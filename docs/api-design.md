@@ -134,7 +134,7 @@ Every physical quantity crossing the API is a `units.Value` from
 `github.com/lestrrat-3d/sketch/units`. We do NOT invent a parallel unit system.
 
 ```go
-body, err := doc.Extrude(prof, decad.Distance{D: units.Millimeters(10)})
+body, err := doc.Extrude(prof, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 ```
 
 `units.Millimeters(6)` can never silently mean centimeters — which is precisely
@@ -282,9 +282,22 @@ type Box struct {
 }
 ```
 
-Invariant #2 covers **measurements**. `IsSolid() bool` and `IsConvex() bool` are
-**predicates**, not measurements: they are decided by the evaluator, not
-approximated by it, so they stay bare bools.
+Invariant #2 covers **measurements**, and the line is drawn once, here, so no
+implementation has to guess where it falls:
+
+- **A quantity the evaluator computes is a measurement and reports `Exactness`.**
+  That includes every *coordinate* and every *direction* it computes — a volume, an
+  area, a length, a bounding box, a centroid, a vertex position, a face normal. A
+  vertex position produced by a v1 tessellation-backed boolean is approximated
+  exactly as its volume is, and says so.
+- **Only a predicate the evaluator *decides* is exempt** — `Body.IsSolid`,
+  `Edge.IsConvex`, `Loop.IsOuter`, `Shell.IsVoid`. These are answers, not
+  approximations of answers, so they stay bare bools.
+
+The §5.2 carve-out is a carve-out from the **units** rule (§5.1) only: it says an
+`r3.Vec` coordinate is a length in millimetres rather than a `units.Value`. It says
+nothing about invariant #2, and exempts nothing from it — a coordinate is still a
+measurement and still reports its `Exactness` alongside the vector.
 
 ### 6.1 Topology
 
@@ -295,7 +308,7 @@ func (f *Face) Surface() Surface   // sealed; see below
 func (f *Face) Loops() []*Loop     // Loop.IsOuter() distinguishes outer from holes
 func (f *Face) Edges() []*Edge
 func (f *Face) Area() (Measurement, error)
-func (f *Face) NormalAt(p r3.Vec) (r3.Vec, error)
+func (f *Face) NormalAt(p r3.Vec) (r3.Vec, Exactness, error) // a computed direction: a measurement
 func (f *Face) Origin() FeatureRef // provenance: the feature that created it
 
 type Edge struct{ /* ... */ }
@@ -358,6 +371,7 @@ type Step struct {
     Axis      Axis            // revolve only
     Selectors []Selector      // the edge / face queries, unresolved
     Values    []units.Value   // radii, distances, thicknesses
+    Opts      StepOpts        // the feature options; nil when the op takes none
 }
 
 type Param struct {
@@ -373,6 +387,30 @@ of them is non-nil, keyed to `Op`**: `Extrude` sets `Extent` and leaves `Angular
 nil; `Revolve` sets `Angular` and leaves `Extent` nil; every other `Op` leaves both
 nil. That is what lets a `Recipe` encode a revolve at all — an `AngularExtent` is
 not assignable to an `Extent` field, by design.
+
+**`StepOpts`** — the feature options a `Step` carries, sealed and typed, one struct
+per `OpKind` that has options. Not `[]any`, not a stringly key/value map: §4 rejects
+`core.Base`-as-anything, and a recipe is the last place to smuggle it back in.
+
+```go
+type StepOpts interface{ stepOpts() } // sealed
+
+type ExtrudeOpts struct { Taper units.Value; /* ... */ }
+type RevolveOpts struct { /* ... */ }
+type FilletOpts  struct { /* ... */ }
+type ChamferOpts struct { /* ... */ }
+type ShellOpts   struct { /* ... */ }
+```
+
+The binding rule, and it is a rule, not a hope: **every `ExtrudeOption`,
+`RevolveOption`, `FilletOption`, `ChamferOption` and `ShellOption` MUST be
+representable in the corresponding `…Opts` struct.** An option with nowhere to land
+in the recipe does not ship. This is what §2's "the recipe is never approximate…
+an exact statement of intent" actually costs: a `Recipe` that re-evaluates to a
+*different* model than the one it was recorded from is not the deliverable §2 claims
+— a tapered extrude that round-trips as an untapered one would make vN a silently
+different model rather than a better answer to the same one, and would make the
+mechanical Fusion emission of §11 emit the wrong feature.
 
 `Selector` is the sealed root of the selector vocabulary, so a `Step` never holds
 an `any` — Fusion's `core.Base`-as-anything is rejected in §4, and `Recipe` is the
@@ -417,7 +455,7 @@ type Clearance struct {
 The rest are deferred:
 
 ```go
-type Direction struct{ /* ... */ }     // a sense along a sketch normal: up / down / both
+type Direction int                     // enumerated sense: Along or Against — the profile normal, or the revolve axis (§8.1)
 type FeatureRef struct{ /* ... */ }    // an opaque handle to the feature that created a body or face
 type Mesh struct{ /* ... */ }          // a triangle mesh; an OUTPUT of Tessellate, never the representation
 type Curve interface{ curve() }        // sealed, like Surface: Line / Circle / Arc / Ellipse / NURBSCurve / FacetedCurve
@@ -444,7 +482,7 @@ func (l *Loop) IsOuter() bool // the outer boundary; false for a hole
 
 // Vertex is a topological point.
 type Vertex struct{ /* ... */ }
-func (v *Vertex) Position() r3.Vec // a length in millimetres — the §5.2 carve-out
+func (v *Vertex) Position() (r3.Vec, Exactness) // millimetres (§5.2); a computed coordinate, so it reports (§6)
 
 // MeshBody is imported triangle soup. It NEVER claims to be a solid B-rep —
 // invariant #5 — and mesh import is a v1 non-goal (§13).
@@ -462,16 +500,22 @@ s, _ := w.CreateSketch(w.XY())
 s.CreateRectangle(0, 0, 100, 60)
 s.Solve(ctx)
 
-// sketch has already proven this closes, is fully constrained, is extrudable.
+// sketch has already proven this region closes: it is a valid, extrudable profile.
 prof := s.Profiles()[0]
 
 doc := decad.New()
-body, err := doc.Extrude(prof, decad.Distance{D: units.Millimeters(10)})
+body, err := doc.Extrude(prof, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 ```
 
 `doc.Extrude` REJECTS a `sketch.Profile` whose `Valid` is false — a
-self-intersecting or degenerate region is never silently swept. The plane's
-`r3.Frame` lifts the plane-local profile into world space.
+self-intersecting or degenerate region is never silently swept. `Profile.Valid` is
+the whole of decad's gate, and it is `sketch`'s answer, not one decad recomputes.
+The plane's `r3.Frame` lifts the plane-local profile into world space.
+
+Whether the *sketch* is fully constrained is a separate, sketch-level question: a
+profile can close while the sketch still has degrees of freedom. It is not decad's
+to answer — an agent that wants that guarantee gates on `sketch.Sketch.Verify`
+before extruding. decad never re-derives it.
 
 ## 8. Features
 
@@ -502,9 +546,9 @@ Operands owned by different documents are `ErrForeignBody`.
 Modify operations return a new body, retiring the receiver, on the same terms:
 
 ```go
-func (b *Body) Fillet(sel EdgeSelector, r units.Value) (*Body, error)
-func (b *Body) Chamfer(sel EdgeSelector, d units.Value) (*Body, error)
-func (b *Body) Shell(sel FaceSelector, thickness units.Value) (*Body, error)
+func (b *Body) Fillet(sel EdgeSelector, r units.Value, opts ...FilletOption) (*Body, error)
+func (b *Body) Chamfer(sel EdgeSelector, d units.Value, opts ...ChamferOption) (*Body, error)
+func (b *Body) Shell(sel FaceSelector, thickness units.Value, opts ...ShellOption) (*Body, error)
 ```
 
 Placement is a body operation on the same terms — it retires the receiver and
@@ -532,15 +576,21 @@ Extrude takes a **linear** extent:
 type Extent interface{ extent() }
 
 // SideExtent is what ONE side of a two-sided extent may be. Sealed, and narrower
-// than Extent: implemented ONLY by Distance, ThroughAllSide and ToFace.
+// than Extent: implemented ONLY by DistanceSide, ThroughAllSide and ToFace.
 type SideExtent interface{ sideExtent() }
 
-type Distance   struct { D units.Value }               // Extent AND SideExtent
-type ToFace     struct { Face FaceSelector; Offset units.Value } // Extent AND SideExtent
-type ThroughAll struct { Dir Direction }               // Extent ONLY
-type ThroughAllSide struct{}                           // SideExtent ONLY
+// Extent — standalone. A standalone extent is one-sided, so it carries its own
+// sense as an enumerated Direction.
+type Distance   struct { D units.Value; Dir Direction }          // Extent ONLY
+type ThroughAll struct { Dir Direction }                         // Extent ONLY
 type Symmetric  struct { D units.Value; FullLength bool }        // Extent ONLY
 type TwoSided   struct { One, Two SideExtent }                   // Extent ONLY
+type ToFace     struct { Face FaceSelector; Offset units.Value } // Extent AND SideExtent
+
+// SideExtent — one side of a TwoSided. The SIDE supplies the sense, so a side
+// variant never carries a Direction.
+type DistanceSide   struct { D units.Value }                     // SideExtent ONLY
+type ThroughAllSide struct{}                                     // SideExtent ONLY
 ```
 
 Revolve takes an **angular** extent, its own sealed set, with the same two-tier
@@ -550,33 +600,62 @@ split:
 type AngularExtent interface{ angularExtent() }
 
 // SideAngular is what ONE side of a two-sided angular extent may be. Sealed:
-// implemented ONLY by AngleExtent and ToFaceAngular.
+// implemented ONLY by AngleSide and ToFaceAngular.
 type SideAngular interface{ sideAngular() }
 
-type AngleExtent    struct { A units.Value }           // AngularExtent AND SideAngular; one-sided
-type ToFaceAngular  struct { Face FaceSelector }       // AngularExtent AND SideAngular
+type AngleExtent    struct { A units.Value; Dir Direction }   // AngularExtent ONLY
+type FullRevolution struct{}                                  // AngularExtent ONLY
 type SymmetricAngle struct { A units.Value; FullLength bool } // AngularExtent ONLY
 type TwoSidedAngle  struct { One, Two SideAngular }           // AngularExtent ONLY
-type FullRevolution struct{}                                  // AngularExtent ONLY
+type ToFaceAngular  struct { Face FaceSelector }              // AngularExtent AND SideAngular
+
+type AngleSide struct { A units.Value }                       // SideAngular ONLY
 ```
 
 **The nesting is the point.** A side of a two-sided extent is a *single direction
 of travel*, so only the variants that mean one are admissible there. Because
-`Symmetric`, `TwoSided`, `SymmetricAngle`, `TwoSidedAngle` and `FullRevolution`
-implement only the outer interface and not the inner one,
-`TwoSided{One: TwoSided{...}}`, `TwoSided{One: Symmetric{...}}` and
-`TwoSidedAngle{One: FullRevolution{}}` do not compile. Illegal states are
-unrepresentable structurally, not rejected at runtime.
+`Distance`, `ThroughAll`, `Symmetric`, `TwoSided`, `AngleExtent`, `SymmetricAngle`,
+`TwoSidedAngle` and `FullRevolution` implement only the outer interface and not the
+inner one, `TwoSided{One: TwoSided{...}}`, `TwoSided{One: Symmetric{...}}`,
+`TwoSided{One: Distance{...}}` and `TwoSidedAngle{One: FullRevolution{}}` do not
+compile. Illegal states are unrepresentable structurally, not rejected at runtime.
 
-`ThroughAll` and `ThroughAllSide` are split for the same reason, **by role**.
-Standalone, "through all" must say which way it runs, so `ThroughAll` carries a
-`Direction` (up / down / both) and satisfies `Extent` only. As a *side* of a
-`TwoSided` it must not: the side already **is** a single direction of travel, so a
-second, possibly contradicting direction on the same value —
-`TwoSided{One: ThroughAll{Dir: both}}` — is precisely the illegal state this
-section abolishes. `ThroughAllSide` therefore carries no direction, satisfies
-`SideExtent` only, and takes its sense from the side it occupies. Neither form is
+**Magnitude and direction are separate, and direction is role-scoped.** A magnitude
+— `Distance.D`, `AngleExtent.A`, `Symmetric.D` — is **non-negative**; a negative
+magnitude is `ErrNegativeMagnitude` (§12), never a reversal. Sense is carried
+**only** by the enumerated `Direction`, never as a sign on a number: a signed
+magnitude means every value has two ways to say the same thing and one way to
+contradict itself.
+
+Which value carries the `Direction` is decided by **role**, and every variant obeys
+the same rule:
+
+| Role | Sense comes from | Carries `Direction` |
+|---|---|---|
+| Standalone one-sided (`Distance`, `ThroughAll`, `AngleExtent`) | the value itself — nothing else states it | yes |
+| A side of a `TwoSided` / `TwoSidedAngle` (`DistanceSide`, `ThroughAllSide`, `AngleSide`) | the side it occupies | **never** |
+| Sense implied by a target (`ToFace`, `ToFaceAngular`) | the target face | never |
+| Structurally two-sided (`Symmetric`, `SymmetricAngle`, `TwoSided`, `TwoSidedAngle`, `FullRevolution`) | the shape of the variant | never |
+
+That is why `Distance` and `DistanceSide` — and `ThroughAll` and `ThroughAllSide`,
+and `AngleExtent` and `AngleSide` — are distinct types rather than one type used in
+two places. A side already **is** a single direction of travel, so a second,
+possibly contradicting direction on the same value — `TwoSided{One: Distance{Dir:
+…}}` — is precisely the illegal state this section abolishes. Neither form is
 assignable where the other belongs.
+
+`Direction` is a two-valued enumeration. There is no "both": a sweep that runs both
+ways is `Symmetric`, `TwoSided`, `SymmetricAngle` or `TwoSidedAngle`, stated
+structurally.
+
+```go
+type Direction int
+
+const (
+    Along   Direction = iota // linear: with the profile normal. angular: right-handed about the revolve axis.
+    Against                  // the opposite sense
+)
+```
 
 The two sets are **deliberately disjoint**: no linear extent satisfies
 `AngularExtent` and no angular extent satisfies `Extent`. That is what makes
@@ -590,7 +669,10 @@ to that face" is meaningless when "that face" is four faces.
 
 Options carry the rest (`WithTaper(units.Degrees(3))`), via
 `github.com/lestrrat-go/option/v3` — the house functional-options library, and an
-approved dependency.
+approved dependency. **Every option MUST be representable in the corresponding
+`…Opts` struct a `Step` records (§6.2).** An option a `Recipe` cannot round-trip
+would make the recipe a lossy record of intent, which §2 does not permit; such an
+option does not ship.
 
 ## 9. Selectors — intent, not identity
 
@@ -714,6 +796,36 @@ Fusion answers **none** of `Watertight` (with diagnostics), `Manifold`,
 `SelfIntersecting`, `MinWallThickness` (B-rep), `Undercuts`, or `MinRadius`. That
 gap is decad's mandate.
 
+### 10.1 Tolerance — what "beyond the caller's tolerance" means
+
+`Suspect` and `Trustworthy()` turn on an approximation being *coarser than the
+caller will accept*, so the caller must be able to say what they accept:
+
+```go
+func WithTolerance(t units.Value) VerifyOption
+func WithMinWallThickness(tool units.Value) VerifyOption
+func WithPullDirection(v r3.Vec) VerifyOption
+func WithMinRadius() VerifyOption
+```
+
+`WithTolerance(t)` is **the largest absolute error the caller will accept on any
+measurement**. A `Measurement` whose `Bound` exceeds it makes its `BodyReport`
+`Suspect`, hence the `Report` `Suspect`, hence `Trustworthy()` false. `Exact`
+answers have a zero `Bound` and can never trip it, at any tolerance.
+
+Omitted, the tolerance defaults to **1e-6 of the body's bounding-box diagonal**.
+The default is **relative, so it is scale-invariant**: a 1mm part and a 1m part are
+judged on the same footing, and an agent that never states a tolerance still gets a
+meaningful `Suspect`. This mirrors how `sketch` makes its conditioning gate
+scale-invariant. `WithTolerance` overrides it with an absolute bound, which is what
+a caller with a real manufacturing tolerance has.
+
+`t` is a **length** — the linear error the caller accepts — and any other `Kind` is
+`ErrUnitKind` (§5.1), never a coercion. `Measurement.Bound` carries the `Kind` of
+the quantity it bounds (§5.4), so the comparison is made in that quantity's kind:
+`t` for a length, `t²` for an area, `t³` for a volume. One number, stated once,
+governs every measurement in the report.
+
 `Status` is one type used at two levels:
 
 ```go
@@ -728,8 +840,8 @@ const (
 ```
 
 - **`BodyReport.Status`** is per-body: `Sound` (solid, watertight, manifold, no
-  self-intersection), `Suspect` (sound, but one of its answers is `Approximate`
-  beyond the caller's tolerance), or `Unsound` (not a valid solid). A body is never
+  self-intersection), `Suspect` (sound, but one of its answers is `Approximate` with
+  a `Bound` beyond the tolerance of §10.1), or `Unsound` (not a valid solid). A body is never
   `Interfering` — interference is a property of a *pair*, not of a body.
 - **`Report.Status`** is the document-level aggregate.
 
@@ -769,8 +881,10 @@ to make that mechanical.
 - Sentinel/typed errors for the cases an agent must branch on: `ErrNoMatch`
   (a selector carrying no cardinality assertion matched nothing), `ErrCardinality`
   (a cardinality assertion failed), `ErrForeignBody` (an operation was handed bodies
-  owned by different documents), `ErrNotSolid`, `ErrDegenerate`, `ErrBooleanFailed`,
-  `ErrInvalidProfile`, `ErrUnitKind`.
+  owned by different documents), `ErrNegativeMagnitude` (a magnitude — an extent
+  distance or angle, a radius, a thickness, a tolerance — was given as a negative
+  value; magnitudes are non-negative and sense is enumerated, §8.1), `ErrNotSolid`,
+  `ErrDegenerate`, `ErrBooleanFailed`, `ErrInvalidProfile`, `ErrUnitKind`.
 - **`ErrCardinality` takes precedence at zero matches.** A failed cardinality
   assertion is `ErrCardinality` **even when the selector matched nothing** — and
   that covers both the explicit assertions, `Exactly(n)` / `AtLeast(n)` (§9), and
