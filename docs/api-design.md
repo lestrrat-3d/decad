@@ -30,7 +30,7 @@ Three layers. The split is what makes an exact-kernel future reachable.
 
 ```
 Recipe      declarative, exact, kernel-independent, serializable
-            sketch profiles + features + selectors + parameters
+            sketch profiles + features + operands + selectors + options + quantities
    |
    v
 Evaluator   swappable
@@ -83,7 +83,7 @@ These are cheap now and expensive to retrofit. They are the upgrade path.
 |---|---|---|
 | 1 | **NEVER expose triangles as the representation.** `Tessellate(tol)` is an output; the public vocabulary is `Body → Face → Edge → Vertex` even while the backing is approximate. | A public `Triangles()` is a one-way door; callers depend on it and vN can never remove it. |
 | 2 | **Every measurement carries `Exactness`, from the first commit.** | Makes the upgrade **monotonic, not breaking**: callers already branch on `Approximate`; in vN that branch stops being taken and nobody's code changes. A bare `float64` today means adding exactness later breaks every call site. |
-| 3 | **Selectors, never indices.** `Body.Faces()` / `Edges()` / `Vertices()` exist for **traversal and inspection only**; no feature, selector, or recipe ever accepts an index or a bare topology pointer. | An exact kernel produces a different (more correct) face/edge decomposition. If `Edges()[3]` is the API, index order becomes a de facto contract and vN breaks every model. |
+| 3 | **Selectors, never topology indices.** `Body.Faces()` / `Edges()` / `Vertices()` exist for **traversal and inspection only**; no feature, selector, or recipe ever names a face, an edge or a vertex by index or by a bare topology pointer. (A `Recipe`'s `StepRef` (§6.2) is not one: it indexes the recipe's own steps, which no evaluator reorders.) | An exact kernel produces a different (more correct) face/edge decomposition. If `Edges()[3]` is the API, index order becomes a de facto contract and vN breaks every model. |
 | 4 | **Booleans never mutate their operands, and take no target-out parameter.** `Union(a, b) (*Body, error)` — never Fusion's in-place `booleanOperation(target, tool, type) -> bool`. | A signature free of in-place mutation lets the implementation be swapped with zero API churn. |
 | 5 | **Imported meshes are a separate type.** A `MeshBody` never claims to be a solid B-rep. | For imported triangle soup, no future kernel can recover exactness. Keeping it separate stops approximate-forever geometry from contaminating the type we promise to make exact. |
 
@@ -342,6 +342,13 @@ type NURBSSurface struct { /* ... */ }
 type Faceted struct{ /* ... */ }
 ```
 
+**Surface parameters carry no `Exactness`, and this is not an exception to
+invariant #2.** An analytic `Surface` variant is `Exact` by construction: a face
+whose geometry is not exact is `Faceted`, and `Faceted` is the flag. So a
+`Cylinder.Axis` or a `Sphere.Center` is an exact parameter of an exact surface,
+while `Face.NormalAt(p)` — a quantity the evaluator *computes*, on a face that may
+be `Faceted` — is a measurement and reports its `Exactness` like every other.
+
 A `switch` on `Surface` MUST carry a `default` — vN adds variants.
 
 ### 6.2 Supporting types
@@ -351,42 +358,74 @@ are load-bearing; the rest are deferred, not undecided.
 
 **`Recipe`** — the exact record of intent, and per §2 the library's actual
 deliverable, so it is a real value, not a handle. An ordered, immutable list of
-steps; each step is an exact statement of intent — the feature kind, its profile
-and parameters, and the *selectors* (never resolved pointers, never indices) it
-was given. It is declarative and kernel-independent: nothing in a `Recipe` names a
-face, an edge, a tessellation or an evaluator, which is what lets a second
-evaluator re-run it and what makes emitting Fusion code from it mechanical (§11).
+steps; each step is an exact statement of intent — the feature kind, the bodies it
+consumes, its profile, its extent, its options, its quantities, and the *selectors*
+(never resolved pointers, never topology indices) it was given. It is declarative
+and kernel-independent:
+nothing in a `Recipe` names a face, an edge, a tessellation or an evaluator, which
+is what lets a second evaluator re-run it and what makes emitting Fusion code from
+it mechanical (§11).
+
+**The completeness rule, and it is a rule, not a hope.** A `Recipe` MUST be
+sufficient to (a) re-evaluate the model from scratch under any evaluator, and
+(b) emit equivalent CAD code. Every input an operation takes — its operands, its
+profile, its extent, its selectors, its options, its quantities — MUST be
+recordable in its `Step`. **An operation whose inputs a `Step` cannot record does
+not ship.** This is what §2's "the exact record of intent" costs: a `Recipe` that
+re-evaluates to a *different* model than the one it was recorded from is not the
+deliverable §2 claims — it would make vN a silently different model rather than a
+better answer to the same one, and would make the mechanical Fusion emission of
+§11 emit the wrong feature.
 
 ```go
 type Recipe struct {
-    Steps  []Step         // ordered, immutable; the model, exactly as meant
-    Params []Param        // the named quantities the steps are written against
+    Steps []Step // ordered, immutable; the model, exactly as meant
 }
+
+// StepRef refers to the Step that produced a body. It is NOT a topology index.
+type StepRef int
 
 type Step struct {
     Op        OpKind          // Extrude / Revolve / Union / Cut / Intersect / Fillet / Chamfer / Shell
-    Profile   *sketch.Profile // the source region, when the op has one
-    Extent    Extent          // set for Extrude; nil for Revolve
-    Angular   AngularExtent   // set for Revolve; nil for Extrude
-    Axis      Axis            // revolve only
-    Selectors []Selector      // the edge / face queries, unresolved
+    Inputs    []StepRef       // the bodies this op consumes. Cut is [target, tool].
+    Profile   *sketch.Profile // Extrude / Revolve
+    Extent    Extent          // Extrude
+    Angular   AngularExtent   // Revolve
+    Axis      Axis            // Revolve
+    Selectors []Selector      // Fillet / Chamfer / Shell — the edge / face queries, unresolved
+    Opts      StepOpts        // per-op options; nil when the op takes none
     Values    []units.Value   // radii, distances, thicknesses
-    Opts      StepOpts        // the feature options; nil when the op takes none
-}
-
-type Param struct {
-    Name  string
-    Value units.Value
 }
 
 type OpKind int
 ```
 
-`Extent` and `Angular` are the two disjoint extent sets of §8.1, and **exactly one
+**Every `Step` produces exactly one body**, so a `StepRef` names it without
+ambiguity, and `Inputs` is what makes the recipe a graph rather than a list of
+unrelated features. `Extrude` and `Revolve` consume no body and leave `Inputs`
+empty; `Fillet`, `Chamfer` and `Shell` consume one — the body they modify; the
+booleans consume two. **`Cut`'s `Inputs` order is `[target, tool]`** — the two
+roles are asymmetric and order is the only thing that distinguishes them.
+
+**A `StepRef` is not the index invariant #3 forbids.** Invariant #3 forbids indices
+as *topology* selectors — `Edges()[3]` — because an exact kernel decomposes a body
+into different faces and edges. A `StepRef` names a *step in this recipe*, and the
+step list is the recipe's own content, not the evaluator's output: step 2 is step 2
+under every evaluator, forever. Step references are stable by construction;
+topology indices are not. That is the whole of the distinction.
+
+`Extent` and `Angular` are the two disjoint extent sets of §8.1, and **at most one
 of them is non-nil, keyed to `Op`**: `Extrude` sets `Extent` and leaves `Angular`
 nil; `Revolve` sets `Angular` and leaves `Extent` nil; every other `Op` leaves both
 nil. That is what lets a `Recipe` encode a revolve at all — an `AngularExtent` is
 not assignable to an `Extent` field, by design.
+
+**Parameterisation is the caller's Go function, and there is no parameter
+sublanguage.** `Step.Values` holds literal quantities, and a `Recipe` binds no
+names. §6 already settles this: the agent's Go function *is* the feature tree, and
+re-running `MakeBracket(height)` with a new height *is* the rebuild — it emits a
+new `Recipe` with new values. decad does not build an interpreter for a language
+the agent already has.
 
 **`StepOpts`** — the feature options a `Step` carries, sealed and typed, one struct
 per `OpKind` that has options. Not `[]any`, not a stringly key/value map: §4 rejects
@@ -402,15 +441,11 @@ type ChamferOpts struct { /* ... */ }
 type ShellOpts   struct { /* ... */ }
 ```
 
-The binding rule, and it is a rule, not a hope: **every `ExtrudeOption`,
+The completeness rule applied to options: **every `ExtrudeOption`,
 `RevolveOption`, `FilletOption`, `ChamferOption` and `ShellOption` MUST be
 representable in the corresponding `…Opts` struct.** An option with nowhere to land
-in the recipe does not ship. This is what §2's "the recipe is never approximate…
-an exact statement of intent" actually costs: a `Recipe` that re-evaluates to a
-*different* model than the one it was recorded from is not the deliverable §2 claims
-— a tapered extrude that round-trips as an untapered one would make vN a silently
-different model rather than a better answer to the same one, and would make the
-mechanical Fusion emission of §11 emit the wrong feature.
+in the recipe does not ship — a tapered extrude that round-tripped as an untapered
+one would be exactly the lossy record the completeness rule forbids.
 
 `Selector` is the sealed root of the selector vocabulary, so a `Step` never holds
 an `any` — Fusion's `core.Base`-as-anything is rejected in §4, and `Recipe` is the
@@ -455,7 +490,6 @@ type Clearance struct {
 The rest are deferred:
 
 ```go
-type Direction int                     // enumerated sense: Along or Against — the profile normal, or the revolve axis (§8.1)
 type FeatureRef struct{ /* ... */ }    // an opaque handle to the feature that created a body or face
 type Mesh struct{ /* ... */ }          // a triangle mesh; an OUTPUT of Tessellate, never the representation
 type Curve interface{ curve() }        // sealed, like Surface: Line / Circle / Arc / Ellipse / NURBSCurve / FacetedCurve
@@ -463,6 +497,9 @@ type SurfaceKind int                   // the discriminant a Surface reports: Pl
 type EdgePredicate struct{ /* ... */ } // one clause of an EdgeQuery; the §9 constructors return these
 type FacePredicate struct{ /* ... */ } // one clause of a FaceQuery
 ```
+
+`Direction` — the enumerated sense a standalone extent carries — is *not* deferred:
+it is specified in full in §8.1, and declared there.
 
 The remaining topology of §2's chain, each deferred but for the one method that
 carries its weight:
@@ -585,7 +622,7 @@ type Distance   struct { D units.Value; Dir Direction }          // Extent ONLY
 type ThroughAll struct { Dir Direction }                         // Extent ONLY
 type Symmetric  struct { D units.Value; FullLength bool }        // Extent ONLY
 type TwoSided   struct { One, Two SideExtent }                   // Extent ONLY
-type ToFace     struct { Face FaceSelector; Offset units.Value } // Extent AND SideExtent
+type ToFace     struct { Face FaceSelector; Offset units.Value } // Extent AND SideExtent; Offset is SIGNED
 
 // SideExtent — one side of a TwoSided. The SIDE supplies the sense, so a side
 // variant never carries a Direction.
@@ -621,11 +658,11 @@ inner one, `TwoSided{One: TwoSided{...}}`, `TwoSided{One: Symmetric{...}}`,
 compile. Illegal states are unrepresentable structurally, not rejected at runtime.
 
 **Magnitude and direction are separate, and direction is role-scoped.** A magnitude
-— `Distance.D`, `AngleExtent.A`, `Symmetric.D` — is **non-negative**; a negative
-magnitude is `ErrNegativeMagnitude` (§12), never a reversal. Sense is carried
-**only** by the enumerated `Direction`, never as a sign on a number: a signed
-magnitude means every value has two ways to say the same thing and one way to
-contradict itself.
+— `Distance.D`, `AngleExtent.A`, `Symmetric.D`, and the rest of the set §12
+enumerates — is **non-negative**; a negative magnitude is `ErrNegativeMagnitude`
+(§12), never a reversal. Sense is carried **only** by the enumerated `Direction`,
+never as a sign on a number: a signed magnitude means every value has two ways to
+say the same thing and one way to contradict itself.
 
 Which value carries the `Direction` is decided by **role**, and every variant obeys
 the same rule:
@@ -643,6 +680,15 @@ two places. A side already **is** a single direction of travel, so a second,
 possibly contradicting direction on the same value — `TwoSided{One: Distance{Dir:
 …}}` — is precisely the illegal state this section abolishes. Neither form is
 assignable where the other belongs.
+
+**`ToFace.Offset` is not a magnitude**, and it is the one signed number in the
+extent vocabulary. It is a **signed displacement along the target face's normal**.
+The role table above still holds: the *sense* of a `ToFace` comes from the target
+face, and the sign says only which **side** of that face the sweep stops on — a
+positive offset overshoots it, a negative one stops short of it ("stop 2mm short of
+that boss"). `ToFace` carries no `Direction` to reverse, so clamping the offset
+non-negative would make one of those two ordinary intents unrepresentable.
+`ErrNegativeMagnitude` therefore does **not** apply to `ToFace.Offset` (§12).
 
 `Direction` is a two-valued enumeration. There is no "both": a sweep that runs both
 ways is `Symmetric`, `TwoSided`, `SymmetricAngle` or `TwoSidedAngle`, stated
@@ -809,9 +855,15 @@ func WithMinRadius() VerifyOption
 ```
 
 `WithTolerance(t)` is **the largest absolute error the caller will accept on any
-measurement**. A `Measurement` whose `Bound` exceeds it makes its `BodyReport`
-`Suspect`, hence the `Report` `Suspect`, hence `Trustworthy()` false. `Exact`
-answers have a zero `Bound` and can never trip it, at any tolerance.
+measurement in the report** — every `Measurement` the report carries, without
+exception, and whether or not it hangs off a body. A `Measurement` on a
+`BodyReport` whose `Bound` exceeds `t` makes that `BodyReport` `Suspect`; an
+`Interference.Volume` or a `Clearance.Gap` whose `Bound` exceeds `t` makes the
+`Report` `Suspect` directly — those two are properties of a *pair*, so there is no
+`BodyReport` for them to travel through, and a gap measured 50× coarser than the
+caller's stated tolerance is not an answer the caller said they would accept.
+Either path makes `Trustworthy()` false. `Exact` answers have a zero `Bound` and
+can never trip it, at any tolerance.
 
 Omitted, the tolerance defaults to **1e-6 of the body's bounding-box diagonal**.
 The default is **relative, so it is scale-invariant**: a 1mm part and a 1m part are
@@ -843,7 +895,8 @@ const (
   self-intersection), `Suspect` (sound, but one of its answers is `Approximate` with
   a `Bound` beyond the tolerance of §10.1), or `Unsound` (not a valid solid). A body is never
   `Interfering` — interference is a property of a *pair*, not of a body.
-- **`Report.Status`** is the document-level aggregate.
+- **`Report.Status`** is the document-level aggregate — over the bodies *and* over
+  the pairwise results, which belong to no body.
 
 Aggregation is by **severity precedence — worst wins**:
 
@@ -856,11 +909,20 @@ Concretely, `Report.Status` is:
 | any `BodyReport.Status == Unsound` | `Unsound` |
 | else, `len(Interferences) > 0` | `Interfering` |
 | else, any `BodyReport.Status == Suspect` | `Suspect` |
+| else, any `Interference.Volume` or `Clearance.Gap` whose `Bound` exceeds the tolerance (§10.1) | `Suspect` |
 | else | `Sound` |
+
+The last rung is what keeps the tolerance gate **total**: a `Measurement` that
+hangs off the `Report` rather than off a `BodyReport` is gated exactly as every
+other is, so a `Clearance.Gap` measured far coarser than the caller's tolerance can
+never sit inside a `Sound` report. (Interference is caught by the rung above it as
+well, and `Interfering` is the worse verdict; the rule is stated over both so that
+no `Measurement` in the report is exempt.)
 
 `Report.Trustworthy()` is true **only** at `Report.Status == Sound`. An unsound
 body, an unresolved interference, or an approximation coarser than the caller's
-tolerance each make it false — even when the geometry "looks" fine.
+tolerance — on a body or on a pair — each make it false, even when the geometry
+"looks" fine.
 
 ## 11. Export and translation
 
@@ -881,10 +943,17 @@ to make that mechanical.
 - Sentinel/typed errors for the cases an agent must branch on: `ErrNoMatch`
   (a selector carrying no cardinality assertion matched nothing), `ErrCardinality`
   (a cardinality assertion failed), `ErrForeignBody` (an operation was handed bodies
-  owned by different documents), `ErrNegativeMagnitude` (a magnitude — an extent
-  distance or angle, a radius, a thickness, a tolerance — was given as a negative
-  value; magnitudes are non-negative and sense is enumerated, §8.1), `ErrNotSolid`,
-  `ErrDegenerate`, `ErrBooleanFailed`, `ErrInvalidProfile`, `ErrUnitKind`.
+  owned by different documents), `ErrNegativeMagnitude` (a magnitude was given as a
+  negative value; magnitudes are non-negative and sense is enumerated, §8.1),
+  `ErrNotSolid`, `ErrDegenerate`, `ErrBooleanFailed`, `ErrInvalidProfile`,
+  `ErrUnitKind`.
+- **`ErrNegativeMagnitude` covers exactly the magnitudes.** Those are `Distance.D`,
+  `DistanceSide.D`, `Symmetric.D`, `AngleExtent.A`, `AngleSide.A`,
+  `SymmetricAngle.A`, every fillet and chamfer radius or distance, every shell
+  thickness, and the `WithTolerance` value (§10.1). It does **not** cover
+  `ToFace.Offset`, which is a signed displacement along the target face's normal
+  and not a magnitude at all (§8.1) — a negative offset there is a legal intent,
+  not an error.
 - **`ErrCardinality` takes precedence at zero matches.** A failed cardinality
   assertion is `ErrCardinality` **even when the selector matched nothing** — and
   that covers both the explicit assertions, `Exactly(n)` / `AtLeast(n)` (§9), and
