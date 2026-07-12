@@ -123,7 +123,7 @@ Loosely based on the Fusion SDK. The odd parts are thrown away deliberately.
 | Mutable `Point3D`/`Vector3D`/`Matrix3D` with in-place mutators | COM reference objects | `r3.Vec` immutable value structs |
 | GUI state on the geometry model (`isLightBulbOn` ×8, `displayBounds`, `opacity`, `Timeline.play()`) | The API is a scripting shim over the GUI | Keep view state out entirely |
 | `LowCalculationAccuracy` default (±1%) | UI responsiveness | Accuracy is explicit; verification NEVER defaults to loose |
-| `boundingBox` (knowingly loose) beside `preciseBoundingBox` | Legacy | One `Bounds()`, tight. |
+| `boundingBox` (knowingly loose) beside `preciseBoundingBox` | Legacy | One `Bounds()`, as tight as the evaluator can prove — and it reports its own exactness. The sin is being loose *without saying so*. |
 | `volume == 0` meaning both "empty" and "not a solid" | Sloppiness | `(Measurement, error)` |
 
 ## 5. Foundations
@@ -134,7 +134,7 @@ Every physical quantity crossing the API is a `units.Value` from
 `github.com/lestrrat-3d/sketch/units`. We do NOT invent a parallel unit system.
 
 ```go
-body, err := doc.Extrude(prof, decad.Distance(units.Millimeters(10)))
+body, err := doc.Extrude(prof, decad.Distance{D: units.Millimeters(10)})
 ```
 
 `units.Millimeters(6)` can never silently mean centimeters — which is precisely
@@ -142,19 +142,30 @@ the trap in `ValueInput.createByReal`, where the value is always internal units
 (cm, radians) regardless of the document. A wrong-`Kind` value (an angle where a
 length is wanted) is an **error**, not a coercion.
 
+`units.Kind` today is Dimensionless / Length / Angle — deliberately limited to the
+kinds a 2D sketch needs. decad needs Area, Volume, Mass and Density as well, and
+the wrong-`Kind`-is-an-error rule means they cannot be faked. See §5.3.
+
 ### 5.2 Coordinates — r3, never hand-rolled
 
 `r3.Vec` and `r3.Frame` only. `Frame` is orthonormal, so the inverse is the
 transpose, never a matrix solve.
 
-> **Open, and a dependency-side decision:** `r3` has no general **rigid transform**
-> type — `Frame` covers plane-local↔world only. Placing a body at an arbitrary pose
-> needs rotation + translation. This belongs in `r3` by its own charter ("what
-> *acts on* 3-space"), so the proposal is to add `r3.Transform` upstream rather
-> than hand-roll one here. **Blocks body placement; needs a decision before that
-> lands.**
+### 5.3 Dependency-side decisions (blockers)
 
-### 5.3 Exactness — the load-bearing type
+Two capabilities decad's API depends on do not exist in its dependencies yet. Both
+belong upstream by charter, and both are resolved upstream — decad does not
+hand-roll around either.
+
+| Gap | Proposal | Blocks |
+|---|---|---|
+| **`r3` has no rigid transform type.** `Frame` covers plane-local↔world only; placing a body at an arbitrary pose needs rotation + translation. | Add `r3.Transform` upstream. It *acts on* ℝ³, which is r3's charter. | Body placement. |
+| **`sketch/units` has no Area / Volume / Mass / Density kinds.** `units.Kind` is Dimensionless / Length / Angle only, so a `units.Value` cannot hold `12.9997 mm³`. | Add those kinds upstream to `sketch/units` — it is a first-party module — so `Measurement.Value` stays a single `units.Value` and the no-parallel-unit-system rule holds. | Every volume / area / mass measurement — i.e. most of `Verify`. |
+
+Until the units kinds land, `Measurement` **cannot be implemented as specified**,
+and decad will **not** work around it by inventing a parallel unit system.
+
+### 5.4 Exactness — the load-bearing type
 
 ```go
 type Exactness int
@@ -210,13 +221,29 @@ func (b *Body) Edges() []*Edge
 func (b *Body) Vertices() []*Vertex
 
 func (b *Body) IsSolid() bool
-func (b *Body) Bounds() Box       // tight, always
+func (b *Body) Bounds() (Box, error)
 func (b *Body) Volume() (Measurement, error)   // error when not a solid — never 0
 func (b *Body) Area() (Measurement, error)
 func (b *Body) Centroid() (r3.Vec, Exactness, error)
 
 func (b *Body) Origin() FeatureRef  // which feature created this body
 ```
+
+A bounding box is a measurement, so it carries the same trust metadata every other
+measurement does — a v1 box around a curved body produced by a boolean is bounded
+by `Faceted` faces and is therefore *not* tight, and says so:
+
+```go
+type Box struct {
+    Min, Max  r3.Vec
+    Exactness Exactness
+    Bound     float64 // absolute error bound in base units; 0 when Exact
+}
+```
+
+Invariant #2 covers **measurements**. `IsSolid() bool` and `IsConvex() bool` are
+**predicates**, not measurements: they are decided by the evaluator, not
+approximated by it, so they stay bare bools.
 
 ### 6.1 Topology
 
@@ -278,7 +305,7 @@ s.Solve(ctx)
 prof := s.Profiles()[0]
 
 doc := decad.New()
-body, err := doc.Extrude(prof, decad.Distance(units.Millimeters(10)))
+body, err := doc.Extrude(prof, decad.Distance{D: units.Millimeters(10)})
 ```
 
 `doc.Extrude` REJECTS a `sketch.Profile` whose `Valid` is false — a
@@ -292,7 +319,7 @@ Fillet, Chamfer, Shell**. Sweep and Loft are deferred.
 
 ```go
 func (d *Document) Extrude(p *sketch.Profile, e Extent, opts ...ExtrudeOption) (*Body, error)
-func (d *Document) Revolve(p *sketch.Profile, axis Axis, a Extent, opts ...RevolveOption) (*Body, error)
+func (d *Document) Revolve(p *sketch.Profile, axis Axis, a AngularExtent, opts ...RevolveOption) (*Body, error)
 ```
 
 Booleans are **explicit and pure** — not folded into every feature with an
@@ -317,6 +344,8 @@ func (b *Body) Shell(sel FaceSelector, thickness units.Value) (*Body, error)
 Fusion has three mutually-exclusive `setXxxExtent` methods with no enforcement,
 and `add()` fails at runtime. decad makes exclusivity structural:
 
+Extrude takes a **linear** extent:
+
 ```go
 type Extent interface{ extent() }
 
@@ -327,9 +356,25 @@ type ThroughAll struct { Dir Direction }
 type ToFace     struct { Face *Face; Offset units.Value }
 ```
 
+Revolve takes an **angular** extent, its own sealed set:
+
+```go
+type AngularExtent interface{ angularExtent() }
+
+type AngleExtent    struct { A units.Value }              // one-sided
+type SymmetricAngle struct { A units.Value; FullLength bool }
+type TwoSidedAngle  struct { One, Two AngularExtent }
+type FullRevolution struct{}
+type ToFaceAngular  struct { Face *Face }
+```
+
+The two sets are **deliberately disjoint**: no linear extent satisfies
+`AngularExtent` and no angular extent satisfies `Extent`. That is what makes
+"revolve 90mm" unrepresentable rather than a runtime error.
+
 Options carry the rest (`WithTaper(units.Degrees(3))`), via
-`github.com/lestrrat-go/option/v3` — the house functional-options library, and a
-new approved dependency.
+`github.com/lestrrat-go/option/v3` — the house functional-options library, and an
+approved dependency.
 
 ## 9. Selectors — intent, not identity
 
@@ -340,13 +385,32 @@ stable. Its `isTangentChain` flag is the workaround; we take the lesson properly
 
 **A feature is given a query, never a pointer.**
 
+Features accept the **interfaces**; the constructors return the **concrete query
+types** that implement them and that carry the cardinality assertions.
+
 ```go
 type EdgeSelector interface {
     SelectEdges(*Body) ([]*Edge, error)
 }
 
-func Edges(preds ...EdgePredicate) EdgeSelector
-func Faces(preds ...FacePredicate) FaceSelector
+type FaceSelector interface {
+    SelectFaces(*Body) ([]*Face, error)
+}
+
+func Edges(preds ...EdgePredicate) *EdgeQuery
+func Faces(preds ...FacePredicate) *FaceQuery
+
+type EdgeQuery struct{ /* ... */ }
+
+func (q *EdgeQuery) SelectEdges(*Body) ([]*Edge, error)
+func (q *EdgeQuery) Exactly(n int) *EdgeQuery   // errors at resolve unless exactly n match
+func (q *EdgeQuery) AtLeast(n int) *EdgeQuery
+
+type FaceQuery struct{ /* ... */ }
+
+func (q *FaceQuery) SelectFaces(*Body) ([]*Face, error)
+func (q *FaceQuery) Exactly(n int) *FaceQuery
+func (q *FaceQuery) AtLeast(n int) *FaceQuery
 
 // Predicates compose.
 func Convex() EdgePredicate
@@ -383,8 +447,9 @@ parallel: a real Fusion script must pick edges by geometric predicate too.
 ## 10. Verification — the product
 
 The 3D counterpart of `sketch.Verify`. One non-mutating call; a rich report; a
-single-value `Status` with a fixed severity precedence; and one bit an agent gates
-on. Deliberately mirrors `sketch.VerificationReport` / `WorldVerificationReport`.
+`Status` at both the body and the document level, aggregated by a fixed severity
+precedence; and one bit an agent gates on. Deliberately mirrors
+`sketch.VerificationReport` / `WorldVerificationReport`.
 
 ```go
 func (d *Document) Verify(ctx context.Context, opts ...VerifyOption) *Report
@@ -400,6 +465,7 @@ func (r *Report) Trustworthy() bool // the single bit to gate on
 
 type BodyReport struct {
     Body             *Body
+    Status           Status        // Sound / Suspect / Unsound — this body only
     Solid            bool
     Watertight       bool
     Manifold         bool          // every edge bounds exactly 2 faces
@@ -423,21 +489,41 @@ Fusion answers **none** of `Watertight` (with diagnostics), `Manifold`,
 `SelfIntersecting`, `MinWallThickness` (B-rep), `Undercuts`, or `MinRadius`. That
 gap is decad's mandate.
 
-`Status` follows a fixed precedence so one check gates on the dominant condition:
+`Status` is one type used at two levels:
 
 ```go
 type Status int
 
 const (
-    Sound   Status = iota // solid, watertight, manifold, no self-intersection
-    Suspect               // sound, but an answer is Approximate beyond tolerance
-    Unsound               // not a valid solid
+    Sound       Status = iota // every body sound; nothing approximate beyond tolerance
+    Suspect                   // sound, but an answer is Approximate beyond the caller's tolerance
+    Interfering               // bodies overlap
+    Unsound                   // some body is not a valid solid
 )
 ```
 
-`Trustworthy()` is false for an unsound body, an unresolved interference, or an
-approximation coarser than the caller's tolerance — even when the geometry "looks"
-fine.
+- **`BodyReport.Status`** is per-body: `Sound` (solid, watertight, manifold, no
+  self-intersection), `Suspect` (sound, but one of its answers is `Approximate`
+  beyond the caller's tolerance), or `Unsound` (not a valid solid). A body is never
+  `Interfering` — interference is a property of a *pair*, not of a body.
+- **`Report.Status`** is the document-level aggregate.
+
+Aggregation is by **severity precedence — worst wins**:
+
+**`Unsound` > `Interfering` > `Suspect` > `Sound`**
+
+Concretely, `Report.Status` is:
+
+| Condition | `Report.Status` |
+|---|---|
+| any `BodyReport.Status == Unsound` | `Unsound` |
+| else, `len(Interferences) > 0` | `Interfering` |
+| else, any `BodyReport.Status == Suspect` | `Suspect` |
+| else | `Sound` |
+
+`Report.Trustworthy()` is true **only** at `Report.Status == Sound`. An unsound
+body, an unresolved interference, or an approximation coarser than the caller's
+tolerance each make it false — even when the geometry "looks" fine.
 
 ## 11. Export and translation
 

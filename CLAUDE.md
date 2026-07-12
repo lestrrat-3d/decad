@@ -38,6 +38,8 @@ type.
 - **NEVER add a `go.mod` module without recording the decision here.** Approved:
   - `github.com/lestrrat-3d/sketch` — parametric 2D constraint engine.
   - `github.com/lestrrat-3d/r3` — 3D coordinate math (`Vec`, `Frame`).
+  - `github.com/lestrrat-go/option/v3` — functional options (house library). Used
+    by feature options.
   - `github.com/stretchr/testify/require` — assertions, **test code only**.
     NEVER import from production code.
 - **Correctness must be observable.** Every capability ships with a test
