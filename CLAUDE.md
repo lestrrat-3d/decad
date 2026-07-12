@@ -29,6 +29,14 @@ type.
   the input exactly — a `Partial` fragment of a curve, whose trim range
   `BoundaryEdge` does not expose (`docs/api-design.md` §5.3) — decad **rejects**.
   It never repairs, projects, fits, or infers the missing answer.
+- **A decad-side check may only FALSIFY an upstream claim, never bless one.**
+  Admission is decided by what `sketch` says, never by a test decad runs on the
+  geometry it was handed. A residual against a source curve is admissible in exactly
+  one direction: **large ⇒ the claim is disproven ⇒ reject**; **small ⇒ proves
+  nothing** — a sampled cut can lie arbitrarily close to the curve, so a small
+  residual NEVER admits an input (`docs/api-design.md` §5.3). A check that can accept
+  is an admission gate, and an admission gate on a residual is unsound. Reject-only,
+  always.
 - **NEVER hand-roll coordinate math.** Vectors, frames, local↔world transforms →
   `r3`. Its `Frame` is orthonormal, so the inverse is the transpose, never a
   matrix solve.

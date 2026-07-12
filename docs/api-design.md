@@ -181,7 +181,7 @@ does not hand-roll around any of them.
 |---|---|---|
 | **`r3` has no rigid transform type.** `Frame` covers plane-local↔world only; placing a body at an arbitrary pose needs rotation + translation. | Add `r3.Transform` upstream. It *acts on* ℝ³, which is r3's charter. | Body placement — `Body.Placed` (§8), and with it the explicit-transform answer to assemblies (§13). |
 | **`sketch/units` has no Area / Volume / Mass / Density kinds.** `units.Kind` is Dimensionless / Length / Angle only, so a `units.Value` cannot hold `12.9997 mm³`. | Add those kinds upstream to `sketch/units` — it is a first-party module — so `Measurement.Value` stays a single `units.Value` and the no-parallel-unit-system rule holds. | Every volume / area / mass measurement — i.e. most of `Verify` — and, for the text form below, encoding a `Recipe` (§6.2). |
-| **`sketch.BoundaryEdge` does not carry a fragment's parameter range.** `Partial` is a bare `bool`: it says *that* the edge is a sub-range of its `Entity`, never *which* sub-range. The entity gives the parameters of the whole curve; the fragment's extent survives only as its two endpoints, which do not determine a trim of a curve and cannot be tested to see whether they do. | Add `TStart` / `TEnd` (the fragment's parameter range on `Entity`) to `sketch.BoundaryEdge`. sketch already computes the split that produced the fragment, so it is the only party that knows the range exactly. | Recording **any profile in which a curve is split** — every `Partial` fragment of a circle, arc, ellipse, elliptical arc, conic, spline, closed spline, fit spline or NURBS, however it was cut (§6.2). A circle crossed by a rectangle does not record. With the range, **every** partial fragment records exactly, and no test is needed anywhere. |
+| **`sketch.BoundaryEdge` carries neither a fragment's parameter range nor how that range was computed.** `Partial` is a bare `bool`: it says *that* the edge is a sub-range of its `Entity`, never *which* sub-range, and never whether that sub-range is exact. The entity gives the parameters of the whole curve; the fragment's extent survives only as its two endpoints, which do not determine a trim of a curve, and whose distance from the curve cannot be tested to decide whether they do. | Add **both** `TStart` / `TEnd` (the fragment's parameter range on `Entity`) **and `TExact bool`** (whether that range was computed exactly — a line-involved crossing or a tangency — or sampled) to `sketch.BoundaryEdge`. `sketch` computed the arrangement that produced the fragment, so it is the only party that knows the range, and the only party that knows how it was obtained. `TExact` is **per-fragment**. | Recording **any profile in which a curve is split** — every `Partial` fragment of a circle, arc, ellipse, elliptical arc, conic, spline, closed spline, fit spline or NURBS, however it was cut (§6.2). Today a circle crossed by a rectangle does not record. With both fields, a fragment records exactly from its range when `TExact` is true, and is `ErrUnrecordableProfile` when it is false. |
 
 Until the units kinds land, `Measurement` **cannot be implemented as specified**,
 and decad will **not** work around it by inventing a parallel unit system.
@@ -206,24 +206,33 @@ points do not determine a trim of a curve — a parameter range does — and
 `BoundaryEdge` carries `Entity`, `Partial`, `Reversed` and `Polyline` and nothing
 else.
 
-**And decad cannot test the endpoints it was handed. No test can exist, at any
-tolerance.** `sketch`'s exact closed-form contact is authoritative "for line-involved
-crossings and all tangencies", while "a curve split at a *sampled* crossing
-(ellipse/spline/conic vs line, or curve/curve) has an approximate cut parameter", and
-"curve/curve transverse crossings (both circle/arc) are deferred to the sampled path"
-— and `BoundaryEdge` does not record which path produced a given fragment. Nor do the
-endpoints. A `Polyline` is a **sample of the curve**: its vertices lie *on* the curve.
-A sampled cut is the crossing of a **chord** between two such vertices, so as the
-crossing approaches a sample vertex the cut point approaches the curve, and its
-residual against the curve goes to zero. An endpoint's distance from the source curve
-therefore carries **no information** about whether the cut parameter is the exact one:
-exactly-cut endpoints and sampled ones are not separated populations, so there is no
-threshold between them to find. This is not a mistuned test; it is a quantity that
-does not answer the question.
+**And the endpoints cannot be tested to decide admission. No such test exists, at any
+tolerance.** `sketch` cuts a curve exactly for a line-involved crossing and for every
+tangency, and *samples* the cut parameter for a curve/curve crossing and for any
+ellipse/conic/spline/NURBS crossing — and `BoundaryEdge` records neither the range nor
+which path produced it. Nor do the endpoints. A `Polyline` is a **sample of the curve**:
+its vertices lie *on* the curve. A sampled cut is the crossing of a **chord** between two
+such vertices, so as the crossing approaches a sample vertex the cut point approaches the
+curve, and its residual against the curve goes to zero. A sampled circle/circle cut has
+been measured with a normalised radial residual of **7.07e-10** — indistinguishable from
+an exact cut by any threshold. Exactly-cut endpoints and sampled ones are therefore not
+separated populations, and an endpoint-residual test is **unsound as an admission gate**:
+it is not a mistuned test, it is a quantity that does not answer the question asked of it.
 
-**So decad does not test. It rejects.** A `Partial` fragment records only where its
-endpoints *are* the curve — a fragment of a `*Line`, whose two endpoints determine
-the segment exactly, whatever produced them, because a chord of a line is the line. A
+**The test is one-sided, and that asymmetry is the whole of what it is good for:**
+
+| observation | what it proves |
+|---|---|
+| the residual is **large** | the endpoint does **not** lie on the source curve, so the cut cannot have been computed exactly. A fragment claiming exactness here is **wrong**. **Sound.** |
+| the residual is **small** | **nothing.** A sampled cut can lie arbitrarily close to the curve. **Unsound as an accept.** |
+
+**A large residual is proof of inexactness. A small residual is proof of nothing.** A
+check on it may therefore only ever **reject** a fragment; it may never admit one.
+
+**So decad does not test for admission. It rejects.** A `Partial` fragment records
+only where its endpoints *are* the curve — a fragment of a `*Line`, whose two endpoints
+determine the segment exactly, whatever produced them, because a chord of a line is the
+line. A
 `Partial` fragment of **anything else** — circle, arc, ellipse, elliptical arc,
 conic, spline, closed spline, fit spline, NURBS — is `ErrUnrecordableProfile` (§12).
 No test, no exception, no tolerance. It is never recorded as the whole entity, which
@@ -243,11 +252,32 @@ prevent.
 Whole (non-`Partial`) edges of every kind are unaffected: they record from the
 entity's own defining data, because there is no trim to recover.
 
-`TStart` / `TEnd` on `BoundaryEdge` retires all of it, and this is the exact payoff:
-the range `sketch` already computed **is** the trim, so **every** partial fragment
-records exactly — the circle cut by a rectangle, the circle cut by a circle, every
-ellipse fragment, every free-form fragment — and **no test is needed at all**,
-because nothing is left to guess.
+**`TStart` / `TEnd` and `TExact` together lift all of it, and this is the rule decad
+applies once they land.** The range `sketch` computed **is** the trim, and `TExact` says
+whether that range is the exact one:
+
+- **Admission is decided by `TExact`, and by nothing else.** `sketch` computed the
+  arrangement; it is the only party that knows how a cut was produced. decad does not
+  second-guess the flag and does not re-derive it — re-deriving a 2D answer is what §7
+  forbids.
+- `TExact == false` → `ErrUnrecordableProfile` (§12). An approximate parameter range is
+  not recorded as an exact analytic fragment.
+- `TExact == true` → the fragment records: the trimmed variant of the entity's own kind,
+  built from `TStart` / `TEnd`. The circle cut by a rectangle edge records; so does every
+  arc, ellipse, conic and free-form fragment of an exact cut.
+- **A residual check is retained purely as a one-sided falsifier, never as an admission
+  gate.** If `TExact == true` and the fragment's endpoints do not lie on the source
+  entity, the flag is wrong, and decad returns `ErrUnrecordableProfile` rather than record
+  a fragment it can prove is not what it claims to be. It can only ever **reject**. It
+  never admits a fragment on its own, because a small residual proves nothing — that is
+  the asymmetry above, and re-reading it as an accept is the unsound gate it forbids.
+
+**`TExact` is per-fragment, and it is per-fragment because exactness is a property of the
+crossing that produced the fragment, never of the entity's type.** A circle cut by a
+rectangle edge is an exact, line-involved crossing; the *same circle* cut by another
+circle is sampled. One entity, two fragments, two verdicts — so a per-entity flag, or any
+rule keyed on the entity kind, would be wrong on one of them. decad reads the flag on the
+fragment it is recording.
 
 ### 5.4 Exactness — the load-bearing type
 
