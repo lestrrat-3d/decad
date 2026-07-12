@@ -1412,13 +1412,23 @@ Three things follow, and all three are rules:
   a volume of 10 mm³: against `Scale` a ±5 mm³ bound — a 50% error — would pass at
   every tolerance an evaluator can meet. Against its own 10 mm³ it is `Suspect` at
   the default, and it must be, and it is.
-- **The near-zero case is still defined.** A zero clearance, or the volume of a
-  degenerate body, has `|Value|` at or near zero, and a ratio to it is undefined or
-  explosive. `Quantum` is what keeps the comparison total there. It engages only
-  when the quantity is itself below the noise level — and an `Approximate`
-  answer at the noise level, whose `Bound` is anything at all, then reads `Suspect`,
-  which is the honest verdict: nothing has been proven about it. An `Exact` answer
-  has a zero `Bound` and passes at the floor like everywhere else.
+- **At and below the noise level the gate becomes absolute.** A zero clearance, or
+  the volume of a degenerate body, has `|Value|` at or under `Quantum`, and a ratio
+  to it is undefined or explosive. `Ref` collapses to `Quantum` there — and that is
+  the whole of the near-zero rule, because it is the same formula: `Bound <= rel ×
+  Ref` reads `Bound <= rel × Quantum`, an **absolute** threshold of `1e-12 × Scale`
+  at the default `rel`. It is a real number and the reader can check it: a zero wall
+  thickness on a body whose `Diag` is 1 mm has `Scale = 1 mm` and
+  `Quantum = 1e-9 mm`, so the gate is `1e-12 mm`; a zero clearance in a document
+  100 mm across has `Quantum = 1e-7 mm` and a gate of `1e-10 mm`. So a near-zero
+  answer passes only with a bound that is, in practice, vanishingly tight. A
+  tessellation does not produce one — an `Approximate` near-zero answer will
+  essentially always read `Suspect` — while an `Exact` answer has a zero `Bound` and
+  passes at the floor as it does everywhere else. That is the intent: a zero
+  clearance reported as `0 ± 5mm` is untrustworthy and must be `Suspect`; a zero
+  clearance known to `1e-12 mm` is not. A point-like body carries this to its limit:
+  `Diag → 0`, so `Scale → 0`, so `Quantum → 0`, and the gate tightens to zero —
+  only a zero `Bound`, i.e. an `Exact` answer, passes.
 - **A coordinate is judged against `Diag` alone**, never against its own magnitude:
   the magnitude of a position is origin-dependent, and translating the model must
   never change the verdict. Because that `Diag` is the **owning body's**, the verdict
