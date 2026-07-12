@@ -24,7 +24,13 @@ type.
 - **Layering is `decad -> sketch -> r3`.** NEVER import decad from either; they
   do not know it exists.
 - **NEVER re-derive a 2D answer.** Profile closure, DOF, constraint conflicts,
-  sketch validity → ask `sketch`, consume its answer.
+  sketch validity → ask `sketch`, consume its answer. **Validating an answer
+  `sketch` handed over is not re-deriving it, and is required**: evaluating a source
+  entity's own implicit residual at a boundary-edge endpoint, to decide whether decad
+  may record a partial fragment (`docs/api-design.md` §6.2), computes no
+  intersection, runs no solve, and produces no point or parameter `sketch` did not
+  supply. Deriving a 2D answer is forbidden; checking the one you were given is not,
+  and a check that fails **rejects** — it never repairs, projects or fits.
 - **NEVER hand-roll coordinate math.** Vectors, frames, local↔world transforms →
   `r3`. Its `Frame` is orthonormal, so the inverse is the transpose, never a
   matrix solve.
