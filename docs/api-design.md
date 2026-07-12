@@ -203,7 +203,10 @@ The `BoundaryEdge` gap is narrow, and decad states its boundary exactly. A fragm
 two endpoints are `Polyline[0]` and `Polyline[len-1]` (§6.2), and for the analytic
 curves — line, circle, arc, ellipse, elliptical arc — an endpoint inverts to a curve
 parameter in **closed form** (an angle is an `atan2` about the known centre), so the
-trim is exact and those fragments record today. For a free-form curve — conic,
+trim is exact and those fragments record today. They also have somewhere to record it:
+a fragment of a closed analytic curve is an open one, so a `Partial` `*Circle` records
+as an `ArcSeg` and a `Partial` `*Ellipse` as an `EllipticalArcSeg` (§6.2) — the trimmed
+variant, which carries the range. For a free-form curve — conic,
 spline, closed spline, fit spline, NURBS — inverting a point to a parameter is a
 **projection**: a 2D root-find, which is a 2D answer, which decad never re-derives.
 Until `BoundaryEdge` carries the range, a profile whose boundary contains a partial
@@ -517,22 +520,31 @@ type LoopRecord struct {
 
 // CurveSegment is one curve of a loop, recorded structurally — never as a
 // sample. Sealed, like Surface (§6.1).
-// Each variant records exactly the defining data of the sketch entity it came
-// from — the fields of that entity's own geom value, in plane-local Point2 —
-// so an evaluator reconstitutes the curve through sketch/geom and never
-// re-derives it (§7).
+// A variant records exactly the defining data of the curve the edge IS — the
+// fields of the source entity's own geom value, in plane-local Point2 — so an
+// evaluator reconstitutes the curve through sketch/geom and never re-derives it
+// (§7). The variant is therefore chosen by the entity AND by whether the edge
+// is the whole entity or a fragment of it: a fragment of a closed curve is an
+// open one, and it is the open variant that has somewhere to put the trim.
 type CurveSegment interface{ curveSegment() }
 
 // The five analytic kinds.
 type LineSeg    struct { Start, End Point2 }
 type ArcSeg     struct { Center Point2; Radius units.Value; StartAngle, EndAngle units.Value; CCW bool }
 type CircleSeg  struct { Center Point2; Radius units.Value; CCW bool }
-type EllipseSeg struct { Center Point2; Major, Minor, Rotation units.Value; CCW bool }
+
+// EllipseSeg is a whole ellipse. Rx and Ry are the semi-axes along the ellipse's
+// own local x and y, and they are UNORDERED — geom.Ellipse does not enforce
+// Rx >= Ry; the axes are simply the local x and y, and Rotation is the angle of
+// that local frame. Naming them Major/Minor would oblige an implementer to
+// normalise the pair, which is re-deriving 2D geometry (§7).
+type EllipseSeg struct { Center Point2; Rx, Ry, Rotation units.Value; CCW bool }
+
 type EllipticalArcSeg struct {
-    Center                 Point2
-    Major, Minor, Rotation units.Value
-    StartAngle, EndAngle   units.Value // the swept angular range
-    CCW                    bool
+    Center               Point2
+    Rx, Ry, Rotation     units.Value // local-x / local-y semi-axes, unordered; frame angle
+    StartAngle, EndAngle units.Value // the swept range in the ECCENTRIC angle — the t of (Rx·cos t, Ry·sin t)
+    CCW                  bool
 }
 
 // The five free-form kinds. Degree, knots, weights, a conic's fullness Rho and
@@ -587,13 +599,31 @@ the closed spline as a closed curve bounding a region on its own. So **every pro
 new entity kind upstream needs a new `CurveSegment` variant before decad accepts a
 profile that uses it; there is no fallback to a sample.
 
+**Which variant an edge records is a function of its entity *and* its `Partial`
+flag**, because a fragment of a closed curve is not that closed curve. A circle
+crossing a rectangle is the most ordinary split a 2D sketch produces, and it yields
+a `BoundaryEdge{Entity: *Circle, Partial: true}`: an arc. `sketch` says so in its own
+vocabulary — `geom.SplitCircleAt(c, p, q)` returns two `*Arc` — and decad records what
+`sketch` says. A `CircleSeg` has no range to trim and never needs one; the trim lives
+in the open variant, which has the fields for it.
+
+| `BoundaryEdge.Entity` | whole edge | `Partial` fragment |
+|---|---|---|
+| `*Line` | `LineSeg` | `LineSeg` — the fragment's own two endpoints |
+| `*Circle` | `CircleSeg` | **`ArcSeg`** — same centre and radius; `StartAngle` / `EndAngle` from the endpoints |
+| `*Arc` | `ArcSeg` — the entity's own angles | `ArcSeg` — trimmed angles |
+| `*Ellipse` | `EllipseSeg` | **`EllipticalArcSeg`** — same centre, `Rx`, `Ry`, `Rotation`; eccentric angles from the endpoints |
+| `*EllipticalArc` | `EllipticalArcSeg` — the entity's own range | `EllipticalArcSeg` — trimmed range |
+| the free-form five | the matching free-form variant, `TStart`/`TEnd` spanning the full domain | `ErrUnrecordableProfile` (§12) — the trim needs a projection (§5.3) |
+
 Conversion is mechanical, and it happens once, in the feature call. decad walks
 `p.Outer` and each loop of `p.Holes`, reads each `BoundaryEdge`'s source `Entity`
 for its defining parameters, and **bakes the edge's flags into the segment**:
 `Reversed` becomes the segment's own orientation — endpoints swapped, `CCW`
 flipped, `TStart` and `TEnd` swapped, so `TStart > TEnd` says the segment runs
-against the curve's natural sense — and `Partial` becomes the segment's trimmed
-range. A `LoopRecord` therefore carries no residual flags and no back-reference.
+against the curve's natural sense — and `Partial` selects the trimmed variant per
+the table above and becomes its trimmed range. A `LoopRecord` therefore carries no
+residual flags and no back-reference.
 
 **What decad reads of `BoundaryEdge.Polyline`, and nothing more: `Polyline[0]` and
 `Polyline[len-1]`.** `Partial` is a bare bool — it says *that* the edge is a
@@ -605,8 +635,9 @@ the whole of the carve-out — no interior point of `Polyline` is ever read, by 
 or by anything a `Recipe` carries, and no `Polyline` enters a `Step`.
 
 Turning those endpoints into a trim is exact **only for the analytic five**: on a
-circle or an arc the parameter is `atan2` about the known centre, on an ellipse or
-an elliptical arc the eccentric angle about the known centre and axes, on a line the
+circle or an arc the parameter is `atan2` about the known centre, and the fragment is
+an `ArcSeg`; on an ellipse or an elliptical arc it is the eccentric angle about the
+known centre and axes, and the fragment is an `EllipticalArcSeg`; on a line the
 endpoints *are* the record. Each is a closed-form read-out of the entity's own
 parameterisation at a point `sketch` handed over — not a solve. On the **free-form
 five** it is not exact: inverting a point to a spline, NURBS, fit-spline or conic
@@ -1276,13 +1307,28 @@ total:
 | `VecMeasurement`, a **direction** (`Bound` is `Dimensionless`, §5.4) | `1` — the magnitude of a unit vector |
 | `VecMeasurement`, a **position**, and `Box` (`Bound` is a Length) | `Diag` |
 
-`Diag` is the diagonal of the document's bounding box — the box enclosing every live
-body. `Scale` is `Diag` **raised to the dimension of the quantity's `Kind`**: `Diag`
+**`Diag` is the bounding-box diagonal of the thing the result belongs to**, and
+that is decided by ownership, not by convenience:
+
+- a result on a `BodyReport` — `Volume`, `Area`, `Centroid`, `Bounds`,
+  `MinWallThickness`, `MinRadius`, and every vertex position and face normal of that
+  body — belongs to **one body**, and `Diag` is **that body's own** bounding-box
+  diagonal, i.e. the diagonal of that `BodyReport.Bounds`. A body's answers are
+  judged against the size of the body they are answers about;
+- an `Interference.Volume` and a `Clearance.Gap` belong to a **pair**, so no single
+  body's size is theirs to be judged against. For those, and only those, `Diag` is
+  the diagonal of the **document's** bounding box — the box enclosing every live
+  body. It is the one reference both members of the pair share.
+
+A diagonal is a difference of coordinates, so `Diag` is translation-invariant in
+either form — which is exactly what a position's reference must be.
+
+`Scale` is `Diag` **raised to the dimension of the quantity's `Kind`**: `Diag`
 for a length, `Diag²` for an area, `Diag³` for a volume, `1` for a dimensionless
-quantity. And `Quantum` is `ε × Scale` with `ε = 1e-9` fixed — the model's own noise
-level, the magnitude below which a quantity of that `Kind` is not distinguishable
-from zero at this model's size. `ε` is a constant of the gate, not the caller's
-knob: it is **not** `rel`, and `rel` never multiplies `Scale`.
+quantity. And `Quantum` is `ε × Scale` with `ε = 1e-9` fixed — the noise level of the
+thing being measured, the magnitude below which a quantity of that `Kind` is not
+distinguishable from zero at that size. `ε` is a constant of the gate, not the
+caller's knob: it is **not** `rel`, and `rel` never multiplies `Scale`.
 
 Three things follow, and all three are rules:
 
@@ -1291,30 +1337,38 @@ Three things follow, and all three are rules:
   the test is exactly `Bound <= rel × abs(Value)`: how many significant figures of
   this answer are real. `Quantum` is a floor, not a scale factor, and it never
   loosens the test for a quantity that has a magnitude of its own. A `Scale`-sized
-  reference would be an absolute threshold wearing a ratio's clothes: a body of
-  8 mm³ measured to ±5 mm³ — a 62% error — inside a 100mm model would pass it, and
-  it must not, and it does not.
+  reference would be an absolute threshold wearing a ratio's clothes — it would judge
+  a volume against the *extent* of the body rather than against the volume itself. A
+  100×100×0.001mm sliver has a `Diag` of 141.4mm and so a `Scale` of 2.83e6 mm³, but
+  a volume of 10 mm³: against `Scale` a ±5 mm³ bound — a 50% error — would pass at
+  every tolerance an evaluator can meet. Against its own 10 mm³ it is `Suspect` at
+  the default, and it must be, and it is.
 - **The near-zero case is still defined.** A zero clearance, or the volume of a
   degenerate body, has `|Value|` at or near zero, and a ratio to it is undefined or
   explosive. `Quantum` is what keeps the comparison total there. It engages only
-  when the quantity is itself below the model's noise level — and an `Approximate`
+  when the quantity is itself below the noise level — and an `Approximate`
   answer at the noise level, whose `Bound` is anything at all, then reads `Suspect`,
   which is the honest verdict: nothing has been proven about it. An `Exact` answer
   has a zero `Bound` and passes at the floor like everywhere else.
 - **A coordinate is judged against `Diag` alone**, never against its own magnitude:
   the magnitude of a position is origin-dependent, and translating the model must
-  never change the verdict.
+  never change the verdict. Because that `Diag` is the **owning body's**, the verdict
+  is also scale-free: a centroid is judged against the size of the body whose centroid
+  it is, so a 100mm bracket sharing a document with a 1.5m enclosure is judged against
+  its own 173mm, and does not inherit a slack tolerance from the biggest thing in the
+  document.
 
-Worked, at the default `rel = 1e-3`, in a document holding a 100×100×100mm block
-(`Diag` = 173.2mm, `Scale` = 5.196e6 mm³, `Quantum` = 5.2e-3 mm³):
+Worked, at the default `rel = 1e-3`, on two bodies:
 
-| Body | `Volume` | `Bound` | `Ref` | `rel × Ref` | Verdict |
-|---|---|---|---|---|---|
-| a small boolean off-cut | 8 mm³ | 5 mm³ (±62%) | 8 mm³ | 8e-3 mm³ | **`Suspect`** — 5 ≫ 8e-3 |
-| a Ø20×10mm cylinder, 1e-3 mm chord | 3142 mm³ | 1.3 mm³ (±0.04%) | 3142 mm³ | 3.14 mm³ | `Sound` — 1.3 ≤ 3.14 |
+| Body | `Diag` | `Volume` | `Bound` | `Ref` | `rel × Ref` | Verdict |
+|---|---|---|---|---|---|---|
+| a small boolean off-cut, ~2mm across | 3.5 mm | 8 mm³ | 5 mm³ (±62%) | 8 mm³ | 8e-3 mm³ | **`Suspect`** — 5 ≫ 8e-3 |
+| a Ø20×10mm cylinder, 1e-3 mm chord | 30 mm | 3142 mm³ | 1.3 mm³ (±0.04%) | 3142 mm³ | 3.14 mm³ | `Sound` — 1.3 ≤ 3.14 |
 
-The two are separated by three orders of magnitude in *relative* error, which is the
-only thing that distinguishes them, and it is exactly what the gate reads.
+`Quantum` is nowhere near either (4.3e-8 mm³ and 2.7e-5 mm³), so `Ref` is the volume
+itself in both rows. The two are separated by three orders of magnitude in *relative*
+error, which is the only thing that distinguishes them, and it is exactly what the
+gate reads.
 
 The gate has nothing to miss, because **every one of the three shapes carries a
 `Bound`**:
@@ -1330,9 +1384,30 @@ The gate has nothing to miss, because **every one of the three shapes carries a
 Either path makes `Trustworthy()` false. `Exact` answers have a zero `Bound` and
 can never trip it, at any tolerance. **Nothing in the report is exempt**, and the
 `VecMeasurement` of §5.4 is what makes that true: a centroid or a vertex position
-carries a bound like everything else, so a boolean that puts the centroid a
-millimetre off cannot hide inside a `Sound` body — which is the confidently-wrong
-failure §1 exists to prevent.
+carries a bound like everything else, so a boolean that puts the centroid off by
+more than `rel` of the body's own size cannot hide inside a `Sound` body — which is
+the confidently-wrong failure §1 exists to prevent.
+
+**That guarantee is relative, and it is stated relatively because that is what is
+true.** The gate on a centroid is `Bound <= rel × Diag` with `Diag` the owning
+body's bounding-box diagonal, so at the default `rel = 1e-3` a centroid bound
+passes only when it is under one part in a thousand of that body's diagonal:
+
+| Body | `Diag` | `rel × Diag` | a 1 mm centroid `Bound` reads |
+|---|---|---|---|
+| 100×100×100mm block | 173.2 mm | 0.173 mm | **`Suspect`** |
+| 1200×800×600mm enclosure | 1562 mm | 1.562 mm | `Sound` |
+| 1m cube | 1732 mm | 1.732 mm | `Sound` |
+
+A millimetre is a coarse answer on a 100mm block and the gate says so. On a body a
+metre across it is under one part in a thousand — three significant figures, which is
+what the default tolerance *means* and what the caller asked for. A caller who needs
+an absolute millimetre on a metre-scale body buys it with figures: `rel = 5e-4` puts
+the 1m cube's gate at 0.87mm and the enclosure's at 0.78mm. What is ruled out
+absolutely — at every tolerance, on every body — is the failure §1 names: an error
+that is large *relative to the part it is an error about* sitting inside a `Sound`
+report. Judging the centroid against the owning body rather than the document is what
+makes that reading hold at any scale.
 
 `Status` is one type used at two levels:
 
@@ -1420,11 +1495,14 @@ to make that mechanical.
 - **`ErrNegativeMagnitude` covers exactly the magnitudes.** Those are `Distance.D`,
   `DistanceSide.D`, `Symmetric.D`, `AngleExtent.A`, `AngleSide.A`,
   `SymmetricAngle.A`, every fillet and chamfer radius or distance, every shell
-  thickness, the `WithTolerance` relative tolerance (§10.1), the
-  `WithMinWallThickness` tool size (§10.1), and the `Tessellate` tolerance (§11). It
-  does **not** cover `ToFace.Offset`, which is a signed displacement along the target
-  face's normal and not a magnitude at all (§8.1) — a negative offset there is a
-  legal intent, not an error.
+  thickness, the `LongerThan(l)` edge-predicate length (§9), the `WithTolerance`
+  relative tolerance (§10.1), the `WithMinWallThickness` tool size (§10.1), and the
+  `Tessellate` tolerance (§11). Two `units.Value` parameters are **signed
+  displacements, not magnitudes**, and are outside it: `ToFace.Offset`, which
+  displaces along the target face's normal and whose sign says which side of that
+  face the sweep stops on (§8.1); and `ExtrudeOpts.Taper` (`WithTaper`, §8.1),
+  whose sign says which way the wall leans. Neither carries a `Direction` to reverse,
+  so a negative value there is a legal intent, not an error.
 - **`ErrCardinality` takes precedence at zero matches.** A failed cardinality
   assertion is `ErrCardinality` **even when the selector matched nothing** — and
   that covers both the explicit assertions, `Exactly(n)` / `AtLeast(n)` (§9), and

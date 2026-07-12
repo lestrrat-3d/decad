@@ -36,10 +36,13 @@ type.
   `float64` measurement. NEVER give a boolean a target-out parameter or let it
   mutate an operand.** These are the forward-compatibility invariants that keep
   an exact-kernel future reachable (`docs/api-design.md` §3). Scalar quantities —
-  values and their error bounds alike — are `units.Value`. The single exception is
-  the coordinate — an `r3.Vec`, or a plane-local `Point2` — which is a length in
-  millimetres by convention (`docs/api-design.md` §5.2); it is not a licence for
-  any other bare float.
+  values and their error bounds alike — are `units.Value`. Exactly two things are
+  not scalar quantities and so fall outside the rule (`docs/api-design.md` §5.2):
+  the **coordinate** — an `r3.Vec`, or a plane-local `Point2` — which is a length in
+  millimetres by convention; and the **curve parameter** — a spline's degree, knots,
+  weights and parameter range (`TStart`/`TEnd`), a conic's fullness `Rho` — which is
+  a dimensionless index into a parameterisation, not a measurement of anything.
+  Neither is a licence for a bare float anywhere else.
 - **NEVER add a `go.mod` module without recording the decision here.** Approved:
   - `github.com/lestrrat-3d/sketch` — parametric 2D constraint engine.
   - `github.com/lestrrat-3d/r3` — 3D coordinate math (`Vec`, `Frame`).
