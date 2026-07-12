@@ -13,10 +13,11 @@ models a part here and proves it sound — watertight, correct volume, no
 interference, no wall thinner than the tool — BEFORE committing to write real
 CAD software code (e.g. an Autodesk Fusion add-in). Be wrong in the cheap place.
 
-**Current state: scaffolding.** Infrastructure, dependency wiring and design
-contract only. No public API exists. The kernel representation — what a `Body`
-is (B-rep / mesh / hybrid) — is undecided, and every downstream choice (features,
-booleans, exports, verification depth) hangs off it.
+**Current state: scaffolding + an approved API design.** No public API exists yet.
+`docs/api-design.md` is the contract for the one that lands: a recipe/evaluator
+split, a B-rep-shaped surface, immediate-mode features, selectors instead of
+handles, and `Exactness` on every measurement. Read it before writing any public
+type.
 
 ## Hard rules
 
@@ -29,8 +30,11 @@ booleans, exports, verification depth) hangs off it.
   matrix solve.
 - **Shapes belong HERE.** `r3` excludes them by charter; solids/surfaces/meshes/
   topology are this module's job.
-- **NEVER add a public API without a design doc in `docs/` landing first.** The
-  kernel representation is undecided, and every downstream choice depends on it.
+- **NEVER add a public API that contradicts `docs/api-design.md`.** Extending it
+  is fine; changing a decision means changing the doc first.
+- **NEVER expose triangles as the representation, indices as selectors, or a bare
+  `float64` measurement.** These are the forward-compatibility invariants that keep
+  an exact-kernel future reachable (`docs/api-design.md` §3).
 - **NEVER add a `go.mod` module without recording the decision here.** Approved:
   - `github.com/lestrrat-3d/sketch` — parametric 2D constraint engine.
   - `github.com/lestrrat-3d/r3` — 3D coordinate math (`Vec`, `Frame`).
@@ -44,6 +48,7 @@ booleans, exports, verification depth) hangs off it.
 
 | Path | Responsibility |
 |---|---|
+| `docs/api-design.md` | **The public API contract.** Recipe/evaluator split, forward-compat invariants, feature + selector + verification surface. |
 | `doc.go` | Package doc: scope + the layering contract. |
 | `wiring_test.go` | Dependency smoke test — solves a `sketch` profile, lifts it to world space via `r3.Frame`. Asserts nothing about decad. **Delete when real decad code imports both deps.** |
 | `.github/workflows/` | `ci.yml` (lint → test/tidy/govulncheck), `codeql.yml`. |
