@@ -84,7 +84,7 @@ These are cheap now and expensive to retrofit. They are the upgrade path.
 | 1 | **NEVER expose triangles as the representation.** `Tessellate(tol)` is an output; the public vocabulary is `Body → Face → Edge → Vertex` even while the backing is approximate. | A public `Triangles()` is a one-way door; callers depend on it and vN can never remove it. |
 | 2 | **Every measurement carries `Exactness`, from the first commit.** | Makes the upgrade **monotonic, not breaking**: callers already branch on `Approximate`; in vN that branch stops being taken and nobody's code changes. A bare `float64` today means adding exactness later breaks every call site. |
 | 3 | **Selectors, never indices.** `Body.Faces()` / `Edges()` / `Vertices()` exist for **traversal and inspection only**; no feature, selector, or recipe ever accepts an index or a bare topology pointer. | An exact kernel produces a different (more correct) face/edge decomposition. If `Edges()[3]` is the API, index order becomes a de facto contract and vN breaks every model. |
-| 4 | **Booleans are pure functions.** `Union(a, b) (*Body, error)` — never Fusion's in-place `booleanOperation(target, tool, type) -> bool`. | A pure signature lets the implementation be swapped with zero API churn. |
+| 4 | **Booleans never mutate their operands, and take no target-out parameter.** `Union(a, b) (*Body, error)` — never Fusion's in-place `booleanOperation(target, tool, type) -> bool`. | A signature free of in-place mutation lets the implementation be swapped with zero API churn. |
 | 5 | **Imported meshes are a separate type.** A `MeshBody` never claims to be a solid B-rep. | For imported triangle soup, no future kernel can recover exactness. Keeping it separate stops approximate-forever geometry from contaminating the type we promise to make exact. |
 
 **What will still churn**, stated honestly: face/edge *counts* may change under an
@@ -171,7 +171,7 @@ hand-roll around either.
 
 | Gap | Proposal | Blocks |
 |---|---|---|
-| **`r3` has no rigid transform type.** `Frame` covers plane-local↔world only; placing a body at an arbitrary pose needs rotation + translation. | Add `r3.Transform` upstream. It *acts on* ℝ³, which is r3's charter. | Body placement. |
+| **`r3` has no rigid transform type.** `Frame` covers plane-local↔world only; placing a body at an arbitrary pose needs rotation + translation. | Add `r3.Transform` upstream. It *acts on* ℝ³, which is r3's charter. | Body placement — `Body.Placed` (§8), and with it the explicit-transform answer to assemblies (§13). |
 | **`sketch/units` has no Area / Volume / Mass / Density kinds.** `units.Kind` is Dimensionless / Length / Angle only, so a `units.Value` cannot hold `12.9997 mm³`. | Add those kinds upstream to `sketch/units` — it is a first-party module — so `Measurement.Value` stays a single `units.Value` and the no-parallel-unit-system rule holds. | Every volume / area / mass measurement — i.e. most of `Verify`. |
 
 Until the units kinds land, `Measurement` **cannot be implemented as specified**,
@@ -234,14 +234,17 @@ func (d *Document) Verify(ctx context.Context, opts ...VerifyOption) *Report
 retired from the document.
 
 **A `*Body` carries its owning `*Document`.** This is what lets a boolean keep the
-pure signature invariant #4 demands while `Document.Bodies()` stays truthful:
-`Union(a, b)` reaches the document *through* `a`, so retiring the operands and
-registering the result happen inside the operation, with no `*Document` argument
-and no caller bookkeeping. The rule is uniform — every operation that consumes a
-body (the booleans of §8, and the `Body.Fillet` / `Chamfer` / `Shell` modify ops)
-retires its input body or bodies from the document and registers the body it
-returns. A retired body remains readable, but it is gone from `Document.Bodies()`
-and `Document.Verify()` never reports on it.
+signature invariant #4 demands — no target-out parameter, no operand mutated —
+while `Document.Bodies()` stays truthful: `Union(a, b)` reaches the document
+*through* `a`, so retiring the operands and registering the result happen inside
+the operation, with no `*Document` argument and no caller bookkeeping. Operands
+themselves are untouched: retiring is a change of *document* membership, not of
+the body, which stays immutable and readable. The rule is uniform — every
+operation that consumes a body (the booleans of §8, the `Body.Fillet` /
+`Chamfer` / `Shell` modify ops, and `Body.Placed`) retires its input body or
+bodies from the document and registers the body it returns. A retired body
+remains readable, but it is gone from `Document.Bodies()` and
+`Document.Verify()` never reports on it.
 
 It follows that **bodies from different documents cannot be combined**.
 `Union(a, b)` where `a` and `b` have different owners has no defined result — which
@@ -348,11 +351,12 @@ type Recipe struct {
 }
 
 type Step struct {
-    Op        OpKind        // Extrude / Revolve / Union / Cut / Intersect / Fillet / Chamfer / Shell
+    Op        OpKind          // Extrude / Revolve / Union / Cut / Intersect / Fillet / Chamfer / Shell
     Profile   *sketch.Profile // the source region, when the op has one
-    Extent    Extent          // or AngularExtent, per Op
+    Extent    Extent          // set for Extrude; nil for Revolve
+    Angular   AngularExtent   // set for Revolve; nil for Extrude
     Axis      Axis            // revolve only
-    Selectors []any           // the EdgeSelector / FaceSelector queries, unresolved
+    Selectors []Selector      // the edge / face queries, unresolved
     Values    []units.Value   // radii, distances, thicknesses
 }
 
@@ -363,6 +367,24 @@ type Param struct {
 
 type OpKind int
 ```
+
+`Extent` and `Angular` are the two disjoint extent sets of §8.1, and **exactly one
+of them is non-nil, keyed to `Op`**: `Extrude` sets `Extent` and leaves `Angular`
+nil; `Revolve` sets `Angular` and leaves `Extent` nil; every other `Op` leaves both
+nil. That is what lets a `Recipe` encode a revolve at all — an `AngularExtent` is
+not assignable to an `Extent` field, by design.
+
+`Selector` is the sealed root of the selector vocabulary, so a `Step` never holds
+an `any` — Fusion's `core.Base`-as-anything is rejected in §4, and `Recipe` is the
+last place to reintroduce it:
+
+```go
+// Selector is what a Step may carry: an unresolved edge or face query.
+type Selector interface{ selector() }
+```
+
+Every `EdgeSelector` and `FaceSelector` implementation is a `Selector`; in
+particular `*EdgeQuery` and `*FaceQuery` (§9) satisfy all three.
 
 **`Axis`** — sealed; what a revolve may spin about.
 
@@ -404,6 +426,31 @@ type EdgePredicate struct{ /* ... */ } // one clause of an EdgeQuery; the §9 co
 type FacePredicate struct{ /* ... */ } // one clause of a FaceQuery
 ```
 
+The remaining topology of §2's chain, each deferred but for the one method that
+carries its weight:
+
+```go
+// Lump is a connected solid piece of a body. Body.Lumps() returning more than one
+// means the body is disconnected.
+type Lump struct{ /* ... */ }
+
+// Shell is a connected set of faces.
+type Shell struct{ /* ... */ }
+func (s *Shell) IsVoid() bool // true when the shell bounds an internal cavity
+
+// Loop is a boundary loop of a face.
+type Loop struct{ /* ... */ }
+func (l *Loop) IsOuter() bool // the outer boundary; false for a hole
+
+// Vertex is a topological point.
+type Vertex struct{ /* ... */ }
+func (v *Vertex) Position() r3.Vec // a length in millimetres — the §5.2 carve-out
+
+// MeshBody is imported triangle soup. It NEVER claims to be a solid B-rep —
+// invariant #5 — and mesh import is a v1 non-goal (§13).
+type MeshBody struct{ /* ... */ }
+```
+
 ## 7. The sketch seam
 
 `sketch` answers every 2D question; decad consumes the answer and NEVER
@@ -436,8 +483,9 @@ func (d *Document) Extrude(p *sketch.Profile, e Extent, opts ...ExtrudeOption) (
 func (d *Document) Revolve(p *sketch.Profile, axis Axis, a AngularExtent, opts ...RevolveOption) (*Body, error)
 ```
 
-Booleans are **explicit and pure** — not folded into every feature with an
-ambient, implicitly-chosen target:
+Booleans are **explicit** — not folded into every feature with an ambient,
+implicitly-chosen target — and they never mutate an operand or take a target-out
+parameter:
 
 ```go
 func Union(a, b *Body) (*Body, error)
@@ -447,9 +495,9 @@ func Intersect(a, b *Body) (*Body, error)
 
 No `*Document` appears in those signatures, and none is needed: a `*Body` carries
 its owning document (§6), so each call retires its operands and registers its
-result inside the document that owns them. The signature stays pure — invariant #4
-— and `Document.Bodies()` and `Document.Verify()` stay truthful. Operands owned by
-different documents are `ErrForeignBody`.
+result inside the document that owns them. The operands are themselves unchanged
+— invariant #4 — and `Document.Bodies()` and `Document.Verify()` stay truthful.
+Operands owned by different documents are `ErrForeignBody`.
 
 Modify operations return a new body, retiring the receiver, on the same terms:
 
@@ -458,6 +506,20 @@ func (b *Body) Fillet(sel EdgeSelector, r units.Value) (*Body, error)
 func (b *Body) Chamfer(sel EdgeSelector, d units.Value) (*Body, error)
 func (b *Body) Shell(sel FaceSelector, thickness units.Value) (*Body, error)
 ```
+
+Placement is a body operation on the same terms — it retires the receiver and
+registers the placed body — and is **blocked on `r3.Transform` landing upstream**
+(§5.3):
+
+```go
+func (b *Body) Placed(t r3.Transform) (*Body, error) // blocked on r3.Transform (§5.3)
+```
+
+This is the whole of the "explicit transforms" story: a body is positioned by an
+argument the caller states, never by an ambient assembly context (§4). Until
+`r3.Transform` exists, `Placed` **cannot be implemented as specified** — it is not
+in the v1 vocabulary above, and no `OpKind` records it — and decad will not
+hand-roll a transform type around the gap.
 
 ### 8.1 Extent — illegal states unrepresentable
 
@@ -470,12 +532,13 @@ Extrude takes a **linear** extent:
 type Extent interface{ extent() }
 
 // SideExtent is what ONE side of a two-sided extent may be. Sealed, and narrower
-// than Extent: implemented ONLY by Distance, ThroughAll and ToFace.
+// than Extent: implemented ONLY by Distance, ThroughAllSide and ToFace.
 type SideExtent interface{ sideExtent() }
 
 type Distance   struct { D units.Value }               // Extent AND SideExtent
-type ThroughAll struct { Dir Direction }               // Extent AND SideExtent
 type ToFace     struct { Face FaceSelector; Offset units.Value } // Extent AND SideExtent
+type ThroughAll struct { Dir Direction }               // Extent ONLY
+type ThroughAllSide struct{}                           // SideExtent ONLY
 type Symmetric  struct { D units.Value; FullLength bool }        // Extent ONLY
 type TwoSided   struct { One, Two SideExtent }                   // Extent ONLY
 ```
@@ -505,6 +568,16 @@ implement only the outer interface and not the inner one,
 `TwoSidedAngle{One: FullRevolution{}}` do not compile. Illegal states are
 unrepresentable structurally, not rejected at runtime.
 
+`ThroughAll` and `ThroughAllSide` are split for the same reason, **by role**.
+Standalone, "through all" must say which way it runs, so `ThroughAll` carries a
+`Direction` (up / down / both) and satisfies `Extent` only. As a *side* of a
+`TwoSided` it must not: the side already **is** a single direction of travel, so a
+second, possibly contradicting direction on the same value —
+`TwoSided{One: ThroughAll{Dir: both}}` — is precisely the illegal state this
+section abolishes. `ThroughAllSide` therefore carries no direction, satisfies
+`SideExtent` only, and takes its sense from the side it occupies. Neither form is
+assignable where the other belongs.
+
 The two sets are **deliberately disjoint**: no linear extent satisfies
 `AngularExtent` and no angular extent satisfies `Extent`. That is what makes
 "revolve 90mm" unrepresentable rather than a runtime error.
@@ -529,14 +602,18 @@ stable. Its `isTangentChain` flag is the workaround; we take the lesson properly
 **A feature is given a query, never a pointer.**
 
 Features accept the **interfaces**; the constructors return the **concrete query
-types** that implement them and that carry the cardinality assertions.
+types** that implement them and that carry the cardinality assertions. Both
+interfaces embed the sealed `Selector` root (§6.2), so every selector a feature
+accepts is a value a `Recipe` can record.
 
 ```go
 type EdgeSelector interface {
+    Selector
     SelectEdges(*Body) ([]*Edge, error)
 }
 
 type FaceSelector interface {
+    Selector
     SelectFaces(*Body) ([]*Face, error)
 }
 
@@ -554,6 +631,10 @@ type FaceQuery struct{ /* ... */ }
 func (q *FaceQuery) SelectFaces(*Body) ([]*Face, error)
 func (q *FaceQuery) Exactly(n int) *FaceQuery
 func (q *FaceQuery) AtLeast(n int) *FaceQuery
+
+// Both queries seal into Selector (§6.2), which is what a Recipe Step stores.
+func (q *EdgeQuery) selector()
+func (q *FaceQuery) selector()
 
 // Predicates compose.
 func Convex() EdgePredicate
@@ -607,24 +688,25 @@ type Report struct {
 func (r *Report) Trustworthy() bool // the single bit to gate on
 
 type BodyReport struct {
-    Body             *Body
-    Status           Status        // Sound / Suspect / Unsound — this body only
-    Solid            bool
-    Watertight       bool
-    Manifold         bool          // every edge bounds exactly 2 faces
-    SelfIntersecting bool
-    Lumps            int           // > 1 == disconnected pieces
-    Voids            int           // internal cavities (Shell.IsVoid)
-    Volume           Measurement
-    Area             Measurement
-    Centroid         r3.Vec
-    Bounds           Box
-    Exactness        Exactness     // the weakest link across this body
+    Body              *Body
+    Status            Status       // Sound / Suspect / Unsound — this body only
+    Solid             bool
+    Watertight        bool
+    Manifold          bool         // every edge bounds exactly 2 faces
+    SelfIntersecting  bool
+    Lumps             int          // > 1 == disconnected pieces
+    Voids             int          // internal cavities (Shell.IsVoid)
+    Volume            Measurement
+    Area              Measurement
+    Centroid          r3.Vec       // millimetres — the §5.2 carve-out
+    CentroidExactness Exactness    // mirrors Body.Centroid() (§6); invariant #2
+    Bounds            Box
+    Exactness         Exactness    // the weakest link across this body
 
     // Opt-in, expensive:
-    MinWallThickness *Measurement  // WithMinWallThickness(tool)
-    Undercuts        []*Face       // WithPullDirection(v)
-    MinRadius        *Measurement  // WithMinRadius() — can the endmill reach?
+    MinWallThickness  *Measurement // WithMinWallThickness(tool)
+    Undercuts         []*Face      // WithPullDirection(v)
+    MinRadius         *Measurement // WithMinRadius() — can the endmill reach?
 }
 ```
 
@@ -685,18 +767,28 @@ to make that mechanical.
 
 - `(T, error)`. NEVER a `bool` return, a `-1` sentinel, or a deferred health state.
 - Sentinel/typed errors for the cases an agent must branch on: `ErrNoMatch`
-  (selector matched nothing), `ErrCardinality` (a selector resolved to the wrong
-  number of entities — including a `ToFace` / `ToFaceAngular` selector that did not
-  resolve to exactly one face), `ErrForeignBody` (an operation was handed bodies
+  (a selector carrying no cardinality assertion matched nothing), `ErrCardinality`
+  (a cardinality assertion failed), `ErrForeignBody` (an operation was handed bodies
   owned by different documents), `ErrNotSolid`, `ErrDegenerate`, `ErrBooleanFailed`,
   `ErrInvalidProfile`, `ErrUnitKind`.
+- **`ErrCardinality` takes precedence at zero matches.** A failed cardinality
+  assertion is `ErrCardinality` **even when the selector matched nothing** — and
+  that covers both the explicit assertions, `Exactly(n)` / `AtLeast(n)` (§9), and
+  the *implicit* exactly-one of `ToFace` / `ToFaceAngular` (§8.1). `ErrNoMatch` is
+  reserved for the one remaining case: a selector that asserts no cardinality at
+  all and resolves to zero entities.
 - `Body` is immutable → safe to read from many goroutines.
 - `Document` owns mutable state and is NOT safe for concurrent mutation. `Verify`
   is non-mutating and safe.
 
 ## 13. Non-goals for v1
 
-Assemblies (`Component`/`Occurrence` instancing — bodies with explicit transforms
-cover interference and clearance without the DAG), a feature tree / timeline /
-rollback, sweep and loft, STEP, sheet metal, mesh import, GUI or view state of any
-kind, and Fusion code generation.
+Assemblies (`Component`/`Occurrence` instancing and the DAG that comes with it), a
+feature tree / timeline / rollback, sweep and loft, STEP, sheet metal, mesh import,
+GUI or view state of any kind, and Fusion code generation.
+
+The assemblies non-goal rests on a plan, not on a capability already in hand:
+interference and clearance (§10) are computed between **explicitly-placed bodies**
+— `Body.Placed(t r3.Transform)` (§8) — which needs no instancing graph. That plan
+is **gated on `r3.Transform` landing** (§5.3). Until it does, a body sits where its
+profile put it, and multi-body interference is limited to what that reaches.

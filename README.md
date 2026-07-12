@@ -4,9 +4,10 @@ A **headless CAD engine** for Go: the 3D modeling layer above the
 [sketch](https://github.com/lestrrat-3d/sketch) 2D constraint engine and the
 [r3](https://github.com/lestrrat-3d/r3) coordinate-math layer.
 
-> **Status: scaffolding.** The repository carries its infrastructure, its
-> dependency wiring and its design contract. The public API is **not designed
-> yet**. There is nothing to import.
+> **Status: scaffolding, plus an approved API design.** The repository carries
+> its infrastructure, its dependency wiring, and the API contract in
+> [`docs/api-design.md`](docs/api-design.md). No public API exists yet — there is
+> nothing to import — and any that lands must follow that contract.
 
 ## Why this exists
 

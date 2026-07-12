@@ -36,9 +36,9 @@
 //
 // # Status
 //
-// Scaffolding only. The public API is not designed yet, and no kernel surface
-// should be added to this package without a design doc landing first. See
-// CLAUDE.md.
+// Scaffolding, plus an approved API design. No public API exists yet; the
+// contract for the one that lands is docs/api-design.md, and nothing that
+// contradicts it may be added to this package.
 //
 // [sketch]: https://github.com/lestrrat-3d/sketch
 // [r3]: https://github.com/lestrrat-3d/r3

@@ -33,7 +33,8 @@ type.
 - **NEVER add a public API that contradicts `docs/api-design.md`.** Extending it
   is fine; changing a decision means changing the doc first.
 - **NEVER expose triangles as the representation, indices as selectors, or a bare
-  `float64` measurement.** These are the forward-compatibility invariants that keep
+  `float64` measurement. NEVER give a boolean a target-out parameter or let it
+  mutate an operand.** These are the forward-compatibility invariants that keep
   an exact-kernel future reachable (`docs/api-design.md` §3). Scalar quantities —
   values and their error bounds alike — are `units.Value`. The single exception is
   the `r3.Vec` coordinate, which is a length in millimetres by convention
