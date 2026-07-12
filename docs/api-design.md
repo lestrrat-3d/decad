@@ -83,7 +83,7 @@ These are cheap now and expensive to retrofit. They are the upgrade path.
 |---|---|---|
 | 1 | **NEVER expose triangles as the representation.** `Tessellate(tol)` is an output; the public vocabulary is `Body → Face → Edge → Vertex` even while the backing is approximate. | A public `Triangles()` is a one-way door; callers depend on it and vN can never remove it. |
 | 2 | **Every measurement carries `Exactness`, from the first commit.** | Makes the upgrade **monotonic, not breaking**: callers already branch on `Approximate`; in vN that branch stops being taken and nobody's code changes. A bare `float64` today means adding exactness later breaks every call site. |
-| 3 | **Selectors, never indices.** | An exact kernel produces a different (more correct) face/edge decomposition. If `Edges()[3]` is the API, index order becomes a de facto contract and vN breaks every model. |
+| 3 | **Selectors, never indices.** `Body.Faces()` / `Edges()` / `Vertices()` exist for **traversal and inspection only**; no feature, selector, or recipe ever accepts an index or a bare topology pointer. | An exact kernel produces a different (more correct) face/edge decomposition. If `Edges()[3]` is the API, index order becomes a de facto contract and vN breaks every model. |
 | 4 | **Booleans are pure functions.** `Union(a, b) (*Body, error)` — never Fusion's in-place `booleanOperation(target, tool, type) -> bool`. | A pure signature lets the implementation be swapped with zero API churn. |
 | 5 | **Imported meshes are a separate type.** A `MeshBody` never claims to be a solid B-rep. | For imported triangle soup, no future kernel can recover exactness. Keeping it separate stops approximate-forever geometry from contaminating the type we promise to make exact. |
 
@@ -121,7 +121,7 @@ Loosely based on the Fusion SDK. The odd parts are thrown away deliberately.
 | `core.Base` as a parameter type ("planarEntity") | No sum types in COM IDL | Sealed interfaces |
 | Booleans folded into every feature (`FeatureOperations`) with `participantBodies = nil` meaning "guess" | Convenient in a UI | **Explicit** boolean ops with an explicit target |
 | Mutable `Point3D`/`Vector3D`/`Matrix3D` with in-place mutators | COM reference objects | `r3.Vec` immutable value structs |
-| GUI state on the geometry model (`isLightBulbOn` ×8, `displayBounds`, `opacity`, `Timeline.play()`) | The API is a scripting shim over the GUI | Keep view state out entirely |
+| GUI state on the geometry model (`isLightBulbOn` ×16, `displayBounds`, `opacity`, `Timeline.play()`) | The API is a scripting shim over the GUI | Keep view state out entirely |
 | `LowCalculationAccuracy` default (±1%) | UI responsiveness | Accuracy is explicit; verification NEVER defaults to loose |
 | `boundingBox` (knowingly loose) beside `preciseBoundingBox` | Legacy | One `Bounds()`, as tight as the evaluator can prove — and it reports its own exactness. The sin is being loose *without saying so*. |
 | `volume == 0` meaning both "empty" and "not a solid" | Sloppiness | `(Measurement, error)` |
@@ -151,6 +151,18 @@ the wrong-`Kind`-is-an-error rule means they cannot be faked. See §5.3.
 `r3.Vec` and `r3.Frame` only. `Frame` is orthonormal, so the inverse is the
 transpose, never a matrix solve.
 
+**The one deliberate exception to §5.1.** An `r3.Vec` *position* — `Box.Min`,
+`Box.Max`, `Body.Centroid`, `Cylinder.Origin`, every point the API returns or
+accepts — is a **length in the base unit, millimetres**. It is not a `units.Value`
+and never becomes one: a vector of three typed quantities cannot be added, scaled,
+dotted or crossed without unwrapping it at every step, which makes coordinate math
+unusable and pushes callers back to hand-rolling. (An `r3.Vec` used as a *direction*
+— `Cylinder.Axis`, `NormalTo(v)` — is dimensionless, and carries no unit at all.)
+
+Vectors carry the unit **by convention**; scalars carry it **in the type**. §5.1
+governs scalars, and this is the whole of the carve-out — a bare `float64` scalar
+quantity is still forbidden anywhere in the API.
+
 ### 5.3 Dependency-side decisions (blockers)
 
 Two capabilities decad's API depends on do not exist in its dependencies yet. Both
@@ -164,6 +176,12 @@ hand-roll around either.
 
 Until the units kinds land, `Measurement` **cannot be implemented as specified**,
 and decad will **not** work around it by inventing a parallel unit system.
+
+The units gap is **wider than the measured value alone**. `Measurement.Bound` and
+`Box.Bound` are `units.Value` too, carrying the same `Kind` as the quantity they
+bound — the error bound on a volume is itself a volume, so it needs the Volume kind
+as much as the volume does. So does `Interference.Volume` (§6.2). The blocker
+covers the bound, not just the number.
 
 ### 5.4 Exactness — the load-bearing type
 
@@ -179,15 +197,19 @@ const (
 type Measurement struct {
     Value     units.Value
     Exactness Exactness
-    Bound     float64 // absolute error bound in base units; 0 when Exact
+    Bound     units.Value // absolute error bound, same Kind as Value; zero when Exact
 }
 ```
+
+`Bound` carries the same `Kind` as `Value` — the error bound on a volume is a
+volume. It is never a bare `float64`; invariant #2 and §5.1 admit no exception
+here.
 
 Every measurement returns one:
 
 ```go
-vol, err := body.Volume()  // v1 after a boolean: {12.9997mm³, Approximate, 1e-3}
-                           // vN:                 {13.0000mm³, Exact,       0}
+vol, err := body.Volume()  // v1 after a boolean: {12.9997mm³, Approximate, 1e-3mm³}
+                           // vN:                 {13.0000mm³, Exact,       0mm³}
 ```
 
 ## 6. The document and bodies
@@ -211,8 +233,24 @@ func (d *Document) Verify(ctx context.Context, opts ...VerifyOption) *Report
 `Body` is **immutable**; every operation returns a new one, and the input body is
 retired from the document.
 
+**A `*Body` carries its owning `*Document`.** This is what lets a boolean keep the
+pure signature invariant #4 demands while `Document.Bodies()` stays truthful:
+`Union(a, b)` reaches the document *through* `a`, so retiring the operands and
+registering the result happen inside the operation, with no `*Document` argument
+and no caller bookkeeping. The rule is uniform — every operation that consumes a
+body (the booleans of §8, and the `Body.Fillet` / `Chamfer` / `Shell` modify ops)
+retires its input body or bodies from the document and registers the body it
+returns. A retired body remains readable, but it is gone from `Document.Bodies()`
+and `Document.Verify()` never reports on it.
+
+It follows that **bodies from different documents cannot be combined**.
+`Union(a, b)` where `a` and `b` have different owners has no defined result — which
+document would own it? — and is `ErrForeignBody` (§12).
+
 ```go
 type Body struct{ /* ... */ }
+
+func (b *Body) Document() *Document // the document that owns this body
 
 func (b *Body) Lumps() []*Lump    // disjoint pieces; len > 1 means disconnected
 func (b *Body) Shells() []*Shell  // Shell.IsVoid() marks an internal cavity
@@ -235,9 +273,9 @@ by `Faceted` faces and is therefore *not* tight, and says so:
 
 ```go
 type Box struct {
-    Min, Max  r3.Vec
+    Min, Max  r3.Vec      // lengths in millimetres — the §5.2 carve-out
     Exactness Exactness
-    Bound     float64 // absolute error bound in base units; 0 when Exact
+    Bound     units.Value // absolute error bound, Kind Length; zero when Exact
 }
 ```
 
@@ -290,6 +328,82 @@ type Faceted struct{ /* ... */ }
 
 A `switch` on `Surface` MUST carry a `default` — vN adds variants.
 
+### 6.2 Supporting types
+
+The rest of the vocabulary the signatures above and below name. Shapes given here
+are load-bearing; the rest are deferred, not undecided.
+
+**`Recipe`** — the exact record of intent, and per §2 the library's actual
+deliverable, so it is a real value, not a handle. An ordered, immutable list of
+steps; each step is an exact statement of intent — the feature kind, its profile
+and parameters, and the *selectors* (never resolved pointers, never indices) it
+was given. It is declarative and kernel-independent: nothing in a `Recipe` names a
+face, an edge, a tessellation or an evaluator, which is what lets a second
+evaluator re-run it and what makes emitting Fusion code from it mechanical (§11).
+
+```go
+type Recipe struct {
+    Steps  []Step         // ordered, immutable; the model, exactly as meant
+    Params []Param        // the named quantities the steps are written against
+}
+
+type Step struct {
+    Op        OpKind        // Extrude / Revolve / Union / Cut / Intersect / Fillet / Chamfer / Shell
+    Profile   *sketch.Profile // the source region, when the op has one
+    Extent    Extent          // or AngularExtent, per Op
+    Axis      Axis            // revolve only
+    Selectors []any           // the EdgeSelector / FaceSelector queries, unresolved
+    Values    []units.Value   // radii, distances, thicknesses
+}
+
+type Param struct {
+    Name  string
+    Value units.Value
+}
+
+type OpKind int
+```
+
+**`Axis`** — sealed; what a revolve may spin about.
+
+```go
+type Axis interface{ axis() }
+
+type SketchLine   struct{ /* ... */ } // a line in the source sketch
+type ConstructionAxis struct{ /* ... */ } // an explicit axis in the document
+type EdgeAxis     struct{ Edge EdgeSelector } // a linear edge, selected — never a pointer
+```
+
+**`Interference` / `Clearance`** — the pairwise results of §10. Both name the two
+bodies and carry their quantity as a `Measurement`, so both report their own
+exactness like everything else.
+
+```go
+// Interference: the two bodies overlap, and by how much.
+type Interference struct {
+    A, B   *Body
+    Volume Measurement // the overlap volume; needs the Volume kind — see §5.3
+}
+
+// Clearance: the two bodies do not overlap, and how close they come.
+type Clearance struct {
+    A, B *Body
+    Gap  Measurement // minimum distance between the two surfaces
+}
+```
+
+The rest are deferred:
+
+```go
+type Direction struct{ /* ... */ }     // a sense along a sketch normal: up / down / both
+type FeatureRef struct{ /* ... */ }    // an opaque handle to the feature that created a body or face
+type Mesh struct{ /* ... */ }          // a triangle mesh; an OUTPUT of Tessellate, never the representation
+type Curve interface{ curve() }        // sealed, like Surface: Line / Circle / Arc / Ellipse / NURBSCurve / FacetedCurve
+type SurfaceKind int                   // the discriminant a Surface reports: Plane / Cylinder / Cone / Sphere / Torus / NURBS / Faceted
+type EdgePredicate struct{ /* ... */ } // one clause of an EdgeQuery; the §9 constructors return these
+type FacePredicate struct{ /* ... */ } // one clause of a FaceQuery
+```
+
 ## 7. The sketch seam
 
 `sketch` answers every 2D question; decad consumes the answer and NEVER
@@ -331,7 +445,13 @@ func Cut(target, tool *Body) (*Body, error)
 func Intersect(a, b *Body) (*Body, error)
 ```
 
-Modify operations return a new body:
+No `*Document` appears in those signatures, and none is needed: a `*Body` carries
+its owning document (§6), so each call retires its operands and registers its
+result inside the document that owns them. The signature stays pure — invariant #4
+— and `Document.Bodies()` and `Document.Verify()` stay truthful. Operands owned by
+different documents are `ErrForeignBody`.
+
+Modify operations return a new body, retiring the receiver, on the same terms:
 
 ```go
 func (b *Body) Fillet(sel EdgeSelector, r units.Value) (*Body, error)
@@ -349,28 +469,51 @@ Extrude takes a **linear** extent:
 ```go
 type Extent interface{ extent() }
 
-type Distance   struct { D units.Value }
-type Symmetric  struct { D units.Value; FullLength bool }
-type TwoSided   struct { One, Two Extent }
-type ThroughAll struct { Dir Direction }
-type ToFace     struct { Face *Face; Offset units.Value }
+// SideExtent is what ONE side of a two-sided extent may be. Sealed, and narrower
+// than Extent: implemented ONLY by Distance, ThroughAll and ToFace.
+type SideExtent interface{ sideExtent() }
+
+type Distance   struct { D units.Value }               // Extent AND SideExtent
+type ThroughAll struct { Dir Direction }               // Extent AND SideExtent
+type ToFace     struct { Face FaceSelector; Offset units.Value } // Extent AND SideExtent
+type Symmetric  struct { D units.Value; FullLength bool }        // Extent ONLY
+type TwoSided   struct { One, Two SideExtent }                   // Extent ONLY
 ```
 
-Revolve takes an **angular** extent, its own sealed set:
+Revolve takes an **angular** extent, its own sealed set, with the same two-tier
+split:
 
 ```go
 type AngularExtent interface{ angularExtent() }
 
-type AngleExtent    struct { A units.Value }              // one-sided
-type SymmetricAngle struct { A units.Value; FullLength bool }
-type TwoSidedAngle  struct { One, Two AngularExtent }
-type FullRevolution struct{}
-type ToFaceAngular  struct { Face *Face }
+// SideAngular is what ONE side of a two-sided angular extent may be. Sealed:
+// implemented ONLY by AngleExtent and ToFaceAngular.
+type SideAngular interface{ sideAngular() }
+
+type AngleExtent    struct { A units.Value }           // AngularExtent AND SideAngular; one-sided
+type ToFaceAngular  struct { Face FaceSelector }       // AngularExtent AND SideAngular
+type SymmetricAngle struct { A units.Value; FullLength bool } // AngularExtent ONLY
+type TwoSidedAngle  struct { One, Two SideAngular }           // AngularExtent ONLY
+type FullRevolution struct{}                                  // AngularExtent ONLY
 ```
+
+**The nesting is the point.** A side of a two-sided extent is a *single direction
+of travel*, so only the variants that mean one are admissible there. Because
+`Symmetric`, `TwoSided`, `SymmetricAngle`, `TwoSidedAngle` and `FullRevolution`
+implement only the outer interface and not the inner one,
+`TwoSided{One: TwoSided{...}}`, `TwoSided{One: Symmetric{...}}` and
+`TwoSidedAngle{One: FullRevolution{}}` do not compile. Illegal states are
+unrepresentable structurally, not rejected at runtime.
 
 The two sets are **deliberately disjoint**: no linear extent satisfies
 `AngularExtent` and no angular extent satisfies `Extent`. That is what makes
 "revolve 90mm" unrepresentable rather than a runtime error.
+
+`ToFace` and `ToFaceAngular` take a **`FaceSelector`, never a `*Face`** — invariant
+#3 and §9's rule hold inside features too, not merely at their edges. The selector
+MUST resolve to **exactly one** face: that is what `FaceQuery.Exactly(1)` is for.
+Resolving to zero faces or to more than one is `ErrCardinality` (§12) — "extrude up
+to that face" is meaningless when "that face" is four faces.
 
 Options carry the rest (`WithTaper(units.Degrees(3))`), via
 `github.com/lestrrat-go/option/v3` — the house functional-options library, and an
@@ -542,8 +685,11 @@ to make that mechanical.
 
 - `(T, error)`. NEVER a `bool` return, a `-1` sentinel, or a deferred health state.
 - Sentinel/typed errors for the cases an agent must branch on: `ErrNoMatch`
-  (selector matched nothing), `ErrCardinality`, `ErrNotSolid`, `ErrDegenerate`,
-  `ErrBooleanFailed`, `ErrInvalidProfile`, `ErrUnitKind`.
+  (selector matched nothing), `ErrCardinality` (a selector resolved to the wrong
+  number of entities — including a `ToFace` / `ToFaceAngular` selector that did not
+  resolve to exactly one face), `ErrForeignBody` (an operation was handed bodies
+  owned by different documents), `ErrNotSolid`, `ErrDegenerate`, `ErrBooleanFailed`,
+  `ErrInvalidProfile`, `ErrUnitKind`.
 - `Body` is immutable → safe to read from many goroutines.
 - `Document` owns mutable state and is NOT safe for concurrent mutation. `Verify`
   is non-mutating and safe.

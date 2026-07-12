@@ -34,7 +34,10 @@ type.
   is fine; changing a decision means changing the doc first.
 - **NEVER expose triangles as the representation, indices as selectors, or a bare
   `float64` measurement.** These are the forward-compatibility invariants that keep
-  an exact-kernel future reachable (`docs/api-design.md` §3).
+  an exact-kernel future reachable (`docs/api-design.md` §3). Scalar quantities —
+  values and their error bounds alike — are `units.Value`. The single exception is
+  the `r3.Vec` coordinate, which is a length in millimetres by convention
+  (`docs/api-design.md` §5.2); it is not a licence for any other bare float.
 - **NEVER add a `go.mod` module without recording the decision here.** Approved:
   - `github.com/lestrrat-3d/sketch` — parametric 2D constraint engine.
   - `github.com/lestrrat-3d/r3` — 3D coordinate math (`Vec`, `Frame`).
