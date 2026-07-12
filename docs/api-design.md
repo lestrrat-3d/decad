@@ -181,7 +181,7 @@ does not hand-roll around any of them.
 |---|---|---|
 | **`r3` has no rigid transform type.** `Frame` covers plane-local↔world only; placing a body at an arbitrary pose needs rotation + translation. | Add `r3.Transform` upstream. It *acts on* ℝ³, which is r3's charter. | Body placement — `Body.Placed` (§8), and with it the explicit-transform answer to assemblies (§13). |
 | **`sketch/units` has no Area / Volume / Mass / Density kinds.** `units.Kind` is Dimensionless / Length / Angle only, so a `units.Value` cannot hold `12.9997 mm³`. | Add those kinds upstream to `sketch/units` — it is a first-party module — so `Measurement.Value` stays a single `units.Value` and the no-parallel-unit-system rule holds. | Every volume / area / mass measurement — i.e. most of `Verify` — and, for the text form below, encoding a `Recipe` (§6.2). |
-| **`sketch.BoundaryEdge` does not carry a fragment's parameter range.** `Partial` is a bare `bool`: it says *that* the edge is a sub-range of its `Entity`, never *which* sub-range. The entity gives the parameters of the whole curve; the fragment's extent survives only as its endpoints — and `BoundaryEdge` does not say whether `sketch` cut it analytically or at a sampled crossing, so it does not say whether those endpoints are on the curve. | Add `TStart` / `TEnd` (the fragment's parameter range on `Entity`) to `sketch.BoundaryEdge`. sketch already computes the split that produced the fragment, so it is the only party that knows the range exactly. | Recording **any partial fragment whose endpoints `sketch` did not compute exactly** — every fragment of a curve/curve crossing, and every fragment of an ellipse, conic, spline, closed spline, fit spline or NURBS (§6.2). With the range, **every** partial fragment records exactly and the endpoint test of §6.2 disappears. |
+| **`sketch.BoundaryEdge` does not carry a fragment's parameter range.** `Partial` is a bare `bool`: it says *that* the edge is a sub-range of its `Entity`, never *which* sub-range. The entity gives the parameters of the whole curve; the fragment's extent survives only as its two endpoints, which do not determine a trim of a curve and cannot be tested to see whether they do. | Add `TStart` / `TEnd` (the fragment's parameter range on `Entity`) to `sketch.BoundaryEdge`. sketch already computes the split that produced the fragment, so it is the only party that knows the range exactly. | Recording **any profile in which a curve is split** — every `Partial` fragment of a circle, arc, ellipse, elliptical arc, conic, spline, closed spline, fit spline or NURBS, however it was cut (§6.2). A circle crossed by a rectangle does not record. With the range, **every** partial fragment records exactly, and no test is needed anywhere. |
 
 Until the units kinds land, `Measurement` **cannot be implemented as specified**,
 and decad will **not** work around it by inventing a parallel unit system.
@@ -199,48 +199,55 @@ it records as a `units.Value` — cannot round-trip until `units.Value` gains
 the same charter; decad does not hand-roll a shadow encoding of a foreign type.
 This is what §6.2's serializability rule is waiting on, and nothing else is.
 
-The `BoundaryEdge` gap decides which partial fragments decad can record, and the
-line does **not** fall where the entity kinds do. A fragment's two endpoints are
-`Polyline[0]` and `Polyline[len-1]` (§6.2), and they are the only record of the
-trim. Whether they are the *exact* ends of the fragment is a property of **the
-crossing that produced it**, not of the entity it is a fragment of. `sketch` says
-so itself: its exact closed-form contact is authoritative "for line-involved
+The `BoundaryEdge` gap decides which partial fragments decad can record, and it
+excludes **every curve**. A fragment's two endpoints are `Polyline[0]` and
+`Polyline[len-1]` (§6.2), and they are the only surviving record of the trim. Two
+points do not determine a trim of a curve — a parameter range does — and
+`BoundaryEdge` carries `Entity`, `Partial`, `Reversed` and `Polyline` and nothing
+else.
+
+**And decad cannot test the endpoints it was handed. No test can exist, at any
+tolerance.** `sketch`'s exact closed-form contact is authoritative "for line-involved
 crossings and all tangencies", while "a curve split at a *sampled* crossing
-(ellipse/spline/conic vs line, or curve/curve) has an approximate cut parameter",
-and "curve/curve transverse crossings (both circle/arc) are deferred to the sampled
-path".
+(ellipse/spline/conic vs line, or curve/curve) has an approximate cut parameter", and
+"curve/curve transverse crossings (both circle/arc) are deferred to the sampled path"
+— and `BoundaryEdge` does not record which path produced a given fragment. Nor do the
+endpoints. A `Polyline` is a **sample of the curve**: its vertices lie *on* the curve.
+A sampled cut is the crossing of a **chord** between two such vertices, so as the
+crossing approaches a sample vertex the cut point approaches the curve, and its
+residual against the curve goes to zero. An endpoint's distance from the source curve
+therefore carries **no information** about whether the cut parameter is the exact one:
+exactly-cut endpoints and sampled ones are not separated populations, so there is no
+threshold between them to find. This is not a mistuned test; it is a quantity that
+does not answer the question.
 
-| A fragment cut by | Its endpoints |
-|---|---|
-| a **line-involved** crossing — line × circle, line × arc: a circle cut by a rectangle edge — or **any tangency** | lie on the source curve to machine precision |
-| a **curve/curve** crossing — circle × circle, circle × arc, arc × arc | lie on a **chord**, off the true curve by O(chord² / R) |
-| any crossing involving an **ellipse, conic, spline, closed spline, fit spline or NURBS**, a line among them | lie on a **chord** |
+**So decad does not test. It rejects.** A `Partial` fragment records only where its
+endpoints *are* the curve — a fragment of a `*Line`, whose two endpoints determine
+the segment exactly, whatever produced them, because a chord of a line is the line. A
+`Partial` fragment of **anything else** — circle, arc, ellipse, elliptical arc,
+conic, spline, closed spline, fit spline, NURBS — is `ErrUnrecordableProfile` (§12).
+No test, no exception, no tolerance. It is never recorded as the whole entity, which
+would be a different region than the caller drew, and never recorded from a trim
+decad cannot know.
 
-A circle cut by a circle and an ellipse cut by a line are ordinary sketches, and
-their fragments' endpoints are **not on the curve**. `BoundaryEdge` carries
-`Entity`, `Partial`, `Reversed` and `Polyline` and nothing else, so decad cannot
-ask which case it is in — but it can **test the evidence it was handed**, and it
-does (§6.2): a partial fragment records **iff both endpoints lie on the source
-entity**, to a normalised radial residual of `1e-9` — a scale-invariant test, stated
-in full in §6.2. Passing, the endpoints invert to parameters in closed
-form and the fragment records as the trimmed variant — a `Partial` `*Circle` as an
-`ArcSeg`, a `Partial` `*Ellipse` as an `EllipticalArcSeg` — because a fragment of a
-closed curve is an open one and it is the open variant that has the fields for a
-trim. Failing, it is `ErrUnrecordableProfile` (§12) — **rejected, never recorded as
-the whole entity**, which would be a different region than the caller drew, and
-never recorded from a point that is not on the curve, which would be a different
-curve.
+**The consequence is severe, and it is not a corner case.** A `Partial` fragment
+exists wherever a bare crossing splits a curve, so decad can record **no profile in
+which any curve is cut**: not a circle crossed by a rectangle, not a circle crossed
+by a circle, not an arc trimmed at a crossing, not an ellipse cut by anything. A
+circle cut by a rectangle edge is among the most ordinary sketches there is, and
+decad rejects it. That is a real and large hole in what decad can model, stated here
+rather than papered over: the alternative is recording a fragment decad cannot prove
+is the fragment the caller drew, which is the confidently-wrong geometry §1 exists to
+prevent.
 
-A partial fragment of a free-form curve fails a second way as well, and would fail
-even with endpoints on the curve: inverting a point to a spline, NURBS, fit-spline
-or conic parameter is a **projection** — a 2D root-find, which is a 2D answer, which
-decad never re-derives (§7). Those fragments are `ErrUnrecordableProfile` outright.
+Whole (non-`Partial`) edges of every kind are unaffected: they record from the
+entity's own defining data, because there is no trim to recover.
 
-`TStart` / `TEnd` on `BoundaryEdge` retires all of it: the range `sketch` already
-computed is the trim, every partial fragment records exactly — the circle cut by a
-circle, every ellipse fragment, every free-form fragment — and §6.2's endpoint test
-is deleted rather than loosened. Whole (non-`Partial`) edges of every kind are
-unaffected and record today: there is no trim to recover.
+`TStart` / `TEnd` on `BoundaryEdge` retires all of it, and this is the exact payoff:
+the range `sketch` already computed **is** the trim, so **every** partial fragment
+records exactly — the circle cut by a rectangle, the circle cut by a circle, every
+ellipse fragment, every free-form fragment — and **no test is needed at all**,
+because nothing is left to guess.
 
 ### 5.4 Exactness — the load-bearing type
 
@@ -510,9 +517,9 @@ moment the feature is called:
   `BoundaryEdge.Entity` are `sketch.Entity`, an interface with unexported methods,
   which no decoder can reconstruct. And its `BoundaryEdge.Polyline` is a **densified
   sample** — a tessellation, which §2 says a `Recipe` never names. (Its first and
-  last points are the edge's start and end, and they are the one thing decad reads
-  from it — under the endpoint test below, because `sketch` does not always cut a
-  curve exactly.)
+  last points are the edge's start and end. They are the one thing decad reads from
+  it, and only on a `Partial` `*Line`, where they are points of the line itself —
+  see below.)
 - `r3.Frame`'s fields are unexported: it marshals to `{}`, so a `Step` that stored
   one would silently drop the plane — the single field without which the step is
   incomplete.
@@ -552,9 +559,9 @@ type LoopRecord struct {
 // A variant records exactly the defining data of the curve the edge IS — the
 // fields of the source entity's own geom value, in plane-local Point2 — so an
 // evaluator reconstitutes the curve through sketch/geom and never re-derives it
-// (§7). The variant is therefore chosen by the entity AND by whether the edge
-// is the whole entity or a fragment of it: a fragment of a closed curve is an
-// open one, and it is the open variant that has somewhere to put the trim.
+// (§7). The variant is chosen by the entity: a whole edge records its entity's
+// own data, and the only fragment decad records is a fragment of a line, which
+// is a line (see the table below).
 type CurveSegment interface{ curveSegment() }
 
 // The five analytic kinds.
@@ -623,121 +630,60 @@ line, circle, arc, ellipse, elliptical arc, conic, spline, closed spline, fit
 spline, NURBS — because `SplineSeg` covers `Spline` and `NURBS` alike. That is
 `sketch`'s entity vocabulary exactly and entirely, and `sketch` puts every one of
 those kinds on a profile boundary: the four open free-form curves as boundary edges,
-the closed spline as a closed curve bounding a region on its own. So **every profile
-`sketch` can produce has a record**, which is what the completeness rule demands. A
+the closed spline as a closed curve bounding a region on its own. So **every entity
+`sketch` can put on a boundary has a record** — as a whole edge. What has no record
+is a `Partial` fragment of a curve, which is a limit of `BoundaryEdge`, not of this
+vocabulary (§5.3), and such a profile is rejected rather than recorded lossily. A
 new entity kind upstream needs a new `CurveSegment` variant before decad accepts a
 profile that uses it; there is no fallback to a sample.
 
-**Which variant an edge records is a function of its entity *and* its `Partial`
-flag**, because a fragment of a closed curve is not that closed curve. A circle
-crossing a rectangle is the most ordinary split a 2D sketch produces, and it yields
-a `BoundaryEdge{Entity: *Circle, Partial: true}`: an arc. `sketch` says so in its own
-vocabulary — `geom.SplitCircleAt(c, p, q)` returns two `*Arc` — and decad records what
-`sketch` says. A `CircleSeg` has no range to trim and never needs one; the trim lives
-in the open variant, which has the fields for it.
+**A whole edge records its entity. A `Partial` fragment records only if it is a
+fragment of a line.** `Partial` is a bare bool — it says *that* the edge is a
+sub-range of its `Entity`, never which sub-range — and the entity holds the
+parameters of the **whole** curve, so a fragment's trim survives nowhere but its two
+endpoints. Two endpoints determine a fragment of a *line*: a chord of a line is the
+line. They determine a fragment of no other curve, and no test on them can recover
+one (§5.3).
 
 | `BoundaryEdge.Entity` | whole edge | `Partial` fragment |
 |---|---|---|
-| `*Line` | `LineSeg` | `LineSeg` — the fragment's own two endpoints. **Always records**: a chord of a line *is* the line, so there is nothing for the endpoint test to catch |
-| `*Circle` | `CircleSeg` | **`ArcSeg`** — same centre and radius; `StartAngle` / `EndAngle` from the endpoints — **if the endpoint test passes**; else `ErrUnrecordableProfile` (§12) |
-| `*Arc` | `ArcSeg` — the entity's own angles | `ArcSeg` — trimmed angles — **if the endpoint test passes**; else `ErrUnrecordableProfile` |
-| `*Ellipse` | `EllipseSeg` | **`EllipticalArcSeg`** — same centre, `Rx`, `Ry`, `Rotation`; eccentric angles from the endpoints — **if the endpoint test passes**; else `ErrUnrecordableProfile` |
-| `*EllipticalArc` | `EllipticalArcSeg` — the entity's own range | `EllipticalArcSeg` — trimmed range — **if the endpoint test passes**; else `ErrUnrecordableProfile` |
-| the free-form five | the matching free-form variant, `TStart`/`TEnd` spanning the full domain | `ErrUnrecordableProfile` — the trim needs a projection, which is a 2D answer decad never re-derives (§5.3). No test; there is no closed form to pass into |
+| `*Line` | `LineSeg` | `LineSeg` — the fragment's own two endpoints. **Records**: they determine the segment exactly, whatever produced them |
+| `*Circle` | `CircleSeg` | **`ErrUnrecordableProfile`** (§12) |
+| `*Arc` | `ArcSeg` — the entity's own angles | **`ErrUnrecordableProfile`** |
+| `*Ellipse` | `EllipseSeg` | **`ErrUnrecordableProfile`** |
+| `*EllipticalArc` | `EllipticalArcSeg` — the entity's own range | **`ErrUnrecordableProfile`** |
+| the free-form five | the matching free-form variant, `TStart`/`TEnd` spanning the full domain | **`ErrUnrecordableProfile`** |
 
-**Only the `*Line` row promises a `Partial` fragment records unconditionally.** The
-four analytic *curve* rows record **when the endpoint test passes**, and it passes
-exactly when `sketch` cut the curve analytically. A `*Circle` cut by a rectangle
-edge passes; the same circle cut by another circle does not, and neither does an
-ellipse cut by anything (§5.3). Exactness is a property of **the crossing**, never
-of the entity kind. A fragment that fails is `ErrUnrecordableProfile`, on the same
-terms as a partial free-form curve.
+**One row records a fragment, and the other five reject one.** No test, no
+tolerance, no exception: an endpoint's proximity to the source curve says nothing
+about whether the cut that produced it was exact, because `sketch`'s polyline
+vertices are samples that lie *on* the curve, so a sampled cut near a sample vertex
+lies on the curve too (§5.3). A fragment of a curve is `ErrUnrecordableProfile`
+however it was cut — a circle cut by a rectangle edge as surely as a circle cut by a
+circle. This is what the `BoundaryEdge` blocker of §5.3 costs, and §5.3 states the
+size of it.
+
+A free-form fragment would fail a second way regardless: inverting a point to a
+spline, NURBS, fit-spline or conic parameter is a **projection** — a 2D root-find,
+which is a 2D answer, and decad re-derives none (§7).
 
 Conversion is mechanical, and it happens once, in the feature call. decad walks
-`p.Outer` and each loop of `p.Holes`, reads each `BoundaryEdge`'s source `Entity`
-for its defining parameters, and **bakes the edge's flags into the segment**:
-`Reversed` becomes the segment's own orientation — endpoints swapped, `CCW`
-flipped, `TStart` and `TEnd` swapped, so `TStart > TEnd` says the segment runs
-against the curve's natural sense — and `Partial` selects the trimmed variant per
-the table above and becomes its trimmed range. A `LoopRecord` therefore carries no
+`p.Outer` and each loop of `p.Holes` and reads each `BoundaryEdge`'s source `Entity`
+for its defining parameters. `Partial` selects the row of the table above: on a
+`*Line` it takes the fragment's own endpoints, on anything else it rejects the
+profile. `Reversed` is **baked into the segment** as its own orientation — endpoints
+swapped, `CCW` flipped, `TStart` and `TEnd` swapped, so `TStart > TEnd` says the
+segment runs against the curve's natural sense. A `LoopRecord` therefore carries no
 residual flags and no back-reference.
 
 **What decad reads of `BoundaryEdge.Polyline`, and nothing more: `Polyline[0]` and
-`Polyline[len-1]`.** `Partial` is a bare bool — it says *that* the edge is a
-fragment, never which fragment — and the source `Entity` holds the parameters of
-the **whole** curve, so the trim exists nowhere else. Those two points are the
-fragment's start and end, and they are the whole of the carve-out: no interior point
-of `Polyline` is ever read, by decad or by anything a `Recipe` carries, and no
-`Polyline` enters a `Step`.
-
-**They are the fragment's start and end. They are not always *on the curve*.**
-`sketch` cuts exactly at a line-involved crossing and at every tangency, and falls
-back to its sampled path for curve/curve crossings and for every crossing involving
-an ellipse, conic, spline or NURBS (§5.3). A sampled cut lands on a **chord** of the
-polyline, not on the curve. `BoundaryEdge` does not record which path produced it,
-so decad does not ask — it **tests**.
-
-**The endpoint test.** A `Partial` fragment of an analytic *curve* — a circle, an
-arc, an ellipse, an elliptical arc — is recordable **iff both of its endpoints lie
-on the source entity**. decad evaluates that entity's own implicit residual at
-`Polyline[0]` and `Polyline[len-1]`:
-
-> Take the point into the entity's own frame — centre `C`, and for an ellipse its
-> local axes — which is a subtraction and an orthonormal basis change, never a solve.
-> The **normalised radial residual** is
->
-> `ρ(p) = | sqrt((u/Rx)² + (v/Ry)²) − 1 |`
->
-> with `Rx = Ry = R` on a circle or an arc, where it degenerates to
-> `| ‖p − C‖ / R − 1 |`. It is zero exactly on the curve, it is dimensionless, and it
-> is invariant under scaling the entity and the point together — so a threshold on it
-> is **relative to the entity's own size**, at every scale, with no absolute length
-> anywhere in it.
->
-> **The fragment records iff `ρ ≤ 1e-9` at both endpoints.** Otherwise the profile is
-> `ErrUnrecordableProfile` (§12).
-
-**`1e-9` is not a delicate number, because the two populations are ten orders of
-magnitude apart.** An analytic cut puts the endpoint on the curve to round-off: `ρ`
-of order `1e-15`. A sampled cut puts it on a chord, off the curve by
-`O(chord² / R)`: a `*sketch.Ellipse` cut by a rectangle gives `ρ = 7.0e-5`. The
-threshold sits in the empty middle — six orders above the round-off floor, so no
-exact cut is rejected; nearly five orders below the sampled residual, so no chord
-point is mistaken for a curve point. `1e-9` is a constant of this test, not a
-caller's knob, and it is unrelated to `WithTolerance` (§10.1), which governs
-*measurements of a body*, not the *admissibility of an input*.
-
-**And the test is sound, not merely a proxy for provenance.** It gates on the thing
-that actually has to be true — the endpoint is on the curve — so a sampled cut that
-happens to land on the curve is *right*, and recording it is right. decad never
-needs to know which path `sketch` took.
-
-**Passing the test, the trim is a closed-form read-out.** On a circle or an arc the
-parameter is `atan2` about the known centre, and the fragment is an `ArcSeg`; on an
-ellipse or an elliptical arc it is the eccentric angle about the known centre and
-axes, and the fragment is an `EllipticalArcSeg`; on a line the endpoints *are* the
-record, and a chord of a line is the line, so a `Partial` `*Line` needs no test at
-all. Each is an evaluation of the entity's own parameterisation at a point `sketch`
-handed over — not a solve.
-
-**The test is not a re-derivation, and this is the whole of why.** decad is
-**validating an input it was handed**, not computing a cut. It evaluates a known
-formula at a given point and gets a number; it runs no iteration, solves for
-nothing, and never produces a point or a parameter it was not given. It computes no
-intersection, and where the evidence fails the test it does not repair it, project
-it, or fit it — it **rejects** (§12). CLAUDE.md's rule forbids re-deriving a 2D
-answer; checking that a 2D answer decad was handed is the one it claims to be is the
-opposite of ignoring the seam.
-
-On the **free-form five** there is nothing to test into: inverting a point to a
-spline, NURBS, fit-spline or conic parameter is a projection — a 2D root-find, which
-is a 2D answer, and decad re-derives none (§7). A `Partial` fragment of a free-form
-curve is `ErrUnrecordableProfile` unconditionally. Whole (non-`Partial`) edges of
-every kind — the overwhelming case, since a fragment exists only where a curve is
-split at a bare crossing — record today, free-form ones with `TStart`/`TEnd` spanning
-the curve's full domain. All of it is retired by `TStart`/`TEnd` on `BoundaryEdge`,
-the third blocker of §5.3: with the range in hand every partial fragment records
-exactly and this test is deleted.
+`Polyline[len-1]`, on a `Partial` `*Line` and nowhere else.** Those two points are
+that fragment's start and end, and on a line they are points of the line itself — no
+sampled content reaches a `Recipe` through them, which is why §2's "a `Recipe` never
+names a tessellation" holds without qualification. On every other entity a `Partial`
+fragment is rejected, so its `Polyline` is not read at all; on a whole edge the
+entity's own data is the record and the `Polyline` is never read either. No interior
+point of a `Polyline` is ever read, and no `Polyline` enters a `Step`.
 
 **Serializability is a rule, not an aspiration.** Every type reachable from a
 `Recipe` MUST be encodable and decodable: exported fields only; no foreign
@@ -1001,26 +947,20 @@ blockers, and this is not one of them).
 self-intersecting or degenerate region is never silently swept. `Profile.Valid` is
 the whole of decad's *validity* gate, and it is `sketch`'s answer, not one decad
 recomputes. The one further rejection is not a validity judgement at all: a valid
-profile whose boundary decad cannot record exactly — a partial fragment whose trim
-range `sketch` does not expose and whose endpoints do not lie on the source curve,
-or a partial fragment of a free-form curve at all (§5.3) — is
-`ErrUnrecordableProfile` (§12), because a `Step` that recorded the whole curve
-where the caller drew a piece of it, or a trim read off a point that is not on the
-curve, would be the lossy record §6.2 forbids.
+profile whose boundary decad cannot record exactly — a profile containing a
+`Partial` fragment of any curve, whose trim range `sketch` does not expose (§5.3) —
+is `ErrUnrecordableProfile` (§12), because a `Step` that recorded the whole curve
+where the caller drew a piece of it, or a trim decad guessed at, would be the lossy
+record §6.2 forbids.
 
-**The seam permits exactly one read-out, and one test, and neither is a
-re-derivation.** Beyond an edge's source `Entity`, decad reads a fragment's two
-endpoints — `Polyline[0]` and `Polyline[len-1]` (§6.2). `sketch` computes an exact
-cut only for line-involved crossings and tangencies, so those endpoints lie on the
-source curve only sometimes, and `BoundaryEdge` does not say when. decad therefore
-**checks**: it evaluates the source entity's own implicit residual at each endpoint
-(§6.2) and records the fragment only if both lie on the curve. That is arithmetic on
-an answer `sketch` handed over — a *validation of an input*, computing no
-intersection and solving for nothing — not a second computation of `sketch`'s
-answer. Passing, the trim is a closed-form read-out of the entity's own
-parameterisation at those points. Where the conversion would need a solve — any
-free-form curve — decad does not do it, and where the test fails, decad does not
-repair the point: it errors (§5.3).
+**The seam permits exactly one read-out, and no test.** Beyond an edge's source
+`Entity`, decad reads the two endpoints of a `Partial` `*Line` — `Polyline[0]` and
+`Polyline[len-1]` (§6.2) — and nothing else. It runs no check on them and none on
+any other fragment's: an endpoint's distance from its source curve does not say
+whether the cut that produced it was exact, because `sketch`'s polyline vertices are
+samples *on* the curve (§5.3). So decad neither re-derives the trim nor infers it. A
+fragment it cannot record it **rejects** — it never repairs, projects or fits a point
+`sketch` handed over, and it never solves for one.
 
 Whether the *sketch* is fully constrained is a separate, sketch-level question: a
 profile can close while the sketch still has degrees of freedom. It is not decad's
@@ -1583,11 +1523,11 @@ to make that mechanical.
   where a live `*Body` is required, §6.2), `ErrNegativeMagnitude` (a magnitude was
   given as a negative value; magnitudes are non-negative and sense is enumerated,
   §8.1), `ErrUnrecordableProfile` (a feature was handed a profile whose boundary
-  contains a partial fragment whose trim range `sketch` does not expose and decad
-  cannot recover: a fragment of a free-form curve — conic, spline, closed spline,
-  fit spline, NURBS — where the trim needs a projection; or a fragment of an
-  analytic curve that fails the endpoint test, i.e. whose endpoints do not lie on
-  its source entity, because `sketch` cut it at a sampled crossing, §5.3/§6.2),
+  contains a `Partial` fragment of a **curve** — circle, arc, ellipse, elliptical
+  arc, conic, spline, closed spline, fit spline or NURBS — whose trim range `sketch`
+  does not expose and decad cannot recover from the fragment's endpoints, however
+  that fragment was cut. A `Partial` fragment of a `*Line` is the one that records,
+  and a whole edge of every kind records; §5.3/§6.2),
   `ErrNotSolid`, `ErrDegenerate`, `ErrBooleanFailed`, `ErrInvalidProfile`,
   `ErrUnitKind`.
 - **`ErrUnitKind` covers exactly the wrong-`Kind` values.** A `units.Value` whose
