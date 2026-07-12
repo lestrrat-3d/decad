@@ -166,20 +166,22 @@ in millimetres on exactly the same terms, and for exactly the same reason.
 Vectors carry the unit **by convention**; scalars carry it **in the type**. §5.1
 governs scalars, and this is the whole of the carve-out — a bare `float64` scalar
 quantity is still forbidden anywhere in the API. A *curve parameter* is not a
-scalar quantity: a spline's knots, weights and parameter range (§6.2) are
+scalar quantity: a spline's knots, weights and parameter range, and a conic's
+fullness `Rho` — the apex weight of a rational quadratic in disguise (§6.2) — are
 dimensionless indices into a parameterisation, not measurements of anything, and
 §5.1 does not reach them.
 
 ### 5.3 Dependency-side decisions (blockers)
 
-Two capabilities decad's API depends on do not exist in its dependencies yet. Both
-belong upstream by charter, and both are resolved upstream — decad does not
-hand-roll around either.
+Three capabilities decad's API depends on do not exist in its dependencies yet.
+All three belong upstream by charter, and all three are resolved upstream — decad
+does not hand-roll around any of them.
 
 | Gap | Proposal | Blocks |
 |---|---|---|
 | **`r3` has no rigid transform type.** `Frame` covers plane-local↔world only; placing a body at an arbitrary pose needs rotation + translation. | Add `r3.Transform` upstream. It *acts on* ℝ³, which is r3's charter. | Body placement — `Body.Placed` (§8), and with it the explicit-transform answer to assemblies (§13). |
 | **`sketch/units` has no Area / Volume / Mass / Density kinds.** `units.Kind` is Dimensionless / Length / Angle only, so a `units.Value` cannot hold `12.9997 mm³`. | Add those kinds upstream to `sketch/units` — it is a first-party module — so `Measurement.Value` stays a single `units.Value` and the no-parallel-unit-system rule holds. | Every volume / area / mass measurement — i.e. most of `Verify` — and, for the text form below, encoding a `Recipe` (§6.2). |
+| **`sketch.BoundaryEdge` does not carry a fragment's parameter range.** `Partial` is a bare `bool`: it says *that* the edge is a sub-range of its `Entity`, never *which* sub-range. The entity gives the parameters of the whole curve; the fragment's extent survives only as its endpoints. | Add `TStart` / `TEnd` (the fragment's parameter range on `Entity`) to `sketch.BoundaryEdge`. sketch already computes the split that produced the fragment, so it is the only party that knows the range exactly. | Recording a **partial fragment of a free-form curve** — conic, spline, closed spline, fit spline, NURBS (§6.2). Fragments of the analytic curves invert exactly from their endpoints and are not blocked. |
 
 Until the units kinds land, `Measurement` **cannot be implemented as specified**,
 and decad will **not** work around it by inventing a parallel unit system.
@@ -196,6 +198,18 @@ it records as a `units.Value` — cannot round-trip until `units.Value` gains
 `MarshalText` / `UnmarshalText` upstream. It is the same first-party module and
 the same charter; decad does not hand-roll a shadow encoding of a foreign type.
 This is what §6.2's serializability rule is waiting on, and nothing else is.
+
+The `BoundaryEdge` gap is narrow, and decad states its boundary exactly. A fragment's
+two endpoints are `Polyline[0]` and `Polyline[len-1]` (§6.2), and for the analytic
+curves — line, circle, arc, ellipse, elliptical arc — an endpoint inverts to a curve
+parameter in **closed form** (an angle is an `atan2` about the known centre), so the
+trim is exact and those fragments record today. For a free-form curve — conic,
+spline, closed spline, fit spline, NURBS — inverting a point to a parameter is a
+**projection**: a 2D root-find, which is a 2D answer, which decad never re-derives.
+Until `BoundaryEdge` carries the range, a profile whose boundary contains a partial
+fragment of a free-form curve is `ErrUnrecordableProfile` (§12) — **rejected, never
+recorded as the whole entity**, which would be a different region than the caller
+drew. Whole (non-`Partial`) free-form edges are unaffected and record today.
 
 ### 5.4 Exactness — the load-bearing type
 
@@ -424,7 +438,9 @@ sufficient to (a) re-evaluate the model from scratch under any evaluator, and
 (b) emit equivalent CAD code. Every input an operation takes — its operands, **every
 body its extent or its axis names**, its profile, **the plane that profile lies
 in**, its extent, its selectors, its options, its quantities — MUST be recordable in
-its `Step`. **An operation whose inputs a `Step` cannot record does not ship.** This is what §2's "the exact record of intent" costs: a `Recipe` that
+its `Step`. **An operation whose inputs a `Step` cannot record does not ship**, and
+an *input* a `Step` cannot record is **rejected at the call**, never recorded
+approximately — that is what `ErrUnrecordableProfile` (§12) is. This is what §2's "the exact record of intent" costs: a `Recipe` that
 re-evaluates to a *different* model than the one it was recorded from is not the
 deliverable §2 claims — it would make vN a silently different model rather than a
 better answer to the same one, and would make the mechanical Fusion emission of
@@ -462,7 +478,9 @@ moment the feature is called:
   *handle*, and §2 says the recipe is a value. Its `Entities` and its
   `BoundaryEdge.Entity` are `sketch.Entity`, an interface with unexported methods,
   which no decoder can reconstruct. And its `BoundaryEdge.Polyline` is a **densified
-  sample** — a tessellation, which §2 says a `Recipe` never names.
+  sample** — a tessellation, which §2 says a `Recipe` never names. (Its first and
+  last points are not part of that sample: they are the edge's exact endpoints, and
+  they are the one thing decad reads from it. See the conversion below.)
 - `r3.Frame`'s fields are unexported: it marshals to `{}`, so a `Step` that stored
   one would silently drop the plane — the single field without which the step is
   incomplete.
@@ -483,22 +501,29 @@ type PlaneRecord struct {
 type Point2 struct{ U, V float64 }
 
 // ProfileRecord is the region a Step extrudes or revolves: one outer loop and its
-// holes, analytic and plane-local. Not a sample, not a pointer, not a sketch.
+// holes, structural and plane-local. Not a sample, not a pointer, not a sketch.
 type ProfileRecord struct {
     Outer LoopRecord
     Holes []LoopRecord
 }
 
 // LoopRecord is a closed, directed boundary loop: each segment's end is the next
-// segment's start, and the last closes onto the first. Outer loops run
+// segment's start, and the last closes onto the first. A single closed segment —
+// a circle, an ellipse, a closed spline — is a loop on its own. Outer loops run
 // counter-clockwise in (u, v), holes clockwise.
 type LoopRecord struct {
     Segments []CurveSegment
 }
 
-// CurveSegment is one analytic piece of a loop. Sealed, like Surface (§6.1).
+// CurveSegment is one curve of a loop, recorded structurally — never as a
+// sample. Sealed, like Surface (§6.1).
+// Each variant records exactly the defining data of the sketch entity it came
+// from — the fields of that entity's own geom value, in plane-local Point2 —
+// so an evaluator reconstitutes the curve through sketch/geom and never
+// re-derives it (§7).
 type CurveSegment interface{ curveSegment() }
 
+// The five analytic kinds.
 type LineSeg    struct { Start, End Point2 }
 type ArcSeg     struct { Center Point2; Radius units.Value; StartAngle, EndAngle units.Value; CCW bool }
 type CircleSeg  struct { Center Point2; Radius units.Value; CCW bool }
@@ -509,30 +534,88 @@ type EllipticalArcSeg struct {
     StartAngle, EndAngle   units.Value // the swept angular range
     CCW                    bool
 }
-// SplineSeg covers sketch's Spline and NURBS alike — a spline is the unweighted
-// case. Knots, Weights and the T range are curve parameters, not quantities (§5.2).
+
+// The five free-form kinds. Degree, knots, weights, a conic's fullness Rho and
+// every T range are curve parameters, not quantities (§5.2): Rho is the apex
+// weight w = Rho/(1-Rho) of a rational quadratic in disguise, of exactly the
+// same class as a NURBS weight.
+
+// SplineSeg covers sketch's Spline and NURBS alike — a Spline is the degree-3,
+// clamped-uniform, unweighted case, which is its definition, not a fit.
 type SplineSeg struct {
-    Degree   int
-    Control  []Point2
-    Knots    []float64
-    Weights  []float64
-    TStart, TEnd float64 // the sub-range this segment covers
+    Degree       int
+    Control      []Point2
+    Knots        []float64
+    Weights      []float64
+    TStart, TEnd float64
+}
+
+// ClosedSplineSeg is sketch's periodic uniform cubic B-spline: a closed curve
+// that bounds a region on its own, so it is a whole LoopRecord by itself.
+type ClosedSplineSeg struct {
+    Control      []Point2
+    CCW          bool
+    TStart, TEnd float64 // the full period for a whole edge
+}
+
+// FitSplineSeg records the INTENT sketch was given: the points the curve
+// interpolates. sketch's definition — a natural cubic with chord-length
+// parameterisation through exactly these points — is the curve; decad records
+// the points and NEVER runs the interpolation solve itself (§7).
+type FitSplineSeg struct {
+    Fit          []Point2
+    TStart, TEnd float64
+}
+
+// ConicSeg is a rational quadratic Bezier: endpoints, the apex where the end
+// tangents meet, and the fullness Rho in (0, 1) — Rho < 0.5 an ellipse arc,
+// 0.5 a parabola, > 0.5 a hyperbola arc.
+type ConicSeg struct {
+    Start, Apex, End Point2
+    Rho              float64
+    TStart, TEnd     float64
 }
 ```
 
-Those six kinds cover `sketch`'s entity vocabulary exactly — line, circle, arc,
-ellipse, elliptical arc, spline/NURBS — so **every profile `sketch` can produce is
-recordable**, which is what the completeness rule demands. A new entity kind
-upstream needs a new `CurveSegment` variant before decad accepts a profile that
-uses it; there is no fallback to a sample.
+Nine variants, and they cover **all ten** of `sketch`'s `Entity` implementations —
+line, circle, arc, ellipse, elliptical arc, conic, spline, closed spline, fit
+spline, NURBS — because `SplineSeg` covers `Spline` and `NURBS` alike. That is
+`sketch`'s entity vocabulary exactly and entirely, and `sketch` puts every one of
+those kinds on a profile boundary: the four open free-form curves as boundary edges,
+the closed spline as a closed curve bounding a region on its own. So **every profile
+`sketch` can produce has a record**, which is what the completeness rule demands. A
+new entity kind upstream needs a new `CurveSegment` variant before decad accepts a
+profile that uses it; there is no fallback to a sample.
 
 Conversion is mechanical, and it happens once, in the feature call. decad walks
 `p.Outer` and each loop of `p.Holes`, reads each `BoundaryEdge`'s source `Entity`
-for its analytic parameters, and **bakes the edge's flags into the segment**:
-`Partial` becomes the segment's trimmed range (an arc's `StartAngle`/`EndAngle`, a
-spline's `TStart`/`TEnd`), and `Reversed` becomes the segment's own orientation
-(endpoints swapped, `CCW` flipped). A `LoopRecord` therefore carries no residual
-flags and no back-reference — and `BoundaryEdge.Polyline` is never read.
+for its defining parameters, and **bakes the edge's flags into the segment**:
+`Reversed` becomes the segment's own orientation — endpoints swapped, `CCW`
+flipped, `TStart` and `TEnd` swapped, so `TStart > TEnd` says the segment runs
+against the curve's natural sense — and `Partial` becomes the segment's trimmed
+range. A `LoopRecord` therefore carries no residual flags and no back-reference.
+
+**What decad reads of `BoundaryEdge.Polyline`, and nothing more: `Polyline[0]` and
+`Polyline[len-1]`.** `Partial` is a bare bool — it says *that* the edge is a
+fragment, never which fragment — and the source `Entity` holds the parameters of
+the **whole** curve, so the trim exists nowhere else. Those two points are not a
+sample of a curve: they are, by `sketch`'s own contract, the fragment's **exact
+start and end**. Reading them is therefore not reading a tessellation, and it is
+the whole of the carve-out — no interior point of `Polyline` is ever read, by decad
+or by anything a `Recipe` carries, and no `Polyline` enters a `Step`.
+
+Turning those endpoints into a trim is exact **only for the analytic five**: on a
+circle or an arc the parameter is `atan2` about the known centre, on an ellipse or
+an elliptical arc the eccentric angle about the known centre and axes, on a line the
+endpoints *are* the record. Each is a closed-form read-out of the entity's own
+parameterisation at a point `sketch` handed over — not a solve. On the **free-form
+five** it is not exact: inverting a point to a spline, NURBS, fit-spline or conic
+parameter is a projection — a 2D root-find, which is a 2D answer, and decad
+re-derives none (§7). So a `Partial` fragment of a free-form curve is
+`ErrUnrecordableProfile` (§12) until `sketch.BoundaryEdge` carries the range
+itself; that is the third blocker of §5.3. Whole free-form edges — the overwhelming
+case, since a fragment exists only where a curve is split at a bare crossing —
+record today, with `TStart`/`TEnd` spanning the curve's full domain.
 
 **Serializability is a rule, not an aspiration.** Every type reachable from a
 `Recipe` MUST be encodable and decodable: exported fields only; no foreign
@@ -789,12 +872,25 @@ built before a later `Solve` still holds entities that belong to `s`, so it pass
 but its geometry is the pre-solve geometry. The caller MUST pass a profile from the
 current solve. A profile→sketch back-reference, or a generation counter, would make
 the check total; both belong upstream in `sketch`, and neither is a condition of
-shipping — this is a limitation of the check, not a blocker (§5.3 lists the two
+shipping — this is a limitation of the check, not a blocker (§5.3 lists the three
 blockers, and this is not one of them).
 
 `doc.Extrude` REJECTS a `sketch.Profile` whose `Valid` is false — a
 self-intersecting or degenerate region is never silently swept. `Profile.Valid` is
-the whole of decad's gate, and it is `sketch`'s answer, not one decad recomputes.
+the whole of decad's *validity* gate, and it is `sketch`'s answer, not one decad
+recomputes. The one further rejection is not a validity judgement at all: a valid
+profile whose boundary decad cannot record exactly — a partial fragment of a
+free-form curve, whose trim range `sketch` does not expose (§5.3) — is
+`ErrUnrecordableProfile` (§12), because a `Step` that recorded the whole curve
+where the caller drew a piece of it would be the lossy record §6.2 forbids.
+
+**The seam permits exactly one read-out, and it is not a re-derivation.** Beyond an
+edge's source `Entity`, decad reads a fragment's two endpoints — `Polyline[0]` and
+`Polyline[len-1]`, which `sketch` defines as the fragment's exact start and end
+(§6.2) — and, on an analytic curve, converts them to a trim by evaluating that
+entity's own parameterisation at them in closed form. That is a read-out of
+`sketch`'s answer, not a second computation of it. Where the conversion would need a
+solve, decad does not do it: it errors (§5.3).
 
 Whether the *sketch* is fully constrained is a separate, sketch-level question: a
 profile can close while the sketch still has degrees of freedom. It is not decad's
@@ -1129,7 +1225,7 @@ gap is decad's mandate.
 caller will accept*, so the caller must be able to say what they accept:
 
 ```go
-func WithTolerance(rel units.Value) VerifyOption // Dimensionless; default units.Scalar(1e-6)
+func WithTolerance(rel units.Value) VerifyOption // Dimensionless; default units.Scalar(1e-3)
 func WithMinWallThickness(tool units.Value) VerifyOption
 func WithPullDirection(v r3.Vec) VerifyOption
 func WithMinRadius() VerifyOption
@@ -1147,7 +1243,18 @@ and a 1m part are judged on the same footing — which mirrors how `sketch` make
 conditioning gate scale-invariant. `rel` is `Dimensionless` (`units.Scalar`); any
 other `Kind` is `ErrUnitKind` (§12), never a coercion, and a negative `rel` is
 `ErrNegativeMagnitude`. Both are returned from `Verify`, which is why it returns an
-`error` (§10). Omitted, `rel` defaults to `units.Scalar(1e-6)`.
+`error` (§10).
+
+**The default is `units.Scalar(1e-3)` — three significant figures — and it is set
+by what a tessellation-backed evaluator can actually prove.** A v1 boolean bounds a
+volume by roughly `surface area × chord error`: a Ø20×10mm cylinder tessellated to a
+1e-3 mm chord has an area of 1257 mm², so a bound of order 1.3 mm³ against a volume
+of 3142 mm³ — a relative error of 4e-4. A default of `1e-6` would put every such
+body — every *correct* such body — in `Suspect`, and a gate no honest evaluator can
+pass has no content. `1e-3` passes it with room to spare, and is still an order of
+magnitude tighter than the ±1% Fusion ships by default (§1) — and unlike Fusion's
+figure it is a **proven bound**, not a nominal one. A caller who wants six figures
+asks for them, and gets the honest `Suspect` an approximate evaluator owes them.
 
 An **absolute** threshold cannot do this job. A `Bound` carries the `Kind` of the
 quantity it bounds (§5.4), so an absolute length `t` has nothing to say about a
@@ -1165,27 +1272,49 @@ total:
 
 | Bounded result | `Ref` |
 |---|---|
-| `Measurement` — a volume, an area, a length, a gap | `max(abs(Value), Scale)` |
+| `Measurement` — a volume, an area, a length, a gap | `max(abs(Value), Quantum)` |
 | `VecMeasurement`, a **direction** (`Bound` is `Dimensionless`, §5.4) | `1` — the magnitude of a unit vector |
 | `VecMeasurement`, a **position**, and `Box` (`Bound` is a Length) | `Diag` |
 
 `Diag` is the diagonal of the document's bounding box — the box enclosing every live
-body — and `Scale` is `Diag` **raised to the dimension of the quantity's `Kind`**:
-`Diag` for a length, `Diag²` for an area, `Diag³` for a volume, `1` for a
-dimensionless quantity. `Scale` is the model's own size, not an acceptance
-threshold, so raising it is dimensionally exact and carries none of the pathology
-of raising `t`.
+body. `Scale` is `Diag` **raised to the dimension of the quantity's `Kind`**: `Diag`
+for a length, `Diag²` for an area, `Diag³` for a volume, `1` for a dimensionless
+quantity. And `Quantum` is `ε × Scale` with `ε = 1e-9` fixed — the model's own noise
+level, the magnitude below which a quantity of that `Kind` is not distinguishable
+from zero at this model's size. `ε` is a constant of the gate, not the caller's
+knob: it is **not** `rel`, and `rel` never multiplies `Scale`.
 
-Two things follow, and both are rules:
+Three things follow, and all three are rules:
 
-- **The near-zero case is defined.** A zero clearance, or the volume of a degenerate
-  body, has `|Value|` at or near zero, and a ratio to it is undefined or explosive.
-  `max(|Value|, Scale)` is what handles it: below the model's own scale the
-  comparison falls back to `rel × Scale`, so the answer is judged against the size
-  of the model rather than against nothing.
+- **The gate is genuinely relative.** For any quantity above the noise level — every
+  volume, area, length and gap a real model measures — `Ref` **is** `abs(Value)`, and
+  the test is exactly `Bound <= rel × abs(Value)`: how many significant figures of
+  this answer are real. `Quantum` is a floor, not a scale factor, and it never
+  loosens the test for a quantity that has a magnitude of its own. A `Scale`-sized
+  reference would be an absolute threshold wearing a ratio's clothes: a body of
+  8 mm³ measured to ±5 mm³ — a 62% error — inside a 100mm model would pass it, and
+  it must not, and it does not.
+- **The near-zero case is still defined.** A zero clearance, or the volume of a
+  degenerate body, has `|Value|` at or near zero, and a ratio to it is undefined or
+  explosive. `Quantum` is what keeps the comparison total there. It engages only
+  when the quantity is itself below the model's noise level — and an `Approximate`
+  answer at the noise level, whose `Bound` is anything at all, then reads `Suspect`,
+  which is the honest verdict: nothing has been proven about it. An `Exact` answer
+  has a zero `Bound` and passes at the floor like everywhere else.
 - **A coordinate is judged against `Diag` alone**, never against its own magnitude:
   the magnitude of a position is origin-dependent, and translating the model must
   never change the verdict.
+
+Worked, at the default `rel = 1e-3`, in a document holding a 100×100×100mm block
+(`Diag` = 173.2mm, `Scale` = 5.196e6 mm³, `Quantum` = 5.2e-3 mm³):
+
+| Body | `Volume` | `Bound` | `Ref` | `rel × Ref` | Verdict |
+|---|---|---|---|---|---|
+| a small boolean off-cut | 8 mm³ | 5 mm³ (±62%) | 8 mm³ | 8e-3 mm³ | **`Suspect`** — 5 ≫ 8e-3 |
+| a Ø20×10mm cylinder, 1e-3 mm chord | 3142 mm³ | 1.3 mm³ (±0.04%) | 3142 mm³ | 3.14 mm³ | `Sound` — 1.3 ≤ 3.14 |
+
+The two are separated by three orders of magnitude in *relative* error, which is the
+only thing that distinguishes them, and it is exactly what the gate reads.
 
 The gate has nothing to miss, because **every one of the three shapes carries a
 `Bound`**:
@@ -1279,7 +1408,10 @@ to make that mechanical.
   `ErrUnresolvedBody` (a `StepRef` was passed as a `BodyRef` to a feature call,
   where a live `*Body` is required, §6.2), `ErrNegativeMagnitude` (a magnitude was
   given as a negative value; magnitudes are non-negative and sense is enumerated,
-  §8.1), `ErrNotSolid`, `ErrDegenerate`, `ErrBooleanFailed`, `ErrInvalidProfile`,
+  §8.1), `ErrUnrecordableProfile` (a feature was handed a profile whose boundary
+  contains a partial fragment of a free-form curve — conic, spline, closed spline,
+  fit spline, NURBS — whose trim range `sketch` does not expose, §5.3/§6.2),
+  `ErrNotSolid`, `ErrDegenerate`, `ErrBooleanFailed`, `ErrInvalidProfile`,
   `ErrUnitKind`.
 - **`ErrUnitKind` covers exactly the wrong-`Kind` values.** A `units.Value` whose
   `Kind` is not the one the parameter takes: an angle where a length is wanted, and
