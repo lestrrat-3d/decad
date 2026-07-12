@@ -30,7 +30,7 @@ Three layers. The split is what makes an exact-kernel future reachable.
 
 ```
 Recipe      declarative, exact, kernel-independent, serializable
-            sketch profiles + features + operands + selectors + options + quantities
+            analytic profiles + planes + features + operands + selectors + options + quantities
    |
    v
 Evaluator   swappable
@@ -159,9 +159,16 @@ dotted or crossed without unwrapping it at every step, which makes coordinate ma
 unusable and pushes callers back to hand-rolling. (An `r3.Vec` used as a *direction*
 — `Cylinder.Axis`, `NormalTo(v)` — is dimensionless, and carries no unit at all.)
 
+The carve-out is about **coordinates**, not about the vector type: a plane-local
+2D coordinate — `Point2` (§6.2), the `(u, v)` of a recorded profile — is a length
+in millimetres on exactly the same terms, and for exactly the same reason.
+
 Vectors carry the unit **by convention**; scalars carry it **in the type**. §5.1
 governs scalars, and this is the whole of the carve-out — a bare `float64` scalar
-quantity is still forbidden anywhere in the API.
+quantity is still forbidden anywhere in the API. A *curve parameter* is not a
+scalar quantity: a spline's knots, weights and parameter range (§6.2) are
+dimensionless indices into a parameterisation, not measurements of anything, and
+§5.1 does not reach them.
 
 ### 5.3 Dependency-side decisions (blockers)
 
@@ -172,7 +179,7 @@ hand-roll around either.
 | Gap | Proposal | Blocks |
 |---|---|---|
 | **`r3` has no rigid transform type.** `Frame` covers plane-local↔world only; placing a body at an arbitrary pose needs rotation + translation. | Add `r3.Transform` upstream. It *acts on* ℝ³, which is r3's charter. | Body placement — `Body.Placed` (§8), and with it the explicit-transform answer to assemblies (§13). |
-| **`sketch/units` has no Area / Volume / Mass / Density kinds.** `units.Kind` is Dimensionless / Length / Angle only, so a `units.Value` cannot hold `12.9997 mm³`. | Add those kinds upstream to `sketch/units` — it is a first-party module — so `Measurement.Value` stays a single `units.Value` and the no-parallel-unit-system rule holds. | Every volume / area / mass measurement — i.e. most of `Verify`. |
+| **`sketch/units` has no Area / Volume / Mass / Density kinds.** `units.Kind` is Dimensionless / Length / Angle only, so a `units.Value` cannot hold `12.9997 mm³`. | Add those kinds upstream to `sketch/units` — it is a first-party module — so `Measurement.Value` stays a single `units.Value` and the no-parallel-unit-system rule holds. | Every volume / area / mass measurement — i.e. most of `Verify` — and, for the text form below, encoding a `Recipe` (§6.2). |
 
 Until the units kinds land, `Measurement` **cannot be implemented as specified**,
 and decad will **not** work around it by inventing a parallel unit system.
@@ -182,6 +189,13 @@ The units gap is **wider than the measured value alone**. `Measurement.Bound` an
 bound — the error bound on a volume is itself a volume, so it needs the Volume kind
 as much as the volume does. So does `Interference.Volume` (§6.2). The blocker
 covers the bound, not just the number.
+
+The same row also covers **a text form for `units.Value`**: its fields are
+unexported and it marshals to `{}`, so a `Recipe` — which carries every quantity
+it records as a `units.Value` — cannot round-trip until `units.Value` gains
+`MarshalText` / `UnmarshalText` upstream. It is the same first-party module and
+the same charter; decad does not hand-roll a shadow encoding of a foreign type.
+This is what §6.2's serializability rule is waiting on, and nothing else is.
 
 ### 5.4 Exactness — the load-bearing type
 
@@ -205,7 +219,8 @@ type Measurement struct {
 type VecMeasurement struct {
     Value     r3.Vec      // a position in millimetres (§5.2), or a unit direction
     Exactness Exactness
-    Bound     units.Value // absolute error bound, Kind Length; zero when Exact
+    Bound     units.Value // absolute error bound; Kind Length for a position,
+                          // Dimensionless for a direction. Zero when Exact.
 }
 ```
 
@@ -213,11 +228,18 @@ type VecMeasurement struct {
 volume is a volume. It is never a bare `float64`; invariant #2 and §5.1 admit no
 exception here.
 
-`VecMeasurement.Bound` is a **length in both cases**: it is the radius of the ball
-around `Value` that the true vector is proven to lie in. For a position that is a
-distance in millimetres; for a unit direction it is the length of the deviation
-from the true direction, the tip of a unit vector being a point like any other. One
-`Kind`, so one tolerance (§10.1) governs every vector the report carries.
+`VecMeasurement.Bound` obeys the same rule, and its `Kind` therefore **follows its
+`Value`**. The bound is the radius of the ball around `Value` that the true vector
+is proven to lie in, so it is a magnitude of the same quantity the vector is. For a
+**position** that is a distance: `Kind` Length, millimetres. For a **direction** it
+is the deviation of a unit vector from the true unit vector, and a direction is
+dimensionless (§5.2) — so the bound is `Dimensionless` (`units.Scalar`), and typing
+it as a length would be exactly the wrong-`Kind` coercion §5.1 forbids: it would
+hand a millimetre tolerance a quantity that is not a length. §10.1's gate is stated
+over both, and needs no exponent to be.
+
+`Dimensionless` exists in `sketch/units` today, so the direction bound is **not**
+blocked by §5.3.
 
 Every measurement returns one:
 
@@ -263,6 +285,12 @@ operation that consumes a body (the booleans of §8, the `Body.Fillet` /
 bodies from the document and registers the body it returns. A retired body
 remains readable, but it is gone from `Document.Bodies()` and
 `Document.Verify()` never reports on it.
+
+**A retired body is no longer part of the model, so no operation takes one.** It is
+readable — its measurements still answer — but handing it to a boolean, to a modify
+op, or to an extent that names a body (`ToFace`, §8.1) is `ErrRetiredBody` (§12).
+A recipe that stopped an extrude at the face of a body the model no longer contains
+would not re-evaluate, and §11's emission would have no face to name.
 
 It follows that **bodies from different documents cannot be combined**.
 `Union(a, b)` where `a` and `b` have different owners has no defined result — which
@@ -381,23 +409,22 @@ The rest of the vocabulary the signatures above and below name. Shapes given her
 are load-bearing; the rest are deferred, not undecided.
 
 **`Recipe`** — the exact record of intent, and per §2 the library's actual
-deliverable, so it is a real value, not a handle. An ordered, immutable list of
-steps; each step is an exact statement of intent — the feature kind, the bodies it
-consumes, its profile and the plane that profile lies in, its extent, its options,
-its quantities, and the *selectors*
-(never resolved pointers, never topology indices) it was given. It is declarative
-and kernel-independent:
-nothing in a `Recipe` names a face, an edge, a tessellation or an evaluator, which
-is what lets a second evaluator re-run it and what makes emitting Fusion code from
-it mechanical (§11).
+deliverable, so it is **a real value, not a handle**: it holds no pointer into a
+live `*Document` and none into a live `*sketch.Sketch`, and it stays true after
+either has moved on. An ordered, immutable list of steps; each step is an exact
+statement of intent — the feature kind, the bodies it depends on, its profile and
+the plane that profile lies in, its extent, its options, its quantities, and the
+*selectors* (never resolved pointers, never topology indices) it was given. It is
+declarative and kernel-independent: nothing in a `Recipe` names a face, an edge, a
+tessellation or an evaluator, which is what lets a second evaluator re-run it and
+what makes emitting Fusion code from it mechanical (§11).
 
 **The completeness rule, and it is a rule, not a hope.** A `Recipe` MUST be
 sufficient to (a) re-evaluate the model from scratch under any evaluator, and
-(b) emit equivalent CAD code. Every input an operation takes — its operands, its
-profile, **the plane that profile lies in**, its extent, its selectors, its
-options, its quantities — MUST be
-recordable in its `Step`. **An operation whose inputs a `Step` cannot record does
-not ship.** This is what §2's "the exact record of intent" costs: a `Recipe` that
+(b) emit equivalent CAD code. Every input an operation takes — its operands, **every
+body its extent or its axis names**, its profile, **the plane that profile lies
+in**, its extent, its selectors, its options, its quantities — MUST be recordable in
+its `Step`. **An operation whose inputs a `Step` cannot record does not ship.** This is what §2's "the exact record of intent" costs: a `Recipe` that
 re-evaluates to a *different* model than the one it was recorded from is not the
 deliverable §2 claims — it would make vN a silently different model rather than a
 better answer to the same one, and would make the mechanical Fusion emission of
@@ -413,9 +440,9 @@ type StepRef int
 
 type Step struct {
     Op        OpKind          // Extrude / Revolve / Union / Cut / Intersect / Fillet / Chamfer / Shell
-    Inputs    []StepRef       // the bodies this op consumes. Cut is [target, tool].
-    Profile   *sketch.Profile // Extrude / Revolve — plane-local, so Plane below is what places it
-    Plane     r3.Frame        // Extrude / Revolve — the sketch plane's frame; lifts Profile into world space
+    Inputs    []StepRef       // the bodies this step depends on. Cut is [target, tool].
+    Profile   ProfileRecord   // Extrude / Revolve — decad's own analytic 2D record of the region
+    Plane     PlaneRecord     // Extrude / Revolve — the sketch plane; lifts Profile into world space
     Extent    Extent          // Extrude
     Angular   AngularExtent   // Revolve
     Axis      Axis            // Revolve
@@ -427,20 +454,148 @@ type Step struct {
 type OpKind int
 ```
 
+**The `Recipe` owns its geometry.** A `Step` holds no `*sketch.Profile` and no
+`r3.Frame`. It records the region **structurally**, in decad's own types, at the
+moment the feature is called:
+
+- A `*sketch.Profile` is a pointer into a live, mutable `*sketch.Sketch` — a
+  *handle*, and §2 says the recipe is a value. Its `Entities` and its
+  `BoundaryEdge.Entity` are `sketch.Entity`, an interface with unexported methods,
+  which no decoder can reconstruct. And its `BoundaryEdge.Polyline` is a **densified
+  sample** — a tessellation, which §2 says a `Recipe` never names.
+- `r3.Frame`'s fields are unexported: it marshals to `{}`, so a `Step` that stored
+  one would silently drop the plane — the single field without which the step is
+  incomplete.
+
+So decad **converts, it does not reference**:
+
+```go
+// PlaneRecord is the sketch plane, as three vectors: it survives encoding, which
+// an r3.Frame does not. Orthonormal, right-handed; the plane normal is U × V, and
+// that normal is the sense Direction.Along means for a linear extent (§8.1).
+type PlaneRecord struct {
+    Origin r3.Vec // millimetres (§5.2)
+    U, V   r3.Vec // the in-plane axes: the (u, v) a Point2 below is expressed in
+}
+
+// Point2 is a plane-local coordinate, a length in millimetres — §5.2's carve-out
+// in the plane's own (u, v).
+type Point2 struct{ U, V float64 }
+
+// ProfileRecord is the region a Step extrudes or revolves: one outer loop and its
+// holes, analytic and plane-local. Not a sample, not a pointer, not a sketch.
+type ProfileRecord struct {
+    Outer LoopRecord
+    Holes []LoopRecord
+}
+
+// LoopRecord is a closed, directed boundary loop: each segment's end is the next
+// segment's start, and the last closes onto the first. Outer loops run
+// counter-clockwise in (u, v), holes clockwise.
+type LoopRecord struct {
+    Segments []CurveSegment
+}
+
+// CurveSegment is one analytic piece of a loop. Sealed, like Surface (§6.1).
+type CurveSegment interface{ curveSegment() }
+
+type LineSeg    struct { Start, End Point2 }
+type ArcSeg     struct { Center Point2; Radius units.Value; StartAngle, EndAngle units.Value; CCW bool }
+type CircleSeg  struct { Center Point2; Radius units.Value; CCW bool }
+type EllipseSeg struct { Center Point2; Major, Minor, Rotation units.Value; CCW bool }
+type EllipticalArcSeg struct {
+    Center                 Point2
+    Major, Minor, Rotation units.Value
+    StartAngle, EndAngle   units.Value // the swept angular range
+    CCW                    bool
+}
+// SplineSeg covers sketch's Spline and NURBS alike — a spline is the unweighted
+// case. Knots, Weights and the T range are curve parameters, not quantities (§5.2).
+type SplineSeg struct {
+    Degree   int
+    Control  []Point2
+    Knots    []float64
+    Weights  []float64
+    TStart, TEnd float64 // the sub-range this segment covers
+}
+```
+
+Those six kinds cover `sketch`'s entity vocabulary exactly — line, circle, arc,
+ellipse, elliptical arc, spline/NURBS — so **every profile `sketch` can produce is
+recordable**, which is what the completeness rule demands. A new entity kind
+upstream needs a new `CurveSegment` variant before decad accepts a profile that
+uses it; there is no fallback to a sample.
+
+Conversion is mechanical, and it happens once, in the feature call. decad walks
+`p.Outer` and each loop of `p.Holes`, reads each `BoundaryEdge`'s source `Entity`
+for its analytic parameters, and **bakes the edge's flags into the segment**:
+`Partial` becomes the segment's trimmed range (an arc's `StartAngle`/`EndAngle`, a
+spline's `TStart`/`TEnd`), and `Reversed` becomes the segment's own orientation
+(endpoints swapped, `CCW` flipped). A `LoopRecord` therefore carries no residual
+flags and no back-reference — and `BoundaryEdge.Polyline` is never read.
+
+**Serializability is a rule, not an aspiration.** Every type reachable from a
+`Recipe` MUST be encodable and decodable: exported fields only; no foreign
+interface; no foreign type whose fields decad cannot see. decad's own sealed
+interfaces — `Extent`, `AngularExtent`, `SideExtent`, `SideAngular`, `Axis`,
+`Selector`, `StepOpts`, `CurveSegment` — are **closed variant sets decad owns**, so
+decad ships their codec: each encodes as a tagged object and decoding dispatches on
+the tag. That is precisely what decad cannot do for `sketch.Entity`, which is why
+the entity never enters a `Step`. The rule is transitive, so it reaches the query
+types too (§9): an `EdgeQuery` / `FaceQuery` is recorded content — its predicates
+and its cardinality assertion — and a predicate that cannot be encoded does not
+ship, exactly as an option that cannot be recorded does not. The one thing
+outstanding is a text form for `units.Value`, which belongs upstream (§5.3).
+
+**A `Step` holds no `*Body` either.** A body reference in a `Step` is a `StepRef` —
+the step that produced the body — and that is what makes `Inputs` a graph. The
+extents and the axis that name a body (`ToFace`, `ToFaceAngular`, `EdgeAxis`, §8.1)
+hold a `BodyRef`, which is either form; recording a step substitutes the `StepRef`
+for the `*Body` the caller passed, so what a `Recipe` carries is only ever values:
+
+```go
+// BodyRef names the body a selector resolves against. A live *Body is one, which
+// is what a caller passes; a StepRef is one, which is what a recorded — or a
+// decoded — Recipe holds. One field, and the codec maps between them.
+type BodyRef interface{ bodyRef() }
+
+func (*Body) bodyRef()
+func (StepRef) bodyRef()
+```
+
+A `StepRef` handed to a *feature call*, where a live body is required, is
+`ErrUnresolvedBody` (§12).
+
 **`Plane` is what makes an `Extrude` step complete.** A `sketch.Profile` is
 plane-local 2D — its boundary is `(u, v)` in the frame of the sketch plane, and it
-back-references no plane of its own. A `Step` that recorded only the `Profile`
-would therefore record the same bytes for the same rectangle extruded on XY and on
-XZ, and re-evaluating it could not know which solid was meant. Recording the sketch
-plane's `r3.Frame` is what the completeness rule demands, and it is why §8's
-`Extrude` and `Revolve` take the sketch (§7).
+back-references no plane of its own. A `Step` that recorded only the profile would
+therefore record the same bytes for the same rectangle extruded on XY and on XZ, and
+re-evaluating it could not know which solid was meant. Recording the sketch plane is
+what the completeness rule demands, and it is why §8's `Extrude` and `Revolve` take
+the sketch (§7).
 
 **Every `Step` produces exactly one body**, so a `StepRef` names it without
 ambiguity, and `Inputs` is what makes the recipe a graph rather than a list of
-unrelated features. `Extrude` and `Revolve` consume no body and leave `Inputs`
-empty; `Fillet`, `Chamfer` and `Shell` consume one — the body they modify; the
-booleans consume two. **`Cut`'s `Inputs` order is `[target, tool]`** — the two
-roles are asymmetric and order is the only thing that distinguishes them.
+unrelated features. `Inputs` records every body a step **depends on**, which is not
+always a body it consumes:
+
+- `Fillet`, `Chamfer` and `Shell` depend on one — the body they modify, which they
+  consume;
+- the booleans depend on two, and consume both. **`Cut`'s `Inputs` order is
+  `[target, tool]`** — the two roles are asymmetric and order is the only thing that
+  distinguishes them;
+- `Extrude` and `Revolve` consume no body, and leave `Inputs` empty **only when
+  their extent and their axis name none**. A `ToFace`, a `ToFaceAngular` or an
+  `EdgeAxis` names one (§8.1), and the extrude genuinely depends on it — the solid
+  it produces is a function of that body's geometry — so **that body's `StepRef` is
+  recorded in `Inputs`**, in extent order first and axis second, deduplicated. A
+  `TwoSided{One: ToFace{Body: a…}, Two: ToFace{Body: b…}}` records both. Without
+  this the recipe would not be a complete graph: a second evaluator would reach the
+  extrude with no way to know which body's face it stops at.
+
+Depending on a body is **not** consuming it: `Extrude` and `Revolve` retire
+nothing, and the body a `ToFace` names stays live in `Document.Bodies()`. §6's
+retire rule is unchanged, and lists exactly the operations it covers.
 
 **A `StepRef` is not the index invariant #3 forbids.** Invariant #3 forbids indices
 as *topology* selectors — `Edges()[3]` — because an exact kernel decomposes a body
@@ -501,8 +656,16 @@ type Axis interface{ axis() }
 
 type SketchLine   struct{ /* ... */ } // a line in the source sketch
 type ConstructionAxis struct{ /* ... */ } // an explicit axis in the document
-type EdgeAxis     struct{ Edge EdgeSelector } // a linear edge, selected — never a pointer
+// EdgeAxis is a linear edge, selected — never a pointer. Body is what Edge
+// resolves against: a Revolve is handed no body, so the axis must name its own.
+type EdgeAxis struct{ Body BodyRef; Edge EdgeSelector }
 ```
+
+`EdgeAxis.Edge` MUST resolve to **exactly one** linear edge of `Body`
+(`EdgeQuery.Exactly(1)`); zero or many is `ErrCardinality` (§12), and a non-linear
+edge is `ErrDegenerate`. `Body` MUST be a live body of the same `Document` the
+`Revolve` is called on — another document's is `ErrForeignBody`, a retired one is
+`ErrRetiredBody` — and its `StepRef` is recorded in the step's `Inputs`.
 
 **`Interference` / `Clearance`** — the pairwise results of §10. Both name the two
 bodies and carry their quantity as a `Measurement`, so both report their own
@@ -601,15 +764,33 @@ is pure plane-local 2D geometry — an outer loop and its holes in `(u, v)` — 
 holds no back-reference to the sketch it came from, so it names no plane and no
 frame. It cannot say *where in space* it is. The sketch can: `s.Plane()` is the
 construction plane the sketch is drawn on, and `s.Plane().Frame()` is the
-orthonormal `r3.Frame` that lifts the plane-local profile into world space. That
-frame is also what a `Step` records (§6.2), and it is what the profile normal —
-the frame's normal, the sense `Direction.Along` means for a linear extent (§8.1) —
-is read from.
+orthonormal `r3.Frame` that lifts the plane-local profile into world space. A
+`Step` records that frame as a `PlaneRecord` — origin, u, v — because an `r3.Frame`
+does not survive encoding (§6.2), and the frame is what the profile normal — the
+sense `Direction.Along` means for a linear extent (§8.1) — is read from.
 
-`p` MUST be one of `s.Profiles()`. A profile from another sketch is
-`ErrForeignProfile` (§12): it is expressed in a different plane's coordinates, so
-lifting it through `s`'s frame would place it silently, confidently, in the wrong
-place.
+**`p` MUST be a profile of `s`, and the test is *entity membership*.** Every
+`BoundaryEdge.Entity` of `p.Outer` and of every loop of `p.Holes` — and every
+element of `p.Entities` — MUST be a member of `s.Entities()`. A profile that fails
+that test is `ErrForeignProfile` (§12): it is expressed in a different plane's
+coordinates, so lifting it through `s`'s frame would place it silently,
+confidently, in the wrong place.
+
+The test is entity membership and **not** pointer membership in `s.Profiles()`,
+because `sketch.Sketch.Profiles()` **recomputes and reallocates** the profiles on
+every call: the `*sketch.Profile` a caller holds is never pointer-equal to anything
+a later `Profiles()` returns, so a pointer-membership rule would reject the caller's
+own profile — including the one in the example above. The `Entity` pointers are the
+stable identity: they are the sketch's own entities, and they survive every
+`Profiles()` call.
+
+**The honest limit of the check: it cannot detect a *stale* profile.** A profile
+built before a later `Solve` still holds entities that belong to `s`, so it passes —
+but its geometry is the pre-solve geometry. The caller MUST pass a profile from the
+current solve. A profile→sketch back-reference, or a generation counter, would make
+the check total; both belong upstream in `sketch`, and neither is a condition of
+shipping — this is a limitation of the check, not a blocker (§5.3 lists the two
+blockers, and this is not one of them).
 
 `doc.Extrude` REJECTS a `sketch.Profile` whose `Valid` is false — a
 self-intersecting or degenerate region is never silently swept. `Profile.Valid` is
@@ -631,10 +812,11 @@ func (d *Document) Revolve(s *sketch.Sketch, p *sketch.Profile, axis Axis, a Ang
 ```
 
 Both take the **sketch** as well as the profile, because a `sketch.Profile` is
-plane-local and carries no plane of its own (§7). `p` MUST be one of
-`s.Profiles()`; a profile from another sketch is `ErrForeignProfile` (§12). decad
+plane-local and carries no plane of its own (§7). Every entity of `p` MUST be an
+entity of `s`; a profile from another sketch is `ErrForeignProfile` (§12). decad
 reads the plane through `s.Plane()` and its frame through `s.Plane().Frame()`, and
-records that frame in the `Step` (§6.2) so the recipe stays complete.
+records the plane — as a `PlaneRecord`, and the profile as a `ProfileRecord` — in
+the `Step` (§6.2), so the recipe stays complete and holds no live sketch.
 
 Booleans are **explicit** — not folded into every feature with an ambient,
 implicitly-chosen target — and they never mutate an operand or take a target-out
@@ -690,11 +872,15 @@ type SideExtent interface{ sideExtent() }
 
 // Extent — standalone. A standalone extent is one-sided, so it carries its own
 // sense as an enumerated Direction.
-type Distance   struct { D units.Value; Dir Direction }          // Extent ONLY
-type ThroughAll struct { Dir Direction }                         // Extent ONLY
-type Symmetric  struct { D units.Value; FullLength bool }        // Extent ONLY
-type TwoSided   struct { One, Two SideExtent }                   // Extent ONLY
-type ToFace     struct { Face FaceSelector; Offset units.Value } // Extent AND SideExtent; Offset is SIGNED
+type Distance   struct { D units.Value; Dir Direction }   // Extent ONLY
+type ThroughAll struct { Dir Direction }                  // Extent ONLY
+type Symmetric  struct { D units.Value; FullLength bool } // Extent ONLY
+type TwoSided   struct { One, Two SideExtent }            // Extent ONLY
+
+// ToFace stops the sweep at a face of Body. Extent AND SideExtent; Offset is SIGNED.
+// Body is what Face resolves against: an Extrude is handed no body, so the extent
+// must name its own.
+type ToFace struct { Body BodyRef; Face FaceSelector; Offset units.Value }
 
 // SideExtent — one side of a TwoSided. The SIDE supplies the sense, so a side
 // variant never carries a Direction.
@@ -716,7 +902,9 @@ type AngleExtent    struct { A units.Value; Dir Direction }   // AngularExtent O
 type FullRevolution struct{}                                  // AngularExtent ONLY
 type SymmetricAngle struct { A units.Value; FullLength bool } // AngularExtent ONLY
 type TwoSidedAngle  struct { One, Two SideAngular }           // AngularExtent ONLY
-type ToFaceAngular  struct { Face FaceSelector }              // AngularExtent AND SideAngular
+
+// ToFaceAngular stops the revolve at a face of Body. AngularExtent AND SideAngular.
+type ToFaceAngular struct { Body BodyRef; Face FaceSelector }
 
 type AngleSide struct { A units.Value }                       // SideAngular ONLY
 ```
@@ -780,10 +968,25 @@ The two sets are **deliberately disjoint**: no linear extent satisfies
 "revolve 90mm" unrepresentable rather than a runtime error.
 
 `ToFace` and `ToFaceAngular` take a **`FaceSelector`, never a `*Face`** — invariant
-#3 and §9's rule hold inside features too, not merely at their edges. The selector
-MUST resolve to **exactly one** face: that is what `FaceQuery.Exactly(1)` is for.
-Resolving to zero faces or to more than one is `ErrCardinality` (§12) — "extrude up
-to that face" is meaningless when "that face" is four faces.
+#3 and §9's rule hold inside features too, not merely at their edges.
+
+**A selector needs a body to resolve against, and the feature does not supply one.**
+`FaceSelector.SelectFaces` takes a `*Body` (§9), but `Extrude` and `Revolve` take a
+sketch and a profile — no body at all. So the extent names its own: `ToFace.Body`,
+`ToFaceAngular.Body`, and `EdgeAxis.Body` (§6.2). At a feature call that `BodyRef`
+is a live `*Body` — a `StepRef` there is `ErrUnresolvedBody` (§6.2) — and `Face` is
+resolved as `Face.SelectFaces(Body)` and nothing else. The rules are the same
+everywhere:
+
+- the selector MUST resolve to **exactly one** face — that is what
+  `FaceQuery.Exactly(1)` is for. Zero faces or more than one is `ErrCardinality`
+  (§12); "extrude up to that face" is meaningless when "that face" is four faces;
+- `Body` MUST be a live body of the same `Document` the feature is called on.
+  Another document's body is `ErrForeignBody` (§12) — a face in another document's
+  coordinates would stop the sweep somewhere the caller never named — and a body the
+  document has retired is `ErrRetiredBody` (§6);
+- the step **depends on** that body, so its `StepRef` is recorded in the step's
+  `Inputs` (§6.2). It is not consumed and not retired.
 
 Options carry the rest (`WithTaper(units.Degrees(3))`), via
 `github.com/lestrrat-go/option/v3` — the house functional-options library, and an
@@ -926,25 +1129,74 @@ gap is decad's mandate.
 caller will accept*, so the caller must be able to say what they accept:
 
 ```go
-func WithTolerance(t units.Value) VerifyOption
+func WithTolerance(rel units.Value) VerifyOption // Dimensionless; default units.Scalar(1e-6)
 func WithMinWallThickness(tool units.Value) VerifyOption
 func WithPullDirection(v r3.Vec) VerifyOption
 func WithMinRadius() VerifyOption
 ```
 
-`WithTolerance(t)` is **the largest absolute error the caller will accept on any
-measurement in the report**, and "any" is meant literally. The report carries
-bounded results in exactly three shapes (§5.4) — a `Measurement`, a
-`VecMeasurement`, a `Box` — and **every one of them carries a `Bound`**, so the
-gate has nothing to miss:
+**The tolerance is relative, and it is one number for every kind.** `rel` is the
+largest error the caller will accept **as a fraction of the quantity being
+measured**:
 
-- a `Measurement`, a `VecMeasurement` or a `Box` on a `BodyReport` whose `Bound`
-  exceeds `t` — `Volume`, `Area`, `Centroid`, `Bounds`, `MinWallThickness`,
+> A bounded result is **within tolerance** when `Bound <= rel × Ref`, where `Ref` is
+> the result's **reference magnitude**.
+
+One comparison, one number, no exponentiation. It is scale-invariant — a 1mm part
+and a 1m part are judged on the same footing — which mirrors how `sketch` makes its
+conditioning gate scale-invariant. `rel` is `Dimensionless` (`units.Scalar`); any
+other `Kind` is `ErrUnitKind` (§12), never a coercion, and a negative `rel` is
+`ErrNegativeMagnitude`. Both are returned from `Verify`, which is why it returns an
+`error` (§10). Omitted, `rel` defaults to `units.Scalar(1e-6)`.
+
+An **absolute** threshold cannot do this job. A `Bound` carries the `Kind` of the
+quantity it bounds (§5.4), so an absolute length `t` has nothing to say about a
+volume bound: raising it — `t²` for an area, `t³` for a volume — makes the gate
+meaningless, because a linear error `t` propagates to a volume error of order
+`area × t`, not `t³`. A Ø20×10mm cylinder tessellated to a 1mm chord carries a
+volume bound of order 10³ mm³ while `t³` would admit 1 mm³, so *every* body touched
+by a boolean would read `Suspect` at *every* tolerance, and the gate would have no
+content at all. The ratio has content: it is exactly "how many significant figures
+of this answer are real".
+
+`Ref` is fixed per shape, and the report carries bounded results in exactly three
+shapes (§5.4) — a `Measurement`, a `VecMeasurement`, a `Box` — so the table is
+total:
+
+| Bounded result | `Ref` |
+|---|---|
+| `Measurement` — a volume, an area, a length, a gap | `max(abs(Value), Scale)` |
+| `VecMeasurement`, a **direction** (`Bound` is `Dimensionless`, §5.4) | `1` — the magnitude of a unit vector |
+| `VecMeasurement`, a **position**, and `Box` (`Bound` is a Length) | `Diag` |
+
+`Diag` is the diagonal of the document's bounding box — the box enclosing every live
+body — and `Scale` is `Diag` **raised to the dimension of the quantity's `Kind`**:
+`Diag` for a length, `Diag²` for an area, `Diag³` for a volume, `1` for a
+dimensionless quantity. `Scale` is the model's own size, not an acceptance
+threshold, so raising it is dimensionally exact and carries none of the pathology
+of raising `t`.
+
+Two things follow, and both are rules:
+
+- **The near-zero case is defined.** A zero clearance, or the volume of a degenerate
+  body, has `|Value|` at or near zero, and a ratio to it is undefined or explosive.
+  `max(|Value|, Scale)` is what handles it: below the model's own scale the
+  comparison falls back to `rel × Scale`, so the answer is judged against the size
+  of the model rather than against nothing.
+- **A coordinate is judged against `Diag` alone**, never against its own magnitude:
+  the magnitude of a position is origin-dependent, and translating the model must
+  never change the verdict.
+
+The gate has nothing to miss, because **every one of the three shapes carries a
+`Bound`**:
+
+- a `Measurement`, a `VecMeasurement` or a `Box` on a `BodyReport` that is beyond
+  tolerance — `Volume`, `Area`, `Centroid`, `Bounds`, `MinWallThickness`,
   `MinRadius` — makes that `BodyReport` `Suspect`;
-- an `Interference.Volume` or a `Clearance.Gap` whose `Bound` exceeds `t` makes the
-  `Report` `Suspect` directly — those two are properties of a *pair*, so there is no
-  `BodyReport` for them to travel through, and a gap measured 50× coarser than the
-  caller's stated tolerance is not an answer the caller said they would accept.
+- an `Interference.Volume` or a `Clearance.Gap` beyond tolerance makes the `Report`
+  `Suspect` directly — those two are properties of a *pair*, so there is no
+  `BodyReport` for them to travel through, and a gap known to only one significant
+  figure is not an answer the caller said they would accept.
 
 Either path makes `Trustworthy()` false. `Exact` answers have a zero `Bound` and
 can never trip it, at any tolerance. **Nothing in the report is exempt**, and the
@@ -952,24 +1204,6 @@ can never trip it, at any tolerance. **Nothing in the report is exempt**, and th
 carries a bound like everything else, so a boolean that puts the centroid a
 millimetre off cannot hide inside a `Sound` body — which is the confidently-wrong
 failure §1 exists to prevent.
-
-Omitted, the tolerance defaults to **1e-6 of the document's bounding-box diagonal**
-— the diagonal of the box enclosing every live body. It is one number for the whole
-report, which is what lets it govern the pairwise results too: an
-`Interference.Volume` and a `Clearance.Gap` belong to no body, so a per-body default
-would leave them with no tolerance to be judged against. The default is
-**relative, so it is scale-invariant**: a 1mm part and a 1m part are judged on the
-same footing, and an agent that never states a tolerance still gets a meaningful
-`Suspect`. This mirrors how `sketch` makes its conditioning gate scale-invariant.
-`WithTolerance` overrides it with an absolute bound, which is what a caller with a
-real manufacturing tolerance has.
-
-`t` is a **length** — the linear error the caller accepts — and any other `Kind` is
-`ErrUnitKind` (§12), never a coercion; a negative `t` is `ErrNegativeMagnitude`.
-Both are returned from `Verify`, which is why it returns an `error` (§10). A
-`Bound` carries the `Kind` of the quantity it bounds (§5.4), so the comparison is
-made in that quantity's kind: `t` for a length, `t²` for an area, `t³` for a
-volume. One number, stated once, governs every measurement in the report.
 
 `Status` is one type used at two levels:
 
@@ -1002,7 +1236,7 @@ Concretely, `Report.Status` is:
 | any `BodyReport.Status == Unsound` | `Unsound` |
 | else, `len(Interferences) > 0` | `Interfering` |
 | else, any `BodyReport.Status == Suspect` | `Suspect` |
-| else, any `Interference.Volume` or `Clearance.Gap` whose `Bound` exceeds the tolerance (§10.1) | `Suspect` |
+| else, any `Interference.Volume` or `Clearance.Gap` beyond tolerance (§10.1) | `Suspect` |
 | else | `Sound` |
 
 The last rung is what keeps the tolerance gate **total**: a bounded result that
@@ -1038,23 +1272,32 @@ to make that mechanical.
 - Sentinel/typed errors for the cases an agent must branch on: `ErrNoMatch`
   (a selector carrying no cardinality assertion matched nothing), `ErrCardinality`
   (a cardinality assertion failed), `ErrForeignBody` (an operation was handed bodies
-  owned by different documents), `ErrForeignProfile` (a feature was handed a profile
-  that is not one of the given sketch's `Profiles()`, §7), `ErrNegativeMagnitude`
-  (a magnitude was given as a negative value; magnitudes are non-negative and sense
-  is enumerated, §8.1), `ErrNotSolid`, `ErrDegenerate`, `ErrBooleanFailed`,
-  `ErrInvalidProfile`, `ErrUnitKind`.
+  owned by different documents, or an extent or axis named a body owned by another
+  document, §8.1), `ErrForeignProfile` (a feature was handed a profile with an
+  entity that is not an entity of the given sketch, §7), `ErrRetiredBody` (an
+  operation, or an extent, was handed a body the document has retired, §6),
+  `ErrUnresolvedBody` (a `StepRef` was passed as a `BodyRef` to a feature call,
+  where a live `*Body` is required, §6.2), `ErrNegativeMagnitude` (a magnitude was
+  given as a negative value; magnitudes are non-negative and sense is enumerated,
+  §8.1), `ErrNotSolid`, `ErrDegenerate`, `ErrBooleanFailed`, `ErrInvalidProfile`,
+  `ErrUnitKind`.
+- **`ErrUnitKind` covers exactly the wrong-`Kind` values.** A `units.Value` whose
+  `Kind` is not the one the parameter takes: an angle where a length is wanted, and
+  a `WithTolerance` value that is not `Dimensionless` (§10.1). It is never a
+  coercion (§5.1).
 - **`ErrNegativeMagnitude` covers exactly the magnitudes.** Those are `Distance.D`,
   `DistanceSide.D`, `Symmetric.D`, `AngleExtent.A`, `AngleSide.A`,
   `SymmetricAngle.A`, every fillet and chamfer radius or distance, every shell
-  thickness, the `WithTolerance` value (§10.1), the `WithMinWallThickness` tool
-  size (§10.1), and the `Tessellate` tolerance (§11). It does **not** cover
-  `ToFace.Offset`, which is a signed displacement along the target face's normal
-  and not a magnitude at all (§8.1) — a negative offset there is a legal intent,
-  not an error.
+  thickness, the `WithTolerance` relative tolerance (§10.1), the
+  `WithMinWallThickness` tool size (§10.1), and the `Tessellate` tolerance (§11). It
+  does **not** cover `ToFace.Offset`, which is a signed displacement along the target
+  face's normal and not a magnitude at all (§8.1) — a negative offset there is a
+  legal intent, not an error.
 - **`ErrCardinality` takes precedence at zero matches.** A failed cardinality
   assertion is `ErrCardinality` **even when the selector matched nothing** — and
   that covers both the explicit assertions, `Exactly(n)` / `AtLeast(n)` (§9), and
-  the *implicit* exactly-one of `ToFace` / `ToFaceAngular` (§8.1). `ErrNoMatch` is
+  the *implicit* exactly-one of `ToFace` / `ToFaceAngular` (§8.1) and of `EdgeAxis`
+  (§6.2). `ErrNoMatch` is
   reserved for the one remaining case: a selector that asserts no cardinality at
   all and resolves to zero entities.
 - `Body` is immutable → safe to read from many goroutines.
