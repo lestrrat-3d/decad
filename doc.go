@@ -36,9 +36,9 @@
 //
 // # Status
 //
-// Scaffolding only. The public API is not designed yet — it is being worked out
-// in docs/roadmap.md, and no kernel surface should be added to this package
-// without a design doc landing first. See CLAUDE.md.
+// Scaffolding only. The public API is not designed yet, and no kernel surface
+// should be added to this package without a design doc landing first. See
+// CLAUDE.md.
 //
 // [sketch]: https://github.com/lestrrat-3d/sketch
 // [r3]: https://github.com/lestrrat-3d/r3

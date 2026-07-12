@@ -10,9 +10,9 @@ import (
 
 // TestWiring exercises the seam decad is built on: a solved 2D sketch profile,
 // lifted into world space through the r3 frame of the plane it was drawn on.
-// It asserts nothing about decad itself — the kernel API is not designed yet
-// (see docs/roadmap.md). It exists to keep both dependencies honest and to
-// prove the layering compiles. Delete it once real decad code imports them.
+// It asserts nothing about decad itself — the kernel API is not designed yet.
+// It exists to keep both dependencies honest and to prove the layering
+// compiles. Delete it once real decad code imports them.
 func TestWiring(t *testing.T) {
 	w := sketch.NewWorld()
 

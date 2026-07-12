@@ -6,7 +6,7 @@ A **headless CAD engine** for Go: the 3D modeling layer above the
 
 > **Status: scaffolding.** The repository carries its infrastructure, its
 > dependency wiring and its design contract. The public API is **not designed
-> yet** — see [docs/roadmap.md](docs/roadmap.md). There is nothing to import.
+> yet**. There is nothing to import.
 
 ## Why this exists
 

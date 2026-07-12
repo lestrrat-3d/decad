@@ -14,8 +14,9 @@ interference, no wall thinner than the tool — BEFORE committing to write real
 CAD software code (e.g. an Autodesk Fusion add-in). Be wrong in the cheap place.
 
 **Current state: scaffolding.** Infrastructure, dependency wiring and design
-contract only. No public API exists. `docs/roadmap.md` holds what is settled and
-what is open.
+contract only. No public API exists. The kernel representation — what a `Body`
+is (B-rep / mesh / hybrid) — is undecided, and every downstream choice (features,
+booleans, exports, verification depth) hangs off it.
 
 ## Hard rules
 
@@ -29,8 +30,7 @@ what is open.
 - **Shapes belong HERE.** `r3` excludes them by charter; solids/surfaces/meshes/
   topology are this module's job.
 - **NEVER add a public API without a design doc in `docs/` landing first.** The
-  kernel representation is undecided (`docs/roadmap.md`) and every downstream
-  choice depends on it.
+  kernel representation is undecided, and every downstream choice depends on it.
 - **NEVER add a `go.mod` module without recording the decision here.** Approved:
   - `github.com/lestrrat-3d/sketch` — parametric 2D constraint engine.
   - `github.com/lestrrat-3d/r3` — 3D coordinate math (`Vec`, `Frame`).
@@ -46,7 +46,6 @@ what is open.
 |---|---|
 | `doc.go` | Package doc: scope + the layering contract. |
 | `wiring_test.go` | Dependency smoke test — solves a `sketch` profile, lifts it to world space via `r3.Frame`. Asserts nothing about decad. **Delete when real decad code imports both deps.** |
-| `docs/roadmap.md` | Settled contracts + open design questions. |
 | `.github/workflows/` | `ci.yml` (lint → test/tidy/govulncheck), `codeql.yml`. |
 
 ## Conventions
