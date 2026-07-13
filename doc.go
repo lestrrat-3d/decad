@@ -1,5 +1,6 @@
 // Package decad is a headless CAD engine for Go: the 3D modeling layer above
-// the [sketch] 2D constraint engine and the [r3] coordinate-math layer.
+// the [sketch] 2D constraint engine and the [r3] coordinate-math layer, with
+// every quantity a typed [units] value.
 //
 // # Why this exists
 //
@@ -22,10 +23,12 @@
 //	  |
 //	sketch   parametric 2D constraint solving    github.com/lestrrat-3d/sketch
 //	  |
-//	r3       vectors and orthonormal frames      github.com/lestrrat-3d/r3
+//	r3       vectors, frames, rigid transforms   github.com/lestrrat-3d/r3
+//	  |
+//	units    typed quantities (Value, Kind)      github.com/lestrrat-3d/units
 //
-// The arrows point down and NEVER back up: decad imports sketch and r3; neither
-// of them knows decad exists. A 2D question — does this profile close, is this
+// The arrows point down and NEVER back up: decad imports sketch, r3 and units;
+// none of them knows decad exists. A 2D question — does this profile close, is this
 // sketch fully constrained — is answered by sketch and consumed here as a given.
 // decad does not re-derive it.
 //
@@ -36,10 +39,14 @@
 //
 // # Status
 //
-// Scaffolding only. The public API is not designed yet, and no kernel surface
-// should be added to this package without a design doc landing first. See
-// CLAUDE.md.
+// Scaffolding, plus an approved API design. No public API exists yet; the
+// contract for the one that lands is docs/api-design.md — the core design,
+// whose deep ends live in the companion docs/sketch-seam-design.md and
+// docs/verification-design.md — every capability it consumes from sketch, r3
+// and units exists today — no open dependency gaps — and nothing that
+// contradicts it may be added to this package.
 //
 // [sketch]: https://github.com/lestrrat-3d/sketch
 // [r3]: https://github.com/lestrrat-3d/r3
+// [units]: https://github.com/lestrrat-3d/units
 package decad

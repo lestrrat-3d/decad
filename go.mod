@@ -3,8 +3,9 @@ module github.com/lestrrat-3d/decad
 go 1.24
 
 require (
-	github.com/lestrrat-3d/r3 v0.0.0-20260712105614-67204eb81351
-	github.com/lestrrat-3d/sketch v0.0.0-20260712104855-d27452381dbb
+	github.com/lestrrat-3d/r3 v0.0.0-20260713000132-2e6d6464affc
+	github.com/lestrrat-3d/sketch v0.0.0-20260713030653-e1313e1cd01c
+	github.com/lestrrat-3d/units v0.0.0-20260713004850-5816412456f9
 	github.com/stretchr/testify v1.11.1
 )
 
