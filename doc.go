@@ -39,9 +39,10 @@
 //
 // # Status
 //
-// The public API is landing incrementally against an approved design: the
-// foundational value vocabulary ships first, and the document, features,
-// evaluator and verification surface remain design-only until they land. The
+// The public API is landing incrementally against an approved design: what
+// this package exports today is the leading edge of that surface, and
+// whatever it does not yet export — ultimately the document, features,
+// evaluator and verification surface — remains design-only. The
 // contract for the whole surface is docs/api-design.md — the core design,
 // whose deep ends live in the companion docs/sketch-seam-design.md and
 // docs/verification-design.md — every capability it consumes from sketch, r3
