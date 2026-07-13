@@ -13,7 +13,7 @@ ordinary bug reports rather than security reports.
 
 ## Supported Versions
 
-The repository is scaffolding: no public API and no release is tagged. `main` is
+The public API is landing incrementally and no release is tagged yet. `main` is
 the reference and only line that receives fixes.
 
 | Version  | Supported                    |

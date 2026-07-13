@@ -39,8 +39,11 @@
 //
 // # Status
 //
-// Scaffolding, plus an approved API design. No public API exists yet; the
-// contract for the one that lands is docs/api-design.md — the core design,
+// The public API is landing incrementally against an approved design: what
+// this package exports today is the leading edge of that surface, and
+// whatever it does not yet export — ultimately the document, features,
+// evaluator and verification surface — remains design-only. The
+// contract for the whole surface is docs/api-design.md — the core design,
 // whose deep ends live in the companion docs/sketch-seam-design.md and
 // docs/verification-design.md — every capability it consumes from sketch, r3
 // and units exists today — no open dependency gaps — and nothing that
