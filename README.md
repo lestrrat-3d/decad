@@ -6,10 +6,12 @@ A **headless CAD engine** for Go: the 3D modeling layer above the
 
 > **Status: scaffolding, plus an approved API design.** The repository carries
 > its infrastructure, its dependency wiring, and the API contract in
-> [`docs/api-design.md`](docs/api-design.md). No public API exists yet — there is
-> nothing to import — and any that lands must follow that contract. Every
-> capability the contract consumes from its dependencies exists today; there are
-> no open dependency gaps.
+> [`docs/api-design.md`](docs/api-design.md) — the core design, with its deep
+> ends in the companion [`docs/sketch-seam-design.md`](docs/sketch-seam-design.md)
+> and [`docs/verification-design.md`](docs/verification-design.md). No public API
+> exists yet — there is nothing to import — and any that lands must follow that
+> contract. Every capability the contract consumes from its dependencies exists
+> today; there are no open dependency gaps.
 
 ## Why this exists
 

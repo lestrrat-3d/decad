@@ -16,10 +16,13 @@ CAD software code (e.g. an Autodesk Fusion add-in). Be wrong in the cheap place.
 **Current state: scaffolding + an approved API design.** No public API exists
 yet, and every capability the design consumes exists in its dependencies —
 there is no open dependency gap.
-`docs/api-design.md` is the contract for the one that lands: a recipe/evaluator
-split, a B-rep-shaped surface, immediate-mode features, selectors instead of
-handles, and `Exactness` on every measurement. Read it before writing any public
-type.
+`docs/api-design.md` is the core contract for the one that lands: a
+recipe/evaluator split, a B-rep-shaped surface, immediate-mode features,
+selectors instead of handles, and `Exactness` on every measurement. Two
+companion designs carry its deep ends: `docs/sketch-seam-design.md` (the trim
+contract and recording IR at the `sketch` seam) and
+`docs/verification-design.md` (the tolerance gate and noise floor). Read them
+before writing any public type.
 
 ## Hard rules
 
@@ -29,7 +32,7 @@ type.
   sketch validity, an intersection, a cut parameter, a projection onto a curve →
   ask `sketch`, consume its answer. Where `sketch` reports its own answer
   approximate — a `Partial` fragment whose cut is sampled, `BoundaryEdge.TExact`
-  false (`docs/api-design.md` §5.3) — decad **rejects**. It never repairs,
+  false (`docs/sketch-seam-design.md`) — decad **rejects**. It never repairs,
   projects, fits, or infers the exact answer. A whole (non-`Partial`) edge
   records from the entity's own data and never consults `TExact`.
 - **A decad-side check may only FALSIFY an upstream claim, never bless one.**
@@ -38,7 +41,7 @@ type.
   geometry it was handed. A residual against a source curve is admissible in exactly
   one direction: **large ⇒ the claim is disproven ⇒ reject**; **small ⇒ proves
   nothing** — a sampled cut can lie arbitrarily close to the curve, so a small
-  residual NEVER admits an input (`docs/api-design.md` §5.3). A check that can accept
+  residual NEVER admits an input (`docs/sketch-seam-design.md`). A check that can accept
   is an admission gate, and an admission gate on a residual is unsound. Reject-only,
   always.
 - **NEVER hand-roll coordinate math.** Vectors, frames, local↔world transforms →
@@ -46,8 +49,10 @@ type.
   matrix solve.
 - **Shapes belong HERE.** `r3` excludes them by charter; solids/surfaces/meshes/
   topology are this module's job.
-- **NEVER add a public API that contradicts `docs/api-design.md`.** Extending it
-  is fine; changing a decision means changing the doc first.
+- **NEVER add a public API that contradicts the design docs** —
+  `docs/api-design.md` and its companions `docs/sketch-seam-design.md` and
+  `docs/verification-design.md`. Extending them is fine; changing a decision
+  means changing the doc first.
 - **NEVER expose triangles as the representation, indices as selectors, or a bare
   `float64` measurement. NEVER give a boolean a target-out parameter or let it
   mutate an operand.** These are the forward-compatibility invariants that keep
@@ -80,7 +85,9 @@ type.
 
 | Path | Responsibility |
 |---|---|
-| `docs/api-design.md` | **The public API contract.** Recipe/evaluator split, forward-compat invariants, feature + selector + verification surface. |
+| `docs/api-design.md` | **The core public API contract.** Recipe/evaluator split, forward-compat invariants, feature + selector + verification surface. Points at the two companion designs. |
+| `docs/sketch-seam-design.md` | The recording contract at the `sketch` seam: trim contract (`TExact`), the `CurveSegment` recording IR, `ErrUnrecordableProfile`. |
+| `docs/verification-design.md` | How `Verify` judges every bounded result: report + statuses, `WithTolerance`, the diameter-anchored noise floor. |
 | `doc.go` | Package doc: scope + the layering contract. |
 | `wiring_test.go` | Dependency smoke test — solves a `sketch` profile, checks its provenance, staleness and fragment trim certification (`TExact`), lifts and places it via `r3`, round-trips a `units` quantity. Asserts nothing about decad. **Delete when real decad code imports the deps.** |
 | `.github/workflows/` | `ci.yml` (lint → test/tidy/govulncheck), `codeql.yml`. |

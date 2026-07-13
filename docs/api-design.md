@@ -4,6 +4,12 @@ The design of decad's public API: a headless CAD engine an agent uses to model a
 part, prove it sound, and only then write real CAD software code (a Fusion
 add-in). This document is the contract. No public API lands that contradicts it.
 
+Two companion designs carry the deep ends of this contract: the recording
+contract at the sketch seam — the trim contract, the recording IR, and
+`ErrUnrecordableProfile` — is specified in `docs/sketch-seam-design.md`, and
+how verification judges every bounded result — the report, the tolerance gate,
+and the noise floor — is specified in `docs/verification-design.md`.
+
 ## 1. What decad is answerable for
 
 decad is **not** a CAD kernel competing with Fusion. It is a **proxy that must
@@ -175,7 +181,7 @@ rebuilds it, which is how a placement survives encoding (§6.2). It is what
 `Body.Placed` (§8) takes.
 
 **The one deliberate exception to §5.1.** An `r3.Vec` *position* — `Box.Min`,
-`Box.Max`, a `VecMeasurement.Value` (§5.4), `Cylinder.Origin`, every point the API
+`Box.Max`, a `VecMeasurement.Value` (§5.3), `Cylinder.Origin`, every point the API
 returns or accepts — is a **length in the base unit, millimetres**. It is not a `units.Value`
 and never becomes one: a vector of three typed quantities cannot be added, scaled,
 dotted or crossed without unwrapping it at every step, which makes coordinate math
@@ -183,140 +189,18 @@ unusable and pushes callers back to hand-rolling. (An `r3.Vec` used as a *direct
 — `Cylinder.Axis`, `NormalTo(v)` — is dimensionless, and carries no unit at all.)
 
 The carve-out is about **coordinates**, not about the vector type: a plane-local
-2D coordinate — `Point2` (§6.2), the `(u, v)` of a recorded profile — is a length
-in millimetres on exactly the same terms, and for exactly the same reason.
+2D coordinate — `Point2` (`docs/sketch-seam-design.md`), the `(u, v)` of a
+recorded profile — is a length in millimetres on exactly the same terms, and for
+exactly the same reason.
 
 Vectors carry the unit **by convention**; scalars carry it **in the type**. §5.1
 governs scalars, and this is the whole of the carve-out — a bare `float64` scalar
 quantity is still forbidden anywhere in the API. A *curve parameter* is not a
 scalar quantity: a spline's knots and weights, a recorded segment's parameter
-range (`TStart`/`TEnd`, §6.2), and a conic's fullness `Rho` — the apex weight of
-a rational quadratic in disguise (§6.2) — are dimensionless indices into a
-parameterisation, not measurements of anything, and §5.1 does not reach them.
-
-### 5.3 The trim contract at the sketch seam
-
-Every capability decad's API consumes exists in its dependencies today — there
-is no open dependency gap. The one contract subtle enough to state in full is
-`sketch.BoundaryEdge`'s account of a boundary fragment, because §6.2's mapping
-table, §7's seam rules and `ErrUnrecordableProfile` (§12) are all built on it.
-
-A `BoundaryEdge` carries `Entity`, `Partial`, `Reversed` and `Polyline` — and
-the trim itself:
-
-- **`TStart` / `TEnd`** are the fragment's parameter range on `Entity`, as
-  normalized `t` in `[0, 1]` in the entity's **natural** direction: `TStart <
-  TEnd` always, and the range **never wraps** — a fragment of a closed curve
-  that straddles the seam arrives as two edges. `Reversed` composes with that
-  natural-direction range: it, and never the order of the pair, says the
-  boundary walks the range backwards. A whole edge spans the entity's full
-  domain.
-- **`TExact`** reports whether that range is the true parameters on `Entity`
-  rather than a sampling-accurate approximation, and its meaning is precise and
-  checkable: evaluating `Entity` at `TStart` / `TEnd` reproduces the fragment's
-  `Polyline` endpoints to machine precision, at both bounds.
-
-**Which cuts `sketch` certifies exact is a property of the pair.** A cut bound
-is exact only when `sketch`'s closed-form kernel placed it, and that kernel
-places a cut for exactly one kind of contact: a **crossing** whose source
-curves are **both** a line, a circle or an arc, with a line on at least one
-side. A tangency is never a cut, whatever the curves: the kernel classifies a
-tangency between line/circle/arc sources as a **non-splitting** contact — a
-shared-endpoint tangency is a smooth join, an interior touch splits neither
-curve — so tangent entities arrive as whole edges (two externally tangent
-circles are two whole one-edge loops). Every other cut is **sampled**: every
-curve/curve crossing (circle × circle, circle × arc, arc × arc), and every cut
-at a contact involving an ellipse, elliptical arc, conic, spline, closed
-spline, fit spline or NURBS — **including a plain line** against one of those,
-whether it crosses or merely grazes: such pairs are resolved on the sampled
-polylines, and where the sampled arrangement cuts — it can cut at a grazing
-touch — the parameter is sampled. A sampled cut yields `TExact == false` on
-every fragment it bounds.
-
-**No residual test on a fragment's endpoints could stand in for the flag, at any
-tolerance.** A `Polyline` is a **sample of the curve**: its vertices lie *on*
-the curve. A sampled cut is the crossing of a **chord** between two such
-vertices, so as the crossing approaches a sample vertex the cut point approaches
-the curve, and its residual against the curve goes to zero. A sampled
-circle/circle cut has been measured with a normalised radial residual of
-**7.07e-10** — indistinguishable from an exact cut by any threshold. Exactly-cut
-endpoints and sampled ones are therefore not separated populations, and an
-endpoint-residual test is **unsound as an admission gate**: it is not a mistuned
-test, it is a quantity that does not answer the question asked of it.
-
-**The test is one-sided, and that asymmetry is the whole of what it is good for:**
-
-| observation | what it proves |
-|---|---|
-| the residual is **large** | the endpoint does **not** lie where the range says it does, so the cut cannot have been computed exactly. A fragment claiming exactness here is **wrong**. **Sound.** |
-| the residual is **small** | **nothing.** A sampled cut can lie arbitrarily close to the curve. **Unsound as an accept.** |
-
-**A large residual is proof of inexactness. A small residual is proof of nothing.** A
-check on it may therefore only ever **reject** a fragment; it may never admit one.
-
-**So admission of a `Partial` fragment is decided by `TExact`, and by nothing
-else.** `sketch` computed the arrangement that produced the fragment, so it is
-the only party that knows the range and the only party that knows how it was
-obtained. The range it computed **is** the trim; decad neither second-guesses
-the flag nor re-derives it — re-deriving a 2D answer is what §7 forbids.
-
-- `TExact == true` → the fragment records: the entity's own variant, built
-  from the entity's defining data and `TStart` / `TEnd` (the table in §6.2).
-  A circle crossed by a rectangle records.
-- `TExact == false` → `ErrUnrecordableProfile` (§12). An approximate parameter
-  range is never recorded as an exact analytic fragment, never recorded as the
-  whole entity — a different region than the caller drew — and never repaired.
-- **A residual check is retained purely as a one-sided falsifier, never as an
-  admission gate.** If `TExact == true` and evaluating the source entity at the
-  reported range does not reproduce the fragment's endpoints — the flag's own
-  stated meaning — the flag is disproven: decad returns `ErrUnrecordableProfile`
-  and the discrepancy is reported upstream as a `sketch` bug. The check can only
-  ever **reject**. It never admits a fragment on its own, because a small
-  residual proves nothing — that is the asymmetry above, and re-reading it as an
-  accept is the unsound gate it forbids.
-
-**`TExact` is per-fragment, and it is per-fragment because exactness is a property of the
-crossing that produced the fragment — of *both* its source curves — never of the entity
-the fragment lies on.** A circle cut by a rectangle edge is exact: both sources are
-line/circle/arc, and the crossing is line-involved. The *same circle* cut by another
-circle is sampled: both sources are curves. One entity, two fragments, two verdicts — so a
-per-entity flag, or any rule keyed on the entity kind, would be wrong on one of them.
-
-**The rule is about the pair, and no shorthand on one source survives it.** "Line-involved"
-is not one either: a line crossing an *ellipse*, a conic, a spline or a NURBS is sampled,
-because the other source is not a line, a circle or an arc. decad reads the flag on the
-fragment it is recording, and derives it from nothing.
-
-**Whole (non-`Partial`) edges never consult `TExact`.** A whole edge records
-from the entity's own defining data — there is no trim to recover, so the flag
-answers a question decad is not asking. `sketch` decides the flag by
-reproduction — the checkable meaning above — so on a whole edge it turns on how
-the entity's domain ends arise. Every kind but one evaluates them from the
-curve itself, so its whole edge reads `true`. The exception is the whole
-`*EllipticalArc` edge, whose flag is **contingent**: the arc's endpoints are
-pinned to sketch points rather than evaluated from the curve, so the flag reads
-`false` whenever those pinned points miss the parametric ellipse — the typical
-solver outcome, a miss on the order of the solver tolerance — and `true` when
-they happen to land on it. Either reading is a fact about the pinning, **not
-topology distrust**, and neither may affect whole-edge recording: an
-implementer who "helpfully" gates whole edges on `TExact` would make an
-elliptical-arc boundary's recordability turn on how the solver converged —
-nondeterministic on data the entity itself records exactly.
-
-**What records reaches exactly as far as `sketch`'s exact kernel does, and no further.**
-For fragments, that is a line, circle or arc fragment whose bounding cuts were
-placed by the closed-form crossing kernel — each cut a line-involved crossing
-between line/circle/arc sources — plus whole edges of every recordable kind,
-which record from entity data with no cut to certify. Tangencies add nothing
-to that set: among lines, circles and arcs a tangency splits nothing (above),
-so no fragment is ever bounded at one — a tangent entity arrives whole, or in
-fragments whose every bound is a crossing. A fragment cut by anything else — an
-ellipse, elliptical arc, conic, spline, closed spline, fit spline or NURBS on
-either side of the contact, and every curve/curve crossing — carries
-`TExact == false` and is `ErrUnrecordableProfile`.
-That is not decad declining to record it; it is `sketch` reporting that the parameter is
-sampled, and decad recording no fragment on a range it was told is approximate. Widening
-that set is an upstream question about the arrangement, not an API question here.
+range (`TStart`/`TEnd`), and a conic's fullness `Rho` — the apex weight of a
+rational quadratic in disguise (all `docs/sketch-seam-design.md`) — are
+dimensionless indices into a parameterisation, not measurements of anything,
+and §5.1 does not reach them.
 
 ### 5.4 Exactness — the load-bearing type
 
@@ -356,8 +240,9 @@ is proven to lie in, so it is a magnitude of the same quantity the vector is. Fo
 is the deviation of a unit vector from the true unit vector, and a direction is
 dimensionless (§5.2) — so the bound is `Dimensionless` (`units.Scalar`), and typing
 it as a length would be exactly the wrong-`Kind` coercion §5.1 forbids: it would
-hand a millimetre tolerance a quantity that is not a length. §10.1's gate is stated
-over both, and needs no exponent to be.
+hand a millimetre tolerance a quantity that is not a length. The verification
+gate (`docs/verification-design.md`) is stated over both, and needs no exponent
+to be.
 
 Every measurement returns one:
 
@@ -367,8 +252,10 @@ vol, err := body.Volume()  // v1 after a boolean: {12.9997mm³, Approximate, 1e-
 ```
 
 `Measurement`, `VecMeasurement` and `Box` (§6) are the **three and only three**
-bounded results the API returns. Every one of them carries a `Bound`, which is
-what lets §10.1's tolerance gate be total.
+bounded results the API returns. Every one of them carries a `Bound`; how
+verification judges each against the caller's tolerance is specified in
+`docs/verification-design.md`, and every one of them is judged — the gate is
+total because this set is.
 
 ## 6. The document and bodies
 
@@ -576,34 +463,20 @@ type OpKind int
 ```
 
 **The `Recipe` owns its geometry.** A `Step` holds no `*sketch.Profile` and no
-`r3.Frame`. It records the region **structurally**, in decad's own types, at the
-moment the feature is called:
+`r3.Frame`: it records the region **structurally**, in decad's own plane-local
+types, at the moment the feature is called — a live profile is a handle into a
+mutable sketch, and §2 says the recipe is a value. `ProfileRecord` and
+`PlaneRecord` — the structural record of the region and of the sketch plane
+that lifts it into world space — are specified, with the `CurveSegment`
+vocabulary they are built from (one variant per `sketch` entity kind, whole
+and trimmed alike) and the whole-versus-`Partial` recording rules, in
+`docs/sketch-seam-design.md`.
 
-- A `*sketch.Profile` is a pointer into a live, mutable `*sketch.Sketch` — a
-  *handle*, and §2 says the recipe is a value. Its `Entities` and its
-  `BoundaryEdge.Entity` are `sketch.Entity`, an interface with unexported methods,
-  which no decoder can reconstruct. And its `BoundaryEdge.Polyline` is a **densified
-  sample** — a tessellation, which §2 says a `Recipe` never names. (Its first and
-  last points are the edge's start and end. They are the one thing decad reads from
-  it, and only to check — they are what §5.3's falsifier tests the recorded range
-  against — never to record; see below.)
-- `r3.Frame`'s fields are unexported: it marshals to `{}`, so a `Step` that stored
-  one would silently drop the plane — the single field without which the step is
-  incomplete. `r3.Transform`'s fields are unexported on the same terms, so a
-  placement is recorded as a `TransformRecord`, read out through
-  `Transform.Basis()` and `Transform.Translation()`.
-
-So decad **converts, it does not reference**:
+A placement is recorded on the same terms. `r3.Transform`'s fields are
+unexported, so a `Step` that stored one would silently drop the motion; decad
+converts, it does not reference:
 
 ```go
-// PlaneRecord is the sketch plane, as three vectors: it survives encoding, which
-// an r3.Frame does not. Orthonormal, right-handed; the plane normal is U × V, and
-// that normal is the sense Direction.Along means for a linear extent (§8.1).
-type PlaneRecord struct {
-    Origin r3.Vec // millimetres (§5.2)
-    U, V   r3.Vec // the in-plane axes: the (u, v) a Point2 below is expressed in
-}
-
 // TransformRecord is a rigid placement, as four vectors: it survives encoding,
 // which an r3.Transform does not. EX, EY, EZ are the transformed world basis
 // (r3.Transform.Basis()), T the translation. r3.FromBasis rebuilds the
@@ -613,207 +486,7 @@ type TransformRecord struct {
     EX, EY, EZ r3.Vec // the images of the world axes — dimensionless directions
     T          r3.Vec // the translation, millimetres (§5.2)
 }
-
-// Point2 is a plane-local coordinate, a length in millimetres — §5.2's carve-out
-// in the plane's own (u, v).
-type Point2 struct{ U, V float64 }
-
-// ProfileRecord is the region a Step extrudes or revolves: one outer loop and its
-// holes, structural and plane-local. Not a sample, not a pointer, not a sketch.
-type ProfileRecord struct {
-    Outer LoopRecord
-    Holes []LoopRecord
-}
-
-// LoopRecord is a closed, directed boundary loop: each segment's walk — from
-// its point at TStart to its point at TEnd — ends where the next segment's walk
-// starts, and the last closes onto the first. A single closed segment — a
-// circle, an ellipse, a closed spline — is a loop on its own. Outer loops run
-// counter-clockwise in (u, v), holes clockwise.
-type LoopRecord struct {
-    Segments []CurveSegment
-}
-
-// CurveSegment is one curve of a loop, recorded structurally — never as a
-// sample. Sealed, like Surface (§6.1).
-// A variant records exactly the defining data of the curve the edge IS — the
-// fields of the source entity's own geom value, verbatim, in plane-local
-// Point2 — plus the recorded range: TStart/TEnd, sketch's normalized t on the
-// entity, the full domain for a whole edge and the certified range for a
-// Partial fragment (TExact, §5.3). An evaluator reconstitutes the curve
-// through sketch/geom from the entity's own fields and trims it at the range —
-// it never re-derives either (§7). What geom DERIVES from those fields — an
-// arc's radius and angles, an elliptical arc's eccentric parameters — is never
-// recorded in their place: a derived reading re-evaluates to the entity's
-// boundary only when the entity's data happens to lie on it, and a pinned
-// endpoint need not (§5.3). One variant serves each entity kind, whole and
-// trimmed alike: the entity picks the variant, and only the range differs.
-type CurveSegment interface{ curveSegment() }
-
-// The five analytic kinds. Every variant's TStart/TEnd — like a spline's
-// knots and weights — is a curve parameter, not a quantity (§5.2).
-type LineSeg struct {
-    Start, End   Point2  // geom.Line: the endpoints, verbatim
-    TStart, TEnd float64 // the full domain for a whole edge
-}
-
-// CircleSeg and EllipseSeg are the closed analytic kinds — a whole edge of
-// either is a LoopRecord on its own — so, like ClosedSplineSeg, they carry the
-// walk's winding in (u, v) as CCW alongside the range.
-type CircleSeg struct {
-    Center       Point2      // geom.Circle: the center —
-    Radius       units.Value // — and the radius
-    CCW          bool
-    TStart, TEnd float64 // the full period for a whole edge
-}
-
-// ArcSeg mirrors geom.Arc: three pinned points, the arc swept counter-clockwise
-// from Start to End about Center. The sweep is the entity's own definition, so
-// no field restates it. Radius and angles are geom's derived readings, never
-// fields — End is a pinned point, not "Start's radius at another angle" — so a
-// center/radius/angle record would re-evaluate to a boundary the entity's own
-// points need not lie on.
-type ArcSeg struct {
-    Center, Start, End Point2  // geom.Arc: the pinned points, verbatim
-    TStart, TEnd       float64 // the full domain for a whole edge
-}
-
-// EllipseSeg is sketch's ellipse. Rx and Ry are the semi-axes along the
-// ellipse's own local x and y, and they are UNORDERED — geom.Ellipse does not
-// enforce Rx >= Ry; the axes are simply the local x and y, and Rotation is the
-// angle of that local frame. Naming them Major/Minor would oblige an
-// implementer to normalise the pair, which is re-deriving 2D geometry (§7).
-type EllipseSeg struct {
-    Center           Point2
-    Rx, Ry, Rotation units.Value
-    CCW              bool
-    TStart, TEnd     float64 // the full period for a whole edge
-}
-
-// EllipticalArcSeg mirrors geom.EllipticalArc: the ellipse (Center, Rx, Ry,
-// Rotation — unordered, as EllipseSeg) restricted to the counter-clockwise
-// eccentric-angle sweep from Start to End. The sweep is the entity's own
-// definition, so no field restates it. Start and End are the entity's PINNED
-// points, verbatim — they lie on the parametric ellipse only within solver
-// tolerance (§5.3) — so no eccentric-angle pair can stand in for them: angles
-// re-evaluate to points ON the parametric ellipse, a different boundary than
-// the one the entity defines.
-type EllipticalArcSeg struct {
-    Center, Start, End Point2      // geom.EllipticalArc: the pinned points, verbatim
-    Rx, Ry, Rotation   units.Value // local-x / local-y semi-axes, unordered; frame angle
-    TStart, TEnd       float64     // the full domain for a whole edge
-}
-
-// The five free-form kinds. Degree, knots and weights are curve parameters on
-// the same terms as every range (§5.2); a conic's fullness Rho is the apex
-// weight w = Rho/(1-Rho) of a rational quadratic in disguise, of exactly the
-// same class as a NURBS weight.
-
-// SplineSeg covers sketch's Spline and NURBS alike — a Spline is the degree-3,
-// clamped-uniform, unweighted case, which is its definition, not a fit.
-type SplineSeg struct {
-    Degree       int
-    Control      []Point2
-    Knots        []float64
-    Weights      []float64
-    TStart, TEnd float64
-}
-
-// ClosedSplineSeg is sketch's periodic uniform cubic B-spline: a closed curve
-// that bounds a region on its own, so it is a whole LoopRecord by itself.
-type ClosedSplineSeg struct {
-    Control      []Point2
-    CCW          bool
-    TStart, TEnd float64 // the full period for a whole edge
-}
-
-// FitSplineSeg records the INTENT sketch was given: the points the curve
-// interpolates. sketch's definition — a natural cubic with chord-length
-// parameterisation through exactly these points — is the curve; decad records
-// the points and NEVER runs the interpolation solve itself (§7).
-type FitSplineSeg struct {
-    Fit          []Point2
-    TStart, TEnd float64
-}
-
-// ConicSeg is a rational quadratic Bezier: endpoints, the apex where the end
-// tangents meet, and the fullness Rho in (0, 1) — Rho < 0.5 an ellipse arc,
-// 0.5 a parabola, > 0.5 a hyperbola arc.
-type ConicSeg struct {
-    Start, Apex, End Point2
-    Rho              float64
-    TStart, TEnd     float64
-}
 ```
-
-Nine variants, and they cover **all ten** of `sketch`'s `Entity` implementations —
-line, circle, arc, ellipse, elliptical arc, conic, spline, closed spline, fit
-spline, NURBS — because `SplineSeg` covers `Spline` and `NURBS` alike. That is
-`sketch`'s entity vocabulary exactly and entirely, and `sketch` puts every one of
-those kinds on a profile boundary: the four open free-form curves as boundary edges,
-the closed spline as a closed curve bounding a region on its own. So **every entity
-`sketch` can put on a boundary has a record** — whole, and trimmed: a `Partial`
-fragment records through the same nine variants — its entity's own variant,
-with the certified range — so the vocabulary needs no fragment-specific
-kinds. What has no record is a `Partial` fragment whose cut
-`sketch` samples — `TExact == false` (§5.3) — and such a profile is rejected
-rather than recorded lossily. A
-new entity kind upstream needs a new `CurveSegment` variant before decad accepts a
-profile that uses it; there is no fallback to a sample.
-
-**A whole edge records its entity. A `Partial` fragment records exactly when
-`sketch` certifies its cut — `TExact == true` — and it records from
-`TStart` / `TEnd`.** The range is `sketch`'s answer — normalized `t` in the
-entity's natural direction, `TStart < TEnd`, never wrapping (§5.3) — and the
-fragment's record is the entity's own defining data plus that range: the same
-variant a whole edge records, narrowed. Admission never depends on the
-entity's kind: the flag admits the fragment, and the kind only selects which
-variant records it. Whole edges never consult the flag (§5.3).
-
-| `BoundaryEdge.Entity` | whole edge | `Partial` fragment — records when `TExact`; else **`ErrUnrecordableProfile`** (§12) |
-|---|---|---|
-| `*Line` | `LineSeg` — the entity's endpoints; the full domain | `LineSeg` — the same endpoints; the certified range |
-| `*Circle` | `CircleSeg` — the entity's center and radius; the full period | `CircleSeg` — the same; the certified range |
-| `*Arc` | `ArcSeg` — the entity's pinned points; the full domain | `ArcSeg` — the same points; the certified range |
-| `*Ellipse` | `EllipseSeg` — the entity's axes and frame; the full period | `EllipseSeg` — the same; the certified range |
-| `*EllipticalArc` | `EllipticalArcSeg` — the entity's pinned points, axes and frame; the full domain | `EllipticalArcSeg` — the same; the certified range |
-| the free-form five | the matching free-form variant, `TStart`/`TEnd` spanning the full domain | the matching free-form variant, `TStart`/`TEnd` the fragment's range |
-
-**Every row records a certified fragment, and every row rejects a sampled one.**
-Every row records the entity's fields verbatim, and the two columns differ only
-in the range. There is no per-row parameter mapping to apply: every variant
-records `sketch`'s normalized `t` itself — `geom.BoundaryEdge`'s published
-contract — so the range is handed over, never converted; nothing is solved
-for, no point is evaluated from a parameter, and no point is ever inverted to
-one (§7). Under `sketch`'s exact kernel the fragments that carry `TExact == true`
-are those of a line, a circle or an arc cut within that family (§5.3), so those
-are the rows the true column reaches today: a circle cut by a rectangle edge
-records, and a circle cut by another circle — or an ellipse cut by anything,
-including the line fragments that crossing leaves on the rectangle — is
-`ErrUnrecordableProfile`, because its range is sampled.
-
-Conversion is mechanical, and it happens once, in the feature call. decad walks
-`p.Outer` and each loop of `p.Holes` and reads each `BoundaryEdge`'s source `Entity`
-for its defining fields. `Partial` selects the column of the table above, and
-on a fragment `TExact` decides admission (§5.3). `Reversed` is **baked into the
-segment** as the order of its range — `TStart` and `TEnd` swapped, so
-`TStart > TEnd` says the segment runs against the curve's natural sense, and a
-closed kind's `CCW` flips with it; `sketch` hands the range over in natural
-direction, so the swap is decad's record of the walk, composed with that range.
-The entity's fields are never reordered: a walked-backwards line still records
-its entity's `Start` and `End` as the entity states them, and the walk's own
-endpoints are read off the range. A `LoopRecord` therefore carries no residual
-flags and no back-reference.
-
-**What decad reads of `BoundaryEdge.Polyline`, and nothing more: `Polyline[0]` and
-`Polyline[len-1]`, on the `Partial` fragments it admits, as the observations
-§5.3's falsifier tests the certified range against.** They never enter a `Step`:
-every recorded value is the entity's own defining data and the certified range,
-so no sampled content reaches a `Recipe` through them, which is why §2's "a
-`Recipe` never names a tessellation" holds without qualification. On a rejected
-fragment the `Polyline` is not read at all; on a whole edge the entity's own data
-is the record and the `Polyline` is never read either. No interior point of a
-`Polyline` is ever read, and no `Polyline` enters a `Step`.
 
 **Serializability is a rule, not an aspiration.** Every type reachable from a
 `Recipe` MUST be encodable and decodable: exported fields only; no foreign
@@ -1028,7 +701,11 @@ type MeshBody struct{ /* ... */ }
 ## 7. The sketch seam
 
 `sketch` answers every 2D question; decad consumes the answer and NEVER
-re-derives it.
+re-derives it. The recording contract at this seam — the trim contract
+(`TStart`/`TEnd`/`TExact`), the recording IR a `Step` carries, and
+`ErrUnrecordableProfile`'s full semantics — is specified in
+`docs/sketch-seam-design.md`; this section states the feature-call rules built
+on it.
 
 ```go
 w := sketch.NewWorld()
@@ -1079,22 +756,20 @@ the whole of decad's *validity* gate, and it is `sketch`'s answer, not one decad
 recomputes. The one further rejection is not a validity judgement at all: a valid
 profile whose boundary decad cannot record exactly — a profile containing a
 `Partial` fragment whose cut `sketch` reports sampled, `TExact == false`, or one
-whose certified range §5.3's falsifier disproves —
+whose certified range the seam's falsifier disproves —
 is `ErrUnrecordableProfile` (§12), because a `Step` that recorded the whole curve
 where the caller drew a piece of it, or an approximate range as an exact trim,
-would be the lossy record §6.2 forbids.
+would be the lossy record the completeness rule (§6.2) forbids.
 
 **The seam's read-outs are `sketch`'s answers, and its one check can only
-falsify.** Beyond an edge's source `Entity`, decad reads `Partial`, `Reversed`,
-`TStart` / `TEnd` and `TExact`, and the two `Polyline` ends of an admitted
-fragment — the observations §5.3's falsifier tests the range against (§6.2), and
-nothing else. Admission is the flag's alone: an endpoint's distance from its
-source curve does not say whether the cut that produced it was exact, because
-`sketch`'s polyline vertices are samples *on* the curve (§5.3), so the residual
-check rejects a provably wrong flag and admits nothing. decad neither re-derives
-the trim nor infers it. A
-fragment it cannot record it **rejects** — it never repairs, projects or fits a point
-`sketch` handed over, and it never solves for one.
+falsify.** Admission of a `Partial` fragment is decided by `TExact` — `sketch`'s
+own certification — and by nothing else; the one check decad runs is a
+reject-only falsifier that can disprove the flag but never admit a fragment.
+decad neither re-derives the trim nor infers it, and a fragment it cannot
+record it **rejects** — it never repairs, projects or fits a point `sketch`
+handed over, and it never solves for one. What decad reads of a
+`BoundaryEdge`, why a residual test cannot be an admission gate, and the
+whole-edge rules are specified in `docs/sketch-seam-design.md`.
 
 Whether the *sketch* is fully constrained is a separate, sketch-level question: a
 profile can close while the sketch still has degrees of freedom. It is not decad's
@@ -1381,403 +1056,31 @@ precedence; and one bit an agent gates on. Deliberately mirrors
 ```go
 func (d *Document) Verify(ctx context.Context, opts ...VerifyOption) (*Report, error)
 
-type Report struct {
-    Bodies        []*BodyReport
-    Interferences []Interference // pairwise overlap, with the overlap VOLUME
-    Clearances    []Clearance    // opt-in: minimum gap between bodies
-    Status        Status
-}
-
 func (r *Report) Trustworthy() bool // the single bit to gate on
-
-type BodyReport struct {
-    Body              *Body
-    Status            Status       // Sound / Suspect / Unsound — this body only
-    Solid             bool
-    Watertight        bool
-    Manifold          bool         // every edge bounds exactly 2 faces
-    SelfIntersecting  bool
-    Lumps             int          // > 1 == disconnected pieces
-    Voids             int          // internal cavities (Shell.IsVoid)
-    Volume            Measurement
-    Area              Measurement
-    Centroid          VecMeasurement // a computed coordinate, so it is bounded (§5.4)
-    Bounds            Box
-    Exactness         Exactness      // the weakest link across this body
-
-    // Opt-in, expensive:
-    MinWallThickness  *Measurement   // WithMinWallThickness(tool)
-    Undercuts         []*Face        // WithPullDirection(v)
-    MinRadius         *Measurement   // WithMinRadius() — can the endmill reach?
-}
 ```
 
-**`Verify` returns an `error`, and the report carries no health state.** The error
-is for the call that could not be made — a `WithTolerance` value of the wrong
-`Kind` is `ErrUnitKind`, a negative one is `ErrNegativeMagnitude` (§12) — and a
-`Report` is returned only when the verification actually ran. §12 admits no
-alternative: a `Report.Err` field an agent could forget to read is exactly the
-deferred health state §4 rejects in Fusion, and a `bool` is no better.
+The report vocabulary — `Report`, `BodyReport`, `Status` and its severity
+precedence, and the `VerifyOption` set including `WithTolerance` — and the
+tolerance gate that judges every `Exactness` and `Bound` the report carries are
+specified in `docs/verification-design.md`. What the core contract pins down:
+
+- **`Verify` returns an `error`, and the report carries no health state.** The
+  error is for the call that could not be made — a `WithTolerance` value of the
+  wrong `Kind` is `ErrUnitKind`, a negative one is `ErrNegativeMagnitude`
+  (§12) — and a `Report` is returned only when the verification actually ran.
+  §12 admits no alternative: a `Report.Err` field an agent could forget to read
+  is exactly the deferred health state §4 rejects in Fusion, and a `bool` is no
+  better.
+- **Every bounded result the report carries is judged.** A `Measurement`, a
+  `VecMeasurement` or a `Box` (§5.3) whose `Bound` is beyond the caller's
+  tolerance makes the report `Suspect` — on a body or on a pair, nothing is
+  exempt — and `Report.Trustworthy()` is true only when the whole report is
+  `Sound`.
 
 Fusion answers **none** of `Watertight` (with diagnostics), `Manifold`,
 `SelfIntersecting`, `MinWallThickness` (B-rep), `Undercuts`, or `MinRadius`. That
 gap is decad's mandate.
 
-### 10.1 Tolerance — what "beyond the caller's tolerance" means
-
-`Suspect` and `Trustworthy()` turn on an approximation being *coarser than the
-caller will accept*, so the caller must be able to say what they accept:
-
-```go
-func WithTolerance(rel units.Value) VerifyOption // Dimensionless; default units.Scalar(1e-3)
-func WithMinWallThickness(tool units.Value) VerifyOption
-func WithPullDirection(v r3.Vec) VerifyOption
-func WithMinRadius() VerifyOption
-```
-
-**The tolerance is relative, and it is one number for every kind.** `rel` is the
-largest error the caller will accept **as a fraction of the quantity being
-measured**:
-
-> A bounded result is **within tolerance** when `Bound <= rel × Ref`, where `Ref` is
-> the result's **reference magnitude**.
-
-One comparison, one number, no exponentiation. It is scale-invariant — a 1mm part
-and a 1m part are judged on the same footing — which mirrors how `sketch` makes its
-conditioning gate scale-invariant. `rel` is `Dimensionless` (`units.Scalar`); any
-other `Kind` is `ErrUnitKind` (§12), never a coercion, and a negative `rel` is
-`ErrNegativeMagnitude`. Both are returned from `Verify`, which is why it returns an
-`error` (§10).
-
-**The default is `units.Scalar(1e-3)` — three significant figures — and it is set
-by what a tessellation-backed evaluator can actually prove.** A v1 boolean bounds a
-volume by roughly `surface area × chord error`: a Ø20×10mm cylinder tessellated to a
-1e-3 mm chord has an area of 1257 mm², so a bound of order 1.3 mm³ against a volume
-of 3142 mm³ — a relative error of 4e-4. A default of `1e-6` would put every such
-body — every *correct* such body — in `Suspect`, and a gate no honest evaluator can
-pass has no content. `1e-3` passes it with room to spare, and is still an order of
-magnitude tighter than the ±1% Fusion ships by default (§1) — and unlike Fusion's
-figure it is a **proven bound**, not a nominal one. A caller who wants six figures
-asks for them, and gets the honest `Suspect` an approximate evaluator owes them.
-
-An **absolute** threshold cannot do this job. A `Bound` carries the `Kind` of the
-quantity it bounds (§5.4), so an absolute length `t` has nothing to say about a
-volume bound: raising it — `t²` for an area, `t³` for a volume — makes the gate
-meaningless, because a linear error `t` propagates to a volume error of order
-`area × t`, not `t³`. A Ø20×10mm cylinder tessellated to a 1mm chord carries a
-volume bound of order 10³ mm³ while `t³` would admit 1 mm³, so *every* body touched
-by a boolean would read `Suspect` at *every* tolerance, and the gate would have no
-content at all. The ratio has content: it is exactly "how many significant figures
-of this answer are real".
-
-`Ref` is fixed per shape, and the report carries bounded results in exactly three
-shapes (§5.4) — a `Measurement`, a `VecMeasurement`, a `Box` — so the table is
-total:
-
-| Bounded result | `Ref` |
-|---|---|
-| `Measurement` — a volume, an area, a length, a gap | `max(abs(Value), Quantum)` |
-| `VecMeasurement`, a **direction** (`Bound` is `Dimensionless`, §5.4) | `1` — the magnitude of a unit vector |
-| `VecMeasurement`, a **position**, and `Box` (`Bound` is a Length) | `D` |
-
-`D` is a **diameter**: the greatest distance between two points of the geometry
-the result belongs to. **Every reference is anchored to the thing the result
-belongs to**, and ownership, not convenience, decides whose geometry that is:
-
-- a result on a `BodyReport` — `Volume`, `Area`, `Centroid`, `Bounds`,
-  `MinWallThickness`, `MinRadius`, and every vertex position and face normal of that
-  body — belongs to **one body**: `D` is **that body's own** diameter — the
-  distance between its two farthest points — and the boundary measures below are
-  that body's own surface and edges. A body's answers are judged against the
-  body they are answers about;
-- an `Interference.Volume` and a `Clearance.Gap` belong to a **pair**, so no single
-  body's size is theirs to be judged against — but the pair's own is. For those,
-  and only those, `D` is the **pair's**: the diameter of the union of the two
-  operand bodies' points — the greatest distance between two points drawn from
-  either body — the one reference both members share and the only geometry the
-  result is about. The boundary measure of an interference is the pair's own as
-  well: the operands' summed surface areas. A body that is not an operand has no
-  say in a pair's verdict, however large it is or wherever it sits.
-
-A diameter is a distance between two points of the geometry, and a surface area
-or an edge length is intrinsic to the bodies measured, so every reference is
-invariant under rigid motion — and translation invariance is exactly what a
-position's reference must have.
-
-`Quantum` is the quantity's **noise floor** — the magnitude below which a value
-of that `Kind` is not distinguishable from zero by any evaluator. Vertex
-positions are the primitive everything else is computed from, and they are
-trusted to an absolute noise of `δ = ε × D` — `D` decided by the ownership rule
-above: a body's own for a body's results, the pair's for a pair's — with
-`ε = 1e-9` fixed. What that noise does to a quantity is set by the **boundary
-the quantity depends on**: displace every boundary point by `δ` and a volume
-moves by at most `δ ×` the area of the surface enclosing it, an area by at most
-`δ ×` the length of the edges bounding it, a length by `δ` itself. `Quantum` is
-that product:
-
-| Quantity | `Quantum` |
-|---|---|
-| a body's volume | `δ ×` that body's surface area |
-| an `Interference.Volume` | `δ × (AreaA + AreaB)` — the overlap's boundary lies on the operands' skins: `∂(A∩B) ⊆ ∂A ∪ ∂B` |
-| an area | `δ ×` the total length of the edges bounding the measured surface — the body's edges for `BodyReport.Area`, the face's own loops for a face |
-| a length, a gap | `δ` |
-| a dimensionless quantity | `ε` |
-
-This is the same shape as the bound a v1 boolean actually proves — `surface
-area × chord error` (above) — evaluated at the noise displacement instead of
-the chord error: the floor is where that bound would land if the evaluator were
-perfect to the last bit of its own coordinates.
-
-Every input to the gate is **intrinsic** — a property of the owning geometry's
-own point set, a body's or a pair's, never of its pose — and that is the
-rule's half of making a verdict a property of the **part, not the pose**.
-Surface area and edge length do not move under a rigid motion, and neither
-does `D`: a diameter is
-realised by two points of the geometry, and a rigid motion preserves their
-distance. So every `δ`, every `Quantum` and every `Ref` is the same real
-number in every pose — the **rule** reads nothing pose-dependent, and so
-introduces no pose dependence of its own. The floating-point **evaluator**
-owns the other half — what its arithmetic returns for those same inputs
-after the coordinates move — and that half is a statement about coordinate
-**magnitude**: applying a rigid `r3.Transform` rounds every coordinate, and
-the rounding is an absolute noise of order
-`ulp(|coordinate|) ≈ |coordinate| × 2⁻⁵²` — relative to the coordinate, not
-to the feature computed from it — so a feature of size `L` built from
-coordinates of magnitude `R` re-measures with a relative wobble of order
-`(R / L) × 2⁻⁵²`. For a model whose coordinates are of the order of the
-geometry they describe — parts kept near the origin at their own scale —
-the two magnitudes coincide and the wobble is ulps: a 10 mm segment
-re-measured after a rotation by π/7 reads `10.000000000000002`, a relative
-error of order 1e-16, thirteen decades below what the default `rel = 1e-3`
-resolves — a fact about the evaluator's arithmetic, not about the gate's
-geometry, and one that can move a verdict only when a `Bound` already sits
-within a few ulps of its gate, the unavoidable property of any threshold
-computed in floating point. A body parked far from the origin is a different
-matter, and it fails upstream of the gate: it has spent its mantissa on its
-own position. At `1e17 mm` the ulp is `16 mm`, so every coordinate of a
-10 mm body parked there quantizes to a multiple of 16 mm and the segment
-re-measures as `0` or `16 mm` — value, `Bound`, `D`, area, every gate input
-computed from those coordinates is gone together, and no rule reading them
-can defend numbers that no longer carry the geometry. What the gate does own
-is that the loss must be **visible**. A `Bound` is a *proven* bound (§5.4),
-so an honest evaluator folds the coordinate rounding it was handed into the
-`Bound` it reports, and the escalation is a ladder the reader can check:
-past `R / D ≈ ε × 2⁵² ≈ 4.5e6` — a 10 mm part beyond about 45 km — the
-rounding exceeds the `δ = ε × D` the noise model trusts a vertex to; past
-`R / L ≈ rel × 2⁵² ≈ 4.5e12` at the default, the honest `Bound` exceeds
-`rel × Ref` and the body reads `Suspect`; by `R / L ≈ 2⁵² ≈ 4.5e15` the ulp
-reaches the feature itself and nothing measured survives, as at `1e17 mm`
-above. The gate cannot restore figures the coordinates no longer hold; what
-it guarantees is that an honestly bounded loss reads `Suspect`, never a
-confidently wrong `Sound`. No axis-aligned box measure appears anywhere in the
-gate, because a box's pose dependence is **geometric**, not arithmetic. The
-box's bulk is off by decades: the box volume of a slender body posed diagonally
-is of the order of the cube of its length — eleven decades over the same body
-laid on axis, for a metre-long micron wire. And even the box's *diagonal*
-breathes with pose — it lies between `D` and `√3 × D` depending on
-orientation — and a factor that moves geometrically moves verdicts: any `Bound`
-that lands inside the band reads differently in two poses of the same part. A
-bounded geometric error is not intrinsicness, so the gate admits no box
-measure, bounded or not. The one axis-aligned box in the report is the
-`Bounds` **result**, and pose-dependence is that quantity's nature — it
-answers where the body sits in these axes — but the gate judging its `Bound`
-reads `D`, not the box.
-
-The floor is honest at every aspect ratio, and the condition is sharp:
-`Quantum` reaches a body's real volume only when `Volume / Area` — the body's
-mean thickness — is itself under `δ`, i.e. only when the body is thinner than
-the coordinate noise. The same holds one dimension down: an area's floor
-reaches the area only when `Area / edge length` — the face's mean width — is
-under `δ`. A body an evaluator can resolve at all sits decades above its floor.
-The floor's ingredients — `D`, an area, an edge length — are the evaluator's
-own readings and may themselves be approximate: `D` is read off the evaluated
-boundary, and for a polyhedral approximation the greatest vertex-to-vertex
-distance is the polyhedron's exact diameter — a convex hull and rotating
-calipers, or any exact max-pair pass over the hull's vertices, computes it —
-understating a curved body's true diameter by at most the chord error. A floor
-is a magnitude, not an answer, and a per-mille error in it moves no verdict. A
-surface with no edges at all — a sphere — gives its area a `Quantum` of zero,
-and that errs in the only safe direction: a floor too low can only demand more
-of an answer, never admit one. `ε` is a constant of the gate, not the caller's
-knob: it is **not** `rel`, and `rel` never multiplies a `Quantum`.
-
-Three things follow, and all three are rules:
-
-- **The gate is genuinely relative.** For any quantity above its noise floor — every
-  volume, area, length and gap a real model measures — `Ref` **is** `abs(Value)`, and
-  the test is exactly `Bound <= rel × abs(Value)`: how many significant figures of
-  this answer are real. `Quantum` is a floor, not a scale factor, and it never
-  loosens the test for a quantity that has a magnitude of its own — at **any**
-  aspect ratio, because the floor engages only under the body's own skin. A
-  100×100×0.001mm sliver measures 10 mm³ against a `Quantum` of
-  `δ × 20000 mm² ≈ 2.8e-3 mm³` — three and a half decades under it — so `Ref`
-  is the volume itself, and a ±5 mm³ bound — a 50% error — is `Suspect` at the
-  default, and it must be, and it is. Nor may `Ref` ever be a yardstick of the
-  body rather than of the value: a body need not fill its box — a thin shell,
-  an L-bracket — and judging a volume against the box's bulk, or against any
-  measure the value need not reach, would loosen its gate by every unfilled
-  decade. That would be an absolute threshold wearing a ratio's clothes,
-  judging a volume against the body rather than against the volume itself.
-- **At and below the noise floor the gate becomes absolute.** A zero clearance, or
-  the volume of a degenerate body, has `|Value|` at or under `Quantum`, and a ratio
-  to it is undefined or explosive. `Ref` collapses to `Quantum` there — and that is
-  the whole of the near-zero rule, because it is the same formula: `Bound <= rel ×
-  Ref` reads `Bound <= rel × Quantum` — an **absolute** threshold, a thousandth
-  of the noise floor at the default `rel`. It is a real number and the reader
-  can check it: a zero wall thickness on a body whose `D` is 1 mm has
-  `Quantum = δ = 1e-9 mm`, so the gate is `1e-12 mm`; a zero clearance between
-  two bodies whose union spans 100 mm has `Quantum = 1e-7 mm` and a gate of
-  `1e-10 mm`. So a near-zero answer passes only with a bound that is, in
-  practice, vanishingly tight. A tessellation does not produce one — an
-  `Approximate` near-zero answer will
-  essentially always read `Suspect` — while an `Exact` answer has a zero `Bound` and
-  passes at the floor as it does everywhere else. That is the intent: a zero
-  clearance reported as `0 ± 5mm` is untrustworthy and must be `Suspect`; a zero
-  clearance known to `1e-12 mm` is not. Degenerate bodies keep a real floor. A
-  genuinely flat body — a 100×100 mm sheet of zero thickness — has zero volume,
-  but its volume's noise floor is not: its `D` is 141.4 mm and its two
-  coincident faces carry `2×10⁴ mm²` of surface, so `Quantum ≈ 2.8e-3 mm³` and
-  the default gate is `2.8e-6 mm³` — the volume a `δ`-thick skin over the sheet
-  would hold, the finest anything reading coordinates at `δ` can tell from
-  zero. An `Exact` zero passes with its zero `Bound`; an `Approximate` zero
-  passes only under that skin. Its area is gated relatively as everywhere — a
-  flat body keeps a positive surface area. A point-like body is the full limit:
-  `D`, surface area and edge length are all zero, so every `Quantum` is
-  zero, and only an `Exact` answer passes — a point has nothing to be
-  approximately right about.
-- **A coordinate is judged against `D` alone**, never against its own magnitude:
-  the magnitude of a position is origin-dependent, and translating the model must
-  never change the verdict. Because that `D` is the **owning body's**, the verdict
-  is also scale-free: a centroid is judged against the size of the body whose centroid
-  it is, so a 100mm bracket sharing a document with a 1.5m enclosure is judged against
-  its own hundred-odd millimetres, and does not inherit a slack tolerance from the
-  biggest thing in the document. Pair results keep the same discipline through
-  the pair's own `D`: a 1µm gap bounded to ±5e-4 mm between two bodies spanning
-  100 mm together sits above its `1e-7 mm` floor, so its gate is
-  `rel × 1e-6 mm` — `1e-9 mm` at the default — and it reads `Suspect` whether
-  those two bodies share the document with nothing or with a building. No
-  result, a body's or a pair's, is ever judged against geometry it is not
-  about.
-
-Worked, at the default `rel = 1e-3`, on four bodies — the last two are the same
-wire, posed twice:
-
-| Body | Box | `D` | `Quantum` | `Volume` | `Bound` | `Ref` | `rel × Ref` | Verdict |
-|---|---|---|---|---|---|---|---|---|
-| a small boolean off-cut | 2×2×2 mm | 3.46 mm | 8.3e-8 mm³ | 8 mm³ | 5 mm³ (±62%) | 8 mm³ | 8e-3 mm³ | **`Suspect`** — 5 ≫ 8e-3 |
-| a Ø20×10mm cylinder, 1e-3 mm chord | 20×20×10 mm | 22.4 mm | 2.8e-5 mm³ | 3142 mm³ | 1.3 mm³ (±0.04%) | 3142 mm³ | 3.14 mm³ | `Sound` — 1.3 ≤ 3.14 |
-| a 1m wire, 1µm square section, on axis | 1000×0.001×0.001 mm | 1000 mm | 4e-6 mm³ | 1e-3 mm³ | 5e-4 mm³ (±50%) | 1e-3 mm³ | 1e-6 mm³ | **`Suspect`** — 5e-4 ≫ 1e-6 |
-| the same wire, along a cube diagonal | 577×577×577 mm | 1000 mm | 4e-6 mm³ | 1e-3 mm³ | 5e-4 mm³ (±50%) | 1e-3 mm³ | 1e-6 mm³ | **`Suspect`** — the same row |
-
-`Quantum` is decades under the value in every row, so `Ref` is the volume itself
-in all four. The off-cut and the cylinder are separated by three orders of
-magnitude in *relative* error, which is the only thing that distinguishes them,
-and it is exactly what the gate reads. The cylinder's `D` is `√(20² + 10²) ≈
-22.4 mm` — rim to opposite rim — not its box's 30 mm diagonal: the body does
-not reach its box's corners, so the box overstates it, and the gate never asks
-the box. The wire is the stress case in both directions at once. Aspect ratio:
-a real, nondegenerate solid whose volume is a trillionth of `D³` gets its floor
-from its own 4 mm² of skin — `Quantum = δ × Area = 4e-6 mm³`, two and a half
-decades under the volume it measures — so a ±50% volume error reads `Suspect`
-on a wire exactly as it does on a cube. Orientation: posing the same wire along
-a diagonal balloons its box's bulk from 1e-3 mm³ to nearly 2e8 mm³, while
-volume, area and `D` are the wire's own in either pose — its `D` the same
-1000 mm between the same two end points. The two wire rows list the rule's
-quantities, and those are the same real numbers column for column; an evaluator
-re-measuring them after the move reproduces them to ulps (above — the wire's
-coordinates stay at its own 1000 mm scale in either pose), decades inside
-every margin in the row. The floor tracks the body's skin and its own
-two farthest points, never its box, so neither aspect ratio nor orientation can
-touch it: the verdict is the part's, in every pose whose coordinates still
-carry the part (above).
-
-The gate has nothing to miss, because **every one of the three shapes carries a
-`Bound`**:
-
-- a `Measurement`, a `VecMeasurement` or a `Box` on a `BodyReport` that is beyond
-  tolerance — `Volume`, `Area`, `Centroid`, `Bounds`, `MinWallThickness`,
-  `MinRadius` — makes that `BodyReport` `Suspect`;
-- an `Interference.Volume` or a `Clearance.Gap` beyond tolerance makes the `Report`
-  `Suspect` directly — those two are properties of a *pair*, so there is no
-  `BodyReport` for them to travel through, and a gap known to only one significant
-  figure is not an answer the caller said they would accept.
-
-Either path makes `Trustworthy()` false. `Exact` answers have a zero `Bound` and
-can never trip it, at any tolerance. **Nothing in the report is exempt**, and the
-`VecMeasurement` of §5.4 is what makes that true: a centroid or a vertex position
-carries a bound like everything else, so a boolean that puts the centroid off by
-more than `rel` of the body's own size cannot hide inside a `Sound` body — which is
-the confidently-wrong failure §1 exists to prevent.
-
-**That guarantee is relative, and it is stated relatively because that is what is
-true.** The gate on a centroid is `Bound <= rel × D` with `D` the owning
-body's diameter, so at the default `rel = 1e-3` a centroid bound passes only
-when it is under one part in a thousand of that body's own size — for these
-box-shaped bodies, `D` is the distance between opposite corners:
-
-| Body | `D` | `rel × D` | a 1 mm centroid `Bound` reads |
-|---|---|---|---|
-| 100×100×100mm block | 173.2 mm | 0.173 mm | **`Suspect`** |
-| 1200×800×600mm enclosure | 1562 mm | 1.562 mm | `Sound` |
-| 1m cube | 1732 mm | 1.732 mm | `Sound` |
-
-A millimetre is a coarse answer on a 100mm block and the gate says so. On a body a
-metre across it is under one part in a thousand — three significant figures, which is
-what the default tolerance *means* and what the caller asked for. A caller who needs
-an absolute millimetre on a metre-scale body buys it with figures: `rel = 5e-4` puts
-the 1m cube's gate at 0.87mm and the enclosure's at 0.78mm. What is ruled out
-absolutely — at every tolerance, on every body — is the failure §1 names: an error
-that is large *relative to the part it is an error about* sitting inside a `Sound`
-report. Judging the centroid against the owning body rather than the document is what
-makes that reading hold at any scale.
-
-`Status` is one type used at two levels:
-
-```go
-type Status int
-
-const (
-    Sound       Status = iota // every body sound; nothing approximate beyond tolerance
-    Suspect                   // sound, but an answer is Approximate beyond the caller's tolerance
-    Interfering               // bodies overlap
-    Unsound                   // some body is not a valid solid
-)
-```
-
-- **`BodyReport.Status`** is per-body: `Sound` (solid, watertight, manifold, no
-  self-intersection), `Suspect` (sound, but one of its answers is `Approximate` with
-  a `Bound` beyond the tolerance of §10.1), or `Unsound` (not a valid solid). A body is never
-  `Interfering` — interference is a property of a *pair*, not of a body.
-- **`Report.Status`** is the document-level aggregate — over the bodies *and* over
-  the pairwise results, which belong to no body.
-
-Aggregation is by **severity precedence — worst wins**:
-
-**`Unsound` > `Interfering` > `Suspect` > `Sound`**
-
-Concretely, `Report.Status` is:
-
-| Condition | `Report.Status` |
-|---|---|
-| any `BodyReport.Status == Unsound` | `Unsound` |
-| else, `len(Interferences) > 0` | `Interfering` |
-| else, any `BodyReport.Status == Suspect` | `Suspect` |
-| else, any `Interference.Volume` or `Clearance.Gap` beyond tolerance (§10.1) | `Suspect` |
-| else | `Sound` |
-
-The last rung is what keeps the tolerance gate **total**: a bounded result that
-hangs off the `Report` rather than off a `BodyReport` is gated exactly as every
-other is, so a `Clearance.Gap` measured far coarser than the caller's tolerance can
-never sit inside a `Sound` report. (Interference is caught by the rung above it as
-well, and `Interfering` is the worse verdict; the rule is stated over both so that
-nothing in the report is exempt.) Together with the `Suspect` rung above it, the
-gate covers **every `Measurement`, every `VecMeasurement` and every `Box` the report
-carries** — and per §5.4 those are all of them.
-
-`Report.Trustworthy()` is true **only** at `Report.Status == Sound`. An unsound
-body, an unresolved interference, or an approximation coarser than the caller's
-tolerance — on a body or on a pair — each make it false, even when the geometry
-"looks" fine.
 
 ## 11. Export and translation
 
@@ -1809,22 +1112,22 @@ to make that mechanical.
   given as a negative value; magnitudes are non-negative and sense is enumerated,
   §8.1), `ErrUnrecordableProfile` (a feature was handed a profile whose boundary
   contains a `Partial` fragment `sketch` could not certify — `TExact == false`,
-  its cut sampled — or one whose certified range fails §5.3's falsifier. A
-  `Partial` fragment `sketch` certifies exact records as its entity's own
+  its cut sampled — or one whose certified range the seam's falsifier disproves.
+  A `Partial` fragment `sketch` certifies exact records as its entity's own
   variant with the certified range, and a whole edge of every kind records;
-  §5.3/§6.2),
+  full semantics in `docs/sketch-seam-design.md`),
   `ErrNotSolid`, `ErrDegenerate`, `ErrBooleanFailed`, `ErrInvalidProfile`,
   `ErrUnitKind`.
 - **`ErrUnitKind` covers exactly the wrong-`Kind` values.** A `units.Value` whose
   `Kind` is not the one the parameter takes: an angle where a length is wanted, and
-  a `WithTolerance` value that is not `Dimensionless` (§10.1). It is never a
-  coercion (§5.1).
+  a `WithTolerance` value that is not `Dimensionless`
+  (`docs/verification-design.md`). It is never a coercion (§5.1).
 - **`ErrNegativeMagnitude` covers exactly the magnitudes.** Those are `Distance.D`,
   `DistanceSide.D`, `Symmetric.D`, `AngleExtent.A`, `AngleSide.A`,
   `SymmetricAngle.A`, every fillet and chamfer radius or distance, every shell
   thickness, the `LongerThan(l)` edge-predicate length (§9), the `WithTolerance`
-  relative tolerance (§10.1), the `WithMinWallThickness` tool size (§10.1), and the
-  `Tessellate` tolerance (§11). Two `units.Value` parameters are **signed
+  relative tolerance and the `WithMinWallThickness` tool size (§10,
+  `docs/verification-design.md`), and the `Tessellate` tolerance (§11). Two `units.Value` parameters are **signed
   displacements, not magnitudes**, and are outside it: `ToFace.Offset`, which
   displaces along the target face's normal and whose sign says which side of that
   face the sweep stops on (§8.1); and `ExtrudeOpts.Taper` (`WithTaper`, §8.1),

@@ -40,9 +40,11 @@
 // # Status
 //
 // Scaffolding, plus an approved API design. No public API exists yet; the
-// contract for the one that lands is docs/api-design.md, every capability it
-// consumes from sketch, r3 and units exists today — no open dependency gaps —
-// and nothing that contradicts it may be added to this package.
+// contract for the one that lands is docs/api-design.md — the core design,
+// whose deep ends live in the companion docs/sketch-seam-design.md and
+// docs/verification-design.md — every capability it consumes from sketch, r3
+// and units exists today — no open dependency gaps — and nothing that
+// contradicts it may be added to this package.
 //
 // [sketch]: https://github.com/lestrrat-3d/sketch
 // [r3]: https://github.com/lestrrat-3d/r3
