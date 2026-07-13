@@ -1130,8 +1130,9 @@ to make that mechanical.
   `DistanceSide.D`, `Symmetric.D`, `AngleExtent.A`, `AngleSide.A`,
   `SymmetricAngle.A`, every fillet and chamfer radius or distance, every shell
   thickness, the `LongerThan(l)` edge-predicate length (§9), the `WithTolerance`
-  relative tolerance and the `WithMinWallThickness` tool size (§10,
-  `docs/verification-design.md`), and the `Tessellate` tolerance (§11). Two `units.Value` parameters are **signed
+  relative tolerance, the `WithMinWallThickness` tool size and its
+  `WithDraftAllowance` draft allowance (§10, `docs/verification-design.md`), and
+  the `Tessellate` tolerance (§11). Two `units.Value` parameters are **signed
   displacements, not magnitudes**, and are outside it: `ToFace.Offset`, which
   displaces along the target face's normal and whose sign says which side of that
   face the sweep stops on (§8.1); and `ExtrudeOpts.Taper` (`WithTaper`, §8.1),
