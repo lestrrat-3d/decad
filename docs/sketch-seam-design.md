@@ -194,9 +194,12 @@ type LoopRecord struct {
 // through sketch/geom from the entity's own fields and trims it at the range —
 // it never re-derives either (core §7). What geom DERIVES from those fields —
 // an arc's radius and angles, an elliptical arc's eccentric parameters — is
-// never recorded in their place: a derived reading re-evaluates to the entity's
-// boundary only when the entity's data happens to lie on it, and a pinned
-// endpoint need not (§1). One variant serves each entity kind, whole and
+// never recorded in their place: the readings are geom's answers, computed on
+// demand, and they do not determine the fields — an arc's readings fix End
+// only up to its angle, an elliptical arc's eccentric angles name points on
+// the parametric ellipse its pinned ends need not lie on (§1) — so a record
+// of readings could not reconstitute the entity's geom value without
+// synthesizing its points. One variant serves each entity kind, whole and
 // trimmed alike: the entity picks the variant, and only the range differs.
 type CurveSegment interface{ curveSegment() }
 
@@ -220,9 +223,16 @@ type CircleSeg struct {
 // ArcSeg mirrors geom.Arc: three pinned points, the arc swept counter-clockwise
 // from Start to End about Center. The sweep is the entity's own definition, so
 // no field restates it. Radius and angles are geom's derived readings, never
-// fields — End is a pinned point, not "Start's radius at another angle" — so a
-// center/radius/angle record would re-evaluate to a boundary the entity's own
-// points need not lie on.
+// fields. geom's arc geometry is Center plus Start's radius, End contributing
+// only its angle: the boundary geom emits runs on Start's radius and ends at
+// End's angle, evaluated from the curve — never pinned to End — so it passes
+// through a pinned End only when End lies on that radius (which is why a whole
+// *Arc edge's flag reads true, §1). A center/radius/angle record re-evaluates
+// to exactly that boundary; what it loses is the fields: the readings do not
+// determine End's radial position, and an evaluator holding angles in place of
+// points would have to synthesize the points from them — re-deriving what geom
+// owns (core §7) — instead of reconstituting geom.Arc from its own fields and
+// asking it.
 type ArcSeg struct {
     Center, Start, End Point2  // geom.Arc: the pinned points, verbatim
     TStart, TEnd       float64 // the full domain for a whole edge
@@ -245,9 +255,12 @@ type EllipseSeg struct {
 // eccentric-angle sweep from Start to End. The sweep is the entity's own
 // definition, so no field restates it. Start and End are the entity's PINNED
 // points, verbatim — they lie on the parametric ellipse only within solver
-// tolerance (§1) — so no eccentric-angle pair can stand in for them: angles
-// re-evaluate to points ON the parametric ellipse, a different boundary than
-// the one the entity defines.
+// tolerance (§1) — and, unlike an arc's, the boundary geom emits interpolates
+// them: its interior is evaluated from the ellipse, its ends are the pinned
+// points themselves (the gap §1's contingent whole-edge flag turns on). So no
+// eccentric-angle pair can stand in for them: angles re-evaluate to points ON
+// the parametric ellipse, a different boundary than the one the entity
+// defines.
 type EllipticalArcSeg struct {
     Center, Start, End Point2      // geom.EllipticalArc: the pinned points, verbatim
     Rx, Ry, Rotation   units.Value // local-x / local-y semi-axes, unordered; frame angle
@@ -373,14 +386,17 @@ endpoints are read off the range. A `LoopRecord` therefore carries no residual
 flags and no back-reference.
 
 **What decad reads of `BoundaryEdge.Polyline`, and nothing more: `Polyline[0]` and
-`Polyline[len-1]`, on the `Partial` fragments it admits, as the observations
-§1's falsifier tests the certified range against.** They never enter a `Step`:
-every recorded value is the entity's own defining data and the certified range,
-so no sampled content reaches a `Recipe` through them, which is why core §2's "a
-`Recipe` never names a tessellation" holds without qualification. On a rejected
-fragment the `Polyline` is not read at all; on a whole edge the entity's own data
-is the record and the `Polyline` is never read either. No interior point of a
-`Polyline` is ever read, and no `Polyline` enters a `Step`.
+`Polyline[len-1]`, on every `Partial` fragment whose `TExact` reads `true`, as
+the observations §1's falsifier tests the certified range against — read on the
+fragments that record and on the ones the falsifier rejects alike, to check and
+never to record.** They never enter a `Step`: every recorded value is the
+entity's own defining data and the certified range, so no sampled content
+reaches a `Recipe` through them, which is why core §2's "a `Recipe` never names
+a tessellation" holds without qualification. On a fragment the flag already
+rejects — `TExact == false` — the `Polyline` is not read at all; on a whole edge
+the entity's own data is the record and the `Polyline` is never read either. No
+interior point of a `Polyline` is ever read, and no `Polyline` content ever
+enters a `Step`.
 
 `CurveSegment` is one of the closed variant sets decad owns, so decad ships its
 codec under core §6.2's serializability rule: each variant encodes as a tagged
