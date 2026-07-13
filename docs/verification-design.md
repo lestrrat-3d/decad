@@ -49,10 +49,12 @@ type BodyReport struct {
 
     Exactness         Exactness      // the weakest link across the quantities this report carries
 
-    // Opt-in, expensive; non-nil only when the option asks AND Status != Unsound:
+    // Opt-in, expensive; nil unless the option asks AND Status != Unsound.
+    // MinRadius alone adds a third leg: the feature must exist (below):
     MinWallThickness  *Measurement   // WithMinWallThickness(tool) — decided against tool (§6)
-    Undercuts         []*Face        // WithPullDirection(v) — non-empty is Violating (§6)
-    MinRadius         *Measurement   // WithMinRadius() — the tightest concave radius; the caller compares (§2)
+    Undercuts         []*Face        // WithPullDirection(v) — non-empty is Violating (§6); empty means none
+    MinRadius         *Measurement   // WithMinRadius() — the tightest concave radius; nil when no
+                                     // concave feature exists (below); the caller compares (§2)
 }
 ```
 
@@ -75,16 +77,50 @@ wall, an undercut and an endmill's reach are features of a solid — so each is
 computed only when its option asks for it **and** the body is a valid solid,
 and is nil otherwise.
 
+Two legs — the option asked, the body a valid solid — are the whole rule
+exactly when the quantity's existence is already the precondition's: a
+boundary always has an area and a box, a region always has a volume and a
+centroid, and every valid solid has walls — its boundary encloses material,
+and the thinnest of that material is a reading every valid solid yields,
+finite and non-negative, down to the `Exact` zero of a degenerate flat body,
+which is a genuine measured thickness (§6 decides it thin against any real
+tool), never core §4's sentinel. `Undercuts` carries its further question — do
+any exist? — in the slice itself: asked on a valid solid it is non-nil, and
+**empty** is the answer *no face is an undercut*, an answer and not an
+absence, because membership is a predicate the evaluator decides (§6).
+`MinRadius` alone measures a feature a valid solid may simply not have: an
+all-convex body — a plain block — has no concave radius, and no `Measurement`
+can honestly stand for *none*. Zero is core §4's sentinel reintroduced — a
+real concave radius can be arbitrarily tight, so zero is a value the quantity
+itself approaches — and an infinity is not a measurement of anything the body
+has, and turns the §2 gate vacuous. So `MinRadius` carries the existence leg
+the way the pair results below carry their preconditions — in existence: it is
+non-nil exactly when the option asks **and** the body is a valid solid **and**
+a concave feature exists. Nil with the option asked on a valid solid is not a
+question left unanswered; it is the determination *this body has no concave
+feature* — the best possible answer to the endmill question — and §6 holds the
+evaluator to proving it, marking the body `Suspect` when it cannot. Nor do the
+causes of a nil ever blur for the caller: which options were passed is the
+caller's own knowledge, `Status` carries validity — and carries the survey §6
+lets no evaluator silently fail, as `Suspect` — and what remains is the
+determination.
+
 `Interference` and `Clearance` are the pairwise result types of core §6.2: each
 names its two bodies and carries its quantity as a `Measurement`, so each
 reports its own exactness like everything else. Their preconditions are carried
 the same way a body's are — in **existence**, never in a fabricated value: an
 `Interference` exists only for a pair that overlaps, a `Clearance` only for a
 pair that does not, so `Interference.Volume` is always a real overlap's volume
-and `Clearance.Gap` always a real gap — zero for a touching pair, gated at the
-noise floor like every near-zero answer (§5). Pairs are drawn from the
-document's **valid solids** only. The partition is a statement about interiors
-— a pair either shares volume or has a gap between disjoint interiors — and a
+and `Clearance.Gap` always a real gap. A touching pair's zero `Gap` is a
+**measured** zero, not the sentinel core §4 rejects: the sentinel is a zero
+standing in for *there is no such quantity*, and a `Clearance`'s existence has
+already said there is one — two disjoint interiors have a minimum distance,
+and for a touching pair it is genuinely zero, gated at the noise floor like
+every near-zero answer (§5): an `Approximate` zero must earn trust with a
+vanishingly tight bound, an `Exact` zero passes on its own terms. Pairs are
+drawn from the document's **valid solids** only. The partition is a statement
+about interiors — a pair either shares volume or has a gap between disjoint
+interiors — and a
 body that is not a valid solid has no interior to say either of; it joins no
 pair, and nothing is lost by that, because it has already made the report
 `Unsound`, which outranks anything a pair could add (§6). Of the two lists,
@@ -145,8 +181,11 @@ they state nothing, and `MinRadius` and `Clearance.Gap` are **measurements, not
 verdicts**: the tightest concave radius and the smallest gap, gated for
 trustworthiness like every bounded result but compared against no threshold,
 because the endmill and the clearance spec live with the caller, who was never
-asked to name them. The report never invents a spec the caller did not state,
-and never withholds a verdict on one they did.
+asked to name them. A nil `MinRadius` on a valid solid is the comparison's
+best case, not a missing answer: §1 makes it the determination that no concave
+feature exists — no radius for any endmill to be too large for. The report
+never invents a spec the caller did not state, and never withholds a verdict
+on one they did.
 
 **The tolerance is relative, and it is one number for every kind.** `rel` is the
 largest error the caller will accept **as a fraction of the quantity being
@@ -434,16 +473,34 @@ which is the confidently-wrong failure core §1 exists to prevent.
 
 Absence is not an exemption. A quantity the report does not carry is absent
 only where §1 permits it: a region quantity of a body that is not a valid
-solid, or an opt-in quantity that was not asked for. Neither hole is one an
-untrustworthy answer can hide in. The first exists only on a body that is
-already `Unsound` — the worst verdict in the precedence below, so the report it
-sits in is already gated harder than any `Suspect` could gate it. The second is
-a quantity the evaluator never computed, so there is no answer, trustworthy or
-otherwise, for the report to be silent about — and no verdict owed either: an
-option is where a spec is stated (§2), so an option left off poses no question
-for the report to fail. The gate covers every bounded result the report
-carries, and what the report does not carry is either outranked or was never
-asked.
+solid, an opt-in quantity that was not asked for, or a `MinRadius` on a body
+with no concave feature. No hole of the three is one an untrustworthy answer
+can hide in. The first exists only on a body that is already `Unsound` — the
+worst verdict in the precedence below, so the report it sits in is already
+gated harder than any `Suspect` could gate it. The second is a quantity the
+evaluator never computed, so there is no answer, trustworthy or otherwise, for
+the report to be silent about — and no verdict owed either: an option is where
+a spec is stated (§2), so an option left off poses no question for the report
+to fail. The third is not a silence at all: that nil is the evaluator's
+**answer** — *no concave feature exists* — and an answer can be wrong, so it
+is held to the standard of the predicates core §6 exempts from bounds: a
+decided answer, never an approximation of one. The evaluator may decide
+absence only when it can prove it. On faces it holds analytically, convexity
+and curvature are exact facts, and a survey over them is that proof; a survey
+that is itself approximate proves nothing of the kind — a tessellation cannot
+see below its own chord error, so a concave dimple shallower than the chord
+lands inside one flat facet and leaves no concave edge to find. A `Faceted`
+body whose survey turns up nothing concave is therefore an asked question the
+evaluator cannot answer, and the body reads `Suspect` with `MinRadius` nil —
+nothing proven wrong, nothing proven right, which is exactly the rung's
+meaning. What the standard buys is the only reading that matters: inside a
+`Trustworthy()` report, a nil `MinRadius` on a valid solid is a **proven**
+absence, as good as any `Exact` answer, because an unprovable absence never
+reaches the caller inside a `Sound` report. (On a `Suspect` body a nil could
+be either the proven absence or the survey that could not decide, and nothing
+turns on which: `Suspect` already says this report is not one to read answers
+out of.) The gate covers every bounded result the report carries, and what the
+report does not carry is outranked, never asked, or proven absent.
 
 **That guarantee is relative, and it is stated relatively because that is what is
 true.** The gate on a centroid is `Bound <= rel × D` with `D` the owning
@@ -474,7 +531,7 @@ type Status int
 
 const (
     Sound       Status = iota // every body sound; every stated spec met; nothing approximate beyond tolerance
-    Suspect                   // an answer is Approximate beyond the caller's tolerance, or straddles a stated spec
+    Suspect                   // an answer is Approximate beyond the caller's tolerance, straddles a stated spec, or is an asked absence left unproven
     Violating                 // a stated spec is proven to fail: a wall thinner than the tool, an undercut against the pull
     Interfering               // bodies overlap
     Unsound                   // some body is not a valid solid
@@ -483,13 +540,15 @@ const (
 
 - **`BodyReport.Status`** is per-body: `Sound` (solid, watertight, manifold, no
   self-intersection; every stated spec met; nothing approximate beyond
-  tolerance), `Suspect` (sound, but one of its answers is `Approximate` with a
-  `Bound` beyond the tolerance of §2, or a stated spec is straddled — the
-  interval rule below), `Violating` (sound, but a spec a §2 option stated is
-  proven to fail: `MinWallThickness` decided below the tool, or `Undercuts`
-  non-empty), or `Unsound` (not a valid solid — any of those four predicates
-  the wrong way). Validity is decided by the four
-  predicates alone, before any quantity is read, which is what lets §1 key a
+  tolerance; every asked absence proven), `Suspect` (sound, but one of its
+  answers is `Approximate` with a `Bound` beyond the tolerance of §2, a stated
+  spec is straddled — the interval rule below — or `WithMinRadius` was asked
+  and the evaluator could neither measure a concave radius nor prove the body
+  has none, the absence rule above), `Violating` (sound, but a spec a §2
+  option stated is proven to fail: `MinWallThickness` decided below the tool,
+  or `Undercuts` non-empty), or `Unsound` (not a valid solid — any of those
+  four predicates the wrong way). Validity is decided by the four predicates
+  alone, before any quantity is read, which is what lets §1 key a
   region quantity's presence on it with no circularity: the predicates decide
   `Unsound`, and only a valid body's quantities exist to decide `Sound` against
   `Violating` and `Suspect`. A body is
