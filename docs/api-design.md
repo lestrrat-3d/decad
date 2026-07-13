@@ -1417,28 +1417,46 @@ total:
 | `VecMeasurement`, a **direction** (`Bound` is `Dimensionless`, §5.4) | `1` — the magnitude of a unit vector |
 | `VecMeasurement`, a **position**, and `Box` (`Bound` is a Length) | `Diag` |
 
-**`Diag` is the bounding-box diagonal of the thing the result belongs to**, and
-that is decided by ownership, not by convenience:
+**Every reference derives from the bounding box of the thing the result belongs
+to** — `Diag` is that box's diagonal — and ownership, not convenience, decides
+whose box it is:
 
 - a result on a `BodyReport` — `Volume`, `Area`, `Centroid`, `Bounds`,
   `MinWallThickness`, `MinRadius`, and every vertex position and face normal of that
-  body — belongs to **one body**, and `Diag` is **that body's own** bounding-box
-  diagonal, i.e. the diagonal of that `BodyReport.Bounds`. A body's answers are
-  judged against the size of the body they are answers about;
+  body — belongs to **one body**, and the box is **that body's own** bounding box,
+  i.e. that `BodyReport.Bounds`. A body's answers are judged against the size of
+  the body they are answers about;
 - an `Interference.Volume` and a `Clearance.Gap` belong to a **pair**, so no single
-  body's size is theirs to be judged against. For those, and only those, `Diag` is
-  the diagonal of the **document's** bounding box — the box enclosing every live
-  body. It is the one reference both members of the pair share.
+  body's size is theirs to be judged against. For those, and only those, the box is
+  the **document's** bounding box — the box enclosing every live body. It is the
+  one reference both members of the pair share.
 
-A diagonal is a difference of coordinates, so `Diag` is translation-invariant in
-either form — which is exactly what a position's reference must be.
+The box's side lengths and diagonal are differences of coordinates, so every
+reference built from the box is translation-invariant in either form — which is
+exactly what a position's reference must be.
 
-`Scale` is `Diag` **raised to the dimension of the quantity's `Kind`**: `Diag`
-for a length, `Diag²` for an area, `Diag³` for a volume, `1` for a dimensionless
-quantity. And `Quantum` is `ε × Scale` with `ε = 1e-9` fixed — the noise level of the
-thing being measured, the magnitude below which a quantity of that `Kind` is not
-distinguishable from zero at that size. `ε` is a constant of the gate, not the
-caller's knob: it is **not** `rel`, and `rel` never multiplies `Scale`.
+`Scale` is the quantity's **own measure of that bounding box**. For a box with
+side lengths `Lx`, `Ly`, `Lz`:
+
+| Quantity | `Scale` |
+|---|---|
+| a volume | the box's **volume** — `Lx·Ly·Lz` |
+| an area | the box's **surface area** — `2(LxLy + LyLz + LzLx)` |
+| a length, a gap, a position | `Diag` |
+| a dimensionless quantity | `1` |
+
+And `Quantum` is `ε × Scale` with `ε = 1e-9` fixed — the noise level of the thing
+being measured, the magnitude below which a quantity of that `Kind` is not
+distinguishable from zero **in that box**. The box's own measure is the tight
+reference at every aspect ratio: a measured volume can never exceed the volume of
+the box that contains it, so a volume under its `Quantum` genuinely fills less
+than a billionth of its own box — it sits at the resolution floor of the box it
+lives in, and no evaluator resolves finer than that. A yardstick that grows with
+the box's *extent* rather than its measure — any power of `Diag` — overstates a
+thin body's noise level by up to the square of its aspect ratio and would drown
+the body's real answers in a floor built for a cube. `ε` is a constant of the
+gate, not the caller's knob: it is **not** `rel`, and `rel` never multiplies
+`Scale`.
 
 Three things follow, and all three are rules:
 
@@ -1446,13 +1464,17 @@ Three things follow, and all three are rules:
   volume, area, length and gap a real model measures — `Ref` **is** `abs(Value)`, and
   the test is exactly `Bound <= rel × abs(Value)`: how many significant figures of
   this answer are real. `Quantum` is a floor, not a scale factor, and it never
-  loosens the test for a quantity that has a magnitude of its own. A `Scale`-sized
-  reference would be an absolute threshold wearing a ratio's clothes — it would judge
-  a volume against the *extent* of the body rather than against the volume itself. A
-  100×100×0.001mm sliver has a `Diag` of 141.4mm and so a `Scale` of 2.83e6 mm³, but
-  a volume of 10 mm³: against `Scale` a ±5 mm³ bound — a 50% error — would pass at
-  every tolerance an evaluator can meet. Against its own 10 mm³ it is `Suspect` at
-  the default, and it must be, and it is.
+  loosens the test for a quantity that has a magnitude of its own — at **any**
+  aspect ratio, because the floor is a billionth of the box's own measure in the
+  quantity's `Kind`. A 100×100×0.001mm sliver has a box volume of 10 mm³ — its
+  own volume, the extreme case of a body filling its box — so its `Quantum` is
+  1e-8 mm³, nine decades under the 10 mm³ it measures: `Ref` is the volume
+  itself, and a ±5 mm³ bound — a 50% error — is `Suspect` at the default, and it
+  must be, and it is. Nor may `Ref` ever be `Scale` itself: a body need not fill
+  its box — a thin shell, an L-bracket — and every unfilled decade of the box
+  would loosen its gate by the same factor. That would be an absolute threshold
+  wearing a ratio's clothes, judging a volume against the box rather than against
+  the volume itself.
 - **At and below the noise level the gate becomes absolute.** A zero clearance, or
   the volume of a degenerate body, has `|Value|` at or under `Quantum`, and a ratio
   to it is undefined or explosive. `Ref` collapses to `Quantum` there — and that is
@@ -1467,9 +1489,14 @@ Three things follow, and all three are rules:
   essentially always read `Suspect` — while an `Exact` answer has a zero `Bound` and
   passes at the floor as it does everywhere else. That is the intent: a zero
   clearance reported as `0 ± 5mm` is untrustworthy and must be `Suspect`; a zero
-  clearance known to `1e-12 mm` is not. A point-like body carries this to its limit:
-  `Diag → 0`, so `Scale → 0`, so `Quantum → 0`, and the gate tightens to zero —
-  only a zero `Bound`, i.e. an `Exact` answer, passes.
+  clearance known to `1e-12 mm` is not. Degenerate boxes carry this to the limit. A
+  genuinely flat body has a box with a zero side, so a zero box volume, so
+  `Quantum = 0` for its volume: `Ref` is zero, the gate is zero, and only a zero
+  `Bound` — an `Exact` volume — passes. That is honest and conservative: a flat
+  body has no volume to be approximately right about. Its area is still gated
+  relatively — a flat box keeps a positive surface area. A point-like body is the
+  full limit: every side is zero, so every `Scale` — box volume, box surface area,
+  `Diag` — is zero, every `Quantum` is zero, and only an `Exact` answer passes.
 - **A coordinate is judged against `Diag` alone**, never against its own magnitude:
   the magnitude of a position is origin-dependent, and translating the model must
   never change the verdict. Because that `Diag` is the **owning body's**, the verdict
@@ -1478,17 +1505,22 @@ Three things follow, and all three are rules:
   its own 173mm, and does not inherit a slack tolerance from the biggest thing in the
   document.
 
-Worked, at the default `rel = 1e-3`, on two bodies:
+Worked, at the default `rel = 1e-3`, on three bodies:
 
-| Body | `Diag` | `Volume` | `Bound` | `Ref` | `rel × Ref` | Verdict |
-|---|---|---|---|---|---|---|
-| a small boolean off-cut, ~2mm across | 3.5 mm | 8 mm³ | 5 mm³ (±62%) | 8 mm³ | 8e-3 mm³ | **`Suspect`** — 5 ≫ 8e-3 |
-| a Ø20×10mm cylinder, 1e-3 mm chord | 30 mm | 3142 mm³ | 1.3 mm³ (±0.04%) | 3142 mm³ | 3.14 mm³ | `Sound` — 1.3 ≤ 3.14 |
+| Body | Box | `Scale` | `Volume` | `Bound` | `Ref` | `rel × Ref` | Verdict |
+|---|---|---|---|---|---|---|---|
+| a small boolean off-cut | 2×2×2 mm | 8 mm³ | 8 mm³ | 5 mm³ (±62%) | 8 mm³ | 8e-3 mm³ | **`Suspect`** — 5 ≫ 8e-3 |
+| a Ø20×10mm cylinder, 1e-3 mm chord | 20×20×10 mm | 4000 mm³ | 3142 mm³ | 1.3 mm³ (±0.04%) | 3142 mm³ | 3.14 mm³ | `Sound` — 1.3 ≤ 3.14 |
+| a 1m wire, 1µm square section | 1000×0.001×0.001 mm | 1e-3 mm³ | 1e-3 mm³ | 5e-4 mm³ (±50%) | 1e-3 mm³ | 1e-6 mm³ | **`Suspect`** — 5e-4 ≫ 1e-6 |
 
-`Quantum` is nowhere near either (4.3e-8 mm³ and 2.7e-5 mm³), so `Ref` is the volume
-itself in both rows. The two are separated by three orders of magnitude in *relative*
-error, which is the only thing that distinguishes them, and it is exactly what the
-gate reads.
+`Quantum` is nowhere near any of them (8e-9, 4e-6 and 1e-12 mm³), so `Ref` is the
+volume itself in every row. The off-cut and the cylinder are separated by three
+orders of magnitude in *relative* error, which is the only thing that distinguishes
+them, and it is exactly what the gate reads. The wire is the aspect-ratio stress
+case: a real, nondegenerate solid whose volume is a trillionth of `Diag³`. Its box
+volume is its own 1e-3 mm³, its `Quantum` is nine decades under that, and a ±50%
+volume error reads `Suspect` on a wire exactly as it does on a cube — the floor
+tracks the body's own box, so no aspect ratio can lift it over a real answer.
 
 The gate has nothing to miss, because **every one of the three shapes carries a
 `Bound`**:
