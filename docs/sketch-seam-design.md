@@ -36,11 +36,13 @@ a crossing. A `BoundaryEdge` carries `Entity`, `Partial`, `Reversed` and
 is exact only when `sketch`'s closed-form kernel placed it, and that kernel
 places a cut for exactly one kind of contact: a **crossing** whose source
 curves are **both** a line, a circle or an arc, with a line on at least one
-side. A tangency is never a cut, whatever the curves: the kernel classifies a
-tangency between line/circle/arc sources as a **non-splitting** contact — a
-shared-endpoint tangency is a smooth join, an interior touch splits neither
-curve — so tangent entities arrive as whole edges (two externally tangent
-circles are two whole one-edge loops). Every other cut is **sampled**: every
+side. Among line/circle/arc sources a tangency is never a cut: the kernel
+classifies it as a **non-splitting** contact — a shared-endpoint tangency is a
+smooth join, an interior touch splits neither curve — so analytically tangent
+entities arrive as whole edges (two externally tangent circles are two whole
+one-edge loops). A grazing contact involving any other curve kind has no such
+rule: it is resolved on the sampled polylines below, which can cut at the
+touch. Every other cut is **sampled**: every
 curve/curve crossing (circle × circle, circle × arc, arc × arc), and every cut
 at a contact involving an ellipse, elliptical arc, conic, spline, closed
 spline, fit spline or NURBS — **including a plain line** against one of those,
@@ -270,9 +272,9 @@ type EllipticalArcSeg struct {
 }
 
 // The five free-form kinds. Degree, knots and weights are curve parameters on
-// the same terms as every range (core §5.2); a conic's fullness Rho is the apex
-// weight w = Rho/(1-Rho) of a rational quadratic in disguise, of exactly the
-// same class as a NURBS weight.
+// the same terms as every range (core §5.2); a conic's fullness Rho — from
+// which a rational quadratic's apex weight derives as w = Rho/(1-Rho) — is of
+// exactly the same class as a NURBS weight.
 
 // SplineSeg mirrors geom.Spline: an open cubic B-spline over its control
 // points. Degree 3, the clamped uniform knot vector and unit weights are the
