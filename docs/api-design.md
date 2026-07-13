@@ -202,7 +202,7 @@ rational quadratic in disguise (all `docs/sketch-seam-design.md`) — are
 dimensionless indices into a parameterisation, not measurements of anything,
 and §5.1 does not reach them.
 
-### 5.4 Exactness — the load-bearing type
+### 5.3 Exactness — the load-bearing type
 
 ```go
 type Exactness int
