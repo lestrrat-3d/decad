@@ -131,7 +131,9 @@ Loosely based on the Fusion SDK. The odd parts are thrown away deliberately.
 ### 5.1 Units — no naked floats
 
 Every physical quantity crossing the API is a `units.Value` from
-`github.com/lestrrat-3d/sketch/units`. We do NOT invent a parallel unit system.
+`github.com/lestrrat-3d/units` — the same module `sketch` uses for its own
+dimensional values, so a quantity never changes type crossing the seam. We do
+NOT invent a parallel unit system.
 
 ```go
 body, err := doc.Extrude(s, prof, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
@@ -142,14 +144,35 @@ the trap in `ValueInput.createByReal`, where the value is always internal units
 (cm, radians) regardless of the document. A wrong-`Kind` value (an angle where a
 length is wanted) is an **error**, not a coercion.
 
-`units.Kind` today is Dimensionless / Length / Angle — deliberately limited to the
-kinds a 2D sketch needs. decad needs Area, Volume, Mass and Density as well, and
-the wrong-`Kind`-is-an-error rule means they cannot be faked. See §5.3.
+`units.Kind` is a vector of dimension exponents — length, mass, angle — so kinds
+compose (`Kind.Mul` / `Div` / `Pow`) rather than being enumerated; a composition
+past the exponent range saturates and is marked overflowed, stickily, so it can
+never pass for a real kind. The named kinds — Dimensionless, Length, Area,
+Volume, Angle, Mass, Density, MomentOfInertia, SecondMomentOfArea — each have a
+registered base unit, and they cover every quantity decad measures: a
+`units.Value` holds `12.9997 mm³` as readily as a length, and the
+wrong-`Kind`-is-an-error rule means no kind can be faked.
 
 ### 5.2 Coordinates — r3, never hand-rolled
 
-`r3.Vec` and `r3.Frame` only. `Frame` is orthonormal, so the inverse is the
-transpose, never a matrix solve.
+`r3.Vec`, `r3.Frame` and `r3.Transform` only. `Frame` is orthonormal, so the
+inverse is the transpose, never a matrix solve.
+
+`r3.Transform` is a rigid motion of ℝ³ — an orthogonal linear map plus a
+translation, an isometry by construction: scale, shear and projection are
+unrepresentable. It is built with `Identity` / `Translation` / `Rotation` /
+`RotationAround` / `Reflection` / `FromFrame` / `FromBasis` — angles are typed
+`units.Value`, so a bare `2` can never silently mean radians — and applied with
+`Apply` (a point) and `ApplyDir` (a direction; normals transform like
+directions, with no inverse transpose anywhere). Every constructor but
+`Identity`, and the derivations `Then` (composition) and `Inverse`, return
+`(Transform, error)` and validate what they produce, so a `Transform` that
+exists is a real rigid motion; `Inverse` is exact — the transpose, never a
+solve. Reflections are representable (det = −1) and `Transform.IsReflection`
+reports them, because a reflected solid has inverted face normals. `Basis()`
+and `Translation()` read a transform out as plain vectors and `FromBasis`
+rebuilds it, which is how a placement survives encoding (§6.2). It is what
+`Body.Placed` (§8) takes.
 
 **The one deliberate exception to §5.1.** An `r3.Vec` *position* — `Box.Min`,
 `Box.Max`, a `VecMeasurement.Value` (§5.4), `Cylinder.Origin`, every point the API
@@ -171,110 +194,79 @@ fullness `Rho` — the apex weight of a rational quadratic in disguise (§6.2) �
 dimensionless indices into a parameterisation, not measurements of anything, and
 §5.1 does not reach them.
 
-### 5.3 Dependency-side decisions (blockers)
+### 5.3 The trim contract at the sketch seam
 
-Three capabilities decad's API depends on do not exist in its dependencies yet.
-All three belong upstream by charter, and all three are resolved upstream — decad
-does not hand-roll around any of them.
+Every capability decad's API consumes exists in its dependencies today — there
+is no open dependency gap. The one contract subtle enough to state in full is
+`sketch.BoundaryEdge`'s account of a boundary fragment, because §6.2's mapping
+table, §7's seam rules and `ErrUnrecordableProfile` (§12) are all built on it.
 
-| Gap | Proposal | Blocks |
-|---|---|---|
-| **`r3` has no rigid transform type.** `Frame` covers plane-local↔world only; placing a body at an arbitrary pose needs rotation + translation. | Add `r3.Transform` upstream. It *acts on* ℝ³, which is r3's charter. | Body placement — `Body.Placed` (§8), and with it the explicit-transform answer to assemblies (§13). |
-| **`sketch/units` has no Area / Volume / Mass / Density kinds.** `units.Kind` is Dimensionless / Length / Angle only, so a `units.Value` cannot hold `12.9997 mm³`. | Add those kinds upstream to `sketch/units` — it is a first-party module — so `Measurement.Value` stays a single `units.Value` and the no-parallel-unit-system rule holds. | Every volume / area / mass measurement — i.e. most of `Verify` — and, for the text form below, encoding a `Recipe` (§6.2). |
-| **`sketch.BoundaryEdge` carries neither a fragment's parameter range nor how that range was computed.** `Partial` is a bare `bool`: it says *that* the edge is a sub-range of its `Entity`, never *which* sub-range, and never whether that sub-range is exact. The entity gives the parameters of the whole curve; the fragment's extent survives only as its two endpoints, which do not determine a trim of a curve, and whose distance from the curve cannot be tested to decide whether they do. | Add **both** `TStart` / `TEnd` (the fragment's parameter range on `Entity`) **and `TExact bool`** (whether that range was computed exactly — a line-involved crossing or a tangency **between two sources that are each a line, a circle or an arc** — or sampled) to `sketch.BoundaryEdge`. `sketch` computed the arrangement that produced the fragment, so it is the only party that knows the range, and the only party that knows how it was obtained. `TExact` is **per-fragment**, and its truth depends on **both** sources of the crossing, never on the entity the fragment lies on alone. | Recording **any profile in which a curve is split** — every `Partial` fragment of a circle, arc, ellipse, elliptical arc, conic, spline, closed spline, fit spline or NURBS, however it was cut (§6.2). Today a circle crossed by a rectangle does not record. With both fields, a fragment records exactly from its range when `TExact` is true, and is `ErrUnrecordableProfile` when it is false. |
+A `BoundaryEdge` carries `Entity`, `Partial`, `Reversed` and `Polyline` — and
+the trim itself:
 
-Until the units kinds land, `Measurement` **cannot be implemented as specified**,
-and decad will **not** work around it by inventing a parallel unit system.
+- **`TStart` / `TEnd`** are the fragment's parameter range on `Entity`, as
+  normalized `t` in `[0, 1]` in the entity's **natural** direction: `TStart <
+  TEnd` always, and the range **never wraps** — a fragment of a closed curve
+  that straddles the seam arrives as two edges. `Reversed` composes with that
+  natural-direction range: it, and never the order of the pair, says the
+  boundary walks the range backwards. A whole edge spans the entity's full
+  domain.
+- **`TExact`** reports whether that range is the true parameters on `Entity`
+  rather than a sampling-accurate approximation, and its meaning is precise and
+  checkable: evaluating `Entity` at `TStart` / `TEnd` reproduces the fragment's
+  `Polyline` endpoints to machine precision, at both bounds.
 
-The units gap is **wider than the measured value alone**. `Measurement.Bound` and
-`Box.Bound` are `units.Value` too, carrying the same `Kind` as the quantity they
-bound — the error bound on a volume is itself a volume, so it needs the Volume kind
-as much as the volume does. So does `Interference.Volume` (§6.2). The blocker
-covers the bound, not just the number.
+**Which cuts `sketch` certifies exact is a property of the pair.** A cut bound
+is exact only when `sketch`'s closed-form kernel placed it, and that kernel runs
+only when **both** of the crossing's source curves are a line, a circle or an
+arc — and then only for a line-involved crossing or a tangency between them.
+Every other contact yields a **sampled** cut parameter: every curve/curve
+crossing (circle × circle, circle × arc, arc × arc), and every contact involving
+an ellipse, elliptical arc, conic, spline, closed spline, fit spline or NURBS —
+**including a plain line** crossing, or tangent to, one of those. A sampled cut
+yields `TExact == false` on every fragment it bounds.
 
-The same row also covers **a text form for `units.Value`**: its fields are
-unexported and it marshals to `{}`, so a `Recipe` — which carries every quantity
-it records as a `units.Value` — cannot round-trip until `units.Value` gains
-`MarshalText` / `UnmarshalText` upstream. It is the same first-party module and
-the same charter; decad does not hand-roll a shadow encoding of a foreign type.
-This is what §6.2's serializability rule is waiting on, and nothing else is.
-
-The `BoundaryEdge` gap decides which partial fragments decad can record, and it
-excludes **every curve**. A fragment's two endpoints are `Polyline[0]` and
-`Polyline[len-1]` (§6.2), and they are the only surviving record of the trim. Two
-points do not determine a trim of a curve — a parameter range does — and
-`BoundaryEdge` carries `Entity`, `Partial`, `Reversed` and `Polyline` and nothing
-else.
-
-**And the endpoints cannot be tested to decide admission. No such test exists, at any
-tolerance.** `sketch` cuts exactly **only when both of the crossing's source curves are a
-line, a circle or an arc** — and then only for a line-involved crossing or a tangency
-between them. Every other contact yields a **sampled** cut parameter: every curve/curve
-crossing (circle × circle, circle × arc, arc × arc), and every crossing involving an
-ellipse, elliptical arc, conic, spline, closed spline, fit spline or NURBS — **including
-against a plain line**. `BoundaryEdge` records neither the range nor which path produced
-it. Nor do the endpoints. A `Polyline` is a **sample of the curve**:
-its vertices lie *on* the curve. A sampled cut is the crossing of a **chord** between two
-such vertices, so as the crossing approaches a sample vertex the cut point approaches the
-curve, and its residual against the curve goes to zero. A sampled circle/circle cut has
-been measured with a normalised radial residual of **7.07e-10** — indistinguishable from
-an exact cut by any threshold. Exactly-cut endpoints and sampled ones are therefore not
-separated populations, and an endpoint-residual test is **unsound as an admission gate**:
-it is not a mistuned test, it is a quantity that does not answer the question asked of it.
+**No residual test on a fragment's endpoints could stand in for the flag, at any
+tolerance.** A `Polyline` is a **sample of the curve**: its vertices lie *on*
+the curve. A sampled cut is the crossing of a **chord** between two such
+vertices, so as the crossing approaches a sample vertex the cut point approaches
+the curve, and its residual against the curve goes to zero. A sampled
+circle/circle cut has been measured with a normalised radial residual of
+**7.07e-10** — indistinguishable from an exact cut by any threshold. Exactly-cut
+endpoints and sampled ones are therefore not separated populations, and an
+endpoint-residual test is **unsound as an admission gate**: it is not a mistuned
+test, it is a quantity that does not answer the question asked of it.
 
 **The test is one-sided, and that asymmetry is the whole of what it is good for:**
 
 | observation | what it proves |
 |---|---|
-| the residual is **large** | the endpoint does **not** lie on the source curve, so the cut cannot have been computed exactly. A fragment claiming exactness here is **wrong**. **Sound.** |
+| the residual is **large** | the endpoint does **not** lie where the range says it does, so the cut cannot have been computed exactly. A fragment claiming exactness here is **wrong**. **Sound.** |
 | the residual is **small** | **nothing.** A sampled cut can lie arbitrarily close to the curve. **Unsound as an accept.** |
 
 **A large residual is proof of inexactness. A small residual is proof of nothing.** A
 check on it may therefore only ever **reject** a fragment; it may never admit one.
 
-**So decad does not test for admission. It rejects.** A `Partial` fragment records
-only where its endpoints *are* the curve — a fragment of a `*Line`, whose two endpoints
-determine the segment exactly, whatever produced them, because a chord of a line is the
-line. A
-`Partial` fragment of **anything else** — circle, arc, ellipse, elliptical arc,
-conic, spline, closed spline, fit spline, NURBS — is `ErrUnrecordableProfile` (§12).
-No test, no exception, no tolerance. It is never recorded as the whole entity, which
-would be a different region than the caller drew, and never recorded from a trim
-decad cannot know.
+**So admission of a `Partial` fragment is decided by `TExact`, and by nothing
+else.** `sketch` computed the arrangement that produced the fragment, so it is
+the only party that knows the range and the only party that knows how it was
+obtained. The range it computed **is** the trim; decad neither second-guesses
+the flag nor re-derives it — re-deriving a 2D answer is what §7 forbids.
 
-**The consequence is severe, and it is not a corner case.** A `Partial` fragment
-exists wherever a bare crossing splits a curve, so decad can record **no profile in
-which any curve is cut**: not a circle crossed by a rectangle, not a circle crossed
-by a circle, not an arc trimmed at a crossing, not an ellipse cut by anything. A
-circle cut by a rectangle edge is among the most ordinary sketches there is, and
-decad rejects it. That is a real and large hole in what decad can model, stated here
-rather than papered over: the alternative is recording a fragment decad cannot prove
-is the fragment the caller drew, which is the confidently-wrong geometry §1 exists to
-prevent.
-
-Whole (non-`Partial`) edges of every kind are unaffected: they record from the
-entity's own defining data, because there is no trim to recover.
-
-**`TStart` / `TEnd` and `TExact` together lift every fragment `sketch` can certify, and
-this is the rule decad applies once they land.** The range `sketch` computed **is** the
-trim, and `TExact` says whether that range is the exact one:
-
-- **Admission is decided by `TExact`, and by nothing else.** `sketch` computed the
-  arrangement; it is the only party that knows how a cut was produced. decad does not
-  second-guess the flag and does not re-derive it — re-deriving a 2D answer is what §7
-  forbids.
-- `TExact == false` → `ErrUnrecordableProfile` (§12). An approximate parameter range is
-  not recorded as an exact analytic fragment.
-- `TExact == true` → the fragment records: the trimmed variant of the entity's own kind,
-  built from `TStart` / `TEnd`. The circle cut by a rectangle edge records, and so does
-  every other fragment whose cut `sketch` certifies exact — whatever the entity kind, the
-  flag admits the fragment and the kind never does.
-- **A residual check is retained purely as a one-sided falsifier, never as an admission
-  gate.** If `TExact == true` and the fragment's endpoints do not lie on the source
-  entity, the flag is wrong, and decad returns `ErrUnrecordableProfile` rather than record
-  a fragment it can prove is not what it claims to be. It can only ever **reject**. It
-  never admits a fragment on its own, because a small residual proves nothing — that is
-  the asymmetry above, and re-reading it as an accept is the unsound gate it forbids.
+- `TExact == true` → the fragment records: the trimmed variant of the entity's
+  own kind, built from the entity's defining data and `TStart` / `TEnd` (the
+  table in §6.2). A circle crossed by a rectangle records.
+- `TExact == false` → `ErrUnrecordableProfile` (§12). An approximate parameter
+  range is never recorded as an exact analytic fragment, never recorded as the
+  whole entity — a different region than the caller drew — and never repaired.
+- **A residual check is retained purely as a one-sided falsifier, never as an
+  admission gate.** If `TExact == true` and evaluating the source entity at the
+  reported range does not reproduce the fragment's endpoints — the flag's own
+  stated meaning — the flag is disproven: decad returns `ErrUnrecordableProfile`
+  and the discrepancy is reported upstream as a `sketch` bug. The check can only
+  ever **reject**. It never admits a fragment on its own, because a small
+  residual proves nothing — that is the asymmetry above, and re-reading it as an
+  accept is the unsound gate it forbids.
 
 **`TExact` is per-fragment, and it is per-fragment because exactness is a property of the
 crossing that produced the fragment — of *both* its source curves — never of the entity
@@ -288,15 +280,25 @@ is not one either: a line crossing an *ellipse*, a conic, a spline or a NURBS is
 because the other source is not a line, a circle or an arc. decad reads the flag on the
 fragment it is recording, and derives it from nothing.
 
-**So the lift reaches exactly as far as `sketch`'s exact kernel does, and no further.**
-What records is a circle or arc fragment cut against a line, and a fragment of a tangency
+**Whole (non-`Partial`) edges never consult `TExact`.** A whole edge records
+from the entity's own defining data — there is no trim to recover, so the flag
+answers a question decad is not asking. The distinction bites on exactly one
+kind: a whole `*EllipticalArc` edge reads `TExact == false`, because the arc's
+endpoints are pinned to sketch points that lie on the parametric ellipse only
+within solver tolerance, so evaluating the entity at its domain ends misses the
+polyline ends by that tolerance. That is a fact about the pinning, **not
+topology distrust**, and it must not affect whole-edge recording: an implementer
+who "helpfully" gates whole edges on `TExact` would reject every whole
+elliptical-arc boundary that the entity's own data records exactly.
+
+**What records reaches exactly as far as `sketch`'s exact kernel does, and no further.**
+That is a circle or arc fragment cut against a line, and a fragment of a tangency
 among lines, circles and arcs. A fragment cut by anything else — an ellipse, elliptical
 arc, conic, spline, closed spline, fit spline or NURBS on either side of the crossing, and
-every curve/curve crossing — carries `TExact == false` and stays `ErrUnrecordableProfile`.
+every curve/curve crossing — carries `TExact == false` and is `ErrUnrecordableProfile`.
 That is not decad declining to record it; it is `sketch` reporting that the parameter is
-sampled, and decad recording no fragment on a range it was told is approximate. The hole
-narrows to the profiles `sketch` cuts exactly; widening it further is an upstream question
-about the arrangement, not an API question here.
+sampled, and decad recording no fragment on a range it was told is approximate. Widening
+that set is an upstream question about the arrangement, not an API question here.
 
 ### 5.4 Exactness — the load-bearing type
 
@@ -338,9 +340,6 @@ dimensionless (§5.2) — so the bound is `Dimensionless` (`units.Scalar`), and 
 it as a length would be exactly the wrong-`Kind` coercion §5.1 forbids: it would
 hand a millimetre tolerance a quantity that is not a length. §10.1's gate is stated
 over both, and needs no exponent to be.
-
-`Dimensionless` exists in `sketch/units` today, so the direction bound is **not**
-blocked by §5.3.
 
 Every measurement returns one:
 
@@ -542,13 +541,14 @@ type Recipe struct {
 type StepRef int
 
 type Step struct {
-    Op        OpKind          // Extrude / Revolve / Union / Cut / Intersect / Fillet / Chamfer / Shell
+    Op        OpKind          // Extrude / Revolve / Union / Cut / Intersect / Fillet / Chamfer / Shell / Placed
     Inputs    []StepRef       // the bodies this step depends on. Cut is [target, tool].
     Profile   ProfileRecord   // Extrude / Revolve — decad's own analytic 2D record of the region
     Plane     PlaneRecord     // Extrude / Revolve — the sketch plane; lifts Profile into world space
     Extent    Extent          // Extrude
     Angular   AngularExtent   // Revolve
     Axis      Axis            // Revolve
+    Placement TransformRecord // Placed — the rigid motion, recorded as vectors
     Selectors []Selector      // Fillet / Chamfer / Shell — the edge / face queries, unresolved
     Opts      StepOpts        // per-op options; nil when the op takes none
     Values    []units.Value   // radii, distances, thicknesses
@@ -567,11 +567,13 @@ moment the feature is called:
   which no decoder can reconstruct. And its `BoundaryEdge.Polyline` is a **densified
   sample** — a tessellation, which §2 says a `Recipe` never names. (Its first and
   last points are the edge's start and end. They are the one thing decad reads from
-  it, and only on a `Partial` `*Line`, where they are points of the line itself —
-  see below.)
+  it, and only to check — they are what §5.3's falsifier tests the recorded range
+  against — never to record; see below.)
 - `r3.Frame`'s fields are unexported: it marshals to `{}`, so a `Step` that stored
   one would silently drop the plane — the single field without which the step is
-  incomplete.
+  incomplete. `r3.Transform`'s fields are unexported on the same terms, so a
+  placement is recorded as a `TransformRecord`, read out through
+  `Transform.Basis()` and `Transform.Translation()`.
 
 So decad **converts, it does not reference**:
 
@@ -582,6 +584,16 @@ So decad **converts, it does not reference**:
 type PlaneRecord struct {
     Origin r3.Vec // millimetres (§5.2)
     U, V   r3.Vec // the in-plane axes: the (u, v) a Point2 below is expressed in
+}
+
+// TransformRecord is a rigid placement, as four vectors: it survives encoding,
+// which an r3.Transform does not. EX, EY, EZ are the transformed world basis
+// (r3.Transform.Basis()), T the translation. r3.FromBasis rebuilds the
+// transform, snapping encoding drift straight and rejecting anything that is
+// not an isometry.
+type TransformRecord struct {
+    EX, EY, EZ r3.Vec // the images of the world axes — dimensionless directions
+    T          r3.Vec // the translation, millimetres (§5.2)
 }
 
 // Point2 is a plane-local coordinate, a length in millimetres — §5.2's carve-out
@@ -608,9 +620,10 @@ type LoopRecord struct {
 // A variant records exactly the defining data of the curve the edge IS — the
 // fields of the source entity's own geom value, in plane-local Point2 — so an
 // evaluator reconstitutes the curve through sketch/geom and never re-derives it
-// (§7). The variant is chosen by the entity: a whole edge records its entity's
-// own data, and the only fragment decad records is a fragment of a line, which
-// is a line (see the table below).
+// (§7). The variant is chosen by the entity and by whether the edge is whole:
+// a whole edge records its entity's own data, and a Partial fragment sketch
+// certifies exact (TExact, §5.3) records the trimmed variant of the same kind,
+// its range from TStart/TEnd (see the table below).
 type CurveSegment interface{ curveSegment() }
 
 // The five analytic kinds.
@@ -680,59 +693,64 @@ spline, NURBS — because `SplineSeg` covers `Spline` and `NURBS` alike. That is
 `sketch`'s entity vocabulary exactly and entirely, and `sketch` puts every one of
 those kinds on a profile boundary: the four open free-form curves as boundary edges,
 the closed spline as a closed curve bounding a region on its own. So **every entity
-`sketch` can put on a boundary has a record** — as a whole edge. What has no record
-is a `Partial` fragment of a curve, which is a limit of `BoundaryEdge`, not of this
-vocabulary (§5.3), and such a profile is rejected rather than recorded lossily. A
+`sketch` can put on a boundary has a record** — whole, and trimmed: a `Partial`
+fragment records through the same nine variants, as the trimmed variant of its
+entity's kind with the certified range, so the vocabulary needs no
+fragment-specific kinds. What has no record is a `Partial` fragment whose cut
+`sketch` samples — `TExact == false` (§5.3) — and such a profile is rejected
+rather than recorded lossily. A
 new entity kind upstream needs a new `CurveSegment` variant before decad accepts a
 profile that uses it; there is no fallback to a sample.
 
-**A whole edge records its entity. A `Partial` fragment records only if it is a
-fragment of a line.** `Partial` is a bare bool — it says *that* the edge is a
-sub-range of its `Entity`, never which sub-range — and the entity holds the
-parameters of the **whole** curve, so a fragment's trim survives nowhere but its two
-endpoints. Two endpoints determine a fragment of a *line*: a chord of a line is the
-line. They determine a fragment of no other curve, and no test on them can recover
-one (§5.3).
+**A whole edge records its entity. A `Partial` fragment records exactly when
+`sketch` certifies its cut — `TExact == true` — and it records from
+`TStart` / `TEnd`.** The range is `sketch`'s answer — normalized `t` in the
+entity's natural direction, `TStart < TEnd`, never wrapping (§5.3) — and the
+trimmed variant is built from the entity's own defining data plus that range.
+Admission never depends on the entity's kind: the flag admits the fragment, and
+the kind only selects which variant records it. Whole edges never consult the
+flag (§5.3).
 
-| `BoundaryEdge.Entity` | whole edge | `Partial` fragment |
+| `BoundaryEdge.Entity` | whole edge | `Partial` fragment — records when `TExact`; else **`ErrUnrecordableProfile`** (§12) |
 |---|---|---|
-| `*Line` | `LineSeg` | `LineSeg` — the fragment's own two endpoints. **Records**: they determine the segment exactly, whatever produced them |
-| `*Circle` | `CircleSeg` | **`ErrUnrecordableProfile`** (§12) |
-| `*Arc` | `ArcSeg` — the entity's own angles | **`ErrUnrecordableProfile`** |
-| `*Ellipse` | `EllipseSeg` | **`ErrUnrecordableProfile`** |
-| `*EllipticalArc` | `EllipticalArcSeg` — the entity's own range | **`ErrUnrecordableProfile`** |
-| the free-form five | the matching free-form variant, `TStart`/`TEnd` spanning the full domain | **`ErrUnrecordableProfile`** |
+| `*Line` | `LineSeg` | `LineSeg` — the line, trimmed to `TStart`/`TEnd` |
+| `*Circle` | `CircleSeg` | `ArcSeg` — the circle's center and radius; the angles `2π·TStart` / `2π·TEnd` from +x |
+| `*Arc` | `ArcSeg` — the entity's own angles | `ArcSeg` — the entity's own angles, narrowed to the fragment's fraction of the sweep |
+| `*Ellipse` | `EllipseSeg` | `EllipticalArcSeg` — the ellipse's axes and frame; the eccentric range `2π·TStart` / `2π·TEnd` |
+| `*EllipticalArc` | `EllipticalArcSeg` — the entity's own range | `EllipticalArcSeg` — the entity's own range, narrowed to the fragment's fraction of the sweep |
+| the free-form five | the matching free-form variant, `TStart`/`TEnd` spanning the full domain | the matching free-form variant, `TStart`/`TEnd` the fragment's range |
 
-**One row records a fragment, and the other five reject one.** No test, no
-tolerance, no exception: an endpoint's proximity to the source curve says nothing
-about whether the cut that produced it was exact, because `sketch`'s polyline
-vertices are samples that lie *on* the curve, so a sampled cut near a sample vertex
-lies on the curve too (§5.3). A fragment of a curve is `ErrUnrecordableProfile`
-however it was cut — a circle cut by a rectangle edge as surely as a circle cut by a
-circle. This is what the `BoundaryEdge` blocker of §5.3 costs, and §5.3 states the
-size of it.
-
-A free-form fragment would fail a second way regardless: inverting a point to a
-spline, NURBS, fit-spline or conic parameter is a **projection** — a 2D root-find,
-which is a 2D answer, and decad re-derives none (§7).
+**Every row records a certified fragment, and every row rejects a sampled one.**
+The per-row parameter mapping — from `sketch`'s normalized `t` to each variant's
+own parameter — is `sketch`'s published per-type contract
+(`geom.BoundaryEdge`), applied mechanically; nothing is solved for, and no
+point is ever inverted to a parameter — the range is handed over, not derived
+(§7). Under `sketch`'s exact kernel the fragments that carry `TExact == true`
+are those of a line, a circle or an arc cut within that family (§5.3), so those
+are the rows the true column reaches today: a circle cut by a rectangle edge
+records, and a circle cut by another circle — or an ellipse cut by anything,
+including the line fragments that crossing leaves on the rectangle — is
+`ErrUnrecordableProfile`, because its range is sampled.
 
 Conversion is mechanical, and it happens once, in the feature call. decad walks
 `p.Outer` and each loop of `p.Holes` and reads each `BoundaryEdge`'s source `Entity`
-for its defining parameters. `Partial` selects the row of the table above: on a
-`*Line` it takes the fragment's own endpoints, on anything else it rejects the
-profile. `Reversed` is **baked into the segment** as its own orientation — endpoints
-swapped, `CCW` flipped, `TStart` and `TEnd` swapped, so `TStart > TEnd` says the
-segment runs against the curve's natural sense. A `LoopRecord` therefore carries no
-residual flags and no back-reference.
+for its defining parameters. `Partial` selects the column of the table above, and
+on a fragment `TExact` decides admission (§5.3). `Reversed` is **baked into the
+segment** as its own orientation — endpoints swapped, `CCW` flipped, `TStart` and
+`TEnd` swapped, so `TStart > TEnd` says the segment runs against the curve's
+natural sense; `sketch` hands the range over in natural direction, so the swap is
+decad's record of the walk, composed with that range. A `LoopRecord` therefore
+carries no residual flags and no back-reference.
 
 **What decad reads of `BoundaryEdge.Polyline`, and nothing more: `Polyline[0]` and
-`Polyline[len-1]`, on a `Partial` `*Line` and nowhere else.** Those two points are
-that fragment's start and end, and on a line they are points of the line itself — no
-sampled content reaches a `Recipe` through them, which is why §2's "a `Recipe` never
-names a tessellation" holds without qualification. On every other entity a `Partial`
-fragment is rejected, so its `Polyline` is not read at all; on a whole edge the
-entity's own data is the record and the `Polyline` is never read either. No interior
-point of a `Polyline` is ever read, and no `Polyline` enters a `Step`.
+`Polyline[len-1]`, on the `Partial` fragments it admits, as the observations
+§5.3's falsifier tests the certified range against.** They never enter a `Step`:
+every recorded value is the entity's own defining data and the certified range,
+so no sampled content reaches a `Recipe` through them, which is why §2's "a
+`Recipe` never names a tessellation" holds without qualification. On a rejected
+fragment the `Polyline` is not read at all; on a whole edge the entity's own data
+is the record and the `Polyline` is never read either. No interior point of a
+`Polyline` is ever read, and no `Polyline` enters a `Step`.
 
 **Serializability is a rule, not an aspiration.** Every type reachable from a
 `Recipe` MUST be encodable and decodable: exported fields only; no foreign
@@ -744,8 +762,11 @@ the tag. That is precisely what decad cannot do for `sketch.Entity`, which is wh
 the entity never enters a `Step`. The rule is transitive, so it reaches the query
 types too (§9): an `EdgeQuery` / `FaceQuery` is recorded content — its predicates
 and its cardinality assertion — and a predicate that cannot be encoded does not
-ship, exactly as an option that cannot be recorded does not. The one thing
-outstanding is a text form for `units.Value`, which belongs upstream (§5.3).
+ship, exactly as an option that cannot be recorded does not. `units.Value`
+carries its own text form — `"10 mm"`, the magnitude and the unit's registered
+symbol, an exact bit-for-bit round trip — and refuses to write what cannot be
+read back: an unnamed or overflowed kind, a non-finite magnitude. Every quantity
+a `Step` records therefore encodes.
 
 **A `Step` holds no `*Body` either.** A body reference in a `Step` is a `StepRef` —
 the step that produced the body — and that is what makes `Inputs` a graph. The
@@ -779,8 +800,8 @@ ambiguity, and `Inputs` is what makes the recipe a graph rather than a list of
 unrelated features. `Inputs` records every body a step **depends on**, which is not
 always a body it consumes:
 
-- `Fillet`, `Chamfer` and `Shell` depend on one — the body they modify, which they
-  consume;
+- `Fillet`, `Chamfer`, `Shell` and `Placed` depend on one — the body they modify
+  or place, which they consume;
 - the booleans depend on two, and consume both. **`Cut`'s `Inputs` order is
   `[target, tool]`** — the two roles are asymmetric and order is the only thing that
   distinguishes them;
@@ -875,7 +896,7 @@ exactness like everything else.
 // Interference: the two bodies overlap, and by how much.
 type Interference struct {
     A, B   *Body
-    Volume Measurement // the overlap volume; needs the Volume kind — see §5.3
+    Volume Measurement // the overlap volume, Kind Volume
 }
 
 // Clearance: the two bodies do not overlap, and how close they come.
@@ -959,55 +980,56 @@ doc := decad.New()
 body, err := doc.Extrude(s, prof, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 ```
 
-**A feature takes the sketch and the profile, in that order.** A `sketch.Profile`
-is pure plane-local 2D geometry — an outer loop and its holes in `(u, v)` — and it
-holds no back-reference to the sketch it came from, so it names no plane and no
-frame. It cannot say *where in space* it is. The sketch can: `s.Plane()` is the
-construction plane the sketch is drawn on, and `s.Plane().Frame()` is the
-orthonormal `r3.Frame` that lifts the plane-local profile into world space. A
-`Step` records that frame as a `PlaneRecord` — origin, u, v — because an `r3.Frame`
-does not survive encoding (§6.2), and the frame is what the profile normal — the
-sense `Direction.Along` means for a linear extent (§8.1) — is read from.
+**A feature takes the sketch and the profile, in that order.** A
+`sketch.Profile`'s geometry is pure plane-local 2D — an outer loop and its holes
+in `(u, v)` — so the profile alone does not place the region in space: the plane
+is the sketch's. `s.Plane()` is the construction plane the sketch is drawn on,
+and `s.Plane().Frame()` is the orthonormal `r3.Frame` that lifts the plane-local
+profile into world space. A `Step` records that frame as a `PlaneRecord` —
+origin, u, v — because an `r3.Frame` does not survive encoding (§6.2), and the
+frame is what the profile normal — the sense `Direction.Along` means for a
+linear extent (§8.1) — is read from.
 
-**`p` MUST be a profile of `s`, and the test is *entity membership*.** Every
-`BoundaryEdge.Entity` of `p.Outer` and of every loop of `p.Holes` — and every
-element of `p.Entities` — MUST be a member of `s.Entities()`. A profile that fails
-that test is `ErrForeignProfile` (§12): it is expressed in a different plane's
-coordinates, so lifting it through `s`'s frame would place it silently,
-confidently, in the wrong place.
+**`p` MUST be a profile of `s`, and `sketch` answers that too:
+`Profile.Sketch()` is the sketch the profile was built from.** A
+`*sketch.Profile` is freshly allocated by every `Profiles()` call, so pointer
+membership in `s.Profiles()` could never establish provenance — it would reject
+the caller's own profile, including the one in the example above. The
+back-reference is `sketch`'s own answer, and decad consumes it. A profile whose
+`Sketch()` is not `s` is `ErrForeignProfile` (§12): it is expressed in a
+different plane's coordinates, so lifting it through `s`'s frame would place it
+silently, confidently, in the wrong place.
 
-The test is entity membership and **not** pointer membership in `s.Profiles()`,
-because `sketch.Sketch.Profiles()` **recomputes and reallocates** the profiles on
-every call: the `*sketch.Profile` a caller holds is never pointer-equal to anything
-a later `Profiles()` returns, so a pointer-membership rule would reject the caller's
-own profile — including the one in the example above. The `Entity` pointers are the
-stable identity: they are the sketch's own entities, and they survive every
-`Profiles()` call.
-
-**The honest limit of the check: it cannot detect a *stale* profile.** A profile
-built before a later `Solve` still holds entities that belong to `s`, so it passes —
-but its geometry is the pre-solve geometry. The caller MUST pass a profile from the
-current solve. A profile→sketch back-reference, or a generation counter, would make
-the check total; both belong upstream in `sketch`, and neither is a condition of
-shipping — this is a limitation of the check, not a blocker (§5.3 lists the three
-blockers, and this is not one of them).
+**A *stale* profile is detected, and rejected.** A profile is a snapshot: one
+built before a later `Solve`, parameter edit or geometry change still holds
+entities that belong to `s`, but its boundary is the old geometry, and sweeping
+it would silently build the wrong part. `sketch` answers this too:
+`Profile.Revision()` is the value of `Sketch.Revision()` — a fingerprint of
+every input `Profiles()` reads, compared for equality only — at the moment the
+profile was built, and `Profile.IsStale()` reports whether the sketch has
+changed since. A feature handed a stale profile is `ErrStaleProfile` (§12); the
+caller rebuilds with `s.Profiles()` and passes a current one.
 
 `doc.Extrude` REJECTS a `sketch.Profile` whose `Valid` is false — a
 self-intersecting or degenerate region is never silently swept. `Profile.Valid` is
 the whole of decad's *validity* gate, and it is `sketch`'s answer, not one decad
 recomputes. The one further rejection is not a validity judgement at all: a valid
 profile whose boundary decad cannot record exactly — a profile containing a
-`Partial` fragment of any curve, whose trim range `sketch` does not expose (§5.3) —
+`Partial` fragment whose cut `sketch` reports sampled, `TExact == false`, or one
+whose certified range §5.3's falsifier disproves —
 is `ErrUnrecordableProfile` (§12), because a `Step` that recorded the whole curve
-where the caller drew a piece of it, or a trim decad guessed at, would be the lossy
-record §6.2 forbids.
+where the caller drew a piece of it, or an approximate range as an exact trim,
+would be the lossy record §6.2 forbids.
 
-**The seam permits exactly one read-out, and no test.** Beyond an edge's source
-`Entity`, decad reads the two endpoints of a `Partial` `*Line` — `Polyline[0]` and
-`Polyline[len-1]` (§6.2) — and nothing else. It runs no check on them and none on
-any other fragment's: an endpoint's distance from its source curve does not say
-whether the cut that produced it was exact, because `sketch`'s polyline vertices are
-samples *on* the curve (§5.3). So decad neither re-derives the trim nor infers it. A
+**The seam's read-outs are `sketch`'s answers, and its one check can only
+falsify.** Beyond an edge's source `Entity`, decad reads `Partial`, `Reversed`,
+`TStart` / `TEnd` and `TExact`, and the two `Polyline` ends of an admitted
+fragment — the observations §5.3's falsifier tests the range against (§6.2), and
+nothing else. Admission is the flag's alone: an endpoint's distance from its
+source curve does not say whether the cut that produced it was exact, because
+`sketch`'s polyline vertices are samples *on* the curve (§5.3), so the residual
+check rejects a provably wrong flag and admits nothing. decad neither re-derives
+the trim nor infers it. A
 fragment it cannot record it **rejects** — it never repairs, projects or fits a point
 `sketch` handed over, and it never solves for one.
 
@@ -1019,16 +1041,17 @@ before extruding. decad never re-derives it.
 ## 8. Features
 
 v1 vocabulary, deliberately small: **Extrude, Revolve, Union/Cut/Intersect,
-Fillet, Chamfer, Shell**. Sweep and Loft are deferred.
+Fillet, Chamfer, Shell, Placed**. Sweep and Loft are deferred.
 
 ```go
 func (d *Document) Extrude(s *sketch.Sketch, p *sketch.Profile, e Extent, opts ...ExtrudeOption) (*Body, error)
 func (d *Document) Revolve(s *sketch.Sketch, p *sketch.Profile, axis Axis, a AngularExtent, opts ...RevolveOption) (*Body, error)
 ```
 
-Both take the **sketch** as well as the profile, because a `sketch.Profile` is
-plane-local and carries no plane of its own (§7). Every entity of `p` MUST be an
-entity of `s`; a profile from another sketch is `ErrForeignProfile` (§12). decad
+Both take the **sketch** as well as the profile, because a `sketch.Profile`'s
+geometry is plane-local and the plane is the sketch's (§7). `p` MUST be a
+profile of `s` (`Profile.Sketch()`), and a current one: another sketch's profile
+is `ErrForeignProfile`, a stale one `ErrStaleProfile` (§12). decad
 reads the plane through `s.Plane()` and its frame through `s.Plane().Frame()`, and
 records the plane — as a `PlaneRecord`, and the profile as a `ProfileRecord` — in
 the `Step` (§6.2), so the recipe stays complete and holds no live sketch.
@@ -1058,18 +1081,17 @@ func (b *Body) Shell(sel FaceSelector, thickness units.Value, opts ...ShellOptio
 ```
 
 Placement is a body operation on the same terms — it retires the receiver and
-registers the placed body — and is **blocked on `r3.Transform` landing upstream**
-(§5.3):
+registers the placed body:
 
 ```go
-func (b *Body) Placed(t r3.Transform) (*Body, error) // blocked on r3.Transform (§5.3)
+func (b *Body) Placed(t r3.Transform) (*Body, error)
 ```
 
 This is the whole of the "explicit transforms" story: a body is positioned by an
-argument the caller states, never by an ambient assembly context (§4). Until
-`r3.Transform` exists, `Placed` **cannot be implemented as specified** — it is not
-in the v1 vocabulary above, and no `OpKind` records it — and decad will not
-hand-roll a transform type around the gap.
+argument the caller states — an `r3.Transform`, a rigid motion (§5.2) — never by
+an ambient assembly context (§4). The zero `Transform{}` is invalid
+(`Transform.IsValid`) and is `ErrDegenerate` (§12). The step records the motion
+as a `TransformRecord` (§6.2).
 
 ### 8.1 Extent — illegal states unrepresentable
 
@@ -1575,18 +1597,19 @@ to make that mechanical.
   (a selector carrying no cardinality assertion matched nothing), `ErrCardinality`
   (a cardinality assertion failed), `ErrForeignBody` (an operation was handed bodies
   owned by different documents, or an extent or axis named a body owned by another
-  document, §8.1), `ErrForeignProfile` (a feature was handed a profile with an
-  entity that is not an entity of the given sketch, §7), `ErrRetiredBody` (an
+  document, §8.1), `ErrForeignProfile` (a feature was handed a profile built from
+  a different sketch than the one given — `Profile.Sketch()`, §7),
+  `ErrStaleProfile` (a feature was handed a profile built before the sketch's
+  current state — `Profile.IsStale`, §7), `ErrRetiredBody` (an
   operation, or an extent, was handed a body the document has retired, §6),
   `ErrUnresolvedBody` (a `StepRef` was passed as a `BodyRef` to a feature call,
   where a live `*Body` is required, §6.2), `ErrNegativeMagnitude` (a magnitude was
   given as a negative value; magnitudes are non-negative and sense is enumerated,
   §8.1), `ErrUnrecordableProfile` (a feature was handed a profile whose boundary
-  contains a `Partial` fragment of a **curve** — circle, arc, ellipse, elliptical
-  arc, conic, spline, closed spline, fit spline or NURBS — whose trim range `sketch`
-  does not expose and decad cannot recover from the fragment's endpoints, however
-  that fragment was cut. A `Partial` fragment of a `*Line` is the one that records,
-  and a whole edge of every kind records; §5.3/§6.2),
+  contains a `Partial` fragment `sketch` could not certify — `TExact == false`,
+  its cut sampled — or one whose certified range fails §5.3's falsifier. A
+  `Partial` fragment `sketch` certifies exact records as the trimmed variant of
+  its entity's kind, and a whole edge of every kind records; §5.3/§6.2),
   `ErrNotSolid`, `ErrDegenerate`, `ErrBooleanFailed`, `ErrInvalidProfile`,
   `ErrUnitKind`.
 - **`ErrUnitKind` covers exactly the wrong-`Kind` values.** A `units.Value` whose
@@ -1621,8 +1644,7 @@ Assemblies (`Component`/`Occurrence` instancing and the DAG that comes with it),
 feature tree / timeline / rollback, sweep and loft, STEP, sheet metal, mesh import,
 GUI or view state of any kind, and Fusion code generation.
 
-The assemblies non-goal rests on a plan, not on a capability already in hand:
-interference and clearance (§10) are computed between **explicitly-placed bodies**
-— `Body.Placed(t r3.Transform)` (§8) — which needs no instancing graph. That plan
-is **gated on `r3.Transform` landing** (§5.3). Until it does, a body sits where its
-profile put it, and multi-body interference is limited to what that reaches.
+The assemblies non-goal rests on a capability in hand, not on an instancing
+graph: interference and clearance (§10) are computed between
+**explicitly-placed bodies** — `Body.Placed(t r3.Transform)` (§8) — which needs
+no `Component`/`Occurrence` machinery.

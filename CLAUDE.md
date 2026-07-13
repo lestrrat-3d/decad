@@ -13,7 +13,9 @@ models a part here and proves it sound — watertight, correct volume, no
 interference, no wall thinner than the tool — BEFORE committing to write real
 CAD software code (e.g. an Autodesk Fusion add-in). Be wrong in the cheap place.
 
-**Current state: scaffolding + an approved API design.** No public API exists yet.
+**Current state: scaffolding + an approved API design.** No public API exists
+yet, and every capability the design consumes exists in its dependencies —
+there is no open dependency gap.
 `docs/api-design.md` is the contract for the one that lands: a recipe/evaluator
 split, a B-rep-shaped surface, immediate-mode features, selectors instead of
 handles, and `Exactness` on every measurement. Read it before writing any public
@@ -21,16 +23,18 @@ type.
 
 ## Hard rules
 
-- **Layering is `decad -> sketch -> r3`.** NEVER import decad from either; they
-  do not know it exists.
+- **Layering is `decad -> sketch -> r3 -> units`.** decad imports all three
+  directly. NEVER import decad from any of them; they do not know it exists.
 - **NEVER re-derive a 2D answer.** Profile closure, DOF, constraint conflicts,
   sketch validity, an intersection, a cut parameter, a projection onto a curve →
-  ask `sketch`, consume its answer. Where `sketch`'s answer is not enough to record
-  the input exactly — a `Partial` fragment of a curve, whose trim range
-  `BoundaryEdge` does not expose (`docs/api-design.md` §5.3) — decad **rejects**.
-  It never repairs, projects, fits, or infers the missing answer.
+  ask `sketch`, consume its answer. Where `sketch` reports its own answer
+  approximate — a `Partial` fragment whose cut is sampled, `BoundaryEdge.TExact`
+  false (`docs/api-design.md` §5.3) — decad **rejects**. It never repairs,
+  projects, fits, or infers the exact answer. A whole (non-`Partial`) edge
+  records from the entity's own data and never consults `TExact`.
 - **A decad-side check may only FALSIFY an upstream claim, never bless one.**
-  Admission is decided by what `sketch` says, never by a test decad runs on the
+  Admission is decided by what `sketch` says — `BoundaryEdge.TExact` for a
+  `Partial` fragment — never by a test decad runs on the
   geometry it was handed. A residual against a source curve is admissible in exactly
   one direction: **large ⇒ the claim is disproven ⇒ reject**; **small ⇒ proves
   nothing** — a sampled cut can lie arbitrarily close to the curve, so a small
@@ -57,7 +61,12 @@ type.
   Neither is a licence for a bare float anywhere else.
 - **NEVER add a `go.mod` module without recording the decision here.** Approved:
   - `github.com/lestrrat-3d/sketch` — parametric 2D constraint engine.
-  - `github.com/lestrrat-3d/r3` — 3D coordinate math (`Vec`, `Frame`).
+  - `github.com/lestrrat-3d/r3` — 3D coordinate math (`Vec`, `Frame`,
+    `Transform`).
+  - `github.com/lestrrat-3d/units` — typed quantities (`Value`, `Kind`).
+    Direct: decad's `Measurement` and `Recipe` quantities are `units.Value`.
+    It is the same module `sketch` uses for its dimensions (`sketch` has no
+    in-tree units package), so there is no parallel unit system to reconcile.
   - `github.com/lestrrat-go/option/v3` — functional options (house library). Used
     by feature options.
   - `github.com/stretchr/testify/require` — assertions, **test code only**.
@@ -72,7 +81,7 @@ type.
 |---|---|
 | `docs/api-design.md` | **The public API contract.** Recipe/evaluator split, forward-compat invariants, feature + selector + verification surface. |
 | `doc.go` | Package doc: scope + the layering contract. |
-| `wiring_test.go` | Dependency smoke test — solves a `sketch` profile, lifts it to world space via `r3.Frame`. Asserts nothing about decad. **Delete when real decad code imports both deps.** |
+| `wiring_test.go` | Dependency smoke test — solves a `sketch` profile, checks its provenance, staleness and fragment trim certification (`TExact`), lifts and places it via `r3`, round-trips a `units` quantity. Asserts nothing about decad. **Delete when real decad code imports the deps.** |
 | `.github/workflows/` | `ci.yml` (lint → test/tidy/govulncheck), `codeql.yml`. |
 
 ## Conventions
