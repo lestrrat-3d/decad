@@ -54,8 +54,11 @@ type BodyReport struct {
     Exactness         Exactness      // the weakest link across the quantities this report carries
 
     // Opt-in, expensive; nil unless the option asks AND the body is a proven
-    // solid. MinRadius alone adds a third leg: the feature must exist (below):
-    MinWallThickness  *Measurement   // WithMinWallThickness(tool) — decided against tool (§6)
+    // solid. MinWallThickness and MinRadius add a third leg: the feature must
+    // exist (below):
+    MinWallThickness  *Measurement   // WithMinWallThickness(tool) — the thinnest wall: material between
+                                     // opposing skins (§6); nil when no wall exists (below); decided
+                                     // against the tool (§6)
     Undercuts         []*Face        // WithPullDirection(v) — every entry a proven undercut: non-empty
                                      // is Violating; empty claims none exist, held to proof (§6)
     MinRadius         *Measurement   // WithMinRadius() — the tightest concave radius; nil when no
@@ -86,31 +89,35 @@ features of a solid — so each is computed only when its option asks for it
 
 Two legs — the option asked, the body a proven solid — are the whole rule
 exactly when the quantity's existence is already the precondition's: a
-boundary always has an area and a box, a region always has a volume and a
-centroid, and every valid solid has walls — its boundary encloses material,
-and the thinnest of that material is a reading every valid solid yields,
-finite and non-negative, down to the `Exact` zero of a wall pinched to
-nothing — a knife edge, a cusp — on a body that is still a proven solid: a
-genuine measured thickness (§6 decides it thin against any real tool), never
-core §4's sentinel. The zero is always a wall's, never a body's: a body flat
-through and through encloses nothing, is no proven solid, and carries no
-reading at all — the second leg already said so. `Undercuts` carries its
+boundary always has an area and a box, and a region always has a volume and a
+centroid. `Undercuts` carries its
 further question — do any exist? — in the slice itself: asked on a proven
 solid it is non-nil, every face it lists is a **proven** undercut, and
 **empty** is the answer *no face is an undercut* — an answer and not an
 absence, and an answer §6 holds to proof like any other, marking the body
 `Suspect` when the evaluator cannot give one.
-`MinRadius` alone measures a feature a valid solid may simply not have: an
-all-convex body — a plain block — has no concave radius, and no `Measurement`
-can honestly stand for *none*. Zero is core §4's sentinel reintroduced — a
-real concave radius can be arbitrarily tight, so zero is a value the quantity
-itself approaches — and an infinity is not a measurement of anything the body
-has, and turns the §2 gate vacuous. So `MinRadius` carries the existence leg
-the way the pair results below carry their preconditions — in existence: it is
-non-nil exactly when the option asks **and** the body is a proven solid **and**
-a concave feature exists. Nil with the option asked on a proven solid is not a
-question left unanswered; it is the determination *this body has no concave
-feature* — the best possible answer to the endmill question — and §6 holds the
+`MinWallThickness` and `MinRadius` each measure a feature a valid solid may
+simply not have. A wall is material between **opposing skins** — two boundary
+patches facing each other across it, read by the ball that spans them, skin
+to skin (§6) — and a body that is all edge and taper — a tetrahedron, a
+cone — has skins that everywhere meet and nowhere oppose: no wall at all, not
+a thick one. A concave radius is a feature an all-convex body — a plain
+block — does not have. For neither can a `Measurement` honestly stand for
+*none*. Zero is core §4's sentinel reintroduced: a real wall pinches to a
+genuine `Exact` zero where its skins meet at tangency — a knife edge, a
+cusp — on a body that is still a proven solid (§6 decides it thin against any
+real tool), and a real concave radius can be arbitrarily tight, so zero is a
+value each quantity itself approaches. (That zero is always a wall's, never a
+body's: a body flat through and through encloses nothing, is no proven solid,
+and carries no reading at all — the second leg already said so.) And an
+infinity is not a measurement of anything the body has, and turns the §2 gate
+vacuous. So both carry the existence leg the way the pair results below carry
+their preconditions — in existence: each is non-nil exactly when the option
+asks **and** the body is a proven solid **and** the feature exists. Nil with
+the option asked on a proven solid is not a question left unanswered; it is
+the determination *this body has no wall* — nothing exists for the tool to be
+thinner than — or *this body has no concave feature* — the best possible
+answer to the endmill question — and §6 holds the
 evaluator to proving it, marking the body `Suspect` when it cannot. Nor do the
 causes of a nil ever blur where a nil is read as an answer: which options were
 passed is the caller's own knowledge, `Status` carries validity — proven,
@@ -174,18 +181,23 @@ ask is never gated on the trustworthiness of answers they do not want. The
 `Violating` rung (§6) reads only opt-in answers and stays answerable for the
 same reason it exists: it enforces specs, an option is where a spec is stated,
 and an option left off states none. An option takes a parameter exactly when
-its question cannot be posed without one: undercuts are relative to a pull
-direction, so `WithPullDirection` takes it, and a probe-free minimum wall
-thickness is zero on any body with a sharp convex edge — thickness is read by
-the largest ball that fits the wall, and no ball fits a sharp edge — so
-`WithMinWallThickness` takes the tool as the probe (a zero tool is that same
-probe-free question, and is `ErrDegenerate`, core §12 — as is a zero pull
-direction, which poses no direction at all), which is also the
-caller's actual question (core §1: no wall thinner than the tool that has to
-cut it) — and §6 answers it: `MinWallThickness` is decided against the tool,
-and a wall proven thinner makes its body `Violating`. A minimum radius and a
+the question the caller poses states one. Undercuts are relative to a pull
+direction, so `WithPullDirection` takes it — a zero direction poses no
+direction at all, and is `ErrDegenerate` (core §12). The wall question is
+comparative, in core §1's own words — *no wall thinner than the tool that has
+to cut it* — so `WithMinWallThickness` takes the tool, and the tool is the
+**spec, never the probe**: the reading needs no probe, because a wall carries
+its own — a wall is material between opposing skins, read by the ball that
+spans it, skin to skin (§6) — so `MinWallThickness` is a fact of the body
+alone, and the tool enters only where §6 decides the reading against it: a
+wall proven thinner makes its body `Violating`. A zero tool states the one
+spec no wall can violate — no thickness is thinner than zero — a comparison
+with a single outcome, no question at all, and is `ErrDegenerate` too (core
+§12). A minimum radius and a
 minimum gap are well-posed bare, so `WithMinRadius` and `WithClearances` take
-nothing.
+nothing — and the wall *reading* is well-posed bare on the same terms, so the
+tool is not what makes it posable; it is the spec core §1's question states,
+and only a stated spec earns a verdict (below).
 
 **A parameter is a spec, and only a spec earns a verdict.** The line between an
 option the report answers and an option the report merely fills runs exactly
@@ -543,8 +555,19 @@ is no answer, trustworthy or otherwise, for the report to be silent about —
 and no verdict owed either: an option is where a spec is stated (§2), so an
 option left off poses no question for the report to fail. Everything else the
 report says by absence or emptiness is an **answer** — a decided answer, never
-an approximation of one — and the report gives three answers this way:
+an approximation of one — and the report gives four answers this way:
 
+- **A nil `MinWallThickness` on a proven solid** is the determination *no wall
+  exists* — nowhere do two of the body's skins oppose (the wall rule below),
+  so nothing exists for the tool to be thinner than. On analytic faces the
+  proof exists: which face pairs oppose across material, and whether any
+  tangency pinches a wall to zero, are closed-form facts of the surfaces, and
+  the spanning survey over them (below) is that proof. A survey that is itself
+  approximate proves nothing of the kind — a feather pinched below the chord
+  error lands inside one facet and leaves no opposing pair to find. A
+  `Faceted` body whose survey turns up no spanning pair is therefore an asked
+  question the evaluator cannot answer, and the body reads `Suspect` with
+  `MinWallThickness` nil — nothing proven wrong, nothing proven right.
 - **A nil `MinRadius` on a proven solid** is the determination *no concave
   feature exists*. On analytic faces the proof exists: convexity and curvature
   are exact facts there, and a survey over them is that proof. A survey that
@@ -578,12 +601,13 @@ an approximation of one — and the report gives three answers this way:
   travel (the table below).
 
 What the standard buys is the only reading that matters: inside a
-`Trustworthy()` report, a nil `MinRadius` is a **proven** absence, an empty
+`Trustworthy()` report, a nil `MinWallThickness` is a **proven** *no wall*, a
+nil `MinRadius` a **proven** absence, an empty
 `Undercuts` a **proven** all-clear, a pair with no `Interference` row a
 **proven** disjointness — and every body a **proven** solid (the validity rule
 below) — each as good as any `Exact` answer, because an unprovable answer
 never reaches the caller inside a `Sound` report. (On a
-`Suspect` report any of the four could be either the proven answer or the
+`Suspect` report any of the five could be either the proven answer or the
 survey that could not decide, and nothing turns on which: `Suspect` already
 says this report is not one to read answers out of.) The gate covers every
 bounded result the report carries, and what the report does not carry is
@@ -630,7 +654,9 @@ const (
   `Suspect` (nothing proven wrong and something not proven right: an answer
   `Approximate` with a `Bound` beyond the tolerance of §2, a stated spec
   straddled — the interval rule below — an asked absence left unproven, the
-  standard above: `WithMinRadius` asked and the evaluator could neither
+  standard above: `WithMinWallThickness` asked and the evaluator could
+  neither decide the wall against the tool nor prove the body has no wall,
+  `WithMinRadius` asked and the evaluator could neither
   measure a concave radius nor prove the body has none, or `WithPullDirection`
   asked and the evaluator could neither prove an undercut nor prove there is
   none — or the body's own validity left undecided, the rule just below),
@@ -705,6 +731,62 @@ const (
   nothing proven right, which is exactly the rung's meaning.
 - **`Report.Status`** is the document-level aggregate — over the bodies *and* over
   the pairwise results, which belong to no body.
+
+**A wall is material between opposing skins, and the reading needs no
+probe.** `MinWallThickness` reads the body's maximal inscribed balls — every
+ball that fits the material and can grow no further — and fit alone is not a
+wall: no ball of positive radius fits a sharp convex edge, so a bare infimum
+over fits reads zero on any body with one, and §6 would faithfully find a
+plain 100 mm cube `Violating` against a 1 mm tool — a verdict about every
+part's edges and about no part's walls. What discriminates is what a ball
+touches. A ball **spans a wall** when two of its boundary contacts are
+diametrally opposite: its diameter then runs skin to skin, and the material
+it fills is a slab between two boundary patches that face each other. The
+mid-plane ball of a 10×10×0.5 mm plate touches the two 10×10 skins at
+opposite poles — it spans, and its 0.5 mm diameter is the plate's wall —
+while a ball wedged near a cube's edge touches the two faces at points 90°
+apart: those skins meet, they do not oppose, nothing lies *between* them, and
+the ball spans nothing however small the edge starves it. In general the two
+contacts of a ball inscribed in a dihedral of angle δ sit π − δ apart, so
+opposition is the tangency limit δ → 0, and a sharp edge is the reading's
+excluded case at every angle, not at a tuned one. The cube's only spanning
+ball is its center's, touching two opposite faces 50 mm out each way: its
+reading is its own 100 mm slab, and a 1 mm tool finds nothing to violate.
+
+`MinWallThickness` is the infimum of the diameter over spanning balls,
+closed under limits: a family of balls whose contacts approach opposition as
+the balls thin contributes the diameter it converges to. That closure is the
+knife edge's zero (§1): where two skins meet at **tangency** — a wall ground
+out to nothing, a face running out tangent onto another — the balls between
+the skins thin to nothing while their contacts straighten toward opposite
+poles, and the infimum is a genuine 0 on a body that is still a proven
+solid, decided thin against any real tool by the interval rule below. An
+edge of positive dihedral contributes nothing, however acute: its contacts
+hold π − δ apart at every size, short of opposition, so a feather edge and a
+cube's edge are the same answer — *an edge, not a wall*. A caller whose spec
+is a minimum edge angle is stating a spec `WithMinWallThickness` does not
+pose, and no option states, so no verdict enforces it (§2) — the vertical
+wall's line (below), one spec over. And a body may have no wall at all: a
+regular tetrahedron's inscribed ball touches its four faces pairwise
+arccos(−1/3) ≈ 109.5° apart, no ball it admits anywhere comes nearer
+opposition, and no family closes a limit — every skin meets its neighbours
+and opposes none. The infimum is over nothing, and §1 carries that answer in
+presence: `MinWallThickness` nil, the determination *no wall exists*, held
+to proof by the absence standard above.
+
+The reading quantifies over inscribed balls, but everything it reads is the
+boundary the evaluator holds, as with the undercut survey below. On analytic
+faces the spanning survey is closed form: whether two of core §6.1's
+variants oppose across material, the ball between them, and the tangency
+that pinches a wall to zero are exact facts of the surfaces, so an analytic
+evaluator decides the reading — and the absence — outright. A `Faceted`
+evaluator surveys facet pairs whose normals carry tilt bounds (core §6.1),
+and what its survey cannot pin, its proven `Bound` must cover: a
+near-opposite pair it can neither count as a wall nor dismiss widens the
+reading's interval until it admits both answers, and the interval rule below
+does the rest — an interval that straddles the tool reads `Suspect`, the
+honest verdict on a tessellated feather whose facets really could lean
+either way.
 
 **A spec is decided on the proven interval, never on the bare `Value`.** A
 `Measurement` proves its truth lies in `[Value − Bound, Value + Bound]` (core
