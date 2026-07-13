@@ -189,10 +189,10 @@ in millimetres on exactly the same terms, and for exactly the same reason.
 Vectors carry the unit **by convention**; scalars carry it **in the type**. §5.1
 governs scalars, and this is the whole of the carve-out — a bare `float64` scalar
 quantity is still forbidden anywhere in the API. A *curve parameter* is not a
-scalar quantity: a spline's knots, weights and parameter range, and a conic's
-fullness `Rho` — the apex weight of a rational quadratic in disguise (§6.2) — are
-dimensionless indices into a parameterisation, not measurements of anything, and
-§5.1 does not reach them.
+scalar quantity: a spline's knots and weights, a recorded segment's parameter
+range (`TStart`/`TEnd`, §6.2), and a conic's fullness `Rho` — the apex weight of
+a rational quadratic in disguise (§6.2) — are dimensionless indices into a
+parameterisation, not measurements of anything, and §5.1 does not reach them.
 
 ### 5.3 The trim contract at the sketch seam
 
@@ -260,9 +260,9 @@ the only party that knows the range and the only party that knows how it was
 obtained. The range it computed **is** the trim; decad neither second-guesses
 the flag nor re-derives it — re-deriving a 2D answer is what §7 forbids.
 
-- `TExact == true` → the fragment records: the trimmed variant of the entity's
-  own kind, built from the entity's defining data and `TStart` / `TEnd` (the
-  table in §6.2). A circle crossed by a rectangle records.
+- `TExact == true` → the fragment records: the entity's own variant, built
+  from the entity's defining data and `TStart` / `TEnd` (the table in §6.2).
+  A circle crossed by a rectangle records.
 - `TExact == false` → `ErrUnrecordableProfile` (§12). An approximate parameter
   range is never recorded as an exact analytic fragment, never recorded as the
   whole entity — a different region than the caller drew — and never repaired.
@@ -625,9 +625,10 @@ type ProfileRecord struct {
     Holes []LoopRecord
 }
 
-// LoopRecord is a closed, directed boundary loop: each segment's end is the next
-// segment's start, and the last closes onto the first. A single closed segment —
-// a circle, an ellipse, a closed spline — is a loop on its own. Outer loops run
+// LoopRecord is a closed, directed boundary loop: each segment's walk — from
+// its point at TStart to its point at TEnd — ends where the next segment's walk
+// starts, and the last closes onto the first. A single closed segment — a
+// circle, an ellipse, a closed spline — is a loop on its own. Outer loops run
 // counter-clockwise in (u, v), holes clockwise.
 type LoopRecord struct {
     Segments []CurveSegment
@@ -636,35 +637,75 @@ type LoopRecord struct {
 // CurveSegment is one curve of a loop, recorded structurally — never as a
 // sample. Sealed, like Surface (§6.1).
 // A variant records exactly the defining data of the curve the edge IS — the
-// fields of the source entity's own geom value, in plane-local Point2 — so an
-// evaluator reconstitutes the curve through sketch/geom and never re-derives it
-// (§7). The variant is chosen by the entity and by whether the edge is whole:
-// a whole edge records its entity's own data, and a Partial fragment sketch
-// certifies exact (TExact, §5.3) records the trimmed variant of the same kind,
-// its range from TStart/TEnd (see the table below).
+// fields of the source entity's own geom value, verbatim, in plane-local
+// Point2 — plus the recorded range: TStart/TEnd, sketch's normalized t on the
+// entity, the full domain for a whole edge and the certified range for a
+// Partial fragment (TExact, §5.3). An evaluator reconstitutes the curve
+// through sketch/geom from the entity's own fields and trims it at the range —
+// it never re-derives either (§7). What geom DERIVES from those fields — an
+// arc's radius and angles, an elliptical arc's eccentric parameters — is never
+// recorded in their place: a derived reading re-evaluates to the entity's
+// boundary only when the entity's data happens to lie on it, and a pinned
+// endpoint need not (§5.3). One variant serves each entity kind, whole and
+// trimmed alike: the entity picks the variant, and only the range differs.
 type CurveSegment interface{ curveSegment() }
 
-// The five analytic kinds.
-type LineSeg    struct { Start, End Point2 }
-type ArcSeg     struct { Center Point2; Radius units.Value; StartAngle, EndAngle units.Value; CCW bool }
-type CircleSeg  struct { Center Point2; Radius units.Value; CCW bool }
-
-// EllipseSeg is a whole ellipse. Rx and Ry are the semi-axes along the ellipse's
-// own local x and y, and they are UNORDERED — geom.Ellipse does not enforce
-// Rx >= Ry; the axes are simply the local x and y, and Rotation is the angle of
-// that local frame. Naming them Major/Minor would oblige an implementer to
-// normalise the pair, which is re-deriving 2D geometry (§7).
-type EllipseSeg struct { Center Point2; Rx, Ry, Rotation units.Value; CCW bool }
-
-type EllipticalArcSeg struct {
-    Center               Point2
-    Rx, Ry, Rotation     units.Value // local-x / local-y semi-axes, unordered; frame angle
-    StartAngle, EndAngle units.Value // the swept range in the ECCENTRIC angle — the t of (Rx·cos t, Ry·sin t)
-    CCW                  bool
+// The five analytic kinds. Every variant's TStart/TEnd — like a spline's
+// knots and weights — is a curve parameter, not a quantity (§5.2).
+type LineSeg struct {
+    Start, End   Point2  // geom.Line: the endpoints, verbatim
+    TStart, TEnd float64 // the full domain for a whole edge
 }
 
-// The five free-form kinds. Degree, knots, weights, a conic's fullness Rho and
-// every T range are curve parameters, not quantities (§5.2): Rho is the apex
+// CircleSeg and EllipseSeg are the closed analytic kinds — a whole edge of
+// either is a LoopRecord on its own — so, like ClosedSplineSeg, they carry the
+// walk's winding in (u, v) as CCW alongside the range.
+type CircleSeg struct {
+    Center       Point2      // geom.Circle: the center —
+    Radius       units.Value // — and the radius
+    CCW          bool
+    TStart, TEnd float64 // the full period for a whole edge
+}
+
+// ArcSeg mirrors geom.Arc: three pinned points, the arc swept counter-clockwise
+// from Start to End about Center. The sweep is the entity's own definition, so
+// no field restates it. Radius and angles are geom's derived readings, never
+// fields — End is a pinned point, not "Start's radius at another angle" — so a
+// center/radius/angle record would re-evaluate to a boundary the entity's own
+// points need not lie on.
+type ArcSeg struct {
+    Center, Start, End Point2  // geom.Arc: the pinned points, verbatim
+    TStart, TEnd       float64 // the full domain for a whole edge
+}
+
+// EllipseSeg is sketch's ellipse. Rx and Ry are the semi-axes along the
+// ellipse's own local x and y, and they are UNORDERED — geom.Ellipse does not
+// enforce Rx >= Ry; the axes are simply the local x and y, and Rotation is the
+// angle of that local frame. Naming them Major/Minor would oblige an
+// implementer to normalise the pair, which is re-deriving 2D geometry (§7).
+type EllipseSeg struct {
+    Center           Point2
+    Rx, Ry, Rotation units.Value
+    CCW              bool
+    TStart, TEnd     float64 // the full period for a whole edge
+}
+
+// EllipticalArcSeg mirrors geom.EllipticalArc: the ellipse (Center, Rx, Ry,
+// Rotation — unordered, as EllipseSeg) restricted to the counter-clockwise
+// eccentric-angle sweep from Start to End. The sweep is the entity's own
+// definition, so no field restates it. Start and End are the entity's PINNED
+// points, verbatim — they lie on the parametric ellipse only within solver
+// tolerance (§5.3) — so no eccentric-angle pair can stand in for them: angles
+// re-evaluate to points ON the parametric ellipse, a different boundary than
+// the one the entity defines.
+type EllipticalArcSeg struct {
+    Center, Start, End Point2      // geom.EllipticalArc: the pinned points, verbatim
+    Rx, Ry, Rotation   units.Value // local-x / local-y semi-axes, unordered; frame angle
+    TStart, TEnd       float64     // the full domain for a whole edge
+}
+
+// The five free-form kinds. Degree, knots and weights are curve parameters on
+// the same terms as every range (§5.2); a conic's fullness Rho is the apex
 // weight w = Rho/(1-Rho) of a rational quadratic in disguise, of exactly the
 // same class as a NURBS weight.
 
@@ -712,9 +753,9 @@ spline, NURBS — because `SplineSeg` covers `Spline` and `NURBS` alike. That is
 those kinds on a profile boundary: the four open free-form curves as boundary edges,
 the closed spline as a closed curve bounding a region on its own. So **every entity
 `sketch` can put on a boundary has a record** — whole, and trimmed: a `Partial`
-fragment records through the same nine variants, as the trimmed variant of its
-entity's kind with the certified range, so the vocabulary needs no
-fragment-specific kinds. What has no record is a `Partial` fragment whose cut
+fragment records through the same nine variants — its entity's own variant,
+with the certified range — so the vocabulary needs no fragment-specific
+kinds. What has no record is a `Partial` fragment whose cut
 `sketch` samples — `TExact == false` (§5.3) — and such a profile is rejected
 rather than recorded lossily. A
 new entity kind upstream needs a new `CurveSegment` variant before decad accepts a
@@ -724,26 +765,27 @@ profile that uses it; there is no fallback to a sample.
 `sketch` certifies its cut — `TExact == true` — and it records from
 `TStart` / `TEnd`.** The range is `sketch`'s answer — normalized `t` in the
 entity's natural direction, `TStart < TEnd`, never wrapping (§5.3) — and the
-trimmed variant is built from the entity's own defining data plus that range.
-Admission never depends on the entity's kind: the flag admits the fragment, and
-the kind only selects which variant records it. Whole edges never consult the
-flag (§5.3).
+fragment's record is the entity's own defining data plus that range: the same
+variant a whole edge records, narrowed. Admission never depends on the
+entity's kind: the flag admits the fragment, and the kind only selects which
+variant records it. Whole edges never consult the flag (§5.3).
 
 | `BoundaryEdge.Entity` | whole edge | `Partial` fragment — records when `TExact`; else **`ErrUnrecordableProfile`** (§12) |
 |---|---|---|
-| `*Line` | `LineSeg` | `LineSeg` — the line, trimmed to `TStart`/`TEnd` |
-| `*Circle` | `CircleSeg` | `ArcSeg` — the circle's center and radius; the angles `2π·TStart` / `2π·TEnd` from +x |
-| `*Arc` | `ArcSeg` — the entity's own angles | `ArcSeg` — the entity's own angles, narrowed to the fragment's fraction of the sweep |
-| `*Ellipse` | `EllipseSeg` | `EllipticalArcSeg` — the ellipse's axes and frame; the eccentric range `2π·TStart` / `2π·TEnd` |
-| `*EllipticalArc` | `EllipticalArcSeg` — the entity's own range | `EllipticalArcSeg` — the entity's own range, narrowed to the fragment's fraction of the sweep |
+| `*Line` | `LineSeg` — the entity's endpoints; the full domain | `LineSeg` — the same endpoints; the certified range |
+| `*Circle` | `CircleSeg` — the entity's center and radius; the full period | `CircleSeg` — the same; the certified range |
+| `*Arc` | `ArcSeg` — the entity's pinned points; the full domain | `ArcSeg` — the same points; the certified range |
+| `*Ellipse` | `EllipseSeg` — the entity's axes and frame; the full period | `EllipseSeg` — the same; the certified range |
+| `*EllipticalArc` | `EllipticalArcSeg` — the entity's pinned points, axes and frame; the full domain | `EllipticalArcSeg` — the same; the certified range |
 | the free-form five | the matching free-form variant, `TStart`/`TEnd` spanning the full domain | the matching free-form variant, `TStart`/`TEnd` the fragment's range |
 
 **Every row records a certified fragment, and every row rejects a sampled one.**
-The per-row parameter mapping — from `sketch`'s normalized `t` to each variant's
-own parameter — is `sketch`'s published per-type contract
-(`geom.BoundaryEdge`), applied mechanically; nothing is solved for, and no
-point is ever inverted to a parameter — the range is handed over, not derived
-(§7). Under `sketch`'s exact kernel the fragments that carry `TExact == true`
+Every row records the entity's fields verbatim, and the two columns differ only
+in the range. There is no per-row parameter mapping to apply: every variant
+records `sketch`'s normalized `t` itself — `geom.BoundaryEdge`'s published
+contract — so the range is handed over, never converted; nothing is solved
+for, no point is evaluated from a parameter, and no point is ever inverted to
+one (§7). Under `sketch`'s exact kernel the fragments that carry `TExact == true`
 are those of a line, a circle or an arc cut within that family (§5.3), so those
 are the rows the true column reaches today: a circle cut by a rectangle edge
 records, and a circle cut by another circle — or an ellipse cut by anything,
@@ -752,13 +794,16 @@ including the line fragments that crossing leaves on the rectangle — is
 
 Conversion is mechanical, and it happens once, in the feature call. decad walks
 `p.Outer` and each loop of `p.Holes` and reads each `BoundaryEdge`'s source `Entity`
-for its defining parameters. `Partial` selects the column of the table above, and
+for its defining fields. `Partial` selects the column of the table above, and
 on a fragment `TExact` decides admission (§5.3). `Reversed` is **baked into the
-segment** as its own orientation — endpoints swapped, `CCW` flipped, `TStart` and
-`TEnd` swapped, so `TStart > TEnd` says the segment runs against the curve's
-natural sense; `sketch` hands the range over in natural direction, so the swap is
-decad's record of the walk, composed with that range. A `LoopRecord` therefore
-carries no residual flags and no back-reference.
+segment** as the order of its range — `TStart` and `TEnd` swapped, so
+`TStart > TEnd` says the segment runs against the curve's natural sense, and a
+closed kind's `CCW` flips with it; `sketch` hands the range over in natural
+direction, so the swap is decad's record of the walk, composed with that range.
+The entity's fields are never reordered: a walked-backwards line still records
+its entity's `Start` and `End` as the entity states them, and the walk's own
+endpoints are read off the range. A `LoopRecord` therefore carries no residual
+flags and no back-reference.
 
 **What decad reads of `BoundaryEdge.Polyline`, and nothing more: `Polyline[0]` and
 `Polyline[len-1]`, on the `Partial` fragments it admits, as the observations
@@ -1765,8 +1810,9 @@ to make that mechanical.
   §8.1), `ErrUnrecordableProfile` (a feature was handed a profile whose boundary
   contains a `Partial` fragment `sketch` could not certify — `TExact == false`,
   its cut sampled — or one whose certified range fails §5.3's falsifier. A
-  `Partial` fragment `sketch` certifies exact records as the trimmed variant of
-  its entity's kind, and a whole edge of every kind records; §5.3/§6.2),
+  `Partial` fragment `sketch` certifies exact records as its entity's own
+  variant with the certified range, and a whole edge of every kind records;
+  §5.3/§6.2),
   `ErrNotSolid`, `ErrDegenerate`, `ErrBooleanFailed`, `ErrInvalidProfile`,
   `ErrUnitKind`.
 - **`ErrUnitKind` covers exactly the wrong-`Kind` values.** A `units.Value` whose
