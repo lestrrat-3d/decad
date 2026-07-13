@@ -89,14 +89,17 @@ exactly when the quantity's existence is already the precondition's: a
 boundary always has an area and a box, a region always has a volume and a
 centroid, and every valid solid has walls — its boundary encloses material,
 and the thinnest of that material is a reading every valid solid yields,
-finite and non-negative, down to the `Exact` zero of a degenerate flat body,
-which is a genuine measured thickness (§6 decides it thin against any real
-tool), never core §4's sentinel. `Undercuts` carries its further question — do
-any exist? — in the slice itself: asked on a proven solid it is non-nil, every
-face it lists is a **proven** undercut, and **empty** is the answer *no face
-is an undercut* — an answer and not an absence, and an answer §6 holds to
-proof like any other, marking the body `Suspect` when the evaluator cannot
-give one.
+finite and non-negative, down to the `Exact` zero of a wall pinched to
+nothing — a knife edge, a cusp — on a body that is still a proven solid: a
+genuine measured thickness (§6 decides it thin against any real tool), never
+core §4's sentinel. The zero is always a wall's, never a body's: a body flat
+through and through encloses nothing, is no proven solid, and carries no
+reading at all — the second leg already said so. `Undercuts` carries its
+further question — do any exist? — in the slice itself: asked on a proven
+solid it is non-nil, every face it lists is a **proven** undercut, and
+**empty** is the answer *no face is an undercut* — an answer and not an
+absence, and an answer §6 holds to proof like any other, marking the body
+`Suspect` when the evaluator cannot give one.
 `MinRadius` alone measures a feature a valid solid may simply not have: an
 all-convex body — a plain block — has no concave radius, and no `Measurement`
 can honestly stand for *none*. Zero is core §4's sentinel reintroduced — a
@@ -404,33 +407,49 @@ Three things follow, and all three are rules:
   measure the value need not reach, would loosen its gate by every unfilled
   decade. That would be an absolute threshold wearing a ratio's clothes,
   judging a volume against the body rather than against the volume itself.
-- **At and below the noise floor the gate becomes absolute.** A zero clearance, or
-  the volume of a degenerate body, has `|Value|` at or under `Quantum`, and a ratio
+- **At and below the noise floor the gate becomes absolute.** A zero clearance, a
+  knife-edge zero wall, or the volume of a body thinner than the coordinate noise
+  (the flat limit below), has `|Value|` at or under `Quantum`, and a ratio
   to it is undefined or explosive. `Ref` collapses to `Quantum` there — and that is
   the whole of the near-zero rule, because it is the same formula: `Bound <= rel ×
   Ref` reads `Bound <= rel × Quantum` — an **absolute** threshold, a thousandth
   of the noise floor at the default `rel`. It is a real number and the reader
-  can check it: a zero wall thickness on a body whose `D` is 1 mm has
-  `Quantum = δ = 1e-9 mm`, so the gate is `1e-12 mm`; a zero clearance between
-  two bodies whose union spans 100 mm has `Quantum = 1e-7 mm` and a gate of
-  `1e-10 mm`. So a near-zero answer passes only with a bound that is, in
-  practice, vanishingly tight. A tessellation does not produce one — an
+  can check it: a knife-edge zero wall thickness on a proven solid whose `D`
+  is 1 mm has `Quantum = δ = 1e-9 mm`, so the gate is `1e-12 mm`; a zero
+  clearance between two bodies whose union spans 100 mm has `Quantum = 1e-7 mm`
+  and a gate of `1e-10 mm`. So a near-zero answer passes only with a bound
+  that is, in practice, vanishingly tight. A tessellation does not produce one — an
   `Approximate` near-zero answer will
   essentially always read `Suspect` — while an `Exact` answer has a zero `Bound` and
   passes at the floor as it does everywhere else. That is the intent: a zero
   clearance reported as `0 ± 5mm` is untrustworthy and must be `Suspect`; a zero
-  clearance known to `1e-12 mm` is not. Degenerate bodies keep a real floor. A
-  genuinely flat body — a 100×100 mm sheet of zero thickness — has zero volume,
-  but its volume's noise floor is not: its `D` is 141.4 mm and its two
-  coincident faces carry `2×10⁴ mm²` of surface, so `Quantum ≈ 2.8e-3 mm³` and
-  the default gate is `2.8e-6 mm³` — the volume a `δ`-thick skin over the sheet
-  would hold, the finest anything reading coordinates at `δ` can tell from
-  zero. An `Exact` zero passes with its zero `Bound`; an `Approximate` zero
-  passes only under that skin. Its area is gated relatively as everywhere — a
-  flat body keeps a positive surface area. A point-like body is the full limit:
-  `D`, surface area and edge length are all zero, so every `Quantum` is
-  zero, and only an `Exact` answer passes — a point has nothing to be
-  approximately right about.
+  clearance known to `1e-12 mm` is not. The flat limit keeps a real floor. A
+  genuinely flat body — a 100×100 mm sheet of zero thickness — never brings a
+  volume to this gate: it encloses no region, and an evaluator proves as much —
+  a skin whose two faces coincide is decisively no solid's — so §1 carries the
+  answer in presence: `Unsound`, `Volume` nil, the boundary quantities only,
+  its `2×10⁴ mm²` of area gated relatively as everywhere. The floor's work at
+  that limit is done just above it, on the thinnest body that is still a body.
+  A 100×100 mm plate `1e-7 mm` thick is a real solid, and it is thinner than
+  the coordinate noise — §4's sharp condition, the only place the floor
+  reaches a real volume: its `D` is 141.4 mm, so `δ ≈ 1.4e-7 mm`, its skin
+  carries `2×10⁴ mm²`, and `Quantum ≈ 2.8e-3 mm³` — the volume a `δ`-thick
+  skin over the plate would hold, the finest anything reading coordinates at
+  `δ` can tell from zero — while the plate's whole volume is `1e-3 mm³`,
+  under its own floor. `Ref` collapses to `Quantum` and the default gate is
+  `2.8e-6 mm³`. The plate carries a `Volume` on §1's terms — an `Exact`
+  evaluator's bound is zero, any positive thickness clears it, and it proves
+  the plate solid outright (§6) — and that `Exact` volume passes with its
+  zero `Bound`. An `Approximate` answer passes only with a bound under
+  `2.8e-6 mm³`, a thousandth of the skin — and only from an evaluator sharp
+  enough to have proven the plate solid at all: one whose proven bound cannot
+  resolve the plate's `1e-7 mm` of self-clearance carries no `Volume` here to
+  gate, only an undecided validity and a `Suspect` body (§1, §6). A
+  point-like body is the full limit in every direction at once: proven no
+  solid, so no region quantities at all (§1), and `D`, surface area and edge
+  length all zero, so every `Quantum` its boundary quantities keep is zero,
+  and only an `Exact` answer passes — a point has nothing to be approximately
+  right about.
 - **A coordinate is judged against `D` alone**, never against its own magnitude:
   the magnitude of a position is origin-dependent, and translating the model must
   never change the verdict. Because that `D` is the **owning body's**, the verdict
@@ -538,13 +557,14 @@ an approximation of one — and the report gives three answers this way:
   rung's meaning.
 - **An empty `Undercuts`** is the claim *no face is an undercut* — the same
   rule for the same reason, because the claim quantifies over the part, not
-  over the survey. On analytic faces a normal against the pull direction is an
-  exact fact, and the survey over the faces is the proof that none opposes it.
-  A `Faceted` survey that finds no undercut has proven no undercut *among the
-  facets it holds*, and the claim is about the part those facets stand for: a
-  reverse-draft face smaller than the chord lands inside one facet and leaves
-  no reverse facet to find. So the body reads `Suspect` with `Undercuts` empty
-  — asked, and undecided.
+  over the survey. On analytic faces every point's normal is an exact fact
+  with a closed-form range over the face, and the survey of those ranges (the
+  membership rule below) is the proof that no region of any face opposes the
+  pull. A `Faceted` survey that finds no undercut has proven no undercut
+  *among the facets it holds*, and the claim is about the part those facets
+  stand for: a reverse-draft face smaller than the chord lands inside one
+  facet and leaves no reverse facet to find. So the body reads `Suspect` with
+  `Undercuts` empty — asked, and undecided.
 - **A pair in neither list** is the answer *these two bodies do not overlap* —
   the claim the `Interfering` rung reads, made by omission for every pair of
   proven solids without an `Interference` row. It is held to the same proof: a
@@ -724,10 +744,12 @@ however coarsely proven — reads `Violating`, one rung worse.
 
 The comparison and the gate read the same interval and cannot contradict each
 other: neither reads the other's output, and both feed the same worst-wins
-precedence below. The `Exact` zero-thickness wall is the sharp case: its zero
-`Bound` passes the gate at the noise floor as an `Exact` answer passes
-everywhere (§5), and it is `Violating` — [0, 0] sits below any real tool — so
-the gate's pass certifies the *measurement*, never the part. An `Approximate`
+precedence below. The `Exact` zero-thickness wall — a knife edge on a body
+that is still a proven solid, the only body that carries the reading (§1) —
+is the sharp case: its zero `Bound` passes the gate at the noise floor as an
+`Exact` answer passes everywhere (§5), and it is `Violating` — [0, 0] sits
+below any real tool — so the gate's pass certifies the *measurement*, never
+the part. An `Approximate`
 zero at the floor lands the same way through §5's other arm: on a body whose
 `D` is 1 mm the floor gate is `1e-12 mm` (§5), so a bound tight enough to pass
 it puts the whole interval decades under any tool a caller would name —
@@ -736,28 +758,65 @@ and fails the gate too: `Suspect` on both counts, because it is proven neither
 thin nor thick. A trust-pass never implies a spec-pass, a spec-pass never
 implies a trust-pass, and the rungs compose by precedence alone.
 
-The other spec of §2 reads the same interval, one dimension over. Undercut
-membership is decided per face on the face's normal against the pull
-direction, and a face's normal is a measurement: core §6.1 makes it a
-`VecMeasurement` with a proven bound — zero on an analytic face, whose normals
-are exact facts, and the facet's honest tilt error on a `Faceted` one, because
-a facet's normal is exact *for the facet* and approximate *for the part the
-facet stands for*. The membership comparison reads that proven interval
-exactly as the wall's does, and is total the same three ways. A face whose
-whole interval opposes the pull is a **proven** undercut: it is listed, and a
-non-empty `Undercuts` makes its body `Violating` exactly as a non-empty
-`Interferences` makes the report `Interfering` — at any coarseness, for the
-same reason a proven-thin wall does, because a proven interval on the wrong
-side of a spec is a proven violation. A face whose whole interval lies with
-the pull is proven no undercut — that face is settled. A face whose interval
-straddles — tilted against the pull by less than its own normal bound —
-decides nothing, so it is **not** listed (every listed face is a proven
-membership) and its body reads `Suspect`: an asked spec with a face the
-evaluator could not decide. And an **empty** `Undercuts` claims more than
-every held face settled — it is the absence answer of the standard above,
-provable by the exact survey over analytic faces and unprovable from a
-tessellation, whose sub-chord features no per-facet interval covers: the body
-reads `Suspect` with `Undercuts` empty.
+The other spec of §2 reads the same kind of interval, one dimension over —
+and quantified over the face, because a face does not have *a* normal. What
+core §6.1 defines is the normal **at a point**: `Face.NormalAt(p)`, a
+`VecMeasurement` whose proven bound is zero on an analytic face, where every
+normal is an exact fact of the surface, and the facet's honest tilt error on
+a `Faceted` one, because a facet's normal is exact *for the facet* and
+approximate *for the part the facet stands for*. A curved face sweeps a
+**range** of normals — a single cylindrical, spherical or toroidal face
+carries normals both with and against any pull — so membership is decided
+pointwise first. The pointwise comparison reads the point's proven interval
+exactly as the wall's does, and is total the same three ways: a point whose
+whole interval **opposes** the pull — every direction the bound admits has a
+component against it — provenly opposes; a point whose whole interval does
+not oppose provenly clears — exactly perpendicular is not opposed, as
+exactly tool-thick is not thinner; a point whose interval straddles decides
+nothing. The face's membership quantifies those points — existentially for
+the violation, universally for the all-clear, the proof always on the claim:
+
+- **a face with a provenly opposing point is a proven undercut.** One point
+  is enough, and by the surface's continuity it never comes alone: around it
+  lies a region facing against the pull, material the pull cannot clear. The
+  face is listed, and a non-empty `Undercuts` makes its body `Violating`
+  exactly as a non-empty `Interferences` makes the report `Interfering` — at
+  any coarseness, for the same reason a proven-thin wall does, because a
+  proven interval on the wrong side of a spec is a proven violation. Listing
+  is the honest unit: a spherical face that reaches past its equator against
+  the pull provenly opposes there and is listed for that region — the claim
+  is *this face has a proven undercut*, never *all of this face opposes*;
+- **a face whose every point provenly clears is settled** — proven no
+  undercut;
+- **a face in between** — no point provenly opposes, some point straddles —
+  **is undecided**: it is **not** listed (every listed face is a proven
+  membership) and its body reads `Suspect`, an asked spec with a face the
+  evaluator could not decide.
+
+The quantifier costs nothing core does not expose: `Face.Surface()` (core
+§6.1) is the face's own geometry, and on an analytic variant — a plane,
+cylinder, cone, sphere or torus — the normal over the face's bounded region
+is closed-form, so the survey of its range is exact and the three-way answer
+is decided outright. A `Faceted` face is its facets, and each facet is one
+point of the survey: its normal is a single `NormalAt` reading, constant
+across the facet, whose tilt bound is the interval the pointwise rule reads.
+The rule is the claim, not the algorithm — but everything it quantifies over
+is a reading the evaluator holds. The boundary case is the vertical wall — a
+face everywhere exactly perpendicular to the pull, draft angle zero. It
+provenly clears: the pull slides along it, not into it, and the strictness
+sits on the same side as the wall rule's — exactly perpendicular is not
+opposed, exactly tool-thick is not thinner. An analytic vertical wall is
+settled by the exact survey; a `Faceted` one never is — its facets' tilt
+bounds straddle zero draft from both sides, so it is the undecided face
+above and its body reads `Suspect`, the honest answer: inside its bound a
+tessellated wall really could lean either way. A caller whose spec is a
+positive minimum draft — not mere clearance — is stating a spec
+`WithPullDirection` does not pose, and no option states, so no verdict
+enforces it (§2). And an **empty** `Undercuts` claims more than every held
+face settled — it is the absence answer of the standard above, quantifying
+over the part and not the survey: provable by the exact range surveys over
+analytic faces, unprovable from a tessellation, whose sub-chord features no
+per-facet interval covers — the body reads `Suspect` with `Undercuts` empty.
 
 Aggregation is by **severity precedence — worst wins**:
 
