@@ -2,6 +2,7 @@ package decad
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/lestrrat-3d/r3"
@@ -256,6 +257,10 @@ func segmentKind(s CurveSegment) (string, error) {
 // marshalSegment encodes one variant as its tagged object: the variant's own
 // fields, with the kind tag spliced in front.
 func marshalSegment(s CurveSegment) ([]byte, error) {
+	s, err := normalizeSegment(s)
+	if err != nil {
+		return nil, err
+	}
 	kind, err := segmentKind(s)
 	if err != nil {
 		return nil, err
@@ -320,35 +325,71 @@ func unmarshalSegment(data []byte) (CurveSegment, error) {
 	if err := json.Unmarshal(data, seg); err != nil {
 		return nil, fmt.Errorf(`decad: failed to decode %s segment: %w`, probe.Kind, err)
 	}
-	return derefSegment(seg), nil
+	return normalizeSegment(seg)
 }
 
-// derefSegment returns the value the decode buffer holds: the codec hands
-// back the same value forms the sealed set is built from.
-func derefSegment(s CurveSegment) CurveSegment {
+// errNilSegment rejects a nil variant pointer: it names no curve to record.
+var errNilSegment = errors.New(`decad: nil curve segment`)
+
+// normalizeSegment returns the value form of s. The variants implement
+// CurveSegment with value receivers, so a *LineSeg satisfies the interface as
+// readily as a LineSeg does — the codec accepts both and records the value
+// the pointer names; the decode buffer normalizes through the same path, so
+// the codec always hands back value forms.
+func normalizeSegment(s CurveSegment) (CurveSegment, error) {
 	switch s := s.(type) {
 	case *LineSeg:
-		return *s
+		if s == nil {
+			return nil, errNilSegment
+		}
+		return *s, nil
 	case *CircleSeg:
-		return *s
+		if s == nil {
+			return nil, errNilSegment
+		}
+		return *s, nil
 	case *ArcSeg:
-		return *s
+		if s == nil {
+			return nil, errNilSegment
+		}
+		return *s, nil
 	case *EllipseSeg:
-		return *s
+		if s == nil {
+			return nil, errNilSegment
+		}
+		return *s, nil
 	case *EllipticalArcSeg:
-		return *s
+		if s == nil {
+			return nil, errNilSegment
+		}
+		return *s, nil
 	case *SplineSeg:
-		return *s
+		if s == nil {
+			return nil, errNilSegment
+		}
+		return *s, nil
 	case *NURBSSeg:
-		return *s
+		if s == nil {
+			return nil, errNilSegment
+		}
+		return *s, nil
 	case *ClosedSplineSeg:
-		return *s
+		if s == nil {
+			return nil, errNilSegment
+		}
+		return *s, nil
 	case *FitSplineSeg:
-		return *s
+		if s == nil {
+			return nil, errNilSegment
+		}
+		return *s, nil
 	case *ConicSeg:
-		return *s
+		if s == nil {
+			return nil, errNilSegment
+		}
+		return *s, nil
 	default:
-		return s
+		return s, nil
 	}
 }
 

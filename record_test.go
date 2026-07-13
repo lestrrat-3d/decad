@@ -124,6 +124,23 @@ func TestCurveSegmentEncodeRejects(t *testing.T) {
 	require.Error(t, err, `a quantity of an unnamed kind should refuse to encode`)
 }
 
+func TestCurveSegmentPointerVariants(t *testing.T) {
+	// The sealed methods use value receivers, so a pointer to a variant
+	// satisfies CurveSegment too; the codec accepts it and records the value
+	// it names, and decode hands back the value form.
+	line := decad.LineSeg{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 1, V: 1}, TStart: 0, TEnd: 1}
+	buf, err := json.Marshal(decad.LoopRecord{Segments: []decad.CurveSegment{&line}})
+	require.NoError(t, err, `a pointer variant should encode`)
+
+	var got decad.LoopRecord
+	require.NoError(t, json.Unmarshal(buf, &got))
+	require.Equal(t, line, got.Segments[0], `decode should hand back the value form`)
+
+	// A nil pointer names no curve.
+	_, err = json.Marshal(decad.LoopRecord{Segments: []decad.CurveSegment{(*decad.CircleSeg)(nil)}})
+	require.Error(t, err, `a nil segment pointer should refuse to encode`)
+}
+
 func TestPlaneRecordRoundTrip(t *testing.T) {
 	rec := decad.PlaneRecord{
 		Origin: r3.NewVec(10, 20, 30),
