@@ -20,8 +20,8 @@ func (d *Document) Verify(ctx context.Context, opts ...VerifyOption) (*Report, e
 
 type Report struct {
     Bodies        []*BodyReport
-    Interferences []Interference // pairwise overlap, with the overlap VOLUME
-    Clearances    []Clearance    // opt-in: minimum gap between bodies
+    Interferences []Interference // pairwise overlap, with the overlap VOLUME; always computed
+    Clearances    []Clearance    // WithClearances(): minimum gap between disjoint pairs
     Status        Status
 }
 
@@ -36,22 +36,61 @@ type BodyReport struct {
     SelfIntersecting  bool
     Lumps             int          // > 1 == disconnected pieces
     Voids             int          // internal cavities (Shell.IsVoid)
-    Volume            Measurement
-    Area              Measurement
-    Centroid          VecMeasurement // a computed coordinate, so it is bounded (core §5.3)
-    Bounds            Box
-    Exactness         Exactness      // the weakest link across this body
 
-    // Opt-in, expensive:
+    // Boundary quantities — properties of the boundary the evaluator holds,
+    // which every body has; always present:
+    Area              Measurement
+    Bounds            Box
+
+    // Region quantities — properties of the enclosed region, which only a
+    // valid solid has; non-nil exactly when Status != Unsound (§6):
+    Volume            *Measurement
+    Centroid          *VecMeasurement // a computed coordinate, so it is bounded (core §5.3)
+
+    Exactness         Exactness      // the weakest link across the quantities this report carries
+
+    // Opt-in, expensive; non-nil only when the option asks AND Status != Unsound:
     MinWallThickness  *Measurement   // WithMinWallThickness(tool)
     Undercuts         []*Face        // WithPullDirection(v)
     MinRadius         *Measurement   // WithMinRadius() — can the endmill reach?
 }
 ```
 
+**A quantity a body does not have is absent — nil — never zero.** Core §4
+rejects `volume == 0` meaning both "empty" and "not a solid", and core §6 makes
+`Body.Volume()` `(Measurement, error)` for exactly that reason; a struct field
+has no error to return, so the report says it with presence, in the shape the
+opt-in fields already use. A zero `Measurement` could not say it: its
+`Exactness` is `Exact` and its `Bound` zero, so it reads as an exactly-zero
+volume — the sentinel core §4 rejects, reintroduced one level up. The line
+between the two groups is what a quantity is a property of. `Area` and `Bounds`
+are properties of the body's **boundary** — the faces and points the evaluator
+holds — and every body in the document has one, broken skin or not, so both are
+unconditional. `Volume` and `Centroid` are properties of the **enclosed
+region**, and a body that is not a valid solid encloses none: there is no
+honest `Measurement` to put there. Both are therefore non-nil exactly when the
+body is a valid solid — `Status != Unsound`, decided by the four validity
+predicates alone (§6). The opt-in quantities are region quantities too — a
+wall, an undercut and an endmill's reach are features of a solid — so each is
+computed only when its option asks for it **and** the body is a valid solid,
+and is nil otherwise.
+
 `Interference` and `Clearance` are the pairwise result types of core §6.2: each
 names its two bodies and carries its quantity as a `Measurement`, so each
-reports its own exactness like everything else.
+reports its own exactness like everything else. Their preconditions are carried
+the same way a body's are — in **existence**, never in a fabricated value: an
+`Interference` exists only for a pair that overlaps, a `Clearance` only for a
+pair that does not, so `Interference.Volume` is always a real overlap's volume
+and `Clearance.Gap` always a real gap — zero for a touching pair, gated at the
+noise floor like every near-zero answer (§5). Pairs are drawn from the
+document's **valid solids** only. The partition is a statement about interiors
+— a pair either shares volume or has a gap between disjoint interiors — and a
+body that is not a valid solid has no interior to say either of; it joins no
+pair, and nothing is lost by that, because it has already made the report
+`Unsound`, which outranks anything a pair could add (§6). Of the two lists,
+`Interferences` is always computed — the `Interfering` rung of §6 reads it, so
+the report could not aggregate honestly without it — and `Clearances` is
+computed when `WithClearances()` (§2) asks for it.
 
 ## 2. Tolerance — what "beyond the caller's tolerance" means
 
@@ -63,7 +102,28 @@ func WithTolerance(rel units.Value) VerifyOption // Dimensionless; default units
 func WithMinWallThickness(tool units.Value) VerifyOption
 func WithPullDirection(v r3.Vec) VerifyOption
 func WithMinRadius() VerifyOption
+func WithClearances() VerifyOption
 ```
+
+`WithTolerance` sets the gate this section defines; each of the other four
+switches on one quantity, and each lands in a named place in the report:
+`WithMinWallThickness` fills `BodyReport.MinWallThickness`, `WithPullDirection`
+fills `Undercuts`, `WithMinRadius` fills `MinRadius`, and `WithClearances`
+fills `Report.Clearances`. The correspondence is total in both directions —
+every option feeds the report, and everything in the report is producible:
+`Bodies`, `Interferences` and `Status` unconditionally, the rest each by its
+option. What is opt-in is what is expensive and **required by no status rung**:
+interference must always run — the `Interfering` rung of §6 is unanswerable
+without it — while no rung needs a gap the caller never asked for, and a caller
+who did not ask is never gated on the trustworthiness of answers they do not
+want. An option takes a parameter exactly when its question cannot be posed
+without one: undercuts are relative to a pull direction, so `WithPullDirection`
+takes it, and a probe-free minimum wall thickness is zero on any body with a
+sharp convex edge — thickness is read by the largest ball that fits the wall,
+and no ball fits a sharp edge — so `WithMinWallThickness` takes the tool as the
+probe, which is also the caller's actual question (core §1: no wall thinner
+than the tool that has to cut it). A minimum radius and a minimum gap are
+well-posed bare, so `WithMinRadius` and `WithClearances` take nothing.
 
 **The tolerance is relative, and it is one number for every kind.** `rel` is the
 largest error the caller will accept **as a fraction of the quantity being
@@ -335,7 +395,8 @@ The gate has nothing to miss, because **every one of the three shapes carries a
 
 - a `Measurement`, a `VecMeasurement` or a `Box` on a `BodyReport` that is beyond
   tolerance — `Volume`, `Area`, `Centroid`, `Bounds`, `MinWallThickness`,
-  `MinRadius` — makes that `BodyReport` `Suspect`;
+  `MinRadius`, each when the report carries it (§1) — makes that `BodyReport`
+  `Suspect`;
 - an `Interference.Volume` or a `Clearance.Gap` beyond tolerance makes the `Report`
   `Suspect` directly — those two are properties of a *pair*, so there is no
   `BodyReport` for them to travel through, and a gap known to only one significant
@@ -347,6 +408,17 @@ can never trip it, at any tolerance. **Nothing in the report is exempt**, and th
 position carries a bound like everything else, so a boolean that puts the centroid
 off by more than `rel` of the body's own size cannot hide inside a `Sound` body —
 which is the confidently-wrong failure core §1 exists to prevent.
+
+Absence is not an exemption. A quantity the report does not carry is absent
+only where §1 permits it: a region quantity of a body that is not a valid
+solid, or an opt-in quantity that was not asked for. Neither hole is one an
+untrustworthy answer can hide in. The first exists only on a body that is
+already `Unsound` — the worst verdict in the precedence below, so the report it
+sits in is already gated harder than any `Suspect` could gate it. The second is
+a quantity the evaluator never computed, so there is no answer, trustworthy or
+otherwise, for the report to be silent about. The gate covers every bounded
+result the report carries, and what the report does not carry is either
+outranked or was never measured.
 
 **That guarantee is relative, and it is stated relatively because that is what is
 true.** The gate on a centroid is `Bound <= rel × D` with `D` the owning
@@ -385,7 +457,12 @@ const (
 
 - **`BodyReport.Status`** is per-body: `Sound` (solid, watertight, manifold, no
   self-intersection), `Suspect` (sound, but one of its answers is `Approximate` with
-  a `Bound` beyond the tolerance of §2), or `Unsound` (not a valid solid). A body is
+  a `Bound` beyond the tolerance of §2), or `Unsound` (not a valid solid — any of
+  those four predicates the wrong way). Validity is decided by the four
+  predicates alone, before any quantity is read, which is what lets §1 key a
+  region quantity's presence on it with no circularity: the predicates decide
+  `Unsound`, and only a valid body's quantities exist to decide `Sound` against
+  `Suspect`. A body is
   never `Interfering` — interference is a property of a *pair*, not of a body.
 - **`Report.Status`** is the document-level aggregate — over the bodies *and* over
   the pairwise results, which belong to no body.
