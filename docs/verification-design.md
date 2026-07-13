@@ -126,7 +126,8 @@ direction, so `WithPullDirection` takes it, and a probe-free minimum wall
 thickness is zero on any body with a sharp convex edge — thickness is read by
 the largest ball that fits the wall, and no ball fits a sharp edge — so
 `WithMinWallThickness` takes the tool as the probe (a zero tool is that same
-probe-free question, and is `ErrDegenerate`, core §12), which is also the
+probe-free question, and is `ErrDegenerate`, core §12 — as is a zero pull
+direction, which poses no direction at all), which is also the
 caller's actual question (core §1: no wall thinner than the tool that has to
 cut it) — and §6 answers it: `MinWallThickness` is decided against the tool,
 and a wall proven thinner makes its body `Violating`. A minimum radius and a
