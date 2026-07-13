@@ -13,10 +13,11 @@ models a part here and proves it sound — watertight, correct volume, no
 interference, no wall thinner than the tool — BEFORE committing to write real
 CAD software code (e.g. an Autodesk Fusion add-in). Be wrong in the cheap place.
 
-**Current state: scaffolding + an approved API design.** No public API exists
-yet, and every capability the design consumes exists in its dependencies —
-there is no open dependency gap.
-`docs/api-design.md` is the core contract for the one that lands: a
+**Current state: the public API is landing incrementally against an approved
+design.** What the package exports today is the leading edge of that surface;
+everything it does not yet export remains design-only, and every capability the
+design consumes exists in its dependencies — there is no open dependency gap.
+`docs/api-design.md` is the core contract for the whole surface: a
 recipe/evaluator split, a B-rep-shaped surface, immediate-mode features,
 selectors instead of handles, and `Exactness` on every measurement. Two
 companion designs carry its deep ends: `docs/sketch-seam-design.md` (the trim
