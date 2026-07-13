@@ -20,7 +20,7 @@ func (d *Document) Verify(ctx context.Context, opts ...VerifyOption) (*Report, e
 
 type Report struct {
     Bodies        []*BodyReport
-    Interferences []Interference // pairwise overlap, with the overlap VOLUME; always computed
+    Interferences []Interference // proven pairwise overlap, with the overlap VOLUME; always computed
     Clearances    []Clearance    // WithClearances(): minimum gap between disjoint pairs
     Status        Status
 }
@@ -52,7 +52,8 @@ type BodyReport struct {
     // Opt-in, expensive; nil unless the option asks AND Status != Unsound.
     // MinRadius alone adds a third leg: the feature must exist (below):
     MinWallThickness  *Measurement   // WithMinWallThickness(tool) — decided against tool (§6)
-    Undercuts         []*Face        // WithPullDirection(v) — non-empty is Violating (§6); empty means none
+    Undercuts         []*Face        // WithPullDirection(v) — every entry a proven undercut: non-empty
+                                     // is Violating; empty claims none exist, held to proof (§6)
     MinRadius         *Measurement   // WithMinRadius() — the tightest concave radius; nil when no
                                      // concave feature exists (below); the caller compares (§2)
 }
@@ -85,9 +86,11 @@ and the thinnest of that material is a reading every valid solid yields,
 finite and non-negative, down to the `Exact` zero of a degenerate flat body,
 which is a genuine measured thickness (§6 decides it thin against any real
 tool), never core §4's sentinel. `Undercuts` carries its further question — do
-any exist? — in the slice itself: asked on a valid solid it is non-nil, and
-**empty** is the answer *no face is an undercut*, an answer and not an
-absence, because membership is a predicate the evaluator decides (§6).
+any exist? — in the slice itself: asked on a valid solid it is non-nil, every
+face it lists is a **proven** undercut, and **empty** is the answer *no face
+is an undercut* — an answer and not an absence, and an answer §6 holds to
+proof like any other, marking the body `Suspect` when the evaluator cannot
+give one.
 `MinRadius` alone measures a feature a valid solid may simply not have: an
 all-convex body — a plain block — has no concave radius, and no `Measurement`
 can honestly stand for *none*. Zero is core §4's sentinel reintroduced — a
@@ -109,9 +112,9 @@ determination.
 names its two bodies and carries its quantity as a `Measurement`, so each
 reports its own exactness like everything else. Their preconditions are carried
 the same way a body's are — in **existence**, never in a fabricated value: an
-`Interference` exists only for a pair that overlaps, a `Clearance` only for a
-pair that does not, so `Interference.Volume` is always a real overlap's volume
-and `Clearance.Gap` always a real gap. A touching pair's zero `Gap` is a
+`Interference` exists only for a pair **proven** to overlap, a `Clearance`
+only for a pair proven disjoint, so `Interference.Volume` is always a real
+overlap's volume and `Clearance.Gap` always a real gap. A touching pair's zero `Gap` is a
 **measured** zero, not the sentinel core §4 rejects: the sentinel is a zero
 standing in for *there is no such quantity*, and a `Clearance`'s existence has
 already said there is one — two disjoint interiors have a minimum distance,
@@ -120,8 +123,10 @@ every near-zero answer (§5): an `Approximate` zero must earn trust with a
 vanishingly tight bound, an `Exact` zero passes on its own terms. Pairs are
 drawn from the document's **valid solids** only. The partition is a statement
 about interiors — a pair either shares volume or has a gap between disjoint
-interiors — and a
-body that is not a valid solid has no interior to say either of; it joins no
+interiors — and it is answered to proof like everything else: a pair the
+evaluator can prove neither way joins neither list and makes the report
+`Suspect` (§6). A body that is not a valid solid has no interior to say
+either of; it joins no
 pair, and nothing is lost by that, because it has already made the report
 `Unsound`, which outranks anything a pair could add (§6). Of the two lists,
 `Interferences` is always computed — the `Interfering` rung of §6 reads it, so
@@ -471,36 +476,67 @@ position carries a bound like everything else, so a boolean that puts the centro
 off by more than `rel` of the body's own size cannot hide inside a `Sound` body —
 which is the confidently-wrong failure core §1 exists to prevent.
 
-Absence is not an exemption. A quantity the report does not carry is absent
-only where §1 permits it: a region quantity of a body that is not a valid
-solid, an opt-in quantity that was not asked for, or a `MinRadius` on a body
-with no concave feature. No hole of the three is one an untrustworthy answer
-can hide in. The first exists only on a body that is already `Unsound` — the
-worst verdict in the precedence below, so the report it sits in is already
-gated harder than any `Suspect` could gate it. The second is a quantity the
-evaluator never computed, so there is no answer, trustworthy or otherwise, for
-the report to be silent about — and no verdict owed either: an option is where
-a spec is stated (§2), so an option left off poses no question for the report
-to fail. The third is not a silence at all: that nil is the evaluator's
-**answer** — *no concave feature exists* — and an answer can be wrong, so it
-is held to the standard of the predicates core §6 exempts from bounds: a
-decided answer, never an approximation of one. The evaluator may decide
-absence only when it can prove it. On faces it holds analytically, convexity
-and curvature are exact facts, and a survey over them is that proof; a survey
-that is itself approximate proves nothing of the kind — a tessellation cannot
-see below its own chord error, so a concave dimple shallower than the chord
-lands inside one flat facet and leaves no concave edge to find. A `Faceted`
-body whose survey turns up nothing concave is therefore an asked question the
-evaluator cannot answer, and the body reads `Suspect` with `MinRadius` nil —
-nothing proven wrong, nothing proven right, which is exactly the rung's
-meaning. What the standard buys is the only reading that matters: inside a
-`Trustworthy()` report, a nil `MinRadius` on a valid solid is a **proven**
-absence, as good as any `Exact` answer, because an unprovable absence never
-reaches the caller inside a `Sound` report. (On a `Suspect` body a nil could
-be either the proven absence or the survey that could not decide, and nothing
-turns on which: `Suspect` already says this report is not one to read answers
-out of.) The gate covers every bounded result the report carries, and what the
-report does not carry is outranked, never asked, or proven absent.
+Absence is not an exemption, and neither is emptiness, because one standard
+governs both, stated once:
+
+> **An absence is an answer, an empty list is an answer, and an answer must be
+> proven. An answer the evaluator cannot prove never reads as a pass: the
+> asked question is undecided, and undecided reads `Suspect`.**
+
+A quantity the report does not carry is absent only where §1 permits it: a
+region quantity of a body that is not a valid solid, an opt-in quantity that
+was not asked for, or an absence the standard itself governs. The first exists
+only on a body that is already `Unsound` — the worst verdict in the precedence
+below, so the report it sits in is already gated harder than any `Suspect`
+could gate it. The second is a quantity the evaluator never computed, so there
+is no answer, trustworthy or otherwise, for the report to be silent about —
+and no verdict owed either: an option is where a spec is stated (§2), so an
+option left off poses no question for the report to fail. Everything else the
+report says by absence or emptiness is an **answer** — held to the standard of
+the predicates core §6 exempts from bounds, a decided answer and never an
+approximation of one — and the report gives three answers this way:
+
+- **A nil `MinRadius` on a valid solid** is the determination *no concave
+  feature exists*. On analytic faces the proof exists: convexity and curvature
+  are exact facts there, and a survey over them is that proof. A survey that
+  is itself approximate proves nothing of the kind — a tessellation cannot see
+  below its own chord error, so a concave dimple shallower than the chord
+  lands inside one flat facet and leaves no concave edge to find. A `Faceted`
+  body whose survey turns up nothing concave is therefore an asked question
+  the evaluator cannot answer, and the body reads `Suspect` with `MinRadius`
+  nil — nothing proven wrong, nothing proven right, which is exactly the
+  rung's meaning.
+- **An empty `Undercuts`** is the claim *no face is an undercut* — the same
+  rule for the same reason, because the claim quantifies over the part, not
+  over the survey. On analytic faces a normal against the pull direction is an
+  exact fact, and the survey over the faces is the proof that none opposes it.
+  A `Faceted` survey that finds no undercut has proven no undercut *among the
+  facets it holds*, and the claim is about the part those facets stand for: a
+  reverse-draft face smaller than the chord lands inside one facet and leaves
+  no reverse facet to find. So the body reads `Suspect` with `Undercuts` empty
+  — asked, and undecided.
+- **A pair in neither list** is the answer *these two bodies do not overlap* —
+  the claim the `Interfering` rung reads, made by omission for every pair of
+  valid solids without an `Interference` row. It is held to the same proof: a
+  pair is proven disjoint when the boundaries the evaluator holds clear each
+  other by more than the proven bounds those boundaries carry — the true skins
+  then cannot touch — and an exact evaluator decides it outright. A pair whose
+  held boundaries come closer than their own bounds, or overlap by less, is
+  proven neither overlapping nor disjoint: no `Interference` row is fabricated
+  for it — every row is a proven overlap (§1) — and the undecided pair makes
+  the `Report` `Suspect` directly, at the same level its bounded results
+  travel (the table below).
+
+What the standard buys is the only reading that matters: inside a
+`Trustworthy()` report, a nil `MinRadius` is a **proven** absence, an empty
+`Undercuts` a **proven** all-clear, and a pair with no `Interference` row a
+**proven** disjointness — each as good as any `Exact` answer, because an
+unprovable answer never reaches the caller inside a `Sound` report. (On a
+`Suspect` report any of the three could be either the proven answer or the
+survey that could not decide, and nothing turns on which: `Suspect` already
+says this report is not one to read answers out of.) The gate covers every
+bounded result the report carries, and what the report does not carry is
+outranked, never asked, or proven.
 
 **That guarantee is relative, and it is stated relatively because that is what is
 true.** The gate on a centroid is `Bound <= rel × D` with `D` the owning
@@ -530,8 +566,8 @@ document is what makes that reading hold at any scale.
 type Status int
 
 const (
-    Sound       Status = iota // every body sound; every stated spec met; nothing approximate beyond tolerance
-    Suspect                   // an answer is Approximate beyond the caller's tolerance, straddles a stated spec, or is an asked absence left unproven
+    Sound       Status = iota // every body sound; every stated spec met; every asked absence proven; nothing approximate beyond tolerance
+    Suspect                   // an answer is Approximate beyond the caller's tolerance, straddles a stated spec, or is an absence answer left unproven — a nil, an empty list, a pair in neither list
     Violating                 // a stated spec is proven to fail: a wall thinner than the tool, an undercut against the pull
     Interfering               // bodies overlap
     Unsound                   // some body is not a valid solid
@@ -542,16 +578,29 @@ const (
   self-intersection; every stated spec met; nothing approximate beyond
   tolerance; every asked absence proven), `Suspect` (sound, but one of its
   answers is `Approximate` with a `Bound` beyond the tolerance of §2, a stated
-  spec is straddled — the interval rule below — or `WithMinRadius` was asked
-  and the evaluator could neither measure a concave radius nor prove the body
-  has none, the absence rule above), `Violating` (sound, but a spec a §2
+  spec is straddled — the interval rule below — or an asked absence is left
+  unproven, the standard above: `WithMinRadius` asked and the evaluator could
+  neither measure a concave radius nor prove the body has none, or
+  `WithPullDirection` asked and the evaluator could neither prove an undercut
+  nor prove there is none), `Violating` (sound, but a spec a §2
   option stated is proven to fail: `MinWallThickness` decided below the tool,
   or `Undercuts` non-empty), or `Unsound` (not a valid solid — any of those
   four predicates the wrong way). Validity is decided by the four predicates
   alone, before any quantity is read, which is what lets §1 key a
   region quantity's presence on it with no circularity: the predicates decide
   `Unsound`, and only a valid body's quantities exist to decide `Sound` against
-  `Violating` and `Suspect`. A body is
+  `Violating` and `Suspect`. The predicates survive the absence standard
+  because they claim nothing past the boundary the evaluator holds: solidity,
+  watertightness, manifoldness, self-intersection — and the `Lumps` and
+  `Voids` counts with them — are facts of that boundary's own incidence and
+  geometry, and the boundary is held **exactly** even when it is approximate
+  as a stand-in, because a `Faceted` face is exactly the polygon it is: what
+  it approximates is which surface it stands for (core §6.1), never what it
+  is. Deciding those predicates inspects data the evaluator possesses in
+  full, on any evaluator class, so each is a decided answer with nothing left
+  to prove — the absence standard bites exactly where a claim reaches past
+  the held boundary to the part it stands for: a sub-chord dimple, a
+  sub-chord reverse draft, a sub-bound gap. A body is
   never `Interfering` — interference is a property of a *pair*, not of a body.
 - **`Report.Status`** is the document-level aggregate — over the bodies *and* over
   the pairwise results, which belong to no body.
@@ -606,11 +655,28 @@ and fails the gate too: `Suspect` on both counts, because it is proven neither
 thin nor thick. A trust-pass never implies a spec-pass, a spec-pass never
 implies a trust-pass, and the rungs compose by precedence alone.
 
-The other spec of §2 needs no interval. Undercut membership is a predicate the
-evaluator *decides* (core §6) — an answer, not an approximation of one — so
-`Undercuts` carries no bound and no straddle: the faces themselves are the
-failure, and a non-empty `Undercuts` makes its body `Violating` exactly as a
-non-empty `Interferences` makes the report `Interfering`.
+The other spec of §2 reads the same interval, one dimension over. Undercut
+membership is decided per face on the face's normal against the pull
+direction, and a face's normal is a measurement: core §6.1 makes it a
+`VecMeasurement` with a proven bound — zero on an analytic face, whose normals
+are exact facts, and the facet's honest tilt error on a `Faceted` one, because
+a facet's normal is exact *for the facet* and approximate *for the part the
+facet stands for*. The membership comparison reads that proven interval
+exactly as the wall's does, and is total the same three ways. A face whose
+whole interval opposes the pull is a **proven** undercut: it is listed, and a
+non-empty `Undercuts` makes its body `Violating` exactly as a non-empty
+`Interferences` makes the report `Interfering` — at any coarseness, for the
+same reason a proven-thin wall does, because a proven interval on the wrong
+side of a spec is a proven violation. A face whose whole interval lies with
+the pull is proven no undercut — that face is settled. A face whose interval
+straddles — tilted against the pull by less than its own normal bound —
+decides nothing, so it is **not** listed (every listed face is a proven
+membership) and its body reads `Suspect`: an asked spec with a face the
+evaluator could not decide. And an **empty** `Undercuts` claims more than
+every held face settled — it is the absence answer of the standard above,
+provable by the exact survey over analytic faces and unprovable from a
+tessellation, whose sub-chord features no per-facet interval covers: the body
+reads `Suspect` with `Undercuts` empty.
 
 Aggregation is by **severity precedence — worst wins**:
 
@@ -631,7 +697,7 @@ Concretely, `Report.Status` is:
 | else, `len(Interferences) > 0` | `Interfering` |
 | else, any `BodyReport.Status == Violating` | `Violating` |
 | else, any `BodyReport.Status == Suspect` | `Suspect` |
-| else, any `Interference.Volume` or `Clearance.Gap` beyond tolerance (§2) | `Suspect` |
+| else, any `Interference.Volume` or `Clearance.Gap` beyond tolerance (§2), or any pair left undecided (the absence standard above) | `Suspect` |
 | else | `Sound` |
 
 The last rung is what keeps the tolerance gate **total**: a bounded result that
@@ -639,11 +705,15 @@ hangs off the `Report` rather than off a `BodyReport` is gated exactly as every
 other is, so a `Clearance.Gap` measured far coarser than the caller's tolerance can
 never sit inside a `Sound` report. (Interference is caught by the rung above it as
 well, and `Interfering` is the worse verdict; the rule is stated over both so that
-nothing in the report is exempt.) Together with the `Suspect` rung above it, the
+nothing in the report is exempt.) The same rung carries the undecided pair, and
+that keeps the pair partition total: a proven overlap is `Interfering`, a proven
+disjointness is the one silence a `Sound` report may rest on, and a pair proven
+neither is `Suspect`. Together with the `Suspect` rung above it, the
 gate covers **every `Measurement`, every `VecMeasurement` and every `Box` the report
 carries** — and per core §5.3 those are all of them.
 
 `Report.Trustworthy()` is true **only** at `Report.Status == Sound`. An unsound
 body, an unresolved interference, a stated spec proven to fail or left
-undecided, or an approximation coarser than the caller's tolerance — on a body
-or on a pair — each make it false, even when the geometry "looks" fine.
+undecided, an asked absence left unproven, an undecided pair, or an
+approximation coarser than the caller's tolerance — on a body or on a pair —
+each make it false, even when the geometry "looks" fine.
