@@ -1415,31 +1415,33 @@ total:
 |---|---|
 | `Measurement` — a volume, an area, a length, a gap | `max(abs(Value), Quantum)` |
 | `VecMeasurement`, a **direction** (`Bound` is `Dimensionless`, §5.4) | `1` — the magnitude of a unit vector |
-| `VecMeasurement`, a **position**, and `Box` (`Bound` is a Length) | `Diag` |
+| `VecMeasurement`, a **position**, and `Box` (`Bound` is a Length) | `D` |
 
-**Every reference is anchored to the thing the result belongs to**, and
-ownership, not convenience, decides whose geometry that is:
+`D` is a **diameter**: the greatest distance between two points of the geometry
+the result belongs to. **Every reference is anchored to the thing the result
+belongs to**, and ownership, not convenience, decides whose geometry that is:
 
 - a result on a `BodyReport` — `Volume`, `Area`, `Centroid`, `Bounds`,
   `MinWallThickness`, `MinRadius`, and every vertex position and face normal of that
-  body — belongs to **one body**: `Diag` is **that body's own** bounding-box
-  diagonal (that `BodyReport.Bounds`), and the boundary measures below are that
-  body's own surface and edges. A body's answers are judged against the body
-  they are answers about;
+  body — belongs to **one body**: `D` is **that body's own** diameter — the
+  distance between its two farthest points — and the boundary measures below are
+  that body's own surface and edges. A body's answers are judged against the
+  body they are answers about;
 - an `Interference.Volume` and a `Clearance.Gap` belong to a **pair**, so no single
-  body's size is theirs to be judged against. For those, and only those, `Diag` is
-  the **document's** — the diagonal of the box enclosing every live body, the one
-  reference both members of the pair share — and the boundary measure of an
+  body's size is theirs to be judged against. For those, and only those, `D` is
+  the **document's** — the diameter of the union of every live body's points, the
+  one reference both members of the pair share — and the boundary measure of an
   interference is the pair's own: the operands' summed surface areas.
 
-The box's side lengths and diagonal are differences of coordinates, and a
-surface area or an edge length is intrinsic to the body, so every reference is
-translation-invariant — which is exactly what a position's reference must be.
+A diameter is a distance between two points of the geometry, and a surface area
+or an edge length is intrinsic to the body, so every reference is invariant
+under rigid motion — and translation invariance is exactly what a position's
+reference must have.
 
 `Quantum` is the quantity's **noise floor** — the magnitude below which a value
 of that `Kind` is not distinguishable from zero by any evaluator. Vertex
 positions are the primitive everything else is computed from, and they are
-trusted to an absolute noise of `δ = ε × Diag`, with `ε = 1e-9` fixed. What that
+trusted to an absolute noise of `δ = ε × D`, with `ε = 1e-9` fixed. What that
 noise does to a quantity is set by the **boundary the quantity depends on**:
 displace every boundary point by `δ` and a volume moves by at most `δ ×` the
 area of the surface enclosing it, an area by at most `δ ×` the length of the
@@ -1458,21 +1460,25 @@ area × chord error` (above) — evaluated at the noise displacement instead of
 the chord error: the floor is where that bound would land if the evaluator were
 perfect to the last bit of its own coordinates.
 
-Every factor of a `Quantum` is either intrinsic to the body or the box's
-diagonal, and that is what makes the floor a property of the **part, not the
-pose**. Surface area and edge length do not move under a rigid motion at all,
-and `Diag` is the one box measure a rotation cannot inflate: the box always
-contains the body's two farthest points, and no box extent exceeds their
-distance, so `Diag` lies between the body's diameter and `√3` times it in every
-orientation. Rotating a body therefore moves any `Quantum` by at most `√3` —
-never a decade, and never a verdict class. The box's **bulk** measures have no
-such bound, and none appears anywhere in the gate: the box volume of a slender
-body posed diagonally is of the order of the cube of its length — eleven
-decades over the same body laid on axis, for a metre-long micron wire — and a higher power
-of `Diag` fails the other way, overstating a thin body's floor by up to the
-square of its aspect ratio. The diagonal, taken **once** as `δ` with every
-remaining factor the body's own, is the only box-derived quantity with a
-bounded orientation error, and it is the only one the gate uses.
+Every input to the gate is **intrinsic** — a property of the body's own point
+set, never of its pose — and that is what makes a verdict a property of the
+**part, not the pose**. Surface area and edge length do not move under a rigid
+motion, and neither does `D`: a diameter is realised by two points of the body,
+and a rigid motion preserves their distance. So every `δ`, every `Quantum`,
+every `Ref` and therefore every verdict is invariant under rigid motion
+**exactly** — rotate or translate a body, or the whole document, and the gate
+reads the same numbers to the last bit. No axis-aligned box measure appears
+anywhere in the gate, because none has that property. The box's bulk is off by
+decades: the box volume of a slender body posed diagonally is of the order of
+the cube of its length — eleven decades over the same body laid on axis, for a
+metre-long micron wire. And even the box's *diagonal* breathes with pose — it
+lies between `D` and `√3 × D` depending on orientation — and a factor that
+moves at all moves verdicts: any `Bound` that lands inside the band reads
+differently in two poses of the same part. A bounded error is not invariance,
+so the gate admits no box measure, bounded or not. The one axis-aligned box in
+the report is the `Bounds` **result**, and pose-dependence is that quantity's
+nature — it answers where the body sits in these axes — but the gate judging
+its `Bound` reads `D`, not the box.
 
 The floor is honest at every aspect ratio, and the condition is sharp:
 `Quantum` reaches a body's real volume only when `Volume / Area` — the body's
@@ -1480,13 +1486,17 @@ mean thickness — is itself under `δ`, i.e. only when the body is thinner than
 the coordinate noise. The same holds one dimension down: an area's floor
 reaches the area only when `Area / edge length` — the face's mean width — is
 under `δ`. A body an evaluator can resolve at all sits decades above its floor.
-The floor's ingredients — `Diag`, an area, an edge length — are the evaluator's
-own readings and may themselves be approximate; a floor is a magnitude, not an
-answer, and a per-mille error in it moves no verdict. A surface with no edges
-at all — a sphere — gives its area a `Quantum` of zero, and that errs in the
-only safe direction: a floor too low can only demand more of an answer, never
-admit one. `ε` is a constant of the gate, not the caller's knob: it is **not**
-`rel`, and `rel` never multiplies a `Quantum`.
+The floor's ingredients — `D`, an area, an edge length — are the evaluator's
+own readings and may themselves be approximate: `D` is read off the evaluated
+boundary, and for a polyhedral approximation the greatest vertex-to-vertex
+distance is the polyhedron's exact diameter — a convex hull and rotating
+calipers, or any exact max-pair pass over the hull's vertices, computes it —
+understating a curved body's true diameter by at most the chord error. A floor
+is a magnitude, not an answer, and a per-mille error in it moves no verdict. A
+surface with no edges at all — a sphere — gives its area a `Quantum` of zero,
+and that errs in the only safe direction: a floor too low can only demand more
+of an answer, never admit one. `ε` is a constant of the gate, not the caller's
+knob: it is **not** `rel`, and `rel` never multiplies a `Quantum`.
 
 Three things follow, and all three are rules:
 
@@ -1511,7 +1521,7 @@ Three things follow, and all three are rules:
   the whole of the near-zero rule, because it is the same formula: `Bound <= rel ×
   Ref` reads `Bound <= rel × Quantum` — an **absolute** threshold, a thousandth
   of the noise floor at the default `rel`. It is a real number and the reader
-  can check it: a zero wall thickness on a body whose `Diag` is 1 mm has
+  can check it: a zero wall thickness on a body whose `D` is 1 mm has
   `Quantum = δ = 1e-9 mm`, so the gate is `1e-12 mm`; a zero clearance in a
   document 100 mm across has `Quantum = 1e-7 mm` and a gate of `1e-10 mm`. So a near-zero
   answer passes only with a bound that is, in practice, vanishingly tight. A
@@ -1521,49 +1531,51 @@ Three things follow, and all three are rules:
   clearance reported as `0 ± 5mm` is untrustworthy and must be `Suspect`; a zero
   clearance known to `1e-12 mm` is not. Degenerate bodies keep a real floor. A
   genuinely flat body — a 100×100 mm sheet of zero thickness — has zero volume,
-  but its volume's noise floor is not: its `Diag` is 141.4 mm and its two
+  but its volume's noise floor is not: its `D` is 141.4 mm and its two
   coincident faces carry `2×10⁴ mm²` of surface, so `Quantum ≈ 2.8e-3 mm³` and
   the default gate is `2.8e-6 mm³` — the volume a `δ`-thick skin over the sheet
   would hold, the finest anything reading coordinates at `δ` can tell from
   zero. An `Exact` zero passes with its zero `Bound`; an `Approximate` zero
   passes only under that skin. Its area is gated relatively as everywhere — a
   flat body keeps a positive surface area. A point-like body is the full limit:
-  `Diag`, surface area and edge length are all zero, so every `Quantum` is
+  `D`, surface area and edge length are all zero, so every `Quantum` is
   zero, and only an `Exact` answer passes — a point has nothing to be
   approximately right about.
-- **A coordinate is judged against `Diag` alone**, never against its own magnitude:
+- **A coordinate is judged against `D` alone**, never against its own magnitude:
   the magnitude of a position is origin-dependent, and translating the model must
-  never change the verdict. Because that `Diag` is the **owning body's**, the verdict
+  never change the verdict. Because that `D` is the **owning body's**, the verdict
   is also scale-free: a centroid is judged against the size of the body whose centroid
   it is, so a 100mm bracket sharing a document with a 1.5m enclosure is judged against
-  its own 173mm, and does not inherit a slack tolerance from the biggest thing in the
-  document.
+  its own hundred-odd millimetres, and does not inherit a slack tolerance from the
+  biggest thing in the document.
 
 Worked, at the default `rel = 1e-3`, on four bodies — the last two are the same
 wire, posed twice:
 
-| Body | Box | `Quantum` | `Volume` | `Bound` | `Ref` | `rel × Ref` | Verdict |
-|---|---|---|---|---|---|---|---|
-| a small boolean off-cut | 2×2×2 mm | 8.3e-8 mm³ | 8 mm³ | 5 mm³ (±62%) | 8 mm³ | 8e-3 mm³ | **`Suspect`** — 5 ≫ 8e-3 |
-| a Ø20×10mm cylinder, 1e-3 mm chord | 20×20×10 mm | 3.8e-5 mm³ | 3142 mm³ | 1.3 mm³ (±0.04%) | 3142 mm³ | 3.14 mm³ | `Sound` — 1.3 ≤ 3.14 |
-| a 1m wire, 1µm square section, on axis | 1000×0.001×0.001 mm | 4e-6 mm³ | 1e-3 mm³ | 5e-4 mm³ (±50%) | 1e-3 mm³ | 1e-6 mm³ | **`Suspect`** — 5e-4 ≫ 1e-6 |
-| the same wire, along a cube diagonal | 577×577×577 mm | 4e-6 mm³ | 1e-3 mm³ | 5e-4 mm³ (±50%) | 1e-3 mm³ | 1e-6 mm³ | **`Suspect`** — the same row |
+| Body | Box | `D` | `Quantum` | `Volume` | `Bound` | `Ref` | `rel × Ref` | Verdict |
+|---|---|---|---|---|---|---|---|---|
+| a small boolean off-cut | 2×2×2 mm | 3.46 mm | 8.3e-8 mm³ | 8 mm³ | 5 mm³ (±62%) | 8 mm³ | 8e-3 mm³ | **`Suspect`** — 5 ≫ 8e-3 |
+| a Ø20×10mm cylinder, 1e-3 mm chord | 20×20×10 mm | 22.4 mm | 2.8e-5 mm³ | 3142 mm³ | 1.3 mm³ (±0.04%) | 3142 mm³ | 3.14 mm³ | `Sound` — 1.3 ≤ 3.14 |
+| a 1m wire, 1µm square section, on axis | 1000×0.001×0.001 mm | 1000 mm | 4e-6 mm³ | 1e-3 mm³ | 5e-4 mm³ (±50%) | 1e-3 mm³ | 1e-6 mm³ | **`Suspect`** — 5e-4 ≫ 1e-6 |
+| the same wire, along a cube diagonal | 577×577×577 mm | 1000 mm | 4e-6 mm³ | 1e-3 mm³ | 5e-4 mm³ (±50%) | 1e-3 mm³ | 1e-6 mm³ | **`Suspect`** — the same row |
 
 `Quantum` is decades under the value in every row, so `Ref` is the volume itself
 in all four. The off-cut and the cylinder are separated by three orders of
 magnitude in *relative* error, which is the only thing that distinguishes them,
-and it is exactly what the gate reads. The wire is the stress case in both
-directions at once. Aspect ratio: a real, nondegenerate solid whose volume is a
-trillionth of `Diag³` gets its floor from its own 4 mm² of skin —
-`Quantum = δ × Area = 4e-6 mm³`, two and a half decades under the volume it
-measures — so a ±50% volume error reads `Suspect` on a wire exactly as it does
-on a cube. Orientation: posing the same wire along a diagonal balloons its
-box's bulk from 1e-3 mm³ to nearly 2e8 mm³, and nothing the gate reads moves —
-volume and area are intrinsic, and `Diag` is the wire's own 1000 mm in either
-pose. The floor tracks the body's skin, never its box's bulk, so neither
-aspect ratio nor orientation can lift it over a real answer — a rigid motion
-moves a `Quantum` by at most `√3`, and a verdict is a property of the part,
-not the pose.
+and it is exactly what the gate reads. The cylinder's `D` is `√(20² + 10²) ≈
+22.4 mm` — rim to opposite rim — not its box's 30 mm diagonal: the body does
+not reach its box's corners, so the box overstates it, and the gate never asks
+the box. The wire is the stress case in both directions at once. Aspect ratio:
+a real, nondegenerate solid whose volume is a trillionth of `D³` gets its floor
+from its own 4 mm² of skin — `Quantum = δ × Area = 4e-6 mm³`, two and a half
+decades under the volume it measures — so a ±50% volume error reads `Suspect`
+on a wire exactly as it does on a cube. Orientation: posing the same wire along
+a diagonal balloons its box's bulk from 1e-3 mm³ to nearly 2e8 mm³, and nothing
+the gate reads moves — volume, area and `D` are the wire's own in either pose,
+its `D` the same 1000 mm between the same two end points. The floor tracks the
+body's skin and its own two farthest points, never its box, so neither aspect
+ratio nor orientation can touch it: the two wire rows are identical column for
+column, and a verdict is a property of the part, not the pose.
 
 The gate has nothing to miss, because **every one of the three shapes carries a
 `Bound`**:
@@ -1584,11 +1596,12 @@ more than `rel` of the body's own size cannot hide inside a `Sound` body — whi
 the confidently-wrong failure §1 exists to prevent.
 
 **That guarantee is relative, and it is stated relatively because that is what is
-true.** The gate on a centroid is `Bound <= rel × Diag` with `Diag` the owning
-body's bounding-box diagonal, so at the default `rel = 1e-3` a centroid bound
-passes only when it is under one part in a thousand of that body's diagonal:
+true.** The gate on a centroid is `Bound <= rel × D` with `D` the owning
+body's diameter, so at the default `rel = 1e-3` a centroid bound passes only
+when it is under one part in a thousand of that body's own size — for these
+box-shaped bodies, `D` is the distance between opposite corners:
 
-| Body | `Diag` | `rel × Diag` | a 1 mm centroid `Bound` reads |
+| Body | `D` | `rel × D` | a 1 mm centroid `Bound` reads |
 |---|---|---|---|
 | 100×100×100mm block | 173.2 mm | 0.173 mm | **`Suspect`** |
 | 1200×800×600mm enclosure | 1562 mm | 1.562 mm | `Sound` |
