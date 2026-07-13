@@ -217,14 +217,21 @@ the trim itself:
   `Polyline` endpoints to machine precision, at both bounds.
 
 **Which cuts `sketch` certifies exact is a property of the pair.** A cut bound
-is exact only when `sketch`'s closed-form kernel placed it, and that kernel runs
-only when **both** of the crossing's source curves are a line, a circle or an
-arc — and then only for a line-involved crossing or a tangency between them.
-Every other contact yields a **sampled** cut parameter: every curve/curve
-crossing (circle × circle, circle × arc, arc × arc), and every contact involving
-an ellipse, elliptical arc, conic, spline, closed spline, fit spline or NURBS —
-**including a plain line** crossing, or tangent to, one of those. A sampled cut
-yields `TExact == false` on every fragment it bounds.
+is exact only when `sketch`'s closed-form kernel placed it, and that kernel
+places a cut for exactly one kind of contact: a **crossing** whose source
+curves are **both** a line, a circle or an arc, with a line on at least one
+side. A tangency is never a cut, whatever the curves: the kernel classifies a
+tangency between line/circle/arc sources as a **non-splitting** contact — a
+shared-endpoint tangency is a smooth join, an interior touch splits neither
+curve — so tangent entities arrive as whole edges (two externally tangent
+circles are two whole one-edge loops). Every other cut is **sampled**: every
+curve/curve crossing (circle × circle, circle × arc, arc × arc), and every cut
+at a contact involving an ellipse, elliptical arc, conic, spline, closed
+spline, fit spline or NURBS — **including a plain line** against one of those,
+whether it crosses or merely grazes: such pairs are resolved on the sampled
+polylines, and where the sampled arrangement cuts — it can cut at a grazing
+touch — the parameter is sampled. A sampled cut yields `TExact == false` on
+every fragment it bounds.
 
 **No residual test on a fragment's endpoints could stand in for the flag, at any
 tolerance.** A `Polyline` is a **sample of the curve**: its vertices lie *on*
@@ -297,10 +304,16 @@ elliptical-arc boundary's recordability turn on how the solver converged —
 nondeterministic on data the entity itself records exactly.
 
 **What records reaches exactly as far as `sketch`'s exact kernel does, and no further.**
-That is a circle or arc fragment cut against a line, and a fragment of a tangency
-among lines, circles and arcs. A fragment cut by anything else — an ellipse, elliptical
-arc, conic, spline, closed spline, fit spline or NURBS on either side of the crossing, and
-every curve/curve crossing — carries `TExact == false` and is `ErrUnrecordableProfile`.
+For fragments, that is a line, circle or arc fragment whose bounding cuts were
+placed by the closed-form crossing kernel — each cut a line-involved crossing
+between line/circle/arc sources — plus whole edges of every recordable kind,
+which record from entity data with no cut to certify. Tangencies add nothing
+to that set: among lines, circles and arcs a tangency splits nothing (above),
+so no fragment is ever bounded at one — a tangent entity arrives whole, or in
+fragments whose every bound is a crossing. A fragment cut by anything else — an
+ellipse, elliptical arc, conic, spline, closed spline, fit spline or NURBS on
+either side of the contact, and every curve/curve crossing — carries
+`TExact == false` and is `ErrUnrecordableProfile`.
 That is not decad declining to record it; it is `sketch` reporting that the parameter is
 sampled, and decad recording no fragment on a range it was told is approximate. Widening
 that set is an upstream question about the arrangement, not an API question here.
@@ -1475,21 +1488,30 @@ own point set, a body's or a pair's, never of its pose — and that is what make
 a verdict a property of the **part, not the pose**. Surface area and edge
 length do not move under a rigid motion, and neither does `D`: a diameter is
 realised by two points of the geometry, and a rigid motion preserves their
-distance. So every `δ`, every `Quantum`, every `Ref` and therefore every
-verdict is invariant under rigid motion of the geometry it belongs to
-**exactly** — rotate or translate a body, a pair together, or the whole
-document, and the gate reads the same numbers to the last bit. No axis-aligned
-box measure appears anywhere in the gate, because none has that property. The
+distance. So every `δ`, every `Quantum` and every `Ref` is the same real
+number in every pose — the **rule** reads nothing pose-dependent, and so
+introduces no pose dependence of its own. What a floating-point **evaluator**
+returns for those inputs after the coordinates move is the separate, smaller
+statement: applying a rigid `r3.Transform` rounds every coordinate, so
+re-measuring wobbles at the ulp scale — a 10 mm segment re-measured after a
+rotation by π/7 reads `10.000000000000002` — a relative error of order 1e-16,
+a fact about the evaluator's arithmetic, not about the gate's geometry. That
+wobble can move a verdict only when a `Bound` already sits within machine
+epsilon of its gate, which is the unavoidable property of any threshold
+computed in floating point, and thirteen decades below what the default
+`rel = 1e-3` resolves. No axis-aligned box measure appears anywhere in the
+gate, because a box's pose dependence is **geometric**, not arithmetic. The
 box's bulk is off by decades: the box volume of a slender body posed diagonally
 is of the order of the cube of its length — eleven decades over the same body
 laid on axis, for a metre-long micron wire. And even the box's *diagonal*
 breathes with pose — it lies between `D` and `√3 × D` depending on
-orientation — and a factor that moves at all moves verdicts: any `Bound` that
-lands inside the band reads differently in two poses of the same part. A
-bounded error is not invariance, so the gate admits no box measure, bounded or
-not. The one axis-aligned box in the report is the `Bounds` **result**, and
-pose-dependence is that quantity's nature — it answers where the body sits in
-these axes — but the gate judging its `Bound` reads `D`, not the box.
+orientation — and a factor that moves geometrically moves verdicts: any `Bound`
+that lands inside the band reads differently in two poses of the same part. A
+bounded geometric error is not intrinsicness, so the gate admits no box
+measure, bounded or not. The one axis-aligned box in the report is the
+`Bounds` **result**, and pose-dependence is that quantity's nature — it
+answers where the body sits in these axes — but the gate judging its `Bound`
+reads `D`, not the box.
 
 The floor is honest at every aspect ratio, and the condition is sharp:
 `Quantum` reaches a body's real volume only when `Volume / Area` — the body's
@@ -1588,12 +1610,14 @@ a real, nondegenerate solid whose volume is a trillionth of `D³` gets its floor
 from its own 4 mm² of skin — `Quantum = δ × Area = 4e-6 mm³`, two and a half
 decades under the volume it measures — so a ±50% volume error reads `Suspect`
 on a wire exactly as it does on a cube. Orientation: posing the same wire along
-a diagonal balloons its box's bulk from 1e-3 mm³ to nearly 2e8 mm³, and nothing
-the gate reads moves — volume, area and `D` are the wire's own in either pose,
-its `D` the same 1000 mm between the same two end points. The floor tracks the
-body's skin and its own two farthest points, never its box, so neither aspect
-ratio nor orientation can touch it: the two wire rows are identical column for
-column, and a verdict is a property of the part, not the pose.
+a diagonal balloons its box's bulk from 1e-3 mm³ to nearly 2e8 mm³, while
+volume, area and `D` are the wire's own in either pose — its `D` the same
+1000 mm between the same two end points. The two wire rows list the rule's
+quantities, and those are the same real numbers column for column; an evaluator
+re-measuring them after the move reproduces them to ulps (above), decades
+inside every margin in the row. The floor tracks the body's skin and its own
+two farthest points, never its box, so neither aspect ratio nor orientation can
+touch it: a verdict is a property of the part, not the pose.
 
 The gate has nothing to miss, because **every one of the three shapes carries a
 `Bound`**:
