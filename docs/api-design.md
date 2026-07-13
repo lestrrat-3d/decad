@@ -197,10 +197,10 @@ Vectors carry the unit **by convention**; scalars carry it **in the type**. §5.
 governs scalars, and this is the whole of the carve-out — a bare `float64` scalar
 quantity is still forbidden anywhere in the API. A *curve parameter* is not a
 scalar quantity: a spline's knots and weights, a recorded segment's parameter
-range (`TStart`/`TEnd`), and a conic's fullness `Rho` — the apex weight of a
-rational quadratic in disguise (all `docs/sketch-seam-design.md`) — are
-dimensionless indices into a parameterisation, not measurements of anything,
-and §5.1 does not reach them.
+range (`TStart`/`TEnd`), and a conic's fullness `Rho` — from which a rational
+quadratic's apex weight derives as `w = Rho/(1−Rho)` (all
+`docs/sketch-seam-design.md`) — are dimensionless indices into a
+parameterisation, not measurements of anything, and §5.1 does not reach them.
 
 ### 5.3 Exactness — the load-bearing type
 
