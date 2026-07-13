@@ -29,7 +29,7 @@ func (r *Report) Trustworthy() bool // the single bit to gate on
 
 type BodyReport struct {
     Body              *Body
-    Status            Status       // Sound / Suspect / Unsound — this body only
+    Status            Status       // Sound / Suspect / Violating / Unsound — this body only
     Solid             bool
     Watertight        bool
     Manifold          bool         // every edge bounds exactly 2 faces
@@ -50,9 +50,9 @@ type BodyReport struct {
     Exactness         Exactness      // the weakest link across the quantities this report carries
 
     // Opt-in, expensive; non-nil only when the option asks AND Status != Unsound:
-    MinWallThickness  *Measurement   // WithMinWallThickness(tool)
-    Undercuts         []*Face        // WithPullDirection(v)
-    MinRadius         *Measurement   // WithMinRadius() — can the endmill reach?
+    MinWallThickness  *Measurement   // WithMinWallThickness(tool) — decided against tool (§6)
+    Undercuts         []*Face        // WithPullDirection(v) — non-empty is Violating (§6)
+    MinRadius         *Measurement   // WithMinRadius() — the tightest concave radius; the caller compares (§2)
 }
 ```
 
@@ -94,8 +94,9 @@ computed when `WithClearances()` (§2) asks for it.
 
 ## 2. Tolerance — what "beyond the caller's tolerance" means
 
-`Suspect` and `Trustworthy()` turn on an approximation being *coarser than the
-caller will accept*, so the caller must be able to say what they accept:
+`Suspect` — and through it `Trustworthy()` — turns on an approximation being
+*coarser than the caller will accept*, so the caller must be able to say what
+they accept:
 
 ```go
 func WithTolerance(rel units.Value) VerifyOption // Dimensionless; default units.Scalar(1e-3)
@@ -112,18 +113,39 @@ fills `Undercuts`, `WithMinRadius` fills `MinRadius`, and `WithClearances`
 fills `Report.Clearances`. The correspondence is total in both directions —
 every option feeds the report, and everything in the report is producible:
 `Bodies`, `Interferences` and `Status` unconditionally, the rest each by its
-option. What is opt-in is what is expensive and **required by no status rung**:
-interference must always run — the `Interfering` rung of §6 is unanswerable
-without it — while no rung needs a gap the caller never asked for, and a caller
-who did not ask is never gated on the trustworthiness of answers they do not
-want. An option takes a parameter exactly when its question cannot be posed
-without one: undercuts are relative to a pull direction, so `WithPullDirection`
-takes it, and a probe-free minimum wall thickness is zero on any body with a
-sharp convex edge — thickness is read by the largest ball that fits the wall,
-and no ball fits a sharp edge — so `WithMinWallThickness` takes the tool as the
-probe, which is also the caller's actual question (core §1: no wall thinner
-than the tool that has to cut it). A minimum radius and a minimum gap are
-well-posed bare, so `WithMinRadius` and `WithClearances` take nothing.
+option. What is opt-in is what is expensive and **required by no rung the caller is
+owed unasked**: interference must always run — the `Interfering` rung of §6 is
+unanswerable without it, and overlap is a failure whether or not anyone asked —
+while no rung needs a gap the caller never asked for, and a caller who did not
+ask is never gated on the trustworthiness of answers they do not want. The
+`Violating` rung (§6) reads only opt-in answers and stays answerable for the
+same reason it exists: it enforces specs, an option is where a spec is stated,
+and an option left off states none. An option takes a parameter exactly when
+its question cannot be posed without one: undercuts are relative to a pull
+direction, so `WithPullDirection` takes it, and a probe-free minimum wall
+thickness is zero on any body with a sharp convex edge — thickness is read by
+the largest ball that fits the wall, and no ball fits a sharp edge — so
+`WithMinWallThickness` takes the tool as the probe (a zero tool is that same
+probe-free question, and is `ErrDegenerate`, core §12), which is also the
+caller's actual question (core §1: no wall thinner than the tool that has to
+cut it) — and §6 answers it: `MinWallThickness` is decided against the tool,
+and a wall proven thinner makes its body `Violating`. A minimum radius and a
+minimum gap are well-posed bare, so `WithMinRadius` and `WithClearances` take
+nothing.
+
+**A parameter is a spec, and only a spec earns a verdict.** The line between an
+option the report answers and an option the report merely fills runs exactly
+where the parameters are, and it is drawn once, here. `WithTolerance` states
+how many figures the caller will accept, and the `Suspect` rung enforces it;
+`WithMinWallThickness` states the tool no wall may be thinner than,
+`WithPullDirection` the direction the part must pull along, and the `Violating`
+rung of §6 enforces both. `WithMinRadius` and `WithClearances` take nothing, so
+they state nothing, and `MinRadius` and `Clearance.Gap` are **measurements, not
+verdicts**: the tightest concave radius and the smallest gap, gated for
+trustworthiness like every bounded result but compared against no threshold,
+because the endmill and the clearance spec live with the caller, who was never
+asked to name them. The report never invents a spec the caller did not state,
+and never withholds a verdict on one they did.
 
 **The tolerance is relative, and it is one number for every kind.** `rel` is the
 largest error the caller will accept **as a fraction of the quantity being
@@ -416,9 +438,11 @@ untrustworthy answer can hide in. The first exists only on a body that is
 already `Unsound` — the worst verdict in the precedence below, so the report it
 sits in is already gated harder than any `Suspect` could gate it. The second is
 a quantity the evaluator never computed, so there is no answer, trustworthy or
-otherwise, for the report to be silent about. The gate covers every bounded
-result the report carries, and what the report does not carry is either
-outranked or was never measured.
+otherwise, for the report to be silent about — and no verdict owed either: an
+option is where a spec is stated (§2), so an option left off poses no question
+for the report to fail. The gate covers every bounded result the report
+carries, and what the report does not carry is either outranked or was never
+asked.
 
 **That guarantee is relative, and it is stated relatively because that is what is
 true.** The gate on a centroid is `Bound <= rel × D` with `D` the owning
@@ -448,28 +472,96 @@ document is what makes that reading hold at any scale.
 type Status int
 
 const (
-    Sound       Status = iota // every body sound; nothing approximate beyond tolerance
-    Suspect                   // sound, but an answer is Approximate beyond the caller's tolerance
+    Sound       Status = iota // every body sound; every stated spec met; nothing approximate beyond tolerance
+    Suspect                   // an answer is Approximate beyond the caller's tolerance, or straddles a stated spec
+    Violating                 // a stated spec is proven to fail: a wall thinner than the tool, an undercut against the pull
     Interfering               // bodies overlap
     Unsound                   // some body is not a valid solid
 )
 ```
 
 - **`BodyReport.Status`** is per-body: `Sound` (solid, watertight, manifold, no
-  self-intersection), `Suspect` (sound, but one of its answers is `Approximate` with
-  a `Bound` beyond the tolerance of §2), or `Unsound` (not a valid solid — any of
-  those four predicates the wrong way). Validity is decided by the four
+  self-intersection; every stated spec met; nothing approximate beyond
+  tolerance), `Suspect` (sound, but one of its answers is `Approximate` with a
+  `Bound` beyond the tolerance of §2, or a stated spec is straddled — the
+  interval rule below), `Violating` (sound, but a spec a §2 option stated is
+  proven to fail: `MinWallThickness` decided below the tool, or `Undercuts`
+  non-empty), or `Unsound` (not a valid solid — any of those four predicates
+  the wrong way). Validity is decided by the four
   predicates alone, before any quantity is read, which is what lets §1 key a
   region quantity's presence on it with no circularity: the predicates decide
   `Unsound`, and only a valid body's quantities exist to decide `Sound` against
-  `Suspect`. A body is
+  `Violating` and `Suspect`. A body is
   never `Interfering` — interference is a property of a *pair*, not of a body.
 - **`Report.Status`** is the document-level aggregate — over the bodies *and* over
   the pairwise results, which belong to no body.
 
+**A spec is decided on the proven interval, never on the bare `Value`.** A
+`Measurement` proves its truth lies in `[Value − Bound, Value + Bound]` (core
+§5.3), and the comparison reads that interval, so it is total in three cases:
+
+- **`Value + Bound < tool` decides thin.** Every thickness the interval admits
+  is thinner than the tool, so the body is `Violating` — whatever the gate
+  would say about the bound's size, because the `Bound` is a *proven* bound and
+  a proven interval below the tool is a proven violation at any coarseness.
+- **`Value − Bound >= tool` decides the spec met.** No admissible thickness is
+  thinner than the tool — exactly tool-thick is not thinner — and the trust
+  gate then judges the bound on its own terms, as it judges every bounded
+  result: a wall proven thick by a coarse measurement is still a coarse
+  measurement.
+- **An interval that straddles the tool decides nothing**, and an undecided
+  stated question is exactly what `Suspect` means: the measurement cannot
+  answer the question the caller posed. It reads `Suspect` even when the bound
+  passes the gate — the gate demands figures of the answer, the spec demands
+  resolution at its own threshold, and near the threshold the second is the
+  stronger demand.
+
+Worked, at the default `rel = 1e-3`, against a 1 mm tool, on a body whose
+every other answer is sound and in tolerance:
+
+| `MinWallThickness` | interval | the spec | the gate | body reads |
+|---|---|---|---|---|
+| 0.5 mm, `Exact` | [0.5, 0.5] | decided thin | passes — `Exact` | **`Violating`** |
+| 0.2 ± 0.3 mm | [−0.1, 0.5] | decided thin | fails — 0.3 ≫ 2e-4 | **`Violating`** — a ±150% bound, and still a proven violation |
+| 1.2 ± 1e-4 mm | [1.1999, 1.2001] | met | passes — 1e-4 ≤ 1.2e-3 | `Sound` |
+| 1.2 ± 0.05 mm | [1.15, 1.25] | met | fails — 0.05 > 1.2e-3 | **`Suspect`** — thick, but not to the figures asked |
+| 1.0005 ± 0.001 mm | [0.9995, 1.0015] | straddles | passes — 1e-3 ≤ 1.0005e-3 | **`Suspect`** — the straddle, not the gate |
+
+The last two rows are the trust-versus-spec distinction the ladder keeps: an
+untrustworthy measurement of a thick wall and a trustworthy measurement that
+cannot resolve the threshold both read `Suspect`, while a proven-thin wall —
+however coarsely proven — reads `Violating`, one rung worse.
+
+The comparison and the gate read the same interval and cannot contradict each
+other: neither reads the other's output, and both feed the same worst-wins
+precedence below. The `Exact` zero-thickness wall is the sharp case: its zero
+`Bound` passes the gate at the noise floor as an `Exact` answer passes
+everywhere (§5), and it is `Violating` — [0, 0] sits below any real tool — so
+the gate's pass certifies the *measurement*, never the part. An `Approximate`
+zero at the floor lands the same way through §5's other arm: on a body whose
+`D` is 1 mm the floor gate is `1e-12 mm` (§5), so a bound tight enough to pass
+it puts the whole interval decades under any tool a caller would name —
+decided thin, `Violating`. And a zero reported as `0 ± 5 mm` decides nothing
+and fails the gate too: `Suspect` on both counts, because it is proven neither
+thin nor thick. A trust-pass never implies a spec-pass, a spec-pass never
+implies a trust-pass, and the rungs compose by precedence alone.
+
+The other spec of §2 needs no interval. Undercut membership is a predicate the
+evaluator *decides* (core §6) — an answer, not an approximation of one — so
+`Undercuts` carries no bound and no straddle: the faces themselves are the
+failure, and a non-empty `Undercuts` makes its body `Violating` exactly as a
+non-empty `Interferences` makes the report `Interfering`.
+
 Aggregation is by **severity precedence — worst wins**:
 
-**`Unsound` > `Interfering` > `Suspect` > `Sound`**
+**`Unsound` > `Interfering` > `Violating` > `Suspect` > `Sound`**
+
+Read down, each rung concedes the one above: `Unsound` — some body is not even
+a solid, and nothing about its region is measurable; `Interfering` — every
+body is a solid, but the document claims the same space twice; `Violating` —
+the document is coherent, but a spec the caller stated is proven to fail;
+`Suspect` — nothing is proven wrong, and something is not proven right;
+`Sound` — everything asked is answered, met, and trusted.
 
 Concretely, `Report.Status` is:
 
@@ -477,6 +569,7 @@ Concretely, `Report.Status` is:
 |---|---|
 | any `BodyReport.Status == Unsound` | `Unsound` |
 | else, `len(Interferences) > 0` | `Interfering` |
+| else, any `BodyReport.Status == Violating` | `Violating` |
 | else, any `BodyReport.Status == Suspect` | `Suspect` |
 | else, any `Interference.Volume` or `Clearance.Gap` beyond tolerance (§2) | `Suspect` |
 | else | `Sound` |
@@ -491,6 +584,6 @@ gate covers **every `Measurement`, every `VecMeasurement` and every `Box` the re
 carries** — and per core §5.3 those are all of them.
 
 `Report.Trustworthy()` is true **only** at `Report.Status == Sound`. An unsound
-body, an unresolved interference, or an approximation coarser than the caller's
-tolerance — on a body or on a pair — each make it false, even when the geometry
-"looks" fine.
+body, an unresolved interference, a stated spec proven to fail or left
+undecided, or an approximation coarser than the caller's tolerance — on a body
+or on a pair — each make it false, even when the geometry "looks" fine.
