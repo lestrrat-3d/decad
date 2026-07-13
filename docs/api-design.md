@@ -282,14 +282,19 @@ fragment it is recording, and derives it from nothing.
 
 **Whole (non-`Partial`) edges never consult `TExact`.** A whole edge records
 from the entity's own defining data — there is no trim to recover, so the flag
-answers a question decad is not asking. The distinction bites on exactly one
-kind: a whole `*EllipticalArc` edge reads `TExact == false`, because the arc's
-endpoints are pinned to sketch points that lie on the parametric ellipse only
-within solver tolerance, so evaluating the entity at its domain ends misses the
-polyline ends by that tolerance. That is a fact about the pinning, **not
-topology distrust**, and it must not affect whole-edge recording: an implementer
-who "helpfully" gates whole edges on `TExact` would reject every whole
-elliptical-arc boundary that the entity's own data records exactly.
+answers a question decad is not asking. `sketch` decides the flag by
+reproduction — the checkable meaning above — so on a whole edge it turns on how
+the entity's domain ends arise. Every kind but one evaluates them from the
+curve itself, so its whole edge reads `true`. The exception is the whole
+`*EllipticalArc` edge, whose flag is **contingent**: the arc's endpoints are
+pinned to sketch points rather than evaluated from the curve, so the flag reads
+`false` whenever those pinned points miss the parametric ellipse — the typical
+solver outcome, a miss on the order of the solver tolerance — and `true` when
+they happen to land on it. Either reading is a fact about the pinning, **not
+topology distrust**, and neither may affect whole-edge recording: an
+implementer who "helpfully" gates whole edges on `TExact` would make an
+elliptical-arc boundary's recordability turn on how the solver converged —
+nondeterministic on data the entity itself records exactly.
 
 **What records reaches exactly as far as `sketch`'s exact kernel does, and no further.**
 That is a circle or arc fragment cut against a line, and a fragment of a tangency
@@ -1428,24 +1433,29 @@ belongs to**, and ownership, not convenience, decides whose geometry that is:
   that body's own surface and edges. A body's answers are judged against the
   body they are answers about;
 - an `Interference.Volume` and a `Clearance.Gap` belong to a **pair**, so no single
-  body's size is theirs to be judged against. For those, and only those, `D` is
-  the **document's** — the diameter of the union of every live body's points, the
-  one reference both members of the pair share — and the boundary measure of an
-  interference is the pair's own: the operands' summed surface areas.
+  body's size is theirs to be judged against — but the pair's own is. For those,
+  and only those, `D` is the **pair's**: the diameter of the union of the two
+  operand bodies' points — the greatest distance between two points drawn from
+  either body — the one reference both members share and the only geometry the
+  result is about. The boundary measure of an interference is the pair's own as
+  well: the operands' summed surface areas. A body that is not an operand has no
+  say in a pair's verdict, however large it is or wherever it sits.
 
 A diameter is a distance between two points of the geometry, and a surface area
-or an edge length is intrinsic to the body, so every reference is invariant
-under rigid motion — and translation invariance is exactly what a position's
-reference must have.
+or an edge length is intrinsic to the bodies measured, so every reference is
+invariant under rigid motion — and translation invariance is exactly what a
+position's reference must have.
 
 `Quantum` is the quantity's **noise floor** — the magnitude below which a value
 of that `Kind` is not distinguishable from zero by any evaluator. Vertex
 positions are the primitive everything else is computed from, and they are
-trusted to an absolute noise of `δ = ε × D`, with `ε = 1e-9` fixed. What that
-noise does to a quantity is set by the **boundary the quantity depends on**:
-displace every boundary point by `δ` and a volume moves by at most `δ ×` the
-area of the surface enclosing it, an area by at most `δ ×` the length of the
-edges bounding it, a length by `δ` itself. `Quantum` is that product:
+trusted to an absolute noise of `δ = ε × D` — `D` decided by the ownership rule
+above: a body's own for a body's results, the pair's for a pair's — with
+`ε = 1e-9` fixed. What that noise does to a quantity is set by the **boundary
+the quantity depends on**: displace every boundary point by `δ` and a volume
+moves by at most `δ ×` the area of the surface enclosing it, an area by at most
+`δ ×` the length of the edges bounding it, a length by `δ` itself. `Quantum` is
+that product:
 
 | Quantity | `Quantum` |
 |---|---|
@@ -1460,25 +1470,26 @@ area × chord error` (above) — evaluated at the noise displacement instead of
 the chord error: the floor is where that bound would land if the evaluator were
 perfect to the last bit of its own coordinates.
 
-Every input to the gate is **intrinsic** — a property of the body's own point
-set, never of its pose — and that is what makes a verdict a property of the
-**part, not the pose**. Surface area and edge length do not move under a rigid
-motion, and neither does `D`: a diameter is realised by two points of the body,
-and a rigid motion preserves their distance. So every `δ`, every `Quantum`,
-every `Ref` and therefore every verdict is invariant under rigid motion
-**exactly** — rotate or translate a body, or the whole document, and the gate
-reads the same numbers to the last bit. No axis-aligned box measure appears
-anywhere in the gate, because none has that property. The box's bulk is off by
-decades: the box volume of a slender body posed diagonally is of the order of
-the cube of its length — eleven decades over the same body laid on axis, for a
-metre-long micron wire. And even the box's *diagonal* breathes with pose — it
-lies between `D` and `√3 × D` depending on orientation — and a factor that
-moves at all moves verdicts: any `Bound` that lands inside the band reads
-differently in two poses of the same part. A bounded error is not invariance,
-so the gate admits no box measure, bounded or not. The one axis-aligned box in
-the report is the `Bounds` **result**, and pose-dependence is that quantity's
-nature — it answers where the body sits in these axes — but the gate judging
-its `Bound` reads `D`, not the box.
+Every input to the gate is **intrinsic** — a property of the owning geometry's
+own point set, a body's or a pair's, never of its pose — and that is what makes
+a verdict a property of the **part, not the pose**. Surface area and edge
+length do not move under a rigid motion, and neither does `D`: a diameter is
+realised by two points of the geometry, and a rigid motion preserves their
+distance. So every `δ`, every `Quantum`, every `Ref` and therefore every
+verdict is invariant under rigid motion of the geometry it belongs to
+**exactly** — rotate or translate a body, a pair together, or the whole
+document, and the gate reads the same numbers to the last bit. No axis-aligned
+box measure appears anywhere in the gate, because none has that property. The
+box's bulk is off by decades: the box volume of a slender body posed diagonally
+is of the order of the cube of its length — eleven decades over the same body
+laid on axis, for a metre-long micron wire. And even the box's *diagonal*
+breathes with pose — it lies between `D` and `√3 × D` depending on
+orientation — and a factor that moves at all moves verdicts: any `Bound` that
+lands inside the band reads differently in two poses of the same part. A
+bounded error is not invariance, so the gate admits no box measure, bounded or
+not. The one axis-aligned box in the report is the `Bounds` **result**, and
+pose-dependence is that quantity's nature — it answers where the body sits in
+these axes — but the gate judging its `Bound` reads `D`, not the box.
 
 The floor is honest at every aspect ratio, and the condition is sharp:
 `Quantum` reaches a body's real volume only when `Volume / Area` — the body's
@@ -1522,10 +1533,11 @@ Three things follow, and all three are rules:
   Ref` reads `Bound <= rel × Quantum` — an **absolute** threshold, a thousandth
   of the noise floor at the default `rel`. It is a real number and the reader
   can check it: a zero wall thickness on a body whose `D` is 1 mm has
-  `Quantum = δ = 1e-9 mm`, so the gate is `1e-12 mm`; a zero clearance in a
-  document 100 mm across has `Quantum = 1e-7 mm` and a gate of `1e-10 mm`. So a near-zero
-  answer passes only with a bound that is, in practice, vanishingly tight. A
-  tessellation does not produce one — an `Approximate` near-zero answer will
+  `Quantum = δ = 1e-9 mm`, so the gate is `1e-12 mm`; a zero clearance between
+  two bodies whose union spans 100 mm has `Quantum = 1e-7 mm` and a gate of
+  `1e-10 mm`. So a near-zero answer passes only with a bound that is, in
+  practice, vanishingly tight. A tessellation does not produce one — an
+  `Approximate` near-zero answer will
   essentially always read `Suspect` — while an `Exact` answer has a zero `Bound` and
   passes at the floor as it does everywhere else. That is the intent: a zero
   clearance reported as `0 ± 5mm` is untrustworthy and must be `Suspect`; a zero
@@ -1547,7 +1559,13 @@ Three things follow, and all three are rules:
   is also scale-free: a centroid is judged against the size of the body whose centroid
   it is, so a 100mm bracket sharing a document with a 1.5m enclosure is judged against
   its own hundred-odd millimetres, and does not inherit a slack tolerance from the
-  biggest thing in the document.
+  biggest thing in the document. Pair results keep the same discipline through
+  the pair's own `D`: a 1µm gap bounded to ±5e-4 mm between two bodies spanning
+  100 mm together sits above its `1e-7 mm` floor, so its gate is
+  `rel × 1e-6 mm` — `1e-9 mm` at the default — and it reads `Suspect` whether
+  those two bodies share the document with nothing or with a building. No
+  result, a body's or a pair's, is ever judged against geometry it is not
+  about.
 
 Worked, at the default `rel = 1e-3`, on four bodies — the last two are the same
 wire, posed twice:
