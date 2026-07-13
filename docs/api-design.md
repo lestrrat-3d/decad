@@ -1066,8 +1066,9 @@ specified in `docs/verification-design.md`. What the core contract pins down:
 
 - **`Verify` returns an `error`, and the report carries no health state.** The
   error is for the call that could not be made — a `WithTolerance` value of the
-  wrong `Kind` is `ErrUnitKind`, a negative one is `ErrNegativeMagnitude`
-  (§12) — and a `Report` is returned only when the verification actually ran.
+  wrong `Kind` is `ErrUnitKind`, a negative one is `ErrNegativeMagnitude`, a
+  non-finite one is `ErrNotFinite` (§12) — and a `Report` is returned only when
+  the verification actually ran.
   §12 admits no alternative: a `Report.Err` field an agent could forget to read
   is exactly the deferred health state §4 rejects in Fusion, and a `bool` is no
   better.
@@ -1117,7 +1118,10 @@ to make that mechanical.
   variant with the certified range, and a whole edge of every kind records;
   full semantics in `docs/sketch-seam-design.md`),
   `ErrNotSolid`, `ErrDegenerate`, `ErrBooleanFailed`, `ErrInvalidProfile`,
-  `ErrUnitKind`.
+  `ErrUnitKind`, `ErrNotFinite` (a non-finite `units.Value` magnitude or
+  `r3.Vec` component handed as a parameter — `units` construction admits a
+  non-finite value and only its operations reject one, so the call must;
+  option semantics in `docs/verification-design.md`).
 - **`ErrUnitKind` covers exactly the wrong-`Kind` values.** A `units.Value` whose
   `Kind` is not the one the parameter takes: an angle where a length is wanted, and
   a `WithTolerance` value that is not `Dimensionless`
