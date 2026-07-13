@@ -56,9 +56,9 @@ type BodyReport struct {
     // Opt-in, expensive; nil unless the option asks AND the body is a proven
     // solid. MinWallThickness and MinRadius add a third leg: the feature must
     // exist (below):
-    MinWallThickness  *Measurement   // WithMinWallThickness(tool) — the thinnest wall: material between
-                                     // opposing skins (§6); nil when no wall exists (below); decided
-                                     // against the tool (§6)
+    MinWallThickness  *Measurement   // WithMinWallThickness(tool, ...) — the thinnest wall: material
+                                     // between skins opposing within the draft allowance (§6); nil when
+                                     // no wall exists (below); decided against the tool (§6)
     Undercuts         []*Face        // WithPullDirection(v) — every entry a proven undercut: non-empty
                                      // is Violating; empty claims none exist, held to proof (§6)
     MinRadius         *Measurement   // WithMinRadius() — the tightest concave radius; nil when no
@@ -98,10 +98,11 @@ absence, and an answer §6 holds to proof like any other, marking the body
 `Suspect` when the evaluator cannot give one.
 `MinWallThickness` and `MinRadius` each measure a feature a valid solid may
 simply not have. A wall is material between **opposing skins** — two boundary
-patches facing each other across it, read by the ball that spans them, skin
-to skin (§6) — and a body that is all edge and taper — a tetrahedron, a
-cone — has skins that everywhere meet and nowhere oppose: no wall at all, not
-a thick one. A concave radius is a feature an all-convex body — a plain
+patches facing each other across it, within the draft allowance (§6),
+read by the ball that spans them, skin to skin — and a body that is all
+edge — a tetrahedron, whose skins everywhere meet at the body's own 70.5°
+dihedral, past any allowance short of it (§6), and nowhere oppose — has no
+wall at all, not a thick one. A concave radius is a feature an all-convex body — a plain
 block — does not have. For neither can a `Measurement` honestly stand for
 *none*. Zero is core §4's sentinel reintroduced: a real wall pinches to a
 genuine `Exact` zero where its skins meet at tangency — a knife edge, a
@@ -160,17 +161,24 @@ they accept:
 
 ```go
 func WithTolerance(rel units.Value) VerifyOption // Dimensionless; default units.Scalar(1e-3)
-func WithMinWallThickness(tool units.Value) VerifyOption
+func WithMinWallThickness(tool units.Value, opts ...WallOption) VerifyOption
+func WithDraftAllowance(a units.Value) WallOption // Angle; default units.Degrees(15)
 func WithPullDirection(v r3.Vec) VerifyOption
 func WithMinRadius() VerifyOption
 func WithClearances() VerifyOption
 ```
 
 `WithTolerance` sets the gate this section defines; each of the other four
-switches on one quantity, and each lands in a named place in the report:
-`WithMinWallThickness` fills `BodyReport.MinWallThickness`, `WithPullDirection`
-fills `Undercuts`, `WithMinRadius` fills `MinRadius`, and `WithClearances`
-fills `Report.Clearances`. The correspondence is total in both directions —
+`VerifyOption`s switches on one quantity, and each lands in a named place in
+the report: `WithMinWallThickness` fills `BodyReport.MinWallThickness`,
+`WithPullDirection` fills `Undercuts`, `WithMinRadius` fills `MinRadius`, and
+`WithClearances` fills `Report.Clearances`. `WithDraftAllowance` is no fifth
+switch: it is the wall question's second parameter (below), it travels inside
+`WithMinWallThickness` — a `WallOption`, the nesting core §8.1's
+functional-options house style gives an option's own parameters — and it
+cannot be stated without the question it parameterizes, so no allowance ever
+dangles with no wall question to mean anything by. The correspondence is
+total in both directions —
 every option feeds the report, and everything in the report is producible:
 `Bodies`, `Interferences` and `Status` unconditionally, the rest each by its
 option. What is opt-in is what is expensive and **required by no rung the caller is
@@ -183,27 +191,46 @@ same reason it exists: it enforces specs, an option is where a spec is stated,
 and an option left off states none. An option takes a parameter exactly when
 the question the caller poses states one. Undercuts are relative to a pull
 direction, so `WithPullDirection` takes it — a zero direction poses no
-direction at all, and is `ErrDegenerate` (core §12). The wall question is
-comparative, in core §1's own words — *no wall thinner than the tool that has
-to cut it* — so `WithMinWallThickness` takes the tool, and the tool is the
-**spec, never the probe**: the reading needs no probe, because a wall carries
-its own — a wall is material between opposing skins, read by the ball that
-spans it, skin to skin (§6) — so `MinWallThickness` is a fact of the body
-alone, and the tool enters only where §6 decides the reading against it: a
-wall proven thinner makes its body `Violating`. A zero tool states the one
-spec no wall can violate — no thickness is thinner than zero — a comparison
-with a single outcome, no question at all, and is `ErrDegenerate` too (core
-§12). A minimum radius and a
+direction at all, and is `ErrDegenerate` (core §12). The wall question states
+two, because it is one spec in two parts: *no wall thinner than the tool that
+has to cut it* — core §1's own words — *a wall being skins that oppose within
+the draft allowance*. `WithMinWallThickness` takes the tool, and the tool is
+the **spec, never the probe**: the reading needs no probe, because a wall
+carries its own — a wall is material between opposing skins, read by the ball
+that spans it, skin to skin (§6) — so `MinWallThickness` is a fact of the
+body alone, and the tool enters only where §6 decides the reading against it:
+a wall proven thinner makes its body `Violating`. `WithDraftAllowance` takes
+the allowance, and the allowance is spec for the reason §6 works through: no
+line intrinsic to the geometry separates a drafted wall from a shallow
+wedge — the caller's **process** draws it, drafting the walls it molds and
+chamfering the edges it breaks — so where the wall ends and the edge begins
+is the caller's to state, exactly as the tool is. Unlike the tool it carries
+a **convention default**, `units.Degrees(15)`: no convention can guess a
+tool size, but draft practice is narrow — single-digit degrees at its
+heaviest — and deliberate wedges start far above it, so one generous line
+covers real processes (§6 works both brackets), and a caller whose process
+leans harder moves it. A zero tool states the one spec no wall can violate —
+no thickness is thinner than zero — a comparison with a single outcome, no
+question at all, and is `ErrDegenerate` too (core §12). A **zero allowance**
+is legal, and is the strictest reading — exact opposition and its tangency
+limits only, every tapered skin deliberate — but the range is capped where
+opposition itself gives out: at 90° or beyond, skins meeting at a square
+corner would count as facing each other and every block's every edge would
+read as a zero-thickness wall (§6) — a question no longer about walls, and
+`ErrDegenerate` on the zero tool's own grounds. The legal range is
+`[0°, 90°)`. A minimum radius and a
 minimum gap are well-posed bare, so `WithMinRadius` and `WithClearances` take
-nothing — and the wall *reading* is well-posed bare on the same terms, so the
-tool is not what makes it posable; it is the spec core §1's question states,
-and only a stated spec earns a verdict (below).
+nothing — and the wall *reading* is well-posed with no tool at all, so the
+tool is not what makes it posable; the reading's own parameter is the
+allowance, defaulted above, and the tool is the spec core §1's question
+states — only a stated spec earns a verdict (below).
 
 **A parameter is a spec, and only a spec earns a verdict.** The line between an
 option the report answers and an option the report merely fills runs exactly
 where the parameters are, and it is drawn once, here. `WithTolerance` states
 how many figures the caller will accept, and the `Suspect` rung enforces it;
-`WithMinWallThickness` states the tool no wall may be thinner than,
+`WithMinWallThickness` states the tool no wall may be thinner than — the
+allowance inside it stating what counts as a wall at all —
 `WithPullDirection` the direction the part must pull along, and the `Violating`
 rung of §6 enforces both. `WithMinRadius` and `WithClearances` take nothing, so
 they state nothing, and `MinRadius` and `Clearance.Gap` are **measurements, not
@@ -237,10 +264,13 @@ turns it inside out: every comparison against a `NaN` is false, so every
 answer reads `Suspect`, the `Exact` answers §6 promises can never trip the
 gate included. Neither is a tolerance, so neither is allowed to act as one.
 The same rule closes the class for every parameter the options above take: a
-non-finite `WithMinWallThickness` tool, or a `WithPullDirection` vector with a
-non-finite component, is `ErrNotFinite` on the same terms — a negative tool is
-`ErrNegativeMagnitude` (core §12), and the zero tool and zero direction are
-`ErrDegenerate`, above. All are returned from `Verify` — never deferred into
+non-finite `WithMinWallThickness` tool, a non-finite draft allowance, or a
+`WithPullDirection` vector with a non-finite component, is `ErrNotFinite` on
+the same terms — a negative tool or a negative allowance is
+`ErrNegativeMagnitude`, an allowance whose `Kind` is not an angle is
+`ErrUnitKind` (core §12), and the zero tool, the zero direction and the
+90°-or-beyond allowance are `ErrDegenerate`, above. All are returned from
+`Verify` — never deferred into
 the report — which is why it returns an `error` (core §10).
 
 **The default is `units.Scalar(1e-3)` — three significant figures — and it is set
@@ -558,10 +588,12 @@ report says by absence or emptiness is an **answer** — a decided answer, never
 an approximation of one — and the report gives four answers this way:
 
 - **A nil `MinWallThickness` on a proven solid** is the determination *no wall
-  exists* — nowhere do two of the body's skins oppose (the wall rule below),
+  exists* — nowhere do two of the body's skins oppose within the allowance
+  (the wall rule below),
   so nothing exists for the tool to be thinner than. On analytic faces the
-  proof exists: which face pairs oppose across material, and whether any
-  tangency pinches a wall to zero, are closed-form facts of the surfaces, and
+  proof exists: which face pairs oppose within the allowance across material,
+  and whether any meeting inside it pinches a wall to zero, are closed-form
+  facts of the surfaces, and
   the spanning survey over them (below) is that proof. A survey that is itself
   approximate proves nothing of the kind — a feather pinched below the chord
   error lands inside one facet and leaves no opposing pair to find. A
@@ -732,61 +764,129 @@ const (
 - **`Report.Status`** is the document-level aggregate — over the bodies *and* over
   the pairwise results, which belong to no body.
 
-**A wall is material between opposing skins, and the reading needs no
-probe.** `MinWallThickness` reads the body's maximal inscribed balls — every
+**A wall is material between opposing skins, the allowance says how much
+draft opposition tolerates, and the reading needs no probe.**
+`MinWallThickness` reads the body's maximal inscribed balls — every
 ball that fits the material and can grow no further — and fit alone is not a
 wall: no ball of positive radius fits a sharp convex edge, so a bare infimum
 over fits reads zero on any body with one, and §6 would faithfully find a
 plain 100 mm cube `Violating` against a 1 mm tool — a verdict about every
 part's edges and about no part's walls. What discriminates is what a ball
 touches. A ball **spans a wall** when two of its boundary contacts are
-diametrally opposite: its diameter then runs skin to skin, and the material
-it fills is a slab between two boundary patches that face each other. The
+within the draft allowance α of diametrally opposite — `WithDraftAllowance`,
+default 15° (§2), *within* inclusive as within tolerance is (§2): its
+diameter then runs skin to skin — squarely at exact opposition, across the
+lean when the contacts sit inside the allowance — and the material it fills
+is a slab between two boundary patches that face each other. The
 mid-plane ball of a 10×10×0.5 mm plate touches the two 10×10 skins at
 opposite poles — it spans, and its 0.5 mm diameter is the plate's wall —
 while a ball wedged near a cube's edge touches the two faces at points 90°
 apart: those skins meet, they do not oppose, nothing lies *between* them, and
 the ball spans nothing however small the edge starves it. In general the two
 contacts of a ball inscribed in a dihedral of angle δ sit π − δ apart, so
-opposition is the tangency limit δ → 0, and a sharp edge is the reading's
-excluded case at every angle, not at a tuned one. The cube's only spanning
-ball is its center's, touching two opposite faces 50 mm out each way: its
-reading is its own 100 mm slab, and a 1 mm tool finds nothing to violate.
+the allowance is a line through the dihedrals: **a wedge of dihedral within
+the allowance is a wall, beyond it an edge** — δ ≤ α spans, δ > α never
+does, at every size the edge starves a ball to.
+
+The allowance is the caller's spec (§2) because no line intrinsic to the
+geometry separates a drafted wall from a shallow wedge — the **process**
+draws it, and two cases bracket where it can sit. A 100 mm long,
+20 mm tall wall, 1.0 mm thick at its base and drafted 1° — 1.35 mm at the
+top, as every molded wall is drafted — is a wall by any process's lights,
+and a 1.5 mm tool spec must find it thin: its skins' contacts sit 179°
+apart, and a reading that demanded exact opposition would read the part
+`Sound` against the tool that cannot cut it — the exact failure the
+question exists to catch. A 60° chamfer is an edge
+by the same lights, and the same tool must find nothing there: its
+contacts sit 120° apart, and the balls its edge starves say how sharp the
+edge is, not how thin any wall is. Between those brackets the geometry
+offers no line, so the default is a convention the caller owns, with its
+grounds stated (§2): 15° clears the heaviest real draft — single-digit
+degrees, 0.5–3° as a rule, 5–7° on heavily textured mold faces — by a
+factor of two, and sits a factor of four under the 60° chamfer. A process
+whose deliberate wedges run finer — a knife ground to a 12° bevel — is
+exactly a caller with a line of their own to state, and moving the line
+moves only where wall ends and edge begins, never the reading's law. The
+range cap is where opposition itself gives out: two
+skins face each other only while their contacts sit past a right angle
+apart, so α is legal on `[0°, 90°)` (§2) — and it is the cap, not the
+default, that a square edge can never cross. A cube's edges are excluded
+at every legal allowance; its only spanning ball is its center's, touching
+two opposite faces 50 mm out each way: its reading is its own 100 mm slab,
+and a 1 mm tool finds nothing to violate.
 
 `MinWallThickness` is the infimum of the diameter over spanning balls,
-closed under limits: a family of balls whose contacts approach opposition as
-the balls thin contributes the diameter it converges to. That closure is the
-knife edge's zero (§1): where two skins meet at **tangency** — a wall ground
-out to nothing, a face running out tangent onto another — the balls between
-the skins thin to nothing while their contacts straighten toward opposite
-poles, and the infimum is a genuine 0 on a body that is still a proven
-solid, decided thin against any real tool by the interval rule below. An
-edge of positive dihedral contributes nothing, however acute: its contacts
-hold π − δ apart at every size, short of opposition, so a feather edge and a
-cube's edge are the same answer — *an edge, not a wall*. A caller whose spec
-is a minimum edge angle is stating a spec `WithMinWallThickness` does not
-pose, and no option states, so no verdict enforces it (§2) — the vertical
-wall's line (below), one spec over. And a body may have no wall at all: a
-regular tetrahedron's inscribed ball touches its four faces pairwise
-arccos(−1/3) ≈ 109.5° apart, no ball it admits anywhere comes nearer
-opposition, and no family closes a limit — every skin meets its neighbours
-and opposes none. The infimum is over nothing, and §1 carries that answer in
-presence: `MinWallThickness` nil, the determination *no wall exists*, held
-to proof by the absence standard above.
+closed under limits: a family of balls whose contacts approach within-α
+opposition contributes the diameter it converges to. On the drafted wall
+the infimum is the base-tangent spanning ball, pinned by the two skins and
+the base at once — diameter 1.009 mm, the base thickness read across the
+1° lean — and against the 1.5 mm tool the interval rule below decides it
+`Violating`. The closure is the knife edge's zero (§1): where two skins
+meet at **tangency** — a wall ground out to nothing, a face running out
+tangent onto another — the balls between the skins thin to nothing with
+their contacts inside every allowance, zero included, and the infimum is a
+genuine 0 on a body that is still a proven solid, decided thin against any
+real tool by the interval rule below. A taper within the allowance pinches
+the same way — a drafted wall run out to a sharp edge is a wall ground to
+nothing, and reads 0 — while an edge of dihedral beyond α contributes
+nothing however acute: its contacts hold π − δ apart at every size, short
+of the allowance, so a 20° chamfer and a cube's edge are the same answer
+at the default — *an edge, not a wall*. A caller whose spec is about the
+edges themselves — a minimum edge angle, say — is stating a spec
+`WithMinWallThickness` does not pose, and no option states, so no verdict
+enforces it (§2): the allowance says where walls end, and demands nothing
+of the edges beyond. And a body may have no wall at all: a regular
+tetrahedron's inscribed ball touches its four faces pairwise
+arccos(−1/3) ≈ 109.5° apart — the body's own 70.5° dihedral, read in
+contacts — so nothing spans at the default, or at any allowance short of
+that dihedral, and no family closes a limit: every skin meets its
+neighbours and opposes none. The infimum is over nothing, and §1 carries
+that answer in presence: `MinWallThickness` nil, the determination *no
+wall exists*, held to proof by the absence standard above. Bulk changes
+nothing: an equilateral wedge prism 30 mm on a side and 80 mm long has its
+side pairs at 60°, its caps at 90° to them, and its two parallel caps
+beyond any inscribed ball's reach — no ball exceeds the cross-section's
+8.66 mm inradius, so none touches caps 80 mm apart — no spanning ball
+anywhere, nil, and no tool spec it can violate.
+
+Worked, at the default α = 15° — spanning is contacts within 15° of
+opposite, a dihedral of 15° or less:
+
+| Body | nearest skins | contacts | reading | against the tool |
+|---|---|---|---|---|
+| 10×10×0.5 mm plate | the 10×10 skins, parallel | 180° | 0.5 mm | **`Violating`** vs 1 mm |
+| 100 mm cube | opposite faces — its edges sit at 90°, past every legal α | 180° | 100 mm | `Sound` vs 1 mm |
+| 100×20 mm wall, 1.0 mm base, 1° draft | its two skins | 179° | 1.009 mm | **`Violating`** vs 1.5 mm |
+| 60° wedge prism, 30 mm side, 80 mm long | side pairs 120°; caps opposite but beyond any ball | — | nil — no wall | nothing to violate |
+| regular tetrahedron | face pairs | 109.5° | nil — no wall | nothing to violate |
+| knife edge | skins at tangency | → 180° | `Exact` 0 | **`Violating`** vs any tool |
+| 100×100×0.001 mm sliver | the 100×100 skins, parallel | 180° | 0.001 mm | **`Violating`** vs any real tool |
 
 The reading quantifies over inscribed balls, but everything it reads is the
 boundary the evaluator holds, as with the undercut survey below. On analytic
 faces the spanning survey is closed form: whether two of core §6.1's
-variants oppose across material, the ball between them, and the tangency
+variants oppose within the allowance across material, the ball between
+them, and the meeting inside the allowance
 that pinches a wall to zero are exact facts of the surfaces, so an analytic
-evaluator decides the reading — and the absence — outright. A `Faceted`
+evaluator decides the reading — and the absence — outright, the boundary
+case included: a wall drafted at exactly α spans — within is inclusive,
+above — and an exact evaluator reads its thinnest spanning ball like any
+other wall's. A `Faceted`
 evaluator surveys facet pairs whose normals carry tilt bounds (core §6.1),
 and what its survey cannot pin, its proven `Bound` must cover: a
-near-opposite pair it can neither count as a wall nor dismiss widens the
+pair whose tilt bounds admit both sides of the allowance it can neither
+count as a wall nor dismiss — the at-allowance wall is that pair every
+time, as the exactly-vertical wall is the undercut survey's undecided face
+(below) — and it widens the
 reading's interval until it admits both answers, and the interval rule below
 does the rest — an interval that straddles the tool reads `Suspect`, the
-honest verdict on a tessellated feather whose facets really could lean
-either way.
+honest verdict on a tessellated feather — or a wall drafted at the
+allowance itself — whose facets really could lean
+either way. And where dismissing the undecidable pair would leave no wall
+at all, the two answers are a reading and an absence, no interval spans
+them, and the absence standard above already holds: *no wall* is a claim
+the survey cannot prove, and the body reads `Suspect` with
+`MinWallThickness` nil.
 
 **A spec is decided on the proven interval, never on the bare `Value`.** A
 `Measurement` proves its truth lies in `[Value − Bound, Value + Bound]` (core
@@ -894,7 +994,9 @@ above and its body reads `Suspect`, the honest answer: inside its bound a
 tessellated wall really could lean either way. A caller whose spec is a
 positive minimum draft — not mere clearance — is stating a spec
 `WithPullDirection` does not pose, and no option states, so no verdict
-enforces it (§2). And an **empty** `Undercuts` claims more than every held
+enforces it (§2): the draft *allowance* is no such spec — it says which
+skins the wall reading counts as opposing (above), and demands nothing of
+the pull. And an **empty** `Undercuts` claims more than every held
 face settled — it is the absence answer of the standard above, quantifying
 over the part and not the survey: provable by the exact range surveys over
 analytic faces, unprovable from a tessellation, whose sub-chord features no
