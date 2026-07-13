@@ -1484,22 +1484,47 @@ the chord error: the floor is where that bound would land if the evaluator were
 perfect to the last bit of its own coordinates.
 
 Every input to the gate is **intrinsic** — a property of the owning geometry's
-own point set, a body's or a pair's, never of its pose — and that is what makes
-a verdict a property of the **part, not the pose**. Surface area and edge
-length do not move under a rigid motion, and neither does `D`: a diameter is
+own point set, a body's or a pair's, never of its pose — and that is the
+rule's half of making a verdict a property of the **part, not the pose**.
+Surface area and edge length do not move under a rigid motion, and neither
+does `D`: a diameter is
 realised by two points of the geometry, and a rigid motion preserves their
 distance. So every `δ`, every `Quantum` and every `Ref` is the same real
 number in every pose — the **rule** reads nothing pose-dependent, and so
-introduces no pose dependence of its own. What a floating-point **evaluator**
-returns for those inputs after the coordinates move is the separate, smaller
-statement: applying a rigid `r3.Transform` rounds every coordinate, so
-re-measuring wobbles at the ulp scale — a 10 mm segment re-measured after a
-rotation by π/7 reads `10.000000000000002` — a relative error of order 1e-16,
-a fact about the evaluator's arithmetic, not about the gate's geometry. That
-wobble can move a verdict only when a `Bound` already sits within machine
-epsilon of its gate, which is the unavoidable property of any threshold
-computed in floating point, and thirteen decades below what the default
-`rel = 1e-3` resolves. No axis-aligned box measure appears anywhere in the
+introduces no pose dependence of its own. The floating-point **evaluator**
+owns the other half — what its arithmetic returns for those same inputs
+after the coordinates move — and that half is a statement about coordinate
+**magnitude**: applying a rigid `r3.Transform` rounds every coordinate, and
+the rounding is an absolute noise of order
+`ulp(|coordinate|) ≈ |coordinate| × 2⁻⁵²` — relative to the coordinate, not
+to the feature computed from it — so a feature of size `L` built from
+coordinates of magnitude `R` re-measures with a relative wobble of order
+`(R / L) × 2⁻⁵²`. For a model whose coordinates are of the order of the
+geometry they describe — parts kept near the origin at their own scale —
+the two magnitudes coincide and the wobble is ulps: a 10 mm segment
+re-measured after a rotation by π/7 reads `10.000000000000002`, a relative
+error of order 1e-16, thirteen decades below what the default `rel = 1e-3`
+resolves — a fact about the evaluator's arithmetic, not about the gate's
+geometry, and one that can move a verdict only when a `Bound` already sits
+within a few ulps of its gate, the unavoidable property of any threshold
+computed in floating point. A body parked far from the origin is a different
+matter, and it fails upstream of the gate: it has spent its mantissa on its
+own position. At `1e17 mm` the ulp is `16 mm`, so every coordinate of a
+10 mm body parked there quantizes to a multiple of 16 mm and the segment
+re-measures as `0` or `16 mm` — value, `Bound`, `D`, area, every gate input
+computed from those coordinates is gone together, and no rule reading them
+can defend numbers that no longer carry the geometry. What the gate does own
+is that the loss must be **visible**. A `Bound` is a *proven* bound (§5.4),
+so an honest evaluator folds the coordinate rounding it was handed into the
+`Bound` it reports, and the escalation is a ladder the reader can check:
+past `R / D ≈ ε × 2⁵² ≈ 4.5e6` — a 10 mm part beyond about 45 km — the
+rounding exceeds the `δ = ε × D` the noise model trusts a vertex to; past
+`R / L ≈ rel × 2⁵² ≈ 4.5e12` at the default, the honest `Bound` exceeds
+`rel × Ref` and the body reads `Suspect`; by `R / L ≈ 2⁵² ≈ 4.5e15` the ulp
+reaches the feature itself and nothing measured survives, as at `1e17 mm`
+above. The gate cannot restore figures the coordinates no longer hold; what
+it guarantees is that an honestly bounded loss reads `Suspect`, never a
+confidently wrong `Sound`. No axis-aligned box measure appears anywhere in the
 gate, because a box's pose dependence is **geometric**, not arithmetic. The
 box's bulk is off by decades: the box volume of a slender body posed diagonally
 is of the order of the cube of its length — eleven decades over the same body
@@ -1614,10 +1639,12 @@ a diagonal balloons its box's bulk from 1e-3 mm³ to nearly 2e8 mm³, while
 volume, area and `D` are the wire's own in either pose — its `D` the same
 1000 mm between the same two end points. The two wire rows list the rule's
 quantities, and those are the same real numbers column for column; an evaluator
-re-measuring them after the move reproduces them to ulps (above), decades
-inside every margin in the row. The floor tracks the body's skin and its own
+re-measuring them after the move reproduces them to ulps (above — the wire's
+coordinates stay at its own 1000 mm scale in either pose), decades inside
+every margin in the row. The floor tracks the body's skin and its own
 two farthest points, never its box, so neither aspect ratio nor orientation can
-touch it: a verdict is a property of the part, not the pose.
+touch it: the verdict is the part's, in every pose whose coordinates still
+carry the part (above).
 
 The gate has nothing to miss, because **every one of the three shapes carries a
 `Bound`**:
