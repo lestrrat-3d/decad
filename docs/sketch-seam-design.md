@@ -50,10 +50,12 @@ touch — the parameter is sampled. A sampled cut yields `TExact == false` on
 every fragment it bounds.
 
 **No residual test on a fragment's endpoints could stand in for the flag, at any
-tolerance.** A `Polyline` is a **sample of the curve**: its vertices lie *on*
-the curve. A sampled cut is the crossing of a **chord** between two such
-vertices, so as the crossing approaches a sample vertex the cut point approaches
-the curve, and its residual against the curve goes to zero. A sampled
+tolerance.** A `Polyline` is a **sample of the curve**: its vertices are
+evaluated from the curve (the one exception is an elliptical arc's two end
+vertices, which are its pinned ends, §2). A sampled cut is the crossing of a
+**chord** between two such vertices, so as the crossing approaches an evaluated
+vertex the cut point approaches the curve, and its residual against the curve
+goes to zero. A sampled
 circle/circle cut has been measured with a normalised radial residual of
 **7.07e-10** — indistinguishable from an exact cut by any threshold. Exactly-cut
 endpoints and sampled ones are therefore not separated populations, and an
