@@ -30,6 +30,10 @@ func (r *Report) Trustworthy() bool // the single bit to gate on
 type BodyReport struct {
     Body              *Body
     Status            Status       // Sound / Suspect / Violating / Unsound — this body only
+
+    // Validity readings — facts of the boundary the evaluator holds, which is
+    // exact as data; what they prove about the PART is Status's to say,
+    // decided against the boundary's own proven bound (§6):
     Solid             bool
     Watertight        bool
     Manifold          bool         // every edge bounds exactly 2 faces
@@ -43,14 +47,14 @@ type BodyReport struct {
     Bounds            Box
 
     // Region quantities — properties of the enclosed region, which only a
-    // valid solid has; non-nil exactly when Status != Unsound (§6):
+    // valid solid has; non-nil exactly when the body is a proven solid (§6):
     Volume            *Measurement
     Centroid          *VecMeasurement // a computed coordinate, so it is bounded (core §5.3)
 
     Exactness         Exactness      // the weakest link across the quantities this report carries
 
-    // Opt-in, expensive; nil unless the option asks AND Status != Unsound.
-    // MinRadius alone adds a third leg: the feature must exist (below):
+    // Opt-in, expensive; nil unless the option asks AND the body is a proven
+    // solid. MinRadius alone adds a third leg: the feature must exist (below):
     MinWallThickness  *Measurement   // WithMinWallThickness(tool) — decided against tool (§6)
     Undercuts         []*Face        // WithPullDirection(v) — every entry a proven undercut: non-empty
                                      // is Violating; empty claims none exist, held to proof (§6)
@@ -72,13 +76,15 @@ holds — and every body in the document has one, broken skin or not, so both ar
 unconditional. `Volume` and `Centroid` are properties of the **enclosed
 region**, and a body that is not a valid solid encloses none: there is no
 honest `Measurement` to put there. Both are therefore non-nil exactly when the
-body is a valid solid — `Status != Unsound`, decided by the four validity
-predicates alone (§6). The opt-in quantities are region quantities too — a
-wall, an undercut and an endmill's reach are features of a solid — so each is
-computed only when its option asks for it **and** the body is a valid solid,
-and is nil otherwise.
+body is a **proven** solid — validity proven the §6 way, on the held boundary
+beyond its own proven bound. A body proven invalid is `Unsound`; one whose
+validity is undecided is `Suspect`; and neither carries a region quantity,
+because neither has a region the report can vouch for. The opt-in quantities
+are region quantities too — a wall, an undercut and an endmill's reach are
+features of a solid — so each is computed only when its option asks for it
+**and** the body is a proven solid, and is nil otherwise.
 
-Two legs — the option asked, the body a valid solid — are the whole rule
+Two legs — the option asked, the body a proven solid — are the whole rule
 exactly when the quantity's existence is already the precondition's: a
 boundary always has an area and a box, a region always has a volume and a
 centroid, and every valid solid has walls — its boundary encloses material,
@@ -86,7 +92,7 @@ and the thinnest of that material is a reading every valid solid yields,
 finite and non-negative, down to the `Exact` zero of a degenerate flat body,
 which is a genuine measured thickness (§6 decides it thin against any real
 tool), never core §4's sentinel. `Undercuts` carries its further question — do
-any exist? — in the slice itself: asked on a valid solid it is non-nil, every
+any exist? — in the slice itself: asked on a proven solid it is non-nil, every
 face it lists is a **proven** undercut, and **empty** is the answer *no face
 is an undercut* — an answer and not an absence, and an answer §6 holds to
 proof like any other, marking the body `Suspect` when the evaluator cannot
@@ -98,15 +104,17 @@ real concave radius can be arbitrarily tight, so zero is a value the quantity
 itself approaches — and an infinity is not a measurement of anything the body
 has, and turns the §2 gate vacuous. So `MinRadius` carries the existence leg
 the way the pair results below carry their preconditions — in existence: it is
-non-nil exactly when the option asks **and** the body is a valid solid **and**
-a concave feature exists. Nil with the option asked on a valid solid is not a
+non-nil exactly when the option asks **and** the body is a proven solid **and**
+a concave feature exists. Nil with the option asked on a proven solid is not a
 question left unanswered; it is the determination *this body has no concave
 feature* — the best possible answer to the endmill question — and §6 holds the
 evaluator to proving it, marking the body `Suspect` when it cannot. Nor do the
-causes of a nil ever blur for the caller: which options were passed is the
-caller's own knowledge, `Status` carries validity — and carries the survey §6
-lets no evaluator silently fail, as `Suspect` — and what remains is the
-determination.
+causes of a nil ever blur where a nil is read as an answer: which options were
+passed is the caller's own knowledge, `Status` carries validity — proven,
+refuted or undecided (§6) — and carries the survey §6 lets no evaluator
+silently fail, as `Suspect`; inside a `Sound` report what remains is the
+determination, and a report that is not `Sound` is not one to read answers out
+of (§6).
 
 `Interference` and `Clearance` are the pairwise result types of core §6.2: each
 names its two bodies and carries its quantity as a `Measurement`, so each
@@ -121,14 +129,15 @@ already said there is one — two disjoint interiors have a minimum distance,
 and for a touching pair it is genuinely zero, gated at the noise floor like
 every near-zero answer (§5): an `Approximate` zero must earn trust with a
 vanishingly tight bound, an `Exact` zero passes on its own terms. Pairs are
-drawn from the document's **valid solids** only. The partition is a statement
+drawn from the document's **proven solids** only. The partition is a statement
 about interiors — a pair either shares volume or has a gap between disjoint
 interiors — and it is answered to proof like everything else: a pair the
 evaluator can prove neither way joins neither list and makes the report
-`Suspect` (§6). A body that is not a valid solid has no interior to say
-either of; it joins no
-pair, and nothing is lost by that, because it has already made the report
-`Unsound`, which outranks anything a pair could add (§6). Of the two lists,
+`Suspect` (§6). A body that is not a proven solid has no interior the report
+can vouch for; it joins no pair, and nothing is lost by that: proven invalid,
+it has already made the report `Unsound`, which outranks anything a pair could
+add, and undecided, it has already made the report `Suspect` — so its missing
+pairs are never a silence a `Sound` report rests on (§6). Of the two lists,
 `Interferences` is always computed — the `Interfering` rung of §6 reads it, so
 the report could not aggregate honestly without it — and `Clearances` is
 computed when `WithClearances()` (§2) asks for it.
@@ -186,7 +195,7 @@ they state nothing, and `MinRadius` and `Clearance.Gap` are **measurements, not
 verdicts**: the tightest concave radius and the smallest gap, gated for
 trustworthiness like every bounded result but compared against no threshold,
 because the endmill and the clearance spec live with the caller, who was never
-asked to name them. A nil `MinRadius` on a valid solid is the comparison's
+asked to name them. A nil `MinRadius` on a proven solid is the comparison's
 best case, not a missing answer: §1 makes it the determination that no concave
 feature exists — no radius for any endmill to be too large for. The report
 never invents a spec the caller did not state, and never withholds a verdict
@@ -202,9 +211,22 @@ measured**:
 One comparison, one number, no exponentiation. It is scale-invariant — a 1mm part
 and a 1m part are judged on the same footing — which mirrors how `sketch` makes its
 conditioning gate scale-invariant. `rel` is `Dimensionless` (`units.Scalar`); any
-other `Kind` is `ErrUnitKind` (core §12), never a coercion, and a negative `rel` is
-`ErrNegativeMagnitude`. Both are returned from `Verify` — never deferred into the
-report — which is why it returns an `error` (core §10).
+other `Kind` is `ErrUnitKind` (core §12), never a coercion; a negative `rel` is
+`ErrNegativeMagnitude`; and a non-finite `rel` is `ErrNotFinite` — the name is
+`units`' own, and the check is `Verify`'s to make, because `units.Value`
+**construction** checks nothing: `units.Scalar(math.Inf(1))` is a representable
+value, and only `units` *operations* refuse a non-finite result. Unrejected, an
+infinite `rel` turns the gate off — `Bound <= (+Inf) × Ref` holds for every
+bound, so the ±62% off-cut of §5 would read within tolerance — and a `NaN`
+turns it inside out: every comparison against a `NaN` is false, so every
+answer reads `Suspect`, the `Exact` answers §6 promises can never trip the
+gate included. Neither is a tolerance, so neither is allowed to act as one.
+The same rule closes the class for every parameter the options above take: a
+non-finite `WithMinWallThickness` tool, or a `WithPullDirection` vector with a
+non-finite component, is `ErrNotFinite` on the same terms — a negative tool is
+`ErrNegativeMagnitude` (core §12), and the zero tool and zero direction are
+`ErrDegenerate`, above. All are returned from `Verify` — never deferred into
+the report — which is why it returns an `error` (core §10).
 
 **The default is `units.Scalar(1e-3)` — three significant figures — and it is set
 by what a tessellation-backed evaluator can actually prove.** A v1 boolean bounds a
@@ -476,27 +498,35 @@ position carries a bound like everything else, so a boolean that puts the centro
 off by more than `rel` of the body's own size cannot hide inside a `Sound` body —
 which is the confidently-wrong failure core §1 exists to prevent.
 
-Absence is not an exemption, and neither is emptiness, because one standard
-governs both, stated once:
+Absence is not an exemption, emptiness is not, and a predicate is not, because
+one standard governs the whole report, stated once:
 
-> **An absence is an answer, an empty list is an answer, and an answer must be
-> proven. An answer the evaluator cannot prove never reads as a pass: the
-> asked question is undecided, and undecided reads `Suspect`.**
+> **An absence is an answer, an empty list is an answer, a predicate is an
+> answer, and an answer must be proven. An answer the evaluator cannot prove
+> never reads as a pass: the asked question is undecided, and undecided reads
+> `Suspect`.**
+
+The standard draws its line by what a claim is **about**, never by the claim's
+shape: a claim about the data the evaluator holds is exact — a `Faceted` face
+is exactly the polygon it is (core §6.1) — and a claim about the **part** that
+data stands for is proven or `Suspect`, quantities, absences and predicates
+alike. There is no exempt class. How that decides validity itself is the rule
+of the `BodyReport.Status` bullet below.
 
 A quantity the report does not carry is absent only where §1 permits it: a
-region quantity of a body that is not a valid solid, an opt-in quantity that
+region quantity of a body that is not a proven solid, an opt-in quantity that
 was not asked for, or an absence the standard itself governs. The first exists
-only on a body that is already `Unsound` — the worst verdict in the precedence
-below, so the report it sits in is already gated harder than any `Suspect`
-could gate it. The second is a quantity the evaluator never computed, so there
+only on a body whose validity has already spoken in `Status` — proven invalid,
+`Unsound`, the worst verdict in the precedence below; undecided, `Suspect`
+under this same standard — so the absence never outruns the verdict that
+explains it. The second is a quantity the evaluator never computed, so there
 is no answer, trustworthy or otherwise, for the report to be silent about —
 and no verdict owed either: an option is where a spec is stated (§2), so an
 option left off poses no question for the report to fail. Everything else the
-report says by absence or emptiness is an **answer** — held to the standard of
-the predicates core §6 exempts from bounds, a decided answer and never an
-approximation of one — and the report gives three answers this way:
+report says by absence or emptiness is an **answer** — a decided answer, never
+an approximation of one — and the report gives three answers this way:
 
-- **A nil `MinRadius` on a valid solid** is the determination *no concave
+- **A nil `MinRadius` on a proven solid** is the determination *no concave
   feature exists*. On analytic faces the proof exists: convexity and curvature
   are exact facts there, and a survey over them is that proof. A survey that
   is itself approximate proves nothing of the kind — a tessellation cannot see
@@ -517,7 +547,7 @@ approximation of one — and the report gives three answers this way:
   — asked, and undecided.
 - **A pair in neither list** is the answer *these two bodies do not overlap* —
   the claim the `Interfering` rung reads, made by omission for every pair of
-  valid solids without an `Interference` row. It is held to the same proof: a
+  proven solids without an `Interference` row. It is held to the same proof: a
   pair is proven disjoint when the boundaries the evaluator holds clear each
   other by more than the proven bounds those boundaries carry — the true skins
   then cannot touch — and an exact evaluator decides it outright. A pair whose
@@ -529,10 +559,11 @@ approximation of one — and the report gives three answers this way:
 
 What the standard buys is the only reading that matters: inside a
 `Trustworthy()` report, a nil `MinRadius` is a **proven** absence, an empty
-`Undercuts` a **proven** all-clear, and a pair with no `Interference` row a
-**proven** disjointness — each as good as any `Exact` answer, because an
-unprovable answer never reaches the caller inside a `Sound` report. (On a
-`Suspect` report any of the three could be either the proven answer or the
+`Undercuts` a **proven** all-clear, a pair with no `Interference` row a
+**proven** disjointness — and every body a **proven** solid (the validity rule
+below) — each as good as any `Exact` answer, because an unprovable answer
+never reaches the caller inside a `Sound` report. (On a
+`Suspect` report any of the four could be either the proven answer or the
 survey that could not decide, and nothing turns on which: `Suspect` already
 says this report is not one to read answers out of.) The gate covers every
 bounded result the report carries, and what the report does not carry is
@@ -566,42 +597,92 @@ document is what makes that reading hold at any scale.
 type Status int
 
 const (
-    Sound       Status = iota // every body sound; every stated spec met; every asked absence proven; nothing approximate beyond tolerance
-    Suspect                   // an answer is Approximate beyond the caller's tolerance, straddles a stated spec, or is an absence answer left unproven — a nil, an empty list, a pair in neither list
+    Sound       Status = iota // every body a proven solid; every stated spec met; every asked absence proven; nothing approximate beyond tolerance
+    Suspect                   // an answer is Approximate beyond the caller's tolerance, straddles a stated spec, or is undecided — a validity the boundary's bound cannot settle, an unproven absence, a pair in neither list
     Violating                 // a stated spec is proven to fail: a wall thinner than the tool, an undercut against the pull
     Interfering               // bodies overlap
-    Unsound                   // some body is not a valid solid
+    Unsound                   // some body is proven not a valid solid
 )
 ```
 
-- **`BodyReport.Status`** is per-body: `Sound` (solid, watertight, manifold, no
-  self-intersection; every stated spec met; nothing approximate beyond
-  tolerance; every asked absence proven), `Suspect` (sound, but one of its
-  answers is `Approximate` with a `Bound` beyond the tolerance of §2, a stated
-  spec is straddled — the interval rule below — or an asked absence is left
-  unproven, the standard above: `WithMinRadius` asked and the evaluator could
-  neither measure a concave radius nor prove the body has none, or
-  `WithPullDirection` asked and the evaluator could neither prove an undercut
-  nor prove there is none), `Violating` (sound, but a spec a §2
-  option stated is proven to fail: `MinWallThickness` decided below the tool,
-  or `Undercuts` non-empty), or `Unsound` (not a valid solid — any of those
-  four predicates the wrong way). Validity is decided by the four predicates
-  alone, before any quantity is read, which is what lets §1 key a
-  region quantity's presence on it with no circularity: the predicates decide
-  `Unsound`, and only a valid body's quantities exist to decide `Sound` against
-  `Violating` and `Suspect`. The predicates survive the absence standard
-  because they claim nothing past the boundary the evaluator holds: solidity,
-  watertightness, manifoldness, self-intersection — and the `Lumps` and
-  `Voids` counts with them — are facts of that boundary's own incidence and
-  geometry, and the boundary is held **exactly** even when it is approximate
-  as a stand-in, because a `Faceted` face is exactly the polygon it is: what
-  it approximates is which surface it stands for (core §6.1), never what it
-  is. Deciding those predicates inspects data the evaluator possesses in
-  full, on any evaluator class, so each is a decided answer with nothing left
-  to prove — the absence standard bites exactly where a claim reaches past
-  the held boundary to the part it stands for: a sub-chord dimple, a
-  sub-chord reverse draft, a sub-bound gap. A body is
-  never `Interfering` — interference is a property of a *pair*, not of a body.
+- **`BodyReport.Status`** is per-body: `Sound` (a proven solid; every stated
+  spec met; nothing approximate beyond tolerance; every asked absence proven),
+  `Suspect` (nothing proven wrong and something not proven right: an answer
+  `Approximate` with a `Bound` beyond the tolerance of §2, a stated spec
+  straddled — the interval rule below — an asked absence left unproven, the
+  standard above: `WithMinRadius` asked and the evaluator could neither
+  measure a concave radius nor prove the body has none, or `WithPullDirection`
+  asked and the evaluator could neither prove an undercut nor prove there is
+  none — or the body's own validity left undecided, the rule just below),
+  `Violating` (a proven solid, but a spec a §2 option stated is proven to
+  fail: `MinWallThickness` decided below the tool, or `Undercuts` non-empty),
+  or `Unsound` (**proven** not a valid solid). Validity is decided first,
+  before any quantity is read, which is what lets §1 key a region quantity's
+  presence on it with no circularity: only a proven solid's quantities exist
+  to decide `Sound` against `Violating` and `Suspect`. A body is never
+  `Interfering` — interference is a property of a *pair*, not of a body.
+
+  **Validity is a claim about the part, so it is held to the standard like
+  every other answer: proven, or `Suspect`.** The predicate fields report the
+  boundary the evaluator holds, and about *that* they are exact — a `Faceted`
+  face is exactly the polygon it is; what it approximates is which surface it
+  stands for (core §6.1), never what it is — so whether the held skin closes,
+  pinches or crosses itself is a fact of data the evaluator possesses in
+  full, a decided answer (core §6). But *this body is a valid solid*
+  quantifies over the part that boundary stands for, exactly as `MinRadius`'s
+  nil quantifies over the part and not the survey: a sub-bound pinhole, pinch
+  or graze is absent from the held boundary precisely the way a sub-chord
+  dimple is absent from the `MinRadius` survey. The instrument that decides
+  it is one the report already owns — the proof the undecided pair above
+  reads, turned inward. The held boundary approximates the true one within a
+  **proven** bound (the bound every vertex and facet reports, core §5.3: a
+  `Faceted` evaluator's chord error, an `Exact` evaluator's zero), and a
+  validity claim is proven exactly when the held geometry is **decisive
+  beyond that bound** — when no true boundary the bound admits could flip
+  the answer. Decisive against — a defect wider than the bound — is proven
+  invalid, `Unsound`. Decisive for — the held skin clean, and its
+  **self-clearance** — the nearest its skin comes to itself across space
+  rather than along it — beyond the bound, leaving a sub-bound defect no
+  room to hide — is proven valid. In between — a defect, gap or graze inside
+  the bound — the question is undecided, and the body reads `Suspect`: not
+  `Sound`, and not `Unsound` either, because nothing is proven wrong.
+  Predicate by predicate:
+
+  - **watertight** — a hole in the held skin wider than the bound is a proven
+    hole: no true skin the bound admits closes it. A held skin that closes,
+    with self-clearance beyond the bound, is proven watertight: none the
+    bound admits opens it. A sub-bound gap — or a seam sealed at a sub-bound
+    near-tangency, where the true surfaces may part exactly where the facets
+    met — is undecided.
+  - **manifold** — sheets crossing at a shared edge by more than the bound
+    are a proven non-manifold junction; a clean held skin with self-clearance
+    beyond the bound is proven pinch-free; a junction or pinch inside the
+    bound is undecided.
+  - **self-intersection** — the held skin through itself deeper than the
+    bound is proven self-intersection; self-clearance beyond the bound proves
+    there is none; a graze inside the bound is undecided.
+  - **`Lumps` and `Voids`** — a count is proven when every gap that separates
+    and every neck or wall that joins clears the bound: pieces further apart
+    than the bound cannot be one piece, a throat thicker than the bound
+    cannot be a split, a cavity walled off by more than the bound cannot
+    open to the outside. A sub-bound gap, neck or wall leaves the count
+    undecided, and an undecided count is `Suspect` like any undecided
+    answer: the reported `int` is the held boundary's, and the part's is
+    the claim.
+
+  Every predicate and both counts read the same instrument — the held
+  boundary's own feature scale against its own proven bound — so one survey
+  decides them together, and `Solid` is decided as their conjunction. An
+  `Exact` evaluator's bound is zero and its boundary is the truth: it proves
+  validity outright, every time. A `Faceted` evaluator proves it whenever the
+  geometry is decisive, and on real parts that is the ordinary case, not the
+  exception: §2's Ø20×10mm cylinder at a 1e-3 mm chord has a self-clearance
+  of its own 10 mm height — four decades beyond the bound its facets carry —
+  and is proven valid outright. What a faceted evaluator cannot do is what
+  it never honestly could: read `Sound` over a seam its chord cannot resolve.
+  The sub-bound pinhole, pinch or neck of a near-tangent boolean is an asked
+  question it cannot answer, and it reads `Suspect` — nothing proven wrong,
+  nothing proven right, which is exactly the rung's meaning.
 - **`Report.Status`** is the document-level aggregate — over the bodies *and* over
   the pairwise results, which belong to no body.
 
@@ -682,12 +763,12 @@ Aggregation is by **severity precedence — worst wins**:
 
 **`Unsound` > `Interfering` > `Violating` > `Suspect` > `Sound`**
 
-Read down, each rung concedes the one above: `Unsound` — some body is not even
-a solid, and nothing about its region is measurable; `Interfering` — every
-body is a solid, but the document claims the same space twice; `Violating` —
-the document is coherent, but a spec the caller stated is proven to fail;
-`Suspect` — nothing is proven wrong, and something is not proven right;
-`Sound` — everything asked is answered, met, and trusted.
+Read down, each rung concedes the one above: `Unsound` — some body is proven
+not even a solid, and nothing about its region is measurable; `Interfering` —
+no body is proven invalid, but the document claims the same space twice;
+`Violating` — the document is coherent, but a spec the caller stated is proven
+to fail; `Suspect` — nothing is proven wrong, and something is not proven
+right; `Sound` — everything asked is answered, met, and trusted.
 
 Concretely, `Report.Status` is:
 
@@ -712,8 +793,9 @@ neither is `Suspect`. Together with the `Suspect` rung above it, the
 gate covers **every `Measurement`, every `VecMeasurement` and every `Box` the report
 carries** — and per core §5.3 those are all of them.
 
-`Report.Trustworthy()` is true **only** at `Report.Status == Sound`. An unsound
-body, an unresolved interference, a stated spec proven to fail or left
-undecided, an asked absence left unproven, an undecided pair, or an
-approximation coarser than the caller's tolerance — on a body or on a pair —
-each make it false, even when the geometry "looks" fine.
+`Report.Trustworthy()` is true **only** at `Report.Status == Sound`. A body
+proven invalid, a validity left undecided, an unresolved interference, a
+stated spec proven to fail or left undecided, an asked absence left unproven,
+an undecided pair, or an approximation coarser than the caller's tolerance —
+on a body or on a pair — each make it false, even when the geometry "looks"
+fine.
