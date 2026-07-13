@@ -4,9 +4,14 @@ A **headless CAD engine** for Go: the 3D modeling layer above the
 [sketch](https://github.com/lestrrat-3d/sketch) 2D constraint engine and the
 [r3](https://github.com/lestrrat-3d/r3) coordinate-math layer.
 
-> **Status: scaffolding.** The repository carries its infrastructure, its
-> dependency wiring and its design contract. The public API is **not designed
-> yet**. There is nothing to import.
+> **Status: scaffolding, plus an approved API design.** The repository carries
+> its infrastructure, its dependency wiring, and the API contract in
+> [`docs/api-design.md`](docs/api-design.md) — the core design, with its deep
+> ends in the companion [`docs/sketch-seam-design.md`](docs/sketch-seam-design.md)
+> and [`docs/verification-design.md`](docs/verification-design.md). No public API
+> exists yet — there is nothing to import — and any that lands must follow that
+> contract. Every capability the contract consumes from its dependencies exists
+> today; there are no open dependency gaps.
 
 ## Why this exists
 
@@ -35,11 +40,14 @@ decad    3D bodies, features, verification   (this module)
   |
 sketch   parametric 2D constraint solving    github.com/lestrrat-3d/sketch
   |
-r3       vectors and orthonormal frames      github.com/lestrrat-3d/r3
+r3       vectors, frames, rigid transforms   github.com/lestrrat-3d/r3
+  |
+units    typed quantities (Value, Kind)      github.com/lestrrat-3d/units
 ```
 
-The arrows point **down and never back up**. decad imports `sketch` and `r3`;
-neither of them knows decad exists.
+The arrows point **down and never back up**. decad imports `sketch`, `r3` and
+[`units`](https://github.com/lestrrat-3d/units); none of them knows decad
+exists.
 
 This is the layer both of them deliberately left room for. `r3` excludes shapes
 by charter — *"if it lives in ℝ³ it belongs here; if it **is** a shape, it does

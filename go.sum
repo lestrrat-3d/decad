@@ -1,9 +1,11 @@
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
-github.com/lestrrat-3d/r3 v0.0.0-20260712105614-67204eb81351 h1:DCzjKp3Tqf9MbDgtsESls6ipboDSFNRFKU6dwAH1L1I=
-github.com/lestrrat-3d/r3 v0.0.0-20260712105614-67204eb81351/go.mod h1:cPR+PfJkG7hJGju+cw1VEjdSl4BS9BnPn3M8pSCtLsM=
-github.com/lestrrat-3d/sketch v0.0.0-20260712104855-d27452381dbb h1:dFNjaJWGSiR8x3ZCWE/hOkLyvQLLkkJ+ofW0S84pStc=
-github.com/lestrrat-3d/sketch v0.0.0-20260712104855-d27452381dbb/go.mod h1:iIGugsclTJk6CS6DcgYiQLHDUN7hGapWn7FI4WJXtis=
+github.com/lestrrat-3d/r3 v0.0.0-20260713000132-2e6d6464affc h1:yVKwT87mjAqZmNnTYCwp8nPqw9YNGW54EjrZgKRMbmg=
+github.com/lestrrat-3d/r3 v0.0.0-20260713000132-2e6d6464affc/go.mod h1:zcgeCBpWc5FB+e9qXYcpjjqurzJZtkPQtp39NUZX7BE=
+github.com/lestrrat-3d/sketch v0.0.0-20260713030653-e1313e1cd01c h1:p50gs3KlvhseyFI1pzcttctLOAdeWMBCH6fvAlYYmZ8=
+github.com/lestrrat-3d/sketch v0.0.0-20260713030653-e1313e1cd01c/go.mod h1:Sf7OeC+vQ2aFTjKNQSDQANhILWhycIUAQIe1ymG29kM=
+github.com/lestrrat-3d/units v0.0.0-20260713004850-5816412456f9 h1:6VAyt//MI8Vc8/SNpGOrL2//HpTDm4dfX+mDPRjR1eM=
+github.com/lestrrat-3d/units v0.0.0-20260713004850-5816412456f9/go.mod h1:43cmeVRCRWndV+h2v92CZxlEvGWNfMYv5/KHFFUThKI=
 github.com/lestrrat-go/option/v3 v3.0.0-alpha1 h1:dvdzLwm/Ba5CJUF3jQP7w/iNYSLfy7yyh9XXNa1WjxI=
 github.com/lestrrat-go/option/v3 v3.0.0-alpha1/go.mod h1:5KSg20dfsKkNJtjDmaQRLZVXuUrzuCCcz/gbDK0pfKk=
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
