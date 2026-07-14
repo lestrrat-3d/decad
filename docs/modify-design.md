@@ -1,13 +1,25 @@
 # Modify Design
 
 How the v1 evaluator builds the three modify ops — `Body.Fillet`,
-`Body.Chamfer`, `Body.Shell`: what a modify op owes and how it refuses (§1),
-the reduction that makes a straight prism's modify ops exact (§2), the class it
-admits and the class it rejects at the call (§3), where the 2D work is allowed
-to live (§4), the fillet (§5), the chamfer (§6), the shell (§7), how the
-results stay Exact (§8), the recipe, the provenance and the replay (§9), what
-the result is to everything already shipped (§10), and the increment plan
-(§11). Companion to `docs/api-design.md`, which owns the three signatures, the
+`Body.Chamfer`, `Body.Shell`.
+
+Four tables are normative, and each states its facts **once**:
+
+| Table | States | Section |
+|---|---|---|
+| **R** — the receiver | which body a modify op accepts, keyed on the **payload class** | §3 |
+| **S** — the refusals | every refusal, with the §1 existence test that picks its sentinel | §4 |
+| **B** — the result | op × removed faces × sense × section connectivity → payload class, **lump count**, faces and their roles | §9 |
+| **D** — downstream | one row per consumer, and whether it reads the payload only or reads roles | §12 |
+
+Every other section cites a row of one of them and restates none of it.
+Around the tables: what a modify op owes and how it refuses (§1), the reduction
+that makes a straight prism's modify ops exact (§2), where the 2D work is
+allowed to live (§5), the fillet (§6), the chamfer (§7), the shell (§8), how
+the results stay Exact (§10), the recipe, the provenance and the replay (§11),
+the increment plan (§13) and the open questions (§14).
+
+Companion to `docs/api-design.md`, which owns the three signatures, the
 selector contract and the retire rule ("core §N"), and to
 `docs/evaluator-design.md`, whose §11 row 5 this document is ("evaluator §N").
 `docs/verification-design.md` owns how the results are judged
@@ -36,17 +48,21 @@ question separates them:
 
 | The caller asked for | Sentinel |
 |---|---|
-| a body that **does not exist** — a fillet of a radius for which no blend surface exists at all (the two faces' material-side offsets never meet), a shell thicker than the material it hollows | `ErrDegenerate` |
-| a body that **exists** and this evaluator cannot build — a blend across a cap edge, a blend whose cutback overruns the wall it is trimmed from, a shell that opens a side wall, an offset whose exact form changes the section's topology | `ErrUnsupported` |
+| a body that **does not exist** — no such solid, at that radius or that thickness, under any evaluator | `ErrDegenerate` |
+| a body that **exists** and this evaluator cannot build | `ErrUnsupported` |
 
-Both are returned from the call, before anything is recorded: a failed
-evaluation leaves the recipe and the document untouched (evaluator §8), so a
-refused modify op retires nothing and the caller still holds a live body.
-Neither is ever deferred into a `Verify` reading — a body the evaluator declines
-to build is not a body whose soundness is in question, it is a body that does
-not exist. The staging split of evaluator §11 is exactly this: an intent the
-evaluator cannot BUILD is an error at the call; only a question it cannot
-ANSWER reads `Suspect`.
+Table S (§4) answers that question for every refusal, once. No other section
+picks a sentinel; they cite an S row.
+
+Both sentinels are returned from the call, before anything is recorded: a
+failed evaluation leaves the recipe and the document untouched (evaluator §8),
+so a refused modify op retires nothing and the caller still holds a live body.
+Neither is ever deferred into a `Verify` reading — `Verify` judges bodies the
+document holds, and a refused call produced none. The staging split of
+evaluator §11 is exactly this: an intent the evaluator cannot **build** is an
+error at the call; only a question it cannot **answer** on a body it did build
+reads `Suspect`. This increment has exactly one such question, and Table D
+(§12) names it.
 
 ## 2. The reduction: a prism's modify ops are its section's
 
@@ -70,22 +86,24 @@ circle, and a corner closes with an arc or a miter — so the result is again a
 `ProfileRecord` in the increment-1 vocabulary, and the body is again built by
 `evalPrism` from it.
 
+A prism's recorded section is line and arc segments and nothing else: a
+free-form segment kind does not build as an extrude (evaluator §5), so no
+prism carries one, and a modify op needs no gate against a shape that cannot
+reach it.
+
 That is the whole design, and everything else follows from it:
 
 - **exactness is inherited, not re-argued.** The mass-property engine
   (evaluator §4) integrates the rewritten region in closed form, so volume,
-  area and centroid stay Exact with a zero bound (§8);
+  area and centroid stay Exact with a zero bound (§10);
 - **validity is by construction, exactly as evaluator §10 claims it.** A prism
   over a simple closed line/arc region is watertight and manifold structurally.
   What changes is who proves the region simple: for an extrude it is `sketch`;
-  for a modify op it is decad's own audit of its own construction (§4), run
+  for a modify op it is decad's own audit of its own construction (§5), run
   before anything is built;
-- **everything downstream already works.** The tessellator, the analytic
-  surveys, the clearance kernel, the stops and `Placed` all consume the
-  evaluator's own prism payload, and the result of a fillet or a chamfer IS one
-  (§10);
-- **the ops compose.** A filleted prism is a prism, so a chamfer of it builds,
-  and a fillet of a chamfered prism builds.
+- **the ops compose**, and Table R (§3) says so in the only way that cannot
+  drift: a filleted prism, a chamfered prism and a tube are all one payload
+  class, so what accepts one accepts all three.
 
 **The reduction is the evaluator's, never the recipe's.** The `Step` records
 "fillet these edges at 2 mm" — a selector and a radius (core §6.2) — and never
@@ -96,55 +114,60 @@ second evaluator will do. A recipe that recorded the rewritten section would
 have recorded this evaluator's *method* as the caller's *intent*, and vN would
 inherit a 2D reduction it does not need.
 
-## 3. The admitted class
+The one thing the reduction cannot express is a result in **more than one
+piece**: a `ProfileRecord` is one outer loop and its holes, so a `prismPayload`
+is one connected region swept once. The lump count is therefore a load-bearing
+fact of every result, and Table B (§9) carries it as a column.
 
-**Fillet and chamfer.** The receiver must be a body this evaluator built as a
-prism, and every selected edge must be a **lateral** edge of it:
+## 3. Table R — the receiver
 
-| Input | Reads |
-|---|---|
-| a prism body; every selected edge lateral; every corner a genuine corner | **builds** |
-| a selected edge that is a cap edge (a `Line3`, `Arc3` or `Circle3` in a cap plane) | `ErrUnsupported` — the corner problem (§5) |
-| a receiver that is not a prism — a revolve, a shelled prism, a `Faceted` boolean output, an imported body | `ErrUnsupported` |
-| a corner whose two segments meet **smoothly** (tangent) or in a **cusp** (anti-tangent) | `ErrDegenerate` — there is no corner to blend |
-| a section carrying a free-form segment kind | `ErrUnsupported` — it does not build as an extrude either (evaluator §5) |
-| a radius or distance for which **no blend surface exists** — the corner's two material-side offsets never meet, or an offset arc's radius has reached zero | `ErrDegenerate` (§5, §6) |
-| a cutback that reaches or passes the far end of a walk — including a far end another corner in the same call claims — or any rewritten loop that crosses itself or another loop | `ErrUnsupported` — the surface exists; reaching the body needs the blends merged, or trimmed against the geometry they run into, and this evaluator's per-corner rewrite has no resolution step (§4, §5) |
-| a rewritten loop that has turned itself inside out — its signed area has changed sign | `ErrDegenerate` (§4) |
+The receiver is admitted on **what its payload is**, never on the op history
+that produced it. `Body.Placed` re-evaluates a payload under a composed motion
+and yields the same class (evaluator §8), so a placed body reads exactly as
+the body it was placed from.
+
+| R | Receiver payload | `Fillet` / `Chamfer` | `Shell` |
+|---|---|---|---|
+| **R1** | `prismPayload` — an extrude, a filleted body, a chamfered body, a tube (B2/B3), or any of these `Placed` | **builds**; every selected edge must be lateral (else S1) | **builds**; the removed faces must be caps (else S2) |
+| **R2** | `cupPayload` — a one-cap shell (B5/B6) | S3 | S3 |
+| **R3** | `revolvePayload` | S3 | S3 |
+| **R4** | no payload — a body this evaluator did not build (a `Faceted` boolean output) | S3 | S3 |
 
 A full-circle loop is a single closed wall with **no** lateral edge at all
 (evaluator §5 emits no seam), so a cylinder has no edge a fillet can name but
-its cap rims — and those are `ErrUnsupported`. That is the honest reading of the
-class, not an oversight: the blend of a cap edge is the vertex-blend problem
-(§5), and this increment does not solve it.
+its cap rims — and a query naming one is S1, a query naming nothing is S16.
+That is the honest reading of the class, not an oversight: the blend of a cap
+edge is the vertex-blend problem (§6), and this increment does not solve it.
 
-**Shell.** The receiver must be a prism, and the selector must resolve to cap
-faces only:
+## 4. Table S — the refusals
 
-| Input | Reads |
-|---|---|
-| a prism; the removed faces are one or both caps | **builds** (§7) |
-| a removed face that is a side wall | `ErrUnsupported` — the cavity is then the offset of an open chain, closed against the removed wall's own surface; a different 2D machine |
-| a receiver that is not a prism | `ErrUnsupported` |
-| an **inward** thickness at or beyond the section's inradius | `ErrDegenerate` — the erosion is empty; there is no such body (an outward thickness has no such limit, §7) |
-| an offset whose exact form merges, splits or drops a boundary loop | `ErrUnsupported` — the body exists; this evaluator's offset is topology-preserving (§7) |
+Every refusal in this document, once. The middle column is §1's test; the
+sentinel follows from it and from nothing else.
 
-**Magnitudes are magnitudes.** The radius, the distance and the thickness are
-`units.Value` of Kind Length: another `Kind` is `ErrUnitKind`, a negative value
-`ErrNegativeMagnitude` (core §12 names all three by role), a non-finite one
-`ErrNotFinite`, and **zero is `ErrDegenerate`** — a zero-radius fillet, a
-zero-distance chamfer and a zero-thickness shell each name a body identical to
-the one the caller already holds, which is a question with one answer and no
-content, exactly as `Verify`'s zero tool is (verification §2).
+| S | The call asked for | Does that body exist? | Sentinel |
+|---|---|---|---|
+| **S1** | a fillet or chamfer of an edge that is not a **lateral** edge of the receiver — a cap edge (a `Line3`, `Arc3` or `Circle3` in a cap plane) | yes | `ErrUnsupported` — the vertex-blend problem (§6) |
+| **S2** | a shell that removes a **side wall** | yes | `ErrUnsupported` — the cavity is then the offset of an open chain, closed against the removed wall's own surface; a different 2D machine |
+| **S3** | a modify op on a receiver whose payload class is not `prismPayload` (R2–R4) | yes | `ErrUnsupported` |
+| **S4** | a blend or bevel of a corner whose two segments meet **smoothly** (tangent) or in a **cusp** (anti-tangent) | no — there is no corner to blend | `ErrDegenerate` |
+| **S5** | a blend at a corner where **no blend surface of that radius exists**: the two carriers' material-side offsets never meet (parallel lines, concentric circles), or a circular carrier with the material **inside** it has `R − r ≤ 0` — its `r`-offset into the material is empty (`r > R`) or the circle's own centre, whose foot on the arc is not unique (`r = R`) | no | `ErrDegenerate` (§6) |
+| **S6** | a cutback that reaches or passes the far end of a walk — including a far end another corner **in the same call** claims | yes — the blend surface is pinned by its own corner's offsets, and merging the two (or trimming each against what it runs into) builds the body | `ErrUnsupported` (§6) |
+| **S7** | a rewrite whose loops **cross** — a loop crossing itself, or two loops of the section crossing each other | yes — a resolving kernel trims the pieces against each other | `ErrUnsupported` (§5) |
+| **S8** | a rewritten loop that has turned **inside out** — its signed area has changed sign | no — the modification consumed the region | `ErrDegenerate` (§5) |
+| **S9** | a rewrite whose loops do not cross but whose **nesting the audit cannot decide** (§5) | this evaluator cannot tell | `ErrUnsupported` — it declines rather than guess |
+| **S10** | an **inward** thickness at or beyond the section's **inradius** | no — the erosion is empty; the wall has eaten the part (an outward thickness has no such limit: a dilation of a non-empty region is never empty) | `ErrDegenerate` (§8) |
+| **S11** | a shell whose **exact offset changes the section's feature set** — a loop merged, split or dropped (a slot or a gap narrower than `2t` inward; a hole narrower than `2t` outward), or a **segment** dropped (a circular segment with the material inside it and `R ≤ t` inward: its offset radius `R − t` reaches zero or goes negative, the arc vanishes and its neighbours miter) | yes | `ErrUnsupported` — this evaluator's offset is per-feature and topology-preserving; resolving either needs a trimmed-offset kernel it does not have (§8) |
+| **S12** | a **both-caps** shell of a **holed** section — the wall is one band around the outer loop plus one band lining each hole: `1 + k` lumps (B4) | yes | `ErrUnsupported` — a `prismPayload` holds one region, and this evaluator has no multi-lump payload (§9, §14) |
+| **S13** | a **zero radius** or a **zero distance** — a body identical to the one the caller already holds | it exists, and it is the receiver: a question with one answer and no content, exactly as `Verify`'s zero tool is (verification §2) | `ErrDegenerate` |
+| **S14** | a **zero thickness** shell | no — a face is removed and the wall is `P \ P`: the empty region, no solid at all | `ErrDegenerate` |
+| **S15** | a magnitude of the wrong `Kind`, a non-finite one, or a negative one | — | `ErrUnitKind` / `ErrNotFinite` / `ErrNegativeMagnitude` (core §12 names all three by role) |
+| **S16** | a selector that matches nothing — loudly (core §9): a query asserting no cardinality, `ErrNoMatch`; a failed `Exactly(n)` / `AtLeast(n)`, `ErrCardinality`, zero matches included (core §12) | — | `ErrNoMatch` / `ErrCardinality` |
+| **S17** | a modify op on a retired receiver | — | `ErrRetiredBody` |
 
-**A selector that matches nothing is an error, loudly** (core §9): a query
-carrying no cardinality assertion that resolves to zero entities is
-`ErrNoMatch`, and a failed `Exactly(n)` / `AtLeast(n)` is `ErrCardinality`,
-zero matches included (core §12). Selection happens against the live receiver,
-before the build; a retired receiver is `ErrRetiredBody`, and every gate above
-runs before a single face is made.
+Selection happens against the live receiver, before the build, and every gate
+in this table runs before a single face is made.
 
-## 4. Where the 2D work lives, and what proves it
+## 5. Where the 2D work lives, and what proves it
 
 The section rewrite computes tangent points, offset curves and their crossings —
 2D geometry, in a repository whose first hard rule is **never re-derive a 2D
@@ -167,37 +190,42 @@ properties, and it is drawn by *whose claim it is*:
 upstream claim to bless.** That rule governs admission of what `sketch` hands
 over — a `Partial` fragment's `TExact`, which decad may disprove and may never
 certify (seam design). The rewritten section is not handed over by anyone; decad
-constructed it, so decad owns its validity, and it proves it with an **exact,
-closed-form** test rather than a residual:
+constructed it, so decad owns its validity, and it proves it with **exact,
+closed-form** tests rather than a residual.
 
-> **The rewrite is admitted only when the loops it produces are proven simple.**
-> Every pair of segments in a rewritten loop, and every pair drawn from two
-> loops of the section, is tested for crossing in closed form — line×line,
-> line×circle, circle×circle over decad's own segments, the same closed forms
-> the clearance kernel's 2D reduction and `survey2d.go`'s boundary walks use.
-> A crossing, a loop whose signed area has changed sign (it has turned itself
-> inside out), a segment trimmed past its own other end, or an offset arc whose
-> radius has reached zero, **rejects the call**.
+**The rewrite is admitted only when the loops it produces are proven simple and
+correctly nested.** Four tests, in order, all in closed form over decad's own
+line and arc segments:
 
-The audit's verdict is one of the two sentinels of §1, by the same test: a loop
-that has turned inside out, and an offset arc whose radius has vanished, say the
-modification consumed the region — there is no such body, `ErrDegenerate`. A
-crossing, and a segment trimmed past its own other end, say the pieces the
-rewrite produced must be resolved against each other — merged, or trimmed
-against the geometry they run into — before they bound anything. That body
-exists and a resolving kernel builds it; this evaluator's rewrite trims each
-corner on its own and has no resolution step, so it is `ErrUnsupported`. Either
-way the call is refused before a face is made.
+1. **No crossing.** Every pair of segments within a rewritten loop, and every
+   pair drawn from two loops of the section, is tested for intersection —
+   line×line, line×circle, circle×circle, the same closed forms the clearance
+   kernel's 2D reduction and `survey2d.go`'s boundary walks use. A crossing is
+   **S7**.
+2. **No self-consuming trim.** A segment trimmed past its own other end is
+   **S7**: the pieces the rewrite produced must be resolved against each other
+   before they bound anything.
+3. **Orientation preserved.** A loop whose signed area has changed sign has
+   turned itself inside out — the modification consumed the region — and is
+   **S8**.
+4. **Nesting preserved.** Once no two loops cross, each loop lies wholly inside
+   or wholly outside every other, so nesting is decided by classifying **one
+   point** of each loop against each other loop. Containment is *not* a crossing
+   test and is not free: the classifier is the ray-parity walk with direction
+   retries that `survey2d.go` already runs, and it admits an **undecided**
+   outcome. A build-time audit has no `Suspect` to fall back on, so an undecided
+   containment is **S9** — the evaluator declines. The audit passes only when the
+   outer loop is proven to contain each hole and the holes are proven mutually
+   disjoint.
 
-A residual proves nothing and admits nothing; a crossing test on exactly
-represented line and arc segments is a **decided** fact of decad's own data, and
-its verdict is the same under every evaluator. It is what makes the build's
-"valid by construction" claim (evaluator §10) survive a modify op: the region is
-proven simple before the prism over it is built, so no unproven body is ever
-made, and `Verify` reads the result exactly as it reads an extrude's — Exact,
-and structurally sound.
+A residual proves nothing and admits nothing; a crossing or containment test on
+exactly represented line and arc segments is a **decided** fact of decad's own
+data, and its verdict is the same under every evaluator. It is what makes the
+build's "valid by construction" claim (evaluator §10) survive a modify op: the
+region is proven simple before the prism over it is built, so no unproven body
+is ever made, and `Verify` reads the result exactly as it reads an extrude's.
 
-## 5. Fillet
+## 6. Fillet
 
 ```go
 func (b *Body) Fillet(sel EdgeSelector, r units.Value, opts ...FilletOption) (*Body, error)
@@ -218,7 +246,7 @@ kind:
 | Carrier | Its `r`-offset into the material |
 |---|---|
 | a line | the parallel line, `r` into the material |
-| a circle of radius `R`, material inside it | the concentric circle of radius `R − r` |
+| a circle of radius `R`, material inside it | the concentric circle of radius `R − r` (`R − r ≤ 0` is S5) |
 | a circle of radius `R`, material outside it | the concentric circle of radius `R + r` |
 
 Which side the material is on is a **decided** fact of the record — the loop's
@@ -226,9 +254,8 @@ winding and the segment's own sense — never a guess. The center is the
 intersection of the two offset carriers nearest the corner; the tangent points
 are its feet on the two carriers. Line×line, line×circle and circle×circle are
 closed form with at most two roots, and the root is chosen by the corner it
-belongs to, not by proximity to a sample. **No intersection means no blend of
-that radius exists** — two parallel offsets, or two concentric ones — and the
-call is `ErrDegenerate`.
+belongs to, not by proximity to a sample. No intersection means no blend of that
+radius exists (S5).
 
 `Edge.IsConvex` is therefore not an input to the construction at all; it is what
 the caller *selected* with (`Convex()` / `Concave()`, core §9). A convex corner
@@ -241,20 +268,16 @@ material in, and both are exact.
 must fit **strictly** inside the length that walk still has, after the
 modification at its *other* end has taken its own cutback — two adjacent
 corners of a short wall are filleted in the same call, and they claim the wall
-from both ends. A cutback that reaches or passes the far end is
-`ErrUnsupported`: the blend cylinder itself is unharmed — it is pinned by its own
-corner's offsets, and the wall's *length* never entered its equations — so the
-body the caller named exists, and a kernel that merges the two blends into one
-surface (or trims the blend against the wall it has run into) builds it. This
-evaluator trims each corner on its own, so it declines, by §1's test. What it
-will not do is clip the blend, slide it, or shrink `r` to fit: those are all the
-same failure — a body the caller did not ask for, with a radius they did not
-name. `ErrDegenerate` is kept for the case where there is nothing to build at
-all: no center at that radius, so no blend surface exists.
+from both ends. A cutback that reaches or passes the far end is S6, and S6's
+existence answer is what makes it the staging sentinel: the blend cylinder
+itself is unharmed — it is pinned by its own corner's offsets, and the wall's
+*length* never entered its equations. What this evaluator will not do is clip
+the blend, slide it, or shrink `r` to fit: those are all the same failure — a
+body the caller did not ask for, with a radius they did not name.
 
 **The rewrite.** `A` is trimmed to its tangent foot, `B` is trimmed to its own,
 and an `ArcSeg` of radius `r` about the center joins them, wound so the loop
-keeps its orientation. The result goes through the §4 audit and then through
+keeps its orientation. The result goes through the §5 audit and then through
 `evalPrism`, which produces, with no special case:
 
 | Entity | What it is |
@@ -264,22 +287,29 @@ keeps its orientation. The result goes through the §4 audit and then through
 | its two cap edges | `Arc3`, one per cap, each shared with the cap face |
 | the old lateral edge | gone; the old corner vertices are replaced by the arcs' endpoints |
 
-**The build table needs one correction, and the fillet depends on it — it does
-not introduce it.** A circular wall's face orientation — which way its outward
-normal points — must be read from the **walk's own sense**: a circular walk that
-runs clockwise in the plane frame has its material *outside* the cylinder, so
-the face is reversed; counter-clockwise, inside, and it is not. The prism build
-reads the loop's *role* instead (an outer loop's wall not reversed, a hole's
-reversed), which is a proxy, and the proxy is wrong wherever an **outer loop
-carries a clockwise circular walk**. That is not a shape only a fillet can make:
-the seam records an arc's walk sense in the segment's own range (`TStart` >
-`TEnd` says the walk runs against the curve, `seam.go`), so a plain sketch
-produces one — a plate with a semicircular bite taken out of one edge walks that
-arc clockwise on its outer loop, and the role rule gives its wall a normal
-pointing into the material. It is a live defect in the prism build, fixed there,
-in its own change. Increment 5 needs the walk-sense rule because a concave round
-is the first thing a fillet emits; it is a prerequisite of this increment, not a
-deliverable of it.
+Its roles are B1's.
+
+**The prism build needs two corrections, and the fillet depends on them — it
+does not introduce them.** Two readings in the prism build are taken from the
+loop's **role** (an outer loop, or a hole) where they must be taken from the
+**walk's own sense**:
+
+- a circular wall's **face orientation** — a circular walk that runs clockwise
+  in the plane frame has its material *outside* the cylinder, so the face is
+  reversed; counter-clockwise, inside, and it is not;
+- a lateral edge's **`Edge.IsConvex`** — which is exactly what `Convex()` /
+  `Concave()` selection reads (core §9), so the proxy does not merely mis-orient
+  a normal, it mis-answers the query a caller filters edges with.
+
+The role proxy is wrong for both wherever an **outer loop carries a clockwise
+circular walk**. That is not a shape only a fillet can make: the seam records an
+arc's walk sense in the segment's own range (`TStart` > `TEnd` says the walk
+runs against the curve, `seam.go`), so a plain sketch produces one — a plate with
+a semicircular bite taken out of one edge walks that arc clockwise on its outer
+loop. Both are live defects in the prism build, fixed there, in the build's own
+change. This increment needs the walk-sense rules because a concave round is the
+first thing a fillet emits; they are its prerequisite, not its deliverable
+(§13).
 
 **The corner problem is excluded, not fudged.** Where two blends meet at a
 shared vertex — a lateral edge's blend running into a cap edge's blend — the
@@ -291,26 +321,23 @@ invented one would be guessing at the very corner an agent asked it to check.
 So the class is drawn where the problem does not arise: **a lateral edge's blend
 terminates on the two caps, and two lateral blends never share a vertex** —
 distinct lateral edges are disjoint, and each blend runs cap to cap, so there is
-no vertex at which two of them meet and no patch that would close one.
+no vertex at which two of them meet and no patch that would close one. A cap
+edge is S1, and the vertex blend stays an open question (§14), not a surface
+this evaluator makes up.
 
 Two lateral blends can still **interfere**, and interference is refused, never
-patched. Two corners of one wall claim it from both ends, and that is the cutback
-gate above. Two corners that share no wall at all — opposite ends of a thin neck,
-two corners of one loop that are not adjacent, a corner of the outer loop and a
-corner of a hole across a thin section — can have their rewritten pieces cross
-without either overrunning a walk, and those are caught by §4's audit, which
-tests every pair of segments **within** a rewritten loop and **across** every two
-loops of the section. Both refusals name `ErrUnsupported`, both fire before a face
-is made, and neither produces a corner needing a surface nobody can name. A
-selector that names a cap edge is `ErrUnsupported` at the call (§3), and the
-vertex blend stays where it belongs: an open question (§12), not a surface this
-evaluator makes up.
+patched. Two corners of one wall claim it from both ends: S6. Two corners that
+share no wall at all — opposite ends of a thin neck, two corners of one loop
+that are not adjacent, a corner of the outer loop and a corner of a hole across
+a thin section — can have their rewritten pieces cross without either
+overrunning a walk, and the §5 audit catches those: S7. Both fire before a face
+is made, and neither produces a corner needing a surface nobody can name.
 
 `FilletOpts` carries nothing in this increment, so a fillet `Step`'s `Opts` is
 nil (core §6.2: nil when the op takes none). A variable-radius or setback option
 lands in it, with the struct, when it ships.
 
-## 6. Chamfer
+## 7. Chamfer
 
 ```go
 func (b *Body) Chamfer(sel EdgeSelector, d units.Value, opts ...ChamferOption) (*Body, error)
@@ -331,25 +358,23 @@ that has not shipped, so it is not an option a caller can pass, and nothing is
 silently narrowed (core §8.1: an option that cannot be recorded does not ship).
 
 The rewrite trims both walks back by `d` and joins the feet with a `LineSeg`.
-The gates are the fillet's, unchanged in every respect: a setback that reaches
-or passes the far end of a walk — including a far end another corner in the same
-call has already claimed — is `ErrUnsupported`, refused and never clipped; a
-smooth or cusped corner is `ErrDegenerate`; a rewritten loop that crosses itself
-or another loop is `ErrUnsupported`, and one that has turned inside out is
-`ErrDegenerate` (§4). A corner with a circular neighbour builds: the chord
-from a point on a line to a point on an arc, or from arc to arc, is still a
-`LineSeg`, and the bevel face is still a `Plane` — a chamfer against a
-cylindrical wall meets it in a straight ruling, because both are parallel to the
-sweep.
+The gates are the fillet's, unchanged in every respect: S1 for a cap edge, S4
+for a smooth or cusped corner, S6 for a setback that reaches or passes the far
+end of a walk, S7/S8/S9 from the §5 audit. A corner with a circular neighbour
+builds: the chord from a point on a line to a point on an arc, or from arc to
+arc, is still a `LineSeg`, and the bevel face is still a `Plane` — a chamfer
+against a cylindrical wall meets it in a straight ruling, because both are
+parallel to the sweep. (S5 has no chamfer case: a chord exists between any two
+distinct feet.)
 
 A convex corner's chamfer cuts material away; a concave corner's fills material
 in. Both build, from the same construction, for the same reason the fillet's
-two cases do.
+two cases do. The result is B1.
 
 `ChamferOpts` carries nothing this increment, so a chamfer `Step`'s `Opts` is
 nil.
 
-## 7. Shell
+## 8. Shell
 
 ```go
 func (b *Body) Shell(sel FaceSelector, thickness units.Value, opts ...ShellOption) (*Body, error)
@@ -357,7 +382,7 @@ func (b *Body) Shell(sel FaceSelector, thickness units.Value, opts ...ShellOptio
 
 `sel` names the faces to **remove** — the openings. What remains of the solid is
 a wall of the given thickness behind every face that was *kept*. On a prism, with
-the removed faces restricted to caps (§3), the whole construction is the
+the removed faces restricted to caps (S2), the whole construction is the
 section's own offset.
 
 **Inward is the default sense, and outward is enumerated, never signed.** The
@@ -376,17 +401,15 @@ Write `P` for the section. The inward offset (the erosion) `P ⊖ t` is bounded 
 | Feature of `P` | Its offset |
 |---|---|
 | a line segment | the parallel line, `t` into the material |
-| a circular segment, material inside | the concentric circle of radius `R − t` |
+| a circular segment, material inside | the concentric circle of radius `R − t` (`R ≤ t` drops the segment: S11) |
 | a circular segment, material outside — a hole wall, a concave round | the concentric circle of radius `R + t` |
 | a **convex** corner | a miter: the two offset curves meet, and the corner stays sharp |
 | a **reflex** corner | an **arc of radius `t` centered on the corner point** — the nearest boundary feature there is the corner itself, so the erosion's boundary is at distance exactly `t` from it |
 
 Every piece is a line or an arc, so `P ⊖ t` is a `ProfileRecord`. The outward
-offset is the same table with the two corner rules exchanged (a convex corner
-rounds, a reflex one miters) and the radii moved the other way. Both are exact,
-and the class that admits them is exactly the increment-1 segment set: a
-free-form section has no offset in the vocabulary (the offset of a spline is not
-a spline), and it does not build as an extrude either.
+offset `P ⊕ t` is the same table with the two corner rules exchanged (a convex
+corner rounds, a reflex one miters) and the radii moved the other way. Both are
+exact.
 
 **Two gates, and they are different questions.**
 
@@ -394,82 +417,78 @@ a spline), and it does not build as an extrude either.
   answers it: `P ⊖ t` is non-empty exactly when `t` is strictly less than the
   section's **inradius** — the radius of its largest inscribed disk, which
   `survey2d.go` already computes **exactly** as part of the wall survey. At or
-  beyond it the wall has eaten the part and there is no cavity: `ErrDegenerate`,
-  and the reading that refuses is the same one that answers `MinWallThickness`.
-  An outward shell has no such limit — a dilation of a non-empty region is never
-  empty, at any thickness.
-- **Can this evaluator build it?** The raw offset is admitted only when it
-  **preserves the section's topology**: every offset loop simple, no two offset
-  loops crossing, the offset outer loop still containing each offset hole, and the
-  holes still mutually disjoint — all decided by the §4 crossing audit in
-  closed form. Inward, a section with a slot narrower than `2t`, or two holes
-  closer than `2t`, has an exact offset whose *pieces merge*; outward, a hole
-  narrower than `2t` closes up and the loop is *dropped*. Resolving either needs
-  a trimmed-offset kernel this evaluator does not have. The body exists, so
-  the answer is `ErrUnsupported` (§1) — never a self-overlapping loop swept into
-  a solid, which is the same principle evaluator §12 states for the tapered
-  extrude. Refusing costs the caller a shell decad could in principle build;
-  producing one costs them a part that is wrong where they cannot see it.
+  beyond it, S10; and the reading that refuses is the same one that answers
+  `MinWallThickness`.
+- **Can this evaluator build it?** Two ways it cannot, and both are staged, not
+  denied: an offset that changes the section's feature set (S11), and a result
+  in more than one piece (S12). Refusing costs the caller a shell decad could in
+  principle build; producing one costs them a part that is wrong where they
+  cannot see it — the same principle evaluator §12 states for the tapered
+  extrude.
 
-**The result, by which caps were removed and which way the wall grew.** Write `Q`
-for the offset section — `P ⊖ t` inward, `P ⊕ t` outward — and `[z0, z1]` for the
-sweep interval. **The sense decides which of the two sections is the outer
-boundary and which is the cavity**: inward, the outer boundary is `P` and the
-cavity is `Q`; outward, the outer boundary is `Q` and the cavity is `P`, because
-the wall grew off the original solid and the original solid is what it now
-encloses. Write `O` for the outer section and `C` for the cavity section under
-whichever sense was asked for. Taking the removed cap as the top (`z1`), a removed
-bottom being its mirror:
-
-| Removed | Sense | The body |
-|---|---|---|
-| **both caps** | `Inward` | a tube: the prism over `P` with `Q = P ⊖ t` as its **hole(s)**, on `[z0, z1]` |
-| **both caps** | `Outward` | a tube: the prism over `Q = P ⊕ t` with `P` as its **hole(s)**, on `[z0, z1]` — no cap is kept, so no material is added along the sweep |
-| **one cap** | `Inward` | a cup: the outer prism over `P` on `[z0, z1]`, with the cavity the prism over `Q = P ⊖ t` on `[z0 + t, z1]` — the kept cap does not move, and the floor is `t` of the original material |
-| **one cap** | `Outward` | a cup: the outer prism over `Q = P ⊕ t` on `[z0 − t, z1]`, with the cavity the prism over `P` on `[z0, z1]` — the original solid *is* the cavity, and the floor is `t` of new material below the kept cap |
-
-Either tube is a plain `prismPayload` — an outer loop with holes — and
-canonicalizes to one: everything that consumes a prism consumes it (§10), and a
-fillet of a tube's lateral edges builds.
-
-The cup is the one new payload this increment introduces: two co-directional
-prisms over the same plane — the outer region on its interval, the cavity region
-on its own — which is enough to re-evaluate the body under a placement
-(`Body.Placed` composes the motion and rebuilds, evaluator §8) and enough for
-every measurement (§8).
+**Which section is the outside, and which is the cavity, is what the sense
+decides.** Inward, the outer boundary is `P` and the cavity is `P ⊖ t`; outward,
+the outer boundary is `P ⊕ t` and the cavity is `P`, because the wall grew off
+the original solid and the original solid is what it now encloses. The bodies
+that come out — their payload class, their **lump count**, their faces and their
+roles — are Table B (§9), and this section states none of it a second time.
 
 **A shelled body has no void, and `Shell.IsVoid()` is false on it.** An opening
 is what a removed face *is*, so the cavity's skin reaches the outside through
 the rim, and the inner and outer skins are one connected shell — a cup and a
 tube alike. A hollow **closed** body — the one shape whose inner skin is a
-genuine void shell — would be a shell that removes *no* face, and core §9's rule
-that a selector matching nothing is an error, loudly, is exactly what a caller
-would have to defeat to ask for it. v1 does not let them: `Shell` removes at
-least one face, and how a no-opening shell should be *spelled* is an open
-question (§12), not a silent behaviour of the empty match.
+genuine void shell — would be a shell that removes *no* face, and the selector
+vocabulary cannot ask for it at all: S16 makes an empty match an error, and a
+cardinality assertion takes a positive count. It is **unspellable**, not
+staged: there is no call to refuse, and how it should be spelled is an open
+question (§14).
 
-Faces of the cup, and each is analytic: the outer walls (planes and cylinders
-over `O`) and the kept cap, the **rim** — the removed cap's plane, trimmed to the
-annulus between `P` and `Q` — the cavity walls (planes and cylinders over `C`),
-and the cavity's own cap. Every edge bounds exactly two faces, so the body
-is manifold and watertight by the same structural argument the prism enjoys
-(evaluator §10), on a region the §4 audit has already proven simple.
+## 9. Table B — the result
 
-## 8. Mass properties, and why they stay Exact
+One row per (op × removed faces × sense × section connectivity). `k` is the
+number of holes in the receiver's section `P`; hole-free means `k = 0`. `[z0, z1]`
+is the receiver's sweep interval, and the removed cap is taken as the top
+(`z1`) — a removed bottom is its mirror. `Q` is the offset section: `P ⊖ t`
+inward, `P ⊕ t` outward.
+
+| B | Op | Removed | Sense | Section | Payload | Lumps | Faces (roles) | Refusals |
+|---|---|---|---|---|---|---|---|---|
+| **B1** | `Fillet` / `Chamfer` | — | — | any (`k ≥ 0`) | `prismPayload` over the **rewritten** section, same frame, same `[z0, z1]` | **1** | side walls `side(i,j)` over the rewritten record, two caps `capStart` / `capEnd`. The blend cylinder / bevel plane **is** one of those walls, and carries a **second** role `fillet(i,j)` / `chamfer(i,j)` naming the same `(loop, segment)` of the rewritten record | S1, S4, S5, S6, S7, S8, S9 |
+| **B2** | `Shell` | both caps | `Inward` | hole-free | a **tube**: `prismPayload` whose section is `{Outer: P, Holes: [Q]}`, on `[z0, z1]` | **1** | outer walls `side(0,j)`, cavity walls `side(1,j)`, and the two **rim annuli** — the caps of that prism — `capStart` / `capEnd` | S10, S11 |
+| **B3** | `Shell` | both caps | `Outward` | hole-free | a **tube**: `prismPayload` whose section is `{Outer: Q, Holes: [P]}`, on `[z0, z1]` — no cap is kept, so no material is added along the sweep | **1** | as B2 | S11 |
+| **B4** | `Shell` | both caps | either | holed (`k ≥ 1`) | — | **1 + k** — a band around the outer loop, plus one band lining each hole, pairwise disjoint | — | **S12** |
+| **B5** | `Shell` | one cap | `Inward` | any (`k ≥ 0`) | a **cup**: `cupPayload` — the outer prism over `P` on `[z0, z1]` and the cavity prism over `Q = P ⊖ t` on `[z0 + t, z1]`. The kept cap does not move; the floor is `t` of the original material | **1** — every wall band hangs off the floor slab | outer walls `side(i,j)`, the kept cap `capStart`, the **rims** `rim(i)` — the removed cap's plane trimmed to the band between loop `i` of `P` and loop `i` of `Q`, one face per loop (`1 + k` of them) — cavity walls `shellSide(i,j)`, cavity cap `shellCap` | S10, S11 |
+| **B6** | `Shell` | one cap | `Outward` | any (`k ≥ 0`) | a **cup**: `cupPayload` — the outer prism over `Q = P ⊕ t` on `[z0 − t, z1]` and the cavity prism over `P` on `[z0, z1]`. The original solid *is* the cavity; the floor is `t` of new material below the kept cap | **1** | as B5 | S11 |
+
+Every role above indexes the record of the payload **the result holds** — never
+the receiver's (§11). B2/B3's tube is a `prismPayload`, which is why Table R
+admits it as a receiver in R1 and why nothing downstream needs a new case for
+it (§12).
+
+`cupPayload` is the one new payload this increment introduces: two
+co-directional prisms over the same plane — the outer region on its interval,
+the cavity region on its own — plus the accumulated rigid placement, which is
+what `Body.Placed` re-evaluates (evaluator §8) and what every measurement reads
+(§10). Every edge of B1–B3, B5 and B6 bounds exactly two faces, so each body is
+manifold and watertight by the same structural argument the prism enjoys
+(evaluator §10), on regions the §5 audit has already proven simple.
+
+## 10. Mass properties, and why they stay Exact
 
 **A modify op introduces no bound.** Its result is one prism, or two, over
 regions the mass-property engine (evaluator §4) integrates in closed form —
 `LineSeg`, `CircleSeg` and `ArcSeg` walks are exactly the kinds it already
 integrates, and the arcs a fillet and an offset add are those kinds. So every
 quantity is `Exact` with a zero `Bound`, and the verification gate passes it at
-any tolerance (verification §5):
+any tolerance (verification §5). Write `h = |z1 − z0|`, `A_X` for the area of
+region `X`, and `h_c` for the cavity's own interval length:
 
-| Quantity | On a filleted / chamfered prism | On a cup |
-|---|---|---|
-| `Volume` | `A·h` on the rewritten section | `A_O·h − A_C·h_c` — the outer prism less the cavity prism, on each one's own interval (§7) |
-| `Area` | caps + Σ (segment length · h); an arc's length is `rθ`, exact | outer walls + kept cap + rim annulus + cavity walls + cavity cap |
-| `Centroid` | the rewritten region's centroid, lifted to the interval's signed midpoint | the mass-weighted difference of the two prisms' centroids |
-| `Bounds` | per-segment analytic extremes over the interval | the outer prism's — the cavity is interior |
+| Quantity | B1 — a filleted / chamfered prism | B2 / B3 — a tube | B5 / B6 — a cup |
+|---|---|---|---|
+| `Volume` | `A · h` on the rewritten section | `(A_outer − A_cavity) · h` — the tube's section is the outer loop less its holes, which is what the engine integrates | `A_outer · h − A_cavity · h_c` — the outer prism less the cavity prism, each on its own interval |
+| `Area` | caps + Σ (segment length · h); an arc's length is `rθ`, exact | rim annuli + Σ (segment length · h) over both loops | outer walls + kept cap + the rim bands + cavity walls + cavity cap |
+| `Centroid` | the rewritten region's centroid, lifted to the interval's signed midpoint | the section's centroid (holes subtract, as the engine already does), lifted likewise | the mass-weighted difference of the two prisms' centroids |
+| `Bounds` | per-segment analytic extremes over the interval | the same | the outer prism's — the cavity is interior |
 
 Each is a difference or a sum of quantities the engine already produces exactly;
 none is sampled, and none is fitted. The `Exactness` a modify op reports is
@@ -485,7 +504,7 @@ performed in infinite precision, which is a property no evaluator has and which
 verification §4 already accounts for, in the only place it can be accounted for:
 the coordinates.
 
-## 9. The recipe, provenance, and replay
+## 11. The recipe, provenance, and replay
 
 **The `Step`.** Each op appends one step (core §6.2), and each depends on and
 **consumes** the receiver — the receiver is retired from the document and the
@@ -513,129 +532,139 @@ forbids, one level down.
 **Replay is deterministic because resolution is.** Selector resolution is a
 filter over `Body.Edges()` / `Body.Faces()` in the body's own deterministic
 order (evaluator §7), the body being resolved against is itself rebuilt from its
-own step, and every gate in §3–§7 is a closed-form test on that geometry. A
+own step, and every gate in §3–§9 is a closed-form test on that geometry. A
 replay therefore selects the same edges, computes the same tangent feet, and
 builds the same body — which is what makes a recipe the deliverable core §2 says
 it is.
 
-**Provenance is inherited, and trimming is not creating.** The rewrite maps each
-surviving side face of the receiver to exactly one face of the result — the same
-wall, shorter — and the caps to the caps. Those faces carry **the origin roles
-they already had**, including the merged multi-role set a canonicalized face
-holds (evaluator §3). The modify step's own role attaches only to the faces
-whose **surface it introduced**:
+**A role is an index into the record, so the result's roles index the result's
+record.** `FeatureRef` is a producing `StepRef` plus a role, and the role of a
+side face is `side(i, j)` — loop `i`, segment `j` **of the payload the body
+holds** (evaluator §3). A modify op rewrites the section: segments are trimmed,
+inserted and renumbered, so a role inherited from the receiver would name a
+segment of a record this body no longer has. This increment therefore does what
+the shipped evaluator already does when it re-evaluates a payload: **every face
+of the result carries roles of the modify step alone**, in the result's own index
+space, and Table B lists them. There is no re-parenting problem because there is
+no inheritance: a role is minted from the record it labels.
 
-| Role | The face |
-|---|---|
-| `fillet(i,j)` | the blend cylinder at loop `i`'s junction `j` |
-| `chamfer(i,j)` | the bevel plane at loop `i`'s junction `j` |
-| `shellSide(i,j)` | a cavity wall |
-| `shellCap` | the cavity's cap (a cup only; a tube has none) |
+Two consequences, both load-bearing, and neither is a workaround:
 
-So `FaceCreatedBy(filletRef)` selects exactly the blends, `FaceCreatedBy` of the
-original extrude still selects the walls it made — a trim does not re-parent a
-face — and the rim of a shelled cap keeps the cap's role, its new hole loop
-notwithstanding. The body's own `Origin()` is the modify step, role `"body"`.
-Roles derive from the record and the deterministic walk order, so a replay
-reproduces every one of them (evaluator §3).
+- **the role-keyed consumers keep working.** The undercut survey and the
+  tessellator map a payload walk to the face built from it by looking the role
+  up on the body itself — the payload's `(i, j)` against the body's own roles
+  (Table D). Because both sides are the result's index space, the lookup hits on
+  a filleted, chamfered or tube-shelled body exactly as it does on an extrude,
+  with no new code and no new undecided case. An inherited role would have
+  broken precisely this: it names the *receiver's* step, and the same role
+  *string* would then label two different segments.
+- **`FaceCreatedBy` of an earlier step selects nothing on a modified body.** A
+  `FeatureRef` is a step **and** a role, so `FaceCreatedBy(FeatureRef{Step: the
+  fillet's step, Role: "fillet(0,3)"})` names that blend face, and the extrude's
+  refs name faces of the extrude's body — which the modify op consumed. Selecting
+  the walls of a modified body is done on what they **are** (`Planar()`,
+  `Cylindrical()`, `NormalTo`, `ParallelTo`) or on the modify step's own roles.
+  Whether a consuming op should additionally carry its ancestor's refs is core
+  §9's question, and it is open (§14).
 
-## 10. What the result is to everything already shipped
+The body's own `Origin()` is the modify step, role `"body"`. Roles derive from
+the record and the deterministic walk order, so a replay reproduces every one of
+them (evaluator §3).
 
-The reduction pays here, and the ledger is short:
+## 12. Table D — downstream
 
-- **Tessellation** (`tessellate.go`) chords a prism payload, and a filleted or
-  chamfered body IS one — the blend cylinders chord through the same per-curve
-  machinery, shared by every face meeting the curve, so the mesh stays
-  watertight by construction. The cup's payload is new, and the tessellator
-  extends to it in the same increment: its faces are the same analytic variants,
-  and the rim annulus is a polygon-with-holes the shipped cap triangulator
-  already builds. `STL` and `OBJ` follow for free.
-- **The wall survey** (`survey.go`, `survey2d.go`) reduces a prism to its
-  section, and the rewritten section is a section: a filleted or chamfered
-  body's `MinWallThickness` is read by the shipped 2D kernel with no new code. A
-  **chamfer** meets its neighbours at dihedrals of `π` minus the bevel's half
+One row per consumer. The **Reads** column is the whole point: a payload-only
+consumer cannot notice a modify op, and a role-keyed one can only work because
+§11 puts the roles in the payload's own index space.
+
+| D | Consumer | Reads | B1 — filleted / chamfered | B2 / B3 — a tube | B5 / B6 — a cup |
+|---|---|---|---|---|---|
+| **D1** | `prismWall` + `survey2d` (`MinWallThickness`) | the payload only | works unchanged: the rewritten section is a section, the height is the receiver's, the reading is Exact | works unchanged: a tube **is** a prism over an annular section | **undecided.** The kernel decides one section swept at one height; a cup is two sections over adjoining intervals, so the survey does not decide it and the reading is `Suspect` — §1's sanctioned path, never a silent pass (§14) |
+| **D2** | `prismUndercuts` | the payload **and the roles** — it looks each payload walk's face up by `side(i,j)` on the body's own step | works unchanged (§11): every wall of the result, blends included, carries its `side(i,j)` role in the result's index space | works unchanged | a cup reading lands with the cup payload: the same per-face exact normal ranges over the faces of B5/B6, mapped by their roles |
+| **D3** | `prismMinRadius` | the payload only | works unchanged: a fillet of a **concave** edge is a concave arc of the section, and its radius is read; a fillet of a convex edge adds a convex cylinder, which is not a concave feature and rightly does not appear | works unchanged: the cavity loop's walls are read like any hole wall | a cup reading lands with the payload: the same walk over the outer and the cavity section. The sharp concave edge where the wall meets the floor carries no radius — the survey reads faces' principal radii, and a spec about the *edges* is one no option states (verification §2) |
+| **D4** | `Tessellate` → `STL` / `OBJ` | the payload **and the roles** — it chords the payload's curves and names the face each belongs to by role | works unchanged: blend cylinders chord through the same per-curve machinery, shared by every face meeting the curve, so the mesh stays watertight by construction | works unchanged | extends with the cup payload, in the shell's own increment: the faces are the same analytic variants, and a rim band is a polygon-with-holes the shipped cap triangulator already builds |
+| **D5** | Body-relative stops (`ToFace`, `ThroughAll`) | the payload only — a body's exact extent along a direction | works unchanged | works unchanged | the cup answers with its outer prism's extent; the cavity is interior |
+| **D6** | Clearance (`docs/clearance-design.md`) | the **faces**, not the payload | a first-class operand — every face here is in its table | a first-class operand | a first-class operand |
+| **D7** | The mesh boolean (evaluator §9) | the tessellation | takes these bodies as it takes any other | as any other | as any other, once D4 covers it |
+| **D8** | `Verify` — the structural audit and the tolerance gate | the topology and the measurements | `Sound` on the same terms an extrude's body is: valid by construction (§5), Exact at any tolerance (§10) | the same | the same, with D1 the single exception: a cup asked for `MinWallThickness` reads `Suspect` |
+
+Two readings verification §6 asks about are worth stating because a modify op is
+what makes them arise, and neither needs §6 relaxed:
+
+- a **chamfer** meets its neighbours at dihedrals of `π` minus the bevel's half
   turn — far beyond any legal draft allowance on a right-angled edge — so it
   reads as an *edge, not a wall*, which is precisely what verification §6 says a
-  chamfer is. A **fillet**'s junctions are tangent, and the material's interior
-  angle there is `π`: a smooth continuation, not the closing wedge of
-  verification §6's knife edge (whose interior dihedral goes to *zero*). So a
-  fillet mints no spurious zero wall, and nothing in §6 has to be relaxed to say
-  so. The cup's reading is the same kernel run twice: the spanning balls of the
-  wall are the annulus section's, with the wall's height as the vertical fit,
-  and the balls spanning the floor are pinned between the kept cap and the
-  cavity's cap — diameter exactly `t`. Lateral and cap contacts sit 90° apart,
-  past every legal allowance, so the enumeration is complete and the reading is
-  Exact.
-- **Undercuts** are a per-face survey of exact normal ranges, and every face a
-  modify op makes is a `Plane` or a `Cylinder` whose range the shipped survey
-  already reads. A blend cylinder whose axis is parallel to the pull is
-  everywhere perpendicular to it and provenly clears; one wrapped across the
-  pull opposes over part of its range and is listed. No new rule, and no new
-  undecided case.
-- **`MinRadius`** must see a concave fillet's radius, and it does: the survey
-  walks the section's arcs against the material, and a fillet of a *concave*
-  edge is a concave arc of radius `r` in the section. A fillet of a *convex*
-  edge adds a convex cylinder, which is not a concave feature and rightly does
-  not appear. A shell's cavity is read the same way. The sharp concave edge
-  where a cup's wall meets its floor carries no radius — the survey reads faces'
-  principal radii, and a spec about the *edges* themselves is one no option
-  states, so no verdict enforces it (verification §2).
-- **Clearance** (`docs/clearance-design.md`) reads faces, not payloads, and
-  every face here is in its table. A filleted body is a first-class operand.
-- **The boolean** (evaluator §9) tessellates its operands, so it takes these
-  bodies as it takes any other.
-- **Body-relative stops** read a body's exact extent along a direction. A
-  filleted prism keeps the prism payload that answers it; the cup's payload
-  answers with its outer prism's extent, the cavity being interior. So a
-  modified body can be the stop of a later `ThroughAll` or `ToFace`, and its
-  `StepRef` is recorded in that step's `Inputs` like any other (core §6.2).
-- **`Verify`** reads Exact quantities on a body proven valid by construction, so
-  a modified body is `Sound` on the same terms an extrude's is. Nothing here adds
-  a `Suspect` path.
+  chamfer is;
+- a **fillet**'s junctions are tangent, and the material's interior angle there
+  is `π`: a smooth continuation, not the closing wedge of verification §6's knife
+  edge (whose interior dihedral goes to *zero*). So a fillet mints no spurious
+  zero wall.
 
-## 11. Increments
+## 13. Increments
 
 PR-level staging inside evaluator increment 5. Everything not yet landed is
 `ErrUnsupported` **at the call** — never a `Verify` reading, and never a body:
 
 | PR | Lands | Still `ErrUnsupported` after it |
 |---|---|---|
-| 1 | the section rewrite and its §4 audit, `Fillet` on lateral edges (line/line, line/arc, arc/arc corners), the `Step` wiring and provenance inheritance | chamfer, shell; every cap edge; every non-prism receiver |
-| 2 | `Chamfer`, equal distance | shell; the asymmetric chamfer |
-| 3 | `Shell`: cap removal, the exact erosion and dilation, the topology-preservation audit, the cup payload, and `Tessellate` + the surveys extended to it | side-wall removal; the no-opening shell; the topology-changing offset |
+| 1 | the section rewrite and its §5 audit, `Fillet` on lateral edges (line/line, line/arc, arc/arc corners), B1's roles, the `Step` wiring | `Chamfer`, `Shell` (S3 for their receivers is unchanged); every cap edge (S1); every non-prism receiver (S3) |
+| 2 | `Chamfer`, equal distance | `Shell`; the asymmetric chamfer (it is not spellable — no option carries it) |
+| 3 | `Shell`: cap removal, the exact erosion and dilation, the §5 topology gates, the tube (B2/B3), the `cupPayload` (B5/B6), and D2/D3/D4 extended to the cup | side-wall removal (S2); the topology-changing offset (S11); the both-caps shell of a holed section (S12) |
 
-The walk-sense wall orientation (§5) is a **prerequisite**, not a deliverable: a
-clockwise circular walk on an outer loop mis-orients its wall in the prism build
-today, on profiles a fillet has nothing to do with, and the fix belongs to that
-build. PR 1 depends on it landing; it does not carry it.
+After PR 3, one asked question on a body this evaluator builds is still
+undecided: a cup's `MinWallThickness`, which reads `Suspect` (D1).
 
-## 12. Open questions
+The walk-sense corrections of §6 — a circular wall's face orientation and a
+lateral edge's `IsConvex` — are a **prerequisite**, not a deliverable: the role
+proxy mis-reads both on profiles a fillet has nothing to do with, and the fix
+belongs to the prism build. PR 1 depends on it landing; it does not carry it.
 
-- **The vertex blend.** A cap-edge fillet, and therefore any blend chain that
-  turns a corner, needs a surface for the vertex where three blends meet. It is
-  not a cylinder, not a sphere, and not exactly derivable from the section —
-  which is why §5 excludes it rather than approximating it. What it should be
+## 14. Open questions
+
+- **The vertex blend.** A cap-edge fillet (S1), and therefore any blend chain
+  that turns a corner, needs a surface for the vertex where three blends meet.
+  It is not a cylinder, not a sphere, and not exactly derivable from the section
+  — which is why §6 excludes it rather than approximating it. What it should be
   (a setback patch? a spherical corner where the three radii agree, and
   `ErrUnsupported` where they do not?) is undecided, and it is the single
   largest thing standing between this increment and general edge chains.
 - **Blend merging.** Two corners of one short wall, filleted in one call so that
-  their cutbacks overlap, is `ErrUnsupported` today (§5): the two blend surfaces
-  exist, and a kernel that merges them into one — or trims each against what it
-  runs into — builds the body. Whether this evaluator should grow that resolution
-  step, or whether a caller who asks for it is better served by the refusal, is
-  undecided.
-- **The topology-changing offset.** A shell whose exact offset merges two loops
-  (a slot narrower than twice the wall) is `ErrUnsupported`. Resolving it needs
-  a trimmed-offset kernel — the same machinery the tapered extrude wants
+  their cutbacks overlap, is S6: the two blend surfaces exist, and a kernel that
+  merges them into one — or trims each against what it runs into — builds the
+  body. Whether this evaluator should grow that resolution step, or whether a
+  caller who asks for it is better served by the refusal, is undecided.
+- **The topology-changing offset.** S11 — a shell whose exact offset merges two
+  loops (a slot narrower than twice the wall) or drops a segment. Resolving it
+  needs a trimmed-offset kernel — the same machinery the tapered extrude wants
   (evaluator §12), which suggests one kernel, one increment, and both callers.
+- **The multi-lump result.** S12 — a both-caps shell of a holed section is
+  `1 + k` disjoint bands (B4), and no payload in this evaluator holds a
+  disconnected region: a `ProfileRecord` is one outer loop and its holes, and a
+  `prismPayload` holds one. A multi-region payload (a list of `ProfileRecord`s,
+  one lump each, sharing a frame and an interval) would build it, and would also
+  be what a boolean that splits a body needs (evaluator §9). Whether that payload
+  is worth its cost, and which increment owns it, is undecided; until it exists,
+  the refusal stands.
+- **A cup's wall reading.** D1 — the shipped 2D kernel decides one section swept
+  at one height. A cup is a stack of two sections over adjoining intervals (a
+  floor slab, then a wall band), and its spanning balls are not the balls of
+  either section alone. Extending the kernel to a stacked section is the missing
+  piece; until it lands, the question reads `Suspect`.
 - **The no-opening shell.** A hollow closed body — the only shape with a genuine
   `IsVoid` shell — is a shell that removes no face, and the selector vocabulary
-  has no way to ask for it: core §9 makes an empty match an error, and a
-  cardinality assertion takes a positive count, so a *satisfied* assertion of zero
-  is not a spelling the contract offers. Asking for it therefore means adding
+  has no way to ask for it: core §9 makes an empty match an error (S16), and a
+  cardinality assertion takes a positive count, so a *satisfied* assertion of
+  zero is not a spelling the contract offers. Asking for it therefore means adding
   something — a nullary `WithNoOpenings()` option is the obvious candidate — and
   nothing is chosen. Admitting a zero-count assertion instead would be a change to
   the selector contract, which is core §9's to make, not this document's.
+- **Ancestor provenance across a consuming op.** §11 mints every role of a result
+  from the record it labels, so no face of a modified body carries the extrude's
+  refs, and `FaceCreatedBy` of an earlier step selects nothing on it. A face can
+  hold several refs (evaluator §3 unions them on a canonicalization merge), so
+  carrying the ancestor's `(step, role)` **alongside** the result's own is
+  expressible — but it is a change to what `FaceCreatedBy` promises across a
+  consuming op, and that promise is core §9's to make.
 - **The asymmetric chamfer**, and the **variable-radius fillet**: both are
   options with nowhere to land until `ChamferOpts` and `FilletOpts` carry a
   field, and both are recordable when they do. Neither is in v1.
@@ -643,5 +672,5 @@ build. PR 1 depends on it landing; it does not carry it.
   exactly as a prism's section stands to its own — a latitude-circle edge is a
   meridian corner, and rounding that corner sweeps a **torus**, which is in the
   shipped surface set. The reduction of §2 looks like it generalizes intact. It
-  is not designed here, and whether it is increment 5's or a later one's is
-  open.
+  is not designed here (R3 refuses today), and whether it is increment 5's or a
+  later one's is open.
