@@ -99,6 +99,24 @@ type Torus struct {
 	Minor  units.Value
 }
 
+// Faceted is the honest v1 boolean-output variant (core §6.1): a face a
+// boolean produced, whose analytic identity is gone. A Faceted face IS
+// exactly its polygons — what it approximates is which surface it stands
+// for, never what it is — and this variant's presence is exactly why a
+// measurement on its body reads Approximate. Bound is the proven chord bound
+// its polygons carry: no point of the surface the face stands for lies
+// farther from them. The polygons themselves are read through
+// Body.Tessellate (core §3 invariant #1 — triangles are an output, never
+// the representation).
+type Faceted struct {
+	Bound units.Value
+}
+
+// Kind reports KindFaceted.
+func (Faceted) Kind() SurfaceKind { return KindFaceted }
+
+func (Faceted) surface() {}
+
 // Kind reports KindPlane.
 func (Plane) Kind() SurfaceKind { return KindPlane }
 
@@ -144,9 +162,18 @@ type Arc3 struct {
 	Radius units.Value
 }
 
-func (Line3) curve()   {}
-func (Circle3) curve() {}
-func (Arc3) curve()    {}
+// FacetedCurve is Faceted's one-dimensional analog: a boolean-built edge —
+// a chain of straight chords along the contact of two faceted faces, whose
+// analytic identity is gone. Bound is the proven chord bound the chain
+// carries.
+type FacetedCurve struct {
+	Bound units.Value
+}
+
+func (Line3) curve()        {}
+func (Circle3) curve()      {}
+func (Arc3) curve()         {}
+func (FacetedCurve) curve() {}
 
 // Vertex is a topological point.
 type Vertex struct {
@@ -179,7 +206,10 @@ type Edge struct {
 	end    *Vertex
 	faces  []*Face
 	convex bool    // the walked-boundary convexity — see IsConvex
-	length float64 // millimetres, exact for the v1 curve set
+	length float64 // millimetres, exact for the analytic curve set
+	// lengthBound is the proven error bound on length: zero for the
+	// analytic curves, the chord bound for a boolean-built chain.
+	lengthBound float64
 }
 
 // Curve returns the edge's tagged geometry.
@@ -225,10 +255,15 @@ func (e *Edge) Faces() []*Face { return append([]*Face(nil), e.faces...) }
 // Convex() never does.
 func (e *Edge) IsConvex() bool { return e.convex }
 
-// Length returns the edge's length. Exact (zero bound) for every curve the
-// v1 features build.
+// Length returns the edge's length: Exact (zero bound) for every analytic
+// curve the features build, Approximate with the proven chord bound for a
+// boolean-built chain.
 func (e *Edge) Length() (Measurement, error) {
-	return Measurement{Value: units.Millimeters(e.length), Exactness: Exact, Bound: units.Millimeters(0)}, nil
+	return Measurement{
+		Value:     units.Millimeters(e.length),
+		Exactness: exactnessOf(e.lengthBound),
+		Bound:     units.Millimeters(e.lengthBound),
+	}, nil
 }
 
 // Loop is one boundary loop of a face.
@@ -256,7 +291,10 @@ type Face struct {
 	loops   []*Loop
 	origins []FeatureRef
 	body    *Body
-	area    float64 // millimetres², exact for the v1 face set
+	area    float64 // millimetres², exact for the analytic face set
+	// areaBound is the proven error bound on area: zero for the analytic
+	// faces, the composed chord bound for a boolean-built Faceted face.
+	areaBound float64
 	// reversed is true when the OUTWARD (material-leaving) normal is the
 	// surface's geometric normal negated — a hole's cylinder wall, whose
 	// material lies outside the cylinder.
@@ -341,10 +379,15 @@ func (f *Face) Edges() []*Edge {
 	return out
 }
 
-// Area returns the face's area. Exact (zero bound) for every face the v1
-// features build.
+// Area returns the face's area: Exact (zero bound) for every analytic face
+// the features build, Approximate with the proven composed bound for a
+// boolean-built Faceted face.
 func (f *Face) Area() (Measurement, error) {
-	return Measurement{Value: units.SquareMillimeters(f.area), Exactness: Exact, Bound: units.SquareMillimeters(0)}, nil
+	return Measurement{
+		Value:     units.SquareMillimeters(f.area),
+		Exactness: exactnessOf(f.areaBound),
+		Bound:     units.SquareMillimeters(f.areaBound),
+	}, nil
 }
 
 // Origins returns every feature role that created this face —
