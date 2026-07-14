@@ -454,3 +454,29 @@ func TestCurvedRimLengthRefuses(t *testing.T) {
 	require.Positive(t, curvedRefused, `the drilled rims lie on a curved source`)
 	require.Positive(t, straightAnswered, `the plate's own outline rims are straight`)
 }
+
+func TestUnionRejectsVertexTangentContact(t *testing.T) {
+	// Two cubes sharing exactly one corner vertex pinch at a point: an
+	// isolated point contact no crossing chain owns, which the boolean
+	// refuses rather than stitching a non-manifold result.
+	doc := decad.New()
+	a := boxBody(t, doc, 0, 0, 10, 10, 10)
+	b := translated(t, boxBody(t, doc, 0, 0, 10, 10, 10), 10, 10, 10)
+	_, err := decad.Union(a, b)
+	require.ErrorIs(t, err, decad.ErrDegenerate)
+}
+
+func TestPlanarUnionAreaBoundIsTiny(t *testing.T) {
+	// The all-planar union keeps an Exact volume; the area always carries
+	// the ulp-scale float-summation bound — Approximate, but tiny against
+	// any real tolerance.
+	doc := decad.New()
+	a := boxBody(t, doc, 0, 0, 20, 20, 8)
+	b := translated(t, boxBody(t, doc, 0, 0, 20, 20, 8), 15, 15, -4)
+	got, err := decad.Union(a, b)
+	require.NoError(t, err)
+	area, err := got.Area()
+	require.NoError(t, err)
+	require.Equal(t, decad.Approximate, area.Exactness)
+	require.Less(t, area.Bound.Base(), 1e-9*area.Value.Base(), `ulp-scale, far under any gate`)
+}

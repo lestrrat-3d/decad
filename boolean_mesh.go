@@ -99,6 +99,10 @@ func errDegenerateContact(what string) error {
 type triContact struct {
 	p0, p1                     xpt
 	p0OnA, p1OnA, p0OnB, p1OnB bool
+	// pointOnly marks a contact that is exactly one point: carried to the
+	// mesh pass, which rejects it unless it is the endpoint of some
+	// segment contact (a crossing chain passing through a vertex).
+	pointOnly bool
 }
 
 // planeCrossings collects the exact points where triangle t crosses the
@@ -148,11 +152,29 @@ func triTriContact(ta, tb [3]r3.Vec, xta, xtb [3]xpt, na, nb xpt) (triContact, b
 
 	za := countZero(sa)
 	zb := countZero(sb)
+	// pointTouch reports the first vertex of xt (whose plane-side sign is
+	// zero at index i) that lies on the closed other triangle — a carried
+	// point contact candidate.
+	pointTouch := func(signs [3]int, xt, xo [3]xpt, no xpt) (xpt, bool) {
+		for i := range 3 {
+			if signs[i] == 0 && pointOnTri(xt[i], xo, no) {
+				return xt[i], true
+			}
+		}
+		return xpt{}, false
+	}
 	if za == 3 || zb == 3 {
 		// Coplanar pair: an overlap of positive measure is a face-on-face
-		// tangency; a point touch is no contact at all.
+		// tangency; a vertex touching the other closed triangle is a point
+		// contact, carried for the isolation check.
 		if coplanarOverlap(xta, xtb, na) {
 			return triContact{}, false, errDegenerateContact(`two operand facets overlap in one plane`)
+		}
+		if p, ok := pointTouch([3]int{0, 0, 0}, xta, xtb, nb); ok {
+			return triContact{p0: p, p1: p, pointOnly: true}, true, nil
+		}
+		if p, ok := pointTouch([3]int{0, 0, 0}, xtb, xta, na); ok {
+			return triContact{p0: p, p1: p, pointOnly: true}, true, nil
 		}
 		return triContact{}, false, nil
 	}
@@ -160,17 +182,30 @@ func triTriContact(ta, tb [3]r3.Vec, xta, xtb [3]xpt, na, nb xpt) (triContact, b
 		if err := rejectEdgeGraze(sa, xta, xtb, nb); err != nil {
 			return triContact{}, false, err
 		}
+		if p, ok := pointTouch(sa, xta, xtb, nb); ok {
+			return triContact{p0: p, p1: p, pointOnly: true}, true, nil
+		}
 		return triContact{}, false, nil
 	}
 	if zb == 2 {
 		if err := rejectEdgeGraze(sb, xtb, xta, na); err != nil {
 			return triContact{}, false, err
 		}
+		if p, ok := pointTouch(sb, xtb, xta, na); ok {
+			return triContact{p0: p, p1: p, pointOnly: true}, true, nil
+		}
 		return triContact{}, false, nil
 	}
 	if za == 1 && (sa[0]+sa[1]+sa[2] != 0) && zb == 1 && (sb[0]+sb[1]+sb[2] != 0) {
-		// Both triangles only touch the other's plane at one vertex from one
-		// side: the contact is at most a point.
+		// Both triangles only touch the other's plane at one vertex from
+		// one side: the contact is at most a point — carried when the
+		// vertex really lies on the other closed triangle.
+		if p, ok := pointTouch(sa, xta, xtb, nb); ok {
+			return triContact{p0: p, p1: p, pointOnly: true}, true, nil
+		}
+		if p, ok := pointTouch(sb, xtb, xta, na); ok {
+			return triContact{p0: p, p1: p, pointOnly: true}, true, nil
+		}
 		return triContact{}, false, nil
 	}
 
@@ -179,7 +214,15 @@ func triTriContact(ta, tb [3]r3.Vec, xta, xtb [3]xpt, na, nb xpt) (triContact, b
 	ptsA = dedupePoints(ptsA)
 	ptsB = dedupePoints(ptsB)
 	if len(ptsA) < 2 || len(ptsB) < 2 {
-		return triContact{}, false, nil // a point touch on either side
+		// A single crossing point on a side is at most a point contact —
+		// carried when it really lies on the other closed triangle.
+		if len(ptsA) == 1 && pointOnTri(ptsA[0], xtb, nb) {
+			return triContact{p0: ptsA[0], p1: ptsA[0], pointOnly: true}, true, nil
+		}
+		if len(ptsB) == 1 && pointOnTri(ptsB[0], xta, na) {
+			return triContact{p0: ptsB[0], p1: ptsB[0], pointOnly: true}, true, nil
+		}
+		return triContact{}, false, nil
 	}
 	if len(ptsA) > 2 || len(ptsB) > 2 {
 		return triContact{}, false, fmt.Errorf(`%w: a facet crosses a plane more than twice`, ErrBooleanFailed)
@@ -292,6 +335,29 @@ func projAxes(n xpt) (int, int) {
 	return 1, 2
 }
 
+// xcoordOf returns p's exact coordinate along axis i (0=x, 1=y, 2=z).
+func xcoordOf(p xpt, i int) *big.Rat {
+	switch i {
+	case 0:
+		return p.x
+	case 1:
+		return p.y
+	default:
+		return p.z
+	}
+}
+
+// pointOnTri reports whether the exact point p — already on the triangle's
+// plane — lies inside or on the closed triangle, via the exact projection.
+func pointOnTri(p xpt, xt [3]xpt, n xpt) bool {
+	u, v := projAxes(n)
+	pp := xp2{xcoordOf(p, u), xcoordOf(p, v)}
+	a := xp2{xcoordOf(xt[0], u), xcoordOf(xt[0], v)}
+	b := xp2{xcoordOf(xt[1], u), xcoordOf(xt[1], v)}
+	c := xp2{xcoordOf(xt[2], u), xcoordOf(xt[2], v)}
+	return pointInTriX(pp, a, b, c)
+}
+
 // segTriOverlap2 reports whether segment (a, b) meets the closed triangle
 // with positive length — exactly.
 func segTriOverlap2(a, b, ta, tb, tc xp2) bool {
@@ -384,6 +450,7 @@ func meshBoolean(op OpKind, ma, mb *boolMesh) ([]keptFacet, error) {
 	// Exact contacts, per facet of each operand. Facet boxes prune the pairs.
 	cutsA := map[int][]xseg{}
 	cutsB := map[int][]xseg{}
+	var pointTouches []xpt
 	for i := range ma.tris {
 		if ma.degen[i] {
 			continue
@@ -401,6 +468,10 @@ func meshBoolean(op OpKind, ma, mb *boolMesh) ([]keptFacet, error) {
 			if !ok {
 				continue
 			}
+			if contact.pointOnly {
+				pointTouches = append(pointTouches, contact.p0)
+				continue
+			}
 			cutsA[i] = append(cutsA[i], xseg{
 				a: contact.p0, b: contact.p1,
 				aOnEdge: contact.p0OnA, bOnEdge: contact.p1OnA,
@@ -411,6 +482,28 @@ func meshBoolean(op OpKind, ma, mb *boolMesh) ([]keptFacet, error) {
 				aOnEdge: contact.p0OnB, bOnEdge: contact.p1OnB,
 				partner: ta,
 			})
+		}
+	}
+
+	// A point-only contact is legitimate only as the endpoint of some
+	// crossing segment (a chain passing exactly through a vertex). An
+	// isolated one is a tangency the boolean cannot classify: the operands
+	// pinch at a point, and stitching it would emit a non-manifold result —
+	// refuse, never a wrong mesh.
+	if len(pointTouches) > 0 {
+		ends := map[string]struct{}{}
+		for _, segs := range [2]map[int][]xseg{cutsA, cutsB} {
+			for _, ss := range segs {
+				for _, s := range ss {
+					ends[s.a.key()] = struct{}{}
+					ends[s.b.key()] = struct{}{}
+				}
+			}
+		}
+		for _, p := range pointTouches {
+			if _, ok := ends[p.key()]; !ok {
+				return nil, errDegenerateContact(`the operand boundaries touch at an isolated point`)
+			}
 		}
 	}
 
@@ -728,6 +821,10 @@ func stitchFacets(kept []keptFacet) (*stitchedMesh, error) {
 	}
 	w, _ := worst.Float64()
 	if w > 0 {
+		// worst is the max PER-COORDINATE rounding; the consumers read a 3D
+		// distance bound, and all three coordinates can round at once, so
+		// scale by √3 (rounded up) before the ulp nudge.
+		w *= 1.7320508075688774
 		w = math.Nextafter(w, math.Inf(1))
 	}
 	out.round = w

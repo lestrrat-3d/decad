@@ -88,9 +88,10 @@ func (fp facetedPayload) placed(d *Document, ref StepRef, composed r3.Transform)
 			next.tris[i] = [3]int{t[0], t[2], t[1]}
 		}
 	}
-	// The transform arithmetic rounds each coordinate; a generous ulp
-	// allowance keeps every bound proven.
-	allow := 16 * ulpOf(maxAbs)
+	// The transform arithmetic rounds each coordinate; the consumers read a
+	// 3D distance bound and all three coordinates can round at once, so the
+	// generous per-coordinate ulp allowance carries a √3 on top (32 ≥ 16·√3).
+	allow := 32 * ulpOf(maxAbs)
 	next.meshBound += allow
 	next.volSymDiff += allow * meshAreaUpper(next.verts, next.tris)
 	return buildFacetedBody(d, ref, next)
@@ -330,7 +331,13 @@ func buildFacetedBody(d *Document, ref StepRef, pp facetedPayload) (*Body, error
 		a, b, c := verts[t[0]], verts[t[1]], verts[t[2]]
 		areaF += b.Sub(a).Cross(c.Sub(a)).Len() / 2
 	}
-	areaBound := pp.meshBound*edgeLenTotal + pp.areaSlack + 1e-9*areaF
+	// The float area accumulation itself rounds: each facet contributes a
+	// cross product, norm and sum, each within a few ulps, so the slop is
+	// ulp-scale in the total — NOT a fixed 1e-9 fraction, which would turn
+	// a genuinely tiny-bound planar boolean into a needlessly coarse one,
+	// and never zero, which would claim an exactness the float sum lacks.
+	floatSlop := 16 * 2.220446049250313e-16 * areaF * math.Max(1, math.Log2(float64(len(tris)+1)))
+	areaBound := pp.meshBound*edgeLenTotal + pp.areaSlack + floatSlop
 	body.area = Measurement{
 		Value:     units.SquareMillimeters(areaF),
 		Exactness: exactnessOf(areaBound),

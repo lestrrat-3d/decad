@@ -31,7 +31,10 @@ const boolChordFactor = 2e-5
 // faces are grouped by the operands' source faces, so provenance
 // (FaceCreatedBy) survives, and its measurements are Approximate with proven
 // bounds (docs/evaluator-design.md §9) — except that an all-planar pair whose
-// contact points round exactly stays Exact, honestly. Operands from different
+// contact points round exactly keeps an Exact VOLUME (the volume integral is
+// computed in exact arithmetic); the surface area always carries at least an
+// ulp-scale float-summation bound, so it reads Approximate with a bound tiny
+// against any real tolerance. Operands from different
 // documents are ErrForeignBody; retired operands ErrRetiredBody; a tangent
 // contact the exact predicates cannot classify (face-on-face or grazing
 // contact) is ErrDegenerate; a result with no volume is ErrBooleanFailed.
