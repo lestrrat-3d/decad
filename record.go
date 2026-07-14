@@ -33,6 +33,45 @@ type Point2 struct {
 	V float64 `json:"v"`
 }
 
+// TransformRecord is a rigid placement, as four vectors: it survives encoding,
+// which an r3.Transform does not (its fields are unexported, so a Step that
+// stored one would silently drop the motion — docs/api-design.md §6.2). EX,
+// EY, EZ are the transformed world basis (r3.Transform.Basis), dimensionless
+// directions; T is the translation, millimetres (§5.2). RecordTransform
+// converts a live transform in, and TransformRecord.Transform rebuilds one —
+// through r3.FromBasis, which snaps encoding drift straight and rejects
+// anything that is not an isometry.
+type TransformRecord struct {
+	EX r3.Vec `json:"ex"`
+	EY r3.Vec `json:"ey"`
+	EZ r3.Vec `json:"ez"`
+	T  r3.Vec `json:"t"`
+}
+
+// RecordTransform converts a rigid motion into its record form. The zero
+// r3.Transform is invalid and is [ErrDegenerate], exactly as Body.Placed
+// treats it (docs/api-design.md §8) — an invalid transform names no placement
+// to record.
+func RecordTransform(t r3.Transform) (TransformRecord, error) {
+	if !t.IsValid() {
+		return TransformRecord{}, fmt.Errorf(`%w: an invalid transform names no placement to record`, ErrDegenerate)
+	}
+	b := t.Basis()
+	return TransformRecord{EX: b.EX, EY: b.EY, EZ: b.EZ, T: t.Translation()}, nil
+}
+
+// Transform rebuilds the recorded rigid motion through r3.FromBasis, which
+// snaps encoding drift straight and rejects a record that is not an isometry —
+// a decoded placement is a real rigid motion or an error, never a silent
+// distortion.
+func (r TransformRecord) Transform() (r3.Transform, error) {
+	t, err := r3.FromBasis(r3.Basis{EX: r.EX, EY: r.EY, EZ: r.EZ}, r.T)
+	if err != nil {
+		return r3.Transform{}, fmt.Errorf(`decad: the recorded placement is not a rigid motion: %w`, err)
+	}
+	return t, nil
+}
+
 // ProfileRecord is the region a Step extrudes or revolves: one outer loop and
 // its holes, structural and plane-local. Not a sample, not a pointer, not a
 // sketch.

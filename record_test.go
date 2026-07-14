@@ -154,3 +154,65 @@ func TestPlaneRecordRoundTrip(t *testing.T) {
 	require.NoError(t, json.Unmarshal(buf, &got))
 	require.Equal(t, rec, got, `a plane record should round-trip exactly`)
 }
+
+func TestTransformRecordRoundTrip(t *testing.T) {
+	// A real placement: rotate about a skew axis, then translate.
+	rot, err := r3.Rotation(r3.NewVec(1, 2, 3), units.Degrees(30))
+	require.NoError(t, err)
+	shift, err := r3.Translation(r3.NewVec(10, -5, 2.5))
+	require.NoError(t, err)
+	motion, err := rot.Then(shift)
+	require.NoError(t, err)
+
+	rec, err := decad.RecordTransform(motion)
+	require.NoError(t, err)
+	require.Equal(t, r3.NewVec(10, -5, 2.5), rec.T, `the translation is recorded verbatim`)
+
+	buf, err := json.Marshal(rec)
+	require.NoError(t, err)
+	var decoded decad.TransformRecord
+	require.NoError(t, json.Unmarshal(buf, &decoded))
+
+	rebuilt, err := decoded.Transform()
+	require.NoError(t, err, `a recorded placement rebuilds through FromBasis`)
+	require.True(t, rebuilt.Equal(motion, 1e-12), `the rebuilt motion should be the recorded one`)
+
+	// The motion acts identically: apply both to a probe point.
+	p := r3.NewVec(7, 8, 9)
+	require.InDelta(t, motion.Apply(p).X, rebuilt.Apply(p).X, 1e-12)
+	require.InDelta(t, motion.Apply(p).Y, rebuilt.Apply(p).Y, 1e-12)
+	require.InDelta(t, motion.Apply(p).Z, rebuilt.Apply(p).Z, 1e-12)
+}
+
+func TestTransformRecordReflection(t *testing.T) {
+	// A reflection is a legal rigid placement (det = −1) and must survive the
+	// round trip as one — a reflected solid has inverted face normals, so
+	// losing the handedness would silently flip the part.
+	mirror, err := r3.NewFrame(r3.NewVec(0, 0, 0), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
+	require.NoError(t, err)
+	refl, err := r3.Reflection(mirror)
+	require.NoError(t, err)
+	require.True(t, refl.IsReflection())
+
+	rec, err := decad.RecordTransform(refl)
+	require.NoError(t, err)
+	rebuilt, err := rec.Transform()
+	require.NoError(t, err)
+	require.True(t, rebuilt.IsReflection(), `the rebuilt placement keeps det = −1`)
+	require.True(t, rebuilt.Equal(refl, 1e-12))
+}
+
+func TestTransformRecordRejects(t *testing.T) {
+	// The zero transform is invalid: it names no placement to record.
+	_, err := decad.RecordTransform(r3.Transform{})
+	require.ErrorIs(t, err, decad.ErrDegenerate)
+
+	// A corrupted record — a basis that is no isometry — refuses to rebuild.
+	bad := decad.TransformRecord{
+		EX: r3.NewVec(2, 0, 0), // scaled: not orthonormal
+		EY: r3.NewVec(0, 1, 0),
+		EZ: r3.NewVec(0, 0, 1),
+	}
+	_, err = bad.Transform()
+	require.Error(t, err, `a non-isometric record should not rebuild`)
+}
