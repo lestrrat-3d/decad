@@ -135,11 +135,11 @@ far side of every body the sweep meets), so they are body-relative exactly
 like `ToFace`: all three land in increment 2 with selectors (§7), the stop an
 intersection of the sweep direction with analytic target surfaces — closed
 form — and `ErrUnsupported` until then. A through-all dependency is ambient
-at the CALL but never in the RECORD: the feature call resolves which live
-bodies actually bound the stop and records each one's `StepRef` in the step's
-`Inputs` (core §6.2's depends-on rule), so re-evaluation reaches the same
-stops explicitly, with no ambient body-set dependency. (`ToFaceAngular` is
-the revolve analog and lands there, §6/§11.) A nonzero
+at the CALL but never in the RECORD: core §6.2's depends-on rule covers this
+case explicitly — the feature call resolves which live bodies actually bound
+the stops and records each one's `StepRef` in the step's `Inputs`, in stop
+order — so re-evaluation reaches the same stops with no ambient body-set
+dependency. (`ToFaceAngular` is the revolve analog and lands there, §6/§11.) A nonzero
 `WithTaper` is recorded exactly and is `ErrUnsupported` in v1: a tapered
 extrude of a general region is an offset problem (self-intersecting offsets),
 and a wrong-but-confident prism is the failure decad exists to prevent.

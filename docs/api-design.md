@@ -551,6 +551,15 @@ always a body it consumes:
   `TwoSided{One: ToFace{Body: a…}, Two: ToFace{Body: b…}}` records both. Without
   this the recipe would not be a complete graph: a second evaluator would reach the
   extrude with no way to know which body's face it stops at.
+- **`ThroughAll` and `ThroughAllSide` depend on bodies they do not name.** Their
+  stops are the far sides of the live bodies the sweep meets, so the dependency is
+  ambient at the CALL but must never be ambient in the RECORD: the feature call
+  resolves which bodies actually bound the stops and records **each stop body's
+  `StepRef` in `Inputs`**, in stop order along the sweep (after any named-extent
+  refs, deduplicated like the rest). Replay then reaches the same stops explicitly
+  — a recipe whose through-all depended on "whatever happened to be live" would
+  re-evaluate to a different model in a different document state, which the
+  completeness rule forbids.
 
 Depending on a body is **not** consuming it: `Extrude` and `Revolve` retire
 nothing, and the body a `ToFace` names stays live in `Document.Bodies()`. §6's
