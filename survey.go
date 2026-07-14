@@ -293,12 +293,17 @@ func facesByRole(b *Body) map[string]*Face {
 // opposesPull decides the pointwise membership rule of verification §6 over
 // a face's exact normal-component range [m, M] against the unit pull: a
 // point opposes when its normal has a component against the pull — exactly
-// perpendicular is not opposed — and a face whose normals are exactly
+// perpendicular is not opposed — and a face whose normals are EXACTLY
 // antiparallel everywhere separates under the pull rather than hooking it
-// (the flat base a straight prism pulls off of), so only a range reaching
-// strictly between antiparallel and perpendicular is a proven undercut.
+// (the flat base a straight prism pulls off of). The carve-out is exact,
+// never a tolerance band: a pull tilted by any real angle hooks under the
+// base, however slightly, and §6 lists it. The clamp below absorbs only
+// float overshoot past −1 in a unit dot; it never widens the exception.
 func opposesPull(m, M float64) bool {
-	return m < 0 && M > -1+survAngTol
+	if M < -1 {
+		M = -1
+	}
+	return m < 0 && M > -1
 }
 
 // trigRange is the exact range of a·cosθ + b·sinθ over [lo, hi].

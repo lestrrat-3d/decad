@@ -238,6 +238,19 @@ func TestWallPartialRevolve(t *testing.T) {
 	require.Equal(t, decad.Sound, report.Status)
 }
 
+func TestUndercutNearAntiparallelPull(t *testing.T) {
+	// The antiparallel carve-out is EXACT: a pull tilted by 1e-5 hooks
+	// under the base ever so slightly, so the base face opposes — along
+	// with the one side face leaning against the tilt — and the body is
+	// Violating with exactly those two faces listed.
+	doc := rectPrism(t, 100, 60, 8)
+	report, err := doc.Verify(t.Context(), decad.WithPullDirection(r3.NewVec(1e-5, 0, 1)))
+	require.NoError(t, err)
+	br := report.Bodies[0]
+	require.Len(t, br.Undercuts, 2)
+	require.Equal(t, decad.Violating, br.Status)
+}
+
 func TestWallReflexSweep(t *testing.T) {
 	// A 270° sector of a length-7, radius-8 solid cylinder. The sweep is
 	// reflex, so a mid-sweep ball's clearance to each cap HALF-plane is its
