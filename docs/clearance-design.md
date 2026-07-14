@@ -66,8 +66,10 @@ nested wholly inside the other has exactly the same signature. Disjointness is
 each connected shell of one body lies wholly inside or wholly outside the
 other, so one exact membership test per shell decides it: a witness point on
 the shell (every shipped face can produce one — a vertex, a seam point, or
-for a loop-less sphere its center plus its radius along a fixed unit
-direction, all read off stored data), cast along a ray, crossings counted closed-form
+for the loop-less closed faces a point off stored data: a sphere's center
+plus its radius along a fixed unit direction, a torus's center plus
+`Major + Minor` along a fixed direction perpendicular to its axis), cast
+along a ray, crossings counted closed-form
 against every face of the other body, trim membership included. A cast is
 admissible only when every crossing is certified transversal and interior to
 its face; a cast that grazes an edge, a vertex or a tangency retries the next
@@ -220,9 +222,12 @@ Two upgrades and one downgrade close the table:
   two partial faces with identical generators but disjoint sweep intervals
   have a positive real gap the meridian reading would wrongly report as
   zero. The face-interior candidate is admitted when the sweep intervals
-  intersect (a decided closed-form test); otherwise it is discarded and the
-  minimum falls to the angular boundary edges and vertices, exactly as a
-  trim-departed foot does in §3. This upgrades every `BB` cell for the
+  overlap with positive interior measure (a decided closed-form test);
+  endpoint-only touching is an angular-BOUNDARY configuration — §6 leaves
+  edge and vertex contact undecided, and blessing it here would mint an
+  `Exact` zero row §6 forbids — so it, like disjoint intervals, discards
+  the candidate and the minimum falls to the angular boundary edges and
+  vertices, exactly as a trim-departed foot does in §3. This upgrades every `BB` cell for the
   layout revolved bodies most often produce.
 - **Co-directional prisms reduce to 2D.** Two prisms with parallel sweep
   directions have `Gap = hypot(dz, d₂)` where `dz` is the sweep-interval
