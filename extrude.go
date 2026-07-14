@@ -249,6 +249,15 @@ func (pp prismPayload) dir(du, dv, dz float64) r3.Vec {
 // orientation decision below corrects for it.
 func (pp prismPayload) reflected() bool { return pp.xform.IsReflection() }
 
+// transform is the accumulated rigid placement.
+func (pp prismPayload) transform() r3.Transform { return pp.xform }
+
+// placed re-evaluates the same record under the composed motion.
+func (pp prismPayload) placed(d *Document, ref StepRef, composed r3.Transform) (*Body, error) {
+	pp.xform = composed
+	return evalPrism(d, ref, pp)
+}
+
 // evalPrism builds the analytic prism body from the payload: side faces per
 // boundary segment, two caps, shared edges and vertices, and Exact
 // measurements (docs/evaluator-design.md §5). The payload's segment kinds
@@ -332,7 +341,7 @@ func evalPrism(d *Document, ref StepRef, pp prismPayload) (*Body, error) {
 		return nil, err
 	}
 	body.bounds = bounds
-	body.payload = &pp
+	body.payload = pp
 	return body, nil
 }
 

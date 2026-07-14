@@ -2,6 +2,7 @@ package decad
 
 import (
 	"fmt"
+	"math"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -69,14 +70,55 @@ type Cylinder struct {
 	Radius units.Value
 }
 
+// Cone is a right circular cone: Origin a point on the axis (mm), Axis the
+// unit axis direction along which the radius GROWS, Radius the cone's radius
+// at Origin (zero when Origin is the apex), HalfAngle the angle between the
+// axis and the wall.
+type Cone struct {
+	Origin    r3.Vec
+	Axis      r3.Vec
+	Radius    units.Value
+	HalfAngle units.Value
+}
+
+// Sphere is a sphere: Center (mm) and Radius.
+type Sphere struct {
+	Center r3.Vec
+	Radius units.Value
+}
+
+// Torus is a torus: Center (mm) on the axis in the plane of the major
+// circle, Axis the unit axis direction, Major the major-circle radius
+// (center to tube center), Minor the tube radius. Major < Minor is a valid
+// spindle torus — a revolved arc patch can sit on one without the surface
+// self-intersecting.
+type Torus struct {
+	Center r3.Vec
+	Axis   r3.Vec
+	Major  units.Value
+	Minor  units.Value
+}
+
 // Kind reports KindPlane.
 func (Plane) Kind() SurfaceKind { return KindPlane }
 
 // Kind reports KindCylinder.
 func (Cylinder) Kind() SurfaceKind { return KindCylinder }
 
+// Kind reports KindCone.
+func (Cone) Kind() SurfaceKind { return KindCone }
+
+// Kind reports KindSphere.
+func (Sphere) Kind() SurfaceKind { return KindSphere }
+
+// Kind reports KindTorus.
+func (Torus) Kind() SurfaceKind { return KindTorus }
+
 func (Plane) surface()    {}
 func (Cylinder) surface() {}
+func (Cone) surface()     {}
+func (Sphere) surface()   {}
+func (Torus) surface()    {}
 
 // Curve is the sealed edge-geometry set, Surface's one-dimensional analog.
 // A switch on Curve MUST carry a default — vN adds variants.
@@ -216,6 +258,44 @@ func (f *Face) NormalAt(p r3.Vec) (VecMeasurement, error) {
 			return VecMeasurement{}, fmt.Errorf(`%w: a point on the cylinder axis has no normal`, ErrDegenerate)
 		}
 		return VecMeasurement{Value: dir.Scale(sign), Exactness: Exact, Bound: units.Scalar(0)}, nil
+	case Cone:
+		rel := p.Sub(s.Origin)
+		radial := rel.Sub(s.Axis.Scale(rel.Dot(s.Axis)))
+		dir, ok := radial.Normalize()
+		if !ok {
+			return VecMeasurement{}, fmt.Errorf(`%w: the cone apex has no normal`, ErrDegenerate)
+		}
+		half, err := s.HalfAngle.In(units.Radian)
+		if err != nil {
+			return VecMeasurement{}, fmt.Errorf(`decad: a cone's half angle is not an angle: %w`, err)
+		}
+		// The wall leans outward by the half angle along the growth axis, so
+		// the geometric normal tilts against it by the same angle.
+		n := dir.Scale(math.Cos(half)).Sub(s.Axis.Scale(math.Sin(half)))
+		return VecMeasurement{Value: n.Scale(sign), Exactness: Exact, Bound: units.Scalar(0)}, nil
+	case Sphere:
+		dir, ok := p.Sub(s.Center).Normalize()
+		if !ok {
+			return VecMeasurement{}, fmt.Errorf(`%w: the sphere center has no normal`, ErrDegenerate)
+		}
+		return VecMeasurement{Value: dir.Scale(sign), Exactness: Exact, Bound: units.Scalar(0)}, nil
+	case Torus:
+		major, err := s.Major.In(units.Millimeter)
+		if err != nil {
+			return VecMeasurement{}, fmt.Errorf(`decad: a torus's major radius is not a length: %w`, err)
+		}
+		rel := p.Sub(s.Center)
+		radial := rel.Sub(s.Axis.Scale(rel.Dot(s.Axis)))
+		rdir, ok := radial.Normalize()
+		if !ok {
+			return VecMeasurement{}, fmt.Errorf(`%w: a point on the torus axis has no normal`, ErrDegenerate)
+		}
+		tube := s.Center.Add(rdir.Scale(major))
+		dir, ok := p.Sub(tube).Normalize()
+		if !ok {
+			return VecMeasurement{}, fmt.Errorf(`%w: the tube center has no normal`, ErrDegenerate)
+		}
+		return VecMeasurement{Value: dir.Scale(sign), Exactness: Exact, Bound: units.Scalar(0)}, nil
 	default:
 		return VecMeasurement{}, fmt.Errorf(`%w: this evaluator computes normals for its own analytic faces only`, ErrUnsupported)
 	}
@@ -286,7 +366,7 @@ type Body struct {
 	// what Placed re-evaluates under a composed motion
 	// (docs/evaluator-design.md §8). Nil for a body this evaluator did not
 	// build.
-	payload *prismPayload
+	payload featurePayload
 }
 
 // bodyRef seals *Body into BodyRef: a live body is what a caller passes at a
