@@ -272,3 +272,14 @@ func TestTessellateToleranceValidation(t *testing.T) {
 		})
 	}
 }
+
+func TestTessellateBoundNeverExceedsTolerance(t *testing.T) {
+	// A threshold tolerance that used to land one chord short: the proven
+	// bound must never exceed what the caller asked for.
+	body := holedPlateBody(t)
+	for _, tol := range []float64{0.489434836999924627, 0.5, 0.1, 1e-3, 3.7e-2} {
+		mesh, err := body.Tessellate(units.Millimeters(tol))
+		require.NoError(t, err)
+		require.LessOrEqual(t, mesh.Bound().Mag(), tol, `tol %v`, tol)
+	}
+}

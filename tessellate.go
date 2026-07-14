@@ -224,9 +224,18 @@ func chordCount(w segmentWalk, tol float64) (int, float64) {
 	if tol < w.radius {
 		maxD = 2 * math.Acos(1-tol/w.radius)
 	}
-	n := max(int(math.Ceil(sweep/maxD-1e-9)), 1)
+	n := max(int(math.Ceil(sweep/maxD)), 1)
 	if w.closed && n < 3 {
 		n = 3
 	}
-	return n, w.radius * (1 - math.Cos(sweep/float64(n)/2))
+	// The returned sagitta is a PROVEN bound, so it may never exceed the
+	// asked tolerance: float rounding in the acos/ceil path can land one
+	// chord short at a threshold value. Each increment strictly shrinks the
+	// sagitta toward zero, so the walk-up terminates.
+	sagitta := w.radius * (1 - math.Cos(sweep/float64(n)/2))
+	for sagitta > tol && sweep > 0 {
+		n++
+		sagitta = w.radius * (1 - math.Cos(sweep/float64(n)/2))
+	}
+	return n, sagitta
 }
