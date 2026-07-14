@@ -81,10 +81,10 @@ func (d *Document) requireLive(b *Body) error {
 		return fmt.Errorf(`%w: a nil body names nothing to operate on`, ErrDegenerate)
 	}
 	if b.doc != d {
-		return fmt.Errorf(`%w: the body is owned by a different document`, ErrForeignBody)
+		return ErrForeignBody
 	}
 	if !d.isLive(b) {
-		return fmt.Errorf(`%w: the body has been retired from its document`, ErrRetiredBody)
+		return ErrRetiredBody
 	}
 	return nil
 }
