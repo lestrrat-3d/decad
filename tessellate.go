@@ -261,22 +261,33 @@ func chordCount(w segmentWalk, tol float64) (int, float64, error) {
 	// asked tolerance: float rounding in the asin/ceil path can land one
 	// chord short at a threshold value. Each increment strictly shrinks the
 	// sagitta toward zero, so the walk-up terminates.
-	sagitta := w.radius * (1 - math.Cos(sweep/float64(n)/2))
-	for sagitta > tol && sweep > 0 {
+	// 2r·sin²(Δθ/4) is the same sagitta as r·(1 − cos(Δθ/2)) but stays
+	// accurate where 1 − cos rounds a tiny positive sagitta to zero — the
+	// bound is PROVEN, so it may be conservative but never understated.
+	sagitta := func(n int) float64 {
+		s := math.Sin(sweep / float64(n) / 4)
+		return 2 * w.radius * s * s
+	}
+	s := sagitta(n)
+	for s > tol && sweep > 0 {
 		if n == maxChordsPerWalk {
 			return 0, 0, errTooManyChords
 		}
 		n++
-		sagitta = w.radius * (1 - math.Cos(sweep/float64(n)/2))
+		s = sagitta(n)
 	}
-	return n, sagitta, nil
+	return n, s, nil
 }
 
 // errTooManyChords refuses a chord tolerance finer than the mesh cap.
 var errTooManyChords = fmt.Errorf(`%w: the chord tolerance asks for more than %d chords on one curve`, ErrUnsupported, maxChordsPerWalk)
 
-// maxChordsPerWalk caps how finely one boundary curve may be chorded.
-const maxChordsPerWalk = 1 << 22
+// maxChordsPerWalk caps how finely one boundary curve may be chorded. The
+// ceiling is set by the cap triangulator, whose ear clipping is quadratic in
+// the boundary samples: 2¹⁴ chords keeps the worst cap under a second while
+// still admitting sub-micrometre tolerances on any real part (a 10 mm-radius
+// circle at the cap carries a sagitta under 2e-7 mm).
+const maxChordsPerWalk = 1 << 14
 
 // requireLoopClearance rejects a profile whose chorded loops come within
 // their combined chord bounds of one another. Each chorded loop lies within
@@ -285,15 +296,25 @@ const maxChordsPerWalk = 1 << 22
 // tangent to the outline, or two holes touching — is a pinch this mesh
 // cannot prove it represents, and is refused.
 func requireLoopClearance(pts []Point2, loopIdx [][]int, loopSag []float64) error {
-	// Round-off floor: coordinates carry ~1e-9-relative noise, so an exact
-	// tangency recorded through solved geometry still reads as contact.
-	scale := 0.0
+	// Round-off floor, in two translation-honest parts: 1e-9 of the
+	// geometry's own span (coordinates carry ~1e-9-relative noise at their
+	// own scale, and a span is translation-invariant), plus a few ulps of
+	// the largest coordinate magnitude — the arithmetic's actual rounding,
+	// which grows with distance from the origin without ever inflating the
+	// floor by the position itself.
+	minU, maxU := math.Inf(1), math.Inf(-1)
+	minV, maxV := math.Inf(1), math.Inf(-1)
+	maxAbs := 0.0
 	for _, p := range pts {
-		scale = math.Max(scale, math.Max(math.Abs(p.U), math.Abs(p.V)))
+		minU, maxU = math.Min(minU, p.U), math.Max(maxU, p.U)
+		minV, maxV = math.Min(minV, p.V), math.Max(maxV, p.V)
+		maxAbs = math.Max(maxAbs, math.Max(math.Abs(p.U), math.Abs(p.V)))
 	}
+	span := math.Hypot(maxU-minU, maxV-minV)
+	floor := 1e-9*span + 4*(math.Nextafter(maxAbs, math.Inf(1))-maxAbs)
 	for i := range loopIdx {
 		for j := i + 1; j < len(loopIdx); j++ {
-			gate := loopSag[i] + loopSag[j] + 1e-9*scale
+			gate := loopSag[i] + loopSag[j] + floor
 			if loopPolylineDistance(pts, loopIdx[i], loopIdx[j]) <= gate {
 				return fmt.Errorf(`%w: two cap boundary loops come within the chord tolerance of each other`, ErrDegenerate)
 			}
