@@ -45,9 +45,12 @@ reads `Suspect` — a failed classification is never laundered into an
 `Approximate` zero that would then fail the floor anyway.
 
 And the standing rule of verification §1/§6, restated once because every
-section below leans on it: **no fabricated rows**. A pair not proven on both
-claims joins neither list and makes the report `Suspect` — the shipped
-`verify.go` semantics this kernel extends, never relaxes.
+section below leans on it: **no fabricated rows**. An unproven PARTITION —
+a pair decided neither overlapping nor disjoint — joins neither list and
+makes the report `Suspect` unasked; an unproven GAP does so only when
+`WithClearances()` asked for it, since no rung needs a gap the caller never
+requested (§7). The shipped `verify.go` semantics this kernel extends,
+never relaxes.
 
 ## 2. Boundaries carry the problem — and boundary clearance alone does not decide it
 
