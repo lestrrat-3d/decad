@@ -574,6 +574,14 @@ func TestExtrudeRejectsNonFiniteTaper(t *testing.T) {
 	require.Empty(t, doc.Recipe().Steps)
 }
 
+func TestExtrudeRejectsNilOption(t *testing.T) {
+	s, p := plateSketch(t)
+	doc := decad.New()
+	_, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(5), Dir: decad.Along}, nil)
+	require.ErrorIs(t, err, decad.ErrDegenerate)
+	require.Empty(t, doc.Recipe().Steps)
+}
+
 func TestRecordedExtentNeverAliasesCallerPointers(t *testing.T) {
 	// A nested pointer side is normalized to a value at the feature call, so
 	// mutating the caller's struct after the fact cannot rewrite the recipe.

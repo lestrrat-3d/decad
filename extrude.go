@@ -57,6 +57,9 @@ func (d *Document) Extrude(s *sketch.Sketch, p *sketch.Profile, e Extent, opts .
 
 	taper := units.Degrees(0)
 	for _, o := range opts {
+		if o == nil {
+			return nil, fmt.Errorf(`%w: a nil option names nothing to apply`, ErrDegenerate)
+		}
 		switch o.Ident().(type) {
 		case identTaper:
 			v, ok := option.Get[units.Value](o)
