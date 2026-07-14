@@ -269,11 +269,14 @@ Increment 4, the deep end. Strategy:
   cheap, and they decide the common far-apart case); increment 3 adds the
   clearance computation and `WithClearances`.
 - **Wall thickness / undercuts / min radius**: the analytic surveys of
-  verification §6 over the v1 surface set (plane/cylinder/cone/sphere/torus
-  pair tables for opposition and pinch; per-variant normal ranges for pull
-  membership). Increment 5; until then the options are accepted, the survey
-  is not run, and the asked-but-unanswered question reads `Suspect` — never
-  a silent pass.
+  verification §6, answered outright on this evaluator's own payloads
+  (`survey.go`/`survey2d.go`): the wall reading reduces exactly to the 2D
+  spanning-disk problem (a prism's profile with the height as the vertical
+  fit; a revolve's meridian section, mirrored for a full turn), undercuts
+  are per-face exact normal-range membership, and the min radius is the
+  tightest concave principal radius. All readings Exact; a payload the
+  surveys cannot decide leaves the asked question undecided → `Suspect`,
+  never a silent pass.
 
 ## 11. Increments
 
@@ -291,7 +294,7 @@ silent pass.
 | 2 | `Revolve` (angular extents), selector vocabulary + resolution, the body-relative stops (`ToFace`/`ToFaceAngular`/`EdgeAxis`, `ThroughAll`/`ThroughAllSide`) |
 | 3 | analytic clearance proofs and `WithClearances` (box-disjointness proofs already run from increment 1, §10/§11 row 1) |
 | 4 | tessellation + the exact-predicate mesh boolean, `Faceted` bodies, faceted `Verify`, `Tessellate`/`STL`/`OBJ` |
-| 5 | fillet/chamfer on analytic prism edges, shell, `WithMinWallThickness`/`WithPullDirection`/`WithMinRadius` surveys |
+| 5 | fillet/chamfer on analytic prism edges, shell |
 | 6 | free-form side surfaces (`NURBSSurface` from recorded control data), tapered extrude if a sound offset story exists |
 
 ## 12. Open questions
