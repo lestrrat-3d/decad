@@ -170,3 +170,101 @@ func TestRegionMomentsPointerVariants(t *testing.T) {
 	_, err = bad.Area()
 	require.Error(t, err, `a nil segment pointer names no curve to integrate`)
 }
+
+func TestSecondMomentsRectangle(t *testing.T) {
+	// For the axis-aligned rectangle [0,a]×[0,b] about the origin:
+	// ∫u²dA = a³b/3, ∫uv dA = a²b²/4, ∫v²dA = ab³/3.
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	rect := s.CreateRectangle(0, 0, 40, 30)
+	s.Fix(rect.A)
+
+	rec := recordOne(t, s, func(p *sketch.Profile) bool { return len(p.Outer) == 4 })
+	m, err := rec.SecondMoments()
+	require.NoError(t, err)
+	require.Equal(t, decad.Exact, m.UU.Exactness)
+	uu, err := m.UU.Value.In(units.QuarticMillimeter)
+	require.NoError(t, err)
+	uv, err := m.UV.Value.In(units.QuarticMillimeter)
+	require.NoError(t, err)
+	vv, err := m.VV.Value.In(units.QuarticMillimeter)
+	require.NoError(t, err)
+	require.InDelta(t, 40.0*40*40*30/3, uu, 1e-6)
+	require.InDelta(t, 40.0*40*30*30/4, uv, 1e-6)
+	require.InDelta(t, 40.0*30*30*30/3, vv, 1e-6)
+}
+
+func TestSecondMomentsOffsetCircle(t *testing.T) {
+	// Parallel-axis check on a Ø14 disk centered at (5, -3):
+	// ∫u²dA = πr⁴/4 + c_u²·πr², ∫uv = c_u·c_v·πr², ∫v²dA = πr⁴/4 + c_v²·πr².
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	center := s.CreatePoint(5, -3)
+	s.Fix(center)
+	s.CreateCircle(center, 7)
+
+	rec := recordOne(t, s, func(p *sketch.Profile) bool { return true })
+	m, err := rec.SecondMoments()
+	require.NoError(t, err)
+	area := math.Pi * 49
+	quarter := math.Pi * 7 * 7 * 7 * 7 / 4
+	uu, err := m.UU.Value.In(units.QuarticMillimeter)
+	require.NoError(t, err)
+	uv, err := m.UV.Value.In(units.QuarticMillimeter)
+	require.NoError(t, err)
+	vv, err := m.VV.Value.In(units.QuarticMillimeter)
+	require.NoError(t, err)
+	require.InDelta(t, quarter+25*area, uu, 1e-6)
+	require.InDelta(t, 5.0*(-3)*area, uv, 1e-6)
+	require.InDelta(t, quarter+9*area, vv, 1e-6)
+}
+
+func TestArcSegExactQuarterDisk(t *testing.T) {
+	// The dedicated ArcSeg exact-value coverage: a quarter disk of radius 20
+	// in the first quadrant, bounded by two lines and a real sketch arc.
+	// Exact values: A = πR²/4, centroid (4R/3π, 4R/3π),
+	// ∫u²dA = ∫v²dA = πR⁴/16, ∫uv dA = R⁴/8.
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	o := s.CreatePoint(0, 0)
+	s.Fix(o)
+	px := s.CreatePoint(20, 0)
+	py := s.CreatePoint(0, 20)
+	s.CreateLine(o, px)
+	s.CreateLine(py, o)
+	s.CreateArc(o, px, py) // CCW from (R,0) to (0,R): the quarter circle
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+
+	profiles := s.Profiles()
+	require.Len(t, profiles, 1)
+	rec, _, err := decad.RecordProfile(s, profiles[0])
+	require.NoError(t, err)
+
+	const R = 20.0
+	area, err := rec.Area()
+	require.NoError(t, err)
+	gotA, err := area.Value.In(units.SquareMillimeter)
+	require.NoError(t, err)
+	require.InDelta(t, math.Pi*R*R/4, gotA, 1e-9)
+
+	c, err := rec.Centroid()
+	require.NoError(t, err)
+	require.InDelta(t, 4*R/(3*math.Pi), c.Value.X, 1e-9)
+	require.InDelta(t, 4*R/(3*math.Pi), c.Value.Y, 1e-9)
+
+	m, err := rec.SecondMoments()
+	require.NoError(t, err)
+	uu, err := m.UU.Value.In(units.QuarticMillimeter)
+	require.NoError(t, err)
+	uv, err := m.UV.Value.In(units.QuarticMillimeter)
+	require.NoError(t, err)
+	vv, err := m.VV.Value.In(units.QuarticMillimeter)
+	require.NoError(t, err)
+	require.InDelta(t, math.Pi*R*R*R*R/16, uu, 1e-6)
+	require.InDelta(t, R*R*R*R/8, uv, 1e-6)
+	require.InDelta(t, math.Pi*R*R*R*R/16, vv, 1e-6)
+}
