@@ -232,6 +232,7 @@ type wallKernel struct {
 	wedgeSpans  bool    // two wedge-cap contacts count as a spanning pair
 	fitMax      float64 // spanning disks wider than this cannot lift to 3D
 	scale, tol  float64
+	subTolFar   bool         // a sub-tolerance candidate away from every junction was dropped
 	boundary    []surveyElem // elems + containOnly, built lazily for contains
 }
 
@@ -267,10 +268,11 @@ func newWallKernel(elems, containOnly []surveyElem, verts [][2]float64, alpha, w
 
 // wallSurveyOut is the kernel's answer over its candidate set.
 type wallSurveyOut struct {
-	ok       bool    // false: the survey could not decide (never a silent pass)
-	hasSpan  bool    // some empty spanning disk exists
-	span     float64 // the smallest spanning diameter found
-	inradius float64 // the largest empty disk radius found (the 2D inradius)
+	ok        bool    // false: the survey could not decide (never a silent pass)
+	hasSpan   bool    // some empty spanning disk exists
+	span      float64 // the smallest spanning diameter found
+	inradius  float64 // the largest empty disk radius found (the 2D inradius)
+	subTolFar bool    // an off-junction sub-tolerance candidate was dropped
 }
 
 // run enumerates and validates the candidate set.
@@ -294,6 +296,7 @@ func (k *wallKernel) run() wallSurveyOut {
 			}
 		}
 	}
+	out.subTolFar = k.subTolFar
 	return out
 }
 
@@ -307,9 +310,25 @@ func (k *wallKernel) validate(c diskCand) (bool, bool, bool) {
 		return false, false, true
 	}
 	// The candidate floor: a disk this small is indistinguishable from the
-	// numeric noise of a degenerate (corner) solve, and a real zero-thickness
-	// feature is the junction-pinch rule's to report, not a disk's.
+	// numeric noise of a degenerate solve. Dropping it is safe ONLY where a
+	// junction owns the spot — the junction-pinch rule reports the true
+	// dihedral there exactly. Away from every junction the same tiny disk
+	// can be a REAL near-tangent web (two boundary elements almost touching
+	// mid-span), and treating it as absent would bless a body whose wall is
+	// thinner than the kernel can resolve: that is an undecided survey,
+	// never a silent pass.
 	if c.r <= 4*k.tol {
+		reach := c.r + 8*k.tol
+		for _, v := range k.verts {
+			if math.Hypot(c.x-v[0], c.y-v[1]) <= reach {
+				return false, false, true
+			}
+		}
+		// Not junction-owned: remember it. The caller decides — an exact
+		// zero elsewhere still stands (nothing sits below zero), but a
+		// positive reading or an absence claim would rest on a candidate
+		// the kernel could not resolve, and reads undecided instead.
+		k.subTolFar = true
 		return false, false, true
 	}
 	wedgeActive := false

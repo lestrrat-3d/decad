@@ -267,6 +267,13 @@ func revolveWall(rp revolvePayload, alpha float64) wallOutcome {
 		// itself: a dihedral within the allowance, ground to zero.
 		best = 0
 	}
+	if out.subTolFar && best != 0 {
+		// A dropped off-junction sub-tolerance disk could be a real web
+		// thinner than the kernel resolves: only an exact zero (which
+		// nothing can undercut) still decides; any other reading — or an
+		// absence — is undecided.
+		return wallOutcome{}
+	}
 	if out.hasSpan && out.span < best {
 		best = out.span
 	}
