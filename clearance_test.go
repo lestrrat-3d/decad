@@ -420,3 +420,32 @@ func TestClearanceBallCenteredInHole(t *testing.T) {
 	require.NoError(t, err)
 	requireExactGap(t, report, 5)
 }
+
+func TestClearanceNearParallelPlateReadsTheCorner(t *testing.T) {
+	// A plate pair with the upper plate tilted DOWN by a tiny angle: the
+	// planes are near-parallel, and a tolerance-based plateau would bless
+	// the anchor height 1.0 as an Exact minimum — but the true minimum is
+	// at the dipped edge, 1 − 10·sin(5e-7). The exact-only plateau rule
+	// leaves the tiers to find the corner, and any reported row must carry
+	// the corner value (or the pair may read Suspect; it must never carry
+	// the wrong plateau).
+	doc := decad.New()
+	boxBody(t, doc, 0, 0, 10, 10, 4)
+	other := boxBody(t, doc, 0, 0, 10, 10, 4)
+	rot, err := r3.Rotation(r3.NewVec(1, 0, 0), units.Radians(-5e-7))
+	require.NoError(t, err)
+	shift, err := r3.Translation(r3.NewVec(0, 0, 5))
+	require.NoError(t, err)
+	motion, err := rot.Then(shift)
+	require.NoError(t, err)
+	_, err = other.Placed(motion)
+	require.NoError(t, err)
+
+	report, err := doc.Verify(t.Context(), decad.WithClearances())
+	require.NoError(t, err)
+	want := 1 - 10*math.Sin(5e-7)
+	for _, c := range report.Clearances {
+		require.InDelta(t, want, c.Gap.Value.Base(), 1e-9,
+			`the row must carry the dipped-edge minimum, not the plateau`)
+	}
+}

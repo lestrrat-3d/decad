@@ -1181,10 +1181,19 @@ func (f *cFace) rayCrossings(p, dir r3.Vec, tol float64) (int, bool) {
 	switch f.kind {
 	case ckPlane:
 		nd := f.n.Dot(dir)
-		if math.Abs(nd) < 1e-7 {
+		if nd == 0 {
+			// EXACTLY parallel: the ray never meets the carrier when the
+			// start is cleanly off the plane; on the plane it is a graze —
+			// ambiguous, retry the ladder.
 			if math.Abs(f.n.Dot(p)-f.planeOffset()) > tol {
 				return 0, true
 			}
+			return 0, false
+		}
+		if math.Abs(nd) < 1e-7 {
+			// Near-parallel: the crossing exists but sits far away and
+			// poorly conditioned — the count is not certified; retry the
+			// ladder rather than claim zero.
 			return 0, false
 		}
 		t := (f.planeOffset() - f.n.Dot(p)) / nd

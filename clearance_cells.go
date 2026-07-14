@@ -535,7 +535,11 @@ func ringAngles(f, g *cFace, u, v r3.Vec) []float64 {
 // carriers are excluded through the trims or read as the §6/§7-routed
 // contact, never quietly as a boundary answer.
 func (k *pairKernel) planePlane(f, g *cFace, sink *cellSink) {
-	if f.n.Cross(g.n).Len() <= clrAngTol {
+	// The plateau exists only for EXACT parallelism: a tolerance here
+	// blesses a tilted pair's mid-face height as an Exact minimum the true
+	// gap undercuts (or exceeds). A tilt too small for the crossing-line
+	// path to certify falls to unsure there — never a wrong Exact.
+	if f.n.Cross(g.n).Len() == 0 {
 		h := g.o.Sub(f.o).Dot(f.n)
 		rel, wit := k.coplanarRelation(f, g)
 		if math.Abs(h) <= k.tol {
@@ -761,7 +765,12 @@ func circleRegionHits(r region2, cx, cy, rad float64) int {
 // plane, the exact axial crossing range otherwise) or routed to §6/§7.
 func (k *pairKernel) planeCylinder(f, g *cFace, sink *cellSink) {
 	s := f.n.Dot(g.axis)
-	if math.Abs(s) > clrAngTol {
+	if s != 0 {
+		// The constant-ruling plateau exists only for EXACT axis
+		// parallelism: a tolerance here would bless a tilted cylinder's
+		// plateau as an Exact reading the true minimum undercuts. A tilt
+		// too small for the crossing machinery to certify falls through
+		// to unsure there — never a wrong Exact.
 		k.planeCrossesRevolved(f, g, sink)
 		return
 	}
