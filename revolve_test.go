@@ -1050,3 +1050,27 @@ func TestRevolveVerifySound(t *testing.T) {
 	require.True(t, report.Bodies[0].Manifold)
 	require.Equal(t, decad.Exact, report.Bodies[0].Exactness)
 }
+
+func TestRevolveRejectsSpindleTorusArc(t *testing.T) {
+	// A boundary arc lying above the axis whose circle center sits BELOW it
+	// sweeps a spindle-branch torus: a valid solid the shipped Torus
+	// (non-negative Major) cannot represent, so the intent is refused as
+	// staged — never a face with a negative major radius.
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	c := s.CreatePoint(15, -3)
+	s.Fix(c)
+	start := s.CreatePoint(20, 5)
+	end := s.CreatePoint(10, 5)
+	s.CreateArc(c, start, end) // CCW over the top: every arc point stays above v=0
+	s.CreateLine(end, start)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	require.NotEmpty(t, s.Profiles())
+
+	doc := decad.New()
+	_, err = doc.Revolve(s, s.Profiles()[0], uAxis, decad.FullRevolution{})
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+	require.Empty(t, doc.Recipe().Steps, `a refused revolve leaves the document untouched`)
+}

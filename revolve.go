@@ -627,11 +627,15 @@ func resolveAxisSide(profile ProfileRecord, line axisLine2) (axisFrame, float64,
 	return ax, side, nil
 }
 
-// rejectInteriorContact rejects a circular boundary walk tangent to the
-// axis at a point interior to the walk — the horn-torus contact §6 forbids.
-// The circle's radial minimum sits at its lowest angle; when that angle is
-// strictly inside the walked range and the minimum reaches the axis, the
-// contact is neither of the two allowed forms.
+// rejectInteriorContact rejects the circular boundary walks a revolve
+// cannot sweep soundly: a walk tangent to the axis at a point interior to
+// the walk — the horn-torus contact §6 forbids — and a walk whose circle
+// center lies across the axis, whose swept surface is a spindle-branch
+// torus the shipped Torus (non-negative Major) cannot represent; the solid
+// is valid, so that one is the staged ErrUnsupported, never a wrong face.
+// For the tangency, the circle's radial minimum sits at its lowest angle;
+// when that angle is strictly inside the walked range and the minimum
+// reaches the axis, the contact is neither of the two allowed forms.
 func (ax axisFrame) rejectInteriorContact(profile ProfileRecord) error {
 	const angEps = 1e-9
 	loops := append([]LoopRecord{profile.Outer}, profile.Holes...)
@@ -644,6 +648,9 @@ func (ax axisFrame) rejectInteriorContact(profile ProfileRecord) error {
 			w = ax.walk(w)
 			if !w.circular {
 				continue
+			}
+			if w.cV < -ax.snapTol {
+				return fmt.Errorf(`%w: a boundary arc centered across the revolve axis sweeps a spindle torus this evaluator cannot represent`, ErrUnsupported)
 			}
 			if w.cV-w.radius > ax.snapTol {
 				continue
