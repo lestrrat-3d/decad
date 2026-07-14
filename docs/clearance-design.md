@@ -138,13 +138,18 @@ minor radius — and the surface distance follows from the spine distance `d`
 in three branches, because an offset surface has an inside as well as an
 outside:
 
-- **exterior** — `d ≥ r₁ + r₂`, with `d` the MINIMUM spine distance: the
-  gap is `d − r₁ − r₂`, the two skins facing each other across free space;
+- **exterior** — `d > r₁ + r₂` STRICTLY, with `d` the MINIMUM spine
+  distance: the gap is `d − r₁ − r₂`, the two skins facing each other
+  across free space. Equality is a tangency at distance zero, and a zero
+  row exists only through a §6 contact certificate — an equality here
+  routes to §6, and an offset tangency outside §6's certified list stays
+  `Suspect`;
 - **nested** — one carrier provably inside the other. Containment is a claim
   about the WHOLE inner spine, so this branch reads `d_sup`, the supremum of
   inner-spine-to-outer-spine distance, never the minimum: nested holds when
-  `d_sup + r_in ≤ r_out`, and the gap is `r_out − d_sup − r_in`, read across
-  the annular space. `d_sup` is certified per spine pair: an inner POINT spine (a sphere
+  `d_sup + r_in < r_out` STRICTLY, and the gap is `r_out − d_sup − r_in`,
+  read across the annular space; equality is an internal tangency and
+  routes to §6 on the same terms as the exterior branch. `d_sup` is certified per spine pair: an inner POINT spine (a sphere
   inside anything) has `d_sup = d` trivially — the supremum over one point
   is that point's distance; concentric spheres, parallel cylinder axes and
   coaxial torus spines have constant spine distance, so `d_sup = d` there
