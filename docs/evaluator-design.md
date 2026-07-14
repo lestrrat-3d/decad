@@ -55,7 +55,7 @@ index (core §3 invariant #3).
 | `Body` | owning `*Document`, origin `FeatureRef`, `[]*Lump`, cached measurements (computed at build, immutable after) |
 | `Lump` | `[]*Shell` |
 | `Shell` | `[]*Face`, `void bool` |
-| `Face` | tagged `Surface`, `[]*Loop` (first outer), origin `FeatureRef`, back-ref to its body |
+| `Face` | tagged `Surface`, `[]*Loop` (first outer), origin roles (≥1 `FeatureRef`s — a canonicalization merge UNIONS the merged faces' roles, and `FaceCreatedBy` matches on ANY of them, so provenance survives the merge), back-ref to its body |
 | `Loop` | ordered `[]*coedge` (edge + sense), `outer bool` |
 | `Edge` | tagged `Curve`, `Start`/`End` `*Vertex`, ALL adjacent faces (exactly 2 on a closed manifold body; `Edge.Faces()` reports the actual count, which is precisely how `len != 2` surfaces non-manifold topology — core §6.1), `convex bool` |
 | `Vertex` | position (mm), the proven bound on it |
@@ -129,9 +129,10 @@ arc length `rθ` exact). Extents: `Distance`,
 whose interval the step's own quantities determine. `ThroughAll` and
 `ThroughAllSide` have no finite stop geometry of their own (they stop at the
 far side of every body the sweep meets), so they are body-relative exactly
-like `ToFace`/`ToFaceAngular`: all four land in increment 2 with selectors
-(§7), the stop an intersection of the sweep direction with analytic target
-surfaces — closed form — and `ErrUnsupported` until then. A nonzero
+like `ToFace`: all three land in increment 2 with selectors (§7), the stop an
+intersection of the sweep direction with analytic target surfaces — closed
+form — and `ErrUnsupported` until then. (`ToFaceAngular` is the revolve
+analog and lands there, §6/§11.) A nonzero
 `WithTaper` is recorded exactly and is `ErrUnsupported` in v1: a tapered
 extrude of a general region is an offset problem (self-intersecting offsets),
 and a wrong-but-confident prism is the failure decad exists to prevent.
@@ -144,7 +145,9 @@ INTERIOR: the region lies in one closed half-plane of the axis, boundary
 contact allowed — a boundary point on the axis sweeps to a pole or an apex,
 which is exactly the sphere and cone-tip case. A region with interior on both
 sides sweeps a self-intersecting solid and is rejected, `ErrDegenerate`.
-Faces: a `LineSeg` parallel to the axis → `Cylinder`; inclined → `Cone` (an
+Faces: a `LineSeg` lying ON the axis emits no face at all — it sweeps a
+zero-area set, and the neighboring segments' faces close the solid there;
+parallel to the axis (off it) → `Cylinder`; inclined → `Cone` (an
 endpoint on the axis is its apex); perpendicular → planar annulus (a disk
 when it reaches the axis); `ArcSeg`/`CircleSeg` → `Torus`, or `Sphere` when
 the arc's center lies on the axis — an endpoint ON the axis closes at a pole,
@@ -224,12 +227,14 @@ Increment 4, the deep end. Strategy:
   beyond the bound or `Suspect`.
 - **Pairs**: proven disjoint when the two bodies' bounds-inflated boxes are
   disjoint (a box bounds its body, so box separation proves body separation),
-  or when a clearance computation clears the summed bounds; proven
-  overlapping when a witness point lies inside both beyond their bounds
-  (analytic containment tests for analytic bodies; exact mesh classification
-  for faceted ones). A pair proven neither joins neither list and reads
-  `Suspect` — from increment 3 on, the report is honest before the boolean
-  exists, because box-proofs already decide the common far-apart case.
+  or when a clearance computation clears the summed bounds. An
+  `Interference` row carries a bounded overlap VOLUME (verification §1), and
+  a bare witness point cannot supply one — so a row is emitted only once the
+  boolean machinery can intersect the pair and bound the volume (increment
+  4). Until then a pair that cannot be proven disjoint is undecided: it joins
+  neither list and reads `Suspect` — never a fabricated row, and never a
+  false `Sound`, because box-proofs already decide the common far-apart case
+  from increment 3 on.
 - **Wall thickness / undercuts / min radius**: the analytic surveys of
   verification §6 over the v1 surface set (plane/cylinder/cone/sphere/torus
   pair tables for opposition and pinch; per-variant normal ranges for pull
