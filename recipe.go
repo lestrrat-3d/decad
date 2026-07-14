@@ -399,18 +399,15 @@ func cloneStep(s Step) Step {
 	out.Selectors = cloneSelectors(s.Selectors)
 	out.Profile = cloneProfileRecord(s.Profile)
 	// An extent normalizes to pure values recursively (nested TwoSided sides
-	// included), so a cloned step can never share a caller-visible pointer
-	// with the document. A malformed nil pointer stays as-is — the codecs
-	// and the feature calls reject it at their own gates.
+	// included) and a ToFace/ToFaceAngular's selector is deep-copied, so a
+	// cloned step can never share a caller-visible pointer with the
+	// document. A malformed nil pointer stays as-is — the codecs and the
+	// feature calls reject it at their own gates.
 	if s.Extent != nil {
-		if e, err := normalizeExtent(s.Extent); err == nil {
-			out.Extent = e
-		}
+		out.Extent = cloneExtent(s.Extent)
 	}
 	if s.Angular != nil {
-		if a, err := normalizeAngularExtent(s.Angular); err == nil {
-			out.Angular = a
-		}
+		out.Angular = cloneAngularExtent(s.Angular)
 	}
 	// An axis normalizes to a value; an EdgeAxis's selector is deep-copied
 	// so a recorded step never aliases a caller-owned query.

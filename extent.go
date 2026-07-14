@@ -16,8 +16,8 @@ import (
 // of travel, so the side variants carry no Direction at all.
 //
 // ToFace and ToFaceAngular — the extents that stop at a face of a named
-// body — need the selector vocabulary and land with it in evaluator
-// increment 2 (docs/evaluator-design.md §5/§6/§11).
+// body — are resolved at the feature call (stops.go) and recorded with the
+// body as its producing StepRef, exactly like EdgeAxis (core §6.2).
 
 // Direction is the enumerated sense a standalone one-sided extent carries.
 // There is no "both": a sweep that runs both ways is Symmetric or TwoSided,
@@ -121,17 +121,39 @@ type DistanceSide struct {
 }
 
 // ThroughAllSide is one side of a TwoSided that runs through every body on
-// its side. SideExtent only; evaluator support lands in increment 2.
+// its side. SideExtent only; like ThroughAll, its stop bodies are resolved at
+// the call and recorded as StepRefs in the step's Inputs (core §6.2).
 type ThroughAllSide struct{}
 
+// ToFace stops the sweep at a face of Body, displaced by the signed Offset —
+// the one signed number in the extent vocabulary: a positive offset
+// overshoots the face, a negative one stops short of it, so
+// ErrNegativeMagnitude does not apply (core §8.1/§12). A zero-value Offset
+// means no displacement. The sense of the sweep comes from the target face,
+// so ToFace carries no Direction. Face is a FaceSelector, never a *Face
+// (core §9), resolved as Face.SelectFaces(Body) under the implicit
+// exactly-one of core §12; Body must be a live body of the same document at
+// the call (a StepRef there is ErrUnresolvedBody), and its StepRef is
+// recorded in the step's Inputs — the step depends on it; the body is not
+// consumed and not retired. Both Extent and SideExtent: a ToFace is a single
+// direction of travel, so it may also stand as one side of a TwoSided.
+type ToFace struct {
+	Body   BodyRef
+	Face   FaceSelector
+	Offset units.Value
+}
+
 // The sealed sets. The two tiers are deliberately disjoint: a standalone
-// extent is never a side, and a side is never a standalone extent.
+// extent is never a side, and a side is never a standalone extent. ToFace is
+// the deliberate exception — core §8.1 admits it in both roles.
 func (Distance) extent()           {}
 func (ThroughAll) extent()         {}
 func (Symmetric) extent()          {}
 func (TwoSided) extent()           {}
+func (ToFace) extent()             {}
 func (DistanceSide) sideExtent()   {}
 func (ThroughAllSide) sideExtent() {}
+func (ToFace) sideExtent()         {}
 
 // Extent and SideExtent are closed variant sets decad owns, so decad ships
 // their codec (core §6.2): tagged objects, dispatch on the tag, no fallback.
@@ -141,6 +163,7 @@ const (
 	extKindThroughAll     = "through_all"
 	extKindSymmetric      = "symmetric"
 	extKindTwoSided       = "two_sided"
+	extKindToFace         = "to_face"
 	extKindDistanceSide   = "distance_side"
 	extKindThroughAllSide = "through_all_side"
 )
@@ -178,6 +201,11 @@ func normalizeExtent(e Extent) (Extent, error) {
 			return nil, errNilExtent
 		}
 		return normalizeExtent(*e)
+	case *ToFace:
+		if e == nil {
+			return nil, errNilExtent
+		}
+		return *e, nil
 	case TwoSided:
 		one, err := normalizeSideExtent(e.One)
 		if err != nil {
@@ -206,9 +234,55 @@ func normalizeSideExtent(s SideExtent) (SideExtent, error) {
 			return nil, errNilExtent
 		}
 		return *s, nil
+	case *ToFace:
+		if s == nil {
+			return nil, errNilExtent
+		}
+		return *s, nil
 	default:
 		return s, nil
 	}
+}
+
+// cloneExtent deep-copies a recorded extent so a Recipe never aliases a
+// caller-owned face selector — the extent analog of cloneAxis. A malformed
+// nil pointer stays as-is; the codecs and the feature call reject it at
+// their own gates.
+func cloneExtent(e Extent) Extent {
+	n, err := normalizeExtent(e)
+	if err != nil {
+		return e
+	}
+	switch n := n.(type) {
+	case ToFace:
+		return cloneToFace(n)
+	case TwoSided:
+		n.One = cloneSideExtent(n.One)
+		n.Two = cloneSideExtent(n.Two)
+		return n
+	default:
+		return n
+	}
+}
+
+// cloneSideExtent is cloneExtent's side-tier analog. The sides were
+// normalized with the enclosing TwoSided already.
+func cloneSideExtent(s SideExtent) SideExtent {
+	if tf, ok := s.(ToFace); ok {
+		return cloneToFace(tf)
+	}
+	return s
+}
+
+// cloneToFace deep-copies a ToFace's selector so no caller-owned query
+// survives into a recorded step and none escapes Recipe().
+func cloneToFace(tf ToFace) ToFace {
+	if tf.Face != nil {
+		if sel, ok := cloneSelector(tf.Face).(FaceSelector); ok {
+			tf.Face = sel
+		}
+	}
+	return tf
 }
 
 // marshalExtent encodes one extent as its tagged object.
@@ -238,9 +312,69 @@ func marshalExtent(e Extent) ([]byte, error) {
 			One  json.RawMessage `json:"one"`
 			Two  json.RawMessage `json:"two"`
 		}{Kind: extKindTwoSided, One: one, Two: two})
+	case ToFace:
+		return marshalToFace(e)
 	default:
 		return nil, fmt.Errorf(`decad: unencodable extent type %T`, e)
 	}
+}
+
+// marshalToFace encodes a to-face stop as its tagged object, shared by the
+// Extent and SideExtent codecs. Like an EdgeAxis, it records its body as the
+// producing StepRef — a live *Body is a handle, not a record.
+func marshalToFace(tf ToFace) ([]byte, error) {
+	ref, ok := tf.Body.(StepRef)
+	if !ok {
+		return nil, fmt.Errorf(`decad: a to-face extent records its body as a StepRef, got %T`, tf.Body)
+	}
+	if tf.Face == nil {
+		return nil, errNilSelector
+	}
+	face, err := marshalSelector(tf.Face)
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(struct {
+		Kind   string          `json:"kind"`
+		Body   StepRef         `json:"body"`
+		Face   json.RawMessage `json:"face"`
+		Offset units.Value     `json:"offset"`
+	}{Kind: extKindToFace, Body: ref, Face: face, Offset: normalizeStopOffset(tf.Offset)})
+}
+
+// normalizeStopOffset reads the zero Value as "no displacement": the record
+// and the wire always carry an explicit length.
+func normalizeStopOffset(v units.Value) units.Value {
+	if v == (units.Value{}) {
+		return units.Millimeters(0)
+	}
+	return v
+}
+
+// unmarshalToFace decodes a to-face stop, shared by the Extent and SideExtent
+// codecs. Wire structs with pointer fields: an absent body, face or offset is
+// malformed input, never silently step 0, a match-all query or a zero offset.
+func unmarshalToFace(data []byte) (ToFace, error) {
+	var raw struct {
+		Body   *StepRef        `json:"body"`
+		Face   json.RawMessage `json:"face"`
+		Offset *units.Value    `json:"offset"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return ToFace{}, fmt.Errorf(`decad: failed to decode to-face extent: %w`, err)
+	}
+	if raw.Body == nil || raw.Face == nil || raw.Offset == nil {
+		return ToFace{}, fmt.Errorf(`decad: a to-face extent requires body, face and offset`)
+	}
+	sel, err := unmarshalSelector(raw.Face)
+	if err != nil {
+		return ToFace{}, err
+	}
+	face, ok := sel.(FaceSelector)
+	if !ok {
+		return ToFace{}, fmt.Errorf(`decad: a to-face extent requires a face selector, got %T`, sel)
+	}
+	return ToFace{Body: *raw.Body, Face: face, Offset: *raw.Offset}, nil
 }
 
 // unmarshalExtent dispatches on the kind tag; an unknown or missing tag is an
@@ -307,6 +441,8 @@ func unmarshalExtent(data []byte) (Extent, error) {
 			return nil, err
 		}
 		return TwoSided{One: one, Two: two}, nil
+	case extKindToFace:
+		return unmarshalToFace(data)
 	case "":
 		return nil, fmt.Errorf(`decad: extent is missing its kind tag`)
 	default:
@@ -325,6 +461,8 @@ func marshalSideExtent(s SideExtent) ([]byte, error) {
 		return marshalTagged(extKindDistanceSide, s)
 	case ThroughAllSide:
 		return marshalTagged(extKindThroughAllSide, s)
+	case ToFace:
+		return marshalToFace(s)
 	default:
 		return nil, fmt.Errorf(`decad: unencodable side extent type %T`, s)
 	}
@@ -352,6 +490,8 @@ func unmarshalSideExtent(data []byte) (SideExtent, error) {
 		return DistanceSide{D: *raw.D}, nil
 	case extKindThroughAllSide:
 		return ThroughAllSide{}, nil
+	case extKindToFace:
+		return unmarshalToFace(data)
 	case "":
 		return nil, fmt.Errorf(`decad: side extent is missing its kind tag`)
 	default:
@@ -406,13 +546,32 @@ type AngleSide struct {
 	A units.Value `json:"a"`
 }
 
+// ToFaceAngular stops the revolve at a face of Body — the angular analog of
+// ToFace, with no offset. The sense of the sweep comes from the target face
+// (a standalone ToFaceAngular takes the nearer way around; as a side of a
+// TwoSidedAngle the side supplies the sense), so it carries no Direction.
+// Face is a FaceSelector, never a *Face (core §9), resolved as
+// Face.SelectFaces(Body) under the implicit exactly-one of core §12; Body
+// must be a live body of the same document at the call (a StepRef there is
+// ErrUnresolvedBody), and its StepRef is recorded in the step's Inputs — the
+// step depends on it; the body is not consumed and not retired. Both
+// AngularExtent and SideAngular.
+type ToFaceAngular struct {
+	Body BodyRef
+	Face FaceSelector
+}
+
 // The sealed sets. The two tiers are deliberately disjoint: a standalone
 // angular extent is never a side, and a side is never a standalone extent.
+// ToFaceAngular is the deliberate exception — core §8.1 admits it in both
+// roles.
 func (AngleExtent) angularExtent()    {}
 func (FullRevolution) angularExtent() {}
 func (SymmetricAngle) angularExtent() {}
 func (TwoSidedAngle) angularExtent()  {}
+func (ToFaceAngular) angularExtent()  {}
 func (AngleSide) sideAngular()        {}
+func (ToFaceAngular) sideAngular()    {}
 
 // AngularExtent and SideAngular are closed variant sets decad owns, so decad
 // ships their codec (core §6.2): tagged objects, dispatch on the tag, no
@@ -424,6 +583,7 @@ const (
 	extKindSymmetricAngle = "symmetric_angle"
 	extKindTwoSidedAngle  = "two_sided_angle"
 	extKindAngleSide      = "angle_side"
+	extKindToFaceAngular  = "to_face_angular"
 )
 
 // normalizeAngularExtent is normalizeExtent's angular analog: it returns the
@@ -452,6 +612,11 @@ func normalizeAngularExtent(a AngularExtent) (AngularExtent, error) {
 			return nil, errNilExtent
 		}
 		return normalizeAngularExtent(*a)
+	case *ToFaceAngular:
+		if a == nil {
+			return nil, errNilExtent
+		}
+		return *a, nil
 	case TwoSidedAngle:
 		one, err := normalizeSideAngular(a.One)
 		if err != nil {
@@ -475,9 +640,55 @@ func normalizeSideAngular(s SideAngular) (SideAngular, error) {
 			return nil, errNilExtent
 		}
 		return *s, nil
+	case *ToFaceAngular:
+		if s == nil {
+			return nil, errNilExtent
+		}
+		return *s, nil
 	default:
 		return s, nil
 	}
+}
+
+// cloneAngularExtent is cloneExtent's angular analog: it deep-copies a
+// recorded angular extent so a Recipe never aliases a caller-owned face
+// selector.
+func cloneAngularExtent(a AngularExtent) AngularExtent {
+	n, err := normalizeAngularExtent(a)
+	if err != nil {
+		return a
+	}
+	switch n := n.(type) {
+	case ToFaceAngular:
+		return cloneToFaceAngular(n)
+	case TwoSidedAngle:
+		n.One = cloneSideAngular(n.One)
+		n.Two = cloneSideAngular(n.Two)
+		return n
+	default:
+		return n
+	}
+}
+
+// cloneSideAngular is cloneAngularExtent's side-tier analog. The sides were
+// normalized with the enclosing TwoSidedAngle already.
+func cloneSideAngular(s SideAngular) SideAngular {
+	if tfa, ok := s.(ToFaceAngular); ok {
+		return cloneToFaceAngular(tfa)
+	}
+	return s
+}
+
+// cloneToFaceAngular deep-copies a ToFaceAngular's selector so no
+// caller-owned query survives into a recorded step and none escapes
+// Recipe().
+func cloneToFaceAngular(tfa ToFaceAngular) ToFaceAngular {
+	if tfa.Face != nil {
+		if sel, ok := cloneSelector(tfa.Face).(FaceSelector); ok {
+			tfa.Face = sel
+		}
+	}
+	return tfa
 }
 
 // marshalAngularExtent encodes one angular extent as its tagged object.
@@ -507,9 +718,59 @@ func marshalAngularExtent(a AngularExtent) ([]byte, error) {
 			One  json.RawMessage `json:"one"`
 			Two  json.RawMessage `json:"two"`
 		}{Kind: extKindTwoSidedAngle, One: one, Two: two})
+	case ToFaceAngular:
+		return marshalToFaceAngular(a)
 	default:
 		return nil, fmt.Errorf(`decad: unencodable angular extent type %T`, a)
 	}
+}
+
+// marshalToFaceAngular encodes an angular to-face stop as its tagged object,
+// shared by the AngularExtent and SideAngular codecs. Like an EdgeAxis, it
+// records its body as the producing StepRef.
+func marshalToFaceAngular(tfa ToFaceAngular) ([]byte, error) {
+	ref, ok := tfa.Body.(StepRef)
+	if !ok {
+		return nil, fmt.Errorf(`decad: a to-face angular extent records its body as a StepRef, got %T`, tfa.Body)
+	}
+	if tfa.Face == nil {
+		return nil, errNilSelector
+	}
+	face, err := marshalSelector(tfa.Face)
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(struct {
+		Kind string          `json:"kind"`
+		Body StepRef         `json:"body"`
+		Face json.RawMessage `json:"face"`
+	}{Kind: extKindToFaceAngular, Body: ref, Face: face})
+}
+
+// unmarshalToFaceAngular decodes an angular to-face stop, shared by the
+// AngularExtent and SideAngular codecs. Wire structs with pointer fields: an
+// absent body or face is malformed input, never silently step 0 or a
+// match-all query.
+func unmarshalToFaceAngular(data []byte) (ToFaceAngular, error) {
+	var raw struct {
+		Body *StepRef        `json:"body"`
+		Face json.RawMessage `json:"face"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return ToFaceAngular{}, fmt.Errorf(`decad: failed to decode to-face angular extent: %w`, err)
+	}
+	if raw.Body == nil || raw.Face == nil {
+		return ToFaceAngular{}, fmt.Errorf(`decad: a to-face angular extent requires both body and face`)
+	}
+	sel, err := unmarshalSelector(raw.Face)
+	if err != nil {
+		return ToFaceAngular{}, err
+	}
+	face, ok := sel.(FaceSelector)
+	if !ok {
+		return ToFaceAngular{}, fmt.Errorf(`decad: a to-face angular extent requires a face selector, got %T`, sel)
+	}
+	return ToFaceAngular{Body: *raw.Body, Face: face}, nil
 }
 
 // unmarshalAngularExtent dispatches on the kind tag; an unknown or missing
@@ -567,6 +828,8 @@ func unmarshalAngularExtent(data []byte) (AngularExtent, error) {
 			return nil, err
 		}
 		return TwoSidedAngle{One: one, Two: two}, nil
+	case extKindToFaceAngular:
+		return unmarshalToFaceAngular(data)
 	case "":
 		return nil, fmt.Errorf(`decad: angular extent is missing its kind tag`)
 	default:
@@ -583,6 +846,8 @@ func marshalSideAngular(s SideAngular) ([]byte, error) {
 	switch s := s.(type) {
 	case AngleSide:
 		return marshalTagged(extKindAngleSide, s)
+	case ToFaceAngular:
+		return marshalToFaceAngular(s)
 	default:
 		return nil, fmt.Errorf(`decad: unencodable side angular type %T`, s)
 	}
@@ -608,6 +873,8 @@ func unmarshalSideAngular(data []byte) (SideAngular, error) {
 			return nil, fmt.Errorf(`decad: an angle side requires a`)
 		}
 		return AngleSide{A: *raw.A}, nil
+	case extKindToFaceAngular:
+		return unmarshalToFaceAngular(data)
 	case "":
 		return nil, fmt.Errorf(`decad: side angular is missing its kind tag`)
 	default:

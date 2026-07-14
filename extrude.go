@@ -10,10 +10,13 @@ import (
 	"github.com/lestrrat-go/option/v3"
 )
 
-// This file is the increment-1 extrude of docs/evaluator-design.md §5: the
-// feature call gates its live inputs, records the step, evaluates FROM the
-// record, and commits atomically. The prism it builds is fully analytic —
-// Plane and Cylinder faces, Exact measurements with zero bounds.
+// This file is the extrude of docs/evaluator-design.md §5: the feature call
+// gates its live inputs, records the step, evaluates FROM the record, and
+// commits atomically. The prism it builds is fully analytic — Plane and
+// Cylinder faces, Exact measurements with zero bounds. The body-relative
+// stops (ThroughAll/ThroughAllSide/ToFace) resolve through stops.go: the
+// stop bodies are resolved at the call and recorded as StepRefs in the
+// step's Inputs (core §6.2).
 
 // ExtrudeOption configures Extrude.
 type ExtrudeOption interface {
@@ -81,25 +84,26 @@ func (d *Document) Extrude(s *sketch.Sketch, p *sketch.Profile, e Extent, opts .
 		return nil, fmt.Errorf(`%w: tapered extrude is not supported by this evaluator`, ErrUnsupported)
 	}
 
-	e, err = normalizeExtent(e)
-	if err != nil {
-		return nil, err
-	}
-	z0, z1, err := resolveLinearExtent(e)
-	if err != nil {
-		return nil, err
-	}
-
 	frame, err := r3.NewFrame(plane.Origin, plane.U, plane.V)
 	if err != nil {
 		return nil, fmt.Errorf(`%w: the recorded plane is degenerate: %s`, ErrDegenerate, err)
 	}
 
+	e, err = normalizeExtent(e)
+	if err != nil {
+		return nil, err
+	}
+	z0, z1, inputs, err := d.resolveLinearExtent(e, frame)
+	if err != nil {
+		return nil, err
+	}
+
 	step := Step{
 		Op:      OpExtrude,
+		Inputs:  inputs,
 		Profile: profile,
 		Plane:   plane,
-		Extent:  e,
+		Extent:  recordExtent(e),
 		Opts:    ExtrudeOpts{Taper: taper},
 	}
 	ref := d.nextStepRef()
@@ -137,84 +141,133 @@ func falsifyRecordedArea(profile ProfileRecord, sketchArea float64) error {
 }
 
 // resolveLinearExtent turns a linear extent into the signed sweep interval
-// [z0, z1] along the plane normal (docs/evaluator-design.md §5). Magnitudes
-// are validated per core §8.1/§12; a zero-thickness sweep is ErrDegenerate;
-// the body-relative stops (ThroughAll, ThroughAllSide, ToFace) are
-// ErrUnsupported until increment 2.
-func resolveLinearExtent(e Extent) (float64, float64, error) {
+// [z0, z1] along the plane normal (docs/evaluator-design.md §5), plus the
+// StepRefs of the bodies the extent's stops resolved against — named-extent
+// refs in extent order first, through-all stop bodies after them in stop
+// order along the sweep, deduplicated (core §6.2). Magnitudes are validated
+// per core §8.1/§12; a zero-thickness sweep is ErrDegenerate.
+func (d *Document) resolveLinearExtent(e Extent, frame r3.Frame) (float64, float64, []StepRef, error) {
 	switch e := e.(type) {
 	case Distance:
 		m, err := magnitudeIn(e.D, units.Length, units.Millimeter, "the extent distance")
 		if err != nil {
-			return 0, 0, err
+			return 0, 0, nil, err
 		}
 		if m == 0 {
-			return 0, 0, fmt.Errorf(`%w: a zero-distance extent sweeps no solid`, ErrDegenerate)
+			return 0, 0, nil, fmt.Errorf(`%w: a zero-distance extent sweeps no solid`, ErrDegenerate)
 		}
 		// An unknown Direction is malformed input, never silently Along.
 		switch e.Dir {
 		case Along:
-			return 0, m, nil
+			return 0, m, nil, nil
 		case Against:
-			return -m, 0, nil
+			return -m, 0, nil, nil
 		default:
-			return 0, 0, fmt.Errorf(`%w: unknown direction %d`, ErrDegenerate, int(e.Dir))
+			return 0, 0, nil, fmt.Errorf(`%w: unknown direction %d`, ErrDegenerate, int(e.Dir))
 		}
 	case Symmetric:
 		m, err := magnitudeIn(e.D, units.Length, units.Millimeter, "the symmetric distance")
 		if err != nil {
-			return 0, 0, err
+			return 0, 0, nil, err
 		}
 		if m == 0 {
-			return 0, 0, fmt.Errorf(`%w: a zero-distance extent sweeps no solid`, ErrDegenerate)
+			return 0, 0, nil, fmt.Errorf(`%w: a zero-distance extent sweeps no solid`, ErrDegenerate)
 		}
 		half := m
 		if e.FullLength {
 			half = m / 2
 		}
-		return -half, half, nil
+		return -half, half, nil, nil
 	case TwoSided:
-		along, err := resolveSide(e.One, "the along side")
+		one, err := d.resolveLinearSide(e.One, frame, 1, "the along side")
 		if err != nil {
-			return 0, 0, err
+			return 0, 0, nil, err
 		}
-		against, err := resolveSide(e.Two, "the against side")
+		two, err := d.resolveLinearSide(e.Two, frame, -1, "the against side")
 		if err != nil {
-			return 0, 0, err
+			return 0, 0, nil, err
 		}
-		if along == 0 && against == 0 {
-			return 0, 0, fmt.Errorf(`%w: a zero-distance extent sweeps no solid`, ErrDegenerate)
+		if one.z == 0 && two.z == 0 {
+			return 0, 0, nil, fmt.Errorf(`%w: a zero-distance extent sweeps no solid`, ErrDegenerate)
 		}
-		return -against, along, nil
+		named := append(append([]StepRef(nil), one.named...), two.named...)
+		refs := dedupRefs(append(append(named, one.through...), two.through...))
+		return two.z, one.z, refs, nil
 	case ThroughAll:
+		// An unknown Direction is malformed input, never silently Along.
+		var travel float64
 		switch e.Dir {
-		case Along, Against:
-			return 0, 0, fmt.Errorf(`%w: through-all extents land with the body-relative stops in increment 2`, ErrUnsupported)
+		case Along:
+			travel = 1
+		case Against:
+			travel = -1
 		default:
-			return 0, 0, fmt.Errorf(`%w: unknown direction %d`, ErrDegenerate, int(e.Dir))
+			return 0, 0, nil, fmt.Errorf(`%w: unknown direction %d`, ErrDegenerate, int(e.Dir))
 		}
+		stop, refs, err := d.resolveThroughAll(frame, travel)
+		if err != nil {
+			return 0, 0, nil, err
+		}
+		if travel > 0 {
+			return 0, stop, refs, nil
+		}
+		return stop, 0, refs, nil
+	case ToFace:
+		stop, ref, err := d.resolveToFace(e, frame, 0, "a to-face extent")
+		if err != nil {
+			return 0, 0, nil, err
+		}
+		if stop > 0 {
+			return 0, stop, []StepRef{ref}, nil
+		}
+		return stop, 0, []StepRef{ref}, nil
 	case nil:
-		return 0, 0, fmt.Errorf(`%w: a nil extent sweeps nothing`, ErrDegenerate)
+		return 0, 0, nil, fmt.Errorf(`%w: a nil extent sweeps nothing`, ErrDegenerate)
 	default:
-		return 0, 0, fmt.Errorf(`%w: extent %T is not supported by this evaluator`, ErrUnsupported, e)
+		return 0, 0, nil, fmt.Errorf(`%w: extent %T is not supported by this evaluator`, ErrUnsupported, e)
 	}
 }
 
-// resolveSide resolves one side of a TwoSided to its magnitude.
-func resolveSide(s SideExtent, what string) (float64, error) {
+// linearSide is one resolved side of a TwoSided: its signed boundary
+// coordinate along the plane normal, and the stop refs it resolved —
+// named-extent and through-all kept apart so the enclosing extent can order
+// them per core §6.2.
+type linearSide struct {
+	z       float64
+	named   []StepRef
+	through []StepRef
+}
+
+// resolveLinearSide resolves one side of a TwoSided; travel is +1 for the
+// along side, −1 for the against side.
+func (d *Document) resolveLinearSide(s SideExtent, frame r3.Frame, travel float64, what string) (linearSide, error) {
 	s, err := normalizeSideExtent(s)
 	if err != nil {
-		return 0, err
+		return linearSide{}, err
 	}
 	switch s := s.(type) {
 	case DistanceSide:
-		return magnitudeIn(s.D, units.Length, units.Millimeter, what)
+		m, err := magnitudeIn(s.D, units.Length, units.Millimeter, what)
+		if err != nil {
+			return linearSide{}, err
+		}
+		return linearSide{z: travel * m}, nil
 	case ThroughAllSide:
-		return 0, fmt.Errorf(`%w: through-all sides land with the body-relative stops in increment 2`, ErrUnsupported)
+		stop, refs, err := d.resolveThroughAll(frame, travel)
+		if err != nil {
+			return linearSide{}, err
+		}
+		return linearSide{z: stop, through: refs}, nil
+	case ToFace:
+		stop, ref, err := d.resolveToFace(s, frame, travel, what)
+		if err != nil {
+			return linearSide{}, err
+		}
+		return linearSide{z: stop, named: []StepRef{ref}}, nil
 	case nil:
-		return 0, fmt.Errorf(`%w: a two-sided extent requires both sides`, ErrDegenerate)
+		return linearSide{}, fmt.Errorf(`%w: a two-sided extent requires both sides`, ErrDegenerate)
 	default:
-		return 0, fmt.Errorf(`%w: side extent %T is not supported by this evaluator`, ErrUnsupported, s)
+		return linearSide{}, fmt.Errorf(`%w: side extent %T is not supported by this evaluator`, ErrUnsupported, s)
 	}
 }
 
@@ -655,6 +708,25 @@ func buildLoopSides(body *Body, ref StepRef, pp prismPayload, li int, loop LoopR
 	return faces, bottomCo, topCo, total, nil
 }
 
+// extentAlong is the prism's exact extent interval along an arbitrary world
+// direction g — the lifted linear functional point·g = origin·g + u·(U'·g)
+// + v·(V'·g) + z·(N'·g), primes the placed directions, extremized over the
+// region boundary and the sweep. Shared by prismBounds and the through-all
+// stop resolution (docs/evaluator-design.md §5).
+func (pp prismPayload) extentAlong(g r3.Vec) (float64, float64, error) {
+	base := pp.xform.Apply(pp.frame.Origin()).Dot(g)
+	gu := pp.dir(1, 0, 0).Dot(g)
+	gv := pp.dir(0, 1, 0).Dot(g)
+	gz := pp.dir(0, 0, 1).Dot(g)
+	lo, hi, err := boundaryExtremes(pp.profile, gu, gv)
+	if err != nil {
+		return 0, 0, err
+	}
+	zlo := math.Min(pp.z0*gz, pp.z1*gz)
+	zhi := math.Max(pp.z0*gz, pp.z1*gz)
+	return base + lo + zlo, base + hi + zhi, nil
+}
+
 // prismBounds computes the exact axis-aligned bounds of the placed prism:
 // for each world axis, the directional extreme of the region boundary under
 // the lifted linear functional, plus the sweep's own extreme
@@ -663,20 +735,12 @@ func prismBounds(pp prismPayload) (Box, error) {
 	axes := []r3.Vec{r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1)}
 	var minC, maxC [3]float64
 	for i, axis := range axes {
-		// The lifted functional: point·axis = origin·axis + u·(U'·axis) +
-		// v·(V'·axis) + z·(N'·axis), primes the placed directions.
-		base := pp.xform.Apply(pp.frame.Origin())
-		gu := pp.dir(1, 0, 0).Dot(axis)
-		gv := pp.dir(0, 1, 0).Dot(axis)
-		gz := pp.dir(0, 0, 1).Dot(axis)
-		lo, hi, err := boundaryExtremes(pp.profile, gu, gv)
+		lo, hi, err := pp.extentAlong(axis)
 		if err != nil {
 			return Box{}, err
 		}
-		zlo := math.Min(pp.z0*gz, pp.z1*gz)
-		zhi := math.Max(pp.z0*gz, pp.z1*gz)
-		minC[i] = base.Dot(axis) + lo + zlo
-		maxC[i] = base.Dot(axis) + hi + zhi
+		minC[i] = lo
+		maxC[i] = hi
 	}
 	return Box{
 		Min:       r3.NewVec(minC[0], minC[1], minC[2]),
