@@ -72,8 +72,12 @@ type Interference struct {
 
 // Clearance is the minimum gap between a pair of proven-disjoint bodies
 // (verification §1). A row exists only for a pair proven disjoint with a
-// measured gap; this evaluator cannot measure gaps yet (increment 3), so an
-// asked gap reads Suspect instead.
+// measured gap: the clearance kernel (docs/clearance-design.md) proves the
+// gap as an interval, and Gap reports its midpoint with the interval's half
+// width as the proven Bound — Exact exactly when the interval is a point. A
+// touching pair's zero is a measured Exact zero carried by a certified
+// contact; a pair whose gap the kernel cannot prove yields no row and reads
+// Suspect under WithClearances.
 type Clearance struct {
 	A, B *Body
 	Gap  Measurement
@@ -227,9 +231,11 @@ func WithMinRadius() VerifyOption {
 }
 
 // WithClearances asks for the minimum gap between disjoint pairs — a
-// measurement, not a verdict (verification §2). This evaluator cannot
-// measure gaps yet (evaluator §11, increment 3): the question is accepted,
-// and any pair it would cover reads Suspect.
+// measurement, not a verdict (verification §2): the clearance spec lives
+// with the caller, and the gate judges only the measurement's own figures.
+// Each proven-disjoint pair gets a row whose Gap the clearance kernel proves
+// (docs/clearance-design.md); a gap the kernel cannot prove yields no row
+// and reads Suspect — asked and unanswered, never a fabricated number.
 func WithClearances() VerifyOption {
 	return verifyOption{option.New(identClearances{}, true)}
 }
@@ -359,25 +365,48 @@ func (d *Document) Verify(ctx context.Context, opts ...VerifyOption) (*Report, e
 		}
 	}
 
-	// The pair partition over proven solids (verification §6): proven
-	// disjoint when the bounds-inflated boxes are disjoint — a box bounds
-	// its body, so box separation proves body separation (evaluator §10) —
-	// otherwise proven neither way: no fabricated row, and the report reads
-	// Suspect. An asked clearance gap is a measurement this evaluator
-	// cannot make (increment 3), so a disjoint-proven pair under
-	// WithClearances is asked-but-unanswered: Suspect.
+	// The pair partition over proven solids (verification §6, clearance
+	// design §7): a box-proven pair is already partition-decided (box
+	// separation proves body separation and excludes nesting — evaluator
+	// §10), but its row still needs the kernel, so the kernel runs for it
+	// only under WithClearances; every other pair gets the always-on
+	// disjointness proof — boundary clearance plus nesting exclusion, or the
+	// coplanar contact certificate. An undecided pair joins neither list and
+	// reads Suspect; an asked gap the kernel cannot prove reads Suspect the
+	// same way — never a fabricated row.
 	for i := range solids {
 		for j := i + 1; j < len(solids); j++ {
 			if err := ctx.Err(); err != nil {
 				return nil, err
 			}
-			if boxesDisjoint(solids[i].Bounds, solids[j].Bounds) {
-				if cfg.clearances {
+			boxProven := boxesDisjoint(solids[i].Bounds, solids[j].Bounds)
+			if boxProven && !cfg.clearances {
+				continue
+			}
+			res := clearancePair(solids[i].Body, solids[j].Body, boxProven)
+			if res.verdict == pairUndecided {
+				if !boxProven || cfg.clearances {
 					undecided = true
 				}
 				continue
 			}
-			undecided = true
+			if !cfg.clearances {
+				continue
+			}
+			gap := Measurement{
+				Value:     units.Millimeters((res.lo + res.hi) / 2),
+				Exactness: Exact,
+				Bound:     units.Millimeters((res.hi - res.lo) / 2),
+			}
+			if !res.exact {
+				gap.Exactness = Approximate
+			}
+			report.Clearances = append(report.Clearances, Clearance{
+				A: solids[i].Body, B: solids[j].Body, Gap: gap,
+			})
+			if !gapWithinTolerance(gap, res.diam, cfg.rel) {
+				undecided = true
+			}
 		}
 	}
 
@@ -517,6 +546,19 @@ func bodyExactness(br *BodyReport) Exactness {
 		worst = max(worst, br.MinRadius.Exactness)
 	}
 	return worst
+}
+
+// gapWithinTolerance is the §7 gate on one Clearance.Gap: a Measurement of
+// Kind Length judged as verification §2/§3/§5 demand — Bound ≤ rel × Ref
+// with Ref = max(|Value|, Quantum) and Quantum = δ = ε × D, D the pair's own
+// diameter read by the kernel (understating D only lowers the floor, the
+// safe direction). A gap beyond tolerance makes the report Suspect directly.
+func gapWithinTolerance(gap Measurement, pairD, rel float64) bool {
+	const eps = 1e-9
+	value := math.Abs(gap.Value.Mag())
+	bound := gap.Bound.Mag()
+	ref := math.Max(value, eps*pairD)
+	return bound <= rel*ref
 }
 
 // boxesDisjoint reports whether the two bounds-inflated boxes have disjoint

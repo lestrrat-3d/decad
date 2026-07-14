@@ -174,7 +174,7 @@ func TestVerifyAskedSurveysAreAnswered(t *testing.T) {
 	}
 }
 
-func TestVerifyClearancesAskedReadSuspect(t *testing.T) {
+func TestVerifyClearancesMeasureBoxProvenPair(t *testing.T) {
 	doc, body := extrudePlate(t)
 	shift, err := r3.Translation(r3.NewVec(500, 0, 0))
 	require.NoError(t, err)
@@ -184,14 +184,18 @@ func TestVerifyClearancesAskedReadSuspect(t *testing.T) {
 	_, err = doc.Extrude(s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	require.NoError(t, err)
 
-	// The pair is proven disjoint, but the asked gap is a measurement this
-	// evaluator cannot make yet: asked and unanswered, Suspect, with no
-	// fabricated Clearance row.
+	// A box-proven pair is already partition-decided, but its row still
+	// needs the kernel: the box distance is a lower bound, not a minimum
+	// (clearance design §7). The facing side faces sit 400 mm apart.
 	report, err := doc.Verify(t.Context(), decad.WithClearances())
 	require.NoError(t, err)
-	require.Equal(t, decad.Suspect, report.Status)
-	require.NotNil(t, report.Clearances)
-	require.Empty(t, report.Clearances)
+	require.Equal(t, decad.Sound, report.Status)
+	require.True(t, report.Trustworthy())
+	require.Len(t, report.Clearances, 1)
+	row := report.Clearances[0]
+	require.Equal(t, decad.Exact, row.Gap.Exactness)
+	require.True(t, row.Gap.Value.Equal(units.Millimeters(400), 1e-9), `got %s`, row.Gap.Value)
+	require.Equal(t, 0.0, row.Gap.Bound.Mag())
 }
 
 func TestVerifyClearancesAskedWithNoPairIsSound(t *testing.T) {
