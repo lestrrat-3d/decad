@@ -171,7 +171,16 @@ control net is exactly derivable from the record, in increment 6, and
 Partial sweeps get two planar cap faces. Volume by Pappus on the §4 first moments; the solid centroid from the §4
 second and mixed moments (`∫u² dA`, `∫uv dA`) — a full revolution's centroid
 lies on the axis with its axial position from the mixed moment, and a partial
-sweep's is closed form in the sweep angle. All exact. Increment 2.
+sweep's is closed form in the sweep angle. `Area` by Pappus's first theorem
+per side face — swept arc length × the sweep angle × the segment CURVE's
+centroidal radius about the axis, a boundary first moment with closed forms
+for `LineSeg`/`ArcSeg`/`CircleSeg` — plus the §4 region area for each partial-
+sweep cap. `Bounds` from per-face analytic extremes: each face's radial
+extreme about the axis (a cylinder's radius, a cone's two end radii, a
+torus/sphere's center distance ± minor/radius) and axial range, with a
+partial sweep's angular interval deciding which cardinal directions are
+reached — the same extreme analysis extrude uses, in cylindrical coordinates.
+All exact. Increment 2.
 
 ## 7. Selectors
 
