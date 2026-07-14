@@ -27,9 +27,14 @@ func xptOf(v r3.Vec) xpt {
 	return xpt{ratOf(v.X), ratOf(v.Y), ratOf(v.Z)}
 }
 
-// ratOf is the exact rational of a finite float.
-func ratOf(f float64) *big.Rat { return new(big.Rat).SetFloat64(f) }
-
+// The float-to-rational lift this file runs on is ratOf (clearance_poly.go),
+// the package's one exact-rational helper: a float64 IS a rational, so the
+// conversion is exact and lossless, and the two exact kernels — this one and
+// the clearance brackets — share it rather than keep two conversions that
+// could drift apart. Every ratOf call here is on a float already proven
+// finite: prepBoolMesh rejects a non-finite vertex outright, so the operands
+// this file sees hold none.
+//
 // vec rounds the exact point to the nearest float64 coordinates.
 func (p xpt) vec() r3.Vec {
 	x, _ := p.x.Float64()

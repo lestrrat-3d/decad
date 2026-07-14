@@ -12,21 +12,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// boxBody extrudes an x0..x1 × y0..y1 rectangle to a height-h prism on a
-// fresh sketch of the given document.
-func boxBody(t *testing.T, doc *decad.Document, x0, y0, x1, y1, h float64) *decad.Body {
-	t.Helper()
-	w := sketch.NewWorld()
-	s, err := w.CreateSketch(w.XY())
-	require.NoError(t, err)
-	rect := s.CreateRectangle(x0, y0, x1, y1)
-	s.Fix(rect.A)
-	_, err = s.Solve(t.Context())
-	require.NoError(t, err)
-	body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
-	require.NoError(t, err)
-	return body
-}
+// The prism these tests build their operands from is boxBody
+// (clearance_test.go): the same x0..x1 × y0..y1 rectangle extruded to a
+// height-h prism on a fresh sketch of the given document, shared across the
+// package's tests rather than restated here.
 
 // diskBody extrudes a radius-r circle at (cx, cy) to a 20 mm prism — tall
 // enough to pierce every plate in these tests.
