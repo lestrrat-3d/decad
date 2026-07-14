@@ -320,3 +320,115 @@ func TestExtrudeRejections(t *testing.T) {
 	_, err = doc.Extrude(s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	require.ErrorIs(t, err, decad.ErrStaleProfile)
 }
+
+func TestFaceNormals(t *testing.T) {
+	// Outward normals: −z on the start cap, +z on the end cap, −y on the
+	// bottom side, and INTO a hole's void on its cylinder wall.
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	rect := s.CreateRectangle(0, 0, 100, 60)
+	s.Fix(rect.A)
+	s.CreateCircle(s.CreatePoint(70, 30), 10)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	var prof *sketch.Profile
+	for _, p := range s.Profiles() {
+		if len(p.Holes) == 1 {
+			prof = p
+		}
+	}
+	doc := decad.New()
+	body, err := doc.Extrude(s, prof, decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
+	require.NoError(t, err)
+
+	requireNormal := func(f *decad.Face, at, want r3.Vec) {
+		t.Helper()
+		n, err := f.NormalAt(at)
+		require.NoError(t, err)
+		require.Equal(t, decad.Exact, n.Exactness)
+		require.InDelta(t, want.X, n.Value.X, 1e-12)
+		require.InDelta(t, want.Y, n.Value.Y, 1e-12)
+		require.InDelta(t, want.Z, n.Value.Z, 1e-12)
+	}
+
+	caps, cylinders := 0, 0
+	for _, f := range body.Faces() {
+		for _, role := range f.Origins() {
+			switch role.Role {
+			case "capStart":
+				caps++
+				requireNormal(f, r3.NewVec(10, 10, 0), r3.NewVec(0, 0, -1))
+			case "capEnd":
+				caps++
+				requireNormal(f, r3.NewVec(10, 10, 8), r3.NewVec(0, 0, 1))
+			case "side(0,0)", "side(0,1)", "side(0,2)", "side(0,3)":
+				// One of the rectangle sides; check the bottom edge's face
+				// by its plane normal rather than guessing indices.
+				pl, ok := f.Surface().(decad.Plane)
+				require.True(t, ok)
+				n := pl.Frame.N()
+				if math.Abs(n.Y+1) < 1e-9 {
+					requireNormal(f, r3.NewVec(50, 0, 4), r3.NewVec(0, -1, 0))
+				}
+			case "side(1,0)":
+				cylinders++
+				// The hole wall: outward-from-material points INTO the hole,
+				// toward the axis. At (60, 30, 4) the axis is at x=70, so
+				// the outward normal is +x.
+				requireNormal(f, r3.NewVec(60, 30, 4), r3.NewVec(1, 0, 0))
+			}
+		}
+	}
+	require.Equal(t, 2, caps)
+	require.Equal(t, 1, cylinders)
+}
+
+func TestWholeCircleEdgeSeamVertices(t *testing.T) {
+	// A full circle's edge closes on itself: start == end, non-nil.
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	center := s.CreatePoint(0, 0)
+	s.Fix(center)
+	s.CreateCircle(center, 7)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+
+	doc := decad.New()
+	body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(3), Dir: decad.Along})
+	require.NoError(t, err)
+	for _, e := range body.Edges() {
+		if _, ok := e.Curve().(decad.Circle3); !ok {
+			continue
+		}
+		require.NotNil(t, e.Start(), `a full circle edge closes on a seam vertex`)
+		require.Same(t, e.Start(), e.End())
+	}
+	requireManifold(t, body)
+}
+
+func TestExtrudeRejectsUnknownDirection(t *testing.T) {
+	s, p := plateSketch(t)
+	doc := decad.New()
+	_, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(5), Dir: decad.Direction(99)})
+	require.ErrorIs(t, err, decad.ErrDegenerate, `an unknown direction is malformed, never silently Along`)
+	require.Empty(t, doc.Recipe().Steps)
+}
+
+func TestRecipeIsAValue(t *testing.T) {
+	// Mutating a returned recipe never changes the document's own record.
+	s, p := plateSketch(t)
+	doc := decad.New()
+	_, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	require.NoError(t, err)
+
+	stolen := doc.Recipe()
+	stolen.Steps[0].Profile.Outer.Segments[0] = decad.LineSeg{TStart: 0.5, TEnd: 0.5}
+	stolen.Steps[0].Inputs = append(stolen.Steps[0].Inputs, 42)
+
+	fresh := doc.Recipe()
+	require.NotEqual(t, stolen.Steps[0].Profile.Outer.Segments[0], fresh.Steps[0].Profile.Outer.Segments[0],
+		`the document's record is isolated from caller mutation`)
+	require.Empty(t, fresh.Steps[0].Inputs)
+}

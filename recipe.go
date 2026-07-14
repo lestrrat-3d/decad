@@ -3,6 +3,7 @@ package decad
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -309,4 +310,78 @@ func (s *Step) UnmarshalJSON(data []byte) error {
 	}
 	*s = out
 	return nil
+}
+
+// cloneSteps deep-copies recorded steps: a Recipe is a value (core §6.2), so
+// nothing it hands out may alias document state — a caller mutating a
+// returned recipe must never change future replay behavior.
+func cloneSteps(steps []Step) []Step {
+	out := make([]Step, len(steps))
+	for i, s := range steps {
+		out[i] = cloneStep(s)
+	}
+	return out
+}
+
+// cloneStep deep-copies one step's slice-bearing fields.
+func cloneStep(s Step) Step {
+	out := s
+	out.Inputs = slices.Clone(s.Inputs)
+	out.Values = slices.Clone(s.Values)
+	out.Selectors = slices.Clone(s.Selectors)
+	out.Profile = cloneProfileRecord(s.Profile)
+	return out
+}
+
+// cloneProfileRecord deep-copies a recorded region.
+func cloneProfileRecord(r ProfileRecord) ProfileRecord {
+	out := ProfileRecord{Outer: cloneLoopRecord(r.Outer)}
+	if r.Holes != nil {
+		out.Holes = make([]LoopRecord, len(r.Holes))
+		for i, h := range r.Holes {
+			out.Holes[i] = cloneLoopRecord(h)
+		}
+	}
+	return out
+}
+
+// cloneLoopRecord deep-copies one loop's segments.
+func cloneLoopRecord(l LoopRecord) LoopRecord {
+	if l.Segments == nil {
+		return LoopRecord{}
+	}
+	out := LoopRecord{Segments: make([]CurveSegment, len(l.Segments))}
+	for i, seg := range l.Segments {
+		out.Segments[i] = cloneSegment(seg)
+	}
+	return out
+}
+
+// cloneSegment deep-copies a segment's slice-bearing fields. Value variants
+// with only scalar fields copy by assignment; pointer forms normalize to
+// values first (a malformed nil pointer is kept as-is — the codecs and
+// integrals reject it at their own gates).
+func cloneSegment(seg CurveSegment) CurveSegment {
+	normalized, err := normalizeSegment(seg)
+	if err != nil {
+		return seg
+	}
+	switch s := normalized.(type) {
+	case SplineSeg:
+		s.Control = slices.Clone(s.Control)
+		return s
+	case NURBSSeg:
+		s.Control = slices.Clone(s.Control)
+		s.Knots = slices.Clone(s.Knots)
+		s.Weights = slices.Clone(s.Weights)
+		return s
+	case ClosedSplineSeg:
+		s.Control = slices.Clone(s.Control)
+		return s
+	case FitSplineSeg:
+		s.Fit = slices.Clone(s.Fit)
+		return s
+	default:
+		return normalized
+	}
 }

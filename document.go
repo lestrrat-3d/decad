@@ -39,7 +39,7 @@ func (d *Document) Bodies() []*Body {
 // Recipe returns the exact record of intent: a value holding no pointer into
 // the document (core §6.2). The steps slice is a copy.
 func (d *Document) Recipe() Recipe {
-	return Recipe{Steps: append([]Step(nil), d.steps...)}
+	return Recipe{Steps: cloneSteps(d.steps)}
 }
 
 // commit appends the step and registers the produced body, retiring the

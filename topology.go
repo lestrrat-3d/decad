@@ -1,6 +1,8 @@
 package decad
 
 import (
+	"fmt"
+
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
@@ -188,6 +190,35 @@ type Face struct {
 	origins []FeatureRef
 	body    *Body
 	area    float64 // millimetres², exact for the v1 face set
+	// reversed is true when the OUTWARD (material-leaving) normal is the
+	// surface's geometric normal negated — a hole's cylinder wall, whose
+	// material lies outside the cylinder.
+	reversed bool
+}
+
+// NormalAt returns the face's outward normal at p — a computed direction, so
+// it is a measurement (core §6.1): Exact with a zero dimensionless bound for
+// the analytic v1 faces. A point that gives the surface no direction — a
+// cylinder's own axis — is ErrDegenerate.
+func (f *Face) NormalAt(p r3.Vec) (VecMeasurement, error) {
+	sign := 1.0
+	if f.reversed {
+		sign = -1
+	}
+	switch s := f.surface.(type) {
+	case Plane:
+		return VecMeasurement{Value: s.Frame.N().Scale(sign), Exactness: Exact, Bound: units.Scalar(0)}, nil
+	case Cylinder:
+		rel := p.Sub(s.Origin)
+		radial := rel.Sub(s.Axis.Scale(rel.Dot(s.Axis)))
+		dir, ok := radial.Normalize()
+		if !ok {
+			return VecMeasurement{}, fmt.Errorf(`%w: a point on the cylinder axis has no normal`, ErrDegenerate)
+		}
+		return VecMeasurement{Value: dir.Scale(sign), Exactness: Exact, Bound: units.Scalar(0)}, nil
+	default:
+		return VecMeasurement{}, fmt.Errorf(`%w: this evaluator computes normals for its own analytic faces only`, ErrUnsupported)
+	}
 }
 
 // Surface returns the face's tagged geometry.

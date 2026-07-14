@@ -51,6 +51,9 @@ func (d *Document) Extrude(s *sketch.Sketch, p *sketch.Profile, e Extent, opts .
 	if err != nil {
 		return nil, err
 	}
+	if err := falsifyRecordedArea(profile, p.Area); err != nil {
+		return nil, err
+	}
 
 	taper := units.Degrees(0)
 	for _, o := range opts {
@@ -108,6 +111,25 @@ func (d *Document) Extrude(s *sketch.Sketch, p *sketch.Profile, e Extent, opts .
 	return body, nil
 }
 
+// falsifyRecordedArea is evaluator-design §1's one live-profile read: the
+// recorded region's closed-form area is compared against sketch's own Area
+// answer, and a LARGE mismatch rejects the call — the record and the profile
+// disagree, which is a bug somewhere. A small residual proves nothing and
+// admits nothing; the check can only reject, the same one-sided shape as the
+// seam's range falsifier.
+func falsifyRecordedArea(profile ProfileRecord, sketchArea float64) error {
+	ig, err := profile.integrals()
+	if err != nil {
+		return err
+	}
+	scale := math.Max(1, math.Abs(sketchArea))
+	if math.Abs(ig.area-sketchArea) > 1e-9*scale {
+		return fmt.Errorf(`%w: the recorded boundary's area %v does not reproduce sketch's %v; report upstream as a bug`,
+			ErrUnrecordableProfile, ig.area, sketchArea)
+	}
+	return nil
+}
+
 // resolveLinearExtent turns a linear extent into the signed sweep interval
 // [z0, z1] along the plane normal (docs/evaluator-design.md §5). Magnitudes
 // are validated per core §8.1/§12; a zero-thickness sweep is ErrDegenerate;
@@ -123,10 +145,15 @@ func resolveLinearExtent(e Extent) (float64, float64, error) {
 		if m == 0 {
 			return 0, 0, fmt.Errorf(`%w: a zero-distance extent sweeps no solid`, ErrDegenerate)
 		}
-		if e.Dir == Against {
+		// An unknown Direction is malformed input, never silently Along.
+		switch e.Dir {
+		case Along:
+			return 0, m, nil
+		case Against:
 			return -m, 0, nil
+		default:
+			return 0, 0, fmt.Errorf(`%w: unknown direction %d`, ErrDegenerate, int(e.Dir))
 		}
-		return 0, m, nil
 	case Symmetric:
 		m, err := magnitudeIn(e.D, units.Length, units.Millimeter, "the symmetric distance")
 		if err != nil {
@@ -154,7 +181,12 @@ func resolveLinearExtent(e Extent) (float64, float64, error) {
 		}
 		return -against, along, nil
 	case ThroughAll:
-		return 0, 0, fmt.Errorf(`%w: through-all extents land with the body-relative stops in increment 2`, ErrUnsupported)
+		switch e.Dir {
+		case Along, Against:
+			return 0, 0, fmt.Errorf(`%w: through-all extents land with the body-relative stops in increment 2`, ErrUnsupported)
+		default:
+			return 0, 0, fmt.Errorf(`%w: unknown direction %d`, ErrDegenerate, int(e.Dir))
+		}
 	case nil:
 		return 0, 0, fmt.Errorf(`%w: a nil extent sweeps nothing`, ErrDegenerate)
 	default:
@@ -228,11 +260,13 @@ func evalPrism(d *Document, ref StepRef, pp prismPayload) (*Body, error) {
 
 	// Topology: one shell over every loop's side faces plus the two caps.
 	var faces []*Face
-	startFrame, err := capFrame(pp, pp.z0)
+	// The start cap faces −N (its outward normal leaves the material at the
+	// bottom), so its frame swaps the in-plane axes; the end cap keeps them.
+	startFrame, err := capFrame(pp, pp.z0, true)
 	if err != nil {
 		return nil, err
 	}
-	endFrame, err := capFrame(pp, pp.z1)
+	endFrame, err := capFrame(pp, pp.z1, false)
 	if err != nil {
 		return nil, err
 	}
@@ -291,12 +325,17 @@ func evalPrism(d *Document, ref StepRef, pp prismPayload) (*Body, error) {
 	return body, nil
 }
 
-// capFrame is the plane frame of a cap at height z, under the placement.
-// The payload frame is orthonormal and the placement rigid, so the
+// capFrame is the plane frame of a cap at height z, under the placement;
+// flip swaps the in-plane axes so the frame's normal is the cap's OUTWARD
+// normal. The payload frame is orthonormal and the placement rigid, so the
 // transformed axes cannot be degenerate; NewFrame re-validates anyway and
 // the error propagates rather than being discarded.
-func capFrame(pp prismPayload, z float64) (r3.Frame, error) {
-	f, err := r3.NewFrame(pp.point(0, 0, z), pp.dir(1, 0, 0), pp.dir(0, 1, 0))
+func capFrame(pp prismPayload, z float64, flip bool) (r3.Frame, error) {
+	u, v := pp.dir(1, 0, 0), pp.dir(0, 1, 0)
+	if flip {
+		u, v = v, u
+	}
+	f, err := r3.NewFrame(pp.point(0, 0, z), u, v)
 	if err != nil {
 		return r3.Frame{}, fmt.Errorf(`%w: the placed cap frame is degenerate: %s`, ErrDegenerate, err)
 	}
@@ -450,6 +489,7 @@ func buildLoopSides(body *Body, ref StepRef, pp prismPayload, li int, loop LoopR
 		}
 		var bottomEdge, topEdge *Edge
 		var surf Surface
+		faceReversed := false
 		if w.circular {
 			axis := pp.dir(0, 0, 1)
 			center0 := pp.point(w.cU, w.cV, pp.z0)
@@ -457,6 +497,12 @@ func buildLoopSides(body *Body, ref StepRef, pp prismPayload, li int, loop LoopR
 			radius := units.Millimeters(w.radius)
 			var curve0, curve1 Curve
 			if singleClosed {
+				// A full circle's edge closes on itself: one vertex per cap
+				// edge, start == end (topology.go's Circle3 contract).
+				seam0 := &Vertex{position: pp.point(w.startU, w.startV, pp.z0), bound: units.Millimeters(0)}
+				seam1 := &Vertex{position: pp.point(w.startU, w.startV, pp.z1), bound: units.Millimeters(0)}
+				bStart, bEnd = seam0, seam0
+				tStart, tEnd = seam1, seam1
 				curve0, curve1 = Circle3{Center: center0, Axis: axis, Radius: radius}, Circle3{Center: center1, Axis: axis, Radius: radius}
 			} else {
 				curve0, curve1 = Arc3{Center: center0, Axis: axis, Radius: radius}, Arc3{Center: center1, Axis: axis, Radius: radius}
@@ -464,6 +510,9 @@ func buildLoopSides(body *Body, ref StepRef, pp prismPayload, li int, loop LoopR
 			bottomEdge = &Edge{curve: curve0, start: bStart, end: bEnd, convex: !holeLoop, length: w.length}
 			topEdge = &Edge{curve: curve1, start: tStart, end: tEnd, convex: !holeLoop, length: w.length}
 			surf = Cylinder{Origin: center0, Axis: axis, Radius: radius}
+			// A hole's wall has its material OUTSIDE the cylinder, so its
+			// outward normal is the radial direction negated.
+			faceReversed = holeLoop
 		} else {
 			bottomEdge = &Edge{curve: Line3{}, start: bStart, end: bEnd, convex: !holeLoop, length: w.length}
 			topEdge = &Edge{curve: Line3{}, start: tStart, end: tEnd, convex: !holeLoop, length: w.length}
@@ -476,10 +525,11 @@ func buildLoopSides(body *Body, ref StepRef, pp prismPayload, li int, loop LoopR
 		}
 
 		face := &Face{
-			surface: surf,
-			origins: []FeatureRef{{Step: ref, Role: fmt.Sprintf("side(%d,%d)", li, i)}},
-			body:    body,
-			area:    w.length * h,
+			surface:  surf,
+			origins:  []FeatureRef{{Step: ref, Role: fmt.Sprintf("side(%d,%d)", li, i)}},
+			body:     body,
+			area:     w.length * h,
+			reversed: faceReversed,
 		}
 		var ces []coedge
 		ces = append(ces, coedge{edge: bottomEdge, forward: true})
