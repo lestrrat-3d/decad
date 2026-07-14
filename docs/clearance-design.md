@@ -240,9 +240,14 @@ Two upgrades and one downgrade close the table:
   directions have `Gap = hypot(dz, d₂)` where `dz` is the sweep-interval
   separation (zero when the intervals overlap) and `d₂` the 2D distance
   between the profile REGIONS — a CLEARANCE result only while at least one
-  of the two is positive: `dz = 0` AND `d₂ = 0` together mean the interiors
-  share volume, which is no gap at all — the pair routes to the
-  proven-overlap handling of §7, never to an `Exact` zero `Clearance` row. That is an operational two-step: `d₂` is the
+  of the two is positive. `dz = 0` AND `d₂ = 0` together decide nothing by
+  themselves — the double zero splits on WHY `d₂` is zero: positive-area
+  interior overlap or containment of the 2D regions means the solids share
+  volume, the §7 proven-overlap path; boundary-only 2D contact (two extrudes
+  sharing a side face) leaves the interiors disjoint and routes to the §6
+  contact classification, whose certificates alone may bless the touching
+  zero; and a `d₂` the 2D tests cannot classify is undecided — `Suspect` —
+  never an `Exact` zero `Clearance` row minted from the shortcut itself. That is an operational two-step: `d₂` is the
   minimum over boundary pairs (line/arc pairwise, closed form) UNLESS the
   regions overlap or one contains the other — decided by an exact 2D
   point-in-region test on any boundary point of each — in which case `d₂` is
