@@ -28,6 +28,7 @@ func TestErrorVocabulary(t *testing.T) {
 		"ErrInvalidProfile":      decad.ErrInvalidProfile,
 		"ErrUnitKind":            decad.ErrUnitKind,
 		"ErrNotFinite":           decad.ErrNotFinite,
+		"ErrUnsupported":         decad.ErrUnsupported,
 	}
 
 	// Every sentinel is a branchable identity: the public contract is that a

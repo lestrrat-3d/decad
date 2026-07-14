@@ -57,7 +57,7 @@ index (core §3 invariant #3).
 | `Shell` | `[]*Face`, `void bool` |
 | `Face` | tagged `Surface`, `[]*Loop` (first outer), origin `FeatureRef`, back-ref to its body |
 | `Loop` | ordered `[]*coedge` (edge + sense), `outer bool` |
-| `Edge` | tagged `Curve`, `Start`/`End` `*Vertex`, the ≤2 adjacent faces, `convex bool` |
+| `Edge` | tagged `Curve`, `Start`/`End` `*Vertex`, ALL adjacent faces (exactly 2 on a closed manifold body; `Edge.Faces()` reports the actual count, which is precisely how `len != 2` surfaces non-manifold topology — core §6.1), `convex bool` |
 | `Vertex` | position (mm), the proven bound on it |
 
 Rules:
@@ -115,11 +115,15 @@ Faces, per recorded loop segment (roles in parentheses):
 Caps: one planar face per end (`capStart`/`capEnd`), the outer loop plus one
 loop per hole, holes wound opposite.
 
-Measurements (untapered, increment-1 kinds): all **Exact**, bound zero —
-`Volume = A·h` (`A` the recorded region's area per §4, `h` the extent
-length), `Centroid` the region centroid lifted `h/2` along the normal,
-`Bounds` from per-segment analytic extremes, `Area` from cap areas + side
-areas (`segment length · h`; arc length `rθ` exact). Extents: `Distance`,
+Measurements (untapered, increment-1 kinds): all **Exact**, bound zero. The
+extent resolves to a signed sweep interval `[z0, z1]` along the plane normal
+(`Along` positive; `Against`, `Symmetric` and `TwoSided` sides place `z0`/`z1`
+on their own senses), and every formula reads the interval: `Volume =
+A·(z1−z0)` (`A` the recorded region's area per §4), `Centroid` the region
+centroid lifted `(z0+z1)/2` along the normal — `h/2` only in the one-sided
+`Along` case — `Bounds` from per-segment analytic extremes swept over
+`[z0, z1]`, `Area` from cap areas + side areas (`segment length · (z1−z0)`;
+arc length `rθ` exact). Extents: `Distance`,
 `Symmetric`, `ThroughAll`-as-side, `TwoSided` of distance sides land in
 increment 1; `ToFace`/`ToFaceAngular` land with selectors (§7), stopping the
 sweep at an analytic target plane/cylinder — the stop is an intersection of
@@ -156,9 +160,13 @@ because provenance roles are stable (§3).
 ## 8. Document, recipe, and re-evaluation
 
 `Document` owns the live body set and the step list. Every feature call:
-validate live inputs (gates of core §7/§8) → append the `Step` (records +
-`StepRef` substitution for body references) → evaluate from the step (§1) →
-retire consumed bodies, register the result. `Body.Placed` transforms
+validate live inputs (gates of core §7/§8) → build the `Step` record as a
+value (records + `StepRef` substitution for body references), NOT yet
+appended → evaluate from that record (§1) → only on success, commit
+atomically: append the step, retire consumed bodies, register the result. A
+failed evaluation — `ErrUnsupported` included — leaves the recipe and the
+document untouched: a rejected operation is not intent, and a recipe holding
+it would re-reject on every re-evaluation. `Body.Placed` transforms
 analytic geometry exactly — every v1 surface variant maps to itself under an
 isometry (plane→plane, cylinder→cylinder, …), with `IsReflection` flipping
 face orientation handling. Re-evaluation (`vN`, or replay for testing) walks
