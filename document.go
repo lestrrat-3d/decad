@@ -89,6 +89,17 @@ func (d *Document) requireLive(b *Body) error {
 	return nil
 }
 
+// featurePayload is the evaluator's own record of how a body was built —
+// what Placed re-evaluates under a composed motion (docs/evaluator-design.md
+// §8). Each feature's payload carries its accumulated rigid placement and
+// rebuilds the same record under a new one.
+type featurePayload interface {
+	// transform is the accumulated rigid placement.
+	transform() r3.Transform
+	// placed re-evaluates the same record under the composed motion.
+	placed(d *Document, ref StepRef, composed r3.Transform) (*Body, error)
+}
+
 // Placed returns a new body carrying the receiver's geometry under the rigid
 // motion t, retiring the receiver (core §8). The zero transform is invalid
 // and is ErrDegenerate; the step records the motion as a TransformRecord.
@@ -111,7 +122,7 @@ func (b *Body) Placed(t r3.Transform) (*Body, error) {
 		return nil, fmt.Errorf(`%w: this evaluator cannot place a body it did not build`, ErrUnsupported)
 	}
 
-	composed, err := b.payload.xform.Then(t)
+	composed, err := b.payload.transform().Then(t)
 	if err != nil {
 		return nil, fmt.Errorf(`decad: composing the placement failed: %w`, err)
 	}
@@ -121,13 +132,7 @@ func (b *Body) Placed(t r3.Transform) (*Body, error) {
 		Placement: rec,
 	}
 	ref := d.nextStepRef()
-	placed, err := evalPrism(d, ref, prismPayload{
-		profile: b.payload.profile,
-		frame:   b.payload.frame,
-		z0:      b.payload.z0,
-		z1:      b.payload.z1,
-		xform:   composed,
-	})
+	placed, err := b.payload.placed(d, ref, composed)
 	if err != nil {
 		return nil, err
 	}

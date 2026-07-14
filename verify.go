@@ -450,7 +450,15 @@ func auditBoundary(b *Body) bool {
 	for _, f := range faces {
 		loops := f.Loops()
 		if len(loops) == 0 {
-			return false
+			// A closed surface of revolution bounds a solid with no edges
+			// at all — a full sphere or a full torus needs no boundary
+			// loop. Any other loop-less face is a defect.
+			switch f.Surface().Kind() {
+			case KindSphere, KindTorus:
+				continue
+			default:
+				return false
+			}
 		}
 		for _, l := range loops {
 			if len(l.Edges()) == 0 {
