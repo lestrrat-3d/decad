@@ -228,9 +228,29 @@ type jsonStep struct {
 // zeroVec reports whether v is the zero vector.
 func zeroVec(v r3.Vec) bool { return v == r3.Vec{} }
 
+// validateExtentKeying enforces the core §6.2 one-of contract on both wire
+// directions: at most one of Extent and Angular is non-nil, and each is
+// keyed to its op — Extent to extrude, Angular to revolve. A step violating
+// it names no recordable intent, so it neither encodes nor decodes.
+func validateExtentKeying(s Step) error {
+	if s.Extent != nil && s.Angular != nil {
+		return fmt.Errorf(`decad: a step carries at most one of extent and angular`)
+	}
+	if s.Extent != nil && s.Op != OpExtrude {
+		return fmt.Errorf(`decad: a linear extent is keyed to the extrude op, got %q`, s.Op)
+	}
+	if s.Angular != nil && s.Op != OpRevolve {
+		return fmt.Errorf(`decad: an angular extent is keyed to the revolve op, got %q`, s.Op)
+	}
+	return nil
+}
+
 // MarshalJSON encodes the step with every absent field omitted: a decoded
 // step is the recorded one, field for field.
 func (s Step) MarshalJSON() ([]byte, error) {
+	if err := validateExtentKeying(s); err != nil {
+		return nil, err
+	}
 	op := s.Op
 	out := jsonStep{Op: &op, Inputs: s.Inputs, Values: s.Values}
 	if len(s.Profile.Outer.Segments) > 0 || len(s.Profile.Holes) > 0 {
@@ -324,6 +344,9 @@ func (s *Step) UnmarshalJSON(data []byte) error {
 			return err
 		}
 		out.Opts = o
+	}
+	if err := validateExtentKeying(out); err != nil {
+		return err
 	}
 	*s = out
 	return nil

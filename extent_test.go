@@ -104,3 +104,39 @@ func TestAngularExtentPointerForms(t *testing.T) {
 		require.ErrorIs(t, err, decad.ErrDegenerate, `a nil pointer inside %T is ErrDegenerate`, a)
 	}
 }
+
+func TestStepExtentKeying(t *testing.T) {
+	// The core §6.2 one-of contract: at most one of extent and angular,
+	// each keyed to its op — enforced on both wire directions.
+	t.Run("both extents rejected on marshal", func(t *testing.T) {
+		_, err := json.Marshal(decad.Step{
+			Op:      decad.OpExtrude,
+			Extent:  decad.Distance{D: units.Millimeters(5), Dir: decad.Along},
+			Angular: decad.FullRevolution{},
+		})
+		require.Error(t, err)
+	})
+	t.Run("angular on a non-revolve op rejected on marshal", func(t *testing.T) {
+		_, err := json.Marshal(decad.Step{Op: decad.OpExtrude, Angular: decad.FullRevolution{}})
+		require.Error(t, err)
+	})
+	t.Run("linear on a non-extrude op rejected on marshal", func(t *testing.T) {
+		_, err := json.Marshal(decad.Step{Op: decad.OpRevolve, Extent: decad.Distance{D: units.Millimeters(5), Dir: decad.Along}})
+		require.Error(t, err)
+	})
+	t.Run("both extents rejected on unmarshal", func(t *testing.T) {
+		var s decad.Step
+		err := json.Unmarshal([]byte(`{"op":"extrude","extent":{"kind":"distance","d":"5 mm","dir":"along"},"angular":{"kind":"full_revolution"}}`), &s)
+		require.Error(t, err)
+	})
+	t.Run("angular on a non-revolve op rejected on unmarshal", func(t *testing.T) {
+		var s decad.Step
+		err := json.Unmarshal([]byte(`{"op":"extrude","angular":{"kind":"full_revolution"}}`), &s)
+		require.Error(t, err)
+	})
+	t.Run("linear on a non-extrude op rejected on unmarshal", func(t *testing.T) {
+		var s decad.Step
+		err := json.Unmarshal([]byte(`{"op":"revolve","extent":{"kind":"distance","d":"5 mm","dir":"along"}}`), &s)
+		require.Error(t, err)
+	})
+}
