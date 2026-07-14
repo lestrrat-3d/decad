@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
 
@@ -15,35 +16,49 @@ import (
 // free-form kinds until their evaluator increments land.
 
 // Area returns the recorded region's net area — the outer loop minus its
-// holes — as a quantity of Kind Area (mm²). It is exact: each boundary
-// segment contributes its closed-form Green's-theorem integral in walk order,
-// so a hole's clockwise walk subtracts without a special case.
+// holes — as a [Measurement] of Kind Area (mm²): a computed quantity carries
+// its Exactness and Bound (docs/api-design.md §6). The closed forms here are
+// exact, so the measurement reads Exact with a zero bound; each boundary
+// segment contributes its Green's-theorem integral in walk order, so a hole's
+// clockwise walk subtracts without a special case.
 //
 // A region whose boundary contains a free-form segment kind (ellipse,
 // elliptical arc, conic, spline, closed spline, fit spline, NURBS) is
 // [ErrUnsupported] until that kind's evaluator increment lands
 // (docs/evaluator-design.md §11) — never approximated.
-func (r ProfileRecord) Area() (units.Value, error) {
+func (r ProfileRecord) Area() (Measurement, error) {
 	ig, err := r.integrals()
 	if err != nil {
-		return units.Value{}, err
+		return Measurement{}, err
 	}
-	return units.SquareMillimeters(ig.area), nil
+	return Measurement{
+		Value:     units.SquareMillimeters(ig.area),
+		Exactness: Exact,
+		Bound:     units.SquareMillimeters(0),
+	}, nil
 }
 
-// Centroid returns the recorded region's centroid in plane-local (u, v)
-// millimetres — the docs/api-design.md §5.2 carve-out — from the region's
-// exact first moments. A region whose net area is zero has no centroid and
-// is [ErrDegenerate].
-func (r ProfileRecord) Centroid() (Point2, error) {
+// Centroid returns the recorded region's centroid from its exact first
+// moments, as a [VecMeasurement] — a computed coordinate is a measurement
+// (docs/api-design.md §6). The Value is PLANE-LOCAL: (u, v, 0) in the
+// region's own plane coordinates, millimetres (§5.2), not a world position —
+// lift it through the profile's PlaneRecord to place it in space. The closed
+// forms are exact, so it reads Exact with a zero bound.
+//
+// A region whose net area is zero has no centroid and is [ErrDegenerate].
+func (r ProfileRecord) Centroid() (VecMeasurement, error) {
 	ig, err := r.integrals()
 	if err != nil {
-		return Point2{}, err
+		return VecMeasurement{}, err
 	}
 	if ig.area == 0 {
-		return Point2{}, fmt.Errorf(`%w: a region with zero net area has no centroid`, ErrDegenerate)
+		return VecMeasurement{}, fmt.Errorf(`%w: a region with zero net area has no centroid`, ErrDegenerate)
 	}
-	return Point2{U: ig.mu / ig.area, V: ig.mv / ig.area}, nil
+	return VecMeasurement{
+		Value:     r3.NewVec(ig.mu/ig.area, ig.mv/ig.area, 0),
+		Exactness: Exact,
+		Bound:     units.Millimeters(0),
+	}, nil
 }
 
 // regionIntegrals accumulates the boundary integrals of one region: the net
@@ -93,6 +108,13 @@ func (ig *regionIntegrals) add(seg CurveSegment) error {
 		r, err := seg.Radius.In(units.Millimeter)
 		if err != nil {
 			return fmt.Errorf(`decad: a circle segment's radius is not a length: %w`, err)
+		}
+		// The record carries the walk twice — the range order, and CCW —
+		// and the two must agree (a reversed walk swaps the range AND flips
+		// CCW, seam §2). A record that contradicts itself is malformed, not
+		// a judgement call.
+		if seg.CCW != (seg.TStart < seg.TEnd) {
+			return fmt.Errorf(`%w: a circle segment's CCW flag contradicts its range order`, ErrDegenerate)
 		}
 		// The arrangement's normalized t is the angle 2π·t from +u
 		// (geom.BoundaryEdge); the recorded range order is the walk.

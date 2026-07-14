@@ -38,12 +38,16 @@ func TestRegionAreaAndCentroidRectangle(t *testing.T) {
 
 	area, err := rec.Area()
 	require.NoError(t, err)
-	require.True(t, area.Equal(units.SquareMillimeters(6000), 1e-9), `a 100×60 plate is 6000 mm², got %s`, area)
+	require.Equal(t, decad.Exact, area.Exactness, `closed-form area is exact`)
+	require.Zero(t, area.Bound.Mag(), `an exact measurement carries a zero bound`)
+	require.True(t, area.Value.Equal(units.SquareMillimeters(6000), 1e-9), `a 100×60 plate is 6000 mm², got %s`, area.Value)
 
 	c, err := rec.Centroid()
 	require.NoError(t, err)
-	require.InDelta(t, 60.0, c.U, 1e-9)
-	require.InDelta(t, 50.0, c.V, 1e-9)
+	require.Equal(t, decad.Exact, c.Exactness)
+	require.InDelta(t, 60.0, c.Value.X, 1e-9)
+	require.InDelta(t, 50.0, c.Value.Y, 1e-9)
+	require.Zero(t, c.Value.Z, `the centroid is plane-local: (u, v, 0)`)
 }
 
 func TestRegionAreaAndCentroidWithHole(t *testing.T) {
@@ -61,14 +65,14 @@ func TestRegionAreaAndCentroidWithHole(t *testing.T) {
 	wantArea := 6000 - hole
 	area, err := rec.Area()
 	require.NoError(t, err)
-	got, err := area.In(units.SquareMillimeter)
+	got, err := area.Value.In(units.SquareMillimeter)
 	require.NoError(t, err)
 	require.InDelta(t, wantArea, got, 1e-9, `net area subtracts the hole exactly`)
 
 	c, err := rec.Centroid()
 	require.NoError(t, err)
-	require.InDelta(t, (6000*50-hole*70)/wantArea, c.U, 1e-9, `the centroid shifts away from the off-center hole`)
-	require.InDelta(t, 30.0, c.V, 1e-9)
+	require.InDelta(t, (6000*50-hole*70)/wantArea, c.Value.X, 1e-9, `the centroid shifts away from the off-center hole`)
+	require.InDelta(t, 30.0, c.Value.Y, 1e-9)
 }
 
 func TestRegionAreaWholeCircle(t *testing.T) {
@@ -83,14 +87,14 @@ func TestRegionAreaWholeCircle(t *testing.T) {
 
 	area, err := rec.Area()
 	require.NoError(t, err)
-	got, err := area.In(units.SquareMillimeter)
+	got, err := area.Value.In(units.SquareMillimeter)
 	require.NoError(t, err)
 	require.InDelta(t, math.Pi*49, got, 1e-9)
 
 	c, err := rec.Centroid()
 	require.NoError(t, err)
-	require.InDelta(t, 5.0, c.U, 1e-9)
-	require.InDelta(t, -3.0, c.V, 1e-9)
+	require.InDelta(t, 5.0, c.Value.X, 1e-9)
+	require.InDelta(t, -3.0, c.Value.Y, 1e-9)
 }
 
 func TestRegionAreaMatchesSketchOnCertifiedFragments(t *testing.T) {
@@ -116,7 +120,7 @@ func TestRegionAreaMatchesSketchOnCertifiedFragments(t *testing.T) {
 		require.NoError(t, err)
 		area, err := rec.Area()
 		require.NoError(t, err)
-		got, err := area.In(units.SquareMillimeter)
+		got, err := area.Value.In(units.SquareMillimeter)
 		require.NoError(t, err)
 		require.InDelta(t, p.Area, got, 1e-9, `decad's closed form should reproduce sketch's exact area`)
 		checked++
@@ -144,7 +148,7 @@ func TestRegionMomentsRejects(t *testing.T) {
 	var empty decad.ProfileRecord
 	area, err := empty.Area()
 	require.NoError(t, err)
-	require.Zero(t, area.Mag())
+	require.Zero(t, area.Value.Mag())
 	_, err = empty.Centroid()
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 }
@@ -160,7 +164,7 @@ func TestRegionMomentsPointerVariants(t *testing.T) {
 	}}}
 	area, err := square.Area()
 	require.NoError(t, err)
-	require.True(t, area.Equal(units.SquareMillimeters(16), 1e-12), `pointer segments integrate like values, got %s`, area)
+	require.True(t, area.Value.Equal(units.SquareMillimeters(16), 1e-12), `pointer segments integrate like values, got %s`, area.Value)
 
 	bad := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{(*decad.LineSeg)(nil)}}}
 	_, err = bad.Area()
