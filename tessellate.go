@@ -78,7 +78,12 @@ func (b *Body) Tessellate(tol units.Value) (*Mesh, error) {
 	if b.payload == nil {
 		return nil, fmt.Errorf(`%w: this evaluator cannot tessellate a body it did not build`, ErrUnsupported)
 	}
-	pp := *b.payload
+	pp, ok := b.payload.(prismPayload)
+	if !ok {
+		// Chording is per payload kind; the revolve surfaces are staged —
+		// explicit, never a wrong mesh (docs/evaluator-design.md §11).
+		return nil, fmt.Errorf(`%w: this evaluator tessellates prism bodies only`, ErrUnsupported)
+	}
 
 	// Facets remember their source face (docs/evaluator-design.md §9); the
 	// provenance roles are how the payload's walks name the faces evalPrism

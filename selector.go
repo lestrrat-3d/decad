@@ -3,6 +3,7 @@ package decad
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"slices"
 
 	"github.com/lestrrat-3d/r3"
@@ -21,10 +22,13 @@ import (
 // recorded content — its predicates and its cardinality assertion — and it
 // ships with its tagged codec below.
 //
-// Resolution — the filter pipeline over a live body's topology
-// (docs/evaluator-design.md §7) — lands with evaluator increment 2
-// (docs/evaluator-design.md §11); until then SelectEdges/SelectFaces are
-// staged explicitly via ErrUnsupported, never silently empty.
+// Resolution is a filter pipeline over the body's live topology
+// (docs/evaluator-design.md §7): gather (Body.Edges()/Faces()), apply each
+// predicate as a pure function of the analytic data, then enforce the
+// cardinality assertion. Matching is decided on what an entity IS — a
+// predicate that needs analytic identity an entity does not have simply does
+// not match it — and the result keeps the topology accessors' order, so a
+// recipe replay selects identically.
 
 // EdgeSelector is what an edge-consuming feature (fillet, chamfer) accepts:
 // an unresolved edge query. It embeds the sealed Selector root, so every
@@ -93,25 +97,97 @@ func Faces(preds ...FacePredicate) *FaceQuery {
 	return &FaceQuery{preds: slices.Clone(preds)}
 }
 
-// errSelectorResolutionStaged is the staged-resolution rejection: the query
-// records exactly, but no evaluator resolves it yet
-// (docs/evaluator-design.md §11 increment 2). Explicit, never silently empty.
-var errSelectorResolutionStaged = fmt.Errorf(`%w: selector resolution lands with evaluator increment 2`, ErrUnsupported)
-
-// SelectEdges resolves the query against a live body's topology: gather,
-// filter by each predicate, then enforce the cardinality assertion
-// (docs/evaluator-design.md §7). Resolution is staged: it is ErrUnsupported
-// until evaluator increment 2.
-func (q *EdgeQuery) SelectEdges(*Body) ([]*Edge, error) {
-	return nil, errSelectorResolutionStaged
+// SelectEdges resolves the query against the body's topology: gather
+// (Body.Edges(), whose order the result keeps), filter by each predicate,
+// then enforce the cardinality assertion (docs/evaluator-design.md §7). A
+// nil body has no topology to select from and is ErrDegenerate; zero matches
+// is ErrCardinality when asserted, else ErrNoMatch (core §12 precedence).
+func (q *EdgeQuery) SelectEdges(body *Body) ([]*Edge, error) {
+	if q == nil {
+		return nil, errNilSelector
+	}
+	if body == nil {
+		return nil, fmt.Errorf(`%w: a nil body has no edges to select`, ErrDegenerate)
+	}
+	// Predicates are validated up front, so a degenerate direction or a
+	// malformed length is rejected regardless of what the body holds.
+	for _, p := range q.preds {
+		if err := p.validate(); err != nil {
+			return nil, err
+		}
+	}
+	edges := body.Edges()
+	matched := make([]*Edge, 0, len(edges))
+	for _, e := range edges {
+		if !edgeMatchesAll(e, q.preds) {
+			continue
+		}
+		matched = append(matched, e)
+	}
+	if err := q.card.enforce(len(matched), "edges"); err != nil {
+		return nil, err
+	}
+	return matched, nil
 }
 
-// SelectFaces resolves the query against a live body's topology: gather,
-// filter by each predicate, then enforce the cardinality assertion
-// (docs/evaluator-design.md §7). Resolution is staged: it is ErrUnsupported
-// until evaluator increment 2.
-func (q *FaceQuery) SelectFaces(*Body) ([]*Face, error) {
-	return nil, errSelectorResolutionStaged
+// SelectFaces resolves the query against the body's topology: gather
+// (Body.Faces(), whose order the result keeps), filter by each predicate,
+// then enforce the cardinality assertion (docs/evaluator-design.md §7). A
+// nil body has no topology to select from and is ErrDegenerate; zero matches
+// is ErrCardinality when asserted, else ErrNoMatch (core §12 precedence).
+func (q *FaceQuery) SelectFaces(body *Body) ([]*Face, error) {
+	if q == nil {
+		return nil, errNilSelector
+	}
+	if body == nil {
+		return nil, fmt.Errorf(`%w: a nil body has no faces to select`, ErrDegenerate)
+	}
+	for _, p := range q.preds {
+		if err := p.validate(); err != nil {
+			return nil, err
+		}
+	}
+	faces := body.Faces()
+	matched := make([]*Face, 0, len(faces))
+	for _, f := range faces {
+		if !faceMatchesAll(f, q.preds) {
+			continue
+		}
+		matched = append(matched, f)
+	}
+	if err := q.card.enforce(len(matched), "faces"); err != nil {
+		return nil, err
+	}
+	return matched, nil
+}
+
+// enforce applies the recorded cardinality assertion to a match count: a
+// failed assertion is ErrCardinality even at zero matches, and ErrNoMatch is
+// reserved for a query that asserts nothing and matched nothing (core §12).
+func (c cardinality) enforce(n int, what string) error {
+	if c.kind != cardNone && c.n <= 0 {
+		// Exactly(0)/AtLeast(0) would let "matches nothing" read as
+		// success — the outcome core §9 makes an error — and a negative
+		// count asserts nothing at all. Both are malformed questions.
+		return fmt.Errorf(`%w: a cardinality assertion needs a positive count, got %d`, ErrDegenerate, c.n)
+	}
+	switch c.kind {
+	case cardNone:
+		if n == 0 {
+			return fmt.Errorf(`%w: the query matched no %s`, ErrNoMatch, what)
+		}
+	case cardExactly:
+		if n != c.n {
+			return fmt.Errorf(`%w: the query matched %d %s, asserted exactly %d`, ErrCardinality, n, what, c.n)
+		}
+	case cardAtLeast:
+		if n < c.n {
+			return fmt.Errorf(`%w: the query matched %d %s, asserted at least %d`, ErrCardinality, n, what, c.n)
+		}
+	default:
+		return fmt.Errorf(`%w: unknown cardinality kind %d`, ErrDegenerate, int(c.kind))
+	}
+	return nil
 }
 
 // Exactly asserts the query resolves to exactly n matches; anything else —
@@ -241,6 +317,174 @@ func FaceCreatedBy(f FeatureRef) FacePredicate {
 	return FacePredicate{kind: predKindFaceCreatedBy, ref: f}
 }
 
+// parallelEps decides "parallel": two directions are parallel when the
+// magnitude of their cross product is within this relative tolerance of zero
+// — sign-insensitive, so either sense matches.
+const parallelEps = 1e-9
+
+// parallelDirs reports whether the two nonzero directions are parallel,
+// either sense.
+func parallelDirs(a, b r3.Vec) bool {
+	la, lb := a.Len(), b.Len()
+	if la == 0 || lb == 0 {
+		return false
+	}
+	return a.Cross(b).Len() <= parallelEps*la*lb
+}
+
+// validateDirection gates a caller-supplied predicate direction at resolve:
+// a non-finite component is ErrNotFinite and the zero vector is ErrDegenerate
+// — it names no direction to compare against.
+func validateDirection(v r3.Vec, what string) error {
+	for _, c := range []float64{v.X, v.Y, v.Z} {
+		if math.IsNaN(c) || math.IsInf(c, 0) {
+			return fmt.Errorf(`%w: a %s direction component is not finite`, ErrNotFinite, what)
+		}
+	}
+	if zeroVec(v) {
+		return fmt.Errorf(`%w: a zero %s direction names no direction`, ErrDegenerate, what)
+	}
+	return nil
+}
+
+// validate gates one edge clause's recorded parameters at resolve
+// (core §9/§12): a degenerate or non-finite direction, and a non-length,
+// non-finite or negative LongerThan quantity, are rejected before any edge
+// is examined. A kind the constructors never produce is malformed input.
+func (p EdgePredicate) validate() error {
+	switch p.kind {
+	case predKindConvex, predKindConcave, predKindCircular, predKindCreatedBy:
+		return nil
+	case predKindParallelTo:
+		return validateDirection(p.dir, "parallel-to")
+	case predKindLongerThan:
+		_, err := magnitudeIn(p.length, units.Length, units.Millimeter, "the longer-than length")
+		return err
+	case "":
+		return fmt.Errorf(`%w: edge predicate names no kind; use the package constructors`, ErrDegenerate)
+	default:
+		return fmt.Errorf(`%w: unknown edge predicate kind %q`, ErrDegenerate, p.kind)
+	}
+}
+
+// validate gates one face clause's recorded parameters at resolve, the face
+// analog of EdgePredicate.validate.
+func (p FacePredicate) validate() error {
+	switch p.kind {
+	case predKindPlanar, predKindCylindrical, predKindFaceCreatedBy:
+		return nil
+	case predKindNormalTo:
+		return validateDirection(p.dir, "normal-to")
+	case "":
+		return fmt.Errorf(`%w: face predicate names no kind; use the package constructors`, ErrDegenerate)
+	default:
+		return fmt.Errorf(`%w: unknown face predicate kind %q`, ErrDegenerate, p.kind)
+	}
+}
+
+// edgeMatchesAll reports whether the edge satisfies every clause — predicates
+// compose by conjunction (core §9). Predicates were validated up front.
+func edgeMatchesAll(e *Edge, preds []EdgePredicate) bool {
+	for _, p := range preds {
+		if !p.matches(e) {
+			return false
+		}
+	}
+	return true
+}
+
+// faceMatchesAll reports whether the face satisfies every clause.
+func faceMatchesAll(f *Face, preds []FacePredicate) bool {
+	for _, p := range preds {
+		if !p.matches(f) {
+			return false
+		}
+	}
+	return true
+}
+
+// matches decides one edge clause on the analytic data the edge holds
+// (docs/evaluator-design.md §7):
+//
+//   - convex/concave read the decided IsConvex answer;
+//   - parallel_to compares a LINEAR edge's direction (start vertex toward
+//     end vertex) against the recorded vector, either sense — a curved edge
+//     has no single direction, so it does not match;
+//   - longer_than compares Edge.Length() strictly against the recorded
+//     quantity;
+//   - created_by matches provenance through the edge's adjacent faces: an
+//     edge is created by the role that created a face it bounds, so it
+//     matches when ANY adjacent face's Origins() carries the ref;
+//   - circular matches an edge whose curve is a full circle or a circular
+//     arc.
+func (p EdgePredicate) matches(e *Edge) bool {
+	switch p.kind {
+	case predKindConvex:
+		return e.convex
+	case predKindConcave:
+		return !e.convex
+	case predKindParallelTo:
+		if _, ok := e.curve.(Line3); !ok {
+			return false
+		}
+		return parallelDirs(e.end.position.Sub(e.start.position), p.dir)
+	case predKindLongerThan:
+		// validate ran magnitudeIn already, so the conversion cannot fail.
+		mm, err := p.length.In(units.Millimeter)
+		if err != nil {
+			return false
+		}
+		return e.length > mm
+	case predKindCreatedBy:
+		for _, f := range e.faces {
+			if slices.Contains(f.origins, p.ref) {
+				return true
+			}
+		}
+		return false
+	case predKindCircular:
+		switch e.curve.(type) {
+		case Circle3, Arc3:
+			return true
+		default:
+			return false
+		}
+	default:
+		return false
+	}
+}
+
+// matches decides one face clause on the analytic data the face holds
+// (docs/evaluator-design.md §7):
+//
+//   - planar/cylindrical match the Surface variant — matching is decided on
+//     what the face IS, so a face whose analytic identity is gone (Faceted)
+//     matches neither;
+//   - normal_to matches a PLANAR face whose plane normal is parallel to the
+//     recorded vector, either sense;
+//   - face_created_by matches when the face's Origins() carries the ref —
+//     a canonicalization merge unions roles, and any of them matches.
+func (p FacePredicate) matches(f *Face) bool {
+	switch p.kind {
+	case predKindPlanar:
+		_, ok := f.surface.(Plane)
+		return ok
+	case predKindCylindrical:
+		_, ok := f.surface.(Cylinder)
+		return ok
+	case predKindNormalTo:
+		pl, ok := f.surface.(Plane)
+		if !ok {
+			return false
+		}
+		return parallelDirs(pl.Frame.N(), p.dir)
+	case predKindFaceCreatedBy:
+		return slices.Contains(f.origins, p.ref)
+	default:
+		return false
+	}
+}
+
 // Selector is a closed variant set decad owns, so decad ships its codec
 // (core §6.2): tagged objects, dispatch on the tag, no fallback. The variants
 // seal in with pointer receivers, so — unlike the value-receiver sets — there
@@ -304,6 +548,9 @@ func marshalSelector(sel Selector) ([]byte, error) {
 // marshalQuery assembles the wire shape shared by the two query kinds.
 func marshalQuery(kind string, preds []json.RawMessage, card cardinality) ([]byte, error) {
 	out := jsonQuery{Kind: kind, Preds: preds}
+	if card.kind != cardNone && card.n <= 0 {
+		return nil, fmt.Errorf(`%w: a cardinality assertion needs a positive count, got %d`, ErrDegenerate, card.n)
+	}
 	switch card.kind {
 	case cardNone:
 		// no assertion recorded
@@ -352,9 +599,15 @@ func unmarshalSelector(data []byte) (Selector, error) {
 	}
 	var card cardinality
 	if raw.Exactly != nil {
+		if *raw.Exactly <= 0 {
+			return nil, fmt.Errorf(`%w: a %s query's exactly assertion needs a positive count, got %d`, ErrDegenerate, probe.Kind, *raw.Exactly)
+		}
 		card = cardinality{kind: cardExactly, n: *raw.Exactly}
 	}
 	if raw.AtLeast != nil {
+		if *raw.AtLeast <= 0 {
+			return nil, fmt.Errorf(`%w: a %s query's at_least assertion needs a positive count, got %d`, ErrDegenerate, probe.Kind, *raw.AtLeast)
+		}
 		card = cardinality{kind: cardAtLeast, n: *raw.AtLeast}
 	}
 	if probe.Kind == selKindEdges {
