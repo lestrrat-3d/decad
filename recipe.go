@@ -15,10 +15,9 @@ import (
 // ship their tagged codecs — and a Step holds only values: bodies as
 // StepRefs, the profile and plane as records, quantities as units.Value.
 //
-// The Angular and Axis fields of a revolve Step join with the Revolve
-// increment (docs/evaluator-design.md §6/§11); adding fields to Step is
-// additive, and an extrude-only recipe round-trips identically before and
-// after they land.
+// The Axis field of a revolve Step joins with the Revolve increment
+// (docs/evaluator-design.md §6/§11); adding fields to Step is additive, and
+// an extrude-only recipe round-trips identically before and after it lands.
 
 // Recipe is the exact record of intent: an ordered, immutable list of steps —
 // the model, exactly as meant. It is the library's actual deliverable
@@ -151,6 +150,9 @@ type Step struct {
 	Plane   PlaneRecord
 	// Extent is the linear extent (Extrude only; nil otherwise).
 	Extent Extent
+	// Angular is the angular extent (Revolve only; nil otherwise). At most
+	// one of Extent and Angular is non-nil, keyed to Op (core §6.2).
+	Angular AngularExtent
 	// Placement is the recorded rigid motion (Placed only; zero otherwise).
 	Placement TransformRecord
 	// Selectors are the unresolved edge/face queries (Fillet/Chamfer/Shell).
@@ -216,6 +218,7 @@ type jsonStep struct {
 	Profile   *ProfileRecord    `json:"profile,omitempty"`
 	Plane     *PlaneRecord      `json:"plane,omitempty"`
 	Extent    json.RawMessage   `json:"extent,omitempty"`
+	Angular   json.RawMessage   `json:"angular,omitempty"`
 	Placement *TransformRecord  `json:"placement,omitempty"`
 	Selectors []json.RawMessage `json:"selectors,omitempty"`
 	Opts      json.RawMessage   `json:"opts,omitempty"`
@@ -244,6 +247,13 @@ func (s Step) MarshalJSON() ([]byte, error) {
 			return nil, err
 		}
 		out.Extent = raw
+	}
+	if s.Angular != nil {
+		raw, err := marshalAngularExtent(s.Angular)
+		if err != nil {
+			return nil, err
+		}
+		out.Angular = raw
 	}
 	if !zeroVec(s.Placement.EX) || !zeroVec(s.Placement.EY) || !zeroVec(s.Placement.EZ) || !zeroVec(s.Placement.T) {
 		p := s.Placement
@@ -288,6 +298,13 @@ func (s *Step) UnmarshalJSON(data []byte) error {
 			return err
 		}
 		out.Extent = e
+	}
+	if raw.Angular != nil {
+		a, err := unmarshalAngularExtent(raw.Angular)
+		if err != nil {
+			return err
+		}
+		out.Angular = a
 	}
 	if raw.Placement != nil {
 		out.Placement = *raw.Placement
@@ -337,6 +354,11 @@ func cloneStep(s Step) Step {
 	if s.Extent != nil {
 		if e, err := normalizeExtent(s.Extent); err == nil {
 			out.Extent = e
+		}
+	}
+	if s.Angular != nil {
+		if a, err := normalizeAngularExtent(s.Angular); err == nil {
+			out.Angular = a
 		}
 	}
 	return out
