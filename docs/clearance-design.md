@@ -116,11 +116,24 @@ may widen the interval, never unsound it.
 One reduction shrinks the table before it is written: **three of the five
 surfaces are constant offsets of a spine** — a sphere is a point ⊕ its
 radius, a cylinder is a line ⊕ its radius, a torus is its spine circle ⊕ its
-minor radius — and the distance between offsets is the distance between
-spines minus the offsets (valid when positive; the carriers meet otherwise
-and the minimum falls to the boundary tiers or to §6). The feet map along the
-joining segment, spine foot to surface foot, and admission (§3) reads the
-mapped feet. A plane is its own problem, and a cone reduces to nothing — its
+minor radius — and the surface distance follows from the spine distance `d`
+in three branches, because an offset surface has an inside as well as an
+outside:
+
+- **exterior** — `d ≥ r₁ + r₂`: the gap is `d − r₁ − r₂`, the two skins
+  facing each other across free space;
+- **nested** — `d + min(r₁, r₂) ≤ max(r₁, r₂)`: one carrier lies inside the
+  other, and the gap is `max(r₁, r₂) − d − min(r₁, r₂)`, read across the
+  annular space between them. Two coaxial cylinders of radii 10 and 5 have
+  spine distance 0 and a genuine 5 mm gap — the peg-in-hole clearance, and
+  the branch a subtraction-only rule would misread as "carriers meet";
+- **otherwise** the carriers intersect or touch: no positive gap exists
+  through this reduction, and the pair falls to the boundary tiers or to §6.
+
+The branch test reads exact spine geometry, so which branch holds is itself
+a decided answer. The feet map along the joining segment — outward on the
+exterior branch, inward across the annulus on the nested branch — spine foot
+to surface foot, and admission (§3) reads the mapped feet. A plane is its own problem, and a cone reduces to nothing — its
 offset is not a cone — so cone cells are the genuinely iterative ones.
 
 The face-interior table over the shipped surface set (`CF` = closed form;
@@ -195,11 +208,13 @@ Two upgrades and one downgrade close the table:
   between the profile boundaries (zero when the regions overlap in
   projection) — line/arc pairwise, closed form. Two extrudes off one sketch
   plane land here.
-- **A torus face with `Minor ≥ Major` leaves the polynomial path.** Reachable
-  only through an axis-endpoint revolve contact, its tube self-intersects, so
-  the offset foot map is no longer faithful; those faces take the `BB` path
-  (the torus as its meridian-circle family) — a wider bound, never a wrong
-  `Exact`.
+- **A torus face with `Minor ≥ Major` leaves the polynomial path.** The
+  spine-offset foot map is faithful only while every surface point's nearest
+  spine point is unique — a `Minor ≥ Major` (spindle-branch) tube wraps the
+  axis and breaks that uniqueness, and the shipped topology can carry such a
+  trimmed patch (an arc whose radius exceeds its center's axis distance,
+  swept above the axis). Those faces take the `BB` path (the torus as its
+  meridian-circle family) — a wider bound, never a wrong `Exact`.
 
 ## 5. Intervals: witnesses, conservative bounds, refinement
 
