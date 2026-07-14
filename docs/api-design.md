@@ -1121,7 +1121,11 @@ to make that mechanical.
   `ErrUnitKind`, `ErrNotFinite` (a non-finite `units.Value` magnitude or
   `r3.Vec` component handed as a parameter — `units` construction admits a
   non-finite value and only its operations reject one, so the call must;
-  option semantics in `docs/verification-design.md`).
+  option semantics in `docs/verification-design.md`),
+  `ErrUnsupported` (the recipe records the intent exactly, but the current
+  evaluator cannot yet build it — evaluator staging is explicit and rejected
+  at the call, never silently approximated or narrowed;
+  `docs/evaluator-design.md` §2).
 - **`ErrUnitKind` covers exactly the wrong-`Kind` values.** A `units.Value` whose
   `Kind` is not the one the parameter takes: an angle where a length is wanted, and
   a `WithTolerance` value that is not `Dimensionless`

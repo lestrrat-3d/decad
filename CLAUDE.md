@@ -23,7 +23,10 @@ selectors instead of handles, and `Exactness` on every measurement. Two
 companion designs carry its deep ends: `docs/sketch-seam-design.md` (the trim
 contract and recording IR at the `sketch` seam) and
 `docs/verification-design.md` (the tolerance gate and noise floor). Read them
-before writing any public type.
+before writing any public type. `docs/evaluator-design.md` is the v1
+evaluator's own design — topology construction, mass properties, staging
+(`ErrUnsupported`), the mesh boolean, the Verify implementation; read it
+before writing evaluator/topology/feature code.
 
 ## Hard rules
 
@@ -89,6 +92,7 @@ before writing any public type.
 | `docs/api-design.md` | **The core public API contract.** Recipe/evaluator split, forward-compat invariants, feature + selector + verification surface. Points at the two companion designs. |
 | `docs/sketch-seam-design.md` | The recording contract at the `sketch` seam: trim contract (`TExact`), the `CurveSegment` recording IR, `ErrUnrecordableProfile`. |
 | `docs/verification-design.md` | How `Verify` judges every bounded result: report + statuses, `WithTolerance`, the diameter-anchored noise floor. |
+| `docs/evaluator-design.md` | The v1 evaluator: evaluate-from-the-record rule, topology model + provenance roles, mass properties on decad's own records, per-feature build tables, explicit staging via `ErrUnsupported`, the exact-predicate mesh boolean, Verify's implementation, the increment plan. |
 | `doc.go` | Package doc: scope + the layering contract. |
 | `errors.go` | The core §12 sentinel error vocabulary — one branchable identity per case an agent must branch on. |
 | `measurement.go` | The bounded-result shapes (core §5.3/§6): `Exactness`, `Measurement`, `VecMeasurement`, `Box`. |
