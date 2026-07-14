@@ -652,13 +652,24 @@ func buildLoopSides(body *Body, ref StepRef, pp prismPayload, li int, loop LoopR
 			} else {
 				curve0, curve1 = Arc3{Center: center0, Axis: edgeAxis, Radius: radius}, Arc3{Center: center1, Axis: edgeAxis, Radius: radius}
 			}
-			bottomEdge = &Edge{curve: curve0, start: bStart, end: bEnd, convex: !holeLoop, length: w.length}
-			topEdge = &Edge{curve: curve1, start: tStart, end: tEnd, convex: !holeLoop, length: w.length}
+			// The rim edges read the same WALK: a clockwise wall's material
+			// lies outside its cylinder, so the boundary turns into the metal
+			// there and the rim is concave — a hole's rim (clockwise) and a
+			// concave outer bite's (also clockwise) alike, while a
+			// counter-clockwise round keeps its convex rim. The loop's role
+			// decides nothing here.
+			capConvex := !clockwise
+			bottomEdge = &Edge{curve: curve0, start: bStart, end: bEnd, convex: capConvex, length: w.length}
+			topEdge = &Edge{curve: curve1, start: tStart, end: tEnd, convex: capConvex, length: w.length}
 			surf = Cylinder{Origin: center0, Axis: axis, Radius: radius}
 			// A clockwise-walked wall has its material OUTSIDE the cylinder,
 			// so its outward normal is the radial direction negated.
 			faceReversed = clockwise
 		} else {
+			// A straight wall has no turn of its own to disagree with the
+			// loop's: which side its material lies on is decided by the sense
+			// the whole loop is walked, and that sense IS the loop's role —
+			// the outer loop counter-clockwise, holes clockwise (moments.go).
 			bottomEdge = &Edge{curve: Line3{}, start: bStart, end: bEnd, convex: !holeLoop, length: w.length}
 			topEdge = &Edge{curve: Line3{}, start: tStart, end: tEnd, convex: !holeLoop, length: w.length}
 			mid := pp.point((w.startU+w.endU)/2, (w.startV+w.endV)/2, pp.z0)

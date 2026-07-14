@@ -1170,10 +1170,19 @@ func fullRevLoops(j0, j1 revJunction, kind wallKind) []*Loop {
 // capEdge is one boundary walk's copy in the cap plane at sweep angle φ: a
 // straight walk stays a line, a circular one an arc — or a whole circle
 // with a seam vertex, closing on itself. The cap edge sits between the cap
-// and the side face it bounds; its dihedral is a quarter turn everywhere,
-// convex on the outer boundary and concave around a hole.
+// and the side face it bounds; its dihedral is a quarter turn everywhere.
+// Which way it turns is decided by the side the wall's material lies on — a
+// CIRCULAR walk decides that by its own sense (a clockwise arc keeps the
+// material outside the sphere/torus it sweeps, exactly as wallSurface reads
+// it, so its cap edge is concave — a hole's arc and a concave bite in the
+// outer boundary alike), while a STRAIGHT walk has no sense of its own and
+// takes the loop's: outer convex, hole concave.
 func (rp revolvePayload) capEdge(b revolveBasis, w segmentWalk, closed bool, vs, ve *Vertex, phi float64, holeLoop bool) *Edge {
-	e := &Edge{convex: !holeLoop, length: w.length}
+	convex := !holeLoop
+	if w.circular {
+		convex = w.th0 < w.th1
+	}
+	e := &Edge{convex: convex, length: w.length}
 	if !w.circular {
 		e.curve = Line3{}
 		e.start, e.end = vs, ve
