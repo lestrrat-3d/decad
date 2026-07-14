@@ -159,7 +159,7 @@ sentinel follows from it and from nothing else.
 | **S7** | a rewrite whose loops **cross** — a loop crossing itself, or two loops of the section crossing each other | yes — a resolving kernel trims the pieces against each other | `ErrUnsupported` (§5) |
 | **S8** | a rewritten loop that has turned **inside out** — its signed area has changed sign | no — the modification consumed the region | `ErrDegenerate` (§5) |
 | **S9** | a rewrite whose loops do not cross but whose **nesting the audit cannot decide** (§5) | this evaluator cannot tell | `ErrUnsupported` — it declines rather than guess |
-| **S10** | an **inward** thickness at or beyond the section's **inradius** | no — the erosion is empty; the wall has eaten the part (an outward thickness has no such limit: a dilation of a non-empty region is never empty) | `ErrDegenerate` (§8) |
+| **S10** | an **inward** thickness that leaves **no cavity** — at or beyond the section's **inradius**, or, where a cap is **kept** (B5), at or beyond the sweep's **height**, which that cap's floor consumes | no — the cavity is empty; the wall has eaten the part, across the section or along the sweep. The two limits are independent, and an **outward** thickness has neither: a dilation of a non-empty region is never empty, and an outward floor *adds* height below the kept cap instead of eating it. A **both-caps** shell keeps no cap, so it grows no floor and its cavity runs the whole sweep: only the inradius limit can fire on B2/B4 | `ErrDegenerate` (§8) |
 | **S11** | a shell whose **exact offset changes the section's feature set** — a loop merged, split or dropped (a slot or a gap narrower than `2t` inward; a hole narrower than `2t` outward), or a **segment** dropped (a circular segment with the material inside it and `R ≤ t` inward: its offset radius `R − t` reaches zero or goes negative, the arc vanishes and its neighbours miter) | yes | `ErrUnsupported` — this evaluator's offset is per-feature and topology-preserving; resolving either needs a trimmed-offset kernel it does not have (§8) |
 | **S12** | a **both-caps** shell of a **holed** section — the wall is one band around the outer loop plus one band lining each hole: `1 + k` lumps (B4) | yes | `ErrUnsupported` — a `prismPayload` holds one region, and this evaluator has no multi-lump payload (§9, §14) |
 | **S13** | a **zero radius** or a **zero distance** — a body identical to the one the caller already holds | it exists, and it is the receiver: a question with one answer and no content, exactly as `Verify`'s zero tool is (verification §2) | `ErrDegenerate` |
@@ -182,13 +182,13 @@ the same for every op:
 |---|---|---|
 | **1 — the pre-gates** | is this a call at all? Decided before any geometry | S17 (a live receiver), S15 (a magnitude of the right `Kind`, finite and non-negative), S13 / S14 (a non-zero one), S16 (a selector that matches) |
 | **2 — the receiver and its targets** | is this body one a modify op takes, and is what the query named a thing it can act on? | S3 (Table R's payload class), then S1 (every selected edge is lateral) / S2 (every removed face is a cap) |
-| **3 — the construction's own gates** | does the rewrite the caller asked for exist, feature by feature? | fillet / chamfer: S4 (there is a corner), then S5 (a blend of that radius exists — fillet only). Shell: S10 (the erosion is non-empty — inward only), then S11 (no feature the offset would drop) |
+| **3 — the construction's own gates** | does the rewrite the caller asked for exist, feature by feature? | fillet / chamfer: S4 (there is a corner), then S5 (a blend of that radius exists — fillet only). Shell: S10 (the cavity is non-empty — inward only: the eroded section, and the height a kept cap's floor leaves), then S11 (no feature the offset would drop) |
 | **4 — the §5 audit of the rewritten profile** | do the pieces bound a simple, correctly nested region? | S8 (orientation — the existence question, so a consumed region never reads `ErrUnsupported`), then S6 (no walk consumed by its own corners — an offset mints none, §8), then S7 (no crossing; for a **shell** a crossing is S11, §8), then S9 (nesting, which is decidable only once no two loops cross) |
 | **5 — what the result can be held as** | the region is proven; can a payload hold it? | S12 (a both-caps shell of a holed section is `1 + k` lumps) |
 
 Each stage needs the one before it, and that is what fixes the order rather than
 taste: there is no cutback to measure until the blend centre exists (S5), no
-offset loop to orient until the erosion exists (S10) and keeps its features
+offset loop to orient until the cavity exists (S10) and keeps its features
 (S11), and no lump count to take until the offset bounds a proven region. **S12
 is therefore last** — an inward both-caps shell of a holed section at or beyond
 the inradius is S10, and one whose offset merges two loops is S11; neither
@@ -341,27 +341,27 @@ keeps its orientation. The result goes through the §5 audit and then through
 
 Its roles are B1's.
 
-**The prism build needs two corrections, and the fillet depends on them — it
-does not introduce them.** Two readings in the prism build are taken from the
-loop's **role** (an outer loop, or a hole) where they must be taken from the
-**walk's own sense**:
+**The prism build reads the walk, and the fillet depends on that — it does not
+introduce it.** Two readings there are taken from the **walk's own sense**, never
+from the loop's **role** (an outer loop, or a hole):
 
 - a circular wall's **face orientation** — a circular walk that runs clockwise
   in the plane frame has its material *outside* the cylinder, so the face is
   reversed; counter-clockwise, inside, and it is not;
-- a lateral edge's **`Edge.IsConvex`** — which is exactly what `Convex()` /
-  `Concave()` selection reads (core §9), so the proxy does not merely mis-orient
-  a normal, it mis-answers the query a caller filters edges with.
+- **`Edge.IsConvex`**, the walked-boundary convexity a `Convex()` / `Concave()`
+  query filters on (core §9) — a **lateral** edge, where two walls meet, reads
+  the turn the walk makes there; a circular wall's **rim** edges read that wall's
+  own sense, so a clockwise round is concave whatever loop carries it.
 
-The role proxy is wrong for both wherever an **outer loop carries a clockwise
-circular walk**. That is not a shape only a fillet can make: the seam records an
-arc's walk sense in the segment's own range (`TStart` > `TEnd` says the walk
-runs against the curve, `seam.go`), so a plain sketch produces one — a plate with
-a semicircular bite taken out of one edge walks that arc clockwise on its outer
-loop. Both are live defects in the prism build, fixed there, in the build's own
-change. This increment needs the walk-sense rules because a concave round is the
-first thing a fillet emits; they are its prerequisite, not its deliverable
-(§13).
+The role would be a wrong proxy for both wherever an **outer loop carries a
+clockwise circular walk**, and that is not a shape only a fillet can make: the
+seam records an arc's walk sense in the segment's own range (`TStart` > `TEnd`
+says the walk runs against the curve, `seam.go`), so a plain sketch produces one —
+a plate with a semicircular bite taken out of one edge walks that arc clockwise
+on its outer loop. The rules are therefore the prism build's own, and this
+increment inherits them rather than shipping them: a concave round — a clockwise
+circular walk on an outer loop — is the first thing a fillet emits, so the
+walk-sense rules are its prerequisite, not its deliverable (§13).
 
 **The corner problem is excluded, not fudged.** Where two blends meet at a
 shared vertex — a lateral edge's blend running into a cap edge's blend — the
@@ -469,13 +469,27 @@ exact.
 **Three gates, and they are different questions — asked in that order (§4),
 because each needs the one before it to have passed.**
 
-- **Does the body exist?** This is the inward sense's question, and the erosion
-  answers it: `P ⊖ t` is non-empty exactly when `t` is strictly less than the
-  section's **inradius** — the radius of its largest inscribed disk, which
-  `survey2d.go` already computes **exactly** as part of the wall survey. At or
-  beyond it, S10; and the reading that refuses is the same one that answers
-  `MinWallThickness`. Nothing below can be asked until this passes: there is no
-  offset section to inspect until the offset section is there.
+- **Does the body exist?** This is the inward sense's question, and the **cavity**
+  answers it. The cavity is a region swept along an interval, so it is empty when
+  either of them is — and the thickness can empty either one, which is why S10
+  carries **two independent limits**:
+  - the **section** limit: `P ⊖ t` is non-empty exactly when `t` is strictly less
+    than the section's **inradius** — the radius of its largest inscribed disk,
+    which `survey2d.go` already computes **exactly** as part of the wall survey.
+    The reading that refuses is the same one that answers `MinWallThickness`;
+  - the **height** limit: the wall behind a **kept** cap is a floor `t` thick, so
+    the cavity is swept over `[z0 + t, z1]` (B5) and is non-empty exactly when `t`
+    is strictly less than the sweep's height `h`. A wide, shallow section clears
+    the inradius at a thickness that still eats its whole depth, and no test on
+    the offset section would ever see that: `P ⊖ t` is there, and perfectly
+    valid — it is the interval under it that has gone.
+
+  Either limit, reached or passed, is S10. The **height** one cannot fire on a
+  **both-caps** shell: it keeps no cap, grows no floor, and sweeps its cavity over
+  the whole of `[z0, z1]` (B2/B4), so the section limit is the only one that
+  reaches those rows. Nothing below can be asked until this gate passes: there is
+  no offset section to inspect until the offset section is there, and no wall to
+  build around a cavity that has no room to exist.
 - **Can this evaluator build the offset?** An offset that changes the section's
   feature set is S11 — a segment the offset would drop, caught as the offset is
   constructed, and a loop it would merge or split, caught by the audit below.
@@ -527,10 +541,10 @@ inward, `P ⊕ t` outward.
 | B | Op | Removed | Sense | Section | Payload | Lumps | Faces (roles) | Refusals |
 |---|---|---|---|---|---|---|---|---|
 | **B1** | `Fillet` / `Chamfer` | — | — | any (`k ≥ 0`) | `prismPayload` over the **rewritten** section, same frame, same `[z0, z1]` | **1** | side walls `side(i,j)` over the rewritten record, two caps `capStart` / `capEnd`. The blend cylinder / bevel plane **is** one of those walls, and carries a **second** role `fillet(i,j)` / `chamfer(i,j)` naming the same `(loop, segment)` of the rewritten record | S1, S4, S5 (**a fillet only** — S5 is a condition on the two carriers' `r`-offsets, which only the blend computes; a chamfer's chord exists between any two distinct feet, §7), then the §5 audit: S8, S6, S7, S9 |
-| **B2** | `Shell` | both caps | `Inward` | hole-free | a **tube**: `prismPayload` whose section is `{Outer: P, Holes: [Q]}`, on `[z0, z1]` | **1** | outer walls `side(0,j)`, cavity walls `side(1,j)`, and the two **rim annuli** — the caps of that prism — `capStart` / `capEnd` | S10, S11, then the §5 audit: S8, S9 |
+| **B2** | `Shell` | both caps | `Inward` | hole-free | a **tube**: `prismPayload` whose section is `{Outer: P, Holes: [Q]}`, on `[z0, z1]` | **1** | outer walls `side(0,j)`, cavity walls `side(1,j)`, and the two **rim annuli** — the caps of that prism — `capStart` / `capEnd` | S10 (its **section** limit only — no cap is kept, so no floor eats the sweep), S11, then the §5 audit: S8, S9 |
 | **B3** | `Shell` | both caps | `Outward` | hole-free | a **tube**: `prismPayload` whose section is `{Outer: Q, Holes: [P]}`, on `[z0, z1]` — no cap is kept, so no material is added along the sweep | **1** | as B2 | S11, then the §5 audit: S8, S9 (no S10 — an outward thickness has no limit) |
-| **B4** | `Shell` | both caps | either | holed (`k ≥ 1`) | — | **1 + k** — a band around the outer loop, plus one band lining each hole, pairwise disjoint | — | S10 (**`Inward` only**), S11, the §5 audit's S8 and S9 — every one of them decided on the offset section, and so reached before the count is — then, and only then, **S12** |
-| **B5** | `Shell` | one cap | `Inward` | any (`k ≥ 0`) | a **cup**: `cupPayload` — the outer prism over `P` on `[z0, z1]` and the cavity prism over `Q = P ⊖ t` on `[z0 + t, z1]`. The kept cap does not move; the floor is `t` of the original material | **1** — every wall band hangs off the floor slab | outer walls `side(i,j)`, the kept cap `capStart`, the **rims** `rim(i)` — the removed cap's plane trimmed to the band between loop `i` of `P` and loop `i` of `Q`, one face per loop (`1 + k` of them) — cavity walls `shellSide(i,j)`, cavity cap `shellCap` | S10, S11, then the §5 audit: S8, S9 (no S12 — one cap is kept, and every band hangs off the floor it leaves) |
+| **B4** | `Shell` | both caps | either | holed (`k ≥ 1`) | — | **1 + k** — a band around the outer loop, plus one band lining each hole, pairwise disjoint | — | S10 (**`Inward` only**, and its **section** limit only — B2's reason), S11, the §5 audit's S8 and S9 — every one of them decided on the offset section, and so reached before the count is — then, and only then, **S12** |
+| **B5** | `Shell` | one cap | `Inward` | any (`k ≥ 0`) | a **cup**: `cupPayload` — the outer prism over `P` on `[z0, z1]` and the cavity prism over `Q = P ⊖ t` on `[z0 + t, z1]`, an interval S10's **height** limit is what proves non-empty. The kept cap does not move; the floor is `t` of the original material | **1** — every wall band hangs off the floor slab | outer walls `side(i,j)`, the kept cap `capStart`, the **rims** `rim(i)` — the removed cap's plane trimmed to the band between loop `i` of `P` and loop `i` of `Q`, one face per loop (`1 + k` of them) — cavity walls `shellSide(i,j)`, cavity cap `shellCap` | S10 (**both** its limits — this is the one row whose floor eats the sweep), S11, then the §5 audit: S8, S9 (no S12 — one cap is kept, and every band hangs off the floor it leaves) |
 | **B6** | `Shell` | one cap | `Outward` | any (`k ≥ 0`) | a **cup**: `cupPayload` — the outer prism over `Q = P ⊕ t` on `[z0 − t, z1]` and the cavity prism over `P` on `[z0, z1]`. The original solid *is* the cavity; the floor is `t` of new material below the kept cap | **1** | as B5 | S11, then the §5 audit: S8, S9 (no S10, no S12, for B3's and B5's reasons) |
 
 **The Refusals column names what a row's own geometry refuses, in the order §4
@@ -564,15 +578,23 @@ regions the mass-property engine (evaluator §4) integrates in closed form —
 `LineSeg`, `CircleSeg` and `ArcSeg` walks are exactly the kinds it already
 integrates, and the arcs a fillet and an offset add are those kinds. So every
 quantity is `Exact` with a zero `Bound`, and the verification gate passes it at
-any tolerance (verification §5). Write `h = |z1 − z0|`, `A_X` for the area of
-region `X`, and `h_c` for the cavity's own interval length:
+any tolerance (verification §5). Write `A_X` for the area of region `X`, and
+`h` for the receiver's own sweep length, the magnitude of `z1 − z0`. Every prism
+then takes **the length of its own interval** — a cup is two prisms, and they
+are not the same height:
+
+| Prism | Its interval | Its height |
+|---|---|---|
+| the receiver, and B1's / B2's / B3's single prism | `[z0, z1]` | `h` |
+| a cup's **outer** prism — B5 over `P` on `[z0, z1]`, B6 over `Q` on `[z0 − t, z1]` | its own | `h_o` = `h` inward, **`h + t`** outward — an outward floor is `t` of new material below the kept cap |
+| a cup's **cavity** prism — B5 over `Q` on `[z0 + t, z1]`, B6 over `P` on `[z0, z1]` | its own | `h_c` = **`h − t`** inward — the kept cap's floor takes `t` off it, and S10 is what proves the remainder positive — and `h` outward |
 
 | Quantity | B1 — a filleted / chamfered prism | B2 / B3 — a tube | B5 / B6 — a cup |
 |---|---|---|---|
-| `Volume` | `A · h` on the rewritten section | `(A_outer − A_cavity) · h` — the tube's section is the outer loop less its holes, which is what the engine integrates | `A_outer · h − A_cavity · h_c` — the outer prism less the cavity prism, each on its own interval |
-| `Area` | caps + Σ (segment length · h); an arc's length is `rθ`, exact | rim annuli + Σ (segment length · h) over both loops | outer walls + kept cap + the rim bands + cavity walls + cavity cap |
-| `Centroid` | the rewritten region's centroid, lifted to the interval's signed midpoint | the section's centroid (holes subtract, as the engine already does), lifted likewise | the mass-weighted difference of the two prisms' centroids |
-| `Bounds` | per-segment analytic extremes over the interval | the same | the outer prism's — the cavity is interior |
+| `Volume` | `A · h` on the rewritten section | `(A_outer − A_cavity) · h` — the tube's section is the outer loop less its holes, which is what the engine integrates, and both loops are swept over the one interval | `A_outer · h_o − A_cavity · h_c` — the outer prism less the cavity prism, **each on its own interval**: inward `A_P · h − A_Q · (h − t)`, outward `A_Q · (h + t) − A_P · h` |
+| `Area` | caps + Σ (segment length · h); an arc's length is `rθ`, exact | rim annuli + Σ (segment length · h) over both loops | Σ (outer segment length · `h_o`) + Σ (cavity segment length · `h_c`) — each wall band over the interval of the prism it belongs to — plus the kept cap (`A_outer`), the rim bands (`A_outer − A_cavity` in total: the removed cap's plane, less the opening) and the cavity cap (`A_cavity`) |
+| `Centroid` | the rewritten region's centroid, lifted to the interval's signed midpoint | the section's centroid (holes subtract, as the engine already does), lifted likewise | each region's centroid lifted to the midpoint of **its own** interval, the two combined with the cavity's mass subtracted: `(A_outer · h_o · c_outer − A_cavity · h_c · c_cavity) / (A_outer · h_o − A_cavity · h_c)` |
+| `Bounds` | per-segment analytic extremes over the interval | the same | the outer prism's — in both senses the cavity lies within it, `Q ⊂ P` on the shorter interval inward, `P ⊂ Q` on the shorter one outward |
 
 Each is a difference or a sum of quantities the engine already produces exactly;
 none is sampled, and none is fitted. The `Exactness` a modify op reports is
@@ -698,10 +720,10 @@ PR-level staging inside evaluator increment 5. Everything not yet landed is
 After PR 3, one asked question on a body this evaluator builds is still
 undecided: a cup's `MinWallThickness`, which reads `Suspect` (D1).
 
-The walk-sense corrections of §6 — a circular wall's face orientation and a
-lateral edge's `IsConvex` — are a **prerequisite**, not a deliverable: the role
-proxy mis-reads both on profiles a fillet has nothing to do with, and the fix
-belongs to the prism build. PR 1 depends on it landing; it does not carry it.
+The walk-sense rules of §6 — a circular wall's face orientation and the
+walked-boundary `Edge.IsConvex` — are a **prerequisite**, not a deliverable. They
+belong to the prism build, which reads them on profiles a fillet has nothing to
+do with; PR 1 builds on them and carries none of them.
 
 ## 14. Open questions
 
