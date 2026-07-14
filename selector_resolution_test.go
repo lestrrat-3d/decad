@@ -1,6 +1,7 @@
 package decad_test
 
 import (
+	"encoding/json"
 	"math"
 	"testing"
 
@@ -341,4 +342,24 @@ func TestSelectorPredicateParameterGates(t *testing.T) {
 		_, err = decad.Faces(decad.FacePredicate{}).SelectFaces(body)
 		require.ErrorIs(t, err, decad.ErrDegenerate)
 	})
+}
+
+func TestSelectorRejectsNonPositiveCardinality(t *testing.T) {
+	body := holePlateBody(t)
+
+	// A zero or negative assertion would let "matches nothing" read as
+	// success: rejected at resolve.
+	_, err := decad.Edges(decad.Circular()).Exactly(0).SelectEdges(body)
+	require.ErrorIs(t, err, decad.ErrDegenerate)
+	_, err = decad.Faces(decad.Planar()).AtLeast(0).SelectFaces(body)
+	require.ErrorIs(t, err, decad.ErrDegenerate)
+	_, err = decad.Edges(decad.Circular()).AtLeast(-1).SelectEdges(body)
+	require.ErrorIs(t, err, decad.ErrDegenerate)
+
+	// And on both wire directions.
+	var s decad.Step
+	err = json.Unmarshal([]byte(`{"op":"fillet","selectors":[{"kind":"edges","preds":[],"exactly":0}]}`), &s)
+	require.Error(t, err)
+	err = json.Unmarshal([]byte(`{"op":"fillet","selectors":[{"kind":"faces","preds":[],"at_least":-2}]}`), &s)
+	require.Error(t, err)
 }

@@ -165,6 +165,12 @@ func (q *FaceQuery) SelectFaces(body *Body) ([]*Face, error) {
 // failed assertion is ErrCardinality even at zero matches, and ErrNoMatch is
 // reserved for a query that asserts nothing and matched nothing (core §12).
 func (c cardinality) enforce(n int, what string) error {
+	if c.kind != cardNone && c.n <= 0 {
+		// Exactly(0)/AtLeast(0) would let "matches nothing" read as
+		// success — the outcome core §9 makes an error — and a negative
+		// count asserts nothing at all. Both are malformed questions.
+		return fmt.Errorf(`%w: a cardinality assertion needs a positive count, got %d`, ErrDegenerate, c.n)
+	}
 	switch c.kind {
 	case cardNone:
 		if n == 0 {
@@ -542,6 +548,9 @@ func marshalSelector(sel Selector) ([]byte, error) {
 // marshalQuery assembles the wire shape shared by the two query kinds.
 func marshalQuery(kind string, preds []json.RawMessage, card cardinality) ([]byte, error) {
 	out := jsonQuery{Kind: kind, Preds: preds}
+	if card.kind != cardNone && card.n <= 0 {
+		return nil, fmt.Errorf(`decad: a cardinality assertion needs a positive count, got %d`, card.n)
+	}
 	switch card.kind {
 	case cardNone:
 		// no assertion recorded
@@ -590,9 +599,15 @@ func unmarshalSelector(data []byte) (Selector, error) {
 	}
 	var card cardinality
 	if raw.Exactly != nil {
+		if *raw.Exactly <= 0 {
+			return nil, fmt.Errorf(`decad: a %s query's exactly assertion needs a positive count, got %d`, probe.Kind, *raw.Exactly)
+		}
 		card = cardinality{kind: cardExactly, n: *raw.Exactly}
 	}
 	if raw.AtLeast != nil {
+		if *raw.AtLeast <= 0 {
+			return nil, fmt.Errorf(`decad: a %s query's at_least assertion needs a positive count, got %d`, probe.Kind, *raw.AtLeast)
+		}
 		card = cardinality{kind: cardAtLeast, n: *raw.AtLeast}
 	}
 	if probe.Kind == selKindEdges {
