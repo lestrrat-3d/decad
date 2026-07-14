@@ -1170,9 +1170,11 @@ func fullRevLoops(j0, j1 revJunction, kind wallKind) []*Loop {
 // capEdge is one boundary walk's copy in the cap plane at sweep angle φ: a
 // straight walk stays a line, a circular one an arc — or a whole circle
 // with a seam vertex, closing on itself. The cap edge sits between the cap
-// and the side face it bounds; its dihedral is a quarter turn everywhere.
-// Which way it turns is decided by the side the wall's material lies on — a
-// CIRCULAR walk decides that by its own sense (a clockwise arc keeps the
+// and the side face it bounds; the material across it is a quarter-turn wedge
+// everywhere, so the material angle decides nothing — a rim reports the
+// WALKED-BOUNDARY convexity instead (topology.go, Edge.IsConvex), which is the
+// side the wall's material lies on. A CIRCULAR walk decides that by its own
+// sense (a clockwise arc keeps the
 // material outside the sphere/torus it sweeps, exactly as wallSurface reads
 // it, so its cap edge is concave — a hole's arc and a concave bite in the
 // outer boundary alike), while a STRAIGHT walk has no sense of its own and
