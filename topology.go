@@ -178,7 +178,7 @@ type Edge struct {
 	start  *Vertex
 	end    *Vertex
 	faces  []*Face
-	convex bool
+	convex bool    // the walked-boundary convexity — see IsConvex
 	length float64 // millimetres, exact for the v1 curve set
 }
 
@@ -196,8 +196,33 @@ func (e *Edge) End() *Vertex { return e.end }
 // topology is observable (core §6.1).
 func (e *Edge) Faces() []*Face { return append([]*Face(nil), e.faces...) }
 
-// IsConvex reports whether the material angle across the edge is convex — a
-// decided answer, not an approximation of one (core §6).
+// IsConvex reports the edge's convexity under decad's WALKED-BOUNDARY
+// convention — a decided answer, not an approximation of one (core §6). It is
+// the sense of the 2D profile walk that produced the edge, NOT the 3D material
+// angle across it; the two agree where two walls meet and part company at a
+// rim.
+//
+// Every profile is walked with the material on the left: the outer loop
+// counter-clockwise, every hole clockwise (moments.go). Three classes of edge
+// read that walk:
+//
+//   - A JUNCTION edge, where two walls meet, is convex when the walk turns
+//     left there — the material wedge closes to less than a half turn — and
+//     concave when it turns right. This one is also the material angle.
+//   - A RIM edge, a wall's own copy in a cap plane, takes the sense of the
+//     wall it runs along: a CIRCULAR wall by its own turn — walked
+//     counter-clockwise convex, clockwise concave — and a STRAIGHT wall, which
+//     turns not at all, by the role of the loop it belongs to: outer convex,
+//     hole concave.
+//   - The on-axis edge shared by both caps of a partial revolve is convex when
+//     the sweep is less than a half turn: there the two caps ARE the adjacent
+//     faces, and the sweep is the angle between them.
+//
+// So a HOLE's rim edges are CONCAVE, and so are the rim edges of a concave
+// round bitten out of the outer boundary — even though the material across
+// such a rim is a plain quarter-turn wedge a chamfer could take. Convexity
+// here is the walk's answer, not the wedge's: Concave() picks a hole's rim,
+// Convex() never does.
 func (e *Edge) IsConvex() bool { return e.convex }
 
 // Length returns the edge's length. Exact (zero bound) for every curve the

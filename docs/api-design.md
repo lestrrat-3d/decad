@@ -377,6 +377,20 @@ func (e *Edge) Length() (Measurement, error)
 func (e *Edge) IsConvex() bool
 ```
 
+**`Edge.IsConvex` is the WALKED-BOUNDARY convexity, not the 3D material angle
+across the edge.** Every profile is walked with the material on the left — the
+outer loop counter-clockwise, every hole clockwise — and an edge reports the
+sense of that walk. A **junction** edge, where two walls meet, is convex when the
+walk turns left there, which is also the material angle. A **rim** edge, a wall's
+copy in a cap plane, takes the sense of the wall it runs along: a circular wall
+by its own turn (counter-clockwise convex, clockwise concave), a straight wall —
+which turns not at all — by the role of its loop (outer convex, hole concave).
+The on-axis edge shared by both caps of a partial revolve is convex when the
+sweep is under a half turn. So **a hole's rim edges are concave**, as are those of
+a concave round bitten out of the outer boundary, even though the material across
+such a rim is a plain quarter-turn wedge a chamfer could take. It is a decided
+answer either way — `Concave()` selects those rims, `Convex()` never does.
+
 `Surface` and `Curve` are **sealed** interfaces (unexported method), matching the
 house idiom in `sketch.Entity` — the answer to Fusion's `core.Base`-as-anything.
 
@@ -1038,6 +1052,10 @@ func Cylindrical() FacePredicate
 func NormalTo(v r3.Vec) FacePredicate
 func FaceCreatedBy(f FeatureRef) FacePredicate // provenance, the face analog of CreatedBy
 ```
+
+`Convex()` and `Concave()` read `Edge.IsConvex` (§6.1): the walked-boundary
+convexity, not the material angle across the edge. A hole's rim edges are
+concave, so a fillet meant for them asks for `Concave()`.
 
 ```go
 body, err = body.Fillet(

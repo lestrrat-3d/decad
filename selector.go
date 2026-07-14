@@ -264,10 +264,16 @@ const (
 	predKindFaceCreatedBy = "face_created_by"
 )
 
-// Convex matches edges whose dihedral angle is convex.
+// Convex matches edges Edge.IsConvex reports convex — the walked-boundary
+// convention, not the 3D material angle across the edge. Read Edge.IsConvex
+// before selecting on it: a hole's rim edges are CONCAVE, so this predicate
+// never picks them.
 func Convex() EdgePredicate { return EdgePredicate{kind: predKindConvex} }
 
-// Concave matches edges whose dihedral angle is concave.
+// Concave matches edges Edge.IsConvex reports concave — the walked-boundary
+// convention, not the 3D material angle across the edge. This is the predicate
+// that picks a hole's rim edges, and the rim of a concave round bitten out of
+// the outer boundary.
 func Concave() EdgePredicate { return EdgePredicate{kind: predKindConcave} }
 
 // ParallelTo matches edges whose direction is parallel to v. The vector is
@@ -406,7 +412,8 @@ func faceMatchesAll(f *Face, preds []FacePredicate) bool {
 // matches decides one edge clause on the analytic data the edge holds
 // (docs/evaluator-design.md §7):
 //
-//   - convex/concave read the decided IsConvex answer;
+//   - convex/concave read the decided IsConvex answer — the walked-boundary
+//     convention, so a hole's rim edges are concave;
 //   - parallel_to compares a LINEAR edge's direction (start vertex toward
 //     end vertex) against the recorded vector, either sense — a curved edge
 //     has no single direction, so it does not match;

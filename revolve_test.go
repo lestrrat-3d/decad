@@ -1201,3 +1201,68 @@ func TestRevolveRejectsSpindleTorusArc(t *testing.T) {
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.Empty(t, doc.Recipe().Steps, `a refused revolve leaves the document untouched`)
 }
+
+func TestRevolveConcaveGrooveCapEdges(t *testing.T) {
+	// A meridian rectangle u∈[0,20], v∈[5,15] with a semicircular GROOVE of
+	// radius 3 centred at (10, 15) bitten out of its outer edge (the arc dips
+	// to (10, 12)). The outer loop walks counter-clockwise, but that arc is
+	// walked CLOCKWISE about its own centre, so the swept torus wall keeps the
+	// material OUTSIDE its tube — a hole's wall in every way but its loop's
+	// role. Its cap edges must be concave, exactly as a hole's would be.
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	corners := [][2]float64{{0, 5}, {20, 5}, {20, 15}, {13, 15}, {7, 15}, {0, 15}}
+	pts := make([]*sketch.Point, len(corners))
+	for i, c := range corners {
+		pts[i] = s.CreatePoint(c[0], c[1])
+		s.Fix(pts[i])
+	}
+	centre := s.CreatePoint(10, 15)
+	s.Fix(centre)
+	s.CreateLine(pts[0], pts[1])
+	s.CreateLine(pts[1], pts[2])
+	s.CreateLine(pts[2], pts[3])
+	s.CreateArc(centre, pts[4], pts[3]) // CCW from (7,15) to (13,15): dips to (10,12)
+	s.CreateLine(pts[4], pts[5])
+	s.CreateLine(pts[5], pts[0])
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	require.Len(t, s.Profiles(), 1)
+
+	doc := decad.New()
+	body, err := doc.Revolve(s, s.Profiles()[0], uAxis, decad.AngleExtent{A: units.Radians(math.Pi / 2), Dir: decad.Along})
+	require.NoError(t, err)
+
+	// Pappus by hand: the section is the rectangle minus the half disc, and
+	// the removed disc's centroid sits 4r/3π below the groove's centre.
+	half := math.Pi * 9 / 2
+	moment := 2000 - half*(15-4/math.Pi) // ∫ρ dA over the section
+	vol, err := body.Volume()
+	require.NoError(t, err)
+	gotVol, err := vol.Value.In(units.CubicMillimeter)
+	require.NoError(t, err)
+	require.InDelta(t, math.Pi/2*moment, gotVol, 1e-9)
+
+	// The groove's wall is the body's one torus; its CAP edges are the arcs
+	// lying in a cap plane, whose normal is perpendicular to the revolve axis
+	// — the latitude arcs run about that axis (±X) instead.
+	tori, caps := 0, 0
+	for _, f := range body.Faces() {
+		if _, ok := f.Surface().(decad.Torus); !ok {
+			continue
+		}
+		tori++
+		for _, e := range f.Edges() {
+			arc, ok := e.Curve().(decad.Arc3)
+			require.True(t, ok, `a groove wall of a partial sweep is bounded by arcs`)
+			if math.Abs(arc.Axis.Dot(r3.NewVec(1, 0, 0))) > 0.5 {
+				continue // a latitude arc about the revolve axis, not a cap edge
+			}
+			caps++
+			require.False(t, e.IsConvex(), `a clockwise-walked groove's cap edges are concave`)
+		}
+	}
+	require.Equal(t, 1, tori)
+	require.Equal(t, 2, caps, `one cap edge in each cap plane`)
+}
