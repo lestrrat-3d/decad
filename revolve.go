@@ -14,10 +14,12 @@ import (
 
 // This file is the increment-2 revolve of docs/evaluator-design.md §6: the
 // sealed Axis vocabulary of docs/api-design.md §6.2, the §6 axis-contact
-// gates, angular-extent resolution to a sweep interval, and the analytic
-// revolve evaluator — Cylinder, Cone, planar-annulus, Sphere and Torus side
-// faces per boundary segment kind, caps only on partial sweeps, and
-// Pappus-exact measurements with zero bounds.
+// gates, angular-extent resolution to a sweep interval (the body-relative
+// ToFaceAngular stop resolves through stops.go, its body recorded as a
+// StepRef in the step's Inputs — core §6.2), and the analytic revolve
+// evaluator — Cylinder, Cone, planar-annulus, Sphere and Torus side faces
+// per boundary segment kind, caps only on partial sweeps, and Pappus-exact
+// measurements with zero bounds.
 
 // Axis is what a revolve may spin about (docs/api-design.md §6.2). Sealed:
 // the variants are SketchLine, ConstructionAxis and EdgeAxis.
@@ -268,24 +270,20 @@ func (d *Document) Revolve(s *sketch.Sketch, p *sketch.Profile, axis Axis, a Ang
 	// the query (with the body as its producing StepRef — a live *Body is a
 	// handle, not a record), and the step depends on the named body.
 	evalAxis := axis
-	var inputs []StepRef
+	var axisRefs []StepRef
 	if ea, ok := axis.(EdgeAxis); ok {
 		line, ref, err := d.resolveEdgeAxis(ea)
 		if err != nil {
 			return nil, err
 		}
 		evalAxis = line
-		inputs = []StepRef{ref}
+		axisRefs = []StepRef{ref}
 		// The recorded query is deep-copied so the step never aliases the
 		// caller-owned selector (core §6.2).
 		axis = cloneAxis(EdgeAxis{Body: ref, Edge: ea.Edge})
 	}
 
 	a, err = normalizeAngularExtent(a)
-	if err != nil {
-		return nil, err
-	}
-	phi0, phi1, full, err := resolveAngularExtent(a)
 	if err != nil {
 		return nil, err
 	}
@@ -302,6 +300,12 @@ func (d *Document) Revolve(s *sketch.Sketch, p *sketch.Profile, axis Axis, a Ang
 	if err != nil {
 		return nil, err
 	}
+	// The angular extent resolves in the caller's frame — a ToFaceAngular
+	// stop needs the resolved axis, which is why the axis gates run first.
+	phi0, phi1, full, extRefs, err := d.resolveAngularExtent(a, d.angularStopCtx(frame, line, ax))
+	if err != nil {
+		return nil, err
+	}
 	if side < 0 {
 		// The axis frame was flipped to put the region on its non-negative
 		// side; a rotation by φ about the given axis is a rotation by −φ
@@ -311,10 +315,10 @@ func (d *Document) Revolve(s *sketch.Sketch, p *sketch.Profile, axis Axis, a Ang
 
 	step := Step{
 		Op:      OpRevolve,
-		Inputs:  inputs,
+		Inputs:  dedupRefs(append(extRefs, axisRefs...)),
 		Profile: profile,
 		Plane:   plane,
-		Angular: a,
+		Angular: recordAngularExtent(a),
 		Axis:    axis,
 	}
 	ref := d.nextStepRef()
@@ -399,21 +403,22 @@ const angFullEps = 1e-12
 // resolveAngularExtent turns an angular extent into the signed sweep
 // interval [phi0, phi1] about the axis, radians, Along positive
 // (docs/evaluator-design.md §6), and reports whether the sweep is a full
-// revolution. Magnitudes are validated per core §8.1/§12; a zero-angle sweep
-// is ErrDegenerate, as is one past a full turn; the body-relative stop
-// (ToFaceAngular) is not yet in the vocabulary, so future variants are
-// ErrUnsupported.
-func resolveAngularExtent(a AngularExtent) (float64, float64, bool, error) {
+// revolution, plus the StepRefs of the bodies the extent's stops resolved
+// against — in extent order, deduplicated with the axis ref by the caller
+// (core §6.2). Magnitudes are validated per core §8.1/§12; a zero-angle
+// sweep is ErrDegenerate, as is one past a full turn.
+func (d *Document) resolveAngularExtent(a AngularExtent, st angularStops) (float64, float64, bool, []StepRef, error) {
 	var phi0, phi1 float64
+	var refs []StepRef
 	full := false
 	switch a := a.(type) {
 	case AngleExtent:
 		m, err := magnitudeIn(a.A, units.Angle, units.Radian, "the extent angle")
 		if err != nil {
-			return 0, 0, false, err
+			return 0, 0, false, nil, err
 		}
 		if m == 0 {
-			return 0, 0, false, fmt.Errorf(`%w: a zero-angle extent sweeps no solid`, ErrDegenerate)
+			return 0, 0, false, nil, fmt.Errorf(`%w: a zero-angle extent sweeps no solid`, ErrDegenerate)
 		}
 		// An unknown Direction is malformed input, never silently Along.
 		switch a.Dir {
@@ -422,17 +427,17 @@ func resolveAngularExtent(a AngularExtent) (float64, float64, bool, error) {
 		case Against:
 			phi0, phi1 = -m, 0
 		default:
-			return 0, 0, false, fmt.Errorf(`%w: unknown direction %d`, ErrDegenerate, int(a.Dir))
+			return 0, 0, false, nil, fmt.Errorf(`%w: unknown direction %d`, ErrDegenerate, int(a.Dir))
 		}
 	case FullRevolution:
-		return 0, 2 * math.Pi, true, nil
+		return 0, 2 * math.Pi, true, nil, nil
 	case SymmetricAngle:
 		m, err := magnitudeIn(a.A, units.Angle, units.Radian, "the symmetric angle")
 		if err != nil {
-			return 0, 0, false, err
+			return 0, 0, false, nil, err
 		}
 		if m == 0 {
-			return 0, 0, false, fmt.Errorf(`%w: a zero-angle extent sweeps no solid`, ErrDegenerate)
+			return 0, 0, false, nil, fmt.Errorf(`%w: a zero-angle extent sweeps no solid`, ErrDegenerate)
 		}
 		half := m
 		if a.FullLength {
@@ -440,47 +445,70 @@ func resolveAngularExtent(a AngularExtent) (float64, float64, bool, error) {
 		}
 		phi0, phi1 = -half, half
 	case TwoSidedAngle:
-		along, err := resolveAngleSide(a.One, "the along side")
+		along, oneRefs, err := d.resolveAngleSide(a.One, st, 1, "the along side")
 		if err != nil {
-			return 0, 0, false, err
+			return 0, 0, false, nil, err
 		}
-		against, err := resolveAngleSide(a.Two, "the against side")
+		against, twoRefs, err := d.resolveAngleSide(a.Two, st, -1, "the against side")
 		if err != nil {
-			return 0, 0, false, err
+			return 0, 0, false, nil, err
 		}
 		if along == 0 && against == 0 {
-			return 0, 0, false, fmt.Errorf(`%w: a zero-angle extent sweeps no solid`, ErrDegenerate)
+			return 0, 0, false, nil, fmt.Errorf(`%w: a zero-angle extent sweeps no solid`, ErrDegenerate)
 		}
-		phi0, phi1 = -against, along
+		phi0, phi1 = against, along
+		refs = append(oneRefs, twoRefs...)
+	case ToFaceAngular:
+		stop, ref, err := st.resolveToFaceAngular(a, 0, "a to-face extent")
+		if err != nil {
+			return 0, 0, false, nil, err
+		}
+		refs = []StepRef{ref}
+		if stop > 0 {
+			phi0, phi1 = 0, stop
+		} else {
+			phi0, phi1 = stop, 0
+		}
 	case nil:
-		return 0, 0, false, fmt.Errorf(`%w: a nil extent sweeps nothing`, ErrDegenerate)
+		return 0, 0, false, nil, fmt.Errorf(`%w: a nil extent sweeps nothing`, ErrDegenerate)
 	default:
-		return 0, 0, false, fmt.Errorf(`%w: angular extent %T is not supported by this evaluator`, ErrUnsupported, a)
+		return 0, 0, false, nil, fmt.Errorf(`%w: angular extent %T is not supported by this evaluator`, ErrUnsupported, a)
 	}
 	total := phi1 - phi0
 	if total > 2*math.Pi+angFullEps {
-		return 0, 0, false, fmt.Errorf(`%w: a sweep past a full turn overlaps itself`, ErrDegenerate)
+		return 0, 0, false, nil, fmt.Errorf(`%w: a sweep past a full turn overlaps itself`, ErrDegenerate)
 	}
 	if total >= 2*math.Pi-angFullEps {
 		full = true
 		phi1 = phi0 + 2*math.Pi
 	}
-	return phi0, phi1, full, nil
+	return phi0, phi1, full, refs, nil
 }
 
-// resolveAngleSide resolves one side of a TwoSidedAngle to its magnitude.
-func resolveAngleSide(s SideAngular, what string) (float64, error) {
+// resolveAngleSide resolves one side of a TwoSidedAngle to its signed
+// boundary angle; travel is +1 for the along side, −1 for the against side.
+func (d *Document) resolveAngleSide(s SideAngular, st angularStops, travel float64, what string) (float64, []StepRef, error) {
 	s, err := normalizeSideAngular(s)
 	if err != nil {
-		return 0, err
+		return 0, nil, err
 	}
 	switch s := s.(type) {
 	case AngleSide:
-		return magnitudeIn(s.A, units.Angle, units.Radian, what)
+		m, err := magnitudeIn(s.A, units.Angle, units.Radian, what)
+		if err != nil {
+			return 0, nil, err
+		}
+		return travel * m, nil, nil
+	case ToFaceAngular:
+		stop, ref, err := st.resolveToFaceAngular(s, travel, what)
+		if err != nil {
+			return 0, nil, err
+		}
+		return stop, []StepRef{ref}, nil
 	case nil:
-		return 0, fmt.Errorf(`%w: a two-sided extent requires both sides`, ErrDegenerate)
+		return 0, nil, fmt.Errorf(`%w: a two-sided extent requires both sides`, ErrDegenerate)
 	default:
-		return 0, fmt.Errorf(`%w: side angular %T is not supported by this evaluator`, ErrUnsupported, s)
+		return 0, nil, fmt.Errorf(`%w: side angular %T is not supported by this evaluator`, ErrUnsupported, s)
 	}
 }
 
@@ -890,7 +918,7 @@ func evalRevolve(d *Document, ref StepRef, rp revolvePayload) (*Body, error) {
 	}
 	body.centroid = VecMeasurement{Value: rp.xform.Apply(cen), Exactness: Exact, Bound: units.Millimeters(0)}
 
-	bounds, err := revolveBounds(rp, b)
+	bounds, err := revolveBounds(rp)
 	if err != nil {
 		return nil, err
 	}
@@ -1264,34 +1292,43 @@ func walkAxisMoment(w segmentWalk, kind wallKind) float64 {
 	return w.radius * (w.cV*(hi-lo) + w.radius*(math.Cos(lo)-math.Cos(hi)))
 }
 
+// extentAlong is the revolved solid's exact extent interval along an
+// arbitrary world direction g: the swept radial factor's range over the
+// angular interval turns the extreme into a linear functional over the
+// recorded boundary in (z, ρ) — ρ ≥ 0 over the region, so the solid's
+// extreme along g is the extreme of wg·z + m·ρ with m at its own extreme,
+// and a linear functional's extreme sits on the boundary. Shared by
+// revolveBounds and the through-all stop resolution
+// (docs/evaluator-design.md §5/§6).
+func (rp revolvePayload) extentAlong(g r3.Vec) (float64, float64, error) {
+	b := rp.basis()
+	base := rp.xform.Apply(b.a3).Dot(g)
+	wg := rp.xform.ApplyDir(b.w).Dot(g)
+	mlo, mhi := sweepExtremes(rp.xform.ApplyDir(b.e0).Dot(g), rp.xform.ApplyDir(b.e1).Dot(g), rp.phi0, rp.phi1, rp.full)
+	hi, err := axisExtreme(rp, wg, mhi, true)
+	if err != nil {
+		return 0, 0, err
+	}
+	lo, err := axisExtreme(rp, wg, mlo, false)
+	if err != nil {
+		return 0, 0, err
+	}
+	return base + lo, base + hi, nil
+}
+
 // revolveBounds computes the exact axis-aligned bounds of the placed
-// revolved solid: for each world axis, the swept radial factor's range over
-// the angular interval turns the extreme into a linear functional over the
-// recorded boundary in (z, ρ) — the same directional-extreme analysis the
-// prism uses, in cylindrical coordinates (docs/evaluator-design.md §6).
-func revolveBounds(rp revolvePayload, b revolveBasis) (Box, error) {
+// revolved solid — the same directional-extreme analysis the prism uses, in
+// cylindrical coordinates (docs/evaluator-design.md §6).
+func revolveBounds(rp revolvePayload) (Box, error) {
 	axes := []r3.Vec{r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1)}
-	base := rp.xform.Apply(b.a3)
-	wD := rp.xform.ApplyDir(b.w)
-	e0D := rp.xform.ApplyDir(b.e0)
-	e1D := rp.xform.ApplyDir(b.e1)
 	var minC, maxC [3]float64
 	for i, g := range axes {
-		wg := wD.Dot(g)
-		mlo, mhi := sweepExtremes(e0D.Dot(g), e1D.Dot(g), rp.phi0, rp.phi1, rp.full)
-		// ρ ≥ 0 over the region, so the solid's extreme along g is the
-		// extreme of wg·z + m·ρ with m at its own extreme — a linear
-		// functional, so the region's extreme sits on its boundary.
-		hi, err := axisExtreme(rp, wg, mhi, true)
+		lo, hi, err := rp.extentAlong(g)
 		if err != nil {
 			return Box{}, err
 		}
-		lo, err := axisExtreme(rp, wg, mlo, false)
-		if err != nil {
-			return Box{}, err
-		}
-		minC[i] = base.Dot(g) + lo
-		maxC[i] = base.Dot(g) + hi
+		minC[i] = lo
+		maxC[i] = hi
 	}
 	return Box{
 		Min:       r3.NewVec(minC[0], minC[1], minC[2]),

@@ -297,7 +297,7 @@ func TestExtrudeRejections(t *testing.T) {
 	_, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along}, decad.WithTaper(units.Degrees(3)))
 	require.ErrorIs(t, err, decad.ErrUnsupported, `a nonzero taper is staged, loudly`)
 	_, err = doc.Extrude(s, p, decad.ThroughAll{Dir: decad.Along})
-	require.ErrorIs(t, err, decad.ErrUnsupported, `through-all lands with the body-relative stops`)
+	require.ErrorIs(t, err, decad.ErrDegenerate, `a through-all sweep with no live body in its path has no stop`)
 	_, err = doc.Extrude(s, p, decad.Distance{D: units.Millimeters(0), Dir: decad.Along})
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 	_, err = doc.Extrude(s, p, decad.Distance{D: units.Millimeters(-1), Dir: decad.Along})
