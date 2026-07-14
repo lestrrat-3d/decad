@@ -237,23 +237,42 @@ func unmarshalExtent(data []byte) (Extent, error) {
 	}
 	switch probe.Kind {
 	case extKindDistance:
-		var e Distance
-		if err := json.Unmarshal(data, &e); err != nil {
+		// Wire structs with pointer fields: an absent magnitude or sense is
+		// malformed input, never silently a zero distance or Along.
+		var raw struct {
+			D   *units.Value `json:"d"`
+			Dir *Direction   `json:"dir"`
+		}
+		if err := json.Unmarshal(data, &raw); err != nil {
 			return nil, fmt.Errorf(`decad: failed to decode distance extent: %w`, err)
 		}
-		return e, nil
+		if raw.D == nil || raw.Dir == nil {
+			return nil, fmt.Errorf(`decad: a distance extent requires both d and dir`)
+		}
+		return Distance{D: *raw.D, Dir: *raw.Dir}, nil
 	case extKindThroughAll:
-		var e ThroughAll
-		if err := json.Unmarshal(data, &e); err != nil {
+		var raw struct {
+			Dir *Direction `json:"dir"`
+		}
+		if err := json.Unmarshal(data, &raw); err != nil {
 			return nil, fmt.Errorf(`decad: failed to decode through-all extent: %w`, err)
 		}
-		return e, nil
+		if raw.Dir == nil {
+			return nil, fmt.Errorf(`decad: a through-all extent requires dir`)
+		}
+		return ThroughAll{Dir: *raw.Dir}, nil
 	case extKindSymmetric:
-		var e Symmetric
-		if err := json.Unmarshal(data, &e); err != nil {
+		var raw struct {
+			D          *units.Value `json:"d"`
+			FullLength bool         `json:"full_length"`
+		}
+		if err := json.Unmarshal(data, &raw); err != nil {
 			return nil, fmt.Errorf(`decad: failed to decode symmetric extent: %w`, err)
 		}
-		return e, nil
+		if raw.D == nil {
+			return nil, fmt.Errorf(`decad: a symmetric extent requires d`)
+		}
+		return Symmetric{D: *raw.D, FullLength: raw.FullLength}, nil
 	case extKindTwoSided:
 		var raw struct {
 			One json.RawMessage `json:"one"`
@@ -304,11 +323,16 @@ func unmarshalSideExtent(data []byte) (SideExtent, error) {
 	}
 	switch probe.Kind {
 	case extKindDistanceSide:
-		var s DistanceSide
-		if err := json.Unmarshal(data, &s); err != nil {
+		var raw struct {
+			D *units.Value `json:"d"`
+		}
+		if err := json.Unmarshal(data, &raw); err != nil {
 			return nil, fmt.Errorf(`decad: failed to decode distance side: %w`, err)
 		}
-		return s, nil
+		if raw.D == nil {
+			return nil, fmt.Errorf(`decad: a distance side requires d`)
+		}
+		return DistanceSide{D: *raw.D}, nil
 	case extKindThroughAllSide:
 		return ThroughAllSide{}, nil
 	case "":

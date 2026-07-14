@@ -87,6 +87,18 @@ func TestExtentCodec(t *testing.T) {
 	var step decad.Step
 	require.Error(t, json.Unmarshal([]byte(`{"op":"extrude","extent":{"kind":"helical"}}`), &step))
 	require.Error(t, json.Unmarshal([]byte(`{"op":"extrude","extent":{"d":"3 mm"}}`), &step))
+
+	// Absent fields are malformed, never silently a zero value or Along.
+	require.Error(t, json.Unmarshal([]byte(`{"op":"extrude","extent":{"kind":"distance","d":"3 mm"}}`), &step),
+		`a distance extent with no dir is malformed`)
+	require.Error(t, json.Unmarshal([]byte(`{"op":"extrude","extent":{"kind":"distance","dir":"along"}}`), &step),
+		`a distance extent with no d is malformed`)
+	require.Error(t, json.Unmarshal([]byte(`{"op":"extrude","extent":{"kind":"through_all"}}`), &step),
+		`a through-all extent with no dir is malformed`)
+	require.Error(t, json.Unmarshal([]byte(`{"op":"extrude","extent":{"kind":"symmetric"}}`), &step),
+		`a symmetric extent with no d is malformed`)
+	require.Error(t, json.Unmarshal([]byte(`{"op":"extrude","extent":{"kind":"two_sided","one":{"kind":"distance_side"},"two":{"kind":"through_all_side"}}}`), &step),
+		`a distance side with no d is malformed`)
 	require.Error(t, json.Unmarshal([]byte(`{"op":"extrude","extent":{"kind":"two_sided","one":{"kind":"distance"},"two":{"kind":"distance_side"}}}`), &step),
 		`a standalone extent is not a side: the side codec rejects its tag`)
 }
