@@ -69,8 +69,11 @@ the shell (every shipped face can produce one — a vertex, a seam point, or
 for the loop-less closed faces a point off stored data: a sphere's center
 plus its radius along a fixed unit direction, a torus's center plus
 `Major + Minor` along a fixed direction perpendicular to its axis), cast
-along a ray, crossings counted closed-form
-against every face of the other body, trim membership included. A cast is
+along a ray, crossings counted against every face of the other body, trim
+membership included — closed-form for plane, sphere, cylinder and cone
+crossings, while a torus crossing is a quartic and takes the same certified
+Sturm isolation discipline as the P4/P8 table cells: a root count is a proof
+only when the isolation certifies it. A cast is
 admissible only when every crossing is certified transversal and interior to
 its face; a cast that grazes an edge, a vertex or a tangency retries the next
 direction on a fixed ladder — deterministic, never random, so a replay
