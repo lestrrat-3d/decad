@@ -141,9 +141,14 @@ outside:
   about the WHOLE inner spine, so this branch reads `d_sup`, the supremum of
   inner-spine-to-outer-spine distance, never the minimum: nested holds when
   `d_sup + r_in ≤ r_out`, and the gap is `r_out − d_sup − r_in`, read across
-  the annular space. For the configurations this table sends here —
-  concentric spheres, parallel cylinder axes, coaxial torus spines — the
-  spine distance is constant, so `d_sup = d` and the branch is closed form:
+  the annular space. `d_sup` is certified per spine pair: an inner POINT spine (a sphere
+  inside anything) has `d_sup = d` trivially — the supremum over one point
+  is that point's distance; concentric spheres, parallel cylinder axes and
+  coaxial torus spines have constant spine distance, so `d_sup = d` there
+  too; any other nested configuration — a non-coaxial circle spine inside
+  another curved carrier — has no constant supremum, and the pair routes to
+  the `BB` path or stays undecided rather than borrowing this branch. In
+  the certified cases the branch is closed form:
   two coaxial cylinders of radii 10 and 5 have `d = 0` and a genuine 5 mm
   gap, the peg-in-hole clearance a subtraction-only rule would misread as
   "carriers meet". A minimum-distance test could NOT carry this branch: two
@@ -250,7 +255,11 @@ Two upgrades and one downgrade close the table:
   separation (zero when the intervals overlap) and `d₂` the 2D distance
   between the profile REGIONS — a CLEARANCE result only while at least one
   of the two is positive. `dz = 0` AND `d₂ = 0` together decide nothing by
-  themselves — the double zero splits on WHY `d₂` is zero: positive-area
+  themselves — the double zero splits on WHY each is zero. `dz = 0` from
+  endpoint-only sweep contact (the intervals touch, with no positive-length
+  overlap) is cap-on-cap CONTACT whatever the profiles do in projection —
+  the coplanar plane-pair certificate of §6 owns it, never §7. With
+  positive-length sweep overlap, the split reads `d₂`: positive-area
   interior overlap or containment of the 2D regions means the solids share
   volume, the §7 proven-overlap path; boundary-only 2D contact (two extrudes
   sharing a side face) leaves the interiors disjoint and routes to the §6
