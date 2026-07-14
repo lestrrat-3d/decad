@@ -356,10 +356,12 @@ func TestSelectorRejectsNonPositiveCardinality(t *testing.T) {
 	_, err = decad.Edges(decad.Circular()).AtLeast(-1).SelectEdges(body)
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 
-	// And on both wire directions.
+	// And on both wire directions, with the same branchable identity.
+	_, err = json.Marshal(decad.Step{Op: decad.OpFillet, Selectors: []decad.Selector{decad.Edges(decad.Circular()).Exactly(0)}})
+	require.ErrorIs(t, err, decad.ErrDegenerate)
 	var s decad.Step
 	err = json.Unmarshal([]byte(`{"op":"fillet","selectors":[{"kind":"edges","preds":[],"exactly":0}]}`), &s)
-	require.Error(t, err)
+	require.ErrorIs(t, err, decad.ErrDegenerate)
 	err = json.Unmarshal([]byte(`{"op":"fillet","selectors":[{"kind":"faces","preds":[],"at_least":-2}]}`), &s)
-	require.Error(t, err)
+	require.ErrorIs(t, err, decad.ErrDegenerate)
 }

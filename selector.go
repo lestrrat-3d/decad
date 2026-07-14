@@ -549,7 +549,7 @@ func marshalSelector(sel Selector) ([]byte, error) {
 func marshalQuery(kind string, preds []json.RawMessage, card cardinality) ([]byte, error) {
 	out := jsonQuery{Kind: kind, Preds: preds}
 	if card.kind != cardNone && card.n <= 0 {
-		return nil, fmt.Errorf(`decad: a cardinality assertion needs a positive count, got %d`, card.n)
+		return nil, fmt.Errorf(`%w: a cardinality assertion needs a positive count, got %d`, ErrDegenerate, card.n)
 	}
 	switch card.kind {
 	case cardNone:
@@ -600,13 +600,13 @@ func unmarshalSelector(data []byte) (Selector, error) {
 	var card cardinality
 	if raw.Exactly != nil {
 		if *raw.Exactly <= 0 {
-			return nil, fmt.Errorf(`decad: a %s query's exactly assertion needs a positive count, got %d`, probe.Kind, *raw.Exactly)
+			return nil, fmt.Errorf(`%w: a %s query's exactly assertion needs a positive count, got %d`, ErrDegenerate, probe.Kind, *raw.Exactly)
 		}
 		card = cardinality{kind: cardExactly, n: *raw.Exactly}
 	}
 	if raw.AtLeast != nil {
 		if *raw.AtLeast <= 0 {
-			return nil, fmt.Errorf(`decad: a %s query's at_least assertion needs a positive count, got %d`, probe.Kind, *raw.AtLeast)
+			return nil, fmt.Errorf(`%w: a %s query's at_least assertion needs a positive count, got %d`, ErrDegenerate, probe.Kind, *raw.AtLeast)
 		}
 		card = cardinality{kind: cardAtLeast, n: *raw.AtLeast}
 	}
