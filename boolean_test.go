@@ -44,6 +44,28 @@ func diskBody(t *testing.T, doc *decad.Document, cx, cy, r float64) *decad.Body 
 	return body
 }
 
+// wedgePrism extrudes the triangle through the three plane-local points to a
+// prism symmetric about its sketch plane: the sweep of the first point is a
+// knife edge, and the other two share the corner's opposite side.
+func wedgePrism(t *testing.T, doc *decad.Document, w *sketch.World, plane *sketch.Plane, pts [3][2]float64, half float64) *decad.Body {
+	t.Helper()
+	s, err := w.CreateSketch(plane)
+	require.NoError(t, err)
+	var corners [3]*sketch.Point
+	for i, p := range pts {
+		corners[i] = s.CreatePoint(p[0], p[1])
+	}
+	s.Fix(corners[0])
+	for i := range corners {
+		s.CreateLine(corners[i], corners[(i+1)%len(corners)])
+	}
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	body, err := doc.Extrude(s, s.Profiles()[0], decad.Symmetric{D: units.Millimeters(half)})
+	require.NoError(t, err)
+	return body
+}
+
 // translated moves a body by (x, y, z), consuming it.
 func translated(t *testing.T, b *decad.Body, x, y, z float64) *decad.Body {
 	t.Helper()
@@ -515,4 +537,29 @@ func TestPlanarUnionCentroidBoundCoversRounding(t *testing.T) {
 	want := r3.NewVec(mx/vol, my/vol, mz/vol)
 	dist := cen.Value.Sub(want).Len()
 	require.LessOrEqual(t, dist, cen.Bound.Base(), `the 3D bound covers the true rounding distance`)
+}
+
+func TestUnionRejectsEdgeEdgePointTouch(t *testing.T) {
+	// Two knife-edged prisms crossing at right angles: one wedge opens toward
+	// +x and sweeps along z, the other opens toward −x and sweeps along y, so
+	// the solids meet at the origin and nowhere else. The touch sits in the
+	// interior of both apex edges — no vertex of either mesh lands on it — so
+	// the facet pairs that see it properly cross each other's planes and their
+	// crossing intervals meet at exactly one point. That zero-length overlap
+	// is the contact, and the boolean refuses it like any isolated point touch.
+	doc := decad.New()
+	w := sketch.NewWorld()
+	a := wedgePrism(t, doc, w, w.XY(), [3][2]float64{{0, 0}, {12, -4}, {12, 6}}, 5)
+	b := wedgePrism(t, doc, w, w.XZ(), [3][2]float64{{0, 0}, {-12, -6}, {-12, 5}}, 5)
+
+	// The apex edges really do cross at the origin: each prism owns it as an
+	// interior point of an edge, never as a vertex.
+	for _, body := range []*decad.Body{a, b} {
+		for _, v := range body.Vertices() {
+			require.NotZero(t, v.Position().Value.Len(), `the touch point is no mesh vertex`)
+		}
+	}
+
+	_, err := decad.Union(a, b)
+	require.ErrorIs(t, err, decad.ErrDegenerate)
 }

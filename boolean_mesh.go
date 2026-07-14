@@ -258,8 +258,12 @@ func triTriContact(ta, tb [3]r3.Vec, xta, xtb [3]xpt, na, nb xpt) (triContact, b
 	case 0:
 		hiB = true
 	}
-	if loS.Cmp(hiS) >= 0 {
-		return triContact{}, false, nil // empty overlap, or a single shared point
+	if c := loS.Cmp(hiS); c > 0 {
+		return triContact{}, false, nil // empty overlap
+	} else if c == 0 {
+		// A zero-length overlap is an edge-edge point touch: carried, so
+		// the isolated-point rejection decides it like any point contact.
+		return triContact{p0: lo, p1: lo, pointOnly: true}, true, nil
 	}
 	return triContact{
 		p0: lo, p1: hi,
