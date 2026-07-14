@@ -93,6 +93,7 @@ before writing evaluator/topology/feature code.
 | `docs/sketch-seam-design.md` | The recording contract at the `sketch` seam: trim contract (`TExact`), the `CurveSegment` recording IR, `ErrUnrecordableProfile`. |
 | `docs/verification-design.md` | How `Verify` judges every bounded result: report + statuses, `WithTolerance`, the diameter-anchored noise floor. |
 | `docs/evaluator-design.md` | The v1 evaluator: evaluate-from-the-record rule, topology model + provenance roles, mass properties on decad's own records, per-feature build tables, explicit staging via `ErrUnsupported`, the exact-predicate mesh boolean, Verify's implementation, the increment plan. |
+| `docs/clearance-design.md` | The increment-3 clearance kernel: how a minimum gap between two analytic bodies is proven — the stationarity-tier candidate enumeration with exact trim admission, the face-pair distance table (closed-form / certified polynomial bracket / branch-and-bound), the disjointness proof (boundary clearance + nesting exclusion), touching-contact classification, and how rows feed the report. |
 | `doc.go` | Package doc: scope + the layering contract. |
 | `errors.go` | The core §12 sentinel error vocabulary — one branchable identity per case an agent must branch on. |
 | `measurement.go` | The bounded-result shapes (core §5.3/§6): `Exactness`, `Measurement`, `VecMeasurement`, `Box`. |
