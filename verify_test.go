@@ -124,31 +124,52 @@ func TestVerifyOverlappingPairIsSuspect(t *testing.T) {
 	}
 }
 
-func TestVerifyAskedSurveysReadSuspect(t *testing.T) {
-	// The wall, undercut and radius surveys land in later increments: each
-	// asked question is accepted, leaves its field nil, and reads Suspect —
-	// never a silent pass.
+func TestVerifyAskedSurveysAreAnswered(t *testing.T) {
+	// The analytic surveys answer each asked question outright on this
+	// evaluator's bodies: the plate's wall is its 10 mm slab, no face
+	// opposes a +z pull, and no concave feature exists — every answer
+	// proven, so the report is Sound, not the old asked-but-unanswered
+	// Suspect.
 	testcases := []struct {
 		Name   string
 		Option decad.VerifyOption
+		Check  func(t *testing.T, br *decad.BodyReport)
 	}{
-		{Name: "min wall thickness", Option: decad.WithMinWallThickness(units.Millimeters(1))},
-		{Name: "pull direction", Option: decad.WithPullDirection(r3.NewVec(0, 0, 1))},
-		{Name: "min radius", Option: decad.WithMinRadius()},
+		{
+			Name:   "min wall thickness",
+			Option: decad.WithMinWallThickness(units.Millimeters(1)),
+			Check: func(t *testing.T, br *decad.BodyReport) {
+				require.NotNil(t, br.MinWallThickness)
+				require.True(t, br.MinWallThickness.Value.Equal(units.Millimeters(10), 1e-9))
+			},
+		},
+		{
+			Name:   "pull direction",
+			Option: decad.WithPullDirection(r3.NewVec(0, 0, 1)),
+			Check: func(t *testing.T, br *decad.BodyReport) {
+				require.NotNil(t, br.Undercuts)
+				require.Empty(t, br.Undercuts)
+			},
+		},
+		{
+			Name:   "min radius",
+			Option: decad.WithMinRadius(),
+			Check: func(t *testing.T, br *decad.BodyReport) {
+				require.Nil(t, br.MinRadius, `an all-convex plate has no concave feature`)
+			},
+		},
 	}
 	for _, tc := range testcases {
 		t.Run(tc.Name, func(t *testing.T) {
 			doc, _ := extrudePlate(t)
 			report, err := doc.Verify(t.Context(), tc.Option)
 			require.NoError(t, err)
-			require.Equal(t, decad.Suspect, report.Status)
-			require.False(t, report.Trustworthy())
+			require.Equal(t, decad.Sound, report.Status)
+			require.True(t, report.Trustworthy())
 			br := report.Bodies[0]
-			require.Equal(t, decad.Suspect, br.Status)
+			require.Equal(t, decad.Sound, br.Status)
 			require.True(t, br.Solid, `validity is decided before any survey is read`)
-			require.Nil(t, br.MinWallThickness)
-			require.Nil(t, br.Undercuts)
-			require.Nil(t, br.MinRadius)
+			tc.Check(t, br)
 		})
 	}
 }
@@ -215,11 +236,16 @@ func TestVerifyOptionValidation(t *testing.T) {
 }
 
 func TestVerifyZeroAllowanceIsLegal(t *testing.T) {
-	// A zero allowance is the strictest legal reading (verification §2).
+	// A zero allowance is the strictest legal reading (verification §2):
+	// exact opposition only — which the plate's parallel skins are, so the
+	// 10 mm reading still stands and meets the 1 mm tool.
 	doc, _ := extrudePlate(t)
 	report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(1), decad.WithDraftAllowance(units.Degrees(0))))
 	require.NoError(t, err)
-	require.Equal(t, decad.Suspect, report.Status)
+	require.Equal(t, decad.Sound, report.Status)
+	br := report.Bodies[0]
+	require.NotNil(t, br.MinWallThickness)
+	require.True(t, br.MinWallThickness.Value.Equal(units.Millimeters(10), 1e-9))
 }
 
 func TestVerifyIsNonMutating(t *testing.T) {

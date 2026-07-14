@@ -10,13 +10,15 @@ import (
 	"github.com/lestrrat-go/option/v3"
 )
 
-// This file is the increment-1 Verify of docs/evaluator-design.md §10/§11 and
+// This file is the Verify of docs/evaluator-design.md §10/§11 and
 // docs/verification-design.md: one non-mutating call returning a rich report
 // with a Status at both levels, aggregated by a fixed severity precedence,
-// and one bit — Trustworthy() — an agent gates on. The staging rule is
-// evaluator §11: an option this evaluator cannot yet ANSWER is accepted, its
-// parameters validated, and the asked-but-unanswered question reads Suspect —
-// an undecided answer, never an error and never a silent pass.
+// and one bit — Trustworthy() — an agent gates on. The wall, undercut and
+// minimum-radius questions are answered outright by the analytic surveys of
+// survey.go on the bodies this evaluator builds; the staging rule of
+// evaluator §11 still governs everything else — an option this evaluator
+// cannot ANSWER is accepted, its parameters validated, and the
+// asked-but-unanswered question reads Suspect, never a silent pass.
 
 // Status is a verdict, used at both the body and the report level
 // (verification §6). Severity is by precedence, worst wins:
@@ -99,9 +101,11 @@ func (r *Report) Trustworthy() bool { return r.Status == Sound }
 // are region properties only a proven solid has, so both are non-nil exactly
 // when the body is one. The opt-in fields are nil unless their option asks
 // AND the body is a proven solid AND (for the two feature measures) the
-// feature exists; this evaluator does not run those surveys yet
-// (evaluator §11 — increments 3/5), so an asked question leaves its field
-// nil and the body or report Suspect.
+// feature exists: on this evaluator's analytic bodies the surveys decide
+// them outright (survey.go), so a nil MinWallThickness or MinRadius on a
+// proven solid inside a Sound report is the PROVEN determination that no
+// wall / no concave feature exists, and an empty Undercuts the proven
+// all-clear (verification §1/§6).
 type BodyReport struct {
 	Body   *Body
 	Status Status
@@ -174,8 +178,10 @@ func WithTolerance(rel units.Value) VerifyOption {
 
 // WithMinWallThickness states the spec that no wall may be thinner than the
 // tool that has to cut it (verification §2). The tool is the spec, never the
-// probe. This evaluator does not run the wall survey yet (evaluator §11,
-// increment 5): the question is accepted and reads Suspect.
+// probe: the reading is the infimum diameter over the body's spanning
+// inscribed balls — material between skins opposing within the draft
+// allowance — and the tool enters only where the interval rule decides the
+// reading against it (verification §6). A wall proven thinner is Violating.
 func WithMinWallThickness(tool units.Value, opts ...WallOption) VerifyOption {
 	spec := wallSpec{tool: tool, allowance: units.Degrees(15)}
 	for _, o := range opts {
@@ -203,17 +209,19 @@ func WithDraftAllowance(a units.Value) WallOption {
 }
 
 // WithPullDirection states the direction the part must pull along; every
-// reported undercut is a proven violation of it (verification §2). This
-// evaluator does not run the undercut survey yet (evaluator §11, increment
-// 5): the question is accepted and reads Suspect.
+// reported undercut is a proven violation of it (verification §2), decided
+// per face from the exact normal range an analytic face sweeps: a face with
+// a provenly opposing point is listed, exactly perpendicular is not opposed
+// (the vertical wall clears), and a non-empty listing is Violating.
 func WithPullDirection(v r3.Vec) VerifyOption {
 	return verifyOption{option.New(identPullDirection{}, v)}
 }
 
 // WithMinRadius asks for the tightest concave radius — a measurement, not a
-// verdict; the endmill spec lives with the caller (verification §2). This
-// evaluator does not run the survey yet (evaluator §11, increment 5): the
-// question is accepted and reads Suspect.
+// verdict; the endmill spec lives with the caller (verification §2). On the
+// analytic faces convexity and curvature are exact facts, so the survey
+// answers outright: the tightest concave principal radius over every face,
+// or nil — the proven determination that no concave feature exists.
 func WithMinRadius() VerifyOption {
 	return verifyOption{option.New(identMinRadius{}, true)}
 }
@@ -226,10 +234,13 @@ func WithClearances() VerifyOption {
 	return verifyOption{option.New(identClearances{}, true)}
 }
 
-// verifyConfig is the folded option set.
+// verifyConfig is the folded option set. toolMM and allowRad carry the wall
+// spec resolved to the solver's base units (millimetres, radians).
 type verifyConfig struct {
 	rel        float64
 	wall       *wallSpec
+	toolMM     float64
+	allowRad   float64
 	pull       *r3.Vec
 	minRadius  bool
 	clearances bool
@@ -283,6 +294,8 @@ func resolveVerifyOptions(opts []VerifyOption) (verifyConfig, error) {
 				return verifyConfig{}, fmt.Errorf(`%w: a draft allowance must be under 90 degrees, got %s`, ErrDegenerate, spec.allowance)
 			}
 			cfg.wall = &spec
+			cfg.toolMM = tool
+			cfg.allowRad = allow
 		case identPullDirection:
 			v, ok := option.Get[r3.Vec](o)
 			if !ok {
@@ -414,9 +427,19 @@ func verifyBody(b *Body, cfg verifyConfig) *BodyReport {
 		br.Status = Suspect
 	}
 
-	br.Exactness = bodyExactness(br)
 	if br.Status == Unsound {
+		br.Exactness = bodyExactness(br)
 		return br
+	}
+
+	// The asked opt-in surveys (evaluator §10, verification §6): answered
+	// outright on this evaluator's analytic bodies — validity is decided
+	// first, so only a proven solid carries the readings. A survey that
+	// cannot decide (a payload no shipped feature builds) leaves the asked
+	// question undecided, and a stated spec proven to fail is Violating.
+	violating, suspect := false, false
+	if br.Solid && (cfg.wall != nil || cfg.pull != nil || cfg.minRadius) {
+		violating, suspect = runSurveys(br, cfg)
 	}
 
 	// The tolerance gate (verification §2/§6): an Exact answer has a zero
@@ -425,15 +448,18 @@ func verifyBody(b *Body, cfg verifyConfig) *BodyReport {
 	// evaluator cannot judge — its reference machinery (verification §3/§4)
 	// lands with the approximate evaluators — so it reads Suspect, never a
 	// silent pass.
+	br.Exactness = bodyExactness(br)
 	if br.Exactness != Exact {
-		br.Status = Suspect
+		suspect = true
 	}
 
-	// Asked-but-unanswered surveys (evaluator §11): the wall, undercut and
-	// radius surveys land in increment 5. Each asked question leaves its
-	// field nil and the proven-solid body Suspect — an undecided answer.
-	if br.Solid && (cfg.wall != nil || cfg.pull != nil || cfg.minRadius) {
+	// Worst wins at the body level: Violating > Suspect > Sound
+	// (verification §6).
+	if suspect {
 		br.Status = Suspect
+	}
+	if violating {
+		br.Status = Violating
 	}
 	return br
 }
@@ -483,6 +509,12 @@ func bodyExactness(br *BodyReport) Exactness {
 	}
 	if br.Centroid != nil {
 		worst = max(worst, br.Centroid.Exactness)
+	}
+	if br.MinWallThickness != nil {
+		worst = max(worst, br.MinWallThickness.Exactness)
+	}
+	if br.MinRadius != nil {
+		worst = max(worst, br.MinRadius.Exactness)
 	}
 	return worst
 }
