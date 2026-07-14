@@ -269,7 +269,12 @@ Increment 4, the deep end. Strategy:
 ## 11. Increments
 
 Each increment is a PR series behind the same public contract; nothing ships
-half-silent — unreachable capability is `ErrUnsupported` at the call.
+half-silent. The staging surfaces differently by what is being staged, per
+the sections above: an intent the evaluator cannot BUILD — a feature call, an
+extent, a segment kind — is `ErrUnsupported` at the call (§2), while a
+`Verify` question the evaluator cannot yet ANSWER is accepted and reads
+`Suspect` (§10) — an asked-but-undecided answer, never an error and never a
+silent pass.
 
 | # | Lands |
 |---|---|
