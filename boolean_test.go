@@ -425,3 +425,32 @@ func TestFacetedTessellateAndExport(t *testing.T) {
 	_, err = got.Tessellate(units.Millimeters(1e-12))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 }
+
+func TestCurvedRimLengthRefuses(t *testing.T) {
+	// A hole drilled by a cylindrical tool leaves boolean rims on a curved
+	// source: their chord-chain length provably understates the true rim,
+	// no chord bound covers the excess, and Length refuses. Straight rims
+	// between planar sources still answer with their proven bound.
+	doc := decad.New()
+	plate := boxBody(t, doc, 0, 0, 20, 20, 8)
+	tool := translated(t, diskBody(t, doc, 14, 6, 2), 0, 0, -6)
+	got, err := decad.Cut(plate, tool)
+	require.NoError(t, err)
+
+	var curvedRefused, straightAnswered int
+	for _, e := range got.Edges() {
+		if _, ok := e.Curve().(decad.FacetedCurve); !ok {
+			continue
+		}
+		m, err := e.Length()
+		if err != nil {
+			require.ErrorIs(t, err, decad.ErrUnsupported)
+			curvedRefused++
+			continue
+		}
+		require.GreaterOrEqual(t, m.Bound.Base(), 0.0)
+		straightAnswered++
+	}
+	require.Positive(t, curvedRefused, `the drilled rims lie on a curved source`)
+	require.Positive(t, straightAnswered, `the plate's own outline rims are straight`)
+}

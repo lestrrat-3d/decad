@@ -92,7 +92,10 @@ func performBoolean(op OpKind, a, b *Body) (*Body, error) {
 	faceID := map[*Face]int{}
 	for _, f := range append(a.Faces(), b.Faces()...) {
 		faceID[f] = len(groups)
-		groups = append(groups, facetGroup{origins: f.Origins()})
+		groups = append(groups, facetGroup{
+			origins: f.Origins(),
+			planar:  f.Surface().Kind() == KindPlane,
+		})
 	}
 	srcA, err := sourceIDs(ma, faceID)
 	if err != nil {

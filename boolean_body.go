@@ -22,6 +22,11 @@ import (
 // rebuild (Placed) reproduces the same origins.
 type facetGroup struct {
 	origins []FeatureRef
+	// planar records whether the source analytic face is a plane: the rim
+	// between two planar sources is a straight line, whose chord length is
+	// exact; any curved source makes the rim's true length unboundable
+	// without curvature knowledge, and Edge.Length must refuse.
+	planar bool
 }
 
 // facetedPayload is the evaluator's own record of a boolean-built body: the
@@ -211,6 +216,7 @@ func buildFacetedBody(d *Document, ref StepRef, pp facetedPayload) (*Body, error
 		src  int
 	}
 	faceIdx := map[faceKey]*Face{}
+	facePlanar := map[*Face]bool{}
 	facetFace := make([]*Face, len(tris))
 	compFaces := make([][]*Face, len(members))
 	for i, t := range tris {
@@ -226,6 +232,7 @@ func buildFacetedBody(d *Document, ref StepRef, pp facetedPayload) (*Body, error
 				body:    body,
 			}
 			faceIdx[key] = f
+			facePlanar[f] = pp.groups[pp.src[i]].planar
 			compFaces[comp[i]] = append(compFaces[comp[i]], f)
 		}
 		a, b, c := verts[t[0]], verts[t[1]], verts[t[2]]
@@ -233,7 +240,7 @@ func buildFacetedBody(d *Document, ref StepRef, pp facetedPayload) (*Body, error
 		facetFace[i] = f
 	}
 
-	edgeLenTotal, err := buildFacetedTopology(verts, tris, facetFace, pp.meshBound)
+	edgeLenTotal, err := buildFacetedTopology(verts, tris, facetFace, facePlanar, pp.meshBound)
 	if err != nil {
 		return nil, err
 	}
@@ -416,7 +423,7 @@ func volFloor(vol *big.Rat, sym float64) float64 {
 // Edges (split where the adjacent face pair or the exact hinge convexity
 // changes), builds each face's loops by walking the facet fans, and returns
 // the total edge length.
-func buildFacetedTopology(verts []r3.Vec, tris [][3]int, facetFace []*Face, bound float64) (float64, error) {
+func buildFacetedTopology(verts []r3.Vec, tris [][3]int, facetFace []*Face, facePlanar map[*Face]bool, bound float64) (float64, error) {
 	boundMM := units.Millimeters(bound)
 
 	// Directed halfedge → facet, and the boundary predicate: the twin facet
@@ -535,6 +542,12 @@ func buildFacetedTopology(verts []r3.Vec, tris [][3]int, facetFace []*Face, boun
 			convex:      info.sign < 0,
 			length:      length,
 			lengthBound: bound,
+			// A rim between two PLANAR sources is a straight line, so its
+			// chord length is honest; any curved source leaves the true
+			// curve's length excess over the chords unboundable without
+			// curvature knowledge, and Length must refuse rather than
+			// understate (never a silent pass).
+			lengthUnbounded: !(facePlanar[info.fa] && facePlanar[info.fb]),
 		}
 		chains = append(chains, chainRec{verts: path, edge: e})
 	}

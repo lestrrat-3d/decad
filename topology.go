@@ -210,6 +210,10 @@ type Edge struct {
 	// lengthBound is the proven error bound on length: zero for the
 	// analytic curves, the chord bound for a boolean-built chain.
 	lengthBound float64
+	// lengthUnbounded marks a boolean rim on a curved source: the chord
+	// chain understates the true curve's length by an amount no chord
+	// bound can cover, so Length refuses rather than understate.
+	lengthUnbounded bool
 }
 
 // Curve returns the edge's tagged geometry.
@@ -257,8 +261,14 @@ func (e *Edge) IsConvex() bool { return e.convex }
 
 // Length returns the edge's length: Exact (zero bound) for every analytic
 // curve the features build, Approximate with the proven chord bound for a
-// boolean-built chain.
+// boolean-built straight rim (two planar sources). A boolean rim on a
+// curved source has a true length the chord chain provably understates by
+// an amount this evaluator cannot bound, so it is ErrUnsupported — an
+// honest refusal, never an understated Bound.
 func (e *Edge) Length() (Measurement, error) {
+	if e.lengthUnbounded {
+		return Measurement{}, fmt.Errorf(`%w: a boolean rim on a curved source has no proven length bound`, ErrUnsupported)
+	}
 	return Measurement{
 		Value:     units.Millimeters(e.length),
 		Exactness: exactnessOf(e.lengthBound),
