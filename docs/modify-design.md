@@ -201,6 +201,14 @@ certify (seam design). The rewritten section is not handed over by anyone; decad
 constructed it, so decad owns its validity, and it proves it with **exact,
 closed-form** tests rather than a residual.
 
+**The audit is a property of a rewritten profile, not of the op that rewrote
+it.** A fillet's rounded section, a chamfer's beveled one and a shell's offset
+one are the same kind of thing — a `ProfileRecord` decad synthesized from its own
+data — so every one of them passes the audit below before anything is built, and
+there is no rewrite that skips it. Where the op that produced the rewrite has a
+row of its own for what a test catches, that row is the one the refusal cites;
+the shell has one, and §8 says which.
+
 **The rewrite is admitted only when the loops it produces are proven simple and
 correctly nested.** Four tests, in order, all in closed form over decad's own
 line and arc segments:
@@ -434,12 +442,23 @@ exact.
   `survey2d.go` already computes **exactly** as part of the wall survey. At or
   beyond it, S10; and the reading that refuses is the same one that answers
   `MinWallThickness`.
-- **Can this evaluator build it?** Two ways it cannot, and both are staged, not
-  denied: an offset that changes the section's feature set (S11), and a result
-  in more than one piece (S12). Refusing costs the caller a shell decad could in
-  principle build; producing one costs them a part that is wrong where they
-  cannot see it — the same principle evaluator §12 states for the tapered
-  extrude.
+- **Can this evaluator build it?** Two ways the offset construction itself
+  cannot, and both are staged, not denied: an offset that changes the section's
+  feature set (S11), and a result in more than one piece (S12). Refusing costs
+  the caller a shell decad could in principle build; producing one costs them a
+  part that is wrong where they cannot see it — the same principle evaluator §12
+  states for the tapered extrude. The audit below adds its own.
+
+**The offset section is a rewrite, so it faces the §5 audit like any other.**
+Two of the audit's refusals are the shell's exactly as they stand: an offset loop
+that has turned inside out is **S8**, and an offset whose nesting the containment
+classifier cannot decide is **S9**, which the evaluator declines rather than
+guess. The crossing test is the one the shell claims for itself: **a crossing of offset loops is S11, not S7**, because a merge is the
+expected outcome of an offset — two walls closing on each other at `2t` *is* the
+feature-set change S11 names — so the shell's own row owns the event and S7 never
+fires on an offset. The trim test cannot fire at all: it tests a cutback, and an
+offset mints none — a segment the offset consumes is a dropped feature, which is
+S11 again.
 
 **Which section is the outside, and which is the cavity, is what the sense
 decides.** Inward, the outer boundary is `P` and the cavity is `P ⊖ t`; outward,
@@ -469,11 +488,11 @@ inward, `P ⊕ t` outward.
 | B | Op | Removed | Sense | Section | Payload | Lumps | Faces (roles) | Refusals |
 |---|---|---|---|---|---|---|---|---|
 | **B1** | `Fillet` / `Chamfer` | — | — | any (`k ≥ 0`) | `prismPayload` over the **rewritten** section, same frame, same `[z0, z1]` | **1** | side walls `side(i,j)` over the rewritten record, two caps `capStart` / `capEnd`. The blend cylinder / bevel plane **is** one of those walls, and carries a **second** role `fillet(i,j)` / `chamfer(i,j)` naming the same `(loop, segment)` of the rewritten record | S1, S4, S6, S7, S8, S9, and S5 **for a fillet only** — S5 is a condition on the two carriers' `r`-offsets, which only the blend computes; a chamfer's chord exists between any two distinct feet (§7) |
-| **B2** | `Shell` | both caps | `Inward` | hole-free | a **tube**: `prismPayload` whose section is `{Outer: P, Holes: [Q]}`, on `[z0, z1]` | **1** | outer walls `side(0,j)`, cavity walls `side(1,j)`, and the two **rim annuli** — the caps of that prism — `capStart` / `capEnd` | S10, S11 |
-| **B3** | `Shell` | both caps | `Outward` | hole-free | a **tube**: `prismPayload` whose section is `{Outer: Q, Holes: [P]}`, on `[z0, z1]` — no cap is kept, so no material is added along the sweep | **1** | as B2 | S11 |
+| **B2** | `Shell` | both caps | `Inward` | hole-free | a **tube**: `prismPayload` whose section is `{Outer: P, Holes: [Q]}`, on `[z0, z1]` | **1** | outer walls `side(0,j)`, cavity walls `side(1,j)`, and the two **rim annuli** — the caps of that prism — `capStart` / `capEnd` | S8, S9, S10, S11 |
+| **B3** | `Shell` | both caps | `Outward` | hole-free | a **tube**: `prismPayload` whose section is `{Outer: Q, Holes: [P]}`, on `[z0, z1]` — no cap is kept, so no material is added along the sweep | **1** | as B2 | S8, S9, S11 |
 | **B4** | `Shell` | both caps | either | holed (`k ≥ 1`) | — | **1 + k** — a band around the outer loop, plus one band lining each hole, pairwise disjoint | — | **S12** |
-| **B5** | `Shell` | one cap | `Inward` | any (`k ≥ 0`) | a **cup**: `cupPayload` — the outer prism over `P` on `[z0, z1]` and the cavity prism over `Q = P ⊖ t` on `[z0 + t, z1]`. The kept cap does not move; the floor is `t` of the original material | **1** — every wall band hangs off the floor slab | outer walls `side(i,j)`, the kept cap `capStart`, the **rims** `rim(i)` — the removed cap's plane trimmed to the band between loop `i` of `P` and loop `i` of `Q`, one face per loop (`1 + k` of them) — cavity walls `shellSide(i,j)`, cavity cap `shellCap` | S10, S11 |
-| **B6** | `Shell` | one cap | `Outward` | any (`k ≥ 0`) | a **cup**: `cupPayload` — the outer prism over `Q = P ⊕ t` on `[z0 − t, z1]` and the cavity prism over `P` on `[z0, z1]`. The original solid *is* the cavity; the floor is `t` of new material below the kept cap | **1** | as B5 | S11 |
+| **B5** | `Shell` | one cap | `Inward` | any (`k ≥ 0`) | a **cup**: `cupPayload` — the outer prism over `P` on `[z0, z1]` and the cavity prism over `Q = P ⊖ t` on `[z0 + t, z1]`. The kept cap does not move; the floor is `t` of the original material | **1** — every wall band hangs off the floor slab | outer walls `side(i,j)`, the kept cap `capStart`, the **rims** `rim(i)` — the removed cap's plane trimmed to the band between loop `i` of `P` and loop `i` of `Q`, one face per loop (`1 + k` of them) — cavity walls `shellSide(i,j)`, cavity cap `shellCap` | S8, S9, S10, S11 |
+| **B6** | `Shell` | one cap | `Outward` | any (`k ≥ 0`) | a **cup**: `cupPayload` — the outer prism over `Q = P ⊕ t` on `[z0 − t, z1]` and the cavity prism over `P` on `[z0, z1]`. The original solid *is* the cavity; the floor is `t` of new material below the kept cap | **1** | as B5 | S8, S9, S11 |
 
 The Refusals column names what a row's own geometry refuses. The pre-gates of §4
 — S13 / S14 (a zero magnitude), S15 (an invalid one), S16 (a selector that
