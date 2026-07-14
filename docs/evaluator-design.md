@@ -147,8 +147,9 @@ sides sweeps a self-intersecting solid and is rejected, `ErrDegenerate`.
 Faces: a `LineSeg` parallel to the axis → `Cylinder`; inclined → `Cone` (an
 endpoint on the axis is its apex); perpendicular → planar annulus (a disk
 when it reaches the axis); `ArcSeg`/`CircleSeg` → `Torus`, or `Sphere` when
-the arc's center lies on the axis (its endpoints then touch the axis at the
-poles). Partial sweeps get two planar cap faces. Volume/centroid by Pappus on the §4 region integrals —
+the arc's center lies on the axis — an endpoint ON the axis closes at a pole,
+and an endpoint off it leaves a latitude-circle edge (a spherical band when
+neither endpoint reaches the axis). Partial sweeps get two planar cap faces. Volume/centroid by Pappus on the §4 region integrals —
 exact. Increment 2.
 
 ## 7. Selectors
