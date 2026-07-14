@@ -718,6 +718,12 @@ func TestRevolveEdgeAxisGates(t *testing.T) {
 		_, err := doc.Revolve(s, p, decad.EdgeAxis{Edge: decad.Edges().Exactly(1)}, decad.FullRevolution{})
 		require.ErrorIs(t, err, decad.ErrDegenerate)
 	})
+	t.Run("TypedNilEdge", func(t *testing.T) {
+		var q *decad.EdgeQuery
+		_, err := doc.Revolve(s, p, decad.EdgeAxis{Body: host, Edge: q}, decad.FullRevolution{})
+		require.ErrorIs(t, err, decad.ErrDegenerate)
+		require.NotErrorIs(t, err, decad.ErrUnsupported, `malformed input must not read as staged resolution`)
+	})
 	t.Run("NilEdge", func(t *testing.T) {
 		_, err := doc.Revolve(s, p, decad.EdgeAxis{Body: host}, decad.FullRevolution{})
 		require.ErrorIs(t, err, decad.ErrDegenerate)

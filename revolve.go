@@ -339,8 +339,16 @@ func (d *Document) validateEdgeAxis(ea EdgeAxis) error {
 	default:
 		return fmt.Errorf(`%w: an edge axis cannot resolve against a %T`, ErrDegenerate, b)
 	}
-	if ea.Edge == nil {
+	// A typed nil query is as empty a selector as an untyped nil: it must
+	// read as malformed input (errNilSelector, branchable ErrDegenerate),
+	// never as the staged resolution's ErrUnsupported.
+	switch q := ea.Edge.(type) {
+	case nil:
 		return fmt.Errorf(`%w: an edge axis names no edge selector`, ErrDegenerate)
+	case *EdgeQuery:
+		if q == nil {
+			return errNilSelector
+		}
 	}
 	if _, err := ea.Edge.SelectEdges(body); err != nil {
 		return err
