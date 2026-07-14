@@ -103,6 +103,13 @@ func bridgeHole(pts []Point2, merged, hole []int) ([]int, error) {
 	if bestEdge < 0 {
 		return nil, fmt.Errorf(`%w: a hole lies outside its cap boundary`, ErrDegenerate)
 	}
+	if bestU == m.U {
+		// The nearest crossing IS the hole vertex: the hole touches the
+		// boundary it is being bridged into, and a zero-length bridge would
+		// emit duplicate directed edges — a cracked mesh. The pinch is a
+		// degenerate cap region, so it is an error, never a wrong mesh.
+		return nil, fmt.Errorf(`%w: a hole touches its cap boundary`, ErrDegenerate)
+	}
 	hit := Point2{U: bestU, V: m.V}
 	ai, bi := bestEdge, (bestEdge+1)%n
 	a, b := pts[merged[ai]], pts[merged[bi]]
@@ -124,6 +131,9 @@ func bridgeHole(pts []Point2, merged, hole []int) ([]int, error) {
 		// of those, the one whose direction from M lies closest to the ray
 		// (nearest first on ties) is visible instead.
 		p := pts[merged[bridge]]
+		if p == m {
+			return nil, fmt.Errorf(`%w: a hole touches its cap boundary`, ErrDegenerate)
+		}
 		bestCos, bestDist := math.Inf(-1), math.Inf(1)
 		for j := range n {
 			if j == bridge {

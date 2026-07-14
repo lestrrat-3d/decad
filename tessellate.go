@@ -140,7 +140,10 @@ func (b *Body) Tessellate(tol units.Value) (*Mesh, error) {
 				faceOf = append(faceOf, face)
 				continue
 			}
-			n, sag := chordCount(w.segmentWalk, chord)
+			n, sag, err := chordCount(w.segmentWalk, chord)
+			if err != nil {
+				return nil, err
+			}
 			mesh.bound = math.Max(mesh.bound, sag)
 			dth := (w.th1 - w.th0) / float64(n)
 			for k := range n {
@@ -218,18 +221,26 @@ func (m *Mesh) addTriangle(tri [3]int, src *Face) {
 // choice proves. A closed walk needs at least three chords to bound a
 // polygon; the per-chord angle never exceeds π, so consecutive samples are
 // always distinct.
-func chordCount(w segmentWalk, tol float64) (int, float64) {
+func chordCount(w segmentWalk, tol float64) (int, float64, error) {
 	sweep := math.Abs(w.th1 - w.th0)
 	maxD := math.Pi
 	if tol < w.radius {
-		maxD = 2 * math.Acos(1-tol/w.radius)
+		// sagitta(Δθ) = 2r·sin²(Δθ/4), so Δθ_max = 4·asin(√(tol/2r)) — the
+		// stable inverse: acos(1 − tol/r) rounds to zero for tiny tol and
+		// would seed an unbounded walk-up.
+		maxD = 4 * math.Asin(math.Sqrt(tol/(2*w.radius)))
+	}
+	// A tolerance this fine asks for more chords than any mesh can hold;
+	// the intent cannot be built, so it is refused outright (evaluator §2).
+	if maxD == 0 || sweep/maxD > maxChordsPerWalk {
+		return 0, 0, fmt.Errorf(`%w: the chord tolerance asks for more than %d chords on one curve`, ErrUnsupported, maxChordsPerWalk)
 	}
 	n := max(int(math.Ceil(sweep/maxD)), 1)
 	if w.closed && n < 3 {
 		n = 3
 	}
 	// The returned sagitta is a PROVEN bound, so it may never exceed the
-	// asked tolerance: float rounding in the acos/ceil path can land one
+	// asked tolerance: float rounding in the asin/ceil path can land one
 	// chord short at a threshold value. Each increment strictly shrinks the
 	// sagitta toward zero, so the walk-up terminates.
 	sagitta := w.radius * (1 - math.Cos(sweep/float64(n)/2))
@@ -237,5 +248,8 @@ func chordCount(w segmentWalk, tol float64) (int, float64) {
 		n++
 		sagitta = w.radius * (1 - math.Cos(sweep/float64(n)/2))
 	}
-	return n, sagitta
+	return n, sagitta, nil
 }
+
+// maxChordsPerWalk caps how finely one boundary curve may be chorded.
+const maxChordsPerWalk = 1 << 22

@@ -283,3 +283,38 @@ func TestTessellateBoundNeverExceedsTolerance(t *testing.T) {
 		require.LessOrEqual(t, mesh.Bound().Mag(), tol, `tol %v`, tol)
 	}
 }
+
+func TestTessellateRejectsTangentHole(t *testing.T) {
+	// A hole tangent to the outline pinches the cap region: a zero-length
+	// bridge would crack the mesh, so the tessellation refuses instead.
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	rect := s.CreateRectangle(0, 0, 100, 60)
+	s.Fix(rect.A)
+	s.CreateCircle(s.CreatePoint(90, 30), 10)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	var prof *sketch.Profile
+	for _, p := range s.Profiles() {
+		if len(p.Holes) == 1 {
+			prof = p
+		}
+	}
+	if prof == nil {
+		t.Skip(`the arrangement did not produce a holed region for the tangent circle`)
+	}
+	doc := decad.New()
+	body, err := doc.Extrude(s, prof, decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
+	require.NoError(t, err)
+	_, err = body.Tessellate(units.Millimeters(0.5))
+	require.ErrorIs(t, err, decad.ErrDegenerate)
+}
+
+func TestTessellateRejectsImpossiblyFineTolerance(t *testing.T) {
+	// acos(1 − tol/r) rounds to zero for tiny tolerances; the stable inverse
+	// must refuse the unbuildable ask rather than walk up forever.
+	body := holedPlateBody(t)
+	_, err := body.Tessellate(units.Millimeters(1e-20))
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+}
