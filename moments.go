@@ -61,14 +61,44 @@ func (r ProfileRecord) Centroid() (VecMeasurement, error) {
 	}, nil
 }
 
+// SecondMoments is a recorded region's second moments of area about the
+// plane origin, in the plane's own (u, v): every field is a Measurement of
+// Kind SecondMomentOfArea (mm⁴), Exact with a zero bound — the closed forms
+// admit no approximation. They are what a revolve's solid centroid is
+// computed from (docs/evaluator-design.md §4/§6); to re-reference them to
+// another axis, use the parallel-axis theorem with the region's Area and
+// Centroid.
+type SecondMoments struct {
+	// UU is ∫u² dA, VV is ∫v² dA, UV is the mixed ∫uv dA.
+	UU Measurement
+	UV Measurement
+	VV Measurement
+}
+
+// SecondMoments returns the region's exact second moments of area about the
+// plane origin. The staging matches Area: a free-form boundary kind is
+// [ErrUnsupported] until its evaluator increment lands.
+func (r ProfileRecord) SecondMoments() (SecondMoments, error) {
+	ig, err := r.integrals()
+	if err != nil {
+		return SecondMoments{}, err
+	}
+	exact := func(x float64) Measurement {
+		return Measurement{Value: units.QuarticMillimeters(x), Exactness: Exact, Bound: units.QuarticMillimeters(0)}
+	}
+	return SecondMoments{UU: exact(ig.muu), UV: exact(ig.muv), VV: exact(ig.mvv)}, nil
+}
+
 // regionIntegrals accumulates the boundary integrals of one region: the net
-// signed area and the first moments ∫u dA, ∫v dA. (The second and mixed
-// moments a revolve centroid needs join in increment 2 —
-// docs/evaluator-design.md §4/§6.)
+// signed area, the first moments ∫u dA and ∫v dA, and the second moments
+// ∫u² dA, ∫uv dA and ∫v² dA.
 type regionIntegrals struct {
 	area float64
 	mu   float64 // ∫u dA
 	mv   float64 // ∫v dA
+	muu  float64 // ∫u² dA
+	muv  float64 // ∫uv dA
+	mvv  float64 // ∫v² dA
 }
 
 // integrals walks the outer loop and every hole in recorded walk order and
@@ -151,6 +181,17 @@ func (ig *regionIntegrals) addLine(seg LineSeg) {
 	ig.area += 0.5 * (u0*v1 - u1*v0)
 	ig.mu += (v1 - v0) * (u0*u0 + u0*u1 + u1*u1) / 6
 	ig.mv += -(u1 - u0) * (v0*v0 + v0*v1 + v1*v1) / 6
+
+	// ∫u² dA = ⅓ ∮ u³ dv;  ∫v² dA = −⅓ ∮ v³ du — the cubic sums are the
+	// exact ∫₀¹ of the lerp cubed.
+	ig.muu += (v1 - v0) * (u0*u0*u0 + u0*u0*u1 + u0*u1*u1 + u1*u1*u1) / 12
+	ig.mvv += -(u1 - u0) * (v0*v0*v0 + v0*v0*v1 + v0*v1*v1 + v1*v1*v1) / 12
+
+	// ∫uv dA = ½ ∮ u²v dv: expand u(t)² v(t) and integrate the polynomial
+	// exactly, term by term.
+	du, dv := u1-u0, v1-v0
+	intU2V := v0*(u0*u0+u0*du+du*du/3) + dv*(u0*u0/2+2*u0*du/3+du*du/4)
+	ig.muv += 0.5 * dv * intU2V
 }
 
 // addCircular accumulates a circular path about center c with radius r, from
@@ -178,6 +219,27 @@ func (ig *regionIntegrals) addCircular(c Point2, r, th0, th1 float64) {
 	intSin2 := dth/2 - (math.Sin(2*th1)-math.Sin(2*th0))/4
 	intSin3 := (cos0 - cos0*cos0*cos0/3) - (cos1 - cos1*cos1*cos1/3)
 	ig.mv += 0.5 * r * (c.V*c.V*intSin + 2*c.V*r*intSin2 + r*r*intSin3)
+
+	// The quartic antiderivatives for the second moments:
+	//   ∫cos⁴θ dθ = 3θ/8 + sin 2θ/4 + sin 4θ/32
+	//   ∫sin⁴θ dθ = 3θ/8 − sin 2θ/4 + sin 4θ/32
+	intCos4 := 3*dth/8 + (math.Sin(2*th1)-math.Sin(2*th0))/4 + (math.Sin(4*th1)-math.Sin(4*th0))/32
+	intSin4 := 3*dth/8 - (math.Sin(2*th1)-math.Sin(2*th0))/4 + (math.Sin(4*th1)-math.Sin(4*th0))/32
+
+	// ∫u² dA = ⅓ ∮ u³ dv, dv = r cos θ dθ, u³ expanded about the center.
+	ig.muu += r / 3 * (c.U*c.U*c.U*intCos + 3*c.U*c.U*r*intCos2 + 3*c.U*r*r*intCos3 + r*r*r*intCos4)
+
+	// ∫v² dA = −⅓ ∮ v³ du, du = −r sin θ dθ, v³ expanded about the center.
+	ig.mvv += r / 3 * (c.V*c.V*c.V*intSin + 3*c.V*c.V*r*intSin2 + 3*c.V*r*r*intSin3 + r*r*r*intSin4)
+
+	// ∫uv dA = ½ ∮ u²v dv: u²v = c_v·u² + r sin θ·u², with
+	//   ∫sin θ cos θ dθ = sin²θ/2, ∫sin θ cos²θ dθ = −cos³θ/3,
+	//   ∫sin θ cos³θ dθ = −cos⁴θ/4.
+	intSC := (sin1*sin1 - sin0*sin0) / 2
+	intSC2 := (cos0*cos0*cos0 - cos1*cos1*cos1) / 3
+	intSC3 := (cos0*cos0*cos0*cos0 - cos1*cos1*cos1*cos1) / 4
+	ig.muv += 0.5 * r * (c.V*(c.U*c.U*intCos+2*c.U*r*intCos2+r*r*intCos3) +
+		r*(c.U*c.U*intSC+2*c.U*r*intSC2+r*r*intSC3))
 }
 
 // lerp2 returns the point at parameter t on the segment start→end.
