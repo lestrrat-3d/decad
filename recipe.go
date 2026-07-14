@@ -165,8 +165,16 @@ type Step struct {
 // stepOptsKind and the codec below: StepOpts is a closed set decad owns.
 const optsKindExtrude = "extrude"
 
-// marshalStepOpts encodes one options record as its tagged object.
+// marshalStepOpts encodes one options record as its tagged object. Pointer
+// forms normalize to values — the sealed set uses value receivers, so a
+// *ExtrudeOpts satisfies StepOpts too — and a nil pointer is rejected.
 func marshalStepOpts(o StepOpts) ([]byte, error) {
+	if p, ok := o.(*ExtrudeOpts); ok {
+		if p == nil {
+			return nil, fmt.Errorf(`decad: nil step options`)
+		}
+		o = *p
+	}
 	switch o := o.(type) {
 	case ExtrudeOpts:
 		return marshalTagged(optsKindExtrude, o)
@@ -200,7 +208,9 @@ func unmarshalStepOpts(data []byte) (StepOpts, error) {
 // jsonStep is Step's wire shape: interface-typed fields as tagged raw
 // messages, absent fields omitted.
 type jsonStep struct {
-	Op        OpKind            `json:"op"`
+	// Op is a pointer so a missing "op" is distinguishable from the zero
+	// kind: a step with no op is malformed, never silently an extrude.
+	Op        *OpKind           `json:"op"`
 	Inputs    []StepRef         `json:"inputs,omitempty"`
 	Profile   *ProfileRecord    `json:"profile,omitempty"`
 	Plane     *PlaneRecord      `json:"plane,omitempty"`
@@ -217,7 +227,8 @@ func zeroVec(v r3.Vec) bool { return v == r3.Vec{} }
 // MarshalJSON encodes the step with every absent field omitted: a decoded
 // step is the recorded one, field for field.
 func (s Step) MarshalJSON() ([]byte, error) {
-	out := jsonStep{Op: s.Op, Inputs: s.Inputs, Values: s.Values}
+	op := s.Op
+	out := jsonStep{Op: &op, Inputs: s.Inputs, Values: s.Values}
 	if len(s.Profile.Outer.Segments) > 0 || len(s.Profile.Holes) > 0 {
 		p := s.Profile
 		out.Profile = &p
@@ -260,7 +271,10 @@ func (s *Step) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return fmt.Errorf(`decad: failed to decode step: %w`, err)
 	}
-	out := Step{Op: raw.Op, Inputs: raw.Inputs, Values: raw.Values}
+	if raw.Op == nil {
+		return fmt.Errorf(`decad: step is missing its op`)
+	}
+	out := Step{Op: *raw.Op, Inputs: raw.Inputs, Values: raw.Values}
 	if raw.Profile != nil {
 		out.Profile = *raw.Profile
 	}

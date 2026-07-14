@@ -142,8 +142,64 @@ const (
 	extKindThroughAllSide = "through_all_side"
 )
 
+// errNilExtent rejects a nil variant pointer: it names no extent to record.
+var errNilExtent = fmt.Errorf(`decad: nil extent`)
+
+// normalizeExtent returns the value form of e: the variants seal with value
+// receivers, so a *Distance satisfies Extent as readily as a Distance does —
+// the codec accepts both and records the value the pointer names. A nil
+// pointer is rejected.
+func normalizeExtent(e Extent) (Extent, error) {
+	switch e := e.(type) {
+	case *Distance:
+		if e == nil {
+			return nil, errNilExtent
+		}
+		return *e, nil
+	case *ThroughAll:
+		if e == nil {
+			return nil, errNilExtent
+		}
+		return *e, nil
+	case *Symmetric:
+		if e == nil {
+			return nil, errNilExtent
+		}
+		return *e, nil
+	case *TwoSided:
+		if e == nil {
+			return nil, errNilExtent
+		}
+		return *e, nil
+	default:
+		return e, nil
+	}
+}
+
+// normalizeSideExtent is normalizeExtent's side-tier analog.
+func normalizeSideExtent(s SideExtent) (SideExtent, error) {
+	switch s := s.(type) {
+	case *DistanceSide:
+		if s == nil {
+			return nil, errNilExtent
+		}
+		return *s, nil
+	case *ThroughAllSide:
+		if s == nil {
+			return nil, errNilExtent
+		}
+		return *s, nil
+	default:
+		return s, nil
+	}
+}
+
 // marshalExtent encodes one extent as its tagged object.
 func marshalExtent(e Extent) ([]byte, error) {
+	e, err := normalizeExtent(e)
+	if err != nil {
+		return nil, err
+	}
 	switch e := e.(type) {
 	case Distance:
 		return marshalTagged(extKindDistance, e)
@@ -224,6 +280,10 @@ func unmarshalExtent(data []byte) (Extent, error) {
 
 // marshalSideExtent encodes one side of a TwoSided as its tagged object.
 func marshalSideExtent(s SideExtent) ([]byte, error) {
+	s, err := normalizeSideExtent(s)
+	if err != nil {
+		return nil, err
+	}
 	switch s := s.(type) {
 	case DistanceSide:
 		return marshalTagged(extKindDistanceSide, s)

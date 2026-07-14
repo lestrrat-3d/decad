@@ -121,4 +121,27 @@ func TestStepOptsCodec(t *testing.T) {
 	require.Error(t, json.Unmarshal([]byte(`{"op":"extrude","opts":{"kind":"warp"}}`), &bad))
 	require.Error(t, json.Unmarshal([]byte(`{"op":"fillet","selectors":[{"kind":"edges"}]}`), &bad),
 		`selector tags are rejected until the query types land`)
+	require.Error(t, json.Unmarshal([]byte(`{"extent":{"kind":"through_all","dir":"along"}}`), &bad),
+		`a step with no op is malformed, never silently an extrude`)
+}
+
+func TestRecipePointerForms(t *testing.T) {
+	// The sealed sets use value receivers, so pointer forms satisfy the
+	// interfaces; the codecs normalize them to values and reject nil.
+	step := decad.Step{
+		Op:     decad.OpExtrude,
+		Extent: &decad.TwoSided{One: &decad.DistanceSide{D: units.Millimeters(2)}, Two: decad.ThroughAllSide{}},
+		Opts:   &decad.ExtrudeOpts{Taper: units.Degrees(1)},
+	}
+	buf, err := json.Marshal(step)
+	require.NoError(t, err, `pointer variant forms should encode like their values`)
+	var got decad.Step
+	require.NoError(t, json.Unmarshal(buf, &got))
+	require.Equal(t, decad.TwoSided{One: decad.DistanceSide{D: units.Millimeters(2)}, Two: decad.ThroughAllSide{}}, got.Extent)
+	require.Equal(t, decad.ExtrudeOpts{Taper: units.Degrees(1)}, got.Opts)
+
+	_, err = json.Marshal(decad.Step{Op: decad.OpExtrude, Extent: (*decad.Distance)(nil)})
+	require.Error(t, err, `a nil extent pointer names no extent to record`)
+	_, err = json.Marshal(decad.Step{Op: decad.OpExtrude, Opts: (*decad.ExtrudeOpts)(nil)})
+	require.Error(t, err, `nil step options name nothing to record`)
 }
