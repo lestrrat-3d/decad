@@ -363,7 +363,9 @@ func (f *Face) Loops() []*Loop     // Loop.IsOuter() distinguishes outer from ho
 func (f *Face) Edges() []*Edge
 func (f *Face) Area() (Measurement, error)
 func (f *Face) NormalAt(p r3.Vec) (VecMeasurement, error) // a computed direction: a measurement
-func (f *Face) Origin() FeatureRef // provenance: the feature that created it
+func (f *Face) Origins() []FeatureRef // provenance: every feature role that created it — canonicalization
+                                      // may merge coplanar faces, and a merged face carries ALL contributing
+                                      // roles; FaceCreatedBy matches on any of them
 
 type Edge struct{ /* ... */ }
 

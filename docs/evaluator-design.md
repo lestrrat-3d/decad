@@ -55,7 +55,7 @@ index (core §3 invariant #3).
 | `Body` | owning `*Document`, origin `FeatureRef`, `[]*Lump`, cached measurements (computed at build, immutable after) |
 | `Lump` | `[]*Shell` |
 | `Shell` | `[]*Face`, `void bool` |
-| `Face` | tagged `Surface`, `[]*Loop` (first outer), origin roles (≥1 `FeatureRef`s — a canonicalization merge UNIONS the merged faces' roles, and `FaceCreatedBy` matches on ANY of them, so provenance survives the merge), back-ref to its body |
+| `Face` | tagged `Surface`, `[]*Loop` (first outer), origin roles (≥1 `FeatureRef`s, exposed as `Face.Origins()` — a canonicalization merge UNIONS the merged faces' roles, and `FaceCreatedBy` matches on ANY of them, so provenance survives the merge) , back-ref to its body |
 | `Loop` | ordered `[]*coedge` (edge + sense), `outer bool` |
 | `Edge` | tagged `Curve`, `Start`/`End` `*Vertex`, ALL adjacent faces (exactly 2 on a closed manifold body; `Edge.Faces()` reports the actual count, which is precisely how `len != 2` surfaces non-manifold topology — core §6.1), `convex bool` |
 | `Vertex` | position (mm), the proven bound on it |
@@ -119,20 +119,25 @@ loop per hole, holes wound opposite.
 Measurements (untapered, increment-1 kinds): all **Exact**, bound zero. The
 extent resolves to a signed sweep interval `[z0, z1]` along the plane normal
 (`Along` positive; `Against`, `Symmetric` and `TwoSided` sides place `z0`/`z1`
-on their own senses), and every formula reads the interval: `Volume =
-A·(z1−z0)` (`A` the recorded region's area per §4), `Centroid` the region
-centroid lifted `(z0+z1)/2` along the normal — `h/2` only in the one-sided
-`Along` case — `Bounds` from per-segment analytic extremes swept over
-`[z0, z1]`, `Area` from cap areas + side areas (`segment length · (z1−z0)`;
-arc length `rθ` exact). Extents: `Distance`,
+on their own senses), and every formula reads the interval: `Volume = A·h`
+with `h = |z1−z0|` (`A` the recorded region's area per §4 — measures are
+magnitudes, so an `Against` sweep never reads negative), `Centroid` the
+region centroid lifted `(z0+z1)/2` along the normal — the SIGNED midpoint,
+`h/2` only in the one-sided `Along` case — `Bounds` from per-segment analytic
+extremes swept over the signed `[z0, z1]`, `Area` from cap areas + side areas
+(`segment length · h`; arc length `rθ` exact). Extents: `Distance`,
 `Symmetric`, and `TwoSided` of distance sides land in increment 1 — the three
 whose interval the step's own quantities determine. `ThroughAll` and
 `ThroughAllSide` have no finite stop geometry of their own (they stop at the
 far side of every body the sweep meets), so they are body-relative exactly
 like `ToFace`: all three land in increment 2 with selectors (§7), the stop an
 intersection of the sweep direction with analytic target surfaces — closed
-form — and `ErrUnsupported` until then. (`ToFaceAngular` is the revolve
-analog and lands there, §6/§11.) A nonzero
+form — and `ErrUnsupported` until then. A through-all dependency is ambient
+at the CALL but never in the RECORD: the feature call resolves which live
+bodies actually bound the stop and records each one's `StepRef` in the step's
+`Inputs` (core §6.2's depends-on rule), so re-evaluation reaches the same
+stops explicitly, with no ambient body-set dependency. (`ToFaceAngular` is
+the revolve analog and lands there, §6/§11.) A nonzero
 `WithTaper` is recorded exactly and is `ErrUnsupported` in v1: a tapered
 extrude of a general region is an offset problem (self-intersecting offsets),
 and a wrong-but-confident prism is the failure decad exists to prevent.
@@ -152,7 +157,11 @@ endpoint on the axis is its apex); perpendicular → planar annulus (a disk
 when it reaches the axis); `ArcSeg`/`CircleSeg` → `Torus`, or `Sphere` when
 the arc's center lies on the axis — an endpoint ON the axis closes at a pole,
 and an endpoint off it leaves a latitude-circle edge (a spherical band when
-neither endpoint reaches the axis). Partial sweeps get two planar cap faces. Volume/centroid by Pappus on the §4 region integrals —
+neither endpoint reaches the axis). The free-form segment kinds follow the
+same staging as extrude (§5): `NURBSSurface` surfaces of revolution where the
+control net is exactly derivable from the record, in increment 6, and
+`ErrUnsupported` until then — `FitSplineSeg` included, on the same grounds.
+Partial sweeps get two planar cap faces. Volume/centroid by Pappus on the §4 region integrals —
 exact. Increment 2.
 
 ## 7. Selectors
@@ -190,9 +199,14 @@ replay test in the suite asserts this on every example model.
 
 Increment 4, the deep end. Strategy:
 
-- **Tessellate both operands** with a caller-visible chord tolerance
-  (`Tessellate(tol)`'s machinery): per-surface analytic tessellators with a
-  proven per-facet deviation bound δ_t; facets remember their source face.
+- **Tessellate both operands** with an evaluator-internal chord tolerance —
+  a documented default derived from the pair's own diameter (the booleans of
+  core §8 expose no tolerance parameter, on purpose). What IS caller-visible
+  is the proven bound the output carries: the tolerance's whole effect
+  surfaces as `Bound`/`Exactness`, judged by the caller's `WithTolerance` at
+  Verify. The machinery is `Tessellate(tol)`'s, with per-surface analytic
+  tessellators, a proven per-facet deviation bound δ_t, and facets that
+  remember their source face.
 - **Robust mesh boolean in-repo, stdlib-only.** The curated-dependency rule
   stands: no third-party mesh kernel. The algorithm is the exact-predicate
   route: triangle/triangle intersection and point classification decided by
@@ -233,8 +247,9 @@ Increment 4, the deep end. Strategy:
   boolean machinery can intersect the pair and bound the volume (increment
   4). Until then a pair that cannot be proven disjoint is undecided: it joins
   neither list and reads `Suspect` — never a fabricated row, and never a
-  false `Sound`, because box-proofs already decide the common far-apart case
-  from increment 3 on.
+  false `Sound`. Box-disjointness proofs run from increment 1 (they are
+  cheap, and they decide the common far-apart case); increment 3 adds the
+  clearance computation and `WithClearances`.
 - **Wall thickness / undercuts / min radius**: the analytic surveys of
   verification §6 over the v1 surface set (plane/cylinder/cone/sphere/torus
   pair tables for opposition and pinch; per-variant normal ranges for pull
