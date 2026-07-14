@@ -304,15 +304,22 @@ func marshalSegment(s CurveSegment) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	body, err := json.Marshal(s)
+	return marshalTagged(kind, s)
+}
+
+// marshalTagged encodes v's own fields with the kind tag spliced in front —
+// {"kind":"<kind>", ...v's fields} — the one tagged-object encoder every
+// closed variant set's codec shares (core §6.2).
+func marshalTagged(kind string, v any) ([]byte, error) {
+	body, err := json.Marshal(v)
 	if err != nil {
-		return nil, fmt.Errorf(`decad: failed to encode %s segment: %w`, kind, err)
+		return nil, fmt.Errorf(`decad: failed to encode %s: %w`, kind, err)
 	}
 	tag, err := json.Marshal(struct {
 		Kind string `json:"kind"`
 	}{Kind: kind})
 	if err != nil {
-		return nil, fmt.Errorf(`decad: failed to encode %s segment tag: %w`, kind, err)
+		return nil, fmt.Errorf(`decad: failed to encode %s tag: %w`, kind, err)
 	}
 	if string(body) == "{}" {
 		return tag, nil
