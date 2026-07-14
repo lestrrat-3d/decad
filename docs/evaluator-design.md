@@ -328,9 +328,26 @@ Increment 4, the deep end. Strategy:
     close. It is refused (`ErrUnsupported`). Every other collapse is an edge
     contraction inside a component that survives, and the two bounds above
     cover it.
-- **Output**: faces are `Faceted`, grouped by source analytic face so
-  provenance (`FaceCreatedBy`) and face-level selection survive the boolean;
-  measurements integrate the mesh exactly and report the verification-design
+- **Output**: faces are `Faceted`, one per CONNECTED PATCH of a source analytic
+  face. Each patch keeps that source's origins, so provenance (`FaceCreatedBy`)
+  and face-level selection survive the boolean — but the source face is not the
+  face. A boolean can cut one source into pieces that no longer touch (a blind
+  trench crosses a cap and leaves two separate strips of it standing), and each
+  piece is its own face, bounded from outside by its own loop. Grouping by
+  source alone would hand both strips to one face, which then has two outer
+  boundaries and can call only one of them outer — reporting the other as a
+  *hole* in a patch it is not part of, a wrong topology answer on the surface
+  agents traverse. So the key is the patch: the facets of one source reachable
+  from each other across shared edges. Within a patch, which loop bounds it from
+  outside is decided, not guessed: on a planar patch the boundary is walked with
+  the material on its left, so about the patch's own outward normal the outer
+  loop turns positive and every genuine hole turns negative, and the outer
+  loop's area vector — the patch's area plus its holes' — is the largest. Never
+  the longest perimeter: a serpentine slot can out-measure the boundary it is cut
+  into. A curved patch has no such plane and no loop of it is a hole in another
+  (a hole wall's two rims bound a tube), so there the longest boundary stands as
+  the deterministic bookkeeping choice; validity never reads it. Measurements
+  integrate the mesh exactly and report the verification-design
   bound shapes (volume bound ≈ δ_t · area, by the symmetric-difference
   identity, which the rim never enters) — `Approximate`, except the §2
   Exact-volume case: an all-planar pair whose contacts round exactly leaves the

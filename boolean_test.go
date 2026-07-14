@@ -864,3 +864,250 @@ func TestSecondGenerationPlanarRimsAnswer(t *testing.T) {
 	require.Positive(t, len(second.Edges()))
 	require.Zero(t, refused, `an all-planar second-generation boolean refuses no rim`)
 }
+
+// faceVertices collects the positions of every vertex on a face's loops.
+func faceVertices(f *decad.Face) []r3.Vec {
+	var out []r3.Vec
+	for _, l := range f.Loops() {
+		for _, e := range l.Edges() {
+			out = append(out, e.Start().Position().Value, e.End().Position().Value)
+		}
+	}
+	return out
+}
+
+// facesOnPlaneZ picks the result faces whose every loop vertex sits at height z.
+func facesOnPlaneZ(b *decad.Body, z float64) []*decad.Face {
+	var out []*decad.Face
+	for _, f := range b.Faces() {
+		verts := faceVertices(f)
+		if len(verts) == 0 {
+			continue
+		}
+		on := true
+		for _, v := range verts {
+			if math.Abs(v.Z-z) > 1e-6 {
+				on = false
+				break
+			}
+		}
+		if on {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
+// requireOneOuterLoopPerFace pins the loop invariant every face of a solid
+// owes: exactly one of its loops bounds it from outside, and the rest are
+// holes in it.
+func requireOneOuterLoopPerFace(t *testing.T, b *decad.Body) {
+	t.Helper()
+	for i, f := range b.Faces() {
+		outer := 0
+		for _, l := range f.Loops() {
+			if l.IsOuter() {
+				outer++
+			}
+		}
+		require.Equal(t, 1, outer,
+			`face %d holds %d loops and must call exactly one of them outer`, i, len(f.Loops()))
+	}
+}
+
+// areaMM2 reads an area measurement in mm².
+func areaMM2(t *testing.T, m decad.Measurement) float64 {
+	t.Helper()
+	v, err := m.Value.In(units.SquareMillimeter)
+	require.NoError(t, err)
+	return v
+}
+
+func TestCutBlindTrenchSplitsCapIntoTwoFaces(t *testing.T) {
+	// A blind trench: the tool crosses the plate in x, spans y 8..12, and its
+	// floor STOPS inside the material at z = 5. The plate's top cap is cut
+	// clean through, leaving TWO disconnected patches of the SAME source face
+	// — and two patches are two faces, each bounded from outside by its own
+	// loop. Reporting the second patch as a non-outer loop of the first would
+	// call it a hole in a face it is not even part of.
+	doc := decad.New()
+	plate := boxBody(t, doc, 0, 0, 20, 20, 10)
+	tool := translated(t, boxBody(t, doc, -5, 8, 25, 12, 10), 0, 0, 5)
+
+	got, err := decad.Cut(plate, tool)
+	require.NoError(t, err)
+
+	// 20×20×10 minus the 20×4×5 trench.
+	vol, err := got.Volume()
+	require.NoError(t, err)
+	require.InDelta(t, 3600.0, volumeMM(t, vol), boundMM3(t, vol))
+
+	tops := facesOnPlaneZ(got, 10)
+	require.Len(t, tops, 2, `the trench splits the cap into two separate faces`)
+	for i, f := range tops {
+		require.Len(t, f.Loops(), 1, `top patch %d is a plain rectangle: one loop, no hole`, i)
+		require.True(t, f.Loops()[0].IsOuter(), `top patch %d is bounded from outside by its own loop`, i)
+		area, err := f.Area()
+		require.NoError(t, err)
+		// Each patch is the 20 × 8 strip the trench left standing.
+		require.InDelta(t, 160.0, areaMM2(t, area), 1e-6)
+	}
+	// The two patches occupy the two strips the trench left, one either side.
+	lo, hi := tops[0], tops[1]
+	if faceVertices(lo)[0].Y > faceVertices(hi)[0].Y {
+		lo, hi = hi, lo
+	}
+	for _, v := range faceVertices(lo) {
+		require.True(t, v.Y <= 8+1e-6 && v.Y >= -1e-6, `the near patch spans y 0..8, saw %v`, v)
+	}
+	for _, v := range faceVertices(hi) {
+		require.True(t, v.Y >= 12-1e-6 && v.Y <= 20+1e-6, `the far patch spans y 12..20, saw %v`, v)
+	}
+	// Both patches came from the plate's own cap, so both still say so.
+	require.NotEmpty(t, tops[0].Origins())
+	require.Equal(t, tops[0].Origins(), tops[1].Origins(),
+		`a split cap keeps the ONE source face's origins on both of its patches`)
+
+	requireOneOuterLoopPerFace(t, got)
+	requireBodyWatertight(t, got)
+}
+
+func TestCutThroughHoleKeepsInnerLoopNonOuter(t *testing.T) {
+	// The companion case the split must not break: a through-cut leaves the
+	// cap CONNECTED, with a genuine hole in it. One patch, two loops — and the
+	// hole is emphatically not an outer loop.
+	doc := decad.New()
+	plate := boxBody(t, doc, 0, 0, 20, 20, 10)
+	tool := translated(t, boxBody(t, doc, 8, 8, 12, 12, 20), 0, 0, -5)
+
+	got, err := decad.Cut(plate, tool)
+	require.NoError(t, err)
+
+	// 20×20×10 minus the 4×4 through-hole.
+	vol, err := got.Volume()
+	require.NoError(t, err)
+	require.InDelta(t, 3840.0, volumeMM(t, vol), boundMM3(t, vol))
+
+	tops := facesOnPlaneZ(got, 10)
+	require.Len(t, tops, 1, `a through-hole leaves the cap one connected face`)
+	top := tops[0]
+	require.Len(t, top.Loops(), 2, `the cap holds its outer boundary and the hole`)
+
+	var outer, inner []*decad.Loop
+	for _, l := range top.Loops() {
+		if l.IsOuter() {
+			outer = append(outer, l)
+			continue
+		}
+		inner = append(inner, l)
+	}
+	require.Len(t, outer, 1)
+	require.Len(t, inner, 1, `the hole stays a NON-outer loop — the fix for the split cap must not make every loop outer`)
+
+	area, err := top.Area()
+	require.NoError(t, err)
+	require.InDelta(t, 400.0-16.0, areaMM2(t, area), 1e-6)
+
+	// The hole's rim is the 4×4 square: four edges, 16 mm around.
+	require.Len(t, inner[0].Edges(), 4)
+	perim := 0.0
+	for _, e := range inner[0].Edges() {
+		l, err := e.Length()
+		require.NoError(t, err)
+		v, err := l.Value.In(units.Millimeter)
+		require.NoError(t, err)
+		perim += v
+	}
+	require.InDelta(t, 16.0, perim, 1e-6)
+
+	requireOneOuterLoopPerFace(t, got)
+	requireBodyWatertight(t, got)
+}
+
+// loopPerimeterMM sums a loop's edge lengths in mm.
+func loopPerimeterMM(t *testing.T, l *decad.Loop) float64 {
+	t.Helper()
+	total := 0.0
+	for _, e := range l.Edges() {
+		m, err := e.Length()
+		require.NoError(t, err)
+		v, err := m.Value.In(units.Millimeter)
+		require.NoError(t, err)
+		total += v
+	}
+	return total
+}
+
+func TestCutStarHoleOuterLoopIsNotTheLongest(t *testing.T) {
+	// A star-shaped through-hole whose rim is LONGER than the square boundary
+	// it was cut into. The cap is one connected patch with a genuine hole, and
+	// which of its two loops bounds it from OUTSIDE is settled by the sense the
+	// boundary turns about the patch's own outward normal — never by which one
+	// measures longer. Picking the longer would crown the hole outer and report
+	// the cap's true boundary as a hole inside its own slot.
+	doc := decad.New()
+	w := sketch.NewWorld()
+	plate := boxBody(t, doc, 0, 0, 20, 20, 10)
+
+	const points = 8
+	pts := make([][2]float64, 0, 2*points)
+	for i := range 2 * points {
+		r := 9.0
+		if i%2 == 1 {
+			r = 2.0
+		}
+		th := float64(i) * math.Pi / points
+		pts = append(pts, [2]float64{10 + r*math.Cos(th), 10 + r*math.Sin(th)})
+	}
+	// The star is cut clean through: the prism spans z −20..20, the plate 0..10.
+	tool := polyPrism(t, doc, w, w.XY(), pts, 20)
+
+	got, err := decad.Cut(plate, tool)
+	require.NoError(t, err)
+
+	// Shoelace: the star's own area, which the cap loses and the plate's
+	// volume loses over its full 10 mm height.
+	star := 0.0
+	for i, p := range pts {
+		q := pts[(i+1)%len(pts)]
+		star += p[0]*q[1] - q[0]*p[1]
+	}
+	star = math.Abs(star) / 2
+
+	vol, err := got.Volume()
+	require.NoError(t, err)
+	require.InDelta(t, (400-star)*10, volumeMM(t, vol), boundMM3(t, vol))
+
+	tops := facesOnPlaneZ(got, 10)
+	require.Len(t, tops, 1, `a through-hole leaves the cap one connected patch`)
+	top := tops[0]
+	require.Len(t, top.Loops(), 2)
+
+	var outer, hole *decad.Loop
+	for _, l := range top.Loops() {
+		if l.IsOuter() {
+			outer = l
+			continue
+		}
+		hole = l
+	}
+	require.NotNil(t, outer)
+	require.NotNil(t, hole)
+
+	// The premise: the hole really is the longer boundary of the two.
+	outerLen := loopPerimeterMM(t, outer)
+	holeLen := loopPerimeterMM(t, hole)
+	require.Greater(t, holeLen, outerLen,
+		`the star rim out-measures the square — the case a longest-loop pick gets wrong`)
+
+	// And still the square is the one that bounds the cap from outside.
+	require.InDelta(t, 80.0, outerLen, 1e-6, `the cap's outer boundary is the 20 mm square`)
+	require.Len(t, hole.Edges(), 2*points, `the hole is the star's own rim`)
+
+	area, err := top.Area()
+	require.NoError(t, err)
+	require.InDelta(t, 400-star, areaMM2(t, area), 1e-6)
+
+	requireOneOuterLoopPerFace(t, got)
+	requireBodyWatertight(t, got)
+}

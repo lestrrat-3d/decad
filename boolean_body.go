@@ -10,13 +10,15 @@ import (
 )
 
 // This file turns a stitched boolean mesh into a Faceted Body
-// (docs/evaluator-design.md §9, core §6.1): facets grouped by source
-// analytic face so provenance survives the boolean, real Face/Loop/Edge/
-// Vertex topology chained along the face boundaries, shells and voids decided
-// by exact signed volume and exact containment parity, and measurements
-// integrated exactly over the held mesh, reported Approximate with the proven
-// composed bounds. A Faceted face IS exactly its polygons; what it
-// approximates is which surface it stands for.
+// (docs/evaluator-design.md §9, core §6.1): facets grouped into one Face per
+// CONNECTED PATCH of a source analytic face — the source's origins ride onto
+// every patch of it, so provenance survives the boolean, while a source the
+// boolean cut into disconnected pieces reports each piece as the separate face
+// it now is — real Face/Loop/Edge/Vertex topology chained along the face
+// boundaries, shells and voids decided by exact signed volume and exact
+// containment parity, and measurements integrated exactly over the held mesh,
+// reported Approximate with the proven composed bounds. A Faceted face IS
+// exactly its polygons; what it approximates is which surface it stands for.
 
 // facetGroup is one source face's provenance, carried into the payload so a
 // rebuild (Placed) reproduces the same origins.
@@ -217,29 +219,71 @@ func buildFacetedBody(d *Document, ref StepRef, pp facetedPayload) (*Body, error
 	body := &Body{doc: d, origin: FeatureRef{Step: ref, Role: "body"}, solid: true}
 	boundMM := units.Millimeters(pp.meshBound)
 
-	// Faces: one per (component, source group), in facet order.
-	type faceKey struct {
-		comp int
-		src  int
+	for _, s := range pp.src {
+		if s < 0 || s >= len(pp.groups) {
+			return nil, fmt.Errorf(`%w: a facet names no source group`, ErrBooleanFailed)
+		}
 	}
-	faceIdx := map[faceKey]*Face{}
+
+	// Faces: one per connected PATCH of a source group, in facet order.
+	//
+	// The source face is NOT the face. A boolean can cut one source face into
+	// SEVERAL pieces that no longer touch — a blind trench crosses a cap and
+	// leaves two separate strips of it standing — and each piece is its own
+	// Face, bounded from outside by its own loop. Keying only by source would
+	// hand both strips to one Face, which then has two outer boundaries and
+	// can call only one of them outer: the other would be reported as a HOLE
+	// in a patch it is not even part of. So the key is the patch: the facets
+	// of one source group reachable from each other ACROSS SHARED EDGES.
+	//
+	// Two facets sharing an edge always share a component, so a patch never
+	// spans two components and the component need not be keyed on separately.
+	// The partition is exactly edge-connectivity, so it adds no face boundary
+	// that was not already there: an edge whose two facets differ in patch also
+	// differs in source group, and was a boundary before the split.
+	patch := make([]int, len(tris))
+	for i := range patch {
+		patch[i] = -1
+	}
+	nPatch := 0
+	for i := range tris {
+		if patch[i] != -1 {
+			continue
+		}
+		id := nPatch
+		nPatch++
+		patch[i] = id
+		queue := []int{i}
+		for len(queue) > 0 {
+			f := queue[0]
+			queue = queue[1:]
+			for _, nb := range adj[f] {
+				if patch[nb] != -1 || pp.src[nb] != pp.src[f] {
+					continue
+				}
+				patch[nb] = id
+				queue = append(queue, nb)
+			}
+		}
+	}
+
+	faceIdx := map[int]*Face{}
 	facePlanar := map[*Face]bool{}
 	facetFace := make([]*Face, len(tris))
 	compFaces := make([][]*Face, len(members))
 	for i, t := range tris {
-		key := faceKey{comp: comp[i], src: pp.src[i]}
-		f, ok := faceIdx[key]
+		f, ok := faceIdx[patch[i]]
 		if !ok {
-			if pp.src[i] < 0 || pp.src[i] >= len(pp.groups) {
-				return nil, fmt.Errorf(`%w: a facet names no source group`, ErrBooleanFailed)
-			}
+			// Every patch of one source face carries that face's OWN origins:
+			// both strips of a split cap came from the cap, and both must
+			// still say so, or FaceCreatedBy and the surveys lose them.
 			f = &Face{
 				surface:    Faceted{Bound: boundMM},
 				origins:    append([]FeatureRef(nil), pp.groups[pp.src[i]].origins...),
 				body:       body,
 				heldPlanar: pp.groups[pp.src[i]].planar,
 			}
-			faceIdx[key] = f
+			faceIdx[patch[i]] = f
 			facePlanar[f] = pp.groups[pp.src[i]].planar
 			compFaces[comp[i]] = append(compFaces[comp[i]], f)
 		}
@@ -660,8 +704,21 @@ func buildFacetedTopology(verts []r3.Vec, tris [][3]int, facetFace []*Face, face
 		commitChain(rotated)
 	}
 
+	// The area-weighted normal of each face's own facets. A face is ONE patch,
+	// and a patch of a PLANAR source is coplanar, so this is that plane's
+	// outward normal (scaled by twice the patch's area).
+	faceNormal := map[*Face]r3.Vec{}
+	for i, t := range tris {
+		a, b, c := verts[t[0]], verts[t[1]], verts[t[2]]
+		f := facetFace[i]
+		faceNormal[f] = faceNormal[f].Add(b.Sub(a).Cross(c.Sub(a)))
+	}
+
 	// Face loops: walk each face's directed boundary cycles through the
 	// facet fans, then group consecutive halfedges by chain into coedges.
+	// loopMoment is each loop's closed-polygon area vector Σ vᵢ × vᵢ₊₁ (twice
+	// the signed area), which is what decides outer from hole on a planar face.
+	loopMoment := map[*Loop]r3.Vec{}
 	visited := map[[2]int]struct{}{}
 	nextBoundary := func(h [2]int) ([2]int, error) {
 		cur := h
@@ -711,7 +768,7 @@ func buildFacetedTopology(verts []r3.Vec, tris [][3]int, facetFace []*Face, face
 				cur = nxt
 			}
 			loop := &Loop{}
-			lastChain := -1
+			firstChain, lastChain := -1, -1
 			for _, he := range cycle {
 				key := [2]int{min(he[0], he[1]), max(he[0], he[1])}
 				ci, ok := chainOf[key]
@@ -722,29 +779,71 @@ func buildFacetedTopology(verts []r3.Vec, tris [][3]int, facetFace []*Face, face
 					continue
 				}
 				lastChain = ci
+				if firstChain == -1 {
+					firstChain = ci
+				}
 				forward := chains[ci].verts[posInChain[key]] == he[0]
 				loop.coedges = append(loop.coedges, coedge{edge: chains[ci].edge, forward: forward})
 			}
+			// The walk starts at whichever halfedge the facet scan reached
+			// first, which can sit in the MIDDLE of a chain — and then that one
+			// chain is met twice, once at each end of the cycle, and would be
+			// listed as two coedges of one edge. The cycle is closed, so the
+			// tail is the head's own chain resumed: drop it. (A chain that is
+			// the loop's ONLY one already collapsed to a single coedge above.)
+			if n := len(loop.coedges); n > 1 && lastChain == firstChain {
+				loop.coedges = loop.coedges[:n-1]
+			}
+			mom := r3.Vec{}
+			for _, he := range cycle {
+				mom = mom.Add(verts[he[0]].Cross(verts[he[1]]))
+			}
+			loopMoment[loop] = mom
 			face.loops = append(face.loops, loop)
 		}
 	}
 
-	// Attach edges to faces' loops' order and pick each face's outer loop:
-	// the longest boundary, a deterministic bookkeeping choice — validity
-	// never reads it, and Faceted faces expose their polygons through
-	// Tessellate, not through loop nesting.
+	// Pick each face's outer loop. A face is ONE connected patch, so exactly one
+	// of its loops bounds it from outside and the rest are holes in it.
+	//
+	// On a PLANAR patch that is decided, not guessed: the boundary is walked
+	// with the material on its left, so about the patch's own outward normal
+	// the outer loop turns positive and every hole turns negative — and the
+	// outer loop's area vector is the patch's area PLUS its holes', so it is
+	// the largest. A longest-perimeter pick would not do: a long serpentine
+	// slot can out-measure the boundary it is cut into, and crowning it outer
+	// would report the face's true outer boundary as a hole in its own slot.
+	//
+	// A CURVED patch has no such plane, and no loop of it is a hole in another
+	// (a hole wall's two rims bound a tube). There the longest boundary stands
+	// as the deterministic bookkeeping choice: validity never reads it, and
+	// Faceted faces expose their polygons through Tessellate, not through loop
+	// nesting.
 	for f := range collectFaces(facetFace) {
 		if len(f.loops) == 0 {
 			return fmt.Errorf(`%w: a faceted face has no boundary loop`, ErrBooleanFailed)
 		}
-		longest, li := -1.0, 0
-		for idx, l := range f.loops {
-			total := 0.0
-			for _, ce := range l.coedges {
-				total += ce.edge.length
+		li := -1
+		if facePlanar[f] {
+			n := faceNormal[f]
+			best := 0.0
+			for idx, l := range f.loops {
+				if s := loopMoment[l].Dot(n); s > best {
+					best, li = s, idx
+				}
 			}
-			if total > longest {
-				longest, li = total, idx
+		}
+		if li == -1 {
+			longest := -1.0
+			li = 0
+			for idx, l := range f.loops {
+				total := 0.0
+				for _, ce := range l.coedges {
+					total += ce.edge.length
+				}
+				if total > longest {
+					longest, li = total, idx
+				}
 			}
 		}
 		f.loops[0], f.loops[li] = f.loops[li], f.loops[0]
