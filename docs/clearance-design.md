@@ -215,7 +215,14 @@ Two upgrades and one downgrade close the table:
 - **Coaxial pairs are closed form regardless of the table.** Two surfaces of
   revolution about the same axis reduce to the 2D meridian problem — the
   distance between their generating segments and arcs in the shared `(z, ρ)`
-  half-plane, closed form pairwise. This upgrades every `BB` cell for the
+  half-plane, closed form pairwise — but ONLY where the two faces' angular
+  trims overlap: the meridian problem quantifies over full revolutions, and
+  two partial faces with identical generators but disjoint sweep intervals
+  have a positive real gap the meridian reading would wrongly report as
+  zero. The face-interior candidate is admitted when the sweep intervals
+  intersect (a decided closed-form test); otherwise it is discarded and the
+  minimum falls to the angular boundary edges and vertices, exactly as a
+  trim-departed foot does in §3. This upgrades every `BB` cell for the
   layout revolved bodies most often produce.
 - **Co-directional prisms reduce to 2D.** Two prisms with parallel sweep
   directions have `Gap = hypot(dz, d₂)` where `dz` is the sweep-interval
