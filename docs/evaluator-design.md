@@ -80,10 +80,11 @@ Rules:
 - **`convex` is the walked boundary, decided at build** (core §6.1). The
   profile walk carries the material on its left — outer loop counter-clockwise,
   every hole clockwise (§4) — and every edge reads that walk, never a 3D
-  dihedral measured after the fact. A junction edge (a prism's vertical edge, a
-  revolve's swept junction) takes the sign of the cross product of the incoming
-  and outgoing walk tangents: a left turn is convex. A rim edge (a cap edge, a
-  full revolve's latitude circle) takes the sense of the wall it runs along —
+  dihedral measured after the fact. A junction edge — a prism's vertical edge,
+  and a revolve's swept junction, which is a partial sweep's arc and a full
+  revolution's latitude circle alike — takes the sign of the cross product of
+  the incoming and outgoing walk tangents: a left turn is convex. A rim edge (a
+  wall's own copy in a cap plane) takes the sense of the wall it runs along —
   a circular wall by its own turn, counter-clockwise convex and clockwise
   concave, which is the same test that decides whether the wall's material lies
   outside its cylinder; a straight wall, having no turn, by the role of its loop
