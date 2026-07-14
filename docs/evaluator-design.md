@@ -35,7 +35,18 @@ Per core §2: **v1 is analytic where construction is free, and
 tessellation-backed exactly where exactness dies — the boolean.** A body built
 by features alone (extrude, revolve, placed) carries analytic faces and Exact
 measurements. A body touched by a boolean carries `Faceted` faces and
-Approximate measurements with proven bounds. There is no third state.
+measurements with proven bounds. There is no third state.
+
+`Exactness` on a boolean's measurement is decided by that measurement's own
+proven bound, never by the fact that a boolean produced it (core §5.3: a zero
+bound IS the claim that the value is exactly representable). A nonzero bound
+reads `Approximate`. A **zero** bound reads `Exact`, and exactly one boolean
+measurement can reach it: the **VOLUME** of an all-planar pair whose contact
+points round exactly, which is integrated in exact rational arithmetic over the
+held mesh and whose rounding term is then genuinely zero. Every other boolean
+measurement is Approximate — a length, an area or a centroid is a float sum of
+square roots, and the last ulp is not free, so its bound is never zero (§9,
+`bounds.go`).
 
 **Staging is explicit.** v1 lands in increments (§11), and an intent the
 recipe can record but this evaluator cannot yet build is **rejected at the
@@ -249,11 +260,112 @@ Increment 4, the deep end. Strategy:
   construction** on the tessellated geometry. Retriangulation along
   intersection curves, classification by exact winding tests, stitching by
   shared exact vertices.
-- **Output**: faces are `Faceted`, grouped by source analytic face so
-  provenance (`FaceCreatedBy`) and face-level selection survive the boolean;
-  vertices carry bound δ_t; measurements integrate the mesh exactly and
-  report `Approximate` with the verification-design bound shapes
-  (volume bound ≈ δ_t · area).
+- **One symmetric classifier per facet pair.** Two closed triangles are convex
+  sets, so their intersection is empty, a point, a segment, or a 2-D region —
+  and the pair pass computes exactly *which*, never "how many of A's vertices
+  sit on B's plane, and whose geometry do I look on". A 2-D region is a
+  coplanar face-on-face tangency (`ErrDegenerate`); a point is carried and
+  refused unless some crossing chain owns it as an endpoint; a segment is a
+  rim. Which triangle's boundary an endpoint lies on is decided by testing the
+  point against *each* triangle, not by which list it was drawn from. The
+  classification is direction-free by construction, which is what keeps it from
+  disagreeing with itself.
+- **Graze versus crossing is not a property of a facet pair.** When a contact
+  segment runs ALONG a facet edge, the pair cannot tell whether the operand's
+  boundary touches the other's plane and comes back (a graze — a tangency no
+  side classification can be proven for, `ErrDegenerate`) or genuinely passes
+  through it (an ordinary crossing, and a real rim). Only the edge's TWO
+  adjacent facets can: their apex vertices strictly on one side is a graze,
+  straddling is a crossing. So the pair pass only reports the in-plane edge,
+  and the mesh pass makes the call once, with the adjacency in hand. A crossing
+  edge subdivides the facet it passes through (never the facet it runs along —
+  a segment on a facet's own boundary cuts nothing off it) and its regions
+  classify by exact parity, because the other operand's boundary there is a
+  DIHEDRAL and one plane of a dihedral decides nothing.
+- **A tangency the chords cannot see is refused, never assumed away.** A chord
+  polygon lies strictly inside the curved surface it approximates, so a true
+  tangency between two operands can vanish from the tessellation — and whether
+  it vanishes depends on where the chord samples fell. A pre-pass therefore
+  proves, per analytic FACE pair, that no touch can be hiding: if the true
+  surfaces touch, that point is within δ_A of A's facets and δ_B of B's, so
+  the facet sets come within δ_A + δ_B of each other. A face pair whose facets
+  already MEET is decided (the contact is exact and the predicates own it); a
+  face pair that comes within δ_A + δ_B *without* meeting is the undecidable
+  one, and it is refused (`ErrUnsupported`). Reject-only: it may refuse a valid
+  model whose operands genuinely pass that close, and that is the accepted
+  price. Deciding such a pair for real is the clearance kernel's job
+  (`docs/clearance-design.md`), not a chord's. A planar face with straight
+  edges triangulates exactly, and a `Faceted` face IS its polygons, so both are
+  held with zero error and the pre-pass has nothing to prove about them.
+- **An operand facet that collapsed is refused, never skipped.** A rigid
+  placement's own rounding can flatten a facet of an already-faceted body to
+  zero area. Such a facet has no plane and no interior, so every contact
+  predicate here is blind to it — a point or tangent contact the other operand
+  makes there would be classified by nothing at all — and it must not ride
+  through the boolean on its component's verdict. The operand is refused
+  (`ErrUnsupported`) rather than examined in part.
+- **The final rounding to float64 welds, and what the weld takes it must
+  answer for.** Two exact result vertices closer than an ulp round to one held
+  vertex, and the facets they span collapse. A collapsed facet is a zero-area
+  triangle: it moves neither the volume integral nor the area sum of the held
+  mesh, and its two real directed edges cancel, so closure survives it. But the
+  facet it stood for was not zero-area *before* the weld, and two things it
+  carried have to be accounted for, in two different ways:
+  - **The volume and the area it carried are BOUNDED.** The rounding's volume
+    error is what its vertex displacement sweeps out over the surface the
+    displacement acted ON — the stitched surface *before* any facet was
+    dropped from it. Charging it against the mesh that survived would leave the
+    dropped facets' own swept volume out of the bound entirely. So the swept
+    volume is charged against the pre-round surface, and the area the weld
+    dropped — which the held mesh can no longer report — joins the operands'
+    chord deficit in the area bound (`bounds.go`: `sweptVolumeAllow`,
+    `perturbedAreaUpper`).
+  - **A component welded out of existence is REFUSED.** When *every* facet of a
+    connected component collapses, that whole shell disappears — a lump gone
+    from the body, with its volume, its place in `Lumps()` and its reach in the
+    bounds box. No bound answers for that: the loss is topological, and the
+    closure audit does not catch it, because the components that remain still
+    close. It is refused (`ErrUnsupported`). Every other collapse is an edge
+    contraction inside a component that survives, and the two bounds above
+    cover it.
+- **Output**: faces are `Faceted`, one per CONNECTED PATCH of a source analytic
+  face. Each patch keeps that source's origins, so provenance (`FaceCreatedBy`)
+  and face-level selection survive the boolean — but the source face is not the
+  face. A boolean can cut one source into pieces that no longer touch (a blind
+  trench crosses a cap and leaves two separate strips of it standing), and each
+  piece is its own face, bounded from outside by its own loop. Grouping by
+  source alone would hand both strips to one face, which then has two outer
+  boundaries and can call only one of them outer — reporting the other as a
+  *hole* in a patch it is not part of, a wrong topology answer on the surface
+  agents traverse. So the key is the patch: the facets of one source reachable
+  from each other across shared edges. Within a patch, which loop bounds it from
+  outside is decided, not guessed: on a planar patch the boundary is walked with
+  the material on its left, so about the patch's own outward normal the outer
+  loop turns positive and every genuine hole turns negative, and the outer
+  loop's area vector — the patch's area plus its holes' — is the largest. Never
+  the longest perimeter: a serpentine slot can out-measure the boundary it is cut
+  into. A curved patch has no such plane and no loop of it is a hole in another
+  (a hole wall's two rims bound a tube), so there the longest boundary stands as
+  the deterministic bookkeeping choice; validity never reads it. Measurements
+  integrate the mesh exactly and report the verification-design
+  bound shapes (volume bound ≈ δ_t · area, by the symmetric-difference
+  identity, which the rim never enters) — `Approximate`, except the §2
+  Exact-volume case: an all-planar pair whose contacts round exactly leaves the
+  exact volume integral with a genuinely zero bound.
+- **The rim is NOT bounded by δ_t.** A vertex an operand's tessellation
+  contributed lies on that operand's surface; a vertex the BOOLEAN creates does
+  not lie on either. It is the crossing of two chord PLANES, and the true
+  intersection curve is anywhere within δ_A of the one and δ_B of the other —
+  a tube of half-width **(δ_A + δ_B)/sin θ** about it, θ the crossing angle.
+  So the boundary bound is that trim-amplified displacement, computed from a
+  proven lower bound on sin θ taken exactly from the facet normals, and it is
+  what every boundary measurement composes from (`Vertex.Position`,
+  `Faceted.Bound`, `FacetedCurve.Bound`, `Box`, and the perimeter term of every
+  area bound). It has no finite ceiling as the operands approach tangency: when
+  the inflated bound reaches the pair's own diameter it has stopped bounding
+  anything, and the operation is refused (`ErrUnsupported`) rather than
+  reported with a number nobody can use. Every bound has exactly one owner
+  (`bounds.go`); no measurement site computes one inline.
 - Rejected alternatives: a third-party kernel (dependency rule; also the
   supply-chain surface); float-only BSP classification (the flipped-sign
   nonsense solid of core §2.1); snapping/welding heuristics (silently moves

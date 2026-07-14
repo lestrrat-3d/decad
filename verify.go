@@ -472,11 +472,11 @@ func verifyBody(b *Body, cfg verifyConfig) *BodyReport {
 	}
 
 	// The tolerance gate (verification §2/§6): an Exact answer has a zero
-	// proven bound and passes at any tolerance; everything this evaluator
-	// computes is Exact (evaluator §10). An Approximate answer is one this
-	// evaluator cannot judge — its reference machinery (verification §3/§4)
-	// lands with the approximate evaluators — so it reads Suspect, never a
-	// silent pass.
+	// proven bound and passes at any tolerance; everything the feature
+	// evaluators compute is Exact (evaluator §10). An Approximate answer —
+	// a boolean-built Faceted body's — is one this audit cannot judge yet:
+	// its reference machinery (verification §3/§4) is staged, so it reads
+	// Suspect, never a silent pass.
 	br.Exactness = bodyExactness(br)
 	if br.Exactness != Exact {
 		suspect = true

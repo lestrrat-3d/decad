@@ -26,6 +26,11 @@ type Mesh struct {
 	triangles [][3]int
 	source    []*Face
 	bound     float64 // millimetres
+	// areaSlack is a proven bound (mm²) on how far the mesh's total facet
+	// area falls short of — or, over a hole, overshoots — the body's true
+	// boundary area: the chord-versus-arc deficit, closed form per walk.
+	// The mesh boolean's area bounds compose from it.
+	areaSlack float64
 }
 
 // Vertices returns the mesh vertex positions in millimetres (core §5.2).
@@ -77,6 +82,9 @@ func (b *Body) Tessellate(tol units.Value) (*Mesh, error) {
 	}
 	if b.payload == nil {
 		return nil, fmt.Errorf(`%w: this evaluator cannot tessellate a body it did not build`, ErrUnsupported)
+	}
+	if fp, ok := b.payload.(facetedPayload); ok {
+		return tessellateFaceted(b, fp, chord)
 	}
 	pp, ok := b.payload.(prismPayload)
 	if !ok {
@@ -153,6 +161,7 @@ func (b *Body) Tessellate(tol units.Value) (*Mesh, error) {
 			}
 			mesh.bound = math.Max(mesh.bound, sag)
 			maxSag = math.Max(maxSag, sag)
+			mesh.areaSlack += walkAreaSlack(w.segmentWalk, n, pp.z1-pp.z0)
 			dth := (w.th1 - w.th0) / float64(n)
 			for k := range n {
 				p := Point2{U: w.startU, V: w.startV}
@@ -221,6 +230,45 @@ func (b *Body) Tessellate(tol units.Value) (*Mesh, error) {
 		}
 	}
 	return &mesh, nil
+}
+
+// walkAreaSlack is the proven chord-versus-arc area slack one circular walk
+// contributes: the wall loses (arc − chord) × height, and each cap gains or
+// loses the circular segments between arc and chords — both closed form, both
+// padded a hair so float rounding never understates them.
+func walkAreaSlack(w segmentWalk, n int, h float64) float64 {
+	sweep := math.Abs(w.th1 - w.th0)
+	arc := sweep * w.radius
+	chord := float64(n) * 2 * w.radius * math.Sin(sweep/(2*float64(n)))
+	wall := math.Max(arc-chord, 0) * h
+	segs := w.radius * w.radius / 2 * math.Max(sweep-float64(n)*math.Sin(sweep/float64(n)), 0)
+	return (wall + 2*segs) * (1 + 1e-9)
+}
+
+// tessellateFaceted restates a boolean-built body's held mesh: the polygons
+// ARE the boundary this evaluator holds (core §6.1), carrying their own
+// proven bound. It cannot refine them — the analytic identity is gone — so a
+// tolerance finer than the held bound is ErrUnsupported, never a mesh whose
+// bound overstates its trust.
+func tessellateFaceted(b *Body, fp facetedPayload, chord float64) (*Mesh, error) {
+	if chord < fp.meshBound {
+		return nil, fmt.Errorf(`%w: a faceted body cannot be re-tessellated finer than its own bound`, ErrUnsupported)
+	}
+	faces := b.Faces()
+	src := make([]*Face, len(fp.tris))
+	for i, fi := range fp.faceOf {
+		if fi < 0 || fi >= len(faces) {
+			return nil, fmt.Errorf(`%w: a facet maps to no face`, ErrUnsupported)
+		}
+		src[i] = faces[fi]
+	}
+	return &Mesh{
+		vertices:  fp.verts,
+		triangles: fp.tris,
+		source:    src,
+		bound:     fp.meshBound,
+		areaSlack: fp.areaSlack,
+	}, nil
 }
 
 // meshBottom and meshTop are the mesh vertex indices of 2D boundary sample g:
