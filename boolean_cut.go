@@ -27,6 +27,13 @@ type xseg struct {
 	a, b             xpt
 	aOnEdge, bOnEdge bool
 	partner          [3]r3.Vec
+	// viaParity marks a contact whose region classification may NOT be read
+	// off the partner facet's plane: the segment runs along an EDGE of the
+	// other operand, whose boundary there is the DIHEDRAL between two facets,
+	// and one plane of a dihedral decides nothing (a reflex hinge reverses the
+	// reading). Such a region falls back to exact parity, which is global and
+	// cannot be fooled by a local plane.
+	viaParity bool
 }
 
 // cutRegion is one classified-to-be region of a subdivided facet: its exact
@@ -55,6 +62,16 @@ type cutVert struct {
 type cutEdge struct {
 	a, b    int
 	partner [3]r3.Vec
+	// viaParity carries xseg.viaParity: this chain edge anchors no region.
+	viaParity bool
+}
+
+// chainAnchor is what a chain edge offers a region for classification: the
+// partner facet whose plane side is the answer — unless viaParity, in which
+// case the edge anchors nothing and the region falls back to exact parity.
+type chainAnchor struct {
+	partner   [3]r3.Vec
+	viaParity bool
 }
 
 // triCutter is the working state of one facet's subdivision.
@@ -119,7 +136,7 @@ func cutTriangle(xtri [3]xpt, normal xpt, segs []xseg) ([]cutRegion, error) {
 			continue
 		}
 		seen[k] = struct{}{}
-		tc.edges = append(tc.edges, cutEdge{a: ia, b: ib, partner: s.partner})
+		tc.edges = append(tc.edges, cutEdge{a: ia, b: ib, partner: s.partner, viaParity: s.viaParity})
 	}
 	if len(tc.edges) == 0 {
 		// Every contact collapsed to a point: the facet is whole, classified
@@ -171,9 +188,9 @@ func cutTriangle(xtri [3]xpt, normal xpt, segs []xseg) ([]cutRegion, error) {
 		}
 	}
 
-	chainEdges := map[[2]int][3]r3.Vec{}
+	chainEdges := map[[2]int]chainAnchor{}
 	for _, e := range tc.edges {
-		chainEdges[[2]int{min(e.a, e.b), max(e.a, e.b)}] = e.partner
+		chainEdges[[2]int{min(e.a, e.b), max(e.a, e.b)}] = chainAnchor{partner: e.partner, viaParity: e.viaParity}
 	}
 
 	var regions []cutRegion
@@ -379,7 +396,9 @@ func (tc *triCutter) splitEdgesAtU(c *big.Rat) {
 		}
 		p3 := xlerp(tc.verts[e.a].p3, tc.verts[e.b].p3, t)
 		mid := tc.addVert(p2, p3, true)
-		out = append(out, cutEdge{a: e.a, b: mid, partner: e.partner}, cutEdge{a: mid, b: e.b, partner: e.partner})
+		out = append(out,
+			cutEdge{a: e.a, b: mid, partner: e.partner, viaParity: e.viaParity},
+			cutEdge{a: mid, b: e.b, partner: e.partner, viaParity: e.viaParity})
 	}
 	tc.edges = out
 }
@@ -538,7 +557,7 @@ func indexOf(poly []int, vi int) int {
 // regionOf triangulates one final region polygon and finds its
 // classification anchor: the region triangle adjacent to a chain edge, whose
 // exact centroid probes the partner facet's plane side.
-func (tc *triCutter) regionOf(poly []int, chainEdges map[[2]int][3]r3.Vec) (cutRegion, error) {
+func (tc *triCutter) regionOf(poly []int, chainEdges map[[2]int]chainAnchor) (cutRegion, error) {
 	tris2, err := earClipX(collectP2(tc.verts), poly)
 	if err != nil {
 		return cutRegion{}, err
@@ -555,12 +574,12 @@ func (tc *triCutter) regionOf(poly []int, chainEdges map[[2]int][3]r3.Vec) (cutR
 		}
 		for k := range 3 {
 			key := [2]int{min(t[k], t[(k+1)%3]), max(t[k], t[(k+1)%3])}
-			partner, ok := chainEdges[key]
-			if !ok {
+			anchor, ok := chainEdges[key]
+			if !ok || anchor.viaParity {
 				continue
 			}
 			reg.hasAnchor = true
-			reg.partner = partner
+			reg.partner = anchor.partner
 			reg.probe = xCentroid(corners[0], corners[1], corners[2])
 			break
 		}

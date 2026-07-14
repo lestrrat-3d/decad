@@ -76,11 +76,14 @@ func (fp facetedPayload) placed(d *Document, ref StepRef, composed r3.Transform)
 	next := fp
 	next.xform = composed
 	next.verts = make([]r3.Vec, len(fp.verts))
-	maxAbs := 0.0
+	// The rounding a rigid motion commits is committed at the magnitude of the
+	// INPUT coordinate and of the translation — inside the products and sums —
+	// never at the magnitude of the result: a body built far from the origin
+	// and moved back rounds at the far magnitude. Charge it there (bounds.go).
+	maxIn := 0.0
 	for i, v := range fp.verts {
-		moved := delta.Apply(v)
-		next.verts[i] = moved
-		maxAbs = math.Max(maxAbs, math.Max(math.Abs(moved.X), math.Max(math.Abs(moved.Y), math.Abs(moved.Z))))
+		maxIn = math.Max(maxIn, math.Max(math.Abs(v.X), math.Max(math.Abs(v.Y), math.Abs(v.Z))))
+		next.verts[i] = delta.Apply(v)
 	}
 	if delta.IsReflection() {
 		next.tris = make([][3]int, len(fp.tris))
@@ -88,10 +91,9 @@ func (fp facetedPayload) placed(d *Document, ref StepRef, composed r3.Transform)
 			next.tris[i] = [3]int{t[0], t[2], t[1]}
 		}
 	}
-	// The transform arithmetic rounds each coordinate; the consumers read a
-	// 3D distance bound and all three coordinates can round at once, so the
-	// generous per-coordinate ulp allowance carries a √3 on top (32 ≥ 16·√3).
-	allow := 32 * ulpOf(maxAbs)
+	tr := delta.Translation()
+	maxTrans := math.Max(math.Abs(tr.X), math.Max(math.Abs(tr.Y), math.Abs(tr.Z)))
+	allow := rigidRoundAllow(maxIn, maxTrans)
 	next.meshBound += allow
 	next.volSymDiff += allow * meshAreaUpper(next.verts, next.tris)
 	return buildFacetedBody(d, ref, next)
@@ -104,14 +106,16 @@ func ulpOf(x float64) float64 {
 }
 
 // meshAreaUpper is a proven upper bound on the held mesh's total facet area:
-// the float sum padded for its own summation rounding.
+// the float sum padded by the PROVEN naive-summation bound of the very loop
+// that computed it (bounds.go, sumSlop) — not a fixed fraction, which no proof
+// backs at any facet count.
 func meshAreaUpper(verts []r3.Vec, tris [][3]int) float64 {
 	total := 0.0
 	for _, t := range tris {
 		a, b, c := verts[t[0]], verts[t[1]], verts[t[2]]
 		total += b.Sub(a).Cross(c.Sub(a)).Len() / 2
 	}
-	return total*(1+1e-9) + 1e-300
+	return total + sumSlop(len(tris), total) + 1e-300
 }
 
 // buildFacetedBody assembles the Faceted body from the payload: exact
@@ -228,9 +232,10 @@ func buildFacetedBody(d *Document, ref StepRef, pp facetedPayload) (*Body, error
 				return nil, fmt.Errorf(`%w: a facet names no source group`, ErrBooleanFailed)
 			}
 			f = &Face{
-				surface: Faceted{Bound: boundMM},
-				origins: append([]FeatureRef(nil), pp.groups[pp.src[i]].origins...),
-				body:    body,
+				surface:    Faceted{Bound: boundMM},
+				origins:    append([]FeatureRef(nil), pp.groups[pp.src[i]].origins...),
+				body:       body,
+				heldPlanar: pp.groups[pp.src[i]].planar,
 			}
 			faceIdx[key] = f
 			facePlanar[f] = pp.groups[pp.src[i]].planar
@@ -241,23 +246,35 @@ func buildFacetedBody(d *Document, ref StepRef, pp facetedPayload) (*Body, error
 		facetFace[i] = f
 	}
 
-	edgeLenTotal, err := buildFacetedTopology(verts, tris, facetFace, facePlanar, pp.meshBound)
-	if err != nil {
+	if err := buildFacetedTopology(verts, tris, facetFace, facePlanar, pp.meshBound); err != nil {
 		return nil, err
 	}
 
-	// Per-face area bounds: the §4 shape — the chord bound times the face's
-	// own bounding edges — plus the operands' chord-length slack and a float
-	// summation allowance.
+	// Per-face area bounds: the §4 shape — the rim's proven displacement times
+	// the face's own bounding edges — plus the operands' chord-length slack and
+	// the PROVEN slop of the float sum that produced the area. The perimeter it
+	// multiplies is the UPPER one: an edge's held chord length is itself only
+	// known within its own bound (bounds.go, chainLengthBound).
+	facetsOf := map[*Face]int{}
+	for _, f := range facetFace {
+		facetsOf[f]++
+	}
+	// facePerimTotal is the sum of the faces' OWN perimeters, which counts every
+	// edge TWICE — once per face it bounds. That is the right multiplier for the
+	// whole body's area: a rim that moves perturbs BOTH faces it separates, and
+	// charging it once would understate the body's area error by up to a factor
+	// of two.
+	facePerimTotal := 0.0
 	for _, faces := range compFaces {
 		for _, f := range faces {
 			loopLen := 0.0
 			for _, l := range f.loops {
 				for _, ce := range l.coedges {
-					loopLen += ce.edge.length
+					loopLen += ce.edge.length + ce.edge.lengthBound
 				}
 			}
-			f.areaBound = pp.meshBound*loopLen + pp.areaSlack + 1e-9*f.area
+			facePerimTotal += loopLen
+			f.areaBound = upRound(pp.meshBound*loopLen + pp.areaSlack + sumSlop(facetsOf[f], f.area))
 		}
 	}
 
@@ -331,13 +348,12 @@ func buildFacetedBody(d *Document, ref StepRef, pp facetedPayload) (*Body, error
 		a, b, c := verts[t[0]], verts[t[1]], verts[t[2]]
 		areaF += b.Sub(a).Cross(c.Sub(a)).Len() / 2
 	}
-	// The float area accumulation itself rounds: each facet contributes a
-	// cross product, norm and sum, each within a few ulps, so the slop is
-	// ulp-scale in the total — NOT a fixed 1e-9 fraction, which would turn
-	// a genuinely tiny-bound planar boolean into a needlessly coarse one,
-	// and never zero, which would claim an exactness the float sum lacks.
-	floatSlop := 16 * 2.220446049250313e-16 * areaF * math.Max(1, math.Log2(float64(len(tris)+1)))
-	areaBound := pp.meshBound*edgeLenTotal + pp.areaSlack + floatSlop
+	// The float area accumulation itself rounds, and the loop above sums
+	// NAIVELY: charge the proven naive-summation bound, never a pairwise one
+	// (bounds.go, sumSlop). It is ulp-scale in the total, so a genuinely
+	// tiny-bound planar boolean stays tiny — and never zero, which would claim
+	// an exactness a float sum of square roots does not have.
+	areaBound := upRound(pp.meshBound*facePerimTotal + pp.areaSlack + sumSlop(len(tris), areaF))
 	body.area = Measurement{
 		Value:     units.SquareMillimeters(areaF),
 		Exactness: exactnessOf(areaBound),
@@ -358,13 +374,9 @@ func buildFacetedBody(d *Document, ref StepRef, pp facetedPayload) (*Body, error
 	cxF, _ := cx.Float64()
 	cyF, _ := cy.Float64()
 	czF, _ := cz.Float64()
-	// The three coordinates round independently, and the VecMeasurement
-	// bound is a 3D radius: scale the per-coordinate max by √3 (rounded
-	// up), then nudge an ulp so the sum stays a proven bound.
-	cenRound := math.Max(ratAbsDiff(cx, cxF), math.Max(ratAbsDiff(cy, cyF), ratAbsDiff(cz, czF)))
-	if cenRound > 0 {
-		cenRound = math.Nextafter(cenRound*1.7320508075688774, math.Inf(1))
-	}
+	// The three coordinates round independently, and the VecMeasurement bound
+	// is a 3D radius (bounds.go, radius3D).
+	cenRound := radius3D(math.Max(ratAbsDiff(cx, cxF), math.Max(ratAbsDiff(cy, cyF), ratAbsDiff(cz, czF))))
 	body.centroid = VecMeasurement{
 		Value:     r3.Vec{X: cxF, Y: cyF, Z: czF},
 		Exactness: exactnessOf(cenBound + cenRound),
@@ -376,10 +388,16 @@ func buildFacetedBody(d *Document, ref StepRef, pp facetedPayload) (*Body, error
 		lo = r3.Vec{X: math.Min(lo.X, v.X), Y: math.Min(lo.Y, v.Y), Z: math.Min(lo.Z, v.Z)}
 		hi = r3.Vec{X: math.Max(hi.X, v.X), Y: math.Max(hi.Y, v.Y), Z: math.Max(hi.Z, v.Z)}
 	}
+	// Min and Max are POSITIONS, and Bound is the error bound on them: a 3D
+	// radius, not a per-axis extent (core §5.2). The held extreme can be one
+	// displacement inside the truth on every axis at once, so the corner is up
+	// to √3 of it away — and the per-coordinate reading is exactly tight, so
+	// there is no headroom to absorb the factor (bounds.go, radius3D).
+	boxBound := radius3D(pp.meshBound)
 	body.bounds = Box{
 		Min: lo, Max: hi,
-		Exactness: exactnessOf(pp.meshBound),
-		Bound:     units.Millimeters(pp.meshBound),
+		Exactness: exactnessOf(boxBound),
+		Bound:     units.Millimeters(boxBound),
 	}
 
 	// The facet → face mapping, in the body's Faces() order, for Tessellate.
@@ -395,8 +413,16 @@ func buildFacetedBody(d *Document, ref StepRef, pp facetedPayload) (*Body, error
 	return body, nil
 }
 
-// exactnessOf keys a measurement's exactness off its proven bound: zero is
-// the truth, anything else is Approximate.
+// exactnessOf keys a measurement's exactness off its proven bound: zero is the
+// truth, anything else is Approximate.
+//
+// A zero bound is therefore a CLAIM that the reported value is exactly
+// representable — and only a value proven so may reach it: the analytic
+// features' closed forms, and the boolean's rational integrals carrying their
+// own explicit rounding term. A value a float loop COMPUTED is never among
+// them: its bound comes from bounds.go, whose helpers are never zero for a
+// nonzero float-computed quantity (sumSlop, chainLengthBound), so it can never
+// arrive here claiming Exact.
 func exactnessOf(bound float64) Exactness {
 	if bound == 0 {
 		return Exact
@@ -421,10 +447,13 @@ func centroidCoord(m, tf, vol *big.Rat) *big.Rat {
 	return c.Quo(c, vol)
 }
 
-// volFloor is the proven lower bound on the true volume: the held volume
-// minus the symmetric-difference bound, floored at zero.
+// volFloor is the proven lower bound on the true volume: the held volume minus
+// the symmetric-difference bound, floored at zero. The rational→float rounding
+// can go UP, which would overstate the floor and understate every bound divided
+// by it, so it is nudged back down first.
 func volFloor(vol *big.Rat, sym float64) float64 {
 	v, _ := vol.Float64()
+	v = math.Nextafter(v, math.Inf(-1))
 	rem := v - sym
 	if rem <= 0 {
 		return 0
@@ -434,9 +463,8 @@ func volFloor(vol *big.Rat, sym float64) float64 {
 
 // buildFacetedTopology chains the face-boundary mesh edges into topological
 // Edges (split where the adjacent face pair or the exact hinge convexity
-// changes), builds each face's loops by walking the facet fans, and returns
-// the total edge length.
-func buildFacetedTopology(verts []r3.Vec, tris [][3]int, facetFace []*Face, facePlanar map[*Face]bool, bound float64) (float64, error) {
+// changes) and builds each face's loops by walking the facet fans.
+func buildFacetedTopology(verts []r3.Vec, tris [][3]int, facetFace []*Face, facePlanar map[*Face]bool, bound float64) error {
 	boundMM := units.Millimeters(bound)
 
 	// Directed halfedge → facet, and the boundary predicate: the twin facet
@@ -484,7 +512,7 @@ func buildFacetedTopology(verts []r3.Vec, tris [][3]int, facetFace []*Face, face
 		}
 	}
 	if len(boundaryEdges) == 0 {
-		return 0, fmt.Errorf(`%w: a faceted body carries no face boundaries`, ErrBooleanFailed)
+		return fmt.Errorf(`%w: a faceted body carries no face boundaries`, ErrBooleanFailed)
 	}
 
 	// Chain the boundary edges: a vertex continues a chain when exactly two
@@ -528,7 +556,6 @@ func buildFacetedTopology(verts []r3.Vec, tris [][3]int, facetFace []*Face, face
 	posInChain := map[[2]int]int{}
 	var chains []chainRec
 	usedEdge := map[[2]int]struct{}{}
-	edgeLenTotal := 0.0
 	otherAt := func(v int, notKey [2]int) [2]int {
 		for _, e := range incident[v] {
 			if ukey(e) != notKey {
@@ -540,13 +567,20 @@ func buildFacetedTopology(verts []r3.Vec, tris [][3]int, facetFace []*Face, face
 	commitChain := func(path []int) {
 		info := hinges[ukey([2]int{path[0], path[1]})]
 		length := 0.0
+		nSegs := 0
 		for k := 0; k+1 < len(path); k++ {
 			key := ukey([2]int{path[k], path[k+1]})
 			chainOf[key] = len(chains)
 			posInChain[key] = k
 			length += verts[path[k+1]].Sub(verts[path[k]]).Len()
+			nSegs++
 		}
-		edgeLenTotal += length
+		// The chain holds nSegs chords, and BOTH endpoints of each move: the
+		// error accumulates over N, it is not δ (bounds.go, chainLengthBound).
+		// It is never zero either — the held length is a float sum of square
+		// roots, and the last ulp is not free — so an all-planar rim reports
+		// Approximate rather than an Exact it cannot back.
+		lengthBound := chainLengthBound(nSegs, bound, length)
 		e := &Edge{
 			curve:       FacetedCurve{Bound: boundMM},
 			start:       vertexOf(path[0]),
@@ -554,7 +588,7 @@ func buildFacetedTopology(verts []r3.Vec, tris [][3]int, facetFace []*Face, face
 			faces:       []*Face{info.fa, info.fb},
 			convex:      info.sign < 0,
 			length:      length,
-			lengthBound: bound,
+			lengthBound: lengthBound,
 			// A rim between two PLANAR sources is a straight line, so its
 			// chord length is honest; any curved source leaves the true
 			// curve's length excess over the chords unboundable without
@@ -605,7 +639,7 @@ func buildFacetedTopology(verts []r3.Vec, tris [][3]int, facetFace []*Face, face
 		}
 		cycle := walkFrom(e[0], e)
 		if cycle[0] != cycle[len(cycle)-1] {
-			return 0, fmt.Errorf(`%w: a face boundary chain did not close`, ErrBooleanFailed)
+			return fmt.Errorf(`%w: a face boundary chain did not close`, ErrBooleanFailed)
 		}
 		ring := cycle[:len(cycle)-1]
 		anchor := 0
@@ -667,7 +701,7 @@ func buildFacetedTopology(verts []r3.Vec, tris [][3]int, facetFace []*Face, face
 				cycle = append(cycle, cur)
 				nxt, err := nextBoundary(cur)
 				if err != nil {
-					return 0, err
+					return err
 				}
 				if nxt == h {
 					break
@@ -680,7 +714,7 @@ func buildFacetedTopology(verts []r3.Vec, tris [][3]int, facetFace []*Face, face
 				key := [2]int{min(he[0], he[1]), max(he[0], he[1])}
 				ci, ok := chainOf[key]
 				if !ok {
-					return 0, fmt.Errorf(`%w: a boundary halfedge belongs to no chain`, ErrBooleanFailed)
+					return fmt.Errorf(`%w: a boundary halfedge belongs to no chain`, ErrBooleanFailed)
 				}
 				if ci == lastChain {
 					continue
@@ -699,7 +733,7 @@ func buildFacetedTopology(verts []r3.Vec, tris [][3]int, facetFace []*Face, face
 	// Tessellate, not through loop nesting.
 	for f := range collectFaces(facetFace) {
 		if len(f.loops) == 0 {
-			return 0, fmt.Errorf(`%w: a faceted face has no boundary loop`, ErrBooleanFailed)
+			return fmt.Errorf(`%w: a faceted face has no boundary loop`, ErrBooleanFailed)
 		}
 		longest, li := -1.0, 0
 		for idx, l := range f.loops {
@@ -714,7 +748,7 @@ func buildFacetedTopology(verts []r3.Vec, tris [][3]int, facetFace []*Face, face
 		f.loops[0], f.loops[li] = f.loops[li], f.loops[0]
 		f.loops[0].outer = true
 	}
-	return edgeLenTotal, nil
+	return nil
 }
 
 func collectFaces(facetFace []*Face) map[*Face]struct{} {

@@ -97,7 +97,7 @@ func performBoolean(op OpKind, a, b *Body) (*Body, error) {
 		faceID[f] = len(groups)
 		groups = append(groups, facetGroup{
 			origins: f.Origins(),
-			planar:  f.Surface().Kind() == KindPlane,
+			planar:  f.isPlanar(),
 		})
 	}
 	srcA, err := sourceIDs(ma, faceID)
@@ -117,7 +117,10 @@ func performBoolean(op OpKind, a, b *Body) (*Body, error) {
 	if err != nil {
 		return nil, err
 	}
-	kept, err := meshBoolean(op, bmA, bmB)
+	if err := refuseUndecidableProximity(ma, mb, bmA, bmB); err != nil {
+		return nil, err
+	}
+	kept, sinMin, err := meshBoolean(op, bmA, bmB)
 	if err != nil {
 		return nil, err
 	}
@@ -129,11 +132,19 @@ func performBoolean(op OpKind, a, b *Body) (*Body, error) {
 		return nil, err
 	}
 
-	// Bound composition (§9, the verification-design shapes). The volume
-	// error obeys the symmetric-difference identity |1_{A∘B} − 1_{A'∘B'}| ≤
-	// |1_A − 1_A'| + |1_B − 1_B'| for all three ops, so it is the sum of the
-	// operands' own symmetric-difference bounds — each δ · (that operand's
-	// held area) — plus what the final float rounding can move.
+	// Bound composition (§9, the verification-design shapes; the helpers own
+	// every mechanism — bounds.go). The volume error obeys the
+	// symmetric-difference identity |1_{A∘B} − 1_{A'∘B'}| ≤ |1_A − 1_A'| +
+	// |1_B − 1_B'| for all three ops, so it is the sum of the operands' own
+	// symmetric-difference bounds — each δ · (that operand's held area) — plus
+	// what the final float rounding can move. The BOUNDARY bound is a different
+	// question: a vertex the boolean itself creates sits at the crossing of two
+	// chord PLANES, so it is displaced by the trim-amplified (δA + δB)/sin θ,
+	// not by δ.
+	rim, err := rimDelta(ma.bound, mb.bound, sinMin, dPair)
+	if err != nil {
+		return nil, err
+	}
 	symA := operandSymDiff(a, ma)
 	symB := operandSymDiff(b, mb)
 	roundArea := stitched.round * meshAreaUpper(stitched.verts, stitched.tris)
@@ -142,7 +153,7 @@ func performBoolean(op OpKind, a, b *Body) (*Body, error) {
 		tris:       stitched.tris,
 		src:        stitched.src,
 		groups:     groups,
-		meshBound:  ma.bound + mb.bound + stitched.round,
+		meshBound:  rim + stitched.round,
 		volSymDiff: symA + symB + roundArea,
 		areaSlack:  ma.areaSlack + mb.areaSlack,
 		dPair:      dPair,
@@ -185,6 +196,226 @@ func operandSymDiff(b *Body, m *Mesh) float64 {
 		return fp.volSymDiff
 	}
 	return m.bound * meshAreaUpper(m.vertices, m.triangles)
+}
+
+// refuseUndecidableProximity is the tangency gate. The mesh boolean decides
+// every contact on the CHORDS, and a chord polygon lies strictly inside the
+// curved surface it approximates — so a true tangency between two operands can
+// vanish from the tessellation entirely, and the boolean would return a clean
+// two-lump body for two solids that genuinely touch. Worse, whether it vanishes
+// at all depends on where the chord samples happen to fall.
+//
+// The gate is reject-only, and it proves nothing it does not have. If the true
+// surfaces of two faces touch, that point lies within δA of face A's facets and
+// within δB of face B's, so the two facet sets come within δA + δB of each
+// other. Contrapose it: a face pair whose facets stay FARTHER apart than
+// δA + δB cannot hide a touch. That leaves two cases — a face pair whose facets
+// already MEET, where the contact is real and the exact predicates own it, and
+// a face pair that comes within δA + δB without meeting, which is exactly the
+// undecidable one. The latter is refused (ErrUnsupported). Deciding it for real
+// is the analytic clearance kernel's job (docs/clearance-design.md), not a
+// chord's; loud beats silently wrong.
+//
+// The question is asked per analytic FACE pair, not per facet pair: a facet of
+// one face can pass arbitrarily close to a facet of the other while the FACES
+// plainly cross (a cylinder wall threading a cap's own triangulation diagonal),
+// and that is no tangency at all.
+//
+// It may refuse a valid model whose operands genuinely pass within a chord
+// tolerance of each other. That is the accepted price; the alternative is a
+// verdict decided by chord placement.
+func refuseUndecidableProximity(ma, mb *Mesh, bmA, bmB *boolMesh) error {
+	fa := facesOfMesh(ma)
+	fb := facesOfMesh(mb)
+	for _, ga := range fa {
+		for _, gb := range fb {
+			slack := ga.delta + gb.delta
+			if slack <= 0 {
+				// Both faces are held exactly (a planar face with straight
+				// edges triangulates exactly; a Faceted face IS its polygons,
+				// core §6.1). A tangency between them is visible to the exact
+				// predicates, so there is nothing here a chord could hide.
+				continue
+			}
+			// The exactly-tangent case sits ON the boundary d = δA + δB, and
+			// both sides of that comparison are float-computed: pad the
+			// threshold so the rounding can only ever ADD a refusal, never
+			// drop one. A relative 1e-9 is nothing against any real clearance.
+			near, err := facesNearMiss(bmA, ga.facets, bmB, gb.facets, slack*(1+1e-9))
+			if err != nil {
+				return err
+			}
+			if near {
+				return fmt.Errorf(`%w: the operands' true surfaces come within the chord tolerance without their tessellations meeting, so whether they touch is decided by where the chords fall — this evaluator refuses the question rather than answer it wrong`, ErrUnsupported)
+			}
+		}
+	}
+	return nil
+}
+
+// facesNearMiss reports whether two faces' facet sets come within slack of each
+// other WITHOUT meeting. A pair that meets is decided (the contact is exact);
+// only a pair that comes close and misses is the undecidable one.
+func facesNearMiss(bmA *boolMesh, fis []int, bmB *boolMesh, fjs []int, slack float64) (bool, error) {
+	near := false
+	for _, i := range fis {
+		if bmA.degen[i] {
+			continue
+		}
+		for _, j := range fjs {
+			if bmB.degen[j] || !boxesWithin(bmA.boxes[i], bmB.boxes[j], slack) {
+				continue
+			}
+			ta := triCorners(bmA, i)
+			tb := triCorners(bmB, j)
+			c, err := triTriClassify(ta, tb, xtriCorners(bmA, i), xtriCorners(bmB, j), bmA.norms[i], bmB.norms[j])
+			if err != nil {
+				return false, err
+			}
+			if c.kind != contactNone {
+				return false, nil // the faces meet: nothing here is undecided
+			}
+			if triTriDistance(ta, tb) <= slack {
+				near = true
+			}
+		}
+	}
+	return near, nil
+}
+
+// faceFacets is one analytic face of an operand: its facets, and the chord
+// displacement between them and the true face.
+type faceFacets struct {
+	delta  float64
+	facets []int
+}
+
+// facesOfMesh groups a tessellation's facets by their source face, in first-
+// appearance order, and charges each face its own chord displacement: how far
+// the TRUE face may lie from the facets that stand for it. A planar face with
+// straight edges triangulates exactly, and a Faceted face IS its polygons (core
+// §6.1) — both are held with zero error. Anything else — a cylinder wall, or a
+// planar cap whose rim is a circle the chords inscribe — deviates by up to the
+// mesh's own proven bound.
+func facesOfMesh(m *Mesh) []faceFacets {
+	index := map[*Face]int{}
+	var out []faceFacets
+	for i, f := range m.source {
+		k, ok := index[f]
+		if !ok {
+			k = len(out)
+			index[f] = k
+			out = append(out, faceFacets{delta: faceChordDelta(f, m.bound)})
+		}
+		out[k].facets = append(out[k].facets, i)
+	}
+	return out
+}
+
+func faceChordDelta(f *Face, meshBound float64) float64 {
+	switch f.Surface().Kind() {
+	case KindFaceted:
+		return 0
+	case KindPlane:
+		for _, e := range f.Edges() {
+			if _, ok := e.Curve().(Line3); !ok {
+				return meshBound
+			}
+		}
+		return 0
+	}
+	return meshBound
+}
+
+// boxesWithin reports whether the two boxes come within slack of each other.
+func boxesWithin(a, b [2]r3.Vec, slack float64) bool {
+	return a[0].X-slack <= b[1].X && b[0].X-slack <= a[1].X &&
+		a[0].Y-slack <= b[1].Y && b[0].Y-slack <= a[1].Y &&
+		a[0].Z-slack <= b[1].Z && b[0].Z-slack <= a[1].Z
+}
+
+// triTriDistance is the distance between two DISJOINT triangles: the smallest
+// of the nine edge-edge distances and the six vertex-to-triangle distances,
+// which is where the minimum of two disjoint convex sets is always attained.
+// The result is nudged DOWN so its own float rounding can only widen the
+// refusal, never narrow it.
+func triTriDistance(ta, tb [3]r3.Vec) float64 {
+	best := math.Inf(1)
+	for i := range 3 {
+		for j := range 3 {
+			best = math.Min(best, segSegDist3(ta[i], ta[(i+1)%3], tb[j], tb[(j+1)%3]))
+		}
+	}
+	for i := range 3 {
+		best = math.Min(best, pointTriDistance(ta[i], tb))
+		best = math.Min(best, pointTriDistance(tb[i], ta))
+	}
+	if best <= 0 || isNonFinite(best) {
+		return 0
+	}
+	return best * (1 - 1e-12)
+}
+
+// segSegDist3 is the distance between two closed 3D segments.
+func segSegDist3(p0, p1, q0, q1 r3.Vec) float64 {
+	u := p1.Sub(p0)
+	v := q1.Sub(q0)
+	w := p0.Sub(q0)
+	a, b, c := u.Dot(u), u.Dot(v), v.Dot(v)
+	d, e := u.Dot(w), v.Dot(w)
+	den := a*c - b*b
+	var s, t float64
+	if den <= 0 {
+		// Parallel (or a collapsed segment): pin s and solve for t.
+		s, t = 0, clamp01(e, c)
+	} else {
+		s = clamp01(b*e-c*d, den)
+		t = clamp01(a*e-b*d, den)
+	}
+	// Re-clamp against the other segment's ends, the standard two-pass fix.
+	if tn := e + s*b; c > 0 {
+		t = clamp01(tn, c)
+	}
+	if sn := -d + t*b; a > 0 {
+		s = clamp01(sn, a)
+	}
+	return p0.Add(u.Scale(s)).Sub(q0.Add(v.Scale(t))).Len()
+}
+
+func clamp01(num, den float64) float64 {
+	if den <= 0 {
+		return 0
+	}
+	return math.Max(0, math.Min(1, num/den))
+}
+
+// pointTriDistance is the distance from a point to a closed triangle: the
+// perpendicular foot when it lands inside, otherwise the nearest edge.
+func pointTriDistance(p r3.Vec, t [3]r3.Vec) float64 {
+	n := t[1].Sub(t[0]).Cross(t[2].Sub(t[0]))
+	if nn := n.Dot(n); nn > 0 {
+		h := n.Dot(p.Sub(t[0])) / nn
+		foot := p.Sub(n.Scale(h))
+		if pointInTriangle(foot, t, n) {
+			return p.Sub(foot).Len()
+		}
+	}
+	best := math.Inf(1)
+	for i := range 3 {
+		best = math.Min(best, segSegDist3(p, p, t[i], t[(i+1)%3]))
+	}
+	return best
+}
+
+// pointInTriangle reports whether a point already on the triangle's plane lies
+// inside it, by the three edge cross products against the facet normal.
+func pointInTriangle(p r3.Vec, t [3]r3.Vec, n r3.Vec) bool {
+	for i := range 3 {
+		if t[(i+1)%3].Sub(t[i]).Cross(p.Sub(t[i])).Dot(n) < 0 {
+			return false
+		}
+	}
+	return true
 }
 
 // pairChordTolerance derives the evaluator-internal chord tolerance and the

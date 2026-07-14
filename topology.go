@@ -305,6 +305,12 @@ type Face struct {
 	// areaBound is the proven error bound on area: zero for the analytic
 	// faces, the composed chord bound for a boolean-built Faceted face.
 	areaBound float64
+	// heldPlanar records that a Faceted face descends only from PLANAR source
+	// faces, so the face it stands for in the true result is flat — and a rim
+	// between two such faces is a straight line, whose chord length is honest.
+	// The surface TAG cannot say this: a boolean's faces all read Faceted,
+	// including the ones that are plainly flat.
+	heldPlanar bool
 	// reversed is true when the OUTWARD (material-leaving) normal is the
 	// surface's geometric normal negated — a hole's cylinder wall, whose
 	// material lies outside the cylinder.
@@ -398,6 +404,13 @@ func (f *Face) Area() (Measurement, error) {
 		Exactness: exactnessOf(f.areaBound),
 		Bound:     units.SquareMillimeters(f.areaBound),
 	}, nil
+}
+
+// isPlanar reports whether the face this evaluator holds is FLAT: an analytic
+// Plane is by construction, and a Faceted face is when every source it descends
+// from was. It is not the same question as the surface tag.
+func (f *Face) isPlanar() bool {
+	return f.surface.Kind() == KindPlane || f.heldPlanar
 }
 
 // Origins returns every feature role that created this face —

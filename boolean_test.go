@@ -2,6 +2,7 @@ package decad_test
 
 import (
 	"math"
+	"math/big"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
@@ -562,4 +563,315 @@ func TestUnionRejectsEdgeEdgePointTouch(t *testing.T) {
 
 	_, err := decad.Union(a, b)
 	require.ErrorIs(t, err, decad.ErrDegenerate)
+}
+
+// polyPrism extrudes a closed polygon on the given plane, symmetric about it.
+func polyPrism(t *testing.T, doc *decad.Document, w *sketch.World, plane *sketch.Plane, pts [][2]float64, half float64) *decad.Body {
+	t.Helper()
+	s, err := w.CreateSketch(plane)
+	require.NoError(t, err)
+	corners := make([]*sketch.Point, len(pts))
+	for i, p := range pts {
+		corners[i] = s.CreatePoint(p[0], p[1])
+	}
+	s.Fix(corners[0])
+	for i := range corners {
+		s.CreateLine(corners[i], corners[(i+1)%len(corners)])
+	}
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	body, err := doc.Extrude(s, s.Profiles()[0], decad.Symmetric{D: units.Millimeters(half)})
+	require.NoError(t, err)
+	return body
+}
+
+func TestUnionRefusesTangentCylinder(t *testing.T) {
+	// A Ø20 cylinder whose TRUE surface is tangent to the plate's x = 20 face
+	// along a line. The chord polygon lies strictly inside the true cylinder,
+	// so the tangency vanishes from the tessellation and the mesh boolean would
+	// happily report a clean two-lump body for two solids that genuinely touch —
+	// with the verdict decided by where the chord samples happened to fall. The
+	// pre-tessellation proximity gate refuses the question instead.
+	doc := decad.New()
+	plate := boxBody(t, doc, 0, 0, 20, 20, 8)
+	cyl := diskBody(t, doc, 30, 10, 10)
+
+	_, err := decad.Union(plate, cyl)
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+
+	// A refused boolean leaves the document untouched.
+	require.Len(t, doc.Bodies(), 2)
+
+	// Moving the cylinder a millimetre clear of the plate's face is decidable
+	// again — the refusal is about proximity, not about the shapes.
+	doc2 := decad.New()
+	plate2 := boxBody(t, doc2, 0, 0, 20, 20, 8)
+	apart := diskBody(t, doc2, 31, 10, 10)
+	got, err := decad.Union(plate2, apart)
+	require.NoError(t, err)
+	require.Len(t, got.Lumps(), 2)
+}
+
+func TestUnionCrossingApexEdgeBuilds(t *testing.T) {
+	// A diamond-section prism driven through a plate, its two apex edges landing
+	// EXACTLY in the plate's top plane z = 2. Whether an in-plane edge grazes the
+	// other operand or crosses it is not a property of any facet pair — it is a
+	// property of the edge's two adjacent facets, which straddle z = 2 here. So
+	// this is an ordinary crossing and it must build, at the exact volume.
+	doc := decad.New()
+	w := sketch.NewWorld()
+	plate := boxBody(t, doc, 0, 0, 10, 10, 2)
+	prism := polyPrism(t, doc, w, w.XZ(), [][2]float64{{5, 2}, {7, 3}, {9, 2}, {7, 1}}, 5)
+
+	got, err := decad.Union(plate, prism)
+	require.NoError(t, err)
+
+	// 10×10×2 plate = 200; the diamond (diagonals 4 and 2) swept ±5 = 40; the
+	// overlap is the diamond's lower half (area 2) over the plate's own y range
+	// 0..5 = 10. 200 + 40 − 10.
+	vol, err := got.Volume()
+	require.NoError(t, err)
+	require.Equal(t, 230.0, volumeMM(t, vol))
+	require.Len(t, got.Lumps(), 1)
+	requireBodyWatertight(t, got)
+
+	// The control: lift the prism 0.25 mm so nothing is coincident. Only the
+	// exact coincidence was ever in question.
+	doc2 := decad.New()
+	w2 := sketch.NewWorld()
+	plate2 := boxBody(t, doc2, 0, 0, 10, 10, 2)
+	lifted := polyPrism(t, doc2, w2, w2.XZ(), [][2]float64{{5, 2.25}, {7, 3.25}, {9, 2.25}, {7, 1.25}}, 5)
+	got2, err := decad.Union(plate2, lifted)
+	require.NoError(t, err)
+	vol2, err := got2.Volume()
+	require.NoError(t, err)
+	require.Equal(t, 234.375, volumeMM(t, vol2))
+}
+
+func TestUnionRejectsKnifeEdgeGraze(t *testing.T) {
+	// A wedge unioned into a wider wedge sharing the same knife-edge line. The
+	// inner wedge's two apex facets lie strictly on ONE side of the outer wedge's
+	// face: the boundary touches the plane and comes back. That is a true graze,
+	// no side classification is proven for it, and it stays refused.
+	doc := decad.New()
+	w := sketch.NewWorld()
+	a := wedgePrism(t, doc, w, w.XY(), [3][2]float64{{0, 0}, {12, -4}, {12, 6}}, 5)
+	b := wedgePrism(t, doc, w, w.XY(), [3][2]float64{{0, 0}, {8, -1}, {8, 2}}, 3)
+
+	_, err := decad.Union(a, b)
+	require.ErrorIs(t, err, decad.ErrDegenerate)
+	require.Len(t, doc.Bodies(), 2)
+}
+
+func TestBooleanRimVertexBoundCoversTrimAmplification(t *testing.T) {
+	// Two Ø10 prisms 9.9 mm apart: their walls cross at a shallow angle, so a rim
+	// vertex — which sits at the crossing of two chord PLANES, not on either
+	// surface — is displaced from the TRUE rim by (δA + δB)/sin θ, not by δ. The
+	// reported bound must cover the real displacement.
+	doc := decad.New()
+	a := diskBody(t, doc, 0, 0, 5)
+	b := translated(t, diskBody(t, doc, 9.9, 0, 5), 0, 0, 5)
+	got, err := decad.Union(a, b)
+	require.NoError(t, err)
+
+	// The true rim: the vertical lines through the two circles' intersections.
+	rx := 9.9 / 2
+	ry := math.Sqrt(25 - rx*rx)
+	rims := 0
+	for _, v := range got.Vertices() {
+		pos := v.Position()
+		p := pos.Value
+		// A rim vertex lies strictly inside BOTH circles — it is on neither
+		// operand's own chording, which samples the circles exactly.
+		if math.Hypot(p.X, p.Y) > 4.9999 || math.Hypot(p.X-9.9, p.Y) > 4.9999 {
+			continue
+		}
+		rims++
+		d := math.Hypot(p.X-rx, math.Abs(p.Y)-ry)
+		require.LessOrEqual(t, d, pos.Bound.Base(),
+			`a rim vertex must lie within its own reported bound of the true rim`)
+	}
+	require.Positive(t, rims, `the two walls do cross`)
+}
+
+func TestBooleanAreaBoundsCoverShallowCrossing(t *testing.T) {
+	// The intersection of two parallel-axis circular prisms is a prism over the
+	// 2-D lens, so its true area and volume are closed form. At a 9.99 mm centre
+	// distance the two Ø10 walls cross at a very shallow angle: the rim moves far
+	// more than δ, and every bound that multiplies a perimeter must say so.
+	doc := decad.New()
+	const d, r, h = 9.99, 5.0, 15.0
+	a := diskBody(t, doc, 0, 0, r)
+	b := translated(t, diskBody(t, doc, d, 0, r), 0, 0, 5)
+	got, err := decad.Intersect(a, b)
+	require.NoError(t, err)
+
+	th := math.Acos(d / 2 / r)
+	lens := 2 * r * r * (th - math.Sin(th)*math.Cos(th))
+	trueArea := 2*lens + 4*r*th*h
+	trueVol := lens * h
+
+	vol, err := got.Volume()
+	require.NoError(t, err)
+	require.LessOrEqual(t, math.Abs(volumeMM(t, vol)-trueVol), boundMM3(t, vol))
+
+	area, err := got.Area()
+	require.NoError(t, err)
+	require.LessOrEqual(t, math.Abs(area.Value.Base()-trueArea), area.Bound.Base(),
+		`the body's area bound covers the true area`)
+
+	// Each wall face is a cylinder patch of area r·2θ·h. Its own bound must
+	// cover it too — the rim bounding it moved by the amplified displacement.
+	walls := 0
+	trueWall := r * 2 * th * h
+	for _, f := range got.Faces() {
+		m, err := f.Area()
+		require.NoError(t, err)
+		if m.Value.Base() < 1 {
+			continue // a cap: the sliver-thin lens
+		}
+		walls++
+		require.LessOrEqual(t, math.Abs(m.Value.Base()-trueWall), m.Bound.Base(),
+			`a wall face's area bound covers its true area`)
+	}
+	require.Equal(t, 2, walls)
+}
+
+func TestFacetedPlacedFarFromOriginBoundHolds(t *testing.T) {
+	// An all-planar union built at x = 1e7, then rotated and translated back to
+	// the origin. The rounding a rigid motion commits happens at the magnitude of
+	// its INPUT, not of its result — a body charged at the result's magnitude is
+	// charged nothing. A rigid motion preserves volume and area exactly, so the
+	// pre-move Exact readings ARE the truth.
+	doc := decad.New()
+	a := boxBody(t, doc, 1e7, 0, 1e7+10, 10, 10)
+	b := translated(t, boxBody(t, doc, 1e7, 0, 1e7+10, 10, 10), 5, 5, 5)
+	got, err := decad.Union(a, b)
+	require.NoError(t, err)
+	volBefore, err := got.Volume()
+	require.NoError(t, err)
+	require.Equal(t, decad.Exact, volBefore.Exactness)
+	areaBefore, err := got.Area()
+	require.NoError(t, err)
+
+	cen, err := got.Centroid()
+	require.NoError(t, err)
+	rot, err := r3.Rotation(r3.Vec{Z: 1}, units.Radians(1))
+	require.NoError(t, err)
+	back, err := r3.Translation(rot.Apply(cen.Value).Scale(-1))
+	require.NoError(t, err)
+	xform, err := rot.Then(back)
+	require.NoError(t, err)
+	moved, err := got.Placed(xform)
+	require.NoError(t, err)
+
+	volAfter, err := moved.Volume()
+	require.NoError(t, err)
+	require.LessOrEqual(t, math.Abs(volumeMM(t, volAfter)-volumeMM(t, volBefore)), boundMM3(t, volAfter),
+		`the moved volume stays within its own bound of the exact pre-move volume`)
+	areaAfter, err := moved.Area()
+	require.NoError(t, err)
+	require.LessOrEqual(t, math.Abs(areaAfter.Value.Base()-areaBefore.Value.Base()), areaAfter.Bound.Base(),
+		`the moved area stays within its own bound of the pre-move area`)
+}
+
+func TestFacetedBoxBoundIsA3DRadius(t *testing.T) {
+	// Box.Min and Box.Max are POSITIONS, and Bound is the error bound on them:
+	// a 3-D radius, not a per-axis extent. The held extreme sits one chord
+	// displacement inside the truth on EVERY axis at once, so the per-coordinate
+	// reading is exactly tight and leaves no headroom for the corner distance.
+	doc := decad.New()
+	disk := diskBody(t, doc, 0, 0, 5)
+	box := translated(t, boxBody(t, doc, 0, 0, 8, 8, 20), 0, 0, 3)
+	got, err := decad.Union(disk, box)
+	require.NoError(t, err)
+
+	bounds, err := got.Bounds()
+	require.NoError(t, err)
+	trueMin := r3.NewVec(-5, -5, 0)
+	require.LessOrEqual(t, bounds.Min.Sub(trueMin).Len(), bounds.Bound.Base(),
+		`the box's proven bound covers the 3D distance from the held corner to the true one`)
+}
+
+func TestFacetedEdgeLengthNeverClaimsExact(t *testing.T) {
+	// A boolean rim's held length is a float SUM of square roots. It is not
+	// exactly representable, so it may never report Exact with a zero bound —
+	// and its bound must cover the difference from the true chord length. The
+	// two models matter for different halves of that: the cubes' contacts round
+	// EXACTLY (nothing displaces the rim, so the old bound was a literal zero),
+	// while the wedge's rims are diagonal (so the float sum really is off).
+	for _, tc := range []string{"exactly-rounding cubes", "diagonal rims"} {
+		t.Run(tc, func(t *testing.T) { facetedEdgeLengths(t, tc) })
+	}
+}
+
+func facetedEdgeLengths(t *testing.T, model string) {
+	t.Helper()
+	doc := decad.New()
+	w := sketch.NewWorld()
+	a := boxBody(t, doc, 0, 0, 10, 10, 10)
+	var b *decad.Body
+	if model == "diagonal rims" {
+		b = wedgePrism(t, doc, w, w.XZ(), [3][2]float64{{3, 5}, {9, 13}, {13, 4}}, 12)
+	} else {
+		b = translated(t, boxBody(t, doc, 0, 0, 10, 10, 10), 5, 5, 5)
+	}
+	got, err := decad.Union(a, b)
+	require.NoError(t, err)
+
+	answered := 0
+	for _, e := range got.Edges() {
+		if _, ok := e.Curve().(decad.FacetedCurve); !ok {
+			continue
+		}
+		m, err := e.Length()
+		if err != nil {
+			continue // a rim on a curved source refuses outright
+		}
+		answered++
+		require.Equal(t, decad.Approximate, m.Exactness, `a float sum of sqrts is not exactly representable`)
+		require.Positive(t, m.Bound.Base())
+
+		// The rim is straight (both sources are planar), so its true length is
+		// the distance between its endpoints — at 200 bits, well past float64.
+		p := e.Start().Position().Value
+		q := e.End().Position().Value
+		sum := new(big.Float).SetPrec(200)
+		for _, c := range []float64{q.X - p.X, q.Y - p.Y, q.Z - p.Z} {
+			sq := new(big.Float).SetPrec(200).SetFloat64(c)
+			sum.Add(sum, sq.Mul(sq, sq))
+		}
+		diff := new(big.Float).SetPrec(200).SetFloat64(m.Value.Base())
+		diff.Sub(diff, sum.Sqrt(sum))
+		err2, _ := diff.Abs(diff).Float64()
+		require.LessOrEqual(t, err2, m.Bound.Base(), `the length bound covers the true length`)
+	}
+	require.Positive(t, answered)
+}
+
+func TestSecondGenerationPlanarRimsAnswer(t *testing.T) {
+	// A boolean of a boolean. Every face of both operands is genuinely planar,
+	// so every rim of the result is a straight line whose chord length is
+	// honest — and every one of them must ANSWER. A Faceted face IS its
+	// polygons: its flatness is a fact about the held mesh, decided exactly on
+	// it, not a guess read off the surface tag.
+	doc := decad.New()
+	w := sketch.NewWorld()
+	a := boxBody(t, doc, 0, 0, 10, 10, 10)
+	b := wedgePrism(t, doc, w, w.XZ(), [3][2]float64{{3, 5}, {9, 13}, {13, 4}}, 12)
+	first, err := decad.Union(a, b)
+	require.NoError(t, err)
+
+	c := translated(t, boxBody(t, doc, 0, 0, 4, 4, 4), 6, 2, 8)
+	second, err := decad.Union(first, c)
+	require.NoError(t, err)
+
+	refused := 0
+	for _, e := range second.Edges() {
+		if _, err := e.Length(); err != nil {
+			refused++
+		}
+	}
+	require.Positive(t, len(second.Edges()))
+	require.Zero(t, refused, `an all-planar second-generation boolean refuses no rim`)
 }

@@ -32,6 +32,20 @@ type boolMesh struct {
 	// no plane and no interior: it takes part in no contact and rides with
 	// its component's classification.
 	degen []bool
+	// owner maps each directed mesh edge to the facet that walks it, so the
+	// twin across a facet edge is one lookup. The graze-or-crossing call
+	// needs it: whether an in-plane edge grazes the other operand or crosses
+	// it is a property of the edge's TWO adjacent facets, which no facet pair
+	// can see (docs/evaluator-design.md §9).
+	owner map[[2]int]int
+}
+
+// twinFacet returns the facet across edge k of facet f — the neighbour a
+// watertight mesh's reversed directed edge names.
+func (bm *boolMesh) twinFacet(f, k int) (int, bool) {
+	tri := bm.tris[f]
+	t, ok := bm.owner[[2]int{tri[(k+1)%3], tri[k]}]
+	return t, ok && t != f
 }
 
 // prepBoolMesh lifts a tessellation into the exact domain. A non-finite
@@ -48,12 +62,16 @@ func prepBoolMesh(m *Mesh, src []int) (*boolMesh, error) {
 	bm.norms = make([]xpt, len(m.triangles))
 	bm.boxes = make([][2]r3.Vec, len(m.triangles))
 	bm.degen = make([]bool, len(m.triangles))
+	bm.owner = make(map[[2]int]int, 3*len(m.triangles))
 	for i, tri := range m.triangles {
 		a, b, c := bm.xverts[tri[0]], bm.xverts[tri[1]], bm.xverts[tri[2]]
 		n := xcross(xsub(b, a), xsub(c, a))
 		bm.degen[i] = n.x.Sign() == 0 && n.y.Sign() == 0 && n.z.Sign() == 0
 		bm.norms[i] = n
 		bm.boxes[i] = triBox(bm.verts, tri)
+		for k := range 3 {
+			bm.owner[[2]int{tri[k], tri[(k+1)%3]}] = i
+		}
 	}
 	return bm, nil
 }
@@ -94,15 +112,232 @@ func errDegenerateContact(what string) error {
 	return fmt.Errorf(`%w: %s — the exact predicates cannot classify a tangent contact`, ErrDegenerate, what)
 }
 
-// triContact is one exact triangle/triangle intersection: a segment with,
-// per endpoint, whether it lies on each triangle's own boundary.
+// contactKind is the DIMENSION of the exact intersection of two closed
+// triangles. Two closed triangles are convex sets, so their intersection is
+// convex and can only be one of these four — and naming it is what makes the
+// classification direction-free: nothing in it depends on whose geometry the
+// answer was looked for on.
+type contactKind int
+
+const (
+	// contactNone: the closed triangles are disjoint.
+	contactNone contactKind = iota
+	// contactPoint: they meet at exactly one point.
+	contactPoint
+	// contactSegment: they meet along a positive-length segment.
+	contactSegment
+	// contactRegion: they meet in a 2-D region — only possible for a coplanar
+	// pair, and a face-on-face tangency the predicates refuse to classify.
+	contactRegion
+)
+
+// triContact is one exact triangle/triangle intersection, as computed by
+// triTriClassify.
 type triContact struct {
-	p0, p1                     xpt
+	kind   contactKind
+	p0, p1 xpt
+	// p0OnA … p1OnB record whether each endpoint lies on each triangle's own
+	// closed BOUNDARY — decided by asking what the point is (onTriBoundary),
+	// never by which triangle's crossing list it happened to be drawn from.
 	p0OnA, p1OnA, p0OnB, p1OnB bool
-	// pointOnly marks a contact that is exactly one point: carried to the
-	// mesh pass, which rejects it unless it is the endpoint of some
-	// segment contact (a crossing chain passing through a vertex).
-	pointOnly bool
+	// edgeA and edgeB name the facet edge a SEGMENT contact runs ALONG (−1
+	// when it runs along none): an in-plane edge. Whether such an edge grazes
+	// the other operand or genuinely crosses it is NOT a property of this pair
+	// — it is a property of the edge's two adjacent facets — so the pair only
+	// reports the fact and the mesh pass decides (docs/evaluator-design.md §9).
+	edgeA, edgeB int
+	// sin2 is the exact squared sine of the two facet planes' crossing angle,
+	// nil for a coplanar or empty pair. The boolean's own rim vertices are
+	// displaced by (δA + δB)/sin θ, so the smallest one over the pair's
+	// contacts is what bounds the result (bounds.go, rimDelta).
+	sin2 *big.Rat
+}
+
+// triTriClassify computes the exact intersection of two CLOSED triangles: the
+// single symmetric entry point every contact question goes through. ta/tb are
+// float corners (the adaptive orient filter reads them), xta/xtb their exact
+// lifts, na/nb the exact normals.
+//
+// The pair's intersection is the overlap of two convex sets, so it is empty, a
+// point, a segment or a 2-D region — and the routine decides WHICH without
+// ever branching on "how many of A's vertices sit on B's plane, and whose
+// geometry do I look on". For a non-coplanar pair the two planes meet in one
+// line; each triangle's intersection with the OTHER's plane is an interval on
+// that line, and the answer is the intervals' overlap. That is the whole rule.
+func triTriClassify(ta, tb [3]r3.Vec, xta, xtb [3]xpt, na, nb xpt) (triContact, error) {
+	out := triContact{edgeA: -1, edgeB: -1}
+	var sb, sa [3]int
+	for i := range 3 {
+		sb[i] = orientSign(ta[0], ta[1], ta[2], tb[i])
+	}
+	if allOneSide(sb) {
+		return out, nil
+	}
+	for i := range 3 {
+		sa[i] = orientSign(tb[0], tb[1], tb[2], ta[i])
+	}
+	if allOneSide(sa) {
+		return out, nil
+	}
+
+	if countZero(sa) == 3 || countZero(sb) == 3 {
+		// Coplanar. The intersection of two coplanar closed triangles is a
+		// convex polygon: positive area — or a positive-length shared boundary
+		// — is a face-on-face tangency (§9 refuses it); anything else is at
+		// most a point, carried for the isolated-point rule.
+		if coplanarOverlap(xta, xtb, na) {
+			out.kind = contactRegion
+			return out, nil
+		}
+		if p, ok := coplanarTouch(xta, xtb, na, nb); ok {
+			out.kind, out.p0, out.p1 = contactPoint, p, p
+		}
+		return out, nil
+	}
+
+	// Non-coplanar: the planes are distinct and non-parallel (a parallel pair
+	// would leave every vertex strictly on one side, already returned), so they
+	// meet in exactly one line, and every point of the intersection lies on it.
+	ptsA := dedupePoints(planeCrossings(xta, xtb, sa))
+	ptsB := dedupePoints(planeCrossings(xtb, xta, sb))
+	if len(ptsA) == 0 || len(ptsB) == 0 {
+		return out, nil
+	}
+	if len(ptsA) > 2 || len(ptsB) > 2 {
+		return out, fmt.Errorf(`%w: a facet crosses a plane more than twice`, ErrBooleanFailed)
+	}
+	dir := xcross(na, nb)
+	loA, hiA := orderOnLine(ptsA, dir)
+	loB, hiB := orderOnLine(ptsB, dir)
+	lo, hi := loA, hiA
+	if cmpOnLine(loB, lo, dir) > 0 {
+		lo = loB
+	}
+	if cmpOnLine(hiB, hi, dir) < 0 {
+		hi = hiB
+	}
+	switch cmpOnLine(lo, hi, dir) {
+	case 1:
+		return out, nil // the intervals miss: no contact at all
+	case 0:
+		out.kind, out.p0, out.p1 = contactPoint, lo, lo
+	default:
+		out.kind, out.p0, out.p1 = contactSegment, lo, hi
+	}
+	out.sin2 = sinSquared(na, nb)
+	out.p0OnA = onTriBoundary(out.p0, xta, na)
+	out.p0OnB = onTriBoundary(out.p0, xtb, nb)
+	if out.kind == contactSegment {
+		out.p1OnA = onTriBoundary(out.p1, xta, na)
+		out.p1OnB = onTriBoundary(out.p1, xtb, nb)
+		out.edgeA = segAlongEdge(out.p0, out.p1, xta, na)
+		out.edgeB = segAlongEdge(out.p0, out.p1, xtb, nb)
+	} else {
+		out.p1OnA, out.p1OnB = out.p0OnA, out.p0OnB
+	}
+	return out, nil
+}
+
+// allOneSide reports whether all three plane-side signs are strictly the same:
+// the triangle misses the plane entirely.
+func allOneSide(s [3]int) bool {
+	return s[0] > 0 && s[1] > 0 && s[2] > 0 || s[0] < 0 && s[1] < 0 && s[2] < 0
+}
+
+// coplanarTouch returns the single point two coplanar, non-overlapping closed
+// triangles share, looking BOTH ways — the symmetric shape the whole classifier
+// is built on.
+func coplanarTouch(xta, xtb [3]xpt, na, nb xpt) (xpt, bool) {
+	for i := range 3 {
+		if pointOnTri(xta[i], xtb, nb) {
+			return xta[i], true
+		}
+	}
+	for i := range 3 {
+		if pointOnTri(xtb[i], xta, na) {
+			return xtb[i], true
+		}
+	}
+	return xpt{}, false
+}
+
+// orderOnLine sorts a triangle's one or two plane crossings along the planes'
+// common line, giving the interval the triangle occupies on it.
+func orderOnLine(pts []xpt, dir xpt) (xpt, xpt) {
+	if len(pts) == 1 {
+		return pts[0], pts[0]
+	}
+	if cmpOnLine(pts[0], pts[1], dir) > 0 {
+		return pts[1], pts[0]
+	}
+	return pts[0], pts[1]
+}
+
+// cmpOnLine orders two points of the planes' common line along it.
+func cmpOnLine(a, b, dir xpt) int { return xdot(a, dir).Cmp(xdot(b, dir)) }
+
+// onTriBoundary reports whether the exact point p — already on the triangle's
+// plane — lies on one of its three CLOSED edges. The projection is invertible
+// on the plane, so the 2-D answer IS the 3-D one.
+func onTriBoundary(p xpt, xt [3]xpt, n xpt) bool {
+	u, v := projAxes(n)
+	pp := xp2{ratCoordOf(p, u), ratCoordOf(p, v)}
+	for i := range 3 {
+		a := xp2{ratCoordOf(xt[i], u), ratCoordOf(xt[i], v)}
+		b := xp2{ratCoordOf(xt[(i+1)%3], u), ratCoordOf(xt[(i+1)%3], v)}
+		if on, _ := onSegment2(a, b, pp); on {
+			return true
+		}
+	}
+	return false
+}
+
+// segAlongEdge names the triangle edge a positive-length contact segment runs
+// along, or −1. Such a segment lies in the other facet's plane, so the edge it
+// runs along has both its endpoints on that plane — the in-plane edge whose
+// graze-or-crossing verdict only the edge's two adjacent facets can give.
+func segAlongEdge(p0, p1 xpt, xt [3]xpt, n xpt) int {
+	u, v := projAxes(n)
+	q0 := xp2{ratCoordOf(p0, u), ratCoordOf(p0, v)}
+	q1 := xp2{ratCoordOf(p1, u), ratCoordOf(p1, v)}
+	for i := range 3 {
+		a := xp2{ratCoordOf(xt[i], u), ratCoordOf(xt[i], v)}
+		b := xp2{ratCoordOf(xt[(i+1)%3], u), ratCoordOf(xt[(i+1)%3], v)}
+		on0, _ := onSegment2(a, b, q0)
+		if !on0 {
+			continue
+		}
+		if on1, _ := onSegment2(a, b, q1); on1 {
+			return i
+		}
+	}
+	return -1
+}
+
+// sinSquared is the exact sin²θ of the angle between two facet planes:
+// |na × nb|² / (|na|²·|nb|²).
+func sinSquared(na, nb xpt) *big.Rat {
+	c := xcross(na, nb)
+	num := xdot(c, c)
+	den := new(big.Rat).Mul(xdot(na, na), xdot(nb, nb))
+	if den.Sign() == 0 {
+		return new(big.Rat)
+	}
+	return num.Quo(num, den)
+}
+
+// sinLowerBound is a PROVEN lower bound on sin θ from its exact square: the
+// float square root, nudged down twice so neither the rational's rounding nor
+// the root's can push it above the truth. A lower bound on the sine is what
+// makes (δA + δB)/sin θ an UPPER bound on the rim displacement.
+func sinLowerBound(sin2 *big.Rat) float64 {
+	f, _ := sin2.Float64()
+	if f <= 0 {
+		return 0
+	}
+	s := math.Sqrt(f)
+	s = math.Nextafter(s, 0)
+	return math.Nextafter(s, 0)
 }
 
 // planeCrossings collects the exact points where triangle t crosses the
@@ -131,147 +366,6 @@ func planeCrossings(xt [3]xpt, xo [3]xpt, signs [3]int) []xpt {
 	return out
 }
 
-// triTriContact computes the exact intersection of two non-coplanar-safe
-// triangles: a proper crossing segment, nothing (disjoint or a point touch),
-// or a degenerate-contact rejection. ta/tb are float corners, xta/xtb their
-// exact lifts, na/nb the exact normals.
-func triTriContact(ta, tb [3]r3.Vec, xta, xtb [3]xpt, na, nb xpt) (triContact, bool, error) {
-	var sb, sa [3]int
-	for i := range 3 {
-		sb[i] = orientSign(ta[0], ta[1], ta[2], tb[i])
-	}
-	if sb[0] > 0 && sb[1] > 0 && sb[2] > 0 || sb[0] < 0 && sb[1] < 0 && sb[2] < 0 {
-		return triContact{}, false, nil
-	}
-	for i := range 3 {
-		sa[i] = orientSign(tb[0], tb[1], tb[2], ta[i])
-	}
-	if sa[0] > 0 && sa[1] > 0 && sa[2] > 0 || sa[0] < 0 && sa[1] < 0 && sa[2] < 0 {
-		return triContact{}, false, nil
-	}
-
-	za := countZero(sa)
-	zb := countZero(sb)
-	// pointTouch reports the first vertex of xt (whose plane-side sign is
-	// zero at index i) that lies on the closed other triangle — a carried
-	// point contact candidate.
-	pointTouch := func(signs [3]int, xt, xo [3]xpt, no xpt) (xpt, bool) {
-		for i := range 3 {
-			if signs[i] == 0 && pointOnTri(xt[i], xo, no) {
-				return xt[i], true
-			}
-		}
-		return xpt{}, false
-	}
-	if za == 3 || zb == 3 {
-		// Coplanar pair: an overlap of positive measure is a face-on-face
-		// tangency; a vertex touching the other closed triangle is a point
-		// contact, carried for the isolation check.
-		if coplanarOverlap(xta, xtb, na) {
-			return triContact{}, false, errDegenerateContact(`two operand facets overlap in one plane`)
-		}
-		if p, ok := pointTouch([3]int{0, 0, 0}, xta, xtb, nb); ok {
-			return triContact{p0: p, p1: p, pointOnly: true}, true, nil
-		}
-		if p, ok := pointTouch([3]int{0, 0, 0}, xtb, xta, na); ok {
-			return triContact{p0: p, p1: p, pointOnly: true}, true, nil
-		}
-		return triContact{}, false, nil
-	}
-	if za == 2 {
-		if err := rejectEdgeGraze(sa, xta, xtb, nb); err != nil {
-			return triContact{}, false, err
-		}
-		if p, ok := pointTouch(sa, xta, xtb, nb); ok {
-			return triContact{p0: p, p1: p, pointOnly: true}, true, nil
-		}
-		return triContact{}, false, nil
-	}
-	if zb == 2 {
-		if err := rejectEdgeGraze(sb, xtb, xta, na); err != nil {
-			return triContact{}, false, err
-		}
-		if p, ok := pointTouch(sb, xtb, xta, na); ok {
-			return triContact{p0: p, p1: p, pointOnly: true}, true, nil
-		}
-		return triContact{}, false, nil
-	}
-	if za == 1 && (sa[0]+sa[1]+sa[2] != 0) && zb == 1 && (sb[0]+sb[1]+sb[2] != 0) {
-		// Both triangles only touch the other's plane at one vertex from
-		// one side: the contact is at most a point — carried when the
-		// vertex really lies on the other closed triangle.
-		if p, ok := pointTouch(sa, xta, xtb, nb); ok {
-			return triContact{p0: p, p1: p, pointOnly: true}, true, nil
-		}
-		if p, ok := pointTouch(sb, xtb, xta, na); ok {
-			return triContact{p0: p, p1: p, pointOnly: true}, true, nil
-		}
-		return triContact{}, false, nil
-	}
-
-	ptsA := planeCrossings(xta, xtb, sa)
-	ptsB := planeCrossings(xtb, xta, sb)
-	ptsA = dedupePoints(ptsA)
-	ptsB = dedupePoints(ptsB)
-	if len(ptsA) < 2 || len(ptsB) < 2 {
-		// A single crossing point on a side is at most a point contact —
-		// carried when it really lies on the other closed triangle.
-		if len(ptsA) == 1 && pointOnTri(ptsA[0], xtb, nb) {
-			return triContact{p0: ptsA[0], p1: ptsA[0], pointOnly: true}, true, nil
-		}
-		if len(ptsB) == 1 && pointOnTri(ptsB[0], xta, na) {
-			return triContact{p0: ptsB[0], p1: ptsB[0], pointOnly: true}, true, nil
-		}
-		return triContact{}, false, nil
-	}
-	if len(ptsA) > 2 || len(ptsB) > 2 {
-		return triContact{}, false, fmt.Errorf(`%w: a facet crosses a plane more than twice`, ErrBooleanFailed)
-	}
-
-	// Both crossings lie on the planes' common line; order them along it.
-	dir := xcross(na, nb)
-	sOf := func(p xpt) *big.Rat { return xdot(p, dir) }
-	a0, a1 := ptsA[0], ptsA[1]
-	sa0, sa1 := sOf(a0), sOf(a1)
-	if sa0.Cmp(sa1) > 0 {
-		a0, a1, sa0, sa1 = a1, a0, sa1, sa0
-	}
-	b0, b1 := ptsB[0], ptsB[1]
-	sb0, sb1 := sOf(b0), sOf(b1)
-	if sb0.Cmp(sb1) > 0 {
-		b0, b1, sb0, sb1 = b1, b0, sb1, sb0
-	}
-	// The contact is the overlap of the two crossing intervals. An endpoint
-	// taken from ptsA lies on ta's own boundary (a vertex or an edge
-	// crossing), and symmetrically for ptsB; a tie is a point on both.
-	lo, loS, loA, loB := a0, sa0, true, false
-	switch sb0.Cmp(sa0) {
-	case 1:
-		lo, loS, loA, loB = b0, sb0, false, true
-	case 0:
-		loB = true
-	}
-	hi, hiS, hiA, hiB := a1, sa1, true, false
-	switch sb1.Cmp(sa1) {
-	case -1:
-		hi, hiS, hiA, hiB = b1, sb1, false, true
-	case 0:
-		hiB = true
-	}
-	if c := loS.Cmp(hiS); c > 0 {
-		return triContact{}, false, nil // empty overlap
-	} else if c == 0 {
-		// A zero-length overlap is an edge-edge point touch: carried, so
-		// the isolated-point rejection decides it like any point contact.
-		return triContact{p0: lo, p1: lo, pointOnly: true}, true, nil
-	}
-	return triContact{
-		p0: lo, p1: hi,
-		p0OnA: loA, p1OnA: hiA,
-		p0OnB: loB, p1OnB: hiB,
-	}, true, nil
-}
-
 func countZero(s [3]int) int {
 	n := 0
 	for _, v := range s {
@@ -295,32 +389,6 @@ func dedupePoints(pts []xpt) []xpt {
 		out = append(out, p)
 	}
 	return out
-}
-
-// rejectEdgeGraze handles the two-zero case: an edge of triangle t lies in
-// the other triangle's plane. A positive-length overlap with the closed other
-// triangle is a grazing tangent contact — unclassifiable — while a miss or a
-// point touch is no contact.
-func rejectEdgeGraze(signs [3]int, xt, xo [3]xpt, no xpt) error {
-	var onPlane []xpt
-	for i := range 3 {
-		if signs[i] == 0 {
-			onPlane = append(onPlane, xt[i])
-		}
-	}
-	if len(onPlane) != 2 {
-		return nil
-	}
-	u, v := projAxes(no)
-	a := xp2{ratCoordOf(onPlane[0], u), ratCoordOf(onPlane[0], v)}
-	b := xp2{ratCoordOf(onPlane[1], u), ratCoordOf(onPlane[1], v)}
-	ta := xp2{ratCoordOf(xo[0], u), ratCoordOf(xo[0], v)}
-	tb := xp2{ratCoordOf(xo[1], u), ratCoordOf(xo[1], v)}
-	tc := xp2{ratCoordOf(xo[2], u), ratCoordOf(xo[2], v)}
-	if segTriOverlap2(a, b, ta, tb, tc) {
-		return errDegenerateContact(`an operand edge grazes along the other operand's facet`)
-	}
-	return nil
 }
 
 // projAxes picks the two projection coordinates for a plane with exact
@@ -443,18 +511,31 @@ func booleanKeep(op OpKind) (bool, bool, bool, error) {
 	}
 }
 
+// pairContact is one classified facet pair, kept whole so the decisions the
+// PAIR cannot make are made later with the mesh in hand.
+type pairContact struct {
+	i, j   int // the facet in ma, the facet in mb
+	ta, tb [3]r3.Vec
+	c      triContact
+}
+
 // meshBoolean runs the exact-predicate boolean over two prepared operand
-// tessellations and returns the kept, still-exact facets.
-func meshBoolean(op OpKind, ma, mb *boolMesh) ([]keptFacet, error) {
+// tessellations. It returns the kept, still-exact facets and a proven LOWER
+// bound on the sine of the crossing angle of every contact it used — the
+// number the rim's displacement bound divides by (bounds.go, rimDelta).
+func meshBoolean(op OpKind, ma, mb *boolMesh) ([]keptFacet, float64, error) {
 	wantA, wantB, flipB, err := booleanKeep(op)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	// Exact contacts, per facet of each operand. Facet boxes prune the pairs.
 	cutsA := map[int][]xseg{}
 	cutsB := map[int][]xseg{}
 	var pointTouches []xpt
+	var segEnds []xpt
+	var inPlane []pairContact
+	var minSin2 *big.Rat
 	for i := range ma.tris {
 		if ma.degen[i] {
 			continue
@@ -465,63 +546,182 @@ func meshBoolean(op OpKind, ma, mb *boolMesh) ([]keptFacet, error) {
 			}
 			ta := triCorners(ma, i)
 			tb := triCorners(mb, j)
-			contact, ok, err := triTriContact(ta, tb, xtriCorners(ma, i), xtriCorners(mb, j), ma.norms[i], mb.norms[j])
+			c, err := triTriClassify(ta, tb, xtriCorners(ma, i), xtriCorners(mb, j), ma.norms[i], mb.norms[j])
 			if err != nil {
-				return nil, err
+				return nil, 0, err
 			}
-			if !ok {
+			if c.kind == contactRegion {
+				return nil, 0, errDegenerateContact(`two operand facets overlap in one plane`)
+			}
+			if c.kind == contactNone {
 				continue
 			}
-			if contact.pointOnly {
-				pointTouches = append(pointTouches, contact.p0)
+			if c.sin2 != nil && (minSin2 == nil || c.sin2.Cmp(minSin2) < 0) {
+				minSin2 = c.sin2
+			}
+			if c.kind == contactPoint {
+				pointTouches = append(pointTouches, c.p0)
+				continue
+			}
+			segEnds = append(segEnds, c.p0, c.p1)
+			if c.edgeA >= 0 || c.edgeB >= 0 {
+				// The segment runs ALONG a facet edge. Graze or crossing is not
+				// decidable here — hold it for the mesh-level call below.
+				inPlane = append(inPlane, pairContact{i: i, j: j, ta: ta, tb: tb, c: c})
 				continue
 			}
 			cutsA[i] = append(cutsA[i], xseg{
-				a: contact.p0, b: contact.p1,
-				aOnEdge: contact.p0OnA, bOnEdge: contact.p1OnA,
+				a: c.p0, b: c.p1,
+				aOnEdge: c.p0OnA, bOnEdge: c.p1OnA,
 				partner: tb,
 			})
 			cutsB[j] = append(cutsB[j], xseg{
-				a: contact.p0, b: contact.p1,
-				aOnEdge: contact.p0OnB, bOnEdge: contact.p1OnB,
+				a: c.p0, b: c.p1,
+				aOnEdge: c.p0OnB, bOnEdge: c.p1OnB,
 				partner: ta,
 			})
 		}
 	}
 
-	// A point-only contact is legitimate only as the endpoint of some
-	// crossing segment (a chain passing exactly through a vertex). An
-	// isolated one is a tangency the boolean cannot classify: the operands
-	// pinch at a point, and stitching it would emit a non-manifold result —
-	// refuse, never a wrong mesh.
+	// The graze-or-crossing call, made once, OUTSIDE the pair loop: an in-plane
+	// facet edge grazes the other operand exactly when the edge's two adjacent
+	// facets lie strictly on ONE side of the other facet's plane — the operand's
+	// boundary touches the plane and comes back, a tangency no side
+	// classification can be proven for. Apexes that STRADDLE the plane are an
+	// ordinary crossing: the boundary genuinely passes through, and the segment
+	// is a real rim of the result.
+	blockedA := map[[2]int]struct{}{}
+	blockedB := map[[2]int]struct{}{}
+	for _, p := range inPlane {
+		if p.c.edgeA >= 0 {
+			key, crossing, err := edgeCrosses(ma, p.i, p.c.edgeA, p.tb)
+			if err != nil {
+				return nil, 0, err
+			}
+			if !crossing {
+				return nil, 0, errDegenerateContact(`an operand edge grazes along the other operand's facet`)
+			}
+			blockedA[key] = struct{}{}
+		}
+		if p.c.edgeB >= 0 {
+			key, crossing, err := edgeCrosses(mb, p.j, p.c.edgeB, p.ta)
+			if err != nil {
+				return nil, 0, err
+			}
+			if !crossing {
+				return nil, 0, errDegenerateContact(`an operand edge grazes along the other operand's facet`)
+			}
+			blockedB[key] = struct{}{}
+		}
+		// A crossing segment subdivides whichever facet does NOT already own it
+		// as an edge — a segment lying along a facet's own boundary cuts nothing
+		// off it. Its regions classify by exact parity, never by the partner
+		// facet's plane: the other operand's boundary there is the DIHEDRAL
+		// between two facets, and one plane of it decides nothing.
+		if p.c.edgeA < 0 {
+			cutsA[p.i] = append(cutsA[p.i], xseg{
+				a: p.c.p0, b: p.c.p1,
+				aOnEdge: p.c.p0OnA, bOnEdge: p.c.p1OnA,
+				partner: p.tb, viaParity: true,
+			})
+		}
+		if p.c.edgeB < 0 {
+			cutsB[p.j] = append(cutsB[p.j], xseg{
+				a: p.c.p0, b: p.c.p1,
+				aOnEdge: p.c.p0OnB, bOnEdge: p.c.p1OnB,
+				partner: p.ta, viaParity: true,
+			})
+		}
+	}
+
+	// A point contact is legitimate only as the endpoint of some crossing
+	// segment (a chain passing exactly through a vertex). An isolated one is a
+	// tangency the boolean cannot classify: the operands pinch at a point, and
+	// stitching it would emit a non-manifold result — refuse, never a wrong mesh.
 	if len(pointTouches) > 0 {
 		ends := map[string]struct{}{}
-		for _, segs := range [2]map[int][]xseg{cutsA, cutsB} {
-			for _, ss := range segs {
-				for _, s := range ss {
-					ends[s.a.key()] = struct{}{}
-					ends[s.b.key()] = struct{}{}
-				}
-			}
+		for _, p := range segEnds {
+			ends[p.key()] = struct{}{}
 		}
 		for _, p := range pointTouches {
 			if _, ok := ends[p.key()]; !ok {
-				return nil, errDegenerateContact(`the operand boundaries touch at an isolated point`)
+				return nil, 0, errDegenerateContact(`the operand boundaries touch at an isolated point`)
 			}
 		}
 	}
 
 	var kept []keptFacet
-	keep, err := keepSide(ma, mb, cutsA, wantA, false)
+	keep, err := keepSide(ma, mb, cutsA, blockedA, wantA, false)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	kept = append(kept, keep...)
-	keep, err = keepSide(mb, ma, cutsB, wantB, flipB)
+	keep, err = keepSide(mb, ma, cutsB, blockedB, wantB, flipB)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
-	return append(kept, keep...), nil
+	sinMin := 1.0
+	if minSin2 != nil {
+		sinMin = sinLowerBound(minSin2)
+	}
+	return append(kept, keep...), sinMin, nil
+}
+
+// edgeCrosses decides whether edge k of facet f — which lies exactly in the
+// partner facet's plane — GRAZES that plane or genuinely CROSSES it, and
+// returns the undirected mesh-edge key either way. The verdict is read off the
+// edge's two adjacent facets: their apex vertices strictly on one side is a
+// graze; straddling is a crossing. An apex exactly ON the plane proves nothing
+// (the facet lies in it), so it reads as a graze — reject-only.
+func edgeCrosses(m *boolMesh, f, k int, partner [3]r3.Vec) ([2]int, bool, error) {
+	tri := m.tris[f]
+	u, v := tri[k], tri[(k+1)%3]
+	key := [2]int{min(u, v), max(u, v)}
+	twin, ok := m.twinFacet(f, k)
+	if !ok {
+		return key, false, fmt.Errorf(`%w: an in-plane facet edge has no twin facet`, ErrBooleanFailed)
+	}
+	tt := m.tris[twin]
+	apex := m.verts[tri[0]+tri[1]+tri[2]-u-v]
+	apexTwin := m.verts[tt[0]+tt[1]+tt[2]-u-v]
+	s0 := orientSign(partner[0], partner[1], partner[2], apex)
+	s1 := orientSign(partner[0], partner[1], partner[2], apexTwin)
+	return key, s0*s1 < 0, nil
+}
+
+// blockedBetween reports whether the mesh edge two adjacent facets share
+// carries an in-plane CROSSING contact. The other operand's boundary passes
+// exactly along that edge, so the two facets sit on opposite sides of it: they
+// must not flood-fill into one classification, or one of them inherits the
+// other's answer.
+func blockedBetween(m *boolMesh, a, b int, blocked map[[2]int]struct{}) bool {
+	if len(blocked) == 0 {
+		return false
+	}
+	ta, tb := m.tris[a], m.tris[b]
+	for k := range 3 {
+		u, v := ta[k], ta[(k+1)%3]
+		if _, ok := blocked[[2]int{min(u, v), max(u, v)}]; !ok {
+			continue
+		}
+		if sharesVertices(tb, u, v) {
+			return true
+		}
+	}
+	return false
+}
+
+func sharesVertices(t [3]int, u, v int) bool {
+	hasU, hasV := false, false
+	for _, x := range t {
+		switch x {
+		case u:
+			hasU = true
+		case v:
+			hasV = true
+		}
+	}
+	return hasU && hasV
 }
 
 func triCorners(m *boolMesh, i int) [3]r3.Vec {
@@ -539,7 +739,7 @@ func xtriCorners(m *boolMesh, i int) [3]xpt {
 // facets for the uncut regions (classified per connected component by exact
 // ray parity — the classification is constant on a component that crosses
 // nothing).
-func keepSide(m, other *boolMesh, cuts map[int][]xseg, wantInside, flip bool) ([]keptFacet, error) {
+func keepSide(m, other *boolMesh, cuts map[int][]xseg, blocked map[[2]int]struct{}, wantInside, flip bool) ([]keptFacet, error) {
 	var kept []keptFacet
 	emit := func(tri [3]xpt, src int) {
 		if flip {
@@ -597,6 +797,9 @@ func keepSide(m, other *boolMesh, cuts map[int][]xseg, wantInside, flip bool) ([
 			members = append(members, f)
 			for _, nb := range adj[f] {
 				if _, cut := cuts[nb]; cut || comp[nb] != -1 {
+					continue
+				}
+				if blockedBetween(m, f, nb, blocked) {
 					continue
 				}
 				comp[nb] = id
@@ -824,14 +1027,10 @@ func stitchFacets(kept []keptFacet) (*stitchedMesh, error) {
 		}
 	}
 	w, _ := worst.Float64()
-	if w > 0 {
-		// worst is the max PER-COORDINATE rounding; the consumers read a 3D
-		// distance bound, and all three coordinates can round at once, so
-		// scale by √3 (rounded up) before the ulp nudge.
-		w *= 1.7320508075688774
-		w = math.Nextafter(w, math.Inf(1))
-	}
-	out.round = w
+	// worst is the max PER-COORDINATE rounding; the consumers read a 3D
+	// distance bound, and all three coordinates can round at once (bounds.go,
+	// radius3D).
+	out.round = radius3D(upRound(w))
 	return out, nil
 }
 
