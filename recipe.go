@@ -15,10 +15,9 @@ import (
 // ship their tagged codecs — and a Step holds only values: bodies as
 // StepRefs, the profile and plane as records, quantities as units.Value.
 //
-// The Angular and Axis fields of a revolve Step join with the Revolve
-// increment (docs/evaluator-design.md §6/§11); adding fields to Step is
-// additive, and an extrude-only recipe round-trips identically before and
-// after they land.
+// The Axis field of a revolve Step joins with the Revolve increment
+// (docs/evaluator-design.md §6/§11); adding fields to Step is additive, and
+// an extrude-only recipe round-trips identically before and after it lands.
 
 // Recipe is the exact record of intent: an ordered, immutable list of steps —
 // the model, exactly as meant. It is the library's actual deliverable
@@ -151,6 +150,9 @@ type Step struct {
 	Plane   PlaneRecord
 	// Extent is the linear extent (Extrude only; nil otherwise).
 	Extent Extent
+	// Angular is the angular extent (Revolve only; nil otherwise). At most
+	// one of Extent and Angular is non-nil, keyed to Op (core §6.2).
+	Angular AngularExtent
 	// Placement is the recorded rigid motion (Placed only; zero otherwise).
 	Placement TransformRecord
 	// Selectors are the unresolved edge/face queries (Fillet/Chamfer/Shell).
@@ -216,6 +218,7 @@ type jsonStep struct {
 	Profile   *ProfileRecord    `json:"profile,omitempty"`
 	Plane     *PlaneRecord      `json:"plane,omitempty"`
 	Extent    json.RawMessage   `json:"extent,omitempty"`
+	Angular   json.RawMessage   `json:"angular,omitempty"`
 	Placement *TransformRecord  `json:"placement,omitempty"`
 	Selectors []json.RawMessage `json:"selectors,omitempty"`
 	Opts      json.RawMessage   `json:"opts,omitempty"`
@@ -225,9 +228,29 @@ type jsonStep struct {
 // zeroVec reports whether v is the zero vector.
 func zeroVec(v r3.Vec) bool { return v == r3.Vec{} }
 
+// validateExtentKeying enforces the core §6.2 one-of contract on both wire
+// directions: at most one of Extent and Angular is non-nil, and each is
+// keyed to its op — Extent to extrude, Angular to revolve. A step violating
+// it names no recordable intent, so it neither encodes nor decodes.
+func validateExtentKeying(s Step) error {
+	if s.Extent != nil && s.Angular != nil {
+		return fmt.Errorf(`decad: a step carries at most one of extent and angular`)
+	}
+	if s.Extent != nil && s.Op != OpExtrude {
+		return fmt.Errorf(`decad: a linear extent is keyed to the extrude op, got %q`, s.Op)
+	}
+	if s.Angular != nil && s.Op != OpRevolve {
+		return fmt.Errorf(`decad: an angular extent is keyed to the revolve op, got %q`, s.Op)
+	}
+	return nil
+}
+
 // MarshalJSON encodes the step with every absent field omitted: a decoded
 // step is the recorded one, field for field.
 func (s Step) MarshalJSON() ([]byte, error) {
+	if err := validateExtentKeying(s); err != nil {
+		return nil, err
+	}
 	op := s.Op
 	out := jsonStep{Op: &op, Inputs: s.Inputs, Values: s.Values}
 	if len(s.Profile.Outer.Segments) > 0 || len(s.Profile.Holes) > 0 {
@@ -244,6 +267,13 @@ func (s Step) MarshalJSON() ([]byte, error) {
 			return nil, err
 		}
 		out.Extent = raw
+	}
+	if s.Angular != nil {
+		raw, err := marshalAngularExtent(s.Angular)
+		if err != nil {
+			return nil, err
+		}
+		out.Angular = raw
 	}
 	if !zeroVec(s.Placement.EX) || !zeroVec(s.Placement.EY) || !zeroVec(s.Placement.EZ) || !zeroVec(s.Placement.T) {
 		p := s.Placement
@@ -289,6 +319,13 @@ func (s *Step) UnmarshalJSON(data []byte) error {
 		}
 		out.Extent = e
 	}
+	if raw.Angular != nil {
+		a, err := unmarshalAngularExtent(raw.Angular)
+		if err != nil {
+			return err
+		}
+		out.Angular = a
+	}
 	if raw.Placement != nil {
 		out.Placement = *raw.Placement
 	}
@@ -307,6 +344,9 @@ func (s *Step) UnmarshalJSON(data []byte) error {
 			return err
 		}
 		out.Opts = o
+	}
+	if err := validateExtentKeying(out); err != nil {
+		return err
 	}
 	*s = out
 	return nil
@@ -337,6 +377,11 @@ func cloneStep(s Step) Step {
 	if s.Extent != nil {
 		if e, err := normalizeExtent(s.Extent); err == nil {
 			out.Extent = e
+		}
+	}
+	if s.Angular != nil {
+		if a, err := normalizeAngularExtent(s.Angular); err == nil {
+			out.Angular = a
 		}
 	}
 	return out
