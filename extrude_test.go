@@ -356,7 +356,7 @@ func TestFaceNormals(t *testing.T) {
 	for _, f := range body.Faces() {
 		for _, role := range f.Origins() {
 			switch role.Role {
-			case "capStart":
+			case roleCapStart:
 				caps++
 				requireNormal(f, r3.NewVec(10, 10, 0), r3.NewVec(0, 0, -1))
 			case "capEnd":

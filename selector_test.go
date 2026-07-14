@@ -24,7 +24,7 @@ var (
 func TestSelectorCodec(t *testing.T) {
 	// Every selector variant, carrying every predicate the vocabulary
 	// defines, round-trips through a Step field for field.
-	ref := decad.FeatureRef{Step: 2, Role: "capStart"}
+	ref := decad.FeatureRef{Step: 2, Role: roleCapStart}
 	for _, sel := range []decad.Selector{
 		decad.Edges(),
 		decad.Faces(),
@@ -111,14 +111,20 @@ func TestNilSelectorPointersAreBranchable(t *testing.T) {
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 }
 
-func TestSelectorResolutionIsStaged(t *testing.T) {
-	// Resolution lands with evaluator increment 2
-	// (docs/evaluator-design.md §11); until then resolving is ErrUnsupported —
-	// explicit, never silently zero matches.
+func TestSelectorResolutionRejectsNilInputs(t *testing.T) {
+	// A nil body has no topology to select from, and a typed nil query names
+	// no query: both are branchable ErrDegenerate, never a silent zero-match.
 	_, err := decad.Edges(decad.Convex()).SelectEdges(nil)
-	require.ErrorIs(t, err, decad.ErrUnsupported)
+	require.ErrorIs(t, err, decad.ErrDegenerate)
 	_, err = decad.Faces(decad.Planar()).SelectFaces(nil)
-	require.ErrorIs(t, err, decad.ErrUnsupported)
+	require.ErrorIs(t, err, decad.ErrDegenerate)
+
+	var eq *decad.EdgeQuery
+	_, err = eq.SelectEdges(nil)
+	require.ErrorIs(t, err, decad.ErrDegenerate)
+	var fq *decad.FaceQuery
+	_, err = fq.SelectFaces(nil)
+	require.ErrorIs(t, err, decad.ErrDegenerate)
 }
 
 func TestSelectorConstructorsDoNotAliasCallerSlices(t *testing.T) {

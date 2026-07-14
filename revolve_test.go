@@ -232,7 +232,7 @@ func TestRevolvePartialSweeps(t *testing.T) {
 
 	// Caps face outward: the start cap against the sweep, the end cap
 	// along it.
-	capStart := faceByRole(t, quarter, "capStart")
+	capStart := faceByRole(t, quarter, roleCapStart)
 	n, err := capStart.NormalAt(r3.NewVec(5, 10, 0))
 	require.NoError(t, err)
 	require.InDelta(t, 0.0, n.Value.X, 1e-9)
@@ -271,7 +271,7 @@ func TestRevolveWedgeSharesAxisEdgeBetweenCaps(t *testing.T) {
 	require.Len(t, body.Faces(), 5, `wall, two pie sectors, two caps`)
 	requireManifold(t, body)
 
-	capStart := faceByRole(t, body, "capStart")
+	capStart := faceByRole(t, body, roleCapStart)
 	capEnd := faceByRole(t, body, "capEnd")
 	shared := 0
 	for _, e := range body.Edges() {
@@ -706,9 +706,34 @@ func TestRevolveEdgeAxisGates(t *testing.T) {
 	host, err := doc.Extrude(es, ep, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	require.NoError(t, err)
 
-	t.Run("ResolutionStaged", func(t *testing.T) {
-		_, err := doc.Revolve(s, p, decad.EdgeAxis{Body: host, Edge: decad.Edges().Exactly(1)}, decad.FullRevolution{})
-		require.ErrorIs(t, err, decad.ErrUnsupported)
+	t.Run("CountMissIsErrCardinality", func(t *testing.T) {
+		// The implicit exactly-one of an EdgeAxis (core §12): more than one
+		// match fails it, whatever the selector's own assertion says.
+		_, err := doc.Revolve(s, p, decad.EdgeAxis{Body: host, Edge: decad.Edges()}, decad.FullRevolution{})
+		require.ErrorIs(t, err, decad.ErrCardinality)
+	})
+	t.Run("ZeroMatchesIsErrCardinality", func(t *testing.T) {
+		// ErrCardinality takes precedence at zero matches, even for a
+		// selector asserting no cardinality of its own (core §12).
+		_, err := doc.Revolve(s, p, decad.EdgeAxis{Body: host, Edge: decad.Edges(decad.Circular())}, decad.FullRevolution{})
+		require.ErrorIs(t, err, decad.ErrCardinality)
+		require.NotErrorIs(t, err, decad.ErrNoMatch)
+	})
+	t.Run("CircularEdgeIsErrDegenerate", func(t *testing.T) {
+		// A non-linear edge named as a revolve axis spins about no line.
+		holed := holePlateBody(t)
+		ref := decad.FeatureRef{Step: holed.Origin().Step, Role: roleCapStart}
+		axis := decad.EdgeAxis{Body: holed, Edge: decad.Edges(decad.Circular(), decad.CreatedBy(ref)).Exactly(1)}
+		_, err := holed.Document().Revolve(s, p, axis, decad.FullRevolution{})
+		require.ErrorIs(t, err, decad.ErrDegenerate)
+	})
+	t.Run("RejectionLeavesDocumentUntouched", func(t *testing.T) {
+		steps := len(doc.Recipe().Steps)
+		bodies := len(doc.Bodies())
+		_, err := doc.Revolve(s, p, decad.EdgeAxis{Body: host, Edge: decad.Edges()}, decad.FullRevolution{})
+		require.ErrorIs(t, err, decad.ErrCardinality)
+		require.Len(t, doc.Recipe().Steps, steps)
+		require.Len(t, doc.Bodies(), bodies)
 	})
 	t.Run("StepRefBody", func(t *testing.T) {
 		_, err := doc.Revolve(s, p, decad.EdgeAxis{Body: decad.StepRef(0), Edge: decad.Edges().Exactly(1)}, decad.FullRevolution{})
@@ -745,6 +770,108 @@ func TestRevolveEdgeAxisGates(t *testing.T) {
 		_, err = doc2.Revolve(s, p, decad.EdgeAxis{Body: old, Edge: decad.Edges().Exactly(1)}, decad.FullRevolution{})
 		require.ErrorIs(t, err, decad.ErrRetiredBody)
 	})
+}
+
+// trianglePrismHost extrudes a right triangle (0,0)-(100,0)-(0,60) by 10 mm
+// into doc: its bottom cap holds exactly one edge parallel to x — the world
+// x axis segment from (0,0,0) to (100,0,0).
+func trianglePrismHost(t *testing.T, doc *decad.Document) *decad.Body {
+	t.Helper()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	a := s.CreatePoint(0, 0)
+	s.Fix(a)
+	b := s.CreatePoint(100, 0)
+	c := s.CreatePoint(0, 60)
+	s.CreateLine(a, b)
+	s.CreateLine(b, c)
+	s.CreateLine(c, a)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	host, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	require.NoError(t, err)
+	return host
+}
+
+func TestRevolveAboutEdgeAxis(t *testing.T) {
+	// End to end: select the host prism's bottom x-axis edge by provenance +
+	// direction, revolve the annular rectangle about it, and check the
+	// closed-form volume — the axis is the world x axis, so a full turn is
+	// the same annular cylinder the SketchLine axis builds (Pappus:
+	// 2π·10·100 = 2000π).
+	s, p := annularSketch(t)
+	doc := decad.New()
+	host := trianglePrismHost(t, doc)
+	capStart := decad.FeatureRef{Step: host.Origin().Step, Role: roleCapStart}
+	axis := decad.EdgeAxis{
+		Body: host,
+		Edge: decad.Edges(decad.CreatedBy(capStart), decad.ParallelTo(r3.NewVec(1, 0, 0))).Exactly(1),
+	}
+
+	body, err := doc.Revolve(s, p, axis, decad.FullRevolution{})
+	require.NoError(t, err)
+	require.True(t, body.IsSolid())
+	requireVolume(t, body, 2000*math.Pi)
+	requireBounds(t, body, 0, -15, -15, 10, 15, 15)
+
+	// The host is a dependency, not an operand: it stays live.
+	require.Contains(t, doc.Bodies(), host)
+
+	// The recorded step depends on the host's producing step, and the axis
+	// records the query with the body as that StepRef (core §6.2).
+	steps := doc.Recipe().Steps
+	require.Len(t, steps, 2)
+	step := steps[1]
+	require.Equal(t, decad.OpRevolve, step.Op)
+	require.Equal(t, []decad.StepRef{host.Origin().Step}, step.Inputs)
+	ea, ok := step.Axis.(decad.EdgeAxis)
+	require.True(t, ok, `the recorded axis stays an EdgeAxis, never the resolved line`)
+	require.Equal(t, host.Origin().Step, ea.Body)
+
+	// The recorded step round-trips through the wire codec.
+	buf, err := json.Marshal(step)
+	require.NoError(t, err)
+	var got decad.Step
+	require.NoError(t, json.Unmarshal(buf, &got))
+	require.Equal(t, step, got)
+}
+
+func TestRevolveEdgeAxisDirectionSense(t *testing.T) {
+	// The axis runs from the resolved edge's start vertex toward its end
+	// vertex, and Along is right-handed about it: a 90° Along sweep of the
+	// +y-side region about the +x axis carries it toward +z, never −z.
+	s, p := annularSketch(t)
+	doc := decad.New()
+	host := trianglePrismHost(t, doc)
+	capStart := decad.FeatureRef{Step: host.Origin().Step, Role: roleCapStart}
+	axis := decad.EdgeAxis{
+		Body: host,
+		Edge: decad.Edges(decad.CreatedBy(capStart), decad.ParallelTo(r3.NewVec(1, 0, 0))).Exactly(1),
+	}
+
+	body, err := doc.Revolve(s, p, axis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
+	require.NoError(t, err)
+	requireVolume(t, body, 500*math.Pi)
+	bounds, err := body.Bounds()
+	require.NoError(t, err)
+	require.GreaterOrEqual(t, bounds.Min.Z, -1e-9, `an Along sweep about start→end never reaches −z`)
+	require.InDelta(t, 15, bounds.Max.Z, 1e-9)
+}
+
+func TestRevolveEdgeAxisMustBeCoplanar(t *testing.T) {
+	// The resolved edge is a real axis candidate, so the coplanarity gate
+	// still applies: a top-cap edge lies at z = 10, off the profile plane.
+	s, p := annularSketch(t)
+	doc := decad.New()
+	host := trianglePrismHost(t, doc)
+	capEnd := decad.FeatureRef{Step: host.Origin().Step, Role: "capEnd"}
+	axis := decad.EdgeAxis{
+		Body: host,
+		Edge: decad.Edges(decad.CreatedBy(capEnd), decad.ParallelTo(r3.NewVec(1, 0, 0))).Exactly(1),
+	}
+	_, err := doc.Revolve(s, p, axis, decad.FullRevolution{})
+	require.ErrorIs(t, err, decad.ErrDegenerate)
 }
 
 func TestRevolvePlacedRigidMotion(t *testing.T) {
@@ -1008,7 +1135,7 @@ func TestRevolvePartialSweepWithHole(t *testing.T) {
 	require.Len(t, body.Shells(), 1, `the caps connect the hole wall to the outer boundary`)
 
 	// Each cap carries the hole as a second, non-outer loop.
-	for _, role := range []string{"capStart", "capEnd"} {
+	for _, role := range []string{roleCapStart, "capEnd"} {
 		capFace := faceByRole(t, body, role)
 		loops := capFace.Loops()
 		require.Len(t, loops, 2)

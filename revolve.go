@@ -2,6 +2,7 @@ package decad
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 
@@ -44,11 +45,14 @@ type ConstructionAxis struct {
 
 // EdgeAxis is a linear edge, selected — never a pointer. Body is what Edge
 // resolves against: a Revolve is handed no body, so the axis must name its
-// own. Edge MUST resolve to exactly one linear edge of Body; Body must be a
-// live body of the same document at the call (a StepRef there is
-// ErrUnresolvedBody), and its StepRef is recorded in the step's Inputs.
-// Resolution lands with the selectors; until then a revolve about an edge is
-// ErrUnsupported at the call.
+// own. Edge MUST resolve to exactly one linear edge of Body — any other
+// count is ErrCardinality, zero included (the implicit exactly-one of
+// core §12), and a non-linear edge named as an axis is ErrDegenerate. Body
+// must be a live body of the same document at the call (a StepRef there is
+// ErrUnresolvedBody), and its StepRef is recorded in the step's Inputs — the
+// step depends on it; the body is not consumed and not retired. The axis
+// runs from the resolved edge's start vertex toward its end vertex, the
+// sense Along is right-handed about.
 type EdgeAxis struct {
 	Body BodyRef
 	Edge EdgeSelector
@@ -259,14 +263,22 @@ func (d *Document) Revolve(s *sketch.Sketch, p *sketch.Profile, axis Axis, a Ang
 	if err != nil {
 		return nil, err
 	}
+	// The evaluator spins about a resolved line; for an EdgeAxis that line
+	// comes from the one edge the selector names, the recorded axis keeps
+	// the query (with the body as its producing StepRef — a live *Body is a
+	// handle, not a record), and the step depends on the named body.
+	evalAxis := axis
+	var inputs []StepRef
 	if ea, ok := axis.(EdgeAxis); ok {
-		// The EdgeAxis gates run in full (core §6.2/§8.1); resolution itself
-		// is staged with the selectors, so a gated edge axis is
-		// ErrUnsupported at the call — never a guessed axis.
-		if err := d.validateEdgeAxis(ea); err != nil {
+		line, ref, err := d.resolveEdgeAxis(ea)
+		if err != nil {
 			return nil, err
 		}
-		return nil, fmt.Errorf(`%w: a revolve about a selected edge lands with selector resolution`, ErrUnsupported)
+		evalAxis = line
+		inputs = []StepRef{ref}
+		// The recorded query is deep-copied so the step never aliases the
+		// caller-owned selector (core §6.2).
+		axis = cloneAxis(EdgeAxis{Body: ref, Edge: ea.Edge})
 	}
 
 	a, err = normalizeAngularExtent(a)
@@ -282,7 +294,7 @@ func (d *Document) Revolve(s *sketch.Sketch, p *sketch.Profile, axis Axis, a Ang
 	if err != nil {
 		return nil, fmt.Errorf(`%w: the recorded plane is degenerate: %s`, ErrDegenerate, err)
 	}
-	line, err := axisInPlane(axis, frame)
+	line, err := axisInPlane(evalAxis, frame)
 	if err != nil {
 		return nil, err
 	}
@@ -299,6 +311,7 @@ func (d *Document) Revolve(s *sketch.Sketch, p *sketch.Profile, axis Axis, a Ang
 
 	step := Step{
 		Op:      OpRevolve,
+		Inputs:  inputs,
 		Profile: profile,
 		Plane:   plane,
 		Angular: a,
@@ -321,39 +334,60 @@ func (d *Document) Revolve(s *sketch.Sketch, p *sketch.Profile, axis Axis, a Ang
 	return body, nil
 }
 
-// validateEdgeAxis runs the EdgeAxis gates: the named body must be a live
-// body of this document, and the selector must exist. Resolution — exactly
-// one linear edge — is the selectors' job and is staged with them.
-func (d *Document) validateEdgeAxis(ea EdgeAxis) error {
+// resolveEdgeAxis runs the EdgeAxis gates and resolves the named edge into
+// the construction axis the evaluator spins about: the named body must be a
+// live body of this document, and the selector must resolve to exactly one
+// LINEAR edge of it — any other count is ErrCardinality, zero included (the
+// implicit exactly-one of core §12 takes precedence over ErrNoMatch), and a
+// non-linear edge named as a revolve axis is ErrDegenerate. The axis runs
+// from the edge's start vertex toward its end vertex. It returns the derived
+// axis and the StepRef the step's Inputs record its dependency as.
+func (d *Document) resolveEdgeAxis(ea EdgeAxis) (ConstructionAxis, StepRef, error) {
 	var body *Body
 	switch b := ea.Body.(type) {
 	case nil:
-		return fmt.Errorf(`%w: an edge axis names no body to resolve against`, ErrDegenerate)
+		return ConstructionAxis{}, 0, fmt.Errorf(`%w: an edge axis names no body to resolve against`, ErrDegenerate)
 	case StepRef:
-		return ErrUnresolvedBody
+		return ConstructionAxis{}, 0, ErrUnresolvedBody
 	case *Body:
 		if err := d.requireLive(b); err != nil {
-			return err
+			return ConstructionAxis{}, 0, err
 		}
 		body = b
 	default:
-		return fmt.Errorf(`%w: an edge axis cannot resolve against a %T`, ErrDegenerate, b)
+		return ConstructionAxis{}, 0, fmt.Errorf(`%w: an edge axis cannot resolve against a %T`, ErrDegenerate, b)
 	}
-	// A typed nil query is as empty a selector as an untyped nil: it must
-	// read as malformed input (errNilSelector, branchable ErrDegenerate),
-	// never as the staged resolution's ErrUnsupported.
+	// A typed nil query is as empty a selector as an untyped nil: malformed
+	// input (errNilSelector, branchable ErrDegenerate).
 	switch q := ea.Edge.(type) {
 	case nil:
-		return fmt.Errorf(`%w: an edge axis names no edge selector`, ErrDegenerate)
+		return ConstructionAxis{}, 0, fmt.Errorf(`%w: an edge axis names no edge selector`, ErrDegenerate)
 	case *EdgeQuery:
 		if q == nil {
-			return errNilSelector
+			return ConstructionAxis{}, 0, errNilSelector
 		}
 	}
-	if _, err := ea.Edge.SelectEdges(body); err != nil {
-		return err
+	edges, err := ea.Edge.SelectEdges(body)
+	if err != nil {
+		if errors.Is(err, ErrNoMatch) {
+			// The implicit exactly-one is a cardinality assertion, so a
+			// selector that matched nothing fails IT, not ErrNoMatch.
+			return ConstructionAxis{}, 0, fmt.Errorf(`%w: an edge axis resolves to exactly one edge, matched none`, ErrCardinality)
+		}
+		return ConstructionAxis{}, 0, err
 	}
-	return nil
+	if len(edges) != 1 {
+		return ConstructionAxis{}, 0, fmt.Errorf(`%w: an edge axis resolves to exactly one edge, matched %d`, ErrCardinality, len(edges))
+	}
+	e := edges[0]
+	if _, ok := e.Curve().(Line3); !ok {
+		return ConstructionAxis{}, 0, fmt.Errorf(`%w: a non-linear edge named as a revolve axis spins about no line`, ErrDegenerate)
+	}
+	dir := e.end.position.Sub(e.start.position)
+	if zeroVec(dir) {
+		return ConstructionAxis{}, 0, fmt.Errorf(`%w: a zero-length edge names no axis`, ErrDegenerate)
+	}
+	return ConstructionAxis{Origin: e.start.position, Dir: dir}, body.originStep(), nil
 }
 
 // angFullEps separates "a full turn" from "past a full turn": an angular
