@@ -88,12 +88,14 @@ areas of the bodies built from it are decad's 3D job. The boundary is:
 
 - **sketch decides topology and admissibility** — what closes, what is valid,
   where curves cross, what a trim is. decad consumes.
-- **decad integrates its own records** — area, first moments, arc length,
-  extremes of the recorded loops, by closed form per segment kind: shoelace
-  over segment chords plus the exact circular-segment correction for
-  `CircleSeg`/`ArcSeg` fragments (the same correction family geom uses;
-  independent code on decad's own data, asserted against sketch's answer by
-  the §1 falsifier at every feature call).
+- **decad integrates its own records** — area, first moments, the second and
+  mixed moments (`∫u² dA`, `∫uv dA` — what a revolve centroid needs, §6),
+  arc length, and extremes of the recorded loops, by closed form per segment
+  kind: shoelace-family boundary integrals over segment chords plus the
+  exact circular-segment corrections for `CircleSeg`/`ArcSeg` fragments (the
+  same correction family geom uses; independent code on decad's own data,
+  asserted against sketch's answer by the §1 falsifier at every feature
+  call).
 
 Increment 1 implements the closed forms for `LineSeg`/`CircleSeg`/`ArcSeg`;
 the free-form kinds arrive with their increments (§11) and reject
@@ -146,10 +148,13 @@ and a wrong-but-confident prism is the failure decad exists to prevent.
 
 Same recording shape; the axis must be validated non-degenerate and coplanar
 with the profile plane, and the axis must not pass through the region's
-INTERIOR: the region lies in one closed half-plane of the axis, boundary
-contact allowed — a boundary point on the axis sweeps to a pole or an apex,
-which is exactly the sphere and cone-tip case. A region with interior on both
-sides sweeps a self-intersecting solid and is rejected, `ErrDegenerate`.
+INTERIOR: the region lies in one closed half-plane of the axis. Boundary
+contact is allowed at SEGMENT ENDPOINTS on the axis only — an endpoint on the
+axis sweeps to a pole or an apex, exactly the sphere and cone-tip case. Any
+other boundary contact — a curve tangent to the axis at an interior point (a
+circle kissing it would sweep a self-touching horn torus), or a segment
+crossing it — is rejected, `ErrDegenerate`, as is a region with interior on
+both sides; that is what keeps §10's valid-by-construction claim true.
 Faces: a `LineSeg` lying ON the axis emits no face at all — it sweeps a
 zero-area set, and the neighboring segments' faces close the solid there;
 parallel to the axis (off it) → `Cylinder`; inclined → `Cone` (an
@@ -161,8 +166,10 @@ neither endpoint reaches the axis). The free-form segment kinds follow the
 same staging as extrude (§5): `NURBSSurface` surfaces of revolution where the
 control net is exactly derivable from the record, in increment 6, and
 `ErrUnsupported` until then — `FitSplineSeg` included, on the same grounds.
-Partial sweeps get two planar cap faces. Volume/centroid by Pappus on the §4 region integrals —
-exact. Increment 2.
+Partial sweeps get two planar cap faces. Volume by Pappus on the §4 first moments; the solid centroid from the §4
+second and mixed moments (`∫u² dA`, `∫uv dA`) — a full revolution's centroid
+lies on the axis with its axial position from the mixed moment, and a partial
+sweep's is closed form in the sweep angle. All exact. Increment 2.
 
 ## 7. Selectors
 
