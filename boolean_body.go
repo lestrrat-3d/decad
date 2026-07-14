@@ -358,7 +358,13 @@ func buildFacetedBody(d *Document, ref StepRef, pp facetedPayload) (*Body, error
 	cxF, _ := cx.Float64()
 	cyF, _ := cy.Float64()
 	czF, _ := cz.Float64()
+	// The three coordinates round independently, and the VecMeasurement
+	// bound is a 3D radius: scale the per-coordinate max by √3 (rounded
+	// up), then nudge an ulp so the sum stays a proven bound.
 	cenRound := math.Max(ratAbsDiff(cx, cxF), math.Max(ratAbsDiff(cy, cyF), ratAbsDiff(cz, czF)))
+	if cenRound > 0 {
+		cenRound = math.Nextafter(cenRound*1.7320508075688774, math.Inf(1))
+	}
 	body.centroid = VecMeasurement{
 		Value:     r3.Vec{X: cxF, Y: cyF, Z: czF},
 		Exactness: exactnessOf(cenBound + cenRound),

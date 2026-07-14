@@ -480,3 +480,39 @@ func TestPlanarUnionAreaBoundIsTiny(t *testing.T) {
 	require.Equal(t, decad.Approximate, area.Exactness)
 	require.Less(t, area.Bound.Base(), 1e-9*area.Value.Base(), `ulp-scale, far under any gate`)
 }
+
+func TestPlanarUnionCentroidBoundCoversRounding(t *testing.T) {
+	// A union whose exact centroid coordinates are non-binary rationals:
+	// all three coordinates round at once, and the reported 3D bound must
+	// cover the true distance between the exact and reported centroids.
+	doc := decad.New()
+	a := boxBody(t, doc, 0, 0, 7, 5, 3)
+	b := translated(t, boxBody(t, doc, 0, 0, 7, 5, 3), 5, 3, -1)
+	got, err := decad.Union(a, b)
+	require.NoError(t, err)
+	cen, err := got.Centroid()
+	require.NoError(t, err)
+
+	// Recompute the exact centroid from the two boxes minus their overlap
+	// (inclusion-exclusion over axis-aligned boxes, exact in closed form).
+	type box struct{ x0, y0, z0, x1, y1, z1 float64 }
+	boxes := []struct {
+		b box
+		w float64
+	}{
+		{box{0, 0, 0, 7, 5, 3}, 1},
+		{box{5, 3, -1, 12, 8, 2}, 1},
+		{box{5, 3, 0, 7, 5, 2}, -1},
+	}
+	var vol, mx, my, mz float64
+	for _, e := range boxes {
+		v := (e.b.x1 - e.b.x0) * (e.b.y1 - e.b.y0) * (e.b.z1 - e.b.z0) * e.w
+		vol += v
+		mx += v * (e.b.x0 + e.b.x1) / 2
+		my += v * (e.b.y0 + e.b.y1) / 2
+		mz += v * (e.b.z0 + e.b.z1) / 2
+	}
+	want := r3.NewVec(mx/vol, my/vol, mz/vol)
+	dist := cen.Value.Sub(want).Len()
+	require.LessOrEqual(t, dist, cen.Bound.Base(), `the 3D bound covers the true rounding distance`)
+}
