@@ -171,9 +171,11 @@ the radius, plane/torus the spine circle's plane distance (a closed-form
 amplitude extreme) minus the minor; a carrier the plane crosses has no
 positive plateau and the face minimum falls to the boundary tiers. The sphere
 column is the point column ⊕: point/line, point/plane, point/circle and the
-meridian point/cone are all closed form. Cylinder/cylinder is the axes'
-common perpendicular minus both radii — closed form for parallel and skew
-axes alike. The two torus polynomial cells are the spine problems:
+meridian point/cone are all closed form. Cylinder/cylinder reads the three
+offset branches of the reduction above — exterior `d − r₁ − r₂` off the
+axes' common perpendicular (closed form for parallel and skew axes alike),
+nested `r_out − d_sup − r_in` for parallel axes with the containment proof,
+and the fall-through otherwise. The two torus polynomial cells are the spine problems:
 cylinder/torus is line/circle, whose stationarity is a degree-4 polynomial;
 torus/torus is circle/circle, degree 8. **A certified bracket is a proof, not
 a hope**: the polynomial's coefficients are the evaluator's own floats, taken
@@ -217,8 +219,12 @@ Two upgrades and one downgrade close the table:
 - **Co-directional prisms reduce to 2D.** Two prisms with parallel sweep
   directions have `Gap = hypot(dz, d₂)` where `dz` is the sweep-interval
   separation (zero when the intervals overlap) and `d₂` the 2D distance
-  between the profile boundaries (zero when the regions overlap in
-  projection) — line/arc pairwise, closed form. Two extrudes off one sketch
+  between the profile REGIONS. That is an operational two-step: `d₂` is the
+  minimum over boundary pairs (line/arc pairwise, closed form) UNLESS the
+  regions overlap or one contains the other — decided by an exact 2D
+  point-in-region test on any boundary point of each — in which case `d₂` is
+  zero. Boundary distance alone would overstate the gap for a profile nested
+  inside another with no boundary crossing. Two extrudes off one sketch
   plane land here.
 - **A torus face with `Minor ≥ Major` leaves the polynomial path.** The
   spine-offset foot map is faithful only while every surface point's nearest
