@@ -609,3 +609,84 @@ func TestNilExtentPointersAreBranchable(t *testing.T) {
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 	require.Empty(t, doc.Recipe().Steps)
 }
+
+func TestExtrudeConcaveRoundWall(t *testing.T) {
+	// A 100×60 plate whose top edge carries a semicircular BITE of radius 10
+	// centred at (50, 60): a concave round on the OUTER loop. The outer loop
+	// walks counter-clockwise, but that arc is walked CLOCKWISE about its own
+	// centre, so the material lies OUTSIDE its cylinder — exactly as a hole's
+	// does. The wall's outward normal is the radial direction negated, and a
+	// rule that read the loop's role instead would point it into the metal.
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	corners := [][2]float64{{0, 0}, {100, 0}, {100, 60}, {60, 60}, {40, 60}, {0, 60}}
+	pts := make([]*sketch.Point, len(corners))
+	for i, c := range corners {
+		pts[i] = s.CreatePoint(c[0], c[1])
+		s.Fix(pts[i])
+	}
+	centre := s.CreatePoint(50, 60)
+	s.Fix(centre)
+	s.CreateLine(pts[0], pts[1])
+	s.CreateLine(pts[1], pts[2])
+	s.CreateLine(pts[2], pts[3])
+	s.CreateArc(centre, pts[4], pts[3]) // CCW from (40,60) to (60,60): dips to (50,50)
+	s.CreateLine(pts[4], pts[5])
+	s.CreateLine(pts[5], pts[0])
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	require.Len(t, s.Profiles(), 1)
+
+	doc := decad.New()
+	body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+	require.NoError(t, err)
+
+	vol, err := body.Volume()
+	require.NoError(t, err)
+	gotVol, err := vol.Value.In(units.CubicMillimeter)
+	require.NoError(t, err)
+	require.InDelta(t, (6000-math.Pi*100/2)*5, gotVol, 1e-9, `the bite removes a half disc from every section`)
+
+	// The notch wall's outward normal, checked against an independent
+	// material test: the region is the rectangle MINUS the disc, so a step
+	// along the outward normal must leave the solid and a step against it
+	// must stay inside.
+	material := func(p r3.Vec) bool {
+		inRect := p.X >= 0 && p.X <= 100 && p.Y >= 0 && p.Y <= 60 && p.Z >= 0 && p.Z <= 5
+		outBite := math.Hypot(p.X-50, p.Y-60) >= 10
+		return inRect && outBite
+	}
+	cylinders := 0
+	for _, f := range body.Faces() {
+		if _, ok := f.Surface().(decad.Cylinder); !ok {
+			continue
+		}
+		cylinders++
+		p := r3.NewVec(50, 50, 2.5) // the deepest point of the bite, mid-height
+		n, err := f.NormalAt(p)
+		require.NoError(t, err)
+		require.InDelta(t, 0.0, n.Value.X, 1e-12)
+		require.InDelta(t, 1.0, n.Value.Y, 1e-12, `the outward normal points at the arc centre — the material is outside the cylinder`)
+		require.InDelta(t, 0.0, n.Value.Z, 1e-12)
+		require.True(t, material(p.Sub(n.Value.Scale(0.01))), `against the outward normal is metal`)
+		require.False(t, material(p.Add(n.Value.Scale(0.01))), `along the outward normal leaves the solid`)
+	}
+	require.Equal(t, 1, cylinders)
+
+	// The mesh is wound outward by construction, so every facet's winding
+	// must agree with its source face's outward normal.
+	mesh, err := body.Tessellate(units.Millimeters(0.05))
+	require.NoError(t, err)
+	requireWatertight(t, mesh)
+	require.Positive(t, meshVolume(mesh))
+	verts := mesh.Vertices()
+	src := mesh.SourceFaces()
+	for i, tri := range mesh.Triangles() {
+		a, b, c := verts[tri[0]], verts[tri[1]], verts[tri[2]]
+		facet := b.Sub(a).Cross(c.Sub(a))
+		n, err := src[i].NormalAt(a.Add(b).Add(c).Scale(1.0 / 3))
+		require.NoError(t, err)
+		require.Positive(t, facet.Dot(n.Value), `facet %d is wound against its face's outward normal`, i)
+	}
+}

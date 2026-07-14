@@ -615,13 +615,22 @@ func buildLoopSides(body *Body, ref StepRef, pp prismPayload, li int, loop LoopR
 		faceReversed := false
 		if w.circular {
 			axis := pp.dir(0, 0, 1)
+			// The material's side of a circular wall is decided by the WALK,
+			// not by the loop's role: the outward normal is the walk tangent
+			// turned a quarter turn against the walk's sense, which is the
+			// radial direction away from the centre for a counter-clockwise
+			// walk and toward the centre for a clockwise one. A hole is
+			// walked clockwise — which is why its wall reverses — but so is a
+			// CONCAVE round on an outer loop (a rounded bite out of the
+			// boundary), whose material also lies outside the cylinder.
+			clockwise := w.th1 < w.th0
 			// An Arc3/Circle3 is CCW from start to end about its axis. A
-			// walk that runs the circle clockwise (th1 < th0), and a
-			// reflected placement (which flips handedness), each invert
-			// that sense, so the EDGE axis carries the corrected sign; the
-			// cylinder surface keeps the plain ruling direction.
+			// clockwise walk, and a reflected placement (which flips
+			// handedness), each invert that sense, so the EDGE axis carries
+			// the corrected sign; the cylinder surface keeps the plain ruling
+			// direction.
 			edgeSign := 1.0
-			if w.th1 < w.th0 {
+			if clockwise {
 				edgeSign = -1
 			}
 			if pp.reflected() {
@@ -646,9 +655,9 @@ func buildLoopSides(body *Body, ref StepRef, pp prismPayload, li int, loop LoopR
 			bottomEdge = &Edge{curve: curve0, start: bStart, end: bEnd, convex: !holeLoop, length: w.length}
 			topEdge = &Edge{curve: curve1, start: tStart, end: tEnd, convex: !holeLoop, length: w.length}
 			surf = Cylinder{Origin: center0, Axis: axis, Radius: radius}
-			// A hole's wall has its material OUTSIDE the cylinder, so its
-			// outward normal is the radial direction negated.
-			faceReversed = holeLoop
+			// A clockwise-walked wall has its material OUTSIDE the cylinder,
+			// so its outward normal is the radial direction negated.
+			faceReversed = clockwise
 		} else {
 			bottomEdge = &Edge{curve: Line3{}, start: bStart, end: bEnd, convex: !holeLoop, length: w.length}
 			topEdge = &Edge{curve: Line3{}, start: tStart, end: tEnd, convex: !holeLoop, length: w.length}
