@@ -120,21 +120,33 @@ minor radius — and the surface distance follows from the spine distance `d`
 in three branches, because an offset surface has an inside as well as an
 outside:
 
-- **exterior** — `d ≥ r₁ + r₂`: the gap is `d − r₁ − r₂`, the two skins
-  facing each other across free space;
-- **nested** — `d + min(r₁, r₂) ≤ max(r₁, r₂)`: one carrier lies inside the
-  other, and the gap is `max(r₁, r₂) − d − min(r₁, r₂)`, read across the
-  annular space between them. Two coaxial cylinders of radii 10 and 5 have
-  spine distance 0 and a genuine 5 mm gap — the peg-in-hole clearance, and
-  the branch a subtraction-only rule would misread as "carriers meet";
-- **otherwise** the carriers intersect or touch: no positive gap exists
-  through this reduction, and the pair falls to the boundary tiers or to §6.
+- **exterior** — `d ≥ r₁ + r₂`, with `d` the MINIMUM spine distance: the
+  gap is `d − r₁ − r₂`, the two skins facing each other across free space;
+- **nested** — one carrier provably inside the other. Containment is a claim
+  about the WHOLE inner spine, so this branch reads `d_sup`, the supremum of
+  inner-spine-to-outer-spine distance, never the minimum: nested holds when
+  `d_sup + r_in ≤ r_out`, and the gap is `r_out − d_sup − r_in`, read across
+  the annular space. For the configurations this table sends here —
+  concentric spheres, parallel cylinder axes, coaxial torus spines — the
+  spine distance is constant, so `d_sup = d` and the branch is closed form:
+  two coaxial cylinders of radii 10 and 5 have `d = 0` and a genuine 5 mm
+  gap, the peg-in-hole clearance a subtraction-only rule would misread as
+  "carriers meet". A minimum-distance test could NOT carry this branch: two
+  perpendicular crossing cylinder axes with radii 10 and 5 also have
+  `d = 0`, and their surfaces intersect — that pair has `d_sup = ∞` along
+  the unbounded spines, fails the containment test, and falls through;
+- **otherwise** the carriers intersect, touch, or admit no containment
+  proof: no positive gap exists through this reduction, and the pair falls
+  to the boundary tiers, the `BB` path, or §6.
 
 The branch test reads exact spine geometry, so which branch holds is itself
 a decided answer. The feet map along the joining segment — outward on the
 exterior branch, inward across the annulus on the nested branch — spine foot
-to surface foot, and admission (§3) reads the mapped feet. A plane is its own problem, and a cone reduces to nothing — its
-offset is not a cone — so cone cells are the genuinely iterative ones.
+to surface foot, and admission (§3) reads the mapped feet. A plane is its
+own problem, and the spine-offset reduction does not apply to a cone at all —
+a cone's surface is not at constant distance from its axis, so it has no
+spine to offset from — which is what makes the cone cells the genuinely
+iterative ones.
 
 The face-interior table over the shipped surface set (`CF` = closed form;
 `P4`/`P8` = a certified bracket on the stationarity polynomial — degree 4 for
@@ -311,12 +323,17 @@ the caller is owed unasked; no rung needs a gap the caller never asked for.
   every pair result: an answer, never an absence.
 - **The gate reads pair geometry.** A `Gap` is a `Measurement` of Kind
   Length: `Ref = max(|Value|, Quantum)` with `Quantum = δ = ε × D`, `D` the
-  **pair's** diameter (verification §3/§4). `D` is computed as a certified
-  under-estimate — the greatest distance over vertex pairs and per-face
-  analytic support points along the current best pair's direction —
-  because understating `D` lowers the floor, and a floor too low can only
-  demand more of an answer (verification §4). A `Gap` beyond tolerance makes
-  the report `Suspect` directly (verification §6, the last rung).
+  **pair's** diameter exactly as verification §3 defines it — the greatest
+  distance between two points drawn from either body. The evaluator READS
+  that `D` from exact vertex pairs and per-face analytic support points, and
+  the reading may understate the true diameter; verification §4 already
+  admits exactly this (its diameter reading understates a curved body "by at
+  most the chord error") because a floor's ingredients are magnitudes, not
+  answers, and understating `D` lowers the floor — the only safe direction:
+  it can demand more of an answer, never admit one. The definition is the
+  parent's, untouched; only the reading is the evaluator's. A `Gap` beyond
+  tolerance makes the report `Suspect` directly (verification §6, the last
+  rung).
 
 Worked, at the default `rel = 1e-3`:
 
