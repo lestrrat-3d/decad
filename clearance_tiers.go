@@ -65,9 +65,12 @@ func (k *pairKernel) feCell(f *cFace, e *cEdge, sink *cellSink) {
 	}
 }
 
-// linePlaneFE: a line parallel to the plane carries a constant-distance
-// family admitted through the projected segment; a crossing line is
-// excluded through the trims or routed as a contact.
+// linePlaneFE: a line EXACTLY parallel to the plane carries a
+// constant-distance family admitted through the projected segment; a line
+// provenly crossing it is excluded through the trims or routed as a contact —
+// its distance is affine along the segment, so the minimum sits at an endpoint
+// and the vertex tier holds it exactly. A tilt the oracle cannot rule out gets
+// neither reading: the plateau would be an Exact the true minimum undercuts.
 func (k *pairKernel) linePlaneFE(f *cFace, e *cEdge, sink *cellSink) {
 	dir := e.b.Sub(e.a)
 	l := dir.Len()
@@ -76,7 +79,8 @@ func (k *pairKernel) linePlaneFE(f *cFace, e *cEdge, sink *cellSink) {
 		return
 	}
 	s := f.n.Dot(u)
-	if math.Abs(s) <= clrAngTol {
+	switch k.perpendicularSeg(e.a, e.b, f.n) {
+	case degYes:
 		h := e.a.Sub(f.o).Dot(f.n)
 		x0, y0 := f.planeCoords(e.a.Sub(f.n.Scale(h)))
 		x1, y1 := f.planeCoords(e.b.Sub(f.n.Scale(h)))
@@ -90,6 +94,12 @@ func (k *pairKernel) linePlaneFE(f *cFace, e *cEdge, sink *cellSink) {
 		}
 		pa := f.o.Add(f.u.Scale(w[0])).Add(f.v.Scale(w[1]))
 		sink.candidate(k, hit, math.Abs(h), math.Abs(h), true, pa, pa.Add(f.n.Scale(h)))
+		return
+	case degUnknown:
+		if clrBoxDist(f.box, e.box) > k.tol {
+			return
+		}
+		sink.unsure = true
 		return
 	}
 	// The crossing point of the carrier with the plane.
@@ -106,13 +116,28 @@ func (k *pairKernel) linePlaneFE(f *cFace, e *cEdge, sink *cellSink) {
 }
 
 // circlePlaneFE: the circle's signed plane height is a first harmonic —
-// closed-form criticals, closed-form crossing roots.
+// closed-form criticals, closed-form crossing roots. The constant-height
+// reading belongs to the circle whose own plane is EXACTLY parallel to the
+// face's (its axis parallel to the normal); decided on an amplitude epsilon it
+// would report abs(base) Exact where the true minimum is abs(base) − the
+// amplitude.
 func (k *pairKernel) circlePlaneFE(f *cFace, e *cEdge, sink *cellSink) {
 	base := e.center.Sub(f.o).Dot(f.n)
 	hu := e.radius * f.n.Dot(e.refU)
 	hv := e.radius * f.n.Dot(e.refV)
 	h := func(th float64) float64 { return base + hu*math.Cos(th) + hv*math.Sin(th) }
-	if math.Hypot(hu, hv) <= 1e-12*(math.Abs(base)+e.radius+1) {
+	parallel := k.parallel(f.n, e.axis)
+	if parallel == degUnknown {
+		// A tilt too small to prove or disprove: the extremal azimuth the
+		// criticals below rest on is not resolvable, and the plateau is not
+		// certifiable. Undecided, never a guess.
+		if clrBoxDist(f.box, e.box) > k.tol {
+			return
+		}
+		sink.unsure = true
+		return
+	}
+	if parallel == degYes {
 		// The circle parallels the plane: constant height.
 		if math.Abs(base) <= k.tol {
 			// In the carrier plane itself: a contact exactly when the circle
@@ -267,10 +292,10 @@ func (k *pairKernel) lineOffsetFE(f *cFace, e *cEdge, sink *cellSink) {
 		foot := linePoint(e.a, u, f.anchor)
 		crits = []spineCrit{exactCrit(foot, f.anchor)}
 	case 1:
-		cross := u.Cross(f.axis)
-		if cross.Len() <= clrAngTol {
-			// Parallel to the axis: constant distance, represented at the
-			// axial-overlap midpoint.
+		switch k.parallelSeg(e.a, e.b, f.axis) {
+		case degYes:
+			// EXACTLY parallel to the axis: constant distance, represented at
+			// the axial-overlap midpoint.
 			aOnF := e.a.Sub(f.anchor).Dot(f.axis)
 			bOnF := e.b.Sub(f.anchor).Dot(f.axis)
 			ew := newLinWindow(aOnF, bOnF)
@@ -283,9 +308,16 @@ func (k *pairKernel) lineOffsetFE(f *cFace, e *cEdge, sink *cellSink) {
 			axPt := f.anchor.Add(f.axis.Scale(z))
 			pe := linePoint(e.a, u, axPt)
 			crits = []spineCrit{exactCrit(pe, linePoint(f.anchor, f.axis, pe))}
-		} else {
-			cs := k.lineLinePerp(e.a, u, f.anchor, f.axis)
+		case degNo:
+			cs, okp := k.lineLinePerp(e.a, u, f.anchor, f.axis)
+			if !okp {
+				sink.coarse(f.box, e.box, f.wit, edgeWits(e))
+				return
+			}
 			crits = []spineCrit{cs}
+		default:
+			sink.coarse(f.box, e.box, f.wit, edgeWits(e))
+			return
 		}
 	default:
 		cp := circleParam{
@@ -314,17 +346,29 @@ func (k *pairKernel) lineOffsetFE(f *cFace, e *cEdge, sink *cellSink) {
 	}
 }
 
-// lineLinePerp is the common perpendicular critical between a segment
-// carrier and a spine line.
-func (k *pairKernel) lineLinePerp(a, u, b, v r3.Vec) spineCrit {
+// lineLinePerp is the common perpendicular critical between a segment carrier
+// and a spine line — for lines the oracle has already proven NOT parallel. The
+// solve still owes a guard: cancellation can drive the denominator to zero (or
+// the feet to infinity) on a pair the oracle only just separated, and a
+// non-finite foot is no critical at all. ok is false there — the caller owes
+// an enclosure, never a fabricated critical.
+func (k *pairKernel) lineLinePerp(a, u, b, v r3.Vec) (spineCrit, bool) {
 	rel := b.Sub(a)
 	uv := u.Dot(v)
 	den := 1 - uv*uv
+	if !(den > 0) {
+		return spineCrit{}, false
+	}
 	ru := rel.Dot(u)
 	rv := rel.Dot(v)
 	s := (ru - uv*rv) / den
 	t := (uv*ru - rv) / den
-	return exactCrit(a.Add(u.Scale(s)), b.Add(v.Scale(t)))
+	fa := a.Add(u.Scale(s))
+	fb := b.Add(v.Scale(t))
+	if !finiteVec(fa) || !finiteVec(fb) {
+		return spineCrit{}, false
+	}
+	return exactCrit(fa, fb), true
 }
 
 // circleOffsetFE: a circular edge against a cylinder, sphere or torus face —
@@ -334,18 +378,22 @@ func (k *pairKernel) circleOffsetFE(f *cFace, e *cEdge, sink *cellSink) {
 	var crits []spineCrit
 	switch spineOf(f) {
 	case 0:
-		crits = pointCircleCrits(f.anchor, e.center, e.axis, e.refU, e.refV, e.radius, k.tol)
-		for i := range crits {
-			crits[i].fa, crits[i].fb = crits[i].fb, crits[i].fa // (edge point, spine foot)
+		cs, ok := k.pointCircleCrits(f.anchor, e.center, e.axis, e.refU, e.refV, e.radius, e.ang)
+		if !ok {
+			sink.coarse(f.box, e.box, f.wit, edgeWits(e))
+			return
 		}
+		for i := range cs {
+			cs[i].fa, cs[i].fb = cs[i].fb, cs[i].fa // (edge point, spine foot)
+		}
+		crits = cs
 	case 1:
-		if e.axis.Cross(f.axis).Len() <= clrAngTol {
-			// The circle's plane is perpendicular to the axis: in-plane
-			// point-to-circle geometry, closed form.
-			rel := e.center.Sub(f.anchor)
-			perp := rel.Sub(f.axis.Scale(rel.Dot(f.axis)))
-			dc := perp.Len()
-			if dc <= k.tol {
+		switch k.parallel(e.axis, f.axis) {
+		case degYes:
+			// The circle's plane is EXACTLY perpendicular to the axis:
+			// in-plane point-to-circle geometry, closed form.
+			switch k.onAxis(e.center, f.anchor, f.axis) {
+			case degYes:
 				// Coaxial: constant distance — the peg-in-hole cap edge.
 				th := 0.0
 				if !e.ang.full {
@@ -353,16 +401,25 @@ func (k *pairKernel) circleOffsetFE(f *cFace, e *cEdge, sink *cellSink) {
 				}
 				pe := e.at(th)
 				crits = []spineCrit{exactCrit(pe, linePoint(f.anchor, f.axis, pe))}
-			} else {
-				dir, _ := perp.Normalize()
+			case degNo:
+				rel := e.center.Sub(f.anchor)
+				perp := rel.Sub(f.axis.Scale(rel.Dot(f.axis)))
+				dir, okd := perp.Normalize()
+				if !okd {
+					sink.coarse(f.box, e.box, f.wit, edgeWits(e))
+					return
+				}
 				near := angleOf(e, dir.Scale(-1))
 				far := angleOf(e, dir)
 				for _, th := range []float64{near, far} {
 					pe := e.at(th)
 					crits = append(crits, exactCrit(pe, linePoint(f.anchor, f.axis, pe)))
 				}
+			default:
+				sink.coarse(f.box, e.box, f.wit, edgeWits(e))
+				return
 			}
-		} else {
+		case degNo:
 			cp := circleParam{
 				c: [3]float64{e.center.X, e.center.Y, e.center.Z},
 				u: [3]float64{e.refU.X, e.refU.Y, e.refU.Z},
@@ -378,6 +435,9 @@ func (k *pairKernel) circleOffsetFE(f *cFace, e *cEdge, sink *cellSink) {
 				cs[i].fa, cs[i].fb = cs[i].fb, cs[i].fa // (edge point, axis foot)
 			}
 			crits = cs
+		default:
+			sink.coarse(f.box, e.box, f.wit, edgeWits(e))
+			return
 		}
 	default:
 		ef := &cFace{kind: ckTorus, anchor: e.center, axis: e.axis, refU: e.refU, refV: e.refV, major: e.radius}
@@ -429,8 +489,10 @@ func (k *pairKernel) lineLineEE(ea, eb *cEdge, sink *cellSink) {
 	if !oka || !okb {
 		return
 	}
-	if ua.Cross(ub).Len() <= clrAngTol {
-		// Parallel: overlap of eb's parameter range projected onto ea.
+	switch k.parallelSegs(ea.a, ea.b, eb.a, eb.b) {
+	case degYes:
+		// EXACTLY parallel: the constant family over the overlap of eb's
+		// parameter range projected onto ea.
 		p0 := eb.a.Sub(ea.a).Dot(ua)
 		p1 := eb.b.Sub(ea.a).Dot(ua)
 		w := newLinWindow(p0, p1)
@@ -445,8 +507,20 @@ func (k *pairKernel) lineLineEE(ea, eb *cEdge, sink *cellSink) {
 		d := pa.Sub(pb).Len()
 		sink.candidate(k, 1, d, d, true, pa, pb)
 		return
+	case degUnknown:
+		// A tilt too small to prove or disprove: the constant family is not
+		// certifiable and the common perpendicular is not resolvable.
+		if clrBoxDist(ea.box, eb.box) > k.tol {
+			return
+		}
+		sink.unsure = true
+		return
 	}
-	c := k.lineLinePerp(ea.a, ua, eb.a, ub)
+	c, ok := k.lineLinePerp(ea.a, ua, eb.a, ub)
+	if !ok {
+		sink.coarse(ea.box, eb.box, edgeWits(ea), edgeWits(eb))
+		return
+	}
 	d := c.fa.Sub(c.fb).Len()
 	admit := admitState(lineParamAdmit(ea, c.fa, k.tol), lineParamAdmit(eb, c.fb, k.tol))
 	sink.candidate(k, admit, d, d, true, c.fa, c.fb)
@@ -460,22 +534,30 @@ func (k *pairKernel) lineCircleEE(el, ec *cEdge, sink *cellSink) {
 	if !ok {
 		return
 	}
-	if u.Cross(ec.axis).Len() <= clrAngTol {
-		// The segment is parallel to the circle's axis: in-plane
+	switch k.parallelSeg(el.a, el.b, ec.axis) {
+	case degYes:
+		// The segment is EXACTLY parallel to the circle's axis: in-plane
 		// point-to-circle geometry, closed form.
-		rel := el.a.Sub(ec.center)
-		perp := rel.Sub(ec.axis.Scale(rel.Dot(ec.axis)))
-		dc := perp.Len()
 		var ths []float64
-		if dc <= k.tol {
+		switch k.onAxis(el.a, ec.center, ec.axis) {
+		case degYes:
 			th := 0.0
 			if !ec.ang.full {
 				th = (ec.ang.lo + ec.ang.hi) / 2
 			}
 			ths = []float64{th}
-		} else {
-			dirP, _ := perp.Normalize()
+		case degNo:
+			rel := el.a.Sub(ec.center)
+			perp := rel.Sub(ec.axis.Scale(rel.Dot(ec.axis)))
+			dirP, okd := perp.Normalize()
+			if !okd {
+				sink.coarse(el.box, ec.box, edgeWits(el), edgeWits(ec))
+				return
+			}
 			ths = []float64{angleOf(ec, dirP), angleOf(ec, dirP.Scale(-1))}
+		default:
+			sink.coarse(el.box, ec.box, edgeWits(el), edgeWits(ec))
+			return
 		}
 		for _, th := range ths {
 			pc := ec.at(th)
@@ -484,6 +566,9 @@ func (k *pairKernel) lineCircleEE(el, ec *cEdge, sink *cellSink) {
 			admit := admitState(circleAngleAdmit(ec, th, k.tol), lineParamAdmit(el, pl, k.tol))
 			sink.candidate(k, admit, d, d, true, pl, pc)
 		}
+		return
+	case degUnknown:
+		sink.coarse(el.box, ec.box, edgeWits(el), edgeWits(ec))
 		return
 	}
 	cp := circleParam{
@@ -546,17 +631,25 @@ func (k *pairKernel) vertexFace(v r3.Vec, f *cFace, sink *cellSink) {
 		z := rel.Dot(f.axis)
 		perp := rel.Sub(f.axis.Scale(z))
 		rho := perp.Len()
+		sinA, cosA := math.Sincos(f.half)
 		var radial r3.Vec
-		if rho > k.tol {
-			radial, _ = perp.Normalize()
-		} else {
+		switch k.onAxis(v, f.anchor, f.axis) {
+		case degYes:
+			// Provenly on the axis: every azimuth carries the same distance, so
+			// the sweep window's midpoint represents the family.
 			mid := 0.0
 			if !f.sweep.full {
 				mid = (f.sweep.lo + f.sweep.hi) / 2
 			}
 			radial = f.refU.Scale(math.Cos(mid)).Add(f.refV.Scale(math.Sin(mid)))
+		case degNo:
+			radial, _ = perp.Normalize()
+		default:
+			// The distance is azimuth-free, the admission foot is not. The
+			// carrier distance is a proven lower bound; it stands as one.
+			sink.loOnly(math.Abs(rho*cosA - z*sinA))
+			return
 		}
-		sinA, cosA := math.Sincos(f.half)
 		t := z*cosA + rho*sinA
 		if t <= k.tol {
 			return // the apex holds the nearest point; the vertex tiers pair with it
@@ -591,7 +684,18 @@ func (k *pairKernel) vertexEdge(v r3.Vec, e *cEdge, sink *cellSink) {
 		sink.candidate(k, lineParamAdmit(e, foot, k.tol), d, d, true, foot, v)
 		return
 	}
-	for _, c := range pointCircleCrits(v, e.center, e.axis, e.refU, e.refV, e.radius, k.tol) {
+	crits, ok := k.pointCircleCrits(v, e.center, e.axis, e.refU, e.refV, e.radius, e.ang)
+	if !ok {
+		// The radial direction is not resolvable, so the arc's own admission
+		// cannot be decided — but the distance to the WHOLE circle bounds the
+		// distance to any arc of it from below, and that is a proof.
+		rel := v.Sub(e.center)
+		z := rel.Dot(e.axis)
+		rho := rel.Sub(e.axis.Scale(z)).Len()
+		sink.loOnly(math.Hypot(z, math.Abs(rho-e.radius)))
+		return
+	}
+	for _, c := range crits {
 		th := angleOf(e, c.fb.Sub(e.center))
 		d := c.fa.Sub(c.fb).Len()
 		sink.candidate(k, circleAngleAdmit(e, th, k.tol), d, d, true, c.fb, v)

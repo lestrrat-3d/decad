@@ -449,3 +449,82 @@ func TestClearanceNearParallelPlateReadsTheCorner(t *testing.T) {
 			`the row must carry the dipped-edge minimum, not the plateau`)
 	}
 }
+
+// rodBody extrudes a circle of radius r centered at (cx, cy) symmetrically
+// about the sketch plane: a cylinder whose axis is the world Z line through
+// (cx, cy), spanning z ∈ [−half, +half].
+func rodBody(t *testing.T, doc *decad.Document, cx, cy, r, half float64) *decad.Body {
+	t.Helper()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	c := s.CreatePoint(cx, cy)
+	s.Fix(c)
+	s.CreateCircle(c, r)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	body, err := doc.Extrude(s, s.Profiles()[0], decad.Symmetric{D: units.Millimeters(half)})
+	require.NoError(t, err)
+	return body
+}
+
+func TestClearanceRodPiercingBallIsNeverSound(t *testing.T) {
+	// A rod of radius 1 on the axis (3, 0), running clear through a ball of
+	// radius 10 at the origin — roughly 60 mm³ of overlap, and no gap exists at
+	// all. The §4 nested branch reads a SUPREMUM over the inner spine, and a
+	// cylinder's spine is an infinite LINE: its supremum against the ball's
+	// point spine is +∞, so the containment test must FAIL and the crossing
+	// must be met. Hand that branch the 3 mm foot distance instead and the
+	// crossing check is skipped: the kernel then certifies the piercing pair as
+	// nested and reports it Sound with an Exact 0.688779163216 mm clearance —
+	// the worst answer a verification oracle can give.
+	doc := decad.New()
+	ballBody(t, doc, 10)
+	rodBody(t, doc, 3, 0, 1, 10.5)
+
+	report, err := doc.Verify(t.Context(), decad.WithClearances())
+	require.NoError(t, err)
+	require.Equal(t, decad.Suspect, report.Status, `an interpenetrating pair is never Sound`)
+	require.False(t, report.Trustworthy())
+	require.Empty(t, report.Clearances, `no gap exists, so no row may claim one`)
+}
+
+func TestClearanceCoaxialToriReadTheRing(t *testing.T) {
+	// The certified constant-distance branch (§4), pinned: two EXACTLY coaxial
+	// full tori — spine radii 10 and 5, tubes 2 and 1 — have a constant spine
+	// distance of 5 and a 2 mm ring gap, Exact. Neither face carries an edge,
+	// so the boundary tiers hold nothing here: this reading stands on the
+	// coaxial certificate alone, and it must keep standing.
+	doc := decad.New()
+	torusBody(t, doc, 10, 2)
+	torusBody(t, doc, 5, 1)
+
+	report, err := doc.Verify(t.Context(), decad.WithClearances())
+	require.NoError(t, err)
+	require.Equal(t, decad.Sound, report.Status)
+	requireExactGap(t, report, 2)
+}
+
+func TestClearanceNearCoaxialToriAreNotExact(t *testing.T) {
+	// The same pair with the inner torus 1e-12 mm off the shared axis: NOT
+	// coaxial, so the constant-distance closed form does not hold and its 2 mm
+	// answer is off by up to the offset. Two full tori have no edges and no
+	// vertices — nothing in the lower tiers can out-vote a wrong Exact here —
+	// so the cell must decline. Undecided is the honest answer (clearance §4);
+	// an Exact 2.0 with a zero bound is a lie.
+	doc := decad.New()
+	torusBody(t, doc, 10, 2)
+	inner := torusBody(t, doc, 5, 1)
+	shift, err := r3.Translation(r3.NewVec(0, 0, 1e-12))
+	require.NoError(t, err)
+	_, err = inner.Placed(shift)
+	require.NoError(t, err)
+
+	report, err := doc.Verify(t.Context(), decad.WithClearances())
+	require.NoError(t, err)
+	require.Equal(t, decad.Suspect, report.Status)
+	require.Empty(t, report.Clearances)
+	for _, c := range report.Clearances {
+		require.NotEqual(t, decad.Exact, c.Gap.Exactness)
+	}
+}

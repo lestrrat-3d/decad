@@ -187,71 +187,22 @@ func (k *pairKernel) offsetPair(f, g *cFace, sink *cellSink) {
 		sink.coarse(f.box, g.box, f.wit, g.wit)
 		return
 	}
-	minLo, maxHi := math.Inf(1), math.Inf(-1)
+	minLo := math.Inf(1)
 	for _, c := range crits {
 		minLo = math.Min(minLo, c.lo)
-		maxHi = math.Max(maxHi, c.hi)
 		k.emitOffsetCombos(sink, f, g, c)
 	}
 	rf, rg := spineOffset(f), spineOffset(g)
 	if minLo > rf+rg+k.tol {
 		return // strict exterior: the carriers never meet (§4)
 	}
-	if k.certifiedContainment(f, g, minLo, maxHi) {
+	if k.certifiedContainment(f, g) {
 		return
 	}
 	if clrBoxDist(f.box, g.box) > k.tol {
 		return // the trimmed faces provably cannot touch
 	}
 	sink.unsure = true
-}
-
-// certifiedContainment is §4's nested-branch certification, restricted to
-// the doc's list: an inner POINT spine has d_sup = d trivially (the sup over
-// one point is that point's distance — minLo), and parallel cylinder axes
-// and coaxial spines have constant spine distance (minLo == maxHi). Any
-// other configuration never borrows this branch. Strict inequalities
-// throughout — equality is a tangency and routes to §6.
-func (k *pairKernel) certifiedContainment(f, g *cFace, minLo, maxHi float64) bool {
-	rf, rg := spineOffset(f), spineOffset(g)
-	constD := k.constantSpineDist(f, g)
-	fSup, gSup := math.Inf(1), math.Inf(1)
-	if spineOf(f) == 0 {
-		fSup = minLo
-	} else if constD {
-		fSup = maxHi
-	}
-	if spineOf(g) == 0 {
-		gSup = minLo
-	} else if constD {
-		gSup = maxHi
-	}
-	if rg > fSup+rf+k.tol {
-		return true // f's carrier strictly inside g's
-	}
-	return rf > gSup+rg+k.tol
-}
-
-// constantSpineDist reports the configurations whose spine distance is
-// provably constant: parallel cylinder axes, coaxial circle spines, a circle
-// spine coaxial with a cylinder axis, and any point-spine pair.
-func (k *pairKernel) constantSpineDist(f, g *cFace) bool {
-	sf, sg := spineOf(f), spineOf(g)
-	if sf == 0 || sg == 0 {
-		// A point spine's supremum is the one distance it has — constant
-		// against ANY partner spine (the doc's "an inner POINT spine has
-		// d_sup = d trivially"), not only against another point.
-		return true
-	}
-	if f.axis.Cross(g.axis).Len() > clrAngTol {
-		return false
-	}
-	rel := g.anchor.Sub(f.anchor)
-	perp := rel.Sub(f.axis.Scale(rel.Dot(f.axis))).Len()
-	if sf == 1 && sg == 1 {
-		return true // parallel cylinder axes: any offset
-	}
-	return perp <= k.tol // circle spines (or circle × line): coaxial only
 }
 
 // spineCriticals encloses every critical of the spine-pair distance; ok is
@@ -272,9 +223,9 @@ func (k *pairKernel) spineCriticals(f, g *cFace) ([]spineCrit, bool) {
 		foot := linePoint(g.anchor, g.axis, f.anchor)
 		return []spineCrit{exactCrit(f.anchor, foot)}, true
 	case sf == 0 && sg == 2:
-		return pointCircleCrits(f.anchor, g.anchor, g.axis, g.refU, g.refV, g.major, k.tol), true
+		return k.pointCircleCrits(f.anchor, g.anchor, g.axis, g.refU, g.refV, g.major, g.sweep)
 	case sf == 1 && sg == 1:
-		return k.lineLineCrits(f, g), true
+		return k.lineLineCrits(f, g)
 	case sf == 1 && sg == 2:
 		cp := circleParam{
 			c: [3]float64{g.anchor.X, g.anchor.Y, g.anchor.Z},
@@ -299,31 +250,51 @@ func linePoint(a, d, p r3.Vec) r3.Vec {
 }
 
 // pointCircleCrits are the near and far criticals of a point against a
-// circle — closed form; a point on the circle's axis has constant distance,
-// represented at a deterministic azimuth.
-func pointCircleCrits(p, c, axis, refU, refV r3.Vec, rad, tol float64) []spineCrit {
-	rel := p.Sub(c)
-	perp := rel.Sub(axis.Scale(rel.Dot(axis)))
-	dir, ok := perp.Normalize()
-	if !ok || perp.Len() <= tol {
-		q := c.Add(refU.Scale(rad))
-		_ = refV
-		return []spineCrit{exactCrit(p, q)}
+// circle — closed form. A point PROVENLY on the circle's axis has the same
+// distance at every azimuth, so one representative inside the trim's own
+// window carries the whole family; a point provenly off the axis has the two
+// criticals along its radial direction. An offset the oracle cannot decide
+// leaves the radial direction unresolvable — and the azimuth it would produce
+// decides a trim admission — so the cell reports no criticals rather than
+// guess (ok=false).
+func (k *pairKernel) pointCircleCrits(p, c, axis, refU, refV r3.Vec, rad float64, win angWindow) ([]spineCrit, bool) {
+	switch k.onAxis(p, c, axis) {
+	case degYes:
+		th := 0.0
+		if !win.full {
+			th = (win.lo + win.hi) / 2
+		}
+		s, cs := math.Sincos(th)
+		q := c.Add(refU.Scale(rad * cs)).Add(refV.Scale(rad * s))
+		return []spineCrit{exactCrit(p, q)}, true
+	case degNo:
+		rel := p.Sub(c)
+		perp := rel.Sub(axis.Scale(rel.Dot(axis)))
+		dir, ok := perp.Normalize()
+		if !ok {
+			return nil, false
+		}
+		near := c.Add(dir.Scale(rad))
+		far := c.Sub(dir.Scale(rad))
+		return []spineCrit{exactCrit(p, near), exactCrit(p, far)}, true
+	default:
+		return nil, false
 	}
-	near := c.Add(dir.Scale(rad))
-	far := c.Sub(dir.Scale(rad))
-	return []spineCrit{exactCrit(p, near), exactCrit(p, far)}
 }
 
-// lineLineCrits: parallel axes carry one constant-distance family
-// (represented at the axial-overlap midpoint); skew or crossing axes carry
-// the single common-perpendicular critical.
-func (k *pairKernel) lineLineCrits(f, g *cFace) []spineCrit {
-	cross := f.axis.Cross(g.axis)
-	rel := g.anchor.Sub(f.anchor)
-	if cross.Len() <= clrAngTol {
-		// Parallel: the representative sits at the overlap midpoint of the
-		// two axial windows, projected onto each axis.
+// lineLineCrits: EXACTLY parallel axes carry one constant-distance family
+// (represented at the axial-overlap midpoint — the family really is constant,
+// so the representative is a proof); provenly non-parallel axes carry the
+// single common-perpendicular critical. An axis pair in the oracle's undecided
+// band has neither — a plateau there would be an Exact reading the true
+// minimum undercuts, and the common perpendicular is not resolvable — so the
+// cell falls to the coarse enclosure (ok=false).
+func (k *pairKernel) lineLineCrits(f, g *cFace) ([]spineCrit, bool) {
+	switch k.parallel(f.axis, g.axis) {
+	case degYes:
+		// The representative sits at the overlap midpoint of the two axial
+		// windows, projected onto each axis.
+		rel := g.anchor.Sub(f.anchor)
 		sign := 1.0
 		if g.axis.Dot(f.axis) < 0 {
 			sign = -1
@@ -338,20 +309,16 @@ func (k *pairKernel) lineLineCrits(f, g *cFace) []spineCrit {
 			z = math.Max(f.zWin.lo, math.Min(f.zWin.hi, (gw.lo+gw.hi)/2))
 		}
 		fa := f.anchor.Add(f.axis.Scale(z))
-		return []spineCrit{exactCrit(fa, linePoint(g.anchor, g.axis, fa))}
+		return []spineCrit{exactCrit(fa, linePoint(g.anchor, g.axis, fa))}, true
+	case degNo:
+		c, ok := k.lineLinePerp(f.anchor, f.axis, g.anchor, g.axis)
+		if !ok {
+			return nil, false
+		}
+		return []spineCrit{c}, true
+	default:
+		return nil, false
 	}
-	// Common perpendicular of two non-parallel lines.
-	a := f.axis
-	b := g.axis
-	ab := a.Dot(b)
-	den := 1 - ab*ab
-	ra := rel.Dot(a)
-	rb := rel.Dot(b)
-	s := (ra - ab*rb) / den
-	t := (ab*ra - rb) / den
-	fa := f.anchor.Add(a.Scale(s))
-	fb := g.anchor.Add(b.Scale(t))
-	return []spineCrit{exactCrit(fa, fb)}
 }
 
 // lineCircleBracketCrits runs the P4 machinery for an explicit circle.
@@ -373,14 +340,17 @@ func (k *pairKernel) lineCircleBracketCrits(cp circleParam, center, refU, refV, 
 	return out, true
 }
 
-// circleCircleCrits is the P8 spine cell: coaxial spines are the certified
-// constant-distance closed form; otherwise the Sturm brackets, guarded
-// against the ρ = 0 kink (a spine meeting the other's axis, where the
-// distance is not differentiable — off the shipped path, handled coarse).
+// circleCircleCrits is the P8 spine cell: EXACTLY coaxial spines are the
+// certified constant-distance closed form; provenly non-coaxial spines take
+// the Sturm brackets, guarded against the ρ = 0 kink (a spine meeting the
+// other's axis, where the distance is not differentiable — off the shipped
+// path, handled coarse). A pair the oracle cannot decide coaxial gets neither:
+// the constant closed form would be an Exact reading a tilt undercuts, and the
+// brackets' own foot map is not resolvable there.
 func (k *pairKernel) circleCircleCrits(f, g *cFace) ([]spineCrit, bool) {
 	rel := f.anchor.Sub(g.anchor)
-	if f.axis.Cross(g.axis).Len() <= clrAngTol &&
-		rel.Sub(g.axis.Scale(rel.Dot(g.axis))).Len() <= k.tol {
+	switch k.coaxial(g, f) {
+	case degYes:
 		// Coaxial: constant distance hypot(dz, ΔR) at matched azimuths.
 		dz := rel.Dot(g.axis)
 		d := math.Hypot(dz, f.major-g.major)
@@ -392,6 +362,8 @@ func (k *pairKernel) circleCircleCrits(f, g *cFace) ([]spineCrit, bool) {
 		}
 		pg := g.anchor.Add(dir.Scale(g.major))
 		return []spineCrit{{lo: d, hi: d, exact: true, fa: pf, fb: pg}}, true
+	case degUnknown:
+		return nil, false
 	}
 	// Kink guard: the P8 stationarity is smooth only while f's spine stays
 	// clear of g's axis (§4's foot-map caveat, at the spine level); a spine
@@ -442,11 +414,11 @@ func (k *pairKernel) emitOffsetCombos(sink *cellSink, f, g *cFace, c spineCrit) 
 	d := sep.Len()
 	if d <= k.tol {
 		// Coincident spine feet: the joining direction degenerates into a
-		// whole ring. The certified constant-distance configurations carry
-		// it (concentric shells, coaxial cylinders — the peg-in-hole
-		// reading); anything else is a contact question this cell cannot
-		// decide.
-		if k.constantSpineDist(f, g) && spineOf(f) <= 1 && spineOf(g) <= 1 {
+		// whole ring. Only a PROVEN ring family carries it (concentric
+		// shells, coaxial cylinders — the peg-in-hole reading); a
+		// near-coincidence the oracle cannot decide is a contact question
+		// this cell has no right to answer.
+		if k.ringFamily(f, g) == degYes {
 			k.emitRingCombos(sink, f, g, c)
 			return
 		}
@@ -478,10 +450,15 @@ func (k *pairKernel) emitOffsetCombos(sink *cellSink, f, g *cFace, c spineCrit) 
 	}
 }
 
-// emitRingCombos handles the concentric family of a coincident-spine
-// critical over point/line spines: the annular gap |rf − rg| and the
-// far-side rf + rg pairings, represented at deterministic radial directions
-// and admitted per trim like every candidate.
+// emitRingCombos handles the concentric family of a coincident-spine critical
+// over point/line spines: the annular gap |rf − rg| and the far-side rf + rg
+// pairings. The VALUE is the same all the way around the family — that is what
+// the ring family means — so only the trim admission depends on the direction,
+// and the directions below are a deterministic SAMPLE of it. A sample proves a
+// candidate present, never absent: where no sampled direction of the near
+// pairing is admitted, the family is not discarded (that would OVERSTATE the
+// gap) but held as the proven lower bound it is — the annular distance bounds
+// the whole carrier pair from below.
 func (k *pairKernel) emitRingCombos(sink *cellSink, f, g *cFace, c spineCrit) {
 	axis := f.axis
 	if spineOf(f) == 0 && spineOf(g) == 1 {
@@ -493,37 +470,52 @@ func (k *pairKernel) emitRingCombos(sink *cellSink, f, g *cFace, c spineCrit) {
 	u := perpTo(axis)
 	v := axis.Cross(u)
 	rf, rg := spineOffset(f), spineOffset(g)
-	dirs := make([]r3.Vec, 0, 8)
+	dirs := make([]r3.Vec, 0, 24)
 	for _, th := range ringAngles(f, g, u, v) {
 		dirs = append(dirs, u.Scale(math.Cos(th)).Add(v.Scale(math.Sin(th))))
 	}
 	if spineOf(f) == 0 && spineOf(g) == 0 {
 		dirs = append(dirs, axis, axis.Scale(-1))
 	}
+	margin := k.tol + (c.hi - c.lo)
+	nearAdmitted := false
 	for _, dir := range dirs {
 		pf := c.fa.Add(dir.Scale(rf))
 		near := c.fb.Add(dir.Scale(rg))
 		far := c.fb.Sub(dir.Scale(rg))
-		margin := k.tol + (c.hi - c.lo)
-		sink.candidate(k, admitState(f.admitPoint(pf, margin), g.admitPoint(near, margin)),
-			math.Abs(rf-rg), math.Abs(rf-rg), c.exact, pf, near)
-		sink.candidate(k, admitState(f.admitPoint(pf, margin), g.admitPoint(far, margin)),
-			rf+rg, rf+rg, c.exact, pf, far)
+		if a := admitState(f.admitPoint(pf, margin), g.admitPoint(near, margin)); a != -1 {
+			nearAdmitted = true
+			sink.candidate(k, a, math.Abs(rf-rg), math.Abs(rf-rg), c.exact, pf, near)
+		}
+		if a := admitState(f.admitPoint(pf, margin), g.admitPoint(far, margin)); a != -1 {
+			sink.candidate(k, a, rf+rg, rf+rg, c.exact, pf, far)
+		}
+	}
+	if !nearAdmitted {
+		// The near pairing is the small one: a far pairing can never hold the
+		// minimum the near pairing does not. Unproven absence keeps its bound.
+		sink.loOnly(math.Abs(rf - rg))
 	}
 }
 
-// ringAngles proposes representative azimuths: the faces' own window mids
-// plus the quarters — deterministic, and covering every interval overlap the
-// windows can form.
+// ringAngles proposes representative azimuths of the ring family: a
+// deterministic uniform set plus each face's own window endpoints and mid
+// mapped into the ring frame — the places a partial trim's admission can begin,
+// end or sit comfortably inside.
 func ringAngles(f, g *cFace, u, v r3.Vec) []float64 {
-	out := []float64{0, math.Pi / 2, math.Pi, 3 * math.Pi / 2}
+	const uniform = 16
+	out := make([]float64, 0, uniform+6)
+	for i := range uniform {
+		out = append(out, 2*math.Pi*float64(i)/uniform)
+	}
 	for _, fc := range []*cFace{f, g} {
 		if fc.sweep.full {
 			continue
 		}
-		mid := (fc.sweep.lo + fc.sweep.hi) / 2
-		dir := fc.refU.Scale(math.Cos(mid)).Add(fc.refV.Scale(math.Sin(mid)))
-		out = append(out, math.Atan2(dir.Dot(v), dir.Dot(u)))
+		for _, th := range []float64{fc.sweep.lo, (fc.sweep.lo + fc.sweep.hi) / 2, fc.sweep.hi} {
+			dir := fc.refU.Scale(math.Cos(th)).Add(fc.refV.Scale(math.Sin(th)))
+			out = append(out, math.Atan2(dir.Dot(v), dir.Dot(u)))
+		}
 	}
 	return out
 }
@@ -869,9 +861,12 @@ func (k *pairKernel) planeCrossesRevolved(f, g *cFace, sink *cellSink) {
 	if zw.hi < g.zWin.lo-k.tol || zw.lo > g.zWin.hi+k.tol {
 		return
 	}
-	if math.Abs(s) >= 1-clrAngTol {
-		// Axis perpendicular to the plane: the crossing is the circle at the
-		// plane's own axial station, exact against the region.
+	if k.parallel(f.n, g.axis) == degYes {
+		// Axis EXACTLY perpendicular to the plane: the crossing is a circle at
+		// the plane's own axial station, exact against the region. A tilted
+		// axis crosses in an ELLIPSE of semi-major radius R/|s| — reading it
+		// as the circle would grant an exclusion the ellipse does not earn, so
+		// a tilt the oracle cannot rule out leaves the crossing undecided.
 		center := g.anchor.Add(g.axis.Scale((c - base) / s))
 		cx, cy := f.planeCoords(center)
 		if circleRegionHits(f.region, cx, cy, g.radius) == -1 {
@@ -881,13 +876,27 @@ func (k *pairKernel) planeCrossesRevolved(f, g *cFace, sink *cellSink) {
 	sink.unsure = true
 }
 
-// planeCone is the plane-row cone cell: the plateau exists exactly when the
-// plane parallels a ruling (|n·axis| = sin α), at the apex's own plane
-// distance; otherwise the cell only owes the crossing exclusion — the exact
-// range of n·x over the trimmed face.
+// planeCone is the plane-row cone cell, and it owes only the crossing
+// exclusion — the exact range of n·x over the trimmed face.
+//
+// The face-interior plateau §4 grants this cell (the plane parallel to a
+// ruling, |n·axis| = sin α, at the apex's own plane distance) is NOT emitted,
+// and the cell loses nothing by it. Two reasons, and both must hold:
+//
+//   - It cannot be certified. |n·axis| is exact arithmetic on the payload's
+//     floats, but sin α is a transcendental of the stored half-angle: no exact
+//     test on those floats decides the identity, so the plateau could only ever
+//     be minted off a tolerance — an Exact reading a tilt undercuts by up to
+//     clrAngTol × the slant length, exactly the lie this kernel does not tell.
+//   - It is redundant. The plane distance is AFFINE along every ruling, so its
+//     minimum over the trimmed face always migrates to a trim boundary in the
+//     axial direction: the latitude edges (Circle3 × Plane, closed form) and
+//     the synthesized apex vertex (point × plane, closed form) hold it exactly,
+//     including in the parallel-ruling case where the plateau merely ties them.
+//     A zero crossing inside the trim is not a minimum but a contact, and that
+//     is what the crossing exclusion below is for.
 func (k *pairKernel) planeCone(f, g *cFace, sink *cellSink) {
 	s := f.n.Dot(g.axis)
-	sinA := math.Sin(g.half)
 	apexH := g.anchor.Sub(f.o).Dot(f.n)
 	nu, nv := f.n.Dot(g.refU), f.n.Dot(g.refV)
 
@@ -906,36 +915,10 @@ func (k *pairKernel) planeCone(f, g *cFace, sink *cellSink) {
 			rangeHi = math.Max(rangeHi, v)
 		}
 	}
-	crossingExcluded := rangeLo > k.tol || rangeHi < -k.tol || clrBoxDist(f.box, g.box) > k.tol
-
-	if math.Abs(math.Abs(s)-sinA) <= clrAngTol {
-		if math.Abs(apexH) <= k.tol {
-			sink.unsure = true
-			return
-		}
-		// The parallel ruling: the azimuth where n·d(θ) reaches ∓|s|·cos α.
-		sign := -1.0
-		if s < 0 {
-			sign = 1
-		}
-		th := math.Atan2(sign*nv, sign*nu)
-		angAdmit := g.sweep.classify(th, clrAngTol*10)
-		if angAdmit != -1 {
-			radial := g.refU.Scale(math.Cos(th)).Add(g.refV.Scale(math.Sin(th)))
-			p0 := g.anchor.Add(g.axis.Scale(g.zWin.lo)).Add(radial.Scale(g.zWin.lo * tanA))
-			p1 := g.anchor.Add(g.axis.Scale(g.zWin.hi)).Add(radial.Scale(g.zWin.hi * tanA))
-			x0, y0 := f.planeCoords(p0)
-			x1, y1 := f.planeCoords(p1)
-			hit, w := f.region.segmentHits(x0, y0, x1, y1)
-			if hit != -1 {
-				pa := f.o.Add(f.u.Scale(w[0])).Add(f.v.Scale(w[1]))
-				sink.candidate(k, admitState(angAdmit, hit), math.Abs(apexH), math.Abs(apexH), true, pa, pa.Add(f.n.Scale(apexH)))
-			}
-		}
+	if rangeLo > k.tol || rangeHi < -k.tol || clrBoxDist(f.box, g.box) > k.tol {
+		return
 	}
-	if !crossingExcluded {
-		sink.unsure = true
-	}
+	sink.unsure = true
 }
 
 // planeSphere is the plane-row sphere cell: the center's plane distance
@@ -1040,19 +1023,28 @@ func (k *pairKernel) coneSphere(f, g *cFace, sink *cellSink) {
 	z := rel.Dot(cone.axis)
 	perp := rel.Sub(cone.axis.Scale(z))
 	rho := perp.Len()
+	sinA, cosA := math.Sincos(cone.half)
 	var radial r3.Vec
-	if rho > k.tol {
-		radial, _ = perp.Normalize()
-	} else {
-		// A center on the axis makes every azimuth equivalent; represent at
-		// the sweep-window midpoint.
+	switch k.onAxis(sph.anchor, cone.anchor, cone.axis) {
+	case degYes:
+		// A center PROVENLY on the axis makes every azimuth equivalent — the
+		// meridian reading is the same all the way around — so the sweep
+		// window's own midpoint represents the family.
 		mid := 0.0
 		if !cone.sweep.full {
 			mid = (cone.sweep.lo + cone.sweep.hi) / 2
 		}
 		radial = cone.refU.Scale(math.Cos(mid)).Add(cone.refV.Scale(math.Sin(mid)))
+	case degNo:
+		radial, _ = perp.Normalize()
+	default:
+		// The value is azimuth-free, but the FOOT that decides trim admission
+		// is not: an offset in the undecided band normalizes to a garbage
+		// direction. The carrier distance still bounds the trimmed pair from
+		// below, so it stands as the honest lower bound it is.
+		sink.loOnly(math.Abs(rho*cosA-z*sinA) - sph.radius)
+		return
 	}
-	sinA, cosA := math.Sincos(cone.half)
 	t := z*cosA + rho*sinA // slant projection onto the ruling
 	if t <= k.tol {
 		// The nearest carrier point is the apex — a singular point owned by

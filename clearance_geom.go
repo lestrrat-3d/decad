@@ -31,9 +31,15 @@ type angWindow struct {
 	full   bool
 }
 
+// newAngWindow builds the window. A window is FULL only when it really closes
+// on itself: `full` is an ADMISSION — it says every azimuth lies in the trim —
+// and a tolerance that rounds a window up to full admits carrier points inside
+// the sliver the window is missing. The closed carriers say so themselves (a
+// Circle3 edge, a closed sphere/torus meridian, a full revolve) and pass
+// `full` directly; nothing else earns it on a near miss.
 func newAngWindow(a, b float64) angWindow {
 	lo, hi := math.Min(a, b), math.Max(a, b)
-	if hi-lo >= 2*math.Pi-clrAngTol {
+	if hi-lo >= 2*math.Pi {
 		return angWindow{full: true}
 	}
 	return angWindow{lo: lo, hi: hi}
