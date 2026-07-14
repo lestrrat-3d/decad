@@ -149,12 +149,14 @@ and a wrong-but-confident prism is the failure decad exists to prevent.
 Same recording shape; the axis must be validated non-degenerate and coplanar
 with the profile plane, and the axis must not pass through the region's
 INTERIOR: the region lies in one closed half-plane of the axis. Boundary
-contact is allowed at SEGMENT ENDPOINTS on the axis only — an endpoint on the
-axis sweeps to a pole or an apex, exactly the sphere and cone-tip case. Any
-other boundary contact — a curve tangent to the axis at an interior point (a
-circle kissing it would sweep a self-touching horn torus), or a segment
-crossing it — is rejected, `ErrDegenerate`, as is a region with interior on
-both sides; that is what keeps §10's valid-by-construction claim true.
+contact is allowed in exactly two forms — a segment ENDPOINT on the axis (it
+sweeps to a pole or an apex, the sphere and cone-tip case), and a whole
+`LineSeg` lying ALONG the axis (it sweeps nothing and emits no face, per the
+build table below). Any other contact — a curve tangent to the axis at an
+interior point (a circle kissing it would sweep a self-touching horn torus),
+or a segment crossing it — is rejected, `ErrDegenerate`, as is a region with
+interior on both sides; that is what keeps §10's valid-by-construction claim
+true.
 Faces: a `LineSeg` lying ON the axis emits no face at all — it sweeps a
 zero-area set, and the neighboring segments' faces close the solid there;
 parallel to the axis (off it) → `Cylinder`; inclined → `Cone` (an
@@ -224,7 +226,7 @@ Increment 4, the deep end. Strategy:
   intersection curves, classification by exact winding tests, stitching by
   shared exact vertices.
 - **Output**: faces are `Faceted`, grouped by source analytic face so
-  provenance (`CreatedBy`) and face-level selection survive the boolean;
+  provenance (`FaceCreatedBy`) and face-level selection survive the boolean;
   vertices carry bound δ_t; measurements integrate the mesh exactly and
   report `Approximate` with the verification-design bound shapes
   (volume bound ≈ δ_t · area).
