@@ -145,9 +145,11 @@ const (
 // errNilExtent rejects a nil variant pointer: it names no extent to record.
 var errNilExtent = fmt.Errorf(`decad: nil extent`)
 
-// normalizeExtent returns the value form of e: the variants seal with value
-// receivers, so a *Distance satisfies Extent as readily as a Distance does —
-// the codec accepts both and records the value the pointer names. A nil
+// normalizeExtent returns the value form of e, RECURSIVELY: the variants seal
+// with value receivers, so a *Distance satisfies Extent as readily as a
+// Distance does — the codec accepts both and records the value the pointer
+// names — and a TwoSided's sides normalize with it, so no caller-owned
+// pointer survives into a recorded step to alias document state. A nil
 // pointer is rejected.
 func normalizeExtent(e Extent) (Extent, error) {
 	switch e := e.(type) {
@@ -170,7 +172,17 @@ func normalizeExtent(e Extent) (Extent, error) {
 		if e == nil {
 			return nil, errNilExtent
 		}
-		return *e, nil
+		return normalizeExtent(*e)
+	case TwoSided:
+		one, err := normalizeSideExtent(e.One)
+		if err != nil {
+			return nil, err
+		}
+		two, err := normalizeSideExtent(e.Two)
+		if err != nil {
+			return nil, err
+		}
+		return TwoSided{One: one, Two: two}, nil
 	default:
 		return e, nil
 	}

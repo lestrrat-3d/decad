@@ -573,3 +573,19 @@ func TestExtrudeRejectsNonFiniteTaper(t *testing.T) {
 	require.ErrorIs(t, err, decad.ErrNotFinite)
 	require.Empty(t, doc.Recipe().Steps)
 }
+
+func TestRecordedExtentNeverAliasesCallerPointers(t *testing.T) {
+	// A nested pointer side is normalized to a value at the feature call, so
+	// mutating the caller's struct after the fact cannot rewrite the recipe.
+	s, p := plateSketch(t)
+	doc := decad.New()
+	side := &decad.DistanceSide{D: units.Millimeters(7)}
+	_, err := doc.Extrude(s, p, decad.TwoSided{One: side, Two: decad.DistanceSide{D: units.Millimeters(3)}})
+	require.NoError(t, err)
+
+	side.D = units.Millimeters(999)
+	got := doc.Recipe().Steps[0].Extent.(decad.TwoSided)
+	one, ok := got.One.(decad.DistanceSide)
+	require.True(t, ok, `the recorded side is a value, not the caller's pointer`)
+	require.True(t, one.D.Equal(units.Millimeters(7), 1e-12), `the recorded magnitude is the one given at the call`)
+}

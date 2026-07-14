@@ -330,6 +330,15 @@ func cloneStep(s Step) Step {
 	out.Values = slices.Clone(s.Values)
 	out.Selectors = slices.Clone(s.Selectors)
 	out.Profile = cloneProfileRecord(s.Profile)
+	// An extent normalizes to pure values recursively (nested TwoSided sides
+	// included), so a cloned step can never share a caller-visible pointer
+	// with the document. A malformed nil pointer stays as-is — the codecs
+	// and the feature calls reject it at their own gates.
+	if s.Extent != nil {
+		if e, err := normalizeExtent(s.Extent); err == nil {
+			out.Extent = e
+		}
+	}
 	return out
 }
 
