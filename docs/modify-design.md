@@ -8,7 +8,7 @@ Four tables are normative, and each states its facts **once**:
 | Table | States | Section |
 |---|---|---|
 | **R** — the receiver | which body a modify op accepts, keyed on the **payload class** | §3 |
-| **S** — the refusals | every refusal, with the §1 existence test that picks its sentinel | §4 |
+| **S** — the refusals | every refusal, with the §1 existence test that picks its sentinel, and the order the gates run in | §4 |
 | **B** — the result | op × removed faces × sense × section connectivity → payload class, **lump count**, faces and their roles | §9 |
 | **D** — downstream | one row per consumer, and whether it reads the payload only or reads roles | §12 |
 
@@ -51,8 +51,11 @@ question separates them:
 | a body that **does not exist** — no such solid, at that radius or that thickness, under any evaluator | `ErrDegenerate` |
 | a body that **exists** and this evaluator cannot build | `ErrUnsupported` |
 
-Table S (§4) answers that question for every refusal, once. No other section
-picks a sentinel; they cite an S row.
+Table S (§4) answers that question for every refusal, once, and fixes the order
+the gates are asked in — which the answer above depends on: a gate that fires
+early on a body that *does* exist would hand the caller `ErrUnsupported` for a
+body that does not. No other section picks a sentinel or an order; they cite an
+S row.
 
 Both sentinels are returned from the call, before anything is recorded: a
 failed evaluation leaves the recipe and the document untouched (evaluator §8),
@@ -168,12 +171,33 @@ sentinel follows from it and from nothing else.
 Selection happens against the live receiver, before the build, and every gate
 in this table runs before a single face is made.
 
-S13–S17 are the gates a call passes before any geometric one is asked: a live
-receiver (S17), a magnitude of the right `Kind`, finite and non-negative (S15)
-and non-zero (S13 for a radius or a distance, S14 for a thickness), and a
-selector that matches (S16). They apply to every op and to every row of Table B
-(§9), whose Refusals column therefore names only what a row's own geometry
-refuses.
+**The order the gates run in.** A refusal is truthful only if the question it
+answers could be asked at all, so the gates run in the order their inputs come
+into existence — and where two of them can be asked on the *same* inputs, the
+**existence** question (§1) is asked first, because a body that does not exist
+must never be reported as one this evaluator merely cannot build. The order is
+the same for every op:
+
+| Stage | Asks | Gates, in order |
+|---|---|---|
+| **1 — the pre-gates** | is this a call at all? Decided before any geometry | S17 (a live receiver), S15 (a magnitude of the right `Kind`, finite and non-negative), S13 / S14 (a non-zero one), S16 (a selector that matches) |
+| **2 — the receiver and its targets** | is this body one a modify op takes, and is what the query named a thing it can act on? | S3 (Table R's payload class), then S1 (every selected edge is lateral) / S2 (every removed face is a cap) |
+| **3 — the construction's own gates** | does the rewrite the caller asked for exist, feature by feature? | fillet / chamfer: S4 (there is a corner), then S5 (a blend of that radius exists — fillet only). Shell: S10 (the erosion is non-empty — inward only), then S11 (no feature the offset would drop) |
+| **4 — the §5 audit of the rewritten profile** | do the pieces bound a simple, correctly nested region? | S8 (orientation — the existence question, so a consumed region never reads `ErrUnsupported`), then S6 (no walk consumed by its own corners — an offset mints none, §8), then S7 (no crossing; for a **shell** a crossing is S11, §8), then S9 (nesting, which is decidable only once no two loops cross) |
+| **5 — what the result can be held as** | the region is proven; can a payload hold it? | S12 (a both-caps shell of a holed section is `1 + k` lumps) |
+
+Each stage needs the one before it, and that is what fixes the order rather than
+taste: there is no cutback to measure until the blend centre exists (S5), no
+offset loop to orient until the erosion exists (S10) and keeps its features
+(S11), and no lump count to take until the offset bounds a proven region. **S12
+is therefore last** — an inward both-caps shell of a holed section at or beyond
+the inradius is S10, and one whose offset merges two loops is S11; neither
+reaches the count (B4).
+
+Stage 1 applies to every op and to every row of Table B (§9), and so does S3;
+S2 is decided by the removed faces each shell row is keyed on. Table B's
+Refusals column therefore names what a row's own geometry refuses, in this
+order.
 
 ## 5. Where the 2D work lives, and what proves it
 
@@ -210,21 +234,28 @@ row of its own for what a test catches, that row is the one the refusal cites;
 the shell has one, and §8 says which.
 
 **The rewrite is admitted only when the loops it produces are proven simple and
-correctly nested.** Four tests, in order, all in closed form over decad's own
-line and arc segments:
+correctly nested.** Four tests, in the order §4's precedence fixes, all in
+closed form over decad's own line and arc segments:
 
-1. **No crossing.** Every pair of segments within a rewritten loop, and every
-   pair drawn from two loops of the section, is tested for intersection —
-   line×line, line×circle, circle×circle, the same closed forms the clearance
-   kernel's 2D reduction and `survey2d.go`'s boundary walks use. A crossing is
-   **S7**.
+1. **Orientation preserved.** A loop whose signed area has changed sign has
+   turned itself inside out — the modification consumed the region — and is
+   **S8**. It is asked **first** because it is the audit's one existence
+   question (§1), and its answer is defined whatever the pieces do to each
+   other: the signed area of a closed chain is a boundary integral, and it is
+   there to be read before any piece has been tested against any other. A
+   region a rewrite has consumed exists under no evaluator, so it must never
+   leave by one of the three staging exits below.
 2. **No self-consuming trim.** A segment trimmed past its own other end is
    **S6** — the corners at its two ends have claimed the whole walk between them
    (§6): the pieces the rewrite produced must be resolved against each other
-   before they bound anything.
-3. **Orientation preserved.** A loop whose signed area has changed sign has
-   turned itself inside out — the modification consumed the region — and is
-   **S8**.
+   before they bound anything. It precedes the crossing test because a walk its
+   own corners have eaten is not yet a piece an intersection against it would
+   mean anything on.
+3. **No crossing.** Every pair of segments within a rewritten loop, and every
+   pair drawn from two loops of the section, is tested for intersection —
+   line×line, line×circle, circle×circle, the same closed forms the clearance
+   kernel's 2D reduction and `survey2d.go`'s boundary walks use. A crossing is
+   **S7** — and, on a shell's offset, **S11** (§8).
 4. **Nesting preserved.** Once no two loops cross, each loop lies wholly inside
    or wholly outside every other, so nesting is decided by classifying **one
    point** of each loop against each other loop. Containment is *not* a crossing
@@ -379,9 +410,10 @@ that has not shipped, so it is not an option a caller can pass, and nothing is
 silently narrowed (core §8.1: an option that cannot be recorded does not ship).
 
 The rewrite trims both walks back by `d` and joins the feet with a `LineSeg`.
-The gates are the fillet's: S1 for a cap edge, S4 for a smooth or cusped corner,
-S6 for a setback that reaches or passes the far end of a walk, S7/S8/S9 from the
-§5 audit, S13 for a zero `d` and S15 for a magnitude that is not a valid length. A corner with a circular neighbour
+The gates are the fillet's, in §4's order: S15 for a magnitude that is not a
+valid length and S13 for a zero `d`; S1 for a cap edge; S4 for a smooth or
+cusped corner; then the §5 audit — S8, S6 for a setback that reaches or passes
+the far end of a walk, S7, S9. A corner with a circular neighbour
 builds: the chord from a point on a line to a point on an arc, or from arc to
 arc, is still a `LineSeg`, and the bevel face is still a `Plane` — a chamfer
 against a cylindrical wall meets it in a straight ruling, because both are
@@ -434,31 +466,38 @@ offset `P ⊕ t` is the same table with the two corner rules exchanged (a convex
 corner rounds, a reflex one miters) and the radii moved the other way. Both are
 exact.
 
-**Two gates, and they are different questions.**
+**Three gates, and they are different questions — asked in that order (§4),
+because each needs the one before it to have passed.**
 
 - **Does the body exist?** This is the inward sense's question, and the erosion
   answers it: `P ⊖ t` is non-empty exactly when `t` is strictly less than the
   section's **inradius** — the radius of its largest inscribed disk, which
   `survey2d.go` already computes **exactly** as part of the wall survey. At or
   beyond it, S10; and the reading that refuses is the same one that answers
-  `MinWallThickness`.
-- **Can this evaluator build it?** Two ways the offset construction itself
-  cannot, and both are staged, not denied: an offset that changes the section's
-  feature set (S11), and a result in more than one piece (S12). Refusing costs
-  the caller a shell decad could in principle build; producing one costs them a
-  part that is wrong where they cannot see it — the same principle evaluator §12
-  states for the tapered extrude. The audit below adds its own.
+  `MinWallThickness`. Nothing below can be asked until this passes: there is no
+  offset section to inspect until the offset section is there.
+- **Can this evaluator build the offset?** An offset that changes the section's
+  feature set is S11 — a segment the offset would drop, caught as the offset is
+  constructed, and a loop it would merge or split, caught by the audit below.
+  Staged, not denied: refusing costs the caller a shell decad could in principle
+  build; producing one costs them a part that is wrong where they cannot see it —
+  the same principle evaluator §12 states for the tapered extrude.
+- **Can a payload hold the result?** Only now — with an offset that exists and
+  bounds a proven region with `P`'s own feature set — is the wall's **lump count**
+  a question with an answer, and a result in more than one piece is S12 (B4).
+  Staged for the same reason, and **last** for this one.
 
-**The offset section is a rewrite, so it faces the §5 audit like any other.**
-Two of the audit's refusals are the shell's exactly as they stand: an offset loop
-that has turned inside out is **S8**, and an offset whose nesting the containment
-classifier cannot decide is **S9**, which the evaluator declines rather than
-guess. The crossing test is the one the shell claims for itself: **a crossing of offset loops is S11, not S7**, because a merge is the
-expected outcome of an offset — two walls closing on each other at `2t` *is* the
-feature-set change S11 names — so the shell's own row owns the event and S7 never
-fires on an offset. The trim test cannot fire at all: it tests a cutback, and an
-offset mints none — a segment the offset consumes is a dropped feature, which is
-S11 again.
+**The offset section is a rewrite, so it faces the §5 audit like any other**, and
+the audit runs between the second gate and the third. Two of its refusals are the
+shell's exactly as they stand: an offset loop that has turned inside out is
+**S8**, and an offset whose nesting the containment classifier cannot decide is
+**S9**, which the evaluator declines rather than guess. The crossing test is the
+one the shell claims for itself: **a crossing of offset loops is S11, not S7**,
+because a merge is the expected outcome of an offset — two walls closing on each
+other at `2t` *is* the feature-set change S11 names — so the shell's own row owns
+the event and S7 never fires on an offset. The trim test cannot fire at all: it
+tests a cutback, and an offset mints none — a segment the offset consumes is a
+dropped feature, which is S11 again.
 
 **Which section is the outside, and which is the cavity, is what the sense
 decides.** Inward, the outer boundary is `P` and the cavity is `P ⊖ t`; outward,
@@ -487,17 +526,23 @@ inward, `P ⊕ t` outward.
 
 | B | Op | Removed | Sense | Section | Payload | Lumps | Faces (roles) | Refusals |
 |---|---|---|---|---|---|---|---|---|
-| **B1** | `Fillet` / `Chamfer` | — | — | any (`k ≥ 0`) | `prismPayload` over the **rewritten** section, same frame, same `[z0, z1]` | **1** | side walls `side(i,j)` over the rewritten record, two caps `capStart` / `capEnd`. The blend cylinder / bevel plane **is** one of those walls, and carries a **second** role `fillet(i,j)` / `chamfer(i,j)` naming the same `(loop, segment)` of the rewritten record | S1, S4, S6, S7, S8, S9, and S5 **for a fillet only** — S5 is a condition on the two carriers' `r`-offsets, which only the blend computes; a chamfer's chord exists between any two distinct feet (§7) |
-| **B2** | `Shell` | both caps | `Inward` | hole-free | a **tube**: `prismPayload` whose section is `{Outer: P, Holes: [Q]}`, on `[z0, z1]` | **1** | outer walls `side(0,j)`, cavity walls `side(1,j)`, and the two **rim annuli** — the caps of that prism — `capStart` / `capEnd` | S8, S9, S10, S11 |
-| **B3** | `Shell` | both caps | `Outward` | hole-free | a **tube**: `prismPayload` whose section is `{Outer: Q, Holes: [P]}`, on `[z0, z1]` — no cap is kept, so no material is added along the sweep | **1** | as B2 | S8, S9, S11 |
-| **B4** | `Shell` | both caps | either | holed (`k ≥ 1`) | — | **1 + k** — a band around the outer loop, plus one band lining each hole, pairwise disjoint | — | **S12** |
-| **B5** | `Shell` | one cap | `Inward` | any (`k ≥ 0`) | a **cup**: `cupPayload` — the outer prism over `P` on `[z0, z1]` and the cavity prism over `Q = P ⊖ t` on `[z0 + t, z1]`. The kept cap does not move; the floor is `t` of the original material | **1** — every wall band hangs off the floor slab | outer walls `side(i,j)`, the kept cap `capStart`, the **rims** `rim(i)` — the removed cap's plane trimmed to the band between loop `i` of `P` and loop `i` of `Q`, one face per loop (`1 + k` of them) — cavity walls `shellSide(i,j)`, cavity cap `shellCap` | S8, S9, S10, S11 |
-| **B6** | `Shell` | one cap | `Outward` | any (`k ≥ 0`) | a **cup**: `cupPayload` — the outer prism over `Q = P ⊕ t` on `[z0 − t, z1]` and the cavity prism over `P` on `[z0, z1]`. The original solid *is* the cavity; the floor is `t` of new material below the kept cap | **1** | as B5 | S8, S9, S11 |
+| **B1** | `Fillet` / `Chamfer` | — | — | any (`k ≥ 0`) | `prismPayload` over the **rewritten** section, same frame, same `[z0, z1]` | **1** | side walls `side(i,j)` over the rewritten record, two caps `capStart` / `capEnd`. The blend cylinder / bevel plane **is** one of those walls, and carries a **second** role `fillet(i,j)` / `chamfer(i,j)` naming the same `(loop, segment)` of the rewritten record | S1, S4, S5 (**a fillet only** — S5 is a condition on the two carriers' `r`-offsets, which only the blend computes; a chamfer's chord exists between any two distinct feet, §7), then the §5 audit: S8, S6, S7, S9 |
+| **B2** | `Shell` | both caps | `Inward` | hole-free | a **tube**: `prismPayload` whose section is `{Outer: P, Holes: [Q]}`, on `[z0, z1]` | **1** | outer walls `side(0,j)`, cavity walls `side(1,j)`, and the two **rim annuli** — the caps of that prism — `capStart` / `capEnd` | S10, S11, then the §5 audit: S8, S9 |
+| **B3** | `Shell` | both caps | `Outward` | hole-free | a **tube**: `prismPayload` whose section is `{Outer: Q, Holes: [P]}`, on `[z0, z1]` — no cap is kept, so no material is added along the sweep | **1** | as B2 | S11, then the §5 audit: S8, S9 (no S10 — an outward thickness has no limit) |
+| **B4** | `Shell` | both caps | either | holed (`k ≥ 1`) | — | **1 + k** — a band around the outer loop, plus one band lining each hole, pairwise disjoint | — | S10 (**`Inward` only**), S11, the §5 audit's S8 and S9 — every one of them decided on the offset section, and so reached before the count is — then, and only then, **S12** |
+| **B5** | `Shell` | one cap | `Inward` | any (`k ≥ 0`) | a **cup**: `cupPayload` — the outer prism over `P` on `[z0, z1]` and the cavity prism over `Q = P ⊖ t` on `[z0 + t, z1]`. The kept cap does not move; the floor is `t` of the original material | **1** — every wall band hangs off the floor slab | outer walls `side(i,j)`, the kept cap `capStart`, the **rims** `rim(i)` — the removed cap's plane trimmed to the band between loop `i` of `P` and loop `i` of `Q`, one face per loop (`1 + k` of them) — cavity walls `shellSide(i,j)`, cavity cap `shellCap` | S10, S11, then the §5 audit: S8, S9 (no S12 — one cap is kept, and every band hangs off the floor it leaves) |
+| **B6** | `Shell` | one cap | `Outward` | any (`k ≥ 0`) | a **cup**: `cupPayload` — the outer prism over `Q = P ⊕ t` on `[z0 − t, z1]` and the cavity prism over `P` on `[z0, z1]`. The original solid *is* the cavity; the floor is `t` of new material below the kept cap | **1** | as B5 | S11, then the §5 audit: S8, S9 (no S10, no S12, for B3's and B5's reasons) |
 
-The Refusals column names what a row's own geometry refuses. The pre-gates of §4
-— S13 / S14 (a zero magnitude), S15 (an invalid one), S16 (a selector that
-matches nothing) and S17 (a retired receiver) — run before every row and are not
-repeated in it.
+**The Refusals column names what a row's own geometry refuses, in the order §4
+fixes** — so a row is read left to right, and the first gate that fires is the
+one the caller sees. Two groups are decided before a row is reached at all and
+are therefore not repeated in it: §4's stage-1 pre-gates — S13 / S14 (a zero
+magnitude), S15 (an invalid one), S16 (a selector that matches nothing) and S17
+(a retired receiver) — and the receiver gate S3, which Table R (§3) owns. S2 is
+likewise absent from every shell row, because the removed faces are what each
+row is **keyed on**: a call that removes a side wall has left S2 before any row
+claims it. S1 has no such key to hide behind — B1 is keyed on the op, not on the
+edge class — so it opens B1's cell.
 
 Every role above indexes the record of the payload **the result holds** — never
 the receiver's (§11). B2/B3's tube is a `prismPayload`, which is why Table R
