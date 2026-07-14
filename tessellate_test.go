@@ -285,14 +285,34 @@ func TestTessellateBoundNeverExceedsTolerance(t *testing.T) {
 }
 
 func TestTessellateRejectsTangentHole(t *testing.T) {
-	// A hole tangent to the outline pinches the cap region: a zero-length
-	// bridge would crack the mesh, so the tessellation refuses instead.
+	testcases := []struct {
+		Name string
+		CX   float64
+		CY   float64
+	}{
+		// Tangent toward max-u: the bridge ray itself hits the contact.
+		{Name: "tangent at max-u", CX: 90, CY: 30},
+		// Tangent to the top edge, away from the bridge direction: only the
+		// loop-clearance gate can see it.
+		{Name: "tangent away from the bridge", CX: 50, CY: 50},
+	}
+	for _, tc := range testcases {
+		t.Run(tc.Name, func(t *testing.T) {
+			testTangentHole(t, tc.CX, tc.CY)
+		})
+	}
+}
+
+func testTangentHole(t *testing.T, cx, cy float64) {
+	// A hole tangent to the outline pinches the cap region: the loops fail
+	// the chord-clearance proof, so the tessellation refuses rather than
+	// emit a pinched or cracked mesh.
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	require.NoError(t, err)
 	rect := s.CreateRectangle(0, 0, 100, 60)
 	s.Fix(rect.A)
-	s.CreateCircle(s.CreatePoint(90, 30), 10)
+	s.CreateCircle(s.CreatePoint(cx, cy), 10)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	var prof *sketch.Profile
@@ -316,5 +336,10 @@ func TestTessellateRejectsImpossiblyFineTolerance(t *testing.T) {
 	// must refuse the unbuildable ask rather than walk up forever.
 	body := holedPlateBody(t)
 	_, err := body.Tessellate(units.Millimeters(1e-20))
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+
+	// A tolerance that passes the precheck but lands past the cap after the
+	// ceil/walk-up must be refused too, never returned with n over the cap.
+	_, err = body.Tessellate(units.Millimeters(2.8055335832277702e-12))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 }

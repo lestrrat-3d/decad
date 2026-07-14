@@ -113,6 +113,7 @@ func (b *Body) Tessellate(tol units.Value) (*Mesh, error) {
 	var mesh Mesh
 	var pts2 []Point2
 	var loopIdx [][]int
+	var loopSag []float64
 	loops := append([]LoopRecord{pp.profile.Outer}, pp.profile.Holes...)
 	for li, loop := range loops {
 		if len(loop.Segments) == 0 {
@@ -130,6 +131,7 @@ func (b *Body) Tessellate(tol units.Value) (*Mesh, error) {
 
 		var samples []Point2
 		var faceOf []*Face // per sample: the wall face of the chord leaving it
+		var maxSag float64
 		for _, w := range walks {
 			face, err := faceOfRole(fmt.Sprintf("side(%d,%d)", li, w.segs[0]))
 			if err != nil {
@@ -145,6 +147,7 @@ func (b *Body) Tessellate(tol units.Value) (*Mesh, error) {
 				return nil, err
 			}
 			mesh.bound = math.Max(mesh.bound, sag)
+			maxSag = math.Max(maxSag, sag)
 			dth := (w.th1 - w.th0) / float64(n)
 			for k := range n {
 				p := Point2{U: w.startU, V: w.startV}
@@ -164,6 +167,7 @@ func (b *Body) Tessellate(tol units.Value) (*Mesh, error) {
 			idx[j] = base + j
 		}
 		loopIdx = append(loopIdx, idx)
+		loopSag = append(loopSag, maxSag)
 
 		// Side walls: one quad per chord, split into two triangles wound
 		// outward (tangent × N is the outward side normal for a CCW outer
@@ -181,6 +185,15 @@ func (b *Body) Tessellate(tol units.Value) (*Mesh, error) {
 	mesh.vertices = make([]r3.Vec, 0, 2*len(pts2))
 	for _, p := range pts2 {
 		mesh.vertices = append(mesh.vertices, pp.point(p.U, p.V, pp.z0), pp.point(p.U, p.V, pp.z1))
+	}
+
+	// Loops that touch — a hole tangent to the outline or to another hole —
+	// pinch the cap region, and a mesh at this tolerance cannot prove it
+	// represents that topology: the chorded loops must clear each other by
+	// more than their own sagitta bounds, or the tessellation refuses
+	// (an error, never a pinched or cracked mesh).
+	if err := requireLoopClearance(pts2, loopIdx, loopSag); err != nil {
+		return nil, err
 	}
 
 	// Caps: both share one 2D triangulation of the chorded region — the same
@@ -232,12 +245,17 @@ func chordCount(w segmentWalk, tol float64) (int, float64, error) {
 	}
 	// A tolerance this fine asks for more chords than any mesh can hold;
 	// the intent cannot be built, so it is refused outright (evaluator §2).
+	// The cap is enforced again after ceil and inside the walk-up: rounding
+	// can push n past a precheck that barely admitted it.
 	if maxD == 0 || sweep/maxD > maxChordsPerWalk {
-		return 0, 0, fmt.Errorf(`%w: the chord tolerance asks for more than %d chords on one curve`, ErrUnsupported, maxChordsPerWalk)
+		return 0, 0, errTooManyChords
 	}
 	n := max(int(math.Ceil(sweep/maxD)), 1)
 	if w.closed && n < 3 {
 		n = 3
+	}
+	if n > maxChordsPerWalk {
+		return 0, 0, errTooManyChords
 	}
 	// The returned sagitta is a PROVEN bound, so it may never exceed the
 	// asked tolerance: float rounding in the asin/ceil path can land one
@@ -245,11 +263,86 @@ func chordCount(w segmentWalk, tol float64) (int, float64, error) {
 	// sagitta toward zero, so the walk-up terminates.
 	sagitta := w.radius * (1 - math.Cos(sweep/float64(n)/2))
 	for sagitta > tol && sweep > 0 {
+		if n == maxChordsPerWalk {
+			return 0, 0, errTooManyChords
+		}
 		n++
 		sagitta = w.radius * (1 - math.Cos(sweep/float64(n)/2))
 	}
 	return n, sagitta, nil
 }
 
+// errTooManyChords refuses a chord tolerance finer than the mesh cap.
+var errTooManyChords = fmt.Errorf(`%w: the chord tolerance asks for more than %d chords on one curve`, ErrUnsupported, maxChordsPerWalk)
+
 // maxChordsPerWalk caps how finely one boundary curve may be chorded.
 const maxChordsPerWalk = 1 << 22
+
+// requireLoopClearance rejects a profile whose chorded loops come within
+// their combined chord bounds of one another. Each chorded loop lies within
+// its own sagitta of the true curve, so a polyline clearance beyond the two
+// bounds PROVES the true loops are disjoint; anything closer — a hole
+// tangent to the outline, or two holes touching — is a pinch this mesh
+// cannot prove it represents, and is refused.
+func requireLoopClearance(pts []Point2, loopIdx [][]int, loopSag []float64) error {
+	// Round-off floor: coordinates carry ~1e-9-relative noise, so an exact
+	// tangency recorded through solved geometry still reads as contact.
+	scale := 0.0
+	for _, p := range pts {
+		scale = math.Max(scale, math.Max(math.Abs(p.U), math.Abs(p.V)))
+	}
+	for i := range loopIdx {
+		for j := i + 1; j < len(loopIdx); j++ {
+			gate := loopSag[i] + loopSag[j] + 1e-9*scale
+			if loopPolylineDistance(pts, loopIdx[i], loopIdx[j]) <= gate {
+				return fmt.Errorf(`%w: two cap boundary loops come within the chord tolerance of each other`, ErrDegenerate)
+			}
+		}
+	}
+	return nil
+}
+
+// loopPolylineDistance is the minimum distance between two closed sample
+// polylines.
+func loopPolylineDistance(pts []Point2, a, b []int) float64 {
+	best := math.Inf(1)
+	for i := range a {
+		a0, a1 := pts[a[i]], pts[a[(i+1)%len(a)]]
+		for j := range b {
+			b0, b1 := pts[b[j]], pts[b[(j+1)%len(b)]]
+			best = math.Min(best, segSegDistance(a0, a1, b0, b1))
+		}
+	}
+	return best
+}
+
+// segSegDistance is the minimum distance between two 2D segments.
+func segSegDistance(a0, a1, b0, b1 Point2) float64 {
+	if segmentsCross(a0, a1, b0, b1) {
+		return 0
+	}
+	d := math.Min(pointSegDistance(a0, b0, b1), pointSegDistance(a1, b0, b1))
+	d = math.Min(d, pointSegDistance(b0, a0, a1))
+	return math.Min(d, pointSegDistance(b1, a0, a1))
+}
+
+// segmentsCross reports whether the two segments properly intersect.
+func segmentsCross(a0, a1, b0, b1 Point2) bool {
+	d1 := cross2(b0, b1, a0)
+	d2 := cross2(b0, b1, a1)
+	d3 := cross2(a0, a1, b0)
+	d4 := cross2(a0, a1, b1)
+	return ((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) &&
+		((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0))
+}
+
+// pointSegDistance is the distance from p to segment (s0, s1).
+func pointSegDistance(p, s0, s1 Point2) float64 {
+	du, dv := s1.U-s0.U, s1.V-s0.V
+	l2 := du*du + dv*dv
+	t := 0.0
+	if l2 > 0 {
+		t = math.Min(1, math.Max(0, ((p.U-s0.U)*du+(p.V-s0.V)*dv)/l2))
+	}
+	return math.Hypot(p.U-(s0.U+t*du), p.V-(s0.V+t*dv))
+}
