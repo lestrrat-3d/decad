@@ -363,7 +363,9 @@ func (f *Face) Loops() []*Loop     // Loop.IsOuter() distinguishes outer from ho
 func (f *Face) Edges() []*Edge
 func (f *Face) Area() (Measurement, error)
 func (f *Face) NormalAt(p r3.Vec) (VecMeasurement, error) // a computed direction: a measurement
-func (f *Face) Origin() FeatureRef // provenance: the feature that created it
+func (f *Face) Origins() []FeatureRef // provenance: every feature role that created it — canonicalization
+                                      // may merge coplanar faces, and a merged face carries ALL contributing
+                                      // roles; FaceCreatedBy matches on any of them
 
 type Edge struct{ /* ... */ }
 
@@ -549,6 +551,15 @@ always a body it consumes:
   `TwoSided{One: ToFace{Body: a…}, Two: ToFace{Body: b…}}` records both. Without
   this the recipe would not be a complete graph: a second evaluator would reach the
   extrude with no way to know which body's face it stops at.
+- **`ThroughAll` and `ThroughAllSide` depend on bodies they do not name.** Their
+  stops are the far sides of the live bodies the sweep meets, so the dependency is
+  ambient at the CALL but must never be ambient in the RECORD: the feature call
+  resolves which bodies actually bound the stops and records **each stop body's
+  `StepRef` in `Inputs`**, in stop order along the sweep (after any named-extent
+  refs, deduplicated like the rest). Replay then reaches the same stops explicitly
+  — a recipe whose through-all depended on "whatever happened to be live" would
+  re-evaluate to a different model in a different document state, which the
+  completeness rule forbids.
 
 Depending on a body is **not** consuming it: `Extrude` and `Revolve` retire
 nothing, and the body a `ToFace` names stays live in `Document.Bodies()`. §6's
@@ -1025,6 +1036,7 @@ func Circular() EdgePredicate
 func Planar() FacePredicate
 func Cylindrical() FacePredicate
 func NormalTo(v r3.Vec) FacePredicate
+func FaceCreatedBy(f FeatureRef) FacePredicate // provenance, the face analog of CreatedBy
 ```
 
 ```go
@@ -1121,7 +1133,11 @@ to make that mechanical.
   `ErrUnitKind`, `ErrNotFinite` (a non-finite `units.Value` magnitude or
   `r3.Vec` component handed as a parameter — `units` construction admits a
   non-finite value and only its operations reject one, so the call must;
-  option semantics in `docs/verification-design.md`).
+  option semantics in `docs/verification-design.md`),
+  `ErrUnsupported` (the recipe records the intent exactly, but the current
+  evaluator cannot yet build it — evaluator staging is explicit and rejected
+  at the call, never silently approximated or narrowed;
+  `docs/evaluator-design.md` §2).
 - **`ErrUnitKind` covers exactly the wrong-`Kind` values.** A `units.Value` whose
   `Kind` is not the one the parameter takes: an angle where a length is wanted, and
   a `WithTolerance` value that is not `Dimensionless`

@@ -103,3 +103,10 @@ var ErrUnitKind = errors.New("decad: wrong unit kind")
 // tolerance would turn the verification gate off, and a NaN would turn it
 // inside out.
 var ErrNotFinite = errors.New("decad: non-finite value")
+
+// ErrUnsupported is returned when the recipe records the intent exactly but
+// the current evaluator cannot yet build it. Evaluator staging is explicit
+// and rejected at the call — never silently approximated or narrowed — and a
+// rejected operation leaves the recipe and the document untouched. See
+// docs/evaluator-design.md §2.
+var ErrUnsupported = errors.New("decad: not supported by the current evaluator")
