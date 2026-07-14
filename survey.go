@@ -153,6 +153,12 @@ func prismWall(pp prismPayload, alpha float64) wallOutcome {
 	if pinch {
 		best = 0
 	}
+	if out.subTolFar && best != 0 {
+		// Same rule as the revolve path: a dropped off-junction
+		// sub-tolerance disk could be a real web thinner than the kernel
+		// resolves — only an exact zero still decides.
+		return wallOutcome{}
+	}
 	if out.hasSpan && out.span < best {
 		best = out.span
 	}

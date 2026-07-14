@@ -4,6 +4,7 @@ import (
 	"math"
 	"testing"
 
+	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
 
@@ -44,4 +45,23 @@ func TestWallKernelCleanProfileDoesNotFlag(t *testing.T) {
 	require.False(t, out.subTolFar)
 	require.True(t, out.hasSpan)
 	require.InDelta(t, 60.0, out.span, 1e-9)
+}
+
+func TestPrismWallSubToleranceWebIsUndecided(t *testing.T) {
+	// The prism path must apply the same rule as the revolve path: a
+	// near-concentric annular profile whose 2e-8 web sits under the kernel
+	// floor reads undecided — never a proven absence or a positive wall.
+	pp := prismPayload{
+		profile: ProfileRecord{
+			Outer: LoopRecord{Segments: []CurveSegment{
+				CircleSeg{Center: Point2{U: 0, V: 0}, Radius: units.Millimeters(10), CCW: true, TStart: 0, TEnd: 1},
+			}},
+			Holes: []LoopRecord{{Segments: []CurveSegment{
+				CircleSeg{Center: Point2{U: 0, V: 0}, Radius: units.Millimeters(10 - 2e-8), CCW: false, TStart: 0, TEnd: 1},
+			}}},
+		},
+		z0: 0, z1: 10,
+	}
+	out := prismWall(pp, 15*math.Pi/180)
+	require.False(t, out.ok, `undecided, never a silent pass`)
 }
