@@ -172,7 +172,11 @@ when the plane parallels a ruling (`|n·axis| = sin α`, the plateau at the
 apex's own plane distance), plane/sphere is the center's plane distance minus
 the radius, plane/torus the spine circle's plane distance (a closed-form
 amplitude extreme) minus the minor; a carrier the plane crosses has no
-positive plateau and the face minimum falls to the boundary tiers. The sphere
+positive plateau — and where the crossing itself is admitted by BOTH trims
+it is an interior zero-distance contact, routed to the contact/overlap
+handling of §6/§7, never quietly to the boundary tiers (which would read a
+positive clearance off the edges while the faces cross); only a crossing
+the trims exclude leaves the face minimum to the boundary tiers. The sphere
 column is the point column ⊕: point/line, point/plane, point/circle and the
 meridian point/cone are all closed form. Cylinder/cylinder reads the three
 offset branches of the reduction above — exterior `d − r₁ − r₂` off the
