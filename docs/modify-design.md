@@ -66,7 +66,9 @@ evaluator §11 is exactly this: an intent the evaluator cannot **build** is an
 error at the call; only a question it cannot **answer** on a body it did build
 reads `Suspect`. This increment has two such questions, both on the cup, and
 Table D (§12) names them: its own `MinWallThickness` (D1) and its clearance
-against another body (D6).
+against another body — the latter wherever the clearance kernel is invoked on
+the pair, a box-disjoint cup pair with no clearance asked staying `Sound` by
+the box test (D6).
 
 ## 2. The reduction: a prism's modify ops are its section's
 
@@ -696,9 +698,9 @@ payload class.
 | **D3** | `prismMinRadius` | the payload only | works unchanged: a fillet of a **concave** edge is a concave arc of the section, and its radius is read; a fillet of a convex edge adds a convex cylinder, which is not a concave feature and rightly does not appear | works unchanged: the cavity loop's walls are read like any hole wall | a cup reading lands with the payload: the same walk over the outer and the cavity section. The sharp concave edge where the wall meets the floor carries no radius — the survey reads faces' principal radii, and a spec about the *edges* is one no option states (verification §2) |
 | **D4** | `Tessellate` → `STL` / `OBJ` | the payload **and the roles** — it chords the payload's curves and names the face each belongs to by role | works unchanged: blend cylinders chord through the same per-curve machinery, shared by every face meeting the curve, so the mesh stays watertight by construction | works unchanged | extends with the cup payload, in the shell's own increment: the faces are the same analytic variants, and a rim band is a polygon-with-holes the shipped cap triangulator already builds |
 | **D5** | Body-relative stops (`ToFace` / `ToFaceAngular`; `ThroughAll` / `ThroughAllSide`) | two stop kinds read differently: `ToFace` / `ToFaceAngular` read **topology + a selector + a surface** — a live stop body, its face resolved by the selector, and that face's plane; `ThroughAll` / `ThroughAllSide` read **the payload's directional extent** (`extentAlong`) | works unchanged | works unchanged | `ToFace` reads the cup's faces like any body's; `ThroughAll` reads its outer prism's extent — the cup's own `extentAlong` — the cavity being interior |
-| **D6** | Clearance (`docs/clearance-design.md`) | **the payload and the topology** — it builds its boundary model by switching on the payload **kind** (`prismPayload` / `revolvePayload`), then reads the exact edges, vertices and shells and each body's payload extent | a first-class operand — a `prismPayload`, which its switch builds | a first-class operand — a tube is a `prismPayload` too | **staged.** The kernel's payload switch has no `cupPayload` case, so a cup makes its boundary model undecided and every pair with it reads `Suspect` until clearance learns the payload (§14) — never a silent pass |
+| **D6** | Clearance (`docs/clearance-design.md`) | **the payload and the topology** — it builds its boundary model by switching on the payload **kind** (`prismPayload` / `revolvePayload`), then reads the exact edges, vertices and shells and each body's payload extent | a first-class operand — a `prismPayload`, which its switch builds | a first-class operand — a tube is a `prismPayload` too | **staged.** The kernel's payload switch has no `cupPayload` case, so a cup has no boundary model and the kernel returns undecided on any pair with it. But the pair partition proves box-disjoint pairs cheaply first and reaches for the kernel only where it is needed — a pair the box test cannot settle, or a `WithClearances` gap request — so a cup pair reads `Suspect` exactly there, until clearance learns the payload (§14), never a silent pass. A box-disjoint cup pair with no clearance asked stays `Sound`, proven by the box test with the kernel never invoked |
 | **D7** | The mesh boolean (evaluator §9) | the tessellation | takes these bodies as it takes any other | as any other | as any other, once D4 covers it |
-| **D8** | `Verify` — the structural audit and the tolerance gate | the topology and the measurements | `Sound` on the same terms an extrude's body is: valid by construction (§5), Exact at any tolerance (§10) | the same | the same, with two `Suspect` exceptions on a cup: its `MinWallThickness` (D1) and its clearance against another body (D6) |
+| **D8** | `Verify` — the structural audit and the tolerance gate | the topology and the measurements | `Sound` on the same terms an extrude's body is: valid by construction (§5), Exact at any tolerance (§10) | the same | the same, with two `Suspect` exceptions on a cup: its `MinWallThickness` (D1) and its clearance against another body wherever the clearance kernel is invoked on the pair — a `WithClearances` gap request, or a pair the box test cannot settle (D6); a box-disjoint cup pair with no clearance asked stays `Sound` |
 
 Two readings verification §6 asks about are worth stating because a modify op is
 what makes them arise, and neither needs §6 relaxed:
@@ -725,8 +727,10 @@ PR-level staging inside evaluator increment 5. Everything not yet landed is
 
 After PR 3, two asked questions on a body this evaluator builds are still
 undecided, both on the cup: its `MinWallThickness`, which reads `Suspect` (D1),
-and its clearance against another body, which reads `Suspect` because the
-clearance kernel has no `cupPayload` case (D6).
+and its clearance against another body, which reads `Suspect` wherever the
+clearance kernel is invoked on the pair — the kernel has no `cupPayload` case
+(D6). A box-disjoint cup pair with no clearance asked is still proven `Sound`
+by the box test.
 
 The walk-sense rules of §6 — a circular wall's face orientation and the
 walked-boundary `Edge.IsConvex` — are a **prerequisite**, not a deliverable. They
@@ -766,10 +770,15 @@ do with; PR 1 builds on them and carries none of them.
   piece; until it lands, the question reads `Suspect`.
 - **Clearance on a cup.** D6 — the clearance kernel
   (`docs/clearance-design.md`) builds its boundary model by switching on the
-  payload kind, and it has no `cupPayload` case, so every pair involving a cup
-  reads `Suspect`. Teaching the kernel to read a cup's two-prism boundary — the
-  same analytic faces a prism carries, over two intervals — is the missing
-  piece; until it lands, the pair is staged, exactly as the wall reading is.
+  payload kind, and it has no `cupPayload` case, so the kernel returns undecided
+  on any pair involving a cup. The kernel is invoked on a pair only where it is
+  needed — a pair the box-disjointness test cannot settle, or a `WithClearances`
+  gap request — so a cup pair reads `Suspect` exactly there; a box-disjoint cup
+  pair with no clearance asked stays `Sound`, proven by the cheap box test with
+  the kernel never invoked. Teaching the kernel to read a cup's two-prism
+  boundary — the same analytic faces a prism carries, over two intervals — is the
+  missing piece; until it lands, an invoked cup pair is staged, exactly as the
+  wall reading is.
 - **The no-opening shell.** A hollow closed body — the only shape with a genuine
   `IsVoid` shell — is a shell that removes no face, and the selector vocabulary
   has no way to ask for it: core §9 makes an empty match an error (S16), and a
