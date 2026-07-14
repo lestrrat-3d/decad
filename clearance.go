@@ -135,11 +135,16 @@ func (k *pairKernel) coplanarContactCertified() bool {
 			if fb.kind != ckPlane {
 				continue
 			}
-			if fa.n.Dot(fb.n) > -1+clrAngTol {
-				continue // not strictly opposing
+			// The certificate is EXACT and reject-only: a zero row may
+			// only come from a proven contact, so any nonzero plane
+			// separation, tilt, or side penetration leaves the pair
+			// undecided — a tolerance here would bless a real sub-tol
+			// overlap as a Sound Exact-zero clearance.
+			if fa.n.Dot(fb.n) != -1 {
+				continue // not exactly opposing
 			}
-			if math.Abs(fb.o.Sub(fa.o).Dot(fa.n)) > k.tol {
-				continue // not coplanar
+			if fb.o.Sub(fa.o).Dot(fa.n) != 0 {
+				continue // not exactly coplanar
 			}
 			if rel, _ := k.coplanarRelation(fa, fb); rel != 1 {
 				continue // no proven positive-area overlap
@@ -152,10 +157,10 @@ func (k *pairKernel) coplanarContactCertified() bool {
 			}
 			_ = aLo
 			_ = bHi
-			if aHi <= c+k.tol && bLo >= c-k.tol {
+			if aHi <= c && bLo >= c {
 				return true
 			}
-			if bHi <= c+k.tol && aLo >= c-k.tol {
+			if bHi <= c && aLo >= c {
 				return true
 			}
 		}

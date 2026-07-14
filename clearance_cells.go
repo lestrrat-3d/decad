@@ -237,11 +237,11 @@ func (k *pairKernel) certifiedContainment(f, g *cFace, minLo, maxHi float64) boo
 // spine coaxial with a cylinder axis, and any point-spine pair.
 func (k *pairKernel) constantSpineDist(f, g *cFace) bool {
 	sf, sg := spineOf(f), spineOf(g)
-	if sf == 0 && sg == 0 {
-		return true
-	}
 	if sf == 0 || sg == 0 {
-		return false
+		// A point spine's supremum is the one distance it has — constant
+		// against ANY partner spine (the doc's "an inner POINT spine has
+		// d_sup = d trivially"), not only against another point.
+		return true
 	}
 	if f.axis.Cross(g.axis).Len() > clrAngTol {
 		return false

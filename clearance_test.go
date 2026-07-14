@@ -367,3 +367,56 @@ func TestClearancePlacedRotatedCube(t *testing.T) {
 	dy := 5 + 10/math.Sqrt2 - 10
 	requireExactGap(t, report, math.Hypot(dx, dy))
 }
+
+func TestClearanceSubTolOverlapNotCertified(t *testing.T) {
+	// Two boxes overlapping by 5e-9 mm: not a touching contact, and the
+	// exact coplanar certificate must NOT bless it — the pair is neither
+	// proven disjoint nor certified touching, so it reads Suspect.
+	doc := decad.New()
+	boxBody(t, doc, 0, 0, 10, 10, 8)
+	other := boxBody(t, doc, 0, 0, 10, 10, 8)
+	shift, err := r3.Translation(r3.NewVec(0, 0, 8-5e-9))
+	require.NoError(t, err)
+	_, err = other.Placed(shift)
+	require.NoError(t, err)
+	report, err := doc.Verify(t.Context(), decad.WithClearances())
+	require.NoError(t, err)
+	require.Empty(t, report.Clearances, `no fabricated zero row over a real overlap`)
+	require.Equal(t, decad.Suspect, report.Status)
+}
+
+func TestClearanceBallCenteredInHole(t *testing.T) {
+	// A radius-5 ball centered on the axis of a radius-10 through-hole: the
+	// point-spine d_sup branch is trivially constant against the hole wall,
+	// and the 5 mm ring gap is proven Exact.
+	doc := decad.New()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	rect := s.CreateRectangle(-20, -20, 20, 20)
+	s.Fix(rect.A)
+	s.CreateCircle(s.CreatePoint(0, 0), 10)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	var prof *sketch.Profile
+	for _, p := range s.Profiles() {
+		if len(p.Holes) == 1 {
+			prof = p
+		}
+	}
+	require.NotNil(t, prof)
+	_, err = doc.Extrude(s, prof, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	require.NoError(t, err)
+
+	// The ball: revolved about the u axis at the origin, then placed so its
+	// center sits on the hole axis at mid-height.
+	ball := ballBody(t, doc, 5)
+	shift, err := r3.Translation(r3.NewVec(0, 0, 5))
+	require.NoError(t, err)
+	_, err = ball.Placed(shift)
+	require.NoError(t, err)
+
+	report, err := doc.Verify(t.Context(), decad.WithClearances())
+	require.NoError(t, err)
+	requireExactGap(t, report, 5)
+}
