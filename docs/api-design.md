@@ -1025,6 +1025,7 @@ func Circular() EdgePredicate
 func Planar() FacePredicate
 func Cylindrical() FacePredicate
 func NormalTo(v r3.Vec) FacePredicate
+func FaceCreatedBy(f FeatureRef) FacePredicate // provenance, the face analog of CreatedBy
 ```
 
 ```go

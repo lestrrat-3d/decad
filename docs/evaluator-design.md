@@ -67,8 +67,9 @@ Rules:
 - **Provenance is structural.** `FeatureRef` identifies the producing
   `StepRef` plus a stable role within it — `side(i, j)` (loop `i`, segment
   `j`), `capStart`, `capEnd`, and the revolve/boolean analogs. Roles derive
-  from the recorded step, so re-evaluation reproduces them and `CreatedBy`
-  selects the same faces under every run.
+  from the recorded step, so re-evaluation reproduces them, and the
+  provenance predicates — `CreatedBy` for edges, `FaceCreatedBy` for faces
+  (core §9) — select the same entities under every run.
 - **Canonicalize at build.** Adjacent coplanar side faces merge; a full
   cylinder is one face with two circular-edge loops and no seam edge. v1
   counts already match the analytic answer, so vN does not churn them
@@ -138,12 +139,16 @@ and a wrong-but-confident prism is the failure decad exists to prevent.
 ## 6. Revolve
 
 Same recording shape; the axis must be validated non-degenerate and coplanar
-with the profile plane, and the profile must lie strictly on one side of the
-axis (a region crossing its axis sweeps a self-intersecting solid — rejected,
-`ErrDegenerate`). Faces: a `LineSeg` parallel to the axis → `Cylinder`;
-inclined → `Cone`; perpendicular → planar annulus; `ArcSeg`/`CircleSeg` →
-`Torus` (`Sphere` when the arc center lies on the axis). Partial sweeps get
-two planar cap faces. Volume/centroid by Pappus on the §4 region integrals —
+with the profile plane, and the axis must not pass through the region's
+INTERIOR: the region lies in one closed half-plane of the axis, boundary
+contact allowed — a boundary point on the axis sweeps to a pole or an apex,
+which is exactly the sphere and cone-tip case. A region with interior on both
+sides sweeps a self-intersecting solid and is rejected, `ErrDegenerate`.
+Faces: a `LineSeg` parallel to the axis → `Cylinder`; inclined → `Cone` (an
+endpoint on the axis is its apex); perpendicular → planar annulus (a disk
+when it reaches the axis); `ArcSeg`/`CircleSeg` → `Torus`, or `Sphere` when
+the arc's center lies on the axis (its endpoints then touch the axis at the
+poles). Partial sweeps get two planar cap faces. Volume/centroid by Pappus on the §4 region integrals —
 exact. Increment 2.
 
 ## 7. Selectors
