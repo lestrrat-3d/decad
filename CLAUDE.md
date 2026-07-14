@@ -98,6 +98,7 @@ before writing evaluator/topology/feature code.
 | `measurement.go` | The bounded-result shapes (core §5.3/§6): `Exactness`, `Measurement`, `VecMeasurement`, `Box`. |
 | `record.go` | The recording IR (seam §2): `PlaneRecord`, `Point2`, `ProfileRecord`, `LoopRecord`, the ten sealed `CurveSegment` variants, and their tagged JSON codec (pointer variants normalize to values; nil pointers and unknown/missing kind tags are rejected). |
 | `seam.go` | The seam conversion: `RecordProfile(s, p)` — the §7 gates (`ErrForeignProfile`/`ErrStaleProfile`/`ErrInvalidProfile`), the `TExact` admission gate, and the reject-only falsifier (`falsifyRange`, evaluating through `sketch/geom`'s own evaluators — the only `Polyline` read, endpoints only, check-never-record). |
+| `moments.go` | The mass-property engine (evaluator §4): exact Green's-theorem boundary integrals over a `ProfileRecord` — `Area()` (a `Measurement`, Kind Area, Exact/zero-bound) and `Centroid()` (a `VecMeasurement` whose Value is PLANE-LOCAL (u, v, 0) mm) — closed forms for line/circle/arc walks incl. pointer variants; a `CircleSeg` whose `CCW` contradicts its range order is `ErrDegenerate`; free-form kinds are `ErrUnsupported` until their increments. |
 | `examples/` | Executable Go examples (`Example_decad_…`, `go test`-verified `// Output:` blocks) that double as living documentation. Never `package main`. |
 | `.github/workflows/` | `ci.yml` (lint → test/tidy/govulncheck), `codeql.yml`. |
 
