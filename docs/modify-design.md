@@ -36,8 +36,8 @@ question separates them:
 
 | The caller asked for | Sentinel |
 |---|---|
-| a body that **does not exist** — a fillet whose blend surface does not fit the faces it must be tangent to, a shell thicker than the material it hollows | `ErrDegenerate` |
-| a body that **exists** and this evaluator cannot build — a blend across a cap edge, a shell that opens a side wall, an offset whose exact form changes the section's topology | `ErrUnsupported` |
+| a body that **does not exist** — a fillet of a radius for which no blend surface exists at all (the two faces' material-side offsets never meet), a shell thicker than the material it hollows | `ErrDegenerate` |
+| a body that **exists** and this evaluator cannot build — a blend across a cap edge, a blend whose cutback overruns the wall it is trimmed from, a shell that opens a side wall, an offset whose exact form changes the section's topology | `ErrUnsupported` |
 
 Both are returned from the call, before anything is recorded: a failed
 evaluation leaves the recipe and the document untouched (evaluator §8), so a
@@ -108,8 +108,9 @@ prism, and every selected edge must be a **lateral** edge of it:
 | a receiver that is not a prism — a revolve, a shelled prism, a `Faceted` boolean output, an imported body | `ErrUnsupported` |
 | a corner whose two segments meet **smoothly** (tangent) or in a **cusp** (anti-tangent) | `ErrDegenerate` — there is no corner to blend |
 | a section carrying a free-form segment kind | `ErrUnsupported` — it does not build as an extrude either (evaluator §5) |
-| a radius or distance that does not fit the corner's own faces | `ErrDegenerate` (§5, §6) |
-| a rewritten section that crosses itself | `ErrDegenerate` (§4) |
+| a radius or distance for which **no blend surface exists** — the corner's two material-side offsets never meet, or an offset arc's radius has reached zero | `ErrDegenerate` (§5, §6) |
+| a cutback that reaches or passes the far end of a walk — including a far end another corner in the same call claims — or any rewritten loop that crosses itself or another loop | `ErrUnsupported` — the surface exists; reaching the body needs the blends merged, or trimmed against the geometry they run into, and this evaluator's per-corner rewrite has no resolution step (§4, §5) |
+| a rewritten loop that has turned itself inside out — its signed area has changed sign | `ErrDegenerate` (§4) |
 
 A full-circle loop is a single closed wall with **no** lateral edge at all
 (evaluator §5 emits no seam), so a cylinder has no edge a fillet can name but
@@ -125,7 +126,7 @@ faces only:
 | a prism; the removed faces are one or both caps | **builds** (§7) |
 | a removed face that is a side wall | `ErrUnsupported` — the cavity is then the offset of an open chain, closed against the removed wall's own surface; a different 2D machine |
 | a receiver that is not a prism | `ErrUnsupported` |
-| a thickness at or beyond the section's inradius | `ErrDegenerate` — the erosion is empty; there is no such body |
+| an **inward** thickness at or beyond the section's inradius | `ErrDegenerate` — the erosion is empty; there is no such body (an outward thickness has no such limit, §7) |
 | an offset whose exact form merges, splits or drops a boundary loop | `ErrUnsupported` — the body exists; this evaluator's offset is topology-preserving (§7) |
 
 **Magnitudes are magnitudes.** The radius, the distance and the thickness are
@@ -177,6 +178,16 @@ closed-form** test rather than a residual:
 > A crossing, a loop whose signed area has changed sign (it has turned itself
 > inside out), a segment trimmed past its own other end, or an offset arc whose
 > radius has reached zero, **rejects the call**.
+
+The audit's verdict is one of the two sentinels of §1, by the same test: a loop
+that has turned inside out, and an offset arc whose radius has vanished, say the
+modification consumed the region — there is no such body, `ErrDegenerate`. A
+crossing, and a segment trimmed past its own other end, say the pieces the
+rewrite produced must be resolved against each other — merged, or trimmed
+against the geometry they run into — before they bound anything. That body
+exists and a resolving kernel builds it; this evaluator's rewrite trims each
+corner on its own and has no resolution step, so it is `ErrUnsupported`. Either
+way the call is refused before a face is made.
 
 A residual proves nothing and admits nothing; a crossing test on exactly
 represented line and arc segments is a **decided** fact of decad's own data, and
@@ -231,10 +242,15 @@ must fit **strictly** inside the length that walk still has, after the
 modification at its *other* end has taken its own cutback — two adjacent
 corners of a short wall are filleted in the same call, and they claim the wall
 from both ends. A cutback that reaches or passes the far end is
-`ErrDegenerate`: the radius is too large for the faces it must be tangent to,
-and the honest answer is to say so. Clipping the blend, sliding it, or shrinking
-`r` to fit are all the same failure — a body the caller did not ask for, with a
-radius they did not name.
+`ErrUnsupported`: the blend cylinder itself is unharmed — it is pinned by its own
+corner's offsets, and the wall's *length* never entered its equations — so the
+body the caller named exists, and a kernel that merges the two blends into one
+surface (or trims the blend against the wall it has run into) builds it. This
+evaluator trims each corner on its own, so it declines, by §1's test. What it
+will not do is clip the blend, slide it, or shrink `r` to fit: those are all the
+same failure — a body the caller did not ask for, with a radius they did not
+name. `ErrDegenerate` is kept for the case where there is nothing to build at
+all: no center at that radius, so no blend surface exists.
 
 **The rewrite.** `A` is trimmed to its tangent foot, `B` is trimmed to its own,
 and an `ArcSeg` of radius `r` about the center joins them, wound so the loop
@@ -248,18 +264,22 @@ keeps its orientation. The result goes through the §4 audit and then through
 | its two cap edges | `Arc3`, one per cap, each shared with the cap face |
 | the old lateral edge | gone; the old corner vertices are replaced by the arcs' endpoints |
 
-**The build table needs one correction, and the fillet is what needs it.** A
-circular wall's face orientation — which way its outward normal points — must be
-read from the **walk's own sense**: a circular walk that runs clockwise in the
-plane frame has its material *outside* the cylinder, so the face is reversed;
-counter-clockwise, inside, and it is not. The shipped prism build reads the
-loop's *role* instead (an outer loop's wall not reversed, a hole's reversed),
-and the two agree on every profile a sketch has recorded so far — a hole's
-circle is walked clockwise, an outer loop's arcs counter-clockwise. They part
-company at exactly one shape: **a concave round on an outer loop**, which is the
-first thing a fillet emits and which the role rule would orient inside out.
-Increment 5 replaces the proxy with the walk-sense rule, which is correct on
-both.
+**The build table needs one correction, and the fillet depends on it — it does
+not introduce it.** A circular wall's face orientation — which way its outward
+normal points — must be read from the **walk's own sense**: a circular walk that
+runs clockwise in the plane frame has its material *outside* the cylinder, so
+the face is reversed; counter-clockwise, inside, and it is not. The prism build
+reads the loop's *role* instead (an outer loop's wall not reversed, a hole's
+reversed), which is a proxy, and the proxy is wrong wherever an **outer loop
+carries a clockwise circular walk**. That is not a shape only a fillet can make:
+the seam records an arc's walk sense in the segment's own range (`TStart` >
+`TEnd` says the walk runs against the curve, `seam.go`), so a plain sketch
+produces one — a plate with a semicircular bite taken out of one edge walks that
+arc clockwise on its outer loop, and the role rule gives its wall a normal
+pointing into the material. It is a live defect in the prism build, fixed there,
+in its own change. Increment 5 needs the walk-sense rule because a concave round
+is the first thing a fillet emits; it is a prerequisite of this increment, not a
+deliverable of it.
 
 **The corner problem is excluded, not fudged.** Where two blends meet at a
 shared vertex — a lateral edge's blend running into a cap edge's blend — the
@@ -269,10 +289,20 @@ setback) is neither a cylinder nor a sphere in general. It is not in the shipped
 surface set, it is not exactly derivable from the record, and an evaluator that
 invented one would be guessing at the very corner an agent asked it to check.
 So the class is drawn where the problem does not arise: **a lateral edge's blend
-terminates on the two caps, and two lateral blends never meet each other** —
-distinct lateral edges are disjoint, and their blends can only interfere by
-claiming the same wall from both ends, which is the cutback gate above, refused.
-A selector that names a cap edge is `ErrUnsupported` at the call (§3), and the
+terminates on the two caps, and two lateral blends never share a vertex** —
+distinct lateral edges are disjoint, and each blend runs cap to cap, so there is
+no vertex at which two of them meet and no patch that would close one.
+
+Two lateral blends can still **interfere**, and interference is refused, never
+patched. Two corners of one wall claim it from both ends, and that is the cutback
+gate above. Two corners that share no wall at all — opposite ends of a thin neck,
+two corners of one loop that are not adjacent, a corner of the outer loop and a
+corner of a hole across a thin section — can have their rewritten pieces cross
+without either overrunning a walk, and those are caught by §4's audit, which
+tests every pair of segments **within** a rewritten loop and **across** every two
+loops of the section. Both refusals name `ErrUnsupported`, both fire before a face
+is made, and neither produces a corner needing a surface nobody can name. A
+selector that names a cap edge is `ErrUnsupported` at the call (§3), and the
 vertex blend stays where it belongs: an open question (§12), not a surface this
 evaluator makes up.
 
@@ -303,9 +333,10 @@ silently narrowed (core §8.1: an option that cannot be recorded does not ship).
 The rewrite trims both walks back by `d` and joins the feet with a `LineSeg`.
 The gates are the fillet's, unchanged in every respect: a setback that reaches
 or passes the far end of a walk — including a far end another corner in the same
-call has already claimed — is `ErrDegenerate`, refused and never clipped; a
+call has already claimed — is `ErrUnsupported`, refused and never clipped; a
 smooth or cusped corner is `ErrDegenerate`; a rewritten loop that crosses itself
-is `ErrDegenerate` (§4). A corner with a circular neighbour builds: the chord
+or another loop is `ErrUnsupported`, and one that has turned inside out is
+`ErrDegenerate` (§4). A corner with a circular neighbour builds: the chord
 from a point on a line to a point on an arc, or from arc to arc, is still a
 `LineSeg`, and the bevel face is still a `Plane` — a chamfer against a
 cylindrical wall meets it in a straight ruling, because both are parallel to the
@@ -359,32 +390,47 @@ a spline), and it does not build as an extrude either.
 
 **Two gates, and they are different questions.**
 
-- **Does the body exist?** The erosion is non-empty exactly when `t` is
-  strictly less than the section's **inradius** — the radius of its largest
-  inscribed disk, which `survey2d.go` already computes **exactly** as part of
-  the wall survey. At or beyond it the wall has eaten the part and there is no
-  cavity: `ErrDegenerate`, and the reading that refuses is the same one that
-  answers `MinWallThickness`.
+- **Does the body exist?** This is the inward sense's question, and the erosion
+  answers it: `P ⊖ t` is non-empty exactly when `t` is strictly less than the
+  section's **inradius** — the radius of its largest inscribed disk, which
+  `survey2d.go` already computes **exactly** as part of the wall survey. At or
+  beyond it the wall has eaten the part and there is no cavity: `ErrDegenerate`,
+  and the reading that refuses is the same one that answers `MinWallThickness`.
+  An outward shell has no such limit — a dilation of a non-empty region is never
+  empty, at any thickness.
 - **Can this evaluator build it?** The raw offset is admitted only when it
   **preserves the section's topology**: every offset loop simple, no two offset
-  loops crossing, the eroded outer loop still containing each expanded hole, and
-  the holes still mutually disjoint — all decided by the §4 crossing audit in
-  closed form. A section with a slot narrower than `2t`, or two holes closer
-  than `2t`, has an exact offset whose *pieces merge*, and resolving that merge
-  is a trimmed-offset kernel this evaluator does not have. The body exists, so
+  loops crossing, the offset outer loop still containing each offset hole, and the
+  holes still mutually disjoint — all decided by the §4 crossing audit in
+  closed form. Inward, a section with a slot narrower than `2t`, or two holes
+  closer than `2t`, has an exact offset whose *pieces merge*; outward, a hole
+  narrower than `2t` closes up and the loop is *dropped*. Resolving either needs
+  a trimmed-offset kernel this evaluator does not have. The body exists, so
   the answer is `ErrUnsupported` (§1) — never a self-overlapping loop swept into
   a solid, which is the same principle evaluator §12 states for the tapered
   extrude. Refusing costs the caller a shell decad could in principle build;
   producing one costs them a part that is wrong where they cannot see it.
 
-**The result, by which caps were removed.** Write `Q` for the offset section
-(`P ⊖ t` inward, `P ⊕ t` outward, in which case `Q` is the *outer* boundary and
-`P` the cavity), and `[z0, z1]` for the sweep interval:
+**The result, by which caps were removed and which way the wall grew.** Write `Q`
+for the offset section — `P ⊖ t` inward, `P ⊕ t` outward — and `[z0, z1]` for the
+sweep interval. **The sense decides which of the two sections is the outer
+boundary and which is the cavity**: inward, the outer boundary is `P` and the
+cavity is `Q`; outward, the outer boundary is `Q` and the cavity is `P`, because
+the wall grew off the original solid and the original solid is what it now
+encloses. Write `O` for the outer section and `C` for the cavity section under
+whichever sense was asked for. Taking the removed cap as the top (`z1`), a removed
+bottom being its mirror:
 
-| Removed | The body |
-|---|---|
-| **both caps** | a tube: the prism over the region bounded by the outer loop with the offset loop(s) as **holes**, on the same interval. This is a plain `prismPayload`, and it canonicalizes to one — everything that consumes a prism consumes it (§10), and a fillet of the tube's lateral edges builds |
-| **one cap** | a cup: the outer prism over `P` on `[z0, z1]`, with a cavity — the prism over `Q` on `[z0 + t, z1]` for a removed top, mirrored for a removed bottom. An outward shell moves the kept cap out instead, to `z0 − t`, and the cavity is the original solid |
+| Removed | Sense | The body |
+|---|---|---|
+| **both caps** | `Inward` | a tube: the prism over `P` with `Q = P ⊖ t` as its **hole(s)**, on `[z0, z1]` |
+| **both caps** | `Outward` | a tube: the prism over `Q = P ⊕ t` with `P` as its **hole(s)**, on `[z0, z1]` — no cap is kept, so no material is added along the sweep |
+| **one cap** | `Inward` | a cup: the outer prism over `P` on `[z0, z1]`, with the cavity the prism over `Q = P ⊖ t` on `[z0 + t, z1]` — the kept cap does not move, and the floor is `t` of the original material |
+| **one cap** | `Outward` | a cup: the outer prism over `Q = P ⊕ t` on `[z0 − t, z1]`, with the cavity the prism over `P` on `[z0, z1]` — the original solid *is* the cavity, and the floor is `t` of new material below the kept cap |
+
+Either tube is a plain `prismPayload` — an outer loop with holes — and
+canonicalizes to one: everything that consumes a prism consumes it (§10), and a
+fillet of a tube's lateral edges builds.
 
 The cup is the one new payload this increment introduces: two co-directional
 prisms over the same plane — the outer region on its interval, the cavity region
@@ -402,10 +448,10 @@ would have to defeat to ask for it. v1 does not let them: `Shell` removes at
 least one face, and how a no-opening shell should be *spelled* is an open
 question (§12), not a silent behaviour of the empty match.
 
-Faces of the cup, and each is analytic: the outer walls and the kept cap
-(unmoved, on an inward shell), the **rim** — the removed cap's plane, trimmed to
-the annulus between `P` and `Q` — the cavity walls (planes and cylinders over
-`Q`), and the cavity's own cap. Every edge bounds exactly two faces, so the body
+Faces of the cup, and each is analytic: the outer walls (planes and cylinders
+over `O`) and the kept cap, the **rim** — the removed cap's plane, trimmed to the
+annulus between `P` and `Q` — the cavity walls (planes and cylinders over `C`),
+and the cavity's own cap. Every edge bounds exactly two faces, so the body
 is manifold and watertight by the same structural argument the prism enjoys
 (evaluator §10), on a region the §4 audit has already proven simple.
 
@@ -420,7 +466,7 @@ any tolerance (verification §5):
 
 | Quantity | On a filleted / chamfered prism | On a cup |
 |---|---|---|
-| `Volume` | `A·h` on the rewritten section | `A_P·h − A_Q·h_c` — the outer prism less the cavity prism |
+| `Volume` | `A·h` on the rewritten section | `A_O·h − A_C·h_c` — the outer prism less the cavity prism, on each one's own interval (§7) |
 | `Area` | caps + Σ (segment length · h); an arc's length is `rθ`, exact | outer walls + kept cap + rim annulus + cavity walls + cavity cap |
 | `Centroid` | the rewritten region's centroid, lifted to the interval's signed midpoint | the mass-weighted difference of the two prisms' centroids |
 | `Bounds` | per-segment analytic extremes over the interval | the outer prism's — the cavity is interior |
@@ -554,9 +600,14 @@ PR-level staging inside evaluator increment 5. Everything not yet landed is
 
 | PR | Lands | Still `ErrUnsupported` after it |
 |---|---|---|
-| 1 | the section rewrite and its §4 audit, the walk-sense orientation correction (§5), `Fillet` on lateral edges (line/line, line/arc, arc/arc corners), the `Step` wiring and provenance inheritance | chamfer, shell; every cap edge; every non-prism receiver |
+| 1 | the section rewrite and its §4 audit, `Fillet` on lateral edges (line/line, line/arc, arc/arc corners), the `Step` wiring and provenance inheritance | chamfer, shell; every cap edge; every non-prism receiver |
 | 2 | `Chamfer`, equal distance | shell; the asymmetric chamfer |
 | 3 | `Shell`: cap removal, the exact erosion and dilation, the topology-preservation audit, the cup payload, and `Tessellate` + the surveys extended to it | side-wall removal; the no-opening shell; the topology-changing offset |
+
+The walk-sense wall orientation (§5) is a **prerequisite**, not a deliverable: a
+clockwise circular walk on an outer loop mis-orients its wall in the prism build
+today, on profiles a fillet has nothing to do with, and the fix belongs to that
+build. PR 1 depends on it landing; it does not carry it.
 
 ## 12. Open questions
 
@@ -568,18 +619,23 @@ PR-level staging inside evaluator increment 5. Everything not yet landed is
   `ErrUnsupported` where they do not?) is undecided, and it is the single
   largest thing standing between this increment and general edge chains.
 - **Blend merging.** Two corners of one short wall, filleted in one call so that
-  their cutbacks overlap, is `ErrDegenerate` today. A kernel that merges the two
-  blends into one surface would build it. Is that intent worth admitting, or is
-  a caller who asks for it better served by the refusal?
+  their cutbacks overlap, is `ErrUnsupported` today (§5): the two blend surfaces
+  exist, and a kernel that merges them into one — or trims each against what it
+  runs into — builds the body. Whether this evaluator should grow that resolution
+  step, or whether a caller who asks for it is better served by the refusal, is
+  undecided.
 - **The topology-changing offset.** A shell whose exact offset merges two loops
   (a slot narrower than twice the wall) is `ErrUnsupported`. Resolving it needs
   a trimmed-offset kernel — the same machinery the tapered extrude wants
   (evaluator §12), which suggests one kernel, one increment, and both callers.
 - **The no-opening shell.** A hollow closed body — the only shape with a genuine
-  `IsVoid` shell — is a shell that removes no face, and core §9 makes an empty
-  match an error. `Faces(…).Exactly(0)` is the one spelling the contract already
-  admits (a *satisfied* assertion of zero, not a failed one); a nullary
-  `WithNoOpenings()` option is the other. Neither is chosen.
+  `IsVoid` shell — is a shell that removes no face, and the selector vocabulary
+  has no way to ask for it: core §9 makes an empty match an error, and a
+  cardinality assertion takes a positive count, so a *satisfied* assertion of zero
+  is not a spelling the contract offers. Asking for it therefore means adding
+  something — a nullary `WithNoOpenings()` option is the obvious candidate — and
+  nothing is chosen. Admitting a zero-count assertion instead would be a change to
+  the selector contract, which is core §9's to make, not this document's.
 - **The asymmetric chamfer**, and the **variable-radius fillet**: both are
   options with nowhere to land until `ChamferOpts` and `FilletOpts` carry a
   field, and both are recordable when they do. Neither is in v1.
