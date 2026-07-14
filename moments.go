@@ -77,6 +77,14 @@ func (r ProfileRecord) integrals() (regionIntegrals, error) {
 // against the curve's natural sense — the sign falls out of the integral
 // limits, no special case).
 func (ig *regionIntegrals) add(seg CurveSegment) error {
+	// The codec accepts pointer variants and normalizes them to values
+	// (record.go); the integrals read segments on the same terms, so a
+	// *LineSeg integrates exactly like its value and a nil pointer is
+	// rejected rather than misread as an unsupported kind.
+	seg, err := normalizeSegment(seg)
+	if err != nil {
+		return err
+	}
 	switch seg := seg.(type) {
 	case LineSeg:
 		ig.addLine(seg)

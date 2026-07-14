@@ -148,3 +148,21 @@ func TestRegionMomentsRejects(t *testing.T) {
 	_, err = empty.Centroid()
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 }
+
+func TestRegionMomentsPointerVariants(t *testing.T) {
+	// Pointer variants integrate exactly like their values — the same
+	// normalization the codec applies — and a nil pointer is rejected.
+	square := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
+		&decad.LineSeg{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 4, V: 0}, TStart: 0, TEnd: 1},
+		&decad.LineSeg{Start: decad.Point2{U: 4, V: 0}, End: decad.Point2{U: 4, V: 4}, TStart: 0, TEnd: 1},
+		&decad.LineSeg{Start: decad.Point2{U: 4, V: 4}, End: decad.Point2{U: 0, V: 4}, TStart: 0, TEnd: 1},
+		&decad.LineSeg{Start: decad.Point2{U: 0, V: 4}, End: decad.Point2{U: 0, V: 0}, TStart: 0, TEnd: 1},
+	}}}
+	area, err := square.Area()
+	require.NoError(t, err)
+	require.True(t, area.Equal(units.SquareMillimeters(16), 1e-12), `pointer segments integrate like values, got %s`, area)
+
+	bad := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{(*decad.LineSeg)(nil)}}}
+	_, err = bad.Area()
+	require.Error(t, err, `a nil segment pointer names no curve to integrate`)
+}
