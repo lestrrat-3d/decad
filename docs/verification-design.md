@@ -952,10 +952,15 @@ carries normals both with and against any pull — so membership is decided
 pointwise first. The pointwise comparison reads the point's proven interval
 exactly as the wall's does, and is total the same three ways: a point whose
 whole interval **opposes** the pull — every direction the bound admits has a
-component against it — provenly opposes; a point whose whole interval does
-not oppose provenly clears — exactly perpendicular is not opposed, as
-exactly tool-thick is not thinner; a point whose interval straddles decides
-nothing. The face's membership quantifies those points — existentially for
+component against it, short of exact antiparallelism — provenly opposes; a
+point whose whole interval does not oppose provenly clears — exactly
+perpendicular is not opposed, as exactly tool-thick is not thinner, and a
+face exactly antiparallel everywhere (a flat base square against the pull)
+SEPARATES under it rather than hooking it, the same strictness posture at
+the interval's other end. Without that end carved out, every closed solid
+would carry a support face reading as an undercut and the proven empty
+all-clear this section promises would be unattainable on any solid. A point
+whose interval straddles decides nothing. The face's membership quantifies those points — existentially for
 the violation, universally for the all-clear, the proof always on the claim:
 
 - **a face with a provenly opposing point is a proven undercut.** One point

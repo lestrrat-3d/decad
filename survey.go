@@ -243,6 +243,13 @@ func revolveWall(rp revolvePayload, alpha float64) wallOutcome {
 	wedgeS := 0.0
 	wedgeSpans := false
 	if !rp.full {
+		// A mid-sweep ball at meridian radius ρ clears each cap HALF-plane
+		// by ρ·sin(dphi/2) only while dphi/2 ≤ 90°: past that (a reflex
+		// sweep) the perpendicular foot leaves the half-plane, the nearest
+		// cap point is its edge — the axis — and the clearance is ρ itself.
+		// So the factor saturates at sin(π/2) and never shrinks again;
+		// shrinking it past 90° would erase real walls
+		// (TestWallReflexSweep pins the hand-checked case).
 		wedgeS = math.Sin(math.Min(dphi/2, math.Pi/2))
 		wedgeSpans = dphi <= alpha+survAngTol
 	}

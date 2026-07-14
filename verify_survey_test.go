@@ -238,6 +238,47 @@ func TestWallPartialRevolve(t *testing.T) {
 	require.Equal(t, decad.Sound, report.Status)
 }
 
+func TestWallReflexSweep(t *testing.T) {
+	// A 270° sector of a length-7, radius-8 solid cylinder. The sweep is
+	// reflex, so a mid-sweep ball's clearance to each cap HALF-plane is its
+	// own axis distance (the perpendicular foot leaves the half-plane and
+	// the nearest cap point is the axis edge): the length-spanning ball of
+	// radius 3.5 at meridian radius 4 is legal — hand-checked, its angular
+	// footprint [74°, 196°] sits inside the sweep — and the flats' 7 mm is
+	// a real wall. A rule that kept shrinking the clearance past 90°
+	// (ρ·sin(Δφ/2) ≈ 2.83 < 3.5) would erase it.
+	ws := sketch.NewWorld()
+	s, err := ws.CreateSketch(ws.XY())
+	require.NoError(t, err)
+	rect := s.CreateRectangle(0, 0, 7, 8)
+	s.Fix(rect.A)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	doc := decad.New()
+	_, err = doc.Revolve(s, s.Profiles()[0], uAxis, decad.AngleExtent{A: units.Degrees(270), Dir: decad.Along})
+	require.NoError(t, err)
+	report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(1)))
+	require.NoError(t, err)
+	requireWall(t, report.Bodies[0], 7)
+	require.Equal(t, decad.Sound, report.Status)
+}
+
+func TestWallSectorTooTightForItsFlats(t *testing.T) {
+	// The same sector one size longer (length 10, radius 8): the
+	// length-spanning ball of radius 5 needs meridian radius ≥ 5 to clear
+	// the caps but ≤ 3 to stay inside the skin — infeasible — and no other
+	// pair opposes within the allowance. §6's wall is read by the ball that
+	// spans it, so this body has NO wall: nil, a proven absence, Sound.
+	s, p := solidSketch(t)
+	doc := decad.New()
+	_, err := doc.Revolve(s, p, uAxis, decad.AngleExtent{A: units.Degrees(270), Dir: decad.Along})
+	require.NoError(t, err)
+	report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(1)))
+	require.NoError(t, err)
+	require.Nil(t, report.Bodies[0].MinWallThickness)
+	require.Equal(t, decad.Sound, report.Status)
+}
+
 func TestWallThinPieWedge(t *testing.T) {
 	// A 10° pie wedge of a solid cylinder: its two caps meet along the axis
 	// at the sweep angle itself — a dihedral within the allowance, a wall
