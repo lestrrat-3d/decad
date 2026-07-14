@@ -90,7 +90,11 @@ before writing any public type.
 | `docs/sketch-seam-design.md` | The recording contract at the `sketch` seam: trim contract (`TExact`), the `CurveSegment` recording IR, `ErrUnrecordableProfile`. |
 | `docs/verification-design.md` | How `Verify` judges every bounded result: report + statuses, `WithTolerance`, the diameter-anchored noise floor. |
 | `doc.go` | Package doc: scope + the layering contract. |
-| `wiring_test.go` | Dependency smoke test — solves a `sketch` profile, checks its provenance, staleness and fragment trim certification (`TExact`), lifts and places it via `r3`, round-trips a `units` quantity. Asserts nothing about decad. **Delete when real decad code imports the deps.** |
+| `errors.go` | The core §12 sentinel error vocabulary — one branchable identity per case an agent must branch on. |
+| `measurement.go` | The bounded-result shapes (core §5.3/§6): `Exactness`, `Measurement`, `VecMeasurement`, `Box`. |
+| `record.go` | The recording IR (seam §2): `PlaneRecord`, `Point2`, `ProfileRecord`, `LoopRecord`, the ten sealed `CurveSegment` variants, and their tagged JSON codec (pointer variants normalize to values; nil pointers and unknown/missing kind tags are rejected). |
+| `seam.go` | The seam conversion: `RecordProfile(s, p)` — the §7 gates (`ErrForeignProfile`/`ErrStaleProfile`/`ErrInvalidProfile`), the `TExact` admission gate, and the reject-only falsifier (`falsifyRange`, evaluating through `sketch/geom`'s own evaluators — the only `Polyline` read, endpoints only, check-never-record). |
+| `examples/` | Executable Go examples (`Example_decad_…`, `go test`-verified `// Output:` blocks) that double as living documentation. Never `package main`. |
 | `.github/workflows/` | `ci.yml` (lint → test/tidy/govulncheck), `codeql.yml`. |
 
 ## Conventions
