@@ -124,10 +124,13 @@ centroid lifted `(z0+z1)/2` along the normal — `h/2` only in the one-sided
 `Along` case — `Bounds` from per-segment analytic extremes swept over
 `[z0, z1]`, `Area` from cap areas + side areas (`segment length · (z1−z0)`;
 arc length `rθ` exact). Extents: `Distance`,
-`Symmetric`, `ThroughAll`-as-side, `TwoSided` of distance sides land in
-increment 1; `ToFace`/`ToFaceAngular` land with selectors (§7), stopping the
-sweep at an analytic target plane/cylinder — the stop is an intersection of
-the sweep direction with an analytic surface, closed form. A nonzero
+`Symmetric`, and `TwoSided` of distance sides land in increment 1 — the three
+whose interval the step's own quantities determine. `ThroughAll` and
+`ThroughAllSide` have no finite stop geometry of their own (they stop at the
+far side of every body the sweep meets), so they are body-relative exactly
+like `ToFace`/`ToFaceAngular`: all four land in increment 2 with selectors
+(§7), the stop an intersection of the sweep direction with analytic target
+surfaces — closed form — and `ErrUnsupported` until then. A nonzero
 `WithTaper` is recorded exactly and is `ErrUnsupported` in v1: a tapered
 extrude of a general region is an offset problem (self-intersecting offsets),
 and a wrong-but-confident prism is the failure decad exists to prevent.
@@ -235,8 +238,8 @@ half-silent — unreachable capability is `ErrUnsupported` at the call.
 
 | # | Lands |
 |---|---|
-| 1 | topology model, `Document`/`Recipe`/`Step` wiring, `Extrude` for line/circle/arc profiles with `Distance`/`Symmetric`/`TwoSided`/`ThroughAll` extents, mass properties (§4), `Placed`, structural `Verify` (validity by construction, quantities, tolerance gate; every pair undecided → `Suspect` unless box-proven disjoint) |
-| 2 | `Revolve` (angular extents), selector vocabulary + resolution, `ToFace`/`ToFaceAngular`/`EdgeAxis` |
+| 1 | topology model, `Document`/`Recipe`/`Step` wiring, `Extrude` for line/circle/arc profiles with `Distance`/`Symmetric`/`TwoSided`-of-distance-sides extents, mass properties (§4), `Placed`, structural `Verify` (validity by construction, quantities, tolerance gate; every pair undecided → `Suspect` unless box-proven disjoint) |
+| 2 | `Revolve` (angular extents), selector vocabulary + resolution, the body-relative stops (`ToFace`/`ToFaceAngular`/`EdgeAxis`, `ThroughAll`/`ThroughAllSide`) |
 | 3 | pair proofs (box-disjointness, analytic clearance), `WithClearances` |
 | 4 | tessellation + the exact-predicate mesh boolean, `Faceted` bodies, faceted `Verify`, `Tessellate`/`STL`/`OBJ` |
 | 5 | fillet/chamfer on analytic prism edges, shell, `WithMinWallThickness`/`WithPullDirection`/`WithMinRadius` surveys |
