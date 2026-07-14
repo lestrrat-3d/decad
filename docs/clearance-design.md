@@ -99,8 +99,17 @@ local minimum, the global one included, is a candidate in exactly one tier:
 | edge interior × vertex | foot of the point on the curve | point–curve, closed form for all three curves |
 | vertex × vertex | — | a distance |
 
-A face with no edges at all — a full sphere, a full torus — simply
-contributes no curve or vertex tiers; the enumeration does not require them.
+The vertex tiers quantify over the face's STATIONARY POINTS, not only the
+topology's vertices: a cone's apex is a surface singular point — the normal
+is undefined there, so no interior first-order condition holds and a minimum
+can sit exactly on the tip — and a full-revolution cone carries NO axis
+vertex in the shipped topology (`Body.Vertices()` returns edge endpoints
+only, and `Face.NormalAt` rejects the apex). The kernel therefore
+synthesizes a vertex-like candidate at every trimmed cone face's apex, read
+off the stored surface data, and runs it through the two vertex tiers like
+any topological vertex. A face with no edges at all — a full sphere, a full
+torus — contributes no curve tier and, being smooth everywhere, no
+synthesized point either; the enumeration does not require them.
 
 **Admission is exact, and doubt only ever costs figures.** A tier's candidates
 are computed on the unbounded carriers, and each is admitted only when both
