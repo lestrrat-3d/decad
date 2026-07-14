@@ -547,7 +547,7 @@ func buildFacetedTopology(verts []r3.Vec, tris [][3]int, facetFace []*Face, face
 			// curve's length excess over the chords unboundable without
 			// curvature knowledge, and Length must refuse rather than
 			// understate (never a silent pass).
-			lengthUnbounded: !(facePlanar[info.fa] && facePlanar[info.fb]),
+			lengthUnbounded: !facePlanar[info.fa] || !facePlanar[info.fb],
 		}
 		chains = append(chains, chainRec{verts: path, edge: e})
 	}
