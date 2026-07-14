@@ -3,6 +3,8 @@ package decad
 import (
 	"fmt"
 	"math"
+
+	"github.com/lestrrat-3d/r3"
 )
 
 // This file is the single owner of every proven error bound a faceted
@@ -26,6 +28,9 @@ import (
 //   - RIGID-MOTION rounding → rigidRoundAllow, charged at the INPUT and
 //     translation magnitudes, which is where the rounding is actually
 //     committed — never at the output's;
+//   - the VOLUME a vertex displacement sweeps out → sweptVolumeAllow, charged
+//     against perturbedAreaUpper — the area of the surface the displacement
+//     acted ON, which is NOT the area of the mesh that survived it;
 //   - a per-coordinate maximum read as a 3D DISTANCE → radius3D.
 
 const (
@@ -99,6 +104,46 @@ func chainLengthBound(nSegs int, delta, heldLen float64) float64 {
 func rigidRoundAllow(maxInputAbs, maxTransAbs float64) float64 {
 	m := 2*math.Abs(maxInputAbs) + math.Abs(maxTransAbs)
 	return radius3D(16 * ulpOf(m))
+}
+
+// perturbedAreaUpper bounds the total facet area of a mesh whose vertices may
+// each sit up to delta from the HELD ones — and of every mesh on the straight
+// path between the two, which is what the swept-volume bound integrates over.
+//
+// Per facet, with held edge vectors u', v' and true ones u = u' + du,
+// v = v' + dv (|du|, |dv| ≤ 2·delta, each endpoint moving by up to delta):
+// |u × v| ≤ |u' × v'| + 2·delta·(|u'| + |v'|) + 4·delta², so the true area is
+// at most the held area plus delta·(|u'| + |v'|) + 2·delta². A facet the weld
+// COLLAPSED holds zero area and the correction is the whole of its bound —
+// which is the point: it is the only term that speaks for it.
+func perturbedAreaUpper(verts []r3.Vec, tris [][3]int, delta float64) float64 {
+	total := 0.0
+	for _, t := range tris {
+		a, b, c := verts[t[0]], verts[t[1]], verts[t[2]]
+		u, v := b.Sub(a), c.Sub(a)
+		total += u.Cross(v).Len()/2 + delta*(u.Len()+v.Len()) + 2*delta*delta
+	}
+	return upRound(total + sumSlop(len(tris), total))
+}
+
+// sweptVolumeAllow bounds the volume between two closed meshes whose vertices
+// correspond and differ by at most delta. The signed volume is a polynomial in
+// the vertices, so along the straight path from one mesh to the other
+// |dV/dt| ≤ delta · A(t) — every boundary point moves at speed at most delta,
+// and it can only displace volume at the rate the area it sweeps allows. So
+// |V' − V| ≤ delta · sup A(t), and areaUpper must bound the area along the WHOLE
+// path (perturbedAreaUpper does).
+//
+// The identity holds facet by facet, so it holds whatever the rounding does to
+// the mesh's shape — a facet flattened to zero area still answers for the volume
+// it swept getting there. What it needs is the area of the surface the motion
+// acted ON: charge it against what survived the motion and the collapsed facets'
+// own swept volume drops silently out of the bound.
+func sweptVolumeAllow(delta, areaUpper float64) float64 {
+	if delta <= 0 || areaUpper <= 0 {
+		return 0
+	}
+	return upRound(delta * areaUpper)
 }
 
 // rimDelta is the trim-amplified displacement bound of a vertex the boolean

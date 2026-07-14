@@ -47,7 +47,9 @@ type facetedPayload struct {
 	// result boundary is farther than this from the held mesh's
 	// corresponding piece. volSymDiff bounds the volume of the symmetric
 	// difference between the held solid and the true result. areaSlack
-	// bounds the chord-length deficit the operand tessellations carry.
+	// bounds the area the held mesh cannot report: the chord-length deficit
+	// the operand tessellations carry, plus the area of any facet the final
+	// weld collapsed out of the mesh.
 	// dPair is the operand pair's diameter, the centroid bound's yardstick.
 	meshBound  float64
 	volSymDiff float64
@@ -95,7 +97,7 @@ func (fp facetedPayload) placed(d *Document, ref StepRef, composed r3.Transform)
 	maxTrans := math.Max(math.Abs(tr.X), math.Max(math.Abs(tr.Y), math.Abs(tr.Z)))
 	allow := rigidRoundAllow(maxIn, maxTrans)
 	next.meshBound += allow
-	next.volSymDiff += allow * meshAreaUpper(next.verts, next.tris)
+	next.volSymDiff += sweptVolumeAllow(allow, perturbedAreaUpper(next.verts, next.tris, allow))
 	return buildFacetedBody(d, ref, next)
 }
 

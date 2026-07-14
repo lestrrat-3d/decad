@@ -147,15 +147,22 @@ func performBoolean(op OpKind, a, b *Body) (*Body, error) {
 	}
 	symA := operandSymDiff(a, ma)
 	symB := operandSymDiff(b, mb)
-	roundArea := stitched.round * meshAreaUpper(stitched.verts, stitched.tris)
+	// The final rounding's own volume error is what its vertex displacement
+	// sweeps out over the surface it acted on — the stitched surface BEFORE the
+	// weld dropped any collapsed facet from it (bounds.go, sweptVolumeAllow).
+	// The held mesh's area is the WRONG yardstick here: a dropped facet is
+	// missing from it, and its swept volume would go uncharged. The area the
+	// weld dropped is likewise missing from every area the result reports, so
+	// it joins the operands' own chord deficit in areaSlack.
+	roundVol := sweptVolumeAllow(stitched.round, stitched.preArea)
 	payload := facetedPayload{
 		verts:      stitched.verts,
 		tris:       stitched.tris,
 		src:        stitched.src,
 		groups:     groups,
 		meshBound:  rim + stitched.round,
-		volSymDiff: symA + symB + roundArea,
-		areaSlack:  ma.areaSlack + mb.areaSlack,
+		volSymDiff: symA + symB + roundVol,
+		areaSlack:  ma.areaSlack + mb.areaSlack + stitched.dropArea,
 		dPair:      dPair,
 		xform:      r3.Identity(),
 	}
@@ -259,11 +266,8 @@ func refuseUndecidableProximity(ma, mb *Mesh, bmA, bmB *boolMesh) error {
 func facesNearMiss(bmA *boolMesh, fis []int, bmB *boolMesh, fjs []int, slack float64) (bool, error) {
 	near := false
 	for _, i := range fis {
-		if bmA.degen[i] {
-			continue
-		}
 		for _, j := range fjs {
-			if bmB.degen[j] || !boxesWithin(bmA.boxes[i], bmB.boxes[j], slack) {
+			if !boxesWithin(bmA.boxes[i], bmB.boxes[j], slack) {
 				continue
 			}
 			ta := triCorners(bmA, i)

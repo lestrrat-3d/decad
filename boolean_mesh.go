@@ -27,11 +27,6 @@ type boolMesh struct {
 	norms  []xpt
 	boxes  [][2]r3.Vec
 	src    []int
-	// degen marks facets with an exactly zero normal — the float rounding
-	// of a previous boolean can collapse a sliver. A degenerate facet has
-	// no plane and no interior: it takes part in no contact and rides with
-	// its component's classification.
-	degen []bool
 	// owner maps each directed mesh edge to the facet that walks it, so the
 	// twin across a facet edge is one lookup. The graze-or-crossing call
 	// needs it: whether an in-plane edge grazes the other operand or crosses
@@ -50,6 +45,15 @@ func (bm *boolMesh) twinFacet(f, k int) (int, bool) {
 
 // prepBoolMesh lifts a tessellation into the exact domain. A non-finite
 // vertex has no exact form, so it is rejected outright.
+//
+// A COLLAPSED operand facet — one whose exact normal is zero, which a rigid
+// placement's own rounding can produce on an already-faceted body — is refused
+// (ErrUnsupported). A collapsed facet has no plane and no interior, so every
+// contact predicate in this file is blind to it: a point or tangent contact the
+// other operand makes THERE would be classified by nothing at all, and the
+// facet would ride silently through the boolean with its component's verdict.
+// The contact is exactly what this pipeline must not miss, so the operand is
+// refused rather than partly examined. Loud beats silently wrong.
 func prepBoolMesh(m *Mesh, src []int) (*boolMesh, error) {
 	bm := &boolMesh{verts: m.vertices, tris: m.triangles, src: src}
 	bm.xverts = make([]xpt, len(m.vertices))
@@ -61,12 +65,13 @@ func prepBoolMesh(m *Mesh, src []int) (*boolMesh, error) {
 	}
 	bm.norms = make([]xpt, len(m.triangles))
 	bm.boxes = make([][2]r3.Vec, len(m.triangles))
-	bm.degen = make([]bool, len(m.triangles))
 	bm.owner = make(map[[2]int]int, 3*len(m.triangles))
 	for i, tri := range m.triangles {
 		a, b, c := bm.xverts[tri[0]], bm.xverts[tri[1]], bm.xverts[tri[2]]
 		n := xcross(xsub(b, a), xsub(c, a))
-		bm.degen[i] = n.x.Sign() == 0 && n.y.Sign() == 0 && n.z.Sign() == 0
+		if n.x.Sign() == 0 && n.y.Sign() == 0 && n.z.Sign() == 0 {
+			return nil, fmt.Errorf(`%w: an operand holds a collapsed facet, which carries no plane and no interior — a contact made on it could not be classified at all, so this evaluator refuses the operand rather than examine it in part`, ErrUnsupported)
+		}
 		bm.norms[i] = n
 		bm.boxes[i] = triBox(bm.verts, tri)
 		for k := range 3 {
@@ -537,11 +542,8 @@ func meshBoolean(op OpKind, ma, mb *boolMesh) ([]keptFacet, float64, error) {
 	var inPlane []pairContact
 	var minSin2 *big.Rat
 	for i := range ma.tris {
-		if ma.degen[i] {
-			continue
-		}
 		for j := range mb.tris {
-			if mb.degen[j] || !boxesOverlap(ma.boxes[i], mb.boxes[j]) {
+			if !boxesOverlap(ma.boxes[i], mb.boxes[j]) {
 				continue
 			}
 			ta := triCorners(ma, i)
@@ -806,19 +808,9 @@ func keepSide(m, other *boolMesh, cuts map[int][]xseg, blocked map[[2]int]struct
 				queue = append(queue, nb)
 			}
 		}
-		// Seed the parity probe on a non-degenerate member: a collapsed
-		// sliver has no interior to probe.
-		seedIdx := -1
-		for _, f := range members {
-			if !m.degen[f] {
-				seedIdx = f
-				break
-			}
-		}
-		if seedIdx == -1 {
-			return nil, fmt.Errorf(`%w: an uncut component holds only collapsed facets`, ErrBooleanFailed)
-		}
-		seed := xtriCorners(m, seedIdx)
+		// Every facet has a real interior to probe: prepBoolMesh refused the
+		// operand outright if any facet collapsed.
+		seed := xtriCorners(m, members[0])
 		probe := xCentroid(seed[0], seed[1], seed[2])
 		inside, onBoundary, err := meshParity(probe, other.verts, other.tris, all)
 		if err != nil {
@@ -907,13 +899,27 @@ func xCentroid(a, b, c xpt) xpt {
 }
 
 // stitchedMesh is the boolean output after welding, conforming and rounding:
-// the held float mesh, its per-facet source-face ids, and the exact bound on
-// the final rounding.
+// the held float mesh, its per-facet source-face ids, and the proven terms the
+// rounding's own error composes from.
 type stitchedMesh struct {
 	verts []r3.Vec
 	tris  [][3]int
 	src   []int
+	// round is the proven displacement (mm) of one vertex under the final
+	// float rounding: no held vertex is farther than this from the exact
+	// point it stands for.
 	round float64
+	// preArea upper-bounds the area of the surface the rounding acted ON —
+	// the stitched surface BEFORE any facet was dropped, and along the whole
+	// motion from it to the held mesh. It is what the volume error is charged
+	// against, NOT the held mesh's area: a facet the weld collapses is gone
+	// from the held mesh, and charging the rounding against what survived
+	// would leave that facet's own swept volume out of the bound.
+	preArea float64
+	// dropArea upper-bounds the area of the facets the weld collapsed, which
+	// the held mesh no longer carries. The reported surface area is short by
+	// exactly this much, so the area bound must cover it.
+	dropArea float64
 }
 
 // stitchFacets welds the kept facets by shared exact vertices, makes the
@@ -973,11 +979,20 @@ func stitchFacets(kept []keptFacet) (*stitchedMesh, error) {
 		}
 	}
 
-	// Round to float64, welding vertices whose roundings coincide — two
-	// exact points closer than an ulp become one held vertex — and drop the
-	// facets that collapse under the weld: a collapsed facet's two real
-	// directed edges cancel each other, so closure survives, and the final
-	// audit re-proves it.
+	// Round to float64, welding vertices whose roundings coincide — two exact
+	// points closer than an ulp become one held vertex — and drop the facets
+	// that collapse under the weld: a collapsed facet's two real directed
+	// edges cancel each other, so closure survives, and the final audit
+	// re-proves it. A collapsed facet is a zero-area triangle, so it moves
+	// neither the volume integral nor the area sum of the HELD mesh — but the
+	// facet it stands for was not zero-area before the weld, and what it did
+	// carry has to be answered for. Two answers, below: the swept volume and
+	// the missing area are charged against the PRE-ROUND surface (preArea,
+	// dropArea), and a whole component welded out of existence is REFUSED —
+	// there no bound would help, because a lump would be gone from the body
+	// (its volume, its place in the lump count, its share of the bounds) while
+	// the closure audit, which the surviving components still pass, reports
+	// nothing wrong.
 	out := &stitchedMesh{}
 	floatIdx := map[r3.Vec]int{}
 	remap := make([]int, len(xverts))
@@ -1004,9 +1019,19 @@ func stitchFacets(kept []keptFacet) (*stitchedMesh, error) {
 			worst = d
 		}
 	}
+	w, _ := worst.Float64()
+	// worst is the max PER-COORDINATE rounding; the consumers read a 3D
+	// distance bound, and all three coordinates can round at once (bounds.go,
+	// radius3D).
+	out.round = radius3D(upRound(w))
+
+	dropped := make([]bool, len(tris))
+	welded := make([][3]int, len(tris))
 	for ti, tri := range tris {
 		a, b, c := remap[tri[0]], remap[tri[1]], remap[tri[2]]
+		welded[ti] = [3]int{a, b, c}
 		if a == b || b == c || c == a {
+			dropped[ti] = true
 			continue
 		}
 		out.tris = append(out.tris, [3]int{a, b, c})
@@ -1015,6 +1040,21 @@ func stitchFacets(kept []keptFacet) (*stitchedMesh, error) {
 	if len(out.tris) == 0 {
 		return nil, fmt.Errorf(`%w: the whole result collapsed under rounding`, ErrBooleanFailed)
 	}
+	if err := refuseWeldedAwayComponent(tris, dropped); err != nil {
+		return nil, err
+	}
+	// The pre-round surface: every facet the exact stitch produced, dropped
+	// ones included, measured on the held vertices and inflated by the
+	// rounding they may each have travelled (bounds.go, perturbedAreaUpper).
+	out.preArea = perturbedAreaUpper(out.verts, welded, out.round)
+	var droppedTris [][3]int
+	for ti := range tris {
+		if dropped[ti] {
+			droppedTris = append(droppedTris, welded[ti])
+		}
+	}
+	out.dropArea = perturbedAreaUpper(out.verts, droppedTris, out.round)
+
 	directed = map[[2]int]int{}
 	for _, tri := range out.tris {
 		for k := range 3 {
@@ -1026,12 +1066,50 @@ func stitchFacets(kept []keptFacet) (*stitchedMesh, error) {
 			return nil, fmt.Errorf(`%w: the rounded boundary does not close`, ErrBooleanFailed)
 		}
 	}
-	w, _ := worst.Float64()
-	// worst is the max PER-COORDINATE rounding; the consumers read a 3D
-	// distance bound, and all three coordinates can round at once (bounds.go,
-	// radius3D).
-	out.round = radius3D(upRound(w))
 	return out, nil
+}
+
+// refuseWeldedAwayComponent refuses the one class of weld collapse no bound can
+// answer for: a connected component of the stitched surface EVERY facet of
+// which the weld collapses. That component is a shell — a lump of the result,
+// or a cavity inside one — and dropping all of it removes the lump from the
+// body entirely: its volume, its place in Lumps(), its reach in the bounds box.
+// The closure audit does not catch it, because the components that remain still
+// close; nothing else in the pipeline would report it either. Every other
+// collapse is an edge contraction WITHIN a component that survives, and the
+// rounding bounds account for it: the swept volume is charged against the
+// pre-round surface (preArea) and the missing facet area against dropArea, both
+// of which count the dropped facets.
+func refuseWeldedAwayComponent(tris [][3]int, dropped []bool) error {
+	comp := make([]int, len(tris))
+	for i := range comp {
+		comp[i] = -1
+	}
+	adj := facetAdjacency(tris)
+	for i := range tris {
+		if comp[i] != -1 {
+			continue
+		}
+		queue := []int{i}
+		comp[i] = i
+		alive := false
+		for len(queue) > 0 {
+			f := queue[0]
+			queue = queue[1:]
+			alive = alive || !dropped[f]
+			for _, nb := range adj[f] {
+				if comp[nb] != -1 {
+					continue
+				}
+				comp[nb] = i
+				queue = append(queue, nb)
+			}
+		}
+		if !alive {
+			return fmt.Errorf(`%w: a whole component of the result welds away under float rounding — the lump would vanish from the body, and no volume, lump count or bound could then be trusted; this evaluator refuses rather than drop it`, ErrUnsupported)
+		}
+	}
+	return nil
 }
 
 // conformOnce inserts, into every facet edge, the mesh vertices that lie
