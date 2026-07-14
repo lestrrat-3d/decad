@@ -432,3 +432,144 @@ func TestRecipeIsAValue(t *testing.T) {
 		`the document's record is isolated from caller mutation`)
 	require.Empty(t, fresh.Steps[0].Inputs)
 }
+
+func TestExtrudeCoalescesCollinearSides(t *testing.T) {
+	// A rectangle authored with a midpoint on its bottom edge: two collinear
+	// boundary segments coalesce into ONE side face carrying both roles
+	// (evaluator §3 canonicalization), so v1 counts match the analytic answer.
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	a := s.CreatePoint(0, 0)
+	s.Fix(a)
+	m := s.CreatePoint(50, 0)
+	b := s.CreatePoint(100, 0)
+	c := s.CreatePoint(100, 60)
+	d := s.CreatePoint(0, 60)
+	s.CreateLine(a, m)
+	s.CreateLine(m, b)
+	s.CreateLine(b, c)
+	s.CreateLine(c, d)
+	s.CreateLine(d, a)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+
+	doc := decad.New()
+	body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	require.NoError(t, err)
+	require.Len(t, body.Faces(), 6, `the split edge merges: four sides + two caps`)
+	requireManifold(t, body)
+	merged := 0
+	for _, f := range body.Faces() {
+		if len(f.Origins()) == 2 {
+			merged++
+		}
+	}
+	require.Equal(t, 1, merged, `the merged face carries both contributing roles`)
+}
+
+func TestWholeCircleCylinderHasTwoLoops(t *testing.T) {
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	center := s.CreatePoint(0, 0)
+	s.Fix(center)
+	s.CreateCircle(center, 7)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+
+	doc := decad.New()
+	body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(3), Dir: decad.Along})
+	require.NoError(t, err)
+	for _, f := range body.Faces() {
+		if _, ok := f.Surface().(decad.Cylinder); !ok {
+			continue
+		}
+		require.Len(t, f.Loops(), 2, `a closed cylindrical band has one boundary loop per cap`)
+	}
+}
+
+func TestArcEdgeAxisFollowsWalkSense(t *testing.T) {
+	// A hole circle is walked clockwise, so its cap edges are CCW about −z;
+	// the outer quarter-disk arc is walked CCW, so its edges are about +z.
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	rect := s.CreateRectangle(0, 0, 100, 60)
+	s.Fix(rect.A)
+	s.CreateCircle(s.CreatePoint(70, 30), 10)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	var prof *sketch.Profile
+	for _, p := range s.Profiles() {
+		if len(p.Holes) == 1 {
+			prof = p
+		}
+	}
+	doc := decad.New()
+	body, err := doc.Extrude(s, prof, decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
+	require.NoError(t, err)
+	circles := 0
+	for _, e := range body.Edges() {
+		c, ok := e.Curve().(decad.Circle3)
+		if !ok {
+			continue
+		}
+		circles++
+		require.InDelta(t, -1.0, c.Axis.Z, 1e-12, `a clockwise hole walk is CCW about −z`)
+	}
+	require.Equal(t, 2, circles)
+}
+
+func TestReflectedPlacementKeepsOutwardNormals(t *testing.T) {
+	// A mirrored body's plane normals must still point out of the material,
+	// and its centroid must map exactly.
+	s, p := plateSketch(t)
+	doc := decad.New()
+	body, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	require.NoError(t, err)
+
+	mirror, err := r3.NewFrame(r3.NewVec(0, 0, 0), r3.NewVec(1, 0, 0), r3.NewVec(0, 0, 1))
+	require.NoError(t, err)
+	refl, err := r3.Reflection(mirror)
+	require.NoError(t, err)
+	require.True(t, refl.IsReflection())
+
+	placed, err := body.Placed(refl)
+	require.NoError(t, err)
+	c, err := placed.Centroid()
+	require.NoError(t, err)
+	wantC := refl.Apply(r3.NewVec(50, 30, 5))
+	require.InDelta(t, wantC.X, c.Value.X, 1e-9)
+	require.InDelta(t, wantC.Y, c.Value.Y, 1e-9)
+	require.InDelta(t, wantC.Z, c.Value.Z, 1e-9)
+
+	// Outwardness, checked face by face: the plane's normal at a point on
+	// the face points away from the body's centroid.
+	for _, f := range placed.Faces() {
+		pl, ok := f.Surface().(decad.Plane)
+		if !ok {
+			continue
+		}
+		at := pl.Frame.Origin()
+		n, err := f.NormalAt(at)
+		require.NoError(t, err)
+		away := at.Sub(c.Value)
+		require.Positive(t, n.Value.Dot(away), `an outward normal points away from the centroid`)
+	}
+	requireManifold(t, placed)
+
+	vol, err := placed.Volume()
+	require.NoError(t, err)
+	require.True(t, vol.Value.Equal(units.CubicMillimeters(60000), 1e-9), `a reflection preserves volume`)
+}
+
+func TestExtrudeRejectsNonFiniteTaper(t *testing.T) {
+	s, p := plateSketch(t)
+	doc := decad.New()
+	_, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(5), Dir: decad.Along}, decad.WithTaper(units.Degrees(math.Inf(1))))
+	require.ErrorIs(t, err, decad.ErrNotFinite)
+	_, err = doc.Extrude(s, p, decad.Distance{D: units.Millimeters(5), Dir: decad.Along}, decad.WithTaper(units.Degrees(math.NaN())))
+	require.ErrorIs(t, err, decad.ErrNotFinite)
+	require.Empty(t, doc.Recipe().Steps)
+}

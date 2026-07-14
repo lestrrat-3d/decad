@@ -69,6 +69,9 @@ func (d *Document) Extrude(s *sketch.Sketch, p *sketch.Profile, e Extent, opts .
 	if taper.Kind() != units.Angle {
 		return nil, fmt.Errorf(`%w: a taper must be an angle, got %s`, ErrUnitKind, taper.Kind())
 	}
+	if _, err := taper.In(units.Radian); err != nil {
+		return nil, fmt.Errorf(`%w: the taper is not representable: %s`, ErrNotFinite, err)
+	}
 	if taper.Mag() != 0 {
 		// Recorded exactly, then rejected: staging is explicit
 		// (docs/evaluator-design.md §2/§5), never a silent untapered prism.
@@ -238,6 +241,11 @@ func (pp prismPayload) dir(du, dv, dz float64) r3.Vec {
 	return pp.xform.ApplyDir(world)
 }
 
+// reflected reports whether the accumulated placement flips handedness — a
+// reflected solid's face normals and arc senses invert with it, and every
+// orientation decision below corrects for it.
+func (pp prismPayload) reflected() bool { return pp.xform.IsReflection() }
+
 // evalPrism builds the analytic prism body from the payload: side faces per
 // boundary segment, two caps, shared edges and vertices, and Exact
 // measurements (docs/evaluator-design.md §5). The payload's segment kinds
@@ -327,10 +335,14 @@ func evalPrism(d *Document, ref StepRef, pp prismPayload) (*Body, error) {
 
 // capFrame is the plane frame of a cap at height z, under the placement;
 // flip swaps the in-plane axes so the frame's normal is the cap's OUTWARD
-// normal. The payload frame is orthonormal and the placement rigid, so the
-// transformed axes cannot be degenerate; NewFrame re-validates anyway and
-// the error propagates rather than being discarded.
+// normal, and a reflected placement swaps once more (a reflection flips the
+// cross product's handedness). The payload frame is orthonormal and the
+// placement rigid, so the transformed axes cannot be degenerate; NewFrame
+// re-validates anyway and the error propagates rather than being discarded.
 func capFrame(pp prismPayload, z float64, flip bool) (r3.Frame, error) {
+	if pp.reflected() {
+		flip = !flip
+	}
 	u, v := pp.dir(1, 0, 0), pp.dir(0, 1, 0)
 	if flip {
 		u, v = v, u
@@ -422,24 +434,70 @@ func circularWalk(cu, cv, r, th0, th1 float64) segmentWalk {
 	}
 }
 
+// sideWalk is one side face's walk after canonicalization: consecutive
+// collinear line walks coalesce into one (evaluator §3 — "adjacent coplanar
+// side faces merge"), and the merged face carries every constituent
+// segment's role.
+type sideWalk struct {
+	segmentWalk
+	segs []int // the recorded segment indices this walk covers
+}
+
+// coalesceWalks merges consecutive collinear line walks, wrap-around
+// included. Circular walks never merge; a loop that is entirely one straight
+// line is degenerate and left to the area gate.
+func coalesceWalks(walks []sideWalk) []sideWalk {
+	collinear := func(a, b sideWalk) bool {
+		if a.circular || b.circular {
+			return false
+		}
+		cross := a.tanOutU*b.tanInV - a.tanOutV*b.tanInU
+		dot := a.tanOutU*b.tanInU + a.tanOutV*b.tanInV
+		scale := math.Hypot(a.tanOutU, a.tanOutV) * math.Hypot(b.tanInU, b.tanInV)
+		return dot > 0 && math.Abs(cross) <= 1e-12*scale
+	}
+	merge := func(a, b sideWalk) sideWalk {
+		a.endU, a.endV = b.endU, b.endV
+		a.tanOutU, a.tanOutV = b.tanOutU, b.tanOutV
+		a.length += b.length
+		a.segs = append(a.segs, b.segs...)
+		return a
+	}
+	out := make([]sideWalk, 0, len(walks))
+	for _, w := range walks {
+		if len(out) > 0 && collinear(out[len(out)-1], w) {
+			out[len(out)-1] = merge(out[len(out)-1], w)
+			continue
+		}
+		out = append(out, w)
+	}
+	// Wrap-around: the loop's last walk may continue into its first.
+	for len(out) > 1 && collinear(out[len(out)-1], out[0]) {
+		out[0] = merge(out[len(out)-1], out[0])
+		out = out[:len(out)-1]
+	}
+	return out
+}
+
 // buildLoopSides builds one loop's side faces with shared vertices and
 // edges, returning the faces, the bottom and top cap coedges in walk order,
 // and the loop's perimeter length.
 func buildLoopSides(body *Body, ref StepRef, pp prismPayload, li int, loop LoopRecord) ([]*Face, []coedge, []coedge, float64, error) {
-	n := len(loop.Segments)
-	if n == 0 {
+	if len(loop.Segments) == 0 {
 		return nil, nil, nil, 0, fmt.Errorf(`%w: a recorded loop holds no segments`, ErrDegenerate)
 	}
-	walks := make([]segmentWalk, n)
+	raw := make([]sideWalk, len(loop.Segments))
 	total := 0.0
 	for i, seg := range loop.Segments {
 		w, err := walkOf(seg)
 		if err != nil {
 			return nil, nil, nil, 0, err
 		}
-		walks[i] = w
+		raw[i] = sideWalk{segmentWalk: w, segs: []int{i}}
 		total += w.length
 	}
+	walks := coalesceWalks(raw)
+	n := len(walks)
 
 	// Junction vertices, shared between neighbors: junction i sits at walk
 	// i's start (== walk i−1's end). A single whole closed curve has none.
@@ -492,6 +550,19 @@ func buildLoopSides(body *Body, ref StepRef, pp prismPayload, li int, loop LoopR
 		faceReversed := false
 		if w.circular {
 			axis := pp.dir(0, 0, 1)
+			// An Arc3/Circle3 is CCW from start to end about its axis. A
+			// walk that runs the circle clockwise (th1 < th0), and a
+			// reflected placement (which flips handedness), each invert
+			// that sense, so the EDGE axis carries the corrected sign; the
+			// cylinder surface keeps the plain ruling direction.
+			edgeSign := 1.0
+			if w.th1 < w.th0 {
+				edgeSign = -1
+			}
+			if pp.reflected() {
+				edgeSign = -edgeSign
+			}
+			edgeAxis := axis.Scale(edgeSign)
 			center0 := pp.point(w.cU, w.cV, pp.z0)
 			center1 := pp.point(w.cU, w.cV, pp.z1)
 			radius := units.Millimeters(w.radius)
@@ -503,9 +574,9 @@ func buildLoopSides(body *Body, ref StepRef, pp prismPayload, li int, loop LoopR
 				seam1 := &Vertex{position: pp.point(w.startU, w.startV, pp.z1), bound: units.Millimeters(0)}
 				bStart, bEnd = seam0, seam0
 				tStart, tEnd = seam1, seam1
-				curve0, curve1 = Circle3{Center: center0, Axis: axis, Radius: radius}, Circle3{Center: center1, Axis: axis, Radius: radius}
+				curve0, curve1 = Circle3{Center: center0, Axis: edgeAxis, Radius: radius}, Circle3{Center: center1, Axis: edgeAxis, Radius: radius}
 			} else {
-				curve0, curve1 = Arc3{Center: center0, Axis: axis, Radius: radius}, Arc3{Center: center1, Axis: axis, Radius: radius}
+				curve0, curve1 = Arc3{Center: center0, Axis: edgeAxis, Radius: radius}, Arc3{Center: center1, Axis: edgeAxis, Radius: radius}
 			}
 			bottomEdge = &Edge{curve: curve0, start: bStart, end: bEnd, convex: !holeLoop, length: w.length}
 			topEdge = &Edge{curve: curve1, start: tStart, end: tEnd, convex: !holeLoop, length: w.length}
@@ -517,30 +588,46 @@ func buildLoopSides(body *Body, ref StepRef, pp prismPayload, li int, loop LoopR
 			bottomEdge = &Edge{curve: Line3{}, start: bStart, end: bEnd, convex: !holeLoop, length: w.length}
 			topEdge = &Edge{curve: Line3{}, start: tStart, end: tEnd, convex: !holeLoop, length: w.length}
 			mid := pp.point((w.startU+w.endU)/2, (w.startV+w.endV)/2, pp.z0)
-			f, err := r3.NewFrame(mid, pp.dir(w.tanInU, w.tanInV, 0), pp.dir(0, 0, 1))
+			// tangent × N is the outward normal for a CCW outer walk (and a
+			// CW hole walk); a reflection flips the cross product, so the
+			// tangent is negated to keep the frame's normal outward.
+			tu, tv := w.tanInU, w.tanInV
+			if pp.reflected() {
+				tu, tv = -tu, -tv
+			}
+			f, err := r3.NewFrame(mid, pp.dir(tu, tv, 0), pp.dir(0, 0, 1))
 			if err != nil {
 				return nil, nil, nil, 0, fmt.Errorf(`%w: a boundary segment has no direction`, ErrDegenerate)
 			}
 			surf = Plane{Frame: f}
 		}
 
+		origins := make([]FeatureRef, len(w.segs))
+		for oi, si := range w.segs {
+			origins[oi] = FeatureRef{Step: ref, Role: fmt.Sprintf("side(%d,%d)", li, si)}
+		}
 		face := &Face{
 			surface:  surf,
-			origins:  []FeatureRef{{Step: ref, Role: fmt.Sprintf("side(%d,%d)", li, i)}},
+			origins:  origins,
 			body:     body,
 			area:     w.length * h,
 			reversed: faceReversed,
 		}
-		var ces []coedge
-		ces = append(ces, coedge{edge: bottomEdge, forward: true})
-		if !singleClosed {
-			ces = append(ces, coedge{edge: vertical[(i+1)%n], forward: true})
+		if singleClosed {
+			// A closed cylindrical band has TWO boundary loops — one circle
+			// per cap — not one loop holding both.
+			face.loops = []*Loop{
+				{coedges: []coedge{{edge: bottomEdge, forward: true}}, outer: true},
+				{coedges: []coedge{{edge: topEdge, forward: false}}, outer: true},
+			}
+		} else {
+			face.loops = []*Loop{{coedges: []coedge{
+				{edge: bottomEdge, forward: true},
+				{edge: vertical[(i+1)%n], forward: true},
+				{edge: topEdge, forward: false},
+				{edge: vertical[i], forward: false},
+			}, outer: true}}
 		}
-		ces = append(ces, coedge{edge: topEdge, forward: false})
-		if !singleClosed {
-			ces = append(ces, coedge{edge: vertical[i], forward: false})
-		}
-		face.loops = []*Loop{{coedges: ces, outer: true}}
 
 		bottomEdge.faces = append(bottomEdge.faces, face)
 		topEdge.faces = append(topEdge.faces, face)
