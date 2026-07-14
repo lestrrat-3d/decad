@@ -131,8 +131,6 @@ func TestStepOptsCodec(t *testing.T) {
 
 	var bad decad.Step
 	require.Error(t, json.Unmarshal([]byte(`{"op":"extrude","opts":{"kind":"warp"}}`), &bad))
-	require.Error(t, json.Unmarshal([]byte(`{"op":"fillet","selectors":[{"kind":"edges"}]}`), &bad),
-		`selector tags are rejected until the query types land`)
 	require.Error(t, json.Unmarshal([]byte(`{"extent":{"kind":"through_all","dir":"along"}}`), &bad),
 		`a step with no op is malformed, never silently an extrude`)
 }

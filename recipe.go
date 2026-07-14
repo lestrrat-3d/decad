@@ -46,9 +46,9 @@ func (StepRef) bodyRef() {}
 type BodyRef interface{ bodyRef() }
 
 // Selector is what a Step may carry: an unresolved edge or face query. The
-// query types seal in with the selector vocabulary
-// (docs/evaluator-design.md §7/§11); the root exists from the start so a
-// Step never holds an `any`.
+// root is sealed so a Step never holds an `any`; the variants are *EdgeQuery
+// and *FaceQuery (selector.go), which is what makes every selector a feature
+// accepts a value a Recipe can record (core §9/§6.2).
 type Selector interface{ selector() }
 
 // StepOpts is the sealed per-op options record: one struct per OpKind that
@@ -279,11 +279,16 @@ func (s Step) MarshalJSON() ([]byte, error) {
 		p := s.Placement
 		out.Placement = &p
 	}
-	// The selector query types land with the selector vocabulary
-	// (docs/evaluator-design.md §7/§11); until then no Selector value is
-	// encodable, and the codec says so rather than dropping one.
 	if len(s.Selectors) > 0 {
-		return nil, fmt.Errorf(`decad: unencodable selector type %T`, s.Selectors[0])
+		sels := make([]json.RawMessage, 0, len(s.Selectors))
+		for _, sel := range s.Selectors {
+			raw, err := marshalSelector(sel)
+			if err != nil {
+				return nil, err
+			}
+			sels = append(sels, raw)
+		}
+		out.Selectors = sels
 	}
 	if s.Opts != nil {
 		raw, err := marshalStepOpts(s.Opts)
@@ -330,13 +335,15 @@ func (s *Step) UnmarshalJSON(data []byte) error {
 		out.Placement = *raw.Placement
 	}
 	if len(raw.Selectors) > 0 {
-		var probe struct {
-			Kind string `json:"kind"`
+		sels := make([]Selector, 0, len(raw.Selectors))
+		for _, b := range raw.Selectors {
+			sel, err := unmarshalSelector(b)
+			if err != nil {
+				return err
+			}
+			sels = append(sels, sel)
 		}
-		if err := json.Unmarshal(raw.Selectors[0], &probe); err != nil {
-			return fmt.Errorf(`decad: failed to decode selector tag: %w`, err)
-		}
-		return fmt.Errorf(`decad: unknown selector kind %q`, probe.Kind)
+		out.Selectors = sels
 	}
 	if raw.Opts != nil {
 		o, err := unmarshalStepOpts(raw.Opts)
@@ -368,7 +375,10 @@ func cloneStep(s Step) Step {
 	out := s
 	out.Inputs = slices.Clone(s.Inputs)
 	out.Values = slices.Clone(s.Values)
-	out.Selectors = slices.Clone(s.Selectors)
+	// A selector variant is a pointer (the queries seal in with pointer
+	// receivers), so cloning the slice alone would alias the caller's query;
+	// each query is deep-copied instead.
+	out.Selectors = cloneSelectors(s.Selectors)
 	out.Profile = cloneProfileRecord(s.Profile)
 	// An extent normalizes to pure values recursively (nested TwoSided sides
 	// included), so a cloned step can never share a caller-visible pointer
