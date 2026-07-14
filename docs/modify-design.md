@@ -124,7 +124,8 @@ fact of every result, and Table B (§9) carries it as a column.
 The receiver is admitted on **what its payload is**, never on the op history
 that produced it. `Body.Placed` re-evaluates a payload under a composed motion
 and yields the same class (evaluator §8), so a placed body reads exactly as
-the body it was placed from.
+the body it was placed from. The receiver must also be **live**: a modify op on
+a retired body is S17, by core §6's retire rule.
 
 | R | Receiver payload | `Fillet` / `Chamfer` | `Shell` |
 |---|---|---|---|
@@ -167,6 +168,13 @@ sentinel follows from it and from nothing else.
 Selection happens against the live receiver, before the build, and every gate
 in this table runs before a single face is made.
 
+S13–S17 are the gates a call passes before any geometric one is asked: a live
+receiver (S17), a magnitude of the right `Kind`, finite and non-negative (S15)
+and non-zero (S13 for a radius or a distance, S14 for a thickness), and a
+selector that matches (S16). They apply to every op and to every row of Table B
+(§9), whose Refusals column therefore names only what a row's own geometry
+refuses.
+
 ## 5. Where the 2D work lives, and what proves it
 
 The section rewrite computes tangent points, offset curves and their crossings —
@@ -203,7 +211,8 @@ line and arc segments:
    kernel's 2D reduction and `survey2d.go`'s boundary walks use. A crossing is
    **S7**.
 2. **No self-consuming trim.** A segment trimmed past its own other end is
-   **S7**: the pieces the rewrite produced must be resolved against each other
+   **S6** — the corners at its two ends have claimed the whole walk between them
+   (§6): the pieces the rewrite produced must be resolved against each other
    before they bound anything.
 3. **Orientation preserved.** A loop whose signed area has changed sign has
    turned itself inside out — the modification consumed the region — and is
@@ -231,6 +240,9 @@ is ever made, and `Verify` reads the result exactly as it reads an extrude's.
 func (b *Body) Fillet(sel EdgeSelector, r units.Value, opts ...FilletOption) (*Body, error)
 ```
 
+`r` is a magnitude, gated at the call like every other (S15), and a zero `r` is
+S13.
+
 The rolling-ball blend of a lateral edge is a **cylinder**: the ball of radius
 `r` rolling in the corner sweeps its center along a straight line parallel to
 the sweep direction, and the surface it envelops is the cylinder of radius `r`
@@ -255,7 +267,8 @@ intersection of the two offset carriers nearest the corner; the tangent points
 are its feet on the two carriers. Line×line, line×circle and circle×circle are
 closed form with at most two roots, and the root is chosen by the corner it
 belongs to, not by proximity to a sample. No intersection means no blend of that
-radius exists (S5).
+radius exists (S5), and a corner whose two carriers meet **smoothly** or in a
+**cusp** is no corner at all — S4, decided before any of this is computed.
 
 `Edge.IsConvex` is therefore not an input to the construction at all; it is what
 the caller *selected* with (`Convex()` / `Concave()`, core §9). A convex corner
@@ -358,9 +371,9 @@ that has not shipped, so it is not an option a caller can pass, and nothing is
 silently narrowed (core §8.1: an option that cannot be recorded does not ship).
 
 The rewrite trims both walks back by `d` and joins the feet with a `LineSeg`.
-The gates are the fillet's, unchanged in every respect: S1 for a cap edge, S4
-for a smooth or cusped corner, S6 for a setback that reaches or passes the far
-end of a walk, S7/S8/S9 from the §5 audit. A corner with a circular neighbour
+The gates are the fillet's: S1 for a cap edge, S4 for a smooth or cusped corner,
+S6 for a setback that reaches or passes the far end of a walk, S7/S8/S9 from the
+§5 audit, S13 for a zero `d` and S15 for a magnitude that is not a valid length. A corner with a circular neighbour
 builds: the chord from a point on a line to a point on an arc, or from arc to
 arc, is still a `LineSeg`, and the bevel face is still a `Plane` — a chamfer
 against a cylindrical wall meets it in a straight ruling, because both are
@@ -393,7 +406,9 @@ original solid becomes the cavity) — set by `WithShellSense`, recorded in
 `ShellOpts`, and defaulting to `Inward`, which is what "shell this box" means
 everywhere it is said. `ShellOpts` is the one `StepOpts` variant this increment
 fills, and its `Sense` encodes as a named text token, exactly as `Direction`
-does.
+does. The thickness passes the magnitude gates before either question below is
+asked: a wrong `Kind`, a non-finite or a negative one is S15, and a zero one is
+S14.
 
 **The section offset is exact, and it is closed in the recorded vocabulary.**
 Write `P` for the section. The inward offset (the erosion) `P ⊖ t` is bounded by:
@@ -453,12 +468,17 @@ inward, `P ⊕ t` outward.
 
 | B | Op | Removed | Sense | Section | Payload | Lumps | Faces (roles) | Refusals |
 |---|---|---|---|---|---|---|---|---|
-| **B1** | `Fillet` / `Chamfer` | — | — | any (`k ≥ 0`) | `prismPayload` over the **rewritten** section, same frame, same `[z0, z1]` | **1** | side walls `side(i,j)` over the rewritten record, two caps `capStart` / `capEnd`. The blend cylinder / bevel plane **is** one of those walls, and carries a **second** role `fillet(i,j)` / `chamfer(i,j)` naming the same `(loop, segment)` of the rewritten record | S1, S4, S5, S6, S7, S8, S9 |
+| **B1** | `Fillet` / `Chamfer` | — | — | any (`k ≥ 0`) | `prismPayload` over the **rewritten** section, same frame, same `[z0, z1]` | **1** | side walls `side(i,j)` over the rewritten record, two caps `capStart` / `capEnd`. The blend cylinder / bevel plane **is** one of those walls, and carries a **second** role `fillet(i,j)` / `chamfer(i,j)` naming the same `(loop, segment)` of the rewritten record | S1, S4, S6, S7, S8, S9, and S5 **for a fillet only** — S5 is a condition on the two carriers' `r`-offsets, which only the blend computes; a chamfer's chord exists between any two distinct feet (§7) |
 | **B2** | `Shell` | both caps | `Inward` | hole-free | a **tube**: `prismPayload` whose section is `{Outer: P, Holes: [Q]}`, on `[z0, z1]` | **1** | outer walls `side(0,j)`, cavity walls `side(1,j)`, and the two **rim annuli** — the caps of that prism — `capStart` / `capEnd` | S10, S11 |
 | **B3** | `Shell` | both caps | `Outward` | hole-free | a **tube**: `prismPayload` whose section is `{Outer: Q, Holes: [P]}`, on `[z0, z1]` — no cap is kept, so no material is added along the sweep | **1** | as B2 | S11 |
 | **B4** | `Shell` | both caps | either | holed (`k ≥ 1`) | — | **1 + k** — a band around the outer loop, plus one band lining each hole, pairwise disjoint | — | **S12** |
 | **B5** | `Shell` | one cap | `Inward` | any (`k ≥ 0`) | a **cup**: `cupPayload` — the outer prism over `P` on `[z0, z1]` and the cavity prism over `Q = P ⊖ t` on `[z0 + t, z1]`. The kept cap does not move; the floor is `t` of the original material | **1** — every wall band hangs off the floor slab | outer walls `side(i,j)`, the kept cap `capStart`, the **rims** `rim(i)` — the removed cap's plane trimmed to the band between loop `i` of `P` and loop `i` of `Q`, one face per loop (`1 + k` of them) — cavity walls `shellSide(i,j)`, cavity cap `shellCap` | S10, S11 |
 | **B6** | `Shell` | one cap | `Outward` | any (`k ≥ 0`) | a **cup**: `cupPayload` — the outer prism over `Q = P ⊕ t` on `[z0 − t, z1]` and the cavity prism over `P` on `[z0, z1]`. The original solid *is* the cavity; the floor is `t` of new material below the kept cap | **1** | as B5 | S11 |
+
+The Refusals column names what a row's own geometry refuses. The pre-gates of §4
+— S13 / S14 (a zero magnitude), S15 (an invalid one), S16 (a selector that
+matches nothing) and S17 (a retired receiver) — run before every row and are not
+repeated in it.
 
 Every role above indexes the record of the payload **the result holds** — never
 the receiver's (§11). B2/B3's tube is a `prismPayload`, which is why Table R
