@@ -589,3 +589,15 @@ func TestRecordedExtentNeverAliasesCallerPointers(t *testing.T) {
 	require.True(t, ok, `the recorded side is a value, not the caller's pointer`)
 	require.True(t, one.D.Equal(units.Millimeters(7), 1e-12), `the recorded magnitude is the one given at the call`)
 }
+
+func TestNilExtentPointersAreBranchable(t *testing.T) {
+	// A typed nil extent or side pointer follows the same branchable
+	// contract as an untyped nil: errors.Is(err, ErrDegenerate).
+	s, p := plateSketch(t)
+	doc := decad.New()
+	_, err := doc.Extrude(s, p, (*decad.Distance)(nil))
+	require.ErrorIs(t, err, decad.ErrDegenerate)
+	_, err = doc.Extrude(s, p, decad.TwoSided{One: (*decad.DistanceSide)(nil), Two: decad.DistanceSide{D: units.Millimeters(1)}})
+	require.ErrorIs(t, err, decad.ErrDegenerate)
+	require.Empty(t, doc.Recipe().Steps)
+}

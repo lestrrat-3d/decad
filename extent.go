@@ -143,7 +143,9 @@ const (
 )
 
 // errNilExtent rejects a nil variant pointer: it names no extent to record.
-var errNilExtent = fmt.Errorf(`decad: nil extent`)
+// It wraps ErrDegenerate so a typed nil pointer is branchable exactly like an
+// untyped nil extent.
+var errNilExtent = fmt.Errorf(`%w: nil extent`, ErrDegenerate)
 
 // normalizeExtent returns the value form of e, RECURSIVELY: the variants seal
 // with value receivers, so a *Distance satisfies Extent as readily as a

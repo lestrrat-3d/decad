@@ -2,7 +2,6 @@ package decad
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 
 	"github.com/lestrrat-3d/r3"
@@ -375,7 +374,9 @@ func unmarshalSegment(data []byte) (CurveSegment, error) {
 }
 
 // errNilSegment rejects a nil variant pointer: it names no curve to record.
-var errNilSegment = errors.New(`decad: nil curve segment`)
+// It wraps ErrDegenerate so the failure is branchable wherever it surfaces —
+// the codec, the integrals, or a feature call.
+var errNilSegment = fmt.Errorf(`%w: nil curve segment`, ErrDegenerate)
 
 // normalizeSegment returns the value form of s. The variants implement
 // CurveSegment with value receivers, so a *LineSeg satisfies the interface as
