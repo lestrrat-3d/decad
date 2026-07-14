@@ -65,8 +65,9 @@ nested wholly inside the other has exactly the same signature. Disjointness is
 `g > 0` **and nesting excluded**. Because the boundaries provenly do not meet,
 each connected shell of one body lies wholly inside or wholly outside the
 other, so one exact membership test per shell decides it: a witness point on
-the shell (every shipped face can produce one — a vertex, a seam point, a
-sphere's pole along its axis), cast along a ray, crossings counted closed-form
+the shell (every shipped face can produce one — a vertex, a seam point, or
+for a loop-less sphere its center plus its radius along a fixed unit
+direction, all read off stored data), cast along a ray, crossings counted closed-form
 against every face of the other body, trim membership included. A cast is
 admissible only when every crossing is certified transversal and interior to
 its face; a cast that grazes an edge, a vertex or a tangency retries the next
@@ -288,12 +289,15 @@ stop-built extrude case, a body extruded to a stop on another body sharing
 that plane cap against cap; `Sphere` × `Plane` at the foot point; `Sphere` ×
 `Sphere` on the center line; `Plane` × `Cylinder` and `Plane` × `Cone` along
 the tangent ruling; parallel external `Cylinder` × `Cylinder` along the
-common ruling. Each certifies its whole contact set — a point or a ruling
-segment, in closed form — so the opposition test quantifies over all of it,
-not over samples. Anything else at distance zero — a curved-on-curved
-osculation, a contact through an edge or a vertex, a contact set the kernel
-cannot describe in closed form — is undecided: no row, `Suspect`
-(verification §6). The blessed answer is `Gap` `Exact` zero, and it passes
+common ruling. Each certifies its whole contact set in closed form — a
+point, a ruling segment, or for the coplanar cap-on-cap case a 2D REGION,
+the positive-area overlap of the two trims — so the opposition test
+quantifies over all of it, not over samples. The plane pair certifies only
+when the trim overlap has positive area; trims meeting along an edge or at
+a vertex alone are the undecided case below. Anything else at distance
+zero — a curved-on-curved osculation, a contact through an edge or a
+vertex, a contact set the kernel cannot describe in closed form — is
+undecided: no row, `Suspect` (verification §6). The blessed answer is `Gap` `Exact` zero, and it passes
 the near-zero gate on its own terms (§1).
 
 ## 7. Feeding the report
