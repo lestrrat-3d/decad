@@ -110,9 +110,14 @@ vertex in the shipped topology (`Body.Vertices()` returns edge endpoints
 only, and `Face.NormalAt` rejects the apex). The kernel therefore
 synthesizes a vertex-like candidate at every trimmed cone face's apex, read
 off the stored surface data, and runs it through the two vertex tiers like
-any topological vertex. A face with no edges at all — a full sphere, a full
-torus — contributes no curve tier and, being smooth everywhere, no
-synthesized point either; the enumeration does not require them.
+any topological vertex. A face with no edges at all — a full sphere, a STANDARD full
+torus (`Minor < Major`) — contributes no curve tier and, being smooth
+everywhere, no synthesized point either. A spindle-branch torus patch
+(`Minor ≥ Major`, §4's `BB` downgrade) can reach the axis, where — as at a
+cone apex — the surface is singular with no normal and no latitude edge:
+its axis-collapse points are synthesized as vertex-like candidates the same
+way, and the `BB` meridian-domain search includes its domain endpoints, so
+a closest point there is never missed.
 
 **Admission is exact, and doubt only ever costs figures.** A tier's candidates
 are computed on the unbounded carriers, and each is admitted only when both
