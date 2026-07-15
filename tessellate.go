@@ -263,6 +263,12 @@ func chordLoop(loop LoopRecord, chord, height float64, wallFace func(w sideWalk)
 // (the kept cap over O, the pocket floor over C, and the rim annulus {O, C})
 // triangulate through the shipped cap triangulator.
 func tessellateCup(b *Body, cp cupPayload, chord float64) (*Mesh, error) {
+	// A holed cup's tessellation walks only loop 0, so a post's walls would be
+	// absent and the mesh would read watertight without them — a hole-free
+	// mesh for a holed body. Staged rather than shipped wrong (modify §9, D4).
+	if cp.holed() {
+		return nil, fmt.Errorf(`%w: a holed cup's tessellation is not built yet`, ErrUnsupported)
+	}
 	byRole := map[string]*Face{}
 	for _, f := range b.Faces() {
 		for _, o := range f.Origins() {

@@ -228,11 +228,11 @@ func (b *Body) Shell(sel FaceSelector, t units.Value, opts ...ShellOption) (*Bod
 		}
 		body, err = evalTube(d, ref, pp, offset, s)
 	default:
-		if holed {
-			// B5/B6 with holes build in the design, but this evaluator's cup
-			// builder is hole-free; staged, never a wrong body.
-			return nil, fmt.Errorf(`%w: a one-cap shell of a holed section is not yet supported by this evaluator`, ErrUnsupported)
-		}
+		// A one-cap shell is a cup (B5/B6), for any k ≥ 0: the offset section's
+		// loops are proven simple and correctly nested by the §5 audit above, and
+		// evalCup wraps a wall around each post, all hanging off the one floor slab
+		// (one lump). The holed BOTH-caps case keeps no floor and is 1 + k lumps
+		// (B4, S12), refused above.
 		body, err = evalCup(d, ref, cupPayloadFor(pp, offset, s, tmm, removedEnd))
 	}
 	if err != nil {
