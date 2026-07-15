@@ -589,19 +589,15 @@ func cupWalks(loop LoopRecord) ([]sideWalk, error) {
 }
 
 // cupUndercuts surveys a cup's faces against the pull (docs/modify-design.md
-// D2): the outer walls over region O (role side(0,j)), the cavity walls over
-// the reversed region C (role shellSide(0,j)) — each read by the same exact
-// normal ranges the prism uses — and the three planar faces. The cavity being
-// a pocket, the pocket floor (shellCap) and the rim face the open end and the
-// kept cap (capStart) faces away from it, so their outward normals are ±N by
-// which side of the outer floor the open end lies on.
+// D2): the outer walls over EVERY loop of region O (role side(i,j)), the cavity
+// walls over every loop of the reversed region C (role shellSide(i,j)) — each
+// read by the same exact normal ranges the prism uses, so a post wall is
+// surveyed like any other — and the planar faces (the kept cap, the pocket
+// floor, one rim per loop). The cavity being a pocket, the pocket floor
+// (shellCap) and the rims face the open end and the kept cap (capStart) faces
+// away from it, so their outward normals are ±N by which side of the outer
+// floor the open end lies on.
 func cupUndercuts(b *Body, cp cupPayload, pull r3.Vec) undercutOutcome {
-	// A holed cup's post walls (side(i,j)/shellSide(i,j), i≥1) are not walked
-	// here, so an undercut on a post would be silently dropped. Undecided
-	// rather than a false all-clear (modify §9, D2) — Verify reads Suspect.
-	if cp.holed() {
-		return undercutOutcome{}
-	}
 	p, ok := pull.Normalize()
 	if !ok {
 		return undercutOutcome{}
@@ -630,31 +626,44 @@ func cupUndercuts(b *Body, cp cupPayload, pull r3.Vec) undercutOutcome {
 		}
 		return true
 	}
-	if !survey(cp.outer.Outer, "side(0,%d)") {
-		return undercutOutcome{}
+	oLoops := append([]LoopRecord{cp.outer.Outer}, cp.outer.Holes...)
+	cLoops := append([]LoopRecord{cp.cavity.Outer}, cp.cavity.Holes...)
+	for i, loop := range oLoops {
+		if !survey(loop, fmt.Sprintf("side(%d,%%d)", i)) {
+			return undercutOutcome{}
+		}
 	}
-	crev, err := reverseLoopRecord(cp.cavity.Outer)
-	if err != nil {
-		return undercutOutcome{}
-	}
-	if !survey(crev, "shellSide(0,%d)") {
-		return undercutOutcome{}
+	for i, loop := range cLoops {
+		crev, err := reverseLoopRecord(loop)
+		if err != nil {
+			return undercutOutcome{}
+		}
+		if !survey(crev, fmt.Sprintf("shellSide(%d,%%d)", i)) {
+			return undercutOutcome{}
+		}
 	}
 
-	// The three caps. sOpen is +1 when the open end lies above the outer floor:
-	// the kept cap then faces −N and the pocket floor and rim face +N.
+	// The planar faces. sOpen is +1 when the open end lies above the outer
+	// floor: the kept cap then faces −N and the pocket floor and every rim
+	// face +N. All rims share the open-end plane, so each has the same normal.
 	sOpen := -1.0
 	if cp.zOpen > cp.zOuter {
 		sOpen = 1
 	}
-	for _, c := range []struct {
+	caps := []struct {
 		role string
 		v    float64
 	}{
 		{role: roleCapStart, v: -sOpen * dn},
 		{role: "shellCap", v: sOpen * dn},
-		{role: "rim(0)", v: sOpen * dn},
-	} {
+	}
+	for i := range oLoops {
+		caps = append(caps, struct {
+			role string
+			v    float64
+		}{role: fmt.Sprintf("rim(%d)", i), v: sOpen * dn})
+	}
+	for _, c := range caps {
 		f := roles[c.role]
 		if f == nil {
 			return undercutOutcome{}
@@ -667,22 +676,27 @@ func cupUndercuts(b *Body, cp cupPayload, pull r3.Vec) undercutOutcome {
 }
 
 // cupMinRadius is the tightest concave radius over a cup's faces (D3): the same
-// walk the prism runs, over the outer region O and the cavity region C read as
-// a hole (its walls curve away from the material, like any hole wall). The
-// sharp concave edge where a wall meets the floor carries no radius — the
-// survey reads faces' principal radii, not edges.
+// walk the prism runs, over every loop of the outer region O and every loop of
+// the cavity region C read reversed. A wall that curves away from the material
+// — the cavity's reversed outer (a pocket wall), every hole of O (a tunnel) —
+// contributes its concave radius; a wall that curves toward it — the outer
+// region's own convex rounds, a post's outer cylinder (the reversed cavity
+// hole) — is not a concave feature and rightly does not appear. Each loop is
+// placed with the same walk sense evalCup builds it in, so prismMinRadius reads
+// concavity off the walk direction, exactly as on a prism. The sharp concave
+// edge where a wall meets the floor carries no radius — the survey reads faces'
+// principal radii, not edges.
 func cupMinRadius(cp cupPayload) (radiusOutcome, bool) {
-	// A holed cup's post walls carry concave radii this loop-0-only profile
-	// misses, so the reading would be too large (or nil). Undecided rather
-	// than a wrong radius (modify §9, D3) — Verify reads Suspect.
-	if cp.holed() {
-		return radiusOutcome{}, false
+	profile := ProfileRecord{Outer: cp.outer.Outer}
+	profile.Holes = append(profile.Holes, cp.outer.Holes...)
+	cLoops := append([]LoopRecord{cp.cavity.Outer}, cp.cavity.Holes...)
+	for _, loop := range cLoops {
+		crev, err := reverseLoopRecord(loop)
+		if err != nil {
+			return radiusOutcome{}, false
+		}
+		profile.Holes = append(profile.Holes, crev)
 	}
-	crev, err := reverseLoopRecord(cp.cavity.Outer)
-	if err != nil {
-		return radiusOutcome{}, false
-	}
-	profile := ProfileRecord{Outer: cp.outer.Outer, Holes: []LoopRecord{crev}}
 	return prismMinRadius(prismPayload{profile: profile})
 }
 
