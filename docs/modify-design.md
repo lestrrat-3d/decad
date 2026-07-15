@@ -163,7 +163,7 @@ sentinel follows from it and from nothing else.
 | **S8** | a rewritten loop that has turned **inside out** — its signed area has changed sign | no — the modification consumed the region | `ErrDegenerate` (§5) |
 | **S9** | a rewrite whose loops do not cross but whose **nesting the audit cannot decide** (§5) | this evaluator cannot tell | `ErrUnsupported` — it declines rather than guess |
 | **S10** | an **inward** thickness that leaves **no cavity** — at or beyond the section's **inradius**, or, where a cap is **kept** (B5), at or beyond the sweep's **height**, which that cap's floor consumes | no — the cavity is empty; the wall has eaten the part, across the section or along the sweep. The two limits are independent, and an **outward** thickness has neither: a dilation of a non-empty region is never empty, and an outward floor *adds* height below the kept cap instead of eating it. A **both-caps** shell keeps no cap, so it grows no floor and its cavity runs the whole sweep: only the inradius limit can fire on B2/B4 | `ErrDegenerate` (§8) |
-| **S11** | a shell whose **exact offset changes the section's feature set** — a loop merged, split or dropped (a slot or a gap narrower than `2t` inward; a hole narrower than `2t` outward), or a **segment** dropped (a circular segment with the material inside it and `R ≤ t` inward: its offset radius `R − t` reaches zero or goes negative, the arc vanishes and its neighbours miter) | yes | `ErrUnsupported` — this evaluator's offset is per-feature and topology-preserving; resolving either needs a trimmed-offset kernel it does not have (§8) |
+| **S11** | a shell whose **exact offset changes the section's feature set**, `ErrUnsupported` in either of two shapes at two points in the order. **S11a — a feature the offset drops**, caught **as the offset is built**: a **segment** dropped (a circular segment with the material inside it and `R ≤ t` inward: its offset radius `R − t` reaches zero or goes negative, the arc vanishes and its neighbours miter), or a **loop** dropped (a hole narrower than `2t` outward, whose erosion is empty). It is **antecedent to the §5 audit** — a dropped feature leaves no constructed section to audit — so it precedes S8. **S11b — a loop the offset merges or splits**, caught **by the §5 audit's crossing test** (§5 test 3, in S7's slot between S8 and S9): a slot or gap narrower than `2t` inward, whose two offset walls cross. A merge is the expected outcome of an offset, so the shell owns the crossing event and S7 never fires on an offset (§8). | yes | `ErrUnsupported` — this evaluator's offset is per-feature and topology-preserving; resolving either needs a trimmed-offset kernel it does not have (§8) |
 | **S12** | a **both-caps** shell of a **holed** section — the wall is one band around the outer loop plus one band lining each hole: `1 + k` lumps (B4) | yes | `ErrUnsupported` — a `prismPayload` holds one region, and this evaluator has no multi-lump payload (§9, §14) |
 | **S13** | a **zero radius** or a **zero distance** — a body identical to the one the caller already holds | it exists, and it is the receiver: a question with one answer and no content, exactly as `Verify`'s zero tool is (verification §2) | `ErrDegenerate` |
 | **S14** | a **zero thickness** shell | no — a face is removed and the wall is `P \ P`: the empty region, no solid at all | `ErrDegenerate` |
@@ -185,17 +185,27 @@ the same for every op:
 |---|---|---|
 | **1 — the pre-gates** | is this a call at all? Decided before any geometry | S17 (a live receiver), S15 (a magnitude of the right `Kind`, finite and non-negative), S13 / S14 (a non-zero one), S16 (a selector that matches) |
 | **2 — the receiver and its targets** | is this body one a modify op takes, and is what the query named a thing it can act on? | S3 (Table R's payload class), then S1 (every selected edge is lateral) / S2 (every removed face is a cap) |
-| **3 — the construction's own gates** | does the rewrite the caller asked for exist, feature by feature? | fillet / chamfer: S4 (there is a corner), then S5 (a blend of that radius exists — fillet only). Shell: S10 (the cavity is non-empty — inward only: the eroded section, and the height a kept cap's floor leaves), then S11 (no feature the offset would drop) |
-| **4 — the §5 audit of the rewritten profile** | do the pieces bound a simple, correctly nested region? | S8 (orientation — the existence question, so a consumed region never reads `ErrUnsupported`), then S6 (no walk consumed by its own corners — an offset mints none, §8), then S7 (no crossing; for a **shell** a crossing is S11, §8), then S9 (nesting, which is decidable only once no two loops cross) |
+| **3 — the construction's own gates** | does the rewrite the caller asked for exist, feature by feature? | fillet / chamfer: S4 (there is a corner), then S5 (a blend of that radius exists — fillet only). Shell: S10 (the cavity is non-empty — inward only: the eroded section, and the height a kept cap's floor leaves), then S11a (no feature the offset drops as it is built) |
+| **4 — the §5 audit of the rewritten profile** | do the pieces bound a simple, correctly nested region? | S8 (orientation — the existence question, so a consumed region never reads `ErrUnsupported`), then S6 (no walk consumed by its own corners — an offset mints none, §8), then S7 (no crossing; for a **shell** a crossing is S11b, §8), then S9 (nesting, which is decidable only once no two loops cross) |
 | **5 — what the result can be held as** | the region is proven; can a payload hold it? | S12 (a both-caps shell of a holed section is `1 + k` lumps) |
 
 Each stage needs the one before it, and that is what fixes the order rather than
 taste: there is no cutback to measure until the blend centre exists (S5), no
 offset loop to orient until the cavity exists (S10) and keeps its features
-(S11), and no lump count to take until the offset bounds a proven region. **S12
+(S11a), and no lump count to take until the offset bounds a proven region. **S12
 is therefore last** — an inward both-caps shell of a holed section at or beyond
-the inradius is S10, and one whose offset merges two loops is S11; neither
+the inradius is S10, and one whose offset merges two loops is S11b; neither
 reaches the count (B4).
+
+**S11a precedes S8 without contravening the existence-before-buildability rule.**
+That rule governs two gates asked on **one constructed section** — where both
+could fire on the same section, the existence question (S8) wins. S11a is
+different: it is **antecedent**, firing *while the offset is being built*, and a
+dropped feature leaves **no constructed section** for S8 to audit at all. So S11a
+and S8 are never asked on the same inputs; S11a running first is the stage order
+(a section must be built before it can be audited), not a buildability gate
+jumping ahead of an existence one. The audit's own crossing test — **S11b** — is
+the one that sits inside the audit, after S8, exactly where §5's order puts it.
 
 Stage 1 applies to every op and to every row of Table B (§9), and so does S3;
 S2 is decided by the removed faces each shell row is keyed on. Table B's
@@ -258,7 +268,7 @@ closed form over decad's own line and arc segments:
    pair drawn from two loops of the section, is tested for intersection —
    line×line, line×circle, circle×circle, the same closed forms the clearance
    kernel's 2D reduction and `survey2d.go`'s boundary walks use. A crossing is
-   **S7** — and, on a shell's offset, **S11** (§8).
+   **S7** — and, on a shell's offset, **S11b** (§8).
 4. **Nesting preserved.** Once no two loops cross, each loop lies wholly inside
    or wholly outside every other, so nesting is decided by classifying **one
    point** of each loop against each other loop. Containment is *not* a crossing
@@ -459,7 +469,7 @@ Write `P` for the section. The inward offset (the erosion) `P ⊖ t` is bounded 
 | Feature of `P` | Its offset |
 |---|---|
 | a line segment | the parallel line, `t` into the material |
-| a circular segment, material inside | the concentric circle of radius `R − t` (`R ≤ t` drops the segment: S11) |
+| a circular segment, material inside | the concentric circle of radius `R − t` (`R ≤ t` drops the segment: S11a) |
 | a circular segment, material outside — a hole wall, a concave round | the concentric circle of radius `R + t` |
 | a **convex** corner | a miter: the two offset curves meet, and the corner stays sharp |
 | a **reflex** corner | an **arc of radius `t` centered on the corner point** — the nearest boundary feature there is the corner itself, so the erosion's boundary is at distance exactly `t` from it |
@@ -494,8 +504,11 @@ because each needs the one before it to have passed.**
   no offset section to inspect until the offset section is there, and no wall to
   build around a cavity that has no room to exist.
 - **Can this evaluator build the offset?** An offset that changes the section's
-  feature set is S11 — a segment the offset would drop, caught as the offset is
-  constructed, and a loop it would merge or split, caught by the audit below.
+  feature set is S11, in two shapes at two points in the order: **S11a**, a
+  feature the offset **drops** — a segment, or a loop whose offset is empty —
+  caught **as the offset is constructed**, so it is antecedent to the audit and
+  precedes S8; and **S11b**, a loop the offset **merges or splits**, caught **by
+  the audit's crossing test below** (in S7's slot, after S8 and before S9).
   Staged, not denied: refusing costs the caller a shell decad could in principle
   build; producing one costs them a part that is wrong where they cannot see it —
   the same principle evaluator §12 states for the tapered extrude.
@@ -505,16 +518,16 @@ because each needs the one before it to have passed.**
   Staged for the same reason, and **last** for this one.
 
 **The offset section is a rewrite, so it faces the §5 audit like any other**, and
-the audit runs between the second gate and the third. Two of its refusals are the
-shell's exactly as they stand: an offset loop that has turned inside out is
-**S8**, and an offset whose nesting the containment classifier cannot decide is
-**S9**, which the evaluator declines rather than guess. The crossing test is the
-one the shell claims for itself: **a crossing of offset loops is S11, not S7**,
-because a merge is the expected outcome of an offset — two walls closing on each
-other at `2t` *is* the feature-set change S11 names — so the shell's own row owns
-the event and S7 never fires on an offset. The trim test cannot fire at all: it
-tests a cutback, and an offset mints none — a segment the offset consumes is a
-dropped feature, which is S11 again.
+the audit runs between the second gate and the third, in its own order (§4): an
+offset loop that has turned inside out is **S8**, asked first as the audit's
+existence test; then the crossing test — **a crossing of offset loops is S11b,
+not S7**, because a merge is the expected outcome of an offset (two walls closing
+on each other at `2t` *is* the feature-set change S11b names), so the shell's own
+row owns the event and S7 never fires on an offset; then nesting — an offset whose
+nesting the containment classifier cannot decide is **S9**, which the evaluator
+declines rather than guess. The trim test cannot fire at all: it tests a cutback,
+and an offset mints none — a segment the offset consumes is a dropped feature,
+which is **S11a**, caught at construction (the gate above), not here.
 
 **Which section is the outside, and which is the cavity, is what the sense
 decides.** Inward, the outer boundary is `P` and the cavity is `P ⊖ t`; outward,
@@ -544,11 +557,11 @@ inward, `P ⊕ t` outward.
 | B | Op | Removed | Sense | Section | Payload | Lumps | Faces (roles) | Refusals |
 |---|---|---|---|---|---|---|---|---|
 | **B1** | `Fillet` / `Chamfer` | — | — | any (`k ≥ 0`) | `prismPayload` over the **rewritten** section, same frame, same `[z0, z1]` | **1** | side walls `side(i,j)` over the rewritten record, two caps `capStart` / `capEnd`. The blend cylinder / bevel plane **is** one of those walls, and carries a **second** role `fillet(i,j)` / `chamfer(i,j)` naming the same `(loop, segment)` of the rewritten record | S1, S4, S5 (**a fillet only** — S5 is a condition on the two carriers' `r`-offsets, which only the blend computes; a chamfer's chord exists between any two distinct feet, §7), then the §5 audit: S8, S6, S7, S9 |
-| **B2** | `Shell` | both caps | `Inward` | hole-free | a **tube**: `prismPayload` whose section is `{Outer: P, Holes: [Q]}`, on `[z0, z1]` | **1** | outer walls `side(0,j)`, cavity walls `side(1,j)`, and the two **rim annuli** — the caps of that prism — `capStart` / `capEnd` | S10 (its **section** limit only — no cap is kept, so no floor eats the sweep), S11, then the §5 audit: S8, S9 |
-| **B3** | `Shell` | both caps | `Outward` | hole-free | a **tube**: `prismPayload` whose section is `{Outer: Q, Holes: [P]}`, on `[z0, z1]` — no cap is kept, so no material is added along the sweep | **1** | as B2 | S11, then the §5 audit: S8, S9 (no S10 — an outward thickness has no limit) |
-| **B4** | `Shell` | both caps | either | holed (`k ≥ 1`) | — | **1 + k** — a band around the outer loop, plus one band lining each hole, pairwise disjoint | — | S10 (**`Inward` only**, and its **section** limit only — B2's reason), S11, the §5 audit's S8 and S9 — every one of them decided on the offset section, and so reached before the count is — then, and only then, **S12** |
-| **B5** | `Shell` | one cap | `Inward` | any (`k ≥ 0`) | a **cup**: `cupPayload` — the outer prism over `P` on `[z0, z1]` and the cavity prism over `Q = P ⊖ t` on `[z0 + t, z1]`, an interval S10's **height** limit is what proves non-empty. The kept cap does not move; the floor is `t` of the original material | **1** — every wall band hangs off the floor slab | outer walls `side(i,j)`, the kept cap `capStart`, the **rims** `rim(i)` — the removed cap's plane trimmed to the band between loop `i` of `P` and loop `i` of `Q`, one face per loop (`1 + k` of them) — cavity walls `shellSide(i,j)`, cavity cap `shellCap` | S10 (**both** its limits — this is the one row whose floor eats the sweep), S11, then the §5 audit: S8, S9 (no S12 — one cap is kept, and every band hangs off the floor it leaves) |
-| **B6** | `Shell` | one cap | `Outward` | any (`k ≥ 0`) | a **cup**: `cupPayload` — the outer prism over `Q = P ⊕ t` on `[z0 − t, z1]` and the cavity prism over `P` on `[z0, z1]`. The original solid *is* the cavity; the floor is `t` of new material below the kept cap | **1** | as B5 | S11, then the §5 audit: S8, S9 (no S10, no S12, for B3's and B5's reasons) |
+| **B2** | `Shell` | both caps | `Inward` | hole-free | a **tube**: `prismPayload` whose section is `{Outer: P, Holes: [Q]}`, on `[z0, z1]` | **1** | outer walls `side(0,j)`, cavity walls `side(1,j)`, and the two **rim annuli** — the caps of that prism — `capStart` / `capEnd` | S10 (its **section** limit only — no cap is kept, so no floor eats the sweep), S11a, then the §5 audit: S8, S11b, S9 |
+| **B3** | `Shell` | both caps | `Outward` | hole-free | a **tube**: `prismPayload` whose section is `{Outer: Q, Holes: [P]}`, on `[z0, z1]` — no cap is kept, so no material is added along the sweep | **1** | as B2 | S11a, then the §5 audit: S8, S11b, S9 (no S10 — an outward thickness has no limit) |
+| **B4** | `Shell` | both caps | either | holed (`k ≥ 1`) | — | **1 + k** — a band around the outer loop, plus one band lining each hole, pairwise disjoint | — | S10 (**`Inward` only**, and its **section** limit only — B2's reason), S11a, the §5 audit's S8, S11b and S9 — every one of them decided on the offset section, and so reached before the count is — then, and only then, **S12** |
+| **B5** | `Shell` | one cap | `Inward` | any (`k ≥ 0`) | a **cup**: `cupPayload` — the outer prism over `P` on `[z0, z1]` and the cavity prism over `Q = P ⊖ t` on `[z0 + t, z1]`, an interval S10's **height** limit is what proves non-empty. The kept cap does not move; the floor is `t` of the original material | **1** — every wall band hangs off the floor slab | outer walls `side(i,j)`, the kept cap `capStart`, the **rims** `rim(i)` — the removed cap's plane trimmed to the band between loop `i` of `P` and loop `i` of `Q`, one face per loop (`1 + k` of them) — cavity walls `shellSide(i,j)`, cavity cap `shellCap` | S10 (**both** its limits — this is the one row whose floor eats the sweep), S11a, then the §5 audit: S8, S11b, S9 (no S12 — one cap is kept, and every band hangs off the floor it leaves) |
+| **B6** | `Shell` | one cap | `Outward` | any (`k ≥ 0`) | a **cup**: `cupPayload` — the outer prism over `Q = P ⊕ t` on `[z0 − t, z1]` and the cavity prism over `P` on `[z0, z1]`. The original solid *is* the cavity; the floor is `t` of new material below the kept cap | **1** | as B5 | S11a, then the §5 audit: S8, S11b, S9 (no S10, no S12, for B3's and B5's reasons) |
 
 **The Refusals column names what a row's own geometry refuses, in the order §4
 fixes** — so a row is read left to right, and the first gate that fires is the
