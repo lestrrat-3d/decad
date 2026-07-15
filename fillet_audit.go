@@ -42,8 +42,26 @@ func auditRewrite(orig, rewritten ProfileRecord, loops []cornerLoop, blendAt []m
 	origLoops := append([]LoopRecord{orig.Outer}, orig.Holes...)
 	newLoops := append([]LoopRecord{rewritten.Outer}, rewritten.Holes...)
 
+	// S6, computed up front so S8 can consult it: a walk whose two ends' cutbacks
+	// reach or pass its far end is consumed by its own corners (§6, Table S). This
+	// is a LOCAL fact — a cutback length against a walk length, needing no
+	// assembled loop — and it covers BOTH shapes Table S names: two corners
+	// claiming one wall from both ends, AND a single corner whose own cutback
+	// reaches the far end of an adjacent walk. It is the more-specific reading of
+	// an over-large setback, so when such an overrun ALSO flips the assembled
+	// loop's signed area, the flip IS the overrun and reads S6 (ErrUnsupported),
+	// not S8 — S8 still owns every genuine inversion a cutback overrun does not
+	// explain.
+	overrun := make([]bool, len(loops))
+	for li, cl := range loops {
+		overrun[li] = loopOverrun(cl, blendAt[li])
+	}
+
 	// S8: orientation preserved — a loop whose signed area changed sign (or
-	// collapsed) has turned itself inside out; the modification consumed it.
+	// collapsed) has turned itself inside out; the modification consumed it —
+	// unless a local cutback overrun on that loop explains the flip, which is
+	// S6's more-specific verdict (Table S: an overrun is ErrUnsupported even when
+	// it also flips the loop).
 	for i := range origLoops {
 		oa, err := loopSignedArea(origLoops[i])
 		if err != nil {
@@ -54,25 +72,18 @@ func auditRewrite(orig, rewritten ProfileRecord, loops []cornerLoop, blendAt []m
 			return err
 		}
 		if math.Signbit(oa) != math.Signbit(na) || math.Abs(na) <= 1e-9*math.Abs(oa) {
+			if overrun[i] {
+				return errCutbackOverrun()
+			}
 			return fmt.Errorf(`%w: the rewrite turned a loop inside out — the modification does not fit`, ErrDegenerate)
 		}
 	}
 
-	// S6: no walk consumed by its own corners — the two ends' cutbacks must fit
-	// strictly inside the walk they claim.
-	for li, cl := range loops {
-		n := len(cl.walks)
-		for i, w := range cl.walks {
-			cut := 0.0
-			if cb := blendAt[li][i]; cb != nil {
-				cut += cb.cutbackB
-			}
-			if cb := blendAt[li][(i+1)%n]; cb != nil {
-				cut += cb.cutbackA
-			}
-			if cut >= w.length-1e-9*math.Max(1, w.length) {
-				return fmt.Errorf(`%w: two corners claim the same wall from both ends; merging their rewrites is not supported`, ErrUnsupported)
-			}
+	// S6: no walk consumed by its own corners — reported for the loops S8 did not
+	// already resolve (an overrun that did not flip the loop's signed area).
+	for li := range loops {
+		if overrun[li] {
+			return errCutbackOverrun()
 		}
 	}
 
@@ -96,6 +107,40 @@ func auditRewrite(orig, rewritten ProfileRecord, loops []cornerLoop, blendAt []m
 	// classify one point of each to prove the outer loop still contains every
 	// hole and the holes stay mutually exterior.
 	return nestingAudit(segs, len(newLoops))
+}
+
+// loopOverrun reports whether any walk of a loop is consumed by its own two
+// corners — the arriving corner's cutback plus the leaving corner's cutback
+// reaches or passes the walk's far end (§6, S6). It is a LOCAL test — a cutback
+// length against a walk length — so it needs no assembled loop, which is what
+// lets S8 consult it before reading the loop's orientation: a flip a single
+// over-large corner produces is this overrun (ErrUnsupported), not a genuinely
+// inside-out section (ErrDegenerate). The sum folds both Table S shapes: a lone
+// corner leaves one end's cutback zero, so its own cutback alone must clear the
+// walk; two corners of a short wall claim it from both ends.
+func loopOverrun(cl cornerLoop, blends map[int]*cornerBlend) bool {
+	n := len(cl.walks)
+	for i, w := range cl.walks {
+		cut := 0.0
+		if cb := blends[i]; cb != nil {
+			cut += cb.cutbackB
+		}
+		if cb := blends[(i+1)%n]; cb != nil {
+			cut += cb.cutbackA
+		}
+		if cut >= w.length-1e-9*math.Max(1, w.length) {
+			return true
+		}
+	}
+	return false
+}
+
+// errCutbackOverrun is S6's op-neutral refusal (§6, Table S): a corner's setback
+// reaches or passes the far end of an adjacent wall, so the rewrite's pieces
+// must be resolved against each other before they bound anything — a body a
+// trimmed-offset kernel could build but this evaluator cannot (ErrUnsupported).
+func errCutbackOverrun() error {
+	return fmt.Errorf(`%w: a corner's setback reaches the far end of an adjacent wall; merging the rewrites there is not supported`, ErrUnsupported)
 }
 
 // buildSegEntries resolves every loop's recorded segments into boundary walks

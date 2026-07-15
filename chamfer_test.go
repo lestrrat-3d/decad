@@ -372,6 +372,21 @@ func TestChamferOverLargeSetbackRefused(t *testing.T) {
 	require.Equal(t, []*decad.Body{box}, box.Document().Bodies(), `a refused chamfer retires nothing`)
 }
 
+func TestChamferOverLargeSetbackFlippingLoopIsUnsupported(t *testing.T) {
+	// An over-large setback whose feet run past their adjacent walls' far ends is
+	// S6 (ErrUnsupported), even when the same overrun ALSO turns the rewritten
+	// loop inside out — Table S assigns the overrun to S6, so it must NOT be
+	// misfiled as the S8 inside-out verdict (ErrDegenerate). At d = 120 on the
+	// 100×60 box every corner's own chord runs past both its walls, and the
+	// rewritten section's signed area flips sign, so the audit's S8 (asked first)
+	// would grab it if S6 did not own it.
+	_, box := filletBox(t)
+	_, err := box.Chamfer(verticalEdges(), units.Millimeters(120))
+	require.ErrorIs(t, err, decad.ErrUnsupported, `an overrun that also flips the loop is still S6`)
+	require.NotErrorIs(t, err, decad.ErrDegenerate, `the overrun must not read as the S8 inside-out verdict`)
+	require.Equal(t, []*decad.Body{box}, box.Document().Bodies(), `a refused chamfer retires nothing`)
+}
+
 func TestChamferRefusals(t *testing.T) {
 	_, box := filletBox(t)
 
