@@ -34,8 +34,11 @@ import (
 // the region the caller's section lived in, so no such body exists and it is an
 // S8-family ErrDegenerate (§1 existence test).
 
-// auditRewrite runs the §5 audit on the rewritten profile in §4's order.
-func auditRewrite(orig, rewritten ProfileRecord, loops []cornerLoop, filletAt []map[int]*filletData) error {
+// auditRewrite runs the §5 audit on the rewritten profile in §4's order. It is
+// shared by every modify op (Fillet, Chamfer): its only op-specific input is the
+// per-corner cutback the S6 self-consuming-trim test sums, carried by the shared
+// cornerBlend, so the audit itself forks nothing.
+func auditRewrite(orig, rewritten ProfileRecord, loops []cornerLoop, blendAt []map[int]*cornerBlend) error {
 	origLoops := append([]LoopRecord{orig.Outer}, orig.Holes...)
 	newLoops := append([]LoopRecord{rewritten.Outer}, rewritten.Holes...)
 
@@ -51,7 +54,7 @@ func auditRewrite(orig, rewritten ProfileRecord, loops []cornerLoop, filletAt []
 			return err
 		}
 		if math.Signbit(oa) != math.Signbit(na) || math.Abs(na) <= 1e-9*math.Abs(oa) {
-			return fmt.Errorf(`%w: the fillet turned a loop inside out — the radius does not fit`, ErrDegenerate)
+			return fmt.Errorf(`%w: the rewrite turned a loop inside out — the modification does not fit`, ErrDegenerate)
 		}
 	}
 
@@ -61,14 +64,14 @@ func auditRewrite(orig, rewritten ProfileRecord, loops []cornerLoop, filletAt []
 		n := len(cl.walks)
 		for i, w := range cl.walks {
 			cut := 0.0
-			if fd := filletAt[li][i]; fd != nil {
-				cut += fd.cutbackB
+			if cb := blendAt[li][i]; cb != nil {
+				cut += cb.cutbackB
 			}
-			if fd := filletAt[li][(i+1)%n]; fd != nil {
-				cut += fd.cutbackA
+			if cb := blendAt[li][(i+1)%n]; cb != nil {
+				cut += cb.cutbackA
 			}
 			if cut >= w.length-1e-9*math.Max(1, w.length) {
-				return fmt.Errorf(`%w: two fillets claim the same wall from both ends; merging them is not supported`, ErrUnsupported)
+				return fmt.Errorf(`%w: two corners claim the same wall from both ends; merging their rewrites is not supported`, ErrUnsupported)
 			}
 		}
 	}
@@ -153,10 +156,10 @@ func crossingAudit(segs []segEntry) error {
 				continue
 			}
 			if segCross(segs[i].w, segs[j].w) {
-				return fmt.Errorf(`%w: the fillet rewrite crosses itself; a resolving kernel is not available`, ErrUnsupported)
+				return fmt.Errorf(`%w: the rewrite crosses itself; a resolving kernel is not available`, ErrUnsupported)
 			}
 			if segMinDist(segs[i].w, segs[j].w) <= touchFloor {
-				return fmt.Errorf(`%w: the fillet rewrite brings two boundaries into contact; a resolving kernel is not available`, ErrUnsupported)
+				return fmt.Errorf(`%w: the rewrite brings two boundaries into contact; a resolving kernel is not available`, ErrUnsupported)
 			}
 		}
 	}
@@ -260,7 +263,7 @@ func nestingAudit(segs []segEntry, nLoops int) error {
 	tol := contactEps * scale
 
 	undecidable := func() error {
-		return fmt.Errorf(`%w: the fillet rewrite's nesting cannot be decided; a resolving kernel is not available`, ErrUnsupported)
+		return fmt.Errorf(`%w: the rewrite's nesting cannot be decided; a resolving kernel is not available`, ErrUnsupported)
 	}
 	// Every hole must sit inside the rewritten outer loop.
 	for h := 1; h < nLoops; h++ {
@@ -272,7 +275,7 @@ func nestingAudit(segs []segEntry, nLoops int) error {
 			return undecidable()
 		}
 		if !inside {
-			return fmt.Errorf(`%w: the fillet shrank the outer loop past a hole, leaving it outside the rounded material`, ErrDegenerate)
+			return fmt.Errorf(`%w: the rewrite left a hole outside the outer loop, consuming the region it lived in`, ErrDegenerate)
 		}
 	}
 	// Holes must stay mutually exterior — neither nested in the other.
@@ -290,7 +293,7 @@ func nestingAudit(segs []segEntry, nLoops int) error {
 					return undecidable()
 				}
 				if inside {
-					return fmt.Errorf(`%w: the fillet nested one hole inside another`, ErrDegenerate)
+					return fmt.Errorf(`%w: the rewrite nested one hole inside another`, ErrDegenerate)
 				}
 			}
 		}
