@@ -16,7 +16,8 @@ import (
 // fed back through evalPrism so mass properties, tessellation and the surveys
 // come for free (§10, Table D). The section rewrite is decad's OWN synthesized
 // geometry (§5), so decad owns its validity with exact closed-form tests — the
-// §5 audit (S8 orientation, S6 self-consuming trim, S7 crossing, S9 nesting) —
+// §5 audit (S8 orientation, S6 self-consuming trim, S7 crossing/contact, S9
+// nesting) —
 // never a residual. The blend surface is a Cylinder (§6); its wall carries the
 // side(i,j) role AND a second fillet(i,j) role naming the same (loop, segment)
 // of the rewritten record (Table B, B1).

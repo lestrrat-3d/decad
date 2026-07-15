@@ -386,6 +386,78 @@ func TestFilletTooLargeRadius(t *testing.T) {
 	require.Equal(t, []*decad.Body{body}, doc.Bodies(), `a refused fillet retires nothing`)
 }
 
+// plateWithSquareHole extrudes a 100×100 plate with a 10×10 square hole whose
+// lower-left corner is at (off, off), by 20 mm — a straight prism whose section
+// is a rectangle with a rectangular hole.
+func plateWithSquareHole(t *testing.T, off float64) (*decad.Document, *decad.Body) {
+	t.Helper()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	outer := s.CreateRectangle(0, 0, 100, 100)
+	s.Fix(outer.A)
+	s.CreateRectangle(off, off, off+10, off+10)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+
+	var prof *sketch.Profile
+	for _, p := range s.Profiles() {
+		if len(p.Outer) == 4 && len(p.Holes) == 1 {
+			prof = p
+			break
+		}
+	}
+	require.NotNil(t, prof, `the rectangle-with-square-hole region should exist`)
+
+	doc := decad.New()
+	body, err := doc.Extrude(s, prof, decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+	require.NoError(t, err)
+	return doc, body
+}
+
+func TestFilletBoundaryContactRefused(t *testing.T) {
+	// A large fillet can bring the rewritten section's loops into BOUNDARY
+	// CONTACT — here the outer corner's blend arc passes exactly through the
+	// hole's corner (the hole sits at r·(1 − 1/√2) on the corner diagonal), a
+	// shared boundary point with no interior crossing. The §5 audit must refuse
+	// it: without the contact test Fillet returns a body Verify calls Sound but
+	// Tessellate refuses, a silently inconsistent solid.
+	const r = 20.0
+	off := r * (1 - 1/math.Sqrt2)
+	_, body := plateWithSquareHole(t, off)
+
+	convex := decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)), decad.Convex())
+	picked, err := convex.SelectEdges(body)
+	require.NoError(t, err)
+	require.Len(t, picked, 4, `the four outer corners are the convex lateral edges`)
+
+	_, err = body.Fillet(convex, units.Millimeters(r))
+	require.Error(t, err, `a fillet that pinches two boundaries must be refused, not returned`)
+	require.ErrorIs(t, err, decad.ErrUnsupported, `boundary contact is the boundary case of a crossing: S7, ErrUnsupported`)
+	require.Equal(t, []*decad.Body{body}, body.Document().Bodies(), `a refused fillet retires nothing`)
+}
+
+func TestFilletClearOfHoleBuilds(t *testing.T) {
+	// The same plate-with-hole, but a radius whose blend arcs stay well clear of
+	// the hole: the rewritten loops are disjoint, so the fillet builds and the
+	// body is watertight and Sound — the widened audit does not over-reject.
+	const r = 5.0
+	off := 20 * (1 - 1/math.Sqrt2) // the hole that r = 20 would have touched
+	doc, body := plateWithSquareHole(t, off)
+
+	filleted, err := body.Fillet(decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)), decad.Convex()), units.Millimeters(r))
+	require.NoError(t, err, `a fillet clear of the hole must still build`)
+	requireManifold(t, filleted)
+
+	mesh, err := filleted.Tessellate(units.Millimeters(0.1))
+	require.NoError(t, err, `the clear fillet's loops are disjoint, so it tessellates`)
+	require.NotEmpty(t, mesh.Triangles())
+
+	rep, err := doc.Verify(t.Context())
+	require.NoError(t, err)
+	require.True(t, rep.Trustworthy(), `a fillet clear of the hole is Sound`)
+}
+
 func TestFilletNonPrismReceiver(t *testing.T) {
 	// A revolve is not a prismPayload, so a fillet of it is staged: S3.
 	w := sketch.NewWorld()
