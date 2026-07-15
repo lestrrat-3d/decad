@@ -152,19 +152,31 @@ func TestShellCupTessellateReflected(t *testing.T) {
 	require.InDelta(t, wantVol, meshVolume(mesh), 1e-9, `outward winding survives a reflected placement`)
 }
 
-func TestShellCupTessellateDegenerateRimRefused(t *testing.T) {
+func TestShellCupTessellateOutwardBox(t *testing.T) {
 	// An outward box cup dilates its rectangular section, landing the rounded
 	// outer corners' tangent points on the cavity's own top and bottom edge
-	// lines — a rim band whose loops are collinear on both sides, a degeneracy
-	// ear clipping cannot resolve. The evaluator proves the mesh would be
-	// cracked and refuses it, never returning a non-watertight mesh.
+	// lines — the bridge-collinear rim band. It is a normal 5 mm-wide frame
+	// (rounded outer, sharp inner), so it triangulates into a watertight mesh;
+	// the only chorded feature is the four dilated outer corners, over the
+	// outer prism's full height h + th.
 	const th = 5.0
+	h := shellBoxHeight
 	_, box := shellBox(t)
 	cup, err := box.Shell(topCap(box), units.Millimeters(th), decad.WithShellSense(decad.Outward))
 	require.NoError(t, err)
 
-	_, err = cup.Tessellate(units.Millimeters(0.2))
-	require.ErrorIs(t, err, decad.ErrDegenerate, `a rim the triangulator cannot close is refused, not returned cracked`)
+	tol := 0.1
+	mesh, err := cup.Tessellate(units.Millimeters(tol))
+	require.NoError(t, err)
+	requireWatertight(t, mesh)
+	require.LessOrEqual(t, mesh.Bound().Mag(), tol)
+
+	vol, err := cup.Volume()
+	require.NoError(t, err)
+	exact, err := vol.Value.In(units.CubicMillimeter)
+	require.NoError(t, err)
+	slack := 2 * math.Pi * th * mesh.Bound().Mag() * (h + th)
+	require.InDelta(t, exact, meshVolume(mesh), slack, `the mesh encloses the cup volume up to the chorded outer corners`)
 }
 
 func TestShellCupUndercutsBox(t *testing.T) {
@@ -249,9 +261,9 @@ func TestShellCupMinRadius(t *testing.T) {
 }
 
 // diskHoledCup extrudes an annular section (outer circle R, concentric hole rh)
-// to height h — a straight prism with one circular hole, the section a
-// cylindrical outward cup wraps into a post without the collinear-rim
-// degeneracy a rectangular section hits.
+// to height h — a straight prism with one circular hole, whose outward cup
+// wraps into a cylindrical post. (The rectangular post, whose rim is
+// bridge-collinear, is covered by TestShellCupHoledRectangularPost.)
 func diskHoledCup(t *testing.T, R, rh, h float64) (*decad.Document, *decad.Body) {
 	t.Helper()
 	w := sketch.NewWorld()
@@ -391,19 +403,35 @@ func TestShellCupHoledTessellateOutward(t *testing.T) {
 	require.InDelta(t, wantVol, meshVolume(mesh), 1e-6, `an outward holed cup encloses its chorded volume, post included`)
 }
 
-// TestShellCupHoledTessellateOutwardBoxRefused pins the one holed cup the
-// tessellator still refuses: an OUTWARD box cup dilates its rectangular section,
-// landing the rounded outer corners' tangent points on the cavity's own edge
-// lines — a rim band collinear on both sides that ear clipping cannot close. The
-// hole changes nothing about that outer rim, so the mesh is proven cracked and
-// refused rather than returned, exactly as the hole-free box cup is.
-func TestShellCupHoledTessellateOutwardBoxRefused(t *testing.T) {
+// TestShellCupHoledTessellateOutwardBox meshes a circle-holed OUTWARD box cup:
+// the outer region dilates to a rounded rectangle whose corner tangent points
+// land on the cavity's own edge lines — the bridge-collinear rim — and the
+// circular hole grows a post. It is a normal band, so it triangulates into a
+// watertight mesh; the chorded features are the four outer corners plus the
+// tunnel and post circles.
+func TestShellCupHoledTessellateOutwardBox(t *testing.T) {
 	const th, rh = 5.0, 8.0
+	h := shellBoxHeight
 	_, box := circleHoledBox(t, [3]float64{50, 30, rh})
 	cup, err := box.Shell(topCap(box), units.Millimeters(th), decad.WithShellSense(decad.Outward))
 	require.NoError(t, err)
-	_, err = cup.Tessellate(units.Millimeters(0.2))
-	require.ErrorIs(t, err, decad.ErrDegenerate, `an outward box cup's collinear rim is refused, not returned cracked`)
+
+	tol := 0.1
+	mesh, err := cup.Tessellate(units.Millimeters(tol))
+	require.NoError(t, err)
+	requireWatertight(t, mesh)
+	require.LessOrEqual(t, mesh.Bound().Mag(), tol)
+
+	vol, err := cup.Volume()
+	require.NoError(t, err)
+	exact, err := vol.Value.In(units.CubicMillimeter)
+	require.NoError(t, err)
+	b := mesh.Bound().Mag()
+	// Curved features chorded: the four outer corners (radius th) and tunnel
+	// circle (radius rh − th) over the outer prism height h + th, and the post
+	// circle (radius rh) over the cavity height h.
+	slack := 2 * math.Pi * b * (th*(h+th) + (rh-th)*(h+th) + rh*h)
+	require.InDelta(t, exact, meshVolume(mesh), slack, `the mesh encloses the holed cup volume up to its chorded arcs`)
 }
 
 // TestShellCupHoledUndercuts surveys a HOLED cup against a pull (modify §9, D2).

@@ -474,6 +474,41 @@ func TestShellCupHoledRectangularPost(t *testing.T) {
 	gotVol, err := vol.Value.In(units.CubicMillimeter)
 	require.NoError(t, err)
 	require.InDelta(t, wantVol, gotVol, 1e-9)
+
+	// The post rim is a rounded-outer/sharp-inner band whose corner tangent
+	// points sit on the tunnel's own edge lines — the bridge-collinear case. It
+	// triangulates into a watertight band: every directed edge is matched, the
+	// tunnel and the rounded post are both present, and the mesh under-encloses
+	// the exact volume by no more than the chorded post corners' area over the
+	// cavity height (the only curved feature; the outer plate is planar).
+	tol := 0.1
+	mesh, err := body.Tessellate(units.Millimeters(tol))
+	require.NoError(t, err)
+	requireWatertight(t, mesh)
+	require.LessOrEqual(t, mesh.Bound().Mag(), tol)
+
+	tunnel := map[[2]float64]bool{{40, 20}: false, {60, 20}: false, {40, 40}: false, {60, 40}: false}
+	post := 0
+	for _, v := range mesh.Vertices() {
+		if _, ok := tunnel[[2]float64{v.X, v.Y}]; ok {
+			tunnel[[2]float64{v.X, v.Y}] = true
+		}
+		// The rounded post corners sit at radius th about the tunnel corners.
+		for _, c := range [][2]float64{{40, 20}, {60, 20}, {60, 40}, {40, 40}} {
+			if math.Abs(math.Hypot(v.X-c[0], v.Y-c[1])-th) < 1e-9 {
+				post++
+			}
+		}
+	}
+	for c, seen := range tunnel {
+		require.True(t, seen, `tunnel corner %v is meshed`, c)
+	}
+	require.Positive(t, post, `the rounded post wall is meshed`)
+
+	mv := meshVolume(mesh)
+	slack := 2 * math.Pi * th * mesh.Bound().Mag() * (h - th)
+	require.Less(t, mv, gotVol, `the chorded post inscribes its arcs, so the mesh under-encloses`)
+	require.Greater(t, mv, gotVol-slack, `the deficit is only the chorded post corners`)
 }
 
 func TestShellRefusals(t *testing.T) {

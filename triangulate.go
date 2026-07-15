@@ -67,9 +67,9 @@ func maxU(pts []Point2, loop []int) float64 {
 // bridgeHole splices a hole loop into the merged polygon along a bridge
 // between two mutually visible vertices — Eberly's construction: from the
 // hole vertex M of maximum u, cast a ray in +u to the closest boundary
-// crossing I on edge (a, b); bridge to I when it is a vertex, else to the
-// edge endpoint of maximum u unless a reflex vertex inside triangle (M, I, P)
-// is closer to the ray, in which case bridge to that vertex.
+// crossing I on edge (a, b); bridge to the edge endpoint P of maximum u
+// unless a reflex vertex inside triangle (M, I, P) is closer to the ray, in
+// which case bridge to that vertex.
 func bridgeHole(pts []Point2, merged, hole []int) ([]int, error) {
 	if len(hole) < 3 {
 		return nil, fmt.Errorf(`%w: a hole needs at least three boundary samples`, ErrDegenerate)
@@ -114,48 +114,47 @@ func bridgeHole(pts []Point2, merged, hole []int) ([]int, error) {
 	ai, bi := bestEdge, (bestEdge+1)%n
 	a, b := pts[merged[ai]], pts[merged[bi]]
 
-	var bridge int
-	switch hit {
-	case a:
-		bridge = ai
-	case b:
+	// P: the intersected edge's endpoint of maximum u (a vertical edge ties;
+	// take the upper endpoint). Bridging to the edge's far endpoint — even when
+	// the ray's hit point I lands exactly on the near endpoint — is what keeps
+	// the bridge off a hole edge collinear with the +u ray: an axis-aligned
+	// tunnel whose corner shares the ray's v would otherwise get a bridge
+	// running along its own edge, a zero-area sliver ear clipping dissolves and
+	// leaves cracked. The far endpoint's visibility is proven by the reflex
+	// search below, so this is Eberly's construction as stated, never a nearer
+	// short-circuit that trades a proof for a coincidence.
+	bridge := ai
+	if b.U > a.U || (b.U == a.U && b.V > a.V) {
 		bridge = bi
-	default:
-		// P: the intersected edge's endpoint of maximum u (a vertical edge
-		// ties; take the upper endpoint).
-		bridge = ai
-		if b.U > a.U || (b.U == a.U && b.V > a.V) {
-			bridge = bi
+	}
+	p := pts[merged[bridge]]
+	if p == m {
+		return nil, fmt.Errorf(`%w: a hole touches its cap boundary`, ErrDegenerate)
+	}
+	// A reflex vertex inside triangle (M, I, P) would block the bridge; of
+	// those, the one whose direction from M lies closest to the ray (nearest
+	// first on ties) is visible instead.
+	bestCos, bestDist := math.Inf(-1), math.Inf(1)
+	for j := range n {
+		if j == bridge {
+			continue
 		}
-		// A reflex vertex inside triangle (M, I, P) would block the bridge;
-		// of those, the one whose direction from M lies closest to the ray
-		// (nearest first on ties) is visible instead.
-		p := pts[merged[bridge]]
-		if p == m {
-			return nil, fmt.Errorf(`%w: a hole touches its cap boundary`, ErrDegenerate)
+		r := pts[merged[j]]
+		prev, next := pts[merged[(j-1+n)%n]], pts[merged[(j+1)%n]]
+		if cross2(prev, r, next) >= 0 {
+			continue
 		}
-		bestCos, bestDist := math.Inf(-1), math.Inf(1)
-		for j := range n {
-			if j == bridge {
-				continue
-			}
-			r := pts[merged[j]]
-			prev, next := pts[merged[(j-1+n)%n]], pts[merged[(j+1)%n]]
-			if cross2(prev, r, next) >= 0 {
-				continue
-			}
-			if !pointInTri(r, m, hit, p) {
-				continue
-			}
-			d := math.Hypot(r.U-m.U, r.V-m.V)
-			if d == 0 {
-				continue
-			}
-			cos := (r.U - m.U) / d
-			if cos > bestCos || (cos == bestCos && d < bestDist) {
-				bestCos, bestDist = cos, d
-				bridge = j
-			}
+		if !pointInTri(r, m, hit, p) {
+			continue
+		}
+		d := math.Hypot(r.U-m.U, r.V-m.V)
+		if d == 0 {
+			continue
+		}
+		cos := (r.U - m.U) / d
+		if cos > bestCos || (cos == bestCos && d < bestDist) {
+			bestCos, bestDist = cos, d
+			bridge = j
 		}
 	}
 
@@ -173,9 +172,14 @@ func bridgeHole(pts []Point2, merged, hole []int) ([]int, error) {
 
 // earClip triangulates a counter-clockwise weakly-simple polygon by ear
 // clipping: a strictly convex corner whose triangle contains no reflex vertex
-// is emitted and removed; a zero-area corner is removed without emitting. A
-// pass that finds no ear means the boundary self-intersects, which is an
-// error, never a wrong mesh.
+// is emitted and removed. A zero-area (collinear) corner is removed WITHOUT
+// emitting only when it is a bridge anchor — a vertex the hole splice
+// duplicated, the tip of the bridge's zero-width channel; a collinear corner
+// at a GENUINE (unique) boundary vertex is instead deferred, since removing it
+// would drop a boundary edge and crack the shared band. The deferred vertex
+// turns strictly convex once an adjacent corner is clipped, so the pass always
+// makes progress; a pass that clips nothing means the boundary
+// self-intersects, which is an error, never a wrong mesh.
 func earClip(pts []Point2, poly []int) ([][3]int, error) {
 	idx := append([]int(nil), poly...)
 	tris := make([][3]int, 0, len(idx))
@@ -186,6 +190,9 @@ func earClip(pts []Point2, poly []int) ([][3]int, error) {
 			ia, ib, ic := idx[(i-1+n)%n], idx[i], idx[(i+1)%n]
 			cr := cross2(pts[ia], pts[ib], pts[ic])
 			if cr < 0 {
+				continue
+			}
+			if cr == 0 && !isBridgeAnchor(idx, i) {
 				continue
 			}
 			if cr > 0 && earBlocked(pts, idx, i) {
@@ -203,6 +210,19 @@ func earClip(pts []Point2, poly []int) ([][3]int, error) {
 		}
 	}
 	return tris, nil
+}
+
+// isBridgeAnchor reports whether the vertex at position i is a bridge anchor —
+// a merged-polygon vertex whose index the hole splice repeated (M and P each
+// appear twice). Only such a duplicate may be collapsed on a zero-area corner;
+// a vertex appearing once is a genuine boundary vertex that must be kept.
+func isBridgeAnchor(idx []int, i int) bool {
+	for j := range idx {
+		if j != i && idx[j] == idx[i] {
+			return true
+		}
+	}
+	return false
 }
 
 // earBlocked reports whether the candidate ear at position i is cut off from

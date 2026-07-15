@@ -525,13 +525,12 @@ func tessellateCup(b *Body, cp cupPayload, chord float64) (*Mesh, error) {
 	}
 
 	// The cup's planar faces triangulate through the shipped cap triangulator,
-	// which the design assumes resolves the rim band. A rim whose chorded outer
-	// and cavity loops are collinear on both sides (an outward cup whose dilated
-	// corners land on the cavity's own edge lines) is a degeneracy ear clipping
-	// cannot resolve, and it would leave the band cracked. The walls and floors
-	// close by construction, so a break here is the rim's: prove closure and
-	// refuse a cracked mesh rather than return one (core §11, never a wrong
-	// mesh).
+	// which resolves every rim band — including the bridge-collinear one an
+	// outward cup or a rectangular post produces, where a rounded outer loop's
+	// corner tangent points land on the sharp inner loop's edge lines. The
+	// walls and floors close by construction; this proves the assembled mesh is
+	// watertight and refuses a cracked one rather than return it, a safety net
+	// against any residual chording pathology (core §11, never a wrong mesh).
 	if err := requireClosedMesh(&mesh); err != nil {
 		return nil, err
 	}
@@ -539,8 +538,8 @@ func tessellateCup(b *Body, cp cupPayload, chord float64) (*Mesh, error) {
 }
 
 // requireClosedMesh proves the mesh is a closed 2-manifold — every directed
-// edge is matched by its reverse — refusing a mesh whose boundary the cap
-// triangulator could not close.
+// edge is matched by its reverse — refusing a mesh the cap triangulator could
+// not close into a watertight band.
 func requireClosedMesh(m *Mesh) error {
 	directed := make(map[[2]int]int, 3*len(m.triangles))
 	for _, tri := range m.triangles {
