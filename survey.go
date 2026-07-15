@@ -341,6 +341,31 @@ func trigRange(a, b, lo, hi float64) (float64, float64) {
 	return mn, mx
 }
 
+// wallNormalRange is the exact range of a side wall's outward-normal component
+// against the pull, given the pull's in-plane components (du, dv): a planar
+// wall carries one normal (its walk tangent rotated), a cylindrical wall sweeps
+// its walk's exact angular range. The walk's own sense decides the material
+// side, so it serves an outer wall (counter-clockwise) and a cavity wall
+// (clockwise, the reversed loop) alike.
+func wallNormalRange(w sideWalk, du, dv float64) (float64, float64) {
+	if !w.circular {
+		l := math.Hypot(w.tanInU, w.tanInV)
+		v := (w.tanInV*du - w.tanInU*dv) / l
+		return v, v
+	}
+	sigma := 1.0
+	if w.th1 < w.th0 {
+		sigma = -1
+	}
+	lo, hi := math.Min(w.th0, w.th1), math.Max(w.th0, w.th1)
+	mn, mx := trigRange(du, dv, lo, hi)
+	mn, mx = sigma*mn, sigma*mx
+	if mn > mx {
+		mn, mx = mx, mn
+	}
+	return mn, mx
+}
+
 // prismUndercuts surveys a prism's faces against the pull: planar sides and
 // caps carry one normal each, cylindrical sides sweep their walk's exact
 // angular range.
@@ -364,23 +389,7 @@ func prismUndercuts(b *Body, pp prismPayload, pull r3.Vec) undercutOutcome {
 			if f == nil {
 				return undercutOutcome{}
 			}
-			var mn, mx float64
-			if w.circular {
-				sigma := 1.0
-				if w.th1 < w.th0 {
-					sigma = -1
-				}
-				lo, hi := math.Min(w.th0, w.th1), math.Max(w.th0, w.th1)
-				mn, mx = trigRange(du, dv, lo, hi)
-				mn, mx = sigma*mn, sigma*mx
-				if mn > mx {
-					mn, mx = mx, mn
-				}
-			} else {
-				l := math.Hypot(w.tanInU, w.tanInV)
-				v := (w.tanInV*du - w.tanInU*dv) / l
-				mn, mx = v, v
-			}
+			mn, mx := wallNormalRange(w, du, dv)
 			if opposesPull(mn, mx) {
 				faces = append(faces, f)
 			}
@@ -569,6 +578,102 @@ func revolveMinRadius(rp revolvePayload) (radiusOutcome, bool) {
 	return radiusOutcome{reading: &best, ok: true}, true
 }
 
+// cupWalks resolves one cup region loop into its coalesced walks — the same
+// decomposition evalCup's wall build uses.
+func cupWalks(loop LoopRecord) ([]sideWalk, error) {
+	loops, err := recordLoops(ProfileRecord{Outer: loop})
+	if err != nil {
+		return nil, err
+	}
+	return loops[0], nil
+}
+
+// cupUndercuts surveys a cup's faces against the pull (docs/modify-design.md
+// D2): the outer walls over region O (role side(0,j)), the cavity walls over
+// the reversed region C (role shellSide(0,j)) — each read by the same exact
+// normal ranges the prism uses — and the three planar faces. The cavity being
+// a pocket, the pocket floor (shellCap) and the rim face the open end and the
+// kept cap (capStart) faces away from it, so their outward normals are ±N by
+// which side of the outer floor the open end lies on.
+func cupUndercuts(b *Body, cp cupPayload, pull r3.Vec) undercutOutcome {
+	p, ok := pull.Normalize()
+	if !ok {
+		return undercutOutcome{}
+	}
+	base := cp.prismLike(0, 0)
+	du := base.dir(1, 0, 0).Dot(p)
+	dv := base.dir(0, 1, 0).Dot(p)
+	dn := base.dir(0, 0, 1).Dot(p)
+	roles := facesByRole(b)
+
+	faces := []*Face{}
+	survey := func(loop LoopRecord, role string) bool {
+		walks, err := cupWalks(loop)
+		if err != nil {
+			return false
+		}
+		for _, w := range walks {
+			f := roles[fmt.Sprintf(role, w.segs[0])]
+			if f == nil {
+				return false
+			}
+			mn, mx := wallNormalRange(w, du, dv)
+			if opposesPull(mn, mx) {
+				faces = append(faces, f)
+			}
+		}
+		return true
+	}
+	if !survey(cp.outer.Outer, "side(0,%d)") {
+		return undercutOutcome{}
+	}
+	crev, err := reverseLoopRecord(cp.cavity.Outer)
+	if err != nil {
+		return undercutOutcome{}
+	}
+	if !survey(crev, "shellSide(0,%d)") {
+		return undercutOutcome{}
+	}
+
+	// The three caps. sOpen is +1 when the open end lies above the outer floor:
+	// the kept cap then faces −N and the pocket floor and rim face +N.
+	sOpen := -1.0
+	if cp.zOpen > cp.zOuter {
+		sOpen = 1
+	}
+	for _, c := range []struct {
+		role string
+		v    float64
+	}{
+		{role: roleCapStart, v: -sOpen * dn},
+		{role: "shellCap", v: sOpen * dn},
+		{role: "rim(0)", v: sOpen * dn},
+	} {
+		f := roles[c.role]
+		if f == nil {
+			return undercutOutcome{}
+		}
+		if opposesPull(c.v, c.v) {
+			faces = append(faces, f)
+		}
+	}
+	return undercutOutcome{faces: faces, ok: true}
+}
+
+// cupMinRadius is the tightest concave radius over a cup's faces (D3): the same
+// walk the prism runs, over the outer region O and the cavity region C read as
+// a hole (its walls curve away from the material, like any hole wall). The
+// sharp concave edge where a wall meets the floor carries no radius — the
+// survey reads faces' principal radii, not edges.
+func cupMinRadius(cp cupPayload) (radiusOutcome, bool) {
+	crev, err := reverseLoopRecord(cp.cavity.Outer)
+	if err != nil {
+		return radiusOutcome{}, false
+	}
+	profile := ProfileRecord{Outer: cp.outer.Outer, Holes: []LoopRecord{crev}}
+	return prismMinRadius(prismPayload{profile: profile})
+}
+
 // runSurveys answers the asked opt-in questions on one proven-solid body,
 // filling the report fields and returning the spec verdicts: violating when
 // a stated spec is proven to fail, suspect when an asked question is
@@ -608,6 +713,8 @@ func runSurveys(br *BodyReport, cfg verifyConfig) (bool, bool) {
 			out = prismUndercuts(b, pl, *cfg.pull)
 		case revolvePayload:
 			out = revolveUndercuts(b, pl, *cfg.pull)
+		case cupPayload:
+			out = cupUndercuts(b, pl, *cfg.pull)
 		}
 		if !out.ok {
 			suspect = true
@@ -627,6 +734,8 @@ func runSurveys(br *BodyReport, cfg verifyConfig) (bool, bool) {
 			out, ok = prismMinRadius(pl)
 		case revolvePayload:
 			out, ok = revolveMinRadius(pl)
+		case cupPayload:
+			out, ok = cupMinRadius(pl)
 		}
 		if !ok || !out.ok {
 			suspect = true
