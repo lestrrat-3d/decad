@@ -109,11 +109,11 @@ func (b *Body) Tessellate(tol units.Value) (*Mesh, error) {
 		}
 		return f, nil
 	}
-	capStart, err := faceOfRole("capStart")
+	capStart, err := faceOfRole(roleCapStart)
 	if err != nil {
 		return nil, err
 	}
-	capEnd, err := faceOfRole("capEnd")
+	capEnd, err := faceOfRole(roleCapEnd)
 	if err != nil {
 		return nil, err
 	}

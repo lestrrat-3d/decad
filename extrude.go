@@ -345,13 +345,13 @@ func evalPrism(d *Document, ref StepRef, pp prismPayload) (*Body, error) {
 	}
 	capStart := &Face{
 		surface: Plane{Frame: startFrame},
-		origins: []FeatureRef{{Step: ref, Role: "capStart"}},
+		origins: []FeatureRef{{Step: ref, Role: roleCapStart}},
 		body:    body,
 		area:    ig.area,
 	}
 	capEnd := &Face{
 		surface: Plane{Frame: endFrame},
-		origins: []FeatureRef{{Step: ref, Role: "capEnd"}},
+		origins: []FeatureRef{{Step: ref, Role: roleCapEnd}},
 		body:    body,
 		area:    ig.area,
 	}

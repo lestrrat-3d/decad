@@ -389,7 +389,7 @@ func prismUndercuts(b *Body, pp prismPayload, pull r3.Vec) undercutOutcome {
 	for _, cap := range []struct {
 		role string
 		v    float64
-	}{{role: "capStart", v: -dn}, {role: "capEnd", v: dn}} {
+	}{{role: roleCapStart, v: -dn}, {role: roleCapEnd, v: dn}} {
 		f := roles[cap.role]
 		if f == nil {
 			return undercutOutcome{}
@@ -467,8 +467,8 @@ func revolveUndercuts(b *Body, rp revolvePayload, pull r3.Vec) undercutOutcome {
 			// A cap's outward normal is the sweep-velocity direction at its
 			// own angle — against the sweep on the start cap, along it on
 			// the end cap.
-			{role: "capStart", v: -(c1*cos0 - c0*sin0)},
-			{role: "capEnd", v: c1*cos1 - c0*sin1},
+			{role: roleCapStart, v: -(c1*cos0 - c0*sin0)},
+			{role: roleCapEnd, v: c1*cos1 - c0*sin1},
 		} {
 			f := roles[cap.role]
 			if f == nil {

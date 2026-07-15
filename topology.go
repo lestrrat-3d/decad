@@ -14,6 +14,13 @@ import (
 // index. A Body is immutable after construction, so it is safe to read from
 // many goroutines (core §12).
 
+// The stable cap-role names the analytic evaluators mint (evaluator §3): the
+// two ends of a prism sweep, and a revolve's caps on a partial turn.
+const (
+	roleCapStart = "capStart"
+	roleCapEnd   = "capEnd"
+)
+
 // FeatureRef identifies the feature role that created a body, a face or an
 // edge: the producing StepRef plus a stable role within that step. Roles
 // derive from the recorded step, so re-evaluation reproduces them
