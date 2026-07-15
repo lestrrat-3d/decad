@@ -248,42 +248,228 @@ func TestShellCupMinRadius(t *testing.T) {
 	})
 }
 
-// TestShellCupHoledDownstreamStaged pins the honest staging of a HOLED cup's
-// hole-sensitive downstream readers (modify §9, D2/D3/D4). The build itself is
-// correct (a post per hole, one lump, Exact mass properties), but tessellation
-// and the undercut/min-radius surveys still walk only loop 0, so on a holed cup
-// they would answer hole-blind — a hole-free mesh, a false all-clear, a too-large
-// radius. Each stages instead: tessellation refuses (ErrUnsupported) and the two
-// surveys read undecided (Suspect). A HOLE-FREE cup is unaffected (the box and
-// cylinder tests above still answer outright).
-func TestShellCupHoledDownstreamStaged(t *testing.T) {
+// diskHoledCup extrudes an annular section (outer circle R, concentric hole rh)
+// to height h — a straight prism with one circular hole, the section a
+// cylindrical outward cup wraps into a post without the collinear-rim
+// degeneracy a rectangular section hits.
+func diskHoledCup(t *testing.T, R, rh, h float64) (*decad.Document, *decad.Body) {
+	t.Helper()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	s.CreateCircle(s.CreatePoint(0, 0), R)
+	s.CreateCircle(s.CreatePoint(0, 0), rh)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	var prof *sketch.Profile
+	for _, p := range s.Profiles() {
+		if len(p.Holes) == 1 {
+			prof = p
+		}
+	}
+	require.NotNil(t, prof)
+	doc := decad.New()
+	body, err := doc.Extrude(s, prof, decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+	require.NoError(t, err)
+	return doc, body
+}
+
+// TestShellCupHoledTessellate meshes a HOLED cup (modify §9, D4): a box with one
+// central circular hole, top cap shelled inward. The result wraps a wall around
+// the pocket AND a POST (a tube wall) around the hole — the tunnel through the
+// body and the post around it must both be present, or the enclosed volume is
+// wrong. The mesh is watertight, its bound within tolerance, and its enclosed
+// volume equals the SAME A_O·h_o − A_C·h_c the build asserts, evaluated on the
+// chorded circles the mesh actually holds.
+func TestShellCupHoledTessellate(t *testing.T) {
 	const th, rh = 5.0, 8.0
-	doc, box := circleHoledBox(t, [3]float64{50, 30, rh})
+	h := shellBoxHeight
+	_, box := circleHoledBox(t, [3]float64{50, 30, rh})
 	cup, err := box.Shell(topCap(box), units.Millimeters(th))
 	require.NoError(t, err)
 
-	// Tessellate / STL / OBJ all honestly refuse a holed cup.
-	_, err = cup.Tessellate(units.Millimeters(0.1))
-	require.ErrorIs(t, err, decad.ErrUnsupported, `a holed cup's tessellation is staged`)
-	var buf bytes.Buffer
-	require.ErrorIs(t, cup.STL(&buf), decad.ErrUnsupported, `STL inherits the staged tessellation`)
-	buf.Reset()
-	require.ErrorIs(t, cup.OBJ(&buf), decad.ErrUnsupported, `OBJ inherits the staged tessellation`)
+	tol := 0.1
+	mesh, err := cup.Tessellate(units.Millimeters(tol))
+	require.NoError(t, err)
+	requireWatertight(t, mesh)
+	require.Positive(t, mesh.Bound().Mag(), `the tunnel and post circles carry a real sagitta`)
+	require.LessOrEqual(t, mesh.Bound().Mag(), tol)
 
-	// The undercut survey cannot see a post's walls, so it reads Suspect
-	// rather than dropping a post undercut into a false Sound.
-	report, err := doc.Verify(t.Context(), decad.WithPullDirection(r3.NewVec(0, 0, 1)))
+	// The tunnel ring sits at radius rh, the post ring at rh + th, both about the
+	// hole centre — a post-missing mesh would carry neither. Count each; every
+	// sample owns a lo and a hi vertex.
+	nTunnel, nPost := 0, 0
+	for _, v := range mesh.Vertices() {
+		switch rho := math.Hypot(v.X-50, v.Y-30); {
+		case math.Abs(rho-rh) < 1e-6:
+			nTunnel++
+		case math.Abs(rho-(rh+th)) < 1e-6:
+			nPost++
+		}
+	}
+	require.Positive(t, nTunnel, `the tunnel through the body is meshed`)
+	require.Positive(t, nPost, `the post around the tunnel is meshed`)
+	nTunnel /= 2
+	nPost /= 2
+
+	// Volume = A_O·h − A_C·(h − t): the outer box less its chorded tunnel over
+	// the full height, less the inner box less its chorded post over the pocket.
+	aO := 100.0*60.0 - polyArea(rh, nTunnel)
+	aC := (100-2*th)*(60-2*th) - polyArea(rh+th, nPost)
+	wantVol := aO*h - aC*(h-th)
+	require.InDelta(t, wantVol, meshVolume(mesh), 1e-6, `the mesh encloses exactly the chorded holed-cup volume, post included`)
+
+	// Every one of the fourteen faces carries at least one facet, and every
+	// facet's source is a live face.
+	live := map[*decad.Face]struct{}{}
+	for _, f := range cup.Faces() {
+		live[f] = struct{}{}
+	}
+	covered := map[*decad.Face]struct{}{}
+	for _, f := range mesh.SourceFaces() {
+		_, ok := live[f]
+		require.True(t, ok, `a facet's source is one of the cup's own faces`)
+		covered[f] = struct{}{}
+	}
+	require.Len(t, covered, 14, `every face of the holed cup carries a facet`)
+
+	// STL and OBJ export deterministically.
+	var stl1, stl2 bytes.Buffer
+	require.NoError(t, cup.STL(&stl1))
+	require.NoError(t, cup.STL(&stl2))
+	require.Equal(t, stl1.Bytes(), stl2.Bytes(), `STL export is deterministic`)
+	require.Positive(t, stl1.Len())
+	var obj1, obj2 bytes.Buffer
+	require.NoError(t, cup.OBJ(&obj1))
+	require.NoError(t, cup.OBJ(&obj2))
+	require.Equal(t, obj1.Bytes(), obj2.Bytes(), `OBJ export is deterministic`)
+}
+
+// TestShellCupHoledTessellateOutward meshes an OUTWARD holed cup: an annular
+// disk (outer R, hole rh) shelled outward on its top. Outward, the outer grows
+// to R + th and the section hole shrinks to rh − th (the tunnel), while the
+// original circles R and rh become the pocket wall and the post. All four rings
+// are circular, so the rim bands close cleanly and the mesh is watertight with
+// the post present.
+func TestShellCupHoledTessellateOutward(t *testing.T) {
+	const R, rh, th = 30.0, 8.0, 4.0
+	h := shellBoxHeight
+	_, disk := diskHoledCup(t, R, rh, h)
+	cup, err := disk.Shell(topCap(disk), units.Millimeters(th), decad.WithShellSense(decad.Outward))
+	require.NoError(t, err)
+
+	tol := 0.2
+	mesh, err := cup.Tessellate(units.Millimeters(tol))
+	require.NoError(t, err)
+	requireWatertight(t, mesh)
+	require.LessOrEqual(t, mesh.Bound().Mag(), tol)
+
+	// Bucket the vertices by radius about the axis: the four rings at R + th
+	// (outer), R (pocket wall), rh (post), rh − th (tunnel).
+	counts := map[float64]int{}
+	for _, v := range mesh.Vertices() {
+		rho := math.Hypot(v.X, v.Y)
+		for _, want := range []float64{R + th, R, rh, rh - th} {
+			if math.Abs(rho-want) < 1e-6 {
+				counts[want]++
+			}
+		}
+	}
+	for _, want := range []float64{R + th, R, rh, rh - th} {
+		require.Positive(t, counts[want], `ring at radius %g is meshed`, want)
+	}
+	nOouter := counts[R+th] / 2
+	nOtunnel := counts[rh-th] / 2
+	nCouter := counts[R] / 2
+	nCpost := counts[rh] / 2
+
+	// Outward, the outer prism runs the full height plus the added floor below
+	// (h + th) and the cavity runs h — the mirror of the inward heights.
+	aO := polyArea(R+th, nOouter) - polyArea(rh-th, nOtunnel)
+	aC := polyArea(R, nCouter) - polyArea(rh, nCpost)
+	wantVol := aO*(h+th) - aC*h
+	require.InDelta(t, wantVol, meshVolume(mesh), 1e-6, `an outward holed cup encloses its chorded volume, post included`)
+}
+
+// TestShellCupHoledTessellateOutwardBoxRefused pins the one holed cup the
+// tessellator still refuses: an OUTWARD box cup dilates its rectangular section,
+// landing the rounded outer corners' tangent points on the cavity's own edge
+// lines — a rim band collinear on both sides that ear clipping cannot close. The
+// hole changes nothing about that outer rim, so the mesh is proven cracked and
+// refused rather than returned, exactly as the hole-free box cup is.
+func TestShellCupHoledTessellateOutwardBoxRefused(t *testing.T) {
+	const th, rh = 5.0, 8.0
+	_, box := circleHoledBox(t, [3]float64{50, 30, rh})
+	cup, err := box.Shell(topCap(box), units.Millimeters(th), decad.WithShellSense(decad.Outward))
+	require.NoError(t, err)
+	_, err = cup.Tessellate(units.Millimeters(0.2))
+	require.ErrorIs(t, err, decad.ErrDegenerate, `an outward box cup's collinear rim is refused, not returned cracked`)
+}
+
+// TestShellCupHoledUndercuts surveys a HOLED cup against a pull (modify §9, D2).
+// The post walls (side(i,j)/shellSide(i,j), i ≥ 1) are now walked, so a post
+// undercut is caught rather than dropped into a false all-clear.
+func TestShellCupHoledUndercuts(t *testing.T) {
+	const th, rh = 5.0, 8.0
+
+	// Pulled straight out of the open top, every wall is perpendicular (the
+	// cylinders' normals are radial) and the outer floor exactly antiparallel:
+	// no undercut, Sound.
+	t.Run("clear under an axial pull", func(t *testing.T) {
+		doc, box := circleHoledBox(t, [3]float64{50, 30, rh})
+		_, err := box.Shell(topCap(box), units.Millimeters(th))
+		require.NoError(t, err)
+		report, err := doc.Verify(t.Context(), decad.WithPullDirection(r3.NewVec(0, 0, 1)))
+		require.NoError(t, err)
+		br := report.Bodies[0]
+		require.NotNil(t, br.Undercuts)
+		require.Empty(t, br.Undercuts, `an axial pull frees the whole holed cup`)
+		require.Equal(t, decad.Sound, br.Status)
+		require.True(t, report.Trustworthy())
+	})
+
+	// Tilt the pull and the post cylinder hooks against it — a full cylinder
+	// sweeps every lateral normal, so part of the post opposes any non-axial
+	// pull. The reading is Violating and names the post wall shellSide(1,0).
+	t.Run("tilt hooks the post wall", func(t *testing.T) {
+		doc, box := circleHoledBox(t, [3]float64{50, 30, rh})
+		cup, err := box.Shell(topCap(box), units.Millimeters(th))
+		require.NoError(t, err)
+		report, err := doc.Verify(t.Context(), decad.WithPullDirection(r3.NewVec(1, 0, 1)))
+		require.NoError(t, err)
+		br := report.Bodies[0]
+		require.Equal(t, decad.Violating, br.Status)
+
+		postRef := decad.FeatureRef{Step: cup.Origin().Step, Role: "shellSide(1,0)"}
+		var post *decad.Face
+		for _, f := range br.Undercuts {
+			for _, o := range f.Origins() {
+				if o == postRef {
+					post = f
+				}
+			}
+		}
+		require.NotNil(t, post, `the post wall is caught as an undercut`)
+		require.Equal(t, decad.KindCylinder, post.Surface().Kind(), `the post is a cylinder`)
+	})
+}
+
+// TestShellCupHoledMinRadius reads the tightest concave radius of a HOLED cup
+// (modify §9, D3): the tunnel the post wraps is a hole through the body, radius
+// rh, the one concave cylindrical face. The post's own outer cylinder curves
+// TOWARD the material and is not concave, so the reading is rh, exact.
+func TestShellCupHoledMinRadius(t *testing.T) {
+	const th, rh = 5.0, 8.0
+	doc, box := circleHoledBox(t, [3]float64{50, 30, rh})
+	_, err := box.Shell(topCap(box), units.Millimeters(th))
+	require.NoError(t, err)
+	report, err := doc.Verify(t.Context(), decad.WithMinRadius())
 	require.NoError(t, err)
 	br := report.Bodies[0]
-	require.Nil(t, br.Undercuts, `a staged undercut survey lists no faces`)
-	require.Equal(t, decad.Suspect, br.Status)
-	require.False(t, report.Trustworthy())
-
-	// The min-radius survey misses a post's concave radius, so it too stages.
-	report, err = doc.Verify(t.Context(), decad.WithMinRadius())
-	require.NoError(t, err)
-	br = report.Bodies[0]
-	require.Nil(t, br.MinRadius, `a staged min-radius survey reads nothing`)
-	require.Equal(t, decad.Suspect, br.Status)
-	require.False(t, report.Trustworthy())
+	require.NotNil(t, br.MinRadius, `the tunnel is a concave cylindrical face`)
+	require.Equal(t, decad.Exact, br.MinRadius.Exactness)
+	require.True(t, br.MinRadius.Value.Equal(units.Millimeters(rh), 1e-9),
+		`the tunnel wall the post wraps is the tightest concave radius, got %s`, br.MinRadius.Value)
+	require.Equal(t, decad.Sound, br.Status, `a min-radius reading is a measurement, never a verdict`)
+	require.True(t, report.Trustworthy())
 }
