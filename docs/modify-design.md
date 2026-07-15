@@ -273,6 +273,22 @@ closed form over decad's own line and arc segments:
    crossing, so it takes the same sentinel: the loops provably meet but bound no
    simple region until a kernel this evaluator lacks trims them against each
    other. On a shell's offset either is **S11b** (§8).
+
+   **Contact is declared at a scale-anchored floor, reject-only.** Two
+   non-adjacent segments are in boundary contact when the minimum distance
+   between them is within `δ = ε·D` — `ε = 1e-9`, the **same** constant
+   verification §4 fixes for its diameter-anchored noise floor `δ = ε·D` (the one
+   decad already uses elsewhere, as `verify.go`'s clearance-gap tolerance
+   `gapWithinTolerance`), not a new constant; and `D` the rewritten section's
+   (u, v) bounding-box diagonal, decad's standard reading of the §3 diameter (it
+   is ≥ the true diameter, so the floor overstates `δ` slightly, the conservative
+   direction — it refuses a hair more, never a hair less). The test admits in one
+   direction only: `segMinDist(pair) ≤ δ` ⇒ the two loops are indistinguishable
+   from a pinch ⇒ **REFUSE** (the S7 family → `ErrUnsupported`); a gap comfortably
+   above `δ` ⇒ **BUILD**. A positive gap below the floor is **not** built — it is
+   below decad's resolution, and refusing it loudly is the sound conservative
+   behaviour, never a silently trimmed body. The threshold **scales with the
+   section**; it is never a fixed absolute constant.
 4. **Nesting preserved.** Once no two loops cross and none make boundary contact,
    each loop lies wholly inside or wholly outside every other, so nesting is
    decided by classifying **one point** of each loop against each other loop.
