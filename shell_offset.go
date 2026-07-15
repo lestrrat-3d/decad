@@ -298,9 +298,9 @@ func auditOffsetSection(orig, offset ProfileRecord) error {
 	if err != nil {
 		return err
 	}
-	empty := make([]map[int]*filletData, len(loops))
+	empty := make([]map[int]*cornerBlend, len(loops))
 	for i := range empty {
-		empty[i] = map[int]*filletData{}
+		empty[i] = map[int]*cornerBlend{}
 	}
 	return auditRewrite(orig, offset, loops, empty)
 }
