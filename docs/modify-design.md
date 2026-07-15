@@ -159,11 +159,11 @@ sentinel follows from it and from nothing else.
 | **S4** | a blend or bevel of a corner whose two segments meet **smoothly** (tangent) or in a **cusp** (anti-tangent) | no — there is no corner to blend | `ErrDegenerate` |
 | **S5** | a blend at a corner where **no blend surface of that radius exists**: the two carriers' material-side offsets never meet (parallel lines, concentric circles), or a circular carrier with the material **inside** it has `R − r ≤ 0` — its `r`-offset into the material is empty (`r > R`) or the circle's own centre, whose foot on the arc is not unique (`r = R`) | no | `ErrDegenerate` (§6) |
 | **S6** | a cutback that reaches or passes the far end of a walk — including a far end another corner **in the same call** claims | yes — the blend surface is pinned by its own corner's offsets, and merging the two (or trimming each against what it runs into) builds the body | `ErrUnsupported` (§6) |
-| **S7** | a rewrite whose loops **cross** — a loop crossing itself, or two loops of the section crossing each other | yes — a resolving kernel trims the pieces against each other | `ErrUnsupported` (§5) |
+| **S7** | a rewrite whose loops **cross or make boundary contact** — a loop crossing or touching itself, or two loops of the section crossing or touching each other (a tangency, a shared boundary point, a pinch) | yes — a resolving kernel trims the pieces against each other, and a boundary touch is the limiting case of a crossing: the solid exists under a trimmed-offset kernel this evaluator lacks | `ErrUnsupported` (§5) |
 | **S8** | a rewritten loop that has turned **inside out** — its signed area has changed sign | no — the modification consumed the region | `ErrDegenerate` (§5) |
-| **S9** | a rewrite whose loops do not cross but whose **nesting the audit cannot decide** (§5) | this evaluator cannot tell | `ErrUnsupported` — it declines rather than guess |
+| **S9** | a rewrite whose loops neither cross nor make boundary contact but whose **nesting the audit cannot decide** (§5) | this evaluator cannot tell | `ErrUnsupported` — it declines rather than guess |
 | **S10** | an **inward** thickness that leaves **no cavity** — at or beyond the section's **inradius**, or, where a cap is **kept** (B5), at or beyond the sweep's **height**, which that cap's floor consumes | no — the cavity is empty; the wall has eaten the part, across the section or along the sweep. The two limits are independent, and an **outward** thickness has neither: a dilation of a non-empty region is never empty, and an outward floor *adds* height below the kept cap instead of eating it. A **both-caps** shell keeps no cap, so it grows no floor and its cavity runs the whole sweep: only the inradius limit can fire on B2/B4 | `ErrDegenerate` (§8) |
-| **S11** | a shell whose **exact offset changes the section's feature set**, `ErrUnsupported` in either of two shapes at two points in the order. **S11a — a feature the offset drops**, caught **as the offset is built**: a **segment** dropped (a circular segment with the material inside it and `R ≤ t` inward: its offset radius `R − t` reaches zero or goes negative, the arc vanishes and its neighbours miter), or a **loop** dropped (a hole narrower than `2t` outward, whose erosion is empty). It is **antecedent to the §5 audit** — a dropped feature leaves no constructed section to audit — so it precedes S8. **S11b — a loop the offset merges or splits**, caught **by the §5 audit's crossing test** (§5 test 3, in S7's slot between S8 and S9): a slot or gap narrower than `2t` inward, whose two offset walls cross. A merge is the expected outcome of an offset, so the shell owns the crossing event and S7 never fires on an offset (§8). | yes | `ErrUnsupported` — this evaluator's offset is per-feature and topology-preserving; resolving either needs a trimmed-offset kernel it does not have (§8) |
+| **S11** | a shell whose **exact offset changes the section's feature set**, `ErrUnsupported` in either of two shapes at two points in the order. **S11a — a feature the offset drops**, caught **as the offset is built**: a **segment** dropped (a circular segment with the material inside it and `R ≤ t` inward: its offset radius `R − t` reaches zero or goes negative, the arc vanishes and its neighbours miter), or a **loop** dropped (a hole narrower than `2t` outward, whose erosion is empty). It is **antecedent to the §5 audit** — a dropped feature leaves no constructed section to audit — so it precedes S8. **S11b — a loop the offset merges or splits**, caught **by the §5 audit's crossing test** (§5 test 3, in S7's slot between S8 and S9): a slot or gap narrower than `2t` inward, whose two offset walls cross — or, at exactly `2t`, touch. A merge is the expected outcome of an offset, so the shell owns that event and S7 never fires on an offset (§8). | yes | `ErrUnsupported` — this evaluator's offset is per-feature and topology-preserving; resolving either needs a trimmed-offset kernel it does not have (§8) |
 | **S12** | a **both-caps** shell of a **holed** section — the wall is one band around the outer loop plus one band lining each hole: `1 + k` lumps (B4) | yes | `ErrUnsupported` — a `prismPayload` holds one region, and this evaluator has no multi-lump payload (§9, §14) |
 | **S13** | a **zero radius** or a **zero distance** — a body identical to the one the caller already holds | it exists, and it is the receiver: a question with one answer and no content, exactly as `Verify`'s zero tool is (verification §2) | `ErrDegenerate` |
 | **S14** | a **zero thickness** shell | no — a face is removed and the wall is `P \ P`: the empty region, no solid at all | `ErrDegenerate` |
@@ -186,7 +186,7 @@ the same for every op:
 | **1 — the pre-gates** | is this a call at all? Decided before any geometry | S17 (a live receiver), S15 (a magnitude of the right `Kind`, finite and non-negative), S13 / S14 (a non-zero one), S16 (a selector that matches) |
 | **2 — the receiver and its targets** | is this body one a modify op takes, and is what the query named a thing it can act on? | S3 (Table R's payload class), then S1 (every selected edge is lateral) / S2 (every removed face is a cap) |
 | **3 — the construction's own gates** | does the rewrite the caller asked for exist, feature by feature? | fillet / chamfer: S4 (there is a corner), then S5 (a blend of that radius exists — fillet only). Shell: S10 (the cavity is non-empty — inward only: the eroded section, and the height a kept cap's floor leaves), then S11a (no feature the offset drops as it is built) |
-| **4 — the §5 audit of the rewritten profile** | do the pieces bound a simple, correctly nested region? | S8 (orientation — the existence question, so a consumed region never reads `ErrUnsupported`), then S6 (no walk consumed by its own corners — an offset mints none, §8), then S7 (no crossing; for a **shell** a crossing is S11b, §8), then S9 (nesting, which is decidable only once no two loops cross) |
+| **4 — the §5 audit of the rewritten profile** | do the pieces bound a simple, correctly nested region? | S8 (orientation — the existence question, so a consumed region never reads `ErrUnsupported`), then S6 (no walk consumed by its own corners — an offset mints none, §8), then S7 (no crossing and no boundary contact; for a **shell** either is S11b, §8), then S9 (nesting, which is decidable only once no two loops cross or touch) |
 | **5 — what the result can be held as** | the region is proven; can a payload hold it? | S12 (a both-caps shell of a holed section is `1 + k` lumps) |
 
 Each stage needs the one before it, and that is what fixes the order rather than
@@ -264,24 +264,48 @@ closed form over decad's own line and arc segments:
    before they bound anything. It precedes the crossing test because a walk its
    own corners have eaten is not yet a piece an intersection against it would
    mean anything on.
-3. **No crossing.** Every pair of segments within a rewritten loop, and every
-   pair drawn from two loops of the section, is tested for intersection —
-   line×line, line×circle, circle×circle, the same closed forms the clearance
-   kernel's 2D reduction and `survey2d.go`'s boundary walks use. A crossing is
-   **S7** — and, on a shell's offset, **S11b** (§8).
-4. **Nesting preserved.** Once no two loops cross, each loop lies wholly inside
-   or wholly outside every other, so nesting is decided by classifying **one
-   point** of each loop against each other loop. Containment is *not* a crossing
-   test and is not free: the classifier is the ray-parity walk with direction
-   retries that `survey2d.go` already runs, and it admits an **undecided**
-   outcome. A build-time audit has no `Suspect` to fall back on, so an undecided
-   containment is **S9** — the evaluator declines. The audit passes only when the
-   outer loop is proven to contain each hole and the holes are proven mutually
-   disjoint.
+3. **No crossing, and no boundary contact.** Every pair of segments within a
+   rewritten loop, and every pair drawn from two loops of the section, is tested
+   for intersection — line×line, line×circle, circle×circle, the same closed
+   forms the clearance kernel's 2D reduction and `survey2d.go`'s boundary walks
+   use. A transverse crossing is **S7**; so is a mere **boundary contact** — a
+   tangency, a shared boundary point, a pinch. A touch is the limiting case of a
+   crossing, so it takes the same sentinel: the loops provably meet but bound no
+   simple region until a kernel this evaluator lacks trims them against each
+   other. On a shell's offset either is **S11b** (§8).
 
-A residual proves nothing and admits nothing; a crossing or containment test on
-exactly represented line and arc segments is a **decided** fact of decad's own
-data, and its verdict is the same under every evaluator. It is what makes the
+   **Contact is declared at a scale-anchored floor, reject-only.** Two
+   non-adjacent segments are in boundary contact when the minimum distance
+   between them is within `δ = ε·D` — `ε = 1e-9`, the **same** constant
+   verification §4 fixes for its diameter-anchored noise floor `δ = ε·D` (the one
+   decad already uses elsewhere, as `verify.go`'s clearance-gap tolerance
+   `gapWithinTolerance`), not a new constant; and `D` the rewritten section's
+   (u, v) bounding-box diagonal, decad's standard reading of the §3 diameter (it
+   is ≥ the true diameter, so the floor overstates `δ` slightly, the conservative
+   direction — it refuses a hair more, never a hair less). The test admits in one
+   direction only: `segMinDist(pair) ≤ δ` ⇒ the two loops are indistinguishable
+   from a pinch ⇒ **REFUSE** (the S7 family → `ErrUnsupported`); a gap comfortably
+   above `δ` ⇒ **BUILD**. A positive gap below the floor is **not** built — it is
+   below decad's resolution, and refusing it loudly is the sound conservative
+   behaviour, never a silently trimmed body. The threshold **scales with the
+   section**; it is never a fixed absolute constant.
+4. **Nesting preserved.** Once no two loops cross and none make boundary contact,
+   each loop lies wholly inside or wholly outside every other, so nesting is
+   decided by classifying **one point** of each loop against each other loop.
+   Both conditions are load-bearing: two loops enclose disjoint interiors only
+   when their boundaries neither cross **nor** merely touch (Jordan), so a shared
+   boundary point — a tangency or a pinch — leaves them not cleanly nested even
+   with no crossing, and test 3 has already refused it (S7). Containment is *not*
+   a crossing test and is not free: the classifier is the ray-parity walk with
+   direction retries that `survey2d.go` already runs, and it admits an
+   **undecided** outcome. A build-time audit has no `Suspect` to fall back on, so
+   an undecided containment is **S9** — the evaluator declines. The audit passes
+   only when the outer loop is proven to contain each hole and the holes are
+   proven mutually disjoint.
+
+A residual proves nothing and admits nothing; a crossing, boundary-contact or
+containment test on exactly represented line and arc segments is a **decided**
+fact of decad's own data, and its verdict is the same under every evaluator. It is what makes the
 build's "valid by construction" claim (evaluator §10) survive a modify op: the
 region is proven simple before the prism over it is built, so no unproven body
 is ever made, and `Verify` reads the result exactly as it reads an extrude's.
@@ -394,9 +418,10 @@ Two lateral blends can still **interfere**, and interference is refused, never
 patched. Two corners of one wall claim it from both ends: S6. Two corners that
 share no wall at all — opposite ends of a thin neck, two corners of one loop
 that are not adjacent, a corner of the outer loop and a corner of a hole across
-a thin section — can have their rewritten pieces cross without either
-overrunning a walk, and the §5 audit catches those: S7. Both fire before a face
-is made, and neither produces a corner needing a surface nobody can name.
+a thin section — can have their rewritten pieces cross or come into boundary
+contact without either overrunning a walk, and the §5 audit catches those: S7.
+Both fire before a face is made, and neither produces a corner needing a surface
+nobody can name.
 
 `FilletOpts` carries nothing in this increment, so a fillet `Step`'s `Opts` is
 nil (core §6.2: nil when the op takes none). A variable-radius or setback option
@@ -520,10 +545,11 @@ because each needs the one before it to have passed.**
 **The offset section is a rewrite, so it faces the §5 audit like any other**, and
 the audit runs between the second gate and the third, in its own order (§4): an
 offset loop that has turned inside out is **S8**, asked first as the audit's
-existence test; then the crossing test — **a crossing of offset loops is S11b,
-not S7**, because a merge is the expected outcome of an offset (two walls closing
-on each other at `2t` *is* the feature-set change S11b names), so the shell's own
-row owns the event and S7 never fires on an offset; then nesting — an offset whose
+existence test; then the crossing test — **a crossing or boundary contact of
+offset loops is S11b, not S7**, because a merge is the expected outcome of an
+offset (two walls closing on each other at `2t` *is* the feature-set change S11b
+names, and touching at exactly `2t` is its limiting case), so the shell's own row
+owns the event and S7 never fires on an offset; then nesting — an offset whose
 nesting the containment classifier cannot decide is **S9**, which the evaluator
 declines rather than guess. The trim test cannot fire at all: it tests a cutback,
 and an offset mints none — a segment the offset consumes is a dropped feature,
