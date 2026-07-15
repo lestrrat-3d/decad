@@ -51,6 +51,18 @@ func (cp cupPayload) prismLike(z0, z1 float64) prismPayload {
 	return prismPayload{frame: cp.frame, z0: z0, z1: z1, xform: cp.xform}
 }
 
+// extentAlong is the cup's exact extent interval along an arbitrary world
+// direction g — the OUTER prism's extent (docs/modify-design.md §10, Table D,
+// D5). The cavity is interior and reaches no farther than the outer region, so
+// the outward extent is the solid outer prism's, read by the same
+// prismPayload.extentAlong the outer prism's bounds already use. This is what a
+// through-all stop consults when a cup is a live body in the sweep's path.
+func (cp cupPayload) extentAlong(g r3.Vec) (float64, float64, error) {
+	oLo, oHi := math.Min(cp.zOuter, cp.zOpen), math.Max(cp.zOuter, cp.zOpen)
+	outer := prismPayload{profile: cp.outer, frame: cp.frame, z0: oLo, z1: oHi, xform: cp.xform}
+	return outer.extentAlong(g)
+}
+
 // cupPayloadFor assembles the cup record from the receiver prism, its offset
 // section and the shell sense/opening (docs/modify-design.md §9). removedEnd
 // opens the cup at the top (z1); a removed start opens it at the bottom (z0),

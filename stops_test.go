@@ -653,3 +653,62 @@ func TestBodyStopRecipeRoundTrip(t *testing.T) {
 	require.NoError(t, json.Unmarshal(buf, &got))
 	require.Equal(t, recipe, got)
 }
+
+// TestExtrudeThroughAllCupStop proves docs/modify-design.md Table D, D5: a
+// ThroughAll stop reads a live cup's OUTER prism extent via cupPayload's own
+// extentAlong (the cavity being interior), rather than refusing with
+// ErrUnsupported because the cup lacks a directional extent.
+func TestExtrudeThroughAllCupStop(t *testing.T) {
+	s, plateProf, pinProf := plateAndPin(t)
+	doc := decad.New()
+	box, err := doc.Extrude(s, plateProf, decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+	require.NoError(t, err)
+
+	// Hollow the plate into a cup (one cap removed): the box is retired, so the
+	// cup is the only live body the pin's sweep can meet. The outer prism still
+	// spans z ∈ [0, 20], so the through-all stop must resolve to 20.
+	cup, err := box.Shell(topCap(box), units.Millimeters(5))
+	require.NoError(t, err)
+	require.NotContains(t, doc.Bodies(), box)
+
+	pin, err := doc.Extrude(s, pinProf, decad.ThroughAll{Dir: decad.Along})
+	require.NoError(t, err)
+	require.NotErrorIs(t, err, decad.ErrUnsupported)
+
+	// The sweep read the cup's outer extent (20): the 20×20 pin swept [0, 20]
+	// is 8000 mm³, bounded z ∈ [0, 20]. The cavity did not lower the stop.
+	requireVolume(t, pin, 400*20)
+	requireBounds(t, pin, 120, 0, 0, 140, 20, 20)
+	requireManifold(t, pin)
+
+	// The cup is a recorded dependency of the stop step, not an operand: it
+	// stays live and its StepRef is the step's Inputs (core §6.2).
+	require.Contains(t, doc.Bodies(), cup)
+	steps := doc.Recipe().Steps
+	require.Equal(t, []decad.StepRef{cup.Origin().Step}, steps[len(steps)-1].Inputs)
+}
+
+// TestExtrudeThroughAllSideCupStop is the ThroughAllSide sibling: a two-sided
+// sweep whose Along side runs through a live cup reads the same outer extent.
+func TestExtrudeThroughAllSideCupStop(t *testing.T) {
+	s, plateProf, pinProf := plateAndPin(t)
+	doc := decad.New()
+	box, err := doc.Extrude(s, plateProf, decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+	require.NoError(t, err)
+	cup, err := box.Shell(topCap(box), units.Millimeters(5))
+	require.NoError(t, err)
+
+	pin, err := doc.Extrude(s, pinProf, decad.TwoSided{
+		One: decad.ThroughAllSide{},
+		Two: decad.DistanceSide{D: units.Millimeters(3)},
+	})
+	require.NoError(t, err)
+	require.NotErrorIs(t, err, decad.ErrUnsupported)
+
+	// The Along side (One) stops at the cup's outer extent (20), the Against
+	// side (Two) at 3: the pin spans z ∈ [-3, 20], a 20×20 footprint →
+	// 23·400 = 9200 mm³.
+	requireVolume(t, pin, 400*23)
+	requireBounds(t, pin, 120, 0, -3, 140, 20, 20)
+	require.Contains(t, doc.Bodies(), cup)
+}
