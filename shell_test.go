@@ -244,6 +244,203 @@ func TestShellCupPlacedComposes(t *testing.T) {
 	require.InDelta(t, 10.0, bounds.Min.X, 1e-9, `the placed cup's box shifts by the motion`)
 }
 
+// circleHoledBox extrudes the 100×60 plate carrying the given circular holes
+// (each [cx, cy, r]) by shellBoxHeight — a straight prism whose section has
+// k ≥ 1 holes, the posts a one-cap shell must wrap.
+func circleHoledBox(t *testing.T, holes ...[3]float64) (*decad.Document, *decad.Body) {
+	t.Helper()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	rect := s.CreateRectangle(0, 0, 100, 60)
+	s.Fix(rect.A)
+	for _, h := range holes {
+		s.CreateCircle(s.CreatePoint(h[0], h[1]), h[2])
+	}
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	var prof *sketch.Profile
+	for _, p := range s.Profiles() {
+		if len(p.Holes) == len(holes) {
+			prof = p
+		}
+	}
+	require.NotNil(t, prof)
+	doc := decad.New()
+	box, err := doc.Extrude(s, prof, decad.Distance{D: units.Millimeters(shellBoxHeight), Dir: decad.Along})
+	require.NoError(t, err)
+	return doc, box
+}
+
+func TestShellCupHoledInward(t *testing.T) {
+	const th, rh = 5.0, 8.0
+	h := shellBoxHeight
+	doc, box := circleHoledBox(t, [3]float64{50, 30, rh})
+
+	// One cap removed, inward, on a section with one central hole — a holed cup:
+	// a wall around the pocket, a floor, and a POST (a tube wall) around the hole
+	// rising from the floor, all one lump.
+	body, err := box.Shell(topCap(box), units.Millimeters(th))
+	require.NoError(t, err)
+	require.True(t, body.IsSolid())
+	requireManifold(t, body)
+	require.Len(t, body.Lumps(), 1, `a one-cap holed cup is one lump — the floor joins every band`)
+	for _, sh := range body.Shells() {
+		require.False(t, sh.IsVoid(), `an opening joins inner and outer into one non-void shell`)
+	}
+
+	// Volume = A_P·h − A_Q·(h − t): the outer prism over P less the cavity prism
+	// over Q = P ⊖ t, each on its own interval. Inward, the hole GROWS by t
+	// (its wall's material lies outside it), so Q's hole is radius rh + t.
+	aP := 100.0*60.0 - math.Pi*rh*rh
+	aQ := (100-2*th)*(60-2*th) - math.Pi*(rh+th)*(rh+th)
+	wantVol := aP*h - aQ*(h-th)
+	vol, err := body.Volume()
+	require.NoError(t, err)
+	require.Equal(t, decad.Exact, vol.Exactness)
+	require.True(t, vol.Bound.Equal(units.CubicMillimeters(0), 1e-12), `a shell introduces no bound`)
+	gotVol, err := vol.Value.In(units.CubicMillimeter)
+	require.NoError(t, err)
+	require.InDelta(t, wantVol, gotVol, 1e-9)
+
+	// Area = 2·A_P + perim_O·h_o + perim_C·h_c, summed over every loop.
+	perimO := 2*(100.0+60.0) + 2*math.Pi*rh
+	perimC := 2*(90.0+50.0) + 2*math.Pi*(rh+th)
+	wantArea := 2*aP + perimO*h + perimC*(h-th)
+	area, err := body.Area()
+	require.NoError(t, err)
+	require.Equal(t, decad.Exact, area.Exactness)
+	gotArea, err := area.Value.In(units.SquareMillimeter)
+	require.NoError(t, err)
+	require.InDelta(t, wantArea, gotArea, 1e-9)
+
+	// Centroid: symmetric in x and y about the hole, sitting low over the floor.
+	massO, massC := aP*h, aQ*(h-th)
+	zO, zC := h/2, (th+h)/2
+	wantZ := (massO*zO - massC*zC) / (massO - massC)
+	c, err := body.Centroid()
+	require.NoError(t, err)
+	require.Equal(t, decad.Exact, c.Exactness)
+	require.InDelta(t, 50.0, c.Value.X, 1e-9)
+	require.InDelta(t, 30.0, c.Value.Y, 1e-9)
+	require.InDelta(t, wantZ, c.Value.Z, 1e-9)
+
+	// Faces: 4 outer walls + 1 tunnel cylinder + 4 cavity walls + 1 post cylinder
+	// + capStart + shellCap + rim(0) + rim(1) = 14, with two cylinders.
+	require.Len(t, body.Faces(), 14)
+	cyl := 0
+	for _, f := range body.Faces() {
+		if _, ok := f.Surface().(decad.Cylinder); ok {
+			cyl++
+		}
+	}
+	require.Equal(t, 2, cyl, `the tunnel and the post are each a cylinder`)
+
+	// Roles are minted from the RESULT's own record (§11): a rim per loop, and
+	// the hole's own wall (loop 1) in both the outer and the cavity index space.
+	roles := shellRoleSet(body)
+	for _, want := range []string{"capStart", "shellCap", "rim(0)", "rim(1)", "side(0,0)", "side(1,0)", "shellSide(0,0)", "shellSide(1,0)"} {
+		require.Contains(t, roles, want, `missing role %q`, want)
+	}
+
+	// A lone cup verifies Sound (no pairs to clear, valid by construction).
+	report, err := doc.Verify(t.Context())
+	require.NoError(t, err)
+	require.Equal(t, decad.Sound, report.Status)
+	require.True(t, report.Trustworthy())
+}
+
+func TestShellCupHoledTwoPosts(t *testing.T) {
+	const th, rh = 5.0, 6.0
+	h := shellBoxHeight
+	doc, box := circleHoledBox(t, [3]float64{30, 30, rh}, [3]float64{70, 30, rh})
+
+	body, err := box.Shell(topCap(box), units.Millimeters(th))
+	require.NoError(t, err)
+	require.True(t, body.IsSolid())
+	requireManifold(t, body)
+	require.Len(t, body.Lumps(), 1, `two posts on one floor is still one lump`)
+
+	// Volume with two holes, each growing to radius rh + t in the cavity.
+	aP := 100.0*60.0 - 2*math.Pi*rh*rh
+	aQ := (100-2*th)*(60-2*th) - 2*math.Pi*(rh+th)*(rh+th)
+	wantVol := aP*h - aQ*(h-th)
+	vol, err := body.Volume()
+	require.NoError(t, err)
+	require.Equal(t, decad.Exact, vol.Exactness)
+	gotVol, err := vol.Value.In(units.CubicMillimeter)
+	require.NoError(t, err)
+	require.InDelta(t, wantVol, gotVol, 1e-9)
+
+	// A rim per loop: outer plus one per post.
+	roles := shellRoleSet(body)
+	for _, want := range []string{"rim(0)", "rim(1)", "rim(2)", "shellSide(1,0)", "shellSide(2,0)"} {
+		require.Contains(t, roles, want, `missing role %q`, want)
+	}
+
+	report, err := doc.Verify(t.Context())
+	require.NoError(t, err)
+	require.Equal(t, decad.Sound, report.Status)
+}
+
+func TestShellCupHoledOutward(t *testing.T) {
+	const th, rh = 4.0, 12.0
+	h := shellBoxHeight
+	_, box := circleHoledBox(t, [3]float64{50, 30, rh})
+
+	// Outward: the original solid P is the cavity, and the wall grows off it. The
+	// hole SHRINKS by t in the outer dilation Q (its wall material lies outside
+	// it), so the outer region's tunnel is radius rh − t and the pocket's post is
+	// the original radius rh.
+	body, err := box.Shell(topCap(box), units.Millimeters(th), decad.WithShellSense(decad.Outward))
+	require.NoError(t, err)
+	require.True(t, body.IsSolid())
+	requireManifold(t, body)
+	require.Len(t, body.Lumps(), 1)
+
+	// Q = P ⊕ t: the four convex corners round with quarter arcs of radius t, and
+	// the central hole shrinks to radius rh − t. Volume = A_Q·(h + t) − A_P·h.
+	aP := 100.0*60.0 - math.Pi*rh*rh
+	aQ := (100+2*th)*(60+2*th) - (4-math.Pi)*th*th - math.Pi*(rh-th)*(rh-th)
+	wantVol := aQ*(h+th) - aP*h
+	vol, err := body.Volume()
+	require.NoError(t, err)
+	require.Equal(t, decad.Exact, vol.Exactness)
+	gotVol, err := vol.Value.In(units.CubicMillimeter)
+	require.NoError(t, err)
+	require.InDelta(t, wantVol, gotVol, 1e-9)
+}
+
+func TestShellCupHoledRectangularPost(t *testing.T) {
+	const th = 5.0
+	// A rectangular hole gives a rectangular post; its grown cavity hole rounds
+	// its corners (an inward-reflex corner offsets to an arc, §7), so the post
+	// wall is four planes joined by four corner cylinders — all still one lump.
+	box := holedBox(t, 40, 20, 60, 40)
+	body, err := box.Shell(topCap(box), units.Millimeters(th))
+	require.NoError(t, err)
+	require.True(t, body.IsSolid())
+	requireManifold(t, body)
+	require.Len(t, body.Lumps(), 1)
+	for _, sh := range body.Shells() {
+		require.False(t, sh.IsVoid())
+	}
+
+	// Volume: P is the 100×60 plate less the 20×20 hole; Q erodes the outer to
+	// 90×50 and GROWS the hole to a 30×30 rounded square (corners of radius t).
+	h := shellBoxHeight
+	aP := 100.0*60.0 - 20.0*20.0
+	holeQ := 30.0*30.0 - (4-math.Pi)*th*th
+	aQ := (100-2*th)*(60-2*th) - holeQ
+	wantVol := aP*h - aQ*(h-th)
+	vol, err := body.Volume()
+	require.NoError(t, err)
+	require.Equal(t, decad.Exact, vol.Exactness)
+	gotVol, err := vol.Value.In(units.CubicMillimeter)
+	require.NoError(t, err)
+	require.InDelta(t, wantVol, gotVol, 1e-9)
+}
+
 func TestShellRefusals(t *testing.T) {
 	t.Run("holed both caps is S12 unsupported", func(t *testing.T) {
 		w := sketch.NewWorld()

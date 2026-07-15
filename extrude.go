@@ -546,8 +546,21 @@ func coalesceWalks(walks []sideWalk) []sideWalk {
 
 // buildLoopSides builds one loop's side faces with shared vertices and
 // edges, returning the faces, the bottom and top cap coedges in walk order,
-// and the loop's perimeter length.
+// and the loop's perimeter length. A loop's index is both its role index and,
+// via li != 0, its orientation: loop 0 is an outer loop (material inside),
+// every other a hole (material outside).
 func buildLoopSides(body *Body, ref StepRef, pp prismPayload, li int, loop LoopRecord) ([]*Face, []coedge, []coedge, float64, error) {
+	return buildLoopSidesAs(body, ref, pp, li, li != 0, loop)
+}
+
+// buildLoopSidesAs is buildLoopSides with the role index and the orientation
+// decoupled: roleLoop names the walls' side(roleLoop,j) role, and holeLoop
+// picks the material side of a straight wall independently. A cup's cavity
+// walks each loop of the void the SOLID wraps — the void's outer boundary is a
+// hole in the solid (holeLoop true), each of the void's own holes a solid post
+// (holeLoop false) — a pairing the natural li != 0 rule cannot express
+// (docs/modify-design.md §9).
+func buildLoopSidesAs(body *Body, ref StepRef, pp prismPayload, roleLoop int, holeLoop bool, loop LoopRecord) ([]*Face, []coedge, []coedge, float64, error) {
 	if len(loop.Segments) == 0 {
 		return nil, nil, nil, 0, fmt.Errorf(`%w: a recorded loop holds no segments`, ErrDegenerate)
 	}
@@ -600,7 +613,6 @@ func buildLoopSides(body *Body, ref StepRef, pp prismPayload, li int, loop LoopR
 
 	// Side faces with bottom/top edges; cap coedges accumulate in walk order.
 	h := pp.z1 - pp.z0
-	holeLoop := li != 0
 	faces := make([]*Face, 0, n)
 	bottomCo := make([]coedge, 0, n)
 	topCo := make([]coedge, 0, n)
@@ -689,7 +701,7 @@ func buildLoopSides(body *Body, ref StepRef, pp prismPayload, li int, loop LoopR
 
 		origins := make([]FeatureRef, len(w.segs))
 		for oi, si := range w.segs {
-			origins[oi] = FeatureRef{Step: ref, Role: fmt.Sprintf("side(%d,%d)", li, si)}
+			origins[oi] = FeatureRef{Step: ref, Role: fmt.Sprintf("side(%d,%d)", roleLoop, si)}
 		}
 		face := &Face{
 			surface:  surf,
