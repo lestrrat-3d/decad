@@ -16,11 +16,17 @@ import (
 // proven by exact closed-form tests, never a residual (§5, CLAUDE.md's
 // falsify-only rule governs only what sketch hands over).
 //
-// A feature the offset DROPS (a circular segment whose offset radius reaches
-// zero, a hole whose erosion is empty) or a miter that does not close is a
-// feature-set change the evaluator cannot build without a trimmed-offset kernel
-// — S11a / S11, ErrUnsupported, caught here as the offset is constructed and so
-// antecedent to the audit (§4). A merge the audit catches later is S11b.
+// A feature the offset DROPS or a miter that does not close is a feature-set
+// change the evaluator cannot build without a trimmed-offset kernel — S11a /
+// S11, ErrUnsupported, caught here as the offset is constructed and so
+// antecedent to the audit (§4). A drop takes two shapes, both caught here: a
+// circular segment whose offset radius reaches zero (offsetRadius), and a whole
+// loop whose erosion is empty — a polygonal hole narrower than 2t offset
+// outward, whose corner joins overshoot every walk so each runs backward
+// (walkOffsetConsumed). The eroded loop keeps its walk sense, so its signed
+// area does not change sign and the §5 audit's S8 cannot see it — which is why
+// the drop is decided per walk, here, before there is any section to audit. A
+// merge the audit catches later is S11b.
 
 // errOffsetDrop marks a feature the offset drops (S11a).
 var errOffsetDrop = fmt.Errorf(`%w: the offset drops a section feature; a trimmed-offset kernel is not available`, ErrUnsupported)
@@ -127,6 +133,17 @@ func offsetLoop(loop cornerLoop, s, t float64) ([]CurveSegment, error) {
 		if j1.arc {
 			end = j1.pA
 		}
+		// S11a: a walk the offset has consumed. When a loop's erosion is empty —
+		// a hole narrower than 2t offset outward, a slot the offset over-eats —
+		// the neighbouring corner joins overshoot the walk and its trimmed offset
+		// segment no longer runs along the walk's own direction. offsetRadius
+		// catches a circular segment collapsing to zero radius; this catches a
+		// polygonal loop the joins turn inside out, which keeps its signed-area
+		// sign (so S8 cannot see it) yet bounds no material. Caught here as the
+		// offset is built — antecedent to the §5 audit (§4).
+		if walkOffsetConsumed(w, start, end) {
+			return nil, errOffsetDrop
+		}
 		seg, err := offsetWalkSegment(w, s, t, start, end)
 		if err != nil {
 			return nil, err
@@ -193,6 +210,43 @@ func offsetWalkSegment(w sideWalk, s, t float64, start, end Point2) (CurveSegmen
 		return nil, errOffsetDrop
 	}
 	return arcSegment(Point2{U: w.cU, V: w.cV}, start, end, w.th1 > w.th0), nil
+}
+
+// walkOffsetConsumed reports whether the offset dropped this walk (S11a): its
+// trimmed offset segment, running from start (the join at its head) to end (the
+// join at its tail), no longer advances along the walk's own direction. When a
+// loop's erosion is empty — a hole narrower than 2t offset outward — every corner
+// join overshoots and each straight walk's offset segment runs BACKWARD; an arc
+// walk's offset sweeps the long way round, past its own span. The offset loop
+// keeps its walk sense (its signed area does not change sign), so S8 cannot see
+// this — the drop is a per-walk fact, decided here as the offset is built.
+func walkOffsetConsumed(w sideWalk, start, end Point2) bool {
+	du, dv := end.U-start.U, end.V-start.V
+	if !w.circular {
+		tx, ty, l := normalize2(w.tanInU, w.tanInV)
+		if l == 0 {
+			return false // no direction to compare against; left to other gates
+		}
+		adv := du*tx + dv*ty // signed advance along the walk's tangent
+		return adv <= shellTol*math.Max(1, math.Hypot(du, dv))
+	}
+	// An arc's offset must not sweep further than the arc it descends from: a
+	// consumed arc's trimmed feet swap sides, so its walk-sense sweep wraps the
+	// long way round, exceeding the original span.
+	a0 := math.Atan2(start.V-w.cV, start.U-w.cU)
+	a1 := math.Atan2(end.V-w.cV, end.U-w.cU)
+	span := a1 - a0
+	if w.th1 > w.th0 { // CCW walk
+		for span < 0 {
+			span += 2 * math.Pi
+		}
+	} else { // CW walk
+		for span > 0 {
+			span -= 2 * math.Pi
+		}
+		span = -span
+	}
+	return span > math.Abs(w.th1-w.th0)+shellTol
 }
 
 // circleSegConcentric records a full-circle walk as a CircleSeg of radius rr in

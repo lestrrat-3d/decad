@@ -31,6 +31,32 @@ func bothCaps() *decad.FaceQuery {
 	return decad.Faces(decad.NormalTo(r3.NewVec(0, 0, 1)))
 }
 
+// holedBox extrudes the 100×60 plate with one rectangular hole (corners
+// (x0,y0)-(x1,y1)) by shellBoxHeight — a straight prism whose section carries a
+// single polygonal hole, for the both-caps holed refusals.
+func holedBox(t *testing.T, x0, y0, x1, y1 float64) *decad.Body {
+	t.Helper()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	rect := s.CreateRectangle(0, 0, 100, 60)
+	s.Fix(rect.A)
+	s.CreateRectangle(x0, y0, x1, y1)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	var prof *sketch.Profile
+	for _, p := range s.Profiles() {
+		if len(p.Holes) == 1 {
+			prof = p
+		}
+	}
+	require.NotNil(t, prof)
+	doc := decad.New()
+	box, err := doc.Extrude(s, prof, decad.Distance{D: units.Millimeters(shellBoxHeight), Dir: decad.Along})
+	require.NoError(t, err)
+	return box
+}
+
 // topCap selects a prism's end cap by its role.
 func topCap(b *decad.Body) *decad.FaceQuery {
 	return decad.Faces(decad.FaceCreatedBy(decad.FeatureRef{Step: b.Origin().Step, Role: roleCapEnd}))
@@ -238,8 +264,37 @@ func TestShellRefusals(t *testing.T) {
 		doc := decad.New()
 		box, err := doc.Extrude(s, prof, decad.Distance{D: units.Millimeters(shellBoxHeight), Dir: decad.Along})
 		require.NoError(t, err)
+		// The 5 mm inward wall leaves the radius-10 hole (2t = 10 < 20 diameter),
+		// so the hole survives the offset and the refusal is the lump count (S12),
+		// not a dropped feature.
 		_, err = box.Shell(bothCaps(), units.Millimeters(5))
 		require.ErrorIs(t, err, decad.ErrUnsupported, `1 + k lumps has no prismPayload`)
+		require.Contains(t, err.Error(), "disjoint lumps", `a surviving hole refuses via S12, the lump count`)
+	})
+
+	t.Run("outward offset erasing a hole is S11a, not the S12 lump count", func(t *testing.T) {
+		// A 10×10 hole with a 6 mm OUTWARD wall: 2t = 12 > 10, so the offset
+		// erodes the hole to nothing — a dropped loop (S11a). The erased loop
+		// keeps its walk sense (its signed area does not change sign), so S8
+		// cannot see it and it must be caught as the offset is built — before the
+		// B4/S12 lump-count branch. Both are ErrUnsupported, so assert the message
+		// sub-case to prove S11a fired, not S12.
+		box := holedBox(t, 65, 25, 75, 35)
+		_, err := box.Shell(bothCaps(), units.Millimeters(6), decad.WithShellSense(decad.Outward))
+		require.ErrorIs(t, err, decad.ErrUnsupported)
+		require.Contains(t, err.Error(), "drops a section feature", `the erased hole is S11a, a dropped feature`)
+		require.NotContains(t, err.Error(), "disjoint lumps", `S11a is antecedent to S12; the lump count is never reached`)
+	})
+
+	t.Run("outward offset keeping a hole is S12, not a drop", func(t *testing.T) {
+		// The same 10×10 hole with a 3 mm OUTWARD wall: 2t = 6 < 10, so the hole
+		// survives (it shrinks to 4×4). The offset drops nothing, so the both-caps
+		// holed refusal is the S12 lump count — proving the drop detection did not
+		// over-broaden onto a valid offset.
+		box := holedBox(t, 65, 25, 75, 35)
+		_, err := box.Shell(bothCaps(), units.Millimeters(3), decad.WithShellSense(decad.Outward))
+		require.ErrorIs(t, err, decad.ErrUnsupported)
+		require.Contains(t, err.Error(), "disjoint lumps", `a surviving hole refuses via S12, the lump count`)
 	})
 
 	t.Run("t at or past the inradius is S10 degenerate", func(t *testing.T) {
