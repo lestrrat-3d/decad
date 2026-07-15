@@ -458,6 +458,89 @@ func TestFilletClearOfHoleBuilds(t *testing.T) {
 	require.True(t, rep.Trustworthy(), `a fillet clear of the hole is Sound`)
 }
 
+// scaledDiskInCornerFillet builds a k-scaled plate whose (0,0) outer corner is
+// rounded by a radius-5k convex fillet, with a circular hole placed ENTIRELY
+// inside that fillet's disk so the rewritten arc clears the hole by a gap of
+// gapMult × the section's scale-anchored noise floor (δ = ε·D, ε = 1e-9, D the
+// section's (u, v) bounding-box diagonal). The hole sits at distance L on the
+// corner diagonal with L + ρ = r − gap, so every hole point is within r of the
+// arc centre and the hole circle never crosses the arc — a clean near-miss the
+// §5 contact test judges against the floor. The whole figure scales with k, so
+// the RELATIVE geometry — and the verdict — must not depend on k. It returns the
+// fillet error (nil ⇒ built). Because the tiny gap is created by decad's own
+// rewrite (not present in the sketch), the sketch sees only well-separated,
+// normal-sized features and never collapses them.
+func scaledDiskInCornerFillet(t *testing.T, k, gapMult float64) error {
+	t.Helper()
+	const eps = 1e-9
+	d := math.Sqrt2 * 100 * k // the section's bounding-box diagonal, its scale
+	floor := eps * d
+	gap := gapMult * floor
+	const r = 5.0
+	const rho = 2.0            // hole radius, well inside the fillet disk
+	l := (r - rho - gap/k) * k // centre distance along the diagonal; gap scales with k
+	// hole centre on the (0,0) corner diagonal, at (r,r) − (L/√2)(1,1).
+	cx := (r*k - l/math.Sqrt2)
+
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	outer := s.CreateRectangle(0, 0, 100*k, 100*k)
+	s.Fix(outer.A)
+	s.CreateCircle(s.CreatePoint(cx, cx), rho*k)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+
+	var prof *sketch.Profile
+	for _, p := range s.Profiles() {
+		if len(p.Outer) == 4 && len(p.Holes) == 1 {
+			prof = p
+			break
+		}
+	}
+	require.NotNil(t, prof, `the plate-with-disk region should exist`)
+
+	doc := decad.New()
+	body, err := doc.Extrude(s, prof, decad.Distance{D: units.Millimeters(20 * k), Dir: decad.Along})
+	require.NoError(t, err)
+
+	_, err = body.Fillet(decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)), decad.Convex()), units.Millimeters(r*k))
+	return err
+}
+
+func TestFilletContactToleranceScaleInvariant(t *testing.T) {
+	// The boundary-contact test is anchored to the SECTION'S scale (δ = ε·D),
+	// not a fixed absolute band, so the SAME relative geometry decides the same
+	// way at any absolute size. Here a gap of 10× the noise floor — comfortably
+	// above it — clears at both a 1 mm part (k = 0.01) and a 1e6 mm part
+	// (k = 1e4): both BUILD.
+	//
+	// This is exactly what the old fixed 1e-7 mm band violated. At that band the
+	// 1 mm part's 1.41e-8 mm gap reads as contact and REFUSES, while the 1e6 mm
+	// part's 1.41e-2 mm gap builds — the verdict FLIPS with absolute scale, and
+	// at large scale the old band even ACCEPTS a genuine sub-floor pinch. The
+	// build/refuse verdict below is the audit's; it holds identically at both
+	// scales only for the scale-anchored threshold. (The gap is deliberately
+	// near the floor, far below any chord tolerance, so this exercises the audit,
+	// not tessellation — a macroscopic-gap build that also tessellates Sound is
+	// TestFilletClearOfHoleBuilds.)
+	const above = 10.0 // gap = 10× the floor: comfortably clear
+	for _, k := range []float64{0.01, 1e4} {
+		err := scaledDiskInCornerFillet(t, k, above)
+		require.NoErrorf(t, err, `a gap 10× the floor must build at scale k=%g`, k)
+	}
+
+	// A true pinch (a gap far below the floor) refuses at BOTH scales: the
+	// verdict tracks the relative geometry, not the absolute size — including the
+	// large scale where the old fixed band would have accepted it.
+	const pinch = 1e-4 // 1e-4 × floor: indistinguishable from contact
+	for _, k := range []float64{0.01, 1e4} {
+		err := scaledDiskInCornerFillet(t, k, pinch)
+		require.ErrorIsf(t, err, decad.ErrUnsupported,
+			`a sub-floor gap is a pinch and must refuse at scale k=%g`, k)
+	}
+}
+
 func TestFilletNonPrismReceiver(t *testing.T) {
 	// A revolve is not a prismPayload, so a fillet of it is staged: S3.
 	w := sketch.NewWorld()

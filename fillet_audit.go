@@ -116,6 +116,7 @@ func crossingAudit(loops []LoopRecord) error {
 			segs = append(segs, segEntry{loop: li, idx: i, n: n, w: w})
 		}
 	}
+	touchFloor := contactFloor(segs)
 	for i := range segs {
 		for j := i + 1; j < len(segs); j++ {
 			if adjacent(segs[i], segs[j]) {
@@ -124,7 +125,7 @@ func crossingAudit(loops []LoopRecord) error {
 			if segCross(segs[i].w, segs[j].w) {
 				return fmt.Errorf(`%w: the fillet rewrite crosses itself; a resolving kernel is not available`, ErrUnsupported)
 			}
-			if segMinDist(segs[i].w, segs[j].w) <= segTouchEps {
+			if segMinDist(segs[i].w, segs[j].w) <= touchFloor {
 				return fmt.Errorf(`%w: the fillet rewrite brings two boundaries into contact; a resolving kernel is not available`, ErrUnsupported)
 			}
 		}
@@ -132,13 +133,35 @@ func crossingAudit(loops []LoopRecord) error {
 	return nil
 }
 
-// segTouchEps is the absolute contact tolerance (millimetres) for the
-// boundary-contact test. The rewritten section is decad's own exact geometry,
-// so a true pinch reads as a distance at float-noise scale (the crossing of
-// square-root coordinates lands within ~1e-13 of zero) while any valid gap
-// between two distinct features is macroscopic; the band between them holds no
-// admissible body, so this only absorbs float noise, never a residual.
-const segTouchEps = 1e-7
+// contactEps is the noise-floor coefficient ε of the boundary-contact test,
+// the SAME ε verification design §4 fixes for its diameter-anchored noise floor
+// δ = ε·D (see gapWithinTolerance, the Clearance.Gap gate). It is not a
+// distance; contactFloor multiplies it by the section's own scale.
+const contactEps = 1e-9
+
+// contactFloor is the boundary-contact threshold for the §5 audit, anchored to
+// the SECTION'S scale exactly as verification design §4 anchors a length's
+// noise floor: δ = ε·D with ε = contactEps and D the section's diameter (its
+// (u, v) bounding-box diagonal — the standard decad reading of D, as in
+// Body.STL and the boolean chord tolerance). Below δ two boundaries are
+// indistinguishable from a pinch, so the test REFUSES; comfortably above it is
+// a real positive gap that builds. The threshold is reject-only and SCALES with
+// the section — a fixed absolute band mis-scales, rejecting a macroscopic gap
+// on a sub-millimetre section and accepting a real pinch on a huge one.
+func contactFloor(segs []segEntry) float64 {
+	minU, minV := math.Inf(1), math.Inf(1)
+	maxU, maxV := math.Inf(-1), math.Inf(-1)
+	for _, s := range segs {
+		for _, p := range [2][2]float64{{s.w.startU, s.w.startV}, {s.w.endU, s.w.endV}} {
+			minU, maxU = math.Min(minU, p[0]), math.Max(maxU, p[0])
+			minV, maxV = math.Min(minV, p[1]), math.Max(maxV, p[1])
+		}
+	}
+	if math.IsInf(minU, 1) { // no segments: nothing to pinch
+		return 0
+	}
+	return contactEps * math.Hypot(maxU-minU, maxV-minV)
+}
 
 // adjacent reports whether two segments legitimately share an endpoint: the
 // same loop and cyclically consecutive positions.
@@ -259,9 +282,9 @@ func angleWithin(arc segmentWalk, x, y float64) bool {
 
 // segMinDist is the minimum Euclidean distance between two closed segment
 // primitives (line or arc), in closed form over their own line and arc data. It
-// is the boundary-contact classifier behind S7: a value at or below segTouchEps
-// is a tangency or a shared boundary point the interior-only crossing test
-// misses. The candidate set is complete for the attained infimum over line/arc
+// is the boundary-contact classifier behind S7: a value at or below the
+// section-scaled contactFloor is a tangency or a shared boundary point the
+// interior-only crossing test misses. The candidate set is complete for the attained infimum over line/arc
 // boundaries — the four endpoint-against-the-other distances, the interior
 // radial/aligned criticals, and zero at any interior intersection.
 func segMinDist(a, b segmentWalk) float64 {
