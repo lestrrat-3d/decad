@@ -229,6 +229,8 @@ func evalCup(d *Document, ref StepRef, cp cupPayload) (*Body, error) {
 	// loop i of O and loop i of C. The bigger boundary is O for the outer region
 	// (the cavity sits inside it) and C for a hole loop (a post rim is wider than
 	// the tunnel it wraps), so the outer/hole roles of the two loops swap at i≥1.
+	// Loops() lists the outer loop FIRST (topology.go), so the outer boundary
+	// heads the slice: O for the outer region, C for a post rim.
 	rims := make([]*Face, len(oLoops))
 	for i := range oLoops {
 		oIsOuter := i == 0
@@ -240,15 +242,18 @@ func evalCup(d *Document, ref StepRef, cp cupPayload) (*Body, error) {
 		if err != nil {
 			return nil, err
 		}
+		oLoop := &Loop{coedges: oOpen[i], outer: oIsOuter}
+		cLoop := &Loop{coedges: cOpen[i], outer: !oIsOuter}
+		outerLoop, holeLoop := oLoop, cLoop
+		if !oIsOuter {
+			outerLoop, holeLoop = cLoop, oLoop
+		}
 		rims[i] = &Face{
 			surface: Plane{Frame: rimFrame},
 			origins: []FeatureRef{{Step: ref, Role: fmt.Sprintf("rim(%d)", i)}},
 			body:    body,
 			area:    math.Abs(aO - aC),
-			loops: []*Loop{
-				{coedges: oOpen[i], outer: oIsOuter},
-				{coedges: cOpen[i], outer: !oIsOuter},
-			},
+			loops:   []*Loop{outerLoop, holeLoop},
 		}
 	}
 

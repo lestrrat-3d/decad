@@ -350,6 +350,41 @@ func TestShellCupHoledInward(t *testing.T) {
 	require.True(t, report.Trustworthy())
 }
 
+// rimByRole returns the body's face carrying the given rim role.
+func rimByRole(t *testing.T, b *decad.Body, role string) *decad.Face {
+	t.Helper()
+	for _, f := range b.Faces() {
+		for _, o := range f.Origins() {
+			if o.Role == role {
+				return f
+			}
+		}
+	}
+	t.Fatalf("no face for role %q", role)
+	return nil
+}
+
+// TestShellCupHoledRimLoopOrder pins the outer-loop-first contract of
+// Face.Loops() (topology.go) on a holed cup's rims. rim(0) bounds the outer
+// region (its outer boundary is O), and a POST rim rim(i≥1) bounds a solid
+// column the cup wraps (its outer boundary is the wider cavity opening C) — in
+// both, the loop flagged IsOuter must head the slice, so any consumer taking
+// Loops()[0] as the outer contour reads it correctly.
+func TestShellCupHoledRimLoopOrder(t *testing.T) {
+	const th, rh = 5.0, 8.0
+	_, box := circleHoledBox(t, [3]float64{50, 30, rh})
+	body, err := box.Shell(topCap(box), units.Millimeters(th))
+	require.NoError(t, err)
+
+	for _, role := range []string{"rim(0)", "rim(1)"} {
+		rim := rimByRole(t, body, role)
+		loops := rim.Loops()
+		require.Len(t, loops, 2, `%s is a rim annulus with two loops`, role)
+		require.True(t, loops[0].IsOuter(), `%s must list its outer loop first`, role)
+		require.False(t, loops[1].IsOuter(), `%s must list its hole loop second`, role)
+	}
+}
+
 func TestShellCupHoledTwoPosts(t *testing.T) {
 	const th, rh = 5.0, 6.0
 	h := shellBoxHeight
