@@ -247,3 +247,43 @@ func TestShellCupMinRadius(t *testing.T) {
 		require.True(t, report.Trustworthy())
 	})
 }
+
+// TestShellCupHoledDownstreamStaged pins the honest staging of a HOLED cup's
+// hole-sensitive downstream readers (modify §9, D2/D3/D4). The build itself is
+// correct (a post per hole, one lump, Exact mass properties), but tessellation
+// and the undercut/min-radius surveys still walk only loop 0, so on a holed cup
+// they would answer hole-blind — a hole-free mesh, a false all-clear, a too-large
+// radius. Each stages instead: tessellation refuses (ErrUnsupported) and the two
+// surveys read undecided (Suspect). A HOLE-FREE cup is unaffected (the box and
+// cylinder tests above still answer outright).
+func TestShellCupHoledDownstreamStaged(t *testing.T) {
+	const th, rh = 5.0, 8.0
+	doc, box := circleHoledBox(t, [3]float64{50, 30, rh})
+	cup, err := box.Shell(topCap(box), units.Millimeters(th))
+	require.NoError(t, err)
+
+	// Tessellate / STL / OBJ all honestly refuse a holed cup.
+	_, err = cup.Tessellate(units.Millimeters(0.1))
+	require.ErrorIs(t, err, decad.ErrUnsupported, `a holed cup's tessellation is staged`)
+	var buf bytes.Buffer
+	require.ErrorIs(t, cup.STL(&buf), decad.ErrUnsupported, `STL inherits the staged tessellation`)
+	buf.Reset()
+	require.ErrorIs(t, cup.OBJ(&buf), decad.ErrUnsupported, `OBJ inherits the staged tessellation`)
+
+	// The undercut survey cannot see a post's walls, so it reads Suspect
+	// rather than dropping a post undercut into a false Sound.
+	report, err := doc.Verify(t.Context(), decad.WithPullDirection(r3.NewVec(0, 0, 1)))
+	require.NoError(t, err)
+	br := report.Bodies[0]
+	require.Nil(t, br.Undercuts, `a staged undercut survey lists no faces`)
+	require.Equal(t, decad.Suspect, br.Status)
+	require.False(t, report.Trustworthy())
+
+	// The min-radius survey misses a post's concave radius, so it too stages.
+	report, err = doc.Verify(t.Context(), decad.WithMinRadius())
+	require.NoError(t, err)
+	br = report.Bodies[0]
+	require.Nil(t, br.MinRadius, `a staged min-radius survey reads nothing`)
+	require.Equal(t, decad.Suspect, br.Status)
+	require.False(t, report.Trustworthy())
+}

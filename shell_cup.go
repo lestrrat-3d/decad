@@ -41,6 +41,15 @@ type cupPayload struct {
 	xform  r3.Transform
 }
 
+// holed reports whether the cup wraps a wall around at least one post — the
+// outer or cavity region carries a hole. A holed cup builds (evalCup), but its
+// hole-sensitive downstream readers (tessellation and the undercut/min-radius
+// surveys) still walk only loop 0, so they stage a holed cup rather than
+// return a hole-blind (silently wrong) answer.
+func (cp cupPayload) holed() bool {
+	return len(cp.outer.Holes) > 0 || len(cp.cavity.Holes) > 0
+}
+
 // transform is the accumulated rigid placement.
 func (cp cupPayload) transform() r3.Transform { return cp.xform }
 

@@ -596,6 +596,12 @@ func cupWalks(loop LoopRecord) ([]sideWalk, error) {
 // kept cap (capStart) faces away from it, so their outward normals are ±N by
 // which side of the outer floor the open end lies on.
 func cupUndercuts(b *Body, cp cupPayload, pull r3.Vec) undercutOutcome {
+	// A holed cup's post walls (side(i,j)/shellSide(i,j), i≥1) are not walked
+	// here, so an undercut on a post would be silently dropped. Undecided
+	// rather than a false all-clear (modify §9, D2) — Verify reads Suspect.
+	if cp.holed() {
+		return undercutOutcome{}
+	}
 	p, ok := pull.Normalize()
 	if !ok {
 		return undercutOutcome{}
@@ -666,6 +672,12 @@ func cupUndercuts(b *Body, cp cupPayload, pull r3.Vec) undercutOutcome {
 // sharp concave edge where a wall meets the floor carries no radius — the
 // survey reads faces' principal radii, not edges.
 func cupMinRadius(cp cupPayload) (radiusOutcome, bool) {
+	// A holed cup's post walls carry concave radii this loop-0-only profile
+	// misses, so the reading would be too large (or nil). Undecided rather
+	// than a wrong radius (modify §9, D3) — Verify reads Suspect.
+	if cp.holed() {
+		return radiusOutcome{}, false
+	}
 	crev, err := reverseLoopRecord(cp.cavity.Outer)
 	if err != nil {
 		return radiusOutcome{}, false
