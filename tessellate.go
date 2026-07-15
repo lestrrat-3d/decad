@@ -86,6 +86,9 @@ func (b *Body) Tessellate(tol units.Value) (*Mesh, error) {
 	if fp, ok := b.payload.(facetedPayload); ok {
 		return tessellateFaceted(b, fp, chord)
 	}
+	if cp, ok := b.payload.(cupPayload); ok {
+		return tessellateCup(b, cp, chord)
+	}
 	pp, ok := b.payload.(prismPayload)
 	if !ok {
 		// Chording is per payload kind; the revolve surfaces are staged —
@@ -129,50 +132,14 @@ func (b *Body) Tessellate(tol units.Value) (*Mesh, error) {
 	var loopSag []float64
 	loops := append([]LoopRecord{pp.profile.Outer}, pp.profile.Holes...)
 	for li, loop := range loops {
-		if len(loop.Segments) == 0 {
-			return nil, fmt.Errorf(`%w: a recorded loop holds no segments`, ErrDegenerate)
+		samples, faceOf, maxSag, slack, err := chordLoop(loop, chord, pp.z1-pp.z0, func(w sideWalk) (*Face, error) {
+			return faceOfRole(fmt.Sprintf("side(%d,%d)", li, w.segs[0]))
+		})
+		if err != nil {
+			return nil, err
 		}
-		raw := make([]sideWalk, len(loop.Segments))
-		for i, seg := range loop.Segments {
-			w, err := walkOf(seg)
-			if err != nil {
-				return nil, err
-			}
-			raw[i] = sideWalk{segmentWalk: w, segs: []int{i}}
-		}
-		walks := coalesceWalks(raw)
-
-		var samples []Point2
-		var faceOf []*Face // per sample: the wall face of the chord leaving it
-		var maxSag float64
-		for _, w := range walks {
-			face, err := faceOfRole(fmt.Sprintf("side(%d,%d)", li, w.segs[0]))
-			if err != nil {
-				return nil, err
-			}
-			if !w.circular {
-				samples = append(samples, Point2{U: w.startU, V: w.startV})
-				faceOf = append(faceOf, face)
-				continue
-			}
-			n, sag, err := chordCount(w.segmentWalk, chord)
-			if err != nil {
-				return nil, err
-			}
-			mesh.bound = math.Max(mesh.bound, sag)
-			maxSag = math.Max(maxSag, sag)
-			mesh.areaSlack += walkAreaSlack(w.segmentWalk, n, pp.z1-pp.z0)
-			dth := (w.th1 - w.th0) / float64(n)
-			for k := range n {
-				p := Point2{U: w.startU, V: w.startV}
-				if k > 0 {
-					th := w.th0 + float64(k)*dth
-					p = Point2{U: w.cU + w.radius*math.Cos(th), V: w.cV + w.radius*math.Sin(th)}
-				}
-				samples = append(samples, p)
-				faceOf = append(faceOf, face)
-			}
-		}
+		mesh.bound = math.Max(mesh.bound, maxSag)
+		mesh.areaSlack += slack
 
 		base := len(pts2)
 		pts2 = append(pts2, samples...)
@@ -230,6 +197,272 @@ func (b *Body) Tessellate(tol units.Value) (*Mesh, error) {
 		}
 	}
 	return &mesh, nil
+}
+
+// chordLoop chords one boundary loop into 2D samples: sample j is walk j's own
+// start (the junction shared with the previous walk) plus, for a circular walk,
+// its interior chord samples. It returns the samples, the wall face of the
+// chord LEAVING each sample (resolved by wallFace over the coalesced walk it
+// belongs to), the largest sagitta the chording took, and the chord-versus-arc
+// area slack over the given sweep height. The same chording feeds every face
+// that meets the loop — walls and caps alike — so the mesh is watertight by
+// construction.
+func chordLoop(loop LoopRecord, chord, height float64, wallFace func(w sideWalk) (*Face, error)) ([]Point2, []*Face, float64, float64, error) {
+	if len(loop.Segments) == 0 {
+		return nil, nil, 0, 0, fmt.Errorf(`%w: a recorded loop holds no segments`, ErrDegenerate)
+	}
+	raw := make([]sideWalk, len(loop.Segments))
+	for i, seg := range loop.Segments {
+		w, err := walkOf(seg)
+		if err != nil {
+			return nil, nil, 0, 0, err
+		}
+		raw[i] = sideWalk{segmentWalk: w, segs: []int{i}}
+	}
+	walks := coalesceWalks(raw)
+
+	var samples []Point2
+	var faceOf []*Face
+	var maxSag, areaSlack float64
+	for _, w := range walks {
+		face, err := wallFace(w)
+		if err != nil {
+			return nil, nil, 0, 0, err
+		}
+		if !w.circular {
+			samples = append(samples, Point2{U: w.startU, V: w.startV})
+			faceOf = append(faceOf, face)
+			continue
+		}
+		n, sag, err := chordCount(w.segmentWalk, chord)
+		if err != nil {
+			return nil, nil, 0, 0, err
+		}
+		maxSag = math.Max(maxSag, sag)
+		areaSlack += walkAreaSlack(w.segmentWalk, n, height)
+		dth := (w.th1 - w.th0) / float64(n)
+		for k := range n {
+			p := Point2{U: w.startU, V: w.startV}
+			if k > 0 {
+				th := w.th0 + float64(k)*dth
+				p = Point2{U: w.cU + w.radius*math.Cos(th), V: w.cV + w.radius*math.Sin(th)}
+			}
+			samples = append(samples, p)
+			faceOf = append(faceOf, face)
+		}
+	}
+	return samples, faceOf, maxSag, areaSlack, nil
+}
+
+// tessellateCup meshes a cup (docs/modify-design.md §9, D4): the outer prism
+// over region O and the cavity prism over the reversed region C, sharing a rim
+// at the open end. Each region's boundary loop is chorded ONCE — the same
+// chording feeds its walls, its floor cap and its half of the rim annulus — so
+// every ring vertex is shared and the mesh is watertight and consistently
+// oriented by construction, exactly as the prism's is. The three planar faces
+// (the kept cap over O, the pocket floor over C, and the rim annulus {O, C})
+// triangulate through the shipped cap triangulator.
+func tessellateCup(b *Body, cp cupPayload, chord float64) (*Mesh, error) {
+	byRole := map[string]*Face{}
+	for _, f := range b.Faces() {
+		for _, o := range f.Origins() {
+			byRole[o.Role] = f
+		}
+	}
+	faceOfRole := func(role string) (*Face, error) {
+		f, ok := byRole[role]
+		if !ok {
+			return nil, fmt.Errorf(`%w: the body carries no face for role %q`, ErrDegenerate, role)
+		}
+		return f, nil
+	}
+	capStart, err := faceOfRole(roleCapStart)
+	if err != nil {
+		return nil, err
+	}
+	shellCap, err := faceOfRole("shellCap")
+	if err != nil {
+		return nil, err
+	}
+	rim, err := faceOfRole("rim(0)")
+	if err != nil {
+		return nil, err
+	}
+
+	openIsMax := cp.zOpen > cp.zOuter
+	oLo, oHi := math.Min(cp.zOuter, cp.zOpen), math.Max(cp.zOuter, cp.zOpen)
+	cLo, cHi := math.Min(cp.zCav, cp.zOpen), math.Max(cp.zCav, cp.zOpen)
+
+	var mesh Mesh
+	base := cp.prismLike(0, 0)
+	var verts []r3.Vec
+	add := func(v r3.Vec) int { verts = append(verts, v); return len(verts) - 1 }
+
+	// Outer region O: chord once, then a ring at oLo and a ring at oHi.
+	oSamples, oFace, oSag, oSlack, err := chordLoop(cp.outer.Outer, chord, oHi-oLo, func(w sideWalk) (*Face, error) {
+		return faceOfRole(fmt.Sprintf("side(0,%d)", w.segs[0]))
+	})
+	if err != nil {
+		return nil, err
+	}
+	mesh.bound = math.Max(mesh.bound, oSag)
+	mesh.areaSlack += oSlack
+	oLoV := make([]int, len(oSamples))
+	oHiV := make([]int, len(oSamples))
+	for i, p := range oSamples {
+		oLoV[i] = add(base.point(p.U, p.V, oLo))
+		oHiV[i] = add(base.point(p.U, p.V, oHi))
+	}
+
+	// Cavity region C, walked as the reversed loop the wall build uses (its
+	// material lies OUTSIDE it), chorded once, then a ring at cLo and cHi.
+	crev, err := reverseLoopRecord(cp.cavity.Outer)
+	if err != nil {
+		return nil, err
+	}
+	cSamples, cFace, cSag, cSlack, err := chordLoop(crev, chord, cHi-cLo, func(w sideWalk) (*Face, error) {
+		return faceOfRole(fmt.Sprintf("shellSide(0,%d)", w.segs[0]))
+	})
+	if err != nil {
+		return nil, err
+	}
+	mesh.bound = math.Max(mesh.bound, cSag)
+	mesh.areaSlack += cSlack
+	cLoV := make([]int, len(cSamples))
+	cHiV := make([]int, len(cSamples))
+	for i, p := range cSamples {
+		cLoV[i] = add(base.point(p.U, p.V, cLo))
+		cHiV[i] = add(base.point(p.U, p.V, cHi))
+	}
+	mesh.vertices = verts
+
+	// Side walls: one outward quad per chord — the same winding the prism uses,
+	// tangent × N outward for O's counter-clockwise walk and C's clockwise
+	// (reversed) walk alike.
+	addWalls := func(loV, hiV []int, faceOf []*Face) {
+		n := len(loV)
+		for j := range loV {
+			g0, g1 := j, (j+1)%n
+			mesh.addTriangle([3]int{loV[g0], loV[g1], hiV[g1]}, faceOf[j])
+			mesh.addTriangle([3]int{loV[g0], hiV[g1], hiV[g0]}, faceOf[j])
+		}
+	}
+	addWalls(oLoV, oHiV, oFace)
+	addWalls(cLoV, cHiV, cFace)
+
+	// The chorded loops must clear each other by more than their own sagitta
+	// bounds, or the rim annulus cannot prove it represents that topology —
+	// the same proof the prism's own loop clearance runs.
+	rimPts := append(append([]Point2{}, oSamples...), cSamples...)
+	oIdx := make([]int, len(oSamples))
+	cIdx := make([]int, len(cSamples))
+	for i := range oSamples {
+		oIdx[i] = i
+	}
+	for i := range cSamples {
+		cIdx[i] = len(oSamples) + i
+	}
+	if err := requireLoopClearance(rimPts, [][]int{oIdx, cIdx}, []float64{oSag, cSag}); err != nil {
+		return nil, err
+	}
+
+	// The vertex each region contributes to the open end (the rim) and to its
+	// own floor cap — whichever ring, lo or hi, that plane falls on.
+	oAtOpen, oAtOuter := oHiV, oLoV
+	cAtOpen, cAtCav := cHiV, cLoV
+	if !openIsMax {
+		oAtOpen, oAtOuter = oLoV, oHiV
+		cAtOpen, cAtCav = cLoV, cHiV
+	}
+
+	// A cap whose outward normal is −N reverses the counter-clockwise cap
+	// triangulation; +N uses it as-is (the same rule the prism's two caps use).
+	emit := func(tris [][3]int, vidx func(int) int, reverse bool, face *Face) {
+		for _, tri := range tris {
+			a, bb, c := vidx(tri[0]), vidx(tri[1]), vidx(tri[2])
+			if reverse {
+				bb, c = c, bb
+			}
+			mesh.addTriangle([3]int{a, bb, c}, face)
+		}
+	}
+
+	// capStart over O — the kept outer floor, outward −N when the open end is
+	// on top.
+	oLoop := make([]int, len(oSamples))
+	for i := range oSamples {
+		oLoop[i] = i
+	}
+	capTris, err := triangulate2D(oSamples, [][]int{oLoop})
+	if err != nil {
+		return nil, err
+	}
+	emit(capTris, func(i int) int { return oAtOuter[i] }, openIsMax, capStart)
+
+	// shellCap over C — the pocket floor, outward +N when the open end is on
+	// top. C's samples are walked clockwise (the reversed loop), so the
+	// counter-clockwise triangulation the cap needs reverses their order.
+	cLoopCCW := make([]int, len(cSamples))
+	for i := range cSamples {
+		cLoopCCW[i] = len(cSamples) - 1 - i
+	}
+	shellTris, err := triangulate2D(cSamples, [][]int{cLoopCCW})
+	if err != nil {
+		return nil, err
+	}
+	emit(shellTris, func(i int) int { return cAtCav[i] }, !openIsMax, shellCap)
+
+	// The rim annulus {O, C} at the open end: O the counter-clockwise outer
+	// boundary, C the clockwise hole (the reversed loop is already clockwise).
+	rimTris, err := triangulate2D(rimPts, [][]int{oIdx, cIdx})
+	if err != nil {
+		return nil, err
+	}
+	emit(rimTris, func(i int) int {
+		if i < len(oSamples) {
+			return oAtOpen[i]
+		}
+		return cAtOpen[i-len(oSamples)]
+	}, !openIsMax, rim)
+
+	// A reflected placement flips handedness, turning every counter-clockwise
+	// winding clockwise; reversing the windings restores outward orientation.
+	if base.reflected() {
+		for i := range mesh.triangles {
+			mesh.triangles[i][1], mesh.triangles[i][2] = mesh.triangles[i][2], mesh.triangles[i][1]
+		}
+	}
+
+	// The cup's three planar faces triangulate through the shipped cap
+	// triangulator, which the design assumes resolves the rim band. A rim
+	// whose chorded outer and cavity loops are collinear on both sides (an
+	// outward cup whose dilated corners land on the cavity's own edge lines)
+	// is a degeneracy ear clipping cannot resolve, and it would leave the band
+	// cracked. The walls and floors close by construction, so a break here is
+	// the rim's: prove closure and refuse a cracked mesh rather than return
+	// one (core §11, never a wrong mesh).
+	if err := requireClosedMesh(&mesh); err != nil {
+		return nil, err
+	}
+	return &mesh, nil
+}
+
+// requireClosedMesh proves the mesh is a closed 2-manifold — every directed
+// edge is matched by its reverse — refusing a mesh whose boundary the cap
+// triangulator could not close.
+func requireClosedMesh(m *Mesh) error {
+	directed := make(map[[2]int]int, 3*len(m.triangles))
+	for _, tri := range m.triangles {
+		for k := range 3 {
+			directed[[2]int{tri[k], tri[(k+1)%3]}]++
+		}
+	}
+	for e := range directed {
+		if directed[e] != 1 || directed[[2]int{e[1], e[0]}] != 1 {
+			return fmt.Errorf(`%w: the chorded cup rim could not be triangulated into a watertight band`, ErrDegenerate)
+		}
+	}
+	return nil
 }
 
 // walkAreaSlack is the proven chord-versus-arc area slack one circular walk
