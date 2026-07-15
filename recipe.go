@@ -63,6 +63,17 @@ type ExtrudeOpts struct {
 
 func (ExtrudeOpts) stepOpts() {}
 
+// ShellOpts records a shell's options (docs/modify-design.md §8). Sense is the
+// wall sense — Inward (the default) or Outward — encoded as a named text token
+// exactly as Direction is, so a renumbered constant could never silently
+// reinterpret an old recipe. It is the one StepOpts variant this increment
+// fills.
+type ShellOpts struct {
+	Sense ShellSense `json:"sense"`
+}
+
+func (ShellOpts) stepOpts() {}
+
 // OpKind names the operation a Step records.
 type OpKind int
 
@@ -166,6 +177,7 @@ type Step struct {
 
 // stepOptsKind and the codec below: StepOpts is a closed set decad owns.
 const optsKindExtrude = "extrude"
+const optsKindShell = "shell"
 
 // marshalStepOpts encodes one options record as its tagged object. Pointer
 // forms normalize to values — the sealed set uses value receivers, so a
@@ -177,9 +189,17 @@ func marshalStepOpts(o StepOpts) ([]byte, error) {
 		}
 		o = *p
 	}
+	if p, ok := o.(*ShellOpts); ok {
+		if p == nil {
+			return nil, fmt.Errorf(`decad: nil step options`)
+		}
+		o = *p
+	}
 	switch o := o.(type) {
 	case ExtrudeOpts:
 		return marshalTagged(optsKindExtrude, o)
+	case ShellOpts:
+		return marshalTagged(optsKindShell, o)
 	default:
 		return nil, fmt.Errorf(`decad: unencodable step options type %T`, o)
 	}
@@ -198,6 +218,12 @@ func unmarshalStepOpts(data []byte) (StepOpts, error) {
 		var o ExtrudeOpts
 		if err := json.Unmarshal(data, &o); err != nil {
 			return nil, fmt.Errorf(`decad: failed to decode extrude options: %w`, err)
+		}
+		return o, nil
+	case optsKindShell:
+		var o ShellOpts
+		if err := json.Unmarshal(data, &o); err != nil {
+			return nil, fmt.Errorf(`decad: failed to decode shell options: %w`, err)
 		}
 		return o, nil
 	case "":
