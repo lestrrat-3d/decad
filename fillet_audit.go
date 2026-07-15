@@ -34,13 +34,34 @@ import (
 // the region the caller's section lived in, so no such body exists and it is an
 // S8-family ErrDegenerate (§1 existence test).
 
-// auditRewrite runs the §5 audit on the rewritten profile in §4's order.
-func auditRewrite(orig, rewritten ProfileRecord, loops []cornerLoop, filletAt []map[int]*filletData) error {
+// auditRewrite runs the §5 audit on the rewritten profile in §4's order. It is
+// shared by every modify op (Fillet, Chamfer): its only op-specific input is the
+// per-corner cutback the S6 self-consuming-trim test sums, carried by the shared
+// cornerBlend, so the audit itself forks nothing.
+func auditRewrite(orig, rewritten ProfileRecord, loops []cornerLoop, blendAt []map[int]*cornerBlend) error {
 	origLoops := append([]LoopRecord{orig.Outer}, orig.Holes...)
 	newLoops := append([]LoopRecord{rewritten.Outer}, rewritten.Holes...)
 
+	// S6, computed up front so S8 can consult it: a walk whose two ends' cutbacks
+	// reach or pass its far end is consumed by its own corners (§6, Table S). This
+	// is a LOCAL fact — a cutback length against a walk length, needing no
+	// assembled loop — and it covers BOTH shapes Table S names: two corners
+	// claiming one wall from both ends, AND a single corner whose own cutback
+	// reaches the far end of an adjacent walk. It is the more-specific reading of
+	// an over-large setback, so when such an overrun ALSO flips the assembled
+	// loop's signed area, the flip IS the overrun and reads S6 (ErrUnsupported),
+	// not S8 — S8 still owns every genuine inversion a cutback overrun does not
+	// explain.
+	overrun := make([]bool, len(loops))
+	for li, cl := range loops {
+		overrun[li] = loopOverrun(cl, blendAt[li])
+	}
+
 	// S8: orientation preserved — a loop whose signed area changed sign (or
-	// collapsed) has turned itself inside out; the modification consumed it.
+	// collapsed) has turned itself inside out; the modification consumed it —
+	// unless a local cutback overrun on that loop explains the flip, which is
+	// S6's more-specific verdict (Table S: an overrun is ErrUnsupported even when
+	// it also flips the loop).
 	for i := range origLoops {
 		oa, err := loopSignedArea(origLoops[i])
 		if err != nil {
@@ -51,25 +72,18 @@ func auditRewrite(orig, rewritten ProfileRecord, loops []cornerLoop, filletAt []
 			return err
 		}
 		if math.Signbit(oa) != math.Signbit(na) || math.Abs(na) <= 1e-9*math.Abs(oa) {
-			return fmt.Errorf(`%w: the fillet turned a loop inside out — the radius does not fit`, ErrDegenerate)
+			if overrun[i] {
+				return errCutbackOverrun()
+			}
+			return fmt.Errorf(`%w: the rewrite turned a loop inside out — the modification does not fit`, ErrDegenerate)
 		}
 	}
 
-	// S6: no walk consumed by its own corners — the two ends' cutbacks must fit
-	// strictly inside the walk they claim.
-	for li, cl := range loops {
-		n := len(cl.walks)
-		for i, w := range cl.walks {
-			cut := 0.0
-			if fd := filletAt[li][i]; fd != nil {
-				cut += fd.cutbackB
-			}
-			if fd := filletAt[li][(i+1)%n]; fd != nil {
-				cut += fd.cutbackA
-			}
-			if cut >= w.length-1e-9*math.Max(1, w.length) {
-				return fmt.Errorf(`%w: two fillets claim the same wall from both ends; merging them is not supported`, ErrUnsupported)
-			}
+	// S6: no walk consumed by its own corners — reported for the loops S8 did not
+	// already resolve (an overrun that did not flip the loop's signed area).
+	for li := range loops {
+		if overrun[li] {
+			return errCutbackOverrun()
 		}
 	}
 
@@ -93,6 +107,40 @@ func auditRewrite(orig, rewritten ProfileRecord, loops []cornerLoop, filletAt []
 	// classify one point of each to prove the outer loop still contains every
 	// hole and the holes stay mutually exterior.
 	return nestingAudit(segs, len(newLoops))
+}
+
+// loopOverrun reports whether any walk of a loop is consumed by its own two
+// corners — the arriving corner's cutback plus the leaving corner's cutback
+// reaches or passes the walk's far end (§6, S6). It is a LOCAL test — a cutback
+// length against a walk length — so it needs no assembled loop, which is what
+// lets S8 consult it before reading the loop's orientation: a flip a single
+// over-large corner produces is this overrun (ErrUnsupported), not a genuinely
+// inside-out section (ErrDegenerate). The sum folds both Table S shapes: a lone
+// corner leaves one end's cutback zero, so its own cutback alone must clear the
+// walk; two corners of a short wall claim it from both ends.
+func loopOverrun(cl cornerLoop, blends map[int]*cornerBlend) bool {
+	n := len(cl.walks)
+	for i, w := range cl.walks {
+		cut := 0.0
+		if cb := blends[i]; cb != nil {
+			cut += cb.cutbackB
+		}
+		if cb := blends[(i+1)%n]; cb != nil {
+			cut += cb.cutbackA
+		}
+		if cut >= w.length-1e-9*math.Max(1, w.length) {
+			return true
+		}
+	}
+	return false
+}
+
+// errCutbackOverrun is S6's op-neutral refusal (§6, Table S): a corner's setback
+// reaches or passes the far end of an adjacent wall, so the rewrite's pieces
+// must be resolved against each other before they bound anything — a body a
+// trimmed-offset kernel could build but this evaluator cannot (ErrUnsupported).
+func errCutbackOverrun() error {
+	return fmt.Errorf(`%w: a corner's setback reaches the far end of an adjacent wall; merging the rewrites there is not supported`, ErrUnsupported)
 }
 
 // buildSegEntries resolves every loop's recorded segments into boundary walks
@@ -153,10 +201,10 @@ func crossingAudit(segs []segEntry) error {
 				continue
 			}
 			if segCross(segs[i].w, segs[j].w) {
-				return fmt.Errorf(`%w: the fillet rewrite crosses itself; a resolving kernel is not available`, ErrUnsupported)
+				return fmt.Errorf(`%w: the rewrite crosses itself; a resolving kernel is not available`, ErrUnsupported)
 			}
 			if segMinDist(segs[i].w, segs[j].w) <= touchFloor {
-				return fmt.Errorf(`%w: the fillet rewrite brings two boundaries into contact; a resolving kernel is not available`, ErrUnsupported)
+				return fmt.Errorf(`%w: the rewrite brings two boundaries into contact; a resolving kernel is not available`, ErrUnsupported)
 			}
 		}
 	}
@@ -260,7 +308,7 @@ func nestingAudit(segs []segEntry, nLoops int) error {
 	tol := contactEps * scale
 
 	undecidable := func() error {
-		return fmt.Errorf(`%w: the fillet rewrite's nesting cannot be decided; a resolving kernel is not available`, ErrUnsupported)
+		return fmt.Errorf(`%w: the rewrite's nesting cannot be decided; a resolving kernel is not available`, ErrUnsupported)
 	}
 	// Every hole must sit inside the rewritten outer loop.
 	for h := 1; h < nLoops; h++ {
@@ -272,7 +320,7 @@ func nestingAudit(segs []segEntry, nLoops int) error {
 			return undecidable()
 		}
 		if !inside {
-			return fmt.Errorf(`%w: the fillet shrank the outer loop past a hole, leaving it outside the rounded material`, ErrDegenerate)
+			return fmt.Errorf(`%w: the rewrite left a hole outside the outer loop, consuming the region it lived in`, ErrDegenerate)
 		}
 	}
 	// Holes must stay mutually exterior — neither nested in the other.
@@ -290,7 +338,7 @@ func nestingAudit(segs []segEntry, nLoops int) error {
 					return undecidable()
 				}
 				if inside {
-					return fmt.Errorf(`%w: the fillet nested one hole inside another`, ErrDegenerate)
+					return fmt.Errorf(`%w: the rewrite nested one hole inside another`, ErrDegenerate)
 				}
 			}
 		}

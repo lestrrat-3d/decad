@@ -53,6 +53,89 @@ func TestContactFloorUsesTrueSectionBBox(t *testing.T) {
 	})
 }
 
+// TestAuditRewriteSingleCornerOverrunIsUnsupported pins the §5 audit's Table S
+// S6 verdict for a SINGLE corner whose own setback runs past the far end of its
+// adjacent walls. Such an overrun also flips the rewritten loop's signed area,
+// so S8 (orientation, asked first) could misfile it as ErrDegenerate; Table S
+// assigns the overrun to S6, so the audit must return ErrUnsupported — and NOT
+// ErrDegenerate — even though the loop genuinely inverted. The two-corner case
+// (both ends of one wall) is exercised end-to-end by TestChamferOverLargeSetbackRefused.
+func TestAuditRewriteSingleCornerOverrunIsUnsupported(t *testing.T) {
+	// A CCW 100×60 rectangle: positive signed area, four right-angle corners,
+	// corner 0 at the origin (arriving down the left wall, leaving along the
+	// bottom wall). Both walls at corner 0 are shorter than the setback below.
+	rect := ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{
+		LineSeg{Start: Point2{U: 0, V: 0}, End: Point2{U: 100, V: 0}, TEnd: 1},
+		LineSeg{Start: Point2{U: 100, V: 0}, End: Point2{U: 100, V: 60}, TEnd: 1},
+		LineSeg{Start: Point2{U: 100, V: 60}, End: Point2{U: 0, V: 60}, TEnd: 1},
+		LineSeg{Start: Point2{U: 0, V: 60}, End: Point2{U: 0, V: 0}, TEnd: 1},
+	}}}
+
+	// blendOne blends exactly ONE corner of the section (corner 0) at an
+	// over-large setback, rewrites the profile, and returns the loops and per-loop
+	// blend maps the audit reads.
+	blendOne := func(t *testing.T, cb *cornerBlend, loops []cornerLoop) (ProfileRecord, []map[int]*cornerBlend) {
+		t.Helper()
+		blendAt := []map[int]*cornerBlend{{0: cb}}
+		rewritten, _ := rewriteProfile(rect, loops, blendAt)
+		return rewritten, blendAt
+	}
+
+	origArea, err := loopSignedArea(rect.Outer)
+	require.NoError(t, err)
+
+	for _, tc := range []struct {
+		name string
+		// flips is true when this op's over-large single-corner blend inverts the
+		// rewritten loop's signed area — the case S8 (asked first) would grab. The
+		// chamfer's chord does; the fillet's arc bulges back and keeps the area
+		// positive, so its overrun is caught by S6's own report instead. Either
+		// path must reach ErrUnsupported.
+		flips bool
+		blend func(loops []cornerLoop) (*cornerBlend, error)
+	}{
+		{"chamfer", true, func(loops []cornerLoop) (*cornerBlend, error) { return computeChamfer(loops[0], 0, 120) }},
+		{"fillet", false, func(loops []cornerLoop) (*cornerBlend, error) { return computeFillet(loops[0], 0, 120) }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			loops := sectionCornerLoops(t, rect)
+			cb, err := tc.blend(loops)
+			require.NoError(t, err, `an over-large blend of a right-angle corner still constructs — the overrun is a §5 audit verdict, not a construction gate`)
+
+			rewritten, blendAt := blendOne(t, cb, loops)
+
+			newArea, err := loopSignedArea(rewritten.Outer)
+			require.NoError(t, err)
+			require.Equal(t, tc.flips, math.Signbit(origArea) != math.Signbit(newArea),
+				`the rewritten loop's signed-area flip must match the case's expectation`)
+
+			err = auditRewrite(rect, rewritten, loops, blendAt)
+			require.ErrorIs(t, err, ErrUnsupported,
+				`a single corner's overrun is Table S's S6, not the S8 inside-out verdict`)
+			require.NotErrorIs(t, err, ErrDegenerate,
+				`the overrun must not be misfiled as S8 ErrDegenerate even when the loop flipped`)
+		})
+	}
+}
+
+// sectionCornerLoops resolves a section's loops into coalesced corner walks, the
+// same decomposition prismCornerLoops runs, so an internal audit test can drive
+// the real computeChamfer/computeFillet path on a hand-built section.
+func sectionCornerLoops(t *testing.T, prof ProfileRecord) []cornerLoop {
+	t.Helper()
+	var out []cornerLoop
+	for _, loop := range append([]LoopRecord{prof.Outer}, prof.Holes...) {
+		raw := make([]sideWalk, len(loop.Segments))
+		for i, seg := range loop.Segments {
+			w, err := walkOf(seg)
+			require.NoError(t, err)
+			raw[i] = sideWalk{segmentWalk: w, segs: []int{i}}
+		}
+		out = append(out, cornerLoop{walks: coalesceWalks(raw)})
+	}
+	return out
+}
+
 // TestCrossingAuditRejectsBoundaryContact exercises the §5 audit's crossing
 // test directly on hand-built loops: it must reject not only an interior
 // crossing but any BOUNDARY CONTACT — a tangency or a shared boundary point

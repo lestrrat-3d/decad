@@ -93,36 +93,36 @@ func (b *Body) Fillet(sel EdgeSelector, r units.Value, opts ...FilletOption) (*B
 	if err != nil {
 		return nil, err
 	}
-	// Which corners each loop gets a fillet at, and the fillet's arc data.
-	filletAt := make([]map[int]*filletData, len(loops))
-	for i := range filletAt {
-		filletAt[i] = map[int]*filletData{}
+	// Which corners each loop gets a fillet at, and the fillet's blend data.
+	blendAt := make([]map[int]*cornerBlend, len(loops))
+	for i := range blendAt {
+		blendAt[i] = map[int]*cornerBlend{}
 	}
 	for _, e := range edges {
 		li, ci, found := matchCorner(pp, loops, e)
 		if !found {
 			return nil, fmt.Errorf(`%w: a fillet of a cap edge is the vertex-blend problem, not yet supported`, ErrUnsupported)
 		}
-		filletAt[li][ci] = nil // marked; the blend is computed in stage 3
+		blendAt[li][ci] = nil // marked; the blend is computed in stage 3
 	}
 
 	// Stage 3 (§4): the construction's own gates, per corner — S4 (a corner
 	// exists) then S5 (a blend of that radius exists).
-	for li, corners := range filletAt {
+	for li, corners := range blendAt {
 		for ci := range corners {
-			fd, err := computeFillet(loops[li], ci, rmm)
+			cb, err := computeFillet(loops[li], ci, rmm)
 			if err != nil {
 				return nil, err
 			}
-			filletAt[li][ci] = fd
+			blendAt[li][ci] = cb
 		}
 	}
 
 	// The rewritten section, and the fillet arcs' (loop, segment) indices.
-	profile, filletArcs := rewriteProfile(pp.profile, loops, filletAt)
+	profile, filletArcs := rewriteProfile(pp.profile, loops, blendAt)
 
 	// Stage 4 (§4/§5): the audit of the rewritten profile — S8, S6, S7, S9.
-	if err := auditRewrite(pp.profile, profile, loops, filletAt); err != nil {
+	if err := auditRewrite(pp.profile, profile, loops, blendAt); err != nil {
 		return nil, err
 	}
 
@@ -145,7 +145,7 @@ func (b *Body) Fillet(sel EdgeSelector, r units.Value, opts ...FilletOption) (*B
 	if err != nil {
 		return nil, err
 	}
-	addFilletRoles(body, ref, filletArcs)
+	addBlendRoles(body, ref, filletArcs, "fillet")
 	d.commit(step, body, b)
 	return body, nil
 }
@@ -212,16 +212,18 @@ func matchEndpoints(a, b, p, q r3.Vec, tol float64) bool {
 	return (near(a, p) && near(b, q)) || (near(a, q) && near(b, p))
 }
 
-// filletData is one corner's computed blend: the arc center, the two tangent
-// feet (fA on the arriving carrier, fB on the leaving carrier), the arc's walk
-// sense, and the cutbacks each carrier loses (§6).
-type filletData struct {
-	center   Point2
-	fA, fB   Point2
-	radius   float64
-	ccw      bool    // the fillet arc's walk sense (CCW parameterization)
-	cutbackA float64 // arc length consumed on the arriving walk
-	cutbackB float64 // arc length consumed on the leaving walk
+// cornerBlend is one corner's rewrite — the geometry Fillet and Chamfer share.
+// Each op trims the two adjacent walks back to feet fA (on the arriving walk)
+// and fB (on the leaving walk), losing cutbackA / cutbackB of arc length there
+// (what the §5 S6 audit sums), then joins the feet with a connector segment: a
+// tangent ArcSeg for a fillet (§6), a chord LineSeg for a chamfer (§7).
+// Everything downstream — the §5 audit, the profile rewrite, evalPrism and the
+// mass properties — reads only this shared shape, so the two ops fork no
+// machinery.
+type cornerBlend struct {
+	fA, fB             Point2
+	cutbackA, cutbackB float64 // arc length consumed on the arriving / leaving walk
+	connector          CurveSegment
 }
 
 // carrier is one side of a corner as an offsettable curve: a line through the
@@ -281,7 +283,7 @@ func offsetOf(c carrier, offsetSign, r float64) (offCurve, error) {
 // a smooth or cusped corner, the two material-side offsets are intersected for
 // the center nearest the corner (S5 when they never meet), and the tangent
 // feet, cutbacks and arc sense follow.
-func computeFillet(loop cornerLoop, ci int, r float64) (*filletData, error) {
+func computeFillet(loop cornerLoop, ci int, r float64) (*cornerBlend, error) {
 	n := len(loop.walks)
 	arrive := loop.walks[(ci+n-1)%n] // walk A, arriving at the corner
 	leave := loop.walks[ci]          // walk B, leaving the corner
@@ -329,14 +331,14 @@ func computeFillet(loop cornerLoop, ci int, r float64) (*filletData, error) {
 	rx, ry := -(fay - oy), fax-ox
 	ccw := rx*ax+ry*ay > 0
 
-	return &filletData{
-		center:   Point2{U: ox, V: oy},
-		fA:       Point2{U: fax, V: fay},
-		fB:       Point2{U: fbx, V: fby},
-		radius:   r,
-		ccw:      ccw,
-		cutbackA: cutA,
-		cutbackB: cutB,
+	fA := Point2{U: fax, V: fay}
+	fB := Point2{U: fbx, V: fby}
+	return &cornerBlend{
+		fA:        fA,
+		fB:        fB,
+		cutbackA:  cutA,
+		cutbackB:  cutB,
+		connector: arcSegment(Point2{U: ox, V: oy}, fA, fB, ccw),
 	}, nil
 }
 
@@ -457,49 +459,50 @@ func cutbackOn(c carrier, px, py, fx, fy float64) float64 {
 }
 
 // rewriteProfile applies every corner's blend to the section, returning the new
-// ProfileRecord and, per loop, the segment indices that are fillet arcs (their
-// faces carry the second fillet(i,j) role, Table B).
-func rewriteProfile(orig ProfileRecord, loops []cornerLoop, filletAt []map[int]*filletData) (ProfileRecord, []map[int]struct{}) {
+// ProfileRecord and, per loop, the segment indices that are blend connectors
+// (their faces carry the second fillet(i,j) / chamfer(i,j) role, Table B).
+func rewriteProfile(orig ProfileRecord, loops []cornerLoop, blendAt []map[int]*cornerBlend) (ProfileRecord, []map[int]struct{}) {
 	origLoops := append([]LoopRecord{orig.Outer}, orig.Holes...)
 	newLoops := make([]LoopRecord, len(origLoops))
-	filletArcs := make([]map[int]struct{}, len(origLoops))
+	blendSegs := make([]map[int]struct{}, len(origLoops))
 	for li := range origLoops {
-		filletArcs[li] = map[int]struct{}{}
-		if len(filletAt[li]) == 0 {
+		blendSegs[li] = map[int]struct{}{}
+		if len(blendAt[li]) == 0 {
 			newLoops[li] = cloneLoopRecord(origLoops[li])
 			continue
 		}
-		segs, arcs := rewriteLoop(loops[li], filletAt[li])
+		segs, connectors := rewriteLoop(loops[li], blendAt[li])
 		newLoops[li] = LoopRecord{Segments: segs}
-		filletArcs[li] = arcs
+		blendSegs[li] = connectors
 	}
-	return ProfileRecord{Outer: newLoops[0], Holes: newLoops[1:]}, filletArcs
+	return ProfileRecord{Outer: newLoops[0], Holes: newLoops[1:]}, blendSegs
 }
 
-// rewriteLoop rebuilds one loop's segments with its corners rounded: each walk
-// is trimmed to the feet its two ends' fillets pin, and each fillet's arc is
-// inserted between the walls it joins.
-func rewriteLoop(loop cornerLoop, fillets map[int]*filletData) ([]CurveSegment, map[int]struct{}) {
+// rewriteLoop rebuilds one loop's segments with its corners blended: each walk
+// is trimmed to the feet its two ends' blends pin, and each blend's connector —
+// a fillet's tangent arc or a chamfer's chord — is inserted between the walls it
+// joins.
+func rewriteLoop(loop cornerLoop, blends map[int]*cornerBlend) ([]CurveSegment, map[int]struct{}) {
 	n := len(loop.walks)
 	var segs []CurveSegment
-	arcs := map[int]struct{}{}
+	connectors := map[int]struct{}{}
 	for i := range n {
 		w := loop.walks[i]
 		startU, startV := w.startU, w.startV
-		if fd := fillets[i]; fd != nil { // corner i trims this walk's start
-			startU, startV = fd.fB.U, fd.fB.V
+		if cb := blends[i]; cb != nil { // corner i trims this walk's start
+			startU, startV = cb.fB.U, cb.fB.V
 		}
 		endU, endV := w.endU, w.endV
-		if fd := fillets[(i+1)%n]; fd != nil { // corner i+1 trims this walk's end
-			endU, endV = fd.fA.U, fd.fA.V
+		if cb := blends[(i+1)%n]; cb != nil { // corner i+1 trims this walk's end
+			endU, endV = cb.fA.U, cb.fA.V
 		}
 		segs = append(segs, walkSegment(w, startU, startV, endU, endV))
-		if fd := fillets[(i+1)%n]; fd != nil {
-			segs = append(segs, arcSegment(fd.center, fd.fA, fd.fB, fd.ccw))
-			arcs[len(segs)-1] = struct{}{}
+		if cb := blends[(i+1)%n]; cb != nil {
+			segs = append(segs, cb.connector)
+			connectors[len(segs)-1] = struct{}{}
 		}
 	}
-	return segs, arcs
+	return segs, connectors
 }
 
 // walkSegment re-emits a coalesced walk, trimmed to (start, end), as a
@@ -523,18 +526,19 @@ func arcSegment(center, start, end Point2, ccw bool) CurveSegment {
 	return ArcSeg{Center: center, Start: end, End: start, TStart: 1, TEnd: 0}
 }
 
-// addFilletRoles gives every blend wall its second fillet(i,j) role (Table B):
-// the wall built from a fillet arc already carries side(i,j); the fillet role
-// names the same (loop, segment) of the rewritten record.
-func addFilletRoles(body *Body, ref StepRef, filletArcs []map[int]struct{}) {
-	for li, segs := range filletArcs {
+// addBlendRoles gives every blend wall its second kind(i,j) role (Table B): the
+// wall built from a blend connector already carries side(i,j); the second role —
+// "fillet" for Fillet, "chamfer" for Chamfer — names the same (loop, segment) of
+// the rewritten record.
+func addBlendRoles(body *Body, ref StepRef, blendSegs []map[int]struct{}, kind string) {
+	for li, segs := range blendSegs {
 		for sj := range segs {
 			side := fmt.Sprintf("side(%d,%d)", li, sj)
-			fillet := fmt.Sprintf("fillet(%d,%d)", li, sj)
+			blend := fmt.Sprintf("%s(%d,%d)", kind, li, sj)
 			for _, f := range body.Faces() {
 				for _, o := range f.origins {
 					if o.Step == ref && o.Role == side {
-						f.origins = append(f.origins, FeatureRef{Step: ref, Role: fillet})
+						f.origins = append(f.origins, FeatureRef{Step: ref, Role: blend})
 						break
 					}
 				}

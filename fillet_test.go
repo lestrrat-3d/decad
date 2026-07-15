@@ -386,6 +386,21 @@ func TestFilletTooLargeRadius(t *testing.T) {
 	require.Equal(t, []*decad.Body{body}, doc.Bodies(), `a refused fillet retires nothing`)
 }
 
+func TestFilletOverLargeRadiusFlippingLoopIsUnsupported(t *testing.T) {
+	// The fillet analogue of the chamfer overrun: a radius whose tangent feet run
+	// past their adjacent walls' far ends is S6 (ErrUnsupported), even when the
+	// rewrite also turns the loop inside out. At r = 120 on the 100×60 box each
+	// corner's feet overrun both its walls and the rewritten section flips sign,
+	// so the audit's S8 (asked first) would grab it if S6 did not own it. (This
+	// is a different refusal from TestFilletTooLargeRadius, whose S5 rejects a
+	// radius that exceeds a CIRCULAR carrier before any audit runs.)
+	_, box := filletBox(t)
+	_, err := box.Fillet(verticalEdges(), units.Millimeters(120))
+	require.ErrorIs(t, err, decad.ErrUnsupported, `an overrun that also flips the loop is still S6`)
+	require.NotErrorIs(t, err, decad.ErrDegenerate, `the overrun must not read as the S8 inside-out verdict`)
+	require.Equal(t, []*decad.Body{box}, box.Document().Bodies(), `a refused fillet retires nothing`)
+}
+
 // plateWithSquareHole extrudes a 100×100 plate with a 10×10 square hole whose
 // lower-left corner is at (off, off), by 20 mm — a straight prism whose section
 // is a rectangle with a rectangular hole.
