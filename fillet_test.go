@@ -458,6 +458,76 @@ func TestFilletClearOfHoleBuilds(t *testing.T) {
 	require.True(t, rep.Trustworthy(), `a fillet clear of the hole is Sound`)
 }
 
+// plateWithDiskHole extrudes a 100×100 plate with a circular hole of radius rho
+// centred at (cx, cy), by 10 mm — a straight prism whose section is a rectangle
+// with a circular hole.
+func plateWithDiskHole(t *testing.T, cx, cy, rho float64) (*decad.Document, *decad.Body) {
+	t.Helper()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	outer := s.CreateRectangle(0, 0, 100, 100)
+	s.Fix(outer.A)
+	s.CreateCircle(s.CreatePoint(cx, cy), rho)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+
+	var prof *sketch.Profile
+	for _, p := range s.Profiles() {
+		if len(p.Outer) == 4 && len(p.Holes) == 1 {
+			prof = p
+			break
+		}
+	}
+	require.NotNil(t, prof, `the rectangle-with-disk region should exist`)
+
+	doc := decad.New()
+	body, err := doc.Extrude(s, prof, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	require.NoError(t, err)
+	return doc, body
+}
+
+func TestFilletHoleOutsideRoundedLoopRefused(t *testing.T) {
+	// A large fillet can shrink the outer loop PAST a near-corner hole without the
+	// hole ever crossing or touching an outer segment: the (0,0) corner's r = 20
+	// blend arc has centre (20,20), and the hole at (3,3) r = 1 lies at distance
+	// √(17²+17²) − 1 ≈ 23 > 20 from that centre — entirely in the removed corner,
+	// OUTSIDE the rounded material, yet ≈3 mm from the nearest outer segment (no
+	// crossing, no contact). S8/S6/S7 all pass; only the §5 test-4 containment
+	// audit catches it. The hole is PROVABLY outside the rewritten outer loop, so
+	// the nesting is decidably broken — the fillet consumed the region the hole
+	// lived in — and no such body exists: S8-family ErrDegenerate.
+	_, body := plateWithDiskHole(t, 3, 3, 1)
+
+	convex := decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)), decad.Convex())
+	_, err := body.Fillet(convex, units.Millimeters(20))
+	require.Error(t, err, `a fillet that leaves the hole outside the outer loop must be refused, not returned`)
+	require.ErrorIs(t, err, decad.ErrDegenerate,
+		`a hole proven outside the rounded outer loop is nesting decidably broken: no such body, ErrDegenerate`)
+	require.Equal(t, []*decad.Body{body}, body.Document().Bodies(), `a refused fillet retires nothing`)
+}
+
+func TestFilletHoleWellInsideRoundedLoopBuilds(t *testing.T) {
+	// The mirror of the refusal: a hole comfortably inside the rounded outer loop
+	// still builds and tessellates Sound. A small r = 5 fillet at (0,0) leaves the
+	// hole at the plate's centre untouched and well contained, so the containment
+	// audit passes and does not over-reject.
+	doc, body := plateWithDiskHole(t, 50, 50, 5)
+
+	convex := decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)), decad.Convex())
+	filleted, err := body.Fillet(convex, units.Millimeters(5))
+	require.NoError(t, err, `a fillet with the hole well inside the outer loop must build`)
+	requireManifold(t, filleted)
+
+	mesh, err := filleted.Tessellate(units.Millimeters(0.1))
+	require.NoError(t, err, `a well-nested filleted section tessellates`)
+	require.NotEmpty(t, mesh.Triangles())
+
+	rep, err := doc.Verify(t.Context())
+	require.NoError(t, err)
+	require.True(t, rep.Trustworthy(), `a well-nested fillet is Sound`)
+}
+
 // scaledDiskInCornerFillet builds a k-scaled plate whose (0,0) outer corner is
 // rounded by a radius-5k convex fillet, with a circular hole placed ENTIRELY
 // inside that fillet's disk so the rewritten arc clears the hole by a gap of

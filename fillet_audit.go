@@ -8,24 +8,31 @@ import (
 // This file is the §5 audit of a fillet's rewritten section
 // (docs/modify-design.md §5), run before any face is built, in the order §4
 // fixes: S8 (orientation — the existence question, asked first), S6 (no walk
-// consumed by its own corners), then S7 (no crossing). Every test is a
-// closed-form fact of decad's own line and arc segments, so its verdict is the
-// same under every evaluator — never a residual.
+// consumed by its own corners), S7 (no crossing OR boundary contact), then S9
+// (nesting). Every test is a closed-form fact of decad's own line and arc
+// segments, so its verdict is the same under every evaluator — never a residual.
 //
-// S9 (nesting) is discharged by construction here, but only once S7 rules out
-// boundary CONTACT as well as crossing. A fillet is a bounded local rewrite of
-// each corner, so a hole can leave the outer region — or two holes overlap —
-// only if their boundaries stop being disjoint, and two Jordan loops stop being
-// disjoint in exactly two ways: their boundaries CROSS, or they merely TOUCH (a
-// tangency, or a shared boundary point with no interior crossing). The large
-// fillet that brings the rewritten section's loops into contact is the second
-// case, and an interior-only crossing test passes it — a silently inconsistent
-// body whose loops pinch. So S7 rejects contact as well as crossing (segCross
-// for a transversal crossing, segMinDist for a tangency or shared point), and
-// S8 proves no loop inverted; the section sketch admitted was validly nested
-// (RecordProfile, core §7). A contact-free, crossing-free, orientation-
-// preserving local rewrite of a validly-nested section keeps its nesting, so
-// there is no undecidable containment to decline.
+// S7 rejects boundary CONTACT as well as crossing, so that the loops the
+// rewrite hands S9 are strictly DISJOINT. Two Jordan loops stop being disjoint
+// in exactly two ways: their boundaries CROSS, or they merely TOUCH (a
+// tangency, or a shared boundary point with no interior crossing). A large
+// fillet can pinch the rewritten loops into contact without crossing, so S7
+// tests both (segCross for a transversal crossing, segMinDist for a tangency or
+// shared point).
+//
+// Disjoint is not the same as nested: two disjoint Jordan loops are either
+// nested OR mutually exterior, and S8 (each loop's own signed area) reads no
+// relative position, so it cannot tell the two apart. A large fillet can shrink
+// the outer loop past a near-corner hole, leaving the hole in the removed corner
+// region — disjoint from every outer segment, yet OUTSIDE the rounded material.
+// So S9 (nestingAudit) is COMPUTED, not discharged by construction: it
+// classifies one point of each hole against the outer loop and each other hole,
+// using the same ray-parity walk with direction retries that survey2d.go runs
+// (loopContains). An undecidable containment is S9 ErrUnsupported — the
+// evaluator declines rather than guess; a hole PROVEN outside the outer loop, or
+// nested inside another hole, is nesting decidably broken — the fillet consumed
+// the region the caller's section lived in, so no such body exists and it is an
+// S8-family ErrDegenerate (§1 existence test).
 
 // auditRewrite runs the §5 audit on the rewritten profile in §4's order.
 func auditRewrite(orig, rewritten ProfileRecord, loops []cornerLoop, filletAt []map[int]*filletData) error {
@@ -66,11 +73,43 @@ func auditRewrite(orig, rewritten ProfileRecord, loops []cornerLoop, filletAt []
 		}
 	}
 
+	// S7 and S9 both work on the rewritten loops as boundary primitives, so
+	// resolve every segment's walk once and share it.
+	segs, err := buildSegEntries(newLoops)
+	if err != nil {
+		return err
+	}
+
 	// S7: no crossing AND no boundary contact — any pair of non-adjacent
 	// segments meeting in both their interiors is a self-intersection, and a
 	// pair that merely touches (a tangency, or a shared boundary point) is a
 	// pinch; either is a rewrite a resolving kernel would have to trim.
-	return crossingAudit(newLoops)
+	if err := crossingAudit(segs); err != nil {
+		return err
+	}
+
+	// S9: nesting preserved — with the loops proven disjoint by S7, each hole
+	// lies wholly inside or wholly outside the outer loop and every other hole;
+	// classify one point of each to prove the outer loop still contains every
+	// hole and the holes stay mutually exterior.
+	return nestingAudit(segs, len(newLoops))
+}
+
+// buildSegEntries resolves every loop's recorded segments into boundary walks
+// tagged by the loop and position they came from (for adjacency).
+func buildSegEntries(loops []LoopRecord) ([]segEntry, error) {
+	var segs []segEntry
+	for li, loop := range loops {
+		n := len(loop.Segments)
+		for i, seg := range loop.Segments {
+			w, err := walkOf(seg)
+			if err != nil {
+				return nil, err
+			}
+			segs = append(segs, segEntry{loop: li, idx: i, n: n, w: w})
+		}
+	}
+	return segs, nil
 }
 
 // loopSignedArea is one loop's signed area (positive counter-clockwise): the
@@ -98,24 +137,15 @@ type segEntry struct {
 // boundary contact — a tangency or a shared boundary point — skipping only
 // pairs that legitimately share an endpoint (same-loop neighbours). A crossing
 // and a contact both stop two Jordan loops being disjoint, so both must be
-// rejected before S9's nesting can be discharged by construction: an
-// interior-only crossing test would pass a large fillet whose rewritten loops
-// merely pinch, and Body.Tessellate would then refuse the very body Fillet
-// returned. Both are S7 (ErrUnsupported): the touch is the boundary case of a
-// crossing, a body a resolving/trimmed-offset kernel could build but this
-// evaluator cannot (§1 existence test — the body exists; §4 Table S, S7).
-func crossingAudit(loops []LoopRecord) error {
-	var segs []segEntry
-	for li, loop := range loops {
-		n := len(loop.Segments)
-		for i, seg := range loop.Segments {
-			w, err := walkOf(seg)
-			if err != nil {
-				return err
-			}
-			segs = append(segs, segEntry{loop: li, idx: i, n: n, w: w})
-		}
-	}
+// rejected before S9's nesting can be tested: S9 classifies a point of one loop
+// against another, and that classification is only defined once the loops are
+// strictly disjoint. An interior-only crossing test would pass a large fillet
+// whose rewritten loops merely pinch, and Body.Tessellate would then refuse the
+// very body Fillet returned. Both are S7 (ErrUnsupported): the touch is the
+// boundary case of a crossing, a body a resolving/trimmed-offset kernel could
+// build but this evaluator cannot (§1 existence test — the body exists; §4
+// Table S, S7).
+func crossingAudit(segs []segEntry) error {
 	touchFloor := contactFloor(segs)
 	for i := range segs {
 		for j := i + 1; j < len(segs); j++ {
@@ -149,18 +179,156 @@ const contactEps = 1e-9
 // the section — a fixed absolute band mis-scales, rejecting a macroscopic gap
 // on a sub-millimetre section and accepting a real pinch on a huge one.
 func contactFloor(segs []segEntry) float64 {
-	minU, minV := math.Inf(1), math.Inf(1)
-	maxU, maxV := math.Inf(-1), math.Inf(-1)
-	for _, s := range segs {
-		for _, p := range [2][2]float64{{s.w.startU, s.w.startV}, {s.w.endU, s.w.endV}} {
-			minU, maxU = math.Min(minU, p[0]), math.Max(maxU, p[0])
-			minV, maxV = math.Min(minV, p[1]), math.Max(maxV, p[1])
-		}
-	}
-	if math.IsInf(minU, 1) { // no segments: nothing to pinch
+	minU, minV, maxU, maxV, ok := sectionBBox(segs)
+	if !ok { // no segments: nothing to pinch
 		return 0
 	}
 	return contactEps * math.Hypot(maxU-minU, maxV-minV)
+}
+
+// sectionBBox is the TRUE (u, v) bounding box of a rewritten section — the box
+// the §5 D reads. An arc bulges outside its endpoint chord (a semicircle from
+// (−R,0) to (R,0) reaches (0,R); a full circle's endpoints collapse to a
+// point), so a line contributes its two endpoints and an arc its endpoints AND
+// every cardinal extremum (cU±R, cV±R) its own angular walk actually reaches —
+// never the endpoint box alone, which understates D.
+func sectionBBox(segs []segEntry) (minU, minV, maxU, maxV float64, ok bool) {
+	minU, minV = math.Inf(1), math.Inf(1)
+	maxU, maxV = math.Inf(-1), math.Inf(-1)
+	fold := func(x, y float64) {
+		minU, maxU = math.Min(minU, x), math.Max(maxU, x)
+		minV, maxV = math.Min(minV, y), math.Max(maxV, y)
+	}
+	for _, s := range segs {
+		w := s.w
+		fold(w.startU, w.startV)
+		fold(w.endU, w.endV)
+		if !w.circular {
+			continue
+		}
+		lo, hi := math.Min(w.th0, w.th1), math.Max(w.th0, w.th1)
+		for q := range 4 { // the four cardinal bearings 0, π/2, π, 3π/2
+			base := float64(q) * (math.Pi / 2)
+			th := base + 2*math.Pi*math.Ceil((lo-base)/(2*math.Pi))
+			for ; th <= hi+1e-12; th += 2 * math.Pi {
+				fold(w.cU+w.radius*math.Cos(th), w.cV+w.radius*math.Sin(th))
+			}
+		}
+	}
+	if math.IsInf(minU, 1) {
+		return 0, 0, 0, 0, false
+	}
+	return minU, minV, maxU, maxV, true
+}
+
+// nestingAudit is the §5 test-4 containment audit (S9): with S7 having proven
+// the rewritten loops strictly disjoint, each hole lies wholly inside or wholly
+// outside the outer loop and every other hole. It classifies one point of each
+// hole against the outer loop's boundary and against every other hole's, using
+// the ray-parity walk with direction retries survey2d.go already runs
+// (loopContains, over rayCrossings). The audit passes only when the outer loop
+// is PROVEN to contain each hole and the holes are proven mutually exterior.
+//
+// An undecided classification is S9 ErrUnsupported — a build-time audit has no
+// Suspect to fall back on, so the evaluator declines rather than guess. A hole
+// PROVEN outside the outer loop, or PROVEN inside another hole, is nesting
+// decidably broken: the fillet consumed the region the caller's nested section
+// lived in, so no such body exists (§1 existence test) — an S8-family
+// ErrDegenerate, the same "modification consumed the region" verdict S8 gives an
+// inverted loop.
+func nestingAudit(segs []segEntry, nLoops int) error {
+	if nLoops <= 1 { // no holes: nothing to contain
+		return nil
+	}
+	bounds := make([][]surveyElem, nLoops)
+	pts := make([][2]float64, nLoops)
+	hasPt := make([]bool, nLoops)
+	for _, s := range segs {
+		if e, ok := elemOf(s.w); ok {
+			bounds[s.loop] = append(bounds[s.loop], e)
+		}
+		if !hasPt[s.loop] {
+			pts[s.loop] = [2]float64{s.w.startU, s.w.startV}
+			hasPt[s.loop] = true
+		}
+	}
+	minU, minV, maxU, maxV, ok := sectionBBox(segs)
+	if !ok {
+		return nil
+	}
+	scale := math.Max(1, math.Max(math.Max(math.Abs(minU), math.Abs(maxU)), math.Max(math.Abs(minV), math.Abs(maxV))))
+	tol := contactEps * scale
+
+	undecidable := func() error {
+		return fmt.Errorf(`%w: the fillet rewrite's nesting cannot be decided; a resolving kernel is not available`, ErrUnsupported)
+	}
+	// Every hole must sit inside the rewritten outer loop.
+	for h := 1; h < nLoops; h++ {
+		if !hasPt[h] {
+			continue
+		}
+		inside, decided := loopContains(bounds[0], pts[h][0], pts[h][1], tol)
+		if !decided {
+			return undecidable()
+		}
+		if !inside {
+			return fmt.Errorf(`%w: the fillet shrank the outer loop past a hole, leaving it outside the rounded material`, ErrDegenerate)
+		}
+	}
+	// Holes must stay mutually exterior — neither nested in the other.
+	for a := 1; a < nLoops; a++ {
+		for b := a + 1; b < nLoops; b++ {
+			if !hasPt[a] || !hasPt[b] {
+				continue
+			}
+			for _, pr := range [2]struct {
+				in int
+				pt [2]float64
+			}{{a, pts[b]}, {b, pts[a]}} {
+				inside, decided := loopContains(bounds[pr.in], pr.pt[0], pr.pt[1], tol)
+				if !decided {
+					return undecidable()
+				}
+				if inside {
+					return fmt.Errorf(`%w: the fillet nested one hole inside another`, ErrDegenerate)
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// elemOf converts a segment walk into a survey2d boundary element (the material
+// side is irrelevant to ray parity, so an arc's walk sense is not consulted).
+func elemOf(w segmentWalk) (surveyElem, bool) {
+	if w.circular {
+		return arcElem(w.cU, w.cV, w.radius, w.th0, w.th1, w.closed)
+	}
+	return lineElem(w.startU, w.startV, w.endU, w.endV)
+}
+
+// loopContains classifies (px, py) against a loop's boundary by crossing parity
+// of a ray, retried across the golden-angle direction sequence when a crossing
+// is ambiguous — the same walk wallKernel.contains runs. decided is false when
+// every direction is ambiguous; the answer is never guessed.
+func loopContains(boundary []surveyElem, px, py, tol float64) (inside, decided bool) {
+	for i := range 16 {
+		th := 0.5 + float64(i)*2.399963229728653 // golden-angle sequence
+		dx, dy := math.Cos(th), math.Sin(th)
+		crossings, good := 0, true
+		for _, e := range boundary {
+			n, ok := rayCrossings(e, px, py, dx, dy, tol)
+			if !ok {
+				good = false
+				break
+			}
+			crossings += n
+		}
+		if good {
+			return crossings%2 == 1, true
+		}
+	}
+	return false, false
 }
 
 // adjacent reports whether two segments legitimately share an endpoint: the
