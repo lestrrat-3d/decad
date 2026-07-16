@@ -27,37 +27,39 @@ import (
 // axis-aligned outer rectangle [0,w]×[0,h] whose RIGHT edge is densely
 // subdivided at each integer v (the other three edges single segments), plus a
 // ROW GRID of k ≥ 0 axis-aligned integer rectangular holes: holes are grouped
-// into rows, every hole in a row sharing that row's v-band, rows stacked with a
-// ≥1 v-gap between them, holes within a row separated by a ≥1 u-gap. Each hole is
-// strictly inside the outer (a ≥1 margin off every edge). This is provably a
-// valid simple polygon-with-holes: the outer is a convex rectangle walked once
-// (collinear samples on one edge break neither simplicity nor its positive/CCW
-// area), each hole is a simple rectangle walked CW (negative area), and no hole
-// touches the outer or another hole, so the region outer − Σholes is exactly the
-// region triangulate2D promises to reduce.
+// into rows, every hole in a row sharing that row's v-band, holes within a row
+// separated by a ≥1 u-gap. Consecutive bands may be v-separated OR v-adjacent
+// (sharing a v-line), each band carrying a horizontal phase so holes across a
+// shared v-line stay u-clear. Each hole is strictly inside the outer (a ≥1 margin
+// off every edge). This is provably a valid simple polygon-with-holes: the outer
+// is a convex rectangle walked once (collinear samples on one edge break neither
+// simplicity nor its positive/CCW area), each hole is a simple rectangle walked
+// CW (negative area), and triBuild rejects any draw where a hole touches the
+// outer or another hole, so the region outer − Σholes is exactly the region
+// triangulate2D promises to reduce.
 //
-// Two deliberate choices keep the family inside the triangulator's exercised
-// domain:
-//   - The right edge alone carries the collinear samples: real Tessellate
-//     boundaries (chordLoop) chord CURVES and leave a straight edge a single
-//     segment, so subdividing every straight edge to long collinear runs would
-//     push past that domain (it makes the ear clip stall on a fully-collinear
-//     boundary). One densely-sampled edge is the honest degenerate-alignment
-//     probe without leaving the domain.
-//   - Rows are separated in v so no hole's horizontal edge ever sits at the same
-//     v as a DIFFERENT hole's horizontal edge. Holes that share a v-line across
-//     distinct bands make a +u bridge ray run collinear THROUGH another hole's
-//     edge, which the current triangulator does not resolve; holes sharing the
-//     SAME band do not, and are generated freely.
+// One deliberate choice keeps the family inside the triangulator's exercised
+// domain: the right edge alone carries the collinear samples. Real Tessellate
+// boundaries (chordLoop) chord CURVES and leave a straight edge a single
+// segment, so subdividing every straight edge to long collinear runs would push
+// past that domain (it makes the ear clip stall on a fully-collinear boundary).
+// One densely-sampled edge is the honest degenerate-alignment probe without
+// leaving the domain.
 //
 // Because the holes and the right-edge samples share one integer grid, the
-// DEGENERATE ALIGNMENTS #39 fixed occur by construction:
+// DEGENERATE ALIGNMENTS the triangulator handles occur by construction:
 //   - every hole's maximum-u vertex sits at an integer v, so its +u visibility
 //     ray lands EXACTLY on an outer vertex (w, v) — the ray-hits-a-vertex /
 //     bridge-collinear-with-a-boundary-edge case #39's bridgeHole fix targets;
 //   - two holes sharing a v-band make the left hole's bridge run along the top
 //     or bottom edge of the right hole — the same-band bridge-collinear-with-a-
 //     hole-edge case, whose splice mints genuine collinear corners;
+//   - two holes in v-ADJACENT bands share a horizontal v-line, so a +u bridge
+//     ray from the lower hole runs collinear THROUGH the upper hole's edge (or
+//     vice versa) — the hole-vs-hole shared-v-line case, whose splice makes a
+//     genuine boundary corner of one hole coincide with the other hole's bridge
+//     anchor; collapsing it would drop that boundary edge and crack the band, so
+//     earClip must defer it (a distinct-index collinear corner), not collapse it;
 //   - the right edge's collinear run exercises earClip's genuine-collinear-vertex
 //     deferral directly, holes or none.
 //
@@ -153,11 +155,17 @@ func triBuild(w, h int, holeRects []triRect) (pts []Point2, outer []int, holes [
 }
 
 // triGridRects builds the row-grid hole set inside [0,w]×[0,h]: rows stacked in
-// v with a ≥1 gap between them (so no two holes in different rows share a
-// v-line), each row a band of holes that share the band and are separated in u
-// by ≥1 gaps. next(n) returns a value in [0,n) and is the sole entropy source,
-// so the very same construction serves the seeded generator (next drawing from
-// an rng) and the fuzz decoder (next drawing from the input bytes).
+// v, each row a band of holes that share the band and are separated in u by ≥1
+// gaps. Consecutive bands may be v-SEPARATED (a ≥1 v-gap) OR v-ADJACENT (gap 0),
+// so a hole's top edge sits at the very v of the hole below it in the next band
+// — the shared-v-line configuration that makes a +u bridge ray run collinear
+// THROUGH another hole's edge (the fu6 fault). To keep such configurations valid
+// yet exercised, each band carries a horizontal PHASE offset so a hole and the
+// hole below it, sharing a v-line, are offset in u and stay u-clear rather than
+// touching; any residual overlap triBuild rejects, so the family stays the
+// guaranteed-valid one. next(n) returns a value in [0,n) and is the sole entropy
+// source, so the very same construction serves the seeded generator (next
+// drawing from an rng) and the fuzz decoder (next drawing from the input bytes).
 func triGridRects(next func(n int) int, w, h int) []triRect {
 	var rects []triRect
 	v := 1
@@ -167,7 +175,7 @@ func triGridRects(next func(n int) int, w, h int) []triRect {
 			break
 		}
 		y0, y1 := v, v+bandH
-		u := 1
+		u := 1 + next(3) // band phase 0..2: staggers holes across a shared v-line
 		for u <= w-2 {
 			holeW := 1 + next(3) // 1..3
 			if u+holeW > w-1 {
@@ -178,7 +186,7 @@ func triGridRects(next func(n int) int, w, h int) []triRect {
 			}
 			u = u + holeW + 1 // step past the hole and a ≥1 gap
 		}
-		v = y1 + 2 // next band after a ≥1 v-gap; y1+1 is the gap line
+		v = y1 + next(3) // next band 0..2 above: gap 0 shares this band's v-line
 	}
 	return rects
 }
@@ -355,6 +363,26 @@ func TestTriangulate2DBridgeCollinearFamily(t *testing.T) {
 			triAssert(t, pts, outer, holes)
 		})
 	}
+}
+
+// TestTriangulate2DHoleHoleCollinear pins the hole-vs-hole shared-v-line fault
+// (the #40 fuzzer's calibration repro): an outer 13×13 rectangle with two
+// rectangular holes {2,1,3,2} and {4,2,7,3} whose bands are v-ADJACENT — the
+// first hole's top edge and the second's bottom edge both at v=2. The first
+// hole's maximum-u corner (3,2) casts its +u bridge ray collinear THROUGH the
+// second hole's bottom edge, and the bridge lands on the second hole's reflex
+// corner (4,2). That corner is a genuine boundary vertex of the second hole AND
+// the first hole's bridge anchor; collapsing it as a zero-area corner would drop
+// the second hole's boundary edge (7,2)→(4,2) and overlap triangles. earClip
+// must instead DEFER it — a distinct-index collinear corner is not a bridge stub
+// — so every boundary edge survives and the fan is non-overlapping. This is
+// distinct from #39's hole-vs-outer collinear bridge. triAssert judges with the
+// test-only exact oracles (triSignedArea2, the P4/P5 edge multiset), never the
+// production cross2.
+func TestTriangulate2DHoleHoleCollinear(t *testing.T) {
+	pts, outer, holes, ok := triBuild(13, 13, []triRect{{2, 1, 3, 2}, {4, 2, 7, 3}})
+	require.True(t, ok, `the hole-hole shared-v-line repro builds a valid polygon`)
+	triAssert(t, pts, outer, holes)
 }
 
 // FuzzTriangulate2D decodes fuzz bytes into a member of the guaranteed-valid
