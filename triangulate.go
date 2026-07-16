@@ -173,12 +173,17 @@ func bridgeHole(pts []Point2, merged, hole []int) ([]int, error) {
 // earClip triangulates a counter-clockwise weakly-simple polygon by ear
 // clipping: a strictly convex corner whose triangle contains no reflex vertex
 // is emitted and removed. A zero-area (collinear) corner is removed WITHOUT
-// emitting only when it is a bridge anchor — a vertex the hole splice
-// duplicated, the tip of the bridge's zero-width channel; a collinear corner
-// at a GENUINE (unique) boundary vertex is instead deferred, since removing it
-// would drop a boundary edge and crack the shared band. The deferred vertex
-// turns strictly convex once an adjacent corner is clipped, so the pass always
-// makes progress; a pass that clips nothing means the boundary
+// emitting only when it is a bridge stub — the tip of a bridge's zero-width
+// there-and-back channel, recognised by an index coincidence among the corner's
+// three vertices (the spike apex has the SAME anchor index on both sides, and
+// the residual doubled anchor an adjacent identical index). Removing such a
+// stub drops only a bridge edge and its exact reverse, no boundary. A collinear
+// corner whose three vertices are DISTINCT indices is a genuine boundary corner
+// — its two edges are real boundary edges (possibly one from each of two holes
+// sharing a horizontal v-line) — so it is deferred, never collapsed, since
+// merging its edges would drop a boundary edge and crack the shared band. The
+// deferred vertex turns strictly convex once an adjacent corner is clipped, so
+// the pass always makes progress; a pass that clips nothing means the boundary
 // self-intersects, which is an error, never a wrong mesh.
 func earClip(pts []Point2, poly []int) ([][3]int, error) {
 	idx := append([]int(nil), poly...)
@@ -192,7 +197,7 @@ func earClip(pts []Point2, poly []int) ([][3]int, error) {
 			if cr < 0 {
 				continue
 			}
-			if cr == 0 && !isBridgeAnchor(idx, i) {
+			if cr == 0 && !isBridgeStub(ia, ib, ic) {
 				continue
 			}
 			if cr > 0 && earBlocked(pts, idx, i) {
@@ -212,17 +217,17 @@ func earClip(pts []Point2, poly []int) ([][3]int, error) {
 	return tris, nil
 }
 
-// isBridgeAnchor reports whether the vertex at position i is a bridge anchor —
-// a merged-polygon vertex whose index the hole splice repeated (M and P each
-// appear twice). Only such a duplicate may be collapsed on a zero-area corner;
-// a vertex appearing once is a genuine boundary vertex that must be kept.
-func isBridgeAnchor(idx []int, i int) bool {
-	for j := range idx {
-		if j != i && idx[j] == idx[i] {
-			return true
-		}
-	}
-	return false
+// isBridgeStub reports whether the zero-area corner (ia, ib, ic) is a bridge
+// stub safe to collapse — the tip or residue of a bridge's zero-width channel,
+// where an index coincides among the three corner vertices. The spike apex M
+// carries the SAME bridge anchor index P on both sides (ia == ic); collapsing it
+// drops the reverse edges P→M and M→P and nothing else. The doubled anchor left
+// behind carries an adjacent identical index (ia == ib or ib == ic); collapsing
+// it drops only a zero-length self edge. A collinear corner whose three vertices
+// are DISTINCT indices is NOT a stub — it is a genuine boundary corner whose two
+// edges (one possibly from another hole sharing this v-line) must be kept.
+func isBridgeStub(ia, ib, ic int) bool {
+	return ia == ic || ia == ib || ib == ic
 }
 
 // earBlocked reports whether the candidate ear at position i is cut off from
