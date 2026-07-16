@@ -2,6 +2,7 @@ package decad
 
 import (
 	"math"
+	"math/big"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -70,13 +71,18 @@ func TestTriangulate2DBridgeCollinear(t *testing.T) {
 	require.NotEmpty(t, tris)
 
 	// Every triangle is wound counter-clockwise (no inverted or zero-area
-	// facet), and the triangles together cover exactly the band area.
-	area := 0.0
+	// facet), and the triangles together cover exactly the band area. The facet
+	// oracle is triSignedArea2 (a test-only exact math/big.Rat determinant),
+	// NEVER the production cross2 that triangulate2D accepts ears with — judging
+	// a facet with cross2 would be circular, so a zero-area facet a cross2
+	// regression let through could never be caught here.
+	areaSum := new(big.Rat)
 	for _, tr := range tris {
-		s := cross2(pts[tr[0]], pts[tr[1]], pts[tr[2]]) / 2
-		require.Greater(t, s, 0.0, `facet %v is counter-clockwise and non-degenerate`, tr)
-		area += s
+		s := triSignedArea2(pts[tr[0]], pts[tr[1]], pts[tr[2]])
+		require.Positive(t, s.Sign(), `facet %v is counter-clockwise and non-degenerate`, tr)
+		areaSum.Add(areaSum, s)
 	}
+	area, _ := areaSum.Float64()
 	wantArea := loopSignedArea2(pts, outer) + loopSignedArea2(pts, hole) // hole area is negative
 	require.InDelta(t, wantArea, area, 1e-9, `the fan covers exactly the band`)
 
