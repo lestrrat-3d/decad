@@ -2,6 +2,7 @@ package decad
 
 import (
 	"math"
+	"math/big"
 	"math/rand"
 	"testing"
 
@@ -11,7 +12,7 @@ import (
 // This file is randomized property testing plus a native fuzz target for the
 // shared cap triangulator (triangulate.go: triangulate2D and its helpers
 // bridgeHole / earClip). It is package-internal — like triangulate_internal_test.go
-// — because triangulate2D, cross2 and Point2 are unexported; it reuses that
+// — because triangulate2D and Point2 are unexported; it reuses that
 // file's loopSignedArea2. This treatment matches the randomized suites revolve,
 // the boolean and the fillet already carry.
 //
@@ -65,9 +66,15 @@ import (
 //  P2 Every triangle is wound CCW with STRICTLY positive area — no zero-area
 //     facet shipped. This is one half of the #39 bite: the pre-fix code
 //     dissolved a collinear bridge sliver / dropped a collinear corner, either
-//     shipping a degenerate facet or losing one.
+//     shipping a degenerate facet or losing one. The area/orientation oracle is
+//     triSignedArea2, a test-only exact determinant — NEVER the production
+//     cross2 the triangulator itself uses to accept ears, which would make the
+//     check circular (a facet cross2 wrongly blesses as positive would be
+//     blessed here too).
 //  P3 Coverage: the triangle areas sum to (outer area − Σ hole areas) within a
-//     tight tolerance — no gap, no double cover.
+//     tight tolerance — no gap, no double cover. The per-facet areas summed are
+//     triSignedArea2's, independent of production; the region area is
+//     loopSignedArea2, the test's own shoelace.
 //  P4 Boundary preservation: every directed boundary edge of every input loop
 //     (outer + holes, each unit sub-edge of the dense runs included) appears as
 //     a triangle edge exactly once, and its reverse never. This is the sharp
@@ -176,6 +183,27 @@ func triGridRects(next func(n int) int, w, h int) []triRect {
 	return rects
 }
 
+// triSignedArea2 is the property suite's OWN area/orientation oracle: an exact
+// math/big.Rat determinant ½·((b−a)×(c−a)) over the point coordinates. It is
+// deliberately independent of the production cross2 that triangulate2D uses to
+// decide which ears are valid — judging a facet with cross2 would be circular,
+// so a facet the triangulator wrongly accepted as positive-area could never be
+// caught by P2/P3. The polygon-with-holes family is drawn on an integer grid,
+// so SetFloat64 is exact and the sign is decided with zero float ambiguity: a
+// truly degenerate facet reads exactly 0, never a near-zero positive.
+func triSignedArea2(a, b, c Point2) *big.Rat {
+	ax := new(big.Rat).SetFloat64(a.U)
+	ay := new(big.Rat).SetFloat64(a.V)
+	bx := new(big.Rat).SetFloat64(b.U)
+	by := new(big.Rat).SetFloat64(b.V)
+	cx := new(big.Rat).SetFloat64(c.U)
+	cy := new(big.Rat).SetFloat64(c.V)
+	t1 := new(big.Rat).Mul(new(big.Rat).Sub(bx, ax), new(big.Rat).Sub(cy, ay))
+	t2 := new(big.Rat).Mul(new(big.Rat).Sub(cx, ax), new(big.Rat).Sub(by, ay))
+	d := new(big.Rat).Sub(t1, t2)
+	return d.Mul(d, big.NewRat(1, 2))
+}
+
 // triAssert runs the whole property contract (P1..P5) on a triangulation of the
 // given valid polygon-with-holes.
 func triAssert(t *testing.T, pts []Point2, outer []int, holes [][]int) {
@@ -196,13 +224,16 @@ func triAssert(t *testing.T, pts []Point2, outer []int, holes [][]int) {
 	require.NotEmpty(t, tris)
 
 	// P2 + P3: every facet CCW and strictly non-degenerate; areas sum to the
-	// region area (outer − Σ holes).
-	area := 0.0
+	// region area (outer − Σ holes). Both use triSignedArea2 (test-only exact
+	// determinant), NEVER the production cross2 the triangulator accepts ears
+	// with — so the oracle is not circular.
+	areaSum := new(big.Rat)
 	for _, tr := range tris {
-		s := cross2(pts[tr[0]], pts[tr[1]], pts[tr[2]]) / 2
-		require.Greater(t, s, 0.0, `facet %v is CCW and non-degenerate`, tr)
-		area += s
+		s := triSignedArea2(pts[tr[0]], pts[tr[1]], pts[tr[2]])
+		require.Positive(t, s.Sign(), `facet %v is CCW and non-degenerate`, tr)
+		areaSum.Add(areaSum, s)
 	}
+	area, _ := areaSum.Float64()
 	want := loopSignedArea2(pts, outer) // positive
 	for _, hole := range holes {
 		want += loopSignedArea2(pts, hole) // negative
