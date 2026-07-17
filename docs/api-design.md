@@ -62,11 +62,11 @@ The recipe is also **the thing that translates into Fusion code** — it is the
 library's actual deliverable, so it is a first-class inspectable value.
 
 Stored recipes are executable model input, not JSON-shaped documentation.
-`DecodeRecipe` strictly decodes one versioned envelope, `Recipe.Validate` checks
-the operation/reference graph without building geometry, and `Evaluate` runs a
-private snapshot through a package-owned evaluator into a new `Document`.
-Whole-recipe failure exposes no partial document. The complete contract is
-`docs/recipe-replay-design.md`.
+`DecodeRecipe` strictly decodes one versioned envelope, `Recipe.Validate`
+independently proves every stored profile and checks the operation/reference
+graph without building a body, and `Evaluate` runs a private snapshot through a
+package-owned evaluator into a new `Document`. Whole-recipe failure exposes no
+partial document. The complete contract is `docs/recipe-replay-design.md`.
 
 ### 2.1 Why the boolean is the only place exactness dies
 
@@ -541,19 +541,21 @@ a `Step` records therefore encodes.
 **The root wire format is versioned and strict.** Canonical JSON is
 `{"format":"decad.recipe","version":1,"steps":[...]}`. The existing
 unversioned `{"steps":[...]}` shape is accepted as legacy version 1 and always
-re-encodes canonically. Unknown versions, unknown fields, duplicate keys,
-trailing values, malformed operation shapes, invalid references and configured
-resource-limit overruns reject. The in-memory `Recipe` keeps no version field:
-format metadata is not design intent. `docs/recipe-replay-design.md` §§2–7 is
-normative.
+re-encodes canonically. Invalid Unicode, unknown versions, unknown fields,
+duplicate keys, trailing values, malformed operation shapes, invalid references
+and configured resource-limit overruns reject. The in-memory `Recipe` keeps no
+version field: format metadata is not design intent.
+`docs/recipe-replay-design.md` §§2–7 is normative.
 
 **A recipe is evaluable, not merely encodable.** `Recipe.Validate` checks every
-operation's required/forbidden fields, every reachable value, every backward
-reference and the body-liveness state machine. `Evaluate` deep-copies and
-normalizes the recipe, validates it, then walks steps in order through the
-selected package-owned evaluator. Immediate feature calls and replay share the
-same recorded-step helpers; a second implementation is forbidden. A valid
-intent beyond the selected evaluator's reach remains `ErrUnsupported`.
+operation's required/forbidden fields, independently proves every stored
+profile through a private `sketch` arrangement, checks every reachable value,
+and checks every backward reference + the body-liveness state machine.
+`Evaluate` deep-copies and normalizes the recipe, validates it, then walks steps
+in order through the selected package-owned evaluator. Immediate feature calls
+and replay share the same recorded-step helpers; a second implementation is
+forbidden. A valid intent beyond the selected evaluator's reach remains
+`ErrUnsupported`.
 
 **A `Step` holds no `*Body` either.** A body reference in a `Step` is a `StepRef` —
 the step that produced the body — and that is what makes `Inputs` a graph. The
@@ -1191,9 +1193,9 @@ to make that mechanical.
   evaluator cannot yet build it — evaluator staging is explicit and rejected
   at the call, never silently approximated or narrowed;
   `docs/evaluator-design.md` §2), `ErrInvalidRecipe` (stored IR violates its
-  operation/reference contract), `ErrUnsupportedRecipeVersion` (the envelope
-  names a format version this package cannot interpret), and `ErrResourceLimit`
-  (decode/validation/evaluation crossed an explicit ceiling). `RecipeError`
+  profile/operation/reference contract), `ErrUnsupportedRecipeVersion` (the
+  envelope names a format version this package cannot interpret), and
+  `ErrResourceLimit` (decode/validation/evaluation crossed an explicit ceiling). `RecipeError`
   carries root/step + field path and matches both `ErrInvalidRecipe` and its
   specific cause; `EvaluationError` carries step + op and unwraps evaluator or
   context failures. Full precedence is in `docs/recipe-replay-design.md` §6.

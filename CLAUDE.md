@@ -57,9 +57,9 @@ before writing evaluator/topology/feature code.
 - **Shapes belong HERE.** `r3` excludes them by charter; solids/surfaces/meshes/
   topology are this module's job.
 - **NEVER add a public API that contradicts the design docs** —
-  `docs/api-design.md` and its companions `docs/sketch-seam-design.md` and
-  `docs/verification-design.md`. Extending them is fine; changing a decision
-  means changing the doc first.
+  `docs/api-design.md` and its companions `docs/sketch-seam-design.md`,
+  `docs/recipe-replay-design.md`, and `docs/verification-design.md`. Extending
+  them is fine; changing a decision means changing the doc first.
 - **NEVER expose triangles as the representation, indices as selectors, or a bare
   `float64` measurement. NEVER give a boolean a target-out parameter or let it
   mutate an operand.** These are the forward-compatibility invariants that keep

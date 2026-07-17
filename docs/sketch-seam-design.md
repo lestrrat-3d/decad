@@ -413,27 +413,33 @@ float (core §5.2).
 
 ### 2.1 Decoded records
 
-A serialized `ProfileRecord` carries the certification established when
-`RecordProfile` admitted it:
+`RecordProfile` admits a live profile only after consuming these `sketch`
+answers:
 
 - source `Profile.Valid` said the region was valid;
 - every partial boundary fragment had `TExact == true`;
 - the reject-only range falsifier found no contradiction;
 - whole entities were recorded from their defining data.
 
-Recipe decoding cannot recreate that proof: the live `sketch.Profile`,
-`BoundaryEdge.TExact`, and source arrangement are intentionally absent from the
-record. `Recipe.Validate` therefore checks only stored-IR facts — known variant,
-finite fields, units, counts, ranges, winding consistency, and resource limits.
-It MUST NOT reconstruct an arrangement or use a small residual as an admission
-gate.
+Serialization preserves the admitted geometry, not those answers. The original
+live `sketch.Profile`, `BoundaryEdge.TExact`, and source arrangement are absent,
+so a decoded or caller-built `ProfileRecord` is untrusted input, not an
+exactness certificate.
 
-A decoded record is an exact-record claim, on the same terms as a caller-built
-`ProfileRecord`. A validator or evaluator may reject a contradiction it can
-prove from the stored fields. Passing that check does not re-certify the missing
-upstream facts. Format version 1 carries no duplicated validity flag,
-certificate, hash, or sampled polyline: none could reproduce the source proof,
-and a flag supplied by the same untrusted JSON would add no evidence.
+`Recipe.Validate` independently re-proves the stored region. It reconstructs
+the recorded entity definitions in a private sketch, asks `sketch` to build the
+arrangement, and accepts only one valid arranged profile that exactly matches
+the stored outer/hole walks, entity fields, ranges, order, and sense. That match
+proves closure, loop simplicity, hole nesting/disjointness, and winding. Every
+matched partial fragment MUST report `TExact == true` and pass §1's reject-only
+range falsifier. No match, an ambiguous match, or any unproved property rejects;
+a small residual never admits a trim.
+
+Format version 1 carries no duplicated validity flag, certificate, hash, or
+sampled polyline. A flag supplied by the same untrusted JSON would add no
+evidence; the private arrangement is derived independently from the stored
+analytic entities. The evaluator receives only the validated record and never
+reads the private or original sketch.
 
 `DecodeRecipe` protects resource use and wire meaning; it is not an
 authenticity check. Applications that need to know who produced a recipe sign

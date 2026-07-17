@@ -8,7 +8,8 @@ to `docs/api-design.md`.
 
 This contract has four goals:
 
-- stored recipes rebuild without a live sketch;
+- stored recipes rebuild without the original live sketch; validation may use
+  a private reconstructed sketch only to prove the stored profile;
 - malformed input never becomes a partly built model;
 - replay uses the same operation logic as immediate feature calls;
 - evaluator choice never enters the exact record of intent.
@@ -26,6 +27,7 @@ type RecipeLimits struct {
     MaxCurveScalars     int
     MaxSelectors        int
     MaxPredicates       int
+    MaxProfilePairTests int64
     MaxRoleBytes        int
     MaxTotalStringBytes int
 }
@@ -36,6 +38,7 @@ type EvaluationLimits struct {
     MaxFacets           int
     MaxBooleanPairTests int64
     MaxExactFallbacks   int64
+    MaxGeometryWork     int64
 }
 
 func DefaultEvaluationLimits() EvaluationLimits
@@ -83,7 +86,9 @@ Rules:
 
 - `DecodeRecipe` decodes one JSON recipe and validates it.
 - Nil reader → `ErrDegenerate`.
-- `Recipe.Validate` is pure. It never changes the recipe or builds geometry.
+- `Recipe.Validate` is pure. It never changes the recipe or builds body
+  geometry. It may build a private 2D sketch arrangement only to revalidate a
+  stored `ProfileRecord` (§3.1).
 - `Evaluate` always creates a new `Document`. It never appends into an existing
   document.
 - No option selects a destination document.
@@ -165,6 +170,9 @@ migration API exists for version 1.
 
 The strict decoder MUST reject:
 
+- invalid raw UTF-8;
+- a JSON string containing a lone, reversed, or otherwise malformed UTF-16
+  surrogate escape sequence;
 - an unknown field at any object level;
 - a duplicate key at any object level;
 - a missing required field;
@@ -174,10 +182,19 @@ The strict decoder MUST reject:
 - nesting past `MaxDepth`;
 - input past `MaxBytes`.
 
-Implementation: read through a `MaxBytes+1` limiter, run one token pass that
-checks depth + duplicate keys, then run typed decoding with unknown-field
-rejection. Do not rely on `encoding/json`'s default last-key-wins or
-unknown-field behavior.
+Implementation: read through a `MaxBytes+1` limiter, then run one schema-aware
+raw JSON preflight before any `encoding/json` call. The preflight validates raw
+UTF-8, validates every escaped Unicode scalar (including surrogate pairing),
+checks depth + duplicate keys, and charges every recipe aggregate at its schema
+position. Charge a step, loop, segment, curve point/scalar, selector, or
+predicate before the corresponding typed slice could grow. Charge each stored
+profile's checked arrangement-work upper bound against `MaxProfilePairTests`
+before typed decoding. Charge decoded UTF-8 bytes for each string before storing
+it, including per-role and total string ceilings. Only after the complete
+preflight succeeds may typed decoding run with unknown-field rejection. Do not
+rely on `encoding/json`: it replaces invalid UTF-8 and malformed surrogate
+sequences with U+FFFD, uses last-key-wins for duplicates, and ignores unknown
+fields by default.
 
 Every decoded closed variant is normalized to its value form except selectors,
 whose sealed forms are pointers by design. Decoded selectors are newly
@@ -188,10 +205,10 @@ clone path as extents, axes, segments, and selectors.
 
 Validation has three layers. Each layer runs before the next.
 
-| layer | checks | may build geometry? |
+| layer | checks | may build body geometry? |
 |---|---|---|
-| wire | envelope, JSON shape, tags, duplicates, limits visible in tokens | no |
-| recipe | per-op fields, values, record structure, reference graph, liveness | no |
+| wire | envelope, JSON shape, Unicode scalars, tags, duplicates, schema-aware decode limits | no |
+| recipe | per-op fields, values, independently proven profile structure, reference graph, liveness | no |
 | evaluator | selector resolution, body-relative stops, supported payloads, geometry construction | yes |
 
 `DecodeRecipe` runs wire + recipe validation. `Recipe.Validate` runs recipe
@@ -217,15 +234,32 @@ Recipe validation checks every reachable value:
 - NURBS degree/control/knot/weight counts agree;
 - selectors have the correct query kind, valid cardinality, valid predicates,
   finite directions, and valid provenance references;
-- role strings are non-empty and within limits;
+- role strings are non-empty, valid UTF-8, and within limits;
 - nil interface values and typed nil variants are invalid;
 - every closed-set value is one of decad's variants.
 
-Profile closure, loop nesting, and trim admission were certified by `sketch`
-before the record existed. A decoded `ProfileRecord` carries that exact-record
-claim. Validation may disprove a contradiction in the stored fields, but it
-MUST NOT recreate the sketch arrangement or use a small residual to bless a
-trim. `docs/sketch-seam-design.md` §2.1 owns this trust boundary.
+A decoded or caller-built `ProfileRecord` carries geometry, not certification.
+Recipe validation MUST independently prove its region from the stored analytic
+IR before evaluation:
+
+- reconstruct the recorded entities in a private `sketch.Sketch` and ask
+  `sketch` to build its arrangement;
+- require one valid arranged profile to match the stored outer/hole walks
+  exactly: entity definitions, segment order + sense, ranges, closure,
+  simplicity, and hole containment/disjointness;
+- require every matched partial fragment to have `BoundaryEdge.TExact == true`,
+  then apply the seam's reject-only range falsifier;
+- reject no match, multiple possible matches, sampled trim, self-contact,
+  crossing, broken closure, or invalid nesting as `ErrInvalidRecipe`.
+
+No tolerance or small residual may turn a mismatch into a match. The validator
+uses `sketch`'s independent arrangement result; it never trusts the writer's
+loop shape or an absent `TExact` claim. The original live sketch is not needed,
+and the evaluator still consumes only the validated record. Before invoking an
+arrangement or containment walk that cannot accept a counter, compute and
+charge a checked worst-case visit bound against `MaxProfilePairTests`; overflow
+or a one-over bound is `ErrResourceLimit`. The immediate-call seam and replay
+trust boundaries are specified in `docs/sketch-seam-design.md` §2.1.
 
 Passing `Validate` means “well-formed recipe IR,” not “supported by this
 evaluator.” E.g. a nonzero recorded taper validates, then v1 returns
@@ -431,6 +465,7 @@ func (*EvaluationError) Unwrap() error
 - non-finite coordinate → `ErrInvalidRecipe` + `ErrNotFinite`;
 - forward/live-state failure → `ErrInvalidRecipe`;
 - input/element ceiling → `ErrResourceLimit`;
+- unproved profile closure, simplicity, nesting, or trim → `ErrInvalidRecipe`;
 - unknown format version → `ErrUnsupportedRecipeVersion`.
 
 `EvaluationError` wraps evaluator or context errors without changing their
@@ -456,27 +491,51 @@ Default recipe limits:
 | `MaxCurveScalars` | 1,048,576 | knots + weights |
 | `MaxSelectors` | 16,384 | all selector objects, including nested stops/axes |
 | `MaxPredicates` | 131,072 | all selector predicates |
+| `MaxProfilePairTests` | 50,000,000 | stored-profile arrangement/containment visits |
 | `MaxRoleBytes` | 256 | one provenance role |
 | `MaxTotalStringBytes` | 1 MiB | all tags/roles/quantity strings |
 
-`MaxBytes` + `MaxDepth` apply only while decoding JSON. Other fields apply to
-decoded and caller-built recipes during `Validate`/`Evaluate`.
+`MaxBytes` + `MaxDepth` apply only while decoding JSON. Every other recipe
+limit applies incrementally during `DecodeRecipe`, before typed slice growth,
+and again during recipe validation for decoded and caller-built recipes.
+`MaxProfilePairTests` is shared across all stored profiles. Charge every
+arrangement candidate-pair and loop-containment segment visit, or a checked
+worst-case upper bound before calling a `sketch` routine that cannot accept the
+counter.
 
 Default evaluation limits:
 
 | field | default | count |
 |---|---:|---|
 | `MaxFacets` | 2,000,000 | facets generated/restated across evaluation |
-| `MaxBooleanPairTests` | 50,000,000 | triangle pairs reaching boolean classification |
+| `MaxBooleanPairTests` | 50,000,000 | facet-pair visits before box pruning/classification |
 | `MaxExactFallbacks` | 5,000,000 | adaptive predicates falling back to exact arithmetic |
+| `MaxGeometryWork` | 50,000,000 | other input-dependent geometry visits |
+
+`MaxBooleanPairTests` is shared by the pre-boolean proximity gate and mesh
+boolean. Charge every candidate facet-pair visit before its box test, including
+a pair that pruning rejects. A future spatial index may replace the Cartesian
+walk only if it charges every index/candidate visit against this ceiling.
+
+`MaxGeometryWork` covers input-dependent geometry loops not charged by the
+facet-pair or exact-fallback counters. Current charge sites include every
+non-adjacent segment-pair visit in the shared fillet/chamfer/shell section audit
+and every segment visit in each nesting classification. Polygon triangulation
+charges every segment/vertex visit while choosing or validating a hole bridge,
+every ear candidate, and every candidate-versus-vertex visit, for cap and
+boolean polygons. Charge before each visit. New nested geometry work MUST use
+this counter or add an operation-specific hard ceiling. All evaluation counters
+are shared across the whole recipe evaluation.
 
 Rules:
 
 - Limits are hard ceilings. Reaching the ceiling is allowed; exceeding it is
   `ErrResourceLimit`.
 - Counters use checked integer addition. Overflow is `ErrResourceLimit`.
-- Decoder checks byte/depth/string ceilings before typed allocation.
-- Validator checks aggregate counts on caller-built in-memory recipes.
+- Decoder rejects invalid Unicode and checks every recipe ceiling during the
+  schema-aware preflight, before typed allocation.
+- Validator checks the same aggregate counts on decoded and caller-built
+  in-memory recipes.
 - Evaluator charges work before allocation or expensive calculation.
 - Context cancellation is separate from limits and remains the caller's time
   budget.
@@ -486,8 +545,8 @@ Rules:
   is `ErrNotFinite` or `ErrUnsupported`; NEVER clamp a coordinate.
 
 These defaults admit models far larger than current examples while bounding
-single-input memory and combinatorial boolean work. Callers handling trusted
-larger models opt into larger explicit values.
+single-input memory and input-dependent geometry work. Callers handling
+trusted larger models opt into larger explicit values.
 
 ## 8. Determinism and evaluator changes
 
@@ -528,7 +587,7 @@ No public half-replay surface ships. Internal changes may land in this order:
 
 1. strict envelope codec + version 1 legacy reader;
 2. deep normalization, including `StepOpts`;
-3. resource counters + full recipe validator;
+3. schema-aware decode counters + evaluation counters + full recipe validator;
 4. shared recorded-step helpers for extrude/revolve/placed;
 5. shared recorded-step helpers for booleans + modify operations;
 6. private whole-recipe driver + atomic failure tests;
@@ -547,7 +606,13 @@ immediate feature call.
 - legacy unversioned decode → canonical versioned encode;
 - missing/partial envelope, unknown format/version;
 - unknown field + duplicate key at every object layer;
+- invalid raw UTF-8 + every malformed surrogate form at every free-string
+  schema position, including both provenance-role predicates and every
+  quantity-bearing field;
 - trailing value/data, depth boundary, byte boundary;
+- compact exact-limit/one-over arrays for steps, loops, segments, curve
+  points/scalars, selectors, and predicates; instrument typed decoding to prove
+  no corresponding slice grows past its limit;
 - pointer forms normalize; typed nils reject;
 - canonical bytes stable across repeated encoding.
 
@@ -556,6 +621,13 @@ immediate feature call.
 - one valid + every invalid field combination for every `OpKind`;
 - wrong unit, negative magnitude, non-finite number, invalid frame/transform;
 - malformed segment arrays + winding contradictions;
+- hostile stored profiles: open positive-area walk, self-crossing/touching loop,
+  crossing/outside/nested holes, ambiguous arrangement match, and a partial
+  range whose reconstructed boundary reports `TExact == false`;
+- valid reconstructed whole + exact-partial profiles prove closure, simplicity,
+  nesting, and trim admission;
+- an adversarial stored profile exhausts `MaxProfilePairTests` promptly before
+  starting an unmetered private arrangement;
 - negative/self/forward/missing/duplicate/reordered refs;
 - retired operand/dependency reuse;
 - nested body ref absent from `Inputs`;
@@ -583,9 +655,14 @@ immediate feature call.
 - fuzz reference mutation: never access outside slot table;
 - property: every recipe emitted by successful immediate public calls validates
   and replays;
-- exact limit accepted, one-over rejected, counter overflow rejected;
+- exact limit accepted, one-over rejected, counter overflow rejected for every
+  recipe + evaluation counter;
+- dense box-pruned facet products exhaust `MaxBooleanPairTests` promptly even
+  when no pair reaches classification;
+- large modify-section audits and adversarial cap polygons exhaust
+  `MaxGeometryWork` promptly before completing their quadratic scans;
 - cancellation inside tessellation, boolean pair loops, exact fallback, and
-  modify audits.
+  modify audits + triangulation.
 
 User-facing example flow belongs in `examples/`:
 
