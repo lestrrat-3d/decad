@@ -305,21 +305,25 @@ Increment 4, the deep end. Strategy:
   a segment on a facet's own boundary cuts nothing off it) and its regions
   classify by exact parity, because the other operand's boundary there is a
   DIHEDRAL and one plane of a dihedral decides nothing.
-- **A tangency the chords cannot see is refused, never assumed away.** A chord
-  polygon lies strictly inside the curved surface it approximates, so a true
-  tangency between two operands can vanish from the tessellation — and whether
-  it vanishes depends on where the chord samples fell. A pre-pass therefore
-  proves, per analytic FACE pair, that no touch can be hiding: if the true
-  surfaces touch, that point is within δ_A of A's facets and δ_B of B's, so
-  the facet sets come within δ_A + δ_B of each other. A face pair whose facets
-  already MEET is decided (the contact is exact and the predicates own it); a
-  face pair that comes within δ_A + δ_B *without* meeting is the undecidable
-  one, and it is refused (`ErrUnsupported`). Reject-only: it may refuse a valid
-  model whose operands genuinely pass that close, and that is the accepted
-  price. Deciding such a pair for real is the clearance kernel's job
-  (`docs/clearance-design.md`), not a chord's. A planar face with straight
-  edges triangulates exactly, and a `Faceted` face IS its polygons, so both are
-  held with zero error and the pre-pass has nothing to prove about them.
+- **A tangency the held facets cannot see is refused, never assumed away.** A
+  chord polygon can miss a touch on its analytic patch, and an inherited
+  faceted boundary certificate can place the true patch away from its held
+  polygon. A pre-pass therefore proves, per current operand FACE pair, that no
+  touch can be hiding: if the true patches touch, that point is within δ_A of
+  A's facets and δ_B of B's, so the facet sets come within δ_A + δ_B of each
+  other. An analytic face's δ is its current chording displacement. A faceted
+  face's δ is its inherited certified displacement, falling back to the
+  payload's global composed boundary `Delta` when no tighter face value exists.
+  A face pair whose facets already MEET is decided (the contact is exact and
+  the predicates own it); a face pair that comes within δ_A + δ_B *without*
+  meeting is the undecidable one, and it is refused (`ErrUnsupported`).
+  Reject-only: it may refuse a valid model whose operands genuinely pass that
+  close, and that is the accepted price. Deciding such a pair for real is the
+  clearance kernel's job
+  (`docs/clearance-design.md`), not a held facet's. A planar face with straight
+  edges has zero error. A faceted face has zero error only when its inherited
+  boundary certificate proves that its true patch equals the held polygons
+  (`docs/tessellation-design.md` §2/§7).
 - **An operand facet that collapsed is refused, never skipped.** A rigid
   placement's own rounding can flatten a facet of an already-faceted body to
   zero area. Such a facet has no plane and no interior, so every contact

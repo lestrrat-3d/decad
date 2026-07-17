@@ -58,19 +58,26 @@ data on every `Mesh`:
 
 | Proof | Meaning | Consumer |
 |---|---|---|
-| `sourceBound(face)` | two-sided deviation introduced while tessellating that current operand face; zero when a faceted face is already the held polygons | boolean hidden-tangency pre-pass |
+| `sourceBound(face)` | two-sided displacement between the true operand face patch and the held facets used by the current boolean; analytic faces carry current chording error, faceted faces carry inherited/composed boundary-certificate error | boolean hidden-tangency pre-pass |
 | `areaSlack` | upper bound on `abs(Area(true boundary) - Area(mesh boundary))` | boolean result area bounds |
 | `volSymDiff` + `symDiffOK` | upper bound on `volume(TrueBody △ MeshSolid)`, present only after that payload's occupied-volume proof lands | boolean operand error composition |
 
 `sourceBound` and `areaSlack` are mandatory for every returned mesh.
 `volSymDiff` is mandatory before a boolean may consume it; an export-only
-increment may return a mesh with `symDiffOK == false`. For an analytic payload,
-`Mesh.Bound()` is the maximum `sourceBound` over the body. A faceted restatement
-copies its payload's composed boundary bound, while its current polygon faces
-have zero `sourceBound`: they are the geometry the next boolean operates on.
-A proof is rounded
-up at every sum/product that could understate it. A non-finite proof is a
-refusal, never an infinite bound.
+increment may return a mesh with `symDiffOK == false`. `Mesh.Bound()` is the
+maximum `sourceBound` over the body. For an analytic payload, each source bound
+is the displacement introduced by current chording. A faceted restatement
+copies each face's inherited boundary-certificate displacement; when the
+payload carries only one global composed displacement `Delta`, every faceted
+face uses `Delta`. It is zero only when the inherited certificate proves that
+face exact. A proof is rounded up at every sum/product that could understate it.
+A non-finite proof is a refusal, never an infinite bound.
+
+A `facetedPayload` boundary certificate MUST retain global composed `Delta`.
+It MAY retain a tighter displacement per live faceted face. Every per-face value
+MUST be no greater than `Delta` and cover every true patch mapped to that face.
+Missing or incomplete per-face composition falls back to `Delta`; it NEVER
+falls back to zero.
 
 `areaSlack` is computed as a sum of absolute per-patch differences. This is
 deliberately stronger than taking the absolute difference of the two total
@@ -83,12 +90,12 @@ amount inside a hole. Cancellation is forbidden.
 
 The payload table is normative:
 
-| Payload | Geometry source | `Bound` | `areaSlack` | `volSymDiff` |
-|---|---|---|---|---|
-| `prismPayload` | one chording per recorded section loop, shared by walls + caps | max section-curve sagitta | wall chord deficits + both cap circular-segment deficits | section symmetric-difference allowance × sweep height (§5) |
-| `cupPayload` | one chording per outer/cavity loop, shared by walls + floors + rims | max section-curve sagitta | absolute per-wall/per-planar-patch differences | outer-prism allowance + cavity-prism allowance (§6) |
-| `revolvePayload` | one meridian chording + one global angular sequence | meridian displacement + angular displacement (§8) | absolute true-vs-held difference per wall cell + cap deficits (§10) | construction-homotopy allowance (§11) |
-| `facetedPayload` | held polygons | payload's existing boundary bound | payload's composed slack | payload's composed symmetric-difference bound |
+| Payload | Geometry source | `sourceBound(face)` | `Bound` | `areaSlack` | `volSymDiff` |
+|---|---|---|---|---|---|
+| `prismPayload` | one chording per recorded section loop, shared by walls + caps | current sagitta for that analytic wall; zero for exact planar patches | max per-face source bound | wall chord deficits + both cap circular-segment deficits | section symmetric-difference allowance × sweep height (§5) |
+| `cupPayload` | one chording per outer/cavity loop, shared by walls + floors + rims | current sagitta for that analytic wall; zero for exact planar patches | max per-face source bound | absolute per-wall/per-planar-patch differences | outer-prism allowance + cavity-prism allowance (§6) |
+| `revolvePayload` | one meridian chording + one global angular sequence | current meridian + angular displacement for that analytic patch; zero for exact planar patches | max per-face source bound (§8) | absolute true-vs-held difference per wall cell + cap deficits (§10) | construction-homotopy allowance (§11) |
+| `facetedPayload` | held polygons + inherited boundary certificate | inherited certified face displacement, or global composed `Delta` when no tighter face value exists | payload's composed `Delta` | payload's composed slack | payload's composed symmetric-difference bound |
 
 ## 3. Shared curve chording
 
@@ -221,12 +228,15 @@ its held vertices and polygons; it NEVER fits or refines them.
 - Requested `tol < payload.meshBound` → `ErrUnsupported`.
 - Otherwise return the held connectivity and held bound unchanged.
 - Map every facet group to the corresponding live faceted face.
-- Set every faceted face's `sourceBound` to zero; no new chording was done and
-  the polygons are the current operand geometry.
+- Copy each faceted face's inherited boundary-certificate displacement into
+  `sourceBound`. If the payload carries only global composed `Delta`, use it for
+  every faceted face. NEVER set it to zero merely because no new chording ran;
+  zero requires a certificate that the true patch equals its held polygons.
 - Copy `areaSlack` and `volSymDiff`; do not recompute either from the held mesh.
 
-The copied `volSymDiff` remains relative to the true boolean result the payload
-stands for. Treating the polygons as exact data does not erase that proof.
+The copied `sourceBound`, `Bound`, and `volSymDiff` remain relative to the true
+boolean result the payload stands for. Restating held polygons does not erase
+the boundary displacement or occupied-volume proof.
 
 ## 8. Revolve sampling
 
@@ -448,7 +458,9 @@ Boolean composition then stays evaluator §9's:
 
 1. Tessellate both operands at the evaluator's internal tolerance.
 2. Require a complete `volSymDiff` proof from each mesh.
-3. Use `sourceBound(face)` for the hidden-tangency pre-pass.
+3. Use `sourceBound(face)` for the hidden-tangency pre-pass. For a faceted
+   operand this is its inherited certified face displacement, or its global
+   composed `Delta`, never an automatic zero for restated polygons.
 4. Run the exact-predicate mesh boolean.
 5. Bound the result volume by `volSymDiffA + volSymDiffB` plus final weld
    rounding.
@@ -459,6 +471,18 @@ Boolean composition then stays evaluator §9's:
 A faceted operand contributes its payload's already composed `volSymDiff`.
 Prism, cup, and revolve operands contribute their mesh proofs. No analytic
 operand is admitted through a generic `delta * area` shortcut.
+
+The hidden-tangency and occupied-volume proofs answer different questions.
+`volSymDiff` bounds changed occupied volume; it does not prove that a displaced
+true faceted patch cannot touch another operand. Every boolean generation MUST
+therefore preserve both the faceted boundary certificate used by `sourceBound`
+and the composed `volSymDiff`.
+
+When building the result `facetedPayload`, assign each result face a displacement
+covering every inherited source patch and every new-rim displacement that can
+reach it. Until a tighter per-face composition is proven, assign result global
+`Delta` to every face. This makes the next boolean's hidden-tangency pre-pass
+sound without reconstructing analytic identity.
 
 ## 12. Refusals
 
@@ -519,6 +543,10 @@ until T4 proves occupied-volume error.
 - Exercise revolve×prism and revolve×revolve booleans after T4, including a
   hidden tangency refusal and a shallow crossing whose rim amplification
   refuses.
+- Exercise a second-generation faceted boolean whose held facets miss a contact
+  inside inherited nonzero `Delta`; the hidden-tangency pre-pass MUST refuse.
+- Exercise a certificate-zero all-planar faceted operand; inherited
+  `sourceBound == 0` MUST remain admissible.
 - Fuzz valid revolve payloads across tolerance scales; a result is either a
   mesh satisfying every invariant or `ErrUnsupported`, never a cracked mesh.
 
