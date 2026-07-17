@@ -202,8 +202,9 @@ the arc's center lies on the axis — an endpoint ON the axis closes at a pole,
 and an endpoint off it leaves a latitude-circle edge (a spherical band when
 neither endpoint reaches the axis). The free-form segment kinds follow the
 same staging as extrude (§5): `NURBSSurface` surfaces of revolution where the
-control net is exactly derivable from the record, in increment 7, and
-`ErrUnsupported` until then — `FitSplineSeg` included, on the same grounds.
+control net is exactly derivable from the record, in the free-form increment
+(§11), and `ErrUnsupported` until then — `FitSplineSeg` included, on the same
+grounds.
 Partial sweeps get two planar cap faces. Volume by Pappus on the §4 first moments; the solid centroid from the §4
 second and mixed moments (`∫u² dA`, `∫uv dA`) — a full revolution's centroid
 lies on the axis with its axial position from the mixed moment, and a partial
