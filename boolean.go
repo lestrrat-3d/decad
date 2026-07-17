@@ -1,6 +1,8 @@
 package decad
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"math"
 
@@ -57,10 +59,51 @@ func Intersect(a, b *Body) (*Body, error) {
 	return performBoolean(OpIntersect, a, b)
 }
 
-// performBoolean is the shared pipeline: gate the operands, tessellate at
-// the pair-derived tolerance, run the exact mesh boolean, build the Faceted
-// body, and commit the step atomically (a failure leaves recipe and document
-// untouched, and the operands live).
+type booleanExpectedKind int
+
+const (
+	booleanExpectedEmpty booleanExpectedKind = iota
+	booleanExpectedContact
+	booleanExpectedUnsupported
+	booleanExpectedCoarseTessellation
+)
+
+// booleanExpectedError identifies an ordinary geometric non-result for the
+// read-only evaluator. Public booleans still expose the wrapped sentinel;
+// Verify recognizes the private type and leaves the pair undecided. Invariant
+// failures remain ordinary errors and return from Verify.
+type booleanExpectedError struct {
+	kind booleanExpectedKind
+	err  error
+}
+
+func (e *booleanExpectedError) Error() string { return e.err.Error() }
+func (e *booleanExpectedError) Unwrap() error { return e.err }
+
+func expectedBoolean(kind booleanExpectedKind, err error) error {
+	var expected *booleanExpectedError
+	if errors.As(err, &expected) {
+		return err
+	}
+	return &booleanExpectedError{kind: kind, err: err}
+}
+
+func asExpectedBoolean(err error) (*booleanExpectedError, bool) {
+	var expected *booleanExpectedError
+	return expected, errors.As(err, &expected)
+}
+
+// booleanEvaluation is the geometry-only result shared by public booleans and
+// interference verification. It contains no document reference or recipe
+// state and cannot make the transient result live.
+type booleanEvaluation struct {
+	payload facetedPayload
+	volume  Measurement
+}
+
+// performBoolean gates the operands, runs the read-only geometry evaluator,
+// then builds and commits the public result atomically. A failure before the
+// commit leaves the recipe, live-body set, and operands unchanged.
 func performBoolean(op OpKind, a, b *Body) (*Body, error) {
 	if a == nil || a.doc == nil {
 		return nil, fmt.Errorf(`%w: the first operand belongs to no document`, ErrDegenerate)
@@ -75,61 +118,140 @@ func performBoolean(op OpKind, a, b *Body) (*Body, error) {
 	if a == b {
 		return nil, fmt.Errorf(`%w: a boolean needs two distinct bodies`, ErrDegenerate)
 	}
+	eval, err := evaluateBoolean(context.Background(), op, a, b)
+	if err != nil {
+		return nil, err
+	}
+
+	step := Step{
+		Op:     op,
+		Inputs: []StepRef{a.originStep(), b.originStep()},
+	}
+	ref := d.nextStepRef()
+	body, err := buildFacetedBody(d, ref, eval.payload)
+	if err != nil {
+		return nil, err
+	}
+	d.commit(step, body, a, b)
+	return body, nil
+}
+
+// evaluateBoolean runs the complete geometry pipeline without writing the
+// document. It deliberately does not gate liveness or mint a StepRef: the
+// public wrapper owns those actions, while Verify already walks live bodies.
+func evaluateBoolean(ctx context.Context, op OpKind, a, b *Body) (booleanEvaluation, error) {
+	if err := ctx.Err(); err != nil {
+		return booleanEvaluation{}, err
+	}
 
 	tolMM, dPair, err := pairChordTolerance(a, b)
 	if err != nil {
-		return nil, err
+		return booleanEvaluation{}, err
 	}
-	ma, err := a.Tessellate(units.Millimeters(tolMM))
-	if err != nil {
-		return nil, err
+	if err := ctx.Err(); err != nil {
+		return booleanEvaluation{}, err
 	}
-	mb, err := b.Tessellate(units.Millimeters(tolMM))
+	ma, err := tessellateContext(ctx, a, units.Millimeters(tolMM))
 	if err != nil {
-		return nil, err
+		var coarse *tessellationExpectedError
+		if errors.As(err, &coarse) {
+			err = expectedBoolean(booleanExpectedCoarseTessellation, err)
+		} else if errors.Is(err, ErrUnsupported) {
+			err = expectedBoolean(booleanExpectedUnsupported, err)
+		}
+		return booleanEvaluation{}, err
+	}
+	if err := ctx.Err(); err != nil {
+		return booleanEvaluation{}, err
+	}
+	mb, err := tessellateContext(ctx, b, units.Millimeters(tolMM))
+	if err != nil {
+		var coarse *tessellationExpectedError
+		if errors.As(err, &coarse) {
+			err = expectedBoolean(booleanExpectedCoarseTessellation, err)
+		} else if errors.Is(err, ErrUnsupported) {
+			err = expectedBoolean(booleanExpectedUnsupported, err)
+		}
+		return booleanEvaluation{}, err
+	}
+	if err := ctx.Err(); err != nil {
+		return booleanEvaluation{}, err
 	}
 
 	// Global source-face ids: the operands' faces in order, so the payload
 	// records provenance without holding live pointers.
 	var groups []facetGroup
 	faceID := map[*Face]int{}
-	for _, f := range append(a.Faces(), b.Faces()...) {
+	for i, f := range append(a.Faces(), b.Faces()...) {
+		if i%256 == 0 {
+			if err := ctx.Err(); err != nil {
+				return booleanEvaluation{}, err
+			}
+		}
 		faceID[f] = len(groups)
 		groups = append(groups, facetGroup{
 			origins: f.Origins(),
 			planar:  f.isPlanar(),
 		})
 	}
-	srcA, err := sourceIDs(ma, faceID)
+	srcA, err := sourceIDs(ctx, ma, faceID)
 	if err != nil {
-		return nil, err
+		return booleanEvaluation{}, err
 	}
-	srcB, err := sourceIDs(mb, faceID)
+	srcB, err := sourceIDs(ctx, mb, faceID)
 	if err != nil {
-		return nil, err
+		return booleanEvaluation{}, err
+	}
+	if err := ctx.Err(); err != nil {
+		return booleanEvaluation{}, err
 	}
 
-	bmA, err := prepBoolMesh(ma, srcA)
+	bmA, err := prepBoolMeshContext(ctx, ma, srcA)
 	if err != nil {
-		return nil, err
+		if errors.Is(err, ErrUnsupported) {
+			err = expectedBoolean(booleanExpectedUnsupported, err)
+		}
+		return booleanEvaluation{}, err
 	}
-	bmB, err := prepBoolMesh(mb, srcB)
+	bmB, err := prepBoolMeshContext(ctx, mb, srcB)
 	if err != nil {
-		return nil, err
+		if errors.Is(err, ErrUnsupported) {
+			err = expectedBoolean(booleanExpectedUnsupported, err)
+		}
+		return booleanEvaluation{}, err
 	}
-	if err := refuseUndecidableProximity(ma, mb, bmA, bmB); err != nil {
-		return nil, err
+	if err := ctx.Err(); err != nil {
+		return booleanEvaluation{}, err
 	}
-	kept, sinMin, err := meshBoolean(op, bmA, bmB)
+	if err := refuseUndecidableProximity(ctx, ma, mb, bmA, bmB); err != nil {
+		if errors.Is(err, ErrUnsupported) {
+			err = expectedBoolean(booleanExpectedUnsupported, err)
+		}
+		return booleanEvaluation{}, err
+	}
+	if err := ctx.Err(); err != nil {
+		return booleanEvaluation{}, err
+	}
+	kept, sinMin, err := meshBoolean(ctx, op, bmA, bmB)
 	if err != nil {
-		return nil, err
+		return booleanEvaluation{}, err
 	}
 	if len(kept) == 0 {
-		return nil, fmt.Errorf(`%w: the %s result is empty`, ErrBooleanFailed, op)
+		return booleanEvaluation{}, expectedBoolean(booleanExpectedEmpty,
+			fmt.Errorf(`%w: the %s result is empty`, ErrBooleanFailed, op))
 	}
-	stitched, err := stitchFacets(kept)
+	if err := ctx.Err(); err != nil {
+		return booleanEvaluation{}, err
+	}
+	stitched, err := stitchFacetsContext(ctx, kept)
 	if err != nil {
-		return nil, err
+		if errors.Is(err, ErrUnsupported) {
+			err = expectedBoolean(booleanExpectedUnsupported, err)
+		}
+		return booleanEvaluation{}, err
+	}
+	if err := ctx.Err(); err != nil {
+		return booleanEvaluation{}, err
 	}
 
 	// Bound composition (§9, the verification-design shapes; the helpers own
@@ -143,7 +265,10 @@ func performBoolean(op OpKind, a, b *Body) (*Body, error) {
 	// not by δ.
 	rim, err := rimDelta(ma.bound, mb.bound, sinMin, dPair)
 	if err != nil {
-		return nil, err
+		if errors.Is(err, ErrUnsupported) {
+			err = expectedBoolean(booleanExpectedUnsupported, err)
+		}
+		return booleanEvaluation{}, err
 	}
 	symA := operandSymDiff(a, ma)
 	symB := operandSymDiff(b, mb)
@@ -166,25 +291,32 @@ func performBoolean(op OpKind, a, b *Body) (*Body, error) {
 		dPair:      dPair,
 		xform:      r3.Identity(),
 	}
-
-	step := Step{
-		Op:     op,
-		Inputs: []StepRef{a.originStep(), b.originStep()},
+	if err := ctx.Err(); err != nil {
+		return booleanEvaluation{}, err
 	}
-	ref := d.nextStepRef()
-	body, err := buildFacetedBody(d, ref, payload)
+	if _, err := auditFacetedMesh(ctx, payload.verts, payload.tris); err != nil {
+		return booleanEvaluation{}, err
+	}
+	volume, _, err := meshVolumeMeasurement(ctx, payload.verts, payload.tris, payload.volSymDiff)
 	if err != nil {
-		return nil, err
+		return booleanEvaluation{}, err
 	}
-	d.commit(step, body, a, b)
-	return body, nil
+	if err := ctx.Err(); err != nil {
+		return booleanEvaluation{}, err
+	}
+	return booleanEvaluation{payload: payload, volume: volume}, nil
 }
 
 // sourceIDs maps a tessellation's per-facet source faces to the global
 // group ids.
-func sourceIDs(m *Mesh, faceID map[*Face]int) ([]int, error) {
+func sourceIDs(ctx context.Context, m *Mesh, faceID map[*Face]int) ([]int, error) {
 	out := make([]int, len(m.source))
 	for i, f := range m.source {
+		if i%256 == 0 {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+		}
 		id, ok := faceID[f]
 		if !ok {
 			return nil, fmt.Errorf(`%w: a facet's source is not an operand face`, ErrBooleanFailed)
@@ -231,11 +363,18 @@ func operandSymDiff(b *Body, m *Mesh) float64 {
 // It may refuse a valid model whose operands genuinely pass within a chord
 // tolerance of each other. That is the accepted price; the alternative is a
 // verdict decided by chord placement.
-func refuseUndecidableProximity(ma, mb *Mesh, bmA, bmB *boolMesh) error {
+func refuseUndecidableProximity(ctx context.Context, ma, mb *Mesh, bmA, bmB *boolMesh) error {
 	fa := facesOfMesh(ma)
 	fb := facesOfMesh(mb)
+	work := 0
 	for _, ga := range fa {
 		for _, gb := range fb {
+			work++
+			if work%256 == 0 {
+				if err := ctx.Err(); err != nil {
+					return err
+				}
+			}
 			slack := ga.delta + gb.delta
 			if slack <= 0 {
 				// Both faces are held exactly (a planar face with straight
@@ -248,7 +387,7 @@ func refuseUndecidableProximity(ma, mb *Mesh, bmA, bmB *boolMesh) error {
 			// both sides of that comparison are float-computed: pad the
 			// threshold so the rounding can only ever ADD a refusal, never
 			// drop one. A relative 1e-9 is nothing against any real clearance.
-			near, err := facesNearMiss(bmA, ga.facets, bmB, gb.facets, slack*(1+1e-9))
+			near, err := facesNearMiss(ctx, bmA, ga.facets, bmB, gb.facets, slack*(1+1e-9))
 			if err != nil {
 				return err
 			}
@@ -263,10 +402,17 @@ func refuseUndecidableProximity(ma, mb *Mesh, bmA, bmB *boolMesh) error {
 // facesNearMiss reports whether two faces' facet sets come within slack of each
 // other WITHOUT meeting. A pair that meets is decided (the contact is exact);
 // only a pair that comes close and misses is the undecidable one.
-func facesNearMiss(bmA *boolMesh, fis []int, bmB *boolMesh, fjs []int, slack float64) (bool, error) {
+func facesNearMiss(ctx context.Context, bmA *boolMesh, fis []int, bmB *boolMesh, fjs []int, slack float64) (bool, error) {
 	near := false
+	work := 0
 	for _, i := range fis {
 		for _, j := range fjs {
+			work++
+			if work%256 == 0 {
+				if err := ctx.Err(); err != nil {
+					return false, err
+				}
+			}
 			if !boxesWithin(bmA.boxes[i], bmB.boxes[j], slack) {
 				continue
 			}

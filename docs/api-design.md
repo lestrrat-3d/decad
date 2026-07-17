@@ -12,8 +12,10 @@ are specified in `docs/recipe-replay-design.md`; how verification judges every
 bounded result — the report, the tolerance gate, and the noise floor — is
 specified in `docs/verification-design.md`; the mesh contract, per-payload
 chording, proof bounds, and boolean handoff are specified in
-`docs/tessellation-design.md`; and exact cup plus certificate-backed faceted
-proofs are specified in `docs/payload-verification-design.md`. `CLAUDE.md`
+`docs/tessellation-design.md`; exact cup plus certificate-backed faceted
+proofs are specified in `docs/payload-verification-design.md`; and how
+verification proves overlap and bounds its volume without consuming either body
+is specified in `docs/interference-design.md`. `CLAUDE.md`
 lists every current design document and its owner.
 
 ## 1. What decad is answerable for
@@ -703,7 +705,9 @@ edge is `ErrDegenerate`. `Body` MUST be a live body of the same `Document` the
 
 **`Interference` / `Clearance`** — the pairwise results of §10. Both name the two
 bodies and carry their quantity as a `Measurement`, so both report their own
-exactness like everything else.
+exactness like everything else. `docs/interference-design.md` owns the
+read-only overlap proof; `docs/clearance-design.md` owns the disjointness and
+minimum-gap proof.
 
 ```go
 // Interference: the two bodies overlap, and by how much.
@@ -1144,7 +1148,9 @@ func (r *Report) Trustworthy() bool // the single bit to gate on
 The report vocabulary — `Report`, `BodyReport`, `Status` and its severity
 precedence, and the `VerifyOption` set including `WithTolerance` — and the
 tolerance gate that judges every `Exactness` and `Bound` the report carries are
-specified in `docs/verification-design.md`. What the core contract pins down:
+specified in `docs/verification-design.md`. The non-mutating proof and bounded
+volume behind every `Interference` row are specified in
+`docs/interference-design.md`. What the core contract pins down:
 
 - **`Verify` returns an `error`, and the report carries no health state.** The
   error is for the call that could not be made — a `WithTolerance` value of the

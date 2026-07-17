@@ -1,6 +1,7 @@
 package decad
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"sort"
@@ -35,6 +36,16 @@ func pointInTri(p, a, b, c Point2) bool {
 // the region into one weakly-simple polygon, which ear clipping then reduces;
 // zero-area corners are dropped without emitting a facet.
 func triangulate2D(pts []Point2, loops [][]int) ([][3]int, error) {
+	return triangulate2DContext(context.Background(), pts, loops)
+}
+
+// triangulate2DContext is the evaluator-internal cancellable form. The public
+// tessellator uses a background context; read-only verification passes its
+// caller context through every quadratic bridge and ear-clipping walk.
+func triangulate2DContext(ctx context.Context, pts []Point2, loops [][]int) ([][3]int, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if len(loops) == 0 || len(loops[0]) < 3 {
 		return nil, fmt.Errorf(`%w: a cap needs at least three boundary samples`, ErrDegenerate)
 	}
@@ -45,14 +56,19 @@ func triangulate2D(pts []Point2, loops [][]int) ([][3]int, error) {
 	sort.SliceStable(holes, func(i, j int) bool {
 		return maxU(pts, holes[i]) > maxU(pts, holes[j])
 	})
-	for _, hole := range holes {
+	for i, hole := range holes {
+		if i%256 == 0 {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+		}
 		var err error
-		merged, err = bridgeHole(pts, merged, hole)
+		merged, err = bridgeHole(ctx, pts, merged, hole)
 		if err != nil {
 			return nil, err
 		}
 	}
-	return earClip(pts, merged)
+	return earClip(ctx, pts, merged)
 }
 
 // maxU returns the largest u-coordinate over the loop's vertices.
@@ -70,12 +86,17 @@ func maxU(pts []Point2, loop []int) float64 {
 // crossing I on edge (a, b); bridge to the edge endpoint P of maximum u
 // unless a reflex vertex inside triangle (M, I, P) is closer to the ray, in
 // which case bridge to that vertex.
-func bridgeHole(pts []Point2, merged, hole []int) ([]int, error) {
+func bridgeHole(ctx context.Context, pts []Point2, merged, hole []int) ([]int, error) {
 	if len(hole) < 3 {
 		return nil, fmt.Errorf(`%w: a hole needs at least three boundary samples`, ErrDegenerate)
 	}
 	mi := 0
 	for i := 1; i < len(hole); i++ {
+		if i%256 == 0 {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+		}
 		if pts[hole[i]].U > pts[hole[mi]].U {
 			mi = i
 		}
@@ -89,6 +110,11 @@ func bridgeHole(pts []Point2, merged, hole []int) ([]int, error) {
 	bestU := math.Inf(1)
 	bestEdge := -1
 	for i := range n {
+		if i%256 == 0 {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+		}
 		a, b := pts[merged[i]], pts[merged[(i+1)%n]]
 		if (a.V <= m.V) == (b.V <= m.V) {
 			continue
@@ -136,6 +162,11 @@ func bridgeHole(pts []Point2, merged, hole []int) ([]int, error) {
 	// first on ties) is visible instead.
 	bestCos, bestDist := math.Inf(-1), math.Inf(1)
 	for j := range n {
+		if j%256 == 0 {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+		}
 		if j == bridge {
 			continue
 		}
@@ -185,10 +216,13 @@ func bridgeHole(pts []Point2, merged, hole []int) ([]int, error) {
 // deferred vertex turns strictly convex once an adjacent corner is clipped, so
 // the pass always makes progress; a pass that clips nothing means the boundary
 // self-intersects, which is an error, never a wrong mesh.
-func earClip(pts []Point2, poly []int) ([][3]int, error) {
+func earClip(ctx context.Context, pts []Point2, poly []int) ([][3]int, error) {
 	idx := append([]int(nil), poly...)
 	tris := make([][3]int, 0, len(idx))
 	for len(idx) > 2 {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		n := len(idx)
 		clipped := false
 		for i := range n {
@@ -200,7 +234,11 @@ func earClip(pts []Point2, poly []int) ([][3]int, error) {
 			if cr == 0 && !isBridgeStub(ia, ib, ic) {
 				continue
 			}
-			if cr > 0 && earBlocked(pts, idx, i) {
+			blocked, err := earBlocked(ctx, pts, idx, i)
+			if err != nil {
+				return nil, err
+			}
+			if cr > 0 && blocked {
 				continue
 			}
 			if cr > 0 {
@@ -234,11 +272,16 @@ func isBridgeStub(ia, ib, ic int) bool {
 // the region by another boundary vertex. Only a reflex vertex can block an
 // ear of a simple polygon, and that rule also handles the duplicate vertices
 // a hole bridge introduces.
-func earBlocked(pts []Point2, idx []int, i int) bool {
+func earBlocked(ctx context.Context, pts []Point2, idx []int, i int) (bool, error) {
 	n := len(idx)
 	ip, in := (i-1+n)%n, (i+1)%n
 	a, b, c := pts[idx[ip]], pts[idx[i]], pts[idx[in]]
 	for j := range n {
+		if j%256 == 0 {
+			if err := ctx.Err(); err != nil {
+				return false, err
+			}
+		}
 		if j == ip || j == i || j == in {
 			continue
 		}
@@ -248,8 +291,8 @@ func earBlocked(pts []Point2, idx []int, i int) bool {
 			continue
 		}
 		if pointInTri(p, a, b, c) {
-			return true
+			return true, nil
 		}
 	}
-	return false
+	return false, nil
 }

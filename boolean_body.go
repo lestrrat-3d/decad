@@ -1,6 +1,7 @@
 package decad
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"math/big"
@@ -128,24 +129,30 @@ func meshAreaUpper(verts []r3.Vec, tris [][3]int) float64 {
 	return total + sumSlop(len(tris), total) + 1e-300
 }
 
-// buildFacetedBody assembles the Faceted body from the payload: exact
-// component/void analysis, per-source-face topology, and measurements with
-// the composed proven bounds.
-func buildFacetedBody(d *Document, ref StepRef, pp facetedPayload) (*Body, error) {
-	verts, tris := pp.verts, pp.tris
+// facetedMeshAudit is the shared, geometry-only component and shell proof.
+// It allocates no topology objects and holds no document reference, so the
+// read-only evaluator can run the same invariant checks as body construction.
+type facetedMeshAudit struct {
+	xverts   []xpt
+	comp     []int
+	adj      [][]int
+	members  [][]int
+	compVol  []*big.Rat
+	contains [][]bool
+}
+
+func auditFacetedMesh(ctx context.Context, verts []r3.Vec, tris [][3]int) (*facetedMeshAudit, error) {
 	if len(tris) == 0 {
 		return nil, fmt.Errorf(`%w: the boolean result holds no boundary`, ErrBooleanFailed)
 	}
-	diameter, ok := pointSetDiameter(verts)
-	if !ok {
-		return nil, fmt.Errorf(`%w: the held boundary has no usable diameter`, ErrBooleanFailed)
-	}
-	pp.diameter = diameter
 
-	// The held mesh must be closed: every directed edge paired with its
-	// reverse. The stitcher proved this; the rebuild re-checks it.
 	directed := map[[2]int]int{}
-	for _, t := range tris {
+	for i, t := range tris {
+		if i%256 == 0 {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+		}
 		for k := range 3 {
 			directed[[2]int{t[k], t[(k+1)%3]}]++
 		}
@@ -156,76 +163,144 @@ func buildFacetedBody(d *Document, ref StepRef, pp facetedPayload) (*Body, error
 		}
 	}
 
-	xverts := make([]xpt, len(verts))
+	audit := &facetedMeshAudit{xverts: make([]xpt, len(verts))}
 	for i, v := range verts {
-		xverts[i] = xptOf(v)
+		if i%256 == 0 {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+		}
+		audit.xverts[i] = xptOf(v)
 	}
 
-	// Connected components → candidate shells, with exact signed volumes.
-	comp := make([]int, len(tris))
-	for i := range comp {
-		comp[i] = -1
+	audit.comp = make([]int, len(tris))
+	for i := range audit.comp {
+		audit.comp[i] = -1
 	}
-	adj := facetAdjacency(tris)
-	var members [][]int
+	adj, err := facetAdjacencyContext(ctx, tris)
+	if err != nil {
+		return nil, err
+	}
+	audit.adj = adj
+	work := 0
 	for i := range tris {
-		if comp[i] != -1 {
+		if audit.comp[i] != -1 {
 			continue
 		}
-		id := len(members)
+		id := len(audit.members)
 		queue := []int{i}
-		comp[i] = id
+		audit.comp[i] = id
 		var list []int
 		for len(queue) > 0 {
+			work++
+			if work%256 == 0 {
+				if err := ctx.Err(); err != nil {
+					return nil, err
+				}
+			}
 			f := queue[0]
 			queue = queue[1:]
 			list = append(list, f)
-			for _, nb := range adj[f] {
-				if comp[nb] == -1 {
-					comp[nb] = id
+			for _, nb := range audit.adj[f] {
+				if audit.comp[nb] == -1 {
+					audit.comp[nb] = id
 					queue = append(queue, nb)
 				}
 			}
 		}
-		members = append(members, list)
+		audit.members = append(audit.members, list)
 	}
 
 	sixth := big.NewRat(1, 6)
-	compVol := make([]*big.Rat, len(members))
-	for ci, list := range members {
+	audit.compVol = make([]*big.Rat, len(audit.members))
+	for ci, list := range audit.members {
 		v := new(big.Rat)
-		for _, fi := range list {
+		for i, fi := range list {
+			if i%256 == 0 {
+				if err := ctx.Err(); err != nil {
+					return nil, err
+				}
+			}
 			t := tris[fi]
-			v.Add(v, xdot(xverts[t[0]], xcross(xverts[t[1]], xverts[t[2]])))
+			v.Add(v, xdot(audit.xverts[t[0]], xcross(audit.xverts[t[1]], audit.xverts[t[2]])))
 		}
-		compVol[ci] = v.Mul(v, sixth)
-		if compVol[ci].Sign() == 0 {
+		audit.compVol[ci] = v.Mul(v, sixth)
+		if audit.compVol[ci].Sign() == 0 {
 			return nil, fmt.Errorf(`%w: a result shell encloses no volume`, ErrBooleanFailed)
 		}
 	}
 
-	// Exact containment: which components enclose which.
-	contains := make([][]bool, len(members)) // contains[outer][inner]
-	for i := range members {
-		contains[i] = make([]bool, len(members))
+	audit.contains = make([][]bool, len(audit.members))
+	for i := range audit.members {
+		audit.contains[i] = make([]bool, len(audit.members))
 	}
-	for inner := range members {
-		t := tris[members[inner][0]]
-		probe := xCentroid(xverts[t[0]], xverts[t[1]], xverts[t[2]])
-		for outer := range members {
+	for inner := range audit.members {
+		t := tris[audit.members[inner][0]]
+		probe := xCentroid(audit.xverts[t[0]], audit.xverts[t[1]], audit.xverts[t[2]])
+		for outer := range audit.members {
 			if outer == inner {
 				continue
 			}
-			inside, onBoundary, err := meshParity(probe, verts, tris, members[outer])
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+			inside, onBoundary, err := meshParityContext(ctx, probe, verts, tris, audit.members[outer])
 			if err != nil {
 				return nil, err
 			}
 			if onBoundary {
 				return nil, fmt.Errorf(`%w: two result shells touch`, ErrBooleanFailed)
 			}
-			contains[outer][inner] = inside
+			audit.contains[outer][inner] = inside
 		}
 	}
+
+	// Closed oriented material shells alternate with containment depth:
+	// positive outer shell, negative void, positive island, and so on. Every
+	// pair of containers must also be nested; intersecting shell relations are
+	// impossible after stitching and therefore an evaluator failure.
+	for inner := range audit.members {
+		var containers []int
+		for outer := range audit.members {
+			if audit.contains[outer][inner] {
+				containers = append(containers, outer)
+			}
+		}
+		for i := range containers {
+			for j := i + 1; j < len(containers); j++ {
+				a, b := containers[i], containers[j]
+				if !audit.contains[a][b] && !audit.contains[b][a] {
+					return nil, fmt.Errorf(`%w: result shells have an impossible containment relation`, ErrBooleanFailed)
+				}
+			}
+		}
+		want := 1
+		if len(containers)%2 == 1 {
+			want = -1
+		}
+		if audit.compVol[inner].Sign() != want {
+			return nil, fmt.Errorf(`%w: a result shell has inconsistent orientation`, ErrBooleanFailed)
+		}
+	}
+	return audit, nil
+}
+
+// buildFacetedBody assembles the Faceted body from the payload: exact
+// component/void analysis, per-source-face topology, and measurements with
+// the composed proven bounds.
+func buildFacetedBody(d *Document, ref StepRef, pp facetedPayload) (*Body, error) {
+	verts, tris := pp.verts, pp.tris
+	diameter, ok := pointSetDiameter(verts)
+	if !ok {
+		return nil, fmt.Errorf(`%w: the held boundary has no usable diameter`, ErrBooleanFailed)
+	}
+	pp.diameter = diameter
+	audit, err := auditFacetedMesh(context.Background(), verts, tris)
+	if err != nil {
+		return nil, err
+	}
+	xverts, comp, adj := audit.xverts, audit.comp, audit.adj
+	members, compVol, contains := audit.members, audit.compVol, audit.contains
 
 	body := &Body{doc: d, origin: FeatureRef{Step: ref, Role: "body"}, solid: true}
 	boundMM := units.Millimeters(pp.meshBound)
@@ -376,28 +451,21 @@ func buildFacetedBody(d *Document, ref StepRef, pp facetedPayload) (*Body, error
 
 	// Measurements: exact rational integrals over the held mesh, reported
 	// with the composed proven bounds (§9: the bound shapes of the
-	// verification design, composed from the operands' chord errors).
-	total := new(big.Rat)
+	// verification design, composed from the operands' chord errors). The
+	// volume helper is also the read-only interference evaluator's one source
+	// of volume truth.
+	volume, volRat, err := meshVolumeMeasurement(context.Background(), verts, tris, pp.volSymDiff)
+	if err != nil {
+		return nil, err
+	}
+	body.volume = volume
 	var mx, my, mz = new(big.Rat), new(big.Rat), new(big.Rat)
-	for i, t := range tris {
+	for _, t := range tris {
 		a, b, c := xverts[t[0]], xverts[t[1]], xverts[t[2]]
 		det := xdot(a, xcross(b, c))
-		total.Add(total, det)
 		mx.Add(mx, new(big.Rat).Mul(det, new(big.Rat).Add(new(big.Rat).Add(a.x, b.x), c.x)))
 		my.Add(my, new(big.Rat).Mul(det, new(big.Rat).Add(new(big.Rat).Add(a.y, b.y), c.y)))
 		mz.Add(mz, new(big.Rat).Mul(det, new(big.Rat).Add(new(big.Rat).Add(a.z, b.z), c.z)))
-		_ = i
-	}
-	volRat := new(big.Rat).Mul(total, sixth)
-	if volRat.Sign() <= 0 {
-		return nil, fmt.Errorf(`%w: the boolean result encloses no volume`, ErrBooleanFailed)
-	}
-	volF, _ := volRat.Float64()
-	volRound := ratAbsDiff(volRat, volF)
-	body.volume = Measurement{
-		Value:     units.CubicMillimeters(volF),
-		Exactness: exactnessOf(pp.volSymDiff + volRound),
-		Bound:     units.CubicMillimeters(pp.volSymDiff + volRound),
 	}
 
 	areaF := 0.0
@@ -468,6 +536,43 @@ func buildFacetedBody(d *Document, ref StepRef, pp facetedPayload) (*Body, error
 	}
 	body.payload = pp
 	return body, nil
+}
+
+// meshVolumeMeasurement integrates one stitched, oriented, closed mesh in
+// exact rational arithmetic and composes the shared symmetric-difference
+// allowance with the final rational-to-float rounding. Public booleans and
+// read-only interference measurement both call this helper.
+func meshVolumeMeasurement(ctx context.Context, verts []r3.Vec, tris [][3]int, volSymDiff float64) (Measurement, *big.Rat, error) {
+	xverts := make([]xpt, len(verts))
+	for i, v := range verts {
+		if i%256 == 0 {
+			if err := ctx.Err(); err != nil {
+				return Measurement{}, nil, err
+			}
+		}
+		xverts[i] = xptOf(v)
+	}
+	total := new(big.Rat)
+	for i, t := range tris {
+		if i%256 == 0 {
+			if err := ctx.Err(); err != nil {
+				return Measurement{}, nil, err
+			}
+		}
+		a, b, c := xverts[t[0]], xverts[t[1]], xverts[t[2]]
+		total.Add(total, xdot(a, xcross(b, c)))
+	}
+	volRat := new(big.Rat).Mul(total, big.NewRat(1, 6))
+	if volRat.Sign() <= 0 {
+		return Measurement{}, nil, fmt.Errorf(`%w: the boolean result encloses no volume`, ErrBooleanFailed)
+	}
+	volF, _ := volRat.Float64()
+	bound := volSymDiff + ratAbsDiff(volRat, volF)
+	return Measurement{
+		Value:     units.CubicMillimeters(volF),
+		Exactness: exactnessOf(bound),
+		Bound:     units.CubicMillimeters(bound),
+	}, volRat, nil
 }
 
 // exactnessOf keys a measurement's exactness off its proven bound: zero is the

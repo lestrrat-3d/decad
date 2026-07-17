@@ -32,11 +32,26 @@ type gapContrib struct {
 // cellSink accumulates contributions and the undecidable findings.
 type cellSink struct {
 	contribs []gapContrib
+	// overlap is set only by a trim-admitted transversal boundary crossing.
+	// Such a crossing proves a shared open material neighborhood.
+	overlap bool
 	// unsure is set when a cell meets a question it cannot decide: an
 	// admitted-or-ambiguous carrier crossing, an uncertified contact, an
 	// equality where a branch demands strictness (§4: equality routes to §6,
 	// and PR 1 certifies only the coplanar plane pair).
 	unsure bool
+}
+
+// crossing records a carrier crossing after trim admission: admitted proves
+// overlap, rejected proves absence, and a boundary-straddling admission stays
+// undecided.
+func (s *cellSink) crossing(admit int) {
+	switch admit {
+	case 1:
+		s.overlap = true
+	case 0:
+		s.unsure = true
+	}
 }
 
 // candidate folds an admission state into a contribution: rejected feet are
@@ -81,42 +96,81 @@ func (s *cellSink) coarse(boxA, boxB [2]r3.Vec, witA, witB []r3.Vec) {
 	s.contribs = append(s.contribs, gapContrib{lo: math.Max(0, lo), hi: hi, pa: pa, pb: pb})
 }
 
-// enumerate runs every tier over the pair.
-func (k *pairKernel) enumerate() *cellSink {
+// enumerate runs every tier over the pair, checking cancellation at bounded
+// intervals through the quadratic candidate walk.
+func (k *pairKernel) enumerate() (*cellSink, error) {
 	sink := &cellSink{}
+	work := 0
+	check := func() error {
+		if k.err != nil {
+			return k.err
+		}
+		work++
+		if work%256 != 0 {
+			return nil
+		}
+		return k.ctx.Err()
+	}
 	for _, fa := range k.a.faces {
 		for _, fb := range k.b.faces {
+			if err := check(); err != nil {
+				return nil, err
+			}
 			k.ffCell(fa, fb, sink)
 		}
 	}
 	for _, fa := range k.a.faces {
 		for _, eb := range k.b.edges {
+			if err := check(); err != nil {
+				return nil, err
+			}
 			k.feCell(fa, eb, sink)
 		}
 	}
 	for _, fb := range k.b.faces {
 		for _, ea := range k.a.edges {
+			if err := check(); err != nil {
+				return nil, err
+			}
 			k.feCell(fb, ea, sink)
 		}
 	}
 	for _, ea := range k.a.edges {
 		for _, eb := range k.b.edges {
+			if err := check(); err != nil {
+				return nil, err
+			}
 			k.eeCell(ea, eb, sink)
 		}
 	}
 	for _, va := range k.a.verts {
+		if err := check(); err != nil {
+			return nil, err
+		}
 		k.vertexTier(va, k.b, sink)
 	}
 	for _, vb := range k.b.verts {
+		if err := check(); err != nil {
+			return nil, err
+		}
 		k.vertexTier(vb, k.a, sink)
 	}
 	for _, va := range k.a.verts {
 		for _, vb := range k.b.verts {
+			if err := check(); err != nil {
+				return nil, err
+			}
 			d := va.Sub(vb).Len()
 			sink.candidate(k, 1, d, d, true, va, vb)
 		}
 	}
-	return sink
+	if k.err != nil {
+		return nil, k.err
+	}
+	if err := k.ctx.Err(); err != nil {
+		return nil, err
+	}
+	return sink, nil
 }
 
 // ffCell dispatches one face pair through the §4 table.
@@ -323,7 +377,11 @@ func (k *pairKernel) lineLineCrits(f, g *cFace) ([]spineCrit, bool) {
 
 // lineCircleBracketCrits runs the P4 machinery for an explicit circle.
 func (k *pairKernel) lineCircleBracketCrits(cp circleParam, center, refU, refV, la, ld r3.Vec) ([]spineCrit, bool) {
-	brs, ok := lineCircleBrackets(cp, [3]float64{la.X, la.Y, la.Z}, [3]float64{ld.X, ld.Y, ld.Z}, k.slack)
+	brs, ok, err := lineCircleBracketsContext(k.ctx, cp, [3]float64{la.X, la.Y, la.Z}, [3]float64{ld.X, ld.Y, ld.Z}, k.slack)
+	if err != nil {
+		k.err = err
+		return nil, false
+	}
 	if !ok {
 		// Constant distance over the circle (a coaxial configuration):
 		// closed form at a deterministic azimuth.
@@ -384,7 +442,11 @@ func (k *pairKernel) circleCircleCrits(f, g *cFace) ([]spineCrit, bool) {
 		v: [3]float64{g.refV.X, g.refV.Y, g.refV.Z},
 		r: g.major,
 	}
-	brs, ok := circleCircleBrackets(c1, c2, [3]float64{g.axis.X, g.axis.Y, g.axis.Z}, k.slack)
+	brs, ok, err := circleCircleBracketsContext(k.ctx, c1, c2, [3]float64{g.axis.X, g.axis.Y, g.axis.Z}, k.slack)
+	if err != nil {
+		k.err = err
+		return nil, false
+	}
 	if !ok {
 		return nil, false
 	}
@@ -566,9 +628,15 @@ func (k *pairKernel) planePlane(f, g *cFace, sink *cellSink) {
 	}
 	fx, fy := f.planeCoords(p0)
 	gx, gy := g.planeCoords(p0)
-	// Conservative supersets of each trim's intersection with the line: a
-	// clean miss between them excludes the crossing; anything else is the
-	// §6/§7-routed contact question, undecided in PR 1.
+	// Exact trim intervals certify positive-length transversal crossing. If
+	// either trim cannot classify the line, conservative supersets still prove
+	// a clean miss; every remaining case stays undecided.
+	ivF, okF := f.region.lineIntervals(fx, fy, dir.Dot(f.u), dir.Dot(f.v))
+	ivG, okG := g.region.lineIntervals(gx, gy, dir.Dot(g.u), dir.Dot(g.v))
+	if okF && okG {
+		sink.crossing(intervalsMeet(ivF, ivG, k.tol))
+		return
+	}
 	supF := f.region.lineIntervalsSuperset(fx, fy, dir.Dot(f.u), dir.Dot(f.v))
 	supG := g.region.lineIntervalsSuperset(gx, gy, dir.Dot(g.u), dir.Dot(g.v))
 	if intervalsMeet(supF, supG, k.tol) != -1 {
@@ -751,6 +819,27 @@ func circleRegionHits(r region2, cx, cy, rad float64) int {
 	return 0
 }
 
+// trimmedCircleCrossingRelation classifies a transversal carrier-crossing
+// circle through both face trims. A full-circle miss on the plane proves
+// exclusion. Overlap requires one deterministic point cleanly admitted by the
+// plane region and the revolved face's own sweep/meridian/axial trims; missing
+// such a point is undecided, never a false admission from the full carrier.
+func trimmedCircleCrossingRelation(f, g *cFace, center r3.Vec, rad, tol float64) int {
+	cx, cy := f.planeCoords(center)
+	if circleRegionHits(f.region, cx, cy, rad) == -1 {
+		return -1
+	}
+	const samples = 64
+	for i := range samples {
+		th := 2 * math.Pi * float64(i) / samples
+		q := center.Add(f.u.Scale(rad * math.Cos(th))).Add(f.v.Scale(rad * math.Sin(th)))
+		if admitState(f.admitPoint(q, tol), g.admitPoint(q, tol)) == 1 {
+			return 1
+		}
+	}
+	return 0
+}
+
 // planeCylinder is the plane-row cell for a cylinder: an axis-parallel pair
 // carries the constant ruling plateau; a crossing carrier is excluded
 // through the trims (the two crossing rulings when the axis parallels the
@@ -785,18 +874,24 @@ func (k *pairKernel) planeCylinder(f, g *cFace, sink *cellSink) {
 		// direction.
 		half := math.Acos(math.Max(-1, math.Min(1, d/g.radius)))
 		base := math.Atan2(toward.Dot(g.refV), toward.Dot(g.refU))
+		ambiguous := false
 		for _, dth := range []float64{half, -half} {
 			th := base + dth
 			radial := g.refU.Scale(math.Cos(th)).Add(g.refV.Scale(math.Sin(th)))
-			if !k.rulingExcluded(f, g, radial) {
-				sink.unsure = true
+			rel := k.rulingRelation(f, g, radial)
+			if rel == 1 {
+				sink.overlap = true
 				return
 			}
+			ambiguous = ambiguous || rel == 0
+		}
+		if ambiguous {
+			sink.unsure = true
 		}
 	default:
 		// Tangency at distance zero: certified only in PR 3 (§6); excluded
 		// through the trims or undecided.
-		if !k.rulingExcluded(f, g, toward) {
+		if k.rulingRelation(f, g, toward) != -1 {
 			sink.unsure = true
 		}
 	}
@@ -825,18 +920,19 @@ func (k *pairKernel) rulingCandidate(f, g *cFace, radial r3.Vec, v float64, sink
 	sink.candidate(k, admit, v, v, true, pa, pb)
 }
 
-// rulingExcluded proves one carrier-crossing ruling never meets both trims.
-func (k *pairKernel) rulingExcluded(f, g *cFace, radial r3.Vec) bool {
+// rulingRelation classifies one carrier-crossing ruling through both trims.
+func (k *pairKernel) rulingRelation(f, g *cFace, radial r3.Vec) int {
 	th := math.Atan2(radial.Dot(g.refV), radial.Dot(g.refU))
-	if g.sweep.classify(th, k.tol/math.Max(g.radius, 1e-30)) == -1 {
-		return true
+	ang := g.sweep.classify(th, k.tol/math.Max(g.radius, 1e-30))
+	if ang == -1 {
+		return -1
 	}
 	p0 := g.anchor.Add(radial.Scale(g.radius)).Add(g.axis.Scale(g.zWin.lo))
 	p1 := g.anchor.Add(radial.Scale(g.radius)).Add(g.axis.Scale(g.zWin.hi))
 	x0, y0 := f.planeCoords(p0)
 	x1, y1 := f.planeCoords(p1)
 	hit, _ := f.region.segmentHits(x0, y0, x1, y1)
-	return hit == -1
+	return admitState(ang, hit)
 }
 
 // planeCrossesRevolved excludes (or reports) the crossing of a plane with a
@@ -868,10 +964,12 @@ func (k *pairKernel) planeCrossesRevolved(f, g *cFace, sink *cellSink) {
 		// as the circle would grant an exclusion the ellipse does not earn, so
 		// a tilt the oracle cannot rule out leaves the crossing undecided.
 		center := g.anchor.Add(g.axis.Scale((c - base) / s))
-		cx, cy := f.planeCoords(center)
-		if circleRegionHits(f.region, cx, cy, g.radius) == -1 {
+		rel := trimmedCircleCrossingRelation(f, g, center, g.radius, k.tol)
+		if rel == -1 {
 			return
 		}
+		sink.crossing(rel)
+		return
 	}
 	sink.unsure = true
 }
@@ -946,11 +1044,11 @@ func (k *pairKernel) planeSphere(f, g *cFace, sink *cellSink) {
 		}
 		rc := math.Sqrt(g.radius*g.radius - h*h)
 		foot := g.anchor.Sub(f.n.Scale(h))
-		cx, cy := f.planeCoords(foot)
-		if circleRegionHits(f.region, cx, cy, rc) == -1 {
+		rel := trimmedCircleCrossingRelation(f, g, foot, rc, k.tol)
+		if rel == -1 {
 			return
 		}
-		sink.unsure = true
+		sink.crossing(rel)
 	default:
 		pb := g.anchor.Sub(f.n.Scale(side * g.radius))
 		foot := pb.Sub(f.n.Scale(f.n.Dot(pb.Sub(f.o))))

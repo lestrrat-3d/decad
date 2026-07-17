@@ -1,6 +1,7 @@
 package decad
 
 import (
+	"context"
 	"math"
 
 	"github.com/lestrrat-3d/r3"
@@ -686,7 +687,7 @@ type bodyGeom struct {
 	faces    []*cFace
 	edges    []*cEdge
 	verts    []r3.Vec
-	shellWit []r3.Vec // one witness point per shell (§2)
+	lumpWit  []r3.Vec // outer-shell witness for the supported analytic lump (§2)
 	supports []r3.Vec // support points for the pair-D reading (§7)
 }
 
@@ -700,9 +701,13 @@ func perpTo(a r3.Vec) r3.Vec {
 	return p
 }
 
-// newBodyGeom builds the kernel model; ok is false for a payload this
-// evaluator did not build — the pair then stays undecided, never guessed.
+// newBodyGeom builds the kernel model for shipped single-lump analytic
+// payloads. Faceted and other multi-lump bodies bypass analytic containment
+// and proceed to read-only intersection; ok is false, never a partial model.
 func newBodyGeom(b *Body) (*bodyGeom, bool) {
+	if len(b.lumps) != 1 {
+		return nil, false
+	}
 	g := &bodyGeom{body: b}
 	switch pl := b.payload.(type) {
 	case prismPayload:
@@ -726,8 +731,10 @@ func newBodyGeom(b *Body) (*bodyGeom, bool) {
 	return g, true
 }
 
-// addTopology reads the exact edges and vertices off the built topology and
-// picks one witness point per shell for the §2 nesting casts.
+// addTopology reads exact edges and vertices and picks the supported analytic
+// lump's outer-shell witness for §2 nesting casts. newBodyGeom rejects
+// multi-lump bodies before this point; void shells remove material and are not
+// independent containment candidates.
 func (g *bodyGeom) addTopology(b *Body) bool {
 	for _, e := range b.Edges() {
 		ce, ok := newCEdge(e)
@@ -741,12 +748,22 @@ func (g *bodyGeom) addTopology(b *Body) bool {
 	for _, v := range b.Vertices() {
 		g.verts = append(g.verts, v.position)
 	}
-	for _, sh := range b.Shells() {
-		w, ok := shellWitness(sh)
+	for _, lump := range b.Lumps() {
+		var outer *Shell
+		for _, sh := range lump.Shells() {
+			if !sh.IsVoid() {
+				outer = sh
+				break
+			}
+		}
+		if outer == nil {
+			return false
+		}
+		w, ok := shellWitness(outer)
 		if !ok {
 			return false
 		}
-		g.shellWit = append(g.shellWit, w)
+		g.lumpWit = append(g.lumpWit, w)
 	}
 	return true
 }
@@ -1163,11 +1180,23 @@ func clrLadder() []r3.Vec {
 // crossing certified transversal and interior to its trim; a grazing cast
 // retries the next ladder direction. ok is false when every direction stays
 // ambiguous.
-func (g *bodyGeom) pointInBody(p r3.Vec, tol float64) (bool, bool) {
+
+func (g *bodyGeom) pointInBody(ctx context.Context, p r3.Vec, tol float64) (bool, bool, error) {
 	for _, dir := range clrLadder() {
+		if err := ctx.Err(); err != nil {
+			return false, false, err
+		}
 		total, ok := 0, true
-		for _, f := range g.faces {
-			n, good := f.rayCrossings(p, dir, tol)
+		for i, f := range g.faces {
+			if i%256 == 0 {
+				if err := ctx.Err(); err != nil {
+					return false, false, err
+				}
+			}
+			n, good, err := f.rayCrossings(ctx, p, dir, tol)
+			if err != nil {
+				return false, false, err
+			}
 			if !good {
 				ok = false
 				break
@@ -1175,15 +1204,18 @@ func (g *bodyGeom) pointInBody(p r3.Vec, tol float64) (bool, bool) {
 			total += n
 		}
 		if ok {
-			return total%2 == 1, true
+			return total%2 == 1, true, nil
 		}
 	}
-	return false, false
+	return false, false, nil
 }
 
 // rayCrossings counts certified transversal crossings of the ray p + t·dir
 // (t > tol) with the trimmed face; good is false on any ambiguity.
-func (f *cFace) rayCrossings(p, dir r3.Vec, tol float64) (int, bool) {
+func (f *cFace) rayCrossings(ctx context.Context, p, dir r3.Vec, tol float64) (int, bool, error) {
+	if err := ctx.Err(); err != nil {
+		return 0, false, err
+	}
 	switch f.kind {
 	case ckPlane:
 		nd := f.n.Dot(dir)
@@ -1192,15 +1224,15 @@ func (f *cFace) rayCrossings(p, dir r3.Vec, tol float64) (int, bool) {
 			// start is cleanly off the plane; on the plane it is a graze —
 			// ambiguous, retry the ladder.
 			if math.Abs(f.n.Dot(p)-f.planeOffset()) > tol {
-				return 0, true
+				return 0, true, nil
 			}
-			return 0, false
+			return 0, false, nil
 		}
 		if math.Abs(nd) < 1e-7 {
 			// Near-parallel: the crossing exists but sits far away and
 			// poorly conditioned — the count is not certified; retry the
 			// ladder rather than claim zero.
-			return 0, false
+			return 0, false, nil
 		}
 		t := (f.planeOffset() - f.n.Dot(p)) / nd
 		if math.Abs(t) <= tol {
@@ -1208,20 +1240,20 @@ func (f *cFace) rayCrossings(p, dir r3.Vec, tol float64) (int, bool) {
 			// shared construction plane): a crossing only if the start sits
 			// on the trimmed face — cleanly off it, no crossing.
 			if f.admitPoint(p.Add(dir.Scale(t)), tol) == -1 {
-				return 0, true
+				return 0, true, nil
 			}
-			return 0, false
+			return 0, false, nil
 		}
 		if t < 0 {
-			return 0, true
+			return 0, true, nil
 		}
 		switch f.admitPoint(p.Add(dir.Scale(t)), tol) {
 		case 1:
-			return 1, true
+			return 1, true, nil
 		case -1:
-			return 0, true
+			return 0, true, nil
 		default:
-			return 0, false
+			return 0, false, nil
 		}
 	case ckCylinder:
 		rel := p.Sub(f.anchor)
@@ -1230,10 +1262,12 @@ func (f *cFace) rayCrossings(p, dir r3.Vec, tol float64) (int, bool) {
 		a := dirP.Dot(dirP)
 		b := relP.Dot(dirP)
 		c := relP.Dot(relP) - f.radius*f.radius
-		return f.quadraticCrossings(p, dir, a, b, c, tol)
+		n, ok := f.quadraticCrossings(p, dir, a, b, c, tol)
+		return n, ok, nil
 	case ckSphere:
 		rel := p.Sub(f.anchor)
-		return f.quadraticCrossings(p, dir, 1, rel.Dot(dir), rel.Dot(rel)-f.radius*f.radius, tol)
+		n, ok := f.quadraticCrossings(p, dir, 1, rel.Dot(dir), rel.Dot(rel)-f.radius*f.radius, tol)
+		return n, ok, nil
 	case ckCone:
 		rel := p.Sub(f.anchor)
 		k := math.Tan(f.half)
@@ -1246,11 +1280,11 @@ func (f *cFace) rayCrossings(p, dir r3.Vec, tol float64) (int, bool) {
 		c := relP.Dot(relP) - k*k*az*az
 		n, ok := f.quadraticCrossings(p, dir, a, b, c, tol)
 		if !ok {
-			return 0, false
+			return 0, false, nil
 		}
-		return n, true
+		return n, true, nil
 	default: // ckTorus
-		return f.torusCrossings(p, dir, tol)
+		return f.torusCrossings(ctx, p, dir, tol)
 	}
 }
 
@@ -1308,7 +1342,10 @@ func (f *cFace) quadraticCrossings(p, dir r3.Vec, a, b, c, tol float64) (int, bo
 // certification (§2): a root count is a proof only when the isolation
 // certifies it — a non-square-free quartic (a tangency) is ambiguous and the
 // ladder retries.
-func (f *cFace) torusCrossings(p, dir r3.Vec, tol float64) (int, bool) {
+func (f *cFace) torusCrossings(ctx context.Context, p, dir r3.Vec, tol float64) (int, bool, error) {
+	if err := ctx.Err(); err != nil {
+		return 0, false, err
+	}
 	rel := p.Sub(f.anchor)
 	// |x−C|² = q2 t² + q1 t + q0; axial² = (a0 + a1 t)².
 	q2 := dir.Dot(dir)
@@ -1324,17 +1361,24 @@ func (f *cFace) torusCrossings(p, dir r3.Vec, tol float64) (int, bool) {
 	four := ratOf(4 * f.major * f.major)
 	poly := rpTrim(rpSub(sq, rpScale(perp, four)))
 	if rpDeg(poly) < 1 {
-		return 0, false
+		return 0, false, nil
 	}
 	sf := rpSquareFree(poly)
 	if rpDeg(sf) != rpDeg(poly) {
 		// A repeated root is a tangency somewhere on the line: ambiguous.
-		return 0, false
+		return 0, false, nil
 	}
 	chain := sturmChain(sf)
 	n := 0
-	for _, iv := range rpIsolateRoots(sf) {
-		iv = rpRefineRoot(chain, iv, func(lo, hi float64) bool { return hi-lo <= 1e-11*math.Max(1, math.Abs(lo)) })
+	ivs, err := rpIsolateRootsContext(ctx, sf)
+	if err != nil {
+		return 0, false, err
+	}
+	for _, iv := range ivs {
+		iv, err = rpRefineRootContext(ctx, chain, iv, func(lo, hi float64) bool { return hi-lo <= 1e-11*math.Max(1, math.Abs(lo)) })
+		if err != nil {
+			return 0, false, err
+		}
 		tLo, _ := iv.lo.Float64()
 		tHi, _ := iv.hi.Float64()
 		if tHi <= -tol {
@@ -1348,7 +1392,7 @@ func (f *cFace) torusCrossings(p, dir r3.Vec, tol float64) (int, bool) {
 			if tHi-tLo <= tol && f.admitPoint(q0, tol+(tHi-tLo)) == -1 {
 				continue
 			}
-			return 0, false
+			return 0, false, nil
 		}
 		q := p.Add(dir.Scale((tLo + tHi) / 2))
 		switch f.admitPoint(q, tol+(tHi-tLo)) {
@@ -1356,8 +1400,8 @@ func (f *cFace) torusCrossings(p, dir r3.Vec, tol float64) (int, bool) {
 			n++
 		case -1:
 		default:
-			return 0, false
+			return 0, false, nil
 		}
 	}
-	return n, true
+	return n, true, nil
 }

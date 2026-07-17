@@ -12,8 +12,9 @@ whole-recipe atomicity, and the package-owned evaluator boundary). Nothing here
 changes those contracts. `docs/tessellation-design.md` owns the tessellation
 contract and the private operand proofs the boolean consumes. The
 payload-specific proofs and implementation order live in
-`docs/payload-verification-design.md`. Where this
-document stages a capability, the staging is explicit and rejected loudly,
+`docs/payload-verification-design.md`. `docs/interference-design.md` owns the
+read-only use of this evaluator's intersection volume inside `Verify`. Where
+this document stages a capability, the staging is explicit and rejected loudly,
 never silently approximated.
 
 ## 1. Two sources of truth, one direction
@@ -268,6 +269,26 @@ different topology split but MUST preserve role/query meaning.
 
 Increment 4, the deep end. Strategy:
 
+**Interference evaluation MUST be read-only; committing a public boolean stays
+a wrapper.** Interference PR 1 (`docs/interference-design.md` §11) factors one
+internal `evaluateBoolean(ctx, op, a, b)` over tessellation, exact-predicate
+classification, cutting, stitching, bound composition, and the rational volume
+integral. It never appends a step, retires an operand, registers a body, or
+mints a recipe reference. `Union` / `Cut` / `Intersect` gate their operands,
+call it with `context.Background()`, build the public body, then commit the step
+atomically. `Verify` calls the same evaluator with its own context and consumes
+only a bounded intersection volume; it never calls public `Intersect` and never
+builds a transient document body (`docs/interference-design.md` §5). This split
+is implemented; public consuming behavior is unchanged.
+
+Expected geometric non-results — empty held intersection, an undecidable
+contact arrangement, and `ErrUnsupported` staging — are private typed outcomes:
+the public wrapper maps them to its existing errors, while `Verify` maps them to
+an undecided pair. An invariant failure in source mapping, closure, orientation,
+or exact classification remains an error from `Verify`; it is never hidden as
+`Suspect`. The shared evaluator checks `ctx` at phase boundaries and at bounded
+work intervals inside quadratic/refinement loops, as interference §7 specifies.
+
 - **Tessellate both operands** with an evaluator-internal chord tolerance —
   a documented default derived from the pair's own diameter (the booleans of
   core §8 expose no tolerance parameter, on purpose). What IS caller-visible
@@ -441,17 +462,19 @@ Increment 4, the deep end. Strategy:
   boundary-loop vertices. `Placed` recomputes the diameter after transforming
   the payload vertices. The area floor sums each unique topological edge's held
   length once, never its two coedge uses.
-- **Pairs**: proven disjoint when the two bodies' bounds-inflated boxes are
-  disjoint (a box bounds its body, so box separation proves body separation),
-  or when a clearance computation clears the summed bounds. An
-  `Interference` row carries a bounded overlap VOLUME (verification §1), and
-  a bare witness point cannot supply one — so a row is emitted only once the
-  boolean machinery can intersect the pair and bound the volume. Until then a
-  pair that cannot be proven disjoint is undecided: it joins
-  neither list and reads `Suspect` — never a fabricated row, and never a
-  false `Sound`. Box-disjointness proofs run from increment 1 (they are
-  cheap, and they decide the common far-apart case); increment 3 adds the
-  clearance computation and `WithClearances`.
+- **Pairs**: use the four-way relation and proof order of
+  `docs/interference-design.md`. Bounds separation or the analytic clearance
+  kernel proves disjoint/touching; nesting and admitted crossings remain
+  explicitly `pairOverlapping`, never folded into undecided. A strict
+  full-containment or analytic equality certificate reuses an operand's
+  volume. Every other candidate overlap runs the read-only `OpIntersect`
+  evaluator and emits a row
+  only when the volume interval proves positivity (`Value - Bound > 0`). Empty,
+  contact, unsupported, or coarse results remain undecided and read `Suspect`;
+  internal failures return from `Verify`. Box-disjointness proofs run from
+  increment 1; increment 3 adds analytic clearance; increment 4 adds read-only
+  transversal intersection volume, with later staged breadth listed by the
+  interference design.
 - **Wall thickness / undercuts / min radius**: the analytic surveys of
   verification §6, answered outright on this evaluator's own payloads
   (`survey.go`/`survey2d.go`): prism/revolve wall reduces exactly to the 2D
@@ -488,7 +511,7 @@ silent pass.
 | 1 | topology model, `Document`/`Recipe`/`Step` wiring, `Extrude` for line/circle/arc profiles with `Distance`/`Symmetric`/`TwoSided`-of-distance-sides extents, mass properties (§4), `Placed`, structural `Verify` (validity by construction, quantities, tolerance gate; every pair undecided → `Suspect` unless box-proven disjoint) |
 | 2 | `Revolve` (angular extents), selector vocabulary + resolution, the body-relative stops (`ToFace`/`ToFaceAngular`/`EdgeAxis`, `ThroughAll`/`ThroughAllSide`) |
 | 3 | analytic clearance proofs and `WithClearances` (box-disjointness proofs already run from increment 1, §10/§11 row 1) |
-| 4 | tessellation per `docs/tessellation-design.md` + the exact-predicate mesh boolean, `Faceted` bodies, faceted `Verify`, `Tessellate`/`STL`/`OBJ` |
+| 4 | tessellation per `docs/tessellation-design.md` + the exact-predicate mesh boolean, `Faceted` bodies, faceted `Verify`, `Tessellate`/`STL`/`OBJ`; supplies the geometry and bounds shared by public booleans and read-only interference evaluation |
 | 5 | fillet/chamfer on analytic prism edges, shell |
 | 6 | bounded canonical recipe encode, strict versioned decode, full operation/reference validation with deterministic error precedence, resource budgets, shared recorded-step dispatch, atomic public `Evaluate`, replay/property/fuzz suite |
 | 7 | free-form side surfaces (`NURBSSurface` from recorded control data), tapered extrude if a sound offset story exists |

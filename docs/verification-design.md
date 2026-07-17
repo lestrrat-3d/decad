@@ -10,6 +10,10 @@ owns `Verify`'s place in the API, the three bounded result shapes
 of the form "core §N" are to that document.
 `docs/payload-verification-design.md` owns the exact cup adapter and the
 certificate-backed faceted algorithms that meet this document's proof standard.
+`docs/interference-design.md` owns the non-mutating proof behind an
+`Interference` row and its bounded overlap volume;
+`docs/clearance-design.md` owns analytic disjointness, contact, and minimum-gap
+proofs. This document owns how both results affect the report.
 
 ## 1. The report
 
@@ -154,6 +158,13 @@ pairs are never a silence a `Sound` report rests on (§6). Of the two lists,
 `Interferences` is always computed — the `Interfering` rung of §6 reads it, so
 the report could not aggregate honestly without it — and `Clearances` is
 computed when `WithClearances()` (§2) asks for it.
+
+How that partition is proved is specified once in
+`docs/interference-design.md`: pairs have four internal outcomes — disjoint,
+touching, overlapping, undecided — and `Verify` may use the analytic clearance
+kernel, a strict full-containment certificate, or a read-only mesh intersection.
+`Verify` NEVER calls the consuming public `Intersect`; report construction does
+not append a recipe step, retire an operand, or register a transient body.
 
 ## 2. Tolerance — what "beyond the caller's tolerance" means
 
@@ -687,17 +698,19 @@ an approximation of one — and the report gives four answers this way:
   pull. A faceted survey proves the same absence only when every true patch's
   source-normal range clears. A missing or straddling range leaves
   `Undercuts` empty and the body `Suspect` (payload verification §8).
-- **A pair in neither list** is the answer *these two bodies do not overlap* —
-  the claim the `Interfering` rung reads, made by omission for every pair of
-  proven solids without an `Interference` row. It is held to the same proof: a
-  pair is proven disjoint when the boundaries the evaluator holds clear each
-  other by more than the proven bounds those boundaries carry — the true skins
-  then cannot touch — and an exact evaluator decides it outright. A pair whose
-  held boundaries come closer than their own bounds, or overlap by less, is
-  proven neither overlapping nor disjoint: no `Interference` row is fabricated
-  for it — every row is a proven overlap (§1) — and the undecided pair makes
-  the `Report` `Suspect` directly, at the same level its bounded results
-  travel (the table below).
+- **A pair with no `Interference` row** is the answer *these two bodies do not
+  overlap* only inside a `Sound` report. The proof may be bounds separation,
+  analytic boundary clearance plus nesting exclusion, or a certified touching
+  contact. A strict full-containment certificate or transversal intersection
+  proves the opposite relation, but the report still needs a bounded overlap
+  volume before it may emit the row. A read-only intersection normally proves
+  that volume only when `Volume.Value - Volume.Bound > 0`; strict full
+  containment or certified analytic equality may instead reuse an operand's
+  volume because the set identity proves overlap independently. Any pair whose
+  partition or complete overlap volume
+  remains undecided emits no fabricated row and makes the `Report` `Suspect`
+  directly. Full proof order, expected refusal handling, and stable pair order
+  are `docs/interference-design.md`.
 
 What the standard buys is the only reading that matters: inside a
 `Trustworthy()` report, a nil `MinWallThickness` is a **proven** *no wall*, a
@@ -1104,9 +1117,13 @@ other is, so a `Clearance.Gap` measured far coarser than the caller's tolerance 
 never sit inside a `Sound` report. (Interference is caught by the rung above it as
 well, and `Interfering` is the worse verdict; the rule is stated over both so that
 nothing in the report is exempt.) The same rung carries the undecided pair, and
-that keeps the pair partition total: a proven overlap is `Interfering`, a proven
-disjointness is the one silence a `Sound` report may rest on, and a pair proven
-neither is `Suspect`. Together with the `Suspect` rung above it, the
+that keeps the pair partition total: a proven overlap with bounded volume is
+`Interfering`, a proven disjointness is the one silence a `Sound` report may
+rest on, and a pair proven neither way is `Suspect`. A pair whose shared
+interior is proven but whose complete overlap volume is not yet bounded is
+unresolved interference: no row
+is fabricated, and it is `Suspect` until interference §6's quantity proof
+lands. Together with the `Suspect` rung above it, the
 gate covers **every `Measurement`, every `VecMeasurement` and every `Box` the report
 carries** — and per core §5.3 those are all of them.
 

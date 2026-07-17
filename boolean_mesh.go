@@ -1,6 +1,7 @@
 package decad
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"math/big"
@@ -55,9 +56,18 @@ func (bm *boolMesh) twinFacet(f, k int) (int, bool) {
 // The contact is exactly what this pipeline must not miss, so the operand is
 // refused rather than partly examined. Loud beats silently wrong.
 func prepBoolMesh(m *Mesh, src []int) (*boolMesh, error) {
+	return prepBoolMeshContext(context.Background(), m, src)
+}
+
+func prepBoolMeshContext(ctx context.Context, m *Mesh, src []int) (*boolMesh, error) {
 	bm := &boolMesh{verts: m.vertices, tris: m.triangles, src: src}
 	bm.xverts = make([]xpt, len(m.vertices))
 	for i, v := range m.vertices {
+		if i%256 == 0 {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+		}
 		if isNonFinite(v.X) || isNonFinite(v.Y) || isNonFinite(v.Z) {
 			return nil, fmt.Errorf(`%w: a mesh vertex is not finite`, ErrBooleanFailed)
 		}
@@ -67,6 +77,11 @@ func prepBoolMesh(m *Mesh, src []int) (*boolMesh, error) {
 	bm.boxes = make([][2]r3.Vec, len(m.triangles))
 	bm.owner = make(map[[2]int]int, 3*len(m.triangles))
 	for i, tri := range m.triangles {
+		if i%256 == 0 {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+		}
 		a, b, c := bm.xverts[tri[0]], bm.xverts[tri[1]], bm.xverts[tri[2]]
 		n := xcross(xsub(b, a), xsub(c, a))
 		if n.x.Sign() == 0 && n.y.Sign() == 0 && n.z.Sign() == 0 {
@@ -114,7 +129,8 @@ type keptFacet struct {
 // branching at a point. A tangent contact admits no side, so no facet
 // classification is proven — the operation is rejected, never a wrong mesh.
 func errDegenerateContact(what string) error {
-	return fmt.Errorf(`%w: %s — the exact predicates cannot classify a tangent contact`, ErrDegenerate, what)
+	return expectedBoolean(booleanExpectedContact,
+		fmt.Errorf(`%w: %s — the exact predicates cannot classify a tangent contact`, ErrDegenerate, what))
 }
 
 // contactKind is the DIMENSION of the exact intersection of two closed
@@ -528,7 +544,7 @@ type pairContact struct {
 // tessellations. It returns the kept, still-exact facets and a proven LOWER
 // bound on the sine of the crossing angle of every contact it used — the
 // number the rim's displacement bound divides by (bounds.go, rimDelta).
-func meshBoolean(op OpKind, ma, mb *boolMesh) ([]keptFacet, float64, error) {
+func meshBoolean(ctx context.Context, op OpKind, ma, mb *boolMesh) ([]keptFacet, float64, error) {
 	wantA, wantB, flipB, err := booleanKeep(op)
 	if err != nil {
 		return nil, 0, err
@@ -541,8 +557,15 @@ func meshBoolean(op OpKind, ma, mb *boolMesh) ([]keptFacet, float64, error) {
 	var segEnds []xpt
 	var inPlane []pairContact
 	var minSin2 *big.Rat
+	work := 0
 	for i := range ma.tris {
 		for j := range mb.tris {
+			work++
+			if work%256 == 0 {
+				if err := ctx.Err(); err != nil {
+					return nil, 0, err
+				}
+			}
 			if !boxesOverlap(ma.boxes[i], mb.boxes[j]) {
 				continue
 			}
@@ -594,7 +617,12 @@ func meshBoolean(op OpKind, ma, mb *boolMesh) ([]keptFacet, float64, error) {
 	// is a real rim of the result.
 	blockedA := map[[2]int]struct{}{}
 	blockedB := map[[2]int]struct{}{}
-	for _, p := range inPlane {
+	for i, p := range inPlane {
+		if i%256 == 0 {
+			if err := ctx.Err(); err != nil {
+				return nil, 0, err
+			}
+		}
 		if p.c.edgeA >= 0 {
 			key, crossing, err := edgeCrosses(ma, p.i, p.c.edgeA, p.tb)
 			if err != nil {
@@ -653,12 +681,15 @@ func meshBoolean(op OpKind, ma, mb *boolMesh) ([]keptFacet, float64, error) {
 	}
 
 	var kept []keptFacet
-	keep, err := keepSide(ma, mb, cutsA, blockedA, wantA, false)
+	if err := ctx.Err(); err != nil {
+		return nil, 0, err
+	}
+	keep, err := keepSide(ctx, ma, mb, cutsA, blockedA, wantA, false)
 	if err != nil {
 		return nil, 0, err
 	}
 	kept = append(kept, keep...)
-	keep, err = keepSide(mb, ma, cutsB, blockedB, wantB, flipB)
+	keep, err = keepSide(ctx, mb, ma, cutsB, blockedB, wantB, flipB)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -741,7 +772,7 @@ func xtriCorners(m *boolMesh, i int) [3]xpt {
 // facets for the uncut regions (classified per connected component by exact
 // ray parity — the classification is constant on a component that crosses
 // nothing).
-func keepSide(m, other *boolMesh, cuts map[int][]xseg, blocked map[[2]int]struct{}, wantInside, flip bool) ([]keptFacet, error) {
+func keepSide(ctx context.Context, m, other *boolMesh, cuts map[int][]xseg, blocked map[[2]int]struct{}, wantInside, flip bool) ([]keptFacet, error) {
 	var kept []keptFacet
 	emit := func(tri [3]xpt, src int) {
 		if flip {
@@ -753,6 +784,11 @@ func keepSide(m, other *boolMesh, cuts map[int][]xseg, blocked map[[2]int]struct
 	// The cut facets: exact subdivision along the contact chains, then the
 	// exact local side-of-contact classification per region.
 	for i := range m.tris {
+		if i%256 == 0 {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+		}
 		segs, ok := cuts[i]
 		if !ok {
 			continue
@@ -762,7 +798,7 @@ func keepSide(m, other *boolMesh, cuts map[int][]xseg, blocked map[[2]int]struct
 			return nil, err
 		}
 		for _, reg := range regions {
-			inside, err := classifyRegion(reg, other)
+			inside, err := classifyRegion(ctx, reg, other)
 			if err != nil {
 				return nil, err
 			}
@@ -781,10 +817,19 @@ func keepSide(m, other *boolMesh, cuts map[int][]xseg, blocked map[[2]int]struct
 	for i := range comp {
 		comp[i] = -1
 	}
-	adj := facetAdjacency(m.tris)
+	adj, err := facetAdjacencyContext(ctx, m.tris)
+	if err != nil {
+		return nil, err
+	}
 	next := 0
+	componentWork := 0
 	all := allFacets(other)
 	for i := range m.tris {
+		if i%256 == 0 {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+		}
 		if _, cut := cuts[i]; cut || comp[i] != -1 {
 			continue
 		}
@@ -794,6 +839,12 @@ func keepSide(m, other *boolMesh, cuts map[int][]xseg, blocked map[[2]int]struct
 		comp[i] = id
 		var members []int
 		for len(queue) > 0 {
+			componentWork++
+			if componentWork%256 == 0 {
+				if err := ctx.Err(); err != nil {
+					return nil, err
+				}
+			}
 			f := queue[0]
 			queue = queue[1:]
 			members = append(members, f)
@@ -812,7 +863,7 @@ func keepSide(m, other *boolMesh, cuts map[int][]xseg, blocked map[[2]int]struct
 		// operand outright if any facet collapsed.
 		seed := xtriCorners(m, members[0])
 		probe := xCentroid(seed[0], seed[1], seed[2])
-		inside, onBoundary, err := meshParity(probe, other.verts, other.tris, all)
+		inside, onBoundary, err := meshParityContext(ctx, probe, other.verts, other.tris, all)
 		if err != nil {
 			return nil, err
 		}
@@ -835,7 +886,7 @@ func keepSide(m, other *boolMesh, cuts map[int][]xseg, blocked map[[2]int]struct
 // along the shared chain edge, so the side is the answer; an unanchored
 // region (an artifact of the loop-opening split lines) falls back to exact
 // parity.
-func classifyRegion(reg cutRegion, other *boolMesh) (bool, error) {
+func classifyRegion(ctx context.Context, reg cutRegion, other *boolMesh) (bool, error) {
 	if reg.hasAnchor {
 		switch s := orientSignMixed(reg.partner[0], reg.partner[1], reg.partner[2], reg.probe); {
 		case s < 0:
@@ -846,7 +897,7 @@ func classifyRegion(reg cutRegion, other *boolMesh) (bool, error) {
 			return false, fmt.Errorf(`%w: a region probe landed on its contact plane`, ErrBooleanFailed)
 		}
 	}
-	inside, onBoundary, err := meshParity(reg.probe, other.verts, other.tris, allFacets(other))
+	inside, onBoundary, err := meshParityContext(ctx, reg.probe, other.verts, other.tris, allFacets(other))
 	if err != nil {
 		return false, err
 	}
@@ -864,24 +915,34 @@ func allFacets(m *boolMesh) []int {
 	return out
 }
 
-// facetAdjacency maps each facet to its edge neighbors, through the
-// watertight mesh's paired directed edges.
-func facetAdjacency(tris [][3]int) [][]int {
+// facetAdjacencyContext maps each facet to its edge neighbors through the
+// watertight mesh's paired directed edges, with bounded cancellation checks.
+func facetAdjacencyContext(ctx context.Context, tris [][3]int) ([][]int, error) {
 	owner := map[[2]int]int{}
 	for i, tri := range tris {
+		if i%256 == 0 {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+		}
 		for k := range 3 {
 			owner[[2]int{tri[k], tri[(k+1)%3]}] = i
 		}
 	}
 	adj := make([][]int, len(tris))
 	for i, tri := range tris {
+		if i%256 == 0 {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+		}
 		for k := range 3 {
 			if twin, ok := owner[[2]int{tri[(k+1)%3], tri[k]}]; ok && twin != i {
 				adj[i] = append(adj[i], twin)
 			}
 		}
 	}
-	return adj
+	return adj, nil
 }
 
 func xCentroid(a, b, c xpt) xpt {
@@ -928,6 +989,10 @@ type stitchedMesh struct {
 // and rounds to float64. The audit is the §9 guarantee: every directed edge
 // pairs with its reverse, or the boolean fails — never a cracked mesh.
 func stitchFacets(kept []keptFacet) (*stitchedMesh, error) {
+	return stitchFacetsContext(context.Background(), kept)
+}
+
+func stitchFacetsContext(ctx context.Context, kept []keptFacet) (*stitchedMesh, error) {
 	if len(kept) == 0 {
 		return nil, fmt.Errorf(`%w: the operation leaves no boundary at all`, ErrBooleanFailed)
 	}
@@ -944,7 +1009,12 @@ func stitchFacets(kept []keptFacet) (*stitchedMesh, error) {
 	}
 	var tris [][3]int
 	var src []int
-	for _, f := range kept {
+	for i, f := range kept {
+		if i%256 == 0 {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+		}
 		a, b, c := addVert(f.v[0]), addVert(f.v[1]), addVert(f.v[2])
 		if a == b || b == c || c == a {
 			return nil, fmt.Errorf(`%w: a kept facet collapsed`, ErrBooleanFailed)
@@ -957,7 +1027,10 @@ func stitchFacets(kept []keptFacet) (*stitchedMesh, error) {
 		if round > 6 {
 			return nil, fmt.Errorf(`%w: the conforming pass did not converge`, ErrBooleanFailed)
 		}
-		split, err := conformOnce(&xverts, &tris, &src)
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		split, err := conformOnce(ctx, &xverts, &tris, &src)
 		if err != nil {
 			return nil, err
 		}
@@ -998,6 +1071,11 @@ func stitchFacets(kept []keptFacet) (*stitchedMesh, error) {
 	remap := make([]int, len(xverts))
 	worst := new(big.Rat)
 	for i, p := range xverts {
+		if i%256 == 0 {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+		}
 		v := p.vec()
 		fi, ok := floatIdx[v]
 		if !ok {
@@ -1040,7 +1118,7 @@ func stitchFacets(kept []keptFacet) (*stitchedMesh, error) {
 	if len(out.tris) == 0 {
 		return nil, fmt.Errorf(`%w: the whole result collapsed under rounding`, ErrBooleanFailed)
 	}
-	if err := refuseWeldedAwayComponent(tris, dropped); err != nil {
+	if err := refuseWeldedAwayComponent(ctx, tris, dropped); err != nil {
 		return nil, err
 	}
 	// The pre-round surface: every facet the exact stitch produced, dropped
@@ -1080,13 +1158,22 @@ func stitchFacets(kept []keptFacet) (*stitchedMesh, error) {
 // rounding bounds account for it: the swept volume is charged against the
 // pre-round surface (preArea) and the missing facet area against dropArea, both
 // of which count the dropped facets.
-func refuseWeldedAwayComponent(tris [][3]int, dropped []bool) error {
+func refuseWeldedAwayComponent(ctx context.Context, tris [][3]int, dropped []bool) error {
 	comp := make([]int, len(tris))
 	for i := range comp {
 		comp[i] = -1
 	}
-	adj := facetAdjacency(tris)
+	adj, err := facetAdjacencyContext(ctx, tris)
+	if err != nil {
+		return err
+	}
+	work := 0
 	for i := range tris {
+		if i%256 == 0 {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+		}
 		if comp[i] != -1 {
 			continue
 		}
@@ -1094,6 +1181,12 @@ func refuseWeldedAwayComponent(tris [][3]int, dropped []bool) error {
 		comp[i] = i
 		alive := false
 		for len(queue) > 0 {
+			work++
+			if work%256 == 0 {
+				if err := ctx.Err(); err != nil {
+					return err
+				}
+			}
 			f := queue[0]
 			queue = queue[1:]
 			alive = alive || !dropped[f]
@@ -1115,13 +1208,18 @@ func refuseWeldedAwayComponent(tris [][3]int, dropped []bool) error {
 // conformOnce inserts, into every facet edge, the mesh vertices that lie
 // exactly in that edge's interior, re-triangulating the facet so the
 // subdivision conforms. Returns whether anything split.
-func conformOnce(xverts *[]xpt, tris *[][3]int, src *[]int) (bool, error) {
+func conformOnce(ctx context.Context, xverts *[]xpt, tris *[][3]int, src *[]int) (bool, error) {
 	verts := *xverts
 	// A coarse uniform grid over float approximations prunes the exact
 	// on-edge tests; the slack absorbs the approximation, so no incidence is
 	// missed.
 	lo, hi := r3.Vec{}, r3.Vec{}
 	for i, p := range verts {
+		if i%256 == 0 {
+			if err := ctx.Err(); err != nil {
+				return false, err
+			}
+		}
 		v := p.vec()
 		if i == 0 {
 			lo, hi = v, v
@@ -1142,6 +1240,11 @@ func conformOnce(xverts *[]xpt, tris *[][3]int, src *[]int) (bool, error) {
 	grid := map[[3]int][]int{}
 	approx := make([]r3.Vec, len(verts))
 	for i, p := range verts {
+		if i%256 == 0 {
+			if err := ctx.Err(); err != nil {
+				return false, err
+			}
+		}
 		approx[i] = p.vec()
 		c := cellOf(approx[i].X, approx[i].Y, approx[i].Z)
 		grid[c] = append(grid[c], i)
@@ -1151,6 +1254,11 @@ func conformOnce(xverts *[]xpt, tris *[][3]int, src *[]int) (bool, error) {
 	var outSrc []int
 	splitAny := false
 	for ti, tri := range *tris {
+		if ti%256 == 0 {
+			if err := ctx.Err(); err != nil {
+				return false, err
+			}
+		}
 		inserted := [3][]int{}
 		for k := range 3 {
 			a, b := tri[k], tri[(k+1)%3]

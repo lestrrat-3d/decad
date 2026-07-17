@@ -1,6 +1,7 @@
 package decad
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"math/big"
@@ -311,12 +312,17 @@ func ratCoordOf(p xpt, axis int) *big.Rat {
 // axis-aligned ray. A ray the point's projection meets at a facet's projected
 // boundary is ambiguous and the next axis is tried; a p exactly ON a facet is
 // onBoundary. All six axes ambiguous is a genuine failure — never a guess.
-func meshParity(p xpt, verts []r3.Vec, tris [][3]int, subset []int) (bool, bool, error) {
+func meshParityContext(ctx context.Context, p xpt, verts []r3.Vec, tris [][3]int, subset []int) (bool, bool, error) {
 	for _, ray := range axisRays {
 		crossings := 0
 		ambiguous := false
 		onBoundary := false
-		for _, ti := range subset {
+		for i, ti := range subset {
+			if i%256 == 0 {
+				if err := ctx.Err(); err != nil {
+					return false, false, err
+				}
+			}
 			tri := tris[ti]
 			a, b, c := verts[tri[0]], verts[tri[1]], verts[tri[2]]
 			pa := xp2{ratCoordOf(p, ray.u), ratCoordOf(p, ray.v)}
