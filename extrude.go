@@ -44,9 +44,11 @@ func WithTaper(a units.Value) ExtrudeOption {
 // linear extent e, and registers the new body. p MUST be a profile of s
 // (ErrForeignProfile) and a current one (ErrStaleProfile); an invalid
 // profile is ErrInvalidProfile, and a boundary decad cannot record exactly
-// is ErrUnrecordableProfile (core §7). The step records the profile, the
-// plane, the extent and the options; evaluation runs from that record, and a
-// failed evaluation leaves the recipe and the document untouched.
+// is ErrUnrecordableProfile (core §7). This evaluator builds a straight prism
+// from a profile of line, circle and arc segments; a free-form segment (a
+// spline or ellipse, say) is [ErrUnsupported]. The step records the profile,
+// the plane, the extent and the options; evaluation runs from that record, and
+// a failed evaluation leaves the recipe and the document untouched.
 func (d *Document) Extrude(s *sketch.Sketch, p *sketch.Profile, e Extent, opts ...ExtrudeOption) (*Body, error) {
 	if d == nil {
 		return nil, fmt.Errorf(`%w: a nil document owns no model`, ErrDegenerate)

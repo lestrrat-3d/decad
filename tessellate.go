@@ -70,10 +70,13 @@ func (m *Mesh) Bound() units.Value { return units.Millimeters(m.bound) }
 // shared edge — so the mesh is watertight and consistently oriented by
 // construction, and Bound carries the largest sagitta actually taken.
 //
-// Prism, cup and boolean-built bodies tessellate. A revolve body is
-// [ErrUnsupported] here — Revolve builds and verifies, but its analytic
-// surfaces have no tessellator yet, so it cannot be meshed or exported. A body
-// this evaluator did not build at all is also [ErrUnsupported].
+// Prism, cup and boolean-built bodies tessellate. A boolean-built body only
+// RESTATES its held mesh, so tol must be at least the body's own Bound: a
+// finer tol is [ErrUnsupported], because the analytic identity is gone and no
+// finer mesh can be proven. A revolve body is [ErrUnsupported] here — Revolve
+// builds and verifies, but its analytic surfaces have no tessellator yet, so
+// it cannot be meshed or exported. A body this evaluator did not build at all
+// is also [ErrUnsupported].
 func (b *Body) Tessellate(tol units.Value) (*Mesh, error) {
 	return tessellateContext(context.Background(), b, tol)
 }

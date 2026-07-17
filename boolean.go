@@ -40,6 +40,8 @@ const boolChordFactor = 2e-5
 // documents are ErrForeignBody; retired operands ErrRetiredBody; a tangent
 // contact the exact predicates cannot classify (face-on-face or grazing
 // contact) is ErrDegenerate; a result with no volume is ErrBooleanFailed.
+// Both operands are tessellated first, so a revolve operand — which has no
+// tessellator — is ErrUnsupported.
 func Union(a, b *Body) (*Body, error) {
 	return performBoolean(OpUnion, a, b)
 }

@@ -70,11 +70,15 @@
 // subset of it and refuses the rest explicitly (never a wrong-but-confident
 // result). The current map, and the sentinel a refused combination returns:
 //
-//	Extrude       straight prism (any solved region)         builds
+//	Extrude       line/circle/arc profile segments            builds
+//	  free-form profile segment (spline, ellipse)             ErrUnsupported
 //	  WithTaper   nonzero taper angle                         ErrUnsupported
 //	Revolve       cylinder / cone / sphere / torus / annulus  builds
-//	Union/Cut/Intersect  analytic bodies, exact contacts      builds
+//	Union/Cut/Intersect  prism/faceted operands, crossings    builds
+//	  revolve operand (tessellated, no mesher)                ErrUnsupported
 //	  near-tangency without a proven contact                  ErrUnsupported
+//	  exact tangent or face-on-face contact                   ErrDegenerate
+//	  empty result (disjoint intersect, emptied cut)          ErrBooleanFailed
 //	Fillet/Chamfer  straight prism, lateral edges             builds
 //	  cap edge, or non-prism receiver                         ErrUnsupported
 //	Shell         straight prism (tube or cup)                builds
@@ -84,6 +88,7 @@
 //	  a question the evaluator cannot decide                  Status Suspect
 //	Tessellate / STL / OBJ  prism, cup, boolean body          builds
 //	  revolve payload                                         ErrUnsupported
+//	  boolean body at a tolerance finer than its bound        ErrUnsupported
 //
 // Options: New, Revolve, Fillet and Chamfer expose option groups that carry
 // nothing today (they exist so options can be added without a signature
