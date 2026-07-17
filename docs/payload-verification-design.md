@@ -447,6 +447,10 @@ parameter cell, widened by inherited direction bound. Child facets may inherit
 parent range. Placement rotates certificate exactly, then adds direction-rounding
 bound.
 
+The `constant` bit is plane-only: no curved variant mints it, and §5.2 has boolean
+children inherit their parent's source cell rather than mint a new source identity,
+so this holds through second-generation booleans. §8.2's carve-out rests on it.
+
 Length `Delta` alone NEVER supplies normal tilt. A tiny corrugation can fit inside
 any positional bound while reversing its normal.
 
@@ -467,6 +471,29 @@ Aggregate by public `*Face`:
 
 Any listed face proves `Violating`, even if another face is undecided. Empty list
 is proven only when every face settles clear. Otherwise empty + `Suspect`.
+
+The carve-out clears a patch, while verification §6's antiparallel exception is
+face-wide, so it is sound only under the invariants that make the two coincide:
+
+- `constant && value == -1` forces `n == -p` over the whole patch, so the patch is
+  planar and its certificate came from a plane source (§8.1's plane-only `constant`
+  bit);
+- every patch of one public faceted `*Face` descends from a single analytic source
+  face. `buildFacetedBody` keys a face on one connected patch of one source group,
+  and its flood fill refuses to cross source groups.
+
+A face holding any `constant && value == -1` patch is therefore plane-sourced, and
+every patch of it carries that same exact value, so "all patches clear" over such a
+face is exactly the face-wide antiparallel case the exception is written for. A face
+mixing an exact `-1` patch with a `lo >= 0` patch does not exist. Normal continuity
+bounds the same case independently: a face carrying both an exactly antiparallel
+point and an `n·p >= 0` point passes through `n·p` strictly inside `(-1, 0)`, and
+whatever patch covers that transition is neither `constant` nor `lo >= 0`, so the
+face reads undecided rather than settled clear.
+
+Should either invariant loosen — a curved source minting a `constant` certificate, or
+one public face spanning several analytic sources — the carve-out MUST move from the
+patch to the face and clear only a face proven exactly antiparallel at every point.
 
 ## 9. Faceted minimum radius
 
