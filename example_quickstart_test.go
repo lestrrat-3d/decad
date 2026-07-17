@@ -38,7 +38,7 @@ func Example_decad_quickstart() {
 	body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	if err != nil {
 		if errors.Is(err, decad.ErrUnsupported) {
-			fmt.Println("this evaluator cannot build that combination yet")
+			fmt.Println("this evaluator does not build that combination")
 		}
 		fmt.Printf("failed to extrude: %s\n", err)
 		return

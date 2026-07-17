@@ -24,10 +24,15 @@
 // live document on [Report.Trustworthy]:
 //
 //	w := sketch.NewWorld()
-//	s, _ := w.CreateSketch(w.XY())
+//	s, err := w.CreateSketch(w.XY())
+//	if err != nil {
+//		return err
+//	}
 //	rect := s.CreateRectangle(0, 0, 100, 60)
 //	s.Fix(rect.A)
-//	s.Solve(context.Background())
+//	if _, err := s.Solve(context.Background()); err != nil {
+//		return err
+//	}
 //
 //	doc := decad.New()
 //	body, err := doc.Extrude(s, s.Profiles()[0],
@@ -35,10 +40,15 @@
 //	if err != nil {
 //		// Every failure wraps a sentinel from errors.go — branch with
 //		// errors.Is(err, decad.ErrUnsupported), decad.ErrCardinality, etc.
-//		return
+//		return err
 //	}
 //
-//	report, _ := doc.Verify(context.Background())
+//	// Verify can fail (a cancelled context) and return a NIL report, so gate
+//	// only after checking err — report.Trustworthy() would panic otherwise.
+//	report, err := doc.Verify(context.Background())
+//	if err != nil {
+//		return err
+//	}
 //	if !report.Trustworthy() {
 //		// Something is not proven right: report.Status says how severe,
 //		// and each report.Bodies entry carries that body's verdict.
@@ -76,7 +86,7 @@
 //	Revolve       cylinder / cone / sphere / torus / annulus  builds
 //	Union/Cut/Intersect  prism/faceted operands, crossings    builds
 //	  faceted operand coarser than the pair tolerance         ErrUnsupported
-//	  revolve operand (tessellated, no mesher)                ErrUnsupported
+//	  revolve operand (no tessellator; booleans mesh)         ErrUnsupported
 //	  curved-surface tangent, facets never meet               ErrUnsupported
 //	  exact coplanar / face-on-face / point contact           ErrDegenerate
 //	  empty result (disjoint intersect, emptied cut)          ErrBooleanFailed

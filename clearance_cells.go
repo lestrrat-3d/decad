@@ -190,17 +190,18 @@ func (k *pairKernel) ffCell(f, g *cFace, sink *cellSink) {
 	case f.kind == ckPlane && g.kind == ckTorus:
 		k.planeTorus(f, g, sink)
 	case f.kind == ckCone || g.kind == ckCone:
-		// The genuinely iterative cells (§4): cone × sphere stays closed
-		// form, everything else cone-involved takes the coarse
-		// branch-and-bound path.
+		// Cone × sphere stays closed form (§4); everything else
+		// cone-involved takes the coarse enclosure — the face-box distance
+		// below, the closest witness pair above.
 		if f.kind == ckSphere || g.kind == ckSphere {
 			k.coneSphere(f, g, sink)
 			return
 		}
 		sink.coarse(f.box, g.box, f.wit, g.wit)
 	case (f.kind == ckTorus && f.spindle) || (g.kind == ckTorus && g.spindle):
-		// A Minor ≥ Major torus leaves the polynomial path (§4): it takes
-		// the coarse branch-and-bound path, so the pair is coarse here.
+		// A Minor ≥ Major torus leaves the polynomial path (§4): the pair
+		// takes the coarse enclosure — the face-box distance below, the
+		// closest witness pair above.
 		sink.coarse(f.box, g.box, f.wit, g.wit)
 	default:
 		k.offsetPair(f, g, sink)
