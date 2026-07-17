@@ -81,5 +81,5 @@ func Example_decad_verify() {
 	// apart: Sound, trustworthy: true
 	// body: Sound, solid: true, watertight: true, manifold: true
 	// volume: 60000 mm^3 (Exact)
-	// overlapping: Suspect, trustworthy: false
+	// overlapping: Interfering, trustworthy: false
 }

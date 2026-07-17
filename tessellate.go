@@ -1,6 +1,7 @@
 package decad
 
 import (
+	"context"
 	"fmt"
 	"math"
 
@@ -70,6 +71,15 @@ func (m *Mesh) Bound() units.Value { return units.Millimeters(m.bound) }
 // construction, and Bound carries the largest sagitta actually taken. A body
 // this evaluator did not build is [ErrUnsupported].
 func (b *Body) Tessellate(tol units.Value) (*Mesh, error) {
+	return tessellateContext(context.Background(), b, tol)
+}
+
+// tessellateContext is the read-only evaluator's cancellable tessellation
+// entry. It builds only an unowned Mesh and never touches document state.
+func tessellateContext(ctx context.Context, b *Body, tol units.Value) (*Mesh, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if b == nil || b.doc == nil {
 		return nil, fmt.Errorf(`%w: the body belongs to no document`, ErrDegenerate)
 	}
@@ -84,10 +94,10 @@ func (b *Body) Tessellate(tol units.Value) (*Mesh, error) {
 		return nil, fmt.Errorf(`%w: this evaluator cannot tessellate a body it did not build`, ErrUnsupported)
 	}
 	if fp, ok := b.payload.(facetedPayload); ok {
-		return tessellateFaceted(b, fp, chord)
+		return tessellateFaceted(ctx, b, fp, chord)
 	}
 	if cp, ok := b.payload.(cupPayload); ok {
-		return tessellateCup(b, cp, chord)
+		return tessellateCup(ctx, b, cp, chord)
 	}
 	pp, ok := b.payload.(prismPayload)
 	if !ok {
@@ -132,7 +142,10 @@ func (b *Body) Tessellate(tol units.Value) (*Mesh, error) {
 	var loopSag []float64
 	loops := append([]LoopRecord{pp.profile.Outer}, pp.profile.Holes...)
 	for li, loop := range loops {
-		samples, faceOf, maxSag, slack, err := chordLoop(loop, chord, pp.z1-pp.z0, func(w sideWalk) (*Face, error) {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		samples, faceOf, maxSag, slack, err := chordLoop(ctx, loop, chord, pp.z1-pp.z0, func(w sideWalk) (*Face, error) {
 			return faceOfRole(fmt.Sprintf("side(%d,%d)", li, w.segs[0]))
 		})
 		if err != nil {
@@ -164,7 +177,12 @@ func (b *Body) Tessellate(tol units.Value) (*Mesh, error) {
 	// The mesh vertices: bottom and top of every boundary sample, placed
 	// through the payload — exactly on the analytic boundary.
 	mesh.vertices = make([]r3.Vec, 0, 2*len(pts2))
-	for _, p := range pts2 {
+	for i, p := range pts2 {
+		if i%256 == 0 {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+		}
 		mesh.vertices = append(mesh.vertices, pp.point(p.U, p.V, pp.z0), pp.point(p.U, p.V, pp.z1))
 	}
 
@@ -173,14 +191,14 @@ func (b *Body) Tessellate(tol units.Value) (*Mesh, error) {
 	// represents that topology: the chorded loops must clear each other by
 	// more than their own sagitta bounds, or the tessellation refuses
 	// (an error, never a pinched or cracked mesh).
-	if err := requireLoopClearance(pts2, loopIdx, loopSag); err != nil {
+	if err := requireLoopClearance(ctx, pts2, loopIdx, loopSag); err != nil {
 		return nil, err
 	}
 
 	// Caps: both share one 2D triangulation of the chorded region — the same
 	// non-convex, hole-carrying polygon — mapped to the top vertices as-is
 	// (outward +N) and to the bottom vertices reversed (outward −N).
-	capTris, err := triangulate2D(pts2, loopIdx)
+	capTris, err := triangulate2DContext(ctx, pts2, loopIdx)
 	if err != nil {
 		return nil, err
 	}
@@ -207,12 +225,19 @@ func (b *Body) Tessellate(tol units.Value) (*Mesh, error) {
 // area slack over the given sweep height. The same chording feeds every face
 // that meets the loop — walls and caps alike — so the mesh is watertight by
 // construction.
-func chordLoop(loop LoopRecord, chord, height float64, wallFace func(w sideWalk) (*Face, error)) ([]Point2, []*Face, float64, float64, error) {
+func chordLoop(ctx context.Context, loop LoopRecord, chord, height float64, wallFace func(w sideWalk) (*Face, error)) ([]Point2, []*Face, float64, float64, error) {
 	if len(loop.Segments) == 0 {
 		return nil, nil, 0, 0, fmt.Errorf(`%w: a recorded loop holds no segments`, ErrDegenerate)
 	}
+	// One counter spans the segment walk, the walk loop and the sample emission
+	// nested under it: a single walk emits many samples, and it is the SAMPLES
+	// that are the candidate operations §7.2 counts.
+	budget := newWorkBudget(ctx)
 	raw := make([]sideWalk, len(loop.Segments))
 	for i, seg := range loop.Segments {
+		if err := budget.step(); err != nil {
+			return nil, nil, 0, 0, err
+		}
 		w, err := walkOf(seg)
 		if err != nil {
 			return nil, nil, 0, 0, err
@@ -225,6 +250,9 @@ func chordLoop(loop LoopRecord, chord, height float64, wallFace func(w sideWalk)
 	var faceOf []*Face
 	var maxSag, areaSlack float64
 	for _, w := range walks {
+		if err := budget.step(); err != nil {
+			return nil, nil, 0, 0, err
+		}
 		face, err := wallFace(w)
 		if err != nil {
 			return nil, nil, 0, 0, err
@@ -242,6 +270,9 @@ func chordLoop(loop LoopRecord, chord, height float64, wallFace func(w sideWalk)
 		areaSlack += walkAreaSlack(w.segmentWalk, n, height)
 		dth := (w.th1 - w.th0) / float64(n)
 		for k := range n {
+			if err := budget.step(); err != nil {
+				return nil, nil, 0, 0, err
+			}
 			p := Point2{U: w.startU, V: w.startV}
 			if k > 0 {
 				th := w.th0 + float64(k)*dth
@@ -263,7 +294,7 @@ func chordLoop(loop LoopRecord, chord, height float64, wallFace func(w sideWalk)
 // whole body; a hole of C is a solid POST rising from the floor. The planar
 // faces (the kept cap over O, the pocket floor over C, and one rim band per
 // loop) triangulate through the shipped cap triangulator.
-func tessellateCup(b *Body, cp cupPayload, chord float64) (*Mesh, error) {
+func tessellateCup(ctx context.Context, b *Body, cp cupPayload, chord float64) (*Mesh, error) {
 	byRole := map[string]*Face{}
 	for _, f := range b.Faces() {
 		for _, o := range f.Origins() {
@@ -313,7 +344,7 @@ func tessellateCup(b *Body, cp cupPayload, chord float64) (*Mesh, error) {
 		sag     float64
 	}
 	chordRing := func(loop LoopRecord, h, lo, hi float64, role string) (ring, error) {
-		samples, faceOf, sag, slack, err := chordLoop(loop, chord, h, func(w sideWalk) (*Face, error) {
+		samples, faceOf, sag, slack, err := chordLoop(ctx, loop, chord, h, func(w sideWalk) (*Face, error) {
 			return faceOfRole(fmt.Sprintf(role, w.segs[0]))
 		})
 		if err != nil {
@@ -335,6 +366,9 @@ func tessellateCup(b *Body, cp cupPayload, chord float64) (*Mesh, error) {
 	// holes clockwise), role side(i,j).
 	oRings := make([]ring, len(oLoops))
 	for i, loop := range oLoops {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		oRings[i], err = chordRing(loop, oHi-oLo, oLo, oHi, fmt.Sprintf("side(%d,%%d)", i))
 		if err != nil {
 			return nil, err
@@ -346,6 +380,9 @@ func tessellateCup(b *Body, cp cupPayload, chord float64) (*Mesh, error) {
 	// clockwise (a post), role shellSide(i,j).
 	cRings := make([]ring, len(cLoops))
 	for i, loop := range cLoops {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		rev, err := reverseLoopRecord(loop)
 		if err != nil {
 			return nil, err
@@ -398,7 +435,7 @@ func tessellateCup(b *Body, cp cupPayload, chord float64) (*Mesh, error) {
 	for i := range cRings {
 		addClr(cRings[i])
 	}
-	if err := requireLoopClearance(clrPts, clrIdx, clrSag); err != nil {
+	if err := requireLoopClearance(ctx, clrPts, clrIdx, clrSag); err != nil {
 		return nil, err
 	}
 
@@ -452,7 +489,7 @@ func tessellateCup(b *Body, cp cupPayload, chord float64) (*Mesh, error) {
 			}
 			loops = append(loops, idx)
 		}
-		tris, err := triangulate2D(pts, loops)
+		tris, err := triangulate2DContext(ctx, pts, loops)
 		return tris, vtx, err
 	}
 
@@ -573,15 +610,28 @@ func walkAreaSlack(w segmentWalk, n int, h float64) float64 {
 // proven bound. It cannot refine them — the analytic identity is gone — so a
 // tolerance finer than the held bound is ErrUnsupported, never a mesh whose
 // bound overstates its trust.
-func tessellateFaceted(b *Body, fp facetedPayload, chord float64) (*Mesh, error) {
+func tessellateFaceted(ctx context.Context, b *Body, fp facetedPayload, chord float64) (*Mesh, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if chord < fp.meshBound {
 		return nil, fmt.Errorf(`%w: a faceted body cannot be re-tessellated finer than its own bound`, ErrUnsupported)
 	}
 	faces := b.Faces()
 	src := make([]*Face, len(fp.tris))
 	for i, fi := range fp.faceOf {
+		if i%256 == 0 {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+		}
 		if fi < 0 || fi >= len(faces) {
-			return nil, fmt.Errorf(`%w: a facet maps to no face`, ErrUnsupported)
+			// An inconsistent source mapping is a broken evaluator, not a
+			// staged capability: §7.1 names it an invariant failure, which
+			// Verify must return rather than hide as Suspect. ErrUnsupported
+			// here would be swallowed into an undecided pair by
+			// evaluateBoolean's staging branch.
+			return nil, fmt.Errorf(`%w: a facet maps to no face`, ErrBooleanFailed)
 		}
 		src[i] = faces[fi]
 	}
@@ -663,6 +713,17 @@ var errTooManyChords = fmt.Errorf(`%w: the chord tolerance asks for more than %d
 // the boundary samples: 2¹⁴ chords keeps the worst cap under a second while
 // still admitting sub-micrometre tolerances on any real part (a 10 mm-radius
 // circle at the cap carries a sagitta under 2e-7 mm).
+//
+// The cap is per-curve, and there is deliberately no total across a profile's
+// curves. It bounds what ONE curve can ask of the quadratic cap triangulator,
+// which is why errTooManyChords reports "more than %d chords on one curve". A
+// profile with many loops is proportionally more work because the caller
+// modelled proportionally more geometry, and docs/interference-design.md §7
+// answers large work with cancellation rather than a work cap: the read-only
+// path polls its context at least once per workPollInterval candidate
+// operations, so chordLoop, bridgeHole and earClip all abandon a large profile
+// promptly. A total cap would instead refuse a profile this evaluator can
+// build correctly.
 const maxChordsPerWalk = 1 << 14
 
 // requireLoopClearance rejects a profile whose chorded loops come within
@@ -671,7 +732,7 @@ const maxChordsPerWalk = 1 << 14
 // bounds PROVES the true loops are disjoint; anything closer — a hole
 // tangent to the outline, or two holes touching — is a pinch this mesh
 // cannot prove it represents, and is refused.
-func requireLoopClearance(pts []Point2, loopIdx [][]int, loopSag []float64) error {
+func requireLoopClearance(ctx context.Context, pts []Point2, loopIdx [][]int, loopSag []float64) error {
 	// Round-off floor, in two translation-honest parts: 1e-9 of the
 	// geometry's own span (coordinates carry ~1e-9-relative noise at their
 	// own scale, and a span is translation-invariant), plus a few ulps of
@@ -681,7 +742,12 @@ func requireLoopClearance(pts []Point2, loopIdx [][]int, loopSag []float64) erro
 	minU, maxU := math.Inf(1), math.Inf(-1)
 	minV, maxV := math.Inf(1), math.Inf(-1)
 	maxAbs := 0.0
-	for _, p := range pts {
+	for i, p := range pts {
+		if i%256 == 0 {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+		}
 		minU, maxU = math.Min(minU, p.U), math.Max(maxU, p.U)
 		minV, maxV = math.Min(minV, p.V), math.Max(maxV, p.V)
 		maxAbs = math.Max(maxAbs, math.Max(math.Abs(p.U), math.Abs(p.V)))
@@ -691,8 +757,12 @@ func requireLoopClearance(pts []Point2, loopIdx [][]int, loopSag []float64) erro
 	for i := range loopIdx {
 		for j := i + 1; j < len(loopIdx); j++ {
 			gate := loopSag[i] + loopSag[j] + floor
-			if loopPolylineDistance(pts, loopIdx[i], loopIdx[j]) <= gate {
-				return fmt.Errorf(`%w: two cap boundary loops come within the chord tolerance of each other`, ErrDegenerate)
+			d, err := loopPolylineDistance(ctx, pts, loopIdx[i], loopIdx[j])
+			if err != nil {
+				return err
+			}
+			if d <= gate {
+				return &tessellationExpectedError{err: fmt.Errorf(`%w: two cap boundary loops come within the chord tolerance of each other`, ErrDegenerate)}
 			}
 		}
 	}
@@ -701,17 +771,32 @@ func requireLoopClearance(pts []Point2, loopIdx [][]int, loopSag []float64) erro
 
 // loopPolylineDistance is the minimum distance between two closed sample
 // polylines.
-func loopPolylineDistance(pts []Point2, a, b []int) float64 {
+func loopPolylineDistance(ctx context.Context, pts []Point2, a, b []int) (float64, error) {
 	best := math.Inf(1)
+	work := 0
 	for i := range a {
 		a0, a1 := pts[a[i]], pts[a[(i+1)%len(a)]]
 		for j := range b {
+			work++
+			if work%256 == 0 {
+				if err := ctx.Err(); err != nil {
+					return 0, err
+				}
+			}
 			b0, b1 := pts[b[j]], pts[b[(j+1)%len(b)]]
 			best = math.Min(best, segSegDistance(a0, a1, b0, b1))
 		}
 	}
-	return best
+	return best, nil
 }
+
+// tessellationExpectedError marks a valid operand whose requested chording
+// cannot prove its topology. Public Tessellate still exposes ErrDegenerate
+// through Unwrap; read-only interference treats it as an undecided pair.
+type tessellationExpectedError struct{ err error }
+
+func (e *tessellationExpectedError) Error() string { return e.err.Error() }
+func (e *tessellationExpectedError) Unwrap() error { return e.err }
 
 // segSegDistance is the minimum distance between two 2D segments.
 func segSegDistance(a0, a1, b0, b1 Point2) float64 {

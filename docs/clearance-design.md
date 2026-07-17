@@ -13,7 +13,9 @@ and how its `Gap` is judged (references "verification §N"), and
 box-disjointness proofs ("evaluator §N") — this is the increment-3 design its
 §11 row 3 names. `docs/payload-verification-design.md` owns the cup/faceted
 boundary adapters and the proof-bound expansion around this analytic kernel.
-Nothing here changes those contracts.
+`docs/interference-design.md` owns how a proven overlap is turned into a
+non-mutating, bounded `Interference` row. Nothing here changes those
+contracts.
 
 ## 1. The proof obligation
 
@@ -82,9 +84,15 @@ only when the isolation certifies it. A cast is
 admissible only when every crossing is certified transversal and interior to
 its face; a cast that grazes an edge, a vertex or a tangency retries the next
 direction on a fixed ladder — deterministic, never random, so a replay
-resolves identically (evaluator §8). Any witness strictly inside is a proven
-nesting — proven overlap, not disjoint (§7 for what the report can then say);
-all witnesses mutually outside, with `g > 0`, is the disjointness proof.
+resolves identically (evaluator §8). Interference PR 1 MUST return any witness
+strictly inside as proven nesting — `pairOverlapping`, never the same state as
+a failed cast; all
+witnesses mutually outside, with `g > 0`, is the disjointness proof. Preserve
+inside / outside / undecided for the shipped single-lump analytic payloads, per
+shell. `docs/interference-design.md` §4 owns which combination of these
+per-shell classifications certifies strict full containment; a single shell's
+reading never settles it. Multi-lump faceted bodies bypass this analytic model
+and use read-only intersection.
 
 **Payload adapters preserve this obligation.** A cup expands to its exact outer
 skin, reversed cavity skin, kept cap, pocket floor, and rim bands, so the same
@@ -387,15 +395,16 @@ the caller is owed unasked; no rung needs a gap the caller never asked for.
   box-proven pair (shipped, evaluator §10) is already partition-decided, but
   its row still needs the kernel: box separation proves disjointness, not the
   gap — the box distance is a lower bound, not a minimum.
-- **An undecided pair joins neither list and reads `Suspect`** (verification
-  §6; the shipped `verify.go` semantics). Undecided covers: `lo` that cannot
-  clear zero with no certified contact; a budget-exhausted refinement whose
-  `lo ≤ 0`; and — deliberately — a pair proven NOT disjoint, by crossing
-  boundaries, an aligned-normal contact, or a nesting witness. A proven
-  overlap is not a `Clearance`'s to report, and an `Interference` row carries
-  an overlap volume this evaluator cannot yet bound (evaluator §10), so the
-  proven-overlapping pair follows the parent's own staging and reads
-  `Suspect` until increment 4 — with one candidate exception in §9.
+- **Interference PR 1 makes overlap and uncertainty distinct.** `lo` that
+  cannot clear zero with no certified contact, a budget-exhausted refinement
+  whose `lo ≤ 0`, and an
+  uncertified cast are `pairUndecided`. An admitted boundary crossing, an
+  aligned-normal contact whose material sides prove shared interior, or a
+  nesting witness is `pairOverlapping`. Neither emits a `Clearance` row. The
+  overlap relation proceeds to the containment-volume or read-only intersection
+  path of `docs/interference-design.md`; if neither bounds the complete overlap
+  volume, the pair makes the report `Suspect` without losing the relation the
+  analytic kernel already proved.
 - **`WithClearances` asked with no pairs answers the empty list** — non-nil,
   the shipped `[]Clearance{}` — a document of zero or one proven solid has no
   pairs, and the empty list is that answer in the shape verification §1 gives
@@ -446,12 +455,6 @@ kernel does not tessellate a cup or discard a faceted displacement bound.
 
 ## 9. Open questions
 
-- **The nested pair's `Interference` row.** A nesting witness (§2) proves
-  overlap with an overlap volume that is the inner body's own `Exact` volume
-  — no boolean needed. Evaluator §10's row-needs-a-volume rule was written
-  for the crossing case; emitting the nested row in increment 3 would extend
-  it, not contradict it. Land early, or hold the whole `Interference` surface
-  for increment 4?
 - **Contact breadth.** Osculation (equal-curvature touching), vertex and edge
   point contacts, and contact sets with mixed tangential/transversal pieces
   are all undecided by §6's set. Which of them real models produce often

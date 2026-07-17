@@ -60,11 +60,9 @@ func (s Status) String() string {
 	}
 }
 
-// Interference is a proven pairwise overlap, carrying the overlap volume
-// (verification §1). A row exists only for a pair PROVEN to overlap, so
-// Volume is always a real overlap's volume — this evaluator can prove no
-// overlap yet (the boolean lands in increment 4), so it emits no rows; an
-// unprovable pair reads Suspect instead.
+// Interference is a proven pairwise overlap, carrying its bounded overlap
+// volume (verification §1, interference design §6). Verification computes it
+// without consuming either body or changing the document.
 type Interference struct {
 	A, B   *Body
 	Volume Measurement
@@ -340,9 +338,8 @@ func (d *Document) Verify(ctx context.Context, opts ...VerifyOption) (*Report, e
 
 	report := &Report{}
 	// Interferences is always computed — the Interfering rung reads it
-	// (verification §1) — and for this evaluator the computation proves no
-	// overlaps, so the answer is the empty list; what it cannot prove
-	// reads Suspect through the pair partition below.
+	// (verification §1). The read-only proof never consumes an operand or
+	// exposes a transient intersection through the document.
 	report.Interferences = []Interference{}
 	if cfg.clearances {
 		report.Clearances = []Clearance{}
@@ -365,15 +362,12 @@ func (d *Document) Verify(ctx context.Context, opts ...VerifyOption) (*Report, e
 		}
 	}
 
-	// The pair partition over proven solids (verification §6, clearance
-	// design §7): a box-proven pair is already partition-decided (box
-	// separation proves body separation and excludes nesting — evaluator
-	// §10), but its row still needs the kernel, so the kernel runs for it
-	// only under WithClearances; every other pair gets the always-on
-	// disjointness proof — boundary clearance plus nesting exclusion, or the
-	// coplanar contact certificate. An undecided pair joins neither list and
-	// reads Suspect; an asked gap the kernel cannot prove reads Suspect the
-	// same way — never a fabricated row.
+	// The stable pair partition over proven solids (interference design §2):
+	// box separation first, then the analytic relation, strict containment or
+	// equality, and finally read-only intersection measurement. Only a proven
+	// positive bounded volume emits an Interference row. Expected empty,
+	// contact, staging, or coarse outcomes stay Suspect; invariant failures
+	// return from Verify.
 	for i := range solids {
 		for j := i + 1; j < len(solids); j++ {
 			if err := ctx.Err(); err != nil {
@@ -383,29 +377,55 @@ func (d *Document) Verify(ctx context.Context, opts ...VerifyOption) (*Report, e
 			if boxProven && !cfg.clearances {
 				continue
 			}
-			res := clearancePair(solids[i].Body, solids[j].Body, boxProven)
-			if res.verdict == pairUndecided {
-				if !boxProven || cfg.clearances {
+			a, b := solids[i].Body, solids[j].Body
+			res, err := clearancePair(ctx, a, b, boxProven)
+			if err != nil {
+				return nil, err
+			}
+
+			// Box separation already proves the partition. The analytic kernel
+			// runs only to supply an asked gap; failure to measure that gap is
+			// Suspect but never sends a proven-disjoint pair to intersection.
+			if boxProven {
+				if res.verdict == pairDisjoint || res.verdict == pairTouching {
+					gap := pairGapMeasurement(res)
+					report.Clearances = append(report.Clearances, Clearance{A: a, B: b, Gap: gap})
+					pairGate := pairToleranceInputs{diameter: res.diam}
+					if !measurementWithinTolerance(gap, cfg.rel, pairGate.lengthReference) {
+						undecided = true
+					}
+				} else {
 					undecided = true
 				}
 				continue
 			}
-			if !cfg.clearances {
+
+			if res.verdict == pairDisjoint || res.verdict == pairTouching {
+				if cfg.clearances {
+					gap := pairGapMeasurement(res)
+					report.Clearances = append(report.Clearances, Clearance{A: a, B: b, Gap: gap})
+					pairGate := pairToleranceInputs{diameter: res.diam}
+					if !measurementWithinTolerance(gap, cfg.rel, pairGate.lengthReference) {
+						undecided = true
+					}
+				}
 				continue
 			}
-			gap := Measurement{
-				Value:     units.Millimeters((res.lo + res.hi) / 2),
-				Exactness: Exact,
-				Bound:     units.Millimeters((res.hi - res.lo) / 2),
+
+			volume, measured, err := measuredInterference(ctx, a, b, res)
+			if err != nil {
+				return nil, err
 			}
-			if !res.exact {
-				gap.Exactness = Approximate
+			if !measured {
+				undecided = true
+				continue
 			}
-			report.Clearances = append(report.Clearances, Clearance{
-				A: solids[i].Body, B: solids[j].Body, Gap: gap,
-			})
-			pairGate := pairToleranceInputs{diameter: res.diam}
-			if !measurementWithinTolerance(gap, cfg.rel, pairGate.lengthReference) {
+			report.Interferences = append(report.Interferences, Interference{A: a, B: b, Volume: volume})
+			pairD, err := interferencePairDiameter(ctx, a, b)
+			if err != nil {
+				return nil, err
+			}
+			if !interferenceWithinTolerance(volume, a, b, pairD, cfg.rel) {
 				undecided = true
 			}
 		}
@@ -413,6 +433,18 @@ func (d *Document) Verify(ctx context.Context, opts ...VerifyOption) (*Report, e
 
 	report.Status = aggregateStatus(report, undecided)
 	return report, nil
+}
+
+func pairGapMeasurement(res pairResult) Measurement {
+	gap := Measurement{
+		Value:     units.Millimeters((res.lo + res.hi) / 2),
+		Exactness: Exact,
+		Bound:     units.Millimeters((res.hi - res.lo) / 2),
+	}
+	if !res.exact {
+		gap.Exactness = Approximate
+	}
+	return gap
 }
 
 // verifyBody audits one body and assembles its report. A feature-built body

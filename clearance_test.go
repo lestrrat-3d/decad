@@ -322,20 +322,22 @@ func TestClearanceConeCoarseUndecided(t *testing.T) {
 	require.Empty(t, report.Clearances)
 }
 
-func TestClearanceNestedPairUndecided(t *testing.T) {
+func TestClearanceNestedPairReportsContainedVolume(t *testing.T) {
 	// A ball wholly inside another: the boundaries never meet, so boundary
-	// clearance alone would prove the wrong thing (§2) — the nesting witness
-	// cast finds the inner shell inside the outer body, the pair is proven
-	// NOT disjoint, and per §7 the proven overlap follows the parent's
-	// staging: Suspect, with no row in either list.
+	// clearance alone would prove the wrong thing (§2). One witness from the
+	// inner body's material lump proves strict full containment, so Verify
+	// reuses the complete inner-body volume.
 	doc := decad.New()
 	ballBody(t, doc, 10)
-	ballBody(t, doc, 2)
+	inner := ballBody(t, doc, 2)
+	want, err := inner.Volume()
+	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context(), decad.WithClearances())
 	require.NoError(t, err)
-	require.Equal(t, decad.Suspect, report.Status)
-	require.Empty(t, report.Interferences, `an Interference row needs a volume this evaluator cannot bound`)
+	require.Equal(t, decad.Interfering, report.Status)
+	require.Len(t, report.Interferences, 1)
+	require.Equal(t, want, report.Interferences[0].Volume)
 	require.Empty(t, report.Clearances)
 	for _, br := range report.Bodies {
 		require.Equal(t, decad.Sound, br.Status, `the bodies are sound; the pair is what is undecided`)

@@ -1,6 +1,7 @@
 package decad
 
 import (
+	"context"
 	"math"
 	"math/big"
 	"slices"
@@ -258,10 +259,13 @@ func rpRootBound(p ratPoly) *big.Rat {
 
 // rpIsolateRoots isolates every real root of a square-free polynomial into
 // disjoint rational intervals, each holding exactly one root.
-func rpIsolateRoots(p ratPoly) []ratIv {
+func rpIsolateRootsContext(ctx context.Context, p ratPoly) ([]ratIv, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	p = rpTrim(p)
 	if rpDeg(p) < 1 {
-		return nil
+		return nil, nil
 	}
 	chain := sturmChain(p)
 	bound := rpRootBound(p)
@@ -272,7 +276,14 @@ func rpIsolateRoots(p ratPoly) []ratIv {
 		depth int
 	}
 	stack := []job{{iv: ratIv{lo: new(big.Rat).Neg(bound), hi: bound}}}
+	work := 0
 	for len(stack) > 0 {
+		work++
+		if work%256 == 0 {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+		}
 		j := stack[len(stack)-1]
 		stack = stack[:len(stack)-1]
 		n := sturmCount(chain, j.iv.lo, j.iv.hi)
@@ -293,15 +304,20 @@ func rpIsolateRoots(p ratPoly) []ratIv {
 				job{iv: ratIv{lo: mid, hi: j.iv.hi}, depth: j.depth + 1})
 		}
 	}
-	return out
+	return out, nil
 }
 
 // rpRefineRoot narrows an isolating interval by bisection until the mapped
 // width predicate holds or the fixed depth budget runs out (clearance §5:
 // deterministic, and on exhaustion the honest wide interval stands).
-func rpRefineRoot(chain []ratPoly, iv ratIv, narrow func(lo, hi float64) bool) ratIv {
+func rpRefineRootContext(ctx context.Context, chain []ratPoly, iv ratIv, narrow func(lo, hi float64) bool) (ratIv, error) {
 	half := big.NewRat(1, 2)
-	for range 128 {
+	for i := range 128 {
+		if i%32 == 0 {
+			if err := ctx.Err(); err != nil {
+				return ratIv{}, err
+			}
+		}
 		lo, _ := iv.lo.Float64()
 		hi, _ := iv.hi.Float64()
 		if narrow(lo, hi) {
@@ -315,7 +331,7 @@ func rpRefineRoot(chain []ratPoly, iv ratIv, narrow func(lo, hi float64) bool) r
 		}
 		iv = ratIv{lo: mid, hi: iv.hi}
 	}
-	return iv
+	return iv, nil
 }
 
 // csPoly is a trigonometric polynomial in the canonical form A(c) + s·B(c)
@@ -448,9 +464,9 @@ func (b critBracket) mid() float64 { return (b.thLo + b.thHi) / 2 }
 // speed is at most lip, and slack absorbs floating evaluation noise. The
 // second result is false when f is identically zero — a constant objective,
 // the caller's closed-form path.
-func trigStationaryBrackets(f csPoly, g func(float64) float64, lip, slack float64) ([]critBracket, bool) {
+func trigStationaryBracketsContext(ctx context.Context, f csPoly, g func(float64) float64, lip, slack float64) ([]critBracket, bool, error) {
 	if csIsZero(f) {
-		return nil, false
+		return nil, false, nil
 	}
 	var out []critBracket
 	// Two quarter-turn charts cover the circle: t = tan(θ/2) misses θ = ±π,
@@ -459,15 +475,25 @@ func trigStationaryBrackets(f csPoly, g func(float64) float64, lip, slack float6
 		shift float64
 		poly  csPoly
 	}{{shift: 0, poly: f}, {shift: math.Pi / 2, poly: csQuarterShift(f)}} {
+		if err := ctx.Err(); err != nil {
+			return nil, false, err
+		}
 		p := rpSquareFree(rpTrim(csToT(chart.poly)))
 		if rpDeg(p) < 1 {
 			continue
 		}
 		chain := sturmChain(p)
-		for _, iv := range rpIsolateRoots(p) {
-			iv = rpRefineRoot(chain, iv, func(lo, hi float64) bool {
+		ivs, err := rpIsolateRootsContext(ctx, p)
+		if err != nil {
+			return nil, false, err
+		}
+		for _, iv := range ivs {
+			iv, err = rpRefineRootContext(ctx, chain, iv, func(lo, hi float64) bool {
 				return 2*math.Atan(hi)-2*math.Atan(lo) <= 1e-11
 			})
+			if err != nil {
+				return nil, false, err
+			}
 			tLo, _ := iv.lo.Float64()
 			tHi, _ := iv.hi.Float64()
 			thLo := chart.shift + 2*math.Atan(tLo)
@@ -477,7 +503,7 @@ func trigStationaryBrackets(f csPoly, g func(float64) float64, lip, slack float6
 			out = append(out, critBracket{thLo: thLo, thHi: thHi, lo: v - half, hi: v + half})
 		}
 	}
-	return out, true
+	return out, true, nil
 }
 
 // circleParam is an evaluated circle parameterization: center + r(u·cosθ +
@@ -499,7 +525,7 @@ func (cp circleParam) at(th float64) [3]float64 {
 // lineCircleBrackets encloses every critical value of the distance from the
 // circle to the infinite line (a, d̂): the P4 cell. Returns the brackets, or
 // constant=true when the distance is constant over the circle.
-func lineCircleBrackets(cp circleParam, a, d [3]float64, slack float64) ([]critBracket, bool) {
+func lineCircleBracketsContext(ctx context.Context, cp circleParam, a, d [3]float64, slack float64) ([]critBracket, bool, error) {
 	m := [3]float64{cp.c[0] - a[0], cp.c[1] - a[1], cp.c[2] - a[2]}
 	dot := func(x, y [3]float64) float64 { return x[0]*y[0] + x[1]*y[1] + x[2]*y[2] }
 	// D(θ) = |Q − a|² − ((Q − a)·d̂)², a degree-2 trig polynomial.
@@ -512,7 +538,7 @@ func lineCircleBrackets(cp circleParam, a, d [3]float64, slack float64) ([]critB
 		along := dot(rel, d)
 		return math.Sqrt(math.Max(0, dot(rel, rel)-along*along))
 	}
-	return trigStationaryBrackets(csDerivTheta(dist2), g, cp.r, slack)
+	return trigStationaryBracketsContext(ctx, csDerivTheta(dist2), g, cp.r, slack)
 }
 
 // circleCircleBrackets encloses every critical value of the distance from
@@ -520,7 +546,7 @@ func lineCircleBrackets(cp circleParam, a, d [3]float64, slack float64) ([]critB
 // stationarity s·(w')² = r2²·(s')² covers every smooth critical point;
 // callers guard the ρ = 0 kink separately (a circle meeting the other's
 // axis), where the distance is not differentiable.
-func circleCircleBrackets(c1 circleParam, c2 circleParam, n2 [3]float64, slack float64) ([]critBracket, bool) {
+func circleCircleBracketsContext(ctx context.Context, c1 circleParam, c2 circleParam, n2 [3]float64, slack float64) ([]critBracket, bool, error) {
 	m := [3]float64{c1.c[0] - c2.c[0], c1.c[1] - c2.c[1], c1.c[2] - c2.c[2]}
 	dot := func(x, y [3]float64) float64 { return x[0]*y[0] + x[1]*y[1] + x[2]*y[2] }
 	w := csAdd(csConst(dot(m, m)+c1.r*c1.r), csLin(0, 2*c1.r*dot(m, c1.u), 2*c1.r*dot(m, c1.v)))
@@ -536,5 +562,5 @@ func circleCircleBrackets(c1 circleParam, c2 circleParam, n2 [3]float64, slack f
 		rho := math.Sqrt(math.Max(0, dot(rel, rel)-hh*hh))
 		return math.Hypot(hh, rho-c2.r)
 	}
-	return trigStationaryBrackets(f, g, c1.r, slack)
+	return trigStationaryBracketsContext(ctx, f, g, c1.r, slack)
 }

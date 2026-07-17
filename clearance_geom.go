@@ -1,6 +1,7 @@
 package decad
 
 import (
+	"context"
 	"math"
 
 	"github.com/lestrrat-3d/r3"
@@ -207,6 +208,146 @@ func (r region2) interiorPoint() ([2]float64, bool) {
 		}
 	}
 	return [2]float64{}, false
+}
+
+// newRegion2Budget is newRegion2 with cancellation charged to the caller's
+// shared coplanar-scan budget.
+func newRegion2Budget(budget *workBudget, elems []surveyElem) (region2, error) {
+	scale := 1.0
+	grow := func(vs ...float64) {
+		for _, v := range vs {
+			if a := math.Abs(v); a > scale {
+				scale = a
+			}
+		}
+	}
+	for _, e := range elems {
+		if err := budget.step(); err != nil {
+			return region2{}, err
+		}
+		if e.kind == surveyLine {
+			grow(e.ax, e.ay, e.bx, e.by)
+			continue
+		}
+		grow(e.qx-e.rr, e.qx+e.rr, e.qy-e.rr, e.qy+e.rr)
+	}
+	return region2{elems: elems, scale: scale}, nil
+}
+
+func regionContainsBudget(budget *workBudget, r region2, px, py float64) (bool, bool, error) {
+	for i := range 16 {
+		if err := budget.step(); err != nil {
+			return false, false, err
+		}
+		th := 0.5 + float64(i)*2.399963229728653
+		dx, dy := math.Cos(th), math.Sin(th)
+		crossings, ok := 0, true
+		for _, e := range r.elems {
+			if err := budget.step(); err != nil {
+				return false, false, err
+			}
+			n, good := rayCrossings(e, px, py, dx, dy, r.tol())
+			if !good {
+				ok = false
+				break
+			}
+			crossings += n
+		}
+		if ok {
+			return crossings%2 == 1, true, nil
+		}
+	}
+	return false, false, nil
+}
+
+func regionBoundaryDistBudget(budget *workBudget, r region2, px, py float64) (float64, error) {
+	best := math.Inf(1)
+	for _, e := range r.elems {
+		if err := budget.step(); err != nil {
+			return 0, err
+		}
+		d, _, _ := e.nearest(px, py, survTiny*r.scale)
+		if d < best {
+			best = d
+		}
+	}
+	return best, nil
+}
+
+func regionClassifyBudget(budget *workBudget, r region2, px, py, margin float64) (int, error) {
+	distance, err := regionBoundaryDistBudget(budget, r, px, py)
+	if err != nil {
+		return 0, err
+	}
+	if distance <= margin {
+		return 0, nil
+	}
+	in, ok, err := regionContainsBudget(budget, r, px, py)
+	if err != nil {
+		return 0, err
+	}
+	if !ok {
+		return 0, nil
+	}
+	if in {
+		return 1, nil
+	}
+	return -1, nil
+}
+
+func regionSamplesBudget(budget *workBudget, r region2) ([][2]float64, error) {
+	var out [][2]float64
+	for _, e := range r.elems {
+		if err := budget.step(); err != nil {
+			return nil, err
+		}
+		if e.kind == surveyLine {
+			out = append(out, [2]float64{e.ax, e.ay}, [2]float64{(e.ax + e.bx) / 2, (e.ay + e.by) / 2})
+			continue
+		}
+		lo, hi := e.arcRange()
+		for _, th := range []float64{lo, (lo + hi) / 2} {
+			out = append(out, [2]float64{e.qx + e.rr*math.Cos(th), e.qy + e.rr*math.Sin(th)})
+		}
+	}
+	return out, nil
+}
+
+func regionInteriorPointBudget(budget *workBudget, r region2) ([2]float64, bool, error) {
+	for _, e := range r.elems {
+		if err := budget.step(); err != nil {
+			return [2]float64{}, false, err
+		}
+		var px, py, nx, ny float64
+		if e.kind == surveyLine {
+			px, py = (e.ax+e.bx)/2, (e.ay+e.by)/2
+			nx, ny = e.nx, e.ny
+		} else {
+			lo, hi := e.arcRange()
+			th := (lo + hi) / 2
+			px, py = e.qx+e.rr*math.Cos(th), e.qy+e.rr*math.Sin(th)
+			s := e.matSign()
+			nx, ny = -s*math.Cos(th), -s*math.Sin(th)
+		}
+		for _, f := range []float64{0.25, 0.03, 1e-4} {
+			if err := budget.step(); err != nil {
+				return [2]float64{}, false, err
+			}
+			step := f * r.scale
+			if e.kind == surveyArc && step > e.rr/2 {
+				step = e.rr / 2
+			}
+			x, y := px+nx*step, py+ny*step
+			class, err := regionClassifyBudget(budget, r, x, y, r.tol())
+			if err != nil {
+				return [2]float64{}, false, err
+			}
+			if class == 1 {
+				return [2]float64{x, y}, true, nil
+			}
+		}
+	}
+	return [2]float64{}, false, nil
 }
 
 // elemLineHits collects the crossing parameters of the (infinite) 2D line
@@ -686,7 +827,7 @@ type bodyGeom struct {
 	faces    []*cFace
 	edges    []*cEdge
 	verts    []r3.Vec
-	shellWit []r3.Vec // one witness point per shell (§2)
+	shellWit []r3.Vec // one witness per shell, void shells included (§2)
 	supports []r3.Vec // support points for the pair-D reading (§7)
 }
 
@@ -700,55 +841,91 @@ func perpTo(a r3.Vec) r3.Vec {
 	return p
 }
 
-// newBodyGeom builds the kernel model; ok is false for a payload this
-// evaluator did not build — the pair then stays undecided, never guessed.
+// newBodyGeom builds the kernel model for shipped single-lump analytic
+// payloads. Faceted and other multi-lump bodies bypass analytic containment
+// and proceed to read-only intersection; ok is false, never a partial model.
 func newBodyGeom(b *Body) (*bodyGeom, bool) {
-	g := &bodyGeom{body: b}
-	switch pl := b.payload.(type) {
-	case prismPayload:
-		if !g.addPrismFaces(pl) {
-			return nil, false
-		}
-	case revolvePayload:
-		if !g.addRevolveFaces(pl) {
-			return nil, false
-		}
-	default:
+	g, ok, err := newBodyGeomBudget(newWorkBudget(context.Background()), b)
+	if err != nil {
+		// A background budget never cancels, so this is unreachable.
 		return nil, false
 	}
-	if !g.addTopology(b) {
-		return nil, false
+	return g, ok
+}
+
+// newBodyGeomBudget is the cancellable form. Building a body's carrier faces,
+// edges, vertices and support points is linear in the body but is not free, and
+// §7.2 carries the context through the entire read-only path — so the whole
+// build steps the caller's budget rather than making cancellation wait for both
+// operands to finish.
+func newBodyGeomBudget(budget *workBudget, b *Body) (*bodyGeom, bool, error) {
+	if err := budget.err(); err != nil {
+		return nil, false, err
+	}
+	if len(b.lumps) != 1 {
+		return nil, false, nil
+	}
+	g := &bodyGeom{body: b}
+	var ok bool
+	var err error
+	switch pl := b.payload.(type) {
+	case prismPayload:
+		ok, err = g.addPrismFaces(budget, pl)
+	case revolvePayload:
+		ok, err = g.addRevolveFaces(budget, pl)
+	default:
+		return nil, false, nil
+	}
+	if err != nil || !ok {
+		return nil, false, err
+	}
+	if ok, err = g.addTopology(budget, b); err != nil || !ok {
+		return nil, false, err
 	}
 	g.supports = append([]r3.Vec{}, g.verts...)
 	for _, f := range g.faces {
+		if err := budget.step(); err != nil {
+			return nil, false, err
+		}
 		g.supports = append(g.supports, f.wit...)
 	}
-	return g, true
+	return g, true, nil
 }
 
-// addTopology reads the exact edges and vertices off the built topology and
-// picks one witness point per shell for the §2 nesting casts.
-func (g *bodyGeom) addTopology(b *Body) bool {
+// addTopology reads exact edges and vertices and picks one witness per shell
+// for the §2 nesting casts. Every shell earns a witness, void shells included:
+// a void shell of one body can lie wholly inside the other body's material, so
+// its membership is not implied by any other shell's.
+func (g *bodyGeom) addTopology(budget *workBudget, b *Body) (bool, error) {
 	for _, e := range b.Edges() {
+		if err := budget.step(); err != nil {
+			return false, err
+		}
 		ce, ok := newCEdge(e)
 		if !ok {
-			return false
+			return false, nil
 		}
 		if ce != nil {
 			g.edges = append(g.edges, ce)
 		}
 	}
 	for _, v := range b.Vertices() {
+		if err := budget.step(); err != nil {
+			return false, err
+		}
 		g.verts = append(g.verts, v.position)
 	}
 	for _, sh := range b.Shells() {
+		if err := budget.step(); err != nil {
+			return false, err
+		}
 		w, ok := shellWitness(sh)
 		if !ok {
-			return false
+			return false, nil
 		}
 		g.shellWit = append(g.shellWit, w)
 	}
-	return true
+	return true, nil
 }
 
 func newCEdge(e *Edge) (*cEdge, bool) {
@@ -827,10 +1004,13 @@ func shellWitness(sh *Shell) (r3.Vec, bool) {
 
 // addPrismFaces builds the prism's faces from its own payload, mirroring the
 // walk decomposition the evaluator built the topology from.
-func (g *bodyGeom) addPrismFaces(pp prismPayload) bool {
+func (g *bodyGeom) addPrismFaces(budget *workBudget, pp prismPayload) (bool, error) {
 	loops, err := recordLoops(pp.profile)
 	if err != nil {
-		return false
+		// A section this kernel cannot decompose is an unsupported payload, not
+		// a failure: newBodyGeom answers with no model rather than a partial
+		// one. The error return is reserved for cancellation.
+		return false, nil //nolint:nilerr // an undecomposable section is ok=false, never an error.
 	}
 	nDir := pp.dir(0, 0, 1)
 	h := pp.z1 - pp.z0
@@ -838,9 +1018,12 @@ func (g *bodyGeom) addPrismFaces(pp prismPayload) bool {
 	var capElems []surveyElem
 	for _, loop := range loops {
 		for _, w := range loop {
+			if err := budget.step(); err != nil {
+				return false, err
+			}
 			el, ok := walkElem(w.segmentWalk)
 			if !ok {
-				return false
+				return false, nil
 			}
 			capElems = append(capElems, el)
 
@@ -870,11 +1053,11 @@ func (g *bodyGeom) addPrismFaces(pp prismPayload) bool {
 
 			l := math.Hypot(w.endU-w.startU, w.endV-w.startV)
 			if l == 0 {
-				return false
+				return false, nil
 			}
 			e1, ok := pp.dir(w.endU-w.startU, w.endV-w.startV, 0).Normalize()
 			if !ok {
-				return false
+				return false, nil
 			}
 			tu, tv := w.tanInU, w.tanInV
 			if pp.reflected() {
@@ -882,7 +1065,7 @@ func (g *bodyGeom) addPrismFaces(pp prismPayload) bool {
 			}
 			nOut, ok := pp.dir(tu, tv, 0).Cross(nDir).Normalize()
 			if !ok {
-				return false
+				return false, nil
 			}
 			f := &cFace{
 				kind: ckPlane,
@@ -919,7 +1102,7 @@ func (g *bodyGeom) addPrismFaces(pp prismPayload) bool {
 		f.wit = capWitnesses(f)
 		g.faces = append(g.faces, f)
 	}
-	return true
+	return true, nil
 }
 
 // capBox is the world box of a planar face's region boundary (arcs taken as
@@ -955,10 +1138,12 @@ func capWitnesses(f *cFace) []r3.Vec {
 }
 
 // addRevolveFaces builds the revolved body's faces from its own payload.
-func (g *bodyGeom) addRevolveFaces(rp revolvePayload) bool {
+func (g *bodyGeom) addRevolveFaces(budget *workBudget, rp revolvePayload) (bool, error) {
 	loops, err := revolveLoops(rp)
 	if err != nil {
-		return false
+		// As in addPrismFaces: an undecomposable meridian is an unsupported
+		// payload, and the error return is reserved for cancellation.
+		return false, nil //nolint:nilerr // an undecomposable meridian is ok=false, never an error.
 	}
 	b := rp.basis()
 	a3p := rp.xform.Apply(b.a3)
@@ -975,6 +1160,9 @@ func (g *bodyGeom) addRevolveFaces(rp revolvePayload) bool {
 	var capElems []surveyElem
 	for _, loop := range loops {
 		for _, w := range loop {
+			if err := budget.step(); err != nil {
+				return false, err
+			}
 			kind := rp.ax.classify(w.segmentWalk)
 			if el, ok := walkElem(w.segmentWalk); ok {
 				capElems = append(capElems, el)
@@ -1108,7 +1296,7 @@ func (g *bodyGeom) addRevolveFaces(rp revolvePayload) bool {
 			g.faces = append(g.faces, f)
 		}
 	}
-	return true
+	return true, nil
 }
 
 // annularRegion builds the 2D region of a revolve wallPlane face in its
@@ -1163,11 +1351,23 @@ func clrLadder() []r3.Vec {
 // crossing certified transversal and interior to its trim; a grazing cast
 // retries the next ladder direction. ok is false when every direction stays
 // ambiguous.
-func (g *bodyGeom) pointInBody(p r3.Vec, tol float64) (bool, bool) {
+
+func (g *bodyGeom) pointInBody(ctx context.Context, p r3.Vec, tol float64) (bool, bool, error) {
 	for _, dir := range clrLadder() {
+		if err := ctx.Err(); err != nil {
+			return false, false, err
+		}
 		total, ok := 0, true
-		for _, f := range g.faces {
-			n, good := f.rayCrossings(p, dir, tol)
+		for i, f := range g.faces {
+			if i%256 == 0 {
+				if err := ctx.Err(); err != nil {
+					return false, false, err
+				}
+			}
+			n, good, err := f.rayCrossings(ctx, p, dir, tol)
+			if err != nil {
+				return false, false, err
+			}
 			if !good {
 				ok = false
 				break
@@ -1175,15 +1375,18 @@ func (g *bodyGeom) pointInBody(p r3.Vec, tol float64) (bool, bool) {
 			total += n
 		}
 		if ok {
-			return total%2 == 1, true
+			return total%2 == 1, true, nil
 		}
 	}
-	return false, false
+	return false, false, nil
 }
 
 // rayCrossings counts certified transversal crossings of the ray p + t·dir
 // (t > tol) with the trimmed face; good is false on any ambiguity.
-func (f *cFace) rayCrossings(p, dir r3.Vec, tol float64) (int, bool) {
+func (f *cFace) rayCrossings(ctx context.Context, p, dir r3.Vec, tol float64) (int, bool, error) {
+	if err := ctx.Err(); err != nil {
+		return 0, false, err
+	}
 	switch f.kind {
 	case ckPlane:
 		nd := f.n.Dot(dir)
@@ -1192,15 +1395,15 @@ func (f *cFace) rayCrossings(p, dir r3.Vec, tol float64) (int, bool) {
 			// start is cleanly off the plane; on the plane it is a graze —
 			// ambiguous, retry the ladder.
 			if math.Abs(f.n.Dot(p)-f.planeOffset()) > tol {
-				return 0, true
+				return 0, true, nil
 			}
-			return 0, false
+			return 0, false, nil
 		}
 		if math.Abs(nd) < 1e-7 {
 			// Near-parallel: the crossing exists but sits far away and
 			// poorly conditioned — the count is not certified; retry the
 			// ladder rather than claim zero.
-			return 0, false
+			return 0, false, nil
 		}
 		t := (f.planeOffset() - f.n.Dot(p)) / nd
 		if math.Abs(t) <= tol {
@@ -1208,20 +1411,20 @@ func (f *cFace) rayCrossings(p, dir r3.Vec, tol float64) (int, bool) {
 			// shared construction plane): a crossing only if the start sits
 			// on the trimmed face — cleanly off it, no crossing.
 			if f.admitPoint(p.Add(dir.Scale(t)), tol) == -1 {
-				return 0, true
+				return 0, true, nil
 			}
-			return 0, false
+			return 0, false, nil
 		}
 		if t < 0 {
-			return 0, true
+			return 0, true, nil
 		}
 		switch f.admitPoint(p.Add(dir.Scale(t)), tol) {
 		case 1:
-			return 1, true
+			return 1, true, nil
 		case -1:
-			return 0, true
+			return 0, true, nil
 		default:
-			return 0, false
+			return 0, false, nil
 		}
 	case ckCylinder:
 		rel := p.Sub(f.anchor)
@@ -1230,10 +1433,12 @@ func (f *cFace) rayCrossings(p, dir r3.Vec, tol float64) (int, bool) {
 		a := dirP.Dot(dirP)
 		b := relP.Dot(dirP)
 		c := relP.Dot(relP) - f.radius*f.radius
-		return f.quadraticCrossings(p, dir, a, b, c, tol)
+		n, ok := f.quadraticCrossings(p, dir, a, b, c, tol)
+		return n, ok, nil
 	case ckSphere:
 		rel := p.Sub(f.anchor)
-		return f.quadraticCrossings(p, dir, 1, rel.Dot(dir), rel.Dot(rel)-f.radius*f.radius, tol)
+		n, ok := f.quadraticCrossings(p, dir, 1, rel.Dot(dir), rel.Dot(rel)-f.radius*f.radius, tol)
+		return n, ok, nil
 	case ckCone:
 		rel := p.Sub(f.anchor)
 		k := math.Tan(f.half)
@@ -1246,11 +1451,11 @@ func (f *cFace) rayCrossings(p, dir r3.Vec, tol float64) (int, bool) {
 		c := relP.Dot(relP) - k*k*az*az
 		n, ok := f.quadraticCrossings(p, dir, a, b, c, tol)
 		if !ok {
-			return 0, false
+			return 0, false, nil
 		}
-		return n, true
+		return n, true, nil
 	default: // ckTorus
-		return f.torusCrossings(p, dir, tol)
+		return f.torusCrossings(ctx, p, dir, tol)
 	}
 }
 
@@ -1308,7 +1513,10 @@ func (f *cFace) quadraticCrossings(p, dir r3.Vec, a, b, c, tol float64) (int, bo
 // certification (§2): a root count is a proof only when the isolation
 // certifies it — a non-square-free quartic (a tangency) is ambiguous and the
 // ladder retries.
-func (f *cFace) torusCrossings(p, dir r3.Vec, tol float64) (int, bool) {
+func (f *cFace) torusCrossings(ctx context.Context, p, dir r3.Vec, tol float64) (int, bool, error) {
+	if err := ctx.Err(); err != nil {
+		return 0, false, err
+	}
 	rel := p.Sub(f.anchor)
 	// |x−C|² = q2 t² + q1 t + q0; axial² = (a0 + a1 t)².
 	q2 := dir.Dot(dir)
@@ -1324,17 +1532,24 @@ func (f *cFace) torusCrossings(p, dir r3.Vec, tol float64) (int, bool) {
 	four := ratOf(4 * f.major * f.major)
 	poly := rpTrim(rpSub(sq, rpScale(perp, four)))
 	if rpDeg(poly) < 1 {
-		return 0, false
+		return 0, false, nil
 	}
 	sf := rpSquareFree(poly)
 	if rpDeg(sf) != rpDeg(poly) {
 		// A repeated root is a tangency somewhere on the line: ambiguous.
-		return 0, false
+		return 0, false, nil
 	}
 	chain := sturmChain(sf)
 	n := 0
-	for _, iv := range rpIsolateRoots(sf) {
-		iv = rpRefineRoot(chain, iv, func(lo, hi float64) bool { return hi-lo <= 1e-11*math.Max(1, math.Abs(lo)) })
+	ivs, err := rpIsolateRootsContext(ctx, sf)
+	if err != nil {
+		return 0, false, err
+	}
+	for _, iv := range ivs {
+		iv, err = rpRefineRootContext(ctx, chain, iv, func(lo, hi float64) bool { return hi-lo <= 1e-11*math.Max(1, math.Abs(lo)) })
+		if err != nil {
+			return 0, false, err
+		}
 		tLo, _ := iv.lo.Float64()
 		tHi, _ := iv.hi.Float64()
 		if tHi <= -tol {
@@ -1348,7 +1563,7 @@ func (f *cFace) torusCrossings(p, dir r3.Vec, tol float64) (int, bool) {
 			if tHi-tLo <= tol && f.admitPoint(q0, tol+(tHi-tLo)) == -1 {
 				continue
 			}
-			return 0, false
+			return 0, false, nil
 		}
 		q := p.Add(dir.Scale((tLo + tHi) / 2))
 		switch f.admitPoint(q, tol+(tHi-tLo)) {
@@ -1356,8 +1571,8 @@ func (f *cFace) torusCrossings(p, dir r3.Vec, tol float64) (int, bool) {
 			n++
 		case -1:
 		default:
-			return 0, false
+			return 0, false, nil
 		}
 	}
-	return n, true
+	return n, true, nil
 }

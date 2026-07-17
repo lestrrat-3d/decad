@@ -105,22 +105,23 @@ func TestVerifyTouchingBoxesAreDisjoint(t *testing.T) {
 	require.Equal(t, decad.Sound, report.Status)
 }
 
-func TestVerifyOverlappingPairIsSuspect(t *testing.T) {
+func TestVerifyCoincidentPairIsInterfering(t *testing.T) {
 	doc, _ := extrudePlate(t)
 	s, p := plateSketch(t)
 	_, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	require.NoError(t, err)
 
-	// Two coincident plates: their boxes overlap, and this evaluator can
-	// prove the pair neither overlapping nor disjoint — no Interference row
-	// is fabricated, and the undecided pair reads Suspect.
+	// Two coincident analytic plates have an exact set-identity certificate,
+	// so Verify reuses the first body's volume without calling the mesh
+	// boolean or consuming either operand.
 	report, err := doc.Verify(t.Context())
 	require.NoError(t, err)
-	require.Equal(t, decad.Suspect, report.Status)
+	require.Equal(t, decad.Interfering, report.Status)
 	require.False(t, report.Trustworthy())
-	require.Empty(t, report.Interferences)
+	require.Len(t, report.Interferences, 1)
+	require.Equal(t, 60000.0, report.Interferences[0].Volume.Value.Base())
 	for _, br := range report.Bodies {
-		require.Equal(t, decad.Sound, br.Status, `the bodies themselves are sound; the pair is what is undecided`)
+		require.Equal(t, decad.Sound, br.Status, `the bodies themselves remain sound`)
 	}
 }
 
