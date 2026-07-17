@@ -259,15 +259,22 @@ func auditFacetedMesh(ctx context.Context, verts []r3.Vec, tris [][3]int) (*face
 	// positive outer shell, negative void, positive island, and so on. Every
 	// pair of containers must also be nested; intersecting shell relations are
 	// impossible after stitching and therefore an evaluator failure.
+	budget := newWorkBudget(ctx)
 	for inner := range audit.members {
 		var containers []int
 		for outer := range audit.members {
+			if err := budget.step(); err != nil {
+				return nil, err
+			}
 			if audit.contains[outer][inner] {
 				containers = append(containers, outer)
 			}
 		}
 		for i := range containers {
 			for j := i + 1; j < len(containers); j++ {
+				if err := budget.step(); err != nil {
+					return nil, err
+				}
 				a, b := containers[i], containers[j]
 				if !audit.contains[a][b] && !audit.contains[b][a] {
 					return nil, fmt.Errorf(`%w: result shells have an impossible containment relation`, ErrBooleanFailed)

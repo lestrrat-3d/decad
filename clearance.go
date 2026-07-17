@@ -58,30 +58,6 @@ type pairKernel struct {
 	err   error
 }
 
-// clearanceBudget shares one bounded cancellation counter through nested
-// clearance scans without storing a context in long-lived geometry state.
-type clearanceBudget struct {
-	stepFn func() error
-	errFn  func() error
-}
-
-func newClearanceBudget(ctx context.Context) *clearanceBudget {
-	work := 0
-	return &clearanceBudget{
-		stepFn: func() error {
-			work++
-			if work%256 == 0 {
-				return ctx.Err()
-			}
-			return nil
-		},
-		errFn: ctx.Err,
-	}
-}
-
-func (b *clearanceBudget) step() error { return b.stepFn() }
-func (b *clearanceBudget) err() error  { return b.errFn() }
-
 // clearancePair runs the kernel over one pair of proven solids.
 // nestingExcluded is true when box separation has already excluded nesting
 // (a box-proven pair needs the kernel only for its gap — §7).
@@ -89,8 +65,15 @@ func clearancePair(ctx context.Context, a, b *Body, nestingExcluded bool) (pairR
 	if err := ctx.Err(); err != nil {
 		return pairResult{}, err
 	}
-	ga, oka := newBodyGeom(a)
-	gb, okb := newBodyGeom(b)
+	budget := newWorkBudget(ctx)
+	ga, oka, err := newBodyGeomBudget(budget, a)
+	if err != nil {
+		return pairResult{}, err
+	}
+	gb, okb, err := newBodyGeomBudget(budget, b)
+	if err != nil {
+		return pairResult{}, err
+	}
 	if !oka || !okb {
 		return pairResult{}, nil
 	}
@@ -179,7 +162,7 @@ func (k *pairKernel) coplanarContactCertified(ctx context.Context) (bool, error)
 	if err := ctx.Err(); err != nil {
 		return false, err
 	}
-	budget := newClearanceBudget(ctx)
+	budget := newWorkBudget(ctx)
 	for _, fa := range k.a.faces {
 		if err := budget.step(); err != nil {
 			return false, err

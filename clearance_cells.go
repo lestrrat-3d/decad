@@ -595,7 +595,7 @@ func (k *pairKernel) planePlane(f, g *cFace, sink *cellSink) {
 	// path to certify falls to unsure there — never a wrong Exact.
 	if f.n.Cross(g.n).Len() == 0 {
 		h := g.o.Sub(f.o).Dot(f.n)
-		rel, wit, err := k.coplanarRelation(newClearanceBudget(k.ctx), f, g)
+		rel, wit, err := k.coplanarRelation(newWorkBudget(k.ctx), f, g)
 		if err != nil {
 			k.err = err
 			return
@@ -692,7 +692,7 @@ func intervalsMeet(a, b []clrIv, tol float64) int {
 // frame), −1 provenly apart, 0 ambiguous. Sample-based in the sufficient
 // direction, boundary-clearance-based in the exclusion direction — never a
 // blessed ambiguity.
-func (k *pairKernel) coplanarRelation(budget *clearanceBudget, f, g *cFace) (int, [2]float64, error) {
+func (k *pairKernel) coplanarRelation(budget *workBudget, f, g *cFace) (int, [2]float64, error) {
 	if err := budget.err(); err != nil {
 		return 0, [2]float64{}, err
 	}
@@ -780,7 +780,7 @@ func (k *pairKernel) coplanarRelation(budget *clearanceBudget, f, g *cFace) (int
 	return 0, [2]float64{}, budget.err()
 }
 
-func coplanarBoundaryClearanceBudget(budget *clearanceBudget, a, b region2) (float64, error) {
+func coplanarBoundaryClearanceBudget(budget *workBudget, a, b region2) (float64, error) {
 	clearing := math.Inf(1)
 	for _, ea := range a.elems {
 		for _, eb := range b.elems {
@@ -797,7 +797,7 @@ func coplanarBoundaryClearanceBudget(budget *clearanceBudget, a, b region2) (flo
 
 // regionSampleOutside reports whether a sample of src is cleanly outside dst
 // — with boundaries provably apart, one clean sample settles containment.
-func regionSampleOutsideBudget(budget *clearanceBudget, src, dst region2, tol float64) (bool, error) {
+func regionSampleOutsideBudget(budget *workBudget, src, dst region2, tol float64) (bool, error) {
 	samples, err := regionSamplesBudget(budget, src)
 	if err != nil {
 		return false, err

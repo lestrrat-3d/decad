@@ -229,12 +229,14 @@ func chordLoop(ctx context.Context, loop LoopRecord, chord, height float64, wall
 	if len(loop.Segments) == 0 {
 		return nil, nil, 0, 0, fmt.Errorf(`%w: a recorded loop holds no segments`, ErrDegenerate)
 	}
+	// One counter spans the segment walk, the walk loop and the sample emission
+	// nested under it: a single walk emits many samples, and it is the SAMPLES
+	// that are the candidate operations §7.2 counts.
+	budget := newWorkBudget(ctx)
 	raw := make([]sideWalk, len(loop.Segments))
 	for i, seg := range loop.Segments {
-		if i%256 == 0 {
-			if err := ctx.Err(); err != nil {
-				return nil, nil, 0, 0, err
-			}
+		if err := budget.step(); err != nil {
+			return nil, nil, 0, 0, err
 		}
 		w, err := walkOf(seg)
 		if err != nil {
@@ -247,11 +249,9 @@ func chordLoop(ctx context.Context, loop LoopRecord, chord, height float64, wall
 	var samples []Point2
 	var faceOf []*Face
 	var maxSag, areaSlack float64
-	for i, w := range walks {
-		if i%256 == 0 {
-			if err := ctx.Err(); err != nil {
-				return nil, nil, 0, 0, err
-			}
+	for _, w := range walks {
+		if err := budget.step(); err != nil {
+			return nil, nil, 0, 0, err
 		}
 		face, err := wallFace(w)
 		if err != nil {
@@ -270,6 +270,9 @@ func chordLoop(ctx context.Context, loop LoopRecord, chord, height float64, wall
 		areaSlack += walkAreaSlack(w.segmentWalk, n, height)
 		dth := (w.th1 - w.th0) / float64(n)
 		for k := range n {
+			if err := budget.step(); err != nil {
+				return nil, nil, 0, 0, err
+			}
 			p := Point2{U: w.startU, V: w.startV}
 			if k > 0 {
 				th := w.th0 + float64(k)*dth
@@ -623,7 +626,12 @@ func tessellateFaceted(ctx context.Context, b *Body, fp facetedPayload, chord fl
 			}
 		}
 		if fi < 0 || fi >= len(faces) {
-			return nil, fmt.Errorf(`%w: a facet maps to no face`, ErrUnsupported)
+			// An inconsistent source mapping is a broken evaluator, not a
+			// staged capability: §7.1 names it an invariant failure, which
+			// Verify must return rather than hide as Suspect. ErrUnsupported
+			// here would be swallowed into an undecided pair by
+			// evaluateBoolean's staging branch.
+			return nil, fmt.Errorf(`%w: a facet maps to no face`, ErrBooleanFailed)
 		}
 		src[i] = faces[fi]
 	}
@@ -705,6 +713,17 @@ var errTooManyChords = fmt.Errorf(`%w: the chord tolerance asks for more than %d
 // the boundary samples: 2¹⁴ chords keeps the worst cap under a second while
 // still admitting sub-micrometre tolerances on any real part (a 10 mm-radius
 // circle at the cap carries a sagitta under 2e-7 mm).
+//
+// The cap is per-curve, and there is deliberately no total across a profile's
+// curves. It bounds what ONE curve can ask of the quadratic cap triangulator,
+// which is why errTooManyChords reports "more than %d chords on one curve". A
+// profile with many loops is proportionally more work because the caller
+// modelled proportionally more geometry, and docs/interference-design.md §7
+// answers large work with cancellation rather than a work cap: the read-only
+// path polls its context at least once per workPollInterval candidate
+// operations, so chordLoop, bridgeHole and earClip all abandon a large profile
+// promptly. A total cap would instead refuse a profile this evaluator can
+// build correctly.
 const maxChordsPerWalk = 1 << 14
 
 // requireLoopClearance rejects a profile whose chorded loops come within

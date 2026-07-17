@@ -173,7 +173,7 @@ func onSegment2(a, b, p xp2) (bool, bool) {
 // pointInPoly2 reports whether p lies strictly inside the simple polygon —
 // exact parity along a +u ray with the half-open rule, so a crossing at a
 // shared vertex counts exactly once. A p on the boundary reports onBoundary.
-func pointInPoly2(budget *cutBudget, poly []xp2, p xp2) (bool, bool, error) {
+func pointInPoly2(budget *workBudget, poly []xp2, p xp2) (bool, bool, error) {
 	n := len(poly)
 	for i := range n {
 		if err := budget.step(); err != nil {
@@ -204,7 +204,7 @@ func pointInPoly2(budget *cutBudget, poly []xp2, p xp2) (bool, bool, error) {
 }
 
 // polyArea2 is twice the exact signed area of the polygon.
-func polyArea2(budget *cutBudget, poly []xp2) (*big.Rat, error) {
+func polyArea2(budget *workBudget, poly []xp2) (*big.Rat, error) {
 	total := new(big.Rat)
 	n := len(poly)
 	for i := range n {
@@ -223,7 +223,7 @@ func polyArea2(budget *cutBudget, poly []xp2) (*big.Rat, error) {
 // output, which is what keeps a conforming subdivision conforming — so only
 // strictly convex, unblocked ears are clipped. A stall means the polygon is
 // not weakly simple, which is an internal error, never a wrong mesh.
-func earClipX(budget *cutBudget, pts []xp2, poly []int) ([][3]int, error) {
+func earClipX(budget *workBudget, pts []xp2, poly []int) ([][3]int, error) {
 	idx := make([]int, len(poly))
 	for i, vi := range poly {
 		if err := budget.step(); err != nil {
@@ -280,7 +280,7 @@ func earClipX(budget *cutBudget, pts []xp2, poly []int) ([][3]int, error) {
 // candidate ear — the exact analog of earBlocked, except that every OTHER
 // vertex can block (collinear duplicates included), which is the conservative
 // direction.
-func earBlockedX(budget *cutBudget, pts []xp2, idx []int, i int) (bool, error) {
+func earBlockedX(budget *workBudget, pts []xp2, idx []int, i int) (bool, error) {
 	n := len(idx)
 	ip, in := (i-1+n)%n, (i+1)%n
 	a, b, c := pts[idx[ip]], pts[idx[i]], pts[idx[in]]

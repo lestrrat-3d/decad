@@ -350,6 +350,10 @@ never message matching:
 - empty held intersection;
 - contact/graze/coplanar arrangement the mesh boolean refuses;
 - evaluator staging (`ErrUnsupported`);
+- a valid operand whose chording is too coarse to prove its own topology —
+  loops that close within their chord bounds of each other, a bridge that
+  pinches, a chorded boundary whose ear clipping stalls. The evaluator owns the
+  chord tolerance here, so the caller cannot act on the refusal;
 - positive held intersection whose bound does not clear zero.
 
 `performBoolean` maps these to its existing public errors (`ErrBooleanFailed`,

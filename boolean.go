@@ -364,16 +364,22 @@ func operandSymDiff(b *Body, m *Mesh) float64 {
 // tolerance of each other. That is the accepted price; the alternative is a
 // verdict decided by chord placement.
 func refuseUndecidableProximity(ctx context.Context, ma, mb *Mesh, bmA, bmB *boolMesh) error {
-	fa := facesOfMesh(ma)
-	fb := facesOfMesh(mb)
-	work := 0
+	// One counter spans the grouping and the pair scan it feeds: the grouping
+	// walks every facet and every new source face's edges, which is work the
+	// §7.2 interval covers just as the pair scan is.
+	budget := newWorkBudget(ctx)
+	fa, err := facesOfMesh(budget, ma)
+	if err != nil {
+		return err
+	}
+	fb, err := facesOfMesh(budget, mb)
+	if err != nil {
+		return err
+	}
 	for _, ga := range fa {
 		for _, gb := range fb {
-			work++
-			if work%256 == 0 {
-				if err := ctx.Err(); err != nil {
-					return err
-				}
+			if err := budget.step(); err != nil {
+				return err
 			}
 			slack := ga.delta + gb.delta
 			if slack <= 0 {
@@ -447,34 +453,44 @@ type faceFacets struct {
 // §6.1) — both are held with zero error. Anything else — a cylinder wall, or a
 // planar cap whose rim is a circle the chords inscribe — deviates by up to the
 // mesh's own proven bound.
-func facesOfMesh(m *Mesh) []faceFacets {
+func facesOfMesh(budget *workBudget, m *Mesh) ([]faceFacets, error) {
 	index := map[*Face]int{}
 	var out []faceFacets
 	for i, f := range m.source {
+		if err := budget.step(); err != nil {
+			return nil, err
+		}
 		k, ok := index[f]
 		if !ok {
 			k = len(out)
 			index[f] = k
-			out = append(out, faceFacets{delta: faceChordDelta(f, m.bound)})
+			delta, err := faceChordDelta(budget, f, m.bound)
+			if err != nil {
+				return nil, err
+			}
+			out = append(out, faceFacets{delta: delta})
 		}
 		out[k].facets = append(out[k].facets, i)
 	}
-	return out
+	return out, nil
 }
 
-func faceChordDelta(f *Face, meshBound float64) float64 {
+func faceChordDelta(budget *workBudget, f *Face, meshBound float64) (float64, error) {
 	switch f.Surface().Kind() {
 	case KindFaceted:
-		return 0
+		return 0, nil
 	case KindPlane:
 		for _, e := range f.Edges() {
+			if err := budget.step(); err != nil {
+				return 0, err
+			}
 			if _, ok := e.Curve().(Line3); !ok {
-				return meshBound
+				return meshBound, nil
 			}
 		}
-		return 0
+		return 0, nil
 	}
-	return meshBound
+	return meshBound, nil
 }
 
 // boxesWithin reports whether the two boxes come within slack of each other.

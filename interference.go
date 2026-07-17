@@ -12,20 +12,83 @@ import (
 // payloads whose records are already in their normalized value form. Exact
 // structural equality is deliberately only a sufficient certificate: a
 // different record that might describe the same set stays undecided.
-func analyticBodiesEqual(a, b *Body) bool {
+//
+// The only unbounded part of a payload is its ProfileRecord, so the records are
+// walked loop by loop and segment by segment under the budget, leaving
+// reflect.DeepEqual as a leaf over one segment — a bounded exact predicate,
+// which is what §7.2 allows to stay context-free. The remaining payload fields
+// are fixed-size. Struct and slice deep equality are field-wise and
+// element-wise, so this decides exactly the pairs a whole-payload DeepEqual
+// decides.
+func analyticBodiesEqual(budget *workBudget, a, b *Body) (bool, error) {
 	switch pa := a.payload.(type) {
 	case prismPayload:
 		pb, ok := b.payload.(prismPayload)
-		return ok && reflect.DeepEqual(pa, pb)
+		if !ok || pa.frame != pb.frame || pa.z0 != pb.z0 || pa.z1 != pb.z1 || pa.xform != pb.xform {
+			return false, nil
+		}
+		return profileRecordsEqual(budget, pa.profile, pb.profile)
 	case cupPayload:
 		pb, ok := b.payload.(cupPayload)
-		return ok && reflect.DeepEqual(pa, pb)
+		if !ok || pa.frame != pb.frame || pa.zOpen != pb.zOpen || pa.zOuter != pb.zOuter ||
+			pa.zCav != pb.zCav || pa.xform != pb.xform {
+			return false, nil
+		}
+		same, err := profileRecordsEqual(budget, pa.outer, pb.outer)
+		if err != nil || !same {
+			return false, err
+		}
+		return profileRecordsEqual(budget, pa.cavity, pb.cavity)
 	case revolvePayload:
 		pb, ok := b.payload.(revolvePayload)
-		return ok && reflect.DeepEqual(pa, pb)
+		if !ok || pa.frame != pb.frame || pa.ax != pb.ax || pa.phi0 != pb.phi0 ||
+			pa.phi1 != pb.phi1 || pa.full != pb.full || pa.xform != pb.xform {
+			return false, nil
+		}
+		return profileRecordsEqual(budget, pa.profile, pb.profile)
 	default:
-		return false
+		return false, nil
 	}
+}
+
+// profileRecordsEqual reports exact structural equality of two recorded
+// profiles, stepping the budget once per segment compared.
+func profileRecordsEqual(budget *workBudget, a, b ProfileRecord) (bool, error) {
+	if err := budget.step(); err != nil {
+		return false, err
+	}
+	if len(a.Holes) != len(b.Holes) || (a.Holes == nil) != (b.Holes == nil) {
+		return false, nil
+	}
+	same, err := loopRecordsEqual(budget, a.Outer, b.Outer)
+	if err != nil || !same {
+		return false, err
+	}
+	for i := range a.Holes {
+		same, err := loopRecordsEqual(budget, a.Holes[i], b.Holes[i])
+		if err != nil || !same {
+			return false, err
+		}
+	}
+	return true, nil
+}
+
+// loopRecordsEqual compares one loop segment by segment. The nil-versus-empty
+// slice check keeps this exactly as strict as a whole-record DeepEqual, which
+// holds a nil slice unequal to an empty one.
+func loopRecordsEqual(budget *workBudget, a, b LoopRecord) (bool, error) {
+	if len(a.Segments) != len(b.Segments) || (a.Segments == nil) != (b.Segments == nil) {
+		return false, nil
+	}
+	for i := range a.Segments {
+		if err := budget.step(); err != nil {
+			return false, err
+		}
+		if !reflect.DeepEqual(a.Segments[i], b.Segments[i]) {
+			return false, nil
+		}
+	}
+	return true, nil
 }
 
 // measuredInterference returns the pair's bounded overlap volume. Strict
@@ -36,7 +99,11 @@ func measuredInterference(ctx context.Context, a, b *Body, res pairResult) (Meas
 	if res.contained != nil {
 		return res.contained.volume, true, nil
 	}
-	if analyticBodiesEqual(a, b) {
+	equal, err := analyticBodiesEqual(newWorkBudget(ctx), a, b)
+	if err != nil {
+		return Measurement{}, false, err
+	}
+	if equal {
 		// Stable pair order chooses A when the represented sets are equal.
 		return a.volume, true, nil
 	}
@@ -61,29 +128,33 @@ func measuredInterference(ctx context.Context, a, b *Body, res pairResult) (Meas
 // incomplete set can only understate D and tighten the noise floor, never
 // admit a coarse answer.
 func interferencePairDiameter(ctx context.Context, a, b *Body) (float64, error) {
+	budget := newWorkBudget(ctx)
 	var points []r3.Vec
 	for _, body := range []*Body{a, b} {
 		if payload, ok := body.payload.(facetedPayload); ok {
 			points = append(points, payload.verts...)
 			continue
 		}
-		if geom, ok := newBodyGeom(body); ok {
+		geom, ok, err := newBodyGeomBudget(budget, body)
+		if err != nil {
+			return 0, err
+		}
+		if ok {
 			points = append(points, geom.supports...)
 			continue
 		}
 		for _, vertex := range body.Vertices() {
+			if err := budget.step(); err != nil {
+				return 0, err
+			}
 			points = append(points, vertex.position)
 		}
 	}
 	best := 0.0
-	work := 0
 	for i := range points {
 		for j := i + 1; j < len(points); j++ {
-			work++
-			if work%256 == 0 {
-				if err := ctx.Err(); err != nil {
-					return 0, err
-				}
+			if err := budget.step(); err != nil {
+				return 0, err
 			}
 			best = math.Max(best, points[i].Sub(points[j]).Len())
 		}

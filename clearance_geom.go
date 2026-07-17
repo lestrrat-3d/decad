@@ -212,7 +212,7 @@ func (r region2) interiorPoint() ([2]float64, bool) {
 
 // newRegion2Budget is newRegion2 with cancellation charged to the caller's
 // shared coplanar-scan budget.
-func newRegion2Budget(budget *clearanceBudget, elems []surveyElem) (region2, error) {
+func newRegion2Budget(budget *workBudget, elems []surveyElem) (region2, error) {
 	scale := 1.0
 	grow := func(vs ...float64) {
 		for _, v := range vs {
@@ -234,7 +234,7 @@ func newRegion2Budget(budget *clearanceBudget, elems []surveyElem) (region2, err
 	return region2{elems: elems, scale: scale}, nil
 }
 
-func regionContainsBudget(budget *clearanceBudget, r region2, px, py float64) (bool, bool, error) {
+func regionContainsBudget(budget *workBudget, r region2, px, py float64) (bool, bool, error) {
 	for i := range 16 {
 		if err := budget.step(); err != nil {
 			return false, false, err
@@ -260,7 +260,7 @@ func regionContainsBudget(budget *clearanceBudget, r region2, px, py float64) (b
 	return false, false, nil
 }
 
-func regionBoundaryDistBudget(budget *clearanceBudget, r region2, px, py float64) (float64, error) {
+func regionBoundaryDistBudget(budget *workBudget, r region2, px, py float64) (float64, error) {
 	best := math.Inf(1)
 	for _, e := range r.elems {
 		if err := budget.step(); err != nil {
@@ -274,7 +274,7 @@ func regionBoundaryDistBudget(budget *clearanceBudget, r region2, px, py float64
 	return best, nil
 }
 
-func regionClassifyBudget(budget *clearanceBudget, r region2, px, py, margin float64) (int, error) {
+func regionClassifyBudget(budget *workBudget, r region2, px, py, margin float64) (int, error) {
 	distance, err := regionBoundaryDistBudget(budget, r, px, py)
 	if err != nil {
 		return 0, err
@@ -295,7 +295,7 @@ func regionClassifyBudget(budget *clearanceBudget, r region2, px, py, margin flo
 	return -1, nil
 }
 
-func regionSamplesBudget(budget *clearanceBudget, r region2) ([][2]float64, error) {
+func regionSamplesBudget(budget *workBudget, r region2) ([][2]float64, error) {
 	var out [][2]float64
 	for _, e := range r.elems {
 		if err := budget.step(); err != nil {
@@ -313,7 +313,7 @@ func regionSamplesBudget(budget *clearanceBudget, r region2) ([][2]float64, erro
 	return out, nil
 }
 
-func regionInteriorPointBudget(budget *clearanceBudget, r region2) ([2]float64, bool, error) {
+func regionInteriorPointBudget(budget *workBudget, r region2) ([2]float64, bool, error) {
 	for _, e := range r.elems {
 		if err := budget.step(); err != nil {
 			return [2]float64{}, false, err
@@ -845,50 +845,80 @@ func perpTo(a r3.Vec) r3.Vec {
 // payloads. Faceted and other multi-lump bodies bypass analytic containment
 // and proceed to read-only intersection; ok is false, never a partial model.
 func newBodyGeom(b *Body) (*bodyGeom, bool) {
-	if len(b.lumps) != 1 {
+	g, ok, err := newBodyGeomBudget(newWorkBudget(context.Background()), b)
+	if err != nil {
+		// A background budget never cancels, so this is unreachable.
 		return nil, false
+	}
+	return g, ok
+}
+
+// newBodyGeomBudget is the cancellable form. Building a body's carrier faces,
+// edges, vertices and support points is linear in the body but is not free, and
+// §7.2 carries the context through the entire read-only path — so the whole
+// build steps the caller's budget rather than making cancellation wait for both
+// operands to finish.
+func newBodyGeomBudget(budget *workBudget, b *Body) (*bodyGeom, bool, error) {
+	if err := budget.err(); err != nil {
+		return nil, false, err
+	}
+	if len(b.lumps) != 1 {
+		return nil, false, nil
 	}
 	g := &bodyGeom{body: b}
+	var ok bool
+	var err error
 	switch pl := b.payload.(type) {
 	case prismPayload:
-		if !g.addPrismFaces(pl) {
-			return nil, false
-		}
+		ok, err = g.addPrismFaces(budget, pl)
 	case revolvePayload:
-		if !g.addRevolveFaces(pl) {
-			return nil, false
-		}
+		ok, err = g.addRevolveFaces(budget, pl)
 	default:
-		return nil, false
+		return nil, false, nil
 	}
-	if !g.addTopology(b) {
-		return nil, false
+	if err != nil || !ok {
+		return nil, false, err
+	}
+	if ok, err = g.addTopology(budget, b); err != nil || !ok {
+		return nil, false, err
 	}
 	g.supports = append([]r3.Vec{}, g.verts...)
 	for _, f := range g.faces {
+		if err := budget.step(); err != nil {
+			return nil, false, err
+		}
 		g.supports = append(g.supports, f.wit...)
 	}
-	return g, true
+	return g, true, nil
 }
 
 // addTopology reads exact edges and vertices and picks the supported analytic
 // lump's outer-shell witness for §2 nesting casts. newBodyGeom rejects
 // multi-lump bodies before this point; void shells remove material and are not
 // independent containment candidates.
-func (g *bodyGeom) addTopology(b *Body) bool {
+func (g *bodyGeom) addTopology(budget *workBudget, b *Body) (bool, error) {
 	for _, e := range b.Edges() {
+		if err := budget.step(); err != nil {
+			return false, err
+		}
 		ce, ok := newCEdge(e)
 		if !ok {
-			return false
+			return false, nil
 		}
 		if ce != nil {
 			g.edges = append(g.edges, ce)
 		}
 	}
 	for _, v := range b.Vertices() {
+		if err := budget.step(); err != nil {
+			return false, err
+		}
 		g.verts = append(g.verts, v.position)
 	}
 	for _, lump := range b.Lumps() {
+		if err := budget.step(); err != nil {
+			return false, err
+		}
 		var outer *Shell
 		for _, sh := range lump.Shells() {
 			if !sh.IsVoid() {
@@ -897,15 +927,15 @@ func (g *bodyGeom) addTopology(b *Body) bool {
 			}
 		}
 		if outer == nil {
-			return false
+			return false, nil
 		}
 		w, ok := shellWitness(outer)
 		if !ok {
-			return false
+			return false, nil
 		}
 		g.lumpWit = append(g.lumpWit, w)
 	}
-	return true
+	return true, nil
 }
 
 func newCEdge(e *Edge) (*cEdge, bool) {
@@ -984,10 +1014,13 @@ func shellWitness(sh *Shell) (r3.Vec, bool) {
 
 // addPrismFaces builds the prism's faces from its own payload, mirroring the
 // walk decomposition the evaluator built the topology from.
-func (g *bodyGeom) addPrismFaces(pp prismPayload) bool {
+func (g *bodyGeom) addPrismFaces(budget *workBudget, pp prismPayload) (bool, error) {
 	loops, err := recordLoops(pp.profile)
 	if err != nil {
-		return false
+		// A section this kernel cannot decompose is an unsupported payload, not
+		// a failure: newBodyGeom answers with no model rather than a partial
+		// one. The error return is reserved for cancellation.
+		return false, nil //nolint:nilerr // an undecomposable section is ok=false, never an error.
 	}
 	nDir := pp.dir(0, 0, 1)
 	h := pp.z1 - pp.z0
@@ -995,9 +1028,12 @@ func (g *bodyGeom) addPrismFaces(pp prismPayload) bool {
 	var capElems []surveyElem
 	for _, loop := range loops {
 		for _, w := range loop {
+			if err := budget.step(); err != nil {
+				return false, err
+			}
 			el, ok := walkElem(w.segmentWalk)
 			if !ok {
-				return false
+				return false, nil
 			}
 			capElems = append(capElems, el)
 
@@ -1027,11 +1063,11 @@ func (g *bodyGeom) addPrismFaces(pp prismPayload) bool {
 
 			l := math.Hypot(w.endU-w.startU, w.endV-w.startV)
 			if l == 0 {
-				return false
+				return false, nil
 			}
 			e1, ok := pp.dir(w.endU-w.startU, w.endV-w.startV, 0).Normalize()
 			if !ok {
-				return false
+				return false, nil
 			}
 			tu, tv := w.tanInU, w.tanInV
 			if pp.reflected() {
@@ -1039,7 +1075,7 @@ func (g *bodyGeom) addPrismFaces(pp prismPayload) bool {
 			}
 			nOut, ok := pp.dir(tu, tv, 0).Cross(nDir).Normalize()
 			if !ok {
-				return false
+				return false, nil
 			}
 			f := &cFace{
 				kind: ckPlane,
@@ -1076,7 +1112,7 @@ func (g *bodyGeom) addPrismFaces(pp prismPayload) bool {
 		f.wit = capWitnesses(f)
 		g.faces = append(g.faces, f)
 	}
-	return true
+	return true, nil
 }
 
 // capBox is the world box of a planar face's region boundary (arcs taken as
@@ -1112,10 +1148,12 @@ func capWitnesses(f *cFace) []r3.Vec {
 }
 
 // addRevolveFaces builds the revolved body's faces from its own payload.
-func (g *bodyGeom) addRevolveFaces(rp revolvePayload) bool {
+func (g *bodyGeom) addRevolveFaces(budget *workBudget, rp revolvePayload) (bool, error) {
 	loops, err := revolveLoops(rp)
 	if err != nil {
-		return false
+		// As in addPrismFaces: an undecomposable meridian is an unsupported
+		// payload, and the error return is reserved for cancellation.
+		return false, nil //nolint:nilerr // an undecomposable meridian is ok=false, never an error.
 	}
 	b := rp.basis()
 	a3p := rp.xform.Apply(b.a3)
@@ -1132,6 +1170,9 @@ func (g *bodyGeom) addRevolveFaces(rp revolvePayload) bool {
 	var capElems []surveyElem
 	for _, loop := range loops {
 		for _, w := range loop {
+			if err := budget.step(); err != nil {
+				return false, err
+			}
 			kind := rp.ax.classify(w.segmentWalk)
 			if el, ok := walkElem(w.segmentWalk); ok {
 				capElems = append(capElems, el)
@@ -1265,7 +1306,7 @@ func (g *bodyGeom) addRevolveFaces(rp revolvePayload) bool {
 			g.faces = append(g.faces, f)
 		}
 	}
-	return true
+	return true, nil
 }
 
 // annularRegion builds the 2D region of a revolve wallPlane face in its

@@ -82,26 +82,8 @@ type triCutter struct {
 	edges []cutEdge
 	swap  bool // projection coordinate swap that keeps the facet CCW
 	u, v  int  // projection axes
-	work  *cutBudget
+	work  *workBudget
 }
-
-// cutBudget shares one bounded cancellation counter across every nested loop
-// in one facet subdivision. Exact arithmetic stays context-free; callers poll
-// at least once per 256 candidate operations.
-type cutBudget struct{ stepFn func() error }
-
-func newCutBudget(ctx context.Context) *cutBudget {
-	work := 0
-	return &cutBudget{stepFn: func() error {
-		work++
-		if work%256 == 0 {
-			return ctx.Err()
-		}
-		return nil
-	}}
-}
-
-func (b *cutBudget) step() error { return b.stepFn() }
 
 func (tc *triCutter) proj(p xpt) xp2 {
 	a := ratCoordOf(p, tc.u)
@@ -132,7 +114,7 @@ func cutTriangle(ctx context.Context, xtri [3]xpt, normal xpt, segs []xseg) ([]c
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	tc := &triCutter{index: map[string]int{}, work: newCutBudget(ctx)}
+	tc := &triCutter{index: map[string]int{}, work: newWorkBudget(ctx)}
 	tc.u, tc.v = projAxes(normal)
 
 	// Keep the projected facet counter-clockwise, so polygon areas and ear

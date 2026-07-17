@@ -1210,15 +1210,21 @@ func refuseWeldedAwayComponent(ctx context.Context, tris [][3]int, dropped []boo
 // subdivision conforms. Returns whether anything split.
 func conformOnce(ctx context.Context, xverts *[]xpt, tris *[][3]int, src *[]int) (bool, error) {
 	verts := *xverts
+	// One counter spans the facet walk, the grid-cell candidate scan nested
+	// under it, and the along-edge ordering: the candidate vertices a single
+	// facet edge sweeps are the candidate operations §7.2 counts, not the
+	// facets.
+	budget := newWorkBudget(ctx)
+	if err := budget.err(); err != nil {
+		return false, err
+	}
 	// A coarse uniform grid over float approximations prunes the exact
 	// on-edge tests; the slack absorbs the approximation, so no incidence is
 	// missed.
 	lo, hi := r3.Vec{}, r3.Vec{}
 	for i, p := range verts {
-		if i%256 == 0 {
-			if err := ctx.Err(); err != nil {
-				return false, err
-			}
+		if err := budget.step(); err != nil {
+			return false, err
 		}
 		v := p.vec()
 		if i == 0 {
@@ -1240,10 +1246,8 @@ func conformOnce(ctx context.Context, xverts *[]xpt, tris *[][3]int, src *[]int)
 	grid := map[[3]int][]int{}
 	approx := make([]r3.Vec, len(verts))
 	for i, p := range verts {
-		if i%256 == 0 {
-			if err := ctx.Err(); err != nil {
-				return false, err
-			}
+		if err := budget.step(); err != nil {
+			return false, err
 		}
 		approx[i] = p.vec()
 		c := cellOf(approx[i].X, approx[i].Y, approx[i].Z)
@@ -1254,10 +1258,8 @@ func conformOnce(ctx context.Context, xverts *[]xpt, tris *[][3]int, src *[]int)
 	var outSrc []int
 	splitAny := false
 	for ti, tri := range *tris {
-		if ti%256 == 0 {
-			if err := ctx.Err(); err != nil {
-				return false, err
-			}
+		if err := budget.step(); err != nil {
+			return false, err
 		}
 		inserted := [3][]int{}
 		for k := range 3 {
@@ -1265,23 +1267,14 @@ func conformOnce(ctx context.Context, xverts *[]xpt, tris *[][3]int, src *[]int)
 			pa, pb := approx[a], approx[b]
 			cLo := cellOf(math.Min(pa.X, pb.X)-slack, math.Min(pa.Y, pb.Y)-slack, math.Min(pa.Z, pb.Z)-slack)
 			cHi := cellOf(math.Max(pa.X, pb.X)+slack, math.Max(pa.Y, pb.Y)+slack, math.Max(pa.Z, pb.Z)+slack)
-			var hits []int
-			for cx := cLo[0]; cx <= cHi[0]; cx++ {
-				for cy := cLo[1]; cy <= cHi[1]; cy++ {
-					for cz := cLo[2]; cz <= cHi[2]; cz++ {
-						for _, vi := range grid[[3]int{cx, cy, cz}] {
-							if vi == tri[0] || vi == tri[1] || vi == tri[2] {
-								continue
-							}
-							if onSegmentInterior3(verts[a], verts[b], verts[vi]) {
-								hits = append(hits, vi)
-							}
-						}
-					}
-				}
+			hits, err := edgeInteriorHits(budget, grid, verts, cLo, cHi, a, b, tri)
+			if err != nil {
+				return false, err
 			}
 			if len(hits) > 0 {
-				sortAlongEdge(verts, a, b, hits)
+				if err := sortAlongEdge(budget, verts, a, b, hits); err != nil {
+					return false, err
+				}
 				inserted[k] = hits
 			}
 		}
@@ -1342,20 +1335,62 @@ func dominantAxis(d xpt) int {
 	return 2
 }
 
+// edgeInteriorHits returns the mesh vertices lying exactly in the interior of
+// facet edge (a, b), searched through the grid cells the edge's slack box
+// covers. An edge spanning the mesh sweeps the whole grid, so the cells and the
+// candidate vertices in them — not the facets — are the candidate operations
+// §7.2 counts, and both step the budget.
+func edgeInteriorHits(budget *workBudget, grid map[[3]int][]int, verts []xpt, cLo, cHi [3]int, a, b int, tri [3]int) ([]int, error) {
+	var hits []int
+	for cx := cLo[0]; cx <= cHi[0]; cx++ {
+		for cy := cLo[1]; cy <= cHi[1]; cy++ {
+			for cz := cLo[2]; cz <= cHi[2]; cz++ {
+				if err := budget.step(); err != nil {
+					return nil, err
+				}
+				for _, vi := range grid[[3]int{cx, cy, cz}] {
+					if err := budget.step(); err != nil {
+						return nil, err
+					}
+					if vi == tri[0] || vi == tri[1] || vi == tri[2] {
+						continue
+					}
+					if onSegmentInterior3(verts[a], verts[b], verts[vi]) {
+						hits = append(hits, vi)
+					}
+				}
+			}
+		}
+	}
+	return hits, nil
+}
+
 // sortAlongEdge orders the inserted vertices by their exact parameter along
-// (a, b).
-func sortAlongEdge(verts []xpt, a, b int, hits []int) {
+// (a, b). Each parameter is computed once and carried through the sort: the
+// comparison is a leaf exact predicate, so recomputing an exact division inside
+// it would make the pass quadratic in rational arithmetic rather than in
+// comparisons, with the same ordering.
+func sortAlongEdge(budget *workBudget, verts []xpt, a, b int, hits []int) error {
 	d := xsub(verts[b], verts[a])
 	axis := dominantAxis(d)
 	da := ratCoordOf(d, axis)
-	param := func(vi int) *big.Rat {
-		return new(big.Rat).Quo(ratCoordOf(xsub(verts[vi], verts[a]), axis), da)
+	params := make([]*big.Rat, len(hits))
+	for i, vi := range hits {
+		if err := budget.step(); err != nil {
+			return err
+		}
+		params[i] = new(big.Rat).Quo(ratCoordOf(xsub(verts[vi], verts[a]), axis), da)
 	}
 	for i := 1; i < len(hits); i++ {
-		for j := i; j > 0 && param(hits[j]).Cmp(param(hits[j-1])) < 0; j-- {
+		for j := i; j > 0 && params[j].Cmp(params[j-1]) < 0; j-- {
+			if err := budget.step(); err != nil {
+				return err
+			}
 			hits[j], hits[j-1] = hits[j-1], hits[j]
+			params[j], params[j-1] = params[j-1], params[j]
 		}
 	}
+	return nil
 }
 
 // triangulatePlanarPolygon triangulates a planar polygon of mesh vertices
@@ -1365,7 +1400,7 @@ func triangulatePlanarPolygon(ctx context.Context, verts []xpt, poly []int) ([][
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	budget := newCutBudget(ctx)
+	budget := newWorkBudget(ctx)
 	if len(poly) < 3 {
 		return nil, fmt.Errorf(`%w: a conforming polygon lost its corners`, ErrBooleanFailed)
 	}
