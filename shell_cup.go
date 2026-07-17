@@ -8,8 +8,8 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// This file is the cup payload of docs/modify-design.md §9 (Table B, B5/B6):
-// the one new payload this increment introduces. A cup is two co-directional
+// This file is the cup payload of docs/modify-design.md §9 (Table B, B5/B6),
+// the payload the shell op introduces. A cup is two co-directional
 // prisms over the same plane — the outer region O on its interval and the
 // cavity region C on its own, sharing a rim at the open end and a floor at the
 // closed one. It re-evaluates under Body.Placed (evaluator §8) and holds every

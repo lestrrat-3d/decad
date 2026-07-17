@@ -13,8 +13,8 @@ import (
 // constant offsets of a spine, so their cells reduce to spine-pair criticals
 // (closed form, or P4/P8 certified brackets) with the four offset
 // combinations per critical; the plane row is elementary; cone-involved
-// pairs and spindle-torus pairs are off PR 1's solvable set and contribute a
-// coarse conservative enclosure instead (§8 — proven disjoint with a wide
+// pairs and spindle-torus pairs are outside the certified-cell set and
+// contribute a coarse conservative enclosure instead (§8 — proven disjoint with a wide
 // honest row when even the coarse lower bound clears zero, undecided when it
 // does not). A discarded candidate is a candidate whose feet provably leave
 // the trims — a lower tier holds its minimum; a candidate whose admission is
@@ -38,7 +38,7 @@ type cellSink struct {
 	// unsure is set when a cell meets a question it cannot decide: an
 	// admitted-or-ambiguous carrier crossing, an uncertified contact, an
 	// equality where a branch demands strictness (§4: equality routes to §6,
-	// and PR 1 certifies only the coplanar plane pair).
+	// where only the coplanar plane pair is certified).
 	unsure bool
 }
 
@@ -190,16 +190,18 @@ func (k *pairKernel) ffCell(f, g *cFace, sink *cellSink) {
 	case f.kind == ckPlane && g.kind == ckTorus:
 		k.planeTorus(f, g, sink)
 	case f.kind == ckCone || g.kind == ckCone:
-		// The genuinely iterative cells (§4): cone × sphere stays closed
-		// form, everything else cone-involved is the PR 2 BB path.
+		// Cone × sphere stays closed form (§4); everything else
+		// cone-involved takes the coarse enclosure — the face-box distance
+		// below, the closest witness pair above.
 		if f.kind == ckSphere || g.kind == ckSphere {
 			k.coneSphere(f, g, sink)
 			return
 		}
 		sink.coarse(f.box, g.box, f.wit, g.wit)
 	case (f.kind == ckTorus && f.spindle) || (g.kind == ckTorus && g.spindle):
-		// A Minor ≥ Major torus leaves the polynomial path (§4): the BB
-		// downgrade is PR 2, so the pair is coarse here.
+		// A Minor ≥ Major torus leaves the polynomial path (§4): the pair
+		// takes the coarse enclosure — the face-box distance below, the
+		// closest witness pair above.
 		sink.coarse(f.box, g.box, f.wit, g.wit)
 	default:
 		k.offsetPair(f, g, sink)
@@ -583,7 +585,7 @@ func ringAngles(f, g *cFace, u, v r3.Vec) []float64 {
 }
 
 // planePlane is the plane-row cell for two planes: a coplanar pair reaching
-// here is uncertified (the PR 1 coplanar contact certificate runs at the
+// here is uncertified (the coplanar contact certificate runs at the
 // pair level first); a parallel distinct pair carries its plateau exactly
 // where the trims overlap in projection (§3's projection rule); crossing
 // carriers are excluded through the trims or read as the §6/§7-routed
@@ -963,7 +965,7 @@ func (k *pairKernel) planeCylinder(f, g *cFace, sink *cellSink) {
 			sink.unsure = true
 		}
 	default:
-		// Tangency at distance zero: certified only in PR 3 (§6); excluded
+		// Tangency at distance zero: not certified here (§6); excluded
 		// through the trims or undecided.
 		if k.rulingRelation(f, g, toward) != -1 {
 			sink.unsure = true
@@ -1176,7 +1178,7 @@ func (k *pairKernel) planeTorus(f, g *cFace, sink *cellSink) {
 		return
 	}
 	if hLo > g.radius-k.tol || hHi < -(g.radius-k.tol) {
-		// Tangency zone: certified only in PR 3.
+		// Tangency zone: not certified here.
 		sink.unsure = true
 		return
 	}

@@ -1,6 +1,6 @@
 // Package decad is a headless CAD engine for Go: the 3D modeling layer above
 // the [sketch] 2D constraint engine and the [r3] coordinate-math layer, with
-// every quantity a typed [units] value.
+// every scalar quantity a typed [units] value.
 //
 // # Why this exists
 //
@@ -16,6 +16,99 @@
 // programmatically — is the body watertight, what is its volume and bounding
 // box, does it self-intersect, do these two bodies collide — and only carries
 // the plan into the CAD package once the geometry is proven sound.
+//
+// # Quickstart
+//
+// The canonical loop is sketch → model → verify → gate. Build and solve a 2D
+// profile in [sketch], turn it into a body with a feature verb, then gate the
+// live document on [Report.Trustworthy]:
+//
+//	w := sketch.NewWorld()
+//	s, err := w.CreateSketch(w.XY())
+//	if err != nil {
+//		return err
+//	}
+//	rect := s.CreateRectangle(0, 0, 100, 60)
+//	s.Fix(rect.A)
+//	if _, err := s.Solve(context.Background()); err != nil {
+//		return err
+//	}
+//
+//	doc := decad.New()
+//	body, err := doc.Extrude(s, s.Profiles()[0],
+//		decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+//	if err != nil {
+//		// Every failure wraps a sentinel from errors.go — branch with
+//		// errors.Is(err, decad.ErrUnsupported), decad.ErrCardinality, etc.
+//		return err
+//	}
+//
+//	// Verify can fail (a cancelled context) and return a NIL report, so gate
+//	// only after checking err — report.Trustworthy() would panic otherwise.
+//	report, err := doc.Verify(context.Background())
+//	if err != nil {
+//		return err
+//	}
+//	if !report.Trustworthy() {
+//		// Something is not proven right: report.Status says how severe,
+//		// and each report.Bodies entry carries that body's verdict.
+//	}
+//	_ = body
+//
+// A runnable version of this loop is Example_decad_quickstart in this package's
+// test files. The examples directory holds fuller, feature-specific cases —
+// selectors, revolve, the modify ops, booleans, verification, recipe
+// serialization and error recovery — each an executable test with a verified
+// output block.
+//
+// # Units and coordinates
+//
+// Every SCALAR quantity is a typed [units.Value]: distances, angles, radii,
+// thicknesses, tolerances, and every measurement and its error bound. A value
+// carries its Kind, so a length handed where an angle is wanted is a loud
+// [ErrUnitKind], never a silent coercion.
+//
+// Coordinates are the deliberate exception (core §5.2). A position is a bare
+// [r3.Vec] (or a plane-local Point2) in millimetres by convention — not a
+// units.Value — and a direction vector is dimensionless. So scalar inputs read
+// units.Millimeters(10), while a translation or a selector direction reads
+// r3.NewVec(200, 0, 25) with no unit marker.
+//
+// # Evaluator support
+//
+// The recipe records intent under a stable design; this evaluator builds a
+// subset of it and refuses the rest explicitly (never a wrong-but-confident
+// result). The current map, and the sentinel a refused combination returns:
+//
+//	Extrude       line/circle/arc profile segments            builds
+//	  free-form profile segment (spline, ellipse)             ErrUnsupported
+//	  WithTaper   nonzero taper angle                         ErrUnsupported
+//	Revolve       cylinder / cone / sphere / torus / annulus  builds
+//	Union/Cut/Intersect  prism/faceted operands, crossings    builds
+//	  faceted operand coarser than the pair tolerance         ErrUnsupported
+//	  revolve operand (no tessellator; booleans mesh)         ErrUnsupported
+//	  curved-surface tangent, facets never meet               ErrUnsupported
+//	  exact coplanar / face-on-face / point contact           ErrDegenerate
+//	  empty result (disjoint intersect, emptied cut)          ErrBooleanFailed
+//	Fillet/Chamfer  straight prism, lateral edges             builds
+//	  cap edge, or non-prism receiver                         ErrUnsupported
+//	Shell         straight prism (tube or cup)                builds
+//	  both caps removed from a holed section                  ErrUnsupported
+//	Placed        any body this evaluator built               builds
+//	Verify        every body; surveys read prisms/revolves/cups
+//	  a question the evaluator cannot decide                  Status Suspect
+//	Tessellate / STL / OBJ  prism, cup, boolean body          builds
+//	  revolve payload                                         ErrUnsupported
+//	  boolean body at a tolerance finer than its bound        ErrUnsupported
+//
+// Options: among the MODEL-CONSTRUCTION verbs, New, Revolve, Fillet and
+// Chamfer expose option groups that carry nothing today (they exist so options
+// can be added without a signature change); WithShellSense picks a shell's wall
+// sense, and WithTaper names an extrude taper — but a nonzero taper is
+// [ErrUnsupported], returned before any step is recorded, so the recipe is left
+// unchanged. Separately, Verify's options (WithTolerance, WithMinWallThickness,
+// WithPullDirection, WithMinRadius, WithClearances) and the STL/OBJ
+// WithChordTolerance also take effect.
 //
 // # Layering
 //
@@ -37,7 +130,7 @@
 // be computed FROM a solid. decad is the layer both of them were leaving room
 // for.
 //
-// # Status
+// # Design
 //
 // The public API is landing incrementally against an approved design: what
 // this package exports today is the leading edge of that surface, and

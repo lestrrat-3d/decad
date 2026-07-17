@@ -31,10 +31,11 @@ func (extrudeOption) extrudeOption() {}
 type identTaper struct{}
 
 // WithTaper sets the extrude taper: a SIGNED displacement angle — which way
-// the wall leans — recorded exactly in the step's ExtrudeOpts. A nonzero
-// taper is ErrUnsupported in evaluator v1 (docs/evaluator-design.md §5): a
-// tapered extrude of a general region is an offset problem, and a
-// wrong-but-confident prism is the failure decad exists to prevent.
+// the wall leans. A nonzero taper is [ErrUnsupported]
+// (docs/evaluator-design.md §5), returned before any step is recorded, so the
+// recipe is left unchanged — because a tapered extrude of a general region is
+// an offset problem, and a wrong-but-confident prism is the failure decad
+// exists to prevent. Only a zero taper reaches the step's ExtrudeOpts.
 func WithTaper(a units.Value) ExtrudeOption {
 	return extrudeOption{option.New(identTaper{}, a)}
 }
@@ -43,9 +44,11 @@ func WithTaper(a units.Value) ExtrudeOption {
 // linear extent e, and registers the new body. p MUST be a profile of s
 // (ErrForeignProfile) and a current one (ErrStaleProfile); an invalid
 // profile is ErrInvalidProfile, and a boundary decad cannot record exactly
-// is ErrUnrecordableProfile (core §7). The step records the profile, the
-// plane, the extent and the options; evaluation runs from that record, and a
-// failed evaluation leaves the recipe and the document untouched.
+// is ErrUnrecordableProfile (core §7). This evaluator builds a straight prism
+// from a profile of line, circle and arc segments; a free-form segment (a
+// spline or ellipse, say) is [ErrUnsupported]. The step records the profile,
+// the plane, the extent and the options; evaluation runs from that record, and
+// a failed evaluation leaves the recipe and the document untouched.
 func (d *Document) Extrude(s *sketch.Sketch, p *sketch.Profile, e Extent, opts ...ExtrudeOption) (*Body, error) {
 	if d == nil {
 		return nil, fmt.Errorf(`%w: a nil document owns no model`, ErrDegenerate)
@@ -79,7 +82,7 @@ func (d *Document) Extrude(s *sketch.Sketch, p *sketch.Profile, e Extent, opts .
 		return nil, fmt.Errorf(`%w: the taper is not representable: %s`, ErrNotFinite, err)
 	}
 	if taper.Mag() != 0 {
-		// Recorded exactly, then rejected: staging is explicit
+		// Refused before the step is built: staging is explicit
 		// (docs/evaluator-design.md §2/§5), never a silent untapered prism.
 		return nil, fmt.Errorf(`%w: this evaluator extrudes straight (untapered) prisms only; omit WithTaper or pass a zero angle`, ErrUnsupported)
 	}
@@ -314,7 +317,7 @@ func (pp prismPayload) placed(d *Document, ref StepRef, composed r3.Transform) (
 // evalPrism builds the analytic prism body from the payload: side faces per
 // boundary segment, two caps, shared edges and vertices, and Exact
 // measurements (docs/evaluator-design.md §5). The payload's segment kinds
-// are the increment-1 set; anything else has already been rejected by the
+// are line, circle and arc; anything else has already been rejected by the
 // mass-property integrals it runs first.
 func evalPrism(d *Document, ref StepRef, pp prismPayload) (*Body, error) {
 	ig, err := pp.profile.integrals()
@@ -438,7 +441,7 @@ type segmentWalk struct {
 	th0, th1 float64
 }
 
-// walkOf resolves one increment-1 segment into its walk geometry.
+// walkOf resolves one line, circle or arc segment into its walk geometry.
 func walkOf(seg CurveSegment) (segmentWalk, error) {
 	seg, err := normalizeSegment(seg)
 	if err != nil {

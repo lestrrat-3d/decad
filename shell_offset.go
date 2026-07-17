@@ -12,7 +12,7 @@ import (
 // a line offsets to a parallel line, a circle to a concentric circle, a corner
 // closes with a miter or an arc of radius t about the corner point. Every piece
 // is a line or an arc, so P ⊖ t / P ⊕ t is again a ProfileRecord in the
-// increment-1 vocabulary (§2). The offset is decad's OWN synthesized geometry,
+// line-and-arc vocabulary (§2). The offset is decad's OWN synthesized geometry,
 // proven by exact closed-form tests, never a residual (§5, CLAUDE.md's
 // falsify-only rule governs only what sketch hands over).
 //

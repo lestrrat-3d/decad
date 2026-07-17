@@ -80,9 +80,8 @@ type Extent interface{ extent() }
 
 // SideExtent is what ONE side of a TwoSided extent may be. Sealed, and
 // narrower than Extent: implemented only by DistanceSide, ThroughAllSide and
-// (when it lands with the selector vocabulary) ToFace. A side already IS a
-// single direction of travel, so no side variant carries a Direction —
-// TwoSided{One: Distance{Dir: …}} does not compile.
+// ToFace. A side already IS a single direction of travel, so no side variant
+// carries a Direction — TwoSided{One: Distance{Dir: …}} does not compile.
 type SideExtent interface{ sideExtent() }
 
 // Distance sweeps a non-negative distance D in Direction Dir. Extent only.
@@ -91,10 +90,11 @@ type Distance struct {
 	Dir Direction   `json:"dir"`
 }
 
-// ThroughAll sweeps in Direction Dir through the far side of every body the
-// sweep meets. Extent only; its stop bodies are resolved at the call and
-// recorded as StepRefs in the step's Inputs (core §6.2). Evaluator support
-// lands in increment 2 (docs/evaluator-design.md §5).
+// ThroughAll sweeps in Direction Dir to the farthest far side of every live
+// body with material beyond the sketch plane in the travel sense — the lateral
+// footprint is not consulted, so a body off to the side still counts. Extent
+// only; each such body is resolved at the call and recorded as a StepRef in the
+// step's Inputs (core §6.2, docs/evaluator-design.md §5).
 type ThroughAll struct {
 	Dir Direction `json:"dir"`
 }
@@ -120,9 +120,11 @@ type DistanceSide struct {
 	D units.Value `json:"d"`
 }
 
-// ThroughAllSide is one side of a TwoSided that runs through every body on
-// its side. SideExtent only; like ThroughAll, its stop bodies are resolved at
-// the call and recorded as StepRefs in the step's Inputs (core §6.2).
+// ThroughAllSide is one side of a TwoSided that runs to the farthest far side
+// of every live body with material beyond the sketch plane on this side, its
+// lateral footprint likewise not consulted. SideExtent only; like ThroughAll,
+// each such body is resolved at the call and recorded as a StepRef in the
+// step's Inputs (core §6.2).
 type ThroughAllSide struct{}
 
 // ToFace stops the sweep at a face of Body, displaced by the signed Offset —
@@ -506,10 +508,9 @@ func unmarshalSideExtent(data []byte) (SideExtent, error) {
 type AngularExtent interface{ angularExtent() }
 
 // SideAngular is what ONE side of a TwoSidedAngle extent may be. Sealed, and
-// narrower than AngularExtent: implemented only by AngleSide and (when it
-// lands with the selector vocabulary) ToFaceAngular. A side already IS a
-// single direction of travel, so no side variant carries a Direction —
-// TwoSidedAngle{One: AngleExtent{Dir: …}} does not compile.
+// narrower than AngularExtent: implemented only by AngleSide and ToFaceAngular.
+// A side already IS a single direction of travel, so no side variant carries a
+// Direction — TwoSidedAngle{One: AngleExtent{Dir: …}} does not compile.
 type SideAngular interface{ sideAngular() }
 
 // AngleExtent sweeps a non-negative angle A in Direction Dir about the

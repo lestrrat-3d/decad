@@ -2,7 +2,7 @@ package decad
 
 import "math"
 
-// This file is the 2D kernel behind the increment-5 analytic wall survey
+// This file is the 2D kernel behind the analytic wall survey
 // (docs/verification-design.md §6, docs/evaluator-design.md §10): the
 // spanning-ball reading of a prism or revolved body reduces exactly to
 // empty-disk analysis in a 2D section — the profile plane for a prism, the

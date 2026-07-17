@@ -18,8 +18,8 @@ type Document struct {
 	steps  []Step
 }
 
-// DocumentOption configures New. The set is empty today; the option group
-// exists so options can be added without changing the signature.
+// DocumentOption configures New. No options are currently supported: the
+// option group exists so options can be added without changing the signature.
 type DocumentOption interface {
 	option.Interface
 	documentOption()
@@ -37,7 +37,14 @@ func (d *Document) Bodies() []*Body {
 }
 
 // Recipe returns the exact record of intent: a value holding no pointer into
-// the document (core §6.2). The steps slice is a copy.
+// the document (core §6.2). The steps slice is a copy. The whole value is
+// serializable — encoding/json round-trips it through the sealed codecs, so a
+// recipe can be stored, diffed, or translated into CAD code.
+//
+// A decoded [Recipe] is currently for inspection and translation only: this
+// package has no replay entry point that rebuilds a document from a recipe, so
+// a persisted recipe is re-evaluated by reading its steps and re-issuing the
+// feature calls, not by handing the value back to decad.
 func (d *Document) Recipe() Recipe {
 	return Recipe{Steps: cloneSteps(d.steps)}
 }

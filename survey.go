@@ -8,7 +8,7 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// This file is the increment-5 analytic survey layer of
+// This file is the analytic survey layer of
 // docs/evaluator-design.md §10 and docs/verification-design.md §6: the wall,
 // undercut and minimum-radius questions answered outright on the analytic
 // prism and revolve bodies. Each survey reads the evaluator's own payload —

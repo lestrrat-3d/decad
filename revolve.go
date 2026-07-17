@@ -12,7 +12,7 @@ import (
 	"github.com/lestrrat-go/option/v3"
 )
 
-// This file is the increment-2 revolve of docs/evaluator-design.md §6: the
+// This file is the revolve of docs/evaluator-design.md §6: the
 // sealed Axis vocabulary of docs/api-design.md §6.2, the §6 axis-contact
 // gates, angular-extent resolution to a sweep interval (the body-relative
 // ToFaceAngular stop resolves through stops.go, its body recorded as a
@@ -224,9 +224,9 @@ func unmarshalAxis(data []byte) (Axis, error) {
 	}
 }
 
-// RevolveOption configures Revolve. The set is empty today; the option group
-// exists so options can be added without changing the signature — every
-// future option MUST be representable in a recorded RevolveOpts (core §6.2).
+// RevolveOption configures Revolve. No options are currently supported: the
+// option group exists so options can be added without changing the signature —
+// every such option MUST be representable in a recorded RevolveOpts (core §6.2).
 type RevolveOption interface {
 	option.Interface
 	revolveOption()
@@ -558,7 +558,7 @@ func axisInPlane(a Axis, frame r3.Frame) (axisLine2, error) {
 		l := math.Hypot(du, dv)
 		return axisLine2{aU: local.X, aV: local.Y, dU: du / l, dV: dv / l}, nil
 	default:
-		// EdgeAxis is gated before extent resolution; a future variant is
+		// EdgeAxis is gated before extent resolution; any other variant is
 		// staged, never guessed.
 		return axisLine2{}, fmt.Errorf(`%w: axis %T is not supported by this evaluator`, ErrUnsupported, a)
 	}
@@ -806,9 +806,9 @@ func axisMoments(ig regionIntegrals, ax axisFrame) (float64, float64, float64) {
 // evalRevolve builds the analytic revolved body from the payload: side
 // surfaces of revolution per boundary segment, caps only for a partial
 // sweep, shared edges and vertices, and Exact measurements
-// (docs/evaluator-design.md §6). The payload's segment kinds are the
-// increment-1 set; anything else has already been rejected by the
-// mass-property integrals it runs first.
+// (docs/evaluator-design.md §6). The payload's segment kinds are line, circle
+// and arc; anything else has already been rejected by the mass-property
+// integrals it runs first.
 func evalRevolve(d *Document, ref StepRef, rp revolvePayload) (*Body, error) {
 	ig, err := rp.profile.integrals()
 	if err != nil {
