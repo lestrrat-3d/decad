@@ -311,8 +311,9 @@ Increment 4, the deep end. Strategy:
   polygon. A pre-pass therefore proves, per current operand FACE pair, that no
   touch can be hiding: if the true patches touch, that point is within δ_A of
   A's facets and δ_B of B's, so the facet sets come within δ_A + δ_B of each
-  other. An analytic face's δ is its complete `sourceBound`, including any
-  final-placement rounding. A faceted face's δ is its inherited certified
+  other. An analytic face's δ is its complete `sourceBound`, including curved
+  trim displacement and every coordinate-construction/final-placement rounding
+  allowance. A faceted face's δ is its inherited certified
   displacement, falling back to the
   payload's global composed boundary `Delta` when no tighter face value exists.
   A face pair whose facets already MEET is decided (the contact is exact and
@@ -321,9 +322,10 @@ Increment 4, the deep end. Strategy:
   Reject-only: it may refuse a valid model whose operands genuinely pass that
   close, and that is the accepted price. Deciding such a pair for real is the
   clearance kernel's job
-  (`docs/clearance-design.md`), not a held facet's. A planar face with straight
-  edges still carries any final-placement rounding in its `sourceBound`; it has
-  zero error only when that complete bound is zero. A faceted face has zero
+  (`docs/clearance-design.md`), not a held facet's. A planar face still carries
+  every curved-trim, coordinate-construction, and placement displacement in its
+  `sourceBound`; it has zero error only when its held trimmed polygon and stored
+  coordinates are both proved exact. A faceted face has zero
   error only when its inherited boundary certificate proves that its true patch
   equals the held polygons (`docs/tessellation-design.md` §2/§7).
 - **An operand facet that collapsed is refused, never skipped.** A rigid
