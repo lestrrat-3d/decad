@@ -273,11 +273,19 @@ func offsetOf(c carrier, offsetSign, r float64) (offCurve, error) {
 		return offCurve{isLine: true, px: c.px + s*nlx, py: c.py + s*nly, dx: c.tx, dy: c.ty}, nil
 	}
 	rr := c.radius - offsetSign*c.insideSign*r
-	// The accept boundary sits filletTol (1e-9 mm) below the wall radius — a
-	// sub-nanometre noise floor, not a real margin — so "try a smaller radius"
-	// is the correct remedy in every case this branch fires.
+	// The gate accepts a fillet exactly when the offset radius rr clears
+	// filletTol (1e-9 mm). In the ordinary case, where the offset shrinks the
+	// wall (offsetSign*insideSign = +1), that means the fillet radius must sit
+	// strictly below the wall radius less the tolerance (c.radius − filletTol).
+	// When that boundary is at or below zero the wall itself is within the
+	// evaluator's tolerance, so NO positive fillet fits — the remedy is a larger
+	// wall, not a smaller radius.
 	if rr <= filletTol {
-		return offCurve{}, fmt.Errorf(`%w: no fillet of radius %s fits a circular wall of radius %s; try a smaller radius`, ErrDegenerate, units.Millimeters(r), units.Millimeters(c.radius))
+		bound := c.radius - filletTol
+		if bound <= 0 {
+			return offCurve{}, fmt.Errorf(`%w: the circular wall radius %s is at or below the evaluator's tolerance, so no fillet of radius %s fits; enlarge the wall`, ErrDegenerate, units.Millimeters(c.radius), units.Millimeters(r))
+		}
+		return offCurve{}, fmt.Errorf(`%w: no fillet of radius %s fits a circular wall of radius %s; the fillet radius must be a positive value strictly below %s`, ErrDegenerate, units.Millimeters(r), units.Millimeters(c.radius), units.Millimeters(bound))
 	}
 	return offCurve{cx: c.cx, cy: c.cy, rr: rr}, nil
 }
