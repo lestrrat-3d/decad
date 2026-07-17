@@ -321,6 +321,9 @@ Increment 4, the deep end. Strategy:
   allowance. A faceted face's δ is its inherited certified
   displacement, falling back to the
   payload's global composed boundary `Delta` when no tighter face value exists.
+  Mesh facets carry this value as internal `sourceBound` beside their current
+  operand `*Face`; grouping facets for the pre-pass takes the maximum bound for
+  that face. NEVER derive zero from `KindFaceted` alone.
   Upward-round `b = δ_A + δ_B`. When `b > 0`, every face pair whose held facet
   sets are at distance at most `b` is undecidable, including a pair whose held
   facets meet or cross. A held-facet meet proves true contact only when both
@@ -336,7 +339,8 @@ Increment 4, the deep end. Strategy:
   `sourceBound`; it has zero error only when its held trimmed polygon and stored
   coordinates are both proved exact. A faceted face has zero
   error only when its inherited boundary certificate proves that its true patch
-  equals the held polygons (`docs/tessellation-design.md` §2/§7).
+  equals the held polygons (`docs/tessellation-design.md` §2/§7, payload
+  verification §5).
 - **An operand facet that collapsed is refused, never skipped.** A rigid
   placement's own rounding can flatten a facet of an already-faceted body to
   zero area. Such a facet has no plane and no interior, so every contact
@@ -368,16 +372,16 @@ Increment 4, the deep end. Strategy:
     close. It is refused (`ErrUnsupported`). Every other collapse is an edge
     contraction inside a component that survives, and the two bounds above
     cover it.
-- **Output**: faces are `Faceted`, one per CONNECTED PATCH of a source analytic
-  face. Each patch keeps that source's origins, so provenance (`FaceCreatedBy`)
-  and face-level selection survive the boolean — but the source face is not the
-  face. A boolean can cut one source into pieces that no longer touch (a blind
+- **Output**: faces are `Faceted`, one per CONNECTED PATCH of a current operand
+  face. Each patch keeps that face's origins, so provenance (`FaceCreatedBy`)
+  and face-level selection survive the boolean — but the operand face is not the
+  face. A boolean can cut one operand face into pieces that no longer touch (a blind
   trench crosses a cap and leaves two separate strips of it standing), and each
   piece is its own face, bounded from outside by its own loop. Grouping by
-  source alone would hand both strips to one face, which then has two outer
+  operand face alone would hand both strips to one face, which then has two outer
   boundaries and can call only one of them outer — reporting the other as a
   *hole* in a patch it is not part of, a wrong topology answer on the surface
-  agents traverse. So the key is the patch: the facets of one source reachable
+  agents traverse. So the key is the patch: facets of one operand face reachable
   from each other across shared edges. Within a patch, which loop bounds it from
   outside is decided, not guessed: on a planar patch the boundary is walked with
   the material on its left, so about the patch's own outward normal the outer
@@ -489,9 +493,10 @@ silent pass.
 | 6 | bounded canonical recipe encode, strict versioned decode, full operation/reference validation with deterministic error precedence, resource budgets, shared recorded-step dispatch, atomic public `Evaluate`, replay/property/fuzz suite |
 | 7 | free-form side surfaces (`NURBSSurface` from recorded control data), tapered extrude if a sound offset story exists |
 
-Payload verification §13 sequences the cup adapter and the faceted
-validity/clearance/survey work. Every later question stays `Suspect` until its
-row lands.
+Payload verification §13 gives count-free stages for the cup adapter and
+faceted validity/clearance/survey work. Every later question stays `Suspect`
+until its stage lands. These stages do not consume global evaluator increment
+numbers.
 
 ## 12. Open questions
 

@@ -10,9 +10,11 @@ contract at the sketch seam — the trim contract, the recording IR, and
 recipe decoding, validation, versioning, resource limits, and atomic evaluation
 are specified in `docs/recipe-replay-design.md`; how verification judges every
 bounded result — the report, the tolerance gate, and the noise floor — is
-specified in `docs/verification-design.md`; and the mesh contract, per-payload
+specified in `docs/verification-design.md`; the mesh contract, per-payload
 chording, proof bounds, and boolean handoff are specified in
-`docs/tessellation-design.md`.
+`docs/tessellation-design.md`; and exact cup plus certificate-backed faceted
+proofs are specified in `docs/payload-verification-design.md`. `CLAUDE.md`
+lists every current design document and its owner.
 
 ## 1. What decad is answerable for
 

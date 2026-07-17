@@ -440,7 +440,7 @@ reads `Suspect`, never an error, never a silent pass:
 | 2 | the `BB` refiner (the 1- and 2-variable azimuth searches; the `Minor ≥ Major` torus downgrade path), the coaxial and co-directional 2D reductions | non-coplanar contacts |
 | 3 | the remaining §6 certified contact types | osculating and edge/vertex contacts (§9) |
 
-Cup and faceted adapters land in payload verification §13. Until their rows
+Cup and faceted adapters land in payload verification §13. Until their stages
 land, an invoked pair containing that payload remains `Suspect`; the analytic
 kernel does not tessellate a cup or discard a faceted displacement bound.
 

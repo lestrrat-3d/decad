@@ -24,11 +24,12 @@ designs carry its deep ends: `docs/sketch-seam-design.md` (the trim
 contract and recording IR at the `sketch` seam),
 `docs/recipe-replay-design.md` (strict recipe decoding, validation, versioning,
 resource limits, and atomic evaluation), `docs/verification-design.md` (the
-tolerance gate and noise floor), and `docs/tessellation-design.md` (the mesh
-contract, per-payload chording, proof bounds, and boolean handoff). Read them
+tolerance gate and noise floor), `docs/tessellation-design.md` (the mesh
+contract, per-payload chording, proof bounds, and boolean handoff), and
+`docs/payload-verification-design.md` (payload-specific proofs). Read them
 before writing any public type. Read the replay design before changing recipe
-codecs or evaluation entry points.
-`docs/evaluator-design.md` is the v1
+codecs or evaluation entry points. The Layout table lists every current design
+document. `docs/evaluator-design.md` is the v1
 evaluator's own design — topology construction, mass properties, staging
 (`ErrUnsupported`), the mesh boolean, the Verify implementation; read it
 before writing evaluator/topology/feature code. Read the tessellation design
@@ -60,10 +61,8 @@ before writing tessellation, export, or mesh-boolean operand code.
 - **Shapes belong HERE.** `r3` excludes them by charter; solids/surfaces/meshes/
   topology are this module's job.
 - **NEVER add a public API that contradicts the design docs** —
-  `docs/api-design.md` and its companions `docs/sketch-seam-design.md`,
-  `docs/recipe-replay-design.md`, `docs/verification-design.md`, and
-  `docs/tessellation-design.md`. Extending
-  them is fine; changing a decision means changing the doc first.
+  `docs/api-design.md` and every design document listed in the Layout table.
+  Extending them is fine; changing a decision means changing the doc first.
 - **NEVER expose triangles as the representation, indices as selectors, or a bare
   `float64` measurement. NEVER give a boolean a target-out parameter or let it
   mutate an operand.** These are the forward-compatibility invariants that keep

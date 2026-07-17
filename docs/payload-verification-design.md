@@ -14,7 +14,7 @@ implementation order, and required tests. It changes no public signature.
 ## 1. Coverage contract
 
 `Verify` MUST support every payload the public evaluator builds. Unsupported
-answers stay `Suspect` until their increment lands. NEVER turn a missing payload
+answers stay `Suspect` until their stage lands. NEVER turn a missing payload
 case into nil, an empty list, or `Sound`.
 
 | Payload | Validity | Pair clearance | `MinWallThickness` | `Undercuts` | `MinRadius` |
@@ -221,6 +221,7 @@ type boundaryCert struct {
 
 type facetCert struct {
     SourceID int
+    Delta    float64
     Normal   normalCert
     Radius   radiusCert
 }
@@ -234,11 +235,13 @@ Certificate proves:
    true boundary patch.
 2. Map and inverse move every point by at most `Delta` → two-sided Hausdorff
    bound plus correspondence.
-3. Maps agree on every certified shared edge/vertex.
-4. Each certified vertex fan maps to one local disk; each certified shell fan
+3. Each `facetCert.Delta` bounds its true source patch against that held facet;
+   it is never greater than the payload-wide `boundaryCert.Delta`.
+4. Maps agree on every certified shared edge/vertex.
+5. Each certified vertex fan maps to one local disk; each certified shell fan
    preserves its local orientation.
-5. `normalCert` encloses every true patch normal (§8).
-6. `radiusCert` encloses every true patch's concave principal radius state (§9).
+6. `normalCert` encloses every true patch normal (§8).
+7. `radiusCert` encloses every true patch's concave principal radius state (§9).
 
 Raw Hausdorff distance alone is insufficient: a sub-bound handle can stay near a
 plane while changing topology. Local bijection/orientation clauses are mandatory.
@@ -249,32 +252,58 @@ Analytic tessellation creates certificates:
 
 - record source surface variant + trim cell internally;
 - split parameter cells at normal/curvature sign boundaries;
-- prove chord correspondence and sagitta bound per cell;
+- prove chord correspondence + `facetCert.Delta` per cell;
 - make neighboring cell edge maps agree because boundary chording is shared.
 
 Mesh boolean preserves certificates:
 
 - exact facet subdivision gives every child its parent's source cell;
-- tightening child parameter range is optional; inheriting parent range is safe;
+- tightening child parameter range or displacement is optional; inheriting
+  parent ranges + `facetCert.Delta` is safe;
 - stitched shared vertices retain compatible local join certificates;
 - tangency/branching refusal remains mandatory;
-- final weld composes its rounding displacement into `Delta`;
+- final rounding/weld adds its displacement to payload `Delta` and every
+  surviving child certificate;
 - a weld that destroys local fan correspondence is `ErrUnsupported`, like a
   whole component welded away.
 
 Second-generation booleans carry operand certificates through the same path.
+An output face records a tighter inherited displacement only when it composes
+every parent, trim/rim, and final-rounding allowance that can move that patch.
+Otherwise it records no tighter claim and uses payload `Delta` as the
+conservative fallback.
 Rigid placement:
 
 - rotate normal certificates;
 - preserve curvature certificates;
-- add `rigidRoundAllow` to `Delta`;
+- add `rigidRoundAllow` to payload `Delta` and every per-facet displacement;
 - rebuild local fan certificates after reflected winding reversal.
 
 Missing, malformed, or mismatched certificate → faceted validity + every survey
 that needs it are undecided. NEVER reconstruct source identity from provenance
 roles or fit an analytic surface to polygons.
 
-### 5.3 Public readings
+### 5.3 Boolean hidden-tangency handoff
+
+The evaluator §9 hidden-tangency pre-pass consumes the same displacement proof:
+
+- Tessellation carries an internal `sourceBound` parallel to every mesh facet's
+  current operand `*Face`.
+- Analytic face `sourceBound` is current chording displacement.
+- Faceted face `sourceBound` is its inherited per-face displacement; when that
+  tighter value is unavailable, use `boundaryCert.Delta`.
+- Grouping facets by current operand face takes the maximum `sourceBound` in
+  that group.
+- `KindFaceted` alone NEVER makes `sourceBound` zero. Zero requires a certificate
+  proving the true patch equals the held polygons.
+- A face pair whose held facets miss but come within summed `sourceBound` is
+  refused as hidden-tangency-undecidable.
+
+This handoff is mandatory before a faceted body can enter another boolean. It
+prevents a first boolean's displaced true patch from hiding a touch during a
+second boolean.
+
+### 5.4 Public readings
 
 Strengthen existing meanings; add no API:
 
@@ -563,29 +592,31 @@ lands, overlapping pairs remain `Suspect` by verification's pair-partition rule.
 | `clearance.go` | bounded extent/contact gates + true interval expansion |
 | `shell.go` / `shell_cup.go` | expose/recheck exact morphology certificate internally |
 | `survey.go` | `cupWall`; dispatch faceted surveys |
-| `tessellate.go` | create/carry per-facet source certificates internally |
-| `boolean.go` / `boolean_body.go` | compose `boundaryCert`; preserve facet survey metadata |
+| `tessellate.go` | create/carry per-facet source certificates + `sourceBound` internally |
+| `boolean.go` / `boolean_body.go` | hidden-tangency `sourceBound` consumption; compose `boundaryCert`; preserve facet survey metadata |
 | `topology.go` | faceted `NormalAt` through certificate; no public type change |
 | new `verify_mesh.go` | BVH feature scale + faceted validity |
 | new `survey_mesh.go` | faceted undercut/radius/wall kernels |
 | `verify.go` | validity-first presence; total tolerance gate; payload outcomes |
 
-## 13. Increments
+## 13. Stages
 
 Each row leaves every later question staged as `Suspect`.
 
-| PR | Lands |
+| Stage | Lands |
 |---|---|
-| 1 | cup analytic boundary adapter, cup pair clearance, payload extent/contact gates |
-| 2 | cup morphology recheck + exact wall theorem |
-| 3 | faceted `boundaryCert` creation/composition + `NormalAt` |
-| 4 | faceted held audit, BVH feature scale, validity/presence integration |
-| 5 | faceted triangle boundary adapter + bounded clearance |
-| 6 | faceted undercut + min-radius certificates/surveys |
-| 7 | faceted medial wall survey |
+| cup boundary | analytic adapter, pair clearance, payload extent/contact gates |
+| cup wall | morphology recheck + exact wall theorem |
+| faceted certificate | `boundaryCert` creation/composition, boolean `sourceBound`, `NormalAt` |
+| faceted validity | held audit, BVH feature scale, validity/presence integration |
+| faceted clearance | triangle boundary adapter + bounded clearance |
+| faceted shape surveys | undercut + min-radius certificates/surveys |
+| faceted wall | medial wall survey |
 
-Tolerance-gate implementation MUST land no later than PR 4. Otherwise a proven
-valid faceted body still cannot become `Sound` when all bounds pass.
+Tolerance-gate implementation MUST exist by the faceted-validity stage.
+Otherwise a proven valid faceted body still cannot become `Sound` when all
+bounds pass. These local stages do not allocate global evaluator increment
+numbers.
 
 ## 14. Required tests
 
@@ -615,7 +646,9 @@ not only status.
 | crossing without persistence proof | `Suspect` |
 | missing/local fan certificate | `Suspect` |
 | placement/reflection | same topology verdict; rounding added to bound |
-| second-generation boolean | certificates survive subdivision + composition |
+| second-generation boolean | certificates survive subdivision + composition; hidden-tangency pre-pass receives inherited per-face displacement |
+| second-generation near miss | held facets miss within inherited `sourceBound` → `ErrUnsupported`, never accepted through `KindFaceted == zero` |
+| per-face fallback | tighter face displacement used when present; payload `Delta` used when absent; neither path understates |
 
 Internal tests inject payloads for invalid/missing-certificate cases. Public API
 cannot manufacture them.
@@ -669,5 +702,7 @@ Property tests compare:
   pair API.
 - Validity ignores caller tolerance.
 - Faceted touching with nonzero boundary bound remains undecided.
+- A faceted source face supplies inherited displacement to later boolean
+  hidden-tangency checks; exact held polygons do not erase true-patch `Delta`.
 
-No public API decision remains open for this increment.
+No public API decision remains open for this payload-verification work.
