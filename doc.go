@@ -76,8 +76,8 @@
 //	Revolve       cylinder / cone / sphere / torus / annulus  builds
 //	Union/Cut/Intersect  prism/faceted operands, crossings    builds
 //	  revolve operand (tessellated, no mesher)                ErrUnsupported
-//	  near-tangency without a proven contact                  ErrUnsupported
-//	  exact tangent or face-on-face contact                   ErrDegenerate
+//	  curved-surface tangent, facets never meet               ErrUnsupported
+//	  exact coplanar / face-on-face / point contact           ErrDegenerate
 //	  empty result (disjoint intersect, emptied cut)          ErrBooleanFailed
 //	Fillet/Chamfer  straight prism, lateral edges             builds
 //	  cap edge, or non-prism receiver                         ErrUnsupported

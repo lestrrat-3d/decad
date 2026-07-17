@@ -37,9 +37,13 @@ const boolChordFactor = 2e-5
 // computed in exact arithmetic); the surface area always carries at least an
 // ulp-scale float-summation bound, so it reads Approximate with a bound tiny
 // against any real tolerance. Operands from different
-// documents are ErrForeignBody; retired operands ErrRetiredBody; a tangent
-// contact the exact predicates cannot classify (face-on-face or grazing
-// contact) is ErrDegenerate; a result with no volume is ErrBooleanFailed.
+// documents are ErrForeignBody; retired operands ErrRetiredBody. A
+// curved-surface tangent contact whose chord facets never meet is
+// ErrUnsupported — whether the true surfaces touch would be decided by
+// where the chords happened to fall. An exact coplanar / face-on-face or
+// isolated-point contact whose facets meet degenerately (a face-on-face
+// overlap, a grazing edge) is ErrDegenerate. A result with no volume is
+// ErrBooleanFailed.
 // Both operands are tessellated first, so a revolve operand — which has no
 // tessellator — is ErrUnsupported.
 func Union(a, b *Body) (*Body, error) {

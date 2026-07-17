@@ -55,7 +55,7 @@ func Example_decad_cut() {
 		return
 	}
 	// Drop the tool so it pierces both plate faces; a tool whose cap merely
-	// rests ON a plate face is a tangent contact the boolean rejects.
+	// rests ON a plate face is a face-on-face contact the boolean rejects.
 	down, err := r3.Translation(r3.Vec{Z: -6})
 	if err != nil {
 		fmt.Printf("failed to build translation: %s\n", err)
