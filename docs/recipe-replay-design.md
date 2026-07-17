@@ -110,7 +110,8 @@ Rules:
 - No options → default recipe limits + default evaluation limits + v1 evaluator.
 - Any nil option passed to encode, decode, validate, or evaluate →
   `ErrDegenerate`.
-- A zero or partly zero limit struct is `ErrDegenerate`. Call the default
+- Every field in `RecipeLimits` and `EvaluationLimits` MUST be strictly
+  positive. Any zero or negative field is `ErrDegenerate`. Call the default
   constructor, then change named fields.
 - A zero `Evaluator` passed to `WithEvaluator` is `ErrDegenerate` at
   `Evaluate`.
@@ -214,8 +215,12 @@ The strict decoder MUST reject:
 - nesting past `MaxDepth`;
 - input past `MaxBytes`.
 
-Implementation: read through a `MaxBytes+1` limiter, then run one schema-aware
-raw JSON preflight before any `encoding/json` call. The preflight validates raw
+Implementation: read at most `MaxBytes` into the retained buffer without
+incrementing the limit. If the buffer reaches `MaxBytes`, perform a separate
+one-byte probe; any returned byte means over-limit, even when the probe also
+returns `io.EOF`. Zero probe bytes with `io.EOF` means the input ends exactly
+at the ceiling. Then run one schema-aware raw JSON preflight before any
+`encoding/json` call. The preflight validates raw
 UTF-8, validates every escaped Unicode scalar (including surrogate pairing),
 checks depth + duplicate keys, and charges every recipe aggregate at its schema
 position. Charge a step, loop, segment, curve point/scalar, selector, or
@@ -533,8 +538,10 @@ error.
 
 `DecodeRecipe` then uses this wire order:
 
-1. Read at most `MaxBytes+1`; a one-over byte count wins over every defect in
-   the preflight buffer.
+1. Read at most `MaxBytes` into the retained buffer without incrementing the
+   limit. If the buffer reaches the ceiling, perform a separate one-byte
+   probe. Any returned byte wins over every defect in the preflight buffer as
+   an over-limit input; zero probe bytes with `io.EOF` means exact-limit input.
 2. Scan the retained JSON depth-first in source order. At each token, check
    syntax + Unicode scalar validity, charge container depth before entering
    it, check a repeated object key before its schema membership, check schema
@@ -656,6 +663,9 @@ are shared across the whole recipe evaluation.
 
 Rules:
 
+- Every `RecipeLimits` and `EvaluationLimits` field MUST be strictly positive.
+  Reject any zero or negative field as `ErrDegenerate` before limit arithmetic,
+  reads, allocation, validation, or evaluator state creation.
 - Limits are hard ceilings. Reaching the ceiling is allowed; exceeding it is
   `ErrResourceLimit`.
 - Counters use checked integer addition. Overflow is `ErrResourceLimit`.
@@ -746,6 +756,12 @@ immediate feature call.
   schema position, including both provenance-role predicates and every
   quantity-bearing field;
 - trailing value/data, depth boundary, byte boundary;
+- every `RecipeLimits` field set to zero and to a negative value, one field at
+  a time from defaults, returns `ErrDegenerate` through `EncodeRecipe`,
+  `DecodeRecipe`, `Recipe.Validate`, and `Evaluate`;
+- `DecodeRecipe` with `MaxBytes == math.MaxInt64` accepts a small valid recipe;
+  a small malformed recipe returns its wire error rather than overflow,
+  panic, or a false `ErrResourceLimit`;
 - compact exact-limit/one-over arrays for steps, loops, segments, curve
   points/scalars, selectors, and predicates; instrument typed decoding to prove
   no corresponding slice grows past its limit;
@@ -787,6 +803,9 @@ immediate feature call.
 - failure at every step index returns nil document + correct step error;
 - exact-limit + one-over `Evaluate` cases for every in-memory aggregate;
   instrumentation proves the rejected destination never reaches one-over;
+- every `EvaluationLimits` field set to zero and to a negative value, one field
+  at a time from defaults, makes `Evaluate` return `ErrDegenerate` before
+  evaluator state creation;
 - multi-defect recipes pin the first step, exact path, `Kind`, and optional
   cause across `DecodeRecipe`, `Validate`, and `Evaluate`, including
   field/value vs reference/liveness and context vs budget cases;
