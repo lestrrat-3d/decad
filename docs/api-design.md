@@ -1200,7 +1200,8 @@ to make that mechanical.
   `docs/evaluator-design.md` §2), `ErrInvalidRecipe` (stored IR violates its
   profile/operation/reference contract), `ErrUnsupportedRecipeVersion` (the
   envelope names a format version this package cannot interpret), and
-  `ErrResourceLimit` (decode/validation/evaluation crossed an explicit ceiling). `RecipeError`
+  `ErrResourceLimit` (recipe encoding, decoding, validation, or evaluation crossed
+  an explicit ceiling). `RecipeError`
   carries root/step + field path and matches both `ErrInvalidRecipe` and its
   specific cause; `EvaluationError` carries step + op and unwraps evaluator or
   context failures. Full precedence is in `docs/recipe-replay-design.md` §6.
