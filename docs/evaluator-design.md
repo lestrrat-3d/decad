@@ -10,7 +10,9 @@ core contract this evaluator implements — references of the form "core §N"),
 `docs/recipe-replay-design.md` (strict loading, graph validation,
 whole-recipe atomicity, and the package-owned evaluator boundary). Nothing here
 changes those contracts. `docs/tessellation-design.md` owns the tessellation
-contract and the private operand proofs the boolean consumes. Where this
+contract and the private operand proofs the boolean consumes. The
+payload-specific proofs and implementation order live in
+`docs/payload-verification-design.md`. Where this
 document stages a capability, the staging is explicit and rejected loudly,
 never silently approximated.
 
@@ -319,6 +321,9 @@ Increment 4, the deep end. Strategy:
   allowance. A faceted face's δ is its inherited certified
   displacement, falling back to the
   payload's global composed boundary `Delta` when no tighter face value exists.
+  Mesh facets carry this value as internal `sourceBound` beside their current
+  operand `*Face`; grouping facets for the pre-pass takes the maximum bound for
+  that face. NEVER derive zero from `KindFaceted` alone.
   Upward-round `b = δ_A + δ_B`. When `b > 0`, every face pair whose held facet
   sets are at distance at most `b` is undecidable, including a pair whose held
   facets meet or cross. A held-facet meet proves true contact only when both
@@ -334,7 +339,8 @@ Increment 4, the deep end. Strategy:
   `sourceBound`; it has zero error only when its held trimmed polygon and stored
   coordinates are both proved exact. A faceted face has zero
   error only when its inherited boundary certificate proves that its true patch
-  equals the held polygons (`docs/tessellation-design.md` §2/§7).
+  equals the held polygons (`docs/tessellation-design.md` §2/§7, payload
+  verification §5).
 - **An operand facet that collapsed is refused, never skipped.** A rigid
   placement's own rounding can flatten a facet of an already-faceted body to
   zero area. Such a facet has no plane and no interior, so every contact
@@ -366,16 +372,16 @@ Increment 4, the deep end. Strategy:
     close. It is refused (`ErrUnsupported`). Every other collapse is an edge
     contraction inside a component that survives, and the two bounds above
     cover it.
-- **Output**: faces are `Faceted`, one per CONNECTED PATCH of a source analytic
-  face. Each patch keeps that source's origins, so provenance (`FaceCreatedBy`)
-  and face-level selection survive the boolean — but the source face is not the
-  face. A boolean can cut one source into pieces that no longer touch (a blind
+- **Output**: faces are `Faceted`, one per CONNECTED PATCH of a current operand
+  face. Each patch keeps that face's origins, so provenance (`FaceCreatedBy`)
+  and face-level selection survive the boolean — but the operand face is not the
+  face. A boolean can cut one operand face into pieces that no longer touch (a blind
   trench crosses a cap and leaves two separate strips of it standing), and each
   piece is its own face, bounded from outside by its own loop. Grouping by
-  source alone would hand both strips to one face, which then has two outer
+  operand face alone would hand both strips to one face, which then has two outer
   boundaries and can call only one of them outer — reporting the other as a
   *hole* in a patch it is not part of, a wrong topology answer on the surface
-  agents traverse. So the key is the patch: the facets of one source reachable
+  agents traverse. So the key is the patch: facets of one operand face reachable
   from each other across shared edges. Within a patch, which loop bounds it from
   outside is decided, not guessed: on a planar patch the boundary is walked with
   the material on its left, so about the patch's own outward normal the outer
@@ -423,36 +429,41 @@ Increment 4, the deep end. Strategy:
   revolve side condition holds. `Verify` still runs the structural audit (an
   invariant check, cheap) but its verdict is decided, not sampled. All
   quantities Exact → the tolerance gate passes them at any `rel`.
-- **Faceted bodies** are judged per verification §6: the held boundary
-  against its own proven bound — watertightness/manifoldness read off the
-  stitched mesh (exact, §9), self-clearance via a spatial grid, decisive
-  beyond the bound or `Suspect`. The tolerance gate is then applied to every
-  bounded result the report carries; `Approximate` alone never assigns
-  `Suspect`. The body's gate diameter is cached from the greatest distance
-  between any two vertices in the complete held faceted payload, not from the
-  smaller set exposed as B-rep boundary-loop vertices. `Placed` recomputes the
-  diameter after transforming the payload vertices. The area floor sums each
-  unique topological edge's held length once, never its two coedge uses.
+- **Faceted bodies** are judged per verification §6 and payload verification
+  §5/§6: exact held-mesh facts plus an internal source certificate, with a BVH
+  proving every remote triangle/triangle and nonadjacent trim-edge distance.
+  A clean complete certificate whose remote feature scale exceeds twice its
+  boundary displacement proves validity; a shallow defect remains `Suspect`.
+  The tolerance gate is then applied to every bounded result the report
+  carries; `Approximate` alone never assigns `Suspect`. The body's gate
+  diameter is cached from the greatest distance between any two vertices in
+  the complete held faceted payload, not from the smaller set exposed as B-rep
+  boundary-loop vertices. `Placed` recomputes the diameter after transforming
+  the payload vertices. The area floor sums each unique topological edge's held
+  length once, never its two coedge uses.
 - **Pairs**: proven disjoint when the two bodies' bounds-inflated boxes are
   disjoint (a box bounds its body, so box separation proves body separation),
   or when a clearance computation clears the summed bounds. An
   `Interference` row carries a bounded overlap VOLUME (verification §1), and
   a bare witness point cannot supply one — so a row is emitted only once the
-  boolean machinery can intersect the pair and bound the volume (increment
-  4). Until then a pair that cannot be proven disjoint is undecided: it joins
+  boolean machinery can intersect the pair and bound the volume. Until then a
+  pair that cannot be proven disjoint is undecided: it joins
   neither list and reads `Suspect` — never a fabricated row, and never a
   false `Sound`. Box-disjointness proofs run from increment 1 (they are
   cheap, and they decide the common far-apart case); increment 3 adds the
   clearance computation and `WithClearances`.
 - **Wall thickness / undercuts / min radius**: the analytic surveys of
   verification §6, answered outright on this evaluator's own payloads
-  (`survey.go`/`survey2d.go`): the wall reading reduces exactly to the 2D
+  (`survey.go`/`survey2d.go`): prism/revolve wall reduces exactly to the 2D
   spanning-disk problem (a prism's profile with the height as the vertical
   fit; a revolve's meridian section, mirrored for a full turn), undercuts
   are per-face exact normal-range membership, and the min radius is the
-  tightest concave principal radius. All readings Exact; a payload the
-  surveys cannot decide leaves the asked question undecided → `Suspect`,
-  never a silent pass.
+  tightest concave principal radius. A cup uses its exact morphology theorem:
+  zero for an allowance-qualified pinch, otherwise its exact shell thickness.
+  A faceted body uses certified source-normal/curvature patches and bounded
+  medial candidates. A payload or certificate the surveys cannot decide leaves
+  the asked question undecided → `Suspect`, never a silent pass (payload
+  verification §4/§8–§10).
 
 `Verify` MUST run requested surveys before the total numeric gate, then apply
 verification §3's field table to every present body reading. The gate compares
@@ -481,6 +492,11 @@ silent pass.
 | 5 | fillet/chamfer on analytic prism edges, shell |
 | 6 | bounded canonical recipe encode, strict versioned decode, full operation/reference validation with deterministic error precedence, resource budgets, shared recorded-step dispatch, atomic public `Evaluate`, replay/property/fuzz suite |
 | 7 | free-form side surfaces (`NURBSSurface` from recorded control data), tapered extrude if a sound offset story exists |
+
+Payload verification §13 gives count-free stages for the cup adapter and
+faceted validity/clearance/survey work. Every later question stays `Suspect`
+until its stage lands. These stages do not consume global evaluator increment
+numbers.
 
 ## 12. Open questions
 

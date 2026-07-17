@@ -8,6 +8,8 @@ aggregate into (§6). Companion to `docs/api-design.md` — the core design, whi
 owns `Verify`'s place in the API, the three bounded result shapes
 (`Measurement`, `VecMeasurement`, `Box`), and the error vocabulary. References
 of the form "core §N" are to that document.
+`docs/payload-verification-design.md` owns the exact cup adapter and the
+certificate-backed faceted algorithms that meet this document's proof standard.
 
 ## 1. The report
 
@@ -665,32 +667,26 @@ an approximation of one — and the report gives four answers this way:
   proof exists: which face pairs oppose within the allowance across material,
   and whether any meeting inside it pinches a wall to zero, are closed-form
   facts of the surfaces, and
-  the spanning survey over them (below) is that proof. A survey that is itself
-  approximate proves nothing of the kind — a feather pinched below the chord
-  error lands inside one facet and leaves no opposing pair to find. A
-  `Faceted` body whose survey turns up no spanning pair is therefore an asked
-  question the evaluator cannot answer, and the body reads `Suspect` with
-  `MinWallThickness` nil — nothing proven wrong, nothing proven right.
+  the spanning survey over them (below) is that proof. A faceted survey needs
+  more than held facets: its source-normal certificates, boundary-displacement
+  bound, and complete medial-family enclosure must exclude every possible wall.
+  When they do, nil is proven; otherwise the asked question is undecided and the
+  body reads `Suspect` with `MinWallThickness` nil (payload verification §10).
 - **A nil `MinRadius` on a proven solid** is the determination *no concave
   feature exists*. On analytic faces the proof exists: convexity and curvature
-  are exact facts there, and a survey over them is that proof. A survey that
-  is itself approximate proves nothing of the kind — a tessellation cannot see
-  below its own chord error, so a concave dimple shallower than the chord
-  lands inside one flat facet and leaves no concave edge to find. A `Faceted`
-  body whose survey turns up nothing concave is therefore an asked question
-  the evaluator cannot answer, and the body reads `Suspect` with `MinRadius`
-  nil — nothing proven wrong, nothing proven right, which is exactly the
-  rung's meaning.
+  are exact facts there, and a survey over them is that proof. A faceted source
+  certificate can also prove every represented patch has no concave principal
+  curvature. Missing, mixed-sign, or unknown certificates leave the question
+  undecided and the body `Suspect` with `MinRadius` nil (payload verification
+  §9).
 - **An empty `Undercuts`** is the claim *no face is an undercut* — the same
   rule for the same reason, because the claim quantifies over the part, not
   over the survey. On analytic faces every point's normal is an exact fact
   with a closed-form range over the face, and the survey of those ranges (the
   membership rule below) is the proof that no region of any face opposes the
-  pull. A `Faceted` survey that finds no undercut has proven no undercut
-  *among the facets it holds*, and the claim is about the part those facets
-  stand for: a reverse-draft face smaller than the chord lands inside one
-  facet and leaves no reverse facet to find. So the body reads `Suspect` with
-  `Undercuts` empty — asked, and undecided.
+  pull. A faceted survey proves the same absence only when every true patch's
+  source-normal range clears. A missing or straddling range leaves
+  `Undercuts` empty and the body `Suspect` (payload verification §8).
 - **A pair in neither list** is the answer *these two bodies do not overlap* —
   the claim the `Interfering` rung reads, made by omission for every pair of
   proven solids without an `Interference` row. It is held to the same proof: a
@@ -832,6 +828,8 @@ const (
   The sub-bound pinhole, pinch or neck of a near-tangent boolean is an asked
   question it cannot answer, and it reads `Suspect` — nothing proven wrong,
   nothing proven right, which is exactly the rung's meaning.
+  Payload verification §5/§6 defines the required local correspondence, the
+  remote-feature set, the `2*delta` guard, and the exact held-mesh audit.
 - **`Report.Status`** is the document-level aggregate — over the bodies *and* over
   the pairwise results, which belong to no body.
 
@@ -942,14 +940,14 @@ that pinches a wall to zero are exact facts of the surfaces, so an analytic
 evaluator decides the reading — and the absence — outright, the boundary
 case included: a wall drafted at exactly α spans — within is inclusive,
 above — and an exact evaluator reads its thinnest spanning ball like any
-other wall's. A `Faceted`
-evaluator surveys facet pairs whose normals carry tilt bounds (core §6.1),
-and what its survey cannot pin, its proven `Bound` must cover: a
-pair whose tilt bounds admit both sides of the allowance it can neither
+other wall's. A `Faceted` evaluator encloses maximal-ball contact families
+whose true-patch normals carry source bounds (core §6.1), and widens held
+diameters by its boundary-displacement certificate (payload verification §10).
+A family whose normal bounds admit both sides of the allowance it can neither
 count as a wall nor dismiss — the at-allowance wall is that pair every
 time, as the exactly-vertical wall is the undercut survey's undecided face
-(below) — and it widens the
-reading's interval until it admits both answers, and the interval rule below
+(below). The evaluator widens the reading's interval until it admits both
+answers, and the interval rule below
 does the rest — an interval that straddles the tool reads `Suspect`, the
 honest verdict on a tessellated feather — or a wall drafted at the
 allowance itself — whose facets really could lean
@@ -1055,28 +1053,28 @@ The quantifier costs nothing core does not expose: `Face.Surface()` (core
 §6.1) is the face's own geometry, and on an analytic variant — a plane,
 cylinder, cone, sphere or torus — the normal over the face's bounded region
 is closed-form, so the survey of its range is exact and the three-way answer
-is decided outright. A `Faceted` face is its facets, and each facet is one
-point of the survey: its normal is a single `NormalAt` reading, constant
-across the facet, whose tilt bound is the interval the pointwise rule reads.
+is decided outright. A `Faceted` face is its held facets, but every facet's
+certificate encloses the normals of the true patch it represents; that whole
+range, not only the held plane normal, is what the pointwise rule reads
+(payload verification §8).
 The rule is the claim, not the algorithm — but everything it quantifies over
 is a reading the evaluator holds. The boundary case is the vertical wall — a
 face everywhere exactly perpendicular to the pull, draft angle zero. It
 provenly clears: the pull slides along it, not into it, and the strictness
 sits on the same side as the wall rule's — exactly perpendicular is not
 opposed, exactly tool-thick is not thinner. An analytic vertical wall is
-settled by the exact survey; a `Faceted` one never is — its facets' tilt
-bounds straddle zero draft from both sides, so it is the undecided face
-above and its body reads `Suspect`, the honest answer: inside its bound a
-tessellated wall really could lean either way. A caller whose spec is a
+settled by the exact survey. A faceted vertical wall is settled when its
+source certificate proves a constant perpendicular normal; a range that
+straddles zero stays undecided and makes the body `Suspect`. A caller whose spec is a
 positive minimum draft — not mere clearance — is stating a spec
 `WithPullDirection` does not pose, and no option states, so no verdict
 enforces it (§2): the draft *allowance* is no such spec — it says which
 skins the wall reading counts as opposing (above), and demands nothing of
 the pull. And an **empty** `Undercuts` claims more than every held
 face settled — it is the absence answer of the standard above, quantifying
-over the part and not the survey: provable by the exact range surveys over
-analytic faces, unprovable from a tessellation, whose sub-chord features no
-per-facet interval covers — the body reads `Suspect` with `Undercuts` empty.
+over the part and not the survey. Exact analytic ranges prove it directly;
+complete faceted source ranges can also prove it. A missing or undecided range
+leaves the body `Suspect` with `Undercuts` empty.
 
 Aggregation is by **severity precedence — worst wins**:
 

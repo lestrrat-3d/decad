@@ -10,9 +10,11 @@ contract at the sketch seam — the trim contract, the recording IR, and
 recipe decoding, validation, versioning, resource limits, and atomic evaluation
 are specified in `docs/recipe-replay-design.md`; how verification judges every
 bounded result — the report, the tolerance gate, and the noise floor — is
-specified in `docs/verification-design.md`; and the mesh contract, per-payload
+specified in `docs/verification-design.md`; the mesh contract, per-payload
 chording, proof bounds, and boolean handoff are specified in
-`docs/tessellation-design.md`.
+`docs/tessellation-design.md`; and exact cup plus certificate-backed faceted
+proofs are specified in `docs/payload-verification-design.md`. `CLAUDE.md`
+lists every current design document and its owner.
 
 ## 1. What decad is answerable for
 
@@ -433,8 +435,10 @@ type Sphere struct   { Center r3.Vec; Radius units.Value }
 type Torus struct    { Center, Axis r3.Vec; Major, Minor units.Value }
 type NURBSSurface struct { /* ... */ }
 
-// Faceted is the honest v1 variant: a face a boolean produced, whose analytic
-// identity is gone. Its presence is exactly why a measurement reads Approximate.
+// Faceted is the honest v1 variant: a face a boolean produced, whose public
+// analytic identity is gone. Bound encloses two-sided displacement between the
+// held polygons and their true boundary patches under the evaluator's internal
+// local correspondence (payload verification §5).
 type Faceted struct{ /* ... */ }
 ```
 
@@ -444,6 +448,10 @@ whose geometry is not exact is `Faceted`, and `Faceted` is the flag. So a
 `Cylinder.Axis` or a `Sphere.Center` is an exact parameter of an exact surface,
 while `Face.NormalAt(p)` — a quantity the evaluator *computes*, on a face that may
 be `Faceted` — is a measurement and reports its `Exactness` like every other.
+For a faceted face, the evaluator's internal source certificate bounds the true
+patch normals; a positional `Faceted.Bound` alone does not imply a normal bound
+(`docs/payload-verification-design.md` §5/§8). No certificate details enter the
+public API.
 
 A `switch` on `Surface` MUST carry a `default` — vN adds variants.
 

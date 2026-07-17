@@ -24,8 +24,9 @@ selector contract and the retire rule ("core §N"), and to
 `docs/evaluator-design.md`, whose §11 row 5 this document is ("evaluator §N").
 `docs/verification-design.md` owns how the results are judged
 ("verification §N"). `docs/tessellation-design.md` owns the mesh construction
-and proof bounds behind Table D's tessellation row. Nothing here changes those
-contracts.
+and proof bounds behind Table D's tessellation row.
+`docs/payload-verification-design.md` owns the exact cup verification
+follow-on. Nothing here changes those contracts.
 
 ## 1. What a modify op owes, and how it refuses
 
@@ -66,11 +67,10 @@ Neither is ever deferred into a `Verify` reading — `Verify` judges bodies the
 document holds, and a refused call produced none. The staging split of
 evaluator §11 is exactly this: an intent the evaluator cannot **build** is an
 error at the call; only a question it cannot **answer** on a body it did build
-reads `Suspect`. This increment has two such questions, both on the cup, and
-Table D (§12) names them: its own `MinWallThickness` (D1) and its clearance
-against another body — the latter wherever the clearance kernel is invoked on
-the pair, a box-disjoint cup pair with no clearance asked staying `Sound` by
-the box test (D6).
+reads `Suspect`. Table D (§12) names the two staged cup questions: its own
+`MinWallThickness` (D1) and its clearance against another body (D6). Their
+approved proofs and implementation order live in payload verification §3/§4;
+until those rows land, the existing `Suspect` staging remains.
 
 ## 2. The reduction: a prism's modify ops are its section's
 
@@ -734,14 +734,14 @@ payload class.
 
 | D | Consumer | Reads | B1 — filleted / chamfered | B2 / B3 — a tube | B5 / B6 — a cup |
 |---|---|---|---|---|---|
-| **D1** | `prismWall` + `survey2d` (`MinWallThickness`) | the payload only | works unchanged: the rewritten section is a section, the height is the receiver's, the reading is Exact | works unchanged: a tube **is** a prism over an annular section | **undecided.** The kernel decides one section swept at one height; a cup is two sections over adjoining intervals, so the survey does not decide it and the reading is `Suspect` — §1's sanctioned path, never a silent pass (§14) |
+| **D1** | `prismWall` + `survey2d` (`MinWallThickness`) | the payload only | works unchanged: the rewritten section is a section, the height is the receiver's, the reading is Exact | works unchanged: a tube **is** a prism over an annular section | payload verification §4 proves an exact reading: zero for an allowance-qualified material pinch, otherwise the exact shell thickness `t`; staged as `Suspect` until the cup-wall stage lands |
 | **D2** | `prismUndercuts` | the payload **and the roles** — it looks each payload walk's face up by `side(i,j)` on the body's own step | works unchanged (§11): every wall of the result, blends included, carries its `side(i,j)` role in the result's index space | works unchanged | a cup reading lands with the cup payload: the same per-face exact normal ranges over the faces of B5/B6, mapped by their roles |
 | **D3** | `prismMinRadius` | the payload only | works unchanged: a fillet of a **concave** edge is a concave arc of the section, and its radius is read; a fillet of a convex edge adds a convex cylinder, which is not a concave feature and rightly does not appear | works unchanged: the cavity loop's walls are read like any hole wall | a cup reading lands with the payload: the same walk over the outer and the cavity section. The sharp concave edge where the wall meets the floor carries no radius — the survey reads faces' principal radii, and a spec about the *edges* is one no option states (verification §2) |
 | **D4** | `Tessellate` → `STL` / `OBJ` | the payload **and the roles** — `docs/tessellation-design.md` owns the chording, source-face map, and proof bounds | works by tessellation design §§3–5: blend cylinders are ordinary circular section walks | works by the same prism path | works by tessellation design §6: every outer/cavity loop is shared by its walls, floors, and rim band |
 | **D5** | Body-relative stops (`ToFace` / `ToFaceAngular`; `ThroughAll` / `ThroughAllSide`) | two stop kinds read differently: `ToFace` / `ToFaceAngular` read **topology + a selector + a surface** — a live stop body, its face resolved by the selector, and that face's plane; `ThroughAll` / `ThroughAllSide` read **the payload's directional extent** (`extentAlong`) | works unchanged | works unchanged | `ToFace` reads the cup's faces like any body's; `ThroughAll` reads its outer prism's extent — the cup's own `extentAlong` — the cavity being interior |
-| **D6** | Clearance (`docs/clearance-design.md`) | **the payload and the topology** — it builds its boundary model by switching on the payload **kind** (`prismPayload` / `revolvePayload`), then reads the exact edges, vertices and shells and each body's payload extent | a first-class operand — a `prismPayload`, which its switch builds | a first-class operand — a tube is a `prismPayload` too | **staged.** The kernel's payload switch has no `cupPayload` case, so a cup has no boundary model and the kernel returns undecided on any pair with it. But the pair partition proves box-disjoint pairs cheaply first and reaches for the kernel only where it is needed — a pair the box test cannot settle, or a `WithClearances` gap request — so a cup pair reads `Suspect` exactly there, until clearance learns the payload (§14), never a silent pass. A box-disjoint cup pair with no clearance asked stays `Sound`, proven by the box test with the kernel never invoked |
+| **D6** | Clearance (`docs/clearance-design.md`) | **the payload and the topology** — it builds its boundary model by switching on the payload **kind** (`prismPayload` / `revolvePayload`), then reads the exact edges, vertices and shells and each body's payload extent | a first-class operand — a `prismPayload`, which its switch builds | a first-class operand — a tube is a `prismPayload` too | payload verification §3 adapts the exact outer/cavity skins, three axial planes, rim bands, topology witnesses, and outer extent to the analytic kernel; staged as `Suspect` when the kernel is needed until the cup-boundary stage lands, while a box-disjoint pair with no gap request remains proven |
 | **D7** | The mesh boolean (evaluator §9) | the tessellation | takes these bodies as it takes any other | as any other | as any other, once D4 covers it |
-| **D8** | `Verify` — the structural audit and the tolerance gate | the topology and the measurements | `Sound` on the same terms an extrude's body is: valid by construction (§5), Exact at any tolerance (§10) | the same | the same, with two `Suspect` exceptions on a cup: its `MinWallThickness` (D1) and its clearance against another body wherever the clearance kernel is invoked on the pair — a `WithClearances` gap request, or a pair the box test cannot settle (D6); a box-disjoint cup pair with no clearance asked stays `Sound` |
+| **D8** | `Verify` — the structural audit and the tolerance gate | the topology and the measurements | `Sound` on the same terms an extrude's body is: valid by construction (§5), Exact at any tolerance (§10) | the same | `Sound` once D1/D6's exact payload-verification rows land; until then those asked or required questions remain `Suspect`, while a box-disjoint pair with no gap request stays proven |
 
 Two readings verification §6 asks about are worth stating because a modify op is
 what makes them arise, and neither needs §6 relaxed:
@@ -766,12 +766,10 @@ PR-level staging inside evaluator increment 5. Everything not yet landed is
 | 2 | `Chamfer`, equal distance | `Shell`; the asymmetric chamfer (it is not spellable — no option carries it) |
 | 3 | `Shell`: cap removal, the exact erosion and dilation, the §5 topology gates, the tube (B2/B3), the `cupPayload` (B5/B6), and D2/D3/D4 extended to the cup | side-wall removal (S2); the topology-changing offset (S11); the both-caps shell of a holed section (S12) |
 
-After PR 3, two asked questions on a body this evaluator builds are still
-undecided, both on the cup: its `MinWallThickness`, which reads `Suspect` (D1),
-and its clearance against another body, which reads `Suspect` wherever the
-clearance kernel is invoked on the pair — the kernel has no `cupPayload` case
-(D6). A box-disjoint cup pair with no clearance asked is still proven `Sound`
-by the box test.
+After PR 3, D1/D6 remain staged in the implementation. Payload verification
+§13 names their approved cup-boundary and cup-wall stages. Until those stages
+land, the same `Suspect` staging applies; a box-disjoint cup pair with no
+clearance asked is still proven `Sound` by the box test.
 
 The walk-sense rules of §6 — a circular wall's face orientation and the
 walked-boundary `Edge.IsConvex` — are a **prerequisite**, not a deliverable. They
@@ -804,22 +802,6 @@ do with; PR 1 builds on them and carries none of them.
   be what a boolean that splits a body needs (evaluator §9). Whether that payload
   is worth its cost, and which increment owns it, is undecided; until it exists,
   the refusal stands.
-- **A cup's wall reading.** D1 — the shipped 2D kernel decides one section swept
-  at one height. A cup is a stack of two sections over adjoining intervals (a
-  floor slab, then a wall band), and its spanning balls are not the balls of
-  either section alone. Extending the kernel to a stacked section is the missing
-  piece; until it lands, the question reads `Suspect`.
-- **Clearance on a cup.** D6 — the clearance kernel
-  (`docs/clearance-design.md`) builds its boundary model by switching on the
-  payload kind, and it has no `cupPayload` case, so the kernel returns undecided
-  on any pair involving a cup. The kernel is invoked on a pair only where it is
-  needed — a pair the box-disjointness test cannot settle, or a `WithClearances`
-  gap request — so a cup pair reads `Suspect` exactly there; a box-disjoint cup
-  pair with no clearance asked stays `Sound`, proven by the cheap box test with
-  the kernel never invoked. Teaching the kernel to read a cup's two-prism
-  boundary — the same analytic faces a prism carries, over two intervals — is the
-  missing piece; until it lands, an invoked cup pair is staged, exactly as the
-  wall reading is.
 - **The no-opening shell.** A hollow closed body — the only shape with a genuine
   `IsVoid` shell — is a shell that removes no face, and the selector vocabulary
   has no way to ask for it: core §9 makes an empty match an error (S16), and a
