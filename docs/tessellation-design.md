@@ -696,12 +696,18 @@ Boolean composition then stays evaluator §9's:
 3. Use `sourceBound(face)` for the hidden-tangency pre-pass. For a faceted
    operand this is its inherited certified face displacement, or its global
    composed `Delta`, never an automatic zero for restated polygons.
-4. For each face pair, upward-round `b = deltaA + deltaB`. When `b > 0` and the
-   held facet sets are at distance at most `b`, including when they intersect,
-   require a separate analytic or certified proof that the true patches cross
-   or touch. A held-facet meet alone proves nothing about true contact. If no
-   such proof is available, return `ErrUnsupported`. Only a zero-bound pair may
-   pass directly to held-facet predicates as exact geometry.
+4. For each face pair, upward-round `b = deltaA + deltaB`. When `b > 0`, admit a
+   held-facet meet only when the facet sets interpenetrate by a signed depth
+   strictly greater than `b` — then A's true surface (within deltaA of its
+   facets) and B's (within deltaB of its) still cross even after each is pulled
+   inward by its own bound, so the true crossing is proven. A pair whose held
+   facets merely touch, overlap by at most `b`, or stay apart within `b` is
+   undecidable — the chord error alone could open such a shallow meet from truly
+   disjoint surfaces — so return `ErrUnsupported`. The penetration depth is the
+   maximum signed penetration of the two facet sets under the exact predicates.
+   A tangency without crossing has no positive-bound certificate and stays
+   refused. Only a zero-bound pair may pass directly to held-facet predicates as
+   exact geometry.
 5. Run the exact-predicate mesh boolean.
 6. Bound the result volume by `volSymDiffA + volSymDiffB` plus final weld
    rounding.
@@ -829,8 +835,8 @@ until T4 proves occupied-volume error.
   positive gap smaller than the hole wall's `sourceBound`, so chording the
   concave wall inward makes the two held facet sets meet while the true bodies
   stay disjoint. The pre-pass MUST refuse that positive-bound pair; a held meet
-  is never read as a true meet, and no union may return one held lump for the
-  true two-lump result.
+  within `b` is never read as a true meet, and no union may return one held lump
+  for the true two-lump result.
 - Boolean two exact all-planar operands whose rational intersection vertices
   round inexactly at the final weld. Assert the affected face bounds and
   `boundaryCert.Delta` include the upward-rounded coordinate displacement, then
