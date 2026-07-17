@@ -510,12 +510,16 @@ func provenDepthExceeds(ctx context.Context, bmA *boolMesh, closeA []int, bmB *b
 // deepWitnessInside reports whether any held-facet sample point of m's
 // contacting facets is PROVEN to lie strictly inside the other operand's solid
 // deeper than b. Each candidate — a facet vertex, edge midpoint or centroid — is
-// tested for strict containment by the exact ray-parity predicate (never a
-// boundary point), then its certified LOWER-bound distance to the other mesh's
-// boundary is checked against b. A facet's deepest penetration need not fall on a
-// mesh vertex (a rod pierces a plate through the interior of its wall facets), so
-// the midpoints and centroid are sampled too. Reject-only: sampling and the facet
-// cap can only miss a witness and refuse, never admit a shallow meet.
+// first measured for its certified LOWER-bound distance to the other mesh's
+// boundary; only a candidate deeper than b is then tested for strict containment
+// by the exact ray-parity predicate (never a boundary point). Checking the cheap
+// float depth before the costly exact parity leaves the witness set unchanged —
+// a witness is still exactly inside ∧ deeper than b — while skipping the parity
+// scan for every shallow sample, which is every sample on a refused near-miss. A
+// facet's deepest penetration need not fall on a mesh vertex (a rod pierces a
+// plate through the interior of its wall facets), so the midpoints and centroid
+// are sampled too. Reject-only: sampling and the facet cap can only miss a
+// witness and refuse, never admit a shallow meet.
 func deepWitnessInside(ctx context.Context, m *boolMesh, closeFacets []int, other *boolMesh, b float64) (bool, error) {
 	all := allFacets(other)
 	work := 0
@@ -531,6 +535,17 @@ func deepWitnessInside(ctx context.Context, m *boolMesh, closeFacets []int, othe
 					return false, err
 				}
 			}
+			// A witness needs BOTH strict interior containment AND a certified
+			// depth beyond b. The depth is a float distance-to-boundary scan; the
+			// containment is the exact big.Rat ray-parity test, which is orders of
+			// magnitude costlier. Check the cheap depth first: a sample no deeper
+			// than b is no witness however it classifies, so gating the parity on
+			// depth > b skips the exact test for every shallow sample without
+			// changing which samples become witnesses (a witness is still exactly
+			// inside ∧ !boundary ∧ depth > b).
+			if certifiedInteriorDepth(p, other) <= b {
+				continue
+			}
 			inside, onBoundary, err := meshParityContext(ctx, p, other.verts, other.tris, all)
 			if err != nil {
 				if ctxErr := ctx.Err(); ctxErr != nil {
@@ -544,9 +559,7 @@ func deepWitnessInside(ctx context.Context, m *boolMesh, closeFacets []int, othe
 			if !inside || onBoundary {
 				continue
 			}
-			if certifiedInteriorDepth(p, other) > b {
-				return true, nil
-			}
+			return true, nil
 		}
 	}
 	return false, nil
@@ -572,6 +585,16 @@ func certifiedInteriorDepth(p xpt, other *boolMesh) float64 {
 	pf := p.vec()
 	best := math.Inf(1)
 	for i := range other.tris {
+		// The facet lies inside its own containing box, so the point's distance
+		// to that box never exceeds its distance to the facet. A box already at or
+		// beyond the running minimum therefore cannot hold a nearer facet — skip
+		// it. This prunes on distance alone and cannot lower the minimum below the
+		// unpruned value; any float-boundary case where a skipped box rounds a hair
+		// past the true nearest is already covered by the 1e-12 down-nudge below,
+		// so the certified LOWER bound is preserved.
+		if pointBoxDist(pf, other.boxes[i]) >= best {
+			continue
+		}
 		best = math.Min(best, pointTriDistance(pf, triCorners(other, i)))
 	}
 	if best <= 0 || isNonFinite(best) {
@@ -713,6 +736,26 @@ func clamp01(num, den float64) float64 {
 		return 0
 	}
 	return math.Max(0, math.Min(1, num/den))
+}
+
+// pointBoxDist is the Euclidean distance from a point to an axis-aligned box
+// (zero when the point is inside it). It lower-bounds the distance to anything
+// the box contains, so it is a sound distance prune for a nearest-facet scan.
+func pointBoxDist(p r3.Vec, box [2]r3.Vec) float64 {
+	axis := func(v, lo, hi float64) float64 {
+		switch {
+		case v < lo:
+			return lo - v
+		case v > hi:
+			return v - hi
+		default:
+			return 0
+		}
+	}
+	dx := axis(p.X, box[0].X, box[1].X)
+	dy := axis(p.Y, box[0].Y, box[1].Y)
+	dz := axis(p.Z, box[0].Z, box[1].Z)
+	return math.Sqrt(dx*dx + dy*dy + dz*dz)
 }
 
 // pointTriDistance is the distance from a point to a closed triangle: the
