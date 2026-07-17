@@ -588,7 +588,15 @@ func boundedWithinTolerance(bound, rel float64, reference func() (float64, bool)
 }
 
 func withinTolerance(bound, ref, rel float64) bool {
-	return usableMagnitude(ref) && bound <= rel*ref
+	if !usableMagnitude(ref) {
+		return false
+	}
+	if ref == 0 || rel == 0 {
+		return bound <= rel*ref
+	}
+	// Compare the represented ratio directly: multiplying that ratio back by
+	// ref can round one ulp below the bound at the inclusive boundary.
+	return bound/ref <= rel
 }
 
 func usableMagnitude(v float64) bool {

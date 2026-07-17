@@ -44,7 +44,7 @@ func TestVerifyAllPlanarBooleanGatesApproximateArea(t *testing.T) {
 }
 
 func TestVerifyToleranceBoundaryIsInclusive(t *testing.T) {
-	doc, body := allPlanarBoolean(t, 1)
+	doc, body := allPlanarBoolean(t, 0.3)
 	required := requiredBodyTolerance(t, body)
 	require.Positive(t, required)
 
