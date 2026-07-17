@@ -81,7 +81,7 @@ func (d *Document) Extrude(s *sketch.Sketch, p *sketch.Profile, e Extent, opts .
 	if taper.Mag() != 0 {
 		// Recorded exactly, then rejected: staging is explicit
 		// (docs/evaluator-design.md §2/§5), never a silent untapered prism.
-		return nil, fmt.Errorf(`%w: tapered extrude is not supported by this evaluator`, ErrUnsupported)
+		return nil, fmt.Errorf(`%w: this evaluator extrudes straight (untapered) prisms only; omit WithTaper or pass a zero angle`, ErrUnsupported)
 	}
 
 	frame, err := r3.NewFrame(plane.Origin, plane.U, plane.V)
@@ -476,7 +476,7 @@ func walkOf(seg CurveSegment) (segmentWalk, error) {
 		}
 		return circularWalk(seg.Center.U, seg.Center.V, radius, a0+seg.TStart*sweep, a0+seg.TEnd*sweep), nil
 	default:
-		return segmentWalk{}, fmt.Errorf(`%w: side faces for a %T land with its evaluator increment`, ErrUnsupported, seg)
+		return segmentWalk{}, fmt.Errorf(`%w: this evaluator extrudes profiles of line, arc and circle segments only; the profile has a %T segment it cannot sweep into a side face yet`, ErrUnsupported, seg)
 	}
 }
 

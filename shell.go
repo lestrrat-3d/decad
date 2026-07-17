@@ -177,15 +177,38 @@ func (b *Body) Shell(sel FaceSelector, t units.Value, opts ...ShellOption) (*Bod
 		if !ok {
 			return nil, fmt.Errorf(`%w: this evaluator cannot prove the eroded section non-empty`, ErrUnsupported)
 		}
-		if tmm >= inradius-shellTol*math.Max(1, inradius) {
-			return nil, fmt.Errorf(`%w: the inward wall reaches the section's inradius %g, so the cavity is empty`, ErrDegenerate, inradius)
+		// The accept boundary sits shellTol*max(1, inradius) below the limit —
+		// a SCALE-RELATIVE rounding tolerance that grows with the part's scale,
+		// not a fixed sub-nanometre margin — so the refusal reports the computed
+		// accepted maximum thickness rather than the bare inradius (at a large
+		// scale the two differ by far more than a noise floor).
+		if maxT := inradius - shellTol*math.Max(1, inradius); tmm >= maxT {
+			if maxT <= 0 {
+				// The inradius itself is at or below the rounding tolerance, so
+				// the accepted maximum is non-positive — no positive thickness
+				// leaves a cavity. A smaller thickness cannot help; the section
+				// must be enlarged.
+				return nil, fmt.Errorf(`%w: the section's inradius %s is at or below the evaluator's rounding tolerance, so this evaluator accepts no positive shell thickness here (the tolerance-adjusted maximum is non-positive); enlarge the section`, ErrDegenerate, units.Millimeters(inradius))
+			}
+			return nil, fmt.Errorf(`%w: the shell thickness %s meets or exceeds the accepted maximum %s (the section's inradius %s less the evaluator's rounding tolerance); use a thickness strictly below the accepted maximum`, ErrDegenerate, t, units.Millimeters(maxT), units.Millimeters(inradius))
 		}
 		// The height limit: where a cap is kept (a cup), the wall behind it is a
 		// floor t thick, so the cavity is swept over an interval of length h − t,
 		// non-empty exactly when t < h. A both-caps shell keeps no cap and has no
 		// floor, so only the section limit reaches it (§8).
-		if !bothCaps && tmm >= h-shellTol*math.Max(1, h) {
-			return nil, fmt.Errorf(`%w: the inward floor reaches the sweep height %g, so the cavity is empty`, ErrDegenerate, h)
+		// The same scale-relative rounding tolerance as the section limit
+		// (shellTol*max(1, h), growing with the part's scale, not a fixed
+		// sub-nanometre margin): the refusal reports the computed accepted
+		// maximum thickness rather than the bare height.
+		if maxT := h - shellTol*math.Max(1, h); !bothCaps && tmm >= maxT {
+			if maxT <= 0 {
+				// The sweep height itself is at or below the rounding tolerance,
+				// so the accepted maximum is non-positive — no positive thickness
+				// leaves a floor cavity. A smaller thickness cannot help; the
+				// sweep height must be increased.
+				return nil, fmt.Errorf(`%w: the sweep height %s is at or below the evaluator's rounding tolerance, so this evaluator accepts no positive shell thickness here (the tolerance-adjusted maximum is non-positive); increase the sweep height`, ErrDegenerate, units.Millimeters(h))
+			}
+			return nil, fmt.Errorf(`%w: the shell thickness %s meets or exceeds the accepted maximum %s (the sweep height %s less the evaluator's rounding tolerance); use a thickness strictly below the accepted maximum`, ErrDegenerate, t, units.Millimeters(maxT), units.Millimeters(h))
 		}
 	}
 

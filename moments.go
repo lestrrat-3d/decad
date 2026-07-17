@@ -165,7 +165,7 @@ func (ig *regionIntegrals) add(seg CurveSegment) error {
 		ig.addCircular(seg.Center, radius, a0+seg.TStart*sweep, a0+seg.TEnd*sweep)
 		return nil
 	default:
-		return fmt.Errorf(`%w: mass properties for a %T land with its evaluator increment`, ErrUnsupported, seg)
+		return fmt.Errorf(`%w: this evaluator computes mass properties over line, arc and circle profile segments only; the profile has a %T segment`, ErrUnsupported, seg)
 	}
 }
 
