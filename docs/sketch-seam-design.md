@@ -411,6 +411,35 @@ a frame rotation — round-trips through its own text form (core §6.2), and a
 curve parameter — a range, a knot, a weight, a `Rho` — is a plain dimensionless
 float (core §5.2).
 
+### 2.1 Decoded records
+
+A serialized `ProfileRecord` carries the certification established when
+`RecordProfile` admitted it:
+
+- source `Profile.Valid` said the region was valid;
+- every partial boundary fragment had `TExact == true`;
+- the reject-only range falsifier found no contradiction;
+- whole entities were recorded from their defining data.
+
+Recipe decoding cannot recreate that proof: the live `sketch.Profile`,
+`BoundaryEdge.TExact`, and source arrangement are intentionally absent from the
+record. `Recipe.Validate` therefore checks only stored-IR facts — known variant,
+finite fields, units, counts, ranges, winding consistency, and resource limits.
+It MUST NOT reconstruct an arrangement or use a small residual as an admission
+gate.
+
+A decoded record is an exact-record claim, on the same terms as a caller-built
+`ProfileRecord`. A validator or evaluator may reject a contradiction it can
+prove from the stored fields. Passing that check does not re-certify the missing
+upstream facts. Format version 1 carries no duplicated validity flag,
+certificate, hash, or sampled polyline: none could reproduce the source proof,
+and a flag supplied by the same untrusted JSON would add no evidence.
+
+`DecodeRecipe` protects resource use and wire meaning; it is not an
+authenticity check. Applications that need to know who produced a recipe sign
+or authenticate the complete encoded artifact outside decad. Full loading and
+evaluation rules are in `docs/recipe-replay-design.md`.
+
 ## 3. `ErrUnrecordableProfile`
 
 `ErrUnrecordableProfile` is the seam's one rejection of a *valid* profile: a

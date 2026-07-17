@@ -4,11 +4,13 @@ The design of decad's public API: a headless CAD engine an agent uses to model a
 part, prove it sound, and only then write real CAD software code (a Fusion
 add-in). This document is the contract. No public API lands that contradicts it.
 
-Two companion designs carry the deep ends of this contract: the recording
+Three companion designs carry the deep ends of this contract: the recording
 contract at the sketch seam — the trim contract, the recording IR, and
-`ErrUnrecordableProfile` — is specified in `docs/sketch-seam-design.md`, and
-how verification judges every bounded result — the report, the tolerance gate,
-and the noise floor — is specified in `docs/verification-design.md`.
+`ErrUnrecordableProfile` — is specified in `docs/sketch-seam-design.md`; strict
+recipe decoding, validation, versioning, resource limits, and atomic evaluation
+are specified in `docs/recipe-replay-design.md`; and how verification judges
+every bounded result — the report, the tolerance gate, and the noise floor — is
+specified in `docs/verification-design.md`.
 
 ## 1. What decad is answerable for
 
@@ -58,6 +60,13 @@ Existing models re-evaluate and get better answers.
 
 The recipe is also **the thing that translates into Fusion code** — it is the
 library's actual deliverable, so it is a first-class inspectable value.
+
+Stored recipes are executable model input, not JSON-shaped documentation.
+`DecodeRecipe` strictly decodes one versioned envelope, `Recipe.Validate` checks
+the operation/reference graph without building geometry, and `Evaluate` runs a
+private snapshot through a package-owned evaluator into a new `Document`.
+Whole-recipe failure exposes no partial document. The complete contract is
+`docs/recipe-replay-design.md`.
 
 ### 2.1 Why the boolean is the only place exactness dies
 
@@ -270,6 +279,10 @@ type Document struct{ /* ... */ }
 
 func New(opts ...DocumentOption) *Document
 
+func DecodeRecipe(r io.Reader, opts ...DecodeRecipeOption) (Recipe, error)
+func (r Recipe) Validate(opts ...ValidateRecipeOption) error
+func Evaluate(ctx context.Context, r Recipe, opts ...EvaluateOption) (*Document, error)
+
 func (d *Document) Bodies() []*Body            // live bodies
 func (d *Document) Recipe() Recipe             // the exact record of intent
 func (d *Document) Verify(ctx context.Context, opts ...VerifyOption) (*Report, error)
@@ -277,6 +290,11 @@ func (d *Document) Verify(ctx context.Context, opts ...VerifyOption) (*Report, e
 
 `Body` is **immutable**; every operation returns a new one, and the input body is
 retired from the document.
+
+`Evaluate` always owns a new document. It never appends into a caller's
+document, and any failure returns a nil document. Evaluator selection is an
+option on `Evaluate`; evaluator identity never enters `Recipe`. See
+`docs/recipe-replay-design.md` §§1/5.
 
 **A `*Body` carries its owning `*Document`.** This is what lets a boolean keep the
 signature invariant #4 demands — no target-out parameter, no operand mutated —
@@ -519,6 +537,23 @@ carries its own text form — `"10 mm"`, the magnitude and the unit's registered
 symbol, an exact bit-for-bit round trip — and refuses to write what cannot be
 read back: an unnamed or overflowed kind, a non-finite magnitude. Every quantity
 a `Step` records therefore encodes.
+
+**The root wire format is versioned and strict.** Canonical JSON is
+`{"format":"decad.recipe","version":1,"steps":[...]}`. The existing
+unversioned `{"steps":[...]}` shape is accepted as legacy version 1 and always
+re-encodes canonically. Unknown versions, unknown fields, duplicate keys,
+trailing values, malformed operation shapes, invalid references and configured
+resource-limit overruns reject. The in-memory `Recipe` keeps no version field:
+format metadata is not design intent. `docs/recipe-replay-design.md` §§2–7 is
+normative.
+
+**A recipe is evaluable, not merely encodable.** `Recipe.Validate` checks every
+operation's required/forbidden fields, every reachable value, every backward
+reference and the body-liveness state machine. `Evaluate` deep-copies and
+normalizes the recipe, validates it, then walks steps in order through the
+selected package-owned evaluator. Immediate feature calls and replay share the
+same recorded-step helpers; a second implementation is forbidden. A valid
+intent beyond the selected evaluator's reach remains `ErrUnsupported`.
 
 **A `Step` holds no `*Body` either.** A body reference in a `Step` is a `StepRef` —
 the step that produced the body — and that is what makes `Inputs` a graph. The
@@ -1155,7 +1190,13 @@ to make that mechanical.
   `ErrUnsupported` (the recipe records the intent exactly, but the current
   evaluator cannot yet build it — evaluator staging is explicit and rejected
   at the call, never silently approximated or narrowed;
-  `docs/evaluator-design.md` §2).
+  `docs/evaluator-design.md` §2), `ErrInvalidRecipe` (stored IR violates its
+  operation/reference contract), `ErrUnsupportedRecipeVersion` (the envelope
+  names a format version this package cannot interpret), and `ErrResourceLimit`
+  (decode/validation/evaluation crossed an explicit ceiling). `RecipeError`
+  carries root/step + field path and matches both `ErrInvalidRecipe` and its
+  specific cause; `EvaluationError` carries step + op and unwraps evaluator or
+  context failures. Full precedence is in `docs/recipe-replay-design.md` §6.
 - **`ErrUnitKind` covers exactly the wrong-`Kind` values.** A `units.Value` whose
   `Kind` is not the one the parameter takes: an angle where a length is wanted, and
   a `WithTolerance` value that is not `Dimensionless`
