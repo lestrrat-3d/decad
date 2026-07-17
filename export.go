@@ -52,7 +52,8 @@ func WithChordTolerance(tol units.Value) STLOBJOption {
 // deterministic, diffable text record (core §11). Facet normals are the
 // triangles' own outward normals; the mesh comes from [Body.Tessellate] at
 // the [WithChordTolerance] tolerance, or the documented size-derived default
-// without one, and every Tessellate rejection surfaces unchanged.
+// without one, and every Tessellate rejection surfaces unchanged — including
+// the [ErrUnsupported] a revolve body returns, which cannot be exported yet.
 func (b *Body) STL(w io.Writer, opts ...STLOption) error {
 	folded := make([]option.Interface, len(opts))
 	for i, o := range opts {
@@ -90,7 +91,8 @@ func (b *Body) STL(w io.Writer, opts ...STLOption) error {
 // the triangles as 1-based index triples, both in mesh order (core §11). The
 // mesh comes from [Body.Tessellate] at the [WithChordTolerance] tolerance, or
 // the documented size-derived default without one, and every Tessellate
-// rejection surfaces unchanged.
+// rejection surfaces unchanged — including the [ErrUnsupported] a revolve body
+// returns, which cannot be exported yet.
 func (b *Body) OBJ(w io.Writer, opts ...OBJOption) error {
 	folded := make([]option.Interface, len(opts))
 	for i, o := range opts {

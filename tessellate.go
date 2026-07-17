@@ -68,8 +68,12 @@ func (m *Mesh) Bound() units.Value { return units.Millimeters(m.bound) }
 // parameter samples chosen once per boundary curve and shared by every face
 // that meets it — a cap and the cylinder wall use the same chording of their
 // shared edge — so the mesh is watertight and consistently oriented by
-// construction, and Bound carries the largest sagitta actually taken. A body
-// this evaluator did not build is [ErrUnsupported].
+// construction, and Bound carries the largest sagitta actually taken.
+//
+// Prism, cup and boolean-built bodies tessellate. A revolve body is
+// [ErrUnsupported] here — Revolve builds and verifies, but its analytic
+// surfaces have no tessellator yet, so it cannot be meshed or exported. A body
+// this evaluator did not build at all is also [ErrUnsupported].
 func (b *Body) Tessellate(tol units.Value) (*Mesh, error) {
 	return tessellateContext(context.Background(), b, tol)
 }

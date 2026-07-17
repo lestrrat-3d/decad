@@ -27,8 +27,8 @@ import (
 // case (Table B, B1). A cap-edge selector is S1 (ErrUnsupported, the vertex
 // blend §6); a non-prism receiver is S3 (ErrUnsupported).
 
-// ChamferOption configures Chamfer. ChamferOpts carries nothing in this
-// increment (§7), so a chamfer Step's Opts is nil; the option group exists so an
+// ChamferOption configures Chamfer. No options are currently supported: a
+// chamfer Step's Opts is nil (§7), and the option group exists so an
 // asymmetric-chamfer option can be added without changing the signature.
 type ChamferOption interface {
 	option.Interface

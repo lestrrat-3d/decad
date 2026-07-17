@@ -27,10 +27,9 @@ import (
 // (modify §13, PR 1). A cap-edge selector is S1 (ErrUnsupported, the vertex
 // blend §6); a non-prism receiver is S3 (ErrUnsupported).
 
-// FilletOption configures Fillet. FilletOpts carries nothing in this increment
-// (§6), so a fillet Step's Opts is nil; the option group exists so a
-// variable-radius or setback option can be added without changing the
-// signature.
+// FilletOption configures Fillet. No options are currently supported: a fillet
+// Step's Opts is nil (§6), and the option group exists so a variable-radius or
+// setback option can be added without changing the signature.
 type FilletOption interface {
 	option.Interface
 	filletOption()

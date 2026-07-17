@@ -31,10 +31,11 @@ func (extrudeOption) extrudeOption() {}
 type identTaper struct{}
 
 // WithTaper sets the extrude taper: a SIGNED displacement angle — which way
-// the wall leans — recorded exactly in the step's ExtrudeOpts. A nonzero
-// taper is ErrUnsupported in evaluator v1 (docs/evaluator-design.md §5): a
-// tapered extrude of a general region is an offset problem, and a
-// wrong-but-confident prism is the failure decad exists to prevent.
+// the wall leans — recorded exactly in the step's ExtrudeOpts. It records
+// intent but always refuses a nonzero value in this evaluator: a nonzero taper
+// is [ErrUnsupported] (docs/evaluator-design.md §5), because a tapered extrude
+// of a general region is an offset problem, and a wrong-but-confident prism is
+// the failure decad exists to prevent.
 func WithTaper(a units.Value) ExtrudeOption {
 	return extrudeOption{option.New(identTaper{}, a)}
 }

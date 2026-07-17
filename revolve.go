@@ -224,9 +224,9 @@ func unmarshalAxis(data []byte) (Axis, error) {
 	}
 }
 
-// RevolveOption configures Revolve. The set is empty today; the option group
-// exists so options can be added without changing the signature — every
-// future option MUST be representable in a recorded RevolveOpts (core §6.2).
+// RevolveOption configures Revolve. No options are currently supported: the
+// option group exists so options can be added without changing the signature —
+// every such option MUST be representable in a recorded RevolveOpts (core §6.2).
 type RevolveOption interface {
 	option.Interface
 	revolveOption()
