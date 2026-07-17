@@ -476,7 +476,7 @@ func walkOf(seg CurveSegment) (segmentWalk, error) {
 		}
 		return circularWalk(seg.Center.U, seg.Center.V, radius, a0+seg.TStart*sweep, a0+seg.TEnd*sweep), nil
 	default:
-		return segmentWalk{}, fmt.Errorf(`%w: this evaluator extrudes profiles of line, arc and circle segments only; the profile has a %T segment it cannot sweep into a side face yet`, ErrUnsupported, seg)
+		return segmentWalk{}, fmt.Errorf(`%w: this evaluator sweeps profiles of line, arc and circle segments only; the profile has a %T segment it cannot sweep into a side face yet`, ErrUnsupported, seg)
 	}
 }
 
