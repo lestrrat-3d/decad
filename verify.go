@@ -352,7 +352,10 @@ func (d *Document) Verify(ctx context.Context, opts ...VerifyOption) (*Report, e
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		br := verifyBody(b, cfg)
+		br, err := verifyBody(ctx, b, cfg)
+		if err != nil {
+			return nil, err
+		}
 		report.Bodies = append(report.Bodies, br)
 		if br.Status == Suspect {
 			undecided = true
@@ -451,7 +454,7 @@ func pairGapMeasurement(res pairResult) Measurement {
 // is valid by construction, and the proof is the construction (evaluator
 // §10): the structural audit is an invariant check, cheap, and its verdict
 // is decided, not sampled.
-func verifyBody(b *Body, cfg verifyConfig) *BodyReport {
+func verifyBody(ctx context.Context, b *Body, cfg verifyConfig) (*BodyReport, error) {
 	br := &BodyReport{
 		Body:   b,
 		Area:   b.area,
@@ -491,8 +494,10 @@ func verifyBody(b *Body, cfg verifyConfig) *BodyReport {
 
 	if br.Status == Unsound {
 		br.Exactness = bodyExactness(br)
-		_ = bodyReadingsWithinTolerance(br, cfg.rel)
-		return br
+		if _, err := bodyReadingsWithinTolerance(ctx, br, cfg.rel); err != nil {
+			return nil, err
+		}
+		return br, nil
 	}
 
 	// The asked opt-in surveys (evaluator §10, verification §6): answered
@@ -509,7 +514,11 @@ func verifyBody(b *Body, cfg verifyConfig) *BodyReport {
 	// every requested survey and judges each present bounded result by its own
 	// inclusive Bound <= rel*Ref comparison (verification §2/§3/§6).
 	br.Exactness = bodyExactness(br)
-	if !bodyReadingsWithinTolerance(br, cfg.rel) {
+	ok, err := bodyReadingsWithinTolerance(ctx, br, cfg.rel)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
 		suspect = true
 	}
 
@@ -521,7 +530,7 @@ func verifyBody(b *Body, cfg verifyConfig) *BodyReport {
 	if violating {
 		br.Status = Violating
 	}
-	return br
+	return br, nil
 }
 
 // auditBoundary checks the structural invariants of the held boundary:
@@ -639,7 +648,10 @@ func usableMagnitude(v float64) bool {
 // laziness is part of the contract: a zero Bound passes even when no usable D
 // can be obtained.
 type bodyToleranceInputs struct {
+	//nolint:containedctx // the reference callbacks have fixed signatures; the gate carries the caller's context through this per-call inputs struct so the diameter build stays cancellable.
+	ctx    context.Context
 	report *BodyReport
+	err    error // a cancellation observed while lazily loading a reference
 
 	diameterLoaded bool
 	diameterValue  float64
@@ -652,7 +664,7 @@ type bodyToleranceInputs struct {
 
 func (in *bodyToleranceInputs) diameter() (float64, bool) {
 	if !in.diameterLoaded {
-		in.diameterValue, in.diameterOK = bodyGateDiameter(in.report.Body)
+		in.diameterValue, in.diameterOK, in.err = bodyGateDiameter(in.ctx, in.report.Body)
 		in.diameterLoaded = true
 	}
 	return in.diameterValue, in.diameterOK
@@ -718,8 +730,19 @@ func (in *bodyToleranceInputs) diameterReference() (float64, bool) {
 // table. Body.Edges already deduplicates topology edges, and edgeLength reads
 // each held geometric chain directly even when public Edge.Length must refuse
 // a curved boolean rim.
-func bodyReadingsWithinTolerance(br *BodyReport, rel float64) bool {
-	in := &bodyToleranceInputs{report: br}
+func bodyReadingsWithinTolerance(ctx context.Context, br *BodyReport, rel float64) (bool, error) {
+	in := &bodyToleranceInputs{ctx: ctx, report: br}
+	pass := in.readingsPass(rel)
+	// A cancellation observed while a reference lazily built its geometry is
+	// reported to the caller rather than folded into a Suspect verdict.
+	if in.err != nil {
+		return false, in.err
+	}
+	return pass, nil
+}
+
+func (in *bodyToleranceInputs) readingsPass(rel float64) bool {
+	br := in.report
 	if !measurementWithinTolerance(br.Area, rel, in.areaReference) {
 		return false
 	}
@@ -757,19 +780,26 @@ func (in pairToleranceInputs) lengthReference(value float64) (float64, bool) {
 
 // bodyGateDiameter returns the body's own diameter, never a document scale or
 // a bounds-box diagonal. A Faceted body's cached value covers every held
-// payload vertex, including vertices absent from the B-rep boundary loops.
-func bodyGateDiameter(body *Body) (float64, bool) {
+// payload vertex, including vertices absent from the B-rep boundary loops. The
+// analytic carrier model is built through the shared work budget (§7.2), so a
+// cancelled Verify observes cancellation during the build instead of waiting for
+// the whole model to finish.
+func bodyGateDiameter(ctx context.Context, body *Body) (float64, bool, error) {
 	if body == nil {
-		return 0, false
+		return 0, false, nil
 	}
 	if payload, ok := body.payload.(facetedPayload); ok {
-		return payload.diameter, usableMagnitude(payload.diameter)
+		return payload.diameter, usableMagnitude(payload.diameter), nil
 	}
-	geom, ok := newBodyGeom(body)
+	geom, ok, err := newBodyGeomBudget(newWorkBudget(ctx), body)
+	if err != nil {
+		return 0, false, err
+	}
 	if !ok {
-		return 0, false
+		return 0, false, nil
 	}
-	return pointSetDiameter(geom.supports)
+	d, ok := pointSetDiameter(geom.supports)
+	return d, ok, nil
 }
 
 func pointSetDiameter(points []r3.Vec) (float64, bool) {

@@ -533,16 +533,35 @@ func buildFacetedBody(d *Document, ref StepRef, pp facetedPayload) (*Body, error
 	}
 
 	// The facet → face mapping, in the body's Faces() order, for Tessellate.
-	flat := map[*Face]int{}
-	for i, f := range body.Faces() {
-		flat[f] = i
+	faceOf, err := facetFaceIndices(body.Faces(), facetFace)
+	if err != nil {
+		return nil, err
 	}
-	pp.faceOf = make([]int, len(tris))
-	for i, f := range facetFace {
-		pp.faceOf[i] = flat[f]
-	}
+	pp.faceOf = faceOf
 	body.payload = pp
 	return body, nil
+}
+
+// facetFaceIndices maps each facet to its face's index in the built body's
+// Faces() order — the lookup Tessellate reads. Every facetFace entry is a face
+// this build attached to the body's own topology, so on a consistent build the
+// lookup cannot miss. A miss is an invariant failure (docs/interference-design.md
+// §7.1), returned as ErrBooleanFailed rather than silently attributing the facet
+// to face 0.
+func facetFaceIndices(faces, facetFace []*Face) ([]int, error) {
+	flat := make(map[*Face]int, len(faces))
+	for i, f := range faces {
+		flat[f] = i
+	}
+	out := make([]int, len(facetFace))
+	for i, f := range facetFace {
+		idx, ok := flat[f]
+		if !ok {
+			return nil, fmt.Errorf(`%w: a facet maps to a face absent from the built body`, ErrBooleanFailed)
+		}
+		out[i] = idx
+	}
+	return out, nil
 }
 
 // meshVolumeMeasurement integrates one stitched, oriented, closed mesh in

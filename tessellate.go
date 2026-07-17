@@ -184,11 +184,10 @@ func tessellateContext(ctx context.Context, b *Body, tol units.Value) (*Mesh, er
 	// The mesh vertices: bottom and top of every boundary sample, placed
 	// through the payload — exactly on the analytic boundary.
 	mesh.vertices = make([]r3.Vec, 0, 2*len(pts2))
-	for i, p := range pts2 {
-		if i%256 == 0 {
-			if err := ctx.Err(); err != nil {
-				return nil, err
-			}
+	vertexBudget := newWorkBudget(ctx)
+	for _, p := range pts2 {
+		if err := vertexBudget.step(); err != nil {
+			return nil, err
 		}
 		mesh.vertices = append(mesh.vertices, pp.point(p.U, p.V, pp.z0), pp.point(p.U, p.V, pp.z1))
 	}
@@ -626,11 +625,10 @@ func tessellateFaceted(ctx context.Context, b *Body, fp facetedPayload, chord fl
 	}
 	faces := b.Faces()
 	src := make([]*Face, len(fp.tris))
+	budget := newWorkBudget(ctx)
 	for i, fi := range fp.faceOf {
-		if i%256 == 0 {
-			if err := ctx.Err(); err != nil {
-				return nil, err
-			}
+		if err := budget.step(); err != nil {
+			return nil, err
 		}
 		if fi < 0 || fi >= len(faces) {
 			// An inconsistent source mapping is a broken evaluator, not a
@@ -749,11 +747,10 @@ func requireLoopClearance(ctx context.Context, pts []Point2, loopIdx [][]int, lo
 	minU, maxU := math.Inf(1), math.Inf(-1)
 	minV, maxV := math.Inf(1), math.Inf(-1)
 	maxAbs := 0.0
-	for i, p := range pts {
-		if i%256 == 0 {
-			if err := ctx.Err(); err != nil {
-				return err
-			}
+	budget := newWorkBudget(ctx)
+	for _, p := range pts {
+		if err := budget.step(); err != nil {
+			return err
 		}
 		minU, maxU = math.Min(minU, p.U), math.Max(maxU, p.U)
 		minV, maxV = math.Min(minV, p.V), math.Max(maxV, p.V)
@@ -780,15 +777,12 @@ func requireLoopClearance(ctx context.Context, pts []Point2, loopIdx [][]int, lo
 // polylines.
 func loopPolylineDistance(ctx context.Context, pts []Point2, a, b []int) (float64, error) {
 	best := math.Inf(1)
-	work := 0
+	budget := newWorkBudget(ctx)
 	for i := range a {
 		a0, a1 := pts[a[i]], pts[a[(i+1)%len(a)]]
 		for j := range b {
-			work++
-			if work%256 == 0 {
-				if err := ctx.Err(); err != nil {
-					return 0, err
-				}
+			if err := budget.step(); err != nil {
+				return 0, err
 			}
 			b0, b1 := pts[b[j]], pts[b[(j+1)%len(b)]]
 			best = math.Min(best, segSegDistance(a0, a1, b0, b1))

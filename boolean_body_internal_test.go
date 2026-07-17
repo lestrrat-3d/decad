@@ -8,6 +8,24 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestFacetFaceIndicesMapsConsistentFaces(t *testing.T) {
+	f0, f1 := &Face{}, &Face{}
+	got, err := facetFaceIndices([]*Face{f0, f1}, []*Face{f1, f0, f1})
+	require.NoError(t, err)
+	require.Equal(t, []int{1, 0, 1}, got,
+		`each facet must map to its face's index in the built body's Faces() order`)
+}
+
+func TestFacetFaceIndicesRejectsUnmappedFacet(t *testing.T) {
+	f0, f1 := &Face{}, &Face{}
+	orphan := &Face{} // a face absent from the built body's Faces()
+	_, err := facetFaceIndices([]*Face{f0, f1}, []*Face{f0, orphan})
+	// Without the miss guard, a Go map lookup yields the zero value 0 and the
+	// facet is silently attributed to face 0; the guard turns that invariant
+	// break into an error instead.
+	require.ErrorIs(t, err, ErrBooleanFailed)
+}
+
 func TestFacetedPlacementRebuildsCachedDiameter(t *testing.T) {
 	doc := New()
 	body, err := buildFacetedBody(doc, StepRef(0), facetedPayload{

@@ -1353,16 +1353,15 @@ func clrLadder() []r3.Vec {
 // ambiguous.
 
 func (g *bodyGeom) pointInBody(ctx context.Context, p r3.Vec, tol float64) (bool, bool, error) {
+	budget := newWorkBudget(ctx)
 	for _, dir := range clrLadder() {
 		if err := ctx.Err(); err != nil {
 			return false, false, err
 		}
 		total, ok := 0, true
-		for i, f := range g.faces {
-			if i%256 == 0 {
-				if err := ctx.Err(); err != nil {
-					return false, false, err
-				}
+		for _, f := range g.faces {
+			if err := budget.step(); err != nil {
+				return false, false, err
 			}
 			n, good, err := f.rayCrossings(ctx, p, dir, tol)
 			if err != nil {
