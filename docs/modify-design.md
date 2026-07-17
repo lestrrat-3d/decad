@@ -574,9 +574,9 @@ the rim, and the inner and outer skins are one connected shell — a cup and a
 tube alike. A hollow **closed** body — the one shape whose inner skin is a
 genuine void shell — would be a shell that removes *no* face, and the selector
 vocabulary cannot ask for it at all: S16 makes an empty match an error, and a
-cardinality assertion takes a positive count. It is **unspellable**, not
-staged: there is no call to refuse, and how it should be spelled is an open
-question (§14).
+cardinality assertion takes a positive count. It is **unspellable** through the
+removal selector, not staged: there is no face to name. `WithNoOpenings()`
+spells it instead — the one nil-selector shell (§14).
 
 ## 9. Table B — the result
 
@@ -719,7 +719,8 @@ Two consequences, both load-bearing, and neither is a workaround:
   the walls of a modified body is done on what they **are** (`Planar()`,
   `Cylindrical()`, `NormalTo`, `ParallelTo`) or on the modify step's own roles.
   Whether a consuming op should additionally carry its ancestor's refs is core
-  §9's question, and it is open (§14).
+  §9's question; consuming modify results do not inherit ancestor face roles
+  (§14).
 
 The body's own `Origin()` is the modify step, role `"body"`. Roles derive from
 the record and the deterministic walk order, so a replay reproduces every one of
