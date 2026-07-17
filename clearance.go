@@ -7,18 +7,15 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
-// This file is the pair kernel of docs/clearance-design.md §1/§2/§5/§6/§7:
-// one non-mutating pass over a pair of proven solids that proves the
-// partition (disjoint interiors, a certified touching contact, or undecided
-// — never a fabricated verdict) and, when asked, measures the gap as a
-// proven interval [lo, hi] whose exactness is the interval's, not the
-// winning candidate's: Exact exactly when the interval is a point, which
-// requires a closed-form winner AND every bracketed rival proven to sit at
-// or above it. PR 1 of the §8 increment plan: the tier enumeration with
-// exact admission, every CF cell, the P4/P8 certified brackets, the nesting
-// exclusion, the coplanar Plane × Plane contact certificate, and the report
-// wiring; cone-involved pairs read a coarse enclosure interval, and every
-// non-coplanar contact type stays undecided.
+// This file is the pair kernel of docs/clearance-design.md §1/§2/§5/§6/§7.
+// One non-mutating pass proves one of four outcomes: pairDisjoint,
+// pairTouching, pairOverlapping, or pairUndecided. Admitted non-coplanar
+// transversal crossings and strict containment produce pairOverlapping;
+// unsupported contact stays pairUndecided. When asked, the kernel measures
+// the gap as a proven interval [lo, hi]. Exactness belongs to the interval,
+// not the winning candidate: Exact requires a closed-form winner and every
+// bracketed rival proven to sit at or above it. Cone-involved pairs may read
+// a coarse enclosure interval rather than a fabricated verdict.
 
 // pairVerdict is the kernel's partition answer for one pair.
 type pairVerdict int
@@ -61,6 +58,30 @@ type pairKernel struct {
 	err   error
 }
 
+// clearanceBudget shares one bounded cancellation counter through nested
+// clearance scans without storing a context in long-lived geometry state.
+type clearanceBudget struct {
+	stepFn func() error
+	errFn  func() error
+}
+
+func newClearanceBudget(ctx context.Context) *clearanceBudget {
+	work := 0
+	return &clearanceBudget{
+		stepFn: func() error {
+			work++
+			if work%256 == 0 {
+				return ctx.Err()
+			}
+			return nil
+		},
+		errFn: ctx.Err,
+	}
+}
+
+func (b *clearanceBudget) step() error { return b.stepFn() }
+func (b *clearanceBudget) err() error  { return b.errFn() }
+
 // clearancePair runs the kernel over one pair of proven solids.
 // nestingExcluded is true when box separation has already excluded nesting
 // (a box-proven pair needs the kernel only for its gap — §7).
@@ -94,7 +115,11 @@ func clearancePair(ctx context.Context, a, b *Body, nestingExcluded bool) (pairR
 	// overlap, with each body's material wholly on its own side of the
 	// shared plane — the separating plane clears the interiors globally and
 	// certifies the whole contact set, so the gap is a measured Exact zero.
-	if k.coplanarContactCertified() {
+	certified, err := k.coplanarContactCertified(ctx)
+	if err != nil {
+		return pairResult{}, err
+	}
+	if certified {
 		return pairResult{verdict: pairTouching, exact: true, diam: diam}, nil
 	}
 
@@ -150,12 +175,22 @@ func clearancePair(ctx context.Context, a, b *Body, nestingExcluded bool) (pairR
 
 // coplanarContactCertified scans the plane-face pairs for the §6 coplanar
 // certificate.
-func (k *pairKernel) coplanarContactCertified() bool {
+func (k *pairKernel) coplanarContactCertified(ctx context.Context) (bool, error) {
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
+	budget := newClearanceBudget(ctx)
 	for _, fa := range k.a.faces {
+		if err := budget.step(); err != nil {
+			return false, err
+		}
 		if fa.kind != ckPlane {
 			continue
 		}
 		for _, fb := range k.b.faces {
+			if err := budget.step(); err != nil {
+				return false, err
+			}
 			if fb.kind != ckPlane {
 				continue
 			}
@@ -170,7 +205,11 @@ func (k *pairKernel) coplanarContactCertified() bool {
 			if fb.o.Sub(fa.o).Dot(fa.n) != 0 {
 				continue // not exactly coplanar
 			}
-			if rel, _ := k.coplanarRelation(fa, fb); rel != 1 {
+			rel, _, err := k.coplanarRelation(budget, fa, fb)
+			if err != nil {
+				return false, err
+			}
+			if rel != 1 {
 				continue // no proven positive-area overlap
 			}
 			c := fa.planeOffset()
@@ -182,14 +221,14 @@ func (k *pairKernel) coplanarContactCertified() bool {
 			_ = aLo
 			_ = bHi
 			if aHi <= c && bLo >= c {
-				return true
+				return true, nil
 			}
 			if bHi <= c && aLo >= c {
-				return true
+				return true, nil
 			}
 		}
 	}
-	return false
+	return false, ctx.Err()
 }
 
 // payloadExtent is the body's exact extent interval along a direction, read

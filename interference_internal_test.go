@@ -4,6 +4,8 @@ import (
 	"context"
 	"math"
 	"math/big"
+	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/lestrrat-3d/r3"
@@ -64,6 +66,26 @@ type internalCancelContext struct {
 	calls           int
 }
 
+type internalNestedScanCancelContext struct {
+	context.Context //nolint:containedctx // deterministic cancellation wrapper used only within one test call.
+	enteredNested   bool
+}
+
+func (c *internalNestedScanCancelContext) Err() error {
+	pcs := make([]uintptr, 32)
+	frames := runtime.CallersFrames(pcs[:runtime.Callers(2, pcs)])
+	for {
+		frame, more := frames.Next()
+		if strings.HasSuffix(frame.Function, ".coplanarBoundaryClearanceBudget") {
+			c.enteredNested = true
+			return context.Canceled
+		}
+		if !more {
+			return nil
+		}
+	}
+}
+
 func (c *internalCancelContext) Err() error {
 	c.calls++
 	if c.calls >= c.limit {
@@ -103,6 +125,84 @@ func TestFacetAdjacencyCancellationIsBounded(t *testing.T) {
 
 	_, err := facetAdjacencyContext(ctx, tris)
 	require.ErrorIs(t, err, context.Canceled)
+}
+
+func TestFacetCutCancellationIsBounded(t *testing.T) {
+	tri := [3]xpt{
+		xptOf(r3.NewVec(0, 0, 0)),
+		xptOf(r3.NewVec(10, 0, 0)),
+		xptOf(r3.NewVec(0, 10, 0)),
+	}
+	normal := xcross(xsub(tri[1], tri[0]), xsub(tri[2], tri[0]))
+	seg := xseg{
+		a: xptOf(r3.NewVec(1, 1, 0)),
+		b: xptOf(r3.NewVec(2, 1, 0)),
+	}
+	segs := make([]xseg, 300)
+	for i := range segs {
+		segs[i] = seg
+	}
+	ctx := &internalCancelContext{Context: t.Context(), limit: 2}
+
+	_, err := cutTriangle(ctx, tri, normal, segs)
+	require.ErrorIs(t, err, context.Canceled)
+}
+
+func internalPolygonRegion(t *testing.T, cx, cy, radius float64, sides int) region2 {
+	t.Helper()
+	elems := make([]surveyElem, sides)
+	for i := range sides {
+		a := 2 * math.Pi * float64(i) / float64(sides)
+		b := 2 * math.Pi * float64(i+1) / float64(sides)
+		e, ok := lineElem(
+			cx+radius*math.Cos(a), cy+radius*math.Sin(a),
+			cx+radius*math.Cos(b), cy+radius*math.Sin(b),
+		)
+		require.True(t, ok)
+		elems[i] = e
+	}
+	return newRegion2(elems)
+}
+
+func TestCoplanarRelationCancellationIsBounded(t *testing.T) {
+	x, y, z := r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1)
+	f := &cFace{
+		kind: ckPlane, u: x, v: y, n: z,
+		region: internalPolygonRegion(t, -30, 0, 10, 24),
+	}
+	g := &cFace{
+		kind: ckPlane, u: x, v: y.Scale(-1), n: z.Scale(-1),
+		region: internalPolygonRegion(t, 30, 0, 10, 24),
+	}
+	k := &pairKernel{
+		a: &bodyGeom{faces: []*cFace{f}},
+		b: &bodyGeom{faces: []*cFace{g}},
+	}
+
+	t.Run("whole certificate", func(t *testing.T) {
+		ctx := &internalNestedScanCancelContext{Context: t.Context()}
+		_, err := k.coplanarContactCertified(ctx)
+		require.ErrorIs(t, err, context.Canceled)
+		require.True(t, ctx.enteredNested, `the public certificate path must reach the nested boundary scan before cancellation`)
+	})
+
+	t.Run("nested boundary scan", func(t *testing.T) {
+		ctx := &internalCancelContext{Context: t.Context(), limit: 1}
+		_, err := coplanarBoundaryClearanceBudget(newClearanceBudget(ctx), f.region, g.region)
+		require.ErrorIs(t, err, context.Canceled)
+	})
+}
+
+func TestInterferencePairDiameterUsesAllFacetedPayloadVertices(t *testing.T) {
+	a := &Body{payload: facetedPayload{verts: []r3.Vec{
+		r3.NewVec(0, 0, 0),
+		r3.NewVec(100, 0, 0),
+	}}}
+	b := &Body{payload: facetedPayload{verts: []r3.Vec{r3.NewVec(0, 0, 0)}}}
+
+	diameter, err := interferencePairDiameter(t.Context(), a, b)
+	require.NoError(t, err)
+	require.Equal(t, 100.0, diameter)
 }
 
 func internalBoxBody(t *testing.T, doc *Document, x0, y0, x1, y1, h float64) *Body {

@@ -595,7 +595,11 @@ func (k *pairKernel) planePlane(f, g *cFace, sink *cellSink) {
 	// path to certify falls to unsure there — never a wrong Exact.
 	if f.n.Cross(g.n).Len() == 0 {
 		h := g.o.Sub(f.o).Dot(f.n)
-		rel, wit := k.coplanarRelation(f, g)
+		rel, wit, err := k.coplanarRelation(newClearanceBudget(k.ctx), f, g)
+		if err != nil {
+			k.err = err
+			return
+		}
 		if math.Abs(h) <= k.tol {
 			if rel != -1 {
 				sink.unsure = true
@@ -688,62 +692,132 @@ func intervalsMeet(a, b []clrIv, tol float64) int {
 // frame), −1 provenly apart, 0 ambiguous. Sample-based in the sufficient
 // direction, boundary-clearance-based in the exclusion direction — never a
 // blessed ambiguity.
-func (k *pairKernel) coplanarRelation(f, g *cFace) (int, [2]float64) {
+func (k *pairKernel) coplanarRelation(budget *clearanceBudget, f, g *cFace) (int, [2]float64, error) {
+	if err := budget.err(); err != nil {
+		return 0, [2]float64{}, err
+	}
 	ge := make([]surveyElem, 0, len(g.region.elems))
 	for _, e := range g.region.elems {
+		if err := budget.step(); err != nil {
+			return 0, [2]float64{}, err
+		}
 		ge = append(ge, transformElem(e, g, f))
 	}
-	greg := newRegion2(ge)
+	greg, err := newRegion2Budget(budget, ge)
+	if err != nil {
+		return 0, [2]float64{}, err
+	}
 	tol := math.Max(f.region.tol(), greg.tol())
 
-	probeInto := func(src, dst region2) (int, [2]float64) {
-		if p, ok := src.interiorPoint(); ok {
-			if dst.classify(p[0], p[1], tol) == 1 {
-				return 1, p
+	probeInto := func(src, dst region2) (int, [2]float64, error) {
+		p, ok, err := regionInteriorPointBudget(budget, src)
+		if err != nil {
+			return 0, [2]float64{}, err
+		}
+		if ok {
+			class, err := regionClassifyBudget(budget, dst, p[0], p[1], tol)
+			if err != nil {
+				return 0, [2]float64{}, err
+			}
+			if class == 1 {
+				return 1, p, nil
 			}
 		}
-		for _, s := range src.samples() {
-			if dst.classify(s[0], s[1], tol) == 1 {
-				return 1, s
+		samples, err := regionSamplesBudget(budget, src)
+		if err != nil {
+			return 0, [2]float64{}, err
+		}
+		for _, s := range samples {
+			if err := budget.step(); err != nil {
+				return 0, [2]float64{}, err
+			}
+			class, err := regionClassifyBudget(budget, dst, s[0], s[1], tol)
+			if err != nil {
+				return 0, [2]float64{}, err
+			}
+			if class == 1 {
+				return 1, s, nil
 			}
 		}
-		return 0, [2]float64{}
+		return 0, [2]float64{}, nil
 	}
-	if r, w := probeInto(greg, f.region); r == 1 {
-		return 1, w
+	r, w, err := probeInto(greg, f.region)
+	if err != nil {
+		return 0, [2]float64{}, err
 	}
-	if r, w := probeInto(f.region, greg); r == 1 {
-		return 1, w
+	if r == 1 {
+		return 1, w, nil
+	}
+	r, w, err = probeInto(f.region, greg)
+	if err != nil {
+		return 0, [2]float64{}, err
+	}
+	if r == 1 {
+		return 1, w, nil
 	}
 	// Exclusion: boundaries clear each other and neither contains the other.
+	clearing, err := coplanarBoundaryClearanceBudget(budget, f.region, greg)
+	if err != nil {
+		return 0, [2]float64{}, err
+	}
+	if clearing <= tol {
+		return 0, [2]float64{}, budget.err()
+	}
+	outsideFG, err := regionSampleOutsideBudget(budget, f.region, greg, tol)
+	if err != nil {
+		return 0, [2]float64{}, err
+	}
+	if !outsideFG {
+		return 0, [2]float64{}, budget.err()
+	}
+	outsideGF, err := regionSampleOutsideBudget(budget, greg, f.region, tol)
+	if err != nil {
+		return 0, [2]float64{}, err
+	}
+	if outsideGF {
+		return -1, [2]float64{}, nil
+	}
+	return 0, [2]float64{}, budget.err()
+}
+
+func coplanarBoundaryClearanceBudget(budget *clearanceBudget, a, b region2) (float64, error) {
 	clearing := math.Inf(1)
-	for _, ef := range f.region.elems {
-		for _, eg := range greg.elems {
-			if d := elemElemDistLB(ef, eg); d < clearing {
+	for _, ea := range a.elems {
+		for _, eb := range b.elems {
+			if err := budget.step(); err != nil {
+				return 0, err
+			}
+			if d := elemElemDistLB(ea, eb); d < clearing {
 				clearing = d
 			}
 		}
 	}
-	if clearing > tol &&
-		regionSampleOutside(f.region, greg, tol) &&
-		regionSampleOutside(greg, f.region, tol) {
-		return -1, [2]float64{}
-	}
-	return 0, [2]float64{}
+	return clearing, nil
 }
 
 // regionSampleOutside reports whether a sample of src is cleanly outside dst
 // — with boundaries provably apart, one clean sample settles containment.
-func regionSampleOutside(src, dst region2, tol float64) bool {
-	for _, s := range src.samples() {
-		switch dst.classify(s[0], s[1], tol) {
+func regionSampleOutsideBudget(budget *clearanceBudget, src, dst region2, tol float64) (bool, error) {
+	samples, err := regionSamplesBudget(budget, src)
+	if err != nil {
+		return false, err
+	}
+	for _, s := range samples {
+		if err := budget.step(); err != nil {
+			return false, err
+		}
+		class, err := regionClassifyBudget(budget, dst, s[0], s[1], tol)
+		if err != nil {
+			return false, err
+		}
+		switch class {
 		case -1:
-			return true
+			return true, nil
 		case 1:
-			return false
+			return false, nil
 		}
 	}
-	return false
+	return false, nil
 }
 
 // transformElem maps a boundary element from one plane face's 2D frame into

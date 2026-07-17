@@ -56,12 +56,17 @@ func measuredInterference(ctx context.Context, a, b *Body, res pairResult) (Meas
 
 // interferencePairDiameter reads the greatest supported point distance from
 // the pair. Analytic bodies contribute their exact support set from the
-// clearance model; other shipped payloads contribute their held topology
-// vertices. An incomplete set can only understate D and tighten the noise
-// floor, never admit a coarse answer.
+// clearance model; a faceted payload contributes every held mesh vertex,
+// including interior tessellation vertices that have no B-rep Vertex. An
+// incomplete set can only understate D and tighten the noise floor, never
+// admit a coarse answer.
 func interferencePairDiameter(ctx context.Context, a, b *Body) (float64, error) {
 	var points []r3.Vec
 	for _, body := range []*Body{a, b} {
+		if payload, ok := body.payload.(facetedPayload); ok {
+			points = append(points, payload.verts...)
+			continue
+		}
 		if geom, ok := newBodyGeom(body); ok {
 			points = append(points, geom.supports...)
 			continue

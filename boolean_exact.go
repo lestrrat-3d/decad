@@ -173,16 +173,22 @@ func onSegment2(a, b, p xp2) (bool, bool) {
 // pointInPoly2 reports whether p lies strictly inside the simple polygon —
 // exact parity along a +u ray with the half-open rule, so a crossing at a
 // shared vertex counts exactly once. A p on the boundary reports onBoundary.
-func pointInPoly2(poly []xp2, p xp2) (bool, bool) {
+func pointInPoly2(budget *cutBudget, poly []xp2, p xp2) (bool, bool, error) {
 	n := len(poly)
 	for i := range n {
+		if err := budget.step(); err != nil {
+			return false, false, err
+		}
 		on, _ := onSegment2(poly[i], poly[(i+1)%n], p)
 		if on {
-			return false, true
+			return false, true, nil
 		}
 	}
 	inside := false
 	for i := range n {
+		if err := budget.step(); err != nil {
+			return false, false, err
+		}
 		a, b := poly[i], poly[(i+1)%n]
 		if (a.v.Cmp(p.v) <= 0) == (b.v.Cmp(p.v) <= 0) {
 			continue
@@ -194,18 +200,21 @@ func pointInPoly2(poly []xp2, p xp2) (bool, bool) {
 			inside = !inside
 		}
 	}
-	return inside, false
+	return inside, false, nil
 }
 
 // polyArea2 is twice the exact signed area of the polygon.
-func polyArea2(poly []xp2) *big.Rat {
+func polyArea2(budget *cutBudget, poly []xp2) (*big.Rat, error) {
 	total := new(big.Rat)
 	n := len(poly)
 	for i := range n {
+		if err := budget.step(); err != nil {
+			return nil, err
+		}
 		a, b := poly[i], poly[(i+1)%n]
 		total.Add(total, new(big.Rat).Sub(new(big.Rat).Mul(a.u, b.v), new(big.Rat).Mul(b.u, a.v)))
 	}
-	return total
+	return total, nil
 }
 
 // earClipX triangulates a weakly-simple counter-clockwise polygon (given as
@@ -214,22 +223,44 @@ func polyArea2(poly []xp2) *big.Rat {
 // output, which is what keeps a conforming subdivision conforming — so only
 // strictly convex, unblocked ears are clipped. A stall means the polygon is
 // not weakly simple, which is an internal error, never a wrong mesh.
-func earClipX(pts []xp2, poly []int) ([][3]int, error) {
-	idx := append([]int(nil), poly...)
+func earClipX(budget *cutBudget, pts []xp2, poly []int) ([][3]int, error) {
+	idx := make([]int, len(poly))
+	for i, vi := range poly {
+		if err := budget.step(); err != nil {
+			return nil, err
+		}
+		idx[i] = vi
+	}
 	tris := make([][3]int, 0, len(idx))
 	for len(idx) > 3 {
+		if err := budget.step(); err != nil {
+			return nil, err
+		}
 		n := len(idx)
 		clipped := false
 		for i := range n {
+			if err := budget.step(); err != nil {
+				return nil, err
+			}
 			ia, ib, ic := idx[(i-1+n)%n], idx[i], idx[(i+1)%n]
 			if cross2x(pts[ia], pts[ib], pts[ic]).Sign() <= 0 {
 				continue
 			}
-			if earBlockedX(pts, idx, i) {
+			blocked, err := earBlockedX(budget, pts, idx, i)
+			if err != nil {
+				return nil, err
+			}
+			if blocked {
 				continue
 			}
 			tris = append(tris, [3]int{ia, ib, ic})
-			idx = append(idx[:i], idx[i+1:]...)
+			for j := i; j+1 < len(idx); j++ {
+				if err := budget.step(); err != nil {
+					return nil, err
+				}
+				idx[j] = idx[j+1]
+			}
+			idx = idx[:len(idx)-1]
 			clipped = true
 			break
 		}
@@ -249,11 +280,14 @@ func earClipX(pts []xp2, poly []int) ([][3]int, error) {
 // candidate ear — the exact analog of earBlocked, except that every OTHER
 // vertex can block (collinear duplicates included), which is the conservative
 // direction.
-func earBlockedX(pts []xp2, idx []int, i int) bool {
+func earBlockedX(budget *cutBudget, pts []xp2, idx []int, i int) (bool, error) {
 	n := len(idx)
 	ip, in := (i-1+n)%n, (i+1)%n
 	a, b, c := pts[idx[ip]], pts[idx[i]], pts[idx[in]]
 	for j := range n {
+		if err := budget.step(); err != nil {
+			return false, err
+		}
 		if j == ip || j == i || j == in {
 			continue
 		}
@@ -265,10 +299,10 @@ func earBlockedX(pts []xp2, idx []int, i int) bool {
 			continue
 		}
 		if pointInTriX(p, a, b, c) {
-			return true
+			return true, nil
 		}
 	}
-	return false
+	return false, nil
 }
 
 // axisRays is the deterministic retry list for the parity test: the six

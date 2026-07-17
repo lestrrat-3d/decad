@@ -793,7 +793,7 @@ func keepSide(ctx context.Context, m, other *boolMesh, cuts map[int][]xseg, bloc
 		if !ok {
 			continue
 		}
-		regions, err := cutTriangle(xtriCorners(m, i), m.norms[i], segs)
+		regions, err := cutTriangle(ctx, xtriCorners(m, i), m.norms[i], segs)
 		if err != nil {
 			return nil, err
 		}
@@ -1297,7 +1297,7 @@ func conformOnce(ctx context.Context, xverts *[]xpt, tris *[][3]int, src *[]int)
 		poly = append(poly, inserted[1]...)
 		poly = append(poly, tri[2])
 		poly = append(poly, inserted[2]...)
-		newTris, err := triangulatePlanarPolygon(verts, poly)
+		newTris, err := triangulatePlanarPolygon(ctx, verts, poly)
 		if err != nil {
 			return false, err
 		}
@@ -1361,7 +1361,11 @@ func sortAlongEdge(verts []xpt, a, b int, hits []int) {
 // triangulatePlanarPolygon triangulates a planar polygon of mesh vertices
 // (a facet boundary with collinear insertions) by exact ear clipping in the
 // polygon's own plane, preserving orientation and using every vertex.
-func triangulatePlanarPolygon(verts []xpt, poly []int) ([][3]int, error) {
+func triangulatePlanarPolygon(ctx context.Context, verts []xpt, poly []int) ([][3]int, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	budget := newCutBudget(ctx)
 	if len(poly) < 3 {
 		return nil, fmt.Errorf(`%w: a conforming polygon lost its corners`, ErrBooleanFailed)
 	}
@@ -1370,6 +1374,9 @@ func triangulatePlanarPolygon(verts []xpt, poly []int) ([][3]int, error) {
 	n := xpt{new(big.Rat), new(big.Rat), new(big.Rat)}
 	found := false
 	for i := 1; i+1 < len(poly); i++ {
+		if err := budget.step(); err != nil {
+			return nil, err
+		}
 		cand := xcross(xsub(verts[poly[i]], verts[poly[0]]), xsub(verts[poly[i+1]], verts[poly[0]]))
 		if cand.x.Sign() != 0 || cand.y.Sign() != 0 || cand.z.Sign() != 0 {
 			n = cand
@@ -1384,28 +1391,44 @@ func triangulatePlanarPolygon(verts []xpt, poly []int) ([][3]int, error) {
 	pts := make([]xp2, len(poly))
 	idx := make([]int, len(poly))
 	for i, vi := range poly {
+		if err := budget.step(); err != nil {
+			return nil, err
+		}
 		pts[i] = xp2{ratCoordOf(verts[vi], u), ratCoordOf(verts[vi], v)}
 		idx[i] = i
 	}
 	// Keep the projected orientation counter-clockwise so ear clipping and
 	// the emitted winding agree with the facet's own.
-	flip := polyArea2(pts).Sign() < 0
+	area, err := polyArea2(budget, pts)
+	if err != nil {
+		return nil, err
+	}
+	flip := area.Sign() < 0
 	if flip {
 		for i, j := 0, len(idx)-1; i < j; i, j = i+1, j-1 {
+			if err := budget.step(); err != nil {
+				return nil, err
+			}
 			idx[i], idx[j] = idx[j], idx[i]
 		}
 	}
-	tris2, err := earClipX(pts, idx)
+	tris2, err := earClipX(budget, pts, idx)
 	if err != nil {
 		return nil, err
 	}
 	out := make([][3]int, 0, len(tris2))
 	for _, t := range tris2 {
+		if err := budget.step(); err != nil {
+			return nil, err
+		}
 		a, b, c := poly[t[0]], poly[t[1]], poly[t[2]]
 		if flip {
 			b, c = c, b
 		}
 		out = append(out, [3]int{a, b, c})
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 	return out, nil
 }

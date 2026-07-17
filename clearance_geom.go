@@ -210,6 +210,146 @@ func (r region2) interiorPoint() ([2]float64, bool) {
 	return [2]float64{}, false
 }
 
+// newRegion2Budget is newRegion2 with cancellation charged to the caller's
+// shared coplanar-scan budget.
+func newRegion2Budget(budget *clearanceBudget, elems []surveyElem) (region2, error) {
+	scale := 1.0
+	grow := func(vs ...float64) {
+		for _, v := range vs {
+			if a := math.Abs(v); a > scale {
+				scale = a
+			}
+		}
+	}
+	for _, e := range elems {
+		if err := budget.step(); err != nil {
+			return region2{}, err
+		}
+		if e.kind == surveyLine {
+			grow(e.ax, e.ay, e.bx, e.by)
+			continue
+		}
+		grow(e.qx-e.rr, e.qx+e.rr, e.qy-e.rr, e.qy+e.rr)
+	}
+	return region2{elems: elems, scale: scale}, nil
+}
+
+func regionContainsBudget(budget *clearanceBudget, r region2, px, py float64) (bool, bool, error) {
+	for i := range 16 {
+		if err := budget.step(); err != nil {
+			return false, false, err
+		}
+		th := 0.5 + float64(i)*2.399963229728653
+		dx, dy := math.Cos(th), math.Sin(th)
+		crossings, ok := 0, true
+		for _, e := range r.elems {
+			if err := budget.step(); err != nil {
+				return false, false, err
+			}
+			n, good := rayCrossings(e, px, py, dx, dy, r.tol())
+			if !good {
+				ok = false
+				break
+			}
+			crossings += n
+		}
+		if ok {
+			return crossings%2 == 1, true, nil
+		}
+	}
+	return false, false, nil
+}
+
+func regionBoundaryDistBudget(budget *clearanceBudget, r region2, px, py float64) (float64, error) {
+	best := math.Inf(1)
+	for _, e := range r.elems {
+		if err := budget.step(); err != nil {
+			return 0, err
+		}
+		d, _, _ := e.nearest(px, py, survTiny*r.scale)
+		if d < best {
+			best = d
+		}
+	}
+	return best, nil
+}
+
+func regionClassifyBudget(budget *clearanceBudget, r region2, px, py, margin float64) (int, error) {
+	distance, err := regionBoundaryDistBudget(budget, r, px, py)
+	if err != nil {
+		return 0, err
+	}
+	if distance <= margin {
+		return 0, nil
+	}
+	in, ok, err := regionContainsBudget(budget, r, px, py)
+	if err != nil {
+		return 0, err
+	}
+	if !ok {
+		return 0, nil
+	}
+	if in {
+		return 1, nil
+	}
+	return -1, nil
+}
+
+func regionSamplesBudget(budget *clearanceBudget, r region2) ([][2]float64, error) {
+	var out [][2]float64
+	for _, e := range r.elems {
+		if err := budget.step(); err != nil {
+			return nil, err
+		}
+		if e.kind == surveyLine {
+			out = append(out, [2]float64{e.ax, e.ay}, [2]float64{(e.ax + e.bx) / 2, (e.ay + e.by) / 2})
+			continue
+		}
+		lo, hi := e.arcRange()
+		for _, th := range []float64{lo, (lo + hi) / 2} {
+			out = append(out, [2]float64{e.qx + e.rr*math.Cos(th), e.qy + e.rr*math.Sin(th)})
+		}
+	}
+	return out, nil
+}
+
+func regionInteriorPointBudget(budget *clearanceBudget, r region2) ([2]float64, bool, error) {
+	for _, e := range r.elems {
+		if err := budget.step(); err != nil {
+			return [2]float64{}, false, err
+		}
+		var px, py, nx, ny float64
+		if e.kind == surveyLine {
+			px, py = (e.ax+e.bx)/2, (e.ay+e.by)/2
+			nx, ny = e.nx, e.ny
+		} else {
+			lo, hi := e.arcRange()
+			th := (lo + hi) / 2
+			px, py = e.qx+e.rr*math.Cos(th), e.qy+e.rr*math.Sin(th)
+			s := e.matSign()
+			nx, ny = -s*math.Cos(th), -s*math.Sin(th)
+		}
+		for _, f := range []float64{0.25, 0.03, 1e-4} {
+			if err := budget.step(); err != nil {
+				return [2]float64{}, false, err
+			}
+			step := f * r.scale
+			if e.kind == surveyArc && step > e.rr/2 {
+				step = e.rr / 2
+			}
+			x, y := px+nx*step, py+ny*step
+			class, err := regionClassifyBudget(budget, r, x, y, r.tol())
+			if err != nil {
+				return [2]float64{}, false, err
+			}
+			if class == 1 {
+				return [2]float64{x, y}, true, nil
+			}
+		}
+	}
+	return [2]float64{}, false, nil
+}
+
 // elemLineHits collects the crossing parameters of the (infinite) 2D line
 // p + t·d with one boundary element; ok is false on an ambiguous geometry
 // (near-parallel overlap, grazing an endpoint).
