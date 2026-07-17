@@ -346,17 +346,28 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
   Mesh facets carry this value as internal `sourceBound` beside their current
   operand `*Face`; grouping facets for the pre-pass takes the maximum bound for
   that face. NEVER derive zero from `KindFaceted` alone.
-  Upward-round `b = δ_A + δ_B`. When `b > 0`, every face pair whose held facet
-  sets are at distance at most `b` is undecidable, including a pair whose held
-  facets meet or cross. A held-facet meet proves true contact only when both
-  source bounds are zero. Otherwise admission requires a separate analytic or
-  certified proof that the true patches cross or touch; the mesh predicates
-  cannot supply that proof. No such positive-bound contact certificate is
-  defined for this evaluator increment, so the pair is refused
-  (`ErrUnsupported`). Reject-only: it may refuse a valid model whose operands
-  genuinely pass that close, and that is the accepted price. Deciding such a
-  pair for real is the clearance kernel's job
-  (`docs/clearance-design.md`), not a held facet's. A planar face still carries
+  Upward-round `b = δ_A + δ_B`. When `b > 0`, a held-facet meet is decidable
+  exactly when the facet sets INTERPENETRATE — cross with a signed penetration
+  depth strictly GREATER than `b`. Then the true patches provably cross: A's
+  true surface lies within δ_A of A's facets and B's within δ_B of B's, so even
+  in the worst case — each true surface pulled back toward its own interior by
+  its own bound — the two true surfaces still overlap. The chord error alone,
+  bounded by `b`, cannot open a penetration deeper than `b`, so a depth past `b`
+  is a proof of true crossing and the pair is ADMITTED. Every other close pair
+  is undecidable and refused (`ErrUnsupported`): a pair whose held facets merely
+  touch, a pair that overlaps by AT MOST `b`, and a pair whose facets stay apart
+  but within `b`. A displacement within the bounds can pull such surfaces apart
+  — chording a concave hole wall inward, for one, adds held material into the
+  hole and makes truly disjoint surfaces meet — so a held meet at distance 0 or
+  a shallow penetration ≤ `b` proves nothing when `b > 0`. The interpenetration
+  depth is the implementer's to compute: it is the maximum signed penetration of
+  the two facet sets, decided by the exact predicates, never assumed cheaply
+  available. Reject-only in the undecidable band: it may refuse a valid model
+  whose operands genuinely pass that close, and that is the accepted price. A
+  TANGENCY — facets that touch without crossing — has no positive-bound contact
+  certificate in this evaluator increment and stays refused; deciding such a
+  pair for real is the clearance kernel's job (`docs/clearance-design.md`), not
+  a held facet's. A planar face still carries
   every curved-trim, coordinate-construction, and placement displacement in its
   `sourceBound`; it has zero error only when its held trimmed polygon and stored
   coordinates are both proved exact. A faceted face has zero
