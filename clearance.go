@@ -251,13 +251,12 @@ func (k *pairKernel) nestingRelation() (pairVerdict, *Body, error) {
 	type membership struct {
 		inside, outside, unknown int
 	}
+	budget := newWorkBudget(k.ctx)
 	classify := func(inner, outer *bodyGeom) (membership, error) {
 		var got membership
-		for i, w := range inner.shellWit {
-			if i%256 == 0 {
-				if err := k.ctx.Err(); err != nil {
-					return membership{}, err
-				}
+		for _, w := range inner.shellWit {
+			if err := budget.step(); err != nil {
+				return membership{}, err
 			}
 			inside, ok, err := outer.pointInBody(k.ctx, w, k.tol)
 			if err != nil {
@@ -308,14 +307,11 @@ func (k *pairKernel) nestingRelation() (pairVerdict, *Body, error) {
 func (k *pairKernel) pairDiameter() (float64, error) {
 	pts := append(append([]r3.Vec{}, k.a.supports...), k.b.supports...)
 	best := 0.0
-	work := 0
+	budget := newWorkBudget(k.ctx)
 	for i := range pts {
 		for j := i + 1; j < len(pts); j++ {
-			work++
-			if work%256 == 0 {
-				if err := k.ctx.Err(); err != nil {
-					return 0, err
-				}
+			if err := budget.step(); err != nil {
+				return 0, err
 			}
 			if d := pts[i].Sub(pts[j]).Len(); d > best {
 				best = d

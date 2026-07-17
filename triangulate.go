@@ -104,12 +104,11 @@ func bridgeHole(ctx context.Context, pts []Point2, merged, hole []int) ([]int, e
 	if len(hole) < 3 {
 		return nil, fmt.Errorf(`%w: a hole needs at least three boundary samples`, ErrDegenerate)
 	}
+	budget := newWorkBudget(ctx)
 	mi := 0
 	for i := 1; i < len(hole); i++ {
-		if i%256 == 0 {
-			if err := ctx.Err(); err != nil {
-				return nil, err
-			}
+		if err := budget.step(); err != nil {
+			return nil, err
 		}
 		if pts[hole[i]].U > pts[hole[mi]].U {
 			mi = i
@@ -124,10 +123,8 @@ func bridgeHole(ctx context.Context, pts []Point2, merged, hole []int) ([]int, e
 	bestU := math.Inf(1)
 	bestEdge := -1
 	for i := range n {
-		if i%256 == 0 {
-			if err := ctx.Err(); err != nil {
-				return nil, err
-			}
+		if err := budget.step(); err != nil {
+			return nil, err
 		}
 		a, b := pts[merged[i]], pts[merged[(i+1)%n]]
 		if (a.V <= m.V) == (b.V <= m.V) {
@@ -185,10 +182,8 @@ func bridgeHole(ctx context.Context, pts []Point2, merged, hole []int) ([]int, e
 	// first on ties) is visible instead.
 	bestCos, bestDist := math.Inf(-1), math.Inf(1)
 	for j := range n {
-		if j%256 == 0 {
-			if err := ctx.Err(); err != nil {
-				return nil, err
-			}
+		if err := budget.step(); err != nil {
+			return nil, err
 		}
 		if j == bridge {
 			continue
@@ -254,17 +249,21 @@ func earClip(ctx context.Context, pts []Point2, poly []int) ([][3]int, error) {
 			if cr < 0 {
 				continue
 			}
-			if cr == 0 && !isBridgeStub(ia, ib, ic) {
-				continue
-			}
-			blocked, err := earBlocked(ctx, pts, idx, i)
-			if err != nil {
-				return nil, err
-			}
-			if cr > 0 && blocked {
-				continue
-			}
-			if cr > 0 {
+			if cr == 0 {
+				// A zero-area corner is removed only when it is a bridge stub, and
+				// never emits a triangle — so the reflex-blocking scan, whose
+				// result is discarded for such a corner, is skipped entirely.
+				if !isBridgeStub(ia, ib, ic) {
+					continue
+				}
+			} else {
+				blocked, err := earBlocked(ctx, pts, idx, i)
+				if err != nil {
+					return nil, err
+				}
+				if blocked {
+					continue
+				}
 				tris = append(tris, [3]int{ia, ib, ic})
 			}
 			idx = append(idx[:i], idx[i+1:]...)
