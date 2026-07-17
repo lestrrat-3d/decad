@@ -19,8 +19,8 @@ everything it does not yet export remains design-only, and every capability the
 design consumes exists in its dependencies — there is no open dependency gap.
 `docs/api-design.md` is the core contract for the whole surface: a
 recipe/evaluator split, a B-rep-shaped surface, immediate-mode features,
-selectors instead of handles, and `Exactness` on every measurement. Three
-companion designs carry its deep ends: `docs/sketch-seam-design.md` (the trim
+selectors instead of handles, and `Exactness` on every measurement. Companion
+designs carry its deep ends: `docs/sketch-seam-design.md` (the trim
 contract and recording IR at the `sketch` seam),
 `docs/recipe-replay-design.md` (strict recipe decoding, validation, versioning,
 resource limits, and atomic evaluation), and `docs/verification-design.md` (the

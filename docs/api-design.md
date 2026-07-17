@@ -4,7 +4,7 @@ The design of decad's public API: a headless CAD engine an agent uses to model a
 part, prove it sound, and only then write real CAD software code (a Fusion
 add-in). This document is the contract. No public API lands that contradicts it.
 
-Three companion designs carry the deep ends of this contract: the recording
+Companion designs carry the deep ends of this contract: the recording
 contract at the sketch seam — the trim contract, the recording IR, and
 `ErrUnrecordableProfile` — is specified in `docs/sketch-seam-design.md`; strict
 recipe decoding, validation, versioning, resource limits, and atomic evaluation
