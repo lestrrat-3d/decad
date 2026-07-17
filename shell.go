@@ -177,6 +177,9 @@ func (b *Body) Shell(sel FaceSelector, t units.Value, opts ...ShellOption) (*Bod
 		if !ok {
 			return nil, fmt.Errorf(`%w: this evaluator cannot prove the eroded section non-empty`, ErrUnsupported)
 		}
+		// The refusal fires within shellTol (1e-9) of the limit — a
+		// sub-nanometre noise floor, not a real margin — so "use a thickness
+		// below the inradius" is the correct remedy in every case it fires.
 		if tmm >= inradius-shellTol*math.Max(1, inradius) {
 			return nil, fmt.Errorf(`%w: the shell thickness %s reaches the section's inradius %s, so the cavity would be empty; use a thickness below the inradius`, ErrDegenerate, t, units.Millimeters(inradius))
 		}
@@ -184,6 +187,9 @@ func (b *Body) Shell(sel FaceSelector, t units.Value, opts ...ShellOption) (*Bod
 		// floor t thick, so the cavity is swept over an interval of length h − t,
 		// non-empty exactly when t < h. A both-caps shell keeps no cap and has no
 		// floor, so only the section limit reaches it (§8).
+		// Same sub-nanometre noise floor as the section limit (shellTol, 1e-9):
+		// "use a thickness below the height" is the correct remedy whenever it
+		// fires.
 		if !bothCaps && tmm >= h-shellTol*math.Max(1, h) {
 			return nil, fmt.Errorf(`%w: the shell thickness %s reaches the sweep height %s, so the cavity would be empty; use a thickness below the height`, ErrDegenerate, t, units.Millimeters(h))
 		}

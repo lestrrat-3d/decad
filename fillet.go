@@ -273,6 +273,9 @@ func offsetOf(c carrier, offsetSign, r float64) (offCurve, error) {
 		return offCurve{isLine: true, px: c.px + s*nlx, py: c.py + s*nly, dx: c.tx, dy: c.ty}, nil
 	}
 	rr := c.radius - offsetSign*c.insideSign*r
+	// The accept boundary sits filletTol (1e-9 mm) below the wall radius — a
+	// sub-nanometre noise floor, not a real margin — so "try a smaller radius"
+	// is the correct remedy in every case this branch fires.
 	if rr <= filletTol {
 		return offCurve{}, fmt.Errorf(`%w: no fillet of radius %s fits a circular wall of radius %s; try a smaller radius`, ErrDegenerate, units.Millimeters(r), units.Millimeters(c.radius))
 	}
