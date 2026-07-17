@@ -250,6 +250,15 @@ measured**:
 > A bounded result is **within tolerance** when `Bound <= rel × Ref`, where `Ref` is
 > the result's **reference magnitude**.
 
+The comparison is **inclusive**: a bound exactly on the gate passes. Both sides
+are compared as base-unit magnitudes (`units.Value.Base()`) after the option and
+measurement kinds have been validated; `Mag()` or a display-unit magnitude MUST
+NOT enter the gate. `Exactness` is metadata, not a second gate: `Exact` requires a
+zero `Bound` and therefore passes, while an `Approximate` result passes whenever
+its proven `Bound` satisfies this same comparison. `Approximate` alone MUST NOT
+make a body or report `Suspect`, and `BodyReport.Exactness` may therefore remain
+`Approximate` while `BodyReport.Status` and `Report.Status` are `Sound`.
+
 One comparison, one number, no exponentiation. It is scale-invariant — a 1mm part
 and a 1m part are judged on the same footing — which mirrors how `sketch` makes its
 conditioning gate scale-invariant. `rel` is `Dimensionless` (`units.Scalar`); any
@@ -306,6 +315,32 @@ total:
 | `Measurement` — a volume, an area, a length, a gap | `max(abs(Value), Quantum)` |
 | `VecMeasurement`, a **direction** (`Bound` is `Dimensionless`, core §5.3) | `1` — the magnitude of a unit vector |
 | `VecMeasurement`, a **position**, and `Box` (`Bound` is a Length) | `D` |
+
+For the report fields, the generic table expands to this normative, total
+table. Every scalar in the table is its non-negative base-unit magnitude:
+
+| Report result | Owner | `Ref` |
+|---|---|---|
+| `BodyReport.Area` | body | `max(abs(Area.Value.Base()), δ × L)` |
+| `BodyReport.Bounds` | body | `D` |
+| `BodyReport.Volume`, when present | body | `max(abs(Volume.Value.Base()), δ × A)` |
+| `BodyReport.Centroid`, when present | body | `D` |
+| `BodyReport.MinWallThickness`, when present | body | `max(abs(Value.Base()), δ)` |
+| `BodyReport.MinRadius`, when present | body | `max(abs(Value.Base()), δ)` |
+| `Interference.Volume` | pair | `max(abs(Volume.Value.Base()), δ × (A_A + A_B))` |
+| `Clearance.Gap` | pair | `max(abs(Gap.Value.Base()), δ)` |
+
+Here `A` is the owning body's held surface-area reading,
+`abs(BodyReport.Area.Value.Base())`; `A_A` and `A_B` are the corresponding
+readings for the pair operands. `L` is the sum of the held geometric lengths of
+the body's **unique topological edges**: traverse `Body.Edges()` once and count
+each returned edge once. MUST NOT sum face loops or coedges, which would count
+each manifold edge twice; MUST NOT use only one face's loops. On a faceted body,
+use the length of the held chord chain even when `Edge.Length()` cannot bound the
+unknown true curved rim: `L` describes the held surface whose area noise floor is
+being formed, not a public measurement of the true rim. `Undercuts` and the
+validity fields are proven predicates/counts, not bounded numeric results, so
+they have no tolerance reference; their proof rules remain §6's.
 
 `D` is a **diameter**: the greatest distance between two points of the geometry
 the result belongs to. **Every reference is anchored to the thing the result
@@ -419,12 +454,17 @@ the coordinate noise. The same holds one dimension down: an area's floor
 reaches the area only when `Area / edge length` — the face's mean width — is
 under `δ`. A body an evaluator can resolve at all sits decades above its floor.
 The floor's ingredients — `D`, an area, an edge length — are the evaluator's
-own readings and may themselves be approximate: `D` is read off the evaluated
-boundary, and for a polyhedral approximation the greatest vertex-to-vertex
-distance is the polyhedron's exact diameter — a convex hull and rotating
-calipers, or any exact max-pair pass over the hull's vertices, computes it —
-understating a curved body's true diameter by at most the chord error. A floor
-is a magnitude, not an answer, and a per-mille error in it moves no verdict. A
+own readings and may themselves be approximate. For a v1 faceted body, `D` is
+the greatest vertex-to-vertex distance over **all vertices in the held faceted
+payload**, including interior tessellation vertices that do not become B-rep
+`Vertex` objects. Using only `Body.Vertices()` is forbidden: those are
+topological boundary-loop vertices and can omit the pair that realizes the held
+mesh's diameter. Compute the max pair directly or through an exact convex-hull
+reduction, cache it with the immutable faceted payload, and recompute it from the
+transformed payload vertices when `Placed` rebuilds the body. This is the held
+polyhedron's exact diameter and may understate a curved body's true diameter by
+at most the chord error. A floor is a magnitude, not an answer, and a per-mille
+error in it moves no verdict. A
 surface with no edges at all — a sphere — gives its area a `Quantum` of zero,
 and that errs in the only safe direction: a floor too low can only demand more
 of an answer, never admit one. `ε` is a constant of the gate, not the caller's
@@ -553,11 +593,42 @@ The gate has nothing to miss, because **every one of the three shapes carries a
   figure is not an answer the caller said they would accept.
 
 Either path makes `Trustworthy()` false. `Exact` answers have a zero `Bound` and
-can never trip it, at any tolerance. **Nothing in the report is exempt**, and the
-`VecMeasurement` of core §5.3 is what makes that true: a centroid or a vertex
-position carries a bound like everything else, so a boolean that puts the centroid
-off by more than `rel` of the body's own size cannot hide inside a `Sound` body —
-which is the confidently-wrong failure core §1 exists to prevent.
+can never trip it, at any tolerance. An `Approximate` answer is not a failure: it
+passes when its proven bound is within the inclusive gate of §2. **Nothing in the
+report is exempt**, and the `VecMeasurement` of core §5.3 is what makes that
+true: a centroid or a vertex position carries a bound like everything else, so a
+boolean that puts the centroid off by more than `rel` of the body's own size
+cannot hide inside a `Sound` body — while a boolean whose bound proves the figures
+the caller asked for can be `Sound` without pretending to be `Exact`.
+
+The body flow is normative and MUST NOT short-circuit on `Exactness`:
+
+1. Decide validity and populate unconditional boundary readings; populate region
+   readings only for a proven solid (§1).
+2. Run every requested optional survey and populate its reading, absence or
+   predicate result before the numeric gate. Decide each stated spec from its
+   proven interval or predicate proof.
+3. Set `BodyReport.Exactness` to the weakest exactness among the bounded results
+   the report actually carries. This is summary metadata only; MUST NOT assign
+   `Suspect` from this field.
+4. Apply §3's table to every present bounded result. One failed comparison makes
+   the body `Suspect` unless a worse proven status wins.
+5. Combine validity, spec, undecided-answer and gate outcomes using the severity
+   order below.
+
+The order keeps the wall rule independent from the trust gate. A wall interval
+proven below the tool is `Violating` even when its bound is coarse; a wall proven
+to meet the tool but measured beyond tolerance is `Suspect`; an interval that
+straddles the tool is `Suspect` even when its bound passes the gate. `Undercuts`
+remain predicate results: a proven member is `Violating`, an unproven all-clear
+is `Suspect`, and no scalar gate is invented for the slice.
+
+Every nonzero-bound body result needs a usable finite, non-negative body diameter
+to construct its reference. If the evaluator cannot obtain one, the body is
+`Suspect`; MUST NOT substitute a box diagonal, document scale or zero. A
+zero-bound result passes without needing `D`, because `0 <= rel × Ref` cannot
+fail for any legal reference. The same rule applies to a pair result whose pair
+reference cannot be formed.
 
 Absence is not an exemption, emptiness is not, and a predicate is not, because
 one standard governs the whole report, stated once:

@@ -404,7 +404,8 @@ func (d *Document) Verify(ctx context.Context, opts ...VerifyOption) (*Report, e
 			report.Clearances = append(report.Clearances, Clearance{
 				A: solids[i].Body, B: solids[j].Body, Gap: gap,
 			})
-			if !gapWithinTolerance(gap, res.diam, cfg.rel) {
+			pairGate := pairToleranceInputs{diameter: res.diam}
+			if !measurementWithinTolerance(gap, cfg.rel, pairGate.lengthReference) {
 				undecided = true
 			}
 		}
@@ -458,6 +459,7 @@ func verifyBody(b *Body, cfg verifyConfig) *BodyReport {
 
 	if br.Status == Unsound {
 		br.Exactness = bodyExactness(br)
+		_ = bodyReadingsWithinTolerance(br, cfg.rel)
 		return br
 	}
 
@@ -471,14 +473,11 @@ func verifyBody(b *Body, cfg verifyConfig) *BodyReport {
 		violating, suspect = runSurveys(br, cfg)
 	}
 
-	// The tolerance gate (verification §2/§6): an Exact answer has a zero
-	// proven bound and passes at any tolerance; everything the feature
-	// evaluators compute is Exact (evaluator §10). An Approximate answer —
-	// a boolean-built Faceted body's — is one this audit cannot judge yet:
-	// its reference machinery (verification §3/§4) is staged, so it reads
-	// Suspect, never a silent pass.
+	// Exactness is summary metadata only. The total tolerance gate runs after
+	// every requested survey and judges each present bounded result by its own
+	// inclusive Bound <= rel*Ref comparison (verification §2/§3/§6).
 	br.Exactness = bodyExactness(br)
-	if br.Exactness != Exact {
+	if !bodyReadingsWithinTolerance(br, cfg.rel) {
 		suspect = true
 	}
 
@@ -548,17 +547,214 @@ func bodyExactness(br *BodyReport) Exactness {
 	return worst
 }
 
-// gapWithinTolerance is the §7 gate on one Clearance.Gap: a Measurement of
-// Kind Length judged as verification §2/§3/§5 demand — Bound ≤ rel × Ref
-// with Ref = max(|Value|, Quantum) and Quantum = δ = ε × D, D the pair's own
-// diameter read by the kernel (understating D only lowers the floor, the
-// safe direction). A gap beyond tolerance makes the report Suspect directly.
-func gapWithinTolerance(gap Measurement, pairD, rel float64) bool {
-	const eps = 1e-9
-	value := math.Abs(gap.Value.Mag())
-	bound := gap.Bound.Mag()
-	ref := math.Max(value, eps*pairD)
-	return bound <= rel*ref
+const toleranceEpsilon = 1e-9
+
+// measurementReference forms one scalar result's reference magnitude from
+// its non-negative base-unit value. The callback keeps the shared scalar gate
+// usable for body readings, clearances, and the future interference volume.
+type measurementReference func(value float64) (float64, bool)
+
+// measurementWithinTolerance is the one scalar tolerance gate. Exactness does
+// not enter: a zero Bound passes without asking for a diameter, while every
+// nonzero Bound needs a finite, non-negative reference. The comparison is
+// deliberately inclusive (verification §2).
+func measurementWithinTolerance(m Measurement, rel float64, reference measurementReference) bool {
+	bound := m.Bound.Base()
+	if !usableMagnitude(bound) {
+		return false
+	}
+	if bound == 0 {
+		return true
+	}
+	value := math.Abs(m.Value.Base())
+	if !usableMagnitude(value) {
+		return false
+	}
+	ref, ok := reference(value)
+	return ok && withinTolerance(bound, ref, rel)
+}
+
+// boundedWithinTolerance applies the same gate to a bounded non-scalar shape
+// such as a Box or position VecMeasurement.
+func boundedWithinTolerance(bound, rel float64, reference func() (float64, bool)) bool {
+	if !usableMagnitude(bound) {
+		return false
+	}
+	if bound == 0 {
+		return true
+	}
+	ref, ok := reference()
+	return ok && withinTolerance(bound, ref, rel)
+}
+
+func withinTolerance(bound, ref, rel float64) bool {
+	if !usableMagnitude(ref) {
+		return false
+	}
+	if ref == 0 || rel == 0 {
+		return bound <= rel*ref
+	}
+	// Compare the represented ratio directly: multiplying that ratio back by
+	// ref can round one ulp below the bound at the inclusive boundary.
+	return bound/ref <= rel
+}
+
+func usableMagnitude(v float64) bool {
+	return v >= 0 && !math.IsNaN(v) && !math.IsInf(v, 0)
+}
+
+// bodyToleranceInputs lazily reads one body's intrinsic reference data. The
+// laziness is part of the contract: a zero Bound passes even when no usable D
+// can be obtained.
+type bodyToleranceInputs struct {
+	report *BodyReport
+
+	diameterLoaded bool
+	diameterValue  float64
+	diameterOK     bool
+
+	edgeLengthLoaded bool
+	edgeLengthValue  float64
+	edgeLengthOK     bool
+}
+
+func (in *bodyToleranceInputs) diameter() (float64, bool) {
+	if !in.diameterLoaded {
+		in.diameterValue, in.diameterOK = bodyGateDiameter(in.report.Body)
+		in.diameterLoaded = true
+	}
+	return in.diameterValue, in.diameterOK
+}
+
+func (in *bodyToleranceInputs) edgeLength() (float64, bool) {
+	if in.edgeLengthLoaded {
+		return in.edgeLengthValue, in.edgeLengthOK
+	}
+	in.edgeLengthLoaded = true
+	in.edgeLengthOK = true
+	for _, edge := range in.report.Body.Edges() {
+		if edge == nil || !usableMagnitude(edge.length) {
+			in.edgeLengthOK = false
+			break
+		}
+		in.edgeLengthValue += edge.length
+		if !usableMagnitude(in.edgeLengthValue) {
+			in.edgeLengthOK = false
+			break
+		}
+	}
+	return in.edgeLengthValue, in.edgeLengthOK
+}
+
+func (in *bodyToleranceInputs) areaReference(value float64) (float64, bool) {
+	diameter, ok := in.diameter()
+	if !ok {
+		return 0, false
+	}
+	edgeLength, ok := in.edgeLength()
+	if !ok {
+		return 0, false
+	}
+	return math.Max(value, toleranceEpsilon*diameter*edgeLength), true
+}
+
+func (in *bodyToleranceInputs) volumeReference(value float64) (float64, bool) {
+	diameter, ok := in.diameter()
+	if !ok {
+		return 0, false
+	}
+	area := math.Abs(in.report.Area.Value.Base())
+	if !usableMagnitude(area) {
+		return 0, false
+	}
+	return math.Max(value, toleranceEpsilon*diameter*area), true
+}
+
+func (in *bodyToleranceInputs) lengthReference(value float64) (float64, bool) {
+	diameter, ok := in.diameter()
+	if !ok {
+		return 0, false
+	}
+	return math.Max(value, toleranceEpsilon*diameter), true
+}
+
+func (in *bodyToleranceInputs) diameterReference() (float64, bool) {
+	return in.diameter()
+}
+
+// bodyReadingsWithinTolerance applies verification §3's complete body-field
+// table. Body.Edges already deduplicates topology edges, and edgeLength reads
+// each held geometric chain directly even when public Edge.Length must refuse
+// a curved boolean rim.
+func bodyReadingsWithinTolerance(br *BodyReport, rel float64) bool {
+	in := &bodyToleranceInputs{report: br}
+	if !measurementWithinTolerance(br.Area, rel, in.areaReference) {
+		return false
+	}
+	if !boundedWithinTolerance(br.Bounds.Bound.Base(), rel, in.diameterReference) {
+		return false
+	}
+	if br.Volume != nil && !measurementWithinTolerance(*br.Volume, rel, in.volumeReference) {
+		return false
+	}
+	if br.Centroid != nil && !boundedWithinTolerance(br.Centroid.Bound.Base(), rel, in.diameterReference) {
+		return false
+	}
+	if br.MinWallThickness != nil && !measurementWithinTolerance(*br.MinWallThickness, rel, in.lengthReference) {
+		return false
+	}
+	if br.MinRadius != nil && !measurementWithinTolerance(*br.MinRadius, rel, in.lengthReference) {
+		return false
+	}
+	return true
+}
+
+// pairToleranceInputs owns pair-relative references. Clearance uses the
+// length reference now; measurementWithinTolerance accepts the interference
+// volume reference through the same callback path once interference rows land.
+type pairToleranceInputs struct {
+	diameter float64
+}
+
+func (in pairToleranceInputs) lengthReference(value float64) (float64, bool) {
+	if !usableMagnitude(in.diameter) {
+		return 0, false
+	}
+	return math.Max(value, toleranceEpsilon*in.diameter), true
+}
+
+// bodyGateDiameter returns the body's own diameter, never a document scale or
+// a bounds-box diagonal. A Faceted body's cached value covers every held
+// payload vertex, including vertices absent from the B-rep boundary loops.
+func bodyGateDiameter(body *Body) (float64, bool) {
+	if body == nil {
+		return 0, false
+	}
+	if payload, ok := body.payload.(facetedPayload); ok {
+		return payload.diameter, usableMagnitude(payload.diameter)
+	}
+	geom, ok := newBodyGeom(body)
+	if !ok {
+		return 0, false
+	}
+	return pointSetDiameter(geom.supports)
+}
+
+func pointSetDiameter(points []r3.Vec) (float64, bool) {
+	if len(points) == 0 {
+		return 0, false
+	}
+	best := 0.0
+	for i := range points {
+		for j := i + 1; j < len(points); j++ {
+			distance := points[i].Sub(points[j]).Len()
+			if !usableMagnitude(distance) {
+				return 0, false
+			}
+			best = math.Max(best, distance)
+		}
+	}
+	return best, true
 }
 
 // boxesDisjoint reports whether the two bounds-inflated boxes have disjoint

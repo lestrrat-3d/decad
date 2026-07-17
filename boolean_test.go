@@ -383,7 +383,7 @@ func TestBooleanRecipeRoundTrip(t *testing.T) {
 	require.Equal(t, []decad.StepRef{0, 2}, got.Inputs)
 }
 
-func TestBooleanVerifyReadsSuspect(t *testing.T) {
+func TestBooleanVerifyUsesProvenToleranceBound(t *testing.T) {
 	doc := decad.New()
 	plate := boxBody(t, doc, 0, 0, 20, 20, 8)
 	tool := translated(t, diskBody(t, doc, 14, 6, 2), 0, 0, -6)
@@ -395,17 +395,22 @@ func TestBooleanVerifyReadsSuspect(t *testing.T) {
 	require.Len(t, report.Bodies, 1)
 	br := report.Bodies[0]
 	require.Same(t, got, br.Body)
-	// The held boundary's structural facts are decided; the approximate
-	// quantities are staged reading Suspect — an asked question this
-	// evaluator cannot yet judge is never a silent pass.
+	// Exactness remains honest metadata, while the default tolerance accepts
+	// every proven bound carried by this faceted result.
 	require.True(t, br.Solid)
 	require.True(t, br.Watertight)
 	require.True(t, br.Manifold)
 	require.NotNil(t, br.Volume)
 	require.Equal(t, decad.Approximate, br.Exactness)
-	require.Equal(t, decad.Suspect, br.Status)
-	require.Equal(t, decad.Suspect, report.Status)
-	require.False(t, report.Trustworthy())
+	require.Equal(t, decad.Sound, br.Status)
+	require.Equal(t, decad.Sound, report.Status)
+	require.True(t, report.Trustworthy())
+
+	strict, err := doc.Verify(t.Context(), decad.WithTolerance(units.Scalar(0)))
+	require.NoError(t, err)
+	require.Equal(t, decad.Suspect, strict.Bodies[0].Status)
+	require.Equal(t, decad.Suspect, strict.Status)
+	require.False(t, strict.Trustworthy())
 }
 
 func TestFacetedTessellateAndExport(t *testing.T) {
