@@ -619,7 +619,7 @@ func TestShellCupDownstreamStaging(t *testing.T) {
 		report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(1)))
 		require.NoError(t, err)
 		br := report.Bodies[0]
-		require.Nil(t, br.MinWallThickness, `the cup's stacked section has no single-height reading`)
+		require.Nil(t, br.MinWallThickness, `a cup's MinWallThickness is staged, so it reads nil`)
 		require.Equal(t, decad.Suspect, br.Status)
 		require.False(t, report.Trustworthy())
 	})
