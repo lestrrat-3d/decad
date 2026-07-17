@@ -683,6 +683,10 @@ an approximation of one — and the report gives four answers this way:
   bound, and complete medial-family enclosure must exclude every possible wall.
   When they do, nil is proven; otherwise the asked question is undecided and the
   body reads `Suspect` with `MinWallThickness` nil (payload verification §10).
+  Modify reach DX9 makes the same deliberate result for exact
+  `capBlendPayload` and `stackedPrismPayload`: their solids are exact, but the
+  shipped constant-section spanning proof does not cover them. Exact geometry
+  does not turn an incomplete survey into a decided absence.
 - **A nil `MinRadius` on a proven solid** is the determination *no concave
   feature exists*. On analytic faces the proof exists: convexity and curvature
   are exact facts there, and a survey over them is that proof. A faceted source

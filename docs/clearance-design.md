@@ -453,6 +453,11 @@ Cup and faceted adapters land in payload verification §13. Until their stages
 land, an invoked pair containing that payload remains `Suspect`; the analytic
 kernel does not tessellate a cup or discard a faceted displacement bound.
 
+Modify reach DX6 adds boundary readers for `capBlendPayload` and
+`stackedPrismPayload`; it does not add a weaker clearance proof. Readers emit
+only exposed analytic faces and omit cancelled slab interfaces. Any new face
+cell this kernel cannot certify follows §7's existing undecided result.
+
 ## 9. Open questions
 
 - **Contact breadth.** Osculation (equal-curvature touching), vertex and edge
