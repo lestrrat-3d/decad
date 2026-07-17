@@ -19,11 +19,14 @@ everything it does not yet export remains design-only, and every capability the
 design consumes exists in its dependencies — there is no open dependency gap.
 `docs/api-design.md` is the core contract for the whole surface: a
 recipe/evaluator split, a B-rep-shaped surface, immediate-mode features,
-selectors instead of handles, and `Exactness` on every measurement. Two
-companion designs carry its deep ends: `docs/sketch-seam-design.md` (the trim
-contract and recording IR at the `sketch` seam) and
-`docs/verification-design.md` (the tolerance gate and noise floor). Read them
-before writing any public type. `docs/evaluator-design.md` is the v1
+selectors instead of handles, and `Exactness` on every measurement. Companion
+designs carry its deep ends: `docs/sketch-seam-design.md` (the trim
+contract and recording IR at the `sketch` seam),
+`docs/recipe-replay-design.md` (strict recipe decoding, validation, versioning,
+resource limits, and atomic evaluation), and `docs/verification-design.md` (the
+tolerance gate and noise floor). Read them before writing any public type. Read
+the replay design before changing recipe codecs or evaluation entry points.
+`docs/evaluator-design.md` is the v1
 evaluator's own design — topology construction, mass properties, staging
 (`ErrUnsupported`), the mesh boolean, the Verify implementation; read it
 before writing evaluator/topology/feature code.
@@ -54,9 +57,9 @@ before writing evaluator/topology/feature code.
 - **Shapes belong HERE.** `r3` excludes them by charter; solids/surfaces/meshes/
   topology are this module's job.
 - **NEVER add a public API that contradicts the design docs** —
-  `docs/api-design.md` and its companions `docs/sketch-seam-design.md` and
-  `docs/verification-design.md`. Extending them is fine; changing a decision
-  means changing the doc first.
+  `docs/api-design.md` and its companions `docs/sketch-seam-design.md`,
+  `docs/recipe-replay-design.md`, and `docs/verification-design.md`. Extending
+  them is fine; changing a decision means changing the doc first.
 - **NEVER expose triangles as the representation, indices as selectors, or a bare
   `float64` measurement. NEVER give a boolean a target-out parameter or let it
   mutate an operand.** These are the forward-compatibility invariants that keep
@@ -89,8 +92,9 @@ before writing evaluator/topology/feature code.
 
 | Path | Responsibility |
 |---|---|
-| `docs/api-design.md` | **The core public API contract.** Recipe/evaluator split, forward-compat invariants, feature + selector + verification surface. Points at the two companion designs. |
+| `docs/api-design.md` | **The core public API contract.** Recipe/evaluator split, forward-compat invariants, feature + selector + verification surface. Points at the companion designs. |
 | `docs/sketch-seam-design.md` | The recording contract at the `sketch` seam: trim contract (`TExact`), the `CurveSegment` recording IR, `ErrUnrecordableProfile`. |
+| `docs/recipe-replay-design.md` | Stored-recipe contract: bounded canonical encoding, strict/versioned JSON, validation + liveness graph, deterministic error precedence, resource limits, package-owned evaluator boundary, shared recorded-step dispatch, whole-recipe atomicity, replay tests. |
 | `docs/verification-design.md` | How `Verify` judges every bounded result: report + statuses, `WithTolerance`, the diameter-anchored noise floor. |
 | `docs/evaluator-design.md` | The v1 evaluator: evaluate-from-the-record rule, topology model + provenance roles, mass properties on decad's own records, per-feature build tables, explicit staging via `ErrUnsupported`, the exact-predicate mesh boolean, Verify's implementation, the increment plan. |
 | `docs/clearance-design.md` | The increment-3 clearance kernel: how a minimum gap between two analytic bodies is proven — the stationarity-tier candidate enumeration with exact trim admission, the face-pair distance table (closed-form / certified polynomial bracket / branch-and-bound), the disjointness proof (boundary clearance + nesting exclusion), touching-contact classification, and how rows feed the report. |

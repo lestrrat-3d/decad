@@ -5,8 +5,10 @@ topology it builds, the measurements it computes and the bounds it proves, how
 selectors resolve against it, how the tessellation-backed boolean works, and
 how `Verify`'s checks are implemented. Companion to `docs/api-design.md` (the
 core contract this evaluator implements — references of the form "core §N"),
-`docs/sketch-seam-design.md` (the profile records it consumes), and
-`docs/verification-design.md` (how its answers are judged). Nothing here
+`docs/sketch-seam-design.md` (the profile records it consumes),
+`docs/verification-design.md` (how its answers are judged), and
+`docs/recipe-replay-design.md` (strict loading, graph validation,
+whole-recipe atomicity, and the package-owned evaluator boundary). Nothing here
 changes those contracts; where this document stages a capability, the staging
 is explicit and rejected loudly, never silently approximated.
 
@@ -192,7 +194,7 @@ the arc's center lies on the axis — an endpoint ON the axis closes at a pole,
 and an endpoint off it leaves a latitude-circle edge (a spherical band when
 neither endpoint reaches the axis). The free-form segment kinds follow the
 same staging as extrude (§5): `NURBSSurface` surfaces of revolution where the
-control net is exactly derivable from the record, in increment 6, and
+control net is exactly derivable from the record, in increment 7, and
 `ErrUnsupported` until then — `FitSplineSeg` included, on the same grounds.
 Partial sweeps get two planar cap faces. Volume by Pappus on the §4 first moments; the solid centroid from the §4
 second and mixed moments (`∫u² dA`, `∫uv dA`) — a full revolution's centroid
@@ -231,13 +233,29 @@ appended → evaluate from that record (§1) → only on success, commit
 atomically: append the step, retire consumed bodies, register the result. A
 failed evaluation — `ErrUnsupported` included — leaves the recipe and the
 document untouched: a rejected operation is not intent, and a recipe holding
-it would re-reject on every re-evaluation. `Body.Placed` transforms
-analytic geometry exactly — every v1 surface variant maps to itself under an
-isometry (plane→plane, cylinder→cylinder, …), with `IsReflection` flipping
-face orientation handling. Re-evaluation (`vN`, or replay for testing) walks
-the steps in order and must reproduce the same body count, the same
-provenance roles, and measurements within each evaluator's own exactness — a
-replay test in the suite asserts this on every example model.
+it would re-reject on every re-evaluation.
+
+Immediate calls and stored-recipe evaluation share one recorded-step helper per
+operation. The helper consumes the step's records + already-built input bodies,
+returns one body + consumed-body list, and never commits. One package-owned
+commit tail serves both paths. A separate replay implementation is forbidden.
+
+Whole-recipe `Evaluate` applies selected recipe limits while taking its deep
+normalized snapshot, before any private slice can grow past a ceiling. It then
+validates the complete graph and walks it in a private document. It checks
+context + work budget in every long loop. Geometry-dependent dependencies such
+as `ThroughAll` are recomputed against replayed live bodies and MUST equal
+recorded `Inputs`. Failure returns no document.
+`docs/recipe-replay-design.md` §§4–7 is normative.
+
+`Body.Placed` transforms analytic geometry exactly — every v1 surface variant
+maps to itself under an isometry (plane→plane, cylinder→cylinder, …), with
+`IsReflection` flipping face orientation handling.
+
+Replay tests cover every example model + every current `OpKind`. Same-evaluator
+replay reproduces live-body order and provenance roles. Measurements reproduce
+within each evaluator's own exactness/bounds; alternate evaluators may build a
+different topology split but MUST preserve role/query meaning.
 
 ## 9. The boolean — where exactness dies, and how
 
@@ -436,7 +454,8 @@ silent pass.
 | 3 | analytic clearance proofs and `WithClearances` (box-disjointness proofs already run from increment 1, §10/§11 row 1) |
 | 4 | tessellation + the exact-predicate mesh boolean, `Faceted` bodies, faceted `Verify`, `Tessellate`/`STL`/`OBJ` |
 | 5 | fillet/chamfer on analytic prism edges, shell |
-| 6 | free-form side surfaces (`NURBSSurface` from recorded control data), tapered extrude if a sound offset story exists |
+| 6 | bounded canonical recipe encode, strict versioned decode, full operation/reference validation with deterministic error precedence, resource budgets, shared recorded-step dispatch, atomic public `Evaluate`, replay/property/fuzz suite |
+| 7 | free-form side surfaces (`NURBSSurface` from recorded control data), tapered extrude if a sound offset story exists |
 
 ## 12. Open questions
 

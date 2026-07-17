@@ -411,6 +411,41 @@ a frame rotation — round-trips through its own text form (core §6.2), and a
 curve parameter — a range, a knot, a weight, a `Rho` — is a plain dimensionless
 float (core §5.2).
 
+### 2.1 Decoded records
+
+`RecordProfile` admits a live profile only after consuming these `sketch`
+answers:
+
+- source `Profile.Valid` said the region was valid;
+- every partial boundary fragment had `TExact == true`;
+- the reject-only range falsifier found no contradiction;
+- whole entities were recorded from their defining data.
+
+Serialization preserves the admitted geometry, not those answers. The original
+live `sketch.Profile`, `BoundaryEdge.TExact`, and source arrangement are absent,
+so a decoded or caller-built `ProfileRecord` is untrusted input, not an
+exactness certificate.
+
+`Recipe.Validate` independently re-proves the stored region. It reconstructs
+the recorded entity definitions in a private sketch, asks `sketch` to build the
+arrangement, and accepts only one valid arranged profile that exactly matches
+the stored outer/hole walks, entity fields, ranges, order, and sense. That match
+proves closure, loop simplicity, hole nesting/disjointness, and winding. Every
+matched partial fragment MUST report `TExact == true` and pass §1's reject-only
+range falsifier. No match, an ambiguous match, or any unproved property rejects;
+a small residual never admits a trim.
+
+Format version 1 carries no duplicated validity flag, certificate, hash, or
+sampled polyline. A flag supplied by the same untrusted JSON would add no
+evidence; the private arrangement is derived independently from the stored
+analytic entities. The evaluator receives only the validated record and never
+reads the private or original sketch.
+
+`DecodeRecipe` protects resource use and wire meaning; it is not an
+authenticity check. Applications that need to know who produced a recipe sign
+or authenticate the complete encoded artifact outside decad. Full loading and
+evaluation rules are in `docs/recipe-replay-design.md`.
+
 ## 3. `ErrUnrecordableProfile`
 
 `ErrUnrecordableProfile` is the seam's one rejection of a *valid* profile: a
