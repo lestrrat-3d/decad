@@ -240,11 +240,13 @@ operation. The helper consumes the step's records + already-built input bodies,
 returns one body + consumed-body list, and never commits. One package-owned
 commit tail serves both paths. A separate replay implementation is forbidden.
 
-Whole-recipe `Evaluate` takes a deep normalized snapshot, validates the complete
-graph, and walks it in a private document. It checks context + work budget in
-every long loop. Geometry-dependent dependencies such as `ThroughAll` are
-recomputed against replayed live bodies and MUST equal recorded `Inputs`.
-Failure returns no document. `docs/recipe-replay-design.md` §§4–7 is normative.
+Whole-recipe `Evaluate` applies selected recipe limits while taking its deep
+normalized snapshot, before any private slice can grow past a ceiling. It then
+validates the complete graph and walks it in a private document. It checks
+context + work budget in every long loop. Geometry-dependent dependencies such
+as `ThroughAll` are recomputed against replayed live bodies and MUST equal
+recorded `Inputs`. Failure returns no document.
+`docs/recipe-replay-design.md` §§4–7 is normative.
 
 `Body.Placed` transforms analytic geometry exactly — every v1 surface variant
 maps to itself under an isometry (plane→plane, cylinder→cylinder, …), with
@@ -452,7 +454,7 @@ silent pass.
 | 3 | analytic clearance proofs and `WithClearances` (box-disjointness proofs already run from increment 1, §10/§11 row 1) |
 | 4 | tessellation + the exact-predicate mesh boolean, `Faceted` bodies, faceted `Verify`, `Tessellate`/`STL`/`OBJ` |
 | 5 | fillet/chamfer on analytic prism edges, shell |
-| 6 | strict versioned recipe decode, full operation/reference validation, resource budgets, shared recorded-step dispatch, atomic public `Evaluate`, replay/property/fuzz suite |
+| 6 | bounded canonical recipe encode, strict versioned decode, full operation/reference validation with deterministic error precedence, resource budgets, shared recorded-step dispatch, atomic public `Evaluate`, replay/property/fuzz suite |
 | 7 | free-form side surfaces (`NURBSSurface` from recorded control data), tapered extrude if a sound offset story exists |
 
 ## 12. Open questions

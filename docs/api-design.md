@@ -62,11 +62,13 @@ The recipe is also **the thing that translates into Fusion code** — it is the
 library's actual deliverable, so it is a first-class inspectable value.
 
 Stored recipes are executable model input, not JSON-shaped documentation.
+`EncodeRecipe` writes one canonical envelope after bounded full validation,
 `DecodeRecipe` strictly decodes one versioned envelope, `Recipe.Validate`
 independently proves every stored profile and checks the operation/reference
-graph without building a body, and `Evaluate` runs a private snapshot through a
-package-owned evaluator into a new `Document`. Whole-recipe failure exposes no
-partial document. The complete contract is `docs/recipe-replay-design.md`.
+graph without building a body, and `Evaluate` runs a bounded private snapshot
+through a package-owned evaluator into a new `Document`. Whole-recipe failure
+exposes no partial document. The complete contract is
+`docs/recipe-replay-design.md`.
 
 ### 2.1 Why the boolean is the only place exactness dies
 
@@ -279,6 +281,7 @@ type Document struct{ /* ... */ }
 
 func New(opts ...DocumentOption) *Document
 
+func EncodeRecipe(w io.Writer, r Recipe, opts ...EncodeRecipeOption) error
 func DecodeRecipe(r io.Reader, opts ...DecodeRecipeOption) (Recipe, error)
 func (r Recipe) Validate(opts ...ValidateRecipeOption) error
 func Evaluate(ctx context.Context, r Recipe, opts ...EvaluateOption) (*Document, error)
@@ -541,9 +544,11 @@ a `Step` records therefore encodes.
 **The root wire format is versioned and strict.** Canonical JSON is
 `{"format":"decad.recipe","version":1,"steps":[...]}`. The existing
 unversioned `{"steps":[...]}` shape is accepted as legacy version 1 and always
-re-encodes canonically. Invalid Unicode, unknown versions, unknown fields,
-duplicate keys, trailing values, malformed operation shapes, invalid references
-and configured resource-limit overruns reject. The in-memory `Recipe` keeps no
+re-encodes canonically. `json.Marshal` runs full recipe validation under default
+limits; `EncodeRecipe` runs the same encoder under explicit limits for trusted
+larger recipes. Invalid Unicode, unknown versions, unknown fields, duplicate
+keys, trailing values, malformed operation shapes, invalid references and
+configured resource-limit overruns reject. The in-memory `Recipe` keeps no
 version field: format metadata is not design intent.
 `docs/recipe-replay-design.md` §§2–7 is normative.
 
@@ -551,11 +556,11 @@ version field: format metadata is not design intent.
 operation's required/forbidden fields, independently proves every stored
 profile through a private `sketch` arrangement, checks every reachable value,
 and checks every backward reference + the body-liveness state machine.
-`Evaluate` deep-copies and normalizes the recipe, validates it, then walks steps
-in order through the selected package-owned evaluator. Immediate feature calls
-and replay share the same recorded-step helpers; a second implementation is
-forbidden. A valid intent beyond the selected evaluator's reach remains
-`ErrUnsupported`.
+`Evaluate` applies selected recipe limits while deep-copying + normalizing the
+recipe, validates it, then walks steps in order through the selected
+package-owned evaluator. Immediate feature calls and replay share the same
+recorded-step helpers; a second implementation is forbidden. A valid intent
+beyond the selected evaluator's reach remains `ErrUnsupported`.
 
 **A `Step` holds no `*Body` either.** A body reference in a `Step` is a `StepRef` —
 the step that produced the body — and that is what makes `Inputs` a graph. The

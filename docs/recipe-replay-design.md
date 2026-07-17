@@ -48,6 +48,11 @@ type DecodeRecipeOption interface {
     decodeRecipeOption()
 }
 
+type EncodeRecipeOption interface {
+    option.Interface
+    encodeRecipeOption()
+}
+
 type ValidateRecipeOption interface {
     option.Interface
     validateRecipeOption()
@@ -58,9 +63,10 @@ type EvaluateOption interface {
     evaluateOption()
 }
 
-// RecipeOption satisfies DecodeRecipeOption, ValidateRecipeOption, and
-// EvaluateOption.
+// RecipeOption satisfies EncodeRecipeOption, DecodeRecipeOption,
+// ValidateRecipeOption, and EvaluateOption.
 type RecipeOption interface {
+    EncodeRecipeOption
     DecodeRecipeOption
     ValidateRecipeOption
     EvaluateOption
@@ -69,6 +75,7 @@ type RecipeOption interface {
 func WithRecipeLimits(RecipeLimits) RecipeOption
 func WithEvaluationLimits(EvaluationLimits) EvaluateOption
 
+func EncodeRecipe(w io.Writer, r Recipe, opts ...EncodeRecipeOption) error
 func DecodeRecipe(r io.Reader, opts ...DecodeRecipeOption) (Recipe, error)
 func (r Recipe) Validate(opts ...ValidateRecipeOption) error
 
@@ -84,6 +91,10 @@ func Evaluate(ctx context.Context, r Recipe, opts ...EvaluateOption) (*Document,
 
 Rules:
 
+- `EncodeRecipe` validates one caller-built recipe, then writes one canonical
+  versioned JSON envelope. It buffers at most `MaxBytes` and writes nothing to
+  the caller's writer until validation + bounded encoding succeed. Nil writer
+  → `ErrDegenerate`.
 - `DecodeRecipe` decodes one JSON recipe and validates it.
 - Nil reader → `ErrDegenerate`.
 - `Recipe.Validate` is pure. It never changes the recipe or builds body
@@ -97,7 +108,8 @@ Rules:
 - No `Replay` synonym ships. `Evaluate` is the one operation that runs exact
   intent through an evaluator.
 - No options → default recipe limits + default evaluation limits + v1 evaluator.
-- Any nil option passed to decode, validate, or evaluate → `ErrDegenerate`.
+- Any nil option passed to encode, decode, validate, or evaluate →
+  `ErrDegenerate`.
 - A zero or partly zero limit struct is `ErrDegenerate`. Call the default
   constructor, then change named fields.
 - A zero `Evaluator` passed to `WithEvaluator` is `ErrDegenerate` at
@@ -109,11 +121,24 @@ Rules:
 - Code generators consume `Recipe` directly. They are not evaluators because
   they do not produce a decad `Document`.
 
-`Recipe` contains slices and pointer-form closed variants. `Evaluate` takes a
-deep, normalized snapshot before validation. Caller mutation after snapshot
-cannot affect the build. Concurrent mutation while `Validate` or `Evaluate`
-copies the same recipe is unsupported and is a data race, on the same terms as
-concurrent mutation of `Document`.
+`Recipe` contains slices and pointer-form closed variants. Every typed entry
+path — `EncodeRecipe`, `Recipe.MarshalJSON`, `Recipe.Validate`, and `Evaluate` —
+selects + validates its recipe limits before copying, then uses one limit-aware
+deep normalizer. The normalizer charges each source aggregate before allocating
+or growing its destination and returns `ErrResourceLimit` at the first one-over
+element. It charges steps, loops, segments, curve points/scalars, selectors,
+predicates, and role/total string bytes. Before copying, it also rejects an
+`Inputs` slice longer than its step index and a `Values` slice longer than one
+as `ErrInvalidRecipe`; no valid operation can contain either shape. No private
+destination slice ever grows beyond the selected limit or those structural
+bounds.
+
+The successful result is a private normalized snapshot: every slice and
+pointer-form closed variant is newly owned, and caller mutation after snapshot
+cannot affect validation, encoding, or evaluation. A partial snapshot is
+discarded on failure. Concurrent mutation while a typed entry path copies the
+same recipe is unsupported and is a data race, on the same terms as concurrent
+mutation of `Document`.
 
 ## 2. Wire envelope and compatibility
 
@@ -144,8 +169,15 @@ format version.
 - `json.Marshal(Recipe)` ALWAYS writes `format`, `version`, then `steps`.
 - Canonical `steps` is always an array. Nil + empty in-memory slices both encode
   as `[]`.
-- `Recipe.MarshalJSON` validates structure without applying resource ceilings.
-  A malformed caller-built recipe refuses to encode.
+- `Recipe.MarshalJSON` runs the full recipe validator, including independent
+  stored-profile reconstruction, under `DefaultRecipeLimits`, then emits the
+  canonical envelope. A malformed or over-default caller-built recipe refuses
+  to encode before unmetered arrangement work, over-limit private growth, or
+  an output allocation beyond `MaxBytes`.
+- `EncodeRecipe` is the limit-aware encoding path. It runs the same full
+  validation and canonical encoder under its selected recipe limits. Callers
+  with trusted recipes above the defaults must use it with explicit limits;
+  `json.Marshal` has no option channel and never bypasses the defaults.
 - `json.Unmarshal` into `Recipe` uses the strict decoder and default limits.
 - `DecodeRecipe` is the untrusted-reader API and allows explicit limits.
 - Existing unversioned `{"steps": ...}` input is legacy version 1 and remains
@@ -211,10 +243,11 @@ Validation has three layers. Each layer runs before the next.
 | recipe | per-op fields, values, independently proven profile structure, reference graph, liveness | no |
 | evaluator | selector resolution, body-relative stops, supported payloads, geometry construction | yes |
 
-`DecodeRecipe` runs wire + recipe validation. `Recipe.Validate` runs recipe
-validation. `Evaluate` snapshots, runs recipe validation again, then runs the
-evaluator. Revalidation is required because `Recipe` has exported fields and a
-caller may construct or change one without the decoder.
+`DecodeRecipe` runs wire + recipe validation. `EncodeRecipe`,
+`Recipe.MarshalJSON`, and `Recipe.Validate` run bounded normalization + recipe
+validation. `Evaluate` runs bounded normalization, recipe validation again,
+then the evaluator. Revalidation is required because `Recipe` has exported
+fields and a caller may construct or change one without the decoder.
 
 ### 3.1 Record checks
 
@@ -382,17 +415,19 @@ second extrude/revolve/boolean/modify implementation for replay.
 
 1. Return `ErrDegenerate` when `ctx == nil`.
 2. Return `ctx.Err()` when already canceled/deadlined.
-3. Deep-clone + normalize recipe into private memory.
-4. Apply recipe limits and validate the full operation/reference graph.
-5. Check `ctx.Err()` again, then create private empty `Document` + evaluator
+3. Parse + validate options, selecting recipe/evaluation limits + evaluator.
+4. Deep-clone + normalize into private memory through the selected recipe
+   limits; charge before every destination allocation/growth.
+5. Validate the full operation/reference graph on that bounded snapshot.
+6. Check `ctx.Err()` again, then create private empty `Document` + evaluator
    state.
-6. For each step in order:
+7. For each step in order:
    - check `ctx.Err()`;
    - resolve input slots and nested refs against current live bodies;
    - recompute geometry-dependent dependencies and compare them with `Inputs`;
    - evaluate the step from its record;
    - commit only that successful step to the private document.
-7. Return document only after all steps commit.
+8. Return document only after all steps commit.
 
 Step helpers reuse current record-based paths:
 
@@ -438,7 +473,7 @@ Add path-aware errors:
 ```go
 type RecipeError struct {
     StepIndex int    // -1 for envelope/root
-    Path      string // JSON-style path, e.g. steps[3].inputs[0]
+    Path      string // JSON-style path; "$" for root, e.g. steps[3].inputs[0]
     Kind      error  // invalid recipe, version, or resource-limit sentinel
     Err       error  // optional specific cause
 }
@@ -476,13 +511,103 @@ A geometry-time dependency mismatch is a `RecipeError` at that step because the
 record is incomplete or changed. An evaluator's honest inability to build valid
 intent remains `EvaluationError` wrapping `ErrUnsupported`.
 
+### 6.1 Deterministic error precedence and traversal
+
+Every public entry point returns the first failure in the order below. It never
+validates independent branches in parallel and never replaces an earlier error
+with a later, more specific one.
+
+Call-entry order:
+
+1. `Recipe.MarshalJSON` selects `DefaultRecipeLimits`; it has no option gate.
+2. `EncodeRecipe` checks the writer, then applies options left-to-right.
+3. `DecodeRecipe` checks the reader, then applies options left-to-right.
+4. `Recipe.Validate` applies options left-to-right.
+5. `Evaluate` checks nil context, then the context's existing error, then
+   applies options left-to-right.
+
+At an option position, nil or invalid content fails immediately. Later valid
+options of the same kind replace earlier ones. After validation + canonical
+encoding succeed, an `EncodeRecipe` writer failure is returned as the writer's
+error.
+
+`DecodeRecipe` then uses this wire order:
+
+1. Read at most `MaxBytes+1`; a one-over byte count wins over every defect in
+   the preflight buffer.
+2. Scan the retained JSON depth-first in source order. At each token, check
+   syntax + Unicode scalar validity, charge container depth before entering
+   it, check a repeated object key before its schema membership, check schema
+   membership, then charge an array element/string before retaining or
+   descending into it. The first failing token wins.
+3. At each object close, check missing required fields in that object's
+   canonical field order. At the root, first choose the envelope shape: neither
+   `format` nor `version` means legacy and requires `steps`; either one means
+   versioned and requires both plus `steps`. Only after required-field checks
+   pass does the versioned form check `format`, then `version`. An incomplete
+   envelope therefore fails before an unsupported version; a complete
+   unsupported version fails before typed step decode or recipe validation.
+4. Run typed decoding only after the whole preflight succeeds, then run the
+   typed-recipe order below.
+
+Every typed-recipe path next uses this order:
+
+1. Bounded normalization traverses `Steps` by ascending index and each step in
+   canonical field order: `Op`, `Inputs`, `Profile`, `Plane`, `Extent`,
+   `Angular`, `Axis`, `Placement`, `Selectors`, `Opts`, `Values`. It charges a
+   complete source slice/string before allocating or retaining its destination;
+   a failed checked addition reports the path of the first element/byte beyond
+   the ceiling. `MaxRoleBytes` is checked before `MaxTotalStringBytes` for one
+   role. `MaxDepth` remains decode-only.
+2. Nested slices use ascending index. Nested objects use canonical JSON field
+   order. A profile visits `Outer`, then `Holes` by index; each loop visits
+   `Segments` by index; each segment visits its tagged fields in canonical wire
+   order. A selector visits its tag + cardinality before its predicates, and
+   predicates by index + canonical field order.
+3. Recipe validation walks steps by ascending index. For one step it checks:
+   the `Op` tag; required/allowed/absent field shape in the canonical step-field
+   order above; non-reference field values in that same order; independent
+   profile reconstruction after every stored profile field passes; direct
+   `Inputs` references by index; then nested body/provenance references
+   depth-first in `Extent`, `Angular`, `Axis`, and `Selectors` order.
+4. Only after that step passes does validation apply its consumed-input
+   liveness changes and append the produced slot, then visit the next step.
+   Thus an earlier step always wins among recipe-semantic failures; bounded
+   normalization is the earlier layer and its limit/structural error wins first.
+   Within one step a field/value/profile defect wins over a reference/liveness
+   defect.
+
+Profile pair-work is charged before an arrangement/containment visit or before
+calling an unmetered `sketch` routine. A one-over charge therefore wins over
+the geometry result that visit could have produced.
+
+After recipe validation, the marshal/encode paths generate canonical bytes in
+field order and charge each output chunk before growing their private buffer.
+A one-over `MaxBytes` result is a root `RecipeError` wrapping
+`ErrResourceLimit`; `EncodeRecipe` has not called the writer yet.
+
+Bounded normalization + recipe validation do not poll context; they are the
+same pure pipeline used by `Recipe.Validate`. After `Evaluate`'s initial context
+check, a normalization/recipe error therefore wins over cancellation observed
+only at the post-validation check.
+
+After recipe validation, `Evaluate` checks context before creating evaluator
+state. It then visits steps in order. At each step it checks context, resolves
+and recomputes dependencies, rejects a mismatch as `RecipeError`, then enters
+the evaluator. Every long-loop check point tests context first, charges the
+applicable evaluation counter second, then performs the visit. The first
+observed context error therefore wins over a simultaneous one-over budget at
+that check point; a one-over budget wins over any operation error the refused
+visit could have produced. Evaluator helpers retain the immediate operation's
+documented gate order, and their first failure is wrapped in `EvaluationError`.
+
 ## 7. Resource limits
 
 Default recipe limits:
 
 | field | default | count |
 |---|---:|---|
-| `MaxBytes` | 16 MiB | encoded input bytes |
+| `MaxBytes` | 16 MiB | encoded input/output bytes |
 | `MaxDepth` | 32 | JSON container nesting |
 | `MaxSteps` | 4,096 | recipe steps |
 | `MaxLoops` | 65,536 | all profile loops |
@@ -495,10 +620,12 @@ Default recipe limits:
 | `MaxRoleBytes` | 256 | one provenance role |
 | `MaxTotalStringBytes` | 1 MiB | all tags/roles/quantity strings |
 
-`MaxBytes` + `MaxDepth` apply only while decoding JSON. Every other recipe
-limit applies incrementally during `DecodeRecipe`, before typed slice growth,
-and again during recipe validation for decoded and caller-built recipes.
-`MaxProfilePairTests` is shared across all stored profiles. Charge every
+`MaxDepth` applies only while decoding JSON. `MaxBytes` applies to the bounded
+decode read and to canonical encoding before bytes reach the caller. Every
+other recipe limit applies during schema-aware decode preflight and during the
+bounded normalization used by encode, validate, and evaluate. Both paths
+charge before typed slice allocation/growth. `MaxProfilePairTests` is shared
+across all stored profiles in the subsequent recipe validation. Charge every
 arrangement candidate-pair and loop-containment segment visit, or a checked
 worst-case upper bound before calling a `sketch` routine that cannot accept the
 counter.
@@ -534,8 +661,8 @@ Rules:
 - Counters use checked integer addition. Overflow is `ErrResourceLimit`.
 - Decoder rejects invalid Unicode and checks every recipe ceiling during the
   schema-aware preflight, before typed allocation.
-- Validator checks the same aggregate counts on decoded and caller-built
-  in-memory recipes.
+- The bounded normalizer checks the same aggregate counts on decoded and
+  caller-built in-memory recipes before allocating its private copy.
 - Evaluator charges work before allocation or expensive calculation.
 - Context cancellation is separate from limits and remains the caller's time
   budget.
@@ -591,7 +718,8 @@ No public half-replay surface ships. Internal changes may land in this order:
 4. shared recorded-step helpers for extrude/revolve/placed;
 5. shared recorded-step helpers for booleans + modify operations;
 6. private whole-recipe driver + atomic failure tests;
-7. public `DecodeRecipe`, `Validate`, evaluator handle, and `Evaluate` together;
+7. public `EncodeRecipe`, `DecodeRecipe`, `Validate`, evaluator handle, and
+   `Evaluate` together;
 8. executable example + full replay/fuzz/property suite.
 
 Public `Evaluate` MUST support every `OpKind` the same release can record.
@@ -604,6 +732,14 @@ immediate feature call.
 
 - versioned round-trip for every closed variant;
 - legacy unversioned decode → canonical versioned encode;
+- `Recipe.MarshalJSON` runs full profile validation with default limits;
+  `EncodeRecipe` produces identical canonical bytes under the same limits;
+- exact-limit + one-over marshal profile-arrangement work, with instrumentation
+  proving the one-over path does not enter the private arrangement;
+- exact-limit + one-over custom `EncodeRecipe` limits for a recipe above the
+  defaults;
+- exact-limit + one-over encoded bytes; the one-over `EncodeRecipe` writer
+  receives no bytes;
 - missing/partial envelope, unknown format/version;
 - unknown field + duplicate key at every object layer;
 - invalid raw UTF-8 + every malformed surrogate form at every free-string
@@ -628,6 +764,11 @@ immediate feature call.
   nesting, and trim admission;
 - an adversarial stored profile exhausts `MaxProfilePairTests` promptly before
   starting an unmetered private arrangement;
+- exact-limit + one-over caller-built aggregates for every typed-recipe limit;
+  instrument the normalizer to prove no destination slice grows beyond the
+  selected ceiling;
+- overlong caller-built `Inputs` + `Values` slices reject before their private
+  destination allocates;
 - negative/self/forward/missing/duplicate/reordered refs;
 - retired operand/dependency reuse;
 - nested body ref absent from `Inputs`;
@@ -644,6 +785,11 @@ immediate feature call.
 - through-all dependencies recompute exactly; changed/missing/extra/order errors
   reject;
 - failure at every step index returns nil document + correct step error;
+- exact-limit + one-over `Evaluate` cases for every in-memory aggregate;
+  instrumentation proves the rejected destination never reaches one-over;
+- multi-defect recipes pin the first step, exact path, `Kind`, and optional
+  cause across `DecodeRecipe`, `Validate`, and `Evaluate`, including
+  field/value vs reference/liveness and context vs budget cases;
 - `ErrUnsupported`, selector, boolean, context, and limit identities survive;
 - repeated v1 evaluation is deterministic;
 - evaluator snapshot does not alias caller slices/queries/options;
@@ -667,7 +813,7 @@ immediate feature call.
 User-facing example flow belongs in `examples/`:
 
 ```text
-build → json encode → DecodeRecipe → Validate → Evaluate → inspect/Verify
+build → EncodeRecipe → DecodeRecipe → Validate → Evaluate → inspect/Verify
 ```
 
 Assert on body count + computed measurement, not only successful return.
