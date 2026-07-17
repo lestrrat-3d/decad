@@ -178,14 +178,14 @@ func (b *Body) Shell(sel FaceSelector, t units.Value, opts ...ShellOption) (*Bod
 			return nil, fmt.Errorf(`%w: this evaluator cannot prove the eroded section non-empty`, ErrUnsupported)
 		}
 		if tmm >= inradius-shellTol*math.Max(1, inradius) {
-			return nil, fmt.Errorf(`%w: the inward wall reaches the section's inradius %g, so the cavity is empty`, ErrDegenerate, inradius)
+			return nil, fmt.Errorf(`%w: the shell thickness %s reaches the section's inradius %s, so the cavity would be empty; use a thickness below the inradius`, ErrDegenerate, t, units.Millimeters(inradius))
 		}
 		// The height limit: where a cap is kept (a cup), the wall behind it is a
 		// floor t thick, so the cavity is swept over an interval of length h − t,
 		// non-empty exactly when t < h. A both-caps shell keeps no cap and has no
 		// floor, so only the section limit reaches it (§8).
 		if !bothCaps && tmm >= h-shellTol*math.Max(1, h) {
-			return nil, fmt.Errorf(`%w: the inward floor reaches the sweep height %g, so the cavity is empty`, ErrDegenerate, h)
+			return nil, fmt.Errorf(`%w: the shell thickness %s reaches the sweep height %s, so the cavity would be empty; use a thickness below the height`, ErrDegenerate, t, units.Millimeters(h))
 		}
 	}
 

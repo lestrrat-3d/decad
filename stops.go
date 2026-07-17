@@ -136,11 +136,11 @@ func (d *Document) resolveToFace(tf ToFace, frame r3.Frame, travel float64, what
 	}
 	pl, ok := face.Surface().(Plane)
 	if !ok {
-		return 0, 0, fmt.Errorf(`%w: a stop at a non-planar face lands with its evaluator increment`, ErrUnsupported)
+		return 0, 0, fmt.Errorf(`%w: ToFace requires a planar stop face whose normal is parallel to the sweep direction; this face is not planar — choose a planar cap face or use a Distance extent`, ErrUnsupported)
 	}
 	n := frame.N()
 	if !parallelDirs(pl.Frame.N(), n) {
-		return 0, 0, fmt.Errorf(`%w: a stop at a plane not perpendicular to the sweep lands with its evaluator increment`, ErrUnsupported)
+		return 0, 0, fmt.Errorf(`%w: ToFace requires the stop face's normal parallel to the sweep direction (the face perpendicular to the sweep); this face is tilted — choose a perpendicular face or use a Distance extent`, ErrUnsupported)
 	}
 	zFace := pl.Frame.Origin().Sub(frame.Origin()).Dot(n)
 	tol := relStopTol(math.Max(pl.Frame.Origin().Len(), frame.Origin().Len()))
@@ -353,15 +353,15 @@ func (st angularStops) resolveToFaceAngular(tfa ToFaceAngular, travel float64, w
 	}
 	pl, ok := face.Surface().(Plane)
 	if !ok {
-		return 0, 0, fmt.Errorf(`%w: a stop at a non-planar face lands with its evaluator increment`, ErrUnsupported)
+		return 0, 0, fmt.Errorf(`%w: ToFaceAngular requires a planar stop face whose plane contains the revolve axis; this face is not planar — choose a planar radial face or use an angle extent`, ErrUnsupported)
 	}
 	nf := pl.Frame.N()
 	if math.Abs(nf.Dot(st.w)) > stopTol {
-		return 0, 0, fmt.Errorf(`%w: a stop at a plane not containing the revolve axis lands with its evaluator increment`, ErrUnsupported)
+		return 0, 0, fmt.Errorf(`%w: ToFaceAngular requires the stop face's plane to contain the revolve axis; this plane is not parallel to the axis — choose a radial face or use an angle extent`, ErrUnsupported)
 	}
 	off := pl.Frame.Origin().Sub(st.a3).Dot(nf)
 	if math.Abs(off) > relStopTol(math.Max(pl.Frame.Origin().Len(), st.a3.Len())) {
-		return 0, 0, fmt.Errorf(`%w: a stop at a plane not containing the revolve axis lands with its evaluator increment`, ErrUnsupported)
+		return 0, 0, fmt.Errorf(`%w: ToFaceAngular requires the stop face's plane to contain the revolve axis; this plane runs parallel to the axis but offset from it — choose a face through the axis or use an angle extent`, ErrUnsupported)
 	}
 	phi, err := st.faceHalfPlane(face)
 	if err != nil {

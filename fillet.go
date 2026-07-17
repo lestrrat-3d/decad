@@ -274,7 +274,7 @@ func offsetOf(c carrier, offsetSign, r float64) (offCurve, error) {
 	}
 	rr := c.radius - offsetSign*c.insideSign*r
 	if rr <= filletTol {
-		return offCurve{}, fmt.Errorf(`%w: no blend of radius %g fits a circular wall of radius %g`, ErrDegenerate, r, c.radius)
+		return offCurve{}, fmt.Errorf(`%w: no fillet of radius %s fits a circular wall of radius %s; try a smaller radius`, ErrDegenerate, units.Millimeters(r), units.Millimeters(c.radius))
 	}
 	return offCurve{cx: c.cx, cy: c.cy, rr: rr}, nil
 }
@@ -366,7 +366,7 @@ func intersectOffsets(a, b offCurve, px, py float64) (float64, float64, error) {
 		cands = circleCircle(a.cx, a.cy, a.rr, b.cx, b.cy, b.rr)
 	}
 	if len(cands) == 0 {
-		return 0, 0, fmt.Errorf(`%w: the two carriers' offsets never meet, so no blend of that radius exists`, ErrDegenerate)
+		return 0, 0, fmt.Errorf(`%w: no fillet of that radius fits this corner; try a smaller radius`, ErrDegenerate)
 	}
 	best, bestD := cands[0], math.Inf(1)
 	for _, c := range cands {
