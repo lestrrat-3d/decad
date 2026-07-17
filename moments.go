@@ -12,8 +12,8 @@ import (
 // decad integrating its OWN records. sketch decides topology and
 // admissibility; once a region is recorded, its areas and moments are decad's
 // job, computed by closed-form boundary integrals (Green's theorem) per
-// segment kind — exact for the increment-1 kinds, and ErrUnsupported for the
-// free-form kinds until their evaluator increments land.
+// segment kind — exact for line, circle and arc walks, and ErrUnsupported for
+// the free-form kinds.
 
 // Area returns the recorded region's net area — the outer loop minus its
 // holes — as a [Measurement] of Kind Area (mm²): a computed quantity carries
@@ -24,8 +24,7 @@ import (
 //
 // A region whose boundary contains a free-form segment kind (ellipse,
 // elliptical arc, conic, spline, closed spline, fit spline, NURBS) is
-// [ErrUnsupported] until that kind's evaluator increment lands
-// (docs/evaluator-design.md §11) — never approximated.
+// [ErrUnsupported] (docs/evaluator-design.md §11) — never approximated.
 func (r ProfileRecord) Area() (Measurement, error) {
 	ig, err := r.integrals()
 	if err != nil {
@@ -77,7 +76,7 @@ type SecondMoments struct {
 
 // SecondMoments returns the region's exact second moments of area about the
 // plane origin. The staging matches Area: a free-form boundary kind is
-// [ErrUnsupported] until its evaluator increment lands.
+// [ErrUnsupported].
 func (r ProfileRecord) SecondMoments() (SecondMoments, error) {
 	ig, err := r.integrals()
 	if err != nil {

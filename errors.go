@@ -105,7 +105,7 @@ var ErrUnitKind = errors.New("decad: wrong unit kind")
 var ErrNotFinite = errors.New("decad: non-finite value")
 
 // ErrUnsupported is returned when the recipe records the intent exactly but
-// the current evaluator cannot yet build it. Evaluator staging is explicit
+// the current evaluator does not build it. Evaluator staging is explicit
 // and rejected at the call — never silently approximated or narrowed — and a
 // rejected operation leaves the recipe and the document untouched. See
 // docs/evaluator-design.md §2.

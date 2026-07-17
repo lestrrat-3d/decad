@@ -22,8 +22,8 @@ import (
 // topology-changing offset is S11, a both-caps shell of a HOLED section is S12
 // (a prismPayload holds one region), each ErrUnsupported.
 
-// ShellOption configures Shell. ShellOpts is the one StepOpts variant this
-// increment fills — its Sense (§8) — so the option group is not empty.
+// ShellOption configures Shell. ShellOpts is the StepOpts variant a shell
+// fills — its Sense (§8) — so the option group is not empty.
 type ShellOption interface {
 	option.Interface
 	shellOption()

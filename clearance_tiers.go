@@ -10,8 +10,8 @@ import (
 // face × edge-interior, edge × edge and vertex tiers, over the shipped
 // Line3/Circle3/Arc3 edge carriers and the five face carriers — every cell
 // closed form or a P4/P8 certified bracket per §4's curve-tier table, with
-// Line3 × Cone and Circle3 × Cone (the 1-variable BB cells) coarse until
-// PR 2. Candidates are computed on the unbounded carriers and admitted by
+// Line3 × Cone and Circle3 × Cone (the 1-variable BB cells) coarse.
+// Candidates are computed on the unbounded carriers and admitted by
 // the edge's parameter range and the face's trim exactly as §3 demands.
 
 // edgeWits returns on-edge sample points.
@@ -50,7 +50,7 @@ func (k *pairKernel) feCell(f *cFace, e *cEdge, sink *cellSink) {
 		}
 		k.circlePlaneFE(f, e, sink)
 	case ckCone:
-		// Line3 × Cone and Circle3 × Cone are 1-variable BB cells (PR 2).
+		// Line3 × Cone and Circle3 × Cone are 1-variable BB cells, coarse here.
 		sink.coarse(f.box, e.box, f.wit, edgeWits(e))
 	default:
 		if f.kind == ckTorus && f.spindle {

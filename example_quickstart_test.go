@@ -12,9 +12,10 @@ import (
 
 // This is the canonical decad loop: build and solve a 2D profile in sketch,
 // turn it into a body with a feature verb, then gate the live document on
-// Verify's one trustworthy bit. It lives in the root package so it is the
-// first program a caller reaches from `go doc github.com/lestrrat-3d/decad`;
-// the examples directory holds the fuller, feature-specific cases.
+// Verify's one trustworthy bit. It lives in the root package so godoc and
+// pkg.go.dev render it right beside the package doc; the `go doc` CLI skips
+// test files, so there it is the doc.go Quickstart section that a caller reads
+// instead. The examples directory holds the fuller, feature-specific cases.
 func Example_decad_quickstart() {
 	// 1. A solved 2D profile: a 100 x 60 plate on the XY plane.
 	w := sketch.NewWorld()

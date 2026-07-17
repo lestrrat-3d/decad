@@ -31,7 +31,10 @@ func Example_decad_recipe() {
 		return
 	}
 
-	// Two steps: extrude the plate, then place a copy 200 mm along x.
+	// Two steps: extrude the plate, then place it 200 mm along x. Placed
+	// retires the plate and commits a replacement body; the document stays
+	// valid because it retains that replacement. The returned pointer is
+	// discarded below only because the example goes straight to Recipe.
 	doc := decad.New()
 	body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	if err != nil {

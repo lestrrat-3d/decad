@@ -22,10 +22,10 @@ import (
 // side(i,j) role AND a second fillet(i,j) role naming the same (loop, segment)
 // of the rewritten record (Table B, B1).
 //
-// This increment lands Fillet on lateral edges — line/line, line/arc and
-// arc/arc corners, convex and concave — with B1's roles and the Step wiring
-// (modify §13, PR 1). A cap-edge selector is S1 (ErrUnsupported, the vertex
-// blend §6); a non-prism receiver is S3 (ErrUnsupported).
+// Fillet rounds lateral edges — line/line, line/arc and arc/arc corners,
+// convex and concave — with B1's roles and the Step wiring (modify §13). A
+// cap-edge selector is S1 (ErrUnsupported, the vertex blend §6); a non-prism
+// receiver is S3 (ErrUnsupported).
 
 // FilletOption configures Fillet. No options are currently supported: a fillet
 // Step's Opts is nil (§6), and the option group exists so a variable-radius or

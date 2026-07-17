@@ -66,8 +66,7 @@ func (ExtrudeOpts) stepOpts() {}
 // ShellOpts records a shell's options (docs/modify-design.md §8). Sense is the
 // wall sense — Inward (the default) or Outward — encoded as a named text token
 // exactly as Direction is, so a renumbered constant could never silently
-// reinterpret an old recipe. It is the one StepOpts variant this increment
-// fills.
+// reinterpret an old recipe. It is the StepOpts variant a shell step records.
 type ShellOpts struct {
 	Sense ShellSense `json:"sense"`
 }

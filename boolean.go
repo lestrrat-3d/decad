@@ -44,8 +44,10 @@ const boolChordFactor = 2e-5
 // isolated-point contact whose facets meet degenerately (a face-on-face
 // overlap, a grazing edge) is ErrDegenerate. A result with no volume is
 // ErrBooleanFailed.
-// Both operands are tessellated first, so a revolve operand — which has no
-// tessellator — is ErrUnsupported.
+// Both operands are tessellated first at a chord tolerance derived from the
+// pair's diameter, so a revolve operand — which has no tessellator — is
+// ErrUnsupported, and so is a Faceted operand whose own held Bound is coarser
+// than that pair tolerance (it cannot be re-tessellated finer than its bound).
 func Union(a, b *Body) (*Body, error) {
 	return performBoolean(OpUnion, a, b)
 }

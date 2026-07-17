@@ -90,10 +90,11 @@ type Distance struct {
 	Dir Direction   `json:"dir"`
 }
 
-// ThroughAll sweeps in Direction Dir through the far side of every body the
-// sweep meets. Extent only; its stop bodies are resolved at the call and
-// recorded as StepRefs in the step's Inputs (core §6.2, docs/evaluator-design.md
-// §5).
+// ThroughAll sweeps in Direction Dir to the farthest far side of every live
+// body with material beyond the sketch plane in the travel sense — the lateral
+// footprint is not consulted, so a body off to the side still counts. Extent
+// only; each such body is resolved at the call and recorded as a StepRef in the
+// step's Inputs (core §6.2, docs/evaluator-design.md §5).
 type ThroughAll struct {
 	Dir Direction `json:"dir"`
 }
@@ -119,9 +120,11 @@ type DistanceSide struct {
 	D units.Value `json:"d"`
 }
 
-// ThroughAllSide is one side of a TwoSided that runs through every body on
-// its side. SideExtent only; like ThroughAll, its stop bodies are resolved at
-// the call and recorded as StepRefs in the step's Inputs (core §6.2).
+// ThroughAllSide is one side of a TwoSided that runs to the farthest far side
+// of every live body with material beyond the sketch plane on this side, its
+// lateral footprint likewise not consulted. SideExtent only; like ThroughAll,
+// each such body is resolved at the call and recorded as a StepRef in the
+// step's Inputs (core §6.2).
 type ThroughAllSide struct{}
 
 // ToFace stops the sweep at a face of Body, displaced by the signed Offset —

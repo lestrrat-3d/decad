@@ -11,7 +11,7 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// This file is the body-relative stop resolution of evaluator increment 2
+// This file is the body-relative stop resolution
 // (docs/evaluator-design.md §5/§6/§11, core §8.1/§6.2): ToFace and
 // ToFaceAngular stops at a selected face of a named body, and the
 // ThroughAll/ThroughAllSide stops at the far side of every live body the
@@ -113,7 +113,7 @@ func selectStopFace(body *Body, sel FaceSelector, what string) (*Face, error) {
 // planar and perpendicular to the sweep — so the face must be PLANAR with
 // its normal parallel to the sweep direction; a non-planar stop face, or a
 // planar one not perpendicular to the sweep, is a solid this evaluator
-// cannot build yet (ErrUnsupported, staged). A face coplanar with the sketch
+// cannot build (ErrUnsupported, staged). A face coplanar with the sketch
 // plane stops the sweep before it starts (ErrDegenerate).
 //
 // travel is 0 for a standalone ToFace — the target face supplies the sense
@@ -174,7 +174,7 @@ func (d *Document) resolveToFace(tf ToFace, frame r3.Frame, travel float64, what
 // own recorded payload — its closed-form directional extent along the sweep
 // direction; the sweep's lateral footprint is not consulted (an exact
 // region-versus-projection overlap is boolean-grade machinery this
-// increment does not have, and a conservative guess would fabricate or drop
+// evaluator does not have, and a conservative guess would fabricate or drop
 // a recorded dependency). It returns the signed stop coordinate along the
 // plane normal and the met bodies' StepRefs in stop order along the sweep —
 // nearest far side first. No live body in the path is ErrDegenerate: the
@@ -337,7 +337,7 @@ const angTol = 1e-9
 // the rotated profile plane, which CONTAINS the axis — so the face must be
 // PLANAR, its plane must contain the revolve axis, and its material must lie
 // in one half-plane of the axis; a non-planar face, or a plane that does not
-// contain the axis, is a solid this evaluator cannot build yet
+// contain the axis, is a solid this evaluator cannot build
 // (ErrUnsupported, staged), while a face spanning both half-planes names two
 // stops at once and one in the profile's own half-plane a zero sweep — both
 // ErrDegenerate.

@@ -75,6 +75,7 @@
 //	  WithTaper   nonzero taper angle                         ErrUnsupported
 //	Revolve       cylinder / cone / sphere / torus / annulus  builds
 //	Union/Cut/Intersect  prism/faceted operands, crossings    builds
+//	  faceted operand coarser than the pair tolerance         ErrUnsupported
 //	  revolve operand (tessellated, no mesher)                ErrUnsupported
 //	  curved-surface tangent, facets never meet               ErrUnsupported
 //	  exact coplanar / face-on-face / point contact           ErrDegenerate
@@ -90,10 +91,14 @@
 //	  revolve payload                                         ErrUnsupported
 //	  boolean body at a tolerance finer than its bound        ErrUnsupported
 //
-// Options: New, Revolve, Fillet and Chamfer expose option groups that carry
-// nothing today (they exist so options can be added without a signature
-// change). WithTaper and WithShellSense are the options that do something;
-// WithTaper records the taper angle but refuses any nonzero value here.
+// Options: among the MODEL-CONSTRUCTION verbs, New, Revolve, Fillet and
+// Chamfer expose option groups that carry nothing today (they exist so options
+// can be added without a signature change); WithShellSense picks a shell's wall
+// sense, and WithTaper names an extrude taper — but a nonzero taper is
+// [ErrUnsupported], returned before any step is recorded, so the recipe is left
+// unchanged. Separately, Verify's options (WithTolerance, WithMinWallThickness,
+// WithPullDirection, WithMinRadius, WithClearances) and the STL/OBJ
+// WithChordTolerance also take effect.
 //
 // # Layering
 //

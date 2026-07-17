@@ -10,9 +10,11 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// Every fallible decad call wraps a sentinel from its error vocabulary, so a
-// caller — an agent, especially — branches with errors.Is and repairs its next
-// call instead of parsing a message. Here two real refusals drive a repair: a
+// A model-input or evaluator refusal wraps a sentinel from decad's error
+// vocabulary, so a caller — an agent, especially — branches with errors.Is and
+// repairs its next call instead of parsing a message. (Two failures keep their
+// own cause instead: Verify can return the context's cancellation directly, and
+// STL/OBJ preserve the writer's error.) Here two real refusals drive a repair: a
 // staged tapered extrude (ErrUnsupported) is retried straight, and an
 // over-asserted selector (ErrCardinality) is relaxed to a count the body can
 // meet.
@@ -30,8 +32,8 @@ func Example_decad_error_recovery() {
 		return
 	}
 
-	// A tapered extrude is recorded exactly but this evaluator refuses it.
-	// A failed call leaves the document untouched, so the profile is still
+	// This evaluator refuses a nonzero taper before it records any step, so
+	// the failed call leaves the document untouched: the profile is still
 	// current and the repair is to drop the taper.
 	doc := decad.New()
 	prof := s.Profiles()[0]
