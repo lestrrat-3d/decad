@@ -11,7 +11,9 @@ Companion to `docs/verification-design.md`, which owns what a `Clearance` IS
 and how its `Gap` is judged (references "verification §N"), and
 `docs/evaluator-design.md`, which owns the evaluator's staging and the shipped
 box-disjointness proofs ("evaluator §N") — this is the increment-3 design its
-§11 row 3 names. Nothing here changes those contracts.
+§11 row 3 names. `docs/payload-verification-design.md` owns the cup/faceted
+boundary adapters and the proof-bound expansion around this analytic kernel.
+Nothing here changes those contracts.
 
 ## 1. The proof obligation
 
@@ -83,6 +85,15 @@ direction on a fixed ladder — deterministic, never random, so a replay
 resolves identically (evaluator §8). Any witness strictly inside is a proven
 nesting — proven overlap, not disjoint (§7 for what the report can then say);
 all witnesses mutually outside, with `g > 0`, is the disjointness proof.
+
+**Payload adapters preserve this obligation.** A cup expands to its exact outer
+skin, reversed cavity skin, kept cap, pocket floor, and rim bands, so the same
+analytic tiers and exact nesting casts apply. A faceted payload expands every
+held triangle to a trimmed plane and carries one body-level displacement
+`delta`; after held candidate aggregation the true distance interval is widened
+once by the two payload deltas. A nonzero widened interval that reaches zero is
+undecided unless a separate exact contact certificate settles it. Payload
+verification §3/§7 owns these adapters and their tests.
 
 ## 3. The candidate enumeration
 
@@ -428,6 +439,10 @@ reads `Suspect`, never an error, never a silent pass:
 | 1 | the tier enumeration + exact admission, every CF cell, the P4/P8 certified brackets, the nesting exclusion, coplanar `Plane` × `Plane` contact, report wiring — rows, the empty list, the `Gap` gate, pair `D` | cone-involved pairs near contact (coarse enclosure interval only: proven disjoint with a wide honest row when even the coarse `lo` clears zero, undecided when it does not); every non-coplanar contact type |
 | 2 | the `BB` refiner (the 1- and 2-variable azimuth searches; the `Minor ≥ Major` torus downgrade path), the coaxial and co-directional 2D reductions | non-coplanar contacts |
 | 3 | the remaining §6 certified contact types | osculating and edge/vertex contacts (§9) |
+
+Cup and faceted adapters land in payload verification §13. Until their rows
+land, an invoked pair containing that payload remains `Suspect`; the analytic
+kernel does not tessellate a cup or discard a faceted displacement bound.
 
 ## 9. Open questions
 
