@@ -123,14 +123,20 @@ sagitta is:
 s(r, theta, n) = 2 r sin²(abs(theta) / (4 n))
 ```
 
-Choose the smallest `n` whose upward-rounded direct sagitta fits its budget.
-Use the stable inverse `4 asin(sqrt(tol/(2r)))` only to seed a checked search:
-clamp the seed to the walk's minimum, decrement while `n-1` remains at least
-that minimum and its upward-rounded direct sagitta fits, then increment while
+Choose the smallest `n` whose upward-rounded direct sagitta fits its positive
+budget `b`. Let `nMin` be the walk minimum. First evaluate
+`upRound(s(r, theta, nMin))`; when it is at most `b`, choose `nMin` without
+evaluating an inverse. Otherwise clamp `q = b/(2r)` to `[0, 1]`, compute
+`dTheta = 4 asin(sqrt(q))`, and seed the checked search with
+`ceil(abs(theta)/dTheta)`, clamped to `nMin`. Decrement while `n-1` remains at
+least `nMin` and its upward-rounded direct sagitta fits, then increment while
 `n` does not fit. This downward-then-upward correction applies to every section,
-meridian, and global angular inverse. A whole closed circle uses at least three
-chords. A circular revolve generator whose two ends are on the axis uses at
-least two meridian chords (§9).
+meridian, and global angular inverse. If a positive `b` makes `q` or `dTheta`
+underflow to zero, the quotient is non-finite, the checked ceiling cannot be
+represented, or the resulting count exceeds its fixed cap, refuse with
+`ErrUnsupported` before integer conversion or allocation. A whole closed circle
+uses at least three chords. A circular revolve generator whose two ends are on
+the axis uses at least two meridian chords (§9).
 
 One curve may use at most `maxChordsPerWalk` chords. The global revolve angular
 sequence has the same cap. The complete call also has these fixed ceilings:
@@ -422,6 +428,14 @@ chorded-loop test alone is insufficient. Refine the first failing walk in
 deterministic walk order and rerun the whole section proof; an undecidable
 predicate or exhausted refinement/work budget → `ErrUnsupported`.
 
+Also run evaluator §6's exact axis-incidence audit on the recorded walks before
+sampling. At each exact on-axis loop point, collect every incident walk end
+across all loops. A manifold pole has exactly one off-axis walk end and one
+on-axis `LineSeg` end from the same loop. A second off-axis sector, repeated
+loop incidence, isolated endpoint tangency, or missing on-axis continuation is
+`ErrDegenerate`. In particular, splitting a circle tangent to the axis into two
+arcs does not turn its shared tangent endpoint into an admissible pole.
+
 First form the intermediate surface obtained by revolving every meridian chord
 exactly. Every chord is a straight generator and classifies as one of:
 
@@ -494,6 +508,13 @@ exactly. Apply the same full-interval rules; this is the proof charged to
 charge both homotopy audits to §3's cumulative pair-work budget before starting
 them. Together with the meridian proof, they preserve loop nesting, shell and
 component topology, and contact relations through every construction stage.
+
+Before return, build the combinatorial link of every stored mesh vertex: each
+incident triangle contributes the edge between its other two vertices. Every
+link vertex MUST have degree two and the complete link MUST be one connected
+cycle. More than one cycle at an interned pole is a pinched vertex even when the
+directed-edge audit passes. A failed link audit is `ErrUnsupported`; it is the
+construction safety net behind the profile-level `ErrDegenerate` refusal.
 
 ## 10. Revolve boundary proofs
 
@@ -675,12 +696,21 @@ Boolean composition then stays evaluator §9's:
 3. Use `sourceBound(face)` for the hidden-tangency pre-pass. For a faceted
    operand this is its inherited certified face displacement, or its global
    composed `Delta`, never an automatic zero for restated polygons.
-4. Run the exact-predicate mesh boolean.
-5. Bound the result volume by `volSymDiffA + volSymDiffB` plus final weld
+4. For each face pair, upward-round `b = deltaA + deltaB`. When `b > 0` and the
+   held facet sets are at distance at most `b`, including when they intersect,
+   require a separate analytic or certified proof that the true patches cross
+   or touch. A held-facet meet alone proves nothing about true contact. If no
+   such proof is available, return `ErrUnsupported`. Only a zero-bound pair may
+   pass directly to held-facet predicates as exact geometry.
+5. Run the exact-predicate mesh boolean.
+6. Bound the result volume by `volSymDiffA + volSymDiffB` plus final weld
    rounding.
-6. Bound new rim vertices by `(deltaA + deltaB)/sin(theta)`, using each mesh's
+7. Bound new rim vertices by `(deltaA + deltaB)/sin(theta)`, using each mesh's
    global boundary bound; this remains separate from volume error.
-7. Compose `areaSlackA + areaSlackB` plus area dropped by the final weld.
+8. Measure the final weld displacement from every exact stitched result vertex
+   to its stored binary64 vertex. Upward-round its addition to every incident
+   result face's boundary displacement.
+9. Compose `areaSlackA + areaSlackB` plus area dropped by the final weld.
 
 A faceted operand contributes its payload's already composed `volSymDiff`.
 Prism, cup, and revolve operands contribute their mesh proofs. No analytic
@@ -692,14 +722,20 @@ true faceted patch cannot touch another operand. Every boolean generation MUST
 therefore preserve both the faceted boundary certificate used by `sourceBound`
 and the composed `volSymDiff`.
 
-When building the result `facetedPayload`, assign each result face a displacement
-covering every inherited `sourceBound` and every new-rim displacement that can
-reach it. Set `boundaryCert.Delta` to the upward-rounded maximum of those
-complete result-face values. If per-face composition is incomplete, use the
-conservative composed `Delta` for every result face before taking that maximum.
-Thus every faceted operand `sourceBound`, including a global-`Delta` fallback,
-flows into the next result's `boundaryCert.Delta`. This makes the next boolean's
-hidden-tangency pre-pass sound without reconstructing analytic identity.
+When building the result `facetedPayload`, first assign each result face a
+pre-weld displacement covering every inherited `sourceBound` and every new-rim
+displacement that can reach it. Let `deltaW(face)` be the upward-rounded maximum
+exact-stitched-to-stored coordinate displacement of the welded vertices
+incident to that face; zero is allowed only when every such coordinate is exact.
+Set the face's complete displacement to
+`upRound(preWeld(face) + deltaW(face))`. Set `boundaryCert.Delta` to the
+upward-rounded maximum of those complete result-face values. If per-face
+composition is incomplete, use `upRound(conservativePreWeldDelta + deltaW)`,
+where `deltaW` is the global maximum weld displacement, for every result face
+before taking that maximum. Thus every faceted operand `sourceBound`, including
+a global-`Delta` fallback, and every final weld displacement flow into the next
+result's `boundaryCert.Delta`. This makes the next boolean's hidden-tangency
+pre-pass sound without reconstructing analytic identity.
 
 ## 12. Refusals
 
@@ -712,11 +748,13 @@ Refuse before returning any partial mesh:
 | faceted request finer than the certified maximum face bound | `ErrUnsupported` |
 | meridian/angular, per-mesh facet, cumulative facet-work, cumulative pair-test, or certified-interval proof budget exceeded; integer size overflow | `ErrUnsupported`, before the refused allocation/audit starts |
 | non-finite `rhoMax`, `deltaC`, `deltaR`, sagitta, area slack, source bound, construction/placement allowance, or symmetric-difference allowance | `ErrUnsupported` unless it proves an impossible payload invariant |
+| positive chording budget whose inverse underflows, cannot produce a represented checked count, or exceeds the owning chord cap | `ErrUnsupported` before integer conversion or allocation |
+| recorded on-axis incidence is not exactly one off-axis walk end plus one on-axis line end from the same loop | `ErrDegenerate` |
 | positive-radius ring numerically collapses; circular generator is erased | `ErrUnsupported` |
 | chording cannot prove loop simplicity/nesting/clearance or preserve it through the analytic-to-chord meridian homotopy after refinement | `ErrUnsupported` |
 | non-adjacent facets intersect after refinement | `ErrUnsupported` |
 | coordinate construction or placement rounding cannot prove positive facets and unchanged contact/component topology over its affine homotopy | `ErrUnsupported` |
-| directed-edge audit fails or a triangle has zero area | `ErrUnsupported`; a missing/conflicting source role is `ErrDegenerate` because the body topology contradicts its payload |
+| directed-edge audit fails, a vertex link is not one connected cycle, or a triangle has zero area | `ErrUnsupported`; a missing/conflicting source role is `ErrDegenerate` because the body topology contradicts its payload |
 | revolve mesh has no finite construction/placement-homotopy allowance when used by a boolean | boolean call returns `ErrUnsupported`; export remains available when §§8–10 pass |
 
 NEVER snap, weld, drop a facet, round a near-axis ring onto the axis, or perturb a
@@ -727,7 +765,7 @@ sample to make an analytic mesh close. Refine or refuse.
 | Increment | Lands | Stays staged |
 |---|---|---|
 | **T1** | common proof record + audits; prism/cup/faceted paths expressed by §§2–7 without changing their public API | revolve |
-| **T2** | revolve line generators: cylinder/cone/plane cells, smallest-count correction, global angular sequence, partial caps, full-turn cycles, poles/apexes, meridian nesting/homotopy audit, construction/placement rounding proofs, two-sided bound, cut-stable area slack, STL/OBJ | circular generators; revolve booleans |
+| **T2** | revolve line generators: cylinder/cone/plane cells, smallest-count correction, global angular sequence, partial caps, full-turn cycles, poles/apexes, axis-incidence + vertex-link manifold audits, meridian nesting/homotopy audit, construction/placement rounding proofs, two-sided bound, cut-stable area slack, STL/OBJ | circular generators; revolve booleans |
 | **T3** | circular meridian generators: sphere/torus cells, axis-to-axis minimum, circular meridian nesting/homotopy audit, non-adjacent-intersection refinement, cut-stable circular-cell area proof | revolve booleans |
 | **T4** | meridian first-moment allowance + certified per-cell angular homotopy integral; finite `volSymDiff`; revolve admitted to booleans | density improvements |
 | **T5** | deterministic local meridian refinement and global angular density improvements that preserve every earlier proof | free-form/NURBS generators |
@@ -743,7 +781,11 @@ until T4 proves occupied-volume error.
 - Assert byte-identical repeated STL/OBJ output.
 - Assert `Bound <= tol` and the smallest valid count at threshold tolerances on
   both sides of every chord-count change. Include the radius-1 full-turn
-  `n = 122` threshold and each closed-walk/axis-to-axis minimum.
+  `n = 122` threshold and each closed-walk/axis-to-axis minimum. For radius 1,
+  cover budgets equal to and above `2r`, including 5 mm: choose the minimum
+  count without evaluating an out-of-domain inverse. Exercise inverse
+  underflow, unrepresentable ceiling, and cap overflow; each MUST refuse before
+  conversion or allocation.
 - At large coordinate magnitudes under identity placement, assert `deltaC` is
   nonzero when required and is charged to each source bound, `Bound`,
   `areaSlack`, and `volSymDiff`. Repeat under a nonidentity transform and charge
@@ -756,7 +798,10 @@ until T4 proves occupied-volume error.
   band, ring torus, concave torus wall, reflected placement, holes, and several
   shells.
 - Cover poles/apexes at each end and both ends; assert one interned vertex,
-  fan triangles only, and no degenerate quad.
+  fan triangles only, no degenerate quad, and one connected link cycle. Encode a
+  disk tangent to the axis as two semicircular `ArcSeg` walks sharing the
+  tangent endpoint; `Revolve` MUST reject the two-sector horn as
+  `ErrDegenerate` before tessellation.
 - Cover a partial on-axis line; assert both caps share one axis edge.
 - Verify every wall/cap/rim triangle maps to the expected live source face,
   including a coalesced face with several origins.
@@ -780,6 +825,17 @@ until T4 proves occupied-volume error.
   refuses.
 - Exercise a second-generation faceted boolean whose held facets miss a contact
   inside inherited nonzero `Delta`; the hidden-tangency pre-pass MUST refuse.
+- Place a body inside the curved hole of a larger annular operand, with a true
+  positive gap smaller than the hole wall's `sourceBound`, so chording the
+  concave wall inward makes the two held facet sets meet while the true bodies
+  stay disjoint. The pre-pass MUST refuse that positive-bound pair; a held meet
+  is never read as a true meet, and no union may return one held lump for the
+  true two-lump result.
+- Boolean two exact all-planar operands whose rational intersection vertices
+  round inexactly at the final weld. Assert the affected face bounds and
+  `boundaryCert.Delta` include the upward-rounded coordinate displacement, then
+  use that result in a second boolean with contact inside the inherited weld
+  allowance; the hidden-tangency pre-pass MUST refuse.
 - Exercise a certificate-zero all-planar faceted operand; inherited
   `sourceBound == 0` MUST remain admissible.
 - Fuzz valid revolve payloads across tolerance scales; a result is either a

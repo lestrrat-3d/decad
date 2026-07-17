@@ -179,14 +179,17 @@ and a wrong-but-confident prism is the failure decad exists to prevent.
 Same recording shape; the axis must be validated non-degenerate and coplanar
 with the profile plane, and the axis must not pass through the region's
 INTERIOR: the region lies in one closed half-plane of the axis. Boundary
-contact is allowed in exactly two forms — a segment ENDPOINT on the axis (it
-sweeps to a pole or an apex, the sphere and cone-tip case), and a whole
-`LineSeg` lying ALONG the axis (it sweeps nothing and emits no face, per the
-build table below). Any other contact — a curve tangent to the axis at an
-interior point (a circle kissing it would sweep a self-touching horn torus),
-or a segment crossing it — is rejected, `ErrDegenerate`, as is a region with
-interior on both sides; that is what keeps §10's valid-by-construction claim
-true.
+contact is allowed only through an exact axis-incidence audit. At each on-axis
+point across all recorded loops, the incident walk ends MUST be exactly one
+off-axis walk end and one `LineSeg` end lying ALONG the axis, from the same
+loop. The off-axis walk sweeps to one pole/apex fan; the on-axis line sweeps
+nothing. A second off-axis sector at that point, repeated loop incidence,
+isolated endpoint tangency, missing on-axis continuation, interior curve
+tangency, or crossing segment is `ErrDegenerate`, as is a region with interior
+on both sides. Thus a circle kissing the axis remains a rejected self-touching
+horn when it is segmented into arcs whose shared tangent point is a walk
+endpoint; segmentation cannot turn the same geometric incidence into a pole.
+This audit is what keeps §10's valid-by-construction claim true.
 Faces: a `LineSeg` lying ON the axis emits no face at all — it sweeps a
 zero-area set, and the neighboring segments' faces close the solid there;
 parallel to the axis (off it) → `Cylinder`; inclined → `Cone` (an
@@ -316,12 +319,16 @@ Increment 4, the deep end. Strategy:
   allowance. A faceted face's δ is its inherited certified
   displacement, falling back to the
   payload's global composed boundary `Delta` when no tighter face value exists.
-  A face pair whose facets already MEET is decided (the contact is exact and
-  the predicates own it); a face pair that comes within δ_A + δ_B *without*
-  meeting is the undecidable one, and it is refused (`ErrUnsupported`).
-  Reject-only: it may refuse a valid model whose operands genuinely pass that
-  close, and that is the accepted price. Deciding such a pair for real is the
-  clearance kernel's job
+  Upward-round `b = δ_A + δ_B`. When `b > 0`, every face pair whose held facet
+  sets are at distance at most `b` is undecidable, including a pair whose held
+  facets meet or cross. A held-facet meet proves true contact only when both
+  source bounds are zero. Otherwise admission requires a separate analytic or
+  certified proof that the true patches cross or touch; the mesh predicates
+  cannot supply that proof. No such positive-bound contact certificate is
+  defined for this evaluator increment, so the pair is refused
+  (`ErrUnsupported`). Reject-only: it may refuse a valid model whose operands
+  genuinely pass that close, and that is the accepted price. Deciding such a
+  pair for real is the clearance kernel's job
   (`docs/clearance-design.md`), not a held facet's. A planar face still carries
   every curved-trim, coordinate-construction, and placement displacement in its
   `sourceBound`; it has zero error only when its held trimmed polygon and stored
@@ -389,9 +396,13 @@ Increment 4, the deep end. Strategy:
   not lie on either. It is the crossing of two chord PLANES, and the true
   intersection curve is anywhere within δ_A of the one and δ_B of the other —
   a tube of half-width **(δ_A + δ_B)/sin θ** about it, θ the crossing angle.
-  So the boundary bound is that trim-amplified displacement, computed from a
-  proven lower bound on sin θ taken exactly from the facet normals, and it is
-  what every boundary measurement composes from (`Vertex.Position`,
+  So the pre-weld boundary bound is that trim-amplified displacement, computed
+  from a proven lower bound on sin θ taken exactly from the facet normals. The
+  final face bound adds, with upward rounding, the maximum displacement from
+  each incident exact stitched vertex to its stored welded binary64 coordinate;
+  the global boundary certificate takes the upward-rounded maximum of those
+  complete face bounds. That complete value is what every boundary measurement
+  composes from (`Vertex.Position`,
   `Faceted.Bound`, `FacetedCurve.Bound`, `Box`, and the perimeter term of every
   area bound). It has no finite ceiling as the operands approach tangency: when
   the inflated bound reaches the pair's own diameter it has stopped bounding
