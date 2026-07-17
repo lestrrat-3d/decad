@@ -1,7 +1,13 @@
 # Modify Design
 
-How the v1 evaluator builds the three modify ops — `Body.Fillet`,
-`Body.Chamfer`, `Body.Shell`.
+How the v1 evaluator builds the first straight-prism cases of the three modify
+ops — `Body.Fillet`, `Body.Chamfer`, `Body.Shell`.
+
+`docs/modify-reach-design.md` owns the approved extension to revolve
+junctions, complete prism cap loops, side-opening/closed shells, tangent-chain
+selection, and asymmetric chamfers. This document remains the shared
+foundation: call semantics, base gates, section rewrite/audit, and shipped
+payloads.
 
 Four tables are normative, and each states its facts **once**:
 
@@ -17,7 +23,7 @@ Around the tables: what a modify op owes and how it refuses (§1), the reduction
 that makes a straight prism's modify ops exact (§2), where the 2D work is
 allowed to live (§5), the fillet (§6), the chamfer (§7), the shell (§8), how
 the results stay Exact (§10), the recipe, the provenance and the replay (§11),
-the increment plan (§13) and the open questions (§14).
+the increment plan (§13) and the reach decisions (§14).
 
 Companion to `docs/api-design.md`, which owns the three signatures, the
 selector contract and the retire rule ("core §N"), and to
@@ -137,10 +143,11 @@ a retired body is S17, by core §6's retire rule.
 
 | R | Receiver payload | `Fillet` / `Chamfer` | `Shell` |
 |---|---|---|---|
-| **R1** | `prismPayload` — an extrude, a filleted body, a chamfered body, a tube (B2/B3), or any of these `Placed` | **builds**; every selected edge must be lateral (else S1) | **builds**; the removed faces must be caps (else S2) |
+| **R1** | `prismPayload` — an extrude, a filleted body, a chamfered body, a tube (B2/B3), or any of these `Placed` | **builds** for lateral edges here; reach RX1 adds complete cap loops | **builds** for cap removal here; reach RX1 adds the B4 multi-lump result and side/no-opening cases |
 | **R2** | `cupPayload` — a one-cap shell (B5/B6) | S3 | S3 |
-| **R3** | `revolvePayload` | S3 | S3 |
-| **R4** | no payload — a body this evaluator did not build (a `Faceted` boolean output) | S3 | S3 |
+| **R3** | `revolvePayload` | reach RX2 for swept meridian junctions; otherwise S3/SX5 | reach RX2; otherwise S3/SX8 |
+| **R4** | `facetedPayload` — a boolean output | reach SX9 | reach SX9 |
+| **R5** | reach payload (`stackedPrismPayload` / `capBlendPayload`) | reach SX10 | reach SX10 |
 
 A full-circle loop is a single closed wall with **no** lateral edge at all
 (evaluator §5 emits no seam), so a cylinder has no edge a fillet can name but
@@ -155,9 +162,9 @@ sentinel follows from it and from nothing else.
 
 | S | The call asked for | Does that body exist? | Sentinel |
 |---|---|---|---|
-| **S1** | a fillet or chamfer of an edge that is not a **lateral** edge of the receiver — a cap edge (a `Line3`, `Arc3` or `Circle3` in a cap plane) | yes | `ErrUnsupported` — the vertex-blend problem (§6) |
-| **S2** | a shell that removes a **side wall** | yes | `ErrUnsupported` — the cavity is then the offset of an open chain, closed against the removed wall's own surface; a different 2D machine |
-| **S3** | a modify op on a receiver whose payload class is not `prismPayload` (R2–R4) | yes | `ErrUnsupported` |
+| **S1** | in the base increment, a fillet or chamfer of an edge that is not a **lateral** edge — reach RX1 replaces this only for complete prism cap loops | yes | `ErrUnsupported` — partial-loop endpoint transition not built |
+| **S2** | in the base increment, a shell that removes a **side wall** — reach RX1 replaces this only for its one proper outer-loop run | yes | `ErrUnsupported` — general open-chain offset not built |
+| **S3** | a modify op on a receiver/target not admitted by Table R or reach Table RX | yes | `ErrUnsupported` |
 | **S4** | a blend or bevel of a corner whose two segments meet **smoothly** (tangent) or in a **cusp** (anti-tangent) | no — there is no corner to blend | `ErrDegenerate` |
 | **S5** | a blend at a corner where **no blend surface of that radius exists**: the two carriers' material-side offsets never meet (parallel lines, concentric circles), or a circular carrier with the material **inside** it has `R − r ≤ 0` — its `r`-offset into the material is empty (`r > R`) or the circle's own centre, whose foot on the arc is not unique (`r = R`) | no | `ErrDegenerate` (§6) |
 | **S6** | a cutback that reaches or passes the far end of a walk — including a far end another corner **in the same call** claims | yes — the blend surface is pinned by its own corner's offsets, and merging the two (or trimming each against what it runs into) builds the body | `ErrUnsupported` (§6) |
@@ -166,7 +173,7 @@ sentinel follows from it and from nothing else.
 | **S9** | a rewrite whose loops neither cross nor make boundary contact but whose **nesting the audit cannot decide** (§5) | this evaluator cannot tell | `ErrUnsupported` — it declines rather than guess |
 | **S10** | an **inward** thickness that leaves **no cavity** — at or beyond the section's **inradius**, or, where a cap is **kept** (B5), at or beyond the sweep's **height**, which that cap's floor consumes | no — the cavity is empty; the wall has eaten the part, across the section or along the sweep. The two limits are independent, and an **outward** thickness has neither: a dilation of a non-empty region is never empty, and an outward floor *adds* height below the kept cap instead of eating it. A **both-caps** shell keeps no cap, so it grows no floor and its cavity runs the whole sweep: only the inradius limit can fire on B2/B4 | `ErrDegenerate` (§8) |
 | **S11** | a shell whose **exact offset changes the section's feature set**, `ErrUnsupported` in either of two shapes at two points in the order. **S11a — a feature the offset drops**, caught **as the offset is built**: a **segment** dropped (a circular segment with the material inside it and `R ≤ t` inward: its offset radius `R − t` reaches zero or goes negative, the arc vanishes and its neighbours miter), or a **loop** dropped (a hole narrower than `2t` outward, whose erosion is empty). It is **antecedent to the §5 audit** — a dropped feature leaves no constructed section to audit — so it precedes S8. **S11b — a loop the offset merges or splits**, caught **by the §5 audit's crossing test** (§5 test 3, in S7's slot between S8 and S9): a slot or gap narrower than `2t` inward, whose two offset walls cross — or, at exactly `2t`, touch. A merge is the expected outcome of an offset, so the shell owns that event and S7 never fires on an offset (§8). | yes | `ErrUnsupported` — this evaluator's offset is per-feature and topology-preserving; resolving either needs a trimmed-offset kernel it does not have (§8) |
-| **S12** | a **both-caps** shell of a **holed** section — the wall is one band around the outer loop plus one band lining each hole: `1 + k` lumps (B4) | yes | `ErrUnsupported` — a `prismPayload` holds one region, and this evaluator has no multi-lump payload (§9, §14) |
+| **S12** | in the base increment, a **both-caps** shell of a **holed** section — the wall is one band around the outer loop plus one band lining each hole: `1 + k` lumps (B4); reach BX8 replaces this after the multi-region stacked payload lands | yes | `ErrUnsupported` — a base `prismPayload` holds one region, and the base evaluator has no multi-lump payload (§9, §14) |
 | **S13** | a **zero radius** or a **zero distance** — a body identical to the one the caller already holds | it exists, and it is the receiver: a question with one answer and no content, exactly as `Verify`'s zero tool is (verification §2) | `ErrDegenerate` |
 | **S14** | a **zero thickness** shell | no — a face is removed and the wall is `P \ P`: the empty region, no solid at all | `ErrDegenerate` |
 | **S15** | a magnitude of the wrong `Kind`, a non-finite one, or a negative one | — | `ErrUnitKind` / `ErrNotFinite` / `ErrNegativeMagnitude` (core §12 names all three by role) |
@@ -402,19 +409,16 @@ increment inherits them rather than shipping them: a concave round — a clockwi
 circular walk on an outer loop — is the first thing a fillet emits, so the
 walk-sense rules are its prerequisite, not its deliverable (§13).
 
-**The corner problem is excluded, not fudged.** Where two blends meet at a
-shared vertex — a lateral edge's blend running into a cap edge's blend — the
-rolling ball has no single surface to sweep: the two cylinders meet in a curve
-that is not on either, and the patch that closes the corner (a vertex blend, a
-setback) is neither a cylinder nor a sphere in general. It is not in the shipped
-surface set, it is not exactly derivable from the record, and an evaluator that
-invented one would be guessing at the very corner an agent asked it to check.
-So the class is drawn where the problem does not arise: **a lateral edge's blend
-terminates on the two caps, and two lateral blends never share a vertex** —
+**The base increment excludes the corner problem.** Where a cap-edge chain ends
+at a vertex, its rolling blend needs an endpoint transition this section rewrite
+does not carry. So the base class is drawn where the problem does not arise:
+**a lateral edge's blend terminates on the two caps, and two lateral blends
+never share a vertex** —
 distinct lateral edges are disjoint, and each blend runs cap to cap, so there is
 no vertex at which two of them meet and no patch that would close one. A cap
-edge is S1, and the vertex blend stays an open question (§14), not a surface
-this evaluator makes up.
+edge is base S1. Reach §8 admits only a **complete** cap loop: its closed
+material-side center path gives named cylinder/torus patches and spherical
+miter patches, while every partial chain remains SX4.
 
 Two lateral blends can still **interfere**, and interference is refused, never
 patched. Two corners of one wall claim it from both ends: S6. Two corners that
@@ -766,6 +770,9 @@ PR-level staging inside evaluator increment 5. Everything not yet landed is
 | 2 | `Chamfer`, equal distance | `Shell`; the asymmetric chamfer (it is not spellable — no option carries it) |
 | 3 | `Shell`: cap removal, the exact erosion and dilation, the §5 topology gates, the tube (B2/B3), the `cupPayload` (B5/B6), and D2/D3/D4 extended to the cup | side-wall removal (S2); the topology-changing offset (S11); the both-caps shell of a holed section (S12) |
 
+Reach PRs A–E follow these base PRs. `docs/modify-reach-design.md` §14 owns
+their order; RX/SX/BX/DX own every additional build and staging result.
+
 After PR 3, D1/D6 remain staged in the implementation. Payload verification
 §13 names their approved cup-boundary and cup-wall stages. Until those stages
 land, the same `Suspect` staging applies; a box-disjoint cup pair with no
@@ -776,53 +783,28 @@ walked-boundary `Edge.IsConvex` — are a **prerequisite**, not a deliverable. T
 belong to the prism build, which reads them on profiles a fillet has nothing to
 do with; PR 1 builds on them and carries none of them.
 
-## 14. Open questions
+## 14. Reach decisions
 
-- **The vertex blend.** A cap-edge fillet (S1), and therefore any blend chain
-  that turns a corner, needs a surface for the vertex where three blends meet.
-  It is not a cylinder, not a sphere, and not exactly derivable from the section
-  — which is why §6 excludes it rather than approximating it. What it should be
-  (a setback patch? a spherical corner where the three radii agree, and
-  `ErrUnsupported` where they do not?) is undecided, and it is the single
-  largest thing standing between this increment and general edge chains.
-- **Blend merging.** Two corners of one short wall, filleted in one call so that
-  their cutbacks overlap, is S6: the two blend surfaces exist, and a kernel that
-  merges them into one — or trims each against what it runs into — builds the
-  body. Whether this evaluator should grow that resolution step, or whether a
-  caller who asks for it is better served by the refusal, is undecided.
-- **The topology-changing offset.** S11 — a shell whose exact offset merges two
-  loops (a slot narrower than twice the wall) or drops a segment. Resolving it
-  needs a trimmed-offset kernel — the same machinery the tapered extrude wants
-  (evaluator §12), which suggests one kernel, one increment, and both callers.
-- **The multi-lump result.** S12 — a both-caps shell of a holed section is
-  `1 + k` disjoint bands (B4), and no payload in this evaluator holds a
-  disconnected region: a `ProfileRecord` is one outer loop and its holes, and a
-  `prismPayload` holds one. A multi-region payload (a list of `ProfileRecord`s,
-  one lump each, sharing a frame and an interval) would build it, and would also
-  be what a boolean that splits a body needs (evaluator §9). Whether that payload
-  is worth its cost, and which increment owns it, is undecided; until it exists,
-  the refusal stands.
-- **The no-opening shell.** A hollow closed body — the only shape with a genuine
-  `IsVoid` shell — is a shell that removes no face, and the selector vocabulary
-  has no way to ask for it: core §9 makes an empty match an error (S16), and a
-  cardinality assertion takes a positive count, so a *satisfied* assertion of
-  zero is not a spelling the contract offers. Asking for it therefore means adding
-  something — a nullary `WithNoOpenings()` option is the obvious candidate — and
-  nothing is chosen. Admitting a zero-count assertion instead would be a change to
-  the selector contract, which is core §9's to make, not this document's.
-- **Ancestor provenance across a consuming op.** §11 mints every role of a result
-  from the record it labels, so no face of a modified body carries the extrude's
-  refs, and `FaceCreatedBy` of an earlier step selects nothing on it. A face can
-  hold several refs (evaluator §3 unions them on a canonicalization merge), so
-  carrying the ancestor's `(step, role)` **alongside** the result's own is
-  expressible — but it is a change to what `FaceCreatedBy` promises across a
-  consuming op, and that promise is core §9's to make.
-- **The asymmetric chamfer**, and the **variable-radius fillet**: both are
-  options with nowhere to land until `ChamferOpts` and `FilletOpts` carry a
-  field, and both are recordable when they do. Neither is in v1.
-- **Modify ops on a revolve.** A revolve's meridian section stands to its body
-  exactly as a prism's section stands to its own — a latitude-circle edge is a
-  meridian corner, and rounding that corner sweeps a **torus**, which is in the
-  shipped surface set. The reduction of §2 looks like it generalizes intact. It
-  is not designed here (R3 refuses today), and whether it is increment 5's or a
-  later one's is open.
+`docs/modify-reach-design.md` resolves the former reach questions:
+
+- cap-edge support requires a complete prism cap loop; line/circle center paths
+  produce cylinder/torus patches, and miter points produce trimmed sphere
+  patches;
+- patch/offset merging remains a deliberate `ErrUnsupported` limit;
+- topology-changing offsets remain a deliberate `ErrUnsupported` limit;
+- `stackedPrismPayload` owns multi-region axial slabs, replaces `cupPayload`,
+  and lifts S12 by holding the B4 outer band plus every hole-lining band;
+- minimum wall on cap-blend/stacked payloads deliberately reads `Suspect` when
+  asked;
+- clearance reads exposed analytic faces of the new payloads and may return its
+  existing undecided pair result;
+- `WithNoOpenings()` spells a closed shell and is the only nil-selector shell;
+- consuming modify results do not inherit ancestor face roles;
+- `WithAsymmetricChamfer` carries a reference face + second distance;
+- `WithTangentChain` expands only through proven analytic G1 continuations;
+- revolve meridian junctions reuse the exact section rewrite;
+- variable-radius fillets, partial cap chains, mixed edge classes, and all
+  faceted receivers stay explicitly unsupported.
+
+The extension's PR order and required tests are reach §§13–14. No reach choice
+in this document remains open.

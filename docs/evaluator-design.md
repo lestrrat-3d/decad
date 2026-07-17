@@ -527,5 +527,7 @@ numbers.
   B-spline form; decad will not duplicate the solve.
 - **Tapered extrude** (§5) needs an offset formulation that rejects
   self-intersecting offsets rather than producing them.
-- **Fillet/chamfer reach** in increment 5 is straight-prism edges first;
-  general edge chains are open.
+- **Modify reach is decided.** `docs/modify-reach-design.md` extends increment
+  5's modify ops with staged sub-items (RX/SX/BX/DX), including exact admitted
+  cases and permanent `ErrUnsupported` boundaries; these stages do not consume a
+  global evaluator increment number.

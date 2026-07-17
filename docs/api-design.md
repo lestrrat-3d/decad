@@ -662,9 +662,19 @@ type StepOpts interface{ stepOpts() } // sealed
 
 type ExtrudeOpts struct { Taper units.Value; /* ... */ }
 type RevolveOpts struct { /* ... */ }
-type FilletOpts  struct { /* ... */ }
-type ChamferOpts struct { /* ... */ }
-type ShellOpts   struct { /* ... */ }
+type FilletOpts  struct { TangentChain bool }
+type AsymmetricChamferOpts struct {
+    Reference FaceSelector
+    Other     units.Value
+}
+type ChamferOpts struct {
+    TangentChain bool
+    Asymmetric  *AsymmetricChamferOpts
+}
+type ShellOpts struct {
+    Sense      ShellSense
+    NoOpenings bool
+}
 ```
 
 The completeness rule applied to options: **every `ExtrudeOption`,
@@ -898,6 +908,26 @@ func (b *Body) Fillet(sel EdgeSelector, r units.Value, opts ...FilletOption) (*B
 func (b *Body) Chamfer(sel EdgeSelector, d units.Value, opts ...ChamferOption) (*Body, error)
 func (b *Body) Shell(sel FaceSelector, thickness units.Value, opts ...ShellOption) (*Body, error)
 ```
+
+Modify reach options are recordable intent, not evaluator switches:
+
+```go
+type FilletChamferOption interface {
+    FilletOption
+    ChamferOption
+}
+
+func WithTangentChain() FilletChamferOption
+func WithAsymmetricChamfer(reference FaceSelector, otherDistance units.Value) ChamferOption
+func WithNoOpenings() ShellOption
+```
+
+`WithTangentChain` expands selected seeds only through proven analytic G1
+continuations. `WithAsymmetricChamfer` applies positional `d` on `reference`
+and `otherDistance` on the other adjacent face. `WithNoOpenings` is the only
+shell form that accepts `sel == nil`; it conflicts with a non-nil selector.
+`docs/modify-reach-design.md` owns exact receiver/target limits, refusal order,
+payloads, and recipe encoding.
 
 Placement is a body operation on the same terms — it retires the receiver and
 registers the placed body:
