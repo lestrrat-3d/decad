@@ -140,7 +140,7 @@ func (d *Document) resolveToFace(tf ToFace, frame r3.Frame, travel float64, what
 		// cap), not merely a flat face: a boolean-built face can be flat
 		// (isPlanar) yet carry a Faceted surface, and this evaluator cannot use
 		// it as a stop. %T reports the actual surface so the caller sees why.
-		return 0, 0, fmt.Errorf(`%w: ToFace requires a stop face with an analytic planar surface (an extrude/revolve cap) whose normal is parallel to the sweep direction, not merely a flat face; this face's surface is %T, which this evaluator cannot use as a stop even when flat — choose an analytic planar cap face or use a Distance (or, inside a TwoSided extent, DistanceSide) extent`, ErrUnsupported, face.Surface())
+		return 0, 0, fmt.Errorf(`%w: ToFace requires a stop face with an analytic Plane surface whose normal is parallel to the sweep direction, not merely a flat face; this face's surface is %T, which this evaluator cannot use as a stop even when flat — choose any analytic planar face with that orientation, or use a Distance (or, inside a TwoSided extent, DistanceSide) extent`, ErrUnsupported, face.Surface())
 	}
 	n := frame.N()
 	if !parallelDirs(pl.Frame.N(), n) {
@@ -361,7 +361,7 @@ func (st angularStops) resolveToFaceAngular(tfa ToFaceAngular, travel float64, w
 		// cap), not merely a flat face: a boolean-built face can be flat
 		// (isPlanar) yet carry a Faceted surface, and this evaluator cannot use
 		// it as a stop. %T reports the actual surface so the caller sees why.
-		return 0, 0, fmt.Errorf(`%w: ToFaceAngular requires a stop face with an analytic planar surface (a revolve radial cap) whose plane contains the revolve axis, not merely a flat face; this face's surface is %T, which this evaluator cannot use as a stop even when flat — choose an analytic planar radial face or use an angle extent (AngleExtent, or AngleSide inside a TwoSidedAngle extent)`, ErrUnsupported, face.Surface())
+		return 0, 0, fmt.Errorf(`%w: ToFaceAngular requires a stop face with an analytic Plane surface whose plane contains the revolve axis, not merely a flat face; this face's surface is %T, which this evaluator cannot use as a stop even when flat — choose any analytic planar face whose plane contains the axis, or use an angle extent (AngleExtent, or AngleSide inside a TwoSidedAngle extent)`, ErrUnsupported, face.Surface())
 	}
 	nf := pl.Frame.N()
 	if math.Abs(nf.Dot(st.w)) > stopTol {

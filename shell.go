@@ -188,7 +188,7 @@ func (b *Body) Shell(sel FaceSelector, t units.Value, opts ...ShellOption) (*Bod
 				// the accepted maximum is non-positive — no positive thickness
 				// leaves a cavity. A smaller thickness cannot help; the section
 				// must be enlarged.
-				return nil, fmt.Errorf(`%w: the section's inradius %s is at or below the evaluator's rounding tolerance, so no positive shell thickness leaves a cavity; enlarge the section`, ErrDegenerate, units.Millimeters(inradius))
+				return nil, fmt.Errorf(`%w: the section's inradius %s is at or below the evaluator's rounding tolerance, so this evaluator accepts no positive shell thickness here (the tolerance-adjusted maximum is non-positive); enlarge the section`, ErrDegenerate, units.Millimeters(inradius))
 			}
 			return nil, fmt.Errorf(`%w: the shell thickness %s meets or exceeds the accepted maximum %s (the section's inradius %s less the evaluator's rounding tolerance); use a thickness strictly below the accepted maximum`, ErrDegenerate, t, units.Millimeters(maxT), units.Millimeters(inradius))
 		}
@@ -206,7 +206,7 @@ func (b *Body) Shell(sel FaceSelector, t units.Value, opts ...ShellOption) (*Bod
 				// so the accepted maximum is non-positive — no positive thickness
 				// leaves a floor cavity. A smaller thickness cannot help; the
 				// sweep height must be increased.
-				return nil, fmt.Errorf(`%w: the sweep height %s is at or below the evaluator's rounding tolerance, so no positive shell thickness leaves a cavity; increase the sweep height`, ErrDegenerate, units.Millimeters(h))
+				return nil, fmt.Errorf(`%w: the sweep height %s is at or below the evaluator's rounding tolerance, so this evaluator accepts no positive shell thickness here (the tolerance-adjusted maximum is non-positive); increase the sweep height`, ErrDegenerate, units.Millimeters(h))
 			}
 			return nil, fmt.Errorf(`%w: the shell thickness %s meets or exceeds the accepted maximum %s (the sweep height %s less the evaluator's rounding tolerance); use a thickness strictly below the accepted maximum`, ErrDegenerate, t, units.Millimeters(maxT), units.Millimeters(h))
 		}
