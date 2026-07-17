@@ -9,8 +9,10 @@ core contract this evaluator implements — references of the form "core §N"),
 `docs/verification-design.md` (how its answers are judged), and
 `docs/recipe-replay-design.md` (strict loading, graph validation,
 whole-recipe atomicity, and the package-owned evaluator boundary). Nothing here
-changes those contracts; where this document stages a capability, the staging
-is explicit and rejected loudly, never silently approximated.
+changes those contracts. `docs/tessellation-design.md` owns the tessellation
+contract and the private operand proofs the boolean consumes. Where this
+document stages a capability, the staging is explicit and rejected loudly,
+never silently approximated.
 
 ## 1. Two sources of truth, one direction
 
@@ -266,9 +268,12 @@ Increment 4, the deep end. Strategy:
   core §8 expose no tolerance parameter, on purpose). What IS caller-visible
   is the proven bound the output carries: the tolerance's whole effect
   surfaces as `Bound`/`Exactness`, judged by the caller's `WithTolerance` at
-  Verify. The machinery is `Tessellate(tol)`'s, with per-surface analytic
-  tessellators, a proven per-facet deviation bound δ_t, and facets that
-  remember their source face.
+  Verify. The machinery and its payload staging are
+  `docs/tessellation-design.md`'s: every mesh carries a two-sided boundary
+  bound, source faces, and area slack. A boolean-admissible mesh additionally
+  carries a proven occupied-volume symmetric-difference allowance. Export
+  needs the boundary proof; a boolean rejects an operand that does not carry
+  the occupied-volume proof.
 - **Robust mesh boolean in-repo, stdlib-only.** The curated-dependency rule
   stands: no third-party mesh kernel. The algorithm is the exact-predicate
   route: triangle/triangle intersection and point classification decided by
@@ -366,8 +371,9 @@ Increment 4, the deep end. Strategy:
   (a hole wall's two rims bound a tube), so there the longest boundary stands as
   the deterministic bookkeeping choice; validity never reads it. Measurements
   integrate the mesh exactly and report the verification-design
-  bound shapes (volume bound ≈ δ_t · area, by the symmetric-difference
-  identity, which the rim never enters) — `Approximate`, except the §2
+  bound shapes (volume composes the operands' own proven mesh
+  symmetric-difference allowances by the set identity; the rim never enters
+  that allowance) — `Approximate`, except the §2
   Exact-volume case: an all-planar pair whose contacts round exactly leaves the
   exact volume integral with a genuinely zero bound.
 - **The rim is NOT bounded by δ_t.** A vertex an operand's tessellation
@@ -452,7 +458,7 @@ silent pass.
 | 1 | topology model, `Document`/`Recipe`/`Step` wiring, `Extrude` for line/circle/arc profiles with `Distance`/`Symmetric`/`TwoSided`-of-distance-sides extents, mass properties (§4), `Placed`, structural `Verify` (validity by construction, quantities, tolerance gate; every pair undecided → `Suspect` unless box-proven disjoint) |
 | 2 | `Revolve` (angular extents), selector vocabulary + resolution, the body-relative stops (`ToFace`/`ToFaceAngular`/`EdgeAxis`, `ThroughAll`/`ThroughAllSide`) |
 | 3 | analytic clearance proofs and `WithClearances` (box-disjointness proofs already run from increment 1, §10/§11 row 1) |
-| 4 | tessellation + the exact-predicate mesh boolean, `Faceted` bodies, faceted `Verify`, `Tessellate`/`STL`/`OBJ` |
+| 4 | tessellation per `docs/tessellation-design.md` + the exact-predicate mesh boolean, `Faceted` bodies, faceted `Verify`, `Tessellate`/`STL`/`OBJ` |
 | 5 | fillet/chamfer on analytic prism edges, shell |
 | 6 | bounded canonical recipe encode, strict versioned decode, full operation/reference validation with deterministic error precedence, resource budgets, shared recorded-step dispatch, atomic public `Evaluate`, replay/property/fuzz suite |
 | 7 | free-form side surfaces (`NURBSSurface` from recorded control data), tapered extrude if a sound offset story exists |

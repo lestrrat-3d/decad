@@ -8,9 +8,11 @@ Companion designs carry the deep ends of this contract: the recording
 contract at the sketch seam — the trim contract, the recording IR, and
 `ErrUnrecordableProfile` — is specified in `docs/sketch-seam-design.md`; strict
 recipe decoding, validation, versioning, resource limits, and atomic evaluation
-are specified in `docs/recipe-replay-design.md`; and how verification judges
-every bounded result — the report, the tolerance gate, and the noise floor — is
-specified in `docs/verification-design.md`.
+are specified in `docs/recipe-replay-design.md`; how verification judges every
+bounded result — the report, the tolerance gate, and the noise floor — is
+specified in `docs/verification-design.md`; and the mesh contract, per-payload
+chording, proof bounds, and boolean handoff are specified in
+`docs/tessellation-design.md`.
 
 ## 1. What decad is answerable for
 
@@ -1162,6 +1164,13 @@ func (b *Body) Tessellate(tol units.Value) (*Mesh, error) // an OUTPUT, not the 
 func (b *Body) STL(w io.Writer, opts ...STLOption) error
 func (b *Body) OBJ(w io.Writer, opts ...OBJOption) error
 ```
+
+`docs/tessellation-design.md` is normative for the mesh these calls consume and
+return: shared boundary samples, two-sided `Mesh.Bound`, source-face mapping,
+area slack, the symmetric-difference proof a boolean requires, and explicit
+per-payload staging. A payload with no complete boundary proof is never
+exported. A mesh without the separate occupied-volume proof is never admitted
+to a boolean by an unproved generic bound.
 
 **Fusion codegen is out of scope for v1.** `Document.Recipe()` exposes the exact
 record of intent as inspectable data; emitting a Fusion add-in from it is a
