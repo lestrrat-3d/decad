@@ -45,7 +45,8 @@
 // evaluator and verification surface — remains design-only. The
 // contract for the whole surface is docs/api-design.md — the core design.
 // Companion designs carry its deep ends in docs/sketch-seam-design.md,
-// docs/recipe-replay-design.md, and docs/verification-design.md. Every
+// docs/recipe-replay-design.md, docs/verification-design.md, and
+// docs/tessellation-design.md. Every
 // capability it consumes from sketch, r3 and units exists today — no open
 // dependency gaps — and nothing that contradicts it may be added to this
 // package.

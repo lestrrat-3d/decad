@@ -58,20 +58,22 @@ data on every `Mesh`:
 
 | Proof | Meaning | Consumer |
 |---|---|---|
-| `sourceBound(face)` | two-sided displacement between the true operand face patch and the held facets used by the current boolean; analytic faces carry current chording error, faceted faces carry inherited/composed boundary-certificate error | boolean hidden-tangency pre-pass |
+| `sourceBound(face)` | two-sided displacement between the true operand face patch and the held facets used by the current boolean; analytic faces carry every current tessellation displacement, including proven placement rounding, and faceted faces carry inherited/composed boundary-certificate error | boolean hidden-tangency pre-pass |
 | `areaSlack` | upper bound on `abs(Area(true boundary) - Area(mesh boundary))` | boolean result area bounds |
 | `volSymDiff` + `symDiffOK` | upper bound on `volume(TrueBody △ MeshSolid)`, present only after that payload's occupied-volume proof lands | boolean operand error composition |
 
 `sourceBound` and `areaSlack` are mandatory for every returned mesh.
 `volSymDiff` is mandatory before a boolean may consume it; an export-only
 increment may return a mesh with `symDiffOK == false`. `Mesh.Bound()` is the
-maximum `sourceBound` over the body. For an analytic payload, each source bound
-is the displacement introduced by current chording. A faceted restatement
-copies each face's inherited boundary-certificate displacement; when the
-payload carries only one global composed displacement `Delta`, every faceted
-face uses `Delta`. It is zero only when the inherited certificate proves that
-face exact. A proof is rounded up at every sum/product that could understate it.
-A non-finite proof is a refusal, never an infinite bound.
+maximum `sourceBound` over the body, for every payload class. For an analytic
+payload, each source bound includes every displacement introduced by the
+current tessellation, including any proven final-placement rounding allowance.
+A faceted restatement copies each face's inherited boundary-certificate
+displacement; when the payload carries only one global composed displacement
+`Delta`, every faceted face uses `Delta`. It is zero only when the inherited
+certificate proves that face exact. A proof is rounded up at every sum/product
+that could understate it. A non-finite proof is a refusal, never an infinite
+bound.
 
 A `facetedPayload` boundary certificate MUST retain global composed `Delta`.
 It MAY retain a tighter displacement per live faceted face. Every per-face value
@@ -94,8 +96,8 @@ The payload table is normative:
 |---|---|---|---|---|---|
 | `prismPayload` | one chording per recorded section loop, shared by walls + caps | current sagitta for that analytic wall; zero for exact planar patches | max per-face source bound | wall chord deficits + both cap circular-segment deficits | section symmetric-difference allowance × sweep height (§5) |
 | `cupPayload` | one chording per outer/cavity loop, shared by walls + floors + rims | current sagitta for that analytic wall; zero for exact planar patches | max per-face source bound | absolute per-wall/per-planar-patch differences | outer-prism allowance + cavity-prism allowance (§6) |
-| `revolvePayload` | one meridian chording + one global angular sequence | current meridian + angular displacement for that analytic patch; zero for exact planar patches | max per-face source bound (§8) | absolute true-vs-held difference per wall cell + cap deficits (§10) | construction-homotopy allowance (§11) |
-| `facetedPayload` | held polygons + inherited boundary certificate | inherited certified face displacement, or global composed `Delta` when no tighter face value exists | payload's composed `Delta` | payload's composed slack | payload's composed symmetric-difference bound |
+| `revolvePayload` | one meridian chording + one global angular sequence, then final rigid placement | current meridian + angular displacement for that analytic patch, plus final-placement rounding `deltaR`; `deltaR` for otherwise exact planar patches | max per-face source bound (§8) | absolute true-vs-held difference per wall cell + cap deficits + placement area allowance (§10) | construction-homotopy + placement-sweep allowance (§11) |
+| `facetedPayload` | held polygons + inherited boundary certificate | inherited certified face displacement, or global composed `Delta` when no tighter face value exists | max per-face source bound | payload's composed slack | payload's composed symmetric-difference bound |
 
 ## 3. Shared curve chording
 
@@ -123,9 +125,28 @@ circular revolve generator whose two ends are on the axis uses at least two
 meridian chords (§9).
 
 One curve may use at most `maxChordsPerWalk` chords. The global revolve angular
-sequence has the same cap. Check integer multiplication and allocation sizes
-before building any slice. Overflow or a finer request than the caps admit →
-`ErrUnsupported`.
+sequence has the same cap. The complete call also has these fixed ceilings:
+
+```text
+maxFacetsPerMesh         = 65_536
+maxFacetWorkPerCall      = 262_144
+maxFacetPairTestsPerCall = 8_000_000
+```
+
+`maxFacetWorkPerCall` counts every facet assembled across the initial attempt
+and every refinement retry. `maxFacetPairTestsPerCall` counts every exact
+facet-pair predicate invocation across all endpoint and placement-homotopy
+audits. Neither counter resets during refinement.
+
+Before building any slice, derive the candidate facet count from every walk's
+chord count and the global angular count with checked integer arithmetic. Refuse
+if that attempt exceeds `maxFacetsPerMesh`, or if adding it would exceed
+`maxFacetWorkPerCall`. Before each all-pairs audit, compute the conservative
+upper bound `F*(F-1)/2` with checked arithmetic and refuse if adding it would
+exceed `maxFacetPairTestsPerCall`; adjacency may reduce actual tests but never
+raises the admitted ceiling. Overflow or a finer request than any cap admits →
+`ErrUnsupported`. No facet allocation or pair predicate starts before its
+corresponding preflight passes.
 
 A requested tolerance is an upper bound, not a density request. The tessellator
 may refine beyond the first admissible `n` to prove topology, non-intersection,
@@ -225,13 +246,16 @@ twice.
 A `facetedPayload` has lost analytic identity. `Tessellate` therefore restates
 its held vertices and polygons; it NEVER fits or refines them.
 
-- Requested `tol < payload.meshBound` → `ErrUnsupported`.
-- Otherwise return the held connectivity and held bound unchanged.
+- First populate every face's `sourceBound` from the complete inherited
+  certificate, using global `Delta` for each missing or incompletely composed
+  face, then set `facetedBound = max(sourceBound(face))`.
+- Requested `tol < facetedBound` → `ErrUnsupported`.
+- Otherwise return the held connectivity and `facetedBound`. Retain the
+  certificate's global `Delta` privately for fallback and later composition;
+  it is not a second public `Bound` rule.
 - Map every facet group to the corresponding live faceted face.
-- Copy each faceted face's inherited boundary-certificate displacement into
-  `sourceBound`. If the payload carries only global composed `Delta`, use it for
-  every faceted face. NEVER set it to zero merely because no new chording ran;
-  zero requires a certificate that the true patch equals its held polygons.
+- NEVER set `sourceBound` to zero merely because no new chording ran; zero
+  requires a certificate that the true patch equals its held polygons.
 - Copy `areaSlack` and `volSymDiff`; do not recompute either from the held mesh.
 
 The copied `sourceBound`, `Bound`, and `volSymDiff` remain relative to the true
@@ -248,21 +272,42 @@ recorded profile into axis coordinates `(z, rho)`, with `rho >= 0`, and use:
 X(z, rho, phi) = axisOrigin + z*w + rho*(cos(phi)*e0 + sin(phi)*e1)
 ```
 
-The rigid placement is applied last and changes no geometric bound.
+Build in this unplaced axis frame. Apply the accumulated rigid placement once,
+after assembly. Exact rigid placement is an isometry, but storing its computed
+coordinates in binary64 is not exact. Charge that final write as `deltaR`.
 
-Compute `rhoMax` exactly from the payload's line/arc walks: endpoints plus
-every circular cardinal point inside a walk's parameter interval. `rhoMax`
-is global across outer and hole loops. Non-positive or non-finite `rhoMax` is
-an invariant failure; no revolved solid exists entirely on the axis.
+Compute `rhoMax` and `zAbsMax` exactly from the payload's line/arc walks:
+endpoints plus every circular cardinal point inside a walk's parameter
+interval. Both are global across outer and hole loops. Non-positive or
+non-finite `rhoMax`, or non-finite `zAbsMax`, is an invariant failure; no
+revolved solid exists entirely on the axis.
+
+Before choosing chord counts, compute an upward-rounded `coordMax` for every
+unplaced analytic-boundary coordinate:
+
+```text
+coordMax = max_j upRound(
+    abs(axisOrigin_j) + zAbsMax*abs(w_j) +
+    rhoMax*(abs(e0_j) + abs(e1_j)))
+```
+
+Let `translationMax` be the maximum absolute component of the accumulated
+placement's translation. Use the evaluator's proven
+`rigidRoundAllow(coordMax, translationMax)` as `deltaR`; it covers the final
+rotation/addition/write in three-dimensional distance. An identity placement
+that performs no coordinate operation has `deltaR = 0`. Non-finite `coordMax`,
+`translationMax`, or `deltaR` → `ErrUnsupported`.
 
 Split the tolerance in this order:
 
-1. Give meridian curves `tol/2` as their initial budget.
-2. Chord every coalesced meridian walk and record the largest actual sagitta
+1. Compute `available = tol - deltaR`; non-positive `available` refuses with
+   `ErrUnsupported`.
+2. Give meridian curves `available/2` as their initial budget.
+3. Chord every coalesced meridian walk and record the largest actual sagitta
    `deltaM`.
-3. Give angular chording `tol - deltaM`; this is positive because
-   `deltaM <= tol/2`.
-4. Choose one global angular count from `rhoMax` and that remaining budget.
+4. Give angular chording `available - deltaM`; this is positive because
+   `deltaM <= available/2`.
+5. Choose one global angular count from `rhoMax` and that remaining budget.
 
 For maximum angular step `dphi`, the angular displacement is:
 
@@ -271,7 +316,8 @@ deltaPhi = 2 * rhoMax * sin²(dphi / 4)
 ```
 
 Walk the angular count upward until the upward-rounded
-`deltaM + deltaPhi <= tol`. `Mesh.Bound()` is that sum, not either budget.
+`deltaM + deltaPhi + deltaR <= tol`. `Mesh.Bound()` is that sum, not any
+individual budget.
 
 A partial sweep has `nPhi + 1` angular samples and includes `phi0` and `phi1`
 exactly. A full revolution has `nPhi` samples, uses cyclic indices, and does
@@ -323,9 +369,9 @@ sample. More generally, a circular generator with positive interior `rho`
 cannot chord to an axis-only polyline. Refine it; budget exhaustion →
 `ErrUnsupported`.
 
-Detect numerical ring collapse before emitting facets. A payload sample with
-`rho > 0` whose angular vertices coincide, whose radius is not representable,
-or whose fan has zero area is not an axis sample. Refuse it as
+Detect numerical ring collapse both before and after final placement. A payload
+sample with `rho > 0` whose angular vertices coincide, whose radius is not
+representable, or whose fan has zero area is not an axis sample. Refuse it as
 `ErrUnsupported`; NEVER merge it into a pole.
 
 Partial caps use the §5 polygon-with-holes triangulation in the `(z, rho)`
@@ -333,34 +379,50 @@ plane, mapped at `phi0` and `phi1`. They reuse all meridian samples and all
 pole vertices. An on-axis line emits no wall, but its one geometric edge is
 shared by both caps. Full revolutions emit no caps.
 
-After assembly, test every pair of non-adjacent facets with the boolean's exact
-triangle predicates. Shared vertices and shared edges are the only admitted
-contacts. A coarse sphere, spindle-like near-axis patch, or concave torus patch
-that crosses another patch is refined before retry. No proof before the budget
-is exhausted → `ErrUnsupported`.
+After unplaced assembly, preflight §3's cumulative pair-work budget, then test
+every pair of non-adjacent facets with the boolean's exact triangle predicates.
+Shared vertices and shared edges are the only admitted contacts. A coarse
+sphere, spindle-like near-axis patch, or concave torus patch that crosses
+another patch is refined before retry. No proof before the refinement or work
+budget is exhausted → `ErrUnsupported`.
+
+Exact placement preserves that result. Coordinate rounding does not. After the
+final placement, run the endpoint audit again and certify the affine homotopy
+from each exact rigid-image vertex to its stored binary64 vertex. Over the whole
+closed interval, every facet MUST stay positive-area; adjacent facet interiors
+MUST meet only on their shared vertex/edge paths; every non-adjacent pair MUST
+stay disjoint. The facet normals and moving contact predicates are fixed-degree
+polynomials in the homotopy parameter. Isolate their roots exactly over the
+binary64 inputs with `math/big.Rat`; any zero, unisolated sign, or contact is
+`ErrUnsupported`. Sampling or checking only the two endpoints is not a proof.
+Preflight and charge this audit to §3's cumulative pair-work budget before
+starting it. This homotopy certificate preserves shell/component topology and
+nesting while the rounding allowance is swept.
 
 ## 10. Revolve boundary proofs
 
 ### 10.1 Two-sided displacement
 
-Let `S` be one true wall patch, `S_M` the same patch with only its meridian
-curve replaced by chords, and `T` the returned triangles.
+Let `S` be one true placed wall patch, `S_M` the same patch with only its
+meridian curve replaced by chords, `T_E` the angularly chorded triangles after
+exact rigid placement, and `T` the stored triangles after placement rounding.
 
 - Rotating a meridian chord is an isometry at each `phi`, so
   `Hausdorff(S, S_M) <= deltaM`.
 - Angular chording moves a point at radius `rho` by at most
   `2 rho sin²(dphi/4) <= deltaPhi`.
-- §9 proves the angularly chorded `S_M` cell is exactly the two triangles.
+- §9 proves the angularly chorded `S_M` cell is exactly `T_E`.
+- Final placement rounding gives `Hausdorff(T_E, T) <= deltaR`.
 
 Triangle inequality gives both directions:
 
 ```text
-Hausdorff(S, T) <= deltaM + deltaPhi
+Hausdorff(S, T) <= deltaM + deltaPhi + deltaR
 ```
 
-For a partial cap, angular error is zero and the bound is `deltaM`. A planar
-cap with only line edges has zero source bound. Take the maximum source-face
-bound for `Mesh.Bound()`.
+For a partial cap, angular error is zero and the bound is `deltaM + deltaR`. A
+planar cap with only line edges has source bound `deltaR`. Take the maximum
+source-face bound for `Mesh.Bound()`.
 
 ### 10.2 Area slack
 
@@ -372,14 +434,25 @@ Atrue = hPhi * integral_gamma rho ds
 ```
 
 The integral is closed form for line and circular walks; evaluator §6 already
-uses it for analytic revolve face area. Let `Aheld` be the sum of the one or
-two emitted triangle areas. Add upward-rounded `abs(Atrue - Aheld)` for the
-cell. Pole fans use the same formula.
+uses it for analytic revolve face area. Let `Apre` be the sum of the one or two
+emitted triangle areas before final placement. Exact rigid placement preserves
+`Apre`. Add upward-rounded `abs(Atrue - Apre)` for the cell. Pole fans use the
+same formula.
 
 For each partial cap, add the absolute circular-segment area between every
 meridian arc and its chords. Cap triangulation is exact for the chorded planar
-region. Add float summation slack after the per-cell bounds; NEVER rely on
-signed cancellation between cells, faces, or loops.
+region. Then charge placement rounding per triangle. If its two pre-placement
+edge vectors are `a` and `b`, moving each vertex by at most `deltaR` changes its
+area by at most:
+
+```text
+Rarea_triangle = deltaR*(length(a) + length(b)) + 2*deltaR^2
+```
+
+Sum `Rarea_triangle` upward over every wall and cap triangle. Add proven
+arithmetic slack for each length, product, and sum. Add this placement allowance
+after the per-cell/cap bounds; NEVER rely on signed cancellation between cells,
+faces, or loops.
 
 ## 11. Symmetric-difference proof and booleans
 
@@ -389,17 +462,18 @@ difference: a torus's inner and outer walls move in opposite material senses,
 and a doubly-curved chord cell can gain material while another loses it. The
 signed volume error may cancel while the symmetric difference does not.
 
-The revolve mesh MUST carry a construction-homotopy proof. Define:
+The revolve mesh MUST carry construction and placement homotopy proofs. Define:
 
-- `B0`: the analytic revolved body;
+- `B0`: the analytic revolved body after exact rigid placement;
 - `BM`: the body obtained by replacing each circular meridian subarc with its
-  chord, then revolving that chorded section exactly;
-- `BH`: the closed polyhedron returned by the angular chording.
+  chord, then revolving that chorded section and placing it exactly;
+- `BH`: the angularly chorded closed polyhedron after exact rigid placement;
+- `BR`: the returned closed polyhedron after placement-coordinate rounding.
 
 Use the set triangle inequality:
 
 ```text
-volume(B0 △ BH) <= volume(B0 △ BM) + volume(BM △ BH)
+volume(B0 △ BR) <= volume(B0 △ BM) + volume(BM △ BH) + volume(BH △ BR)
 ```
 
 The meridian term has a closed-form upper bound. For circular-segment sliver
@@ -444,10 +518,17 @@ shared edges; partial caps stay fixed because both angular endpoints stay
 fixed. Every intermediate boundary is therefore a closed 2-cycle. Any point
 whose inside/outside membership changes is crossed by that boundary, so the
 area formula counts it at least once; the sum of absolute swept volumes bounds
-the symmetric difference. Then:
+the construction symmetric difference.
+
+For the final term, §9's exact placement homotopy keeps every intermediate
+boundary a closed 2-cycle. Bound its absolute swept volume with the evaluator's
+`sweptVolumeAllow(deltaR, perturbedAreaUpper(BH, deltaR))`; the area argument
+covers the pre-round surface and every surface on the way, including a facet
+that would otherwise flatten. Call the upward-rounded result `Mround`. Then:
 
 ```text
-volSymDiff_revolve = upRound(Mmeridian + sum_cells Icell + arithmeticSlack)
+volSymDiff_revolve = upRound(
+    Mmeridian + sum_cells Icell + Mround + arithmeticSlack)
 ```
 
 Until every cell has this finite proof, revolve `Tessellate` may serve export,
@@ -479,10 +560,13 @@ therefore preserve both the faceted boundary certificate used by `sourceBound`
 and the composed `volSymDiff`.
 
 When building the result `facetedPayload`, assign each result face a displacement
-covering every inherited source patch and every new-rim displacement that can
-reach it. Until a tighter per-face composition is proven, assign result global
-`Delta` to every face. This makes the next boolean's hidden-tangency pre-pass
-sound without reconstructing analytic identity.
+covering every inherited `sourceBound` and every new-rim displacement that can
+reach it. Set `boundaryCert.Delta` to the upward-rounded maximum of those
+complete result-face values. If per-face composition is incomplete, use the
+conservative composed `Delta` for every result face before taking that maximum.
+Thus every faceted operand `sourceBound`, including a global-`Delta` fallback,
+flows into the next result's `boundaryCert.Delta`. This makes the next boolean's
+hidden-tangency pre-pass sound without reconstructing analytic identity.
 
 ## 12. Refusals
 
@@ -492,14 +576,15 @@ Refuse before returning any partial mesh:
 |---|---|
 | invalid tolerance | core §12's kind/finite/sign sentinel; zero is `ErrDegenerate` |
 | payload class not implemented | `ErrUnsupported` |
-| faceted request finer than held bound | `ErrUnsupported` |
-| meridian/angular/total facet budget exceeded or integer size overflow | `ErrUnsupported` |
-| non-finite `rhoMax`, sagitta, area slack, source bound, or symmetric-difference allowance | `ErrUnsupported` unless it proves an impossible payload invariant |
+| faceted request finer than the certified maximum face bound | `ErrUnsupported` |
+| meridian/angular, per-mesh facet, cumulative facet-work, or cumulative pair-test budget exceeded; integer size overflow | `ErrUnsupported`, before the refused allocation/audit starts |
+| non-finite `rhoMax`, `deltaR`, sagitta, area slack, source bound, placement allowance, or symmetric-difference allowance | `ErrUnsupported` unless it proves an impossible payload invariant |
 | positive-radius ring numerically collapses; circular generator is erased | `ErrUnsupported` |
 | chording cannot prove loop simplicity/nesting/clearance after refinement | `ErrUnsupported` |
 | non-adjacent facets intersect after refinement | `ErrUnsupported` |
+| placement rounding cannot prove positive facets and unchanged contact/component topology over its affine homotopy | `ErrUnsupported` |
 | directed-edge audit fails or a triangle has zero area | `ErrUnsupported`; a missing/conflicting source role is `ErrDegenerate` because the body topology contradicts its payload |
-| revolve mesh has no finite construction-homotopy allowance when used by a boolean | boolean call returns `ErrUnsupported`; export remains available when §§8–10 pass |
+| revolve mesh has no finite construction/placement-homotopy allowance when used by a boolean | boolean call returns `ErrUnsupported`; export remains available when §§8–10 pass |
 
 NEVER snap, weld, drop a facet, round a near-axis ring onto the axis, or perturb a
 sample to make an analytic mesh close. Refine or refuse.
@@ -524,6 +609,9 @@ until T4 proves occupied-volume error.
   `len(SourceFaces) == len(Triangles)` on every payload class.
 - Assert byte-identical repeated STL/OBJ output.
 - Assert `Bound <= tol` at threshold tolerances around every chord-count change.
+- Place a noncollapsed revolve at large coordinate/translation magnitudes;
+  assert `deltaR` is charged to each source bound, `Bound`, `areaSlack`, and
+  `volSymDiff`, and refuse when `deltaR` leaves no positive chording budget.
 - Sample true line/cylinder/cone/plane/sphere/torus patches densely only as a
   falsifier: any observed distance above `Bound` fails; passing samples never
   replace the proof.
@@ -549,6 +637,9 @@ until T4 proves occupied-volume error.
   `sourceBound == 0` MUST remain admissible.
 - Fuzz valid revolve payloads across tolerance scales; a result is either a
   mesh satisfying every invariant or `ErrUnsupported`, never a cracked mesh.
+- Hit each fixed facet/work ceiling exactly and one unit beyond it. Assert the
+  over-budget call refuses before allocation or pair testing and repeated
+  refinement never resets either cumulative counter.
 
 ## 15. Open implementation choice
 
