@@ -15,7 +15,7 @@ import (
 // operands' tessellations with exact predicates, so the stitched boundary is
 // watertight by construction, and every measurement says how far it can be
 // trusted — the volume reads Approximate with a PROVEN error bound, and
-// Verify refuses to call the model trustworthy on answers it cannot judge.
+// Verify accepts that bound when it is within the requested tolerance.
 func Example_decad_cut() {
 	w := sketch.NewWorld()
 	plateSketch, err := w.CreateSketch(w.XY())
@@ -104,6 +104,6 @@ func Example_decad_cut() {
 	// Output:
 	// faces: 7, lumps: 1
 	// volume: 3099.51 mm^3 (Approximate, bound 0.189 mm^3)
-	// status: Suspect, trustworthy: false
+	// status: Sound, trustworthy: true
 	// recipe steps: 4
 }

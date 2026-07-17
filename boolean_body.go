@@ -58,6 +58,12 @@ type facetedPayload struct {
 	areaSlack  float64
 	dPair      float64
 
+	// diameter is the held Faceted body's own diameter for Verify's
+	// tolerance gate. It is computed from every payload vertex, including
+	// interior tessellation vertices that have no B-rep Vertex, and rebuilt
+	// after every placement.
+	diameter float64
+
 	xform r3.Transform
 }
 
@@ -130,6 +136,11 @@ func buildFacetedBody(d *Document, ref StepRef, pp facetedPayload) (*Body, error
 	if len(tris) == 0 {
 		return nil, fmt.Errorf(`%w: the boolean result holds no boundary`, ErrBooleanFailed)
 	}
+	diameter, ok := pointSetDiameter(verts)
+	if !ok {
+		return nil, fmt.Errorf(`%w: the held boundary has no usable diameter`, ErrBooleanFailed)
+	}
+	pp.diameter = diameter
 
 	// The held mesh must be closed: every directed edge paired with its
 	// reverse. The stitcher proved this; the rebuild re-checks it.

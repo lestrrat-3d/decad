@@ -383,7 +383,13 @@ Increment 4, the deep end. Strategy:
 - **Faceted bodies** are judged per verification §6: the held boundary
   against its own proven bound — watertightness/manifoldness read off the
   stitched mesh (exact, §9), self-clearance via a spatial grid, decisive
-  beyond the bound or `Suspect`.
+  beyond the bound or `Suspect`. The tolerance gate is then applied to every
+  bounded result the report carries; `Approximate` alone never assigns
+  `Suspect`. The body's gate diameter is cached from the greatest distance
+  between any two vertices in the complete held faceted payload, not from the
+  smaller set exposed as B-rep boundary-loop vertices. `Placed` recomputes the
+  diameter after transforming the payload vertices. The area floor sums each
+  unique topological edge's held length once, never its two coedge uses.
 - **Pairs**: proven disjoint when the two bodies' bounds-inflated boxes are
   disjoint (a box bounds its body, so box separation proves body separation),
   or when a clearance computation clears the summed bounds. An
@@ -404,6 +410,14 @@ Increment 4, the deep end. Strategy:
   tightest concave principal radius. All readings Exact; a payload the
   surveys cannot decide leaves the asked question undecided → `Suspect`,
   never a silent pass.
+
+`Verify` MUST run requested surveys before the total numeric gate, then apply
+verification §3's field table to every present body reading. The gate compares
+base-unit magnitudes and uses the inclusive `Bound <= rel × Ref` rule. One
+shared scalar-gate path handles body scalar readings, `Clearance.Gap`, and
+`Interference.Volume`; a gap-only shortcut MUST NOT become a second contract.
+The wall interval verdict and undercut predicate verdict remain separate inputs
+to status aggregation, as verification §6 specifies.
 
 ## 11. Increments
 
