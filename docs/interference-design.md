@@ -133,18 +133,28 @@ The certificate requires all of these:
 3. Both bodies are shipped analytic payloads represented by `bodyGeom`, and
    each has exactly one material lump. Multi-lump/faceted bodies skip this
    certificate and proceed to §5.
-4. Choose one deterministic witness from candidate `inner`'s outer, non-void
-   shell.
-5. `pointInBody(witness, outer)` proves the witness lies in `outer` material.
-   A witness proven in an `outer` void is outside its material and fails full
-   containment. A cast that grazes or exhausts its direction ladder is
-   undecided.
+4. Choose one deterministic witness from **every** shell of both operands,
+   void shells included.
+5. `pointInBody` proves **both** directions: every witness of `inner` lies in
+   `outer` material, **and** every witness of `outer` — its void shells among
+   them — lies outside `inner` material. A witness proven in an `outer` void is
+   outside `outer` material and fails full containment. A cast that grazes or
+   exhausts its direction ladder is undecided.
 
-With disjoint boundaries, membership is constant throughout the connected
-material lump. Its certified witness therefore proves the whole lump is
-inside. Void shells need no independent inside test: they remove material from
-the classified lump, and intersection with the outer body removes the same
-void.
+With disjoint boundaries, membership is constant on each connected component of
+one body minus the other body's shells — not throughout the material lump,
+which the other body's shells can cut into several components. Each shell is
+connected and misses the other boundary, so it lies wholly in one such
+component and its single witness decides that whole shell.
+
+Proving every `outer` witness outside `inner` is what makes `inner`'s own
+witnesses speak for all of it: `outer`'s boundary then misses `inner`
+entirely, so `inner` lies in one component and is wholly inside or wholly
+outside `outer`. Without that direction, an `outer` void shell can sit inside
+`inner`'s material and carve away a part of it that no `inner` witness reports
+— and the reused volume would overstate the true overlap. `inner`'s own voids
+need no separate treatment: they remove material from `inner`, and the
+intersection with `outer` removes the same void.
 
 If A's lump is inside B, report A's volume. If B's lump is inside A, report B's.
 Strict boundary separation prevents both directions from holding for non-empty
@@ -458,6 +468,10 @@ Every increment asserts geometry and report state, not only successful return.
 - transversal overlap → one interference row with `Value - Bound > 0`;
 - nested single-lump body → row volume equals contained body volume exactly as
   a `Measurement` value;
+- a single-lump body whose **void** shell lies inside the other body, whose
+  boundaries are disjoint → no containment reuse: the outer body's void
+  witness is proven inside, so the pair reports only what the read-only
+  Boolean proves, else `Suspect`. A hole-free fixture cannot exercise this;
 - fully or partially contained multi-lump faceted body → no analytic
   containment reuse; read-only Boolean proves the complete overlap or the pair
   stays `Suspect`;

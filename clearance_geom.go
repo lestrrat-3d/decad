@@ -827,7 +827,7 @@ type bodyGeom struct {
 	faces    []*cFace
 	edges    []*cEdge
 	verts    []r3.Vec
-	lumpWit  []r3.Vec // outer-shell witness for the supported analytic lump (§2)
+	shellWit []r3.Vec // one witness per shell, void shells included (§2)
 	supports []r3.Vec // support points for the pair-D reading (§7)
 }
 
@@ -892,10 +892,10 @@ func newBodyGeomBudget(budget *workBudget, b *Body) (*bodyGeom, bool, error) {
 	return g, true, nil
 }
 
-// addTopology reads exact edges and vertices and picks the supported analytic
-// lump's outer-shell witness for §2 nesting casts. newBodyGeom rejects
-// multi-lump bodies before this point; void shells remove material and are not
-// independent containment candidates.
+// addTopology reads exact edges and vertices and picks one witness per shell
+// for the §2 nesting casts. Every shell earns a witness, void shells included:
+// a void shell of one body can lie wholly inside the other body's material, so
+// its membership is not implied by any other shell's.
 func (g *bodyGeom) addTopology(budget *workBudget, b *Body) (bool, error) {
 	for _, e := range b.Edges() {
 		if err := budget.step(); err != nil {
@@ -915,25 +915,15 @@ func (g *bodyGeom) addTopology(budget *workBudget, b *Body) (bool, error) {
 		}
 		g.verts = append(g.verts, v.position)
 	}
-	for _, lump := range b.Lumps() {
+	for _, sh := range b.Shells() {
 		if err := budget.step(); err != nil {
 			return false, err
 		}
-		var outer *Shell
-		for _, sh := range lump.Shells() {
-			if !sh.IsVoid() {
-				outer = sh
-				break
-			}
-		}
-		if outer == nil {
-			return false, nil
-		}
-		w, ok := shellWitness(outer)
+		w, ok := shellWitness(sh)
 		if !ok {
 			return false, nil
 		}
-		g.lumpWit = append(g.lumpWit, w)
+		g.shellWit = append(g.shellWit, w)
 	}
 	return true, nil
 }

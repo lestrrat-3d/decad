@@ -43,8 +43,10 @@ type pairResult struct {
 	lo, hi  float64
 	exact   bool
 	diam    float64
-	// contained is non-nil only when strict positive boundary clearance and
-	// one witness per material lump prove this whole body lies in the other.
+	// contained is non-nil only when strict positive boundary clearance, one
+	// witness per shell of this body proven inside the other, and one witness
+	// per shell of the other — voids included — proven outside this one prove
+	// this whole body lies in the other.
 	contained *Body
 }
 
@@ -235,17 +237,23 @@ func payloadExtent(b *Body, g r3.Vec) (float64, float64, bool) {
 	}
 }
 
-// nestingRelation classifies the deterministic material-lump witness of each
-// shipped single-lump analytic body in both directions. Positive boundary
-// clearance makes membership constant across the lump. Multi-lump/faceted
-// bodies never reach this method; they use read-only intersection instead.
+// nestingRelation classifies every deterministic shell witness of each shipped
+// single-lump analytic body in both directions. Positive boundary clearance
+// makes membership constant on each connected component of one body minus the
+// other body's shells — never across the lump as a whole, since the other
+// body's shells can cut through it. So containment needs both directions: the
+// inner body's every witness inside the outer, AND the outer body's every
+// witness — void shells included — outside the inner. Only then does the outer
+// body's boundary miss the inner body entirely, leaving the inner body in one
+// component its witnesses speak for. Multi-lump/faceted bodies never reach this
+// method; they use read-only intersection instead.
 func (k *pairKernel) nestingRelation() (pairVerdict, *Body, error) {
 	type membership struct {
 		inside, outside, unknown int
 	}
 	classify := func(inner, outer *bodyGeom) (membership, error) {
 		var got membership
-		for i, w := range inner.lumpWit {
+		for i, w := range inner.shellWit {
 			if i%256 == 0 {
 				if err := k.ctx.Err(); err != nil {
 					return membership{}, err
@@ -274,10 +282,14 @@ func (k *pairKernel) nestingRelation() (pairVerdict, *Body, error) {
 	if err != nil {
 		return pairUndecided, nil, err
 	}
-	if len(k.a.lumpWit) > 0 && ab.inside == len(k.a.lumpWit) {
+	contains := func(inner, outer membership, innerWit, outerWit []r3.Vec) bool {
+		return len(innerWit) > 0 && len(outerWit) > 0 &&
+			inner.inside == len(innerWit) && outer.outside == len(outerWit)
+	}
+	if contains(ab, ba, k.a.shellWit, k.b.shellWit) {
 		return pairOverlapping, k.a.body, nil
 	}
-	if len(k.b.lumpWit) > 0 && ba.inside == len(k.b.lumpWit) {
+	if contains(ba, ab, k.b.shellWit, k.a.shellWit) {
 		return pairOverlapping, k.b.body, nil
 	}
 	if ab.inside > 0 || ba.inside > 0 {

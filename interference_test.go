@@ -3,6 +3,7 @@ package decad_test
 import (
 	"context"
 	"encoding/json"
+	"math"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -93,6 +94,82 @@ func TestVerifyStrictContainmentReusesInnerVolume(t *testing.T) {
 	require.Same(t, outer, row.A)
 	require.Same(t, inner, row.B)
 	require.Equal(t, want, row.Volume, `containment keeps the contained body's complete measurement`)
+	requireDocumentUnchanged(t, doc, before)
+}
+
+// ringBody revolves the axis-aligned rectangle u[u0,u1] v[v0,v1] a full turn
+// about the u axis: a tube of outer radius v1, inner radius v0, length u1-u0.
+// Each hole is a second rectangle, revolved into a closed toroidal cavity —
+// one lump whose inner shell is a void.
+func ringBody(t *testing.T, doc *decad.Document, u0, v0, u1, v1 float64, holes ...[4]float64) *decad.Body {
+	t.Helper()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	rect := s.CreateRectangle(u0, v0, u1, v1)
+	s.Fix(rect.A)
+	for _, h := range holes {
+		s.CreateRectangle(h[0], h[1], h[2], h[3])
+	}
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	prof := s.Profiles()[0]
+	for _, p := range s.Profiles() {
+		if len(p.Holes) == len(holes) {
+			prof = p
+			break
+		}
+	}
+	body, err := doc.Revolve(s, prof, uAxis, decad.FullRevolution{})
+	require.NoError(t, err)
+	return body
+}
+
+// A void shell of the outer body lying inside the inner body cuts the inner
+// body's material in two: membership in the outer body is NOT constant across
+// the inner lump, so the inner body's own witness proves nothing about the
+// part the cavity carves away. The full-containment certificate must fail here
+// (§4) — reusing the contained body's volume would report the whole of A where
+// the true overlap is A minus B's cavity.
+func TestVerifyOuterVoidInsideInnerBodyDeniesContainment(t *testing.T) {
+	doc := decad.New()
+	// B: a tube carrying a closed toroidal cavity at radii 7..13, u 2..8.
+	b := ringBody(t, doc, 0, 5, 10, 15, [4]float64{2, 7, 8, 13})
+	// A: a plain tube whose whole boundary sits 1 mm inside B's wall, and
+	// which wholly contains B's cavity.
+	a := ringBody(t, doc, 1, 6, 9, 13.5)
+
+	// The fixture is the shape the certificate must handle: one lump, two
+	// shells, the inner one a void. A single-lump gate does not see it.
+	require.Len(t, b.Lumps(), 1)
+	shells := b.Lumps()[0].Shells()
+	require.Len(t, shells, 2)
+	require.False(t, shells[0].IsVoid())
+	require.True(t, shells[1].IsVoid(), `the revolved hole is a closed cavity`)
+	require.Len(t, a.Lumps()[0].Shells(), 1)
+
+	volA, err := a.Volume()
+	require.NoError(t, err)
+	require.InDelta(t, math.Pi*(13.5*13.5-6*6)*8, volA.Value.Base(), 1e-9)
+	// The true overlap: A minus B's cavity, which lies wholly inside A.
+	wantOverlap := math.Pi*(13.5*13.5-6*6)*8 - math.Pi*(13*13-7*7)*6
+	before := snapshotDocument(t, doc)
+
+	report, err := doc.Verify(t.Context())
+	require.NoError(t, err)
+	for _, row := range report.Interferences {
+		if row.A != b || row.B != a {
+			continue
+		}
+		// A row is admissible only if its proven interval really holds the
+		// overlap. A's whole volume, marked Exact, does not.
+		require.InDelta(t, wantOverlap, row.Volume.Value.Base(), row.Volume.Bound.Base(),
+			`a reported overlap must bound the true overlap, not the contained body's whole volume`)
+	}
+	if len(report.Interferences) == 0 {
+		require.Equal(t, decad.Suspect, report.Status,
+			`an overlap this evaluator cannot bound reads Suspect, never a silent pass`)
+	}
 	requireDocumentUnchanged(t, doc, before)
 }
 

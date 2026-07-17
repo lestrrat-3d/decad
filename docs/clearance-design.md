@@ -88,10 +88,11 @@ resolves identically (evaluator §8). Interference PR 1 MUST return any witness
 strictly inside as proven nesting — `pairOverlapping`, never the same state as
 a failed cast; all
 witnesses mutually outside, with `g > 0`, is the disjointness proof. Preserve
-inside / outside / undecided for the shipped single-lump analytic payloads.
-When that lump is inside the other body, this classification is also the strict
-full-containment certificate of `docs/interference-design.md` §4. Multi-lump
-faceted bodies bypass this analytic model and use read-only intersection.
+inside / outside / undecided for the shipped single-lump analytic payloads, per
+shell. `docs/interference-design.md` §4 owns which combination of these
+per-shell classifications certifies strict full containment; a single shell's
+reading never settles it. Multi-lump faceted bodies bypass this analytic model
+and use read-only intersection.
 
 **Payload adapters preserve this obligation.** A cup expands to its exact outer
 skin, reversed cavity skin, kept cap, pocket floor, and rim bands, so the same
