@@ -183,7 +183,7 @@ func (b *Body) Shell(sel FaceSelector, t units.Value, opts ...ShellOption) (*Bod
 		// accepted maximum thickness rather than the bare inradius (at a large
 		// scale the two differ by far more than a noise floor).
 		if maxT := inradius - shellTol*math.Max(1, inradius); tmm >= maxT {
-			return nil, fmt.Errorf(`%w: the shell thickness %s is within the evaluator's rounding tolerance of the section's inradius %s (the accepted maximum is %s); use a thickness strictly below the accepted maximum`, ErrDegenerate, t, units.Millimeters(inradius), units.Millimeters(maxT))
+			return nil, fmt.Errorf(`%w: the shell thickness %s meets or exceeds the accepted maximum %s (the section's inradius %s less the evaluator's rounding tolerance); use a thickness strictly below the accepted maximum`, ErrDegenerate, t, units.Millimeters(maxT), units.Millimeters(inradius))
 		}
 		// The height limit: where a cap is kept (a cup), the wall behind it is a
 		// floor t thick, so the cavity is swept over an interval of length h − t,
@@ -194,7 +194,7 @@ func (b *Body) Shell(sel FaceSelector, t units.Value, opts ...ShellOption) (*Bod
 		// sub-nanometre margin): the refusal reports the computed accepted
 		// maximum thickness rather than the bare height.
 		if maxT := h - shellTol*math.Max(1, h); !bothCaps && tmm >= maxT {
-			return nil, fmt.Errorf(`%w: the shell thickness %s is within the evaluator's rounding tolerance of the sweep height %s (the accepted maximum is %s); use a thickness strictly below the accepted maximum`, ErrDegenerate, t, units.Millimeters(h), units.Millimeters(maxT))
+			return nil, fmt.Errorf(`%w: the shell thickness %s meets or exceeds the accepted maximum %s (the sweep height %s less the evaluator's rounding tolerance); use a thickness strictly below the accepted maximum`, ErrDegenerate, t, units.Millimeters(maxT), units.Millimeters(h))
 		}
 	}
 
