@@ -9,8 +9,10 @@ core contract this evaluator implements — references of the form "core §N"),
 `docs/verification-design.md` (how its answers are judged), and
 `docs/recipe-replay-design.md` (strict loading, graph validation,
 whole-recipe atomicity, and the package-owned evaluator boundary). Nothing here
-changes those contracts; where this document stages a capability, the staging
-is explicit and rejected loudly, never silently approximated.
+changes those contracts. `docs/tessellation-design.md` owns the tessellation
+contract and the private operand proofs the boolean consumes. Where this
+document stages a capability, the staging is explicit and rejected loudly,
+never silently approximated.
 
 ## 1. Two sources of truth, one direction
 
@@ -177,14 +179,17 @@ and a wrong-but-confident prism is the failure decad exists to prevent.
 Same recording shape; the axis must be validated non-degenerate and coplanar
 with the profile plane, and the axis must not pass through the region's
 INTERIOR: the region lies in one closed half-plane of the axis. Boundary
-contact is allowed in exactly two forms — a segment ENDPOINT on the axis (it
-sweeps to a pole or an apex, the sphere and cone-tip case), and a whole
-`LineSeg` lying ALONG the axis (it sweeps nothing and emits no face, per the
-build table below). Any other contact — a curve tangent to the axis at an
-interior point (a circle kissing it would sweep a self-touching horn torus),
-or a segment crossing it — is rejected, `ErrDegenerate`, as is a region with
-interior on both sides; that is what keeps §10's valid-by-construction claim
-true.
+contact is allowed only through an exact axis-incidence audit. At each on-axis
+point across all recorded loops, the incident walk ends MUST be exactly one
+off-axis walk end and one `LineSeg` end lying ALONG the axis, from the same
+loop. The off-axis walk sweeps to one pole/apex fan; the on-axis line sweeps
+nothing. A second off-axis sector at that point, repeated loop incidence,
+isolated endpoint tangency, missing on-axis continuation, interior curve
+tangency, or crossing segment is `ErrDegenerate`, as is a region with interior
+on both sides. Thus a circle kissing the axis remains a rejected self-touching
+horn when it is segmented into arcs whose shared tangent point is a walk
+endpoint; segmentation cannot turn the same geometric incidence into a pole.
+This audit is what keeps §10's valid-by-construction claim true.
 Faces: a `LineSeg` lying ON the axis emits no face at all — it sweeps a
 zero-area set, and the neighboring segments' faces close the solid there;
 parallel to the axis (off it) → `Cylinder`; inclined → `Cone` (an
@@ -266,9 +271,12 @@ Increment 4, the deep end. Strategy:
   core §8 expose no tolerance parameter, on purpose). What IS caller-visible
   is the proven bound the output carries: the tolerance's whole effect
   surfaces as `Bound`/`Exactness`, judged by the caller's `WithTolerance` at
-  Verify. The machinery is `Tessellate(tol)`'s, with per-surface analytic
-  tessellators, a proven per-facet deviation bound δ_t, and facets that
-  remember their source face.
+  Verify. The machinery and its payload staging are
+  `docs/tessellation-design.md`'s: every mesh carries a two-sided boundary
+  bound, source faces, and area slack. A boolean-admissible mesh additionally
+  carries a proven occupied-volume symmetric-difference allowance. Export
+  needs the boundary proof; a boolean rejects an operand that does not carry
+  the occupied-volume proof.
 - **Robust mesh boolean in-repo, stdlib-only.** The curated-dependency rule
   stands: no third-party mesh kernel. The algorithm is the exact-predicate
   route: triangle/triangle intersection and point classification decided by
@@ -300,21 +308,33 @@ Increment 4, the deep end. Strategy:
   a segment on a facet's own boundary cuts nothing off it) and its regions
   classify by exact parity, because the other operand's boundary there is a
   DIHEDRAL and one plane of a dihedral decides nothing.
-- **A tangency the chords cannot see is refused, never assumed away.** A chord
-  polygon lies strictly inside the curved surface it approximates, so a true
-  tangency between two operands can vanish from the tessellation — and whether
-  it vanishes depends on where the chord samples fell. A pre-pass therefore
-  proves, per analytic FACE pair, that no touch can be hiding: if the true
-  surfaces touch, that point is within δ_A of A's facets and δ_B of B's, so
-  the facet sets come within δ_A + δ_B of each other. A face pair whose facets
-  already MEET is decided (the contact is exact and the predicates own it); a
-  face pair that comes within δ_A + δ_B *without* meeting is the undecidable
-  one, and it is refused (`ErrUnsupported`). Reject-only: it may refuse a valid
-  model whose operands genuinely pass that close, and that is the accepted
-  price. Deciding such a pair for real is the clearance kernel's job
-  (`docs/clearance-design.md`), not a chord's. A planar face with straight
-  edges triangulates exactly, and a `Faceted` face IS its polygons, so both are
-  held with zero error and the pre-pass has nothing to prove about them.
+- **A tangency the held facets cannot see is refused, never assumed away.** A
+  chord polygon can miss a touch on its analytic patch, and an inherited
+  faceted boundary certificate can place the true patch away from its held
+  polygon. A pre-pass therefore proves, per current operand FACE pair, that no
+  touch can be hiding: if the true patches touch, that point is within δ_A of
+  A's facets and δ_B of B's, so the facet sets come within δ_A + δ_B of each
+  other. An analytic face's δ is its complete `sourceBound`, including curved
+  trim displacement and every coordinate-construction/final-placement rounding
+  allowance. A faceted face's δ is its inherited certified
+  displacement, falling back to the
+  payload's global composed boundary `Delta` when no tighter face value exists.
+  Upward-round `b = δ_A + δ_B`. When `b > 0`, every face pair whose held facet
+  sets are at distance at most `b` is undecidable, including a pair whose held
+  facets meet or cross. A held-facet meet proves true contact only when both
+  source bounds are zero. Otherwise admission requires a separate analytic or
+  certified proof that the true patches cross or touch; the mesh predicates
+  cannot supply that proof. No such positive-bound contact certificate is
+  defined for this evaluator increment, so the pair is refused
+  (`ErrUnsupported`). Reject-only: it may refuse a valid model whose operands
+  genuinely pass that close, and that is the accepted price. Deciding such a
+  pair for real is the clearance kernel's job
+  (`docs/clearance-design.md`), not a held facet's. A planar face still carries
+  every curved-trim, coordinate-construction, and placement displacement in its
+  `sourceBound`; it has zero error only when its held trimmed polygon and stored
+  coordinates are both proved exact. A faceted face has zero
+  error only when its inherited boundary certificate proves that its true patch
+  equals the held polygons (`docs/tessellation-design.md` §2/§7).
 - **An operand facet that collapsed is refused, never skipped.** A rigid
   placement's own rounding can flatten a facet of an already-faceted body to
   zero area. Such a facet has no plane and no interior, so every contact
@@ -366,8 +386,9 @@ Increment 4, the deep end. Strategy:
   (a hole wall's two rims bound a tube), so there the longest boundary stands as
   the deterministic bookkeeping choice; validity never reads it. Measurements
   integrate the mesh exactly and report the verification-design
-  bound shapes (volume bound ≈ δ_t · area, by the symmetric-difference
-  identity, which the rim never enters) — `Approximate`, except the §2
+  bound shapes (volume composes the operands' own proven mesh
+  symmetric-difference allowances by the set identity; the rim never enters
+  that allowance) — `Approximate`, except the §2
   Exact-volume case: an all-planar pair whose contacts round exactly leaves the
   exact volume integral with a genuinely zero bound.
 - **The rim is NOT bounded by δ_t.** A vertex an operand's tessellation
@@ -375,9 +396,13 @@ Increment 4, the deep end. Strategy:
   not lie on either. It is the crossing of two chord PLANES, and the true
   intersection curve is anywhere within δ_A of the one and δ_B of the other —
   a tube of half-width **(δ_A + δ_B)/sin θ** about it, θ the crossing angle.
-  So the boundary bound is that trim-amplified displacement, computed from a
-  proven lower bound on sin θ taken exactly from the facet normals, and it is
-  what every boundary measurement composes from (`Vertex.Position`,
+  So the pre-weld boundary bound is that trim-amplified displacement, computed
+  from a proven lower bound on sin θ taken exactly from the facet normals. The
+  final face bound adds, with upward rounding, the maximum displacement from
+  each incident exact stitched vertex to its stored welded binary64 coordinate;
+  the global boundary certificate takes the upward-rounded maximum of those
+  complete face bounds. That complete value is what every boundary measurement
+  composes from (`Vertex.Position`,
   `Faceted.Bound`, `FacetedCurve.Bound`, `Box`, and the perimeter term of every
   area bound). It has no finite ceiling as the operands approach tangency: when
   the inflated bound reaches the pair's own diameter it has stopped bounding
@@ -452,7 +477,7 @@ silent pass.
 | 1 | topology model, `Document`/`Recipe`/`Step` wiring, `Extrude` for line/circle/arc profiles with `Distance`/`Symmetric`/`TwoSided`-of-distance-sides extents, mass properties (§4), `Placed`, structural `Verify` (validity by construction, quantities, tolerance gate; every pair undecided → `Suspect` unless box-proven disjoint) |
 | 2 | `Revolve` (angular extents), selector vocabulary + resolution, the body-relative stops (`ToFace`/`ToFaceAngular`/`EdgeAxis`, `ThroughAll`/`ThroughAllSide`) |
 | 3 | analytic clearance proofs and `WithClearances` (box-disjointness proofs already run from increment 1, §10/§11 row 1) |
-| 4 | tessellation + the exact-predicate mesh boolean, `Faceted` bodies, faceted `Verify`, `Tessellate`/`STL`/`OBJ` |
+| 4 | tessellation per `docs/tessellation-design.md` + the exact-predicate mesh boolean, `Faceted` bodies, faceted `Verify`, `Tessellate`/`STL`/`OBJ` |
 | 5 | fillet/chamfer on analytic prism edges, shell |
 | 6 | bounded canonical recipe encode, strict versioned decode, full operation/reference validation with deterministic error precedence, resource budgets, shared recorded-step dispatch, atomic public `Evaluate`, replay/property/fuzz suite |
 | 7 | free-form side surfaces (`NURBSSurface` from recorded control data), tapered extrude if a sound offset story exists |

@@ -9,8 +9,9 @@ A **headless CAD engine** for Go: the 3D modeling layer above the
 > [`docs/api-design.md`](docs/api-design.md) — the core design. Companion
 > designs carry its deep ends in
 > [`docs/sketch-seam-design.md`](docs/sketch-seam-design.md),
-> [`docs/recipe-replay-design.md`](docs/recipe-replay-design.md), and
-> [`docs/verification-design.md`](docs/verification-design.md). What the
+> [`docs/recipe-replay-design.md`](docs/recipe-replay-design.md),
+> [`docs/verification-design.md`](docs/verification-design.md), and
+> [`docs/tessellation-design.md`](docs/tessellation-design.md). What the
 > package exports today is the leading edge of that surface; everything it does
 > not yet export remains design-only, and anything that lands must follow the
 > contract. Every capability the contract consumes from its dependencies exists
