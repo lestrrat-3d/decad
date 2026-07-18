@@ -8,6 +8,7 @@ import (
 
 	"github.com/lestrrat-3d/decad"
 	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
@@ -493,6 +494,135 @@ func TestBooleanRefusalSoundnessTangentCylinder(t *testing.T) {
 		require.Len(t, got3.Lumps(), 1)
 		requireBodyWatertight(t, got3)
 	}
+}
+
+// plateWithHoleBody extrudes a square plate of half-width `half` centred on the
+// origin with a concentric circular through-hole of radius rHole, to a height-h
+// prism. Its inner hole wall is a Cylinder, so the tessellation chords it INWARD
+// by up to the mesh bound — the concave wall the fix's regression case leans on.
+// The outer boundary is a rectangle (four flat walls, a handful of facets)
+// rather than a circle, so only the hole wall carries a fine chord count: the
+// spurious-contact geometry under test lives entirely on that hole wall, and a
+// round outer wall would add hundreds of facets that never interact with the
+// plug yet dominate the boolean and near-miss scans.
+func plateWithHoleBody(t *testing.T, doc *decad.Document, half, rHole, h float64) *decad.Body {
+	t.Helper()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	rect := s.CreateRectangle(-half, -half, 2*half, 2*half)
+	s.Fix(rect.A)
+	s.CreateCircle(s.CreatePoint(0, 0), rHole)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	var prof *sketch.Profile
+	for _, p := range s.Profiles() {
+		if len(p.Holes) == 1 {
+			prof = p
+		}
+	}
+	require.NotNil(t, prof, `the plate-with-hole region should exist`)
+	body, err := doc.Extrude(s, prof, decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+	require.NoError(t, err)
+	return body
+}
+
+func TestBooleanRefusalConcaveHoleSpuriousContact(t *testing.T) {
+	// The unsoundness the depth discriminator closes: a solid plug sits inside a
+	// plate's circular through-hole with a TRUE positive radial gap, but the
+	// tessellation chords the concave hole wall INWARD (a chord lies inside the
+	// arc), so held material intrudes into the void and the two held facet sets
+	// can MEET — while the true surfaces stay apart. Auto-admitting that meet
+	// would fuse a genuine two-lump result into one lump, decided by where the
+	// chords fell. The gate must instead read the shallow (≤ b) held meet as
+	// undecidable and refuse it; a gap clearly wider than the sagitta is a clean
+	// two-lump union; and a plug that truly overlaps the plate is one lump.
+	//
+	// The plug spans z −5..15 so it clears the plate's z = 0 and z = 10 cap
+	// planes: a shared cap plane would be a real face-on-face contact and would
+	// mask the radial behaviour under test (mirroring the tangent-cylinder test's
+	// z drop).
+	const (
+		// half is the plate half-width; rHole the through-hole radius; h the
+		// plate thickness. The hole is kept small because the sagitta the test
+		// leans on is ≈ tol regardless of the hole radius (sagitta ≈ rHole ·
+		// tol/rHole), so a small hole preserves the exact spurious-meet geometry
+		// while chording the concave wall into far fewer facets — the boolean and
+		// near-miss scans that dominate this test are quadratic in that count.
+		half, rHole, h = 20.0, 1.5, 10.0
+		// The evaluator-internal chord tolerance (boolean.go boolChordFactor,
+		// documented 2e-5) times the pair's bounding-box diagonal. Both operands
+		// live inside the plate's own x,y ∈ [−20, 20] and the shared z ∈ [−5, 15],
+		// so the diagonal is a fixed √(40² + 40² + 20²) = 60 for every case.
+		boolChordFactor = 2e-5
+		dPair           = 60.0
+	)
+	tolMM := dPair * boolChordFactor
+	// The hole wall's per-chord sagitta at that tolerance: the deepest the chord
+	// bows inward from the true circle. maxD is the widest chord angle the
+	// tessellator allows (r·(1 − cos(Δθ/2)) ≤ tol), so this over-estimates the
+	// true sagitta a hair — deliberately, so the fraction below stays under it.
+	maxD := 4 * math.Asin(math.Sqrt(tolMM/(2*rHole)))
+	sagitta := rHole * (1 - math.Cos(maxD/2))
+
+	// plug builds a coaxial solid cylinder of radius r, rotated about the z axis
+	// by ang (to break phase-alignment with the hole's chords) and dropped so it
+	// clears the plate's cap planes.
+	plug := func(doc *decad.Document, r, ang float64) *decad.Body {
+		body := diskBody(t, doc, 0, 0, r)
+		rot, err := r3.Rotation(r3.NewVec(0, 0, 1), units.Radians(ang))
+		require.NoError(t, err)
+		tr, err := r3.Translation(r3.NewVec(0, 0, -5))
+		require.NoError(t, err)
+		xform, err := rot.Then(tr)
+		require.NoError(t, err)
+		moved, err := body.Placed(xform)
+		require.NoError(t, err)
+		return moved
+	}
+
+	// Case 1 — SPURIOUS held meet, truly disjoint: the plug is a fraction of a
+	// sagitta shy of the hole wall (gap < sagitta), so a plug chord vertex pokes
+	// past a hole chord where the two polygons misalign. The plug is rotated half
+	// a chord so its vertices land on the hole's chord midpoints — the deepest
+	// intrusion. The held meet is shallower than b = δ_plate + δ_plug ≈ 2·sagitta,
+	// so no vertex is deep enough inside the plate for the depth proof: refuse.
+	t.Run("spurious held meet refuses", func(t *testing.T) {
+		gap := 0.4 * sagitta
+		doc := decad.New()
+		plate := plateWithHoleBody(t, doc, half, rHole, h)
+		p := plug(doc, rHole-gap, maxD/2)
+		_, err := decad.Union(plate, p)
+		require.Truef(t, errors.Is(err, decad.ErrUnsupported),
+			`a shallow held meet of truly disjoint surfaces must be refused, got %v (gap=%v sagitta=%v)`, err, gap, sagitta)
+		require.Len(t, doc.Bodies(), 2, `a refused boolean leaves both operands live`)
+	})
+
+	// Case 2 — clearly disjoint: a 1 mm radial gap dwarfs the sagitta (~1e-3 mm),
+	// so no held facet comes within b of the plate and the union is the true two
+	// lumps.
+	t.Run("clear gap unions to two lumps", func(t *testing.T) {
+		doc := decad.New()
+		plate := plateWithHoleBody(t, doc, half, rHole, h)
+		p := plug(doc, rHole-1.0, 0)
+		got, err := decad.Union(plate, p)
+		require.NoError(t, err, `a plug clear of the hole wall is a decidable disjoint union`)
+		require.Len(t, got.Lumps(), 2, `a truly disjoint plug and plate stay two lumps`)
+		requireBodyWatertight(t, got)
+	})
+
+	// Case 3 — deep overlap: the plug is wider than the hole and bites into the
+	// plate material, a crossing the chords cannot hide. Held facets interpenetrate
+	// far deeper than b, so the depth proof admits it and the union is one lump.
+	t.Run("deep overlap unions to one lump", func(t *testing.T) {
+		doc := decad.New()
+		plate := plateWithHoleBody(t, doc, half, rHole, h)
+		p := plug(doc, rHole+2.0, 0)
+		got, err := decad.Union(plate, p)
+		require.NoError(t, err, `a plug biting into the plate is a decidable overlap`)
+		require.Len(t, got.Lumps(), 1, `a plug overlapping the plate fuses into one lump`)
+		requireBodyWatertight(t, got)
+	})
 }
 
 // FuzzBoolean drives the boolean over two axis-aligned boxes whose twelve

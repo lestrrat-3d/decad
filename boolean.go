@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"math/big"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -345,28 +346,36 @@ func operandSymDiff(b *Body, m *Mesh) float64 {
 	return m.bound * meshAreaUpper(m.vertices, m.triangles)
 }
 
-// refuseUndecidableProximity is the tangency gate. The mesh boolean decides
-// every contact on the CHORDS, and a chord polygon lies strictly inside the
-// curved surface it approximates — so a true tangency between two operands can
-// vanish from the tessellation entirely, and the boolean would return a clean
-// two-lump body for two solids that genuinely touch. Worse, whether it vanishes
-// at all depends on where the chord samples happen to fall.
+// refuseUndecidableProximity is the tangency gate (docs/evaluator-design.md §9,
+// docs/tessellation-design.md §11 step 4). The mesh boolean decides every
+// contact on the CHORDS, and a chord polygon lies strictly inside the curved
+// surface it approximates — so a true tangency between two operands can vanish
+// from the tessellation entirely, and a spurious meet can appear where the true
+// surfaces stay apart (chording a concave hole wall inward adds held material
+// into the void). Either way the verdict would be decided by where the chord
+// samples happened to fall.
 //
 // The gate is reject-only, and it proves nothing it does not have. If the true
 // surfaces of two faces touch, that point lies within δA of face A's facets and
-// within δB of face B's, so the two facet sets come within δA + δB of each
-// other. Contrapose it: a face pair whose facets stay FARTHER apart than
-// δA + δB cannot hide a touch. That leaves two cases — a face pair whose facets
-// already MEET, where the contact is real and the exact predicates own it, and
-// a face pair that comes within δA + δB without meeting, which is exactly the
-// undecidable one. The latter is refused (ErrUnsupported). Deciding it for real
-// is the analytic clearance kernel's job (docs/clearance-design.md), not a
-// chord's; loud beats silently wrong.
+// within δB of face B's, so the two facet sets come within b = δA + δB of each
+// other. A face pair whose facets stay FARTHER apart than b hides no touch and
+// is decided. Within b the gate decides the pair by the INTERPENETRATION DEPTH
+// of the two facet sets: a held meet is admitted only when the facets provably
+// cross with a signed depth strictly GREATER than b (provenDepthExceeds). Then
+// A's true surface (within δA of its facets) and B's (within δB of its) still
+// overlap even after each is pulled back toward its own interior by its own
+// bound, so the true patches provably cross and the contact is real. The chord
+// error alone, bounded by b, cannot open a penetration deeper than b, so a bare
+// touch, a shallow meet at depth ≤ b, or a non-meeting near-miss within b proves
+// nothing and is refused (ErrUnsupported). Deciding such a pair for real is the
+// analytic clearance kernel's job (docs/clearance-design.md), not a chord's;
+// loud beats silently wrong.
 //
-// The question is asked per analytic FACE pair, not per facet pair: a facet of
-// one face can pass arbitrarily close to a facet of the other while the FACES
-// plainly cross (a cylinder wall threading a cap's own triangulation diagonal),
-// and that is no tangency at all.
+// The question is asked per analytic FACE pair, not per facet pair, and the
+// depth is proven over the whole face's facets: a facet of one face can pass
+// arbitrarily close to a facet of the other while the FACES plainly cross (a
+// cylinder wall threading a cap's own triangulation diagonal), and that is no
+// tangency at all.
 //
 // It may refuse a valid model whose operands genuinely pass within a chord
 // tolerance of each other. That is the accepted price; the alternative is a
@@ -406,7 +415,7 @@ func refuseUndecidableProximity(ctx context.Context, ma, mb *Mesh, bmA, bmB *boo
 				return err
 			}
 			if near {
-				return fmt.Errorf(`%w: the operands' true surfaces come within the chord tolerance without their tessellations meeting, so whether they touch is decided by where the chords fall — this evaluator refuses the question rather than answer it wrong`, ErrUnsupported)
+				return fmt.Errorf(`%w: the operands' held facets come within the chord tolerance without provably interpenetrating deeper than it, so whether their true surfaces touch or cross is decided by where the chords fall — this evaluator refuses the question rather than answer it wrong`, ErrUnsupported)
 			}
 		}
 	}
@@ -414,10 +423,18 @@ func refuseUndecidableProximity(ctx context.Context, ma, mb *Mesh, bmA, bmB *boo
 }
 
 // facesNearMiss reports whether two faces' facet sets come within slack of each
-// other WITHOUT meeting. A pair that meets is decided (the contact is exact);
-// only a pair that comes close and misses is the undecidable one.
+// other in a way this evaluator cannot decide (docs/evaluator-design.md §9). When
+// the facets stay farther than slack apart everywhere, no touch can be hiding and
+// the pair is decided (near = false). When they come within slack — meeting or
+// not — the pair is decided only if the facet sets provably INTERPENETRATE deeper
+// than b = slack (provenDepthExceeds); a bare touch, a shallow meet at depth ≤ b,
+// or a non-meeting near-miss stays undecidable (near = true). A coplanar
+// face-on-face overlap is a tangency the exact mesh pass refuses as
+// ErrDegenerate, so it is left to that verdict rather than pre-empted here.
 func facesNearMiss(ctx context.Context, bmA *boolMesh, fis []int, bmB *boolMesh, fjs []int, slack float64) (bool, error) {
-	near := false
+	var closeA, closeB []int
+	seenA := map[int]bool{}
+	seenB := map[int]bool{}
 	work := 0
 	for _, i := range fis {
 		for _, j := range fjs {
@@ -436,15 +453,173 @@ func facesNearMiss(ctx context.Context, bmA *boolMesh, fis []int, bmB *boolMesh,
 			if err != nil {
 				return false, err
 			}
-			if c.kind != contactNone {
-				return false, nil // the faces meet: nothing here is undecided
+			if c.kind == contactRegion {
+				// A coplanar face-on-face overlap is a tangency the exact mesh
+				// pass refuses as ErrDegenerate; leave that verdict to it.
+				return false, nil
 			}
-			if triTriDistance(ta, tb) <= slack {
-				near = true
+			if c.kind != contactNone || triTriDistance(ta, tb) <= slack {
+				if !seenA[i] {
+					seenA[i] = true
+					closeA = append(closeA, i)
+				}
+				if !seenB[j] {
+					seenB[j] = true
+					closeB = append(closeB, j)
+				}
 			}
 		}
 	}
-	return near, nil
+	if len(closeA) == 0 {
+		return false, nil // the facets stay clear of each other: nothing hides
+	}
+	deep, err := provenDepthExceeds(ctx, bmA, closeA, bmB, closeB, slack)
+	if err != nil {
+		return false, err
+	}
+	return !deep, nil
+}
+
+// maxDepthWitnessFacets caps how many contacting facets provenDepthExceeds
+// probes for a deep interior witness on each side of a face pair. A genuine
+// deep crossing (a rod through a plate, a plug overlapping a ring) exposes a
+// deep witness on its very first contacting facets, so the cap never blocks an
+// admission; it only bounds the work the reject-only refusal path spends
+// confirming no witness exists. Capping over-refuses at worst, which is sound.
+const maxDepthWitnessFacets = 96
+
+// provenDepthExceeds is the reject-only depth discriminator behind the meet
+// admission (docs/evaluator-design.md §9, docs/tessellation-design.md §11 step
+// 4). It reports true ONLY when it has PROVEN that the two facet sets
+// interpenetrate by a signed depth strictly greater than b: a concrete point of
+// one operand's held facets, certified STRICTLY inside the other operand's solid,
+// whose certified lower-bound distance to that solid's boundary exceeds b. Then
+// even after each true surface is pulled back toward its own interior by its own
+// bound the two still cross, so the true patches provably interpenetrate and the
+// held meet is real. When it cannot prove such a witness it returns false and the
+// meet is treated as undecidable and refused upstream — over-refuse, never
+// over-admit.
+func provenDepthExceeds(ctx context.Context, bmA *boolMesh, closeA []int, bmB *boolMesh, closeB []int, b float64) (bool, error) {
+	deep, err := deepWitnessInside(ctx, bmA, closeA, bmB, b)
+	if err != nil || deep {
+		return deep, err
+	}
+	return deepWitnessInside(ctx, bmB, closeB, bmA, b)
+}
+
+// deepWitnessInside reports whether any held-facet sample point of m's
+// contacting facets is PROVEN to lie strictly inside the other operand's solid
+// deeper than b. Each candidate — a facet vertex, edge midpoint or centroid — is
+// first measured for its certified LOWER-bound distance to the other mesh's
+// boundary; only a candidate deeper than b is then tested for strict containment
+// by the exact ray-parity predicate (never a boundary point). Checking the cheap
+// float depth before the costly exact parity leaves the witness set unchanged —
+// a witness is still exactly inside ∧ deeper than b — while skipping the parity
+// scan for every shallow sample, which is every sample on a refused near-miss. A
+// facet's deepest penetration need not fall on a mesh vertex (a rod pierces a
+// plate through the interior of its wall facets), so the midpoints and centroid
+// are sampled too. Reject-only: sampling and the facet cap can only miss a
+// witness and refuse, never admit a shallow meet.
+func deepWitnessInside(ctx context.Context, m *boolMesh, closeFacets []int, other *boolMesh, b float64) (bool, error) {
+	all := allFacets(other)
+	work := 0
+	for n, i := range closeFacets {
+		if n >= maxDepthWitnessFacets {
+			break
+		}
+		tri := m.tris[i]
+		for _, p := range facetSamplePoints(m.xverts[tri[0]], m.xverts[tri[1]], m.xverts[tri[2]]) {
+			work++
+			if work%64 == 0 {
+				if err := ctx.Err(); err != nil {
+					return false, err
+				}
+			}
+			// A witness needs BOTH strict interior containment AND a certified
+			// depth beyond b. The depth is a float distance-to-boundary scan; the
+			// containment is the exact big.Rat ray-parity test, which is orders of
+			// magnitude costlier. Check the cheap depth first: a sample no deeper
+			// than b is no witness however it classifies, so gating the parity on
+			// depth > b skips the exact test for every shallow sample without
+			// changing which samples become witnesses (a witness is still exactly
+			// inside ∧ !boundary ∧ depth > b).
+			if certifiedInteriorDepth(p, other) <= b {
+				continue
+			}
+			inside, onBoundary, err := meshParityContext(ctx, p, other.verts, other.tris, all)
+			if err != nil {
+				if ctxErr := ctx.Err(); ctxErr != nil {
+					return false, ctxErr
+				}
+				// The only other error is an all-axes-ambiguous parity ray: this
+				// sample cannot be PROVEN inside, so it is no witness. Skip it —
+				// reject-only, never a failure of the whole boolean.
+				continue
+			}
+			if !inside || onBoundary {
+				continue
+			}
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// facetSamplePoints returns the exact candidate interior witnesses of one held
+// facet: its three corners, its three edge midpoints and its centroid. Every one
+// is an exact rational, so the parity test that reads it decides strict
+// containment without rounding.
+func facetSamplePoints(a, b, c xpt) []xpt {
+	half := big.NewRat(1, 2)
+	mid := func(p, q xpt) xpt { return xlerp(p, q, half) }
+	return []xpt{a, b, c, mid(a, b), mid(b, c), mid(c, a), xCentroid(a, b, c)}
+}
+
+// certifiedInteriorDepth is a certified LOWER bound (mm) on the distance from the
+// exact interior point p to the boundary of the other operand's mesh: the float
+// point-to-facet distances, taken at their minimum and nudged DOWN for their own
+// float error, then reduced by an upper bound on p's exact→float rounding. It is
+// only ever read as "> b", so under-reporting is safe (it over-refuses, never
+// over-admits).
+func certifiedInteriorDepth(p xpt, other *boolMesh) float64 {
+	pf := p.vec()
+	best := math.Inf(1)
+	for i := range other.tris {
+		// The facet lies inside its own containing box, so the point's distance
+		// to that box never exceeds its distance to the facet. A box already at or
+		// beyond the running minimum therefore cannot hold a nearer facet — skip
+		// it. This prunes on distance alone and cannot lower the minimum below the
+		// unpruned value; any float-boundary case where a skipped box rounds a hair
+		// past the true nearest is already covered by the 1e-12 down-nudge below,
+		// so the certified LOWER bound is preserved.
+		if pointBoxDist(pf, other.boxes[i]) >= best {
+			continue
+		}
+		best = math.Min(best, pointTriDistance(pf, triCorners(other, i)))
+	}
+	if best <= 0 || isNonFinite(best) {
+		return 0
+	}
+	// best is the float distance from the ROUNDED point pf; the true distance
+	// from the exact point p is at least (best, nudged down for the distance
+	// evaluation's own float error) minus how far pf sits from p.
+	return best*(1-1e-12) - pointRoundBound(p, pf)
+}
+
+// pointRoundBound upper-bounds the 3D displacement between the exact point p and
+// its float rounding pf: the largest per-coordinate rational gap, up-rounded and
+// read as a 3D distance (bounds.go, radius3D).
+func pointRoundBound(p xpt, pf r3.Vec) float64 {
+	worst := new(big.Rat)
+	for _, pair := range [][2]*big.Rat{{p.x, ratOf(pf.X)}, {p.y, ratOf(pf.Y)}, {p.z, ratOf(pf.Z)}} {
+		d := new(big.Rat).Sub(pair[0], pair[1])
+		d.Abs(d)
+		if d.Cmp(worst) > 0 {
+			worst = d
+		}
+	}
+	w, _ := worst.Float64()
+	return radius3D(upRound(w))
 }
 
 // faceFacets is one analytic face of an operand: its facets, and the chord
@@ -561,6 +736,26 @@ func clamp01(num, den float64) float64 {
 		return 0
 	}
 	return math.Max(0, math.Min(1, num/den))
+}
+
+// pointBoxDist is the Euclidean distance from a point to an axis-aligned box
+// (zero when the point is inside it). It lower-bounds the distance to anything
+// the box contains, so it is a sound distance prune for a nearest-facet scan.
+func pointBoxDist(p r3.Vec, box [2]r3.Vec) float64 {
+	axis := func(v, lo, hi float64) float64 {
+		switch {
+		case v < lo:
+			return lo - v
+		case v > hi:
+			return v - hi
+		default:
+			return 0
+		}
+	}
+	dx := axis(p.X, box[0].X, box[1].X)
+	dy := axis(p.Y, box[0].Y, box[1].Y)
+	dz := axis(p.Z, box[0].Z, box[1].Z)
+	return math.Sqrt(dx*dx + dy*dy + dz*dz)
 }
 
 // pointTriDistance is the distance from a point to a closed triangle: the
