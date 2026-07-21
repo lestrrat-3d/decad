@@ -506,7 +506,7 @@ type Step struct {
     Extent    Extent          // Extrude
     Angular   AngularExtent   // Revolve
     Axis      Axis            // Revolve
-    Placement TransformRecord // Placed — the rigid motion, recorded as vectors
+    Placement TransformRecord // Placed / PlacedCopy — the rigid motion, recorded as vectors; zero for Duplicate
     Selectors []Selector      // Fillet / Chamfer / Shell — the edge / face queries, unresolved
     Opts      StepOpts        // per-op options; nil when the op takes none
     Values    []units.Value   // radii, distances, thicknesses
@@ -1019,20 +1019,50 @@ func (b *Body) PlacedCopy(t r3.Transform) (*Body, error)
 Each returns a NEW live body and leaves the receiver **live**: the source is
 depended on, never consumed. `Duplicate` re-registers the receiver's immutable
 payload under a new step — identical, independent geometry, a fresh body
-identity, and roles minted from the new step (the modify-design role rule: a
-result's roles are its own record's, never inherited). `PlacedCopy(t)`
-re-evaluates the payload under the composed rigid motion exactly as `Placed`
-does, so `Duplicate` is `PlacedCopy` with no motion; the zero `Transform{}` is
-`ErrDegenerate` as in `Placed`, and `r3.Identity()` is a valid no-op motion. A
-body this evaluator did not build is `ErrUnsupported`, as `Placed`'s is.
+identity. `PlacedCopy(t)` re-evaluates the payload under the composed rigid
+motion exactly as `Placed` does, so `Duplicate` is `PlacedCopy` with no motion;
+the zero `Transform{}` is `ErrDegenerate` as in `Placed`, and `r3.Identity()` is
+a valid no-op motion. A body this evaluator did not build is `ErrUnsupported`, as
+`Placed`'s is.
+
+**A copy preserves geometry, so it preserves provenance.** A copy is the same
+part at a new identity and position, and `FaceCreatedBy` (§9) must still find its
+faces. The modify-design "a result's roles are its own record's, never inherited"
+rule governs the geometry-CHANGING ops (`Fillet` / `Chamfer` / `Shell`), whose
+rewrite makes the source's roles no longer name the same geometry; a copy changes
+no geometry, so it does not re-derive provenance from scratch — it carries the
+source's, reproduced from the same record:
+
+- a **faceted** copy (a boolean's output) carries each face's UPSTREAM
+  `FeatureRef` origins verbatim — they ride in the payload itself, so a boolean's
+  preserved provenance survives the copy unchanged, and `FaceCreatedBy(ref)`
+  matches a cut result's copy exactly as it matches the cut result;
+- an **analytic** or **modified** copy (a prism, revolve, cup, tube) carries no
+  separate upstream provenance — a prism cap is created by the prism step itself
+  — so re-evaluation reproduces the body's own fixed roles (`capStart`, `capEnd`,
+  `side(i, j)`, …) from the same record, keyed to the copy's own producing step
+  (§6.1's rule that roles derive from the recorded step), and the copy's own
+  `CapStart` / `CapEnd` / `FaceCreatedBy` resolve against it;
+- the `body` role — `Body.Origin()` — is the copy's own step in every case.
 
 Two new `OpKind`s — `OpDuplicate` and `OpPlacedCopy` — record the source's
 `StepRef` in `Inputs` on the same terms `ToFace` and `EdgeAxis` record a
 depended-on body (§6.2): the source's `StepRef` in `Inputs`, the source **not**
-in the consumed set, so §6's retire rule never touches it. `OpPlacedCopy`
-records its motion as a `TransformRecord`; `OpDuplicate` records none. A recipe
+in the consumed set, so §6's retire rule never touches it. Each is a closed-set
+member with its own named-text wire token in the `OpKind` codec — `OpDuplicate`
+is `"duplicate"`, `OpPlacedCopy` is `"placed_copy"` — beside `"placed"` and the
+rest (§6.2), so the constant order is never a serialization concern. A recipe
 replay reproduces every copy deterministically — the copies are steps like any
 other, and the source stays live for each.
+
+**`Step.Placement` is keyed to the two placing ops.** `OpPlacedCopy` records its
+motion as a `TransformRecord` in `Placement`, exactly as `OpPlaced` does, so
+`Placement` is present (nonzero, valid) for both; `OpDuplicate` records no
+motion, so its `Placement` is absent (the zero value), the same field-keying
+discipline the extent/angular one-of already enforces (§6.2). `Placement` is
+therefore present exactly for `OpPlaced` and `OpPlacedCopy` and forbidden on
+every other op — the required/forbidden-field rule of `docs/recipe-replay-design.md`
+§3.2.
 
 ### 8.1 Extent — illegal states unrepresentable
 
@@ -1259,9 +1289,26 @@ func CapEnd(b *Body) FeatureRef   // the end-cap role of b's producing step
 
 `FaceCreatedBy(CapStart(body))` selects the start cap without the caller writing
 the string; each helper reads `b.Origin().Step` (§6) and pairs it with its fixed
-role, so it names *this* body's cap even after the body was placed, copied or
-cut. The body-role reference is already `Body.Origin()`, so no helper duplicates
-it. The **indexed** `side(i, j)` roles stay positional and get no helper: a wall
+role — `FeatureRef{Step: b.Origin().Step, Role: "capStart"}`. The body-role
+reference is already `Body.Origin()`, so no helper duplicates it.
+
+**The cap roles exist only where the producing step mints them.** `CapStart(b)` /
+`CapEnd(b)` name `b`'s OWN producing step, so they resolve to a face only when
+that step actually mints the fixed cap role: an extrude, a partial revolve, a
+shell that built a tube — the analytic prisms and partial revolves whose
+evaluator emits `capStart` / `capEnd` — and a `Placed` / `PlacedCopy` /
+`Duplicate` of one, which re-mints those roles under the copy's own step (the
+copy-provenance rule above). On a body whose step mints no such role the helper
+still returns a well-formed `FeatureRef` — it just matches nothing, an ordinary
+`ErrNoMatch` at resolve (or `ErrCardinality` under an implicit exactly-one). That
+covers a `Union` / `Cut` / `Intersect` result (its faces carry the operands'
+UPSTREAM origins, not a cap role keyed to the boolean's own step), a full
+revolution (no caps at all), and `CapEnd` on a cup (a cup mints `capStart` and a
+`shellCap` pocket floor, no `capEnd`). To name a cap that a boolean's operand
+contributed, select `FaceCreatedBy(CapStart(originalBody))` against the upstream
+body whose provenance the boolean preserved (§9), never `CapStart(booleanResult)`.
+
+The **indexed** `side(i, j)` roles stay positional and get no helper: a wall
 is named by geometry — `Faces(Planar(), Facing(v))` — never by a hand-counted
 loop/segment index, so a fillet that re-segments a section can never silently
 invalidate a hand-typed number, and the one selection style that survives a
@@ -1321,6 +1368,20 @@ set, are exactly as §9 already defines them, and the residuals are computed onl
 on the failing path, so a resolving query pays nothing. Modify ops (`Fillet` /
 `Chamfer` / `Shell`) return the `SelectionError` unchanged, still branchable.
 
+**The implicit exactly-one callers report through the same `SelectionError`.**
+`ToFace` and `ToFaceAngular` (their stop face) and `EdgeAxis` (its axis edge)
+resolve their selector through `SelectFaces` / `SelectEdges` and then demand
+exactly one match — the implicit exactly-one of §12, which turns an unasserted
+zero-match `ErrNoMatch` into `ErrCardinality`. Each returns a `SelectionError`
+wrapping `ErrCardinality` with `Expected` rendered `"exactly 1"`, and it
+PRESERVES the underlying resolution's `Kind`, `Query`, `Body`, `Actual` count and
+`Residuals` — it replaces the direct `ErrNoMatch` (or an inner `ErrCardinality`
+from a selector that carried its own assertion) rather than discarding its
+detail. So a stop that matched no face and one that matched three both read
+`ErrCardinality` with `Expected == "exactly 1"` and the same stable query
+rendering, and the agent repairs the query the same way whether it drove
+`SelectFaces` directly or reached it through a stop or an axis.
+
 **A query renders stably**, and the same rendering is what `SelectionError.Query`
 and a verification `Diagnostic.Message` (`docs/verification-design.md` §1.1)
 reuse:
@@ -1330,9 +1391,55 @@ func (q *EdgeQuery) String() string
 func (q *FaceQuery) String() string
 ```
 
-The rendering is built from the same tagged vocabulary the codec uses
-(`edges` / `faces`, `convex`, `parallel_to`, …), so it is stable across releases
-and identical for a query and its decoded round-trip:
+The rendering is a canonical, deterministic function of the query's recorded
+content, built from the codec's own tagged vocabulary (§6.2): equal recorded
+queries render identically, and a query and its decoded round-trip render
+identically. It is an identity for diagnostics and equality, not a parseable
+format — the `Recipe` JSON codec is the round-trip channel.
+
+`q.String()` is `<kind>(<pred>, <pred>, …)<cardinality>`:
+
+- **kind** is `edges` for an `EdgeQuery`, `faces` for a `FaceQuery` — the codec's
+  own selector tokens. (`SelectionError.Kind`'s `SelectorKind.String()` is the
+  singular `edge` / `face`, naming the entity; the query prefix is plural and the
+  error's kind field singular, deliberately distinct.)
+- **preds** are the clauses in query order, `, `-separated; no clause renders
+  `edges()`.
+- **cardinality** is empty for no assertion, `.exactly(<n>)` for `Exactly(n)`,
+  `.at_least(<n>)` for `AtLeast(n)` — the codec's `exactly` / `at_least` keys.
+  (`SelectionError.Expected` renders the same assertion in prose — `exactly <n>`,
+  `at least <n>`, or `any` for none — a human line, not this suffix.)
+
+Each predicate renders by its codec kind token and payload:
+
+| Predicate | Rendering |
+|---|---|
+| `Convex()` / `Concave()` / `Circular()` | `convex` / `concave` / `circular` |
+| `Planar()` / `Cylindrical()` | `planar` / `cylindrical` |
+| `ParallelTo(v)` | `parallel_to(<vec>)` |
+| `NormalTo(v)` / `Facing(v)` | `normal_to(<vec>)` / `facing(<vec>)` |
+| `LongerThan(l)` | `longer_than(<value>)` |
+| `CreatedBy(f)` / `FaceCreatedBy(f)` | `created_by(<ref>)` / `face_created_by(<ref>)` |
+
+with these payload forms:
+
+- **`<vec>`** is `<x>,<y>,<z>` — comma-separated, no spaces, each coordinate the
+  shortest round-tripping float (`strconv.FormatFloat(c, 'g', -1, 64)`), so
+  `parallel_to(0,0,1)`. Rendering is total, so an unresolved query still prints:
+  a non-finite component reads `NaN` / `+Inf` / `-Inf` as that formatter writes
+  it, and the zero vector reads `0,0,0`.
+- **`<value>`** is the `units.Value`'s own canonical text form — magnitude plus
+  registered unit symbol, `"10 mm"` (§6.2) — so `longer_than(10 mm)` states kind
+  and unit explicitly and round-trips.
+- **`<ref>`** is a `FeatureRef` as `<step>:<role>` — the `StepRef` in decimal and
+  the role QUOTED with `strconv.Quote`, so a role that itself holds parentheses or
+  commas stays unambiguous: `created_by(3:"capStart")`, `created_by(2:"side(0,1)")`.
+- a zero-value, kind-less predicate — which the constructors never produce, but a
+  half-decoded query might carry — renders `<invalid>` rather than panicking.
+
+So `Faces(Planar(), Facing(z)).Exactly(1)` renders
+`faces(planar, facing(0,0,1)).exactly(1)`, and
+`Edges(Convex(), ParallelTo(z)).Exactly(4)` renders
 `edges(convex, parallel_to(0,0,1)).exactly(4)`.
 
 This is also why the decad code and the eventual Fusion code stay structurally
@@ -1373,8 +1480,9 @@ volume behind every `Interference` row are specified in
   `Sound`.
 - **`Verify` returns structured diagnostics.** `Report.Diagnostics` is one
   branchable `Diagnostic` per reason the report is not `Sound` — a reading
-  beyond tolerance, an undecided validity, an undecided or staged pair, a proven
-  wall or undercut violation, an interference. The slice is empty exactly when
+  beyond tolerance, an undecided validity, an undecided or staged pair, an
+  undecided survey (named per survey) or clearance, a proven wall or undercut
+  violation, an interference. The slice is empty exactly when
   the report is `Sound`, so an agent reads the reasons instead of reconstructing
   them. Every existing field and `Trustworthy()` are unchanged; the slice is
   additive. `docs/verification-design.md` §1.1 owns its shape.
