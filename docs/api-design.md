@@ -878,7 +878,8 @@ before extruding. decad never re-derives it.
 ## 8. Features
 
 v1 vocabulary, deliberately small: **Extrude, Revolve, Union/Cut/Intersect,
-Fillet, Chamfer, Shell, Placed**. Sweep and Loft are deferred.
+Fillet, Chamfer, Shell, Placed, Duplicate, PlacedCopy**. Sweep and Loft are
+deferred.
 
 ```go
 func (d *Document) Extrude(s *sketch.Sketch, p *sketch.Profile, e Extent, opts ...ExtrudeOption) (*Body, error)
@@ -1036,7 +1037,13 @@ source's, reproduced from the same record:
 - a **faceted** copy (a boolean's output) carries each face's UPSTREAM
   `FeatureRef` origins verbatim — they ride in the payload itself, so a boolean's
   preserved provenance survives the copy unchanged, and `FaceCreatedBy(ref)`
-  matches a cut result's copy exactly as it matches the cut result;
+  matches a cut result's copy exactly as it matches the cut result. A carried
+  upstream `FeatureRef` is a `FaceCreatedBy` provenance origin, not an own-step
+  reference: a boolean's faces already carry the operands' upstream origins, not
+  a role keyed to the boolean's own step (§9), so keeping it verbatim is outside
+  the never-inherited rule — that rule governs the own-step references a copy DOES
+  re-derive from its own record, `Body.Origin()` (the `body` role, below) and the
+  analytic/modified feature roles;
 - an **analytic** or **modified** copy (a prism, revolve, cup, tube) carries no
   separate upstream provenance — a prism cap is created by the prism step itself
   — so re-evaluation reproduces the body's own fixed roles (`capStart`, `capEnd`,

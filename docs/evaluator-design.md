@@ -314,16 +314,24 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
   sets, so their intersection is empty, a point, a segment, or a 2-D region —
   and the pair pass computes exactly *which*, never "how many of A's vertices
   sit on B's plane, and whose geometry do I look on". A 2-D region is a
-  coplanar face-on-face tangency (`ErrDegenerate`); a point is carried and
+  coplanar face-on-face tangency; a point is carried and
   refused unless some crossing chain owns it as an endpoint; a segment is a
-  rim. Which triangle's boundary an endpoint lies on is decided by testing the
-  point against *each* triangle, not by which list it was drawn from. The
-  classification is direction-free by construction, which is what keeps it from
-  disagreeing with itself.
+  rim. When the operands name valid solids, a 2-D region and an unowned point
+  are contacts past this evaluator's reach, so the boolean surfaces them as
+  `BooleanUnsupportedContact` (wrapping `ErrUnsupported`; `docs/api-design.md`
+  §8 / H2), never `ErrDegenerate` — which stays reserved for a genuinely
+  malformed region, a zero-area or self-crossing one. The classifier still
+  DETECTS the region-or-point shape; only the public error a valid such contact
+  yields is decided against H2. Which triangle's boundary an endpoint lies on is
+  decided by testing the point against *each* triangle, not by which list it was
+  drawn from. The classification is direction-free by construction, which is what
+  keeps it from disagreeing with itself.
 - **Graze versus crossing is not a property of a facet pair.** When a contact
   segment runs ALONG a facet edge, the pair cannot tell whether the operand's
   boundary touches the other's plane and comes back (a graze — a tangency no
-  side classification can be proven for, `ErrDegenerate`) or genuinely passes
+  side classification can be proven for, which surfaces on a valid model as
+  `BooleanUnsupportedContact` / `ErrUnsupported`, `docs/api-design.md` §8 / H2,
+  never `ErrDegenerate`) or genuinely passes
   through it (an ordinary crossing, and a real rim). Only the edge's TWO
   adjacent facets can: their apex vertices strictly on one side is a graze,
   straddling is a crossing. So the pair pass only reports the in-plane edge,
