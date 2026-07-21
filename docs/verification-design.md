@@ -203,6 +203,15 @@ const (
     // decidedly apart and only the gap is unmeasured. Reading ReadingNone,
     // Observed* and Required nil. Contributes Suspect.
     DiagUndecidedClearance
+    // DiagUndecidedInterference — a pair PROVEN to overlap whose overlap VOLUME
+    // the evaluator cannot bound (§1): the overlap-side mirror of
+    // DiagUndecidedClearance. No Interference row is emitted for it, and the
+    // report reads Suspect. It is distinct from DiagUndecidedPair (the
+    // disjoint/overlap partition itself unresolved) and DiagUnsupportedPair (a
+    // staged payload or contact) — here the pair is decidedly overlapping and
+    // only the overlap volume is unmeasured. Reading ReadingOverlapVolume;
+    // Observed and Required nil (no bounded value). Pair set. Contributes Suspect.
+    DiagUndecidedInterference
 )
 ```
 
@@ -239,6 +248,7 @@ renders `"reading(<n>)"` with `<n>` the integer, never a panic.
 - `DiagUndecidedPair` → `"undecided_pair"`
 - `DiagUnsupportedPair` → `"unsupported_pair"`
 - `DiagUndecidedClearance` → `"undecided_clearance"`
+- `DiagUndecidedInterference` → `"undecided_interference"`
 
 The zero value is `DiagMeasurementBeyondTolerance`, so it renders
 `"measurement_beyond_tolerance"`; an out-of-range value renders
@@ -256,11 +266,24 @@ its own `Reading` and the matching `Observed*` form; a proven-invalid body emits
 one `DiagInvalidBody` and no region-quantity diagnostics, because §1 gives it no
 region quantity to gate.
 
+A proven solid always forms its tolerance reference, so the tolerance gate never
+yields a reference-less `Suspect`: an analytic reading carries a zero `Bound`
+and short-circuits the gate before any reference is consulted
+(`verify.go:607-609,:624-626`), and a faceted body always forms a usable
+reference — its `payload.diameter` is guaranteed at build
+(`boolean_body.go:300-304`) and an edge length is a finite chord sum
+(`boolean_body.go:757-778`). Every tolerance-gate `Suspect` is therefore a
+genuine `bound > rel*Ref`, already carried by `DiagMeasurementBeyondTolerance`,
+so the "empty **exactly** when `Sound`" completeness holds.
+
 **The undecided pair is now RECORDED.** Where §6 folds a pair the evaluator
 could not decide into the report's `Suspect` rung, a `DiagUndecidedPair` or
-`DiagUnsupportedPair` naming the pair is emitted with it, and a pair proven apart
+`DiagUnsupportedPair` naming the pair is emitted with it, a pair proven apart
 whose asked gap the kernel could not measure emits a `DiagUndecidedClearance`
-instead (§1). The pair that a local boolean once collapsed and dropped —
+instead, and a pair proven to overlap whose overlap volume the evaluator could
+not bound emits a `DiagUndecidedInterference` — `Reading`
+`ReadingOverlapVolume`, `Observed` and `Required` nil, `Pair` set, status
+`Suspect` (§1). The pair that a local boolean once collapsed and dropped —
 undecided, so no `Interference` and no `Clearance` row — now names itself, so an
 agent sees which two bodies it could not separate rather than only that some pair
 failed. Core §4
@@ -921,8 +944,8 @@ survey that could not decide, and for the verdict nothing turns on which:
 `MinRadius`, an empty `Undercuts`, or a pair with no `Interference` row is a
 **proven** absence exactly when no diagnostic names it — the per-survey
 `DiagUndecidedWall` / `DiagUndecidedUndercut` / `DiagUndecidedMinRadius` for that
-body-and-survey, and `DiagUndecidedPair`, `DiagUnsupportedPair` or
-`DiagUndecidedClearance` for that pair — and the survey the evaluator could not
+body-and-survey, and `DiagUndecidedPair`, `DiagUnsupportedPair`,
+`DiagUndecidedClearance` or `DiagUndecidedInterference` for that pair — and the survey the evaluator could not
 decide is exactly the one that emitted such a diagnostic; the per-survey codes
 say WHICH survey it was, not merely that one was undecided. So the `Code` decides what the nil alone cannot:
 the ambiguity the standard leaves inside a `Suspect` report — proven absence, or

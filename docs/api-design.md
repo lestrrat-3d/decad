@@ -955,11 +955,19 @@ three under one sentinel is what makes `errors.Is(err, ErrBooleanFailed)` too
 coarse to drive recovery, so the `Code` draws the line the sentinel cannot.
 
 **A valid tangent contact is staged, not malformed.** A curved-surface or
-coplanar contact this evaluator cannot decide is `BooleanUnsupportedContact`
+coplanar contact this evaluator cannot classify is `BooleanUnsupportedContact`
 (wrapping `ErrUnsupported`), NEVER `ErrDegenerate`: the input names a real
 solid, and the refusal is the evaluator's reach, not a zero or self-crossing
-region. `ErrDegenerate` keeps its §12 meaning — an input with no usable geometry
-— and the boolean surface no longer overloads it with an evaluator limit. This
+region. That "never `ErrDegenerate`" scopes to the CONTACT-CLASSIFICATION
+refusals — the coplanar / tangent / grazing / isolated-point contact. It does
+not reach a distinct case: a valid operand whose boolean OUTPUT cannot be
+chorded finely enough to tessellate (a bridge pinch, a stalled ear clip)
+surfaces `errors.Is(err, ErrDegenerate)` publicly, and that is a retryable
+coarse-chording `ErrDegenerate` on that operand — a finer chord tolerance may
+clear it — not a `BooleanError`. So `ErrDegenerate` covers BOTH an input with
+no usable geometry (its §12 meaning) AND the coarse-chording tessellation
+refusal, while the typed `BooleanError` family covers the empty result, the
+unclassifiable contact, and the evaluator-internal failure. This
 sentinel mapping fixes the test impact mechanically: a valid-contact assertion
 checks `errors.Is(err, ErrUnsupported)` where a coarser taxonomy would check
 `ErrDegenerate`, and landing those assertion changes is the implementation PR's
@@ -1396,21 +1404,33 @@ on the failing path, so a resolving query pays nothing. Modify ops (`Fillet` /
 **The implicit exactly-one callers report through the same `SelectionError`.**
 `ToFace` and `ToFaceAngular` (their stop face) and `EdgeAxis` (its axis edge)
 resolve their selector through `SelectFaces` / `SelectEdges` and then demand
-exactly one match — the implicit exactly-one of §12. That implicit assertion
-applies ONLY to a selector that stated no cardinality of its own: an unasserted
-resolution that does not land exactly one match — zero (an `ErrNoMatch`) or
-several — becomes a `SelectionError` wrapping `ErrCardinality` with `Expected`
-rendered `"exactly 1"`, PRESERVING the underlying resolution's `Kind`, `Query`,
-`Body`, `Actual` count and `Residuals`. A selector that carried its OWN
-`.Exactly(n)` / `.AtLeast(n)` assertion already failed against what the caller
-asked, so its `SelectionError` is returned UNCHANGED — its `Expected` reflects
-that explicit assertion (`"exactly 2"` for an `.Exactly(2)` that matched one),
-never overwritten with `"exactly 1"`. So an unasserted stop that matched no face
-and one that matched three both read `ErrCardinality` with `Expected == "exactly
-1"` and the same stable query rendering, while a caller who asserted a different
-count reads that count back — and either way the agent repairs the query the same
-way whether it drove `SelectFaces` directly or reached it through a stop or an
-axis.
+exactly one match — the implicit exactly-one of §12. The rule keys on whether
+RESOLUTION SUCCEEDED, not on whether the selector carried a cardinality
+assertion:
+
+- A selector whose OWN `.Exactly(n)` / `.AtLeast(n)` assertion FAILED never
+  reaches the stop: `SelectFaces` / `SelectEdges` already returned its
+  `SelectionError`, and the caller gets it UNCHANGED — its `Expected` reflects
+  the caller's own assertion (`"exactly 2"` for an `.Exactly(2)` that matched
+  one), never overwritten.
+- On ANY SUCCESSFUL resolution — an unasserted query that matched several, OR an
+  explicit assertion that was SATISFIED — if the resolved count is not exactly
+  one, the stop returns a NEW `SelectionError` wrapping `ErrCardinality` with
+  `Expected` rendered `"exactly 1"` and `Actual` the resolved count, PRESERVING
+  the resolution's `Kind`, `Query`, `Body` and `Residuals`. A satisfied
+  `.Exactly(2)` on a body with two planar faces resolves to two faces, and the
+  stop — which needs one — turns that into `Expected "exactly 1"` / `Actual 2`,
+  exactly as an unasserted three-match would.
+- An unasserted resolution that matched nothing is an `ErrNoMatch` from
+  `SelectFaces` / `SelectEdges`; the stop rewrites it the same way, into
+  `ErrCardinality` with `Expected "exactly 1"` and `Actual 0`.
+
+So every stop or axis that does not land exactly one face or edge reads
+`ErrCardinality` with `Expected == "exactly 1"` and the same stable query
+rendering — whether the count was zero, three, or a satisfied `.Exactly(2)` —
+while a selector whose OWN assertion FAILED reads that assertion's count back;
+and either way the agent repairs the query the same way whether it drove
+`SelectFaces` directly or reached it through a stop or an axis.
 
 **A query renders stably**, and the same rendering is what `SelectionError.Query`
 and a verification `Diagnostic.Message` (`docs/verification-design.md` §1.1)
@@ -1453,11 +1473,18 @@ Each predicate renders by its codec kind token and payload:
 
 with these payload forms:
 
-- **`<vec>`** is `<x>,<y>,<z>` — comma-separated, no spaces, each coordinate the
-  shortest round-tripping float (`strconv.FormatFloat(c, 'g', -1, 64)`), so
-  `parallel_to(0,0,1)`. Rendering is total, so an unresolved query still prints:
-  a non-finite component reads `NaN` / `+Inf` / `-Inf` as that formatter writes
-  it, and the zero vector reads `0,0,0`.
+- **`<vec>`** is `<x>,<y>,<z>` — comma-separated, no spaces, each coordinate
+  first NORMALIZED so a negative zero renders `0` (`-0.0`, including
+  `math.Copysign(0, -1)`, is replaced with `+0.0` before formatting), then
+  written as the shortest round-tripping float
+  (`strconv.FormatFloat(c, 'g', -1, 64)`), so `parallel_to(0,0,1)`. The
+  normalization is load-bearing for the "equal recorded queries render
+  identically" contract: `-0.0 == 0.0`, so two value-equal vectors — say two
+  `Facing` predicates — must render the same, but `FormatFloat` writes a
+  negative zero as `"-0"`; normalizing first keeps them identical. Rendering is
+  total, so an unresolved query still prints: a non-finite component reads
+  `NaN` / `+Inf` / `-Inf` as that formatter writes it, and the zero vector
+  reads `0,0,0`.
 - **`<value>`** is the `units.Value`'s own canonical text form — magnitude plus
   registered unit symbol, `"10 mm"` (§6.2) — so `longer_than(10 mm)` states kind
   and unit explicitly and round-trips.
