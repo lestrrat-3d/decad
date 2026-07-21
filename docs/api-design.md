@@ -1404,9 +1404,11 @@ on the failing path, so a resolving query pays nothing. Modify ops (`Fillet` /
 **The implicit exactly-one callers report through the same `SelectionError`.**
 `ToFace` and `ToFaceAngular` (their stop face) and `EdgeAxis` (its axis edge)
 resolve their selector through `SelectFaces` / `SelectEdges` and then demand
-exactly one match — the implicit exactly-one of §12. The rule keys on whether
-RESOLUTION SUCCEEDED, not on whether the selector carried a cardinality
-assertion:
+exactly one match — the implicit exactly-one of §12. The rule turns on ONE
+distinction — did the selector's OWN explicit assertion fail? A failed explicit
+assertion is preserved unchanged; the implicit exactly-one owns every other
+outcome that is not a single match, an unasserted zero or several OR a satisfied
+explicit assertion whose count is not one:
 
 - A selector whose OWN `.Exactly(n)` / `.AtLeast(n)` assertion FAILED never
   reaches the stop: `SelectFaces` / `SelectEdges` already returned its

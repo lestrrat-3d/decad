@@ -209,8 +209,9 @@ const (
     // report reads Suspect. It is distinct from DiagUndecidedPair (the
     // disjoint/overlap partition itself unresolved) and DiagUnsupportedPair (a
     // staged payload or contact) — here the pair is decidedly overlapping and
-    // only the overlap volume is unmeasured. Reading ReadingOverlapVolume;
-    // Observed and Required nil (no bounded value). Pair set. Contributes Suspect.
+    // only the overlap volume is unmeasured. Reading ReadingNone (no bounded
+    // value to name, so — like DiagUndecidedClearance — it names no reading);
+    // Observed and Required nil. Pair set. Contributes Suspect.
     DiagUndecidedInterference
 )
 ```
@@ -281,9 +282,8 @@ could not decide into the report's `Suspect` rung, a `DiagUndecidedPair` or
 `DiagUnsupportedPair` naming the pair is emitted with it, a pair proven apart
 whose asked gap the kernel could not measure emits a `DiagUndecidedClearance`
 instead, and a pair proven to overlap whose overlap volume the evaluator could
-not bound emits a `DiagUndecidedInterference` — `Reading`
-`ReadingOverlapVolume`, `Observed` and `Required` nil, `Pair` set, status
-`Suspect` (§1). The pair that a local boolean once collapsed and dropped —
+not bound emits a `DiagUndecidedInterference` — `Reading` `ReadingNone`,
+`Observed` and `Required` nil, `Pair` set, status `Suspect` (§1). The pair that a local boolean once collapsed and dropped —
 undecided, so no `Interference` and no `Clearance` row — now names itself, so an
 agent sees which two bodies it could not separate rather than only that some pair
 failed. Core §4
@@ -944,9 +944,11 @@ survey that could not decide, and for the verdict nothing turns on which:
 `MinRadius`, an empty `Undercuts`, or a pair with no `Interference` row is a
 **proven** absence exactly when no diagnostic names it — the per-survey
 `DiagUndecidedWall` / `DiagUndecidedUndercut` / `DiagUndecidedMinRadius` for that
-body-and-survey, and `DiagUndecidedPair`, `DiagUnsupportedPair`,
-`DiagUndecidedClearance` or `DiagUndecidedInterference` for that pair — and the survey the evaluator could not
-decide is exactly the one that emitted such a diagnostic; the per-survey codes
+body-and-survey, and `DiagUndecidedPair`, `DiagUnsupportedPair` or
+`DiagUndecidedInterference` for that pair (a `DiagUndecidedClearance` proves the
+pair disjoint, so it leaves the missing `Interference` row a proven non-overlap
+and marks only a requested `Clearance` row undecided) — and the survey the
+evaluator could not decide is exactly the one that emitted such a diagnostic; the per-survey codes
 say WHICH survey it was, not merely that one was undecided. So the `Code` decides what the nil alone cannot:
 the ambiguity the standard leaves inside a `Suspect` report — proven absence, or
 undecided survey — is a decidable fact of the slice, not a thing an agent must
