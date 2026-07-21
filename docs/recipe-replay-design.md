@@ -319,8 +319,6 @@ value. Every field not listed as required or allowed MUST be absent.
 | `OpChamfer` | 1 | one `EdgeSelector`, one length `Value` | none | 1 |
 | `OpShell` | 1 | one `FaceSelector`, one length `Value`, `ShellOpts` | none | 1 |
 | `OpPlaced` | 1 | nonzero valid `Placement` | none | 1 |
-| `OpDuplicate` | 1 | none | none | 0 |
-| `OpPlacedCopy` | 1 | nonzero valid `Placement` | none | 0 |
 
 Additional rules:
 
@@ -330,7 +328,7 @@ Additional rules:
 - Extrude and revolve `Profile.Outer` MUST be non-empty.
 - `Extent` is required only for extrude.
 - `Angular` + `Axis` are required only for revolve.
-- `Placement` is required for placed and placed_copy, and MUST be absent for duplicate.
+- `Placement` is required only for placed.
 - `Selectors` are required only for modify operations.
 - `Values` are required only for modify operations.
 - `Opts` is required only for extrude + shell under the current vocabulary.

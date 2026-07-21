@@ -206,6 +206,44 @@ const (
 )
 ```
 
+**Both enums pin their stable `String()` tokens**, in the lower-snake style of
+the other closed sets decad owns (`OpKind`, the query predicates): the token,
+never the iota value, is the identity a caller branches on and a log prints.
+
+`ReadingKind.String()`:
+
+- `ReadingNone` → `"none"`
+- `ReadingArea` → `"area"`
+- `ReadingBounds` → `"bounds"`
+- `ReadingVolume` → `"volume"`
+- `ReadingCentroid` → `"centroid"`
+- `ReadingWall` → `"wall"`
+- `ReadingMinRadius` → `"min_radius"`
+- `ReadingOverlapVolume` → `"overlap_volume"`
+- `ReadingGap` → `"gap"`
+
+The zero value is `ReadingNone`, so it renders `"none"`; an out-of-range value
+renders `"reading(<n>)"` with `<n>` the integer, never a panic.
+
+`DiagnosticCode.String()`:
+
+- `DiagMeasurementBeyondTolerance` → `"measurement_beyond_tolerance"`
+- `DiagUndecidedValidity` → `"undecided_validity"`
+- `DiagInvalidBody` → `"invalid_body"`
+- `DiagWallTooThin` → `"wall_too_thin"`
+- `DiagUndercut` → `"undercut"`
+- `DiagUndecidedWall` → `"undecided_wall"`
+- `DiagUndecidedUndercut` → `"undecided_undercut"`
+- `DiagUndecidedMinRadius` → `"undecided_min_radius"`
+- `DiagInterference` → `"interference"`
+- `DiagUndecidedPair` → `"undecided_pair"`
+- `DiagUnsupportedPair` → `"unsupported_pair"`
+- `DiagUndecidedClearance` → `"undecided_clearance"`
+
+The zero value is `DiagMeasurementBeyondTolerance`, so it renders
+`"measurement_beyond_tolerance"`; an out-of-range value renders
+`"diagnostic(<n>)"` with `<n>` the integer, never a panic.
+
 **The slice is complete, and completeness is the contract.**
 `Report.Diagnostics` is empty **exactly** when `Report.Status == Sound`, and
 `Report.Status` is the worst `Diagnostic.Status` in the slice (`Sound` when it

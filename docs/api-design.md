@@ -960,10 +960,21 @@ coplanar contact this evaluator cannot decide is `BooleanUnsupportedContact`
 solid, and the refusal is the evaluator's reach, not a zero or self-crossing
 region. `ErrDegenerate` keeps its §12 meaning — an input with no usable geometry
 — and the boolean surface no longer overloads it with an evaluator limit. This
-is one taxonomy with `Verify`: an unsupported-contact pair leaves that pair
-`Suspect` with a `DiagUnsupportedPair` diagnostic (`docs/verification-design.md`
-§1.1), so the same contact reads the same way whether a caller ran the boolean
-directly or reached it through interference.
+sentinel mapping fixes the test impact mechanically: a valid-contact assertion
+checks `errors.Is(err, ErrUnsupported)` where a coarser taxonomy would check
+`ErrDegenerate`, and landing those assertion changes is the implementation PR's
+work, not this contract's.
+
+This is one taxonomy with `Verify` FOR A CONTACT THAT REACHES `Verify`'s
+read-only boolean: an unsupported-contact pair the boolean gives its
+unsupported-contact outcome leaves that pair `Suspect` with a
+`DiagUnsupportedPair` diagnostic (`docs/verification-design.md` §1.1), so it
+reads the same way whether a caller ran the boolean directly or reached it
+through interference. A pair `Verify` resolves EARLIER never reaches that
+outcome: the coplanar `Plane`×`Plane` contact certificate
+(`docs/clearance-design.md`) runs before the read-only boolean, so a certified
+coplanar touch reads as a touching/clearance result — an `Exact`-zero gap, no
+interference — and emits no `DiagUnsupportedPair`.
 
 Modify operations return a new body, retiring the receiver, on the same terms:
 
@@ -1068,8 +1079,15 @@ motion as a `TransformRecord` in `Placement`, exactly as `OpPlaced` does, so
 motion, so its `Placement` is absent (the zero value), the same field-keying
 discipline the extent/angular one-of already enforces (§6.2). `Placement` is
 therefore present exactly for `OpPlaced` and `OpPlacedCopy` and forbidden on
-every other op — the required/forbidden-field rule of `docs/recipe-replay-design.md`
-§3.2.
+every other op — the same required/forbidden-field discipline
+`docs/recipe-replay-design.md` §3.2 already states for `OpPlaced`. Recording the
+copy ops in the stored-recipe contract is the implementation PR's work, not this
+document's: `docs/recipe-replay-design.md` must GAIN the `OpDuplicate` /
+`OpPlacedCopy` §3.2 shape rows (each `Inputs: 1`, `consumed inputs: 0`, and the
+`Placement` present/absent rule above), their §4 liveness handling (the source
+`StepRef` depended on, never retired) and §5.1 replay dispatch, and the replay
+tests — this API contract fixes the copy ops' shape, the replay design fixes
+their schema.
 
 ### 8.1 Extent — illegal states unrepresentable
 
@@ -1378,16 +1396,21 @@ on the failing path, so a resolving query pays nothing. Modify ops (`Fillet` /
 **The implicit exactly-one callers report through the same `SelectionError`.**
 `ToFace` and `ToFaceAngular` (their stop face) and `EdgeAxis` (its axis edge)
 resolve their selector through `SelectFaces` / `SelectEdges` and then demand
-exactly one match — the implicit exactly-one of §12, which turns an unasserted
-zero-match `ErrNoMatch` into `ErrCardinality`. Each returns a `SelectionError`
-wrapping `ErrCardinality` with `Expected` rendered `"exactly 1"`, and it
-PRESERVES the underlying resolution's `Kind`, `Query`, `Body`, `Actual` count and
-`Residuals` — it replaces the direct `ErrNoMatch` (or an inner `ErrCardinality`
-from a selector that carried its own assertion) rather than discarding its
-detail. So a stop that matched no face and one that matched three both read
-`ErrCardinality` with `Expected == "exactly 1"` and the same stable query
-rendering, and the agent repairs the query the same way whether it drove
-`SelectFaces` directly or reached it through a stop or an axis.
+exactly one match — the implicit exactly-one of §12. That implicit assertion
+applies ONLY to a selector that stated no cardinality of its own: an unasserted
+resolution that does not land exactly one match — zero (an `ErrNoMatch`) or
+several — becomes a `SelectionError` wrapping `ErrCardinality` with `Expected`
+rendered `"exactly 1"`, PRESERVING the underlying resolution's `Kind`, `Query`,
+`Body`, `Actual` count and `Residuals`. A selector that carried its OWN
+`.Exactly(n)` / `.AtLeast(n)` assertion already failed against what the caller
+asked, so its `SelectionError` is returned UNCHANGED — its `Expected` reflects
+that explicit assertion (`"exactly 2"` for an `.Exactly(2)` that matched one),
+never overwritten with `"exactly 1"`. So an unasserted stop that matched no face
+and one that matched three both read `ErrCardinality` with `Expected == "exactly
+1"` and the same stable query rendering, while a caller who asserted a different
+count reads that count back — and either way the agent repairs the query the same
+way whether it drove `SelectFaces` directly or reached it through a stop or an
+axis.
 
 **A query renders stably**, and the same rendering is what `SelectionError.Query`
 and a verification `Diagnostic.Message` (`docs/verification-design.md` §1.1)
