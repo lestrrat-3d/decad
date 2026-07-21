@@ -28,6 +28,7 @@ type Report struct {
     Bodies        []*BodyReport
     Interferences []Interference // proven pairwise overlap, with the overlap VOLUME; always computed
     Clearances    []Clearance    // WithClearances(): minimum gap between disjoint pairs
+    Diagnostics   []Diagnostic   // one branchable entry per reason the report is not Sound (§1.1)
     Status        Status
 }
 
@@ -72,7 +73,220 @@ type BodyReport struct {
 }
 ```
 
-**A quantity a body does not have is absent — nil — never zero.** Core §4
+### 1.1 Diagnostics — the structured reason a report is not `Sound`
+
+`Status` and `Trustworthy()` say a report cannot be trusted; `Report.Diagnostics`
+says **why**, in a form an agent branches on to choose its next edit. The gate is
+a gate, but the north-star user (core §1) is a program that must revise a
+program: a bare `Suspect` cannot tell it whether to loosen `WithTolerance`,
+change geometry, avoid a staged pair, or report an evaluator limit. `Diagnostics`
+is the itemized answer. Every existing field and `Trustworthy()` are unchanged;
+the slice is **additive detail**, never a second verdict.
+
+```go
+// Diagnostic is one structured, branchable reason a body or a pair is not
+// Sound. It never decides the verdict — Status is still §6's worst-wins
+// aggregate — it explains it.
+type Diagnostic struct {
+    Code        DiagnosticCode  // the stable branch key
+    Status      Status          // the rung this reason contributes: Suspect / Violating / Interfering / Unsound
+    Body        *Body           // the body it concerns; nil for a pair diagnostic
+    Pair        *DiagnosticPair // the pair it concerns; nil for a body diagnostic
+    Reading     ReadingKind     // which quantity the Observed* form carries; ReadingNone when the reason
+                                // names no bounded reading. It keys which of the three Observed* fields is set.
+    Observed    *Measurement    // a SCALAR reading — Area, Volume, MinWallThickness, MinRadius, a pair's
+                                // overlap volume or gap — its own Bound and Exactness riding with it. nil
+                                // unless Reading names a scalar quantity.
+    ObservedVec *VecMeasurement // a VECTOR reading — a Centroid (core §5.3). nil unless Reading == ReadingCentroid.
+    ObservedBox *Box            // a BOX reading — a Bounds box (§1). nil unless Reading == ReadingBounds.
+    Required    *units.Value    // the threshold the reading was judged against, same Kind as the reading's own
+                                // Bound or the spec's own Kind; nil when the reason states none
+    Message     string          // human-readable; NEVER the branch key
+}
+
+// DiagnosticPair names the two bodies of a pair diagnostic, in the report's
+// own stable pair order (interference design §2).
+type DiagnosticPair struct{ A, B *Body }
+
+// ReadingKind names which measured quantity a diagnostic's Observed* form
+// carries — a named-text enum with a stable String(), like every other closed
+// set decad owns. It keeps the invariant #2 shapes distinct without a bare
+// float: EXACTLY ONE of Diagnostic.Observed / ObservedVec / ObservedBox is
+// non-nil, and this says which. A Centroid is a VecMeasurement and a Bounds a
+// Box, so neither fits a *Measurement; each rides its own typed field, keyed
+// here. ReadingNone means the reason names no bounded reading and all three are
+// nil.
+type ReadingKind int
+
+const (
+    // ReadingNone — the reason names no bounded reading; every Observed* is nil.
+    ReadingNone ReadingKind = iota
+    // ReadingArea — a body's Area (Observed).
+    ReadingArea
+    // ReadingBounds — a body's Bounds box (ObservedBox).
+    ReadingBounds
+    // ReadingVolume — a body's Volume (Observed).
+    ReadingVolume
+    // ReadingCentroid — a body's Centroid (ObservedVec).
+    ReadingCentroid
+    // ReadingWall — a body's MinWallThickness (Observed).
+    ReadingWall
+    // ReadingMinRadius — a body's MinRadius (Observed).
+    ReadingMinRadius
+    // ReadingOverlapVolume — a pair's proven overlap volume (Observed).
+    ReadingOverlapVolume
+    // ReadingGap — a pair's proven clearance gap (Observed).
+    ReadingGap
+)
+
+// DiagnosticCode is the stable, branchable reason code — a named-text enum in
+// the style of decad's other closed sets: a stable String(), never the iota
+// value, is the identity a caller and a log share.
+type DiagnosticCode int
+
+const (
+    // DiagMeasurementBeyondTolerance — a bounded reading's Bound exceeds
+    // rel*Ref (§2). Reading names the quantity and its matching Observed* form
+    // carries it — Area / Volume / MinWallThickness / MinRadius on a body ride
+    // Observed, a Centroid rides ObservedVec, a Bounds box rides ObservedBox,
+    // and on a pair the overlap volume or the gap rides Observed. Required is
+    // rel*Ref, the largest Bound that would have passed. On a body Body is set;
+    // on a pair Pair is. Contributes Suspect.
+    DiagMeasurementBeyondTolerance DiagnosticCode = iota
+    // DiagUndecidedValidity — the held boundary is not decisive beyond its own
+    // proven bound (§6): a sub-bound gap, pinch, graze, or an undecided count.
+    // Reading ReadingNone. Contributes Suspect.
+    DiagUndecidedValidity
+    // DiagInvalidBody — the held boundary is proven not a valid solid (§6).
+    // Reading ReadingNone. Contributes Unsound.
+    DiagInvalidBody
+    // DiagWallTooThin — MinWallThickness's proven interval is below the tool
+    // (§6). Reading ReadingWall, Observed the wall reading; Required the tool.
+    // Violating.
+    DiagWallTooThin
+    // DiagUndercut — a face is a proven undercut against the pull (§6).
+    // Reading ReadingNone, every Observed* and Required nil: an undercut is a
+    // predicate, not a scalar. Contributes Violating.
+    DiagUndercut
+    // DiagUndecidedWall — the wall survey is undecided: the payload's survey
+    // could neither answer nor prove the wall absent, OR its proven interval
+    // STRADDLES the tool (§6). In the straddle case Reading is ReadingWall with
+    // Observed the wall reading and Required the tool; when the survey could not
+    // answer at all Reading is ReadingNone and both are nil. Contributes Suspect.
+    DiagUndecidedWall
+    // DiagUndecidedUndercut — the pull survey could neither prove nor exclude an
+    // undercut (§6). Reading ReadingNone, Observed* and Required nil. Suspect.
+    DiagUndecidedUndercut
+    // DiagUndecidedMinRadius — the concave-radius survey could neither measure
+    // nor exclude a concave feature (§6). Reading ReadingNone, Observed* and
+    // Required nil. Contributes Suspect.
+    DiagUndecidedMinRadius
+    // DiagInterference — a pair proven to overlap (§1). Reading
+    // ReadingOverlapVolume, Observed the overlap volume; Required nil.
+    // Contributes Interfering.
+    DiagInterference
+    // DiagUndecidedPair — a pair the disjoint/overlap PARTITION proof resolved
+    // neither way (§1). Reading ReadingNone, Observed* and Required nil.
+    // Contributes Suspect.
+    DiagUndecidedPair
+    // DiagUnsupportedPair — a pair this evaluator cannot decide because a
+    // payload or a contact is STAGED: a revolve or cup operand, or the
+    // boolean's unsupported-contact (core §8). Reading ReadingNone, Observed*
+    // and Required nil. Contributes Suspect.
+    DiagUnsupportedPair
+    // DiagUndecidedClearance — a pair whose partition IS proven disjoint (by box
+    // or by the kernel) but whose REQUESTED WithClearances gap the kernel could
+    // not prove: no Clearance row is emitted for it, and the report reads
+    // Suspect. It is emitted only when WithClearances was asked, and it is
+    // distinct from DiagUndecidedPair (the partition itself unresolved) and
+    // DiagUnsupportedPair (a staged payload or contact) — here the pair is
+    // decidedly apart and only the gap is unmeasured. Reading ReadingNone,
+    // Observed* and Required nil. Contributes Suspect.
+    DiagUndecidedClearance
+    // DiagUndecidedInterference — a pair PROVEN to overlap whose overlap VOLUME
+    // the evaluator cannot bound (§1): the overlap-side mirror of
+    // DiagUndecidedClearance. No Interference row is emitted for it, and the
+    // report reads Suspect. It is distinct from DiagUndecidedPair (the
+    // disjoint/overlap partition itself unresolved) and DiagUnsupportedPair (a
+    // staged payload or contact) — here the pair is decidedly overlapping and
+    // only the overlap volume is unmeasured. Reading ReadingNone (no bounded
+    // value to name, so — like DiagUndecidedClearance — it names no reading);
+    // Observed and Required nil. Pair set. Contributes Suspect.
+    DiagUndecidedInterference
+)
+```
+
+**Both enums pin their stable `String()` tokens**, in the lower-snake style of
+the other closed sets decad owns (`OpKind`, the query predicates): the token,
+never the iota value, is the identity a caller branches on and a log prints.
+
+`ReadingKind.String()`:
+
+- `ReadingNone` → `"none"`
+- `ReadingArea` → `"area"`
+- `ReadingBounds` → `"bounds"`
+- `ReadingVolume` → `"volume"`
+- `ReadingCentroid` → `"centroid"`
+- `ReadingWall` → `"wall"`
+- `ReadingMinRadius` → `"min_radius"`
+- `ReadingOverlapVolume` → `"overlap_volume"`
+- `ReadingGap` → `"gap"`
+
+The zero value is `ReadingNone`, so it renders `"none"`; an out-of-range value
+renders `"reading(<n>)"` with `<n>` the integer, never a panic.
+
+`DiagnosticCode.String()`:
+
+- `DiagMeasurementBeyondTolerance` → `"measurement_beyond_tolerance"`
+- `DiagUndecidedValidity` → `"undecided_validity"`
+- `DiagInvalidBody` → `"invalid_body"`
+- `DiagWallTooThin` → `"wall_too_thin"`
+- `DiagUndercut` → `"undercut"`
+- `DiagUndecidedWall` → `"undecided_wall"`
+- `DiagUndecidedUndercut` → `"undecided_undercut"`
+- `DiagUndecidedMinRadius` → `"undecided_min_radius"`
+- `DiagInterference` → `"interference"`
+- `DiagUndecidedPair` → `"undecided_pair"`
+- `DiagUnsupportedPair` → `"unsupported_pair"`
+- `DiagUndecidedClearance` → `"undecided_clearance"`
+- `DiagUndecidedInterference` → `"undecided_interference"`
+
+The zero value is `DiagMeasurementBeyondTolerance`, so it renders
+`"measurement_beyond_tolerance"`; an out-of-range value renders
+`"diagnostic(<n>)"` with `<n>` the integer, never a panic.
+
+**The slice is complete, and completeness is the contract.**
+`Report.Diagnostics` is empty **exactly** when `Report.Status == Sound`, and
+`Report.Status` is the worst `Diagnostic.Status` in the slice (`Sound` when it
+is empty). Every rung the aggregate reaches has at least one diagnostic that
+reached it — the slice is §6's aggregate, itemized and proven, never a summary
+that can drift from it. Aggregation itself is unchanged: worst wins, over the
+bodies and the pairs, exactly as §6 states it. A body beyond tolerance on two
+readings emits two `DiagMeasurementBeyondTolerance`, one per reading, each with
+its own `Reading` and the matching `Observed*` form; a proven-invalid body emits
+one `DiagInvalidBody` and no region-quantity diagnostics, because §1 gives it no
+region quantity to gate.
+
+A proven solid always forms its tolerance reference, so the tolerance gate never
+yields a reference-less `Suspect`: an analytic reading carries a zero `Bound`
+and short-circuits the gate before any reference is consulted
+(`verify.go:607-609,:624-626`), and a faceted body always forms a usable
+reference — its `payload.diameter` is guaranteed at build
+(`boolean_body.go:300-304`) and an edge length is a finite chord sum
+(`boolean_body.go:757-778`). Every tolerance-gate `Suspect` is therefore a
+genuine `bound > rel*Ref`, already carried by `DiagMeasurementBeyondTolerance`,
+so the "empty **exactly** when `Sound`" completeness holds.
+
+**The undecided pair is now RECORDED.** Where §6 folds a pair the evaluator
+could not decide into the report's `Suspect` rung, a `DiagUndecidedPair` or
+`DiagUnsupportedPair` naming the pair is emitted with it, a pair proven apart
+whose asked gap the kernel could not measure emits a `DiagUndecidedClearance`
+instead, and a pair proven to overlap whose overlap volume the evaluator could
+not bound emits a `DiagUndecidedInterference` — `Reading` `ReadingNone`,
+`Observed` and `Required` nil, `Pair` set, status `Suspect` (§1). The pair that a local boolean once collapsed and dropped —
+undecided, so no `Interference` and no `Clearance` row — now names itself, so an
+agent sees which two bodies it could not separate rather than only that some pair
+failed. Core §4
 rejects `volume == 0` meaning both "empty" and "not a solid", and core §6 makes
 `Body.Volume()` `(Measurement, error)` for exactly that reason; a struct field
 has no error to return, so the report says it with presence, in the shape the
@@ -724,8 +938,22 @@ nil `MinRadius` a **proven** absence, an empty
 below) — each as good as any `Exact` answer, because an unprovable answer
 never reaches the caller inside a `Sound` report. (On a
 `Suspect` report any of the five could be either the proven answer or the
-survey that could not decide, and nothing turns on which: `Suspect` already
-says this report is not one to read answers out of.) The gate covers every
+survey that could not decide, and for the verdict nothing turns on which:
+`Suspect` already says this report is not one to gate on.) **Which one it is,
+`Diagnostics` (§1.1) says outright.** A nil `MinWallThickness`, a nil
+`MinRadius`, an empty `Undercuts`, or a pair with no `Interference` row is a
+**proven** absence exactly when no diagnostic names it — the per-survey
+`DiagUndecidedWall` / `DiagUndecidedUndercut` / `DiagUndecidedMinRadius` for that
+body-and-survey, and `DiagUndecidedPair`, `DiagUnsupportedPair` or
+`DiagUndecidedInterference` for that pair (a `DiagUndecidedClearance` proves the
+pair disjoint, so it leaves the missing `Interference` row a proven non-overlap
+and marks only a requested `Clearance` row undecided) — and the survey the
+evaluator could not decide is exactly the one that emitted such a diagnostic; the per-survey codes
+say WHICH survey it was, not merely that one was undecided. So the `Code` decides what the nil alone cannot:
+the ambiguity the standard leaves inside a `Suspect` report — proven absence, or
+undecided survey — is a decidable fact of the slice, not a thing an agent must
+guess. Inside a `Sound` report the slice is empty and every absence is proven,
+as it always was. The gate covers every
 bounded result the report carries, and what the report does not carry is
 outranked, never asked, or proven.
 
