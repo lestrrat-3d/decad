@@ -316,7 +316,11 @@ operation that consumes a body (the booleans of §8, the `Body.Fillet` /
 `Chamfer` / `Shell` modify ops, and `Body.Placed`) retires its input body or
 bodies from the document and registers the body it returns. A retired body
 remains readable, but it is gone from `Document.Bodies()` and
-`Document.Verify()` never reports on it.
+`Document.Verify()` never reports on it. The two copies of §8 —
+`Body.Duplicate` and `Body.PlacedCopy` — are the deliberate exception: they
+**depend on** the source without consuming it, exactly as an `Extrude` depends
+on the body a `ToFace` names (§6.2), so the source stays live and the copy is a
+new body beside it.
 
 **A retired body is no longer part of the model, so no operation takes one.** It is
 readable — its measurements still answer — but handing it to a boolean, to a modify
@@ -495,7 +499,7 @@ type Recipe struct {
 type StepRef int
 
 type Step struct {
-    Op        OpKind          // Extrude / Revolve / Union / Cut / Intersect / Fillet / Chamfer / Shell / Placed
+    Op        OpKind          // Extrude / Revolve / Union / Cut / Intersect / Fillet / Chamfer / Shell / Placed / Duplicate / PlacedCopy
     Inputs    []StepRef       // the bodies this step depends on. Cut is [target, tool].
     Profile   ProfileRecord   // Extrude / Revolve — decad's own analytic 2D record of the region
     Plane     PlaneRecord     // Extrude / Revolve — the sketch plane; lifts Profile into world space
@@ -608,6 +612,10 @@ always a body it consumes:
 
 - `Fillet`, `Chamfer`, `Shell` and `Placed` depend on one — the body they modify
   or place, which they consume;
+- `Duplicate` and `PlacedCopy` (§8) depend on one — the source they copy — and
+  consume **none**: the source's `StepRef` is recorded in `Inputs`, the source
+  stays live, and the copy is a new body. This is the same depend-without-consume
+  the `ToFace` extrude below uses, applied to a body-to-body copy;
 - the booleans depend on two, and consume both. **`Cut`'s `Inputs` order is
   `[target, tool]`** — the two roles are asymmetric and order is the only thing that
   distinguishes them;
@@ -901,6 +909,61 @@ result inside the document that owns them. The operands are themselves unchanged
 — invariant #4 — and `Document.Bodies()` and `Document.Verify()` stay truthful.
 Operands owned by different documents are `ErrForeignBody`.
 
+**A boolean failure is typed, because its three failures are three different
+caller actions.** A boolean that produces no body, that meets a contact this
+evaluator cannot classify, or that breaks an internal invariant returns a
+`BooleanError` — the operation, its operand `StepRef`s, and a branchable `Code`
+— wrapping the sentinel `errors.Is` already branches on, so compatibility
+holds:
+
+```go
+type BooleanError struct {
+    Op     OpKind            // Union / Cut / Intersect
+    Inputs []StepRef         // the operands, as the Step would record them; [target, tool] for Cut
+    Code   BooleanErrorCode
+    // Error()/Message carry the human text; Unwrap() returns the wrapped sentinel.
+}
+
+type BooleanErrorCode int
+
+const (
+    // BooleanEmpty is a NORMAL geometric outcome: the result encloses no
+    // volume — a disjoint Intersect, an all-removing Cut. Wraps ErrBooleanFailed.
+    BooleanEmpty BooleanErrorCode = iota
+    // BooleanUnsupportedContact is a VALID model whose operands meet in a
+    // contact this evaluator cannot classify from chords: a curved-surface
+    // tangency or near-contact, a coplanar face-on-face overlap, a grazing
+    // edge, an isolated-point pinch. Recipe-recordable, evaluator-staged.
+    // Wraps ErrUnsupported.
+    BooleanUnsupportedContact
+    // BooleanEvaluatorFailure is an internal invariant break: the stitched
+    // boundary did not close, no split line was found. Wraps ErrBooleanFailed.
+    BooleanEvaluatorFailure
+)
+```
+
+`errors.Is(err, ErrBooleanFailed)` still holds for `BooleanEmpty` and
+`BooleanEvaluatorFailure`; `errors.Is(err, ErrUnsupported)` holds for
+`BooleanUnsupportedContact`. `errors.As(err, &be)` then `be.Code` is the fine
+branch. The three separate a caller's three moves: `BooleanEmpty` — the model is
+sound and the operation asked for nothing (change the geometry, or drop the
+call); `BooleanUnsupportedContact` — the model is valid but past this
+evaluator's reach (choose a construction that does not lean on a tangent
+contact, or wait for vN); `BooleanEvaluatorFailure` — a bug to file. Mixing the
+three under one sentinel is what makes `errors.Is(err, ErrBooleanFailed)` too
+coarse to drive recovery, so the `Code` draws the line the sentinel cannot.
+
+**A valid tangent contact is staged, not malformed.** A curved-surface or
+coplanar contact this evaluator cannot decide is `BooleanUnsupportedContact`
+(wrapping `ErrUnsupported`), NEVER `ErrDegenerate`: the input names a real
+solid, and the refusal is the evaluator's reach, not a zero or self-crossing
+region. `ErrDegenerate` keeps its §12 meaning — an input with no usable geometry
+— and the boolean surface no longer overloads it with an evaluator limit. This
+is one taxonomy with `Verify`: an unsupported-contact pair leaves that pair
+`Suspect` with a `DiagUnsupportedPair` diagnostic (`docs/verification-design.md`
+§1.1), so the same contact reads the same way whether a caller ran the boolean
+directly or reached it through interference.
+
 Modify operations return a new body, retiring the receiver, on the same terms:
 
 ```go
@@ -941,6 +1004,35 @@ argument the caller states — an `r3.Transform`, a rigid motion (§5.2) — nev
 an ambient assembly context (§4). The zero `Transform{}` is invalid
 (`Transform.IsValid`) and is `ErrDegenerate` (§12). The step records the motion
 as a `TransformRecord` (§6.2).
+
+**A body can be copied without consuming it.** `Placed` retires its receiver, so
+modelling a part once and placing several instances — a bolt pattern, several
+interference placements, one cutting tool reused for several holes — would mean
+rebuilding the whole feature chain per instance. The two non-consuming copies
+close that gap:
+
+```go
+func (b *Body) Duplicate() (*Body, error)
+func (b *Body) PlacedCopy(t r3.Transform) (*Body, error)
+```
+
+Each returns a NEW live body and leaves the receiver **live**: the source is
+depended on, never consumed. `Duplicate` re-registers the receiver's immutable
+payload under a new step — identical, independent geometry, a fresh body
+identity, and roles minted from the new step (the modify-design role rule: a
+result's roles are its own record's, never inherited). `PlacedCopy(t)`
+re-evaluates the payload under the composed rigid motion exactly as `Placed`
+does, so `Duplicate` is `PlacedCopy` with no motion; the zero `Transform{}` is
+`ErrDegenerate` as in `Placed`, and `r3.Identity()` is a valid no-op motion. A
+body this evaluator did not build is `ErrUnsupported`, as `Placed`'s is.
+
+Two new `OpKind`s — `OpDuplicate` and `OpPlacedCopy` — record the source's
+`StepRef` in `Inputs` on the same terms `ToFace` and `EdgeAxis` record a
+depended-on body (§6.2): the source's `StepRef` in `Inputs`, the source **not**
+in the consumed set, so §6's retire rule never touches it. `OpPlacedCopy`
+records its motion as a `TransformRecord`; `OpDuplicate` records none. A recipe
+replay reproduces every copy deterministically — the copies are steps like any
+other, and the source stays live for each.
 
 ### 8.1 Extent — illegal states unrepresentable
 
@@ -1135,13 +1227,45 @@ func Circular() EdgePredicate
 
 func Planar() FacePredicate
 func Cylindrical() FacePredicate
-func NormalTo(v r3.Vec) FacePredicate
+func NormalTo(v r3.Vec) FacePredicate          // planar face whose normal is parallel to v — EITHER sense
+func Facing(v r3.Vec) FacePredicate            // planar face whose OUTWARD normal points ALONG v — ONE sense
 func FaceCreatedBy(f FeatureRef) FacePredicate // provenance, the face analog of CreatedBy
 ```
 
 `Convex()` and `Concave()` read `Edge.IsConvex` (§6.1): the walked-boundary
 convexity, not the material angle across the edge. A hole's rim edges are
 concave, so a fillet meant for them asks for `Concave()`.
+
+**`Facing(v)` is the signed one-face predicate.** `NormalTo(v)` matches a planar
+face on either normal sense, so a slab's two parallel caps both match `NormalTo(z)`
+— the right answer when a caller wants both, the wrong one when they mean the top
+only. `Facing(v)` matches only the face whose OUTWARD (material-leaving) normal
+points along `v` — parallel to `v` **and** the same sense, a positive projection —
+so `Faces(Planar(), Facing(z))` picks the single top cap that
+`Faces(NormalTo(z))` returns as a pair. A zero or non-finite `v` is rejected at
+resolve, as `NormalTo`'s is (§12). `Facing` is a closed-set variant like every
+predicate, so it ships its own tagged codec entry (kind `"facing"`, a `dir`
+payload decoded through a pointer wire field like `normal_to`) — recipe-stable.
+
+**Typed role helpers keep the fixed roles out of string literals.** A provenance
+selector names a `FeatureRef` (§6.1), and the roles a feature mints — `capStart`,
+`capEnd`, `body` — are a public part of the contract, but hand-typing `"capStart"`
+invites a typo the compiler cannot catch. The fixed roles get typed constructors:
+
+```go
+func CapStart(b *Body) FeatureRef // the start-cap role of b's producing step
+func CapEnd(b *Body) FeatureRef   // the end-cap role of b's producing step
+```
+
+`FaceCreatedBy(CapStart(body))` selects the start cap without the caller writing
+the string; each helper reads `b.Origin().Step` (§6) and pairs it with its fixed
+role, so it names *this* body's cap even after the body was placed, copied or
+cut. The body-role reference is already `Body.Origin()`, so no helper duplicates
+it. The **indexed** `side(i, j)` roles stay positional and get no helper: a wall
+is named by geometry — `Faces(Planar(), Facing(v))` — never by a hand-counted
+loop/segment index, so a fillet that re-segments a section can never silently
+invalidate a hand-typed number, and the one selection style that survives a
+rebuild is the geometric one selectors exist to provide.
 
 ```go
 body, err = body.Fillet(
@@ -1158,6 +1282,58 @@ is assertable:
 decad.Edges(decad.Convex()).Exactly(4)   // errors unless it matches 4
 decad.Edges(decad.Convex()).AtLeast(1)
 ```
+
+This is also why the decad code and the eventual Fusion code stay structurally
+parallel: a real Fusion script must pick edges by geometric predicate too.
+
+**A selector failure says which clause emptied the set.** A cardinality error
+that reports only a count tells an agent its assumption was wrong but not how,
+so it must reconstruct the query from source and probe it one clause at a time —
+exactly the iterative work the API should make mechanical. `SelectEdges` /
+`SelectFaces` return a `SelectionError` wrapping `ErrNoMatch` or `ErrCardinality`
+(§12), so `errors.Is` still branches; the type carries what the agent needs to
+repair the query directly:
+
+```go
+type SelectionError struct {
+    Kind      SelectorKind        // edge or face
+    Query     string              // the query's stable rendering — q.String()
+    Body      *Body               // the body resolved against; Body.Origin() names its feature
+    Expected  string              // the cardinality assertion, rendered: "exactly 4", "at least 1", or "any"
+    Actual    int                 // the total match count
+    Residuals []PredicateResidual // the running match count after each clause, in query order
+    // Error()/Message carry the human text; Unwrap() returns the wrapped sentinel.
+}
+
+type PredicateResidual struct {
+    Predicate string // the clause's stable rendering — "convex", "parallel_to(0,0,1)"
+    Remaining int    // candidates still matching after this clause AND every clause before it
+}
+
+type SelectorKind int // EdgeSelectorKind / FaceSelectorKind; a stable String()
+```
+
+`Residuals` is the conjunction evaluated cumulatively in query order: `Remaining`
+starts at the body's whole edge or face count and can only fall, and the clause
+whose `Remaining` reaches zero is the one that emptied the set. It is diagnostic
+enrichment only — WHICH entities a satisfiable query matches, and the final match
+set, are exactly as §9 already defines them, and the residuals are computed only
+on the failing path, so a resolving query pays nothing. Modify ops (`Fillet` /
+`Chamfer` / `Shell`) return the `SelectionError` unchanged, still branchable.
+
+**A query renders stably**, and the same rendering is what `SelectionError.Query`
+and a verification `Diagnostic.Message` (`docs/verification-design.md` §1.1)
+reuse:
+
+```go
+func (q *EdgeQuery) String() string
+func (q *FaceQuery) String() string
+```
+
+The rendering is built from the same tagged vocabulary the codec uses
+(`edges` / `faces`, `convex`, `parallel_to`, …), so it is stable across releases
+and identical for a query and its decoded round-trip:
+`edges(convex, parallel_to(0,0,1)).exactly(4)`.
 
 This is also why the decad code and the eventual Fusion code stay structurally
 parallel: a real Fusion script must pick edges by geometric predicate too.
@@ -1195,6 +1371,13 @@ volume behind every `Interference` row are specified in
   tolerance makes the report `Suspect` — on a body or on a pair, nothing is
   exempt — and `Report.Trustworthy()` is true only when the whole report is
   `Sound`.
+- **`Verify` returns structured diagnostics.** `Report.Diagnostics` is one
+  branchable `Diagnostic` per reason the report is not `Sound` — a reading
+  beyond tolerance, an undecided validity, an undecided or staged pair, a proven
+  wall or undercut violation, an interference. The slice is empty exactly when
+  the report is `Sound`, so an agent reads the reasons instead of reconstructing
+  them. Every existing field and `Trustworthy()` are unchanged; the slice is
+  additive. `docs/verification-design.md` §1.1 owns its shape.
 
 Fusion answers **none** of `Watertight` (with diagnostics), `Manifold`,
 `SelfIntersecting`, `MinWallThickness` (B-rep), `Undercuts`, or `MinRadius`. That
@@ -1258,6 +1441,14 @@ to make that mechanical.
   carries root/step + field path and matches both `ErrInvalidRecipe` and its
   specific cause; `EvaluationError` carries step + op and unwraps evaluator or
   context failures. Full precedence is in `docs/recipe-replay-design.md` §6.
+  `BooleanError` carries the op, the operand `StepRef`s and a `Code`
+  (empty / unsupported-contact / evaluator-failure), wrapping `ErrBooleanFailed`
+  (empty, evaluator-failure) or `ErrUnsupported` (unsupported-contact); a valid
+  tangent or coplanar contact this evaluator cannot classify is
+  unsupported-contact, **not** `ErrDegenerate` (§8). `SelectionError` carries the
+  selector kind, the query's stable rendering, the body, the expected/actual
+  cardinality and the per-clause residual counts, wrapping `ErrNoMatch` or
+  `ErrCardinality` (§9).
 - **`ErrUnitKind` covers exactly the wrong-`Kind` values.** A `units.Value` whose
   `Kind` is not the one the parameter takes: an angle where a length is wanted, and
   a `WithTolerance` value that is not `Dimensionless`

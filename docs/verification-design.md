@@ -28,6 +28,7 @@ type Report struct {
     Bodies        []*BodyReport
     Interferences []Interference // proven pairwise overlap, with the overlap VOLUME; always computed
     Clearances    []Clearance    // WithClearances(): minimum gap between disjoint pairs
+    Diagnostics   []Diagnostic   // one branchable entry per reason the report is not Sound (§1.1)
     Status        Status
 }
 
@@ -72,7 +73,98 @@ type BodyReport struct {
 }
 ```
 
-**A quantity a body does not have is absent — nil — never zero.** Core §4
+### 1.1 Diagnostics — the structured reason a report is not `Sound`
+
+`Status` and `Trustworthy()` say a report cannot be trusted; `Report.Diagnostics`
+says **why**, in a form an agent branches on to choose its next edit. The gate is
+a gate, but the north-star user (core §1) is a program that must revise a
+program: a bare `Suspect` cannot tell it whether to loosen `WithTolerance`,
+change geometry, avoid a staged pair, or report an evaluator limit. `Diagnostics`
+is the itemized answer. Every existing field and `Trustworthy()` are unchanged;
+the slice is **additive detail**, never a second verdict.
+
+```go
+// Diagnostic is one structured, branchable reason a body or a pair is not
+// Sound. It never decides the verdict — Status is still §6's worst-wins
+// aggregate — it explains it.
+type Diagnostic struct {
+    Code     DiagnosticCode  // the stable branch key
+    Status   Status          // the rung this reason contributes: Suspect / Violating / Interfering / Unsound
+    Body     *Body           // the body it concerns; nil for a pair diagnostic
+    Pair     *DiagnosticPair // the pair it concerns; nil for a body diagnostic
+    Observed *Measurement    // the reading in question — its own Bound and Exactness ride with it;
+                             // nil when the reason names no bounded reading
+    Required *units.Value    // the threshold the reading was judged against, same Kind as Observed.Bound
+                             // or the spec's own Kind; nil when the reason states none
+    Message  string          // human-readable; NEVER the branch key
+}
+
+// DiagnosticPair names the two bodies of a pair diagnostic, in the report's
+// own stable pair order (interference design §2).
+type DiagnosticPair struct{ A, B *Body }
+
+// DiagnosticCode is the stable, branchable reason code — a named-text enum in
+// the style of decad's other closed sets: a stable String(), never the iota
+// value, is the identity a caller and a log share.
+type DiagnosticCode int
+
+const (
+    // DiagMeasurementBeyondTolerance — an Approximate reading's Bound exceeds
+    // rel*Ref (§2). Observed is the reading; Required is rel*Ref, the largest
+    // Bound that would have passed. On a body Body is set; on a pair Pair is.
+    // Contributes Suspect.
+    DiagMeasurementBeyondTolerance DiagnosticCode = iota
+    // DiagUndecidedValidity — the held boundary is not decisive beyond its own
+    // proven bound (§6): a sub-bound gap, pinch, graze, or an undecided count.
+    // Contributes Suspect.
+    DiagUndecidedValidity
+    // DiagInvalidBody — the held boundary is proven not a valid solid (§6).
+    // Contributes Unsound.
+    DiagInvalidBody
+    // DiagWallTooThin — MinWallThickness's proven interval is below the tool
+    // (§6). Observed is the wall reading; Required is the tool. Violating.
+    DiagWallTooThin
+    // DiagUndercut — a face is a proven undercut against the pull (§6).
+    // Observed and Required are nil: an undercut is a predicate, not a scalar.
+    // Contributes Violating.
+    DiagUndercut
+    // DiagUndecidedSurvey — an asked survey the evaluator could neither answer
+    // nor prove absent: a wall interval that straddles the tool, a wall it
+    // cannot prove absent, an undercut it can neither prove nor exclude, a
+    // concave radius it can neither measure nor exclude (§6). Contributes
+    // Suspect.
+    DiagUndecidedSurvey
+    // DiagInterference — a pair proven to overlap (§1). Observed is the overlap
+    // volume; Required nil. Contributes Interfering.
+    DiagInterference
+    // DiagUndecidedPair — a pair the partition proof resolved neither way (§1).
+    // Observed and Required nil. Contributes Suspect.
+    DiagUndecidedPair
+    // DiagUnsupportedPair — a pair this evaluator cannot decide because a
+    // payload or a contact is staged: a revolve or cup operand, or the
+    // boolean's unsupported-contact (core §8). Observed and Required nil.
+    // Contributes Suspect.
+    DiagUnsupportedPair
+)
+```
+
+**The slice is complete, and completeness is the contract.**
+`Report.Diagnostics` is empty **exactly** when `Report.Status == Sound`, and
+`Report.Status` is the worst `Diagnostic.Status` in the slice (`Sound` when it
+is empty). Every rung the aggregate reaches has at least one diagnostic that
+reached it — the slice is §6's aggregate, itemized and proven, never a summary
+that can drift from it. Aggregation itself is unchanged: worst wins, over the
+bodies and the pairs, exactly as §6 states it. A body beyond tolerance on two
+readings emits two `DiagMeasurementBeyondTolerance`, one per reading, each with
+its own `Observed`; a proven-invalid body emits one `DiagInvalidBody` and no
+region-quantity diagnostics, because §1 gives it no region quantity to gate.
+
+**The undecided pair is now RECORDED.** Where §6 folds a pair the evaluator
+could not decide into the report's `Suspect` rung, a `DiagUndecidedPair` or
+`DiagUnsupportedPair` naming the pair is emitted with it. The pair that a local
+boolean once collapsed and dropped — undecided, so no `Interference` and no
+`Clearance` row — now names itself, so an agent sees which two bodies it could
+not separate rather than only that some pair failed. Core §4
 rejects `volume == 0` meaning both "empty" and "not a solid", and core §6 makes
 `Body.Volume()` `(Measurement, error)` for exactly that reason; a struct field
 has no error to return, so the report says it with presence, in the shape the
@@ -724,8 +816,18 @@ nil `MinRadius` a **proven** absence, an empty
 below) — each as good as any `Exact` answer, because an unprovable answer
 never reaches the caller inside a `Sound` report. (On a
 `Suspect` report any of the five could be either the proven answer or the
-survey that could not decide, and nothing turns on which: `Suspect` already
-says this report is not one to read answers out of.) The gate covers every
+survey that could not decide, and for the verdict nothing turns on which:
+`Suspect` already says this report is not one to gate on.) **Which one it is,
+`Diagnostics` (§1.1) says outright.** A nil `MinWallThickness`, a nil
+`MinRadius`, an empty `Undercuts`, or a pair with no `Interference` row is a
+**proven** absence exactly when no diagnostic names it — no `DiagUndecidedSurvey`
+for that body-and-survey, no `DiagUndecidedPair` or `DiagUnsupportedPair` for
+that pair — and the survey the evaluator could not decide is exactly the one
+that emitted such a diagnostic. So the `Code` decides what the nil alone cannot:
+the ambiguity the standard leaves inside a `Suspect` report — proven absence, or
+undecided survey — is a decidable fact of the slice, not a thing an agent must
+guess. Inside a `Sound` report the slice is empty and every absence is proven,
+as it always was. The gate covers every
 bounded result the report carries, and what the report does not carry is
 outranked, never asked, or proven.
 
