@@ -701,13 +701,14 @@ func cupMinRadius(cp cupPayload) (radiusOutcome, bool) {
 }
 
 // runSurveys answers the asked opt-in questions on one proven-solid body,
-// filling the report fields and returning the spec verdicts: violating when
-// a stated spec is proven to fail, suspect when an asked question is
-// undecided or a stated spec is straddled (verification §6). Every reading
-// this evaluator produces is closed-form — Exact, zero bound.
-func runSurveys(br *BodyReport, cfg verifyConfig) (bool, bool) {
-	violating := false
-	suspect := false
+// filling the report fields and returning one diagnostic per non-Sound
+// outcome: DiagWallTooThin / DiagUndercut (Violating) when a stated spec is
+// proven to fail, and the per-survey DiagUndecided* (Suspect) when an asked
+// question is undecided or a stated spec is straddled (verification §1.1/§6).
+// A Sound survey emits nothing. Every reading this evaluator produces is
+// closed-form — Exact, zero bound.
+func runSurveys(br *BodyReport, cfg verifyConfig) []Diagnostic {
+	var diags []Diagnostic
 	b := br.Body
 
 	if cfg.wall != nil {
@@ -718,16 +719,42 @@ func runSurveys(br *BodyReport, cfg verifyConfig) (bool, bool) {
 		case revolvePayload:
 			out = revolveWall(pl, cfg.allowRad)
 		}
-		if !out.ok {
-			suspect = true
-		} else if out.reading != nil {
+		switch {
+		case !out.ok:
+			diags = append(diags, Diagnostic{
+				Code:    DiagUndecidedWall,
+				Status:  Suspect,
+				Body:    b,
+				Reading: ReadingNone,
+				Message: "the wall survey could neither answer nor prove no wall exists",
+			})
+		case out.reading != nil:
 			m := exactLengthMeasurement(*out.reading)
 			br.MinWallThickness = &m
+			tool := cfg.wall.tool
 			switch intervalVerdict(*out.reading, 0, cfg.toolMM) {
 			case -1:
-				violating = true
+				obs := m
+				diags = append(diags, Diagnostic{
+					Code:     DiagWallTooThin,
+					Status:   Violating,
+					Body:     b,
+					Reading:  ReadingWall,
+					Observed: &obs,
+					Required: &tool,
+					Message:  "the minimum wall thickness is proven below the tool",
+				})
 			case 0:
-				suspect = true
+				obs := m
+				diags = append(diags, Diagnostic{
+					Code:     DiagUndecidedWall,
+					Status:   Suspect,
+					Body:     b,
+					Reading:  ReadingWall,
+					Observed: &obs,
+					Required: &tool,
+					Message:  "the minimum wall thickness interval straddles the tool",
+				})
 			}
 		}
 	}
@@ -742,12 +769,28 @@ func runSurveys(br *BodyReport, cfg verifyConfig) (bool, bool) {
 		case cupPayload:
 			out = cupUndercuts(b, pl, *cfg.pull)
 		}
-		if !out.ok {
-			suspect = true
-		} else {
+		switch {
+		case !out.ok:
+			diags = append(diags, Diagnostic{
+				Code:    DiagUndecidedUndercut,
+				Status:  Suspect,
+				Body:    b,
+				Reading: ReadingNone,
+				Message: "the pull survey could neither prove nor exclude an undercut",
+			})
+		default:
 			br.Undercuts = out.faces
 			if len(out.faces) > 0 {
-				violating = true
+				// An undercut is a predicate, not a scalar; the report's
+				// Undercuts slice already lists the faces, so the pair emits
+				// one DiagUndercut naming the body.
+				diags = append(diags, Diagnostic{
+					Code:    DiagUndercut,
+					Status:  Violating,
+					Body:    b,
+					Reading: ReadingNone,
+					Message: "a face is a proven undercut against the pull",
+				})
 			}
 		}
 	}
@@ -763,15 +806,22 @@ func runSurveys(br *BodyReport, cfg verifyConfig) (bool, bool) {
 		case cupPayload:
 			out, ok = cupMinRadius(pl)
 		}
-		if !ok || !out.ok {
-			suspect = true
-		} else if out.reading != nil {
+		switch {
+		case !ok || !out.ok:
+			diags = append(diags, Diagnostic{
+				Code:    DiagUndecidedMinRadius,
+				Status:  Suspect,
+				Body:    b,
+				Reading: ReadingNone,
+				Message: "the concave-radius survey could neither measure nor exclude a concave feature",
+			})
+		case out.reading != nil:
 			m := exactLengthMeasurement(*out.reading)
 			br.MinRadius = &m
 		}
 	}
 
-	return violating, suspect
+	return diags
 }
 
 // exactLengthMeasurement wraps a closed-form millimetre reading.

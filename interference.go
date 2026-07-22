@@ -91,34 +91,52 @@ func loopRecordsEqual(budget *workBudget, a, b LoopRecord) (bool, error) {
 	return true, nil
 }
 
+// interferenceOutcome distinguishes why the overlap volume could not be
+// measured, so Verify can pick the matching diagnostic (verification §1.1): a
+// staged payload or contact is DiagUnsupportedPair, any other unmeasured
+// result DiagUndecidedPair (or DiagUndecidedInterference for a proven overlap).
+type interferenceOutcome int
+
+const (
+	// interferenceMeasured — a positive bounded overlap volume was proven.
+	interferenceMeasured interferenceOutcome = iota
+	// interferenceUndecided — the read-only proof resolved neither way.
+	interferenceUndecided
+	// interferenceUnsupported — a staged payload or contact (core §8).
+	interferenceUnsupported
+)
+
 // measuredInterference returns the pair's bounded overlap volume. Strict
 // containment and exact analytic equality prove the set identity directly;
 // every other pair uses the read-only mesh intersection and its positive
-// lower-volume gate.
-func measuredInterference(ctx context.Context, a, b *Body, res pairResult) (Measurement, bool, error) {
+// lower-volume gate. The outcome names why an unmeasured result is unmeasured.
+func measuredInterference(ctx context.Context, a, b *Body, res pairResult) (Measurement, interferenceOutcome, error) {
 	if res.contained != nil {
-		return res.contained.volume, true, nil
+		return res.contained.volume, interferenceMeasured, nil
 	}
 	equal, err := analyticBodiesEqual(newWorkBudget(ctx), a, b)
 	if err != nil {
-		return Measurement{}, false, err
+		return Measurement{}, interferenceUndecided, err
 	}
 	if equal {
 		// Stable pair order chooses A when the represented sets are equal.
-		return a.volume, true, nil
+		return a.volume, interferenceMeasured, nil
 	}
 	eval, err := evaluateBoolean(ctx, OpIntersect, a, b)
 	if err != nil {
-		if _, ok := asExpectedBoolean(err); ok {
-			return Measurement{}, false, nil
+		if expected, ok := asExpectedBoolean(err); ok {
+			if expected.kind == booleanExpectedUnsupported {
+				return Measurement{}, interferenceUnsupported, nil
+			}
+			return Measurement{}, interferenceUndecided, nil
 		}
-		return Measurement{}, false, err
+		return Measurement{}, interferenceUndecided, err
 	}
 	value := math.Abs(eval.volume.Value.Base())
 	if value-eval.volume.Bound.Base() <= 0 {
-		return Measurement{}, false, nil
+		return Measurement{}, interferenceUndecided, nil
 	}
-	return eval.volume, true, nil
+	return eval.volume, interferenceMeasured, nil
 }
 
 // interferencePairDiameter reads the greatest supported point distance from
@@ -162,14 +180,15 @@ func interferencePairDiameter(ctx context.Context, a, b *Body) (float64, error) 
 	return best, ctx.Err()
 }
 
-// interferenceWithinTolerance applies the pair-local volume gate. The
-// overlap boundary lies on the operands' skins, so the noise quantum uses
-// their summed surface areas rather than the transient intersection mesh.
-func interferenceWithinTolerance(volume Measurement, a, b *Body, pairD, rel float64) bool {
+// interferenceToleranceRef applies the pair-local volume gate and returns the
+// reference it formed (verification §1.1's Required). The overlap boundary lies
+// on the operands' skins, so the noise quantum uses their summed surface areas
+// rather than the transient intersection mesh.
+func interferenceToleranceRef(volume Measurement, a, b *Body, pairD, rel float64) (bool, float64, bool) {
 	const eps = 1e-9
 	area := math.Abs(a.area.Value.Base()) + math.Abs(b.area.Value.Base())
 	quantum := eps * pairD * area
-	return measurementWithinTolerance(volume, rel, func(value float64) (float64, bool) {
+	return scalarToleranceRef(volume, rel, func(value float64) (float64, bool) {
 		ref := math.Max(value, quantum)
 		return ref, usableMagnitude(ref)
 	})
