@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"strings"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -38,17 +39,24 @@ const boolChordFactor = 2e-5
 // computed in exact arithmetic); the surface area always carries at least an
 // ulp-scale float-summation bound, so it reads Approximate with a bound tiny
 // against any real tolerance. Operands from different
-// documents are ErrForeignBody; retired operands ErrRetiredBody. A
-// curved-surface tangent contact whose chord facets never meet is
-// ErrUnsupported — whether the true surfaces touch would be decided by
-// where the chords happened to fall. An exact coplanar / face-on-face or
-// isolated-point contact whose facets meet degenerately (a face-on-face
-// overlap, a grazing edge) is ErrDegenerate. A result with no volume is
-// ErrBooleanFailed.
+// documents are ErrForeignBody; retired operands ErrRetiredBody. A boolean
+// that fails on the geometry returns a typed [BooleanError] wrapping the §12
+// sentinel: a valid but unclassifiable contact — a curved-surface tangency or
+// near-contact whose chord facets never provably interpenetrate, an exact
+// coplanar / face-on-face overlap, a grazing edge, or an isolated-point pinch —
+// is BooleanUnsupportedContact (wrapping ErrUnsupported), never ErrDegenerate;
+// a result with no volume is BooleanEmpty (wrapping ErrBooleanFailed); an
+// internal invariant break is BooleanEvaluatorFailure (wrapping
+// ErrBooleanFailed). errors.As(err, &be) reads the Code.
 // Both operands are tessellated first at a chord tolerance derived from the
-// pair's diameter, so a revolve operand — which has no tessellator — is
-// ErrUnsupported, and so is a Faceted operand whose own held Bound is coarser
-// than that pair tolerance (it cannot be re-tessellated finer than its bound).
+// pair's diameter, so an operand this evaluator cannot tessellate — a revolve
+// body, which has no tessellator, or a Faceted operand whose own held Bound is
+// coarser than that pair tolerance (it cannot be re-tessellated finer than its
+// bound) — surfaces a plain ErrUnsupported before any contact is examined: a
+// capability limit, not a BooleanError. A valid operand whose boolean OUTPUT
+// cannot be chorded finely enough to tessellate surfaces the retryable
+// coarse-chording ErrDegenerate on that operand — a finer chord tolerance may
+// clear it — not a BooleanError.
 func Union(a, b *Body) (*Body, error) {
 	return performBoolean(OpUnion, a, b)
 }
@@ -72,8 +80,24 @@ type booleanExpectedKind int
 
 const (
 	booleanExpectedEmpty booleanExpectedKind = iota
+	// booleanExpectedContact is a TRUE contact/proximity refusal of the boolean
+	// geometry itself: an unclassifiable tangent contact (errUnclassifiableContact
+	// / meshBoolean) or an undecidable near-miss (refuseUndecidableProximity). It
+	// maps to the public BooleanUnsupportedContact.
 	booleanExpectedContact
+	// booleanExpectedUnsupported is an in-pipeline reach of the boolean geometry
+	// on operands that DID tessellate — a collapsed or welded-away facet
+	// (prepBoolMesh / stitchFacets) or a trim amplification that outgrew the pair
+	// diameter (rimDelta). Like a contact refusal the model is real and the limit
+	// is the evaluator's reach, so it too maps to BooleanUnsupportedContact.
 	booleanExpectedUnsupported
+	// booleanExpectedStaging is a capability/staging limit reached BEFORE any
+	// contact is examined: an operand this evaluator cannot tessellate at all (a
+	// revolve body, or a Faceted operand whose held bound is coarser than the pair
+	// tolerance). No contact was ever inspected, so it is NOT a contact refusal —
+	// it passes through the public boundary as a plain ErrUnsupported, never a
+	// BooleanError.
+	booleanExpectedStaging
 	booleanExpectedCoarseTessellation
 )
 
@@ -127,22 +151,71 @@ func performBoolean(op OpKind, a, b *Body) (*Body, error) {
 	if a == b {
 		return nil, fmt.Errorf(`%w: a boolean needs two distinct bodies`, ErrDegenerate)
 	}
+	inputs := []StepRef{a.originStep(), b.originStep()}
 	eval, err := evaluateBoolean(context.Background(), op, a, b)
 	if err != nil {
-		return nil, err
+		return nil, asBooleanError(op, inputs, err)
 	}
 
 	step := Step{
 		Op:     op,
-		Inputs: []StepRef{a.originStep(), b.originStep()},
+		Inputs: inputs,
 	}
 	ref := d.nextStepRef()
 	body, err := buildFacetedBody(d, ref, eval.payload)
 	if err != nil {
-		return nil, err
+		return nil, asBooleanError(op, inputs, err)
 	}
 	d.commit(step, body, a, b)
 	return body, nil
+}
+
+// asBooleanError maps an evaluateBoolean or buildFacetedBody error to the
+// public typed BooleanError (docs/api-design.md §8 / H2). The private
+// expected-outcome kinds decide the Code and the wrapped sentinel: an empty
+// result is BooleanEmpty; a valid but unclassifiable coplanar / tangent /
+// grazing / isolated-point contact, and an in-pipeline reach of the boolean
+// geometry on operands that DID tessellate (a proximity refusal, a collapsed or
+// welded-away facet, a trim amplification past the pair diameter), are
+// BooleanUnsupportedContact — the model is real and the refusal is the
+// evaluator's contact reach, so the wrapped sentinel is ErrUnsupported, never
+// ErrDegenerate. A capability/staging limit reached BEFORE any contact is
+// examined — an operand this evaluator cannot tessellate (a revolve body, or a
+// Faceted operand coarser than the pair tolerance) — is NOT a contact refusal
+// and passes through unwrapped as a plain ErrUnsupported, not a BooleanError. A
+// coarse-chording tessellation refusal is a retryable ErrDegenerate on a valid
+// operand and likewise passes through unwrapped. An ordinary ErrBooleanFailed
+// with no expected-outcome tag is an internal invariant break:
+// BooleanEvaluatorFailure. Anything else — a nil, self, or extent-less operand,
+// a cancelled context — passes through unchanged.
+func asBooleanError(op OpKind, inputs []StepRef, err error) error {
+	if expected, ok := asExpectedBoolean(err); ok {
+		switch expected.kind {
+		case booleanExpectedEmpty:
+			return newBooleanError(op, inputs, BooleanEmpty, ErrBooleanFailed, err)
+		case booleanExpectedContact, booleanExpectedUnsupported:
+			return newBooleanError(op, inputs, BooleanUnsupportedContact, ErrUnsupported, err)
+		case booleanExpectedStaging, booleanExpectedCoarseTessellation:
+			return err
+		}
+	}
+	if errors.Is(err, ErrBooleanFailed) {
+		return newBooleanError(op, inputs, BooleanEvaluatorFailure, ErrBooleanFailed, err)
+	}
+	return err
+}
+
+// newBooleanError builds a *BooleanError carrying a private copy of the operand
+// refs, the branchable Code, and the human text of the underlying error (its
+// "decad: " sentinel prefix trimmed so BooleanError.Error does not repeat it).
+func newBooleanError(op OpKind, inputs []StepRef, code BooleanErrorCode, sentinel, orig error) error {
+	return &BooleanError{
+		Op:     op,
+		Inputs: append([]StepRef(nil), inputs...),
+		Code:   code,
+		msg:    strings.TrimPrefix(orig.Error(), "decad: "),
+		err:    sentinel,
+	}
 }
 
 // evaluateBoolean runs the complete geometry pipeline without writing the
@@ -166,7 +239,10 @@ func evaluateBoolean(ctx context.Context, op OpKind, a, b *Body) (booleanEvaluat
 		if errors.As(err, &coarse) {
 			err = expectedBoolean(booleanExpectedCoarseTessellation, err)
 		} else if errors.Is(err, ErrUnsupported) {
-			err = expectedBoolean(booleanExpectedUnsupported, err)
+			// A tessellation ErrUnsupported is a capability/staging limit on the
+			// operand itself, reached before any contact is examined — never a
+			// contact refusal (see booleanExpectedStaging).
+			err = expectedBoolean(booleanExpectedStaging, err)
 		}
 		return booleanEvaluation{}, err
 	}
@@ -179,7 +255,10 @@ func evaluateBoolean(ctx context.Context, op OpKind, a, b *Body) (booleanEvaluat
 		if errors.As(err, &coarse) {
 			err = expectedBoolean(booleanExpectedCoarseTessellation, err)
 		} else if errors.Is(err, ErrUnsupported) {
-			err = expectedBoolean(booleanExpectedUnsupported, err)
+			// A tessellation ErrUnsupported is a capability/staging limit on the
+			// operand itself, reached before any contact is examined — never a
+			// contact refusal (see booleanExpectedStaging).
+			err = expectedBoolean(booleanExpectedStaging, err)
 		}
 		return booleanEvaluation{}, err
 	}
@@ -429,8 +508,9 @@ func refuseUndecidableProximity(ctx context.Context, ma, mb *Mesh, bmA, bmB *boo
 // not — the pair is decided only if the facet sets provably INTERPENETRATE deeper
 // than b = slack (provenDepthExceeds); a bare touch, a shallow meet at depth ≤ b,
 // or a non-meeting near-miss stays undecidable (near = true). A coplanar
-// face-on-face overlap is a tangency the exact mesh pass refuses as
-// ErrDegenerate, so it is left to that verdict rather than pre-empted here.
+// face-on-face overlap is a tangency the exact mesh pass refuses as an
+// unclassifiable contact (BooleanUnsupportedContact / ErrUnsupported), so it is
+// left to that verdict rather than pre-empted here.
 func facesNearMiss(ctx context.Context, bmA *boolMesh, fis []int, bmB *boolMesh, fjs []int, slack float64) (bool, error) {
 	var closeA, closeB []int
 	seenA := map[int]bool{}
@@ -455,7 +535,9 @@ func facesNearMiss(ctx context.Context, bmA *boolMesh, fis []int, bmB *boolMesh,
 			}
 			if c.kind == contactRegion {
 				// A coplanar face-on-face overlap is a tangency the exact mesh
-				// pass refuses as ErrDegenerate; leave that verdict to it.
+				// pass refuses as an unclassifiable contact
+				// (BooleanUnsupportedContact / ErrUnsupported); leave that verdict
+				// to it.
 				return false, nil
 			}
 			if c.kind != contactNone || triTriDistance(ta, tb) <= slack {

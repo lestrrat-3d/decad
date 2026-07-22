@@ -119,9 +119,11 @@ func runBool(op decad.OpKind, a, b *decad.Body) (*decad.Body, error) {
 }
 
 // boolSentinels are the only errors a boolean may return for a real geometric
-// configuration: a contact the exact predicates cannot classify (ErrDegenerate),
-// a proximity/staging refusal (ErrUnsupported), or an empty result
-// (ErrBooleanFailed). Any other error — or a panic — is a genuine finding.
+// configuration: a valid but unclassifiable contact or a proximity/staging
+// refusal (ErrUnsupported, carried by a BooleanUnsupportedContact), a retryable
+// coarse-chording refusal on a valid operand (ErrDegenerate), or an empty
+// result (ErrBooleanFailed, carried by a BooleanEmpty). Any other error — or a
+// panic — is a genuine finding.
 var boolSentinels = []error{decad.ErrDegenerate, decad.ErrUnsupported, decad.ErrBooleanFailed}
 
 func isBoolSentinel(err error) bool {
@@ -461,16 +463,20 @@ func TestBooleanRefusalSoundnessTangentCylinder(t *testing.T) {
 		r := 4.0 + rng.Float64()*4 // 4..8
 
 		// Exact tangency along the x = 20 wall: refused. Whether the pre-
-		// tessellation proximity gate catches it (ErrUnsupported) or the mesh
-		// pass sees an edge grazing the plate facet (ErrDegenerate) depends on
-		// where a chord vertex fell — but a tangency is refused EITHER way,
-		// never silently accepted as a clean two-lump body.
+		// tessellation proximity gate catches it or the mesh pass sees an edge
+		// grazing the plate facet depends on where a chord vertex fell — but both
+		// are valid-but-unclassifiable contacts, so a tangency is refused as
+		// BooleanUnsupportedContact (ErrUnsupported) EITHER way, never silently
+		// accepted as a clean two-lump body.
 		doc := decad.New()
 		plate := boxBody(t, doc, 0, 0, 20, 20, 8)
 		cyl := makeCyl(doc, 20+r, 10, r)
 		_, err := decad.Union(plate, cyl)
-		require.Truef(t, errors.Is(err, decad.ErrUnsupported) || errors.Is(err, decad.ErrDegenerate),
+		require.ErrorIsf(t, err, decad.ErrUnsupported,
 			`an exact tangency must be refused, got %v (r=%v)`, err, r)
+		var be *decad.BooleanError
+		require.ErrorAs(t, err, &be)
+		require.Equal(t, decad.BooleanUnsupportedContact, be.Code)
 		require.Len(t, doc.Bodies(), 2)
 
 		// Clearly clear: a decidable disjoint union of two lumps.

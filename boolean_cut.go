@@ -339,7 +339,7 @@ func (tc *triCutter) buildChains() ([]chainPath, []chainPath, error) {
 			return nil, nil, err
 		}
 		if !tc.verts[vi].boundary && len(list) > 2 {
-			return nil, nil, errDegenerateContact(`intersection curves branch on a facet`)
+			return nil, nil, errUnclassifiableContact(`intersection curves branch on a facet`)
 		}
 		if !tc.verts[vi].boundary && len(list) == 1 {
 			return nil, nil, fmt.Errorf(`%w: a contact chain dangles mid-facet`, ErrBooleanFailed)

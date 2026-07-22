@@ -1,6 +1,7 @@
 package decad_test
 
 import (
+	"errors"
 	"math"
 	"math/big"
 	"testing"
@@ -166,6 +167,13 @@ func TestIntersectDisjointIsEmpty(t *testing.T) {
 	_, err := decad.Intersect(a, b)
 	require.ErrorIs(t, err, decad.ErrBooleanFailed)
 
+	// An empty result is a normal geometric outcome: BooleanEmpty, wrapping
+	// ErrBooleanFailed.
+	var be *decad.BooleanError
+	require.ErrorAs(t, err, &be)
+	require.Equal(t, decad.OpIntersect, be.Op)
+	require.Equal(t, decad.BooleanEmpty, be.Code)
+
 	// A failed boolean leaves the document untouched: both operands live,
 	// no step recorded.
 	require.Len(t, doc.Bodies(), 2)
@@ -259,6 +267,11 @@ func TestCutRemovingEverythingIsEmpty(t *testing.T) {
 
 	_, err := decad.Cut(target, tool)
 	require.ErrorIs(t, err, decad.ErrBooleanFailed)
+	var be *decad.BooleanError
+	require.ErrorAs(t, err, &be)
+	require.Equal(t, decad.OpCut, be.Op)
+	require.Equal(t, decad.BooleanEmpty, be.Code)
+	require.Len(t, be.Inputs, 2, `[target, tool]`)
 	require.Len(t, doc.Bodies(), 2)
 }
 
@@ -310,13 +323,21 @@ func TestBooleanRejections(t *testing.T) {
 		_ = got
 	})
 	t.Run("CoplanarContact", func(t *testing.T) {
-		// Two cubes stacked face on face: a tangent contact the exact
-		// predicates refuse to classify — ErrDegenerate, never a wrong mesh.
+		// Two cubes stacked face on face: a valid model whose contact the exact
+		// predicates cannot classify. That is the evaluator's reach, not
+		// malformed geometry, so it is a BooleanUnsupportedContact wrapping
+		// ErrUnsupported — never ErrDegenerate, never a wrong mesh.
 		doc := decad.New()
 		a := boxBody(t, doc, 0, 0, 10, 10, 10)
 		b := translated(t, boxBody(t, doc, 0, 0, 10, 10, 10), 0, 0, 10)
 		_, err := decad.Union(a, b)
-		require.ErrorIs(t, err, decad.ErrDegenerate)
+		require.ErrorIs(t, err, decad.ErrUnsupported)
+		require.NotErrorIs(t, err, decad.ErrDegenerate)
+		var be *decad.BooleanError
+		require.ErrorAs(t, err, &be)
+		require.Equal(t, decad.OpUnion, be.Op)
+		require.Equal(t, decad.BooleanUnsupportedContact, be.Code)
+		require.Len(t, be.Inputs, 2, `the operands as the recorded step would list them`)
 		require.Len(t, doc.Bodies(), 2)
 	})
 }
@@ -472,15 +493,40 @@ func TestCurvedRimLengthRefuses(t *testing.T) {
 	require.Positive(t, straightAnswered, `the plate's own outline rims are straight`)
 }
 
+func TestUnionOfRevolveBodiesStagesNotContact(t *testing.T) {
+	// Two full-revolution cylinders are valid solids, but revolve tessellation
+	// is staged, so a boolean over them fails at tessellation BEFORE any contact
+	// is examined. That is a capability/staging limit, not a contact refusal: it
+	// must surface as a plain ErrUnsupported, never a *BooleanError with
+	// BooleanUnsupportedContact.
+	doc := decad.New()
+	s1, p1 := solidSketch(t)
+	a, err := doc.Revolve(s1, p1, uAxis, decad.FullRevolution{})
+	require.NoError(t, err)
+	s2, p2 := solidSketch(t)
+	b, err := doc.Revolve(s2, p2, uAxis, decad.FullRevolution{})
+	require.NoError(t, err)
+
+	_, err = decad.Union(a, b)
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+	var be *decad.BooleanError
+	require.False(t, errors.As(err, &be),
+		`tessellation staging is a capability limit, not a BooleanUnsupportedContact`)
+}
+
 func TestUnionRejectsVertexTangentContact(t *testing.T) {
 	// Two cubes sharing exactly one corner vertex pinch at a point: an
-	// isolated point contact no crossing chain owns, which the boolean
-	// refuses rather than stitching a non-manifold result.
+	// isolated point contact no crossing chain owns, which the boolean refuses
+	// rather than stitching a non-manifold result. The model is valid, so the
+	// refusal is BooleanUnsupportedContact wrapping ErrUnsupported.
 	doc := decad.New()
 	a := boxBody(t, doc, 0, 0, 10, 10, 10)
 	b := translated(t, boxBody(t, doc, 0, 0, 10, 10, 10), 10, 10, 10)
 	_, err := decad.Union(a, b)
-	require.ErrorIs(t, err, decad.ErrDegenerate)
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+	var be *decad.BooleanError
+	require.ErrorAs(t, err, &be)
+	require.Equal(t, decad.BooleanUnsupportedContact, be.Code)
 }
 
 func TestPlanarUnionAreaBoundIsTiny(t *testing.T) {
@@ -555,8 +601,13 @@ func TestUnionRejectsEdgeEdgePointTouch(t *testing.T) {
 		}
 	}
 
+	// The model is valid, so the refusal is BooleanUnsupportedContact wrapping
+	// ErrUnsupported.
 	_, err := decad.Union(a, b)
-	require.ErrorIs(t, err, decad.ErrDegenerate)
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+	var be *decad.BooleanError
+	require.ErrorAs(t, err, &be)
+	require.Equal(t, decad.BooleanUnsupportedContact, be.Code)
 }
 
 // polyPrism extrudes a closed polygon on the given plane, symmetric about it.
@@ -592,6 +643,9 @@ func TestUnionRefusesTangentCylinder(t *testing.T) {
 
 	_, err := decad.Union(plate, cyl)
 	require.ErrorIs(t, err, decad.ErrUnsupported)
+	var be *decad.BooleanError
+	require.ErrorAs(t, err, &be)
+	require.Equal(t, decad.BooleanUnsupportedContact, be.Code, `a near-contact past this evaluator's reach`)
 
 	// A refused boolean leaves the document untouched.
 	require.Len(t, doc.Bodies(), 2)
@@ -646,14 +700,19 @@ func TestUnionRejectsKnifeEdgeGraze(t *testing.T) {
 	// A wedge unioned into a wider wedge sharing the same knife-edge line. The
 	// inner wedge's two apex facets lie strictly on ONE side of the outer wedge's
 	// face: the boundary touches the plane and comes back. That is a true graze,
-	// no side classification is proven for it, and it stays refused.
+	// no side classification is proven for it, and it stays refused. The model is
+	// valid, so the refusal is BooleanUnsupportedContact wrapping ErrUnsupported.
 	doc := decad.New()
 	w := sketch.NewWorld()
 	a := wedgePrism(t, doc, w, w.XY(), [3][2]float64{{0, 0}, {12, -4}, {12, 6}}, 5)
 	b := wedgePrism(t, doc, w, w.XY(), [3][2]float64{{0, 0}, {8, -1}, {8, 2}}, 3)
 
 	_, err := decad.Union(a, b)
-	require.ErrorIs(t, err, decad.ErrDegenerate)
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+	require.NotErrorIs(t, err, decad.ErrDegenerate)
+	var be *decad.BooleanError
+	require.ErrorAs(t, err, &be)
+	require.Equal(t, decad.BooleanUnsupportedContact, be.Code)
 	require.Len(t, doc.Bodies(), 2)
 }
 

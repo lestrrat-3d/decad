@@ -88,7 +88,7 @@
 //	  faceted operand coarser than the pair tolerance         ErrUnsupported
 //	  revolve operand (no tessellator; booleans mesh)         ErrUnsupported
 //	  curved-surface tangent, facets never meet               ErrUnsupported
-//	  exact coplanar / face-on-face / point contact           ErrDegenerate
+//	  exact coplanar / face-on-face / point contact           ErrUnsupported
 //	  empty result (disjoint intersect, emptied cut)          ErrBooleanFailed
 //	Fillet/Chamfer  straight prism, lateral edges             builds
 //	  cap edge, or non-prism receiver                         ErrUnsupported
