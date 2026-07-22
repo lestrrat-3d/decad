@@ -1,6 +1,9 @@
 package decad
 
-import "errors"
+import (
+	"errors"
+	"fmt"
+)
 
 // The sentinel errors of the public API (docs/api-design.md §12): the cases an
 // agent must branch on. Every fallible operation returns (T, error) — never a
@@ -79,11 +82,19 @@ var ErrNotSolid = errors.New("decad: body is not a solid")
 // ErrDegenerate is returned for an input with no usable geometry: a zero or
 // invalid transform, a zero pull direction, a zero wall-thickness tool, a
 // draft allowance at or past 90°, or a non-linear edge named as a revolve
-// axis.
+// axis. A boolean returns it only for a genuinely malformed operand (a nil,
+// self, or extent-less body) and for the retryable coarse-chording
+// tessellation refusal — a valid operand whose boolean output cannot be
+// chorded finely enough (a finer tolerance may clear it). A valid but
+// unclassifiable contact is [BooleanUnsupportedContact], never ErrDegenerate
+// (docs/api-design.md §8 / H2).
 var ErrDegenerate = errors.New("decad: degenerate input")
 
 // ErrBooleanFailed is returned when a boolean operation cannot produce a
-// result body.
+// result body. A public Union, Cut or Intersect reports it wrapped in a
+// [BooleanError]: an empty result carries [BooleanEmpty], an internal
+// invariant break [BooleanEvaluatorFailure]. errors.Is(err, ErrBooleanFailed)
+// still branches on it; errors.As(err, &be) then be.Code is the fine branch.
 var ErrBooleanFailed = errors.New("decad: boolean operation failed")
 
 // ErrInvalidProfile is returned when a feature is handed a profile whose
@@ -108,5 +119,63 @@ var ErrNotFinite = errors.New("decad: non-finite value")
 // the current evaluator does not build it. Evaluator staging is explicit
 // and rejected at the call — never silently approximated or narrowed — and a
 // rejected operation leaves the recipe and the document untouched. See
-// docs/evaluator-design.md §2.
+// docs/evaluator-design.md §2. A public Union, Cut or Intersect reports the
+// staging of a valid but unclassifiable contact wrapped in a [BooleanError]
+// carrying [BooleanUnsupportedContact]; errors.Is(err, ErrUnsupported) still
+// branches on it.
 var ErrUnsupported = errors.New("decad: not supported by the current evaluator")
+
+// BooleanErrorCode is the branchable fine reason a public boolean operation
+// failed, read from a [BooleanError] with errors.As. It draws the line the
+// wrapped sentinel is too coarse to draw: the three codes separate a caller's
+// three moves (docs/api-design.md §8 / H2).
+type BooleanErrorCode int
+
+const (
+	// BooleanEmpty is a NORMAL geometric outcome: the operation encloses no
+	// volume — a disjoint Intersect, an all-removing Cut. The model is sound and
+	// the operation asked for nothing; change the geometry or drop the call. The
+	// [BooleanError] wraps [ErrBooleanFailed].
+	BooleanEmpty BooleanErrorCode = iota
+	// BooleanUnsupportedContact is a VALID model whose operands meet in a contact
+	// this evaluator cannot classify from the tessellated chords: a curved-surface
+	// tangency or near-contact, a coplanar face-on-face overlap, a grazing edge,
+	// or an isolated-point pinch. The input names a real solid and the refusal is
+	// the evaluator's reach, so the [BooleanError] wraps [ErrUnsupported], never
+	// [ErrDegenerate]. Choose a construction that does not lean on a tangent
+	// contact, or wait for a later evaluator.
+	BooleanUnsupportedContact
+	// BooleanEvaluatorFailure is an internal invariant break: the stitched
+	// boundary did not close, a split line was not found, a chain dangled. It is a
+	// bug to file. The [BooleanError] wraps [ErrBooleanFailed].
+	BooleanEvaluatorFailure
+)
+
+// BooleanError is the typed failure of [Union], [Cut] or [Intersect]
+// (docs/api-design.md §8 / H2). It names the operation, the operands as the
+// recorded Step would list them (Inputs; [target, tool] for Cut), and a
+// branchable Code. It wraps the §12 sentinel errors.Is already branches on, so
+// compatibility holds: errors.Is(err, [ErrBooleanFailed]) holds for
+// [BooleanEmpty] and [BooleanEvaluatorFailure], and errors.Is(err,
+// [ErrUnsupported]) for [BooleanUnsupportedContact]. errors.As(err, &be) then
+// be.Code is the fine branch.
+//
+// A valid but unclassifiable coplanar / tangent / grazing / isolated-point
+// contact is [BooleanUnsupportedContact]. [ErrDegenerate] stays reserved for a
+// genuinely malformed operand and for the retryable coarse-chording
+// tessellation refusal; neither is a BooleanError.
+type BooleanError struct {
+	Op     OpKind
+	Inputs []StepRef
+	Code   BooleanErrorCode
+	msg    string
+	err    error
+}
+
+// Error reports the operation and the underlying human-readable reason.
+func (e *BooleanError) Error() string {
+	return fmt.Sprintf("decad: %s boolean: %s", e.Op, e.msg)
+}
+
+// Unwrap returns the wrapped §12 sentinel so errors.Is keeps branching on it.
+func (e *BooleanError) Unwrap() error { return e.err }

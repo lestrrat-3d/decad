@@ -123,14 +123,18 @@ type keptFacet struct {
 	src int
 }
 
-// errDegenerateContact wraps ErrDegenerate for the contacts the exact
-// predicates refuse to classify: coplanar face-on-face overlap, an edge
-// grazing along the other operand's facet plane, and intersection curves
-// branching at a point. A tangent contact admits no side, so no facet
-// classification is proven — the operation is rejected, never a wrong mesh.
-func errDegenerateContact(what string) error {
+// errUnclassifiableContact signals a VALID-but-unclassifiable contact the exact
+// predicates refuse to classify: coplanar face-on-face overlap, an edge grazing
+// along the other operand's facet plane, and intersection curves branching at a
+// point. A tangent contact admits no side, so no facet classification is proven
+// — the operation is rejected, never a wrong mesh. The input names a real solid
+// and the refusal is the evaluator's reach, so it carries the booleanExpectedContact
+// signal and wraps ErrUnsupported (never ErrDegenerate); the public boundary remaps
+// it to BooleanUnsupportedContact (boolean.go, asBooleanError; docs/api-design.md
+// §8 / H2, docs/evaluator-design.md §9).
+func errUnclassifiableContact(what string) error {
 	return expectedBoolean(booleanExpectedContact,
-		fmt.Errorf(`%w: %s — the exact predicates cannot classify a tangent contact`, ErrDegenerate, what))
+		fmt.Errorf(`%w: %s — the exact predicates cannot classify a tangent contact`, ErrUnsupported, what))
 }
 
 // contactKind is the DIMENSION of the exact intersection of two closed
@@ -576,7 +580,7 @@ func meshBoolean(ctx context.Context, op OpKind, ma, mb *boolMesh) ([]keptFacet,
 				return nil, 0, err
 			}
 			if c.kind == contactRegion {
-				return nil, 0, errDegenerateContact(`two operand facets overlap in one plane`)
+				return nil, 0, errUnclassifiableContact(`two operand facets overlap in one plane`)
 			}
 			if c.kind == contactNone {
 				continue
@@ -629,7 +633,7 @@ func meshBoolean(ctx context.Context, op OpKind, ma, mb *boolMesh) ([]keptFacet,
 				return nil, 0, err
 			}
 			if !crossing {
-				return nil, 0, errDegenerateContact(`an operand edge grazes along the other operand's facet`)
+				return nil, 0, errUnclassifiableContact(`an operand edge grazes along the other operand's facet`)
 			}
 			blockedA[key] = struct{}{}
 		}
@@ -639,7 +643,7 @@ func meshBoolean(ctx context.Context, op OpKind, ma, mb *boolMesh) ([]keptFacet,
 				return nil, 0, err
 			}
 			if !crossing {
-				return nil, 0, errDegenerateContact(`an operand edge grazes along the other operand's facet`)
+				return nil, 0, errUnclassifiableContact(`an operand edge grazes along the other operand's facet`)
 			}
 			blockedB[key] = struct{}{}
 		}
@@ -675,7 +679,7 @@ func meshBoolean(ctx context.Context, op OpKind, ma, mb *boolMesh) ([]keptFacet,
 		}
 		for _, p := range pointTouches {
 			if _, ok := ends[p.key()]; !ok {
-				return nil, 0, errDegenerateContact(`the operand boundaries touch at an isolated point`)
+				return nil, 0, errUnclassifiableContact(`the operand boundaries touch at an isolated point`)
 			}
 		}
 	}
@@ -868,7 +872,7 @@ func keepSide(ctx context.Context, m, other *boolMesh, cuts map[int][]xseg, bloc
 			return nil, err
 		}
 		if onBoundary {
-			return nil, errDegenerateContact(`an operand facet touches the other operand's boundary`)
+			return nil, errUnclassifiableContact(`an operand facet touches the other operand's boundary`)
 		}
 		if inside != wantInside {
 			continue
@@ -902,7 +906,7 @@ func classifyRegion(ctx context.Context, reg cutRegion, other *boolMesh) (bool, 
 		return false, err
 	}
 	if onBoundary {
-		return false, errDegenerateContact(`a subdivision region touches the other operand's boundary`)
+		return false, errUnclassifiableContact(`a subdivision region touches the other operand's boundary`)
 	}
 	return inside, nil
 }
