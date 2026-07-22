@@ -268,7 +268,7 @@ type EdgePredicate struct {
 
 // FacePredicate is one clause of a FaceQuery (core §6.2). Predicates come
 // only from the package constructors — Planar, Cylindrical, NormalTo,
-// FaceCreatedBy — and compose by conjunction; the zero value names no
+// Facing, FaceCreatedBy — and compose by conjunction; the zero value names no
 // predicate and refuses to encode.
 type FacePredicate struct {
 	kind string
@@ -289,6 +289,7 @@ const (
 	predKindPlanar        = "planar"
 	predKindCylindrical   = "cylindrical"
 	predKindNormalTo      = "normal_to"
+	predKindFacing        = "facing"
 	predKindFaceCreatedBy = "face_created_by"
 )
 
@@ -343,12 +344,42 @@ func NormalTo(v r3.Vec) FacePredicate {
 	return FacePredicate{kind: predKindNormalTo, dir: v}
 }
 
+// Facing matches the planar face whose OUTWARD (material-leaving) normal points
+// ALONG v — parallel to v AND the same sense, a positive projection. NormalTo
+// matches on either sense, so a slab's two parallel caps both match NormalTo(z);
+// Facing(z) picks only the top one. The vector is recorded exactly as given — a
+// dimensionless direction (core §5.2); a degenerate (zero or non-finite)
+// direction is rejected at resolve, not here.
+func Facing(v r3.Vec) FacePredicate {
+	return FacePredicate{kind: predKindFacing, dir: v}
+}
+
 // FaceCreatedBy matches faces by provenance — the face analog of CreatedBy.
 // A canonicalization merge unions the merged faces' roles and this matches
 // on any of them, so provenance survives the merge
 // (docs/evaluator-design.md §3).
 func FaceCreatedBy(f FeatureRef) FacePredicate {
 	return FacePredicate{kind: predKindFaceCreatedBy, ref: f}
+}
+
+// CapStart names the start-cap role of b's own producing step, so
+// FaceCreatedBy(CapStart(b)) selects that cap without a "capStart" string
+// literal a typo could break. It reads b.Origin().Step (§6) and pairs it with
+// the fixed role. The role exists only where the step mints it — an extrude, a
+// partial revolve, a shell that built a tube, or a Placed/PlacedCopy/Duplicate
+// of one; on any other body the ref is still well-formed and simply matches
+// nothing (an ordinary ErrNoMatch at resolve). To name a cap a boolean's
+// operand contributed, use FaceCreatedBy(CapStart(originalBody)) against the
+// upstream body, never CapStart of the boolean result.
+func CapStart(b *Body) FeatureRef {
+	return FeatureRef{Step: b.Origin().Step, Role: roleCapStart}
+}
+
+// CapEnd names the end-cap role of b's own producing step — the sibling of
+// CapStart. A body whose step mints no end cap (a cup, a full revolution) still
+// gets a well-formed ref that matches nothing.
+func CapEnd(b *Body) FeatureRef {
+	return FeatureRef{Step: b.Origin().Step, Role: roleCapEnd}
 }
 
 // parallelEps decides "parallel": two directions are parallel when the
@@ -364,6 +395,17 @@ func parallelDirs(a, b r3.Vec) bool {
 		return false
 	}
 	return a.Cross(b).Len() <= parallelEps*la*lb
+}
+
+// scaleToUnitInfNorm returns v scaled by the reciprocal of its
+// largest-magnitude component, so the result has infinity-norm 1 and names the
+// same ray. It keeps a finite-but-extreme direction (near math.MaxFloat64, or
+// near the smallest normals) from overflowing or underflowing when a later
+// step takes its Euclidean length. The caller guarantees v is finite and
+// nonzero (validateDirection), so the divisor is finite and nonzero.
+func scaleToUnitInfNorm(v r3.Vec) r3.Vec {
+	m := math.Max(math.Abs(v.X), math.Max(math.Abs(v.Y), math.Abs(v.Z)))
+	return r3.NewVec(v.X/m, v.Y/m, v.Z/m)
 }
 
 // validateDirection gates a caller-supplied predicate direction at resolve:
@@ -409,6 +451,8 @@ func (p FacePredicate) validate() error {
 		return nil
 	case predKindNormalTo:
 		return validateDirection(p.dir, "normal-to")
+	case predKindFacing:
+		return validateDirection(p.dir, "facing")
 	case "":
 		return fmt.Errorf(`%w: face predicate names no kind; use the package constructors`, ErrDegenerate)
 	default:
@@ -497,6 +541,9 @@ func (p EdgePredicate) matches(e *Edge) bool {
 //     matches neither;
 //   - normal_to matches a PLANAR face whose plane normal is parallel to the
 //     recorded vector, either sense;
+//   - facing matches a PLANAR face whose OUTWARD (material-leaving) normal
+//     points along the recorded vector — parallel AND the same sense, so one
+//     of a slab's two parallel caps, never both;
 //   - face_created_by matches when the face's Origins() carries the ref —
 //     a canonicalization merge unions roles, and any of them matches.
 func (p FacePredicate) matches(f *Face) bool {
@@ -513,6 +560,31 @@ func (p FacePredicate) matches(f *Face) bool {
 			return false
 		}
 		return parallelDirs(pl.Frame.N(), p.dir)
+	case predKindFacing:
+		pl, ok := f.surface.(Plane)
+		if !ok {
+			return false
+		}
+		// The face's outward normal is the plane normal flipped when the
+		// material lies on the +N side (Face.reversed, the same sign
+		// Face.NormalAt applies). Facing wants it pointing ALONG v: parallel
+		// AND a positive projection — same-sense, so exactly one of a slab's
+		// two caps.
+		n := pl.Frame.N()
+		if f.reversed {
+			n = n.Scale(-1)
+		}
+		// Scale the recorded direction down by its largest-magnitude
+		// component before the length-based parallel test. A finite but huge
+		// direction (a component near math.MaxFloat64) overflows to +Inf when
+		// its length squares the components, which would make every finite
+		// cross length compare parallel; a finite but tiny one underflows the
+		// same way. validate already rejected the zero and non-finite vectors,
+		// so the largest component is finite and nonzero and the scaled
+		// direction names the same ray, robustly. The sign of the dot is
+		// unchanged by a positive scale.
+		d := scaleToUnitInfNorm(p.dir)
+		return parallelDirs(n, d) && n.Dot(d) > 0
 	case predKindFaceCreatedBy:
 		return slices.Contains(f.origins, p.ref)
 	default:
@@ -706,7 +778,7 @@ func marshalFacePredicate(p FacePredicate) ([]byte, error) {
 	switch p.kind {
 	case predKindPlanar, predKindCylindrical:
 		return marshalTagged(p.kind, struct{}{})
-	case predKindNormalTo:
+	case predKindNormalTo, predKindFacing:
 		return marshalTagged(p.kind, struct {
 			Dir r3.Vec `json:"dir"`
 		}{Dir: p.dir})
@@ -782,15 +854,15 @@ func unmarshalFacePredicate(data []byte) (FacePredicate, error) {
 	switch probe.Kind {
 	case predKindPlanar, predKindCylindrical:
 		return FacePredicate{kind: probe.Kind}, nil
-	case predKindNormalTo:
+	case predKindNormalTo, predKindFacing:
 		var raw struct {
 			Dir *r3.Vec `json:"dir"`
 		}
 		if err := json.Unmarshal(data, &raw); err != nil {
-			return FacePredicate{}, fmt.Errorf(`decad: failed to decode normal-to predicate: %w`, err)
+			return FacePredicate{}, fmt.Errorf(`decad: failed to decode %s predicate: %w`, facePredicateDisplayName(probe.Kind), err)
 		}
 		if raw.Dir == nil {
-			return FacePredicate{}, fmt.Errorf(`decad: a normal-to predicate requires dir`)
+			return FacePredicate{}, fmt.Errorf(`decad: a %s predicate requires dir`, facePredicateDisplayName(probe.Kind))
 		}
 		return FacePredicate{kind: probe.Kind, dir: *raw.Dir}, nil
 	case predKindFaceCreatedBy:
@@ -803,6 +875,19 @@ func unmarshalFacePredicate(data []byte) (FacePredicate, error) {
 		return FacePredicate{}, fmt.Errorf(`decad: face predicate is missing its kind tag`)
 	default:
 		return FacePredicate{}, fmt.Errorf(`decad: unknown face predicate kind %q`, probe.Kind)
+	}
+}
+
+// facePredicateDisplayName maps a direction-bearing face-predicate kind tag to
+// its established human-readable name for error messages. The wire token and
+// the display name differ deliberately (normal_to -> normal-to), so a missing
+// dir reports the name a caller sees in the API, not the raw tag.
+func facePredicateDisplayName(kind string) string {
+	switch kind {
+	case predKindFacing:
+		return "facing"
+	default:
+		return "normal-to"
 	}
 }
 

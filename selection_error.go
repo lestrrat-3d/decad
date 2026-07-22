@@ -218,7 +218,7 @@ func (p FacePredicate) render() string {
 	switch p.kind {
 	case predKindPlanar, predKindCylindrical:
 		return p.kind
-	case predKindNormalTo:
+	case predKindNormalTo, predKindFacing:
 		return p.kind + "(" + renderVec(p.dir) + ")"
 	case predKindFaceCreatedBy:
 		return p.kind + "(" + renderRef(p.ref) + ")"
