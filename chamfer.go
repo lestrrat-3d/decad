@@ -128,17 +128,20 @@ func (b *Body) Chamfer(sel EdgeSelector, d units.Value, opts ...ChamferOption) (
 		Values:    []units.Value{d},
 	}
 	ref := doc.nextStepRef()
+	// The blend descriptors ride on the payload so a re-evaluation (a copy or a
+	// placement) re-mints its own chamfer(i,j) roles; evalPrism applies them.
 	body, err := evalPrism(doc, ref, prismPayload{
-		profile: profile,
-		frame:   pp.frame,
-		z0:      pp.z0,
-		z1:      pp.z1,
-		xform:   pp.xform,
+		profile:   profile,
+		frame:     pp.frame,
+		z0:        pp.z0,
+		z1:        pp.z1,
+		xform:     pp.xform,
+		blendSegs: chamferSegs,
+		blendKind: "chamfer",
 	})
 	if err != nil {
 		return nil, err
 	}
-	addBlendRoles(body, ref, chamferSegs, "chamfer")
 	doc.commit(step, body, b)
 	return body, nil
 }

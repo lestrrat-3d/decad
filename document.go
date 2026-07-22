@@ -147,6 +147,75 @@ func (b *Body) Placed(t r3.Transform) (*Body, error) {
 	return placed, nil
 }
 
+// Duplicate returns a new live body carrying the receiver's geometry
+// unchanged, leaving the receiver LIVE (core §8): the source is depended on,
+// never consumed. It is PlacedCopy with no motion — the identity placement — so
+// the copy is identical, independent geometry at a fresh body identity. A body
+// this evaluator did not build is ErrUnsupported.
+func (b *Body) Duplicate() (*Body, error) {
+	return b.copyUnder(OpDuplicate, r3.Identity())
+}
+
+// PlacedCopy returns a new live body carrying the receiver's geometry under the
+// rigid motion t, leaving the receiver LIVE (core §8): the source is depended
+// on, never consumed. The payload re-evaluates under the composed motion
+// exactly as Placed does, so the centroid moves by t; the zero transform is
+// invalid and is ErrDegenerate, and r3.Identity() is a valid no-op. A body this
+// evaluator did not build is ErrUnsupported. The step records the motion as a
+// TransformRecord in Placement.
+func (b *Body) PlacedCopy(t r3.Transform) (*Body, error) {
+	return b.copyUnder(OpPlacedCopy, t)
+}
+
+// copyUnder is the shared non-consuming copy path behind Duplicate and
+// PlacedCopy. It mirrors Placed's gate order and commit, but records the source
+// StepRef as a depended-on Input (never in the consumed set) so the source
+// stays live — a body can be modelled once and instanced many times
+// (core §8, docs/api-design.md H4).
+func (b *Body) copyUnder(op OpKind, motion r3.Transform) (*Body, error) {
+	if b == nil || b.doc == nil {
+		return nil, fmt.Errorf(`%w: the body belongs to no document`, ErrDegenerate)
+	}
+	d := b.doc
+	if err := d.requireLive(b); err != nil {
+		return nil, err
+	}
+	if !motion.IsValid() {
+		return nil, fmt.Errorf(`%w: an invalid transform names no placement`, ErrDegenerate)
+	}
+	// OpPlacedCopy records its motion; OpDuplicate records none (its identity
+	// motion leaves the geometry untouched), so its Placement stays zero.
+	var rec TransformRecord
+	if op == OpPlacedCopy {
+		r, err := RecordTransform(motion)
+		if err != nil {
+			return nil, err
+		}
+		rec = r
+	}
+	if b.payload == nil {
+		return nil, fmt.Errorf(`%w: this evaluator cannot copy a body it did not build`, ErrUnsupported)
+	}
+	composed, err := b.payload.transform().Then(motion)
+	if err != nil {
+		return nil, fmt.Errorf(`decad: composing the placement failed: %w`, err)
+	}
+	step := Step{
+		Op:        op,
+		Inputs:    []StepRef{b.originStep()},
+		Placement: rec,
+	}
+	ref := d.nextStepRef()
+	copied, err := b.payload.placed(d, ref, composed)
+	if err != nil {
+		return nil, err
+	}
+	// The source is depended on, not consumed: commit with no consumed inputs,
+	// so the retire rule never touches it.
+	d.commit(step, copied)
+	return copied, nil
+}
+
 // originStep returns the StepRef that produced this body.
 func (b *Body) originStep() StepRef { return b.origin.Step }
 

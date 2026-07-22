@@ -1088,14 +1088,13 @@ motion, so its `Placement` is absent (the zero value), the same field-keying
 discipline the extent/angular one-of already enforces (§6.2). `Placement` is
 therefore present exactly for `OpPlaced` and `OpPlacedCopy` and forbidden on
 every other op — the same required/forbidden-field discipline
-`docs/recipe-replay-design.md` §3.2 already states for `OpPlaced`. Recording the
-copy ops in the stored-recipe contract is the implementation PR's work, not this
-document's: `docs/recipe-replay-design.md` must GAIN the `OpDuplicate` /
-`OpPlacedCopy` §3.2 shape rows (each `Inputs: 1`, `consumed inputs: 0`, and the
-`Placement` present/absent rule above), their §4 liveness handling (the source
-`StepRef` depended on, never retired) and §5.1 replay dispatch, and the replay
-tests — this API contract fixes the copy ops' shape, the replay design fixes
-their schema.
+`docs/recipe-replay-design.md` §3.2 states for `OpPlaced`. The stored-recipe
+contract carries the copy ops in full: `docs/recipe-replay-design.md` holds the
+`OpDuplicate` / `OpPlacedCopy` §3.2 shape rows (each `Inputs: 1`,
+`consumed inputs: 0`, and the `Placement` present/absent rule above), their §4
+liveness handling (the source `StepRef` depended on, never retired) and §5.1
+replay dispatch — this API contract fixes the copy ops' shape, the replay design
+fixes their schema.
 
 ### 8.1 Extent — illegal states unrepresentable
 
