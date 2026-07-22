@@ -80,14 +80,21 @@ func (d *Document) resolveStopBody(ref BodyRef, what string) (*Body, error) {
 }
 
 // selectStopFace resolves the stop's face selector against the named body
-// under the implicit exactly-one of core §12: any other count is
-// ErrCardinality, zero included — it takes precedence over ErrNoMatch. A
-// typed nil query is as empty a selector as an untyped nil: malformed input
-// (errNilSelector, branchable ErrDegenerate), never a staged resolution.
-func selectStopFace(body *Body, sel FaceSelector, what string) (*Face, error) {
+// under the implicit exactly-one of core §12/§9, reported through the same
+// SelectionError as a direct SelectFaces (selection_error.go). The rule turns
+// on one distinction — did the selector's OWN explicit assertion fail? A
+// failed explicit assertion (ErrCardinality from SelectFaces) is preserved
+// unchanged, its Expected reflecting the caller's own assertion; the implicit
+// exactly-one owns every other outcome that is not a single match — an
+// unasserted zero (ErrNoMatch) or a successful resolution whose count is not
+// one — rewriting it to a SelectionError wrapping ErrCardinality with Expected
+// "exactly 1" and Actual the resolved count. A typed nil query is as empty a
+// selector as an untyped nil: malformed input (errNilSelector, branchable
+// ErrDegenerate), never a staged resolution.
+func selectStopFace(body *Body, sel FaceSelector) (*Face, error) {
 	switch q := sel.(type) {
 	case nil:
-		return nil, fmt.Errorf(`%w: %s names no face selector`, ErrDegenerate, what)
+		return nil, fmt.Errorf(`%w: the stop names no face selector`, ErrDegenerate)
 	case *FaceQuery:
 		if q == nil {
 			return nil, errNilSelector
@@ -95,13 +102,22 @@ func selectStopFace(body *Body, sel FaceSelector, what string) (*Face, error) {
 	}
 	faces, err := sel.SelectFaces(body)
 	if err != nil {
+		// The selector's own explicit assertion failed: SelectFaces already
+		// returned its SelectionError, and the caller gets it unchanged.
+		if errors.Is(err, ErrCardinality) {
+			return nil, err
+		}
+		// An unasserted resolution that matched nothing: the implicit
+		// exactly-one rewrites it to ErrCardinality, Expected "exactly 1".
 		if errors.Is(err, ErrNoMatch) {
-			return nil, fmt.Errorf(`%w: %s resolves to exactly one face, matched none`, ErrCardinality, what)
+			return nil, impliedOneFace(body, sel, 0)
 		}
 		return nil, err
 	}
 	if len(faces) != 1 {
-		return nil, fmt.Errorf(`%w: %s resolves to exactly one face, matched %d`, ErrCardinality, what, len(faces))
+		// A successful resolution the implicit exactly-one turns into
+		// Expected "exactly 1" / Actual len(faces).
+		return nil, impliedOneFace(body, sel, len(faces))
 	}
 	return faces[0], nil
 }
@@ -130,7 +146,7 @@ func (d *Document) resolveToFace(tf ToFace, frame r3.Frame, travel float64, what
 	if err != nil {
 		return 0, 0, err
 	}
-	face, err := selectStopFace(body, tf.Face, what)
+	face, err := selectStopFace(body, tf.Face)
 	if err != nil {
 		return 0, 0, err
 	}
@@ -351,7 +367,7 @@ func (st angularStops) resolveToFaceAngular(tfa ToFaceAngular, travel float64, w
 	if err != nil {
 		return 0, 0, err
 	}
-	face, err := selectStopFace(body, tfa.Face, what)
+	face, err := selectStopFace(body, tfa.Face)
 	if err != nil {
 		return 0, 0, err
 	}

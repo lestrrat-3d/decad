@@ -373,15 +373,22 @@ func (d *Document) resolveEdgeAxis(ea EdgeAxis) (ConstructionAxis, StepRef, erro
 	}
 	edges, err := ea.Edge.SelectEdges(body)
 	if err != nil {
+		// The selector's own explicit assertion failed: SelectEdges already
+		// returned its SelectionError, and the caller gets it unchanged.
+		if errors.Is(err, ErrCardinality) {
+			return ConstructionAxis{}, 0, err
+		}
+		// An unasserted resolution that matched nothing: the implicit
+		// exactly-one rewrites it to ErrCardinality, Expected "exactly 1".
 		if errors.Is(err, ErrNoMatch) {
-			// The implicit exactly-one is a cardinality assertion, so a
-			// selector that matched nothing fails IT, not ErrNoMatch.
-			return ConstructionAxis{}, 0, fmt.Errorf(`%w: an edge axis resolves to exactly one edge, matched none`, ErrCardinality)
+			return ConstructionAxis{}, 0, impliedOneEdge(body, ea.Edge, 0)
 		}
 		return ConstructionAxis{}, 0, err
 	}
 	if len(edges) != 1 {
-		return ConstructionAxis{}, 0, fmt.Errorf(`%w: an edge axis resolves to exactly one edge, matched %d`, ErrCardinality, len(edges))
+		// A successful resolution the implicit exactly-one turns into
+		// Expected "exactly 1" / Actual len(edges).
+		return ConstructionAxis{}, 0, impliedOneEdge(body, ea.Edge, len(edges))
 	}
 	e := edges[0]
 	if _, ok := e.Curve().(Line3); !ok {

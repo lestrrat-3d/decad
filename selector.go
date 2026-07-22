@@ -2,6 +2,7 @@ package decad
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"slices"
@@ -125,9 +126,24 @@ func (q *EdgeQuery) SelectEdges(body *Body) ([]*Edge, error) {
 		matched = append(matched, e)
 	}
 	if err := q.card.enforce(len(matched), "edges"); err != nil {
-		return nil, err
+		return nil, q.enrich(body, len(matched), err)
 	}
 	return matched, nil
+}
+
+// enrich turns a cardinality-enforcement failure into a SelectionError with
+// the per-clause residuals an agent needs to repair the query (core §9). A
+// malformed-count assertion (Exactly(0) and the like) is ErrDegenerate, not a
+// selection outcome, and passes through unwrapped.
+func (q *EdgeQuery) enrich(body *Body, matched int, err error) error {
+	switch {
+	case errors.Is(err, ErrNoMatch):
+		return q.selectionError(body, matched, q.card.expected(), ErrNoMatch)
+	case errors.Is(err, ErrCardinality):
+		return q.selectionError(body, matched, q.card.expected(), ErrCardinality)
+	default:
+		return err
+	}
 }
 
 // SelectFaces resolves the query against the body's topology: gather
@@ -156,9 +172,21 @@ func (q *FaceQuery) SelectFaces(body *Body) ([]*Face, error) {
 		matched = append(matched, f)
 	}
 	if err := q.card.enforce(len(matched), "faces"); err != nil {
-		return nil, err
+		return nil, q.enrich(body, len(matched), err)
 	}
 	return matched, nil
+}
+
+// enrich is the face analog of EdgeQuery.enrich.
+func (q *FaceQuery) enrich(body *Body, matched int, err error) error {
+	switch {
+	case errors.Is(err, ErrNoMatch):
+		return q.selectionError(body, matched, q.card.expected(), ErrNoMatch)
+	case errors.Is(err, ErrCardinality):
+		return q.selectionError(body, matched, q.card.expected(), ErrCardinality)
+	default:
+		return err
+	}
 }
 
 // enforce applies the recorded cardinality assertion to a match count: a
