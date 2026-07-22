@@ -67,6 +67,13 @@ func TestQueryStringRendering(t *testing.T) {
 			"faces(planar, normal_to(0,0,1)).exactly(1)",
 		},
 		{
+			// Facing is a vector-bearing predicate like NormalTo; it must render
+			// its dir, never fall to <invalid>.
+			"FacingRendersDir",
+			decad.Faces(decad.Facing(zAxis)).Exactly(1).String(),
+			"faces(facing(0,0,1)).exactly(1)",
+		},
+		{
 			"AtLeastSuffix",
 			decad.Edges(decad.Concave()).AtLeast(1).String(),
 			"edges(concave).at_least(1)",
