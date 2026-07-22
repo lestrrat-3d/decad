@@ -389,12 +389,31 @@ const parallelEps = 1e-9
 
 // parallelDirs reports whether the two nonzero directions are parallel,
 // either sense.
+//
+// The ordinary path is the exact float comparison cross <= eps*la*lb, so a
+// direction of any ordinary magnitude resolves bit-for-bit as it always has.
+// That comparison breaks only for a finite but EXTREME caller-supplied
+// direction (near math.MaxFloat64, or the smallest normals), where Len squares
+// the components: a MaxFloat64 direction overflows a length or the tolerance
+// product to +Inf (so the test reads finite <= +Inf and EVERY partner reads
+// parallel), and a subnormal one underflows a length or the product to 0. Only
+// in those cases does the code rescale to infinity-norm 1 — scale-invariant, so
+// it changes no ordinary answer — where nothing overflows or underflows.
 func parallelDirs(a, b r3.Vec) bool {
-	la, lb := a.Len(), b.Len()
-	if la == 0 || lb == 0 {
+	if zeroVec(a) || zeroVec(b) {
 		return false
 	}
-	return a.Cross(b).Len() <= parallelEps*la*lb
+	la, lb := a.Len(), b.Len()
+	cl := a.Cross(b).Len()
+	prod := parallelEps * la * lb
+	if !math.IsInf(la, 0) && !math.IsInf(lb, 0) && !math.IsInf(cl, 0) &&
+		!math.IsInf(prod, 0) && prod > 0 {
+		return cl <= prod
+	}
+	// A length overflowed to +Inf or the product underflowed to 0 — a genuine
+	// extreme direction. Rescale both to infinity-norm 1 and retry.
+	a, b = scaleToUnitInfNorm(a), scaleToUnitInfNorm(b)
+	return a.Cross(b).Len() <= parallelEps*a.Len()*b.Len()
 }
 
 // scaleToUnitInfNorm returns v scaled by the reciprocal of its
