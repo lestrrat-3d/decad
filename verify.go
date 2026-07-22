@@ -60,6 +60,184 @@ func (s Status) String() string {
 	}
 }
 
+// ReadingKind names which measured quantity a diagnostic's Observed* form
+// carries (verification §1.1) — a named-text enum with a stable String() like
+// every other closed set decad owns. Exactly one of Diagnostic.Observed /
+// ObservedVec / ObservedBox is non-nil, and this says which: a scalar rides
+// Observed, a Centroid ObservedVec, a Bounds box ObservedBox. ReadingNone means
+// the reason names no bounded reading and all three are nil.
+type ReadingKind int
+
+const (
+	// ReadingNone — the reason names no bounded reading; every Observed* is nil.
+	ReadingNone ReadingKind = iota
+	// ReadingArea — a body's Area (Observed).
+	ReadingArea
+	// ReadingBounds — a body's Bounds box (ObservedBox).
+	ReadingBounds
+	// ReadingVolume — a body's Volume (Observed).
+	ReadingVolume
+	// ReadingCentroid — a body's Centroid (ObservedVec).
+	ReadingCentroid
+	// ReadingWall — a body's MinWallThickness (Observed).
+	ReadingWall
+	// ReadingMinRadius — a body's MinRadius (Observed).
+	ReadingMinRadius
+	// ReadingOverlapVolume — a pair's proven overlap volume (Observed).
+	ReadingOverlapVolume
+	// ReadingGap — a pair's proven clearance gap (Observed).
+	ReadingGap
+)
+
+// String renders the pinned lower-snake token — the identity a caller branches
+// on and a log prints, never the iota value. An out-of-range value renders
+// "reading(<n>)", never a panic (verification §1.1).
+func (k ReadingKind) String() string {
+	switch k {
+	case ReadingNone:
+		return "none"
+	case ReadingArea:
+		return "area"
+	case ReadingBounds:
+		return "bounds"
+	case ReadingVolume:
+		return "volume"
+	case ReadingCentroid:
+		return "centroid"
+	case ReadingWall:
+		return "wall"
+	case ReadingMinRadius:
+		return "min_radius"
+	case ReadingOverlapVolume:
+		return "overlap_volume"
+	case ReadingGap:
+		return "gap"
+	default:
+		return fmt.Sprintf("reading(%d)", int(k))
+	}
+}
+
+// DiagnosticCode is the stable, branchable reason code (verification §1.1) — a
+// named-text enum whose stable String() token, never the iota value, is the
+// identity a caller and a log share.
+type DiagnosticCode int
+
+const (
+	// DiagMeasurementBeyondTolerance — a bounded reading's Bound exceeds rel*Ref
+	// (§2). Reading names the quantity; its Observed* form carries it, Required
+	// is rel*Ref (the largest Bound that would have passed). Body set on a body
+	// reading, Pair on a pair reading. Contributes Suspect.
+	DiagMeasurementBeyondTolerance DiagnosticCode = iota
+	// DiagUndecidedValidity — the held boundary is not decisive beyond its own
+	// proven bound (§6). Reading ReadingNone. Contributes Suspect.
+	DiagUndecidedValidity
+	// DiagInvalidBody — the held boundary is proven not a valid solid (§6).
+	// Reading ReadingNone. Contributes Unsound.
+	DiagInvalidBody
+	// DiagWallTooThin — MinWallThickness's proven interval is below the tool
+	// (§6). Reading ReadingWall, Observed the wall reading, Required the tool.
+	// Contributes Violating.
+	DiagWallTooThin
+	// DiagUndercut — a face is a proven undercut against the pull (§6). Reading
+	// ReadingNone, every Observed* and Required nil. Contributes Violating.
+	DiagUndercut
+	// DiagUndecidedWall — the wall survey is undecided: neither answered nor
+	// proven absent, OR its proven interval STRADDLES the tool (§6). In the
+	// straddle case Reading is ReadingWall with Observed the wall reading and
+	// Required the tool; when the survey could not answer at all Reading is
+	// ReadingNone and both are nil. Contributes Suspect.
+	DiagUndecidedWall
+	// DiagUndecidedUndercut — the pull survey could neither prove nor exclude an
+	// undercut (§6). Reading ReadingNone. Contributes Suspect.
+	DiagUndecidedUndercut
+	// DiagUndecidedMinRadius — the concave-radius survey could neither measure
+	// nor exclude a concave feature (§6). Reading ReadingNone. Contributes
+	// Suspect.
+	DiagUndecidedMinRadius
+	// DiagInterference — a pair proven to overlap (§1). Reading
+	// ReadingOverlapVolume, Observed the overlap volume, Required nil.
+	// Contributes Interfering.
+	DiagInterference
+	// DiagUndecidedPair — a pair the disjoint/overlap PARTITION proof resolved
+	// neither way (§1). Reading ReadingNone. Contributes Suspect.
+	DiagUndecidedPair
+	// DiagUnsupportedPair — a pair this evaluator cannot decide because a
+	// payload or a contact is STAGED: a revolve or cup operand, or the boolean's
+	// unsupported contact (core §8). Reading ReadingNone. Contributes Suspect.
+	DiagUnsupportedPair
+	// DiagUndecidedClearance — a pair PROVEN disjoint (by box or kernel) whose
+	// requested WithClearances gap the kernel could not prove: no Clearance row
+	// is emitted and the report reads Suspect. Distinct from DiagUndecidedPair
+	// (partition unresolved) and DiagUnsupportedPair (a staged payload) — here
+	// the pair is decidedly apart and only the gap is unmeasured. Reading
+	// ReadingNone. Contributes Suspect.
+	DiagUndecidedClearance
+	// DiagUndecidedInterference — a pair PROVEN to overlap whose overlap VOLUME
+	// the evaluator cannot bound (§1): the overlap-side mirror of
+	// DiagUndecidedClearance. No Interference row is emitted and the report reads
+	// Suspect. Reading ReadingNone, Observed and Required nil, Pair set.
+	// Contributes Suspect.
+	DiagUndecidedInterference
+)
+
+// String renders the pinned lower-snake token — the identity a caller branches
+// on and a log prints, never the iota value. An out-of-range value renders
+// "diagnostic(<n>)", never a panic (verification §1.1).
+func (c DiagnosticCode) String() string {
+	switch c {
+	case DiagMeasurementBeyondTolerance:
+		return "measurement_beyond_tolerance"
+	case DiagUndecidedValidity:
+		return "undecided_validity"
+	case DiagInvalidBody:
+		return "invalid_body"
+	case DiagWallTooThin:
+		return "wall_too_thin"
+	case DiagUndercut:
+		return "undercut"
+	case DiagUndecidedWall:
+		return "undecided_wall"
+	case DiagUndecidedUndercut:
+		return "undecided_undercut"
+	case DiagUndecidedMinRadius:
+		return "undecided_min_radius"
+	case DiagInterference:
+		return "interference"
+	case DiagUndecidedPair:
+		return "undecided_pair"
+	case DiagUnsupportedPair:
+		return "unsupported_pair"
+	case DiagUndecidedClearance:
+		return "undecided_clearance"
+	case DiagUndecidedInterference:
+		return "undecided_interference"
+	default:
+		return fmt.Sprintf("diagnostic(%d)", int(c))
+	}
+}
+
+// DiagnosticPair names the two bodies of a pair diagnostic, in the report's own
+// stable pair order (interference design §2).
+type DiagnosticPair struct{ A, B *Body }
+
+// Diagnostic is one structured, branchable reason a body or a pair is not Sound
+// (verification §1.1). It never decides the verdict — Status is still §6's
+// worst-wins aggregate — it explains it. Exactly one of Observed / ObservedVec
+// / ObservedBox is non-nil, keyed by Reading (all three nil when
+// Reading == ReadingNone).
+type Diagnostic struct {
+	Code        DiagnosticCode  // the stable branch key
+	Status      Status          // the rung this reason contributes
+	Body        *Body           // the body it concerns; nil for a pair diagnostic
+	Pair        *DiagnosticPair // the pair it concerns; nil for a body diagnostic
+	Reading     ReadingKind     // which quantity the Observed* form carries; ReadingNone names none
+	Observed    *Measurement    // a scalar reading; nil unless Reading names a scalar quantity
+	ObservedVec *VecMeasurement // a vector reading (a Centroid); nil unless Reading == ReadingCentroid
+	ObservedBox *Box            // a box reading (a Bounds); nil unless Reading == ReadingBounds
+	Required    *units.Value    // the threshold the reading was judged against; nil when the reason states none
+	Message     string          // human-readable; NEVER the branch key
+}
+
 // Interference is a proven pairwise overlap, carrying its bounded overlap
 // volume (verification §1, interference design §6). Verification computes it
 // without consuming either body or changing the document.
@@ -87,7 +265,13 @@ type Report struct {
 	Bodies        []*BodyReport
 	Interferences []Interference
 	Clearances    []Clearance
-	Status        Status
+	// Diagnostics is one structured, branchable entry per reason the report is
+	// not Sound (verification §1.1). It is empty EXACTLY when Status == Sound,
+	// and Status is the worst Diagnostic.Status in it — the §6 aggregate,
+	// itemized. Every existing field and Trustworthy() are unchanged; the slice
+	// is additive detail, never a second verdict.
+	Diagnostics []Diagnostic
+	Status      Status
 }
 
 // Trustworthy is the single bit to gate on: true only when the whole report
@@ -352,11 +536,12 @@ func (d *Document) Verify(ctx context.Context, opts ...VerifyOption) (*Report, e
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		br, err := verifyBody(ctx, b, cfg)
+		br, bodyDiags, err := verifyBody(ctx, b, cfg)
 		if err != nil {
 			return nil, err
 		}
 		report.Bodies = append(report.Bodies, br)
+		report.Diagnostics = append(report.Diagnostics, bodyDiags...)
 		if br.Status == Suspect {
 			undecided = true
 		}
@@ -369,8 +554,8 @@ func (d *Document) Verify(ctx context.Context, opts ...VerifyOption) (*Report, e
 	// box separation first, then the analytic relation, strict containment or
 	// equality, and finally read-only intersection measurement. Only a proven
 	// positive bounded volume emits an Interference row. Expected empty,
-	// contact, staging, or coarse outcomes stay Suspect; invariant failures
-	// return from Verify.
+	// contact, staging, or coarse outcomes stay Suspect and name themselves in
+	// the slice; invariant failures return from Verify.
 	for i := range solids {
 		for j := i + 1; j < len(solids); j++ {
 			if err := ctx.Err(); err != nil {
@@ -388,16 +573,18 @@ func (d *Document) Verify(ctx context.Context, opts ...VerifyOption) (*Report, e
 
 			// Box separation already proves the partition. The analytic kernel
 			// runs only to supply an asked gap; failure to measure that gap is
-			// Suspect but never sends a proven-disjoint pair to intersection.
+			// Suspect (DiagUndecidedClearance) but never sends a proven-disjoint
+			// pair to intersection.
 			if boxProven {
 				if res.verdict == pairDisjoint || res.verdict == pairTouching {
-					gap := pairGapMeasurement(res)
-					report.Clearances = append(report.Clearances, Clearance{A: a, B: b, Gap: gap})
-					pairGate := pairToleranceInputs{diameter: res.diam}
-					if !measurementWithinTolerance(gap, cfg.rel, pairGate.lengthReference) {
+					if d := appendClearance(report, a, b, res, cfg.rel); d != nil {
+						report.Diagnostics = append(report.Diagnostics, *d)
 						undecided = true
 					}
 				} else {
+					report.Diagnostics = append(report.Diagnostics,
+						pairDiagNone(a, b, DiagUndecidedClearance,
+							"the pair is proven disjoint but the requested clearance gap is unmeasured"))
 					undecided = true
 				}
 				continue
@@ -405,21 +592,21 @@ func (d *Document) Verify(ctx context.Context, opts ...VerifyOption) (*Report, e
 
 			if res.verdict == pairDisjoint || res.verdict == pairTouching {
 				if cfg.clearances {
-					gap := pairGapMeasurement(res)
-					report.Clearances = append(report.Clearances, Clearance{A: a, B: b, Gap: gap})
-					pairGate := pairToleranceInputs{diameter: res.diam}
-					if !measurementWithinTolerance(gap, cfg.rel, pairGate.lengthReference) {
+					if d := appendClearance(report, a, b, res, cfg.rel); d != nil {
+						report.Diagnostics = append(report.Diagnostics, *d)
 						undecided = true
 					}
 				}
 				continue
 			}
 
-			volume, measured, err := measuredInterference(ctx, a, b, res)
+			volume, outcome, err := measuredInterference(ctx, a, b, res)
 			if err != nil {
 				return nil, err
 			}
-			if !measured {
+			if outcome != interferenceMeasured {
+				report.Diagnostics = append(report.Diagnostics,
+					undecidedPairDiag(a, b, res.verdict, outcome))
 				undecided = true
 				continue
 			}
@@ -428,7 +615,30 @@ func (d *Document) Verify(ctx context.Context, opts ...VerifyOption) (*Report, e
 			if err != nil {
 				return nil, err
 			}
-			if !interferenceWithinTolerance(volume, a, b, pairD, cfg.rel) {
+			obs := volume
+			interfere := Diagnostic{
+				Code:     DiagInterference,
+				Status:   Interfering,
+				Pair:     &DiagnosticPair{A: a, B: b},
+				Reading:  ReadingOverlapVolume,
+				Observed: &obs,
+				Message:  "the pair is proven to overlap",
+			}
+			report.Diagnostics = append(report.Diagnostics, interfere)
+			pass, ref, haveRef := interferenceToleranceRef(volume, a, b, pairD, cfg.rel)
+			if !pass {
+				beyond := Diagnostic{
+					Code:     DiagMeasurementBeyondTolerance,
+					Status:   Suspect,
+					Pair:     &DiagnosticPair{A: a, B: b},
+					Reading:  ReadingOverlapVolume,
+					Observed: &obs,
+					Message:  fmt.Sprintf("the overlap-volume reading's bound %s is beyond the relative tolerance", volume.Bound),
+				}
+				if haveRef {
+					beyond.Required = requiredThreshold(cfg.rel*ref, volume.Value)
+				}
+				report.Diagnostics = append(report.Diagnostics, beyond)
 				undecided = true
 			}
 		}
@@ -450,11 +660,67 @@ func pairGapMeasurement(res pairResult) Measurement {
 	return gap
 }
 
+// appendClearance records the proven-disjoint pair's Clearance row and returns
+// a DiagMeasurementBeyondTolerance (Reading ReadingGap) when the gap's Bound
+// exceeds the pair-relative tolerance, else nil (verification §1.1/§6).
+func appendClearance(report *Report, a, b *Body, res pairResult, rel float64) *Diagnostic {
+	gap := pairGapMeasurement(res)
+	report.Clearances = append(report.Clearances, Clearance{A: a, B: b, Gap: gap})
+	pairGate := pairToleranceInputs{diameter: res.diam}
+	pass, ref, haveRef := scalarToleranceRef(gap, rel, pairGate.lengthReference)
+	if pass {
+		return nil
+	}
+	obs := gap
+	d := Diagnostic{
+		Code:     DiagMeasurementBeyondTolerance,
+		Status:   Suspect,
+		Pair:     &DiagnosticPair{A: a, B: b},
+		Reading:  ReadingGap,
+		Observed: &obs,
+		Message:  fmt.Sprintf("the gap reading's bound %s is beyond the relative tolerance", gap.Bound),
+	}
+	if haveRef {
+		d.Required = requiredThreshold(rel*ref, gap.Value)
+	}
+	return &d
+}
+
+// pairDiagNone builds a pair diagnostic that names no bounded reading
+// (verification §1.1): Reading ReadingNone, every Observed* and Required nil.
+func pairDiagNone(a, b *Body, code DiagnosticCode, msg string) Diagnostic {
+	return Diagnostic{
+		Code:    code,
+		Status:  Suspect,
+		Pair:    &DiagnosticPair{A: a, B: b},
+		Reading: ReadingNone,
+		Message: msg,
+	}
+}
+
+// undecidedPairDiag picks the diagnostic for a pair whose overlap volume the
+// evaluator could not measure (verification §1.1): a proven overlap is
+// DiagUndecidedInterference, a staged payload or contact is DiagUnsupportedPair,
+// and an unresolved partition is DiagUndecidedPair.
+func undecidedPairDiag(a, b *Body, verdict pairVerdict, outcome interferenceOutcome) Diagnostic {
+	switch {
+	case verdict == pairOverlapping:
+		return pairDiagNone(a, b, DiagUndecidedInterference,
+			"the pair is proven to overlap but the overlap volume is unmeasured")
+	case outcome == interferenceUnsupported:
+		return pairDiagNone(a, b, DiagUnsupportedPair,
+			"the pair cannot be decided because a payload or a contact is staged")
+	default:
+		return pairDiagNone(a, b, DiagUndecidedPair,
+			"the disjoint/overlap partition proof resolved neither way")
+	}
+}
+
 // verifyBody audits one body and assembles its report. A feature-built body
 // is valid by construction, and the proof is the construction (evaluator
 // §10): the structural audit is an invariant check, cheap, and its verdict
 // is decided, not sampled.
-func verifyBody(ctx context.Context, b *Body, cfg verifyConfig) (*BodyReport, error) {
+func verifyBody(ctx context.Context, b *Body, cfg verifyConfig) (*BodyReport, []Diagnostic, error) {
 	br := &BodyReport{
 		Body:   b,
 		Area:   b.area,
@@ -492,34 +758,71 @@ func verifyBody(ctx context.Context, b *Body, cfg verifyConfig) (*BodyReport, er
 		br.Status = Suspect
 	}
 
+	var diags []Diagnostic
+
+	// A proven-invalid body emits one DiagInvalidBody and no region-quantity
+	// diagnostics, because §1 gives it no region quantity to gate. The gate
+	// still runs, discarded, to surface a cancellation observed while lazily
+	// loading a reference.
 	if br.Status == Unsound {
 		br.Exactness = bodyExactness(br)
-		if _, err := bodyReadingsWithinTolerance(ctx, br, cfg.rel); err != nil {
-			return nil, err
+		if _, err := bodyReadingDiagnostics(ctx, br, cfg.rel); err != nil {
+			return nil, nil, err
 		}
-		return br, nil
+		diags = append(diags, Diagnostic{
+			Code:    DiagInvalidBody,
+			Status:  Unsound,
+			Body:    b,
+			Reading: ReadingNone,
+			Message: "the held boundary is proven not a valid solid",
+		})
+		return br, diags, nil
+	}
+
+	// An undecided validity (a body this evaluator did not build, unreachable
+	// through the public API) is Suspect, and names itself in the slice.
+	if br.Status == Suspect {
+		diags = append(diags, Diagnostic{
+			Code:    DiagUndecidedValidity,
+			Status:  Suspect,
+			Body:    b,
+			Reading: ReadingNone,
+			Message: "the held boundary's validity is not decisive beyond its own proven bound",
+		})
 	}
 
 	// The asked opt-in surveys (evaluator §10, verification §6): answered
 	// outright on this evaluator's analytic bodies — validity is decided
 	// first, so only a proven solid carries the readings. A survey that
 	// cannot decide (a payload no shipped feature builds) leaves the asked
-	// question undecided, and a stated spec proven to fail is Violating.
+	// question undecided, and a stated spec proven to fail is Violating. Each
+	// non-Sound survey outcome names itself in the slice.
 	violating, suspect := false, false
 	if br.Solid && (cfg.wall != nil || cfg.pull != nil || cfg.minRadius) {
-		violating, suspect = runSurveys(br, cfg)
+		surveyDiags := runSurveys(br, cfg)
+		for _, d := range surveyDiags {
+			switch d.Status {
+			case Violating:
+				violating = true
+			case Suspect:
+				suspect = true
+			}
+		}
+		diags = append(diags, surveyDiags...)
 	}
 
 	// Exactness is summary metadata only. The total tolerance gate runs after
 	// every requested survey and judges each present bounded result by its own
-	// inclusive Bound <= rel*Ref comparison (verification §2/§3/§6).
+	// inclusive Bound <= rel*Ref comparison (verification §2/§3/§6); each
+	// reading beyond tolerance emits its own DiagMeasurementBeyondTolerance.
 	br.Exactness = bodyExactness(br)
-	ok, err := bodyReadingsWithinTolerance(ctx, br, cfg.rel)
+	toleranceDiags, err := bodyReadingDiagnostics(ctx, br, cfg.rel)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	if !ok {
+	if len(toleranceDiags) > 0 {
 		suspect = true
+		diags = append(diags, toleranceDiags...)
 	}
 
 	// Worst wins at the body level: Violating > Suspect > Sound
@@ -530,7 +833,7 @@ func verifyBody(ctx context.Context, b *Body, cfg verifyConfig) (*BodyReport, er
 	if violating {
 		br.Status = Violating
 	}
-	return br, nil
+	return br, diags, nil
 }
 
 // auditBoundary checks the structural invariants of the held boundary:
@@ -595,37 +898,55 @@ const toleranceEpsilon = 1e-9
 // usable for body readings, clearances, and the future interference volume.
 type measurementReference func(value float64) (float64, bool)
 
-// measurementWithinTolerance is the one scalar tolerance gate. Exactness does
-// not enter: a zero Bound passes without asking for a diameter, while every
-// nonzero Bound needs a finite, non-negative reference. The comparison is
-// deliberately inclusive (verification §2).
-func measurementWithinTolerance(m Measurement, rel float64, reference measurementReference) bool {
+// scalarToleranceRef is the one scalar tolerance gate (verification §2), and it
+// hands back the reference it formed. Exactness does not enter: a zero Bound
+// passes without asking for a diameter, while every nonzero Bound needs a
+// finite, non-negative reference. The comparison is deliberately inclusive.
+// haveRef reports whether a usable reference was built — false for a zero Bound
+// (which passes without one) and for an unusable magnitude — so a caller may
+// report rel*ref as a Required threshold only when it exists.
+func scalarToleranceRef(m Measurement, rel float64, reference measurementReference) (bool, float64, bool) {
 	bound := m.Bound.Base()
 	if !usableMagnitude(bound) {
-		return false
+		return false, 0, false
 	}
 	if bound == 0 {
-		return true
+		return true, 0, false
 	}
 	value := math.Abs(m.Value.Base())
 	if !usableMagnitude(value) {
-		return false
+		return false, 0, false
 	}
 	ref, ok := reference(value)
-	return ok && withinTolerance(bound, ref, rel)
+	if !ok {
+		return false, 0, false
+	}
+	return withinTolerance(bound, ref, rel), ref, true
 }
 
-// boundedWithinTolerance applies the same gate to a bounded non-scalar shape
-// such as a Box or position VecMeasurement.
-func boundedWithinTolerance(bound, rel float64, reference func() (float64, bool)) bool {
+// boundedToleranceRef applies the same gate to a bounded non-scalar shape such
+// as a Box or position VecMeasurement, handing back the reference it formed on
+// the same terms as scalarToleranceRef.
+func boundedToleranceRef(bound, rel float64, reference func() (float64, bool)) (bool, float64, bool) {
 	if !usableMagnitude(bound) {
-		return false
+		return false, 0, false
 	}
 	if bound == 0 {
-		return true
+		return true, 0, false
 	}
 	ref, ok := reference()
-	return ok && withinTolerance(bound, ref, rel)
+	if !ok {
+		return false, 0, false
+	}
+	return withinTolerance(bound, ref, rel), ref, true
+}
+
+// requiredThreshold builds the Required value a DiagMeasurementBeyondTolerance
+// reports: rel*ref, carried in the reading's own unit so its Kind matches the
+// reading's Bound (verification §1.1). sample supplies that unit.
+func requiredThreshold(relRef float64, sample units.Value) *units.Value {
+	v := units.FromBase(relRef, sample.Unit())
+	return &v
 }
 
 func withinTolerance(bound, ref, rel float64) bool {
@@ -726,47 +1047,99 @@ func (in *bodyToleranceInputs) diameterReference() (float64, bool) {
 	return in.diameter()
 }
 
-// bodyReadingsWithinTolerance applies verification §3's complete body-field
-// table. Body.Edges already deduplicates topology edges, and edgeLength reads
-// each held geometric chain directly even when public Edge.Length must refuse
-// a curved boolean rim.
-func bodyReadingsWithinTolerance(ctx context.Context, br *BodyReport, rel float64) (bool, error) {
+// bodyReadingDiagnostics applies verification §3's complete body-field table,
+// emitting one DiagMeasurementBeyondTolerance per present reading that fails —
+// never short-circuiting, so a body beyond tolerance on two readings emits two
+// (verification §1.1). Body.Edges already deduplicates topology edges, and
+// edgeLength reads each held geometric chain directly even when public
+// Edge.Length must refuse a curved boolean rim.
+func bodyReadingDiagnostics(ctx context.Context, br *BodyReport, rel float64) ([]Diagnostic, error) {
 	in := &bodyToleranceInputs{ctx: ctx, report: br}
-	pass := in.readingsPass(rel)
+	diags := in.readingDiagnostics(rel)
 	// A cancellation observed while a reference lazily built its geometry is
 	// reported to the caller rather than folded into a Suspect verdict.
 	if in.err != nil {
-		return false, in.err
+		return nil, in.err
 	}
-	return pass, nil
+	return diags, nil
 }
 
-func (in *bodyToleranceInputs) readingsPass(rel float64) bool {
+func (in *bodyToleranceInputs) readingDiagnostics(rel float64) []Diagnostic {
 	br := in.report
-	if !measurementWithinTolerance(br.Area, rel, in.areaReference) {
-		return false
+	var diags []Diagnostic
+
+	scalar := func(reading ReadingKind, m Measurement, reference measurementReference) {
+		pass, ref, haveRef := scalarToleranceRef(m, rel, reference)
+		if pass {
+			return
+		}
+		obs := m
+		d := Diagnostic{
+			Code:     DiagMeasurementBeyondTolerance,
+			Status:   Suspect,
+			Body:     br.Body,
+			Reading:  reading,
+			Observed: &obs,
+			Message:  fmt.Sprintf("the %s reading's bound %s is beyond the relative tolerance", reading, m.Bound),
+		}
+		if haveRef {
+			d.Required = requiredThreshold(rel*ref, m.Value)
+		}
+		diags = append(diags, d)
 	}
-	if !boundedWithinTolerance(br.Bounds.Bound.Base(), rel, in.diameterReference) {
-		return false
+
+	scalar(ReadingArea, br.Area, in.areaReference)
+
+	if pass, ref, haveRef := boundedToleranceRef(br.Bounds.Bound.Base(), rel, in.diameterReference); !pass {
+		box := br.Bounds
+		d := Diagnostic{
+			Code:        DiagMeasurementBeyondTolerance,
+			Status:      Suspect,
+			Body:        br.Body,
+			Reading:     ReadingBounds,
+			ObservedBox: &box,
+			Message:     fmt.Sprintf("the bounds reading's bound %s is beyond the relative tolerance", br.Bounds.Bound),
+		}
+		if haveRef {
+			d.Required = requiredThreshold(rel*ref, br.Bounds.Bound)
+		}
+		diags = append(diags, d)
 	}
-	if br.Volume != nil && !measurementWithinTolerance(*br.Volume, rel, in.volumeReference) {
-		return false
+
+	if br.Volume != nil {
+		scalar(ReadingVolume, *br.Volume, in.volumeReference)
 	}
-	if br.Centroid != nil && !boundedWithinTolerance(br.Centroid.Bound.Base(), rel, in.diameterReference) {
-		return false
+
+	if br.Centroid != nil {
+		if pass, ref, haveRef := boundedToleranceRef(br.Centroid.Bound.Base(), rel, in.diameterReference); !pass {
+			cen := *br.Centroid
+			d := Diagnostic{
+				Code:        DiagMeasurementBeyondTolerance,
+				Status:      Suspect,
+				Body:        br.Body,
+				Reading:     ReadingCentroid,
+				ObservedVec: &cen,
+				Message:     fmt.Sprintf("the centroid reading's bound %s is beyond the relative tolerance", br.Centroid.Bound),
+			}
+			if haveRef {
+				d.Required = requiredThreshold(rel*ref, br.Centroid.Bound)
+			}
+			diags = append(diags, d)
+		}
 	}
-	if br.MinWallThickness != nil && !measurementWithinTolerance(*br.MinWallThickness, rel, in.lengthReference) {
-		return false
+
+	if br.MinWallThickness != nil {
+		scalar(ReadingWall, *br.MinWallThickness, in.lengthReference)
 	}
-	if br.MinRadius != nil && !measurementWithinTolerance(*br.MinRadius, rel, in.lengthReference) {
-		return false
+	if br.MinRadius != nil {
+		scalar(ReadingMinRadius, *br.MinRadius, in.lengthReference)
 	}
-	return true
+	return diags
 }
 
 // pairToleranceInputs owns pair-relative references. Clearance uses the
-// length reference now; measurementWithinTolerance accepts the interference
-// volume reference through the same callback path once interference rows land.
+// length reference now; scalarToleranceRef accepts the interference volume
+// reference through the same callback path once interference rows land.
 type pairToleranceInputs struct {
 	diameter float64
 }

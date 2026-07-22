@@ -263,6 +263,21 @@ func TestVerifyUnsupportedOverlapStaysSuspectAndReadOnly(t *testing.T) {
 	require.Equal(t, decad.Suspect, report.Status)
 	require.Empty(t, report.Interferences)
 	requireDocumentUnchanged(t, doc, before)
+
+	// The two revolve balls overlap, but neither can be tessellated, so the
+	// read-only intersect stages the pair (booleanExpectedStaging). Per
+	// verification §1.1 a staged revolve operand is a DiagUnsupportedPair — a
+	// capability limit — not a DiagUndecidedPair (an unresolved partition).
+	requireDiagnosticInvariants(t, report)
+	d, ok := findDiagnostic(report.Diagnostics, decad.DiagUnsupportedPair)
+	require.True(t, ok, `a staged revolve operand emits DiagUnsupportedPair`)
+	require.Equal(t, decad.Suspect, d.Status)
+	require.Equal(t, decad.ReadingNone, d.Reading, `an unsupported pair names no reading`)
+	require.Nil(t, d.Body)
+	require.NotNil(t, d.Pair, `an unsupported pair names its pair`)
+
+	_, undecided := findDiagnostic(report.Diagnostics, decad.DiagUndecidedPair)
+	require.False(t, undecided, `a staged revolve operand is not an undecided partition`)
 }
 
 func TestVerifyCoarseBooleanTessellationStaysSuspect(t *testing.T) {
