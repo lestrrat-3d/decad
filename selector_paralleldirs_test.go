@@ -55,4 +55,27 @@ func TestParallelDirsExtremeDirections(t *testing.T) {
 		require.NoError(t, err)
 		require.Len(t, faces, 2)
 	})
+
+	// The threat model requires a genuinely parallel direction to match at ANY
+	// magnitude — the edge ParallelTo false-miss path, where a subnormal used to
+	// underflow the length to 0 and match nothing. +x is the direction of the
+	// plate's four axis-aligned edges (two per cap). Compare against the unit
+	// direction so the expected set is the geometry's own, not a hard-coded count.
+	unitX, err := decad.Edges(decad.ParallelTo(r3.NewVec(1, 0, 0))).SelectEdges(body)
+	require.NoError(t, err)
+	require.NotEmpty(t, unitX, `sanity: the plate has edges parallel to +x`)
+
+	t.Run("EdgeParallelToSubnormalXStillMatches", func(t *testing.T) {
+		edges, err := decad.Edges(decad.ParallelTo(r3.NewVec(tiny, 0, 0))).SelectEdges(body)
+		require.NoError(t, err)
+		require.Len(t, edges, len(unitX),
+			`a subnormal +x direction is parallel to the same edges as unit +x`)
+	})
+
+	t.Run("EdgeParallelToHugeXStillMatches", func(t *testing.T) {
+		edges, err := decad.Edges(decad.ParallelTo(r3.NewVec(huge, 0, 0))).SelectEdges(body)
+		require.NoError(t, err)
+		require.Len(t, edges, len(unitX),
+			`a huge +x direction is parallel to the same edges as unit +x`)
+	})
 }
