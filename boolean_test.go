@@ -1,6 +1,7 @@
 package decad_test
 
 import (
+	"errors"
 	"math"
 	"math/big"
 	"testing"
@@ -490,6 +491,27 @@ func TestCurvedRimLengthRefuses(t *testing.T) {
 	}
 	require.Positive(t, curvedRefused, `the drilled rims lie on a curved source`)
 	require.Positive(t, straightAnswered, `the plate's own outline rims are straight`)
+}
+
+func TestUnionOfRevolveBodiesStagesNotContact(t *testing.T) {
+	// Two full-revolution cylinders are valid solids, but revolve tessellation
+	// is staged, so a boolean over them fails at tessellation BEFORE any contact
+	// is examined. That is a capability/staging limit, not a contact refusal: it
+	// must surface as a plain ErrUnsupported, never a *BooleanError with
+	// BooleanUnsupportedContact.
+	doc := decad.New()
+	s1, p1 := solidSketch(t)
+	a, err := doc.Revolve(s1, p1, uAxis, decad.FullRevolution{})
+	require.NoError(t, err)
+	s2, p2 := solidSketch(t)
+	b, err := doc.Revolve(s2, p2, uAxis, decad.FullRevolution{})
+	require.NoError(t, err)
+
+	_, err = decad.Union(a, b)
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+	var be *decad.BooleanError
+	require.False(t, errors.As(err, &be),
+		`tessellation staging is a capability limit, not a BooleanUnsupportedContact`)
 }
 
 func TestUnionRejectsVertexTangentContact(t *testing.T) {

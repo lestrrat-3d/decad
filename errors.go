@@ -119,10 +119,13 @@ var ErrNotFinite = errors.New("decad: non-finite value")
 // the current evaluator does not build it. Evaluator staging is explicit
 // and rejected at the call — never silently approximated or narrowed — and a
 // rejected operation leaves the recipe and the document untouched. See
-// docs/evaluator-design.md §2. A public Union, Cut or Intersect reports the
-// staging of a valid but unclassifiable contact wrapped in a [BooleanError]
-// carrying [BooleanUnsupportedContact]; errors.Is(err, ErrUnsupported) still
-// branches on it.
+// docs/evaluator-design.md §2. A public Union, Cut or Intersect wraps a valid
+// but unclassifiable contact in a [BooleanError] carrying
+// [BooleanUnsupportedContact], but an operand this evaluator cannot tessellate
+// at all (a revolve body, or a Faceted operand coarser than the pair tolerance)
+// is a capability limit reached before any contact — it passes through as a
+// plain ErrUnsupported, not a [BooleanError]. errors.Is(err, ErrUnsupported)
+// branches on both.
 var ErrUnsupported = errors.New("decad: not supported by the current evaluator")
 
 // BooleanErrorCode is the branchable fine reason a public boolean operation
@@ -163,7 +166,9 @@ const (
 // A valid but unclassifiable coplanar / tangent / grazing / isolated-point
 // contact is [BooleanUnsupportedContact]. [ErrDegenerate] stays reserved for a
 // genuinely malformed operand and for the retryable coarse-chording
-// tessellation refusal; neither is a BooleanError.
+// tessellation refusal; a whole-operand tessellation-staging [ErrUnsupported]
+// (a revolve operand, or a Faceted operand coarser than the pair tolerance)
+// passes through plain — none of these three is a BooleanError.
 type BooleanError struct {
 	Op     OpKind
 	Inputs []StepRef
