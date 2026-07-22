@@ -91,16 +91,25 @@ func (d *Document) resolveStopBody(ref BodyRef, what string) (*Body, error) {
 // "exactly 1" and Actual the resolved count. A typed nil query is as empty a
 // selector as an untyped nil: malformed input (errNilSelector, branchable
 // ErrDegenerate), never a staged resolution.
+//
+// decad owns the selector vocabulary, so the only valid FaceSelector is the
+// built-in *FaceQuery the constructors return. A FaceSelector whose dynamic
+// type is anything else — a foreign implementation, including one that embeds
+// *FaceQuery to promote the sealed selector() marker — is malformed input,
+// not a resolvable query: it is rejected as ErrDegenerate before SelectFaces
+// runs, so every count-not-one that reaches impliedOneFace is a concrete query
+// and cannot miss its SelectionError.
 func selectStopFace(body *Body, sel FaceSelector) (*Face, error) {
-	switch q := sel.(type) {
-	case nil:
+	q, ok := sel.(*FaceQuery)
+	switch {
+	case sel == nil:
 		return nil, fmt.Errorf(`%w: the stop names no face selector`, ErrDegenerate)
-	case *FaceQuery:
-		if q == nil {
-			return nil, errNilSelector
-		}
+	case !ok:
+		return nil, fmt.Errorf(`%w: the stop's face selector is not a decad face query (%T)`, ErrDegenerate, sel)
+	case q == nil:
+		return nil, errNilSelector
 	}
-	faces, err := sel.SelectFaces(body)
+	faces, err := q.SelectFaces(body)
 	if err != nil {
 		// The selector's own explicit assertion failed: SelectFaces already
 		// returned its SelectionError, and the caller gets it unchanged.
@@ -110,14 +119,14 @@ func selectStopFace(body *Body, sel FaceSelector) (*Face, error) {
 		// An unasserted resolution that matched nothing: the implicit
 		// exactly-one rewrites it to ErrCardinality, Expected "exactly 1".
 		if errors.Is(err, ErrNoMatch) {
-			return nil, impliedOneFace(body, sel, 0)
+			return nil, impliedOneFace(body, q, 0)
 		}
 		return nil, err
 	}
 	if len(faces) != 1 {
 		// A successful resolution the implicit exactly-one turns into
 		// Expected "exactly 1" / Actual len(faces).
-		return nil, impliedOneFace(body, sel, len(faces))
+		return nil, impliedOneFace(body, q, len(faces))
 	}
 	return faces[0], nil
 }

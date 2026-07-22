@@ -11,6 +11,28 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// wrappedFaceSelector embeds *decad.FaceQuery, so it promotes the unexported
+// sealed selector() marker and satisfies decad.FaceSelector even though decad
+// owns the vocabulary — the standard Go embedding bypass of a pointer-receiver
+// seal. Its own SelectFaces overrides the promoted one to resolve to no face.
+type wrappedFaceSelector struct {
+	*decad.FaceQuery
+}
+
+func (wrappedFaceSelector) SelectFaces(*decad.Body) ([]*decad.Face, error) {
+	return nil, nil
+}
+
+// wrappedEdgeSelector is the edge analog: it embeds *decad.EdgeQuery to promote
+// the seal and overrides SelectEdges to resolve to no edge.
+type wrappedEdgeSelector struct {
+	*decad.EdgeQuery
+}
+
+func (wrappedEdgeSelector) SelectEdges(*decad.Body) ([]*decad.Edge, error) {
+	return nil, nil
+}
+
 // zAxis is the sweep/normal direction the rendering examples key on.
 var zAxis = r3.NewVec(0, 0, 1)
 
@@ -260,6 +282,24 @@ func TestImplicitExactlyOneStopUnassertedZeroRewritten(t *testing.T) {
 	require.Equal(t, 0, se.Actual)
 }
 
+func TestImplicitExactlyOneStopForeignSelectorRejected(t *testing.T) {
+	s, plateProf, pinProf := plateAndPin(t)
+	doc := decad.New()
+	plate, err := doc.Extrude(s, plateProf, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	require.NoError(t, err)
+
+	// decad owns the selector vocabulary: a foreign FaceSelector that only
+	// satisfies the interface by embedding *decad.FaceQuery to promote the
+	// sealed marker is malformed input, rejected as ErrDegenerate — never a
+	// plain untyped cardinality error that errors.As could not reach.
+	foreign := wrappedFaceSelector{FaceQuery: decad.Faces(decad.Planar())}
+	_, err = doc.Extrude(s, pinProf, decad.ToFace{Body: plate, Face: foreign})
+	require.ErrorIs(t, err, decad.ErrDegenerate)
+	require.NotErrorIs(t, err, decad.ErrCardinality)
+	var se *decad.SelectionError
+	require.NotErrorAs(t, err, &se)
+}
+
 func TestImplicitExactlyOneEdgeAxis(t *testing.T) {
 	s, p := annularSketch(t)
 	doc := decad.New()
@@ -297,5 +337,16 @@ func TestImplicitExactlyOneEdgeAxis(t *testing.T) {
 		require.ErrorAs(t, err, &se)
 		require.Equal(t, "exactly 1", se.Expected)
 		require.Equal(t, 0, se.Actual)
+	})
+	t.Run("ForeignSelectorRejected", func(t *testing.T) {
+		// A foreign EdgeSelector that satisfies the interface only by embedding
+		// *decad.EdgeQuery to promote the sealed marker is malformed input,
+		// rejected as ErrDegenerate — never a plain untyped cardinality error.
+		foreign := wrappedEdgeSelector{EdgeQuery: decad.Edges()}
+		_, err := doc.Revolve(s, p, decad.EdgeAxis{Body: host, Edge: foreign}, decad.FullRevolution{})
+		require.ErrorIs(t, err, decad.ErrDegenerate)
+		require.NotErrorIs(t, err, decad.ErrCardinality)
+		var se *decad.SelectionError
+		require.NotErrorAs(t, err, &se)
 	})
 }

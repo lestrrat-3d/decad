@@ -330,19 +330,17 @@ func (q *FaceQuery) residuals(body *Body) []PredicateResidual {
 // ToFaceAngular stop reports when its selector resolves to a count that is not
 // one (core §9). Expected is rewritten to "exactly 1" and Actual is the
 // resolved count, preserving the resolution's Kind, Query, Body and Residuals.
-func impliedOneFace(body *Body, sel FaceSelector, actual int) error {
-	if q, ok := sel.(*FaceQuery); ok {
-		return q.selectionError(body, actual, expectedExactlyOne, ErrCardinality)
-	}
-	return fmt.Errorf(`%w: the stop resolves to exactly one face, matched %d`, ErrCardinality, actual)
+// It takes the concrete *FaceQuery: the implicit-one callers gate the selector
+// to the built-in variant (selectStopFace) before ever reaching here, so this
+// path cannot miss a SelectionError.
+func impliedOneFace(body *Body, q *FaceQuery, actual int) error {
+	return q.selectionError(body, actual, expectedExactlyOne, ErrCardinality)
 }
 
 // impliedOneEdge builds the implicit exactly-one SelectionError an EdgeAxis
 // reports when its selector resolves to a count that is not one, the edge
-// analog of impliedOneFace.
-func impliedOneEdge(body *Body, sel EdgeSelector, actual int) error {
-	if q, ok := sel.(*EdgeQuery); ok {
-		return q.selectionError(body, actual, expectedExactlyOne, ErrCardinality)
-	}
-	return fmt.Errorf(`%w: the axis resolves to exactly one edge, matched %d`, ErrCardinality, actual)
+// analog of impliedOneFace. It takes the concrete *EdgeQuery for the same
+// reason: resolveEdgeAxis gates the selector to the built-in variant first.
+func impliedOneEdge(body *Body, q *EdgeQuery, actual int) error {
+	return q.selectionError(body, actual, expectedExactlyOne, ErrCardinality)
 }

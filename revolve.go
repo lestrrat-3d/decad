@@ -362,16 +362,23 @@ func (d *Document) resolveEdgeAxis(ea EdgeAxis) (ConstructionAxis, StepRef, erro
 		return ConstructionAxis{}, 0, fmt.Errorf(`%w: an edge axis cannot resolve against a %T`, ErrDegenerate, b)
 	}
 	// A typed nil query is as empty a selector as an untyped nil: malformed
-	// input (errNilSelector, branchable ErrDegenerate).
-	switch q := ea.Edge.(type) {
-	case nil:
+	// input (errNilSelector, branchable ErrDegenerate). decad owns the selector
+	// vocabulary, so the only valid EdgeSelector is the built-in *EdgeQuery the
+	// constructors return; a foreign implementation — including one that embeds
+	// *EdgeQuery to promote the sealed selector() marker — is malformed input,
+	// rejected as ErrDegenerate before SelectEdges runs, so every count-not-one
+	// that reaches impliedOneEdge is a concrete query and cannot miss its
+	// SelectionError.
+	q, ok := ea.Edge.(*EdgeQuery)
+	switch {
+	case ea.Edge == nil:
 		return ConstructionAxis{}, 0, fmt.Errorf(`%w: an edge axis names no edge selector`, ErrDegenerate)
-	case *EdgeQuery:
-		if q == nil {
-			return ConstructionAxis{}, 0, errNilSelector
-		}
+	case !ok:
+		return ConstructionAxis{}, 0, fmt.Errorf(`%w: an edge axis's edge selector is not a decad edge query (%T)`, ErrDegenerate, ea.Edge)
+	case q == nil:
+		return ConstructionAxis{}, 0, errNilSelector
 	}
-	edges, err := ea.Edge.SelectEdges(body)
+	edges, err := q.SelectEdges(body)
 	if err != nil {
 		// The selector's own explicit assertion failed: SelectEdges already
 		// returned its SelectionError, and the caller gets it unchanged.
@@ -381,14 +388,14 @@ func (d *Document) resolveEdgeAxis(ea EdgeAxis) (ConstructionAxis, StepRef, erro
 		// An unasserted resolution that matched nothing: the implicit
 		// exactly-one rewrites it to ErrCardinality, Expected "exactly 1".
 		if errors.Is(err, ErrNoMatch) {
-			return ConstructionAxis{}, 0, impliedOneEdge(body, ea.Edge, 0)
+			return ConstructionAxis{}, 0, impliedOneEdge(body, q, 0)
 		}
 		return ConstructionAxis{}, 0, err
 	}
 	if len(edges) != 1 {
 		// A successful resolution the implicit exactly-one turns into
 		// Expected "exactly 1" / Actual len(edges).
-		return ConstructionAxis{}, 0, impliedOneEdge(body, ea.Edge, len(edges))
+		return ConstructionAxis{}, 0, impliedOneEdge(body, q, len(edges))
 	}
 	e := edges[0]
 	if _, ok := e.Curve().(Line3); !ok {
