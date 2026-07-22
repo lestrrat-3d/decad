@@ -319,6 +319,8 @@ value. Every field not listed as required or allowed MUST be absent.
 | `OpChamfer` | 1 | one `EdgeSelector`, one length `Value` | none | 1 |
 | `OpShell` | 1 | one `FaceSelector`, one length `Value`, `ShellOpts` | none | 1 |
 | `OpPlaced` | 1 | nonzero valid `Placement` | none | 1 |
+| `OpDuplicate` | 1 | none | none | 0 |
+| `OpPlacedCopy` | 1 | nonzero valid `Placement` | none | 0 |
 
 Additional rules:
 
@@ -328,7 +330,14 @@ Additional rules:
 - Extrude and revolve `Profile.Outer` MUST be non-empty.
 - `Extent` is required only for extrude.
 - `Angular` + `Axis` are required only for revolve.
-- `Placement` is required only for placed.
+- `Placement` is required for placed and placed_copy, and forbidden on every
+  other op — a duplicate records no motion, so its `Placement` MUST be absent.
+  "Absent" is the key not being on the wire at all: a `placement` key present on
+  a forbidding op is a violation whether it is written as a value, `{}`, or an
+  explicit `null`. Presence is read from the wire, never from the decoded value,
+  since JSON `null` and a missing key both decode to the zero record.
+- The single `Duplicate`/`PlacedCopy` input is depended on, not consumed
+  (`consumed inputs: 0`): the source stays live for later instances.
 - `Selectors` are required only for modify operations.
 - `Values` are required only for modify operations.
 - `Opts` is required only for extrude + shell under the current vocabulary.
@@ -359,6 +368,11 @@ For step `i`:
 This state machine derives final `Document.Bodies()` membership and order.
 Retiring removes each consumed body from its current live position; committing
 appends the produced body. Dependency-only bodies remain in place.
+
+`OpDuplicate` and `OpPlacedCopy` name their source in `Inputs` but consume
+nothing: the source is a depended-on input, so step 6 retires nothing and the
+source stays live for later instances. The copy's produced body appends after
+it, exactly as a through-all extrude's stop bodies stay live beside the sweep.
 
 ### 4.1 Dependency order
 
@@ -439,6 +453,10 @@ Step helpers reuse current record-based paths:
 - extrude → frame + recorded extent resolution → `evalPrism`;
 - revolve → recorded axis/angular resolution → `evalRevolve`;
 - placed → `TransformRecord.Transform` + payload `placed`;
+- duplicate → source payload `placed` under the identity motion, source not
+  consumed;
+- placed_copy → `TransformRecord.Transform` + source payload `placed`, source
+  not consumed;
 - booleans → shared boolean compute + `buildFacetedBody`;
 - fillet/chamfer/shell → selector resolution + current exact section rewrite.
 

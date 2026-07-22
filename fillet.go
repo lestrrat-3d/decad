@@ -134,17 +134,20 @@ func (b *Body) Fillet(sel EdgeSelector, r units.Value, opts ...FilletOption) (*B
 		Values:    []units.Value{r},
 	}
 	ref := d.nextStepRef()
+	// The blend descriptors ride on the payload so a re-evaluation (a copy or a
+	// placement) re-mints its own fillet(i,j) roles; evalPrism applies them.
 	body, err := evalPrism(d, ref, prismPayload{
-		profile: profile,
-		frame:   pp.frame,
-		z0:      pp.z0,
-		z1:      pp.z1,
-		xform:   pp.xform,
+		profile:   profile,
+		frame:     pp.frame,
+		z0:        pp.z0,
+		z1:        pp.z1,
+		xform:     pp.xform,
+		blendSegs: filletArcs,
+		blendKind: "fillet",
 	})
 	if err != nil {
 		return nil, err
 	}
-	addBlendRoles(body, ref, filletArcs, "fillet")
 	d.commit(step, body, b)
 	return body, nil
 }

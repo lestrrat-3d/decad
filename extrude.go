@@ -279,11 +279,20 @@ func (d *Document) resolveLinearSide(s SideExtent, frame r3.Frame, travel float6
 // the accumulated rigid placement. Every measurement and the whole topology
 // derive from it, which is what makes Placed exact: it re-evaluates the same
 // payload under the composed motion (docs/evaluator-design.md §8).
+//
+// A prism-derived modify body (a filleted or chamfered prism, modify §2) also
+// carries the blend-role descriptors of its own rewritten section: blendSegs
+// names, per loop, the (loop, segment) indices whose side face is a blend wall,
+// and blendKind is "fillet" or "chamfer". They are part of the re-evaluable
+// record so a copy or placement re-mints its own blend roles from its own record
+// (the modify §9 role rule) — a plain extrude leaves them empty (no-op).
 type prismPayload struct {
-	profile ProfileRecord
-	frame   r3.Frame
-	z0, z1  float64
-	xform   r3.Transform
+	profile   ProfileRecord
+	frame     r3.Frame
+	z0, z1    float64
+	xform     r3.Transform
+	blendSegs []map[int]struct{}
+	blendKind string
 }
 
 // point lifts a plane-local (u, v) at height z into placed world space.
@@ -397,6 +406,10 @@ func evalPrism(d *Document, ref StepRef, pp prismPayload) (*Body, error) {
 		return nil, err
 	}
 	body.bounds = bounds
+	// A prism-derived modify body re-mints its blend roles from its own record
+	// under this build's ref, so a copy or placement reproduces them (modify §9).
+	// A plain extrude carries no descriptors and this is a no-op.
+	addBlendRoles(body, ref, pp.blendSegs, pp.blendKind)
 	body.payload = pp
 	return body, nil
 }

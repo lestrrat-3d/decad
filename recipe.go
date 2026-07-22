@@ -95,20 +95,28 @@ const (
 	OpShell
 	// OpPlaced applies a recorded rigid placement.
 	OpPlaced
+	// OpDuplicate re-registers a body's geometry unchanged, without consuming
+	// the source; it records no placement.
+	OpDuplicate
+	// OpPlacedCopy re-registers a body under a recorded rigid placement without
+	// consuming the source.
+	OpPlacedCopy
 )
 
 // opKindNames is the stable wire vocabulary; the constant order is never a
 // serialization concern because the codec goes through these names.
 var opKindNames = map[OpKind]string{
-	OpExtrude:   "extrude",
-	OpRevolve:   "revolve",
-	OpUnion:     "union",
-	OpCut:       "cut",
-	OpIntersect: "intersect",
-	OpFillet:    "fillet",
-	OpChamfer:   "chamfer",
-	OpShell:     "shell",
-	OpPlaced:    "placed",
+	OpExtrude:    "extrude",
+	OpRevolve:    "revolve",
+	OpUnion:      "union",
+	OpCut:        "cut",
+	OpIntersect:  "intersect",
+	OpFillet:     "fillet",
+	OpChamfer:    "chamfer",
+	OpShell:      "shell",
+	OpPlaced:     "placed",
+	OpDuplicate:  "duplicate",
+	OpPlacedCopy: "placed_copy",
 }
 
 // String renders the op kind for diagnostics.
@@ -237,14 +245,20 @@ func unmarshalStepOpts(data []byte) (StepOpts, error) {
 type jsonStep struct {
 	// Op is a pointer so a missing "op" is distinguishable from the zero
 	// kind: a step with no op is malformed, never silently an extrude.
-	Op        *OpKind           `json:"op"`
-	Inputs    []StepRef         `json:"inputs,omitempty"`
-	Profile   *ProfileRecord    `json:"profile,omitempty"`
-	Plane     *PlaneRecord      `json:"plane,omitempty"`
-	Extent    json.RawMessage   `json:"extent,omitempty"`
-	Angular   json.RawMessage   `json:"angular,omitempty"`
-	Axis      json.RawMessage   `json:"axis,omitempty"`
-	Placement *TransformRecord  `json:"placement,omitempty"`
+	Op      *OpKind         `json:"op"`
+	Inputs  []StepRef       `json:"inputs,omitempty"`
+	Profile *ProfileRecord  `json:"profile,omitempty"`
+	Plane   *PlaneRecord    `json:"plane,omitempty"`
+	Extent  json.RawMessage `json:"extent,omitempty"`
+	Angular json.RawMessage `json:"angular,omitempty"`
+	Axis    json.RawMessage `json:"axis,omitempty"`
+	// Placement is a RawMessage, not a *TransformRecord, so a wire-present
+	// field is distinguishable from an absent one: encoding/json decodes an
+	// explicit null to a nil pointer — indistinguishable from a missing key —
+	// but leaves the raw bytes "null" here, so the presence-aware keying below
+	// can reject a placement keyed to a forbidding op whether it is written
+	// null, {}, or a real motion.
+	Placement json.RawMessage   `json:"placement,omitempty"`
 	Selectors []json.RawMessage `json:"selectors,omitempty"`
 	Opts      json.RawMessage   `json:"opts,omitempty"`
 	Values    []units.Value     `json:"values,omitempty"`
@@ -274,10 +288,48 @@ func validateExtentKeying(s Step) error {
 	return nil
 }
 
+// nonzeroPlacement reports whether a placement record carries a motion — the
+// same test MarshalJSON uses to decide whether to emit the field. A placed copy
+// records a motion here (OpPlacedCopy, r3.Identity() among them — its basis is
+// nonzero) while a duplicate leaves it zero (OpDuplicate). It is the VALIDITY
+// half of the placement keying: a nonzero record is a real placement, the zero
+// record is none.
+func nonzeroPlacement(p TransformRecord) bool {
+	return !zeroVec(p.EX) || !zeroVec(p.EY) || !zeroVec(p.EZ) || !zeroVec(p.T)
+}
+
+// validatePlacementKeying enforces the Placement keying on both wire
+// directions, presence-aware and bidirectional. OpPlaced and OpPlacedCopy
+// REQUIRE a placement — the field must be present AND a valid (nonzero) motion,
+// so an absent or zero-value placement for these ops names no recordable
+// intent. Every OTHER op (OpDuplicate among them) FORBIDS the field entirely: a
+// present placement, even a zero-value one, is rejected. present reports
+// whether the step carries the field at all — the raw wire field's presence on
+// decode (a RawMessage, so an explicit null and a {} both count as present),
+// nonzeroPlacement on an in-memory step marshalled out.
+func validatePlacementKeying(op OpKind, present bool, p TransformRecord) error {
+	if op == OpPlaced || op == OpPlacedCopy {
+		if !present || !nonzeroPlacement(p) {
+			return fmt.Errorf(`decad: the %q op requires a placement`, op)
+		}
+		return nil
+	}
+	if present {
+		return fmt.Errorf(`decad: a placement is keyed to the placed and placed_copy ops, got %q`, op)
+	}
+	return nil
+}
+
 // MarshalJSON encodes the step with every absent field omitted: a decoded
 // step is the recorded one, field for field.
 func (s Step) MarshalJSON() ([]byte, error) {
 	if err := validateExtentKeying(s); err != nil {
+		return nil, err
+	}
+	// An in-memory step is "present" for keying exactly when it carries a
+	// motion: the field is emitted (below) on the same test, so a placing op
+	// with a zero placement would encode without the field it requires.
+	if err := validatePlacementKeying(s.Op, nonzeroPlacement(s.Placement), s.Placement); err != nil {
 		return nil, err
 	}
 	op := s.Op
@@ -311,9 +363,12 @@ func (s Step) MarshalJSON() ([]byte, error) {
 		}
 		out.Axis = raw
 	}
-	if !zeroVec(s.Placement.EX) || !zeroVec(s.Placement.EY) || !zeroVec(s.Placement.EZ) || !zeroVec(s.Placement.T) {
-		p := s.Placement
-		out.Placement = &p
+	if nonzeroPlacement(s.Placement) {
+		raw, err := json.Marshal(s.Placement)
+		if err != nil {
+			return nil, err
+		}
+		out.Placement = raw
 	}
 	if len(s.Selectors) > 0 {
 		sels := make([]json.RawMessage, 0, len(s.Selectors))
@@ -374,8 +429,17 @@ func (s *Step) UnmarshalJSON(data []byte) error {
 		}
 		out.Axis = a
 	}
-	if raw.Placement != nil {
-		out.Placement = *raw.Placement
+	// Presence is the field being on the wire at all: a RawMessage captures the
+	// literal bytes, so an explicit null and a {} are both present (non-nil)
+	// here while an absent key leaves it nil — a distinction a *TransformRecord
+	// loses, since json decodes null to a nil pointer. A present null or {}
+	// decodes to the zero record, which the keying below rejects on a
+	// forbidding op and treats as no-placement on a placing one.
+	placementPresent := raw.Placement != nil
+	if placementPresent {
+		if err := json.Unmarshal(raw.Placement, &out.Placement); err != nil {
+			return fmt.Errorf(`decad: failed to decode placement: %w`, err)
+		}
 	}
 	if len(raw.Selectors) > 0 {
 		sels := make([]Selector, 0, len(raw.Selectors))
@@ -396,6 +460,13 @@ func (s *Step) UnmarshalJSON(data []byte) error {
 		out.Opts = o
 	}
 	if err := validateExtentKeying(out); err != nil {
+		return err
+	}
+	// Presence is read from the wire (placementPresent above), not the
+	// flattened value: a present-but-zero placement ({} or an explicit null) on
+	// a forbidding op must be rejected, and an absent one on a placing op must
+	// be caught, neither of which the value alone reveals.
+	if err := validatePlacementKeying(out.Op, placementPresent, out.Placement); err != nil {
 		return err
 	}
 	*s = out

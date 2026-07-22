@@ -135,6 +135,63 @@ func TestStepOptsCodec(t *testing.T) {
 		`a step with no op is malformed, never silently an extrude`)
 }
 
+func TestPlacementKeyingCodec(t *testing.T) {
+	// The Placement keying is presence-aware and bidirectional: the placing
+	// ops REQUIRE a nonzero placement, every other op FORBIDS the field.
+	motion, err := r3.Translation(r3.NewVec(0, 0, 25))
+	require.NoError(t, err)
+	placement, err := decad.RecordTransform(motion)
+	require.NoError(t, err)
+	identity, err := decad.RecordTransform(r3.Identity())
+	require.NoError(t, err)
+
+	// A placed copy with a real motion round-trips, and so does one under the
+	// identity motion — r3.Identity() is a valid (nonzero) placement.
+	for _, p := range []decad.TransformRecord{placement, identity} {
+		step := decad.Step{Op: decad.OpPlacedCopy, Inputs: []decad.StepRef{0}, Placement: p}
+		buf, err := json.Marshal(step)
+		require.NoError(t, err, `a placed copy with a valid placement encodes`)
+		var got decad.Step
+		require.NoError(t, json.Unmarshal(buf, &got), `a placed copy with a valid placement decodes`)
+		require.Equal(t, step, got, `a placed copy round-trips field for field`)
+	}
+
+	// A duplicate carries NO placement and round-trips: the field is absent.
+	dup := decad.Step{Op: decad.OpDuplicate, Inputs: []decad.StepRef{0}}
+	buf, err := json.Marshal(dup)
+	require.NoError(t, err)
+	require.NotContains(t, string(buf), `"placement"`, `a duplicate records no placement`)
+	var gotDup decad.Step
+	require.NoError(t, json.Unmarshal(buf, &gotDup))
+	require.Equal(t, dup, gotDup, `a duplicate round-trips with no placement`)
+
+	// Decode: a placing op with no placement is malformed; a forbidding op with
+	// a present-but-zero placement is malformed.
+	var bad decad.Step
+	require.Error(t, json.Unmarshal([]byte(`{"op":"placed_copy","inputs":[0]}`), &bad),
+		`a placed copy with no placement is malformed`)
+	require.Error(t, json.Unmarshal([]byte(`{"op":"placed","inputs":[0]}`), &bad),
+		`a placed op with no placement is malformed`)
+	require.Error(t, json.Unmarshal([]byte(`{"op":"duplicate","inputs":[0],"placement":{}}`), &bad),
+		`a duplicate with a present zero placement is malformed`)
+	require.Error(t, json.Unmarshal([]byte(`{"op":"duplicate","inputs":[0],"placement":null}`), &bad),
+		`a duplicate with an explicit null placement is present, so malformed`)
+	require.Error(t, json.Unmarshal([]byte(`{"op":"duplicate","inputs":[0],"placement":{"ex":[1,0,0],"ey":[0,1,0],"ez":[0,0,1],"t":[0,0,25]}}`), &bad),
+		`a duplicate with a nonzero placement is malformed`)
+	// The key being present at all forbids it on any non-placing op, whatever
+	// its op: an explicit null placement on an extrude is malformed too, not
+	// silently read as absent.
+	require.Error(t, json.Unmarshal([]byte(`{"op":"extrude","inputs":[0],"placement":null}`), &bad),
+		`an extrude with an explicit null placement is present, so malformed`)
+
+	// Marshal: an in-memory placing op with a zero placement, and a forbidding
+	// op with a nonzero placement, both refuse to encode.
+	_, err = json.Marshal(decad.Step{Op: decad.OpPlacedCopy, Inputs: []decad.StepRef{0}})
+	require.Error(t, err, `an in-memory placed copy with a zero placement names no placement to record`)
+	_, err = json.Marshal(decad.Step{Op: decad.OpDuplicate, Inputs: []decad.StepRef{0}, Placement: placement})
+	require.Error(t, err, `an in-memory duplicate with a placement is keyed wrong`)
+}
+
 func TestRecipePointerForms(t *testing.T) {
 	// The sealed sets use value receivers, so pointer forms satisfy the
 	// interfaces; the codecs normalize them to values and reject nil.
