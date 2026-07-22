@@ -125,7 +125,11 @@ func measuredInterference(ctx context.Context, a, b *Body, res pairResult) (Meas
 	eval, err := evaluateBoolean(ctx, OpIntersect, a, b)
 	if err != nil {
 		if expected, ok := asExpectedBoolean(err); ok {
-			if expected.kind == booleanExpectedUnsupported {
+			// A staged payload AND a staged boolean contact (core §8) are both
+			// DiagUnsupportedPair per verification §1.1 — a coplanar/tangent
+			// contact is an unsupported pair, not an undecided partition.
+			if expected.kind == booleanExpectedUnsupported ||
+				expected.kind == booleanExpectedContact {
 				return Measurement{}, interferenceUnsupported, nil
 			}
 			return Measurement{}, interferenceUndecided, nil

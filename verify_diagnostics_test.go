@@ -6,6 +6,7 @@ import (
 
 	"github.com/lestrrat-3d/decad"
 	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
@@ -182,6 +183,49 @@ func TestVerifyDiagnosticsInterference(t *testing.T) {
 	require.NotNil(t, d.Observed, `the overlap volume rides Observed`)
 	require.InDelta(t, 60000.0, d.Observed.Value.Base(), 1e-6)
 	require.Len(t, report.Interferences, 1, `the diagnostic mirrors the Interference row`)
+}
+
+func TestVerifyDiagnosticsUnsupportedPairStagedContact(t *testing.T) {
+	// Two 10×10×10 boxes, the second translated to (5,0,0): the boxes share
+	// coplanar top and bottom caps, so the read-only intersect stages the
+	// face-on-face contact (booleanExpectedContact). Per verification §1.1 a
+	// staged boolean contact is a DiagUnsupportedPair, not a DiagUndecidedPair;
+	// the Status stays Suspect.
+	ws := sketch.NewWorld()
+	s, err := ws.CreateSketch(ws.XY())
+	require.NoError(t, err)
+	rect := s.CreateRectangle(0, 0, 10, 10)
+	s.Fix(rect.A)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	p := s.Profiles()[0]
+
+	doc := decad.New()
+	_, err = doc.Extrude(s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	require.NoError(t, err)
+	box2, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	require.NoError(t, err)
+
+	shift, err := r3.Translation(r3.NewVec(5, 0, 0))
+	require.NoError(t, err)
+	_, err = box2.Placed(shift)
+	require.NoError(t, err)
+
+	report, err := doc.Verify(t.Context())
+	require.NoError(t, err)
+
+	require.Equal(t, decad.Suspect, report.Status)
+	requireDiagnosticInvariants(t, report)
+
+	d, ok := findDiagnostic(report.Diagnostics, decad.DiagUnsupportedPair)
+	require.True(t, ok, `a staged boolean contact emits DiagUnsupportedPair`)
+	require.Equal(t, decad.Suspect, d.Status)
+	require.Equal(t, decad.ReadingNone, d.Reading, `an unsupported pair names no reading`)
+	require.Nil(t, d.Body)
+	require.NotNil(t, d.Pair, `an unsupported pair names its pair`)
+
+	_, undecided := findDiagnostic(report.Diagnostics, decad.DiagUndecidedPair)
+	require.False(t, undecided, `a staged contact is not an undecided partition`)
 }
 
 func TestVerifyDiagnosticsBeyondTolerance(t *testing.T) {
