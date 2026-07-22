@@ -389,11 +389,20 @@ const parallelEps = 1e-9
 
 // parallelDirs reports whether the two nonzero directions are parallel,
 // either sense.
+//
+// Each direction is first scaled to infinity-norm 1. A finite but extreme
+// caller-supplied direction (near math.MaxFloat64, or the smallest normals)
+// otherwise overflows or underflows the moment Len squares its components: a
+// MaxFloat64 direction sends its reference length to +Inf, so the test
+// cross <= eps*la*lb reads finite <= +Inf and EVERY partner reads parallel; a
+// subnormal direction underflows its length to 0 and matches nothing. The
+// parallelism test is scale-invariant, so normalizing changes no true answer.
 func parallelDirs(a, b r3.Vec) bool {
-	la, lb := a.Len(), b.Len()
-	if la == 0 || lb == 0 {
+	if zeroVec(a) || zeroVec(b) {
 		return false
 	}
+	a, b = scaleToUnitInfNorm(a), scaleToUnitInfNorm(b)
+	la, lb := a.Len(), b.Len()
 	return a.Cross(b).Len() <= parallelEps*la*lb
 }
 
