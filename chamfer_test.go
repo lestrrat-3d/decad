@@ -13,6 +13,48 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestChamferSelectorAdmission(t *testing.T) {
+	t.Run("BuiltInQuery", func(t *testing.T) {
+		doc, box := filletBox(t)
+
+		_, err := box.Chamfer(verticalEdges(), units.Millimeters(5))
+		require.NoError(t, err)
+		require.Len(t, doc.Recipe().Steps, 2)
+		_, err = json.Marshal(doc.Recipe())
+		require.NoError(t, err)
+	})
+
+	t.Run("ForeignRetiringImplementation", func(t *testing.T) {
+		doc, box := filletBox(t)
+		before := doc.Recipe()
+		calls := 0
+		foreign := retiringEdgeSelector{
+			EdgeQuery: verticalEdges(),
+			calls:     &calls,
+		}
+
+		_, err := box.Chamfer(foreign, units.Millimeters(5))
+		require.ErrorIs(t, err, decad.ErrDegenerate)
+		require.Zero(t, calls, `Chamfer rejects a foreign selector before it can retire the receiver`)
+		require.Equal(t, before, doc.Recipe(), `a rejected selector records no step`)
+		require.Equal(t, []*decad.Body{box}, doc.Bodies(), `a rejected selector leaves the receiver live`)
+		_, err = json.Marshal(doc.Recipe())
+		require.NoError(t, err)
+	})
+
+	t.Run("TypedNilQuery", func(t *testing.T) {
+		doc, box := filletBox(t)
+		before := doc.Recipe()
+		var query *decad.EdgeQuery
+		var selector decad.EdgeSelector = query
+
+		_, err := box.Chamfer(selector, units.Millimeters(5))
+		require.ErrorIs(t, err, decad.ErrDegenerate)
+		require.Equal(t, before, doc.Recipe(), `a typed nil selector records no step`)
+		require.Equal(t, []*decad.Body{box}, doc.Bodies(), `a typed nil selector leaves the receiver live`)
+	})
+}
+
 func TestChamferBoxAllConvexEdges(t *testing.T) {
 	const d = 10.0
 	h := filletBoxHeight
