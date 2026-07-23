@@ -234,25 +234,25 @@ type RevolveOption interface {
 
 // Revolve sweeps a profile of s about axis per the angular extent a, and
 // registers the new body. p MUST be a profile of s (ErrForeignProfile) and a
-// current one (ErrStaleProfile); an invalid profile is ErrInvalidProfile,
-// and a boundary decad cannot record exactly is ErrUnrecordableProfile
-// (core §7). The axis must be non-degenerate and coplanar with the profile
-// plane, and it must not pass through the region's interior: the region
-// lies in one closed half-plane of the axis, and boundary contact is
-// allowed in exactly two forms — a segment endpoint on the axis, and a
-// whole line segment lying along it; anything else is ErrDegenerate
-// (docs/evaluator-design.md §6). The step records the profile, the plane,
-// the angular extent and the axis; evaluation runs from that record, and a
-// failed evaluation leaves the recipe and the document untouched.
+// current, unaltered snapshot (ErrStaleProfile or ErrInvalidProfile); an invalid
+// profile is also ErrInvalidProfile, and a boundary decad cannot record exactly
+// is ErrUnrecordableProfile (core §7). The axis must be non-degenerate and
+// coplanar with the profile plane, and it must not pass through the region's
+// interior: the region lies in one closed half-plane of the axis, and boundary
+// contact is allowed in exactly two forms — a segment endpoint on the axis, and
+// a whole line segment lying along it; anything else is ErrDegenerate
+// (docs/evaluator-design.md §6). The step records the profile, the plane, the
+// angular extent and the axis; evaluation runs from that record, and a failed
+// evaluation leaves the recipe and the document untouched.
 func (d *Document) Revolve(s *sketch.Sketch, p *sketch.Profile, axis Axis, a AngularExtent, opts ...RevolveOption) (*Body, error) {
 	if d == nil {
 		return nil, fmt.Errorf(`%w: a nil document owns no model`, ErrDegenerate)
 	}
-	profile, plane, err := RecordProfile(s, p)
+	profile, plane, profileArea, err := recordProfile(s, p)
 	if err != nil {
 		return nil, err
 	}
-	if err := falsifyRecordedArea(profile, p.Area); err != nil {
+	if err := falsifyRecordedArea(profile, profileArea); err != nil {
 		return nil, err
 	}
 	for _, o := range opts {

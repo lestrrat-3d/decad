@@ -23,48 +23,177 @@ import (
 // conversion; it is exported so a consumer can record — and therefore vet — a
 // profile without a Document.
 //
-// Every gate is sketch's own answer (docs/api-design.md §7): p must be a
-// profile of s (Profile.Sketch, else [ErrForeignProfile]) and a current one
-// (Profile.IsStale, else [ErrStaleProfile]); a profile whose Valid is false is
-// never silently swept ([ErrInvalidProfile]). The one further rejection is not
-// a validity judgement: a valid profile whose boundary cannot be recorded
-// exactly — a Partial fragment whose cut sketch reports sampled
+// Admission consumes only a fresh snapshot authenticated against sketch's own
+// answers (docs/api-design.md §7): p must name s (Profile.Sketch, else
+// [ErrForeignProfile]), be current (Profile.IsStale, else [ErrStaleProfile]),
+// and exactly match one fresh result from s.Profiles. Every boundary entity
+// must be non-nil and owned by s. A caller-altered snapshot is
+// [ErrInvalidProfile], and a foreign boundary entity is [ErrForeignProfile].
+// A profile whose Valid is false is also never silently swept
+// ([ErrInvalidProfile]). The one further rejection is not a validity judgement:
+// an authenticated valid profile whose boundary cannot be recorded exactly —
+// a Partial fragment whose cut sketch reports sampled
 // (BoundaryEdge.TExact == false), or a certified range the seam's reject-only
 // falsifier disproves — is [ErrUnrecordableProfile]. decad never repairs,
 // projects or fits a point sketch handed over, and it never solves for one.
 func RecordProfile(s *sketch.Sketch, p *sketch.Profile) (ProfileRecord, PlaneRecord, error) {
+	profile, plane, _, err := recordProfile(s, p)
+	return profile, plane, err
+}
+
+// recordProfile returns the authenticated profile's area with its structural
+// record so feature callers never read a caller-mutable field after admission.
+func recordProfile(s *sketch.Sketch, p *sketch.Profile) (ProfileRecord, PlaneRecord, float64, error) {
 	if s == nil || p == nil {
-		return ProfileRecord{}, PlaneRecord{}, fmt.Errorf(`%w: RecordProfile requires a sketch and a profile`, ErrDegenerate)
+		return ProfileRecord{}, PlaneRecord{}, 0, fmt.Errorf(`%w: RecordProfile requires a sketch and a profile`, ErrDegenerate)
 	}
 	if p.Sketch() != s {
-		return ProfileRecord{}, PlaneRecord{}, fmt.Errorf(`%w: the profile was built from a different sketch, so its plane-local coordinates are another plane's`, ErrForeignProfile)
+		return ProfileRecord{}, PlaneRecord{}, 0, fmt.Errorf(`%w: the profile was built from a different sketch, so its plane-local coordinates are another plane's`, ErrForeignProfile)
 	}
 	if p.IsStale() {
-		return ProfileRecord{}, PlaneRecord{}, fmt.Errorf(`%w: the sketch has changed since this profile was built; rebuild with Sketch.Profiles`, ErrStaleProfile)
+		return ProfileRecord{}, PlaneRecord{}, 0, fmt.Errorf(`%w: the sketch has changed since this profile was built; rebuild with Sketch.Profiles`, ErrStaleProfile)
 	}
 	if !p.Valid {
-		return ProfileRecord{}, PlaneRecord{}, fmt.Errorf(`%w: a self-intersecting or degenerate region is never silently swept`, ErrInvalidProfile)
+		return ProfileRecord{}, PlaneRecord{}, 0, fmt.Errorf(`%w: a self-intersecting or degenerate region is never silently swept`, ErrInvalidProfile)
+	}
+
+	trusted, err := authenticateProfile(s, p)
+	if err != nil {
+		return ProfileRecord{}, PlaneRecord{}, 0, err
 	}
 
 	frame, err := s.Plane().Frame()
 	if err != nil {
-		return ProfileRecord{}, PlaneRecord{}, fmt.Errorf(`decad: failed to resolve the sketch plane: %w`, err)
+		return ProfileRecord{}, PlaneRecord{}, 0, fmt.Errorf(`decad: failed to resolve the sketch plane: %w`, err)
 	}
 	plane := PlaneRecord{Origin: frame.Origin(), U: frame.U(), V: frame.V()}
 
-	outer, err := recordLoop(p.Outer)
+	outer, err := recordLoop(trusted.Outer)
 	if err != nil {
-		return ProfileRecord{}, PlaneRecord{}, err
+		return ProfileRecord{}, PlaneRecord{}, 0, err
 	}
 	var holes []LoopRecord
-	for _, h := range p.Holes {
+	for _, h := range trusted.Holes {
 		loop, err := recordLoop(h)
 		if err != nil {
-			return ProfileRecord{}, PlaneRecord{}, err
+			return ProfileRecord{}, PlaneRecord{}, 0, err
 		}
 		holes = append(holes, loop)
 	}
-	return ProfileRecord{Outer: outer, Holes: holes}, plane, nil
+	return ProfileRecord{Outer: outer, Holes: holes}, plane, trusted.Area, nil
+}
+
+// authenticateProfile rejects caller changes to the exported Profile fields
+// and returns a fresh snapshot built by sketch. Boundary ownership is checked
+// first so a foreign or typed-nil entity never reaches Geometry.
+func authenticateProfile(s *sketch.Sketch, p *sketch.Profile) (*sketch.Profile, error) {
+	owned := make(map[sketch.Entity]struct{})
+	for _, ent := range s.Entities() {
+		owned[ent] = struct{}{}
+	}
+	if err := authenticateBoundaryLoop(owned, p.Outer); err != nil {
+		return nil, err
+	}
+	for _, hole := range p.Holes {
+		if err := authenticateBoundaryLoop(owned, hole); err != nil {
+			return nil, err
+		}
+	}
+
+	var trusted *sketch.Profile
+	for _, candidate := range s.Profiles() {
+		if !sameProfileSnapshot(p, candidate) {
+			continue
+		}
+		if trusted != nil {
+			return nil, fmt.Errorf(`%w: the profile snapshot matches more than one current region; rebuild with Sketch.Profiles`, ErrInvalidProfile)
+		}
+		trusted = candidate
+	}
+	if trusted == nil {
+		return nil, fmt.Errorf(`%w: the profile snapshot was altered after Sketch.Profiles returned it; rebuild and pass the profile unchanged`, ErrInvalidProfile)
+	}
+	return trusted, nil
+}
+
+func authenticateBoundaryLoop(owned map[sketch.Entity]struct{}, edges []sketch.BoundaryEdge) error {
+	for _, edge := range edges {
+		if isNilSketchEntity(edge.Entity) {
+			return fmt.Errorf(`%w: the profile boundary contains a nil entity; rebuild with Sketch.Profiles`, ErrInvalidProfile)
+		}
+		if _, ok := owned[edge.Entity]; !ok {
+			return fmt.Errorf(`%w: the profile boundary contains an entity not owned by its source sketch`, ErrForeignProfile)
+		}
+	}
+	return nil
+}
+
+func isNilSketchEntity(ent sketch.Entity) bool {
+	switch ent := ent.(type) {
+	case nil:
+		return true
+	case *sketch.Line:
+		return ent == nil
+	case *sketch.Circle:
+		return ent == nil
+	case *sketch.Arc:
+		return ent == nil
+	case *sketch.Ellipse:
+		return ent == nil
+	case *sketch.EllipticalArc:
+		return ent == nil
+	case *sketch.Conic:
+		return ent == nil
+	case *sketch.Spline:
+		return ent == nil
+	case *sketch.ClosedSpline:
+		return ent == nil
+	case *sketch.FitSpline:
+		return ent == nil
+	case *sketch.NURBS:
+		return ent == nil
+	default:
+		return false
+	}
+}
+
+func sameProfileSnapshot(a, b *sketch.Profile) bool {
+	if a.Sketch() != b.Sketch() || a.Revision() != b.Revision() ||
+		a.Area != b.Area || a.Valid != b.Valid || a.SelfIntersecting != b.SelfIntersecting ||
+		(a.Entities == nil) != (b.Entities == nil) || !slices.Equal(a.Entities, b.Entities) ||
+		(a.Holes == nil) != (b.Holes == nil) || !sameBoundaryLoop(a.Outer, b.Outer) ||
+		len(a.Holes) != len(b.Holes) {
+		return false
+	}
+	for i := range a.Holes {
+		if !sameBoundaryLoop(a.Holes[i], b.Holes[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+func sameBoundaryLoop(a, b []sketch.BoundaryEdge) bool {
+	if (a == nil) != (b == nil) || len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if !sameBoundaryEdge(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+func sameBoundaryEdge(a, b sketch.BoundaryEdge) bool {
+	return a.Entity == b.Entity &&
+		a.Partial == b.Partial &&
+		a.Reversed == b.Reversed &&
+		a.TStart == b.TStart &&
+		a.TEnd == b.TEnd &&
+		a.TExact == b.TExact &&
+		(a.Polyline == nil) == (b.Polyline == nil) &&
+		slices.Equal(a.Polyline, b.Polyline)
 }
 
 // recordLoop converts one boundary loop, edge by edge, in walk order.
