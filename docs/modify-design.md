@@ -25,8 +25,9 @@ allowed to live (§5), the fillet (§6), the chamfer (§7), the shell (§8), how
 the results stay Exact (§10), the recipe, the provenance and the replay (§11),
 the increment plan (§13) and the reach decisions (§14).
 
-Companion to `docs/api-design.md`, which owns the three signatures, the
-selector contract and the retire rule ("core §N"), and to
+Companion to `docs/api-design.md`, which owns the three operation signatures
+and their context-aware forms, the selector contract and the retire rule
+("core §N"), and to
 `docs/evaluator-design.md`, whose §11 row 5 this document is ("evaluator §N").
 `docs/verification-design.md` owns how the results are judged
 ("verification §N"). `docs/tessellation-design.md` owns the mesh construction
@@ -257,6 +258,17 @@ there is no rewrite that skips it. Where the op that produced the rewrite has a
 row of its own for what a test catches, that row is the one the refusal cites;
 the shell has one, and §8 says which.
 
+**Every modify audit is cancellable with bounded work.** `FilletContext`,
+`ChamferContext`, and `ShellContext` create one `workBudget` for the audit and
+share it through profile walks, segment-pair crossing/contact tests, hole-pair
+tests, and each ray-boundary containment scan. The budget polls at phase
+boundaries and after at most `workPollInterval` candidate operations. A
+cancelled audit returns `ctx.Err()` before commit, leaving the receiver live and
+the recipe and document unchanged. The original `Fillet`, `Chamfer`, and
+`Shell` methods remain source-compatible wrappers using `context.Background()`.
+The `cupWall` morphology recheck reaches the same audit through
+`Document.Verify`'s context.
+
 **The rewrite is admitted only when the loops it produces are proven simple and
 correctly nested.** Four tests, in the order §4's precedence fixes, all in
 closed form over decad's own line and arc segments:
@@ -325,6 +337,7 @@ is ever made, and `Verify` reads the result exactly as it reads an extrude's.
 
 ```go
 func (b *Body) Fillet(sel EdgeSelector, r units.Value, opts ...FilletOption) (*Body, error)
+func (b *Body) FilletContext(ctx context.Context, sel EdgeSelector, r units.Value, opts ...FilletOption) (*Body, error)
 ```
 
 `r` is a magnitude, gated at the call like every other (S15), and a zero `r` is
@@ -439,6 +452,7 @@ lands in it, with the struct, when it ships.
 
 ```go
 func (b *Body) Chamfer(sel EdgeSelector, d units.Value, opts ...ChamferOption) (*Body, error)
+func (b *Body) ChamferContext(ctx context.Context, sel EdgeSelector, d units.Value, opts ...ChamferOption) (*Body, error)
 ```
 
 The same edge class, the same gates, one simpler surface. **The bevel of a
@@ -477,6 +491,7 @@ nil.
 
 ```go
 func (b *Body) Shell(sel FaceSelector, thickness units.Value, opts ...ShellOption) (*Body, error)
+func (b *Body) ShellContext(ctx context.Context, sel FaceSelector, thickness units.Value, opts ...ShellOption) (*Body, error)
 ```
 
 `sel` names the faces to **remove** — the openings. What remains of the solid is

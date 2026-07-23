@@ -1,6 +1,7 @@
 package decad
 
 import (
+	"context"
 	"fmt"
 	"math"
 
@@ -46,6 +47,10 @@ type ChamferOption interface {
 // built, so no unproven body is ever made and an over-large setback is refused
 // (S6), never clipped.
 func (b *Body) Chamfer(sel EdgeSelector, d units.Value, opts ...ChamferOption) (*Body, error) {
+	return b.ChamferContext(context.Background(), sel, d, opts...)
+}
+
+func (b *Body) ChamferContext(ctx context.Context, sel EdgeSelector, d units.Value, opts ...ChamferOption) (*Body, error) {
 	if b == nil || b.doc == nil {
 		return nil, fmt.Errorf(`%w: the body belongs to no document`, ErrDegenerate)
 	}
@@ -126,7 +131,7 @@ func (b *Body) Chamfer(sel EdgeSelector, d units.Value, opts ...ChamferOption) (
 
 	// Stage 4 (§4/§5): the same audit the fillet runs — S8, S6 (an over-large
 	// setback that reaches or passes a walk's far end), S7, S9.
-	if err := auditRewrite(pp.profile, profile, loops, blendAt); err != nil {
+	if err := auditRewrite(newWorkBudget(ctx), pp.profile, profile, loops, blendAt); err != nil {
 		return nil, wrapModifyAuditError(sel, matched, err)
 	}
 

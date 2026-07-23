@@ -1,6 +1,7 @@
 package decad_test
 
 import (
+	"context"
 	"encoding/json"
 	"math"
 	"strings"
@@ -12,6 +13,19 @@ import (
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
+
+func TestChamferContextCancellationLeavesReceiverLive(t *testing.T) {
+	doc, box := filletBox(t)
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	body, err := box.ChamferContext(ctx, verticalEdges(), units.Millimeters(10))
+	require.Nil(t, body)
+	require.ErrorIs(t, err, context.Canceled)
+	require.Equal(t, []*decad.Body{box}, doc.Bodies())
+	body, err = box.ChamferContext(t.Context(), verticalEdges(), units.Millimeters(10))
+	require.NoError(t, err)
+	require.Equal(t, []*decad.Body{body}, doc.Bodies())
+}
 
 func TestChamferSelectorAdmission(t *testing.T) {
 	t.Run("BuiltInQuery", func(t *testing.T) {
