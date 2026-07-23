@@ -69,15 +69,18 @@ func TestRecipeWireRejectsUnknownAndDuplicateFields(t *testing.T) {
 
 func TestRecipeWireRejectsInvalidEnvelopes(t *testing.T) {
 	tests := []struct {
-		name   string
-		input  string
-		target error
+		name      string
+		input     string
+		target    error
+		notTarget error
 	}{
 		{name: "missing steps", input: `{}`, target: decad.ErrInvalidRecipe},
 		{name: "format only", input: `{"format":"decad.recipe","steps":[]}`, target: decad.ErrInvalidRecipe},
 		{name: "version only", input: `{"version":1,"steps":[]}`, target: decad.ErrInvalidRecipe},
 		{name: "wrong format", input: `{"format":"other","version":1,"steps":[]}`, target: decad.ErrInvalidRecipe},
 		{name: "unknown version", input: `{"format":"decad.recipe","version":2,"steps":[]}`, target: decad.ErrUnsupportedRecipeVersion},
+		{name: "null version", input: `{"format":"decad.recipe","version":null,"steps":[]}`, target: decad.ErrInvalidRecipe, notTarget: decad.ErrUnsupportedRecipeVersion},
+		{name: "unknown version before null steps", input: `{"format":"decad.recipe","version":2,"steps":null}`, target: decad.ErrUnsupportedRecipeVersion, notTarget: decad.ErrInvalidRecipe},
 		{name: "null versioned steps", input: `{"format":"decad.recipe","version":1,"steps":null}`, target: decad.ErrInvalidRecipe},
 		{name: "non-array steps", input: `{"format":"decad.recipe","version":1,"steps":{}}`, target: decad.ErrInvalidRecipe},
 		{name: "trailing value", input: `{"steps":[]} true`},
@@ -91,6 +94,9 @@ func TestRecipeWireRejectsInvalidEnvelopes(t *testing.T) {
 			require.Error(t, err)
 			if test.target != nil {
 				require.ErrorIs(t, err, test.target)
+			}
+			if test.notTarget != nil {
+				require.NotErrorIs(t, err, test.notTarget)
 			}
 			require.Equal(t, original, recipe, `failed decode leaves the receiver unchanged`)
 		})

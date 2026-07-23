@@ -107,9 +107,6 @@ func (r *Recipe) UnmarshalJSON(data []byte) error {
 		if !versionPresent {
 			return rootRecipeError(ErrInvalidRecipe, errors.New(`recipe is missing required field "version"`))
 		}
-		if isJSONNull(raw.Steps) {
-			return rootRecipeError(ErrInvalidRecipe, errors.New(`versioned recipe field "steps" must be an array`))
-		}
 
 		var format string
 		if err := json.Unmarshal(raw.Format, &format); err != nil {
@@ -119,6 +116,9 @@ func (r *Recipe) UnmarshalJSON(data []byte) error {
 			return rootRecipeError(ErrInvalidRecipe, fmt.Errorf("unknown recipe format %q", format))
 		}
 
+		if isJSONNull(raw.Version) {
+			return rootRecipeError(ErrInvalidRecipe, errors.New(`invalid recipe field "version": null`))
+		}
 		var version int
 		if err := json.Unmarshal(raw.Version, &version); err != nil {
 			return rootRecipeError(ErrInvalidRecipe, fmt.Errorf(`invalid recipe field "version": %w`, err))
@@ -128,6 +128,9 @@ func (r *Recipe) UnmarshalJSON(data []byte) error {
 				ErrUnsupportedRecipeVersion,
 				fmt.Errorf("unsupported recipe version %d", version),
 			)
+		}
+		if isJSONNull(raw.Steps) {
+			return rootRecipeError(ErrInvalidRecipe, errors.New(`versioned recipe field "steps" must be an array`))
 		}
 	}
 
