@@ -34,6 +34,50 @@ import (
 // the region the caller's section lived in, so no such body exists and it is an
 // S8-family ErrDegenerate (§1 existence test).
 
+// auditDiagnosticError carries the coordinate-rich rendering used by Fillet and
+// Chamfer while keeping the shared audit's established error text for Shell.
+// The legacy error remains the unwrap chain, so callers can still branch on its
+// sentinel regardless of which rendering they receive.
+type auditDiagnosticError struct {
+	legacy   error
+	detailed string
+}
+
+func (e *auditDiagnosticError) Error() string {
+	return e.legacy.Error()
+}
+
+func (e *auditDiagnosticError) Unwrap() error {
+	return e.legacy
+}
+
+type renderedAuditDiagnosticError struct {
+	cause   error
+	message string
+}
+
+func (e *renderedAuditDiagnosticError) Error() string {
+	return e.message
+}
+
+func (e *renderedAuditDiagnosticError) Unwrap() error {
+	return e.cause
+}
+
+func auditError(legacy error, detailed string) error {
+	return &auditDiagnosticError{legacy: legacy, detailed: detailed}
+}
+
+// renderAuditCoordinates opts a Fillet or Chamfer failure into the detailed
+// diagnostic without changing the shared audit error seen by Shell.
+func renderAuditCoordinates(err error) error {
+	diagnostic, ok := err.(*auditDiagnosticError)
+	if !ok {
+		return err
+	}
+	return &renderedAuditDiagnosticError{cause: err, message: diagnostic.detailed}
+}
+
 // auditRewrite runs the §5 audit on the rewritten profile in §4's order. It is
 // shared by every modify op (Fillet, Chamfer): its only op-specific input is the
 // per-corner cutback the S6 self-consuming-trim test sums, carried by the shared
@@ -66,17 +110,19 @@ func auditRewrite(orig, rewritten ProfileRecord, loops []cornerLoop, blendAt []m
 	for i := range origLoops {
 		oa, err := loopSignedArea(origLoops[i])
 		if err != nil {
-			return fmt.Errorf(`original loop %d: %w`, i, err)
+			return auditError(err, fmt.Sprintf(`original loop %d: %v`, i, err))
 		}
 		na, err := loopSignedArea(newLoops[i])
 		if err != nil {
-			return fmt.Errorf(`rewritten loop %d: %w`, i, err)
+			return auditError(err, fmt.Sprintf(`rewritten loop %d: %v`, i, err))
 		}
 		if math.Signbit(oa) != math.Signbit(na) || math.Abs(na) <= 1e-9*math.Abs(oa) {
 			if overrun[i] {
 				return errCutbackOverrun(i, overrunWalk[i], loops[i])
 			}
-			return fmt.Errorf(`%w: rewritten loop %d turned inside out — the modification does not fit`, ErrDegenerate, i)
+			legacy := fmt.Errorf(`%w: the rewrite turned a loop inside out — the modification does not fit`, ErrDegenerate)
+			return auditError(legacy,
+				fmt.Sprintf(`%v: rewritten loop %d turned inside out — the modification does not fit`, ErrDegenerate, i))
 		}
 	}
 
@@ -143,9 +189,11 @@ func loopOverrun(cl cornerLoop, blends map[int]*cornerBlend) (int, bool) {
 func errCutbackOverrun(loop, walk int, cl cornerLoop) error {
 	w := cl.walks[walk]
 	next := (walk + 1) % len(cl.walks)
-	return fmt.Errorf(`%w: loop %d walk %d from corner %d at (u, v) = (%s, %s) to corner %d at (u, v) = (%s, %s) is consumed by its corner setbacks; merging the rewrites there is not supported`,
+	legacy := fmt.Errorf(`%w: a corner's setback reaches the far end of an adjacent wall; merging the rewrites there is not supported`, ErrUnsupported)
+	detailed := fmt.Sprintf(`%v: loop %d walk %d from corner %d at (u, v) = (%s, %s) to corner %d at (u, v) = (%s, %s) is consumed by its corner setbacks; merging the rewrites there is not supported`,
 		ErrUnsupported, loop, walk, walk, renderCoord(w.startU), renderCoord(w.startV),
 		next, renderCoord(w.endU), renderCoord(w.endV))
+	return auditError(legacy, detailed)
 }
 
 // buildSegEntries resolves every loop's recorded segments into boundary walks
@@ -157,7 +205,7 @@ func buildSegEntries(loops []LoopRecord) ([]segEntry, error) {
 		for i, seg := range loop.Segments {
 			w, err := walkOf(seg)
 			if err != nil {
-				return nil, fmt.Errorf(`loop %d segment %d: %w`, li, i, err)
+				return nil, auditError(err, fmt.Sprintf(`loop %d segment %d: %v`, li, i, err))
 			}
 			segs = append(segs, segEntry{loop: li, idx: i, n: n, w: w})
 		}
@@ -206,12 +254,16 @@ func crossingAudit(segs []segEntry) error {
 				continue
 			}
 			if segCross(segs[i].w, segs[j].w) {
-				return fmt.Errorf(`%w: rewritten loop %d segment %d and loop %d segment %d cross; a resolving kernel is not available`,
+				legacy := fmt.Errorf(`%w: the rewrite crosses itself; a resolving kernel is not available`, ErrUnsupported)
+				detailed := fmt.Sprintf(`%v: rewritten loop %d segment %d and loop %d segment %d cross; a resolving kernel is not available`,
 					ErrUnsupported, segs[i].loop, segs[i].idx, segs[j].loop, segs[j].idx)
+				return auditError(legacy, detailed)
 			}
 			if segMinDist(segs[i].w, segs[j].w) <= touchFloor {
-				return fmt.Errorf(`%w: rewritten loop %d segment %d and loop %d segment %d are in contact; a resolving kernel is not available`,
+				legacy := fmt.Errorf(`%w: the rewrite brings two boundaries into contact; a resolving kernel is not available`, ErrUnsupported)
+				detailed := fmt.Sprintf(`%v: rewritten loop %d segment %d and loop %d segment %d are in contact; a resolving kernel is not available`,
 					ErrUnsupported, segs[i].loop, segs[i].idx, segs[j].loop, segs[j].idx)
+				return auditError(legacy, detailed)
 			}
 		}
 	}
@@ -315,8 +367,10 @@ func nestingAudit(segs []segEntry, nLoops int) error {
 	tol := contactEps * scale
 
 	undecidable := func(container, pointLoop int, point [2]float64) error {
-		return fmt.Errorf(`%w: nesting of loop %d and loop %d at (u, v) = (%s, %s) cannot be decided; a resolving kernel is not available`,
+		legacy := fmt.Errorf(`%w: the rewrite's nesting cannot be decided; a resolving kernel is not available`, ErrUnsupported)
+		detailed := fmt.Sprintf(`%v: nesting of loop %d and loop %d at (u, v) = (%s, %s) cannot be decided; a resolving kernel is not available`,
 			ErrUnsupported, container, pointLoop, renderCoord(point[0]), renderCoord(point[1]))
+		return auditError(legacy, detailed)
 	}
 	// Every hole must sit inside the rewritten outer loop.
 	for h := 1; h < nLoops; h++ {
@@ -328,8 +382,10 @@ func nestingAudit(segs []segEntry, nLoops int) error {
 			return undecidable(0, h, pts[h])
 		}
 		if !inside {
-			return fmt.Errorf(`%w: hole loop %d at (u, v) = (%s, %s) lies outside outer loop 0, consuming the region it lived in`,
+			legacy := fmt.Errorf(`%w: the rewrite left a hole outside the outer loop, consuming the region it lived in`, ErrDegenerate)
+			detailed := fmt.Sprintf(`%v: hole loop %d at (u, v) = (%s, %s) lies outside outer loop 0, consuming the region it lived in`,
 				ErrDegenerate, h, renderCoord(pts[h][0]), renderCoord(pts[h][1]))
+			return auditError(legacy, detailed)
 		}
 	}
 	// Holes must stay mutually exterior — neither nested in the other.
@@ -355,8 +411,10 @@ func nestingAudit(segs []segEntry, nLoops int) error {
 					if pr.in == a {
 						pointLoop = b
 					}
-					return fmt.Errorf(`%w: hole loop %d at (u, v) = (%s, %s) lies inside hole loop %d`,
+					legacy := fmt.Errorf(`%w: the rewrite nested one hole inside another`, ErrDegenerate)
+					detailed := fmt.Sprintf(`%v: hole loop %d at (u, v) = (%s, %s) lies inside hole loop %d`,
 						ErrDegenerate, pointLoop, renderCoord(pr.pt[0]), renderCoord(pr.pt[1]), pr.in)
+					return auditError(legacy, detailed)
 				}
 			}
 		}
