@@ -443,6 +443,10 @@ func TestFilletTooLargeRadius(t *testing.T) {
 	corner := decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)), decad.Convex()).AtLeast(1)
 	_, err = body.Fillet(corner, units.Millimeters(25))
 	require.ErrorIs(t, err, decad.ErrDegenerate, `no blend of radius 25 fits inside a wall of radius 20`)
+	require.ErrorContains(t, err, `selector `+corner.String(),
+		`a multi-edge construction failure retains the query that selected the corners`)
+	require.Regexp(t, `selected edge\[\d+\] from \([^)]+\) to \([^)]+\) maps to loop 0 corner \d+ at \(u, v\) = \([^)]+\)`,
+		err.Error(), `the failing selected edge retains its result ordinal and matched corner coordinate`)
 	require.Equal(t, []*decad.Body{body}, doc.Bodies(), `a refused fillet retires nothing`)
 }
 
@@ -509,6 +513,10 @@ func TestFilletBoundaryContactRefused(t *testing.T) {
 	_, err = body.Fillet(convex, units.Millimeters(r))
 	require.Error(t, err, `a fillet that pinches two boundaries must be refused, not returned`)
 	require.ErrorIs(t, err, decad.ErrUnsupported, `boundary contact is the boundary case of a crossing: S7, ErrUnsupported`)
+	require.ErrorContains(t, err, `selector `+convex.String(),
+		`an audit failure retains the multi-edge query`)
+	require.Regexp(t, `rewritten loop \d+ segment \d+ and loop \d+ segment \d+ are in contact`,
+		err.Error(), `a pairwise audit failure names both implicated loop segments`)
 	require.Equal(t, []*decad.Body{body}, body.Document().Bodies(), `a refused fillet retires nothing`)
 }
 
@@ -579,6 +587,10 @@ func TestFilletHoleOutsideRoundedLoopRefused(t *testing.T) {
 	require.Error(t, err, `a fillet that leaves the hole outside the outer loop must be refused, not returned`)
 	require.ErrorIs(t, err, decad.ErrDegenerate,
 		`a hole proven outside the rounded outer loop is nesting decidably broken: no such body, ErrDegenerate`)
+	require.ErrorContains(t, err, `hole loop 1 at (u, v) = `,
+		`the nesting audit identifies the failed hole and its classification point`)
+	require.ErrorContains(t, err, `outside outer loop 0`,
+		`the nesting audit identifies the outer loop used for classification`)
 	require.Equal(t, []*decad.Body{body}, body.Document().Bodies(), `a refused fillet retires nothing`)
 }
 

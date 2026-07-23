@@ -409,8 +409,15 @@ func TestChamferOverLargeSetbackRefused(t *testing.T) {
 	// never handed a clipped body. Here the 60 mm walls each carry two corners at
 	// d = 40 → 80 > 60, so the audit refuses.
 	_, box := filletBox(t)
-	_, err := box.Chamfer(verticalEdges(), units.Millimeters(40))
+	selector := verticalEdges()
+	_, err := box.Chamfer(selector, units.Millimeters(40))
 	require.ErrorIs(t, err, decad.ErrUnsupported, `a setback that consumes a wall from both ends is S6`)
+	require.ErrorContains(t, err, `selector `+selector.String(),
+		`an audit failure retains the multi-edge query`)
+	require.Equal(t, 4, strings.Count(err.Error(), `selected edge[`),
+		`the audit failure retains all four selected-edge to corner mappings`)
+	require.Regexp(t, `loop 0 walk \d+ from corner \d+ at \(u, v\) = \([^)]+\) to corner \d+ at \(u, v\) = \([^)]+\)`,
+		err.Error(), `the overrun identifies the consumed walk and both corner coordinates`)
 	require.Equal(t, []*decad.Body{box}, box.Document().Bodies(), `a refused chamfer retires nothing`)
 }
 
@@ -491,6 +498,10 @@ func TestChamferBreaksNestingRefused(t *testing.T) {
 	require.Error(t, err, `a chamfer that leaves the hole outside the outer loop must be refused`)
 	require.ErrorIs(t, err, decad.ErrDegenerate,
 		`a hole proven outside the bevelled outer loop is nesting decidably broken: ErrDegenerate`)
+	require.ErrorContains(t, err, `hole loop 1 at (u, v) = `,
+		`the nesting audit identifies the failed hole and its classification point`)
+	require.ErrorContains(t, err, `outside outer loop 0`,
+		`the nesting audit identifies the outer loop used for classification`)
 	require.Equal(t, []*decad.Body{body}, body.Document().Bodies(), `a refused chamfer retires nothing`)
 }
 

@@ -99,24 +99,25 @@ func (b *Body) Chamfer(sel EdgeSelector, d units.Value, opts ...ChamferOption) (
 	for i := range blendAt {
 		blendAt[i] = map[int]*cornerBlend{}
 	}
-	for _, e := range edges {
+	matched := make([]matchedCorner, 0, len(edges))
+	for ei, e := range edges {
 		li, ci, found := matchCorner(pp, loops, e)
 		if !found {
-			return nil, fmt.Errorf(`%w: a chamfer of a cap edge is the vertex-blend problem, not yet supported`, ErrUnsupported)
+			return nil, fmt.Errorf(`selector %s, %s: %w: a chamfer of a cap edge is the vertex-blend problem, not yet supported`,
+				sel, selectedEdgeContext(ei, e), ErrUnsupported)
 		}
+		matched = append(matched, newMatchedCorner(ei, e, li, ci, loops[li]))
 		blendAt[li][ci] = nil // marked; the bevel is computed in stage 3
 	}
 
 	// Stage 3 (§4): the construction's own gate, per corner — S4 (a corner
 	// exists). There is no S5: a chord exists between any two distinct feet.
-	for li, corners := range blendAt {
-		for ci := range corners {
-			cb, err := computeChamfer(loops[li], ci, dmm)
-			if err != nil {
-				return nil, err
-			}
-			blendAt[li][ci] = cb
+	for _, corner := range matched {
+		cb, err := computeChamfer(loops[corner.loop], corner.corner, dmm)
+		if err != nil {
+			return nil, fmt.Errorf(`selector %s, %s: %w`, sel, corner, err)
 		}
+		blendAt[corner.loop][corner.corner] = cb
 	}
 
 	// The rewritten section, and the bevel chords' (loop, segment) indices.
@@ -125,7 +126,7 @@ func (b *Body) Chamfer(sel EdgeSelector, d units.Value, opts ...ChamferOption) (
 	// Stage 4 (§4/§5): the same audit the fillet runs — S8, S6 (an over-large
 	// setback that reaches or passes a walk's far end), S7, S9.
 	if err := auditRewrite(pp.profile, profile, loops, blendAt); err != nil {
-		return nil, err
+		return nil, wrapModifyAuditError(sel, matched, err)
 	}
 
 	// Build through evalPrism (§2): same frame, interval and placement, only
