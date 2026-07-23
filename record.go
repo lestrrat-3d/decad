@@ -1,8 +1,10 @@
 package decad
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"math"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -329,19 +331,210 @@ func marshalTagged(kind string, v any) ([]byte, error) {
 	return out, nil
 }
 
+// segmentWire is the presence-aware form of every CurveSegment variant. Raw
+// fields distinguish an omitted or null required field from a valid zero
+// coordinate, parameter or boolean.
+type segmentWire struct {
+	Kind     *string         `json:"kind"`
+	Start    json.RawMessage `json:"start"`
+	End      json.RawMessage `json:"end"`
+	Center   json.RawMessage `json:"center"`
+	Apex     json.RawMessage `json:"apex"`
+	Radius   json.RawMessage `json:"radius"`
+	Rx       json.RawMessage `json:"rx"`
+	Ry       json.RawMessage `json:"ry"`
+	Rotation json.RawMessage `json:"rotation"`
+	CCW      json.RawMessage `json:"ccw"`
+	Control  json.RawMessage `json:"control"`
+	Degree   json.RawMessage `json:"degree"`
+	Knots    json.RawMessage `json:"knots"`
+	Weights  json.RawMessage `json:"weights"`
+	Fit      json.RawMessage `json:"fit"`
+	Rho      json.RawMessage `json:"rho"`
+	TStart   json.RawMessage `json:"t_start"`
+	TEnd     json.RawMessage `json:"t_end"`
+}
+
+type namedSegmentWireField struct {
+	name string
+	raw  json.RawMessage
+}
+
+func presentSegmentWireField(raw json.RawMessage) bool {
+	return len(raw) != 0 && !bytes.Equal(bytes.TrimSpace(raw), []byte("null"))
+}
+
+func requireSegmentWireFields(kind string, fields ...namedSegmentWireField) error {
+	for _, field := range fields {
+		if !presentSegmentWireField(field.raw) {
+			return fmt.Errorf(`%w: %s segment is missing required field %q`, ErrDegenerate, kind, field.name)
+		}
+	}
+	return nil
+}
+
+func requirePointWire(kind, field string, raw json.RawMessage) error {
+	var point struct {
+		U *float64 `json:"u"`
+		V *float64 `json:"v"`
+	}
+	if err := json.Unmarshal(raw, &point); err != nil {
+		return fmt.Errorf(`decad: failed to decode %s segment field %q: %w`, kind, field, err)
+	}
+	if point.U == nil {
+		return fmt.Errorf(`%w: %s segment field %q is missing required coordinate "u"`, ErrDegenerate, kind, field)
+	}
+	if point.V == nil {
+		return fmt.Errorf(`%w: %s segment field %q is missing required coordinate "v"`, ErrDegenerate, kind, field)
+	}
+	return nil
+}
+
+func requirePointArrayWire(kind, field string, raw json.RawMessage) error {
+	var points []json.RawMessage
+	if err := json.Unmarshal(raw, &points); err != nil {
+		return fmt.Errorf(`decad: failed to decode %s segment field %q: %w`, kind, field, err)
+	}
+	for i, point := range points {
+		if !presentSegmentWireField(point) {
+			return fmt.Errorf(`%w: %s segment field %q has a null point at index %d`, ErrDegenerate, kind, field, i)
+		}
+		if err := requirePointWire(kind, fmt.Sprintf(`%s[%d]`, field, i), point); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func requireNumberArrayWire(kind, field string, raw json.RawMessage) error {
+	var numbers []json.RawMessage
+	if err := json.Unmarshal(raw, &numbers); err != nil {
+		return fmt.Errorf(`decad: failed to decode %s segment field %q: %w`, kind, field, err)
+	}
+	for i, number := range numbers {
+		if !presentSegmentWireField(number) {
+			return fmt.Errorf(`%w: %s segment field %q has a null value at index %d`, ErrDegenerate, kind, field, i)
+		}
+	}
+	return nil
+}
+
+// validateSegmentWire checks required top-level and nested fields before the
+// concrete variant is built. Unknown fields remain the root recipe codec's
+// responsibility; this layer owns only CurveSegment requiredness.
+func validateSegmentWire(kind string, wire segmentWire) error {
+	f := func(name string, raw json.RawMessage) namedSegmentWireField {
+		return namedSegmentWireField{name: name, raw: raw}
+	}
+
+	var required []namedSegmentWireField
+	var points, pointArrays, numberArrays []namedSegmentWireField
+	switch kind {
+	case segKindLine:
+		required = []namedSegmentWireField{
+			f("start", wire.Start), f("end", wire.End), f("t_start", wire.TStart), f("t_end", wire.TEnd),
+		}
+		points = required[:2]
+	case segKindCircle:
+		required = []namedSegmentWireField{
+			f("center", wire.Center), f("radius", wire.Radius), f("ccw", wire.CCW),
+			f("t_start", wire.TStart), f("t_end", wire.TEnd),
+		}
+		points = required[:1]
+	case segKindArc:
+		required = []namedSegmentWireField{
+			f("center", wire.Center), f("start", wire.Start), f("end", wire.End),
+			f("t_start", wire.TStart), f("t_end", wire.TEnd),
+		}
+		points = required[:3]
+	case segKindEllipse:
+		required = []namedSegmentWireField{
+			f("center", wire.Center), f("rx", wire.Rx), f("ry", wire.Ry), f("rotation", wire.Rotation),
+			f("ccw", wire.CCW), f("t_start", wire.TStart), f("t_end", wire.TEnd),
+		}
+		points = required[:1]
+	case segKindEllipticalArc:
+		required = []namedSegmentWireField{
+			f("center", wire.Center), f("start", wire.Start), f("end", wire.End),
+			f("rx", wire.Rx), f("ry", wire.Ry), f("rotation", wire.Rotation),
+			f("t_start", wire.TStart), f("t_end", wire.TEnd),
+		}
+		points = required[:3]
+	case segKindSpline:
+		required = []namedSegmentWireField{
+			f("control", wire.Control), f("t_start", wire.TStart), f("t_end", wire.TEnd),
+		}
+		pointArrays = required[:1]
+	case segKindNURBS:
+		required = []namedSegmentWireField{
+			f("degree", wire.Degree), f("control", wire.Control), f("knots", wire.Knots), f("weights", wire.Weights),
+			f("t_start", wire.TStart), f("t_end", wire.TEnd),
+		}
+		pointArrays = required[1:2]
+		numberArrays = required[2:4]
+	case segKindClosedSpline:
+		required = []namedSegmentWireField{
+			f("control", wire.Control), f("ccw", wire.CCW), f("t_start", wire.TStart), f("t_end", wire.TEnd),
+		}
+		pointArrays = required[:1]
+	case segKindFitSpline:
+		required = []namedSegmentWireField{
+			f("fit", wire.Fit), f("t_start", wire.TStart), f("t_end", wire.TEnd),
+		}
+		pointArrays = required[:1]
+	case segKindConic:
+		required = []namedSegmentWireField{
+			f("start", wire.Start), f("apex", wire.Apex), f("end", wire.End), f("rho", wire.Rho),
+			f("t_start", wire.TStart), f("t_end", wire.TEnd),
+		}
+		points = required[:3]
+	default:
+		return fmt.Errorf(`decad: unknown curve segment kind %q`, kind)
+	}
+
+	if err := requireSegmentWireFields(kind, required...); err != nil {
+		return err
+	}
+	for _, field := range points {
+		if err := requirePointWire(kind, field.name, field.raw); err != nil {
+			return err
+		}
+	}
+	for _, field := range pointArrays {
+		if err := requirePointArrayWire(kind, field.name, field.raw); err != nil {
+			return err
+		}
+	}
+	for _, field := range numberArrays {
+		if err := requireNumberArrayWire(kind, field.name, field.raw); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // unmarshalSegment dispatches on the kind tag and decodes the matching
 // variant. A missing or unknown tag is an error: the set is closed, and there
-// is no fallback.
+// is no fallback. Every required field is present and every segment invariant
+// holds before the decoded geometry is returned.
 func unmarshalSegment(data []byte) (CurveSegment, error) {
-	var probe struct {
-		Kind string `json:"kind"`
-	}
-	if err := json.Unmarshal(data, &probe); err != nil {
+	var wire segmentWire
+	if err := json.Unmarshal(data, &wire); err != nil {
 		return nil, fmt.Errorf(`decad: failed to decode curve segment tag: %w`, err)
+	}
+	if wire.Kind == nil {
+		return nil, fmt.Errorf(`decad: curve segment is missing its kind tag`)
+	}
+	kind := *wire.Kind
+	if kind == "" {
+		return nil, fmt.Errorf(`decad: curve segment is missing its kind tag`)
+	}
+	if err := validateSegmentWire(kind, wire); err != nil {
+		return nil, err
 	}
 
 	var seg CurveSegment
-	switch probe.Kind {
+	switch kind {
 	case segKindLine:
 		seg = &LineSeg{}
 	case segKindCircle:
@@ -362,15 +555,255 @@ func unmarshalSegment(data []byte) (CurveSegment, error) {
 		seg = &FitSplineSeg{}
 	case segKindConic:
 		seg = &ConicSeg{}
-	case "":
-		return nil, fmt.Errorf(`decad: curve segment is missing its kind tag`)
-	default:
-		return nil, fmt.Errorf(`decad: unknown curve segment kind %q`, probe.Kind)
 	}
 	if err := json.Unmarshal(data, seg); err != nil {
-		return nil, fmt.Errorf(`decad: failed to decode %s segment: %w`, probe.Kind, err)
+		return nil, fmt.Errorf(`decad: failed to decode %s segment: %w`, kind, err)
 	}
-	return normalizeSegment(seg)
+	seg, err := normalizeSegment(seg)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateSegment(seg); err != nil {
+		return nil, err
+	}
+	return seg, nil
+}
+
+func finiteSegmentValue(v float64) bool {
+	return !math.IsNaN(v) && !math.IsInf(v, 0)
+}
+
+func validateSegmentPoint(point Point2, what string) error {
+	if !finiteSegmentValue(point.U) || !finiteSegmentValue(point.V) {
+		return fmt.Errorf(`%w: %s must have finite coordinates`, ErrNotFinite, what)
+	}
+	return nil
+}
+
+func validateSegmentPoints(points []Point2, minimum int, what string) error {
+	if len(points) < minimum {
+		return fmt.Errorf(`%w: %s requires at least %d points, got %d`, ErrDegenerate, what, minimum, len(points))
+	}
+	for i, point := range points {
+		if err := validateSegmentPoint(point, fmt.Sprintf(`%s point %d`, what, i)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateSegmentParameter(v float64, what string) error {
+	if !finiteSegmentValue(v) {
+		return fmt.Errorf(`%w: %s must be finite`, ErrNotFinite, what)
+	}
+	return nil
+}
+
+func validateSegmentRange(tStart, tEnd float64, kind string) error {
+	if err := validateSegmentParameter(tStart, kind+" segment t_start"); err != nil {
+		return err
+	}
+	if err := validateSegmentParameter(tEnd, kind+" segment t_end"); err != nil {
+		return err
+	}
+	if tStart < 0 || tStart > 1 || tEnd < 0 || tEnd > 1 {
+		return fmt.Errorf(`%w: %s segment range [%v, %v] is outside [0, 1]`, ErrDegenerate, kind, tStart, tEnd)
+	}
+	if tStart == tEnd {
+		return fmt.Errorf(`%w: %s segment has an empty range at %v`, ErrDegenerate, kind, tStart)
+	}
+	return nil
+}
+
+func validateSegmentWinding(ccw bool, tStart, tEnd float64, kind string) error {
+	if ccw != (tStart < tEnd) {
+		return fmt.Errorf(`%w: %s segment's CCW flag contradicts its range order`, ErrDegenerate, kind)
+	}
+	return nil
+}
+
+func validateSegmentMagnitude(v units.Value, kind units.Kind, unit units.Unit, what string) error {
+	_, err := magnitudeIn(v, kind, unit, what)
+	return err
+}
+
+func validateSegmentQuantity(v units.Value, kind units.Kind, unit units.Unit, what string) error {
+	if v.Kind() != kind {
+		return fmt.Errorf(`%w: %s must be a %s, got %s`, ErrUnitKind, what, kind, v.Kind())
+	}
+	if _, err := v.In(unit); err != nil {
+		return fmt.Errorf(`%w: %s is not representable: %s`, ErrNotFinite, what, err)
+	}
+	return nil
+}
+
+func validateNURBSSegment(seg NURBSSeg) error {
+	if seg.Degree < 1 {
+		return fmt.Errorf(`%w: NURBS segment degree must be at least 1, got %d`, ErrDegenerate, seg.Degree)
+	}
+	n := len(seg.Control)
+	if seg.Degree >= n {
+		return fmt.Errorf(`%w: NURBS segment requires more control points than its degree %d, got %d`, ErrDegenerate, seg.Degree, n)
+	}
+	if err := validateSegmentPoints(seg.Control, seg.Degree+1, "NURBS segment control"); err != nil {
+		return err
+	}
+	if len(seg.Knots) != n+seg.Degree+1 {
+		return fmt.Errorf(`%w: NURBS segment needs %d knots, got %d`, ErrDegenerate, n+seg.Degree+1, len(seg.Knots))
+	}
+	for i, knot := range seg.Knots {
+		if err := validateSegmentParameter(knot, fmt.Sprintf(`NURBS segment knot %d`, i)); err != nil {
+			return err
+		}
+		if i > 0 && knot < seg.Knots[i-1] {
+			return fmt.Errorf(`%w: NURBS segment knots must be non-decreasing`, ErrDegenerate)
+		}
+	}
+	for i := 1; i <= seg.Degree; i++ {
+		if seg.Knots[i] != seg.Knots[0] {
+			return fmt.Errorf(`%w: NURBS segment knot vector is not clamped at the start`, ErrDegenerate)
+		}
+		if seg.Knots[len(seg.Knots)-1-i] != seg.Knots[len(seg.Knots)-1] {
+			return fmt.Errorf(`%w: NURBS segment knot vector is not clamped at the end`, ErrDegenerate)
+		}
+	}
+	if seg.Knots[seg.Degree] >= seg.Knots[n] {
+		return fmt.Errorf(`%w: NURBS segment knot domain is empty`, ErrDegenerate)
+	}
+	if len(seg.Weights) != n {
+		return fmt.Errorf(`%w: NURBS segment needs %d weights, got %d`, ErrDegenerate, n, len(seg.Weights))
+	}
+	for i, weight := range seg.Weights {
+		if err := validateSegmentParameter(weight, fmt.Sprintf(`NURBS segment weight %d`, i)); err != nil {
+			return err
+		}
+		if weight <= 0 {
+			return fmt.Errorf(`%w: NURBS segment weight %d must be positive, got %v`, ErrDegenerate, i, weight)
+		}
+	}
+	return nil
+}
+
+// validateSegment enforces the CurveSegment checks from recipe replay §3.1:
+// finite values, physical unit kinds, non-negative magnitudes, normalized
+// non-empty ranges, closed-curve winding, spline field counts, and the complete
+// clamped NURBS shape.
+func validateSegment(segment CurveSegment) error {
+	segment, err := normalizeSegment(segment)
+	if err != nil {
+		return err
+	}
+	validateRange := func(kind string, tStart, tEnd float64) error {
+		return validateSegmentRange(tStart, tEnd, kind)
+	}
+	switch seg := segment.(type) {
+	case LineSeg:
+		if err := validateSegmentPoint(seg.Start, "line segment start"); err != nil {
+			return err
+		}
+		if err := validateSegmentPoint(seg.End, "line segment end"); err != nil {
+			return err
+		}
+		return validateRange(segKindLine, seg.TStart, seg.TEnd)
+	case CircleSeg:
+		if err := validateSegmentPoint(seg.Center, "circle segment center"); err != nil {
+			return err
+		}
+		if err := validateSegmentMagnitude(seg.Radius, units.Length, units.Millimeter, "circle segment radius"); err != nil {
+			return err
+		}
+		if err := validateRange(segKindCircle, seg.TStart, seg.TEnd); err != nil {
+			return err
+		}
+		return validateSegmentWinding(seg.CCW, seg.TStart, seg.TEnd, segKindCircle)
+	case ArcSeg:
+		for _, point := range []struct {
+			value Point2
+			name  string
+		}{{seg.Center, "center"}, {seg.Start, "start"}, {seg.End, "end"}} {
+			if err := validateSegmentPoint(point.value, "arc segment "+point.name); err != nil {
+				return err
+			}
+		}
+		return validateRange(segKindArc, seg.TStart, seg.TEnd)
+	case EllipseSeg:
+		if err := validateSegmentPoint(seg.Center, "ellipse segment center"); err != nil {
+			return err
+		}
+		if err := validateSegmentMagnitude(seg.Rx, units.Length, units.Millimeter, "ellipse segment rx"); err != nil {
+			return err
+		}
+		if err := validateSegmentMagnitude(seg.Ry, units.Length, units.Millimeter, "ellipse segment ry"); err != nil {
+			return err
+		}
+		if err := validateSegmentQuantity(seg.Rotation, units.Angle, units.Radian, "ellipse segment rotation"); err != nil {
+			return err
+		}
+		if err := validateRange(segKindEllipse, seg.TStart, seg.TEnd); err != nil {
+			return err
+		}
+		return validateSegmentWinding(seg.CCW, seg.TStart, seg.TEnd, segKindEllipse)
+	case EllipticalArcSeg:
+		for _, point := range []struct {
+			value Point2
+			name  string
+		}{{seg.Center, "center"}, {seg.Start, "start"}, {seg.End, "end"}} {
+			if err := validateSegmentPoint(point.value, "elliptical arc segment "+point.name); err != nil {
+				return err
+			}
+		}
+		if err := validateSegmentMagnitude(seg.Rx, units.Length, units.Millimeter, "elliptical arc segment rx"); err != nil {
+			return err
+		}
+		if err := validateSegmentMagnitude(seg.Ry, units.Length, units.Millimeter, "elliptical arc segment ry"); err != nil {
+			return err
+		}
+		if err := validateSegmentQuantity(seg.Rotation, units.Angle, units.Radian, "elliptical arc segment rotation"); err != nil {
+			return err
+		}
+		return validateRange(segKindEllipticalArc, seg.TStart, seg.TEnd)
+	case SplineSeg:
+		if err := validateSegmentPoints(seg.Control, 4, "spline segment control"); err != nil {
+			return err
+		}
+		return validateRange(segKindSpline, seg.TStart, seg.TEnd)
+	case NURBSSeg:
+		if err := validateNURBSSegment(seg); err != nil {
+			return err
+		}
+		return validateRange(segKindNURBS, seg.TStart, seg.TEnd)
+	case ClosedSplineSeg:
+		if err := validateSegmentPoints(seg.Control, 3, "closed spline segment control"); err != nil {
+			return err
+		}
+		if err := validateRange(segKindClosedSpline, seg.TStart, seg.TEnd); err != nil {
+			return err
+		}
+		return validateSegmentWinding(seg.CCW, seg.TStart, seg.TEnd, segKindClosedSpline)
+	case FitSplineSeg:
+		if err := validateSegmentPoints(seg.Fit, 2, "fit spline segment fit"); err != nil {
+			return err
+		}
+		return validateRange(segKindFitSpline, seg.TStart, seg.TEnd)
+	case ConicSeg:
+		for _, point := range []struct {
+			value Point2
+			name  string
+		}{{seg.Start, "start"}, {seg.Apex, "apex"}, {seg.End, "end"}} {
+			if err := validateSegmentPoint(point.value, "conic segment "+point.name); err != nil {
+				return err
+			}
+		}
+		if err := validateSegmentParameter(seg.Rho, "conic segment rho"); err != nil {
+			return err
+		}
+		if seg.Rho <= 0 || seg.Rho >= 1 {
+			return fmt.Errorf(`%w: conic segment rho must be in (0, 1), got %v`, ErrDegenerate, seg.Rho)
+		}
+		return validateRange(segKindConic, seg.TStart, seg.TEnd)
+	default:
+		return fmt.Errorf(`%w: unknown curve segment type %T`, ErrDegenerate, segment)
+	}
 }
 
 // errNilSegment rejects a nil variant pointer: it names no curve to record.

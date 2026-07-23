@@ -43,9 +43,9 @@ func TestProfileRecordRoundTrip(t *testing.T) {
 		Holes: []decad.LoopRecord{
 			// The closed kinds each bound a loop on their own; a hole walks
 			// clockwise, so CCW is false.
-			{Segments: []decad.CurveSegment{decad.CircleSeg{Center: decad.Point2{U: 30, V: 20}, Radius: units.Millimeters(5), CCW: false, TStart: 0, TEnd: 1}}},
-			{Segments: []decad.CurveSegment{decad.EllipseSeg{Center: decad.Point2{U: 70, V: 20}, Rx: units.Millimeters(8), Ry: units.Millimeters(3), Rotation: units.Degrees(30), CCW: false, TStart: 0, TEnd: 1}}},
-			{Segments: []decad.CurveSegment{decad.ClosedSplineSeg{Control: []decad.Point2{{U: 40, V: 40}, {U: 50, V: 40}, {U: 45, V: 50}}, CCW: false, TStart: 0, TEnd: 1}}},
+			{Segments: []decad.CurveSegment{decad.CircleSeg{Center: decad.Point2{U: 30, V: 20}, Radius: units.Millimeters(5), CCW: false, TStart: 1, TEnd: 0}}},
+			{Segments: []decad.CurveSegment{decad.EllipseSeg{Center: decad.Point2{U: 70, V: 20}, Rx: units.Millimeters(8), Ry: units.Millimeters(3), Rotation: units.Degrees(30), CCW: false, TStart: 1, TEnd: 0}}},
+			{Segments: []decad.CurveSegment{decad.ClosedSplineSeg{Control: []decad.Point2{{U: 40, V: 40}, {U: 50, V: 40}, {U: 45, V: 50}}, CCW: false, TStart: 1, TEnd: 0}}},
 		},
 	}
 
@@ -104,6 +104,262 @@ func TestCurveSegmentDecodeRejects(t *testing.T) {
 	// A segment with no tag at all is rejected too — never guessed.
 	err = json.Unmarshal([]byte(`{"segments":[{"t_start":0,"t_end":1}]}`), &loop)
 	require.Error(t, err, `a segment missing its kind tag should be rejected`)
+}
+
+func TestCurveSegmentDecodeRequiresEveryField(t *testing.T) {
+	const (
+		startField   = "start"
+		endField     = "end"
+		centerField  = "center"
+		ccwField     = "ccw"
+		controlField = "control"
+		tStartField  = "t_start"
+		tEndField    = "t_end"
+	)
+
+	tests := []struct {
+		name     string
+		segment  string
+		required []string
+	}{
+		{
+			name:     "line",
+			segment:  `{"kind":"line","start":{"u":0,"v":0},"end":{"u":1,"v":0},"t_start":0,"t_end":1}`,
+			required: []string{startField, endField, tStartField, tEndField},
+		},
+		{
+			name:     "circle",
+			segment:  `{"kind":"circle","center":{"u":0,"v":0},"radius":"2 mm","ccw":true,"t_start":0,"t_end":1}`,
+			required: []string{centerField, "radius", ccwField, tStartField, tEndField},
+		},
+		{
+			name:     "arc",
+			segment:  `{"kind":"arc","center":{"u":0,"v":0},"start":{"u":1,"v":0},"end":{"u":0,"v":1},"t_start":0,"t_end":1}`,
+			required: []string{centerField, startField, endField, tStartField, tEndField},
+		},
+		{
+			name:     "ellipse",
+			segment:  `{"kind":"ellipse","center":{"u":0,"v":0},"rx":"2 mm","ry":"1 mm","rotation":"0 rad","ccw":true,"t_start":0,"t_end":1}`,
+			required: []string{centerField, "rx", "ry", "rotation", ccwField, tStartField, tEndField},
+		},
+		{
+			name:     "elliptical arc",
+			segment:  `{"kind":"elliptical_arc","center":{"u":0,"v":0},"start":{"u":2,"v":0},"end":{"u":0,"v":1},"rx":"2 mm","ry":"1 mm","rotation":"0 rad","t_start":0,"t_end":1}`,
+			required: []string{centerField, startField, endField, "rx", "ry", "rotation", tStartField, tEndField},
+		},
+		{
+			name:     "spline",
+			segment:  `{"kind":"spline","control":[{"u":0,"v":0},{"u":1,"v":1},{"u":2,"v":1},{"u":3,"v":0}],"t_start":0,"t_end":1}`,
+			required: []string{controlField, tStartField, tEndField},
+		},
+		{
+			name:     "NURBS",
+			segment:  `{"kind":"nurbs","degree":2,"control":[{"u":0,"v":0},{"u":1,"v":1},{"u":2,"v":0}],"knots":[0,0,0,1,1,1],"weights":[1,1,1],"t_start":0,"t_end":1}`,
+			required: []string{"degree", controlField, "knots", "weights", tStartField, tEndField},
+		},
+		{
+			name:     "closed spline",
+			segment:  `{"kind":"closed_spline","control":[{"u":0,"v":0},{"u":1,"v":0},{"u":0,"v":1}],"ccw":true,"t_start":0,"t_end":1}`,
+			required: []string{controlField, ccwField, tStartField, tEndField},
+		},
+		{
+			name:     "fit spline",
+			segment:  `{"kind":"fit_spline","fit":[{"u":0,"v":0},{"u":1,"v":1}],"t_start":0,"t_end":1}`,
+			required: []string{"fit", tStartField, tEndField},
+		},
+		{
+			name:     "conic",
+			segment:  `{"kind":"conic","start":{"u":0,"v":0},"apex":{"u":1,"v":1},"end":{"u":2,"v":0},"rho":0.5,"t_start":0,"t_end":1}`,
+			required: []string{startField, "apex", endField, "rho", tStartField, tEndField},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var loop decad.LoopRecord
+			require.NoError(t, json.Unmarshal([]byte(`{"segments":[`+tt.segment+`]}`), &loop),
+				`the complete variant should decode`)
+
+			var object map[string]json.RawMessage
+			require.NoError(t, json.Unmarshal([]byte(tt.segment), &object))
+			for _, field := range tt.required {
+				t.Run("missing "+field, func(t *testing.T) {
+					truncated := make(map[string]json.RawMessage, len(object)-1)
+					for key, value := range object {
+						if key != field {
+							truncated[key] = value
+						}
+					}
+					segment, err := json.Marshal(truncated)
+					require.NoError(t, err)
+
+					err = json.Unmarshal([]byte(`{"segments":[`+string(segment)+`]}`), &loop)
+					require.Error(t, err, `an omitted required field must not become its Go zero value`)
+					require.ErrorIs(t, err, decad.ErrDegenerate)
+					require.Contains(t, err.Error(), field)
+				})
+			}
+		})
+	}
+}
+
+func TestCurveSegmentDecodeRequiresNestedGeometry(t *testing.T) {
+	tests := []struct {
+		name    string
+		segment string
+		want    string
+	}{
+		{
+			name:    "point coordinate",
+			segment: `{"kind":"line","start":{"u":0},"end":{"u":1,"v":0},"t_start":0,"t_end":1}`,
+			want:    "coordinate \"v\"",
+		},
+		{
+			name:    "null point",
+			segment: `{"kind":"line","start":null,"end":{"u":1,"v":0},"t_start":0,"t_end":1}`,
+			want:    "start",
+		},
+		{
+			name:    "control point coordinate",
+			segment: `{"kind":"spline","control":[{"u":0},{"u":1,"v":1},{"u":2,"v":1},{"u":3,"v":0}],"t_start":0,"t_end":1}`,
+			want:    "control[0]",
+		},
+		{
+			name:    "null control point",
+			segment: `{"kind":"spline","control":[null,{"u":1,"v":1},{"u":2,"v":1},{"u":3,"v":0}],"t_start":0,"t_end":1}`,
+			want:    "index 0",
+		},
+		{
+			name:    "null knot",
+			segment: `{"kind":"nurbs","degree":2,"control":[{"u":0,"v":0},{"u":1,"v":1},{"u":2,"v":0}],"knots":[0,0,null,1,1,1],"weights":[1,1,1],"t_start":0,"t_end":1}`,
+			want:    "index 2",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var loop decad.LoopRecord
+			err := json.Unmarshal([]byte(`{"segments":[`+tt.segment+`]}`), &loop)
+			require.Error(t, err)
+			require.ErrorIs(t, err, decad.ErrDegenerate)
+			require.Contains(t, err.Error(), tt.want)
+		})
+	}
+}
+
+func TestCurveSegmentDecodeRejectsInvalidVariant(t *testing.T) {
+	tests := []struct {
+		name    string
+		segment string
+		wantErr error
+	}{
+		{
+			name:    "line empty range",
+			segment: `{"kind":"line","start":{"u":0,"v":0},"end":{"u":1,"v":0},"t_start":0.5,"t_end":0.5}`,
+			wantErr: decad.ErrDegenerate,
+		},
+		{
+			name:    "circle winding",
+			segment: `{"kind":"circle","center":{"u":0,"v":0},"radius":"2 mm","ccw":false,"t_start":0,"t_end":1}`,
+			wantErr: decad.ErrDegenerate,
+		},
+		{
+			name:    "arc range",
+			segment: `{"kind":"arc","center":{"u":0,"v":0},"start":{"u":1,"v":0},"end":{"u":0,"v":1},"t_start":0,"t_end":1.1}`,
+			wantErr: decad.ErrDegenerate,
+		},
+		{
+			name:    "ellipse rotation kind",
+			segment: `{"kind":"ellipse","center":{"u":0,"v":0},"rx":"2 mm","ry":"1 mm","rotation":"1 mm","ccw":true,"t_start":0,"t_end":1}`,
+			wantErr: decad.ErrUnitKind,
+		},
+		{
+			name:    "elliptical arc negative semi-axis",
+			segment: `{"kind":"elliptical_arc","center":{"u":0,"v":0},"start":{"u":2,"v":0},"end":{"u":0,"v":1},"rx":"-2 mm","ry":"1 mm","rotation":"0 rad","t_start":0,"t_end":1}`,
+			wantErr: decad.ErrNegativeMagnitude,
+		},
+		{
+			name:    "spline control count",
+			segment: `{"kind":"spline","control":[{"u":0,"v":0},{"u":1,"v":1},{"u":2,"v":0}],"t_start":0,"t_end":1}`,
+			wantErr: decad.ErrDegenerate,
+		},
+		{
+			name:    "NURBS weight count",
+			segment: `{"kind":"nurbs","degree":2,"control":[{"u":0,"v":0},{"u":1,"v":1},{"u":2,"v":0}],"knots":[0,0,0,1,1,1],"weights":[1,1],"t_start":0,"t_end":1}`,
+			wantErr: decad.ErrDegenerate,
+		},
+		{
+			name:    "closed spline winding",
+			segment: `{"kind":"closed_spline","control":[{"u":0,"v":0},{"u":1,"v":0},{"u":0,"v":1}],"ccw":false,"t_start":0,"t_end":1}`,
+			wantErr: decad.ErrDegenerate,
+		},
+		{
+			name:    "fit spline point count",
+			segment: `{"kind":"fit_spline","fit":[{"u":0,"v":0}],"t_start":0,"t_end":1}`,
+			wantErr: decad.ErrDegenerate,
+		},
+		{
+			name:    "conic rho",
+			segment: `{"kind":"conic","start":{"u":0,"v":0},"apex":{"u":1,"v":1},"end":{"u":2,"v":0},"rho":1,"t_start":0,"t_end":1}`,
+			wantErr: decad.ErrDegenerate,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var loop decad.LoopRecord
+			err := json.Unmarshal([]byte(`{"segments":[`+tt.segment+`]}`), &loop)
+			require.Error(t, err)
+			require.ErrorIs(t, err, tt.wantErr)
+		})
+	}
+}
+
+func TestNURBSSegmentDecodeRejectsInvalidShape(t *testing.T) {
+	tests := []struct {
+		name    string
+		segment string
+	}{
+		{
+			name:    "degree",
+			segment: `{"kind":"nurbs","degree":0,"control":[{"u":0,"v":0},{"u":1,"v":0}],"knots":[0,1,2],"weights":[1,1],"t_start":0,"t_end":1}`,
+		},
+		{
+			name:    "control count",
+			segment: `{"kind":"nurbs","degree":2,"control":[{"u":0,"v":0},{"u":1,"v":0}],"knots":[0,0,0,1,1],"weights":[1,1],"t_start":0,"t_end":1}`,
+		},
+		{
+			name:    "knot count",
+			segment: `{"kind":"nurbs","degree":2,"control":[{"u":0,"v":0},{"u":1,"v":1},{"u":2,"v":0}],"knots":[0,0,1,1,1],"weights":[1,1,1],"t_start":0,"t_end":1}`,
+		},
+		{
+			name:    "knot order",
+			segment: `{"kind":"nurbs","degree":2,"control":[{"u":0,"v":0},{"u":1,"v":1},{"u":2,"v":0}],"knots":[0,0,0,1,0.5,1],"weights":[1,1,1],"t_start":0,"t_end":1}`,
+		},
+		{
+			name:    "start clamp",
+			segment: `{"kind":"nurbs","degree":2,"control":[{"u":0,"v":0},{"u":1,"v":1},{"u":2,"v":0}],"knots":[0,0.1,0.1,1,1,1],"weights":[1,1,1],"t_start":0,"t_end":1}`,
+		},
+		{
+			name:    "end clamp",
+			segment: `{"kind":"nurbs","degree":2,"control":[{"u":0,"v":0},{"u":1,"v":1},{"u":2,"v":0}],"knots":[0,0,0,0.9,0.9,1],"weights":[1,1,1],"t_start":0,"t_end":1}`,
+		},
+		{
+			name:    "empty knot domain",
+			segment: `{"kind":"nurbs","degree":2,"control":[{"u":0,"v":0},{"u":1,"v":1},{"u":2,"v":0}],"knots":[0,0,0,0,0,0],"weights":[1,1,1],"t_start":0,"t_end":1}`,
+		},
+		{
+			name:    "non-positive weight",
+			segment: `{"kind":"nurbs","degree":2,"control":[{"u":0,"v":0},{"u":1,"v":1},{"u":2,"v":0}],"knots":[0,0,0,1,1,1],"weights":[1,0,1],"t_start":0,"t_end":1}`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var loop decad.LoopRecord
+			err := json.Unmarshal([]byte(`{"segments":[`+tt.segment+`]}`), &loop)
+			require.Error(t, err)
+			require.ErrorIs(t, err, decad.ErrDegenerate)
+		})
+	}
 }
 
 func TestCurveSegmentEncodeRejects(t *testing.T) {
