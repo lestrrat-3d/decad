@@ -1,6 +1,7 @@
 package decad_test
 
 import (
+	"context"
 	"math"
 	"testing"
 
@@ -236,6 +237,27 @@ func TestWallPartialRevolve(t *testing.T) {
 	require.NoError(t, err)
 	requireWall(t, report.Bodies[0], 10)
 	require.Equal(t, decad.Sound, report.Status)
+}
+
+func TestVerifyWallCancellationStopsCandidateWork(t *testing.T) {
+	const sides = 40
+	pts := make([][2]float64, sides)
+	for i := range pts {
+		th := 2 * math.Pi * float64(i) / sides
+		pts[i] = [2]float64{20 * math.Cos(th), 20 * math.Sin(th)}
+	}
+	s, p := polygonSketch(t, pts)
+	doc := decad.New()
+	_, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	require.NoError(t, err)
+	before := snapshotDocument(t, doc)
+	ctx := newCancelAfterContext(t.Context(), 5)
+
+	report, err := doc.Verify(ctx, decad.WithMinWallThickness(units.Millimeters(1)))
+
+	require.ErrorIs(t, err, context.Canceled)
+	require.Nil(t, report)
+	requireDocumentUnchanged(t, doc, before)
 }
 
 func TestUndercutNearAntiparallelPull(t *testing.T) {

@@ -134,10 +134,16 @@ func junctionPinch(inU, inV, outU, outV, alpha float64) bool {
 // disks lift to balls when their diameter fits the height, the parallel caps
 // span whenever a disk of half the height fits the section, and a profile
 // corner within the allowance pinches to zero.
-func prismWall(pp prismPayload, alpha float64) wallOutcome {
+func prismWall(budget *workBudget, pp prismPayload, alpha float64) (wallOutcome, error) {
+	if err := wallBudgetErr(budget); err != nil {
+		return wallOutcome{}, err
+	}
 	loops, err := recordLoops(pp.profile)
 	if err != nil {
-		return wallOutcome{}
+		return wallOutcome{}, nil
+	}
+	if err := wallBudgetErr(budget); err != nil {
+		return wallOutcome{}, err
 	}
 	var elems []surveyElem
 	var verts [][2]float64
@@ -145,9 +151,12 @@ func prismWall(pp prismPayload, alpha float64) wallOutcome {
 	for _, loop := range loops {
 		single := len(loop) == 1 && loop[0].closed
 		for i, w := range loop {
+			if err := wallBudgetStep(budget); err != nil {
+				return wallOutcome{}, err
+			}
 			el, ok := walkElem(w.segmentWalk)
 			if !ok {
-				return wallOutcome{}
+				return wallOutcome{}, nil
 			}
 			elems = append(elems, el)
 			if single {
@@ -162,9 +171,12 @@ func prismWall(pp prismPayload, alpha float64) wallOutcome {
 	}
 	h := pp.z1 - pp.z0
 	k := newWallKernel(elems, nil, verts, alpha, 0, false, h)
-	out := k.run()
+	out, err := k.runBudget(budget)
+	if err != nil {
+		return wallOutcome{}, err
+	}
 	if !out.ok {
-		return wallOutcome{}
+		return wallOutcome{}, nil
 	}
 	best := math.Inf(1)
 	if pinch {
@@ -174,7 +186,7 @@ func prismWall(pp prismPayload, alpha float64) wallOutcome {
 		// Same rule as the revolve path: a dropped off-junction
 		// sub-tolerance disk could be a real web thinner than the kernel
 		// resolves — only an exact zero still decides.
-		return wallOutcome{}
+		return wallOutcome{}, nil
 	}
 	if out.hasSpan && out.span < best {
 		best = out.span
@@ -183,9 +195,9 @@ func prismWall(pp prismPayload, alpha float64) wallOutcome {
 		best = h
 	}
 	if math.IsInf(best, 1) {
-		return wallOutcome{ok: true}
+		return wallOutcome{ok: true}, nil
 	}
-	return wallOutcome{reading: &best, ok: true}
+	return wallOutcome{reading: &best, ok: true}, nil
 }
 
 // revolveWall is the spanning-ball reading of a revolved body, computed in
@@ -195,10 +207,16 @@ func prismWall(pp prismPayload, alpha float64) wallOutcome {
 // sweep's are the plain section's disks constrained by the cap wedge —
 // whose own two contacts span exactly when the sweep is within the
 // allowance, the on-axis cap edge (dihedral = the sweep itself) included.
-func revolveWall(rp revolvePayload, alpha float64) wallOutcome {
+func revolveWall(budget *workBudget, rp revolvePayload, alpha float64) (wallOutcome, error) {
+	if err := wallBudgetErr(budget); err != nil {
+		return wallOutcome{}, err
+	}
 	loops, err := revolveLoops(rp)
 	if err != nil {
-		return wallOutcome{}
+		return wallOutcome{}, nil
+	}
+	if err := wallBudgetErr(budget); err != nil {
+		return wallOutcome{}, err
 	}
 	dphi := rp.phi1 - rp.phi0
 	var elems, containOnly []surveyElem
@@ -210,9 +228,15 @@ func revolveWall(rp revolvePayload, alpha float64) wallOutcome {
 		single := n == 1 && loop[0].closed
 		kinds := make([]wallKind, n)
 		for i, w := range loop {
+			if err := wallBudgetStep(budget); err != nil {
+				return wallOutcome{}, err
+			}
 			kinds[i] = rp.ax.classify(w.segmentWalk)
 		}
 		for i, w := range loop {
+			if err := wallBudgetStep(budget); err != nil {
+				return wallOutcome{}, err
+			}
 			if kinds[i] == wallAxis {
 				axisTouch = true
 				if !rp.full {
@@ -224,7 +248,7 @@ func revolveWall(rp revolvePayload, alpha float64) wallOutcome {
 			}
 			el, ok := walkElem(w.segmentWalk)
 			if !ok {
-				return wallOutcome{}
+				return wallOutcome{}, nil
 			}
 			elems = append(elems, el)
 			if rp.full {
@@ -277,9 +301,12 @@ func revolveWall(rp revolvePayload, alpha float64) wallOutcome {
 		wedgeSpans = dphi <= alpha+survAngTol
 	}
 	k := newWallKernel(elems, containOnly, verts, alpha, wedgeS, wedgeSpans, math.Inf(1))
-	out := k.run()
+	out, err := k.runBudget(budget)
+	if err != nil {
+		return wallOutcome{}, err
+	}
 	if !out.ok {
-		return wallOutcome{}
+		return wallOutcome{}, nil
 	}
 	best := math.Inf(1)
 	if pinch {
@@ -295,15 +322,15 @@ func revolveWall(rp revolvePayload, alpha float64) wallOutcome {
 		// thinner than the kernel resolves: only an exact zero (which
 		// nothing can undercut) still decides; any other reading — or an
 		// absence — is undecided.
-		return wallOutcome{}
+		return wallOutcome{}, nil
 	}
 	if out.hasSpan && out.span < best {
 		best = out.span
 	}
 	if math.IsInf(best, 1) {
-		return wallOutcome{ok: true}
+		return wallOutcome{ok: true}, nil
 	}
-	return wallOutcome{reading: &best, ok: true}
+	return wallOutcome{reading: &best, ok: true}, nil
 }
 
 // facesByRole indexes a body's faces by their own-step feature role.
@@ -836,21 +863,28 @@ func cupMinRadius(cp cupPayload) (radiusOutcome, bool) {
 // question is undecided or a stated spec is straddled (verification §1.1/§6).
 // A Sound survey emits nothing. Every reading this evaluator produces is
 // closed-form — Exact, zero bound.
-func runSurveys(br *BodyReport, cfg verifyConfig) []Diagnostic {
+func runSurveys(budget *workBudget, br *BodyReport, cfg verifyConfig) ([]Diagnostic, error) {
+	if err := wallBudgetErr(budget); err != nil {
+		return nil, err
+	}
 	var diags []Diagnostic
 	b := br.Body
 
 	if cfg.wall != nil {
 		out := wallOutcome{}
+		var err error
 		switch pl := b.payload.(type) {
 		case prismPayload:
-			out = prismWall(pl, cfg.allowRad)
+			out, err = prismWall(budget, pl, cfg.allowRad)
 		case revolvePayload:
-			out = revolveWall(pl, cfg.allowRad)
+			out, err = revolveWall(budget, pl, cfg.allowRad)
 		case cupPayload:
 			out = cupWall(pl, cfg.allowRad)
 		case facetedPayload:
 			out.reason = surveyFacetedUnsupported
+		}
+		if err != nil {
+			return nil, err
 		}
 		switch {
 		case !out.ok:
@@ -890,6 +924,9 @@ func runSurveys(br *BodyReport, cfg verifyConfig) []Diagnostic {
 				})
 			}
 		}
+		if err := wallBudgetErr(budget); err != nil {
+			return nil, err
+		}
 	}
 
 	if cfg.pull != nil {
@@ -928,6 +965,9 @@ func runSurveys(br *BodyReport, cfg verifyConfig) []Diagnostic {
 				})
 			}
 		}
+		if err := wallBudgetErr(budget); err != nil {
+			return nil, err
+		}
 	}
 
 	if cfg.minRadius {
@@ -956,9 +996,12 @@ func runSurveys(br *BodyReport, cfg verifyConfig) []Diagnostic {
 			m := exactLengthMeasurement(*out.reading)
 			br.MinRadius = &m
 		}
+		if err := wallBudgetErr(budget); err != nil {
+			return nil, err
+		}
 	}
 
-	return diags
+	return diags, nil
 }
 
 func surveyRefusalDiagnostic(

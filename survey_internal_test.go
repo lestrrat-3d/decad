@@ -1,6 +1,7 @@
 package decad
 
 import (
+	"context"
 	"errors"
 	"math"
 	"testing"
@@ -48,35 +49,76 @@ func TestWallKernelCleanProfileDoesNotFlag(t *testing.T) {
 	require.InDelta(t, 60.0, out.span, 1e-9)
 }
 
-func TestWallCandidateWorkChecked(t *testing.T) {
-	work, ok := wallCandidateWork(4, 4, false)
+func TestWallKernelGenerateStreamsCandidates(t *testing.T) {
+	arc, ok := arcElem(0, 0, 10, 0, 2*math.Pi, true)
 	require.True(t, ok)
-	require.Equal(t, uint64(88), work)
-
-	work, ok = wallCandidateWork(4, 4, true)
-	require.True(t, ok)
-	require.Equal(t, uint64(124), work)
-
-	maxInt := int(^uint(0) >> 1)
-	_, ok = wallCandidateWork(maxInt, maxInt, true)
-	require.False(t, ok)
-}
-
-func TestWallKernelStreamsCandidates(t *testing.T) {
-	circle, ok := arcElem(0, 0, 10, 0, 2*math.Pi, true)
-	require.True(t, ok)
-	k := newWallKernel([]surveyElem{circle}, nil, nil, 0, 0, false, math.Inf(1))
-	stop := errors.New("stop after first candidate")
+	k := newWallKernel([]surveyElem{arc}, nil, nil, 15*math.Pi/180, 0, false, math.Inf(1))
+	stop := errors.New("stop after the first candidate")
 	seen := 0
+
 	err := k.generate(nil, func(diskCand) error {
 		seen++
 		return stop
 	})
+
 	require.ErrorIs(t, err, stop)
 	require.Equal(t, 1, seen)
 }
 
-func TestWallKernelSharesWorkBudgetAcrossGenerationAndValidation(t *testing.T) {
+func TestWallKernelGenerateCancellationIsBounded(t *testing.T) {
+	arc, ok := arcElem(0, 0, 10, 0, 2*math.Pi, true)
+	require.True(t, ok)
+	elems := make([]surveyElem, workPollInterval+64)
+	for i := range elems {
+		elems[i] = arc
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	seen := 0
+
+	err := newWallKernel(elems, nil, nil, 15*math.Pi/180, 0, false, math.Inf(1)).
+		generate(newWorkBudget(ctx), func(diskCand) error {
+			seen++
+			return nil
+		})
+
+	require.ErrorIs(t, err, context.Canceled)
+	require.LessOrEqual(t, seen, workPollInterval-1)
+}
+
+func TestWallKernelValidateCancellationIsBounded(t *testing.T) {
+	elems := make([]surveyElem, workPollInterval+64)
+	for i := range elems {
+		e, ok := lineElem(100, float64(i+1), 101, float64(i+1))
+		require.True(t, ok)
+		elems[i] = e
+	}
+	ctx := &internalFrameCancelContext{Context: t.Context(), target: "validate"}
+	k := newWallKernel(elems, nil, nil, 15*math.Pi/180, 0, false, math.Inf(1))
+
+	_, _, _, err := k.validate(diskCand{x: 0, y: 0, r: 1}, newWorkBudget(ctx))
+
+	require.ErrorIs(t, err, context.Canceled)
+	require.True(t, ctx.entered)
+}
+
+func TestWallKernelContainsCancellationIsBounded(t *testing.T) {
+	elems := make([]surveyElem, workPollInterval+64)
+	for i := range elems {
+		e, ok := arcElem(1000+float64(i), 1000, 1, 0, 2*math.Pi, true)
+		require.True(t, ok)
+		elems[i] = e
+	}
+	ctx := &internalFrameCancelContext{Context: t.Context(), target: "contains"}
+	k := newWallKernel(elems, nil, nil, 15*math.Pi/180, 0, false, math.Inf(1))
+
+	_, _, err := k.contains(0, 0, newWorkBudget(ctx))
+
+	require.ErrorIs(t, err, context.Canceled)
+	require.True(t, ctx.entered)
+}
+
+func TestWallKernelBudgetedRunKeepsNormalResult(t *testing.T) {
 	pts := [][2]float64{{0, 0}, {100, 0}, {100, 60}, {0, 60}}
 	elems := make([]surveyElem, 0, len(pts))
 	for i := range pts {
@@ -84,14 +126,14 @@ func TestWallKernelSharesWorkBudgetAcrossGenerationAndValidation(t *testing.T) {
 		require.True(t, ok)
 		elems = append(elems, e)
 	}
-	k := newWallKernel(elems, nil, pts, 0, 0, false, math.Inf(1))
+	k := newWallKernel(elems, nil, pts, 15*math.Pi/180, 0, false, math.Inf(1))
 
-	_, err := k.runBudget(newWallWorkBudget(1))
-	require.ErrorIs(t, err, errWallWorkBudget)
+	out, err := k.runBudget(newWorkBudget(t.Context()))
 
-	_, _, ok, err := k.validate(diskCand{x: 50, y: 30, r: 30}, newWallWorkBudget(1))
-	require.False(t, ok)
-	require.ErrorIs(t, err, errWallWorkBudget)
+	require.NoError(t, err)
+	require.True(t, out.ok)
+	require.True(t, out.hasSpan)
+	require.InDelta(t, 60.0, out.span, 1e-9)
 }
 
 func TestPrismWallSubToleranceWebIsUndecided(t *testing.T) {
@@ -109,7 +151,8 @@ func TestPrismWallSubToleranceWebIsUndecided(t *testing.T) {
 		},
 		z0: 0, z1: 10,
 	}
-	out := prismWall(pp, 15*math.Pi/180)
+	out, err := prismWall(newWorkBudget(t.Context()), pp, 15*math.Pi/180)
+	require.NoError(t, err)
 	require.False(t, out.ok, `undecided, never a silent pass`)
 }
 
@@ -161,12 +204,13 @@ func TestCupWallRequiresExactMorphology(t *testing.T) {
 	require.False(t, out.ok, `a malformed offset relation must not return the recipe thickness`)
 
 	body := &Body{payload: bad}
-	br := BodyReport{Body: body, Status: Sound, Solid: true}
-	diags := runSurveys(&br, verifyConfig{
+	br := BodyReport{Body: body, Solid: true}
+	diags, err := runSurveys(newWorkBudget(t.Context()), &br, verifyConfig{
 		wall:     &wallSpec{tool: units.Millimeters(1)},
 		toolMM:   1,
 		allowRad: 15 * math.Pi / 180,
 	})
+	require.NoError(t, err)
 	require.Nil(t, br.MinWallThickness)
 	require.Len(t, diags, 1)
 	require.Equal(t, DiagUndecidedWall, diags[0].Code)

@@ -515,9 +515,13 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
   verification §6, answered outright on this evaluator's own payloads
   (`survey.go`/`survey2d.go`): prism/revolve wall reduces exactly to the 2D
   spanning-disk problem (a prism's profile with the height as the vertical
-  fit; a revolve's meridian section, mirrored for a full turn), undercuts
-  are per-face exact normal-range membership, and the min radius is the
-  tightest concave principal radius. A cup uses its exact morphology theorem:
+  fit; a revolve's meridian section, mirrored for a full turn). `Verify`
+  passes one shared work counter through the prism/revolve survey; candidate
+  generation streams each disk directly into validation, and generation,
+  validation, containment, and boundary scans all poll that counter. A
+  canceled context therefore aborts the survey and returns its error from
+  `Verify`. Undercuts are per-face exact normal-range membership, and the min
+  radius is the tightest concave principal radius. A cup uses its exact morphology theorem:
   zero for an allowance-qualified pinch, otherwise its exact shell thickness.
   A faceted body uses certified source-normal/curvature patches and bounded
   medial candidates. A payload or certificate the surveys cannot decide leaves

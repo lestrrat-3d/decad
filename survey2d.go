@@ -28,133 +28,6 @@ const survTiny = 1e-12
 // comparison concedes this much in the spanning direction only.
 const survAngTol = 1e-9
 
-var (
-	errWallWorkBudget    = errors.New("wall survey work budget exhausted")
-	errWallSurveyUnknown = errors.New("wall survey could not decide")
-)
-
-// wallWorkBudget is one shared hard counter for candidate generation and
-// whole-boundary validation. A nil budget leaves the read-only Verify survey
-// unbounded; inward shell admission supplies its fixed construction budget.
-type wallWorkBudget struct {
-	remaining uint64
-}
-
-func newWallWorkBudget(limit uint64) *wallWorkBudget {
-	return &wallWorkBudget{remaining: limit}
-}
-
-func (b *wallWorkBudget) step() error {
-	if b == nil {
-		return nil
-	}
-	if b.remaining == 0 {
-		return errWallWorkBudget
-	}
-	b.remaining--
-	return nil
-}
-
-// wallCandidateWork returns the number of candidate-family visits generation
-// will make before validation: whole-arc, element/vertex pair, wedge, and
-// Apollonius triple visits. Arithmetic is checked before the kernel is entered.
-func wallCandidateWork(elementCount, vertexCount int, wedge bool) (uint64, bool) {
-	if elementCount < 0 || vertexCount < 0 {
-		return 0, false
-	}
-	e, v := uint64(elementCount), uint64(vertexCount)
-	ee, ok := wallChoose2(e)
-	if !ok {
-		return 0, false
-	}
-	ev, ok := wallCheckedMul(e, v)
-	if !ok {
-		return 0, false
-	}
-	vv, ok := wallChoose2(v)
-	if !ok {
-		return 0, false
-	}
-	q, ok := wallCheckedAdd(e, v)
-	if !ok {
-		return 0, false
-	}
-	wedgeWork := uint64(0)
-	if wedge {
-		q, ok = wallCheckedAdd(q, 1)
-		if !ok {
-			return 0, false
-		}
-		wedgeWork, ok = wallCheckedAdd(e, v)
-		if !ok {
-			return 0, false
-		}
-	}
-	triples, ok := wallChoose3(q)
-	if !ok {
-		return 0, false
-	}
-	total := e
-	for _, n := range []uint64{ee, ev, vv, wedgeWork, triples} {
-		total, ok = wallCheckedAdd(total, n)
-		if !ok {
-			return 0, false
-		}
-	}
-	return total, true
-}
-
-func wallCheckedAdd(a, b uint64) (uint64, bool) {
-	if ^uint64(0)-a < b {
-		return 0, false
-	}
-	return a + b, true
-}
-
-func wallCheckedMul(a, b uint64) (uint64, bool) {
-	if a != 0 && b > ^uint64(0)/a {
-		return 0, false
-	}
-	return a * b, true
-}
-
-func wallChoose2(n uint64) (uint64, bool) {
-	if n < 2 {
-		return 0, true
-	}
-	a, b := n, n-1
-	if a%2 == 0 {
-		a /= 2
-	} else {
-		b /= 2
-	}
-	return wallCheckedMul(a, b)
-}
-
-func wallChoose3(n uint64) (uint64, bool) {
-	if n < 3 {
-		return 0, true
-	}
-	factors := [3]uint64{n, n - 1, n - 2}
-	for i := range factors {
-		if factors[i]%2 == 0 {
-			factors[i] /= 2
-			break
-		}
-	}
-	for i := range factors {
-		if factors[i]%3 == 0 {
-			factors[i] /= 3
-			break
-		}
-	}
-	product, ok := wallCheckedMul(factors[0], factors[1])
-	if !ok {
-		return 0, false
-	}
-	return wallCheckedMul(product, factors[2])
-}
-
 // dirArc is a closed set of unit directions {(cos t, sin t) : t ∈ [lo, hi]},
 // lo ≤ hi ≤ lo + 2π. A single direction has lo == hi. Contact directions are
 // dirArcs because a disk can touch an arc element along a whole angular
@@ -405,17 +278,32 @@ type wallSurveyOut struct {
 	subTolFar bool    // an off-junction sub-tolerance candidate was dropped
 }
 
-// run streams and validates the candidate set without a construction budget.
-// Build-time callers that need a hard ceiling use runBudget.
+var errWallSurveyUndecided = errors.New("wall survey undecided")
+
+// wallBudgetStep counts one unit of wall work when Verify supplied a budget.
+// The context-free shell-admission caller uses nil.
+func wallBudgetStep(budget *workBudget) error {
+	if budget == nil {
+		return nil
+	}
+	return budget.step()
+}
+
+func wallBudgetErr(budget *workBudget) error {
+	if budget == nil {
+		return nil
+	}
+	return budget.err()
+}
+
+// run preserves the context-free kernel API used by shell admission.
 func (k *wallKernel) run() wallSurveyOut {
 	out, _ := k.runBudget(nil)
 	return out
 }
 
-// runBudget streams each candidate directly into whole-boundary validation.
-// The same budget is charged by generation and validation, so nested work
-// cannot restart the limit for each candidate.
-func (k *wallKernel) runBudget(budget *wallWorkBudget) (wallSurveyOut, error) {
+// runBudget streams and validates candidates under one shared Verify budget.
+func (k *wallKernel) runBudget(budget *workBudget) (wallSurveyOut, error) {
 	out := wallSurveyOut{ok: true, span: math.Inf(1)}
 	err := k.generate(budget, func(c diskCand) error {
 		spanning, empty, ok, err := k.validate(c, budget)
@@ -423,7 +311,7 @@ func (k *wallKernel) runBudget(budget *wallWorkBudget) (wallSurveyOut, error) {
 			return err
 		}
 		if !ok {
-			return errWallSurveyUnknown
+			return errWallSurveyUndecided
 		}
 		if !empty {
 			return nil
@@ -439,10 +327,10 @@ func (k *wallKernel) runBudget(budget *wallWorkBudget) (wallSurveyOut, error) {
 		}
 		return nil
 	})
+	if errors.Is(err, errWallSurveyUndecided) {
+		return wallSurveyOut{}, nil
+	}
 	if err != nil {
-		if errors.Is(err, errWallSurveyUnknown) {
-			return wallSurveyOut{}, nil
-		}
 		return wallSurveyOut{}, err
 	}
 	out.subTolFar = k.subTolFar
@@ -454,8 +342,8 @@ func (k *wallKernel) runBudget(budget *wallWorkBudget) (wallSurveyOut, error) {
 // contact set decides whether it spans — two contact directions within the
 // allowance of antipodal (inclusive), a single whole-arc contact wide
 // enough, or (when the wedge's two cap contacts span) an active wedge.
-func (k *wallKernel) validate(c diskCand, budget *wallWorkBudget) (bool, bool, bool, error) {
-	if err := budget.step(); err != nil {
+func (k *wallKernel) validate(c diskCand, budget *workBudget) (bool, bool, bool, error) {
+	if err := wallBudgetStep(budget); err != nil {
 		return false, false, false, err
 	}
 	if math.IsNaN(c.x) || math.IsNaN(c.y) || math.IsNaN(c.r) || math.IsInf(c.r, 0) {
@@ -472,7 +360,7 @@ func (k *wallKernel) validate(c diskCand, budget *wallWorkBudget) (bool, bool, b
 	if c.r <= 4*k.tol {
 		reach := c.r + 8*k.tol
 		for _, v := range k.verts {
-			if err := budget.step(); err != nil {
+			if err := wallBudgetStep(budget); err != nil {
 				return false, false, false, err
 			}
 			if math.Hypot(c.x-v[0], c.y-v[1]) <= reach {
@@ -496,7 +384,7 @@ func (k *wallKernel) validate(c diskCand, budget *wallWorkBudget) (bool, bool, b
 	}
 	var contacts []dirArc
 	for _, e := range k.elems {
-		if err := budget.step(); err != nil {
+		if err := wallBudgetStep(budget); err != nil {
 			return false, false, false, err
 		}
 		d, dir, dirOK := e.nearest(c.x, c.y, survTiny*k.scale)
@@ -526,7 +414,7 @@ func (k *wallKernel) validate(c diskCand, budget *wallWorkBudget) (bool, bool, b
 	need := math.Pi - k.alpha - survAngTol
 	for i := 0; i < len(contacts) && !spanning; i++ {
 		for j := i; j < len(contacts); j++ {
-			if err := budget.step(); err != nil {
+			if err := wallBudgetStep(budget); err != nil {
 				return false, false, false, err
 			}
 			if maxAngleBetween(contacts[i], contacts[j]) >= need {
@@ -545,20 +433,29 @@ func (k *wallKernel) contactTol() float64 { return 8 * k.tol }
 // every boundary element, retried across directions when a crossing is
 // ambiguous (near an endpoint, near tangency, or grazing the start). All
 // directions ambiguous → undecided, never guessed.
-func (k *wallKernel) contains(px, py float64, budget *wallWorkBudget) (bool, bool, error) {
+func (k *wallKernel) contains(px, py float64, budget *workBudget) (bool, bool, error) {
 	if k.boundary == nil {
-		k.boundary = append(append([]surveyElem{}, k.elems...), k.containOnly...)
+		boundary := make([]surveyElem, 0, len(k.elems)+len(k.containOnly))
+		for _, elems := range [][]surveyElem{k.elems, k.containOnly} {
+			for _, e := range elems {
+				if err := wallBudgetStep(budget); err != nil {
+					return false, false, err
+				}
+				boundary = append(boundary, e)
+			}
+		}
+		k.boundary = boundary
 	}
 	all := k.boundary
 	for i := range 16 {
-		if err := budget.step(); err != nil {
+		if err := wallBudgetStep(budget); err != nil {
 			return false, false, err
 		}
 		th := 0.5 + float64(i)*2.399963229728653 // golden-angle sequence
 		dx, dy := math.Cos(th), math.Sin(th)
 		crossings, ok := 0, true
 		for _, e := range all {
-			if err := budget.step(); err != nil {
+			if err := wallBudgetStep(budget); err != nil {
 				return false, false, err
 			}
 			n, good := rayCrossings(e, px, py, dx, dy, k.tol)
@@ -654,35 +551,28 @@ func rayCrossings(e surveyElem, px, py, dx, dy, tol float64) (int, bool) {
 	return n, true
 }
 
-// generate streams the closed-form candidate set: pair criticals (T2),
+// generate emits the closed-form candidate set: pair criticals (T2),
 // angle-limit disks (T3), Apollonius triples (T4), concentric whole-arc
 // disks, and — under a wedge — the wedge-tangent minima. Candidates are
-// generated liberally; validate is what admits them.
-func (k *wallKernel) generate(budget *wallWorkBudget, visit func(diskCand) error) error {
-	var emitErr error
-	emit := func(x, y, r float64) error {
-		if emitErr == nil {
-			emitErr = visit(diskCand{x: x, y: y, r: r})
+// generated liberally; validate is what admits them. Each candidate is sent
+// directly to visit so the cubic triple set is never materialized.
+func (k *wallKernel) generate(budget *workBudget, visit func(diskCand) error) error {
+	var visitErr error
+	add := func(x, y, r float64) {
+		if visitErr == nil {
+			visitErr = visit(diskCand{x: x, y: y, r: r})
 		}
-		return emitErr
-	}
-	add := func(x, y, r float64) { _ = emit(x, y, r) }
-	step := func() error {
-		if emitErr != nil {
-			return emitErr
-		}
-		return budget.step()
 	}
 
 	// Concentric whole-arc disks.
 	for _, e := range k.elems {
-		if err := step(); err != nil {
+		if err := wallBudgetStep(budget); err != nil {
 			return err
 		}
 		if e.kind == surveyArc && e.matInside {
 			add(e.qx, e.qy, e.rr)
-			if emitErr != nil {
-				return emitErr
+			if visitErr != nil {
+				return visitErr
 			}
 		}
 	}
@@ -690,45 +580,42 @@ func (k *wallKernel) generate(budget *wallWorkBudget, visit func(diskCand) error
 	// Pair criticals and angle limits.
 	for i := range k.elems {
 		for j := i + 1; j < len(k.elems); j++ {
-			if err := step(); err != nil {
+			if err := wallBudgetStep(budget); err != nil {
 				return err
 			}
 			k.pairCands(k.elems[i], k.elems[j], add)
-			if emitErr != nil {
-				return emitErr
+			if visitErr != nil {
+				return visitErr
 			}
 		}
 	}
 	for _, e := range k.elems {
 		for _, v := range k.verts {
-			if err := step(); err != nil {
+			if err := wallBudgetStep(budget); err != nil {
 				return err
 			}
 			k.vertexElemCands(v, e, add)
-			if emitErr != nil {
-				return emitErr
+			if visitErr != nil {
+				return visitErr
 			}
 		}
 	}
 	for i := range k.verts {
 		for j := i + 1; j < len(k.verts); j++ {
-			if err := step(); err != nil {
+			if err := wallBudgetStep(budget); err != nil {
 				return err
 			}
 			k.vertexVertexCands(k.verts[i], k.verts[j], add)
-			if emitErr != nil {
-				return emitErr
+			if visitErr != nil {
+				return visitErr
 			}
 		}
 	}
 
 	// Wedge-tangent minima (partial revolve only).
 	if k.wedgeS > 0 {
-		if err := k.wedgeCands(budget, emit); err != nil {
+		if err := k.wedgeCands(budget, visit); err != nil {
 			return err
-		}
-		if emitErr != nil {
-			return emitErr
 		}
 	}
 
@@ -740,12 +627,12 @@ func (k *wallKernel) generate(budget *wallWorkBudget, visit func(diskCand) error
 	for i := range eqs {
 		for j := i + 1; j < len(eqs); j++ {
 			for l := j + 1; l < len(eqs); l++ {
-				if err := step(); err != nil {
+				if err := wallBudgetStep(budget); err != nil {
 					return err
 				}
 				solveTriple([3]circEq{eqs[i], eqs[j], eqs[l]}, k.scale, add)
-				if emitErr != nil {
-					return emitErr
+				if visitErr != nil {
+					return visitErr
 				}
 			}
 		}
@@ -971,10 +858,10 @@ func (k *wallKernel) vertexVertexCands(a, b [2]float64, add func(x, y, r float64
 // wedgeCands: the wedge-tangent minima for a partial revolve's cap-cap
 // reading — the disk tangent to one element with the wedge constraint
 // active (r = wedgeS·y), at its own closed-form ρ-critical.
-func (k *wallKernel) wedgeCands(budget *wallWorkBudget, add func(x, y, r float64) error) error {
+func (k *wallKernel) wedgeCands(budget *workBudget, visit func(diskCand) error) error {
 	s := k.wedgeS
 	for _, v := range k.verts {
-		if err := budget.step(); err != nil {
+		if err := wallBudgetStep(budget); err != nil {
 			return err
 		}
 		if v[1] <= 0 {
@@ -987,14 +874,14 @@ func (k *wallKernel) wedgeCands(budget *wallWorkBudget, add func(x, y, r float64
 			}
 			r := s * v[1] / den
 			if r > 0 {
-				if err := add(v[0], r/s, r); err != nil {
+				if err := visit(diskCand{x: v[0], y: r / s, r: r}); err != nil {
 					return err
 				}
 			}
 		}
 	}
 	for _, e := range k.elems {
-		if err := budget.step(); err != nil {
+		if err := wallBudgetStep(budget); err != nil {
 			return err
 		}
 		if e.kind != surveyArc {
@@ -1015,7 +902,7 @@ func (k *wallKernel) wedgeCands(budget *wallWorkBudget, add func(x, y, r float64
 				continue
 			}
 			d := e.rr - se*r
-			if err := add(e.qx+d*math.Cos(th), e.qy+d*math.Sin(th), r); err != nil {
+			if err := visit(diskCand{x: e.qx + d*math.Cos(th), y: e.qy + d*math.Sin(th), r: r}); err != nil {
 				return err
 			}
 		}
@@ -1034,10 +921,10 @@ type circEq struct {
 
 // tripleEquations builds the material-side-pinned tangency equation of every
 // item: elements, vertices, and the wedge.
-func (k *wallKernel) tripleEquations(budget *wallWorkBudget) ([]circEq, error) {
+func (k *wallKernel) tripleEquations(budget *workBudget) ([]circEq, error) {
 	var eqs []circEq
 	for _, el := range k.elems {
-		if err := budget.step(); err != nil {
+		if err := wallBudgetStep(budget); err != nil {
 			return nil, err
 		}
 		if el.kind == surveyLine {
@@ -1055,7 +942,7 @@ func (k *wallKernel) tripleEquations(budget *wallWorkBudget) ([]circEq, error) {
 		})
 	}
 	for _, v := range k.verts {
-		if err := budget.step(); err != nil {
+		if err := wallBudgetStep(budget); err != nil {
 			return nil, err
 		}
 		eqs = append(eqs, circEq{
@@ -1065,7 +952,7 @@ func (k *wallKernel) tripleEquations(budget *wallWorkBudget) ([]circEq, error) {
 		})
 	}
 	if k.wedgeS > 0 {
-		if err := budget.step(); err != nil {
+		if err := wallBudgetStep(budget); err != nil {
 			return nil, err
 		}
 		eqs = append(eqs, circEq{b: k.wedgeS, e: -1})
