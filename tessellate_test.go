@@ -1,6 +1,7 @@
 package decad_test
 
 import (
+	"fmt"
 	"math"
 	"testing"
 
@@ -102,6 +103,39 @@ func TestTessellatePlate(t *testing.T) {
 		covered[f] = struct{}{}
 	}
 	require.Len(t, covered, 6)
+}
+
+func TestTessellateFacetedToleranceBoundary(t *testing.T) {
+	doc := decad.New()
+	plate := boxBody(t, doc, 0, 0, 20, 20, 8)
+	tool := translated(t, diskBody(t, doc, 10, 10, 2), 0, 0, -6)
+	body, err := decad.Cut(plate, tool)
+	require.NoError(t, err)
+
+	held, err := body.Tessellate(units.Millimeters(1))
+	require.NoError(t, err)
+	bound := held.Bound()
+	require.Positive(t, bound.Mag())
+
+	requested := units.Millimeters(math.Nextafter(bound.Mag(), 0))
+	mesh, err := body.Tessellate(requested)
+	require.Nil(t, mesh)
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+	require.ErrorContains(t, err, fmt.Sprintf("requested tolerance %s", requested))
+	require.ErrorContains(t, err, fmt.Sprintf("minimum mesh bound %s", bound))
+	require.ErrorContains(t, err, fmt.Sprintf("retry with a tolerance of at least %s", bound))
+	require.ErrorContains(t, err, "to restate the held mesh")
+
+	atBound, err := body.Tessellate(bound)
+	require.NoError(t, err)
+	require.Equal(t, held.Vertices(), atBound.Vertices())
+	require.Equal(t, held.Triangles(), atBound.Triangles())
+
+	above := units.Millimeters(math.Nextafter(bound.Mag(), math.Inf(1)))
+	aboveBound, err := body.Tessellate(above)
+	require.NoError(t, err)
+	require.Equal(t, held.Vertices(), aboveBound.Vertices())
+	require.Equal(t, held.Triangles(), aboveBound.Triangles())
 }
 
 func TestTessellatePlateWithHole(t *testing.T) {
