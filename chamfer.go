@@ -88,7 +88,8 @@ func (b *Body) Chamfer(sel EdgeSelector, d units.Value, opts ...ChamferOption) (
 	// edge is a lateral edge mapped to a section corner (S1).
 	pp, ok := b.payload.(prismPayload)
 	if !ok {
-		return nil, fmt.Errorf(`%w: this evaluator chamfers a straight prism only`, ErrUnsupported)
+		return nil, fmt.Errorf(`selector %s matched [%s]: %w: this evaluator chamfers a straight prism only`,
+			sel, selectedEdgesContext(edges), ErrUnsupported)
 	}
 
 	loops, err := prismCornerLoops(pp)

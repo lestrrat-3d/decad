@@ -95,7 +95,8 @@ func (b *Body) Fillet(sel EdgeSelector, r units.Value, opts ...FilletOption) (*B
 	// edge is a lateral edge mapped to a section corner (S1).
 	pp, ok := b.payload.(prismPayload)
 	if !ok {
-		return nil, fmt.Errorf(`%w: this evaluator fillets a straight prism only`, ErrUnsupported)
+		return nil, fmt.Errorf(`selector %s matched [%s]: %w: this evaluator fillets a straight prism only`,
+			sel, selectedEdgesContext(edges), ErrUnsupported)
 	}
 
 	loops, err := prismCornerLoops(pp)
@@ -209,6 +210,14 @@ func selectedEdgeContext(ordinal int, edge *Edge) string {
 	}
 	return fmt.Sprintf(`selected edge[%d] from (%s) to (%s)`, ordinal,
 		renderVec(edge.start.position), renderVec(edge.end.position))
+}
+
+func selectedEdgesContext(edges []*Edge) string {
+	contexts := make([]string, len(edges))
+	for i, edge := range edges {
+		contexts[i] = selectedEdgeContext(i, edge)
+	}
+	return strings.Join(contexts, `; `)
 }
 
 func wrapModifyAuditError(sel EdgeSelector, matched []matchedCorner, err error) error {

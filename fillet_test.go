@@ -712,6 +712,16 @@ func TestFilletNonPrismReceiver(t *testing.T) {
 	doc := decad.New()
 	body, err := doc.Revolve(s, s.Profiles()[0], uAxis, decad.FullRevolution{})
 	require.NoError(t, err)
-	_, err = body.Fillet(decad.Edges(decad.Circular()), units.Millimeters(1))
+	sel := decad.Edges(decad.Circular())
+	_, err = body.Fillet(sel, units.Millimeters(1))
 	require.ErrorIs(t, err, decad.ErrUnsupported, `this evaluator fillets a straight prism only`)
+	require.ErrorContains(t, err, `selector `+sel.String())
+	for _, want := range []string{
+		`selected edge[0] from (0,5,0) to (0,5,0)`,
+		`selected edge[1] from (10,5,0) to (10,5,0)`,
+		`selected edge[2] from (10,15,0) to (10,15,0)`,
+		`selected edge[3] from (0,15,0) to (0,15,0)`,
+	} {
+		require.ErrorContains(t, err, want)
+	}
 }
