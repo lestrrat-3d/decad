@@ -63,6 +63,7 @@ const (
 	recipeJSONRoot
 	recipeJSONSteps
 	recipeJSONStep
+	recipeJSONInputs
 	recipeJSONProfile
 	recipeJSONOuterLoop
 	recipeJSONLoops
@@ -120,13 +121,13 @@ type recipeJSONPreflight struct {
 // an admitted recipe whose schema slices exceed their fixed ceilings.
 func preflightRecipeJSON(data []byte, limits recipeDecodeLimits) error {
 	if int64(len(data)) > limits.MaxBytes {
-		return recipeDecodeLimitError("MaxBytes", limits.MaxBytes)
+		return recipeDecodeLimitError("$", -1, "MaxBytes", limits.MaxBytes)
 	}
 
 	decoder := json.NewDecoder(bytes.NewReader(data))
 	decoder.UseNumber()
 	scan := recipeJSONPreflight{decoder: decoder, limits: limits}
-	if err := scan.value(recipeJSONRoot); err != nil {
+	if err := scan.value(recipeJSONRoot, "$", -1); err != nil {
 		return err
 	}
 	if _, err := decoder.Token(); err != io.EOF {
@@ -138,15 +139,15 @@ func preflightRecipeJSON(data []byte, limits recipeDecodeLimits) error {
 	return nil
 }
 
-func (s *recipeJSONPreflight) value(role recipeJSONRole) error {
+func (s *recipeJSONPreflight) value(role recipeJSONRole, path string, stepIndex int) error {
 	switch role {
 	case recipeJSONOuterLoop:
-		if err := s.charge(recipeLimitLoops); err != nil {
+		if err := s.charge(recipeLimitLoops, path, stepIndex); err != nil {
 			return err
 		}
 		role = recipeJSONLoop
 	case recipeJSONSelectorValue:
-		if err := s.charge(recipeLimitSelectors); err != nil {
+		if err := s.charge(recipeLimitSelectors, path, stepIndex); err != nil {
 			return err
 		}
 		role = recipeJSONSelector
@@ -157,16 +158,16 @@ func (s *recipeJSONPreflight) value(role recipeJSONRole) error {
 		return fmt.Errorf("decad: failed to scan recipe JSON: %w", err)
 	}
 	if delim, ok := token.(json.Delim); ok {
-		if err := s.enterContainer(); err != nil {
+		if err := s.enterContainer(path, stepIndex); err != nil {
 			return err
 		}
 		defer func() { s.depth-- }()
 
 		switch delim {
 		case '{':
-			return s.object(role)
+			return s.object(role, path, stepIndex)
 		case '[':
-			return s.array(role)
+			return s.array(role, path, stepIndex)
 		default:
 			return fmt.Errorf("decad: unexpected recipe JSON delimiter %q", delim)
 		}
@@ -179,25 +180,25 @@ func (s *recipeJSONPreflight) value(role recipeJSONRole) error {
 	switch role {
 	case recipeJSONRoleString:
 		if len(text) > s.limits.MaxRoleBytes {
-			return recipeDecodeLimitError("MaxRoleBytes", int64(s.limits.MaxRoleBytes))
+			return recipeDecodeLimitError(path, stepIndex, "MaxRoleBytes", int64(s.limits.MaxRoleBytes))
 		}
-		return s.chargeString(len(text))
+		return s.chargeString(len(text), path, stepIndex)
 	case recipeJSONString:
-		return s.chargeString(len(text))
+		return s.chargeString(len(text), path, stepIndex)
 	default:
 		return nil
 	}
 }
 
-func (s *recipeJSONPreflight) enterContainer() error {
+func (s *recipeJSONPreflight) enterContainer(path string, stepIndex int) error {
 	if s.depth >= s.limits.MaxDepth {
-		return recipeDecodeLimitError("MaxDepth", int64(s.limits.MaxDepth))
+		return recipeDecodeLimitError(path, stepIndex, "MaxDepth", int64(s.limits.MaxDepth))
 	}
 	s.depth++
 	return nil
 }
 
-func (s *recipeJSONPreflight) object(role recipeJSONRole) error {
+func (s *recipeJSONPreflight) object(role recipeJSONRole, path string, stepIndex int) error {
 	for s.decoder.More() {
 		token, err := s.decoder.Token()
 		if err != nil {
@@ -207,7 +208,8 @@ func (s *recipeJSONPreflight) object(role recipeJSONRole) error {
 		if !ok {
 			return fmt.Errorf("decad: recipe JSON object key is not a string")
 		}
-		if err := s.value(recipeJSONFieldRole(role, key)); err != nil {
+		fieldPath := recipeJSONFieldPath(path, key)
+		if err := s.value(recipeJSONFieldRole(role, key), fieldPath, stepIndex); err != nil {
 			return err
 		}
 	}
@@ -221,15 +223,23 @@ func (s *recipeJSONPreflight) object(role recipeJSONRole) error {
 	return nil
 }
 
-func (s *recipeJSONPreflight) array(role recipeJSONRole) error {
+func (s *recipeJSONPreflight) array(role recipeJSONRole, path string, stepIndex int) error {
 	elementRole, limit, metered := recipeJSONArrayElement(role)
-	for s.decoder.More() {
+	for index := 0; s.decoder.More(); index++ {
+		elementPath := recipeJSONArrayPath(path, index)
+		elementStepIndex := stepIndex
+		if role == recipeJSONSteps {
+			elementStepIndex = index
+		}
+		if maximum, name, bounded := recipeJSONArrayHardLimit(role, stepIndex); bounded && index >= maximum {
+			return recipeDecodeLimitError(elementPath, elementStepIndex, name, int64(maximum))
+		}
 		if metered {
-			if err := s.charge(limit); err != nil {
+			if err := s.charge(limit, elementPath, elementStepIndex); err != nil {
 				return err
 			}
 		}
-		if err := s.value(elementRole); err != nil {
+		if err := s.value(elementRole, elementPath, elementStepIndex); err != nil {
 			return err
 		}
 	}
@@ -243,7 +253,7 @@ func (s *recipeJSONPreflight) array(role recipeJSONRole) error {
 	return nil
 }
 
-func (s *recipeJSONPreflight) charge(limit recipeJSONLimit) error {
+func (s *recipeJSONPreflight) charge(limit recipeJSONLimit, path string, stepIndex int) error {
 	var count *int
 	var maximum int
 	var name string
@@ -266,22 +276,27 @@ func (s *recipeJSONPreflight) charge(limit recipeJSONLimit) error {
 		panic("decad: unknown recipe JSON limit")
 	}
 	if *count >= maximum {
-		return recipeDecodeLimitError(name, int64(maximum))
+		return recipeDecodeLimitError(path, stepIndex, name, int64(maximum))
 	}
 	*count += 1
 	return nil
 }
 
-func (s *recipeJSONPreflight) chargeString(n int) error {
+func (s *recipeJSONPreflight) chargeString(n int, path string, stepIndex int) error {
 	if n > s.limits.MaxTotalStringBytes-s.totalStringByte {
-		return recipeDecodeLimitError("MaxTotalStringBytes", int64(s.limits.MaxTotalStringBytes))
+		return recipeDecodeLimitError(path, stepIndex, "MaxTotalStringBytes", int64(s.limits.MaxTotalStringBytes))
 	}
 	s.totalStringByte += n
 	return nil
 }
 
-func recipeDecodeLimitError(name string, maximum int64) error {
-	return fmt.Errorf("decad: recipe decode exceeds %s (%d): %w", name, maximum, ErrResourceLimit)
+func recipeDecodeLimitError(path string, stepIndex int, name string, maximum int64) error {
+	return &RecipeError{
+		StepIndex: stepIndex,
+		Path:      path,
+		Kind:      ErrResourceLimit,
+		Err:       fmt.Errorf("recipe decode exceeds %s (%d)", name, maximum),
+	}
 }
 
 func recipeJSONArrayElement(role recipeJSONRole) (recipeJSONRole, recipeJSONLimit, bool) {
@@ -300,11 +315,38 @@ func recipeJSONArrayElement(role recipeJSONRole) (recipeJSONRole, recipeJSONLimi
 		return recipeJSONSelector, recipeLimitSelectors, true
 	case recipeJSONPredicates:
 		return recipeJSONPredicate, recipeLimitPredicates, true
+	case recipeJSONInputs:
+		return recipeJSONIgnore, 0, false
 	case recipeJSONValues:
 		return recipeJSONString, 0, false
 	default:
 		return recipeJSONIgnore, 0, false
 	}
+}
+
+func recipeJSONArrayHardLimit(role recipeJSONRole, stepIndex int) (int, string, bool) {
+	switch role {
+	case recipeJSONInputs:
+		if stepIndex < 0 {
+			return 0, "inputs per step", true
+		}
+		return stepIndex, "inputs per step", true
+	case recipeJSONValues:
+		return 1, "values per step", true
+	default:
+		return 0, "", false
+	}
+}
+
+func recipeJSONFieldPath(path, field string) string {
+	if path == "$" {
+		return field
+	}
+	return path + "." + field
+}
+
+func recipeJSONArrayPath(path string, index int) string {
+	return fmt.Sprintf("%s[%d]", path, index)
 }
 
 func recipeJSONFieldRole(parent recipeJSONRole, field string) recipeJSONRole {
@@ -317,6 +359,8 @@ func recipeJSONFieldRole(parent recipeJSONRole, field string) recipeJSONRole {
 		switch {
 		case strings.EqualFold(field, "op"):
 			return recipeJSONString
+		case strings.EqualFold(field, "inputs"):
+			return recipeJSONInputs
 		case strings.EqualFold(field, "profile"):
 			return recipeJSONProfile
 		case strings.EqualFold(field, "extent"):
