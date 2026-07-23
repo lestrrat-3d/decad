@@ -116,11 +116,19 @@ func (b *Body) Shell(sel FaceSelector, t units.Value, opts ...ShellOption) (*Bod
 		return nil, err
 	}
 	sense := Inward
-	for _, o := range opts {
-		if o == nil {
+	for _, raw := range opts {
+		if raw == nil {
 			return nil, fmt.Errorf(`%w: a nil option names nothing to apply`, ErrDegenerate)
 		}
-		if _, ok := o.Ident().(identShellSense); ok {
+		// decad owns the option vocabulary. Embedding ShellOption can promote
+		// its sealed marker onto a foreign type, so admit the owned concrete
+		// implementation before invoking any option callback.
+		o, ok := raw.(shellOption)
+		if !ok {
+			return nil, fmt.Errorf(`%w: the shell option is not a decad shell option (%T)`, ErrDegenerate, raw)
+		}
+		switch ident := o.Ident().(type) {
+		case identShellSense:
 			v, ok := option.Get[ShellSense](o)
 			if !ok {
 				return nil, fmt.Errorf(`%w: WithShellSense carries no sense`, ErrDegenerate)
@@ -129,6 +137,8 @@ func (b *Body) Shell(sel FaceSelector, t units.Value, opts ...ShellOption) (*Bod
 				return nil, fmt.Errorf(`%w: unknown shell sense %d`, ErrDegenerate, int(v))
 			}
 			sense = v
+		default:
+			return nil, fmt.Errorf(`%w: unknown shell option identifier %T`, ErrDegenerate, ident)
 		}
 	}
 	tmm, err := magnitudeIn(t, units.Length, units.Millimeter, "the shell thickness")
