@@ -492,9 +492,11 @@ original solid becomes the cavity) — set by `WithShellSense`, recorded in
 `ShellOpts`, and defaulting to `Inward`, which is what "shell this box" means
 everywhere it is said. `ShellOpts` is the one `StepOpts` variant this increment
 fills, and its `Sense` encodes as a named text token, exactly as `Direction`
-does. The thickness passes the magnitude gates before either question below is
-asked: a wrong `Kind`, a non-finite or a negative one is S15, and a zero one is
-S14.
+does. The feature call materializes that default as explicit
+`ShellOpts{Sense: Inward}`; a stored shell-options object with no `sense` does
+not request the default and is malformed. The thickness passes the magnitude
+gates before either question below is asked: a wrong `Kind`, a non-finite or a
+negative one is S15, and a zero one is S14.
 
 **The section offset is exact, and it is closed in the recorded vocabulary.**
 Write `P` for the section. The inward offset (the erosion) `P ⊖ t` is bounded by:

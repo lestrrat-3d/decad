@@ -186,6 +186,14 @@ type Step struct {
 const optsKindExtrude = "extrude"
 const optsKindShell = "shell"
 
+type jsonExtrudeOpts struct {
+	Taper *units.Value `json:"taper"`
+}
+
+type jsonShellOpts struct {
+	Sense *ShellSense `json:"sense"`
+}
+
 // marshalStepOpts encodes one options record as its tagged object. Pointer
 // forms normalize to values — the sealed set uses value receivers, so a
 // *ExtrudeOpts satisfies StepOpts too — and a nil pointer is rejected.
@@ -212,7 +220,9 @@ func marshalStepOpts(o StepOpts) ([]byte, error) {
 	}
 }
 
-// unmarshalStepOpts dispatches on the kind tag.
+// unmarshalStepOpts dispatches on the kind tag. Each variant decodes through
+// pointer payload fields so a missing or explicit-null required value never
+// becomes the value form's zero/default.
 func unmarshalStepOpts(data []byte) (StepOpts, error) {
 	var probe struct {
 		Kind string `json:"kind"`
@@ -222,17 +232,23 @@ func unmarshalStepOpts(data []byte) (StepOpts, error) {
 	}
 	switch probe.Kind {
 	case optsKindExtrude:
-		var o ExtrudeOpts
-		if err := json.Unmarshal(data, &o); err != nil {
+		var wire jsonExtrudeOpts
+		if err := json.Unmarshal(data, &wire); err != nil {
 			return nil, fmt.Errorf(`decad: failed to decode extrude options: %w`, err)
 		}
-		return o, nil
+		if wire.Taper == nil {
+			return nil, fmt.Errorf(`decad: extrude options are missing taper`)
+		}
+		return ExtrudeOpts{Taper: *wire.Taper}, nil
 	case optsKindShell:
-		var o ShellOpts
-		if err := json.Unmarshal(data, &o); err != nil {
+		var wire jsonShellOpts
+		if err := json.Unmarshal(data, &wire); err != nil {
 			return nil, fmt.Errorf(`decad: failed to decode shell options: %w`, err)
 		}
-		return o, nil
+		if wire.Sense == nil {
+			return nil, fmt.Errorf(`decad: shell options are missing sense`)
+		}
+		return ShellOpts{Sense: *wire.Sense}, nil
 	case "":
 		return nil, fmt.Errorf(`decad: step options are missing their kind tag`)
 	default:
