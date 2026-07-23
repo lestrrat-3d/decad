@@ -303,9 +303,10 @@ func (e *Edge) Faces() []*Face { return append([]*Face(nil), e.faces...) }
 // Convex() never does.
 func (e *Edge) IsConvex() bool { return e.convex }
 
-// Length returns the edge's length: Exact (zero bound) for every analytic
-// curve the features build, Approximate with the proven chord bound for a
-// boolean-built straight rim (two planar sources). A boolean rim on a
+// Length returns the edge's length: Exact only when the analytic result is
+// proved exactly representable, otherwise Approximate with its evaluation
+// bound. A boolean-built straight rim (two planar sources) carries its proven
+// chord bound. A boolean rim on a
 // curved source has a true length the chord chain provably understates by
 // an amount this evaluator cannot bound, so it is ErrUnsupported — an
 // honest refusal, never an understated Bound.
@@ -352,9 +353,9 @@ type Face struct {
 	loops   []*Loop
 	origins []FeatureRef
 	body    *Body
-	area    float64 // millimetres², exact for the analytic face set
-	// areaBound is the proven error bound on area: zero for the analytic
-	// faces, the composed chord bound for a boolean-built Faceted face.
+	area    float64 // millimetres²
+	// areaBound is the proven error bound on area: analytic float evaluation
+	// or the composed chord bound for a boolean-built Faceted face.
 	areaBound float64
 	// heldPlanar records that a Faceted face descends only from PLANAR source
 	// faces, so the face it stands for in the true result is flat — and a rim
@@ -446,9 +447,9 @@ func (f *Face) Edges() []*Edge {
 	return out
 }
 
-// Area returns the face's area: Exact (zero bound) for every analytic face
-// the features build, Approximate with the proven composed bound for a
-// boolean-built Faceted face.
+// Area returns the face's area: Exact only when the result is proved exactly
+// representable. Analytic float evaluation and boolean-built Faceted faces
+// return Approximate with their proven bounds.
 func (f *Face) Area() (Measurement, error) {
 	return Measurement{
 		Value:     units.SquareMillimeters(f.area),

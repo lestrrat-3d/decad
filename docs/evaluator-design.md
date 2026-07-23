@@ -38,11 +38,10 @@ same one-sided shape as the seam's range falsifier.
 
 ## 2. What v1 is, and is not
 
-Per core §2: **v1 is analytic where construction is free, and
-tessellation-backed exactly where exactness dies — the boolean.** A body built
-by features alone (extrude, revolve, placed) carries analytic faces and Exact
-measurements. A body touched by a boolean carries `Faceted` faces and
-measurements with proven bounds. There is no third state.
+Per core §2: **v1 uses analytic construction for features and tessellation for
+booleans.** Feature bodies carry analytic faces. Every measurement carries its
+own proof: exactly representable results are `Exact`; float/transcendental
+closed forms and tessellated results are `Approximate` with proven bounds.
 
 `Exactness` on a boolean's measurement is decided by that measurement's own
 proven bound, never by the fact that a boolean produced it (core §5.3: a zero
@@ -165,7 +164,8 @@ Faces, per recorded loop segment (roles in parentheses):
 Caps: one planar face per end (`capStart`/`capEnd`), the outer loop plus one
 loop per hole, holes wound opposite.
 
-Measurements (untapered, increment-1 kinds): all **Exact**, bound zero. The
+Measurements (untapered, increment-1 kinds): closed form with outward numerical
+bounds; only proved exactly representable results are **Exact**. The
 extent resolves to a signed sweep interval `[z0, z1]` along the plane normal
 (`Along` positive; `Against`, `Symmetric` and `TwoSided` sides place `z0`/`z1`
 on their own senses), and every formula reads the interval: `Volume = A·h`
@@ -174,7 +174,7 @@ magnitudes, so an `Against` sweep never reads negative), `Centroid` the
 region centroid lifted `(z0+z1)/2` along the normal — the SIGNED midpoint,
 `h/2` only in the one-sided `Along` case — `Bounds` from per-segment analytic
 extremes swept over the signed `[z0, z1]`, `Area` from cap areas + side areas
-(`segment length · h`; arc length `rθ` exact). Extents: `Distance`,
+(`segment length · h`; arc length `rθ` carries its evaluation bound). Extents: `Distance`,
 `Symmetric`, and `TwoSided` of distance sides land in increment 1 — the three
 whose interval the step's own quantities determine. `ThroughAll` and
 `ThroughAllSide` have no finite stop geometry of their own (they stop at the
@@ -231,7 +231,7 @@ extreme about the axis (a cylinder's radius, a cone's two end radii, a
 torus/sphere's center distance ± minor/radius) and axial range, with a
 partial sweep's angular interval deciding which cardinal directions are
 reached — the same extreme analysis extrude uses, in cylindrical coordinates.
-All exact. Increment 2.
+All mass results carry the §4 numerical bounds. Increment 2.
 
 ## 7. Selectors
 

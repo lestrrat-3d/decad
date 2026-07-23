@@ -284,7 +284,7 @@ interval, and placement. Result remains `revolvePayload`:
 - fillet arc → `Sphere` when its center lies on axis, otherwise `Torus`;
 - chamfer chord → `Cylinder`, `Plane`, or `Cone` by existing classification;
 - full and partial turns use existing topology builders;
-- measurements stay Exact through existing revolve integrals.
+- measurements carry existing revolve-integral bounds.
 
 Blend face carries `side(i,j)` plus `fillet(i,j)` / `chamfer(i,j)` in the
 result record's index space.
@@ -380,7 +380,8 @@ undecided both route to SX12. A sample or residual never admits disjointness.
 
 ### 8.4 Measurements + tessellation
 
-`capBlendPayload` owns analytic patches, so its measurements are Exact.
+`capBlendPayload` owns analytic patches. Report each exactly representable
+result as `Exact`; report every float/transcendental result with a proven bound.
 
 Compute area, signed volume, and first moments by closed-form surface integrals
 over each trimmed patch. Parameter domains are line/circle intervals, tube
@@ -446,8 +447,8 @@ Builder rules:
   cavity;
 - mint roles from slab + region + result-record indices.
 
-Mass properties are exact sums of all region-prism integrals. Bounds are the
-union of slab-region bounds. Tessellation chords a section curve once per
+Mass properties are bounded sums of all region-prism integrals. Bounds compose
+from the slab-region bounds. Tessellation chords a section curve once per
 shared carrier and triangulates exposed planar differences.
 
 Existing `cupPayload` migrates to this payload before RX1 side/no-opening shell
@@ -568,8 +569,8 @@ the shipped behavior.
 
 ## 11. Exactness + proof discipline
 
-RX1/RX2 outputs are analytic and report Exact measurements with zero bounds.
-Coordinates are computed floats under the existing Exact convention; no shape
+RX1/RX2 outputs are analytic. Report `Exact` only when the result is proved
+exactly representable. Carry proven outward bounds for computed floats; no shape
 sampling enters the answer.
 
 Proof rules:
@@ -595,7 +596,7 @@ permanent limit of this evaluator reach, not an unfinished zero-bound shortcut.
 
 | DX | Consumer | Revolve rewrite | `capBlendPayload` | `stackedPrismPayload` |
 |---|---|---|---|---|
-| **DX1** | mass properties / bounds | existing exact path | analytic patch integrals | exact slab-region sums |
+| **DX1** | mass properties / bounds | existing bounded path | bounded analytic patch integrals | bounded slab-region sums |
 | **DX2** | topology / structural Verify | existing builder | payload builder | slab-region union builder |
 | **DX3** | `Tessellate` / STL / OBJ | waits on revolve tessellator; feature itself still builds | required patch tessellator | required slab-region tessellator |
 | **DX4** | mesh boolean | available once DX3 exists | available once DX3 exists | available once DX3 exists |
@@ -650,7 +651,7 @@ Every implementation PR MUST add geometry assertions, not run-only coverage.
 - full-turn latitude fillet creates expected torus/sphere and exact radius;
 - partial-turn junction arc produces same meridian rewrite;
 - chamfer line classifies to cylinder/plane/cone as expected;
-- exact volume/area/centroid against rewritten-profile integrals;
+- bounded volume/area/centroid against rewritten-profile integrals;
 - cap-edge selection → SX5;
 - axis contact and spindle gates preserve base sentinel;
 - roles and selectors survive placement/replay.
@@ -666,7 +667,7 @@ Every implementation PR MUST add geometry assertions, not run-only coverage.
 - carrier collapse → SX6;
 - non-adjacent patch crossing/touch → SX7/SX12;
 - every topology edge has exactly two adjacent faces;
-- exact mass properties + bounds from independent closed forms;
+- bounded mass properties from independent closed forms;
 - shared-curve tessellation is watertight and bound `<= tol`;
 - selected/unselected hole loops retain correct nesting.
 
@@ -678,7 +679,7 @@ Every implementation PR MUST add geometry assertions, not run-only coverage.
 - outward slabs extend by exactly `t` at kept caps;
 - `WithNoOpenings` produces outer + void shell;
 - slab interface faces cancel exactly;
-- exact volume/area/centroid equal slab-region sums;
+- bounded volume/area/centroid equal slab-region sums;
 - a migrated cup with `k` holes has `1 + k` wall regions, all joined through
   one floor region into exactly one lump;
 - both-caps cap-only shell with `k` holes produces exactly `1 + k` regions,

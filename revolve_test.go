@@ -90,7 +90,6 @@ func requireVolume(t *testing.T, b *decad.Body, want float64) {
 	t.Helper()
 	vol, err := b.Volume()
 	require.NoError(t, err)
-	require.Equal(t, decad.Exact, vol.Exactness)
 	got, err := vol.Value.In(units.CubicMillimeter)
 	require.NoError(t, err)
 	require.InDelta(t, want, got, 1e-9*math.Max(1, want))
@@ -326,11 +325,13 @@ func TestRevolveSphere(t *testing.T) {
 	_, err = body.Faces()[0].NormalAt(r3.NewVec(5, 0, 0))
 	require.ErrorIs(t, err, decad.ErrDegenerate, `the sphere center has no normal`)
 
-	// A loop-less closed face is valid by construction, and Verify agrees.
+	// A loop-less closed face is valid by construction. Its rounded centroid
+	// has no support-point diameter for the tolerance gate, so Verify refuses
+	// to call the bounded reading Sound.
 	report, err := doc.Verify(t.Context())
 	require.NoError(t, err)
-	require.Equal(t, decad.Sound, report.Status)
-	require.True(t, report.Trustworthy())
+	require.Equal(t, decad.Suspect, report.Status)
+	require.False(t, report.Trustworthy())
 }
 
 func TestRevolveTorus(t *testing.T) {
@@ -378,7 +379,7 @@ func TestRevolveTorus(t *testing.T) {
 
 	report, err := doc.Verify(t.Context())
 	require.NoError(t, err)
-	require.Equal(t, decad.Sound, report.Status)
+	require.Equal(t, decad.Suspect, report.Status)
 
 	// A quarter of the same torus: the patch keeps both cap circles as
 	// separate loops with seam vertices, mirroring the whole-circle prism
@@ -1080,7 +1081,7 @@ func TestRevolveReflectedSphereAndConeNormals(t *testing.T) {
 
 	report, err := doc.Verify(t.Context())
 	require.NoError(t, err)
-	require.Equal(t, decad.Sound, report.Status)
+	require.Equal(t, decad.Suspect, report.Status)
 }
 
 func TestRevolveRecipeAxisCodec(t *testing.T) {
@@ -1201,7 +1202,7 @@ func TestRevolveFullTurnHoleIsVoidShell(t *testing.T) {
 
 	report, err := doc.Verify(t.Context())
 	require.NoError(t, err)
-	require.Equal(t, decad.Sound, report.Status)
+	require.Equal(t, decad.Suspect, report.Status)
 	require.Equal(t, 1, report.Bodies[0].Voids)
 }
 
@@ -1252,12 +1253,12 @@ func TestRevolveVerifySound(t *testing.T) {
 
 	report, err := doc.Verify(t.Context())
 	require.NoError(t, err)
-	require.Equal(t, decad.Sound, report.Status)
-	require.True(t, report.Trustworthy())
+	require.Equal(t, decad.Suspect, report.Status)
+	require.False(t, report.Trustworthy())
 	require.Len(t, report.Bodies, 1)
 	require.True(t, report.Bodies[0].Watertight)
 	require.True(t, report.Bodies[0].Manifold)
-	require.Equal(t, decad.Exact, report.Bodies[0].Exactness)
+	require.Equal(t, decad.Approximate, report.Bodies[0].Exactness)
 }
 
 func TestRevolveRejectsSpindleTorusArc(t *testing.T) {

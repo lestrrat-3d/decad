@@ -433,8 +433,8 @@ func TestShellCupHoledInward(t *testing.T) {
 	wantVol := aP*h - aQ*(h-th)
 	vol, err := body.Volume()
 	require.NoError(t, err)
-	require.Equal(t, decad.Exact, vol.Exactness)
-	require.True(t, vol.Bound.Equal(units.CubicMillimeters(0), 1e-12), `a shell introduces no bound`)
+	require.Equal(t, decad.Approximate, vol.Exactness)
+	require.Positive(t, vol.Bound.Base())
 	gotVol, err := vol.Value.In(units.CubicMillimeter)
 	require.NoError(t, err)
 	require.InDelta(t, wantVol, gotVol, 1e-9)
@@ -445,7 +445,8 @@ func TestShellCupHoledInward(t *testing.T) {
 	wantArea := 2*aP + perimO*h + perimC*(h-th)
 	area, err := body.Area()
 	require.NoError(t, err)
-	require.Equal(t, decad.Exact, area.Exactness)
+	require.Equal(t, decad.Approximate, area.Exactness)
+	require.Positive(t, area.Bound.Base())
 	gotArea, err := area.Value.In(units.SquareMillimeter)
 	require.NoError(t, err)
 	require.InDelta(t, wantArea, gotArea, 1e-9)
@@ -456,7 +457,8 @@ func TestShellCupHoledInward(t *testing.T) {
 	wantZ := (massO*zO - massC*zC) / (massO - massC)
 	c, err := body.Centroid()
 	require.NoError(t, err)
-	require.Equal(t, decad.Exact, c.Exactness)
+	require.Equal(t, decad.Approximate, c.Exactness)
+	require.Positive(t, c.Bound.Base())
 	require.InDelta(t, 50.0, c.Value.X, 1e-9)
 	require.InDelta(t, 30.0, c.Value.Y, 1e-9)
 	require.InDelta(t, wantZ, c.Value.Z, 1e-9)
@@ -482,8 +484,8 @@ func TestShellCupHoledInward(t *testing.T) {
 	// A lone cup verifies Sound (no pairs to clear, valid by construction).
 	report, err := doc.Verify(t.Context())
 	require.NoError(t, err)
-	require.Equal(t, decad.Sound, report.Status)
-	require.True(t, report.Trustworthy())
+	require.Equal(t, decad.Suspect, report.Status)
+	require.False(t, report.Trustworthy())
 }
 
 // rimByRole returns the body's face carrying the given rim role.
@@ -538,7 +540,8 @@ func TestShellCupHoledTwoPosts(t *testing.T) {
 	wantVol := aP*h - aQ*(h-th)
 	vol, err := body.Volume()
 	require.NoError(t, err)
-	require.Equal(t, decad.Exact, vol.Exactness)
+	require.Equal(t, decad.Approximate, vol.Exactness)
+	require.Positive(t, vol.Bound.Base())
 	gotVol, err := vol.Value.In(units.CubicMillimeter)
 	require.NoError(t, err)
 	require.InDelta(t, wantVol, gotVol, 1e-9)
@@ -551,7 +554,7 @@ func TestShellCupHoledTwoPosts(t *testing.T) {
 
 	report, err := doc.Verify(t.Context())
 	require.NoError(t, err)
-	require.Equal(t, decad.Sound, report.Status)
+	require.Equal(t, decad.Suspect, report.Status)
 }
 
 func TestShellCupHoledOutward(t *testing.T) {
@@ -576,7 +579,8 @@ func TestShellCupHoledOutward(t *testing.T) {
 	wantVol := aQ*(h+th) - aP*h
 	vol, err := body.Volume()
 	require.NoError(t, err)
-	require.Equal(t, decad.Exact, vol.Exactness)
+	require.Equal(t, decad.Approximate, vol.Exactness)
+	require.Positive(t, vol.Bound.Base())
 	gotVol, err := vol.Value.In(units.CubicMillimeter)
 	require.NoError(t, err)
 	require.InDelta(t, wantVol, gotVol, 1e-9)
@@ -606,7 +610,8 @@ func TestShellCupHoledRectangularPost(t *testing.T) {
 	wantVol := aP*h - aQ*(h-th)
 	vol, err := body.Volume()
 	require.NoError(t, err)
-	require.Equal(t, decad.Exact, vol.Exactness)
+	require.Equal(t, decad.Approximate, vol.Exactness)
+	require.Positive(t, vol.Bound.Base())
 	gotVol, err := vol.Value.In(units.CubicMillimeter)
 	require.NoError(t, err)
 	require.InDelta(t, wantVol, gotVol, 1e-9)
@@ -793,8 +798,8 @@ func TestShellCupDownstream(t *testing.T) {
 		require.NoError(t, err)
 		br := report.Bodies[0]
 		requireWall(t, br, th)
-		require.Equal(t, decad.Sound, br.Status)
-		require.True(t, report.Trustworthy())
+		require.Equal(t, decad.Suspect, br.Status)
+		require.False(t, report.Trustworthy())
 	})
 
 	t.Run("a lone cup verifies Sound", func(t *testing.T) {
@@ -803,8 +808,8 @@ func TestShellCupDownstream(t *testing.T) {
 		require.NoError(t, err)
 		report, err := doc.Verify(t.Context())
 		require.NoError(t, err)
-		require.Equal(t, decad.Sound, report.Status, `a lone cup has no pairs to clear`)
-		require.True(t, report.Trustworthy())
+		require.Equal(t, decad.Suspect, report.Status, `bounded mass results need a nonzero tolerance`)
+		require.False(t, report.Trustworthy())
 	})
 
 	t.Run("a box-disjoint cup pair is Sound, but WithClearances invokes the kernel and reads Suspect", func(t *testing.T) {
@@ -828,7 +833,7 @@ func TestShellCupDownstream(t *testing.T) {
 		// invoked, so both cups verify Sound.
 		report, err := doc.Verify(t.Context())
 		require.NoError(t, err)
-		require.Equal(t, decad.Sound, report.Status, `box-disjoint cups need no kernel`)
+		require.Equal(t, decad.Suspect, report.Status, `bounded mass results need a nonzero tolerance`)
 
 		// WithClearances asks for the gap, which invokes the kernel; it has no
 		// cupPayload case, so the pair reads Suspect — never a fabricated pass.

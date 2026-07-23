@@ -3,6 +3,7 @@ package decad
 import (
 	"fmt"
 	"math"
+	"math/big"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
@@ -13,7 +14,8 @@ import (
 // This file is the extrude of docs/evaluator-design.md §5: the feature call
 // gates its live inputs, records the step, evaluates FROM the record, and
 // commits atomically. The prism it builds is fully analytic — Plane and
-// Cylinder faces, Exact measurements with zero bounds. The body-relative
+// Cylinder faces, with bounded mass measurements. Exactly representable
+// results retain zero bounds. The body-relative
 // stops (ThroughAll/ThroughAllSide/ToFace) resolve through stops.go: the
 // stop bodies are resolved at the call and recorded as StepRefs in the
 // step's Inputs (core §6.2).
@@ -303,6 +305,106 @@ func (pp prismPayload) point(u, v, z float64) r3.Vec {
 	return pp.xform.Apply(local.Add(n.Scale(z)))
 }
 
+// prismPointBound carries plane-local coordinate error through the isometric
+// frame/placement and charges the float operations that evaluate both maps.
+func prismPointBound(pp prismPayload, u, v, z boundedScalar) float64 {
+	source := radius3D(max(u.bound, v.bound, z.bound))
+	held := pp.point(u.value, v.value, z.value)
+	round := exactPrismPointRound(pp, u.value, v.value, z.value, held)
+	// Frame and transform constructors enforce near-orthonormal maps. A factor
+	// four safely carries the source ball through both held linear maps.
+	return absSumUpper(productUpper(4, source), round)
+}
+
+func vecMaxAbs(v r3.Vec) float64 {
+	return max(math.Abs(v.X), math.Abs(v.Y), math.Abs(v.Z))
+}
+
+func exactPrismPointRound(pp prismPayload, u, v, z float64, held r3.Vec) float64 {
+	ratVec := func(x, y, z *big.Rat) [3]*big.Rat { return [3]*big.Rat{x, y, z} }
+	ratOfVec := func(value r3.Vec) [3]*big.Rat {
+		return ratVec(floatRat(value.X), floatRat(value.Y), floatRat(value.Z))
+	}
+	origin := ratOfVec(pp.frame.Origin())
+	fu, fv, fn := ratOfVec(pp.frame.U()), ratOfVec(pp.frame.V()), ratOfVec(pp.frame.N())
+	ru, rv, rz := floatRat(u), floatRat(v), floatRat(z)
+	if ru == nil || rv == nil || rz == nil {
+		return math.Inf(1)
+	}
+	local := [3]*big.Rat{}
+	for i := range local {
+		if origin[i] == nil || fu[i] == nil || fv[i] == nil || fn[i] == nil {
+			return math.Inf(1)
+		}
+		local[i] = ratAdd(
+			origin[i],
+			ratMul(fu[i], ru),
+			ratMul(fv[i], rv),
+			ratMul(fn[i], rz),
+		)
+	}
+	basis := pp.xform.Basis()
+	ex, ey, ez := ratOfVec(basis.EX), ratOfVec(basis.EY), ratOfVec(basis.EZ)
+	translation := ratOfVec(pp.xform.Translation())
+	exact := [3]*big.Rat{}
+	for i := range exact {
+		if ex[i] == nil || ey[i] == nil || ez[i] == nil || translation[i] == nil {
+			return math.Inf(1)
+		}
+		exact[i] = ratAdd(
+			ratMul(ex[i], local[0]),
+			ratMul(ey[i], local[1]),
+			ratMul(ez[i], local[2]),
+			translation[i],
+		)
+	}
+	perCoord := max(
+		rationalFloatError(exact[0], held.X),
+		rationalFloatError(exact[1], held.Y),
+		rationalFloatError(exact[2], held.Z),
+	)
+	return radius3D(perCoord)
+}
+
+func vecL1(v r3.Vec) float64 {
+	return absSumUpper(v.X, v.Y, v.Z)
+}
+
+func profileCoordinateUpper(profile ProfileRecord) (float64, error) {
+	upper := 0.0
+	for _, loop := range append([]LoopRecord{profile.Outer}, profile.Holes...) {
+		for _, seg := range loop.Segments {
+			w, err := walkOf(seg)
+			if err != nil {
+				return 0, err
+			}
+			upper = math.Max(upper, w.coordUpper)
+		}
+	}
+	return upper, nil
+}
+
+// prismCentroidGeometryBound is a second, formula-independent proof. A solid's
+// centroid is a convex combination of its material points, so it lies within
+// the outer prism. The L1 envelope below bounds every such point through the
+// frame and rigid placement, and therefore bounds the distance from held.
+func prismCentroidGeometryBound(pp prismPayload, profile ProfileRecord, held r3.Vec) (float64, error) {
+	coordUpper, err := profileCoordinateUpper(profile)
+	if err != nil {
+		return 0, err
+	}
+	zUpper := math.Max(math.Abs(pp.z0), math.Abs(pp.z1))
+	frameUpper := absSumUpper(
+		vecL1(pp.frame.Origin()),
+		productUpper(vecL1(pp.frame.U()), coordUpper),
+		productUpper(vecL1(pp.frame.V()), coordUpper),
+		productUpper(vecL1(pp.frame.N()), zUpper),
+	)
+	// A rigid map has each output coordinate bounded by the input L1 norm.
+	placedUpper := absSumUpper(productUpper(3, frameUpper), vecL1(pp.xform.Translation()))
+	return absSumUpper(vecL1(held), placedUpper), nil
+}
+
 // dir places a plane-local direction (du, dv, dz in frame coordinates) into
 // world space.
 func (pp prismPayload) dir(du, dv, dz float64) r3.Vec {
@@ -337,7 +439,8 @@ func evalPrism(d *Document, ref StepRef, pp prismPayload) (*Body, error) {
 	if ig.area <= 0 {
 		return nil, fmt.Errorf(`%w: the recorded region encloses no area`, ErrDegenerate)
 	}
-	h := pp.z1 - pp.z0
+	height := boundedSub(exactScalar(pp.z1), exactScalar(pp.z0))
+	h := height.value
 	if h <= 0 {
 		return nil, fmt.Errorf(`%w: the sweep interval is empty`, ErrDegenerate)
 	}
@@ -357,19 +460,21 @@ func evalPrism(d *Document, ref StepRef, pp prismPayload) (*Body, error) {
 		return nil, err
 	}
 	capStart := &Face{
-		surface: Plane{Frame: startFrame},
-		origins: []FeatureRef{{Step: ref, Role: roleCapStart}},
-		body:    body,
-		area:    ig.area,
+		surface:   Plane{Frame: startFrame},
+		origins:   []FeatureRef{{Step: ref, Role: roleCapStart}},
+		body:      body,
+		area:      ig.area,
+		areaBound: ig.areaBound,
 	}
 	capEnd := &Face{
-		surface: Plane{Frame: endFrame},
-		origins: []FeatureRef{{Step: ref, Role: roleCapEnd}},
-		body:    body,
-		area:    ig.area,
+		surface:   Plane{Frame: endFrame},
+		origins:   []FeatureRef{{Step: ref, Role: roleCapEnd}},
+		body:      body,
+		area:      ig.area,
+		areaBound: ig.areaBound,
 	}
 
-	perimeter := 0.0
+	perimeter := boundedScalar{}
 	loops := append([]LoopRecord{pp.profile.Outer}, pp.profile.Holes...)
 	for li, loop := range loops {
 		sideFaces, bottom, top, loopLen, err := buildLoopSides(body, ref, pp, li, loop)
@@ -377,7 +482,7 @@ func evalPrism(d *Document, ref StepRef, pp prismPayload) (*Body, error) {
 			return nil, err
 		}
 		faces = append(faces, sideFaces...)
-		perimeter += loopLen
+		perimeter = boundedAdd(perimeter, loopLen)
 		capStart.loops = append(capStart.loops, &Loop{coedges: bottom, outer: li == 0})
 		capEnd.loops = append(capEnd.loops, &Loop{coedges: top, outer: li == 0})
 	}
@@ -393,14 +498,37 @@ func evalPrism(d *Document, ref StepRef, pp prismPayload) (*Body, error) {
 	shell := &Shell{faces: faces}
 	body.lumps = []*Lump{{shells: []*Shell{shell}}}
 
-	// Measurements — all Exact (docs/evaluator-design.md §5).
-	body.volume = Measurement{Value: units.CubicMillimeters(ig.area * h), Exactness: Exact, Bound: units.CubicMillimeters(0)}
-	body.area = Measurement{Value: units.SquareMillimeters(2*ig.area + perimeter*h), Exactness: Exact, Bound: units.SquareMillimeters(0)}
-	zc := (pp.z0 + pp.z1) / 2
+	// Measurements carry the closed forms' proven float bounds
+	// (docs/evaluator-design.md §5).
+	regionArea := measuredScalar(ig.area, ig.areaBound)
+	volume := boundedMul(regionArea, height)
+	caps := boundedMul(exactScalar(2), regionArea)
+	sides := boundedMul(perimeter, height)
+	area := boundedAdd(caps, sides)
+	body.volume = Measurement{
+		Value:     units.CubicMillimeters(volume.value),
+		Exactness: exactnessOf(volume.bound),
+		Bound:     units.CubicMillimeters(volume.bound),
+	}
+	body.area = Measurement{
+		Value:     units.SquareMillimeters(area.value),
+		Exactness: exactnessOf(area.bound),
+		Bound:     units.SquareMillimeters(area.bound),
+	}
+	cu := boundedQuotient(ig.mu, ig.muBound, ig.area, ig.areaBound)
+	cv := boundedQuotient(ig.mv, ig.mvBound, ig.area, ig.areaBound)
+	zc := boundedDiv(boundedAdd(exactScalar(pp.z0), exactScalar(pp.z1)), exactScalar(2))
+	centroidValue := pp.point(cu.value, cv.value, zc.value)
+	centroidBound := prismPointBound(pp, cu, cv, zc)
+	geometryBound, err := prismCentroidGeometryBound(pp, pp.profile, centroidValue)
+	if err != nil {
+		return nil, err
+	}
+	centroidBound = math.Min(centroidBound, geometryBound)
 	body.centroid = VecMeasurement{
-		Value:     pp.point(ig.mu/ig.area, ig.mv/ig.area, zc),
-		Exactness: Exact,
-		Bound:     units.Millimeters(0),
+		Value:     centroidValue,
+		Exactness: exactnessOf(centroidBound),
+		Bound:     units.Millimeters(centroidBound),
 	}
 	bounds, err := prismBounds(pp)
 	if err != nil {
@@ -448,6 +576,10 @@ type segmentWalk struct {
 	tanInU, tanInV   float64
 	tanOutU, tanOutV float64
 	length           float64
+	lengthBound      float64
+	lengthUpper      float64
+	coordUpper       float64
+	axisMomentUpper  float64
 	// circular geometry when the segment is a circle/arc walk.
 	circular bool
 	cU, cV   float64
@@ -466,10 +598,15 @@ func walkOf(seg CurveSegment) (segmentWalk, error) {
 		u0, v0 := lerp2(seg.Start, seg.End, seg.TStart)
 		u1, v1 := lerp2(seg.Start, seg.End, seg.TEnd)
 		du, dv := u1-u0, v1-v0
+		length := math.Hypot(du, dv)
+		lengthBound, lengthUpper, coordUpper := lineWalkBounds(seg, length)
 		return segmentWalk{
 			startU: u0, startV: v0, endU: u1, endV: v1,
 			tanInU: du, tanInV: dv, tanOutU: du, tanOutV: dv,
-			length: math.Hypot(du, dv),
+			length:      length,
+			lengthBound: lengthBound,
+			lengthUpper: lengthUpper,
+			coordUpper:  coordUpper,
 		}, nil
 	case CircleSeg:
 		r, err := seg.Radius.In(units.Millimeter)
@@ -480,7 +617,15 @@ func walkOf(seg CurveSegment) (segmentWalk, error) {
 			return segmentWalk{}, fmt.Errorf(`%w: a circle segment's CCW flag contradicts its range order`, ErrDegenerate)
 		}
 		th0, th1 := 2*math.Pi*seg.TStart, 2*math.Pi*seg.TEnd
-		w := circularWalk(seg.Center.U, seg.Center.V, r, th0, th1)
+		w := circularWalk(
+			seg.Center.U,
+			seg.Center.V,
+			r,
+			th0,
+			th1,
+			math.Abs(r),
+			circularSweepUpper(seg.TStart, seg.TEnd),
+		)
 		w.closed = math.Abs(math.Abs(th1-th0)-2*math.Pi) < 1e-12
 		return w, nil
 	case ArcSeg:
@@ -491,29 +636,87 @@ func walkOf(seg CurveSegment) (segmentWalk, error) {
 		if sweep <= 0 {
 			sweep += 2 * math.Pi
 		}
-		return circularWalk(seg.Center.U, seg.Center.V, radius, a0+seg.TStart*sweep, a0+seg.TEnd*sweep), nil
+		return circularWalk(
+			seg.Center.U,
+			seg.Center.V,
+			radius,
+			a0+seg.TStart*sweep,
+			a0+seg.TEnd*sweep,
+			arcRadiusUpper(seg),
+			circularSweepUpper(seg.TStart, seg.TEnd),
+		), nil
 	default:
 		return segmentWalk{}, fmt.Errorf(`%w: this evaluator sweeps profiles of line, arc and circle segments only; the profile has a %T segment it cannot sweep into a side face yet`, ErrUnsupported, seg)
 	}
 }
 
 // circularWalk builds the walk geometry of a circular path about (cu, cv).
-func circularWalk(cu, cv, r, th0, th1 float64) segmentWalk {
+func circularWalk(cu, cv, r, th0, th1, radiusUpper, sweepUpper float64) segmentWalk {
 	sin0, cos0 := math.Sincos(th0)
 	sin1, cos1 := math.Sincos(th1)
 	sign := 1.0
 	if th1 < th0 {
 		sign = -1
 	}
+	length := r * math.Abs(th1-th0)
+	lengthUpper := productUpper(radiusUpper, sweepUpper)
+	coordUpper := absSumUpper(cu, cv, radiusUpper, radiusUpper)
 	return segmentWalk{
 		startU: cu + r*cos0, startV: cv + r*sin0,
 		endU: cu + r*cos1, endV: cv + r*sin1,
 		tanInU: -sign * sin0, tanInV: sign * cos0,
 		tanOutU: -sign * sin1, tanOutV: sign * cos1,
-		length:   r * math.Abs(th1-th0),
-		circular: true,
-		cU:       cu, cV: cv, radius: r, th0: th0, th1: th1,
+		length:      length,
+		lengthBound: conservativeValueError(length, lengthUpper),
+		lengthUpper: lengthUpper,
+		coordUpper:  coordUpper,
+		circular:    true,
+		cU:          cu, cV: cv, radius: r, th0: th0, th1: th1,
 	}
+}
+
+// lineWalkBounds compares the held square root with the segment's exact
+// rational squared length. A Pythagorean or axis-aligned length that lands
+// exactly keeps a zero bound; every other square root uses the exact L1 length
+// as a finite magnitude envelope, without assuming a Hypot ulp guarantee. It
+// also returns an L1 coordinate envelope for later revolution bounds.
+func lineWalkBounds(seg LineSeg, held float64) (float64, float64, float64) {
+	u0 := ratLerp(seg.Start.U, seg.End.U, seg.TStart)
+	v0 := ratLerp(seg.Start.V, seg.End.V, seg.TStart)
+	u1 := ratLerp(seg.Start.U, seg.End.U, seg.TEnd)
+	v1 := ratLerp(seg.Start.V, seg.End.V, seg.TEnd)
+	if u0 == nil || v0 == nil || u1 == nil || v1 == nil {
+		return math.Inf(1), math.Inf(1), math.Inf(1)
+	}
+	du := new(big.Rat).Sub(u1, u0)
+	dv := new(big.Rat).Sub(v1, v0)
+	lengthSquared := new(big.Rat).Add(
+		new(big.Rat).Mul(du, du),
+		new(big.Rat).Mul(dv, dv),
+	)
+	heldRat := floatRat(held)
+	coordUpper := math.Max(ratL1Upper(u0, v0), ratL1Upper(u1, v1))
+	if heldRat != nil && new(big.Rat).Mul(heldRat, heldRat).Cmp(lengthSquared) == 0 {
+		return 0, held, coordUpper
+	}
+	l1 := new(big.Rat).Add(new(big.Rat).Abs(du), new(big.Rat).Abs(dv))
+	upper, exact := l1.Float64()
+	if !exact {
+		upper = math.Nextafter(upper, math.Inf(1))
+	}
+	return conservativeValueError(held, upper), upper, coordUpper
+}
+
+func ratL1Upper(values ...*big.Rat) float64 {
+	total := new(big.Rat)
+	for _, value := range values {
+		total.Add(total, new(big.Rat).Abs(value))
+	}
+	upper, exact := total.Float64()
+	if !exact {
+		upper = math.Nextafter(upper, math.Inf(1))
+	}
+	return upper
 }
 
 // sideWalk is one side face's walk after canonicalization: consecutive
@@ -546,7 +749,11 @@ func coalesceWalksBudget(walks []sideWalk, budget *workBudget) ([]sideWalk, erro
 	merge := func(a, b sideWalk) sideWalk {
 		a.endU, a.endV = b.endU, b.endV
 		a.tanOutU, a.tanOutV = b.tanOutU, b.tanOutV
-		a.length += b.length
+		length := boundedAdd(measuredScalar(a.length, a.lengthBound), measuredScalar(b.length, b.lengthBound))
+		a.length, a.lengthBound = length.value, length.bound
+		a.lengthUpper = absSumUpper(a.lengthUpper, b.lengthUpper)
+		a.coordUpper = math.Max(a.coordUpper, b.coordUpper)
+		a.axisMomentUpper = absSumUpper(a.axisMomentUpper, b.axisMomentUpper)
 		a.segs = append(a.segs, b.segs...)
 		return a
 	}
@@ -577,7 +784,7 @@ func coalesceWalksBudget(walks []sideWalk, budget *workBudget) ([]sideWalk, erro
 // and the loop's perimeter length. A loop's index is both its role index and,
 // via li != 0, its orientation: loop 0 is an outer loop (material inside),
 // every other a hole (material outside).
-func buildLoopSides(body *Body, ref StepRef, pp prismPayload, li int, loop LoopRecord) ([]*Face, []coedge, []coedge, float64, error) {
+func buildLoopSides(body *Body, ref StepRef, pp prismPayload, li int, loop LoopRecord) ([]*Face, []coedge, []coedge, boundedScalar, error) {
 	return buildLoopSidesAs(body, ref, pp, li, li != 0, loop)
 }
 
@@ -588,19 +795,19 @@ func buildLoopSides(body *Body, ref StepRef, pp prismPayload, li int, loop LoopR
 // hole in the solid (holeLoop true), each of the void's own holes a solid post
 // (holeLoop false) — a pairing the natural li != 0 rule cannot express
 // (docs/modify-design.md §9).
-func buildLoopSidesAs(body *Body, ref StepRef, pp prismPayload, roleLoop int, holeLoop bool, loop LoopRecord) ([]*Face, []coedge, []coedge, float64, error) {
+func buildLoopSidesAs(body *Body, ref StepRef, pp prismPayload, roleLoop int, holeLoop bool, loop LoopRecord) ([]*Face, []coedge, []coedge, boundedScalar, error) {
 	if len(loop.Segments) == 0 {
-		return nil, nil, nil, 0, fmt.Errorf(`%w: a recorded loop holds no segments`, ErrDegenerate)
+		return nil, nil, nil, boundedScalar{}, fmt.Errorf(`%w: a recorded loop holds no segments`, ErrDegenerate)
 	}
 	raw := make([]sideWalk, len(loop.Segments))
-	total := 0.0
+	total := boundedScalar{}
 	for i, seg := range loop.Segments {
 		w, err := walkOf(seg)
 		if err != nil {
-			return nil, nil, nil, 0, err
+			return nil, nil, nil, boundedScalar{}, err
 		}
 		raw[i] = sideWalk{segmentWalk: w, segs: []int{i}}
-		total += w.length
+		total = boundedAdd(total, measuredScalar(w.length, w.lengthBound))
 	}
 	walks := coalesceWalks(raw)
 	n := len(walks)
@@ -640,7 +847,7 @@ func buildLoopSidesAs(body *Body, ref StepRef, pp prismPayload, roleLoop int, ho
 	}
 
 	// Side faces with bottom/top edges; cap coedges accumulate in walk order.
-	h := pp.z1 - pp.z0
+	height := boundedSub(exactScalar(pp.z1), exactScalar(pp.z0))
 	faces := make([]*Face, 0, n)
 	bottomCo := make([]coedge, 0, n)
 	topCo := make([]coedge, 0, n)
@@ -722,7 +929,7 @@ func buildLoopSidesAs(body *Body, ref StepRef, pp prismPayload, roleLoop int, ho
 			}
 			f, err := r3.NewFrame(mid, pp.dir(tu, tv, 0), pp.dir(0, 0, 1))
 			if err != nil {
-				return nil, nil, nil, 0, fmt.Errorf(`%w: a boundary segment has no direction`, ErrDegenerate)
+				return nil, nil, nil, boundedScalar{}, fmt.Errorf(`%w: a boundary segment has no direction`, ErrDegenerate)
 			}
 			surf = Plane{Frame: f}
 		}
@@ -731,12 +938,14 @@ func buildLoopSidesAs(body *Body, ref StepRef, pp prismPayload, roleLoop int, ho
 		for oi, si := range w.segs {
 			origins[oi] = FeatureRef{Step: ref, Role: fmt.Sprintf("side(%d,%d)", roleLoop, si)}
 		}
+		faceArea := boundedMul(measuredScalar(w.length, w.lengthBound), height)
 		face := &Face{
-			surface:  surf,
-			origins:  origins,
-			body:     body,
-			area:     w.length * h,
-			reversed: faceReversed,
+			surface:   surf,
+			origins:   origins,
+			body:      body,
+			area:      faceArea.value,
+			areaBound: faceArea.bound,
+			reversed:  faceReversed,
 		}
 		if singleClosed {
 			// A closed cylindrical band has TWO boundary loops — one circle

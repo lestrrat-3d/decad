@@ -14,8 +14,8 @@ import (
 // Chamfer bevels the convex lateral edges of a straight prism. Like the fillet,
 // the reduction is a rewrite of the recorded 2D section — but each corner is cut
 // off by a straight chord between the two setback feet, so the bevel walls are
-// planes, not cylinders, and every measurement stays Exact. The step records the
-// unresolved edge query and the setback distance, retiring the receiver, so the
+// planes, not cylinders, and irrational lengths carry proven bounds. The step records the
+// unresolved edge query and setback distance, retiring the receiver, so the
 // recipe replays deterministically.
 func Example_decad_chamfer() {
 	w := sketch.NewWorld()

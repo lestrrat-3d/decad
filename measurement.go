@@ -8,19 +8,19 @@ import (
 )
 
 // Exactness reports how far a computed result can be trusted: whether the
-// number IS the truth, or a tessellation-derived approximation whose error
-// the accompanying Bound holds (docs/api-design.md §5.3). Every measurement
+// number IS the truth, or a bounded numerical approximation whose error the
+// accompanying Bound holds (docs/api-design.md §5.3). Every measurement
 // the API returns carries one, from the first commit — that is what makes an
 // exact-kernel future monotonic rather than breaking: callers already branch
 // on Approximate, and under an exact evaluator that branch stops being taken.
 type Exactness int
 
 const (
-	// Exact marks an analytic result: the number is the truth, and the
-	// Bound beside it is zero.
+	// Exact marks a proved exactly representable result: the number is the
+	// truth, and the Bound beside it is zero.
 	Exact Exactness = iota
-	// Approximate marks a tessellation-derived result: the Bound beside it
-	// holds the absolute error bound the evaluator proves.
+	// Approximate marks a bounded numerical or tessellation-derived result:
+	// the Bound beside it holds the absolute error the evaluator proves.
 	Approximate
 )
 

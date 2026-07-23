@@ -196,7 +196,7 @@ func TestClearanceBeyondBoxesInHole(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, before, doc.Recipe(), `Verify never mutates the document`)
 	require.Len(t, doc.Bodies(), 2)
-	require.Equal(t, decad.Sound, report.Status)
+	require.Equal(t, decad.Suspect, report.Status)
 	requireExactGap(t, report, 10-2.5*math.Sqrt2)
 }
 
@@ -230,7 +230,7 @@ func TestClearanceCoaxialPegInTube(t *testing.T) {
 
 	report, err := doc.Verify(t.Context(), decad.WithClearances())
 	require.NoError(t, err)
-	require.Equal(t, decad.Sound, report.Status)
+	require.Equal(t, decad.Suspect, report.Status)
 	requireExactGap(t, report, 5)
 }
 
@@ -249,7 +249,7 @@ func TestClearanceToriP8(t *testing.T) {
 
 	report, err := doc.Verify(t.Context(), decad.WithClearances())
 	require.NoError(t, err)
-	require.Equal(t, decad.Sound, report.Status, `5e-10-order bound ≤ the 6e-3 gate`)
+	require.Equal(t, decad.Suspect, report.Status, `bounded mass results remain visible`)
 	require.Len(t, report.Clearances, 1)
 	row := report.Clearances[0]
 	require.Equal(t, decad.Approximate, row.Gap.Exactness, `a bracketed winner is honest-Approximate`)
@@ -397,7 +397,7 @@ func TestClearanceNestedPairReportsContainedVolume(t *testing.T) {
 	require.Equal(t, want, report.Interferences[0].Volume)
 	require.Empty(t, report.Clearances)
 	for _, br := range report.Bodies {
-		require.Equal(t, decad.Sound, br.Status, `the bodies are sound; the pair is what is undecided`)
+		require.Equal(t, decad.Suspect, br.Status, `the bodies carry bounded mass results`)
 	}
 }
 
@@ -560,7 +560,7 @@ func TestClearanceCoaxialToriReadTheRing(t *testing.T) {
 
 	report, err := doc.Verify(t.Context(), decad.WithClearances())
 	require.NoError(t, err)
-	require.Equal(t, decad.Sound, report.Status)
+	require.Equal(t, decad.Suspect, report.Status)
 	requireExactGap(t, report, 2)
 }
 

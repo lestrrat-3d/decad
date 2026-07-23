@@ -39,14 +39,14 @@ follow-on. Nothing here changes those contracts.
 A modify op consumes one body and returns another (core §6). It has exactly
 two honest outcomes, and the whole of this document is the line between them:
 
-- **the body the caller asked for, built exactly** — analytic faces, Exact
-  measurements, a boundary valid by construction; or
+- **the body the caller asked for, built analytically** — analytic faces,
+  bounded measurements, a boundary valid by construction; or
 - **an error at the call**, naming which of the two things went wrong.
 
 There is no third outcome. A blend clipped back because the radius did not fit,
 an offset whose self-overlap was quietly trimmed away, a corner patched with a
 surface nobody can name — each is a body the caller did not ask for, wearing
-the Exact measurements of one they did. That is core §1's confidently-wrong
+the measurements of one they did. That is core §1's confidently-wrong
 failure, produced by the very operation an agent reaches for last, on the model
 it is about to commit to.
 
@@ -107,9 +107,9 @@ reach it.
 
 That is the whole design, and everything else follows from it:
 
-- **exactness is inherited, not re-argued.** The mass-property engine
+- **bounds are inherited, not re-argued.** The mass-property engine
   (evaluator §4) integrates the rewritten region in closed form, so volume,
-  area and centroid stay Exact with a zero bound (§10);
+  area and centroid carry the engine's representability and error bounds (§10);
 - **validity is by construction, exactly as evaluator §10 claims it.** A prism
   over a simple closed line/arc region is watertight and manifold structurally.
   What changes is who proves the region simple: for an extrude it is `sketch`;
@@ -633,14 +633,15 @@ reads (§10). Every edge of B1–B3, B5 and B6 bounds exactly two faces, so each
 manifold and watertight by the same structural argument the prism enjoys
 (evaluator §10), on regions the §5 audit has already proven simple.
 
-## 10. Mass properties, and why they stay Exact
+## 10. Mass properties, and how their bounds compose
 
-**A modify op introduces no bound.** Its result is one prism, or two, over
+**A modify op carries the analytic engine's bounds.** Its result is one prism, or two, over
 regions the mass-property engine (evaluator §4) integrates in closed form —
 `LineSeg`, `CircleSeg` and `ArcSeg` walks are exactly the kinds it already
-integrates, and the arcs a fillet and an offset add are those kinds. So every
-quantity is `Exact` with a zero `Bound`, and the verification gate passes it at
-any tolerance (verification §5). Write `A_X` for the area of region `X`, and
+integrates, and the arcs a fillet and an offset add are those kinds. An exactly
+representable result is `Exact`; every rounded result is `Approximate` with a
+proven `Bound` and passes verification only at a sufficient tolerance
+(verification §5). Write `A_X` for the area of region `X`, and
 `h` for the receiver's own sweep length, the magnitude of `z1 − z0`. Every prism
 then takes **the length of its own interval** — a cup is two prisms, and they
 are not the same height:
@@ -654,23 +655,20 @@ are not the same height:
 | Quantity | B1 — a filleted / chamfered prism | B2 / B3 — a tube | B5 / B6 — a cup |
 |---|---|---|---|
 | `Volume` | `A · h` on the rewritten section | `(A_outer − A_cavity) · h` — the tube's section is the outer loop less its holes, which is what the engine integrates, and both loops are swept over the one interval | `A_outer · h_o − A_cavity · h_c` — the outer prism less the cavity prism, **each on its own interval**: inward `A_P · h − A_Q · (h − t)`, outward `A_Q · (h + t) − A_P · h` |
-| `Area` | caps + Σ (segment length · h); an arc's length is `rθ`, exact | rim annuli + Σ (segment length · h) over both loops | Σ (outer segment length · `h_o`) + Σ (cavity segment length · `h_c`) — each wall band over the interval of the prism it belongs to — plus the kept cap (`A_outer`), the rim bands (`A_outer − A_cavity` in total: the removed cap's plane, less the opening) and the cavity cap (`A_cavity`) |
+| `Area` | caps + Σ (segment length · h); an arc's length is `rθ` with its evaluation bound | rim annuli + Σ (segment length · h) over both loops | Σ (outer segment length · `h_o`) + Σ (cavity segment length · `h_c`) — each wall band over the interval of the prism it belongs to — plus the kept cap (`A_outer`), the rim bands (`A_outer − A_cavity` in total: the removed cap's plane, less the opening) and the cavity cap (`A_cavity`) |
 | `Centroid` | the rewritten region's centroid, lifted to the interval's signed midpoint | the section's centroid (holes subtract, as the engine already does), lifted likewise | each region's centroid lifted to the midpoint of **its own** interval, the two combined with the cavity's mass subtracted: `(A_outer · h_o · c_outer − A_cavity · h_c · c_cavity) / (A_outer · h_o − A_cavity · h_c)` |
 | `Bounds` | per-segment analytic extremes over the interval | the same | the outer prism's — in both senses the cavity lies within it, `Q ⊂ P` on the shorter interval inward, `P ⊂ Q` on the shorter one outward |
 
-Each is a difference or a sum of quantities the engine already produces exactly;
-none is sampled, and none is fitted. The `Exactness` a modify op reports is
-therefore the one it inherited, and there is no path by which a fillet of an
-Exact body yields an Approximate one.
+Each is a difference or a sum of bounded quantities the engine already produces;
+none is sampled, and none is fitted. The modify op propagates both source and
+arithmetic bounds through those formulas.
 
 **The rewritten section is the body's truth, in exactly the sense a recorded one
 is.** A tangent foot is the root of a closed-form equation, computed once, in
 floating point — as is every coordinate the seam records and every vertex an
-extrude places. `Exact` means the number is the analytic answer and no
-approximation was made of the *shape*; it does not mean the arithmetic was
-performed in infinite precision, which is a property no evaluator has and which
-verification §4 already accounts for, in the only place it can be accounted for:
-the coordinates.
+extrude places. The represented *shape* remains analytic. Measurement `Exact`
+means the reported binary number is proved exactly representable; otherwise its
+floating-point evaluation is `Approximate` with a proven outward bound.
 
 ## 11. The recipe, provenance, and replay
 
@@ -760,7 +758,7 @@ payload class.
 | **D5** | Body-relative stops (`ToFace` / `ToFaceAngular`; `ThroughAll` / `ThroughAllSide`) | two stop kinds read differently: `ToFace` / `ToFaceAngular` read **topology + a selector + a surface** — a live stop body, its face resolved by the selector, and that face's plane; `ThroughAll` / `ThroughAllSide` read **the payload's directional extent** (`extentAlong`) | works unchanged | works unchanged | `ToFace` reads the cup's faces like any body's; `ThroughAll` reads its outer prism's extent — the cup's own `extentAlong` — the cavity being interior |
 | **D6** | Clearance (`docs/clearance-design.md`) | **the payload and the topology** — it builds its boundary model by switching on the payload **kind** (`prismPayload` / `revolvePayload`), then reads the exact edges, vertices and shells and each body's payload extent | a first-class operand — a `prismPayload`, which its switch builds | a first-class operand — a tube is a `prismPayload` too | payload verification §3 adapts the exact outer/cavity skins, three axial planes, rim bands, topology witnesses, and outer extent to the analytic kernel; staged as `Suspect` when the kernel is needed until the cup-boundary stage lands, while a box-disjoint pair with no gap request remains proven |
 | **D7** | The mesh boolean (evaluator §9) | the tessellation | takes these bodies as it takes any other | as any other | as any other, once D4 covers it |
-| **D8** | `Verify` — the structural audit and the tolerance gate | the topology and the measurements | `Sound` on the same terms an extrude's body is: valid by construction (§5), Exact at any tolerance (§10) | the same | D1's exact wall answer is available; a pair that requires D6 remains `Suspect`, while a box-disjoint pair with no gap request stays proven |
+| **D8** | `Verify` — the structural audit and the tolerance gate | the topology and the measurements | valid by construction (§5); numerical bounds pass only at a sufficient tolerance (§10) | the same | D1's exact wall answer is available; mass bounds still pass only at a sufficient tolerance; a pair that requires D6 remains `Suspect` |
 
 Two readings verification §6 asks about are worth stating because a modify op is
 what makes them arise, and neither needs §6 relaxed:

@@ -90,7 +90,8 @@ func TestChamferBoxAllConvexEdges(t *testing.T) {
 	wantArea := perimeter*h + 2*capArea
 	area, err := body.Area()
 	require.NoError(t, err)
-	require.Equal(t, decad.Exact, area.Exactness)
+	require.Equal(t, decad.Approximate, area.Exactness)
+	require.Positive(t, area.Bound.Base())
 	gotArea, err := area.Value.In(units.SquareMillimeter)
 	require.NoError(t, err)
 	require.InDelta(t, wantArea, gotArea, 1e-9)
@@ -139,7 +140,7 @@ func TestChamferBoxAllConvexEdges(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, rep.Bodies, 1)
 	require.Nil(t, rep.Bodies[0].MinRadius, `a planar chamfer bevel is not a concave radius`)
-	require.True(t, rep.Trustworthy(), `a chamfered prism is Sound on the same terms an extrude is`)
+	require.False(t, rep.Trustworthy(), `the irrational bevel area carries a nonzero bound`)
 }
 
 func TestChamferRecipeAndRetire(t *testing.T) {
@@ -285,7 +286,8 @@ func TestChamferLineArcCorner(t *testing.T) {
 
 	vol, err := chamfered.Volume()
 	require.NoError(t, err)
-	require.Equal(t, decad.Exact, vol.Exactness)
+	require.Equal(t, decad.Approximate, vol.Exactness)
+	require.Positive(t, vol.Bound.Base())
 	gotV, err := vol.Value.In(units.CubicMillimeter)
 	require.NoError(t, err)
 	require.Less(t, gotV, origV, `bevelling a convex corner removes material`)
@@ -362,7 +364,8 @@ func TestChamferArcArcCorner(t *testing.T) {
 
 	vol, err := chamfered.Volume()
 	require.NoError(t, err)
-	require.Equal(t, decad.Exact, vol.Exactness)
+	require.Equal(t, decad.Approximate, vol.Exactness)
+	require.Positive(t, vol.Bound.Base())
 	gotV, err := vol.Value.In(units.CubicMillimeter)
 	require.NoError(t, err)
 	require.Less(t, gotV, origV, `bevelling the convex corners removes material`)
@@ -532,5 +535,5 @@ func TestChamferClearOfHoleBuilds(t *testing.T) {
 
 	rep, err := doc.Verify(t.Context())
 	require.NoError(t, err)
-	require.True(t, rep.Trustworthy(), `a chamfer clear of the hole is Sound`)
+	require.False(t, rep.Trustworthy(), `bounded analytic mass results need a nonzero tolerance`)
 }

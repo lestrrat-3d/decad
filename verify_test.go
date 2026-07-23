@@ -341,7 +341,7 @@ func TestVerifyPlateWithHole(t *testing.T) {
 
 	report, err := doc.Verify(t.Context())
 	require.NoError(t, err)
-	require.Equal(t, decad.Sound, report.Status)
+	require.Equal(t, decad.Suspect, report.Status)
 	br := report.Bodies[0]
 	require.True(t, br.Solid)
 	require.Equal(t, 1, br.Lumps)

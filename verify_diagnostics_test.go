@@ -340,10 +340,10 @@ func TestVerifyDiagnosticsUndecidedClearance(t *testing.T) {
 	_, err = box2.Shell(topCap(box2), units.Millimeters(5))
 	require.NoError(t, err)
 
-	// No clearance asked: the box test alone proves disjointness — Sound, empty.
+	// No clearance asked: bounded cup mass results remain visible.
 	quiet, err := doc.Verify(t.Context())
 	require.NoError(t, err)
-	require.Equal(t, decad.Sound, quiet.Status)
+	require.Equal(t, decad.Suspect, quiet.Status)
 	requireDiagnosticInvariants(t, quiet)
 
 	// WithClearances invokes the staged kernel: the gap is unmeasured.

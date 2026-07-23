@@ -114,8 +114,8 @@ func TestFilletBoxAllConvexEdges(t *testing.T) {
 	wantVol := (100.0*60.0 - (4-math.Pi)*r*r) * h
 	vol, err := body.Volume()
 	require.NoError(t, err)
-	require.Equal(t, decad.Exact, vol.Exactness)
-	require.True(t, vol.Bound.Equal(units.CubicMillimeters(0), 1e-12), `a fillet introduces no bound`)
+	require.Equal(t, decad.Approximate, vol.Exactness)
+	require.Positive(t, vol.Bound.Base())
 	gotVol, err := vol.Value.In(units.CubicMillimeter)
 	require.NoError(t, err)
 	require.InDelta(t, wantVol, gotVol, 1e-9)
@@ -127,7 +127,8 @@ func TestFilletBoxAllConvexEdges(t *testing.T) {
 	wantArea := perimeter*h + 2*capArea
 	area, err := body.Area()
 	require.NoError(t, err)
-	require.Equal(t, decad.Exact, area.Exactness)
+	require.Equal(t, decad.Approximate, area.Exactness)
+	require.Positive(t, area.Bound.Base())
 	gotArea, err := area.Value.In(units.SquareMillimeter)
 	require.NoError(t, err)
 	require.InDelta(t, wantArea, gotArea, 1e-9)
@@ -173,7 +174,7 @@ func TestFilletBoxAllConvexEdges(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, rep.Bodies, 1)
 	require.Nil(t, rep.Bodies[0].MinRadius, `a convex fillet is not a concave feature`)
-	require.True(t, rep.Trustworthy(), `a filleted prism is Sound on the same terms an extrude is`)
+	require.False(t, rep.Trustworthy(), `bounded circular mass results need a nonzero tolerance`)
 }
 
 func TestFilletRecipeAndRetire(t *testing.T) {
@@ -261,7 +262,8 @@ func TestFilletConcaveEdgeReadsMinRadius(t *testing.T) {
 	wantVol := (lArea + (1-math.Pi/4)*r*r) * 10
 	vol, err := filleted.Volume()
 	require.NoError(t, err)
-	require.Equal(t, decad.Exact, vol.Exactness)
+	require.Equal(t, decad.Approximate, vol.Exactness)
+	require.Positive(t, vol.Bound.Base())
 	gotVol, err := vol.Value.In(units.CubicMillimeter)
 	require.NoError(t, err)
 	require.InDelta(t, wantVol, gotVol, 1e-9)
@@ -322,7 +324,8 @@ func TestFilletLineArcCorner(t *testing.T) {
 
 	vol, err := filleted.Volume()
 	require.NoError(t, err)
-	require.Equal(t, decad.Exact, vol.Exactness)
+	require.Equal(t, decad.Approximate, vol.Exactness)
+	require.Positive(t, vol.Bound.Base())
 	gotV, err := vol.Value.In(units.CubicMillimeter)
 	require.NoError(t, err)
 	require.Less(t, gotV, origV, `rounding convex corners removes material`)
@@ -385,7 +388,8 @@ func TestFilletArcArcCorner(t *testing.T) {
 
 	vol, err := filleted.Volume()
 	require.NoError(t, err)
-	require.Equal(t, decad.Exact, vol.Exactness)
+	require.Equal(t, decad.Approximate, vol.Exactness)
+	require.Positive(t, vol.Bound.Base())
 	gotV, err := vol.Value.In(units.CubicMillimeter)
 	require.NoError(t, err)
 	require.Less(t, gotV, origV, `rounding the convex corners removes material`)
@@ -538,7 +542,7 @@ func TestFilletClearOfHoleBuilds(t *testing.T) {
 
 	rep, err := doc.Verify(t.Context())
 	require.NoError(t, err)
-	require.True(t, rep.Trustworthy(), `a fillet clear of the hole is Sound`)
+	require.False(t, rep.Trustworthy(), `bounded circular mass results need a nonzero tolerance`)
 }
 
 // plateWithDiskHole extrudes a 100×100 plate with a circular hole of radius rho
@@ -612,7 +616,7 @@ func TestFilletHoleWellInsideRoundedLoopBuilds(t *testing.T) {
 
 	rep, err := doc.Verify(t.Context())
 	require.NoError(t, err)
-	require.True(t, rep.Trustworthy(), `a well-nested fillet is Sound`)
+	require.False(t, rep.Trustworthy(), `bounded circular mass results need a nonzero tolerance`)
 }
 
 // scaledDiskInCornerFillet builds a k-scaled plate whose (0,0) outer corner is

@@ -25,8 +25,8 @@ import (
 // radius is drawn:
 //
 //  1. BUILD case: when Fillet returns nil the body is watertight, IsSolid, Verify
-//     reads Sound, Tessellate succeeds, mass properties are Exact (zero bound),
-//     and the analytic Volume matches an INDEPENDENT closed form — a right-angle
+//     reads Sound at a sufficient tolerance, Tessellate succeeds, mass properties
+//     carry bounds, and the analytic Volume matches an INDEPENDENT closed form — a right-angle
 //     corner's radius-r fillet moves exactly (1 − π/4)r² of area per unit height,
 //     removed at a convex corner and added back at a concave one. Every blend
 //     wall is a Cylinder of the fillet radius.
@@ -334,31 +334,31 @@ func runFilletCase(t *testing.T, fc filletCase, plan filletPlan, r float64) bool
 	// prevent.
 	requireTessellates(t, filleted, r, fc.name, plan.name)
 
-	// Volume: Exact, zero bound, matching the independent (1 − π/4)r² oracle.
+	// Volume: bounded analytic result matching the independent (1 − π/4)r² oracle.
 	vol, err := filleted.Volume()
 	require.NoError(t, err)
-	require.Equalf(t, decad.Exact, vol.Exactness, "%s/%s a fillet keeps volume Exact", fc.name, plan.name)
-	require.Truef(t, vol.Bound.Equal(units.CubicMillimeters(0), 1e-9), "%s/%s a fillet introduces no bound", fc.name, plan.name)
+	require.Equalf(t, decad.Approximate, vol.Exactness, "%s/%s a fillet carries a volume bound", fc.name, plan.name)
+	require.Positivef(t, vol.Bound.Base(), "%s/%s a fillet carries a positive bound", fc.name, plan.name)
 	gotVol, err := vol.Value.In(units.CubicMillimeter)
 	require.NoError(t, err)
 	wantVol := (fc.sectionArea(1.0) + plan.sign*float64(count)*cornerBite(r)) * filletCaseHeight(1.0)
 	require.InDeltaf(t, wantVol, gotVol, 1e-6*math.Max(1, wantVol),
 		"%s/%s r=%g: %d corners × %+.0f bite off the analytic volume", fc.name, plan.name, r, count, plan.sign)
 
-	// Area: Exact.
+	// Area carries the same circular evaluation bound.
 	area, err := filleted.Area()
 	require.NoError(t, err)
-	require.Equalf(t, decad.Exact, area.Exactness, "%s/%s a fillet keeps area Exact", fc.name, plan.name)
+	require.Equalf(t, decad.Approximate, area.Exactness, "%s/%s a fillet carries an area bound", fc.name, plan.name)
 
 	// Every blend wall is a Cylinder of the fillet radius; there is exactly one
 	// per rounded corner.
 	requireBlendCylinders(t, filleted, count, r)
 
-	// Verify judges the whole body Sound.
+	// Zero-tolerance verification surfaces the bounded mass results.
 	rep, err := doc.Verify(t.Context())
 	require.NoError(t, err)
-	require.Equalf(t, decad.Sound, rep.Status, "%s/%s a filleted prism is Sound", fc.name, plan.name)
-	require.True(t, rep.Trustworthy())
+	require.Equalf(t, decad.Suspect, rep.Status, "%s/%s has bounded mass results", fc.name, plan.name)
+	require.False(t, rep.Trustworthy())
 
 	// A concave rectilinear fillet is the section's only concave curved feature,
 	// so the min-radius survey reads exactly the fillet radius.
@@ -530,7 +530,8 @@ func FuzzFillet(f *testing.F) {
 
 		vol, err := filleted.Volume()
 		require.NoError(t, err)
-		require.Equal(t, decad.Exact, vol.Exactness)
+		require.Equal(t, decad.Approximate, vol.Exactness)
+		require.Positive(t, vol.Bound.Base())
 		got, err := vol.Value.In(units.CubicMillimeter)
 		require.NoError(t, err)
 		want := (w*h - 4*cornerBite(r)) * 20

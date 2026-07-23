@@ -611,9 +611,9 @@ func meshVolumeMeasurement(ctx context.Context, verts []r3.Vec, tris [][3]int, v
 // truth, anything else is Approximate.
 //
 // A zero bound is therefore a CLAIM that the reported value is exactly
-// representable — and only a value proven so may reach it: the analytic
-// features' closed forms, and the boolean's rational integrals carrying their
-// own explicit rounding term. A value a float loop COMPUTED is never among
+// representable — and only a value proven so may reach it: analytic features
+// with explicit rational/error evaluation, and boolean rational integrals
+// carrying their own rounding term. A value a float loop COMPUTED is never among
 // them: its bound comes from bounds.go, whose helpers are never zero for a
 // nonzero float-computed quantity (sumSlop, chainLengthBound), so it can never
 // arrive here claiming Exact.

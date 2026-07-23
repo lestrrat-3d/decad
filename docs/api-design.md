@@ -225,8 +225,8 @@ parameterisation, not measurements of anything, and §5.1 does not reach them.
 type Exactness int
 
 const (
-    Exact Exactness = iota // analytic; the number is the truth
-    Approximate            // tessellation-derived; Bound holds the error
+    Exact Exactness = iota // proved exactly representable; number is truth
+    Approximate            // bounded numerical/tessellated; Bound holds error
 )
 
 // Measurement is a scalar quantity plus how far it can be trusted.

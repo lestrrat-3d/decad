@@ -2,6 +2,7 @@ package decad_test
 
 import (
 	"math"
+	"math/big"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
@@ -70,6 +71,26 @@ func requireProfileMomentError(t *testing.T, record decad.ProfileRecord, target 
 	require.ErrorIs(t, err, target)
 }
 
+func requireBoundContainsBig(t *testing.T, got, bound float64, want *big.Float) {
+	t.Helper()
+	const precision = 256
+	diff := new(big.Float).SetPrec(precision).Sub(
+		new(big.Float).SetPrec(precision).SetFloat64(got),
+		want,
+	)
+	diff.Abs(diff)
+	heldBound := new(big.Float).SetPrec(precision).SetFloat64(bound)
+	require.GreaterOrEqual(t, heldBound.Cmp(diff), 0, "error %s exceeds bound %.17g", diff.Text('g', 18), bound)
+}
+
+func precisePi(t *testing.T) *big.Float {
+	t.Helper()
+	const digits = "3.141592653589793238462643383279502884197169399375105820974944592307816406286"
+	pi, ok := new(big.Float).SetPrec(256).SetString(digits)
+	require.True(t, ok)
+	return pi
+}
+
 func TestRegionAreaAndCentroidRectangle(t *testing.T) {
 	world := sketch.NewWorld()
 	s, err := world.CreateSketch(world.XY())
@@ -126,14 +147,24 @@ func TestRegionAreaWholeCircle(t *testing.T) {
 
 	area, err := record.Area()
 	require.NoError(t, err)
+	require.Equal(t, decad.Approximate, area.Exactness)
+	require.Positive(t, area.Bound.Base())
 	got, err := area.Value.In(units.SquareMillimeter)
 	require.NoError(t, err)
 	require.InDelta(t, math.Pi*49, got, 1e-9)
+	wantArea := new(big.Float).SetPrec(256).Mul(
+		precisePi(t),
+		new(big.Float).SetPrec(256).SetFloat64(49),
+	)
+	requireBoundContainsBig(t, got, area.Bound.Base(), wantArea)
 
 	centroid, err := record.Centroid()
 	require.NoError(t, err)
-	require.InDelta(t, 5, centroid.Value.X, 1e-9)
-	require.InDelta(t, -3, centroid.Value.Y, 1e-9)
+	require.Equal(t, decad.Approximate, centroid.Exactness)
+	require.Positive(t, centroid.Bound.Base())
+	require.InDelta(t, 5.0, centroid.Value.X, 1e-9)
+	require.InDelta(t, -3.0, centroid.Value.Y, 1e-9)
+	require.LessOrEqual(t, math.Hypot(centroid.Value.X-5, centroid.Value.Y+3), centroid.Bound.Base())
 }
 
 func TestRegionAreaMatchesSketchOnCertifiedFragments(t *testing.T) {
@@ -493,6 +524,12 @@ func TestSecondMomentsRectangle(t *testing.T) {
 
 	moments, err := record.SecondMoments()
 	require.NoError(t, err)
+	require.Equal(t, decad.Exact, moments.UU.Exactness)
+	require.Equal(t, decad.Exact, moments.UV.Exactness)
+	require.Equal(t, decad.Exact, moments.VV.Exactness)
+	require.Zero(t, moments.UU.Bound.Base())
+	require.Zero(t, moments.UV.Bound.Base())
+	require.Zero(t, moments.VV.Bound.Base())
 	uu, err := moments.UU.Value.In(units.QuarticMillimeter)
 	require.NoError(t, err)
 	uv, err := moments.UV.Value.In(units.QuarticMillimeter)
@@ -515,6 +552,12 @@ func TestSecondMomentsOffsetCircle(t *testing.T) {
 
 	moments, err := record.SecondMoments()
 	require.NoError(t, err)
+	require.Equal(t, decad.Approximate, moments.UU.Exactness)
+	require.Equal(t, decad.Approximate, moments.UV.Exactness)
+	require.Equal(t, decad.Approximate, moments.VV.Exactness)
+	require.Positive(t, moments.UU.Bound.Base())
+	require.Positive(t, moments.UV.Bound.Base())
+	require.Positive(t, moments.VV.Bound.Base())
 	area := math.Pi * 49
 	quarter := math.Pi * 7 * 7 * 7 * 7 / 4
 	uu, err := moments.UU.Value.In(units.QuarticMillimeter)
@@ -526,6 +569,37 @@ func TestSecondMomentsOffsetCircle(t *testing.T) {
 	require.InDelta(t, quarter+25*area, uu, 1e-6)
 	require.InDelta(t, -15*area, uv, 1e-6)
 	require.InDelta(t, quarter+9*area, vv, 1e-6)
+}
+
+func TestLineRationalRoundingIsBounded(t *testing.T) {
+	rec := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
+		decad.LineSeg{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 1, V: 0}, TStart: 0, TEnd: 1},
+		decad.LineSeg{Start: decad.Point2{U: 1, V: 0}, End: decad.Point2{U: 0, V: 1}, TStart: 0, TEnd: 1},
+		decad.LineSeg{Start: decad.Point2{U: 0, V: 1}, End: decad.Point2{U: 0, V: 0}, TStart: 0, TEnd: 1},
+	}}}
+
+	area, err := rec.Area()
+	require.NoError(t, err)
+	require.Equal(t, decad.Exact, area.Exactness)
+	require.Zero(t, area.Bound.Base())
+
+	centroid, err := rec.Centroid()
+	require.NoError(t, err)
+	require.Equal(t, decad.Approximate, centroid.Exactness)
+	require.Positive(t, centroid.Bound.Base())
+	want := 1.0 / 3
+	require.LessOrEqual(
+		t,
+		math.Hypot(centroid.Value.X-want, centroid.Value.Y-want),
+		centroid.Bound.Base(),
+	)
+
+	moments, err := rec.SecondMoments()
+	require.NoError(t, err)
+	require.Equal(t, decad.Approximate, moments.UU.Exactness)
+	got, err := moments.UU.Value.In(units.QuarticMillimeter)
+	require.NoError(t, err)
+	require.LessOrEqual(t, math.Abs(got-1.0/12), moments.UU.Bound.Base())
 }
 
 func TestArcSegExactQuarterDisk(t *testing.T) {
@@ -550,11 +624,25 @@ func TestArcSegExactQuarterDisk(t *testing.T) {
 
 	centroid, err := record.Centroid()
 	require.NoError(t, err)
+	require.Equal(t, decad.Approximate, area.Exactness)
+	require.Positive(t, area.Bound.Base())
 	require.InDelta(t, 4*radius/(3*math.Pi), centroid.Value.X, 1e-9)
 	require.InDelta(t, 4*radius/(3*math.Pi), centroid.Value.Y, 1e-9)
+	wantArea := new(big.Float).SetPrec(256).Mul(
+		precisePi(t),
+		new(big.Float).SetPrec(256).SetFloat64(radius*radius/4),
+	)
+	requireBoundContainsBig(t, gotArea, area.Bound.Base(), wantArea)
 
 	moments, err := record.SecondMoments()
 	require.NoError(t, err)
+	require.Equal(t, decad.Approximate, centroid.Exactness)
+	require.Positive(t, centroid.Bound.Base())
+	wantCentroid := 4 * radius / (3 * math.Pi)
+	require.LessOrEqual(t, math.Hypot(centroid.Value.X-wantCentroid, centroid.Value.Y-wantCentroid), centroid.Bound.Base())
+	require.Equal(t, decad.Approximate, moments.UU.Exactness)
+	require.Equal(t, decad.Approximate, moments.UV.Exactness)
+	require.Equal(t, decad.Approximate, moments.VV.Exactness)
 	uu, err := moments.UU.Value.In(units.QuarticMillimeter)
 	require.NoError(t, err)
 	uv, err := moments.UV.Value.In(units.QuarticMillimeter)
@@ -564,4 +652,7 @@ func TestArcSegExactQuarterDisk(t *testing.T) {
 	require.InDelta(t, math.Pi*math.Pow(radius, 4)/16, uu, 1e-6)
 	require.InDelta(t, math.Pow(radius, 4)/8, uv, 1e-6)
 	require.InDelta(t, math.Pi*math.Pow(radius, 4)/16, vv, 1e-6)
+	require.LessOrEqual(t, math.Abs(uu-math.Pi*math.Pow(radius, 4)/16), moments.UU.Bound.Base())
+	require.LessOrEqual(t, math.Abs(uv-math.Pow(radius, 4)/8), moments.UV.Bound.Base())
+	require.LessOrEqual(t, math.Abs(vv-math.Pi*math.Pow(radius, 4)/16), moments.VV.Bound.Base())
 }

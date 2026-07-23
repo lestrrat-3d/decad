@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"math/big"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
@@ -18,8 +19,8 @@ import (
 // ToFaceAngular stop resolves through stops.go, its body recorded as a
 // StepRef in the step's Inputs — core §6.2), and the analytic revolve
 // evaluator — Cylinder, Cone, planar-annulus, Sphere and Torus side faces
-// per boundary segment kind, caps only on partial sweeps, and Pappus-exact
-// measurements with zero bounds.
+// per boundary segment kind, caps only on partial sweeps, and Pappus
+// measurements with proven float-evaluation bounds.
 
 // Axis is what a revolve may spin about (docs/api-design.md §6.2). Sealed:
 // the variants are SketchLine, ConstructionAxis and EdgeAxis.
@@ -529,8 +530,10 @@ func (d *Document) resolveAngleSide(s SideAngular, st angularStops, travel float
 // axisLine2 is a revolve axis resolved into the profile plane: a point on
 // the axis and its unit direction, plane-local (u, v).
 type axisLine2 struct {
-	aU, aV float64
-	dU, dV float64
+	aU, aV           float64
+	aUBound, aVBound float64
+	dU, dV           float64
+	dUBound, dVBound float64
 }
 
 // finiteAxisValues reports whether every derived axis value is representable.
@@ -573,7 +576,19 @@ func axisInPlane(a Axis, frame r3.Frame) (axisLine2, error) {
 		if !finiteAxisValues(dU, dV) {
 			return axisLine2{}, fmt.Errorf(`%w: a sketch-line axis direction is not finite`, ErrNotFinite)
 		}
-		return axisLine2{aU: a.Start.U, aV: a.Start.V, dU: dU, dV: dV}, nil
+		// Recover the held length for exact direction-bound checks. If the
+		// unscaled norm overflows, the axis itself is not representable.
+		l = scale * l
+		if !finiteAxisValues(l) {
+			return axisLine2{}, fmt.Errorf(`%w: a sketch-line axis length is not finite`, ErrNotFinite)
+		}
+		dUBound, dVBound := sketchAxisDirectionBounds(a, l, dU, dV)
+		return axisLine2{
+			aU: a.Start.U, aV: a.Start.V,
+			dU: dU, dV: dV,
+			dUBound: dUBound,
+			dVBound: dVBound,
+		}, nil
 	case ConstructionAxis:
 		for _, c := range []float64{a.Origin.X, a.Origin.Y, a.Origin.Z, a.Dir.X, a.Dir.Y, a.Dir.Z} {
 			if math.IsNaN(c) || math.IsInf(c, 0) {
@@ -617,12 +632,56 @@ func axisInPlane(a Axis, frame r3.Frame) (axisLine2, error) {
 		if !finiteAxisValues(dU, dV) {
 			return axisLine2{}, fmt.Errorf(`%w: a normalized construction axis plane-local direction is not finite`, ErrNotFinite)
 		}
-		return axisLine2{aU: local.X, aV: local.Y, dU: dU, dV: dV}, nil
+		anchorUpper := absSumUpper(
+			a.Origin.X, a.Origin.Y, a.Origin.Z,
+			frame.Origin().X, frame.Origin().Y, frame.Origin().Z,
+		)
+		dUBound, dVBound := conservativeValueError(dU, 1), conservativeValueError(dV, 1)
+		if (dU == 0 || math.Abs(dU) == 1) &&
+			(dV == 0 || math.Abs(dV) == 1) &&
+			dU*dU+dV*dV == 1 {
+			dUBound, dVBound = 0, 0
+		}
+		return axisLine2{
+			aU: local.X, aV: local.Y,
+			aUBound: conservativeValueError(local.X, anchorUpper),
+			aVBound: conservativeValueError(local.Y, anchorUpper),
+			dU:      dU, dV: dV,
+			dUBound: dUBound,
+			dVBound: dVBound,
+		}, nil
 	default:
 		// EdgeAxis is gated before extent resolution; any other variant is
 		// staged, never guessed.
 		return axisLine2{}, fmt.Errorf(`%w: axis %T is not supported by this evaluator`, ErrUnsupported, a)
 	}
+}
+
+func sketchAxisDirectionBounds(a SketchLine, heldLength, heldU, heldV float64) (float64, float64) {
+	u0, v0 := floatRat(a.Start.U), floatRat(a.Start.V)
+	u1, v1 := floatRat(a.End.U), floatRat(a.End.V)
+	length := floatRat(heldLength)
+	if u0 == nil || v0 == nil || u1 == nil || v1 == nil || length == nil || length.Sign() == 0 {
+		return conservativeValueError(heldU, 1), conservativeValueError(heldV, 1)
+	}
+	du := new(big.Rat).Sub(u1, u0)
+	dv := new(big.Rat).Sub(v1, v0)
+	lengthSquared := new(big.Rat).Add(
+		new(big.Rat).Mul(du, du),
+		new(big.Rat).Mul(dv, dv),
+	)
+	if new(big.Rat).Mul(length, length).Cmp(lengthSquared) != 0 {
+		return conservativeValueError(heldU, 1), conservativeValueError(heldV, 1)
+	}
+	componentBound := func(delta *big.Rat, held float64) float64 {
+		exact := new(big.Rat).Quo(delta, length)
+		heldRat := floatRat(held)
+		if heldRat != nil && exact.Cmp(heldRat) == 0 {
+			return 0
+		}
+		return conservativeValueError(held, 1)
+	}
+	return componentBound(du, heldU), componentBound(dv, heldV)
 }
 
 // axisFrame is the revolve axis as a proper plane-local frame with the
@@ -631,9 +690,11 @@ func axisInPlane(a Axis, frame r3.Frame) (axisLine2, error) {
 // scale-relative tolerance that classified axis contact; a coordinate
 // within it of the axis IS on the axis.
 type axisFrame struct {
-	aU, aV  float64
-	dU, dV  float64
-	snapTol float64
+	aU, aV           float64
+	aUBound, aVBound float64
+	dU, dV           float64
+	dUBound, dVBound float64
+	snapTol          float64
 }
 
 // toAxis maps a plane-local point into (z, ρ) axis coordinates.
@@ -665,6 +726,12 @@ func (ax axisFrame) walk(w segmentWalk) segmentWalk {
 		out.th0 = w.th0 - beta
 		out.th1 = w.th1 - beta
 	}
+	anchorUpper := absSumUpper(
+		ax.aU, ax.aUBound,
+		ax.aV, ax.aVBound,
+	)
+	rhoUpper := absSumUpper(w.coordUpper, anchorUpper)
+	out.axisMomentUpper = productUpper(w.lengthUpper, rhoUpper)
 	return out
 }
 
@@ -743,7 +810,13 @@ func resolveAxisSide(profile ProfileRecord, line axisLine2) (axisFrame, float64,
 	if rhi <= tol {
 		side = -1
 	}
-	ax := axisFrame{aU: line.aU, aV: line.aV, dU: side * line.dU, dV: side * line.dV, snapTol: tol}
+	ax := axisFrame{
+		aU: line.aU, aV: line.aV,
+		aUBound: line.aUBound, aVBound: line.aVBound,
+		dU: side * line.dU, dV: side * line.dV,
+		dUBound: line.dUBound, dVBound: line.dVBound,
+		snapTol: tol,
+	}
 	if err := ax.rejectInteriorContact(profile); err != nil {
 		return axisFrame{}, 0, err
 	}
@@ -835,6 +908,33 @@ func (rp revolvePayload) basis() revolveBasis {
 	return revolveBasis{a3: a3, w: w, e0: e0, e1: w.Cross(e0)}
 }
 
+// revolveCentroidGeometryBound bounds the centroid independently of the
+// Pappus quotient. Every material point starts in the recorded profile plane,
+// rotates about the resolved axis, then passes through a rigid placement. The
+// L1 envelopes use three times an input L1 norm for any orthogonal map.
+func revolveCentroidGeometryBound(rp revolvePayload, held r3.Vec) (float64, error) {
+	coordUpper, err := profileCoordinateUpper(rp.profile)
+	if err != nil {
+		return 0, err
+	}
+	originUpper := vecL1(rp.frame.Origin())
+	profileUpper := absSumUpper(
+		originUpper,
+		productUpper(vecL1(rp.frame.U()), coordUpper),
+		productUpper(vecL1(rp.frame.V()), coordUpper),
+	)
+	aUUpper := absSumUpper(rp.ax.aU, rp.ax.aUBound)
+	aVUpper := absSumUpper(rp.ax.aV, rp.ax.aVBound)
+	axisUpper := absSumUpper(
+		originUpper,
+		productUpper(vecL1(rp.frame.U()), aUUpper),
+		productUpper(vecL1(rp.frame.V()), aVUpper),
+	)
+	rotatedUpper := absSumUpper(productUpper(3, profileUpper), productUpper(4, axisUpper))
+	placedUpper := absSumUpper(productUpper(3, rotatedUpper), vecL1(rp.xform.Translation()))
+	return absSumUpper(vecL1(held), placedUpper), nil
+}
+
 // point places the axis-frame point (z, ρ) at sweep angle φ into placed
 // world space.
 func (rp revolvePayload) point(b revolveBasis, z, rho, phi float64) r3.Vec {
@@ -852,21 +952,61 @@ func (rp revolvePayload) reflected() bool { return rp.xform.IsReflection() }
 // frame: q = ∫ρ dA (Pappus's second theorem reads volume off it), mzr =
 // ∫zρ dA (the solid centroid's axial position), and mrr = ∫ρ² dA (the
 // partial sweep's in-plane centroid term) — the §4 first, second and mixed
-// moments, exactly (docs/evaluator-design.md §6).
-func axisMoments(ig regionIntegrals, ax axisFrame) (float64, float64, float64) {
-	nU, nV := -ax.dV, ax.dU
-	iuu := ig.muu - 2*ax.aU*ig.mu + ax.aU*ax.aU*ig.area
-	iuv := ig.muv - ax.aU*ig.mv - ax.aV*ig.mu + ax.aU*ax.aV*ig.area
-	ivv := ig.mvv - 2*ax.aV*ig.mv + ax.aV*ax.aV*ig.area
-	q := nU*(ig.mu-ax.aU*ig.area) + nV*(ig.mv-ax.aV*ig.area)
-	mzr := ax.dU*nU*iuu + (ax.dU*nV+ax.dV*nU)*iuv + ax.dV*nV*ivv
-	mrr := nU*nU*iuu + 2*nU*nV*iuv + nV*nV*ivv
+// moments with their source and arithmetic bounds (docs/evaluator-design.md
+// §6).
+func axisMoments(ig regionIntegrals, ax axisFrame) (boundedScalar, boundedScalar, boundedScalar) {
+	aU, aV := measuredScalar(ax.aU, ax.aUBound), measuredScalar(ax.aV, ax.aVBound)
+	dU, dV := measuredScalar(ax.dU, ax.dUBound), measuredScalar(ax.dV, ax.dVBound)
+	nU, nV := measuredScalar(-ax.dV, ax.dVBound), measuredScalar(ax.dU, ax.dUBound)
+	area := measuredScalar(ig.area, ig.areaBound)
+	mu := measuredScalar(ig.mu, ig.muBound)
+	mv := measuredScalar(ig.mv, ig.mvBound)
+	muu := measuredScalar(ig.muu, ig.muuBound)
+	muv := measuredScalar(ig.muv, ig.muvBound)
+	mvv := measuredScalar(ig.mvv, ig.mvvBound)
+
+	iuu := boundedAdd(
+		boundedSub(muu, boundedMul(boundedMul(exactScalar(2), aU), mu)),
+		boundedMul(boundedMul(aU, aU), area),
+	)
+	iuv := boundedAdd(
+		boundedSub(boundedSub(muv, boundedMul(aU, mv)), boundedMul(aV, mu)),
+		boundedMul(boundedMul(aU, aV), area),
+	)
+	ivv := boundedAdd(
+		boundedSub(mvv, boundedMul(boundedMul(exactScalar(2), aV), mv)),
+		boundedMul(boundedMul(aV, aV), area),
+	)
+	q := boundedAdd(
+		boundedMul(nU, boundedSub(mu, boundedMul(aU, area))),
+		boundedMul(nV, boundedSub(mv, boundedMul(aV, area))),
+	)
+	mzr := boundedAdd(
+		boundedAdd(
+			boundedMul(boundedMul(dU, nU), iuu),
+			boundedMul(boundedAdd(boundedMul(dU, nV), boundedMul(dV, nU)), iuv),
+		),
+		boundedMul(boundedMul(dV, nV), ivv),
+	)
+	mrr := boundedAdd(
+		boundedAdd(
+			boundedMul(boundedMul(nU, nU), iuu),
+			boundedMul(boundedMul(exactScalar(2), boundedMul(nU, nV)), iuv),
+		),
+		boundedMul(boundedMul(nV, nV), ivv),
+	)
 	return q, mzr, mrr
+}
+
+func boundedRevolveSweep(phi0, phi1 float64) boundedScalar {
+	sweep := boundedSub(exactScalar(phi1), exactScalar(phi0))
+	sweep.bound = math.Max(sweep.bound, conservativeValueError(sweep.value, twoPiUpper()))
+	return sweep
 }
 
 // evalRevolve builds the analytic revolved body from the payload: side
 // surfaces of revolution per boundary segment, caps only for a partial
-// sweep, shared edges and vertices, and Exact measurements
+// sweep, shared edges and vertices, and bounded mass measurements
 // (docs/evaluator-design.md §6). The payload's segment kinds are line, circle
 // and arc; anything else has already been rejected by the mass-property
 // integrals it runs first.
@@ -878,12 +1018,13 @@ func evalRevolve(d *Document, ref StepRef, rp revolvePayload) (*Body, error) {
 	if ig.area <= 0 {
 		return nil, fmt.Errorf(`%w: the recorded region encloses no area`, ErrDegenerate)
 	}
-	dphi := rp.phi1 - rp.phi0
+	sweep := boundedRevolveSweep(rp.phi0, rp.phi1)
+	dphi := sweep.value
 	if dphi <= 0 {
 		return nil, fmt.Errorf(`%w: the sweep interval is empty`, ErrDegenerate)
 	}
 	q, mzr, mrr := axisMoments(ig, rp.ax)
-	if q <= 0 && finiteMomentValues(q, mzr, mrr) {
+	if q.value <= 0 {
 		return nil, fmt.Errorf(`%w: the region has no material off the revolve axis`, ErrDegenerate)
 	}
 
@@ -902,20 +1043,22 @@ func evalRevolve(d *Document, ref StepRef, rp revolvePayload) (*Body, error) {
 			return nil, err
 		}
 		capStart = &Face{
-			surface: Plane{Frame: startFrame},
-			origins: []FeatureRef{{Step: ref, Role: roleCapStart}},
-			body:    body,
-			area:    ig.area,
+			surface:   Plane{Frame: startFrame},
+			origins:   []FeatureRef{{Step: ref, Role: roleCapStart}},
+			body:      body,
+			area:      ig.area,
+			areaBound: ig.areaBound,
 		}
 		capEnd = &Face{
-			surface: Plane{Frame: endFrame},
-			origins: []FeatureRef{{Step: ref, Role: roleCapEnd}},
-			body:    body,
-			area:    ig.area,
+			surface:   Plane{Frame: endFrame},
+			origins:   []FeatureRef{{Step: ref, Role: roleCapEnd}},
+			body:      body,
+			area:      ig.area,
+			areaBound: ig.areaBound,
 		}
 	}
 
-	sideArea := 0.0
+	sideArea := boundedScalar{}
 	loops := append([]LoopRecord{rp.profile.Outer}, rp.profile.Holes...)
 	perLoop := make([][]*Face, len(loops))
 	for li, loop := range loops {
@@ -924,7 +1067,7 @@ func evalRevolve(d *Document, ref StepRef, rp revolvePayload) (*Body, error) {
 			return nil, err
 		}
 		perLoop[li] = parts.faces
-		sideArea += parts.area
+		sideArea = boundedAdd(sideArea, parts.area)
 		if !rp.full {
 			capStart.loops = append(capStart.loops, &Loop{coedges: parts.startCo, outer: li == 0})
 			capEnd.loops = append(capEnd.loops, &Loop{coedges: parts.endCo, outer: li == 0})
@@ -959,25 +1102,65 @@ func evalRevolve(d *Document, ref StepRef, rp revolvePayload) (*Body, error) {
 	}
 	body.lumps = []*Lump{{shells: shells}}
 
-	// Measurements — all Exact, all Pappus (docs/evaluator-design.md §6).
+	// Measurements — Pappus with the profile and float-evaluation bounds
+	// carried through (docs/evaluator-design.md §6).
 	area := sideArea
 	if !rp.full {
-		area += 2 * ig.area
+		area = boundedAdd(area, boundedMul(exactScalar(2), measuredScalar(ig.area, ig.areaBound)))
 	}
-	body.volume = Measurement{Value: units.CubicMillimeters(q * dphi), Exactness: Exact, Bound: units.CubicMillimeters(0)}
-	body.area = Measurement{Value: units.SquareMillimeters(area), Exactness: Exact, Bound: units.SquareMillimeters(0)}
+	volume := boundedMul(q, sweep)
+	body.volume = Measurement{
+		Value:     units.CubicMillimeters(volume.value),
+		Exactness: exactnessOf(volume.bound),
+		Bound:     units.CubicMillimeters(volume.bound),
+	}
+	body.area = Measurement{
+		Value:     units.SquareMillimeters(area.value),
+		Exactness: exactnessOf(area.bound),
+		Bound:     units.SquareMillimeters(area.bound),
+	}
 
-	cen := b.a3.Add(b.w.Scale(mzr / q))
+	axial := boundedDiv(mzr, q)
+	cen := b.a3.Add(b.w.Scale(axial.value))
+	centroidScale := absSumUpper(vecMaxAbs(b.a3), axial.value)
+	centroidBound := absSumUpper(axial.bound, radius3D(analyticRoundBound(centroidScale)))
 	if !rp.full {
 		// The in-plane term is the swept radial direction integrated over
 		// the interval — closed form in the sweep angle; a full turn's is
 		// identically zero, which is what puts its centroid on the axis.
-		sin1, cos1 := math.Sincos(rp.phi1)
-		sin0, cos0 := math.Sincos(rp.phi0)
-		radial := b.e0.Scale(sin1 - sin0).Add(b.e1.Scale(cos0 - cos1))
-		cen = cen.Add(radial.Scale(mrr / (dphi * q)))
+		sin1 := boundedSin(exactScalar(rp.phi1))
+		cos1 := boundedCos(exactScalar(rp.phi1))
+		sin0 := boundedSin(exactScalar(rp.phi0))
+		cos0 := boundedCos(exactScalar(rp.phi0))
+		rx := boundedSub(sin1, sin0)
+		ry := boundedSub(cos0, cos1)
+		radial := b.e0.Scale(rx.value).Add(b.e1.Scale(ry.value))
+		radialBound := radius2D(rx.bound, ry.bound)
+		radialScale := boundedDiv(mrr, boundedMul(sweep, q))
+		cen = cen.Add(radial.Scale(radialScale.value))
+		radialUpper := vecL1(radial)
+		centroidBound = absSumUpper(
+			centroidBound,
+			productUpper(radialScale.value, radialBound),
+			productUpper(radialUpper, radialScale.bound),
+			radius3D(analyticRoundBound(productUpper(radialScale.value, radialUpper))),
+		)
 	}
-	body.centroid = VecMeasurement{Value: rp.xform.Apply(cen), Exactness: Exact, Bound: units.Millimeters(0)}
+	centroidBound = absSumUpper(
+		centroidBound,
+		rigidRoundAllow(vecMaxAbs(cen), vecMaxAbs(rp.xform.Translation())),
+	)
+	centroidValue := rp.xform.Apply(cen)
+	geometryBound, err := revolveCentroidGeometryBound(rp, centroidValue)
+	if err != nil {
+		return nil, err
+	}
+	centroidBound = math.Min(centroidBound, geometryBound)
+	body.centroid = VecMeasurement{
+		Value:     centroidValue,
+		Exactness: exactnessOf(centroidBound),
+		Bound:     units.Millimeters(centroidBound),
+	}
 
 	bounds, err := revolveBounds(rp)
 	if err != nil {
@@ -1015,9 +1198,9 @@ func (rp revolvePayload) capFrame(b revolveBasis, phi float64, start bool) (r3.F
 // revLoopParts is what one recorded loop contributes to the revolved body.
 type revLoopParts struct {
 	faces   []*Face
-	startCo []coedge // the loop's start-cap coedges, walk order (partial only)
-	endCo   []coedge // the loop's end-cap coedges, walk order (partial only)
-	area    float64  // the loop's side-face area
+	startCo []coedge      // the loop's start-cap coedges, walk order (partial only)
+	endCo   []coedge      // the loop's end-cap coedges, walk order (partial only)
+	area    boundedScalar // the loop's side-face area
 }
 
 // revJunction is one junction between consecutive walks: the shared point in
@@ -1050,7 +1233,8 @@ func buildRevolveLoop(body *Body, ref StepRef, rp revolvePayload, b revolveBasis
 	walks := coalesceWalks(raw)
 	n := len(walks)
 	singleClosed := n == 1 && walks[0].closed
-	dphi := rp.phi1 - rp.phi0
+	sweep := boundedRevolveSweep(rp.phi0, rp.phi1)
+	dphi := sweep.value
 	sweepSign := 1.0
 	if rp.reflected() {
 		sweepSign = -1
@@ -1154,12 +1338,14 @@ func buildRevolveLoop(body *Body, ref StepRef, rp revolvePayload, b revolveBasis
 		for oi, si := range w.segs {
 			origins[oi] = FeatureRef{Step: ref, Role: fmt.Sprintf("side(%d,%d)", li, si)}
 		}
+		faceArea := boundedMul(walkAxisMoment(w.segmentWalk, kinds[i]), sweep)
 		face := &Face{
-			surface:  surf,
-			origins:  origins,
-			body:     body,
-			area:     walkAxisMoment(w.segmentWalk, kinds[i]) * dphi,
-			reversed: reversed,
+			surface:   surf,
+			origins:   origins,
+			body:      body,
+			area:      faceArea.value,
+			areaBound: faceArea.bound,
+			reversed:  reversed,
 		}
 		switch {
 		case rp.full && singleClosed:
@@ -1192,7 +1378,7 @@ func buildRevolveLoop(body *Body, ref StepRef, rp revolvePayload, b revolveBasis
 			}
 		}
 		parts.faces = append(parts.faces, face)
-		parts.area += face.area
+		parts.area = boundedAdd(parts.area, faceArea)
 		if !rp.full {
 			parts.startCo = append(parts.startCo, coedge{edge: cap0[i], forward: true})
 			parts.endCo = append(parts.endCo, coedge{edge: cap1[i], forward: true})
@@ -1349,19 +1535,35 @@ func (rp revolvePayload) wallSurface(b revolveBasis, w segmentWalk, kind wallKin
 }
 
 // walkAxisMoment is the first moment ∫ρ ds of one boundary walk about the
-// axis — Pappus's first theorem reads the side face's area off it, exactly:
+// axis — Pappus's first theorem reads the side face's area from it:
 // a straight walk's is its length times its mean radius (ρ is linear along
 // it), a circular walk's is the closed-form antiderivative over its angular
 // range, and an on-axis walk sweeps nothing.
-func walkAxisMoment(w segmentWalk, kind wallKind) float64 {
+func walkAxisMoment(w segmentWalk, kind wallKind) boundedScalar {
 	if kind == wallAxis {
-		return 0
+		return boundedScalar{}
 	}
 	if !w.circular {
-		return w.length * (w.startV + w.endV) / 2
+		meanRadius := boundedDiv(
+			boundedAdd(exactScalar(w.startV), exactScalar(w.endV)),
+			exactScalar(2),
+		)
+		result := boundedMul(measuredScalar(w.length, w.lengthBound), meanRadius)
+		result.bound = math.Max(result.bound, conservativeValueError(result.value, w.axisMomentUpper))
+		return result
 	}
 	lo, hi := math.Min(w.th0, w.th1), math.Max(w.th0, w.th1)
-	return w.radius * (w.cV*(hi-lo) + w.radius*(math.Cos(lo)-math.Cos(hi)))
+	dtheta := boundedSub(exactScalar(hi), exactScalar(lo))
+	cosDelta := boundedSub(boundedCos(exactScalar(lo)), boundedCos(exactScalar(hi)))
+	result := boundedMul(
+		exactScalar(w.radius),
+		boundedAdd(
+			boundedMul(exactScalar(w.cV), dtheta),
+			boundedMul(exactScalar(w.radius), cosDelta),
+		),
+	)
+	result.bound = math.Max(result.bound, conservativeValueError(result.value, w.axisMomentUpper))
+	return result
 }
 
 // extentAlong is the revolved solid's exact extent interval along an
