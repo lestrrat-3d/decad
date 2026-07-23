@@ -382,6 +382,139 @@ func TestRegionMomentsRejectMalformedArrangement(t *testing.T) {
 	}
 }
 
+func TestRegionMomentsRejectCrossingAndOpenRecordsAtExtremeScales(t *testing.T) {
+	line := func(u0, v0, u1, v1 float64) decad.CurveSegment {
+		return decad.LineSeg{
+			Start:  decad.Point2{U: u0, V: v0},
+			End:    decad.Point2{U: u1, V: v1},
+			TStart: 0,
+			TEnd:   1,
+		}
+	}
+
+	const translatedU = 1e15
+	tests := []struct {
+		name   string
+		record decad.ProfileRecord
+	}{
+		{
+			name: "LargeCoordinateOpenGap",
+			record: decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
+				line(translatedU, 0, translatedU+10, 0),
+				line(translatedU+10, 0, translatedU+10, 10),
+				line(translatedU+10, 10, translatedU, 10),
+				line(translatedU, 10, translatedU+1, 0),
+			}}},
+		},
+		{
+			name: "SmallCoordinateSelfCrossing",
+			record: decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
+				line(0, 0, 3e-6, 3e-6),
+				line(3e-6, 3e-6, 0, 2e-6),
+				line(0, 2e-6, 2e-6, 0),
+				line(2e-6, 0, 0, 0),
+			}}},
+		},
+		{
+			name: "NearEndpointLineCrossing",
+			record: decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
+				line(0, 0, 1, 0),
+				line(1, 0, 0.5, -1e-8),
+				line(0.5, -1e-8, 0.5, 1),
+				line(0.5, 1, 0, 0),
+			}}},
+		},
+		{
+			name: "NearVertexCircleCrossing",
+			record: decad.ProfileRecord{
+				Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
+					line(-2, 0, 0, 0),
+					line(0, 0, 2, 0),
+					line(2, 0, 2, 3),
+					line(2, 3, -2, 3),
+					line(-2, 3, -2, 0),
+				}},
+				Holes: []decad.LoopRecord{{Segments: []decad.CurveSegment{
+					decad.CircleSeg{
+						Center: decad.Point2{U: 0, V: 1},
+						Radius: units.Millimeters(1.000000000000001),
+						TStart: 1,
+						TEnd:   0,
+					},
+				}}},
+			},
+		},
+		{
+			name: "AdjacentLineArcSecondIntersection",
+			record: decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
+				line(-2, 0.5, 1, 0),
+				decad.ArcSeg{
+					Center: decad.Point2{},
+					Start:  decad.Point2{U: 1},
+					End:    decad.Point2{U: -1},
+					TStart: 0,
+					TEnd:   1,
+				},
+				line(-1, 0, -2, 0.5),
+			}}},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			requireProfileMomentError(t, test.record, decad.ErrDegenerate)
+		})
+	}
+}
+
+func TestRegionMomentsAcceptTranslatedNestedLoops(t *testing.T) {
+	line := func(u0, v0, u1, v1 float64) decad.CurveSegment {
+		return decad.LineSeg{
+			Start:  decad.Point2{U: u0, V: v0},
+			End:    decad.Point2{U: u1, V: v1},
+			TStart: 0,
+			TEnd:   1,
+		}
+	}
+	square := func(u0, v0, u1, v1 float64, clockwise bool) decad.LoopRecord {
+		points := [][2]float64{{u0, v0}, {u1, v0}, {u1, v1}, {u0, v1}}
+		if clockwise {
+			points = [][2]float64{{u0, v0}, {u0, v1}, {u1, v1}, {u1, v0}}
+		}
+		return decad.LoopRecord{Segments: []decad.CurveSegment{
+			line(points[0][0], points[0][1], points[1][0], points[1][1]),
+			line(points[1][0], points[1][1], points[2][0], points[2][1]),
+			line(points[2][0], points[2][1], points[3][0], points[3][1]),
+			line(points[3][0], points[3][1], points[0][0], points[0][1]),
+		}}
+	}
+
+	const translatedU = 1e15
+	record := decad.ProfileRecord{
+		Outer: square(translatedU, 0, translatedU+10, 10, false),
+		Holes: []decad.LoopRecord{square(translatedU+4, 4, translatedU+6, 6, true)},
+	}
+
+	area, err := record.Area()
+	require.NoError(t, err)
+	require.Equal(t, decad.Exact, area.Exactness)
+	require.True(t, area.Value.Equal(units.SquareMillimeters(96), 1e-12))
+
+	centroid, err := record.Centroid()
+	require.NoError(t, err)
+	require.Equal(t, decad.Exact, centroid.Exactness)
+	require.False(t, math.IsNaN(centroid.Value.X))
+	require.False(t, math.IsInf(centroid.Value.X, 0))
+	require.InDelta(t, 5, centroid.Value.Y, 1e-12)
+	require.Zero(t, centroid.Value.Z)
+
+	second, err := record.SecondMoments()
+	require.NoError(t, err)
+	require.Equal(t, decad.Exact, second.UU.Exactness)
+	require.Positive(t, second.UU.Value.Base())
+	require.Positive(t, second.UV.Value.Base())
+	require.Positive(t, second.VV.Value.Base())
+}
+
 func TestRegionMomentsAllowBoundaryTangency(t *testing.T) {
 	line := func(u0, v0, u1, v1 float64) decad.CurveSegment {
 		return decad.LineSeg{

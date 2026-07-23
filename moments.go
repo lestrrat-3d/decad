@@ -3,6 +3,7 @@ package decad
 import (
 	"fmt"
 	"math"
+	"math/big"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -181,9 +182,6 @@ func validateMomentArrangement(loops []LoopRecord) error {
 	}
 	for i := range segs {
 		for j := i + 1; j < len(segs); j++ {
-			if adjacent(segs[i], segs[j]) {
-				continue
-			}
 			if momentSegmentsCross(segs[i].w, segs[j].w) {
 				return fmt.Errorf(`%w: the recorded profile boundaries cross`, ErrDegenerate)
 			}
@@ -201,7 +199,7 @@ func validateMomentArrangement(loops []LoopRecord) error {
 func momentSegmentsCross(a, b segmentWalk) bool {
 	switch {
 	case !a.circular && !b.circular:
-		return lineLineSegCross(a, b)
+		return momentLinesCross(a, b)
 	case a.circular && b.circular:
 		return momentArcsCross(a, b)
 	case a.circular:
@@ -211,54 +209,182 @@ func momentSegmentsCross(a, b segmentWalk) bool {
 	}
 }
 
+// momentLinesCross uses exact rational orientations of the recorded float64
+// coordinates. It excludes only collinear contact and actual endpoints; a
+// proper crossing remains visible at every coordinate scale.
+func momentLinesCross(a, b segmentWalk) bool {
+	a0 := momentExactPoint(a.startU, a.startV)
+	a1 := momentExactPoint(a.endU, a.endV)
+	b0 := momentExactPoint(b.startU, b.startV)
+	b1 := momentExactPoint(b.endU, b.endV)
+	ab0 := momentOrientation(a0, a1, b0)
+	ab1 := momentOrientation(a0, a1, b1)
+	ba0 := momentOrientation(b0, b1, a0)
+	ba1 := momentOrientation(b0, b1, a1)
+	if ab0 == 0 || ab1 == 0 || ba0 == 0 || ba1 == 0 ||
+		ab0 == ab1 || ba0 == ba1 {
+		return false
+	}
+
+	t, u := momentLineIntersectionParameters(a0, a1, b0, b1)
+	return momentParameterInterior(t) && momentParameterInterior(u)
+}
+
+type momentExactPoint2 struct {
+	u *big.Rat
+	v *big.Rat
+}
+
+func momentExactPoint(u, v float64) momentExactPoint2 {
+	return momentExactPoint2{u: ratOf(u), v: ratOf(v)}
+}
+
+func momentOrientation(a, b, c momentExactPoint2) int {
+	bu := new(big.Rat).Sub(b.u, a.u)
+	bv := new(big.Rat).Sub(b.v, a.v)
+	cu := new(big.Rat).Sub(c.u, a.u)
+	cv := new(big.Rat).Sub(c.v, a.v)
+	left := new(big.Rat).Mul(bu, cv)
+	right := new(big.Rat).Mul(bv, cu)
+	return new(big.Rat).Sub(left, right).Sign()
+}
+
+func momentLineIntersectionParameters(a0, a1, b0, b1 momentExactPoint2) (float64, float64) {
+	rU := new(big.Rat).Sub(a1.u, a0.u)
+	rV := new(big.Rat).Sub(a1.v, a0.v)
+	sU := new(big.Rat).Sub(b1.u, b0.u)
+	sV := new(big.Rat).Sub(b1.v, b0.v)
+	qU := new(big.Rat).Sub(b0.u, a0.u)
+	qV := new(big.Rat).Sub(b0.v, a0.v)
+	denominator := new(big.Rat).Sub(
+		new(big.Rat).Mul(rU, sV),
+		new(big.Rat).Mul(rV, sU),
+	)
+	tNumerator := new(big.Rat).Sub(
+		new(big.Rat).Mul(qU, sV),
+		new(big.Rat).Mul(qV, sU),
+	)
+	uNumerator := new(big.Rat).Sub(
+		new(big.Rat).Mul(qU, rV),
+		new(big.Rat).Mul(qV, rU),
+	)
+	t, _ := new(big.Rat).Quo(tNumerator, denominator).Float64()
+	u, _ := new(big.Rat).Quo(uNumerator, denominator).Float64()
+	return t, u
+}
+
 func momentLineArcCross(line, arc segmentWalk) bool {
 	dx, dy := line.endU-line.startU, line.endV-line.startV
-	length := math.Hypot(dx, dy)
-	if length == 0 {
+	aa := dx*dx + dy*dy
+	if aa == 0 {
 		return false
 	}
-	ux, uy := dx/length, dy/length
 	fx, fy := line.startU-arc.cU, line.startV-arc.cV
-	bb := fx*ux + fy*uy
+	bb := 2 * (fx*dx + fy*dy)
 	cc := fx*fx + fy*fy - arc.radius*arc.radius
-	discriminant := bb*bb - cc
-	if discriminant < 0 {
+	exactDiscriminant := momentLineCircleDiscriminant(line, arc)
+	if exactDiscriminant.Sign() <= 0 {
 		return false
 	}
+	discriminant, _ := exactDiscriminant.Float64()
 	root := math.Sqrt(discriminant)
-	for _, distance := range []float64{-bb + root, -bb - root} {
-		u, v := line.startU+distance*ux, line.startV+distance*uy
-		if !interior(distance/length) || !momentAngleInterior(arc, u, v) {
+	q := -0.5 * (bb + math.Copysign(root, bb))
+	roots := [2]float64{q / aa, cc / q}
+	if q == 0 {
+		roots = [2]float64{-bb / (2 * aa), -bb / (2 * aa)}
+	}
+	for _, t := range roots {
+		u, v := line.startU+t*dx, line.startV+t*dy
+		if !momentParameterInterior(t) || !momentAngleInterior(arc, u, v) {
 			continue
 		}
-		radialU, radialV := u-arc.cU, v-arc.cV
-		residual := dx*radialU + dy*radialV
-		scale := math.Max(math.Abs(dx*radialU), math.Abs(dy*radialV))
-		if !momentCoordinateJoins(residual, 0, scale) {
-			return true
-		}
+		return true
 	}
 	return false
+}
+
+func momentLineCircleDiscriminant(line, arc segmentWalk) *big.Rat {
+	dx := new(big.Rat).Sub(ratOf(line.endU), ratOf(line.startU))
+	dy := new(big.Rat).Sub(ratOf(line.endV), ratOf(line.startV))
+	fx := new(big.Rat).Sub(ratOf(line.startU), ratOf(arc.cU))
+	fy := new(big.Rat).Sub(ratOf(line.startV), ratOf(arc.cV))
+	aa := new(big.Rat).Add(
+		new(big.Rat).Mul(dx, dx),
+		new(big.Rat).Mul(dy, dy),
+	)
+	bb := new(big.Rat).Add(
+		new(big.Rat).Mul(fx, dx),
+		new(big.Rat).Mul(fy, dy),
+	)
+	bb.Mul(bb, big.NewRat(2, 1))
+	cc := new(big.Rat).Add(
+		new(big.Rat).Mul(fx, fx),
+		new(big.Rat).Mul(fy, fy),
+	)
+	cc.Sub(cc, new(big.Rat).Mul(ratOf(arc.radius), ratOf(arc.radius)))
+	fourAC := new(big.Rat).Mul(aa, cc)
+	fourAC.Mul(fourAC, big.NewRat(4, 1))
+	return new(big.Rat).Sub(new(big.Rat).Mul(bb, bb), fourAC)
 }
 
 func momentArcsCross(a, b segmentWalk) bool {
-	for _, point := range circleCircle(a.cU, a.cV, a.radius, b.cU, b.cV, b.radius) {
+	for _, point := range momentCircleCircle(a, b) {
 		if !momentAngleInterior(a, point[0], point[1]) || !momentAngleInterior(b, point[0], point[1]) {
 			continue
 		}
-		au, av := point[0]-a.cU, point[1]-a.cV
-		bu, bv := point[0]-b.cU, point[1]-b.cV
-		residual := au*bv - av*bu
-		scale := math.Max(math.Abs(au*bv), math.Abs(av*bu))
-		if !momentCoordinateJoins(residual, 0, scale) {
-			return true
-		}
+		return true
 	}
 	return false
 }
 
+func momentCircleCircle(a, b segmentWalk) [][2]float64 {
+	dx := new(big.Rat).Sub(ratOf(b.cU), ratOf(a.cU))
+	dy := new(big.Rat).Sub(ratOf(b.cV), ratOf(a.cV))
+	distance2 := new(big.Rat).Add(
+		new(big.Rat).Mul(dx, dx),
+		new(big.Rat).Mul(dy, dy),
+	)
+	sum := new(big.Rat).Add(ratOf(a.radius), ratOf(b.radius))
+	difference := new(big.Rat).Sub(ratOf(a.radius), ratOf(b.radius))
+	sum2 := new(big.Rat).Mul(sum, sum)
+	difference2 := new(big.Rat).Mul(difference, difference)
+	if distance2.Sign() == 0 || distance2.Cmp(sum2) >= 0 || distance2.Cmp(difference2) <= 0 {
+		return nil
+	}
+
+	dxFloat, dyFloat := b.cU-a.cU, b.cV-a.cV
+	distanceSquared := dxFloat*dxFloat + dyFloat*dyFloat
+	distance := math.Sqrt(distanceSquared)
+	along := (distanceSquared + a.radius*a.radius - b.radius*b.radius) / (2 * distance)
+	height := math.Sqrt(math.Max(0, a.radius*a.radius-along*along))
+	midU := a.cU + along*dxFloat/distance
+	midV := a.cV + along*dyFloat/distance
+	offsetU := -dyFloat / distance * height
+	offsetV := dxFloat / distance * height
+	return [][2]float64{
+		{midU + offsetU, midV + offsetV},
+		{midU - offsetU, midV - offsetV},
+	}
+}
+
 func momentAngleInterior(arc segmentWalk, u, v float64) bool {
-	return arc.closed || angleInterior(arc, u, v)
+	if arc.closed {
+		return true
+	}
+	lo, hi := math.Min(arc.th0, arc.th1), math.Max(arc.th0, arc.th1)
+	angle := math.Atan2(v-arc.cV, u-arc.cU)
+	first := angle + math.Floor((lo-angle)/(2*math.Pi))*2*math.Pi
+	if first < lo {
+		first += 2 * math.Pi
+	}
+	scale := math.Max(1, math.Max(math.Abs(first), math.Max(math.Abs(lo), math.Abs(hi))))
+	allowance := 64 * (scale - math.Nextafter(scale, 0))
+	return first > lo+allowance && first < hi-allowance
+}
+
+func momentParameterInterior(t float64) bool {
+	allowance := 64 * (1 - math.Nextafter(1, 0))
+	return t > allowance && t < 1-allowance
 }
 
 // momentNestingValid uses several boundary probes per segment. A probe proven
@@ -277,12 +403,10 @@ func momentNestingValid(segs []segEntry, nLoops int) bool {
 		}
 		probes[seg.loop] = append(probes[seg.loop], momentSegmentProbes(seg.w)...)
 	}
-	minU, minV, maxU, maxV, ok := sectionBBox(segs)
-	if !ok {
+	if _, _, _, _, ok := sectionBBox(segs); !ok {
 		return false
 	}
-	scale := math.Max(1, math.Max(math.Max(math.Abs(minU), math.Abs(maxU)), math.Max(math.Abs(minV), math.Abs(maxV))))
-	tolerance := contactEps * scale
+	tolerance := contactFloor(segs)
 
 	for hole := 1; hole < nLoops; hole++ {
 		provenInside := false
@@ -335,8 +459,12 @@ func momentSegmentProbes(w segmentWalk) [][2]float64 {
 
 type momentWalk struct {
 	segmentWalk
-	uScale float64
-	vScale float64
+	uScale      float64
+	vScale      float64
+	startUAllow float64
+	startVAllow float64
+	endUAllow   float64
+	endVAllow   float64
 }
 
 // validateMomentLoop checks the part of ProfileRecord's structural contract
@@ -439,6 +567,11 @@ func validateMomentSegment(seg CurveSegment) (momentWalk, error) {
 	if err != nil {
 		return momentWalk{}, err
 	}
+	lineStartDerived, lineEndDerived := false, false
+	if line, ok := seg.(LineSeg); ok {
+		walk.startU, walk.startV, lineStartDerived = momentLineEndpoint(line, line.TStart)
+		walk.endU, walk.endV, lineEndDerived = momentLineEndpoint(line, line.TEnd)
+	}
 	if !finiteMomentValues(
 		walk.startU, walk.startV, walk.endU, walk.endV,
 		walk.tanInU, walk.tanInV, walk.tanOutU, walk.tanOutV,
@@ -470,7 +603,39 @@ func validateMomentSegment(seg CurveSegment) (momentWalk, error) {
 			math.Max(math.Abs(seg.Center.V), math.Max(math.Abs(seg.Start.V), math.Abs(seg.End.V))),
 		)
 	}
+	startDerived, endDerived := true, true
+	if _, ok := seg.(LineSeg); ok {
+		startDerived, endDerived = lineStartDerived, lineEndDerived
+	}
+	out.startUAllow = momentEndpointAllowance(startDerived, walk.startU, out.uScale)
+	out.startVAllow = momentEndpointAllowance(startDerived, walk.startV, out.vScale)
+	out.endUAllow = momentEndpointAllowance(endDerived, walk.endU, out.uScale)
+	out.endVAllow = momentEndpointAllowance(endDerived, walk.endV, out.vScale)
 	return out, nil
+}
+
+func momentLineEndpoint(line LineSeg, t float64) (float64, float64, bool) {
+	switch t {
+	case 0:
+		return line.Start.U, line.Start.V, false
+	case 1:
+		return line.End.U, line.End.V, false
+	default:
+		u, v := lerp2(line.Start, line.End, t)
+		return u, v, true
+	}
+}
+
+func momentEndpointAllowance(derived bool, value, sourceScale float64) float64 {
+	if !derived {
+		return 0
+	}
+	scale := math.Max(1, math.Max(math.Abs(value), sourceScale))
+	ulp := scale - math.Nextafter(scale, 0)
+	// walkOf's circular endpoint evaluates an angle, sin/cos, a product and
+	// a sum. The allowance covers only that bounded evaluation chain and
+	// remains tied to its rounded coordinate, not to the model's scale.
+	return 64 * ulp
 }
 
 func validateMomentRange(start, end float64) error {
@@ -487,8 +652,8 @@ func validateMomentRange(start, end float64) error {
 // the same certified junction is re-evaluated through two segment formulas.
 // It is intentionally unrelated to the model's geometric scale tolerance.
 func momentEndpointsJoin(a, b momentWalk) bool {
-	return momentCoordinateJoins(a.endU, b.startU, math.Max(a.uScale, b.uScale)) &&
-		momentCoordinateJoins(a.endV, b.startV, math.Max(a.vScale, b.vScale))
+	return math.Abs(a.endU-b.startU) <= a.endUAllow+b.startUAllow &&
+		math.Abs(a.endV-b.startV) <= a.endVAllow+b.startVAllow
 }
 
 func momentCoordinateJoins(a, b, sourceScale float64) bool {

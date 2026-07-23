@@ -276,7 +276,8 @@ func crossingAudit(segs []segEntry) error {
 // distance; contactFloor multiplies it by the section's own scale.
 const contactEps = 1e-9
 
-// contactFloor is the boundary-contact threshold for the §5 audit, anchored to
+// contactFloor is the section-relative threshold shared by the §5 boundary
+// contact audit and the mass-property nesting classifier. It is anchored to
 // the SECTION'S scale exactly as verification design §4 anchors a length's
 // noise floor: δ = ε·D with ε = contactEps and D the section's diameter (its
 // (u, v) bounding-box diagonal — the standard decad reading of D, as in
