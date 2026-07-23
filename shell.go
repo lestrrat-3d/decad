@@ -1,6 +1,7 @@
 package decad
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"math"
@@ -106,6 +107,10 @@ func WithShellSense(s ShellSense) ShellOption {
 // ErrUnsupported. The offset section faces the §5 audit before anything is
 // built, so no unproven body is ever made.
 func (b *Body) Shell(sel FaceSelector, t units.Value, opts ...ShellOption) (*Body, error) {
+	return b.ShellContext(context.Background(), sel, t, opts...)
+}
+
+func (b *Body) ShellContext(ctx context.Context, sel FaceSelector, t units.Value, opts ...ShellOption) (*Body, error) {
 	if b == nil || b.doc == nil {
 		return nil, fmt.Errorf(`%w: the body belongs to no document`, ErrDegenerate)
 	}
@@ -245,7 +250,7 @@ func (b *Body) Shell(sel FaceSelector, t units.Value, opts ...ShellOption) (*Bod
 	// the crossing test (a crossing or boundary contact of offset loops is S11b,
 	// §8), then S9 (nesting). The shared §5 audit, run on decad's own synthesized
 	// geometry. A shell mints no cutback, so S6 cannot fire.
-	if err := auditOffsetSection(pp.profile, offset); err != nil {
+	if err := auditOffsetSectionBudget(newWorkBudget(ctx), pp.profile, offset); err != nil {
 		return nil, err
 	}
 

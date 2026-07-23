@@ -1,6 +1,7 @@
 package decad
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"strings"
@@ -53,6 +54,10 @@ const filletTol = 1e-9
 // (ErrUnsupported). The rewritten section faces the §5 audit before anything
 // is built, so no unproven body is ever made.
 func (b *Body) Fillet(sel EdgeSelector, r units.Value, opts ...FilletOption) (*Body, error) {
+	return b.FilletContext(context.Background(), sel, r, opts...)
+}
+
+func (b *Body) FilletContext(ctx context.Context, sel EdgeSelector, r units.Value, opts ...FilletOption) (*Body, error) {
 	if b == nil || b.doc == nil {
 		return nil, fmt.Errorf(`%w: the body belongs to no document`, ErrDegenerate)
 	}
@@ -133,7 +138,7 @@ func (b *Body) Fillet(sel EdgeSelector, r units.Value, opts ...FilletOption) (*B
 	profile, filletArcs := rewriteProfile(pp.profile, loops, blendAt)
 
 	// Stage 4 (§4/§5): the audit of the rewritten profile — S8, S6, S7, S9.
-	if err := auditRewrite(pp.profile, profile, loops, blendAt); err != nil {
+	if err := auditRewrite(newWorkBudget(ctx), pp.profile, profile, loops, blendAt); err != nil {
 		return nil, wrapModifyAuditError(sel, matched, err)
 	}
 

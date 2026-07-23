@@ -153,6 +153,17 @@ before writing tessellation, export, or mesh-boolean operand code.
 | `examples/` | Executable Go examples (`Example_decad_…`, `go test`-verified `// Output:` blocks) that double as living documentation. Never `package main`. |
 | `.github/workflows/` | `ci.yml` (lint → test/tidy/govulncheck), `codeql.yml`. |
 
+**Modify audit cancellation.** `Body.FilletContext`,
+`Body.ChamferContext`, and `Body.ShellContext` pass one shared `workBudget`
+through the pre-commit rewrite audit. Every profile walk, segment pair, hole
+pair, and ray-boundary containment candidate counts against it, so context
+cancellation is polled at phase boundaries and at least every 256 candidates.
+Cancellation returns `ctx.Err()` with the receiver still live and the
+recipe/document unchanged. The original methods delegate with
+`context.Background()`. `auditOffsetSectionBudget` also receives
+`Document.Verify`'s context through the `cupWall` morphology recheck, so that
+path never drops cancellation.
+
 ## Conventions
 
 - Go style, testing and file-layout rules: `~/.claude/docs/go.md`. Tests use
