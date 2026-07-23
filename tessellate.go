@@ -621,7 +621,9 @@ func tessellateFaceted(ctx context.Context, b *Body, fp facetedPayload, chord fl
 		return nil, err
 	}
 	if chord < fp.meshBound {
-		return nil, fmt.Errorf(`%w: a faceted body cannot be re-tessellated finer than its own bound`, ErrUnsupported)
+		requested := units.Millimeters(chord)
+		minimum := units.Millimeters(fp.meshBound)
+		return nil, fmt.Errorf(`%w: requested tolerance %s is below the faceted body's minimum mesh bound %s; retry with a tolerance of at least %s to restate the held mesh`, ErrUnsupported, requested, minimum, minimum)
 	}
 	faces := b.Faces()
 	src := make([]*Face, len(fp.tris))
