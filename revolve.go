@@ -533,6 +533,18 @@ type axisLine2 struct {
 	dU, dV float64
 }
 
+// finiteAxisValues reports whether every derived axis value is representable.
+// Axis inputs are checked before arithmetic, but subtracting finite endpoints
+// or transforming a finite world point can still overflow.
+func finiteAxisValues(values ...float64) bool {
+	for _, value := range values {
+		if math.IsNaN(value) || math.IsInf(value, 0) {
+			return false
+		}
+	}
+	return true
+}
+
 // axisInPlane resolves an axis variant into plane-local coordinates,
 // validating it non-degenerate and coplanar with the profile plane
 // (docs/evaluator-design.md §6).
@@ -545,11 +557,23 @@ func axisInPlane(a Axis, frame r3.Frame) (axisLine2, error) {
 			}
 		}
 		du, dv := a.End.U-a.Start.U, a.End.V-a.Start.V
-		l := math.Hypot(du, dv)
-		if l == 0 {
+		if !finiteAxisValues(du, dv) {
+			return axisLine2{}, fmt.Errorf(`%w: a sketch-line axis delta is not finite`, ErrNotFinite)
+		}
+		scale := math.Max(math.Abs(du), math.Abs(dv))
+		if scale == 0 {
 			return axisLine2{}, fmt.Errorf(`%w: a zero-length sketch line names no axis`, ErrDegenerate)
 		}
-		return axisLine2{aU: a.Start.U, aV: a.Start.V, dU: du / l, dV: dv / l}, nil
+		scaledU, scaledV := du/scale, dv/scale
+		l := math.Hypot(scaledU, scaledV)
+		if !finiteAxisValues(l) {
+			return axisLine2{}, fmt.Errorf(`%w: a sketch-line axis length is not finite`, ErrNotFinite)
+		}
+		dU, dV := scaledU/l, scaledV/l
+		if !finiteAxisValues(dU, dV) {
+			return axisLine2{}, fmt.Errorf(`%w: a sketch-line axis direction is not finite`, ErrNotFinite)
+		}
+		return axisLine2{aU: a.Start.U, aV: a.Start.V, dU: dU, dV: dV}, nil
 	case ConstructionAxis:
 		for _, c := range []float64{a.Origin.X, a.Origin.Y, a.Origin.Z, a.Dir.X, a.Dir.Y, a.Dir.Z} {
 			if math.IsNaN(c) || math.IsInf(c, 0) {
@@ -560,17 +584,40 @@ func axisInPlane(a Axis, frame r3.Frame) (axisLine2, error) {
 		if !ok {
 			return axisLine2{}, fmt.Errorf(`%w: a zero-direction construction axis names no axis`, ErrDegenerate)
 		}
+		if !finiteAxisValues(dir.X, dir.Y, dir.Z) {
+			return axisLine2{}, fmt.Errorf(`%w: a normalized construction axis direction is not finite`, ErrNotFinite)
+		}
 		local := frame.ToLocal(a.Origin)
-		scale := math.Max(1, local.Len())
+		if !finiteAxisValues(local.X, local.Y, local.Z) {
+			return axisLine2{}, fmt.Errorf(`%w: a construction axis has non-finite plane-local coordinates`, ErrNotFinite)
+		}
+		localLen := local.Len()
+		if !finiteAxisValues(localLen) {
+			return axisLine2{}, fmt.Errorf(`%w: a construction axis plane-local length is not finite`, ErrNotFinite)
+		}
+		scale := math.Max(1, localLen)
 		if math.Abs(local.Z) > 1e-9*scale {
 			return axisLine2{}, fmt.Errorf(`%w: the revolve axis does not lie in the profile plane`, ErrDegenerate)
 		}
 		du, dv, dn := dir.Dot(frame.U()), dir.Dot(frame.V()), dir.Dot(frame.N())
+		if !finiteAxisValues(du, dv, dn) {
+			return axisLine2{}, fmt.Errorf(`%w: a construction axis has a non-finite plane-local direction`, ErrNotFinite)
+		}
 		if math.Abs(dn) > 1e-9 {
 			return axisLine2{}, fmt.Errorf(`%w: the revolve axis does not lie in the profile plane`, ErrDegenerate)
 		}
 		l := math.Hypot(du, dv)
-		return axisLine2{aU: local.X, aV: local.Y, dU: du / l, dV: dv / l}, nil
+		if !finiteAxisValues(l) {
+			return axisLine2{}, fmt.Errorf(`%w: a construction axis plane-local direction length is not finite`, ErrNotFinite)
+		}
+		if l == 0 {
+			return axisLine2{}, fmt.Errorf(`%w: a construction axis has no direction in the profile plane`, ErrDegenerate)
+		}
+		dU, dV := du/l, dv/l
+		if !finiteAxisValues(dU, dV) {
+			return axisLine2{}, fmt.Errorf(`%w: a normalized construction axis plane-local direction is not finite`, ErrNotFinite)
+		}
+		return axisLine2{aU: local.X, aV: local.Y, dU: dU, dV: dV}, nil
 	default:
 		// EdgeAxis is gated before extent resolution; any other variant is
 		// staged, never guessed.

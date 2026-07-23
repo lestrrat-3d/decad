@@ -1593,9 +1593,10 @@ to make that mechanical.
   full semantics in `docs/sketch-seam-design.md`),
   `ErrNotSolid`, `ErrDegenerate`, `ErrBooleanFailed`, `ErrInvalidProfile`,
   `ErrUnitKind`, `ErrNotFinite` (a non-finite `units.Value` magnitude or
-  `r3.Vec` component handed as a parameter — `units` construction admits a
-  non-finite value and only its operations reject one, so the call must;
-  option semantics in `docs/verification-design.md`),
+  `r3.Vec` component handed as a parameter, or a non-finite value derived while
+  validating a Revolve axis whose input is otherwise finite — `units`
+  construction admits a non-finite value and only its operations reject one,
+  so the call must; option semantics in `docs/verification-design.md`),
   `ErrUnsupported` (the recipe records the intent exactly, but the current
   evaluator cannot yet build it — evaluator staging is explicit and rejected
   at the call, never silently approximated or narrowed;
