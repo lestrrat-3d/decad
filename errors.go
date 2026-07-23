@@ -131,6 +131,17 @@ var ErrNotFinite = errors.New("decad: non-finite value")
 // branches on both.
 var ErrUnsupported = errors.New("decad: not supported by the current evaluator")
 
+// ErrInvalidRecipe is returned when stored recipe data violates the recipe
+// wire contract. It covers malformed envelopes, unknown or duplicate fields,
+// and invalid recipe content. A [RecipeError] carries the failing path and
+// preserves this identity for errors.Is.
+var ErrInvalidRecipe = errors.New("decad: invalid recipe")
+
+// ErrUnsupportedRecipeVersion is returned when a complete recipe envelope
+// names a version this package cannot interpret. The decoder never ignores
+// fields from a newer version.
+var ErrUnsupportedRecipeVersion = errors.New("decad: unsupported recipe version")
+
 // BooleanErrorCode is the branchable fine reason a public boolean operation
 // failed, read from a [BooleanError] with errors.As. It draws the line the
 // wrapped sentinel is too coarse to draw: the three codes separate a caller's
