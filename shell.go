@@ -116,9 +116,16 @@ func (b *Body) Shell(sel FaceSelector, t units.Value, opts ...ShellOption) (*Bod
 		return nil, err
 	}
 	sense := Inward
-	for _, o := range opts {
-		if o == nil {
+	for _, raw := range opts {
+		if raw == nil {
 			return nil, fmt.Errorf(`%w: a nil option names nothing to apply`, ErrDegenerate)
+		}
+		// decad owns the option vocabulary. Embedding ShellOption can promote
+		// its sealed marker onto a foreign type, so admit the owned concrete
+		// implementation before invoking any option callback.
+		o, ok := raw.(shellOption)
+		if !ok {
+			return nil, fmt.Errorf(`%w: the shell option is not a decad shell option (%T)`, ErrDegenerate, raw)
 		}
 		switch ident := o.Ident().(type) {
 		case identShellSense:

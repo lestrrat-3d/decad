@@ -118,11 +118,15 @@ func TestShellSelectorAdmission(t *testing.T) {
 
 type unknownShellOption struct {
 	decad.ShellOption
+	calls *int
 }
 
 type unknownShellOptionIdent struct{}
 
-func (unknownShellOption) Ident() any { return unknownShellOptionIdent{} }
+func (o unknownShellOption) Ident() any {
+	(*o.calls)++
+	return unknownShellOptionIdent{}
+}
 
 func TestShellOptionDispatch(t *testing.T) {
 	tests := []struct {
@@ -146,20 +150,42 @@ func TestShellOptionDispatch(t *testing.T) {
 		})
 	}
 
-	t.Run("unknown identifier", func(t *testing.T) {
+	t.Run("ForeignImplementation", func(t *testing.T) {
 		doc, box := shellBox(t)
 		before := doc.Recipe()
-		opt := unknownShellOption{ShellOption: decad.WithShellSense(decad.Outward)}
+		calls := 0
+		opt := unknownShellOption{
+			ShellOption: decad.WithShellSense(decad.Outward),
+			calls:       &calls,
+		}
 
 		body, err := box.Shell(topCap(box), units.Millimeters(5), opt)
 		require.Nil(t, body)
 		require.ErrorIs(t, err, decad.ErrDegenerate)
-		require.ErrorContains(t, err, "unknown shell option identifier")
+		require.ErrorContains(t, err, "not a decad shell option")
+		require.Zero(t, calls, `Shell rejects a foreign option before invoking its callback`)
 		require.Equal(t, before, doc.Recipe())
 		require.Equal(t, []*decad.Body{box}, doc.Bodies())
 	})
 
-	t.Run("unknown sense", func(t *testing.T) {
+	t.Run("TypedNilImplementation", func(t *testing.T) {
+		doc, box := shellBox(t)
+		before := doc.Recipe()
+		var opt *unknownShellOption
+		var body *decad.Body
+		var err error
+
+		require.NotPanics(t, func() {
+			body, err = box.Shell(topCap(box), units.Millimeters(5), opt)
+		})
+		require.Nil(t, body)
+		require.ErrorIs(t, err, decad.ErrDegenerate)
+		require.ErrorContains(t, err, "not a decad shell option")
+		require.Equal(t, before, doc.Recipe())
+		require.Equal(t, []*decad.Body{box}, doc.Bodies())
+	})
+
+	t.Run("UnknownSense", func(t *testing.T) {
 		doc, box := shellBox(t)
 		before := doc.Recipe()
 
