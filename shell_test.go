@@ -62,6 +62,60 @@ func topCap(b *decad.Body) *decad.FaceQuery {
 	return decad.Faces(decad.FaceCreatedBy(decad.FeatureRef{Step: b.Origin().Step, Role: roleCapEnd}))
 }
 
+// forwardingFaceSelector is a foreign selector implementation that embeds the
+// built-in query to promote Selector's sealed marker, then overrides resolution.
+type forwardingFaceSelector struct {
+	*decad.FaceQuery
+	calls *int
+}
+
+func (s forwardingFaceSelector) SelectFaces(body *decad.Body) ([]*decad.Face, error) {
+	(*s.calls)++
+	return s.FaceQuery.SelectFaces(body)
+}
+
+func TestShellSelectorAdmission(t *testing.T) {
+	t.Run("BuiltInQuery", func(t *testing.T) {
+		doc, box := shellBox(t)
+
+		_, err := box.Shell(bothCaps(), units.Millimeters(5))
+		require.NoError(t, err)
+		require.Len(t, doc.Recipe().Steps, 2)
+		_, err = json.Marshal(doc.Recipe())
+		require.NoError(t, err)
+	})
+
+	t.Run("ForeignImplementation", func(t *testing.T) {
+		doc, box := shellBox(t)
+		before := doc.Recipe()
+		calls := 0
+		foreign := forwardingFaceSelector{
+			FaceQuery: bothCaps(),
+			calls:     &calls,
+		}
+
+		_, err := box.Shell(foreign, units.Millimeters(5))
+		require.ErrorIs(t, err, decad.ErrDegenerate)
+		require.Zero(t, calls, `Shell rejects a foreign selector before invoking its callback`)
+		require.Equal(t, before, doc.Recipe(), `a rejected selector records no step`)
+		require.Equal(t, []*decad.Body{box}, doc.Bodies(), `a rejected selector does not retire the receiver`)
+		_, err = json.Marshal(doc.Recipe())
+		require.NoError(t, err)
+	})
+
+	t.Run("TypedNilQuery", func(t *testing.T) {
+		doc, box := shellBox(t)
+		before := doc.Recipe()
+		var query *decad.FaceQuery
+		var selector decad.FaceSelector = query
+
+		_, err := box.Shell(selector, units.Millimeters(5))
+		require.ErrorIs(t, err, decad.ErrDegenerate)
+		require.Equal(t, before, doc.Recipe(), `a typed nil selector records no step`)
+		require.Equal(t, []*decad.Body{box}, doc.Bodies(), `a typed nil selector does not retire the receiver`)
+	})
+}
+
 func TestShellTubeInwardBox(t *testing.T) {
 	const th = 5.0
 	h := shellBoxHeight
