@@ -138,6 +138,44 @@ func TestTessellateFacetedToleranceBoundary(t *testing.T) {
 	require.Equal(t, held.Triangles(), aboveBound.Triangles())
 }
 
+func TestTessellatePayloadClasses(t *testing.T) {
+	t.Run("prism", func(t *testing.T) {
+		mesh, err := holedPlateBody(t).Tessellate(units.Millimeters(1))
+		require.NoError(t, err)
+		require.NotEmpty(t, mesh.Triangles())
+	})
+
+	t.Run("cup", func(t *testing.T) {
+		_, box := shellBox(t)
+		cup, err := box.Shell(topCap(box), units.Millimeters(5))
+		require.NoError(t, err)
+		mesh, err := cup.Tessellate(units.Millimeters(1))
+		require.NoError(t, err)
+		require.NotEmpty(t, mesh.Triangles())
+	})
+
+	t.Run("faceted", func(t *testing.T) {
+		doc := decad.New()
+		plate := boxBody(t, doc, 0, 0, 20, 20, 8)
+		tool := translated(t, diskBody(t, doc, 10, 10, 2), 0, 0, -6)
+		body, err := decad.Cut(plate, tool)
+		require.NoError(t, err)
+		mesh, err := body.Tessellate(units.Millimeters(1))
+		require.NoError(t, err)
+		require.NotEmpty(t, mesh.Triangles())
+	})
+
+	t.Run("revolve", func(t *testing.T) {
+		doc := decad.New()
+		body := ballBody(t, doc, 5)
+		mesh, err := body.Tessellate(units.Millimeters(1))
+		require.Nil(t, mesh)
+		require.ErrorIs(t, err, decad.ErrUnsupported)
+		require.ErrorContains(t, err, "revolvePayload")
+		require.ErrorContains(t, err, "supported payload classes are prism, cup, and faceted")
+	})
+}
+
 func TestTessellatePlateWithHole(t *testing.T) {
 	body := holedPlateBody(t)
 	tol := 0.5
