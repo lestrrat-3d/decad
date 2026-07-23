@@ -215,3 +215,96 @@ func TestRecordProfileGates(t *testing.T) {
 	_, _, err = decad.RecordProfile(s, fresh)
 	require.NoError(t, err)
 }
+
+func TestRecordProfileRejectsForeignBoundaryEntity(t *testing.T) {
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	rect := s.CreateRectangle(0, 0, 10, 10)
+	s.Fix(rect.A)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	prof := s.Profiles()[0]
+
+	foreign, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	foreignRect := foreign.CreateRectangle(100, 100, 110, 110)
+	foreign.Fix(foreignRect.A)
+	_, err = foreign.Solve(t.Context())
+	require.NoError(t, err)
+
+	// The replacement has the same area, so the later area falsifier cannot
+	// distinguish it from the profile that came from s.
+	prof.Outer = foreign.Profiles()[0].Outer
+	doc := decad.New()
+	_, err = doc.Extrude(s, prof, decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+	require.ErrorIs(t, err, decad.ErrForeignProfile)
+	require.Empty(t, doc.Bodies())
+	require.Empty(t, doc.Recipe().Steps)
+}
+
+func TestRecordProfileRejectsForeignHoleEntity(t *testing.T) {
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	rect := s.CreateRectangle(0, 0, 10, 10)
+	s.Fix(rect.A)
+	s.CreateCircle(s.CreatePoint(5, 5), 2)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+
+	var prof *sketch.Profile
+	for _, candidate := range s.Profiles() {
+		if len(candidate.Holes) == 1 {
+			prof = candidate
+			break
+		}
+	}
+	require.NotNil(t, prof)
+
+	foreign, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	center := foreign.CreatePoint(100, 100)
+	foreign.Fix(center)
+	foreign.CreateCircle(center, 2)
+	_, err = foreign.Solve(t.Context())
+	require.NoError(t, err)
+	prof.Holes[0] = foreign.Profiles()[0].Outer
+
+	_, _, err = decad.RecordProfile(s, prof)
+	require.ErrorIs(t, err, decad.ErrForeignProfile)
+}
+
+func TestRecordProfileRejectsChangedCurrentBoundary(t *testing.T) {
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	first := s.CreateRectangle(0, 0, 10, 10)
+	second := s.CreateRectangle(20, 0, 30, 10)
+	s.Fix(first.A)
+	s.Fix(second.A)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+
+	profiles := s.Profiles()
+	require.Len(t, profiles, 2)
+	profiles[0].Outer = profiles[1].Outer
+
+	_, _, err = decad.RecordProfile(s, profiles[0])
+	require.ErrorIs(t, err, decad.ErrInvalidProfile)
+}
+
+func TestRecordProfileRejectsTypedNilBoundaryEntity(t *testing.T) {
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	rect := s.CreateRectangle(0, 0, 10, 10)
+	s.Fix(rect.A)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	prof := s.Profiles()[0]
+	prof.Outer[0].Entity = (*sketch.Line)(nil)
+
+	_, _, err = decad.RecordProfile(s, prof)
+	require.ErrorIs(t, err, decad.ErrInvalidProfile)
+}

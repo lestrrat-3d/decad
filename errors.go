@@ -32,10 +32,10 @@ var ErrCardinality = errors.New("decad: cardinality assertion failed")
 var ErrForeignBody = errors.New("decad: body is owned by a different document")
 
 // ErrForeignProfile is returned when a feature is handed a profile built from
-// a different sketch than the one given — Profile.Sketch() is the sketch the
-// profile was built from, and decad consumes that answer. A foreign profile
-// is expressed in a different plane's coordinates, so lifting it through the
-// given sketch's frame would place it silently in the wrong place.
+// a different sketch than the one given, or when the profile's mutable boundary
+// contains an entity the source sketch does not own. A foreign profile or
+// boundary is expressed in another sketch's plane-local coordinates, so
+// lifting it through the given sketch's frame would silently misplace it.
 var ErrForeignProfile = errors.New("decad: profile was built from a different sketch")
 
 // ErrStaleProfile is returned when a feature is handed a profile built before
@@ -97,9 +97,11 @@ var ErrDegenerate = errors.New("decad: degenerate input")
 // still branches on it; errors.As(err, &be) then be.Code is the fine branch.
 var ErrBooleanFailed = errors.New("decad: boolean operation failed")
 
-// ErrInvalidProfile is returned when a feature is handed a profile whose
-// Valid is false — a self-intersecting or degenerate region is never
-// silently swept. Profile.Valid is sketch's answer, not one decad recomputes.
+// ErrInvalidProfile is returned when a feature is handed a profile whose Valid
+// is false, whose boundary contains a nil entity, or whose exported snapshot
+// fields no longer exactly match one current result from Sketch.Profiles. A
+// self-intersecting, degenerate, or caller-altered region is never silently
+// swept.
 var ErrInvalidProfile = errors.New("decad: profile is not a valid region")
 
 // ErrUnitKind is returned for a units.Value whose Kind is not the one the

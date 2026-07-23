@@ -829,15 +829,21 @@ origin, u, v — because an `r3.Frame` does not survive encoding (§6.2), and th
 frame is what the profile normal — the sense `Direction.Along` means for a
 linear extent (§8.1) — is read from.
 
-**`p` MUST be a profile of `s`, and `sketch` answers that too:
-`Profile.Sketch()` is the sketch the profile was built from.** A
-`*sketch.Profile` is freshly allocated by every `Profiles()` call, so pointer
-membership in `s.Profiles()` could never establish provenance — it would reject
-the caller's own profile, including the one in the example above. The
-back-reference is `sketch`'s own answer, and decad consumes it. A profile whose
-`Sketch()` is not `s` is `ErrForeignProfile` (§12): it is expressed in a
-different plane's coordinates, so lifting it through `s`'s frame would place it
-silently, confidently, in the wrong place.
+**`p` MUST be an unaltered current profile of `s`, and decad records only a
+fresh sketch-authenticated match.** `Profile.Sketch()` MUST be `s`.
+Every boundary entity MUST be non-nil and present in `s.Entities()`; a foreign
+boundary entity is `ErrForeignProfile` (§12). decad then calls `s.Profiles()`
+and requires every exported field of `p` to exactly match one fresh current
+profile, including entity identities, boundary order/ranges, polylines, holes,
+area and validity. It records the fresh match, never caller-mutable `p`. No
+match is `ErrInvalidProfile` (§12).
+
+A `*sketch.Profile` is freshly allocated by every `Profiles()` call, so pointer
+membership cannot authenticate it. Exact snapshot matching preserves the
+profile value while obtaining a trusted copy. `Profile.Sketch()` still proves
+the source sketch; a different source is `ErrForeignProfile`. Either foreign
+case could otherwise lift another sketch's plane-local coordinates through
+`s`'s frame and silently place the wrong solid.
 
 **A *stale* profile is detected, and rejected.** A profile is a snapshot: one
 built before a later `Solve`, parameter edit or geometry change still holds
@@ -850,10 +856,13 @@ changed since. A feature handed a stale profile is `ErrStaleProfile` (§12); the
 caller rebuilds with `s.Profiles()` and passes a current one.
 
 `doc.Extrude` REJECTS a `sketch.Profile` whose `Valid` is false — a
-self-intersecting or degenerate region is never silently swept. `Profile.Valid` is
-the whole of decad's *validity* gate, and it is `sketch`'s answer, not one decad
-recomputes. The one further rejection is not a validity judgement at all: a valid
-profile whose boundary decad cannot record exactly — a profile containing a
+self-intersecting or degenerate region is never silently swept. This early
+check can only reject; `Valid == true` admits nothing until the complete
+snapshot matches a fresh profile. `Profile.Valid` is `sketch`'s
+region-validity answer, not one decad recomputes. Snapshot authentication is a
+separate integrity gate, also reported as `ErrInvalidProfile`. The one further
+rejection is not a validity judgement at all: a valid profile whose boundary
+decad cannot record exactly — a profile containing a
 `Partial` fragment whose cut `sketch` reports sampled, `TExact == false`, or one
 whose certified range the seam's falsifier disproves —
 is `ErrUnrecordableProfile` (§12), because a `Step` that recorded the whole curve
@@ -888,8 +897,10 @@ func (d *Document) Revolve(s *sketch.Sketch, p *sketch.Profile, axis Axis, a Ang
 
 Both take the **sketch** as well as the profile, because a `sketch.Profile`'s
 geometry is plane-local and the plane is the sketch's (§7). `p` MUST be a
-profile of `s` (`Profile.Sketch()`), and a current one: another sketch's profile
-is `ErrForeignProfile`, a stale one `ErrStaleProfile` (§12). decad
+current, unaltered profile of `s`: another sketch's profile or a foreign
+boundary entity is `ErrForeignProfile`, a stale one is `ErrStaleProfile`, and a
+snapshot that does not match a fresh `s.Profiles()` result is
+`ErrInvalidProfile` (§7/§12). decad
 reads the plane through `s.Plane()` and its frame through `s.Plane().Frame()`, and
 records the plane — as a `PlaneRecord`, and the profile as a `ProfileRecord` — in
 the `Step` (§6.2), so the recipe stays complete and holds no live sketch.
@@ -1578,7 +1589,8 @@ to make that mechanical.
   (a cardinality assertion failed), `ErrForeignBody` (an operation was handed bodies
   owned by different documents, or an extent or axis named a body owned by another
   document, §8.1), `ErrForeignProfile` (a feature was handed a profile built from
-  a different sketch than the one given — `Profile.Sketch()`, §7),
+  a different sketch than the one given, or a boundary entity the source sketch
+  does not own, §7),
   `ErrStaleProfile` (a feature was handed a profile built before the sketch's
   current state — `Profile.IsStale`, §7), `ErrRetiredBody` (an
   operation, or an extent, was handed a body the document has retired, §6),
@@ -1591,7 +1603,9 @@ to make that mechanical.
   A `Partial` fragment `sketch` certifies exact records as its entity's own
   variant with the certified range, and a whole edge of every kind records;
   full semantics in `docs/sketch-seam-design.md`),
-  `ErrNotSolid`, `ErrDegenerate`, `ErrBooleanFailed`, `ErrInvalidProfile`,
+  `ErrNotSolid`, `ErrDegenerate`, `ErrBooleanFailed`, `ErrInvalidProfile` (the
+  profile is invalid, contains a nil boundary entity, or no longer exactly
+  matches a fresh current profile from its source sketch),
   `ErrUnitKind`, `ErrNotFinite` (a non-finite `units.Value` magnitude or
   `r3.Vec` component handed as a parameter, or a non-finite value derived while
   validating a Revolve axis whose input is otherwise finite — `units`

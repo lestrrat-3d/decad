@@ -376,11 +376,20 @@ records, and a circle cut by another circle — or an ellipse cut by anything,
 including the line fragments that crossing leaves on the rectangle — is
 `ErrUnrecordableProfile`, because its range is sampled.
 
-Conversion is mechanical, and it happens once, in the feature call. decad walks
-`p.Outer` and each loop of `p.Holes` and reads each `BoundaryEdge`'s source `Entity`
-for its defining fields. `Partial` selects the column of the table above, and
-on a fragment `TExact` decides admission (§1). `Reversed` is **baked into the
-segment** as the order of its range — `TStart` and `TEnd` swapped, so
+Conversion is mechanical, and it happens once, in the feature call.
+`RecordProfile` first rejects every nil boundary entity and every boundary
+entity absent from `s.Entities()`. It then calls `s.Profiles()` and accepts only
+when every exported field of `p` exactly matches one fresh current profile,
+including entity identities, boundary order/ranges, polylines, holes, area and
+validity. It records from that fresh match, never from caller-mutable `p`.
+No match is `ErrInvalidProfile`; a boundary entity another sketch owns is
+`ErrForeignProfile`.
+
+decad walks the authenticated profile's `Outer` and each loop of `Holes` and
+reads each `BoundaryEdge`'s source `Entity` for its defining fields. `Partial`
+selects the column of the table above, and on a fragment `TExact` decides
+admission (§1). `Reversed` is **baked into the segment** as the order of its
+range — `TStart` and `TEnd` swapped, so
 `TStart > TEnd` says the segment runs against the curve's natural sense, and a
 closed kind's `CCW` flips with it; `sketch` hands the range over in natural
 direction, so the swap is decad's record of the walk, composed with that range.
@@ -416,6 +425,9 @@ float (core §5.2).
 `RecordProfile` admits a live profile only after consuming these `sketch`
 answers:
 
+- every boundary entity is non-nil and owned by the profile's source sketch;
+- all exported snapshot fields exactly match one fresh current profile, whose
+  values are used for recording;
 - source `Profile.Valid` said the region was valid;
 - every partial boundary fragment had `TExact == true`;
 - the reject-only range falsifier found no contradiction;
@@ -448,11 +460,12 @@ evaluation rules are in `docs/recipe-replay-design.md`.
 
 ## 3. `ErrUnrecordableProfile`
 
-`ErrUnrecordableProfile` is the seam's one rejection of a *valid* profile: a
-region `sketch` has proven closed, whose boundary decad nonetheless cannot
-record exactly. It is not a validity judgement — `Profile.Valid` is `sketch`'s
-answer and a separate gate (core §7) — and it is a sentinel error the caller
-can branch on (core §12). It is returned in exactly two cases:
+`ErrUnrecordableProfile` is the seam's exactness rejection of an
+*authenticated valid* profile: a region `sketch` has proven closed, whose
+boundary decad nonetheless cannot record exactly. It is not a validity or
+snapshot-integrity judgement — those are separate gates (core §7) — and it is
+a sentinel error the caller can branch on (core §12). It is returned in exactly
+two cases:
 
 - **a `Partial` fragment whose cut `sketch` reports sampled** — `TExact ==
   false` (§1). An approximate parameter range is never recorded as an exact
