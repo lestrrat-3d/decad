@@ -3,8 +3,8 @@
 How `Document.Verify` proves pairwise overlap and reports its volume without
 changing the document: the pair relation (§1), stable report walk (§2), proof
 paths (§3), full-containment certificate (§4), read-only boolean evaluation
-(§5), positive-volume gate (§6), errors and cancellation (§7), tolerance gate
-(§8), evaluator coverage (§9), tests (§10), and increment plan (§11).
+(§5), positive-volume gate (§6), errors, cost and cancellation (§7), tolerance
+gate (§8), evaluator coverage (§9), tests (§10), and increment plan (§11).
 Companion to `docs/verification-design.md`, which owns what an
 `Interference` row means and how its `Volume` is judged; to
 `docs/clearance-design.md`, which owns analytic pair classification; and to
@@ -384,7 +384,7 @@ signed volume on a supposedly non-empty oriented result — is not ordinary
 uncertainty. `Verify` returns that error and no report. It MUST NOT hide a broken
 evaluator as `Suspect`.
 
-### 7.2 Context
+### 7.2 Context and work
 
 `Verify` passes its context through the entire read-only path. Return
 `ctx.Err()` unchanged once canceled.
@@ -405,6 +405,15 @@ geometry decisions.
 `UnionContext` / `CutContext` / `IntersectContext` propagate their caller
 context through evaluation and faceted-body construction. `Union` / `Cut` /
 `Intersect` supply `context.Background()` as compatibility wrappers.
+
+The mesh fallback has no constant-work promise. `meshBoolean` checks every
+pair of operand facets, using the facet boxes to skip exact predicates only
+after each pair-box check. Its pair-box work is therefore the number of facets
+in A multiplied by the number in B. `Verify` can pay that cost for every
+proven-solid pair that box, analytic, containment, and equality proofs leave
+unresolved. Verification §1.2 owns the public deadline guidance. The existing
+context is the public control for this work; do not add a separate work-limit
+or progress API.
 
 ## 8. Interference tolerance gate
 

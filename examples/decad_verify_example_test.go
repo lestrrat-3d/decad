@@ -2,7 +2,9 @@ package examples_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"time"
 
 	"github.com/lestrrat-3d/decad"
 	"github.com/lestrrat-3d/r3"
@@ -51,10 +53,25 @@ func Example_decad_verify() {
 		return
 	}
 
+	// Interference is checked even without options. On a large model,
+	// unresolved pairs can reach mesh work proportional to the product of
+	// their facet counts. Use a fresh deadline for each call, with a budget
+	// chosen from representative models; this fixture's budget is deliberately
+	// generous.
+	verify := func() (*decad.Report, error) {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		return doc.Verify(ctx)
+	}
+
 	// Two plates, 500 mm apart: both proven solids, the pair proven
 	// disjoint by box separation.
-	report, err := doc.Verify(context.Background())
+	report, err := verify()
 	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) {
+			fmt.Println("verification exceeded its deadline")
+			return
+		}
 		fmt.Printf("failed to verify: %s\n", err)
 		return
 	}
@@ -71,8 +88,12 @@ func Example_decad_verify() {
 		fmt.Printf("failed to build: %s\n", err)
 		return
 	}
-	report, err = doc.Verify(context.Background())
+	report, err = verify()
 	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) {
+			fmt.Println("verification exceeded its deadline")
+			return
+		}
 		fmt.Printf("failed to verify: %s\n", err)
 		return
 	}
