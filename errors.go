@@ -109,10 +109,11 @@ var ErrInvalidProfile = errors.New("decad: profile is not a valid region")
 var ErrUnitKind = errors.New("decad: wrong unit kind")
 
 // ErrNotFinite is returned for a non-finite units.Value magnitude or r3.Vec
-// component handed as a parameter. units construction admits a non-finite
-// value and only its operations reject one, so the call must: an infinite
-// tolerance would turn the verification gate off, and a NaN would turn it
-// inside out.
+// component handed as a parameter, or when Revolve axis validation derives a
+// non-finite value from otherwise finite input. units construction admits a
+// non-finite value and only its operations reject one, so the call must: an
+// infinite tolerance would turn the verification gate off, and a NaN would
+// turn it inside out.
 var ErrNotFinite = errors.New("decad: non-finite value")
 
 // ErrUnsupported is returned when the recipe records the intent exactly but
