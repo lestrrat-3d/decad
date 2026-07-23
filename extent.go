@@ -1,6 +1,7 @@
 package decad
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 
@@ -169,6 +170,23 @@ const (
 	extKindDistanceSide   = "distance_side"
 	extKindThroughAllSide = "through_all_side"
 )
+
+// emptyExtentWire is the complete payload shared by the two extent variants
+// that carry no data. Its strict decoder admits the dispatch tag and nothing
+// else, so a field from another variant cannot silently change intent.
+type emptyExtentWire struct {
+	Kind string `json:"kind"`
+}
+
+func unmarshalEmptyExtent(data []byte, name string) error {
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+	var raw emptyExtentWire
+	if err := decoder.Decode(&raw); err != nil {
+		return fmt.Errorf(`decad: failed to decode %s: %w`, name, err)
+	}
+	return nil
+}
 
 // errNilExtent rejects a nil variant pointer: it names no extent to record.
 // It wraps ErrDegenerate so a typed nil pointer is branchable exactly like an
@@ -491,6 +509,9 @@ func unmarshalSideExtent(data []byte) (SideExtent, error) {
 		}
 		return DistanceSide{D: *raw.D}, nil
 	case extKindThroughAllSide:
+		if err := unmarshalEmptyExtent(data, "through-all side"); err != nil {
+			return nil, err
+		}
 		return ThroughAllSide{}, nil
 	case extKindToFace:
 		return unmarshalToFace(data)
@@ -799,6 +820,9 @@ func unmarshalAngularExtent(data []byte) (AngularExtent, error) {
 		}
 		return AngleExtent{A: *raw.A, Dir: *raw.Dir}, nil
 	case extKindFullRevolution:
+		if err := unmarshalEmptyExtent(data, "full-revolution extent"); err != nil {
+			return nil, err
+		}
 		return FullRevolution{}, nil
 	case extKindSymmetricAngle:
 		var raw struct {
