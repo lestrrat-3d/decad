@@ -31,7 +31,7 @@ import (
 // non-finite field or arithmetic result is [ErrNotFinite]. No measurement is
 // returned on error.
 func (r ProfileRecord) Area() (Measurement, error) {
-	ig, err := r.integrals()
+	ig, err := r.integralsTo(momentAreaOrder)
 	if err != nil {
 		return Measurement{}, err
 	}
@@ -52,7 +52,7 @@ func (r ProfileRecord) Area() (Measurement, error) {
 // A region whose net area is zero has no centroid and is [ErrDegenerate].
 // Record validation and arithmetic errors match [ProfileRecord.Area].
 func (r ProfileRecord) Centroid() (VecMeasurement, error) {
-	ig, err := r.integrals()
+	ig, err := r.integralsTo(momentFirstOrder)
 	if err != nil {
 		return VecMeasurement{}, err
 	}
@@ -89,7 +89,7 @@ type SecondMoments struct {
 // [ErrUnsupported], and malformed or non-finite records are rejected before a
 // measurement is constructed.
 func (r ProfileRecord) SecondMoments() (SecondMoments, error) {
-	ig, err := r.integrals()
+	ig, err := r.integralsTo(momentSecondOrder)
 	if err != nil {
 		return SecondMoments{}, err
 	}
@@ -111,6 +111,14 @@ type regionIntegrals struct {
 	mvv  float64 // ∫v² dA
 }
 
+type momentIntegralOrder uint8
+
+const (
+	momentAreaOrder momentIntegralOrder = iota
+	momentFirstOrder
+	momentSecondOrder
+)
+
 func finiteMomentValues(values ...float64) bool {
 	for _, value := range values {
 		if math.IsNaN(value) || math.IsInf(value, 0) {
@@ -120,8 +128,15 @@ func finiteMomentValues(values ...float64) bool {
 	return true
 }
 
-func (ig regionIntegrals) isFinite() bool {
-	return finiteMomentValues(ig.area, ig.mu, ig.mv, ig.muu, ig.muv, ig.mvv)
+func (ig regionIntegrals) isFinite(order momentIntegralOrder) bool {
+	switch order {
+	case momentAreaOrder:
+		return finiteMomentValues(ig.area)
+	case momentFirstOrder:
+		return finiteMomentValues(ig.area, ig.mu, ig.mv)
+	default:
+		return finiteMomentValues(ig.area, ig.mu, ig.mv, ig.muu, ig.muv, ig.mvv)
+	}
 }
 
 // integrals walks the outer loop and every hole in recorded walk order and
@@ -129,39 +144,61 @@ func (ig regionIntegrals) isFinite() bool {
 // the outer loop is counter-clockwise (positive), holes are clockwise
 // (negative), so the sum IS the net region integral.
 func (r ProfileRecord) integrals() (regionIntegrals, error) {
+	return r.integralsTo(momentSecondOrder)
+}
+
+func (r ProfileRecord) integralsTo(order momentIntegralOrder) (regionIntegrals, error) {
 	loops := append([]LoopRecord{r.Outer}, r.Holes...)
-	var ig regionIntegrals
 	for loopIndex, loop := range loops {
 		if err := validateMomentLoop(loop); err != nil {
 			return regionIntegrals{}, fmt.Errorf(`decad: profile loop %d is invalid: %w`, loopIndex, err)
 		}
-		var loopIntegrals regionIntegrals
-		for segmentIndex, seg := range loop.Segments {
-			if err := loopIntegrals.add(seg); err != nil {
-				return regionIntegrals{}, err
-			}
-			if !loopIntegrals.isFinite() {
-				return regionIntegrals{}, fmt.Errorf(`%w: mass-property integration overflowed at loop %d segment %d`, ErrNotFinite, loopIndex, segmentIndex)
-			}
-		}
-		if loopIndex == 0 && loopIntegrals.area <= 0 {
-			return regionIntegrals{}, fmt.Errorf(`%w: the profile outer loop must run counter-clockwise`, ErrDegenerate)
-		}
-		if loopIndex > 0 && loopIntegrals.area >= 0 {
-			return regionIntegrals{}, fmt.Errorf(`%w: profile hole %d must run clockwise`, ErrDegenerate, loopIndex-1)
-		}
-		ig.area += loopIntegrals.area
-		ig.mu += loopIntegrals.mu
-		ig.mv += loopIntegrals.mv
-		ig.muu += loopIntegrals.muu
-		ig.muv += loopIntegrals.muv
-		ig.mvv += loopIntegrals.mvv
-		if !ig.isFinite() {
-			return regionIntegrals{}, fmt.Errorf(`%w: mass-property integration overflowed while combining profile loop %d`, ErrNotFinite, loopIndex)
-		}
 	}
 	if err := validateMomentArrangement(loops); err != nil {
 		return regionIntegrals{}, err
+	}
+
+	loopAreas := make([]float64, len(loops))
+	for loopIndex, loop := range loops {
+		area, sign, err := momentLoopSignedArea(loop)
+		if err != nil {
+			return regionIntegrals{}, fmt.Errorf(`decad: profile loop %d has no decidable winding: %w`, loopIndex, err)
+		}
+		if loopIndex == 0 && sign <= 0 {
+			return regionIntegrals{}, fmt.Errorf(`%w: the profile outer loop must run counter-clockwise`, ErrDegenerate)
+		}
+		if loopIndex > 0 && sign >= 0 {
+			return regionIntegrals{}, fmt.Errorf(`%w: profile hole %d must run clockwise`, ErrDegenerate, loopIndex-1)
+		}
+		loopAreas[loopIndex] = area
+	}
+
+	var ig regionIntegrals
+	for loopIndex, loop := range loops {
+		loopIntegrals := regionIntegrals{area: loopAreas[loopIndex]}
+		if order > momentAreaOrder {
+			for segmentIndex, seg := range loop.Segments {
+				if err := loopIntegrals.addFor(seg, order, false); err != nil {
+					return regionIntegrals{}, err
+				}
+				if !loopIntegrals.isFinite(order) {
+					return regionIntegrals{}, fmt.Errorf(`%w: mass-property integration overflowed at loop %d segment %d`, ErrNotFinite, loopIndex, segmentIndex)
+				}
+			}
+		}
+		ig.area += loopIntegrals.area
+		if order > momentAreaOrder {
+			ig.mu += loopIntegrals.mu
+			ig.mv += loopIntegrals.mv
+		}
+		if order > momentFirstOrder {
+			ig.muu += loopIntegrals.muu
+			ig.muv += loopIntegrals.muv
+			ig.mvv += loopIntegrals.mvv
+		}
+		if !ig.isFinite(order) {
+			return regionIntegrals{}, fmt.Errorf(`%w: mass-property integration overflowed while combining profile loop %d`, ErrNotFinite, loopIndex)
+		}
 	}
 	if ig.area <= 0 {
 		return regionIntegrals{}, fmt.Errorf(`%w: the recorded region encloses no positive net area`, ErrDegenerate)
@@ -329,6 +366,113 @@ func momentOrientation(a, b, c momentExactPoint2) int {
 	left := new(big.Rat).Mul(bu, cv)
 	right := new(big.Rat).Mul(bv, cu)
 	return new(big.Rat).Sub(left, right).Sign()
+}
+
+// momentLoopSignedArea decides winding independently of the float integration.
+// Line contributions use exact rationals over the recorded binary64 fields.
+// Circular contributions use a translation-local evaluation with a bounded
+// rounding interval; a sign that interval cannot decide is rejected.
+func momentLoopSignedArea(loop LoopRecord) (float64, int, error) {
+	walks := make([]momentWalk, len(loop.Segments))
+	for i, segment := range loop.Segments {
+		walk, err := validateMomentSegment(segment)
+		if err != nil {
+			return 0, 0, err
+		}
+		walks[i] = walk
+	}
+	anchorU, anchorV := walks[0].startU, walks[0].startV
+	anchor := momentExactPoint(anchorU, anchorV)
+	value := new(big.Rat)
+	lower := new(big.Rat)
+	upper := new(big.Rat)
+	for i, segment := range loop.Segments {
+		segment, err := normalizeSegment(segment)
+		if err != nil {
+			return 0, 0, err
+		}
+		switch segment := segment.(type) {
+		case LineSeg:
+			contribution := momentExactLineDoubledArea(segment, anchor)
+			value.Add(value, contribution)
+			lower.Add(lower, contribution)
+			upper.Add(upper, contribution)
+		case CircleSeg, ArcSeg:
+			contribution, allowance, err := momentCircularDoubledArea(walks[i], anchorU, anchorV)
+			if err != nil {
+				return 0, 0, err
+			}
+			contributionRat := ratOf(contribution)
+			allowanceRat := ratOf(allowance)
+			value.Add(value, contributionRat)
+			lower.Add(lower, new(big.Rat).Sub(contributionRat, allowanceRat))
+			upper.Add(upper, new(big.Rat).Add(contributionRat, allowanceRat))
+		default:
+			return 0, 0, fmt.Errorf(`%w: this evaluator computes mass properties over line, arc and circle profile segments only; the profile has a %T segment`, ErrUnsupported, segment)
+		}
+	}
+
+	sign := 0
+	switch {
+	case lower.Sign() > 0:
+		sign = 1
+	case upper.Sign() < 0:
+		sign = -1
+	default:
+		return 0, 0, fmt.Errorf(`%w: the loop's signed area is too close to zero to prove its winding`, ErrDegenerate)
+	}
+	areaRat := new(big.Rat).Quo(value, big.NewRat(2, 1))
+	area, _ := areaRat.Float64()
+	if !finiteMomentValues(area) {
+		return 0, 0, fmt.Errorf(`%w: the loop's signed area is not finite`, ErrNotFinite)
+	}
+	return area, sign, nil
+}
+
+func momentExactLineDoubledArea(line LineSeg, anchor momentExactPoint2) *big.Rat {
+	start := momentExactLinePoint(line, line.TStart)
+	end := momentExactLinePoint(line, line.TEnd)
+	startU := new(big.Rat).Sub(start.u, anchor.u)
+	startV := new(big.Rat).Sub(start.v, anchor.v)
+	endU := new(big.Rat).Sub(end.u, anchor.u)
+	endV := new(big.Rat).Sub(end.v, anchor.v)
+	left := new(big.Rat).Mul(startU, endV)
+	right := new(big.Rat).Mul(startV, endU)
+	return new(big.Rat).Sub(left, right)
+}
+
+func momentExactLinePoint(line LineSeg, t float64) momentExactPoint2 {
+	point := func(start, end float64) *big.Rat {
+		delta := new(big.Rat).Sub(ratOf(end), ratOf(start))
+		delta.Mul(delta, ratOf(t))
+		return delta.Add(delta, ratOf(start))
+	}
+	return momentExactPoint2{
+		u: point(line.Start.U, line.End.U),
+		v: point(line.Start.V, line.End.V),
+	}
+}
+
+func momentCircularDoubledArea(walk momentWalk, anchorU, anchorV float64) (float64, float64, error) {
+	sin0, cos0 := math.Sincos(walk.th0)
+	sin1, cos1 := math.Sincos(walk.th1)
+	dth := walk.th1 - walk.th0
+	relativeCenterU := walk.cU - anchorU
+	relativeCenterV := walk.cV - anchorV
+	radiusAngle := walk.radius * walk.radius * dth
+	centerU := relativeCenterU * walk.radius * (sin1 - sin0)
+	centerV := -relativeCenterV * walk.radius * (cos1 - cos0)
+	value := radiusAngle + centerU + centerV
+
+	// This scale covers the local multiply-add chain and the trigonometric
+	// endpoint evaluations without importing the model's absolute translation.
+	scale := math.Abs(radiusAngle) + math.Abs(centerU) + math.Abs(centerV)
+	scale += math.Abs(walk.radius) * (math.Abs(relativeCenterU) + math.Abs(relativeCenterV) + math.Abs(walk.radius))
+	allowance := momentULPAllowance(scale)
+	if !finiteMomentValues(value, scale, allowance) {
+		return 0, 0, fmt.Errorf(`%w: the loop's circular signed-area contribution is not finite`, ErrNotFinite)
+	}
+	return value, allowance, nil
 }
 
 func momentCollinearOverlap(a0, a1, b0, b1 momentExactPoint2) bool {
@@ -743,6 +887,11 @@ func validateMomentLoop(loop LoopRecord) error {
 		}
 		walks[i] = walk
 	}
+	if len(walks) == 1 && walks[0].circular {
+		if err := validateMomentSingleCircularRange(loop.Segments[0]); err != nil {
+			return err
+		}
+	}
 	if len(walks) == 1 && walks[0].closed {
 		if momentEndpointsJoin(walks[0], walks[0]) {
 			return nil
@@ -807,6 +956,9 @@ func validateMomentSegment(seg CurveSegment) (momentWalk, error) {
 		}
 		startRadius := math.Hypot(seg.Start.U-seg.Center.U, seg.Start.V-seg.Center.V)
 		endRadius := math.Hypot(seg.End.U-seg.Center.U, seg.End.V-seg.Center.V)
+		if !finiteMomentValues(startRadius, endRadius) {
+			return momentWalk{}, fmt.Errorf(`%w: an arc segment's derived radius is not finite`, ErrNotFinite)
+		}
 		if !momentCoordinateJoins(startRadius, endRadius) {
 			return momentWalk{}, fmt.Errorf(
 				`%w: an arc segment's pinned start and end radii differ (%g and %g)`,
@@ -859,6 +1011,26 @@ func validateMomentSegment(seg CurveSegment) (momentWalk, error) {
 		out.endVInterval = momentBoundedInterval(walk.endV, allowance)
 	}
 	return out, nil
+}
+
+func validateMomentSingleCircularRange(segment CurveSegment) error {
+	segment, err := normalizeSegment(segment)
+	if err != nil {
+		return err
+	}
+	var start, end float64
+	switch segment := segment.(type) {
+	case CircleSeg:
+		start, end = segment.TStart, segment.TEnd
+	case ArcSeg:
+		start, end = segment.TStart, segment.TEnd
+	default:
+		return nil
+	}
+	if start == 0 && end == 1 || start == 1 && end == 0 {
+		return nil
+	}
+	return fmt.Errorf(`%w: a one-segment circular loop must record the exact full [0, 1] parameter range`, ErrDegenerate)
 }
 
 func momentLineEndpoint(line LineSeg, t float64) (float64, float64) {
@@ -920,6 +1092,10 @@ func momentULPAllowance(scale float64) float64 {
 // against the curve's natural sense — the sign falls out of the integral
 // limits, no special case).
 func (ig *regionIntegrals) add(seg CurveSegment) error {
+	return ig.addFor(seg, momentSecondOrder, true)
+}
+
+func (ig *regionIntegrals) addFor(seg CurveSegment, order momentIntegralOrder, includeArea bool) error {
 	// The codec accepts pointer variants and normalizes them to values
 	// (record.go); the integrals read segments on the same terms, so a
 	// *LineSeg integrates exactly like its value and a nil pointer is
@@ -930,7 +1106,7 @@ func (ig *regionIntegrals) add(seg CurveSegment) error {
 	}
 	switch seg := seg.(type) {
 	case LineSeg:
-		ig.addLine(seg)
+		ig.addLine(seg, order, includeArea)
 		return nil
 	case CircleSeg:
 		r, err := seg.Radius.In(units.Millimeter)
@@ -946,7 +1122,7 @@ func (ig *regionIntegrals) add(seg CurveSegment) error {
 		}
 		// The arrangement's normalized t is the angle 2π·t from +u
 		// (geom.BoundaryEdge); the recorded range order is the walk.
-		ig.addCircular(seg.Center, r, 2*math.Pi*seg.TStart, 2*math.Pi*seg.TEnd)
+		ig.addCircular(seg.Center, r, 2*math.Pi*seg.TStart, 2*math.Pi*seg.TEnd, order, includeArea)
 		return nil
 	case ArcSeg:
 		// geom.Arc's derived readings, computed on the record's own pinned
@@ -960,7 +1136,7 @@ func (ig *regionIntegrals) add(seg CurveSegment) error {
 			sweep += 2 * math.Pi
 		}
 		// normalized t maps to angle = a0 + t·sweep; the range order is the walk.
-		ig.addCircular(seg.Center, radius, a0+seg.TStart*sweep, a0+seg.TEnd*sweep)
+		ig.addCircular(seg.Center, radius, a0+seg.TStart*sweep, a0+seg.TEnd*sweep, order, includeArea)
 		return nil
 	default:
 		return fmt.Errorf(`%w: this evaluator computes mass properties over line, arc and circle profile segments only; the profile has a %T segment`, ErrUnsupported, seg)
@@ -970,15 +1146,23 @@ func (ig *regionIntegrals) add(seg CurveSegment) error {
 // addLine accumulates the straight chord from the walk's start point to its
 // end point. The recorded range picks the walked piece of the entity's own
 // Start→End parameterization.
-func (ig *regionIntegrals) addLine(seg LineSeg) {
+func (ig *regionIntegrals) addLine(seg LineSeg, order momentIntegralOrder, includeArea bool) {
 	u0, v0 := lerp2(seg.Start, seg.End, seg.TStart)
 	u1, v1 := lerp2(seg.Start, seg.End, seg.TEnd)
 	// A     = ½ ∮ (u dv − v du)
 	// ∫u dA = ½ ∮ u² dv
 	// ∫v dA = −½ ∮ v² du
-	ig.area += 0.5 * (u0*v1 - u1*v0)
+	if includeArea {
+		ig.area += 0.5 * (u0*v1 - u1*v0)
+	}
+	if order == momentAreaOrder {
+		return
+	}
 	ig.mu += (v1 - v0) * (u0*u0 + u0*u1 + u1*u1) / 6
 	ig.mv += -(u1 - u0) * (v0*v0 + v0*v1 + v1*v1) / 6
+	if order == momentFirstOrder {
+		return
+	}
 
 	// ∫u² dA = ⅓ ∮ u³ dv;  ∫v² dA = −⅓ ∮ v³ du — the cubic sums are the
 	// exact ∫₀¹ of the lerp cubed.
@@ -996,13 +1180,18 @@ func (ig *regionIntegrals) addLine(seg LineSeg) {
 // angle th0 to th1 in the walk direction (th1 < th0 walks clockwise). The
 // antiderivatives are exact, so a whole period, a fragment, and a reversed
 // walk are all the same formula.
-func (ig *regionIntegrals) addCircular(c Point2, r, th0, th1 float64) {
+func (ig *regionIntegrals) addCircular(c Point2, r, th0, th1 float64, order momentIntegralOrder, includeArea bool) {
 	sin0, cos0 := math.Sincos(th0)
 	sin1, cos1 := math.Sincos(th1)
 	dth := th1 - th0
 
 	// A = ½ ∫ (u v′ − v u′) dθ = ½ [r²·θ + c_u·r·sin θ + c_v·r·cos θ]
-	ig.area += 0.5 * (r*r*dth + c.U*r*(sin1-sin0) - c.V*r*(cos1-cos0))
+	if includeArea {
+		ig.area += 0.5 * (r*r*dth + c.U*r*(sin1-sin0) - c.V*r*(cos1-cos0))
+	}
+	if order == momentAreaOrder {
+		return
+	}
 
 	// ∫u dA = ½ ∮ u² dv, with u = c_u + r cos θ, dv = r cos θ dθ:
 	//   ½ r [c_u²·sin θ + 2 c_u r (θ/2 + sin 2θ/4) + r²(sin θ − sin³θ/3)]
@@ -1017,6 +1206,9 @@ func (ig *regionIntegrals) addCircular(c Point2, r, th0, th1 float64) {
 	intSin2 := dth/2 - (math.Sin(2*th1)-math.Sin(2*th0))/4
 	intSin3 := (cos0 - cos0*cos0*cos0/3) - (cos1 - cos1*cos1*cos1/3)
 	ig.mv += 0.5 * r * (c.V*c.V*intSin + 2*c.V*r*intSin2 + r*r*intSin3)
+	if order == momentFirstOrder {
+		return
+	}
 
 	// The quartic antiderivatives for the second moments:
 	//   ∫cos⁴θ dθ = 3θ/8 + sin 2θ/4 + sin 4θ/32

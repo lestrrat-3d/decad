@@ -315,6 +315,129 @@ func TestRegionMomentsRejectMalformedRecords(t *testing.T) {
 	}
 }
 
+func TestRegionMomentsRejectNearlyFullSingleCircularSegments(t *testing.T) {
+	tests := []struct {
+		name    string
+		segment decad.CurveSegment
+	}{
+		{
+			name: "Circle",
+			segment: decad.CircleSeg{
+				Radius: units.Millimeters(1),
+				CCW:    true,
+				TStart: 0,
+				TEnd:   math.Nextafter(1, 0),
+			},
+		},
+		{
+			name: "Arc",
+			segment: decad.ArcSeg{
+				Center: decad.Point2{},
+				Start:  decad.Point2{U: 1},
+				End:    decad.Point2{U: 1},
+				TStart: 0,
+				TEnd:   math.Nextafter(1, 0),
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			record := decad.ProfileRecord{Outer: decad.LoopRecord{
+				Segments: []decad.CurveSegment{test.segment},
+			}}
+			requireProfileMomentError(t, record, decad.ErrDegenerate)
+		})
+	}
+}
+
+func TestRegionMomentsRejectArcRadiusOverflow(t *testing.T) {
+	record := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
+		decad.ArcSeg{
+			Center: decad.Point2{U: -math.MaxFloat64},
+			Start:  decad.Point2{U: math.MaxFloat64},
+			End:    decad.Point2{U: math.MaxFloat64},
+			TStart: 0,
+			TEnd:   1,
+		},
+	}}}
+
+	requireProfileMomentError(t, record, decad.ErrNotFinite)
+}
+
+func TestRegionMomentsValidateCrossingBeforeArithmetic(t *testing.T) {
+	line := func(u0, v0, u1, v1 float64) decad.CurveSegment {
+		return decad.LineSeg{
+			Start:  decad.Point2{U: u0, V: v0},
+			End:    decad.Point2{U: u1, V: v1},
+			TStart: 0,
+			TEnd:   1,
+		}
+	}
+	const scale = 1e200
+	record := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
+		line(0, 0, scale, scale),
+		line(scale, scale, 0, scale),
+		line(0, scale, scale, 0),
+		line(scale, 0, 0, 0),
+	}}}
+
+	requireProfileMomentError(t, record, decad.ErrDegenerate)
+}
+
+func TestRegionAreaIgnoresUnrequestedHigherMomentOverflow(t *testing.T) {
+	record := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
+		decad.CircleSeg{
+			Center: decad.Point2{V: 1e110},
+			Radius: units.Millimeters(1),
+			CCW:    true,
+			TStart: 0,
+			TEnd:   1,
+		},
+	}}}
+
+	area, err := record.Area()
+	require.NoError(t, err)
+	require.True(t, area.Value.Equal(units.SquareMillimeters(math.Pi), 1e-12))
+
+	_, err = record.SecondMoments()
+	require.ErrorIs(t, err, decad.ErrNotFinite)
+}
+
+func TestRegionMomentsUseTranslationStableWinding(t *testing.T) {
+	const base = 1e50
+	ulp := math.Nextafter(base, math.Inf(1)) - base
+	a := decad.Point2{U: base, V: base}
+	b := decad.Point2{U: base - 8*ulp, V: base - 8*ulp}
+	c := decad.Point2{U: base - 2*ulp, V: base + 6*ulp}
+	line := func(start, end decad.Point2) decad.CurveSegment {
+		return decad.LineSeg{Start: start, End: end, TStart: 0, TEnd: 1}
+	}
+	triangle := func(points ...decad.Point2) decad.ProfileRecord {
+		return decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
+			line(points[0], points[1]),
+			line(points[1], points[2]),
+			line(points[2], points[0]),
+		}}}
+	}
+
+	t.Run("Clockwise", func(t *testing.T) {
+		requireProfileMomentError(t, triangle(a, b, c), decad.ErrDegenerate)
+	})
+	t.Run("CounterClockwise", func(t *testing.T) {
+		record := triangle(a, c, b)
+		area, err := record.Area()
+		require.NoError(t, err)
+		got, err := area.Value.In(units.SquareMillimeter)
+		require.NoError(t, err)
+		require.InDelta(t, 32*ulp*ulp, got, ulp*ulp*1e-12)
+
+		_, err = record.Centroid()
+		require.NoError(t, err)
+		_, err = record.SecondMoments()
+		require.NoError(t, err)
+	})
+}
+
 func TestRegionMomentsRejectMalformedArrangement(t *testing.T) {
 	line := func(u0, v0, u1, v1 float64) decad.CurveSegment {
 		return decad.LineSeg{
