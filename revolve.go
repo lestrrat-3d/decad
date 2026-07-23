@@ -560,14 +560,16 @@ func axisInPlane(a Axis, frame r3.Frame) (axisLine2, error) {
 		if !finiteAxisValues(du, dv) {
 			return axisLine2{}, fmt.Errorf(`%w: a sketch-line axis delta is not finite`, ErrNotFinite)
 		}
-		l := math.Hypot(du, dv)
+		scale := math.Max(math.Abs(du), math.Abs(dv))
+		if scale == 0 {
+			return axisLine2{}, fmt.Errorf(`%w: a zero-length sketch line names no axis`, ErrDegenerate)
+		}
+		scaledU, scaledV := du/scale, dv/scale
+		l := math.Hypot(scaledU, scaledV)
 		if !finiteAxisValues(l) {
 			return axisLine2{}, fmt.Errorf(`%w: a sketch-line axis length is not finite`, ErrNotFinite)
 		}
-		if l == 0 {
-			return axisLine2{}, fmt.Errorf(`%w: a zero-length sketch line names no axis`, ErrDegenerate)
-		}
-		dU, dV := du/l, dv/l
+		dU, dV := scaledU/l, scaledV/l
 		if !finiteAxisValues(dU, dV) {
 			return axisLine2{}, fmt.Errorf(`%w: a sketch-line axis direction is not finite`, ErrNotFinite)
 		}
