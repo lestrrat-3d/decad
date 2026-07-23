@@ -2,6 +2,7 @@ package decad
 
 import (
 	"context"
+	"errors"
 	"math"
 	"math/big"
 	"slices"
@@ -20,14 +21,35 @@ import (
 // coefficient of x^i.
 type ratPoly []*big.Rat
 
-func ratOf(f float64) *big.Rat {
+var errNonFiniteClearancePolynomial = errors.New("decad: non-finite clearance polynomial coefficient")
+
+func ratOf(f float64) (*big.Rat, bool) {
 	r := new(big.Rat)
 	if r.SetFloat64(f) == nil {
-		// A non-finite coefficient cannot happen for the finite geometry the
-		// evaluator holds; a zero keeps the polynomial well-formed anyway.
-		return new(big.Rat)
+		return nil, false
+	}
+	return r, true
+}
+
+// mustRatOf lifts a float whose caller has already proved finite.
+func mustRatOf(f float64) *big.Rat {
+	r, ok := ratOf(f)
+	if !ok {
+		panic("decad: exact rational lift requires a finite float")
 	}
 	return r
+}
+
+func ratPolyOf(coeffs ...float64) (ratPoly, bool) {
+	out := make(ratPoly, len(coeffs))
+	for i, coeff := range coeffs {
+		var ok bool
+		out[i], ok = ratOf(coeff)
+		if !ok {
+			return nil, false
+		}
+	}
+	return out, true
 }
 
 func rpTrim(p ratPoly) ratPoly {
@@ -339,11 +361,19 @@ func rpRefineRootContext(ctx context.Context, chain []ratPoly, iv ratIv, narrow 
 // products and d/dθ, and convertible to a plain polynomial in t = tan(θ/2).
 type csPoly struct{ a, b ratPoly }
 
-func csConst(f float64) csPoly { return csPoly{a: ratPoly{ratOf(f)}} }
+func csConst(f float64) (csPoly, bool) {
+	a, ok := ratPolyOf(f)
+	return csPoly{a: a}, ok
+}
 
 // csLin builds k0 + kc·cosθ + ks·sinθ from float coefficients taken exactly.
-func csLin(k0, kc, ks float64) csPoly {
-	return csPoly{a: ratPoly{ratOf(k0), ratOf(kc)}, b: ratPoly{ratOf(ks)}}
+func csLin(k0, kc, ks float64) (csPoly, bool) {
+	a, ok := ratPolyOf(k0, kc)
+	if !ok {
+		return csPoly{}, false
+	}
+	b, ok := ratPolyOf(ks)
+	return csPoly{a: a, b: b}, ok
 }
 
 func csAdd(x, y csPoly) csPoly { return csPoly{a: rpAdd(x.a, y.a), b: rpAdd(x.b, y.b)} }
@@ -529,8 +559,19 @@ func lineCircleBracketsContext(ctx context.Context, cp circleParam, a, d [3]floa
 	m := [3]float64{cp.c[0] - a[0], cp.c[1] - a[1], cp.c[2] - a[2]}
 	dot := func(x, y [3]float64) float64 { return x[0]*y[0] + x[1]*y[1] + x[2]*y[2] }
 	// D(θ) = |Q − a|² − ((Q − a)·d̂)², a degree-2 trig polynomial.
-	base := csAdd(csConst(dot(m, m)+cp.r*cp.r), csLin(0, 2*cp.r*dot(m, cp.u), 2*cp.r*dot(m, cp.v)))
-	t := csLin(dot(m, d), cp.r*dot(cp.u, d), cp.r*dot(cp.v, d))
+	baseConst, ok := csConst(dot(m, m) + cp.r*cp.r)
+	if !ok {
+		return nil, false, errNonFiniteClearancePolynomial
+	}
+	baseLin, ok := csLin(0, 2*cp.r*dot(m, cp.u), 2*cp.r*dot(m, cp.v))
+	if !ok {
+		return nil, false, errNonFiniteClearancePolynomial
+	}
+	t, ok := csLin(dot(m, d), cp.r*dot(cp.u, d), cp.r*dot(cp.v, d))
+	if !ok {
+		return nil, false, errNonFiniteClearancePolynomial
+	}
+	base := csAdd(baseConst, baseLin)
 	dist2 := csSub(base, csMul(t, t))
 	g := func(th float64) float64 {
 		q := cp.at(th)
@@ -549,12 +590,27 @@ func lineCircleBracketsContext(ctx context.Context, cp circleParam, a, d [3]floa
 func circleCircleBracketsContext(ctx context.Context, c1 circleParam, c2 circleParam, n2 [3]float64, slack float64) ([]critBracket, bool, error) {
 	m := [3]float64{c1.c[0] - c2.c[0], c1.c[1] - c2.c[1], c1.c[2] - c2.c[2]}
 	dot := func(x, y [3]float64) float64 { return x[0]*y[0] + x[1]*y[1] + x[2]*y[2] }
-	w := csAdd(csConst(dot(m, m)+c1.r*c1.r), csLin(0, 2*c1.r*dot(m, c1.u), 2*c1.r*dot(m, c1.v)))
-	h := csLin(dot(m, n2), c1.r*dot(c1.u, n2), c1.r*dot(c1.v, n2))
+	wConst, ok := csConst(dot(m, m) + c1.r*c1.r)
+	if !ok {
+		return nil, false, errNonFiniteClearancePolynomial
+	}
+	wLin, ok := csLin(0, 2*c1.r*dot(m, c1.u), 2*c1.r*dot(m, c1.v))
+	if !ok {
+		return nil, false, errNonFiniteClearancePolynomial
+	}
+	h, ok := csLin(dot(m, n2), c1.r*dot(c1.u, n2), c1.r*dot(c1.v, n2))
+	if !ok {
+		return nil, false, errNonFiniteClearancePolynomial
+	}
+	w := csAdd(wConst, wLin)
 	sp := csSub(w, csMul(h, h))
 	wd := csDerivTheta(w)
 	sd := csDerivTheta(sp)
-	f := csSub(csMul(sp, csMul(wd, wd)), csMul(csConst(c2.r*c2.r), csMul(sd, sd)))
+	r2, ok := csConst(c2.r * c2.r)
+	if !ok {
+		return nil, false, errNonFiniteClearancePolynomial
+	}
+	f := csSub(csMul(sp, csMul(wd, wd)), csMul(r2, csMul(sd, sd)))
 	g := func(th float64) float64 {
 		p := c1.at(th)
 		rel := [3]float64{p[0] - c2.c[0], p[1] - c2.c[1], p[2] - c2.c[2]}

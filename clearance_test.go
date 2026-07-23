@@ -259,6 +259,63 @@ func TestClearanceToriP8(t *testing.T) {
 	require.Less(t, bound, 1e-5)
 }
 
+func TestClearanceNonFinitePolynomialIsUndecided(t *testing.T) {
+	// Every input is finite, but the P4 squared-distance coefficients overflow.
+	// The kernel must refuse the gap instead of solving a zero-substituted
+	// polynomial and publishing a false Exact clearance.
+	const (
+		offset         = 1.4e154
+		major          = 0.9e154
+		minor          = 1e152
+		cylinderRadius = 1e152
+		height         = 4e154
+	)
+
+	doc := decad.New()
+	cylinderWorld := sketch.NewWorld()
+	cylinderSketch, err := cylinderWorld.CreateSketch(cylinderWorld.XY())
+	require.NoError(t, err)
+	cylinderCenter := cylinderSketch.CreatePoint(0, 0)
+	cylinderSketch.Fix(cylinderCenter)
+	cylinderSketch.CreateCircle(cylinderCenter, cylinderRadius)
+	_, err = cylinderSketch.Solve(t.Context())
+	require.NoError(t, err)
+	_, err = doc.Extrude(
+		cylinderSketch,
+		cylinderSketch.Profiles()[0],
+		decad.Distance{D: units.Millimeters(height), Dir: decad.Along},
+	)
+	require.NoError(t, err)
+
+	torusWorld := sketch.NewWorld()
+	torusSketch, err := torusWorld.CreateSketch(torusWorld.XY())
+	require.NoError(t, err)
+	torusCenter := torusSketch.CreatePoint(major, 0)
+	torusSketch.Fix(torusCenter)
+	torusSketch.CreateCircle(torusCenter, minor)
+	_, err = torusSketch.Solve(t.Context())
+	require.NoError(t, err)
+	torus, err := doc.Revolve(
+		torusSketch,
+		torusSketch.Profiles()[0],
+		decad.SketchLine{Start: decad.Point2{}, End: decad.Point2{V: 1}},
+		decad.FullRevolution{},
+	)
+	require.NoError(t, err)
+	shift, err := r3.Translation(r3.NewVec(offset, 0, height/2))
+	require.NoError(t, err)
+	_, err = torus.Placed(shift)
+	require.NoError(t, err)
+
+	report, err := doc.Verify(t.Context(), decad.WithClearances())
+	require.NoError(t, err)
+	require.Equal(t, decad.Suspect, report.Status)
+	require.Empty(t, report.Clearances)
+	diag, ok := findDiagnostic(report.Diagnostics, decad.DiagUndecidedClearance)
+	require.True(t, ok)
+	require.Equal(t, decad.Suspect, diag.Status)
+}
+
 func TestClearanceConeCoarseRow(t *testing.T) {
 	// PR 1's cone staging (§8): cone-involved face pairs carry only a coarse
 	// enclosure interval. Far enough that even the coarse lower bound clears

@@ -62,7 +62,7 @@ func degAnd(a, b degState) degState {
 // arithmetic allowed to prove a degeneracy.
 type ratV3 [3]*big.Rat
 
-func ratVec(v r3.Vec) ratV3 { return ratV3{ratOf(v.X), ratOf(v.Y), ratOf(v.Z)} }
+func ratVec(v r3.Vec) ratV3 { return ratV3{mustRatOf(v.X), mustRatOf(v.Y), mustRatOf(v.Z)} }
 
 func rvSub(a, b ratV3) ratV3 {
 	var out ratV3
@@ -93,8 +93,8 @@ func rvIsZero(a ratV3) bool {
 	return a[0].Sign() == 0 && a[1].Sign() == 0 && a[2].Sign() == 0
 }
 
-// finiteVec guards the exact tests: ratOf maps a non-finite float to zero, so
-// a non-finite coordinate could otherwise forge an exactly-zero cross product.
+// finiteVec guards exact rational lifts and every float result used by a
+// certificate.
 func finiteVec(v r3.Vec) bool {
 	return !math.IsNaN(v.X) && !math.IsInf(v.X, 0) &&
 		!math.IsNaN(v.Y) && !math.IsInf(v.Y, 0) &&
@@ -121,6 +121,9 @@ func (k *pairKernel) parallelRat(ra, rb ratV3, fa, fb r3.Vec) degState {
 
 // parallel decides a ∥ b.
 func (k *pairKernel) parallel(a, b r3.Vec) degState {
+	if !finiteVec(a) || !finiteVec(b) {
+		return degUnknown
+	}
 	return k.parallelRat(ratVec(a), ratVec(b), a, b)
 }
 
@@ -128,11 +131,17 @@ func (k *pairKernel) parallel(a, b r3.Vec) degState {
 // subtraction of the endpoints would round away the very residual the proof
 // rests on).
 func (k *pairKernel) parallelSeg(a, b, d r3.Vec) degState {
+	if !finiteVec(a) || !finiteVec(b) || !finiteVec(d) {
+		return degUnknown
+	}
 	return k.parallelRat(rvSub(ratVec(b), ratVec(a)), ratVec(d), b.Sub(a), d)
 }
 
 // parallelSegs decides (b1 − a1) ∥ (b2 − a2).
 func (k *pairKernel) parallelSegs(a1, b1, a2, b2 r3.Vec) degState {
+	if !finiteVec(a1) || !finiteVec(b1) || !finiteVec(a2) || !finiteVec(b2) {
+		return degUnknown
+	}
 	return k.parallelRat(rvSub(ratVec(b1), ratVec(a1)), rvSub(ratVec(b2), ratVec(a2)),
 		b1.Sub(a1), b2.Sub(a2))
 }
@@ -140,12 +149,15 @@ func (k *pairKernel) parallelSegs(a1, b1, a2, b2 r3.Vec) degState {
 // perpendicularSeg decides (b − a) ⟂ n — the plane-plateau question of the
 // curve tiers, taken exactly.
 func (k *pairKernel) perpendicularSeg(a, b, n r3.Vec) degState {
-	rel := rvSub(ratVec(b), ratVec(a))
+	if !finiteVec(a) || !finiteVec(b) || !finiteVec(n) {
+		return degUnknown
+	}
 	fRel := b.Sub(a)
 	lr, ln := fRel.Len(), n.Len()
 	if !finiteVec(fRel) || !finiteVec(n) || lr == 0 || ln == 0 {
 		return degUnknown
 	}
+	rel := rvSub(ratVec(b), ratVec(a))
 	if rvDot(rel, ratVec(n)).Sign() == 0 {
 		return degYes
 	}

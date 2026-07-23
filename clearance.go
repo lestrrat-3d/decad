@@ -58,6 +58,9 @@ type pairKernel struct {
 	slack float64
 	ctx   context.Context //nolint:containedctx // pairKernel is per-call state and never outlives clearancePair.
 	err   error
+	// clearanceRefused records a finite-input arithmetic range failure. The
+	// cell walk may continue finding overlap, but it cannot certify a gap.
+	clearanceRefused bool
 }
 
 // clearancePair runs the kernel over one pair of proven solids.

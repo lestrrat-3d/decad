@@ -693,7 +693,7 @@ func certifiedInteriorDepth(p xpt, other *boolMesh) float64 {
 // read as a 3D distance (bounds.go, radius3D).
 func pointRoundBound(p xpt, pf r3.Vec) float64 {
 	worst := new(big.Rat)
-	for _, pair := range [][2]*big.Rat{{p.x, ratOf(pf.X)}, {p.y, ratOf(pf.Y)}, {p.z, ratOf(pf.Z)}} {
+	for _, pair := range [][2]*big.Rat{{p.x, mustRatOf(pf.X)}, {p.y, mustRatOf(pf.Y)}, {p.z, mustRatOf(pf.Z)}} {
 		d := new(big.Rat).Sub(pair[0], pair[1])
 		d.Abs(d)
 		if d.Cmp(worst) > 0 {

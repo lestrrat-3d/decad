@@ -77,7 +77,7 @@ func tinyOffset() *big.Rat {
 // xat is an exact point from whole millimetres, optionally nudged by a
 // sub-ulp offset on one axis.
 func xat(x, y, z float64, nudge int) xpt {
-	p := xpt{ratOf(x), ratOf(y), ratOf(z)}
+	p := xpt{mustRatOf(x), mustRatOf(y), mustRatOf(z)}
 	switch nudge {
 	case 0:
 		p.x = new(big.Rat).Add(p.x, tinyOffset())
@@ -95,8 +95,8 @@ func xat(x, y, z float64, nudge int) xpt {
 // survives as the tetra. Every directed edge pairs with its reverse, so the
 // exact closure audit passes before the rounding ever runs.
 func splitApexTetra() []keptFacet {
-	a, b, c := xpt{ratOf(0), ratOf(0), ratOf(0)}, xpt{ratOf(10), ratOf(0), ratOf(0)}, xpt{ratOf(0), ratOf(10), ratOf(0)}
-	d1 := xpt{ratOf(2), ratOf(2), ratOf(9)}
+	a, b, c := xpt{mustRatOf(0), mustRatOf(0), mustRatOf(0)}, xpt{mustRatOf(10), mustRatOf(0), mustRatOf(0)}, xpt{mustRatOf(0), mustRatOf(10), mustRatOf(0)}
+	d1 := xpt{mustRatOf(2), mustRatOf(2), mustRatOf(9)}
 	d2 := xat(2, 2, 9, 0)
 	return []keptFacet{
 		{v: [3]xpt{a, c, b}},
@@ -112,7 +112,7 @@ func splitApexTetra() []keptFacet {
 // float64 vertex: every one of its facets collapses under the weld, so the
 // whole component is welded out of existence.
 func subUlpTetra() []keptFacet {
-	p := xpt{ratOf(40), ratOf(40), ratOf(40)}
+	p := xpt{mustRatOf(40), mustRatOf(40), mustRatOf(40)}
 	q, r, s := xat(40, 40, 40, 0), xat(40, 40, 40, 1), xat(40, 40, 40, 2)
 	return []keptFacet{
 		{v: [3]xpt{p, r, q}},
