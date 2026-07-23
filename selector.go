@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"math/big"
 	"slices"
 
 	"github.com/lestrrat-3d/r3"
@@ -946,9 +945,11 @@ func unmarshalPredicateRef(data []byte, what string) (FeatureRef, error) {
 		return FeatureRef{}, fmt.Errorf(`decad: a %s predicate requires ref with step and role`, what)
 	}
 	stepToken := bytes.TrimSpace(*raw.Ref.Step)
-	var stepValue big.Int
-	if _, ok := stepValue.SetString(string(stepToken), 10); ok && stepValue.Sign() < 0 {
-		return FeatureRef{}, fmt.Errorf(`%w: a %s predicate cannot reference negative step %s`, ErrDegenerate, what, stepToken)
+	if len(stepToken) > 0 && stepToken[0] == '-' {
+		if negativeJSONNumberIsNonzero(stepToken) {
+			return FeatureRef{}, fmt.Errorf(`%w: a %s predicate cannot reference negative step %s`, ErrDegenerate, what, stepToken)
+		}
+		stepToken = []byte("0")
 	}
 	var step StepRef
 	if err := json.Unmarshal(stepToken, &step); err != nil {
@@ -959,6 +960,17 @@ func unmarshalPredicateRef(data []byte, what string) (FeatureRef, error) {
 		return FeatureRef{}, err
 	}
 	return ref, nil
+}
+
+// negativeJSONNumberIsNonzero reports whether a negative JSON number's
+// significand contains a nonzero digit. The exponent never changes zero, so
+// this classifies very large exponents without allocating a large number.
+func negativeJSONNumberIsNonzero(token []byte) bool {
+	significand := token[1:]
+	if i := bytes.IndexAny(significand, "eE"); i >= 0 {
+		significand = significand[:i]
+	}
+	return bytes.ContainsAny(significand, "123456789")
 }
 
 // cloneSelectors deep-copies a step's recorded queries: the selector variants
