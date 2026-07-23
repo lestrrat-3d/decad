@@ -33,6 +33,66 @@ func verticalEdges() *decad.EdgeQuery {
 	return decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)))
 }
 
+// retiringEdgeSelector is a foreign selector implementation that embeds the
+// built-in query to promote Selector's sealed marker, then overrides resolution
+// with a callback that would retire the receiver.
+type retiringEdgeSelector struct {
+	*decad.EdgeQuery
+	calls *int
+}
+
+func (s retiringEdgeSelector) SelectEdges(body *decad.Body) ([]*decad.Edge, error) {
+	(*s.calls)++
+	edges, err := s.EdgeQuery.SelectEdges(body)
+	if err != nil {
+		return nil, err
+	}
+	_, err = body.Placed(r3.Identity())
+	return edges, err
+}
+
+func TestFilletSelectorAdmission(t *testing.T) {
+	t.Run("BuiltInQuery", func(t *testing.T) {
+		doc, box := filletBox(t)
+
+		_, err := box.Fillet(verticalEdges(), units.Millimeters(5))
+		require.NoError(t, err)
+		require.Len(t, doc.Recipe().Steps, 2)
+		_, err = json.Marshal(doc.Recipe())
+		require.NoError(t, err)
+	})
+
+	t.Run("ForeignRetiringImplementation", func(t *testing.T) {
+		doc, box := filletBox(t)
+		before := doc.Recipe()
+		calls := 0
+		foreign := retiringEdgeSelector{
+			EdgeQuery: verticalEdges(),
+			calls:     &calls,
+		}
+
+		_, err := box.Fillet(foreign, units.Millimeters(5))
+		require.ErrorIs(t, err, decad.ErrDegenerate)
+		require.Zero(t, calls, `Fillet rejects a foreign selector before it can retire the receiver`)
+		require.Equal(t, before, doc.Recipe(), `a rejected selector records no step`)
+		require.Equal(t, []*decad.Body{box}, doc.Bodies(), `a rejected selector leaves the receiver live`)
+		_, err = json.Marshal(doc.Recipe())
+		require.NoError(t, err)
+	})
+
+	t.Run("TypedNilQuery", func(t *testing.T) {
+		doc, box := filletBox(t)
+		before := doc.Recipe()
+		var query *decad.EdgeQuery
+		var selector decad.EdgeSelector = query
+
+		_, err := box.Fillet(selector, units.Millimeters(5))
+		require.ErrorIs(t, err, decad.ErrDegenerate)
+		require.Equal(t, before, doc.Recipe(), `a typed nil selector records no step`)
+		require.Equal(t, []*decad.Body{box}, doc.Bodies(), `a typed nil selector leaves the receiver live`)
+	})
+}
+
 func TestFilletBoxAllConvexEdges(t *testing.T) {
 	const r = 10.0
 	h := filletBoxHeight

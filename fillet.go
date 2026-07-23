@@ -73,10 +73,19 @@ func (b *Body) Fillet(sel EdgeSelector, r units.Value, opts ...FilletOption) (*B
 	if rmm == 0 {
 		return nil, fmt.Errorf(`%w: a zero-radius fillet is the body the caller already holds`, ErrDegenerate)
 	}
-	if sel == nil {
+	// decad owns the selector vocabulary, so only the built-in query can be
+	// resolved and recorded. Reject foreign implementations before invoking
+	// their callback, and treat a typed nil query like an untyped nil.
+	q, ok := sel.(*EdgeQuery)
+	switch {
+	case sel == nil:
+		return nil, errNilSelector
+	case !ok:
+		return nil, fmt.Errorf(`%w: the fillet's edge selector is not a decad edge query (%T)`, ErrDegenerate, sel)
+	case q == nil:
 		return nil, errNilSelector
 	}
-	edges, err := sel.SelectEdges(b)
+	edges, err := q.SelectEdges(b)
 	if err != nil {
 		return nil, err
 	}
@@ -130,7 +139,7 @@ func (b *Body) Fillet(sel EdgeSelector, r units.Value, opts ...FilletOption) (*B
 	step := Step{
 		Op:        OpFillet,
 		Inputs:    []StepRef{b.originStep()},
-		Selectors: cloneSelectors([]Selector{sel}),
+		Selectors: cloneSelectors([]Selector{q}),
 		Values:    []units.Value{r},
 	}
 	ref := d.nextStepRef()
@@ -146,6 +155,10 @@ func (b *Body) Fillet(sel EdgeSelector, r units.Value, opts ...FilletOption) (*B
 		blendKind: "fillet",
 	})
 	if err != nil {
+		return nil, err
+	}
+	// Keep the consumed input aligned with recipe liveness at the commit edge.
+	if err := d.requireLive(b); err != nil {
 		return nil, err
 	}
 	d.commit(step, body, b)
