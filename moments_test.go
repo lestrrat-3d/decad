@@ -514,6 +514,173 @@ func TestRegionMomentsRejectCrossingAndOpenRecordsAtExtremeScales(t *testing.T) 
 	}
 }
 
+func TestRegionMomentsRejectCoincidentCircularRangeOverlap(t *testing.T) {
+	line := func(u0, v0, u1, v1 float64) decad.CurveSegment {
+		return decad.LineSeg{
+			Start:  decad.Point2{U: u0, V: v0},
+			End:    decad.Point2{U: u1, V: v1},
+			TStart: 0,
+			TEnd:   1,
+		}
+	}
+	upperArc := func(start, end float64) decad.CurveSegment {
+		return decad.ArcSeg{
+			Center: decad.Point2{},
+			Start:  decad.Point2{U: 1},
+			End:    decad.Point2{U: -1},
+			TStart: start,
+			TEnd:   end,
+		}
+	}
+	t.Run("IdenticalArcs", func(t *testing.T) {
+		record := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
+			upperArc(0, 1),
+			line(-1, 0, 0, -2),
+			line(0, -2, 1, 0),
+			upperArc(0, 1),
+			line(-1, 0, 0, -3),
+			line(0, -3, 1, 0),
+		}}}
+		requireProfileMomentError(t, record, decad.ErrDegenerate)
+	})
+	t.Run("PartiallyOverlappingArcs", func(t *testing.T) {
+		q := math.Sqrt(0.5)
+		record := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
+			upperArc(0, 0.75),
+			line(-q, q, 0, -2),
+			line(0, -2, q, q),
+			upperArc(0.25, 1),
+			line(-1, 0, 0, -3),
+			line(0, -3, 1, 0),
+		}}}
+		requireProfileMomentError(t, record, decad.ErrDegenerate)
+	})
+	t.Run("IdenticalCircles", func(t *testing.T) {
+		record := decad.ProfileRecord{
+			Outer: decad.LoopRecord{Segments: []decad.CurveSegment{decad.CircleSeg{
+				Radius: units.Millimeters(1),
+				CCW:    true,
+				TStart: 0,
+				TEnd:   1,
+			}}},
+			Holes: []decad.LoopRecord{{Segments: []decad.CurveSegment{decad.CircleSeg{
+				Radius: units.Millimeters(1),
+				TStart: 1,
+				TEnd:   0,
+			}}}},
+		}
+		requireProfileMomentError(t, record, decad.ErrDegenerate)
+	})
+}
+
+func TestRegionMomentsRejectTranslatedPartialLineGaps(t *testing.T) {
+	partialLine := func(u0, v0, u1, v1 float64) decad.CurveSegment {
+		du, dv := u1-u0, v1-v0
+		return decad.LineSeg{
+			Start:  decad.Point2{U: u0 - du/2, V: v0 - dv/2},
+			End:    decad.Point2{U: u1 + du/2, V: v1 + dv/2},
+			TStart: 0.25,
+			TEnd:   0.75,
+		}
+	}
+	const u = 1e15
+	record := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
+		partialLine(u, 0, u+10, 0),
+		partialLine(u+11, 0, u+11, 10),
+		partialLine(u+10, 10, u, 10),
+		partialLine(u-1, 10, u-1, 0),
+	}}}
+
+	requireProfileMomentError(t, record, decad.ErrDegenerate)
+}
+
+func TestRegionMomentsRejectAdjacentLineCrossingNearOtherArcEndpoint(t *testing.T) {
+	line := func(u0, v0, u1, v1 float64) decad.CurveSegment {
+		return decad.LineSeg{
+			Start:  decad.Point2{U: u0, V: v0},
+			End:    decad.Point2{U: u1, V: v1},
+			TStart: 0,
+			TEnd:   1,
+		}
+	}
+	record := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
+		line(-1.2, 1.1e-15, 1, 0),
+		decad.ArcSeg{
+			Center: decad.Point2{},
+			Start:  decad.Point2{U: 1},
+			End:    decad.Point2{U: -1},
+			TStart: 0,
+			TEnd:   1,
+		},
+		line(-1, 0, -1.2, 1.1e-15),
+	}}}
+
+	requireProfileMomentError(t, record, decad.ErrDegenerate)
+}
+
+func TestRegionMomentsRejectTinyLineArcCrossing(t *testing.T) {
+	line := func(u0, v0, u1, v1 float64) decad.CurveSegment {
+		return decad.LineSeg{
+			Start:  decad.Point2{U: u0, V: v0},
+			End:    decad.Point2{U: u1, V: v1},
+			TStart: 0,
+			TEnd:   1,
+		}
+	}
+	const r = 1e-200
+	record := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
+		line(-1.2*r, 0.1*r, r, 0),
+		decad.ArcSeg{
+			Center: decad.Point2{},
+			Start:  decad.Point2{U: r},
+			End:    decad.Point2{U: -r},
+			TStart: 0,
+			TEnd:   1,
+		},
+		line(-r, 0, -1, -1),
+		line(-1, -1, 1, -1),
+		line(1, -1, 1, 1),
+		line(1, 1, -1, 1),
+		line(-1, 1, -1.2*r, 0.1*r),
+	}}}
+
+	requireProfileMomentError(t, record, decad.ErrDegenerate)
+}
+
+func TestRegionMomentsRejectTinyArcArcCrossing(t *testing.T) {
+	line := func(u0, v0, u1, v1 float64) decad.CurveSegment {
+		return decad.LineSeg{
+			Start:  decad.Point2{U: u0, V: v0},
+			End:    decad.Point2{U: u1, V: v1},
+			TStart: 0,
+			TEnd:   1,
+		}
+	}
+	const r = 1e-200
+	record := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
+		decad.ArcSeg{
+			Center: decad.Point2{},
+			Start:  decad.Point2{U: r},
+			End:    decad.Point2{U: -r},
+			TStart: 0,
+			TEnd:   1,
+		},
+		line(-r, 0, -1, -1),
+		line(-1, -1, 1, -1),
+		line(1, -1, 2*r, 0),
+		decad.ArcSeg{
+			Center: decad.Point2{U: r},
+			Start:  decad.Point2{U: 2 * r},
+			End:    decad.Point2{},
+			TStart: 0,
+			TEnd:   1,
+		},
+		line(0, 0, r, 0),
+	}}}
+
+	requireProfileMomentError(t, record, decad.ErrDegenerate)
+}
+
 func TestRegionMomentsAcceptTranslatedNestedLoops(t *testing.T) {
 	line := func(u0, v0, u1, v1 float64) decad.CurveSegment {
 		return decad.LineSeg{
