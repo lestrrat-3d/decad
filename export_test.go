@@ -80,6 +80,48 @@ func TestSTLChordTolerance(t *testing.T) {
 	require.ErrorIs(t, body.STL(&buf, decad.WithChordTolerance(units.Degrees(1))), decad.ErrUnitKind)
 }
 
+func TestSTLDefaultChordTolerance(t *testing.T) {
+	sizeDefault := func(t *testing.T, body *decad.Body) units.Value {
+		t.Helper()
+		bounds, err := body.Bounds()
+		require.NoError(t, err)
+		return units.Millimeters(bounds.Max.Sub(bounds.Min).Len() / 1000)
+	}
+
+	t.Run("analytic body uses size default", func(t *testing.T) {
+		body := holedPlateBody(t)
+		tol := sizeDefault(t, body)
+
+		var explicit bytes.Buffer
+		require.NoError(t, body.STL(&explicit, decad.WithChordTolerance(tol)))
+		var automatic bytes.Buffer
+		require.NoError(t, body.STL(&automatic))
+		require.Equal(t, explicit.String(), automatic.String())
+	})
+
+	t.Run("faceted body honors retained bound", func(t *testing.T) {
+		doc := decad.New()
+		plate := boxBody(t, doc, 0, 0, 20, 20, 8)
+		tool := translated(t, diskBody(t, doc, 10, 10, 2), 0, 0, -6)
+		cut, err := decad.Cut(plate, tool)
+		require.NoError(t, err)
+
+		faceted := translated(t, cut, 1e13, -2e13, 3e13)
+		tol := sizeDefault(t, faceted)
+		held, err := faceted.Tessellate(units.Millimeters(1))
+		require.NoError(t, err)
+		require.Greater(t, held.Bound().Mag(), tol.Mag())
+		_, err = faceted.Tessellate(tol)
+		require.ErrorIs(t, err, decad.ErrUnsupported)
+
+		var explicit bytes.Buffer
+		require.NoError(t, faceted.STL(&explicit, decad.WithChordTolerance(held.Bound())))
+		var automatic bytes.Buffer
+		require.NoError(t, faceted.STL(&automatic))
+		require.Equal(t, explicit.String(), automatic.String())
+	})
+}
+
 func TestOBJPlate(t *testing.T) {
 	s, p := plateSketch(t)
 	doc := decad.New()

@@ -42,8 +42,9 @@ type identChordTolerance struct{}
 
 // WithChordTolerance sets the chord tolerance the exporter tessellates at —
 // the tol of [Body.Tessellate], validated identically. Without it the
-// exporter uses the documented default: 1/1000 of the body's own
-// bounding-box diagonal, so facet density is scale-invariant.
+// exporter uses 1/1000 of an analytic body's bounding-box diagonal. For a
+// faceted body it uses the larger of that size-derived tolerance and the
+// retained mesh bound, so the held mesh can always be restated.
 func WithChordTolerance(tol units.Value) STLOBJOption {
 	return stlObjOption{option.New(identChordTolerance{}, tol)}
 }
@@ -51,7 +52,7 @@ func WithChordTolerance(tol units.Value) STLOBJOption {
 // STL writes the body as ASCII STL — chosen over binary so the output is a
 // deterministic, diffable text record (core §11). Facet normals are the
 // triangles' own outward normals; the mesh comes from [Body.Tessellate] at
-// the [WithChordTolerance] tolerance, or the documented size-derived default
+// the [WithChordTolerance] tolerance, or the documented payload-aware default
 // without one, and every Tessellate rejection surfaces unchanged — including
 // the [ErrUnsupported] a revolve body returns, which cannot be exported.
 func (b *Body) STL(w io.Writer, opts ...STLOption) error {
@@ -90,7 +91,7 @@ func (b *Body) STL(w io.Writer, opts ...STLOption) error {
 // OBJ writes the body as Wavefront OBJ — the shared vertex table first, then
 // the triangles as 1-based index triples, both in mesh order (core §11). The
 // mesh comes from [Body.Tessellate] at the [WithChordTolerance] tolerance, or
-// the documented size-derived default without one, and every Tessellate
+// the documented payload-aware default without one, and every Tessellate
 // rejection surfaces unchanged — including the [ErrUnsupported] a revolve body
 // returns, which cannot be exported.
 func (b *Body) OBJ(w io.Writer, opts ...OBJOption) error {
@@ -147,10 +148,12 @@ func (b *Body) exportMesh(opts []option.Interface) (*Mesh, error) {
 	return b.Tessellate(tol)
 }
 
-// defaultChordTolerance derives the exporter's default from the body's own
-// size: 1/1000 of its bounding-box diagonal. A body this evaluator did not
-// build has no payload to tessellate anyway; the staging error is
-// Tessellate's to report, so a zero diagonal only guards the impossible.
+// defaultChordTolerance derives the exporter's default from 1/1000 of the
+// body's bounding-box diagonal. A faceted body raises that size-derived value
+// to its retained mesh bound when necessary, because it can restate but not
+// refine the held mesh. A body this evaluator did not build has no payload to
+// tessellate anyway; the staging error is Tessellate's to report, so a zero
+// diagonal only guards the impossible.
 func (b *Body) defaultChordTolerance() (units.Value, error) {
 	if b.payload == nil {
 		return units.Value{}, fmt.Errorf(`%w: this evaluator cannot tessellate a body it did not build`, ErrUnsupported)
@@ -159,7 +162,11 @@ func (b *Body) defaultChordTolerance() (units.Value, error) {
 	if diag <= 0 || math.IsInf(diag, 0) || math.IsNaN(diag) {
 		return units.Value{}, fmt.Errorf(`%w: the body has no extent to derive a chord tolerance from`, ErrDegenerate)
 	}
-	return units.Millimeters(diag / 1000), nil
+	tol := diag / 1000
+	if fp, ok := b.payload.(facetedPayload); ok {
+		tol = math.Max(tol, fp.meshBound)
+	}
+	return units.Millimeters(tol), nil
 }
 
 // stickyWriter carries the first write error forward so each emitted line
