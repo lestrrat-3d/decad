@@ -96,20 +96,17 @@ func (s *cellSink) coarse(boxA, boxB [2]r3.Vec, witA, witB []r3.Vec) {
 	s.contribs = append(s.contribs, gapContrib{lo: math.Max(0, lo), hi: hi, pa: pa, pb: pb})
 }
 
-// enumerate runs every tier over the pair, checking cancellation at bounded
-// intervals through the quadratic candidate walk.
+// enumerate runs every tier over the pair. One shared budget bounds
+// cancellation latency across both the outer candidate walk and the nested
+// work performed by a vertex tier.
 func (k *pairKernel) enumerate() (*cellSink, error) {
 	sink := &cellSink{}
-	work := 0
+	budget := newWorkBudget(k.ctx)
 	check := func() error {
 		if k.err != nil {
 			return k.err
 		}
-		work++
-		if work%256 != 0 {
-			return nil
-		}
-		return k.ctx.Err()
+		return budget.step()
 	}
 	for _, fa := range k.a.faces {
 		for _, fb := range k.b.faces {
@@ -147,13 +144,17 @@ func (k *pairKernel) enumerate() (*cellSink, error) {
 		if err := check(); err != nil {
 			return nil, err
 		}
-		k.vertexTier(va, k.b, sink)
+		if err := k.vertexTier(budget, va, k.b, sink); err != nil {
+			return nil, err
+		}
 	}
 	for _, vb := range k.b.verts {
 		if err := check(); err != nil {
 			return nil, err
 		}
-		k.vertexTier(vb, k.a, sink)
+		if err := k.vertexTier(budget, vb, k.a, sink); err != nil {
+			return nil, err
+		}
 	}
 	for _, va := range k.a.verts {
 		for _, vb := range k.b.verts {
@@ -167,7 +168,7 @@ func (k *pairKernel) enumerate() (*cellSink, error) {
 	if k.err != nil {
 		return nil, k.err
 	}
-	if err := k.ctx.Err(); err != nil {
+	if err := budget.err(); err != nil {
 		return nil, err
 	}
 	return sink, nil
