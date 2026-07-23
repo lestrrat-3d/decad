@@ -133,6 +133,32 @@ func TestSelectorCodecRejectsOutOfRangeNegativeProvenanceSteps(t *testing.T) {
 	}
 }
 
+func TestSelectorCodecAcceptsNegativeZeroProvenanceSteps(t *testing.T) {
+	ref := decad.FeatureRef{Step: 0, Role: roleCapStart}
+	for _, tc := range []struct {
+		name string
+		data string
+		want decad.Step
+	}{
+		{
+			name: "edge created-by",
+			data: `{"op":"fillet","selectors":[{"kind":"edges","preds":[{"kind":"created_by","ref":{"step":-0,"role":"capStart"}}]}]}`,
+			want: decad.Step{Op: decad.OpFillet, Selectors: []decad.Selector{decad.Edges(decad.CreatedBy(ref))}},
+		},
+		{
+			name: "face created-by",
+			data: `{"op":"shell","selectors":[{"kind":"faces","preds":[{"kind":"face_created_by","ref":{"step":-0,"role":"capStart"}}]}]}`,
+			want: decad.Step{Op: decad.OpShell, Selectors: []decad.Selector{decad.Faces(decad.FaceCreatedBy(ref))}},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var got decad.Step
+			require.NoError(t, json.Unmarshal([]byte(tc.data), &got))
+			require.Equal(t, tc.want, got)
+		})
+	}
+}
+
 func TestNilSelectorPointersAreBranchable(t *testing.T) {
 	// A typed nil query pointer follows the same branchable contract as the
 	// other sealed sets: errors.Is(err, ErrDegenerate).

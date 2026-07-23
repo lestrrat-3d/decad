@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"math/big"
 	"slices"
 
 	"github.com/lestrrat-3d/r3"
@@ -945,7 +946,8 @@ func unmarshalPredicateRef(data []byte, what string) (FeatureRef, error) {
 		return FeatureRef{}, fmt.Errorf(`decad: a %s predicate requires ref with step and role`, what)
 	}
 	stepToken := bytes.TrimSpace(*raw.Ref.Step)
-	if len(stepToken) > 0 && stepToken[0] == '-' {
+	var stepValue big.Int
+	if _, ok := stepValue.SetString(string(stepToken), 10); ok && stepValue.Sign() < 0 {
 		return FeatureRef{}, fmt.Errorf(`%w: a %s predicate cannot reference negative step %s`, ErrDegenerate, what, stepToken)
 	}
 	var step StepRef
