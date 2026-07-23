@@ -321,7 +321,8 @@ func LongerThan(l units.Value) EdgePredicate {
 
 // CreatedBy matches edges by provenance: edges created by the feature role f
 // names. Provenance is structural, so it survives re-evaluation
-// (docs/evaluator-design.md §3).
+// (docs/evaluator-design.md §3). A negative step or empty role is rejected at
+// resolve as ErrDegenerate.
 func CreatedBy(f FeatureRef) EdgePredicate {
 	return EdgePredicate{kind: predKindCreatedBy, ref: f}
 }
@@ -357,7 +358,8 @@ func Facing(v r3.Vec) FacePredicate {
 // FaceCreatedBy matches faces by provenance — the face analog of CreatedBy.
 // A canonicalization merge unions the merged faces' roles and this matches
 // on any of them, so provenance survives the merge
-// (docs/evaluator-design.md §3).
+// (docs/evaluator-design.md §3). A negative step or empty role is rejected at
+// resolve as ErrDegenerate.
 func FaceCreatedBy(f FeatureRef) FacePredicate {
 	return FacePredicate{kind: predKindFaceCreatedBy, ref: f}
 }
@@ -442,14 +444,27 @@ func validateDirection(v r3.Vec, what string) error {
 	return nil
 }
 
+// validatePredicateRef rejects provenance that cannot name a feature role.
+func validatePredicateRef(ref FeatureRef, what string) error {
+	if ref.Step < 0 {
+		return fmt.Errorf(`%w: a %s predicate cannot reference negative step %d`, ErrDegenerate, what, ref.Step)
+	}
+	if ref.Role == "" {
+		return fmt.Errorf(`%w: a %s predicate requires a non-empty provenance role`, ErrDegenerate, what)
+	}
+	return nil
+}
+
 // validate gates one edge clause's recorded parameters at resolve
 // (core §9/§12): a degenerate or non-finite direction, and a non-length,
 // non-finite or negative LongerThan quantity, are rejected before any edge
 // is examined. A kind the constructors never produce is malformed input.
 func (p EdgePredicate) validate() error {
 	switch p.kind {
-	case predKindConvex, predKindConcave, predKindCircular, predKindCreatedBy:
+	case predKindConvex, predKindConcave, predKindCircular:
 		return nil
+	case predKindCreatedBy:
+		return validatePredicateRef(p.ref, "created-by")
 	case predKindParallelTo:
 		return validateDirection(p.dir, "parallel-to")
 	case predKindLongerThan:
@@ -466,8 +481,10 @@ func (p EdgePredicate) validate() error {
 // analog of EdgePredicate.validate.
 func (p FacePredicate) validate() error {
 	switch p.kind {
-	case predKindPlanar, predKindCylindrical, predKindFaceCreatedBy:
+	case predKindPlanar, predKindCylindrical:
 		return nil
+	case predKindFaceCreatedBy:
+		return validatePredicateRef(p.ref, "face-created-by")
 	case predKindNormalTo:
 		return validateDirection(p.dir, "normal-to")
 	case predKindFacing:
@@ -926,7 +943,11 @@ func unmarshalPredicateRef(data []byte, what string) (FeatureRef, error) {
 	if raw.Ref == nil || raw.Ref.Step == nil || raw.Ref.Role == nil {
 		return FeatureRef{}, fmt.Errorf(`decad: a %s predicate requires ref with step and role`, what)
 	}
-	return FeatureRef{Step: *raw.Ref.Step, Role: *raw.Ref.Role}, nil
+	ref := FeatureRef{Step: *raw.Ref.Step, Role: *raw.Ref.Role}
+	if err := validatePredicateRef(ref, what); err != nil {
+		return FeatureRef{}, err
+	}
+	return ref, nil
 }
 
 // cloneSelectors deep-copies a step's recorded queries: the selector variants

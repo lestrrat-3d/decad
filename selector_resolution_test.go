@@ -334,6 +334,20 @@ func TestSelectorPredicateParameterGates(t *testing.T) {
 		_, err := decad.Edges(decad.LongerThan(units.Millimeters(-1))).SelectEdges(body)
 		require.ErrorIs(t, err, decad.ErrNegativeMagnitude)
 	})
+	t.Run("FeatureRef", func(t *testing.T) {
+		for _, ref := range []decad.FeatureRef{
+			{Step: 0, Role: ""},
+			{Step: -1, Role: roleCapStart},
+		} {
+			_, err := decad.Edges(decad.CreatedBy(ref)).SelectEdges(body)
+			require.ErrorIs(t, err, decad.ErrDegenerate)
+			require.NotErrorIs(t, err, decad.ErrNoMatch)
+
+			_, err = decad.Faces(decad.FaceCreatedBy(ref)).SelectFaces(body)
+			require.ErrorIs(t, err, decad.ErrDegenerate)
+			require.NotErrorIs(t, err, decad.ErrNoMatch)
+		}
+	})
 	t.Run("ZeroValuePredicate", func(t *testing.T) {
 		// Only the constructors build a predicate; the zero value names no
 		// kind and is malformed input at resolve.

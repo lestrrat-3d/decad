@@ -92,6 +92,15 @@ func TestSelectorCodecRejections(t *testing.T) {
 		`a normal-to predicate with no dir is malformed`)
 	require.Error(t, json.Unmarshal([]byte(`{"op":"shell","selectors":[{"kind":"faces","preds":[{"kind":"face_created_by","ref":{"role":"capEnd"}}]}]}`), &step),
 		`a provenance ref with no step is malformed`)
+	for _, data := range []string{
+		`{"op":"fillet","selectors":[{"kind":"edges","preds":[{"kind":"created_by","ref":{"step":0,"role":""}}]}]}`,
+		`{"op":"fillet","selectors":[{"kind":"edges","preds":[{"kind":"created_by","ref":{"step":-1,"role":"capStart"}}]}]}`,
+		`{"op":"shell","selectors":[{"kind":"faces","preds":[{"kind":"face_created_by","ref":{"step":0,"role":""}}]}]}`,
+		`{"op":"shell","selectors":[{"kind":"faces","preds":[{"kind":"face_created_by","ref":{"step":-1,"role":"capStart"}}]}]}`,
+	} {
+		err := json.Unmarshal([]byte(data), &step)
+		require.ErrorIs(t, err, decad.ErrDegenerate)
+	}
 	require.Error(t, json.Unmarshal([]byte(`{"op":"fillet","selectors":[{"kind":"edges","preds":[],"exactly":4,"at_least":1}]}`), &step),
 		`a query carries at most one cardinality assertion`)
 
