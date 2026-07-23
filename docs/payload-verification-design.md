@@ -104,9 +104,16 @@ Bottom-open cup is its exact axial mirror. `O` and `C` are recorded
 - loop counts match;
 - `C` is exact erosion of `O` by `t` for inward shell, or `O` is exact
   dilation of `C` by `t` for outward shell;
-- `t = abs(zCav - zOuter) > 0`;
+- the floor plane was constructed from the same positive `t` in the opening's
+  axial sense;
 - cavity interval is non-empty;
 - every offset feature survives; topology does not change.
+
+`cupPayload` retains that shell thickness and sense as a private morphology
+certificate. They are the inputs used to build both the section offset and the
+floor plane; retaining them avoids recovering a thickness by subtracting two
+rounded coordinates. The certificate is never sufficient by itself: every
+consumer that uses it MUST recheck the stored regions and axial planes.
 
 ### 3.2 `bodyGeom`
 
@@ -151,7 +158,8 @@ For accepted cup shell thickness `t` and draft allowance `alpha`:
 - any material junction with dihedral `<= alpha` → `MinWallThickness = Exact 0`;
 - otherwise → `MinWallThickness = Exact t`.
 
-A cup always has a wall. `MinWallThickness` is never nil after this proof lands.
+A cup always has a wall. `MinWallThickness` is never nil for a cup whose exact
+morphology recheck succeeds.
 
 ### 4.2 Proof
 
@@ -189,8 +197,12 @@ alone.
 
 `cupWall(cp, alpha)`:
 
-1. Compute `t = abs(zCav - zOuter)`; reject internal inconsistency as undecided.
-2. Reconfirm equal loop count, strict region nesting, and exact offset relation.
+1. Read positive finite `t` and the valid shell sense from the private morphology
+   certificate. Reconfirm the exact axial construction relation used by that
+   sense and opening direction, plus a non-empty cavity interval; reject any
+   inconsistency as undecided.
+2. Reconfirm equal loop count, strict region nesting, and the sense-specific
+   exact offset relation.
 3. Walk every loop of `O` in natural material-left sense.
 4. Walk every loop of `C` reversed, matching cavity material-left sense.
 5. Run existing `junctionPinch` on each non-smooth junction.

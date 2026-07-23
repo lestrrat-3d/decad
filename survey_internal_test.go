@@ -65,3 +65,63 @@ func TestPrismWallSubToleranceWebIsUndecided(t *testing.T) {
 	out := prismWall(pp, 15*math.Pi/180)
 	require.False(t, out.ok, `undecided, never a silent pass`)
 }
+
+func TestCupWallRequiresExactMorphology(t *testing.T) {
+	line := func(u0, v0, u1, v1 float64) CurveSegment {
+		return LineSeg{
+			Start:  Point2{U: u0, V: v0},
+			End:    Point2{U: u1, V: v1},
+			TStart: 0,
+			TEnd:   1,
+		}
+	}
+	outer := ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{
+		line(0, 0, 100, 0),
+		line(100, 0, 100, 60),
+		line(100, 60, 0, 60),
+		line(0, 60, 0, 0),
+	}}}
+	cavity, err := offsetProfile(outer, 1, 5)
+	require.NoError(t, err)
+	cp := cupPayload{
+		outer:     outer,
+		cavity:    cavity,
+		zOuter:    0,
+		zCav:      5,
+		zOpen:     20,
+		thickness: 5,
+		sense:     Inward,
+	}
+
+	out := cupWall(cp, 15*math.Pi/180)
+	require.True(t, out.ok)
+	require.NotNil(t, out.reading)
+	require.Equal(t, 5.0, *out.reading)
+
+	// Move the stored cavity sideways from the exact five-millimetre offset.
+	// The loop stays closed with the same positive area and loop count, but the
+	// morphology certificate no longer holds, so the survey stays undecided.
+	bad := cp
+	bad.cavity.Outer.Segments = append([]CurveSegment(nil), cp.cavity.Outer.Segments...)
+	for i, seg := range bad.cavity.Outer.Segments {
+		moved := seg.(LineSeg)
+		moved.Start.U += 0.25
+		moved.End.U += 0.25
+		bad.cavity.Outer.Segments[i] = moved
+	}
+
+	out = cupWall(bad, 15*math.Pi/180)
+	require.False(t, out.ok, `a malformed offset relation must not return the recipe thickness`)
+
+	body := &Body{payload: bad}
+	br := BodyReport{Body: body, Solid: true}
+	diags := runSurveys(&br, verifyConfig{
+		wall:     &wallSpec{tool: units.Millimeters(1)},
+		toolMM:   1,
+		allowRad: 15 * math.Pi / 180,
+	})
+	require.Nil(t, br.MinWallThickness)
+	require.Len(t, diags, 1)
+	require.Equal(t, DiagUndecidedWall, diags[0].Code)
+	require.Equal(t, Suspect, diags[0].Status)
+}

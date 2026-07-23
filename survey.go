@@ -3,6 +3,7 @@ package decad
 import (
 	"fmt"
 	"math"
+	"reflect"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -11,7 +12,7 @@ import (
 // This file is the analytic survey layer of
 // docs/evaluator-design.md §10 and docs/verification-design.md §6: the wall,
 // undercut and minimum-radius questions answered outright on the analytic
-// prism and revolve bodies. Each survey reads the evaluator's own payload —
+// prism, revolve and cup bodies. Each survey reads the evaluator's own payload —
 // the recorded 2D region a prism lifts or a revolve sweeps — because the
 // spanning-ball and curvature readings are closed-form facts of that section:
 // a prism's inscribed balls are its profile's inscribed disks with the height
@@ -588,6 +589,118 @@ func cupWalks(loop LoopRecord) ([]sideWalk, error) {
 	return loops[0], nil
 }
 
+// cupWall returns the exact shell-wall theorem of
+// docs/payload-verification-design.md §4: an accepted cup is exactly its
+// shell thickness unless one of its material junctions is within the caller's
+// draft allowance, in which case the closure-under-limits rule makes the
+// reading exactly zero. The theorem consumes the payload's morphology, not the
+// recipe value: it rebuilds and audits the offset relation before trusting it.
+func cupWall(cp cupPayload, alpha float64) wallOutcome {
+	finite := func(v float64) bool { return !math.IsNaN(v) && !math.IsInf(v, 0) }
+	t := cp.thickness
+	if !finite(t) || t <= 0 || (cp.sense != Inward && cp.sense != Outward) {
+		return wallOutcome{}
+	}
+	dOuter := cp.zOpen - cp.zOuter
+	dCavity := cp.zOpen - cp.zCav
+	if !finite(dOuter) || !finite(dCavity) || dOuter == 0 || dCavity == 0 ||
+		math.Signbit(dOuter) != math.Signbit(dCavity) || math.Abs(dCavity) >= math.Abs(dOuter) {
+		return wallOutcome{}
+	}
+	openDir := 1.0
+	if dOuter < 0 {
+		openDir = -1
+	}
+	if cp.sense == Inward && cp.zCav != cp.zOuter+openDir*t {
+		return wallOutcome{}
+	}
+	if cp.sense == Outward && cp.zOuter != cp.zCav-openDir*t {
+		return wallOutcome{}
+	}
+
+	oLoops := append([]LoopRecord{cp.outer.Outer}, cp.outer.Holes...)
+	cLoops := append([]LoopRecord{cp.cavity.Outer}, cp.cavity.Holes...)
+	if len(oLoops) != len(cLoops) {
+		return wallOutcome{}
+	}
+	if oi, err := cp.outer.integrals(); err != nil || oi.area <= 0 || !finite(oi.area) {
+		return wallOutcome{}
+	}
+	if ci, err := cp.cavity.integrals(); err != nil || ci.area <= 0 || !finite(ci.area) {
+		return wallOutcome{}
+	}
+
+	// Inward cups store C = O ⊖ t. Outward cups store O = C ⊕ t. Structural
+	// equality is the exact claim: a residual or tolerance match could only
+	// guess that the regions correspond.
+	offsetMatches := func(orig, want ProfileRecord, sense float64) bool {
+		got, err := offsetProfile(orig, sense, t)
+		if err != nil || !reflect.DeepEqual(got, want) {
+			return false
+		}
+		return auditOffsetSection(orig, got) == nil
+	}
+	matches := offsetMatches(cp.outer, cp.cavity, 1)
+	if cp.sense == Outward {
+		matches = offsetMatches(cp.cavity, cp.outer, -1)
+	}
+	if !matches {
+		return wallOutcome{}
+	}
+
+	hasPinch := func(loops [][]sideWalk) (bool, bool) {
+		for _, loop := range loops {
+			if len(loop) == 0 {
+				return false, false
+			}
+			if len(loop) == 1 && loop[0].closed {
+				continue
+			}
+			for i, w := range loop {
+				prev := loop[(i+len(loop)-1)%len(loop)]
+				if junctionPinch(prev.tanOutU, prev.tanOutV, w.tanInU, w.tanInV, alpha) {
+					return true, true
+				}
+			}
+		}
+		return false, true
+	}
+
+	outerWalks, err := recordLoops(cp.outer)
+	if err != nil {
+		return wallOutcome{}
+	}
+	if pinch, ok := hasPinch(outerWalks); !ok {
+		return wallOutcome{}
+	} else if pinch {
+		zero := 0.0
+		return wallOutcome{reading: &zero, ok: true}
+	}
+
+	// The cavity boundary is a void skin, so reverse every recorded loop to
+	// restore the same material-left walk convention junctionPinch expects.
+	var cavityWalks [][]sideWalk
+	for _, loop := range cLoops {
+		reversed, err := reverseLoopRecord(loop)
+		if err != nil {
+			return wallOutcome{}
+		}
+		walks, err := cupWalks(reversed)
+		if err != nil {
+			return wallOutcome{}
+		}
+		cavityWalks = append(cavityWalks, walks)
+	}
+	if pinch, ok := hasPinch(cavityWalks); !ok {
+		return wallOutcome{}
+	} else if pinch {
+		zero := 0.0
+		return wallOutcome{reading: &zero, ok: true}
+	}
+
+	return wallOutcome{reading: &t, ok: true}
+}
+
 // cupUndercuts surveys a cup's faces against the pull (docs/modify-design.md
 // D2): the outer walls over EVERY loop of region O (role side(i,j)), the cavity
 // walls over every loop of the reversed region C (role shellSide(i,j)) — each
@@ -718,6 +831,8 @@ func runSurveys(br *BodyReport, cfg verifyConfig) []Diagnostic {
 			out = prismWall(pl, cfg.allowRad)
 		case revolvePayload:
 			out = revolveWall(pl, cfg.allowRad)
+		case cupPayload:
+			out = cupWall(pl, cfg.allowRad)
 		}
 		switch {
 		case !out.ok:

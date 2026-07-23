@@ -26,19 +26,21 @@ import (
 
 // cupPayload is the evaluator's own record of a cup: the outer region O and the
 // cavity region C (each walked in its natural sense — the outer loop
-// counter-clockwise), the plane frame, the three sweep planes and the
-// accumulated rigid placement. The open end (the removed cap, where the rim is)
-// is zOpen; the outer prism's floor is at zOuter, the cavity's floor (shellCap)
-// at zCav, which lies between the two so the floor slab is [zOuter, zCav]
-// (docs/modify-design.md §9).
+// counter-clockwise), the plane frame, the three sweep planes, the private
+// shell-morphology certificate and the accumulated rigid placement. The open
+// end (the removed cap, where the rim is) is zOpen; the outer prism's floor is
+// at zOuter, the cavity's floor (shellCap) at zCav, which lies between the two
+// so the floor slab is [zOuter, zCav] (docs/modify-design.md §9).
 type cupPayload struct {
-	outer  ProfileRecord
-	cavity ProfileRecord
-	frame  r3.Frame
-	zOpen  float64
-	zOuter float64
-	zCav   float64
-	xform  r3.Transform
+	outer     ProfileRecord
+	cavity    ProfileRecord
+	frame     r3.Frame
+	zOpen     float64
+	zOuter    float64
+	zCav      float64
+	thickness float64
+	sense     ShellSense
+	xform     r3.Transform
 }
 
 // transform is the accumulated rigid placement.
@@ -79,7 +81,18 @@ func cupPayloadFor(pp prismPayload, offset ProfileRecord, s, t float64, removedE
 	if s < 0 {
 		o, c = offset, pp.profile
 	}
-	cp := cupPayload{outer: o, cavity: c, frame: pp.frame, xform: pp.xform}
+	sense := Inward
+	if s < 0 {
+		sense = Outward
+	}
+	cp := cupPayload{
+		outer:     o,
+		cavity:    c,
+		frame:     pp.frame,
+		thickness: t,
+		sense:     sense,
+		xform:     pp.xform,
+	}
 	if removedEnd { // open at the top
 		cp.zOpen = z1
 		if s > 0 {

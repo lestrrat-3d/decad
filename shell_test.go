@@ -609,19 +609,19 @@ func TestShellRefusals(t *testing.T) {
 	})
 }
 
-func TestShellCupDownstreamStaging(t *testing.T) {
+func TestShellCupDownstream(t *testing.T) {
 	const th = 5.0
 
-	t.Run("MinWallThickness reads Suspect", func(t *testing.T) {
+	t.Run("MinWallThickness is exact", func(t *testing.T) {
 		doc, box := shellBox(t)
 		_, err := box.Shell(topCap(box), units.Millimeters(th))
 		require.NoError(t, err)
 		report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(1)))
 		require.NoError(t, err)
 		br := report.Bodies[0]
-		require.Nil(t, br.MinWallThickness, `a cup's MinWallThickness is staged, so it reads nil`)
-		require.Equal(t, decad.Suspect, br.Status)
-		require.False(t, report.Trustworthy())
+		requireWall(t, br, th)
+		require.Equal(t, decad.Sound, br.Status)
+		require.True(t, report.Trustworthy())
 	})
 
 	t.Run("a lone cup verifies Sound", func(t *testing.T) {
