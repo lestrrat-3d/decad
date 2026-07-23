@@ -64,11 +64,11 @@ func RecordTransform(t r3.Transform) (TransformRecord, error) {
 // Transform rebuilds the recorded rigid motion through r3.FromBasis, which
 // snaps encoding drift straight and rejects a record that is not an isometry —
 // a decoded placement is a real rigid motion or an error, never a silent
-// distortion.
+// distortion. An invalid record is [ErrDegenerate].
 func (r TransformRecord) Transform() (r3.Transform, error) {
 	t, err := r3.FromBasis(r3.Basis{EX: r.EX, EY: r.EY, EZ: r.EZ}, r.T)
 	if err != nil {
-		return r3.Transform{}, fmt.Errorf(`decad: the recorded placement is not a rigid motion: %w`, err)
+		return r3.Transform{}, fmt.Errorf(`%w: the recorded placement is not a rigid motion: %v`, ErrDegenerate, err)
 	}
 	return t, nil
 }

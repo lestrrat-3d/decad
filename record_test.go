@@ -463,12 +463,35 @@ func TestTransformRecordRejects(t *testing.T) {
 	_, err := decad.RecordTransform(r3.Transform{})
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 
-	// A corrupted record — a basis that is no isometry — refuses to rebuild.
-	bad := decad.TransformRecord{
-		EX: r3.NewVec(2, 0, 0), // scaled: not orthonormal
-		EY: r3.NewVec(0, 1, 0),
-		EZ: r3.NewVec(0, 0, 1),
+	for _, test := range []struct {
+		name string
+		rec  decad.TransformRecord
+		text string
+	}{
+		{
+			name: "non-unit basis",
+			rec: decad.TransformRecord{
+				EX: r3.NewVec(2, 0, 0),
+				EY: r3.NewVec(0, 1, 0),
+				EZ: r3.NewVec(0, 0, 1),
+			},
+			text: "basis is not orthonormal",
+		},
+		{
+			name: "non-finite translation",
+			rec: decad.TransformRecord{
+				EX: r3.NewVec(1, 0, 0),
+				EY: r3.NewVec(0, 1, 0),
+				EZ: r3.NewVec(0, 0, 1),
+				T:  r3.NewVec(math.Inf(1), 0, 0),
+			},
+			text: "non-finite value",
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := test.rec.Transform()
+			require.ErrorIs(t, err, decad.ErrDegenerate)
+			require.Contains(t, err.Error(), test.text)
+		})
 	}
-	_, err = bad.Transform()
-	require.Error(t, err, `a non-isometric record should not rebuild`)
 }
