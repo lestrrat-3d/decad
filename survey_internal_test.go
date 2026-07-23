@@ -161,7 +161,7 @@ func TestCupWallRequiresExactMorphology(t *testing.T) {
 	require.False(t, out.ok, `a malformed offset relation must not return the recipe thickness`)
 
 	body := &Body{payload: bad}
-	br := BodyReport{Body: body, Solid: true}
+	br := BodyReport{Body: body, Status: Sound, Solid: true}
 	diags := runSurveys(&br, verifyConfig{
 		wall:     &wallSpec{tool: units.Millimeters(1)},
 		toolMM:   1,

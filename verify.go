@@ -21,14 +21,18 @@ import (
 // asked-but-unanswered question reads Suspect, never a silent pass.
 
 // Status is a verdict, used at both the body and the report level
-// (verification §6). Severity is by precedence, worst wins:
-// Unsound > Interfering > Violating > Suspect > Sound.
+// (verification §6). Unverified is the reserved zero value and is never
+// returned by a successful Verify. Severity among verification results is by
+// precedence, worst wins: Unsound > Interfering > Violating > Suspect > Sound.
 type Status int
 
 const (
+	// Unverified: no verification produced this value. It is reserved so a
+	// zero or partially decoded Report fails Trustworthy.
+	Unverified Status = iota
 	// Sound: every body a proven solid, every stated spec met, every asked
 	// absence proven, nothing approximate beyond tolerance.
-	Sound Status = iota
+	Sound
 	// Suspect: nothing proven wrong and something not proven right — an
 	// answer beyond the caller's tolerance, an asked question undecided, an
 	// undecided pair.
@@ -45,6 +49,8 @@ const (
 // String renders the status for diagnostics.
 func (s Status) String() string {
 	switch s {
+	case Unverified:
+		return "Unverified"
 	case Sound:
 		return "Sound"
 	case Suspect:
@@ -265,17 +271,17 @@ type Report struct {
 	Bodies        []*BodyReport
 	Interferences []Interference
 	Clearances    []Clearance
-	// Diagnostics is one structured, branchable entry per reason the report is
-	// not Sound (verification §1.1). It is empty EXACTLY when Status == Sound,
-	// and Status is the worst Diagnostic.Status in it — the §6 aggregate,
-	// itemized. Every existing field and Trustworthy() are unchanged; the slice
-	// is additive detail, never a second verdict.
+	// Diagnostics is one structured, branchable entry per reason a report
+	// returned by Verify is not Sound (verification §1.1). On such a report it
+	// is empty EXACTLY when Status == Sound, and Status is the worst
+	// Diagnostic.Status in it — the §6 aggregate, itemized. The zero Report is
+	// Unverified and carries no verdict.
 	Diagnostics []Diagnostic
 	Status      Status
 }
 
 // Trustworthy is the single bit to gate on: true only when the whole report
-// is Sound (verification §6).
+// is Sound (verification §6). A zero Report is Unverified and returns false.
 func (r *Report) Trustworthy() bool { return r.Status == Sound }
 
 // BodyReport is one live body's verdict and readings (verification §1).
@@ -520,7 +526,7 @@ func (d *Document) Verify(ctx context.Context, opts ...VerifyOption) (*Report, e
 		return nil, err
 	}
 
-	report := &Report{}
+	report := &Report{Status: Sound}
 	// Interferences is always computed — the Interfering rung reads it
 	// (verification §1). The read-only proof never consumes an operand or
 	// exposes a transient intersection through the document.
@@ -723,6 +729,7 @@ func undecidedPairDiag(a, b *Body, verdict pairVerdict, outcome interferenceOutc
 func verifyBody(ctx context.Context, b *Body, cfg verifyConfig) (*BodyReport, []Diagnostic, error) {
 	br := &BodyReport{
 		Body:   b,
+		Status: Sound,
 		Area:   b.area,
 		Bounds: b.bounds,
 		Lumps:  len(b.lumps),
