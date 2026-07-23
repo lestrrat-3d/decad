@@ -118,6 +118,10 @@ var ErrUnitKind = errors.New("decad: wrong unit kind")
 // turn it inside out.
 var ErrNotFinite = errors.New("decad: non-finite value")
 
+// ErrResourceLimit is returned when recipe decoding crosses a fixed resource
+// ceiling before allocating the corresponding typed collection.
+var ErrResourceLimit = errors.New("decad: resource limit exceeded")
+
 // ErrUnsupported is returned when the recipe records the intent exactly but
 // the current evaluator does not build it. Evaluator staging is explicit
 // and rejected at the call — never silently approximated or narrowed — and a
