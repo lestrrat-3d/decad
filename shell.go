@@ -280,6 +280,10 @@ func (b *Body) Shell(sel FaceSelector, t units.Value, opts ...ShellOption) (*Bod
 	if err != nil {
 		return nil, err
 	}
+	// Keep the consumed input aligned with recipe liveness at the commit edge.
+	if err := d.requireLive(b); err != nil {
+		return nil, err
+	}
 	d.commit(step, body, b)
 	return body, nil
 }
