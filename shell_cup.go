@@ -1,6 +1,7 @@
 package decad
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"math/big"
@@ -48,7 +49,7 @@ type cupPayload struct {
 func (cp cupPayload) transform() r3.Transform { return cp.xform }
 
 // placed re-evaluates the same cup under the composed motion (evaluator §8).
-func (cp cupPayload) placed(d *Document, ref StepRef, composed r3.Transform) (*Body, error) {
+func (cp cupPayload) placed(_ context.Context, d *Document, ref StepRef, composed r3.Transform) (*Body, error) {
 	cp.xform = composed
 	return evalCup(d, ref, cp)
 }

@@ -40,16 +40,16 @@ func Example_decad_copy() {
 		return
 	}
 
-	// Place three instances at 40 mm spacing along x. Each PlacedCopy reads
-	// the same master and leaves it live, so one feature chain feeds the whole
-	// pattern.
+	// Place three instances at 40 mm spacing along x. PlacedCopyContext can
+	// cancel any faceted rebuild and leaves the same master live, so one feature
+	// chain feeds the whole pattern.
 	for i := 1; i <= 3; i++ {
 		shift, err := r3.Translation(r3.NewVec(float64(40*i), 0, 0))
 		if err != nil {
 			fmt.Printf("failed to build placement: %s\n", err)
 			return
 		}
-		inst, err := master.PlacedCopy(shift)
+		inst, err := master.PlacedCopyContext(context.Background(), shift)
 		if err != nil {
 			fmt.Printf("failed to place instance %d: %s\n", i, err)
 			return

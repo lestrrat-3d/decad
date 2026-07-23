@@ -1072,6 +1072,7 @@ Placement is a body operation on the same terms — it retires the receiver and
 registers the placed body:
 
 ```go
+func (b *Body) PlacedContext(ctx context.Context, t r3.Transform) (*Body, error)
 func (b *Body) Placed(t r3.Transform) (*Body, error)
 ```
 
@@ -1079,7 +1080,9 @@ This is the whole of the "explicit transforms" story: a body is positioned by an
 argument the caller states — an `r3.Transform`, a rigid motion (§5.2) — never by
 an ambient assembly context (§4). The zero `Transform{}` is invalid
 (`Transform.IsValid`) and is `ErrDegenerate` (§12). The step records the motion
-as a `TransformRecord` (§6.2).
+as a `TransformRecord` (§6.2). `PlacedContext` checks `ctx` through any
+faceted-payload rebuild and returns its error without changing the document.
+`Placed` is the compatibility wrapper using `context.Background()`.
 
 **A body can be copied without consuming it.** `Placed` retires its receiver, so
 modelling a part once and placing several instances — a bolt pattern, several
@@ -1088,7 +1091,9 @@ rebuilding the whole feature chain per instance. The two non-consuming copies
 close that gap:
 
 ```go
+func (b *Body) DuplicateContext(ctx context.Context) (*Body, error)
 func (b *Body) Duplicate() (*Body, error)
+func (b *Body) PlacedCopyContext(ctx context.Context, t r3.Transform) (*Body, error)
 func (b *Body) PlacedCopy(t r3.Transform) (*Body, error)
 ```
 
@@ -1099,7 +1104,10 @@ identity. `PlacedCopy(t)` re-evaluates the payload under the composed rigid
 motion exactly as `Placed` does, so `Duplicate` is `PlacedCopy` with no motion;
 the zero `Transform{}` is `ErrDegenerate` as in `Placed`, and `r3.Identity()` is
 a valid no-op motion. A body this evaluator did not build is `ErrUnsupported`, as
-`Placed`'s is.
+`Placed`'s is. The context-taking variants check `ctx` throughout a faceted
+rebuild and leave the source, live-body set, and recipe unchanged on
+cancellation. `Duplicate` and `PlacedCopy` are compatibility wrappers using
+`context.Background()`.
 
 **A copy preserves geometry, so it preserves provenance.** A copy is the same
 part at a new identity and position, and `FaceCreatedBy` (§9) must still find its

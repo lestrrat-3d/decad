@@ -763,9 +763,10 @@ payload**, including interior tessellation vertices that do not become B-rep
 topological boundary-loop vertices and can omit the pair that realizes the held
 mesh's diameter. Compute the max pair directly or through an exact convex-hull
 reduction, cache it with the immutable faceted payload, and recompute it from the
-transformed payload vertices when `Placed` rebuilds the body. This is the held
-polyhedron's exact diameter and may understate a curved body's true diameter by
-at most the chord error. A floor is a magnitude, not an answer, and a per-mille
+transformed payload vertices when a placement rebuilds the body, polling the
+placement context through the scan. This is the held polyhedron's exact diameter
+and may understate a curved body's true diameter by at most the chord error. A
+floor is a magnitude, not an answer, and a per-mille
 error in it moves no verdict. A
 surface with no edges at all — a sphere — gives its area a `Quantum` of zero,
 and that errs in the only safe direction: a floor too low can only demand more

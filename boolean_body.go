@@ -75,7 +75,11 @@ func (fp facetedPayload) transform() r3.Transform { return fp.xform }
 // move through the delta motion (float rounding is folded into the proven
 // bounds — the geometry is never silently trusted), a reflection flips the
 // windings, and the topology and measurements rebuild from the moved mesh.
-func (fp facetedPayload) placed(d *Document, ref StepRef, composed r3.Transform) (*Body, error) {
+func (fp facetedPayload) placed(ctx context.Context, d *Document, ref StepRef, composed r3.Transform) (*Body, error) {
+	budget := newWorkBudget(ctx)
+	if err := budget.err(); err != nil {
+		return nil, err
+	}
 	inv, err := fp.xform.Inverse()
 	if err != nil {
 		return nil, fmt.Errorf(`decad: inverting the accumulated placement failed: %w`, err)
@@ -93,12 +97,21 @@ func (fp facetedPayload) placed(d *Document, ref StepRef, composed r3.Transform)
 	// and moved back rounds at the far magnitude. Charge it there (bounds.go).
 	maxIn := 0.0
 	for i, v := range fp.verts {
+		if err := budget.step(); err != nil {
+			return nil, err
+		}
 		maxIn = math.Max(maxIn, math.Max(math.Abs(v.X), math.Max(math.Abs(v.Y), math.Abs(v.Z))))
 		next.verts[i] = delta.Apply(v)
+	}
+	if err := budget.err(); err != nil {
+		return nil, err
 	}
 	if delta.IsReflection() {
 		next.tris = make([][3]int, len(fp.tris))
 		for i, t := range fp.tris {
+			if err := budget.step(); err != nil {
+				return nil, err
+			}
 			next.tris[i] = [3]int{t[0], t[2], t[1]}
 		}
 	}
@@ -106,8 +119,12 @@ func (fp facetedPayload) placed(d *Document, ref StepRef, composed r3.Transform)
 	maxTrans := math.Max(math.Abs(tr.X), math.Max(math.Abs(tr.Y), math.Abs(tr.Z)))
 	allow := rigidRoundAllow(maxIn, maxTrans)
 	next.meshBound += allow
-	next.volSymDiff += sweptVolumeAllow(allow, perturbedAreaUpper(next.verts, next.tris, allow))
-	return buildFacetedBody(context.Background(), d, ref, next)
+	areaUpper, err := perturbedAreaUpperContext(ctx, next.verts, next.tris, allow)
+	if err != nil {
+		return nil, err
+	}
+	next.volSymDiff += sweptVolumeAllow(allow, areaUpper)
+	return buildFacetedBody(ctx, d, ref, next)
 }
 
 // ulpOf is the spacing of float64 at magnitude x.
@@ -300,13 +317,20 @@ func buildFacetedBody(ctx context.Context, d *Document, ref StepRef, pp facetedP
 		return nil, err
 	}
 	verts, tris := pp.verts, pp.tris
-	diameter, ok := pointSetDiameter(verts)
+	diameter, ok, err := pointSetDiameterContext(ctx, verts)
+	if err != nil {
+		return nil, err
+	}
 	if !ok {
 		return nil, fmt.Errorf(`%w: the held boundary has no usable diameter`, ErrBooleanFailed)
 	}
 	pp.diameter = diameter
 	audit, err := auditFacetedMesh(ctx, verts, tris)
 	if err != nil {
+		return nil, err
+	}
+	budget := newWorkBudget(ctx)
+	if err := budget.err(); err != nil {
 		return nil, err
 	}
 	xverts, comp, adj := audit.xverts, audit.comp, audit.adj
@@ -316,6 +340,9 @@ func buildFacetedBody(ctx context.Context, d *Document, ref StepRef, pp facetedP
 	boundMM := units.Millimeters(pp.meshBound)
 
 	for _, s := range pp.src {
+		if err := budget.step(); err != nil {
+			return nil, err
+		}
 		if s < 0 || s >= len(pp.groups) {
 			return nil, fmt.Errorf(`%w: a facet names no source group`, ErrBooleanFailed)
 		}
@@ -339,10 +366,16 @@ func buildFacetedBody(ctx context.Context, d *Document, ref StepRef, pp facetedP
 	// differs in source group, and was a boundary before the split.
 	patch := make([]int, len(tris))
 	for i := range patch {
+		if err := budget.step(); err != nil {
+			return nil, err
+		}
 		patch[i] = -1
 	}
 	nPatch := 0
 	for i := range tris {
+		if err := budget.step(); err != nil {
+			return nil, err
+		}
 		if patch[i] != -1 {
 			continue
 		}
@@ -351,6 +384,9 @@ func buildFacetedBody(ctx context.Context, d *Document, ref StepRef, pp facetedP
 		patch[i] = id
 		queue := []int{i}
 		for len(queue) > 0 {
+			if err := budget.step(); err != nil {
+				return nil, err
+			}
 			f := queue[0]
 			queue = queue[1:]
 			for _, nb := range adj[f] {
@@ -368,6 +404,9 @@ func buildFacetedBody(ctx context.Context, d *Document, ref StepRef, pp facetedP
 	facetFace := make([]*Face, len(tris))
 	compFaces := make([][]*Face, len(members))
 	for i, t := range tris {
+		if err := budget.step(); err != nil {
+			return nil, err
+		}
 		f, ok := faceIdx[patch[i]]
 		if !ok {
 			// Every patch of one source face carries that face's OWN origins:
@@ -388,7 +427,7 @@ func buildFacetedBody(ctx context.Context, d *Document, ref StepRef, pp facetedP
 		facetFace[i] = f
 	}
 
-	if err := buildFacetedTopology(verts, tris, facetFace, facePlanar, pp.meshBound); err != nil {
+	if err := buildFacetedTopology(ctx, verts, tris, facetFace, facePlanar, pp.meshBound); err != nil {
 		return nil, err
 	}
 
@@ -399,6 +438,9 @@ func buildFacetedBody(ctx context.Context, d *Document, ref StepRef, pp facetedP
 	// known within its own bound (bounds.go, chainLengthBound).
 	facetsOf := map[*Face]int{}
 	for _, f := range facetFace {
+		if err := budget.step(); err != nil {
+			return nil, err
+		}
 		facetsOf[f]++
 	}
 	// facePerimTotal is the sum of the faces' OWN perimeters, which counts every
@@ -409,9 +451,15 @@ func buildFacetedBody(ctx context.Context, d *Document, ref StepRef, pp facetedP
 	facePerimTotal := 0.0
 	for _, faces := range compFaces {
 		for _, f := range faces {
+			if err := budget.step(); err != nil {
+				return nil, err
+			}
 			loopLen := 0.0
 			for _, l := range f.loops {
 				for _, ce := range l.coedges {
+					if err := budget.step(); err != nil {
+						return nil, err
+					}
 					loopLen += ce.edge.length + ce.edge.lengthBound
 				}
 			}
@@ -427,6 +475,9 @@ func buildFacetedBody(ctx context.Context, d *Document, ref StepRef, pp facetedP
 	lumpOf := map[int]*Lump{}
 	var lumps []*Lump
 	for ci := range members {
+		if err := budget.step(); err != nil {
+			return nil, err
+		}
 		shells[ci] = &Shell{faces: compFaces[ci], void: compVol[ci].Sign() < 0}
 		if compVol[ci].Sign() > 0 {
 			l := &Lump{shells: []*Shell{shells[ci]}}
@@ -435,11 +486,17 @@ func buildFacetedBody(ctx context.Context, d *Document, ref StepRef, pp facetedP
 		}
 	}
 	for ci := range members {
+		if err := budget.step(); err != nil {
+			return nil, err
+		}
 		if compVol[ci].Sign() > 0 {
 			continue
 		}
 		parent := -1
 		for outer := range members {
+			if err := budget.step(); err != nil {
+				return nil, err
+			}
 			if outer == ci || compVol[outer].Sign() <= 0 || !contains[outer][ci] {
 				continue
 			}
@@ -471,6 +528,9 @@ func buildFacetedBody(ctx context.Context, d *Document, ref StepRef, pp facetedP
 	body.volume = volume
 	var mx, my, mz = new(big.Rat), new(big.Rat), new(big.Rat)
 	for _, t := range tris {
+		if err := budget.step(); err != nil {
+			return nil, err
+		}
 		a, b, c := xverts[t[0]], xverts[t[1]], xverts[t[2]]
 		det := xdot(a, xcross(b, c))
 		mx.Add(mx, new(big.Rat).Mul(det, new(big.Rat).Add(new(big.Rat).Add(a.x, b.x), c.x)))
@@ -480,6 +540,9 @@ func buildFacetedBody(ctx context.Context, d *Document, ref StepRef, pp facetedP
 
 	areaF := 0.0
 	for _, t := range tris {
+		if err := budget.step(); err != nil {
+			return nil, err
+		}
 		a, b, c := verts[t[0]], verts[t[1]], verts[t[2]]
 		areaF += b.Sub(a).Cross(c.Sub(a)).Len() / 2
 	}
@@ -520,6 +583,9 @@ func buildFacetedBody(ctx context.Context, d *Document, ref StepRef, pp facetedP
 
 	lo, hi := verts[0], verts[0]
 	for _, v := range verts[1:] {
+		if err := budget.step(); err != nil {
+			return nil, err
+		}
 		lo = r3.Vec{X: math.Min(lo.X, v.X), Y: math.Min(lo.Y, v.Y), Z: math.Min(lo.Z, v.Z)}
 		hi = r3.Vec{X: math.Max(hi.X, v.X), Y: math.Max(hi.Y, v.Y), Z: math.Max(hi.Z, v.Z)}
 	}
@@ -536,7 +602,10 @@ func buildFacetedBody(ctx context.Context, d *Document, ref StepRef, pp facetedP
 	}
 
 	// The facet → face mapping, in the body's Faces() order, for Tessellate.
-	faceOf, err := facetFaceIndices(body.Faces(), facetFace)
+	if err := budget.err(); err != nil {
+		return nil, err
+	}
+	faceOf, err := facetFaceIndices(ctx, body.Faces(), facetFace)
 	if err != nil {
 		return nil, err
 	}
@@ -554,20 +623,27 @@ func buildFacetedBody(ctx context.Context, d *Document, ref StepRef, pp facetedP
 // lookup cannot miss. A miss is an invariant failure (docs/interference-design.md
 // §7.1), returned as ErrBooleanFailed rather than silently attributing the facet
 // to face 0.
-func facetFaceIndices(faces, facetFace []*Face) ([]int, error) {
+func facetFaceIndices(ctx context.Context, faces, facetFace []*Face) ([]int, error) {
+	budget := newWorkBudget(ctx)
 	flat := make(map[*Face]int, len(faces))
 	for i, f := range faces {
+		if err := budget.step(); err != nil {
+			return nil, err
+		}
 		flat[f] = i
 	}
 	out := make([]int, len(facetFace))
 	for i, f := range facetFace {
+		if err := budget.step(); err != nil {
+			return nil, err
+		}
 		idx, ok := flat[f]
 		if !ok {
 			return nil, fmt.Errorf(`%w: a facet maps to a face absent from the built body`, ErrBooleanFailed)
 		}
 		out[i] = idx
 	}
-	return out, nil
+	return out, budget.err()
 }
 
 // meshVolumeMeasurement integrates one stitched, oriented, closed mesh in
@@ -658,7 +734,18 @@ func volFloor(vol *big.Rat, sym float64) float64 {
 // buildFacetedTopology chains the face-boundary mesh edges into topological
 // Edges (split where the adjacent face pair or the exact hinge convexity
 // changes) and builds each face's loops by walking the facet fans.
-func buildFacetedTopology(verts []r3.Vec, tris [][3]int, facetFace []*Face, facePlanar map[*Face]bool, bound float64) error {
+func buildFacetedTopology(
+	ctx context.Context,
+	verts []r3.Vec,
+	tris [][3]int,
+	facetFace []*Face,
+	facePlanar map[*Face]bool,
+	bound float64,
+) error {
+	budget := newWorkBudget(ctx)
+	if err := budget.err(); err != nil {
+		return err
+	}
 	boundMM := units.Millimeters(bound)
 
 	// Directed halfedge → facet, and the boundary predicate: the twin facet
@@ -666,6 +753,9 @@ func buildFacetedTopology(verts []r3.Vec, tris [][3]int, facetFace []*Face, face
 	halfOwner := map[[2]int]int{}
 	for i, t := range tris {
 		for k := range 3 {
+			if err := budget.step(); err != nil {
+				return err
+			}
 			halfOwner[[2]int{t[k], t[(k+1)%3]}] = i
 		}
 	}
@@ -690,6 +780,9 @@ func buildFacetedTopology(verts []r3.Vec, tris [][3]int, facetFace []*Face, face
 	var boundaryEdges [][2]int
 	for i, t := range tris {
 		for k := range 3 {
+			if err := budget.step(); err != nil {
+				return err
+			}
 			u, v := t[k], t[(k+1)%3]
 			if u > v || !isBoundary(u, v) {
 				continue
@@ -713,6 +806,9 @@ func buildFacetedTopology(verts []r3.Vec, tris [][3]int, facetFace []*Face, face
 	// boundary edges meet there with the same face pair and hinge sign.
 	incident := map[int][][2]int{}
 	for _, e := range boundaryEdges {
+		if err := budget.step(); err != nil {
+			return err
+		}
 		incident[e[0]] = append(incident[e[0]], e)
 		incident[e[1]] = append(incident[e[1]], e)
 	}
@@ -758,11 +854,14 @@ func buildFacetedTopology(verts []r3.Vec, tris [][3]int, facetFace []*Face, face
 		}
 		return notKey
 	}
-	commitChain := func(path []int) {
+	commitChain := func(path []int) error {
 		info := hinges[ukey([2]int{path[0], path[1]})]
 		length := 0.0
 		nSegs := 0
 		for k := 0; k+1 < len(path); k++ {
+			if err := budget.step(); err != nil {
+				return err
+			}
 			key := ukey([2]int{path[k], path[k+1]})
 			chainOf[key] = len(chains)
 			posInChain[key] = k
@@ -791,23 +890,27 @@ func buildFacetedTopology(verts []r3.Vec, tris [][3]int, facetFace []*Face, face
 			lengthUnbounded: !facePlanar[info.fa] || !facePlanar[info.fb],
 		}
 		chains = append(chains, chainRec{verts: path, edge: e})
+		return nil
 	}
-	walkFrom := func(v int, e [2]int) []int {
+	walkFrom := func(v int, e [2]int) ([]int, error) {
 		path := []int{v}
 		cur, curEdge := v, e
 		for {
+			if err := budget.step(); err != nil {
+				return nil, err
+			}
 			usedEdge[ukey(curEdge)] = struct{}{}
 			nxt := curEdge[0] + curEdge[1] - cur
 			path = append(path, nxt)
 			if nxt == path[0] || breakAt(nxt) {
-				return path
+				return path, nil
 			}
 			nextEdge := otherAt(nxt, ukey(curEdge))
 			if ukey(nextEdge) == ukey(curEdge) {
-				return path
+				return path, nil
 			}
 			if _, seen := usedEdge[ukey(nextEdge)]; seen {
-				return path
+				return path, nil
 			}
 			cur, curEdge = nxt, nextEdge
 		}
@@ -815,23 +918,38 @@ func buildFacetedTopology(verts []r3.Vec, tris [][3]int, facetFace []*Face, face
 	// Open chains first: start at every break vertex, in edge order.
 	for _, e := range boundaryEdges {
 		for _, v := range []int{e[0], e[1]} {
+			if err := budget.step(); err != nil {
+				return err
+			}
 			if !breakAt(v) {
 				continue
 			}
 			if _, ok := usedEdge[ukey(e)]; ok {
 				break
 			}
-			commitChain(walkFrom(v, e))
+			path, err := walkFrom(v, e)
+			if err != nil {
+				return err
+			}
+			if err := commitChain(path); err != nil {
+				return err
+			}
 			break
 		}
 	}
 	// The rest are closed uniform cycles: anchor each at its smallest
 	// vertex, deterministically.
 	for _, e := range boundaryEdges {
+		if err := budget.step(); err != nil {
+			return err
+		}
 		if _, ok := usedEdge[ukey(e)]; ok {
 			continue
 		}
-		cycle := walkFrom(e[0], e)
+		cycle, err := walkFrom(e[0], e)
+		if err != nil {
+			return err
+		}
 		if cycle[0] != cycle[len(cycle)-1] {
 			return fmt.Errorf(`%w: a face boundary chain did not close`, ErrBooleanFailed)
 		}
@@ -844,12 +962,17 @@ func buildFacetedTopology(verts []r3.Vec, tris [][3]int, facetFace []*Face, face
 		}
 		rotated := make([]int, 0, len(cycle))
 		for i := range ring {
+			if err := budget.step(); err != nil {
+				return err
+			}
 			rotated = append(rotated, ring[(anchor+i)%len(ring)])
 		}
 		rotated = append(rotated, ring[anchor])
 		// Re-commit with the rotated ordering (walkFrom already marked the
 		// edges used).
-		commitChain(rotated)
+		if err := commitChain(rotated); err != nil {
+			return err
+		}
 	}
 
 	// The area-weighted normal of each face's own facets. A face is ONE patch,
@@ -857,6 +980,9 @@ func buildFacetedTopology(verts []r3.Vec, tris [][3]int, facetFace []*Face, face
 	// outward normal (scaled by twice the patch's area).
 	faceNormal := map[*Face]r3.Vec{}
 	for i, t := range tris {
+		if err := budget.step(); err != nil {
+			return err
+		}
 		a, b, c := verts[t[0]], verts[t[1]], verts[t[2]]
 		f := facetFace[i]
 		faceNormal[f] = faceNormal[f].Add(b.Sub(a).Cross(c.Sub(a)))
@@ -871,6 +997,9 @@ func buildFacetedTopology(verts []r3.Vec, tris [][3]int, facetFace []*Face, face
 	nextBoundary := func(h [2]int) ([2]int, error) {
 		cur := h
 		for range len(tris)*3 + 3 {
+			if err := budget.step(); err != nil {
+				return [2]int{}, err
+			}
 			f := halfOwner[cur]
 			t := tris[f]
 			var follow [2]int
@@ -893,6 +1022,9 @@ func buildFacetedTopology(verts []r3.Vec, tris [][3]int, facetFace []*Face, face
 	}
 	for i, t := range tris {
 		for k := range 3 {
+			if err := budget.step(); err != nil {
+				return err
+			}
 			h := [2]int{t[k], t[(k+1)%3]}
 			if !isBoundary(h[0], h[1]) {
 				continue
@@ -907,6 +1039,9 @@ func buildFacetedTopology(verts []r3.Vec, tris [][3]int, facetFace []*Face, face
 			// Keep the walk bounded even if malformed adjacency causes nextBoundary
 			// to cycle without returning to its start.
 			for steps := 0; ; steps++ {
+				if err := budget.step(); err != nil {
+					return err
+				}
 				if steps >= len(tris)*3+1 {
 					return fmt.Errorf(`%w: a face boundary walk exceeded its halfedges`, ErrBooleanFailed)
 				}
@@ -924,6 +1059,9 @@ func buildFacetedTopology(verts []r3.Vec, tris [][3]int, facetFace []*Face, face
 			loop := &Loop{}
 			firstChain, lastChain := -1, -1
 			for _, he := range cycle {
+				if err := budget.step(); err != nil {
+					return err
+				}
 				key := [2]int{min(he[0], he[1]), max(he[0], he[1])}
 				ci, ok := chainOf[key]
 				if !ok {
@@ -950,6 +1088,9 @@ func buildFacetedTopology(verts []r3.Vec, tris [][3]int, facetFace []*Face, face
 			}
 			mom := r3.Vec{}
 			for _, he := range cycle {
+				if err := budget.step(); err != nil {
+					return err
+				}
 				mom = mom.Add(verts[he[0]].Cross(verts[he[1]]))
 			}
 			loopMoment[loop] = mom
@@ -974,6 +1115,9 @@ func buildFacetedTopology(verts []r3.Vec, tris [][3]int, facetFace []*Face, face
 	// Faceted faces expose their polygons through Tessellate, not through loop
 	// nesting.
 	for f := range collectFaces(facetFace) {
+		if err := budget.step(); err != nil {
+			return err
+		}
 		if len(f.loops) == 0 {
 			return fmt.Errorf(`%w: a faceted face has no boundary loop`, ErrBooleanFailed)
 		}
@@ -982,6 +1126,9 @@ func buildFacetedTopology(verts []r3.Vec, tris [][3]int, facetFace []*Face, face
 			n := faceNormal[f]
 			best := 0.0
 			for idx, l := range f.loops {
+				if err := budget.step(); err != nil {
+					return err
+				}
 				if s := loopMoment[l].Dot(n); s > best {
 					best, li = s, idx
 				}
@@ -991,8 +1138,14 @@ func buildFacetedTopology(verts []r3.Vec, tris [][3]int, facetFace []*Face, face
 			longest := -1.0
 			li = 0
 			for idx, l := range f.loops {
+				if err := budget.step(); err != nil {
+					return err
+				}
 				total := 0.0
 				for _, ce := range l.coedges {
+					if err := budget.step(); err != nil {
+						return err
+					}
 					total += ce.edge.length
 				}
 				if total > longest {
@@ -1003,7 +1156,7 @@ func buildFacetedTopology(verts []r3.Vec, tris [][3]int, facetFace []*Face, face
 		f.loops[0], f.loops[li] = f.loops[li], f.loops[0]
 		f.loops[0].outer = true
 	}
-	return nil
+	return budget.err()
 }
 
 func collectFaces(facetFace []*Face) map[*Face]struct{} {

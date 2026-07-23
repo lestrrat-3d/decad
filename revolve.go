@@ -1,6 +1,7 @@
 package decad
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -893,7 +894,7 @@ type revolvePayload struct {
 func (rp revolvePayload) transform() r3.Transform { return rp.xform }
 
 // placed re-evaluates the same record under the composed motion.
-func (rp revolvePayload) placed(d *Document, ref StepRef, composed r3.Transform) (*Body, error) {
+func (rp revolvePayload) placed(_ context.Context, d *Document, ref StepRef, composed r3.Transform) (*Body, error) {
 	rp.xform = composed
 	return evalRevolve(d, ref, rp)
 }

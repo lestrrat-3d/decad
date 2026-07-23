@@ -263,6 +263,13 @@ operation. The helper consumes the step's records + already-built input bodies,
 returns one body + consumed-body list, and never commits. One package-owned
 commit tail serves both paths. A separate replay implementation is forbidden.
 
+`Body.PlacedContext`, `Body.DuplicateContext`, and `Body.PlacedCopyContext`
+pass the caller's context through payload placement. Faceted placement polls
+that context while transforming vertices, auditing and rebuilding topology, and
+recomputing measurements. Cancellation returns before the document commits.
+`Placed`, `Duplicate`, and `PlacedCopy` remain compatibility wrappers using
+`context.Background()`.
+
 Whole-recipe `Evaluate` applies selected recipe limits while taking its deep
 normalized snapshot, before any private slice can grow past a ceiling. It then
 validates the complete graph and walks it in a private document. It checks
@@ -495,8 +502,9 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
   carries; `Approximate` alone never assigns `Suspect`. The body's gate
   diameter is cached from the greatest distance between any two vertices in
   the complete held faceted payload, not from the smaller set exposed as B-rep
-  boundary-loop vertices. `Placed` recomputes the diameter after transforming
-  the payload vertices. The area floor sums each unique topological edge's held
+  boundary-loop vertices. A placement rebuild recomputes the diameter after
+  transforming the payload vertices and polls its context through the
+  quadratic scan. The area floor sums each unique topological edge's held
   length once, never its two coedge uses.
 - **Pairs**: use the four-way relation and proof order of
   `docs/interference-design.md`. Bounds separation or the analytic clearance

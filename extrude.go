@@ -1,6 +1,7 @@
 package decad
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"math/big"
@@ -421,7 +422,7 @@ func (pp prismPayload) reflected() bool { return pp.xform.IsReflection() }
 func (pp prismPayload) transform() r3.Transform { return pp.xform }
 
 // placed re-evaluates the same record under the composed motion.
-func (pp prismPayload) placed(d *Document, ref StepRef, composed r3.Transform) (*Body, error) {
+func (pp prismPayload) placed(_ context.Context, d *Document, ref StepRef, composed r3.Transform) (*Body, error) {
 	pp.xform = composed
 	return evalPrism(d, ref, pp)
 }

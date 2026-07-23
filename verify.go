@@ -1249,20 +1249,39 @@ func bodyGateDiameter(ctx context.Context, body *Body) (float64, bool, error) {
 }
 
 func pointSetDiameter(points []r3.Vec) (float64, bool) {
+	d, ok, _ := pointSetDiameterWithBudget(nil, points)
+	return d, ok
+}
+
+func pointSetDiameterContext(ctx context.Context, points []r3.Vec) (float64, bool, error) {
+	return pointSetDiameterWithBudget(newWorkBudget(ctx), points)
+}
+
+func pointSetDiameterWithBudget(budget *workBudget, points []r3.Vec) (float64, bool, error) {
 	if len(points) == 0 {
-		return 0, false
+		return 0, false, nil
 	}
 	best := 0.0
 	for i := range points {
 		for j := i + 1; j < len(points); j++ {
+			if budget != nil {
+				if err := budget.step(); err != nil {
+					return 0, false, err
+				}
+			}
 			distance := points[i].Sub(points[j]).Len()
 			if !usableMagnitude(distance) {
-				return 0, false
+				return 0, false, nil
 			}
 			best = math.Max(best, distance)
 		}
 	}
-	return best, true
+	if budget != nil {
+		if err := budget.err(); err != nil {
+			return 0, false, err
+		}
+	}
+	return best, true, nil
 }
 
 // boxesDisjoint reports whether the two bounds-inflated boxes have disjoint
