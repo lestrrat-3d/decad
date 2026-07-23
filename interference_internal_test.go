@@ -386,7 +386,7 @@ func TestAnalyticBodiesEqualCancellationIsBounded(t *testing.T) {
 		`the set-identity walk must poll inside the per-segment comparison`)
 }
 
-func TestAnalyticBodiesEqualMatchesWholePayloadDeepEqual(t *testing.T) {
+func TestAnalyticBodiesEqualMatchesPlainPrismSetIdentity(t *testing.T) {
 	doc := New()
 	a := internalBoxBody(t, doc, 0, 0, 10, 10, 5)
 	same := internalBoxBody(t, doc, 0, 0, 10, 10, 5)
@@ -405,7 +405,7 @@ func TestAnalyticBodiesEqualMatchesWholePayloadDeepEqual(t *testing.T) {
 			got, err := analyticBodiesEqual(newWorkBudget(t.Context()), tc.x, tc.y)
 			require.NoError(t, err)
 			require.Equal(t, reflect.DeepEqual(tc.x.payload, tc.y.payload), got,
-				`the budgeted walk must decide exactly the pairs a whole-payload DeepEqual decides`)
+				`the budgeted walk must agree with set identity for plain prism records`)
 		})
 	}
 }

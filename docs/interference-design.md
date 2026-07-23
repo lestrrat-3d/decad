@@ -179,10 +179,13 @@ Strict containment cannot classify equal bodies because their boundaries
 coincide. An exact set-equality certificate may reuse one operand's volume on
 the same grounds: `A = B` proves `A ∩ B = A`.
 
-The shipped certificate is analytic and exact. It compares complete evaluator
-payload values with exact structural equality, never samples, bounding boxes,
-tolerances, or topology counts. Identical `prismPayload`, `cupPayload`, or
-`revolvePayload` values prove identical represented sets.
+The shipped certificate is analytic and exact. It compares the payload fields
+that determine the represented point set with exact structural equality, never
+samples, bounding boxes, tolerances, or topology counts. Derived metadata that
+does not change that set — `cupPayload.thickness`/`sense` and
+`prismPayload.blendSegs`/`blendKind` — is deliberately excluded. Equal
+represented-set fields in `prismPayload`, `cupPayload`, or `revolvePayload`
+prove identical represented sets.
 
 Broader equality is staged. A future normalizer may prove harmless
 representation choices equivalent:

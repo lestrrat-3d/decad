@@ -13,13 +13,14 @@ import (
 // structural equality is deliberately only a sufficient certificate: a
 // different record that might describe the same set stays undecided.
 //
-// The only unbounded part of a payload is its ProfileRecord, so the records are
-// walked loop by loop and segment by segment under the budget, leaving
-// reflect.DeepEqual as a leaf over one segment — a bounded exact predicate,
-// which is what §7.2 allows to stay context-free. The remaining payload fields
-// are fixed-size. Struct and slice deep equality are field-wise and
-// element-wise, so this decides exactly the pairs a whole-payload DeepEqual
-// decides.
+// The only unbounded represented-set fields compared here are the
+// ProfileRecords, so they are walked loop by loop and segment by segment under
+// the budget, leaving reflect.DeepEqual as a leaf over one segment — a bounded
+// exact predicate, which is what §7.2 allows to stay context-free. The remaining
+// comparisons cover the fixed-size fields that determine the represented point
+// set. They may deliberately ignore derived certificate metadata, such as
+// cupPayload.thickness and cupPayload.sense, because it does not change set
+// identity.
 func analyticBodiesEqual(budget *workBudget, a, b *Body) (bool, error) {
 	switch pa := a.payload.(type) {
 	case prismPayload:
