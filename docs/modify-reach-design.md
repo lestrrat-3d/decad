@@ -172,7 +172,7 @@ Gate order:
 | 2. expansion | resolve seed; expand tangent chain; SX2 |
 | 3. reference | resolve asymmetric reference; SX3 |
 | 4. receiver/target | base R + RX; SX4/SX5/SX8/SX9/SX10 |
-| 5. existence | base S4/S5/S10; SX6/SX11 |
+| 5. existence | base S4/S5/S18/S10; SX6/SX11 |
 | 6. constructed-geometry audit | base S8/S6/S7/S9/S11; SX7/SX12 |
 | 7. payload | base S12 until `stackedPrismPayload` lands; BX8 handles that exact case afterward |
 
@@ -498,10 +498,10 @@ inward, `Q \ P` outward. It produces one outer shell plus one void shell.
 
 For cap-only removal from a holed section, build the wall as one slab with
 `1 + k` regions: the band between the paired outer loops first, followed by one
-band between each paired hole loop in `ProfileRecord` order. The base §5/S10/
-S11 audits prove those bands are regular and pairwise disjoint before payload
-construction. The resulting `1 + k` connected components lift base S12 without
-admitting holed side-opening or no-opening shells.
+band between each paired hole loop in `ProfileRecord` order. The base
+S18/S10/S11/§5 gates prove those bands are regular and pairwise disjoint before
+payload construction. The resulting `1 + k` connected components lift base S12
+without admitting holed side-opening or no-opening shells.
 
 ### 9.3 Revolve shell
 

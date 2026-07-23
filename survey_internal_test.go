@@ -1,6 +1,7 @@
 package decad
 
 import (
+	"errors"
 	"math"
 	"testing"
 
@@ -45,6 +46,52 @@ func TestWallKernelCleanProfileDoesNotFlag(t *testing.T) {
 	require.False(t, out.subTolFar)
 	require.True(t, out.hasSpan)
 	require.InDelta(t, 60.0, out.span, 1e-9)
+}
+
+func TestWallCandidateWorkChecked(t *testing.T) {
+	work, ok := wallCandidateWork(4, 4, false)
+	require.True(t, ok)
+	require.Equal(t, uint64(88), work)
+
+	work, ok = wallCandidateWork(4, 4, true)
+	require.True(t, ok)
+	require.Equal(t, uint64(124), work)
+
+	maxInt := int(^uint(0) >> 1)
+	_, ok = wallCandidateWork(maxInt, maxInt, true)
+	require.False(t, ok)
+}
+
+func TestWallKernelStreamsCandidates(t *testing.T) {
+	circle, ok := arcElem(0, 0, 10, 0, 2*math.Pi, true)
+	require.True(t, ok)
+	k := newWallKernel([]surveyElem{circle}, nil, nil, 0, 0, false, math.Inf(1))
+	stop := errors.New("stop after first candidate")
+	seen := 0
+	err := k.generate(nil, func(diskCand) error {
+		seen++
+		return stop
+	})
+	require.ErrorIs(t, err, stop)
+	require.Equal(t, 1, seen)
+}
+
+func TestWallKernelSharesWorkBudgetAcrossGenerationAndValidation(t *testing.T) {
+	pts := [][2]float64{{0, 0}, {100, 0}, {100, 60}, {0, 60}}
+	elems := make([]surveyElem, 0, len(pts))
+	for i := range pts {
+		e, ok := lineElem(pts[i][0], pts[i][1], pts[(i+1)%len(pts)][0], pts[(i+1)%len(pts)][1])
+		require.True(t, ok)
+		elems = append(elems, e)
+	}
+	k := newWallKernel(elems, nil, pts, 0, 0, false, math.Inf(1))
+
+	_, err := k.runBudget(newWallWorkBudget(1))
+	require.ErrorIs(t, err, errWallWorkBudget)
+
+	_, _, ok, err := k.validate(diskCand{x: 50, y: 30, r: 30}, newWallWorkBudget(1))
+	require.False(t, ok)
+	require.ErrorIs(t, err, errWallWorkBudget)
 }
 
 func TestPrismWallSubToleranceWebIsUndecided(t *testing.T) {
