@@ -268,9 +268,12 @@ func (ig *regionIntegrals) addFor(segment CurveSegment, order momentIntegralOrde
 		ig.addLine(segment, order)
 		return nil
 	case CircleSeg:
+		if segment.Radius.Kind() != units.Length {
+			return fmt.Errorf(`%w: a circle segment's radius must be a %s, got %s`, ErrUnitKind, units.Length, segment.Radius.Kind())
+		}
 		radius, err := segment.Radius.In(units.Millimeter)
 		if err != nil {
-			return fmt.Errorf(`decad: a circle segment's radius is not a length: %w`, err)
+			return fmt.Errorf(`%w: a circle segment's radius is not representable: %s`, ErrNotFinite, err)
 		}
 		if segment.CCW != (segment.TStart < segment.TEnd) {
 			return fmt.Errorf(`%w: a circle segment's CCW flag contradicts its range order`, ErrDegenerate)
