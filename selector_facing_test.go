@@ -100,11 +100,8 @@ func TestFacingPredicate(t *testing.T) {
 func TestFacingCodec(t *testing.T) {
 	// A facing predicate round-trips through a Step field for field, and its
 	// dir payload is required — an absent dir is malformed, never a zero vector.
-	step := decad.Step{
-		Op:        decad.OpShell,
-		Inputs:    []decad.StepRef{0},
-		Selectors: []decad.Selector{decad.Faces(decad.Planar(), decad.Facing(zAxis)).Exactly(1)},
-	}
+	step := validCodecStep(decad.OpShell)
+	step.Selectors = []decad.Selector{decad.Faces(decad.Planar(), decad.Facing(zAxis)).Exactly(1)}
 	buf, err := json.Marshal(step)
 	require.NoError(t, err)
 	require.Contains(t, string(buf), `"kind":"facing"`)

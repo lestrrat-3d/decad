@@ -2,6 +2,7 @@ package decad_test
 
 import (
 	"encoding/json"
+	"math"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
@@ -25,6 +26,355 @@ var (
 	_ decad.BodyRef    = decad.StepRef(0)
 	_ decad.StepOpts   = decad.ExtrudeOpts{}
 )
+
+func validCodecStep(op decad.OpKind) decad.Step {
+	profile := decad.ProfileRecord{
+		Outer: decad.LoopRecord{
+			Segments: []decad.CurveSegment{
+				decad.CircleSeg{
+					Radius: units.Millimeters(1),
+					CCW:    true,
+					TEnd:   2 * math.Pi,
+				},
+			},
+		},
+	}
+	plane := decad.PlaneRecord{
+		U: r3.NewVec(1, 0, 0),
+		V: r3.NewVec(0, 1, 0),
+	}
+	placement := decad.TransformRecord{
+		EX: r3.NewVec(1, 0, 0),
+		EY: r3.NewVec(0, 1, 0),
+		EZ: r3.NewVec(0, 0, 1),
+	}
+
+	switch op {
+	case decad.OpExtrude:
+		return decad.Step{
+			Op:      op,
+			Profile: profile,
+			Plane:   plane,
+			Extent:  decad.Distance{D: units.Millimeters(1), Dir: decad.Along},
+			Opts:    decad.ExtrudeOpts{Taper: units.Degrees(0)},
+		}
+	case decad.OpRevolve:
+		return decad.Step{
+			Op:      op,
+			Profile: profile,
+			Plane:   plane,
+			Angular: decad.FullRevolution{},
+			Axis:    decad.SketchLine{Start: decad.Point2{}, End: decad.Point2{V: 1}},
+		}
+	case decad.OpUnion, decad.OpCut, decad.OpIntersect:
+		return decad.Step{Op: op, Inputs: []decad.StepRef{0, 1}}
+	case decad.OpFillet:
+		return decad.Step{
+			Op:        op,
+			Inputs:    []decad.StepRef{0},
+			Selectors: []decad.Selector{decad.Edges()},
+			Values:    []units.Value{units.Millimeters(1)},
+		}
+	case decad.OpChamfer:
+		return decad.Step{
+			Op:        op,
+			Inputs:    []decad.StepRef{0},
+			Selectors: []decad.Selector{decad.Edges()},
+			Values:    []units.Value{units.Millimeters(1)},
+		}
+	case decad.OpShell:
+		return decad.Step{
+			Op:        op,
+			Inputs:    []decad.StepRef{0},
+			Selectors: []decad.Selector{decad.Faces()},
+			Opts:      decad.ShellOpts{Sense: decad.Inward},
+			Values:    []units.Value{units.Millimeters(1)},
+		}
+	case decad.OpPlaced:
+		return decad.Step{Op: op, Inputs: []decad.StepRef{0}, Placement: placement}
+	case decad.OpDuplicate:
+		return decad.Step{Op: op, Inputs: []decad.StepRef{0}}
+	case decad.OpPlacedCopy:
+		return decad.Step{Op: op, Inputs: []decad.StepRef{0}, Placement: placement}
+	default:
+		return decad.Step{Op: op}
+	}
+}
+
+func rejectStepMutationBothWays(
+	t *testing.T,
+	op decad.OpKind,
+	mutateStep func(*decad.Step),
+	mutateWire func(map[string]json.RawMessage),
+) {
+	t.Helper()
+
+	step := validCodecStep(op)
+	mutateStep(&step)
+	_, err := json.Marshal(step)
+	require.Error(t, err, `the in-memory shape must refuse to encode`)
+
+	buf, err := json.Marshal(validCodecStep(op))
+	require.NoError(t, err)
+	var fields map[string]json.RawMessage
+	require.NoError(t, json.Unmarshal(buf, &fields))
+	mutateWire(fields)
+	buf, err = json.Marshal(fields)
+	require.NoError(t, err)
+	var decoded decad.Step
+	require.Error(t, json.Unmarshal(buf, &decoded), `the wire shape must refuse to decode`)
+}
+
+func TestStepOperationShapes(t *testing.T) {
+	ops := []decad.OpKind{
+		decad.OpExtrude,
+		decad.OpRevolve,
+		decad.OpUnion,
+		decad.OpCut,
+		decad.OpIntersect,
+		decad.OpFillet,
+		decad.OpChamfer,
+		decad.OpShell,
+		decad.OpPlaced,
+		decad.OpDuplicate,
+		decad.OpPlacedCopy,
+	}
+	for _, op := range ops {
+		t.Run(op.String(), func(t *testing.T) {
+			step := validCodecStep(op)
+			buf, err := json.Marshal(step)
+			require.NoError(t, err)
+			var got decad.Step
+			require.NoError(t, json.Unmarshal(buf, &got))
+			require.Equal(t, step, got)
+		})
+	}
+}
+
+func TestStepOperationShapeRejectsMissingAndExtraFields(t *testing.T) {
+	tests := []struct {
+		op           decad.OpKind
+		missingStep  func(*decad.Step)
+		missingField string
+		extraStep    func(*decad.Step)
+		extraField   string
+		extraWire    json.RawMessage
+	}{
+		{
+			op:           decad.OpExtrude,
+			missingStep:  func(s *decad.Step) { s.Profile = decad.ProfileRecord{} },
+			missingField: "profile",
+			extraStep:    func(s *decad.Step) { s.Values = []units.Value{units.Millimeters(1)} },
+			extraField:   "values",
+			extraWire:    json.RawMessage(`[]`),
+		},
+		{
+			op:           decad.OpRevolve,
+			missingStep:  func(s *decad.Step) { s.Axis = nil },
+			missingField: "axis",
+			extraStep:    func(s *decad.Step) { s.Extent = decad.Distance{D: units.Millimeters(1), Dir: decad.Along} },
+			extraField:   "extent",
+			extraWire:    json.RawMessage(`null`),
+		},
+		{
+			op:           decad.OpUnion,
+			missingStep:  func(s *decad.Step) { s.Inputs = s.Inputs[:1] },
+			missingField: "inputs",
+			extraStep:    func(s *decad.Step) { s.Profile = validCodecStep(decad.OpExtrude).Profile },
+			extraField:   "profile",
+			extraWire:    json.RawMessage(`{}`),
+		},
+		{
+			op:           decad.OpCut,
+			missingStep:  func(s *decad.Step) { s.Inputs = nil },
+			missingField: "inputs",
+			extraStep:    func(s *decad.Step) { s.Opts = decad.ExtrudeOpts{Taper: units.Degrees(0)} },
+			extraField:   "opts",
+			extraWire:    json.RawMessage(`null`),
+		},
+		{
+			op:           decad.OpIntersect,
+			missingStep:  func(s *decad.Step) { s.Inputs = nil },
+			missingField: "inputs",
+			extraStep:    func(s *decad.Step) { s.Selectors = []decad.Selector{decad.Edges()} },
+			extraField:   "selectors",
+			extraWire:    json.RawMessage(`[]`),
+		},
+		{
+			op:           decad.OpFillet,
+			missingStep:  func(s *decad.Step) { s.Selectors = nil },
+			missingField: "selectors",
+			extraStep:    func(s *decad.Step) { s.Opts = decad.ExtrudeOpts{Taper: units.Degrees(0)} },
+			extraField:   "opts",
+			extraWire:    json.RawMessage(`null`),
+		},
+		{
+			op:           decad.OpChamfer,
+			missingStep:  func(s *decad.Step) { s.Values = nil },
+			missingField: "values",
+			extraStep:    func(s *decad.Step) { s.Placement = validCodecStep(decad.OpPlaced).Placement },
+			extraField:   "placement",
+			extraWire:    json.RawMessage(`null`),
+		},
+		{
+			op:           decad.OpShell,
+			missingStep:  func(s *decad.Step) { s.Opts = nil },
+			missingField: "opts",
+			extraStep:    func(s *decad.Step) { s.Extent = decad.Distance{D: units.Millimeters(1), Dir: decad.Along} },
+			extraField:   "extent",
+			extraWire:    json.RawMessage(`null`),
+		},
+		{
+			op:           decad.OpPlaced,
+			missingStep:  func(s *decad.Step) { s.Placement = decad.TransformRecord{} },
+			missingField: "placement",
+			extraStep:    func(s *decad.Step) { s.Values = []units.Value{units.Millimeters(1)} },
+			extraField:   "values",
+			extraWire:    json.RawMessage(`[]`),
+		},
+		{
+			op:           decad.OpDuplicate,
+			missingStep:  func(s *decad.Step) { s.Inputs = nil },
+			missingField: "inputs",
+			extraStep:    func(s *decad.Step) { s.Placement = validCodecStep(decad.OpPlaced).Placement },
+			extraField:   "placement",
+			extraWire:    json.RawMessage(`null`),
+		},
+		{
+			op:           decad.OpPlacedCopy,
+			missingStep:  func(s *decad.Step) { s.Placement = decad.TransformRecord{} },
+			missingField: "placement",
+			extraStep:    func(s *decad.Step) { s.Opts = decad.ExtrudeOpts{Taper: units.Degrees(0)} },
+			extraField:   "opts",
+			extraWire:    json.RawMessage(`null`),
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.op.String()+"/missing", func(t *testing.T) {
+			rejectStepMutationBothWays(
+				t,
+				test.op,
+				test.missingStep,
+				func(fields map[string]json.RawMessage) { delete(fields, test.missingField) },
+			)
+		})
+		t.Run(test.op.String()+"/extra", func(t *testing.T) {
+			rejectStepMutationBothWays(
+				t,
+				test.op,
+				test.extraStep,
+				func(fields map[string]json.RawMessage) { fields[test.extraField] = test.extraWire },
+			)
+		})
+	}
+}
+
+func TestStepOperationShapeRejectsWrongCountsAndTypes(t *testing.T) {
+	tests := []struct {
+		name       string
+		op         decad.OpKind
+		mutateStep func(*decad.Step)
+		mutateWire func(map[string]json.RawMessage)
+	}{
+		{
+			name:       "extrude duplicate inputs",
+			op:         decad.OpExtrude,
+			mutateStep: func(s *decad.Step) { s.Inputs = []decad.StepRef{0, 0} },
+			mutateWire: func(fields map[string]json.RawMessage) { fields["inputs"] = json.RawMessage(`[0,0]`) },
+		},
+		{
+			name:       "revolve duplicate inputs",
+			op:         decad.OpRevolve,
+			mutateStep: func(s *decad.Step) { s.Inputs = []decad.StepRef{0, 0} },
+			mutateWire: func(fields map[string]json.RawMessage) { fields["inputs"] = json.RawMessage(`[0,0]`) },
+		},
+		{
+			name:       "union duplicate inputs",
+			op:         decad.OpUnion,
+			mutateStep: func(s *decad.Step) { s.Inputs = []decad.StepRef{0, 0} },
+			mutateWire: func(fields map[string]json.RawMessage) { fields["inputs"] = json.RawMessage(`[0,0]`) },
+		},
+		{
+			name:       "cut duplicate inputs",
+			op:         decad.OpCut,
+			mutateStep: func(s *decad.Step) { s.Inputs = []decad.StepRef{0, 0} },
+			mutateWire: func(fields map[string]json.RawMessage) { fields["inputs"] = json.RawMessage(`[0,0]`) },
+		},
+		{
+			name:       "intersect duplicate inputs",
+			op:         decad.OpIntersect,
+			mutateStep: func(s *decad.Step) { s.Inputs = []decad.StepRef{0, 0} },
+			mutateWire: func(fields map[string]json.RawMessage) { fields["inputs"] = json.RawMessage(`[0,0]`) },
+		},
+		{
+			name:       "fillet selectors",
+			op:         decad.OpFillet,
+			mutateStep: func(s *decad.Step) { s.Selectors = append(s.Selectors, decad.Edges()) },
+			mutateWire: func(fields map[string]json.RawMessage) {
+				fields["selectors"] = json.RawMessage(`[{"kind":"edges","preds":[]},{"kind":"edges","preds":[]}]`)
+			},
+		},
+		{
+			name:       "chamfer values",
+			op:         decad.OpChamfer,
+			mutateStep: func(s *decad.Step) { s.Values = append(s.Values, units.Millimeters(2)) },
+			mutateWire: func(fields map[string]json.RawMessage) { fields["values"] = json.RawMessage(`["1 mm","2 mm"]`) },
+		},
+		{
+			name:       "shell inputs",
+			op:         decad.OpShell,
+			mutateStep: func(s *decad.Step) { s.Inputs = append(s.Inputs, 1) },
+			mutateWire: func(fields map[string]json.RawMessage) { fields["inputs"] = json.RawMessage(`[0,1]`) },
+		},
+		{
+			name:       "extrude options",
+			op:         decad.OpExtrude,
+			mutateStep: func(s *decad.Step) { s.Opts = decad.ShellOpts{Sense: decad.Inward} },
+			mutateWire: func(fields map[string]json.RawMessage) {
+				fields["opts"] = json.RawMessage(`{"kind":"shell","sense":"inward"}`)
+			},
+		},
+		{
+			name:       "shell options",
+			op:         decad.OpShell,
+			mutateStep: func(s *decad.Step) { s.Opts = decad.ExtrudeOpts{Taper: units.Degrees(0)} },
+			mutateWire: func(fields map[string]json.RawMessage) {
+				fields["opts"] = json.RawMessage(`{"kind":"extrude","taper":"0 deg"}`)
+			},
+		},
+		{
+			name:       "fillet selector",
+			op:         decad.OpFillet,
+			mutateStep: func(s *decad.Step) { s.Selectors = []decad.Selector{decad.Faces()} },
+			mutateWire: func(fields map[string]json.RawMessage) {
+				fields["selectors"] = json.RawMessage(`[{"kind":"faces","preds":[]}]`)
+			},
+		},
+		{
+			name:       "chamfer selector",
+			op:         decad.OpChamfer,
+			mutateStep: func(s *decad.Step) { s.Selectors = []decad.Selector{decad.Faces()} },
+			mutateWire: func(fields map[string]json.RawMessage) {
+				fields["selectors"] = json.RawMessage(`[{"kind":"faces","preds":[]}]`)
+			},
+		},
+		{
+			name:       "shell selector",
+			op:         decad.OpShell,
+			mutateStep: func(s *decad.Step) { s.Selectors = []decad.Selector{decad.Edges()} },
+			mutateWire: func(fields map[string]json.RawMessage) {
+				fields["selectors"] = json.RawMessage(`[{"kind":"edges","preds":[]}]`)
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			rejectStepMutationBothWays(t, test.op, test.mutateStep, test.mutateWire)
+		})
+	}
+}
 
 func TestRecipeRoundTrip(t *testing.T) {
 	// A real recorded profile makes the step's payload the genuine article.
@@ -50,7 +400,6 @@ func TestRecipeRoundTrip(t *testing.T) {
 			Plane:   plane,
 			Extent:  decad.Distance{D: units.Millimeters(10), Dir: decad.Along},
 			Opts:    decad.ExtrudeOpts{Taper: units.Degrees(0)},
-			Values:  []units.Value{units.Millimeters(10)},
 		},
 		{
 			Op:        decad.OpPlaced,
@@ -75,7 +424,8 @@ func TestExtentCodec(t *testing.T) {
 		decad.Symmetric{D: units.Millimeters(8), FullLength: true},
 		decad.TwoSided{One: decad.DistanceSide{D: units.Millimeters(3)}, Two: decad.ThroughAllSide{}},
 	} {
-		step := decad.Step{Op: decad.OpExtrude, Extent: e}
+		step := validCodecStep(decad.OpExtrude)
+		step.Extent = e
 		buf, err := json.Marshal(step)
 		require.NoError(t, err, `%T should encode`, e)
 		var got decad.Step
@@ -134,7 +484,8 @@ func TestStepCodecPreservesExplicitNullSlices(t *testing.T) {
 }
 
 func TestStepOptsCodec(t *testing.T) {
-	step := decad.Step{Op: decad.OpExtrude, Opts: decad.ExtrudeOpts{Taper: units.Degrees(-3)}}
+	step := validCodecStep(decad.OpExtrude)
+	step.Opts = decad.ExtrudeOpts{Taper: units.Degrees(-3)}
 	buf, err := json.Marshal(step)
 	require.NoError(t, err)
 	var got decad.Step
@@ -235,11 +586,9 @@ func TestPlacementKeyingCodec(t *testing.T) {
 func TestRecipePointerForms(t *testing.T) {
 	// The sealed sets use value receivers, so pointer forms satisfy the
 	// interfaces; the codecs normalize them to values and reject nil.
-	step := decad.Step{
-		Op:     decad.OpExtrude,
-		Extent: &decad.TwoSided{One: &decad.DistanceSide{D: units.Millimeters(2)}, Two: decad.ThroughAllSide{}},
-		Opts:   &decad.ExtrudeOpts{Taper: units.Degrees(1)},
-	}
+	step := validCodecStep(decad.OpExtrude)
+	step.Extent = &decad.TwoSided{One: &decad.DistanceSide{D: units.Millimeters(2)}, Two: decad.ThroughAllSide{}}
+	step.Opts = &decad.ExtrudeOpts{Taper: units.Degrees(1)}
 	buf, err := json.Marshal(step)
 	require.NoError(t, err, `pointer variant forms should encode like their values`)
 	var got decad.Step
@@ -247,8 +596,12 @@ func TestRecipePointerForms(t *testing.T) {
 	require.Equal(t, decad.TwoSided{One: decad.DistanceSide{D: units.Millimeters(2)}, Two: decad.ThroughAllSide{}}, got.Extent)
 	require.Equal(t, decad.ExtrudeOpts{Taper: units.Degrees(1)}, got.Opts)
 
-	_, err = json.Marshal(decad.Step{Op: decad.OpExtrude, Extent: (*decad.Distance)(nil)})
+	nilExtent := validCodecStep(decad.OpExtrude)
+	nilExtent.Extent = (*decad.Distance)(nil)
+	_, err = json.Marshal(nilExtent)
 	require.Error(t, err, `a nil extent pointer names no extent to record`)
-	_, err = json.Marshal(decad.Step{Op: decad.OpExtrude, Opts: (*decad.ExtrudeOpts)(nil)})
+	nilOpts := validCodecStep(decad.OpExtrude)
+	nilOpts.Opts = (*decad.ExtrudeOpts)(nil)
+	_, err = json.Marshal(nilOpts)
 	require.Error(t, err, `nil step options name nothing to record`)
 }

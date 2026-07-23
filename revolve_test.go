@@ -1086,7 +1086,8 @@ func TestRevolveReflectedSphereAndConeNormals(t *testing.T) {
 
 func TestRevolveRecipeAxisCodec(t *testing.T) {
 	t.Run("AxisKeyedToRevolve", func(t *testing.T) {
-		step := decad.Step{Op: decad.OpExtrude, Axis: uAxis}
+		step := validCodecStep(decad.OpExtrude)
+		step.Axis = uAxis
 		_, err := json.Marshal(step)
 		require.Error(t, err, `an axis on a non-revolve step neither encodes nor decodes`)
 		var s decad.Step
@@ -1094,7 +1095,9 @@ func TestRevolveRecipeAxisCodec(t *testing.T) {
 		require.Error(t, err)
 	})
 	t.Run("SketchLineRoundTrip", func(t *testing.T) {
-		step := decad.Step{Op: decad.OpRevolve, Angular: decad.FullRevolution{}, Axis: uAxis}
+		step := validCodecStep(decad.OpRevolve)
+		step.Angular = decad.FullRevolution{}
+		step.Axis = uAxis
 		buf, err := json.Marshal(step)
 		require.NoError(t, err)
 		var got decad.Step
@@ -1102,11 +1105,9 @@ func TestRevolveRecipeAxisCodec(t *testing.T) {
 		require.Equal(t, step, got)
 	})
 	t.Run("ConstructionAxisRoundTrip", func(t *testing.T) {
-		step := decad.Step{
-			Op:      decad.OpRevolve,
-			Angular: decad.SymmetricAngle{A: units.Degrees(45)},
-			Axis:    decad.ConstructionAxis{Origin: r3.NewVec(1, 2, 3), Dir: r3.NewVec(0, 1, 0)},
-		}
+		step := validCodecStep(decad.OpRevolve)
+		step.Angular = decad.SymmetricAngle{A: units.Degrees(45)}
+		step.Axis = decad.ConstructionAxis{Origin: r3.NewVec(1, 2, 3), Dir: r3.NewVec(0, 1, 0)}
 		buf, err := json.Marshal(step)
 		require.NoError(t, err)
 		var got decad.Step
@@ -1114,11 +1115,10 @@ func TestRevolveRecipeAxisCodec(t *testing.T) {
 		require.Equal(t, step, got)
 	})
 	t.Run("EdgeAxisRoundTrip", func(t *testing.T) {
-		step := decad.Step{
-			Op:      decad.OpRevolve,
-			Angular: decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along},
-			Axis:    decad.EdgeAxis{Body: decad.StepRef(2), Edge: decad.Edges(decad.Circular()).Exactly(1)},
-		}
+		step := validCodecStep(decad.OpRevolve)
+		step.Inputs = []decad.StepRef{2}
+		step.Angular = decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along}
+		step.Axis = decad.EdgeAxis{Body: decad.StepRef(2), Edge: decad.Edges(decad.Circular()).Exactly(1)}
 		buf, err := json.Marshal(step)
 		require.NoError(t, err)
 		var got decad.Step
@@ -1130,11 +1130,9 @@ func TestRevolveRecipeAxisCodec(t *testing.T) {
 		doc := decad.New()
 		host, err := doc.Extrude(es, ep, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 		require.NoError(t, err)
-		step := decad.Step{
-			Op:      decad.OpRevolve,
-			Angular: decad.FullRevolution{},
-			Axis:    decad.EdgeAxis{Body: host, Edge: decad.Edges().Exactly(1)},
-		}
+		step := validCodecStep(decad.OpRevolve)
+		step.Angular = decad.FullRevolution{}
+		step.Axis = decad.EdgeAxis{Body: host, Edge: decad.Edges().Exactly(1)}
 		_, err = json.Marshal(step)
 		require.Error(t, err, `a live body is a handle, not a record`)
 	})

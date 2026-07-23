@@ -46,7 +46,11 @@ func TestSelectorCodec(t *testing.T) {
 		).Exactly(1),
 		decad.Faces(decad.Planar()).AtLeast(2),
 	} {
-		step := decad.Step{Op: decad.OpFillet, Inputs: []decad.StepRef{0}, Selectors: []decad.Selector{sel}}
+		step := validCodecStep(decad.OpFillet)
+		if _, ok := sel.(*decad.FaceQuery); ok {
+			step = validCodecStep(decad.OpShell)
+		}
+		step.Selectors = []decad.Selector{sel}
 		buf, err := json.Marshal(step)
 		require.NoError(t, err, `%T should encode`, sel)
 		var got decad.Step
@@ -55,7 +59,8 @@ func TestSelectorCodec(t *testing.T) {
 	}
 
 	// A later cardinality assertion replaces the earlier one.
-	step := decad.Step{Op: decad.OpFillet, Selectors: []decad.Selector{decad.Edges(decad.Convex()).Exactly(4).AtLeast(1)}}
+	step := validCodecStep(decad.OpFillet)
+	step.Selectors = []decad.Selector{decad.Edges(decad.Convex()).Exactly(4).AtLeast(1)}
 	buf, err := json.Marshal(step)
 	require.NoError(t, err)
 	require.Contains(t, string(buf), `"at_least":1`)
@@ -105,9 +110,13 @@ func TestSelectorCodecRejections(t *testing.T) {
 		`a query carries at most one cardinality assertion`)
 
 	// A zero-value predicate names nothing: only the constructors build one.
-	_, err := json.Marshal(decad.Step{Op: decad.OpFillet, Selectors: []decad.Selector{decad.Edges(decad.EdgePredicate{})}})
+	badEdge := validCodecStep(decad.OpFillet)
+	badEdge.Selectors = []decad.Selector{decad.Edges(decad.EdgePredicate{})}
+	_, err := json.Marshal(badEdge)
 	require.Error(t, err, `a zero-value edge predicate refuses to encode`)
-	_, err = json.Marshal(decad.Step{Op: decad.OpShell, Selectors: []decad.Selector{decad.Faces(decad.FacePredicate{})}})
+	badFace := validCodecStep(decad.OpShell)
+	badFace.Selectors = []decad.Selector{decad.Faces(decad.FacePredicate{})}
+	_, err = json.Marshal(badFace)
 	require.Error(t, err, `a zero-value face predicate refuses to encode`)
 }
 
@@ -210,9 +219,13 @@ func TestSelectorCodecAcceptsNegativeZeroProvenanceSteps(t *testing.T) {
 func TestNilSelectorPointersAreBranchable(t *testing.T) {
 	// A typed nil query pointer follows the same branchable contract as the
 	// other sealed sets: errors.Is(err, ErrDegenerate).
-	_, err := json.Marshal(decad.Step{Op: decad.OpFillet, Selectors: []decad.Selector{(*decad.EdgeQuery)(nil)}})
+	badEdge := validCodecStep(decad.OpFillet)
+	badEdge.Selectors = []decad.Selector{(*decad.EdgeQuery)(nil)}
+	_, err := json.Marshal(badEdge)
 	require.ErrorIs(t, err, decad.ErrDegenerate)
-	_, err = json.Marshal(decad.Step{Op: decad.OpShell, Selectors: []decad.Selector{(*decad.FaceQuery)(nil)}})
+	badFace := validCodecStep(decad.OpShell)
+	badFace.Selectors = []decad.Selector{(*decad.FaceQuery)(nil)}
+	_, err = json.Marshal(badFace)
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 }
 

@@ -295,6 +295,22 @@ type jsonStepDecode struct {
 	Values    json.RawMessage `json:"values"`
 }
 
+// jsonStepPresence retains whether a field whose zero value loses key presence
+// appeared on the wire. A RawMessage distinguishes an absent key from a
+// present null, empty array, empty object, or zero value. The per-operation
+// shape requires forbidden fields to be absent, not merely empty after decode.
+type jsonStepPresence struct {
+	Profile   json.RawMessage `json:"profile"`
+	Plane     json.RawMessage `json:"plane"`
+	Extent    json.RawMessage `json:"extent"`
+	Angular   json.RawMessage `json:"angular"`
+	Axis      json.RawMessage `json:"axis"`
+	Placement json.RawMessage `json:"placement"`
+	Selectors json.RawMessage `json:"selectors"`
+	Opts      json.RawMessage `json:"opts"`
+	Values    json.RawMessage `json:"values"`
+}
+
 // zeroVec reports whether v is the zero vector.
 func zeroVec(v r3.Vec) bool { return v == r3.Vec{} }
 
@@ -324,12 +340,110 @@ func extentKeyingError(s Step) (string, error) {
 	return "", nil
 }
 
+type stepFieldPresence struct {
+	profile   bool
+	plane     bool
+	extent    bool
+	angular   bool
+	axis      bool
+	placement bool
+	selectors bool
+	opts      bool
+	values    bool
+}
+
+type stepSelectorKind int
+
+const (
+	stepSelectorNone stepSelectorKind = iota
+	stepSelectorEdge
+	stepSelectorFace
+)
+
+type stepOptsKind int
+
+const (
+	stepOptsNone stepOptsKind = iota
+	stepOptsExtrude
+	stepOptsShell
+)
+
+type operationShape struct {
+	minInputs int
+	maxInputs int
+	profile   bool
+	plane     bool
+	extent    bool
+	angular   bool
+	axis      bool
+	placement bool
+	selector  stepSelectorKind
+	opts      stepOptsKind
+	values    int
+}
+
+func shapeForOperation(op OpKind) (operationShape, bool) {
+	switch op {
+	case OpExtrude:
+		return operationShape{
+			minInputs: 0,
+			maxInputs: -1,
+			profile:   true,
+			plane:     true,
+			extent:    true,
+			opts:      stepOptsExtrude,
+		}, true
+	case OpRevolve:
+		return operationShape{
+			minInputs: 0,
+			maxInputs: -1,
+			profile:   true,
+			plane:     true,
+			angular:   true,
+			axis:      true,
+		}, true
+	case OpUnion, OpCut, OpIntersect:
+		return operationShape{minInputs: 2, maxInputs: 2}, true
+	case OpFillet, OpChamfer:
+		return operationShape{
+			minInputs: 1,
+			maxInputs: 1,
+			selector:  stepSelectorEdge,
+			values:    1,
+		}, true
+	case OpShell:
+		return operationShape{
+			minInputs: 1,
+			maxInputs: 1,
+			selector:  stepSelectorFace,
+			opts:      stepOptsShell,
+			values:    1,
+		}, true
+	case OpPlaced:
+		return operationShape{minInputs: 1, maxInputs: 1, placement: true}, true
+	case OpDuplicate:
+		return operationShape{minInputs: 1, maxInputs: 1}, true
+	case OpPlacedCopy:
+		return operationShape{minInputs: 1, maxInputs: 1, placement: true}, true
+	default:
+		return operationShape{}, false
+	}
+}
+
+func nonzeroProfile(p ProfileRecord) bool {
+	return len(p.Outer.Segments) > 0 || len(p.Holes) > 0
+}
+
+func nonzeroPlane(p PlaneRecord) bool {
+	return !zeroVec(p.U) || !zeroVec(p.V) || !zeroVec(p.Origin)
+}
+
 // nonzeroPlacement reports whether a placement record carries a motion — the
 // same test MarshalJSON uses to decide whether to emit the field. A placed copy
 // records a motion here (OpPlacedCopy, r3.Identity() among them — its basis is
 // nonzero) while a duplicate leaves it zero (OpDuplicate). It is the VALIDITY
-// half of the placement keying: a nonzero record is a real placement, the zero
-// record is none.
+// half of the placement keying: a nonzero record is present, the zero record
+// is none. Full transform validation belongs to recipe record validation.
 func nonzeroPlacement(p TransformRecord) bool {
 	return !zeroVec(p.EX) || !zeroVec(p.EY) || !zeroVec(p.EZ) || !zeroVec(p.T)
 }
@@ -338,11 +452,8 @@ func nonzeroPlacement(p TransformRecord) bool {
 // directions, presence-aware and bidirectional. OpPlaced and OpPlacedCopy
 // REQUIRE a placement — the field must be present AND a valid (nonzero) motion,
 // so an absent or zero-value placement for these ops names no recordable
-// intent. Every OTHER op (OpDuplicate among them) FORBIDS the field entirely: a
-// present placement, even a zero-value one, is rejected. present reports
-// whether the step carries the field at all — the raw wire field's presence on
-// decode (a RawMessage, so an explicit null and a {} both count as present),
-// nonzeroPlacement on an in-memory step marshalled out.
+// intent. Every OTHER op (OpDuplicate among them) FORBIDS the field entirely:
+// a present placement, even a zero-value one, is rejected.
 func validatePlacementKeying(op OpKind, present bool, p TransformRecord) error {
 	if op == OpPlaced || op == OpPlacedCopy {
 		if !present || !nonzeroPlacement(p) {
@@ -356,25 +467,181 @@ func validatePlacementKeying(op OpKind, present bool, p TransformRecord) error {
 	return nil
 }
 
+func marshalStepPresence(s Step) stepFieldPresence {
+	return stepFieldPresence{
+		profile:   nonzeroProfile(s.Profile),
+		plane:     nonzeroPlane(s.Plane),
+		extent:    s.Extent != nil,
+		angular:   s.Angular != nil,
+		axis:      s.Axis != nil,
+		placement: nonzeroPlacement(s.Placement),
+		selectors: len(s.Selectors) > 0,
+		opts:      s.Opts != nil,
+		values:    len(s.Values) > 0,
+	}
+}
+
+func unmarshalStepPresence(data []byte) (stepFieldPresence, error) {
+	var raw jsonStepPresence
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return stepFieldPresence{}, fmt.Errorf(`decad: failed to decode step field presence: %w`, err)
+	}
+	return stepFieldPresence{
+		profile:   raw.Profile != nil,
+		plane:     raw.Plane != nil,
+		extent:    raw.Extent != nil,
+		angular:   raw.Angular != nil,
+		axis:      raw.Axis != nil,
+		placement: raw.Placement != nil,
+		selectors: raw.Selectors != nil,
+		opts:      raw.Opts != nil,
+		values:    raw.Values != nil,
+	}, nil
+}
+
+func validStepOptsKind(opts StepOpts, want stepOptsKind) bool {
+	switch want {
+	case stepOptsExtrude:
+		switch o := opts.(type) {
+		case ExtrudeOpts:
+			return true
+		case *ExtrudeOpts:
+			return o != nil
+		}
+	case stepOptsShell:
+		switch o := opts.(type) {
+		case ShellOpts:
+			return true
+		case *ShellOpts:
+			return o != nil
+		}
+	}
+	return false
+}
+
+// validateStepShape is the complete core §6.2 per-operation structural gate.
+// It is shared by both codec directions so caller-built and decoded Step
+// values admit exactly the shapes immediate feature calls record.
+func validateStepShape(s Step, present stepFieldPresence) error {
+	shape, ok := shapeForOperation(s.Op)
+	if !ok {
+		return fmt.Errorf(`decad: unknown op kind %d`, int(s.Op))
+	}
+
+	if len(s.Inputs) < shape.minInputs || (shape.maxInputs >= 0 && len(s.Inputs) > shape.maxInputs) {
+		if shape.maxInputs == shape.minInputs {
+			return fmt.Errorf(`decad: the %q op requires exactly %d inputs`, s.Op, shape.minInputs)
+		}
+		return fmt.Errorf(`decad: the %q op requires at least %d inputs`, s.Op, shape.minInputs)
+	}
+	for i, ref := range s.Inputs {
+		if slices.Contains(s.Inputs[:i], ref) {
+			return fmt.Errorf(`decad: the %q op requires unique inputs`, s.Op)
+		}
+	}
+
+	if shape.profile {
+		if !present.profile || len(s.Profile.Outer.Segments) == 0 {
+			return fmt.Errorf(`decad: the %q op requires a non-empty profile`, s.Op)
+		}
+	} else if present.profile {
+		return fmt.Errorf(`decad: the %q op forbids a profile`, s.Op)
+	}
+	if shape.plane {
+		if !present.plane || !nonzeroPlane(s.Plane) {
+			return fmt.Errorf(`decad: the %q op requires a plane`, s.Op)
+		}
+	} else if present.plane {
+		return fmt.Errorf(`decad: the %q op forbids a plane`, s.Op)
+	}
+	if present.extent != shape.extent {
+		if shape.extent {
+			return fmt.Errorf(`decad: the %q op requires a linear extent`, s.Op)
+		}
+		return fmt.Errorf(`decad: the %q op forbids a linear extent`, s.Op)
+	}
+	if present.angular != shape.angular {
+		if shape.angular {
+			return fmt.Errorf(`decad: the %q op requires an angular extent`, s.Op)
+		}
+		return fmt.Errorf(`decad: the %q op forbids an angular extent`, s.Op)
+	}
+	if present.axis != shape.axis {
+		if shape.axis {
+			return fmt.Errorf(`decad: the %q op requires an axis`, s.Op)
+		}
+		return fmt.Errorf(`decad: the %q op forbids an axis`, s.Op)
+	}
+	if shape.placement {
+		if !present.placement || !nonzeroPlacement(s.Placement) {
+			return fmt.Errorf(`decad: the %q op requires a placement`, s.Op)
+		}
+	} else if present.placement {
+		return fmt.Errorf(`decad: the %q op forbids a placement`, s.Op)
+	}
+
+	switch shape.selector {
+	case stepSelectorNone:
+		if present.selectors {
+			return fmt.Errorf(`decad: the %q op forbids selectors`, s.Op)
+		}
+	case stepSelectorEdge:
+		if len(s.Selectors) != 1 {
+			return fmt.Errorf(`decad: the %q op requires exactly one edge selector`, s.Op)
+		}
+		q, ok := s.Selectors[0].(*EdgeQuery)
+		if !ok {
+			return fmt.Errorf(`decad: the %q op requires an edge selector`, s.Op)
+		}
+		if q == nil {
+			return errNilSelector
+		}
+	case stepSelectorFace:
+		if len(s.Selectors) != 1 {
+			return fmt.Errorf(`decad: the %q op requires exactly one face selector`, s.Op)
+		}
+		q, ok := s.Selectors[0].(*FaceQuery)
+		if !ok {
+			return fmt.Errorf(`decad: the %q op requires a face selector`, s.Op)
+		}
+		if q == nil {
+			return errNilSelector
+		}
+	}
+
+	if shape.opts == stepOptsNone {
+		if present.opts {
+			return fmt.Errorf(`decad: the %q op forbids options`, s.Op)
+		}
+	} else if !present.opts || !validStepOptsKind(s.Opts, shape.opts) {
+		return fmt.Errorf(`decad: the %q op requires its matching options`, s.Op)
+	}
+
+	if shape.values == 0 {
+		if present.values {
+			return fmt.Errorf(`decad: the %q op forbids values`, s.Op)
+		}
+		return nil
+	}
+	if len(s.Values) != shape.values {
+		return fmt.Errorf(`decad: the %q op requires exactly %d values`, s.Op, shape.values)
+	}
+	return nil
+}
+
 // MarshalJSON encodes the step with every absent field omitted: a decoded
 // step is the recorded one, field for field.
 func (s Step) MarshalJSON() ([]byte, error) {
-	if err := validateExtentKeying(s); err != nil {
-		return nil, err
-	}
-	// An in-memory step is "present" for keying exactly when it carries a
-	// motion: the field is emitted (below) on the same test, so a placing op
-	// with a zero placement would encode without the field it requires.
-	if err := validatePlacementKeying(s.Op, nonzeroPlacement(s.Placement), s.Placement); err != nil {
+	if err := validateStepShape(s, marshalStepPresence(s)); err != nil {
 		return nil, err
 	}
 	op := s.Op
 	out := jsonStep{Op: &op, Inputs: s.Inputs, Values: s.Values}
-	if len(s.Profile.Outer.Segments) > 0 || len(s.Profile.Holes) > 0 {
+	if nonzeroProfile(s.Profile) {
 		p := s.Profile
 		out.Profile = &p
 	}
-	if !zeroVec(s.Plane.U) || !zeroVec(s.Plane.V) || !zeroVec(s.Plane.Origin) {
+	if nonzeroPlane(s.Plane) {
 		p := s.Plane
 		out.Plane = &p
 	}
@@ -433,6 +700,10 @@ func (s *Step) UnmarshalJSON(data []byte) error {
 	var raw jsonStepDecode
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return codecJSONError(fmt.Errorf(`decad: failed to decode step: %w`, err))
+	}
+	present, err := unmarshalStepPresence(data)
+	if err != nil {
+		return err
 	}
 	var op *OpKind
 	if raw.Op != nil {
@@ -503,10 +774,8 @@ func (s *Step) UnmarshalJSON(data []byte) error {
 	// literal bytes, so an explicit null and a {} are both present (non-nil)
 	// here while an absent key leaves it nil — a distinction a *TransformRecord
 	// loses, since json decodes null to a nil pointer. A present null or {}
-	// decodes to the zero record, which the keying below rejects on a
-	// forbidding op and treats as no-placement on a placing one.
-	placementPresent := raw.Placement != nil
-	if placementPresent {
+	// decodes to the zero record, which the shape gate below rejects.
+	if present.placement {
 		if err := json.Unmarshal(raw.Placement, &out.Placement); err != nil {
 			return prependCodecPath(codecJSONErrorAt(raw.Placement, &out.Placement, fmt.Errorf(`decad: failed to decode placement: %w`, err)), "placement")
 		}
@@ -554,12 +823,15 @@ func (s *Step) UnmarshalJSON(data []byte) error {
 	if field, err := extentKeyingError(out); err != nil {
 		return prependCodecPath(err, field)
 	}
-	// Presence is read from the wire (placementPresent above), not the
+	// Presence is read from the wire, not the
 	// flattened value: a present-but-zero placement ({} or an explicit null) on
 	// a forbidding op must be rejected, and an absent one on a placing op must
 	// be caught, neither of which the value alone reveals.
-	if err := validatePlacementKeying(out.Op, placementPresent, out.Placement); err != nil {
+	if err := validatePlacementKeying(out.Op, present.placement, out.Placement); err != nil {
 		return prependCodecPath(err, "placement")
+	}
+	if err := validateStepShape(out, present); err != nil {
+		return err
 	}
 	*s = out
 	return nil

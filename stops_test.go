@@ -551,19 +551,27 @@ func TestBodyStopExtentKeying(t *testing.T) {
 	linear := decad.ToFace{Body: decad.StepRef(0), Face: decad.Faces(decad.Planar()), Offset: units.Millimeters(0)}
 	angular := decad.ToFaceAngular{Body: decad.StepRef(0), Face: decad.Faces(decad.Planar())}
 
-	_, err := json.Marshal(decad.Step{Op: decad.OpRevolve, Extent: linear})
+	wrongRevolve := validCodecStep(decad.OpRevolve)
+	wrongRevolve.Extent = linear
+	_, err := json.Marshal(wrongRevolve)
 	require.Error(t, err, `a linear to-face under revolve does not encode`)
-	_, err = json.Marshal(decad.Step{Op: decad.OpExtrude, Angular: angular})
+	wrongExtrude := validCodecStep(decad.OpExtrude)
+	wrongExtrude.Angular = angular
+	_, err = json.Marshal(wrongExtrude)
 	require.Error(t, err, `an angular to-face under extrude does not encode`)
 
 	// Decode direction: swap the ops in otherwise-valid wire steps.
-	extrudeStep, err := json.Marshal(decad.Step{Op: decad.OpExtrude, Extent: linear})
+	extrude := validCodecStep(decad.OpExtrude)
+	extrude.Extent = linear
+	extrudeStep, err := json.Marshal(extrude)
 	require.NoError(t, err)
 	var tampered decad.Step
 	swapped := strings.Replace(string(extrudeStep), `"op":"extrude"`, `"op":"revolve"`, 1)
 	require.Error(t, json.Unmarshal([]byte(swapped), &tampered))
 
-	revolveStep, err := json.Marshal(decad.Step{Op: decad.OpRevolve, Angular: angular})
+	revolve := validCodecStep(decad.OpRevolve)
+	revolve.Angular = angular
+	revolveStep, err := json.Marshal(revolve)
 	require.NoError(t, err)
 	swapped = strings.Replace(string(revolveStep), `"op":"revolve"`, `"op":"extrude"`, 1)
 	require.Error(t, json.Unmarshal([]byte(swapped), &tampered))
@@ -575,7 +583,9 @@ func TestBodyStopCodecGates(t *testing.T) {
 		doc := decad.New()
 		plate, err := doc.Extrude(s, plateProf, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 		require.NoError(t, err)
-		_, err = json.Marshal(decad.Step{Op: decad.OpExtrude, Extent: decad.ToFace{Body: plate, Face: capEndFace(plate)}})
+		step := validCodecStep(decad.OpExtrude)
+		step.Extent = decad.ToFace{Body: plate, Face: capEndFace(plate)}
+		_, err = json.Marshal(step)
 		require.Error(t, err, `a recorded step holds a StepRef, never a live body`)
 	})
 	t.Run("MissingFields", func(t *testing.T) {
@@ -592,28 +602,38 @@ func TestBodyStopCodecGates(t *testing.T) {
 	})
 	t.Run("PointerFormsNormalize", func(t *testing.T) {
 		tf := &decad.ToFace{Body: decad.StepRef(0), Face: decad.Faces(decad.Planar()), Offset: units.Millimeters(1)}
-		buf, err := json.Marshal(decad.Step{Op: decad.OpExtrude, Extent: tf})
+		extrude := validCodecStep(decad.OpExtrude)
+		extrude.Extent = tf
+		buf, err := json.Marshal(extrude)
 		require.NoError(t, err)
 		var got decad.Step
 		require.NoError(t, json.Unmarshal(buf, &got))
 		require.Equal(t, *tf, got.Extent, `the pointer form records the value it names`)
 
 		tfa := &decad.ToFaceAngular{Body: decad.StepRef(0), Face: decad.Faces(decad.Planar())}
-		buf, err = json.Marshal(decad.Step{Op: decad.OpRevolve, Angular: tfa})
+		revolve := validCodecStep(decad.OpRevolve)
+		revolve.Angular = tfa
+		buf, err = json.Marshal(revolve)
 		require.NoError(t, err)
 		require.NoError(t, json.Unmarshal(buf, &got))
 		require.Equal(t, *tfa, got.Angular)
 	})
 	t.Run("NilPointersAreBranchable", func(t *testing.T) {
-		_, err := json.Marshal(decad.Step{Op: decad.OpExtrude, Extent: (*decad.ToFace)(nil)})
+		extrude := validCodecStep(decad.OpExtrude)
+		extrude.Extent = (*decad.ToFace)(nil)
+		_, err := json.Marshal(extrude)
 		require.Error(t, err)
-		_, err = json.Marshal(decad.Step{Op: decad.OpRevolve, Angular: (*decad.ToFaceAngular)(nil)})
+		revolve := validCodecStep(decad.OpRevolve)
+		revolve.Angular = (*decad.ToFaceAngular)(nil)
+		_, err = json.Marshal(revolve)
 		require.Error(t, err)
 	})
 	t.Run("ZeroOffsetNormalizes", func(t *testing.T) {
 		// A zero-value Offset means no displacement; the wire always carries
 		// an explicit length.
-		buf, err := json.Marshal(decad.Step{Op: decad.OpExtrude, Extent: decad.ToFace{Body: decad.StepRef(0), Face: decad.Faces(decad.Planar())}})
+		step := validCodecStep(decad.OpExtrude)
+		step.Extent = decad.ToFace{Body: decad.StepRef(0), Face: decad.Faces(decad.Planar())}
+		buf, err := json.Marshal(step)
 		require.NoError(t, err)
 		var got decad.Step
 		require.NoError(t, json.Unmarshal(buf, &got))
