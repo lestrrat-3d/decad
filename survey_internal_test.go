@@ -89,7 +89,8 @@ func TestWallKernelSharesWorkBudgetAcrossGenerationAndValidation(t *testing.T) {
 	_, err := k.runBudget(newWallWorkBudget(1))
 	require.ErrorIs(t, err, errWallWorkBudget)
 
-	_, _, _, err = k.validate(diskCand{x: 50, y: 30, r: 30}, newWallWorkBudget(1))
+	_, _, ok, err := k.validate(diskCand{x: 50, y: 30, r: 30}, newWallWorkBudget(1))
+	require.False(t, ok)
 	require.ErrorIs(t, err, errWallWorkBudget)
 }
 
