@@ -25,6 +25,9 @@ import (
 // A region whose boundary contains a free-form segment kind (ellipse,
 // elliptical arc, conic, spline, closed spline, fit spline, NURBS) is
 // [ErrUnsupported] (docs/evaluator-design.md §11) — never approximated.
+// A malformed or open record is [ErrDegenerate]; a non-finite field or
+// arithmetic result is [ErrNotFinite]. No measurement is returned in either
+// case.
 func (r ProfileRecord) Area() (Measurement, error) {
 	ig, err := r.integrals()
 	if err != nil {
@@ -45,6 +48,7 @@ func (r ProfileRecord) Area() (Measurement, error) {
 // forms are exact, so it reads Exact with a zero bound.
 //
 // A region whose net area is zero has no centroid and is [ErrDegenerate].
+// Record validation and arithmetic errors match [ProfileRecord.Area].
 func (r ProfileRecord) Centroid() (VecMeasurement, error) {
 	ig, err := r.integrals()
 	if err != nil {
@@ -53,8 +57,12 @@ func (r ProfileRecord) Centroid() (VecMeasurement, error) {
 	if ig.area == 0 {
 		return VecMeasurement{}, fmt.Errorf(`%w: a region with zero net area has no centroid`, ErrDegenerate)
 	}
+	u, v := ig.mu/ig.area, ig.mv/ig.area
+	if !finiteMomentValues(u, v) {
+		return VecMeasurement{}, fmt.Errorf(`%w: the region centroid is not finite`, ErrNotFinite)
+	}
 	return VecMeasurement{
-		Value:     r3.NewVec(ig.mu/ig.area, ig.mv/ig.area, 0),
+		Value:     r3.NewVec(u, v, 0),
 		Exactness: Exact,
 		Bound:     units.Millimeters(0),
 	}, nil
@@ -76,7 +84,8 @@ type SecondMoments struct {
 
 // SecondMoments returns the region's exact second moments of area about the
 // plane origin. The staging matches Area: a free-form boundary kind is
-// [ErrUnsupported].
+// [ErrUnsupported], and malformed or non-finite records are rejected before a
+// measurement is constructed.
 func (r ProfileRecord) SecondMoments() (SecondMoments, error) {
 	ig, err := r.integrals()
 	if err != nil {
@@ -100,6 +109,19 @@ type regionIntegrals struct {
 	mvv  float64 // ∫v² dA
 }
 
+func finiteMomentValues(values ...float64) bool {
+	for _, value := range values {
+		if math.IsNaN(value) || math.IsInf(value, 0) {
+			return false
+		}
+	}
+	return true
+}
+
+func (ig regionIntegrals) isFinite() bool {
+	return finiteMomentValues(ig.area, ig.mu, ig.mv, ig.muu, ig.muv, ig.mvv)
+}
+
 // integrals walks the outer loop and every hole in recorded walk order and
 // sums each segment's closed-form contribution. Walk order carries the sign:
 // the outer loop is counter-clockwise (positive), holes are clockwise
@@ -107,87 +129,159 @@ type regionIntegrals struct {
 func (r ProfileRecord) integrals() (regionIntegrals, error) {
 	var ig regionIntegrals
 	for loopIndex, loop := range append([]LoopRecord{r.Outer}, r.Holes...) {
-		if err := validateMomentLoop(loop, loopIndex); err != nil {
-			return regionIntegrals{}, err
+		if err := validateMomentLoop(loop); err != nil {
+			return regionIntegrals{}, fmt.Errorf(`decad: profile loop %d is invalid: %w`, loopIndex, err)
 		}
-		for _, seg := range loop.Segments {
+		for segmentIndex, seg := range loop.Segments {
 			if err := ig.add(seg); err != nil {
 				return regionIntegrals{}, err
 			}
+			if !ig.isFinite() {
+				return regionIntegrals{}, fmt.Errorf(`%w: mass-property integration overflowed at loop %d segment %d`, ErrNotFinite, loopIndex, segmentIndex)
+			}
 		}
+	}
+	if ig.area <= 0 {
+		return regionIntegrals{}, fmt.Errorf(`%w: the recorded region encloses no positive net area`, ErrDegenerate)
 	}
 	return ig, nil
 }
 
-// validateMomentLoop rejects a record that leaves any boundary junction open.
-// The integrals add only the declared walks; joining near endpoints here would
-// invent a closing edge and make a nonzero error bound look Exact.
-func validateMomentLoop(loop LoopRecord, loopIndex int) error {
+type momentWalk struct {
+	segmentWalk
+	uScale float64
+	vScale float64
+}
+
+// validateMomentLoop checks the part of ProfileRecord's structural contract
+// the closed-form integrator relies on: every supported segment has finite,
+// usable walk geometry and the directed walks join into one closed boundary.
+func validateMomentLoop(loop LoopRecord) error {
 	if len(loop.Segments) == 0 {
+		return fmt.Errorf(`%w: a recorded loop holds no segments`, ErrDegenerate)
+	}
+	walks := make([]momentWalk, len(loop.Segments))
+	for i, seg := range loop.Segments {
+		walk, err := validateMomentSegment(seg)
+		if err != nil {
+			return fmt.Errorf(`segment %d: %w`, i, err)
+		}
+		walks[i] = walk
+	}
+	if len(walks) == 1 && walks[0].closed {
 		return nil
 	}
-
-	first, err := walkOf(loop.Segments[0])
-	if err != nil {
-		return fmt.Errorf(`profile loop %d segment 0: %w`, loopIndex, err)
-	}
-	previous := first
-	for segmentIndex := 1; segmentIndex < len(loop.Segments); segmentIndex++ {
-		current, err := walkOf(loop.Segments[segmentIndex])
-		if err != nil {
-			return fmt.Errorf(`profile loop %d segment %d: %w`, loopIndex, segmentIndex, err)
+	for i, walk := range walks {
+		if walk.closed {
+			return fmt.Errorf(`%w: a closed segment cannot share a loop with another segment`, ErrDegenerate)
 		}
-		if !momentWalksJoin(previous, current) {
-			return fmt.Errorf(`%w: profile loop %d has an open junction before segment %d`, ErrDegenerate, loopIndex, segmentIndex)
+		next := walks[(i+1)%len(walks)]
+		if !momentEndpointsJoin(walk, next) {
+			return fmt.Errorf(
+				`%w: segment %d ends at (%g, %g), not segment %d's start (%g, %g)`,
+				ErrDegenerate, i, walk.endU, walk.endV, (i+1)%len(walks), next.startU, next.startV,
+			)
 		}
-		previous = current
-	}
-	if !momentWalksJoin(previous, first) {
-		return fmt.Errorf(`%w: profile loop %d does not close`, ErrDegenerate, loopIndex)
 	}
 	return nil
 }
 
-// momentWalksJoin permits only the endpoint rounding from evaluating a recorded
-// walk. This is not a geometric distance weld: a material gap remains open.
-func momentWalksJoin(a, b segmentWalk) bool {
-	uScale := math.Max(math.Abs(a.endU), math.Abs(b.startU))
-	vScale := math.Max(math.Abs(a.endV), math.Abs(b.startV))
-	if a.circular {
-		uScale = math.Max(uScale, math.Abs(a.cU))
-		uScale = math.Max(uScale, math.Abs(a.radius))
-		vScale = math.Max(vScale, math.Abs(a.cV))
-		vScale = math.Max(vScale, math.Abs(a.radius))
+func validateMomentSegment(seg CurveSegment) (momentWalk, error) {
+	seg, err := normalizeSegment(seg)
+	if err != nil {
+		return momentWalk{}, err
 	}
-	if b.circular {
-		uScale = math.Max(uScale, math.Abs(b.cU))
-		uScale = math.Max(uScale, math.Abs(b.radius))
-		vScale = math.Max(vScale, math.Abs(b.cV))
-		vScale = math.Max(vScale, math.Abs(b.radius))
+	switch seg := seg.(type) {
+	case LineSeg:
+		if !finiteMomentValues(seg.Start.U, seg.Start.V, seg.End.U, seg.End.V, seg.TStart, seg.TEnd) {
+			return momentWalk{}, fmt.Errorf(`%w: a line segment field is not finite`, ErrNotFinite)
+		}
+		if err := validateMomentRange(seg.TStart, seg.TEnd); err != nil {
+			return momentWalk{}, err
+		}
+	case CircleSeg:
+		if !finiteMomentValues(seg.Center.U, seg.Center.V, seg.TStart, seg.TEnd) {
+			return momentWalk{}, fmt.Errorf(`%w: a circle segment field is not finite`, ErrNotFinite)
+		}
+		if err := validateMomentRange(seg.TStart, seg.TEnd); err != nil {
+			return momentWalk{}, err
+		}
+	case ArcSeg:
+		if !finiteMomentValues(
+			seg.Center.U, seg.Center.V,
+			seg.Start.U, seg.Start.V,
+			seg.End.U, seg.End.V,
+			seg.TStart, seg.TEnd,
+		) {
+			return momentWalk{}, fmt.Errorf(`%w: an arc segment field is not finite`, ErrNotFinite)
+		}
+		if err := validateMomentRange(seg.TStart, seg.TEnd); err != nil {
+			return momentWalk{}, err
+		}
+	default:
+		return momentWalk{}, fmt.Errorf(`%w: this evaluator computes mass properties over line, arc and circle profile segments only; the profile has a %T segment`, ErrUnsupported, seg)
 	}
-	return momentCoordinatesJoin(a.endU, b.startU, uScale) && momentCoordinatesJoin(a.endV, b.startV, vScale)
+
+	walk, err := walkOf(seg)
+	if err != nil {
+		return momentWalk{}, err
+	}
+	if !finiteMomentValues(
+		walk.startU, walk.startV, walk.endU, walk.endV,
+		walk.tanInU, walk.tanInV, walk.tanOutU, walk.tanOutV,
+		walk.length, walk.cU, walk.cV, walk.radius, walk.th0, walk.th1,
+	) {
+		return momentWalk{}, fmt.Errorf(`%w: a segment's derived walk is not finite`, ErrNotFinite)
+	}
+	if walk.circular && walk.radius < 0 {
+		return momentWalk{}, fmt.Errorf(`%w: a circular segment radius must be non-negative`, ErrNegativeMagnitude)
+	}
+	if walk.length <= 0 {
+		return momentWalk{}, fmt.Errorf(`%w: a zero-length segment contributes no boundary`, ErrDegenerate)
+	}
+	out := momentWalk{segmentWalk: walk}
+	switch seg := seg.(type) {
+	case LineSeg:
+		out.uScale = math.Max(math.Abs(seg.Start.U), math.Abs(seg.End.U))
+		out.vScale = math.Max(math.Abs(seg.Start.V), math.Abs(seg.End.V))
+	case CircleSeg:
+		out.uScale = math.Max(math.Abs(seg.Center.U), math.Abs(walk.radius))
+		out.vScale = math.Max(math.Abs(seg.Center.V), math.Abs(walk.radius))
+	case ArcSeg:
+		out.uScale = math.Max(
+			math.Abs(walk.radius),
+			math.Max(math.Abs(seg.Center.U), math.Max(math.Abs(seg.Start.U), math.Abs(seg.End.U))),
+		)
+		out.vScale = math.Max(
+			math.Abs(walk.radius),
+			math.Max(math.Abs(seg.Center.V), math.Max(math.Abs(seg.Start.V), math.Abs(seg.End.V))),
+		)
+	}
+	return out, nil
 }
 
-func momentCoordinatesJoin(a, b, scale float64) bool {
-	if !finiteSegmentValue(a) || !finiteSegmentValue(b) || !finiteSegmentValue(scale) {
-		return false
+func validateMomentRange(start, end float64) error {
+	if start < 0 || start > 1 || end < 0 || end > 1 {
+		return fmt.Errorf(`%w: a segment range must stay within [0, 1]`, ErrDegenerate)
 	}
-	if a == b {
-		return true
+	if start == end {
+		return fmt.Errorf(`%w: a zero-length segment range contributes no boundary`, ErrDegenerate)
 	}
-	next := math.Nextafter(scale, math.Inf(1))
-	if math.IsInf(next, 1) {
-		// The largest finite float has no larger finite neighbour. A distinct
-		// endpoint is a material gap because there is no representable rounding
-		// allowance at this scale.
-		return false
-	}
-	// Reconstructing an ArcSeg endpoint first derives its radius from the
-	// recorded start point, then evaluates the derived angle. A generated arc
-	// can therefore land over one hundred ulps from its recorded line neighbour.
-	// This remains a coordinate-local allowance: a large coordinate on the
-	// other axis cannot hide a material gap here.
-	return math.Abs(a-b) <= 128*(next-scale)
+	return nil
+}
+
+// momentEndpointsJoin allows only the ULP-scale difference introduced when
+// the same certified junction is re-evaluated through two segment formulas.
+// It is intentionally unrelated to the model's geometric scale tolerance.
+func momentEndpointsJoin(a, b momentWalk) bool {
+	return momentCoordinateJoins(a.endU, b.startU, math.Max(a.uScale, b.uScale)) &&
+		momentCoordinateJoins(a.endV, b.startV, math.Max(a.vScale, b.vScale))
+}
+
+func momentCoordinateJoins(a, b, sourceScale float64) bool {
+	scale := math.Max(1, math.Max(sourceScale, math.Max(math.Abs(a), math.Abs(b))))
+	ulp := scale - math.Nextafter(scale, 0)
+	return math.Abs(a-b) <= 64*ulp
 }
 
 // add accumulates one segment's boundary-integral contribution, in the
@@ -317,14 +411,5 @@ func (ig *regionIntegrals) addCircular(c Point2, r, th0, th1 float64) {
 
 // lerp2 returns the point at parameter t on the segment start→end.
 func lerp2(start, end Point2, t float64) (float64, float64) {
-	// A whole LineSeg records its endpoints directly. Recomputing the endpoint
-	// as start+(end-start) can change it through cancellation, opening a
-	// generated closed loop only in its floating evaluation.
-	if t == 0 {
-		return start.U, start.V
-	}
-	if t == 1 {
-		return end.U, end.V
-	}
 	return start.U + t*(end.U-start.U), start.V + t*(end.V-start.V)
 }
