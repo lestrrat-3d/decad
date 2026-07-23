@@ -175,7 +175,10 @@ func TestRegionMomentsPointerVariants(t *testing.T) {
 
 	bad := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{(*decad.LineSeg)(nil)}}}
 	_, err = bad.Area()
-	require.Error(t, err, `a nil segment pointer names no curve to integrate`)
+	require.ErrorIs(t, err, decad.ErrDegenerate, `a nil segment pointer names no curve to integrate`)
+
+	bad = decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{nil}}}
+	requireProfileMomentError(t, bad, decad.ErrDegenerate)
 }
 
 func TestRegionMomentsRejectMalformedRecords(t *testing.T) {
@@ -251,7 +254,7 @@ func TestRegionMomentsRejectMalformedRecords(t *testing.T) {
 					TEnd:   1,
 				},
 			}}},
-			target: units.ErrIncompatible,
+			target: decad.ErrUnitKind,
 		},
 		{
 			name: "NonFiniteRadius",
@@ -263,7 +266,7 @@ func TestRegionMomentsRejectMalformedRecords(t *testing.T) {
 					TEnd:   1,
 				},
 			}}},
-			target: units.ErrNotFinite,
+			target: decad.ErrNotFinite,
 		},
 		{
 			name: "NegativeRadius",
@@ -277,6 +280,32 @@ func TestRegionMomentsRejectMalformedRecords(t *testing.T) {
 			}}},
 			target: decad.ErrNegativeMagnitude,
 		},
+		{
+			name: "InconsistentArcPins",
+			record: decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
+				decad.ArcSeg{
+					Center: decad.Point2{},
+					Start:  decad.Point2{U: 1},
+					End:    decad.Point2{V: 2},
+					TStart: 0,
+					TEnd:   1,
+				},
+				line(0, 1, 1, 0),
+			}}},
+			target: decad.ErrDegenerate,
+		},
+		{
+			name: "NearlyFullOpenCircle",
+			record: decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
+				decad.CircleSeg{
+					Radius: units.Millimeters(1e20),
+					CCW:    true,
+					TStart: 0,
+					TEnd:   1 - 1e-13,
+				},
+			}}},
+			target: decad.ErrDegenerate,
+		},
 	}
 
 	for _, test := range tests {
@@ -284,6 +313,125 @@ func TestRegionMomentsRejectMalformedRecords(t *testing.T) {
 			requireProfileMomentError(t, test.record, test.target)
 		})
 	}
+}
+
+func TestRegionMomentsRejectMalformedArrangement(t *testing.T) {
+	line := func(u0, v0, u1, v1 float64) decad.CurveSegment {
+		return decad.LineSeg{
+			Start:  decad.Point2{U: u0, V: v0},
+			End:    decad.Point2{U: u1, V: v1},
+			TStart: 0,
+			TEnd:   1,
+		}
+	}
+	square := func(u0, v0, u1, v1 float64, clockwise bool) decad.LoopRecord {
+		points := [][2]float64{{u0, v0}, {u1, v0}, {u1, v1}, {u0, v1}}
+		if clockwise {
+			points = [][2]float64{{u0, v0}, {u0, v1}, {u1, v1}, {u1, v0}}
+		}
+		return decad.LoopRecord{Segments: []decad.CurveSegment{
+			line(points[0][0], points[0][1], points[1][0], points[1][1]),
+			line(points[1][0], points[1][1], points[2][0], points[2][1]),
+			line(points[2][0], points[2][1], points[3][0], points[3][1]),
+			line(points[3][0], points[3][1], points[0][0], points[0][1]),
+		}}
+	}
+
+	t.Run("WrongOuterWinding", func(t *testing.T) {
+		record := decad.ProfileRecord{Outer: square(0, 0, 10, 10, true)}
+		requireProfileMomentError(t, record, decad.ErrDegenerate)
+	})
+
+	tests := []struct {
+		name  string
+		holes []decad.LoopRecord
+	}{
+		{name: "WrongHoleWinding", holes: []decad.LoopRecord{square(2, 2, 3, 3, false)}},
+		{name: "HoleOutsideOuter", holes: []decad.LoopRecord{square(12, 2, 13, 3, true)}},
+		{name: "CrossingHole", holes: []decad.LoopRecord{square(-1, 2, 1, 3, true)}},
+		{
+			name: "NestedHoles",
+			holes: []decad.LoopRecord{
+				square(2, 2, 8, 8, true),
+				square(3, 3, 4, 4, true),
+			},
+		},
+		{
+			name: "OverlappingHoles",
+			holes: []decad.LoopRecord{
+				square(2, 2, 6, 6, true),
+				square(4, 4, 8, 8, true),
+			},
+		},
+		{
+			name: "DuplicateHoles",
+			holes: []decad.LoopRecord{
+				square(2, 2, 4, 4, true),
+				square(2, 2, 4, 4, true),
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			record := decad.ProfileRecord{
+				Outer: square(0, 0, 10, 10, false),
+				Holes: test.holes,
+			}
+			requireProfileMomentError(t, record, decad.ErrDegenerate)
+		})
+	}
+}
+
+func TestRegionMomentsAllowBoundaryTangency(t *testing.T) {
+	line := func(u0, v0, u1, v1 float64) decad.CurveSegment {
+		return decad.LineSeg{
+			Start:  decad.Point2{U: u0, V: v0},
+			End:    decad.Point2{U: u1, V: v1},
+			TStart: 0,
+			TEnd:   1,
+		}
+	}
+	record := decad.ProfileRecord{
+		Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
+			line(0, 0, 10, 0),
+			line(10, 0, 10, 10),
+			line(10, 10, 0, 10),
+			line(0, 10, 0, 0),
+		}},
+		Holes: []decad.LoopRecord{{Segments: []decad.CurveSegment{
+			decad.CircleSeg{
+				Center: decad.Point2{U: 1, V: 5},
+				Radius: units.Millimeters(1),
+				TStart: 1,
+				TEnd:   0,
+			},
+		}}},
+	}
+
+	area, err := record.Area()
+	require.NoError(t, err)
+	require.True(t, area.Value.Equal(units.SquareMillimeters(100-math.Pi), 1e-12))
+}
+
+func TestRegionMomentsAllowArcPinRoundoff(t *testing.T) {
+	record := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
+		decad.ArcSeg{
+			Center: decad.Point2{},
+			Start:  decad.Point2{U: 1},
+			End:    decad.Point2{V: math.Nextafter(1, 2)},
+			TStart: 0,
+			TEnd:   1,
+		},
+		decad.LineSeg{
+			Start:  decad.Point2{V: 1},
+			End:    decad.Point2{U: 1},
+			TStart: 0,
+			TEnd:   1,
+		},
+	}}}
+
+	_, err := record.Area()
+	require.NoError(t, err, `one ULP of pin roundoff must not disprove the arc record`)
 }
 
 func requireProfileMomentError(t *testing.T, record decad.ProfileRecord, target error) {

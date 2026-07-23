@@ -25,9 +25,10 @@ import (
 // A region whose boundary contains a free-form segment kind (ellipse,
 // elliptical arc, conic, spline, closed spline, fit spline, NURBS) is
 // [ErrUnsupported] (docs/evaluator-design.md §11) — never approximated.
-// A malformed or open record is [ErrDegenerate]; a non-finite field or
-// arithmetic result is [ErrNotFinite]. No measurement is returned in either
-// case.
+// A malformed or open record is [ErrDegenerate]. A circle radius of the wrong
+// kind is [ErrUnitKind], a negative radius is [ErrNegativeMagnitude], and a
+// non-finite field or arithmetic result is [ErrNotFinite]. No measurement is
+// returned on error.
 func (r ProfileRecord) Area() (Measurement, error) {
 	ig, err := r.integrals()
 	if err != nil {
@@ -127,24 +128,209 @@ func (ig regionIntegrals) isFinite() bool {
 // the outer loop is counter-clockwise (positive), holes are clockwise
 // (negative), so the sum IS the net region integral.
 func (r ProfileRecord) integrals() (regionIntegrals, error) {
+	loops := append([]LoopRecord{r.Outer}, r.Holes...)
 	var ig regionIntegrals
-	for loopIndex, loop := range append([]LoopRecord{r.Outer}, r.Holes...) {
+	for loopIndex, loop := range loops {
 		if err := validateMomentLoop(loop); err != nil {
 			return regionIntegrals{}, fmt.Errorf(`decad: profile loop %d is invalid: %w`, loopIndex, err)
 		}
+		var loopIntegrals regionIntegrals
 		for segmentIndex, seg := range loop.Segments {
-			if err := ig.add(seg); err != nil {
+			if err := loopIntegrals.add(seg); err != nil {
 				return regionIntegrals{}, err
 			}
-			if !ig.isFinite() {
+			if !loopIntegrals.isFinite() {
 				return regionIntegrals{}, fmt.Errorf(`%w: mass-property integration overflowed at loop %d segment %d`, ErrNotFinite, loopIndex, segmentIndex)
 			}
 		}
+		if loopIndex == 0 && loopIntegrals.area <= 0 {
+			return regionIntegrals{}, fmt.Errorf(`%w: the profile outer loop must run counter-clockwise`, ErrDegenerate)
+		}
+		if loopIndex > 0 && loopIntegrals.area >= 0 {
+			return regionIntegrals{}, fmt.Errorf(`%w: profile hole %d must run clockwise`, ErrDegenerate, loopIndex-1)
+		}
+		ig.area += loopIntegrals.area
+		ig.mu += loopIntegrals.mu
+		ig.mv += loopIntegrals.mv
+		ig.muu += loopIntegrals.muu
+		ig.muv += loopIntegrals.muv
+		ig.mvv += loopIntegrals.mvv
+		if !ig.isFinite() {
+			return regionIntegrals{}, fmt.Errorf(`%w: mass-property integration overflowed while combining profile loop %d`, ErrNotFinite, loopIndex)
+		}
+	}
+	if err := validateMomentArrangement(loops); err != nil {
+		return regionIntegrals{}, err
 	}
 	if ig.area <= 0 {
 		return regionIntegrals{}, fmt.Errorf(`%w: the recorded region encloses no positive net area`, ErrDegenerate)
 	}
 	return ig, nil
+}
+
+// validateMomentArrangement applies the package's independent line/arc
+// boundary audit after each loop's fields, closure and winding have passed.
+// Caller-built and decoded records carry no upstream arrangement certificate,
+// so crossing, outside or nested holes are malformed input here. Boundary
+// tangency remains admissible for mass properties; consumers that require a
+// manifold boundary apply their own stricter gate.
+func validateMomentArrangement(loops []LoopRecord) error {
+	segs, err := buildSegEntries(loops)
+	if err != nil {
+		return err
+	}
+	for i := range segs {
+		for j := i + 1; j < len(segs); j++ {
+			if adjacent(segs[i], segs[j]) {
+				continue
+			}
+			if momentSegmentsCross(segs[i].w, segs[j].w) {
+				return fmt.Errorf(`%w: the recorded profile boundaries cross`, ErrDegenerate)
+			}
+		}
+	}
+	if !momentNestingValid(segs, len(loops)) {
+		return fmt.Errorf(`%w: each profile hole must lie inside the outer loop and outside every other hole`, ErrDegenerate)
+	}
+	return nil
+}
+
+// momentSegmentsCross reports only a proven transversal crossing. Tangencies
+// are valid for mass properties, so the shared modify audit's stricter
+// crossing-or-contact result cannot be used here.
+func momentSegmentsCross(a, b segmentWalk) bool {
+	switch {
+	case !a.circular && !b.circular:
+		return lineLineSegCross(a, b)
+	case a.circular && b.circular:
+		return momentArcsCross(a, b)
+	case a.circular:
+		return momentLineArcCross(b, a)
+	default:
+		return momentLineArcCross(a, b)
+	}
+}
+
+func momentLineArcCross(line, arc segmentWalk) bool {
+	dx, dy := line.endU-line.startU, line.endV-line.startV
+	length := math.Hypot(dx, dy)
+	if length == 0 {
+		return false
+	}
+	ux, uy := dx/length, dy/length
+	fx, fy := line.startU-arc.cU, line.startV-arc.cV
+	bb := fx*ux + fy*uy
+	cc := fx*fx + fy*fy - arc.radius*arc.radius
+	discriminant := bb*bb - cc
+	if discriminant < 0 {
+		return false
+	}
+	root := math.Sqrt(discriminant)
+	for _, distance := range []float64{-bb + root, -bb - root} {
+		u, v := line.startU+distance*ux, line.startV+distance*uy
+		if !interior(distance/length) || !momentAngleInterior(arc, u, v) {
+			continue
+		}
+		radialU, radialV := u-arc.cU, v-arc.cV
+		residual := dx*radialU + dy*radialV
+		scale := math.Max(math.Abs(dx*radialU), math.Abs(dy*radialV))
+		if !momentCoordinateJoins(residual, 0, scale) {
+			return true
+		}
+	}
+	return false
+}
+
+func momentArcsCross(a, b segmentWalk) bool {
+	for _, point := range circleCircle(a.cU, a.cV, a.radius, b.cU, b.cV, b.radius) {
+		if !momentAngleInterior(a, point[0], point[1]) || !momentAngleInterior(b, point[0], point[1]) {
+			continue
+		}
+		au, av := point[0]-a.cU, point[1]-a.cV
+		bu, bv := point[0]-b.cU, point[1]-b.cV
+		residual := au*bv - av*bu
+		scale := math.Max(math.Abs(au*bv), math.Abs(av*bu))
+		if !momentCoordinateJoins(residual, 0, scale) {
+			return true
+		}
+	}
+	return false
+}
+
+func momentAngleInterior(arc segmentWalk, u, v float64) bool {
+	return arc.closed || angleInterior(arc, u, v)
+}
+
+// momentNestingValid uses several boundary probes per segment. A probe proven
+// outside the outer loop or inside another hole rejects the record. An
+// undecidable probe can be a permitted tangency, so it never admits or rejects
+// by itself; proven transversal crossings were already rejected above.
+func momentNestingValid(segs []segEntry, nLoops int) bool {
+	if nLoops <= 1 {
+		return true
+	}
+	bounds := make([][]surveyElem, nLoops)
+	probes := make([][][2]float64, nLoops)
+	for _, seg := range segs {
+		if elem, ok := elemOf(seg.w); ok {
+			bounds[seg.loop] = append(bounds[seg.loop], elem)
+		}
+		probes[seg.loop] = append(probes[seg.loop], momentSegmentProbes(seg.w)...)
+	}
+	minU, minV, maxU, maxV, ok := sectionBBox(segs)
+	if !ok {
+		return false
+	}
+	scale := math.Max(1, math.Max(math.Max(math.Abs(minU), math.Abs(maxU)), math.Max(math.Abs(minV), math.Abs(maxV))))
+	tolerance := contactEps * scale
+
+	for hole := 1; hole < nLoops; hole++ {
+		provenInside := false
+		for _, probe := range probes[hole] {
+			inside, decided := loopContains(bounds[0], probe[0], probe[1], tolerance)
+			if decided && !inside {
+				return false
+			}
+			provenInside = provenInside || decided && inside
+		}
+		if !provenInside {
+			return false
+		}
+	}
+	for a := 1; a < nLoops; a++ {
+		for b := a + 1; b < nLoops; b++ {
+			aOutsideB := false
+			for _, probe := range probes[a] {
+				inside, decided := loopContains(bounds[b], probe[0], probe[1], tolerance)
+				if decided && inside {
+					return false
+				}
+				aOutsideB = aOutsideB || decided && !inside
+			}
+			bOutsideA := false
+			for _, probe := range probes[b] {
+				inside, decided := loopContains(bounds[a], probe[0], probe[1], tolerance)
+				if decided && inside {
+					return false
+				}
+				bOutsideA = bOutsideA || decided && !inside
+			}
+			if !aOutsideB || !bOutsideA {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func momentSegmentProbes(w segmentWalk) [][2]float64 {
+	midU, midV := (w.startU+w.endU)/2, (w.startV+w.endV)/2
+	if w.circular {
+		midAngle := (w.th0 + w.th1) / 2
+		midU = w.cU + w.radius*math.Cos(midAngle)
+		midV = w.cV + w.radius*math.Sin(midAngle)
+	}
+	return [][2]float64{{w.startU, w.startV}, {midU, midV}}
 }
 
 type momentWalk struct {
@@ -169,7 +355,13 @@ func validateMomentLoop(loop LoopRecord) error {
 		walks[i] = walk
 	}
 	if len(walks) == 1 && walks[0].closed {
-		return nil
+		if momentEndpointsJoin(walks[0], walks[0]) {
+			return nil
+		}
+		return fmt.Errorf(
+			`%w: the closed segment ends at (%g, %g), not its start (%g, %g)`,
+			ErrDegenerate, walks[0].endU, walks[0].endV, walks[0].startU, walks[0].startV,
+		)
 	}
 	for i, walk := range walks {
 		if walk.closed {
@@ -191,6 +383,9 @@ func validateMomentSegment(seg CurveSegment) (momentWalk, error) {
 	if err != nil {
 		return momentWalk{}, err
 	}
+	if seg == nil {
+		return momentWalk{}, errNilSegment
+	}
 	switch seg := seg.(type) {
 	case LineSeg:
 		if !finiteMomentValues(seg.Start.U, seg.Start.V, seg.End.U, seg.End.V, seg.TStart, seg.TEnd) {
@@ -200,6 +395,9 @@ func validateMomentSegment(seg CurveSegment) (momentWalk, error) {
 			return momentWalk{}, err
 		}
 	case CircleSeg:
+		if _, err := magnitudeIn(seg.Radius, units.Length, units.Millimeter, "a circle segment's radius"); err != nil {
+			return momentWalk{}, err
+		}
 		if !finiteMomentValues(seg.Center.U, seg.Center.V, seg.TStart, seg.TEnd) {
 			return momentWalk{}, fmt.Errorf(`%w: a circle segment field is not finite`, ErrNotFinite)
 		}
@@ -217,6 +415,21 @@ func validateMomentSegment(seg CurveSegment) (momentWalk, error) {
 		}
 		if err := validateMomentRange(seg.TStart, seg.TEnd); err != nil {
 			return momentWalk{}, err
+		}
+		startRadius := math.Hypot(seg.Start.U-seg.Center.U, seg.Start.V-seg.Center.V)
+		endRadius := math.Hypot(seg.End.U-seg.Center.U, seg.End.V-seg.Center.V)
+		sourceScale := math.Max(
+			math.Max(math.Abs(seg.Center.U), math.Abs(seg.Center.V)),
+			math.Max(
+				math.Max(math.Abs(seg.Start.U), math.Abs(seg.Start.V)),
+				math.Max(math.Abs(seg.End.U), math.Abs(seg.End.V)),
+			),
+		)
+		if !momentCoordinateJoins(startRadius, endRadius, sourceScale) {
+			return momentWalk{}, fmt.Errorf(
+				`%w: an arc segment's pinned start and end radii differ (%g and %g)`,
+				ErrDegenerate, startRadius, endRadius,
+			)
 		}
 	default:
 		return momentWalk{}, fmt.Errorf(`%w: this evaluator computes mass properties over line, arc and circle profile segments only; the profile has a %T segment`, ErrUnsupported, seg)

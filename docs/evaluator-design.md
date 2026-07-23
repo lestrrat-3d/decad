@@ -130,6 +130,14 @@ areas of the bodies built from it are decad's 3D job. The boundary is:
   asserted against sketch's answer by the §1 falsifier at every feature
   call).
 
+Caller-built and decoded records carry no live sketch answer. Public
+`ProfileRecord` mass-property methods therefore validate the record's
+structural region contract before integration: loop closure and winding,
+boundary crossings, and hole nesting. Boundary tangency remains admissible for
+mass properties; consumers that require a manifold boundary apply their own
+stricter gate. This rejects malformed input; it does not replace `sketch`'s
+validity answer when recording a live profile.
+
 Increment 1 implements the closed forms for `LineSeg`/`CircleSeg`/`ArcSeg`;
 the free-form kinds arrive with their increments (§11) and reject
 `ErrUnsupported` until then.
