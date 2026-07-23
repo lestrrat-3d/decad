@@ -699,6 +699,79 @@ func TestRevolveAxisValidation(t *testing.T) {
 	})
 }
 
+func TestRevolveAxisDerivedOverflow(t *testing.T) {
+	t.Run("SketchLineDelta", func(t *testing.T) {
+		s, p := annularSketch(t)
+		doc := decad.New()
+		axis := decad.SketchLine{
+			Start: decad.Point2{U: -math.MaxFloat64},
+			End:   decad.Point2{U: math.MaxFloat64},
+		}
+
+		_, err := doc.Revolve(s, p, axis, decad.FullRevolution{})
+		require.ErrorIs(t, err, decad.ErrNotFinite)
+		require.Empty(t, doc.Bodies())
+		require.Empty(t, doc.Recipe().Steps)
+	})
+
+	t.Run("SketchLineLength", func(t *testing.T) {
+		s, p := annularSketch(t)
+		doc := decad.New()
+		axis := decad.SketchLine{
+			Start: decad.Point2{},
+			End:   decad.Point2{U: math.MaxFloat64, V: math.MaxFloat64},
+		}
+
+		_, err := doc.Revolve(s, p, axis, decad.FullRevolution{})
+		require.ErrorIs(t, err, decad.ErrNotFinite)
+		require.Empty(t, doc.Bodies())
+		require.Empty(t, doc.Recipe().Steps)
+	})
+
+	t.Run("ConstructionAxisFrameConversion", func(t *testing.T) {
+		w := sketch.NewWorld()
+		frame, err := r3.NewFrame(
+			r3.NewVec(-math.MaxFloat64, 0, 0),
+			r3.NewVec(1, 0, 0),
+			r3.NewVec(0, 1, 0),
+		)
+		require.NoError(t, err)
+		plane, err := w.CreatePlaneFromFrame(frame)
+		require.NoError(t, err)
+		s, err := w.CreateSketch(plane)
+		require.NoError(t, err)
+		rect := s.CreateRectangle(0, 5, 10, 15)
+		s.Fix(rect.A)
+		_, err = s.Solve(t.Context())
+		require.NoError(t, err)
+		p := s.Profiles()[0]
+		doc := decad.New()
+		axis := decad.ConstructionAxis{
+			Origin: r3.NewVec(math.MaxFloat64, 0, 0),
+			Dir:    r3.NewVec(1, 0, 0),
+		}
+
+		_, err = doc.Revolve(s, p, axis, decad.FullRevolution{})
+		require.ErrorIs(t, err, decad.ErrNotFinite)
+		require.Empty(t, doc.Bodies())
+		require.Empty(t, doc.Recipe().Steps)
+	})
+
+	t.Run("ConstructionAxisLocalLength", func(t *testing.T) {
+		s, p := annularSketch(t)
+		doc := decad.New()
+		axis := decad.ConstructionAxis{
+			Origin: r3.NewVec(math.MaxFloat64, math.MaxFloat64, 0),
+			Dir:    r3.NewVec(1, 0, 0),
+		}
+
+		_, err := doc.Revolve(s, p, axis, decad.FullRevolution{})
+		require.ErrorIs(t, err, decad.ErrNotFinite)
+		require.Empty(t, doc.Bodies())
+		require.Empty(t, doc.Recipe().Steps)
+	})
+}
+
 func TestRevolveEdgeAxisGates(t *testing.T) {
 	s, p := annularSketch(t)
 	doc := decad.New()
