@@ -140,10 +140,19 @@ func (b *Body) Shell(sel FaceSelector, t units.Value, opts ...ShellOption) (*Bod
 		// solid at all.
 		return nil, fmt.Errorf(`%w: a zero-thickness shell leaves no wall`, ErrDegenerate)
 	}
-	if sel == nil {
+	// decad owns the selector vocabulary, so only the built-in query can be
+	// resolved and recorded. Reject foreign implementations before invoking
+	// their callback, and treat a typed nil query like an untyped nil.
+	q, ok := sel.(*FaceQuery)
+	switch {
+	case sel == nil:
+		return nil, errNilSelector
+	case !ok:
+		return nil, fmt.Errorf(`%w: the shell's face selector is not a decad face query (%T)`, ErrDegenerate, sel)
+	case q == nil:
 		return nil, errNilSelector
 	}
-	removed, err := sel.SelectFaces(b)
+	removed, err := q.SelectFaces(b)
 	if err != nil {
 		return nil, err
 	}
@@ -235,7 +244,7 @@ func (b *Body) Shell(sel FaceSelector, t units.Value, opts ...ShellOption) (*Bod
 	step := Step{
 		Op:        OpShell,
 		Inputs:    []StepRef{b.originStep()},
-		Selectors: cloneSelectors([]Selector{sel}),
+		Selectors: cloneSelectors([]Selector{q}),
 		Values:    []units.Value{t},
 		Opts:      ShellOpts{Sense: sense},
 	}
