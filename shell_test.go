@@ -116,6 +116,62 @@ func TestShellSelectorAdmission(t *testing.T) {
 	})
 }
 
+type unknownShellOption struct {
+	decad.ShellOption
+}
+
+type unknownShellOptionIdent struct{}
+
+func (unknownShellOption) Ident() any { return unknownShellOptionIdent{} }
+
+func TestShellOptionDispatch(t *testing.T) {
+	tests := []struct {
+		name string
+		opts []decad.ShellOption
+		want decad.ShellSense
+	}{
+		{name: "default", want: decad.Inward},
+		{name: "inward", opts: []decad.ShellOption{decad.WithShellSense(decad.Inward)}, want: decad.Inward},
+		{name: "outward", opts: []decad.ShellOption{decad.WithShellSense(decad.Outward)}, want: decad.Outward},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			doc, box := shellBox(t)
+			body, err := box.Shell(topCap(box), units.Millimeters(5), tc.opts...)
+			require.NoError(t, err)
+			require.NotNil(t, body)
+			recipe := doc.Recipe()
+			require.Len(t, recipe.Steps, 2)
+			require.Equal(t, decad.ShellOpts{Sense: tc.want}, recipe.Steps[1].Opts)
+		})
+	}
+
+	t.Run("unknown identifier", func(t *testing.T) {
+		doc, box := shellBox(t)
+		before := doc.Recipe()
+		opt := unknownShellOption{ShellOption: decad.WithShellSense(decad.Outward)}
+
+		body, err := box.Shell(topCap(box), units.Millimeters(5), opt)
+		require.Nil(t, body)
+		require.ErrorIs(t, err, decad.ErrDegenerate)
+		require.ErrorContains(t, err, "unknown shell option identifier")
+		require.Equal(t, before, doc.Recipe())
+		require.Equal(t, []*decad.Body{box}, doc.Bodies())
+	})
+
+	t.Run("unknown sense", func(t *testing.T) {
+		doc, box := shellBox(t)
+		before := doc.Recipe()
+
+		body, err := box.Shell(topCap(box), units.Millimeters(5), decad.WithShellSense(decad.ShellSense(2)))
+		require.Nil(t, body)
+		require.ErrorIs(t, err, decad.ErrDegenerate)
+		require.ErrorContains(t, err, "unknown shell sense 2")
+		require.Equal(t, before, doc.Recipe())
+		require.Equal(t, []*decad.Body{box}, doc.Bodies())
+	})
+}
+
 func TestShellTubeInwardBox(t *testing.T) {
 	const th = 5.0
 	h := shellBoxHeight

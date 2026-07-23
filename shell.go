@@ -120,7 +120,8 @@ func (b *Body) Shell(sel FaceSelector, t units.Value, opts ...ShellOption) (*Bod
 		if o == nil {
 			return nil, fmt.Errorf(`%w: a nil option names nothing to apply`, ErrDegenerate)
 		}
-		if _, ok := o.Ident().(identShellSense); ok {
+		switch ident := o.Ident().(type) {
+		case identShellSense:
 			v, ok := option.Get[ShellSense](o)
 			if !ok {
 				return nil, fmt.Errorf(`%w: WithShellSense carries no sense`, ErrDegenerate)
@@ -129,6 +130,8 @@ func (b *Body) Shell(sel FaceSelector, t units.Value, opts ...ShellOption) (*Bod
 				return nil, fmt.Errorf(`%w: unknown shell sense %d`, ErrDegenerate, int(v))
 			}
 			sense = v
+		default:
+			return nil, fmt.Errorf(`%w: unknown shell option identifier %T`, ErrDegenerate, ident)
 		}
 	}
 	tmm, err := magnitudeIn(t, units.Length, units.Millimeter, "the shell thickness")
