@@ -718,14 +718,14 @@ func unmarshalSelector(data []byte) (Selector, error) {
 		Kind string `json:"kind"`
 	}
 	if err := json.Unmarshal(data, &probe); err != nil {
-		return nil, fmt.Errorf(`decad: failed to decode selector tag: %w`, err)
+		return nil, codecJSONErrorAt(data, &probe, fmt.Errorf(`decad: failed to decode selector tag: %w`, err))
 	}
 	switch probe.Kind {
 	case selKindEdges, selKindFaces:
 	case "":
-		return nil, fmt.Errorf(`decad: selector is missing its kind tag`)
+		return nil, prependCodecPath(fmt.Errorf(`decad: selector is missing its kind tag`), "kind")
 	default:
-		return nil, fmt.Errorf(`decad: unknown selector kind %q`, probe.Kind)
+		return nil, prependCodecPath(fmt.Errorf(`decad: unknown selector kind %q`, probe.Kind), "kind")
 	}
 	var raw struct {
 		Preds   *[]json.RawMessage `json:"preds"`
@@ -733,24 +733,24 @@ func unmarshalSelector(data []byte) (Selector, error) {
 		AtLeast *int               `json:"at_least"`
 	}
 	if err := json.Unmarshal(data, &raw); err != nil {
-		return nil, fmt.Errorf(`decad: failed to decode %s query: %w`, probe.Kind, err)
+		return nil, codecJSONErrorAt(data, &raw, fmt.Errorf(`decad: failed to decode %s query: %w`, probe.Kind, err))
 	}
 	if raw.Preds == nil {
-		return nil, fmt.Errorf(`decad: a %s query requires preds`, probe.Kind)
+		return nil, prependCodecPath(fmt.Errorf(`decad: a %s query requires preds`, probe.Kind), "preds")
 	}
 	if raw.Exactly != nil && raw.AtLeast != nil {
-		return nil, fmt.Errorf(`decad: a %s query carries at most one cardinality assertion`, probe.Kind)
+		return nil, prependCodecPath(fmt.Errorf(`decad: a %s query carries at most one cardinality assertion`, probe.Kind), "exactly")
 	}
 	var card cardinality
 	if raw.Exactly != nil {
 		if *raw.Exactly <= 0 {
-			return nil, fmt.Errorf(`%w: a %s query's exactly assertion needs a positive count, got %d`, ErrDegenerate, probe.Kind, *raw.Exactly)
+			return nil, prependCodecPath(fmt.Errorf(`%w: a %s query's exactly assertion needs a positive count, got %d`, ErrDegenerate, probe.Kind, *raw.Exactly), "exactly")
 		}
 		card = cardinality{kind: cardExactly, n: *raw.Exactly}
 	}
 	if raw.AtLeast != nil {
 		if *raw.AtLeast <= 0 {
-			return nil, fmt.Errorf(`%w: a %s query's at_least assertion needs a positive count, got %d`, ErrDegenerate, probe.Kind, *raw.AtLeast)
+			return nil, prependCodecPath(fmt.Errorf(`%w: a %s query's at_least assertion needs a positive count, got %d`, ErrDegenerate, probe.Kind, *raw.AtLeast), "at_least")
 		}
 		card = cardinality{kind: cardAtLeast, n: *raw.AtLeast}
 	}
@@ -758,10 +758,10 @@ func unmarshalSelector(data []byte) (Selector, error) {
 		q := &EdgeQuery{card: card}
 		if len(*raw.Preds) > 0 {
 			q.preds = make([]EdgePredicate, 0, len(*raw.Preds))
-			for _, b := range *raw.Preds {
+			for i, b := range *raw.Preds {
 				p, err := unmarshalEdgePredicate(b)
 				if err != nil {
-					return nil, err
+					return nil, prependCodecPath(err, fmt.Sprintf(`preds[%d]`, i))
 				}
 				q.preds = append(q.preds, p)
 			}
@@ -771,10 +771,10 @@ func unmarshalSelector(data []byte) (Selector, error) {
 	q := &FaceQuery{card: card}
 	if len(*raw.Preds) > 0 {
 		q.preds = make([]FacePredicate, 0, len(*raw.Preds))
-		for _, b := range *raw.Preds {
+		for i, b := range *raw.Preds {
 			p, err := unmarshalFacePredicate(b)
 			if err != nil {
-				return nil, err
+				return nil, prependCodecPath(err, fmt.Sprintf(`preds[%d]`, i))
 			}
 			q.preds = append(q.preds, p)
 		}
@@ -838,7 +838,7 @@ func unmarshalEdgePredicate(data []byte) (EdgePredicate, error) {
 		Kind string `json:"kind"`
 	}
 	if err := json.Unmarshal(data, &probe); err != nil {
-		return EdgePredicate{}, fmt.Errorf(`decad: failed to decode edge predicate tag: %w`, err)
+		return EdgePredicate{}, codecJSONErrorAt(data, &probe, fmt.Errorf(`decad: failed to decode edge predicate tag: %w`, err))
 	}
 	switch probe.Kind {
 	case predKindConvex, predKindConcave, predKindCircular:
@@ -848,10 +848,10 @@ func unmarshalEdgePredicate(data []byte) (EdgePredicate, error) {
 			Dir *r3.Vec `json:"dir"`
 		}
 		if err := json.Unmarshal(data, &raw); err != nil {
-			return EdgePredicate{}, fmt.Errorf(`decad: failed to decode parallel-to predicate: %w`, err)
+			return EdgePredicate{}, codecJSONErrorAt(data, &raw, fmt.Errorf(`decad: failed to decode parallel-to predicate: %w`, err))
 		}
 		if raw.Dir == nil {
-			return EdgePredicate{}, fmt.Errorf(`decad: a parallel-to predicate requires dir`)
+			return EdgePredicate{}, prependCodecPath(fmt.Errorf(`decad: a parallel-to predicate requires dir`), "dir")
 		}
 		return EdgePredicate{kind: probe.Kind, dir: *raw.Dir}, nil
 	case predKindLongerThan:
@@ -859,10 +859,10 @@ func unmarshalEdgePredicate(data []byte) (EdgePredicate, error) {
 			L *units.Value `json:"l"`
 		}
 		if err := json.Unmarshal(data, &raw); err != nil {
-			return EdgePredicate{}, fmt.Errorf(`decad: failed to decode longer-than predicate: %w`, err)
+			return EdgePredicate{}, codecJSONErrorAt(data, &raw, fmt.Errorf(`decad: failed to decode longer-than predicate: %w`, err))
 		}
 		if raw.L == nil {
-			return EdgePredicate{}, fmt.Errorf(`decad: a longer-than predicate requires l`)
+			return EdgePredicate{}, prependCodecPath(fmt.Errorf(`decad: a longer-than predicate requires l`), "l")
 		}
 		return EdgePredicate{kind: probe.Kind, length: *raw.L}, nil
 	case predKindCreatedBy:
@@ -872,9 +872,9 @@ func unmarshalEdgePredicate(data []byte) (EdgePredicate, error) {
 		}
 		return EdgePredicate{kind: probe.Kind, ref: ref}, nil
 	case "":
-		return EdgePredicate{}, fmt.Errorf(`decad: edge predicate is missing its kind tag`)
+		return EdgePredicate{}, prependCodecPath(fmt.Errorf(`decad: edge predicate is missing its kind tag`), "kind")
 	default:
-		return EdgePredicate{}, fmt.Errorf(`decad: unknown edge predicate kind %q`, probe.Kind)
+		return EdgePredicate{}, prependCodecPath(fmt.Errorf(`decad: unknown edge predicate kind %q`, probe.Kind), "kind")
 	}
 }
 
@@ -886,7 +886,7 @@ func unmarshalFacePredicate(data []byte) (FacePredicate, error) {
 		Kind string `json:"kind"`
 	}
 	if err := json.Unmarshal(data, &probe); err != nil {
-		return FacePredicate{}, fmt.Errorf(`decad: failed to decode face predicate tag: %w`, err)
+		return FacePredicate{}, codecJSONErrorAt(data, &probe, fmt.Errorf(`decad: failed to decode face predicate tag: %w`, err))
 	}
 	switch probe.Kind {
 	case predKindPlanar, predKindCylindrical:
@@ -896,10 +896,11 @@ func unmarshalFacePredicate(data []byte) (FacePredicate, error) {
 			Dir *r3.Vec `json:"dir"`
 		}
 		if err := json.Unmarshal(data, &raw); err != nil {
-			return FacePredicate{}, fmt.Errorf(`decad: failed to decode %s predicate: %w`, facePredicateDisplayName(probe.Kind), err)
+			return FacePredicate{}, codecJSONErrorAt(data, &raw,
+				fmt.Errorf(`decad: failed to decode %s predicate: %w`, facePredicateDisplayName(probe.Kind), err))
 		}
 		if raw.Dir == nil {
-			return FacePredicate{}, fmt.Errorf(`decad: a %s predicate requires dir`, facePredicateDisplayName(probe.Kind))
+			return FacePredicate{}, prependCodecPath(fmt.Errorf(`decad: a %s predicate requires dir`, facePredicateDisplayName(probe.Kind)), "dir")
 		}
 		return FacePredicate{kind: probe.Kind, dir: *raw.Dir}, nil
 	case predKindFaceCreatedBy:
@@ -909,9 +910,9 @@ func unmarshalFacePredicate(data []byte) (FacePredicate, error) {
 		}
 		return FacePredicate{kind: probe.Kind, ref: ref}, nil
 	case "":
-		return FacePredicate{}, fmt.Errorf(`decad: face predicate is missing its kind tag`)
+		return FacePredicate{}, prependCodecPath(fmt.Errorf(`decad: face predicate is missing its kind tag`), "kind")
 	default:
-		return FacePredicate{}, fmt.Errorf(`decad: unknown face predicate kind %q`, probe.Kind)
+		return FacePredicate{}, prependCodecPath(fmt.Errorf(`decad: unknown face predicate kind %q`, probe.Kind), "kind")
 	}
 }
 
@@ -939,10 +940,16 @@ func unmarshalPredicateRef(data []byte, what string) (FeatureRef, error) {
 		} `json:"ref"`
 	}
 	if err := json.Unmarshal(data, &raw); err != nil {
-		return FeatureRef{}, fmt.Errorf(`decad: failed to decode %s predicate: %w`, what, err)
+		return FeatureRef{}, codecJSONErrorAt(data, &raw, fmt.Errorf(`decad: failed to decode %s predicate: %w`, what, err))
 	}
-	if raw.Ref == nil || raw.Ref.Step == nil || raw.Ref.Role == nil {
-		return FeatureRef{}, fmt.Errorf(`decad: a %s predicate requires ref with step and role`, what)
+	if raw.Ref == nil {
+		return FeatureRef{}, prependCodecPath(fmt.Errorf(`decad: a %s predicate requires ref with step and role`, what), "ref")
+	}
+	if raw.Ref.Step == nil {
+		return FeatureRef{}, prependCodecPath(fmt.Errorf(`decad: a %s predicate requires ref with step and role`, what), "ref.step")
+	}
+	if raw.Ref.Role == nil {
+		return FeatureRef{}, prependCodecPath(fmt.Errorf(`decad: a %s predicate requires ref with step and role`, what), "ref.role")
 	}
 	stepToken := bytes.TrimSpace(*raw.Ref.Step)
 	if len(stepToken) > 0 && stepToken[0] == '-' {

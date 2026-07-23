@@ -381,18 +381,24 @@ func unmarshalToFace(data []byte) (ToFace, error) {
 		Offset *units.Value    `json:"offset"`
 	}
 	if err := json.Unmarshal(data, &raw); err != nil {
-		return ToFace{}, fmt.Errorf(`decad: failed to decode to-face extent: %w`, err)
+		return ToFace{}, codecJSONErrorAt(data, &raw, fmt.Errorf(`decad: failed to decode to-face extent: %w`, err))
 	}
-	if raw.Body == nil || raw.Face == nil || raw.Offset == nil {
-		return ToFace{}, fmt.Errorf(`decad: a to-face extent requires body, face and offset`)
+	if raw.Body == nil {
+		return ToFace{}, prependCodecPath(fmt.Errorf(`decad: a to-face extent requires body, face and offset`), "body")
+	}
+	if raw.Face == nil {
+		return ToFace{}, prependCodecPath(fmt.Errorf(`decad: a to-face extent requires body, face and offset`), "face")
+	}
+	if raw.Offset == nil {
+		return ToFace{}, prependCodecPath(fmt.Errorf(`decad: a to-face extent requires body, face and offset`), "offset")
 	}
 	sel, err := unmarshalSelector(raw.Face)
 	if err != nil {
-		return ToFace{}, err
+		return ToFace{}, prependCodecPath(err, "face")
 	}
 	face, ok := sel.(FaceSelector)
 	if !ok {
-		return ToFace{}, fmt.Errorf(`decad: a to-face extent requires a face selector, got %T`, sel)
+		return ToFace{}, prependCodecPath(fmt.Errorf(`decad: a to-face extent requires a face selector, got %T`, sel), "face")
 	}
 	return ToFace{Body: *raw.Body, Face: face, Offset: *raw.Offset}, nil
 }
@@ -404,7 +410,7 @@ func unmarshalExtent(data []byte) (Extent, error) {
 		Kind string `json:"kind"`
 	}
 	if err := json.Unmarshal(data, &probe); err != nil {
-		return nil, fmt.Errorf(`decad: failed to decode extent tag: %w`, err)
+		return nil, codecJSONErrorAt(data, &probe, fmt.Errorf(`decad: failed to decode extent tag: %w`, err))
 	}
 	switch probe.Kind {
 	case extKindDistance:
@@ -415,10 +421,13 @@ func unmarshalExtent(data []byte) (Extent, error) {
 			Dir *Direction   `json:"dir"`
 		}
 		if err := json.Unmarshal(data, &raw); err != nil {
-			return nil, fmt.Errorf(`decad: failed to decode distance extent: %w`, err)
+			return nil, codecJSONErrorAt(data, &raw, fmt.Errorf(`decad: failed to decode distance extent: %w`, err))
 		}
-		if raw.D == nil || raw.Dir == nil {
-			return nil, fmt.Errorf(`decad: a distance extent requires both d and dir`)
+		if raw.D == nil {
+			return nil, prependCodecPath(fmt.Errorf(`decad: a distance extent requires both d and dir`), "d")
+		}
+		if raw.Dir == nil {
+			return nil, prependCodecPath(fmt.Errorf(`decad: a distance extent requires both d and dir`), "dir")
 		}
 		return Distance{D: *raw.D, Dir: *raw.Dir}, nil
 	case extKindThroughAll:
@@ -426,10 +435,10 @@ func unmarshalExtent(data []byte) (Extent, error) {
 			Dir *Direction `json:"dir"`
 		}
 		if err := json.Unmarshal(data, &raw); err != nil {
-			return nil, fmt.Errorf(`decad: failed to decode through-all extent: %w`, err)
+			return nil, codecJSONErrorAt(data, &raw, fmt.Errorf(`decad: failed to decode through-all extent: %w`, err))
 		}
 		if raw.Dir == nil {
-			return nil, fmt.Errorf(`decad: a through-all extent requires dir`)
+			return nil, prependCodecPath(fmt.Errorf(`decad: a through-all extent requires dir`), "dir")
 		}
 		return ThroughAll{Dir: *raw.Dir}, nil
 	case extKindSymmetric:
@@ -438,10 +447,10 @@ func unmarshalExtent(data []byte) (Extent, error) {
 			FullLength bool         `json:"full_length"`
 		}
 		if err := json.Unmarshal(data, &raw); err != nil {
-			return nil, fmt.Errorf(`decad: failed to decode symmetric extent: %w`, err)
+			return nil, codecJSONErrorAt(data, &raw, fmt.Errorf(`decad: failed to decode symmetric extent: %w`, err))
 		}
 		if raw.D == nil {
-			return nil, fmt.Errorf(`decad: a symmetric extent requires d`)
+			return nil, prependCodecPath(fmt.Errorf(`decad: a symmetric extent requires d`), "d")
 		}
 		return Symmetric{D: *raw.D, FullLength: raw.FullLength}, nil
 	case extKindTwoSided:
@@ -450,23 +459,23 @@ func unmarshalExtent(data []byte) (Extent, error) {
 			Two json.RawMessage `json:"two"`
 		}
 		if err := json.Unmarshal(data, &raw); err != nil {
-			return nil, fmt.Errorf(`decad: failed to decode two-sided extent: %w`, err)
+			return nil, codecJSONErrorAt(data, &raw, fmt.Errorf(`decad: failed to decode two-sided extent: %w`, err))
 		}
 		one, err := unmarshalSideExtent(raw.One)
 		if err != nil {
-			return nil, err
+			return nil, prependCodecPath(err, "one")
 		}
 		two, err := unmarshalSideExtent(raw.Two)
 		if err != nil {
-			return nil, err
+			return nil, prependCodecPath(err, "two")
 		}
 		return TwoSided{One: one, Two: two}, nil
 	case extKindToFace:
 		return unmarshalToFace(data)
 	case "":
-		return nil, fmt.Errorf(`decad: extent is missing its kind tag`)
+		return nil, prependCodecPath(fmt.Errorf(`decad: extent is missing its kind tag`), "kind")
 	default:
-		return nil, fmt.Errorf(`decad: unknown extent kind %q`, probe.Kind)
+		return nil, prependCodecPath(fmt.Errorf(`decad: unknown extent kind %q`, probe.Kind), "kind")
 	}
 }
 
@@ -494,7 +503,7 @@ func unmarshalSideExtent(data []byte) (SideExtent, error) {
 		Kind string `json:"kind"`
 	}
 	if err := json.Unmarshal(data, &probe); err != nil {
-		return nil, fmt.Errorf(`decad: failed to decode side extent tag: %w`, err)
+		return nil, codecJSONErrorAt(data, &probe, fmt.Errorf(`decad: failed to decode side extent tag: %w`, err))
 	}
 	switch probe.Kind {
 	case extKindDistanceSide:
@@ -502,10 +511,10 @@ func unmarshalSideExtent(data []byte) (SideExtent, error) {
 			D *units.Value `json:"d"`
 		}
 		if err := json.Unmarshal(data, &raw); err != nil {
-			return nil, fmt.Errorf(`decad: failed to decode distance side: %w`, err)
+			return nil, codecJSONErrorAt(data, &raw, fmt.Errorf(`decad: failed to decode distance side: %w`, err))
 		}
 		if raw.D == nil {
-			return nil, fmt.Errorf(`decad: a distance side requires d`)
+			return nil, prependCodecPath(fmt.Errorf(`decad: a distance side requires d`), "d")
 		}
 		return DistanceSide{D: *raw.D}, nil
 	case extKindThroughAllSide:
@@ -516,9 +525,9 @@ func unmarshalSideExtent(data []byte) (SideExtent, error) {
 	case extKindToFace:
 		return unmarshalToFace(data)
 	case "":
-		return nil, fmt.Errorf(`decad: side extent is missing its kind tag`)
+		return nil, prependCodecPath(fmt.Errorf(`decad: side extent is missing its kind tag`), "kind")
 	default:
-		return nil, fmt.Errorf(`decad: unknown side extent kind %q`, probe.Kind)
+		return nil, prependCodecPath(fmt.Errorf(`decad: unknown side extent kind %q`, probe.Kind), "kind")
 	}
 }
 
@@ -779,18 +788,21 @@ func unmarshalToFaceAngular(data []byte) (ToFaceAngular, error) {
 		Face json.RawMessage `json:"face"`
 	}
 	if err := json.Unmarshal(data, &raw); err != nil {
-		return ToFaceAngular{}, fmt.Errorf(`decad: failed to decode to-face angular extent: %w`, err)
+		return ToFaceAngular{}, codecJSONErrorAt(data, &raw, fmt.Errorf(`decad: failed to decode to-face angular extent: %w`, err))
 	}
-	if raw.Body == nil || raw.Face == nil {
-		return ToFaceAngular{}, fmt.Errorf(`decad: a to-face angular extent requires both body and face`)
+	if raw.Body == nil {
+		return ToFaceAngular{}, prependCodecPath(fmt.Errorf(`decad: a to-face angular extent requires both body and face`), "body")
+	}
+	if raw.Face == nil {
+		return ToFaceAngular{}, prependCodecPath(fmt.Errorf(`decad: a to-face angular extent requires both body and face`), "face")
 	}
 	sel, err := unmarshalSelector(raw.Face)
 	if err != nil {
-		return ToFaceAngular{}, err
+		return ToFaceAngular{}, prependCodecPath(err, "face")
 	}
 	face, ok := sel.(FaceSelector)
 	if !ok {
-		return ToFaceAngular{}, fmt.Errorf(`decad: a to-face angular extent requires a face selector, got %T`, sel)
+		return ToFaceAngular{}, prependCodecPath(fmt.Errorf(`decad: a to-face angular extent requires a face selector, got %T`, sel), "face")
 	}
 	return ToFaceAngular{Body: *raw.Body, Face: face}, nil
 }
@@ -802,7 +814,7 @@ func unmarshalAngularExtent(data []byte) (AngularExtent, error) {
 		Kind string `json:"kind"`
 	}
 	if err := json.Unmarshal(data, &probe); err != nil {
-		return nil, fmt.Errorf(`decad: failed to decode angular extent tag: %w`, err)
+		return nil, codecJSONErrorAt(data, &probe, fmt.Errorf(`decad: failed to decode angular extent tag: %w`, err))
 	}
 	switch probe.Kind {
 	case extKindAngleExtent:
@@ -813,10 +825,13 @@ func unmarshalAngularExtent(data []byte) (AngularExtent, error) {
 			Dir *Direction   `json:"dir"`
 		}
 		if err := json.Unmarshal(data, &raw); err != nil {
-			return nil, fmt.Errorf(`decad: failed to decode angle extent: %w`, err)
+			return nil, codecJSONErrorAt(data, &raw, fmt.Errorf(`decad: failed to decode angle extent: %w`, err))
 		}
-		if raw.A == nil || raw.Dir == nil {
-			return nil, fmt.Errorf(`decad: an angle extent requires both a and dir`)
+		if raw.A == nil {
+			return nil, prependCodecPath(fmt.Errorf(`decad: an angle extent requires both a and dir`), "a")
+		}
+		if raw.Dir == nil {
+			return nil, prependCodecPath(fmt.Errorf(`decad: an angle extent requires both a and dir`), "dir")
 		}
 		return AngleExtent{A: *raw.A, Dir: *raw.Dir}, nil
 	case extKindFullRevolution:
@@ -830,10 +845,10 @@ func unmarshalAngularExtent(data []byte) (AngularExtent, error) {
 			FullLength bool         `json:"full_length"`
 		}
 		if err := json.Unmarshal(data, &raw); err != nil {
-			return nil, fmt.Errorf(`decad: failed to decode symmetric angle extent: %w`, err)
+			return nil, codecJSONErrorAt(data, &raw, fmt.Errorf(`decad: failed to decode symmetric angle extent: %w`, err))
 		}
 		if raw.A == nil {
-			return nil, fmt.Errorf(`decad: a symmetric angle extent requires a`)
+			return nil, prependCodecPath(fmt.Errorf(`decad: a symmetric angle extent requires a`), "a")
 		}
 		return SymmetricAngle{A: *raw.A, FullLength: raw.FullLength}, nil
 	case extKindTwoSidedAngle:
@@ -842,23 +857,23 @@ func unmarshalAngularExtent(data []byte) (AngularExtent, error) {
 			Two json.RawMessage `json:"two"`
 		}
 		if err := json.Unmarshal(data, &raw); err != nil {
-			return nil, fmt.Errorf(`decad: failed to decode two-sided angle extent: %w`, err)
+			return nil, codecJSONErrorAt(data, &raw, fmt.Errorf(`decad: failed to decode two-sided angle extent: %w`, err))
 		}
 		one, err := unmarshalSideAngular(raw.One)
 		if err != nil {
-			return nil, err
+			return nil, prependCodecPath(err, "one")
 		}
 		two, err := unmarshalSideAngular(raw.Two)
 		if err != nil {
-			return nil, err
+			return nil, prependCodecPath(err, "two")
 		}
 		return TwoSidedAngle{One: one, Two: two}, nil
 	case extKindToFaceAngular:
 		return unmarshalToFaceAngular(data)
 	case "":
-		return nil, fmt.Errorf(`decad: angular extent is missing its kind tag`)
+		return nil, prependCodecPath(fmt.Errorf(`decad: angular extent is missing its kind tag`), "kind")
 	default:
-		return nil, fmt.Errorf(`decad: unknown angular extent kind %q`, probe.Kind)
+		return nil, prependCodecPath(fmt.Errorf(`decad: unknown angular extent kind %q`, probe.Kind), "kind")
 	}
 }
 
@@ -884,7 +899,7 @@ func unmarshalSideAngular(data []byte) (SideAngular, error) {
 		Kind string `json:"kind"`
 	}
 	if err := json.Unmarshal(data, &probe); err != nil {
-		return nil, fmt.Errorf(`decad: failed to decode side angular tag: %w`, err)
+		return nil, codecJSONErrorAt(data, &probe, fmt.Errorf(`decad: failed to decode side angular tag: %w`, err))
 	}
 	switch probe.Kind {
 	case extKindAngleSide:
@@ -892,17 +907,17 @@ func unmarshalSideAngular(data []byte) (SideAngular, error) {
 			A *units.Value `json:"a"`
 		}
 		if err := json.Unmarshal(data, &raw); err != nil {
-			return nil, fmt.Errorf(`decad: failed to decode angle side: %w`, err)
+			return nil, codecJSONErrorAt(data, &raw, fmt.Errorf(`decad: failed to decode angle side: %w`, err))
 		}
 		if raw.A == nil {
-			return nil, fmt.Errorf(`decad: an angle side requires a`)
+			return nil, prependCodecPath(fmt.Errorf(`decad: an angle side requires a`), "a")
 		}
 		return AngleSide{A: *raw.A}, nil
 	case extKindToFaceAngular:
 		return unmarshalToFaceAngular(data)
 	case "":
-		return nil, fmt.Errorf(`decad: side angular is missing its kind tag`)
+		return nil, prependCodecPath(fmt.Errorf(`decad: side angular is missing its kind tag`), "kind")
 	default:
-		return nil, fmt.Errorf(`decad: unknown side angular kind %q`, probe.Kind)
+		return nil, prependCodecPath(fmt.Errorf(`decad: unknown side angular kind %q`, probe.Kind), "kind")
 	}
 }

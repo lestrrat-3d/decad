@@ -367,7 +367,7 @@ func presentSegmentWireField(raw json.RawMessage) bool {
 func requireSegmentWireFields(kind string, fields ...namedSegmentWireField) error {
 	for _, field := range fields {
 		if !presentSegmentWireField(field.raw) {
-			return fmt.Errorf(`%w: %s segment is missing required field %q`, ErrDegenerate, kind, field.name)
+			return prependCodecPath(fmt.Errorf(`%w: %s segment is missing required field %q`, ErrDegenerate, kind, field.name), field.name)
 		}
 	}
 	return nil
@@ -379,13 +379,13 @@ func requirePointWire(kind, field string, raw json.RawMessage) error {
 		V *float64 `json:"v"`
 	}
 	if err := json.Unmarshal(raw, &point); err != nil {
-		return fmt.Errorf(`decad: failed to decode %s segment field %q: %w`, kind, field, err)
+		return prependCodecPath(fmt.Errorf(`decad: failed to decode %s segment field %q: %w`, kind, field, err), field)
 	}
 	if point.U == nil {
-		return fmt.Errorf(`%w: %s segment field %q is missing required coordinate "u"`, ErrDegenerate, kind, field)
+		return prependCodecPath(fmt.Errorf(`%w: %s segment field %q is missing required coordinate "u"`, ErrDegenerate, kind, field), field+".u")
 	}
 	if point.V == nil {
-		return fmt.Errorf(`%w: %s segment field %q is missing required coordinate "v"`, ErrDegenerate, kind, field)
+		return prependCodecPath(fmt.Errorf(`%w: %s segment field %q is missing required coordinate "v"`, ErrDegenerate, kind, field), field+".v")
 	}
 	return nil
 }
@@ -393,11 +393,11 @@ func requirePointWire(kind, field string, raw json.RawMessage) error {
 func requirePointArrayWire(kind, field string, raw json.RawMessage) error {
 	var points []json.RawMessage
 	if err := json.Unmarshal(raw, &points); err != nil {
-		return fmt.Errorf(`decad: failed to decode %s segment field %q: %w`, kind, field, err)
+		return prependCodecPath(fmt.Errorf(`decad: failed to decode %s segment field %q: %w`, kind, field, err), field)
 	}
 	for i, point := range points {
 		if !presentSegmentWireField(point) {
-			return fmt.Errorf(`%w: %s segment field %q has a null point at index %d`, ErrDegenerate, kind, field, i)
+			return prependCodecPath(fmt.Errorf(`%w: %s segment field %q has a null point at index %d`, ErrDegenerate, kind, field, i), fmt.Sprintf(`%s[%d]`, field, i))
 		}
 		if err := requirePointWire(kind, fmt.Sprintf(`%s[%d]`, field, i), point); err != nil {
 			return err
@@ -409,11 +409,11 @@ func requirePointArrayWire(kind, field string, raw json.RawMessage) error {
 func requireNumberArrayWire(kind, field string, raw json.RawMessage) error {
 	var numbers []json.RawMessage
 	if err := json.Unmarshal(raw, &numbers); err != nil {
-		return fmt.Errorf(`decad: failed to decode %s segment field %q: %w`, kind, field, err)
+		return prependCodecPath(fmt.Errorf(`decad: failed to decode %s segment field %q: %w`, kind, field, err), field)
 	}
 	for i, number := range numbers {
 		if !presentSegmentWireField(number) {
-			return fmt.Errorf(`%w: %s segment field %q has a null value at index %d`, ErrDegenerate, kind, field, i)
+			return prependCodecPath(fmt.Errorf(`%w: %s segment field %q has a null value at index %d`, ErrDegenerate, kind, field, i), fmt.Sprintf(`%s[%d]`, field, i))
 		}
 	}
 	return nil
@@ -520,14 +520,14 @@ func validateSegmentWire(kind string, wire segmentWire) error {
 func unmarshalSegment(data []byte) (CurveSegment, error) {
 	var wire segmentWire
 	if err := json.Unmarshal(data, &wire); err != nil {
-		return nil, fmt.Errorf(`decad: failed to decode curve segment tag: %w`, err)
+		return nil, codecJSONErrorAt(data, &wire, fmt.Errorf(`decad: failed to decode curve segment tag: %w`, err))
 	}
 	if wire.Kind == nil {
-		return nil, fmt.Errorf(`decad: curve segment is missing its kind tag`)
+		return nil, prependCodecPath(fmt.Errorf(`decad: curve segment is missing its kind tag`), "kind")
 	}
 	kind := *wire.Kind
 	if kind == "" {
-		return nil, fmt.Errorf(`decad: curve segment is missing its kind tag`)
+		return nil, prependCodecPath(fmt.Errorf(`decad: curve segment is missing its kind tag`), "kind")
 	}
 	if err := validateSegmentWire(kind, wire); err != nil {
 		return nil, err
@@ -557,7 +557,7 @@ func unmarshalSegment(data []byte) (CurveSegment, error) {
 		seg = &ConicSeg{}
 	}
 	if err := json.Unmarshal(data, seg); err != nil {
-		return nil, fmt.Errorf(`decad: failed to decode %s segment: %w`, kind, err)
+		return nil, codecJSONErrorAt(data, seg, fmt.Errorf(`decad: failed to decode %s segment: %w`, kind, err))
 	}
 	seg, err := normalizeSegment(seg)
 	if err != nil {
@@ -895,13 +895,13 @@ func (l *LoopRecord) UnmarshalJSON(data []byte) error {
 		Segments []json.RawMessage `json:"segments"`
 	}
 	if err := json.Unmarshal(data, &raw); err != nil {
-		return fmt.Errorf(`decad: failed to decode loop record: %w`, err)
+		return codecJSONError(fmt.Errorf(`decad: failed to decode loop record: %w`, err))
 	}
 	segs := make([]CurveSegment, 0, len(raw.Segments))
-	for _, b := range raw.Segments {
+	for i, b := range raw.Segments {
 		s, err := unmarshalSegment(b)
 		if err != nil {
-			return err
+			return prependCodecPath(err, fmt.Sprintf(`segments[%d]`, i))
 		}
 		segs = append(segs, s)
 	}

@@ -228,31 +228,31 @@ func unmarshalStepOpts(data []byte) (StepOpts, error) {
 		Kind string `json:"kind"`
 	}
 	if err := json.Unmarshal(data, &probe); err != nil {
-		return nil, fmt.Errorf(`decad: failed to decode step options tag: %w`, err)
+		return nil, codecJSONErrorAt(data, &probe, fmt.Errorf(`decad: failed to decode step options tag: %w`, err))
 	}
 	switch probe.Kind {
 	case optsKindExtrude:
 		var wire jsonExtrudeOpts
 		if err := json.Unmarshal(data, &wire); err != nil {
-			return nil, fmt.Errorf(`decad: failed to decode extrude options: %w`, err)
+			return nil, codecJSONErrorAt(data, &wire, fmt.Errorf(`decad: failed to decode extrude options: %w`, err))
 		}
 		if wire.Taper == nil {
-			return nil, fmt.Errorf(`decad: extrude options are missing taper`)
+			return nil, prependCodecPath(fmt.Errorf(`decad: extrude options are missing taper`), "taper")
 		}
 		return ExtrudeOpts{Taper: *wire.Taper}, nil
 	case optsKindShell:
 		var wire jsonShellOpts
 		if err := json.Unmarshal(data, &wire); err != nil {
-			return nil, fmt.Errorf(`decad: failed to decode shell options: %w`, err)
+			return nil, codecJSONErrorAt(data, &wire, fmt.Errorf(`decad: failed to decode shell options: %w`, err))
 		}
 		if wire.Sense == nil {
-			return nil, fmt.Errorf(`decad: shell options are missing sense`)
+			return nil, prependCodecPath(fmt.Errorf(`decad: shell options are missing sense`), "sense")
 		}
 		return ShellOpts{Sense: *wire.Sense}, nil
 	case "":
-		return nil, fmt.Errorf(`decad: step options are missing their kind tag`)
+		return nil, prependCodecPath(fmt.Errorf(`decad: step options are missing their kind tag`), "kind")
 	default:
-		return nil, fmt.Errorf(`decad: unknown step options kind %q`, probe.Kind)
+		return nil, prependCodecPath(fmt.Errorf(`decad: unknown step options kind %q`, probe.Kind), "kind")
 	}
 }
 
@@ -278,6 +278,21 @@ type jsonStep struct {
 	Selectors []json.RawMessage `json:"selectors,omitempty"`
 	Opts      json.RawMessage   `json:"opts,omitempty"`
 	Values    []units.Value     `json:"values,omitempty"`
+}
+
+// jsonStepDecode keeps fields raw until Step.UnmarshalJSON can attach paths.
+type jsonStepDecode struct {
+	Op        json.RawMessage `json:"op"`
+	Inputs    json.RawMessage `json:"inputs"`
+	Profile   json.RawMessage `json:"profile"`
+	Plane     json.RawMessage `json:"plane"`
+	Extent    json.RawMessage `json:"extent"`
+	Angular   json.RawMessage `json:"angular"`
+	Axis      json.RawMessage `json:"axis"`
+	Placement json.RawMessage `json:"placement"`
+	Selectors json.RawMessage `json:"selectors"`
+	Opts      json.RawMessage `json:"opts"`
+	Values    json.RawMessage `json:"values"`
 }
 
 // zeroVec reports whether v is the zero vector.
@@ -410,38 +425,70 @@ func (s Step) MarshalJSON() ([]byte, error) {
 // UnmarshalJSON decodes the wire shape, dispatching every tagged field
 // through its own closed-set codec.
 func (s *Step) UnmarshalJSON(data []byte) error {
-	var raw jsonStep
+	var raw jsonStepDecode
 	if err := json.Unmarshal(data, &raw); err != nil {
-		return fmt.Errorf(`decad: failed to decode step: %w`, err)
+		return codecJSONError(fmt.Errorf(`decad: failed to decode step: %w`, err))
 	}
-	if raw.Op == nil {
-		return fmt.Errorf(`decad: step is missing its op`)
+	var op *OpKind
+	if raw.Op != nil {
+		if err := json.Unmarshal(raw.Op, &op); err != nil {
+			return prependCodecPath(codecJSONError(err), "op")
+		}
 	}
-	out := Step{Op: *raw.Op, Inputs: raw.Inputs, Values: raw.Values}
+	if op == nil {
+		return prependCodecPath(fmt.Errorf(`decad: step is missing its op`), "op")
+	}
+	out := Step{Op: *op}
+	if raw.Inputs != nil {
+		var vals []json.RawMessage
+		if err := json.Unmarshal(raw.Inputs, &vals); err != nil {
+			return prependCodecPath(codecJSONError(err), "inputs")
+		}
+		out.Inputs = make([]StepRef, 0, len(vals))
+		for i, b := range vals {
+			var v StepRef
+			if err := json.Unmarshal(b, &v); err != nil {
+				return prependCodecPath(codecJSONError(err), fmt.Sprintf(`inputs[%d]`, i))
+			}
+			out.Inputs = append(out.Inputs, v)
+		}
+	}
 	if raw.Profile != nil {
-		out.Profile = *raw.Profile
+		var v *ProfileRecord
+		if err := json.Unmarshal(raw.Profile, &v); err != nil {
+			return prependCodecPath(codecJSONErrorAt(raw.Profile, &v, err), "profile")
+		}
+		if v != nil {
+			out.Profile = *v
+		}
 	}
 	if raw.Plane != nil {
-		out.Plane = *raw.Plane
+		var v *PlaneRecord
+		if err := json.Unmarshal(raw.Plane, &v); err != nil {
+			return prependCodecPath(codecJSONErrorAt(raw.Plane, &v, err), "plane")
+		}
+		if v != nil {
+			out.Plane = *v
+		}
 	}
 	if raw.Extent != nil {
 		e, err := unmarshalExtent(raw.Extent)
 		if err != nil {
-			return err
+			return prependCodecPath(err, "extent")
 		}
 		out.Extent = e
 	}
 	if raw.Angular != nil {
 		a, err := unmarshalAngularExtent(raw.Angular)
 		if err != nil {
-			return err
+			return prependCodecPath(err, "angular")
 		}
 		out.Angular = a
 	}
 	if raw.Axis != nil {
 		a, err := unmarshalAxis(raw.Axis)
 		if err != nil {
-			return err
+			return prependCodecPath(err, "axis")
 		}
 		out.Axis = a
 	}
@@ -454,36 +501,63 @@ func (s *Step) UnmarshalJSON(data []byte) error {
 	placementPresent := raw.Placement != nil
 	if placementPresent {
 		if err := json.Unmarshal(raw.Placement, &out.Placement); err != nil {
-			return fmt.Errorf(`decad: failed to decode placement: %w`, err)
+			return prependCodecPath(codecJSONErrorAt(raw.Placement, &out.Placement, fmt.Errorf(`decad: failed to decode placement: %w`, err)), "placement")
 		}
 	}
-	if len(raw.Selectors) > 0 {
-		sels := make([]Selector, 0, len(raw.Selectors))
-		for _, b := range raw.Selectors {
+	if raw.Selectors != nil {
+		var selectorData []json.RawMessage
+		if err := json.Unmarshal(raw.Selectors, &selectorData); err != nil {
+			return prependCodecPath(codecJSONError(err), "selectors")
+		}
+		sels := make([]Selector, 0, len(selectorData))
+		for i, b := range selectorData {
 			sel, err := unmarshalSelector(b)
 			if err != nil {
-				return err
+				return prependCodecPath(err, fmt.Sprintf(`selectors[%d]`, i))
 			}
 			sels = append(sels, sel)
 		}
-		out.Selectors = sels
+		if len(selectorData) > 0 {
+			out.Selectors = sels
+		}
 	}
 	if raw.Opts != nil {
 		o, err := unmarshalStepOpts(raw.Opts)
 		if err != nil {
-			return err
+			return prependCodecPath(err, "opts")
 		}
 		out.Opts = o
 	}
+	if raw.Values != nil {
+		var valueData []json.RawMessage
+		if err := json.Unmarshal(raw.Values, &valueData); err != nil {
+			return prependCodecPath(codecJSONError(err), "values")
+		}
+		out.Values = make([]units.Value, 0, len(valueData))
+		for i, b := range valueData {
+			var v units.Value
+			if err := json.Unmarshal(b, &v); err != nil {
+				return prependCodecPath(codecJSONError(err), fmt.Sprintf(`values[%d]`, i))
+			}
+			out.Values = append(out.Values, v)
+		}
+	}
 	if err := validateExtentKeying(out); err != nil {
-		return err
+		field := "extent"
+		if out.Extent == nil && out.Angular != nil {
+			field = "angular"
+		}
+		if out.Extent == nil && out.Angular == nil {
+			field = "axis"
+		}
+		return prependCodecPath(err, field)
 	}
 	// Presence is read from the wire (placementPresent above), not the
 	// flattened value: a present-but-zero placement ({} or an explicit null) on
 	// a forbidding op must be rejected, and an absent one on a placing op must
 	// be caught, neither of which the value alone reveals.
 	if err := validatePlacementKeying(out.Op, placementPresent, out.Placement); err != nil {
-		return err
+		return prependCodecPath(err, "placement")
 	}
 	*s = out
 	return nil

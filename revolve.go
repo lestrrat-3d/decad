@@ -169,7 +169,7 @@ func unmarshalAxis(data []byte) (Axis, error) {
 		Kind string `json:"kind"`
 	}
 	if err := json.Unmarshal(data, &probe); err != nil {
-		return nil, fmt.Errorf(`decad: failed to decode axis tag: %w`, err)
+		return nil, codecJSONErrorAt(data, &probe, fmt.Errorf(`decad: failed to decode axis tag: %w`, err))
 	}
 	switch probe.Kind {
 	case axisKindSketchLine:
@@ -180,10 +180,13 @@ func unmarshalAxis(data []byte) (Axis, error) {
 			End   *Point2 `json:"end"`
 		}
 		if err := json.Unmarshal(data, &raw); err != nil {
-			return nil, fmt.Errorf(`decad: failed to decode sketch-line axis: %w`, err)
+			return nil, codecJSONErrorAt(data, &raw, fmt.Errorf(`decad: failed to decode sketch-line axis: %w`, err))
 		}
-		if raw.Start == nil || raw.End == nil {
-			return nil, fmt.Errorf(`decad: a sketch-line axis requires both start and end`)
+		if raw.Start == nil {
+			return nil, prependCodecPath(fmt.Errorf(`decad: a sketch-line axis requires both start and end`), "start")
+		}
+		if raw.End == nil {
+			return nil, prependCodecPath(fmt.Errorf(`decad: a sketch-line axis requires both start and end`), "end")
 		}
 		return SketchLine{Start: *raw.Start, End: *raw.End}, nil
 	case axisKindConstruction:
@@ -192,10 +195,13 @@ func unmarshalAxis(data []byte) (Axis, error) {
 			Dir    *r3.Vec `json:"dir"`
 		}
 		if err := json.Unmarshal(data, &raw); err != nil {
-			return nil, fmt.Errorf(`decad: failed to decode construction axis: %w`, err)
+			return nil, codecJSONErrorAt(data, &raw, fmt.Errorf(`decad: failed to decode construction axis: %w`, err))
 		}
-		if raw.Origin == nil || raw.Dir == nil {
-			return nil, fmt.Errorf(`decad: a construction axis requires both origin and dir`)
+		if raw.Origin == nil {
+			return nil, prependCodecPath(fmt.Errorf(`decad: a construction axis requires both origin and dir`), "origin")
+		}
+		if raw.Dir == nil {
+			return nil, prependCodecPath(fmt.Errorf(`decad: a construction axis requires both origin and dir`), "dir")
 		}
 		return ConstructionAxis{Origin: *raw.Origin, Dir: *raw.Dir}, nil
 	case axisKindEdge:
@@ -204,24 +210,27 @@ func unmarshalAxis(data []byte) (Axis, error) {
 			Edge json.RawMessage `json:"edge"`
 		}
 		if err := json.Unmarshal(data, &raw); err != nil {
-			return nil, fmt.Errorf(`decad: failed to decode edge axis: %w`, err)
+			return nil, codecJSONErrorAt(data, &raw, fmt.Errorf(`decad: failed to decode edge axis: %w`, err))
 		}
-		if raw.Body == nil || raw.Edge == nil {
-			return nil, fmt.Errorf(`decad: an edge axis requires both body and edge`)
+		if raw.Body == nil {
+			return nil, prependCodecPath(fmt.Errorf(`decad: an edge axis requires both body and edge`), "body")
+		}
+		if raw.Edge == nil {
+			return nil, prependCodecPath(fmt.Errorf(`decad: an edge axis requires both body and edge`), "edge")
 		}
 		sel, err := unmarshalSelector(raw.Edge)
 		if err != nil {
-			return nil, err
+			return nil, prependCodecPath(err, "edge")
 		}
 		edge, ok := sel.(EdgeSelector)
 		if !ok {
-			return nil, fmt.Errorf(`decad: an edge axis requires an edge selector, got %T`, sel)
+			return nil, prependCodecPath(fmt.Errorf(`decad: an edge axis requires an edge selector, got %T`, sel), "edge")
 		}
 		return EdgeAxis{Body: *raw.Body, Edge: edge}, nil
 	case "":
-		return nil, fmt.Errorf(`decad: axis is missing its kind tag`)
+		return nil, prependCodecPath(fmt.Errorf(`decad: axis is missing its kind tag`), "kind")
 	default:
-		return nil, fmt.Errorf(`decad: unknown axis kind %q`, probe.Kind)
+		return nil, prependCodecPath(fmt.Errorf(`decad: unknown axis kind %q`, probe.Kind), "kind")
 	}
 }
 
