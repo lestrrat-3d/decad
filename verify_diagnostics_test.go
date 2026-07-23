@@ -98,6 +98,9 @@ func TestDiagnosticCodeTokens(t *testing.T) {
 	require.Equal(t, "unsupported_pair", decad.DiagUnsupportedPair.String())
 	require.Equal(t, "undecided_clearance", decad.DiagUndecidedClearance.String())
 	require.Equal(t, "undecided_interference", decad.DiagUndecidedInterference.String())
+	require.Equal(t, "unsupported_pair_payload", decad.DiagUnsupportedPairPayload.String())
+	require.Equal(t, "unsupported_pair_contact", decad.DiagUnsupportedPairContact.String())
+	require.Equal(t, "unsupported_pair_pipeline", decad.DiagUnsupportedPairPipeline.String())
 	require.Equal(t, "unsupported_survey_payload", decad.DiagUnsupportedSurveyPayload.String())
 	// An out-of-range value renders diagnostic(<n>), never a panic.
 	require.Equal(t, "diagnostic(99)", decad.DiagnosticCode(99).String())
@@ -214,8 +217,8 @@ func TestVerifyDiagnosticsUnsupportedPairStagedContact(t *testing.T) {
 	// Two 10×10×10 boxes, the second translated to (5,0,0): the boxes share
 	// coplanar top and bottom caps, so the read-only intersect stages the
 	// face-on-face contact (booleanExpectedContact). Per verification §1.1 a
-	// staged boolean contact is a DiagUnsupportedPair, not a DiagUndecidedPair;
-	// the Status stays Suspect.
+	// staged boolean contact is a DiagUnsupportedPairContact, not a payload,
+	// pipeline, or undecided-partition diagnostic; the Status stays Suspect.
 	ws := sketch.NewWorld()
 	s, err := ws.CreateSketch(ws.XY())
 	require.NoError(t, err)
@@ -242,15 +245,23 @@ func TestVerifyDiagnosticsUnsupportedPairStagedContact(t *testing.T) {
 	require.Equal(t, decad.Suspect, report.Status)
 	requireDiagnosticInvariants(t, report)
 
-	d, ok := findDiagnostic(report.Diagnostics, decad.DiagUnsupportedPair)
-	require.True(t, ok, `a staged boolean contact emits DiagUnsupportedPair`)
+	d, ok := findDiagnostic(report.Diagnostics, decad.DiagUnsupportedPairContact)
+	require.True(t, ok, `a staged boolean contact emits its cause-specific code`)
 	require.Equal(t, decad.Suspect, d.Status)
 	require.Equal(t, decad.ReadingNone, d.Reading, `an unsupported pair names no reading`)
 	require.Nil(t, d.Body)
 	require.NotNil(t, d.Pair, `an unsupported pair names its pair`)
+	require.Contains(t, d.Message, `contact`, `the message identifies the refused contact policy`)
+	require.Contains(t, d.Message, `change the geometry`, `the message gives the contact-specific action`)
 
 	_, undecided := findDiagnostic(report.Diagnostics, decad.DiagUndecidedPair)
 	require.False(t, undecided, `a staged contact is not an undecided partition`)
+	_, broad := findDiagnostic(report.Diagnostics, decad.DiagUnsupportedPair)
+	require.False(t, broad, `the broad compatibility code is no longer emitted`)
+	_, payload := findDiagnostic(report.Diagnostics, decad.DiagUnsupportedPairPayload)
+	require.False(t, payload, `a contact refusal is not a payload capability limit`)
+	_, pipeline := findDiagnostic(report.Diagnostics, decad.DiagUnsupportedPairPipeline)
+	require.False(t, pipeline, `a contact refusal is not an in-pipeline reach`)
 }
 
 func TestVerifyDiagnosticsBeyondTolerance(t *testing.T) {
@@ -280,7 +291,7 @@ func TestVerifyDiagnosticsBeyondTolerance(t *testing.T) {
 func TestVerifyDiagnosticsUndecidedClearance(t *testing.T) {
 	// Two box-disjoint cups: the box test proves the pair apart, but the
 	// clearance kernel stages the cup payload, so the requested gap is
-	// unmeasured — DiagUndecidedClearance, never DiagUnsupportedPair.
+	// unmeasured — DiagUndecidedClearance, never an unsupported-pair code.
 	doc, box1 := shellBox(t)
 	cup1, err := box1.Shell(topCap(box1), units.Millimeters(5))
 	require.NoError(t, err)

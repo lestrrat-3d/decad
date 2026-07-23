@@ -212,6 +212,62 @@ func TestInterferencePairDiameterUsesAllFacetedPayloadVertices(t *testing.T) {
 	require.Equal(t, 100.0, diameter)
 }
 
+func TestInterferenceExpectedCausesKeepDistinctDiagnostics(t *testing.T) {
+	a := &Body{origin: FeatureRef{Step: 12}}
+	b := &Body{origin: FeatureRef{Step: 34}}
+
+	for _, tc := range []struct {
+		name        string
+		expected    *booleanExpectedError
+		wantOutcome interferenceOutcome
+		wantCode    DiagnosticCode
+		wantMessage []string
+	}{
+		{
+			name:        "first payload",
+			expected:    &booleanExpectedError{kind: booleanExpectedStaging, operand: 0},
+			wantOutcome: interferenceUnsupportedPayloadFirst,
+			wantCode:    DiagUnsupportedPairPayload,
+			wantMessage: []string{"first operand", "step 12", "tessellatable body type"},
+		},
+		{
+			name:        "second payload",
+			expected:    &booleanExpectedError{kind: booleanExpectedStaging, operand: 1},
+			wantOutcome: interferenceUnsupportedPayloadSecond,
+			wantCode:    DiagUnsupportedPairPayload,
+			wantMessage: []string{"second operand", "step 34", "tessellatable body type"},
+		},
+		{
+			name:        "contact policy",
+			expected:    &booleanExpectedError{kind: booleanExpectedContact, operand: -1},
+			wantOutcome: interferenceUnsupportedContact,
+			wantCode:    DiagUnsupportedPairContact,
+			wantMessage: []string{"contact", "change the geometry"},
+		},
+		{
+			name:        "in-pipeline reach",
+			expected:    &booleanExpectedError{kind: booleanExpectedUnsupported, operand: -1},
+			wantOutcome: interferenceUnsupportedPipeline,
+			wantCode:    DiagUnsupportedPairPipeline,
+			wantMessage: []string{"both operands tessellate", "simplify the boolean geometry"},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			outcome := interferenceOutcomeForExpected(tc.expected)
+			require.Equal(t, tc.wantOutcome, outcome)
+
+			diag := undecidedPairDiag(a, b, pairUndecided, outcome)
+			require.Equal(t, tc.wantCode, diag.Code)
+			require.Equal(t, Suspect, diag.Status)
+			require.Equal(t, ReadingNone, diag.Reading)
+			require.Equal(t, &DiagnosticPair{A: a, B: b}, diag.Pair)
+			for _, want := range tc.wantMessage {
+				require.Contains(t, diag.Message, want)
+			}
+		})
+	}
+}
+
 func internalBoxBody(t *testing.T, doc *Document, x0, y0, x1, y1, h float64) *Body {
 	t.Helper()
 	w := sketch.NewWorld()
