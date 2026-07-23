@@ -295,8 +295,7 @@ func validateWholeCircleRegion(record ProfileRecord) (bool, error) {
 		if !finiteMomentValues(distance) {
 			return true, fmt.Errorf(`%w: a circle separation is not finite`, ErrNotFinite)
 		}
-		if holeRadius > outerRadius || distance > outerRadius-holeRadius ||
-			distance == 0 && holeRadius == outerRadius {
+		if holeRadius >= outerRadius || distance >= outerRadius-holeRadius {
 			return true, fmt.Errorf(`%w: profile hole %d is not contained by the outer circle`, ErrDegenerate, holeIndex)
 		}
 	}
@@ -312,8 +311,8 @@ func validateWholeCircleRegion(record ProfileRecord) (bool, error) {
 			if !finiteMomentValues(minimum, distance) {
 				return true, fmt.Errorf(`%w: a circle separation is not finite`, ErrNotFinite)
 			}
-			if distance < minimum {
-				return true, fmt.Errorf(`%w: profile holes overlap or nest`, ErrDegenerate)
+			if distance <= minimum {
+				return true, fmt.Errorf(`%w: profile holes overlap, touch or nest`, ErrDegenerate)
 			}
 		}
 	}

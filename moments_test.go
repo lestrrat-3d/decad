@@ -46,6 +46,20 @@ func momentSquare(u0, v0, u1, v1 float64, clockwise bool) decad.LoopRecord {
 	}}
 }
 
+func momentWholeCircle(center decad.Point2, radius float64, counterclockwise bool) decad.LoopRecord {
+	segment := decad.CircleSeg{
+		Center: center,
+		Radius: units.Millimeters(radius),
+		CCW:    counterclockwise,
+	}
+	if counterclockwise {
+		segment.TEnd = 1
+	} else {
+		segment.TStart = 1
+	}
+	return decad.LoopRecord{Segments: []decad.CurveSegment{segment}}
+}
+
 func requireProfileMomentError(t *testing.T, record decad.ProfileRecord, target error) {
 	t.Helper()
 	_, err := record.Area()
@@ -288,6 +302,25 @@ func TestRegionMomentsRejectMalformedTopology(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "OuterHoleInternalTangency",
+			record: decad.ProfileRecord{
+				Outer: momentWholeCircle(decad.Point2{}, 10, true),
+				Holes: []decad.LoopRecord{
+					momentWholeCircle(decad.Point2{U: 5}, 5, false),
+				},
+			},
+		},
+		{
+			name: "HoleHoleExternalTangency",
+			record: decad.ProfileRecord{
+				Outer: momentWholeCircle(decad.Point2{}, 10, true),
+				Holes: []decad.LoopRecord{
+					momentWholeCircle(decad.Point2{U: -2}, 2, false),
+					momentWholeCircle(decad.Point2{U: 2}, 2, false),
+				},
+			},
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -301,12 +334,10 @@ func TestRegionMomentsAcceptThinAnnulus(t *testing.T) {
 	const gap = 1e-10
 	holeRadius := outerRadius - gap
 	record := decad.ProfileRecord{
-		Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
-			decad.CircleSeg{Radius: units.Millimeters(outerRadius), CCW: true, TEnd: 1},
-		}},
-		Holes: []decad.LoopRecord{{Segments: []decad.CurveSegment{
-			decad.CircleSeg{Radius: units.Millimeters(holeRadius), TStart: 1},
-		}}},
+		Outer: momentWholeCircle(decad.Point2{}, outerRadius, true),
+		Holes: []decad.LoopRecord{
+			momentWholeCircle(decad.Point2{}, holeRadius, false),
+		},
 	}
 
 	area, err := record.Area()
@@ -314,6 +345,26 @@ func TestRegionMomentsAcceptThinAnnulus(t *testing.T) {
 	got, err := area.Value.In(units.SquareMillimeter)
 	require.NoError(t, err)
 	require.InDelta(t, math.Pi*(outerRadius*outerRadius-holeRadius*holeRadius), got, 1e-12)
+	_, err = record.Centroid()
+	require.NoError(t, err)
+	_, err = record.SecondMoments()
+	require.NoError(t, err)
+}
+
+func TestRegionMomentsAcceptSeparatedWholeCircleHoles(t *testing.T) {
+	record := decad.ProfileRecord{
+		Outer: momentWholeCircle(decad.Point2{}, 10, true),
+		Holes: []decad.LoopRecord{
+			momentWholeCircle(decad.Point2{U: -2.0000000001}, 2, false),
+			momentWholeCircle(decad.Point2{U: 2.0000000001}, 2, false),
+		},
+	}
+
+	area, err := record.Area()
+	require.NoError(t, err)
+	got, err := area.Value.In(units.SquareMillimeter)
+	require.NoError(t, err)
+	require.InDelta(t, 92*math.Pi, got, 1e-12)
 	_, err = record.Centroid()
 	require.NoError(t, err)
 	_, err = record.SecondMoments()
