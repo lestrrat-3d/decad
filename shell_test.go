@@ -745,6 +745,32 @@ func TestShellRefusals(t *testing.T) {
 	})
 }
 
+func TestShellInwardSectionWorkBudget(t *testing.T) {
+	const segments = 128
+	pts := make([][2]float64, segments)
+	for i := range pts {
+		theta := 2 * math.Pi * float64(i) / segments
+		pts[i] = [2]float64{100 * math.Cos(theta), 100 * math.Sin(theta)}
+	}
+	s, profile := polygonSketch(t, pts)
+	doc := decad.New()
+	box, err := doc.Extrude(s, profile, decad.Distance{D: units.Millimeters(shellBoxHeight), Dir: decad.Along})
+	require.NoError(t, err)
+	before := snapshotDocument(t, doc)
+
+	body, err := box.Shell(bothCaps(), units.Millimeters(1))
+	require.Nil(t, body)
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+	require.Contains(t, err.Error(), "work budget")
+	require.Contains(t, err.Error(), "candidate-family visits")
+	require.Equal(t, before.bodies, doc.Bodies(), `a refused shell must preserve live body membership and order`)
+	recipe, marshalErr := json.Marshal(doc.Recipe())
+	require.NoError(t, marshalErr)
+	require.Equal(t, before.recipe, recipe, `a refused shell must not append a recipe step`)
+	_, err = box.Duplicate()
+	require.NoError(t, err, `the receiver must remain live after a work-budget refusal`)
+}
+
 func TestShellCupDownstream(t *testing.T) {
 	const th = 5.0
 

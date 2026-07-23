@@ -1,6 +1,7 @@
 package decad
 
 import (
+	"errors"
 	"fmt"
 	"math"
 
@@ -186,15 +187,16 @@ func (b *Body) Shell(sel FaceSelector, t units.Value, opts ...ShellOption) (*Bod
 	holed := len(pp.profile.Holes) > 0
 	h := pp.z1 - pp.z0
 
-	// Stage 3 (§4): the construction's own gates — S10 (the cavity is non-empty,
+	// Stage 3 (§4): the construction's own gates — S18 (the inward section
+	// survey stays within its fixed work budget), S10 (the cavity is non-empty,
 	// inward only), then S11a (no feature the offset drops as it is built).
 	if s > 0 {
 		// The section limit: P ⊖ t is non-empty exactly when t is strictly less
 		// than the section's inradius, which survey2d.go computes exactly
 		// (docs/modify-design.md §8, the same reading MinWallThickness answers).
-		inradius, ok := sectionInradius(pp.profile)
-		if !ok {
-			return nil, fmt.Errorf(`%w: this evaluator cannot prove the eroded section non-empty`, ErrUnsupported)
+		inradius, err := sectionInradius(pp.profile)
+		if err != nil {
+			return nil, err
 		}
 		// The accept boundary sits shellTol*max(1, inradius) below the limit —
 		// a SCALE-RELATIVE rounding tolerance that grows with the part's scale,
@@ -293,6 +295,12 @@ func (b *Body) Shell(sel FaceSelector, t units.Value, opts ...ShellOption) (*Bod
 // exact geometry, so this only absorbs float noise, never an admission.
 const shellTol = 1e-9
 
+// shellInradiusWorkLimit is S18's hard ceiling over one inward shell's
+// candidate generation and whole-boundary validation. Candidate-family visits
+// are checked against it before the wall kernel starts; every generated and
+// validation visit then charges the same counter.
+const shellInradiusWorkLimit uint64 = 1 << 20
+
 // classifyRemovedCaps decides which caps a removed-face set names: every face
 // must be a cap of the receiver (else S2, a side wall — ErrUnsupported), and it
 // reports whether the start cap, the end cap, or both were removed.
@@ -324,13 +332,15 @@ func classifyRemovedCaps(b *Body, removed []*Face) (start, end bool, err error) 
 
 // sectionInradius is the largest inscribed disk of a recorded section — the
 // exact 2D inradius survey2d.go computes as part of the wall survey
-// (docs/modify-design.md §8, the reading that answers MinWallThickness). ok is
-// false when the kernel cannot decide, which a build-time gate treats as
-// ErrUnsupported (it has no Suspect to fall back on).
-func sectionInradius(profile ProfileRecord) (float64, bool) {
+// (docs/modify-design.md §8, the reading that answers MinWallThickness). S18
+// checks the candidate-family count before entering the kernel and shares one
+// fixed work budget across its streamed generation and validation. An
+// undecided or over-budget build-time gate is ErrUnsupported: it has no
+// Suspect result to fall back on.
+func sectionInradius(profile ProfileRecord) (float64, error) {
 	loops, err := recordLoops(profile)
 	if err != nil {
-		return 0, false
+		return 0, fmt.Errorf(`%w: this evaluator cannot read the shell section: %v`, ErrUnsupported, err)
 	}
 	var elems []surveyElem
 	var verts [][2]float64
@@ -339,7 +349,7 @@ func sectionInradius(profile ProfileRecord) (float64, bool) {
 		for _, w := range loop {
 			el, ok := walkElem(w.segmentWalk)
 			if !ok {
-				return 0, false
+				return 0, fmt.Errorf(`%w: this evaluator cannot survey the shell section's curve type`, ErrUnsupported)
 			}
 			elems = append(elems, el)
 			if single {
@@ -348,15 +358,28 @@ func sectionInradius(profile ProfileRecord) (float64, bool) {
 			verts = append(verts, [2]float64{w.startU, w.startV})
 		}
 	}
+	candidateWork, ok := wallCandidateWork(len(elems), len(verts), false)
+	if !ok {
+		return 0, fmt.Errorf(`%w: inward shell section survey candidate count overflows the checked work counter (fixed work budget %d)`, ErrUnsupported, shellInradiusWorkLimit)
+	}
+	if candidateWork > shellInradiusWorkLimit {
+		return 0, fmt.Errorf(`%w: inward shell section survey needs %d candidate-family visits, above the fixed work budget of %d`, ErrUnsupported, candidateWork, shellInradiusWorkLimit)
+	}
 	// fitMax is +Inf: the inradius is a property of the section alone, with no
 	// height constraint (that constraint only bears on spanning, not the
 	// largest inscribed disk).
 	k := newWallKernel(elems, nil, verts, 0, 0, false, math.Inf(1))
-	out := k.run()
-	if !out.ok {
-		return 0, false
+	out, err := k.runBudget(newWallWorkBudget(shellInradiusWorkLimit))
+	if errors.Is(err, errWallWorkBudget) {
+		return 0, fmt.Errorf(`%w: inward shell section survey exceeded the fixed work budget of %d during candidate generation or validation`, ErrUnsupported, shellInradiusWorkLimit)
 	}
-	return out.inradius, true
+	if err != nil {
+		return 0, fmt.Errorf(`%w: inward shell section survey failed: %v`, ErrUnsupported, err)
+	}
+	if !out.ok {
+		return 0, fmt.Errorf(`%w: this evaluator cannot prove the eroded section non-empty`, ErrUnsupported)
+	}
+	return out.inradius, nil
 }
 
 // evalTube builds the both-caps hole-free shell (Table B, B2/B3): a plain prism

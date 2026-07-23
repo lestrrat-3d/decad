@@ -179,6 +179,7 @@ sentinel follows from it and from nothing else.
 | **S15** | a magnitude of the wrong `Kind`, a non-finite one, or a negative one | — | `ErrUnitKind` / `ErrNotFinite` / `ErrNegativeMagnitude` (core §12 names all three by role) |
 | **S16** | a selector that matches nothing — loudly (core §9): a query asserting no cardinality, `ErrNoMatch`; a failed `Exactly(n)` / `AtLeast(n)`, `ErrCardinality`, zero matches included (core §12) | — | `ErrNoMatch` / `ErrCardinality` |
 | **S17** | a modify op on a retired receiver | — | `ErrRetiredBody` |
+| **S18** | an **inward** shell whose section-inradius survey has more than **1,048,576 candidate-family visits** under checked arithmetic, whose count overflows, or whose one shared **1,048,576-visit** generation + validation budget is exhausted | this evaluator cannot decide whether the cavity exists within its fixed work limit | `ErrUnsupported` (§8) |
 
 Selection happens against the live receiver, before the build, and every gate
 in this table runs before a single face is made.
@@ -194,17 +195,18 @@ the same for every op:
 |---|---|---|
 | **1 — the pre-gates** | is this a call at all? Decided before any geometry | S17 (a live receiver), S15 (a magnitude of the right `Kind`, finite and non-negative), S13 / S14 (a non-zero one), S16 (a selector that matches) |
 | **2 — the receiver and its targets** | is this body one a modify op takes, and is what the query named a thing it can act on? | S3 (Table R's payload class), then S1 (every selected edge is lateral) / S2 (every removed face is a cap) |
-| **3 — the construction's own gates** | does the rewrite the caller asked for exist, feature by feature? | fillet / chamfer: S4 (there is a corner), then S5 (a blend of that radius exists — fillet only). Shell: S10 (the cavity is non-empty — inward only: the eroded section, and the height a kept cap's floor leaves), then S11a (no feature the offset drops as it is built) |
+| **3 — the construction's own gates** | does the rewrite the caller asked for exist, feature by feature? | fillet / chamfer: S4 (there is a corner), then S5 (a blend of that radius exists — fillet only). Shell: S18 (the inward section survey fits its fixed work limit), S10 (the cavity is non-empty — inward only: the eroded section, and the height a kept cap's floor leaves), then S11a (no feature the offset drops as it is built) |
 | **4 — the §5 audit of the rewritten profile** | do the pieces bound a simple, correctly nested region? | S8 (orientation — the existence question, so a consumed region never reads `ErrUnsupported`), then S6 (no walk consumed by its own corners — an offset mints none, §8), then S7 (no crossing and no boundary contact; for a **shell** either is S11b, §8), then S9 (nesting, which is decidable only once no two loops cross or touch) |
 | **5 — what the result can be held as** | the region is proven; can a payload hold it? | S12 (a both-caps shell of a holed section is `1 + k` lumps) |
 
 Each stage needs the one before it, and that is what fixes the order rather than
 taste: there is no cutback to measure until the blend centre exists (S5), no
-offset loop to orient until the cavity exists (S10) and keeps its features
+offset loop to orient until the evaluator can decide the cavity (S18), the
+cavity exists (S10), and the offset keeps its features
 (S11a), and no lump count to take until the offset bounds a proven region. **S12
 is therefore last** — an inward both-caps shell of a holed section at or beyond
-the inradius is S10, and one whose offset merges two loops is S11b; neither
-reaches the count (B4).
+the survey limit is S18, one at or beyond the inradius is S10, and one whose
+offset merges two loops is S11b; none reaches the count (B4).
 
 **S11a precedes S8 without contravening the existence-before-buildability rule.**
 That rule governs two gates asked on **one constructed section** — where both
@@ -513,6 +515,15 @@ exact.
 **Three gates, and they are different questions — asked in that order (§4),
 because each needs the one before it to have passed.**
 
+- **Can this evaluator decide whether the cavity exists within fixed work?**
+  Before an inward inradius survey starts, count concentric-scan,
+  element/vertex pair, and Apollonius-triple candidate-family visits with
+  checked arithmetic.
+  Require at most **1,048,576 visits**. Stream every emitted disk directly into
+  validation, and charge generation plus every whole-boundary validation visit
+  to one shared **1,048,576-visit budget**. Count overflow, a preflight count
+  above the limit, or runtime exhaustion is S18 (`ErrUnsupported`). Outward
+  shelling does not need an inradius survey, so S18 does not reach it.
 - **Does the body exist?** This is the inward sense's question, and the **cavity**
   answers it. The cavity is a region swept along an interval, so it is empty when
   either of them is — and the thickness can empty either one, which is why S10
@@ -589,11 +600,11 @@ inward, `P ⊕ t` outward.
 | B | Op | Removed | Sense | Section | Payload | Lumps | Faces (roles) | Refusals |
 |---|---|---|---|---|---|---|---|---|
 | **B1** | `Fillet` / `Chamfer` | — | — | any (`k ≥ 0`) | `prismPayload` over the **rewritten** section, same frame, same `[z0, z1]` | **1** | side walls `side(i,j)` over the rewritten record, two caps `capStart` / `capEnd`. The blend cylinder / bevel plane **is** one of those walls, and carries a **second** role `fillet(i,j)` / `chamfer(i,j)` naming the same `(loop, segment)` of the rewritten record | S1, S4, S5 (**a fillet only** — S5 is a condition on the two carriers' `r`-offsets, which only the blend computes; a chamfer's chord exists between any two distinct feet, §7), then the §5 audit: S8, S6, S7, S9 |
-| **B2** | `Shell` | both caps | `Inward` | hole-free | a **tube**: `prismPayload` whose section is `{Outer: P, Holes: [Q]}`, on `[z0, z1]` | **1** | outer walls `side(0,j)`, cavity walls `side(1,j)`, and the two **rim annuli** — the caps of that prism — `capStart` / `capEnd` | S10 (its **section** limit only — no cap is kept, so no floor eats the sweep), S11a, then the §5 audit: S8, S11b, S9 |
-| **B3** | `Shell` | both caps | `Outward` | hole-free | a **tube**: `prismPayload` whose section is `{Outer: Q, Holes: [P]}`, on `[z0, z1]` — no cap is kept, so no material is added along the sweep | **1** | as B2 | S11a, then the §5 audit: S8, S11b, S9 (no S10 — an outward thickness has no limit) |
-| **B4** | `Shell` | both caps | either | holed (`k ≥ 1`) | — | **1 + k** — a band around the outer loop, plus one band lining each hole, pairwise disjoint | — | S10 (**`Inward` only**, and its **section** limit only — B2's reason), S11a, the §5 audit's S8, S11b and S9 — every one of them decided on the offset section, and so reached before the count is — then, and only then, **S12** |
-| **B5** | `Shell` | one cap | `Inward` | any (`k ≥ 0`) | a **cup**: `cupPayload` — the outer prism over `P` on `[z0, z1]` and the cavity prism over `Q = P ⊖ t` on `[z0 + t, z1]`, an interval S10's **height** limit is what proves non-empty. The kept cap does not move; the floor is `t` of the original material | **1** — every wall band hangs off the floor slab | outer walls `side(i,j)`, the kept cap `capStart`, the **rims** `rim(i)` — the removed cap's plane trimmed to the band between loop `i` of `P` and loop `i` of `Q`, one face per loop (`1 + k` of them) — cavity walls `shellSide(i,j)`, cavity cap `shellCap` | S10 (**both** its limits — this is the one row whose floor eats the sweep), S11a, then the §5 audit: S8, S11b, S9 (no S12 — one cap is kept, and every band hangs off the floor it leaves) |
-| **B6** | `Shell` | one cap | `Outward` | any (`k ≥ 0`) | a **cup**: `cupPayload` — the outer prism over `Q = P ⊕ t` on `[z0 − t, z1]` and the cavity prism over `P` on `[z0, z1]`. The original solid *is* the cavity; the floor is `t` of new material below the kept cap | **1** | as B5 | S11a, then the §5 audit: S8, S11b, S9 (no S10, no S12, for B3's and B5's reasons) |
+| **B2** | `Shell` | both caps | `Inward` | hole-free | a **tube**: `prismPayload` whose section is `{Outer: P, Holes: [Q]}`, on `[z0, z1]` | **1** | outer walls `side(0,j)`, cavity walls `side(1,j)`, and the two **rim annuli** — the caps of that prism — `capStart` / `capEnd` | S18, S10 (its **section** limit only — no cap is kept, so no floor eats the sweep), S11a, then the §5 audit: S8, S11b, S9 |
+| **B3** | `Shell` | both caps | `Outward` | hole-free | a **tube**: `prismPayload` whose section is `{Outer: Q, Holes: [P]}`, on `[z0, z1]` — no cap is kept, so no material is added along the sweep | **1** | as B2 | S11a, then the §5 audit: S8, S11b, S9 (no S18 or S10 — outward shelling has no inradius survey or thickness limit) |
+| **B4** | `Shell` | both caps | either | holed (`k ≥ 1`) | — | **1 + k** — a band around the outer loop, plus one band lining each hole, pairwise disjoint | — | S18 and S10 (**`Inward` only**, with S10's **section** limit only — B2's reason), S11a, the §5 audit's S8, S11b and S9 — every one of them decided on the offset section, and so reached before the count is — then, and only then, **S12** |
+| **B5** | `Shell` | one cap | `Inward` | any (`k ≥ 0`) | a **cup**: `cupPayload` — the outer prism over `P` on `[z0, z1]` and the cavity prism over `Q = P ⊖ t` on `[z0 + t, z1]`, an interval S10's **height** limit is what proves non-empty. The kept cap does not move; the floor is `t` of the original material | **1** — every wall band hangs off the floor slab | outer walls `side(i,j)`, the kept cap `capStart`, the **rims** `rim(i)` — the removed cap's plane trimmed to the band between loop `i` of `P` and loop `i` of `Q`, one face per loop (`1 + k` of them) — cavity walls `shellSide(i,j)`, cavity cap `shellCap` | S18, S10 (**both** its limits — this is the one row whose floor eats the sweep), S11a, then the §5 audit: S8, S11b, S9 (no S12 — one cap is kept, and every band hangs off the floor it leaves) |
+| **B6** | `Shell` | one cap | `Outward` | any (`k ≥ 0`) | a **cup**: `cupPayload` — the outer prism over `Q = P ⊕ t` on `[z0 − t, z1]` and the cavity prism over `P` on `[z0, z1]`. The original solid *is* the cavity; the floor is `t` of new material below the kept cap | **1** | as B5 | S11a, then the §5 audit: S8, S11b, S9 (no S18, S10, or S12, for B3's and B5's reasons) |
 
 **The Refusals column names what a row's own geometry refuses, in the order §4
 fixes** — so a row is read left to right, and the first gate that fires is the
