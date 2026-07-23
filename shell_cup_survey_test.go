@@ -134,6 +134,32 @@ func TestShellCupWallQualifyingPinch(t *testing.T) {
 	require.Equal(t, decad.Sound, report.Status)
 }
 
+func TestShellCupWallOutwardCavityQualifyingPinch(t *testing.T) {
+	const th = 0.3
+	// The V-notch has a roughly 7.15 degree apex. An outward shell keeps that
+	// notch on the cavity boundary, where its material-side corner qualifies
+	// as a wall pinch under the default 15 degree allowance.
+	s, p := polygonSketch(t, [][2]float64{
+		{0, 0},
+		{200, 0},
+		{200, 100},
+		{105, 100},
+		{100, 20},
+		{95, 100},
+		{0, 100},
+	})
+	doc := decad.New()
+	body, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+	require.NoError(t, err)
+	_, err = body.Shell(
+		topCap(body),
+		units.Millimeters(th),
+		decad.WithShellSense(decad.Outward),
+	)
+	require.NoError(t, err)
+	requireCupWall(t, doc, th, 0, decad.Violating)
+}
+
 func TestShellCupTessellateBox(t *testing.T) {
 	// A box cup is all planar: it triangulates exactly (bound zero), its mesh
 	// is watertight, and the enclosed volume is the cup's own — proof the three
