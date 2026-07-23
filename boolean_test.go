@@ -1,6 +1,7 @@
 package decad_test
 
 import (
+	"context"
 	"errors"
 	"math"
 	"math/big"
@@ -73,6 +74,74 @@ func volumeMM(t *testing.T, m decad.Measurement) float64 {
 	v, err := m.Value.In(units.CubicMillimeter)
 	require.NoError(t, err)
 	return v
+}
+
+func TestBooleanContextMatchesCompatibilityWrappers(t *testing.T) {
+	testcases := []struct {
+		Name       string
+		Legacy     func(*decad.Body, *decad.Body) (*decad.Body, error)
+		Contextual func(context.Context, *decad.Body, *decad.Body) (*decad.Body, error)
+	}{
+		{Name: "Union", Legacy: decad.Union, Contextual: decad.UnionContext},
+		{Name: "Cut", Legacy: decad.Cut, Contextual: decad.CutContext},
+		{Name: "Intersect", Legacy: decad.Intersect, Contextual: decad.IntersectContext},
+	}
+	for _, tc := range testcases {
+		t.Run(tc.Name, func(t *testing.T) {
+			legacyDoc := decad.New()
+			legacyA := boxBody(t, legacyDoc, 0, 0, 10, 10, 10)
+			legacyB := translated(t, boxBody(t, legacyDoc, 0, 0, 10, 10, 10), 5, 5, 5)
+			want, err := tc.Legacy(legacyA, legacyB)
+			require.NoError(t, err)
+
+			contextDoc := decad.New()
+			contextA := boxBody(t, contextDoc, 0, 0, 10, 10, 10)
+			contextB := translated(t, boxBody(t, contextDoc, 0, 0, 10, 10, 10), 5, 5, 5)
+			got, err := tc.Contextual(t.Context(), contextA, contextB)
+			require.NoError(t, err)
+
+			require.Equal(t, legacyDoc.Recipe(), contextDoc.Recipe())
+			wantVolume, err := want.Volume()
+			require.NoError(t, err)
+			gotVolume, err := got.Volume()
+			require.NoError(t, err)
+			require.Equal(t, wantVolume, gotVolume)
+			wantMesh, err := want.Tessellate(units.Millimeters(1))
+			require.NoError(t, err)
+			gotMesh, err := got.Tessellate(units.Millimeters(1))
+			require.NoError(t, err)
+			require.Equal(t, wantMesh.Vertices(), gotMesh.Vertices())
+			require.Equal(t, wantMesh.Triangles(), gotMesh.Triangles())
+			require.Equal(t, wantMesh.Bound(), gotMesh.Bound())
+		})
+	}
+}
+
+func TestBooleanContextCancellationLeavesDocumentUnchanged(t *testing.T) {
+	testcases := []struct {
+		Name string
+		Call func(context.Context, *decad.Body, *decad.Body) (*decad.Body, error)
+	}{
+		{Name: "Union", Call: decad.UnionContext},
+		{Name: "Cut", Call: decad.CutContext},
+		{Name: "Intersect", Call: decad.IntersectContext},
+	}
+	for _, tc := range testcases {
+		t.Run(tc.Name, func(t *testing.T) {
+			doc := decad.New()
+			a := boxBody(t, doc, 0, 0, 10, 10, 10)
+			b := translated(t, boxBody(t, doc, 0, 0, 10, 10, 10), 5, 5, 5)
+			beforeRecipe := doc.Recipe()
+			beforeBodies := doc.Bodies()
+			ctx, cancel := context.WithCancel(t.Context())
+			cancel()
+
+			_, err := tc.Call(ctx, a, b)
+			require.ErrorIs(t, err, context.Canceled)
+			require.Equal(t, beforeRecipe, doc.Recipe())
+			require.Equal(t, beforeBodies, doc.Bodies())
+		})
+	}
 }
 
 // boundMM3 reads a volume bound in mm³.

@@ -233,6 +233,21 @@ func TestTessellatePlateWithHole(t *testing.T) {
 	require.Equal(t, 20, cylFacets)
 }
 
+func TestTessellateContextMatchesCompatibilityWrapper(t *testing.T) {
+	body := holedPlateBody(t)
+	tol := units.Millimeters(0.5)
+
+	want, err := body.Tessellate(tol)
+	require.NoError(t, err)
+	got, err := body.TessellateContext(t.Context(), tol)
+	require.NoError(t, err)
+
+	require.Equal(t, want.Vertices(), got.Vertices())
+	require.Equal(t, want.Triangles(), got.Triangles())
+	require.Equal(t, want.SourceFaces(), got.SourceFaces())
+	require.Equal(t, want.Bound(), got.Bound())
+}
+
 func TestTessellateNonConvexOutline(t *testing.T) {
 	// An L-shaped plate: the cap triangulation must respect the reflex
 	// corner — a convex fan would spill outside the region.

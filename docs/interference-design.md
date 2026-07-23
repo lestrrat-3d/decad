@@ -229,7 +229,11 @@ func evaluateBoolean(
     a, b *Body,
 ) (booleanEvaluation, error) // no document write
 
-func performBoolean(op OpKind, a, b *Body) (*Body, error) // existing public path
+func performBoolean(
+    ctx context.Context,
+    op OpKind,
+    a, b *Body,
+) (*Body, error) // public commit path
 ```
 
 Names are illustrative; the split is normative.
@@ -250,14 +254,16 @@ It MUST NOT call `nextStepRef`, append a `Step`, retire an operand, register a
 body, or expose a transient result through the document. Its result contains
 the held facets and every bound input needed by either caller.
 
-The public wrapper keeps current behavior:
+The public context variants keep consuming behavior:
 
 1. gate nil, foreign, retired, and identical operands;
-2. call `evaluateBoolean(context.Background(), op, a, b)`;
-3. build the public faceted body with the next real step reference;
+2. call `evaluateBoolean(ctx, op, a, b)`;
+3. build and audit the public faceted body with `ctx` and the next real step reference;
 4. append the boolean step and retire/register atomically.
 
-No public boolean signature changes.
+`Union` / `Cut` / `Intersect` call their context variants with
+`context.Background()` for compatibility. Cancellation before step 4 returns
+`ctx.Err()` unchanged and leaves the document and operands unchanged.
 
 `Verify` calls `evaluateBoolean(ctx, OpIntersect, a, b)` and consumes only the
 volume result. It does not build or register a transient `Body`.
@@ -396,7 +402,9 @@ boundaries check unconditionally. This gives prompt cancellation without
 threading context through arithmetic primitives or changing deterministic
 geometry decisions.
 
-Public booleans use `context.Background()` and keep their existing API.
+`UnionContext` / `CutContext` / `IntersectContext` propagate their caller
+context through evaluation and faceted-body construction. `Union` / `Cut` /
+`Intersect` supply `context.Background()` as compatibility wrappers.
 
 ## 8. Interference tolerance gate
 

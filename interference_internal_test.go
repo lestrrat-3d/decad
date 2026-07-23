@@ -297,7 +297,7 @@ func TestHoleOrderingKeepsRightToLeftBridging(t *testing.T) {
 		holeArea += 0.5 * 40 * math.Sin(2*math.Pi/40) * 4 // regular 40-gon, r = 2
 	}
 
-	tris, err := triangulate2D(pts, loops)
+	tris, err := triangulate2DContext(t.Context(), pts, loops)
 	require.NoError(t, err)
 	require.NotEmpty(t, tris)
 	total := 0.0

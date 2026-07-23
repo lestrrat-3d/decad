@@ -1,9 +1,11 @@
 package decad
 
 import (
+	"context"
 	"math"
 	"testing"
 
+	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
@@ -45,4 +47,32 @@ func TestRequireLoopClearanceOmitsInvalidRetry(t *testing.T) {
 
 	err = requireLoopClearance(t.Context(), pts, loops, []float64{0, 0})
 	require.ErrorIs(t, err, ErrDegenerate)
+}
+
+func TestTessellateContextReachesCapTriangulationCancellation(t *testing.T) {
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	rect := s.CreateRectangle(0, 0, 100, 60)
+	s.Fix(rect.A)
+	center := s.CreatePoint(70, 30)
+	s.Fix(center)
+	s.CreateCircle(center, 10)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	var prof *sketch.Profile
+	for _, p := range s.Profiles() {
+		if len(p.Holes) == 1 {
+			prof = p
+		}
+	}
+	require.NotNil(t, prof)
+	doc := New()
+	body, err := doc.Extrude(s, prof, Distance{D: units.Millimeters(8), Dir: Along})
+	require.NoError(t, err)
+	ctx := &internalFrameCancelContext{Context: t.Context(), target: "maxU"}
+
+	_, err = body.TessellateContext(ctx, units.Millimeters(0.0005))
+	require.ErrorIs(t, err, context.Canceled)
+	require.True(t, ctx.entered, `the public context must reach cap hole ordering`)
 }

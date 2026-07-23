@@ -225,7 +225,7 @@ func triAssert(t *testing.T, pts []Point2, outer []int, holes [][]int) {
 	}
 
 	loops := append([][]int{outer}, holes...)
-	tris, err := triangulate2D(pts, loops)
+	tris, err := triangulate2DContext(t.Context(), pts, loops)
 
 	// P1: a valid input must triangulate into at least one facet.
 	require.NoError(t, err, `valid polygon-with-holes must triangulate`)

@@ -283,12 +283,14 @@ a wrapper.** Interference PR 1 (`docs/interference-design.md` §11) factors one
 internal `evaluateBoolean(ctx, op, a, b)` over tessellation, exact-predicate
 classification, cutting, stitching, bound composition, and the rational volume
 integral. It never appends a step, retires an operand, registers a body, or
-mints a recipe reference. `Union` / `Cut` / `Intersect` gate their operands,
-call it with `context.Background()`, build the public body, then commit the step
-atomically. `Verify` calls the same evaluator with its own context and consumes
-only a bounded intersection volume; it never calls public `Intersect` and never
-builds a transient document body (`docs/interference-design.md` §5). This split
-is implemented; public consuming behavior is unchanged.
+mints a recipe reference. `UnionContext` / `CutContext` / `IntersectContext`
+gate their operands, pass the caller context through evaluation and faceted-body
+construction, then commit the step atomically. `Union` / `Cut` / `Intersect`
+call those variants with `context.Background()` for compatibility. `Verify`
+calls the same evaluator with its own context and consumes only a bounded
+intersection volume; it never calls public `Intersect` and never builds a
+transient document body (`docs/interference-design.md` §5). This split is
+implemented; public consuming behavior is unchanged.
 
 Expected geometric non-results — empty held intersection, an undecidable
 contact arrangement, and `ErrUnsupported` staging — are private typed outcomes:

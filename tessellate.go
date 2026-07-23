@@ -78,7 +78,13 @@ func (m *Mesh) Bound() units.Value { return units.Millimeters(m.bound) }
 // cannot be meshed or exported. A body this evaluator did not build at all is
 // also [ErrUnsupported].
 func (b *Body) Tessellate(tol units.Value) (*Mesh, error) {
-	return tessellateContext(context.Background(), b, tol)
+	return b.TessellateContext(context.Background(), tol)
+}
+
+// TessellateContext is [Body.Tessellate] with cancellation. It returns
+// ctx.Err() unchanged when ctx is canceled before or during tessellation.
+func (b *Body) TessellateContext(ctx context.Context, tol units.Value) (*Mesh, error) {
+	return tessellateContext(ctx, b, tol)
 }
 
 // tessellateContext is the read-only evaluator's cancellable tessellation

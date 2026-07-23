@@ -1,8 +1,9 @@
 # Tessellation Design
 
-Normative design for `Body.Tessellate`: the public mesh contract, the shared
-chording rules for prism and cup payloads, faceted-body restatement, revolve
-tessellation, and the private proofs the mesh boolean consumes. Companion to
+Normative design for `Body.Tessellate` / `Body.TessellateContext`: the public
+mesh contract, the shared chording rules for prism and cup payloads,
+faceted-body restatement, revolve tessellation, and the private proofs the mesh
+boolean consumes. Companion to
 `docs/api-design.md` (public surface, "core §N"),
 `docs/evaluator-design.md` (analytic evaluator + boolean, "evaluator §N"), and
 `docs/verification-design.md` (how bounded results are judged,
@@ -21,12 +22,18 @@ public accessors remain:
 
 ```go
 func (b *Body) Tessellate(tol units.Value) (*Mesh, error)
+func (b *Body) TessellateContext(ctx context.Context, tol units.Value) (*Mesh, error)
 
 func (m *Mesh) Vertices() []r3.Vec
 func (m *Mesh) Triangles() [][3]int
 func (m *Mesh) SourceFaces() []*Face
 func (m *Mesh) Bound() units.Value
 ```
+
+`TessellateContext` propagates `ctx` through every cancellable chording,
+clearance, triangulation, and audit phase and returns `ctx.Err()` unchanged.
+`Tessellate` calls it with `context.Background()` for compatibility. Both
+produce the same deterministic mesh when not canceled.
 
 Every successful mesh MUST satisfy all rows:
 
@@ -750,6 +757,7 @@ Refuse before returning any partial mesh:
 | Condition | Result |
 |---|---|
 | invalid tolerance | core §12's kind/finite/sign sentinel; zero is `ErrDegenerate` |
+| canceled `TessellateContext` | `ctx.Err()` unchanged; no partial mesh |
 | payload class not implemented | `ErrUnsupported` |
 | faceted request finer than the certified maximum face bound | `ErrUnsupported` |
 | meridian/angular, per-mesh facet, cumulative facet-work, cumulative pair-test, or certified-interval proof budget exceeded; integer size overflow | `ErrUnsupported`, before the refused allocation/audit starts |

@@ -55,10 +55,6 @@ func (bm *boolMesh) twinFacet(f, k int) (int, bool) {
 // facet would ride silently through the boolean with its component's verdict.
 // The contact is exactly what this pipeline must not miss, so the operand is
 // refused rather than partly examined. Loud beats silently wrong.
-func prepBoolMesh(m *Mesh, src []int) (*boolMesh, error) {
-	return prepBoolMeshContext(context.Background(), m, src)
-}
-
 func prepBoolMeshContext(ctx context.Context, m *Mesh, src []int) (*boolMesh, error) {
 	bm := &boolMesh{verts: m.vertices, tris: m.triangles, src: src}
 	bm.xverts = make([]xpt, len(m.vertices))
@@ -992,10 +988,6 @@ type stitchedMesh struct {
 // splits that facet — exact incidence, so nothing moves), audits closure,
 // and rounds to float64. The audit is the §9 guarantee: every directed edge
 // pairs with its reverse, or the boolean fails — never a cracked mesh.
-func stitchFacets(kept []keptFacet) (*stitchedMesh, error) {
-	return stitchFacetsContext(context.Background(), kept)
-}
-
 func stitchFacetsContext(ctx context.Context, kept []keptFacet) (*stitchedMesh, error) {
 	if len(kept) == 0 {
 		return nil, fmt.Errorf(`%w: the operation leaves no boundary at all`, ErrBooleanFailed)
