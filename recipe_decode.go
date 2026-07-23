@@ -48,7 +48,7 @@ func (r *Recipe) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	type recipeWire Recipe
-	var out recipeWire
+	out := recipeWire{Steps: cloneSteps(r.Steps)}
 	if err := json.Unmarshal(data, &out); err != nil {
 		return err
 	}

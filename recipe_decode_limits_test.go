@@ -182,12 +182,40 @@ func TestRecipeUnmarshalStructuralCollectionLimits(t *testing.T) {
 
 func TestRecipeUnmarshalRejectsBeforeChangingDestination(t *testing.T) {
 	original := Recipe{Steps: []Step{{Op: OpUnion}}}
-	got := original
-	over := []byte(`{"steps":[` + strings.Repeat(`null,`, defaultRecipeDecodeLimits().MaxSteps) + `null]}`)
 
-	err := json.Unmarshal(over, &got)
-	requireRecipeLimitPath(t, err, "steps[4096]", 4096)
-	require.Equal(t, original, got)
+	t.Run("preflight failure", func(t *testing.T) {
+		got := original
+		over := []byte(`{"steps":[` + strings.Repeat(`null,`, defaultRecipeDecodeLimits().MaxSteps) + `null]}`)
+
+		err := json.Unmarshal(over, &got)
+		requireRecipeLimitPath(t, err, "steps[4096]", 4096)
+		require.Equal(t, original, got)
+	})
+
+	t.Run("typed decode failure", func(t *testing.T) {
+		got := original
+		err := json.Unmarshal([]byte(`{"steps":[{"op":"cut"},{"op":"extrude","extent":{"kind":"helical"}}]}`), &got)
+		require.Error(t, err)
+		require.Equal(t, original, got)
+	})
+}
+
+func TestRecipeUnmarshalPreservesDestinationWhenStepsAbsent(t *testing.T) {
+	original := Recipe{Steps: []Step{{Op: OpUnion}}}
+
+	for _, test := range []struct {
+		name  string
+		input string
+	}{
+		{name: "null", input: `null`},
+		{name: "empty object", input: `{}`},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			got := original
+			require.NoError(t, json.Unmarshal([]byte(test.input), &got))
+			require.Equal(t, original, got)
+		})
+	}
 }
 
 func TestRecipeUnmarshalDefaultByteLimit(t *testing.T) {
