@@ -111,6 +111,28 @@ func TestSelectorCodecRejections(t *testing.T) {
 	require.Error(t, err, `a zero-value face predicate refuses to encode`)
 }
 
+func TestSelectorCodecRejectsOutOfRangeNegativeProvenanceSteps(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		data string
+	}{
+		{
+			name: "edge created-by",
+			data: `{"op":"fillet","selectors":[{"kind":"edges","preds":[{"kind":"created_by","ref":{"step":-9223372036854775809,"role":"capStart"}}]}]}`,
+		},
+		{
+			name: "face created-by",
+			data: `{"op":"shell","selectors":[{"kind":"faces","preds":[{"kind":"face_created_by","ref":{"step":-9223372036854775809,"role":"capStart"}}]}]}`,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var step decad.Step
+			err := json.Unmarshal([]byte(tc.data), &step)
+			require.ErrorIs(t, err, decad.ErrDegenerate)
+		})
+	}
+}
+
 func TestNilSelectorPointersAreBranchable(t *testing.T) {
 	// A typed nil query pointer follows the same branchable contract as the
 	// other sealed sets: errors.Is(err, ErrDegenerate).

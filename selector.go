@@ -1,6 +1,7 @@
 package decad
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -933,8 +934,8 @@ func facePredicateDisplayName(kind string) string {
 func unmarshalPredicateRef(data []byte, what string) (FeatureRef, error) {
 	var raw struct {
 		Ref *struct {
-			Step *StepRef `json:"step"`
-			Role *string  `json:"role"`
+			Step *json.RawMessage `json:"step"`
+			Role *string          `json:"role"`
 		} `json:"ref"`
 	}
 	if err := json.Unmarshal(data, &raw); err != nil {
@@ -943,7 +944,15 @@ func unmarshalPredicateRef(data []byte, what string) (FeatureRef, error) {
 	if raw.Ref == nil || raw.Ref.Step == nil || raw.Ref.Role == nil {
 		return FeatureRef{}, fmt.Errorf(`decad: a %s predicate requires ref with step and role`, what)
 	}
-	ref := FeatureRef{Step: *raw.Ref.Step, Role: *raw.Ref.Role}
+	stepToken := bytes.TrimSpace(*raw.Ref.Step)
+	if len(stepToken) > 0 && stepToken[0] == '-' {
+		return FeatureRef{}, fmt.Errorf(`%w: a %s predicate cannot reference negative step %s`, ErrDegenerate, what, stepToken)
+	}
+	var step StepRef
+	if err := json.Unmarshal(stepToken, &step); err != nil {
+		return FeatureRef{}, fmt.Errorf(`decad: failed to decode %s predicate: %w`, what, err)
+	}
+	ref := FeatureRef{Step: step, Role: *raw.Ref.Role}
 	if err := validatePredicateRef(ref, what); err != nil {
 		return FeatureRef{}, err
 	}
