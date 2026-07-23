@@ -199,11 +199,48 @@ func (v *Vertex) Position() VecMeasurement {
 	return VecMeasurement{Value: v.position, Exactness: exactness, Bound: v.bound}
 }
 
-// coedge is one directed use of an edge by a loop.
-type coedge struct {
+// CoEdge is one directed use of an Edge by a Loop. Its Start and End follow
+// the loop walk, which may oppose the underlying Edge's global Start-to-End
+// orientation.
+type CoEdge struct {
 	edge    *Edge
 	forward bool
 }
+
+// coedge keeps the evaluator's internal construction spelling while CoEdge is
+// the public immutable view.
+type coedge = CoEdge
+
+// Edge returns the shared topological edge this loop use traverses.
+func (ce CoEdge) Edge() *Edge { return ce.edge }
+
+// Start returns the vertex where this loop use starts. It returns nil for the
+// zero CoEdge.
+func (ce CoEdge) Start() *Vertex {
+	if ce.edge == nil {
+		return nil
+	}
+	if ce.forward {
+		return ce.edge.start
+	}
+	return ce.edge.end
+}
+
+// End returns the vertex where this loop use ends. It returns nil for the zero
+// CoEdge.
+func (ce CoEdge) End() *Vertex {
+	if ce.edge == nil {
+		return nil
+	}
+	if ce.forward {
+		return ce.edge.end
+	}
+	return ce.edge.start
+}
+
+// IsForward reports whether this loop use walks from Edge.Start to Edge.End.
+// False means it walks from Edge.End to Edge.Start.
+func (ce CoEdge) IsForward() bool { return ce.forward }
 
 // Edge is a topological edge: a tagged curve between two vertices, with the
 // faces adjacent to it.
@@ -293,7 +330,14 @@ type Loop struct {
 // hole.
 func (l *Loop) IsOuter() bool { return l.outer }
 
-// Edges returns the loop's edges in walk order.
+// CoEdges returns the loop's directed edge uses in walk order. The returned
+// slice is a copy; each CoEdge is an immutable view of the loop's stored use.
+func (l *Loop) CoEdges() []CoEdge {
+	return append([]CoEdge(nil), l.coedges...)
+}
+
+// Edges returns the loop's edges in walk order. It is the compatibility view
+// of CoEdges: the same edge identities in the same order, without direction.
 func (l *Loop) Edges() []*Edge {
 	out := make([]*Edge, len(l.coedges))
 	for i, ce := range l.coedges {

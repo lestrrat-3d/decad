@@ -74,7 +74,8 @@ index (core §3 invariant #3).
 | `Lump` | `[]*Shell` |
 | `Shell` | `[]*Face`, `void bool` |
 | `Face` | tagged `Surface`, `[]*Loop` (first outer), origin roles (≥1 `FeatureRef`s, exposed as `Face.Origins()` — a canonicalization merge UNIONS the merged faces' roles, and `FaceCreatedBy` matches on ANY of them, so provenance survives the merge) , back-ref to its body |
-| `Loop` | ordered `[]*coedge` (edge + sense), `outer bool` |
+| `Loop` | ordered `[]CoEdge` (directed edge uses in boundary-walk order), `outer bool` |
+| `CoEdge` | shared `*Edge` plus walk sense; public `Edge`/`Start`/`End`/`IsForward` accessors |
 | `Edge` | tagged `Curve`, `Start`/`End` `*Vertex`, ALL adjacent faces (exactly 2 on a closed manifold body; `Edge.Faces()` reports the actual count, which is precisely how `len != 2` surfaces non-manifold topology — core §6.1), `convex bool` |
 | `Vertex` | position (mm), the proven bound on it |
 
@@ -95,6 +96,11 @@ Rules:
 - **Every vertex carries its bound.** Feature-built vertices are exact (bound
   zero); boolean-built vertices carry the tessellation's chord bound. The
   verification gate reads these (verification §4).
+- **Every loop exposes its stored direction.** `Loop.CoEdges()` returns copied
+  `CoEdge` values in boundary-walk order. Each use's `Start`/`End` follows that
+  walk and `IsForward` states whether it matches the shared `Edge` orientation.
+  `Loop.Edges()` returns the same edge identities and order without direction
+  for compatibility.
 - **`convex` is the walked boundary, decided at build** (core §6.1). The
   profile walk carries the material on its left — outer loop counter-clockwise,
   every hole clockwise (§4) — and every edge reads that walk, never a 3D
