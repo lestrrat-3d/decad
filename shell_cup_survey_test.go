@@ -37,6 +37,103 @@ func polyArea(r float64, n int) float64 {
 	return float64(n) / 2 * r * r * math.Sin(2*math.Pi/float64(n))
 }
 
+func requireCupWall(t *testing.T, doc *decad.Document, tool, want float64, status decad.Status) {
+	t.Helper()
+	report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(tool)))
+	require.NoError(t, err)
+	require.Len(t, report.Bodies, 1)
+	requireWall(t, report.Bodies[0], want)
+	require.Equal(t, status, report.Bodies[0].Status)
+	require.Equal(t, status, report.Status)
+}
+
+func TestShellCupWallThickness(t *testing.T) {
+	const th = 5.0
+
+	t.Run("inward box", func(t *testing.T) {
+		doc, box := shellBox(t)
+		_, err := box.Shell(topCap(box), units.Millimeters(th))
+		require.NoError(t, err)
+		requireCupWall(t, doc, th, th, decad.Sound)
+	})
+
+	t.Run("bottom-open mirror", func(t *testing.T) {
+		const mirrorThickness = 0.1
+		doc, box := shellBox(t)
+		bottom := decad.Faces(decad.FaceCreatedBy(decad.CapStart(box)))
+		_, err := box.Shell(bottom, units.Millimeters(mirrorThickness))
+		require.NoError(t, err)
+		requireCupWall(t, doc, mirrorThickness, mirrorThickness, decad.Sound)
+	})
+
+	t.Run("outward bottom-open mirror", func(t *testing.T) {
+		const mirrorThickness = 0.1
+		doc, box := shellBox(t)
+		bottom := decad.Faces(decad.FaceCreatedBy(decad.CapStart(box)))
+		_, err := box.Shell(
+			bottom,
+			units.Millimeters(mirrorThickness),
+			decad.WithShellSense(decad.Outward),
+		)
+		require.NoError(t, err)
+		requireCupWall(t, doc, mirrorThickness, mirrorThickness, decad.Sound)
+	})
+
+	t.Run("cylinder", func(t *testing.T) {
+		doc, _ := cylinderCup(t, 20, 12, th)
+		requireCupWall(t, doc, th, th, decad.Sound)
+	})
+
+	t.Run("outward rounded box", func(t *testing.T) {
+		doc, box := shellBox(t)
+		_, err := box.Shell(topCap(box), units.Millimeters(th), decad.WithShellSense(decad.Outward))
+		require.NoError(t, err)
+		requireCupWall(t, doc, th, th, decad.Sound)
+	})
+
+	t.Run("holed cup", func(t *testing.T) {
+		doc, box := circleHoledBox(t, [3]float64{50, 30, 8})
+		_, err := box.Shell(topCap(box), units.Millimeters(th))
+		require.NoError(t, err)
+		requireCupWall(t, doc, th, th, decad.Sound)
+	})
+}
+
+func TestShellCupWallToolVerdict(t *testing.T) {
+	const th = 5.0
+	doc, box := shellBox(t)
+	_, err := box.Shell(topCap(box), units.Millimeters(th))
+	require.NoError(t, err)
+
+	requireCupWall(t, doc, th-1, th, decad.Sound)
+	requireCupWall(t, doc, th, th, decad.Sound)
+	requireCupWall(t, doc, th+1, th, decad.Violating)
+}
+
+func TestShellCupWallQualifyingPinch(t *testing.T) {
+	// The narrow right triangle has a roughly 5.7 degree material corner.
+	// Under the default 15 degree allowance that junction admits spanning
+	// balls tending to zero, so the wall is exactly zero and every legal tool
+	// proves a violation.
+	s, p := polygonSketch(t, [][2]float64{{0, 0}, {100, 0}, {100, 10}})
+	doc := decad.New()
+	body, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+	require.NoError(t, err)
+	_, err = body.Shell(topCap(body), units.Millimeters(1))
+	require.NoError(t, err)
+	requireCupWall(t, doc, 0.001, 0, decad.Violating)
+
+	// Below the actual corner angle, the junction is an edge rather than a
+	// wall pinch, so the exact shell thickness is the answer.
+	report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(
+		units.Millimeters(1),
+		decad.WithDraftAllowance(units.Degrees(5)),
+	))
+	require.NoError(t, err)
+	requireWall(t, report.Bodies[0], 1)
+	require.Equal(t, decad.Sound, report.Status)
+}
+
 func TestShellCupTessellateBox(t *testing.T) {
 	// A box cup is all planar: it triangulates exactly (bound zero), its mesh
 	// is watertight, and the enclosed volume is the cup's own — proof the three

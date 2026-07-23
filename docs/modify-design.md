@@ -73,10 +73,10 @@ Neither is ever deferred into a `Verify` reading — `Verify` judges bodies the
 document holds, and a refused call produced none. The staging split of
 evaluator §11 is exactly this: an intent the evaluator cannot **build** is an
 error at the call; only a question it cannot **answer** on a body it did build
-reads `Suspect`. Table D (§12) names the two staged cup questions: its own
-`MinWallThickness` (D1) and its clearance against another body (D6). Their
-approved proofs and implementation order live in payload verification §3/§4;
-until those rows land, the existing `Suspect` staging remains.
+reads `Suspect`. Table D (§12) names the remaining staged cup question: its
+clearance against another body (D6). The exact `MinWallThickness` theorem (D1)
+is implemented. The clearance proof and implementation order live in payload
+verification §3; until that row lands, the existing `Suspect` staging remains.
 
 ## 2. The reduction: a prism's modify ops are its section's
 
@@ -613,9 +613,10 @@ it (§12).
 
 `cupPayload` is the one new payload this increment introduces: two
 co-directional prisms over the same plane — the outer region on its interval,
-the cavity region on its own — plus the accumulated rigid placement, which is
-what `Body.Placed` re-evaluates (evaluator §8) and what every measurement reads
-(§10). Every edge of B1–B3, B5 and B6 bounds exactly two faces, so each body is
+the cavity region on its own — plus the private shell-thickness/sense morphology
+certificate of payload verification §3.1 and the accumulated rigid placement,
+which is what `Body.Placed` re-evaluates (evaluator §8) and what every measurement
+reads (§10). Every edge of B1–B3, B5 and B6 bounds exactly two faces, so each body is
 manifold and watertight by the same structural argument the prism enjoys
 (evaluator §10), on regions the §5 audit has already proven simple.
 
@@ -739,14 +740,14 @@ payload class.
 
 | D | Consumer | Reads | B1 — filleted / chamfered | B2 / B3 — a tube | B5 / B6 — a cup |
 |---|---|---|---|---|---|
-| **D1** | `prismWall` + `survey2d` (`MinWallThickness`) | the payload only | works unchanged: the rewritten section is a section, the height is the receiver's, the reading is Exact | works unchanged: a tube **is** a prism over an annular section | payload verification §4 proves an exact reading: zero for an allowance-qualified material pinch, otherwise the exact shell thickness `t`; staged as `Suspect` until the cup-wall stage lands |
+| **D1** | `prismWall` + `survey2d` (`MinWallThickness`) | the payload only | works unchanged: the rewritten section is a section, the height is the receiver's, the reading is Exact | works unchanged: a tube **is** a prism over an annular section | payload verification §4's morphology recheck returns an exact reading: zero for an allowance-qualified material pinch, otherwise the exact shell thickness `t`; a failed recheck reads `Suspect` |
 | **D2** | `prismUndercuts` | the payload **and the roles** — it looks each payload walk's face up by `side(i,j)` on the body's own step | works unchanged (§11): every wall of the result, blends included, carries its `side(i,j)` role in the result's index space | works unchanged | a cup reading lands with the cup payload: the same per-face exact normal ranges over the faces of B5/B6, mapped by their roles |
 | **D3** | `prismMinRadius` | the payload only | works unchanged: a fillet of a **concave** edge is a concave arc of the section, and its radius is read; a fillet of a convex edge adds a convex cylinder, which is not a concave feature and rightly does not appear | works unchanged: the cavity loop's walls are read like any hole wall | a cup reading lands with the payload: the same walk over the outer and the cavity section. The sharp concave edge where the wall meets the floor carries no radius — the survey reads faces' principal radii, and a spec about the *edges* is one no option states (verification §2) |
 | **D4** | `Tessellate` → `STL` / `OBJ` | the payload **and the roles** — `docs/tessellation-design.md` owns the chording, source-face map, and proof bounds | works by tessellation design §§3–5: blend cylinders are ordinary circular section walks | works by the same prism path | works by tessellation design §6: every outer/cavity loop is shared by its walls, floors, and rim band |
 | **D5** | Body-relative stops (`ToFace` / `ToFaceAngular`; `ThroughAll` / `ThroughAllSide`) | two stop kinds read differently: `ToFace` / `ToFaceAngular` read **topology + a selector + a surface** — a live stop body, its face resolved by the selector, and that face's plane; `ThroughAll` / `ThroughAllSide` read **the payload's directional extent** (`extentAlong`) | works unchanged | works unchanged | `ToFace` reads the cup's faces like any body's; `ThroughAll` reads its outer prism's extent — the cup's own `extentAlong` — the cavity being interior |
 | **D6** | Clearance (`docs/clearance-design.md`) | **the payload and the topology** — it builds its boundary model by switching on the payload **kind** (`prismPayload` / `revolvePayload`), then reads the exact edges, vertices and shells and each body's payload extent | a first-class operand — a `prismPayload`, which its switch builds | a first-class operand — a tube is a `prismPayload` too | payload verification §3 adapts the exact outer/cavity skins, three axial planes, rim bands, topology witnesses, and outer extent to the analytic kernel; staged as `Suspect` when the kernel is needed until the cup-boundary stage lands, while a box-disjoint pair with no gap request remains proven |
 | **D7** | The mesh boolean (evaluator §9) | the tessellation | takes these bodies as it takes any other | as any other | as any other, once D4 covers it |
-| **D8** | `Verify` — the structural audit and the tolerance gate | the topology and the measurements | `Sound` on the same terms an extrude's body is: valid by construction (§5), Exact at any tolerance (§10) | the same | `Sound` once D1/D6's exact payload-verification rows land; until then those asked or required questions remain `Suspect`, while a box-disjoint pair with no gap request stays proven |
+| **D8** | `Verify` — the structural audit and the tolerance gate | the topology and the measurements | `Sound` on the same terms an extrude's body is: valid by construction (§5), Exact at any tolerance (§10) | the same | D1's exact wall answer is available; a pair that requires D6 remains `Suspect`, while a box-disjoint pair with no gap request stays proven |
 
 Two readings verification §6 asks about are worth stating because a modify op is
 what makes them arise, and neither needs §6 relaxed:
@@ -774,10 +775,10 @@ PR-level staging inside evaluator increment 5. Everything not yet landed is
 Reach PRs A–E follow these base PRs. `docs/modify-reach-design.md` §14 owns
 their order; RX/SX/BX/DX own every additional build and staging result.
 
-After PR 3, D1/D6 remain staged in the implementation. Payload verification
-§13 names their approved cup-boundary and cup-wall stages. Until those stages
-land, the same `Suspect` staging applies; a box-disjoint cup pair with no
-clearance asked is still proven `Sound` by the box test.
+D1's cup-wall theorem is implemented. D6 remains staged in the implementation;
+payload verification §13 names its approved cup-boundary stage. Until that stage
+lands, an invoked cup clearance pair reads `Suspect`; a box-disjoint cup pair
+with no clearance asked is still proven `Sound` by the box test.
 
 The walk-sense rules of §6 — a circular wall's face orientation and the
 walked-boundary `Edge.IsConvex` — are a **prerequisite**, not a deliverable. They
