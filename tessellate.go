@@ -762,13 +762,23 @@ func requireLoopClearance(ctx context.Context, pts []Point2, loopIdx [][]int, lo
 	floor := 1e-9*span + 4*(math.Nextafter(maxAbs, math.Inf(1))-maxAbs)
 	for i := range loopIdx {
 		for j := i + 1; j < len(loopIdx); j++ {
-			gate := loopSag[i] + loopSag[j] + floor
+			chordGate := loopSag[i] + loopSag[j]
+			gate := chordGate + floor
 			d, err := loopPolylineDistance(ctx, pts, loopIdx[i], loopIdx[j])
 			if err != nil {
 				return err
 			}
 			if d <= gate {
-				return &tessellationExpectedError{err: fmt.Errorf(`%w: two cap boundary loops come within the chord tolerance of each other`, ErrDegenerate)}
+				msg := fmt.Sprintf(
+					`cap boundary loops %d and %d have measured distance %s; distance must exceed the required clearance gate %s`,
+					i, j, units.Millimeters(d), units.Millimeters(gate),
+				)
+				// Chording can only lower the gate toward floor. When the
+				// measured gap does not exceed floor, no finer retry can pass.
+				if d > floor && chordGate > 0 {
+					msg += `; retry with a finer chord tolerance to reduce the gate`
+				}
+				return &tessellationExpectedError{err: fmt.Errorf(`%w: %s`, ErrDegenerate, msg)}
 			}
 		}
 	}
