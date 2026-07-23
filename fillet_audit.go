@@ -276,16 +276,16 @@ func crossingAudit(segs []segEntry) error {
 // distance; contactFloor multiplies it by the section's own scale.
 const contactEps = 1e-9
 
-// contactFloor is the section-relative threshold shared by the §5 boundary
-// contact audit and the mass-property nesting classifier. It is anchored to
-// the SECTION'S scale exactly as verification design §4 anchors a length's
-// noise floor: δ = ε·D with ε = contactEps and D the section's diameter (its
-// (u, v) bounding-box diagonal — the standard decad reading of D, as in
-// Body.STL and the boolean chord tolerance). Below δ two boundaries are
-// indistinguishable from a pinch, so the test REFUSES; comfortably above it is
-// a real positive gap that builds. The threshold is reject-only and SCALES with
-// the section — a fixed absolute band mis-scales, rejecting a macroscopic gap
-// on a sub-millimetre section and accepting a real pinch on a huge one.
+// contactFloor is the section-relative threshold for the §5 boundary contact
+// audit. It is anchored to the SECTION'S scale exactly as verification design
+// §4 anchors a length's noise floor: δ = ε·D with ε = contactEps and D the
+// section's diameter (its (u, v) bounding-box diagonal — the standard decad
+// reading of D, as in Body.STL and the boolean chord tolerance). Below δ two
+// boundaries are indistinguishable from a pinch, so the test REFUSES;
+// comfortably above it is a real positive gap that builds. The threshold is
+// reject-only and SCALES with the section — a fixed absolute band mis-scales,
+// rejecting a macroscopic gap on a sub-millimetre section and accepting a real
+// pinch on a huge one.
 func contactFloor(segs []segEntry) float64 {
 	minU, minV, maxU, maxV, ok := sectionBBox(segs)
 	if !ok { // no segments: nothing to pinch

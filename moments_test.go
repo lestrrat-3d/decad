@@ -425,6 +425,54 @@ func TestRegionMomentsRejectCrossingAndOpenRecordsAtExtremeScales(t *testing.T) 
 			}}},
 		},
 		{
+			name: "TinyNearEndpointLineCrossing",
+			record: decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
+				line(0, 0, 1, 0),
+				line(1, 0, 0.5, -1e-16),
+				line(0.5, -1e-16, 0.5, 1),
+				line(0.5, 1, 0, 0),
+			}}},
+		},
+		{
+			name: "CollinearBacktracking",
+			record: decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
+				line(0, 0, 2, 0),
+				line(2, 0, 1, 0),
+				line(1, 0, 2, 0),
+				line(2, 0, 2, 2),
+				line(2, 2, 0, 2),
+				line(0, 2, 0, 0),
+			}}},
+		},
+		{
+			name: "TranslatedArcPinMismatch",
+			record: decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
+				decad.ArcSeg{
+					Center: decad.Point2{U: translatedU},
+					Start:  decad.Point2{U: translatedU + 10},
+					End:    decad.Point2{U: translatedU, V: 11},
+					TStart: 0,
+					TEnd:   1,
+				},
+				line(translatedU, 10, translatedU, 0),
+				line(translatedU, 0, translatedU+10, 0),
+			}}},
+		},
+		{
+			name: "TranslatedOpenArcJunction",
+			record: decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
+				decad.ArcSeg{
+					Center: decad.Point2{U: translatedU},
+					Start:  decad.Point2{U: translatedU + 10},
+					End:    decad.Point2{U: translatedU, V: 10},
+					TStart: 0,
+					TEnd:   1,
+				},
+				line(translatedU-1, 10, translatedU, 0),
+				line(translatedU, 0, translatedU+10, 0),
+			}}},
+		},
+		{
 			name: "NearVertexCircleCrossing",
 			record: decad.ProfileRecord{
 				Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
@@ -515,6 +563,40 @@ func TestRegionMomentsAcceptTranslatedNestedLoops(t *testing.T) {
 	require.Positive(t, second.VV.Value.Base())
 }
 
+func TestRegionMomentsAcceptThinAnnulus(t *testing.T) {
+	const outerRadius = 10.0
+	const gap = 1e-10
+	holeRadius := outerRadius - gap
+	record := decad.ProfileRecord{
+		Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
+			decad.CircleSeg{
+				Radius: units.Millimeters(outerRadius),
+				CCW:    true,
+				TStart: 0,
+				TEnd:   1,
+			},
+		}},
+		Holes: []decad.LoopRecord{{Segments: []decad.CurveSegment{
+			decad.CircleSeg{
+				Radius: units.Millimeters(holeRadius),
+				TStart: 1,
+				TEnd:   0,
+			},
+		}}},
+	}
+
+	area, err := record.Area()
+	require.NoError(t, err)
+	gotArea, err := area.Value.In(units.SquareMillimeter)
+	require.NoError(t, err)
+	require.InDelta(t, math.Pi*(outerRadius*outerRadius-holeRadius*holeRadius), gotArea, 1e-12)
+
+	_, err = record.Centroid()
+	require.NoError(t, err)
+	_, err = record.SecondMoments()
+	require.NoError(t, err)
+}
+
 func TestRegionMomentsAllowBoundaryTangency(t *testing.T) {
 	line := func(u0, v0, u1, v1 float64) decad.CurveSegment {
 		return decad.LineSeg{
@@ -564,6 +646,10 @@ func TestRegionMomentsAllowArcPinRoundoff(t *testing.T) {
 	}}}
 
 	_, err := record.Area()
+	require.NoError(t, err, `one ULP of pin roundoff must not disprove the arc record`)
+	_, err = record.Centroid()
+	require.NoError(t, err, `one ULP of pin roundoff must not disprove the arc record`)
+	_, err = record.SecondMoments()
 	require.NoError(t, err, `one ULP of pin roundoff must not disprove the arc record`)
 }
 
