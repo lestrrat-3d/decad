@@ -108,9 +108,9 @@ func tessellateContext(ctx context.Context, b *Body, tol units.Value) (*Mesh, er
 	}
 	pp, ok := b.payload.(prismPayload)
 	if !ok {
-		// Chording is per payload kind; the revolve surfaces are staged —
-		// explicit, never a wrong mesh (docs/evaluator-design.md §11).
-		return nil, fmt.Errorf(`%w: this evaluator tessellates prism bodies only`, ErrUnsupported)
+		// Chording is per payload kind. Name both the staged kind and the
+		// implemented set so the refusal cannot misstate evaluator reach.
+		return nil, fmt.Errorf(`%w: tessellation does not support payload %T; supported payload classes are prism, cup, and faceted`, ErrUnsupported, b.payload)
 	}
 
 	// Facets remember their source face (docs/evaluator-design.md §9); the
