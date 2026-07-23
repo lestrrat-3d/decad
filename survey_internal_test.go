@@ -170,5 +170,8 @@ func TestCupWallRequiresExactMorphology(t *testing.T) {
 	require.Nil(t, br.MinWallThickness)
 	require.Len(t, diags, 1)
 	require.Equal(t, DiagUndecidedWall, diags[0].Code)
+	require.NotEqual(t, DiagUnsupportedSurveyPayload, diags[0].Code)
 	require.Equal(t, Suspect, diags[0].Status)
+	require.NotContains(t, diags[0].Message, "facetedPayload",
+		`an undecided analytic survey must not be reported as an unsupported payload`)
 }

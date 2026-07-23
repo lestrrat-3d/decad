@@ -472,6 +472,7 @@ func TestSurveysAnsweredTogether(t *testing.T) {
 	require.Equal(t, decad.Sound, br.Status)
 	require.Equal(t, decad.Sound, report.Status)
 	require.True(t, report.Trustworthy())
+	require.Empty(t, report.Diagnostics, `supported analytic surveys emit no refusal diagnostic`)
 }
 
 func TestWallSolidCylinder(t *testing.T) {

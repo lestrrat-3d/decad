@@ -219,6 +219,10 @@ const (
     // value to name, so — like DiagUndecidedClearance — it names no reading);
     // Observed and Required nil. Pair set. Contributes Suspect.
     DiagUndecidedInterference
+    // DiagUnsupportedSurveyPayload — an asked body survey cannot run because
+    // its payload class is staged. Reading ReadingNone, Observed* and Required
+    // nil. Body set. Contributes Suspect.
+    DiagUnsupportedSurveyPayload
 )
 ```
 
@@ -256,6 +260,7 @@ renders `"reading(<n>)"` with `<n>` the integer, never a panic.
 - `DiagUnsupportedPair` → `"unsupported_pair"`
 - `DiagUndecidedClearance` → `"undecided_clearance"`
 - `DiagUndecidedInterference` → `"undecided_interference"`
+- `DiagUnsupportedSurveyPayload` → `"unsupported_survey_payload"`
 
 The zero value is `DiagMeasurementBeyondTolerance`, so it renders
 `"measurement_beyond_tolerance"`; an out-of-range value renders
@@ -952,7 +957,8 @@ survey that could not decide, and for the verdict nothing turns on which:
 `MinRadius`, an empty `Undercuts`, or a pair with no `Interference` row is a
 **proven** absence exactly when no diagnostic names it — the per-survey
 `DiagUndecidedWall` / `DiagUndecidedUndercut` / `DiagUndecidedMinRadius` for that
-body-and-survey, and `DiagUndecidedPair`, `DiagUnsupportedPair` or
+body-and-survey, `DiagUnsupportedSurveyPayload` when the requested survey's
+payload implementation is staged, and `DiagUndecidedPair`, `DiagUnsupportedPair` or
 `DiagUndecidedInterference` for that pair (a `DiagUndecidedClearance` proves the
 pair disjoint, so it leaves the missing `Interference` row a proven non-overlap
 and marks only a requested `Clearance` row undecided) — and the survey the
