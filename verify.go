@@ -740,14 +740,12 @@ func pairDiagNone(a, b *Body, code DiagnosticCode, msg string) Diagnostic {
 }
 
 // undecidedPairDiag picks the diagnostic for a pair whose overlap volume the
-// evaluator could not measure (verification §1.1): a proven overlap is
-// DiagUndecidedInterference; payload, contact, and in-pipeline limits each keep
-// their own code and action; an unresolved partition is DiagUndecidedPair.
+// evaluator could not measure (verification §1.1): payload, contact, and
+// in-pipeline limits each keep their own code and action; only an overlap with
+// an otherwise undecided measurement is DiagUndecidedInterference; an
+// unresolved partition is DiagUndecidedPair.
 func undecidedPairDiag(a, b *Body, verdict pairVerdict, outcome interferenceOutcome) Diagnostic {
 	switch {
-	case verdict == pairOverlapping:
-		return pairDiagNone(a, b, DiagUndecidedInterference,
-			"the pair is proven to overlap but the overlap volume is unmeasured")
 	case outcome == interferenceUnsupportedPayloadFirst:
 		return pairDiagNone(a, b, DiagUnsupportedPairPayload,
 			fmt.Sprintf("the first operand (step %d) uses a payload the read-only intersection cannot tessellate; use a tessellatable body type or wait for payload support", a.originStep()))
@@ -760,6 +758,9 @@ func undecidedPairDiag(a, b *Body, verdict pairVerdict, outcome interferenceOutc
 	case outcome == interferenceUnsupportedPipeline:
 		return pairDiagNone(a, b, DiagUnsupportedPairPipeline,
 			"both operands tessellate, but later read-only intersection geometry exceeds the boolean pipeline's reach; simplify the boolean geometry or wait for pipeline support")
+	case outcome == interferenceUndecided && verdict == pairOverlapping:
+		return pairDiagNone(a, b, DiagUndecidedInterference,
+			"the pair is proven to overlap but the overlap volume is unmeasured")
 	default:
 		return pairDiagNone(a, b, DiagUndecidedPair,
 			"the disjoint/overlap partition proof resolved neither way")

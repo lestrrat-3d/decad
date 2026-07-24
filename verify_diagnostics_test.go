@@ -214,11 +214,12 @@ func TestVerifyDiagnosticsInterference(t *testing.T) {
 }
 
 func TestVerifyDiagnosticsUnsupportedPairStagedContact(t *testing.T) {
-	// Two 10×10×10 boxes, the second translated to (5,0,0): the boxes share
-	// coplanar top and bottom caps, so the read-only intersect stages the
-	// face-on-face contact (booleanExpectedContact). Per verification §1.1 a
-	// staged boolean contact is a DiagUnsupportedPairContact, not a payload,
-	// pipeline, or undecided-partition diagnostic; the Status stays Suspect.
+	// Two 10×10×10 boxes, the second translated to (0,5,5): they overlap with
+	// positive volume while sharing coplanar side faces. The read-only intersect
+	// stages the face-on-face contact (booleanExpectedContact). Per verification
+	// §1.1 a staged boolean contact is a DiagUnsupportedPairContact, not a
+	// payload, pipeline, or undecided-partition diagnostic; the Status stays
+	// Suspect.
 	ws := sketch.NewWorld()
 	s, err := ws.CreateSketch(ws.XY())
 	require.NoError(t, err)
@@ -234,7 +235,7 @@ func TestVerifyDiagnosticsUnsupportedPairStagedContact(t *testing.T) {
 	box2, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	require.NoError(t, err)
 
-	shift, err := r3.Translation(r3.NewVec(5, 0, 0))
+	shift, err := r3.Translation(r3.NewVec(0, 5, 5))
 	require.NoError(t, err)
 	_, err = box2.Placed(shift)
 	require.NoError(t, err)

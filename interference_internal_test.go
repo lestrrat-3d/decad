@@ -256,7 +256,7 @@ func TestInterferenceExpectedCausesKeepDistinctDiagnostics(t *testing.T) {
 			outcome := interferenceOutcomeForExpected(tc.expected)
 			require.Equal(t, tc.wantOutcome, outcome)
 
-			diag := undecidedPairDiag(a, b, pairUndecided, outcome)
+			diag := undecidedPairDiag(a, b, pairOverlapping, outcome)
 			require.Equal(t, tc.wantCode, diag.Code)
 			require.Equal(t, Suspect, diag.Status)
 			require.Equal(t, ReadingNone, diag.Reading)
@@ -266,6 +266,12 @@ func TestInterferenceExpectedCausesKeepDistinctDiagnostics(t *testing.T) {
 			}
 		})
 	}
+
+	undecided := undecidedPairDiag(a, b, pairOverlapping, interferenceUndecided)
+	require.Equal(t, DiagUndecidedInterference, undecided.Code)
+
+	partition := undecidedPairDiag(a, b, pairUndecided, interferenceUndecided)
+	require.Equal(t, DiagUndecidedPair, partition.Code)
 }
 
 func internalBoxBody(t *testing.T, doc *Document, x0, y0, x1, y1, h float64) *Body {
