@@ -22,11 +22,22 @@ func extrudePlate(t *testing.T) (*decad.Document, *decad.Body) {
 	return doc, body
 }
 
+func TestReportZeroValueIsUnverified(t *testing.T) {
+	var report decad.Report
+	require.Equal(t, decad.Unverified, report.Status)
+	require.Equal(t, "Unverified", report.Status.String())
+	require.False(t, report.Trustworthy())
+
+	var bodyReport decad.BodyReport
+	require.Equal(t, decad.Unverified, bodyReport.Status)
+}
+
 func TestVerifySoundPlate(t *testing.T) {
 	doc, body := extrudePlate(t)
 	report, err := doc.Verify(t.Context())
 	require.NoError(t, err)
 
+	require.NotEqual(t, decad.Unverified, report.Status)
 	require.Equal(t, decad.Sound, report.Status)
 	require.True(t, report.Trustworthy())
 	require.Empty(t, report.Interferences)
@@ -35,6 +46,7 @@ func TestVerifySoundPlate(t *testing.T) {
 
 	br := report.Bodies[0]
 	require.Same(t, body, br.Body)
+	require.NotEqual(t, decad.Unverified, br.Status)
 	require.Equal(t, decad.Sound, br.Status)
 	require.True(t, br.Solid)
 	require.True(t, br.Watertight)
@@ -62,6 +74,7 @@ func TestVerifyEmptyDocument(t *testing.T) {
 	doc := decad.New()
 	report, err := doc.Verify(t.Context())
 	require.NoError(t, err)
+	require.NotEqual(t, decad.Unverified, report.Status)
 	require.Equal(t, decad.Sound, report.Status)
 	require.True(t, report.Trustworthy())
 	require.Empty(t, report.Bodies)

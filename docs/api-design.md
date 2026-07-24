@@ -1532,7 +1532,10 @@ precedence, and the `VerifyOption` set including `WithTolerance` — and the
 tolerance gate that judges every `Exactness` and `Bound` the report carries are
 specified in `docs/verification-design.md`. The non-mutating proof and bounded
 volume behind every `Interference` row are specified in
-`docs/interference-design.md`. What the core contract pins down:
+`docs/interference-design.md`. `Status` reserves zero as `Unverified`, so a
+zero-value `Report` fails `Trustworthy`; every report and body report returned
+by `Verify` is explicitly initialized to a decided status. What the core
+contract pins down:
 
 - **`Verify` returns an `error`, and the report carries no health state.** The
   error is for the call that could not be made — a `WithTolerance` value of the
@@ -1547,7 +1550,8 @@ volume behind every `Interference` row are specified in
   tolerance makes the report `Suspect` — on a body or on a pair, nothing is
   exempt — and `Report.Trustworthy()` is true only when the whole report is
   `Sound`.
-- **`Verify` returns structured diagnostics.** `Report.Diagnostics` is one
+- **`Verify` returns structured diagnostics.** On a report returned by
+  `Verify`, `Report.Diagnostics` is one
   branchable `Diagnostic` per reason the report is not `Sound` — a reading
   beyond tolerance, an undecided validity, an undecided or staged pair, an
   undecided survey (named per survey) or clearance, a proven wall or undercut

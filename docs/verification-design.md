@@ -29,14 +29,14 @@ type Report struct {
     Interferences []Interference // proven pairwise overlap, with the overlap VOLUME; always computed
     Clearances    []Clearance    // WithClearances(): minimum gap between disjoint pairs
     Diagnostics   []Diagnostic   // one branchable entry per reason the report is not Sound (§1.1)
-    Status        Status
+    Status        Status         // Unverified on a zero value; Verify always returns a decided status
 }
 
 func (r *Report) Trustworthy() bool // the single bit to gate on
 
 type BodyReport struct {
     Body              *Body
-    Status            Status       // Sound / Suspect / Violating / Unsound — this body only
+    Status            Status       // Verify sets Sound / Suspect / Violating / Unsound — this body only
 
     // Validity readings — facts of the boundary the evaluator holds, which is
     // exact as data; what they prove about the PART is Status's to say,
@@ -72,6 +72,12 @@ type BodyReport struct {
                                      // concave feature exists (below); the caller compares (§2)
 }
 ```
+
+`Status` reserves its zero value as `Unverified`. A zero `Report` or
+`BodyReport` therefore carries no verification verdict, and
+`(&Report{}).Trustworthy()` is false. `Verify` explicitly initializes the
+document report and every body report to `Sound` before applying worse
+outcomes; a successful `Verify` never returns `Unverified`.
 
 ### 1.1 Diagnostics — the structured reason a report is not `Sound`
 
@@ -256,15 +262,17 @@ The zero value is `DiagMeasurementBeyondTolerance`, so it renders
 `"diagnostic(<n>)"` with `<n>` the integer, never a panic.
 
 **The slice is complete, and completeness is the contract.**
-`Report.Diagnostics` is empty **exactly** when `Report.Status == Sound`, and
-`Report.Status` is the worst `Diagnostic.Status` in the slice (`Sound` when it
-is empty). Every rung the aggregate reaches has at least one diagnostic that
-reached it — the slice is §6's aggregate, itemized and proven, never a summary
-that can drift from it. Aggregation itself is unchanged: worst wins, over the
-bodies and the pairs, exactly as §6 states it. A body beyond tolerance on two
-readings emits two `DiagMeasurementBeyondTolerance`, one per reading, each with
-its own `Reading` and the matching `Observed*` form; a proven-invalid body emits
-one `DiagInvalidBody` and no region-quantity diagnostics, because §1 gives it no
+For every report returned by `Verify`, `Report.Diagnostics` is empty
+**exactly** when `Report.Status == Sound`, and `Report.Status` is the worst
+`Diagnostic.Status` in the slice (`Sound` when it is empty). The reserved
+zero-value `Unverified` report is not a verification result. Every rung the
+aggregate reaches has at least one diagnostic that reached it — the slice is
+§6's aggregate, itemized and proven, never a summary that can drift from it.
+Aggregation itself is unchanged: worst wins, over the bodies and the pairs,
+exactly as §6 states it. A body beyond tolerance on two readings emits two
+`DiagMeasurementBeyondTolerance`, one per reading, each with its own `Reading`
+and the matching `Observed*` form; a proven-invalid body emits one
+`DiagInvalidBody` and no region-quantity diagnostics, because §1 gives it no
 region quantity to gate.
 
 A proven solid always forms its tolerance reference, so the tolerance gate never
@@ -985,13 +993,20 @@ document is what makes that reading hold at any scale.
 type Status int
 
 const (
-    Sound       Status = iota // every body a proven solid; every stated spec met; every asked absence proven; nothing approximate beyond tolerance
+    Unverified  Status = iota // zero value; no Verify verdict exists
+    Sound                     // every body a proven solid; every stated spec met; every asked absence proven; nothing approximate beyond tolerance
     Suspect                   // an answer is Approximate beyond the caller's tolerance, straddles a stated spec, or is undecided — a validity the boundary's bound cannot settle, an unproven absence, a pair in neither list
     Violating                 // a stated spec is proven to fail: a wall thinner than the tool, an undercut against the pull
     Interfering               // bodies overlap
     Unsound                   // some body is proven not a valid solid
 )
 ```
+
+`Unverified` is reserved for the zero value and is not a severity rung.
+`Verify` initializes every `Report` and `BodyReport` to `Sound`, then replaces
+that status only with a worse verified outcome. This makes a zero or partially
+decoded report fail closed without changing the worst-wins order of real
+verification results.
 
 - **`BodyReport.Status`** is per-body: `Sound` (a proven solid; every stated
   spec met; nothing approximate beyond tolerance; every asked absence proven),
@@ -1359,7 +1374,8 @@ lands. Together with the `Suspect` rung above it, the
 gate covers **every `Measurement`, every `VecMeasurement` and every `Box` the report
 carries** — and per core §5.3 those are all of them.
 
-`Report.Trustworthy()` is true **only** at `Report.Status == Sound`. A body
+`Report.Trustworthy()` is true **only** at `Report.Status == Sound`;
+`Unverified` is false. A body
 proven invalid, a validity left undecided, an unresolved interference, a
 stated spec proven to fail or left undecided, an asked absence left unproven,
 an undecided pair, or an approximation coarser than the caller's tolerance —
