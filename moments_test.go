@@ -207,6 +207,41 @@ func TestRegionMomentsRejectOpenLoopWithLargeUnrelatedEdge(t *testing.T) {
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 }
 
+func TestRegionMomentsRejectsUnrepresentableEndpointJoins(t *testing.T) {
+	maxCoordinate := math.MaxFloat64
+	profiles := []struct {
+		name    string
+		profile decad.ProfileRecord
+	}{
+		{
+			name: `largest finite coordinate gap`,
+			profile: decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
+				decad.LineSeg{Start: decad.Point2{U: maxCoordinate, V: 0}, End: decad.Point2{U: maxCoordinate, V: 1}, TStart: 0, TEnd: 1},
+				decad.LineSeg{Start: decad.Point2{U: maxCoordinate, V: 1}, End: decad.Point2{U: 0, V: 1}, TStart: 0, TEnd: 1},
+				decad.LineSeg{Start: decad.Point2{U: 0, V: 1}, End: decad.Point2{U: math.Nextafter(maxCoordinate, 0), V: 0}, TStart: 0, TEnd: 1},
+			}}},
+		},
+		{
+			name: `non-finite coordinate`,
+			profile: decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
+				decad.LineSeg{Start: decad.Point2{U: math.Inf(1), V: 0}, End: decad.Point2{U: math.Inf(1), V: 1}, TStart: 0, TEnd: 1},
+				decad.LineSeg{Start: decad.Point2{U: math.Inf(1), V: 1}, End: decad.Point2{U: 0, V: 1}, TStart: 0, TEnd: 1},
+				decad.LineSeg{Start: decad.Point2{U: 0, V: 1}, End: decad.Point2{U: math.Inf(1), V: 0}, TStart: 0, TEnd: 1},
+			}}},
+		},
+	}
+	for _, test := range profiles {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := test.profile.Area()
+			require.ErrorIs(t, err, decad.ErrDegenerate)
+			_, err = test.profile.Centroid()
+			require.ErrorIs(t, err, decad.ErrDegenerate)
+			_, err = test.profile.SecondMoments()
+			require.ErrorIs(t, err, decad.ErrDegenerate)
+		})
+	}
+}
+
 func TestRegionMomentsAcceptsEndpointRounding(t *testing.T) {
 	// Adjacent recorded walks can differ by a few ulps after their source
 	// coordinates are evaluated independently. This is construction rounding,

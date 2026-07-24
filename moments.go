@@ -164,10 +164,22 @@ func momentWalksJoin(a, b segmentWalk) bool {
 }
 
 func momentCoordinatesJoin(a, b, scale float64) bool {
+	if !finiteSegmentValue(a) || !finiteSegmentValue(b) || !finiteSegmentValue(scale) {
+		return false
+	}
 	if a == b {
 		return true
 	}
-	ulp := math.Nextafter(scale, math.Inf(1)) - scale
+	next := math.Nextafter(scale, math.Inf(1))
+	ulp := next - scale
+	if math.IsInf(next, 1) {
+		// The largest finite float has no larger finite neighbour. Its
+		// predecessor gives the finite spacing, but no distinct coordinate can
+		// be accepted here: that spacing is a material distance, not rounding
+		// from a representable larger endpoint.
+		ulp = scale - math.Nextafter(scale, math.Inf(-1))
+		return math.Abs(a-b) < ulp
+	}
 	return math.Abs(a-b) <= 32*ulp
 }
 
