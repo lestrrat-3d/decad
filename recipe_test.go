@@ -321,9 +321,24 @@ func TestStepShapeGateRunsBeforeTypedPayloadDecoding(t *testing.T) {
 			want: `the "union" op forbids a profile`,
 		},
 		{
-			name: "missing profile",
-			step: `{"op":"extrude","extent":{"kind":"unknown"}}`,
+			name: "missing profile before malformed extent",
+			step: `{"op":"extrude","extent":{"kind":"distance"}}`,
 			want: `the "extrude" op requires a non-empty profile`,
+		},
+		{
+			name: "missing profile before malformed angular extent",
+			step: `{"op":"revolve","angular":{"kind":"angle_extent"}}`,
+			want: `the "revolve" op requires a non-empty profile`,
+		},
+		{
+			name: "missing values before malformed edge selector",
+			step: `{"op":"fillet","inputs":[0],"selectors":[{"kind":"edges","preds":[{"kind":"parallel_to"}]}]}`,
+			want: `the "fillet" op requires exactly 1 values`,
+		},
+		{
+			name: "missing options before malformed face selector",
+			step: `{"op":"shell","inputs":[0],"selectors":[{"kind":"faces","preds":[{"kind":"normal_to"}]}],"values":["1 mm"]}`,
+			want: `the "shell" op requires its matching options`,
 		},
 	}
 	for _, test := range tests {
