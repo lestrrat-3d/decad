@@ -954,17 +954,23 @@ func unmarshalPredicateRef(data []byte, what string) (FeatureRef, error) {
 	stepToken := bytes.TrimSpace(*raw.Ref.Step)
 	if len(stepToken) > 0 && stepToken[0] == '-' {
 		if negativeJSONNumberIsNonzero(stepToken) {
-			return FeatureRef{}, fmt.Errorf(`%w: a %s predicate cannot reference negative step %s`, ErrDegenerate, what, stepToken)
+			return FeatureRef{}, prependCodecPath(
+				fmt.Errorf(`%w: a %s predicate cannot reference negative step %s`, ErrDegenerate, what, stepToken),
+				"ref.step",
+			)
 		}
 		stepToken = []byte("0")
 	}
 	var step StepRef
 	if err := json.Unmarshal(stepToken, &step); err != nil {
-		return FeatureRef{}, fmt.Errorf(`decad: failed to decode %s predicate: %w`, what, err)
+		return FeatureRef{}, prependCodecPath(
+			fmt.Errorf(`decad: failed to decode %s predicate: %w`, what, err),
+			"ref.step",
+		)
 	}
 	ref := FeatureRef{Step: step, Role: *raw.Ref.Role}
 	if err := validatePredicateRef(ref, what); err != nil {
-		return FeatureRef{}, err
+		return FeatureRef{}, prependCodecPath(err, "ref.role")
 	}
 	return ref, nil
 }

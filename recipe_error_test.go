@@ -85,6 +85,48 @@ func TestRecipeDecodeErrorPathIncludesSelectorPosition(t *testing.T) {
 	}`, "steps[0].selectors[0].preds[0].ref.role", 0)
 }
 
+func TestRecipeDecodeErrorPathIncludesPredicateRefLeaf(t *testing.T) {
+	requireRecipeDecodePath(t, `{
+		"steps": [{
+			"op": "fillet",
+			"selectors": [
+				{"kind": "edges", "preds": []},
+				{"kind": "edges", "preds": [{"kind": "created_by", "ref": {"step": 1.5, "role": "capStart"}}]}
+			]
+		}]
+	}`, "steps[0].selectors[1].preds[0].ref.step", 0)
+
+	requireRecipeDecodePath(t, `{
+		"steps": [{
+			"op": "fillet",
+			"selectors": [
+				{"kind": "edges", "preds": []},
+				{"kind": "edges", "preds": [{"kind": "created_by", "ref": {"step": 0, "role": ""}}]}
+			]
+		}]
+	}`, "steps[0].selectors[1].preds[0].ref.role", 0, decad.ErrDegenerate)
+}
+
+func TestRecipeDecodeErrorPathIncludesSemanticSegmentField(t *testing.T) {
+	requireRecipeDecodePath(t, `{
+		"steps": [{
+			"op": "extrude",
+			"profile": {
+				"outer": {"segments": [{"kind": "line", "start": {"u": 0, "v": 0}, "end": {"u": 1, "v": 0}, "t_start": 0.5, "t_end": 0.5}]}
+			}
+		}]
+	}`, "steps[0].profile.outer.segments[0].t_end", 0, decad.ErrDegenerate)
+
+	requireRecipeDecodePath(t, `{
+		"steps": [{
+			"op": "extrude",
+			"profile": {
+				"outer": {"segments": [{"kind": "circle", "center": {"u": 0, "v": 0}, "radius": "1 mm", "ccw": false, "t_start": 0, "t_end": 1}]}
+			}
+		}]
+	}`, "steps[0].profile.outer.segments[0].ccw", 0, decad.ErrDegenerate)
+}
+
 func TestRecipeDecodeErrorPathIncludesNestedClosedFields(t *testing.T) {
 	requireRecipeDecodePath(t, `{
 		"steps": [{

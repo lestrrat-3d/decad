@@ -589,7 +589,7 @@ func validateSegmentPoints(points []Point2, minimum int, what string) error {
 	}
 	for i, point := range points {
 		if err := validateSegmentPoint(point, fmt.Sprintf(`%s point %d`, what, i)); err != nil {
-			return err
+			return prependCodecPath(err, fmt.Sprintf(`[%d]`, i))
 		}
 	}
 	return nil
@@ -604,23 +604,38 @@ func validateSegmentParameter(v float64, what string) error {
 
 func validateSegmentRange(tStart, tEnd float64, kind string) error {
 	if err := validateSegmentParameter(tStart, kind+" segment t_start"); err != nil {
-		return err
+		return prependCodecPath(err, "t_start")
 	}
 	if err := validateSegmentParameter(tEnd, kind+" segment t_end"); err != nil {
-		return err
+		return prependCodecPath(err, "t_end")
 	}
-	if tStart < 0 || tStart > 1 || tEnd < 0 || tEnd > 1 {
-		return fmt.Errorf(`%w: %s segment range [%v, %v] is outside [0, 1]`, ErrDegenerate, kind, tStart, tEnd)
+	if tStart < 0 || tStart > 1 {
+		return prependCodecPath(
+			fmt.Errorf(`%w: %s segment range [%v, %v] is outside [0, 1]`, ErrDegenerate, kind, tStart, tEnd),
+			"t_start",
+		)
+	}
+	if tEnd < 0 || tEnd > 1 {
+		return prependCodecPath(
+			fmt.Errorf(`%w: %s segment range [%v, %v] is outside [0, 1]`, ErrDegenerate, kind, tStart, tEnd),
+			"t_end",
+		)
 	}
 	if tStart == tEnd {
-		return fmt.Errorf(`%w: %s segment has an empty range at %v`, ErrDegenerate, kind, tStart)
+		return prependCodecPath(
+			fmt.Errorf(`%w: %s segment has an empty range at %v`, ErrDegenerate, kind, tStart),
+			"t_end",
+		)
 	}
 	return nil
 }
 
 func validateSegmentWinding(ccw bool, tStart, tEnd float64, kind string) error {
 	if ccw != (tStart < tEnd) {
-		return fmt.Errorf(`%w: %s segment's CCW flag contradicts its range order`, ErrDegenerate, kind)
+		return prependCodecPath(
+			fmt.Errorf(`%w: %s segment's CCW flag contradicts its range order`, ErrDegenerate, kind),
+			"ccw",
+		)
 	}
 	return nil
 }
@@ -642,46 +657,61 @@ func validateSegmentQuantity(v units.Value, kind units.Kind, unit units.Unit, wh
 
 func validateNURBSSegment(seg NURBSSeg) error {
 	if seg.Degree < 1 {
-		return fmt.Errorf(`%w: NURBS segment degree must be at least 1, got %d`, ErrDegenerate, seg.Degree)
+		return prependCodecPath(
+			fmt.Errorf(`%w: NURBS segment degree must be at least 1, got %d`, ErrDegenerate, seg.Degree),
+			"degree",
+		)
 	}
 	n := len(seg.Control)
 	if seg.Degree >= n {
-		return fmt.Errorf(`%w: NURBS segment requires more control points than its degree %d, got %d`, ErrDegenerate, seg.Degree, n)
+		return prependCodecPath(
+			fmt.Errorf(`%w: NURBS segment requires more control points than its degree %d, got %d`, ErrDegenerate, seg.Degree, n),
+			"degree",
+		)
 	}
 	if err := validateSegmentPoints(seg.Control, seg.Degree+1, "NURBS segment control"); err != nil {
-		return err
+		return prependCodecPath(err, "control")
 	}
 	if len(seg.Knots) != n+seg.Degree+1 {
-		return fmt.Errorf(`%w: NURBS segment needs %d knots, got %d`, ErrDegenerate, n+seg.Degree+1, len(seg.Knots))
+		return prependCodecPath(
+			fmt.Errorf(`%w: NURBS segment needs %d knots, got %d`, ErrDegenerate, n+seg.Degree+1, len(seg.Knots)),
+			"knots",
+		)
 	}
 	for i, knot := range seg.Knots {
 		if err := validateSegmentParameter(knot, fmt.Sprintf(`NURBS segment knot %d`, i)); err != nil {
-			return err
+			return prependCodecPath(err, fmt.Sprintf(`knots[%d]`, i))
 		}
 		if i > 0 && knot < seg.Knots[i-1] {
-			return fmt.Errorf(`%w: NURBS segment knots must be non-decreasing`, ErrDegenerate)
+			return prependCodecPath(fmt.Errorf(`%w: NURBS segment knots must be non-decreasing`, ErrDegenerate), fmt.Sprintf(`knots[%d]`, i))
 		}
 	}
 	for i := 1; i <= seg.Degree; i++ {
 		if seg.Knots[i] != seg.Knots[0] {
-			return fmt.Errorf(`%w: NURBS segment knot vector is not clamped at the start`, ErrDegenerate)
+			return prependCodecPath(fmt.Errorf(`%w: NURBS segment knot vector is not clamped at the start`, ErrDegenerate), fmt.Sprintf(`knots[%d]`, i))
 		}
 		if seg.Knots[len(seg.Knots)-1-i] != seg.Knots[len(seg.Knots)-1] {
-			return fmt.Errorf(`%w: NURBS segment knot vector is not clamped at the end`, ErrDegenerate)
+			return prependCodecPath(fmt.Errorf(`%w: NURBS segment knot vector is not clamped at the end`, ErrDegenerate), fmt.Sprintf(`knots[%d]`, len(seg.Knots)-1-i))
 		}
 	}
 	if seg.Knots[seg.Degree] >= seg.Knots[n] {
-		return fmt.Errorf(`%w: NURBS segment knot domain is empty`, ErrDegenerate)
+		return prependCodecPath(fmt.Errorf(`%w: NURBS segment knot domain is empty`, ErrDegenerate), "knots")
 	}
 	if len(seg.Weights) != n {
-		return fmt.Errorf(`%w: NURBS segment needs %d weights, got %d`, ErrDegenerate, n, len(seg.Weights))
+		return prependCodecPath(
+			fmt.Errorf(`%w: NURBS segment needs %d weights, got %d`, ErrDegenerate, n, len(seg.Weights)),
+			"weights",
+		)
 	}
 	for i, weight := range seg.Weights {
 		if err := validateSegmentParameter(weight, fmt.Sprintf(`NURBS segment weight %d`, i)); err != nil {
-			return err
+			return prependCodecPath(err, fmt.Sprintf(`weights[%d]`, i))
 		}
 		if weight <= 0 {
-			return fmt.Errorf(`%w: NURBS segment weight %d must be positive, got %v`, ErrDegenerate, i, weight)
+			return prependCodecPath(
+				fmt.Errorf(`%w: NURBS segment weight %d must be positive, got %v`, ErrDegenerate, i, weight),
+				fmt.Sprintf(`weights[%d]`, i),
+			)
 		}
 	}
 	return nil
@@ -702,18 +732,18 @@ func validateSegment(segment CurveSegment) error {
 	switch seg := segment.(type) {
 	case LineSeg:
 		if err := validateSegmentPoint(seg.Start, "line segment start"); err != nil {
-			return err
+			return prependCodecPath(err, "start")
 		}
 		if err := validateSegmentPoint(seg.End, "line segment end"); err != nil {
-			return err
+			return prependCodecPath(err, "end")
 		}
 		return validateRange(segKindLine, seg.TStart, seg.TEnd)
 	case CircleSeg:
 		if err := validateSegmentPoint(seg.Center, "circle segment center"); err != nil {
-			return err
+			return prependCodecPath(err, "center")
 		}
 		if err := validateSegmentMagnitude(seg.Radius, units.Length, units.Millimeter, "circle segment radius"); err != nil {
-			return err
+			return prependCodecPath(err, "radius")
 		}
 		if err := validateRange(segKindCircle, seg.TStart, seg.TEnd); err != nil {
 			return err
@@ -725,22 +755,22 @@ func validateSegment(segment CurveSegment) error {
 			name  string
 		}{{seg.Center, "center"}, {seg.Start, "start"}, {seg.End, "end"}} {
 			if err := validateSegmentPoint(point.value, "arc segment "+point.name); err != nil {
-				return err
+				return prependCodecPath(err, point.name)
 			}
 		}
 		return validateRange(segKindArc, seg.TStart, seg.TEnd)
 	case EllipseSeg:
 		if err := validateSegmentPoint(seg.Center, "ellipse segment center"); err != nil {
-			return err
+			return prependCodecPath(err, "center")
 		}
 		if err := validateSegmentMagnitude(seg.Rx, units.Length, units.Millimeter, "ellipse segment rx"); err != nil {
-			return err
+			return prependCodecPath(err, "rx")
 		}
 		if err := validateSegmentMagnitude(seg.Ry, units.Length, units.Millimeter, "ellipse segment ry"); err != nil {
-			return err
+			return prependCodecPath(err, "ry")
 		}
 		if err := validateSegmentQuantity(seg.Rotation, units.Angle, units.Radian, "ellipse segment rotation"); err != nil {
-			return err
+			return prependCodecPath(err, "rotation")
 		}
 		if err := validateRange(segKindEllipse, seg.TStart, seg.TEnd); err != nil {
 			return err
@@ -752,22 +782,22 @@ func validateSegment(segment CurveSegment) error {
 			name  string
 		}{{seg.Center, "center"}, {seg.Start, "start"}, {seg.End, "end"}} {
 			if err := validateSegmentPoint(point.value, "elliptical arc segment "+point.name); err != nil {
-				return err
+				return prependCodecPath(err, point.name)
 			}
 		}
 		if err := validateSegmentMagnitude(seg.Rx, units.Length, units.Millimeter, "elliptical arc segment rx"); err != nil {
-			return err
+			return prependCodecPath(err, "rx")
 		}
 		if err := validateSegmentMagnitude(seg.Ry, units.Length, units.Millimeter, "elliptical arc segment ry"); err != nil {
-			return err
+			return prependCodecPath(err, "ry")
 		}
 		if err := validateSegmentQuantity(seg.Rotation, units.Angle, units.Radian, "elliptical arc segment rotation"); err != nil {
-			return err
+			return prependCodecPath(err, "rotation")
 		}
 		return validateRange(segKindEllipticalArc, seg.TStart, seg.TEnd)
 	case SplineSeg:
 		if err := validateSegmentPoints(seg.Control, 4, "spline segment control"); err != nil {
-			return err
+			return prependCodecPath(err, "control")
 		}
 		return validateRange(segKindSpline, seg.TStart, seg.TEnd)
 	case NURBSSeg:
@@ -777,7 +807,7 @@ func validateSegment(segment CurveSegment) error {
 		return validateRange(segKindNURBS, seg.TStart, seg.TEnd)
 	case ClosedSplineSeg:
 		if err := validateSegmentPoints(seg.Control, 3, "closed spline segment control"); err != nil {
-			return err
+			return prependCodecPath(err, "control")
 		}
 		if err := validateRange(segKindClosedSpline, seg.TStart, seg.TEnd); err != nil {
 			return err
@@ -785,7 +815,7 @@ func validateSegment(segment CurveSegment) error {
 		return validateSegmentWinding(seg.CCW, seg.TStart, seg.TEnd, segKindClosedSpline)
 	case FitSplineSeg:
 		if err := validateSegmentPoints(seg.Fit, 2, "fit spline segment fit"); err != nil {
-			return err
+			return prependCodecPath(err, "fit")
 		}
 		return validateRange(segKindFitSpline, seg.TStart, seg.TEnd)
 	case ConicSeg:
@@ -794,14 +824,14 @@ func validateSegment(segment CurveSegment) error {
 			name  string
 		}{{seg.Start, "start"}, {seg.Apex, "apex"}, {seg.End, "end"}} {
 			if err := validateSegmentPoint(point.value, "conic segment "+point.name); err != nil {
-				return err
+				return prependCodecPath(err, point.name)
 			}
 		}
 		if err := validateSegmentParameter(seg.Rho, "conic segment rho"); err != nil {
-			return err
+			return prependCodecPath(err, "rho")
 		}
 		if seg.Rho <= 0 || seg.Rho >= 1 {
-			return fmt.Errorf(`%w: conic segment rho must be in (0, 1), got %v`, ErrDegenerate, seg.Rho)
+			return prependCodecPath(fmt.Errorf(`%w: conic segment rho must be in (0, 1), got %v`, ErrDegenerate, seg.Rho), "rho")
 		}
 		return validateRange(segKindConic, seg.TStart, seg.TEnd)
 	default:
