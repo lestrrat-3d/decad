@@ -920,6 +920,10 @@ parameter:
 func Union(a, b *Body) (*Body, error)
 func Cut(target, tool *Body) (*Body, error)
 func Intersect(a, b *Body) (*Body, error)
+
+func UnionContext(ctx context.Context, a, b *Body) (*Body, error)
+func CutContext(ctx context.Context, target, tool *Body) (*Body, error)
+func IntersectContext(ctx context.Context, a, b *Body) (*Body, error)
 ```
 
 No `*Document` appears in those signatures, and none is needed: a `*Body` carries
@@ -927,6 +931,14 @@ its owning document (§6), so each call retires its operands and registers its
 result inside the document that owns them. The operands are themselves unchanged
 — invariant #4 — and `Document.Bodies()` and `Document.Verify()` stay truthful.
 Operands owned by different documents are `ErrForeignBody`.
+
+**Context variants cancel the complete Boolean before its atomic commit.**
+They pass `ctx` through operand tessellation, exact-predicate classification,
+cutting, stitching, mesh audit, and exact volume calculation. Cancellation
+returns `ctx.Err()` unchanged and leaves both operands, the live-body set, and
+the recipe unchanged. `Union` / `Cut` / `Intersect` are compatibility wrappers
+over their `Context` variants with `context.Background()`; success keeps the
+same consuming behavior and recorded step.
 
 **A boolean failure is typed, because its three failures are three different
 caller actions.** A boolean that produces no body, that meets a contact this
@@ -1576,6 +1588,7 @@ gap is decad's mandate.
 
 ```go
 func (b *Body) Tessellate(tol units.Value) (*Mesh, error) // an OUTPUT, not the representation
+func (b *Body) TessellateContext(ctx context.Context, tol units.Value) (*Mesh, error)
 func (b *Body) STL(w io.Writer, opts ...STLOption) error
 func (b *Body) OBJ(w io.Writer, opts ...OBJOption) error
 ```
@@ -1586,6 +1599,11 @@ area slack, the symmetric-difference proof a boolean requires, and explicit
 per-payload staging. A payload with no complete boundary proof is never
 exported. A mesh without the separate occupied-volume proof is never admitted
 to a boolean by an unproved generic bound.
+
+`TessellateContext` passes `ctx` through chording, loop-clearance scans, cap
+triangulation, mesh audits, and faceted restatement. Cancellation returns
+`ctx.Err()` unchanged. `Tessellate` is its compatibility wrapper with
+`context.Background()`.
 
 **Fusion codegen is out of scope for v1.** `Document.Recipe()` exposes the exact
 record of intent as inspectable data; emitting a Fusion add-in from it is a

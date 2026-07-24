@@ -1,12 +1,63 @@
 package decad
 
 import (
+	"context"
 	"math/big"
+	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/stretchr/testify/require"
 )
+
+type internalBooleanBuildCancelContext struct {
+	context.Context //nolint:containedctx // deterministic cancellation wrapper used only within one test call.
+	target          string
+	entered         bool
+}
+
+func (c *internalBooleanBuildCancelContext) Err() error {
+	pcs := make([]uintptr, 32)
+	frames := runtime.CallersFrames(pcs[:runtime.Callers(2, pcs)])
+	inBuild, inTarget := false, false
+	for {
+		frame, more := frames.Next()
+		inBuild = inBuild || strings.HasSuffix(frame.Function, ".buildFacetedBody")
+		inTarget = inTarget || strings.HasSuffix(frame.Function, "."+c.target)
+		if !more {
+			break
+		}
+	}
+	if inBuild && inTarget {
+		c.entered = true
+		return context.Canceled
+	}
+	return nil
+}
+
+func TestBooleanContextCancelsFacetedBodyFinishing(t *testing.T) {
+	for _, target := range []string{"auditFacetedMesh", "meshVolumeMeasurement"} {
+		t.Run(target, func(t *testing.T) {
+			doc := New()
+			a := internalBoxBody(t, doc, 0, 0, 10, 10, 10)
+			b := internalBoxBody(t, doc, 0, 0, 10, 10, 10)
+			tr, err := r3.Translation(r3.Vec{X: 5, Y: 5, Z: 5})
+			require.NoError(t, err)
+			b, err = b.Placed(tr)
+			require.NoError(t, err)
+			beforeRecipe := doc.Recipe()
+			beforeBodies := doc.Bodies()
+			ctx := &internalBooleanBuildCancelContext{Context: t.Context(), target: target}
+
+			_, err = UnionContext(ctx, a, b)
+			require.ErrorIs(t, err, context.Canceled)
+			require.True(t, ctx.entered)
+			require.Equal(t, beforeRecipe, doc.Recipe())
+			require.Equal(t, beforeBodies, doc.Bodies())
+		})
+	}
+}
 
 // classify runs the pair classifier on two float triangles, lifting them the
 // way the mesh pass does.
@@ -129,13 +180,13 @@ func TestStitchRefusesAWeldedAwayComponent(t *testing.T) {
 	// box. The closure audit does not see it: the component that remains still
 	// closes. Nothing downstream would report it either, so the stitcher
 	// refuses here.
-	_, err := stitchFacets(append(splitApexTetra(), subUlpTetra()...))
+	_, err := stitchFacetsContext(t.Context(), append(splitApexTetra(), subUlpTetra()...))
 	require.ErrorIs(t, err, ErrUnsupported)
 
 	// It is the SURVIVING company that made the loss silent: a result that is
 	// nothing but the tiny component has no extent left at all, and the stitcher
 	// already refused that outright.
-	_, err = stitchFacets(subUlpTetra())
+	_, err = stitchFacetsContext(t.Context(), subUlpTetra())
 	require.ErrorIs(t, err, ErrBooleanFailed)
 }
 
@@ -145,7 +196,7 @@ func TestStitchChargesTheFacetsTheWeldDrops(t *testing.T) {
 	// it drops were not zero-area before the weld, and both of the things they
 	// carried are charged: their swept volume, against the PRE-ROUND surface
 	// (preArea), and the area the held mesh can no longer report (dropArea).
-	got, err := stitchFacets(splitApexTetra())
+	got, err := stitchFacetsContext(t.Context(), splitApexTetra())
 	require.NoError(t, err)
 	require.Len(t, got.tris, 4, `the two bridging facets collapse; the tetra survives`)
 
@@ -167,6 +218,6 @@ func TestPrepRefusesACollapsedOperandFacet(t *testing.T) {
 		vertices:  []r3.Vec{{X: 0, Y: 0, Z: 0}, {X: 4, Y: 0, Z: 0}, {X: 2, Y: 0, Z: 0}},
 		triangles: [][3]int{{0, 1, 2}},
 	}
-	_, err := prepBoolMesh(m, []int{0})
+	_, err := prepBoolMeshContext(t.Context(), m, []int{0})
 	require.ErrorIs(t, err, ErrUnsupported, `three collinear corners span no plane`)
 }

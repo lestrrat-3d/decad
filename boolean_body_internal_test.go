@@ -28,7 +28,7 @@ func TestFacetFaceIndicesRejectsUnmappedFacet(t *testing.T) {
 
 func TestFacetedPlacementRebuildsCachedDiameter(t *testing.T) {
 	doc := New()
-	body, err := buildFacetedBody(doc, StepRef(0), facetedPayload{
+	body, err := buildFacetedBody(t.Context(), doc, StepRef(0), facetedPayload{
 		verts: []r3.Vec{
 			r3.NewVec(0, 0, 0),
 			r3.NewVec(3, 0, 0),

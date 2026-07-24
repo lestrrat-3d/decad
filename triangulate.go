@@ -29,19 +29,13 @@ func pointInTri(p, a, b, c Point2) bool {
 	return !hasNeg || !hasPos
 }
 
-// triangulate2D triangulates the plane region bounded by loops of indices
-// into pts — loops[0] the outer boundary, counter-clockwise; the rest holes,
-// clockwise — and returns counter-clockwise triangles as index triples. Each
-// hole is bridged into the outer boundary at its vertex of maximum u, turning
-// the region into one weakly-simple polygon, which ear clipping then reduces;
-// zero-area corners are dropped without emitting a facet.
-func triangulate2D(pts []Point2, loops [][]int) ([][3]int, error) {
-	return triangulate2DContext(context.Background(), pts, loops)
-}
-
-// triangulate2DContext is the evaluator-internal cancellable form. The public
-// tessellator uses a background context; read-only verification passes its
-// caller context through every quadratic bridge and ear-clipping walk.
+// triangulate2DContext triangulates the plane region bounded by loops of
+// indices into pts — loops[0] the outer boundary, counter-clockwise; the rest
+// holes, clockwise — and returns counter-clockwise triangles as index triples.
+// Each hole is bridged into the outer boundary at its vertex of maximum u,
+// turning the region into one weakly-simple polygon, which ear clipping then
+// reduces; zero-area corners are dropped without emitting a facet. The caller
+// context reaches every quadratic bridge and ear-clipping walk.
 func triangulate2DContext(ctx context.Context, pts []Point2, loops [][]int) ([][3]int, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err

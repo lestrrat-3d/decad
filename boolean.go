@@ -58,7 +58,13 @@ const boolChordFactor = 2e-5
 // coarse-chording ErrDegenerate on that operand — a finer chord tolerance may
 // clear it — not a BooleanError.
 func Union(a, b *Body) (*Body, error) {
-	return performBoolean(OpUnion, a, b)
+	return UnionContext(context.Background(), a, b)
+}
+
+// UnionContext is [Union] with cancellation. It returns ctx.Err() unchanged
+// when ctx is canceled before the document commit.
+func UnionContext(ctx context.Context, a, b *Body) (*Body, error) {
+	return performBoolean(ctx, OpUnion, a, b)
 }
 
 // Cut returns target minus tool, retiring both operands from their document
@@ -66,14 +72,26 @@ func Union(a, b *Body) (*Body, error) {
 // roles are asymmetric. A cut that removes everything is ErrBooleanFailed;
 // the other gates match Union's.
 func Cut(target, tool *Body) (*Body, error) {
-	return performBoolean(OpCut, target, tool)
+	return CutContext(context.Background(), target, tool)
+}
+
+// CutContext is [Cut] with cancellation. It returns ctx.Err() unchanged when
+// ctx is canceled before the document commit.
+func CutContext(ctx context.Context, target, tool *Body) (*Body, error) {
+	return performBoolean(ctx, OpCut, target, tool)
 }
 
 // Intersect returns the volume common to a and b, retiring both operands
 // from their document (core §8). Disjoint operands share nothing, so the
 // empty result is ErrBooleanFailed; the other gates match Union's.
 func Intersect(a, b *Body) (*Body, error) {
-	return performBoolean(OpIntersect, a, b)
+	return IntersectContext(context.Background(), a, b)
+}
+
+// IntersectContext is [Intersect] with cancellation. It returns ctx.Err()
+// unchanged when ctx is canceled before the document commit.
+func IntersectContext(ctx context.Context, a, b *Body) (*Body, error) {
+	return performBoolean(ctx, OpIntersect, a, b)
 }
 
 type booleanExpectedKind int
@@ -137,7 +155,7 @@ type booleanEvaluation struct {
 // performBoolean gates the operands, runs the read-only geometry evaluator,
 // then builds and commits the public result atomically. A failure before the
 // commit leaves the recipe, live-body set, and operands unchanged.
-func performBoolean(op OpKind, a, b *Body) (*Body, error) {
+func performBoolean(ctx context.Context, op OpKind, a, b *Body) (*Body, error) {
 	if a == nil || a.doc == nil {
 		return nil, fmt.Errorf(`%w: the first operand belongs to no document`, ErrDegenerate)
 	}
@@ -152,7 +170,7 @@ func performBoolean(op OpKind, a, b *Body) (*Body, error) {
 		return nil, fmt.Errorf(`%w: a boolean needs two distinct bodies`, ErrDegenerate)
 	}
 	inputs := []StepRef{a.originStep(), b.originStep()}
-	eval, err := evaluateBoolean(context.Background(), op, a, b)
+	eval, err := evaluateBoolean(ctx, op, a, b)
 	if err != nil {
 		return nil, asBooleanError(op, inputs, err)
 	}
@@ -162,9 +180,12 @@ func performBoolean(op OpKind, a, b *Body) (*Body, error) {
 		Inputs: inputs,
 	}
 	ref := d.nextStepRef()
-	body, err := buildFacetedBody(d, ref, eval.payload)
+	body, err := buildFacetedBody(ctx, d, ref, eval.payload)
 	if err != nil {
 		return nil, asBooleanError(op, inputs, err)
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 	d.commit(step, body, a, b)
 	return body, nil

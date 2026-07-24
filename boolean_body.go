@@ -107,7 +107,7 @@ func (fp facetedPayload) placed(d *Document, ref StepRef, composed r3.Transform)
 	allow := rigidRoundAllow(maxIn, maxTrans)
 	next.meshBound += allow
 	next.volSymDiff += sweptVolumeAllow(allow, perturbedAreaUpper(next.verts, next.tris, allow))
-	return buildFacetedBody(d, ref, next)
+	return buildFacetedBody(context.Background(), d, ref, next)
 }
 
 // ulpOf is the spacing of float64 at magnitude x.
@@ -295,14 +295,17 @@ func auditFacetedMesh(ctx context.Context, verts []r3.Vec, tris [][3]int) (*face
 // buildFacetedBody assembles the Faceted body from the payload: exact
 // component/void analysis, per-source-face topology, and measurements with
 // the composed proven bounds.
-func buildFacetedBody(d *Document, ref StepRef, pp facetedPayload) (*Body, error) {
+func buildFacetedBody(ctx context.Context, d *Document, ref StepRef, pp facetedPayload) (*Body, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	verts, tris := pp.verts, pp.tris
 	diameter, ok := pointSetDiameter(verts)
 	if !ok {
 		return nil, fmt.Errorf(`%w: the held boundary has no usable diameter`, ErrBooleanFailed)
 	}
 	pp.diameter = diameter
-	audit, err := auditFacetedMesh(context.Background(), verts, tris)
+	audit, err := auditFacetedMesh(ctx, verts, tris)
 	if err != nil {
 		return nil, err
 	}
@@ -461,7 +464,7 @@ func buildFacetedBody(d *Document, ref StepRef, pp facetedPayload) (*Body, error
 	// verification design, composed from the operands' chord errors). The
 	// volume helper is also the read-only interference evaluator's one source
 	// of volume truth.
-	volume, volRat, err := meshVolumeMeasurement(context.Background(), verts, tris, pp.volSymDiff)
+	volume, volRat, err := meshVolumeMeasurement(ctx, verts, tris, pp.volSymDiff)
 	if err != nil {
 		return nil, err
 	}
@@ -539,6 +542,9 @@ func buildFacetedBody(d *Document, ref StepRef, pp facetedPayload) (*Body, error
 	}
 	pp.faceOf = faceOf
 	body.payload = pp
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	return body, nil
 }
 

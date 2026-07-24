@@ -66,7 +66,7 @@ func TestTriangulate2DBridgeCollinear(t *testing.T) {
 	require.Positive(t, loopSignedArea2(pts, outer), `outer is counter-clockwise`)
 	require.Negative(t, loopSignedArea2(pts, hole), `tunnel hole is clockwise`)
 
-	tris, err := triangulate2D(pts, [][]int{outer, hole})
+	tris, err := triangulate2DContext(t.Context(), pts, [][]int{outer, hole})
 	require.NoError(t, err)
 	require.NotEmpty(t, tris)
 
