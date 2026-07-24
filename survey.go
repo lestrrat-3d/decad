@@ -140,7 +140,7 @@ func prismWall(budget *workBudget, pp prismPayload, alpha float64) (wallOutcome,
 	}
 	loops, err := recordLoops(pp.profile)
 	if err != nil {
-		return wallOutcome{}, nil
+		return wallOutcome{}, err
 	}
 	if err := wallBudgetErr(budget); err != nil {
 		return wallOutcome{}, err
@@ -213,7 +213,7 @@ func revolveWall(budget *workBudget, rp revolvePayload, alpha float64) (wallOutc
 	}
 	loops, err := revolveLoops(rp)
 	if err != nil {
-		return wallOutcome{}, nil
+		return wallOutcome{}, err
 	}
 	if err := wallBudgetErr(budget); err != nil {
 		return wallOutcome{}, err

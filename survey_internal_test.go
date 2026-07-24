@@ -96,7 +96,10 @@ func TestWallKernelValidateCancellationIsBounded(t *testing.T) {
 	ctx := &internalFrameCancelContext{Context: t.Context(), target: "validate"}
 	k := newWallKernel(elems, nil, nil, 15*math.Pi/180, 0, false, math.Inf(1))
 
-	_, _, _, err := k.validate(diskCand{x: 0, y: 0, r: 1}, newWorkBudget(ctx))
+	spanning, empty, valid, err := k.validate(diskCand{x: 0, y: 0, r: 1}, newWorkBudget(ctx))
+	_ = spanning
+	_ = empty
+	_ = valid
 
 	require.ErrorIs(t, err, context.Canceled)
 	require.True(t, ctx.entered)
