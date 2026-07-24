@@ -252,8 +252,10 @@ func TestVerifyDiagnosticsUnsupportedPairStagedContact(t *testing.T) {
 	require.Equal(t, decad.ReadingNone, d.Reading, `an unsupported pair names no reading`)
 	require.Nil(t, d.Body)
 	require.NotNil(t, d.Pair, `an unsupported pair names its pair`)
-	require.Contains(t, d.Message, `contact`, `the message identifies the refused contact policy`)
-	require.Contains(t, d.Message, `change the geometry`, `the message gives the contact-specific action`)
+	require.Equal(t,
+		`the pair reaches a contact or near-contact that the read-only intersection cannot classify; adjust the geometry to create clear separation or deeper overlap, or wait for contact support`,
+		d.Message,
+		`the contact diagnostic names contact and near-contact cases and gives accurate corrective guidance`)
 
 	_, undecided := findDiagnostic(report.Diagnostics, decad.DiagUndecidedPair)
 	require.False(t, undecided, `a staged contact is not an undecided partition`)
@@ -285,7 +287,10 @@ func TestVerifyDiagnosticsProximityRefusalIsContact(t *testing.T) {
 	require.Equal(t, decad.ReadingNone, d.Reading)
 	require.Nil(t, d.Body)
 	require.NotNil(t, d.Pair)
-	require.Contains(t, d.Message, `contact`)
+	require.Equal(t,
+		`the pair reaches a contact or near-contact that the read-only intersection cannot classify; adjust the geometry to create clear separation or deeper overlap, or wait for contact support`,
+		d.Message,
+		`the proximity diagnostic does not describe a near-contact as actual contact`)
 
 	_, pipeline := findDiagnostic(report.Diagnostics, decad.DiagUnsupportedPairPipeline)
 	require.False(t, pipeline, `a proximity refusal is not an in-pipeline reach`)

@@ -220,8 +220,8 @@ const (
     // DiagUnsupportedPairPayload — one named operand uses a payload the
     // read-only intersection cannot tessellate. Reading ReadingNone. Suspect.
     DiagUnsupportedPairPayload
-    // DiagUnsupportedPairContact — the pair reaches a contact the exact
-    // boolean policy cannot classify. Reading ReadingNone. Suspect.
+    // DiagUnsupportedPairContact — the pair reaches a contact or near-contact
+    // the exact boolean policy cannot classify. Reading ReadingNone. Suspect.
     DiagUnsupportedPairContact
     // DiagUnsupportedPairPipeline — both operands tessellate, but later
     // boolean geometry exceeds the pipeline's reach. Reading ReadingNone.

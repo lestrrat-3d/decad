@@ -242,7 +242,7 @@ func TestInterferenceExpectedCausesKeepDistinctDiagnostics(t *testing.T) {
 			expected:    &booleanExpectedError{kind: booleanExpectedContact, operand: -1},
 			wantOutcome: interferenceUnsupportedContact,
 			wantCode:    DiagUnsupportedPairContact,
-			wantMessage: []string{"contact", "change the geometry"},
+			wantMessage: []string{"contact", "clear separation"},
 		},
 		{
 			name:        "in-pipeline reach",

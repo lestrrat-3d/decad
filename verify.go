@@ -190,8 +190,8 @@ const (
 	// DiagUnsupportedPairPayload — one named operand uses a payload the read-only
 	// intersection cannot tessellate. Reading ReadingNone. Contributes Suspect.
 	DiagUnsupportedPairPayload
-	// DiagUnsupportedPairContact — the pair reaches a contact the exact boolean
-	// policy cannot classify. Reading ReadingNone. Contributes Suspect.
+	// DiagUnsupportedPairContact — the pair reaches a contact or near-contact the
+	// exact boolean policy cannot classify. Reading ReadingNone. Contributes Suspect.
 	DiagUnsupportedPairContact
 	// DiagUnsupportedPairPipeline — both operands tessellate, but later boolean
 	// geometry exceeds the pipeline's supported reach. Reading ReadingNone.
@@ -754,7 +754,7 @@ func undecidedPairDiag(a, b *Body, verdict pairVerdict, outcome interferenceOutc
 			fmt.Sprintf("the second operand (step %d) uses a payload the read-only intersection cannot tessellate; use a tessellatable body type or wait for payload support", b.originStep()))
 	case outcome == interferenceUnsupportedContact:
 		return pairDiagNone(a, b, DiagUnsupportedPairContact,
-			"the pair reaches a contact the read-only intersection cannot classify; change the geometry to avoid relying on that contact or wait for contact support")
+			"the pair reaches a contact or near-contact that the read-only intersection cannot classify; adjust the geometry to create clear separation or deeper overlap, or wait for contact support")
 	case outcome == interferenceUnsupportedPipeline:
 		return pairDiagNone(a, b, DiagUnsupportedPairPipeline,
 			"both operands tessellate, but later read-only intersection geometry exceeds the boolean pipeline's reach; simplify the boolean geometry or wait for pipeline support")
