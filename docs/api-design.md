@@ -52,7 +52,7 @@ Evaluator   swappable
             vN: full analytic B-rep
    |
    v
-Result      Body -> Lump -> Shell -> Face -> Loop -> Edge -> Vertex
+Result      Body -> Lump -> Shell -> Face -> Loop -> CoEdge -> Edge -> Vertex
             every measurement carries Exactness
 ```
 
@@ -124,7 +124,7 @@ Loosely based on the Fusion SDK. The odd parts are thrown away deliberately.
 
 | Idea | Why |
 |---|---|
-| B-rep topology `Body → Lump → Shell → Face → Loop → Edge → Vertex`, co-edges as half-edges | The right model, and it makes agent traversal code map 1:1 onto Fusion's. |
+| B-rep topology `Body → Lump → Shell → Face → Loop → CoEdge → Edge → Vertex`, with co-edges as directed edge uses | The right model, and it makes agent traversal code map 1:1 onto Fusion's. |
 | Face geometry as a **tagged surface** (`Plane`/`Cylinder`/`Cone`/`Sphere`/`Torus`/`NURBS`), not everything-is-NURBS | Preserves intent: "this hole is exactly Ø6", not "about 5.997". |
 | `Profile` as a derived, planar, one-outer-loop-plus-N-holes region back-referencing its source curves | Already exactly what `sketch.Profile` is. |
 | Feature owns the faces it created (`Feature.faces`) | The basis of provenance and of selectors. |
@@ -398,6 +398,19 @@ func (f *Face) Origins() []FeatureRef // provenance: every feature role that cre
                                       // may merge coplanar faces, and a merged face carries ALL contributing
                                       // roles; FaceCreatedBy matches on any of them
 
+type Loop struct{ /* ... */ }
+
+func (l *Loop) IsOuter() bool
+func (l *Loop) CoEdges() []CoEdge // directed boundary in walk order
+func (l *Loop) Edges() []*Edge    // compatibility view: same order, direction omitted
+
+type CoEdge struct{ /* ... */ }
+
+func (ce CoEdge) Edge() *Edge
+func (ce CoEdge) Start() *Vertex  // start in this loop's walk
+func (ce CoEdge) End() *Vertex    // end in this loop's walk
+func (ce CoEdge) IsForward() bool // true when the walk matches Edge.Start → Edge.End
+
 type Edge struct{ /* ... */ }
 
 func (e *Edge) Curve() Curve
@@ -407,6 +420,14 @@ func (e *Edge) End() *Vertex
 func (e *Edge) Length() (Measurement, error)
 func (e *Edge) IsConvex() bool
 ```
+
+**A `CoEdge` is one directed use of a shared `Edge` by one `Loop`.**
+`CoEdge.Start()` and `End()` follow the loop walk. `CoEdge.IsForward()` is true
+when that walk matches `Edge.Start()` to `Edge.End()`, and false when it runs
+from `Edge.End()` to `Edge.Start()`. `Loop.CoEdges()` is the complete boundary
+traversal. `Loop.Edges()` remains the undirected compatibility view: it returns
+the same shared edge pointers in the same order and omits only the per-loop
+direction. Both methods return copied slices, preserving topology immutability.
 
 **`Edge.IsConvex` is the WALKED-BOUNDARY convexity, not the 3D material angle
 across the edge.** Every profile is walked with the material on the left — the
@@ -790,10 +811,6 @@ type Lump struct{ /* ... */ }
 // Shell is a connected set of faces.
 type Shell struct{ /* ... */ }
 func (s *Shell) IsVoid() bool // true when the shell bounds an internal cavity
-
-// Loop is a boundary loop of a face.
-type Loop struct{ /* ... */ }
-func (l *Loop) IsOuter() bool // the outer boundary; false for a hole
 
 // Vertex is a topological point.
 type Vertex struct{ /* ... */ }

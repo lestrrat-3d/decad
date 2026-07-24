@@ -234,7 +234,7 @@ With it:
 - every resolved reference face MUST touch at least one expanded edge.
 
 Extra/missing/dual adjacency is SX3. This avoids defining “first side” from a
-hidden coedge direction.
+traversal-dependent coedge direction.
 
 For a prism lateral edge or revolve junction, adjacent faces map to arriving
 and leaving walks of the section/meridian. Set each foot back by its assigned
