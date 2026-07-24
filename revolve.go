@@ -1164,6 +1164,9 @@ func evalRevolve(d *Document, ref StepRef, rp revolvePayload) (*Body, error) {
 		return nil, err
 	}
 	body.bounds = bounds
+	if err := validateAnalyticBodyMeasurements(body); err != nil {
+		return nil, err
+	}
 	body.payload = rp
 	return body, nil
 }

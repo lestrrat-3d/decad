@@ -535,6 +535,9 @@ func evalPrism(d *Document, ref StepRef, pp prismPayload) (*Body, error) {
 		return nil, err
 	}
 	body.bounds = bounds
+	if err := validateAnalyticBodyMeasurements(body); err != nil {
+		return nil, err
+	}
 	// A prism-derived modify body re-mints its blend roles from its own record
 	// under this build's ref, so a copy or placement reproduces them (modify §9).
 	// A plain extrude carries no descriptors and this is a no-op.

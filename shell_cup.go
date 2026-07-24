@@ -367,6 +367,9 @@ func evalCup(d *Document, ref StepRef, cp cupPayload) (*Body, error) {
 		return nil, err
 	}
 	body.bounds = bounds
+	if err := validateAnalyticBodyMeasurements(body); err != nil {
+		return nil, err
+	}
 	body.payload = cp
 	return body, nil
 }

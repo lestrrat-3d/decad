@@ -2,6 +2,7 @@ package decad
 
 import (
 	"fmt"
+	"math"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -73,4 +74,46 @@ type Box struct {
 	Min, Max  r3.Vec
 	Exactness Exactness
 	Bound     units.Value
+}
+
+func validateAnalyticBodyMeasurements(body *Body) error {
+	finiteMeasurement := func(m Measurement) bool {
+		return finiteMeasurementValues(m.Value.Base(), m.Bound.Base())
+	}
+	finiteVecMeasurement := func(m VecMeasurement) bool {
+		return finiteMeasurementValues(
+			m.Value.X, m.Value.Y, m.Value.Z, m.Bound.Base(),
+		)
+	}
+	finiteBox := func(b Box) bool {
+		return finiteMeasurementValues(
+			b.Min.X, b.Min.Y, b.Min.Z,
+			b.Max.X, b.Max.Y, b.Max.Z,
+			b.Bound.Base(),
+		)
+	}
+	checks := []struct {
+		name string
+		ok   bool
+	}{
+		{name: "volume", ok: finiteMeasurement(body.volume)},
+		{name: "area", ok: finiteMeasurement(body.area)},
+		{name: "centroid", ok: finiteVecMeasurement(body.centroid)},
+		{name: "bounds", ok: finiteBox(body.bounds)},
+	}
+	for _, check := range checks {
+		if !check.ok {
+			return fmt.Errorf(`%w: the analytic body's %s measurement is not finite`, ErrNotFinite, check.name)
+		}
+	}
+	return nil
+}
+
+func finiteMeasurementValues(values ...float64) bool {
+	for _, value := range values {
+		if math.IsNaN(value) || math.IsInf(value, 0) {
+			return false
+		}
+	}
+	return true
 }

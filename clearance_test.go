@@ -265,9 +265,9 @@ func TestClearanceNonFinitePolynomialIsUndecided(t *testing.T) {
 	// polynomial and publishing a false Exact clearance.
 	const (
 		offset         = 1.4e154
-		major          = 0.9e154
-		minor          = 1e152
-		cylinderRadius = 1e152
+		major          = 1.1e50
+		minor          = 1e50
+		cylinderRadius = 1e50
 		height         = 4e154
 	)
 
