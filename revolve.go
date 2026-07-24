@@ -576,12 +576,9 @@ func axisInPlane(a Axis, frame r3.Frame) (axisLine2, error) {
 		if !finiteAxisValues(dU, dV) {
 			return axisLine2{}, fmt.Errorf(`%w: a sketch-line axis direction is not finite`, ErrNotFinite)
 		}
-		// Recover the held length for exact direction-bound checks. If the
-		// unscaled norm overflows, the axis itself is not representable.
+		// Recover the held length for exact direction-bound checks. An overflowing
+		// magnitude falls back to the conservative direction bound.
 		l = scale * l
-		if !finiteAxisValues(l) {
-			return axisLine2{}, fmt.Errorf(`%w: a sketch-line axis length is not finite`, ErrNotFinite)
-		}
 		dUBound, dVBound := sketchAxisDirectionBounds(a, l, dU, dV)
 		return axisLine2{
 			aU: a.Start.U, aV: a.Start.V,

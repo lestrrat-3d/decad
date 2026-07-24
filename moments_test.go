@@ -656,3 +656,31 @@ func TestArcSegExactQuarterDisk(t *testing.T) {
 	require.LessOrEqual(t, math.Abs(uv-math.Pow(radius, 4)/8), moments.UV.Bound.Base())
 	require.LessOrEqual(t, math.Abs(vv-math.Pi*math.Pow(radius, 4)/16), moments.VV.Bound.Base())
 }
+
+func TestRegionMomentsAcceptsGeneratedArcEndpointDrift(t *testing.T) {
+	world := sketch.NewWorld()
+	s, err := world.CreateSketch(world.XY())
+	require.NoError(t, err)
+	center := s.CreatePoint(1.23456789, -2.34567891)
+	s.Fix(center)
+	start := s.CreatePoint(17.89101112, 4.32109876)
+	s.Fix(start)
+	end := s.CreatePoint(3.33333333, 18.7654321)
+	s.CreateLine(center, start)
+	s.CreateArc(center, start, end)
+	s.CreateLine(end, center)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+
+	for _, profile := range s.Profiles() {
+		if !profile.Valid {
+			continue
+		}
+		record, _, err := decad.RecordProfile(s, profile)
+		require.NoError(t, err)
+		_, err = record.Centroid()
+		require.NoError(t, err)
+		return
+	}
+	t.Fatal("no valid profile generated")
+}

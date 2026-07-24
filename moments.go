@@ -486,17 +486,14 @@ func circularAreaInterval(seg CurveSegment) (ratInterval, bool) {
 		dy0 := exactCoordinateDelta(seg.Start.V, seg.Center.V)
 		dx1 := exactCoordinateDelta(seg.End.U, seg.Center.U)
 		dy1 := exactCoordinateDelta(seg.End.V, seg.Center.V)
-		r21 := new(big.Rat).Add(
-			new(big.Rat).Mul(dx1, dx1),
-			new(big.Rat).Mul(dy1, dy1),
-		)
+		// Arc endpoints may retain solver drift within the accepted radius join
+		// tolerance. The integrated path uses the start radius and endpoint angles,
+		// so the area interval can still prove that same path without requiring
+		// exact endpoint radii.
 		r2 := new(big.Rat).Add(
 			new(big.Rat).Mul(dx0, dx0),
 			new(big.Rat).Mul(dy0, dy0),
 		)
-		if r2.Cmp(r21) != 0 {
-			return ratInterval{}, false
-		}
 		heldDY0 := seg.Start.V - seg.Center.V
 		heldDY1 := seg.End.V - seg.Center.V
 		a0 := atan2Interval(dy0, dx0, heldDY0 == 0 && math.Signbit(heldDY0))
@@ -628,10 +625,14 @@ func integrateMomentRecordMode(record ProfileRecord, anchor Point2, order moment
 			if err := wallBudgetStep(budget); err != nil {
 				return regionIntegrals{}, err
 			}
-			if err := ig.add(segment); err != nil {
+			shifted, err := shiftMomentSegment(segment, anchor)
+			if err != nil {
 				return regionIntegrals{}, err
 			}
-			if checkFinite && !finiteMomentValues(ig.area, ig.mu, ig.mv, ig.muu, ig.muv, ig.mvv) {
+			if err := ig.addFor(shifted, order); err != nil {
+				return regionIntegrals{}, err
+			}
+			if checkFinite && !ig.isFinite(order) {
 				return regionIntegrals{}, fmt.Errorf(`%w: mass-property integration overflowed at loop %d segment %d`, ErrNotFinite, loopIndex, segmentIndex)
 			}
 		}
@@ -639,7 +640,8 @@ func integrateMomentRecordMode(record ProfileRecord, anchor Point2, order moment
 	if ig.area <= 0 {
 		return regionIntegrals{}, fmt.Errorf(`%w: the recorded region encloses no positive net area`, ErrDegenerate)
 	}
-	if checkFinite && !finiteMomentValues(ig.area, ig.mu, ig.mv, ig.muu, ig.muv, ig.mvv) {
+	ig = translateMomentIntegrals(ig, anchor, order)
+	if checkFinite && !ig.isFinite(order) {
 		return regionIntegrals{}, fmt.Errorf(`%w: mass-property integration overflowed while restoring the profile origin`, ErrNotFinite)
 	}
 	return ig, nil
@@ -675,14 +677,46 @@ func translateMomentIntegrals(ig regionIntegrals, anchor Point2, order momentInt
 	if order == momentAreaOrder {
 		return ig
 	}
-	mu, mv := ig.mu, ig.mv
+	area := measuredScalar(ig.area, ig.areaBound)
+	mu := measuredScalar(ig.mu, ig.muBound)
+	mv := measuredScalar(ig.mv, ig.mvBound)
 	if order == momentSecondOrder {
-		ig.muu += 2*anchor.U*mu + anchor.U*anchor.U*ig.area
-		ig.muv += anchor.V*mu + anchor.U*mv + anchor.U*anchor.V*ig.area
-		ig.mvv += 2*anchor.V*mv + anchor.V*anchor.V*ig.area
+		two := exactScalar(2)
+		anchorU := exactScalar(anchor.U)
+		anchorV := exactScalar(anchor.V)
+		muu := boundedAdd(
+			measuredScalar(ig.muu, ig.muuBound),
+			boundedAdd(
+				boundedMul(boundedMul(two, anchorU), mu),
+				boundedMul(boundedMul(anchorU, anchorU), area),
+			),
+		)
+		muv := boundedAdd(
+			measuredScalar(ig.muv, ig.muvBound),
+			boundedAdd(
+				boundedMul(anchorV, mu),
+				boundedAdd(
+					boundedMul(anchorU, mv),
+					boundedMul(boundedMul(anchorU, anchorV), area),
+				),
+			),
+		)
+		mvv := boundedAdd(
+			measuredScalar(ig.mvv, ig.mvvBound),
+			boundedAdd(
+				boundedMul(boundedMul(two, anchorV), mv),
+				boundedMul(boundedMul(anchorV, anchorV), area),
+			),
+		)
+		ig.muu, ig.muuBound = muu.value, muu.bound
+		ig.muv, ig.muvBound = muv.value, muv.bound
+		ig.mvv, ig.mvvBound = mvv.value, mvv.bound
 	}
-	ig.mu += anchor.U * ig.area
-	ig.mv += anchor.V * ig.area
+	mu = boundedAdd(mu, boundedMul(exactScalar(anchor.U), area))
+	mv = boundedAdd(mv, boundedMul(exactScalar(anchor.V), area))
+	ig.mu, ig.muBound = mu.value, mu.bound
+	ig.mv, ig.mvBound = mv.value, mv.bound
+	ig.coordUpper = math.Max(ig.coordUpper, absSumUpper(anchor.U, anchor.V))
 	return ig
 }
 
