@@ -106,7 +106,10 @@ type regionIntegrals struct {
 // (negative), so the sum IS the net region integral.
 func (r ProfileRecord) integrals() (regionIntegrals, error) {
 	var ig regionIntegrals
-	for _, loop := range append([]LoopRecord{r.Outer}, r.Holes...) {
+	for loopIndex, loop := range append([]LoopRecord{r.Outer}, r.Holes...) {
+		if err := validateMomentLoop(loop, loopIndex); err != nil {
+			return regionIntegrals{}, err
+		}
 		for _, seg := range loop.Segments {
 			if err := ig.add(seg); err != nil {
 				return regionIntegrals{}, err
@@ -114,6 +117,62 @@ func (r ProfileRecord) integrals() (regionIntegrals, error) {
 		}
 	}
 	return ig, nil
+}
+
+// validateMomentLoop rejects a record that leaves any boundary junction open.
+// The integrals add only the declared walks; joining near endpoints here would
+// invent a closing edge and make a nonzero error bound look Exact.
+func validateMomentLoop(loop LoopRecord, loopIndex int) error {
+	if len(loop.Segments) == 0 {
+		return nil
+	}
+
+	first, err := walkOf(loop.Segments[0])
+	if err != nil {
+		return fmt.Errorf(`profile loop %d segment 0: %w`, loopIndex, err)
+	}
+	previous := first
+	for segmentIndex := 1; segmentIndex < len(loop.Segments); segmentIndex++ {
+		current, err := walkOf(loop.Segments[segmentIndex])
+		if err != nil {
+			return fmt.Errorf(`profile loop %d segment %d: %w`, loopIndex, segmentIndex, err)
+		}
+		if !momentWalksJoin(previous, current) {
+			return fmt.Errorf(`%w: profile loop %d has an open junction before segment %d`, ErrDegenerate, loopIndex, segmentIndex)
+		}
+		previous = current
+	}
+	if !momentWalksJoin(previous, first) {
+		return fmt.Errorf(`%w: profile loop %d does not close`, ErrDegenerate, loopIndex)
+	}
+	return nil
+}
+
+// momentWalksJoin uses exact comparison for line junctions. A circular walk
+// can have a few ulps of endpoint error from parameter evaluation, so it gets
+// only that rounding allowance; this is not a geometric distance weld.
+func momentWalksJoin(a, b segmentWalk) bool {
+	if !a.circular && !b.circular {
+		return a.endU == b.startU && a.endV == b.startV
+	}
+	scale := math.Max(math.Abs(a.endU), math.Abs(a.endV))
+	scale = math.Max(scale, math.Abs(b.startU))
+	scale = math.Max(scale, math.Abs(b.startV))
+	if a.circular {
+		scale = math.Max(scale, a.radius)
+	}
+	if b.circular {
+		scale = math.Max(scale, b.radius)
+	}
+	return momentCoordinatesJoin(a.endU, b.startU, scale) && momentCoordinatesJoin(a.endV, b.startV, scale)
+}
+
+func momentCoordinatesJoin(a, b, scale float64) bool {
+	if a == b {
+		return true
+	}
+	ulp := math.Nextafter(scale, math.Inf(1)) - scale
+	return math.Abs(a-b) <= 32*ulp
 }
 
 // add accumulates one segment's boundary-integral contribution, in the

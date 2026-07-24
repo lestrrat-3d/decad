@@ -171,6 +171,24 @@ func TestRegionMomentsPointerVariants(t *testing.T) {
 	require.Error(t, err, `a nil segment pointer names no curve to integrate`)
 }
 
+func TestRegionMomentsRejectOpenLoop(t *testing.T) {
+	// Mass properties integrate a recorded boundary; they must not weld a
+	// near-miss endpoint into a loop. The tiny gap is still an open profile.
+	open := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
+		decad.LineSeg{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 1, V: 0}, TStart: 0, TEnd: 1},
+		decad.LineSeg{Start: decad.Point2{U: 1, V: 0}, End: decad.Point2{U: 1, V: 1}, TStart: 0, TEnd: 1},
+		decad.LineSeg{Start: decad.Point2{U: 1, V: 1}, End: decad.Point2{U: 0, V: 1}, TStart: 0, TEnd: 1},
+		decad.LineSeg{Start: decad.Point2{U: 0, V: 1}, End: decad.Point2{U: -1e-8, V: 0}, TStart: 0, TEnd: 1},
+	}}}
+
+	_, err := open.Area()
+	require.ErrorIs(t, err, decad.ErrDegenerate)
+	_, err = open.Centroid()
+	require.ErrorIs(t, err, decad.ErrDegenerate)
+	_, err = open.SecondMoments()
+	require.ErrorIs(t, err, decad.ErrDegenerate)
+}
+
 func TestSecondMomentsRectangle(t *testing.T) {
 	// For the axis-aligned rectangle [0,a]×[0,b] about the origin:
 	// ∫u²dA = a³b/3, ∫uv dA = a²b²/4, ∫v²dA = ab³/3.
