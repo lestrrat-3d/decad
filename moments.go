@@ -182,7 +182,12 @@ func momentCoordinatesJoin(a, b, scale float64) bool {
 		// allowance at this scale.
 		return false
 	}
-	return math.Abs(a-b) <= 32*(next-scale)
+	// Reconstructing an ArcSeg endpoint first derives its radius from the
+	// recorded start point, then evaluates the derived angle. A generated arc
+	// can therefore land over one hundred ulps from its recorded line neighbour.
+	// This remains a coordinate-local allowance: a large coordinate on the
+	// other axis cannot hide a material gap here.
+	return math.Abs(a-b) <= 128*(next-scale)
 }
 
 // add accumulates one segment's boundary-integral contribution, in the
@@ -312,5 +317,14 @@ func (ig *regionIntegrals) addCircular(c Point2, r, th0, th1 float64) {
 
 // lerp2 returns the point at parameter t on the segment start→end.
 func lerp2(start, end Point2, t float64) (float64, float64) {
+	// A whole LineSeg records its endpoints directly. Recomputing the endpoint
+	// as start+(end-start) can change it through cancellation, opening a
+	// generated closed loop only in its floating evaluation.
+	if t == 0 {
+		return start.U, start.V
+	}
+	if t == 1 {
+		return end.U, end.V
+	}
 	return start.U + t*(end.U-start.U), start.V + t*(end.V-start.V)
 }

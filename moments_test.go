@@ -286,6 +286,34 @@ func TestRegionMomentsAcceptsEndpointRounding(t *testing.T) {
 	require.True(t, area.Value.Equal(units.SquareMillimeters(1), 1e-12), `area = %s`, area.Value)
 }
 
+func TestRegionMomentsAcceptsGeneratedArcEndpointDrift(t *testing.T) {
+	// An outward shell rounds this rectangle's corners. ArcSeg derives its
+	// radius from the translated start point, so the left-top arc's evaluated
+	// end drifts from its recorded line neighbour by over one hundred ulps.
+	const radius = 0.1
+	profile := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
+		decad.LineSeg{Start: decad.Point2{U: 0, V: -radius}, End: decad.Point2{U: 100, V: -radius}, TEnd: 1},
+		decad.ArcSeg{Center: decad.Point2{U: 100, V: 0}, Start: decad.Point2{U: 100, V: -radius}, End: decad.Point2{U: 100 + radius, V: 0}, TEnd: 1},
+		decad.LineSeg{Start: decad.Point2{U: 100 + radius, V: 0}, End: decad.Point2{U: 100 + radius, V: 60}, TEnd: 1},
+		decad.ArcSeg{Center: decad.Point2{U: 100, V: 60}, Start: decad.Point2{U: 100 + radius, V: 60}, End: decad.Point2{U: 100, V: 60 + radius}, TEnd: 1},
+		decad.LineSeg{Start: decad.Point2{U: 100, V: 60 + radius}, End: decad.Point2{U: 0, V: 60 + radius}, TEnd: 1},
+		decad.ArcSeg{Center: decad.Point2{U: 0, V: 60}, Start: decad.Point2{U: 0, V: 60 + radius}, End: decad.Point2{U: -radius, V: 60}, TEnd: 1},
+		decad.LineSeg{Start: decad.Point2{U: -radius, V: 60}, End: decad.Point2{U: -radius, V: 0}, TEnd: 1},
+		decad.ArcSeg{Center: decad.Point2{}, Start: decad.Point2{U: -radius, V: 0}, End: decad.Point2{U: 0, V: -radius}, TEnd: 1},
+	}}}
+
+	area, err := profile.Area()
+	require.NoError(t, err)
+	areaMM, err := area.Value.In(units.SquareMillimeter)
+	require.NoError(t, err)
+	require.InDelta(t, 100*60+2*(100+60)*radius+math.Pi*radius*radius, areaMM, 1e-9)
+
+	_, err = profile.Centroid()
+	require.NoError(t, err)
+	_, err = profile.SecondMoments()
+	require.NoError(t, err)
+}
+
 func TestSecondMomentsRectangle(t *testing.T) {
 	// For the axis-aligned rectangle [0,a]×[0,b] about the origin:
 	// ∫u²dA = a³b/3, ∫uv dA = a²b²/4, ∫v²dA = ab³/3.
