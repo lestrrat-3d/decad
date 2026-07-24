@@ -153,12 +153,12 @@ func TestRecipeUnmarshalStructuralCollectionLimits(t *testing.T) {
 
 	t.Run("inputs exact limit", func(t *testing.T) {
 		var got Recipe
-		err := json.Unmarshal([]byte(`{"steps":[{"op":"extrude","inputs":[0]}]}`), &got)
+		err := json.Unmarshal([]byte(`{"steps":[{"op":"duplicate","inputs":[0]}]}`), &got)
 		require.NoError(t, err)
 		require.Equal(t, []StepRef{0}, got.Steps[0].Inputs)
 
 		got = Recipe{}
-		err = json.Unmarshal([]byte(`{"steps":[{"op":"extrude"},{"op":"extrude","inputs":[0]}]}`), &got)
+		err = json.Unmarshal([]byte(`{"steps":[{"op":"duplicate","inputs":[0]},{"op":"duplicate","inputs":[0]}]}`), &got)
 		require.NoError(t, err)
 		require.Equal(t, []StepRef{0}, got.Steps[1].Inputs)
 	})
@@ -173,14 +173,14 @@ func TestRecipeUnmarshalStructuralCollectionLimits(t *testing.T) {
 
 	t.Run("values exact limit", func(t *testing.T) {
 		var got Recipe
-		err := json.Unmarshal([]byte(`{"steps":[{"op":"fillet","values":["1 mm"]}]}`), &got)
+		err := json.Unmarshal([]byte(`{"steps":[{"op":"fillet","inputs":[0],"selectors":[{"kind":"edges","preds":[]}],"values":["1 mm"]}]}`), &got)
 		require.NoError(t, err)
 		require.Len(t, got.Steps[0].Values, 1)
 	})
 
 	t.Run("values one over", func(t *testing.T) {
 		got := original
-		err := json.Unmarshal([]byte(`{"steps":[{"op":"fillet","values":["1 mm","2 mm"]}]}`), &got)
+		err := json.Unmarshal([]byte(`{"steps":[{"op":"fillet","inputs":[0],"selectors":[{"kind":"edges","preds":[]}],"values":["1 mm","2 mm"]}]}`), &got)
 		requireRecipeLimitPath(t, err, "steps[0].values[1]", 0)
 		require.Equal(t, original, got)
 	})

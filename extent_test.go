@@ -76,18 +76,15 @@ func TestEmptyExtentVariantCodec(t *testing.T) {
 	}{
 		{
 			name: "full revolution",
-			step: decad.Step{Op: decad.OpRevolve, Angular: decad.FullRevolution{}},
+			step: func() decad.Step { s := validCodecStep(decad.OpRevolve); s.Angular = decad.FullRevolution{}; return s }(),
 			bad:  `{"op":"revolve","angular":{"kind":"full_revolution","a":"90 deg","dir":"against"}}`,
 		},
 		{
 			name: "through-all side",
-			step: decad.Step{
-				Op: decad.OpExtrude,
-				Extent: decad.TwoSided{
+			step: func() decad.Step { s := validCodecStep(decad.OpExtrude); s.Extent = decad.TwoSided{
 					One: decad.ThroughAllSide{},
 					Two: decad.DistanceSide{D: units.Millimeters(5)},
-				},
-			},
+				}; return s }(),
 			bad: `{"op":"extrude","extent":{"kind":"two_sided","one":{"kind":"through_all_side","d":"2 mm"},"two":{"kind":"distance_side","d":"5 mm"}}}`,
 		},
 	} {

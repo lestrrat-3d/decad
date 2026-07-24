@@ -189,23 +189,23 @@ func TestSelectorCodecAcceptsNegativeZeroProvenanceSteps(t *testing.T) {
 	}{
 		{
 			name: "edge created-by",
-			data: `{"op":"fillet","selectors":[{"kind":"edges","preds":[{"kind":"created_by","ref":{"step":-0,"role":"capStart"}}]}]}`,
-			want: decad.Step{Op: decad.OpFillet, Selectors: []decad.Selector{decad.Edges(decad.CreatedBy(ref))}},
+			data: `{"op":"fillet","inputs":[0],"selectors":[{"kind":"edges","preds":[{"kind":"created_by","ref":{"step":-0,"role":"capStart"}}]}],"values":["1 mm"]}`,
+			want: decad.Step{Op: decad.OpFillet, Inputs: []decad.StepRef{0}, Selectors: []decad.Selector{decad.Edges(decad.CreatedBy(ref))}, Values: []units.Value{units.Millimeters(1)}},
 		},
 		{
 			name: "face created-by",
-			data: `{"op":"shell","selectors":[{"kind":"faces","preds":[{"kind":"face_created_by","ref":{"step":-0,"role":"capStart"}}]}]}`,
-			want: decad.Step{Op: decad.OpShell, Selectors: []decad.Selector{decad.Faces(decad.FaceCreatedBy(ref))}},
+			data: `{"op":"shell","inputs":[0],"selectors":[{"kind":"faces","preds":[{"kind":"face_created_by","ref":{"step":-0,"role":"capStart"}}]}],"values":["1 mm"],"opts":{"kind":"shell","sense":"inward"}}`,
+			want: decad.Step{Op: decad.OpShell, Inputs: []decad.StepRef{0}, Selectors: []decad.Selector{decad.Faces(decad.FaceCreatedBy(ref))}, Values: []units.Value{units.Millimeters(1)}, Opts: decad.ShellOpts{Sense: decad.Inward}},
 		},
 		{
 			name: "edge created-by exponent",
-			data: `{"op":"fillet","selectors":[{"kind":"edges","preds":[{"kind":"created_by","ref":{"step":-0e10,"role":"capStart"}}]}]}`,
-			want: decad.Step{Op: decad.OpFillet, Selectors: []decad.Selector{decad.Edges(decad.CreatedBy(ref))}},
+			data: `{"op":"fillet","inputs":[0],"selectors":[{"kind":"edges","preds":[{"kind":"created_by","ref":{"step":-0e10,"role":"capStart"}}]}],"values":["1 mm"]}`,
+			want: decad.Step{Op: decad.OpFillet, Inputs: []decad.StepRef{0}, Selectors: []decad.Selector{decad.Edges(decad.CreatedBy(ref))}, Values: []units.Value{units.Millimeters(1)}},
 		},
 		{
 			name: "face created-by exponent",
-			data: `{"op":"shell","selectors":[{"kind":"faces","preds":[{"kind":"face_created_by","ref":{"step":-0E+10,"role":"capStart"}}]}]}`,
-			want: decad.Step{Op: decad.OpShell, Selectors: []decad.Selector{decad.Faces(decad.FaceCreatedBy(ref))}},
+			data: `{"op":"shell","inputs":[0],"selectors":[{"kind":"faces","preds":[{"kind":"face_created_by","ref":{"step":-0E+10,"role":"capStart"}}]}],"values":["1 mm"],"opts":{"kind":"shell","sense":"inward"}}`,
+			want: decad.Step{Op: decad.OpShell, Inputs: []decad.StepRef{0}, Selectors: []decad.Selector{decad.Faces(decad.FaceCreatedBy(ref))}, Values: []units.Value{units.Millimeters(1)}, Opts: decad.ShellOpts{Sense: decad.Inward}},
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

@@ -2,7 +2,6 @@ package decad_test
 
 import (
 	"encoding/json"
-	"math"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
@@ -34,7 +33,7 @@ func validCodecStep(op decad.OpKind) decad.Step {
 				decad.CircleSeg{
 					Radius: units.Millimeters(1),
 					CCW:    true,
-					TEnd:   2 * math.Pi,
+					TEnd:   1,
 				},
 			},
 		},
@@ -511,12 +510,28 @@ func TestStepOptsCodecRequiresPayloadFields(t *testing.T) {
 }
 
 func TestStepOptsCodecAcceptsPresentPayloadFields(t *testing.T) {
+	base := validCodecStep(decad.OpExtrude)
+	raw, err := json.Marshal(base)
+	require.NoError(t, err)
+	var fields map[string]json.RawMessage
+	require.NoError(t, json.Unmarshal(raw, &fields))
+	fields["opts"] = json.RawMessage(`{"kind":"extrude","taper":"0 deg"}`)
+	raw, err = json.Marshal(fields)
+	require.NoError(t, err)
 	var extrude decad.Step
-	require.NoError(t, json.Unmarshal([]byte(`{"op":"extrude","opts":{"kind":"extrude","taper":"0 deg"}}`), &extrude))
+	require.NoError(t, json.Unmarshal(raw, &extrude))
 	require.Equal(t, decad.ExtrudeOpts{Taper: units.Degrees(0)}, extrude.Opts)
 
+	base = validCodecStep(decad.OpShell)
+	raw, err = json.Marshal(base)
+	require.NoError(t, err)
+	fields = nil
+	require.NoError(t, json.Unmarshal(raw, &fields))
+	fields["opts"] = json.RawMessage(`{"kind":"shell","sense":"outward"}`)
+	raw, err = json.Marshal(fields)
+	require.NoError(t, err)
 	var shell decad.Step
-	require.NoError(t, json.Unmarshal([]byte(`{"op":"shell","opts":{"kind":"shell","sense":"outward"}}`), &shell))
+	require.NoError(t, json.Unmarshal(raw, &shell))
 	require.Equal(t, decad.ShellOpts{Sense: decad.Outward}, shell.Opts)
 }
 
