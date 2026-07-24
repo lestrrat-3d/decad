@@ -92,6 +92,15 @@ func TestSelectorCodecRejections(t *testing.T) {
 		`a normal-to predicate with no dir is malformed`)
 	require.Error(t, json.Unmarshal([]byte(`{"op":"shell","selectors":[{"kind":"faces","preds":[{"kind":"face_created_by","ref":{"role":"capEnd"}}]}]}`), &step),
 		`a provenance ref with no step is malformed`)
+	for _, data := range []string{
+		`{"op":"fillet","selectors":[{"kind":"edges","preds":[{"kind":"created_by","ref":{"step":0,"role":""}}]}]}`,
+		`{"op":"fillet","selectors":[{"kind":"edges","preds":[{"kind":"created_by","ref":{"step":-1,"role":"capStart"}}]}]}`,
+		`{"op":"shell","selectors":[{"kind":"faces","preds":[{"kind":"face_created_by","ref":{"step":0,"role":""}}]}]}`,
+		`{"op":"shell","selectors":[{"kind":"faces","preds":[{"kind":"face_created_by","ref":{"step":-1,"role":"capStart"}}]}]}`,
+	} {
+		err := json.Unmarshal([]byte(data), &step)
+		require.ErrorIs(t, err, decad.ErrDegenerate)
+	}
 	require.Error(t, json.Unmarshal([]byte(`{"op":"fillet","selectors":[{"kind":"edges","preds":[],"exactly":4,"at_least":1}]}`), &step),
 		`a query carries at most one cardinality assertion`)
 
@@ -100,6 +109,102 @@ func TestSelectorCodecRejections(t *testing.T) {
 	require.Error(t, err, `a zero-value edge predicate refuses to encode`)
 	_, err = json.Marshal(decad.Step{Op: decad.OpShell, Selectors: []decad.Selector{decad.Faces(decad.FacePredicate{})}})
 	require.Error(t, err, `a zero-value face predicate refuses to encode`)
+}
+
+func TestSelectorCodecRejectsOutOfRangeNegativeProvenanceSteps(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		data string
+	}{
+		{
+			name: "edge created-by",
+			data: `{"op":"fillet","selectors":[{"kind":"edges","preds":[{"kind":"created_by","ref":{"step":-9223372036854775809,"role":"capStart"}}]}]}`,
+		},
+		{
+			name: "face created-by",
+			data: `{"op":"shell","selectors":[{"kind":"faces","preds":[{"kind":"face_created_by","ref":{"step":-9223372036854775809,"role":"capStart"}}]}]}`,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var step decad.Step
+			err := json.Unmarshal([]byte(tc.data), &step)
+			require.ErrorIs(t, err, decad.ErrDegenerate)
+		})
+	}
+}
+
+func TestSelectorCodecRejectsNegativeProvenanceStepNumberForms(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		data string
+	}{
+		{
+			name: "edge created-by decimal",
+			data: `{"op":"fillet","selectors":[{"kind":"edges","preds":[{"kind":"created_by","ref":{"step":-1.0,"role":"capStart"}}]}]}`,
+		},
+		{
+			name: "edge created-by exponent",
+			data: `{"op":"fillet","selectors":[{"kind":"edges","preds":[{"kind":"created_by","ref":{"step":-1e0,"role":"capStart"}}]}]}`,
+		},
+		{
+			name: "edge created-by uppercase exponent",
+			data: `{"op":"fillet","selectors":[{"kind":"edges","preds":[{"kind":"created_by","ref":{"step":-1E+0,"role":"capStart"}}]}]}`,
+		},
+		{
+			name: "face created-by decimal",
+			data: `{"op":"shell","selectors":[{"kind":"faces","preds":[{"kind":"face_created_by","ref":{"step":-1.0,"role":"capStart"}}]}]}`,
+		},
+		{
+			name: "face created-by exponent",
+			data: `{"op":"shell","selectors":[{"kind":"faces","preds":[{"kind":"face_created_by","ref":{"step":-1e0,"role":"capStart"}}]}]}`,
+		},
+		{
+			name: "face created-by uppercase exponent",
+			data: `{"op":"shell","selectors":[{"kind":"faces","preds":[{"kind":"face_created_by","ref":{"step":-1E+0,"role":"capStart"}}]}]}`,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var step decad.Step
+			err := json.Unmarshal([]byte(tc.data), &step)
+			require.ErrorIs(t, err, decad.ErrDegenerate)
+		})
+	}
+}
+
+func TestSelectorCodecAcceptsNegativeZeroProvenanceSteps(t *testing.T) {
+	ref := decad.FeatureRef{Step: 0, Role: roleCapStart}
+	for _, tc := range []struct {
+		name string
+		data string
+		want decad.Step
+	}{
+		{
+			name: "edge created-by",
+			data: `{"op":"fillet","selectors":[{"kind":"edges","preds":[{"kind":"created_by","ref":{"step":-0,"role":"capStart"}}]}]}`,
+			want: decad.Step{Op: decad.OpFillet, Selectors: []decad.Selector{decad.Edges(decad.CreatedBy(ref))}},
+		},
+		{
+			name: "face created-by",
+			data: `{"op":"shell","selectors":[{"kind":"faces","preds":[{"kind":"face_created_by","ref":{"step":-0,"role":"capStart"}}]}]}`,
+			want: decad.Step{Op: decad.OpShell, Selectors: []decad.Selector{decad.Faces(decad.FaceCreatedBy(ref))}},
+		},
+		{
+			name: "edge created-by exponent",
+			data: `{"op":"fillet","selectors":[{"kind":"edges","preds":[{"kind":"created_by","ref":{"step":-0e10,"role":"capStart"}}]}]}`,
+			want: decad.Step{Op: decad.OpFillet, Selectors: []decad.Selector{decad.Edges(decad.CreatedBy(ref))}},
+		},
+		{
+			name: "face created-by exponent",
+			data: `{"op":"shell","selectors":[{"kind":"faces","preds":[{"kind":"face_created_by","ref":{"step":-0E+10,"role":"capStart"}}]}]}`,
+			want: decad.Step{Op: decad.OpShell, Selectors: []decad.Selector{decad.Faces(decad.FaceCreatedBy(ref))}},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var got decad.Step
+			require.NoError(t, json.Unmarshal([]byte(tc.data), &got))
+			require.Equal(t, tc.want, got)
+		})
+	}
 }
 
 func TestNilSelectorPointersAreBranchable(t *testing.T) {
