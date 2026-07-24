@@ -130,6 +130,14 @@ areas of the bodies built from it are decad's 3D job. The boundary is:
   asserted against sketch's answer by the §1 falsifier at every feature
   call).
 
+Caller-built and decoded records carry no live sketch answer. Public
+`ProfileRecord` mass-property methods MUST validate before integration:
+finite supported fields/ranges first, then region topology through a private
+`sketch` reconstruction that exactly matches the recorded walks. Whole-circle
+regions use direct disk containment/separation, preserving valid thin annuli
+below sketch's general arrangement threshold. Reject malformed or overflowing
+input; NEVER return a non-finite `Exact` result.
+
 Increment 1 implements the closed forms for `LineSeg`/`CircleSeg`/`ArcSeg`;
 the free-form kinds arrive with their increments (§11) and reject
 `ErrUnsupported` until then.

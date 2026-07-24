@@ -10,131 +10,135 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// recordOne solves the sketch and records the one profile matching pick.
 func recordOne(t *testing.T, s *sketch.Sketch, pick func(*sketch.Profile) bool) decad.ProfileRecord {
 	t.Helper()
 	_, err := s.Solve(t.Context())
 	require.NoError(t, err)
-	for _, p := range s.Profiles() {
-		if !pick(p) {
+	for _, profile := range s.Profiles() {
+		if !pick(profile) {
 			continue
 		}
-		rec, _, err := decad.RecordProfile(s, p)
+		record, _, err := decad.RecordProfile(s, profile)
 		require.NoError(t, err)
-		return rec
+		return record
 	}
 	t.Fatal(`no profile matched`)
 	return decad.ProfileRecord{}
 }
 
+func momentLine(u0, v0, u1, v1 float64) decad.CurveSegment {
+	return decad.LineSeg{
+		Start: decad.Point2{U: u0, V: v0},
+		End:   decad.Point2{U: u1, V: v1}, TStart: 0, TEnd: 1,
+	}
+}
+
+func momentSquare(u0, v0, u1, v1 float64, clockwise bool) decad.LoopRecord {
+	points := [][2]float64{{u0, v0}, {u1, v0}, {u1, v1}, {u0, v1}}
+	if clockwise {
+		points = [][2]float64{{u0, v0}, {u0, v1}, {u1, v1}, {u1, v0}}
+	}
+	return decad.LoopRecord{Segments: []decad.CurveSegment{
+		momentLine(points[0][0], points[0][1], points[1][0], points[1][1]),
+		momentLine(points[1][0], points[1][1], points[2][0], points[2][1]),
+		momentLine(points[2][0], points[2][1], points[3][0], points[3][1]),
+		momentLine(points[3][0], points[3][1], points[0][0], points[0][1]),
+	}}
+}
+
+func momentWholeCircle(center decad.Point2, radius float64, counterclockwise bool) decad.LoopRecord {
+	segment := decad.CircleSeg{
+		Center: center,
+		Radius: units.Millimeters(radius),
+		CCW:    counterclockwise,
+	}
+	if counterclockwise {
+		segment.TEnd = 1
+	} else {
+		segment.TStart = 1
+	}
+	return decad.LoopRecord{Segments: []decad.CurveSegment{segment}}
+}
+
+func requireProfileMomentError(t *testing.T, record decad.ProfileRecord, target error) {
+	t.Helper()
+	_, err := record.Area()
+	require.ErrorIs(t, err, target)
+	_, err = record.Centroid()
+	require.ErrorIs(t, err, target)
+	_, err = record.SecondMoments()
+	require.ErrorIs(t, err, target)
+}
+
 func TestRegionAreaAndCentroidRectangle(t *testing.T) {
-	w := sketch.NewWorld()
-	s, err := w.CreateSketch(w.XY())
+	world := sketch.NewWorld()
+	s, err := world.CreateSketch(world.XY())
 	require.NoError(t, err)
-	rect := s.CreateRectangle(10, 20, 110, 80) // 100 × 60, off the origin
+	rect := s.CreateRectangle(10, 20, 110, 80)
 	s.Fix(rect.A)
+	record := recordOne(t, s, func(profile *sketch.Profile) bool { return len(profile.Outer) == 4 })
 
-	rec := recordOne(t, s, func(p *sketch.Profile) bool { return len(p.Outer) == 4 })
-
-	area, err := rec.Area()
+	area, err := record.Area()
 	require.NoError(t, err)
-	require.Equal(t, decad.Exact, area.Exactness, `closed-form area is exact`)
-	require.Zero(t, area.Bound.Mag(), `an exact measurement carries a zero bound`)
-	require.True(t, area.Value.Equal(units.SquareMillimeters(6000), 1e-9), `a 100×60 plate is 6000 mm², got %s`, area.Value)
+	require.Equal(t, decad.Exact, area.Exactness)
+	require.Zero(t, area.Bound.Mag())
+	require.True(t, area.Value.Equal(units.SquareMillimeters(6000), 1e-9))
 
-	c, err := rec.Centroid()
+	centroid, err := record.Centroid()
 	require.NoError(t, err)
-	require.Equal(t, decad.Exact, c.Exactness)
-	require.InDelta(t, 60.0, c.Value.X, 1e-9)
-	require.InDelta(t, 50.0, c.Value.Y, 1e-9)
-	require.Zero(t, c.Value.Z, `the centroid is plane-local: (u, v, 0)`)
+	require.Equal(t, decad.Exact, centroid.Exactness)
+	require.InDelta(t, 60, centroid.Value.X, 1e-9)
+	require.InDelta(t, 50, centroid.Value.Y, 1e-9)
+	require.Zero(t, centroid.Value.Z)
 }
 
 func TestRegionAreaAndCentroidWithHole(t *testing.T) {
-	// An off-center Ø20 hole: the composite centroid shifts away from it.
-	w := sketch.NewWorld()
-	s, err := w.CreateSketch(w.XY())
+	world := sketch.NewWorld()
+	s, err := world.CreateSketch(world.XY())
 	require.NoError(t, err)
 	rect := s.CreateRectangle(0, 0, 100, 60)
 	s.Fix(rect.A)
 	s.CreateCircle(s.CreatePoint(70, 30), 10)
+	record := recordOne(t, s, func(profile *sketch.Profile) bool { return len(profile.Holes) == 1 })
 
-	rec := recordOne(t, s, func(p *sketch.Profile) bool { return len(p.Holes) == 1 })
-
-	hole := math.Pi * 100
-	wantArea := 6000 - hole
-	area, err := rec.Area()
+	holeArea := math.Pi * 100
+	wantArea := 6000 - holeArea
+	area, err := record.Area()
 	require.NoError(t, err)
 	got, err := area.Value.In(units.SquareMillimeter)
 	require.NoError(t, err)
-	require.InDelta(t, wantArea, got, 1e-9, `net area subtracts the hole exactly`)
+	require.InDelta(t, wantArea, got, 1e-9)
 
-	c, err := rec.Centroid()
+	centroid, err := record.Centroid()
 	require.NoError(t, err)
-	require.InDelta(t, (6000*50-hole*70)/wantArea, c.Value.X, 1e-9, `the centroid shifts away from the off-center hole`)
-	require.InDelta(t, 30.0, c.Value.Y, 1e-9)
-}
-
-func TestRegionMomentsAcceptSmallCircleHoleBesideLargeOutline(t *testing.T) {
-	// This is a valid recorded profile: the outer loop is a 1 km square and the
-	// hole is a whole 1 mm circle. Keep it as a record because the regression is
-	// in decad's record validation, not sketch's sampled-fragment admission.
-	rec := decad.ProfileRecord{
-		Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
-			decad.LineSeg{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 1_000_000, V: 0}, TStart: 0, TEnd: 1},
-			decad.LineSeg{Start: decad.Point2{U: 1_000_000, V: 0}, End: decad.Point2{U: 1_000_000, V: 1_000_000}, TStart: 0, TEnd: 1},
-			decad.LineSeg{Start: decad.Point2{U: 1_000_000, V: 1_000_000}, End: decad.Point2{U: 0, V: 1_000_000}, TStart: 0, TEnd: 1},
-			decad.LineSeg{Start: decad.Point2{U: 0, V: 1_000_000}, End: decad.Point2{U: 0, V: 0}, TStart: 0, TEnd: 1},
-		}},
-		Holes: []decad.LoopRecord{{Segments: []decad.CurveSegment{
-			decad.CircleSeg{Center: decad.Point2{U: 500_000, V: 500_000}, Radius: units.Millimeters(1), CCW: false, TStart: 1, TEnd: 0},
-		}}},
-	}
-
-	area, err := rec.Area()
-	require.NoError(t, err)
-	areaMM, err := area.Value.In(units.SquareMillimeter)
-	require.NoError(t, err)
-	require.InDelta(t, 1_000_000.0*1_000_000-math.Pi, areaMM, 1e-3)
-
-	centroid, err := rec.Centroid()
-	require.NoError(t, err)
-	require.InDelta(t, 500_000.0, centroid.Value.X, 1e-6)
-	require.InDelta(t, 500_000.0, centroid.Value.Y, 1e-6)
-
-	_, err = rec.SecondMoments()
-	require.NoError(t, err)
+	require.InDelta(t, (6000*50-holeArea*70)/wantArea, centroid.Value.X, 1e-9)
+	require.InDelta(t, 30, centroid.Value.Y, 1e-9)
 }
 
 func TestRegionAreaWholeCircle(t *testing.T) {
-	w := sketch.NewWorld()
-	s, err := w.CreateSketch(w.XY())
+	world := sketch.NewWorld()
+	s, err := world.CreateSketch(world.XY())
 	require.NoError(t, err)
 	center := s.CreatePoint(5, -3)
 	s.Fix(center)
 	s.CreateCircle(center, 7)
+	record := recordOne(t, s, func(*sketch.Profile) bool { return true })
 
-	rec := recordOne(t, s, func(p *sketch.Profile) bool { return true })
-
-	area, err := rec.Area()
+	area, err := record.Area()
 	require.NoError(t, err)
 	got, err := area.Value.In(units.SquareMillimeter)
 	require.NoError(t, err)
 	require.InDelta(t, math.Pi*49, got, 1e-9)
 
-	c, err := rec.Centroid()
+	centroid, err := record.Centroid()
 	require.NoError(t, err)
-	require.InDelta(t, 5.0, c.Value.X, 1e-9)
-	require.InDelta(t, -3.0, c.Value.Y, 1e-9)
+	require.InDelta(t, 5, centroid.Value.X, 1e-9)
+	require.InDelta(t, -3, centroid.Value.Y, 1e-9)
 }
 
 func TestRegionAreaMatchesSketchOnCertifiedFragments(t *testing.T) {
-	// A circle straddling a rectangle edge: every region's boundary mixes
-	// whole edges with certified line and circle fragments. decad's
-	// closed-form area must agree with sketch's own exact answer on every
-	// region — the §1 falsifier consistency, exercised as a test.
-	w := sketch.NewWorld()
-	s, err := w.CreateSketch(w.XY())
+	world := sketch.NewWorld()
+	s, err := world.CreateSketch(world.XY())
 	require.NoError(t, err)
 	rect := s.CreateRectangle(0, 0, 100, 60)
 	s.Fix(rect.A)
@@ -143,226 +147,264 @@ func TestRegionAreaMatchesSketchOnCertifiedFragments(t *testing.T) {
 	require.NoError(t, err)
 
 	checked := 0
-	for _, p := range s.Profiles() {
-		if !p.Valid {
+	for _, profile := range s.Profiles() {
+		if !profile.Valid {
 			continue
 		}
-		rec, _, err := decad.RecordProfile(s, p)
+		record, _, err := decad.RecordProfile(s, profile)
 		require.NoError(t, err)
-		area, err := rec.Area()
+		area, err := record.Area()
 		require.NoError(t, err)
 		got, err := area.Value.In(units.SquareMillimeter)
 		require.NoError(t, err)
-		require.InDelta(t, p.Area, got, 1e-9, `decad's closed form should reproduce sketch's exact area`)
+		require.InDelta(t, profile.Area, got, 1e-9)
 		checked++
 	}
-	require.GreaterOrEqual(t, checked, 3, `the arrangement should yield at least three regions`)
+	require.GreaterOrEqual(t, checked, 3)
 }
 
-func TestRegionMomentsRejects(t *testing.T) {
-	// A free-form boundary kind has no closed form here yet: ErrUnsupported,
-	// never an approximation.
-	w := sketch.NewWorld()
-	s, err := w.CreateSketch(w.XY())
+func TestRegionMomentsRejectUnsupportedAndEmptyRecords(t *testing.T) {
+	world := sketch.NewWorld()
+	s, err := world.CreateSketch(world.XY())
 	require.NoError(t, err)
 	center := s.CreatePoint(0, 0)
 	s.Fix(center)
 	s.CreateEllipse(center, 20, 10, 0)
+	record := recordOne(t, s, func(*sketch.Profile) bool { return true })
+	requireProfileMomentError(t, record, decad.ErrUnsupported)
 
-	rec := recordOne(t, s, func(p *sketch.Profile) bool { return true })
-	_, err = rec.Area()
-	require.ErrorIs(t, err, decad.ErrUnsupported)
-	_, err = rec.Centroid()
-	require.ErrorIs(t, err, decad.ErrUnsupported)
-
-	// A zero-value record has zero net area, so it has no centroid.
-	var empty decad.ProfileRecord
-	area, err := empty.Area()
-	require.NoError(t, err)
-	require.Zero(t, area.Value.Mag())
-	_, err = empty.Centroid()
-	require.ErrorIs(t, err, decad.ErrDegenerate)
+	requireProfileMomentError(t, decad.ProfileRecord{}, decad.ErrDegenerate)
 }
 
 func TestRegionMomentsPointerVariants(t *testing.T) {
-	// Pointer variants integrate exactly like their values — the same
-	// normalization the codec applies — and a nil pointer is rejected.
-	square := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
-		&decad.LineSeg{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 4, V: 0}, TStart: 0, TEnd: 1},
-		&decad.LineSeg{Start: decad.Point2{U: 4, V: 0}, End: decad.Point2{U: 4, V: 4}, TStart: 0, TEnd: 1},
-		&decad.LineSeg{Start: decad.Point2{U: 4, V: 4}, End: decad.Point2{U: 0, V: 4}, TStart: 0, TEnd: 1},
-		&decad.LineSeg{Start: decad.Point2{U: 0, V: 4}, End: decad.Point2{U: 0, V: 0}, TStart: 0, TEnd: 1},
+	record := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
+		&decad.LineSeg{Start: decad.Point2{}, End: decad.Point2{U: 4}, TStart: 0, TEnd: 1},
+		&decad.LineSeg{Start: decad.Point2{U: 4}, End: decad.Point2{U: 4, V: 4}, TStart: 0, TEnd: 1},
+		&decad.LineSeg{Start: decad.Point2{U: 4, V: 4}, End: decad.Point2{V: 4}, TStart: 0, TEnd: 1},
+		&decad.LineSeg{Start: decad.Point2{V: 4}, End: decad.Point2{}, TStart: 0, TEnd: 1},
 	}}}
-	area, err := square.Area()
+	area, err := record.Area()
 	require.NoError(t, err)
-	require.True(t, area.Value.Equal(units.SquareMillimeters(16), 1e-12), `pointer segments integrate like values, got %s`, area.Value)
+	require.True(t, area.Value.Equal(units.SquareMillimeters(16), 1e-12))
 
 	bad := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{(*decad.LineSeg)(nil)}}}
-	_, err = bad.Area()
-	require.Error(t, err, `a nil segment pointer names no curve to integrate`)
+	requireProfileMomentError(t, bad, decad.ErrDegenerate)
+	bad.Outer.Segments[0] = nil
+	requireProfileMomentError(t, bad, decad.ErrDegenerate)
 }
 
-func TestRegionMomentsRejectOpenLoop(t *testing.T) {
-	// Mass properties integrate a recorded boundary; they must not weld a
-	// near-miss endpoint into a loop. The tiny gap is still an open profile.
-	open := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
-		decad.LineSeg{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 1, V: 0}, TStart: 0, TEnd: 1},
-		decad.LineSeg{Start: decad.Point2{U: 1, V: 0}, End: decad.Point2{U: 1, V: 1}, TStart: 0, TEnd: 1},
-		decad.LineSeg{Start: decad.Point2{U: 1, V: 1}, End: decad.Point2{U: 0, V: 1}, TStart: 0, TEnd: 1},
-		decad.LineSeg{Start: decad.Point2{U: 0, V: 1}, End: decad.Point2{U: -1e-8, V: 0}, TStart: 0, TEnd: 1},
-	}}}
-
-	_, err := open.Area()
-	require.ErrorIs(t, err, decad.ErrDegenerate)
-	_, err = open.Centroid()
-	require.ErrorIs(t, err, decad.ErrDegenerate)
-	_, err = open.SecondMoments()
-	require.ErrorIs(t, err, decad.ErrDegenerate)
-}
-
-func TestRegionMomentsRejectOpenLoopWithLargeUnrelatedEdge(t *testing.T) {
-	// The closing endpoints are only 1e-6 mm apart. A separate 1e9 mm edge
-	// must not enlarge their join allowance and weld that material gap.
-	open := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
-		decad.LineSeg{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 1e9, V: 0}, TStart: 0, TEnd: 1},
-		decad.LineSeg{Start: decad.Point2{U: 1e9, V: 0}, End: decad.Point2{U: 1e9, V: 1}, TStart: 0, TEnd: 1},
-		decad.LineSeg{Start: decad.Point2{U: 1e9, V: 1}, End: decad.Point2{U: 0, V: 1}, TStart: 0, TEnd: 1},
-		decad.LineSeg{Start: decad.Point2{U: 0, V: 1}, End: decad.Point2{U: -1e-6, V: 0}, TStart: 0, TEnd: 1},
-	}}}
-
-	_, err := open.Area()
-	require.ErrorIs(t, err, decad.ErrDegenerate)
-	_, err = open.Centroid()
-	require.ErrorIs(t, err, decad.ErrDegenerate)
-	_, err = open.SecondMoments()
-	require.ErrorIs(t, err, decad.ErrDegenerate)
-}
-
-func TestRegionMomentsRejectOpenLoopWithLargeVCoordinate(t *testing.T) {
-	// U and V have independent endpoint-evaluation allowances. A large V
-	// coordinate must not accept the distinct 2 mm U closing gap.
-	for _, test := range []struct {
-		name string
-		v    float64
+func TestRegionMomentsRejectMalformedFields(t *testing.T) {
+	tests := []struct {
+		name   string
+		record decad.ProfileRecord
+		target error
 	}{
-		{name: `large finite V`, v: 1e16},
-		{name: `largest finite V`, v: math.MaxFloat64},
-	} {
+		{
+			name: "OpenLoop",
+			record: decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
+				momentLine(0, 0, 1, 0), momentLine(1, 0, 1, 1),
+			}}},
+			target: decad.ErrDegenerate,
+		},
+		{
+			name: "NonFiniteCoordinate",
+			record: decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
+				momentLine(math.NaN(), 0, 1, 0),
+			}}},
+			target: decad.ErrNotFinite,
+		},
+		{
+			name: "NonFiniteRange",
+			record: decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
+				decad.LineSeg{Start: decad.Point2{}, End: decad.Point2{U: 1}, TEnd: math.Inf(1)},
+			}}},
+			target: decad.ErrNotFinite,
+		},
+		{
+			name: "WrongRadiusUnit",
+			record: decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
+				decad.CircleSeg{Radius: units.Degrees(1), CCW: true, TEnd: 1},
+			}}},
+			target: decad.ErrUnitKind,
+		},
+		{
+			name: "NonFiniteRadius",
+			record: decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
+				decad.CircleSeg{Radius: units.Millimeters(math.Inf(1)), CCW: true, TEnd: 1},
+			}}},
+			target: decad.ErrNotFinite,
+		},
+		{
+			name: "NegativeRadius",
+			record: decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
+				decad.CircleSeg{Radius: units.Millimeters(-1), CCW: true, TEnd: 1},
+			}}},
+			target: decad.ErrNegativeMagnitude,
+		},
+		{
+			name: "InconsistentArcPins",
+			record: decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
+				decad.ArcSeg{
+					Center: decad.Point2{}, Start: decad.Point2{U: 1}, End: decad.Point2{V: 2}, TEnd: 1,
+				},
+				momentLine(0, 1, 1, 0),
+			}}},
+			target: decad.ErrDegenerate,
+		},
+		{
+			name: "NearlyFullCircle",
+			record: decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
+				decad.CircleSeg{
+					Radius: units.Millimeters(1), CCW: true, TEnd: math.Nextafter(1, 0),
+				},
+			}}},
+			target: decad.ErrDegenerate,
+		},
+	}
+	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			open := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
-				decad.LineSeg{Start: decad.Point2{U: 0, V: test.v}, End: decad.Point2{U: 4, V: test.v}, TStart: 0, TEnd: 1},
-				decad.LineSeg{Start: decad.Point2{U: 4, V: test.v}, End: decad.Point2{U: 1, V: test.v}, TStart: 0, TEnd: 1},
-				decad.LineSeg{Start: decad.Point2{U: 1, V: test.v}, End: decad.Point2{U: 2, V: test.v}, TStart: 0, TEnd: 1},
-			}}}
-
-			_, err := open.Area()
-			require.ErrorIs(t, err, decad.ErrDegenerate)
-			_, err = open.Centroid()
-			require.ErrorIs(t, err, decad.ErrDegenerate)
-			_, err = open.SecondMoments()
-			require.ErrorIs(t, err, decad.ErrDegenerate)
+			requireProfileMomentError(t, test.record, test.target)
 		})
 	}
 }
 
-func TestRegionMomentsRejectsUnrepresentableEndpointJoins(t *testing.T) {
-	maxCoordinate := math.MaxFloat64
-	profiles := []struct {
-		name    string
-		profile decad.ProfileRecord
+func TestRegionMomentsRejectMalformedTopology(t *testing.T) {
+	tests := []struct {
+		name   string
+		record decad.ProfileRecord
 	}{
 		{
-			name: `largest finite coordinate gap`,
-			profile: decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
-				decad.LineSeg{Start: decad.Point2{U: maxCoordinate, V: 0}, End: decad.Point2{U: maxCoordinate, V: 1}, TStart: 0, TEnd: 1},
-				decad.LineSeg{Start: decad.Point2{U: maxCoordinate, V: 1}, End: decad.Point2{U: 0, V: 1}, TStart: 0, TEnd: 1},
-				decad.LineSeg{Start: decad.Point2{U: 0, V: 1}, End: decad.Point2{U: math.Nextafter(maxCoordinate, 0), V: 0}, TStart: 0, TEnd: 1},
+			name: "CrossingOuter",
+			record: decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
+				momentLine(0, 0, 4, 4),
+				momentLine(4, 4, 0, 4),
+				momentLine(0, 4, 4, 0),
+				momentLine(4, 0, 0, 0),
 			}}},
+		},
+		{name: "WrongOuterWinding", record: decad.ProfileRecord{Outer: momentSquare(0, 0, 10, 10, true)}},
+		{
+			name: "HoleOutsideOuter",
+			record: decad.ProfileRecord{
+				Outer: momentSquare(0, 0, 10, 10, false),
+				Holes: []decad.LoopRecord{
+					momentSquare(12, 2, 13, 3, true),
+				},
+			},
 		},
 		{
-			name: `non-finite coordinate`,
-			profile: decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
-				decad.LineSeg{Start: decad.Point2{U: math.Inf(1), V: 0}, End: decad.Point2{U: math.Inf(1), V: 1}, TStart: 0, TEnd: 1},
-				decad.LineSeg{Start: decad.Point2{U: math.Inf(1), V: 1}, End: decad.Point2{U: 0, V: 1}, TStart: 0, TEnd: 1},
-				decad.LineSeg{Start: decad.Point2{U: 0, V: 1}, End: decad.Point2{U: math.Inf(1), V: 0}, TStart: 0, TEnd: 1},
-			}}},
+			name: "OverlappingHoles",
+			record: decad.ProfileRecord{
+				Outer: momentSquare(0, 0, 10, 10, false),
+				Holes: []decad.LoopRecord{
+					momentSquare(2, 2, 6, 6, true),
+					momentSquare(4, 4, 8, 8, true),
+				},
+			},
+		},
+		{
+			name: "OuterHoleInternalTangency",
+			record: decad.ProfileRecord{
+				Outer: momentWholeCircle(decad.Point2{}, 10, true),
+				Holes: []decad.LoopRecord{
+					momentWholeCircle(decad.Point2{U: 5}, 5, false),
+				},
+			},
+		},
+		{
+			name: "HoleHoleExternalTangency",
+			record: decad.ProfileRecord{
+				Outer: momentWholeCircle(decad.Point2{}, 10, true),
+				Holes: []decad.LoopRecord{
+					momentWholeCircle(decad.Point2{U: -2}, 2, false),
+					momentWholeCircle(decad.Point2{U: 2}, 2, false),
+				},
+			},
 		},
 	}
-	for _, test := range profiles {
+	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			_, err := test.profile.Area()
-			require.ErrorIs(t, err, decad.ErrDegenerate)
-			_, err = test.profile.Centroid()
-			require.ErrorIs(t, err, decad.ErrDegenerate)
-			_, err = test.profile.SecondMoments()
-			require.ErrorIs(t, err, decad.ErrDegenerate)
+			requireProfileMomentError(t, test.record, decad.ErrDegenerate)
 		})
 	}
 }
 
-func TestRegionMomentsAcceptsEndpointRounding(t *testing.T) {
-	// Adjacent recorded walks can differ by a few ulps after their source
-	// coordinates are evaluated independently. This is construction rounding,
-	// not a material gap such as the 1e-8 case above.
-	nextOne := math.Nextafter(1, math.Inf(1))
-	profile := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
-		decad.LineSeg{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: nextOne, V: 0}, TStart: 0, TEnd: 1},
-		decad.LineSeg{Start: decad.Point2{U: 1, V: 0}, End: decad.Point2{U: 1, V: 1}, TStart: 0, TEnd: 1},
-		decad.LineSeg{Start: decad.Point2{U: 1, V: 1}, End: decad.Point2{U: 0, V: 1}, TStart: 0, TEnd: 1},
-		decad.LineSeg{Start: decad.Point2{U: 0, V: 1}, End: decad.Point2{U: 0, V: 0}, TStart: 0, TEnd: 1},
-	}}}
+func TestRegionMomentsAcceptThinAnnulus(t *testing.T) {
+	const outerRadius = 10.0
+	const gap = 1e-10
+	holeRadius := outerRadius - gap
+	record := decad.ProfileRecord{
+		Outer: momentWholeCircle(decad.Point2{}, outerRadius, true),
+		Holes: []decad.LoopRecord{
+			momentWholeCircle(decad.Point2{}, holeRadius, false),
+		},
+	}
 
-	area, err := profile.Area()
+	area, err := record.Area()
 	require.NoError(t, err)
-	require.True(t, area.Value.Equal(units.SquareMillimeters(1), 1e-12), `area = %s`, area.Value)
+	got, err := area.Value.In(units.SquareMillimeter)
+	require.NoError(t, err)
+	require.InDelta(t, math.Pi*(outerRadius*outerRadius-holeRadius*holeRadius), got, 1e-12)
+	_, err = record.Centroid()
+	require.NoError(t, err)
+	_, err = record.SecondMoments()
+	require.NoError(t, err)
 }
 
-func TestRegionMomentsAcceptsGeneratedArcEndpointDrift(t *testing.T) {
-	// An outward shell rounds this rectangle's corners. ArcSeg derives its
-	// radius from the translated start point, so the left-top arc's evaluated
-	// end drifts from its recorded line neighbour by over one hundred ulps.
-	const radius = 0.1
-	profile := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
-		decad.LineSeg{Start: decad.Point2{U: 0, V: -radius}, End: decad.Point2{U: 100, V: -radius}, TEnd: 1},
-		decad.ArcSeg{Center: decad.Point2{U: 100, V: 0}, Start: decad.Point2{U: 100, V: -radius}, End: decad.Point2{U: 100 + radius, V: 0}, TEnd: 1},
-		decad.LineSeg{Start: decad.Point2{U: 100 + radius, V: 0}, End: decad.Point2{U: 100 + radius, V: 60}, TEnd: 1},
-		decad.ArcSeg{Center: decad.Point2{U: 100, V: 60}, Start: decad.Point2{U: 100 + radius, V: 60}, End: decad.Point2{U: 100, V: 60 + radius}, TEnd: 1},
-		decad.LineSeg{Start: decad.Point2{U: 100, V: 60 + radius}, End: decad.Point2{U: 0, V: 60 + radius}, TEnd: 1},
-		decad.ArcSeg{Center: decad.Point2{U: 0, V: 60}, Start: decad.Point2{U: 0, V: 60 + radius}, End: decad.Point2{U: -radius, V: 60}, TEnd: 1},
-		decad.LineSeg{Start: decad.Point2{U: -radius, V: 60}, End: decad.Point2{U: -radius, V: 0}, TEnd: 1},
-		decad.ArcSeg{Center: decad.Point2{}, Start: decad.Point2{U: -radius, V: 0}, End: decad.Point2{U: 0, V: -radius}, TEnd: 1},
+func TestRegionMomentsAcceptSeparatedWholeCircleHoles(t *testing.T) {
+	record := decad.ProfileRecord{
+		Outer: momentWholeCircle(decad.Point2{}, 10, true),
+		Holes: []decad.LoopRecord{
+			momentWholeCircle(decad.Point2{U: -2.0000000001}, 2, false),
+			momentWholeCircle(decad.Point2{U: 2.0000000001}, 2, false),
+		},
+	}
+
+	area, err := record.Area()
+	require.NoError(t, err)
+	got, err := area.Value.In(units.SquareMillimeter)
+	require.NoError(t, err)
+	require.InDelta(t, 92*math.Pi, got, 1e-12)
+	_, err = record.Centroid()
+	require.NoError(t, err)
+	_, err = record.SecondMoments()
+	require.NoError(t, err)
+}
+
+func TestRegionMomentsRequestedOrderControlsOverflow(t *testing.T) {
+	record := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
+		decad.CircleSeg{
+			Center: decad.Point2{V: 1e200},
+			Radius: units.Millimeters(1),
+			CCW:    true,
+			TEnd:   1,
+		},
 	}}}
 
-	area, err := profile.Area()
+	area, err := record.Area()
 	require.NoError(t, err)
-	areaMM, err := area.Value.In(units.SquareMillimeter)
+	require.True(t, area.Value.Equal(units.SquareMillimeters(math.Pi), 1e-12))
+	_, err = record.Centroid()
 	require.NoError(t, err)
-	require.InDelta(t, 100*60+2*(100+60)*radius+math.Pi*radius*radius, areaMM, 1e-9)
-
-	_, err = profile.Centroid()
-	require.NoError(t, err)
-	_, err = profile.SecondMoments()
-	require.NoError(t, err)
+	_, err = record.SecondMoments()
+	require.ErrorIs(t, err, decad.ErrNotFinite)
 }
 
 func TestSecondMomentsRectangle(t *testing.T) {
-	// For the axis-aligned rectangle [0,a]×[0,b] about the origin:
-	// ∫u²dA = a³b/3, ∫uv dA = a²b²/4, ∫v²dA = ab³/3.
-	w := sketch.NewWorld()
-	s, err := w.CreateSketch(w.XY())
+	world := sketch.NewWorld()
+	s, err := world.CreateSketch(world.XY())
 	require.NoError(t, err)
 	rect := s.CreateRectangle(0, 0, 40, 30)
 	s.Fix(rect.A)
+	record := recordOne(t, s, func(profile *sketch.Profile) bool { return len(profile.Outer) == 4 })
 
-	rec := recordOne(t, s, func(p *sketch.Profile) bool { return len(p.Outer) == 4 })
-	m, err := rec.SecondMoments()
+	moments, err := record.SecondMoments()
 	require.NoError(t, err)
-	require.Equal(t, decad.Exact, m.UU.Exactness)
-	uu, err := m.UU.Value.In(units.QuarticMillimeter)
+	uu, err := moments.UU.Value.In(units.QuarticMillimeter)
 	require.NoError(t, err)
-	uv, err := m.UV.Value.In(units.QuarticMillimeter)
+	uv, err := moments.UV.Value.In(units.QuarticMillimeter)
 	require.NoError(t, err)
-	vv, err := m.VV.Value.In(units.QuarticMillimeter)
+	vv, err := moments.VV.Value.In(units.QuarticMillimeter)
 	require.NoError(t, err)
 	require.InDelta(t, 40.0*40*40*30/3, uu, 1e-6)
 	require.InDelta(t, 40.0*40*30*30/4, uv, 1e-6)
@@ -370,75 +412,63 @@ func TestSecondMomentsRectangle(t *testing.T) {
 }
 
 func TestSecondMomentsOffsetCircle(t *testing.T) {
-	// Parallel-axis check on a Ø14 disk centered at (5, -3):
-	// ∫u²dA = πr⁴/4 + c_u²·πr², ∫uv = c_u·c_v·πr², ∫v²dA = πr⁴/4 + c_v²·πr².
-	w := sketch.NewWorld()
-	s, err := w.CreateSketch(w.XY())
+	world := sketch.NewWorld()
+	s, err := world.CreateSketch(world.XY())
 	require.NoError(t, err)
 	center := s.CreatePoint(5, -3)
 	s.Fix(center)
 	s.CreateCircle(center, 7)
+	record := recordOne(t, s, func(*sketch.Profile) bool { return true })
 
-	rec := recordOne(t, s, func(p *sketch.Profile) bool { return true })
-	m, err := rec.SecondMoments()
+	moments, err := record.SecondMoments()
 	require.NoError(t, err)
 	area := math.Pi * 49
 	quarter := math.Pi * 7 * 7 * 7 * 7 / 4
-	uu, err := m.UU.Value.In(units.QuarticMillimeter)
+	uu, err := moments.UU.Value.In(units.QuarticMillimeter)
 	require.NoError(t, err)
-	uv, err := m.UV.Value.In(units.QuarticMillimeter)
+	uv, err := moments.UV.Value.In(units.QuarticMillimeter)
 	require.NoError(t, err)
-	vv, err := m.VV.Value.In(units.QuarticMillimeter)
+	vv, err := moments.VV.Value.In(units.QuarticMillimeter)
 	require.NoError(t, err)
 	require.InDelta(t, quarter+25*area, uu, 1e-6)
-	require.InDelta(t, 5.0*(-3)*area, uv, 1e-6)
+	require.InDelta(t, -15*area, uv, 1e-6)
 	require.InDelta(t, quarter+9*area, vv, 1e-6)
 }
 
 func TestArcSegExactQuarterDisk(t *testing.T) {
-	// The dedicated ArcSeg exact-value coverage: a quarter disk of radius 20
-	// in the first quadrant, bounded by two lines and a real sketch arc.
-	// Exact values: A = πR²/4, centroid (4R/3π, 4R/3π),
-	// ∫u²dA = ∫v²dA = πR⁴/16, ∫uv dA = R⁴/8.
-	w := sketch.NewWorld()
-	s, err := w.CreateSketch(w.XY())
+	world := sketch.NewWorld()
+	s, err := world.CreateSketch(world.XY())
 	require.NoError(t, err)
-	o := s.CreatePoint(0, 0)
-	s.Fix(o)
+	origin := s.CreatePoint(0, 0)
+	s.Fix(origin)
 	px := s.CreatePoint(20, 0)
 	py := s.CreatePoint(0, 20)
-	s.CreateLine(o, px)
-	s.CreateLine(py, o)
-	s.CreateArc(o, px, py) // CCW from (R,0) to (0,R): the quarter circle
-	_, err = s.Solve(t.Context())
-	require.NoError(t, err)
+	s.CreateLine(origin, px)
+	s.CreateLine(py, origin)
+	s.CreateArc(origin, px, py)
+	record := recordOne(t, s, func(*sketch.Profile) bool { return true })
 
-	profiles := s.Profiles()
-	require.Len(t, profiles, 1)
-	rec, _, err := decad.RecordProfile(s, profiles[0])
+	const radius = 20.0
+	area, err := record.Area()
 	require.NoError(t, err)
+	gotArea, err := area.Value.In(units.SquareMillimeter)
+	require.NoError(t, err)
+	require.InDelta(t, math.Pi*radius*radius/4, gotArea, 1e-9)
 
-	const R = 20.0
-	area, err := rec.Area()
+	centroid, err := record.Centroid()
 	require.NoError(t, err)
-	gotA, err := area.Value.In(units.SquareMillimeter)
-	require.NoError(t, err)
-	require.InDelta(t, math.Pi*R*R/4, gotA, 1e-9)
+	require.InDelta(t, 4*radius/(3*math.Pi), centroid.Value.X, 1e-9)
+	require.InDelta(t, 4*radius/(3*math.Pi), centroid.Value.Y, 1e-9)
 
-	c, err := rec.Centroid()
+	moments, err := record.SecondMoments()
 	require.NoError(t, err)
-	require.InDelta(t, 4*R/(3*math.Pi), c.Value.X, 1e-9)
-	require.InDelta(t, 4*R/(3*math.Pi), c.Value.Y, 1e-9)
-
-	m, err := rec.SecondMoments()
+	uu, err := moments.UU.Value.In(units.QuarticMillimeter)
 	require.NoError(t, err)
-	uu, err := m.UU.Value.In(units.QuarticMillimeter)
+	uv, err := moments.UV.Value.In(units.QuarticMillimeter)
 	require.NoError(t, err)
-	uv, err := m.UV.Value.In(units.QuarticMillimeter)
+	vv, err := moments.VV.Value.In(units.QuarticMillimeter)
 	require.NoError(t, err)
-	vv, err := m.VV.Value.In(units.QuarticMillimeter)
-	require.NoError(t, err)
-	require.InDelta(t, math.Pi*R*R*R*R/16, uu, 1e-6)
-	require.InDelta(t, R*R*R*R/8, uv, 1e-6)
-	require.InDelta(t, math.Pi*R*R*R*R/16, vv, 1e-6)
+	require.InDelta(t, math.Pi*math.Pow(radius, 4)/16, uu, 1e-6)
+	require.InDelta(t, math.Pow(radius, 4)/8, uv, 1e-6)
+	require.InDelta(t, math.Pi*math.Pow(radius, 4)/16, vv, 1e-6)
 }

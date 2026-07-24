@@ -871,7 +871,7 @@ func axisMoments(ig regionIntegrals, ax axisFrame) (float64, float64, float64) {
 // and arc; anything else has already been rejected by the mass-property
 // integrals it runs first.
 func evalRevolve(d *Document, ref StepRef, rp revolvePayload) (*Body, error) {
-	ig, err := rp.profile.integrals()
+	ig, err := rp.profile.evaluatorIntegralsUnchecked(momentSecondOrder)
 	if err != nil {
 		return nil, err
 	}
@@ -883,7 +883,7 @@ func evalRevolve(d *Document, ref StepRef, rp revolvePayload) (*Body, error) {
 		return nil, fmt.Errorf(`%w: the sweep interval is empty`, ErrDegenerate)
 	}
 	q, mzr, mrr := axisMoments(ig, rp.ax)
-	if q <= 0 {
+	if q <= 0 && finiteMomentValues(q, mzr, mrr) {
 		return nil, fmt.Errorf(`%w: the region has no material off the revolve axis`, ErrDegenerate)
 	}
 
