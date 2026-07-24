@@ -153,15 +153,21 @@ func TestRecipeUnmarshalStructuralCollectionLimits(t *testing.T) {
 
 	t.Run("inputs exact limit", func(t *testing.T) {
 		var got Recipe
-		err := json.Unmarshal([]byte(`{"steps":[{"op":"extrude"},{"op":"extrude","inputs":[0]}]}`), &got)
+		err := json.Unmarshal([]byte(`{"steps":[{"op":"extrude","inputs":[0]}]}`), &got)
+		require.NoError(t, err)
+		require.Equal(t, []StepRef{0}, got.Steps[0].Inputs)
+
+		got = Recipe{}
+		err = json.Unmarshal([]byte(`{"steps":[{"op":"extrude"},{"op":"extrude","inputs":[0]}]}`), &got)
 		require.NoError(t, err)
 		require.Equal(t, []StepRef{0}, got.Steps[1].Inputs)
 	})
 
 	t.Run("inputs one over", func(t *testing.T) {
 		got := original
-		err := json.Unmarshal([]byte(`{"steps":[{"op":"extrude"},{"op":"extrude","inputs":[0,0]}]}`), &got)
-		requireRecipeLimitPath(t, err, "steps[1].inputs[1]", 1)
+		inputs := strings.TrimSuffix(strings.Repeat("0,", maxRecipeInputsPerStep), ",") + ",0"
+		err := json.Unmarshal([]byte(`{"steps":[{"op":"extrude","inputs":[`+inputs+`]}]}`), &got)
+		requireRecipeLimitPath(t, err, "steps[0].inputs[4096]", 0)
 		require.Equal(t, original, got)
 	})
 

@@ -24,6 +24,8 @@ type recipeDecodeLimits struct {
 	MaxTotalStringBytes int
 }
 
+const maxRecipeInputsPerStep = 4_096
+
 func defaultRecipeDecodeLimits() recipeDecodeLimits {
 	return recipeDecodeLimits{
 		MaxBytes:            16 << 20,
@@ -311,10 +313,7 @@ func recipeJSONArrayElement(role recipeJSONRole) (recipeJSONRole, recipeJSONLimi
 func recipeJSONArrayHardLimit(role recipeJSONRole, stepIndex int) (int, string, bool) {
 	switch role {
 	case recipeJSONInputs:
-		if stepIndex < 0 {
-			return 0, "inputs per step", true
-		}
-		return stepIndex, "inputs per step", true
+		return maxRecipeInputsPerStep, "inputs per step", true
 	case recipeJSONValues:
 		return 1, "values per step", true
 	default:
