@@ -71,42 +71,42 @@ func TestSelectorCodecRejections(t *testing.T) {
 	// The set is closed: unknown and missing tags are rejected, at the
 	// selector level and inside each predicate tier.
 	var step decad.Step
-	require.Error(t, json.Unmarshal([]byte(`{"op":"fillet","selectors":[{"kind":"vertices","preds":[]}]}`), &step),
+	require.Error(t, json.Unmarshal([]byte(`{"op":"fillet","inputs":[0],"selectors":[{"kind":"vertices","preds":[]}],"values":["1 mm"]}`), &step),
 		`an unknown selector kind is rejected`)
-	require.Error(t, json.Unmarshal([]byte(`{"op":"fillet","selectors":[{"preds":[]}]}`), &step),
+	require.Error(t, json.Unmarshal([]byte(`{"op":"fillet","inputs":[0],"selectors":[{"preds":[]}],"values":["1 mm"]}`), &step),
 		`a selector with no kind tag is malformed`)
-	require.Error(t, json.Unmarshal([]byte(`{"op":"fillet","selectors":[{"kind":"edges","preds":[{"kind":"glowing"}]}]}`), &step),
+	require.Error(t, json.Unmarshal([]byte(`{"op":"fillet","inputs":[0],"selectors":[{"kind":"edges","preds":[{"kind":"glowing"}]}],"values":["1 mm"]}`), &step),
 		`an unknown edge predicate kind is rejected`)
-	require.Error(t, json.Unmarshal([]byte(`{"op":"shell","selectors":[{"kind":"faces","preds":[{"kind":"convex"}]}]}`), &step),
+	require.Error(t, json.Unmarshal([]byte(`{"op":"shell","inputs":[0],"selectors":[{"kind":"faces","preds":[{"kind":"convex"}]}],"opts":{"kind":"shell","sense":"inward"},"values":["1 mm"]}`), &step),
 		`the predicate tiers are disjoint: an edge predicate is not a face predicate`)
-	require.Error(t, json.Unmarshal([]byte(`{"op":"fillet","selectors":[{"kind":"edges","preds":[{}]}]}`), &step),
+	require.Error(t, json.Unmarshal([]byte(`{"op":"fillet","inputs":[0],"selectors":[{"kind":"edges","preds":[{}]}],"values":["1 mm"]}`), &step),
 		`a predicate with no kind tag is malformed`)
 
 	// Absent fields are malformed, never silently zeroed.
-	require.Error(t, json.Unmarshal([]byte(`{"op":"fillet","selectors":[{"kind":"edges"}]}`), &step),
+	require.Error(t, json.Unmarshal([]byte(`{"op":"fillet","inputs":[0],"selectors":[{"kind":"edges"}],"values":["1 mm"]}`), &step),
 		`a query with no preds is malformed, never silently match-all`)
-	require.Error(t, json.Unmarshal([]byte(`{"op":"fillet","selectors":[{"kind":"edges","preds":[{"kind":"parallel_to"}]}]}`), &step),
+	require.Error(t, json.Unmarshal([]byte(`{"op":"fillet","inputs":[0],"selectors":[{"kind":"edges","preds":[{"kind":"parallel_to"}]}],"values":["1 mm"]}`), &step),
 		`a parallel-to predicate with no dir is malformed`)
-	require.Error(t, json.Unmarshal([]byte(`{"op":"fillet","selectors":[{"kind":"edges","preds":[{"kind":"longer_than"}]}]}`), &step),
+	require.Error(t, json.Unmarshal([]byte(`{"op":"fillet","inputs":[0],"selectors":[{"kind":"edges","preds":[{"kind":"longer_than"}]}],"values":["1 mm"]}`), &step),
 		`a longer-than predicate with no l is malformed`)
-	require.Error(t, json.Unmarshal([]byte(`{"op":"fillet","selectors":[{"kind":"edges","preds":[{"kind":"created_by"}]}]}`), &step),
+	require.Error(t, json.Unmarshal([]byte(`{"op":"fillet","inputs":[0],"selectors":[{"kind":"edges","preds":[{"kind":"created_by"}]}],"values":["1 mm"]}`), &step),
 		`a created-by predicate with no ref is malformed`)
-	require.Error(t, json.Unmarshal([]byte(`{"op":"fillet","selectors":[{"kind":"edges","preds":[{"kind":"created_by","ref":{"step":1}}]}]}`), &step),
+	require.Error(t, json.Unmarshal([]byte(`{"op":"fillet","inputs":[0],"selectors":[{"kind":"edges","preds":[{"kind":"created_by","ref":{"step":1}}]}],"values":["1 mm"]}`), &step),
 		`a provenance ref with no role is malformed`)
-	require.Error(t, json.Unmarshal([]byte(`{"op":"shell","selectors":[{"kind":"faces","preds":[{"kind":"normal_to"}]}]}`), &step),
+	require.Error(t, json.Unmarshal([]byte(`{"op":"shell","inputs":[0],"selectors":[{"kind":"faces","preds":[{"kind":"normal_to"}]}],"opts":{"kind":"shell","sense":"inward"},"values":["1 mm"]}`), &step),
 		`a normal-to predicate with no dir is malformed`)
-	require.Error(t, json.Unmarshal([]byte(`{"op":"shell","selectors":[{"kind":"faces","preds":[{"kind":"face_created_by","ref":{"role":"capEnd"}}]}]}`), &step),
+	require.Error(t, json.Unmarshal([]byte(`{"op":"shell","inputs":[0],"selectors":[{"kind":"faces","preds":[{"kind":"face_created_by","ref":{"role":"capEnd"}}]}],"opts":{"kind":"shell","sense":"inward"},"values":["1 mm"]}`), &step),
 		`a provenance ref with no step is malformed`)
 	for _, data := range []string{
-		`{"op":"fillet","selectors":[{"kind":"edges","preds":[{"kind":"created_by","ref":{"step":0,"role":""}}]}]}`,
-		`{"op":"fillet","selectors":[{"kind":"edges","preds":[{"kind":"created_by","ref":{"step":-1,"role":"capStart"}}]}]}`,
-		`{"op":"shell","selectors":[{"kind":"faces","preds":[{"kind":"face_created_by","ref":{"step":0,"role":""}}]}]}`,
-		`{"op":"shell","selectors":[{"kind":"faces","preds":[{"kind":"face_created_by","ref":{"step":-1,"role":"capStart"}}]}]}`,
+		`{"op":"fillet","inputs":[0],"selectors":[{"kind":"edges","preds":[{"kind":"created_by","ref":{"step":0,"role":""}}]}],"values":["1 mm"]}`,
+		`{"op":"fillet","inputs":[0],"selectors":[{"kind":"edges","preds":[{"kind":"created_by","ref":{"step":-1,"role":"capStart"}}]}],"values":["1 mm"]}`,
+		`{"op":"shell","inputs":[0],"selectors":[{"kind":"faces","preds":[{"kind":"face_created_by","ref":{"step":0,"role":""}}]}],"opts":{"kind":"shell","sense":"inward"},"values":["1 mm"]}`,
+		`{"op":"shell","inputs":[0],"selectors":[{"kind":"faces","preds":[{"kind":"face_created_by","ref":{"step":-1,"role":"capStart"}}]}],"opts":{"kind":"shell","sense":"inward"},"values":["1 mm"]}`,
 	} {
 		err := json.Unmarshal([]byte(data), &step)
 		require.ErrorIs(t, err, decad.ErrDegenerate)
 	}
-	require.Error(t, json.Unmarshal([]byte(`{"op":"fillet","selectors":[{"kind":"edges","preds":[],"exactly":4,"at_least":1}]}`), &step),
+	require.Error(t, json.Unmarshal([]byte(`{"op":"fillet","inputs":[0],"selectors":[{"kind":"edges","preds":[],"exactly":4,"at_least":1}],"values":["1 mm"]}`), &step),
 		`a query carries at most one cardinality assertion`)
 
 	// A zero-value predicate names nothing: only the constructors build one.
@@ -127,11 +127,11 @@ func TestSelectorCodecRejectsOutOfRangeNegativeProvenanceSteps(t *testing.T) {
 	}{
 		{
 			name: "edge created-by",
-			data: `{"op":"fillet","selectors":[{"kind":"edges","preds":[{"kind":"created_by","ref":{"step":-9223372036854775809,"role":"capStart"}}]}]}`,
+			data: `{"op":"fillet","inputs":[0],"selectors":[{"kind":"edges","preds":[{"kind":"created_by","ref":{"step":-9223372036854775809,"role":"capStart"}}]}],"values":["1 mm"]}`,
 		},
 		{
 			name: "face created-by",
-			data: `{"op":"shell","selectors":[{"kind":"faces","preds":[{"kind":"face_created_by","ref":{"step":-9223372036854775809,"role":"capStart"}}]}]}`,
+			data: `{"op":"shell","inputs":[0],"selectors":[{"kind":"faces","preds":[{"kind":"face_created_by","ref":{"step":-9223372036854775809,"role":"capStart"}}]}],"opts":{"kind":"shell","sense":"inward"},"values":["1 mm"]}`,
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -149,27 +149,27 @@ func TestSelectorCodecRejectsNegativeProvenanceStepNumberForms(t *testing.T) {
 	}{
 		{
 			name: "edge created-by decimal",
-			data: `{"op":"fillet","selectors":[{"kind":"edges","preds":[{"kind":"created_by","ref":{"step":-1.0,"role":"capStart"}}]}]}`,
+			data: `{"op":"fillet","inputs":[0],"selectors":[{"kind":"edges","preds":[{"kind":"created_by","ref":{"step":-1.0,"role":"capStart"}}]}],"values":["1 mm"]}`,
 		},
 		{
 			name: "edge created-by exponent",
-			data: `{"op":"fillet","selectors":[{"kind":"edges","preds":[{"kind":"created_by","ref":{"step":-1e0,"role":"capStart"}}]}]}`,
+			data: `{"op":"fillet","inputs":[0],"selectors":[{"kind":"edges","preds":[{"kind":"created_by","ref":{"step":-1e0,"role":"capStart"}}]}],"values":["1 mm"]}`,
 		},
 		{
 			name: "edge created-by uppercase exponent",
-			data: `{"op":"fillet","selectors":[{"kind":"edges","preds":[{"kind":"created_by","ref":{"step":-1E+0,"role":"capStart"}}]}]}`,
+			data: `{"op":"fillet","inputs":[0],"selectors":[{"kind":"edges","preds":[{"kind":"created_by","ref":{"step":-1E+0,"role":"capStart"}}]}],"values":["1 mm"]}`,
 		},
 		{
 			name: "face created-by decimal",
-			data: `{"op":"shell","selectors":[{"kind":"faces","preds":[{"kind":"face_created_by","ref":{"step":-1.0,"role":"capStart"}}]}]}`,
+			data: `{"op":"shell","inputs":[0],"selectors":[{"kind":"faces","preds":[{"kind":"face_created_by","ref":{"step":-1.0,"role":"capStart"}}]}],"opts":{"kind":"shell","sense":"inward"},"values":["1 mm"]}`,
 		},
 		{
 			name: "face created-by exponent",
-			data: `{"op":"shell","selectors":[{"kind":"faces","preds":[{"kind":"face_created_by","ref":{"step":-1e0,"role":"capStart"}}]}]}`,
+			data: `{"op":"shell","inputs":[0],"selectors":[{"kind":"faces","preds":[{"kind":"face_created_by","ref":{"step":-1e0,"role":"capStart"}}]}],"opts":{"kind":"shell","sense":"inward"},"values":["1 mm"]}`,
 		},
 		{
 			name: "face created-by uppercase exponent",
-			data: `{"op":"shell","selectors":[{"kind":"faces","preds":[{"kind":"face_created_by","ref":{"step":-1E+0,"role":"capStart"}}]}]}`,
+			data: `{"op":"shell","inputs":[0],"selectors":[{"kind":"faces","preds":[{"kind":"face_created_by","ref":{"step":-1E+0,"role":"capStart"}}]}],"opts":{"kind":"shell","sense":"inward"},"values":["1 mm"]}`,
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

@@ -129,7 +129,7 @@ func TestMissingDirErrorWording(t *testing.T) {
 		t.Run(tc.kind, func(t *testing.T) {
 			var got decad.Step
 			err := json.Unmarshal(
-				[]byte(`{"op":"shell","selectors":[{"kind":"faces","preds":[{"kind":"`+tc.kind+`"}]}]}`),
+				[]byte(`{"op":"shell","inputs":[0],"selectors":[{"kind":"faces","preds":[{"kind":"`+tc.kind+`"}]}],"opts":{"kind":"shell","sense":"inward"},"values":["1 mm"]}`),
 				&got)
 			require.ErrorContains(t, err, tc.want)
 		})
@@ -151,7 +151,7 @@ func TestMalformedDirErrorWording(t *testing.T) {
 		t.Run(tc.kind, func(t *testing.T) {
 			var got decad.Step
 			err := json.Unmarshal(
-				[]byte(`{"op":"shell","selectors":[{"kind":"faces","preds":[{"kind":"`+tc.kind+`","dir":"bad"}]}]}`),
+				[]byte(`{"op":"shell","inputs":[0],"selectors":[{"kind":"faces","preds":[{"kind":"`+tc.kind+`","dir":"bad"}]}],"opts":{"kind":"shell","sense":"inward"},"values":["1 mm"]}`),
 				&got)
 			require.ErrorContains(t, err, tc.want)
 		})

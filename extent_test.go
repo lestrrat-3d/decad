@@ -70,17 +70,21 @@ func TestAngularExtentCodec(t *testing.T) {
 
 func TestEmptyExtentVariantCodec(t *testing.T) {
 	for _, test := range []struct {
-		name string
-		step decad.Step
-		bad  string
+		name     string
+		step     decad.Step
+		badField string
+		bad      json.RawMessage
 	}{
 		{
-			name: "full revolution",
-			step: func() decad.Step { s := validCodecStep(decad.OpRevolve); s.Angular = decad.FullRevolution{}; return s }(),
-			bad:  `{"op":"revolve","angular":{"kind":"full_revolution","a":"90 deg","dir":"against"}}`,
+			name:     "full revolution",
+			step:     func() decad.Step { s := validCodecStep(decad.OpRevolve); s.Angular = decad.FullRevolution{}; return s }(),
+			badField: "angular",
+			bad:      json.RawMessage(`{"kind":"full_revolution","a":"90 deg","dir":"against"}`),
 		},
 		{
-			name: "through-all side",
+			name:     "through-all side",
+			badField: "extent",
+			bad:      json.RawMessage(`{"kind":"two_sided","one":{"kind":"through_all_side","d":"2 mm"},"two":{"kind":"distance_side","d":"5 mm"}}`),
 			step: func() decad.Step {
 				s := validCodecStep(decad.OpExtrude)
 				s.Extent = decad.TwoSided{
@@ -89,7 +93,6 @@ func TestEmptyExtentVariantCodec(t *testing.T) {
 				}
 				return s
 			}(),
-			bad: `{"op":"extrude","extent":{"kind":"two_sided","one":{"kind":"through_all_side","d":"2 mm"},"two":{"kind":"distance_side","d":"5 mm"}}}`,
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -99,8 +102,13 @@ func TestEmptyExtentVariantCodec(t *testing.T) {
 			require.NoError(t, json.Unmarshal(buf, &got))
 			require.Equal(t, test.step, got)
 
+			var fields map[string]json.RawMessage
+			require.NoError(t, json.Unmarshal(buf, &fields))
+			fields[test.badField] = test.bad
+			badData, err := json.Marshal(fields)
+			require.NoError(t, err)
 			var bad decad.Step
-			err = json.Unmarshal([]byte(test.bad), &bad)
+			err = json.Unmarshal(badData, &bad)
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "unknown field")
 		})
