@@ -587,7 +587,7 @@ func decodeKnownStepPayloads(raw jsonStepDecode, op OpKind) error {
 	}
 	var selectors []json.RawMessage
 	if err := json.Unmarshal(raw.Selectors, &selectors); err != nil {
-		return nil
+		return err
 	}
 	for _, selector := range selectors {
 		if !knownTaggedPayload(selector, selKindEdges, selKindFaces) {
