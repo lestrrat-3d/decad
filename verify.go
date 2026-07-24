@@ -529,8 +529,9 @@ func resolveVerifyOptions(opts []VerifyOption) (verifyConfig, error) {
 // work can therefore grow with the two facet counts multiplied together, and
 // total work also grows with the number of unresolved body pairs. Large-model
 // callers should pass a context with a deadline chosen from representative
-// inputs. Cancellation returns ctx.Err() and a nil report; the document remains
-// unchanged.
+// inputs. After document and option validation, cancellation returns ctx.Err()
+// and a nil report; validation errors take precedence even when ctx is already
+// canceled. The document remains unchanged.
 func (d *Document) Verify(ctx context.Context, opts ...VerifyOption) (*Report, error) {
 	if d == nil {
 		return nil, fmt.Errorf(`%w: a nil document owns no model`, ErrDegenerate)

@@ -386,8 +386,8 @@ evaluator as `Suspect`.
 
 ### 7.2 Context and work
 
-`Verify` passes its context through the entire read-only path. Return
-`ctx.Err()` unchanged once canceled.
+`Verify` passes its context through the entire read-only path. After document
+and option validation, return `ctx.Err()` unchanged once canceled.
 
 Check cancellation:
 

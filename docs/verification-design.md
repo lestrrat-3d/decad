@@ -427,10 +427,12 @@ if err != nil {
 }
 ```
 
-When the context expires, `Verify` returns `ctx.Err()` unchanged and a nil
-report. The document remains unchanged, and the caller must not treat the
-interrupted call as a verification result. The context is the public work
-control; verification adds no separate work-limit or progress API.
+After the document and options have been validated, when the context expires,
+`Verify` returns `ctx.Err()` unchanged and a nil report. A document or option
+validation error takes precedence even when the context is already canceled.
+The document remains unchanged, and the caller must not treat the interrupted
+call as a verification result. The context is the public work control;
+verification adds no separate work-limit or progress API.
 
 ## 2. Tolerance — what "beyond the caller's tolerance" means
 
