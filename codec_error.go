@@ -76,11 +76,16 @@ func codecJSONErrorAt(data []byte, dst any, err error) error {
 		return nil
 	}
 	var pathErr *codecPathError
-	if errors.As(err, &pathErr) {
-		return err
-	}
-	if path := codecFailurePath(data, reflect.TypeOf(dst)); path != "" {
+	hasPathErr := errors.As(err, &pathErr)
+	path := codecFailurePath(data, reflect.TypeOf(dst))
+	if path != "" {
+		if hasPathErr {
+			return prependCodecPath(pathErr, path)
+		}
 		return prependCodecPath(err, path)
+	}
+	if hasPathErr {
+		return err
 	}
 	return codecJSONError(err)
 }
@@ -193,4 +198,20 @@ func codecStructField(typ reflect.Type, wireName string) (reflect.StructField, b
 		}
 	}
 	return folded, folded.Name != ""
+}
+
+func newRecipeDecodeError(step int, prefix string, err error) error {
+	path := prefix
+	cause := err
+	var pathErr *codecPathError
+	if errors.As(err, &pathErr) {
+		path = joinCodecPath(prefix, pathErr.path)
+		cause = pathErr.err
+	}
+	return &RecipeError{
+		StepIndex: step,
+		Path:      path,
+		Kind:      ErrInvalidRecipe,
+		Err:       cause,
+	}
 }

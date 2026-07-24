@@ -379,7 +379,10 @@ func requirePointWire(kind, field string, raw json.RawMessage) error {
 		V *float64 `json:"v"`
 	}
 	if err := json.Unmarshal(raw, &point); err != nil {
-		return prependCodecPath(fmt.Errorf(`decad: failed to decode %s segment field %q: %w`, kind, field, err), field)
+		return prependCodecPath(
+			codecJSONErrorAt(raw, &point, fmt.Errorf(`decad: failed to decode %s segment field %q: %w`, kind, field, err)),
+			field,
+		)
 	}
 	if point.U == nil {
 		return prependCodecPath(fmt.Errorf(`%w: %s segment field %q is missing required coordinate "u"`, ErrDegenerate, kind, field), field+".u")
@@ -489,7 +492,7 @@ func validateSegmentWire(kind string, wire segmentWire) error {
 		}
 		points = required[:3]
 	default:
-		return fmt.Errorf(`decad: unknown curve segment kind %q`, kind)
+		return prependCodecPath(fmt.Errorf(`decad: unknown curve segment kind %q`, kind), "kind")
 	}
 
 	if err := requireSegmentWireFields(kind, required...); err != nil {

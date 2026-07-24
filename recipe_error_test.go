@@ -36,12 +36,12 @@ func TestRecipeDecodeErrorPathIncludesProfilePosition(t *testing.T) {
 			{
 				"op": "extrude",
 				"profile": {
-					"outer": {"segments": [{"kind": "line"}]},
+					"outer": {"segments": [{"kind": "line", "start": {"u": 0, "v": 0}, "end": {"u": 1, "v": 0}, "t_start": 0, "t_end": 1}]},
 					"holes": [
-						{"segments": [{"kind": "line"}]},
+						{"segments": [{"kind": "line", "start": {"u": 0, "v": 0}, "end": {"u": 1, "v": 0}, "t_start": 0, "t_end": 1}]},
 						{"segments": [
-							{"kind": "line"},
-							{"kind": "line"},
+							{"kind": "line", "start": {"u": 0, "v": 0}, "end": {"u": 1, "v": 0}, "t_start": 0, "t_end": 1},
+							{"kind": "line", "start": {"u": 0, "v": 0}, "end": {"u": 1, "v": 0}, "t_start": 0, "t_end": 1},
 							{"kind": "helix"}
 						]}
 					]
@@ -54,7 +54,7 @@ func TestRecipeDecodeErrorPathIncludesProfilePosition(t *testing.T) {
 		"steps": [{
 			"op": "extrude",
 			"profile": {
-				"outer": {"segments": [{"kind": "line"}, {"kind": "helix"}]}
+				"outer": {"segments": [{"kind": "line", "start": {"u": 0, "v": 0}, "end": {"u": 1, "v": 0}, "t_start": 0, "t_end": 1}, {"kind": "helix"}]}
 			}
 		}]
 	}`, "steps[0].profile.outer.segments[1].kind", 0)
@@ -141,8 +141,8 @@ func TestRecipeDecodeErrorPathIncludesPrimitiveArrayIndex(t *testing.T) {
 	}`, "steps[0].inputs[1]", 0)
 
 	requireRecipeDecodePath(t, `{
-		"steps": [{"op": "fillet", "values": ["1 mm", "bad"]}]
-	}`, "steps[0].values[1]", 0)
+		"steps": [{"op": "fillet", "values": ["bad"]}]
+	}`, "steps[0].values[0]", 0)
 }
 
 func TestRecipeDecodeErrorPathIncludesCustomScalarAndInnerArray(t *testing.T) {
@@ -150,7 +150,7 @@ func TestRecipeDecodeErrorPathIncludesCustomScalarAndInnerArray(t *testing.T) {
 		"steps": [{
 			"op": "extrude",
 			"profile": {
-				"outer": {"segments": [{"kind": "circle", "radius": "bad"}]}
+				"outer": {"segments": [{"kind": "circle", "center": {"u": 0, "v": 0}, "radius": "bad", "ccw": true, "t_start": 0, "t_end": 1}]}
 			}
 		}]
 	}`, "steps[0].profile.outer.segments[0].radius", 0)
@@ -161,7 +161,12 @@ func TestRecipeDecodeErrorPathIncludesCustomScalarAndInnerArray(t *testing.T) {
 			"profile": {
 				"outer": {"segments": [{
 					"kind": "nurbs",
-					"control": [{"u": 0, "v": 0}, {"u": "bad", "v": 0}]
+					"degree": 2,
+					"control": [{"u": 0, "v": 0}, {"u": "bad", "v": 0}, {"u": 2, "v": 0}],
+					"knots": [0, 0, 0, 1, 1, 1],
+					"weights": [1, 1, 1],
+					"t_start": 0,
+					"t_end": 1
 				}]}
 			}
 		}]
@@ -213,7 +218,7 @@ func TestRecipeDecodeErrorPreservesSpecificCause(t *testing.T) {
 func TestLoopRecordDecodeErrorIncludesSegmentIndex(t *testing.T) {
 	var loop decad.LoopRecord
 	err := json.Unmarshal([]byte(`{
-		"segments": [{"kind": "line"}, {"kind": "helix"}]
+		"segments": [{"kind": "line", "start": {"u": 0, "v": 0}, "end": {"u": 1, "v": 0}, "t_start": 0, "t_end": 1}, {"kind": "helix"}]
 	}`), &loop)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "segments[1].kind")
