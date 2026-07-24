@@ -188,6 +188,12 @@ func validateRecipeJSONStructure(data []byte) error {
 	return nil
 }
 
+func rejectDuplicateJSONKeys(data []byte) error {
+	dec := json.NewDecoder(bytes.NewReader(data))
+	dec.UseNumber()
+	return scanRecipeJSONValue(dec, false)
+}
+
 func scanRecipeJSONValue(dec *json.Decoder, root bool) error {
 	token, err := dec.Token()
 	if err != nil {

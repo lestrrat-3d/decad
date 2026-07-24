@@ -858,6 +858,9 @@ func (s Step) MarshalJSON() ([]byte, error) {
 }
 
 func decodeStrictJSONStep(data []byte, raw *jsonStepDecode) error {
+	if err := rejectDuplicateJSONKeys(data); err != nil {
+		return err
+	}
 	dec := json.NewDecoder(bytes.NewReader(data))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(raw); err != nil {

@@ -280,6 +280,35 @@ func TestStepAndRecipeRejectUnknownOperationFields(t *testing.T) {
 	require.ErrorContains(t, err, `unknown field "unexpected"`)
 }
 
+func TestStepAndRecipeRejectDuplicateJSONFields(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+	}{
+		{
+			name:  "step operation",
+			input: `{"op":"union","op":"cut"}`,
+		},
+		{
+			name:  "nested selector",
+			input: `{"op":"fillet","inputs":[0],"selectors":[{"kind":"edges","kind":"faces","preds":[]}],"values":["1 mm"]}`,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var step decad.Step
+			err := json.Unmarshal([]byte(test.input), &step)
+			require.Error(t, err)
+			require.Contains(t, err.Error(), "duplicate recipe field")
+
+			var recipe decad.Recipe
+			err = json.Unmarshal([]byte(`{"steps":[`+test.input+`]}`), &recipe)
+			require.ErrorIs(t, err, decad.ErrInvalidRecipe)
+			require.Contains(t, err.Error(), "duplicate recipe field")
+		})
+	}
+}
+
 func TestStepShapeGateRunsBeforeTypedPayloadDecoding(t *testing.T) {
 	tests := []struct {
 		name string
