@@ -269,6 +269,48 @@ func TestStepOperationShapeRejectsMissingAndExtraFields(t *testing.T) {
 	}
 }
 
+func TestStepAndRecipeRejectUnknownOperationFields(t *testing.T) {
+	var step decad.Step
+	err := json.Unmarshal([]byte(`{"op":"union","inputs":[0,1],"unexpected":true}`), &step)
+	require.ErrorContains(t, err, `unknown field "unexpected"`)
+
+	var recipe decad.Recipe
+	err = json.Unmarshal([]byte(`{"steps":[{"op":"union","inputs":[0,1],"unexpected":true}]}`), &recipe)
+	require.ErrorIs(t, err, decad.ErrInvalidRecipe)
+	require.ErrorContains(t, err, `unknown field "unexpected"`)
+}
+
+func TestStepShapeGateRunsBeforeTypedPayloadDecoding(t *testing.T) {
+	tests := []struct {
+		name string
+		step string
+		want string
+	}{
+		{
+			name: "forbidden profile",
+			step: `{"op":"union","inputs":[0,1],"profile":{"outer":{"segments":[{"kind":"unknown"}]}}}`,
+			want: `the "union" op forbids a profile`,
+		},
+		{
+			name: "missing profile",
+			step: `{"op":"extrude","extent":{"kind":"unknown"}}`,
+			want: `the "extrude" op requires a non-empty profile`,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var step decad.Step
+			err := json.Unmarshal([]byte(test.step), &step)
+			require.ErrorContains(t, err, test.want)
+
+			var recipe decad.Recipe
+			err = json.Unmarshal([]byte(`{"steps":[`+test.step+`]}`), &recipe)
+			require.ErrorIs(t, err, decad.ErrInvalidRecipe)
+			require.ErrorContains(t, err, test.want)
+		})
+	}
+}
+
 func TestStepOperationShapeRejectsWrongCountsAndTypes(t *testing.T) {
 	tests := []struct {
 		name       string
