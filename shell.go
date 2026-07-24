@@ -338,7 +338,7 @@ func classifyRemovedCaps(b *Body, removed []*Face) (start, end bool, err error) 
 // undecided or over-budget build-time gate is ErrUnsupported: it has no
 // Suspect result to fall back on.
 func sectionInradius(profile ProfileRecord) (float64, error) {
-	loops, err := recordLoops(profile)
+	loops, err := recordLoops(nil, profile)
 	if err != nil {
 		return 0, fmt.Errorf(`%w: this evaluator cannot read the shell section: %v`, ErrUnsupported, err)
 	}

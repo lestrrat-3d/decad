@@ -1,6 +1,8 @@
 package decad
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"math"
 	"reflect"
@@ -63,37 +65,57 @@ type radiusOutcome struct {
 // recordLoops resolves the recorded profile into coalesced walk loops,
 // exactly as the prism evaluator builds its side faces — the surveys must
 // see the same face decomposition the topology carries.
-func recordLoops(profile ProfileRecord) ([][]sideWalk, error) {
+func recordLoops(budget *workBudget, profile ProfileRecord) ([][]sideWalk, error) {
 	var out [][]sideWalk
 	for _, loop := range append([]LoopRecord{profile.Outer}, profile.Holes...) {
+		if err := wallBudgetStep(budget); err != nil {
+			return nil, err
+		}
 		raw := make([]sideWalk, len(loop.Segments))
 		for i, seg := range loop.Segments {
+			if err := wallBudgetStep(budget); err != nil {
+				return nil, err
+			}
 			w, err := walkOf(seg)
 			if err != nil {
 				return nil, err
 			}
 			raw[i] = sideWalk{segmentWalk: w, segs: []int{i}}
 		}
-		out = append(out, coalesceWalks(raw))
+		walks, err := coalesceWalksBudget(raw, budget)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, walks)
 	}
 	return out, nil
 }
 
 // revolveLoops resolves the loops into axis coordinates (the U fields carry
 // z, the V fields ρ), mirroring buildRevolveLoop.
-func revolveLoops(rp revolvePayload) ([][]sideWalk, error) {
+func revolveLoops(budget *workBudget, rp revolvePayload) ([][]sideWalk, error) {
 	var out [][]sideWalk
 	loops := append([]LoopRecord{rp.profile.Outer}, rp.profile.Holes...)
 	for _, loop := range loops {
+		if err := wallBudgetStep(budget); err != nil {
+			return nil, err
+		}
 		raw := make([]sideWalk, len(loop.Segments))
 		for i, seg := range loop.Segments {
+			if err := wallBudgetStep(budget); err != nil {
+				return nil, err
+			}
 			w, err := walkOf(seg)
 			if err != nil {
 				return nil, err
 			}
 			raw[i] = sideWalk{segmentWalk: rp.ax.walk(w), segs: []int{i}}
 		}
-		out = append(out, coalesceWalks(raw))
+		walks, err := coalesceWalksBudget(raw, budget)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, walks)
 	}
 	return out, nil
 }
@@ -138,7 +160,7 @@ func prismWall(budget *workBudget, pp prismPayload, alpha float64) (wallOutcome,
 	if err := wallBudgetErr(budget); err != nil {
 		return wallOutcome{}, err
 	}
-	loops, err := recordLoops(pp.profile)
+	loops, err := recordLoops(budget, pp.profile)
 	if err != nil {
 		return wallOutcome{}, err
 	}
@@ -211,7 +233,7 @@ func revolveWall(budget *workBudget, rp revolvePayload, alpha float64) (wallOutc
 	if err := wallBudgetErr(budget); err != nil {
 		return wallOutcome{}, err
 	}
-	loops, err := revolveLoops(rp)
+	loops, err := revolveLoops(budget, rp)
 	if err != nil {
 		return wallOutcome{}, err
 	}
@@ -422,7 +444,7 @@ func prismUndercuts(b *Body, pp prismPayload, pull r3.Vec) undercutOutcome {
 	dv := pp.dir(0, 1, 0).Dot(p)
 	dn := pp.dir(0, 0, 1).Dot(p)
 	roles := facesByRole(b)
-	loops, err := recordLoops(pp.profile)
+	loops, err := recordLoops(nil, pp.profile)
 	if err != nil {
 		return undercutOutcome{}
 	}
@@ -468,7 +490,7 @@ func revolveUndercuts(b *Body, rp revolvePayload, pull r3.Vec) undercutOutcome {
 	c1 := rp.xform.ApplyDir(bas.e1).Dot(p)
 	glo, ghi := sweepExtremes(c0, c1, rp.phi0, rp.phi1, rp.full)
 	roles := facesByRole(b)
-	loops, err := revolveLoops(rp)
+	loops, err := revolveLoops(nil, rp)
 	if err != nil {
 		return undercutOutcome{}
 	}
@@ -540,7 +562,7 @@ func revolveUndercuts(b *Body, rp revolvePayload, pull r3.Vec) undercutOutcome {
 // hole wall, a notch — curves away from the material, and its radius is the
 // walk's own.
 func prismMinRadius(pp prismPayload) (radiusOutcome, bool) {
-	loops, err := recordLoops(pp.profile)
+	loops, err := recordLoops(nil, pp.profile)
 	if err != nil {
 		return radiusOutcome{}, false
 	}
@@ -565,7 +587,7 @@ func prismMinRadius(pp prismPayload) (radiusOutcome, bool) {
 // wherever the meridian normal points toward the axis (a hole wall, a
 // waist). Both are closed-form over each walk's extent.
 func revolveMinRadius(rp revolvePayload) (radiusOutcome, bool) {
-	loops, err := revolveLoops(rp)
+	loops, err := revolveLoops(nil, rp)
 	if err != nil {
 		return radiusOutcome{}, false
 	}
@@ -625,7 +647,11 @@ func revolveMinRadius(rp revolvePayload) (radiusOutcome, bool) {
 // cupWalks resolves one cup region loop into its coalesced walks — the same
 // decomposition evalCup's wall build uses.
 func cupWalks(loop LoopRecord) ([]sideWalk, error) {
-	loops, err := recordLoops(ProfileRecord{Outer: loop})
+	return cupWalksBudget(nil, loop)
+}
+
+func cupWalksBudget(budget *workBudget, loop LoopRecord) ([]sideWalk, error) {
+	loops, err := recordLoops(budget, ProfileRecord{Outer: loop})
 	if err != nil {
 		return nil, err
 	}
@@ -638,110 +664,158 @@ func cupWalks(loop LoopRecord) ([]sideWalk, error) {
 // draft allowance, in which case the closure-under-limits rule makes the
 // reading exactly zero. The theorem consumes the payload's morphology, not the
 // recipe value: it rebuilds and audits the offset relation before trusting it.
-func cupWall(cp cupPayload, alpha float64) wallOutcome {
+func cupWall(budget *workBudget, cp cupPayload, alpha float64) (wallOutcome, error) {
 	finite := func(v float64) bool { return !math.IsNaN(v) && !math.IsInf(v, 0) }
+	isCancellation := func(err error) bool {
+		return errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)
+	}
+	if err := wallBudgetErr(budget); err != nil {
+		return wallOutcome{}, err
+	}
 	t := cp.thickness
 	if !finite(t) || t <= 0 || (cp.sense != Inward && cp.sense != Outward) {
-		return wallOutcome{}
+		return wallOutcome{}, nil
 	}
 	dOuter := cp.zOpen - cp.zOuter
 	dCavity := cp.zOpen - cp.zCav
 	if !finite(dOuter) || !finite(dCavity) || dOuter == 0 || dCavity == 0 ||
 		math.Signbit(dOuter) != math.Signbit(dCavity) || math.Abs(dCavity) >= math.Abs(dOuter) {
-		return wallOutcome{}
+		return wallOutcome{}, nil
 	}
 	openDir := 1.0
 	if dOuter < 0 {
 		openDir = -1
 	}
 	if cp.sense == Inward && cp.zCav != cp.zOuter+openDir*t {
-		return wallOutcome{}
+		return wallOutcome{}, nil
 	}
 	if cp.sense == Outward && cp.zOuter != cp.zCav-openDir*t {
-		return wallOutcome{}
+		return wallOutcome{}, nil
 	}
 
 	oLoops := append([]LoopRecord{cp.outer.Outer}, cp.outer.Holes...)
 	cLoops := append([]LoopRecord{cp.cavity.Outer}, cp.cavity.Holes...)
 	if len(oLoops) != len(cLoops) {
-		return wallOutcome{}
+		return wallOutcome{}, nil
 	}
-	if oi, err := cp.outer.integrals(); err != nil || oi.area <= 0 || !finite(oi.area) {
-		return wallOutcome{}
+	if oi, err := cp.outer.integralsBudget(budget); err != nil {
+		if isCancellation(err) {
+			return wallOutcome{}, err
+		}
+		return wallOutcome{}, nil
+	} else if oi.area <= 0 || !finite(oi.area) {
+		return wallOutcome{}, nil
 	}
-	if ci, err := cp.cavity.integrals(); err != nil || ci.area <= 0 || !finite(ci.area) {
-		return wallOutcome{}
+	if ci, err := cp.cavity.integralsBudget(budget); err != nil {
+		if isCancellation(err) {
+			return wallOutcome{}, err
+		}
+		return wallOutcome{}, nil
+	} else if ci.area <= 0 || !finite(ci.area) {
+		return wallOutcome{}, nil
 	}
 
 	// Inward cups store C = O ⊖ t. Outward cups store O = C ⊕ t. Structural
 	// equality is the exact claim: a residual or tolerance match could only
 	// guess that the regions correspond.
-	offsetMatches := func(orig, want ProfileRecord, sense float64) bool {
-		got, err := offsetProfile(orig, sense, t)
-		if err != nil || !reflect.DeepEqual(got, want) {
-			return false
+	offsetMatches := func(orig, want ProfileRecord, sense float64) (bool, error) {
+		got, err := offsetProfileBudget(budget, orig, sense, t)
+		if err != nil {
+			if isCancellation(err) {
+				return false, err
+			}
+			return false, nil
 		}
-		return auditOffsetSection(orig, got) == nil
+		if !reflect.DeepEqual(got, want) {
+			return false, nil
+		}
+		if err := auditOffsetSectionBudget(budget, orig, got); err != nil {
+			if isCancellation(err) {
+				return false, err
+			}
+			return false, nil
+		}
+		return true, nil
 	}
-	matches := offsetMatches(cp.outer, cp.cavity, 1)
+	matches, err := offsetMatches(cp.outer, cp.cavity, 1)
+	if err != nil {
+		return wallOutcome{}, err
+	}
 	if cp.sense == Outward {
-		matches = offsetMatches(cp.cavity, cp.outer, -1)
+		matches, err = offsetMatches(cp.cavity, cp.outer, -1)
+		if err != nil {
+			return wallOutcome{}, err
+		}
 	}
 	if !matches {
-		return wallOutcome{}
+		return wallOutcome{}, nil
 	}
 
-	hasPinch := func(loops [][]sideWalk) (bool, bool) {
+	hasPinch := func(loops [][]sideWalk) (bool, bool, error) {
 		for _, loop := range loops {
+			if err := wallBudgetStep(budget); err != nil {
+				return false, false, err
+			}
 			if len(loop) == 0 {
-				return false, false
+				return false, false, nil
 			}
 			if len(loop) == 1 && loop[0].closed {
 				continue
 			}
 			for i, w := range loop {
+				if err := wallBudgetStep(budget); err != nil {
+					return false, false, err
+				}
 				prev := loop[(i+len(loop)-1)%len(loop)]
 				if junctionPinch(prev.tanOutU, prev.tanOutV, w.tanInU, w.tanInV, alpha) {
-					return true, true
+					return true, true, nil
 				}
 			}
 		}
-		return false, true
+		return false, true, nil
 	}
 
-	outerWalks, err := recordLoops(cp.outer)
+	outerWalks, err := recordLoops(budget, cp.outer)
 	if err != nil {
-		return wallOutcome{}
+		return wallOutcome{}, err
 	}
-	if pinch, ok := hasPinch(outerWalks); !ok {
-		return wallOutcome{}
+	pinch, ok, err := hasPinch(outerWalks)
+	if err != nil {
+		return wallOutcome{}, err
+	}
+	if !ok {
+		return wallOutcome{}, nil
 	} else if pinch {
 		zero := 0.0
-		return wallOutcome{reading: &zero, ok: true}
+		return wallOutcome{reading: &zero, ok: true}, nil
 	}
 
 	// The cavity boundary is a void skin, so reverse every recorded loop to
 	// restore the same material-left walk convention junctionPinch expects.
 	var cavityWalks [][]sideWalk
 	for _, loop := range cLoops {
-		reversed, err := reverseLoopRecord(loop)
+		reversed, err := reverseLoopRecordBudget(budget, loop)
 		if err != nil {
-			return wallOutcome{}
+			return wallOutcome{}, err
 		}
-		walks, err := cupWalks(reversed)
+		walks, err := cupWalksBudget(budget, reversed)
 		if err != nil {
-			return wallOutcome{}
+			return wallOutcome{}, err
 		}
 		cavityWalks = append(cavityWalks, walks)
 	}
-	if pinch, ok := hasPinch(cavityWalks); !ok {
-		return wallOutcome{}
+	pinch, ok, err = hasPinch(cavityWalks)
+	if err != nil {
+		return wallOutcome{}, err
+	}
+	if !ok {
+		return wallOutcome{}, nil
 	} else if pinch {
 		zero := 0.0
-		return wallOutcome{reading: &zero, ok: true}
+		return wallOutcome{reading: &zero, ok: true}, nil
 	}
 
-	return wallOutcome{reading: &t, ok: true}
+	return wallOutcome{reading: &t, ok: true}, nil
 }
 
 // cupUndercuts surveys a cup's faces against the pull (docs/modify-design.md
@@ -879,7 +953,7 @@ func runSurveys(budget *workBudget, br *BodyReport, cfg verifyConfig) ([]Diagnos
 		case revolvePayload:
 			out, err = revolveWall(budget, pl, cfg.allowRad)
 		case cupPayload:
-			out = cupWall(pl, cfg.allowRad)
+			out, err = cupWall(budget, pl, cfg.allowRad)
 		case facetedPayload:
 			out.reason = surveyFacetedUnsupported
 		}

@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"math"
+	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/lestrrat-3d/units"
@@ -186,7 +188,8 @@ func TestCupWallRequiresExactMorphology(t *testing.T) {
 		sense:     Inward,
 	}
 
-	out := cupWall(cp, 15*math.Pi/180)
+	out, err := cupWall(newWorkBudget(t.Context()), cp, 15*math.Pi/180)
+	require.NoError(t, err)
 	require.True(t, out.ok)
 	require.NotNil(t, out.reading)
 	require.Equal(t, 5.0, *out.reading)
@@ -203,7 +206,8 @@ func TestCupWallRequiresExactMorphology(t *testing.T) {
 		bad.cavity.Outer.Segments[i] = moved
 	}
 
-	out = cupWall(bad, 15*math.Pi/180)
+	out, err = cupWall(newWorkBudget(t.Context()), bad, 15*math.Pi/180)
+	require.NoError(t, err)
 	require.False(t, out.ok, `a malformed offset relation must not return the recipe thickness`)
 
 	body := &Body{payload: bad}
@@ -221,4 +225,93 @@ func TestCupWallRequiresExactMorphology(t *testing.T) {
 	require.Equal(t, Suspect, diags[0].Status)
 	require.NotContains(t, diags[0].Message, "facetedPayload",
 		`an undecided analytic survey must not be reported as an unsupported payload`)
+}
+
+func manySegmentProfile(segmentCount int) ProfileRecord {
+	segs := make([]CurveSegment, segmentCount)
+	for i := range segmentCount {
+		th0 := 2 * math.Pi * float64(i) / float64(segmentCount)
+		th1 := 2 * math.Pi * float64(i+1) / float64(segmentCount)
+		segs[i] = LineSeg{
+			Start:  Point2{U: 100 * math.Cos(th0), V: 100 * math.Sin(th0)},
+			End:    Point2{U: 100 * math.Cos(th1), V: 100 * math.Sin(th1)},
+			TStart: 0,
+			TEnd:   1,
+		}
+	}
+	return ProfileRecord{Outer: LoopRecord{Segments: segs}}
+}
+
+func newFrameWorkBudget(target string) (*workBudget, *bool) {
+	entered := false
+	cancelled := false
+	inTarget := func() bool {
+		pcs := make([]uintptr, 32)
+		frames := runtime.CallersFrames(pcs[:runtime.Callers(2, pcs)])
+		for {
+			frame, more := frames.Next()
+			if strings.HasSuffix(frame.Function, "."+target) {
+				return true
+			}
+			if !more {
+				return false
+			}
+		}
+	}
+	cancelInTarget := func() error {
+		if cancelled {
+			return context.Canceled
+		}
+		if !inTarget() {
+			return nil
+		}
+		entered = true
+		cancelled = true
+		return context.Canceled
+	}
+	return &workBudget{stepFn: cancelInTarget, errFn: cancelInTarget}, &entered
+}
+
+func TestRecordLoopsCancellationIsBounded(t *testing.T) {
+	ctx := &internalFrameCancelContext{Context: t.Context(), target: "recordLoops"}
+	_, err := recordLoops(newWorkBudget(ctx), manySegmentProfile(workPollInterval+64))
+	require.ErrorIs(t, err, context.Canceled)
+	require.True(t, ctx.entered, `profile segment resolution must poll inside recordLoops`)
+}
+
+func TestRevolveLoopsCancellationIsBounded(t *testing.T) {
+	ctx := &internalFrameCancelContext{Context: t.Context(), target: "revolveLoops"}
+	_, err := revolveLoops(newWorkBudget(ctx), revolvePayload{
+		profile: manySegmentProfile(workPollInterval + 64),
+		ax:      axisFrame{dU: 1},
+	})
+	require.ErrorIs(t, err, context.Canceled)
+	require.True(t, ctx.entered, `profile segment resolution must poll inside revolveLoops`)
+}
+
+func TestCupWallCancellationCoversOffsetAuditAndReverse(t *testing.T) {
+	outer := manySegmentProfile(workPollInterval + 64)
+	cavity, err := offsetProfile(outer, 1, 5)
+	require.NoError(t, err)
+	cp := cupPayload{
+		outer:     outer,
+		cavity:    cavity,
+		zOuter:    0,
+		zCav:      5,
+		zOpen:     20,
+		thickness: 5,
+		sense:     Inward,
+	}
+	out, err := cupWall(newWorkBudget(t.Context()), cp, 15*math.Pi/180)
+	require.NoError(t, err)
+	require.True(t, out.ok)
+
+	for _, target := range []string{"coalesceWalksBudget", "crossingAuditBudget", "reverseLoopRecordBudget"} {
+		t.Run(target, func(t *testing.T) {
+			budget, entered := newFrameWorkBudget(target)
+			_, err := cupWall(budget, cp, 15*math.Pi/180)
+			require.ErrorIs(t, err, context.Canceled)
+			require.True(t, *entered, `cup wall work must poll inside the named phase`)
+		})
+	}
 }

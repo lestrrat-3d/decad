@@ -1005,7 +1005,7 @@ func shellWitness(sh *Shell) (r3.Vec, bool) {
 // addPrismFaces builds the prism's faces from its own payload, mirroring the
 // walk decomposition the evaluator built the topology from.
 func (g *bodyGeom) addPrismFaces(budget *workBudget, pp prismPayload) (bool, error) {
-	loops, err := recordLoops(pp.profile)
+	loops, err := recordLoops(nil, pp.profile)
 	if err != nil {
 		// A section this kernel cannot decompose is an unsupported payload, not
 		// a failure: newBodyGeom answers with no model rather than a partial
@@ -1139,7 +1139,7 @@ func capWitnesses(f *cFace) []r3.Vec {
 
 // addRevolveFaces builds the revolved body's faces from its own payload.
 func (g *bodyGeom) addRevolveFaces(budget *workBudget, rp revolvePayload) (bool, error) {
-	loops, err := revolveLoops(rp)
+	loops, err := revolveLoops(nil, rp)
 	if err != nil {
 		// As in addPrismFaces: an undecomposable meridian is an unsupported
 		// payload, and the error return is reserved for cancellation.
