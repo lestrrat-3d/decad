@@ -883,7 +883,7 @@ func evalRevolve(d *Document, ref StepRef, rp revolvePayload) (*Body, error) {
 		return nil, fmt.Errorf(`%w: the sweep interval is empty`, ErrDegenerate)
 	}
 	q, mzr, mrr := axisMoments(ig, rp.ax)
-	if q <= 0 {
+	if q <= 0 && finiteMomentValues(q, mzr, mrr) {
 		return nil, fmt.Errorf(`%w: the region has no material off the revolve axis`, ErrDegenerate)
 	}
 
