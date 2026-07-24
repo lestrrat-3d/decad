@@ -336,7 +336,10 @@ func recipeJSONArrayPath(path string, index int) string {
 func recipeJSONFieldRole(parent recipeJSONRole, field string) recipeJSONRole {
 	switch parent {
 	case recipeJSONRoot:
-		if strings.EqualFold(field, "steps") {
+		switch {
+		case strings.EqualFold(field, "format"):
+			return recipeJSONString
+		case strings.EqualFold(field, "steps"):
 			return recipeJSONSteps
 		}
 	case recipeJSONStep:

@@ -198,6 +198,15 @@ func TestRecipeUnmarshalRejectsBeforeChangingDestination(t *testing.T) {
 		require.Error(t, err)
 		require.Equal(t, original, got)
 	})
+
+	t.Run("oversized canonical format", func(t *testing.T) {
+		got := original
+		limits := defaultRecipeDecodeLimits()
+		format := strings.Repeat("x", limits.MaxTotalStringBytes+1)
+		err := json.Unmarshal([]byte(`{"format":"`+format+`","version":1,"steps":[]}`), &got)
+		requireRecipeLimitPath(t, err, "format", -1)
+		require.Equal(t, original, got)
+	})
 }
 
 func TestRecipeUnmarshalDefaultByteLimit(t *testing.T) {
