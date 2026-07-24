@@ -3,6 +3,7 @@ package decad
 import (
 	"fmt"
 	"math"
+	"strings"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -94,7 +95,8 @@ func (b *Body) Fillet(sel EdgeSelector, r units.Value, opts ...FilletOption) (*B
 	// edge is a lateral edge mapped to a section corner (S1).
 	pp, ok := b.payload.(prismPayload)
 	if !ok {
-		return nil, fmt.Errorf(`%w: this evaluator fillets a straight prism only`, ErrUnsupported)
+		return nil, fmt.Errorf(`selector %s matched [%s]: %w: this evaluator fillets a straight prism only`,
+			sel, selectedEdgesContext(edges), ErrUnsupported)
 	}
 
 	loops, err := prismCornerLoops(pp)
@@ -106,24 +108,25 @@ func (b *Body) Fillet(sel EdgeSelector, r units.Value, opts ...FilletOption) (*B
 	for i := range blendAt {
 		blendAt[i] = map[int]*cornerBlend{}
 	}
-	for _, e := range edges {
+	matched := make([]matchedCorner, 0, len(edges))
+	for ei, e := range edges {
 		li, ci, found := matchCorner(pp, loops, e)
 		if !found {
-			return nil, fmt.Errorf(`%w: a fillet of a cap edge is the vertex-blend problem, not yet supported`, ErrUnsupported)
+			return nil, fmt.Errorf(`selector %s, %s: %w: a fillet of a cap edge is the vertex-blend problem, not yet supported`,
+				sel, selectedEdgeContext(ei, e), ErrUnsupported)
 		}
+		matched = append(matched, newMatchedCorner(ei, e, li, ci, loops[li]))
 		blendAt[li][ci] = nil // marked; the blend is computed in stage 3
 	}
 
 	// Stage 3 (§4): the construction's own gates, per corner — S4 (a corner
 	// exists) then S5 (a blend of that radius exists).
-	for li, corners := range blendAt {
-		for ci := range corners {
-			cb, err := computeFillet(loops[li], ci, rmm)
-			if err != nil {
-				return nil, err
-			}
-			blendAt[li][ci] = cb
+	for _, corner := range matched {
+		cb, err := computeFillet(loops[corner.loop], corner.corner, rmm)
+		if err != nil {
+			return nil, fmt.Errorf(`selector %s, %s: %w`, sel, corner, err)
 		}
+		blendAt[corner.loop][corner.corner] = cb
 	}
 
 	// The rewritten section, and the fillet arcs' (loop, segment) indices.
@@ -131,7 +134,7 @@ func (b *Body) Fillet(sel EdgeSelector, r units.Value, opts ...FilletOption) (*B
 
 	// Stage 4 (§4/§5): the audit of the rewritten profile — S8, S6, S7, S9.
 	if err := auditRewrite(pp.profile, profile, loops, blendAt); err != nil {
-		return nil, err
+		return nil, wrapModifyAuditError(sel, matched, err)
 	}
 
 	// Build through evalPrism (§2): same frame, interval and placement, only
@@ -170,6 +173,60 @@ func (b *Body) Fillet(sel EdgeSelector, r units.Value, opts ...FilletOption) (*B
 // junction between two consecutive walks.
 type cornerLoop struct {
 	walks []sideWalk
+}
+
+// matchedCorner retains one selector result beside the section coordinate it
+// resolved to. The selected-edge ordinal follows SelectEdges' stable result
+// order; the loop/corner coordinate and plane-local point identify the same
+// junction in the recorded section.
+type matchedCorner struct {
+	edgeOrdinal int
+	edge        *Edge
+	loop        int
+	corner      int
+	point       Point2
+}
+
+func newMatchedCorner(edgeOrdinal int, edge *Edge, loop, corner int, cl cornerLoop) matchedCorner {
+	w := cl.walks[corner]
+	return matchedCorner{
+		edgeOrdinal: edgeOrdinal,
+		edge:        edge,
+		loop:        loop,
+		corner:      corner,
+		point:       Point2{U: w.startU, V: w.startV},
+	}
+}
+
+func (m matchedCorner) String() string {
+	return fmt.Sprintf(`%s maps to loop %d corner %d at (u, v) = (%s, %s)`,
+		selectedEdgeContext(m.edgeOrdinal, m.edge), m.loop, m.corner,
+		renderCoord(m.point.U), renderCoord(m.point.V))
+}
+
+func selectedEdgeContext(ordinal int, edge *Edge) string {
+	if edge == nil || edge.start == nil || edge.end == nil {
+		return fmt.Sprintf(`selected edge[%d]`, ordinal)
+	}
+	return fmt.Sprintf(`selected edge[%d] from (%s) to (%s)`, ordinal,
+		renderVec(edge.start.position), renderVec(edge.end.position))
+}
+
+func selectedEdgesContext(edges []*Edge) string {
+	contexts := make([]string, len(edges))
+	for i, edge := range edges {
+		contexts[i] = selectedEdgeContext(i, edge)
+	}
+	return strings.Join(contexts, `; `)
+}
+
+func wrapModifyAuditError(sel EdgeSelector, matched []matchedCorner, err error) error {
+	coordinates := make([]string, len(matched))
+	for i, corner := range matched {
+		coordinates[i] = corner.String()
+	}
+	err = renderAuditCoordinates(err)
+	return fmt.Errorf(`selector %s matched [%s]: %w`, sel, strings.Join(coordinates, `; `), err)
 }
 
 // prismCornerLoops resolves every loop of the prism's section into its

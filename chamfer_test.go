@@ -409,8 +409,15 @@ func TestChamferOverLargeSetbackRefused(t *testing.T) {
 	// never handed a clipped body. Here the 60 mm walls each carry two corners at
 	// d = 40 → 80 > 60, so the audit refuses.
 	_, box := filletBox(t)
-	_, err := box.Chamfer(verticalEdges(), units.Millimeters(40))
+	selector := verticalEdges()
+	_, err := box.Chamfer(selector, units.Millimeters(40))
 	require.ErrorIs(t, err, decad.ErrUnsupported, `a setback that consumes a wall from both ends is S6`)
+	require.ErrorContains(t, err, `selector `+selector.String(),
+		`an audit failure retains the multi-edge query`)
+	require.Equal(t, 4, strings.Count(err.Error(), `selected edge[`),
+		`the audit failure retains all four selected-edge to corner mappings`)
+	require.Regexp(t, `loop 0 walk \d+ from corner \d+ at \(u, v\) = \([^)]+\) to corner \d+ at \(u, v\) = \([^)]+\)`,
+		err.Error(), `the overrun identifies the consumed walk and both corner coordinates`)
 	require.Equal(t, []*decad.Body{box}, box.Document().Bodies(), `a refused chamfer retires nothing`)
 }
 
@@ -471,8 +478,18 @@ func TestChamferNonPrismReceiver(t *testing.T) {
 	doc := decad.New()
 	body, err := doc.Revolve(s, s.Profiles()[0], uAxis, decad.FullRevolution{})
 	require.NoError(t, err)
-	_, err = body.Chamfer(decad.Edges(decad.Circular()), units.Millimeters(1))
+	sel := decad.Edges(decad.Circular())
+	_, err = body.Chamfer(sel, units.Millimeters(1))
 	require.ErrorIs(t, err, decad.ErrUnsupported, `this evaluator chamfers a straight prism only`)
+	require.ErrorContains(t, err, `selector `+sel.String())
+	for _, want := range []string{
+		`selected edge[0] from (0,5,0) to (0,5,0)`,
+		`selected edge[1] from (10,5,0) to (10,5,0)`,
+		`selected edge[2] from (10,15,0) to (10,15,0)`,
+		`selected edge[3] from (0,15,0) to (0,15,0)`,
+	} {
+		require.ErrorContains(t, err, want)
+	}
 }
 
 func TestChamferBreaksNestingRefused(t *testing.T) {
@@ -491,6 +508,10 @@ func TestChamferBreaksNestingRefused(t *testing.T) {
 	require.Error(t, err, `a chamfer that leaves the hole outside the outer loop must be refused`)
 	require.ErrorIs(t, err, decad.ErrDegenerate,
 		`a hole proven outside the bevelled outer loop is nesting decidably broken: ErrDegenerate`)
+	require.ErrorContains(t, err, `hole loop 1 at (u, v) = `,
+		`the nesting audit identifies the failed hole and its classification point`)
+	require.ErrorContains(t, err, `outside outer loop 0`,
+		`the nesting audit identifies the outer loop used for classification`)
 	require.Equal(t, []*decad.Body{body}, body.Document().Bodies(), `a refused chamfer retires nothing`)
 }
 

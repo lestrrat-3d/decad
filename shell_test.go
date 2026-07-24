@@ -675,6 +675,17 @@ func TestShellRefusals(t *testing.T) {
 		require.Contains(t, err.Error(), "disjoint lumps", `a surviving hole refuses via S12, the lump count`)
 	})
 
+	t.Run("offset crossing keeps the Shell diagnostic", func(t *testing.T) {
+		// The hole is 5 mm from the outer wall. A 3 mm inward offset moves the
+		// outer wall past the hole's expanded boundary, so the shared audit
+		// reaches its crossing refusal before the both-caps lump-count gate.
+		box := holedBox(t, 5, 25, 15, 35)
+		_, err := box.Shell(bothCaps(), units.Millimeters(3))
+		require.ErrorIs(t, err, decad.ErrUnsupported)
+		require.Equal(t, `decad: not supported by the current evaluator: the rewrite crosses itself; a resolving kernel is not available`,
+			err.Error(), `Shell keeps its established shared-audit diagnostic`)
+	})
+
 	t.Run("outward offset erasing a hole is S11a, not the S12 lump count", func(t *testing.T) {
 		// A 10×10 hole with a 6 mm OUTWARD wall: 2t = 12 > 10, so the offset
 		// erodes the hole to nothing — a dropped loop (S11a). The erased loop

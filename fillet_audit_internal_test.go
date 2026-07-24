@@ -145,6 +145,21 @@ func sectionCornerLoops(t *testing.T, prof ProfileRecord) []cornerLoop {
 func TestCrossingAuditRejectsBoundaryContact(t *testing.T) {
 	v := 20 / math.Sqrt2 // a point on the quarter arc of radius 20 at 45°
 
+	t.Run("inter-loop crossing", func(t *testing.T) {
+		horizontal := LoopRecord{Segments: []CurveSegment{
+			LineSeg{Start: Point2{U: -10, V: 0}, End: Point2{U: 10, V: 0}, TEnd: 1},
+		}}
+		vertical := LoopRecord{Segments: []CurveSegment{
+			LineSeg{Start: Point2{U: 0, V: -10}, End: Point2{U: 0, V: 10}, TEnd: 1},
+		}}
+		segs, err := buildSegEntries([]LoopRecord{horizontal, vertical})
+		require.NoError(t, err)
+		err = crossingAudit(segs)
+		require.ErrorIs(t, err, ErrUnsupported, "two loop segments crossing in their interiors are unsupported")
+		require.ErrorContains(t, renderAuditCoordinates(err), `rewritten loop 0 segment 0 and loop 1 segment 0 cross`,
+			`the refusal names both loop segments in the crossing pair`)
+	})
+
 	t.Run("inter-loop shared point: a hole vertex on an outer arc", func(t *testing.T) {
 		// loop0 is a quarter disk whose curved wall is an arc of radius 20 about
 		// the origin; loop1 is a separate triangle one of whose vertices lands
@@ -164,6 +179,8 @@ func TestCrossingAuditRejectsBoundaryContact(t *testing.T) {
 		require.NoError(t, err)
 		err = crossingAudit(segs)
 		require.ErrorIs(t, err, ErrUnsupported, "a hole vertex touching an outer arc is boundary contact")
+		require.ErrorContains(t, renderAuditCoordinates(err), `rewritten loop 0 segment 1 and loop 1 segment 0 are in contact`,
+			`the refusal names both loop segments in the contacting pair`)
 	})
 
 	t.Run("same-loop non-adjacent touch: a vertex on a far edge", func(t *testing.T) {
@@ -182,6 +199,8 @@ func TestCrossingAuditRejectsBoundaryContact(t *testing.T) {
 		require.NoError(t, err)
 		err = crossingAudit(segs)
 		require.ErrorIs(t, err, ErrUnsupported, "a loop touching itself away from its shared vertices is a pinch")
+		require.ErrorContains(t, renderAuditCoordinates(err), `rewritten loop 0 segment 0 and loop 0 segment 2 are in contact`,
+			`the refusal names both loop segments in the contacting pair`)
 	})
 }
 
