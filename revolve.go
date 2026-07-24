@@ -871,7 +871,7 @@ func axisMoments(ig regionIntegrals, ax axisFrame) (float64, float64, float64) {
 // and arc; anything else has already been rejected by the mass-property
 // integrals it runs first.
 func evalRevolve(d *Document, ref StepRef, rp revolvePayload) (*Body, error) {
-	ig, err := rp.profile.integrals()
+	ig, err := rp.profile.evaluatorIntegralsUnchecked(momentSecondOrder)
 	if err != nil {
 		return nil, err
 	}

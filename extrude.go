@@ -132,7 +132,7 @@ func (d *Document) Extrude(s *sketch.Sketch, p *sketch.Profile, e Extent, opts .
 // admits nothing; the check can only reject, the same one-sided shape as the
 // seam's range falsifier.
 func falsifyRecordedArea(profile ProfileRecord, sketchArea float64) error {
-	ig, err := profile.integrals()
+	ig, err := profile.evaluatorIntegrals(momentAreaOrder)
 	if err != nil {
 		return err
 	}
@@ -330,7 +330,7 @@ func (pp prismPayload) placed(d *Document, ref StepRef, composed r3.Transform) (
 // are line, circle and arc; anything else has already been rejected by the
 // mass-property integrals it runs first.
 func evalPrism(d *Document, ref StepRef, pp prismPayload) (*Body, error) {
-	ig, err := pp.profile.integrals()
+	ig, err := pp.profile.evaluatorIntegrals(momentAreaOrder)
 	if err != nil {
 		return nil, err
 	}

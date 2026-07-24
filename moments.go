@@ -155,7 +155,35 @@ func (r ProfileRecord) integralsTo(order momentIntegralOrder) (regionIntegrals, 
 	return integrateMomentRecord(record, anchor, order)
 }
 
+// evaluatorIntegrals supplies only the mass properties an evaluator needs.
+// Public measurement methods use integralsTo and retain full topology and
+// finiteness checks; evaluator construction must not let unused higher-order
+// overflow prevent clearance verification from running.
+func (r ProfileRecord) evaluatorIntegrals(order momentIntegralOrder) (regionIntegrals, error) {
+	record, anchor, err := validateMomentFields(r)
+	if err != nil {
+		return regionIntegrals{}, err
+	}
+	return integrateMomentRecord(record, anchor, order)
+}
+
+func (r ProfileRecord) evaluatorIntegralsUnchecked(order momentIntegralOrder) (regionIntegrals, error) {
+	record, anchor, err := validateMomentFields(r)
+	if err != nil {
+		return regionIntegrals{}, err
+	}
+	return integrateMomentRecordUnchecked(record, anchor, order)
+}
+
 func integrateMomentRecord(record ProfileRecord, anchor Point2, order momentIntegralOrder) (regionIntegrals, error) {
+	return integrateMomentRecordMode(record, anchor, order, true)
+}
+
+func integrateMomentRecordUnchecked(record ProfileRecord, anchor Point2, order momentIntegralOrder) (regionIntegrals, error) {
+	return integrateMomentRecordMode(record, anchor, order, false)
+}
+
+func integrateMomentRecordMode(record ProfileRecord, anchor Point2, order momentIntegralOrder, checkFinite bool) (regionIntegrals, error) {
 	var ig regionIntegrals
 	for loopIndex, loop := range append([]LoopRecord{record.Outer}, record.Holes...) {
 		for segmentIndex, segment := range loop.Segments {
@@ -166,7 +194,7 @@ func integrateMomentRecord(record ProfileRecord, anchor Point2, order momentInte
 			if err := ig.addFor(shifted, order); err != nil {
 				return regionIntegrals{}, err
 			}
-			if !ig.isFinite(order) {
+			if checkFinite && !ig.isFinite(order) {
 				return regionIntegrals{}, fmt.Errorf(`%w: mass-property integration overflowed at loop %d segment %d`, ErrNotFinite, loopIndex, segmentIndex)
 			}
 		}
@@ -175,7 +203,7 @@ func integrateMomentRecord(record ProfileRecord, anchor Point2, order momentInte
 		return regionIntegrals{}, fmt.Errorf(`%w: the recorded region encloses no positive net area`, ErrDegenerate)
 	}
 	ig = translateMomentIntegrals(ig, anchor, order)
-	if !ig.isFinite(order) {
+	if checkFinite && !ig.isFinite(order) {
 		return regionIntegrals{}, fmt.Errorf(`%w: mass-property integration overflowed while restoring the profile origin`, ErrNotFinite)
 	}
 	return ig, nil
