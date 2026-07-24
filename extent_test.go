@@ -67,6 +67,44 @@ func TestAngularExtentCodec(t *testing.T) {
 		`a standalone angular extent is not a side: the side codec rejects its tag`)
 }
 
+func TestEmptyExtentVariantCodec(t *testing.T) {
+	for _, test := range []struct {
+		name string
+		step decad.Step
+		bad  string
+	}{
+		{
+			name: "full revolution",
+			step: decad.Step{Op: decad.OpRevolve, Angular: decad.FullRevolution{}},
+			bad:  `{"op":"revolve","angular":{"kind":"full_revolution","a":"90 deg","dir":"against"}}`,
+		},
+		{
+			name: "through-all side",
+			step: decad.Step{
+				Op: decad.OpExtrude,
+				Extent: decad.TwoSided{
+					One: decad.ThroughAllSide{},
+					Two: decad.DistanceSide{D: units.Millimeters(5)},
+				},
+			},
+			bad: `{"op":"extrude","extent":{"kind":"two_sided","one":{"kind":"through_all_side","d":"2 mm"},"two":{"kind":"distance_side","d":"5 mm"}}}`,
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			buf, err := json.Marshal(test.step)
+			require.NoError(t, err)
+			var got decad.Step
+			require.NoError(t, json.Unmarshal(buf, &got))
+			require.Equal(t, test.step, got)
+
+			var bad decad.Step
+			err = json.Unmarshal([]byte(test.bad), &bad)
+			require.Error(t, err)
+			require.Contains(t, err.Error(), "unknown field")
+		})
+	}
+}
+
 func TestAngularExtentPointerForms(t *testing.T) {
 	// The sealed sets use value receivers, so pointer forms satisfy the
 	// interfaces; the codecs normalize them to values recursively — nested
