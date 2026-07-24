@@ -40,22 +40,6 @@ func defaultRecipeDecodeLimits() recipeDecodeLimits {
 	}
 }
 
-// UnmarshalJSON admits the complete wire value before encoding/json can grow
-// Recipe's typed slices. Decoding into a temporary also leaves the receiver
-// unchanged when either admission or typed decoding fails.
-func (r *Recipe) UnmarshalJSON(data []byte) error {
-	if err := preflightRecipeJSON(data, defaultRecipeDecodeLimits()); err != nil {
-		return err
-	}
-	type recipeWire Recipe
-	out := recipeWire{Steps: cloneSteps(r.Steps)}
-	if err := json.Unmarshal(data, &out); err != nil {
-		return err
-	}
-	*r = Recipe(out)
-	return nil
-}
-
 type recipeJSONRole uint8
 
 const (

@@ -122,45 +122,6 @@ var ErrNotFinite = errors.New("decad: non-finite value")
 // wire-admission ceiling before typed decoding.
 var ErrResourceLimit = errors.New("decad: resource limit exceeded")
 
-// RecipeError reports a path-aware recipe failure. StepIndex is -1 for the
-// envelope or root; Path is "$" for the root and otherwise names the rejected
-// JSON value. Kind is the branchable recipe sentinel, and Err carries an
-// optional specific cause.
-type RecipeError struct {
-	StepIndex int
-	Path      string
-	Kind      error
-	Err       error
-}
-
-// Error reports the branchable outcome, rejected path, and specific cause.
-func (e *RecipeError) Error() string {
-	path := e.Path
-	if path == "" {
-		path = "$"
-	}
-	if e.Err != nil {
-		return fmt.Sprintf("%s at %s: %v", e.Kind, path, e.Err)
-	}
-	return fmt.Sprintf("%s at %s", e.Kind, path)
-}
-
-// Unwrap returns the branchable recipe sentinel.
-func (e *RecipeError) Unwrap() error {
-	if e == nil {
-		return nil
-	}
-	return e.Kind
-}
-
-// Is matches either the branchable recipe sentinel or the specific cause.
-func (e *RecipeError) Is(target error) bool {
-	if e == nil {
-		return false
-	}
-	return errors.Is(e.Kind, target) || errors.Is(e.Err, target)
-}
-
 // ErrUnsupported is returned when the recipe records the intent exactly but
 // the current evaluator does not build it. Evaluator staging is explicit
 // and rejected at the call — never silently approximated or narrowed — and a

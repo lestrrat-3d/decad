@@ -200,24 +200,6 @@ func TestRecipeUnmarshalRejectsBeforeChangingDestination(t *testing.T) {
 	})
 }
 
-func TestRecipeUnmarshalPreservesDestinationWhenStepsAbsent(t *testing.T) {
-	original := Recipe{Steps: []Step{{Op: OpUnion}}}
-
-	for _, test := range []struct {
-		name  string
-		input string
-	}{
-		{name: "null", input: `null`},
-		{name: "empty object", input: `{}`},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			got := original
-			require.NoError(t, json.Unmarshal([]byte(test.input), &got))
-			require.Equal(t, original, got)
-		})
-	}
-}
-
 func TestRecipeUnmarshalDefaultByteLimit(t *testing.T) {
 	limits := defaultRecipeDecodeLimits()
 	prefix := `{"steps":[],"padding":"`

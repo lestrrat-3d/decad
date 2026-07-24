@@ -81,7 +81,10 @@ func (r Recipe) MarshalJSON() ([]byte, error) {
 // unversioned {"steps": ...} form. It rejects unknown root fields and
 // duplicate keys before typed step decoding.
 func (r *Recipe) UnmarshalJSON(data []byte) error {
-	if err := preflightRecipeJSON(data); err != nil {
+	if err := preflightRecipeJSON(data, defaultRecipeDecodeLimits()); err != nil {
+		return err
+	}
+	if err := validateRecipeJSONStructure(data); err != nil {
 		return rootRecipeError(ErrInvalidRecipe, err)
 	}
 
@@ -160,7 +163,7 @@ func isJSONNull(data []byte) bool {
 	return bytes.Equal(bytes.TrimSpace(data), []byte("null"))
 }
 
-func preflightRecipeJSON(data []byte) error {
+func validateRecipeJSONStructure(data []byte) error {
 	dec := json.NewDecoder(bytes.NewReader(data))
 	dec.UseNumber()
 	if err := scanRecipeJSONValue(dec, true); err != nil {
