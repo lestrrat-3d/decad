@@ -539,6 +539,9 @@ func (d *Document) Verify(ctx context.Context, opts ...VerifyOption) (*Report, e
 	if err != nil {
 		return nil, err
 	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 
 	report := &Report{Status: Sound}
 	// Interferences is always computed — the Interfering rung reads it
