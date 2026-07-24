@@ -582,6 +582,7 @@ type segmentWalk struct {
 	lengthBound      float64
 	lengthUpper      float64
 	coordUpper       float64
+	axisRadiusUpper  float64
 	axisMomentUpper  float64
 	// circular geometry when the segment is a circle/arc walk.
 	circular bool
@@ -756,6 +757,7 @@ func coalesceWalksBudget(walks []sideWalk, budget *workBudget) ([]sideWalk, erro
 		a.length, a.lengthBound = length.value, length.bound
 		a.lengthUpper = absSumUpper(a.lengthUpper, b.lengthUpper)
 		a.coordUpper = math.Max(a.coordUpper, b.coordUpper)
+		a.axisRadiusUpper = math.Max(a.axisRadiusUpper, b.axisRadiusUpper)
 		a.axisMomentUpper = absSumUpper(a.axisMomentUpper, b.axisMomentUpper)
 		a.segs = append(a.segs, b.segs...)
 		return a
@@ -818,6 +820,7 @@ func buildLoopSidesAs(body *Body, ref StepRef, pp prismPayload, roleLoop int, ho
 	// Junction vertices, shared between neighbors: junction i sits at walk
 	// i's start (== walk i−1's end). A single whole closed curve has none.
 	singleClosed := n == 1 && walks[0].closed
+	height := boundedSub(exactScalar(pp.z1), exactScalar(pp.z0))
 	var bottomV, topV []*Vertex
 	if !singleClosed {
 		bottomV = make([]*Vertex, n)
@@ -840,17 +843,17 @@ func buildLoopSidesAs(body *Body, ref StepRef, pp prismPayload, roleLoop int, ho
 			prev := walks[(i+n-1)%n]
 			cross := prev.tanOutU*walks[i].tanInV - prev.tanOutV*walks[i].tanInU
 			vertical[i] = &Edge{
-				curve:  Line3{},
-				start:  bottomV[i],
-				end:    topV[i],
-				convex: cross > 0,
-				length: pp.z1 - pp.z0,
+				curve:       Line3{},
+				start:       bottomV[i],
+				end:         topV[i],
+				convex:      cross > 0,
+				length:      pp.z1 - pp.z0,
+				lengthBound: height.bound,
 			}
 		}
 	}
 
 	// Side faces with bottom/top edges; cap coedges accumulate in walk order.
-	height := boundedSub(exactScalar(pp.z1), exactScalar(pp.z0))
 	faces := make([]*Face, 0, n)
 	bottomCo := make([]coedge, 0, n)
 	topCo := make([]coedge, 0, n)
@@ -909,8 +912,8 @@ func buildLoopSidesAs(body *Body, ref StepRef, pp prismPayload, roleLoop int, ho
 			// counter-clockwise round keeps its convex rim. The loop's role
 			// decides nothing here.
 			capConvex := !clockwise
-			bottomEdge = &Edge{curve: curve0, start: bStart, end: bEnd, convex: capConvex, length: w.length}
-			topEdge = &Edge{curve: curve1, start: tStart, end: tEnd, convex: capConvex, length: w.length}
+			bottomEdge = &Edge{curve: curve0, start: bStart, end: bEnd, convex: capConvex, length: w.length, lengthBound: w.lengthBound}
+			topEdge = &Edge{curve: curve1, start: tStart, end: tEnd, convex: capConvex, length: w.length, lengthBound: w.lengthBound}
 			surf = Cylinder{Origin: center0, Axis: axis, Radius: radius}
 			// A clockwise-walked wall has its material OUTSIDE the cylinder,
 			// so its outward normal is the radial direction negated.
@@ -920,8 +923,8 @@ func buildLoopSidesAs(body *Body, ref StepRef, pp prismPayload, roleLoop int, ho
 			// loop's: which side its material lies on is decided by the sense
 			// the whole loop is walked, and that sense IS the loop's role —
 			// the outer loop counter-clockwise, holes clockwise (moments.go).
-			bottomEdge = &Edge{curve: Line3{}, start: bStart, end: bEnd, convex: !holeLoop, length: w.length}
-			topEdge = &Edge{curve: Line3{}, start: tStart, end: tEnd, convex: !holeLoop, length: w.length}
+			bottomEdge = &Edge{curve: Line3{}, start: bStart, end: bEnd, convex: !holeLoop, length: w.length, lengthBound: w.lengthBound}
+			topEdge = &Edge{curve: Line3{}, start: tStart, end: tEnd, convex: !holeLoop, length: w.length, lengthBound: w.lengthBound}
 			mid := pp.point((w.startU+w.endU)/2, (w.startV+w.endV)/2, pp.z0)
 			// tangent × N is the outward normal for a CCW outer walk (and a
 			// CW hole walk); a reflection flips the cross product, so the

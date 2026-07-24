@@ -728,6 +728,7 @@ func (ax axisFrame) walk(w segmentWalk) segmentWalk {
 		ax.aV, ax.aVBound,
 	)
 	rhoUpper := absSumUpper(w.coordUpper, anchorUpper)
+	out.axisRadiusUpper = rhoUpper
 	out.axisMomentUpper = productUpper(w.lengthUpper, rhoUpper)
 	return out
 }
@@ -1264,24 +1265,29 @@ func buildRevolveLoop(body *Body, ref StepRef, rp revolvePayload, b revolveBasis
 			switch {
 			case rp.full && !j.onAxis:
 				seam := &Vertex{position: rp.point(b, j.z, j.rho, rp.phi0), bound: units.Millimeters(0)}
+				latitudeLength := 2 * math.Pi * j.rho
 				j.lat = &Edge{
-					curve:  Circle3{Center: center, Axis: wDir.Scale(sweepSign), Radius: units.Millimeters(j.rho)},
-					start:  seam,
-					end:    seam,
-					convex: turn > 0,
-					length: 2 * math.Pi * j.rho,
+					curve:       Circle3{Center: center, Axis: wDir.Scale(sweepSign), Radius: units.Millimeters(j.rho)},
+					start:       seam,
+					end:         seam,
+					convex:      turn > 0,
+					length:      latitudeLength,
+					lengthBound: conservativeValueError(latitudeLength, productUpper(w.axisRadiusUpper, twoPiUpper())),
 				}
 			case !rp.full:
 				j.v0 = &Vertex{position: rp.point(b, j.z, j.rho, rp.phi0), bound: units.Millimeters(0)}
 				j.v1 = j.v0
 				if !j.onAxis {
 					j.v1 = &Vertex{position: rp.point(b, j.z, j.rho, rp.phi1), bound: units.Millimeters(0)}
+					arcLength := j.rho * dphi
+					dphiUpper := absSumUpper(math.Abs(dphi), sweep.bound)
 					j.arc = &Edge{
-						curve:  Arc3{Center: center, Axis: wDir.Scale(sweepSign), Radius: units.Millimeters(j.rho)},
-						start:  j.v0,
-						end:    j.v1,
-						convex: turn > 0,
-						length: j.rho * dphi,
+						curve:       Arc3{Center: center, Axis: wDir.Scale(sweepSign), Radius: units.Millimeters(j.rho)},
+						start:       j.v0,
+						end:         j.v1,
+						convex:      turn > 0,
+						length:      arcLength,
+						lengthBound: conservativeValueError(arcLength, productUpper(w.axisRadiusUpper, dphiUpper)),
 					}
 				}
 			}
@@ -1302,11 +1308,12 @@ func buildRevolveLoop(body *Body, ref StepRef, rp revolvePayload, b revolveBasis
 		for i, w := range walks {
 			if kinds[i] == wallAxis {
 				shared := &Edge{
-					curve:  Line3{},
-					start:  js[i].v0,
-					end:    js[(i+1)%n].v0,
-					convex: dphi < math.Pi,
-					length: w.length,
+					curve:       Line3{},
+					start:       js[i].v0,
+					end:         js[(i+1)%n].v0,
+					convex:      dphi < math.Pi,
+					length:      w.length,
+					lengthBound: w.lengthBound,
 				}
 				cap0[i], cap1[i] = shared, shared
 				continue
@@ -1431,7 +1438,7 @@ func (rp revolvePayload) capEdge(b revolveBasis, w segmentWalk, closed bool, vs,
 	if w.circular {
 		convex = w.th0 < w.th1
 	}
-	e := &Edge{convex: convex, length: w.length}
+	e := &Edge{convex: convex, length: w.length, lengthBound: w.lengthBound}
 	if !w.circular {
 		e.curve = Line3{}
 		e.start, e.end = vs, ve

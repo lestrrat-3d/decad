@@ -121,11 +121,11 @@ func cupPayloadFor(pp prismPayload, offset ProfileRecord, s, t float64, removedE
 // lies outside it) and each of the void's own holes as a solid post (material
 // inside) — the pairing buildLoopSidesAs's explicit holeLoop expresses.
 func evalCup(d *Document, ref StepRef, cp cupPayload) (*Body, error) {
-	igO, err := cp.outer.integrals()
+	igO, err := cp.outer.evaluatorIntegrals(momentFirstOrder)
 	if err != nil {
 		return nil, err
 	}
-	igC, err := cp.cavity.integrals()
+	igC, err := cp.cavity.evaluatorIntegrals(momentFirstOrder)
 	if err != nil {
 		return nil, err
 	}

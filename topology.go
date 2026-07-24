@@ -250,9 +250,10 @@ type Edge struct {
 	end    *Vertex
 	faces  []*Face
 	convex bool    // the walked-boundary convexity — see IsConvex
-	length float64 // millimetres, exact for the analytic curve set
-	// lengthBound is the proven error bound on length: zero for the
-	// analytic curves, the chord bound for a boolean-built chain.
+	length float64 // held millimetres for the analytic curve set
+	// lengthBound is the proven error bound on length: zero only when the
+	// analytic curve's held result is exact, otherwise its evaluation bound;
+	// boolean-built chains carry their proven chord bound.
 	lengthBound float64
 	// lengthUnbounded marks a boolean rim on a curved source: the chord
 	// chain understates the true curve's length by an amount no chord
