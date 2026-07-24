@@ -620,7 +620,7 @@ func exactnessOf(bound float64) Exactness {
 
 // ratAbsDiff is |r − f| rounded up to float64.
 func ratAbsDiff(r *big.Rat, f float64) float64 {
-	d := new(big.Rat).Sub(r, ratOf(f))
+	d := new(big.Rat).Sub(r, mustRatOf(f))
 	d.Abs(d)
 	out, _ := d.Float64()
 	if out > 0 {

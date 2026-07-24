@@ -1525,10 +1525,24 @@ func (f *cFace) torusCrossings(ctx context.Context, p, dir r3.Vec, tol float64) 
 	a1 := dir.Dot(f.axis)
 	k := f.major*f.major + q0 - f.radius*f.radius
 	// f(t) = (|x−C|² + R² − r²)² − 4R²(|x−C|² − axial²)
-	quad := ratPoly{ratOf(k), ratOf(q1), ratOf(q2)}
+	quad, ok := ratPolyOf(k, q1, q2)
+	if !ok {
+		return 0, false, nil
+	}
 	sq := rpMul(quad, quad)
-	perp := rpSub(ratPoly{ratOf(q0), ratOf(q1), ratOf(q2)}, rpMul(ratPoly{ratOf(a0), ratOf(a1)}, ratPoly{ratOf(a0), ratOf(a1)}))
-	four := ratOf(4 * f.major * f.major)
+	perpBase, ok := ratPolyOf(q0, q1, q2)
+	if !ok {
+		return 0, false, nil
+	}
+	axial, ok := ratPolyOf(a0, a1)
+	if !ok {
+		return 0, false, nil
+	}
+	perp := rpSub(perpBase, rpMul(axial, axial))
+	four, ok := ratOf(4 * f.major * f.major)
+	if !ok {
+		return 0, false, nil
+	}
 	poly := rpTrim(rpSub(sq, rpScale(perp, four)))
 	if rpDeg(poly) < 1 {
 		return 0, false, nil

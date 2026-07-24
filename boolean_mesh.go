@@ -1088,9 +1088,9 @@ func stitchFacetsContext(ctx context.Context, kept []keptFacet) (*stitchedMesh, 
 			out.verts = append(out.verts, v)
 		}
 		remap[i] = fi
-		d := new(big.Rat).Sub(p.x, ratOf(v.X))
+		d := new(big.Rat).Sub(p.x, mustRatOf(v.X))
 		d.Abs(d)
-		for _, pair := range [][2]*big.Rat{{p.y, ratOf(v.Y)}, {p.z, ratOf(v.Z)}} {
+		for _, pair := range [][2]*big.Rat{{p.y, mustRatOf(v.Y)}, {p.z, mustRatOf(v.Z)}} {
 			dd := new(big.Rat).Sub(pair[0], pair[1])
 			dd.Abs(dd)
 			if dd.Cmp(d) > 0 {

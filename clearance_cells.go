@@ -1,6 +1,7 @@
 package decad
 
 import (
+	"errors"
 	"math"
 
 	"github.com/lestrrat-3d/r3"
@@ -170,6 +171,9 @@ func (k *pairKernel) enumerate() (*cellSink, error) {
 	}
 	if err := budget.err(); err != nil {
 		return nil, err
+	}
+	if k.clearanceRefused {
+		sink.unsure = true
 	}
 	return sink, nil
 }
@@ -382,6 +386,10 @@ func (k *pairKernel) lineLineCrits(f, g *cFace) ([]spineCrit, bool) {
 func (k *pairKernel) lineCircleBracketCrits(cp circleParam, center, refU, refV, la, ld r3.Vec) ([]spineCrit, bool) {
 	brs, ok, err := lineCircleBracketsContext(k.ctx, cp, [3]float64{la.X, la.Y, la.Z}, [3]float64{ld.X, ld.Y, ld.Z}, k.slack)
 	if err != nil {
+		if errors.Is(err, errNonFiniteClearancePolynomial) {
+			k.clearanceRefused = true
+			return nil, false
+		}
 		k.err = err
 		return nil, false
 	}
@@ -447,6 +455,10 @@ func (k *pairKernel) circleCircleCrits(f, g *cFace) ([]spineCrit, bool) {
 	}
 	brs, ok, err := circleCircleBracketsContext(k.ctx, c1, c2, [3]float64{g.axis.X, g.axis.Y, g.axis.Z}, k.slack)
 	if err != nil {
+		if errors.Is(err, errNonFiniteClearancePolynomial) {
+			k.clearanceRefused = true
+			return nil, false
+		}
 		k.err = err
 		return nil, false
 	}

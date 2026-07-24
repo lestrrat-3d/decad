@@ -25,16 +25,16 @@ type xpt struct{ x, y, z *big.Rat }
 // xptOf lifts a finite float vertex into exact coordinates. A float64 is an
 // exact rational, so no information is lost.
 func xptOf(v r3.Vec) xpt {
-	return xpt{ratOf(v.X), ratOf(v.Y), ratOf(v.Z)}
+	return xpt{mustRatOf(v.X), mustRatOf(v.Y), mustRatOf(v.Z)}
 }
 
-// The float-to-rational lift this file runs on is ratOf (clearance_poly.go),
+// The float-to-rational lift this file runs on is mustRatOf (clearance_poly.go),
 // the package's one exact-rational helper: a float64 IS a rational, so the
 // conversion is exact and lossless, and the two exact kernels — this one and
-// the clearance brackets — share it rather than keep two conversions that
-// could drift apart. Every ratOf call here is on a float already proven
-// finite: prepBoolMesh rejects a non-finite vertex outright, so the operands
-// this file sees hold none.
+// the clearance brackets — share the checked converter rather than keep two
+// conversions that could drift apart. Every mustRatOf call here is on a float
+// already proven finite: prepBoolMesh rejects a non-finite vertex outright, so
+// the operands this file sees hold none.
 //
 // vec rounds the exact point to the nearest float64 coordinates.
 func (p xpt) vec() r3.Vec {
@@ -360,9 +360,9 @@ func meshParityContext(ctx context.Context, p xpt, verts []r3.Vec, tris [][3]int
 			tri := tris[ti]
 			a, b, c := verts[tri[0]], verts[tri[1]], verts[tri[2]]
 			pa := xp2{ratCoordOf(p, ray.u), ratCoordOf(p, ray.v)}
-			qa := xp2{ratOf(coordOf(a, ray.u)), ratOf(coordOf(a, ray.v))}
-			qb := xp2{ratOf(coordOf(b, ray.u)), ratOf(coordOf(b, ray.v))}
-			qc := xp2{ratOf(coordOf(c, ray.u)), ratOf(coordOf(c, ray.v))}
+			qa := xp2{mustRatOf(coordOf(a, ray.u)), mustRatOf(coordOf(a, ray.v))}
+			qb := xp2{mustRatOf(coordOf(b, ray.u)), mustRatOf(coordOf(b, ray.v))}
+			qc := xp2{mustRatOf(coordOf(c, ray.u)), mustRatOf(coordOf(c, ray.v))}
 			s1 := cross2x(qa, qb, pa).Sign()
 			s2 := cross2x(qb, qc, pa).Sign()
 			s3 := cross2x(qc, qa, pa).Sign()
