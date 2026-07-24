@@ -75,6 +75,37 @@ func TestRegionAreaAndCentroidWithHole(t *testing.T) {
 	require.InDelta(t, 30.0, c.Value.Y, 1e-9)
 }
 
+func TestRegionMomentsAcceptSmallCircleHoleBesideLargeOutline(t *testing.T) {
+	// This is a valid recorded profile: the outer loop is a 1 km square and the
+	// hole is a whole 1 mm circle. Keep it as a record because the regression is
+	// in decad's record validation, not sketch's sampled-fragment admission.
+	rec := decad.ProfileRecord{
+		Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
+			decad.LineSeg{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 1_000_000, V: 0}, TStart: 0, TEnd: 1},
+			decad.LineSeg{Start: decad.Point2{U: 1_000_000, V: 0}, End: decad.Point2{U: 1_000_000, V: 1_000_000}, TStart: 0, TEnd: 1},
+			decad.LineSeg{Start: decad.Point2{U: 1_000_000, V: 1_000_000}, End: decad.Point2{U: 0, V: 1_000_000}, TStart: 0, TEnd: 1},
+			decad.LineSeg{Start: decad.Point2{U: 0, V: 1_000_000}, End: decad.Point2{U: 0, V: 0}, TStart: 0, TEnd: 1},
+		}},
+		Holes: []decad.LoopRecord{{Segments: []decad.CurveSegment{
+			decad.CircleSeg{Center: decad.Point2{U: 500_000, V: 500_000}, Radius: units.Millimeters(1), CCW: false, TStart: 1, TEnd: 0},
+		}}},
+	}
+
+	area, err := rec.Area()
+	require.NoError(t, err)
+	areaMM, err := area.Value.In(units.SquareMillimeter)
+	require.NoError(t, err)
+	require.InDelta(t, 1_000_000.0*1_000_000-math.Pi, areaMM, 1e-3)
+
+	centroid, err := rec.Centroid()
+	require.NoError(t, err)
+	require.InDelta(t, 500_000.0, centroid.Value.X, 1e-6)
+	require.InDelta(t, 500_000.0, centroid.Value.Y, 1e-6)
+
+	_, err = rec.SecondMoments()
+	require.NoError(t, err)
+}
+
 func TestRegionAreaWholeCircle(t *testing.T) {
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
