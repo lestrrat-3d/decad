@@ -903,7 +903,13 @@ func buildFacetedTopology(verts []r3.Vec, tris [][3]int, facetFace []*Face, face
 			face := facetFace[i]
 			var cycle [][2]int
 			cur := h
-			for {
+			// A boundary walk must consume each boundary halfedge at most once.
+			// Keep the walk bounded even if malformed adjacency causes nextBoundary
+			// to cycle without returning to its start.
+			for steps := 0; ; steps++ {
+				if steps >= len(tris)*3+1 {
+					return fmt.Errorf(`%w: a face boundary walk exceeded its halfedges`, ErrBooleanFailed)
+				}
 				visited[cur] = struct{}{}
 				cycle = append(cycle, cur)
 				nxt, err := nextBoundary(cur)
