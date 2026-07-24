@@ -189,6 +189,24 @@ func TestRegionMomentsRejectOpenLoop(t *testing.T) {
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 }
 
+func TestRegionMomentsRejectOpenLoopWithLargeUnrelatedEdge(t *testing.T) {
+	// The closing endpoints are only 1e-6 mm apart. A separate 1e9 mm edge
+	// must not enlarge their join allowance and weld that material gap.
+	open := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
+		decad.LineSeg{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 1e9, V: 0}, TStart: 0, TEnd: 1},
+		decad.LineSeg{Start: decad.Point2{U: 1e9, V: 0}, End: decad.Point2{U: 1e9, V: 1}, TStart: 0, TEnd: 1},
+		decad.LineSeg{Start: decad.Point2{U: 1e9, V: 1}, End: decad.Point2{U: 0, V: 1}, TStart: 0, TEnd: 1},
+		decad.LineSeg{Start: decad.Point2{U: 0, V: 1}, End: decad.Point2{U: -1e-6, V: 0}, TStart: 0, TEnd: 1},
+	}}}
+
+	_, err := open.Area()
+	require.ErrorIs(t, err, decad.ErrDegenerate)
+	_, err = open.Centroid()
+	require.ErrorIs(t, err, decad.ErrDegenerate)
+	_, err = open.SecondMoments()
+	require.ErrorIs(t, err, decad.ErrDegenerate)
+}
+
 func TestRegionMomentsAcceptsEndpointRounding(t *testing.T) {
 	// Adjacent recorded walks can differ by a few ulps after their source
 	// coordinates are evaluated independently. This is construction rounding,

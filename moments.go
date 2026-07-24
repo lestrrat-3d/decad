@@ -154,10 +154,6 @@ func momentWalksJoin(a, b segmentWalk) bool {
 	scale := math.Max(math.Abs(a.endU), math.Abs(a.endV))
 	scale = math.Max(scale, math.Abs(b.startU))
 	scale = math.Max(scale, math.Abs(b.startV))
-	// A line's endpoint can be close to the origin after cancellation, where
-	// its coordinates alone would not describe the arithmetic scale.
-	scale = math.Max(scale, a.length)
-	scale = math.Max(scale, b.length)
 	if a.circular {
 		scale = math.Max(scale, a.radius)
 	}
