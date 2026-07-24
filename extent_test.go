@@ -81,10 +81,14 @@ func TestEmptyExtentVariantCodec(t *testing.T) {
 		},
 		{
 			name: "through-all side",
-			step: func() decad.Step { s := validCodecStep(decad.OpExtrude); s.Extent = decad.TwoSided{
+			step: func() decad.Step {
+				s := validCodecStep(decad.OpExtrude)
+				s.Extent = decad.TwoSided{
 					One: decad.ThroughAllSide{},
 					Two: decad.DistanceSide{D: units.Millimeters(5)},
-				}; return s }(),
+				}
+				return s
+			}(),
 			bad: `{"op":"extrude","extent":{"kind":"two_sided","one":{"kind":"through_all_side","d":"2 mm"},"two":{"kind":"distance_side","d":"5 mm"}}}`,
 		},
 	} {
