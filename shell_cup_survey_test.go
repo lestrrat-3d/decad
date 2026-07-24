@@ -61,6 +61,23 @@ func TestShellCupWallContextCancellationDuringOffset(t *testing.T) {
 	require.True(t, ctx.entered)
 }
 
+func TestShellCupWallContextCancellationDuringFollowUpLeavesDocumentUnchanged(t *testing.T) {
+	doc, box := shellBox(t)
+	_, err := box.Shell(topCap(box), units.Millimeters(5))
+	require.NoError(t, err)
+	before := doc.Recipe()
+	bodies := doc.Bodies()
+	ctx := &operationCancelContext{Context: t.Context(), target: "recordLoopsBudget"}
+
+	report, err := doc.Verify(ctx, decad.WithMinWallThickness(units.Millimeters(1)))
+
+	require.Nil(t, report)
+	require.ErrorIs(t, err, context.Canceled)
+	require.True(t, ctx.entered)
+	require.Equal(t, before, doc.Recipe())
+	require.Equal(t, bodies, doc.Bodies())
+}
+
 func TestShellCupWallThickness(t *testing.T) {
 	const th = 5.0
 
