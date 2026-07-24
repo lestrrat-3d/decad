@@ -98,6 +98,7 @@ func TestDiagnosticCodeTokens(t *testing.T) {
 	require.Equal(t, "unsupported_pair", decad.DiagUnsupportedPair.String())
 	require.Equal(t, "undecided_clearance", decad.DiagUndecidedClearance.String())
 	require.Equal(t, "undecided_interference", decad.DiagUndecidedInterference.String())
+	require.Equal(t, "unsupported_survey_payload", decad.DiagUnsupportedSurveyPayload.String())
 	// An out-of-range value renders diagnostic(<n>), never a panic.
 	require.Equal(t, "diagnostic(99)", decad.DiagnosticCode(99).String())
 }
@@ -159,6 +160,30 @@ func TestVerifyDiagnosticsUndercut(t *testing.T) {
 	require.Equal(t, decad.ReadingNone, d.Reading, `an undercut is a predicate, not a scalar`)
 	require.Same(t, report.Bodies[0].Body, d.Body)
 	require.NotEmpty(t, report.Bodies[0].Undercuts, `the faces are listed on the BodyReport`)
+}
+
+func TestVerifyDiagnosticsUnsupportedFacetedSurveys(t *testing.T) {
+	doc, body := allPlanarBoolean(t, 1)
+	report, err := doc.Verify(t.Context(),
+		decad.WithMinWallThickness(units.Millimeters(1)),
+		decad.WithPullDirection(r3.NewVec(0, 0, 1)),
+		decad.WithMinRadius())
+	require.NoError(t, err)
+
+	require.Equal(t, decad.Suspect, report.Status)
+	requireDiagnosticInvariants(t, report)
+	require.Len(t, report.Diagnostics, 3, `each staged faceted survey names its own refusal`)
+	for _, diagnostic := range report.Diagnostics {
+		require.Equal(t, decad.DiagUnsupportedSurveyPayload, diagnostic.Code)
+		require.Equal(t, decad.Suspect, diagnostic.Status)
+		require.Equal(t, decad.ReadingNone, diagnostic.Reading)
+		require.Same(t, body, diagnostic.Body)
+		require.Contains(t, diagnostic.Message, "facetedPayload")
+		require.Contains(t, diagnostic.Message, "use an analytic body")
+	}
+	require.Contains(t, report.Diagnostics[0].Message, "wall survey")
+	require.Contains(t, report.Diagnostics[1].Message, "pull survey")
+	require.Contains(t, report.Diagnostics[2].Message, "concave-radius survey")
 }
 
 func TestVerifyDiagnosticsInterference(t *testing.T) {

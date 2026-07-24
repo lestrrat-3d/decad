@@ -23,25 +23,41 @@ import (
 // payload no shipped feature builds — leaves every asked question undecided,
 // which reads Suspect, never a silent pass.
 
+// surveyReason retains why a survey was not decided. The zero reason is a
+// numerical or geometric undecided result; surveyFacetedUnsupported records
+// the known payload capability gap before runSurveys maps it to a diagnostic.
+type surveyReason int
+
+const (
+	surveyUndecided surveyReason = iota
+	surveyFacetedUnsupported
+)
+
 // wallOutcome is one body's wall reading: ok=false is an undecided survey;
-// reading == nil (with ok) is the proven determination that no wall exists.
+// reason distinguishes its cause. reading == nil (with ok) is the proven
+// determination that no wall exists.
 type wallOutcome struct {
 	reading *float64 // millimetres
 	ok      bool
+	reason  surveyReason
 }
 
 // undercutOutcome is one body's undercut listing: ok=false is undecided;
-// faces is non-nil when decided, and empty is the proven all-clear.
+// reason distinguishes its cause. faces is non-nil when decided, and empty is
+// the proven all-clear.
 type undercutOutcome struct {
-	faces []*Face
-	ok    bool
+	faces  []*Face
+	ok     bool
+	reason surveyReason
 }
 
 // radiusOutcome is one body's tightest concave radius: ok=false is
-// undecided; reading == nil (with ok) is the proven all-convex answer.
+// undecided and reason distinguishes its cause; reading == nil (with ok) is
+// the proven all-convex answer.
 type radiusOutcome struct {
 	reading *float64 // millimetres
 	ok      bool
+	reason  surveyReason
 }
 
 // recordLoops resolves the recorded profile into coalesced walk loops,
@@ -833,16 +849,18 @@ func runSurveys(br *BodyReport, cfg verifyConfig) []Diagnostic {
 			out = revolveWall(pl, cfg.allowRad)
 		case cupPayload:
 			out = cupWall(pl, cfg.allowRad)
+		case facetedPayload:
+			out.reason = surveyFacetedUnsupported
 		}
 		switch {
 		case !out.ok:
-			diags = append(diags, Diagnostic{
-				Code:    DiagUndecidedWall,
-				Status:  Suspect,
-				Body:    b,
-				Reading: ReadingNone,
-				Message: "the wall survey could neither answer nor prove no wall exists",
-			})
+			diags = append(diags, surveyRefusalDiagnostic(
+				b,
+				out.reason,
+				DiagUndecidedWall,
+				"the wall survey could neither answer nor prove no wall exists",
+				"facetedPayload wall survey support is not implemented; use an analytic body or wait for faceted wall support",
+			))
 		case out.reading != nil:
 			m := exactLengthMeasurement(*out.reading)
 			br.MinWallThickness = &m
@@ -883,16 +901,18 @@ func runSurveys(br *BodyReport, cfg verifyConfig) []Diagnostic {
 			out = revolveUndercuts(b, pl, *cfg.pull)
 		case cupPayload:
 			out = cupUndercuts(b, pl, *cfg.pull)
+		case facetedPayload:
+			out.reason = surveyFacetedUnsupported
 		}
 		switch {
 		case !out.ok:
-			diags = append(diags, Diagnostic{
-				Code:    DiagUndecidedUndercut,
-				Status:  Suspect,
-				Body:    b,
-				Reading: ReadingNone,
-				Message: "the pull survey could neither prove nor exclude an undercut",
-			})
+			diags = append(diags, surveyRefusalDiagnostic(
+				b,
+				out.reason,
+				DiagUndecidedUndercut,
+				"the pull survey could neither prove nor exclude an undercut",
+				"facetedPayload pull survey support is not implemented; use an analytic body or wait for faceted undercut support",
+			))
 		default:
 			br.Undercuts = out.faces
 			if len(out.faces) > 0 {
@@ -920,16 +940,18 @@ func runSurveys(br *BodyReport, cfg verifyConfig) []Diagnostic {
 			out, ok = revolveMinRadius(pl)
 		case cupPayload:
 			out, ok = cupMinRadius(pl)
+		case facetedPayload:
+			out.reason = surveyFacetedUnsupported
 		}
 		switch {
 		case !ok || !out.ok:
-			diags = append(diags, Diagnostic{
-				Code:    DiagUndecidedMinRadius,
-				Status:  Suspect,
-				Body:    b,
-				Reading: ReadingNone,
-				Message: "the concave-radius survey could neither measure nor exclude a concave feature",
-			})
+			diags = append(diags, surveyRefusalDiagnostic(
+				b,
+				out.reason,
+				DiagUndecidedMinRadius,
+				"the concave-radius survey could neither measure nor exclude a concave feature",
+				"facetedPayload concave-radius survey support is not implemented; use an analytic body or wait for faceted radius support",
+			))
 		case out.reading != nil:
 			m := exactLengthMeasurement(*out.reading)
 			br.MinRadius = &m
@@ -937,6 +959,26 @@ func runSurveys(br *BodyReport, cfg verifyConfig) []Diagnostic {
 	}
 
 	return diags
+}
+
+func surveyRefusalDiagnostic(
+	body *Body,
+	reason surveyReason,
+	undecidedCode DiagnosticCode,
+	undecidedMessage string,
+	unsupportedMessage string,
+) Diagnostic {
+	code, message := undecidedCode, undecidedMessage
+	if reason == surveyFacetedUnsupported {
+		code, message = DiagUnsupportedSurveyPayload, unsupportedMessage
+	}
+	return Diagnostic{
+		Code:    code,
+		Status:  Suspect,
+		Body:    body,
+		Reading: ReadingNone,
+		Message: message,
+	}
 }
 
 // exactLengthMeasurement wraps a closed-form millimetre reading.

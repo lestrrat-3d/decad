@@ -184,6 +184,9 @@ const (
 	// Suspect. Reading ReadingNone, Observed and Required nil, Pair set.
 	// Contributes Suspect.
 	DiagUndecidedInterference
+	// DiagUnsupportedSurveyPayload — an asked body survey cannot run because
+	// its payload class is staged. Reading ReadingNone. Contributes Suspect.
+	DiagUnsupportedSurveyPayload
 )
 
 // String renders the pinned lower-snake token — the identity a caller branches
@@ -217,6 +220,8 @@ func (c DiagnosticCode) String() string {
 		return "undecided_clearance"
 	case DiagUndecidedInterference:
 		return "undecided_interference"
+	case DiagUnsupportedSurveyPayload:
+		return "unsupported_survey_payload"
 	default:
 		return fmt.Sprintf("diagnostic(%d)", int(c))
 	}
