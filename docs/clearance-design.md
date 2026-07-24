@@ -121,6 +121,13 @@ local minimum, the global one included, is a candidate in exactly one tier:
 | edge interior × vertex | foot of the point on the curve | point–curve, closed form for all three curves |
 | vertex × vertex | — | a distance |
 
+Tier enumeration uses one shared work counter for cancellation. Every outer
+face, edge and vertex cell steps it; a vertex tier continues that same counter
+through each inner face and edge. Planar vertex admission also steps it for
+every boundary-distance element, retry direction and winding element. The
+counter polls the context at least once per 256 combined operations and at the
+phase boundary.
+
 The vertex tiers quantify over the face's STATIONARY POINTS, not only the
 topology's vertices: a cone's apex is a surface singular point — the normal
 is undefined there, so no interior first-order condition holds and a minimum

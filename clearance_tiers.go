@@ -609,23 +609,37 @@ func (k *pairKernel) circleCircleEE(ea, eb *cEdge, sink *cellSink) {
 
 // vertexTier runs one vertex (a topological vertex, a synthesized cone apex
 // or a spindle axis-collapse point) against the other body's faces and
-// edges — every cell closed form (§3's vertex tiers).
-func (k *pairKernel) vertexTier(v r3.Vec, other *bodyGeom, sink *cellSink) {
+// edges — every cell closed form (§3's vertex tiers). It continues the
+// enumerator's budget through every face, edge, and planar trim scan.
+func (k *pairKernel) vertexTier(budget *workBudget, v r3.Vec, other *bodyGeom, sink *cellSink) error {
 	for _, f := range other.faces {
-		k.vertexFace(v, f, sink)
+		if err := budget.step(); err != nil {
+			return err
+		}
+		if err := k.vertexFace(budget, v, f, sink); err != nil {
+			return err
+		}
 	}
 	for _, e := range other.edges {
+		if err := budget.step(); err != nil {
+			return err
+		}
 		k.vertexEdge(v, e, sink)
 	}
+	return nil
 }
 
-func (k *pairKernel) vertexFace(v r3.Vec, f *cFace, sink *cellSink) {
+func (k *pairKernel) vertexFace(budget *workBudget, v r3.Vec, f *cFace, sink *cellSink) error {
 	switch f.kind {
 	case ckPlane:
 		h := v.Sub(f.o).Dot(f.n)
 		foot := v.Sub(f.n.Scale(h))
 		x, y := f.planeCoords(foot)
-		sink.candidate(k, f.region.classify(x, y, k.tol), math.Abs(h), math.Abs(h), true, foot, v)
+		admit, err := regionClassifyBudget(budget, f.region, x, y, k.tol)
+		if err != nil {
+			return err
+		}
+		sink.candidate(k, admit, math.Abs(h), math.Abs(h), true, foot, v)
 	case ckCone:
 		rel := v.Sub(f.anchor)
 		z := rel.Dot(f.axis)
@@ -648,11 +662,11 @@ func (k *pairKernel) vertexFace(v r3.Vec, f *cFace, sink *cellSink) {
 			// The distance is azimuth-free, the admission foot is not. The
 			// carrier distance is a proven lower bound; it stands as one.
 			sink.loOnly(math.Abs(rho*cosA - z*sinA))
-			return
+			return nil
 		}
 		t := z*cosA + rho*sinA
 		if t <= k.tol {
-			return // the apex holds the nearest point; the vertex tiers pair with it
+			return nil // the apex holds the nearest point; the vertex tiers pair with it
 		}
 		pf := f.anchor.Add(f.axis.Scale(t * cosA)).Add(radial.Scale(t * sinA))
 		d := math.Abs(rho*cosA - z*sinA)
@@ -661,7 +675,7 @@ func (k *pairKernel) vertexFace(v r3.Vec, f *cFace, sink *cellSink) {
 		d, foot := spineDistOf(f, v)
 		if d <= k.tol {
 			sink.unsure = true
-			return
+			return nil
 		}
 		dir := v.Sub(foot).Scale(1 / d)
 		for _, sf := range []float64{1, -1} {
@@ -670,6 +684,7 @@ func (k *pairKernel) vertexFace(v r3.Vec, f *cFace, sink *cellSink) {
 			sink.candidate(k, f.admitPoint(pf, k.tol), math.Abs(raw), math.Abs(raw), true, pf, v)
 		}
 	}
+	return nil
 }
 
 func (k *pairKernel) vertexEdge(v r3.Vec, e *cEdge, sink *cellSink) {
