@@ -422,9 +422,9 @@ func (pp prismPayload) reflected() bool { return pp.xform.IsReflection() }
 func (pp prismPayload) transform() r3.Transform { return pp.xform }
 
 // placed re-evaluates the same record under the composed motion.
-func (pp prismPayload) placed(_ context.Context, d *Document, ref StepRef, composed r3.Transform) (*Body, error) {
+func (pp prismPayload) placed(ctx context.Context, d *Document, ref StepRef, composed r3.Transform) (*Body, error) {
 	pp.xform = composed
-	return evalPrism(d, ref, pp)
+	return evalPrismContext(ctx, d, ref, pp)
 }
 
 // evalPrism builds the analytic prism body from the payload: side faces per
@@ -433,6 +433,13 @@ func (pp prismPayload) placed(_ context.Context, d *Document, ref StepRef, compo
 // are line, circle and arc; anything else has already been rejected by the
 // mass-property integrals it runs first.
 func evalPrism(d *Document, ref StepRef, pp prismPayload) (*Body, error) {
+	return evalPrismContext(context.Background(), d, ref, pp)
+}
+
+func evalPrismContext(ctx context.Context, d *Document, ref StepRef, pp prismPayload) (*Body, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	ig, err := pp.profile.evaluatorIntegralsUnchecked(momentFirstOrder)
 	if err != nil {
 		return nil, err
@@ -478,7 +485,10 @@ func evalPrism(d *Document, ref StepRef, pp prismPayload) (*Body, error) {
 	perimeter := boundedScalar{}
 	loops := append([]LoopRecord{pp.profile.Outer}, pp.profile.Holes...)
 	for li, loop := range loops {
-		sideFaces, bottom, top, loopLen, err := buildLoopSides(body, ref, pp, li, loop)
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		sideFaces, bottom, top, loopLen, err := buildLoopSides(ctx, body, ref, pp, li, loop)
 		if err != nil {
 			return nil, err
 		}
@@ -531,8 +541,11 @@ func evalPrism(d *Document, ref StepRef, pp prismPayload) (*Body, error) {
 		Exactness: exactnessOf(centroidBound),
 		Bound:     units.Millimeters(centroidBound),
 	}
-	bounds, err := prismBounds(pp)
+	bounds, err := prismBoundsContext(ctx, pp)
 	if err != nil {
+		return nil, err
+	}
+	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 	body.bounds = bounds
@@ -790,8 +803,8 @@ func coalesceWalksBudget(walks []sideWalk, budget *workBudget) ([]sideWalk, erro
 // and the loop's perimeter length. A loop's index is both its role index and,
 // via li != 0, its orientation: loop 0 is an outer loop (material inside),
 // every other a hole (material outside).
-func buildLoopSides(body *Body, ref StepRef, pp prismPayload, li int, loop LoopRecord) ([]*Face, []coedge, []coedge, boundedScalar, error) {
-	return buildLoopSidesAs(body, ref, pp, li, li != 0, loop)
+func buildLoopSides(ctx context.Context, body *Body, ref StepRef, pp prismPayload, li int, loop LoopRecord) ([]*Face, []coedge, []coedge, boundedScalar, error) {
+	return buildLoopSidesAs(ctx, body, ref, pp, li, li != 0, loop)
 }
 
 // buildLoopSidesAs is buildLoopSides with the role index and the orientation
@@ -801,13 +814,19 @@ func buildLoopSides(body *Body, ref StepRef, pp prismPayload, li int, loop LoopR
 // hole in the solid (holeLoop true), each of the void's own holes a solid post
 // (holeLoop false) — a pairing the natural li != 0 rule cannot express
 // (docs/modify-design.md §9).
-func buildLoopSidesAs(body *Body, ref StepRef, pp prismPayload, roleLoop int, holeLoop bool, loop LoopRecord) ([]*Face, []coedge, []coedge, boundedScalar, error) {
+func buildLoopSidesAs(ctx context.Context, body *Body, ref StepRef, pp prismPayload, roleLoop int, holeLoop bool, loop LoopRecord) ([]*Face, []coedge, []coedge, boundedScalar, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, nil, nil, boundedScalar{}, err
+	}
 	if len(loop.Segments) == 0 {
 		return nil, nil, nil, boundedScalar{}, fmt.Errorf(`%w: a recorded loop holds no segments`, ErrDegenerate)
 	}
 	raw := make([]sideWalk, len(loop.Segments))
 	total := boundedScalar{}
 	for i, seg := range loop.Segments {
+		if err := ctx.Err(); err != nil {
+			return nil, nil, nil, 0, err
+		}
 		w, err := walkOf(seg)
 		if err != nil {
 			return nil, nil, nil, boundedScalar{}, err
@@ -827,6 +846,9 @@ func buildLoopSidesAs(body *Body, ref StepRef, pp prismPayload, roleLoop int, ho
 		bottomV = make([]*Vertex, n)
 		topV = make([]*Vertex, n)
 		for i, w := range walks {
+			if err := ctx.Err(); err != nil {
+				return nil, nil, nil, 0, err
+			}
 			bottomV[i] = &Vertex{position: pp.point(w.startU, w.startV, pp.z0), bound: units.Millimeters(0)}
 			topV[i] = &Vertex{position: pp.point(w.startU, w.startV, pp.z1), bound: units.Millimeters(0)}
 		}
@@ -841,6 +863,9 @@ func buildLoopSidesAs(body *Body, ref StepRef, pp prismPayload, roleLoop int, ho
 	if !singleClosed {
 		vertical = make([]*Edge, n)
 		for i := range walks {
+			if err := ctx.Err(); err != nil {
+				return nil, nil, nil, 0, err
+			}
 			prev := walks[(i+n-1)%n]
 			cross := prev.tanOutU*walks[i].tanInV - prev.tanOutV*walks[i].tanInU
 			vertical[i] = &Edge{
@@ -859,6 +884,9 @@ func buildLoopSidesAs(body *Body, ref StepRef, pp prismPayload, roleLoop int, ho
 	bottomCo := make([]coedge, 0, n)
 	topCo := make([]coedge, 0, n)
 	for i, w := range walks {
+		if err := ctx.Err(); err != nil {
+			return nil, nil, nil, 0, err
+		}
 		var bStart, bEnd, tStart, tEnd *Vertex
 		if !singleClosed {
 			bStart, tStart = bottomV[i], topV[i]
@@ -987,14 +1015,18 @@ func buildLoopSidesAs(body *Body, ref StepRef, pp prismPayload, roleLoop int, ho
 // extentAlong is the prism's exact extent interval along an arbitrary world
 // direction g — the lifted linear functional point·g = origin·g + u·(U'·g)
 // + v·(V'·g) + z·(N'·g), primes the placed directions, extremized over the
-// region boundary and the sweep. Shared by prismBounds and the through-all
+// region boundary and the sweep. Shared by prismBoundsContext and the through-all
 // stop resolution (docs/evaluator-design.md §5).
 func (pp prismPayload) extentAlong(g r3.Vec) (float64, float64, error) {
+	return pp.extentAlongContext(context.Background(), g)
+}
+
+func (pp prismPayload) extentAlongContext(ctx context.Context, g r3.Vec) (float64, float64, error) {
 	base := pp.xform.Apply(pp.frame.Origin()).Dot(g)
 	gu := pp.dir(1, 0, 0).Dot(g)
 	gv := pp.dir(0, 1, 0).Dot(g)
 	gz := pp.dir(0, 0, 1).Dot(g)
-	lo, hi, err := boundaryExtremes(pp.profile, gu, gv)
+	lo, hi, err := boundaryExtremesContext(ctx, pp.profile, gu, gv)
 	if err != nil {
 		return 0, 0, err
 	}
@@ -1003,15 +1035,18 @@ func (pp prismPayload) extentAlong(g r3.Vec) (float64, float64, error) {
 	return base + lo + zlo, base + hi + zhi, nil
 }
 
-// prismBounds computes the exact axis-aligned bounds of the placed prism:
+// prismBoundsContext computes the exact axis-aligned bounds of the placed prism:
 // for each world axis, the directional extreme of the region boundary under
 // the lifted linear functional, plus the sweep's own extreme
 // (docs/evaluator-design.md §5).
-func prismBounds(pp prismPayload) (Box, error) {
+func prismBoundsContext(ctx context.Context, pp prismPayload) (Box, error) {
 	axes := []r3.Vec{r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1)}
 	var minC, maxC [3]float64
 	for i, axis := range axes {
-		lo, hi, err := pp.extentAlong(axis)
+		if err := ctx.Err(); err != nil {
+			return Box{}, err
+		}
+		lo, hi, err := pp.extentAlongContext(ctx, axis)
 		if err != nil {
 			return Box{}, err
 		}
@@ -1031,6 +1066,10 @@ func prismBounds(pp prismPayload) (Box, error) {
 // segment kind: line extremes at endpoints, circular extremes at the
 // functional's own angle when the walk sweeps it.
 func boundaryExtremes(profile ProfileRecord, gu, gv float64) (float64, float64, error) {
+	return boundaryExtremesContext(context.Background(), profile, gu, gv)
+}
+
+func boundaryExtremesContext(ctx context.Context, profile ProfileRecord, gu, gv float64) (float64, float64, error) {
 	lo, hi := math.Inf(1), math.Inf(-1)
 	take := func(u, v float64) {
 		g := gu*u + gv*v
@@ -1039,6 +1078,9 @@ func boundaryExtremes(profile ProfileRecord, gu, gv float64) (float64, float64, 
 	}
 	for _, loop := range append([]LoopRecord{profile.Outer}, profile.Holes...) {
 		for _, seg := range loop.Segments {
+			if err := ctx.Err(); err != nil {
+				return 0, 0, err
+			}
 			w, err := walkOf(seg)
 			if err != nil {
 				return 0, 0, err

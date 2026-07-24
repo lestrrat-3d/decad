@@ -68,6 +68,68 @@ func TestPlacementContextVariantsCancelFacetedRebuild(t *testing.T) {
 	}
 }
 
+func TestPlacementContextCancelsAnalyticRebuilds(t *testing.T) {
+	shift, err := r3.Translation(r3.NewVec(100, 0, 0))
+	require.NoError(t, err)
+
+	tests := []struct {
+		name  string
+		build func(*testing.T) (*decad.Document, *decad.Body)
+	}{
+		{
+			name: "Extrude",
+			build: func(t *testing.T) (*decad.Document, *decad.Body) {
+				s, p := plateSketch(t)
+				doc := decad.New()
+				body, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+				require.NoError(t, err)
+				return doc, body
+			},
+		},
+		{
+			name: "Revolve",
+			build: func(t *testing.T) (*decad.Document, *decad.Body) {
+				s, p := solidSketch(t)
+				doc := decad.New()
+				body, err := doc.Revolve(s, p, decad.SketchLine{
+					Start: decad.Point2{U: 0, V: 0},
+					End:   decad.Point2{U: 1, V: 0},
+				}, decad.FullRevolution{})
+				require.NoError(t, err)
+				return doc, body
+			},
+		},
+		{
+			name: "Shell",
+			build: func(t *testing.T) (*decad.Document, *decad.Body) {
+				doc, box := shellBox(t)
+				body, err := box.Shell(topCap(box), units.Millimeters(5))
+				require.NoError(t, err)
+				return doc, body
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			doc, body := test.build(t)
+			beforeBodies := doc.Bodies()
+			beforeRecipe := doc.Recipe()
+			ctx := newCancelAfterContext(t.Context(), 3)
+
+			got, err := body.PlacedContext(ctx, shift)
+			require.ErrorIs(t, err, context.Canceled)
+			require.Nil(t, got)
+			require.GreaterOrEqual(t, ctx.calls.Load(), int32(3),
+				`cancellation must reach the analytic payload rebuild`)
+			require.Equal(t, beforeBodies, doc.Bodies(),
+				`a canceled analytic rebuild must not change live bodies`)
+			require.Equal(t, beforeRecipe, doc.Recipe(),
+				`a canceled analytic rebuild must not append a recipe step`)
+		})
+	}
+}
+
 func TestPlacementContextVariantsMatchCompatibilityWrappers(t *testing.T) {
 	shift, err := r3.Translation(r3.NewVec(100, 0, 0))
 	require.NoError(t, err)

@@ -894,9 +894,9 @@ type revolvePayload struct {
 func (rp revolvePayload) transform() r3.Transform { return rp.xform }
 
 // placed re-evaluates the same record under the composed motion.
-func (rp revolvePayload) placed(_ context.Context, d *Document, ref StepRef, composed r3.Transform) (*Body, error) {
+func (rp revolvePayload) placed(ctx context.Context, d *Document, ref StepRef, composed r3.Transform) (*Body, error) {
 	rp.xform = composed
-	return evalRevolve(d, ref, rp)
+	return evalRevolveContext(ctx, d, ref, rp)
 }
 
 // revolveBasis is the unplaced world anchor of the sweep: a3 the axis
@@ -1019,6 +1019,13 @@ func boundedRevolveSweep(phi0, phi1 float64) boundedScalar {
 // and arc; anything else has already been rejected by the mass-property
 // integrals it runs first.
 func evalRevolve(d *Document, ref StepRef, rp revolvePayload) (*Body, error) {
+	return evalRevolveContext(context.Background(), d, ref, rp)
+}
+
+func evalRevolveContext(ctx context.Context, d *Document, ref StepRef, rp revolvePayload) (*Body, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	ig, err := rp.profile.evaluatorIntegralsUnchecked(momentSecondOrder)
 	if err != nil {
 		return nil, err
@@ -1070,7 +1077,10 @@ func evalRevolve(d *Document, ref StepRef, rp revolvePayload) (*Body, error) {
 	loops := append([]LoopRecord{rp.profile.Outer}, rp.profile.Holes...)
 	perLoop := make([][]*Face, len(loops))
 	for li, loop := range loops {
-		parts, err := buildRevolveLoop(body, ref, rp, b, li, loop)
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		parts, err := buildRevolveLoop(ctx, body, ref, rp, b, li, loop)
 		if err != nil {
 			return nil, err
 		}
@@ -1170,8 +1180,11 @@ func evalRevolve(d *Document, ref StepRef, rp revolvePayload) (*Body, error) {
 		Bound:     units.Millimeters(centroidBound),
 	}
 
-	bounds, err := revolveBounds(rp)
+	bounds, err := revolveBoundsContext(ctx, rp)
 	if err != nil {
+		return nil, err
+	}
+	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 	body.bounds = bounds
@@ -1229,12 +1242,18 @@ type revJunction struct {
 // buildRevolveLoop builds one loop's side faces with shared vertices and
 // edges, returning the faces, the two caps' coedges in walk order, and the
 // loop's side area.
-func buildRevolveLoop(body *Body, ref StepRef, rp revolvePayload, b revolveBasis, li int, loop LoopRecord) (revLoopParts, error) {
+func buildRevolveLoop(ctx context.Context, body *Body, ref StepRef, rp revolvePayload, b revolveBasis, li int, loop LoopRecord) (revLoopParts, error) {
+	if err := ctx.Err(); err != nil {
+		return revLoopParts{}, err
+	}
 	if len(loop.Segments) == 0 {
 		return revLoopParts{}, fmt.Errorf(`%w: a recorded loop holds no segments`, ErrDegenerate)
 	}
 	raw := make([]sideWalk, len(loop.Segments))
 	for i, seg := range loop.Segments {
+		if err := ctx.Err(); err != nil {
+			return revLoopParts{}, err
+		}
 		w, err := walkOf(seg)
 		if err != nil {
 			return revLoopParts{}, err
@@ -1268,6 +1287,9 @@ func buildRevolveLoop(body *Body, ref StepRef, rp revolvePayload, b revolveBasis
 	if !singleClosed {
 		js = make([]revJunction, n)
 		for i, w := range walks {
+			if err := ctx.Err(); err != nil {
+				return revLoopParts{}, err
+			}
 			j := revJunction{z: w.startU, rho: w.startV, onAxis: w.startV == 0}
 			prev := walks[(i+n-1)%n]
 			turn := prev.tanOutU*w.tanInV - prev.tanOutV*w.tanInU
@@ -1316,6 +1338,9 @@ func buildRevolveLoop(body *Body, ref StepRef, rp revolvePayload, b revolveBasis
 		cap0 = make([]*Edge, n)
 		cap1 = make([]*Edge, n)
 		for i, w := range walks {
+			if err := ctx.Err(); err != nil {
+				return revLoopParts{}, err
+			}
 			if kinds[i] == wallAxis {
 				shared := &Edge{
 					curve:       Line3{},
@@ -1340,6 +1365,9 @@ func buildRevolveLoop(body *Body, ref StepRef, rp revolvePayload, b revolveBasis
 
 	parts := revLoopParts{}
 	for i, w := range walks {
+		if err := ctx.Err(); err != nil {
+			return revLoopParts{}, err
+		}
 		if kinds[i] == wallAxis {
 			if !rp.full {
 				parts.startCo = append(parts.startCo, coedge{edge: cap0[i], forward: true})
@@ -1592,29 +1620,36 @@ func walkAxisMoment(w segmentWalk, kind wallKind) boundedScalar {
 // revolveBounds and the through-all stop resolution
 // (docs/evaluator-design.md §5/§6).
 func (rp revolvePayload) extentAlong(g r3.Vec) (float64, float64, error) {
+	return rp.extentAlongContext(context.Background(), g)
+}
+
+func (rp revolvePayload) extentAlongContext(ctx context.Context, g r3.Vec) (float64, float64, error) {
 	b := rp.basis()
 	base := rp.xform.Apply(b.a3).Dot(g)
 	wg := rp.xform.ApplyDir(b.w).Dot(g)
 	mlo, mhi := sweepExtremes(rp.xform.ApplyDir(b.e0).Dot(g), rp.xform.ApplyDir(b.e1).Dot(g), rp.phi0, rp.phi1, rp.full)
-	hi, err := axisExtreme(rp, wg, mhi, true)
+	hi, err := axisExtremeContext(ctx, rp, wg, mhi, true)
 	if err != nil {
 		return 0, 0, err
 	}
-	lo, err := axisExtreme(rp, wg, mlo, false)
+	lo, err := axisExtremeContext(ctx, rp, wg, mlo, false)
 	if err != nil {
 		return 0, 0, err
 	}
 	return base + lo, base + hi, nil
 }
 
-// revolveBounds computes the exact axis-aligned bounds of the placed
+// revolveBoundsContext computes the exact axis-aligned bounds of the placed
 // revolved solid — the same directional-extreme analysis the prism uses, in
 // cylindrical coordinates (docs/evaluator-design.md §6).
-func revolveBounds(rp revolvePayload) (Box, error) {
+func revolveBoundsContext(ctx context.Context, rp revolvePayload) (Box, error) {
 	axes := []r3.Vec{r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1)}
 	var minC, maxC [3]float64
 	for i, g := range axes {
-		lo, hi, err := rp.extentAlong(g)
+		if err := ctx.Err(); err != nil {
+			return Box{}, err
+		}
+		lo, hi, err := rp.extentAlongContext(ctx, g)
 		if err != nil {
 			return Box{}, err
 		}
@@ -1657,13 +1692,13 @@ func sweepExtremes(c0, c1, phi0, phi1 float64, full bool) (float64, float64) {
 	return lo, hi
 }
 
-// axisExtreme is one extreme of the linear functional wg·z + k·ρ over the
+// axisExtremeContext is one extreme of the linear functional wg·z + k·ρ over the
 // recorded boundary, evaluated in axis coordinates through the plane-local
 // boundary extremes.
-func axisExtreme(rp revolvePayload, wg, k float64, wantMax bool) (float64, error) {
+func axisExtremeContext(ctx context.Context, rp revolvePayload, wg, k float64, wantMax bool) (float64, error) {
 	gu := wg*rp.ax.dU - k*rp.ax.dV
 	gv := wg*rp.ax.dV + k*rp.ax.dU
-	lo, hi, err := boundaryExtremes(rp.profile, gu, gv)
+	lo, hi, err := boundaryExtremesContext(ctx, rp.profile, gu, gv)
 	if err != nil {
 		return 0, err
 	}
