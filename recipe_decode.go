@@ -217,7 +217,7 @@ func (s *recipeJSONPreflight) array(role recipeJSONRole, path string, stepIndex 
 		if role == recipeJSONSteps {
 			elementStepIndex = index
 		}
-		if maximum, name, bounded := recipeJSONArrayHardLimit(role, stepIndex); bounded && index >= maximum {
+		if maximum, name, bounded := recipeJSONArrayHardLimit(role); bounded && index >= maximum {
 			return recipeDecodeLimitError(elementPath, elementStepIndex, name, int64(maximum))
 		}
 		if metered {
@@ -310,7 +310,7 @@ func recipeJSONArrayElement(role recipeJSONRole) (recipeJSONRole, recipeJSONLimi
 	}
 }
 
-func recipeJSONArrayHardLimit(role recipeJSONRole, stepIndex int) (int, string, bool) {
+func recipeJSONArrayHardLimit(role recipeJSONRole) (int, string, bool) {
 	switch role {
 	case recipeJSONInputs:
 		return maxRecipeInputsPerStep, "inputs per step", true
