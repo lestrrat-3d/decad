@@ -189,6 +189,23 @@ func TestRegionMomentsRejectOpenLoop(t *testing.T) {
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 }
 
+func TestRegionMomentsAcceptsEndpointRounding(t *testing.T) {
+	// Adjacent recorded walks can differ by a few ulps after their source
+	// coordinates are evaluated independently. This is construction rounding,
+	// not a material gap such as the 1e-8 case above.
+	nextOne := math.Nextafter(1, math.Inf(1))
+	profile := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
+		decad.LineSeg{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: nextOne, V: 0}, TStart: 0, TEnd: 1},
+		decad.LineSeg{Start: decad.Point2{U: 1, V: 0}, End: decad.Point2{U: 1, V: 1}, TStart: 0, TEnd: 1},
+		decad.LineSeg{Start: decad.Point2{U: 1, V: 1}, End: decad.Point2{U: 0, V: 1}, TStart: 0, TEnd: 1},
+		decad.LineSeg{Start: decad.Point2{U: 0, V: 1}, End: decad.Point2{U: 0, V: 0}, TStart: 0, TEnd: 1},
+	}}}
+
+	area, err := profile.Area()
+	require.NoError(t, err)
+	require.True(t, area.Value.Equal(units.SquareMillimeters(1), 1e-12), `area = %s`, area.Value)
+}
+
 func TestSecondMomentsRectangle(t *testing.T) {
 	// For the axis-aligned rectangle [0,a]×[0,b] about the origin:
 	// ∫u²dA = a³b/3, ∫uv dA = a²b²/4, ∫v²dA = ab³/3.

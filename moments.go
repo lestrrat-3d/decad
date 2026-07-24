@@ -148,16 +148,16 @@ func validateMomentLoop(loop LoopRecord, loopIndex int) error {
 	return nil
 }
 
-// momentWalksJoin uses exact comparison for line junctions. A circular walk
-// can have a few ulps of endpoint error from parameter evaluation, so it gets
-// only that rounding allowance; this is not a geometric distance weld.
+// momentWalksJoin permits only the endpoint rounding from evaluating a recorded
+// walk. This is not a geometric distance weld: a material gap remains open.
 func momentWalksJoin(a, b segmentWalk) bool {
-	if !a.circular && !b.circular {
-		return a.endU == b.startU && a.endV == b.startV
-	}
 	scale := math.Max(math.Abs(a.endU), math.Abs(a.endV))
 	scale = math.Max(scale, math.Abs(b.startU))
 	scale = math.Max(scale, math.Abs(b.startV))
+	// A line's endpoint can be close to the origin after cancellation, where
+	// its coordinates alone would not describe the arithmetic scale.
+	scale = math.Max(scale, a.length)
+	scale = math.Max(scale, b.length)
 	if a.circular {
 		scale = math.Max(scale, a.radius)
 	}
