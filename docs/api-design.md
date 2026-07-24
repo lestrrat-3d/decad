@@ -685,6 +685,13 @@ type ShellOpts struct {
 }
 ```
 
+For the current wire variants, `ExtrudeOpts.Taper` and `ShellOpts.Sense` are
+required payload fields. The decoder reads them through presence-aware pointer
+wire fields, then constructs the value-form variant. A missing or explicit-null
+payload rejects; it NEVER means zero taper or `Inward`. Feature-call defaults
+are materialized in the recorded `StepOpts`, so canonical output always carries
+the field.
+
 The completeness rule applied to options: **every `ExtrudeOption`,
 `RevolveOption`, `FilletOption`, `ChamferOption` and `ShellOption` MUST be
 representable in the corresponding `…Opts` struct.** An option with nowhere to land

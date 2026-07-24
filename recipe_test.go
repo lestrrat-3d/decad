@@ -135,6 +135,34 @@ func TestStepOptsCodec(t *testing.T) {
 		`a step with no op is malformed, never silently an extrude`)
 }
 
+func TestStepOptsCodecRequiresPayloadFields(t *testing.T) {
+	var step decad.Step
+	require.Error(t, json.Unmarshal([]byte(`{"op":"extrude","opts":{"kind":"extrude"}}`), &step),
+		`extrude options require taper`)
+	require.Error(t, json.Unmarshal([]byte(`{"op":"extrude","opts":{"kind":"extrude","taper":null}}`), &step),
+		`an explicit null taper is not a present value`)
+	require.Error(t, json.Unmarshal([]byte(`{"op":"shell","opts":{"kind":"shell"}}`), &step),
+		`shell options require sense`)
+	require.Error(t, json.Unmarshal([]byte(`{"op":"shell","opts":{"kind":"shell","sense":null}}`), &step),
+		`an explicit null sense is not a present value`)
+}
+
+func TestStepOptsCodecAcceptsPresentPayloadFields(t *testing.T) {
+	var extrude decad.Step
+	require.NoError(t, json.Unmarshal([]byte(`{"op":"extrude","opts":{"kind":"extrude","taper":"0 deg"}}`), &extrude))
+	require.Equal(t, decad.ExtrudeOpts{Taper: units.Degrees(0)}, extrude.Opts)
+
+	var shell decad.Step
+	require.NoError(t, json.Unmarshal([]byte(`{"op":"shell","opts":{"kind":"shell","sense":"outward"}}`), &shell))
+	require.Equal(t, decad.ShellOpts{Sense: decad.Outward}, shell.Opts)
+}
+
+func TestStepOptsCodecRejectsInvalidPayloadFields(t *testing.T) {
+	var step decad.Step
+	require.Error(t, json.Unmarshal([]byte(`{"op":"extrude","opts":{"kind":"extrude","taper":"not-a-value"}}`), &step))
+	require.Error(t, json.Unmarshal([]byte(`{"op":"shell","opts":{"kind":"shell","sense":"sideways"}}`), &step))
+}
+
 func TestPlacementKeyingCodec(t *testing.T) {
 	// The Placement keying is presence-aware and bidirectional: the placing
 	// ops REQUIRE a nonzero placement, every other op FORBIDS the field.

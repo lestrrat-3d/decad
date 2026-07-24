@@ -238,6 +238,13 @@ whose sealed forms are pointers by design. Decoded selectors are newly
 allocated. Every slice is newly owned. `StepOpts` receives the same normalize +
 clone path as extents, axes, segments, and selectors.
 
+Every current `StepOpts` payload field is required on the wire:
+`{"kind":"extrude"}` requires `taper`, and `{"kind":"shell"}` requires `sense`.
+Each variant decodes through pointer payload fields before constructing its
+value form. A missing or explicit-null payload is invalid; it NEVER becomes
+zero taper or `Inward`. Immediate feature-call defaults are materialized and
+recorded explicitly before encoding.
+
 ## 3. Validation layers
 
 Validation has three layers. Each layer runs before the next.
@@ -324,9 +331,11 @@ value. Every field not listed as required or allowed MUST be absent.
 
 Additional rules:
 
-- `ExtrudeOpts.Taper` MUST be an angle. Zero and nonzero are both valid intent.
+- `ExtrudeOpts.Taper` MUST be present on the wire and MUST be an angle. Zero
+  and nonzero are both valid intent.
 - Fillet radius, chamfer distance, and shell thickness MUST be positive lengths.
-- `ShellOpts.Sense` MUST be `Inward` or `Outward`.
+- `ShellOpts.Sense` MUST be present on the wire and MUST be `Inward` or
+  `Outward`.
 - Extrude and revolve `Profile.Outer` MUST be non-empty.
 - `Extent` is required only for extrude.
 - `Angular` + `Axis` are required only for revolve.
@@ -784,6 +793,8 @@ immediate feature call.
   points/scalars, selectors, and predicates; instrument typed decoding to prove
   no corresponding slice grows past its limit;
 - pointer forms normalize; typed nils reject;
+- each `StepOpts` variant rejects missing and explicit-null required payloads,
+  accepts present defaults, and rejects malformed payload values;
 - canonical bytes stable across repeated encoding.
 
 ### 10.2 Validation
