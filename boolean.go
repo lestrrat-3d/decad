@@ -341,7 +341,7 @@ func evaluateBoolean(ctx context.Context, op OpKind, a, b *Body) (booleanEvaluat
 	}
 	if err := refuseUndecidableProximity(ctx, ma, mb, bmA, bmB); err != nil {
 		if errors.Is(err, ErrUnsupported) {
-			err = expectedBoolean(booleanExpectedUnsupported, err)
+			err = expectedBoolean(booleanExpectedContact, err)
 		}
 		return booleanEvaluation{}, err
 	}

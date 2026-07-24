@@ -265,6 +265,32 @@ func TestVerifyDiagnosticsUnsupportedPairStagedContact(t *testing.T) {
 	require.False(t, pipeline, `a contact refusal is not an in-pipeline reach`)
 }
 
+func TestVerifyDiagnosticsProximityRefusalIsContact(t *testing.T) {
+	// The cylinder's analytic surface overlaps the plate's x = 20 face by only
+	// 0.0005 mm. The pre-tessellation proximity gate refuses the undecidable
+	// chord result, so Verify must retain the contact cause for its diagnostic.
+	doc := decad.New()
+	boxBody(t, doc, 0, 0, 20, 20, 8)
+	translated(t, diskBody(t, doc, 29.9995, 10, 10), 0, 0, -6)
+
+	report, err := doc.Verify(t.Context())
+	require.NoError(t, err)
+
+	require.Equal(t, decad.Suspect, report.Status)
+	requireDiagnosticInvariants(t, report)
+
+	d, ok := findDiagnostic(report.Diagnostics, decad.DiagUnsupportedPairContact)
+	require.True(t, ok, `a proximity refusal emits the contact diagnostic`)
+	require.Equal(t, decad.Suspect, d.Status)
+	require.Equal(t, decad.ReadingNone, d.Reading)
+	require.Nil(t, d.Body)
+	require.NotNil(t, d.Pair)
+	require.Contains(t, d.Message, `contact`)
+
+	_, pipeline := findDiagnostic(report.Diagnostics, decad.DiagUnsupportedPairPipeline)
+	require.False(t, pipeline, `a proximity refusal is not an in-pipeline reach`)
+}
+
 func TestVerifyDiagnosticsBeyondTolerance(t *testing.T) {
 	// A faceted union carries an Approximate reading; a tolerance just below the
 	// proven boundary pushes its bound past the gate.
