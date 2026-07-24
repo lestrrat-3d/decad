@@ -149,7 +149,7 @@ func TestPrismWallSubToleranceWebIsUndecided(t *testing.T) {
 				CircleSeg{Center: Point2{U: 0, V: 0}, Radius: units.Millimeters(10), CCW: true, TStart: 0, TEnd: 1},
 			}},
 			Holes: []LoopRecord{{Segments: []CurveSegment{
-				CircleSeg{Center: Point2{U: 0, V: 0}, Radius: units.Millimeters(10 - 2e-8), CCW: false, TStart: 0, TEnd: 1},
+				CircleSeg{Center: Point2{U: 0, V: 0}, Radius: units.Millimeters(10 - 2e-8), CCW: false, TStart: 1, TEnd: 0},
 			}}},
 		},
 		z0: 0, z1: 10,
