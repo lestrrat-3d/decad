@@ -2,6 +2,7 @@ package decad
 
 import (
 	"context"
+	"errors"
 	"math"
 
 	"github.com/lestrrat-3d/r3"
@@ -1005,12 +1006,15 @@ func shellWitness(sh *Shell) (r3.Vec, bool) {
 // addPrismFaces builds the prism's faces from its own payload, mirroring the
 // walk decomposition the evaluator built the topology from.
 func (g *bodyGeom) addPrismFaces(budget *workBudget, pp prismPayload) (bool, error) {
-	loops, err := recordLoops(nil, pp.profile)
+	loops, err := recordLoops(budget, pp.profile)
 	if err != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return false, err
+		}
 		// A section this kernel cannot decompose is an unsupported payload, not
 		// a failure: newBodyGeom answers with no model rather than a partial
 		// one. The error return is reserved for cancellation.
-		return false, nil //nolint:nilerr // an undecomposable section is ok=false, never an error.
+		return false, nil
 	}
 	nDir := pp.dir(0, 0, 1)
 	h := pp.z1 - pp.z0

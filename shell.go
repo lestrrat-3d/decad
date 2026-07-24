@@ -368,7 +368,7 @@ func sectionInradius(profile ProfileRecord) (float64, error) {
 	// fitMax is +Inf: the inradius is a property of the section alone, with no
 	// height constraint (that constraint only bears on spanning, not the
 	// largest inscribed disk).
-	k := newWallKernel(elems, nil, verts, 0, 0, false, math.Inf(1))
+	k := newWallKernel(elems, verts, 0, math.Inf(1))
 	out, err := k.runBudget(newWallWorkBudget(shellInradiusWorkLimit))
 	if errors.Is(err, errWallWorkBudget) {
 		return 0, fmt.Errorf(`%w: inward shell section survey exceeded the fixed work budget of %d during candidate generation or validation`, ErrUnsupported, shellInradiusWorkLimit)

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"reflect"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -192,7 +191,10 @@ func prismWall(budget *workBudget, pp prismPayload, alpha float64) (wallOutcome,
 		}
 	}
 	h := pp.z1 - pp.z0
-	k := newWallKernel(elems, nil, verts, alpha, 0, false, h)
+	k, err := newWallKernelBudget(budget, elems, nil, verts, alpha, 0, false, h)
+	if err != nil {
+		return wallOutcome{}, err
+	}
 	out, err := k.runBudget(budget)
 	if err != nil {
 		return wallOutcome{}, err
@@ -322,7 +324,10 @@ func revolveWall(budget *workBudget, rp revolvePayload, alpha float64) (wallOutc
 		wedgeS = math.Sin(math.Min(dphi/2, math.Pi/2))
 		wedgeSpans = dphi <= alpha+survAngTol
 	}
-	k := newWallKernel(elems, containOnly, verts, alpha, wedgeS, wedgeSpans, math.Inf(1))
+	k, err := newWallKernelBudget(budget, elems, containOnly, verts, alpha, wedgeS, wedgeSpans, math.Inf(1))
+	if err != nil {
+		return wallOutcome{}, err
+	}
 	out, err := k.runBudget(budget)
 	if err != nil {
 		return wallOutcome{}, err
@@ -726,7 +731,14 @@ func cupWall(budget *workBudget, cp cupPayload, alpha float64) (wallOutcome, err
 			}
 			return false, nil
 		}
-		if !reflect.DeepEqual(got, want) {
+		same, err := profileRecordsEqual(budget, got, want)
+		if err != nil {
+			if isCancellation(err) {
+				return false, err
+			}
+			return false, nil
+		}
+		if !same {
 			return false, nil
 		}
 		if err := auditOffsetSectionBudget(budget, orig, got); err != nil {

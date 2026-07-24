@@ -484,8 +484,7 @@ func TestAnalyticBodiesEqualMatchesPlainPrismSetIdentity(t *testing.T) {
 func TestNewBodyGeomCancellationIsBounded(t *testing.T) {
 	doc := New()
 	// A real prism, its recorded section swapped for a 300-sided polygon:
-	// building the carrier faces steps the budget once per wall, past the
-	// polling interval, well before either operand's model is finished.
+	// resolving the carrier profile must poll before the carrier faces are built.
 	body := internalBoxBody(t, doc, 0, 0, 10, 10, 5)
 	pp, ok := body.payload.(prismPayload)
 	require.True(t, ok)
@@ -499,7 +498,7 @@ func TestNewBodyGeomCancellationIsBounded(t *testing.T) {
 		segs[i] = LineSeg{Start: corner(i), End: corner(i + 1), TEnd: 1}
 	}
 	pp.profile = ProfileRecord{Outer: LoopRecord{Segments: segs}}
-	ctx := &internalFrameCancelContext{Context: t.Context(), target: "addPrismFaces"}
+	ctx := &internalFrameCancelContext{Context: t.Context(), target: "recordLoops"}
 
 	_, _, err := newBodyGeomBudget(newWorkBudget(ctx), &Body{
 		lumps:   body.lumps,
@@ -507,7 +506,7 @@ func TestNewBodyGeomCancellationIsBounded(t *testing.T) {
 	})
 	require.ErrorIs(t, err, context.Canceled)
 	require.True(t, ctx.entered,
-		`the kernel model must poll while building carrier faces, not only once both operands are built`)
+		`the kernel model must poll while resolving carrier profile loops`)
 }
 
 // TestChordingRefusalsSplitFromOperandDegeneracy pins the §7.1 line the cap

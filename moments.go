@@ -144,7 +144,7 @@ func (r ProfileRecord) integrals() (regionIntegrals, error) {
 }
 
 func (r ProfileRecord) integralsBudget(budget *workBudget) (regionIntegrals, error) {
-	record, anchor, err := validateMomentFields(r)
+	record, anchor, err := validateMomentFieldsBudget(budget, r)
 	if err != nil {
 		return regionIntegrals{}, err
 	}

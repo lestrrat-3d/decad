@@ -240,7 +240,14 @@ type wallKernel struct {
 }
 
 // newWallKernel sizes the tolerances from the geometry.
-func newWallKernel(elems, containOnly []surveyElem, verts [][2]float64, alpha, wedgeS float64, wedgeSpans bool, fitMax float64) *wallKernel {
+func newWallKernel(elems []surveyElem, verts [][2]float64, alpha float64, fitMax float64) *wallKernel {
+	k, _ := newWallKernelBudget(nil, elems, nil, verts, alpha, 0, false, fitMax)
+	return k
+}
+
+// newWallKernelBudget sizes the tolerances from the geometry while charging
+// the boundary scan to the caller's shared budget.
+func newWallKernelBudget(budget *workBudget, elems, containOnly []surveyElem, verts [][2]float64, alpha, wedgeS float64, wedgeSpans bool, fitMax float64) (*wallKernel, error) {
 	scale := 1.0
 	grow := func(vs ...float64) {
 		for _, v := range vs {
@@ -249,12 +256,17 @@ func newWallKernel(elems, containOnly []surveyElem, verts [][2]float64, alpha, w
 			}
 		}
 	}
-	for _, e := range append(append([]surveyElem{}, elems...), containOnly...) {
-		if e.kind == surveyLine {
-			grow(e.ax, e.ay, e.bx, e.by)
-			continue
+	for _, boundary := range [][]surveyElem{elems, containOnly} {
+		for _, e := range boundary {
+			if err := wallBudgetStep(budget); err != nil {
+				return nil, err
+			}
+			if e.kind == surveyLine {
+				grow(e.ax, e.ay, e.bx, e.by)
+				continue
+			}
+			grow(e.qx-e.rr, e.qx+e.rr, e.qy-e.rr, e.qy+e.rr)
 		}
-		grow(e.qx-e.rr, e.qx+e.rr, e.qy-e.rr, e.qy+e.rr)
 	}
 	return &wallKernel{
 		elems:       elems,
@@ -266,7 +278,7 @@ func newWallKernel(elems, containOnly []surveyElem, verts [][2]float64, alpha, w
 		fitMax:      fitMax,
 		scale:       scale,
 		tol:         1e-9 * scale,
-	}
+	}, nil
 }
 
 // wallSurveyOut is the kernel's answer over its candidate set.
