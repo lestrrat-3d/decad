@@ -1,12 +1,40 @@
 package decad
 
 import (
+	"context"
 	"math"
 	"testing"
 
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
+
+func TestNestingAuditCancellationReachesSectionBBox(t *testing.T) {
+	loop := LoopRecord{Segments: []CurveSegment{
+		LineSeg{Start: Point2{U: 0, V: 0}, End: Point2{U: 10, V: 0}, TEnd: 1},
+		LineSeg{Start: Point2{U: 10, V: 0}, End: Point2{U: 10, V: 10}, TEnd: 1},
+		LineSeg{Start: Point2{U: 10, V: 10}, End: Point2{U: 0, V: 10}, TEnd: 1},
+		LineSeg{Start: Point2{U: 0, V: 10}, End: Point2{U: 0, V: 0}, TEnd: 1},
+	}}
+	segs, err := buildSegEntries([]LoopRecord{loop})
+	require.NoError(t, err)
+
+	calls := 0
+	budget := &workBudget{
+		stepFn: func() error {
+			calls++
+			if calls == len(segs)+1 {
+				return context.Canceled
+			}
+			return nil
+		},
+		errFn: func() error { return nil },
+	}
+	err = nestingAuditBudget(budget, segs, 2)
+	require.ErrorIs(t, err, context.Canceled)
+	require.Equal(t, len(segs)+1, calls,
+		`the nesting audit must spend the shared budget in its section bounding-box scan`)
+}
 
 // TestContactFloorUsesTrueSectionBBox confirms the §5 noise floor δ = ε·D reads
 // the TRUE section (u, v) bounding box — an arc's own extrema, not its endpoint

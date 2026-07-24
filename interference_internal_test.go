@@ -509,6 +509,58 @@ func TestNewBodyGeomCancellationIsBounded(t *testing.T) {
 		`the kernel model must poll while resolving carrier profile loops`)
 }
 
+func TestAddRevolveFacesCancellationReachesRevolveLoops(t *testing.T) {
+	calls := 0
+	budget := &workBudget{
+		stepFn: func() error {
+			calls++
+			return context.Canceled
+		},
+		errFn: func() error { return nil },
+	}
+	_, err := (&bodyGeom{}).addRevolveFaces(budget, revolvePayload{
+		profile: ProfileRecord{Outer: LoopRecord{}},
+		ax:      axisFrame{dU: 1},
+	})
+	require.ErrorIs(t, err, context.Canceled)
+	require.Equal(t, 1, calls, `revolve carrier faces must pass the budget to meridian resolution`)
+}
+
+func TestAddRevolveFacesPreservesMeridianErrorMapping(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		seg  CurveSegment
+		want error
+	}{
+		{
+			name: "unsupported curve",
+			seg:  EllipseSeg{},
+		},
+		{
+			name: "malformed circle",
+			seg: CircleSeg{
+				Radius: units.Millimeters(1),
+				TStart: 0,
+				TEnd:   1,
+			},
+			want: ErrDegenerate,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ok, err := (&bodyGeom{}).addRevolveFaces(newWorkBudget(t.Context()), revolvePayload{
+				profile: ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{tc.seg}}},
+				ax:      axisFrame{dU: 1},
+			})
+			require.False(t, ok)
+			if tc.want == nil {
+				require.NoError(t, err)
+				return
+			}
+			require.ErrorIs(t, err, tc.want)
+		})
+	}
+}
+
 // TestChordingRefusalsSplitFromOperandDegeneracy pins the §7.1 line the cap
 // triangulator sits on. Both refusals below are ErrDegenerate to a public
 // Tessellate caller; they differ in whether a finer chording could ever change

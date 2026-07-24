@@ -1143,11 +1143,18 @@ func capWitnesses(f *cFace) []r3.Vec {
 
 // addRevolveFaces builds the revolved body's faces from its own payload.
 func (g *bodyGeom) addRevolveFaces(budget *workBudget, rp revolvePayload) (bool, error) {
-	loops, err := revolveLoops(nil, rp)
+	loops, err := revolveLoops(budget, rp)
 	if err != nil {
-		// As in addPrismFaces: an undecomposable meridian is an unsupported
-		// payload, and the error return is reserved for cancellation.
-		return false, nil //nolint:nilerr // an undecomposable meridian is ok=false, never an error.
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return false, err
+		}
+		if errors.Is(err, ErrUnsupported) {
+			// An undecomposable meridian is an unsupported payload, not a
+			// failure: newBodyGeom answers with no model rather than a partial
+			// one. Other errors remain visible to the caller.
+			return false, nil
+		}
+		return false, err
 	}
 	b := rp.basis()
 	a3p := rp.xform.Apply(b.a3)

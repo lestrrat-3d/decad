@@ -422,7 +422,10 @@ func nestingAuditBudget(budget *workBudget, segs []segEntry, nLoops int) error {
 			hasPt[s.loop] = true
 		}
 	}
-	minU, minV, maxU, maxV, ok := sectionBBox(segs)
+	minU, minV, maxU, maxV, ok, err := sectionBBoxBudget(budget, segs)
+	if err != nil {
+		return err
+	}
 	if !ok {
 		return nil
 	}
