@@ -176,6 +176,99 @@ func TestRegionMomentsRejectUnsupportedAndEmptyRecords(t *testing.T) {
 	requireProfileMomentError(t, decad.ProfileRecord{}, decad.ErrDegenerate)
 }
 
+func TestCircleSegMomentRadiusErrorsUseDecadSentinels(t *testing.T) {
+	calls := []struct {
+		name string
+		call func(decad.ProfileRecord) error
+	}{
+		{
+			name: "area",
+			call: func(rec decad.ProfileRecord) error {
+				_, err := rec.Area()
+				return err
+			},
+		},
+		{
+			name: "centroid",
+			call: func(rec decad.ProfileRecord) error {
+				_, err := rec.Centroid()
+				return err
+			},
+		},
+		{
+			name: "second moments",
+			call: func(rec decad.ProfileRecord) error {
+				_, err := rec.SecondMoments()
+				return err
+			},
+		},
+	}
+	radii := []struct {
+		name       string
+		radius     units.Value
+		want       error
+		dependency error
+	}{
+		{
+			name:       "wrong kind",
+			radius:     units.Degrees(1),
+			want:       decad.ErrUnitKind,
+			dependency: units.ErrIncompatible,
+		},
+		{
+			name:       "NaN",
+			radius:     units.Millimeters(math.NaN()),
+			want:       decad.ErrNotFinite,
+			dependency: units.ErrNotFinite,
+		},
+		{
+			name:       "infinite",
+			radius:     units.Millimeters(math.Inf(1)),
+			want:       decad.ErrNotFinite,
+			dependency: units.ErrNotFinite,
+		},
+		{
+			name:       "conversion overflow",
+			radius:     units.Meters(math.MaxFloat64),
+			want:       decad.ErrNotFinite,
+			dependency: units.ErrNotFinite,
+		},
+	}
+	forms := []struct {
+		name string
+		seg  func(units.Value) decad.CurveSegment
+	}{
+		{
+			name: "value",
+			seg: func(radius units.Value) decad.CurveSegment {
+				return decad.CircleSeg{Radius: radius, CCW: true, TEnd: 1}
+			},
+		},
+		{
+			name: "pointer",
+			seg: func(radius units.Value) decad.CurveSegment {
+				return &decad.CircleSeg{Radius: radius, CCW: true, TEnd: 1}
+			},
+		},
+	}
+
+	for _, radius := range radii {
+		for _, form := range forms {
+			rec := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
+				form.seg(radius.radius),
+			}}}
+			for _, call := range calls {
+				t.Run(radius.name+"/"+form.name+"/"+call.name, func(t *testing.T) {
+					err := call.call(rec)
+					require.ErrorIs(t, err, radius.want)
+					require.NotErrorIs(t, err, radius.dependency,
+						`mass properties expose decad's sentinel, not the units dependency error`)
+				})
+			}
+		}
+	}
+}
+
 func TestRegionMomentsPointerVariants(t *testing.T) {
 	record := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
 		&decad.LineSeg{Start: decad.Point2{}, End: decad.Point2{U: 4}, TStart: 0, TEnd: 1},
