@@ -529,9 +529,11 @@ func resolveVerifyOptions(opts []VerifyOption) (verifyConfig, error) {
 // work can therefore grow with the two facet counts multiplied together, and
 // total work also grows with the number of unresolved body pairs. Large-model
 // callers should pass a context with a deadline chosen from representative
-// inputs. After document and option validation, cancellation returns ctx.Err()
-// and a nil report; validation errors take precedence even when ctx is already
-// canceled. The document remains unchanged.
+// inputs. For a document with live bodies, after document and option
+// validation, cancellation returns ctx.Err() and a nil report; validation
+// errors take precedence even when ctx is already canceled. An empty document
+// retains its Sound result even when the context is already canceled. The
+// document remains unchanged.
 func (d *Document) Verify(ctx context.Context, opts ...VerifyOption) (*Report, error) {
 	if d == nil {
 		return nil, fmt.Errorf(`%w: a nil document owns no model`, ErrDegenerate)
@@ -540,10 +542,6 @@ func (d *Document) Verify(ctx context.Context, opts ...VerifyOption) (*Report, e
 	if err != nil {
 		return nil, err
 	}
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-
 	report := &Report{Status: Sound}
 	// Interferences is always computed — the Interfering rung reads it
 	// (verification §1). The read-only proof never consumes an operand or

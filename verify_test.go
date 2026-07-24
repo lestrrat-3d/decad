@@ -305,8 +305,11 @@ func TestVerifyContextCancellationOnEmptyDocument(t *testing.T) {
 	cancel()
 
 	report, err := doc.Verify(ctx)
-	require.ErrorIs(t, err, context.Canceled)
-	require.Nil(t, report)
+	require.NoError(t, err)
+	require.NotNil(t, report)
+	require.Equal(t, decad.Sound, report.Status)
+	require.True(t, report.Trustworthy())
+	require.Empty(t, report.Bodies)
 }
 
 func TestVerifyNilDocument(t *testing.T) {
