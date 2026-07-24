@@ -155,6 +155,9 @@ func (b *Body) PlacedContext(ctx context.Context, t r3.Transform) (*Body, error)
 	if err != nil {
 		return nil, err
 	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	d.commit(step, placed, b)
 	return placed, nil
 }
@@ -235,6 +238,9 @@ func (b *Body) copyUnder(ctx context.Context, op OpKind, motion r3.Transform) (*
 	ref := d.nextStepRef()
 	copied, err := b.payload.placed(ctx, d, ref, composed)
 	if err != nil {
+		return nil, err
+	}
+	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 	// The source is depended on, not consumed: commit with no consumed inputs,

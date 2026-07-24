@@ -41,6 +41,25 @@ func (c *cancelWhenInFrameContext) Err() error {
 	return c.Context.Err()
 }
 
+type cancelOnSecondDirectCallContext struct {
+	context.Context //nolint:containedctx // deterministic cancellation wrapper used only within one test call.
+	target          string
+	targetCalls     int
+}
+
+func (c *cancelOnSecondDirectCallContext) Err() error {
+	pcs := make([]uintptr, 32)
+	frames := runtime.CallersFrames(pcs[:runtime.Callers(2, pcs)])
+	frame, _ := frames.Next()
+	if strings.HasSuffix(frame.Function, "."+c.target) {
+		c.targetCalls++
+		if c.targetCalls == 2 {
+			return context.Canceled
+		}
+	}
+	return c.Context.Err()
+}
+
 func facetedContextBody(t *testing.T) (*decad.Document, *decad.Body) {
 	t.Helper()
 	doc := decad.New()
@@ -95,6 +114,61 @@ func TestPlacementContextVariantsCancelFacetedRebuild(t *testing.T) {
 				`a canceled rebuild must not change live bodies`)
 			require.Equal(t, beforeRecipe, doc.Recipe(),
 				`a canceled rebuild must not append a recipe step`)
+		})
+	}
+}
+
+func TestPlacementContextChecksCancellationBeforeCommit(t *testing.T) {
+	shift, err := r3.Translation(r3.NewVec(100, 0, 0))
+	require.NoError(t, err)
+
+	tests := []struct {
+		name   string
+		target string
+		run    func(context.Context, *decad.Body) (*decad.Body, error)
+	}{
+		{
+			name:   "Placed",
+			target: "PlacedContext",
+			run: func(ctx context.Context, body *decad.Body) (*decad.Body, error) {
+				return body.PlacedContext(ctx, shift)
+			},
+		},
+		{
+			name:   "Duplicate",
+			target: "copyUnder",
+			run: func(ctx context.Context, body *decad.Body) (*decad.Body, error) {
+				return body.DuplicateContext(ctx)
+			},
+		},
+		{
+			name:   "PlacedCopy",
+			target: "copyUnder",
+			run: func(ctx context.Context, body *decad.Body) (*decad.Body, error) {
+				return body.PlacedCopyContext(ctx, shift)
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			doc, body := facetedContextBody(t)
+			beforeBodies := doc.Bodies()
+			beforeRecipe := doc.Recipe()
+			ctx := &cancelOnSecondDirectCallContext{
+				Context: t.Context(),
+				target:  test.target,
+			}
+
+			got, err := test.run(ctx, body)
+			require.ErrorIs(t, err, context.Canceled)
+			require.Nil(t, got)
+			require.Equal(t, beforeBodies, doc.Bodies(),
+				`cancellation after rebuild must not change live bodies`)
+			require.Equal(t, beforeRecipe, doc.Recipe(),
+				`cancellation after rebuild must not append a recipe step`)
+			require.Equal(t, 2, ctx.targetCalls,
+				`the second direct gate must observe cancellation before commit`)
 		})
 	}
 }
