@@ -440,7 +440,7 @@ func evalPrismContext(ctx context.Context, d *Document, ref StepRef, pp prismPay
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	ig, err := pp.profile.evaluatorIntegralsUnchecked(momentFirstOrder)
+	ig, err := pp.profile.evaluatorIntegralsUncheckedContext(ctx, momentFirstOrder)
 	if err != nil {
 		return nil, err
 	}
@@ -755,6 +755,14 @@ func coalesceWalks(walks []sideWalk) []sideWalk {
 }
 
 func coalesceWalksBudget(walks []sideWalk, budget *workBudget) ([]sideWalk, error) {
+	return coalesceWalksWithPoll(func() error { return wallBudgetStep(budget) }, walks)
+}
+
+func coalesceWalksContext(ctx context.Context, walks []sideWalk) ([]sideWalk, error) {
+	return coalesceWalksWithPoll(ctx.Err, walks)
+}
+
+func coalesceWalksWithPoll(poll func() error, walks []sideWalk) ([]sideWalk, error) {
 	collinear := func(a, b sideWalk) bool {
 		if a.circular || b.circular {
 			return false
@@ -778,8 +786,10 @@ func coalesceWalksBudget(walks []sideWalk, budget *workBudget) ([]sideWalk, erro
 	}
 	out := make([]sideWalk, 0, len(walks))
 	for _, w := range walks {
-		if err := wallBudgetStep(budget); err != nil {
-			return nil, err
+		if poll != nil {
+			if err := poll(); err != nil {
+				return nil, err
+			}
 		}
 		if len(out) > 0 && collinear(out[len(out)-1], w) {
 			out[len(out)-1] = merge(out[len(out)-1], w)
@@ -789,8 +799,10 @@ func coalesceWalksBudget(walks []sideWalk, budget *workBudget) ([]sideWalk, erro
 	}
 	// Wrap-around: the loop's last walk may continue into its first.
 	for len(out) > 1 && collinear(out[len(out)-1], out[0]) {
-		if err := wallBudgetStep(budget); err != nil {
-			return nil, err
+		if poll != nil {
+			if err := poll(); err != nil {
+				return nil, err
+			}
 		}
 		out[0] = merge(out[len(out)-1], out[0])
 		out = out[:len(out)-1]
@@ -825,7 +837,7 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref StepRef, pp prismPayl
 	total := boundedScalar{}
 	for i, seg := range loop.Segments {
 		if err := ctx.Err(); err != nil {
-			return nil, nil, nil, 0, err
+			return nil, nil, nil, boundedScalar{}, err
 		}
 		w, err := walkOf(seg)
 		if err != nil {
@@ -834,7 +846,10 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref StepRef, pp prismPayl
 		raw[i] = sideWalk{segmentWalk: w, segs: []int{i}}
 		total = boundedAdd(total, measuredScalar(w.length, w.lengthBound))
 	}
-	walks := coalesceWalks(raw)
+	walks, err := coalesceWalksContext(ctx, raw)
+	if err != nil {
+		return nil, nil, nil, boundedScalar{}, err
+	}
 	n := len(walks)
 
 	// Junction vertices, shared between neighbors: junction i sits at walk
@@ -847,7 +862,7 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref StepRef, pp prismPayl
 		topV = make([]*Vertex, n)
 		for i, w := range walks {
 			if err := ctx.Err(); err != nil {
-				return nil, nil, nil, 0, err
+				return nil, nil, nil, boundedScalar{}, err
 			}
 			bottomV[i] = &Vertex{position: pp.point(w.startU, w.startV, pp.z0), bound: units.Millimeters(0)}
 			topV[i] = &Vertex{position: pp.point(w.startU, w.startV, pp.z1), bound: units.Millimeters(0)}
@@ -864,7 +879,7 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref StepRef, pp prismPayl
 		vertical = make([]*Edge, n)
 		for i := range walks {
 			if err := ctx.Err(); err != nil {
-				return nil, nil, nil, 0, err
+				return nil, nil, nil, boundedScalar{}, err
 			}
 			prev := walks[(i+n-1)%n]
 			cross := prev.tanOutU*walks[i].tanInV - prev.tanOutV*walks[i].tanInU
@@ -885,7 +900,7 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref StepRef, pp prismPayl
 	topCo := make([]coedge, 0, n)
 	for i, w := range walks {
 		if err := ctx.Err(); err != nil {
-			return nil, nil, nil, 0, err
+			return nil, nil, nil, boundedScalar{}, err
 		}
 		var bStart, bEnd, tStart, tEnd *Vertex
 		if !singleClosed {

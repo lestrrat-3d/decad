@@ -1026,7 +1026,7 @@ func evalRevolveContext(ctx context.Context, d *Document, ref StepRef, rp revolv
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	ig, err := rp.profile.evaluatorIntegralsUnchecked(momentSecondOrder)
+	ig, err := rp.profile.evaluatorIntegralsUncheckedContext(ctx, momentSecondOrder)
 	if err != nil {
 		return nil, err
 	}
@@ -1260,7 +1260,10 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref StepRef, rp revolvePa
 		}
 		raw[i] = sideWalk{segmentWalk: rp.ax.walk(w), segs: []int{i}}
 	}
-	walks := coalesceWalks(raw)
+	walks, err := coalesceWalksContext(ctx, raw)
+	if err != nil {
+		return revLoopParts{}, err
+	}
 	n := len(walks)
 	singleClosed := n == 1 && walks[0].closed
 	sweep := boundedRevolveSweep(rp.phi0, rp.phi1)

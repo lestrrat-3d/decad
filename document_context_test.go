@@ -2,6 +2,8 @@ package decad_test
 
 import (
 	"context"
+	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
@@ -9,6 +11,35 @@ import (
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
+
+type cancelWhenInFrameContext struct {
+	context.Context //nolint:containedctx // deterministic cancellation wrapper used only within one test call.
+	target          string
+	limit           int
+	targetCalls     int
+	entered         bool
+}
+
+func (c *cancelWhenInFrameContext) Err() error {
+	pcs := make([]uintptr, 32)
+	frames := runtime.CallersFrames(pcs[:runtime.Callers(2, pcs)])
+	inTarget := false
+	for {
+		frame, more := frames.Next()
+		inTarget = inTarget || strings.HasSuffix(frame.Function, "."+c.target)
+		if !more {
+			break
+		}
+	}
+	if inTarget {
+		c.entered = true
+		c.targetCalls++
+		if c.targetCalls >= c.limit {
+			return context.Canceled
+		}
+	}
+	return c.Context.Err()
+}
 
 func facetedContextBody(t *testing.T) (*decad.Document, *decad.Body) {
 	t.Helper()
@@ -126,6 +157,120 @@ func TestPlacementContextCancelsAnalyticRebuilds(t *testing.T) {
 				`a canceled analytic rebuild must not change live bodies`)
 			require.Equal(t, beforeRecipe, doc.Recipe(),
 				`a canceled analytic rebuild must not append a recipe step`)
+		})
+	}
+}
+
+func TestPlacementContextPollsAnalyticRebuildHelpers(t *testing.T) {
+	shift, err := r3.Translation(r3.NewVec(100, 0, 0))
+	require.NoError(t, err)
+
+	tests := []struct {
+		name   string
+		target string
+		build  func(*testing.T) (*decad.Document, *decad.Body)
+	}{
+		{
+			name:   "PrismProfileIntegration",
+			target: "integrateMomentRecordModeContext",
+			build: func(t *testing.T) (*decad.Document, *decad.Body) {
+				s, p := plateSketch(t)
+				doc := decad.New()
+				body, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+				require.NoError(t, err)
+				return doc, body
+			},
+		},
+		{
+			name:   "RevolveProfileIntegration",
+			target: "integrateMomentRecordModeContext",
+			build: func(t *testing.T) (*decad.Document, *decad.Body) {
+				s, p := solidSketch(t)
+				doc := decad.New()
+				body, err := doc.Revolve(s, p, decad.SketchLine{
+					Start: decad.Point2{U: 0, V: 0},
+					End:   decad.Point2{U: 1, V: 0},
+				}, decad.FullRevolution{})
+				require.NoError(t, err)
+				return doc, body
+			},
+		},
+		{
+			name:   "CupProfileIntegration",
+			target: "integrateMomentRecordModeContext",
+			build: func(t *testing.T) (*decad.Document, *decad.Body) {
+				doc, box := shellBox(t)
+				body, err := box.Shell(topCap(box), units.Millimeters(5))
+				require.NoError(t, err)
+				return doc, body
+			},
+		},
+		{
+			name:   "PrismWalkCoalescing",
+			target: "coalesceWalksContext",
+			build: func(t *testing.T) (*decad.Document, *decad.Body) {
+				s, p := plateSketch(t)
+				doc := decad.New()
+				body, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+				require.NoError(t, err)
+				return doc, body
+			},
+		},
+		{
+			name:   "RevolveWalkCoalescing",
+			target: "coalesceWalksContext",
+			build: func(t *testing.T) (*decad.Document, *decad.Body) {
+				s, p := solidSketch(t)
+				doc := decad.New()
+				body, err := doc.Revolve(s, p, decad.SketchLine{
+					Start: decad.Point2{U: 0, V: 0},
+					End:   decad.Point2{U: 1, V: 0},
+				}, decad.FullRevolution{})
+				require.NoError(t, err)
+				return doc, body
+			},
+		},
+		{
+			name:   "CupWalkCoalescing",
+			target: "coalesceWalksContext",
+			build: func(t *testing.T) (*decad.Document, *decad.Body) {
+				doc, box := shellBox(t)
+				body, err := box.Shell(topCap(box), units.Millimeters(5))
+				require.NoError(t, err)
+				return doc, body
+			},
+		},
+		{
+			name:   "CupLoopReversal",
+			target: "reverseLoopRecordContext",
+			build: func(t *testing.T) (*decad.Document, *decad.Body) {
+				doc, box := shellBox(t)
+				body, err := box.Shell(topCap(box), units.Millimeters(5))
+				require.NoError(t, err)
+				return doc, body
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			doc, body := test.build(t)
+			beforeBodies := doc.Bodies()
+			beforeRecipe := doc.Recipe()
+			ctx := &cancelWhenInFrameContext{
+				Context: t.Context(),
+				target:  test.target,
+				limit:   2,
+			}
+
+			got, err := body.PlacedContext(ctx, shift)
+			require.ErrorIs(t, err, context.Canceled)
+			require.Nil(t, got)
+			require.True(t, ctx.entered, `cancellation must reach %s`, test.target)
+			require.GreaterOrEqual(t, ctx.targetCalls, ctx.limit,
+				`%s must poll while processing recorded segments`, test.target)
+			require.Equal(t, beforeBodies, doc.Bodies())
+			require.Equal(t, beforeRecipe, doc.Recipe())
 		})
 	}
 }

@@ -1,6 +1,7 @@
 package decad
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"math/big"
@@ -611,6 +612,14 @@ func (r ProfileRecord) integralsBudget(budget *workBudget) (regionIntegrals, err
 	return integrateMomentRecordBudget(record, anchor, momentSecondOrder, budget)
 }
 
+func (r ProfileRecord) integralsContext(ctx context.Context) (regionIntegrals, error) {
+	record, anchor, err := validateMomentFieldsContext(ctx, r)
+	if err != nil {
+		return regionIntegrals{}, err
+	}
+	return integrateMomentRecordContext(ctx, record, anchor, momentSecondOrder)
+}
+
 func (r ProfileRecord) integralsTo(order momentIntegralOrder) (regionIntegrals, error) {
 	record, anchor, err := validateMomentRecord(r)
 	if err != nil {
@@ -631,12 +640,12 @@ func (r ProfileRecord) evaluatorIntegrals(order momentIntegralOrder) (regionInte
 	return integrateMomentRecord(record, anchor, order)
 }
 
-func (r ProfileRecord) evaluatorIntegralsUnchecked(order momentIntegralOrder) (regionIntegrals, error) {
-	record, anchor, err := validateMomentFields(r)
+func (r ProfileRecord) evaluatorIntegralsUncheckedContext(ctx context.Context, order momentIntegralOrder) (regionIntegrals, error) {
+	record, anchor, err := validateMomentFieldsContext(ctx, r)
 	if err != nil {
 		return regionIntegrals{}, err
 	}
-	return integrateMomentRecordUnchecked(record, anchor, order)
+	return integrateMomentRecordUncheckedContext(ctx, record, anchor, order)
 }
 
 func integrateMomentRecord(record ProfileRecord, anchor Point2, order momentIntegralOrder) (regionIntegrals, error) {
@@ -652,14 +661,34 @@ func integrateMomentRecordUnchecked(record ProfileRecord, anchor Point2, order m
 }
 
 func integrateMomentRecordMode(record ProfileRecord, anchor Point2, order momentIntegralOrder, checkFinite bool, budget *workBudget) (regionIntegrals, error) {
+	return integrateMomentRecordWithPoll(func() error { return wallBudgetStep(budget) }, record, anchor, order, checkFinite)
+}
+
+func integrateMomentRecordContext(ctx context.Context, record ProfileRecord, anchor Point2, order momentIntegralOrder) (regionIntegrals, error) {
+	return integrateMomentRecordModeContext(ctx, record, anchor, order, true)
+}
+
+func integrateMomentRecordUncheckedContext(ctx context.Context, record ProfileRecord, anchor Point2, order momentIntegralOrder) (regionIntegrals, error) {
+	return integrateMomentRecordModeContext(ctx, record, anchor, order, false)
+}
+
+func integrateMomentRecordModeContext(ctx context.Context, record ProfileRecord, anchor Point2, order momentIntegralOrder, checkFinite bool) (regionIntegrals, error) {
+	return integrateMomentRecordWithPoll(ctx.Err, record, anchor, order, checkFinite)
+}
+
+func integrateMomentRecordWithPoll(poll func() error, record ProfileRecord, anchor Point2, order momentIntegralOrder, checkFinite bool) (regionIntegrals, error) {
 	var ig regionIntegrals
 	for loopIndex, loop := range append([]LoopRecord{record.Outer}, record.Holes...) {
-		if err := wallBudgetStep(budget); err != nil {
-			return regionIntegrals{}, err
+		if poll != nil {
+			if err := poll(); err != nil {
+				return regionIntegrals{}, err
+			}
 		}
 		for segmentIndex, segment := range loop.Segments {
-			if err := wallBudgetStep(budget); err != nil {
-				return regionIntegrals{}, err
+			if poll != nil {
+				if err := poll(); err != nil {
+					return regionIntegrals{}, err
+				}
 			}
 			shifted, err := shiftMomentSegment(segment, anchor)
 			if err != nil {
@@ -671,11 +700,6 @@ func integrateMomentRecordMode(record ProfileRecord, anchor Point2, order moment
 			if checkFinite && !ig.isFinite(order) {
 				return regionIntegrals{}, fmt.Errorf(`%w: mass-property integration overflowed at loop %d segment %d`, ErrNotFinite, loopIndex, segmentIndex)
 			}
-		}
-	}
-	if budget != nil {
-		if err := budget.err(); err != nil {
-			return regionIntegrals{}, err
 		}
 	}
 	if ig.area <= 0 {

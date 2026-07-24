@@ -1,6 +1,7 @@
 package decad
 
 import (
+	"context"
 	"fmt"
 	"math"
 
@@ -42,14 +43,22 @@ func validateMomentFields(record ProfileRecord) (ProfileRecord, Point2, error) {
 }
 
 func validateMomentFieldsBudget(budget *workBudget, record ProfileRecord) (ProfileRecord, Point2, error) {
-	if err := wallBudgetErr(budget); err != nil {
-		return ProfileRecord{}, Point2{}, err
-	}
-	normalized := make([]LoopRecord, len(record.Holes)+1)
+	return validateMomentFieldsWithPoll(func() error { return wallBudgetStep(budget) }, record)
+}
+
+func validateMomentFieldsContext(ctx context.Context, record ProfileRecord) (ProfileRecord, Point2, error) {
+	return validateMomentFieldsWithPoll(ctx.Err, record)
+}
+
+func validateMomentFieldsWithPoll(poll func() error, record ProfileRecord) (ProfileRecord, Point2, error) {
+	loops := append([]LoopRecord{record.Outer}, record.Holes...)
+	normalized := make([]LoopRecord, len(loops))
 	var anchor Point2
 	for loopIndex := range normalized {
-		if err := wallBudgetStep(budget); err != nil {
-			return ProfileRecord{}, Point2{}, err
+		if poll != nil {
+			if err := poll(); err != nil {
+				return ProfileRecord{}, Point2{}, err
+			}
 		}
 		loop := record.Outer
 		if loopIndex > 0 {
@@ -64,8 +73,10 @@ func validateMomentFieldsBudget(budget *workBudget, record ProfileRecord) (Profi
 		}
 		normalized[loopIndex].Segments = make([]CurveSegment, len(loop.Segments))
 		for segmentIndex, segment := range loop.Segments {
-			if err := wallBudgetStep(budget); err != nil {
-				return ProfileRecord{}, Point2{}, err
+			if poll != nil {
+				if err := poll(); err != nil {
+					return ProfileRecord{}, Point2{}, err
+				}
 			}
 			checked, walk, err := validateMomentSegment(segment)
 			if err != nil {
@@ -82,12 +93,6 @@ func validateMomentFieldsBudget(budget *workBudget, record ProfileRecord) (Profi
 			}
 		}
 	}
-	if budget != nil {
-		if err := budget.err(); err != nil {
-			return ProfileRecord{}, Point2{}, err
-		}
-	}
-
 	checked := ProfileRecord{Outer: normalized[0], Holes: normalized[1:]}
 	return checked, anchor, nil
 }

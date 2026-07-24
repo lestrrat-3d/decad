@@ -129,11 +129,11 @@ func evalCupContext(ctx context.Context, d *Document, ref StepRef, cp cupPayload
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	igO, err := cp.outer.evaluatorIntegrals(momentFirstOrder)
+	igO, err := cp.outer.integralsContext(ctx)
 	if err != nil {
 		return nil, err
 	}
-	igC, err := cp.cavity.evaluatorIntegrals(momentFirstOrder)
+	igC, err := cp.cavity.integralsContext(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -202,7 +202,7 @@ func evalCupContext(ctx context.Context, d *Document, ref StepRef, cp cupPayload
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		rev, err := reverseLoopRecord(loop)
+		rev, err := reverseLoopRecordContext(ctx, loop)
 		if err != nil {
 			return nil, err
 		}
@@ -449,7 +449,7 @@ func loopEnclosedAreaContext(ctx context.Context, l LoopRecord) (boundedScalar, 
 	var ig regionIntegrals
 	for _, seg := range l.Segments {
 		if err := ctx.Err(); err != nil {
-			return 0, err
+			return boundedScalar{}, err
 		}
 		if err := ig.add(seg); err != nil {
 			return boundedScalar{}, err
