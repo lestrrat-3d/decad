@@ -171,6 +171,149 @@ func TestRegionMomentsPointerVariants(t *testing.T) {
 	require.Error(t, err, `a nil segment pointer names no curve to integrate`)
 }
 
+func TestRegionMomentsRejectOpenLoop(t *testing.T) {
+	// Mass properties integrate a recorded boundary; they must not weld a
+	// near-miss endpoint into a loop. The tiny gap is still an open profile.
+	open := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
+		decad.LineSeg{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 1, V: 0}, TStart: 0, TEnd: 1},
+		decad.LineSeg{Start: decad.Point2{U: 1, V: 0}, End: decad.Point2{U: 1, V: 1}, TStart: 0, TEnd: 1},
+		decad.LineSeg{Start: decad.Point2{U: 1, V: 1}, End: decad.Point2{U: 0, V: 1}, TStart: 0, TEnd: 1},
+		decad.LineSeg{Start: decad.Point2{U: 0, V: 1}, End: decad.Point2{U: -1e-8, V: 0}, TStart: 0, TEnd: 1},
+	}}}
+
+	_, err := open.Area()
+	require.ErrorIs(t, err, decad.ErrDegenerate)
+	_, err = open.Centroid()
+	require.ErrorIs(t, err, decad.ErrDegenerate)
+	_, err = open.SecondMoments()
+	require.ErrorIs(t, err, decad.ErrDegenerate)
+}
+
+func TestRegionMomentsRejectOpenLoopWithLargeUnrelatedEdge(t *testing.T) {
+	// The closing endpoints are only 1e-6 mm apart. A separate 1e9 mm edge
+	// must not enlarge their join allowance and weld that material gap.
+	open := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
+		decad.LineSeg{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 1e9, V: 0}, TStart: 0, TEnd: 1},
+		decad.LineSeg{Start: decad.Point2{U: 1e9, V: 0}, End: decad.Point2{U: 1e9, V: 1}, TStart: 0, TEnd: 1},
+		decad.LineSeg{Start: decad.Point2{U: 1e9, V: 1}, End: decad.Point2{U: 0, V: 1}, TStart: 0, TEnd: 1},
+		decad.LineSeg{Start: decad.Point2{U: 0, V: 1}, End: decad.Point2{U: -1e-6, V: 0}, TStart: 0, TEnd: 1},
+	}}}
+
+	_, err := open.Area()
+	require.ErrorIs(t, err, decad.ErrDegenerate)
+	_, err = open.Centroid()
+	require.ErrorIs(t, err, decad.ErrDegenerate)
+	_, err = open.SecondMoments()
+	require.ErrorIs(t, err, decad.ErrDegenerate)
+}
+
+func TestRegionMomentsRejectOpenLoopWithLargeVCoordinate(t *testing.T) {
+	// U and V have independent endpoint-evaluation allowances. A large V
+	// coordinate must not accept the distinct 2 mm U closing gap.
+	for _, test := range []struct {
+		name string
+		v    float64
+	}{
+		{name: `large finite V`, v: 1e16},
+		{name: `largest finite V`, v: math.MaxFloat64},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			open := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
+				decad.LineSeg{Start: decad.Point2{U: 0, V: test.v}, End: decad.Point2{U: 4, V: test.v}, TStart: 0, TEnd: 1},
+				decad.LineSeg{Start: decad.Point2{U: 4, V: test.v}, End: decad.Point2{U: 1, V: test.v}, TStart: 0, TEnd: 1},
+				decad.LineSeg{Start: decad.Point2{U: 1, V: test.v}, End: decad.Point2{U: 2, V: test.v}, TStart: 0, TEnd: 1},
+			}}}
+
+			_, err := open.Area()
+			require.ErrorIs(t, err, decad.ErrDegenerate)
+			_, err = open.Centroid()
+			require.ErrorIs(t, err, decad.ErrDegenerate)
+			_, err = open.SecondMoments()
+			require.ErrorIs(t, err, decad.ErrDegenerate)
+		})
+	}
+}
+
+func TestRegionMomentsRejectsUnrepresentableEndpointJoins(t *testing.T) {
+	maxCoordinate := math.MaxFloat64
+	profiles := []struct {
+		name    string
+		profile decad.ProfileRecord
+	}{
+		{
+			name: `largest finite coordinate gap`,
+			profile: decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
+				decad.LineSeg{Start: decad.Point2{U: maxCoordinate, V: 0}, End: decad.Point2{U: maxCoordinate, V: 1}, TStart: 0, TEnd: 1},
+				decad.LineSeg{Start: decad.Point2{U: maxCoordinate, V: 1}, End: decad.Point2{U: 0, V: 1}, TStart: 0, TEnd: 1},
+				decad.LineSeg{Start: decad.Point2{U: 0, V: 1}, End: decad.Point2{U: math.Nextafter(maxCoordinate, 0), V: 0}, TStart: 0, TEnd: 1},
+			}}},
+		},
+		{
+			name: `non-finite coordinate`,
+			profile: decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
+				decad.LineSeg{Start: decad.Point2{U: math.Inf(1), V: 0}, End: decad.Point2{U: math.Inf(1), V: 1}, TStart: 0, TEnd: 1},
+				decad.LineSeg{Start: decad.Point2{U: math.Inf(1), V: 1}, End: decad.Point2{U: 0, V: 1}, TStart: 0, TEnd: 1},
+				decad.LineSeg{Start: decad.Point2{U: 0, V: 1}, End: decad.Point2{U: math.Inf(1), V: 0}, TStart: 0, TEnd: 1},
+			}}},
+		},
+	}
+	for _, test := range profiles {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := test.profile.Area()
+			require.ErrorIs(t, err, decad.ErrDegenerate)
+			_, err = test.profile.Centroid()
+			require.ErrorIs(t, err, decad.ErrDegenerate)
+			_, err = test.profile.SecondMoments()
+			require.ErrorIs(t, err, decad.ErrDegenerate)
+		})
+	}
+}
+
+func TestRegionMomentsAcceptsEndpointRounding(t *testing.T) {
+	// Adjacent recorded walks can differ by a few ulps after their source
+	// coordinates are evaluated independently. This is construction rounding,
+	// not a material gap such as the 1e-8 case above.
+	nextOne := math.Nextafter(1, math.Inf(1))
+	profile := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
+		decad.LineSeg{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: nextOne, V: 0}, TStart: 0, TEnd: 1},
+		decad.LineSeg{Start: decad.Point2{U: 1, V: 0}, End: decad.Point2{U: 1, V: 1}, TStart: 0, TEnd: 1},
+		decad.LineSeg{Start: decad.Point2{U: 1, V: 1}, End: decad.Point2{U: 0, V: 1}, TStart: 0, TEnd: 1},
+		decad.LineSeg{Start: decad.Point2{U: 0, V: 1}, End: decad.Point2{U: 0, V: 0}, TStart: 0, TEnd: 1},
+	}}}
+
+	area, err := profile.Area()
+	require.NoError(t, err)
+	require.True(t, area.Value.Equal(units.SquareMillimeters(1), 1e-12), `area = %s`, area.Value)
+}
+
+func TestRegionMomentsAcceptsGeneratedArcEndpointDrift(t *testing.T) {
+	// An outward shell rounds this rectangle's corners. ArcSeg derives its
+	// radius from the translated start point, so the left-top arc's evaluated
+	// end drifts from its recorded line neighbour by over one hundred ulps.
+	const radius = 0.1
+	profile := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
+		decad.LineSeg{Start: decad.Point2{U: 0, V: -radius}, End: decad.Point2{U: 100, V: -radius}, TEnd: 1},
+		decad.ArcSeg{Center: decad.Point2{U: 100, V: 0}, Start: decad.Point2{U: 100, V: -radius}, End: decad.Point2{U: 100 + radius, V: 0}, TEnd: 1},
+		decad.LineSeg{Start: decad.Point2{U: 100 + radius, V: 0}, End: decad.Point2{U: 100 + radius, V: 60}, TEnd: 1},
+		decad.ArcSeg{Center: decad.Point2{U: 100, V: 60}, Start: decad.Point2{U: 100 + radius, V: 60}, End: decad.Point2{U: 100, V: 60 + radius}, TEnd: 1},
+		decad.LineSeg{Start: decad.Point2{U: 100, V: 60 + radius}, End: decad.Point2{U: 0, V: 60 + radius}, TEnd: 1},
+		decad.ArcSeg{Center: decad.Point2{U: 0, V: 60}, Start: decad.Point2{U: 0, V: 60 + radius}, End: decad.Point2{U: -radius, V: 60}, TEnd: 1},
+		decad.LineSeg{Start: decad.Point2{U: -radius, V: 60}, End: decad.Point2{U: -radius, V: 0}, TEnd: 1},
+		decad.ArcSeg{Center: decad.Point2{}, Start: decad.Point2{U: -radius, V: 0}, End: decad.Point2{U: 0, V: -radius}, TEnd: 1},
+	}}}
+
+	area, err := profile.Area()
+	require.NoError(t, err)
+	areaMM, err := area.Value.In(units.SquareMillimeter)
+	require.NoError(t, err)
+	require.InDelta(t, 100*60+2*(100+60)*radius+math.Pi*radius*radius, areaMM, 1e-9)
+
+	_, err = profile.Centroid()
+	require.NoError(t, err)
+	_, err = profile.SecondMoments()
+	require.NoError(t, err)
+}
+
 func TestSecondMomentsRectangle(t *testing.T) {
 	// For the axis-aligned rectangle [0,a]×[0,b] about the origin:
 	// ∫u²dA = a³b/3, ∫uv dA = a²b²/4, ∫v²dA = ab³/3.

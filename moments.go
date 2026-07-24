@@ -106,7 +106,10 @@ type regionIntegrals struct {
 // (negative), so the sum IS the net region integral.
 func (r ProfileRecord) integrals() (regionIntegrals, error) {
 	var ig regionIntegrals
-	for _, loop := range append([]LoopRecord{r.Outer}, r.Holes...) {
+	for loopIndex, loop := range append([]LoopRecord{r.Outer}, r.Holes...) {
+		if err := validateMomentLoop(loop, loopIndex); err != nil {
+			return regionIntegrals{}, err
+		}
 		for _, seg := range loop.Segments {
 			if err := ig.add(seg); err != nil {
 				return regionIntegrals{}, err
@@ -114,6 +117,77 @@ func (r ProfileRecord) integrals() (regionIntegrals, error) {
 		}
 	}
 	return ig, nil
+}
+
+// validateMomentLoop rejects a record that leaves any boundary junction open.
+// The integrals add only the declared walks; joining near endpoints here would
+// invent a closing edge and make a nonzero error bound look Exact.
+func validateMomentLoop(loop LoopRecord, loopIndex int) error {
+	if len(loop.Segments) == 0 {
+		return nil
+	}
+
+	first, err := walkOf(loop.Segments[0])
+	if err != nil {
+		return fmt.Errorf(`profile loop %d segment 0: %w`, loopIndex, err)
+	}
+	previous := first
+	for segmentIndex := 1; segmentIndex < len(loop.Segments); segmentIndex++ {
+		current, err := walkOf(loop.Segments[segmentIndex])
+		if err != nil {
+			return fmt.Errorf(`profile loop %d segment %d: %w`, loopIndex, segmentIndex, err)
+		}
+		if !momentWalksJoin(previous, current) {
+			return fmt.Errorf(`%w: profile loop %d has an open junction before segment %d`, ErrDegenerate, loopIndex, segmentIndex)
+		}
+		previous = current
+	}
+	if !momentWalksJoin(previous, first) {
+		return fmt.Errorf(`%w: profile loop %d does not close`, ErrDegenerate, loopIndex)
+	}
+	return nil
+}
+
+// momentWalksJoin permits only the endpoint rounding from evaluating a recorded
+// walk. This is not a geometric distance weld: a material gap remains open.
+func momentWalksJoin(a, b segmentWalk) bool {
+	uScale := math.Max(math.Abs(a.endU), math.Abs(b.startU))
+	vScale := math.Max(math.Abs(a.endV), math.Abs(b.startV))
+	if a.circular {
+		uScale = math.Max(uScale, math.Abs(a.cU))
+		uScale = math.Max(uScale, math.Abs(a.radius))
+		vScale = math.Max(vScale, math.Abs(a.cV))
+		vScale = math.Max(vScale, math.Abs(a.radius))
+	}
+	if b.circular {
+		uScale = math.Max(uScale, math.Abs(b.cU))
+		uScale = math.Max(uScale, math.Abs(b.radius))
+		vScale = math.Max(vScale, math.Abs(b.cV))
+		vScale = math.Max(vScale, math.Abs(b.radius))
+	}
+	return momentCoordinatesJoin(a.endU, b.startU, uScale) && momentCoordinatesJoin(a.endV, b.startV, vScale)
+}
+
+func momentCoordinatesJoin(a, b, scale float64) bool {
+	if !finiteSegmentValue(a) || !finiteSegmentValue(b) || !finiteSegmentValue(scale) {
+		return false
+	}
+	if a == b {
+		return true
+	}
+	next := math.Nextafter(scale, math.Inf(1))
+	if math.IsInf(next, 1) {
+		// The largest finite float has no larger finite neighbour. A distinct
+		// endpoint is a material gap because there is no representable rounding
+		// allowance at this scale.
+		return false
+	}
+	// Reconstructing an ArcSeg endpoint first derives its radius from the
+	// recorded start point, then evaluates the derived angle. A generated arc
+	// can therefore land over one hundred ulps from its recorded line neighbour.
+	// This remains a coordinate-local allowance: a large coordinate on the
+	// other axis cannot hide a material gap here.
+	return math.Abs(a-b) <= 128*(next-scale)
 }
 
 // add accumulates one segment's boundary-integral contribution, in the
@@ -243,5 +317,14 @@ func (ig *regionIntegrals) addCircular(c Point2, r, th0, th1 float64) {
 
 // lerp2 returns the point at parameter t on the segment start→end.
 func lerp2(start, end Point2, t float64) (float64, float64) {
+	// A whole LineSeg records its endpoints directly. Recomputing the endpoint
+	// as start+(end-start) can change it through cancellation, opening a
+	// generated closed loop only in its floating evaluation.
+	if t == 0 {
+		return start.U, start.V
+	}
+	if t == 1 {
+		return end.U, end.V
+	}
 	return start.U + t*(end.U-start.U), start.V + t*(end.V-start.V)
 }
