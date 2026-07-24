@@ -68,13 +68,13 @@ func recordProfile(s *sketch.Sketch, p *sketch.Profile) (ProfileRecord, PlaneRec
 	}
 	plane := PlaneRecord{Origin: frame.Origin(), U: frame.U(), V: frame.V()}
 
-	outer, err := recordLoop(trusted.Outer)
+	outer, err := recordLoop("outer", trusted.Outer)
 	if err != nil {
 		return ProfileRecord{}, PlaneRecord{}, 0, err
 	}
 	var holes []LoopRecord
-	for _, h := range trusted.Holes {
-		loop, err := recordLoop(h)
+	for i, h := range trusted.Holes {
+		loop, err := recordLoop(fmt.Sprintf("hole %d", i), h)
 		if err != nil {
 			return ProfileRecord{}, PlaneRecord{}, 0, err
 		}
@@ -196,13 +196,13 @@ func sameBoundaryEdge(a, b sketch.BoundaryEdge) bool {
 		slices.Equal(a.Polyline, b.Polyline)
 }
 
-// recordLoop converts one boundary loop, edge by edge, in walk order.
-func recordLoop(edges []sketch.BoundaryEdge) (LoopRecord, error) {
+// recordLoop converts one named boundary loop, edge by edge, in walk order.
+func recordLoop(name string, edges []sketch.BoundaryEdge) (LoopRecord, error) {
 	segs := make([]CurveSegment, 0, len(edges))
-	for _, e := range edges {
+	for i, e := range edges {
 		seg, err := recordEdge(e)
 		if err != nil {
-			return LoopRecord{}, err
+			return LoopRecord{}, fmt.Errorf("%s edge %d: %w", name, i, err)
 		}
 		segs = append(segs, seg)
 	}

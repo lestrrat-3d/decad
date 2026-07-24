@@ -179,6 +179,63 @@ func TestRecordProfileRejectsSampledCuts(t *testing.T) {
 	require.NotZero(t, rejected, `regions bounded by sampled circle/circle cuts should be rejected`)
 }
 
+func TestRecordProfileReportsOuterEdgeIndex(t *testing.T) {
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	rect := s.CreateRectangle(-20, -20, 20, 20)
+	s.Fix(rect.A)
+	s.CreateCircle(s.CreatePoint(-8, 0), 20)
+	s.CreateCircle(s.CreatePoint(8, 0), 20)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+
+	var prof *sketch.Profile
+	for _, candidate := range s.Profiles() {
+		if len(candidate.Outer) == 5 && !candidate.Outer[0].Partial {
+			prof = candidate
+			break
+		}
+	}
+	require.NotNil(t, prof, `the rectangle-and-overlapping-circles region should exist`)
+	require.True(t, prof.Outer[2].Partial)
+	require.False(t, prof.Outer[2].TExact)
+
+	_, _, err = decad.RecordProfile(s, prof)
+	require.ErrorIs(t, err, decad.ErrUnrecordableProfile)
+	require.ErrorContains(t, err, `outer edge 2`)
+}
+
+func TestRecordProfileReportsHoleAndEdgeIndices(t *testing.T) {
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	rect := s.CreateRectangle(-80, -50, 80, 50)
+	s.Fix(rect.A)
+	s.CreateCircle(s.CreatePoint(-50, 0), 8)
+	s.CreateCircle(s.CreatePoint(10, 0), 20)
+	s.CreateCircle(s.CreatePoint(26, 0), 20)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+
+	var prof *sketch.Profile
+	for _, candidate := range s.Profiles() {
+		if len(candidate.Outer) == 4 && len(candidate.Holes) == 2 {
+			prof = candidate
+			break
+		}
+	}
+	require.NotNil(t, prof, `the rectangle-with-two-holes region should exist`)
+	require.False(t, prof.Holes[0][0].Partial)
+	require.True(t, prof.Holes[0][0].TExact)
+	require.True(t, prof.Holes[1][0].Partial)
+	require.False(t, prof.Holes[1][0].TExact)
+
+	_, _, err = decad.RecordProfile(s, prof)
+	require.ErrorIs(t, err, decad.ErrUnrecordableProfile)
+	require.ErrorContains(t, err, `hole 1 edge 0`)
+}
+
 func TestRecordProfileGates(t *testing.T) {
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
