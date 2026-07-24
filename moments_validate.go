@@ -274,11 +274,9 @@ func validateWholeCircleRegion(record ProfileRecord) (bool, error) {
 		}
 		if circle.TStart != 0 || circle.TEnd != 1 {
 			if circle.TStart != 1 || circle.TEnd != 0 {
-				return true, fmt.Errorf(
-					`%w: profile loop %d does not cover a circle's exact full range`,
-					ErrDegenerate,
-					loopIndex,
-				)
+				// Partial circle fragments are handled by the normal topology
+				// reconstruction and integration path below.
+				return false, nil
 			}
 		}
 		wantCCW := loopIndex == 0
