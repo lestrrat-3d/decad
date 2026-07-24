@@ -538,6 +538,68 @@ func jsonArrayLength(data json.RawMessage, field string) (int, error) {
 	return len(values), nil
 }
 
+func knownTaggedPayload(data json.RawMessage, kinds ...string) bool {
+	if data == nil || isJSONNull(data) {
+		return false
+	}
+	var probe struct {
+		Kind string `json:"kind"`
+	}
+	if err := json.Unmarshal(data, &probe); err != nil {
+		return false
+	}
+	return slices.Contains(kinds, probe.Kind)
+}
+
+// decodeKnownStepPayloads preserves the closed-variant codec errors for a
+// malformed payload even when an isolated Step codec caller omitted unrelated
+// operation fields. Unknown variants remain behind the shallow shape gate, so
+// operation-shape errors still take precedence over typed dispatch failures.
+func decodeKnownStepPayloads(raw jsonStepDecode, op OpKind) error {
+	shape, ok := shapeForOperation(op)
+	if !ok {
+		return nil
+	}
+	if shape.extent && knownTaggedPayload(raw.Extent,
+		extKindDistance,
+		extKindThroughAll,
+		extKindSymmetric,
+		extKindTwoSided,
+		extKindToFace,
+	) {
+		if _, err := unmarshalExtent(raw.Extent); err != nil {
+			return err
+		}
+	}
+	if shape.angular && knownTaggedPayload(raw.Angular,
+		extKindAngleExtent,
+		extKindFullRevolution,
+		extKindSymmetricAngle,
+		extKindTwoSidedAngle,
+		extKindToFaceAngular,
+	) {
+		if _, err := unmarshalAngularExtent(raw.Angular); err != nil {
+			return err
+		}
+	}
+	if shape.selector == stepSelectorNone || raw.Selectors == nil {
+		return nil
+	}
+	var selectors []json.RawMessage
+	if err := json.Unmarshal(raw.Selectors, &selectors); err != nil {
+		return nil
+	}
+	for _, selector := range selectors {
+		if !knownTaggedPayload(selector, selKindEdges, selKindFaces) {
+			continue
+		}
+		if _, err := unmarshalSelector(selector); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func validStepOptsKind(opts StepOpts, want stepOptsKind) bool {
 	switch want {
 	case stepOptsExtrude:
@@ -831,6 +893,9 @@ func (s *Step) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	if _, err := validateStepShapeFields(*op, fields); err != nil {
+		if payloadErr := decodeKnownStepPayloads(raw, *op); payloadErr != nil {
+			return payloadErr
+		}
 		return err
 	}
 	present := unmarshalStepPresence(raw)
