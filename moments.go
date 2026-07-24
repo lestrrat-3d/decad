@@ -151,16 +151,21 @@ func validateMomentLoop(loop LoopRecord, loopIndex int) error {
 // momentWalksJoin permits only the endpoint rounding from evaluating a recorded
 // walk. This is not a geometric distance weld: a material gap remains open.
 func momentWalksJoin(a, b segmentWalk) bool {
-	scale := math.Max(math.Abs(a.endU), math.Abs(a.endV))
-	scale = math.Max(scale, math.Abs(b.startU))
-	scale = math.Max(scale, math.Abs(b.startV))
+	uScale := math.Max(math.Abs(a.endU), math.Abs(b.startU))
+	vScale := math.Max(math.Abs(a.endV), math.Abs(b.startV))
 	if a.circular {
-		scale = math.Max(scale, a.radius)
+		uScale = math.Max(uScale, math.Abs(a.cU))
+		uScale = math.Max(uScale, math.Abs(a.radius))
+		vScale = math.Max(vScale, math.Abs(a.cV))
+		vScale = math.Max(vScale, math.Abs(a.radius))
 	}
 	if b.circular {
-		scale = math.Max(scale, b.radius)
+		uScale = math.Max(uScale, math.Abs(b.cU))
+		uScale = math.Max(uScale, math.Abs(b.radius))
+		vScale = math.Max(vScale, math.Abs(b.cV))
+		vScale = math.Max(vScale, math.Abs(b.radius))
 	}
-	return momentCoordinatesJoin(a.endU, b.startU, scale) && momentCoordinatesJoin(a.endV, b.startV, scale)
+	return momentCoordinatesJoin(a.endU, b.startU, uScale) && momentCoordinatesJoin(a.endV, b.startV, vScale)
 }
 
 func momentCoordinatesJoin(a, b, scale float64) bool {
@@ -171,16 +176,13 @@ func momentCoordinatesJoin(a, b, scale float64) bool {
 		return true
 	}
 	next := math.Nextafter(scale, math.Inf(1))
-	ulp := next - scale
 	if math.IsInf(next, 1) {
-		// The largest finite float has no larger finite neighbour. Its
-		// predecessor gives the finite spacing, but no distinct coordinate can
-		// be accepted here: that spacing is a material distance, not rounding
-		// from a representable larger endpoint.
-		ulp = scale - math.Nextafter(scale, math.Inf(-1))
-		return math.Abs(a-b) < ulp
+		// The largest finite float has no larger finite neighbour. A distinct
+		// endpoint is a material gap because there is no representable rounding
+		// allowance at this scale.
+		return false
 	}
-	return math.Abs(a-b) <= 32*ulp
+	return math.Abs(a-b) <= 32*(next-scale)
 }
 
 // add accumulates one segment's boundary-integral contribution, in the

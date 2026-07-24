@@ -207,6 +207,33 @@ func TestRegionMomentsRejectOpenLoopWithLargeUnrelatedEdge(t *testing.T) {
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 }
 
+func TestRegionMomentsRejectOpenLoopWithLargeVCoordinate(t *testing.T) {
+	// U and V have independent endpoint-evaluation allowances. A large V
+	// coordinate must not accept the distinct 2 mm U closing gap.
+	for _, test := range []struct {
+		name string
+		v    float64
+	}{
+		{name: `large finite V`, v: 1e16},
+		{name: `largest finite V`, v: math.MaxFloat64},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			open := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
+				decad.LineSeg{Start: decad.Point2{U: 0, V: test.v}, End: decad.Point2{U: 4, V: test.v}, TStart: 0, TEnd: 1},
+				decad.LineSeg{Start: decad.Point2{U: 4, V: test.v}, End: decad.Point2{U: 1, V: test.v}, TStart: 0, TEnd: 1},
+				decad.LineSeg{Start: decad.Point2{U: 1, V: test.v}, End: decad.Point2{U: 2, V: test.v}, TStart: 0, TEnd: 1},
+			}}}
+
+			_, err := open.Area()
+			require.ErrorIs(t, err, decad.ErrDegenerate)
+			_, err = open.Centroid()
+			require.ErrorIs(t, err, decad.ErrDegenerate)
+			_, err = open.SecondMoments()
+			require.ErrorIs(t, err, decad.ErrDegenerate)
+		})
+	}
+}
+
 func TestRegionMomentsRejectsUnrepresentableEndpointJoins(t *testing.T) {
 	maxCoordinate := math.MaxFloat64
 	profiles := []struct {
