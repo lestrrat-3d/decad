@@ -191,6 +191,10 @@ func (b *Body) ShellContext(ctx context.Context, sel FaceSelector, t units.Value
 	}
 	holed := len(pp.profile.Holes) > 0
 	h := pp.z1 - pp.z0
+	offsetBudget := newWorkBudget(ctx)
+	if err := offsetBudget.err(); err != nil {
+		return nil, err
+	}
 
 	// Stage 3 (§4): the construction's own gates — S18 (the inward section
 	// survey stays within its fixed work budget), S10 (the cavity is non-empty,
@@ -241,7 +245,7 @@ func (b *Body) ShellContext(ctx context.Context, sel FaceSelector, t units.Value
 	// The exact per-feature offset (§7). A dropped feature or a miter that does
 	// not close is caught here — antecedent to the audit (S11a / S11) — before
 	// there is any constructed section to audit.
-	offset, err := offsetProfile(pp.profile, s, tmm)
+	offset, err := offsetProfile(offsetBudget, pp.profile, s, tmm)
 	if err != nil {
 		return nil, err
 	}
@@ -250,7 +254,7 @@ func (b *Body) ShellContext(ctx context.Context, sel FaceSelector, t units.Value
 	// the crossing test (a crossing or boundary contact of offset loops is S11b,
 	// §8), then S9 (nesting). The shared §5 audit, run on decad's own synthesized
 	// geometry. A shell mints no cutback, so S6 cannot fire.
-	if err := auditOffsetSectionBudget(newWorkBudget(ctx), pp.profile, offset); err != nil {
+	if err := auditOffsetSectionBudget(offsetBudget, pp.profile, offset); err != nil {
 		return nil, err
 	}
 
@@ -289,6 +293,9 @@ func (b *Body) ShellContext(ctx context.Context, sel FaceSelector, t units.Value
 	}
 	// Keep the consumed input aligned with recipe liveness at the commit edge.
 	if err := d.requireLive(b); err != nil {
+		return nil, err
+	}
+	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 	d.commit(step, body, b)

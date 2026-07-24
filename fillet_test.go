@@ -1,6 +1,7 @@
 package decad_test
 
 import (
+	"context"
 	"encoding/json"
 	"math"
 	"strings"
@@ -33,6 +34,19 @@ func verticalEdges() *decad.EdgeQuery {
 	return decad.Edges(decad.ParallelTo(r3.NewVec(0, 0, 1)))
 }
 
+type commitBoundaryCancelContext struct {
+	context.Context //nolint:containedctx // deterministic cancellation wrapper used only within one test call.
+	calls           int
+}
+
+func (c *commitBoundaryCancelContext) Err() error {
+	c.calls++
+	if c.calls >= 2 {
+		return context.Canceled
+	}
+	return nil
+}
+
 // retiringEdgeSelector is a foreign selector implementation that embeds the
 // built-in query to promote Selector's sealed marker, then overrides resolution
 // with a callback that would retire the receiver.
@@ -49,6 +63,19 @@ func (s retiringEdgeSelector) SelectEdges(body *decad.Body) ([]*decad.Edge, erro
 	}
 	_, err = body.Placed(r3.Identity())
 	return edges, err
+}
+
+func TestFilletContextCancellationAtCommitLeavesReceiverLive(t *testing.T) {
+	doc, box := filletBox(t)
+	before := doc.Recipe()
+	ctx := &commitBoundaryCancelContext{Context: t.Context()}
+
+	body, err := box.FilletContext(ctx, verticalEdges(), units.Millimeters(10))
+
+	require.Nil(t, body)
+	require.ErrorIs(t, err, context.Canceled)
+	require.Equal(t, before, doc.Recipe())
+	require.Equal(t, []*decad.Body{box}, doc.Bodies())
 }
 
 func TestFilletSelectorAdmission(t *testing.T) {

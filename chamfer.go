@@ -162,6 +162,9 @@ func (b *Body) ChamferContext(ctx context.Context, sel EdgeSelector, d units.Val
 	if err := doc.requireLive(b); err != nil {
 		return nil, err
 	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	doc.commit(step, body, b)
 	return body, nil
 }

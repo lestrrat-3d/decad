@@ -169,6 +169,9 @@ func (b *Body) FilletContext(ctx context.Context, sel EdgeSelector, r units.Valu
 	if err := d.requireLive(b); err != nil {
 		return nil, err
 	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	d.commit(step, body, b)
 	return body, nil
 }

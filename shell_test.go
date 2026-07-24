@@ -1,8 +1,11 @@
 package decad_test
 
 import (
+	"context"
 	"encoding/json"
 	"math"
+	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
@@ -67,6 +70,40 @@ func topCap(b *decad.Body) *decad.FaceQuery {
 type forwardingFaceSelector struct {
 	*decad.FaceQuery
 	calls *int
+}
+
+type offsetPreprocessingCancelContext struct {
+	context.Context //nolint:containedctx // deterministic cancellation wrapper used only within one test call.
+	entered         bool
+}
+
+func (c *offsetPreprocessingCancelContext) Err() error {
+	pcs := make([]uintptr, 32)
+	frames := runtime.CallersFrames(pcs[:runtime.Callers(2, pcs)])
+	for {
+		frame, more := frames.Next()
+		if strings.HasSuffix(frame.Function, ".offsetProfile") {
+			c.entered = true
+			return context.Canceled
+		}
+		if !more {
+			return c.Context.Err()
+		}
+	}
+}
+
+func TestShellContextCancellationDuringOffsetLeavesReceiverLive(t *testing.T) {
+	doc, box := shellBox(t)
+	before := doc.Recipe()
+	ctx := &offsetPreprocessingCancelContext{Context: t.Context()}
+
+	body, err := box.ShellContext(ctx, topCap(box), units.Millimeters(5))
+
+	require.Nil(t, body)
+	require.ErrorIs(t, err, context.Canceled)
+	require.True(t, ctx.entered)
+	require.Equal(t, before, doc.Recipe())
+	require.Equal(t, []*decad.Body{box}, doc.Bodies())
 }
 
 func (s forwardingFaceSelector) SelectFaces(body *decad.Body) ([]*decad.Face, error) {
