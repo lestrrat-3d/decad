@@ -155,14 +155,15 @@ before writing tessellation, export, or mesh-boolean operand code.
 
 **Modify audit cancellation.** `Body.FilletContext`,
 `Body.ChamferContext`, and `Body.ShellContext` pass one shared `workBudget`
-through the pre-commit rewrite audit. Every profile walk, segment pair, hole
-pair, and ray-boundary containment candidate counts against it, so context
-cancellation is polled at phase boundaries and at least every 256 candidates.
-Cancellation returns `ctx.Err()` with the receiver still live and the
-recipe/document unchanged. The original methods delegate with
-`context.Background()`. `auditOffsetSectionBudget` also receives
-`Document.Verify`'s context through the `cupWall` morphology recheck, so that
-path never drops cancellation.
+through the pre-commit cancellation path. Fillet and Chamfer use it through the
+rewrite audit; Shell also uses it for offset construction before that audit.
+Every profile walk, segment pair, hole pair, and ray-boundary containment
+candidate counts against it, so context cancellation is polled at phase
+boundaries and at least every 256 candidates. Cancellation returns `ctx.Err()`
+with the receiver still live and the recipe/document unchanged. The original
+methods delegate with `context.Background()`. Offset construction and
+`auditOffsetSectionBudget` share the same budget when `cupWall` receives
+`Document.Verify`'s context, so that path never drops cancellation.
 
 ## Conventions
 

@@ -259,15 +259,17 @@ row of its own for what a test catches, that row is the one the refusal cites;
 the shell has one, and §8 says which.
 
 **Every modify audit is cancellable with bounded work.** `FilletContext`,
-`ChamferContext`, and `ShellContext` create one `workBudget` for the audit and
-share it through profile walks, segment-pair crossing/contact tests, hole-pair
-tests, and each ray-boundary containment scan. The budget polls at phase
-boundaries and after at most `workPollInterval` candidate operations. A
-cancelled audit returns `ctx.Err()` before commit, leaving the receiver live and
-the recipe and document unchanged. The original `Fillet`, `Chamfer`, and
-`Shell` methods remain source-compatible wrappers using `context.Background()`.
-The `cupWall` morphology recheck reaches the same audit through
-`Document.Verify`'s context.
+`ChamferContext`, and `ShellContext` create one `workBudget` for their
+pre-commit cancellation path. Fillet and Chamfer share it through profile
+walks, segment-pair crossing/contact tests, hole-pair tests, and each
+ray-boundary containment scan. Shell also shares it through exact offset
+construction before that audit. The budget polls at phase boundaries and after
+at most `workPollInterval` candidate operations. A cancelled operation returns
+`ctx.Err()` before commit, leaving the receiver live and the recipe and
+document unchanged. The original `Fillet`, `Chamfer`, and `Shell` methods
+remain source-compatible wrappers using `context.Background()`. The `cupWall`
+morphology recheck shares its budget across offset construction and the same
+audit through `Document.Verify`'s context.
 
 **The rewrite is admitted only when the loops it produces are proven simple and
 correctly nested.** Four tests, in the order §4's precedence fixes, all in

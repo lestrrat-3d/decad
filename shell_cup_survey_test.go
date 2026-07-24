@@ -2,6 +2,7 @@ package decad_test
 
 import (
 	"bytes"
+	"context"
 	"math"
 	"testing"
 
@@ -45,6 +46,19 @@ func requireCupWall(t *testing.T, doc *decad.Document, tool, want float64, statu
 	requireWall(t, report.Bodies[0], want)
 	require.Equal(t, status, report.Bodies[0].Status)
 	require.Equal(t, status, report.Status)
+}
+
+func TestShellCupWallContextCancellationDuringOffset(t *testing.T) {
+	doc, box := shellBox(t)
+	_, err := box.Shell(topCap(box), units.Millimeters(5))
+	require.NoError(t, err)
+
+	ctx := &offsetPreprocessingCancelContext{Context: t.Context()}
+	report, err := doc.Verify(ctx, decad.WithMinWallThickness(units.Millimeters(1)))
+
+	require.Nil(t, report)
+	require.ErrorIs(t, err, context.Canceled)
+	require.True(t, ctx.entered)
 }
 
 func TestShellCupWallThickness(t *testing.T) {
