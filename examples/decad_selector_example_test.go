@@ -122,6 +122,6 @@ func Example_decad_selectors() {
 	// Output:
 	// plate faces: 7
 	// hole wall radius: 10 mm
-	// revolved volume: 6283.19 mm^3 (Exact)
+	// revolved volume: 6283.19 mm^3 (Approximate)
 	// recipe steps: 3
 }

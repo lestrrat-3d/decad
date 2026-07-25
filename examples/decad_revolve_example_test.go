@@ -11,8 +11,8 @@ import (
 
 // Revolve spins a sketch profile about an axis and evaluates the solid of
 // revolution analytically: volume and surface area come from Pappus's
-// theorems on the recorded region's exact moments, so every measurement is
-// closed form. A rectangle with one edge ON the axis revolves into a solid
+// theorems on the recorded region's bounded moments, so every measurement is
+// closed form with a proven bound. A rectangle with one edge ON the axis revolves into a solid
 // cylinder — the on-axis edge sweeps nothing, so there is no inner face, and
 // a full revolution has no caps and no seam.
 func Example_decad_revolve() {
@@ -74,7 +74,7 @@ func Example_decad_revolve() {
 	fmt.Printf("centroid: (%.4f, %.4f, %.4f)\n", c.Value.X, c.Value.Y, c.Value.Z)
 	// Output:
 	// solid: true, faces: 3
-	// volume: 2010.6193 mm³ (Exact)
+	// volume: 2010.6193 mm³ (Approximate)
 	// area: 904.7787 mm²
 	// centroid: (5.0000, 0.0000, 0.0000)
 }

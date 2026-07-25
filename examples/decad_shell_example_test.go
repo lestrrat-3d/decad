@@ -12,7 +12,7 @@ import (
 
 // Shell hollows a straight prism through the faces a selector names. Removing
 // both caps of a hole-free box gives a TUBE — a plain prism over the annular
-// section, so every measurement stays Exact and the body is a first-class prism
+// section, so every measurement carries its numerical proof and the body is a first-class prism
 // downstream. The construction is the recorded section's own exact inward
 // offset (P ⊖ t): the wall is uniform, and the volume is (A_P − A_Q)·h.
 func Example_decad_shell() {

@@ -498,13 +498,13 @@ func runRevolveCase(t *testing.T, rng *rand.Rand, su setup, ap axisPlacement, sw
 	// Mass-property invariance under the rigid motion.
 	volP, err := placed.Volume()
 	require.NoError(t, err)
-	require.Equal(t, decad.Exact, volP.Exactness)
+	require.Equal(t, decad.Approximate, volP.Exactness)
 	require.True(t, volP.Value.Equal(vol0.Value, 1e-9*math.Max(1, wantVol)), "volume changed under placement")
-	require.True(t, volP.Bound.Equal(units.CubicMillimeters(0), 1e-12), "volume bound is zero")
+	require.Positive(t, volP.Bound.Base())
 
 	areaP, err := placed.Area()
 	require.NoError(t, err)
-	require.Equal(t, decad.Exact, areaP.Exactness)
+	require.Equal(t, decad.Approximate, areaP.Exactness)
 	require.True(t, areaP.Value.Equal(area0.Value, 1e-9*(1+mmOf2(area0.Value))), "area changed under placement")
 
 	cenP, err := placed.Centroid()
@@ -562,12 +562,12 @@ func checkRevolveBody(t *testing.T, body *decad.Body, su setup, ap axisPlacement
 	// Invariant 3: the walked-boundary convexity holds under this orientation.
 	checkConvexity(t, body, su, ap, xf, sw)
 
-	// Invariant 4 (structural half): Verify judges the body sound. The mass
-	// properties are checked in the caller.
+	// Invariant 4 (structural half): topology remains valid while bounded mass
+	// properties make zero-tolerance verification Suspect.
 	report, err := body.Document().Verify(t.Context())
 	require.NoError(t, err)
-	require.Equal(t, decad.Sound, report.Status, "%s should verify sound", su.name)
-	require.True(t, report.Trustworthy())
+	require.Equal(t, decad.Suspect, report.Status, "%s has bounded mass results", su.name)
+	require.False(t, report.Trustworthy())
 }
 
 // requireOutward asserts f's outward normal at `at` points out of the solid: a

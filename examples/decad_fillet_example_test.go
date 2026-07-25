@@ -12,8 +12,8 @@ import (
 
 // Fillet rounds the convex lateral edges of a straight prism. The reduction is
 // a rewrite of the recorded 2D section — each rounded corner becomes a tangent
-// arc — so the blend walls are true cylinders and every measurement stays
-// Exact. The step records the unresolved edge query and the radius, retiring
+// arc — so the blend walls are true cylinders and circular measurements carry
+// proven bounds. The step records the unresolved edge query and radius, retiring
 // the receiver, so the recipe replays deterministically.
 func Example_decad_fillet() {
 	w := sketch.NewWorld()
@@ -71,6 +71,6 @@ func Example_decad_fillet() {
 	// Output:
 	// solid: true, faces: 10
 	// blend cylinders: 4
-	// volume: 118283.185 mm^3 (Exact)
+	// volume: 118283.185 mm^3 (Approximate)
 	// recipe steps: 2
 }

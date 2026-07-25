@@ -225,8 +225,8 @@ parameterisation, not measurements of anything, and §5.1 does not reach them.
 type Exactness int
 
 const (
-    Exact Exactness = iota // analytic; the number is the truth
-    Approximate            // tessellation-derived; Bound holds the error
+    Exact Exactness = iota // proved exactly representable; number is truth
+    Approximate            // bounded numerical/tessellated; Bound holds error
 )
 
 // Measurement is a scalar quantity plus how far it can be trusted.
@@ -1654,10 +1654,11 @@ to make that mechanical.
   profile is invalid, contains a nil boundary entity, or no longer exactly
   matches a fresh current profile from its source sketch),
   `ErrUnitKind`, `ErrNotFinite` (a non-finite `units.Value` magnitude or
-  `r3.Vec` component handed as a parameter, or a non-finite value derived while
-  validating a Revolve axis whose input is otherwise finite — `units`
-  construction admits a non-finite value and only its operations reject one,
-  so the call must; option semantics in `docs/verification-design.md`),
+  `r3.Vec` component handed as a parameter, a non-finite value derived while
+  validating a Revolve axis whose input is otherwise finite, or a non-finite
+  measurement or bound derived by an analytic evaluator — `units` construction
+  admits a non-finite value and only its operations reject one, so the call
+  must; option semantics in `docs/verification-design.md`),
   `ErrUnsupported` (the recipe records the intent exactly, but the current
   evaluator cannot yet build it — evaluator staging is explicit and rejected
   at the call, never silently approximated or narrowed;

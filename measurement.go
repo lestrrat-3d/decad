@@ -2,25 +2,26 @@ package decad
 
 import (
 	"fmt"
+	"math"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 )
 
 // Exactness reports how far a computed result can be trusted: whether the
-// number IS the truth, or a tessellation-derived approximation whose error
-// the accompanying Bound holds (docs/api-design.md §5.3). Every measurement
+// number IS the truth, or a bounded numerical approximation whose error the
+// accompanying Bound holds (docs/api-design.md §5.3). Every measurement
 // the API returns carries one, from the first commit — that is what makes an
 // exact-kernel future monotonic rather than breaking: callers already branch
 // on Approximate, and under an exact evaluator that branch stops being taken.
 type Exactness int
 
 const (
-	// Exact marks an analytic result: the number is the truth, and the
-	// Bound beside it is zero.
+	// Exact marks a proved exactly representable result: the number is the
+	// truth, and the Bound beside it is zero.
 	Exact Exactness = iota
-	// Approximate marks a tessellation-derived result: the Bound beside it
-	// holds the absolute error bound the evaluator proves.
+	// Approximate marks a bounded numerical or tessellation-derived result:
+	// the Bound beside it holds the absolute error the evaluator proves.
 	Approximate
 )
 
@@ -73,4 +74,46 @@ type Box struct {
 	Min, Max  r3.Vec
 	Exactness Exactness
 	Bound     units.Value
+}
+
+func validateAnalyticBodyMeasurements(body *Body) error {
+	finiteMeasurement := func(m Measurement) bool {
+		return finiteMeasurementValues(m.Value.Base(), m.Bound.Base())
+	}
+	finiteVecMeasurement := func(m VecMeasurement) bool {
+		return finiteMeasurementValues(
+			m.Value.X, m.Value.Y, m.Value.Z, m.Bound.Base(),
+		)
+	}
+	finiteBox := func(b Box) bool {
+		return finiteMeasurementValues(
+			b.Min.X, b.Min.Y, b.Min.Z,
+			b.Max.X, b.Max.Y, b.Max.Z,
+			b.Bound.Base(),
+		)
+	}
+	checks := []struct {
+		name string
+		ok   bool
+	}{
+		{name: "volume", ok: finiteMeasurement(body.volume)},
+		{name: "area", ok: finiteMeasurement(body.area)},
+		{name: "centroid", ok: finiteVecMeasurement(body.centroid)},
+		{name: "bounds", ok: finiteBox(body.bounds)},
+	}
+	for _, check := range checks {
+		if !check.ok {
+			return fmt.Errorf(`%w: the analytic body's %s measurement is not finite`, ErrNotFinite, check.name)
+		}
+	}
+	return nil
+}
+
+func finiteMeasurementValues(values ...float64) bool {
+	for _, value := range values {
+		if math.IsNaN(value) || math.IsInf(value, 0) {
+			return false
+		}
+	}
+	return true
 }

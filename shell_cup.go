@@ -3,6 +3,7 @@ package decad
 import (
 	"fmt"
 	"math"
+	"math/big"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -13,7 +14,7 @@ import (
 // prisms over the same plane — the outer region O on its interval and the
 // cavity region C on its own, sharing a rim at the open end and a floor at the
 // closed one. It re-evaluates under Body.Placed (evaluator §8) and holds every
-// measurement §10 specifies, all Exact with a zero bound.
+// measurement §10 specifies with its proven numerical bound.
 //
 // A holed section (k ≥ 1 posts in the pocket) builds too: the outer region and
 // the cavity region each carry k holes, so the cup wraps a wall around each
@@ -120,11 +121,11 @@ func cupPayloadFor(pp prismPayload, offset ProfileRecord, s, t float64, removedE
 // lies outside it) and each of the void's own holes as a solid post (material
 // inside) — the pairing buildLoopSidesAs's explicit holeLoop expresses.
 func evalCup(d *Document, ref StepRef, cp cupPayload) (*Body, error) {
-	igO, err := cp.outer.integrals()
+	igO, err := cp.outer.evaluatorIntegrals(momentFirstOrder)
 	if err != nil {
 		return nil, err
 	}
-	igC, err := cp.cavity.integrals()
+	igC, err := cp.cavity.evaluatorIntegrals(momentFirstOrder)
 	if err != nil {
 		return nil, err
 	}
@@ -138,8 +139,9 @@ func evalCup(d *Document, ref StepRef, cp cupPayload) (*Body, error) {
 		// before here); a mismatch would leave a rim with no partner loop.
 		return nil, fmt.Errorf(`%w: the cup's outer and cavity regions have different loop counts`, ErrDegenerate)
 	}
-	hO := math.Abs(cp.zOpen - cp.zOuter)
-	hC := math.Abs(cp.zOpen - cp.zCav)
+	heightO := boundedAbs(boundedSub(exactScalar(cp.zOpen), exactScalar(cp.zOuter)))
+	heightC := boundedAbs(boundedSub(exactScalar(cp.zOpen), exactScalar(cp.zCav)))
+	hO, hC := heightO.value, heightC.value
 	if hO <= 0 || hC <= 0 {
 		return nil, fmt.Errorf(`%w: a cup interval is empty`, ErrDegenerate)
 	}
@@ -162,7 +164,7 @@ func evalCup(d *Document, ref StepRef, cp cupPayload) (*Body, error) {
 	oLo, oHi := math.Min(cp.zOuter, cp.zOpen), math.Max(cp.zOuter, cp.zOpen)
 	ppO := cp.prismLike(oLo, oHi)
 	var faces []*Face
-	perimO := 0.0
+	perimO := boundedScalar{}
 	oFloor := make([][]coedge, len(oLoops))
 	oOpen := make([][]coedge, len(oLoops))
 	for i, loop := range oLoops {
@@ -171,7 +173,7 @@ func evalCup(d *Document, ref StepRef, cp cupPayload) (*Body, error) {
 			return nil, err
 		}
 		faces = append(faces, sf...)
-		perimO += ll
+		perimO = boundedAdd(perimO, ll)
 		oFloor[i], oOpen[i] = floorOpen(bottom, top)
 	}
 
@@ -181,7 +183,7 @@ func evalCup(d *Document, ref StepRef, cp cupPayload) (*Body, error) {
 	// shellSide(i,j) via renameCavityRoles.
 	cLo, cHi := math.Min(cp.zCav, cp.zOpen), math.Max(cp.zCav, cp.zOpen)
 	ppC := cp.prismLike(cLo, cHi)
-	perimC := 0.0
+	perimC := boundedScalar{}
 	cFloor := make([][]coedge, len(cLoops))
 	cOpen := make([][]coedge, len(cLoops))
 	var cavFaces []*Face
@@ -195,7 +197,7 @@ func evalCup(d *Document, ref StepRef, cp cupPayload) (*Body, error) {
 			return nil, err
 		}
 		cavFaces = append(cavFaces, sf...)
-		perimC += ll
+		perimC = boundedAdd(perimC, ll)
 		cFloor[i], cOpen[i] = floorOpen(bottom, top)
 	}
 	renameCavityRoles(cavFaces, ref)
@@ -222,16 +224,18 @@ func evalCup(d *Document, ref StepRef, cp cupPayload) (*Body, error) {
 	// outer boundary (outer true) and each hole (a tunnel through the kept cap, a
 	// post through the pocket floor).
 	capStart := &Face{
-		surface: Plane{Frame: capStartFrame},
-		origins: []FeatureRef{{Step: ref, Role: roleCapStart}},
-		body:    body,
-		area:    igO.area,
+		surface:   Plane{Frame: capStartFrame},
+		origins:   []FeatureRef{{Step: ref, Role: roleCapStart}},
+		body:      body,
+		area:      igO.area,
+		areaBound: igO.areaBound,
 	}
 	shellCap := &Face{
-		surface: Plane{Frame: shellCapFrame},
-		origins: []FeatureRef{{Step: ref, Role: "shellCap"}},
-		body:    body,
-		area:    igC.area,
+		surface:   Plane{Frame: shellCapFrame},
+		origins:   []FeatureRef{{Step: ref, Role: "shellCap"}},
+		body:      body,
+		area:      igC.area,
+		areaBound: igC.areaBound,
 	}
 	for i := range oLoops {
 		capStart.loops = append(capStart.loops, &Loop{coedges: oFloor[i], outer: i == 0})
@@ -261,12 +265,14 @@ func evalCup(d *Document, ref StepRef, cp cupPayload) (*Body, error) {
 		if !oIsOuter {
 			outerLoop, holeLoop = cLoop, oLoop
 		}
+		rimArea := boundedAbs(boundedSub(aO, aC))
 		rims[i] = &Face{
-			surface: Plane{Frame: rimFrame},
-			origins: []FeatureRef{{Step: ref, Role: fmt.Sprintf("rim(%d)", i)}},
-			body:    body,
-			area:    math.Abs(aO - aC),
-			loops:   []*Loop{outerLoop, holeLoop},
+			surface:   Plane{Frame: rimFrame},
+			origins:   []FeatureRef{{Step: ref, Role: fmt.Sprintf("rim(%d)", i)}},
+			body:      body,
+			area:      rimArea.value,
+			areaBound: rimArea.bound,
+			loops:     []*Loop{outerLoop, holeLoop},
 		}
 	}
 
@@ -292,27 +298,67 @@ func evalCup(d *Document, ref StepRef, cp cupPayload) (*Body, error) {
 	faces = append(faces, rims...)
 	body.lumps = []*Lump{{shells: []*Shell{{faces: faces}}}}
 
-	// Measurements — all Exact (docs/modify-design.md §10).
-	body.volume = Measurement{Value: units.CubicMillimeters(igO.area*hO - igC.area*hC), Exactness: Exact, Bound: units.CubicMillimeters(0)}
-	area := 2*igO.area + perimO*hO + perimC*hC
-	body.area = Measurement{Value: units.SquareMillimeters(area), Exactness: Exact, Bound: units.SquareMillimeters(0)}
+	// Measurements carry the composed profile, length, and arithmetic bounds
+	// (docs/modify-design.md §10).
+	areaO := measuredScalar(igO.area, igO.areaBound)
+	areaC := measuredScalar(igC.area, igC.areaBound)
+	massO := boundedMul(areaO, heightO)
+	massC := boundedMul(areaC, heightC)
+	volume := boundedSub(massO, massC)
+	body.volume = Measurement{
+		Value:     units.CubicMillimeters(volume.value),
+		Exactness: exactnessOf(volume.bound),
+		Bound:     units.CubicMillimeters(volume.bound),
+	}
+	area := boundedAdd(
+		boundedAdd(boundedMul(exactScalar(2), areaO), boundedMul(perimO, heightO)),
+		boundedMul(perimC, heightC),
+	)
+	body.area = Measurement{
+		Value:     units.SquareMillimeters(area.value),
+		Exactness: exactnessOf(area.bound),
+		Bound:     units.SquareMillimeters(area.bound),
+	}
 
 	// Centroid: each region's centroid lifted to its own interval midpoint, the
 	// two combined with the cavity's mass subtracted (§10).
-	zMidO := (cp.zOuter + cp.zOpen) / 2
-	zMidC := (cp.zCav + cp.zOpen) / 2
-	cO := cp.prismLike(0, 0).point(igO.mu/igO.area, igO.mv/igO.area, zMidO)
-	cC := cp.prismLike(0, 0).point(igC.mu/igC.area, igC.mv/igC.area, zMidC)
-	massO := igO.area * hO
-	massC := igC.area * hC
-	denom := massO - massC
-	if denom <= 0 {
+	zMidO := boundedDiv(boundedAdd(exactScalar(cp.zOuter), exactScalar(cp.zOpen)), exactScalar(2))
+	zMidC := boundedDiv(boundedAdd(exactScalar(cp.zCav), exactScalar(cp.zOpen)), exactScalar(2))
+	cuO := boundedQuotient(igO.mu, igO.muBound, igO.area, igO.areaBound)
+	cvO := boundedQuotient(igO.mv, igO.mvBound, igO.area, igO.areaBound)
+	cuC := boundedQuotient(igC.mu, igC.muBound, igC.area, igC.areaBound)
+	cvC := boundedQuotient(igC.mv, igC.mvBound, igC.area, igC.areaBound)
+	pp := cp.prismLike(0, 0)
+	cO := pp.point(cuO.value, cvO.value, zMidO.value)
+	cC := pp.point(cuC.value, cvC.value, zMidC.value)
+	cOBound := prismPointBound(pp, cuO, cvO, zMidO)
+	cCBound := prismPointBound(pp, cuC, cvC, zMidC)
+	denom := boundedSub(massO, massC)
+	if denom.value <= 0 {
 		return nil, fmt.Errorf(`%w: the cup cavity is not smaller than its outer solid`, ErrDegenerate)
 	}
+	weightO := boundedDiv(massO, denom)
+	weightC := boundedDiv(massC, denom)
+	centroidValue := cO.Scale(weightO.value).Sub(cC.Scale(weightC.value))
+	centroidBound := absSumUpper(
+		productUpper(weightO.value, cOBound),
+		productUpper(vecL1(cO), weightO.bound),
+		productUpper(weightO.bound, cOBound),
+		productUpper(weightC.value, cCBound),
+		productUpper(vecL1(cC), weightC.bound),
+		productUpper(weightC.bound, cCBound),
+		exactWeightedPointRound(cO, weightO.value, cC, weightC.value, centroidValue),
+	)
+	outerPrism := cp.prismLike(oLo, oHi)
+	geometryBound, err := prismCentroidGeometryBound(outerPrism, cp.outer, centroidValue)
+	if err != nil {
+		return nil, err
+	}
+	centroidBound = math.Min(centroidBound, geometryBound)
 	body.centroid = VecMeasurement{
-		Value:     cO.Scale(massO / denom).Sub(cC.Scale(massC / denom)),
-		Exactness: Exact,
-		Bound:     units.Millimeters(0),
+		Value:     centroidValue,
+		Exactness: exactnessOf(centroidBound),
+		Bound:     units.Millimeters(centroidBound),
 	}
 
 	// Bounds: the outer prism's — the cavity lies within it in both senses (§10).
@@ -321,8 +367,31 @@ func evalCup(d *Document, ref StepRef, cp cupPayload) (*Body, error) {
 		return nil, err
 	}
 	body.bounds = bounds
+	if err := validateAnalyticBodyMeasurements(body); err != nil {
+		return nil, err
+	}
 	body.payload = cp
 	return body, nil
+}
+
+func exactWeightedPointRound(a r3.Vec, wa float64, b r3.Vec, wb float64, held r3.Vec) float64 {
+	coordinateError := func(av, bv, hv float64) float64 {
+		ra, rwa := floatRat(av), floatRat(wa)
+		rb, rwb := floatRat(bv), floatRat(wb)
+		if ra == nil || rwa == nil || rb == nil || rwb == nil {
+			return math.Inf(1)
+		}
+		exact := new(big.Rat).Sub(
+			new(big.Rat).Mul(ra, rwa),
+			new(big.Rat).Mul(rb, rwb),
+		)
+		return rationalFloatError(exact, hv)
+	}
+	return radius3D(max(
+		coordinateError(a.X, b.X, held.X),
+		coordinateError(a.Y, b.Y, held.Y),
+		coordinateError(a.Z, b.Z, held.Z),
+	))
 }
 
 // renameCavityRoles rewrites the cavity walls' provenance from the
@@ -349,13 +418,13 @@ func renameCavityRoles(faces []*Face, ref StepRef) {
 // (counter-clockwise) both report a positive area. A rim band's area is the
 // difference of the two loops it spans, and both are strictly nested (the audit
 // proved the cavity simple and inside the outer region), so the absolute
-// difference IS the band's exact area.
-func loopEnclosedArea(l LoopRecord) (float64, error) {
+// difference is the band's analytic area, with both source bounds carried.
+func loopEnclosedArea(l LoopRecord) (boundedScalar, error) {
 	var ig regionIntegrals
 	for _, seg := range l.Segments {
 		if err := ig.add(seg); err != nil {
-			return 0, err
+			return boundedScalar{}, err
 		}
 	}
-	return math.Abs(ig.area), nil
+	return measuredScalar(math.Abs(ig.area), ig.areaBound), nil
 }
