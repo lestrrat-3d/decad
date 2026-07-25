@@ -326,8 +326,23 @@ func TestStepShapeGateRunsBeforeTypedPayloadDecoding(t *testing.T) {
 			want: `the "extrude" op requires a non-empty profile`,
 		},
 		{
+			name: "empty profile before malformed extent",
+			step: `{"op":"extrude","profile":{},"plane":{},"extent":{"kind":"distance"},"opts":{"kind":"extrude"}}`,
+			want: `the "extrude" op requires a non-empty profile`,
+		},
+		{
+			name: "null profile before malformed extent",
+			step: `{"op":"extrude","profile":null,"plane":{},"extent":{"kind":"distance"},"opts":{"kind":"extrude"}}`,
+			want: `the "extrude" op requires a non-empty profile`,
+		},
+		{
 			name: "missing profile before malformed angular extent",
 			step: `{"op":"revolve","angular":{"kind":"angle_extent"}}`,
+			want: `the "revolve" op requires a non-empty profile`,
+		},
+		{
+			name: "empty profile before malformed angular extent",
+			step: `{"op":"revolve","profile":{},"plane":{},"angular":{"kind":"angle_extent"},"axis":{}}`,
 			want: `the "revolve" op requires a non-empty profile`,
 		},
 		{
@@ -340,6 +355,11 @@ func TestStepShapeGateRunsBeforeTypedPayloadDecoding(t *testing.T) {
 			step: `{"op":"shell","inputs":[0],"selectors":[{"kind":"faces","preds":[{"kind":"normal_to"}]}],"values":["1 mm"]}`,
 			want: `the "shell" op requires its matching options`,
 		},
+		{
+			name: "forbidden profile before malformed selector field",
+			step: `{"op":"union","inputs":[0,1],"profile":{},"selectors":{"kind":"edges","preds":[]}}`,
+			want: `the "union" op forbids a profile`,
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -351,6 +371,36 @@ func TestStepShapeGateRunsBeforeTypedPayloadDecoding(t *testing.T) {
 			err = json.Unmarshal([]byte(`{"steps":[`+test.step+`]}`), &recipe)
 			require.ErrorIs(t, err, decad.ErrInvalidRecipe)
 			require.ErrorContains(t, err, test.want)
+		})
+	}
+}
+
+func TestStepAndRecipeRejectCaseVariantOperationFields(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+	}{
+		{
+			name:  "case variant operation duplicate",
+			input: `{"op":"union","OP":"cut","inputs":[0,1]}`,
+		},
+		{
+			name:  "non-canonical operation field",
+			input: `{"OP":"union","inputs":[0,1]}`,
+		},
+		{
+			name:  "case variant input duplicate",
+			input: `{"op":"union","inputs":[0,1],"Inputs":[1,0]}`,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var step decad.Step
+			require.Error(t, json.Unmarshal([]byte(test.input), &step))
+
+			var recipe decad.Recipe
+			err := json.Unmarshal([]byte(`{"steps":[`+test.input+`]}`), &recipe)
+			require.ErrorIs(t, err, decad.ErrInvalidRecipe)
 		})
 	}
 }

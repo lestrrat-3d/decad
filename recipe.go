@@ -484,6 +484,7 @@ func unmarshalStepPresence(raw jsonStepDecode) stepFieldPresence {
 
 type stepShapeFields struct {
 	inputs           int
+	inputsPresent    bool
 	profile          bool
 	plane            bool
 	extent           bool
@@ -497,7 +498,35 @@ type stepShapeFields struct {
 	valuesPresent    bool
 }
 
-func stepShapeFieldsFromJSON(raw jsonStepDecode) (stepShapeFields, error) {
+func shapeWireFieldPresent(data json.RawMessage, required bool) bool {
+	if data == nil {
+		return false
+	}
+	return !required || !isJSONNull(data)
+}
+
+func stepShapeFieldsFromJSON(raw jsonStepDecode, op OpKind) (stepShapeFields, error) {
+	shape, ok := shapeForOperation(op)
+	if !ok {
+		return stepShapeFields{}, fmt.Errorf(`decad: unknown op kind %d`, int(op))
+	}
+	present := unmarshalStepPresence(raw)
+	fields := stepShapeFields{
+		inputsPresent:    raw.Inputs != nil,
+		profile:          shapeWireFieldPresent(raw.Profile, shape.profile),
+		plane:            shapeWireFieldPresent(raw.Plane, shape.plane),
+		extent:           shapeWireFieldPresent(raw.Extent, shape.extent),
+		angular:          shapeWireFieldPresent(raw.Angular, shape.angular),
+		axis:             shapeWireFieldPresent(raw.Axis, shape.axis),
+		placement:        shapeWireFieldPresent(raw.Placement, shape.placement),
+		selectorsPresent: present.selectors,
+		opts:             shapeWireFieldPresent(raw.Opts, shape.opts != stepOptsNone),
+		valuesPresent:    present.values,
+	}
+	if err := validateStepShapePresence(op, fields); err != nil {
+		return stepShapeFields{}, err
+	}
+
 	inputs, err := jsonArrayLength(raw.Inputs, "inputs")
 	if err != nil {
 		return stepShapeFields{}, err
@@ -510,21 +539,10 @@ func stepShapeFieldsFromJSON(raw jsonStepDecode) (stepShapeFields, error) {
 	if err != nil {
 		return stepShapeFields{}, err
 	}
-	present := unmarshalStepPresence(raw)
-	return stepShapeFields{
-		inputs:           inputs,
-		profile:          present.profile,
-		plane:            present.plane,
-		extent:           present.extent,
-		angular:          present.angular,
-		axis:             present.axis,
-		placement:        present.placement,
-		selectors:        selectors,
-		selectorsPresent: present.selectors,
-		opts:             present.opts,
-		values:           values,
-		valuesPresent:    present.values,
-	}, nil
+	fields.inputs = inputs
+	fields.selectors = selectors
+	fields.values = values
+	return fields, nil
 }
 
 func jsonArrayLength(data json.RawMessage, field string) (int, error) {
@@ -556,6 +574,90 @@ func validStepOptsKind(opts StepOpts, want stepOptsKind) bool {
 		}
 	}
 	return false
+}
+
+func validateStepShapePresence(op OpKind, fields stepShapeFields) error {
+	shape, ok := shapeForOperation(op)
+	if !ok {
+		return fmt.Errorf(`decad: unknown op kind %d`, int(op))
+	}
+
+	if shape.minInputs > 0 && !fields.inputsPresent {
+		if shape.maxInputs == shape.minInputs {
+			return fmt.Errorf(`decad: the %q op requires exactly %d inputs`, op, shape.minInputs)
+		}
+		return fmt.Errorf(`decad: the %q op requires at least %d inputs`, op, shape.minInputs)
+	}
+	if shape.profile {
+		if !fields.profile {
+			return fmt.Errorf(`decad: the %q op requires a non-empty profile`, op)
+		}
+	} else if fields.profile {
+		return fmt.Errorf(`decad: the %q op forbids a profile`, op)
+	}
+	if shape.plane {
+		if !fields.plane {
+			return fmt.Errorf(`decad: the %q op requires a plane`, op)
+		}
+	} else if fields.plane {
+		return fmt.Errorf(`decad: the %q op forbids a plane`, op)
+	}
+	if fields.extent != shape.extent {
+		if shape.extent {
+			return fmt.Errorf(`decad: the %q op requires a linear extent`, op)
+		}
+		return fmt.Errorf(`decad: the %q op forbids a linear extent`, op)
+	}
+	if fields.angular != shape.angular {
+		if shape.angular {
+			return fmt.Errorf(`decad: the %q op requires an angular extent`, op)
+		}
+		return fmt.Errorf(`decad: the %q op forbids an angular extent`, op)
+	}
+	if fields.axis != shape.axis {
+		if shape.axis {
+			return fmt.Errorf(`decad: the %q op requires an axis`, op)
+		}
+		return fmt.Errorf(`decad: the %q op forbids an axis`, op)
+	}
+	if shape.placement {
+		if !fields.placement {
+			return fmt.Errorf(`decad: the %q op requires a placement`, op)
+		}
+	} else if fields.placement {
+		return fmt.Errorf(`decad: the %q op forbids a placement`, op)
+	}
+
+	switch shape.selector {
+	case stepSelectorNone:
+		if fields.selectorsPresent {
+			return fmt.Errorf(`decad: the %q op forbids selectors`, op)
+		}
+	case stepSelectorEdge, stepSelectorFace:
+		if !fields.selectorsPresent {
+			if shape.selector == stepSelectorEdge {
+				return fmt.Errorf(`decad: the %q op requires exactly one edge selector`, op)
+			}
+			return fmt.Errorf(`decad: the %q op requires exactly one face selector`, op)
+		}
+	}
+
+	if shape.opts == stepOptsNone {
+		if fields.opts {
+			return fmt.Errorf(`decad: the %q op forbids options`, op)
+		}
+	} else if !fields.opts {
+		return fmt.Errorf(`decad: the %q op requires its matching options`, op)
+	}
+
+	if shape.values == 0 {
+		if fields.valuesPresent {
+			return fmt.Errorf(`decad: the %q op forbids values`, op)
+		}
+	} else if !fields.valuesPresent {
+		return fmt.Errorf(`decad: the %q op requires exactly %d values`, op, shape.values)
+	}
+	return nil
 }
 
 func validateStepShapeFields(op OpKind, fields stepShapeFields) (operationShape, error) {
@@ -646,6 +748,19 @@ func validateStepShapeFields(op OpKind, fields stepShapeFields) (operationShape,
 	return shape, nil
 }
 
+func validateStepShapeBase(s Step, shape operationShape) error {
+	if shape.profile && len(s.Profile.Outer.Segments) == 0 {
+		return fmt.Errorf(`decad: the %q op requires a non-empty profile`, s.Op)
+	}
+	if shape.plane && !nonzeroPlane(s.Plane) {
+		return fmt.Errorf(`decad: the %q op requires a plane`, s.Op)
+	}
+	if shape.placement && !nonzeroPlacement(s.Placement) {
+		return fmt.Errorf(`decad: the %q op requires a placement`, s.Op)
+	}
+	return nil
+}
+
 // validateStepShape is the complete core §6.2 per-operation structural gate.
 // It is shared by both codec directions so caller-built and decoded Step
 // values admit exactly the shapes immediate feature calls record.
@@ -672,14 +787,8 @@ func validateStepShape(s Step, present stepFieldPresence) error {
 			return fmt.Errorf(`decad: the %q op requires unique inputs`, s.Op)
 		}
 	}
-	if shape.profile && len(s.Profile.Outer.Segments) == 0 {
-		return fmt.Errorf(`decad: the %q op requires a non-empty profile`, s.Op)
-	}
-	if shape.plane && !nonzeroPlane(s.Plane) {
-		return fmt.Errorf(`decad: the %q op requires a plane`, s.Op)
-	}
-	if shape.placement && !nonzeroPlacement(s.Placement) {
-		return fmt.Errorf(`decad: the %q op requires a placement`, s.Op)
+	if err := validateStepShapeBase(s, shape); err != nil {
+		return err
 	}
 
 	switch shape.selector {
@@ -829,31 +938,16 @@ func (s *Step) UnmarshalJSON(data []byte) error {
 	if op == nil {
 		return prependCodecPath(fmt.Errorf(`decad: step is missing its op`), "op")
 	}
-	fields, err := stepShapeFieldsFromJSON(raw)
+	fields, err := stepShapeFieldsFromJSON(raw, *op)
 	if err != nil {
 		return err
 	}
-	if _, err := validateStepShapeFields(*op, fields); err != nil {
+	shape, err := validateStepShapeFields(*op, fields)
+	if err != nil {
 		return err
 	}
 	present := unmarshalStepPresence(raw)
 	out := Step{Op: *op}
-	if raw.Inputs != nil {
-		var vals []json.RawMessage
-		if err := json.Unmarshal(raw.Inputs, &vals); err != nil {
-			return prependCodecPath(codecJSONError(err), "inputs")
-		}
-		if vals != nil {
-			out.Inputs = make([]StepRef, 0, len(vals))
-			for i, b := range vals {
-				var v StepRef
-				if err := json.Unmarshal(b, &v); err != nil {
-					return prependCodecPath(codecJSONError(err), fmt.Sprintf(`inputs[%d]`, i))
-				}
-				out.Inputs = append(out.Inputs, v)
-			}
-		}
-	}
 	if raw.Profile != nil {
 		var v *ProfileRecord
 		if err := json.Unmarshal(raw.Profile, &v); err != nil {
@@ -870,6 +964,46 @@ func (s *Step) UnmarshalJSON(data []byte) error {
 		}
 		if v != nil {
 			out.Plane = *v
+		}
+	}
+	if present.placement {
+		if err := json.Unmarshal(raw.Placement, &out.Placement); err != nil {
+			return prependCodecPath(codecJSONErrorAt(raw.Placement, &out.Placement, fmt.Errorf(`decad: failed to decode placement: %w`, err)), "placement")
+		}
+	}
+	if err := validateStepShapeBase(out, shape); err != nil {
+		return err
+	}
+	if raw.Inputs != nil {
+		var vals []json.RawMessage
+		if err := json.Unmarshal(raw.Inputs, &vals); err != nil {
+			return prependCodecPath(codecJSONError(err), "inputs")
+		}
+		if vals != nil {
+			out.Inputs = make([]StepRef, 0, len(vals))
+			for i, b := range vals {
+				var v StepRef
+				if err := json.Unmarshal(b, &v); err != nil {
+					return prependCodecPath(codecJSONError(err), fmt.Sprintf(`inputs[%d]`, i))
+				}
+				out.Inputs = append(out.Inputs, v)
+			}
+		}
+	}
+	if raw.Values != nil {
+		var valueData []json.RawMessage
+		if err := json.Unmarshal(raw.Values, &valueData); err != nil {
+			return prependCodecPath(codecJSONError(err), "values")
+		}
+		if valueData != nil {
+			out.Values = make([]units.Value, 0, len(valueData))
+			for i, b := range valueData {
+				var v units.Value
+				if err := json.Unmarshal(b, &v); err != nil {
+					return prependCodecPath(codecJSONError(err), fmt.Sprintf(`values[%d]`, i))
+				}
+				out.Values = append(out.Values, v)
+			}
 		}
 	}
 	if raw.Extent != nil {
@@ -892,16 +1026,6 @@ func (s *Step) UnmarshalJSON(data []byte) error {
 			return prependCodecPath(err, "axis")
 		}
 		out.Axis = a
-	}
-	// Presence is the field being on the wire at all: a RawMessage captures the
-	// literal bytes, so an explicit null and a {} are both present (non-nil)
-	// here while an absent key leaves it nil — a distinction a *TransformRecord
-	// loses, since json decodes null to a nil pointer. A present null or {}
-	// decodes to the zero record, which the shape gate below rejects.
-	if present.placement {
-		if err := json.Unmarshal(raw.Placement, &out.Placement); err != nil {
-			return prependCodecPath(codecJSONErrorAt(raw.Placement, &out.Placement, fmt.Errorf(`decad: failed to decode placement: %w`, err)), "placement")
-		}
 	}
 	if raw.Selectors != nil {
 		var selectorData []json.RawMessage
@@ -926,22 +1050,6 @@ func (s *Step) UnmarshalJSON(data []byte) error {
 			return prependCodecPath(err, "opts")
 		}
 		out.Opts = o
-	}
-	if raw.Values != nil {
-		var valueData []json.RawMessage
-		if err := json.Unmarshal(raw.Values, &valueData); err != nil {
-			return prependCodecPath(codecJSONError(err), "values")
-		}
-		if valueData != nil {
-			out.Values = make([]units.Value, 0, len(valueData))
-			for i, b := range valueData {
-				var v units.Value
-				if err := json.Unmarshal(b, &v); err != nil {
-					return prependCodecPath(codecJSONError(err), fmt.Sprintf(`values[%d]`, i))
-				}
-				out.Values = append(out.Values, v)
-			}
-		}
 	}
 	if field, err := extentKeyingError(out); err != nil {
 		return prependCodecPath(err, field)
