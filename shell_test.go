@@ -180,7 +180,7 @@ func TestShellContextCancellationDuringAuditPreservesError(t *testing.T) {
 			before := doc.Recipe()
 			ctx := &operationCancelContext{
 				Context:   t.Context(),
-				target:    "loopSignedAreaBudget",
+				target:    "auditOffsetSectionBudget",
 				cancelErr: cancelErr,
 			}
 
