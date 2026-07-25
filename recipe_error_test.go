@@ -177,6 +177,26 @@ func TestRecipeDecodeErrorPathIncludesNestedClosedFields(t *testing.T) {
 	}`, "steps[0].opts.kind", 0)
 }
 
+func TestRecipeDecodeErrorPathIncludesEmptyExtentLeaf(t *testing.T) {
+	requireRecipeDecodePath(t, `{
+		"steps": [{
+			"op": "revolve",
+			"angular": {"kind": "full_revolution", "a": "90 deg"}
+		}]
+	}`, "steps[0].angular.a", 0)
+
+	requireRecipeDecodePath(t, `{
+		"steps": [{
+			"op": "extrude",
+			"extent": {
+				"kind": "two_sided",
+				"one": {"kind": "through_all_side", "d": "2 mm"},
+				"two": {"kind": "distance_side", "d": "5 mm"}
+			}
+		}]
+	}`, "steps[0].extent.one.d", 0)
+}
+
 func TestRecipeDecodeErrorPathIncludesPrimitiveArrayIndex(t *testing.T) {
 	requireRecipeDecodePath(t, `{
 		"steps": [{"op": "union", "inputs": [0, "bad"]}]

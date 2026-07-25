@@ -3,7 +3,9 @@ package decad
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/lestrrat-3d/units"
 )
@@ -183,9 +185,29 @@ func unmarshalEmptyExtent(data []byte, name string) error {
 	decoder.DisallowUnknownFields()
 	var raw emptyExtentWire
 	if err := decoder.Decode(&raw); err != nil {
-		return fmt.Errorf(`decad: failed to decode %s: %w`, name, err)
+		decodeErr := codecJSONErrorAt(data, &raw, fmt.Errorf(`decad: failed to decode %s: %w`, name, err))
+		var pathErr *codecPathError
+		if !errors.As(decodeErr, &pathErr) {
+			if field := emptyExtentUnknownField(data); field != "" {
+				decodeErr = prependCodecPath(decodeErr, field)
+			}
+		}
+		return prependCodecPath(decodeErr, "")
 	}
 	return nil
+}
+
+func emptyExtentUnknownField(data []byte) string {
+	fields, ok := codecObjectFields(data)
+	if !ok {
+		return ""
+	}
+	for _, field := range fields {
+		if !strings.EqualFold(field.name, "kind") {
+			return field.name
+		}
+	}
+	return ""
 }
 
 // errNilExtent rejects a nil variant pointer: it names no extent to record.
