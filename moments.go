@@ -612,14 +612,6 @@ func (r ProfileRecord) integralsBudget(budget *workBudget) (regionIntegrals, err
 	return integrateMomentRecordBudget(record, anchor, momentSecondOrder, budget)
 }
 
-func (r ProfileRecord) integralsContext(ctx context.Context) (regionIntegrals, error) {
-	record, anchor, err := validateMomentFieldsContext(ctx, r)
-	if err != nil {
-		return regionIntegrals{}, err
-	}
-	return integrateMomentRecordContext(ctx, record, anchor, momentSecondOrder)
-}
-
 func (r ProfileRecord) integralsTo(order momentIntegralOrder) (regionIntegrals, error) {
 	record, anchor, err := validateMomentRecord(r)
 	if err != nil {
@@ -664,16 +656,8 @@ func integrateMomentRecordBudget(record ProfileRecord, anchor Point2, order mome
 	return integrateMomentRecordMode(record, anchor, order, true, budget)
 }
 
-func integrateMomentRecordUnchecked(record ProfileRecord, anchor Point2, order momentIntegralOrder) (regionIntegrals, error) {
-	return integrateMomentRecordMode(record, anchor, order, false, nil)
-}
-
 func integrateMomentRecordMode(record ProfileRecord, anchor Point2, order momentIntegralOrder, checkFinite bool, budget *workBudget) (regionIntegrals, error) {
 	return integrateMomentRecordWithPoll(func() error { return wallBudgetStep(budget) }, record, anchor, order, checkFinite)
-}
-
-func integrateMomentRecordContext(ctx context.Context, record ProfileRecord, anchor Point2, order momentIntegralOrder) (regionIntegrals, error) {
-	return integrateMomentRecordModeContext(ctx, record, anchor, order, true)
 }
 
 func integrateMomentRecordUncheckedContext(ctx context.Context, record ProfileRecord, anchor Point2, order momentIntegralOrder) (regionIntegrals, error) {

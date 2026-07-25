@@ -170,7 +170,7 @@ func (b *Body) FilletContext(ctx context.Context, sel EdgeSelector, r units.Valu
 	ref := d.nextStepRef()
 	// The blend descriptors ride on the payload so a re-evaluation (a copy or a
 	// placement) re-mints its own fillet(i,j) roles; evalPrism applies them.
-	body, err := evalPrism(d, ref, prismPayload{
+	body, err := evalPrismContext(ctx, d, ref, prismPayload{
 		profile:   profile,
 		frame:     pp.frame,
 		z0:        pp.z0,

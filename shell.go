@@ -285,14 +285,14 @@ func (b *Body) ShellContext(ctx context.Context, sel FaceSelector, t units.Value
 			// each hole — 1 + k disjoint lumps, which no prismPayload holds (S12).
 			return nil, fmt.Errorf(`%w: a both-caps shell of a holed section is %d disjoint lumps; this evaluator has no multi-lump payload`, ErrUnsupported, 1+len(pp.profile.Holes))
 		}
-		body, err = evalTube(d, ref, pp, offset, s)
+		body, err = evalTubeContext(ctx, d, ref, pp, offset, s)
 	default:
 		// A one-cap shell is a cup (B5/B6), for any k ≥ 0: the offset section's
 		// loops are proven simple and correctly nested by the §5 audit above, and
 		// evalCup wraps a wall around each post, all hanging off the one floor slab
 		// (one lump). The holed BOTH-caps case keeps no floor and is 1 + k lumps
 		// (B4, S12), refused above.
-		body, err = evalCup(d, ref, cupPayloadFor(pp, offset, s, tmm, removedEnd))
+		body, err = evalCupContext(ctx, d, ref, cupPayloadFor(pp, offset, s, tmm, removedEnd))
 	}
 	if err != nil {
 		return nil, err
@@ -426,7 +426,10 @@ func sectionInradius(budget *workBudget, profile ProfileRecord) (float64, error)
 // Hole: reverse(P)} outward — so it IS a prismPayload, admitted as a receiver
 // (R1) and first-class downstream (§12). The inner loop is walked as a hole
 // (reversed sense), which is what makes its wall's material lie outside it.
-func evalTube(d *Document, ref StepRef, pp prismPayload, offset ProfileRecord, s float64) (*Body, error) {
+func evalTubeContext(ctx context.Context, d *Document, ref StepRef, pp prismPayload, offset ProfileRecord, s float64) (*Body, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	var outer, inner LoopRecord
 	if s > 0 { // inward: P is the outside, Q the cavity
 		outer = pp.profile.Outer
@@ -435,12 +438,12 @@ func evalTube(d *Document, ref StepRef, pp prismPayload, offset ProfileRecord, s
 		outer = offset.Outer
 		inner = pp.profile.Outer
 	}
-	holeLoop, err := reverseLoopRecord(inner)
+	holeLoop, err := reverseLoopRecordContext(ctx, inner)
 	if err != nil {
 		return nil, err
 	}
 	section := ProfileRecord{Outer: outer, Holes: []LoopRecord{holeLoop}}
-	return evalPrism(d, ref, prismPayload{
+	return evalPrismContext(ctx, d, ref, prismPayload{
 		profile: section,
 		frame:   pp.frame,
 		z0:      pp.z0,

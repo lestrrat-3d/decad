@@ -163,7 +163,7 @@ func (b *Body) ChamferContext(ctx context.Context, sel EdgeSelector, d units.Val
 	ref := doc.nextStepRef()
 	// The blend descriptors ride on the payload so a re-evaluation (a copy or a
 	// placement) re-mints its own chamfer(i,j) roles; evalPrism applies them.
-	body, err := evalPrism(doc, ref, prismPayload{
+	body, err := evalPrismContext(ctx, doc, ref, prismPayload{
 		profile:   profile,
 		frame:     pp.frame,
 		z0:        pp.z0,
