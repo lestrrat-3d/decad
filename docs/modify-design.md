@@ -269,8 +269,8 @@ at most `workPollInterval` candidate operations. A cancelled operation returns
 `ctx.Err()` before commit, leaving the receiver live and the recipe and
 document unchanged. The original `Fillet`, `Chamfer`, and `Shell` methods
 remain source-compatible wrappers using `context.Background()`. The `cupWall`
-morphology recheck shares its budget across offset construction and the same
-audit through `Document.Verify`'s context.
+morphology recheck shares its budget across profile validation and integration,
+offset construction, and the same audit through `Document.Verify`'s context.
 
 **The rewrite is admitted only when the loops it produces are proven simple and
 correctly nested.** Four tests, in the order §4's precedence fixes, all in

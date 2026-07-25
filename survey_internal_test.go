@@ -330,3 +330,37 @@ func TestCupWallCancellationCoversOffsetAuditAndReverse(t *testing.T) {
 		})
 	}
 }
+
+func TestCupWallCancellationDuringProfileIntegrals(t *testing.T) {
+	line := func(u0, v0, u1, v1 float64) CurveSegment {
+		return LineSeg{
+			Start:  Point2{U: u0, V: v0},
+			End:    Point2{U: u1, V: v1},
+			TStart: 0,
+			TEnd:   1,
+		}
+	}
+	outer := ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{
+		line(0, 0, 100, 0),
+		line(100, 0, 100, 60),
+		line(100, 60, 0, 60),
+		line(0, 60, 0, 0),
+	}}}
+	cavity, err := offsetProfile(newWorkBudget(t.Context()), outer, 1, 5)
+	require.NoError(t, err)
+	cp := cupPayload{
+		outer:     outer,
+		cavity:    cavity,
+		zOuter:    0,
+		zCav:      5,
+		zOpen:     20,
+		thickness: 5,
+		sense:     Inward,
+	}
+	ctx := &internalFrameCancelContext{Context: t.Context(), target: "integralsBudget"}
+
+	_, err = cupWall(newWorkBudget(ctx), cp, 15*math.Pi/180)
+
+	require.ErrorIs(t, err, context.Canceled)
+	require.True(t, ctx.entered)
+}
