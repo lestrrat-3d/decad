@@ -168,8 +168,8 @@ const (
 	// neither way (§1). Reading ReadingNone. Contributes Suspect.
 	DiagUndecidedPair
 	// DiagUnsupportedPair is the broad compatibility code for a staged pair.
-	// Verify emits one of the cause-specific codes below. Reading ReadingNone.
-	// Contributes Suspect.
+	// Verify emits this alongside one of the cause-specific codes below.
+	// Reading ReadingNone. Contributes Suspect.
 	//
 	// Deprecated: branch on DiagUnsupportedPairPayload,
 	// DiagUnsupportedPairContact, or DiagUnsupportedPairPipeline.
@@ -295,9 +295,10 @@ type Report struct {
 	Bodies        []*BodyReport
 	Interferences []Interference
 	Clearances    []Clearance
-	// Diagnostics is one structured, branchable entry per reason a report
-	// returned by Verify is not Sound (verification §1.1). On such a report it
-	// is empty EXACTLY when Status == Sound, and Status is the worst
+	// Diagnostics contains structured, branchable entries for every reason a
+	// report returned by Verify is not Sound (verification §1.1). Staged pair
+	// causes also carry the deprecated broad compatibility entry. On such a
+	// report it is empty EXACTLY when Status == Sound, and Status is the worst
 	// Diagnostic.Status in it — the §6 aggregate, itemized. The zero Report is
 	// Unverified and carries no verdict.
 	Diagnostics []Diagnostic
@@ -646,8 +647,11 @@ func (d *Document) Verify(ctx context.Context, opts ...VerifyOption) (*Report, e
 				return nil, err
 			}
 			if outcome != interferenceMeasured {
-				report.Diagnostics = append(report.Diagnostics,
-					undecidedPairDiag(a, b, res.verdict, outcome))
+				diag := undecidedPairDiag(a, b, res.verdict, outcome)
+				if legacy, ok := legacyUnsupportedPairDiag(a, b, diag.Code); ok {
+					report.Diagnostics = append(report.Diagnostics, legacy)
+				}
+				report.Diagnostics = append(report.Diagnostics, diag)
 				undecided = true
 				continue
 			}
@@ -739,11 +743,25 @@ func pairDiagNone(a, b *Body, code DiagnosticCode, msg string) Diagnostic {
 	}
 }
 
+// legacyUnsupportedPairDiag preserves the deprecated broad pair signal for
+// callers that still branch on it. The cause-specific diagnostic remains the
+// actionable entry and is appended separately by Verify.
+func legacyUnsupportedPairDiag(a, b *Body, cause DiagnosticCode) (Diagnostic, bool) {
+	switch cause {
+	case DiagUnsupportedPairPayload, DiagUnsupportedPairContact, DiagUnsupportedPairPipeline:
+		return pairDiagNone(a, b, DiagUnsupportedPair,
+			"the pair cannot be decided because a read-only intersection stage is unsupported; inspect the accompanying cause-specific diagnostic for details"), true
+	default:
+		return Diagnostic{}, false
+	}
+}
+
 // undecidedPairDiag picks the diagnostic for a pair whose overlap volume the
 // evaluator could not measure (verification §1.1): payload, contact, and
 // in-pipeline limits each keep their own code and action; only an overlap with
 // an otherwise undecided measurement is DiagUndecidedInterference; an
-// unresolved partition is DiagUndecidedPair.
+// unresolved partition is DiagUndecidedPair. Verify adds the deprecated broad
+// compatibility code alongside the three cause-specific outcomes.
 func undecidedPairDiag(a, b *Body, verdict pairVerdict, outcome interferenceOutcome) Diagnostic {
 	switch {
 	case outcome == interferenceUnsupportedPayloadFirst:

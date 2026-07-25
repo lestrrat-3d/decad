@@ -28,7 +28,7 @@ type Report struct {
     Bodies        []*BodyReport
     Interferences []Interference // proven pairwise overlap, with the overlap VOLUME; always computed
     Clearances    []Clearance    // WithClearances(): minimum gap between disjoint pairs
-    Diagnostics   []Diagnostic   // one branchable entry per reason the report is not Sound (§1.1)
+    Diagnostics   []Diagnostic   // branchable entries per reason; staged pair causes also carry the deprecated compatibility entry (§1.1)
     Status        Status         // Unverified on a zero value; Verify always returns a decided status
 }
 
@@ -196,7 +196,8 @@ const (
     // Contributes Suspect.
     DiagUndecidedPair
     // DiagUnsupportedPair — broad compatibility code for a staged pair.
-    // Verify emits one of the three cause-specific codes below. Deprecated.
+    // Verify emits this alongside one of the three cause-specific codes below.
+    // Deprecated: branch on the cause-specific code for detail.
     DiagUnsupportedPair
     // DiagUndecidedClearance — a pair whose partition IS proven disjoint (by box
     // or by the kernel) but whose REQUESTED WithClearances gap the kernel could
@@ -291,6 +292,9 @@ and the matching `Observed*` form; a proven-invalid body emits one
 `DiagInvalidBody` and no region-quantity diagnostics, because §1 gives it no
 region quantity to gate.
 
+For a staged pair cause, the slice carries both the deprecated broad
+`DiagUnsupportedPair` compatibility entry and the cause-specific entry.
+
 A proven solid always forms its tolerance reference, so the tolerance gate never
 yields a reference-less `Suspect`: an analytic reading carries a zero `Bound`
 and short-circuits the gate before any reference is consulted
@@ -304,7 +308,9 @@ so the "empty **exactly** when `Sound`" completeness holds.
 **The undecided pair is now RECORDED.** Where §6 folds a pair the evaluator
 could not decide into the report's `Suspect` rung, a `DiagUndecidedPair` or
 one of `DiagUnsupportedPairPayload`, `DiagUnsupportedPairContact`, or
-`DiagUnsupportedPairPipeline` naming the exact staged cause is emitted with it,
+`DiagUnsupportedPairPipeline` naming the exact staged cause is emitted. For
+those three staged causes, the deprecated broad `DiagUnsupportedPair`
+compatibility signal is emitted alongside it,
 a pair proven apart whose asked gap the kernel could not measure emits a
 `DiagUndecidedClearance` instead, and a pair proven to overlap whose overlap
 volume the evaluator could not bound emits a `DiagUndecidedInterference` —
@@ -1014,8 +1020,9 @@ survey that could not decide, and for the verdict nothing turns on which:
 **proven** absence exactly when no diagnostic names it — the per-survey
 `DiagUndecidedWall` / `DiagUndecidedUndercut` / `DiagUndecidedMinRadius` for that
 body-and-survey, `DiagUnsupportedSurveyPayload` when the requested survey's
-payload implementation is staged, and `DiagUndecidedPair`, `DiagUnsupportedPair`,
-a cause-specific unsupported-pair code, or `DiagUndecidedInterference` for that
+payload implementation is staged, and `DiagUndecidedPair`, the compatibility
+`DiagUnsupportedPair` plus its cause-specific unsupported-pair code, or
+`DiagUndecidedInterference` for that
 pair (a `DiagUndecidedClearance` proves the
 pair disjoint, so it leaves the missing `Interference` row a proven non-overlap
 and marks only a requested `Clearance` row undecided) — and the survey the

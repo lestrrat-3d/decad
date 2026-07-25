@@ -259,8 +259,11 @@ func TestVerifyDiagnosticsUnsupportedPairStagedContact(t *testing.T) {
 
 	_, undecided := findDiagnostic(report.Diagnostics, decad.DiagUndecidedPair)
 	require.False(t, undecided, `a staged contact is not an undecided partition`)
-	_, broad := findDiagnostic(report.Diagnostics, decad.DiagUnsupportedPair)
-	require.False(t, broad, `the broad compatibility code is no longer emitted`)
+	legacy, broad := findDiagnostic(report.Diagnostics, decad.DiagUnsupportedPair)
+	require.True(t, broad, `a staged contact preserves the broad compatibility code`)
+	require.Equal(t, decad.Suspect, legacy.Status)
+	require.Equal(t, decad.ReadingNone, legacy.Reading)
+	require.NotNil(t, legacy.Pair)
 	_, payload := findDiagnostic(report.Diagnostics, decad.DiagUnsupportedPairPayload)
 	require.False(t, payload, `a contact refusal is not a payload capability limit`)
 	_, pipeline := findDiagnostic(report.Diagnostics, decad.DiagUnsupportedPairPipeline)

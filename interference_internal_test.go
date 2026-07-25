@@ -264,11 +264,20 @@ func TestInterferenceExpectedCausesKeepDistinctDiagnostics(t *testing.T) {
 			for _, want := range tc.wantMessage {
 				require.Contains(t, diag.Message, want)
 			}
+
+			legacy, ok := legacyUnsupportedPairDiag(a, b, diag.Code)
+			require.True(t, ok, `a staged cause preserves the broad compatibility signal`)
+			require.Equal(t, DiagUnsupportedPair, legacy.Code)
+			require.Equal(t, Suspect, legacy.Status)
+			require.Equal(t, ReadingNone, legacy.Reading)
+			require.Equal(t, &DiagnosticPair{A: a, B: b}, legacy.Pair)
 		})
 	}
 
 	undecided := undecidedPairDiag(a, b, pairOverlapping, interferenceUndecided)
 	require.Equal(t, DiagUndecidedInterference, undecided.Code)
+	_, legacy := legacyUnsupportedPairDiag(a, b, undecided.Code)
+	require.False(t, legacy, `an unmeasured overlap has no staged-pair compatibility signal`)
 
 	partition := undecidedPairDiag(a, b, pairUndecided, interferenceUndecided)
 	require.Equal(t, DiagUndecidedPair, partition.Code)
