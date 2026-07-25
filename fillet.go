@@ -233,17 +233,31 @@ func wrapModifyAuditError(sel EdgeSelector, matched []matchedCorner, err error) 
 // coalesced walks (outer first, then holes), so a lateral edge maps to a
 // junction and the rewrite operates at the corner level.
 func prismCornerLoops(pp prismPayload) ([]cornerLoop, error) {
+	return prismCornerLoopsBudget(nil, pp)
+}
+
+func prismCornerLoopsBudget(budget *workBudget, pp prismPayload) ([]cornerLoop, error) {
 	var out []cornerLoop
 	for _, loop := range append([]LoopRecord{pp.profile.Outer}, pp.profile.Holes...) {
+		if err := wallBudgetStep(budget); err != nil {
+			return nil, err
+		}
 		raw := make([]sideWalk, len(loop.Segments))
 		for i, seg := range loop.Segments {
+			if err := wallBudgetStep(budget); err != nil {
+				return nil, err
+			}
 			w, err := walkOf(seg)
 			if err != nil {
 				return nil, err
 			}
 			raw[i] = sideWalk{segmentWalk: w, segs: []int{i}}
 		}
-		out = append(out, cornerLoop{walks: coalesceWalks(raw)})
+		walks, err := coalesceWalksBudget(raw, budget)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, cornerLoop{walks: walks})
 	}
 	return out, nil
 }

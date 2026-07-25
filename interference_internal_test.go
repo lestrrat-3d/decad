@@ -484,8 +484,7 @@ func TestAnalyticBodiesEqualMatchesPlainPrismSetIdentity(t *testing.T) {
 func TestNewBodyGeomCancellationIsBounded(t *testing.T) {
 	doc := New()
 	// A real prism, its recorded section swapped for a 300-sided polygon:
-	// building the carrier faces steps the budget once per wall, past the
-	// polling interval, well before either operand's model is finished.
+	// resolving the carrier profile must poll before the carrier faces are built.
 	body := internalBoxBody(t, doc, 0, 0, 10, 10, 5)
 	pp, ok := body.payload.(prismPayload)
 	require.True(t, ok)
@@ -499,7 +498,7 @@ func TestNewBodyGeomCancellationIsBounded(t *testing.T) {
 		segs[i] = LineSeg{Start: corner(i), End: corner(i + 1), TEnd: 1}
 	}
 	pp.profile = ProfileRecord{Outer: LoopRecord{Segments: segs}}
-	ctx := &internalFrameCancelContext{Context: t.Context(), target: "addPrismFaces"}
+	ctx := &internalFrameCancelContext{Context: t.Context(), target: "recordLoops"}
 
 	_, _, err := newBodyGeomBudget(newWorkBudget(ctx), &Body{
 		lumps:   body.lumps,
@@ -507,7 +506,59 @@ func TestNewBodyGeomCancellationIsBounded(t *testing.T) {
 	})
 	require.ErrorIs(t, err, context.Canceled)
 	require.True(t, ctx.entered,
-		`the kernel model must poll while building carrier faces, not only once both operands are built`)
+		`the kernel model must poll while resolving carrier profile loops`)
+}
+
+func TestAddRevolveFacesCancellationReachesRevolveLoops(t *testing.T) {
+	calls := 0
+	budget := &workBudget{
+		stepFn: func() error {
+			calls++
+			return context.Canceled
+		},
+		errFn: func() error { return nil },
+	}
+	_, err := (&bodyGeom{}).addRevolveFaces(budget, revolvePayload{
+		profile: ProfileRecord{Outer: LoopRecord{}},
+		ax:      axisFrame{dU: 1},
+	})
+	require.ErrorIs(t, err, context.Canceled)
+	require.Equal(t, 1, calls, `revolve carrier faces must pass the budget to meridian resolution`)
+}
+
+func TestAddRevolveFacesPreservesMeridianErrorMapping(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		seg  CurveSegment
+		want error
+	}{
+		{
+			name: "unsupported curve",
+			seg:  EllipseSeg{},
+		},
+		{
+			name: "malformed circle",
+			seg: CircleSeg{
+				Radius: units.Millimeters(1),
+				TStart: 0,
+				TEnd:   1,
+			},
+			want: ErrDegenerate,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ok, err := (&bodyGeom{}).addRevolveFaces(newWorkBudget(t.Context()), revolvePayload{
+				profile: ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{tc.seg}}},
+				ax:      axisFrame{dU: 1},
+			})
+			require.False(t, ok)
+			if tc.want == nil {
+				require.NoError(t, err)
+				return
+			}
+			require.ErrorIs(t, err, tc.want)
+		})
+	}
 }
 
 // TestChordingRefusalsSplitFromOperandDegeneracy pins the §7.1 line the cap

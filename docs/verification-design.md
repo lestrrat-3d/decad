@@ -1270,7 +1270,12 @@ that pinches a wall to zero are exact facts of the surfaces, so an analytic
 evaluator decides the reading — and the absence — outright, the boundary
 case included: a wall drafted at exactly α spans — within is inclusive,
 above — and an exact evaluator reads its thinnest spanning ball like any
-other wall's. A `Faceted` evaluator encloses maximal-ball contact families
+other wall's. The prism/revolve analytic survey streams each closed-form
+candidate into validation instead of retaining the full cubic candidate set.
+Its generation, validation, containment, and boundary scans share `Verify`'s
+work counter, which checks cancellation at least every 256 candidate
+operations; cancellation returns the context error from `Verify`, not a
+`Suspect` report. A `Faceted` evaluator encloses maximal-ball contact families
 whose true-patch normals carry source bounds (core §6.1), and widens held
 diameters by its boundary-displacement certificate (payload verification §10).
 A family whose normal bounds admit both sides of the allowance it can neither

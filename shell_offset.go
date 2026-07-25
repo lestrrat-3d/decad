@@ -40,13 +40,20 @@ var errOffsetTopology = fmt.Errorf(`%w: the offset changes the section's topolog
 // sense (docs/modify-design.md §7). A dropped feature is S11a (errOffsetDrop);
 // a non-closing miter is S11 (errOffsetTopology). Both are ErrUnsupported.
 func offsetProfile(profile ProfileRecord, s, t float64) (ProfileRecord, error) {
-	loops, err := prismCornerLoops(prismPayload{profile: profile})
+	return offsetProfileBudget(nil, profile, s, t)
+}
+
+func offsetProfileBudget(budget *workBudget, profile ProfileRecord, s, t float64) (ProfileRecord, error) {
+	loops, err := prismCornerLoopsBudget(budget, prismPayload{profile: profile})
 	if err != nil {
 		return ProfileRecord{}, err
 	}
 	out := make([]LoopRecord, len(loops))
 	for i, loop := range loops {
-		segs, err := offsetLoop(loop, s, t)
+		if err := wallBudgetStep(budget); err != nil {
+			return ProfileRecord{}, err
+		}
+		segs, err := offsetLoopBudget(budget, loop, s, t)
 		if err != nil {
 			return ProfileRecord{}, err
 		}
@@ -55,13 +62,13 @@ func offsetProfile(profile ProfileRecord, s, t float64) (ProfileRecord, error) {
 	return ProfileRecord{Outer: out[0], Holes: out[1:]}, nil
 }
 
-// offsetLoop offsets one coalesced loop by s·t (docs/modify-design.md §7). The
+// offsetLoopBudget offsets one coalesced loop by s·t (docs/modify-design.md §7). The
 // walk keeps its own sense, so the offset loop's orientation matches the
 // original's (the S8 sign check reads that). Each corner closes with a miter
 // (offset carriers meet) or an arc of radius t about the corner point; which,
 // is decided by the corner turn and the sense: an arc appears exactly when
 // sign(cross) == −s — the inward reflex and the outward convex cases (§7).
-func offsetLoop(loop cornerLoop, s, t float64) ([]CurveSegment, error) {
+func offsetLoopBudget(budget *workBudget, loop cornerLoop, s, t float64) ([]CurveSegment, error) {
 	walks := loop.walks
 	n := len(walks)
 	if n == 0 {
@@ -71,6 +78,9 @@ func offsetLoop(loop cornerLoop, s, t float64) ([]CurveSegment, error) {
 	// Every circular walk's offset radius must stay positive; a non-positive one
 	// is a dropped segment (S11a), caught before any join is computed.
 	for _, w := range walks {
+		if err := wallBudgetStep(budget); err != nil {
+			return nil, err
+		}
 		if w.circular {
 			if _, ok := offsetRadius(w, s, t); !ok {
 				return nil, errOffsetDrop
@@ -91,6 +101,9 @@ func offsetLoop(loop cornerLoop, s, t float64) ([]CurveSegment, error) {
 	// Per-corner joins: corner i sits at walk i's start (== walk i−1's end).
 	joins := make([]cornerJoin, n)
 	for i := range n {
+		if err := wallBudgetStep(budget); err != nil {
+			return nil, err
+		}
 		prev := walks[(i+n-1)%n]
 		cur := walks[i]
 		vU, vV := cur.startU, cur.startV
@@ -123,6 +136,9 @@ func offsetLoop(loop cornerLoop, s, t float64) ([]CurveSegment, error) {
 	// the arc that closes the following corner.
 	var segs []CurveSegment
 	for i := range n {
+		if err := wallBudgetStep(budget); err != nil {
+			return nil, err
+		}
 		w := walks[i]
 		start := joins[i].m
 		if joins[i].arc {
@@ -263,9 +279,16 @@ func circleSegConcentric(cu, cv, rr float64, ccw bool) CurveSegment {
 // walked clockwise, so its wall's material lies outside it). It reads the loop
 // through walkOf, so it handles line, arc and full-circle segments alike.
 func reverseLoopRecord(l LoopRecord) (LoopRecord, error) {
+	return reverseLoopRecordBudget(nil, l)
+}
+
+func reverseLoopRecordBudget(budget *workBudget, l LoopRecord) (LoopRecord, error) {
 	n := len(l.Segments)
 	walks := make([]segmentWalk, n)
 	for i, seg := range l.Segments {
+		if err := wallBudgetStep(budget); err != nil {
+			return LoopRecord{}, err
+		}
 		w, err := walkOf(seg)
 		if err != nil {
 			return LoopRecord{}, err
@@ -274,6 +297,9 @@ func reverseLoopRecord(l LoopRecord) (LoopRecord, error) {
 	}
 	segs := make([]CurveSegment, 0, n)
 	for i := n - 1; i >= 0; i-- {
+		if err := wallBudgetStep(budget); err != nil {
+			return LoopRecord{}, err
+		}
 		w := walks[i]
 		switch {
 		case w.closed:
@@ -294,7 +320,11 @@ func reverseLoopRecord(l LoopRecord) (LoopRecord, error) {
 // cutback, so the empty fillet map makes the S6 trim test a no-op — the one test
 // that cannot fire on an offset (§8).
 func auditOffsetSection(orig, offset ProfileRecord) error {
-	loops, err := prismCornerLoops(prismPayload{profile: offset})
+	return auditOffsetSectionBudget(nil, orig, offset)
+}
+
+func auditOffsetSectionBudget(budget *workBudget, orig, offset ProfileRecord) error {
+	loops, err := prismCornerLoopsBudget(budget, prismPayload{profile: offset})
 	if err != nil {
 		return err
 	}
@@ -302,5 +332,5 @@ func auditOffsetSection(orig, offset ProfileRecord) error {
 	for i := range empty {
 		empty[i] = map[int]*cornerBlend{}
 	}
-	return auditRewrite(orig, offset, loops, empty)
+	return auditRewriteBudget(budget, orig, offset, loops, empty)
 }

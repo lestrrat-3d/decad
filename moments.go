@@ -140,11 +140,15 @@ func (ig regionIntegrals) isFinite(order momentIntegralOrder) bool {
 // the outer loop is counter-clockwise (positive), holes are clockwise
 // (negative), so the sum IS the net region integral.
 func (r ProfileRecord) integrals() (regionIntegrals, error) {
-	record, anchor, err := validateMomentFields(r)
+	return r.integralsBudget(nil)
+}
+
+func (r ProfileRecord) integralsBudget(budget *workBudget) (regionIntegrals, error) {
+	record, anchor, err := validateMomentFieldsBudget(budget, r)
 	if err != nil {
 		return regionIntegrals{}, err
 	}
-	return integrateMomentRecord(record, anchor, momentSecondOrder)
+	return integrateMomentRecordBudget(record, anchor, momentSecondOrder, budget)
 }
 
 func (r ProfileRecord) integralsTo(order momentIntegralOrder) (regionIntegrals, error) {
@@ -176,17 +180,27 @@ func (r ProfileRecord) evaluatorIntegralsUnchecked(order momentIntegralOrder) (r
 }
 
 func integrateMomentRecord(record ProfileRecord, anchor Point2, order momentIntegralOrder) (regionIntegrals, error) {
-	return integrateMomentRecordMode(record, anchor, order, true)
+	return integrateMomentRecordBudget(record, anchor, order, nil)
+}
+
+func integrateMomentRecordBudget(record ProfileRecord, anchor Point2, order momentIntegralOrder, budget *workBudget) (regionIntegrals, error) {
+	return integrateMomentRecordMode(record, anchor, order, true, budget)
 }
 
 func integrateMomentRecordUnchecked(record ProfileRecord, anchor Point2, order momentIntegralOrder) (regionIntegrals, error) {
-	return integrateMomentRecordMode(record, anchor, order, false)
+	return integrateMomentRecordMode(record, anchor, order, false, nil)
 }
 
-func integrateMomentRecordMode(record ProfileRecord, anchor Point2, order momentIntegralOrder, checkFinite bool) (regionIntegrals, error) {
+func integrateMomentRecordMode(record ProfileRecord, anchor Point2, order momentIntegralOrder, checkFinite bool, budget *workBudget) (regionIntegrals, error) {
 	var ig regionIntegrals
 	for loopIndex, loop := range append([]LoopRecord{record.Outer}, record.Holes...) {
+		if err := wallBudgetStep(budget); err != nil {
+			return regionIntegrals{}, err
+		}
 		for segmentIndex, segment := range loop.Segments {
+			if err := wallBudgetStep(budget); err != nil {
+				return regionIntegrals{}, err
+			}
 			shifted, err := shiftMomentSegment(segment, anchor)
 			if err != nil {
 				return regionIntegrals{}, err

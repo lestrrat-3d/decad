@@ -869,7 +869,10 @@ func verifyBody(ctx context.Context, b *Body, cfg verifyConfig) (*BodyReport, []
 	// non-Sound survey outcome names itself in the slice.
 	violating, suspect := false, false
 	if br.Solid && (cfg.wall != nil || cfg.pull != nil || cfg.minRadius) {
-		surveyDiags := runSurveys(br, cfg)
+		surveyDiags, err := runSurveys(newWorkBudget(ctx), br, cfg)
+		if err != nil {
+			return nil, nil, err
+		}
 		for _, d := range surveyDiags {
 			switch d.Status {
 			case Violating:

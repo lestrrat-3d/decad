@@ -38,10 +38,20 @@ func validateMomentRecord(record ProfileRecord) (ProfileRecord, Point2, error) {
 }
 
 func validateMomentFields(record ProfileRecord) (ProfileRecord, Point2, error) {
-	loops := append([]LoopRecord{record.Outer}, record.Holes...)
-	normalized := make([]LoopRecord, len(loops))
+	return validateMomentFieldsBudget(nil, record)
+}
+
+func validateMomentFieldsBudget(budget *workBudget, record ProfileRecord) (ProfileRecord, Point2, error) {
+	normalized := make([]LoopRecord, len(record.Holes)+1)
 	var anchor Point2
-	for loopIndex, loop := range loops {
+	for loopIndex := range normalized {
+		if err := wallBudgetStep(budget); err != nil {
+			return ProfileRecord{}, Point2{}, err
+		}
+		loop := record.Outer
+		if loopIndex > 0 {
+			loop = record.Holes[loopIndex-1]
+		}
 		if len(loop.Segments) == 0 {
 			return ProfileRecord{}, Point2{}, fmt.Errorf(
 				`decad: profile loop %d is invalid: %w: a recorded loop holds no segments`,
@@ -51,6 +61,9 @@ func validateMomentFields(record ProfileRecord) (ProfileRecord, Point2, error) {
 		}
 		normalized[loopIndex].Segments = make([]CurveSegment, len(loop.Segments))
 		for segmentIndex, segment := range loop.Segments {
+			if err := wallBudgetStep(budget); err != nil {
+				return ProfileRecord{}, Point2{}, err
+			}
 			checked, walk, err := validateMomentSegment(segment)
 			if err != nil {
 				return ProfileRecord{}, Point2{}, fmt.Errorf(

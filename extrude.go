@@ -529,6 +529,11 @@ type sideWalk struct {
 // included. Circular walks never merge; a loop that is entirely one straight
 // line is degenerate and left to the area gate.
 func coalesceWalks(walks []sideWalk) []sideWalk {
+	out, _ := coalesceWalksBudget(walks, nil)
+	return out
+}
+
+func coalesceWalksBudget(walks []sideWalk, budget *workBudget) ([]sideWalk, error) {
 	collinear := func(a, b sideWalk) bool {
 		if a.circular || b.circular {
 			return false
@@ -547,6 +552,9 @@ func coalesceWalks(walks []sideWalk) []sideWalk {
 	}
 	out := make([]sideWalk, 0, len(walks))
 	for _, w := range walks {
+		if err := wallBudgetStep(budget); err != nil {
+			return nil, err
+		}
 		if len(out) > 0 && collinear(out[len(out)-1], w) {
 			out[len(out)-1] = merge(out[len(out)-1], w)
 			continue
@@ -555,10 +563,13 @@ func coalesceWalks(walks []sideWalk) []sideWalk {
 	}
 	// Wrap-around: the loop's last walk may continue into its first.
 	for len(out) > 1 && collinear(out[len(out)-1], out[0]) {
+		if err := wallBudgetStep(budget); err != nil {
+			return nil, err
+		}
 		out[0] = merge(out[len(out)-1], out[0])
 		out = out[:len(out)-1]
 	}
-	return out
+	return out, nil
 }
 
 // buildLoopSides builds one loop's side faces with shared vertices and

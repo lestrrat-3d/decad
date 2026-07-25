@@ -83,6 +83,10 @@ func renderAuditCoordinates(err error) error {
 // per-corner cutback the S6 self-consuming-trim test sums, carried by the shared
 // cornerBlend, so the audit itself forks nothing.
 func auditRewrite(orig, rewritten ProfileRecord, loops []cornerLoop, blendAt []map[int]*cornerBlend) error {
+	return auditRewriteBudget(nil, orig, rewritten, loops, blendAt)
+}
+
+func auditRewriteBudget(budget *workBudget, orig, rewritten ProfileRecord, loops []cornerLoop, blendAt []map[int]*cornerBlend) error {
 	origLoops := append([]LoopRecord{orig.Outer}, orig.Holes...)
 	newLoops := append([]LoopRecord{rewritten.Outer}, rewritten.Holes...)
 
@@ -99,7 +103,11 @@ func auditRewrite(orig, rewritten ProfileRecord, loops []cornerLoop, blendAt []m
 	overrunWalk := make([]int, len(loops))
 	overrun := make([]bool, len(loops))
 	for li, cl := range loops {
-		overrunWalk[li], overrun[li] = loopOverrun(cl, blendAt[li])
+		var err error
+		overrunWalk[li], overrun[li], err = loopOverrunBudget(budget, cl, blendAt[li])
+		if err != nil {
+			return err
+		}
 	}
 
 	// S8: orientation preserved — a loop whose signed area changed sign (or
@@ -108,11 +116,11 @@ func auditRewrite(orig, rewritten ProfileRecord, loops []cornerLoop, blendAt []m
 	// S6's more-specific verdict (Table S: an overrun is ErrUnsupported even when
 	// it also flips the loop).
 	for i := range origLoops {
-		oa, err := loopSignedArea(origLoops[i])
+		oa, err := loopSignedAreaBudget(budget, origLoops[i])
 		if err != nil {
 			return auditError(err, fmt.Sprintf(`original loop %d: %v`, i, err))
 		}
-		na, err := loopSignedArea(newLoops[i])
+		na, err := loopSignedAreaBudget(budget, newLoops[i])
 		if err != nil {
 			return auditError(err, fmt.Sprintf(`rewritten loop %d: %v`, i, err))
 		}
@@ -129,6 +137,9 @@ func auditRewrite(orig, rewritten ProfileRecord, loops []cornerLoop, blendAt []m
 	// S6: no walk consumed by its own corners — reported for the loops S8 did not
 	// already resolve (an overrun that did not flip the loop's signed area).
 	for li := range loops {
+		if err := wallBudgetStep(budget); err != nil {
+			return err
+		}
 		if overrun[li] {
 			return errCutbackOverrun(li, overrunWalk[li], loops[li])
 		}
@@ -136,7 +147,7 @@ func auditRewrite(orig, rewritten ProfileRecord, loops []cornerLoop, blendAt []m
 
 	// S7 and S9 both work on the rewritten loops as boundary primitives, so
 	// resolve every segment's walk once and share it.
-	segs, err := buildSegEntries(newLoops)
+	segs, err := buildSegEntriesBudget(budget, newLoops)
 	if err != nil {
 		return err
 	}
@@ -145,7 +156,7 @@ func auditRewrite(orig, rewritten ProfileRecord, loops []cornerLoop, blendAt []m
 	// segments meeting in both their interiors is a self-intersection, and a
 	// pair that merely touches (a tangency, or a shared boundary point) is a
 	// pinch; either is a rewrite a resolving kernel would have to trim.
-	if err := crossingAudit(segs); err != nil {
+	if err := crossingAuditBudget(budget, segs); err != nil {
 		return err
 	}
 
@@ -153,10 +164,10 @@ func auditRewrite(orig, rewritten ProfileRecord, loops []cornerLoop, blendAt []m
 	// lies wholly inside or wholly outside the outer loop and every other hole;
 	// classify one point of each to prove the outer loop still contains every
 	// hole and the holes stay mutually exterior.
-	return nestingAudit(segs, len(newLoops))
+	return nestingAuditBudget(budget, segs, len(newLoops))
 }
 
-// loopOverrun reports the first walk consumed by its own two corners and whether
+// loopOverrunBudget reports the first walk consumed by its own two corners and whether
 // one was found. The arriving corner's cutback plus the leaving corner's
 // cutback reaches or passes the walk's far end (§6, S6). It is a LOCAL test — a
 // cutback length against a walk length — so it needs no assembled loop, which
@@ -165,9 +176,12 @@ func auditRewrite(orig, rewritten ProfileRecord, loops []cornerLoop, blendAt []m
 // genuinely inside-out section (ErrDegenerate). The sum folds both Table S
 // shapes: a lone corner leaves one end's cutback zero, so its own cutback alone
 // must clear the walk; two corners of a short wall claim it from both ends.
-func loopOverrun(cl cornerLoop, blends map[int]*cornerBlend) (int, bool) {
+func loopOverrunBudget(budget *workBudget, cl cornerLoop, blends map[int]*cornerBlend) (int, bool, error) {
 	n := len(cl.walks)
 	for i, w := range cl.walks {
+		if err := wallBudgetStep(budget); err != nil {
+			return 0, false, err
+		}
 		cut := 0.0
 		if cb := blends[i]; cb != nil {
 			cut += cb.cutbackB
@@ -176,10 +190,10 @@ func loopOverrun(cl cornerLoop, blends map[int]*cornerBlend) (int, bool) {
 			cut += cb.cutbackA
 		}
 		if cut >= w.length-1e-9*math.Max(1, w.length) {
-			return i, true
+			return i, true, nil
 		}
 	}
-	return 0, false
+	return 0, false, nil
 }
 
 // errCutbackOverrun is S6's op-neutral refusal (§6, Table S): a corner's setback
@@ -199,10 +213,17 @@ func errCutbackOverrun(loop, walk int, cl cornerLoop) error {
 // buildSegEntries resolves every loop's recorded segments into boundary walks
 // tagged by the loop and position they came from (for adjacency).
 func buildSegEntries(loops []LoopRecord) ([]segEntry, error) {
+	return buildSegEntriesBudget(nil, loops)
+}
+
+func buildSegEntriesBudget(budget *workBudget, loops []LoopRecord) ([]segEntry, error) {
 	var segs []segEntry
 	for li, loop := range loops {
 		n := len(loop.Segments)
 		for i, seg := range loop.Segments {
+			if err := wallBudgetStep(budget); err != nil {
+				return nil, err
+			}
 			w, err := walkOf(seg)
 			if err != nil {
 				return nil, auditError(err, fmt.Sprintf(`loop %d segment %d: %v`, li, i, err))
@@ -216,8 +237,15 @@ func buildSegEntries(loops []LoopRecord) ([]segEntry, error) {
 // loopSignedArea is one loop's signed area (positive counter-clockwise): the
 // Green's-theorem boundary integral of its own segments.
 func loopSignedArea(loop LoopRecord) (float64, error) {
+	return loopSignedAreaBudget(nil, loop)
+}
+
+func loopSignedAreaBudget(budget *workBudget, loop LoopRecord) (float64, error) {
 	var ig regionIntegrals
 	for _, seg := range loop.Segments {
+		if err := wallBudgetStep(budget); err != nil {
+			return 0, err
+		}
 		if err := ig.add(seg); err != nil {
 			return 0, err
 		}
@@ -247,9 +275,19 @@ type segEntry struct {
 // build but this evaluator cannot (§1 existence test — the body exists; §4
 // Table S, S7).
 func crossingAudit(segs []segEntry) error {
-	touchFloor := contactFloor(segs)
+	return crossingAuditBudget(nil, segs)
+}
+
+func crossingAuditBudget(budget *workBudget, segs []segEntry) error {
+	touchFloor, err := contactFloorBudget(budget, segs)
+	if err != nil {
+		return err
+	}
 	for i := range segs {
 		for j := i + 1; j < len(segs); j++ {
+			if err := wallBudgetStep(budget); err != nil {
+				return err
+			}
 			if adjacent(segs[i], segs[j]) {
 				continue
 			}
@@ -293,6 +331,17 @@ func contactFloor(segs []segEntry) float64 {
 	return contactEps * math.Hypot(maxU-minU, maxV-minV)
 }
 
+func contactFloorBudget(budget *workBudget, segs []segEntry) (float64, error) {
+	minU, minV, maxU, maxV, ok, err := sectionBBoxBudget(budget, segs)
+	if err != nil {
+		return 0, err
+	}
+	if !ok {
+		return 0, nil
+	}
+	return contactEps * math.Hypot(maxU-minU, maxV-minV), nil
+}
+
 // sectionBBox is the TRUE (u, v) bounding box of a rewritten section — the box
 // the §5 D reads. An arc bulges outside its endpoint chord (a semicircle from
 // (−R,0) to (R,0) reaches (0,R); a full circle's endpoints collapse to a
@@ -300,6 +349,11 @@ func contactFloor(segs []segEntry) float64 {
 // every cardinal extremum (cU±R, cV±R) its own angular walk actually reaches —
 // never the endpoint box alone, which understates D.
 func sectionBBox(segs []segEntry) (minU, minV, maxU, maxV float64, ok bool) {
+	minU, minV, maxU, maxV, ok, _ = sectionBBoxBudget(nil, segs)
+	return
+}
+
+func sectionBBoxBudget(budget *workBudget, segs []segEntry) (minU, minV, maxU, maxV float64, ok bool, err error) {
 	minU, minV = math.Inf(1), math.Inf(1)
 	maxU, maxV = math.Inf(-1), math.Inf(-1)
 	fold := func(x, y float64) {
@@ -307,6 +361,9 @@ func sectionBBox(segs []segEntry) (minU, minV, maxU, maxV float64, ok bool) {
 		minV, maxV = math.Min(minV, y), math.Max(maxV, y)
 	}
 	for _, s := range segs {
+		if err := wallBudgetStep(budget); err != nil {
+			return 0, 0, 0, 0, false, err
+		}
 		w := s.w
 		fold(w.startU, w.startV)
 		fold(w.endU, w.endV)
@@ -315,6 +372,9 @@ func sectionBBox(segs []segEntry) (minU, minV, maxU, maxV float64, ok bool) {
 		}
 		lo, hi := math.Min(w.th0, w.th1), math.Max(w.th0, w.th1)
 		for q := range 4 { // the four cardinal bearings 0, π/2, π, 3π/2
+			if err := wallBudgetStep(budget); err != nil {
+				return 0, 0, 0, 0, false, err
+			}
 			base := float64(q) * (math.Pi / 2)
 			th := base + 2*math.Pi*math.Ceil((lo-base)/(2*math.Pi))
 			for ; th <= hi+1e-12; th += 2 * math.Pi {
@@ -323,12 +383,12 @@ func sectionBBox(segs []segEntry) (minU, minV, maxU, maxV float64, ok bool) {
 		}
 	}
 	if math.IsInf(minU, 1) {
-		return 0, 0, 0, 0, false
+		return 0, 0, 0, 0, false, nil
 	}
-	return minU, minV, maxU, maxV, true
+	return minU, minV, maxU, maxV, true, nil
 }
 
-// nestingAudit is the §5 test-4 containment audit (S9): with S7 having proven
+// nestingAuditBudget is the §5 test-4 containment audit (S9): with S7 having proven
 // the rewritten loops strictly disjoint, each hole lies wholly inside or wholly
 // outside the outer loop and every other hole. It classifies one point of each
 // hole against the outer loop's boundary and against every other hole's, using
@@ -343,7 +403,7 @@ func sectionBBox(segs []segEntry) (minU, minV, maxU, maxV float64, ok bool) {
 // lived in, so no such body exists (§1 existence test) — an S8-family
 // ErrDegenerate, the same "modification consumed the region" verdict S8 gives an
 // inverted loop.
-func nestingAudit(segs []segEntry, nLoops int) error {
+func nestingAuditBudget(budget *workBudget, segs []segEntry, nLoops int) error {
 	if nLoops <= 1 { // no holes: nothing to contain
 		return nil
 	}
@@ -351,6 +411,9 @@ func nestingAudit(segs []segEntry, nLoops int) error {
 	pts := make([][2]float64, nLoops)
 	hasPt := make([]bool, nLoops)
 	for _, s := range segs {
+		if err := wallBudgetStep(budget); err != nil {
+			return err
+		}
 		if e, ok := elemOf(s.w); ok {
 			bounds[s.loop] = append(bounds[s.loop], e)
 		}
@@ -359,7 +422,10 @@ func nestingAudit(segs []segEntry, nLoops int) error {
 			hasPt[s.loop] = true
 		}
 	}
-	minU, minV, maxU, maxV, ok := sectionBBox(segs)
+	minU, minV, maxU, maxV, ok, err := sectionBBoxBudget(budget, segs)
+	if err != nil {
+		return err
+	}
 	if !ok {
 		return nil
 	}
@@ -374,10 +440,16 @@ func nestingAudit(segs []segEntry, nLoops int) error {
 	}
 	// Every hole must sit inside the rewritten outer loop.
 	for h := 1; h < nLoops; h++ {
+		if err := wallBudgetStep(budget); err != nil {
+			return err
+		}
 		if !hasPt[h] {
 			continue
 		}
-		inside, decided := loopContains(bounds[0], pts[h][0], pts[h][1], tol)
+		inside, decided, err := loopContainsBudget(budget, bounds[0], pts[h][0], pts[h][1], tol)
+		if err != nil {
+			return err
+		}
 		if !decided {
 			return undecidable(0, h, pts[h])
 		}
@@ -391,6 +463,9 @@ func nestingAudit(segs []segEntry, nLoops int) error {
 	// Holes must stay mutually exterior — neither nested in the other.
 	for a := 1; a < nLoops; a++ {
 		for b := a + 1; b < nLoops; b++ {
+			if err := wallBudgetStep(budget); err != nil {
+				return err
+			}
 			if !hasPt[a] || !hasPt[b] {
 				continue
 			}
@@ -398,7 +473,10 @@ func nestingAudit(segs []segEntry, nLoops int) error {
 				in int
 				pt [2]float64
 			}{{a, pts[b]}, {b, pts[a]}} {
-				inside, decided := loopContains(bounds[pr.in], pr.pt[0], pr.pt[1], tol)
+				inside, decided, err := loopContainsBudget(budget, bounds[pr.in], pr.pt[0], pr.pt[1], tol)
+				if err != nil {
+					return err
+				}
 				if !decided {
 					pointLoop := a
 					if pr.in == a {
@@ -431,16 +509,22 @@ func elemOf(w segmentWalk) (surveyElem, bool) {
 	return lineElem(w.startU, w.startV, w.endU, w.endV)
 }
 
-// loopContains classifies (px, py) against a loop's boundary by crossing parity
+// loopContainsBudget classifies (px, py) against a loop's boundary by crossing parity
 // of a ray, retried across the golden-angle direction sequence when a crossing
 // is ambiguous — the same walk wallKernel.contains runs. decided is false when
 // every direction is ambiguous; the answer is never guessed.
-func loopContains(boundary []surveyElem, px, py, tol float64) (inside, decided bool) {
+func loopContainsBudget(budget *workBudget, boundary []surveyElem, px, py, tol float64) (inside, decided bool, err error) {
 	for i := range 16 {
+		if err := wallBudgetStep(budget); err != nil {
+			return false, false, err
+		}
 		th := 0.5 + float64(i)*2.399963229728653 // golden-angle sequence
 		dx, dy := math.Cos(th), math.Sin(th)
 		crossings, good := 0, true
 		for _, e := range boundary {
+			if err := wallBudgetStep(budget); err != nil {
+				return false, false, err
+			}
 			n, ok := rayCrossings(e, px, py, dx, dy, tol)
 			if !ok {
 				good = false
@@ -449,10 +533,10 @@ func loopContains(boundary []surveyElem, px, py, tol float64) (inside, decided b
 			crossings += n
 		}
 		if good {
-			return crossings%2 == 1, true
+			return crossings%2 == 1, true, nil
 		}
 	}
-	return false, false
+	return false, false, nil
 }
 
 // adjacent reports whether two segments legitimately share an endpoint: the

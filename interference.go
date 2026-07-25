@@ -55,7 +55,7 @@ func analyticBodiesEqual(budget *workBudget, a, b *Body) (bool, error) {
 // profileRecordsEqual reports exact structural equality of two recorded
 // profiles, stepping the budget once per segment compared.
 func profileRecordsEqual(budget *workBudget, a, b ProfileRecord) (bool, error) {
-	if err := budget.step(); err != nil {
+	if err := wallBudgetStep(budget); err != nil {
 		return false, err
 	}
 	if len(a.Holes) != len(b.Holes) || (a.Holes == nil) != (b.Holes == nil) {
@@ -82,7 +82,7 @@ func loopRecordsEqual(budget *workBudget, a, b LoopRecord) (bool, error) {
 		return false, nil
 	}
 	for i := range a.Segments {
-		if err := budget.step(); err != nil {
+		if err := wallBudgetStep(budget); err != nil {
 			return false, err
 		}
 		if !reflect.DeepEqual(a.Segments[i], b.Segments[i]) {
