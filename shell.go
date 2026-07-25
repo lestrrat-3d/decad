@@ -255,6 +255,12 @@ func (b *Body) ShellContext(ctx context.Context, sel FaceSelector, t units.Value
 	// §8), then S9 (nesting). The shared §5 audit, run on decad's own synthesized
 	// geometry. A shell mints no cutback, so S6 cannot fire.
 	if err := auditOffsetSectionBudget(offsetBudget, pp.profile, offset); err != nil {
+		if errors.Is(err, context.Canceled) {
+			return nil, context.Canceled
+		}
+		if errors.Is(err, context.DeadlineExceeded) {
+			return nil, context.DeadlineExceeded
+		}
 		return nil, err
 	}
 

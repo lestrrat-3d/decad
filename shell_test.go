@@ -80,6 +80,7 @@ type offsetPreprocessingCancelContext struct {
 type operationCancelContext struct {
 	context.Context //nolint:containedctx // deterministic cancellation wrapper used only within one test call.
 	target          string
+	cancelErr       error
 	entered         bool
 }
 
@@ -90,6 +91,9 @@ func (c *operationCancelContext) Err() error {
 		frame, more := frames.Next()
 		if strings.HasSuffix(frame.Function, "."+c.target) {
 			c.entered = true
+			if c.cancelErr != nil {
+				return c.cancelErr
+			}
 			return context.Canceled
 		}
 		if !more {
@@ -167,6 +171,28 @@ func TestShellContextCancellationDuringKernelSetupLeavesReceiverLive(t *testing.
 	require.True(t, ctx.entered)
 	require.Equal(t, before, doc.Recipe())
 	require.Equal(t, []*decad.Body{box}, doc.Bodies())
+}
+
+func TestShellContextCancellationDuringAuditPreservesError(t *testing.T) {
+	for _, cancelErr := range []error{context.Canceled, context.DeadlineExceeded} {
+		t.Run(cancelErr.Error(), func(t *testing.T) {
+			doc, box := manySidedPrism(t, 17)
+			before := doc.Recipe()
+			ctx := &operationCancelContext{
+				Context:   t.Context(),
+				target:    "loopSignedAreaBudget",
+				cancelErr: cancelErr,
+			}
+
+			body, err := box.ShellContext(ctx, topCap(box), units.Millimeters(5))
+
+			require.Nil(t, body)
+			require.True(t, err == cancelErr, "ShellContext must return the exact context error")
+			require.True(t, ctx.entered)
+			require.Equal(t, before, doc.Recipe())
+			require.Equal(t, []*decad.Body{box}, doc.Bodies())
+		})
+	}
 }
 
 func (s forwardingFaceSelector) SelectFaces(body *decad.Body) ([]*decad.Face, error) {
