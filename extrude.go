@@ -551,7 +551,12 @@ func evalPrismContext(ctx context.Context, d *Document, ref StepRef, pp prismPay
 	// A prism-derived modify body re-mints its blend roles from its own record
 	// under this build's ref, so a copy or placement reproduces them (modify §9).
 	// A plain extrude carries no descriptors and this is a no-op.
-	addBlendRoles(body, ref, pp.blendSegs, pp.blendKind)
+	if err := addBlendRoles(ctx, body, ref, pp.blendSegs, pp.blendKind); err != nil {
+		return nil, err
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	body.payload = pp
 	return body, nil
 }
@@ -1003,9 +1008,9 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref StepRef, pp prismPayl
 			surf = Plane{Frame: f}
 		}
 
-		origins := make([]FeatureRef, len(w.segs))
-		for oi, si := range w.segs {
-			origins[oi] = FeatureRef{Step: ref, Role: fmt.Sprintf("side(%d,%d)", roleLoop, si)}
+		origins, err := sideOriginsContext(ctx, ref, roleLoop, w.segs)
+		if err != nil {
+			return nil, nil, nil, boundedScalar{}, err
 		}
 		faceArea := boundedMul(measuredScalar(w.length, w.lengthBound), height)
 		face := &Face{
@@ -1044,6 +1049,17 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref StepRef, pp prismPayl
 		topCo = append(topCo, coedge{edge: topEdge, forward: true})
 	}
 	return faces, bottomCo, topCo, total, nil
+}
+
+func sideOriginsContext(ctx context.Context, ref StepRef, roleLoop int, segs []int) ([]FeatureRef, error) {
+	origins := make([]FeatureRef, len(segs))
+	for oi, si := range segs {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		origins[oi] = FeatureRef{Step: ref, Role: fmt.Sprintf("side(%d,%d)", roleLoop, si)}
+	}
+	return origins, nil
 }
 
 // extentAlong is the prism's exact extent interval along an arbitrary world

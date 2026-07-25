@@ -214,7 +214,12 @@ func evalCupContext(ctx context.Context, d *Document, ref StepRef, cp cupPayload
 		perimC = boundedAdd(perimC, ll)
 		cFloor[i], cOpen[i] = floorOpen(bottom, top)
 	}
-	renameCavityRoles(cavFaces, ref)
+	if err := renameCavityRoles(ctx, cavFaces, ref); err != nil {
+		return nil, err
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	faces = append(faces, cavFaces...)
 
 	// The planar faces. capFrame orients each normal outward via its flip;
@@ -412,9 +417,18 @@ func exactWeightedPointRound(a r3.Vec, wa float64, b r3.Vec, wb float64, held r3
 // (B5/B6) gives a cavity wall, indexing loop i of the cavity region Q in the
 // result's own record (§11). The cavity walls are built with roleLoop equal to
 // their Q loop index, so the rename keeps the index and only swaps the tag.
-func renameCavityRoles(faces []*Face, ref StepRef) {
+func renameCavityRoles(ctx context.Context, faces []*Face, ref StepRef) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	for _, f := range faces {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		for i, o := range f.origins {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
 			if o.Step != ref {
 				continue
 			}
@@ -424,6 +438,7 @@ func renameCavityRoles(faces []*Face, ref StepRef) {
 			}
 		}
 	}
+	return nil
 }
 
 // loopEnclosedAreaContext is the absolute area a single loop encloses — the magnitude

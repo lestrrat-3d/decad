@@ -300,6 +300,144 @@ func TestPlacementContextCancelsAnalyticAssembly(t *testing.T) {
 	}
 }
 
+func TestPlacementContextCancelsAnalyticProvenanceAssembly(t *testing.T) {
+	shift, err := r3.Translation(r3.NewVec(100, 0, 0))
+	require.NoError(t, err)
+
+	tests := []struct {
+		name   string
+		target string
+		build  func(*testing.T) (*decad.Document, *decad.Body)
+	}{
+		{
+			name:   "Prism",
+			target: "sideOriginsContext",
+			build: func(t *testing.T) (*decad.Document, *decad.Body) {
+				s, p := plateSketch(t)
+				doc := decad.New()
+				body, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+				require.NoError(t, err)
+				return doc, body
+			},
+		},
+		{
+			name:   "FullRevolve",
+			target: "sideOriginsContext",
+			build: func(t *testing.T) (*decad.Document, *decad.Body) {
+				s, p := solidSketch(t)
+				doc := decad.New()
+				body, err := doc.Revolve(s, p, decad.SketchLine{
+					Start: decad.Point2{U: 0, V: 0},
+					End:   decad.Point2{U: 1, V: 0},
+				}, decad.FullRevolution{})
+				require.NoError(t, err)
+				return doc, body
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			doc, body := test.build(t)
+			beforeBodies := doc.Bodies()
+			beforeRecipe := doc.Recipe()
+			ctx := &cancelWhenInFrameContext{
+				Context: t.Context(),
+				target:  test.target,
+				limit:   1,
+			}
+
+			got, err := body.PlacedContext(ctx, shift)
+
+			require.ErrorIs(t, err, context.Canceled)
+			require.Nil(t, got)
+			require.True(t, ctx.entered)
+			require.Equal(t, beforeBodies, doc.Bodies())
+			require.Equal(t, beforeRecipe, doc.Recipe())
+		})
+	}
+}
+
+func TestPlacementContextCancelsFullRevolveShellAssembly(t *testing.T) {
+	shift, err := r3.Translation(r3.NewVec(100, 0, 0))
+	require.NoError(t, err)
+	s, p := solidSketch(t)
+	doc := decad.New()
+	body, err := doc.Revolve(s, p, decad.SketchLine{
+		Start: decad.Point2{U: 0, V: 0},
+		End:   decad.Point2{U: 1, V: 0},
+	}, decad.FullRevolution{})
+	require.NoError(t, err)
+	beforeBodies := doc.Bodies()
+	beforeRecipe := doc.Recipe()
+	ctx := &cancelWhenInFrameContext{
+		Context: t.Context(),
+		target:  "fullRevolveShellsContext",
+		limit:   1,
+	}
+
+	got, err := body.PlacedContext(ctx, shift)
+
+	require.ErrorIs(t, err, context.Canceled)
+	require.Nil(t, got)
+	require.True(t, ctx.entered)
+	require.Equal(t, beforeBodies, doc.Bodies())
+	require.Equal(t, beforeRecipe, doc.Recipe())
+}
+
+func TestPlacementContextCancelsAnalyticMetadataRewriting(t *testing.T) {
+	shift, err := r3.Translation(r3.NewVec(100, 0, 0))
+	require.NoError(t, err)
+
+	tests := []struct {
+		name   string
+		target string
+		build  func(*testing.T) (*decad.Document, *decad.Body)
+	}{
+		{
+			name:   "BlendRoles",
+			target: "addBlendRoles",
+			build: func(t *testing.T) (*decad.Document, *decad.Body) {
+				doc, box := filletBox(t)
+				body, err := box.Fillet(verticalEdges(), units.Millimeters(10))
+				require.NoError(t, err)
+				return doc, body
+			},
+		},
+		{
+			name:   "CavityRoles",
+			target: "renameCavityRoles",
+			build: func(t *testing.T) (*decad.Document, *decad.Body) {
+				doc, box := shellBox(t)
+				body, err := box.Shell(topCap(box), units.Millimeters(5))
+				require.NoError(t, err)
+				return doc, body
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			doc, body := test.build(t)
+			beforeBodies := doc.Bodies()
+			beforeRecipe := doc.Recipe()
+			ctx := &cancelWhenInFrameContext{
+				Context: t.Context(),
+				target:  test.target,
+				limit:   1,
+			}
+
+			got, err := body.PlacedContext(ctx, shift)
+
+			require.ErrorIs(t, err, context.Canceled)
+			require.Nil(t, got)
+			require.True(t, ctx.entered)
+			require.Equal(t, beforeBodies, doc.Bodies())
+			require.Equal(t, beforeRecipe, doc.Recipe())
+		})
+	}
+}
+
 func TestPlacementContextPollsAnalyticRebuildHelpers(t *testing.T) {
 	shift, err := r3.Translation(r3.NewVec(100, 0, 0))
 	require.NoError(t, err)

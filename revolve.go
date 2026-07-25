@@ -1097,11 +1097,10 @@ func evalRevolveContext(ctx context.Context, d *Document, ref StepRef, rp revolv
 	// toroidal void — a separate shell, and a void one (evaluator §3).
 	var shells []*Shell
 	if rp.full {
-		for li, group := range perLoop {
-			if len(group) == 0 {
-				continue
-			}
-			shells = append(shells, &Shell{faces: group, void: li != 0})
+		var err error
+		shells, err = fullRevolveShellsContext(ctx, perLoop)
+		if err != nil {
+			return nil, err
 		}
 	} else {
 		var faces []*Face
@@ -1378,9 +1377,9 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref StepRef, rp revolvePa
 		if err != nil {
 			return revLoopParts{}, err
 		}
-		origins := make([]FeatureRef, len(w.segs))
-		for oi, si := range w.segs {
-			origins[oi] = FeatureRef{Step: ref, Role: fmt.Sprintf("side(%d,%d)", li, si)}
+		origins, err := sideOriginsContext(ctx, ref, li, w.segs)
+		if err != nil {
+			return revLoopParts{}, err
 		}
 		faceArea := boundedMul(walkAxisMoment(w.segmentWalk, kinds[i]), sweep)
 		face := &Face{
@@ -1427,6 +1426,20 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref StepRef, rp revolvePa
 		}
 	}
 	return parts, nil
+}
+
+func fullRevolveShellsContext(ctx context.Context, perLoop [][]*Face) ([]*Shell, error) {
+	var shells []*Shell
+	for li, group := range perLoop {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		if len(group) == 0 {
+			continue
+		}
+		shells = append(shells, &Shell{faces: group, void: li != 0})
+	}
+	return shells, nil
 }
 
 // fullRevLoops assembles a full-revolution side face's boundary loops from
