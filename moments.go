@@ -559,14 +559,6 @@ func (ig regionIntegrals) isFinite(order momentIntegralOrder) bool {
 	}
 }
 
-// integrals walks the outer loop and every hole in recorded walk order and
-// sums each segment's closed-form contribution. Walk order carries the sign:
-// the outer loop is counter-clockwise (positive), holes are clockwise
-// (negative), so the sum IS the net region integral.
-func (r ProfileRecord) integrals() (regionIntegrals, error) {
-	return r.integralsBudget(nil)
-}
-
 func (r ProfileRecord) integralsBudget(budget *workBudget) (regionIntegrals, error) {
 	record, anchor, err := validateMomentFieldsBudget(budget, r)
 	if err != nil {
