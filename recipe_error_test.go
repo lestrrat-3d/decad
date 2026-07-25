@@ -256,6 +256,17 @@ func TestRecipeDecodeErrorPathIncludesCustomScalarAndInnerArray(t *testing.T) {
 	}`, "steps[0].opts.taper", 0)
 }
 
+func TestRecipeDecodeErrorPathFollowsReturnedCustomFieldError(t *testing.T) {
+	requireRecipeDecodePath(t, `{
+		"steps": [{
+			"op": "extrude",
+			"profile": {
+				"outer": {"segments": [{"kind": "circle", "ccw": "bad", "center": {"u": 0, "v": 0}, "radius": "bad", "t_start": 0, "t_end": 1}]}
+			}
+		}]
+	}`, "steps[0].profile.outer.segments[0].radius", 0)
+}
+
 func TestRecipeDecodeErrorPathIncludesStepField(t *testing.T) {
 	requireRecipeDecodePath(t, `{
 		"steps": [{"op": "union"}, {"op": "warp"}]

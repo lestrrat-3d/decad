@@ -70,7 +70,8 @@ func codecJSONError(err error) error {
 // codecJSONErrorAt fills the gap left by encoding/json for errors returned by
 // a field's custom decoder. Those errors do not carry the containing field,
 // and array type errors do not carry the element index. The original decode
-// remains authoritative; this second, read-only walk only finds its location.
+// remains authoritative; this second, read-only walk follows its error
+// precedence only to find the returned error's location.
 func codecJSONErrorAt(data []byte, dst any, err error) error {
 	if err == nil {
 		return nil
@@ -96,22 +97,33 @@ var (
 )
 
 func codecFailurePath(data []byte, typ reflect.Type) string {
+	failure := codecFailurePathInfo(data, typ)
+	return failure.path
+}
+
+type codecFailureInfo struct {
+	path  string
+	fatal bool
+}
+
+func codecFailurePathInfo(data []byte, typ reflect.Type) codecFailureInfo {
+	if typ == nil {
+		return codecFailureInfo{}
+	}
 	for typ.Kind() == reflect.Pointer {
 		typ = typ.Elem()
 	}
-	if typ.Implements(jsonUnmarshalerType) ||
-		reflect.PointerTo(typ).Implements(jsonUnmarshalerType) ||
-		typ.Implements(textUnmarshalerType) ||
-		reflect.PointerTo(typ).Implements(textUnmarshalerType) {
-		return ""
+	if codecCustomDecoderRuns(data, typ) {
+		return codecFailureInfo{fatal: true}
 	}
 
 	switch typ.Kind() {
 	case reflect.Struct:
 		fields, ok := codecObjectFields(data)
 		if !ok {
-			return ""
+			return codecFailureInfo{}
 		}
+		var firstDeferred codecFailureInfo
 		for _, wireField := range fields {
 			field, ok := codecStructField(typ, wireField.name)
 			if !ok {
@@ -119,25 +131,64 @@ func codecFailurePath(data []byte, typ reflect.Type) string {
 			}
 			candidate := reflect.New(field.Type).Interface()
 			if err := json.Unmarshal(wireField.data, candidate); err != nil {
-				return joinCodecPath(wireField.name, codecFailurePath(wireField.data, field.Type))
+				nested := codecFailurePathInfo(wireField.data, field.Type)
+				failure := codecFailureInfo{
+					path: joinCodecPath(wireField.name, nested.path),
+				}
+				if nested.fatal || !isDeferredCodecError(err) {
+					failure.fatal = true
+					return failure
+				}
+				if firstDeferred.path == "" {
+					firstDeferred = failure
+				}
 			}
 		}
+		return firstDeferred
 	case reflect.Slice, reflect.Array:
 		var raw []json.RawMessage
 		if err := json.Unmarshal(data, &raw); err != nil {
-			return ""
+			return codecFailureInfo{}
 		}
+		var firstDeferred codecFailureInfo
 		for i, elementData := range raw {
 			candidate := reflect.New(typ.Elem()).Interface()
 			if err := json.Unmarshal(elementData, candidate); err != nil {
-				return joinCodecPath(
-					fmt.Sprintf(`[%d]`, i),
-					codecFailurePath(elementData, typ.Elem()),
-				)
+				nested := codecFailurePathInfo(elementData, typ.Elem())
+				failure := codecFailureInfo{
+					path: joinCodecPath(fmt.Sprintf(`[%d]`, i), nested.path),
+				}
+				if nested.fatal || !isDeferredCodecError(err) {
+					failure.fatal = true
+					return failure
+				}
+				if firstDeferred.path == "" {
+					firstDeferred = failure
+				}
 			}
 		}
+		return firstDeferred
 	}
-	return ""
+	return codecFailureInfo{}
+}
+
+func codecCustomDecoderRuns(data []byte, typ reflect.Type) bool {
+	for typ.Kind() == reflect.Pointer {
+		typ = typ.Elem()
+	}
+	if typ.Implements(jsonUnmarshalerType) || reflect.PointerTo(typ).Implements(jsonUnmarshalerType) {
+		return true
+	}
+	if !typ.Implements(textUnmarshalerType) && !reflect.PointerTo(typ).Implements(textUnmarshalerType) {
+		return false
+	}
+	data = bytes.TrimSpace(data)
+	return len(data) > 0 && data[0] == '"'
+}
+
+func isDeferredCodecError(err error) bool {
+	var typeErr *json.UnmarshalTypeError
+	return errors.As(err, &typeErr)
 }
 
 type codecRawField struct {
