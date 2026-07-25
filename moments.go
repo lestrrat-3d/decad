@@ -640,6 +640,14 @@ func (r ProfileRecord) evaluatorIntegrals(order momentIntegralOrder) (regionInte
 	return integrateMomentRecord(record, anchor, order)
 }
 
+func (r ProfileRecord) evaluatorIntegralsContext(ctx context.Context, order momentIntegralOrder) (regionIntegrals, error) {
+	record, anchor, err := validateMomentFieldsContext(ctx, r)
+	if err != nil {
+		return regionIntegrals{}, err
+	}
+	return integrateMomentRecordModeContext(ctx, record, anchor, order, true)
+}
+
 func (r ProfileRecord) evaluatorIntegralsUncheckedContext(ctx context.Context, order momentIntegralOrder) (regionIntegrals, error) {
 	record, anchor, err := validateMomentFieldsContext(ctx, r)
 	if err != nil {

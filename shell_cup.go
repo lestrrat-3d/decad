@@ -129,11 +129,11 @@ func evalCupContext(ctx context.Context, d *Document, ref StepRef, cp cupPayload
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	igO, err := cp.outer.integralsContext(ctx)
+	igO, err := cp.outer.evaluatorIntegralsContext(ctx, momentFirstOrder)
 	if err != nil {
 		return nil, err
 	}
-	igC, err := cp.cavity.integralsContext(ctx)
+	igC, err := cp.cavity.evaluatorIntegralsContext(ctx, momentFirstOrder)
 	if err != nil {
 		return nil, err
 	}
