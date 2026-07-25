@@ -124,19 +124,26 @@ const (
 // Verify recognizes the private type and leaves the pair undecided. Invariant
 // failures remain ordinary errors and return from Verify.
 type booleanExpectedError struct {
-	kind booleanExpectedKind
-	err  error
+	kind    booleanExpectedKind
+	operand int
+	err     error
 }
 
 func (e *booleanExpectedError) Error() string { return e.err.Error() }
 func (e *booleanExpectedError) Unwrap() error { return e.err }
 
 func expectedBoolean(kind booleanExpectedKind, err error) error {
+	return expectedBooleanForOperand(kind, -1, err)
+}
+
+// expectedBooleanForOperand retains which operand hit a pre-contact staging
+// limit. Other expected outcomes concern the pair or the result and use -1.
+func expectedBooleanForOperand(kind booleanExpectedKind, operand int, err error) error {
 	var expected *booleanExpectedError
 	if errors.As(err, &expected) {
 		return err
 	}
-	return &booleanExpectedError{kind: kind, err: err}
+	return &booleanExpectedError{kind: kind, operand: operand, err: err}
 }
 
 func asExpectedBoolean(err error) (*booleanExpectedError, bool) {
@@ -263,7 +270,7 @@ func evaluateBoolean(ctx context.Context, op OpKind, a, b *Body) (booleanEvaluat
 			// A tessellation ErrUnsupported is a capability/staging limit on the
 			// operand itself, reached before any contact is examined — never a
 			// contact refusal (see booleanExpectedStaging).
-			err = expectedBoolean(booleanExpectedStaging, err)
+			err = expectedBooleanForOperand(booleanExpectedStaging, 0, err)
 		}
 		return booleanEvaluation{}, err
 	}
@@ -279,7 +286,7 @@ func evaluateBoolean(ctx context.Context, op OpKind, a, b *Body) (booleanEvaluat
 			// A tessellation ErrUnsupported is a capability/staging limit on the
 			// operand itself, reached before any contact is examined — never a
 			// contact refusal (see booleanExpectedStaging).
-			err = expectedBoolean(booleanExpectedStaging, err)
+			err = expectedBooleanForOperand(booleanExpectedStaging, 1, err)
 		}
 		return booleanEvaluation{}, err
 	}
@@ -334,7 +341,7 @@ func evaluateBoolean(ctx context.Context, op OpKind, a, b *Body) (booleanEvaluat
 	}
 	if err := refuseUndecidableProximity(ctx, ma, mb, bmA, bmB); err != nil {
 		if errors.Is(err, ErrUnsupported) {
-			err = expectedBoolean(booleanExpectedUnsupported, err)
+			err = expectedBoolean(booleanExpectedContact, err)
 		}
 		return booleanEvaluation{}, err
 	}

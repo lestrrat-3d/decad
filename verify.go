@@ -167,16 +167,19 @@ const (
 	// DiagUndecidedPair — a pair the disjoint/overlap PARTITION proof resolved
 	// neither way (§1). Reading ReadingNone. Contributes Suspect.
 	DiagUndecidedPair
-	// DiagUnsupportedPair — a pair this evaluator cannot decide because a
-	// payload or a contact is STAGED: a revolve or cup operand, or the boolean's
-	// unsupported contact (core §8). Reading ReadingNone. Contributes Suspect.
+	// DiagUnsupportedPair is the broad compatibility code for a staged pair.
+	// Verify emits this alongside one of the cause-specific codes below.
+	// Reading ReadingNone. Contributes Suspect.
+	//
+	// Deprecated: branch on DiagUnsupportedPairPayload,
+	// DiagUnsupportedPairContact, or DiagUnsupportedPairPipeline.
 	DiagUnsupportedPair
 	// DiagUndecidedClearance — a pair PROVEN disjoint (by box or kernel) whose
 	// requested WithClearances gap the kernel could not prove: no Clearance row
 	// is emitted and the report reads Suspect. Distinct from DiagUndecidedPair
-	// (partition unresolved) and DiagUnsupportedPair (a staged payload) — here
-	// the pair is decidedly apart and only the gap is unmeasured. Reading
-	// ReadingNone. Contributes Suspect.
+	// (partition unresolved) and the cause-specific unsupported-pair codes
+	// (payload, contact, or pipeline) — here the pair is decidedly apart and
+	// only the gap is unmeasured. Reading ReadingNone. Contributes Suspect.
 	DiagUndecidedClearance
 	// DiagUndecidedInterference — a pair PROVEN to overlap whose overlap VOLUME
 	// the evaluator cannot bound (§1): the overlap-side mirror of
@@ -184,6 +187,16 @@ const (
 	// Suspect. Reading ReadingNone, Observed and Required nil, Pair set.
 	// Contributes Suspect.
 	DiagUndecidedInterference
+	// DiagUnsupportedPairPayload — one named operand uses a payload the read-only
+	// intersection cannot tessellate. Reading ReadingNone. Contributes Suspect.
+	DiagUnsupportedPairPayload
+	// DiagUnsupportedPairContact — the pair reaches a contact or near-contact the
+	// exact boolean policy cannot classify. Reading ReadingNone. Contributes Suspect.
+	DiagUnsupportedPairContact
+	// DiagUnsupportedPairPipeline — both operands tessellate, but later boolean
+	// geometry exceeds the pipeline's supported reach. Reading ReadingNone.
+	// Contributes Suspect.
+	DiagUnsupportedPairPipeline
 	// DiagUnsupportedSurveyPayload — an asked body survey cannot run because
 	// its payload class is staged. Reading ReadingNone. Contributes Suspect.
 	DiagUnsupportedSurveyPayload
@@ -220,6 +233,12 @@ func (c DiagnosticCode) String() string {
 		return "undecided_clearance"
 	case DiagUndecidedInterference:
 		return "undecided_interference"
+	case DiagUnsupportedPairPayload:
+		return "unsupported_pair_payload"
+	case DiagUnsupportedPairContact:
+		return "unsupported_pair_contact"
+	case DiagUnsupportedPairPipeline:
+		return "unsupported_pair_pipeline"
 	case DiagUnsupportedSurveyPayload:
 		return "unsupported_survey_payload"
 	default:
@@ -276,9 +295,10 @@ type Report struct {
 	Bodies        []*BodyReport
 	Interferences []Interference
 	Clearances    []Clearance
-	// Diagnostics is one structured, branchable entry per reason a report
-	// returned by Verify is not Sound (verification §1.1). On such a report it
-	// is empty EXACTLY when Status == Sound, and Status is the worst
+	// Diagnostics contains structured, branchable entries for every reason a
+	// report returned by Verify is not Sound (verification §1.1). Staged pair
+	// causes also carry the deprecated broad compatibility entry. On such a
+	// report it is empty EXACTLY when Status == Sound, and Status is the worst
 	// Diagnostic.Status in it — the §6 aggregate, itemized. The zero Report is
 	// Unverified and carries no verdict.
 	Diagnostics []Diagnostic
@@ -627,8 +647,11 @@ func (d *Document) Verify(ctx context.Context, opts ...VerifyOption) (*Report, e
 				return nil, err
 			}
 			if outcome != interferenceMeasured {
-				report.Diagnostics = append(report.Diagnostics,
-					undecidedPairDiag(a, b, res.verdict, outcome))
+				diag := undecidedPairDiag(a, b, res.verdict, outcome)
+				if legacy, ok := legacyUnsupportedPairDiag(a, b, diag.Code); ok {
+					report.Diagnostics = append(report.Diagnostics, legacy)
+				}
+				report.Diagnostics = append(report.Diagnostics, diag)
 				undecided = true
 				continue
 			}
@@ -720,18 +743,42 @@ func pairDiagNone(a, b *Body, code DiagnosticCode, msg string) Diagnostic {
 	}
 }
 
+// legacyUnsupportedPairDiag preserves the deprecated broad pair signal for
+// callers that still branch on it. The cause-specific diagnostic remains the
+// actionable entry and is appended separately by Verify.
+func legacyUnsupportedPairDiag(a, b *Body, cause DiagnosticCode) (Diagnostic, bool) {
+	switch cause {
+	case DiagUnsupportedPairPayload, DiagUnsupportedPairContact, DiagUnsupportedPairPipeline:
+		return pairDiagNone(a, b, DiagUnsupportedPair,
+			"the pair cannot be decided because a read-only intersection stage is unsupported; inspect the accompanying cause-specific diagnostic for details"), true
+	default:
+		return Diagnostic{}, false
+	}
+}
+
 // undecidedPairDiag picks the diagnostic for a pair whose overlap volume the
-// evaluator could not measure (verification §1.1): a proven overlap is
-// DiagUndecidedInterference, a staged payload or contact is DiagUnsupportedPair,
-// and an unresolved partition is DiagUndecidedPair.
+// evaluator could not measure (verification §1.1): payload, contact, and
+// in-pipeline limits each keep their own code and action; only an overlap with
+// an otherwise undecided measurement is DiagUndecidedInterference; an
+// unresolved partition is DiagUndecidedPair. Verify adds the deprecated broad
+// compatibility code alongside the three cause-specific outcomes.
 func undecidedPairDiag(a, b *Body, verdict pairVerdict, outcome interferenceOutcome) Diagnostic {
 	switch {
-	case verdict == pairOverlapping:
+	case outcome == interferenceUnsupportedPayloadFirst:
+		return pairDiagNone(a, b, DiagUnsupportedPairPayload,
+			fmt.Sprintf("the first operand (step %d) uses a payload the read-only intersection cannot tessellate; use a tessellatable body type or wait for payload support", a.originStep()))
+	case outcome == interferenceUnsupportedPayloadSecond:
+		return pairDiagNone(a, b, DiagUnsupportedPairPayload,
+			fmt.Sprintf("the second operand (step %d) uses a payload the read-only intersection cannot tessellate; use a tessellatable body type or wait for payload support", b.originStep()))
+	case outcome == interferenceUnsupportedContact:
+		return pairDiagNone(a, b, DiagUnsupportedPairContact,
+			"the pair reaches a contact or near-contact that the read-only intersection cannot classify; adjust the geometry to create clear separation or deeper overlap, or wait for contact support")
+	case outcome == interferenceUnsupportedPipeline:
+		return pairDiagNone(a, b, DiagUnsupportedPairPipeline,
+			"both operands tessellate, but later read-only intersection geometry exceeds the boolean pipeline's reach; simplify the boolean geometry or wait for pipeline support")
+	case outcome == interferenceUndecided && verdict == pairOverlapping:
 		return pairDiagNone(a, b, DiagUndecidedInterference,
 			"the pair is proven to overlap but the overlap volume is unmeasured")
-	case outcome == interferenceUnsupported:
-		return pairDiagNone(a, b, DiagUnsupportedPair,
-			"the pair cannot be decided because a payload or a contact is staged")
 	default:
 		return pairDiagNone(a, b, DiagUndecidedPair,
 			"the disjoint/overlap partition proof resolved neither way")

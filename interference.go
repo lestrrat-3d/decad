@@ -93,9 +93,9 @@ func loopRecordsEqual(budget *workBudget, a, b LoopRecord) (bool, error) {
 }
 
 // interferenceOutcome distinguishes why the overlap volume could not be
-// measured, so Verify can pick the matching diagnostic (verification §1.1): a
-// staged payload or contact is DiagUnsupportedPair, any other unmeasured
-// result DiagUndecidedPair (or DiagUndecidedInterference for a proven overlap).
+// measured, so Verify can pick the matching diagnostic (verification §1.1).
+// Payload staging retains the first operand that failed; contact policy and
+// in-pipeline reach remain separate from it and from an undecided proof.
 type interferenceOutcome int
 
 const (
@@ -103,8 +103,18 @@ const (
 	interferenceMeasured interferenceOutcome = iota
 	// interferenceUndecided — the read-only proof resolved neither way.
 	interferenceUndecided
-	// interferenceUnsupported — a staged payload or contact (core §8).
-	interferenceUnsupported
+	// interferenceUnsupportedPayloadFirst — the first operand cannot enter the
+	// read-only intersection pipeline.
+	interferenceUnsupportedPayloadFirst
+	// interferenceUnsupportedPayloadSecond — the second operand cannot enter
+	// the read-only intersection pipeline.
+	interferenceUnsupportedPayloadSecond
+	// interferenceUnsupportedContact — the exact boolean contact policy refused
+	// the pair.
+	interferenceUnsupportedContact
+	// interferenceUnsupportedPipeline — both operands entered the pipeline, but
+	// later geometry exceeded its supported reach.
+	interferenceUnsupportedPipeline
 )
 
 // measuredInterference returns the pair's bounded overlap volume. Strict
@@ -126,17 +136,7 @@ func measuredInterference(ctx context.Context, a, b *Body, res pairResult) (Meas
 	eval, err := evaluateBoolean(ctx, OpIntersect, a, b)
 	if err != nil {
 		if expected, ok := asExpectedBoolean(err); ok {
-			// A staged payload (a revolve or cup operand this evaluator cannot
-			// tessellate, booleanExpectedStaging) AND a staged boolean contact
-			// (core §8) are both DiagUnsupportedPair per verification §1.1 — a
-			// staged payload or a coplanar/tangent contact is an unsupported
-			// pair, not an undecided partition.
-			if expected.kind == booleanExpectedUnsupported ||
-				expected.kind == booleanExpectedContact ||
-				expected.kind == booleanExpectedStaging {
-				return Measurement{}, interferenceUnsupported, nil
-			}
-			return Measurement{}, interferenceUndecided, nil
+			return Measurement{}, interferenceOutcomeForExpected(expected), nil
 		}
 		return Measurement{}, interferenceUndecided, err
 	}
@@ -145,6 +145,24 @@ func measuredInterference(ctx context.Context, a, b *Body, res pairResult) (Meas
 		return Measurement{}, interferenceUndecided, nil
 	}
 	return eval.volume, interferenceMeasured, nil
+}
+
+// interferenceOutcomeForExpected preserves the read-only boolean's private
+// reason taxonomy for Verify's cause-specific diagnostics.
+func interferenceOutcomeForExpected(expected *booleanExpectedError) interferenceOutcome {
+	switch expected.kind {
+	case booleanExpectedContact:
+		return interferenceUnsupportedContact
+	case booleanExpectedUnsupported:
+		return interferenceUnsupportedPipeline
+	case booleanExpectedStaging:
+		if expected.operand == 1 {
+			return interferenceUnsupportedPayloadSecond
+		}
+		return interferenceUnsupportedPayloadFirst
+	default:
+		return interferenceUndecided
+	}
 }
 
 // interferencePairDiameter reads the greatest supported point distance from

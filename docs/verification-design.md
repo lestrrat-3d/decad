@@ -28,7 +28,7 @@ type Report struct {
     Bodies        []*BodyReport
     Interferences []Interference // proven pairwise overlap, with the overlap VOLUME; always computed
     Clearances    []Clearance    // WithClearances(): minimum gap between disjoint pairs
-    Diagnostics   []Diagnostic   // one branchable entry per reason the report is not Sound (§1.1)
+    Diagnostics   []Diagnostic   // branchable entries per reason; staged pair causes also carry the deprecated compatibility entry (§1.1)
     Status        Status         // Unverified on a zero value; Verify always returns a decided status
 }
 
@@ -195,30 +195,39 @@ const (
     // neither way (§1). Reading ReadingNone, Observed* and Required nil.
     // Contributes Suspect.
     DiagUndecidedPair
-    // DiagUnsupportedPair — a pair this evaluator cannot decide because a
-    // payload or a contact is STAGED: a revolve or cup operand, or the
-    // boolean's unsupported-contact (core §8). Reading ReadingNone, Observed*
-    // and Required nil. Contributes Suspect.
+    // DiagUnsupportedPair — broad compatibility code for a staged pair.
+    // Verify emits this alongside one of the three cause-specific codes below.
+    // Deprecated: branch on the cause-specific code for detail.
     DiagUnsupportedPair
     // DiagUndecidedClearance — a pair whose partition IS proven disjoint (by box
     // or by the kernel) but whose REQUESTED WithClearances gap the kernel could
     // not prove: no Clearance row is emitted for it, and the report reads
     // Suspect. It is emitted only when WithClearances was asked, and it is
     // distinct from DiagUndecidedPair (the partition itself unresolved) and
-    // DiagUnsupportedPair (a staged payload or contact) — here the pair is
-    // decidedly apart and only the gap is unmeasured. Reading ReadingNone,
+    // the cause-specific unsupported-pair codes — here the pair is decidedly
+    // apart and only the gap is unmeasured. Reading ReadingNone,
     // Observed* and Required nil. Contributes Suspect.
     DiagUndecidedClearance
     // DiagUndecidedInterference — a pair PROVEN to overlap whose overlap VOLUME
     // the evaluator cannot bound (§1): the overlap-side mirror of
     // DiagUndecidedClearance. No Interference row is emitted for it, and the
     // report reads Suspect. It is distinct from DiagUndecidedPair (the
-    // disjoint/overlap partition itself unresolved) and DiagUnsupportedPair (a
-    // staged payload or contact) — here the pair is decidedly overlapping and
-    // only the overlap volume is unmeasured. Reading ReadingNone (no bounded
+    // disjoint/overlap partition itself unresolved) and the cause-specific
+    // unsupported-pair codes — here the pair is decidedly overlapping and only
+    // the overlap volume is unmeasured. Reading ReadingNone (no bounded
     // value to name, so — like DiagUndecidedClearance — it names no reading);
     // Observed and Required nil. Pair set. Contributes Suspect.
     DiagUndecidedInterference
+    // DiagUnsupportedPairPayload — one named operand uses a payload the
+    // read-only intersection cannot tessellate. Reading ReadingNone. Suspect.
+    DiagUnsupportedPairPayload
+    // DiagUnsupportedPairContact — the pair reaches a contact or near-contact
+    // the exact boolean policy cannot classify. Reading ReadingNone. Suspect.
+    DiagUnsupportedPairContact
+    // DiagUnsupportedPairPipeline — both operands tessellate, but later
+    // boolean geometry exceeds the pipeline's reach. Reading ReadingNone.
+    // Suspect.
+    DiagUnsupportedPairPipeline
     // DiagUnsupportedSurveyPayload — an asked body survey cannot run because
     // its payload class is staged. Reading ReadingNone, Observed* and Required
     // nil. Body set. Contributes Suspect.
@@ -258,6 +267,9 @@ renders `"reading(<n>)"` with `<n>` the integer, never a panic.
 - `DiagInterference` → `"interference"`
 - `DiagUndecidedPair` → `"undecided_pair"`
 - `DiagUnsupportedPair` → `"unsupported_pair"`
+- `DiagUnsupportedPairPayload` → `"unsupported_pair_payload"`
+- `DiagUnsupportedPairContact` → `"unsupported_pair_contact"`
+- `DiagUnsupportedPairPipeline` → `"unsupported_pair_pipeline"`
 - `DiagUndecidedClearance` → `"undecided_clearance"`
 - `DiagUndecidedInterference` → `"undecided_interference"`
 - `DiagUnsupportedSurveyPayload` → `"unsupported_survey_payload"`
@@ -280,6 +292,9 @@ and the matching `Observed*` form; a proven-invalid body emits one
 `DiagInvalidBody` and no region-quantity diagnostics, because §1 gives it no
 region quantity to gate.
 
+For a staged pair cause, the slice carries both the deprecated broad
+`DiagUnsupportedPair` compatibility entry and the cause-specific entry.
+
 A proven solid always forms its tolerance reference, so the tolerance gate never
 yields a reference-less `Suspect`: an analytic reading carries a zero `Bound`
 and short-circuits the gate before any reference is consulted
@@ -292,10 +307,14 @@ so the "empty **exactly** when `Sound`" completeness holds.
 
 **The undecided pair is now RECORDED.** Where §6 folds a pair the evaluator
 could not decide into the report's `Suspect` rung, a `DiagUndecidedPair` or
-`DiagUnsupportedPair` naming the pair is emitted with it, a pair proven apart
-whose asked gap the kernel could not measure emits a `DiagUndecidedClearance`
-instead, and a pair proven to overlap whose overlap volume the evaluator could
-not bound emits a `DiagUndecidedInterference` — `Reading` `ReadingNone`,
+one of `DiagUnsupportedPairPayload`, `DiagUnsupportedPairContact`, or
+`DiagUnsupportedPairPipeline` naming the exact staged cause is emitted. For
+those three staged causes, the deprecated broad `DiagUnsupportedPair`
+compatibility signal is emitted alongside it,
+a pair proven apart whose asked gap the kernel could not measure emits a
+`DiagUndecidedClearance` instead, and a pair proven to overlap whose overlap
+volume the evaluator could not bound emits a `DiagUndecidedInterference` —
+`Reading` `ReadingNone`,
 `Observed` and `Required` nil, `Pair` set, status `Suspect` (§1). The pair that a local boolean once collapsed and dropped —
 undecided, so no `Interference` and no `Clearance` row — now names itself, so an
 agent sees which two bodies it could not separate rather than only that some pair
@@ -1001,8 +1020,10 @@ survey that could not decide, and for the verdict nothing turns on which:
 **proven** absence exactly when no diagnostic names it — the per-survey
 `DiagUndecidedWall` / `DiagUndecidedUndercut` / `DiagUndecidedMinRadius` for that
 body-and-survey, `DiagUnsupportedSurveyPayload` when the requested survey's
-payload implementation is staged, and `DiagUndecidedPair`, `DiagUnsupportedPair` or
-`DiagUndecidedInterference` for that pair (a `DiagUndecidedClearance` proves the
+payload implementation is staged, and `DiagUndecidedPair`, the compatibility
+`DiagUnsupportedPair` plus its cause-specific unsupported-pair code, or
+`DiagUndecidedInterference` for that
+pair (a `DiagUndecidedClearance` proves the
 pair disjoint, so it leaves the missing `Interference` row a proven non-overlap
 and marks only a requested `Clearance` row undecided) — and the survey the
 evaluator could not decide is exactly the one that emitted such a diagnostic; the per-survey codes

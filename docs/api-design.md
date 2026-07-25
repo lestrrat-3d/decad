@@ -1023,13 +1023,13 @@ work, not this contract's.
 This is one taxonomy with `Verify` FOR A CONTACT THAT REACHES `Verify`'s
 read-only boolean: an unsupported-contact pair the boolean gives its
 unsupported-contact outcome leaves that pair `Suspect` with a
-`DiagUnsupportedPair` diagnostic (`docs/verification-design.md` §1.1), so it
+`DiagUnsupportedPairContact` diagnostic (`docs/verification-design.md` §1.1), so it
 reads the same way whether a caller ran the boolean directly or reached it
 through interference. A pair `Verify` resolves EARLIER never reaches that
 outcome: the coplanar `Plane`×`Plane` contact certificate
 (`docs/clearance-design.md`) runs before the read-only boolean, so a certified
 coplanar touch reads as a touching/clearance result — an `Exact`-zero gap, no
-interference — and emits no `DiagUnsupportedPair`.
+interference — and emits no `DiagUnsupportedPairContact`.
 
 Modify operations return a new body, retiring the receiver, on the same terms:
 

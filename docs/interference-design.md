@@ -377,6 +377,12 @@ never message matching:
 
 `performBoolean` maps these to its existing public errors (`ErrBooleanFailed`,
 `ErrDegenerate`, or `ErrUnsupported`). `Verify` maps them to an undecided pair.
+For diagnostics, preserve the private reason: pre-contact operand staging emits
+`DiagUnsupportedPairPayload` and names the operand; contact policy emits
+`DiagUnsupportedPairContact`; later pipeline reach emits
+`DiagUnsupportedPairPipeline`. Each message states the matching corrective
+action. Keep the broad `DiagUnsupportedPair` signal alongside these codes for
+compatibility, while callers should branch on the cause-specific code.
 
 An invariant failure — inconsistent source mapping, an unclosed stitched mesh,
 an impossible shell relation, a failed exact predicate, or a non-positive
