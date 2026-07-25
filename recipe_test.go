@@ -734,6 +734,51 @@ func TestPlacementKeyingCodec(t *testing.T) {
 	require.Error(t, err, `an in-memory duplicate with a placement is keyed wrong`)
 }
 
+func TestPlacementCodecRejectsNonRigidBasis(t *testing.T) {
+	// Construct the malformed record in memory and generate its wire form so
+	// this regression does not preserve a hand-written malformed JSON example.
+	placement := decad.TransformRecord{
+		EX: r3.NewVec(2, 0, 0),
+		EY: r3.NewVec(0, 1, 0),
+		EZ: r3.NewVec(0, 0, 1),
+	}
+
+	for _, op := range []decad.OpKind{decad.OpPlaced, decad.OpPlacedCopy} {
+		t.Run(op.String(), func(t *testing.T) {
+			step := decad.Step{Op: op, Inputs: []decad.StepRef{0}, Placement: placement}
+			_, err := json.Marshal(step)
+			require.ErrorIs(t, err, decad.ErrDegenerate,
+				`marshal validates the placement basis before accepting the step`)
+
+			stepWire, err := json.Marshal(struct {
+				Op        decad.OpKind          `json:"op"`
+				Inputs    []decad.StepRef       `json:"inputs"`
+				Placement decad.TransformRecord `json:"placement"`
+			}{Op: op, Inputs: []decad.StepRef{0}, Placement: placement})
+			require.NoError(t, err)
+
+			var decodedStep decad.Step
+			err = json.Unmarshal(stepWire, &decodedStep)
+			require.ErrorIs(t, err, decad.ErrDegenerate,
+				`step decoding validates the placement basis before accepting the step`)
+
+			recipeWire, err := json.Marshal(struct {
+				Format  string            `json:"format"`
+				Version int               `json:"version"`
+				Steps   []json.RawMessage `json:"steps"`
+			}{Format: "decad.recipe", Version: 1, Steps: []json.RawMessage{stepWire}})
+			require.NoError(t, err)
+
+			var decodedRecipe decad.Recipe
+			err = json.Unmarshal(recipeWire, &decodedRecipe)
+			require.ErrorIs(t, err, decad.ErrInvalidRecipe,
+				`recipe decoding rejects the malformed placement step`)
+			require.ErrorIs(t, err, decad.ErrDegenerate,
+				`recipe decoding preserves the placement validation cause`)
+		})
+	}
+}
+
 func TestRecipePointerForms(t *testing.T) {
 	// The sealed sets use value receivers, so pointer forms satisfy the
 	// interfaces; the codecs normalize them to values and reject nil.

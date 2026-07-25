@@ -758,6 +758,11 @@ func validateStepShapeBase(s Step, shape operationShape) error {
 	if shape.placement && !nonzeroPlacement(s.Placement) {
 		return fmt.Errorf(`decad: the %q op requires a placement`, s.Op)
 	}
+	if shape.placement {
+		if _, err := s.Placement.Transform(); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
