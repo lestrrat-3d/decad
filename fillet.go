@@ -2,6 +2,7 @@ package decad
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"strings"
@@ -149,6 +150,12 @@ func (b *Body) FilletContext(ctx context.Context, sel EdgeSelector, r units.Valu
 
 	// Stage 4 (§4/§5): the audit of the rewritten profile — S8, S6, S7, S9.
 	if err := auditRewriteBudget(budget, pp.profile, profile, loops, blendAt); err != nil {
+		if errors.Is(err, context.Canceled) {
+			return nil, context.Canceled
+		}
+		if errors.Is(err, context.DeadlineExceeded) {
+			return nil, context.DeadlineExceeded
+		}
 		return nil, wrapModifyAuditError(sel, matched, err)
 	}
 

@@ -29,6 +29,30 @@ func filletBox(t *testing.T) (*decad.Document, *decad.Body) {
 	return doc, body
 }
 
+func manySidedPrism(t *testing.T, sides int) (*decad.Document, *decad.Body) {
+	t.Helper()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	points := make([]*sketch.Point, sides)
+	for i := range sides {
+		th := 2 * math.Pi * float64(i) / float64(sides)
+		points[i] = s.CreatePoint(100*math.Cos(th), 100*math.Sin(th))
+	}
+	for i := range sides {
+		s.CreateLine(points[i], points[(i+1)%sides])
+	}
+	s.Fix(points[0])
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	require.Len(t, s.Profiles(), 1)
+
+	doc := decad.New()
+	body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(filletBoxHeight), Dir: decad.Along})
+	require.NoError(t, err)
+	return doc, body
+}
+
 // verticalEdges selects a prism's lateral edges: straight and parallel to the
 // sweep, which for an XY-plane extrude is the z axis.
 func verticalEdges() *decad.EdgeQuery {
@@ -45,6 +69,12 @@ type preAuditScanCancelContext struct {
 	entered         bool
 }
 
+type auditScanCancelContext struct {
+	context.Context //nolint:containedctx // deterministic cancellation wrapper used only within one test call.
+	cancelErr       error
+	entered         bool
+}
+
 func (c *preAuditScanCancelContext) Err() error {
 	pcs := make([]uintptr, 32)
 	frames := runtime.CallersFrames(pcs[:runtime.Callers(2, pcs)])
@@ -53,6 +83,21 @@ func (c *preAuditScanCancelContext) Err() error {
 		if strings.HasSuffix(frame.Function, ".prismCornerLoopsBudget") {
 			c.entered = true
 			return context.Canceled
+		}
+		if !more {
+			return c.Context.Err()
+		}
+	}
+}
+
+func (c *auditScanCancelContext) Err() error {
+	pcs := make([]uintptr, 32)
+	frames := runtime.CallersFrames(pcs[:runtime.Callers(2, pcs)])
+	for {
+		frame, more := frames.Next()
+		if strings.HasSuffix(frame.Function, ".auditRewriteBudget") {
+			c.entered = true
+			return c.cancelErr
 		}
 		if !more {
 			return c.Context.Err()
@@ -111,6 +156,24 @@ func TestFilletContextCancellationDuringPreAuditLeavesReceiverLive(t *testing.T)
 	require.True(t, ctx.entered)
 	require.Equal(t, before, doc.Recipe())
 	require.Equal(t, []*decad.Body{box}, doc.Bodies())
+}
+
+func TestFilletContextCancellationDuringAuditPreservesError(t *testing.T) {
+	for _, cancelErr := range []error{context.Canceled, context.DeadlineExceeded} {
+		t.Run(cancelErr.Error(), func(t *testing.T) {
+			doc, box := manySidedPrism(t, 300)
+			before := doc.Recipe()
+			ctx := &auditScanCancelContext{Context: t.Context(), cancelErr: cancelErr}
+
+			body, err := box.FilletContext(ctx, verticalEdges(), units.Millimeters(10))
+
+			require.Nil(t, body)
+			require.Equal(t, cancelErr, err)
+			require.True(t, ctx.entered)
+			require.Equal(t, before, doc.Recipe())
+			require.Equal(t, []*decad.Body{box}, doc.Bodies())
+		})
+	}
 }
 
 func TestFilletSelectorAdmission(t *testing.T) {

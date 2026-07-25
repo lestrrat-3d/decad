@@ -2,6 +2,7 @@ package decad
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 
@@ -142,6 +143,12 @@ func (b *Body) ChamferContext(ctx context.Context, sel EdgeSelector, d units.Val
 	// Stage 4 (§4/§5): the same audit the fillet runs — S8, S6 (an over-large
 	// setback that reaches or passes a walk's far end), S7, S9.
 	if err := auditRewriteBudget(budget, pp.profile, profile, loops, blendAt); err != nil {
+		if errors.Is(err, context.Canceled) {
+			return nil, context.Canceled
+		}
+		if errors.Is(err, context.DeadlineExceeded) {
+			return nil, context.DeadlineExceeded
+		}
 		return nil, wrapModifyAuditError(sel, matched, err)
 	}
 
