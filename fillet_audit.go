@@ -25,7 +25,7 @@ import (
 // relative position, so it cannot tell the two apart. A large fillet can shrink
 // the outer loop past a near-corner hole, leaving the hole in the removed corner
 // region — disjoint from every outer segment, yet OUTSIDE the rounded material.
-// So S9 (nestingAudit) is COMPUTED, not discharged by construction: it
+// So S9 (nestingAuditBudget) is COMPUTED, not discharged by construction: it
 // classifies one point of each hole against the outer loop and each other hole,
 // using the same ray-parity walk with direction retries that survey2d.go runs
 // (loopContains). An undecidable containment is S9 ErrUnsupported — the
