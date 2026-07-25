@@ -122,6 +122,8 @@ func (p xp2) key2() string { return p.u.RatString() + "|" + p.v.RatString() }
 
 // cross2x is the exact value of (b − a) × (c − a): positive when a, b, c turn
 // counter-clockwise.
+//
+// The exact result remains available for callers that need more than its sign.
 func cross2x(a, b, c xp2) *big.Rat {
 	bu := new(big.Rat).Sub(b.u, a.u)
 	bv := new(big.Rat).Sub(b.v, a.v)
@@ -130,12 +132,45 @@ func cross2x(a, b, c xp2) *big.Rat {
 	return new(big.Rat).Sub(new(big.Rat).Mul(bu, cv), new(big.Rat).Mul(bv, cu))
 }
 
+// cross2xSign uses a conservative float filter for the common case and keeps
+// the exact rational predicate for values close enough to zero that rounding
+// could change the answer. The scale uses the original coordinates, not only
+// their float differences, so cancellation during subtraction is covered too.
+func cross2xSign(a, b, c xp2) int {
+	au, _ := a.u.Float64()
+	av, _ := a.v.Float64()
+	bu, _ := b.u.Float64()
+	bv, _ := b.v.Float64()
+	cu, _ := c.u.Float64()
+	cv, _ := c.v.Float64()
+	if !math.IsNaN(au) && !math.IsInf(au, 0) &&
+		!math.IsNaN(av) && !math.IsInf(av, 0) &&
+		!math.IsNaN(bu) && !math.IsInf(bu, 0) &&
+		!math.IsNaN(bv) && !math.IsInf(bv, 0) &&
+		!math.IsNaN(cu) && !math.IsInf(cu, 0) &&
+		!math.IsNaN(cv) && !math.IsInf(cv, 0) {
+		det := (bu-au)*(cv-av) - (bv-av)*(cu-au)
+		scale := (math.Abs(bu)+math.Abs(au))*(math.Abs(cv)+math.Abs(av)) +
+			(math.Abs(bv)+math.Abs(av))*(math.Abs(cu)+math.Abs(au))
+		err := 1e-12 * scale
+		if !math.IsNaN(det) && !math.IsInf(det, 0) && !math.IsInf(err, 0) && err > 0 {
+			if det > err {
+				return 1
+			}
+			if det < -err {
+				return -1
+			}
+		}
+	}
+	return cross2x(a, b, c).Sign()
+}
+
 // pointInTriX reports whether p lies inside or on the closed triangle a, b,
 // c, whichever way it is wound — the exact analog of pointInTri.
 func pointInTriX(p, a, b, c xp2) bool {
-	d1 := cross2x(a, b, p).Sign()
-	d2 := cross2x(b, c, p).Sign()
-	d3 := cross2x(c, a, p).Sign()
+	d1 := cross2xSign(a, b, p)
+	d2 := cross2xSign(b, c, p)
+	d3 := cross2xSign(c, a, p)
 	hasNeg := d1 < 0 || d2 < 0 || d3 < 0
 	hasPos := d1 > 0 || d2 > 0 || d3 > 0
 	return !hasNeg || !hasPos
@@ -144,7 +179,7 @@ func pointInTriX(p, a, b, c xp2) bool {
 // onSegment2 reports whether p lies on the closed segment (a, b) — collinear
 // and within the endpoints. interior additionally excludes the endpoints.
 func onSegment2(a, b, p xp2) (bool, bool) {
-	if cross2x(a, b, p).Sign() != 0 {
+	if cross2xSign(a, b, p) != 0 {
 		return false, false
 	}
 	// Collinear: order along the dominant axis of the segment.
@@ -243,7 +278,7 @@ func earClipX(budget *workBudget, pts []xp2, poly []int) ([][3]int, error) {
 				return nil, err
 			}
 			ia, ib, ic := idx[(i-1+n)%n], idx[i], idx[(i+1)%n]
-			if cross2x(pts[ia], pts[ib], pts[ic]).Sign() <= 0 {
+			if cross2xSign(pts[ia], pts[ib], pts[ic]) <= 0 {
 				continue
 			}
 			blocked, err := earBlockedX(budget, pts, idx, i)
@@ -268,9 +303,9 @@ func earClipX(budget *workBudget, pts []xp2, poly []int) ([][3]int, error) {
 			return nil, fmt.Errorf(`%w: exact ear clipping stalled on a boolean subdivision polygon`, ErrBooleanFailed)
 		}
 	}
-	if cross2x(pts[idx[0]], pts[idx[1]], pts[idx[2]]).Sign() > 0 {
+	if cross2xSign(pts[idx[0]], pts[idx[1]], pts[idx[2]]) > 0 {
 		tris = append(tris, [3]int{idx[0], idx[1], idx[2]})
-	} else if cross2x(pts[idx[0]], pts[idx[1]], pts[idx[2]]).Sign() < 0 {
+	} else if cross2xSign(pts[idx[0]], pts[idx[1]], pts[idx[2]]) < 0 {
 		return nil, fmt.Errorf(`%w: a boolean subdivision polygon closed clockwise`, ErrBooleanFailed)
 	}
 	return tris, nil
@@ -363,9 +398,9 @@ func meshParityContext(ctx context.Context, p xpt, verts []r3.Vec, tris [][3]int
 			qa := xp2{mustRatOf(coordOf(a, ray.u)), mustRatOf(coordOf(a, ray.v))}
 			qb := xp2{mustRatOf(coordOf(b, ray.u)), mustRatOf(coordOf(b, ray.v))}
 			qc := xp2{mustRatOf(coordOf(c, ray.u)), mustRatOf(coordOf(c, ray.v))}
-			s1 := cross2x(qa, qb, pa).Sign()
-			s2 := cross2x(qb, qc, pa).Sign()
-			s3 := cross2x(qc, qa, pa).Sign()
+			s1 := cross2xSign(qa, qb, pa)
+			s2 := cross2xSign(qb, qc, pa)
+			s3 := cross2xSign(qc, qa, pa)
 			neg := s1 < 0 || s2 < 0 || s3 < 0
 			pos := s1 > 0 || s2 > 0 || s3 > 0
 			if neg && pos {

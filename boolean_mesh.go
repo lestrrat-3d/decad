@@ -457,7 +457,7 @@ func segTriOverlap2(a, b, ta, tb, tc xp2) bool {
 	// Clip the segment parameter interval [0, 1] against each closed edge
 	// half-plane of the triangle, in exact arithmetic; a positive-length
 	// remainder is an overlap.
-	ccw := cross2x(ta, tb, tc).Sign()
+	ccw := cross2xSign(ta, tb, tc)
 	if ccw == 0 {
 		return false
 	}

@@ -120,7 +120,7 @@ func cutTriangle(ctx context.Context, xtri [3]xpt, normal xpt, segs []xseg) ([]c
 	// Keep the projected facet counter-clockwise, so polygon areas and ear
 	// clipping read the facet's own orientation.
 	corner := func(p xpt) xp2 { return xp2{ratCoordOf(p, tc.u), ratCoordOf(p, tc.v)} }
-	if cross2x(corner(xtri[0]), corner(xtri[1]), corner(xtri[2])).Sign() < 0 {
+	if cross2xSign(corner(xtri[0]), corner(xtri[1]), corner(xtri[2])) < 0 {
 		tc.swap = true
 	}
 	var cornerIdx [3]int
