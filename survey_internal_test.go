@@ -28,7 +28,7 @@ func TestWallKernelFlagsOffJunctionSubTolerance(t *testing.T) {
 	require.True(t, ok)
 	inner, ok := arcElem(0, 0, 10-2e-8, 2*math.Pi, 0, true)
 	require.True(t, ok)
-	k := newWallKernel([]surveyElem{outer, inner}, nil, 15*math.Pi/180, math.Inf(1))
+	k := newWallKernel([]surveyElem{outer, inner}, nil, math.Inf(1))
 	out := k.run()
 	require.True(t, out.subTolFar, `an off-junction sub-tolerance candidate must be flagged`)
 }
@@ -43,7 +43,7 @@ func TestWallKernelCleanProfileDoesNotFlag(t *testing.T) {
 		require.True(t, ok)
 		elems = append(elems, e)
 	}
-	k := newWallKernel(elems, pts, 15*math.Pi/180, math.Inf(1))
+	k := newWallKernel(elems, pts, math.Inf(1))
 	out := k.run()
 	require.True(t, out.ok)
 	require.False(t, out.subTolFar)
@@ -54,7 +54,7 @@ func TestWallKernelCleanProfileDoesNotFlag(t *testing.T) {
 func TestWallKernelGenerateStreamsCandidates(t *testing.T) {
 	arc, ok := arcElem(0, 0, 10, 0, 2*math.Pi, true)
 	require.True(t, ok)
-	k := newWallKernel([]surveyElem{arc}, nil, 15*math.Pi/180, math.Inf(1))
+	k := newWallKernel([]surveyElem{arc}, nil, math.Inf(1))
 	stop := errors.New("stop after the first candidate")
 	seen := 0
 
@@ -78,7 +78,7 @@ func TestWallKernelGenerateCancellationIsBounded(t *testing.T) {
 	cancel()
 	seen := 0
 
-	err := newWallKernel(elems, nil, 15*math.Pi/180, math.Inf(1)).
+	err := newWallKernel(elems, nil, math.Inf(1)).
 		generate(newWorkBudget(ctx), func(diskCand) error {
 			seen++
 			return nil
@@ -111,7 +111,7 @@ func TestWallKernelValidateCancellationIsBounded(t *testing.T) {
 		elems[i] = e
 	}
 	ctx := &internalFrameCancelContext{Context: t.Context(), target: "validate"}
-	k := newWallKernel(elems, nil, 15*math.Pi/180, math.Inf(1))
+	k := newWallKernel(elems, nil, math.Inf(1))
 
 	spanning, empty, valid, err := k.validate(diskCand{x: 0, y: 0, r: 1}, newWorkBudget(ctx))
 	_ = spanning
@@ -130,7 +130,7 @@ func TestWallKernelContainsCancellationIsBounded(t *testing.T) {
 		elems[i] = e
 	}
 	ctx := &internalFrameCancelContext{Context: t.Context(), target: "contains"}
-	k := newWallKernel(elems, nil, 15*math.Pi/180, math.Inf(1))
+	k := newWallKernel(elems, nil, math.Inf(1))
 
 	_, _, err := k.contains(0, 0, newWorkBudget(ctx))
 
@@ -146,7 +146,7 @@ func TestWallKernelBudgetedRunKeepsNormalResult(t *testing.T) {
 		require.True(t, ok)
 		elems = append(elems, e)
 	}
-	k := newWallKernel(elems, pts, 15*math.Pi/180, math.Inf(1))
+	k := newWallKernel(elems, pts, math.Inf(1))
 
 	out, err := k.runBudget(newWorkBudget(t.Context()))
 
@@ -191,7 +191,7 @@ func TestCupWallRequiresExactMorphology(t *testing.T) {
 		line(100, 60, 0, 60),
 		line(0, 60, 0, 0),
 	}}}
-	cavity, err := offsetProfile(outer, 1, 5)
+	cavity, err := offsetProfileBudget(newWorkBudget(t.Context()), outer, 1, 5)
 	require.NoError(t, err)
 	cp := cupPayload{
 		outer:     outer,
@@ -306,7 +306,7 @@ func TestRevolveLoopsCancellationIsBounded(t *testing.T) {
 
 func TestCupWallCancellationCoversOffsetAuditAndReverse(t *testing.T) {
 	outer := manySegmentProfile(workPollInterval + 64)
-	cavity, err := offsetProfile(outer, 1, 5)
+	cavity, err := offsetProfile(nil, outer, 1, 5)
 	require.NoError(t, err)
 	cp := cupPayload{
 		outer:     outer,
@@ -329,4 +329,38 @@ func TestCupWallCancellationCoversOffsetAuditAndReverse(t *testing.T) {
 			require.True(t, *entered, `cup wall work must poll inside the named phase`)
 		})
 	}
+}
+
+func TestCupWallCancellationDuringProfileIntegrals(t *testing.T) {
+	line := func(u0, v0, u1, v1 float64) CurveSegment {
+		return LineSeg{
+			Start:  Point2{U: u0, V: v0},
+			End:    Point2{U: u1, V: v1},
+			TStart: 0,
+			TEnd:   1,
+		}
+	}
+	outer := ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{
+		line(0, 0, 100, 0),
+		line(100, 0, 100, 60),
+		line(100, 60, 0, 60),
+		line(0, 60, 0, 0),
+	}}}
+	cavity, err := offsetProfile(newWorkBudget(t.Context()), outer, 1, 5)
+	require.NoError(t, err)
+	cp := cupPayload{
+		outer:     outer,
+		cavity:    cavity,
+		zOuter:    0,
+		zCav:      5,
+		zOpen:     20,
+		thickness: 5,
+		sense:     Inward,
+	}
+	ctx := &internalFrameCancelContext{Context: t.Context(), target: "integralsBudget"}
+
+	_, err = cupWall(newWorkBudget(ctx), cp, 15*math.Pi/180)
+
+	require.ErrorIs(t, err, context.Canceled)
+	require.True(t, ctx.entered)
 }

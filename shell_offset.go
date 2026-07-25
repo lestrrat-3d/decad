@@ -39,11 +39,14 @@ var errOffsetTopology = fmt.Errorf(`%w: the offset changes the section's topolog
 // (inward, s = +1) or P ⊕ t (outward, s = −1), each loop offset in its own
 // sense (docs/modify-design.md §7). A dropped feature is S11a (errOffsetDrop);
 // a non-closing miter is S11 (errOffsetTopology). Both are ErrUnsupported.
-func offsetProfile(profile ProfileRecord, s, t float64) (ProfileRecord, error) {
-	return offsetProfileBudget(nil, profile, s, t)
+func offsetProfile(budget *workBudget, profile ProfileRecord, s, t float64) (ProfileRecord, error) {
+	return offsetProfileBudget(budget, profile, s, t)
 }
 
 func offsetProfileBudget(budget *workBudget, profile ProfileRecord, s, t float64) (ProfileRecord, error) {
+	if err := wallBudgetErr(budget); err != nil {
+		return ProfileRecord{}, err
+	}
 	loops, err := prismCornerLoopsBudget(budget, prismPayload{profile: profile})
 	if err != nil {
 		return ProfileRecord{}, err
@@ -313,16 +316,12 @@ func reverseLoopRecordBudget(budget *workBudget, l LoopRecord) (LoopRecord, erro
 	return LoopRecord{Segments: segs}, nil
 }
 
-// auditOffsetSection runs the shared §5 audit (fillet_audit.go) on a shell's
+// auditOffsetSectionBudget runs the shared §5 audit (fillet_audit.go) on a shell's
 // offset section, in §4's order: S8 (orientation — an offset loop turned inside
 // out is ErrDegenerate), the crossing test (a crossing or boundary contact of
 // offset loops — S11b, ErrUnsupported), then S9 (nesting). A shell mints no
 // cutback, so the empty fillet map makes the S6 trim test a no-op — the one test
 // that cannot fire on an offset (§8).
-func auditOffsetSection(orig, offset ProfileRecord) error {
-	return auditOffsetSectionBudget(nil, orig, offset)
-}
-
 func auditOffsetSectionBudget(budget *workBudget, orig, offset ProfileRecord) error {
 	loops, err := prismCornerLoopsBudget(budget, prismPayload{profile: offset})
 	if err != nil {

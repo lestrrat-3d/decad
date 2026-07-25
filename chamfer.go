@@ -1,6 +1,8 @@
 package decad
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"math"
 
@@ -17,7 +19,7 @@ import (
 // rewrite: the corner is cut off by a straight CHORD between the two setback
 // feet (a LineSeg), never a tangent arc, so the bevel wall is a PLANE (§7). It
 // then shares everything downstream with the fillet — the §5 audit
-// (auditRewrite, S8/S6/S7/S9), the profile rewrite (rewriteProfile), evalPrism,
+// (auditRewriteBudget, S8/S6/S7/S9), the profile rewrite (rewriteProfile), evalPrism,
 // and the blend-role machinery (addBlendRoles) — via the common cornerBlend.
 //
 // The setback d is measured along the adjacent boundary curve, d from the corner
@@ -46,6 +48,10 @@ type ChamferOption interface {
 // built, so no unproven body is ever made and an over-large setback is refused
 // (S6), never clipped.
 func (b *Body) Chamfer(sel EdgeSelector, d units.Value, opts ...ChamferOption) (*Body, error) {
+	return b.ChamferContext(context.Background(), sel, d, opts...)
+}
+
+func (b *Body) ChamferContext(ctx context.Context, sel EdgeSelector, d units.Value, opts ...ChamferOption) (*Body, error) {
 	if b == nil || b.doc == nil {
 		return nil, fmt.Errorf(`%w: the body belongs to no document`, ErrDegenerate)
 	}
@@ -92,7 +98,8 @@ func (b *Body) Chamfer(sel EdgeSelector, d units.Value, opts ...ChamferOption) (
 			sel, selectedEdgesContext(edges), ErrUnsupported)
 	}
 
-	loops, err := prismCornerLoops(pp)
+	budget := newWorkBudget(ctx)
+	loops, err := prismCornerLoopsBudget(budget, pp)
 	if err != nil {
 		return nil, err
 	}
@@ -102,7 +109,10 @@ func (b *Body) Chamfer(sel EdgeSelector, d units.Value, opts ...ChamferOption) (
 	}
 	matched := make([]matchedCorner, 0, len(edges))
 	for ei, e := range edges {
-		li, ci, found := matchCorner(pp, loops, e)
+		li, ci, found, err := matchCornerBudget(budget, pp, loops, e)
+		if err != nil {
+			return nil, err
+		}
 		if !found {
 			return nil, fmt.Errorf(`selector %s, %s: %w: a chamfer of a cap edge is the vertex-blend problem, not yet supported`,
 				sel, selectedEdgeContext(ei, e), ErrUnsupported)
@@ -114,6 +124,9 @@ func (b *Body) Chamfer(sel EdgeSelector, d units.Value, opts ...ChamferOption) (
 	// Stage 3 (§4): the construction's own gate, per corner — S4 (a corner
 	// exists). There is no S5: a chord exists between any two distinct feet.
 	for _, corner := range matched {
+		if err := budget.step(); err != nil {
+			return nil, err
+		}
 		cb, err := computeChamfer(loops[corner.loop], corner.corner, dmm)
 		if err != nil {
 			return nil, fmt.Errorf(`selector %s, %s: %w`, sel, corner, err)
@@ -122,11 +135,20 @@ func (b *Body) Chamfer(sel EdgeSelector, d units.Value, opts ...ChamferOption) (
 	}
 
 	// The rewritten section, and the bevel chords' (loop, segment) indices.
-	profile, chamferSegs := rewriteProfile(pp.profile, loops, blendAt)
+	profile, chamferSegs, err := rewriteProfileBudget(budget, pp.profile, loops, blendAt)
+	if err != nil {
+		return nil, err
+	}
 
 	// Stage 4 (§4/§5): the same audit the fillet runs — S8, S6 (an over-large
 	// setback that reaches or passes a walk's far end), S7, S9.
-	if err := auditRewrite(pp.profile, profile, loops, blendAt); err != nil {
+	if err := auditRewriteBudget(budget, pp.profile, profile, loops, blendAt); err != nil {
+		if errors.Is(err, context.Canceled) {
+			return nil, context.Canceled
+		}
+		if errors.Is(err, context.DeadlineExceeded) {
+			return nil, context.DeadlineExceeded
+		}
 		return nil, wrapModifyAuditError(sel, matched, err)
 	}
 
@@ -155,6 +177,9 @@ func (b *Body) Chamfer(sel EdgeSelector, d units.Value, opts ...ChamferOption) (
 	}
 	// Keep the consumed input aligned with recipe liveness at the commit edge.
 	if err := doc.requireLive(b); err != nil {
+		return nil, err
+	}
+	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 	doc.commit(step, body, b)

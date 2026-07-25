@@ -28,6 +28,30 @@ func newWallWorkBudget(limit uint64) *workBudget {
 	}
 }
 
+// newWallWorkBudgetWithOperation shares the operation cancellation budget with
+// the fixed wall-survey ceiling.
+func newWallWorkBudgetWithOperation(limit uint64, operation *workBudget) *workBudget {
+	wall := newWallWorkBudget(limit)
+	return &workBudget{
+		stepFn: func() error {
+			if operation != nil {
+				if err := operation.step(); err != nil {
+					return err
+				}
+			}
+			return wall.step()
+		},
+		errFn: func() error {
+			if operation != nil {
+				if err := operation.err(); err != nil {
+					return err
+				}
+			}
+			return wall.err()
+		},
+	}
+}
+
 func wallCheckedAdd(a, b uint64) (uint64, bool) {
 	if ^uint64(0)-a < b {
 		return 0, false
@@ -135,10 +159,10 @@ func wallCandidateWork(elementCount, vertexCount int, wedge bool) (uint64, bool)
 const workPollInterval = 256
 
 // workBudget shares one bounded cancellation counter across every nested loop
-// of one read-only phase. Leaf exact predicates stay context-free
-// (docs/interference-design.md §7.2); their callers step this counter, which
-// polls the context at least once per workPollInterval candidate operations.
-// Phase boundaries call err instead, which polls unconditionally.
+// of one read-only or pre-commit audit phase. Leaf exact predicates stay
+// context-free (docs/interference-design.md §7.2); their callers step this
+// counter, which polls the context at least once per workPollInterval candidate
+// operations. Phase boundaries call err instead, which polls unconditionally.
 //
 // The counter is shared rather than per-loop on purpose: a nest of loops that
 // each counted to workPollInterval alone would let the innermost scan run the

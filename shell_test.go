@@ -1,8 +1,11 @@
 package decad_test
 
 import (
+	"context"
 	"encoding/json"
 	"math"
+	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
@@ -67,6 +70,129 @@ func topCap(b *decad.Body) *decad.FaceQuery {
 type forwardingFaceSelector struct {
 	*decad.FaceQuery
 	calls *int
+}
+
+type offsetPreprocessingCancelContext struct {
+	context.Context //nolint:containedctx // deterministic cancellation wrapper used only within one test call.
+	entered         bool
+}
+
+type operationCancelContext struct {
+	context.Context //nolint:containedctx // deterministic cancellation wrapper used only within one test call.
+	target          string
+	cancelErr       error
+	entered         bool
+}
+
+func (c *operationCancelContext) Err() error {
+	pcs := make([]uintptr, 32)
+	frames := runtime.CallersFrames(pcs[:runtime.Callers(2, pcs)])
+	for {
+		frame, more := frames.Next()
+		if strings.HasSuffix(frame.Function, "."+c.target) {
+			c.entered = true
+			if c.cancelErr != nil {
+				return c.cancelErr
+			}
+			return context.Canceled
+		}
+		if !more {
+			return c.Context.Err()
+		}
+	}
+}
+
+func (c *offsetPreprocessingCancelContext) Err() error {
+	pcs := make([]uintptr, 32)
+	frames := runtime.CallersFrames(pcs[:runtime.Callers(2, pcs)])
+	for {
+		frame, more := frames.Next()
+		if strings.HasSuffix(frame.Function, ".offsetProfile") {
+			c.entered = true
+			return context.Canceled
+		}
+		if !more {
+			return c.Context.Err()
+		}
+	}
+}
+
+func TestShellContextCancellationDuringOffsetLeavesReceiverLive(t *testing.T) {
+	doc, box := shellBox(t)
+	before := doc.Recipe()
+	ctx := &offsetPreprocessingCancelContext{Context: t.Context()}
+
+	body, err := box.ShellContext(ctx, topCap(box), units.Millimeters(5))
+
+	require.Nil(t, body)
+	require.ErrorIs(t, err, context.Canceled)
+	require.True(t, ctx.entered)
+	require.Equal(t, before, doc.Recipe())
+	require.Equal(t, []*decad.Body{box}, doc.Bodies())
+}
+
+func TestShellContextCancellationDuringOffsetSetupLeavesReceiverLive(t *testing.T) {
+	doc, box := shellBox(t)
+	before := doc.Recipe()
+	ctx := &operationCancelContext{Context: t.Context(), target: "prismCornerLoopsBudget"}
+
+	body, err := box.ShellContext(ctx, topCap(box), units.Millimeters(5))
+
+	require.Nil(t, body)
+	require.ErrorIs(t, err, context.Canceled)
+	require.True(t, ctx.entered)
+	require.Equal(t, before, doc.Recipe())
+	require.Equal(t, []*decad.Body{box}, doc.Bodies())
+}
+
+func TestShellContextCancellationDuringSectionSurveyLeavesReceiverLive(t *testing.T) {
+	doc, box := shellBox(t)
+	before := doc.Recipe()
+	ctx := &operationCancelContext{Context: t.Context(), target: "sectionInradius"}
+
+	body, err := box.ShellContext(ctx, topCap(box), units.Millimeters(5))
+
+	require.Nil(t, body)
+	require.ErrorIs(t, err, context.Canceled)
+	require.True(t, ctx.entered)
+	require.Equal(t, before, doc.Recipe())
+	require.Equal(t, []*decad.Body{box}, doc.Bodies())
+}
+
+func TestShellContextCancellationDuringKernelSetupLeavesReceiverLive(t *testing.T) {
+	doc, box := shellBox(t)
+	before := doc.Recipe()
+	ctx := &operationCancelContext{Context: t.Context(), target: "newWallKernelBudget"}
+
+	body, err := box.ShellContext(ctx, topCap(box), units.Millimeters(5))
+
+	require.Nil(t, body)
+	require.ErrorIs(t, err, context.Canceled)
+	require.True(t, ctx.entered)
+	require.Equal(t, before, doc.Recipe())
+	require.Equal(t, []*decad.Body{box}, doc.Bodies())
+}
+
+func TestShellContextCancellationDuringAuditPreservesError(t *testing.T) {
+	for _, cancelErr := range []error{context.Canceled, context.DeadlineExceeded} {
+		t.Run(cancelErr.Error(), func(t *testing.T) {
+			doc, box := manySidedPrism(t, 17)
+			before := doc.Recipe()
+			ctx := &operationCancelContext{
+				Context:   t.Context(),
+				target:    "auditOffsetSectionBudget",
+				cancelErr: cancelErr,
+			}
+
+			body, err := box.ShellContext(ctx, topCap(box), units.Millimeters(5))
+
+			require.Nil(t, body)
+			require.True(t, err == cancelErr, "ShellContext must return the exact context error")
+			require.True(t, ctx.entered)
+			require.Equal(t, before, doc.Recipe())
+			require.Equal(t, []*decad.Body{box}, doc.Bodies())
+		})
+	}
 }
 
 func (s forwardingFaceSelector) SelectFaces(body *decad.Body) ([]*decad.Face, error) {

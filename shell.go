@@ -1,6 +1,7 @@
 package decad
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"math"
@@ -106,6 +107,10 @@ func WithShellSense(s ShellSense) ShellOption {
 // ErrUnsupported. The offset section faces the §5 audit before anything is
 // built, so no unproven body is ever made.
 func (b *Body) Shell(sel FaceSelector, t units.Value, opts ...ShellOption) (*Body, error) {
+	return b.ShellContext(context.Background(), sel, t, opts...)
+}
+
+func (b *Body) ShellContext(ctx context.Context, sel FaceSelector, t units.Value, opts ...ShellOption) (*Body, error) {
 	if b == nil || b.doc == nil {
 		return nil, fmt.Errorf(`%w: the body belongs to no document`, ErrDegenerate)
 	}
@@ -186,6 +191,10 @@ func (b *Body) Shell(sel FaceSelector, t units.Value, opts ...ShellOption) (*Bod
 	}
 	holed := len(pp.profile.Holes) > 0
 	h := pp.z1 - pp.z0
+	offsetBudget := newWorkBudget(ctx)
+	if err := offsetBudget.err(); err != nil {
+		return nil, err
+	}
 
 	// Stage 3 (§4): the construction's own gates — S18 (the inward section
 	// survey stays within its fixed work budget), S10 (the cavity is non-empty,
@@ -194,7 +203,7 @@ func (b *Body) Shell(sel FaceSelector, t units.Value, opts ...ShellOption) (*Bod
 		// The section limit: P ⊖ t is non-empty exactly when t is strictly less
 		// than the section's inradius, which survey2d.go computes exactly
 		// (docs/modify-design.md §8, the same reading MinWallThickness answers).
-		inradius, err := sectionInradius(pp.profile)
+		inradius, err := sectionInradius(offsetBudget, pp.profile)
 		if err != nil {
 			return nil, err
 		}
@@ -236,7 +245,7 @@ func (b *Body) Shell(sel FaceSelector, t units.Value, opts ...ShellOption) (*Bod
 	// The exact per-feature offset (§7). A dropped feature or a miter that does
 	// not close is caught here — antecedent to the audit (S11a / S11) — before
 	// there is any constructed section to audit.
-	offset, err := offsetProfile(pp.profile, s, tmm)
+	offset, err := offsetProfile(offsetBudget, pp.profile, s, tmm)
 	if err != nil {
 		return nil, err
 	}
@@ -245,7 +254,13 @@ func (b *Body) Shell(sel FaceSelector, t units.Value, opts ...ShellOption) (*Bod
 	// the crossing test (a crossing or boundary contact of offset loops is S11b,
 	// §8), then S9 (nesting). The shared §5 audit, run on decad's own synthesized
 	// geometry. A shell mints no cutback, so S6 cannot fire.
-	if err := auditOffsetSection(pp.profile, offset); err != nil {
+	if err := auditOffsetSectionBudget(offsetBudget, pp.profile, offset); err != nil {
+		if errors.Is(err, context.Canceled) {
+			return nil, context.Canceled
+		}
+		if errors.Is(err, context.DeadlineExceeded) {
+			return nil, context.DeadlineExceeded
+		}
 		return nil, err
 	}
 
@@ -284,6 +299,9 @@ func (b *Body) Shell(sel FaceSelector, t units.Value, opts ...ShellOption) (*Bod
 	}
 	// Keep the consumed input aligned with recipe liveness at the commit edge.
 	if err := d.requireLive(b); err != nil {
+		return nil, err
+	}
+	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 	d.commit(step, body, b)
@@ -337,9 +355,15 @@ func classifyRemovedCaps(b *Body, removed []*Face) (start, end bool, err error) 
 // fixed work budget across its streamed generation and validation. An
 // undecided or over-budget build-time gate is ErrUnsupported: it has no
 // Suspect result to fall back on.
-func sectionInradius(profile ProfileRecord) (float64, error) {
-	loops, err := recordLoops(nil, profile)
+func sectionInradius(budget *workBudget, profile ProfileRecord) (float64, error) {
+	if err := wallBudgetErr(budget); err != nil {
+		return 0, err
+	}
+	loops, err := recordLoopsBudget(budget, profile)
 	if err != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return 0, err
+		}
 		return 0, fmt.Errorf(`%w: this evaluator cannot read the shell section: %v`, ErrUnsupported, err)
 	}
 	var elems []surveyElem
@@ -347,6 +371,9 @@ func sectionInradius(profile ProfileRecord) (float64, error) {
 	for _, loop := range loops {
 		single := len(loop) == 1 && loop[0].closed
 		for _, w := range loop {
+			if err := wallBudgetStep(budget); err != nil {
+				return 0, err
+			}
 			el, ok := walkElem(w.segmentWalk)
 			if !ok {
 				return 0, fmt.Errorf(`%w: this evaluator cannot survey the shell section's curve type`, ErrUnsupported)
@@ -358,7 +385,13 @@ func sectionInradius(profile ProfileRecord) (float64, error) {
 			verts = append(verts, [2]float64{w.startU, w.startV})
 		}
 	}
+	if err := wallBudgetErr(budget); err != nil {
+		return 0, err
+	}
 	candidateWork, ok := wallCandidateWork(len(elems), len(verts), false)
+	if err := wallBudgetErr(budget); err != nil {
+		return 0, err
+	}
 	if !ok {
 		return 0, fmt.Errorf(`%w: inward shell section survey candidate count overflows the checked work counter (fixed work budget %d)`, ErrUnsupported, shellInradiusWorkLimit)
 	}
@@ -368,8 +401,14 @@ func sectionInradius(profile ProfileRecord) (float64, error) {
 	// fitMax is +Inf: the inradius is a property of the section alone, with no
 	// height constraint (that constraint only bears on spanning, not the
 	// largest inscribed disk).
-	k := newWallKernel(elems, verts, 0, math.Inf(1))
-	out, err := k.runBudget(newWallWorkBudget(shellInradiusWorkLimit))
+	k, err := newWallKernelBudget(budget, elems, nil, verts, 0, 0, false, math.Inf(1))
+	if err != nil {
+		return 0, err
+	}
+	out, err := k.runBudget(newWallWorkBudgetWithOperation(shellInradiusWorkLimit, budget))
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return 0, err
+	}
 	if errors.Is(err, errWallWorkBudget) {
 		return 0, fmt.Errorf(`%w: inward shell section survey exceeded the fixed work budget of %d during candidate generation or validation`, ErrUnsupported, shellInradiusWorkLimit)
 	}

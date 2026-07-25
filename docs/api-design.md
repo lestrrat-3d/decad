@@ -1035,9 +1035,18 @@ Modify operations return a new body, retiring the receiver, on the same terms:
 
 ```go
 func (b *Body) Fillet(sel EdgeSelector, r units.Value, opts ...FilletOption) (*Body, error)
+func (b *Body) FilletContext(ctx context.Context, sel EdgeSelector, r units.Value, opts ...FilletOption) (*Body, error)
 func (b *Body) Chamfer(sel EdgeSelector, d units.Value, opts ...ChamferOption) (*Body, error)
+func (b *Body) ChamferContext(ctx context.Context, sel EdgeSelector, d units.Value, opts ...ChamferOption) (*Body, error)
 func (b *Body) Shell(sel FaceSelector, thickness units.Value, opts ...ShellOption) (*Body, error)
+func (b *Body) ShellContext(ctx context.Context, sel FaceSelector, thickness units.Value, opts ...ShellOption) (*Body, error)
 ```
+
+The `Context` forms bound cancellation latency in their cancellable construction
+and audit paths, including Shell's shared offset-construction, crossing, and
+nesting audit. Cancellation returns `ctx.Err()` before commit, so the receiver
+stays live and the recipe and document remain unchanged. The original methods
+delegate with `context.Background()` and keep their existing behavior.
 
 Modify reach options are recordable intent, not evaluator switches:
 
