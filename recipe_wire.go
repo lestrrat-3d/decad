@@ -196,6 +196,28 @@ func rejectDuplicateJSONKeys(data []byte) error {
 	return scanRecipeJSONValueMode(dec, false, true)
 }
 
+// decodeStrictJSON decodes one nested wire value without silently dropping
+// unknown or duplicate fields. The step envelope has its own equivalent
+// because it needs step-specific error wording, while selectors and their
+// predicates share this nested boundary.
+func decodeStrictJSON(data []byte, out any, what string) error {
+	if err := rejectDuplicateJSONKeys(data); err != nil {
+		return err
+	}
+	dec := json.NewDecoder(bytes.NewReader(data))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(out); err != nil {
+		return fmt.Errorf(`decad: failed to decode %s: %w`, what, err)
+	}
+	var trailing json.RawMessage
+	if err := dec.Decode(&trailing); err == nil {
+		return fmt.Errorf(`decad: %s contains more than one JSON value`, what)
+	} else if err != io.EOF {
+		return fmt.Errorf(`decad: failed to decode trailing %s JSON: %w`, what, err)
+	}
+	return nil
+}
+
 func scanRecipeJSONValue(dec *json.Decoder, root bool) error {
 	return scanRecipeJSONValueMode(dec, root, false)
 }

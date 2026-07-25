@@ -120,6 +120,31 @@ func TestSelectorCodecRejections(t *testing.T) {
 	require.Error(t, err, `a zero-value face predicate refuses to encode`)
 }
 
+func TestSelectorCodecRejectsUnknownNestedFields(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		data string
+	}{
+		{
+			name: "selector field",
+			data: `{"op":"fillet","inputs":[0],"selectors":[{"kind":"edges","preds":[],"unexpected":true}],"values":["1 mm"]}`,
+		},
+		{
+			name: "predicate field",
+			data: `{"op":"fillet","inputs":[0],"selectors":[{"kind":"edges","preds":[{"kind":"convex","unexpected":true}]}],"values":["1 mm"]}`,
+		},
+		{
+			name: "provenance field",
+			data: `{"op":"fillet","inputs":[0],"selectors":[{"kind":"edges","preds":[{"kind":"created_by","ref":{"step":0,"role":"capStart","unexpected":true}}]}],"values":["1 mm"]}`,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var step decad.Step
+			require.Error(t, json.Unmarshal([]byte(tc.data), &step))
+		})
+	}
+}
+
 func TestSelectorCodecRejectsOutOfRangeNegativeProvenanceSteps(t *testing.T) {
 	for _, tc := range []struct {
 		name string
