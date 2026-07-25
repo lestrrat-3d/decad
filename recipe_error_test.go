@@ -268,6 +268,16 @@ func TestRecipeDecodeErrorPathIncludesStepField(t *testing.T) {
 	requireRecipeDecodePath(t, `{"steps": "bad"}`, "steps", -1)
 }
 
+func TestRecipeDecodeErrorPathUsesAxisForAxisKeyingFailure(t *testing.T) {
+	requireRecipeDecodePath(t, `{
+		"steps": [{
+			"op": "extrude",
+			"extent": {"kind": "distance", "d": "1 mm", "dir": "along"},
+			"axis": {"kind": "sketch_line", "start": {"u": 0, "v": 0}, "end": {"u": 1, "v": 0}}
+		}]
+	}`, "steps[0].axis", 0)
+}
+
 func TestRecipeDecodeErrorPreservesSpecificCause(t *testing.T) {
 	requireRecipeDecodePath(t, `{
 		"steps": [{

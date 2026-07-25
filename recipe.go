@@ -304,19 +304,24 @@ func zeroVec(v r3.Vec) bool { return v == r3.Vec{} }
 // violating it names no recordable intent, so it neither encodes nor
 // decodes.
 func validateExtentKeying(s Step) error {
+	_, err := extentKeyingError(s)
+	return err
+}
+
+func extentKeyingError(s Step) (string, error) {
 	if s.Extent != nil && s.Angular != nil {
-		return fmt.Errorf(`decad: a step carries at most one of extent and angular`)
+		return "extent", fmt.Errorf(`decad: a step carries at most one of extent and angular`)
 	}
 	if s.Extent != nil && s.Op != OpExtrude {
-		return fmt.Errorf(`decad: a linear extent is keyed to the extrude op, got %q`, s.Op)
+		return "extent", fmt.Errorf(`decad: a linear extent is keyed to the extrude op, got %q`, s.Op)
 	}
 	if s.Angular != nil && s.Op != OpRevolve {
-		return fmt.Errorf(`decad: an angular extent is keyed to the revolve op, got %q`, s.Op)
+		return "angular", fmt.Errorf(`decad: an angular extent is keyed to the revolve op, got %q`, s.Op)
 	}
 	if s.Axis != nil && s.Op != OpRevolve {
-		return fmt.Errorf(`decad: a revolve axis is keyed to the revolve op, got %q`, s.Op)
+		return "axis", fmt.Errorf(`decad: a revolve axis is keyed to the revolve op, got %q`, s.Op)
 	}
-	return nil
+	return "", nil
 }
 
 // nonzeroPlacement reports whether a placement record carries a motion — the
@@ -546,14 +551,7 @@ func (s *Step) UnmarshalJSON(data []byte) error {
 			}
 		}
 	}
-	if err := validateExtentKeying(out); err != nil {
-		field := "extent"
-		if out.Extent == nil && out.Angular != nil {
-			field = "angular"
-		}
-		if out.Extent == nil && out.Angular == nil {
-			field = "axis"
-		}
+	if field, err := extentKeyingError(out); err != nil {
 		return prependCodecPath(err, field)
 	}
 	// Presence is read from the wire (placementPresent above), not the
