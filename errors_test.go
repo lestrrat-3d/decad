@@ -26,6 +26,7 @@ func TestErrorVocabulary(t *testing.T) {
 		"ErrDegenerate":          decad.ErrDegenerate,
 		"ErrBooleanFailed":       decad.ErrBooleanFailed,
 		"ErrInvalidProfile":      decad.ErrInvalidProfile,
+		"ErrInvalidRecipe":       decad.ErrInvalidRecipe,
 		"ErrUnitKind":            decad.ErrUnitKind,
 		"ErrNotFinite":           decad.ErrNotFinite,
 		"ErrUnsupported":         decad.ErrUnsupported,

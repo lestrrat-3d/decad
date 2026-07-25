@@ -139,8 +139,17 @@ func (r *Recipe) UnmarshalJSON(data []byte) error {
 
 	var steps []Step
 	if !isJSONNull(raw.Steps) {
-		if err := json.Unmarshal(raw.Steps, &steps); err != nil {
-			return rootRecipeError(ErrInvalidRecipe, fmt.Errorf(`failed to decode recipe field "steps": %w`, err))
+		var rawSteps []json.RawMessage
+		if err := json.Unmarshal(raw.Steps, &rawSteps); err != nil {
+			return newRecipeDecodeError(-1, "steps", codecJSONError(err))
+		}
+		steps = make([]Step, 0, len(rawSteps))
+		for i, data := range rawSteps {
+			var step Step
+			if err := json.Unmarshal(data, &step); err != nil {
+				return newRecipeDecodeError(i, fmt.Sprintf(`steps[%d]`, i), err)
+			}
+			steps = append(steps, step)
 		}
 	}
 	if steps == nil {
