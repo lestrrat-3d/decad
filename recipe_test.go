@@ -405,6 +405,50 @@ func TestStepAndRecipeRejectCaseVariantOperationFields(t *testing.T) {
 	}
 }
 
+func TestStepAndRecipeRejectNullOperationElements(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+	}{
+		{
+			name:  "input element",
+			input: `{"op":"union","inputs":[null,1]}`,
+		},
+		{
+			name:  "value element",
+			input: `{"op":"fillet","inputs":[0],"selectors":[{"kind":"edges","preds":[]}],"values":[null]}`,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var step decad.Step
+			err := json.Unmarshal([]byte(test.input), &step)
+			require.ErrorContains(t, err, "must not be null")
+
+			var recipe decad.Recipe
+			err = json.Unmarshal([]byte(`{"steps":[`+test.input+`]}`), &recipe)
+			require.ErrorIs(t, err, decad.ErrInvalidRecipe)
+			require.ErrorContains(t, err, "must not be null")
+		})
+	}
+
+	base, err := json.Marshal(validCodecStep(decad.OpExtrude))
+	require.NoError(t, err)
+	var fields map[string]json.RawMessage
+	require.NoError(t, json.Unmarshal(base, &fields))
+	fields["inputs"] = json.RawMessage(`null`)
+	input, err := json.Marshal(fields)
+	require.NoError(t, err)
+
+	var step decad.Step
+	err = json.Unmarshal(input, &step)
+	require.ErrorContains(t, err, `step field "inputs" must be an array`)
+	var recipe decad.Recipe
+	err = json.Unmarshal([]byte(`{"steps":[`+string(input)+`]}`), &recipe)
+	require.ErrorIs(t, err, decad.ErrInvalidRecipe)
+	require.ErrorContains(t, err, `step field "inputs" must be an array`)
+}
+
 func TestStepOperationShapeRejectsWrongCountsAndTypes(t *testing.T) {
 	tests := []struct {
 		name       string

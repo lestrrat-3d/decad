@@ -556,6 +556,26 @@ func jsonArrayLength(data json.RawMessage, field string) (int, error) {
 	return len(values), nil
 }
 
+func unmarshalPresentJSONSlice[T any](data json.RawMessage, field string) ([]T, error) {
+	if isJSONNull(data) {
+		return nil, fmt.Errorf(`decad: step field %q must be an array`, field)
+	}
+	var raw []json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return nil, fmt.Errorf(`decad: step field %q must be an array: %w`, field, err)
+	}
+	values := make([]T, len(raw))
+	for i, element := range raw {
+		if isJSONNull(element) {
+			return nil, fmt.Errorf(`decad: step field %q element %d must not be null`, field, i)
+		}
+		if err := json.Unmarshal(element, &values[i]); err != nil {
+			return nil, fmt.Errorf(`decad: failed to decode %s[%d]: %w`, field, i, err)
+		}
+	}
+	return values, nil
+}
+
 func validStepOptsKind(opts StepOpts, want stepOptsKind) bool {
 	switch want {
 	case stepOptsExtrude:
@@ -980,36 +1000,18 @@ func (s *Step) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	if raw.Inputs != nil {
-		var vals []json.RawMessage
-		if err := json.Unmarshal(raw.Inputs, &vals); err != nil {
-			return prependCodecPath(codecJSONError(err), "inputs")
+		inputs, err := unmarshalPresentJSONSlice[StepRef](raw.Inputs, "inputs")
+		if err != nil {
+			return fmt.Errorf(`decad: failed to decode inputs: %w`, err)
 		}
-		if vals != nil {
-			out.Inputs = make([]StepRef, 0, len(vals))
-			for i, b := range vals {
-				var v StepRef
-				if err := json.Unmarshal(b, &v); err != nil {
-					return prependCodecPath(codecJSONError(err), fmt.Sprintf(`inputs[%d]`, i))
-				}
-				out.Inputs = append(out.Inputs, v)
-			}
-		}
+		out.Inputs = inputs
 	}
 	if raw.Values != nil {
-		var valueData []json.RawMessage
-		if err := json.Unmarshal(raw.Values, &valueData); err != nil {
-			return prependCodecPath(codecJSONError(err), "values")
+		values, err := unmarshalPresentJSONSlice[units.Value](raw.Values, "values")
+		if err != nil {
+			return fmt.Errorf(`decad: failed to decode values: %w`, err)
 		}
-		if valueData != nil {
-			out.Values = make([]units.Value, 0, len(valueData))
-			for i, b := range valueData {
-				var v units.Value
-				if err := json.Unmarshal(b, &v); err != nil {
-					return prependCodecPath(codecJSONError(err), fmt.Sprintf(`values[%d]`, i))
-				}
-				out.Values = append(out.Values, v)
-			}
-		}
+		out.Values = values
 	}
 	if raw.Extent != nil {
 		e, err := unmarshalExtent(raw.Extent)
