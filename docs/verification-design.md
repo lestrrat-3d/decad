@@ -393,6 +393,49 @@ kernel, a strict full-containment certificate, or a read-only mesh intersection.
 `Verify` NEVER calls the consuming public `Intersect`; report construction does
 not append a recipe step, retire an operand, or register a transient body.
 
+### 1.2 Cost and caller deadlines
+
+**Give large-model verification a caller-owned deadline.** `Verify` computes
+interference even when no options are passed because the `Interfering` status
+depends on it. After body checks, it considers every unordered pair of proven
+solids. Box separation, the analytic pair kernel, containment, or equality can
+settle a pair cheaply. A pair they do not settle reaches the read-only mesh
+intersection.
+
+For that mesh fallback, facet boxes prune exact intersection predicates, but
+the evaluator still checks the box of every facet in one operand against the
+box of every facet in the other. One unresolved pair can therefore require the
+number of facets in A multiplied by the number in B in pair-box checks. Total
+work also grows with the number of unresolved body pairs, before any opt-in
+survey or clearance work is counted. Interference design §7.2 owns the
+algorithm and its cancellation checks.
+
+There is no useful universal timeout: bodies differ in facet count, pair-box
+overlap, and the proof path they reach. Choose a service or request budget from
+representative models, pass a fresh deadline to each call, and tune that budget
+from observed production inputs:
+
+```go
+ctx, cancel := context.WithTimeout(parent, verificationBudget)
+defer cancel()
+
+report, err := doc.Verify(ctx)
+if err != nil {
+    // errors.Is(err, context.DeadlineExceeded) and
+    // errors.Is(err, context.Canceled) identify caller cancellation.
+    return err
+}
+```
+
+After the document and options have been validated, when the context expires,
+`Verify` returns `ctx.Err()` unchanged and a nil report for a document with live
+bodies. An empty document retains its `Sound` result even when the context is
+already canceled. A document or option validation error takes precedence even
+when the context is already canceled. The document remains unchanged, and the
+caller must not treat an interrupted call as a verification result. The context
+is the public work control; verification adds no separate work-limit or
+progress API.
+
 ## 2. Tolerance — what "beyond the caller's tolerance" means
 
 `Suspect` — and through it `Trustworthy()` — turns on an approximation being

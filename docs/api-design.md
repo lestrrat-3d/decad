@@ -1566,8 +1566,9 @@ func (r *Report) Trustworthy() bool // the single bit to gate on
 The report vocabulary — `Report`, `BodyReport`, `Status` and its severity
 precedence, and the `VerifyOption` set including `WithTolerance` — and the
 tolerance gate that judges every `Exactness` and `Bound` the report carries are
-specified in `docs/verification-design.md`. The non-mutating proof and bounded
-volume behind every `Interference` row are specified in
+specified in `docs/verification-design.md`. Its §1.2 also owns `Verify`'s
+public cost warning and caller-deadline guidance. The non-mutating proof and
+bounded volume behind every `Interference` row are specified in
 `docs/interference-design.md`. `Status` reserves zero as `Unverified`, so a
 zero-value `Report` fails `Trustworthy`; every report and body report returned
 by `Verify` is explicitly initialized to a decided status. What the core

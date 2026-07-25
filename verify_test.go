@@ -294,8 +294,22 @@ func TestVerifyContextCancellation(t *testing.T) {
 	doc, _ := extrudePlate(t)
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	_, err := doc.Verify(ctx)
+	report, err := doc.Verify(ctx)
 	require.ErrorIs(t, err, context.Canceled)
+	require.Nil(t, report)
+}
+
+func TestVerifyContextCancellationOnEmptyDocument(t *testing.T) {
+	doc := decad.New()
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	report, err := doc.Verify(ctx)
+	require.NoError(t, err)
+	require.NotNil(t, report)
+	require.Equal(t, decad.Sound, report.Status)
+	require.True(t, report.Trustworthy())
+	require.Empty(t, report.Bodies)
 }
 
 func TestVerifyNilDocument(t *testing.T) {
