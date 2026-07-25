@@ -461,11 +461,11 @@ Step helpers reuse current record-based paths:
 
 - extrude → frame + recorded extent resolution → `evalPrism`;
 - revolve → recorded axis/angular resolution → `evalRevolve`;
-- placed → `TransformRecord.Transform` + payload `placed`;
-- duplicate → source payload `placed` under the identity motion, source not
+- placed → `TransformRecord.Transform` + payload `placed(ctx, …)`;
+- duplicate → source payload `placed(ctx, …)` under the identity motion, source not
   consumed;
-- placed_copy → `TransformRecord.Transform` + source payload `placed`, source
-  not consumed;
+- placed_copy → `TransformRecord.Transform` + source payload `placed(ctx, …)`,
+  source not consumed;
 - booleans → shared boolean compute + `buildFacetedBody`;
 - fillet/chamfer/shell → selector resolution + current exact section rewrite.
 

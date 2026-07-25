@@ -1,6 +1,7 @@
 package decad
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"math/big"
@@ -48,9 +49,9 @@ type cupPayload struct {
 func (cp cupPayload) transform() r3.Transform { return cp.xform }
 
 // placed re-evaluates the same cup under the composed motion (evaluator §8).
-func (cp cupPayload) placed(d *Document, ref StepRef, composed r3.Transform) (*Body, error) {
+func (cp cupPayload) placed(ctx context.Context, d *Document, ref StepRef, composed r3.Transform) (*Body, error) {
 	cp.xform = composed
-	return evalCup(d, ref, cp)
+	return evalCupContext(ctx, d, ref, cp)
 }
 
 // prismLike is a prismPayload sharing the cup's frame and placement, so the
@@ -121,11 +122,18 @@ func cupPayloadFor(pp prismPayload, offset ProfileRecord, s, t float64, removedE
 // lies outside it) and each of the void's own holes as a solid post (material
 // inside) — the pairing buildLoopSidesAs's explicit holeLoop expresses.
 func evalCup(d *Document, ref StepRef, cp cupPayload) (*Body, error) {
-	igO, err := cp.outer.evaluatorIntegrals(momentFirstOrder)
+	return evalCupContext(context.Background(), d, ref, cp)
+}
+
+func evalCupContext(ctx context.Context, d *Document, ref StepRef, cp cupPayload) (*Body, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	igO, err := cp.outer.evaluatorIntegralsContext(ctx, momentFirstOrder)
 	if err != nil {
 		return nil, err
 	}
-	igC, err := cp.cavity.evaluatorIntegrals(momentFirstOrder)
+	igC, err := cp.cavity.evaluatorIntegralsContext(ctx, momentFirstOrder)
 	if err != nil {
 		return nil, err
 	}
@@ -168,7 +176,10 @@ func evalCup(d *Document, ref StepRef, cp cupPayload) (*Body, error) {
 	oFloor := make([][]coedge, len(oLoops))
 	oOpen := make([][]coedge, len(oLoops))
 	for i, loop := range oLoops {
-		sf, bottom, top, ll, err := buildLoopSides(body, ref, ppO, i, loop)
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		sf, bottom, top, ll, err := buildLoopSides(ctx, body, ref, ppO, i, loop)
 		if err != nil {
 			return nil, err
 		}
@@ -188,11 +199,14 @@ func evalCup(d *Document, ref StepRef, cp cupPayload) (*Body, error) {
 	cOpen := make([][]coedge, len(cLoops))
 	var cavFaces []*Face
 	for i, loop := range cLoops {
-		rev, err := reverseLoopRecord(loop)
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		rev, err := reverseLoopRecordContext(ctx, loop)
 		if err != nil {
 			return nil, err
 		}
-		sf, bottom, top, ll, err := buildLoopSidesAs(body, ref, ppC, i, i == 0, rev)
+		sf, bottom, top, ll, err := buildLoopSidesAs(ctx, body, ref, ppC, i, i == 0, rev)
 		if err != nil {
 			return nil, err
 		}
@@ -200,7 +214,12 @@ func evalCup(d *Document, ref StepRef, cp cupPayload) (*Body, error) {
 		perimC = boundedAdd(perimC, ll)
 		cFloor[i], cOpen[i] = floorOpen(bottom, top)
 	}
-	renameCavityRoles(cavFaces, ref)
+	if err := renameCavityRoles(ctx, cavFaces, ref); err != nil {
+		return nil, err
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	faces = append(faces, cavFaces...)
 
 	// The planar faces. capFrame orients each normal outward via its flip;
@@ -238,6 +257,9 @@ func evalCup(d *Document, ref StepRef, cp cupPayload) (*Body, error) {
 		areaBound: igC.areaBound,
 	}
 	for i := range oLoops {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		capStart.loops = append(capStart.loops, &Loop{coedges: oFloor[i], outer: i == 0})
 		shellCap.loops = append(shellCap.loops, &Loop{coedges: cFloor[i], outer: i == 0})
 	}
@@ -250,12 +272,15 @@ func evalCup(d *Document, ref StepRef, cp cupPayload) (*Body, error) {
 	// heads the slice: O for the outer region, C for a post rim.
 	rims := make([]*Face, len(oLoops))
 	for i := range oLoops {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		oIsOuter := i == 0
-		aO, err := loopEnclosedArea(oLoops[i])
+		aO, err := loopEnclosedAreaContext(ctx, oLoops[i])
 		if err != nil {
 			return nil, err
 		}
-		aC, err := loopEnclosedArea(cLoops[i])
+		aC, err := loopEnclosedAreaContext(ctx, cLoops[i])
 		if err != nil {
 			return nil, err
 		}
@@ -277,21 +302,11 @@ func evalCup(d *Document, ref StepRef, cp cupPayload) (*Body, error) {
 	}
 
 	// Attach each planar face to its boundary edges (two faces per edge).
-	for i := range oLoops {
-		for _, ce := range oFloor[i] {
-			ce.edge.faces = append(ce.edge.faces, capStart)
-		}
-		for _, ce := range oOpen[i] {
-			ce.edge.faces = append(ce.edge.faces, rims[i])
-		}
-	}
-	for i := range cLoops {
-		for _, ce := range cFloor[i] {
-			ce.edge.faces = append(ce.edge.faces, shellCap)
-		}
-		for _, ce := range cOpen[i] {
-			ce.edge.faces = append(ce.edge.faces, rims[i])
-		}
+	planarFaces := make([]*Face, 0, 2+len(rims))
+	planarFaces = append(planarFaces, capStart, shellCap)
+	planarFaces = append(planarFaces, rims...)
+	if err := attachFaceLoopsContext(ctx, planarFaces); err != nil {
+		return nil, err
 	}
 
 	faces = append(faces, capStart, shellCap)
@@ -362,8 +377,11 @@ func evalCup(d *Document, ref StepRef, cp cupPayload) (*Body, error) {
 	}
 
 	// Bounds: the outer prism's — the cavity lies within it in both senses (§10).
-	bounds, err := prismBounds(prismPayload{profile: cp.outer, frame: cp.frame, z0: oLo, z1: oHi, xform: cp.xform})
+	bounds, err := prismBoundsContext(ctx, prismPayload{profile: cp.outer, frame: cp.frame, z0: oLo, z1: oHi, xform: cp.xform})
 	if err != nil {
+		return nil, err
+	}
+	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 	body.bounds = bounds
@@ -399,9 +417,18 @@ func exactWeightedPointRound(a r3.Vec, wa float64, b r3.Vec, wb float64, held r3
 // (B5/B6) gives a cavity wall, indexing loop i of the cavity region Q in the
 // result's own record (§11). The cavity walls are built with roleLoop equal to
 // their Q loop index, so the rename keeps the index and only swaps the tag.
-func renameCavityRoles(faces []*Face, ref StepRef) {
+func renameCavityRoles(ctx context.Context, faces []*Face, ref StepRef) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	for _, f := range faces {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		for i, o := range f.origins {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
 			if o.Step != ref {
 				continue
 			}
@@ -411,17 +438,21 @@ func renameCavityRoles(faces []*Face, ref StepRef) {
 			}
 		}
 	}
+	return nil
 }
 
-// loopEnclosedArea is the absolute area a single loop encloses — the magnitude
+// loopEnclosedAreaContext is the absolute area a single loop encloses — the magnitude
 // of its Green's-theorem signed area, so a hole (clockwise) and an outer loop
 // (counter-clockwise) both report a positive area. A rim band's area is the
 // difference of the two loops it spans, and both are strictly nested (the audit
 // proved the cavity simple and inside the outer region), so the absolute
 // difference is the band's analytic area, with both source bounds carried.
-func loopEnclosedArea(l LoopRecord) (boundedScalar, error) {
+func loopEnclosedAreaContext(ctx context.Context, l LoopRecord) (boundedScalar, error) {
 	var ig regionIntegrals
 	for _, seg := range l.Segments {
+		if err := ctx.Err(); err != nil {
+			return boundedScalar{}, err
+		}
 		if err := ig.add(seg); err != nil {
 			return boundedScalar{}, err
 		}

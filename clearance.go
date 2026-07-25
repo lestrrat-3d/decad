@@ -201,8 +201,8 @@ func (k *pairKernel) coplanarContactCertified(ctx context.Context) (bool, error)
 				continue // no proven positive-area overlap
 			}
 			c := fa.planeOffset()
-			aLo, aHi, okA := payloadExtent(k.a.body, fa.n)
-			bLo, bHi, okB := payloadExtent(k.b.body, fa.n)
+			aLo, aHi, okA := payloadExtent(ctx, k.a.body, fa.n)
+			bLo, bHi, okB := payloadExtent(ctx, k.b.body, fa.n)
 			if !okA || !okB {
 				continue
 			}
@@ -221,16 +221,16 @@ func (k *pairKernel) coplanarContactCertified(ctx context.Context) (bool, error)
 
 // payloadExtent is the body's exact extent interval along a direction, read
 // off its own payload.
-func payloadExtent(b *Body, g r3.Vec) (float64, float64, bool) {
+func payloadExtent(ctx context.Context, b *Body, g r3.Vec) (float64, float64, bool) {
 	switch pl := b.payload.(type) {
 	case prismPayload:
-		lo, hi, err := pl.extentAlong(g)
+		lo, hi, err := pl.extentAlongContext(ctx, g)
 		if err != nil {
 			return 0, 0, false
 		}
 		return lo, hi, true
 	case revolvePayload:
-		lo, hi, err := pl.extentAlong(g)
+		lo, hi, err := pl.extentAlongContext(ctx, g)
 		if err != nil {
 			return 0, 0, false
 		}

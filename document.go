@@ -1,6 +1,7 @@
 package decad
 
 import (
+	"context"
 	"fmt"
 	"slices"
 
@@ -103,14 +104,22 @@ func (d *Document) requireLive(b *Body) error {
 type featurePayload interface {
 	// transform is the accumulated rigid placement.
 	transform() r3.Transform
-	// placed re-evaluates the same record under the composed motion.
-	placed(d *Document, ref StepRef, composed r3.Transform) (*Body, error)
+	// placed re-evaluates the same record under the composed motion, checking
+	// ctx during any long rebuild.
+	placed(ctx context.Context, d *Document, ref StepRef, composed r3.Transform) (*Body, error)
 }
 
-// Placed returns a new body carrying the receiver's geometry under the rigid
-// motion t, retiring the receiver (core §8). The zero transform is invalid
-// and is ErrDegenerate; the step records the motion as a TransformRecord.
+// Placed calls [Body.PlacedContext] with [context.Background].
 func (b *Body) Placed(t r3.Transform) (*Body, error) {
+	return b.PlacedContext(context.Background(), t)
+}
+
+// PlacedContext returns a new body carrying the receiver's geometry under the
+// rigid motion t, retiring the receiver (core §8). The zero transform is
+// invalid and is ErrDegenerate; the step records the motion as a
+// TransformRecord. A canceled context stops the rebuild before the document
+// changes.
+func (b *Body) PlacedContext(ctx context.Context, t r3.Transform) (*Body, error) {
 	if b == nil || b.doc == nil {
 		return nil, fmt.Errorf(`%w: the body belongs to no document`, ErrDegenerate)
 	}
@@ -128,6 +137,9 @@ func (b *Body) Placed(t r3.Transform) (*Body, error) {
 	if b.payload == nil {
 		return nil, fmt.Errorf(`%w: this evaluator cannot place a body it did not build`, ErrUnsupported)
 	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 
 	composed, err := b.payload.transform().Then(t)
 	if err != nil {
@@ -139,32 +151,47 @@ func (b *Body) Placed(t r3.Transform) (*Body, error) {
 		Placement: rec,
 	}
 	ref := d.nextStepRef()
-	placed, err := b.payload.placed(d, ref, composed)
+	placed, err := b.payload.placed(ctx, d, ref, composed)
 	if err != nil {
+		return nil, err
+	}
+	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 	d.commit(step, placed, b)
 	return placed, nil
 }
 
-// Duplicate returns a new live body carrying the receiver's geometry
-// unchanged, leaving the receiver LIVE (core §8): the source is depended on,
-// never consumed. It is PlacedCopy with no motion — the identity placement — so
-// the copy is identical, independent geometry at a fresh body identity. A body
-// this evaluator did not build is ErrUnsupported.
+// Duplicate calls [Body.DuplicateContext] with [context.Background].
 func (b *Body) Duplicate() (*Body, error) {
-	return b.copyUnder(OpDuplicate, r3.Identity())
+	return b.DuplicateContext(context.Background())
 }
 
-// PlacedCopy returns a new live body carrying the receiver's geometry under the
-// rigid motion t, leaving the receiver LIVE (core §8): the source is depended
-// on, never consumed. The payload re-evaluates under the composed motion
-// exactly as Placed does, so the centroid moves by t; the zero transform is
-// invalid and is ErrDegenerate, and r3.Identity() is a valid no-op. A body this
-// evaluator did not build is ErrUnsupported. The step records the motion as a
-// TransformRecord in Placement.
+// DuplicateContext returns a new live body carrying the receiver's geometry
+// unchanged, leaving the receiver LIVE (core §8): the source is depended on,
+// never consumed. It is PlacedCopy with no motion — the identity placement —
+// so the copy is identical, independent geometry at a fresh body identity. A
+// body this evaluator did not build is ErrUnsupported. A canceled context
+// stops the rebuild before the document changes.
+func (b *Body) DuplicateContext(ctx context.Context) (*Body, error) {
+	return b.copyUnder(ctx, OpDuplicate, r3.Identity())
+}
+
+// PlacedCopy calls [Body.PlacedCopyContext] with [context.Background].
 func (b *Body) PlacedCopy(t r3.Transform) (*Body, error) {
-	return b.copyUnder(OpPlacedCopy, t)
+	return b.PlacedCopyContext(context.Background(), t)
+}
+
+// PlacedCopyContext returns a new live body carrying the receiver's geometry
+// under the rigid motion t, leaving the receiver LIVE (core §8): the source is
+// depended on, never consumed. The payload re-evaluates under the composed
+// motion exactly as Placed does, so the centroid moves by t; the zero transform
+// is invalid and is ErrDegenerate, and r3.Identity() is a valid no-op. A body
+// this evaluator did not build is ErrUnsupported. The step records the motion
+// as a TransformRecord in Placement. A canceled context stops the rebuild
+// before the document changes.
+func (b *Body) PlacedCopyContext(ctx context.Context, t r3.Transform) (*Body, error) {
+	return b.copyUnder(ctx, OpPlacedCopy, t)
 }
 
 // copyUnder is the shared non-consuming copy path behind Duplicate and
@@ -172,7 +199,7 @@ func (b *Body) PlacedCopy(t r3.Transform) (*Body, error) {
 // StepRef as a depended-on Input (never in the consumed set) so the source
 // stays live — a body can be modelled once and instanced many times
 // (core §8, docs/api-design.md H4).
-func (b *Body) copyUnder(op OpKind, motion r3.Transform) (*Body, error) {
+func (b *Body) copyUnder(ctx context.Context, op OpKind, motion r3.Transform) (*Body, error) {
 	if b == nil || b.doc == nil {
 		return nil, fmt.Errorf(`%w: the body belongs to no document`, ErrDegenerate)
 	}
@@ -196,6 +223,9 @@ func (b *Body) copyUnder(op OpKind, motion r3.Transform) (*Body, error) {
 	if b.payload == nil {
 		return nil, fmt.Errorf(`%w: this evaluator cannot copy a body it did not build`, ErrUnsupported)
 	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	composed, err := b.payload.transform().Then(motion)
 	if err != nil {
 		return nil, fmt.Errorf(`decad: composing the placement failed: %w`, err)
@@ -206,8 +236,11 @@ func (b *Body) copyUnder(op OpKind, motion r3.Transform) (*Body, error) {
 		Placement: rec,
 	}
 	ref := d.nextStepRef()
-	copied, err := b.payload.placed(d, ref, composed)
+	copied, err := b.payload.placed(ctx, d, ref, composed)
 	if err != nil {
+		return nil, err
+	}
+	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 	// The source is depended on, not consumed: commit with no consumed inputs,

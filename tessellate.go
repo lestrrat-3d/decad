@@ -256,7 +256,10 @@ func chordLoop(ctx context.Context, loop LoopRecord, chord, height float64, wall
 		}
 		raw[i] = sideWalk{segmentWalk: w, segs: []int{i}}
 	}
-	walks := coalesceWalks(raw)
+	walks, err := coalesceWalksContext(ctx, raw)
+	if err != nil {
+		return nil, nil, 0, 0, err
+	}
 
 	var samples []Point2
 	var faceOf []*Face
@@ -395,7 +398,7 @@ func tessellateCup(ctx context.Context, b *Body, cp cupPayload, chord float64) (
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		rev, err := reverseLoopRecord(loop)
+		rev, err := reverseLoopRecordContext(ctx, loop)
 		if err != nil {
 			return nil, err
 		}

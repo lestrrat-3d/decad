@@ -1,6 +1,7 @@
 package decad
 
 import (
+	"context"
 	"fmt"
 	"math"
 
@@ -117,13 +118,42 @@ func rigidRoundAllow(maxInputAbs, maxTransAbs float64) float64 {
 // COLLAPSED holds zero area and the correction is the whole of its bound —
 // which is the point: it is the only term that speaks for it.
 func perturbedAreaUpper(verts []r3.Vec, tris [][3]int, delta float64) float64 {
+	area, _ := perturbedAreaUpperWithBudget(nil, verts, tris, delta)
+	return area
+}
+
+func perturbedAreaUpperContext(
+	ctx context.Context,
+	verts []r3.Vec,
+	tris [][3]int,
+	delta float64,
+) (float64, error) {
+	return perturbedAreaUpperWithBudget(newWorkBudget(ctx), verts, tris, delta)
+}
+
+func perturbedAreaUpperWithBudget(
+	budget *workBudget,
+	verts []r3.Vec,
+	tris [][3]int,
+	delta float64,
+) (float64, error) {
 	total := 0.0
 	for _, t := range tris {
+		if budget != nil {
+			if err := budget.step(); err != nil {
+				return 0, err
+			}
+		}
 		a, b, c := verts[t[0]], verts[t[1]], verts[t[2]]
 		u, v := b.Sub(a), c.Sub(a)
 		total += u.Cross(v).Len()/2 + delta*(u.Len()+v.Len()) + 2*delta*delta
 	}
-	return upRound(total + sumSlop(len(tris), total))
+	if budget != nil {
+		if err := budget.err(); err != nil {
+			return 0, err
+		}
+	}
+	return upRound(total + sumSlop(len(tris), total)), nil
 }
 
 // sweptVolumeAllow bounds the volume between two closed meshes whose vertices

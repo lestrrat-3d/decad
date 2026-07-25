@@ -170,7 +170,7 @@ func (b *Body) FilletContext(ctx context.Context, sel EdgeSelector, r units.Valu
 	ref := d.nextStepRef()
 	// The blend descriptors ride on the payload so a re-evaluation (a copy or a
 	// placement) re-mints its own fillet(i,j) roles; evalPrism applies them.
-	body, err := evalPrism(d, ref, prismPayload{
+	body, err := evalPrismContext(ctx, d, ref, prismPayload{
 		profile:   profile,
 		frame:     pp.frame,
 		z0:        pp.z0,
@@ -671,13 +671,28 @@ func arcSegment(center, start, end Point2, ccw bool) CurveSegment {
 // wall built from a blend connector already carries side(i,j); the second role —
 // "fillet" for Fillet, "chamfer" for Chamfer — names the same (loop, segment) of
 // the rewritten record.
-func addBlendRoles(body *Body, ref StepRef, blendSegs []map[int]struct{}, kind string) {
+func addBlendRoles(ctx context.Context, body *Body, ref StepRef, blendSegs []map[int]struct{}, kind string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	for li, segs := range blendSegs {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		for sj := range segs {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
 			side := fmt.Sprintf("side(%d,%d)", li, sj)
 			blend := fmt.Sprintf("%s(%d,%d)", kind, li, sj)
 			for _, f := range body.Faces() {
+				if err := ctx.Err(); err != nil {
+					return err
+				}
 				for _, o := range f.origins {
+					if err := ctx.Err(); err != nil {
+						return err
+					}
 					if o.Step == ref && o.Role == side {
 						f.origins = append(f.origins, FeatureRef{Step: ref, Role: blend})
 						break
@@ -686,4 +701,5 @@ func addBlendRoles(body *Body, ref StepRef, blendSegs []map[int]struct{}, kind s
 			}
 		}
 	}
+	return nil
 }

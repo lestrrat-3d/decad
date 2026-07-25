@@ -1,6 +1,7 @@
 package decad
 
 import (
+	"context"
 	"fmt"
 	"math"
 
@@ -286,11 +287,21 @@ func reverseLoopRecord(l LoopRecord) (LoopRecord, error) {
 }
 
 func reverseLoopRecordBudget(budget *workBudget, l LoopRecord) (LoopRecord, error) {
+	return reverseLoopRecordWithPoll(func() error { return wallBudgetStep(budget) }, l)
+}
+
+func reverseLoopRecordContext(ctx context.Context, l LoopRecord) (LoopRecord, error) {
+	return reverseLoopRecordWithPoll(ctx.Err, l)
+}
+
+func reverseLoopRecordWithPoll(poll func() error, l LoopRecord) (LoopRecord, error) {
 	n := len(l.Segments)
 	walks := make([]segmentWalk, n)
 	for i, seg := range l.Segments {
-		if err := wallBudgetStep(budget); err != nil {
-			return LoopRecord{}, err
+		if poll != nil {
+			if err := poll(); err != nil {
+				return LoopRecord{}, err
+			}
 		}
 		w, err := walkOf(seg)
 		if err != nil {
@@ -300,8 +311,10 @@ func reverseLoopRecordBudget(budget *workBudget, l LoopRecord) (LoopRecord, erro
 	}
 	segs := make([]CurveSegment, 0, n)
 	for i := n - 1; i >= 0; i-- {
-		if err := wallBudgetStep(budget); err != nil {
-			return LoopRecord{}, err
+		if poll != nil {
+			if err := poll(); err != nil {
+				return LoopRecord{}, err
+			}
 		}
 		w := walks[i]
 		switch {
