@@ -235,6 +235,71 @@ func TestPlacementContextCancelsAnalyticRebuilds(t *testing.T) {
 	}
 }
 
+func TestPlacementContextCancelsAnalyticAssembly(t *testing.T) {
+	shift, err := r3.Translation(r3.NewVec(100, 0, 0))
+	require.NoError(t, err)
+
+	tests := []struct {
+		name  string
+		build func(*testing.T) (*decad.Document, *decad.Body)
+	}{
+		{
+			name: "Prism",
+			build: func(t *testing.T) (*decad.Document, *decad.Body) {
+				s, p := plateSketch(t)
+				doc := decad.New()
+				body, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+				require.NoError(t, err)
+				return doc, body
+			},
+		},
+		{
+			name: "PartialRevolve",
+			build: func(t *testing.T) (*decad.Document, *decad.Body) {
+				s, p := solidSketch(t)
+				doc := decad.New()
+				body, err := doc.Revolve(s, p, decad.SketchLine{
+					Start: decad.Point2{U: 0, V: 0},
+					End:   decad.Point2{U: 1, V: 0},
+				}, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
+				require.NoError(t, err)
+				return doc, body
+			},
+		},
+		{
+			name: "Cup",
+			build: func(t *testing.T) (*decad.Document, *decad.Body) {
+				doc, box := shellBox(t)
+				body, err := box.Shell(topCap(box), units.Millimeters(5))
+				require.NoError(t, err)
+				return doc, body
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			doc, body := test.build(t)
+			beforeBodies := doc.Bodies()
+			beforeRecipe := doc.Recipe()
+			ctx := &cancelOnSecondDirectCallContext{
+				Context: t.Context(),
+				target:  "attachFaceLoopsContext",
+			}
+
+			got, err := body.PlacedContext(ctx, shift)
+			require.ErrorIs(t, err, context.Canceled)
+			require.Nil(t, got)
+			require.Equal(t, 2, ctx.targetCalls,
+				`cancellation must be observed inside final face assembly`)
+			require.Equal(t, beforeBodies, doc.Bodies(),
+				`a canceled assembly must not change live bodies`)
+			require.Equal(t, beforeRecipe, doc.Recipe(),
+				`a canceled assembly must not append a recipe step`)
+		})
+	}
+}
+
 func TestPlacementContextPollsAnalyticRebuildHelpers(t *testing.T) {
 	shift, err := r3.Translation(r3.NewVec(100, 0, 0))
 	require.NoError(t, err)

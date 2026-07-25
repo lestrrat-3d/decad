@@ -252,6 +252,9 @@ func evalCupContext(ctx context.Context, d *Document, ref StepRef, cp cupPayload
 		areaBound: igC.areaBound,
 	}
 	for i := range oLoops {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		capStart.loops = append(capStart.loops, &Loop{coedges: oFloor[i], outer: i == 0})
 		shellCap.loops = append(shellCap.loops, &Loop{coedges: cFloor[i], outer: i == 0})
 	}
@@ -294,27 +297,11 @@ func evalCupContext(ctx context.Context, d *Document, ref StepRef, cp cupPayload
 	}
 
 	// Attach each planar face to its boundary edges (two faces per edge).
-	for i := range oLoops {
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-		for _, ce := range oFloor[i] {
-			ce.edge.faces = append(ce.edge.faces, capStart)
-		}
-		for _, ce := range oOpen[i] {
-			ce.edge.faces = append(ce.edge.faces, rims[i])
-		}
-	}
-	for i := range cLoops {
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-		for _, ce := range cFloor[i] {
-			ce.edge.faces = append(ce.edge.faces, shellCap)
-		}
-		for _, ce := range cOpen[i] {
-			ce.edge.faces = append(ce.edge.faces, rims[i])
-		}
+	planarFaces := make([]*Face, 0, 2+len(rims))
+	planarFaces = append(planarFaces, capStart, shellCap)
+	planarFaces = append(planarFaces, rims...)
+	if err := attachFaceLoopsContext(ctx, planarFaces); err != nil {
+		return nil, err
 	}
 
 	faces = append(faces, capStart, shellCap)

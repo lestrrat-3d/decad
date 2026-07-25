@@ -498,12 +498,8 @@ func evalPrismContext(ctx context.Context, d *Document, ref StepRef, pp prismPay
 		capEnd.loops = append(capEnd.loops, &Loop{coedges: top, outer: li == 0})
 	}
 	faces = append(faces, capStart, capEnd)
-	for _, f := range []*Face{capStart, capEnd} {
-		for _, l := range f.loops {
-			for _, ce := range l.coedges {
-				ce.edge.faces = append(ce.edge.faces, f)
-			}
-		}
+	if err := attachFaceLoopsContext(ctx, []*Face{capStart, capEnd}); err != nil {
+		return nil, err
 	}
 
 	shell := &Shell{faces: faces}
@@ -558,6 +554,29 @@ func evalPrismContext(ctx context.Context, d *Document, ref StepRef, pp prismPay
 	addBlendRoles(body, ref, pp.blendSegs, pp.blendKind)
 	body.payload = pp
 	return body, nil
+}
+
+// attachFaceLoopsContext links each coedge's shared edge to its face. The
+// assembly is private until the caller commits the body, but it can be large
+// for a recorded region with many loops, so every nesting level polls ctx.
+func attachFaceLoopsContext(ctx context.Context, faces []*Face) error {
+	for _, f := range faces {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		for _, l := range f.loops {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			for _, ce := range l.coedges {
+				if err := ctx.Err(); err != nil {
+					return err
+				}
+				ce.edge.faces = append(ce.edge.faces, f)
+			}
+		}
+	}
+	return nil
 }
 
 // capFrame is the plane frame of a cap at height z, under the placement;

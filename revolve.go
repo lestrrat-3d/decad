@@ -1109,12 +1109,8 @@ func evalRevolveContext(ctx context.Context, d *Document, ref StepRef, rp revolv
 			faces = append(faces, group...)
 		}
 		faces = append(faces, capStart, capEnd)
-		for _, f := range []*Face{capStart, capEnd} {
-			for _, l := range f.loops {
-				for _, ce := range l.coedges {
-					ce.edge.faces = append(ce.edge.faces, f)
-				}
-			}
+		if err := attachFaceLoopsContext(ctx, []*Face{capStart, capEnd}); err != nil {
+			return nil, err
 		}
 		shells = []*Shell{{faces: faces}}
 	}
@@ -1420,10 +1416,8 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref StepRef, rp revolvePa
 			}
 			face.loops = []*Loop{{coedges: co, outer: true}}
 		}
-		for _, l := range face.loops {
-			for _, ce := range l.coedges {
-				ce.edge.faces = append(ce.edge.faces, face)
-			}
+		if err := attachFaceLoopsContext(ctx, []*Face{face}); err != nil {
+			return revLoopParts{}, err
 		}
 		parts.faces = append(parts.faces, face)
 		parts.area = boundedAdd(parts.area, faceArea)
