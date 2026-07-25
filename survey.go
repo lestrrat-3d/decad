@@ -90,6 +90,15 @@ func recordLoops(budget *workBudget, profile ProfileRecord) ([][]sideWalk, error
 	return out, nil
 }
 
+// recordLoopsBudget names the operation-budget form used by cancellation
+// probes and by callers that distinguish profile scanning from other surveys.
+func recordLoopsBudget(budget *workBudget, profile ProfileRecord) ([][]sideWalk, error) {
+	if err := wallBudgetErr(budget); err != nil {
+		return nil, err
+	}
+	return recordLoops(budget, profile)
+}
+
 // revolveLoops resolves the loops into axis coordinates (the U fields carry
 // z, the V fields ρ), mirroring buildRevolveLoop.
 func revolveLoops(budget *workBudget, rp revolvePayload) ([][]sideWalk, error) {
@@ -656,7 +665,7 @@ func cupWalks(loop LoopRecord) ([]sideWalk, error) {
 }
 
 func cupWalksBudget(budget *workBudget, loop LoopRecord) ([]sideWalk, error) {
-	loops, err := recordLoops(budget, ProfileRecord{Outer: loop})
+	loops, err := recordLoopsBudget(budget, ProfileRecord{Outer: loop})
 	if err != nil {
 		return nil, err
 	}
@@ -724,7 +733,7 @@ func cupWall(budget *workBudget, cp cupPayload, alpha float64) (wallOutcome, err
 	// equality is the exact claim: a residual or tolerance match could only
 	// guess that the regions correspond.
 	offsetMatches := func(orig, want ProfileRecord, sense float64) (bool, error) {
-		got, err := offsetProfileBudget(budget, orig, sense, t)
+		got, err := offsetProfile(budget, orig, sense, t)
 		if err != nil {
 			if isCancellation(err) {
 				return false, err
@@ -787,7 +796,7 @@ func cupWall(budget *workBudget, cp cupPayload, alpha float64) (wallOutcome, err
 		return false, true, nil
 	}
 
-	outerWalks, err := recordLoops(budget, cp.outer)
+	outerWalks, err := recordLoopsBudget(budget, cp.outer)
 	if err != nil {
 		return wallOutcome{}, err
 	}

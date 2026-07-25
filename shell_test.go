@@ -155,6 +155,20 @@ func TestShellContextCancellationDuringSectionSurveyLeavesReceiverLive(t *testin
 	require.Equal(t, []*decad.Body{box}, doc.Bodies())
 }
 
+func TestShellContextCancellationDuringKernelSetupLeavesReceiverLive(t *testing.T) {
+	doc, box := shellBox(t)
+	before := doc.Recipe()
+	ctx := &operationCancelContext{Context: t.Context(), target: "newWallKernelBudget"}
+
+	body, err := box.ShellContext(ctx, topCap(box), units.Millimeters(5))
+
+	require.Nil(t, body)
+	require.ErrorIs(t, err, context.Canceled)
+	require.True(t, ctx.entered)
+	require.Equal(t, before, doc.Recipe())
+	require.Equal(t, []*decad.Body{box}, doc.Bodies())
+}
+
 func (s forwardingFaceSelector) SelectFaces(body *decad.Body) ([]*decad.Face, error) {
 	(*s.calls)++
 	return s.FaceQuery.SelectFaces(body)

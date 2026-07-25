@@ -39,11 +39,14 @@ var errOffsetTopology = fmt.Errorf(`%w: the offset changes the section's topolog
 // (inward, s = +1) or P ⊕ t (outward, s = −1), each loop offset in its own
 // sense (docs/modify-design.md §7). A dropped feature is S11a (errOffsetDrop);
 // a non-closing miter is S11 (errOffsetTopology). Both are ErrUnsupported.
-func offsetProfile(profile ProfileRecord, s, t float64) (ProfileRecord, error) {
-	return offsetProfileBudget(nil, profile, s, t)
+func offsetProfile(budget *workBudget, profile ProfileRecord, s, t float64) (ProfileRecord, error) {
+	return offsetProfileBudget(budget, profile, s, t)
 }
 
 func offsetProfileBudget(budget *workBudget, profile ProfileRecord, s, t float64) (ProfileRecord, error) {
+	if err := wallBudgetErr(budget); err != nil {
+		return ProfileRecord{}, err
+	}
 	loops, err := prismCornerLoopsBudget(budget, prismPayload{profile: profile})
 	if err != nil {
 		return ProfileRecord{}, err

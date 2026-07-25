@@ -191,7 +191,7 @@ func TestCupWallRequiresExactMorphology(t *testing.T) {
 		line(100, 60, 0, 60),
 		line(0, 60, 0, 0),
 	}}}
-	cavity, err := offsetProfile(newWorkBudget(t.Context()), outer, 1, 5)
+	cavity, err := offsetProfileBudget(newWorkBudget(t.Context()), outer, 1, 5)
 	require.NoError(t, err)
 	cp := cupPayload{
 		outer:     outer,
@@ -306,7 +306,7 @@ func TestRevolveLoopsCancellationIsBounded(t *testing.T) {
 
 func TestCupWallCancellationCoversOffsetAuditAndReverse(t *testing.T) {
 	outer := manySegmentProfile(workPollInterval + 64)
-	cavity, err := offsetProfile(outer, 1, 5)
+	cavity, err := offsetProfile(nil, outer, 1, 5)
 	require.NoError(t, err)
 	cp := cupPayload{
 		outer:     outer,

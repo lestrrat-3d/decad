@@ -97,7 +97,8 @@ func (b *Body) ChamferContext(ctx context.Context, sel EdgeSelector, d units.Val
 			sel, selectedEdgesContext(edges), ErrUnsupported)
 	}
 
-	loops, err := prismCornerLoops(pp)
+	budget := newWorkBudget(ctx)
+	loops, err := prismCornerLoopsBudget(budget, pp)
 	if err != nil {
 		return nil, err
 	}
@@ -107,7 +108,10 @@ func (b *Body) ChamferContext(ctx context.Context, sel EdgeSelector, d units.Val
 	}
 	matched := make([]matchedCorner, 0, len(edges))
 	for ei, e := range edges {
-		li, ci, found := matchCorner(pp, loops, e)
+		li, ci, found, err := matchCornerBudget(budget, pp, loops, e)
+		if err != nil {
+			return nil, err
+		}
 		if !found {
 			return nil, fmt.Errorf(`selector %s, %s: %w: a chamfer of a cap edge is the vertex-blend problem, not yet supported`,
 				sel, selectedEdgeContext(ei, e), ErrUnsupported)
@@ -119,6 +123,9 @@ func (b *Body) ChamferContext(ctx context.Context, sel EdgeSelector, d units.Val
 	// Stage 3 (§4): the construction's own gate, per corner — S4 (a corner
 	// exists). There is no S5: a chord exists between any two distinct feet.
 	for _, corner := range matched {
+		if err := budget.step(); err != nil {
+			return nil, err
+		}
 		cb, err := computeChamfer(loops[corner.loop], corner.corner, dmm)
 		if err != nil {
 			return nil, fmt.Errorf(`selector %s, %s: %w`, sel, corner, err)
@@ -127,11 +134,14 @@ func (b *Body) ChamferContext(ctx context.Context, sel EdgeSelector, d units.Val
 	}
 
 	// The rewritten section, and the bevel chords' (loop, segment) indices.
-	profile, chamferSegs := rewriteProfile(pp.profile, loops, blendAt)
+	profile, chamferSegs, err := rewriteProfileBudget(budget, pp.profile, loops, blendAt)
+	if err != nil {
+		return nil, err
+	}
 
 	// Stage 4 (§4/§5): the same audit the fillet runs — S8, S6 (an over-large
 	// setback that reaches or passes a walk's far end), S7, S9.
-	if err := auditRewrite(newWorkBudget(ctx), pp.profile, profile, loops, blendAt); err != nil {
+	if err := auditRewriteBudget(budget, pp.profile, profile, loops, blendAt); err != nil {
 		return nil, wrapModifyAuditError(sel, matched, err)
 	}
 

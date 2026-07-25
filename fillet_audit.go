@@ -446,7 +446,7 @@ func nestingAuditBudget(budget *workBudget, segs []segEntry, nLoops int) error {
 		if !hasPt[h] {
 			continue
 		}
-		inside, decided, err := loopContainsBudget(budget, bounds[0], pts[h][0], pts[h][1], tol)
+		inside, decided, err := loopContains(budget, bounds[0], pts[h][0], pts[h][1], tol)
 		if err != nil {
 			return err
 		}
@@ -473,7 +473,7 @@ func nestingAuditBudget(budget *workBudget, segs []segEntry, nLoops int) error {
 				in int
 				pt [2]float64
 			}{{a, pts[b]}, {b, pts[a]}} {
-				inside, decided, err := loopContainsBudget(budget, bounds[pr.in], pr.pt[0], pr.pt[1], tol)
+				inside, decided, err := loopContains(budget, bounds[pr.in], pr.pt[0], pr.pt[1], tol)
 				if err != nil {
 					return err
 				}
@@ -509,11 +509,22 @@ func elemOf(w segmentWalk) (surveyElem, bool) {
 	return lineElem(w.startU, w.startV, w.endU, w.endV)
 }
 
+// loopContains is the named boundary-scan phase used by cancellation probes.
+func loopContains(budget *workBudget, boundary []surveyElem, px, py, tol float64) (inside, decided bool, err error) {
+	if err := wallBudgetErr(budget); err != nil {
+		return false, false, err
+	}
+	return loopContainsBudget(budget, boundary, px, py, tol)
+}
+
 // loopContainsBudget classifies (px, py) against a loop's boundary by crossing parity
 // of a ray, retried across the golden-angle direction sequence when a crossing
 // is ambiguous — the same walk wallKernel.contains runs. decided is false when
 // every direction is ambiguous; the answer is never guessed.
 func loopContainsBudget(budget *workBudget, boundary []surveyElem, px, py, tol float64) (inside, decided bool, err error) {
+	if err := wallBudgetErr(budget); err != nil {
+		return false, false, err
+	}
 	for i := range 16 {
 		if err := wallBudgetStep(budget); err != nil {
 			return false, false, err
