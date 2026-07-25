@@ -301,16 +301,6 @@ type jsonStepDecode struct {
 // zeroVec reports whether v is the zero vector.
 func zeroVec(v r3.Vec) bool { return v == r3.Vec{} }
 
-// validateExtentKeying enforces the core §6.2 one-of contract on both wire
-// directions: at most one of Extent and Angular is non-nil, and each is
-// keyed to its op — Extent to extrude, Angular and Axis to revolve. A step
-// violating it names no recordable intent, so it neither encodes nor
-// decodes.
-func validateExtentKeying(s Step) error {
-	_, err := extentKeyingError(s)
-	return err
-}
-
 func extentKeyingError(s Step) (string, error) {
 	if s.Extent != nil && s.Angular != nil {
 		return "extent", fmt.Errorf(`decad: a step carries at most one of extent and angular`)
@@ -558,19 +548,25 @@ func jsonArrayLength(data json.RawMessage, field string) (int, error) {
 
 func unmarshalPresentJSONSlice[T any](data json.RawMessage, field string) ([]T, error) {
 	if isJSONNull(data) {
-		return nil, fmt.Errorf(`decad: step field %q must be an array`, field)
+		return nil, prependCodecPath(fmt.Errorf(`decad: step field %q must be an array`, field), field)
 	}
 	var raw []json.RawMessage
 	if err := json.Unmarshal(data, &raw); err != nil {
-		return nil, fmt.Errorf(`decad: step field %q must be an array: %w`, field, err)
+		return nil, prependCodecPath(fmt.Errorf(`decad: step field %q must be an array: %w`, field, err), field)
 	}
 	values := make([]T, len(raw))
 	for i, element := range raw {
 		if isJSONNull(element) {
-			return nil, fmt.Errorf(`decad: step field %q element %d must not be null`, field, i)
+			return nil, prependCodecPath(
+				fmt.Errorf(`decad: step field %q element %d must not be null`, field, i),
+				fmt.Sprintf(`%s[%d]`, field, i),
+			)
 		}
 		if err := json.Unmarshal(element, &values[i]); err != nil {
-			return nil, fmt.Errorf(`decad: failed to decode %s[%d]: %w`, field, i, err)
+			return nil, prependCodecPath(
+				fmt.Errorf(`decad: failed to decode %s[%d]: %w`, field, i, err),
+				fmt.Sprintf(`%s[%d]`, field, i),
+			)
 		}
 	}
 	return values, nil
