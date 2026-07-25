@@ -91,6 +91,80 @@ func precisePi(t *testing.T) *big.Float {
 	return pi
 }
 
+func preciseAtan(t *testing.T, x *big.Rat) *big.Float {
+	t.Helper()
+	const precision = uint(256)
+	xSquared := new(big.Rat).Mul(x, x)
+	term := new(big.Rat).Set(x)
+	sum := new(big.Rat)
+	for n := range 256 {
+		addend := new(big.Rat).Quo(term, big.NewRat(int64(2*n+1), 1))
+		if n%2 == 0 {
+			sum.Add(sum, addend)
+		} else {
+			sum.Sub(sum, addend)
+		}
+		term.Mul(term, xSquared)
+	}
+	return new(big.Float).SetPrec(precision).SetRat(sum)
+}
+
+func preciseGreenArcArea(t *testing.T, center, start, end decad.Point2) *big.Float {
+	t.Helper()
+	const precision = uint(256)
+	floatRat := func(value float64) *big.Rat {
+		return new(big.Rat).SetFloat64(value)
+	}
+	bigFloatRat := func(value *big.Rat) *big.Float {
+		return new(big.Float).SetPrec(precision).SetRat(value)
+	}
+	bigFloat := func(value float64) *big.Float {
+		return new(big.Float).SetPrec(precision).SetFloat64(value)
+	}
+
+	dx0 := new(big.Rat).Sub(floatRat(start.U), floatRat(center.U))
+	dy0 := new(big.Rat).Sub(floatRat(start.V), floatRat(center.V))
+	dx1 := new(big.Rat).Sub(floatRat(end.U), floatRat(center.U))
+	dy1 := new(big.Rat).Sub(floatRat(end.V), floatRat(center.V))
+	r0Squared := new(big.Rat).Add(new(big.Rat).Mul(dx0, dx0), new(big.Rat).Mul(dy0, dy0))
+	r1Squared := new(big.Rat).Add(new(big.Rat).Mul(dx1, dx1), new(big.Rat).Mul(dy1, dy1))
+	r0 := new(big.Float).SetPrec(precision).Sqrt(bigFloatRat(r0Squared))
+	r1 := new(big.Float).SetPrec(precision).Sqrt(bigFloatRat(r1Squared))
+
+	angleArg := new(big.Rat).Quo(
+		new(big.Rat).Sub(dy1, dx1),
+		new(big.Rat).Add(dy1, dx1),
+	)
+	theta := new(big.Float).SetPrec(precision).Quo(precisePi(t), bigFloat(4))
+	theta.Add(theta, preciseAtan(t, angleArg))
+
+	endSin := new(big.Float).SetPrec(precision).Quo(bigFloatRat(dy1), r1)
+	endSin.Mul(endSin, r0)
+	endCos := new(big.Float).SetPrec(precision).Quo(bigFloatRat(dx1), r1)
+	endCos.Mul(endCos, r0)
+
+	arc := new(big.Float).SetPrec(precision).Mul(new(big.Float).SetPrec(precision).Mul(r0, r0), theta)
+	centerU, centerV := bigFloat(center.U), bigFloat(center.V)
+	arc.Add(arc, new(big.Float).SetPrec(precision).Mul(
+		centerU,
+		new(big.Float).SetPrec(precision).Sub(endSin, bigFloatRat(dy0)),
+	))
+	arc.Sub(arc, new(big.Float).SetPrec(precision).Mul(
+		centerV,
+		new(big.Float).SetPrec(precision).Sub(endCos, bigFloatRat(dx0)),
+	))
+	arc.Mul(arc, bigFloat(0.5))
+
+	startU, startV := bigFloat(start.U), bigFloat(start.V)
+	endU, endV := bigFloat(end.U), bigFloat(end.V)
+	line := new(big.Float).SetPrec(precision).Mul(endU, centerV)
+	line.Sub(line, new(big.Float).SetPrec(precision).Mul(endV, centerU))
+	line.Add(line, new(big.Float).SetPrec(precision).Mul(centerU, startV))
+	line.Sub(line, new(big.Float).SetPrec(precision).Mul(centerV, startU))
+	line.Mul(line, bigFloat(0.5))
+	return arc.Add(arc, line)
+}
+
 func TestRegionAreaAndCentroidRectangle(t *testing.T) {
 	world := sketch.NewWorld()
 	s, err := world.CreateSketch(world.XY())
@@ -683,4 +757,26 @@ func TestRegionMomentsAcceptsGeneratedArcEndpointDrift(t *testing.T) {
 		return
 	}
 	t.Fatal("no valid profile generated")
+}
+
+func TestRegionAreaBoundContainsArcEndpointDriftGreenIntegral(t *testing.T) {
+	center := decad.Point2{U: 5, V: -3}
+	start := decad.Point2{U: 6, V: -3}
+	driftedRadius := math.Nextafter(1, math.Inf(1))
+	end := decad.Point2{
+		U: 5 + 0.6*driftedRadius,
+		V: -3 + 0.8*driftedRadius,
+	}
+	record := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
+		decad.ArcSeg{Center: center, Start: start, End: end, TStart: 0, TEnd: 1},
+		decad.LineSeg{Start: end, End: center, TStart: 0, TEnd: 1},
+		decad.LineSeg{Start: center, End: start, TStart: 0, TEnd: 1},
+	}}}
+
+	area, err := record.Area()
+	require.NoError(t, err)
+	got, err := area.Value.In(units.SquareMillimeter)
+	require.NoError(t, err)
+	want := preciseGreenArcArea(t, center, start, end)
+	requireBoundContainsBig(t, got, area.Bound.Base(), want)
 }

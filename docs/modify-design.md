@@ -20,10 +20,11 @@ Four tables are normative, and each states its facts **once**:
 
 Every other section cites a row of one of them and restates none of it.
 Around the tables: what a modify op owes and how it refuses (§1), the reduction
-that makes a straight prism's modify ops exact (§2), where the 2D work is
-allowed to live (§5), the fillet (§6), the chamfer (§7), the shell (§8), how
-the results stay Exact (§10), the recipe, the provenance and the replay (§11),
-the increment plan (§13) and the reach decisions (§14).
+that keeps the analytic shape and propagates bounded mass results, with
+Exactness only when the proven bound is zero (§2, §10), where the 2D work is
+allowed to live (§5), the fillet (§6), the chamfer (§7), the shell (§8), the
+recipe, the provenance and the replay (§11), the increment plan (§13) and the
+reach decisions (§14).
 
 Companion to `docs/api-design.md`, which owns the three signatures, the
 selector contract and the retire rule ("core §N"), and to

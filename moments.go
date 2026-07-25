@@ -488,11 +488,14 @@ func circularAreaInterval(seg CurveSegment) (ratInterval, bool) {
 		dy1 := exactCoordinateDelta(seg.End.V, seg.Center.V)
 		// Arc endpoints may retain solver drift within the accepted radius join
 		// tolerance. The integrated path uses the start radius and endpoint angles,
-		// so the area interval can still prove that same path without requiring
-		// exact endpoint radii.
+		// so the area interval charges the radial mismatch before it is published.
 		r2 := new(big.Rat).Add(
 			new(big.Rat).Mul(dx0, dx0),
 			new(big.Rat).Mul(dy0, dy0),
+		)
+		endR2 := new(big.Rat).Add(
+			new(big.Rat).Mul(dx1, dx1),
+			new(big.Rat).Mul(dy1, dy1),
 		)
 		heldDY0 := seg.Start.V - seg.Center.V
 		heldDY1 := seg.End.V - seg.Center.V
@@ -516,8 +519,46 @@ func circularAreaInterval(seg CurveSegment) (ratInterval, bool) {
 			new(big.Rat).Mul(floatRat(seg.Center.U), dy),
 			new(big.Rat).Mul(floatRat(seg.Center.V), dx),
 		)
+		areaProof := intervalAdd(sector, pointInterval(centerTerm))
+		if endR2.Cmp(r2) != 0 {
+			if endR2.Sign() == 0 {
+				return ratInterval{}, false
+			}
+			radialGap := new(big.Rat).Sub(endR2, r2)
+			radialGap.Abs(radialGap)
+			radialRatioUpper := new(big.Rat).Quo(radialGap, endR2)
+			endpointScale := new(big.Rat).Add(
+				new(big.Rat).Mul(
+					new(big.Rat).Abs(floatRat(seg.Center.U)),
+					new(big.Rat).Abs(dy1),
+				),
+				new(big.Rat).Mul(
+					new(big.Rat).Abs(floatRat(seg.Center.V)),
+					new(big.Rat).Abs(dx1),
+				),
+			)
+			correction := new(big.Rat).Mul(radialRatioUpper, endpointScale)
+			correctionFloat, exact := correction.Float64()
+			if !exact {
+				correctionFloat = math.Nextafter(correctionFloat, math.Inf(1))
+			}
+			correctionFloat = absSumUpper(
+				correctionFloat,
+				analyticRoundBound(absSumUpper(
+					seg.Center.U,
+					seg.Center.V,
+					seg.End.U-seg.Center.U,
+					seg.End.V-seg.Center.V,
+				)),
+			)
+			correction = floatRat(correctionFloat)
+			areaProof = intervalAdd(
+				areaProof,
+				intervalScale(interval(big.NewRat(-1, 1), big.NewRat(1, 1)), correction),
+			)
+		}
 		return intervalScale(
-			intervalAdd(sector, pointInterval(centerTerm)),
+			areaProof,
 			big.NewRat(1, 2),
 		), true
 	default:
