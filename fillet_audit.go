@@ -78,14 +78,10 @@ func renderAuditCoordinates(err error) error {
 	return &renderedAuditDiagnosticError{cause: err, message: diagnostic.detailed}
 }
 
-// auditRewrite runs the §5 audit on the rewritten profile in §4's order. It is
+// auditRewriteBudget runs the §5 audit on the rewritten profile in §4's order. It is
 // shared by every modify op (Fillet, Chamfer): its only op-specific input is the
 // per-corner cutback the S6 self-consuming-trim test sums, carried by the shared
 // cornerBlend, so the audit itself forks nothing.
-func auditRewrite(orig, rewritten ProfileRecord, loops []cornerLoop, blendAt []map[int]*cornerBlend) error {
-	return auditRewriteBudget(nil, orig, rewritten, loops, blendAt)
-}
-
 func auditRewriteBudget(budget *workBudget, orig, rewritten ProfileRecord, loops []cornerLoop, blendAt []map[int]*cornerBlend) error {
 	origLoops := append([]LoopRecord{orig.Outer}, orig.Holes...)
 	newLoops := append([]LoopRecord{rewritten.Outer}, rewritten.Holes...)
@@ -234,12 +230,8 @@ func buildSegEntriesBudget(budget *workBudget, loops []LoopRecord) ([]segEntry, 
 	return segs, nil
 }
 
-// loopSignedArea is one loop's signed area (positive counter-clockwise): the
+// loopSignedAreaBudget is one loop's signed area (positive counter-clockwise): the
 // Green's-theorem boundary integral of its own segments.
-func loopSignedArea(loop LoopRecord) (float64, error) {
-	return loopSignedAreaBudget(nil, loop)
-}
-
 func loopSignedAreaBudget(budget *workBudget, loop LoopRecord) (float64, error) {
 	var ig regionIntegrals
 	for _, seg := range loop.Segments {
@@ -262,7 +254,7 @@ type segEntry struct {
 	w    segmentWalk
 }
 
-// crossingAudit tests every pair of segments for an interior crossing OR a
+// crossingAuditBudget tests every pair of segments for an interior crossing OR a
 // boundary contact — a tangency or a shared boundary point — skipping only
 // pairs that legitimately share an endpoint (same-loop neighbours). A crossing
 // and a contact both stop two Jordan loops being disjoint, so both must be
@@ -274,10 +266,6 @@ type segEntry struct {
 // boundary case of a crossing, a body a resolving/trimmed-offset kernel could
 // build but this evaluator cannot (§1 existence test — the body exists; §4
 // Table S, S7).
-func crossingAudit(segs []segEntry) error {
-	return crossingAuditBudget(nil, segs)
-}
-
 func crossingAuditBudget(budget *workBudget, segs []segEntry) error {
 	touchFloor, err := contactFloorBudget(budget, segs)
 	if err != nil {
@@ -311,10 +299,10 @@ func crossingAuditBudget(budget *workBudget, segs []segEntry) error {
 // contactEps is the noise-floor coefficient ε of the boundary-contact test,
 // the SAME ε verification design §4 fixes for its diameter-anchored noise floor
 // δ = ε·D (see gapWithinTolerance, the Clearance.Gap gate). It is not a
-// distance; contactFloor multiplies it by the section's own scale.
+// distance; contactFloorBudget multiplies it by the section's own scale.
 const contactEps = 1e-9
 
-// contactFloor is the boundary-contact threshold for the §5 audit, anchored to
+// contactFloorBudget is the boundary-contact threshold for the §5 audit, anchored to
 // the SECTION'S scale exactly as verification design §4 anchors a length's
 // noise floor: δ = ε·D with ε = contactEps and D the section's diameter (its
 // (u, v) bounding-box diagonal — the standard decad reading of D, as in
@@ -323,14 +311,6 @@ const contactEps = 1e-9
 // a real positive gap that builds. The threshold is reject-only and SCALES with
 // the section — a fixed absolute band mis-scales, rejecting a macroscopic gap
 // on a sub-millimetre section and accepting a real pinch on a huge one.
-func contactFloor(segs []segEntry) float64 {
-	minU, minV, maxU, maxV, ok := sectionBBox(segs)
-	if !ok { // no segments: nothing to pinch
-		return 0
-	}
-	return contactEps * math.Hypot(maxU-minU, maxV-minV)
-}
-
 func contactFloorBudget(budget *workBudget, segs []segEntry) (float64, error) {
 	minU, minV, maxU, maxV, ok, err := sectionBBoxBudget(budget, segs)
 	if err != nil {
@@ -342,17 +322,12 @@ func contactFloorBudget(budget *workBudget, segs []segEntry) (float64, error) {
 	return contactEps * math.Hypot(maxU-minU, maxV-minV), nil
 }
 
-// sectionBBox is the TRUE (u, v) bounding box of a rewritten section — the box
+// sectionBBoxBudget is the TRUE (u, v) bounding box of a rewritten section — the box
 // the §5 D reads. An arc bulges outside its endpoint chord (a semicircle from
 // (−R,0) to (R,0) reaches (0,R); a full circle's endpoints collapse to a
 // point), so a line contributes its two endpoints and an arc its endpoints AND
 // every cardinal extremum (cU±R, cV±R) its own angular walk actually reaches —
 // never the endpoint box alone, which understates D.
-func sectionBBox(segs []segEntry) (minU, minV, maxU, maxV float64, ok bool) {
-	minU, minV, maxU, maxV, ok, _ = sectionBBoxBudget(nil, segs)
-	return
-}
-
 func sectionBBoxBudget(budget *workBudget, segs []segEntry) (minU, minV, maxU, maxV float64, ok bool, err error) {
 	minU, minV = math.Inf(1), math.Inf(1)
 	maxU, maxV = math.Inf(-1), math.Inf(-1)
@@ -670,7 +645,7 @@ func angleWithin(arc segmentWalk, x, y float64) bool {
 // segMinDist is the minimum Euclidean distance between two closed segment
 // primitives (line or arc), in closed form over their own line and arc data. It
 // is the boundary-contact classifier behind S7: a value at or below the
-// section-scaled contactFloor is a tangency or a shared boundary point the
+// section-scaled contactFloorBudget is a tangency or a shared boundary point the
 // interior-only crossing test misses. The candidate set is complete for the attained infimum over line/arc
 // boundaries — the four endpoint-against-the-other distances, the interior
 // radial/aligned criticals, and zero at any interior intersection.

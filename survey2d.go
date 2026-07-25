@@ -239,9 +239,9 @@ type wallKernel struct {
 	boundary    []surveyElem // elems + containOnly, built lazily for contains
 }
 
-// newWallKernel sizes the tolerances from the geometry.
-func newWallKernel(elems []surveyElem, verts [][2]float64, alpha float64, fitMax float64) *wallKernel {
-	k, _ := newWallKernelBudget(nil, elems, nil, verts, alpha, 0, false, fitMax)
+// newWallKernel sizes the tolerances from the geometry with the default draft allowance.
+func newWallKernel(elems []surveyElem, verts [][2]float64, fitMax float64) *wallKernel {
+	k, _ := newWallKernelBudget(nil, elems, nil, verts, 15*math.Pi/180, 0, false, fitMax)
 	return k
 }
 

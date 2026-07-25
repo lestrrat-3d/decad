@@ -276,16 +276,11 @@ func prismCornerLoopsBudget(budget *workBudget, pp prismPayload) ([]cornerLoop, 
 	return out, nil
 }
 
-// matchCorner maps a selected edge to a (loop, corner) of the section: a
+// matchCornerBudget maps a selected edge to a (loop, corner) of the section: a
 // lateral edge is the vertical junction at a corner, so its two vertices are
 // the corner point lifted to the two caps. A cap edge matches nothing (its
 // endpoints share a cap plane), which is exactly S1's honest reading of the
 // class.
-func matchCorner(pp prismPayload, loops []cornerLoop, e *Edge) (int, int, bool) {
-	li, ci, found, _ := matchCornerBudget(nil, pp, loops, e)
-	return li, ci, found
-}
-
 func matchCornerBudget(budget *workBudget, pp prismPayload, loops []cornerLoop, e *Edge) (int, int, bool, error) {
 	if _, ok := e.curve.(Line3); !ok {
 		return 0, 0, false, nil

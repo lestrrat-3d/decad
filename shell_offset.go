@@ -316,16 +316,12 @@ func reverseLoopRecordBudget(budget *workBudget, l LoopRecord) (LoopRecord, erro
 	return LoopRecord{Segments: segs}, nil
 }
 
-// auditOffsetSection runs the shared §5 audit (fillet_audit.go) on a shell's
+// auditOffsetSectionBudget runs the shared §5 audit (fillet_audit.go) on a shell's
 // offset section, in §4's order: S8 (orientation — an offset loop turned inside
 // out is ErrDegenerate), the crossing test (a crossing or boundary contact of
 // offset loops — S11b, ErrUnsupported), then S9 (nesting). A shell mints no
 // cutback, so the empty fillet map makes the S6 trim test a no-op — the one test
 // that cannot fire on an offset (§8).
-func auditOffsetSection(orig, offset ProfileRecord) error {
-	return auditOffsetSectionBudget(nil, orig, offset)
-}
-
 func auditOffsetSectionBudget(budget *workBudget, orig, offset ProfileRecord) error {
 	loops, err := prismCornerLoopsBudget(budget, prismPayload{profile: offset})
 	if err != nil {

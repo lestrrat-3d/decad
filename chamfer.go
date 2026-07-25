@@ -18,7 +18,7 @@ import (
 // rewrite: the corner is cut off by a straight CHORD between the two setback
 // feet (a LineSeg), never a tangent arc, so the bevel wall is a PLANE (§7). It
 // then shares everything downstream with the fillet — the §5 audit
-// (auditRewrite, S8/S6/S7/S9), the profile rewrite (rewriteProfile), evalPrism,
+// (auditRewriteBudget, S8/S6/S7/S9), the profile rewrite (rewriteProfile), evalPrism,
 // and the blend-role machinery (addBlendRoles) — via the common cornerBlend.
 //
 // The setback d is measured along the adjacent boundary curve, d from the corner

@@ -58,7 +58,7 @@ func TestContactFloorUsesTrueSectionBBox(t *testing.T) {
 		require.NoError(t, err)
 		wantTrue := contactEps * math.Hypot(20, 10)     // true bbox diagonal √500
 		wantEndpoints := contactEps * math.Hypot(20, 0) // the old endpoint box
-		require.InEpsilon(t, wantTrue, got, 1e-12, `contactFloor must read the true section bbox`)
+		require.InEpsilon(t, wantTrue, got, 1e-12, `contactFloorBudget must read the true section bbox`)
 		require.Greater(t, got, wantEndpoints, `the true D strictly exceeds the endpoint box when an arc bulges`)
 	})
 
