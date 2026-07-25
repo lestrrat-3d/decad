@@ -444,13 +444,15 @@ func (s *Step) UnmarshalJSON(data []byte) error {
 		if err := json.Unmarshal(raw.Inputs, &vals); err != nil {
 			return prependCodecPath(codecJSONError(err), "inputs")
 		}
-		out.Inputs = make([]StepRef, 0, len(vals))
-		for i, b := range vals {
-			var v StepRef
-			if err := json.Unmarshal(b, &v); err != nil {
-				return prependCodecPath(codecJSONError(err), fmt.Sprintf(`inputs[%d]`, i))
+		if vals != nil {
+			out.Inputs = make([]StepRef, 0, len(vals))
+			for i, b := range vals {
+				var v StepRef
+				if err := json.Unmarshal(b, &v); err != nil {
+					return prependCodecPath(codecJSONError(err), fmt.Sprintf(`inputs[%d]`, i))
+				}
+				out.Inputs = append(out.Inputs, v)
 			}
-			out.Inputs = append(out.Inputs, v)
 		}
 	}
 	if raw.Profile != nil {
@@ -533,13 +535,15 @@ func (s *Step) UnmarshalJSON(data []byte) error {
 		if err := json.Unmarshal(raw.Values, &valueData); err != nil {
 			return prependCodecPath(codecJSONError(err), "values")
 		}
-		out.Values = make([]units.Value, 0, len(valueData))
-		for i, b := range valueData {
-			var v units.Value
-			if err := json.Unmarshal(b, &v); err != nil {
-				return prependCodecPath(codecJSONError(err), fmt.Sprintf(`values[%d]`, i))
+		if valueData != nil {
+			out.Values = make([]units.Value, 0, len(valueData))
+			for i, b := range valueData {
+				var v units.Value
+				if err := json.Unmarshal(b, &v); err != nil {
+					return prependCodecPath(codecJSONError(err), fmt.Sprintf(`values[%d]`, i))
+				}
+				out.Values = append(out.Values, v)
 			}
-			out.Values = append(out.Values, v)
 		}
 	}
 	if err := validateExtentKeying(out); err != nil {

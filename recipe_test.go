@@ -121,6 +121,18 @@ func TestDirectionAndOpKindCodec(t *testing.T) {
 	require.Error(t, err, `an out-of-range op kind refuses to encode`)
 }
 
+func TestStepCodecPreservesExplicitNullSlices(t *testing.T) {
+	var nullStep decad.Step
+	require.NoError(t, json.Unmarshal([]byte(`{"op":"union","inputs":null,"values":null}`), &nullStep))
+	require.Nil(t, nullStep.Inputs)
+	require.Nil(t, nullStep.Values)
+
+	var emptyStep decad.Step
+	require.NoError(t, json.Unmarshal([]byte(`{"op":"union","inputs":[],"values":[]}`), &emptyStep))
+	require.NotNil(t, emptyStep.Inputs)
+	require.NotNil(t, emptyStep.Values)
+}
+
 func TestStepOptsCodec(t *testing.T) {
 	step := decad.Step{Op: decad.OpExtrude, Opts: decad.ExtrudeOpts{Taper: units.Degrees(-3)}}
 	buf, err := json.Marshal(step)
