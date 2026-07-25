@@ -203,7 +203,7 @@ func (b *Body) ShellContext(ctx context.Context, sel FaceSelector, t units.Value
 		// The section limit: P ⊖ t is non-empty exactly when t is strictly less
 		// than the section's inradius, which survey2d.go computes exactly
 		// (docs/modify-design.md §8, the same reading MinWallThickness answers).
-		inradius, err := sectionInradius(pp.profile)
+		inradius, err := sectionInradius(offsetBudget, pp.profile)
 		if err != nil {
 			return nil, err
 		}
@@ -349,9 +349,15 @@ func classifyRemovedCaps(b *Body, removed []*Face) (start, end bool, err error) 
 // fixed work budget across its streamed generation and validation. An
 // undecided or over-budget build-time gate is ErrUnsupported: it has no
 // Suspect result to fall back on.
-func sectionInradius(profile ProfileRecord) (float64, error) {
-	loops, err := recordLoops(nil, profile)
+func sectionInradius(budget *workBudget, profile ProfileRecord) (float64, error) {
+	if err := wallBudgetErr(budget); err != nil {
+		return 0, err
+	}
+	loops, err := recordLoopsBudget(budget, profile)
 	if err != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return 0, err
+		}
 		return 0, fmt.Errorf(`%w: this evaluator cannot read the shell section: %v`, ErrUnsupported, err)
 	}
 	var elems []surveyElem
@@ -359,6 +365,9 @@ func sectionInradius(profile ProfileRecord) (float64, error) {
 	for _, loop := range loops {
 		single := len(loop) == 1 && loop[0].closed
 		for _, w := range loop {
+			if err := wallBudgetStep(budget); err != nil {
+				return 0, err
+			}
 			el, ok := walkElem(w.segmentWalk)
 			if !ok {
 				return 0, fmt.Errorf(`%w: this evaluator cannot survey the shell section's curve type`, ErrUnsupported)
@@ -370,7 +379,13 @@ func sectionInradius(profile ProfileRecord) (float64, error) {
 			verts = append(verts, [2]float64{w.startU, w.startV})
 		}
 	}
+	if err := wallBudgetErr(budget); err != nil {
+		return 0, err
+	}
 	candidateWork, ok := wallCandidateWork(len(elems), len(verts), false)
+	if err := wallBudgetErr(budget); err != nil {
+		return 0, err
+	}
 	if !ok {
 		return 0, fmt.Errorf(`%w: inward shell section survey candidate count overflows the checked work counter (fixed work budget %d)`, ErrUnsupported, shellInradiusWorkLimit)
 	}
@@ -380,8 +395,14 @@ func sectionInradius(profile ProfileRecord) (float64, error) {
 	// fitMax is +Inf: the inradius is a property of the section alone, with no
 	// height constraint (that constraint only bears on spanning, not the
 	// largest inscribed disk).
-	k := newWallKernel(elems, verts, 0, math.Inf(1))
-	out, err := k.runBudget(newWallWorkBudget(shellInradiusWorkLimit))
+	k, err := newWallKernelBudget(budget, elems, nil, verts, 0, 0, false, math.Inf(1))
+	if err != nil {
+		return 0, err
+	}
+	out, err := k.runBudget(newWallWorkBudgetWithOperation(shellInradiusWorkLimit, budget))
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return 0, err
+	}
 	if errors.Is(err, errWallWorkBudget) {
 		return 0, fmt.Errorf(`%w: inward shell section survey exceeded the fixed work budget of %d during candidate generation or validation`, ErrUnsupported, shellInradiusWorkLimit)
 	}

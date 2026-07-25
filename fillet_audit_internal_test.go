@@ -54,7 +54,7 @@ func TestContactFloorUsesTrueSectionBBox(t *testing.T) {
 		require.NoError(t, err)
 		segs := []segEntry{{loop: 0, idx: 0, n: 1, w: w}}
 
-		got, err := contactFloor(newWorkBudget(t.Context()), segs)
+		got, err := contactFloorBudget(newWorkBudget(t.Context()), segs)
 		require.NoError(t, err)
 		wantTrue := contactEps * math.Hypot(20, 10)     // true bbox diagonal √500
 		wantEndpoints := contactEps * math.Hypot(20, 0) // the old endpoint box
@@ -75,12 +75,40 @@ func TestContactFloorUsesTrueSectionBBox(t *testing.T) {
 		require.NoError(t, err)
 		segs := []segEntry{{loop: 0, idx: 0, n: 1, w: w}}
 
-		got, err := contactFloor(newWorkBudget(t.Context()), segs)
+		got, err := contactFloorBudget(newWorkBudget(t.Context()), segs)
 		require.NoError(t, err)
 		want := contactEps * math.Hypot(10, 10) // true bbox diagonal √200
 		require.InEpsilon(t, want, got, 1e-12,
 			`a full circle's true D is its diameter's diagonal, not the collapsed endpoint`)
 	})
+}
+
+type cancelOnFirstPollContext struct {
+	context.Context //nolint:containedctx // deterministic cancellation wrapper used only within one test call.
+	polls           int
+}
+
+func (c *cancelOnFirstPollContext) Err() error {
+	c.polls++
+	if c.polls == 1 {
+		return context.Canceled
+	}
+	return c.Context.Err()
+}
+
+func TestRewriteLoopChargesEachWalkToBudget(t *testing.T) {
+	walks := make([]sideWalk, workPollInterval)
+	for i := range walks {
+		walks[i] = sideWalk{segmentWalk: segmentWalk{
+			startU: float64(i), endU: float64(i + 1), length: 1,
+		}}
+	}
+	ctx := &cancelOnFirstPollContext{Context: t.Context()}
+
+	_, _, err := rewriteLoop(newWorkBudget(ctx), cornerLoop{walks: walks}, nil)
+
+	require.ErrorIs(t, err, context.Canceled)
+	require.Equal(t, 1, ctx.polls)
 }
 
 // TestAuditRewriteSingleCornerOverrunIsUnsupported pins the §5 audit's Table S
@@ -111,7 +139,7 @@ func TestAuditRewriteSingleCornerOverrunIsUnsupported(t *testing.T) {
 		return rewritten, blendAt
 	}
 
-	origArea, err := loopSignedArea(newWorkBudget(t.Context()), rect.Outer)
+	origArea, err := loopSignedAreaBudget(newWorkBudget(t.Context()), rect.Outer)
 	require.NoError(t, err)
 
 	for _, tc := range []struct {
@@ -134,12 +162,12 @@ func TestAuditRewriteSingleCornerOverrunIsUnsupported(t *testing.T) {
 
 			rewritten, blendAt := blendOne(t, cb, loops)
 
-			newArea, err := loopSignedArea(newWorkBudget(t.Context()), rewritten.Outer)
+			newArea, err := loopSignedAreaBudget(newWorkBudget(t.Context()), rewritten.Outer)
 			require.NoError(t, err)
 			require.Equal(t, tc.flips, math.Signbit(origArea) != math.Signbit(newArea),
 				`the rewritten loop's signed-area flip must match the case's expectation`)
 
-			err = auditRewrite(newWorkBudget(t.Context()), rect, rewritten, loops, blendAt)
+			err = auditRewriteBudget(newWorkBudget(t.Context()), rect, rewritten, loops, blendAt)
 			require.ErrorIs(t, err, ErrUnsupported,
 				`a single corner's overrun is Table S's S6, not the S8 inside-out verdict`)
 			require.NotErrorIs(t, err, ErrDegenerate,
@@ -149,7 +177,7 @@ func TestAuditRewriteSingleCornerOverrunIsUnsupported(t *testing.T) {
 }
 
 // sectionCornerLoops resolves a section's loops into coalesced corner walks, the
-// same decomposition prismCornerLoops runs, so an internal audit test can drive
+// same decomposition prismCornerLoopsBudget runs, so an internal audit test can drive
 // the real computeChamfer/computeFillet path on a hand-built section.
 func sectionCornerLoops(t *testing.T, prof ProfileRecord) []cornerLoop {
 	t.Helper()
@@ -183,9 +211,9 @@ func TestCrossingAuditRejectsBoundaryContact(t *testing.T) {
 			LineSeg{Start: Point2{U: 0, V: -10}, End: Point2{U: 0, V: 10}, TEnd: 1},
 		}}
 		budget := newWorkBudget(t.Context())
-		segs, err := buildSegEntries(budget, []LoopRecord{horizontal, vertical})
+		segs, err := buildSegEntriesBudget(budget, []LoopRecord{horizontal, vertical})
 		require.NoError(t, err)
-		err = crossingAudit(budget, segs)
+		err = crossingAuditBudget(budget, segs)
 		require.ErrorIs(t, err, ErrUnsupported, "two loop segments crossing in their interiors are unsupported")
 		require.ErrorContains(t, renderAuditCoordinates(err), `rewritten loop 0 segment 0 and loop 1 segment 0 cross`,
 			`the refusal names both loop segments in the crossing pair`)
@@ -207,9 +235,9 @@ func TestCrossingAuditRejectsBoundaryContact(t *testing.T) {
 			LineSeg{Start: Point2{U: 30, V: v}, End: Point2{U: v, V: v}, TEnd: 1},
 		}}
 		budget := newWorkBudget(t.Context())
-		segs, err := buildSegEntries(budget, []LoopRecord{quarterDisk, triangleOnArc})
+		segs, err := buildSegEntriesBudget(budget, []LoopRecord{quarterDisk, triangleOnArc})
 		require.NoError(t, err)
-		err = crossingAudit(budget, segs)
+		err = crossingAuditBudget(budget, segs)
 		require.ErrorIs(t, err, ErrUnsupported, "a hole vertex touching an outer arc is boundary contact")
 		require.ErrorContains(t, renderAuditCoordinates(err), `rewritten loop 0 segment 1 and loop 1 segment 0 are in contact`,
 			`the refusal names both loop segments in the contacting pair`)
@@ -228,9 +256,9 @@ func TestCrossingAuditRejectsBoundaryContact(t *testing.T) {
 			LineSeg{Start: Point2{U: 10, V: -10}, End: Point2{U: 0, V: 0}, TEnd: 1},
 		}}
 		budget := newWorkBudget(t.Context())
-		segs, err := buildSegEntries(budget, []LoopRecord{pinched})
+		segs, err := buildSegEntriesBudget(budget, []LoopRecord{pinched})
 		require.NoError(t, err)
-		err = crossingAudit(budget, segs)
+		err = crossingAuditBudget(budget, segs)
 		require.ErrorIs(t, err, ErrUnsupported, "a loop touching itself away from its shared vertices is a pinch")
 		require.ErrorContains(t, renderAuditCoordinates(err), `rewritten loop 0 segment 0 and loop 0 segment 2 are in contact`,
 			`the refusal names both loop segments in the contacting pair`)
@@ -254,9 +282,9 @@ func TestCrossingAuditAcceptsDisjointLoops(t *testing.T) {
 			LineSeg{Start: Point2{U: 110, V: 110}, End: Point2{U: 100, V: 100}, TEnd: 1},
 		}}
 		budget := newWorkBudget(t.Context())
-		segs, err := buildSegEntries(budget, []LoopRecord{a, b})
+		segs, err := buildSegEntriesBudget(budget, []LoopRecord{a, b})
 		require.NoError(t, err)
-		require.NoError(t, crossingAudit(budget, segs))
+		require.NoError(t, crossingAuditBudget(budget, segs))
 	})
 
 	t.Run("adjacent segments legitimately share their endpoint", func(t *testing.T) {
@@ -269,9 +297,9 @@ func TestCrossingAuditAcceptsDisjointLoops(t *testing.T) {
 			LineSeg{Start: Point2{U: 0, V: 10}, End: Point2{U: 0, V: 0}, TEnd: 1},
 		}}
 		budget := newWorkBudget(t.Context())
-		segs, err := buildSegEntries(budget, []LoopRecord{quad})
+		segs, err := buildSegEntriesBudget(budget, []LoopRecord{quad})
 		require.NoError(t, err)
-		require.NoError(t, crossingAudit(budget, segs))
+		require.NoError(t, crossingAuditBudget(budget, segs))
 	})
 }
 
@@ -287,7 +315,7 @@ func TestCrossingAuditCancellationIsBounded(t *testing.T) {
 	}
 	ctx := &internalCancelContext{Context: t.Context(), limit: 1}
 
-	err := crossingAudit(newWorkBudget(ctx), segs)
+	err := crossingAuditBudget(newWorkBudget(ctx), segs)
 
 	require.ErrorIs(t, err, context.Canceled)
 	require.Equal(t, 1, ctx.calls,
@@ -317,7 +345,7 @@ func TestNestingAuditCancellationReachesBoundaryScan(t *testing.T) {
 	})
 	ctx := &internalFrameCancelContext{Context: t.Context(), target: "loopContains"}
 
-	err := nestingAudit(newWorkBudget(ctx), segs, 2)
+	err := nestingAuditBudget(newWorkBudget(ctx), segs, 2)
 
 	require.ErrorIs(t, err, context.Canceled)
 	require.True(t, ctx.entered,

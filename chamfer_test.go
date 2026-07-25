@@ -40,6 +40,20 @@ func TestChamferContextCancellationAtCommitLeavesReceiverLive(t *testing.T) {
 	require.Equal(t, []*decad.Body{box}, doc.Bodies())
 }
 
+func TestChamferContextCancellationDuringPreprocessingLeavesReceiverLive(t *testing.T) {
+	doc, box := filletBox(t)
+	before := doc.Recipe()
+	ctx := &preAuditScanCancelContext{Context: t.Context()}
+
+	body, err := box.ChamferContext(ctx, verticalEdges(), units.Millimeters(10))
+
+	require.Nil(t, body)
+	require.ErrorIs(t, err, context.Canceled)
+	require.True(t, ctx.entered)
+	require.Equal(t, before, doc.Recipe())
+	require.Equal(t, []*decad.Body{box}, doc.Bodies())
+}
+
 func TestChamferSelectorAdmission(t *testing.T) {
 	t.Run("BuiltInQuery", func(t *testing.T) {
 		doc, box := filletBox(t)

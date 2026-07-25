@@ -104,7 +104,8 @@ func (b *Body) FilletContext(ctx context.Context, sel EdgeSelector, r units.Valu
 			sel, selectedEdgesContext(edges), ErrUnsupported)
 	}
 
-	loops, err := prismCornerLoops(pp)
+	budget := newWorkBudget(ctx)
+	loops, err := prismCornerLoopsBudget(budget, pp)
 	if err != nil {
 		return nil, err
 	}
@@ -115,7 +116,10 @@ func (b *Body) FilletContext(ctx context.Context, sel EdgeSelector, r units.Valu
 	}
 	matched := make([]matchedCorner, 0, len(edges))
 	for ei, e := range edges {
-		li, ci, found := matchCorner(pp, loops, e)
+		li, ci, found, err := matchCornerBudget(budget, pp, loops, e)
+		if err != nil {
+			return nil, err
+		}
 		if !found {
 			return nil, fmt.Errorf(`selector %s, %s: %w: a fillet of a cap edge is the vertex-blend problem, not yet supported`,
 				sel, selectedEdgeContext(ei, e), ErrUnsupported)
@@ -127,6 +131,9 @@ func (b *Body) FilletContext(ctx context.Context, sel EdgeSelector, r units.Valu
 	// Stage 3 (§4): the construction's own gates, per corner — S4 (a corner
 	// exists) then S5 (a blend of that radius exists).
 	for _, corner := range matched {
+		if err := wallBudgetStep(budget); err != nil {
+			return nil, err
+		}
 		cb, err := computeFillet(loops[corner.loop], corner.corner, rmm)
 		if err != nil {
 			return nil, fmt.Errorf(`selector %s, %s: %w`, sel, corner, err)
@@ -135,10 +142,13 @@ func (b *Body) FilletContext(ctx context.Context, sel EdgeSelector, r units.Valu
 	}
 
 	// The rewritten section, and the fillet arcs' (loop, segment) indices.
-	profile, filletArcs := rewriteProfile(pp.profile, loops, blendAt)
+	profile, filletArcs, err := rewriteProfileBudget(budget, pp.profile, loops, blendAt)
+	if err != nil {
+		return nil, err
+	}
 
 	// Stage 4 (§4/§5): the audit of the rewritten profile — S8, S6, S7, S9.
-	if err := auditRewrite(newWorkBudget(ctx), pp.profile, profile, loops, blendAt); err != nil {
+	if err := auditRewriteBudget(budget, pp.profile, profile, loops, blendAt); err != nil {
 		return nil, wrapModifyAuditError(sel, matched, err)
 	}
 
@@ -237,14 +247,10 @@ func wrapModifyAuditError(sel EdgeSelector, matched []matchedCorner, err error) 
 	return fmt.Errorf(`selector %s matched [%s]: %w`, sel, strings.Join(coordinates, `; `), err)
 }
 
-// prismCornerLoops resolves every loop of the prism's section into its
-// coalesced walks (outer first, then holes), so a lateral edge maps to a
-// junction and the rewrite operates at the corner level.
-func prismCornerLoops(pp prismPayload) ([]cornerLoop, error) {
-	return prismCornerLoopsBudget(nil, pp)
-}
-
 func prismCornerLoopsBudget(budget *workBudget, pp prismPayload) ([]cornerLoop, error) {
+	if err := wallBudgetErr(budget); err != nil {
+		return nil, err
+	}
 	var out []cornerLoop
 	for _, loop := range append([]LoopRecord{pp.profile.Outer}, pp.profile.Holes...) {
 		if err := wallBudgetStep(budget); err != nil {
@@ -276,27 +282,38 @@ func prismCornerLoopsBudget(budget *workBudget, pp prismPayload) ([]cornerLoop, 
 // endpoints share a cap plane), which is exactly S1's honest reading of the
 // class.
 func matchCorner(pp prismPayload, loops []cornerLoop, e *Edge) (int, int, bool) {
+	li, ci, found, _ := matchCornerBudget(nil, pp, loops, e)
+	return li, ci, found
+}
+
+func matchCornerBudget(budget *workBudget, pp prismPayload, loops []cornerLoop, e *Edge) (int, int, bool, error) {
 	if _, ok := e.curve.(Line3); !ok {
-		return 0, 0, false
+		return 0, 0, false, nil
 	}
 	if e.start == nil || e.end == nil {
-		return 0, 0, false
+		return 0, 0, false, nil
 	}
 	const tol = 1e-6
 	for li, loop := range loops {
+		if err := wallBudgetStep(budget); err != nil {
+			return 0, 0, false, err
+		}
 		n := len(loop.walks)
 		if n == 1 && loop.walks[0].closed {
 			continue
 		}
 		for ci, w := range loop.walks {
+			if err := wallBudgetStep(budget); err != nil {
+				return 0, 0, false, err
+			}
 			j0 := pp.point(w.startU, w.startV, pp.z0)
 			j1 := pp.point(w.startU, w.startV, pp.z1)
 			if matchEndpoints(e.start.position, e.end.position, j0, j1, tol) {
-				return li, ci, true
+				return li, ci, true, nil
 			}
 		}
 	}
-	return 0, 0, false
+	return 0, 0, false, nil
 }
 
 // matchEndpoints reports whether {a, b} equals {p, q} as an unordered pair
@@ -567,31 +584,48 @@ func cutbackOn(c carrier, px, py, fx, fy float64) float64 {
 // ProfileRecord and, per loop, the segment indices that are blend connectors
 // (their faces carry the second fillet(i,j) / chamfer(i,j) role, Table B).
 func rewriteProfile(orig ProfileRecord, loops []cornerLoop, blendAt []map[int]*cornerBlend) (ProfileRecord, []map[int]struct{}) {
+	profile, blendSegs, _ := rewriteProfileBudget(nil, orig, loops, blendAt)
+	return profile, blendSegs
+}
+
+func rewriteProfileBudget(budget *workBudget, orig ProfileRecord, loops []cornerLoop, blendAt []map[int]*cornerBlend) (ProfileRecord, []map[int]struct{}, error) {
 	origLoops := append([]LoopRecord{orig.Outer}, orig.Holes...)
 	newLoops := make([]LoopRecord, len(origLoops))
 	blendSegs := make([]map[int]struct{}, len(origLoops))
 	for li := range origLoops {
+		if err := wallBudgetStep(budget); err != nil {
+			return ProfileRecord{}, nil, err
+		}
 		blendSegs[li] = map[int]struct{}{}
 		if len(blendAt[li]) == 0 {
 			newLoops[li] = cloneLoopRecord(origLoops[li])
 			continue
 		}
-		segs, connectors := rewriteLoop(loops[li], blendAt[li])
+		segs, connectors, err := rewriteLoop(budget, loops[li], blendAt[li])
+		if err != nil {
+			return ProfileRecord{}, nil, err
+		}
 		newLoops[li] = LoopRecord{Segments: segs}
 		blendSegs[li] = connectors
 	}
-	return ProfileRecord{Outer: newLoops[0], Holes: newLoops[1:]}, blendSegs
+	if err := wallBudgetErr(budget); err != nil {
+		return ProfileRecord{}, nil, err
+	}
+	return ProfileRecord{Outer: newLoops[0], Holes: newLoops[1:]}, blendSegs, nil
 }
 
 // rewriteLoop rebuilds one loop's segments with its corners blended: each walk
 // is trimmed to the feet its two ends' blends pin, and each blend's connector —
 // a fillet's tangent arc or a chamfer's chord — is inserted between the walls it
 // joins.
-func rewriteLoop(loop cornerLoop, blends map[int]*cornerBlend) ([]CurveSegment, map[int]struct{}) {
+func rewriteLoop(budget *workBudget, loop cornerLoop, blends map[int]*cornerBlend) ([]CurveSegment, map[int]struct{}, error) {
 	n := len(loop.walks)
 	var segs []CurveSegment
 	connectors := map[int]struct{}{}
 	for i := range n {
+		if err := wallBudgetStep(budget); err != nil {
+			return nil, nil, err
+		}
 		w := loop.walks[i]
 		startU, startV := w.startU, w.startV
 		if cb := blends[i]; cb != nil { // corner i trims this walk's start
@@ -607,7 +641,7 @@ func rewriteLoop(loop cornerLoop, blends map[int]*cornerBlend) ([]CurveSegment, 
 			connectors[len(segs)-1] = struct{}{}
 		}
 	}
-	return segs, connectors
+	return segs, connectors, nil
 }
 
 // walkSegment re-emits a coalesced walk, trimmed to (start, end), as a

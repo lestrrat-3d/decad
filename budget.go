@@ -28,6 +28,30 @@ func newWallWorkBudget(limit uint64) *workBudget {
 	}
 }
 
+// newWallWorkBudgetWithOperation shares the operation cancellation budget with
+// the fixed wall-survey ceiling.
+func newWallWorkBudgetWithOperation(limit uint64, operation *workBudget) *workBudget {
+	wall := newWallWorkBudget(limit)
+	return &workBudget{
+		stepFn: func() error {
+			if operation != nil {
+				if err := operation.step(); err != nil {
+					return err
+				}
+			}
+			return wall.step()
+		},
+		errFn: func() error {
+			if operation != nil {
+				if err := operation.err(); err != nil {
+					return err
+				}
+			}
+			return wall.err()
+		},
+	}
+}
+
 func wallCheckedAdd(a, b uint64) (uint64, bool) {
 	if ^uint64(0)-a < b {
 		return 0, false
