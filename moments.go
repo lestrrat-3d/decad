@@ -144,6 +144,9 @@ func (r ProfileRecord) integrals() (regionIntegrals, error) {
 }
 
 func (r ProfileRecord) integralsBudget(budget *workBudget) (regionIntegrals, error) {
+	if err := wallBudgetErr(budget); err != nil {
+		return regionIntegrals{}, err
+	}
 	record, anchor, err := validateMomentFieldsBudget(budget, r)
 	if err != nil {
 		return regionIntegrals{}, err
@@ -211,6 +214,11 @@ func integrateMomentRecordMode(record ProfileRecord, anchor Point2, order moment
 			if checkFinite && !ig.isFinite(order) {
 				return regionIntegrals{}, fmt.Errorf(`%w: mass-property integration overflowed at loop %d segment %d`, ErrNotFinite, loopIndex, segmentIndex)
 			}
+		}
+	}
+	if budget != nil {
+		if err := budget.err(); err != nil {
+			return regionIntegrals{}, err
 		}
 	}
 	if ig.area <= 0 {

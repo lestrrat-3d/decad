@@ -42,6 +42,9 @@ func validateMomentFields(record ProfileRecord) (ProfileRecord, Point2, error) {
 }
 
 func validateMomentFieldsBudget(budget *workBudget, record ProfileRecord) (ProfileRecord, Point2, error) {
+	if err := wallBudgetErr(budget); err != nil {
+		return ProfileRecord{}, Point2{}, err
+	}
 	normalized := make([]LoopRecord, len(record.Holes)+1)
 	var anchor Point2
 	for loopIndex := range normalized {
@@ -77,6 +80,11 @@ func validateMomentFieldsBudget(budget *workBudget, record ProfileRecord) (Profi
 			if loopIndex == 0 && segmentIndex == 0 {
 				anchor = Point2{U: walk.startU, V: walk.startV}
 			}
+		}
+	}
+	if budget != nil {
+		if err := budget.err(); err != nil {
+			return ProfileRecord{}, Point2{}, err
 		}
 	}
 
