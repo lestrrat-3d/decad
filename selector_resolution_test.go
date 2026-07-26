@@ -371,11 +371,13 @@ func TestSelectorRejectsNonPositiveCardinality(t *testing.T) {
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 
 	// And on both wire directions, with the same branchable identity.
-	_, err = json.Marshal(decad.Step{Op: decad.OpFillet, Selectors: []decad.Selector{decad.Edges(decad.Circular()).Exactly(0)}})
+	step := validCodecStep(decad.OpFillet)
+	step.Selectors = []decad.Selector{decad.Edges(decad.Circular()).Exactly(0)}
+	_, err = json.Marshal(step)
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 	var s decad.Step
-	err = json.Unmarshal([]byte(`{"op":"fillet","selectors":[{"kind":"edges","preds":[],"exactly":0}]}`), &s)
+	err = json.Unmarshal([]byte(`{"op":"fillet","inputs":[0],"selectors":[{"kind":"edges","preds":[],"exactly":0}],"values":["1 mm"]}`), &s)
 	require.ErrorIs(t, err, decad.ErrDegenerate)
-	err = json.Unmarshal([]byte(`{"op":"fillet","selectors":[{"kind":"faces","preds":[],"at_least":-2}]}`), &s)
+	err = json.Unmarshal([]byte(`{"op":"fillet","inputs":[0],"selectors":[{"kind":"faces","preds":[],"at_least":-2}],"values":["1 mm"]}`), &s)
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 }

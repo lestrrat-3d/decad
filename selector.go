@@ -728,12 +728,13 @@ func unmarshalSelector(data []byte) (Selector, error) {
 		return nil, prependCodecPath(fmt.Errorf(`decad: unknown selector kind %q`, probe.Kind), "kind")
 	}
 	var raw struct {
+		Kind    string             `json:"kind"`
 		Preds   *[]json.RawMessage `json:"preds"`
 		Exactly *int               `json:"exactly"`
 		AtLeast *int               `json:"at_least"`
 	}
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return nil, codecJSONErrorAt(data, &raw, fmt.Errorf(`decad: failed to decode %s query: %w`, probe.Kind, err))
+	if err := decodeStrictJSON(data, &raw, fmt.Sprintf(`%s query`, probe.Kind)); err != nil {
+		return nil, err
 	}
 	if raw.Preds == nil {
 		return nil, prependCodecPath(fmt.Errorf(`decad: a %s query requires preds`, probe.Kind), "preds")
@@ -842,13 +843,20 @@ func unmarshalEdgePredicate(data []byte) (EdgePredicate, error) {
 	}
 	switch probe.Kind {
 	case predKindConvex, predKindConcave, predKindCircular:
+		var raw struct {
+			Kind string `json:"kind"`
+		}
+		if err := decodeStrictJSON(data, &raw, "edge predicate"); err != nil {
+			return EdgePredicate{}, err
+		}
 		return EdgePredicate{kind: probe.Kind}, nil
 	case predKindParallelTo:
 		var raw struct {
-			Dir *r3.Vec `json:"dir"`
+			Kind string  `json:"kind"`
+			Dir  *r3.Vec `json:"dir"`
 		}
-		if err := json.Unmarshal(data, &raw); err != nil {
-			return EdgePredicate{}, codecJSONErrorAt(data, &raw, fmt.Errorf(`decad: failed to decode parallel-to predicate: %w`, err))
+		if err := decodeStrictJSON(data, &raw, "parallel-to predicate"); err != nil {
+			return EdgePredicate{}, err
 		}
 		if raw.Dir == nil {
 			return EdgePredicate{}, prependCodecPath(fmt.Errorf(`decad: a parallel-to predicate requires dir`), "dir")
@@ -856,10 +864,11 @@ func unmarshalEdgePredicate(data []byte) (EdgePredicate, error) {
 		return EdgePredicate{kind: probe.Kind, dir: *raw.Dir}, nil
 	case predKindLongerThan:
 		var raw struct {
-			L *units.Value `json:"l"`
+			Kind string       `json:"kind"`
+			L    *units.Value `json:"l"`
 		}
-		if err := json.Unmarshal(data, &raw); err != nil {
-			return EdgePredicate{}, codecJSONErrorAt(data, &raw, fmt.Errorf(`decad: failed to decode longer-than predicate: %w`, err))
+		if err := decodeStrictJSON(data, &raw, "longer-than predicate"); err != nil {
+			return EdgePredicate{}, err
 		}
 		if raw.L == nil {
 			return EdgePredicate{}, prependCodecPath(fmt.Errorf(`decad: a longer-than predicate requires l`), "l")
@@ -890,14 +899,20 @@ func unmarshalFacePredicate(data []byte) (FacePredicate, error) {
 	}
 	switch probe.Kind {
 	case predKindPlanar, predKindCylindrical:
+		var raw struct {
+			Kind string `json:"kind"`
+		}
+		if err := decodeStrictJSON(data, &raw, "face predicate"); err != nil {
+			return FacePredicate{}, err
+		}
 		return FacePredicate{kind: probe.Kind}, nil
 	case predKindNormalTo, predKindFacing:
 		var raw struct {
-			Dir *r3.Vec `json:"dir"`
+			Kind string  `json:"kind"`
+			Dir  *r3.Vec `json:"dir"`
 		}
-		if err := json.Unmarshal(data, &raw); err != nil {
-			return FacePredicate{}, codecJSONErrorAt(data, &raw,
-				fmt.Errorf(`decad: failed to decode %s predicate: %w`, facePredicateDisplayName(probe.Kind), err))
+		if err := decodeStrictJSON(data, &raw, fmt.Sprintf(`%s predicate`, facePredicateDisplayName(probe.Kind))); err != nil {
+			return FacePredicate{}, err
 		}
 		if raw.Dir == nil {
 			return FacePredicate{}, prependCodecPath(fmt.Errorf(`decad: a %s predicate requires dir`, facePredicateDisplayName(probe.Kind)), "dir")
@@ -934,13 +949,14 @@ func facePredicateDisplayName(kind string) string {
 // an empty role.
 func unmarshalPredicateRef(data []byte, what string) (FeatureRef, error) {
 	var raw struct {
-		Ref *struct {
+		Kind string `json:"kind"`
+		Ref  *struct {
 			Step *json.RawMessage `json:"step"`
 			Role *string          `json:"role"`
 		} `json:"ref"`
 	}
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return FeatureRef{}, codecJSONErrorAt(data, &raw, fmt.Errorf(`decad: failed to decode %s predicate: %w`, what, err))
+	if err := decodeStrictJSON(data, &raw, fmt.Sprintf(`%s predicate`, what)); err != nil {
+		return FeatureRef{}, err
 	}
 	if raw.Ref == nil {
 		return FeatureRef{}, prependCodecPath(fmt.Errorf(`decad: a %s predicate requires ref with step and role`, what), "ref")

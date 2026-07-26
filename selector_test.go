@@ -46,7 +46,11 @@ func TestSelectorCodec(t *testing.T) {
 		).Exactly(1),
 		decad.Faces(decad.Planar()).AtLeast(2),
 	} {
-		step := decad.Step{Op: decad.OpFillet, Inputs: []decad.StepRef{0}, Selectors: []decad.Selector{sel}}
+		step := validCodecStep(decad.OpFillet)
+		if _, ok := sel.(*decad.FaceQuery); ok {
+			step = validCodecStep(decad.OpShell)
+		}
+		step.Selectors = []decad.Selector{sel}
 		buf, err := json.Marshal(step)
 		require.NoError(t, err, `%T should encode`, sel)
 		var got decad.Step
@@ -55,7 +59,8 @@ func TestSelectorCodec(t *testing.T) {
 	}
 
 	// A later cardinality assertion replaces the earlier one.
-	step := decad.Step{Op: decad.OpFillet, Selectors: []decad.Selector{decad.Edges(decad.Convex()).Exactly(4).AtLeast(1)}}
+	step := validCodecStep(decad.OpFillet)
+	step.Selectors = []decad.Selector{decad.Edges(decad.Convex()).Exactly(4).AtLeast(1)}
 	buf, err := json.Marshal(step)
 	require.NoError(t, err)
 	require.Contains(t, string(buf), `"at_least":1`)
@@ -66,49 +71,78 @@ func TestSelectorCodecRejections(t *testing.T) {
 	// The set is closed: unknown and missing tags are rejected, at the
 	// selector level and inside each predicate tier.
 	var step decad.Step
-	require.Error(t, json.Unmarshal([]byte(`{"op":"fillet","selectors":[{"kind":"vertices","preds":[]}]}`), &step),
+	require.Error(t, json.Unmarshal([]byte(`{"op":"fillet","inputs":[0],"selectors":[{"kind":"vertices","preds":[]}],"values":["1 mm"]}`), &step),
 		`an unknown selector kind is rejected`)
-	require.Error(t, json.Unmarshal([]byte(`{"op":"fillet","selectors":[{"preds":[]}]}`), &step),
+	require.Error(t, json.Unmarshal([]byte(`{"op":"fillet","inputs":[0],"selectors":[{"preds":[]}],"values":["1 mm"]}`), &step),
 		`a selector with no kind tag is malformed`)
-	require.Error(t, json.Unmarshal([]byte(`{"op":"fillet","selectors":[{"kind":"edges","preds":[{"kind":"glowing"}]}]}`), &step),
+	require.Error(t, json.Unmarshal([]byte(`{"op":"fillet","inputs":[0],"selectors":[{"kind":"edges","preds":[{"kind":"glowing"}]}],"values":["1 mm"]}`), &step),
 		`an unknown edge predicate kind is rejected`)
-	require.Error(t, json.Unmarshal([]byte(`{"op":"shell","selectors":[{"kind":"faces","preds":[{"kind":"convex"}]}]}`), &step),
+	require.Error(t, json.Unmarshal([]byte(`{"op":"shell","inputs":[0],"selectors":[{"kind":"faces","preds":[{"kind":"convex"}]}],"opts":{"kind":"shell","sense":"inward"},"values":["1 mm"]}`), &step),
 		`the predicate tiers are disjoint: an edge predicate is not a face predicate`)
-	require.Error(t, json.Unmarshal([]byte(`{"op":"fillet","selectors":[{"kind":"edges","preds":[{}]}]}`), &step),
+	require.Error(t, json.Unmarshal([]byte(`{"op":"fillet","inputs":[0],"selectors":[{"kind":"edges","preds":[{}]}],"values":["1 mm"]}`), &step),
 		`a predicate with no kind tag is malformed`)
 
 	// Absent fields are malformed, never silently zeroed.
-	require.Error(t, json.Unmarshal([]byte(`{"op":"fillet","selectors":[{"kind":"edges"}]}`), &step),
+	require.Error(t, json.Unmarshal([]byte(`{"op":"fillet","inputs":[0],"selectors":[{"kind":"edges"}],"values":["1 mm"]}`), &step),
 		`a query with no preds is malformed, never silently match-all`)
-	require.Error(t, json.Unmarshal([]byte(`{"op":"fillet","selectors":[{"kind":"edges","preds":[{"kind":"parallel_to"}]}]}`), &step),
+	require.Error(t, json.Unmarshal([]byte(`{"op":"fillet","inputs":[0],"selectors":[{"kind":"edges","preds":[{"kind":"parallel_to"}]}],"values":["1 mm"]}`), &step),
 		`a parallel-to predicate with no dir is malformed`)
-	require.Error(t, json.Unmarshal([]byte(`{"op":"fillet","selectors":[{"kind":"edges","preds":[{"kind":"longer_than"}]}]}`), &step),
+	require.Error(t, json.Unmarshal([]byte(`{"op":"fillet","inputs":[0],"selectors":[{"kind":"edges","preds":[{"kind":"longer_than"}]}],"values":["1 mm"]}`), &step),
 		`a longer-than predicate with no l is malformed`)
-	require.Error(t, json.Unmarshal([]byte(`{"op":"fillet","selectors":[{"kind":"edges","preds":[{"kind":"created_by"}]}]}`), &step),
+	require.Error(t, json.Unmarshal([]byte(`{"op":"fillet","inputs":[0],"selectors":[{"kind":"edges","preds":[{"kind":"created_by"}]}],"values":["1 mm"]}`), &step),
 		`a created-by predicate with no ref is malformed`)
-	require.Error(t, json.Unmarshal([]byte(`{"op":"fillet","selectors":[{"kind":"edges","preds":[{"kind":"created_by","ref":{"step":1}}]}]}`), &step),
+	require.Error(t, json.Unmarshal([]byte(`{"op":"fillet","inputs":[0],"selectors":[{"kind":"edges","preds":[{"kind":"created_by","ref":{"step":1}}]}],"values":["1 mm"]}`), &step),
 		`a provenance ref with no role is malformed`)
-	require.Error(t, json.Unmarshal([]byte(`{"op":"shell","selectors":[{"kind":"faces","preds":[{"kind":"normal_to"}]}]}`), &step),
+	require.Error(t, json.Unmarshal([]byte(`{"op":"shell","inputs":[0],"selectors":[{"kind":"faces","preds":[{"kind":"normal_to"}]}],"opts":{"kind":"shell","sense":"inward"},"values":["1 mm"]}`), &step),
 		`a normal-to predicate with no dir is malformed`)
-	require.Error(t, json.Unmarshal([]byte(`{"op":"shell","selectors":[{"kind":"faces","preds":[{"kind":"face_created_by","ref":{"role":"capEnd"}}]}]}`), &step),
+	require.Error(t, json.Unmarshal([]byte(`{"op":"shell","inputs":[0],"selectors":[{"kind":"faces","preds":[{"kind":"face_created_by","ref":{"role":"capEnd"}}]}],"opts":{"kind":"shell","sense":"inward"},"values":["1 mm"]}`), &step),
 		`a provenance ref with no step is malformed`)
 	for _, data := range []string{
-		`{"op":"fillet","selectors":[{"kind":"edges","preds":[{"kind":"created_by","ref":{"step":0,"role":""}}]}]}`,
-		`{"op":"fillet","selectors":[{"kind":"edges","preds":[{"kind":"created_by","ref":{"step":-1,"role":"capStart"}}]}]}`,
-		`{"op":"shell","selectors":[{"kind":"faces","preds":[{"kind":"face_created_by","ref":{"step":0,"role":""}}]}]}`,
-		`{"op":"shell","selectors":[{"kind":"faces","preds":[{"kind":"face_created_by","ref":{"step":-1,"role":"capStart"}}]}]}`,
+		`{"op":"fillet","inputs":[0],"selectors":[{"kind":"edges","preds":[{"kind":"created_by","ref":{"step":0,"role":""}}]}],"values":["1 mm"]}`,
+		`{"op":"fillet","inputs":[0],"selectors":[{"kind":"edges","preds":[{"kind":"created_by","ref":{"step":-1,"role":"capStart"}}]}],"values":["1 mm"]}`,
+		`{"op":"shell","inputs":[0],"selectors":[{"kind":"faces","preds":[{"kind":"face_created_by","ref":{"step":0,"role":""}}]}],"opts":{"kind":"shell","sense":"inward"},"values":["1 mm"]}`,
+		`{"op":"shell","inputs":[0],"selectors":[{"kind":"faces","preds":[{"kind":"face_created_by","ref":{"step":-1,"role":"capStart"}}]}],"opts":{"kind":"shell","sense":"inward"},"values":["1 mm"]}`,
 	} {
 		err := json.Unmarshal([]byte(data), &step)
 		require.ErrorIs(t, err, decad.ErrDegenerate)
 	}
-	require.Error(t, json.Unmarshal([]byte(`{"op":"fillet","selectors":[{"kind":"edges","preds":[],"exactly":4,"at_least":1}]}`), &step),
+	require.Error(t, json.Unmarshal([]byte(`{"op":"fillet","inputs":[0],"selectors":[{"kind":"edges","preds":[],"exactly":4,"at_least":1}],"values":["1 mm"]}`), &step),
 		`a query carries at most one cardinality assertion`)
 
 	// A zero-value predicate names nothing: only the constructors build one.
-	_, err := json.Marshal(decad.Step{Op: decad.OpFillet, Selectors: []decad.Selector{decad.Edges(decad.EdgePredicate{})}})
+	badEdge := validCodecStep(decad.OpFillet)
+	badEdge.Selectors = []decad.Selector{decad.Edges(decad.EdgePredicate{})}
+	_, err := json.Marshal(badEdge)
 	require.Error(t, err, `a zero-value edge predicate refuses to encode`)
-	_, err = json.Marshal(decad.Step{Op: decad.OpShell, Selectors: []decad.Selector{decad.Faces(decad.FacePredicate{})}})
+	badFace := validCodecStep(decad.OpShell)
+	badFace.Selectors = []decad.Selector{decad.Faces(decad.FacePredicate{})}
+	_, err = json.Marshal(badFace)
 	require.Error(t, err, `a zero-value face predicate refuses to encode`)
+}
+
+func TestSelectorCodecRejectsUnknownNestedFields(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		data string
+	}{
+		{
+			name: "selector field",
+			data: `{"op":"fillet","inputs":[0],"selectors":[{"kind":"edges","preds":[],"unexpected":true}],"values":["1 mm"]}`,
+		},
+		{
+			name: "predicate field",
+			data: `{"op":"fillet","inputs":[0],"selectors":[{"kind":"edges","preds":[{"kind":"convex","unexpected":true}]}],"values":["1 mm"]}`,
+		},
+		{
+			name: "provenance field",
+			data: `{"op":"fillet","inputs":[0],"selectors":[{"kind":"edges","preds":[{"kind":"created_by","ref":{"step":0,"role":"capStart","unexpected":true}}]}],"values":["1 mm"]}`,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var step decad.Step
+			require.Error(t, json.Unmarshal([]byte(tc.data), &step))
+		})
+	}
 }
 
 func TestSelectorCodecRejectsOutOfRangeNegativeProvenanceSteps(t *testing.T) {
@@ -118,11 +152,11 @@ func TestSelectorCodecRejectsOutOfRangeNegativeProvenanceSteps(t *testing.T) {
 	}{
 		{
 			name: "edge created-by",
-			data: `{"op":"fillet","selectors":[{"kind":"edges","preds":[{"kind":"created_by","ref":{"step":-9223372036854775809,"role":"capStart"}}]}]}`,
+			data: `{"op":"fillet","inputs":[0],"selectors":[{"kind":"edges","preds":[{"kind":"created_by","ref":{"step":-9223372036854775809,"role":"capStart"}}]}],"values":["1 mm"]}`,
 		},
 		{
 			name: "face created-by",
-			data: `{"op":"shell","selectors":[{"kind":"faces","preds":[{"kind":"face_created_by","ref":{"step":-9223372036854775809,"role":"capStart"}}]}]}`,
+			data: `{"op":"shell","inputs":[0],"selectors":[{"kind":"faces","preds":[{"kind":"face_created_by","ref":{"step":-9223372036854775809,"role":"capStart"}}]}],"opts":{"kind":"shell","sense":"inward"},"values":["1 mm"]}`,
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -140,27 +174,27 @@ func TestSelectorCodecRejectsNegativeProvenanceStepNumberForms(t *testing.T) {
 	}{
 		{
 			name: "edge created-by decimal",
-			data: `{"op":"fillet","selectors":[{"kind":"edges","preds":[{"kind":"created_by","ref":{"step":-1.0,"role":"capStart"}}]}]}`,
+			data: `{"op":"fillet","inputs":[0],"selectors":[{"kind":"edges","preds":[{"kind":"created_by","ref":{"step":-1.0,"role":"capStart"}}]}],"values":["1 mm"]}`,
 		},
 		{
 			name: "edge created-by exponent",
-			data: `{"op":"fillet","selectors":[{"kind":"edges","preds":[{"kind":"created_by","ref":{"step":-1e0,"role":"capStart"}}]}]}`,
+			data: `{"op":"fillet","inputs":[0],"selectors":[{"kind":"edges","preds":[{"kind":"created_by","ref":{"step":-1e0,"role":"capStart"}}]}],"values":["1 mm"]}`,
 		},
 		{
 			name: "edge created-by uppercase exponent",
-			data: `{"op":"fillet","selectors":[{"kind":"edges","preds":[{"kind":"created_by","ref":{"step":-1E+0,"role":"capStart"}}]}]}`,
+			data: `{"op":"fillet","inputs":[0],"selectors":[{"kind":"edges","preds":[{"kind":"created_by","ref":{"step":-1E+0,"role":"capStart"}}]}],"values":["1 mm"]}`,
 		},
 		{
 			name: "face created-by decimal",
-			data: `{"op":"shell","selectors":[{"kind":"faces","preds":[{"kind":"face_created_by","ref":{"step":-1.0,"role":"capStart"}}]}]}`,
+			data: `{"op":"shell","inputs":[0],"selectors":[{"kind":"faces","preds":[{"kind":"face_created_by","ref":{"step":-1.0,"role":"capStart"}}]}],"opts":{"kind":"shell","sense":"inward"},"values":["1 mm"]}`,
 		},
 		{
 			name: "face created-by exponent",
-			data: `{"op":"shell","selectors":[{"kind":"faces","preds":[{"kind":"face_created_by","ref":{"step":-1e0,"role":"capStart"}}]}]}`,
+			data: `{"op":"shell","inputs":[0],"selectors":[{"kind":"faces","preds":[{"kind":"face_created_by","ref":{"step":-1e0,"role":"capStart"}}]}],"opts":{"kind":"shell","sense":"inward"},"values":["1 mm"]}`,
 		},
 		{
 			name: "face created-by uppercase exponent",
-			data: `{"op":"shell","selectors":[{"kind":"faces","preds":[{"kind":"face_created_by","ref":{"step":-1E+0,"role":"capStart"}}]}]}`,
+			data: `{"op":"shell","inputs":[0],"selectors":[{"kind":"faces","preds":[{"kind":"face_created_by","ref":{"step":-1E+0,"role":"capStart"}}]}],"opts":{"kind":"shell","sense":"inward"},"values":["1 mm"]}`,
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -180,23 +214,23 @@ func TestSelectorCodecAcceptsNegativeZeroProvenanceSteps(t *testing.T) {
 	}{
 		{
 			name: "edge created-by",
-			data: `{"op":"fillet","selectors":[{"kind":"edges","preds":[{"kind":"created_by","ref":{"step":-0,"role":"capStart"}}]}]}`,
-			want: decad.Step{Op: decad.OpFillet, Selectors: []decad.Selector{decad.Edges(decad.CreatedBy(ref))}},
+			data: `{"op":"fillet","inputs":[0],"selectors":[{"kind":"edges","preds":[{"kind":"created_by","ref":{"step":-0,"role":"capStart"}}]}],"values":["1 mm"]}`,
+			want: decad.Step{Op: decad.OpFillet, Inputs: []decad.StepRef{0}, Selectors: []decad.Selector{decad.Edges(decad.CreatedBy(ref))}, Values: []units.Value{units.Millimeters(1)}},
 		},
 		{
 			name: "face created-by",
-			data: `{"op":"shell","selectors":[{"kind":"faces","preds":[{"kind":"face_created_by","ref":{"step":-0,"role":"capStart"}}]}]}`,
-			want: decad.Step{Op: decad.OpShell, Selectors: []decad.Selector{decad.Faces(decad.FaceCreatedBy(ref))}},
+			data: `{"op":"shell","inputs":[0],"selectors":[{"kind":"faces","preds":[{"kind":"face_created_by","ref":{"step":-0,"role":"capStart"}}]}],"values":["1 mm"],"opts":{"kind":"shell","sense":"inward"}}`,
+			want: decad.Step{Op: decad.OpShell, Inputs: []decad.StepRef{0}, Selectors: []decad.Selector{decad.Faces(decad.FaceCreatedBy(ref))}, Values: []units.Value{units.Millimeters(1)}, Opts: decad.ShellOpts{Sense: decad.Inward}},
 		},
 		{
 			name: "edge created-by exponent",
-			data: `{"op":"fillet","selectors":[{"kind":"edges","preds":[{"kind":"created_by","ref":{"step":-0e10,"role":"capStart"}}]}]}`,
-			want: decad.Step{Op: decad.OpFillet, Selectors: []decad.Selector{decad.Edges(decad.CreatedBy(ref))}},
+			data: `{"op":"fillet","inputs":[0],"selectors":[{"kind":"edges","preds":[{"kind":"created_by","ref":{"step":-0e10,"role":"capStart"}}]}],"values":["1 mm"]}`,
+			want: decad.Step{Op: decad.OpFillet, Inputs: []decad.StepRef{0}, Selectors: []decad.Selector{decad.Edges(decad.CreatedBy(ref))}, Values: []units.Value{units.Millimeters(1)}},
 		},
 		{
 			name: "face created-by exponent",
-			data: `{"op":"shell","selectors":[{"kind":"faces","preds":[{"kind":"face_created_by","ref":{"step":-0E+10,"role":"capStart"}}]}]}`,
-			want: decad.Step{Op: decad.OpShell, Selectors: []decad.Selector{decad.Faces(decad.FaceCreatedBy(ref))}},
+			data: `{"op":"shell","inputs":[0],"selectors":[{"kind":"faces","preds":[{"kind":"face_created_by","ref":{"step":-0E+10,"role":"capStart"}}]}],"values":["1 mm"],"opts":{"kind":"shell","sense":"inward"}}`,
+			want: decad.Step{Op: decad.OpShell, Inputs: []decad.StepRef{0}, Selectors: []decad.Selector{decad.Faces(decad.FaceCreatedBy(ref))}, Values: []units.Value{units.Millimeters(1)}, Opts: decad.ShellOpts{Sense: decad.Inward}},
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -210,9 +244,13 @@ func TestSelectorCodecAcceptsNegativeZeroProvenanceSteps(t *testing.T) {
 func TestNilSelectorPointersAreBranchable(t *testing.T) {
 	// A typed nil query pointer follows the same branchable contract as the
 	// other sealed sets: errors.Is(err, ErrDegenerate).
-	_, err := json.Marshal(decad.Step{Op: decad.OpFillet, Selectors: []decad.Selector{(*decad.EdgeQuery)(nil)}})
+	badEdge := validCodecStep(decad.OpFillet)
+	badEdge.Selectors = []decad.Selector{(*decad.EdgeQuery)(nil)}
+	_, err := json.Marshal(badEdge)
 	require.ErrorIs(t, err, decad.ErrDegenerate)
-	_, err = json.Marshal(decad.Step{Op: decad.OpShell, Selectors: []decad.Selector{(*decad.FaceQuery)(nil)}})
+	badFace := validCodecStep(decad.OpShell)
+	badFace.Selectors = []decad.Selector{(*decad.FaceQuery)(nil)}
+	_, err = json.Marshal(badFace)
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 }
 

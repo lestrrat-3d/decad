@@ -32,7 +32,8 @@ func TestAngularExtentCodec(t *testing.T) {
 		decad.SymmetricAngle{A: units.Degrees(120), FullLength: true},
 		decad.TwoSidedAngle{One: decad.AngleSide{A: units.Degrees(30)}, Two: decad.AngleSide{A: units.Degrees(60)}},
 	} {
-		step := decad.Step{Op: decad.OpRevolve, Angular: a}
+		step := validCodecStep(decad.OpRevolve)
+		step.Angular = a
 		buf, err := json.Marshal(step)
 		require.NoError(t, err, `%T should encode`, a)
 		var got decad.Step
@@ -69,25 +70,29 @@ func TestAngularExtentCodec(t *testing.T) {
 
 func TestEmptyExtentVariantCodec(t *testing.T) {
 	for _, test := range []struct {
-		name string
-		step decad.Step
-		bad  string
+		name     string
+		step     decad.Step
+		badField string
+		bad      json.RawMessage
 	}{
 		{
-			name: "full revolution",
-			step: decad.Step{Op: decad.OpRevolve, Angular: decad.FullRevolution{}},
-			bad:  `{"op":"revolve","angular":{"kind":"full_revolution","a":"90 deg","dir":"against"}}`,
+			name:     "full revolution",
+			step:     func() decad.Step { s := validCodecStep(decad.OpRevolve); s.Angular = decad.FullRevolution{}; return s }(),
+			badField: "angular",
+			bad:      json.RawMessage(`{"kind":"full_revolution","a":"90 deg","dir":"against"}`),
 		},
 		{
-			name: "through-all side",
-			step: decad.Step{
-				Op: decad.OpExtrude,
-				Extent: decad.TwoSided{
+			name:     "through-all side",
+			badField: "extent",
+			bad:      json.RawMessage(`{"kind":"two_sided","one":{"kind":"through_all_side","d":"2 mm"},"two":{"kind":"distance_side","d":"5 mm"}}`),
+			step: func() decad.Step {
+				s := validCodecStep(decad.OpExtrude)
+				s.Extent = decad.TwoSided{
 					One: decad.ThroughAllSide{},
 					Two: decad.DistanceSide{D: units.Millimeters(5)},
-				},
-			},
-			bad: `{"op":"extrude","extent":{"kind":"two_sided","one":{"kind":"through_all_side","d":"2 mm"},"two":{"kind":"distance_side","d":"5 mm"}}}`,
+				}
+				return s
+			}(),
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -97,8 +102,13 @@ func TestEmptyExtentVariantCodec(t *testing.T) {
 			require.NoError(t, json.Unmarshal(buf, &got))
 			require.Equal(t, test.step, got)
 
+			var fields map[string]json.RawMessage
+			require.NoError(t, json.Unmarshal(buf, &fields))
+			fields[test.badField] = test.bad
+			badData, err := json.Marshal(fields)
+			require.NoError(t, err)
 			var bad decad.Step
-			err = json.Unmarshal([]byte(test.bad), &bad)
+			err = json.Unmarshal(badData, &bad)
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "unknown field")
 		})
@@ -122,7 +132,9 @@ func TestAngularExtentPointerForms(t *testing.T) {
 			want: decad.TwoSidedAngle{One: decad.AngleSide{A: units.Degrees(15)}, Two: decad.AngleSide{A: units.Degrees(75)}},
 		},
 	} {
-		buf, err := json.Marshal(decad.Step{Op: decad.OpRevolve, Angular: tc.ptr})
+		step := validCodecStep(decad.OpRevolve)
+		step.Angular = tc.ptr
+		buf, err := json.Marshal(step)
 		require.NoError(t, err, `pointer variant %T should encode like its value`, tc.ptr)
 		var got decad.Step
 		require.NoError(t, json.Unmarshal(buf, &got))
@@ -138,7 +150,9 @@ func TestAngularExtentPointerForms(t *testing.T) {
 		(*decad.TwoSidedAngle)(nil),
 		decad.TwoSidedAngle{One: (*decad.AngleSide)(nil), Two: decad.AngleSide{A: units.Degrees(5)}},
 	} {
-		_, err := json.Marshal(decad.Step{Op: decad.OpRevolve, Angular: a})
+		step := validCodecStep(decad.OpRevolve)
+		step.Angular = a
+		_, err := json.Marshal(step)
 		require.ErrorIs(t, err, decad.ErrDegenerate, `a nil pointer inside %T is ErrDegenerate`, a)
 	}
 }
@@ -147,19 +161,21 @@ func TestStepExtentKeying(t *testing.T) {
 	// The core §6.2 one-of contract: at most one of extent and angular,
 	// each keyed to its op — enforced on both wire directions.
 	t.Run("both extents rejected on marshal", func(t *testing.T) {
-		_, err := json.Marshal(decad.Step{
-			Op:      decad.OpExtrude,
-			Extent:  decad.Distance{D: units.Millimeters(5), Dir: decad.Along},
-			Angular: decad.FullRevolution{},
-		})
+		step := validCodecStep(decad.OpExtrude)
+		step.Angular = decad.FullRevolution{}
+		_, err := json.Marshal(step)
 		require.Error(t, err)
 	})
 	t.Run("angular on a non-revolve op rejected on marshal", func(t *testing.T) {
-		_, err := json.Marshal(decad.Step{Op: decad.OpExtrude, Angular: decad.FullRevolution{}})
+		step := validCodecStep(decad.OpExtrude)
+		step.Angular = decad.FullRevolution{}
+		_, err := json.Marshal(step)
 		require.Error(t, err)
 	})
 	t.Run("linear on a non-extrude op rejected on marshal", func(t *testing.T) {
-		_, err := json.Marshal(decad.Step{Op: decad.OpRevolve, Extent: decad.Distance{D: units.Millimeters(5), Dir: decad.Along}})
+		step := validCodecStep(decad.OpRevolve)
+		step.Extent = decad.Distance{D: units.Millimeters(5), Dir: decad.Along}
+		_, err := json.Marshal(step)
 		require.Error(t, err)
 	})
 	t.Run("both extents rejected on unmarshal", func(t *testing.T) {

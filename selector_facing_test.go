@@ -100,11 +100,8 @@ func TestFacingPredicate(t *testing.T) {
 func TestFacingCodec(t *testing.T) {
 	// A facing predicate round-trips through a Step field for field, and its
 	// dir payload is required — an absent dir is malformed, never a zero vector.
-	step := decad.Step{
-		Op:        decad.OpShell,
-		Inputs:    []decad.StepRef{0},
-		Selectors: []decad.Selector{decad.Faces(decad.Planar(), decad.Facing(zAxis)).Exactly(1)},
-	}
+	step := validCodecStep(decad.OpShell)
+	step.Selectors = []decad.Selector{decad.Faces(decad.Planar(), decad.Facing(zAxis)).Exactly(1)}
 	buf, err := json.Marshal(step)
 	require.NoError(t, err)
 	require.Contains(t, string(buf), `"kind":"facing"`)
@@ -132,7 +129,7 @@ func TestMissingDirErrorWording(t *testing.T) {
 		t.Run(tc.kind, func(t *testing.T) {
 			var got decad.Step
 			err := json.Unmarshal(
-				[]byte(`{"op":"shell","selectors":[{"kind":"faces","preds":[{"kind":"`+tc.kind+`"}]}]}`),
+				[]byte(`{"op":"shell","inputs":[0],"selectors":[{"kind":"faces","preds":[{"kind":"`+tc.kind+`"}]}],"opts":{"kind":"shell","sense":"inward"},"values":["1 mm"]}`),
 				&got)
 			require.ErrorContains(t, err, tc.want)
 		})
@@ -154,7 +151,7 @@ func TestMalformedDirErrorWording(t *testing.T) {
 		t.Run(tc.kind, func(t *testing.T) {
 			var got decad.Step
 			err := json.Unmarshal(
-				[]byte(`{"op":"shell","selectors":[{"kind":"faces","preds":[{"kind":"`+tc.kind+`","dir":"bad"}]}]}`),
+				[]byte(`{"op":"shell","inputs":[0],"selectors":[{"kind":"faces","preds":[{"kind":"`+tc.kind+`","dir":"bad"}]}],"opts":{"kind":"shell","sense":"inward"},"values":["1 mm"]}`),
 				&got)
 			require.ErrorContains(t, err, tc.want)
 		})

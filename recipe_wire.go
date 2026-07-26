@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"reflect"
+	"strings"
 )
 
 const recipeWireFormat = "decad.recipe"
@@ -188,7 +190,39 @@ func validateRecipeJSONStructure(data []byte) error {
 	return nil
 }
 
+func rejectDuplicateJSONKeys(data []byte) error {
+	dec := json.NewDecoder(bytes.NewReader(data))
+	dec.UseNumber()
+	return scanRecipeJSONValueMode(dec, false, true)
+}
+
+// decodeStrictJSON decodes one nested wire value without silently dropping
+// unknown or duplicate fields. The step envelope has its own equivalent
+// because it needs step-specific error wording, while selectors and their
+// predicates share this nested boundary.
+func decodeStrictJSON(data []byte, out any, what string) error {
+	if err := rejectDuplicateJSONKeys(data); err != nil {
+		return err
+	}
+	dec := json.NewDecoder(bytes.NewReader(data))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(out); err != nil {
+		return codecJSONErrorAt(data, out, fmt.Errorf(`decad: failed to decode %s: %w`, what, err))
+	}
+	var trailing json.RawMessage
+	if err := dec.Decode(&trailing); err == nil {
+		return fmt.Errorf(`decad: %s contains more than one JSON value`, what)
+	} else if err != io.EOF {
+		return fmt.Errorf(`decad: failed to decode trailing %s JSON: %w`, what, err)
+	}
+	return nil
+}
+
 func scanRecipeJSONValue(dec *json.Decoder, root bool) error {
+	return scanRecipeJSONValueMode(dec, root, false)
+}
+
+func scanRecipeJSONValueMode(dec *json.Decoder, root, stepRoot bool) error {
 	token, err := dec.Token()
 	if err != nil {
 		return fmt.Errorf("invalid recipe JSON: %w", err)
@@ -201,6 +235,7 @@ func scanRecipeJSONValue(dec *json.Decoder, root bool) error {
 	switch delim {
 	case '{':
 		seen := make(map[string]struct{})
+		var nonCanonicalStepField string
 		for dec.More() {
 			token, err := dec.Token()
 			if err != nil {
@@ -210,23 +245,32 @@ func scanRecipeJSONValue(dec *json.Decoder, root bool) error {
 			if !ok {
 				return errors.New("recipe object key is not a string")
 			}
-			if _, exists := seen[key]; exists {
+			folded := strings.ToLower(key)
+			if _, exists := seen[folded]; exists {
 				return fmt.Errorf("duplicate recipe field %q", key)
 			}
-			seen[key] = struct{}{}
+			seen[folded] = struct{}{}
+			if stepRoot {
+				if canonical, ok := canonicalStepField(key); ok && key != canonical && nonCanonicalStepField == "" {
+					nonCanonicalStepField = key
+				}
+			}
 			if root && key != "format" && key != "version" && key != "steps" {
 				return fmt.Errorf("unknown recipe field %q", key)
 			}
-			if err := scanRecipeJSONValue(dec, false); err != nil {
+			if err := scanRecipeJSONValueMode(dec, false, false); err != nil {
 				return err
 			}
 		}
 		if _, err := dec.Token(); err != nil {
 			return fmt.Errorf("invalid recipe JSON: %w", err)
 		}
+		if nonCanonicalStepField != "" {
+			return fmt.Errorf("non-canonical step field %q", nonCanonicalStepField)
+		}
 	case '[':
 		for dec.More() {
-			if err := scanRecipeJSONValue(dec, false); err != nil {
+			if err := scanRecipeJSONValueMode(dec, false, false); err != nil {
 				return err
 			}
 		}
@@ -237,4 +281,18 @@ func scanRecipeJSONValue(dec *json.Decoder, root bool) error {
 		return fmt.Errorf("invalid recipe JSON delimiter %q", delim)
 	}
 	return nil
+}
+
+func canonicalStepField(key string) (string, bool) {
+	typ := reflect.TypeFor[jsonStep]()
+	for i := range typ.NumField() {
+		tag := typ.Field(i).Tag.Get("json")
+		if comma := strings.IndexByte(tag, ','); comma >= 0 {
+			tag = tag[:comma]
+		}
+		if strings.EqualFold(tag, key) {
+			return tag, true
+		}
+	}
+	return "", false
 }

@@ -153,12 +153,12 @@ func TestRecipeUnmarshalStructuralCollectionLimits(t *testing.T) {
 
 	t.Run("inputs exact limit", func(t *testing.T) {
 		var got Recipe
-		err := json.Unmarshal([]byte(`{"steps":[{"op":"extrude","inputs":[0]}]}`), &got)
+		err := json.Unmarshal([]byte(`{"steps":[{"op":"duplicate","inputs":[0]}]}`), &got)
 		require.NoError(t, err)
 		require.Equal(t, []StepRef{0}, got.Steps[0].Inputs)
 
 		got = Recipe{}
-		err = json.Unmarshal([]byte(`{"steps":[{"op":"extrude"},{"op":"extrude","inputs":[0]}]}`), &got)
+		err = json.Unmarshal([]byte(`{"steps":[{"op":"duplicate","inputs":[0]},{"op":"duplicate","inputs":[0]}]}`), &got)
 		require.NoError(t, err)
 		require.Equal(t, []StepRef{0}, got.Steps[1].Inputs)
 	})
@@ -173,17 +173,58 @@ func TestRecipeUnmarshalStructuralCollectionLimits(t *testing.T) {
 
 	t.Run("values exact limit", func(t *testing.T) {
 		var got Recipe
-		err := json.Unmarshal([]byte(`{"steps":[{"op":"fillet","values":["1 mm"]}]}`), &got)
+		err := json.Unmarshal([]byte(`{"steps":[{"op":"fillet","inputs":[0],"selectors":[{"kind":"edges","preds":[]}],"values":["1 mm"]}]}`), &got)
 		require.NoError(t, err)
 		require.Len(t, got.Steps[0].Values, 1)
 	})
 
 	t.Run("values one over", func(t *testing.T) {
 		got := original
-		err := json.Unmarshal([]byte(`{"steps":[{"op":"fillet","values":["1 mm","2 mm"]}]}`), &got)
+		err := json.Unmarshal([]byte(`{"steps":[{"op":"fillet","inputs":[0],"selectors":[{"kind":"edges","preds":[]}],"values":["1 mm","2 mm"]}]}`), &got)
 		requireRecipeLimitPath(t, err, "steps[0].values[1]", 0)
 		require.Equal(t, original, got)
 	})
+}
+
+func TestStepCodecInputLimit(t *testing.T) {
+	inputs := strings.TrimSuffix(strings.Repeat("0,", maxRecipeInputsPerStep), ",") + ",0"
+	input := []byte(`{"op":"extrude","inputs":[` + inputs + `],"profile":{},"plane":{},"extent":{},"opts":{}}`)
+
+	var step Step
+	err := json.Unmarshal(input, &step)
+	requireRecipeLimitPath(t, err, "inputs[4096]", -1)
+
+	step = Step{Op: OpExtrude, Inputs: make([]StepRef, maxRecipeInputsPerStep+1)}
+	_, err = json.Marshal(step)
+	requireRecipeLimitPath(t, err, "inputs[4096]", -1)
+}
+
+func TestStepCodecArrayCountLimit(t *testing.T) {
+	elements := strings.TrimSuffix(strings.Repeat("0,", maxRecipeInputsPerStep), ",") + ",0"
+	tests := []struct {
+		name  string
+		input string
+		path  string
+	}{
+		{
+			name:  "selectors",
+			input: `{"op":"fillet","inputs":[0],"selectors":[` + elements + `],"values":["1 mm"]}`,
+			path:  "selectors[4096]",
+		},
+		{
+			name:  "values",
+			input: `{"op":"fillet","inputs":[0],"selectors":[{"kind":"edges","preds":[]}],"values":[` + elements + `]}`,
+			path:  "values[4096]",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var step Step
+			err := json.Unmarshal([]byte(test.input), &step)
+			requireRecipeLimitPath(t, err, test.path, -1)
+		})
+	}
 }
 
 func TestRecipeUnmarshalRejectsBeforeChangingDestination(t *testing.T) {
