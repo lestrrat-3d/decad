@@ -186,6 +186,19 @@ func TestRecipeUnmarshalStructuralCollectionLimits(t *testing.T) {
 	})
 }
 
+func TestStepCodecInputLimit(t *testing.T) {
+	inputs := strings.TrimSuffix(strings.Repeat("0,", maxRecipeInputsPerStep), ",") + ",0"
+	input := []byte(`{"op":"extrude","inputs":[` + inputs + `],"profile":{},"plane":{},"extent":{},"opts":{}}`)
+
+	var step Step
+	err := json.Unmarshal(input, &step)
+	requireRecipeLimitPath(t, err, "inputs[4096]", -1)
+
+	step = Step{Op: OpExtrude, Inputs: make([]StepRef, maxRecipeInputsPerStep+1)}
+	_, err = json.Marshal(step)
+	requireRecipeLimitPath(t, err, "inputs[4096]", -1)
+}
+
 func TestRecipeUnmarshalRejectsBeforeChangingDestination(t *testing.T) {
 	original := Recipe{Steps: []Step{{Op: OpUnion}}}
 

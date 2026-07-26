@@ -2,6 +2,7 @@ package decad_test
 
 import (
 	"encoding/json"
+	"math"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
@@ -671,6 +672,80 @@ func TestStepOptsCodec(t *testing.T) {
 	require.Error(t, json.Unmarshal([]byte(`{"op":"extrude","opts":{"kind":"warp"}}`), &bad))
 	require.Error(t, json.Unmarshal([]byte(`{"extent":{"kind":"through_all","dir":"along"}}`), &bad),
 		`a step with no op is malformed, never silently an extrude`)
+}
+
+func TestStepModifyValuesRequirePositiveLengths(t *testing.T) {
+	tests := []struct {
+		name  string
+		value units.Value
+		wire  string
+		cause error
+	}{
+		{name: "wrong kind", value: units.Degrees(1), wire: "1 deg", cause: decad.ErrUnitKind},
+		{name: "zero", value: units.Millimeters(0), wire: "0 mm", cause: decad.ErrDegenerate},
+		{name: "negative", value: units.Millimeters(-1), wire: "-1 mm", cause: decad.ErrNegativeMagnitude},
+		{name: "non-finite", value: units.Millimeters(math.Inf(1)), wire: "1e999 mm", cause: decad.ErrNotFinite},
+	}
+	for _, op := range []decad.OpKind{decad.OpFillet, decad.OpChamfer, decad.OpShell} {
+		for _, test := range tests {
+			t.Run(op.String()+"/"+test.name, func(t *testing.T) {
+				step := validCodecStep(op)
+				step.Values = []units.Value{test.value}
+				_, err := json.Marshal(step)
+				require.ErrorIs(t, err, test.cause)
+
+				wire, err := json.Marshal(validCodecStep(op))
+				require.NoError(t, err)
+				var fields map[string]json.RawMessage
+				require.NoError(t, json.Unmarshal(wire, &fields))
+				fields["values"] = json.RawMessage(`["` + test.wire + `"]`)
+				wire, err = json.Marshal(fields)
+				require.NoError(t, err)
+				var decoded decad.Step
+				err = json.Unmarshal(wire, &decoded)
+				if test.name == "non-finite" {
+					require.Error(t, err)
+				} else {
+					require.ErrorIs(t, err, test.cause)
+				}
+			})
+		}
+	}
+}
+
+func TestStepExtrudeTaperRequiresFiniteAngle(t *testing.T) {
+	tests := []struct {
+		name  string
+		taper units.Value
+		wire  string
+		cause error
+	}{
+		{name: "wrong kind", taper: units.Millimeters(1), wire: "1 mm", cause: decad.ErrUnitKind},
+		{name: "non-finite", taper: units.Degrees(math.Inf(1)), wire: "1e999 deg", cause: decad.ErrNotFinite},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			step := validCodecStep(decad.OpExtrude)
+			step.Opts = decad.ExtrudeOpts{Taper: test.taper}
+			_, err := json.Marshal(step)
+			require.ErrorIs(t, err, test.cause)
+
+			wire, err := json.Marshal(validCodecStep(decad.OpExtrude))
+			require.NoError(t, err)
+			var fields map[string]json.RawMessage
+			require.NoError(t, json.Unmarshal(wire, &fields))
+			fields["opts"] = json.RawMessage(`{"kind":"extrude","taper":"` + test.wire + `"}`)
+			wire, err = json.Marshal(fields)
+			require.NoError(t, err)
+			var decoded decad.Step
+			err = json.Unmarshal(wire, &decoded)
+			if test.name == "non-finite" {
+				require.Error(t, err)
+			} else {
+				require.ErrorIs(t, err, test.cause)
+			}
+		})
+	}
 }
 
 func TestStepOptsCodecRequiresPayloadFields(t *testing.T) {

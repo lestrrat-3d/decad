@@ -521,6 +521,9 @@ func stepShapeFieldsFromJSON(raw jsonStepDecode, op OpKind) (stepShapeFields, er
 	if err != nil {
 		return stepShapeFields{}, err
 	}
+	if err := validateStepInputLimit(inputs); err != nil {
+		return stepShapeFields{}, err
+	}
 	selectors, err := jsonArrayLength(raw.Selectors, "selectors")
 	if err != nil {
 		return stepShapeFields{}, err
@@ -544,6 +547,18 @@ func jsonArrayLength(data json.RawMessage, field string) (int, error) {
 		return 0, fmt.Errorf(`decad: step field %q must be an array: %w`, field, err)
 	}
 	return len(values), nil
+}
+
+func validateStepInputLimit(inputs int) error {
+	if inputs <= maxRecipeInputsPerStep {
+		return nil
+	}
+	return recipeDecodeLimitError(
+		fmt.Sprintf("inputs[%d]", maxRecipeInputsPerStep),
+		-1,
+		"inputs per step",
+		int64(maxRecipeInputsPerStep),
+	)
 }
 
 func unmarshalPresentJSONSlice[T any](data json.RawMessage, field string) ([]T, error) {
@@ -590,6 +605,40 @@ func validStepOptsKind(opts StepOpts, want stepOptsKind) bool {
 		}
 	}
 	return false
+}
+
+func validateExtrudeTaper(opts StepOpts) error {
+	var taper units.Value
+	switch o := opts.(type) {
+	case ExtrudeOpts:
+		taper = o.Taper
+	case *ExtrudeOpts:
+		if o == nil {
+			return nil
+		}
+		taper = o.Taper
+	default:
+		return nil
+	}
+	if taper.Kind() != units.Angle {
+		return fmt.Errorf(`%w: a taper must be an angle, got %s`, ErrUnitKind, taper.Kind())
+	}
+	if _, err := taper.In(units.Radian); err != nil {
+		return fmt.Errorf(`%w: the taper is not representable: %s`, ErrNotFinite, err)
+	}
+	return nil
+}
+
+func validateModifyValue(op OpKind, value units.Value) error {
+	what := fmt.Sprintf("the %s value", op)
+	m, err := magnitudeIn(value, units.Length, units.Millimeter, what)
+	if err != nil {
+		return err
+	}
+	if m == 0 {
+		return fmt.Errorf(`%w: %s must be positive`, ErrDegenerate, what)
+	}
+	return nil
 }
 
 func validateStepShapePresence(op OpKind, fields stepShapeFields) error {
@@ -786,6 +835,9 @@ func validateStepShapeBase(s Step, shape operationShape) error {
 // It is shared by both codec directions so caller-built and decoded Step
 // values admit exactly the shapes immediate feature calls record.
 func validateStepShape(s Step, present stepFieldPresence) error {
+	if err := validateStepInputLimit(len(s.Inputs)); err != nil {
+		return err
+	}
 	shape, err := validateStepShapeFields(s.Op, stepShapeFields{
 		inputs:           len(s.Inputs),
 		profile:          present.profile,
@@ -803,13 +855,20 @@ func validateStepShape(s Step, present stepFieldPresence) error {
 	if err != nil {
 		return err
 	}
-	for i, ref := range s.Inputs {
-		if slices.Contains(s.Inputs[:i], ref) {
+	seen := make(map[StepRef]struct{}, len(s.Inputs))
+	for _, ref := range s.Inputs {
+		if _, ok := seen[ref]; ok {
 			return fmt.Errorf(`decad: the %q op requires unique inputs`, s.Op)
 		}
+		seen[ref] = struct{}{}
 	}
 	if err := validateStepShapeBase(s, shape); err != nil {
 		return err
+	}
+	if shape.values == 1 {
+		if err := validateModifyValue(s.Op, s.Values[0]); err != nil {
+			return err
+		}
 	}
 
 	switch shape.selector {
@@ -832,6 +891,11 @@ func validateStepShape(s Step, present stepFieldPresence) error {
 	}
 	if shape.opts != stepOptsNone && !validStepOptsKind(s.Opts, shape.opts) {
 		return fmt.Errorf(`decad: the %q op requires its matching options`, s.Op)
+	}
+	if shape.opts == stepOptsExtrude {
+		if err := validateExtrudeTaper(s.Opts); err != nil {
+			return err
+		}
 	}
 	return nil
 }
