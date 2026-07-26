@@ -542,11 +542,86 @@ func jsonArrayLength(data json.RawMessage, field string) (int, error) {
 	if data == nil || isJSONNull(data) {
 		return 0, nil
 	}
-	var values []json.RawMessage
-	if err := json.Unmarshal(data, &values); err != nil {
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.UseNumber()
+	token, err := decoder.Token()
+	if err != nil {
 		return 0, fmt.Errorf(`decad: step field %q must be an array: %w`, field, err)
 	}
-	return len(values), nil
+	if token != json.Delim('[') {
+		return 0, fmt.Errorf(`decad: step field %q must be an array`, field)
+	}
+
+	length := 0
+	for decoder.More() {
+		if length >= maxRecipeInputsPerStep {
+			return 0, recipeDecodeLimitError(
+				fmt.Sprintf("%s[%d]", field, length),
+				-1,
+				field+" per step",
+				int64(maxRecipeInputsPerStep),
+			)
+		}
+		if err := skipJSONValue(decoder); err != nil {
+			return 0, fmt.Errorf(`decad: step field %q must be an array: %w`, field, err)
+		}
+		length++
+	}
+	if token, err = decoder.Token(); err != nil {
+		return 0, fmt.Errorf(`decad: step field %q must be an array: %w`, field, err)
+	}
+	if token != json.Delim(']') {
+		return 0, fmt.Errorf(`decad: step field %q must be an array`, field)
+	}
+	if _, err = decoder.Token(); err != io.EOF {
+		if err == nil {
+			return 0, fmt.Errorf(`decad: step field %q contains more than one JSON value`, field)
+		}
+		return 0, fmt.Errorf(`decad: step field %q has trailing JSON: %w`, field, err)
+	}
+	return length, nil
+}
+
+func skipJSONValue(decoder *json.Decoder) error {
+	token, err := decoder.Token()
+	if err != nil {
+		return err
+	}
+	start, ok := token.(json.Delim)
+	if !ok {
+		return nil
+	}
+	if start != json.Delim('{') && start != json.Delim('[') {
+		return fmt.Errorf("unexpected JSON delimiter %q", start)
+	}
+
+	stack := []json.Delim{start}
+	for len(stack) > 0 {
+		token, err := decoder.Token()
+		if err != nil {
+			return err
+		}
+		delim, ok := token.(json.Delim)
+		if !ok {
+			continue
+		}
+		switch delim {
+		case '{', '[':
+			stack = append(stack, delim)
+		case '}', ']':
+			expected := json.Delim(']')
+			if stack[len(stack)-1] == json.Delim('{') {
+				expected = json.Delim('}')
+			}
+			if delim != expected {
+				return fmt.Errorf("unexpected JSON delimiter %q", delim)
+			}
+			stack = stack[:len(stack)-1]
+		default:
+			return fmt.Errorf("unexpected JSON delimiter %q", delim)
+		}
+	}
+	return nil
 }
 
 func validateStepInputLimit(inputs int) error {

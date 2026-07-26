@@ -199,6 +199,34 @@ func TestStepCodecInputLimit(t *testing.T) {
 	requireRecipeLimitPath(t, err, "inputs[4096]", -1)
 }
 
+func TestStepCodecArrayCountLimit(t *testing.T) {
+	elements := strings.TrimSuffix(strings.Repeat("0,", maxRecipeInputsPerStep), ",") + ",0"
+	tests := []struct {
+		name  string
+		input string
+		path  string
+	}{
+		{
+			name:  "selectors",
+			input: `{"op":"fillet","inputs":[0],"selectors":[` + elements + `],"values":["1 mm"]}`,
+			path:  "selectors[4096]",
+		},
+		{
+			name:  "values",
+			input: `{"op":"fillet","inputs":[0],"selectors":[{"kind":"edges","preds":[]}],"values":[` + elements + `]}`,
+			path:  "values[4096]",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var step Step
+			err := json.Unmarshal([]byte(test.input), &step)
+			requireRecipeLimitPath(t, err, test.path, -1)
+		})
+	}
+}
+
 func TestRecipeUnmarshalRejectsBeforeChangingDestination(t *testing.T) {
 	original := Recipe{Steps: []Step{{Op: OpUnion}}}
 
