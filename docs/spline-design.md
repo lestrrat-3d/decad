@@ -101,22 +101,31 @@ kind is admitted. Admission is §2 and Table R.
 
 | Kind | Tier | Area / centroid / second moments | Construction |
 |---|---|---|---|
-| `SplineSeg` | **A** | `Exact`, zero bound | §5 |
-| `ClosedSplineSeg` | **A** | `Exact`, zero bound | §5 |
-| `NURBSSeg`, all weights equal | **A** | `Exact`, zero bound | §5 |
+| `SplineSeg` | **A** | exactly rational, rounded ONCE | §5 |
+| `ClosedSplineSeg` | **A** | exactly rational, rounded ONCE | §5 |
+| `NURBSSeg`, all weights equal | **A** | exactly rational, rounded ONCE | §5 |
 | `ConicSeg` | **B** | `Approximate`, proven interval | §5.3 |
 | `EllipseSeg` (whole) | **B** | `Approximate`, proven interval | §5.3 |
 | `NURBSSeg`, weights unequal | **C** | `Approximate`, proven interval | §5.4 |
 | `EllipticalArcSeg` | — | refused, §2.2 | — |
 | `FitSplineSeg` | — | refused, §4 R6 | — |
 
-Tier A is not a convenience. It is the reason free-form support does not cost
-decad its exactness discipline: a spline prism's `Volume` is `Exact` with a zero
-bound, exactly as a line-only prism's is.
+**Tier A means the integral is exact, NOT that the reported measurement is
+`Exact`.** The integral's value is an exact rational; `Measurement.Value` is a
+float64. So the reported bound is a SINGLE rounding of that rational, and it is
+zero — hence `Exact` — exactly when the rational is representable in float64.
+A 5-control closed spline whose area is 293/18 reports `Approximate` with a
+one-ulp bound; the same section scaled by 3 has area 293/2, is representable, and
+reports `Exact`.
+
+That is precisely the standing the LINE path already has, and it is the point:
+Tier A's bound is one rounding rather than a quadrature estimate, so free-form
+support costs decad none of its exactness discipline. NEVER describe a Tier A
+reading as unconditionally `Exact`.
 
 A tier is a CEILING, never a promise about a specific reading. Arc length is
-never exact in ANY tier (§6.1), so a Tier A body's `Area` is `Approximate` while
-its `Volume` is `Exact`.
+never exact in ANY tier (§6.1), so a Tier A body's `Area` always carries a
+positive bound even where its `Volume` does not.
 
 ## 4. Table R — refusals
 
@@ -182,7 +191,8 @@ rational convex combination, so the conversion is exact:
 | `NURBSSeg` | clamped arbitrary degree → one Bézier per knot span |
 
 Integrate the Green's-theorem boundary forms. Each integrand is a POLYNOMIAL, so
-each integral is an exact rational:
+each integral is an exact rational — which the reported measurement then rounds
+once, per §3:
 
 | Reading | Boundary form | Integrand degree |
 |---|---|---|
@@ -197,10 +207,14 @@ Walk direction carries the sign through the recorded range order, exactly as
 
 ### 5.2 Discipline
 
-The exact result is the only result. NEVER fall back to quadrature on a Tier A
-kind — a float sum of Gauss nodes cannot claim the zero bound the tier grants,
-and `exactnessOf`'s zero bound is a CLAIM that the value is exactly
-representable (`bounds.go`).
+The exact rational is the only result. NEVER fall back to quadrature on a Tier A
+kind — a float sum of Gauss nodes has no exact value to round from, so it can
+never reach the zero bound a representable rational does, and `exactnessOf`'s
+zero bound is a CLAIM that the value is exactly representable (`bounds.go`).
+
+The held float MUST be the exact rational rounded once, never a separate float
+evaluation of the same formula: a second evaluation would add its own error to a
+bound that already speaks for the rounding.
 
 Rational coefficient size grows with degree and span count. Charge every span,
 every coefficient product and every integral term against a `workBudget`
@@ -326,8 +340,8 @@ off `NormalAt`.
 
 | Capability | Free-form reach | Construction |
 |---|---|---|
-| `ProfileRecord.Area`/`Centroid`/`SecondMoments` | Tier A `Exact`; B/C proven interval | §5 |
-| `Extrude` | full; `Volume` `Exact` on Tier A, `Area`/`Box` bounded | §6, §7 |
+| `ProfileRecord.Area`/`Centroid`/`SecondMoments` | Tier A exactly rational, rounded once; B/C proven interval | §5 |
+| `Extrude` | full; `Volume` from the Tier A rational, `Area`/`Box` bounded | §6, §7 |
 | `Tessellate`, `STL`, `OBJ` | full for an extruded free-form section | §6.2 sagitta; rides the existing prism path, NOT tessellation T5 |
 | `Union`/`Cut`/`Intersect` | full, `Faceted` output as always | free once chording lands — the mesh boolean reads triangles, not kinds |
 | interference proof | full | free once chording lands — read-only mesh intersection already serves faceted pairs |
@@ -390,9 +404,9 @@ half-silent. These stages do not consume a global evaluator increment number.
 | # | Lands | Public effect |
 |---|---|---|
 | **P1** | this document + the core/evaluator table updates it resolves | none |
-| **P2** | Bézier conversion, exact Tier A moments, the §5.2 budget | `ProfileRecord.Area`/`Centroid`/`SecondMoments` answer `Exact` for Tier A. No new types |
+| **P2** | Bézier conversion, exact Tier A moments, the §5.2 budget | `ProfileRecord.Area`/`Centroid`/`SecondMoments` answer for Tier A, bounded by one rounding. No new types |
 | **P3** | walk-kind discriminant across every `segmentWalk` consumer | none — behaviour preserved |
-| **P4** | `NURBSSurface`/`NURBSCurve`, free-form extrude side faces, §6.1 length brackets, §6.2 extremes, `NormalAt` refusal | free-form prisms build; `Volume` `Exact`, `Area`/`Box` bounded |
+| **P4** | `NURBSSurface`/`NURBSCurve`, free-form extrude side faces, §6.1 length brackets, §6.2 extremes, `NormalAt` refusal | free-form prisms build; `Volume` from the Tier A rational, `Area`/`Box` bounded |
 | **P5** | free-form chording with proven sagitta + area slack | `Tessellate`/`STL`/`OBJ`, booleans, interference proof. Wall reading explicitly `Suspect` |
 | **P6** | hodograph normal cones, bracketed curvature extremes | `Undercuts` proven, `MinRadius` bounded |
 | **P7** | certified branch-and-bound inscribed-disk interval | `MinWallThickness` answered, with its own convergence evidence |
@@ -408,8 +422,12 @@ rules).
 - Assert the exact RATIONAL area, centroid and second moments of a Tier A
   section against a densely sampled reference AND against sketch's own
   `Profile.Area`. Two independent implementations agreeing is the §5.2 falsifier.
-- Assert `Volume` reports `Exact` with a zero bound for a Tier A prism, and that
-  `Box` reports `Approximate` with a positive bound (§6.2).
+- Assert BOTH sides of §3's rounding rule: a Tier A section whose exact area is
+  not representable reports `Approximate` with a bound of one rounding, and a
+  section whose exact area IS representable reports `Exact` with a zero bound. A
+  test that only covers one side cannot tell the rule from a constant.
+- Assert `Box` reports `Approximate` with a positive bound for a Tier A prism
+  (§6.2).
 - Assert an arc-length bracket strictly narrows with subdivision depth and
   encloses a dense-sample reference at every depth.
 - Assert directed-edge closure, positive triangle area, outward winding, and
