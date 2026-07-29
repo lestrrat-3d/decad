@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"slices"
+	"strings"
 
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
@@ -78,7 +80,7 @@ func validateMomentFieldsWithPoll(poll func() error, record ProfileRecord) (Prof
 					return ProfileRecord{}, Point2{}, err
 				}
 			}
-			checked, walk, err := validateMomentSegment(segment)
+			checked, start, err := validateMomentSegment(segment)
 			if err != nil {
 				return ProfileRecord{}, Point2{}, fmt.Errorf(
 					`decad: profile loop %d segment %d is invalid: %w`,
@@ -89,7 +91,7 @@ func validateMomentFieldsWithPoll(poll func() error, record ProfileRecord) (Prof
 			}
 			normalized[loopIndex].Segments[segmentIndex] = checked
 			if loopIndex == 0 && segmentIndex == 0 {
-				anchor = Point2{U: walk.startU, V: walk.startV}
+				anchor = start
 			}
 		}
 	}
@@ -117,6 +119,12 @@ func scaleMomentRecordForValidation(record ProfileRecord, anchor Point2) (Profil
 				grow(segment.Center)
 				grow(segment.Start)
 				grow(segment.End)
+			case SplineSeg:
+				growAll(segment.Control, grow)
+			case ClosedSplineSeg:
+				growAll(segment.Control, grow)
+			case NURBSSeg:
+				growAll(segment.Control, grow)
 			}
 		}
 	}
@@ -150,19 +158,46 @@ func scaleMomentRecordForValidation(record ProfileRecord, anchor Point2) (Profil
 				segment.Start = transform(segment.Start)
 				segment.End = transform(segment.End)
 				scaled[loopIndex].Segments[segmentIndex] = segment
+			case SplineSeg:
+				// A B-spline is affine invariant, so transforming its control
+				// points transforms the curve — the rescaled record states the
+				// same shape at unit scale.
+				segment.Control = shiftPoints(segment.Control, transform)
+				scaled[loopIndex].Segments[segmentIndex] = segment
+			case ClosedSplineSeg:
+				segment.Control = shiftPoints(segment.Control, transform)
+				scaled[loopIndex].Segments[segmentIndex] = segment
+			case NURBSSeg:
+				segment.Control = shiftPoints(segment.Control, transform)
+				scaled[loopIndex].Segments[segmentIndex] = segment
 			}
 		}
 	}
 	return ProfileRecord{Outer: scaled[0], Holes: scaled[1:]}, nil
 }
 
-func validateMomentSegment(segment CurveSegment) (CurveSegment, segmentWalk, error) {
+func growAll(points []Point2, grow func(Point2)) {
+	for _, point := range points {
+		grow(point)
+	}
+}
+
+// validateMomentSegment normalizes one recorded segment and returns it beside
+// the walk's own start point — the anchor the integrator re-references its
+// moments to. A free-form segment resolves that point from its converted Bézier
+// chain rather than through walkOf, which still refuses free-form kinds: the
+// walk vocabulary carries no free-form state yet, and a free-form walk that
+// merely read as non-circular would be built as a straight line.
+func validateMomentSegment(segment CurveSegment) (CurveSegment, Point2, error) {
 	segment, err := normalizeSegment(segment)
 	if err != nil {
-		return nil, segmentWalk{}, err
+		return nil, Point2{}, err
 	}
 	if segment == nil {
-		return nil, segmentWalk{}, errNilSegment
+		return nil, Point2{}, errNilSegment
+	}
+	if isFreeformSegment(segment) {
+		return validateFreeformMomentSegment(segment)
 	}
 
 	switch segment := segment.(type) {
@@ -175,24 +210,24 @@ func validateMomentSegment(segment CurveSegment) (CurveSegment, segmentWalk, err
 			segment.TStart,
 			segment.TEnd,
 		) {
-			return nil, segmentWalk{}, fmt.Errorf(`%w: a line segment field is not finite`, ErrNotFinite)
+			return nil, Point2{}, fmt.Errorf(`%w: a line segment field is not finite`, ErrNotFinite)
 		}
 		if err := validateMomentRange(segment.TStart, segment.TEnd); err != nil {
-			return nil, segmentWalk{}, err
+			return nil, Point2{}, err
 		}
 	case CircleSeg:
 		radius, err := magnitudeIn(segment.Radius, units.Length, units.Millimeter, "a circle segment's radius")
 		if err != nil {
-			return nil, segmentWalk{}, err
+			return nil, Point2{}, err
 		}
 		if !finiteMomentValues(segment.Center.U, segment.Center.V, segment.TStart, segment.TEnd) {
-			return nil, segmentWalk{}, fmt.Errorf(`%w: a circle segment field is not finite`, ErrNotFinite)
+			return nil, Point2{}, fmt.Errorf(`%w: a circle segment field is not finite`, ErrNotFinite)
 		}
 		if err := validateMomentRange(segment.TStart, segment.TEnd); err != nil {
-			return nil, segmentWalk{}, err
+			return nil, Point2{}, err
 		}
 		if segment.CCW != (segment.TStart < segment.TEnd) {
-			return nil, segmentWalk{}, fmt.Errorf(`%w: a circle segment's CCW flag contradicts its range order`, ErrDegenerate)
+			return nil, Point2{}, fmt.Errorf(`%w: a circle segment's CCW flag contradicts its range order`, ErrDegenerate)
 		}
 		segment.Radius = units.Millimeters(radius)
 		return validateMomentWalk(segment)
@@ -207,18 +242,18 @@ func validateMomentSegment(segment CurveSegment) (CurveSegment, segmentWalk, err
 			segment.TStart,
 			segment.TEnd,
 		) {
-			return nil, segmentWalk{}, fmt.Errorf(`%w: an arc segment field is not finite`, ErrNotFinite)
+			return nil, Point2{}, fmt.Errorf(`%w: an arc segment field is not finite`, ErrNotFinite)
 		}
 		if err := validateMomentRange(segment.TStart, segment.TEnd); err != nil {
-			return nil, segmentWalk{}, err
+			return nil, Point2{}, err
 		}
 		startRadius := math.Hypot(segment.Start.U-segment.Center.U, segment.Start.V-segment.Center.V)
 		endRadius := math.Hypot(segment.End.U-segment.Center.U, segment.End.V-segment.Center.V)
 		if !finiteMomentValues(startRadius, endRadius) {
-			return nil, segmentWalk{}, fmt.Errorf(`%w: an arc segment's derived radius is not finite`, ErrNotFinite)
+			return nil, Point2{}, fmt.Errorf(`%w: an arc segment's derived radius is not finite`, ErrNotFinite)
 		}
 		if !momentCoordinateJoins(startRadius, endRadius) {
-			return nil, segmentWalk{}, fmt.Errorf(
+			return nil, Point2{}, fmt.Errorf(
 				`%w: an arc segment's pinned start and end radii differ (%g and %g)`,
 				ErrDegenerate,
 				startRadius,
@@ -226,7 +261,7 @@ func validateMomentSegment(segment CurveSegment) (CurveSegment, segmentWalk, err
 			)
 		}
 	default:
-		return nil, segmentWalk{}, fmt.Errorf(
+		return nil, Point2{}, fmt.Errorf(
 			`%w: this evaluator computes mass properties over line, arc and circle profile segments only; the profile has a %T segment`,
 			ErrUnsupported,
 			segment,
@@ -235,10 +270,52 @@ func validateMomentSegment(segment CurveSegment) (CurveSegment, segmentWalk, err
 	return validateMomentWalk(segment)
 }
 
-func validateMomentWalk(segment CurveSegment) (CurveSegment, segmentWalk, error) {
+// validateFreeformMomentSegment checks the fields the exact integrator reads on
+// a Tier A free-form segment and returns the walk's own start point. The
+// conversion itself is the check: it rejects a non-finite control coordinate, a
+// trimmed range, a rational NURBS and every non-Tier-A kind with its own reason
+// (docs/spline-design.md Table R), so no field test is duplicated here.
+func validateFreeformMomentSegment(segment CurveSegment) (CurveSegment, Point2, error) {
+	spans, reversed, err := freeformBezierSpans(segment, &freeformWork{})
+	if err != nil {
+		return nil, Point2{}, err
+	}
+	start, _, err := freeformEndpoints(spans, reversed)
+	if err != nil {
+		return nil, Point2{}, err
+	}
+	if !finiteMomentValues(start.U, start.V) {
+		return nil, Point2{}, fmt.Errorf(`%w: a free-form segment's start point is not finite`, ErrNotFinite)
+	}
+	if freeformDegenerate(spans) {
+		return nil, Point2{}, fmt.Errorf(`%w: a free-form segment whose control points all coincide contributes no boundary`, ErrDegenerate)
+	}
+	return segment, start, nil
+}
+
+// freeformDegenerate reports whether every control point of the converted chain
+// is the same coordinate. The convex hull property makes that the exact
+// condition for the curve to be a single point, so the test is a proof rather
+// than a tolerance.
+func freeformDegenerate(spans []bezierSpan) bool {
+	if len(spans) == 0 || len(spans[0]) == 0 {
+		return true
+	}
+	first := spans[0][0]
+	for _, span := range spans {
+		for _, point := range span {
+			if point.u.Cmp(first.u) != 0 || point.v.Cmp(first.v) != 0 {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func validateMomentWalk(segment CurveSegment) (CurveSegment, Point2, error) {
 	walk, err := walkOf(segment)
 	if err != nil {
-		return nil, segmentWalk{}, err
+		return nil, Point2{}, err
 	}
 	if !finiteMomentValues(
 		walk.startU,
@@ -256,12 +333,12 @@ func validateMomentWalk(segment CurveSegment) (CurveSegment, segmentWalk, error)
 		walk.th0,
 		walk.th1,
 	) {
-		return nil, segmentWalk{}, fmt.Errorf(`%w: a segment's derived walk is not finite`, ErrNotFinite)
+		return nil, Point2{}, fmt.Errorf(`%w: a segment's derived walk is not finite`, ErrNotFinite)
 	}
 	if walk.length <= 0 {
-		return nil, segmentWalk{}, fmt.Errorf(`%w: a zero-length segment contributes no boundary`, ErrDegenerate)
+		return nil, Point2{}, fmt.Errorf(`%w: a zero-length segment contributes no boundary`, ErrDegenerate)
 	}
-	return segment, walk, nil
+	return segment, Point2{U: walk.startU, V: walk.startV}, nil
 }
 
 func validateMomentRange(start, end float64) error {
@@ -349,6 +426,25 @@ type momentEntityKey struct {
 	second Point2
 	third  Point2
 	radius float64
+	// control identifies a free-form entity by its own defining data, which
+	// no fixed number of Point2 fields can hold.
+	control string
+}
+
+// freeformEntityKey renders a free-form segment's defining data as a key. It
+// keys on the entity's OWN fields — control points, and a NURBS's degree, knots
+// and weights — so two recorded segments dedupe exactly when they name the same
+// entity.
+func freeformEntityKey(kind uint8, points []Point2, extra ...float64) momentEntityKey {
+	var b strings.Builder
+	for _, point := range points {
+		fmt.Fprintf(&b, "%v,%v;", point.U, point.V)
+	}
+	b.WriteByte('|')
+	for _, value := range extra {
+		fmt.Fprintf(&b, "%v;", value)
+	}
+	return momentEntityKey{kind: kind, control: b.String()}
 }
 
 func momentRecordMatchesSketch(record ProfileRecord) bool {
@@ -358,14 +454,21 @@ func momentRecordMatchesSketch(record ProfileRecord) bool {
 		return false
 	}
 
-	points := make(map[Point2]*sketch.Point)
+	interned := make(map[Point2]*sketch.Point)
 	point := func(value Point2) *sketch.Point {
-		if existing, ok := points[value]; ok {
+		if existing, ok := interned[value]; ok {
 			return existing
 		}
 		created := s.CreatePoint(value.U, value.V)
-		points[value] = created
+		interned[value] = created
 		return created
+	}
+	points := func(values []Point2) []*sketch.Point {
+		out := make([]*sketch.Point, len(values))
+		for i, value := range values {
+			out[i] = point(value)
+		}
+		return out
 	}
 	entities := make(map[momentEntityKey]struct{})
 	for _, loop := range append([]LoopRecord{record.Outer}, record.Holes...) {
@@ -393,6 +496,32 @@ func momentRecordMatchesSketch(record ProfileRecord) bool {
 				}
 				if _, ok := entities[key]; !ok {
 					s.CreateArc(point(segment.Center), point(segment.Start), point(segment.End))
+					entities[key] = struct{}{}
+				}
+			case SplineSeg:
+				key := freeformEntityKey(4, segment.Control)
+				if _, ok := entities[key]; !ok {
+					if _, err := s.CreateSpline(points(segment.Control)...); err != nil {
+						return false
+					}
+					entities[key] = struct{}{}
+				}
+			case ClosedSplineSeg:
+				key := freeformEntityKey(5, segment.Control)
+				if _, ok := entities[key]; !ok {
+					if _, err := s.CreateClosedSpline(points(segment.Control)...); err != nil {
+						return false
+					}
+					entities[key] = struct{}{}
+				}
+			case NURBSSeg:
+				extra := append([]float64{float64(segment.Degree)}, segment.Knots...)
+				extra = append(extra, segment.Weights...)
+				key := freeformEntityKey(6, segment.Control, extra...)
+				if _, ok := entities[key]; !ok {
+					if _, err := s.CreateNURBS(segment.Degree, points(segment.Control), segment.Weights, segment.Knots); err != nil {
+						return false
+					}
 					entities[key] = struct{}{}
 				}
 			default:
@@ -473,6 +602,20 @@ func momentSegmentsEqual(a, b CurveSegment) bool {
 	case ArcSeg:
 		b, ok := b.(ArcSeg)
 		return ok && a == b
+	case SplineSeg:
+		b, ok := b.(SplineSeg)
+		return ok && slices.Equal(a.Control, b.Control) && a.TStart == b.TStart && a.TEnd == b.TEnd
+	case ClosedSplineSeg:
+		b, ok := b.(ClosedSplineSeg)
+		return ok && slices.Equal(a.Control, b.Control) &&
+			a.CCW == b.CCW && a.TStart == b.TStart && a.TEnd == b.TEnd
+	case NURBSSeg:
+		b, ok := b.(NURBSSeg)
+		return ok && a.Degree == b.Degree &&
+			slices.Equal(a.Control, b.Control) &&
+			slices.Equal(a.Knots, b.Knots) &&
+			slices.Equal(a.Weights, b.Weights) &&
+			a.TStart == b.TStart && a.TEnd == b.TEnd
 	default:
 		return false
 	}

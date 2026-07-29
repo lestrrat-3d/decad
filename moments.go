@@ -725,9 +725,28 @@ func shiftMomentSegment(segment CurveSegment, anchor Point2) (CurveSegment, erro
 		segment.Start = shift(segment.Start)
 		segment.End = shift(segment.End)
 		return segment, nil
+	case SplineSeg:
+		segment.Control = shiftPoints(segment.Control, shift)
+		return segment, nil
+	case ClosedSplineSeg:
+		segment.Control = shiftPoints(segment.Control, shift)
+		return segment, nil
+	case NURBSSeg:
+		segment.Control = shiftPoints(segment.Control, shift)
+		return segment, nil
 	default:
-		return nil, fmt.Errorf(`%w: this evaluator computes mass properties over line, arc and circle profile segments only; the profile has a %T segment`, ErrUnsupported, segment)
+		return nil, fmt.Errorf(`%w: this evaluator computes mass properties over line, arc, circle and Tier A free-form profile segments only; the profile has a %T segment`, ErrUnsupported, segment)
 	}
+}
+
+// shiftPoints translates a control-point slice into a fresh slice, leaving the
+// caller's recorded segment untouched.
+func shiftPoints(points []Point2, shift func(Point2) Point2) []Point2 {
+	out := make([]Point2, len(points))
+	for i, point := range points {
+		out[i] = shift(point)
+	}
+	return out
 }
 
 func translateMomentIntegrals(ig regionIntegrals, anchor Point2, order momentIntegralOrder) regionIntegrals {
@@ -836,7 +855,15 @@ func (ig *regionIntegrals) add(segment CurveSegment) error {
 		)
 		return nil
 	default:
-		return fmt.Errorf(`%w: this evaluator computes mass properties over line, arc and circle profile segments only; the profile has a %T segment`, ErrUnsupported, segment)
+		if !isFreeformSegment(segment) {
+			return fmt.Errorf(`%w: this evaluator computes mass properties over line, arc, circle and Tier A free-form profile segments only; the profile has a %T segment`, ErrUnsupported, segment)
+		}
+		work := &freeformWork{}
+		spans, reversed, err := freeformBezierSpans(segment, work)
+		if err != nil {
+			return err
+		}
+		return ig.addFreeform(spans, reversed, work)
 	}
 }
 
