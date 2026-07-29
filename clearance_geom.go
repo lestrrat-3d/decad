@@ -1031,7 +1031,7 @@ func (g *bodyGeom) addPrismFaces(budget *workBudget, pp prismPayload) (bool, err
 			}
 			capElems = append(capElems, el)
 
-			if w.circular {
+			if w.isCircular() {
 				f := &cFace{
 					kind:   ckCylinder,
 					anchor: pp.point(w.cU, w.cV, pp.z0),

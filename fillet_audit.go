@@ -224,6 +224,9 @@ func buildSegEntriesBudget(budget *workBudget, loops []LoopRecord) ([]segEntry, 
 			if err != nil {
 				return nil, auditError(err, fmt.Sprintf(`loop %d segment %d: %v`, li, i, err))
 			}
+			if err := requireAnalyticWalk(w, "the section audit"); err != nil {
+				return nil, auditError(err, fmt.Sprintf(`loop %d segment %d: %v`, li, i, err))
+			}
 			segs = append(segs, segEntry{loop: li, idx: i, n: n, w: w})
 		}
 	}
@@ -344,7 +347,7 @@ func sectionBBoxBudget(budget *workBudget, segs []segEntry) (minU, minV, maxU, m
 		w := s.w
 		fold(w.startU, w.startV)
 		fold(w.endU, w.endV)
-		if !w.circular {
+		if !w.isCircular() {
 			continue
 		}
 		lo, hi := math.Min(w.th0, w.th1), math.Max(w.th0, w.th1)
@@ -477,14 +480,10 @@ func nestingAuditBudget(budget *workBudget, segs []segEntry, nLoops int) error {
 	return nil
 }
 
-// elemOf converts a segment walk into a survey2d boundary element (the material
-// side is irrelevant to ray parity, so an arc's walk sense is not consulted).
-func elemOf(w segmentWalk) (surveyElem, bool) {
-	if w.circular {
-		return arcElem(w.cU, w.cV, w.radius, w.th0, w.th1, w.closed)
-	}
-	return lineElem(w.startU, w.startV, w.endU, w.endV)
-}
+// elemOf converts a segment walk into a survey2d boundary element. It is
+// walkElem under this file's own name; the conversion lives in one place so a
+// new walk kind is decided once (survey.go).
+func elemOf(w segmentWalk) (surveyElem, bool) { return walkElem(w) }
 
 // loopContains is the named boundary-scan phase used by cancellation probes.
 func loopContains(budget *workBudget, boundary []surveyElem, px, py, tol float64) (inside, decided bool, err error) {
@@ -547,11 +546,11 @@ const segCrossEps = 1e-7
 // segCross reports whether two segment primitives meet in both their interiors.
 func segCross(a, b segmentWalk) bool {
 	switch {
-	case !a.circular && !b.circular:
+	case a.isLine() && b.isLine():
 		return lineLineSegCross(a, b)
-	case a.circular && b.circular:
+	case a.isCircular() && b.isCircular():
 		return arcArcSegCross(a, b)
-	case a.circular:
+	case a.isCircular():
 		return lineArcSegCross(b, a)
 	default:
 		return lineArcSegCross(a, b)
@@ -653,11 +652,11 @@ func angleWithin(arc segmentWalk, x, y float64) bool {
 // radial/aligned criticals, and zero at any interior intersection.
 func segMinDist(a, b segmentWalk) float64 {
 	switch {
-	case !a.circular && !b.circular:
+	case a.isLine() && b.isLine():
 		return lineLineMinDist(a, b)
-	case a.circular && b.circular:
+	case a.isCircular() && b.isCircular():
 		return arcArcMinDist(a, b)
-	case a.circular:
+	case a.isCircular():
 		return lineArcMinDist(b, a)
 	default:
 		return lineArcMinDist(a, b)

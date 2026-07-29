@@ -1349,3 +1349,29 @@ func TestDegenerateSplineRecordRefuses(t *testing.T) {
 	require.Error(t, err)
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 }
+
+// A spline profile's moments now answer, so Extrude reaches its own side-face
+// build. It must refuse there rather than sweep the spline as a straight line —
+// the walk-kind discriminant exists to make that refusal explicit.
+func TestExtrudeSplineProfileRefusesAtSideFaces(t *testing.T) {
+	world := sketch.NewWorld()
+	s, err := world.CreateSketch(world.XY())
+	require.NoError(t, err)
+	points := make([]*sketch.Point, len(closedSplineControls))
+	for i, control := range closedSplineControls {
+		points[i] = s.CreatePoint(control[0], control[1])
+	}
+	_, err = s.CreateClosedSpline(points...)
+	require.NoError(t, err)
+	profiles := s.Profiles()
+	require.Len(t, profiles, 1)
+
+	d := decad.New()
+	body, err := d.Extrude(s, profiles[0], &decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	require.Error(t, err)
+	require.Nil(t, body)
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+	require.Contains(t, err.Error(), "free-form")
+	require.Empty(t, d.Bodies(), "a refused extrude registers no body")
+	require.Empty(t, d.Recipe().Steps, "a refused extrude records no step")
+}

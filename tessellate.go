@@ -254,6 +254,9 @@ func chordLoop(ctx context.Context, loop LoopRecord, chord, height float64, wall
 		if err != nil {
 			return nil, nil, 0, 0, err
 		}
+		if err := requireAnalyticWalk(w, "chording a boundary loop"); err != nil {
+			return nil, nil, 0, 0, err
+		}
 		raw[i] = sideWalk{segmentWalk: w, segs: []int{i}}
 	}
 	walks, err := coalesceWalksContext(ctx, raw)
@@ -272,7 +275,7 @@ func chordLoop(ctx context.Context, loop LoopRecord, chord, height float64, wall
 		if err != nil {
 			return nil, nil, 0, 0, err
 		}
-		if !w.circular {
+		if !w.isCircular() {
 			samples = append(samples, Point2{U: w.startU, V: w.startV})
 			faceOf = append(faceOf, face)
 			continue

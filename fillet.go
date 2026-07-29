@@ -272,6 +272,9 @@ func prismCornerLoopsBudget(budget *workBudget, pp prismPayload) ([]cornerLoop, 
 			if err != nil {
 				return nil, err
 			}
+			if err := requireAnalyticWalk(w, "a modify corner rewrite"); err != nil {
+				return nil, err
+			}
 			raw[i] = sideWalk{segmentWalk: w, segs: []int{i}}
 		}
 		walks, err := coalesceWalksBudget(raw, budget)
@@ -363,7 +366,7 @@ type offCurve struct {
 // carrierOf builds the carrier of a walk at a corner: (tx, ty) is the walk's
 // unit travel tangent there.
 func carrierOf(w sideWalk, tx, ty float64) carrier {
-	if !w.circular {
+	if !w.isCircular() {
 		return carrier{isLine: true, px: w.startU, py: w.startV, tx: tx, ty: ty}
 	}
 	inside := 1.0
@@ -649,7 +652,7 @@ func rewriteLoop(budget *workBudget, loop cornerLoop, blends map[int]*cornerBlen
 // walkSegment re-emits a coalesced walk, trimmed to (start, end), as a
 // LineSeg or an ArcSeg in the walk's own sense.
 func walkSegment(w sideWalk, sU, sV, eU, eV float64) CurveSegment {
-	if !w.circular {
+	if !w.isCircular() {
 		return LineSeg{Start: Point2{U: sU, V: sV}, End: Point2{U: eU, V: eV}, TStart: 0, TEnd: 1}
 	}
 	return arcSegment(Point2{U: w.cU, V: w.cV}, Point2{U: sU, V: sV}, Point2{U: eU, V: eV}, w.th1 > w.th0)

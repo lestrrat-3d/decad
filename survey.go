@@ -79,6 +79,9 @@ func recordLoops(budget *workBudget, profile ProfileRecord) ([][]sideWalk, error
 			if err != nil {
 				return nil, err
 			}
+			if err := requireAnalyticWalk(w, "the wall survey"); err != nil {
+				return nil, err
+			}
 			raw[i] = sideWalk{segmentWalk: w, segs: []int{i}}
 		}
 		walks, err := coalesceWalksBudget(raw, budget)
@@ -117,6 +120,9 @@ func revolveLoops(budget *workBudget, rp revolvePayload) ([][]sideWalk, error) {
 			if err != nil {
 				return nil, err
 			}
+			if err := requireAnalyticWalk(w, "the survey boundary walk"); err != nil {
+				return nil, err
+			}
 			raw[i] = sideWalk{segmentWalk: rp.ax.walk(w), segs: []int{i}}
 		}
 		walks, err := coalesceWalksBudget(raw, budget)
@@ -128,12 +134,24 @@ func revolveLoops(budget *workBudget, rp revolvePayload) ([][]sideWalk, error) {
 	return out, nil
 }
 
-// walkElem turns one walk into a kernel boundary element.
+// walkElem turns one walk into a kernel boundary element — the ONE conversion
+// from a walk into survey2d's 2D vocabulary, shared by the wall survey, the
+// modify section audit and the clearance kernel's planar trims. The material
+// side is irrelevant to ray parity, so an arc's walk sense is not consulted.
+//
+// The switch is total over walkKind on purpose: a free-form walk has no
+// surveyElem to become, and answering false is what keeps it from silently
+// converting into the straight line between its endpoints. Its element awaits
+// docs/spline-design.md §8's free-form kernels.
 func walkElem(w segmentWalk) (surveyElem, bool) {
-	if w.circular {
+	switch w.kind {
+	case walkCircular:
 		return arcElem(w.cU, w.cV, w.radius, w.th0, w.th1, w.closed)
+	case walkLine:
+		return lineElem(w.startU, w.startV, w.endU, w.endV)
+	default:
+		return surveyElem{}, false
 	}
-	return lineElem(w.startU, w.startV, w.endU, w.endV)
 }
 
 // mirrorElem reflects an element across the axis (y → −y), reversing the
@@ -428,7 +446,7 @@ func trigRange(a, b, lo, hi float64) (float64, float64) {
 // side, so it serves an outer wall (counter-clockwise) and a cavity wall
 // (clockwise, the reversed loop) alike.
 func wallNormalRange(w sideWalk, du, dv float64) (float64, float64) {
-	if !w.circular {
+	if !w.isCircular() {
 		l := math.Hypot(w.tanInU, w.tanInV)
 		v := (w.tanInV*du - w.tanInU*dv) / l
 		return v, v
@@ -519,7 +537,7 @@ func revolveUndercuts(b *Body, rp revolvePayload, pull r3.Vec) undercutOutcome {
 				return undercutOutcome{}
 			}
 			mn, mx := math.Inf(1), math.Inf(-1)
-			if w.circular {
+			if w.isCircular() {
 				sigma := 1.0
 				if w.th1 < w.th0 {
 					sigma = -1
@@ -583,7 +601,7 @@ func prismMinRadius(pp prismPayload) (radiusOutcome, bool) {
 	best := math.Inf(1)
 	for _, loop := range loops {
 		for _, w := range loop {
-			if w.circular && w.th1 < w.th0 && w.radius < best {
+			if w.isCircular() && w.th1 < w.th0 && w.radius < best {
 				best = w.radius
 			}
 		}
@@ -618,7 +636,7 @@ func revolveMinRadius(rp revolvePayload) (radiusOutcome, bool) {
 			if rp.ax.classify(w.segmentWalk) == wallAxis {
 				continue
 			}
-			if !w.circular {
+			if !w.isCircular() {
 				l := math.Hypot(w.tanInU, w.tanInV)
 				nr := -w.tanInU / l
 				if nr < -survAngTol {

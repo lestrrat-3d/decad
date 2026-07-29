@@ -85,7 +85,7 @@ func offsetLoopBudget(budget *workBudget, loop cornerLoop, s, t float64) ([]Curv
 		if err := wallBudgetStep(budget); err != nil {
 			return nil, err
 		}
-		if w.circular {
+		if w.isCircular() {
 			if _, ok := offsetRadius(w, s, t); !ok {
 				return nil, errOffsetDrop
 			}
@@ -210,7 +210,7 @@ func offsetRadius(w sideWalk, s, t float64) (float64, bool) {
 // circle. It reuses the fillet's offCurve so the closed-form intersectOffsets
 // serves both ops.
 func offsetCarrier(w sideWalk, s, t float64) offCurve {
-	if !w.circular {
+	if !w.isCircular() {
 		tx, ty, _ := normalize2(w.tanInU, w.tanInV)
 		return offCurve{isLine: true, px: w.startU + s*t*(-ty), py: w.startV + s*t*tx, dx: tx, dy: ty}
 	}
@@ -223,7 +223,7 @@ func offsetCarrier(w sideWalk, s, t float64) offCurve {
 // circular one. start and end lie on the offset curve by construction, so the
 // emitted radius is the offset radius exactly.
 func offsetWalkSegment(w sideWalk, s, t float64, start, end Point2) (CurveSegment, error) {
-	if !w.circular {
+	if !w.isCircular() {
 		return LineSeg{Start: start, End: end, TStart: 0, TEnd: 1}, nil
 	}
 	if _, ok := offsetRadius(w, s, t); !ok {
@@ -242,7 +242,7 @@ func offsetWalkSegment(w sideWalk, s, t float64, start, end Point2) (CurveSegmen
 // this — the drop is a per-walk fact, decided here as the offset is built.
 func walkOffsetConsumed(w sideWalk, start, end Point2) bool {
 	du, dv := end.U-start.U, end.V-start.V
-	if !w.circular {
+	if !w.isCircular() {
 		tx, ty, l := normalize2(w.tanInU, w.tanInV)
 		if l == 0 {
 			return false // no direction to compare against; left to other gates
@@ -307,6 +307,9 @@ func reverseLoopRecordWithPoll(poll func() error, l LoopRecord) (LoopRecord, err
 		if err != nil {
 			return LoopRecord{}, err
 		}
+		if err := requireAnalyticWalk(w, "the shell section offset"); err != nil {
+			return LoopRecord{}, err
+		}
 		walks[i] = w
 	}
 	segs := make([]CurveSegment, 0, n)
@@ -320,7 +323,7 @@ func reverseLoopRecordWithPoll(poll func() error, l LoopRecord) (LoopRecord, err
 		switch {
 		case w.closed:
 			segs = append(segs, circleSegConcentric(w.cU, w.cV, w.radius, !(w.th1 > w.th0)))
-		case w.circular:
+		case w.isCircular():
 			segs = append(segs, arcSegment(Point2{U: w.cU, V: w.cV}, Point2{U: w.endU, V: w.endV}, Point2{U: w.startU, V: w.startV}, !(w.th1 > w.th0)))
 		default:
 			segs = append(segs, LineSeg{Start: Point2{U: w.endU, V: w.endV}, End: Point2{U: w.startU, V: w.startV}, TStart: 0, TEnd: 1})

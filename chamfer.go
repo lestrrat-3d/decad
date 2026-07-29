@@ -231,7 +231,7 @@ func computeChamfer(loop cornerLoop, ci int, d float64) (*cornerBlend, error) {
 // in the walk's own turn sense — CCW (th1 > th0) increases the bearing, CW
 // decreases it — so the foot lands on the arc itself, exactly.
 func setbackFoot(w sideWalk, d float64, back bool) Point2 {
-	if !w.circular {
+	if !w.isCircular() {
 		if back {
 			ux, uy, _ := normalize2(w.tanOutU, w.tanOutV)
 			return Point2{U: w.endU - d*ux, V: w.endV - d*uy}

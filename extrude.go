@@ -379,6 +379,9 @@ func profileCoordinateUpper(profile ProfileRecord) (float64, error) {
 			if err != nil {
 				return 0, err
 			}
+			if err := requireAnalyticWalk(w, "a placed cap frame"); err != nil {
+				return 0, err
+			}
 			upper = math.Max(upper, w.coordUpper)
 		}
 	}
@@ -605,6 +608,27 @@ func capFrame(pp prismPayload, z float64, flip bool) (r3.Frame, error) {
 	return f, nil
 }
 
+// walkKind discriminates what a segmentWalk's geometry IS. It replaced a
+// line-versus-circular boolean because a free-form walk is neither: a two-state
+// flag left every "not circular" branch silently building a straight line out of
+// a spline, which is exactly the confidently-wrong answer decad exists to
+// prevent (docs/spline-design.md §6.2).
+//
+// A switch on walkKind MUST be total. Where a consumer cannot yet handle
+// walkFreeform, it refuses through requireAnalyticWalk rather than falling
+// through to the line branch.
+type walkKind uint8
+
+const (
+	// walkLine is a straight walk between its endpoints.
+	walkLine walkKind = iota
+	// walkCircular is a circular walk about (cU, cV) — a circle or an arc.
+	walkCircular
+	// walkFreeform is a free-form walk, whose geometry lives in its converted
+	// Bézier spans rather than in the circular fields.
+	walkFreeform
+)
+
 // segmentWalk is one boundary segment's walk geometry in plane coordinates.
 type segmentWalk struct {
 	// start/end are the walk's endpoints in (u, v); closed is true for a
@@ -622,11 +646,36 @@ type segmentWalk struct {
 	coordUpper       float64
 	axisRadiusUpper  float64
 	axisMomentUpper  float64
-	// circular geometry when the segment is a circle/arc walk.
-	circular bool
+	// kind says which geometry the walk carries; the fields below it are
+	// meaningful only for walkCircular.
+	kind     walkKind
 	cU, cV   float64
 	radius   float64
 	th0, th1 float64
+	// spans is the converted Bézier chain of a walkFreeform walk, in the
+	// curve's natural direction; reversed says the walk runs against it. Both
+	// are zero for every other kind.
+	spans    []bezierSpan
+	reversed bool
+}
+
+// isCircular reports whether the walk is a circle or arc — the question the
+// closed-form circular branches ask.
+func (w segmentWalk) isCircular() bool { return w.kind == walkCircular }
+
+// isLine reports whether the walk is straight. It is NOT "not circular": a
+// free-form walk answers false to both.
+func (w segmentWalk) isLine() bool { return w.kind == walkLine }
+
+// requireAnalyticWalk refuses a free-form walk on behalf of a consumer that has
+// no free-form construction yet. Reaching it is a staging limit, never a wrong
+// answer — the reason each consumer stages is its own row in
+// docs/spline-design.md Table R.
+func requireAnalyticWalk(w segmentWalk, what string) error {
+	if w.kind != walkFreeform {
+		return nil
+	}
+	return fmt.Errorf(`%w: %s does not support a free-form boundary segment`, ErrUnsupported, what)
 }
 
 // walkOf resolves one line, circle or arc segment into its walk geometry.
@@ -688,8 +737,62 @@ func walkOf(seg CurveSegment) (segmentWalk, error) {
 			circularSweepUpper(seg.TStart, seg.TEnd),
 		), nil
 	default:
-		return segmentWalk{}, fmt.Errorf(`%w: this evaluator sweeps profiles of line, arc and circle segments only; the profile has a %T segment it cannot sweep into a side face yet`, ErrUnsupported, seg)
+		if !isFreeformSegment(seg) {
+			return segmentWalk{}, fmt.Errorf(`%w: this evaluator sweeps profiles of line, arc, circle and Tier A free-form segments only; the profile has a %T segment it cannot sweep into a side face yet`, ErrUnsupported, seg)
+		}
+		return freeformWalk(seg)
 	}
+}
+
+// freeformWalk resolves a Tier A free-form segment into its walk geometry
+// (docs/spline-design.md Table F). Every field it fills is a proof:
+//
+//   - the endpoints are the converted chain's own first and last control
+//     points, which a Bézier interpolates exactly;
+//   - the tangents are the hodograph at those ends, exact directions;
+//   - the length is §6.1's proven two-sided bracket, so lengthBound is
+//     positive and the walk NEVER claims an exact length;
+//   - coordUpper and lengthUpper are convex-hull envelopes, so they bound the
+//     curve and not merely its control net.
+//
+// axisRadiusUpper and axisMomentUpper stay zero: they are revolve's readings,
+// and revolve refuses a free-form walk before reaching them.
+func freeformWalk(seg CurveSegment) (segmentWalk, error) {
+	work := &freeformWork{}
+	spans, reversed, err := freeformBezierSpans(seg, work)
+	if err != nil {
+		return segmentWalk{}, err
+	}
+	start, end, err := freeformEndpoints(spans, reversed)
+	if err != nil {
+		return segmentWalk{}, err
+	}
+	length, bound, err := freeformArcLength(spans, work)
+	if err != nil {
+		return segmentWalk{}, err
+	}
+	tanInU, tanInV, tanOutU, tanOutV, err := freeformEndTangents(spans, reversed)
+	if err != nil {
+		return segmentWalk{}, err
+	}
+	return segmentWalk{
+		startU: start.U, startV: start.V,
+		endU: end.U, endV: end.V,
+		// A closed free-form curve returns to its start, so it carries no
+		// junction vertex — the same fact CircleSeg's closed walk states.
+		closed:      start == end,
+		tanInU:      tanInU,
+		tanInV:      tanInV,
+		tanOutU:     tanOutU,
+		tanOutV:     tanOutV,
+		length:      length,
+		lengthBound: bound,
+		lengthUpper: upRound(length + bound),
+		coordUpper:  freeformControlExtent(spans),
+		kind:        walkFreeform,
+		spans:       spans,
+		reversed:    reversed,
+	}, nil
 }
 
 // circularWalk builds the walk geometry of a circular path about (cu, cv).
@@ -712,7 +815,7 @@ func circularWalk(cu, cv, r, th0, th1, radiusUpper, sweepUpper float64) segmentW
 		lengthBound: conservativeValueError(length, lengthUpper),
 		lengthUpper: lengthUpper,
 		coordUpper:  coordUpper,
-		circular:    true,
+		kind:        walkCircular,
 		cU:          cu, cV: cv, radius: r, th0: th0, th1: th1,
 	}
 }
@@ -788,7 +891,7 @@ func coalesceWalksContext(ctx context.Context, walks []sideWalk) ([]sideWalk, er
 
 func coalesceWalksWithPoll(poll func() error, walks []sideWalk) ([]sideWalk, error) {
 	collinear := func(a, b sideWalk) bool {
-		if a.circular || b.circular {
+		if !a.isLine() || !b.isLine() {
 			return false
 		}
 		cross := a.tanOutU*b.tanInV - a.tanOutV*b.tanInU
@@ -867,6 +970,9 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref StepRef, pp prismPayl
 		if err != nil {
 			return nil, nil, nil, boundedScalar{}, err
 		}
+		if err := requireAnalyticWalk(w, "the prism side-face build"); err != nil {
+			return nil, nil, nil, boundedScalar{}, err
+		}
 		raw[i] = sideWalk{segmentWalk: w, segs: []int{i}}
 		total = boundedAdd(total, measuredScalar(w.length, w.lengthBound))
 	}
@@ -934,7 +1040,7 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref StepRef, pp prismPayl
 		var bottomEdge, topEdge *Edge
 		var surf Surface
 		faceReversed := false
-		if w.circular {
+		if w.isCircular() {
 			axis := pp.dir(0, 0, 1)
 			// The material's side of a circular wall is decided by the WALK,
 			// not by the loop's role: the outward normal is the walk tangent
@@ -1135,9 +1241,12 @@ func boundaryExtremesContext(ctx context.Context, profile ProfileRecord, gu, gv 
 			if err != nil {
 				return 0, 0, err
 			}
+			if err := requireAnalyticWalk(w, "the boundary extreme scan"); err != nil {
+				return 0, 0, err
+			}
 			take(w.startU, w.startV)
 			take(w.endU, w.endV)
-			if !w.circular {
+			if !w.isCircular() {
 				continue
 			}
 			// Interior extremes at θ* where the functional's gradient

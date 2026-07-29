@@ -727,7 +727,7 @@ func (ax axisFrame) walk(w segmentWalk) segmentWalk {
 	if math.Abs(out.endV) <= ax.snapTol {
 		out.endV = 0
 	}
-	if w.circular {
+	if w.isCircular() {
 		beta := math.Atan2(ax.dV, ax.dU)
 		out.cU, out.cV = ax.toAxis(w.cU, w.cV)
 		out.th0 = w.th0 - beta
@@ -765,7 +765,7 @@ const (
 
 // classify names the surface of revolution one axis-coordinate walk sweeps.
 func (ax axisFrame) classify(w segmentWalk) wallKind {
-	if w.circular {
+	if w.isCircular() {
 		if math.Abs(w.cV) <= ax.snapTol {
 			return wallSphere
 		}
@@ -849,8 +849,11 @@ func (ax axisFrame) rejectInteriorContact(profile ProfileRecord) error {
 			if err != nil {
 				return err
 			}
+			if err := requireAnalyticWalk(w, "the revolve axis-contact audit"); err != nil {
+				return err
+			}
 			w = ax.walk(w)
-			if !w.circular {
+			if !w.isCircular() {
 				continue
 			}
 			if w.cV < -ax.snapTol {
@@ -1253,6 +1256,9 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref StepRef, rp revolvePa
 		if err != nil {
 			return revLoopParts{}, err
 		}
+		if err := requireAnalyticWalk(w, "the revolve wall build"); err != nil {
+			return revLoopParts{}, err
+		}
 		raw[i] = sideWalk{segmentWalk: rp.ax.walk(w), segs: []int{i}}
 	}
 	walks, err := coalesceWalksContext(ctx, raw)
@@ -1483,11 +1489,11 @@ func fullRevLoops(j0, j1 revJunction, kind wallKind) []*Loop {
 // takes the loop's: outer convex, hole concave.
 func (rp revolvePayload) capEdge(b revolveBasis, w segmentWalk, closed bool, vs, ve *Vertex, phi float64, holeLoop bool) *Edge {
 	convex := !holeLoop
-	if w.circular {
+	if w.isCircular() {
 		convex = w.th0 < w.th1
 	}
 	e := &Edge{convex: convex, length: w.length, lengthBound: w.lengthBound}
-	if !w.circular {
+	if !w.isCircular() {
 		e.curve = Line3{}
 		e.start, e.end = vs, ve
 		return e
@@ -1598,7 +1604,7 @@ func walkAxisMoment(w segmentWalk, kind wallKind) boundedScalar {
 	if kind == wallAxis {
 		return boundedScalar{}
 	}
-	if !w.circular {
+	if !w.isCircular() {
 		meanRadius := boundedDiv(
 			boundedAdd(exactScalar(w.startV), exactScalar(w.endV)),
 			exactScalar(2),
