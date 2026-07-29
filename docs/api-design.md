@@ -460,7 +460,11 @@ type Cylinder struct { Origin, Axis r3.Vec; Radius units.Value }
 type Cone struct     { Origin, Axis r3.Vec; Radius, HalfAngle units.Value }
 type Sphere struct   { Center r3.Vec; Radius units.Value }
 type Torus struct    { Center, Axis r3.Vec; Major, Minor units.Value }
-type NURBSSurface struct { /* ... */ }
+// NURBSSurface is a free-form face's geometry — the exact extruded or revolved
+// surface of a recorded free-form curve, so Exact by construction like every
+// other analytic variant. Its control net is private in v1
+// (`docs/spline-design.md` §7).
+type NURBSSurface struct { /* private */ }
 
 // Faceted is the honest v1 variant: a face a boolean produced, whose public
 // analytic identity is gone. Bound encloses two-sided displacement between the
@@ -478,7 +482,10 @@ be `Faceted` — is a measurement and reports its `Exactness` like every other.
 For a faceted face, the evaluator's internal source certificate bounds the true
 patch normals; a positional `Faceted.Bound` alone does not imply a normal bound
 (`docs/payload-verification-design.md` §5/§8). No certificate details enter the
-public API.
+public API. `NormalAt` on a `NURBSSurface` is `ErrUnsupported`: recovering a
+given point's surface parameters is a root-find, so no zero-bound answer is
+available, and nothing internal reads normals through it
+(`docs/spline-design.md` §7).
 
 A `switch` on `Surface` MUST carry a `default` — vN adds variants.
 
@@ -775,6 +782,7 @@ The rest are deferred:
 type FeatureRef struct{ /* ... */ }    // an opaque handle to the feature that created a body or face
 type Mesh struct{ /* ... */ }          // a triangle mesh; an OUTPUT of Tessellate, never the representation
 type Curve interface{ curve() }        // sealed, like Surface: Line / Circle / Arc / Ellipse / NURBSCurve / FacetedCurve
+type NURBSCurve struct{ /* private */ }// a free-form edge, NURBSSurface's 1-D analog (spline design §7)
 type EdgePredicate struct{ /* ... */ } // one clause of an EdgeQuery; the §9 constructors return these
 type FacePredicate struct{ /* ... */ } // one clause of a FaceQuery
 ```

@@ -51,6 +51,11 @@ polylines, and where the sampled arrangement cuts — it can cut at a grazing
 touch — the parameter is sampled. A sampled cut yields `TExact == false` on
 every fragment it bounds.
 
+**Evaluator consequence, and it is scope rather than a footnote:** no free-form
+fragment is ever recordable, so the evaluator only ever sees a free-form curve
+over its FULL domain. `docs/spline-design.md` §2 owns that scope and what the
+public doc comments must tell a caller whose spline crosses another curve.
+
 **No residual test on a fragment's endpoints could stand in for the flag, at any
 tolerance.** A `Polyline` is a **sample of the curve**: its vertices are
 evaluated from the curve (the one exception is an elliptical arc's two end
