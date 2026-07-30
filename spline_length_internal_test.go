@@ -2,6 +2,7 @@ package decad
 
 import (
 	"math"
+	"runtime"
 	"strconv"
 	"testing"
 	"time"
@@ -97,7 +98,7 @@ func TestFreeformCoincidentControlNetRefused(t *testing.T) {
 			require.ErrorIs(t, err, ErrDegenerate)
 			require.Contains(t, err.Error(), "coincide")
 
-			_, err = walkOf(seg)
+			_, err = walkOf(seg, newFreeformWork())
 			require.ErrorIs(t, err, ErrDegenerate, "no walk carries a zero length bound")
 
 			_, _, _, err = validateFreeformMomentSegment(seg, &freeformWork{})
@@ -244,7 +245,7 @@ func TestFreeformArcLengthAboveFloat64RangeRefused(t *testing.T) {
 	require.NotErrorIs(t, err, ErrNotFinite, "every coordinate here is finite")
 	require.Contains(t, err.Error(), "representable float64 range")
 
-	_, err = walkOf(seg)
+	_, err = walkOf(seg, newFreeformWork())
 	require.ErrorIs(t, err, ErrUnsupported, "the walk carries the same refusal")
 	require.NotErrorIs(t, err, ErrNotFinite)
 }
@@ -255,7 +256,7 @@ func TestFreeformArcLengthAboveFloat64RangeRefused(t *testing.T) {
 // trims at once.
 func TestFreeformWalkRefusedByAnalyticConsumers(t *testing.T) {
 	control := []Point2{{U: 0, V: 0}, {U: 1, V: 2}, {U: 3, V: 2}, {U: 4, V: 0}}
-	walk, err := walkOf(SplineSeg{Control: control, TStart: 0, TEnd: 1})
+	walk, err := walkOf(SplineSeg{Control: control, TStart: 0, TEnd: 1}, newFreeformWork())
 	require.NoError(t, err, "a Tier A segment resolves into a walk")
 	require.Equal(t, walkFreeform, walk.kind)
 	require.False(t, walk.isLine(), "a free-form walk is not a line")
@@ -304,7 +305,7 @@ func TestWideSpanBracketRefusesBeforeSubdividing(t *testing.T) {
 	require.Less(t, time.Since(start), 10*time.Second, "the refusal precedes the subdivision")
 
 	start = time.Now()
-	_, err = walkOf(seg)
+	_, err = walkOf(seg, newFreeformWork())
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.Contains(t, err.Error(), "work budget")
 	require.Less(t, time.Since(start), 10*time.Second, "the walk refuses on the same preflight")
@@ -328,4 +329,94 @@ func oneSpanNURBS(degree int) NURBSSeg {
 		knots = append(knots, 1)
 	}
 	return NURBSSeg{Degree: degree, Control: control, Knots: knots, Weights: weights, TStart: 0, TEnd: 1}
+}
+
+// The R7 ceiling belongs to the RECORD, across every phase of one operation
+// (docs/spline-design.md §5.2), and the length bracket is bound to that rule
+// (§6.1). A moments preflight and the walk resolution that follows it are two
+// phases over the same record, so the walk spends what the preflight left; a
+// counter minted inside the walk hands the same record a second full ceiling and
+// subdivides for seconds over work the first phase already proved unaffordable.
+//
+// The assertion MEASURES the second phase, because a second counter is invisible
+// to any unit count: both counters read well under the limit, and only the cost
+// tells them apart.
+func TestWalkSpendsTheRecordsRemainingCeiling(t *testing.T) {
+	seg := ringSplineSeg(45)
+	record := ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{seg}}}
+
+	pre, err := validateMomentFields(record)
+	require.NoError(t, err, "the preflight admits this record")
+	require.Greater(t, pre.work.spent, freeformWorkLimit/2,
+		"the fixture is sized so the preflight alone spends most of the record's ceiling")
+
+	var before, after runtime.MemStats
+	runtime.GC()
+	runtime.ReadMemStats(&before)
+	start := time.Now()
+	_, err = walkOf(seg, pre.work)
+	elapsed := time.Since(start)
+	runtime.ReadMemStats(&after)
+
+	require.ErrorIs(t, err, ErrUnsupported)
+	require.Contains(t, err.Error(), "work budget",
+		"the walk refuses on the record's own ceiling, not on a fresh one")
+	// A second ceiling runs the whole bracket over this chain: 2.17 s and
+	// 1.46 GB measured. What is left of the record's ceiling cannot pay for one
+	// span of it, so the refusal costs neither.
+	require.Less(t, after.TotalAlloc-before.TotalAlloc, uint64(64)<<20,
+		"a second ceiling would allocate gigabytes of rational subdivision here")
+	require.Less(t, elapsed, 2*time.Second,
+		"a second ceiling would subdivide for seconds before refusing")
+}
+
+// walkOf mints no counter of its own: successive resolutions charge the counter
+// they were handed. A per-call counter spends the same units twice from zero,
+// which is exactly what leaves the ceiling unable to bound a whole record.
+func TestWalkChargesTheCounterItIsGiven(t *testing.T) {
+	seg := SplineSeg{
+		Control: []Point2{{U: 0, V: 0}, {U: 1, V: 2}, {U: 3, V: 2}, {U: 4, V: 0}},
+		TStart:  0,
+		TEnd:    1,
+	}
+	shared := newFreeformWork()
+
+	_, err := walkOf(seg, shared)
+	require.NoError(t, err)
+	first := shared.spent
+	require.Positive(t, first, "a free-form walk charges its conversion and its bracket")
+
+	_, err = walkOf(seg, shared)
+	require.NoError(t, err)
+	require.Equal(t, 2*first, shared.spent,
+		"the second resolution accumulates onto the same counter")
+}
+
+// A free-form resolution handed no counter has no ceiling at all, so it refuses
+// rather than quietly open one — the silent mint is the defect this rule closes.
+func TestFreeformWalkWithoutCounterRefuses(t *testing.T) {
+	seg := SplineSeg{
+		Control: []Point2{{U: 0, V: 0}, {U: 1, V: 2}, {U: 3, V: 2}, {U: 4, V: 0}},
+		TStart:  0,
+		TEnd:    1,
+	}
+	_, err := walkOf(seg, nil)
+	require.ErrorIs(t, err, ErrUnsupported)
+	require.Contains(t, err.Error(), "work counter")
+
+	// An analytic walk charges nothing, so it is unaffected.
+	_, err = walkOf(LineSeg{Start: Point2{}, End: Point2{U: 1, V: 1}, TEnd: 1}, nil)
+	require.NoError(t, err)
+}
+
+// ringSplineSeg is a cubic spline whose control points ride a circle. Its
+// conversion is the widest single Tier A segment the record preflight admits at
+// 45 controls, which is what makes the remaining ceiling small enough to observe.
+func ringSplineSeg(controls int) SplineSeg {
+	control := make([]Point2, controls)
+	for i := range control {
+		a := 2 * math.Pi * float64(i) / float64(controls)
+		control[i] = Point2{U: 10 * math.Cos(a), V: 10 * math.Sin(a)}
+	}
+	return SplineSeg{Control: control, TStart: 0, TEnd: 1}
 }

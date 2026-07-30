@@ -65,6 +65,10 @@ type radiusOutcome struct {
 // exactly as the prism evaluator builds its side faces — the surveys must
 // see the same face decomposition the topology carries.
 func recordLoops(budget *workBudget, profile ProfileRecord) ([][]sideWalk, error) {
+	// One free-form counter for the whole record: the surveys read a built body's
+	// own section with no preflight counter in hand, so the ceiling starts here
+	// and spans every loop below.
+	work := newFreeformWork()
 	var out [][]sideWalk
 	for _, loop := range append([]LoopRecord{profile.Outer}, profile.Holes...) {
 		if err := wallBudgetStep(budget); err != nil {
@@ -75,7 +79,7 @@ func recordLoops(budget *workBudget, profile ProfileRecord) ([][]sideWalk, error
 			if err := wallBudgetStep(budget); err != nil {
 				return nil, err
 			}
-			w, err := walkOf(seg)
+			w, err := walkOf(seg, work)
 			if err != nil {
 				return nil, err
 			}
@@ -105,6 +109,8 @@ func recordLoopsBudget(budget *workBudget, profile ProfileRecord) ([][]sideWalk,
 // revolveLoops resolves the loops into axis coordinates (the U fields carry
 // z, the V fields ρ), mirroring buildRevolveLoop.
 func revolveLoops(budget *workBudget, rp revolvePayload) ([][]sideWalk, error) {
+	// One free-form counter for the whole record, as recordLoops opens.
+	work := newFreeformWork()
 	var out [][]sideWalk
 	loops := append([]LoopRecord{rp.profile.Outer}, rp.profile.Holes...)
 	for _, loop := range loops {
@@ -116,7 +122,7 @@ func revolveLoops(budget *workBudget, rp revolvePayload) ([][]sideWalk, error) {
 			if err := wallBudgetStep(budget); err != nil {
 				return nil, err
 			}
-			w, err := walkOf(seg)
+			w, err := walkOf(seg, work)
 			if err != nil {
 				return nil, err
 			}

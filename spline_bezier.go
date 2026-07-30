@@ -43,14 +43,16 @@ type ratPoint struct{ u, v *big.Rat }
 // last control points ARE the recorded curve's own endpoints.
 type bezierSpan []ratPoint
 
-// freeformWorkLimit is the fixed ceiling on ONE RECORD's free-form conversion
-// and integration work, in charged units (one scanned or copied knot-insertion
-// entry, or one integrand coefficient product). It bounds a whole ProfileRecord
-// rather than each of its segments: a counter opened per segment reads a record
-// of individually cheap curves as cheap however many of them it holds, so the
-// aggregate — which is what actually runs — would be unbounded. Public
-// ProfileRecord methods take no context, so the limit is fixed rather than
-// caller-set, exactly as shellInradiusWorkLimit is for the inward shell survey.
+// freeformWorkLimit is the fixed ceiling on ONE RECORD's free-form conversion,
+// integration and length-bracket work, in charged units (one scanned or copied
+// knot-insertion entry, or one integrand coefficient product). It bounds a whole
+// ProfileRecord rather than each of its segments, and it bounds the whole
+// OPERATION over that record rather than each pass through it: a counter opened
+// per segment reads a record of individually cheap curves as cheap however many
+// of them it holds, and a counter opened per pass lets a later pass run work an
+// earlier one already proved unaffordable. Either way the aggregate — which is
+// what actually runs — would be unbounded. Public ProfileRecord methods take no
+// context, so the limit is fixed rather than caller-set, exactly as shellInradiusWorkLimit is for the inward shell survey.
 // Reaching it is Table R row R7: ErrUnsupported, never a widened float path.
 const freeformWorkLimit uint64 = 1 << 20
 
@@ -83,6 +85,13 @@ func costMul(a, b uint64) uint64 {
 
 // freeformWork is the charged counter behind freeformWorkLimit.
 type freeformWork struct{ spent uint64 }
+
+// newFreeformWork opens ONE record's counter. Minting is deliberately explicit
+// and rare: the ceiling bounds a record's total free-form work across the whole
+// operation, so every new counter is a new full ceiling. Mint one where a record
+// walk begins with no preflight counter in hand; everywhere else, pass the
+// counter the record already has.
+func newFreeformWork() *freeformWork { return &freeformWork{} }
 
 func (w *freeformWork) step(n uint64) error {
 	if w == nil {

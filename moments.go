@@ -724,24 +724,28 @@ func (r ProfileRecord) integralsTo(order momentIntegralOrder) (regionIntegrals, 
 // Public measurement methods use integralsTo and retain full topology and
 // finiteness checks; evaluator construction must not let unused higher-order
 // overflow prevent clearance verification from running.
-func (r ProfileRecord) evaluatorIntegrals(order momentIntegralOrder) (regionIntegrals, error) {
-	pre, err := validateMomentFields(r)
+//
+// work is the record's free-form work counter (docs/spline-design.md §5.2). An
+// evaluator that already spent part of this record's ceiling passes the same
+// counter, so the preflight below continues it rather than open a second one.
+func (r ProfileRecord) evaluatorIntegrals(order momentIntegralOrder, work *freeformWork) (regionIntegrals, error) {
+	pre, err := validateMomentFieldsWork(work, r)
 	if err != nil {
 		return regionIntegrals{}, err
 	}
 	return integrateMomentRecord(pre, order)
 }
 
-func (r ProfileRecord) evaluatorIntegralsContext(ctx context.Context, order momentIntegralOrder) (regionIntegrals, error) {
-	pre, err := validateMomentFieldsContext(ctx, r)
+func (r ProfileRecord) evaluatorIntegralsContext(ctx context.Context, order momentIntegralOrder, work *freeformWork) (regionIntegrals, error) {
+	pre, err := validateMomentFieldsContext(ctx, work, r)
 	if err != nil {
 		return regionIntegrals{}, err
 	}
 	return integrateMomentRecordModeContext(ctx, pre, order, true)
 }
 
-func (r ProfileRecord) evaluatorIntegralsUncheckedContext(ctx context.Context, order momentIntegralOrder) (regionIntegrals, error) {
-	pre, err := validateMomentFieldsContext(ctx, r)
+func (r ProfileRecord) evaluatorIntegralsUncheckedContext(ctx context.Context, order momentIntegralOrder, work *freeformWork) (regionIntegrals, error) {
+	pre, err := validateMomentFieldsContext(ctx, work, r)
 	if err != nil {
 		return regionIntegrals{}, err
 	}

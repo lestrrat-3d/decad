@@ -129,11 +129,16 @@ func evalCupContext(ctx context.Context, d *Document, ref StepRef, cp cupPayload
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	igO, err := cp.outer.evaluatorIntegralsContext(ctx, momentFirstOrder)
+	// ONE free-form counter for the whole cup build. The outer region and the
+	// cavity are the two halves of one recorded section and no preflight has run
+	// on either, so the ceiling opens here and both preflights and every walkOf
+	// below spend it (docs/spline-design.md §5.2).
+	work := newFreeformWork()
+	igO, err := cp.outer.evaluatorIntegralsContext(ctx, momentFirstOrder, work)
 	if err != nil {
 		return nil, err
 	}
-	igC, err := cp.cavity.evaluatorIntegralsContext(ctx, momentFirstOrder)
+	igC, err := cp.cavity.evaluatorIntegralsContext(ctx, momentFirstOrder, work)
 	if err != nil {
 		return nil, err
 	}
@@ -179,7 +184,7 @@ func evalCupContext(ctx context.Context, d *Document, ref StepRef, cp cupPayload
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		sf, bottom, top, ll, err := buildLoopSides(ctx, body, ref, ppO, i, loop)
+		sf, bottom, top, ll, err := buildLoopSides(ctx, body, ref, ppO, i, loop, work)
 		if err != nil {
 			return nil, err
 		}
@@ -206,7 +211,7 @@ func evalCupContext(ctx context.Context, d *Document, ref StepRef, cp cupPayload
 		if err != nil {
 			return nil, err
 		}
-		sf, bottom, top, ll, err := buildLoopSidesAs(ctx, body, ref, ppC, i, i == 0, rev)
+		sf, bottom, top, ll, err := buildLoopSidesAs(ctx, body, ref, ppC, i, i == 0, rev, work)
 		if err != nil {
 			return nil, err
 		}
@@ -365,7 +370,7 @@ func evalCupContext(ctx context.Context, d *Document, ref StepRef, cp cupPayload
 		exactWeightedPointRound(cO, weightO.value, cC, weightC.value, centroidValue),
 	)
 	outerPrism := cp.prismLike(oLo, oHi)
-	geometryBound, err := prismCentroidGeometryBound(outerPrism, cp.outer, centroidValue)
+	geometryBound, err := prismCentroidGeometryBound(outerPrism, cp.outer, centroidValue, work)
 	if err != nil {
 		return nil, err
 	}
@@ -377,7 +382,7 @@ func evalCupContext(ctx context.Context, d *Document, ref StepRef, cp cupPayload
 	}
 
 	// Bounds: the outer prism's — the cavity lies within it in both senses (§10).
-	bounds, err := prismBoundsContext(ctx, prismPayload{profile: cp.outer, frame: cp.frame, z0: oLo, z1: oHi, xform: cp.xform})
+	bounds, err := prismBoundsContext(ctx, prismPayload{profile: cp.outer, frame: cp.frame, z0: oLo, z1: oHi, xform: cp.xform}, work)
 	if err != nil {
 		return nil, err
 	}

@@ -295,6 +295,10 @@ func reverseLoopRecordContext(ctx context.Context, l LoopRecord) (LoopRecord, er
 }
 
 func reverseLoopRecordWithPoll(poll func() error, l LoopRecord) (LoopRecord, error) {
+	// One free-form counter for this loop's walk: reversal is reached from the
+	// offset construction and the cup build, neither of which holds a preflight
+	// counter for the loop it hands over.
+	work := newFreeformWork()
 	n := len(l.Segments)
 	walks := make([]segmentWalk, n)
 	for i, seg := range l.Segments {
@@ -303,7 +307,7 @@ func reverseLoopRecordWithPoll(poll func() error, l LoopRecord) (LoopRecord, err
 				return LoopRecord{}, err
 			}
 		}
-		w, err := walkOf(seg)
+		w, err := walkOf(seg, work)
 		if err != nil {
 			return LoopRecord{}, err
 		}

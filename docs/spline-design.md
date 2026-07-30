@@ -387,6 +387,22 @@ that actually runs is the aggregate: a counter opened per segment reads a record
 of individually cheap curves as cheap however many of them it holds, and bounds
 nothing.
 
+That counter spans the whole OPERATION, not one pass through the record. A
+feature call reads the same record several times — the moments preflight behind
+its area falsifier, the preflight the build runs again, and the walk resolution
+that reads every segment after it — and each of those phases charges work over
+the same curves. So the counter is opened where the operation first touches the
+record, and every later phase spends what is left of it. A counter minted per
+phase hands one record a fresh full ceiling each time, and a later phase then
+runs work an earlier one already proved unaffordable; the arc-length bracket
+(§6.1) is where that bites hardest, being the most expensive of the three passes.
+A pass that legitimately holds no counter — a re-evaluation under a rigid
+placement, a modify op's rewritten section, a survey, an extent reading or a
+tessellation reading a body already built — opens exactly one counter for the
+record walk it is about to make. Never one per segment, never one per loop, and
+never one inside the walk resolution itself: a resolution handed no counter has
+no ceiling at all and refuses.
+
 Charge EARLY as well as conservatively. The ceiling is fixed because the public
 `ProfileRecord` methods take no context and so cannot be cancelled, so every
 pass whose cost grows with the record must sit BEHIND a charge already levied —
@@ -1252,6 +1268,15 @@ rules).
   restated whenever a validator is added and goes stale silently; a cost boundary
   fails when a pass is uncharged or allocates per element, whatever the accounting
   says.
+- Assert that ONE public operation over one record spends ONE ceiling, and assert
+  it by MEASUREMENT. A second counter reads well under the limit exactly as the
+  first does, so no unit count can see it; only the cost of the work it admits
+  can. Take a record whose preflight alone spends most of the ceiling, and require
+  the phase after it — the walk resolution, whose arc-length bracket is the
+  expensive one — to refuse within a stated wall-clock and allocation budget that
+  a fresh ceiling's subdivision blows through. Assert beside it that a walk charges
+  the counter it was handed rather than one of its own, so successive resolutions
+  accumulate.
 - Assert an OPEN spline's converted spans against an exact Cox–de Boor evaluation
   over `geom.ClampedKnots`'s own FLOAT knots, at a control count where `n−3` is
   not a power of two, comparing rationals rather than a tolerance. A fixture whose

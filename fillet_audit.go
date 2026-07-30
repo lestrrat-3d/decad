@@ -213,6 +213,9 @@ func buildSegEntries(loops []LoopRecord) ([]segEntry, error) {
 }
 
 func buildSegEntriesBudget(budget *workBudget, loops []LoopRecord) ([]segEntry, error) {
+	// One free-form counter for the whole audited section: the loops handed here
+	// are one record, and no preflight has run on them.
+	work := newFreeformWork()
 	var segs []segEntry
 	for li, loop := range loops {
 		n := len(loop.Segments)
@@ -220,7 +223,7 @@ func buildSegEntriesBudget(budget *workBudget, loops []LoopRecord) ([]segEntry, 
 			if err := wallBudgetStep(budget); err != nil {
 				return nil, err
 			}
-			w, err := walkOf(seg)
+			w, err := walkOf(seg, work)
 			if err != nil {
 				return nil, auditError(err, fmt.Sprintf(`loop %d segment %d: %v`, li, i, err))
 			}

@@ -170,6 +170,8 @@ func (b *Body) FilletContext(ctx context.Context, sel EdgeSelector, r units.Valu
 	ref := d.nextStepRef()
 	// The blend descriptors ride on the payload so a re-evaluation (a copy or a
 	// placement) re-mints its own fillet(i,j) roles; evalPrism applies them.
+	// The rewritten section is a NEW record no preflight has seen, so the build
+	// opens its one counter here (docs/spline-design.md §5.2).
 	body, err := evalPrismContext(ctx, d, ref, prismPayload{
 		profile:   profile,
 		frame:     pp.frame,
@@ -178,7 +180,7 @@ func (b *Body) FilletContext(ctx context.Context, sel EdgeSelector, r units.Valu
 		xform:     pp.xform,
 		blendSegs: filletArcs,
 		blendKind: "fillet",
-	})
+	}, newFreeformWork())
 	if err != nil {
 		return nil, err
 	}
@@ -258,6 +260,10 @@ func prismCornerLoopsBudget(budget *workBudget, pp prismPayload) ([]cornerLoop, 
 	if err := wallBudgetErr(budget); err != nil {
 		return nil, err
 	}
+	// One free-form counter for this whole record walk: no moments preflight ran
+	// on the section this reads, so the ceiling starts here and covers every
+	// segment of every loop below.
+	work := newFreeformWork()
 	var out []cornerLoop
 	for _, loop := range append([]LoopRecord{pp.profile.Outer}, pp.profile.Holes...) {
 		if err := wallBudgetStep(budget); err != nil {
@@ -268,7 +274,7 @@ func prismCornerLoopsBudget(budget *workBudget, pp prismPayload) ([]cornerLoop, 
 			if err := wallBudgetStep(budget); err != nil {
 				return nil, err
 			}
-			w, err := walkOf(seg)
+			w, err := walkOf(seg, work)
 			if err != nil {
 				return nil, err
 			}
