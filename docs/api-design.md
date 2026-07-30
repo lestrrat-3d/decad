@@ -490,10 +490,10 @@ Its never-restate rule bans the pointer-WITH-GLOSS shape, and no clause of splin
 §7's derivation is unpacked here — not the (u, v) root-find, not the other
 variants' Exact zero bound, not the undercut survey reading normals off the
 payload walk. Two sentences of the same claim+pointer shape already ship in this
-file on the base branch: the Faceted.Bound sentence immediately above, and the
+file: the Faceted.Bound sentence immediately above, and the
 DiagUnsupportedPairContact sentence in §8's boolean-error taxonomy, which even
-names the owner's constant. Any reviewer can check both claims against the rule
-text and against origin/main. -->
+names the owner's constant. This reading of the authoring rule is the project's
+settled one. -->
 
 A `switch` on `Surface` MUST carry a `default` — vN adds variants.
 

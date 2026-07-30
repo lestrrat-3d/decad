@@ -82,6 +82,14 @@ tolerance, so they lie on the parametric ellipse only approximately — `geom`
 documents the miss as ~5e-3. seam §1 records the whole edge anyway, because a
 whole edge's admission never consults `TExact`.
 
+<!-- The ~5e-3 figure is a checkable claim about the pinned sketch module: it is
+written in package geom, in `geom/region.go`, in the doc comment on the
+`BoundaryEdge.TExact` field, which states that an EllipticalArc's ends are pinned
+to the sketch Start/End points and that eval(t=0/t=1) misses the pinned Polyline
+end by that tolerance. That is production code carrying the magnitude, not a test
+tolerance. Package `sketch`'s own `profiles.go` states the same pinning rule
+without a number, so `geom` is the site the figure comes from. -->
+
 The two datasets disagree, and decad has no exact reconciliation:
 
 - trusting the parametric curve moves the segment's ends off the neighbour's
@@ -116,9 +124,13 @@ kind is admitted. Admission is §2 and Table R.
 | `FitSplineSeg` | — | refused, §4 R6 | — |
 
 **Tier A means the integral is exact, NOT that the reported measurement is
-`Exact`.** The integral's value is an exact rational; `Measurement.Value` is a
-float64. So the reported bound is a SINGLE rounding of that rational, and it is
-zero — hence `Exact` — exactly when the rational is representable in float64.
+`Exact`.** The integral's value is an exact rational, and the `units.Value` the
+measurement returns carries a single `float64` magnitude — `Mag()` in the
+value's own unit, `Base()` in the kind's base unit. So the reported bound is a
+SINGLE rounding of that rational into that magnitude, and it is zero — hence
+`Exact` — exactly when the rational is representable in the magnitude the value
+ACTUALLY CARRIES, never in an abstract float64: the same rational can be
+representable in one unit and not in another.
 A 5-control closed spline whose area is 293/18 reports `Approximate` with a
 one-ulp bound; the same section scaled by 3 has area 293/2, is representable, and
 reports `Exact`.
@@ -787,10 +799,12 @@ rules).
 - Assert the exact RATIONAL area, centroid and second moments of a Tier A
   section against a densely sampled reference AND against sketch's own
   `Profile.Area`. Two independent implementations agreeing is the §5.2 falsifier.
-- Assert BOTH sides of §3's rounding rule: a Tier A section whose exact area is
-  not representable reports `Approximate` with a bound of one rounding, and a
-  section whose exact area IS representable reports `Exact` with a zero bound. A
-  test that only covers one side cannot tell the rule from a constant.
+- Assert BOTH sides of §3's rounding rule, with representability read in the
+  magnitude the reported `units.Value` actually carries: a Tier A section whose
+  exact area is not representable there reports `Approximate` with a bound of one
+  rounding, and a section whose exact area IS representable there reports `Exact`
+  with a zero bound. A test that only covers one side cannot tell the rule from a
+  constant.
 - Assert `Box` reports `Approximate` with a positive bound for a Tier A prism
   (§6.2).
 - Assert an arc-length bracket strictly narrows with subdivision depth and
