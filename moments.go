@@ -488,7 +488,17 @@ func exactCoordinateDelta(a, b float64) *big.Rat {
 	return new(big.Rat).Sub(floatRat(a), floatRat(b))
 }
 
-func circularAreaInterval(seg CurveSegment) (ratInterval, bool) {
+// circularAreaInterval brackets one circular walk's exact area contribution
+// about the walk anchor. The segment holds the RECORDED coordinates and the
+// anchor is subtracted here over rationals: every radial term is a difference
+// the shift cancels out of exactly, and only the centre term carries it, so
+// this bracket stays a proof about the recorded arc rather than about a
+// float-shifted copy of it.
+func circularAreaInterval(seg CurveSegment, anchor Point2) (ratInterval, bool) {
+	anchorU, anchorV := floatRat(anchor.U), floatRat(anchor.V)
+	if anchorU == nil || anchorV == nil {
+		return ratInterval{}, false
+	}
 	switch seg := seg.(type) {
 	case CircleSeg:
 		dt := exactCoordinateDelta(seg.TEnd, seg.TStart)
@@ -525,13 +535,18 @@ func circularAreaInterval(seg CurveSegment) (ratInterval, bool) {
 			new(big.Rat).Mul(dx1, dx1),
 			new(big.Rat).Mul(dy1, dy1),
 		)
-		heldDY0 := seg.Start.V - seg.Center.V
-		heldDY1 := seg.End.V - seg.Center.V
+		// The held angles read the same float-shifted coordinates the float
+		// evaluation does, so this bracket brackets THAT walk's sweep branch.
+		heldCenter := shiftPoint(seg.Center, anchor)
+		heldStart := shiftPoint(seg.Start, anchor)
+		heldEnd := shiftPoint(seg.End, anchor)
+		heldDY0 := heldStart.V - heldCenter.V
+		heldDY1 := heldEnd.V - heldCenter.V
 		a0 := atan2Interval(dy0, dx0, heldDY0 == 0 && math.Signbit(heldDY0))
 		a1 := atan2Interval(dy1, dx1, heldDY1 == 0 && math.Signbit(heldDY1))
 		sweep := intervalSub(a1, a0)
-		heldA0 := math.Atan2(seg.Start.V-seg.Center.V, seg.Start.U-seg.Center.U)
-		heldA1 := math.Atan2(seg.End.V-seg.Center.V, seg.End.U-seg.Center.U)
+		heldA0 := math.Atan2(heldStart.V-heldCenter.V, heldStart.U-heldCenter.U)
+		heldA1 := math.Atan2(heldEnd.V-heldCenter.V, heldEnd.U-heldCenter.U)
 		if heldA1-heldA0 <= 0 {
 			sweep = intervalAdd(sweep, intervalScale(interval(piLower, piUpper), big.NewRat(2, 1)))
 		}
@@ -543,9 +558,13 @@ func circularAreaInterval(seg CurveSegment) (ratInterval, bool) {
 			dy.Neg(dy)
 		}
 		sector := intervalScale(sweep, new(big.Rat).Mul(sign, r2))
+		// Only the centre carries the anchor: every radial term above is a
+		// difference the shift cancels out of.
+		centerU := new(big.Rat).Sub(floatRat(seg.Center.U), anchorU)
+		centerV := new(big.Rat).Sub(floatRat(seg.Center.V), anchorV)
 		centerTerm := new(big.Rat).Sub(
-			new(big.Rat).Mul(floatRat(seg.Center.U), dy),
-			new(big.Rat).Mul(floatRat(seg.Center.V), dx),
+			new(big.Rat).Mul(centerU, dy),
+			new(big.Rat).Mul(centerV, dx),
 		)
 		areaProof := intervalAdd(sector, pointInterval(centerTerm))
 		if endR2.Cmp(r2) != 0 {
@@ -557,11 +576,11 @@ func circularAreaInterval(seg CurveSegment) (ratInterval, bool) {
 			radialRatioUpper := new(big.Rat).Quo(radialGap, endR2)
 			endpointScale := new(big.Rat).Add(
 				new(big.Rat).Mul(
-					new(big.Rat).Abs(floatRat(seg.Center.U)),
+					new(big.Rat).Abs(centerU),
 					new(big.Rat).Abs(dy1),
 				),
 				new(big.Rat).Mul(
-					new(big.Rat).Abs(floatRat(seg.Center.V)),
+					new(big.Rat).Abs(centerV),
 					new(big.Rat).Abs(dx1),
 				),
 			)
@@ -573,10 +592,10 @@ func circularAreaInterval(seg CurveSegment) (ratInterval, bool) {
 			correctionFloat = absSumUpper(
 				correctionFloat,
 				analyticRoundBound(absSumUpper(
-					seg.Center.U,
-					seg.Center.V,
-					seg.End.U-seg.Center.U,
-					seg.End.V-seg.Center.V,
+					heldCenter.U,
+					heldCenter.V,
+					heldEnd.U-heldCenter.U,
+					heldEnd.V-heldCenter.V,
 				)),
 			)
 			correction = floatRat(correctionFloat)
@@ -709,11 +728,7 @@ func integrateMomentRecordWithPoll(poll func() error, record ProfileRecord, anch
 					return regionIntegrals{}, err
 				}
 			}
-			shifted, err := shiftMomentSegment(segment, anchor)
-			if err != nil {
-				return regionIntegrals{}, err
-			}
-			if err := ig.addFor(shifted, order); err != nil {
+			if err := ig.addFor(segment, anchor, order); err != nil {
 				return regionIntegrals{}, err
 			}
 			if checkFinite && !ig.isFinite(order) {
@@ -732,39 +747,13 @@ func integrateMomentRecordWithPoll(poll func() error, record ProfileRecord, anch
 	return ig, nil
 }
 
-func shiftMomentSegment(segment CurveSegment, anchor Point2) (CurveSegment, error) {
-	segment, err := normalizeSegment(segment)
-	if err != nil {
-		return nil, err
-	}
-	shift := func(point Point2) Point2 {
-		return Point2{U: point.U - anchor.U, V: point.V - anchor.V}
-	}
-	switch segment := segment.(type) {
-	case LineSeg:
-		segment.Start = shift(segment.Start)
-		segment.End = shift(segment.End)
-		return segment, nil
-	case CircleSeg:
-		segment.Center = shift(segment.Center)
-		return segment, nil
-	case ArcSeg:
-		segment.Center = shift(segment.Center)
-		segment.Start = shift(segment.Start)
-		segment.End = shift(segment.End)
-		return segment, nil
-	case SplineSeg:
-		segment.Control = shiftPoints(segment.Control, shift)
-		return segment, nil
-	case ClosedSplineSeg:
-		segment.Control = shiftPoints(segment.Control, shift)
-		return segment, nil
-	case NURBSSeg:
-		segment.Control = shiftPoints(segment.Control, shift)
-		return segment, nil
-	default:
-		return nil, fmt.Errorf(`%w: this evaluator computes mass properties over line, arc, circle and Tier A free-form profile segments only; the profile has a %T segment`, ErrUnsupported, segment)
-	}
+// shiftPoint re-references one recorded coordinate to the walk anchor in
+// float64. It conditions the FLOAT evaluation only: every exact rational
+// subtracts the anchor over rationals instead, because fl(p−anchor) rounds and
+// an exact result taken over rounded coordinates is the exact answer for a
+// different region (see regionIntegrals.add).
+func shiftPoint(point, anchor Point2) Point2 {
+	return Point2{U: point.U - anchor.U, V: point.V - anchor.V}
 }
 
 // shiftPoints translates a control-point slice into a fresh slice, leaving the
@@ -830,14 +819,25 @@ func translateMomentIntegrals(ig regionIntegrals, anchor Point2, order momentInt
 // add accumulates one segment's boundary-integral contribution, in the
 // segment's recorded walk direction. Circular contributions carry an outward
 // evaluation bound.
-func (ig *regionIntegrals) add(segment CurveSegment) error {
+//
+// Every contribution is re-referenced to the walk anchor, and the two
+// arithmetics do it differently ON PURPOSE. The FLOAT evaluation reads
+// anchor-shifted float coordinates, which is what keeps it conditioned. Every
+// EXACT rational — a line's closed form, an arc's proven area interval, a
+// converted free-form chain — subtracts the anchor over rationals instead,
+// from the recorded coordinates themselves. Shifting in float first would round
+// the geometry before the exact pipeline ever saw it, so the rational would be
+// the exact answer for a region the caller did not record, and publishExact
+// would round an already representable value and report Exact with a zero bound
+// for it.
+func (ig *regionIntegrals) add(segment CurveSegment, anchor Point2) error {
 	segment, err := normalizeSegment(segment)
 	if err != nil {
 		return err
 	}
 	switch segment := segment.(type) {
 	case LineSeg:
-		ig.addLine(segment)
+		ig.addLine(segment, anchor)
 		return nil
 	case CircleSeg:
 		if segment.Radius.Kind() != units.Length {
@@ -850,7 +850,8 @@ func (ig *regionIntegrals) add(segment CurveSegment) error {
 		if segment.CCW != (segment.TStart < segment.TEnd) {
 			return fmt.Errorf(`%w: a circle segment's CCW flag contradicts its range order`, ErrDegenerate)
 		}
-		areaProof, haveAreaProof := circularAreaInterval(segment)
+		areaProof, haveAreaProof := circularAreaInterval(segment, anchor)
+		segment.Center = shiftPoint(segment.Center, anchor)
 		// The arrangement's normalized t is the angle 2π·t from +u
 		// (geom.BoundaryEdge); the recorded range order is the walk.
 		ig.addCircular(
@@ -865,6 +866,10 @@ func (ig *regionIntegrals) add(segment CurveSegment) error {
 		)
 		return nil
 	case ArcSeg:
+		areaProof, haveAreaProof := circularAreaInterval(segment, anchor)
+		segment.Center = shiftPoint(segment.Center, anchor)
+		segment.Start = shiftPoint(segment.Start, anchor)
+		segment.End = shiftPoint(segment.End, anchor)
 		radius := math.Hypot(segment.Start.U-segment.Center.U, segment.Start.V-segment.Center.V)
 		a0 := math.Atan2(segment.Start.V-segment.Center.V, segment.Start.U-segment.Center.U)
 		a1 := math.Atan2(segment.End.V-segment.Center.V, segment.End.U-segment.Center.U)
@@ -872,7 +877,6 @@ func (ig *regionIntegrals) add(segment CurveSegment) error {
 		if sweep <= 0 {
 			sweep += 2 * math.Pi
 		}
-		areaProof, haveAreaProof := circularAreaInterval(segment)
 		// normalized t maps to angle = a0 + t·sweep; the range order is the walk.
 		ig.addCircular(
 			segment.Center,
@@ -890,8 +894,13 @@ func (ig *regionIntegrals) add(segment CurveSegment) error {
 			return fmt.Errorf(`%w: this evaluator computes mass properties over line, arc, circle and Tier A free-form profile segments only; the profile has a %T segment`, ErrUnsupported, segment)
 		}
 		work := &freeformWork{}
+		// The chain is converted from the RECORDED control points and shifted
+		// afterwards over rationals, so the spans stay the recorded curve.
 		spans, reversed, err := freeformBezierSpans(segment, work)
 		if err != nil {
+			return err
+		}
+		if err := shiftFreeformSpans(spans, anchor, work); err != nil {
 			return err
 		}
 		return ig.addFreeform(spans, reversed, work)
@@ -901,17 +910,19 @@ func (ig *regionIntegrals) add(segment CurveSegment) error {
 // addFor preserves the evaluator helper's order-aware call shape. The bounded
 // implementation computes all moments together, so the requested order does
 // not change the accumulated result.
-func (ig *regionIntegrals) addFor(segment CurveSegment, _ momentIntegralOrder) error {
-	return ig.add(segment)
+func (ig *regionIntegrals) addFor(segment CurveSegment, anchor Point2, _ momentIntegralOrder) error {
+	return ig.add(segment, anchor)
 }
 
 // addLine accumulates the straight chord from the walk's start point to its
 // end point. The recorded range picks the walked piece of the entity's own
 // Start→End parameterization.
-func (ig *regionIntegrals) addLine(seg LineSeg) {
+func (ig *regionIntegrals) addLine(seg LineSeg, anchor Point2) {
+	exact := exactLineMoments(seg, anchor)
+	seg.Start = shiftPoint(seg.Start, anchor)
+	seg.End = shiftPoint(seg.End, anchor)
 	u0, v0 := lerp2(seg.Start, seg.End, seg.TStart)
 	u1, v1 := lerp2(seg.Start, seg.End, seg.TEnd)
-	exact := exactLineMoments(seg)
 	_, _, coordUpper := lineWalkBounds(seg, math.Hypot(u1-u0, v1-v0))
 	ig.coordUpper = math.Max(ig.coordUpper, coordUpper)
 
@@ -1101,17 +1112,29 @@ func ratLerp(start, end, t float64) *big.Rat {
 	return new(big.Rat).Add(rs, new(big.Rat).Mul(rt, new(big.Rat).Sub(re, rs)))
 }
 
-// exactLineMoments evaluates the polynomial line formulas over exact rationals.
-// The public values retain the existing float evaluation; the rational result
-// proves whether its rounding is exact and, when it is not, the precise error.
-func exactLineMoments(seg LineSeg) exactMoments {
+// exactLineMoments evaluates the polynomial line formulas over exact rationals,
+// about the walk anchor. The public values retain the existing float
+// evaluation; the rational result proves whether its rounding is exact and,
+// when it is not, the precise error.
+//
+// The segment handed in holds the RECORDED coordinates and the anchor is
+// subtracted here, over rationals. A lerp is affine, so lerping then
+// subtracting is identical to subtracting then lerping — but only in exact
+// arithmetic: fl(p−anchor) rounds, and the rational taken over those rounded
+// coordinates would be a different chord's exact area.
+func exactLineMoments(seg LineSeg, anchor Point2) exactMoments {
 	u0 := ratLerp(seg.Start.U, seg.End.U, seg.TStart)
 	v0 := ratLerp(seg.Start.V, seg.End.V, seg.TStart)
 	u1 := ratLerp(seg.Start.U, seg.End.U, seg.TEnd)
 	v1 := ratLerp(seg.Start.V, seg.End.V, seg.TEnd)
-	if u0 == nil || v0 == nil || u1 == nil || v1 == nil {
+	anchorU, anchorV := floatRat(anchor.U), floatRat(anchor.V)
+	if u0 == nil || v0 == nil || u1 == nil || v1 == nil || anchorU == nil || anchorV == nil {
 		return exactMoments{}
 	}
+	u0.Sub(u0, anchorU)
+	u1.Sub(u1, anchorU)
+	v0.Sub(v0, anchorV)
+	v1.Sub(v1, anchorV)
 	du := new(big.Rat).Sub(u1, u0)
 	dv := new(big.Rat).Sub(v1, v0)
 

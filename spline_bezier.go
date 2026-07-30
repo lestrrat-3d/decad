@@ -332,7 +332,10 @@ func ratWeighted(points []ratPoint, weights []int64, den int64) ratPoint {
 // by Boehm knot insertion (docs/spline-design.md §5.1). Every interior knot is
 // raised to multiplicity degree; the control points then split into consecutive
 // blocks of degree+1 that share their boundary values, which is exactly the
-// per-span Bézier form.
+// per-span Bézier form. bezierSliceCount proves that shape holds before a
+// single block is cut, so a knot vector the insertion loop leaves outside it —
+// one whose interior multiplicity already exceeded degree, so no insertion was
+// owed — refuses instead of being sliced on a stride it does not have.
 //
 // Every arithmetic step is rational, so the extracted spans are the curve.
 func clampedBezierSpans(degree int, ctrl []ratPoint, knots []*big.Rat, work *freeformWork) ([]bezierSpan, error) {
@@ -358,17 +361,9 @@ func clampedBezierSpans(degree int, ctrl []ratPoint, knots []*big.Rat, work *fre
 			ctrl, knots = inserted, insertedKnots
 		}
 	}
-	// Every interior knot now sits at multiplicity degree, so span j owns
-	// control points [j*degree, j*degree+degree].
-	if (len(ctrl)-1)%degree != 0 {
-		return nil, fmt.Errorf(
-			`%w: knot insertion left %d control points, which is not a whole number of degree-%d Bézier spans`,
-			ErrDegenerate, len(ctrl), degree,
-		)
-	}
-	count := (len(ctrl) - 1) / degree
-	if count == 0 {
-		return nil, fmt.Errorf(`%w: a B-spline with an empty knot domain bounds no curve`, ErrDegenerate)
+	count, err := bezierSliceCount(degree, len(ctrl), knots)
+	if err != nil {
+		return nil, err
 	}
 	spans := make([]bezierSpan, count)
 	for j := range count {
@@ -377,6 +372,48 @@ func clampedBezierSpans(degree int, ctrl []ratPoint, knots []*big.Rat, work *fre
 		spans[j] = span
 	}
 	return spans, nil
+}
+
+// bezierSliceCount establishes the precondition the stride-degree slicing above
+// rests on, and returns the number of spans it may cut.
+//
+// The slicing reads control points [j*degree, j*degree+degree], so consecutive
+// spans SHARE their boundary control point. That is the Bézier form of a
+// clamped B-spline only while every interior knot sits at multiplicity EXACTLY
+// degree: at multiplicity degree+1 the curve is discontinuous there, the two
+// pieces meeting at that knot share no control point at all, and each piece
+// owns degree+1 of its own — so the stride is wrong and the slices straddle the
+// break. A divisibility test on the control count cannot see that (a degree-3
+// curve with four multiplicity-4 interior knots holds 16 controls, and 15 is
+// divisible by 3), so the check is the knot vector's own shape: as many
+// interior knots as there are joins between spans, each at exactly degree.
+func bezierSliceCount(degree, controls int, knots []*big.Rat) (int, error) {
+	if (controls-1)%degree != 0 {
+		return 0, fmt.Errorf(
+			`%w: knot insertion left %d control points, which is not a whole number of degree-%d Bézier spans`,
+			ErrDegenerate, controls, degree,
+		)
+	}
+	count := (controls - 1) / degree
+	if count == 0 {
+		return 0, fmt.Errorf(`%w: a B-spline with an empty knot domain bounds no curve`, ErrDegenerate)
+	}
+	values, runs := interiorKnotRuns(degree, controls, knots)
+	for i, run := range runs {
+		if run != degree {
+			return 0, fmt.Errorf(
+				`%w: interior knot %d sits at multiplicity %d rather than %d, so consecutive Bézier spans share no boundary control point`,
+				ErrDegenerate, i, run, degree,
+			)
+		}
+	}
+	if len(values) != count-1 {
+		return 0, fmt.Errorf(
+			`%w: a degree-%d B-spline over %d Bézier spans needs %d interior knots, got %d`,
+			ErrDegenerate, degree, count, count-1, len(values),
+		)
+	}
+	return count, nil
 }
 
 // interiorKnotRuns returns each distinct knot strictly inside the clamped
@@ -415,6 +452,13 @@ func interiorKnotRuns(degree, n int, knots []*big.Rat) ([]*big.Rat, []int) {
 // bound every insertion in the pass. Quadratic total work therefore charges
 // quadratically, which is what keeps a hundred-thousand-control degree-3
 // record refusing at the ceiling instead of running for hours inside it.
+//
+// Every knotMultiplicity PROBE is charged, not only the ones that go on to
+// insert. The loop probes each target once more than it inserts at it, and a
+// record already at degree multiplicity everywhere owes no insertion at all yet
+// still pays one full knot-vector scan per target — quadratic work a charge
+// counting insertions alone reads as nothing (a degree-1 record with thousands
+// of distinct interior knots is that shape exactly).
 func clampedConversionCost(degree, controls, knots int, runs []int) uint64 {
 	insertions := uint64(0)
 	for _, run := range runs {
@@ -425,8 +469,9 @@ func clampedConversionCost(degree, controls, knots int, runs []int) uint64 {
 	finalControls := costAdd(uint64(controls), insertions)
 	finalKnots := costAdd(uint64(knots), insertions)
 	perInsertion := costAdd(costMul(2, finalControls), costMul(3, finalKnots))
+	probes := costMul(uint64(len(runs)), finalKnots)
 	// The interiorKnotRuns pass itself walks the knot vector once.
-	return costAdd(costMul(insertions, perInsertion), uint64(knots))
+	return costAdd(costAdd(costMul(insertions, perInsertion), probes), uint64(knots))
 }
 
 func knotMultiplicity(knots []*big.Rat, target *big.Rat) int {
@@ -479,6 +524,37 @@ func insertKnot(degree int, ctrl []ratPoint, knots []*big.Rat, target *big.Rat) 
 	outKnots = append(outKnots, target)
 	outKnots = append(outKnots, knots[span+1:]...)
 	return out, outKnots, nil
+}
+
+// shiftFreeformSpans re-references a converted chain to the walk anchor over
+// EXACT rationals, in place.
+//
+// The anchor must never be subtracted from the recorded floats first. A Bézier
+// span IS the recorded curve (§5.1) only while its control coordinates are the
+// recorded ones taken exactly; fl(p−anchor) rounds, so a chain built from
+// pre-shifted floats is the exact form of a DIFFERENT curve, and every
+// exactness claim downstream — including the zero bound that publishes as
+// Exact — would then speak for that curve instead of the recorded one.
+// Subtracting here is exact, because a float and the anchor are both exact
+// rationals.
+func shiftFreeformSpans(spans []bezierSpan, anchor Point2, work *freeformWork) error {
+	u, okU := ratOf(anchor.U)
+	v, okV := ratOf(anchor.V)
+	if !okU || !okV {
+		return fmt.Errorf(`%w: a free-form walk's anchor is not finite`, ErrNotFinite)
+	}
+	for _, span := range spans {
+		if err := work.step(costMul(2, uint64(len(span)))); err != nil {
+			return err
+		}
+		for i, point := range span {
+			span[i] = ratPoint{
+				u: new(big.Rat).Sub(point.u, u),
+				v: new(big.Rat).Sub(point.v, v),
+			}
+		}
+	}
+	return nil
 }
 
 // freeformEndpoints returns the converted chain's own endpoints in the recorded

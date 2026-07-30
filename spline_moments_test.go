@@ -236,6 +236,127 @@ func TestDenseNURBSRecordRefusesWithinBudget(t *testing.T) {
 	require.Less(t, time.Since(start), 5*time.Second, "the refusal precedes the insertion pass")
 }
 
+// A NURBS whose interior knots repeat degree+1 times is four disconnected cubic
+// pieces, not one boundary curve: the four sides of a unit square, each its own
+// Bézier, spliced into a single segment. It satisfies every count, ordering and
+// clamping rule, so nothing else refuses it — and the exact conversion's
+// stride-degree slicing then reads five spans across those four pieces, rounding
+// the (1,1) corner and losing 1/180 of the area under a bound fourteen orders of
+// magnitude too small. The record is malformed and must be REFUSED, never
+// measured.
+func TestBrokenNURBSKnotVectorRefuses(t *testing.T) {
+	third := 1.0 / 3
+	record := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
+		decad.NURBSSeg{
+			Degree: 3,
+			Control: []decad.Point2{
+				{U: 0, V: 0}, {U: third, V: 0}, {U: 2 * third, V: 0}, {U: 1, V: 0},
+				{U: 1, V: 0}, {U: 1, V: third}, {U: 1, V: 2 * third}, {U: 1, V: 1},
+				{U: 1, V: 1}, {U: 2 * third, V: 1}, {U: third, V: 1}, {U: 0, V: 1},
+				{U: 0, V: 1}, {U: 0, V: 2 * third}, {U: 0, V: third}, {U: 0, V: 0},
+			},
+			Knots: []float64{
+				0, 0, 0, 0,
+				0.25, 0.25, 0.25, 0.25,
+				0.5, 0.5, 0.5, 0.5,
+				0.75, 0.75, 0.75, 0.75,
+				1, 1, 1, 1,
+			},
+			Weights: []float64{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
+			TStart:  0,
+			TEnd:    1,
+		},
+	}}}
+
+	for name, measure := range map[string]func() error{
+		"Area":          func() error { _, err := record.Area(); return err },
+		"Centroid":      func() error { _, err := record.Centroid(); return err },
+		"SecondMoments": func() error { _, err := record.SecondMoments(); return err },
+	} {
+		t.Run(name, func(t *testing.T) {
+			err := measure()
+			require.Error(t, err, "a broken knot vector states no single curve")
+			require.ErrorIs(t, err, decad.ErrDegenerate)
+			require.Contains(t, err.Error(), "disjoint pieces")
+		})
+	}
+}
+
+// The walk anchor is subtracted from every coordinate before integration, and
+// subtracting it in float64 first would round the geometry away: this rectangle
+// sits at (0.1, 0.1), so fl(100.1−0.1) is exactly 100 and fl(1.1−0.1) exactly 1,
+// turning it into a 100×1 rectangle whose area is the integer 100 — representable,
+// hence published as Exact with a zero bound. The recorded rectangle's own exact
+// shoelace is NOT representable, so the honest reading is Approximate with the
+// single rounding as its bound.
+func TestFreeformAnchorSubtractsExactly(t *testing.T) {
+	corners := []decad.Point2{{U: 0.1, V: 0.1}, {U: 100.1, V: 0.1}, {U: 100.1, V: 1.1}, {U: 0.1, V: 1.1}}
+	segments := make([]decad.CurveSegment, len(corners))
+	for i := range corners {
+		segments[i] = nurbsEdge(corners[i], corners[(i+1)%len(corners)])
+	}
+	record := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: segments}}
+
+	// The falsifier: the shoelace over the RECORDED float coordinates, exactly.
+	exact := new(big.Rat)
+	for i := range corners {
+		j := (i + 1) % len(corners)
+		ax, ay := new(big.Rat).SetFloat64(corners[i].U), new(big.Rat).SetFloat64(corners[i].V)
+		bx, by := new(big.Rat).SetFloat64(corners[j].U), new(big.Rat).SetFloat64(corners[j].V)
+		exact.Add(exact, new(big.Rat).Sub(new(big.Rat).Mul(ax, by), new(big.Rat).Mul(bx, ay)))
+	}
+	exact.Quo(exact, big.NewRat(2, 1))
+	_, representable := exact.Float64()
+	require.False(t, representable, "the fixture's own area is not a float64")
+
+	area, err := record.Area()
+	require.NoError(t, err)
+	value, err := area.Value.In(units.SquareMillimeter)
+	require.NoError(t, err)
+	bound, err := area.Bound.In(units.SquareMillimeter)
+	require.NoError(t, err)
+	require.Equal(t, decad.Approximate, area.Exactness,
+		"the recorded rectangle's area is not representable, so nothing may claim Exact")
+	require.Positive(t, bound)
+	requireSingleRounding(t, exact, value, bound)
+}
+
+// The work ceiling exists because the public ProfileRecord methods take no
+// context and so cannot be cancelled. It must therefore fire BEFORE the sketch
+// reconstruction that validation runs, which samples the curve a multiple of the
+// control count and grows without any bound of its own: a degree-128 record
+// spent 235ms there before the ceiling refused it, and a degree-599 one over
+// thirteen seconds.
+func TestOverBudgetFreeformRefusesBeforeSketchSampling(t *testing.T) {
+	const controls = 600
+	const degree = controls - 1
+	control := make([]decad.Point2, controls)
+	weights := make([]float64, controls)
+	for i := range control {
+		angle := 2 * math.Pi * float64(i) / float64(controls-1)
+		control[i] = decad.Point2{U: 10 * math.Cos(angle), V: 10 * math.Sin(angle)}
+		weights[i] = 1
+	}
+	control[controls-1] = control[0]
+	knots := make([]float64, 0, 2*controls)
+	for range controls {
+		knots = append(knots, 0)
+	}
+	for range controls {
+		knots = append(knots, 1)
+	}
+	record := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
+		decad.NURBSSeg{Degree: degree, Control: control, Knots: knots, Weights: weights, TStart: 0, TEnd: 1},
+	}}}
+
+	start := time.Now()
+	_, err := record.Area()
+	require.Error(t, err)
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+	require.Contains(t, err.Error(), "work budget")
+	require.Less(t, time.Since(start), 2*time.Second, "the refusal precedes the sketch reconstruction")
+}
+
 // A spline chained with a straight chord exercises the mixed path: the line
 // contributes through the existing exact-rational line formulas and the spline
 // through the Bézier integrals, into one region.

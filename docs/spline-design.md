@@ -259,6 +259,20 @@ rightly does not. Three consequences the constructions carry:
   — so every §6 row must bound, bracket or refuse a collapsed span on its own
   terms. §6.3's speed floor is where that bites.
 
+The conversion raises every interior knot to multiplicity `degree` and then cuts
+consecutive spans that SHARE their boundary control point. A recorded interior
+knot repeating MORE than `degree` times admits no such cut: the curve is
+discontinuous there, so the record states several disjoint pieces rather than
+the one connected boundary curve a loop's segment is. That is a malformed
+record and it is rejected in NURBS validation (Table R, R12), never converted —
+narrowing the accepted input rather than widening the converter, which would
+push a new closure question into the moments path for no gain.
+
+The slicing must PROVE that shape on the knot vector before it cuts a single
+span. A divisibility test on the control count does not: a degree-3 curve with
+four multiplicity-4 interior knots holds 16 control points, and 15 divides by 3,
+so the stride-degree cut silently straddles the breaks.
+
 Integrate the Green's-theorem boundary forms. Each integrand is a POLYNOMIAL, so
 each integral is an exact rational — which the reported measurement then rounds
 once, per §3:
@@ -328,6 +342,14 @@ Rational coefficient size grows with degree and span count. Charge every span,
 every coefficient product and every integral term against a `workBudget`
 (`budget.go`), and refuse as R7 when it runs out. NEVER widen to a float path to
 stay inside the budget.
+
+Charge EARLY as well as conservatively. The ceiling is fixed because the public
+`ProfileRecord` methods take no context and so cannot be cancelled, so every
+pass whose cost grows with the record must sit BEHIND a charge already levied —
+the knot-multiplicity probes the conversion runs, including the probes that
+insert nothing, and the sketch reconstruction validation samples the curve
+through before any integral is taken. A ceiling consulted after such a pass
+bounds nothing it was added to bound.
 
 The independent-implementation rule stands. sketch computes its own free-form
 area internally and reports it as `Profile.Area`; decad integrates its OWN
@@ -964,5 +986,11 @@ rules).
   test. Run each of R3–R5 on a DEGREE-1 `NURBSSeg` walk as well as a curved one
   and require the same `ErrUnsupported`, so the refusal stays keyed on the
   recorded kind rather than on the degree (§4.1).
+- Assert the §5.2 charge fires BEFORE the pass it bounds, by MEASURING the
+  refusal rather than reading the cost formula: a degree-1 record with thousands
+  of distinct interior knots — needing no insertion, so an insertion-only charge
+  sees nothing to charge — and a high-degree record whose over-budget
+  integration would otherwise be reached only after validation had sampled the
+  curve in sketch, must each refuse promptly.
 - Assert recipe replay of every free-form step reproduces body order, provenance
   roles, and measurements within the evaluator's own exactness.

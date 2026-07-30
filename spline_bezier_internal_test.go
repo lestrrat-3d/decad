@@ -210,6 +210,76 @@ func TestClampedConversionCostIsQuadratic(t *testing.T) {
 	require.Greater(t, doubled, 3*small, "doubling the controls more than triples the charge")
 	require.Equal(t, freeformCostCeiling, cost(100000), "the finding's shape saturates over budget")
 	require.Equal(t, freeformCostCeiling, cost(2000), "a quadratic cost the old charge admitted now refuses")
+
+	// A degree-1 record owes no insertion — every run is already at degree — so
+	// the whole charge is the terminating probe each target still pays for.
+	runs := make([]int, 2998)
+	for i := range runs {
+		runs[i] = 1
+	}
+	require.Equal(t, freeformCostCeiling, clampedConversionCost(1, 3000, 3002, runs),
+		"probes that insert nothing are charged")
+}
+
+// The stride-degree slicing rests on consecutive spans SHARING their boundary
+// control point, and the divisibility test that used to stand in for that
+// precondition is satisfied by inputs that break it: a cubic whose four interior
+// knots each sit at multiplicity 4 needs no insertion at all, holds 16 control
+// points, and 15 is divisible by 3 — so the slicer cut five spans across four
+// disconnected pieces and quietly rounded a corner. Validation now rejects that
+// record, so this asserts the slicer's own guard on the same shape.
+func TestBezierSliceCountRejectsBrokenKnotVector(t *testing.T) {
+	third := 1.0 / 3
+	control := []Point2{
+		{U: 0, V: 0}, {U: third, V: 0}, {U: 2 * third, V: 0}, {U: 1, V: 0},
+		{U: 1, V: 0}, {U: 1, V: third}, {U: 1, V: 2 * third}, {U: 1, V: 1},
+		{U: 1, V: 1}, {U: 2 * third, V: 1}, {U: third, V: 1}, {U: 0, V: 1},
+		{U: 0, V: 1}, {U: 0, V: 2 * third}, {U: 0, V: third}, {U: 0, V: 0},
+	}
+	ctrl, err := ratPointsOf(control)
+	require.NoError(t, err)
+	knots := make([]*big.Rat, 0, 20)
+	for _, value := range []int64{0, 1, 2, 3, 4} {
+		for range 4 {
+			knots = append(knots, big.NewRat(value, 4))
+		}
+	}
+	require.Len(t, knots, len(ctrl)+3+1)
+
+	_, err = clampedBezierSpans(3, ctrl, knots, &freeformWork{})
+	require.Error(t, err)
+	require.ErrorIs(t, err, ErrDegenerate)
+	require.Contains(t, err.Error(), "multiplicity")
+}
+
+// The conversion budget must charge every knotMultiplicity PROBE, not only the
+// probes that go on to insert. A degree-1 record with thousands of distinct
+// interior knots owes no insertion at all — each target is already at degree
+// multiplicity — yet the loop still scans the whole knot vector once per target,
+// which is quadratic work a charge counting insertions alone reads as nothing.
+func TestUnchargedKnotProbesRefuse(t *testing.T) {
+	const controls = 3000
+	control := make([]Point2, controls)
+	weights := make([]float64, controls)
+	for i := range control {
+		control[i] = Point2{U: float64(i), V: float64(i % 3)}
+		weights[i] = 1
+	}
+	interior := controls - 2
+	knots := []float64{0, 0}
+	for j := 1; j <= interior; j++ {
+		knots = append(knots, float64(j)/float64(interior+1))
+	}
+	knots = append(knots, 1, 1)
+	seg := NURBSSeg{Degree: 1, Control: control, Knots: knots, Weights: weights, TStart: 0, TEnd: 1}
+	require.NoError(t, validateNURBSSegment(seg), "the record itself is well formed")
+
+	start := time.Now()
+	_, _, err := freeformBezierSpans(seg, &freeformWork{})
+	require.Error(t, err)
+	require.ErrorIs(t, err, ErrUnsupported)
+	require.Contains(t, err.Error(), "work budget")
+	require.Less(t, time.Since(start), 2*time.Second, "the refusal precedes the probe pass")
 }
 
 // The integration cost is CUBIC in span degree while the span is only degree+1

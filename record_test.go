@@ -351,6 +351,13 @@ func TestNURBSSegmentDecodeRejectsInvalidShape(t *testing.T) {
 			name:    "non-positive weight",
 			segment: `{"kind":"nurbs","degree":2,"control":[{"u":0,"v":0},{"u":1,"v":1},{"u":2,"v":0}],"knots":[0,0,0,1,1,1],"weights":[1,0,1],"t_start":0,"t_end":1}`,
 		},
+		{
+			// An interior knot repeated degree+1 times breaks the curve into
+			// disjoint pieces, so the record states no single connected
+			// boundary curve.
+			name:    "interior knot multiplicity above degree",
+			segment: `{"kind":"nurbs","degree":2,"control":[{"u":0,"v":0},{"u":1,"v":1},{"u":2,"v":0},{"u":3,"v":1},{"u":4,"v":0},{"u":5,"v":1}],"knots":[0,0,0,0.5,0.5,0.5,1,1,1],"weights":[1,1,1,1,1,1],"t_start":0,"t_end":1}`,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

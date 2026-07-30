@@ -275,9 +275,22 @@ func validateMomentSegment(segment CurveSegment) (CurveSegment, Point2, error) {
 // conversion itself is the check: it rejects a non-finite control coordinate, a
 // trimmed range, a rational NURBS and every non-Tier-A kind with its own reason
 // (docs/spline-design.md Table R), so no field test is duplicated here.
+//
+// The integration that segment will later run is charged HERE too, on the same
+// counter, so an over-budget record refuses at validation. Everything between
+// this step and the moments pass — momentRecordMatchesSketch reconstructing the
+// entity in a private sketch and SAMPLING it a multiple of the control count —
+// is work proportional to the record's own size, and the R7 ceiling exists
+// because the public ProfileRecord methods take no context and so cannot be
+// cancelled. A ceiling consulted only downstream fires after the work it is
+// there to bound has already run.
 func validateFreeformMomentSegment(segment CurveSegment) (CurveSegment, Point2, error) {
-	spans, reversed, err := freeformBezierSpans(segment, &freeformWork{})
+	work := &freeformWork{}
+	spans, reversed, err := freeformBezierSpans(segment, work)
 	if err != nil {
+		return nil, Point2{}, err
+	}
+	if err := chargeFreeformSpans(spans, work); err != nil {
 		return nil, Point2{}, err
 	}
 	start, _, err := freeformEndpoints(spans, reversed)

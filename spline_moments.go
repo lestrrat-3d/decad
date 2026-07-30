@@ -45,6 +45,22 @@ func freeformSpanCost(controls int) uint64 {
 	return costAdd(bernstein, 64*n*n)
 }
 
+// chargeFreeformSpans preflights the exact integration of a WHOLE converted
+// chain, before any of it runs. Charging it up front rather than span by span
+// is what lets a caller levy the cost at a validation step that precedes the
+// integration entirely (moments_validate.go): a record whose integration cannot
+// fit the budget must refuse before anything downstream of the conversion
+// samples or reconstructs the curve, since the ceiling exists precisely because
+// the public ProfileRecord methods take no context and cannot be cancelled.
+func chargeFreeformSpans(spans []bezierSpan, work *freeformWork) error {
+	for _, span := range spans {
+		if err := work.step(freeformSpanCost(len(span))); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // rpIntegral01 is the exact ∫₀¹ of a rational polynomial: Σ cᵢ/(i+1).
 func rpIntegral01(p ratPoly) *big.Rat {
 	out := new(big.Rat)
@@ -116,6 +132,9 @@ func spanCoordinatePolys(span bezierSpan) (ratPoly, ratPoly) {
 //	∫v² dA = −⅓∮v³ du
 //	∫uv dA = ½∮u²v dv
 func exactFreeformMoments(spans []bezierSpan, reversed bool, work *freeformWork) (exactMoments, error) {
+	if err := chargeFreeformSpans(spans, work); err != nil {
+		return exactMoments{}, err
+	}
 	half := big.NewRat(1, 2)
 	third := big.NewRat(1, 3)
 	out := exactMoments{
@@ -127,9 +146,6 @@ func exactFreeformMoments(spans []bezierSpan, reversed bool, work *freeformWork)
 		mvv:  new(big.Rat),
 	}
 	for _, span := range spans {
-		if err := work.step(freeformSpanCost(len(span))); err != nil {
-			return exactMoments{}, err
-		}
 		u, v := spanCoordinatePolys(span)
 		du, dv := rpDeriv(u), rpDeriv(v)
 		uu := rpMul(u, u)

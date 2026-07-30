@@ -697,6 +697,9 @@ func validateNURBSSegment(seg NURBSSeg) error {
 	if seg.Knots[seg.Degree] >= seg.Knots[n] {
 		return prependCodecPath(fmt.Errorf(`%w: NURBS segment knot domain is empty`, ErrDegenerate), "knots")
 	}
+	if err := validateNURBSInteriorMultiplicity(seg, n); err != nil {
+		return err
+	}
 	if len(seg.Weights) != n {
 		return prependCodecPath(
 			fmt.Errorf(`%w: NURBS segment needs %d weights, got %d`, ErrDegenerate, n, len(seg.Weights)),
@@ -711,6 +714,42 @@ func validateNURBSSegment(seg NURBSSeg) error {
 			return prependCodecPath(
 				fmt.Errorf(`%w: NURBS segment weight %d must be positive, got %v`, ErrDegenerate, i, weight),
 				fmt.Sprintf(`weights[%d]`, i),
+			)
+		}
+	}
+	return nil
+}
+
+// validateNURBSInteriorMultiplicity rejects a knot strictly inside the clamped
+// domain that repeats more than degree times.
+//
+// A multiplicity of degree is a corner: the curve is still one connected curve
+// through it. One more repeat drops the continuity below C⁰ and the curve
+// genuinely BREAKS APART there, so the record states several disjoint pieces
+// rather than the single connected boundary curve a loop's segment is. That is
+// a malformed record, on the same footing as the clamping, monotonicity and
+// empty-domain rules beside it — not a shape whose area the evaluator owes an
+// answer for. Callers rely on it: the exact Bézier conversion's spans share
+// their boundary control point, which a broken curve's do not.
+func validateNURBSInteriorMultiplicity(seg NURBSSeg, n int) error {
+	run := 0
+	for i := seg.Degree + 1; i < n; i++ {
+		knot := seg.Knots[i]
+		if knot <= seg.Knots[seg.Degree] || knot >= seg.Knots[n] {
+			continue
+		}
+		if knot == seg.Knots[i-1] {
+			run++
+		} else {
+			run = 1
+		}
+		if run > seg.Degree {
+			return prependCodecPath(
+				fmt.Errorf(
+					`%w: NURBS segment interior knot %v repeats %d times, more than its degree %d, so the curve breaks into disjoint pieces`,
+					ErrDegenerate, knot, run, seg.Degree,
+				),
+				fmt.Sprintf(`knots[%d]`, i),
 			)
 		}
 	}
