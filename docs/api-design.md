@@ -480,9 +480,7 @@ be `Faceted` — is a measurement and reports its `Exactness` like every other.
 For a faceted face, the evaluator's internal source certificate bounds the true
 patch normals; a positional `Faceted.Bound` alone does not imply a normal bound
 (`docs/payload-verification-design.md` §5/§8). No certificate details enter the
-public API. `NormalAt` on a `NURBSSurface` is `ErrUnsupported`: recovering a
-given point's surface parameters is a root-find, so no zero-bound answer is
-available, and nothing internal reads normals through it
+public API. `NormalAt` on a `NURBSSurface` is `ErrUnsupported`
 (`docs/spline-design.md` §7).
 
 A `switch` on `Surface` MUST carry a `default` — vN adds variants.

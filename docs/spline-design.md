@@ -476,11 +476,18 @@ rules).
   encloses a dense-sample reference at every depth, and that the depth is chosen
   from the MEASURED enclosure — a case whose first level narrows by well under 4×
   must still reach its target rather than stop at a rate-sized depth (§6.1).
-- Assert each §6.2 rational row on a RATIONAL span whose true reading the
-  polynomial-span identity would miss: a directional extreme attained at an
-  interior parameter that is not a root of `d/dt(g·U)`, so the `Box` is not
-  understated, and a true maximum speed above the `p·ΔP_i` hull's norm, so the
-  Lipschitz bound still holds. Falsify both against a dense sample.
+- Assert every §6.2 row whose rational identity differs from its polynomial one,
+  each on a RATIONAL span whose true reading the polynomial-span identity would
+  miss, and falsify each against a dense sample: a directional extreme attained
+  at an interior parameter that is not a root of `d/dt(g·U)`, so the `Box` is not
+  understated; a true maximum speed above the `p·ΔP_i` hull's norm, so the
+  Lipschitz bound still holds; a true tangent direction outside the cone that
+  same hull reports, so the undercut survey's enclosure still holds every normal;
+  and a curvature extreme at a parameter that is not a root of the polynomial
+  stationarity `2K′S − 3KS′`, so `MinRadius` is not overstated. The chord-sagitta
+  row is EXCLUDED and needs no rational fixture: both its columns measure the
+  same control-point deviation per subdivision level, so it carries no
+  rational-specific identity a fixture could falsify.
 - Assert `MinRadius` on a span carrying an INFLECTION: the reported interval
   encloses the tightest radius, which is attained where `K ≠ 0`, so a candidate
   set built from `K`'s roots alone fails the test (§6.2).
