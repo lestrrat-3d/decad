@@ -588,6 +588,55 @@ func TestRegionMomentsRequestedOrderControlsOverflow(t *testing.T) {
 	require.ErrorIs(t, err, decad.ErrNotFinite)
 }
 
+// The measured defect behind publishExact's per-field publication. The exact
+// rational accumulator holds all six moments whatever order the caller asked
+// for, so a region whose SECOND moment has no float64 image still has an exact
+// area rational in hand. Publishing the six together abandoned every one of
+// them on the first overflow, and Area fell back to the sum of its per-segment
+// float roundings: one ulp off the correctly rounded area, carrying a bound past
+// the half ulp spline design §3 promises unconditionally. Each field publishes on
+// its own now, so Area carries its single rounding while SecondMoments still
+// refuses honestly.
+//
+// The polygon is LineSeg-only on purpose: the accumulator is shared with the
+// Tier A free-form path, and the defect was never specific to it.
+func TestOverflowingSecondMomentKeepsExactArea(t *testing.T) {
+	// 1e78 mm squares to a finite area and raises the second moment past
+	// float64's range. No plausible model reaches this scale; the guarantee is
+	// unconditional, so it is asserted where it is reachable at all.
+	const scale = 1e78
+	polygon := []decad.Point2{{}, {U: 0.1 * scale}, {U: 0.3 * scale, V: 0.2 * scale}, {U: 0.05 * scale, V: 0.1 * scale}, {V: 0.4 * scale}}
+	segments := make([]decad.CurveSegment, len(polygon))
+	for i, corner := range polygon {
+		next := polygon[(i+1)%len(polygon)]
+		segments[i] = momentLine(corner.U, corner.V, next.U, next.V)
+	}
+	record := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: segments}}
+
+	// The falsifier: the polygon's own shoelace over exact rationals.
+	exact := new(big.Rat)
+	for i, corner := range polygon {
+		next := polygon[(i+1)%len(polygon)]
+		au, av := new(big.Rat).SetFloat64(corner.U), new(big.Rat).SetFloat64(corner.V)
+		bu, bv := new(big.Rat).SetFloat64(next.U), new(big.Rat).SetFloat64(next.V)
+		exact.Add(exact, new(big.Rat).Sub(new(big.Rat).Mul(au, bv), new(big.Rat).Mul(bu, av)))
+	}
+	exact.Quo(exact, big.NewRat(2, 1))
+
+	area, err := record.Area()
+	require.NoError(t, err)
+	require.Equal(t, decad.Approximate, area.Exactness, "this area is not representable in float64")
+	value, err := area.Value.In(units.SquareMillimeter)
+	require.NoError(t, err)
+	bound, err := area.Bound.In(units.SquareMillimeter)
+	require.NoError(t, err)
+	requireSingleRounding(t, exact, value, bound)
+
+	_, err = record.SecondMoments()
+	require.ErrorIs(t, err, decad.ErrNotFinite,
+		"the second moment has no float64 image and is still refused, not published")
+}
+
 func TestSecondMomentsRectangle(t *testing.T) {
 	world := sketch.NewWorld()
 	s, err := world.CreateSketch(world.XY())

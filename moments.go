@@ -1115,23 +1115,35 @@ func (ig *regionIntegrals) dropExact() {
 // own exact rational rounded ONCE, and the bound with that single rounding —
 // zero, hence Exact, exactly when the rational is representable
 // (docs/spline-design.md §3). It is a no-op once any contribution lacked an
-// exact rational, and it declines a rational no float can hold rather than
-// publish an infinity over a finite running sum.
+// exact rational.
+//
+// Each field is published INDEPENDENTLY, and it must be: a field's value and
+// bound are self-contained — the value is fl(exact) and the bound |exact −
+// value| over rationals — so a rational no float64 can hold costs only its own
+// field its single rounding. Publishing the six together instead abandons every
+// one of them, so a second moment overflowing at coordinates near 1e78 mm denies
+// Area the rational already in hand and leaves it the SUM of its per-segment
+// roundings, past the half ulp §3 promises unconditionally. The mixed result is
+// sound because every consumer reads each field through its own (value, bound)
+// pair, and all cross-field composition — a revolve's axisMoments, the cup mass
+// properties, Centroid's bounded-quotient fallback — is interval arithmetic,
+// which asks only that each input interval encloses the truth.
 func (ig *regionIntegrals) publishExact() {
 	if ig.exactDead || !ig.exact.complete() {
 		return
 	}
 	exact := ig.exact.fields()
-	var held [6]float64
-	for i, value := range exact {
-		held[i], _ = value.Float64()
-		if isNonFinite(held[i]) {
-			return
-		}
-	}
 	for i, field := range ig.heldFields() {
-		*field.value = held[i]
-		*field.bound = rationalFloatError(exact[i], held[i])
+		held, _ := exact[i].Float64()
+		if isNonFinite(held) {
+			// No float64 holds this moment, so it has no single rounding to
+			// publish; its own float accumulation and proven bound stand, and a
+			// non-finite accumulation is refused by the order's finiteness check
+			// rather than reported.
+			continue
+		}
+		*field.value = held
+		*field.bound = rationalFloatError(exact[i], held)
 	}
 }
 
