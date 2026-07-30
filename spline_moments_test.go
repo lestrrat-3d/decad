@@ -668,6 +668,71 @@ func TestSplineAndChordProfileMoments(t *testing.T) {
 	require.InDelta(t, math.Abs(twice/2), value, 1e-6)
 }
 
+// An OPEN spline's knot vector is geom.ClampedKnots's own floats, and its interior
+// knots are float64(j)/float64(n−3) — NOT the exact rationals j/(n−3). Where n−3
+// is not a power of two the two differ, and the difference is the whole
+// exactness claim: over the rational knots this six-control hump's area is
+// −543/32, which IS representable, so the conversion published Exact with a zero
+// bound; over the knots sketch really holds it is not representable at all and
+// sits about 1.53e-17 mm² away.
+//
+// So the honest reading is Approximate with that single rounding as its bound.
+// This fixture is a public one — recorded through RecordProfile — so it is the
+// end-to-end guard: a converter that re-derives the knots republishes the Exact.
+func TestOpenSplineAreaRoundsOverSketchKnots(t *testing.T) {
+	world := sketch.NewWorld()
+	s, err := world.CreateSketch(world.XY())
+	require.NoError(t, err)
+	coords := [][2]float64{{0, 0}, {1, 3}, {2, 4}, {4, 4}, {5, 3}, {6, 0}}
+	points := make([]*sketch.Point, len(coords))
+	for i, coord := range coords {
+		points[i] = s.CreatePoint(coord[0], coord[1])
+	}
+	_, err = s.CreateSpline(points...)
+	require.NoError(t, err)
+	s.CreateLine(points[len(points)-1], points[0])
+
+	profiles := s.Profiles()
+	require.Len(t, profiles, 1)
+	require.True(t, profiles[0].Valid)
+	record, _, err := decad.RecordProfile(s, profiles[0])
+	require.NoError(t, err)
+	require.Len(t, record.Outer.Segments, 2)
+
+	// Six control points put n−3 at 3, which is one of the affected counts: 4, 5,
+	// 7 and 11 controls have a power-of-two span count and cannot see this.
+	spline, ok := record.Outer.Segments[0].(decad.SplineSeg)
+	if !ok {
+		spline, ok = record.Outer.Segments[1].(decad.SplineSeg)
+	}
+	require.True(t, ok, "the loop carries the recorded spline")
+	require.Len(t, spline.Control, 6)
+
+	area, err := record.Area()
+	require.NoError(t, err)
+	require.Equal(t, decad.Approximate, area.Exactness,
+		"the area over sketch's own float knots is not representable")
+
+	value, err := area.Value.In(units.SquareMillimeter)
+	require.NoError(t, err)
+	bound, err := area.Bound.In(units.SquareMillimeter)
+	require.NoError(t, err)
+	require.Positive(t, bound, "a rational that is not representable rounds, and the bound is that rounding")
+	require.LessOrEqual(t, bound, (math.Nextafter(value, math.Inf(1))-value)/2,
+		"the bound is one rounding, never an estimate")
+
+	// The dense-sample falsifier over sketch's own sampler: the hump closed by its
+	// chord. It disproves a wrong magnitude; it never blesses this one.
+	ring, err := geom.SampleCubicBSpline(coords, 200000)
+	require.NoError(t, err)
+	var twice float64
+	for i := 0; i+1 < len(ring); i++ {
+		twice += ring[i][0]*ring[i+1][1] - ring[i+1][0]*ring[i][1]
+	}
+	twice += ring[len(ring)-1][0]*ring[0][1] - ring[0][0]*ring[len(ring)-1][1]
+	require.InDelta(t, math.Abs(twice/2), value, 1e-6)
+}
+
 func TestFreeformProfileRefusals(t *testing.T) {
 	for _, tc := range []struct {
 		name    string

@@ -583,14 +583,23 @@ func validateSegmentPoint(point Point2, what string) error {
 	return nil
 }
 
+// validateSegmentPoints checks a whole recorded point array. The per-point
+// diagnostic is formatted only for the point that FAILS: this loop is the scan a
+// caller-sized array pays for element by element, and formatting a description
+// for every point made it some seventy times more expensive than the slice walk
+// it is (spline design §5.2's linear-pass claim is about the walk).
 func validateSegmentPoints(points []Point2, minimum int, what string) error {
 	if len(points) < minimum {
 		return fmt.Errorf(`%w: %s requires at least %d points, got %d`, ErrDegenerate, what, minimum, len(points))
 	}
 	for i, point := range points {
-		if err := validateSegmentPoint(point, fmt.Sprintf(`%s point %d`, what, i)); err != nil {
-			return prependCodecPath(err, fmt.Sprintf(`[%d]`, i))
+		if finiteSegmentValue(point.U) && finiteSegmentValue(point.V) {
+			continue
 		}
+		return prependCodecPath(
+			fmt.Errorf(`%w: %s point %d must have finite coordinates`, ErrNotFinite, what, i),
+			fmt.Sprintf(`[%d]`, i),
+		)
 	}
 	return nil
 }
@@ -703,14 +712,21 @@ func validateNURBSSegmentSizes(seg NURBSSeg) error {
 // domain and interior multiplicity, and each weight. Its callers run
 // validateNURBSSegmentSizes first, which is what lets it index without
 // re-testing a length.
+//
+// Each per-element diagnostic is formatted only for the element that FAILS. This
+// is a scan whose length the caller chose, so a description built for every knot
+// and every weight dominated the walk itself by roughly seventy times.
 func validateNURBSSegmentContent(seg NURBSSeg) error {
 	n := len(seg.Control)
 	if err := validateSegmentPoints(seg.Control, seg.Degree+1, "NURBS segment control"); err != nil {
 		return prependCodecPath(err, "control")
 	}
 	for i, knot := range seg.Knots {
-		if err := validateSegmentParameter(knot, fmt.Sprintf(`NURBS segment knot %d`, i)); err != nil {
-			return prependCodecPath(err, fmt.Sprintf(`knots[%d]`, i))
+		if !finiteSegmentValue(knot) {
+			return prependCodecPath(
+				fmt.Errorf(`%w: NURBS segment knot %d must be finite`, ErrNotFinite, i),
+				fmt.Sprintf(`knots[%d]`, i),
+			)
 		}
 		if i > 0 && knot < seg.Knots[i-1] {
 			return prependCodecPath(fmt.Errorf(`%w: NURBS segment knots must be non-decreasing`, ErrDegenerate), fmt.Sprintf(`knots[%d]`, i))
@@ -731,8 +747,11 @@ func validateNURBSSegmentContent(seg NURBSSeg) error {
 		return err
 	}
 	for i, weight := range seg.Weights {
-		if err := validateSegmentParameter(weight, fmt.Sprintf(`NURBS segment weight %d`, i)); err != nil {
-			return prependCodecPath(err, fmt.Sprintf(`weights[%d]`, i))
+		if !finiteSegmentValue(weight) {
+			return prependCodecPath(
+				fmt.Errorf(`%w: NURBS segment weight %d must be finite`, ErrNotFinite, i),
+				fmt.Sprintf(`weights[%d]`, i),
+			)
 		}
 		if weight <= 0 {
 			return prependCodecPath(

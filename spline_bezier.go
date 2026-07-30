@@ -4,15 +4,24 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+
+	"github.com/lestrrat-3d/sketch/geom"
 )
 
 // This file is docs/spline-design.md §5.1's exact reduction: a recorded
 // free-form curve becomes piecewise polynomial Bézier control points over
 // math/big.Rat, with no rounding anywhere along the way. Control coordinates
-// are floats, so they are exact rationals, and knot insertion is a rational
-// convex combination — so the converted spans ARE the recorded curve, not an
-// approximation of it, and every integral taken over them (spline_moments.go)
-// inherits that exactness.
+// and knots are floats, so they are exact rationals, and knot insertion is a
+// rational convex combination — so the converted spans ARE the recorded curve,
+// not an approximation of it, and every integral taken over them
+// (spline_moments.go) inherits that exactness.
+//
+// Every number the conversion reads is UPSTREAM's, taken exactly and never
+// re-derived. A SplineSeg's knot vector is geom.ClampedKnots's own floats lifted
+// into rationals, not the exact rationals j/(n−3) those floats are the roundings
+// of: sketch defines the curve over the floats it stores, so integrating the
+// exact rationals would integrate a DIFFERENT curve — and publish its
+// representable area as an Exact claim about the recorded one.
 //
 // The conversion serves the Tier A kinds of Table F: SplineSeg,
 // ClosedSplineSeg, and a NURBSSeg whose weights are all equal. A rational
@@ -232,9 +241,12 @@ func requireFullFreeformRange(tStart, tEnd float64, what string) error {
 // arrays before any of them is allocated: two rationals per control point and
 // one per knot. It is the linear floor under the conversion, so a record too
 // large to hold rationally refuses at the ceiling rather than allocating first
-// and refusing afterwards. It is levied after the recorded content has decided
-// the segment's TIER, so a kind refused for its own cause reports that cause
-// rather than the ceiling.
+// and refusing afterwards.
+//
+// It is computed from SLICE LENGTHS alone, which is what lets it be levied ahead
+// of every element scan — the content checks and the tier test included — and so
+// bound them: each of those passes is linear in exactly the controls, knots and
+// weights this charge counts.
 func chargeRationalLift(work *freeformWork, controls, knots int) error {
 	return work.step(rationalLiftCost(controls, knots))
 }
@@ -259,10 +271,11 @@ func ratPointsOf(points []Point2) ([]ratPoint, error) {
 }
 
 // splineBezierSpans converts a SplineSeg — geom.Spline's clamped uniform cubic
-// B-spline. Degree 3 and geom.ClampedKnots(n) are the entity's DEFINITION, not
-// recorded data (seam §2), so they are restated here rather than read: four
-// zeros, n−4 evenly spaced interior knots, four ones. Those interior knots are
-// j/(n−3), exact rationals.
+// B-spline. Degree 3 and the knot vector geom.ClampedKnots(n) builds are the
+// entity's DEFINITION rather than recorded data (seam §2), so the degree is
+// restated here and the knot vector is READ FROM geom: its interior knots are
+// float64(j)/float64(n−3), and those floats — not the exact rationals they round
+// — are the curve sketch defines.
 func splineBezierSpans(seg SplineSeg, work *freeformWork) ([]bezierSpan, error) {
 	const degree = 3
 	if err := requireFullFreeformRange(seg.TStart, seg.TEnd, "spline segment"); err != nil {
@@ -276,13 +289,14 @@ func splineBezierSpans(seg SplineSeg, work *freeformWork) ([]bezierSpan, error) 
 			ErrDegenerate, degree+1, len(seg.Control),
 		)
 	}
-	// The whole conversion is charged BEFORE the first rational exists. degree is
-	// fixed and geom.ClampedKnots is derived from the control count, so this
-	// record's insertion demand is a pure function of that count — no knot has to
-	// be lifted to learn it. Charging after the lift would let a record whose
-	// conversion is hopelessly over budget allocate two rationals per control
-	// point first: the open-spline charge is quadratic, so a refused record
-	// allocated three orders of magnitude more than any accepted one.
+	// The whole conversion is charged BEFORE the first rational exists, and before
+	// geom.ClampedKnots is even asked for its vector. degree is fixed and that
+	// vector's shape is derived from the control count, so this record's insertion
+	// demand is a pure function of that count — no knot has to be built or lifted to
+	// learn it. Charging after the lift would let a record whose conversion is
+	// hopelessly over budget allocate two rationals per control point first: the
+	// open-spline charge is quadratic, so a refused record allocated three orders of
+	// magnitude more than any accepted one.
 	knots := len(seg.Control) + 4
 	if err := work.step(costAdd(
 		rationalLiftCost(len(seg.Control), knots),
@@ -294,22 +308,28 @@ func splineBezierSpans(seg SplineSeg, work *freeformWork) ([]bezierSpan, error) 
 	if err != nil {
 		return nil, err
 	}
-	return clampedBezierSpans(degree, ctrl, clampedUniformKnots(len(ctrl), degree))
+	return clampedBezierSpans(degree, ctrl, clampedUniformKnots(len(ctrl)))
 }
 
-// clampedUniformKnots is geom.ClampedKnots in exact rationals: degree+1
-// repeats of 0, the interior knots j/spans, degree+1 repeats of 1.
-func clampedUniformKnots(n, degree int) []*big.Rat {
-	spans := int64(n - degree)
-	knots := make([]*big.Rat, 0, n+degree+1)
-	for range degree + 1 {
-		knots = append(knots, new(big.Rat))
-	}
-	for j := int64(1); j < spans; j++ {
-		knots = append(knots, big.NewRat(j, spans))
-	}
-	for range degree + 1 {
-		knots = append(knots, big.NewRat(1, 1))
+// clampedUniformKnots is geom.ClampedKnots's OWN float knot vector lifted
+// exactly into rationals — sketch's answer taken as it stands, never re-derived.
+//
+// The distinction is load-bearing rather than cosmetic. geom builds each interior
+// knot as float64(j)/float64(n−3), so for six control points it holds the
+// roundings of 1/3 and 2/3, not those rationals: the two differ by
+// 1/54043195528445952 and 1/27021597764222976. Rebuilding the vector from the
+// closed form therefore converts a curve sketch does not define, and the error is
+// not confined to the bound — the exact rational area over the closed-form knots
+// is often representable while the area over sketch's own knots is not, so such a
+// conversion publishes a false zero bound and an Exact claim, and on a
+// near-cancelling section it moves the published magnitude too.
+//
+// Every knot geom returns is 0, 1 or a quotient of finite floats, so each lifts.
+func clampedUniformKnots(n int) []*big.Rat {
+	floats := geom.ClampedKnots(n)
+	knots := make([]*big.Rat, len(floats))
+	for i, knot := range floats {
+		knots[i] = mustRatOf(knot)
 	}
 	return knots
 }
@@ -323,22 +343,31 @@ func nurbsBezierSpans(seg NURBSSeg, work *freeformWork) ([]bezierSpan, error) {
 	// Order is the preflight's own: the O(1) refusals — the recorded range, then
 	// every slice size — decide first, because they read no element, so a record
 	// whose knot count cannot match its control count is refused in constant time
-	// however many control points it holds. Then the record's OWN CONTENT is read
-	// and the TIER is decided, and only after that is anything charged.
+	// however many control points it holds. The SIZE-DERIVED lift charge comes
+	// next, still O(1), and only then is the record's own CONTENT read and its TIER
+	// decided.
 	//
-	// The tier has to precede the charge. Whether this segment is Tier A at all is
-	// a property of the recorded weights, so a record that is not Tier A owes its
-	// own Table R reason whatever its size: charging the rational lift first hands
-	// a large VALID rational NURBS the generic ceiling message instead, and the
-	// two are different answers to the caller — one says this evaluator has no
-	// certified quadrature for a rational curve, the other says a record this
-	// large will not fit the budget. Reading the arrays to decide it is a single
-	// linear pass over slices the caller already holds, which is not the
-	// super-linear work the ceiling exists to bound.
+	// The BOUND wins over the tier here, and the trade is exact. Deciding the tier
+	// means reading all n weights, so it is inherently linear and no O(1) charge can
+	// follow it: a scan placed ahead of every charge is unbounded and uncancellable,
+	// which is precisely what freeformWorkLimit exists to stop (the public
+	// ProfileRecord methods take no context). Levying the lift charge first bounds
+	// that scan under the same ceiling, because the scan is linear in exactly the
+	// controls, knots and weights the charge counts.
+	//
+	// What it costs is small and worth stating. A record whose SIZE alone fits the
+	// ceiling — every record that could ever yield a measurement — still reads its
+	// own Tier C reason below. Only a record too large for the lift charge loses it,
+	// and such a record is refused either way, so R7 is equally true of it.
 	if err := requireFullFreeformRange(seg.TStart, seg.TEnd, "NURBS segment"); err != nil {
 		return nil, err
 	}
 	if err := validateNURBSSegmentSizes(seg); err != nil {
+		return nil, err
+	}
+	// The rational lift is the linear floor under everything below: the content
+	// scan, the tier test and the conversion all walk the same arrays it counts.
+	if err := chargeRationalLift(work, len(seg.Control), len(seg.Knots)); err != nil {
 		return nil, err
 	}
 	if err := validateNURBSSegmentContent(seg); err != nil {
@@ -351,11 +380,6 @@ func nurbsBezierSpans(seg NURBSSeg, work *freeformWork) ([]bezierSpan, error) {
 				ErrUnsupported, i,
 			)
 		}
-	}
-	// The rational lift is charged next, as the linear floor under the conversion
-	// below it.
-	if err := chargeRationalLift(work, len(seg.Control), len(seg.Knots)); err != nil {
-		return nil, err
 	}
 	// The conversion is charged before the rational lift RUNS, not after it. The
 	// insertion demand reads the RECORDED float knots, over a vector the content
@@ -624,11 +648,16 @@ func (d *knotInsertionDemand) add(degree, run int) {
 }
 
 // uniformKnotDemand is the demand of geom.ClampedKnots(n) at the given degree,
-// which splineBezierSpans restates rather than records: its interior knots are
-// the n−degree−1 distinct values j/(n−degree), each at multiplicity one, so each
-// owes degree−1 insertions. Being a pure function of the control count is
-// exactly what lets a SplineSeg charge its whole conversion before it lifts a
-// single coordinate.
+// read from the control count WITHOUT asking geom for the vector: it holds
+// n−degree−1 interior knots, each at multiplicity one, so each owes degree−1
+// insertions. Being a pure function of the control count is exactly what lets a
+// SplineSeg charge its whole conversion before it builds or lifts a single knot.
+//
+// It stays an UPPER bound on the vector geom actually returns. Those interior
+// knots are the floats float64(j)/float64(n−degree), and counting each as its own
+// multiplicity-one target can only OVERSTATE what the insertion pass owes: were
+// two of them to round to the same float, they would form one longer run needing
+// fewer insertions and one fewer probe target.
 func uniformKnotDemand(n, degree int) knotInsertionDemand {
 	if n <= degree+1 || degree < 1 {
 		return knotInsertionDemand{}

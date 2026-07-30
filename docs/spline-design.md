@@ -236,14 +236,29 @@ Take the control coordinates exactly. They are floats, so they are exact
 rationals — the same take-the-floats-exactly discipline `clearance_poly.go`
 already uses.
 
+**Take the KNOT VECTOR exactly too, from sketch, and NEVER re-derive it.** Every
+number the conversion reads is upstream's own float lifted into a rational: a
+`NURBSSeg`'s knots are recorded verbatim, and a `SplineSeg`'s are not recorded at
+all, so the evaluator reads `geom.ClampedKnots` and lifts what it returns.
+`geom` builds each interior knot as `float64(j)/float64(n−3)`, so sketch stores
+the ROUNDING of `j/(n−3)` and not that rational; rebuilding the vector from the
+closed form is the no-re-derivation rule broken, and the cost is not confined to
+a bound. The exact area over the rational knots is often representable where the
+area over sketch's own knots is not, so the conversion publishes a zero bound and
+an `Exact` claim about a curve nobody recorded, and on a near-cancelling section
+the published magnitude moves too. The two vectors agree only where `n−3` is a
+power of two, which is why four- and five-control fixtures cannot see the
+difference. Whichever kind is converted, the knots come from sketch and the
+conversion is over them.
+
 Convert the recorded curve to piecewise Bézier form. Knot insertion is a
 rational convex combination, so the conversion is exact:
 
-| Recorded kind | Conversion |
-|---|---|
-| `SplineSeg` | clamped uniform cubic → one Bézier per span |
-| `ClosedSplineSeg` | periodic uniform cubic → one Bézier per span, `n` spans for `n` control points |
-| `NURBSSeg` | clamped arbitrary degree → one Bézier per NONEMPTY knot span |
+| Recorded kind | Conversion | Knot vector |
+|---|---|---|
+| `SplineSeg` | clamped uniform cubic → one Bézier per span | `geom.ClampedKnots(n)`'s floats, lifted |
+| `ClosedSplineSeg` | periodic uniform cubic → one Bézier per span, `n` spans for `n` control points | none — the periodic uniform basis is per span |
+| `NURBSSeg` | clamped arbitrary degree → one Bézier per NONEMPTY knot span | the recorded `Knots`, lifted |
 
 **Repeated knots and repeated control points are admitted, so every construction
 in §5 and §6 runs per NONEMPTY span and must hold on a COLLAPSED one.**
@@ -378,8 +393,9 @@ through before any integral is taken. A ceiling consulted after such a pass
 bounds nothing it was added to bound.
 
 That applies to MEMORY as much as to time, and the conversion's own charge is
-where it bites: a record's insertion demand is readable from data already in
-hand as floats — a `SplineSeg`'s degree is fixed and its knot vector derived, a
+where it bites: a record's insertion demand is readable from SIZES and from data
+already in hand as floats — a `SplineSeg`'s degree is fixed and the shape of the
+vector `geom.ClampedKnots` returns follows from its control count, a
 `ClosedSplineSeg` owes no insertion at all, and a `NURBSSeg`'s runs read off its
 RECORDED knots — so the whole conversion is charged before one `big.Rat` exists.
 Charging after the lift refuses a record that was hopeless from its control
@@ -441,19 +457,38 @@ constant time however large a caller made it. Every charge is levied THERE: the
 conversion, the re-anchoring of each converted chain, the integration that runs
 only in the later moments pass, and the reconstruction's whole-scene
 arrangements. The chains the preflight converted are what that pass integrates,
-so the conversion the record paid for happens once. And the segment's TIER is
-decided before it is charged.
+so the conversion the record paid for happens once. And a segment's TIER is
+decided before its CONVERSION charge.
 
 That last one is a rule about which ANSWER a caller gets, not about cost. Whether
 a `NURBSSeg` is Tier A at all is a property of its recorded weights, so a
-rational one owes its own Tier C reason (§5.4) however large the record is:
-charging the
-rational lift first hands a large VALID rational NURBS the R7 ceiling message
-instead, and the two are different answers — one says this evaluator has no
-certified quadrature for a rational curve, the other says a record this size will
-not fit the budget. Reading the recorded arrays once to decide it is a single
-linear pass over slices the caller already holds, which is not the super-linear
-work the ceiling exists to bound.
+rational one owes its own Tier C reason (§5.4) rather than the R7 ceiling message:
+the two are different answers — one says this evaluator has no certified
+quadrature for a rational curve, the other says a record this size will not fit
+the budget.
+
+**The scope of that rule is the conversion charge, not every charge, and the
+BOUND is why.** Deciding the tier means reading all `n` weights, so it is
+inherently linear and no O(1) charge can follow it. A scan placed ahead of every
+charge is therefore unbounded and uncancellable — exactly what the ceiling exists
+to stop — so the SIZE-DERIVED rational-lift charge is levied first, from slice
+lengths alone, and it bounds every element scan behind it: the content checks and
+the tier test are each linear in precisely the controls, knots and weights that
+charge counts. The order is the recorded range, the slice sizes, the
+size-derived lift charge, the content checks and the tier test, the conversion
+charge, and only then the rational lift itself.
+
+What that costs is stated exactly: a record whose SIZE alone cannot fit the
+ceiling reports R7 rather than its kind's reason. Every record within the
+budget — which is every record that could ever yield a measurement — still reads
+its own Table R reason, and a record over it is refused either way, so R7 is
+equally true of it.
+
+The per-element diagnostic is part of that bound. A description formatted for
+every knot and every weight rather than only for the element that fails made the
+content scan roughly seventy times the cost of the slice walk it is, so a "single
+linear pass over slices the caller already holds" is a claim about the WALK and
+the walk alone.
 
 The independent-implementation rule stands. sketch computes its own free-form
 area internally and reports it as `Profile.Area`; decad integrates its OWN
@@ -1124,9 +1159,21 @@ rules).
 - Assert the per-kind chord counts against sketch's own sampler as a table over
   the kinds, the floor and the open spline's per-span count among them. A test
   that checks one kind cannot see a row that reads the wrong field.
-- Assert a rational `NURBSSeg` reports its Tier C reason with the work counter
-  ALREADY EXHAUSTED. That is the condition a record large enough to exhaust the
-  ceiling on its rational lift alone creates, and only it distinguishes a tier
-  decided before the charge from one decided after.
+- Assert a rational `NURBSSeg` reports its Tier C reason with the counter left
+  holding exactly its rational lift and nothing more, which is what distinguishes
+  a tier decided before the CONVERSION charge from one decided after. Assert the
+  stated cost beside it: with the counter exhausted the same record reports R7.
+- Assert the size-derived lift charge precedes the per-element content scan
+  MECHANICALLY rather than by timing, on two records one control point apart
+  across the ceiling, each carrying a non-finite element at the end of its
+  vector. The record inside the ceiling reports that element's own refusal, so
+  the scan ran; the record past it reports R7, which it can only do by never
+  reading the element.
+- Assert an OPEN spline's converted spans against an exact Cox–de Boor evaluation
+  over `geom.ClampedKnots`'s own FLOAT knots, at a control count where `n−3` is
+  not a power of two, comparing rationals rather than a tolerance. A fixture whose
+  `n−3` is a power of two cannot see a re-derived knot vector, and a tolerance
+  cannot see it either — the divergence is smaller than an ulp of the reading and
+  still turns an `Approximate` into a false `Exact`.
 - Assert recipe replay of every free-form step reproduces body order, provenance
   roles, and measurements within the evaluator's own exactness.

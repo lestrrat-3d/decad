@@ -197,12 +197,13 @@ func validateMomentFieldsWithPoll(poll func() error, record ProfileRecord) (mome
 	// charged immediately before its RecordProfile call
 	// (momentRecordMatchesSketch); and every free-form conversion is charged
 	// before its rational lift (spline_bezier.go). What runs AHEAD of this charge
-	// is the loop above: one linear pass over slices the caller already holds,
-	// which docs/spline-design.md §5.2 excludes from the ceiling by design and
-	// whose order §5.2 requires, because a segment's tier is decided before it is
-	// charged. Hoisting a record-wide charge ahead of per-segment validation
-	// breaks that rule: a valid rational NURBS would then report the R7 ceiling
-	// instead of its own Table R reason.
+	// is the loop above, and each segment in it levies its own size-derived linear
+	// floor before scanning its own arrays, so that loop is bounded by this same
+	// ceiling rather than excluded from it. Its ORDER is what
+	// docs/spline-design.md §5.2 requires: a segment's tier is decided before its
+	// CONVERSION charge, so hoisting a record-wide charge ahead of per-segment
+	// validation would hand a valid rational NURBS the R7 ceiling instead of its
+	// own Table R reason.
 	//
 	// A record with a large analytic prefix is expensive on its own account, not
 	// because of this charge. 500,000 line segments plus one minimal spline take

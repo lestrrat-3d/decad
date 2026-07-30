@@ -3,6 +3,7 @@ package decad
 import (
 	"math"
 	"math/big"
+	"strconv"
 	"testing"
 	"time"
 
@@ -71,6 +72,125 @@ func TestSplineBezierMatchesGeomEvaluator(t *testing.T) {
 		gotU, gotV := evalSpans(t, spans, at)
 		require.InDelta(t, wantU, gotU, 1e-12, "u at t=%v", at)
 		require.InDelta(t, wantV, gotV, 1e-12, "v at t=%v", at)
+	}
+}
+
+// evalSpanExact is de Casteljau over exact rationals on ONE span, at a rational
+// local parameter. It rounds nothing, so its result is comparable by Cmp.
+func evalSpanExact(span bezierSpan, at *big.Rat) (*big.Rat, *big.Rat) {
+	us := make([]*big.Rat, len(span))
+	vs := make([]*big.Rat, len(span))
+	for i, point := range span {
+		us[i] = new(big.Rat).Set(point.u)
+		vs[i] = new(big.Rat).Set(point.v)
+	}
+	oneMinus := new(big.Rat).Sub(big.NewRat(1, 1), at)
+	for round := len(span) - 1; round > 0; round-- {
+		for i := range round {
+			blend := func(values []*big.Rat) {
+				lo := new(big.Rat).Mul(oneMinus, values[i])
+				hi := new(big.Rat).Mul(at, values[i+1])
+				values[i] = lo.Add(lo, hi)
+			}
+			blend(us)
+			blend(vs)
+		}
+	}
+	return us[0], vs[0]
+}
+
+// splineBasisRat is Cox–de Boor N_{i,p}(t) over exact rationals with the
+// 0/0 = 0 convention — the same recursion geom's own bsplineBasis runs, evaluated
+// without rounding so it can serve as an exact reference.
+func splineBasisRat(i, p int, at *big.Rat, knots []*big.Rat) *big.Rat {
+	if p == 0 {
+		if knots[i].Cmp(at) <= 0 && at.Cmp(knots[i+1]) < 0 {
+			return big.NewRat(1, 1)
+		}
+		return new(big.Rat)
+	}
+	sum := new(big.Rat)
+	if d := new(big.Rat).Sub(knots[i+p], knots[i]); d.Sign() > 0 {
+		weight := new(big.Rat).Quo(new(big.Rat).Sub(at, knots[i]), d)
+		sum.Add(sum, new(big.Rat).Mul(weight, splineBasisRat(i, p-1, at, knots)))
+	}
+	if d := new(big.Rat).Sub(knots[i+p+1], knots[i+1]); d.Sign() > 0 {
+		weight := new(big.Rat).Quo(new(big.Rat).Sub(knots[i+p+1], at), d)
+		sum.Add(sum, new(big.Rat).Mul(weight, splineBasisRat(i+1, p-1, at, knots)))
+	}
+	return sum
+}
+
+// coxDeBoorExact evaluates the clamped cubic B-spline over the given control
+// points and knot vector exactly, as the literal Σ N_{i,3}(t)·P_i.
+func coxDeBoorExact(control []Point2, knots []*big.Rat, at *big.Rat) (*big.Rat, *big.Rat) {
+	u, v := new(big.Rat), new(big.Rat)
+	for i, point := range control {
+		basis := splineBasisRat(i, 3, at, knots)
+		if basis.Sign() == 0 {
+			continue
+		}
+		u.Add(u, new(big.Rat).Mul(basis, mustRatOf(point.U)))
+		v.Add(v, new(big.Rat).Mul(basis, mustRatOf(point.V)))
+	}
+	return u, v
+}
+
+// The converted spans must be the curve SKETCH defines, and the knot vector is
+// where the two can silently diverge: geom.ClampedKnots builds each interior knot
+// as float64(j)/float64(n−3), so a converter that rebuilds them as the exact
+// rationals j/(n−3) integrates a different curve whenever n−3 is not a power of
+// two — and does so with no rounding anywhere, which is what let it publish a
+// false zero bound.
+//
+// This test is exact and therefore a proof, not a tolerance: it compares each
+// converted span against Cox–de Boor over sketch's own FLOAT knots at rational
+// parameters, and requires bit-for-bit rational equality. A re-derivation of the
+// knots fails it loudly. The control counts are both AFFECTED ones — 6 and 9,
+// where n−3 is 3 and 6 — since the four- and five-control fixtures elsewhere have
+// n−3 a power of two and cannot see the difference.
+func TestSplineBezierSpansUseSketchFloatKnots(t *testing.T) {
+	// The offending values, stated once: 1/3 and the float geom actually holds.
+	require.NotEqual(t, 0, clampedUniformKnots(6)[4].Cmp(big.NewRat(1, 3)),
+		"geom's interior knot is the rounding of 1/3, not 1/3")
+	require.Equal(t, 0, clampedUniformKnots(6)[4].Cmp(mustRatOf(geom.ClampedKnots(6)[4])),
+		"the lifted vector is geom's own float, taken exactly")
+
+	for _, controls := range []int{6, 9} {
+		t.Run(strconv.Itoa(controls), func(t *testing.T) {
+			control := make([]Point2, controls)
+			for i := range control {
+				control[i] = Point2{U: float64(i), V: float64((i * 7) % 5)}
+			}
+			// The reference reads geom DIRECTLY rather than through the converter's
+			// own helper, so the comparison below is a statement about sketch's knot
+			// values and not a self-consistency check.
+			knots := make([]*big.Rat, controls+4)
+			for i, knot := range geom.ClampedKnots(controls) {
+				knots[i] = mustRatOf(knot)
+			}
+
+			spans, err := splineBezierSpans(SplineSeg{Control: control, TStart: 0, TEnd: 1}, &freeformWork{})
+			require.NoError(t, err)
+			require.Len(t, spans, controls-3)
+
+			for index, span := range spans {
+				lo, hi := knots[3+index], knots[4+index]
+				width := new(big.Rat).Sub(hi, lo)
+				// The half-open basis convention leaves t = hi to the next span, and
+				// the chain's far endpoint is covered by the join at every other span.
+				for _, numerator := range []int64{0, 1, 2, 3, 4} {
+					local := big.NewRat(numerator, 5)
+					global := new(big.Rat).Add(lo, new(big.Rat).Mul(local, width))
+					wantU, wantV := coxDeBoorExact(control, knots, global)
+					gotU, gotV := evalSpanExact(span, local)
+					require.Equal(t, 0, gotU.Cmp(wantU),
+						"span %d u at local %v", index, local)
+					require.Equal(t, 0, gotV.Cmp(wantV),
+						"span %d v at local %v", index, local)
+				}
+			}
+		})
 	}
 }
 
@@ -192,23 +312,89 @@ func TestFreeformWorkLimitRefuses(t *testing.T) {
 	require.Contains(t, err.Error(), "work budget")
 }
 
-// Whether a NURBS segment is Tier A at all is decided by its recorded weights,
-// so a rational one owes its OWN Table R reason however large the record is and
-// whatever the counter has left. Charging the rational lift first hands it the
-// generic ceiling message instead, and the two are different answers: one says
-// this evaluator has no certified quadrature for a rational curve, the other says
-// a record this size will not fit the budget. On the public path the swap needed
-// a record big enough for the lift charge alone to exhaust the ceiling — 349,525
-// control points at a ceiling of 2^20 — and an exhausted counter is the same
-// condition without the record.
-func TestRationalNURBSReasonPrecedesTheLiftCharge(t *testing.T) {
-	work := &freeformWork{spent: freeformWorkLimit}
+// Whether a NURBS segment is Tier A at all is decided by its recorded weights, so
+// a rational one owes its OWN Table R reason — and it gets that reason for every
+// record whose SIZE fits the ceiling, which is every record that could ever yield
+// a measurement. What it does NOT get is precedence over the size-derived lift
+// charge: deciding the tier reads all n weights, so it is inherently linear, and a
+// scan placed ahead of every charge is unbounded and uncancellable. So the two
+// halves are asserted separately.
+func TestRationalNURBSReasonPrecedesTheConversionCharge(t *testing.T) {
+	// The fixture's lift charge is 2 controls + knots = 16 units, and its
+	// conversion charge is a further 8. Leaving room for exactly the lift proves
+	// the tier is read before the conversion charge and not merely when the
+	// counter is empty.
+	const liftCost = 2*4 + 8
+	work := &freeformWork{spent: freeformWorkLimit - liftCost}
 	_, _, err := freeformBezierSpans(rationalNURBSFixture(), work)
 	require.Error(t, err)
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.Contains(t, err.Error(), "rational NURBS")
 	require.NotContains(t, err.Error(), "work budget",
-		"the tier is decided from the record's own weights, before anything is charged")
+		"a record whose size fits the ceiling reads its own tier reason")
+
+	// The stated cost of the bound: a record the lift charge alone cannot afford
+	// reports R7 instead. Such a record is refused either way, so R7 is equally
+	// true of it.
+	exhausted := &freeformWork{spent: freeformWorkLimit}
+	_, _, err = freeformBezierSpans(rationalNURBSFixture(), exhausted)
+	require.Error(t, err)
+	require.ErrorIs(t, err, ErrUnsupported)
+	require.Contains(t, err.Error(), "work budget")
+}
+
+// The size-derived lift charge must be levied BEFORE the per-element content
+// scan, because that scan is linear in a length the caller chose and nothing
+// downstream can cancel it: a well-formed degree-1 record took 213.7 ms at
+// 1,048,576 control points and 1.672 s at 8,000,000, each time running to
+// completion and only then refusing.
+//
+// The proof is mechanical rather than timed. Two records one control point apart
+// straddle the ceiling — a degree-1 NURBS over n controls charges 2n + (n+2)
+// units, so 349,524 fits 2^20 and 349,525 does not — and each carries a
+// non-finite knot at the very end of its vector. The smaller one still reports
+// that content error, so the scan runs when the charge admits it; the larger
+// reports R7, which it can only do by refusing before reading the knot.
+func TestNURBSLiftChargePrecedesTheContentScan(t *testing.T) {
+	segmentOf := func(controls int) NURBSSeg {
+		control := make([]Point2, controls)
+		weights := make([]float64, controls)
+		for i := range control {
+			control[i] = Point2{U: float64(i), V: float64(i % 3)}
+			weights[i] = 1
+		}
+		interior := controls - 2
+		knots := make([]float64, 0, controls+2)
+		knots = append(knots, 0, 0)
+		for j := 1; j <= interior; j++ {
+			knots = append(knots, float64(j)/float64(interior+1))
+		}
+		// The last interior knot is the non-finite one, so the whole control array
+		// and almost the whole knot vector are walked before it is reached.
+		knots[len(knots)-1] = math.NaN()
+		knots = append(knots, 1, 1)
+		return NURBSSeg{Degree: 1, Control: control, Knots: knots, Weights: weights, TStart: 0, TEnd: 1}
+	}
+
+	require.LessOrEqual(t, rationalLiftCost(349524, 349526), freeformWorkLimit,
+		"349,524 controls are the most the lift charge admits")
+	require.Greater(t, rationalLiftCost(349525, 349527), freeformWorkLimit,
+		"one more control point does not fit")
+
+	start := time.Now()
+	_, _, err := freeformBezierSpans(segmentOf(349524), &freeformWork{})
+	require.Error(t, err)
+	require.ErrorIs(t, err, ErrNotFinite)
+	require.Contains(t, err.Error(), "must be finite",
+		"the largest scan the charge admits still runs and still reports its own content error")
+	require.Less(t, time.Since(start), time.Second,
+		"and the charge is what bounds how long that scan can be")
+
+	_, _, err = freeformBezierSpans(segmentOf(349525), &freeformWork{})
+	require.Error(t, err)
+	require.ErrorIs(t, err, ErrUnsupported)
+	require.Contains(t, err.Error(), "work budget",
+		"one control point past the ceiling, nothing scans the knot vector at all")
 }
 
 // The chord counts the reconstruction charge is built on are sketch's own
@@ -363,7 +549,7 @@ func TestKnotInsertionDemandMatchesRationalWalk(t *testing.T) {
 	}
 
 	for _, controls := range []int{4, 5, 9, 40} {
-		knots := clampedUniformKnots(controls, 3)
+		knots := clampedUniformKnots(controls)
 		require.Equal(t,
 			rationalDemand(3, controls, knots),
 			uniformKnotDemand(controls, 3),
