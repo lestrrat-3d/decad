@@ -633,6 +633,88 @@ func TestAnalyticChordsAreCharged(t *testing.T) {
 	require.Less(t, time.Since(start), time.Second, "no arrangement ran before the refusal")
 }
 
+// Plan storage is the preflight's OWN state, so its size has to follow the
+// segments that actually converted and never the segment count an untrusted
+// record states. Storage sized by the recorded loop length is levied ahead of
+// the first per-segment charge — the one thing that can refuse the record — and
+// it is levied on every record, analytic ones included: a freeformPlan is 32
+// bytes, so a 262,144-segment record paid 8.00 MiB for plan storage on top of
+// the 4.00 MiB its own normalized segments cost, and a pure line record paid all
+// of it for plans it can never read.
+//
+// Both readings are marginal costs per recorded segment, which is what tells
+// storage that follows the loop length from storage that follows the
+// conversions. The converted spline chains are a fixed cost here — the ceiling
+// refuses this record at loop 0 segment 942, whatever its length past that — so
+// a per-segment plan allocation is the only term either measurement can grow by.
+func TestPlanStorageFollowsConvertedSegments(t *testing.T) {
+	// One recorded segment costs 16 bytes of normalized CurveSegment, which is
+	// the whole marginal cost the preflight owes. The slack covers the map
+	// growth of the fixed 942 converted plans and the counters beside them.
+	const perSegmentAllowance = 24
+
+	for _, tc := range []struct {
+		name    string
+		segment func(index int) decad.CurveSegment
+	}{
+		{
+			// A record of minimal cubic splines: every segment converts, and
+			// the record's work ceiling refuses it partway through.
+			name: "free-form",
+			segment: func(index int) decad.CurveSegment {
+				base := float64(index)
+				return decad.SplineSeg{
+					Control: []decad.Point2{
+						{U: base},
+						{U: base + 1, V: 1},
+						{U: base + 2, V: 1},
+						{U: base + 3},
+					},
+					TStart: 0, TEnd: 1,
+				}
+			},
+		},
+		{
+			// A pure analytic record converts nothing at all, so it must pay
+			// exactly what an evaluator with no free-form path would: its own
+			// normalized segments and not one byte of plan storage. Its first
+			// segment is degenerate, so the refusal lands before any walk is
+			// integrated and the reading is the preflight's allocation alone.
+			name: "analytic",
+			segment: func(int) decad.CurveSegment {
+				return decad.LineSeg{TStart: 0, TEnd: 1}
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			// 262,144 is what recipe_decode.go admits per document, so it is
+			// the largest loop the only untrusted channel can state.
+			const small = 65536
+			const large = 262144
+
+			recordOf := func(segments int) decad.ProfileRecord {
+				out := make([]decad.CurveSegment, segments)
+				for i := range out {
+					out[i] = tc.segment(i)
+				}
+				return decad.ProfileRecord{Outer: decad.LoopRecord{Segments: out}}
+			}
+
+			measure := func(segments int) uint64 {
+				record := recordOf(segments)
+				var err error
+				allocated := allocatedBy(func() { _, err = record.Area() })
+				require.Error(t, err, "neither fixture is a measurable region")
+				return allocated
+			}
+
+			marginal := float64(measure(large)-measure(small)) / float64(large-small)
+			require.Less(t, marginal, float64(perSegmentAllowance),
+				"a recorded segment the preflight converts no plan for owes no plan storage")
+		})
+	}
+}
+
 // A spline chained with a straight chord exercises the mixed path: the line
 // contributes through the existing exact-rational line formulas and the spline
 // through the Bézier integrals, into one region.

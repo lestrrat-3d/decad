@@ -36,9 +36,18 @@ import (
 type momentPreflight struct {
 	record ProfileRecord
 	anchor Point2
-	// plans is indexed [loop][segment] over the checked record's loops in
+	// plans holds one entry per CONVERTED free-form segment, keyed by its
+	// [loop, segment] index over the checked record's loops in
 	// outer-then-holes order — the order the moments pass walks them in.
-	plans [][]freeformPlan
+	//
+	// It is sparse, and deliberately so. The key set is decided by the
+	// segments that actually converted, never by the recorded loop lengths, so
+	// an analytic record allocates no plan storage at all and a free-form
+	// record pays only for the segments that already passed their own charge.
+	// Storage sized by the recorded segment count would be forced by an
+	// untrusted record ahead of the first per-segment charge, which is the one
+	// thing that can refuse it.
+	plans map[[2]int]freeformPlan
 	// work is the record's own counter, still open. The topology reconstruction
 	// re-arranges the whole scene once per candidate profile it authenticates, so
 	// those arrangements are charged here as they happen rather than predicted.
@@ -59,12 +68,11 @@ type freeformPlan struct {
 	reversed bool
 }
 
-// planAt returns the plan the preflight converted for one segment.
+// planAt returns the plan the preflight converted for one segment. A segment
+// the preflight recorded no plan for — every line, arc and circle — reads the
+// zero plan, which is what the moments pass integrates from its own closed form.
 func (p momentPreflight) planAt(loopIndex, segmentIndex int) freeformPlan {
-	if loopIndex >= len(p.plans) || segmentIndex >= len(p.plans[loopIndex]) {
-		return freeformPlan{}
-	}
-	return p.plans[loopIndex][segmentIndex]
+	return p.plans[[2]int{loopIndex, segmentIndex}]
 }
 
 // validateMomentRecord normalizes and checks the fields the integrator reads,
@@ -126,7 +134,9 @@ func validateMomentFieldsContext(ctx context.Context, record ProfileRecord) (mom
 func validateMomentFieldsWithPoll(poll func() error, record ProfileRecord) (momentPreflight, error) {
 	loops := append([]LoopRecord{record.Outer}, record.Holes...)
 	normalized := make([]LoopRecord, len(loops))
-	plans := make([][]freeformPlan, len(loops))
+	// Plan storage is minted on the first segment that converts, so a record
+	// naming none allocates none (see momentPreflight.plans).
+	var plans map[[2]int]freeformPlan
 	// One counter for the whole record: the ceiling bounds the record's total
 	// free-form work, never each segment's own.
 	work := &freeformWork{}
@@ -150,7 +160,6 @@ func validateMomentFieldsWithPoll(poll func() error, record ProfileRecord) (mome
 			)
 		}
 		normalized[loopIndex].Segments = make([]CurveSegment, len(loop.Segments))
-		plans[loopIndex] = make([]freeformPlan, len(loop.Segments))
 		for segmentIndex, segment := range loop.Segments {
 			if poll != nil {
 				if err := poll(); err != nil {
@@ -167,7 +176,12 @@ func validateMomentFieldsWithPoll(poll func() error, record ProfileRecord) (mome
 				)
 			}
 			normalized[loopIndex].Segments[segmentIndex] = checked
-			plans[loopIndex][segmentIndex] = plan
+			if len(plan.spans) > 0 {
+				if plans == nil {
+					plans = make(map[[2]int]freeformPlan)
+				}
+				plans[[2]int{loopIndex, segmentIndex}] = plan
+			}
 			freeform = freeform || isFreeformSegment(checked)
 			if loopIndex == 0 && segmentIndex == 0 {
 				anchor = start
