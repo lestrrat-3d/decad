@@ -314,18 +314,43 @@ A rational span uses the same control points — a positive-weight rational Béz
 lies in their hull too, and `W > 0` is proven (§5.4) — so this construction needs
 no separate rational form.
 
-Per span, with `[L_lo, L_hi]` the §6.1 length bracket of that SAME span and
-`r_lo ≥ 0`:
+**`r_lo` carries no sign, and the axis gate does not give it one.** The gate
+proves `r ≥ 0` over the REGION and so over every walk on its boundary; a control
+point is not a point of either, and a hull that dips across the axis holds a
+negative radial control value while the curve stays strictly on the material
+side. A span whose four radial control values are `1, −1, 3, 1` has the radial
+polynomial `1 − 6t + 18t² − 12t³`, whose stationary points `t = (3 ∓ √3)/6` give
+values `0.4226` and `1.5774` against endpoint values of `1`: the walk's minimum
+radius is `0.4226 > 0` with `r_lo = −1`. So the hull bound is one-sided in sign —
+a genuine lower bound on `r`, and a negative one proves only that the hull
+crossed the axis. Clamp it with what the gate DID prove:
 
 ```
-r_lo · L_lo  ≤  ∫ r ds  ≤  r_hi · L_hi
+r_lo⁺ = max(0, r_lo)  ≤  r(t)   for every t on the walk
 ```
+
+Per span, with `[L_lo, L_hi]` the §6.1 length bracket of that SAME span:
+
+```
+r_lo⁺ · L_lo  ≤  ∫ r ds  ≤  r_hi · L_hi
+```
+
+Both factors of each product are non-negative — `r_lo⁺` by the clamp, `r_hi`
+because it dominates the walk's own values and the gate proves those
+non-negative — and that is exactly what licenses multiplying the two lower
+bounds together and the two upper bounds together. **NEVER write the lower bound as `r_lo · L_lo`.** Where `r_lo < 0` that
+is the LARGER of `r_lo·L_lo` and `r_lo·L_hi`, so it is not the product interval's
+lower end; it survives only on the separate fact that `∫ r ds ≥ 0`, which is a
+different argument and a weaker bound than the clamp gives.
 
 Sum the per-span enclosures. de Casteljau subdivision shrinks `[L_lo, L_hi]` and
-`[r_lo, r_hi]` together, so the product enclosure closes, and **the stopping
-certificate is again the MEASURED enclosure, never an assumed rate** (§6.1).
-Report the interval midpoint as the value and its half width as the bound,
-`Approximate` always.
+`[r_lo, r_hi]` together — the hull converges onto the curve, so `r_lo` rises
+toward the sub-span's own minimum radius and the clamp goes inert — and **the
+stopping certificate is again the MEASURED enclosure, never an assumed rate**
+(§6.1). A span still holding `r_lo < 0` contributes a lower bound of `0`:
+honest, slack, and no reason to stop. Subdivide until the measured product
+enclosure meets its target. Report the interval midpoint as the value and its
+half width as the bound, `Approximate` always.
 
 This bracket serves the lateral area alone. A revolve's `Volume` takes Pappus's
 SECOND theorem over the region's area first moment `∫u dA`, which §5 integrates
@@ -354,10 +379,14 @@ that reads it:
   §5.3's closed forms answer these questions directly, exactly as they do for
   `CircleSeg`/`ArcSeg`.
 
+The chord-sagitta row is the one exception, and it is not an identity: both its
+columns MEASURE the same control-point distance, which §6.2.1 justifies for a
+rational span unchanged.
+
 | Question | Polynomial Bézier span (Tier A) | Rational span | Consumer |
 |---|---|---|---|
 | directional extreme | `d/dt(g·C(t)) = 0`, degree `p−1` per span | `(g·U)′W − (g·U)W′ = 0`, degree `≤ 2p−1` per span — the positive `W²` denominator cleared | `extentAlong`, `Box`, through-all stops |
-| chord sagitta | control-point deviation from the linear interpolant, MEASURED per subdivision level (§6.1) | the same deviation on the span's own control points, MEASURED per level | `chordCount`, tessellation |
+| chord sagitta | the control points' distance to the chord SEGMENT `P_0 P_p`, MEASURED per subdivision level (§6.1) | the same distance on the span's own control points, MEASURED per level | `chordCount`, tessellation |
 | tangent/normal DIRECTION cone | hodograph control hull — a degree `p−1` Bézier with control points `p·ΔP_i` — a CONE only where that hull excludes the origin (§6.3) | the control hull of the numerator hodograph `(U′W − UW′, V′W − VW′)`, degree `≤ 2p−1` — the positive `W²` scales `C′` and never rotates it, so the direction cone is the numerator's, under the same origin-exclusion test (§6.3) | undercut survey |
 | speed, for a Lipschitz bound | that same hodograph hull's maximum norm | the numerator hodograph hull's maximum norm divided by the square of `W`'s proven positive LOWER bound | extreme-VALUE brackets |
 | curvature extreme | `2K′S − 3KS′ = 0` with `K = u′v″ − v′u″` and `S = u′² + v′²`, degree `≤ 4p−6` — PLUS both span endpoints; the bracket needs `S`'s proven positive floor, so a span without one is `Suspect` (§6.3) rather than a candidate list | the same stationarity over the rational derivative forms, the positive powers of `W` cleared before isolation — plus the same endpoint and speed-floor cases | `MinRadius` |
@@ -378,6 +407,33 @@ breaks the proof rather than merely widening it.
 zero bound today. A free-form interior extreme is an irrational root evaluation,
 so **a free-form prism's `Box` is `Approximate`** with the bracket's bound. State
 it; never paper over it.
+
+### 6.2.1 Which distance the sagitta row measures
+
+The chording error a chord commits is the curve's distance to that chord as a
+SEGMENT, so the sagitta row measures the control points' distance to the segment
+`P_0 P_p` and to nothing else. Three quantities are within a careless reading of
+each other here, and only one of them is the bound:
+
+- **distance to the chord's carrier LINE understates it.** A span may overshoot
+  its own endpoints along that line. The control net `(0, 0)`, `(−3, 0.01)`,
+  `(4, 0.01)`, `(1, 0)` has every control point within `0.01` of the line through
+  its ends, while the curve reaches `u ≈ −0.76` — `0.76` beyond the chord, and
+  `0.76` from it. Perpendicular distance to an infinite line is not a chord
+  bound.
+- **the parametric deviation `|C(t) − L(t)|` is a different quantity**, larger
+  than the sagitta and not bounded by the control points' deviations on a
+  RATIONAL span. The weights reparameterise: the collinear net `(0, 0)`,
+  `(1, 0)`, `(2, 0)` with weights `1, 1, 100` has every control point ON its
+  linear interpolant, yet `|C(1/2) − L(1/2)| ≈ 0.96`. Its sagitta is `0` — which
+  the segment distance reports correctly.
+- **distance to the SEGMENT is the bound, and it holds unchanged on a rational
+  span.** Distance to a convex set is a convex function, so its maximum over the
+  control hull is attained at a control point; every curve point is a convex
+  combination of the same control points, positive weights included (`W > 0`,
+  §5.4). That argument reads no parameterisation at all, which is why the row's
+  two columns measure the same thing and why §11 asks for no rational fixture
+  here.
 
 ### 6.3 The speed floor, and when a direction cone is a cone
 
@@ -412,9 +468,12 @@ taken exactly as rationals (§5.1):
   clears the positive `W²` first and tests the numerator hodograph.
 - **origin exclusion.** Whether the origin lies in the convex hull of the
   hodograph's control points is an exact rational sign test — no root-find. Where
-  a hull fails it, subdivide the hodograph and retest the children: under a proven
-  `s_min > 0` the child hulls shrink toward a curve that stays `s_min` away from
-  the origin, so the subdivision terminates.
+  a hull fails it, subdivide the hodograph and retest the children: under a
+  proven `s_min > 0` the child hulls shrink toward a curve that stays `√s_min`
+  away from the origin. `s_min` floors `S`, the SQUARED speed, so the separation
+  it certifies in the hodograph plane is its SQUARE ROOT — `|C′(t)| = √S(t) ≥
+  √s_min` — and a child hull whose own diameter has fallen below that distance
+  cannot contain the origin. So the subdivision terminates.
 
 What each failure costs, per R9 — a `Verify` question the evaluator cannot answer
 is accepted and reads `Suspect`:
@@ -578,7 +637,7 @@ half-silent. These stages do not consume a global evaluator increment number.
 | **P3** | walk-kind discriminant across every `segmentWalk` consumer | none — behaviour preserved |
 | **P4** | `NURBSSurface`/`NURBSCurve`, free-form extrude side faces, §6.1 length brackets, §6.2 extremes, `NormalAt` refusal, §6.4's stop gate | Tier A free-form prisms build; `Volume` from the Tier A rational, `Area`/`Box` bounded. A Tier B or C section is R10; an undecidable through-all stop is R11 |
 | **P5** | free-form chording with proven sagitta + area slack | `Tessellate`/`STL`/`OBJ`, booleans, interference proof. Wall reading explicitly `Suspect` |
-| **P6** | §6.3's speed floor and origin-exclusion certificates, hodograph normal cones, bracketed curvature extremes | `Undercuts` and `MinRadius` answer where those certificates close, `Suspect` where they do not |
+| **P6** | §6.3's speed floor and origin-exclusion certificates, hodograph normal cones, bracketed curvature extremes | `Undercuts` and `MinRadius` each answer where the certificates that reading needs close, and read `Suspect` per §6.3's cost table where they do not |
 | **P7** | certified branch-and-bound inscribed-disk interval | `MinWallThickness` answered, with its own convergence evidence |
 | **P8** | free-form surfaces of revolution, §6.1.1's radial first-moment bracket | `Revolve` builds for a Tier A section |
 | **P9** | Tier B formulas; Tier C certified quadrature | Tier B/C moment readings answer, and the builds Table C stages on them follow — R10 retires |
@@ -612,8 +671,15 @@ rules).
   and a curvature extreme at a parameter that is not a root of the polynomial
   stationarity `2K′S − 3KS′`, so `MinRadius` is not overstated. The chord-sagitta
   row is EXCLUDED and needs no rational fixture: both its columns measure the
-  same control-point deviation per subdivision level, so it carries no
-  rational-specific identity a fixture could falsify.
+  same control-point distance to the chord per subdivision level, so it carries
+  no rational-specific identity a fixture could falsify.
+- Assert the §6.2.1 sagitta bound on a span that overshoots its own chord ends —
+  the `(0, 0)`, `(−3, 0.01)`, `(4, 0.01)`, `(1, 0)` net, whose curve runs `0.76`
+  past the chord: the reported bound must enclose the dense-sample deviation, so
+  a bound measured to the chord's carrier LINE fails the test. Assert it again on
+  a rational span whose control points all lie on their linear interpolant while
+  the curve does not, so a bound built from the parametric deviation `|C − L|` is
+  distinguished from the sagitta the chord actually commits.
 - Assert `MinRadius` on a span carrying an INFLECTION: the reported interval
   encloses the tightest radius, which is attained where `K ≠ 0`, so a candidate
   set built from `K`'s roots alone fails the test (§6.2).
@@ -624,6 +690,14 @@ rules).
   falls inside `θ ·` that enclosure, and that a walk revolved twice at different
   radii reports areas in the ratio of those radii — a length-only construction
   reports them equal and fails.
+- Assert the §6.1.1 bracket on a span whose radial control values include a
+  NEGATIVE one while the walk stays strictly on the material side — radial
+  controls `1, −1, 3, 1`, minimum radius `0.4226`: the reported enclosure must
+  contain a dense-sample reference at every subdivision depth, starting at the
+  depth where `r_lo` is still negative. A lower bound built as `r_lo · L_lo`
+  passes only by sign accident, so assert the clamp directly: the first level's
+  lower bound is `0`, and it rises once subdivision lifts every sub-span's
+  `r_lo` to non-negative.
 - Assert both §6.3 certificates by the readings they gate. On the cusp net
   `(−1/8, 1/4)`, `(1/8, −1/12)`, `(−1/8, −1/12)`, `(1/8, 1/4)`: the hodograph
   hull contains the origin, subdivision never separates it, `Undercuts` and
