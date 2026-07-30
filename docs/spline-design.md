@@ -171,13 +171,14 @@ exactly → `ErrUnrecordableProfile`.
 | **R4** | `Fillet` corner with a free-form carrier | `ErrUnsupported` | yes for a curved walk, §4.1 |
 | **R5** | `Chamfer` corner with a free-form carrier | `ErrUnsupported` | yes for a curved walk, §4.1 |
 | **R6** | `FitSplineSeg` reaches a build or an integral | `ErrUnsupported` | pending §9 ask 1 |
-| **R7** | exact-rational integration exceeds its work budget | `ErrUnsupported` | no, §5.2 |
+| **R7** | exact-rational conversion, length bracketing or integration exceeds its work budget | `ErrUnsupported` | no, §5.2, §6.1 |
 | **R8** | chording a free-form walk needs more than the chord cap | `ErrUnsupported` | no, reuses `errTooManyChords` |
 | **R9** | a `Verify` reading's proof does not close — its bracket cannot separate it from its threshold, or a §6.3 certificate fails | not an error — `Suspect` | no, §8 |
 | **R10** | a Tier B or Tier C walk reaches a BUILD before its moments land | `ErrUnsupported` | no, §8 |
 | **R11** | a free-form bracket cannot decide a BUILD-time comparison | `ErrUnsupported` | no, §6.4 |
 | **R12** | an interior knot at multiplicity above the degree whose two one-sided limits are DIFFERENT recorded coordinates | `ErrDegenerate` | yes, §5.1.1 |
 | **R13** | an admitted record whose Bézier extraction this evaluator cannot slice — a C0 join's stride, an over-clamped end knot's dead control | `ErrUnsupported` | no, §5.1.1 |
+| **R14** | a free-form curve whose control points all coincide reaches a length bracket or an integral | `ErrDegenerate` | yes, §6.1 |
 
 R9 is the one row that is not a refusal. An intent the evaluator cannot BUILD is
 `ErrUnsupported` at the call; a `Verify` question it cannot ANSWER is accepted
@@ -282,7 +283,8 @@ the constructions carry:
   span of zero length**, on which `C(t)` is constant and `C′ ≡ 0`. A walk whose
   spans ALL collapse has zero length, and the free-form walk owes it the refusal
   the analytic walk already makes: `validateMomentWalk`'s `ErrDegenerate`, a
-  zero-length segment contributes no boundary. That refusal does NOT reach one
+  zero-length segment contributes no boundary — Table R R14, which §6.1's length
+  bracket reaches on its own terms. That refusal does NOT reach one
   collapsed span inside a longer walk — four coincident controls in the middle of
   a clamped cubic net collapse a span while the walk's own length stays positive
   — so every §6 row must bound, bracket or refuse a collapsed span on its own
@@ -573,6 +575,23 @@ straight slice reads. It does reach a reading alone, and the `Approximate` rule
 above still holds for it: the enclosed length is a float square root, so the
 reported value carries that rounding and never a zero bound. So the rule speaks
 for every length decad reports.
+
+**A REPORTED half width of zero is therefore a REFUSAL, never a reading.** One
+shape reaches it: the walk whose every span is collapsed, so the whole control
+net is a single point and the control-polygon upper bound is `0` because the
+curve is that point. No such curve bounds an arc, so it is R14 —
+`ErrDegenerate`, the zero-length walk §5.1 already refuses, and the same answer
+the moments path gives the identical record. Nothing else reaches it: a degree-1
+span reports its float square root carrying that root's own rounding (above),
+and on a curved span every subdivision level rounds the lower sum down and the
+upper sum up, so a curve of positive length can never close its own interval.
+
+The subdivision is CHARGED like every other free-form pass (§5.2), and the
+charge must read the span's DEGREE, not only the depth. Subdividing to depth `d`
+makes `2ᵈ−1` exact splits and `2ᵈ` leaves, and one split blends all `n(n−1)/2`
+de Casteljau pairs, so cost grows with depth and degree TOGETHER; a charge
+counting leaves alone admits a single high-degree span whose splits run for
+hours. Over budget is R7.
 
 Consumers: a prism's side-face `Area` (`length × height`), `Edge.Length()`, and
 the setback R5 refuses. A revolve's lateral area is NOT one of them — length
@@ -1095,7 +1114,7 @@ rules).
   repeated interior knot builds and its area matches a dense-sample reference,
   its empty span carrying no Bézier segment and no division by a zero span
   width; a free-form walk whose every span is collapsed is refused as a
-  zero-length walk (`ErrDegenerate`); and the §6.1 length, §6.1.1 radial and
+  zero-length walk (R14, `ErrDegenerate`); and the §6.1 length, §6.1.1 radial and
   §6.2.1 sagitta enclosures of a walk holding one collapsed span each contain a
   dense-sample reference, with that span contributing `0`.
 - Assert both §5.1.1 rules on records `record.go` admits today, each against a
@@ -1129,19 +1148,22 @@ rules).
   derivation.
 - Assert every Table R row by behaviour, each with its own sentinel: a crossed
   spline, a `FitSplineSeg`, an `EllipticalArcSeg`, a free-form `Shell`, a
-  free-form fillet carrier, a free-form chamfer carrier, an `Extrude` whose
-  through-all stop reads a free-form extent bracket straddling the sketch plane
-  (R11), a `NURBSSeg` whose interior knot at multiplicity above its degree has
-  DIFFERENT one-sided limits (R12), a record R13 stages, a Tier A section whose
-  exact-rational integration exhausts the §5.2 work budget (R7 `ErrUnsupported`,
-  and the same section under a budget that admits it integrates exactly — so the
-  refusal cannot be a float fallback in disguise), a free-form walk whose
-  chording needs more than the chord cap (R8 `ErrUnsupported` through
-  `errTooManyChords`), and — while R10 stands — an `Extrude` of a section
-  carrying a Tier B or Tier C walk, whose Tier A counterpart builds in the same
-  test. Run each of R3–R5 on a DEGREE-1 `NURBSSeg` walk as well as a curved one
-  and require the same `ErrUnsupported`, so the refusal stays keyed on the
-  recorded kind rather than on the degree (§4.1).
+  free-form fillet carrier, a free-form chamfer carrier, a control net collapsed
+  to a single point (R14), an `Extrude` whose through-all stop reads a free-form
+  extent bracket straddling the sketch plane (R11), a `NURBSSeg` whose interior
+  knot at multiplicity above its degree has DIFFERENT one-sided limits (R12), a
+  record R13 stages, a Tier A section whose exact-rational integration exhausts
+  the §5.2 work budget (R7 `ErrUnsupported`, and the same section under a budget
+  that admits it integrates exactly — so the refusal cannot be a float fallback
+  in disguise), a valid single-span record whose DEGREE alone exhausts that
+  budget through §6.1's subdivision charge rather than through the integration
+  one (R7 again), a free-form walk whose chording needs more than the chord cap
+  (R8 `ErrUnsupported` through `errTooManyChords`), and — while R10 stands — an
+  `Extrude` of a section carrying a Tier B or Tier C walk, whose Tier A
+  counterpart builds in the same test. Run each of R3–R5 on a DEGREE-1
+  `NURBSSeg` walk as well as a curved one and require the same `ErrUnsupported`,
+  so the refusal stays keyed on the recorded kind rather than on the degree
+  (§4.1).
 - Assert R12 and R13 on the SAME knot vector, moving only the one control point
   that decides continuity: the record whose two one-sided limits differ is
   `ErrDegenerate`, the record whose limits are identical is `ErrUnsupported`, and

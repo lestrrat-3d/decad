@@ -457,6 +457,10 @@ func validateFreeformMomentSegment(segment CurveSegment, work *freeformWork) (Cu
 // is the same coordinate. The convex hull property makes that the exact
 // condition for the curve to be a single point, so the test is a proof rather
 // than a tolerance.
+//
+// It is this path's half of Table R row R14. The length bracket refuses the
+// same record on its own terms — a collapsed net is the one shape whose bracket
+// has zero width (spline_length.go) — so the two paths agree.
 func freeformDegenerate(spans []bezierSpan) bool {
 	if len(spans) == 0 || len(spans[0]) == 0 {
 		return true

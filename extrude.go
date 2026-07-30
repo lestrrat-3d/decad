@@ -751,7 +751,9 @@ func walkOf(seg CurveSegment) (segmentWalk, error) {
 //     points, which a Bézier interpolates exactly;
 //   - the tangents are the hodograph at those ends, exact directions;
 //   - the length is §6.1's proven two-sided bracket, so lengthBound is
-//     positive and the walk NEVER claims an exact length;
+//     positive and the walk NEVER claims an exact length — a control net
+//     collapsed to a single point has no positive bracket and refuses as
+//     ErrDegenerate rather than resolve into a walk (Table R row R14);
 //   - coordUpper and lengthUpper are convex-hull envelopes, so they bound the
 //     curve and not merely its control net.
 //

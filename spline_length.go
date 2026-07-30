@@ -32,10 +32,19 @@ const freeformLengthDepth = 10
 // freeformArcLength brackets the converted chain's arc length. It returns the
 // interval midpoint and its half width, so the caller reports a value with a
 // proven bound and NEVER an Exact zero — §6.1 forbids one here.
+//
+// A zero half width is that forbidden Exact, so the bracket is the gate: a
+// curve whose control net has collapsed to a single point is the one shape
+// whose control-polygon upper bound is zero, and it refuses as ErrDegenerate
+// (Table R row R14) rather than report a length at all. That is the same answer
+// the moments path already gives the identical record (freeformDegenerate in
+// moments_validate.go). Every curve that is not a point brackets strictly wide:
+// each subdivision level rounds the lower sum down and the upper sum up, so a
+// positive length can never close its own interval.
 func freeformArcLength(spans []bezierSpan, work *freeformWork) (float64, float64, error) {
 	lo, hi := 0.0, 0.0
 	for _, span := range spans {
-		if err := work.step(uint64(1) << freeformLengthDepth); err != nil {
+		if err := work.step(freeformBracketCost(len(span))); err != nil {
 			return 0, 0, err
 		}
 		spanLo, spanHi := spanLengthBracket(span, freeformLengthDepth)
@@ -46,12 +55,45 @@ func freeformArcLength(spans []bezierSpan, work *freeformWork) (float64, float64
 		return 0, 0, errFreeformLengthUnbounded
 	}
 	mid := lo + (hi-lo)/2
-	return mid, upRound(math.Max(mid-lo, hi-mid)), nil
+	bound := upRound(math.Max(mid-lo, hi-mid))
+	if bound <= 0 {
+		return 0, 0, errFreeformLengthDegenerate
+	}
+	return mid, bound, nil
 }
 
 var errFreeformLengthUnbounded = fmt.Errorf(
 	`%w: a free-form segment's arc length has no finite bracket`, ErrNotFinite,
 )
+
+var errFreeformLengthDegenerate = fmt.Errorf(
+	`%w: a free-form segment whose control points all coincide bounds no arc length`, ErrDegenerate,
+)
+
+// freeformBracketCost is the conservative preflight of ONE span's bracket,
+// charged before the first subdivision allocates anything.
+//
+// The cost is driven by the subdivision depth and the span DEGREE together.
+// Depth d makes 2ᵈ−1 exact de Casteljau splits and 2ᵈ leaves; one split blends
+// all n(n−1)/2 de Casteljau pairs over two coordinates, and one leaf takes its
+// chord and its control polygon — n exact square-root brackets between them.
+// A charge read off the depth alone counts the leaves and nothing else, which
+// lets an arbitrarily wide span through: a single degree-1000 span is 1024
+// leaves and over five hundred million rational midpoints.
+//
+// Saturating arithmetic keeps the estimate an UPPER bound at every size, so an
+// oversized span refuses at freeformWorkLimit instead of wrapping to a small
+// charge (spline_bezier.go).
+func freeformBracketCost(controls int) uint64 {
+	if controls < 2 {
+		return 0
+	}
+	n := uint64(controls)
+	leaves := uint64(1) << freeformLengthDepth
+	perSplit := costMul(n, n-1)
+	perLeaf := n
+	return costAdd(costMul(leaves-1, perSplit), costMul(leaves, perLeaf))
+}
 
 // spanLengthBracket brackets one Bézier span's arc length, subdividing to the
 // given depth and summing each piece's chord (below) and control polygon
