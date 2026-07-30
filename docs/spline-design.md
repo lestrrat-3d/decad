@@ -472,11 +472,28 @@ BOUND is why.** Deciding the tier means reading all `n` weights, so it is
 inherently linear and no O(1) charge can follow it. A scan placed ahead of every
 charge is therefore unbounded and uncancellable — exactly what the ceiling exists
 to stop — so the SIZE-DERIVED rational-lift charge is levied first, from slice
-lengths alone, and it bounds every element scan behind it: the content checks and
-the tier test are each linear in precisely the controls, knots and weights that
-charge counts. The order is the recorded range, the slice sizes, the
-size-derived lift charge, the content checks and the tier test, the conversion
-charge, and only then the rational lift itself.
+lengths alone, and it bounds every element scan behind it. The order is the
+recorded range, the slice sizes, the size-derived lift charge, the content checks
+and the tier test, the conversion charge, and only then the rational lift itself.
+
+What that charge bounds those scans BY is a constant factor, not an equality.
+The property to state and to keep is: **every element-touching pass between the
+size-derived charge and the conversion charge is a single walk over one array
+whose own length is a term of that charge.** The charge therefore counts every
+such array — the controls, the knots AND the weights — and a record's element
+visits are at most `K` times the units it levies, so a whole record's are at most
+`K·2^20` however the record is split into segments. Adding a validator of that
+shape can only raise `K`; it can never unbound the work. A pass of any other
+shape — one over an array no term counts, or more than a constant number of walks
+over a counted one — is outside the invariant and owes a charge of its own,
+exactly as the conversion's quadratic does.
+
+Counting every walked array is what sets the admission boundary: a degree-1
+`NURBSSeg` holds `n` controls, `n+2` knots and `n` weights, so it charges `4n+2`
+units and the ceiling admits a few hundred thousand control points on size alone.
+That is three orders of magnitude above anything that can produce a measurement,
+because the reconstruction charge above already caps a lone free-form source at a
+few dozen control points.
 
 What that costs is stated exactly: a record whose SIZE alone cannot fit the
 ceiling reports R7 rather than its kind's reason. Every record within the
@@ -1169,6 +1186,14 @@ rules).
   vector. The record inside the ceiling reports that element's own refusal, so
   the scan ran; the record past it reports R7, which it can only do by never
   reading the element.
+- Back the constant-factor invariant with a BOUNDARY REGRESSION on measured cost
+  rather than a per-pass accounting identity: the worst record that charge
+  admits — well formed, so every pass it bounds runs before the refusal — must
+  stay within a stated wall-clock and allocation budget, and the first record past
+  the boundary must refuse without any of them running. An identity has to be
+  restated whenever a validator is added and goes stale silently; a cost boundary
+  fails when a pass is uncharged or allocates per element, whatever the accounting
+  says.
 - Assert an OPEN spline's converted spans against an exact Cox–de Boor evaluation
   over `geom.ClampedKnots`'s own FLOAT knots, at a control count where `n−3` is
   not a power of two, comparing rationals rather than a tolerance. A fixture whose

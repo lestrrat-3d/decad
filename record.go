@@ -716,6 +716,12 @@ func validateNURBSSegmentSizes(seg NURBSSeg) error {
 // Each per-element diagnostic is formatted only for the element that FAILS. This
 // is a scan whose length the caller chose, so a description built for every knot
 // and every weight dominated the walk itself by roughly seventy times.
+//
+// On the moment path this runs behind chargeRationalLift (spline_bezier.go), and
+// every check here must keep that charge's invariant: a single walk over Control,
+// Knots or Weights, whose length the charge counts. A check of any other shape —
+// over an array none of those lengths measures, or more than a constant number of
+// walks over one of them — is outside the invariant and owes a charge of its own.
 func validateNURBSSegmentContent(seg NURBSSeg) error {
 	n := len(seg.Control)
 	if err := validateSegmentPoints(seg.Control, seg.Degree+1, "NURBS segment control"); err != nil {

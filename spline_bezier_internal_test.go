@@ -3,6 +3,7 @@ package decad
 import (
 	"math"
 	"math/big"
+	"runtime"
 	"strconv"
 	"testing"
 	"time"
@@ -320,11 +321,11 @@ func TestFreeformWorkLimitRefuses(t *testing.T) {
 // scan placed ahead of every charge is unbounded and uncancellable. So the two
 // halves are asserted separately.
 func TestRationalNURBSReasonPrecedesTheConversionCharge(t *testing.T) {
-	// The fixture's lift charge is 2 controls + knots = 16 units, and its
+	// The fixture's lift charge is 2 controls + knots + weights = 20 units, and its
 	// conversion charge is a further 8. Leaving room for exactly the lift proves
 	// the tier is read before the conversion charge and not merely when the
 	// counter is empty.
-	const liftCost = 2*4 + 8
+	const liftCost = 2*4 + 8 + 4
 	work := &freeformWork{spent: freeformWorkLimit - liftCost}
 	_, _, err := freeformBezierSpans(rationalNURBSFixture(), work)
 	require.Error(t, err)
@@ -343,6 +344,42 @@ func TestRationalNURBSReasonPrecedesTheConversionCharge(t *testing.T) {
 	require.Contains(t, err.Error(), "work budget")
 }
 
+// maxDegreeOneNURBSControls is the largest degree-1 NURBS control count the
+// size-derived lift charge admits. Such a record holds n control points, n+2
+// knots and n weights, so it charges 2n + (n+2) + n = 4n+2 units, and 4n+2 fits
+// 2^20 exactly up to this count. It is exact integer arithmetic, so the boundary
+// does not move from machine to machine.
+const maxDegreeOneNURBSControls = 262143
+
+// degreeOneNURBSWithTrailingNaN carries its non-finite element as far from the
+// start as a record can: the LAST interior knot, so the whole control array and
+// almost the whole knot vector are walked before the content scan can refuse it.
+func degreeOneNURBSWithTrailingNaN(controls int) NURBSSeg {
+	seg := wellFormedDegreeOneNURBS(controls)
+	seg.Knots[len(seg.Knots)-3] = math.NaN()
+	return seg
+}
+
+// wellFormedDegreeOneNURBS is the same record with every element valid and every
+// weight equal, so it clears the content scan and the tier test and is refused
+// only by the conversion charge — the path on which every preflight pass runs.
+func wellFormedDegreeOneNURBS(controls int) NURBSSeg {
+	control := make([]Point2, controls)
+	weights := make([]float64, controls)
+	for i := range control {
+		control[i] = Point2{U: float64(i), V: float64(i % 3)}
+		weights[i] = 1
+	}
+	interior := controls - 2
+	knots := make([]float64, 0, controls+2)
+	knots = append(knots, 0, 0)
+	for j := 1; j <= interior; j++ {
+		knots = append(knots, float64(j)/float64(interior+1))
+	}
+	knots = append(knots, 1, 1)
+	return NURBSSeg{Degree: 1, Control: control, Knots: knots, Weights: weights, TStart: 0, TEnd: 1}
+}
+
 // The size-derived lift charge must be levied BEFORE the per-element content
 // scan, because that scan is linear in a length the caller chose and nothing
 // downstream can cancel it: a well-formed degree-1 record took 213.7 ms at
@@ -350,39 +387,19 @@ func TestRationalNURBSReasonPrecedesTheConversionCharge(t *testing.T) {
 // completion and only then refusing.
 //
 // The proof is mechanical rather than timed. Two records one control point apart
-// straddle the ceiling — a degree-1 NURBS over n controls charges 2n + (n+2)
-// units, so 349,524 fits 2^20 and 349,525 does not — and each carries a
-// non-finite knot at the very end of its vector. The smaller one still reports
-// that content error, so the scan runs when the charge admits it; the larger
-// reports R7, which it can only do by refusing before reading the knot.
+// straddle the ceiling, and each carries a non-finite knot at the very end of
+// its vector. The smaller one still reports that content error, so the scan runs
+// when the charge admits it; the larger reports R7, which it can only do by
+// refusing before reading the knot.
 func TestNURBSLiftChargePrecedesTheContentScan(t *testing.T) {
-	segmentOf := func(controls int) NURBSSeg {
-		control := make([]Point2, controls)
-		weights := make([]float64, controls)
-		for i := range control {
-			control[i] = Point2{U: float64(i), V: float64(i % 3)}
-			weights[i] = 1
-		}
-		interior := controls - 2
-		knots := make([]float64, 0, controls+2)
-		knots = append(knots, 0, 0)
-		for j := 1; j <= interior; j++ {
-			knots = append(knots, float64(j)/float64(interior+1))
-		}
-		// The last interior knot is the non-finite one, so the whole control array
-		// and almost the whole knot vector are walked before it is reached.
-		knots[len(knots)-1] = math.NaN()
-		knots = append(knots, 1, 1)
-		return NURBSSeg{Degree: 1, Control: control, Knots: knots, Weights: weights, TStart: 0, TEnd: 1}
-	}
-
-	require.LessOrEqual(t, rationalLiftCost(349524, 349526), freeformWorkLimit,
-		"349,524 controls are the most the lift charge admits")
-	require.Greater(t, rationalLiftCost(349525, 349527), freeformWorkLimit,
+	const admitted = maxDegreeOneNURBSControls
+	require.LessOrEqual(t, rationalLiftCost(admitted, admitted+2, admitted), freeformWorkLimit,
+		"%d controls are the most the lift charge admits", admitted)
+	require.Greater(t, rationalLiftCost(admitted+1, admitted+3, admitted+1), freeformWorkLimit,
 		"one more control point does not fit")
 
 	start := time.Now()
-	_, _, err := freeformBezierSpans(segmentOf(349524), &freeformWork{})
+	_, _, err := freeformBezierSpans(degreeOneNURBSWithTrailingNaN(admitted), &freeformWork{})
 	require.Error(t, err)
 	require.ErrorIs(t, err, ErrNotFinite)
 	require.Contains(t, err.Error(), "must be finite",
@@ -390,11 +407,69 @@ func TestNURBSLiftChargePrecedesTheContentScan(t *testing.T) {
 	require.Less(t, time.Since(start), time.Second,
 		"and the charge is what bounds how long that scan can be")
 
-	_, _, err = freeformBezierSpans(segmentOf(349525), &freeformWork{})
+	_, _, err = freeformBezierSpans(degreeOneNURBSWithTrailingNaN(admitted+1), &freeformWork{})
 	require.Error(t, err)
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.Contains(t, err.Error(), "work budget",
 		"one control point past the ceiling, nothing scans the knot vector at all")
+}
+
+// costOf reports the wall-clock, allocation count and allocated bytes of one
+// call. The counts are deltas across the call, so the record the call reads must
+// already be built when it starts.
+func costOf(call func()) (time.Duration, uint64, uint64) {
+	runtime.GC()
+	var before, after runtime.MemStats
+	runtime.ReadMemStats(&before)
+	start := time.Now()
+	call()
+	elapsed := time.Since(start)
+	runtime.ReadMemStats(&after)
+	return elapsed, after.Mallocs - before.Mallocs, after.TotalAlloc - before.TotalAlloc
+}
+
+// What chargeRationalLift's invariant claims — that the preflight's element
+// visits are a fixed multiple of the units it charges — is backed HERE, by
+// MEASURED cost at the admission boundary, and deliberately not by a per-pass
+// accounting identity. An identity has to be restated every time a validator is
+// added, and it goes stale silently; a boundary on wall-clock and allocation
+// fails whenever an added pass is unbounded or allocates per element, whatever
+// the accounting says.
+//
+// The record measured is the WORST the charge admits and it is well formed, so
+// its refusal is the conversion charge's and every pass the invariant covers has
+// run first. It costs about 1.9 ms, 3.9 kB and 9 allocations here, against about
+// 5 us for the first record past the boundary. The limits below sit far above
+// those readings on purpose: what they exist to catch — an uncharged pass over an
+// array the charge does not count, or one allocation per element — misses them by
+// orders of magnitude, while ordinary machine-to-machine variation does not come
+// near them.
+func TestFreeformPreflightBoundaryCost(t *testing.T) {
+	const admitted = maxDegreeOneNURBSControls
+	worst := wellFormedDegreeOneNURBS(admitted)
+	past := wellFormedDegreeOneNURBS(admitted + 1)
+
+	var err error
+	elapsed, mallocs, bytes := costOf(func() {
+		_, _, err = freeformBezierSpans(worst, &freeformWork{})
+	})
+	require.ErrorIs(t, err, ErrUnsupported)
+	require.Contains(t, err.Error(), "work budget",
+		"the worst admitted record clears every content pass and is refused by the conversion charge")
+	require.Less(t, elapsed, 500*time.Millisecond,
+		"the worst record the ceiling admits costs milliseconds, so the ceiling bounds a real cost")
+	require.Less(t, mallocs, uint64(1000),
+		"the preflight allocates per refusal, never per element")
+	require.Less(t, bytes, uint64(1<<20),
+		"and it lifts no array of the record's own size")
+
+	elapsed, mallocs, _ = costOf(func() {
+		_, _, err = freeformBezierSpans(past, &freeformWork{})
+	})
+	require.ErrorIs(t, err, ErrUnsupported)
+	require.Less(t, elapsed, 50*time.Millisecond,
+		"one control point past the boundary, no pass over the record runs at all")
+	require.Less(t, mallocs, uint64(100))
 }
 
 // The chord counts the reconstruction charge is built on are sketch's own

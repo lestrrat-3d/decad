@@ -243,16 +243,37 @@ func requireFullFreeformRange(tStart, tEnd float64, what string) error {
 // large to hold rationally refuses at the ceiling rather than allocating first
 // and refusing afterwards.
 //
-// It is computed from SLICE LENGTHS alone, which is what lets it be levied ahead
-// of every element scan — the content checks and the tier test included — and so
-// bound them: each of those passes is linear in exactly the controls, knots and
-// weights this charge counts.
-func chargeRationalLift(work *freeformWork, controls, knots int) error {
-	return work.step(rationalLiftCost(controls, knots))
+// It is computed from SLICE LENGTHS alone — every array a preflight pass walks,
+// the weights among them — which is what lets it be levied ahead of every
+// element scan, the content checks and the tier test included.
+//
+// THE INVARIANT IT CARRIES IS NOT "charge equals work". It is that the work is a
+// FIXED MULTIPLE of the charge: every element-touching pass in the preflight is
+// a SINGLE walk over one array whose own length is a term of this charge, so a
+// segment's element visits are at most K times the units it levies here, and a
+// whole record's are at most K·freeformWorkLimit however the record is split
+// into segments. K is 4 today — the widest kind is a NURBSSeg, whose preflight
+// walks its controls once (validateSegmentPoints), its knots three times (the
+// finite/monotone scan, validateNURBSInteriorMultiplicity and floatKnotDemand),
+// its weights twice (the finite/positive scan and the equal-weight tier test),
+// and reads two knots per degree for the clamping check, where the degree is
+// below the control count this charge already counts twice. That is under
+// 3·controls + 3·knots + 2·weights, hence under 4·(2·controls + knots +
+// weights).
+//
+// Stated that way, ADDING a validator can only raise K and can never unbound the
+// work: one more single walk over Control, Knots or Weights adds at most one to
+// the multiple. What the invariant does NOT cover is a pass that walks anything
+// those three lengths do not measure, or that walks one of them more than a
+// constant number of times — a nested or superlinear pass. Such a pass owes its
+// own charge, exactly as the conversion's own quadratic does
+// (clampedConversionCost).
+func chargeRationalLift(work *freeformWork, controls, knots, weights int) error {
+	return work.step(rationalLiftCost(controls, knots, weights))
 }
 
-func rationalLiftCost(controls, knots int) uint64 {
-	return costAdd(costMul(2, uint64(controls)), uint64(knots))
+func rationalLiftCost(controls, knots, weights int) uint64 {
+	return costAdd(costAdd(costMul(2, uint64(controls)), uint64(knots)), uint64(weights))
 }
 
 // ratPointsOf lifts recorded control points into exact rationals. A
@@ -299,7 +320,7 @@ func splineBezierSpans(seg SplineSeg, work *freeformWork) ([]bezierSpan, error) 
 	// magnitude more than any accepted one.
 	knots := len(seg.Control) + 4
 	if err := work.step(costAdd(
-		rationalLiftCost(len(seg.Control), knots),
+		rationalLiftCost(len(seg.Control), knots, 0),
 		clampedConversionCost(len(seg.Control), knots, uniformKnotDemand(len(seg.Control), degree)),
 	)); err != nil {
 		return nil, err
@@ -352,8 +373,10 @@ func nurbsBezierSpans(seg NURBSSeg, work *freeformWork) ([]bezierSpan, error) {
 	// follow it: a scan placed ahead of every charge is unbounded and uncancellable,
 	// which is precisely what freeformWorkLimit exists to stop (the public
 	// ProfileRecord methods take no context). Levying the lift charge first bounds
-	// that scan under the same ceiling, because the scan is linear in exactly the
-	// controls, knots and weights the charge counts.
+	// that scan under the same ceiling, under chargeRationalLift's own invariant:
+	// every pass between that charge and the conversion charge below — the content
+	// checks, the tier test and floatKnotDemand — is a single walk over one array
+	// whose length the charge counts.
 	//
 	// What it costs is small and worth stating. A record whose SIZE alone fits the
 	// ceiling — every record that could ever yield a measurement — still reads its
@@ -367,7 +390,7 @@ func nurbsBezierSpans(seg NURBSSeg, work *freeformWork) ([]bezierSpan, error) {
 	}
 	// The rational lift is the linear floor under everything below: the content
 	// scan, the tier test and the conversion all walk the same arrays it counts.
-	if err := chargeRationalLift(work, len(seg.Control), len(seg.Knots)); err != nil {
+	if err := chargeRationalLift(work, len(seg.Control), len(seg.Knots), len(seg.Weights)); err != nil {
 		return nil, err
 	}
 	if err := validateNURBSSegmentContent(seg); err != nil {
@@ -432,7 +455,7 @@ func closedSplineBezierSpans(seg ClosedSplineSeg, work *freeformWork) ([]bezierS
 	// control points of the n spans below and is known from the control count
 	// alone.
 	if err := work.step(costAdd(
-		rationalLiftCost(len(seg.Control), 0),
+		rationalLiftCost(len(seg.Control), 0, 0),
 		costMul(4, uint64(len(seg.Control))),
 	)); err != nil {
 		return nil, err
