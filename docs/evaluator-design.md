@@ -143,9 +143,12 @@ regions use direct disk containment/separation, preserving valid thin annuli
 below sketch's general arrangement threshold. Reject malformed or overflowing
 input; NEVER return a non-finite `Exact` result.
 
-Increment 1 implements the closed forms for `LineSeg`/`CircleSeg`/`ArcSeg`;
-the free-form kinds arrive with their increments (§11) and reject
-`ErrUnsupported` until then.
+Increment 1 implements the closed forms for `LineSeg`/`CircleSeg`/`ArcSeg`.
+`docs/spline-design.md` owns the free-form kinds entirely: Table F there assigns
+each an exactness tier and what a measurement over it may claim, §5 gives the
+construction, Table R owns every refusal and its sentinel — the permanent and the
+upstream-blocked ones among them — and §10 owns the landing order. This section
+restates none of it; read it there.
 
 ## 5. Extrude
 
@@ -159,7 +162,7 @@ Faces, per recorded loop segment (roles in parentheses):
 | `LineSeg` | `Plane` (`side(i,j)`) |
 | `CircleSeg` (whole) | full `Cylinder`, no seam edge |
 | `CircleSeg` (fragment) / `ArcSeg` | `Cylinder` patch bounded by two line edges + two arc edges |
-| free-form kinds | later increments: `NURBSSurface` where the control net is exactly derivable from the record (ellipse/elliptical-arc/conic — exact rational forms; spline/closed-spline/NURBS — extruded control net); `FitSplineSeg` stays `ErrUnsupported` until geom exports its interpolant's B-spline form — decad NEVER re-runs the interpolation solve (seam §2) |
+| free-form kinds | `NURBSSurface` — `docs/spline-design.md` §7 owns the variant and its exactness, Table C the extrude reach, Table F the per-kind tier, Table R the refusals |
 
 Caps: one planar face per end (`capStart`/`capEnd`), the outer loop plus one
 loop per hole, holes wound opposite.
@@ -214,11 +217,10 @@ endpoint on the axis is its apex); perpendicular → planar annulus (a disk
 when it reaches the axis); `ArcSeg`/`CircleSeg` → `Torus`, or `Sphere` when
 the arc's center lies on the axis — an endpoint ON the axis closes at a pole,
 and an endpoint off it leaves a latitude-circle edge (a spherical band when
-neither endpoint reaches the axis). The free-form segment kinds follow the
-same staging as extrude (§5): `NURBSSurface` surfaces of revolution where the
-control net is exactly derivable from the record, in the free-form increment
-(§11), and `ErrUnsupported` until then — `FitSplineSeg` included, on the same
-grounds.
+neither endpoint reaches the axis). The free-form segment kinds emit
+`NURBSSurface` faces; `docs/spline-design.md` §7 owns the variant and its
+exactness, Table C the revolve reach, Table R the refusals, and §10 the revolve
+increment.
 Partial sweeps get two planar cap faces. Volume by Pappus on the §4 first moments; the solid centroid from the §4
 second and mixed moments (`∫u² dA`, `∫uv dA`) — a full revolution's centroid
 lies on the axis with its axial position from the mixed moment, and a partial
@@ -562,7 +564,10 @@ silent pass.
 | 4 | tessellation per `docs/tessellation-design.md` + the exact-predicate mesh boolean, `Faceted` bodies, faceted `Verify`, `Tessellate`/`STL`/`OBJ`; supplies the geometry and bounds shared by public booleans and read-only interference evaluation |
 | 5 | fillet/chamfer on analytic prism edges, shell |
 | 6 | bounded canonical recipe encode, strict versioned decode, full operation/reference validation with deterministic error precedence, resource budgets, shared recorded-step dispatch, atomic public `Evaluate`, replay/property/fuzz suite |
-| 7 | free-form side surfaces (`NURBSSurface` from recorded control data), tapered extrude if a sound offset story exists |
+| 7 | tapered extrude if a sound offset story exists |
+
+Free-form support is `docs/spline-design.md`'s own increment plan (§10 there).
+Its stages do not consume a global evaluator increment number.
 
 Payload verification §13 gives count-free stages for the cup adapter and
 faceted validity/clearance/survey work. Every later question stays `Suspect`
@@ -571,8 +576,9 @@ numbers.
 
 ## 12. Open questions
 
-- **`FitSplineSeg` side faces** (§5) wait on geom exporting its interpolant's
-  B-spline form; decad will not duplicate the solve.
+- **Free-form reach is decided.** `docs/spline-design.md` owns it: the
+  whole-entities-only scope, the exactness tiers, the refusals, and the upstream
+  asks that retire `FitSplineSeg` and `EllipticalArcSeg` (§9 there).
 - **Tapered extrude** (§5) needs an offset formulation that rejects
   self-intersecting offsets rather than producing them.
 - **Modify reach is decided.** `docs/modify-reach-design.md` extends increment

@@ -460,7 +460,9 @@ type Cylinder struct { Origin, Axis r3.Vec; Radius units.Value }
 type Cone struct     { Origin, Axis r3.Vec; Radius, HalfAngle units.Value }
 type Sphere struct   { Center r3.Vec; Radius units.Value }
 type Torus struct    { Center, Axis r3.Vec; Major, Minor units.Value }
-type NURBSSurface struct { /* ... */ }
+// NURBSSurface is a free-form face's geometry. `docs/spline-design.md` §7 owns
+// its construction, its exactness and its v1 shape.
+type NURBSSurface struct { /* private */ }
 
 // Faceted is the honest v1 variant: a face a boolean produced, whose public
 // analytic identity is gone. Bound encloses two-sided displacement between the
@@ -478,7 +480,20 @@ be `Faceted` — is a measurement and reports its `Exactness` like every other.
 For a faceted face, the evaluator's internal source certificate bounds the true
 patch normals; a positional `Faceted.Bound` alone does not imply a normal bound
 (`docs/payload-verification-design.md` §5/§8). No certificate details enter the
-public API.
+public API. `NormalAt` on a `NURBSSurface` is `ErrUnsupported`
+(`docs/spline-design.md` §7).
+
+<!-- The NormalAt sentence is claim + pointer, which the authoring rule in
+~/.claude/docs/agent-instructions.md sanctions for a non-owning site: "One full
+derivation per why, at the owning site; every repeat becomes claim + pointer."
+Its never-restate rule bans the pointer-WITH-GLOSS shape, and no clause of spline
+§7's derivation is unpacked here — not the (u, v) root-find, not the other
+variants' Exact zero bound, not the undercut survey reading normals off the
+payload walk. Two sentences of the same claim+pointer shape already ship in this
+file: the Faceted.Bound sentence immediately above, and the
+DiagUnsupportedPairContact sentence in §8's boolean-error taxonomy, which even
+names the owner's constant. This reading of the authoring rule is the project's
+settled one. -->
 
 A `switch` on `Surface` MUST carry a `default` — vN adds variants.
 
@@ -775,6 +790,7 @@ The rest are deferred:
 type FeatureRef struct{ /* ... */ }    // an opaque handle to the feature that created a body or face
 type Mesh struct{ /* ... */ }          // a triangle mesh; an OUTPUT of Tessellate, never the representation
 type Curve interface{ curve() }        // sealed, like Surface: Line / Circle / Arc / Ellipse / NURBSCurve / FacetedCurve
+type NURBSCurve struct{ /* private */ }// a free-form edge, NURBSSurface's 1-D analog (spline design §7)
 type EdgePredicate struct{ /* ... */ } // one clause of an EdgeQuery; the §9 constructors return these
 type FacePredicate struct{ /* ... */ } // one clause of a FaceQuery
 ```

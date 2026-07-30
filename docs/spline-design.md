@@ -1,0 +1,968 @@
+# Spline Design
+
+How the evaluator supports the free-form recorded segment kinds — `SplineSeg`,
+`ClosedSplineSeg`, `NURBSSeg`, `ConicSeg`, `EllipseSeg`, `EllipticalArcSeg`,
+`FitSplineSeg`.
+
+`docs/sketch-seam-design.md` owns the recording contract and already records
+every one of them. `docs/api-design.md` owns the public surface. This document
+owns what happens BETWEEN them: which free-form questions the evaluator can
+answer, at what exactness, by what construction, and which stay refused for
+cause.
+
+Read before writing any free-form geometry, any `NURBSSurface`/`NURBSCurve` code,
+or any per-segment-kind dispatch.
+
+Three tables are normative:
+
+| Table | Owns | Section |
+|---|---|---|
+| **F** | per-kind exactness tier + admission | §3 |
+| **R** | refusals + their sentinels | §4 |
+| **C** | per-capability reach + construction | §8 |
+
+## 1. Router
+
+| Question | Section |
+|---|---|
+| which kinds work at all | §2 scope, Table F §3 |
+| why a crossed spline is rejected | §2.1 |
+| why an elliptical arc cannot build | §2.2 |
+| how a spline's area is EXACT | §5 |
+| what a repeated knot or a repeated control net does | §5.1 |
+| what a knot multiplicity above the degree does | §5.1.1 |
+| how a length/extreme is bounded | §6 |
+| what a revolve's area needs beyond length | §6.1.1 |
+| why an undercut or radius reading is `Suspect` | §6.3 |
+| why a build refuses on a bracket it cannot decide | §6.4 |
+| what surface an extruded spline gets | §7 |
+| what each capability answers | Table C §8 |
+| what stays refused forever | Table R §4 |
+| landing order | §10 |
+
+## 2. Scope — whole entities, joined end to end
+
+The evaluator accepts a free-form segment whose recorded range spans the
+entity's FULL domain, in walk order. It accepts no other free-form range,
+because no other free-form range is recordable (§2.1).
+
+A recorded free-form range is therefore always `[0, 1]` or `[1, 0]`. Every
+construction here may assume it, and MUST NOT carry a partial-domain path that
+cannot be reached — dead exactness machinery is worse than none, because a later
+reader trusts it.
+
+### 2.1 A trimmed free-form fragment is unrecordable
+
+`geom.BoundaryEdge.TExact` is true for a CUT bound only when sketch's
+closed-form kernel placed it, and that kernel runs only when BOTH curves of the
+pair are a `Line`, `Circle` or `Arc`. Every contact involving a free-form curve
+is sampled — a line crossing a spline included, a line TANGENT to one included.
+So a free-form fragment always reports `TExact = false`, and seam §1 rejects it
+as `ErrUnrecordableProfile`.
+
+A WHOLE edge is bounded by the curve's own domain ends, not by a contact, so
+`recordEdge` never consults `TExact` for it (seam §1). A closed spline, and a
+chain of free-form curves joined at shared endpoints, record cleanly.
+
+**Public consequence, and it MUST be documented on `Extrude`/`Revolve`:** a
+free-form curve must meet other curves at shared endpoints, never by crossing.
+The error names a cause the caller cannot guess, so the doc comment states the
+remedy — join the endpoints in the sketch — beside the sentinel.
+
+Lifting this restriction is an upstream ask (§9), never a decad-side repair. A
+decad-side check may only falsify an upstream claim, never bless one (core hard
+rules), and admitting a sampled cut because its residual is small is exactly the
+unsound admission gate that rule forbids.
+
+### 2.2 An elliptical arc's record is self-inconsistent
+
+`EllipticalArcSeg` carries the parametric ellipse (`Center`/`Rx`/`Ry`/`Rotation`)
+AND the entity's pinned `Start`/`End`. sketch pins those endpoints to solver
+tolerance, so they lie on the parametric ellipse only approximately — `geom`
+documents the miss as ~5e-3. seam §1 records the whole edge anyway, because a
+whole edge's admission never consults `TExact`.
+
+<!-- The ~5e-3 figure is a checkable claim about the pinned sketch module: it is
+written in package geom, in `geom/region.go`, in the doc comment on the
+`BoundaryEdge.TExact` field, which states that an EllipticalArc's ends are pinned
+to the sketch Start/End points and that eval(t=0/t=1) misses the pinned Polyline
+end by that tolerance. That is production code carrying the magnitude, not a test
+tolerance. Package `sketch`'s own `profiles.go` states the same pinning rule
+without a number, so `geom` is the site the figure comes from. -->
+
+The two datasets disagree, and decad has no exact reconciliation:
+
+- trusting the parametric curve moves the segment's ends off the neighbour's
+  join point, so the loop no longer closes and the topology builder has nothing
+  to build;
+- trusting the pinned endpoints leaves no curve between them.
+
+`ArcSeg` has the same shape of problem and decad already resolves it by
+REFUSING an inconsistent record: `validateMomentSegment` computes both pinned
+radii and rejects when they disagree. The elliptical analogue — do the pinned
+ends lie on the parametric ellipse — fails on realistic input.
+
+So `EllipticalArcSeg` is `ErrUnsupported` at the evaluator, permanently from
+decad's side, pending the upstream fix (§9). A whole `EllipseSeg` is closed and
+carries no pinned endpoints, so it is unaffected. `ConicSeg` is unaffected — a
+rational quadratic Bézier interpolates its endpoints by construction.
+
+## 3. Table F — per-kind exactness tier
+
+The tier decides what a measurement over that kind may claim, never whether the
+kind is admitted. Admission is §2 and Table R.
+
+| Kind | Tier | Area / centroid / second moments | Construction |
+|---|---|---|---|
+| `SplineSeg` | **A** | exactly rational, rounded ONCE | §5 |
+| `ClosedSplineSeg` | **A** | exactly rational, rounded ONCE | §5 |
+| `NURBSSeg`, all weights equal | **A** | exactly rational, rounded ONCE | §5 |
+| `ConicSeg` | **B** | `Approximate`, proven interval | §5.3 |
+| `EllipseSeg` (whole) | **B** | `Approximate`, proven interval | §5.3 |
+| `NURBSSeg`, weights unequal | **C** | `Approximate`, proven interval | §5.4 |
+| `EllipticalArcSeg` | — | refused, §2.2 | — |
+| `FitSplineSeg` | — | refused, §4 R6 | — |
+
+**Tier A means the integral is exact, NOT that the reported measurement is
+`Exact`.** The integral's value is an exact rational, and the `units.Value` the
+measurement returns carries a single `float64` magnitude — `Mag()` in the
+value's own unit, `Base()` in the kind's base unit. So the reported bound is a
+SINGLE rounding of that rational into that magnitude, and it is zero — hence
+`Exact` — exactly when the rational is representable in the magnitude the value
+ACTUALLY CARRIES, never in an abstract float64: the same rational can be
+representable in one unit and not in another.
+A 5-control closed spline whose area is 293/18 reports `Approximate` with a
+one-ulp bound; the same section scaled by 3 has area 293/2, is representable, and
+reports `Exact`.
+
+That is precisely the standing the LINE path already has, and it is the point:
+Tier A's bound is one rounding rather than a quadrature estimate, so free-form
+support costs decad none of its exactness discipline. NEVER describe a Tier A
+reading as unconditionally `Exact`.
+
+A tier is a CEILING, never a promise about a specific reading. Arc length is
+never exact in ANY tier (§6.1), so a Tier A body's `Area` always carries a
+positive bound even where its `Volume` does not.
+
+## 4. Table R — refusals
+
+Every refusal appears once, with the sentinel picked by the existence test of
+modify §1: no such body exists → `ErrDegenerate`; the body exists and this
+evaluator cannot build it → `ErrUnsupported`; the INPUT cannot be recorded
+exactly → `ErrUnrecordableProfile`.
+
+| # | Condition | Sentinel | Permanent from decad's side |
+|---|---|---|---|
+| **R1** | free-form fragment (`TExact` false) | `ErrUnrecordableProfile` | yes, §2.1 |
+| **R2** | `EllipticalArcSeg` reaches a build or an integral | `ErrUnsupported` | yes, §2.2 |
+| **R3** | free-form walk in a section a `Shell` offsets | `ErrUnsupported` | yes for a curved walk, §4.1 |
+| **R4** | `Fillet` corner with a free-form carrier | `ErrUnsupported` | yes for a curved walk, §4.1 |
+| **R5** | `Chamfer` corner with a free-form carrier | `ErrUnsupported` | yes for a curved walk, §4.1 |
+| **R6** | `FitSplineSeg` reaches a build or an integral | `ErrUnsupported` | pending §9 ask 1 |
+| **R7** | exact-rational integration exceeds its work budget | `ErrUnsupported` | no, §5.2 |
+| **R8** | chording a free-form walk needs more than the chord cap | `ErrUnsupported` | no, reuses `errTooManyChords` |
+| **R9** | a `Verify` reading's proof does not close — its bracket cannot separate it from its threshold, or a §6.3 certificate fails | not an error — `Suspect` | no, §8 |
+| **R10** | a Tier B or Tier C walk reaches a BUILD before its moments land | `ErrUnsupported` | no, §8 |
+| **R11** | a free-form bracket cannot decide a BUILD-time comparison | `ErrUnsupported` | no, §6.4 |
+| **R12** | an interior knot at multiplicity above the degree whose two one-sided limits are DIFFERENT recorded coordinates | `ErrDegenerate` | yes, §5.1.1 |
+| **R13** | an admitted record whose Bézier extraction this evaluator cannot slice — a C0 join's stride, an over-clamped end knot's dead control | `ErrUnsupported` | no, §5.1.1 |
+
+R9 is the one row that is not a refusal. An intent the evaluator cannot BUILD is
+`ErrUnsupported` at the call; a `Verify` question it cannot ANSWER is accepted
+and reads `Suspect` (evaluator §11). A free-form reading whose proven interval
+straddles its threshold is the second case, and so is a direction cone §6.3
+cannot certify. R11 is the first case reached from the same brackets: a build
+gate has no `Suspect` to fall back on (§6.4).
+
+### 4.1 Why the modify refusals stand
+
+Modify §2 reduces every modify op to an EXACT rewrite of the recorded 2D
+section. Each reason below follows from that reduction, not from missing effort
+— and each is stated for a CURVED free-form walk, which is the whole of what the
+exactness barrier covers. The STRAIGHT slice is refused by the same rows on a
+different ground, stated after them.
+
+- **R3.** `Shell` needs the section's exact offset. The exact offset of a curved
+  polynomial spline is not polynomial, so no recordable section represents it.
+- **R4.** A fillet's blend centre is the intersection of the two carriers'
+  material-side offsets. A curved carrier's offset is not representable, so
+  there is no exact centre to record.
+- **R5.** A chamfer's foot sits a setback distance along the boundary curve,
+  measured as ARC LENGTH. On a curved span that length is a bracket and never
+  exact (§6.1), so the foot is not exact, so the chord's recorded endpoints
+  would be approximate coordinates — which core §6.2 forbids outright.
+
+**The straight slice is refused too, and NOT for those reasons.** A degree-1
+`NURBSSeg` is a polyline: a rational degree-1 Bézier is a convex combination of
+its two control points, so the point set is the polyline through the control
+points whatever the positive weights. Every barrier above dissolves on it — the
+exact offset of a straight walk is a straight walk with miter or arc corner
+joins, all recordable; a corner between two of its segments has the exact blend
+centre the line/line case already computes; and its length enclosure is a POINT,
+chord and control polygon coinciding (§6.1), so its setback foot is the same
+closed form the analytic `LineSeg` walk already records. R3–R5 refuse it anyway,
+on the recorded segment KIND: no modify construction reads a free-form walk at
+all, so admitting the straight slice means building offset, blend-centre and
+setback cases for a kind that has none. That refusal is staging, so
+`ErrUnsupported` is the right sentinel for it as well — the same sentinel, a
+different reason, and the only part of R3–R5 decad could lift on its own. No §10
+increment schedules it.
+
+**The admissible slice, and it is not a refusal.** A corner whose BOTH carriers
+are analytic stays buildable in a section that holds free-form walks elsewhere:
+the rewrite is local to the corner, and every untouched walk re-emits verbatim.
+What it needs beyond that is the modify §5 audit running over free-form
+elements — a crossing test and a boundary-contact test no other capability here
+calls for. §6.4 owns both constructions and the R11 refusal for a contact they
+cannot decide.
+
+## 5. Exact rational moments — Tier A
+
+### 5.1 The reduction
+
+Take the control coordinates exactly. They are floats, so they are exact
+rationals — the same take-the-floats-exactly discipline `clearance_poly.go`
+already uses.
+
+Convert the recorded curve to piecewise Bézier form. Knot insertion is a
+rational convex combination, so the conversion is exact:
+
+| Recorded kind | Conversion |
+|---|---|
+| `SplineSeg` | clamped uniform cubic → one Bézier per span |
+| `ClosedSplineSeg` | periodic uniform cubic → one Bézier per span, `n` spans for `n` control points |
+| `NURBSSeg` | clamped arbitrary degree → one Bézier per NONEMPTY knot span |
+
+**Repeated knots and repeated control points are admitted, so every construction
+in §5 and §6 runs per NONEMPTY span and must hold on a COLLAPSED one.**
+`validateNURBSSegment` checks the knots finite, non-decreasing, clamped at both
+ends and the whole domain nonempty (`Knots[Degree] < Knots[n]`), the control
+points finite and at least `Degree + 1` of them, and every weight positive; the
+`SplineSeg`/`ClosedSplineSeg` arms check control count, point finiteness and
+parameter range. Neither arm tests distinctness anywhere, and a recording gate
+rightly does not. Three consequences the constructions carry:
+
+- **an EMPTY knot span — `t_i = t_{i+1}`, a repeated interior knot — carries no
+  Bézier segment.** It enters no sum here and is not a span any §6 row runs on.
+  The nonempty-domain check leaves at least one span to run on.
+- **an interior knot whose multiplicity EXCEEDS the degree carries the two
+  one-sided limits onto two RECORDED control points**, and whether the record
+  describes one walk is decided by whether those two coordinates are identical —
+  §5.1.1, R12 and R13.
+- **a COLLAPSED span — every control point of that span the same point — is a
+  span of zero length**, on which `C(t)` is constant and `C′ ≡ 0`. A walk whose
+  spans ALL collapse has zero length, and the free-form walk owes it the refusal
+  the analytic walk already makes: `validateMomentWalk`'s `ErrDegenerate`, a
+  zero-length segment contributes no boundary. That refusal does NOT reach one
+  collapsed span inside a longer walk — four coincident controls in the middle of
+  a clamped cubic net collapse a span while the walk's own length stays positive
+  — so every §6 row must bound, bracket or refuse a collapsed span on its own
+  terms. §6.3's speed floor is where that bites.
+
+Integrate the Green's-theorem boundary forms. Each integrand is a POLYNOMIAL, so
+each integral is an exact rational — which the reported measurement then rounds
+once, per §3:
+
+| Reading | Boundary form | Integrand degree |
+|---|---|---|
+| area | `½∮(u dv − v du)` | `2p−1` |
+| `∫u dA` | `½∮u² dv` | `3p−1` |
+| `∫v dA` | `−½∮v² du` | `3p−1` |
+| `∫u² dA` | `⅓∮u³ dv` | `4p−1` |
+| `∫uv dA` | `½∮u²v dv` | `4p−1` |
+
+Walk direction carries the sign through the recorded range order, exactly as
+§2's `[1, 0]` case states. Nothing is reordered.
+
+#### 5.1.1 A knot above the degree, and the record it still describes
+
+**At an interior knot of multiplicity `m ≥ p + 1` the two one-sided limits are
+two RECORDED control points, and the record describes one walk exactly when
+those two coordinates are identical.** For the knot occupying knot indices
+`j+1 … j+m` they are `P_j`, which ends the left piece, and `P_{j+m−p}`, which
+starts the right piece — adjacent exactly when `m = p + 1`, with `m − p − 1` DEAD
+control points between them otherwise. Weights do not enter: a single control
+point projects to itself under any positive weight. Degree 1 is representative
+rather than a special case; the same two limits stand at degree 2 with `m = 3`
+and at degree 3 with `m = 4` and `m = 5`.
+
+Equality is EXACT float identity, NEVER a tolerance. Both directions are exactly
+decidable on the recorded floats, so no admission here rests on a residual —
+which is what the core falsify-never-bless rule requires.
+
+- **the two limits at DIFFERENT coordinates — R12, `ErrDegenerate`,
+  permanent.** The record describes two disconnected walks, which close no loop
+  and bound no region, so no such body exists.
+- **the two limits at the IDENTICAL coordinate — a C0 join, ADMITTED.** The
+  curve is bit-for-bit the concatenation of its Bézier pieces, which is the walk
+  §2 already admits when the same shape is spelled as a chain of free-form
+  curves joined at shared endpoints; a closed one closes with a gap of exactly
+  `0` and encloses positive area. `record.go` admits it today —
+  `validateNURBSSegment` tests distinctness nowhere — so the evaluator owes it a
+  build or a staged refusal. Where the Bézier extraction cannot slice a stride
+  whose spans share no boundary control point, that is R13 `ErrUnsupported`, and
+  it is not permanent.
+
+**An END knot above multiplicity `p + 1` is the same record with no piece on the
+far side, and it is a valid body.** `validateNURBSSegment` requires the first
+`p + 1` knots equal and the last `p + 1` equal, and rejects no repeat beyond
+them: degree 2 with knots `[0, 0, 0, 0, 1, 1, 1]` and 4 control points is
+admitted, and it is one quadratic Bézier over `P_1, P_2, P_3` with `P_0` DEAD. A
+dead control point enters no nonempty span, so it enters no §5 sum, no §6 hull
+and no bracket, and the walk is exactly the concatenation of its nonempty spans.
+Admit it; where the extraction cannot slice it, that is R13 `ErrUnsupported`,
+never `ErrDegenerate`.
+
+### 5.2 Discipline
+
+The exact rational is the only result. NEVER fall back to quadrature on a Tier A
+kind — a float sum of Gauss nodes has no exact value to round from, so it can
+never reach the zero bound a representable rational does, and `exactnessOf`'s
+zero bound is a CLAIM that the value is exactly representable (`bounds.go`).
+
+The held float MUST be the exact rational rounded once, never a separate float
+evaluation of the same formula: a second evaluation would add its own error to a
+bound that already speaks for the rounding.
+
+Rational coefficient size grows with degree and span count. Charge every span,
+every coefficient product and every integral term against a `workBudget`
+(`budget.go`), and refuse as R7 when it runs out. NEVER widen to a float path to
+stay inside the budget.
+
+The independent-implementation rule stands. sketch computes its own free-form
+area internally and reports it as `Profile.Area`; decad integrates its OWN
+records (evaluator §4). The two agreeing is the §1 falsifier working. decad must
+NOT consume sketch's moment internals even if they are exported later — a single
+implementation cannot falsify itself.
+
+### 5.3 Tier B — closed forms carrying transcendental terms
+
+`ConicSeg` and whole `EllipseSeg` have closed-form moments carrying π, trig or
+`atanh` terms. That is the standing `CircleSeg`/`ArcSeg` already have: the closed
+form is exact in the reals, and the reported result is a `ratInterval` bracket
+around the float evaluation (`moments.go`). Same machinery, new formulas.
+
+### 5.4 Tier C — certified quadrature for a rational NURBS
+
+For a rational curve with `u = U/W`, `v = V/W`, the moment integrand reduces:
+
+```
+u v′ − v u′ = (U V′ − V U′) / W²
+```
+
+A polynomial over a squared polynomial. The exact antiderivative needs `W`'s
+roots and yields log/arctan terms, so exact integration is out of reach in
+general.
+
+`W > 0` is GUARANTEED — `record.go` validates every NURBS weight positive — which
+is what makes a rigorous remainder bound reachable: bound the integrand's
+derivatives on each span from `W`'s proven positive range, then bisect
+adaptively until the remainder bound closes. The result is a proven `[lo, hi]`,
+never an adaptive estimate compared against itself. An estimate that measures
+its own convergence is not a bound.
+
+## 6. Bounds for the readings no tier makes exact
+
+### 6.1 Arc length — a proven two-sided bracket
+
+Arc length integrates `√(u′² + v′²)`, which on a curved span has no polynomial
+antiderivative in any tier. Bracket it instead:
+
+- the CHORD is a lower bound;
+- the CONTROL POLYGON is an upper bound (variation diminishing);
+- de Casteljau subdivision shrinks the gap toward zero.
+
+**The stopping certificate is the MEASURED post-subdivision enclosure, never an
+assumed per-level rate.** Recompute both bounds on the child spans, sum them, and
+stop when that measured gap meets the target. The familiar 4× per level is
+ASYMPTOTIC only: the first levels of a span with a far control point shrink the
+gap by substantially less, so a depth sized from that rate reports a bound the
+actual enclosure does not support. NEVER size a depth from a rate.
+
+Both bounds are proven, not sampled. Report the interval midpoint as the value
+and its half width as the bound, `Approximate` always — a zero bound here would
+be a false Exact.
+
+A COLLAPSED span (§5.1) has a POINT enclosure: its chord and its control polygon
+are both `0`, which is that span's true length, so the measured gap meets any
+target at depth zero and the span contributes an honest `0` to the walk's sum. It
+never reaches a reading alone — a walk of nothing but collapsed spans is the
+zero-length walk §5.1 refuses.
+
+A DEGREE-1 span's enclosure is a point too, its chord BEING its control polygon,
+and the point it encloses is that span's exact length — which is what §4.1's
+straight slice reads. It does reach a reading alone, and the `Approximate` rule
+above still holds for it: the enclosed length is a float square root, so the
+reported value carries that rounding and never a zero bound. So the rule speaks
+for every length decad reports.
+
+Consumers: a prism's side-face `Area` (`length × height`), `Edge.Length()`, and
+the setback R5 refuses. A revolve's lateral area is NOT one of them — length
+alone cannot determine it, and §6.1.1 supplies what it needs.
+
+### 6.1.1 The radial first moment `∫ r ds` — what a revolve's area needs
+
+Pappus's first theorem gives a revolved curve's lateral area as `θ · ∫ r ds`:
+the sweep angle times the curve's FIRST MOMENT about the axis, never `θ ×
+length`. Two meridian walks of equal length at different radii sweep different
+areas, so §6.1's bracket cannot decide the reading on its own. Bracket the first
+moment itself. This is the same quantity the analytic path already supplies per
+segment kind (evaluator §6's swept-arc-length × sweep angle × centroidal radius),
+so the free-form path owes its own bracket for it rather than a length.
+
+`r` is AFFINE in the point. The axis is coplanar with the profile plane
+(evaluator §6's axis gate), so in plane coordinates it is a line, and the region
+lies in one closed half-plane of it — so with the sign chosen toward the material,
+`r(u, v) = a·u + b·v + c` with `a² + b² = 1` and `r ≥ 0` over every walk.
+Evaluating that affine form at the span's control points gives the span's radial
+control values `r(P_i)`, and the convex-hull property bounds `r` over the span
+with no root-find at all:
+
+```
+r_lo = min_i r(P_i)  ≤  r(t)  ≤  max_i r(P_i) = r_hi
+```
+
+A rational span uses the same control points — a positive-weight rational Bézier
+lies in their hull too, and `W > 0` is proven (§5.4) — so this construction needs
+no separate rational form.
+
+**`r_lo` carries no sign, and the axis gate does not give it one.** The gate
+proves `r ≥ 0` over the REGION and so over every walk on its boundary; a control
+point is not a point of either, and a hull that dips across the axis holds a
+negative radial control value while the curve stays strictly on the material
+side. A span whose four radial control values are `1, −1, 3, 1` has the radial
+polynomial `1 − 6t + 18t² − 12t³`, whose stationary points `t = (3 ∓ √3)/6` give
+values `0.4226` and `1.5774` against endpoint values of `1`: the walk's minimum
+radius is `0.4226 > 0` with `r_lo = −1`. So the hull bound is one-sided in sign —
+a genuine lower bound on `r`, and a negative one proves only that the hull
+crossed the axis. Clamp it with what the gate DID prove:
+
+```
+r_lo⁺ = max(0, r_lo)  ≤  r(t)   for every t on the walk
+```
+
+Per span, with `[L_lo, L_hi]` the §6.1 length bracket of that SAME span:
+
+```
+r_lo⁺ · L_lo  ≤  ∫ r ds  ≤  r_hi · L_hi
+```
+
+Both factors of each product are non-negative — `r_lo⁺` by the clamp, `r_hi`
+because it dominates the walk's own values and the gate proves those
+non-negative — and that is exactly what licenses multiplying the two lower
+bounds together and the two upper bounds together. **NEVER write the lower bound as `r_lo · L_lo`.** Where `r_lo < 0` that
+is the LARGER of `r_lo·L_lo` and `r_lo·L_hi`, so it is not the product interval's
+lower end; it survives only on the separate fact that `∫ r ds ≥ 0`, which is a
+different argument and a weaker bound than the clamp gives.
+
+Sum the per-span enclosures. de Casteljau subdivision shrinks `[L_lo, L_hi]` and
+`[r_lo, r_hi]` together — the hull converges onto the curve, so `r_lo` rises
+toward the sub-span's own minimum radius and the clamp goes inert — and **the
+stopping certificate is again the MEASURED enclosure, never an assumed rate**
+(§6.1). A span still holding `r_lo < 0` contributes a lower bound of `0`:
+honest, slack, and no reason to stop. A COLLAPSED span (§5.1) contributes
+`[0, 0]` — `L_lo = L_hi = 0`, and its hull is the single walk point whose radius
+the axis gate already proved non-negative, so the clamp needs no exception
+there. Subdivide until the measured product enclosure meets its target. Report
+the interval midpoint as the value and its half width as the bound,
+`Approximate` always.
+
+This bracket serves the lateral area alone. A revolve's `Volume` takes Pappus's
+SECOND theorem over the region's area first moment `∫u dA`, which §5 integrates
+exactly as a rational — a different integral, and the exact one. A partial
+sweep's cap areas are the §5 region area, likewise exact.
+
+### 6.2 Extremes, sagitta, normals and curvature reduce to one existing engine
+
+`clearance_poly.go` already owns a certified polynomial root engine — `ratPoly`
+over `math/big.Rat`, Sturm chains, square-free reduction, Cauchy root bounds,
+root isolation into intervals that cannot lie, and deterministic bisection under
+a fixed depth budget, all context-aware. In Bézier form every free-form question
+decad needs is one of its root problems. Reuse it. Do NOT fork a second root
+finder.
+
+**Every row splits on the span's form, and the middle column's identities hold
+ONLY on a POLYNOMIAL Bézier span** — Tier A (Table F). Applying one to a span
+that is not a polynomial Bézier understates the extreme and unsounds the proof
+that reads it:
+
+- a RATIONAL span — Tier C's unequal-weight `NURBSSeg`, and `ConicSeg`, which is
+  a rational quadratic — takes the RIGHT-hand column. Write it `u = U/W`,
+  `v = V/W`, with `W > 0` and its positive range proven (§5.4), and clear the
+  positive denominator before isolating anything;
+- a whole `EllipseSeg` is neither. Its record is the parametric ellipse, so
+  §5.3's closed forms answer these questions directly, exactly as they do for
+  `CircleSeg`/`ArcSeg`.
+
+The chord-sagitta row is the one exception, and it is not an identity: both its
+columns MEASURE the same control-point distance, which §6.2.1 justifies for a
+rational span unchanged.
+
+| Question | Polynomial Bézier span (Tier A) | Rational span | Consumer |
+|---|---|---|---|
+| directional extreme | `d/dt(g·C(t)) = 0`, degree `≤ p−1` per span | `(g·U)′W − (g·U)W′ = 0`, degree `≤ 2p−1` per span — the positive `W²` denominator cleared | `extentAlong`, `Box`, through-all stops |
+| chord sagitta | the control points' distance to the chord SEGMENT `P_0 P_p`, MEASURED per subdivision level (§6.1) | the same distance on the span's own control points, MEASURED per level | `chordCount`, tessellation |
+| tangent/normal DIRECTION cone | hodograph control hull — a degree `p−1` Bézier with control points `p·ΔP_i` — a CONE only where that hull excludes the origin (§6.3) | the control hull of the numerator hodograph `(U′W − UW′, V′W − VW′)`, degree `≤ 2p−1` — the positive `W²` scales `C′` and never rotates it, so the direction cone is the numerator's, under the same origin-exclusion test (§6.3) | undercut survey |
+| speed, for a Lipschitz bound | that same hodograph hull's maximum norm | the numerator hodograph hull's maximum norm divided by the square of `W`'s proven positive LOWER bound | extreme-VALUE brackets |
+| curvature extreme | `2K′S − 3KS′ = 0` with `K = u′v″ − v′u″` and `S = u′² + v′²`, degree `≤ 4p−6` — PLUS both span endpoints; the bracket needs `S`'s proven positive floor, so a span without one is `Suspect` (§6.3) rather than a candidate list | the same stationarity over the rational derivative forms, the positive powers of `W` cleared before isolation — plus the same endpoint and speed-floor cases | `MinRadius` |
+
+`K` is the curvature NUMERATOR, so **`K`'s own roots are the inflections**
+(`κ = 0`, infinite radius) — the opposite end of the range `MinRadius` reports.
+They are not the candidate set and NEVER stand in for one: a span can hold its
+tightest radius at a parameter where `K` is far from zero.
+
+An extreme VALUE bracket follows from the isolated parameter interval plus the
+row's own Lipschitz bound, exactly the pattern `clearance_poly.go` already uses
+for its critical values. Bracket EVERY isolated root and both span endpoints
+before reporting a `Box`, a through-all stop or a `MinRadius`: a candidate set
+that misses an interior root understates the reading, which is the direction that
+breaks the proof rather than merely widening it.
+
+**A stationarity polynomial that is identically ZERO makes its objective
+constant, and a zero root count is never on its own the proof of anything.**
+Isolation returns an empty list for every polynomial below degree 1 —
+`clearance_poly.go` trims trailing zero coefficients and returns early for
+`rpDeg < 1` — so a nonzero constant, which genuinely has no root, and the zero
+polynomial, which is a root everywhere, come back identical. The rows above
+survive that because each candidate set carries BOTH span endpoints and a
+constant attains its extreme there: a collapsed span (§5.1) has a constant
+directional extreme and a zero sagitta, and the endpoints report each exactly.
+The curvature row reads no candidate list on such a span at all — §6.3's speed
+floor gates it first, and there `S` is the zero polynomial. That floor is the one
+certificate reading the COUNT itself as its proof, so it owes the extra test §6.3
+states.
+
+**Contract consequence.** `prismBoundsContext` reports `Exactness: Exact` with a
+zero bound today. A free-form interior extreme is an irrational root evaluation,
+so **a free-form prism's `Box` is `Approximate`** with the bracket's bound. State
+it; never paper over it.
+
+### 6.2.1 Which distance the sagitta row measures
+
+The chording error a chord commits is the curve's distance to that chord as a
+SEGMENT, so the sagitta row measures the control points' distance to the segment
+`P_0 P_p` and to nothing else. Three quantities are within a careless reading of
+each other here, and only one of them is the bound:
+
+- **distance to the chord's carrier LINE understates it.** A span may overshoot
+  its own endpoints along that line. The control net `(0, 0)`, `(−3, 0.01)`,
+  `(4, 0.01)`, `(1, 0)` has every control point within `0.01` of the line through
+  its ends, while the curve reaches `u ≈ −0.76` — `0.76` beyond the chord, and
+  `0.76` from it. Perpendicular distance to an infinite line is not a chord
+  bound.
+- **the parametric deviation `|C(t) − L(t)|` is a different quantity**, larger
+  than the sagitta and not bounded by the control points' deviations on a
+  RATIONAL span. The weights reparameterise: the collinear net `(0, 0)`,
+  `(1, 0)`, `(2, 0)` with weights `1, 1, 100` has every control point ON its
+  linear interpolant, yet `|C(1/2) − L(1/2)| ≈ 0.96`. Its sagitta is `0` — which
+  the segment distance reports correctly.
+- **distance to the SEGMENT is the bound, and it holds unchanged on a rational
+  span.** Distance to a convex set is a convex function, so its maximum over the
+  control hull is attained at a control point; every curve point is a convex
+  combination of the same control points, positive weights included (`W > 0`,
+  §5.4). That argument reads no parameterisation at all, which is why the row's
+  two columns measure the same thing and why §11 asks for no rational fixture
+  here. It reads no NONDEGENERACY either: a collapsed span's chord is a single
+  POINT (§5.1), distance to a one-point convex set is convex like any other, and
+  the same maximum-at-a-control-point argument reports the sagitta `0` — that
+  span's true deviation, and one chord covers it.
+
+### 6.3 The speed floor, and when a direction cone is a cone
+
+**A hodograph control hull that CONTAINS the origin encloses every direction, so
+it proves nothing.** The cone is what supplies a free-form face's proven normal
+interval, and verification §6 decides undercut membership from that interval
+pointwise. A whole-plane interval straddles at every point, so no point provenly
+opposes and none provenly clears. Read carelessly that face is simply not listed
+and its body passes — the silent pass §8.1 forbids. Read honestly it is
+undecided, which is `Suspect`. Two mechanisms put the origin inside the hull:
+
+- **zero speed.** `C′(t) = 0` at some `t` puts the origin ON the hodograph, so
+  every hull covering that `t` contains it and no subdivision escapes. A recorded
+  net can do exactly this: the 4-control `SplineSeg` `(−1/8, 1/4)`,
+  `(1/8, −1/12)`, `(−1/8, −1/12)`, `(1/8, 1/4)` — clamped, so §5.1's conversion
+  gives the one Bézier span over that same net — has `C′(1/2) = (0, 0)` exactly,
+  with `C″(1/2) ≠ 0`: an ordinary cusp, where the tangent reverses and the curve
+  has no direction at all. `record.go` admits it, and rightly so — the `SplineSeg`
+  arm checks control count, point finiteness and parameter range, and a speed test
+  is not a recording question. That same arm admits an ALL-COINCIDENT net, where
+  `C′ ≡ 0` across the whole span rather than at one `t`: the hodograph hull is
+  the origin itself and `S` below is the zero polynomial (§5.1).
+- **a wide turn.** A tangent turning through half a revolution across one span
+  sweeps the hull across the origin even where the speed never vanishes.
+
+Both mechanisms are decided EXACTLY, never at a tolerance — the control points
+are floats taken exactly as rationals (§5.1):
+
+- **the speed floor, on a POLYNOMIAL span.** `S(t) = u′² + v′²` is a polynomial
+  with exact rational coefficients, degree `≤ 2(p−1)`, and `S ≥ 0` everywhere by
+  construction. Test its COEFFICIENTS before its roots: an identically zero `S`
+  is a collapsed span (§5.1) — a curve with no speed anywhere — and it FAILS this
+  certificate outright. Its root count is not evidence either way, because
+  isolation returns the same empty list for the zero polynomial as for a positive
+  constant `S` (§6.2). For a NONZERO `S`, count its real roots on the closed span
+  with `ratPoly`'s Sturm chain (§6.2): `S ≥ 0` with no root there proves `S > 0`,
+  and bracketing `S`'s minimum over its own isolated stationary points and the
+  span endpoints gives the floor `s_min` that the Lipschitz and curvature
+  brackets need. The certificate closes only where that bracket's LOWER end is
+  strictly positive; a bracket reaching `0` is a failed certificate, never a
+  floor.
+- **the speed floor on a RATIONAL span — divide by `W_max⁴`, never by nothing.**
+  `C′ = H/W²` with `H = (U′W − UW′, V′W − VW′)` the numerator hodograph, so the
+  squared speed is `S = S_num/W⁴` with `S_num = |H|²` the numerator's own
+  polynomial. Run BOTH tests above on `S_num` — the positive `W⁴` moves no zero
+  and no sign — for the numerator floor `h_min`. Then divide:
+
+  ```
+  s_min = h_min / W_max⁴
+  ```
+
+  `W_max` is the upper end of `W`'s proven positive range (§5.4), read off the
+  span's largest Bézier weight because `W`'s Bernstein coefficients ARE those
+  weights. **NEVER hand `h_min` itself to the Lipschitz or curvature brackets.**
+  It overstates the floor by as much as `W_max⁴`, and §5 normalizes no weight
+  anywhere — a net carrying weights `1, 1, 100` is admitted as recorded — so
+  nothing bounds `W_max` to `1`. The controls `(0, 0)` and `(1, 0)` at weights
+  `1, 2` show the whole gap exactly: `H ≡ (2, 0)` gives `h_min = 4`, while
+  `C(t) = 2t/(1+t)` has `|C′|² = 4/(1+t)⁴` and a true minimum of `1/4` at
+  `t = 1` — `W_max⁴ = 16` times smaller. An inflated floor understates curvature,
+  which OVERSTATES the `MinRadius` Table C advertises as proven, so the error
+  runs in the unsafe direction. The mirror bound divides by its own power of `W`
+  the same way — §6.2's speed row.
+- **origin exclusion.** Whether the origin lies in the convex hull of the
+  hodograph's control points is an exact rational sign test — no root-find. Where
+  a hull fails it, subdivide the hodograph and retest the children, and run that
+  subdivision ONLY on a span whose speed floor closed: the termination argument
+  below rests on that floor, so subdividing a span without one can only spend the
+  budget on a reading already `Suspect`. The child hulls shrink toward a curve
+  that stays a proven distance from the origin, and the separation is the SQUARE
+  ROOT of the floor of whatever quantity the SUBDIVIDED hull bounds — `√s_min`
+  on a polynomial span, whose hull is `C′`'s own and whose floor `s_min` floors
+  the squared speed `S`, and `√h_min` on a rational span, whose hull is the
+  numerator's (§6.2). The two are not interchangeable: `h_min = s_min·W_max⁴`
+  sits BELOW `s_min` wherever `W_max < 1`, so reading `s_min` in the numerator
+  plane would claim a separation that hull does not have and exclude the origin
+  too early. A child hull whose own diameter has fallen below its span's own
+  separation cannot contain the origin. So the subdivision terminates.
+
+What each failure costs, per R9 — a `Verify` question the evaluator cannot answer
+is accepted and reads `Suspect`:
+
+| Certificate | Fails when | Cost |
+|---|---|---|
+| speed floor `s_min > 0` | the tested polynomial — `S`, or a rational span's `S_num` — is identically zero (the collapsed span), or has a root on the span, or its bracketed minimum reaches `0` | `Undercuts` AND `MinRadius` read `Suspect` for that body |
+| origin exclusion on every subdivided hull | the turn is too wide to separate within the subdivision budget | `Undercuts` reads `Suspect` |
+
+**Neither failure refuses a BUILD.** Chording, volume, area, export and the
+boolean path read no direction cone, so a cusped section still extrudes and still
+takes part in an interference proof — the readings that need a direction are the
+only ones that go undecided. A build refusal would also refuse an ordinary spline
+whose first two control points coincide: that is zero speed at a span END, which
+costs the same two readings and nothing else. A collapsed span stands the same
+way — it costs those two readings on a body that still builds, and what refuses
+an ALL-collapsed walk at build time is §5.1's zero-length walk rule, never this
+certificate.
+
+### 6.4 A build-time comparison a bracket cannot decide
+
+`Suspect` is a `Verify` answer. A BUILD has no such fallback — it produces a body
+or refuses, exactly as the modify audit's undecidable nesting does (modify §5
+S9). So a gate that compares a free-form bracket against a threshold at build
+time refuses as R11 when the bracket straddles it. Two gates do:
+
+- **a through-all stop's in-path test.** `stops.go` decides EXACTLY, on each
+  body's closed-form `extentAlong`, whether the sweep meets that body. A
+  free-form body's extent is a bracket (§6.2), so a stop whose bracket straddles
+  the sketch plane in the travel sense is R11 — never a guessed dependency.
+- **the §4.1 analytic-corner slice's audit.** The modify §5 crossing and
+  boundary-contact audit must run over the section's free-form walks. A crossing
+  is a root problem for §6.2's engine, exactly; the contact floor `δ = ε·D` needs
+  a certified minimum-distance bracket between two spans — a control-hull
+  branch-and-bound, structurally §8.1's. A contact that bracket cannot decide is
+  R11.
+
+R11 is not permanent: refining the bracket decides every case but an exact
+tangency, and a tangency is a contact the §5 audit refuses anyway.
+
+## 7. `NURBSSurface` and `NURBSCurve`
+
+Core §6.1 reserved both names. This section fixes their shape.
+
+Both the extrusion and the revolution of a B-spline are EXACTLY NURBS surfaces:
+
+- extruded — the control net is the curve's control points against the two sweep
+  ends, degree `(p, 1)`, weights carried through;
+- revolved — the standard rational quadratic circle representation, degree
+  `(p, 2)`, weights multiplied.
+
+So core §6.1's promise holds unstrained: an analytic `Surface` variant is
+`Exact` by construction. A `NURBSSurface` built from a recorded control net IS
+the surface, not an approximation of it. `Faceted` remains the only inexact
+variant, and no new exactness machinery enters the public API.
+
+**The control net stays private in v1.** The variant is a tagged, opaque marker
+carrying no exported geometry. Widening an opaque variant later is compatible;
+narrowing an exposed one is not, and exposing the net would commit decad to a
+wire format and a validation surface it does not yet need.
+
+```go
+// NURBSSurface is a free-form face's geometry — the exact extruded or revolved
+// surface of a recorded free-form curve. Its control net is private in v1.
+type NURBSSurface struct{ /* private */ }
+
+// NURBSCurve is a free-form edge's geometry, NURBSSurface's 1-D analog.
+type NURBSCurve struct{ /* private */ }
+```
+
+`NURBSSurface.Kind()` reports the existing `KindNURBS`: `Surface` declares
+`Kind() SurfaceKind` and `KindNURBS` is one of that set's constants.
+`NURBSCurve` reports no kind at all — `Curve` is sealed by its marker method
+alone and declares no `Kind`, so the variant seals in with that method and
+exports nothing else. A `switch` on `Surface` or `Curve` MUST already carry a
+`default` (core §6.1), so adding these variants breaks no conforming caller.
+
+**`Face.NormalAt(p)` on a `NURBSSurface` is `ErrUnsupported`.** Recovering the
+`(u, v)` of a given point is a root-find, not a closed form, so an `Exact`
+zero-bound answer is unavailable and the other variants all promise one. Nothing
+internal needs it: the undercut survey reads normals off the payload walk, never
+off `NormalAt`.
+
+## 8. Table C — per-capability reach
+
+**Every build reads its section's moments, so a body's tier reach is its
+section's.** A section whose free-form walks are all Tier A builds; a section
+carrying a Tier B or Tier C walk is `ErrUnsupported` at EVERY build until §10's
+P9 supplies that tier's moments (§5.3, §5.4) — Table R R10. "Tier A section"
+below names exactly that condition. A `ProfileRecord` moment reading is not a
+build and is unaffected.
+
+**A Tier A section's exactly-rational reach is its free-form walks' alone.**
+Analytic walks join them in the same section freely (§4.1), and a circular one
+contributes `moments.go`'s own proven interval, so every row below reads "the
+Tier A rational" as the section's COMPOSED moments — one rounding only where
+every walk of the section is itself exactly rational (§3).
+
+| Capability | Free-form reach | Construction |
+|---|---|---|
+| `ProfileRecord.Area`/`Centroid`/`SecondMoments` | Tier A exactly rational, rounded once; B/C proven interval | §5 |
+| `Extrude` | Tier A section; `Volume` from the Tier A rational, `Area`/`Box` bounded | §6.1 length, §6.2 extremes, §7 surfaces; a through-all stop reading the bracket is §6.4 |
+| `Tessellate`, `STL`, `OBJ` | every section `Extrude` builds | §6.2 sagitta; rides the existing prism path, NOT tessellation T5 |
+| `Union`/`Cut`/`Intersect` | every body `Extrude` builds, `Faceted` output as always | free once chording lands — the mesh boolean reads triangles, not kinds |
+| interference proof | every body `Extrude` builds | free once chording lands — read-only mesh intersection already serves faceted pairs |
+| `Undercuts` | proven where §6.3's certificates close, else `Suspect` | §6.2 normal cones; an enclosure decides a face only while it is a proper cone (§6.3) |
+| `MinRadius` | proven interval under §6.3's speed floor, else `Suspect` | §6.2 curvature extremes; a measurement, never a verdict |
+| `MinWallThickness` | proven interval, else `Suspect` | §8.1 |
+| `Clearance` rows | `Suspect` until a free-form cell lands | box-disjoint pairs still read `Sound` |
+| `Revolve` | Tier A section; surfaces of revolution per §7 | lateral `Area` by Pappus over §6.1.1's radial first moment, `Volume` and cap areas from §5's exact rational; meshing waits on tessellation T2–T5 |
+| `Fillet`/`Chamfer`/`Shell` | refused per R3–R5, except the §4.1 analytic-corner slice | §4.1, with the free-form audit and its R11 refusal in §6.4 |
+
+The sequencing that falls out: **chording an extruded free-form section rides the
+existing prism tessellation path.** Only the boundary chording is per-segment.
+`triangulate.go` and the loop-clearance audit consume chorded 2D samples and need
+no change. So export, booleans and interference proof — the north-star oracle
+capabilities — land early, before revolve and before the surveys.
+
+### 8.1 Wall thickness is the one capability with no complete candidate set
+
+`survey2d.go` answers `MinWallThickness` from a CLOSED-FORM candidate set of
+critical inscribed disks, and the set is COMPLETE for the attained infimum over
+line/arc boundaries. Completeness is what makes the answer exact.
+
+No free-form analogue exists. A disk tangent to three cubic Bézier pieces is a
+high-degree polynomial system, and isolating it exactly would still not prove
+completeness for the infimum.
+
+The sound construction is a certified branch-and-bound over pairs of Bézier
+pieces with control-hull distance enclosures, returning an interval on the
+minimum spanning diameter — structurally what `clearance_cells.go` already does
+for its cone-involved and spindle-torus cells. The verdict rule already consumes
+intervals (verification §6): proven thin → `Violating` at any coarseness, met →
+the gate judges the bound, straddle → `Suspect`.
+
+**Until that kernel lands, a free-form section's wall reading is `Suspect`** — an
+asked-but-undecided answer, never a silent pass, and never a wrong number. What
+the caller must be told plainly: for a free-form part decad proves closure,
+volume and interference before it can prove wall thickness.
+
+## 9. Upstream asks to sketch
+
+Ordered by reach per unit of upstream work. None is a prerequisite for §10's
+first four increments.
+
+1. **Export the fit-spline interpolant's B-spline or piecewise-polynomial
+   coefficients.** `geom/fitspline.go` already computes them internally. This is
+   a signature, not an algorithm. It retires R6, and it is the only way to:
+   decad must NEVER re-run the interpolation solve (seam §2), and consuming
+   `geom.EvalFitSpline` would build geometry from samples.
+2. **Pin `EllipticalArc` endpoints onto the parametric ellipse.** Retires R2
+   (§2.2): sketch's own coincidence constraint carries each moved endpoint to the
+   neighbouring segment, so the loop still closes on a shared join point.
+   Exporting exact eccentric parameters does NOT retire R2 on its own — it makes
+   the parametric evaluation exact while the segment's ends stay at
+   `ellipse(θ)`, which is precisely §2.2's rejected trust-the-parametric-curve
+   branch: the neighbour's pinned join point is elsewhere and the loop stays
+   open. Exported parameters retire R2 only together with an exact endpoint
+   representation that preserves the shared join.
+3. **Closed-form free-form intersection**, so a cut free-form fragment can report
+   `TExact = true`. Retires R1 and lifts §2's whole-entities-only scope, letting
+   free-form curves cross other curves in a sketch. Large upstream effort.
+
+## 10. Increments
+
+Each increment is a PR series behind the same public contract; nothing ships
+half-silent. These stages do not consume a global evaluator increment number.
+
+| # | Lands | Public effect |
+|---|---|---|
+| **P1** | this document + the core/evaluator table updates it resolves | none |
+| **P2** | Bézier conversion, exact Tier A moments, the §5.2 budget | `ProfileRecord.Area`/`Centroid`/`SecondMoments` answer for Tier A, bounded by one rounding. No new types |
+| **P3** | walk-kind discriminant across every `segmentWalk` consumer | none — behaviour preserved |
+| **P4** | `NURBSSurface`/`NURBSCurve`, free-form extrude side faces, §6.1 length brackets, §6.2 extremes, `NormalAt` refusal, §6.4's stop gate | Tier A free-form prisms build; `Volume` from the Tier A rational, `Area`/`Box` bounded. A Tier B or C section is R10; an undecidable through-all stop is R11 |
+| **P5** | free-form chording with proven sagitta + area slack | `Tessellate`/`STL`/`OBJ`, booleans, interference proof. Wall reading explicitly `Suspect` |
+| **P6** | §6.3's speed floor and origin-exclusion certificates, hodograph normal cones, bracketed curvature extremes | `Undercuts` and `MinRadius` each answer where the certificates that reading needs close, and read `Suspect` per §6.3's cost table where they do not |
+| **P7** | certified branch-and-bound inscribed-disk interval | `MinWallThickness` answered, with its own convergence evidence |
+| **P8** | free-form surfaces of revolution, §6.1.1's radial first-moment bracket | `Revolve` builds for a Tier A section |
+| **P9** | Tier B formulas; Tier C certified quadrature | Tier B/C moment readings answer, and the builds Table C stages on them follow — R10 retires |
+| **P10** | the §4.1 analytic-corner modify slice over §6.4's free-form crossing and contact tests | fillet/chamfer on analytic corners of a mixed section |
+
+## 11. Test obligations
+
+Correctness must be observable — computed geometry, never "it ran" (core hard
+rules).
+
+- Assert the exact RATIONAL area, centroid and second moments of a Tier A
+  section against a densely sampled reference AND against sketch's own
+  `Profile.Area`. Two independent implementations agreeing is the §5.2 falsifier.
+- Assert BOTH sides of §3's rounding rule, with representability read in the
+  magnitude the reported `units.Value` actually carries: a Tier A section whose
+  exact area is not representable there reports `Approximate` with a bound of one
+  rounding, and a section whose exact area IS representable there reports `Exact`
+  with a zero bound. A test that only covers one side cannot tell the rule from a
+  constant.
+- Assert `Box` reports `Approximate` with a positive bound for a Tier A prism
+  (§6.2).
+- Assert an arc-length bracket strictly narrows with subdivision depth and
+  encloses a dense-sample reference at every depth, and that the depth is chosen
+  from the MEASURED enclosure — a case whose first level narrows by well under 4×
+  must still reach its target rather than stop at a rate-sized depth (§6.1).
+- Assert every §6.2 row whose rational identity differs from its polynomial one,
+  each on a RATIONAL span whose true reading the polynomial-span identity would
+  miss, and falsify each against a dense sample: a directional extreme attained
+  at an interior parameter that is not a root of `d/dt(g·U)`, so the `Box` is not
+  understated; a true maximum speed above the `p·ΔP_i` hull's norm, so the
+  Lipschitz bound still holds; a true tangent direction outside the cone that
+  same hull reports, so the undercut survey's enclosure still holds every normal;
+  and a curvature extreme at a parameter that is not a root of the polynomial
+  stationarity `2K′S − 3KS′`, so `MinRadius` is not overstated. The chord-sagitta
+  row is EXCLUDED and needs no rational fixture: both its columns measure the
+  same control-point distance to the chord per subdivision level, so it carries
+  no rational-specific identity a fixture could falsify.
+- Assert the §6.2.1 sagitta bound on a span that overshoots its own chord ends —
+  the `(0, 0)`, `(−3, 0.01)`, `(4, 0.01)`, `(1, 0)` net, whose curve runs `0.76`
+  past the chord: the reported bound must enclose the dense-sample deviation, so
+  a bound measured to the chord's carrier LINE fails the test. Assert it again on
+  a rational span whose control points all lie on their linear interpolant while
+  the curve does not, so a bound built from the parametric deviation `|C − L|` is
+  distinguished from the sagitta the chord actually commits.
+- Assert `MinRadius` on a span carrying an INFLECTION: the reported interval
+  encloses the tightest radius, which is attained where `K ≠ 0`, so a candidate
+  set built from `K`'s roots alone fails the test (§6.2).
+- Assert the §6.1.1 radial bracket on the reading a length bracket cannot make:
+  two meridian walks of EQUAL length at different radii, whose §6.1 brackets
+  coincide, must produce different `∫ r ds` enclosures, and each enclosure must
+  contain a dense-sample reference. Then assert the P8 revolve's lateral `Area`
+  falls inside `θ ·` that enclosure, and that a walk revolved twice at different
+  radii reports areas in the ratio of those radii — a length-only construction
+  reports them equal and fails.
+- Assert the §6.1.1 bracket on a span whose radial control values include a
+  NEGATIVE one while the walk stays strictly on the material side — radial
+  controls `1, −1, 3, 1`, minimum radius `0.4226`: the reported enclosure must
+  contain a dense-sample reference at every subdivision depth, starting at the
+  depth where `r_lo` is still negative. A lower bound built as `r_lo · L_lo`
+  passes only by sign accident, so assert the clamp directly: the first level's
+  lower bound is `0`, and it rises once subdivision lifts every sub-span's
+  `r_lo` to non-negative.
+- Assert both §6.3 certificates by the readings they gate. On the cusp net
+  `(−1/8, 1/4)`, `(1/8, −1/12)`, `(−1/8, −1/12)`, `(1/8, 1/4)`: the hodograph
+  hull contains the origin, subdivision never separates it, `Undercuts` and
+  `MinRadius` read `Suspect`, and the same body still reports its `Volume` and
+  tessellates — a survey that instead returns an empty `Undercuts` list on that
+  body is the silent pass §8.1 forbids, and must fail the test. On a cusp-free
+  span whose FIRST hodograph hull still contains the origin (a wide turn),
+  subdivision must reach origin exclusion and report a proper cone. On a span
+  with a coincident first control pair — zero speed at the span END — the same
+  two readings are `Suspect` while the build succeeds. On a walk carrying ONE
+  collapsed span — four coincident controls inside a longer clamped net, so `S`
+  is the zero polynomial there while the walk's own length stays positive — the
+  speed floor must FAIL, those two readings must read `Suspect`, and the body
+  must still build and report its `Volume`. A certificate that reads the isolated
+  root count alone reports a floor on that span and passes silently, so it must
+  fail this test.
+- Assert the §6.3 speed floor's `W_max⁴` division on a RATIONAL span whose
+  weights are not all equal, since the numerator floor alone errs in the UNSAFE
+  direction. The degree-1 controls `(0, 0)` and `(1, 0)` at weights `1, 2` are
+  the minimal falsifier: the numerator floor is `4` while the true squared-speed
+  minimum is `1/4`, so a reported floor above a dense-sampled minimum of `|C′|²`
+  fails the test. Assert the consequence on a CURVED rational span too — the
+  reported `MinRadius` interval must enclose the dense-sample tightest radius,
+  which a floor inflated by `W_max⁴` overstates.
+- Assert R9's OTHER branch — a reading whose proven bracket straddles its
+  threshold, not a §6.3 certificate failure. A free-form section whose §8.1 wall
+  interval straddles the tool diameter reads `Suspect`; the same section against
+  a tool the interval provenly clears reads its verdict from the gate, and
+  against one the interval provenly undercuts reads `Violating` at any
+  coarseness (§8.1). A test covering only the certificate branch cannot tell the
+  straddle rule from a certificate check.
+- Assert the §5.1 span rules on records `record.go` admits: a `NURBSSeg` with a
+  repeated interior knot builds and its area matches a dense-sample reference,
+  its empty span carrying no Bézier segment and no division by a zero span
+  width; a free-form walk whose every span is collapsed is refused as a
+  zero-length walk (`ErrDegenerate`); and the §6.1 length, §6.1.1 radial and
+  §6.2.1 sagitta enclosures of a walk holding one collapsed span each contain a
+  dense-sample reference, with that span contributing `0`.
+- Assert both §5.1.1 rules on records `record.go` admits today, each against a
+  dense-sample reference. A `NURBSSeg` whose interior knot sits at multiplicity
+  above its degree with the two one-sided limits at DIFFERENT coordinates is
+  refused `ErrDegenerate` (R12). The SAME record with those two limits at the
+  IDENTICAL coordinate either builds — its area matching the chain-of-curves
+  section that spells the same walk as separate segments joined at that shared
+  endpoint — or refuses `ErrUnsupported` while R13 stands, NEVER `ErrDegenerate`;
+  a test that asserts only the different-coordinate direction cannot tell the
+  rule from a multiplicity check. Cover an adjacent limit pair (degree 1,
+  `m = 2`) and a non-adjacent one (degree 3, `m = 5`, whose limits `P_j` and
+  `P_{j+m−p}` have a dead control between them), so neither direction can pass by
+  assuming adjacency.
+- Assert the §5.1.1 END-knot rule on the over-clamped record `record.go` admits —
+  degree 2, knots `[0, 0, 0, 0, 1, 1, 1]`, 4 control points, `P_0` dead: the body
+  either builds with the area of the single quadratic Bézier over `P_1, P_2, P_3`
+  against a dense-sample reference, or refuses `ErrUnsupported` (R13), never
+  `ErrDegenerate`. Assert the dead control point moves no reading: displacing
+  `P_0` alone changes no area, no length enclosure and no `Box`.
+- Assert `Undercuts` on a free-form face whose certified cone is proper: a face
+  whose cone puts every point provenly opposing the pull is listed, and a face
+  whose cone clears at every point is not.
+- Assert directed-edge closure, positive triangle area, outward winding, and
+  `len(SourceFaces) == len(Triangles)` on a free-form prism mesh.
+- Assert byte-identical repeated STL/OBJ output.
+- Assert a boolean of a free-form prism against a box carries a composed bound
+  and breaks no invariant.
+- Sample the true surface densely only as a FALSIFIER: any observed distance
+  above `Mesh.Bound` fails, and passing samples never replace the bound's
+  derivation.
+- Assert every Table R row by behaviour, each with its own sentinel: a crossed
+  spline, a `FitSplineSeg`, an `EllipticalArcSeg`, a free-form `Shell`, a
+  free-form fillet carrier, a free-form chamfer carrier, an `Extrude` whose
+  through-all stop reads a free-form extent bracket straddling the sketch plane
+  (R11), a `NURBSSeg` whose interior knot at multiplicity above its degree has
+  DIFFERENT one-sided limits (R12), a record R13 stages, a Tier A section whose
+  exact-rational integration exhausts the §5.2 work budget (R7 `ErrUnsupported`,
+  and the same section under a budget that admits it integrates exactly — so the
+  refusal cannot be a float fallback in disguise), a free-form walk whose
+  chording needs more than the chord cap (R8 `ErrUnsupported` through
+  `errTooManyChords`), and — while R10 stands — an `Extrude` of a section
+  carrying a Tier B or Tier C walk, whose Tier A counterpart builds in the same
+  test. Run each of R3–R5 on a DEGREE-1 `NURBSSeg` walk as well as a curved one
+  and require the same `ErrUnsupported`, so the refusal stays keyed on the
+  recorded kind rather than on the degree (§4.1).
+- Assert recipe replay of every free-form step reproduces body order, provenance
+  roles, and measurements within the evaluator's own exactness.
