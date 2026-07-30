@@ -591,41 +591,66 @@ undecided, which is `Suspect`. Two mechanisms put the origin inside the hull:
 - **a wide turn.** A tangent turning through half a revolution across one span
   sweeps the hull across the origin even where the speed never vanishes.
 
-Both are decided EXACTLY, never at a tolerance — the control points are floats
-taken exactly as rationals (§5.1):
+Both mechanisms are decided EXACTLY, never at a tolerance — the control points
+are floats taken exactly as rationals (§5.1):
 
-- **the speed floor.** `S(t) = u′² + v′²` is a polynomial with exact rational
-  coefficients, degree `≤ 2(p−1)`, and `S ≥ 0` everywhere by construction. Test
-  its COEFFICIENTS before its roots: an identically zero `S` is a collapsed span
-  (§5.1) — a curve with no speed anywhere — and it FAILS this certificate
-  outright. Its root count is not evidence either way, because isolation returns
-  the same empty list for the zero polynomial as for a positive constant `S`
-  (§6.2). For a NONZERO `S`, count its real roots on the closed span with
-  `ratPoly`'s Sturm chain (§6.2): `S ≥ 0` with no root there proves `S > 0`, and
-  bracketing `S`'s minimum over its own isolated stationary points and the span
-  endpoints gives the floor `s_min` that the Lipschitz and curvature brackets
-  need. The certificate closes only where that bracket's LOWER end is strictly
-  positive; a bracket reaching `0` is a failed certificate, never a floor. A
-  rational span clears the positive `W²` first and tests the numerator
-  hodograph, under both tests.
+- **the speed floor, on a POLYNOMIAL span.** `S(t) = u′² + v′²` is a polynomial
+  with exact rational coefficients, degree `≤ 2(p−1)`, and `S ≥ 0` everywhere by
+  construction. Test its COEFFICIENTS before its roots: an identically zero `S`
+  is a collapsed span (§5.1) — a curve with no speed anywhere — and it FAILS this
+  certificate outright. Its root count is not evidence either way, because
+  isolation returns the same empty list for the zero polynomial as for a positive
+  constant `S` (§6.2). For a NONZERO `S`, count its real roots on the closed span
+  with `ratPoly`'s Sturm chain (§6.2): `S ≥ 0` with no root there proves `S > 0`,
+  and bracketing `S`'s minimum over its own isolated stationary points and the
+  span endpoints gives the floor `s_min` that the Lipschitz and curvature
+  brackets need. The certificate closes only where that bracket's LOWER end is
+  strictly positive; a bracket reaching `0` is a failed certificate, never a
+  floor.
+- **the speed floor on a RATIONAL span — divide by `W_max⁴`, never by nothing.**
+  `C′ = H/W²` with `H = (U′W − UW′, V′W − VW′)` the numerator hodograph, so the
+  squared speed is `S = S_num/W⁴` with `S_num = |H|²` the numerator's own
+  polynomial. Run BOTH tests above on `S_num` — the positive `W⁴` moves no zero
+  and no sign — for the numerator floor `h_min`. Then divide:
+
+  ```
+  s_min = h_min / W_max⁴
+  ```
+
+  `W_max` is the upper end of `W`'s proven positive range (§5.4), read off the
+  span's largest Bézier weight because `W`'s Bernstein coefficients ARE those
+  weights. **NEVER hand `h_min` itself to the Lipschitz or curvature brackets.**
+  It overstates the floor by as much as `W_max⁴`, and §5 normalizes no weight
+  anywhere — a net carrying weights `1, 1, 100` is admitted as recorded — so
+  nothing bounds `W_max` to `1`. The controls `(0, 0)` and `(1, 0)` at weights
+  `1, 2` show the whole gap exactly: `H ≡ (2, 0)` gives `h_min = 4`, while
+  `C(t) = 2t/(1+t)` has `|C′|² = 4/(1+t)⁴` and a true minimum of `1/4` at
+  `t = 1` — `W_max⁴ = 16` times smaller. An inflated floor understates curvature,
+  which OVERSTATES the `MinRadius` Table C advertises as proven, so the error
+  runs in the unsafe direction. The mirror bound divides by its own power of `W`
+  the same way — §6.2's speed row.
 - **origin exclusion.** Whether the origin lies in the convex hull of the
   hodograph's control points is an exact rational sign test — no root-find. Where
   a hull fails it, subdivide the hodograph and retest the children, and run that
   subdivision ONLY on a span whose speed floor closed: the termination argument
-  below is `s_min`'s, so subdividing a span without one can only spend the budget
-  on a reading already `Suspect`. Under a proven `s_min > 0` the child hulls
-  shrink toward a curve that stays `√s_min` away from the origin. `s_min` floors
-  `S`, the SQUARED speed, so the separation it certifies in the hodograph plane
-  is its SQUARE ROOT — `|C′(t)| = √S(t) ≥ √s_min` — and a child hull whose own
-  diameter has fallen below that distance cannot contain the origin. So the
-  subdivision terminates.
+  below rests on that floor, so subdividing a span without one can only spend the
+  budget on a reading already `Suspect`. The child hulls shrink toward a curve
+  that stays a proven distance from the origin, and the separation is the SQUARE
+  ROOT of the floor of whatever quantity the SUBDIVIDED hull bounds — `√s_min`
+  on a polynomial span, whose hull is `C′`'s own and whose floor `s_min` floors
+  the squared speed `S`, and `√h_min` on a rational span, whose hull is the
+  numerator's (§6.2). The two are not interchangeable: `h_min = s_min·W_max⁴`
+  sits BELOW `s_min` wherever `W_max < 1`, so reading `s_min` in the numerator
+  plane would claim a separation that hull does not have and exclude the origin
+  too early. A child hull whose own diameter has fallen below its span's own
+  separation cannot contain the origin. So the subdivision terminates.
 
 What each failure costs, per R9 — a `Verify` question the evaluator cannot answer
 is accepted and reads `Suspect`:
 
 | Certificate | Fails when | Cost |
 |---|---|---|
-| speed floor `s_min > 0` | `S` is identically zero — the collapsed span — or `S` has a root on the span, or its bracketed minimum reaches `0` | `Undercuts` AND `MinRadius` read `Suspect` for that body |
+| speed floor `s_min > 0` | the tested polynomial — `S`, or a rational span's `S_num` — is identically zero (the collapsed span), or has a root on the span, or its bracketed minimum reaches `0` | `Undercuts` AND `MinRadius` read `Suspect` for that body |
 | origin exclusion on every subdivided hull | the turn is too wide to separate within the subdivision budget | `Undercuts` reads `Suspect` |
 
 **Neither failure refuses a BUILD.** Chording, volume, area, export and the
@@ -689,9 +714,12 @@ type NURBSSurface struct{ /* private */ }
 type NURBSCurve struct{ /* private */ }
 ```
 
-`Kind()` reports the existing `KindNURBS`. A `switch` on `Surface` or `Curve`
-MUST already carry a `default` (core §6.1), so adding these variants breaks no
-conforming caller.
+`NURBSSurface.Kind()` reports the existing `KindNURBS`: `Surface` declares
+`Kind() SurfaceKind` and `KindNURBS` is one of that set's constants.
+`NURBSCurve` reports no kind at all — `Curve` is sealed by its marker method
+alone and declares no `Kind`, so the variant seals in with that method and
+exports nothing else. A `switch` on `Surface` or `Curve` MUST already carry a
+`default` (core §6.1), so adding these variants breaks no conforming caller.
 
 **`Face.NormalAt(p)` on a `NURBSSurface` is `ErrUnsupported`.** Recovering the
 `(u, v)` of a given point is a root-find, not a closed form, so an `Exact`
@@ -707,6 +735,12 @@ carrying a Tier B or Tier C walk is `ErrUnsupported` at EVERY build until §10's
 P9 supplies that tier's moments (§5.3, §5.4) — Table R R10. "Tier A section"
 below names exactly that condition. A `ProfileRecord` moment reading is not a
 build and is unaffected.
+
+**A Tier A section's exactly-rational reach is its free-form walks' alone.**
+Analytic walks join them in the same section freely (§4.1), and a circular one
+contributes `moments.go`'s own proven interval, so every row below reads "the
+Tier A rational" as the section's COMPOSED moments — one rounding only where
+every walk of the section is itself exactly rational (§3).
 
 | Capability | Free-form reach | Construction |
 |---|---|---|
@@ -864,6 +898,21 @@ rules).
   must still build and report its `Volume`. A certificate that reads the isolated
   root count alone reports a floor on that span and passes silently, so it must
   fail this test.
+- Assert the §6.3 speed floor's `W_max⁴` division on a RATIONAL span whose
+  weights are not all equal, since the numerator floor alone errs in the UNSAFE
+  direction. The degree-1 controls `(0, 0)` and `(1, 0)` at weights `1, 2` are
+  the minimal falsifier: the numerator floor is `4` while the true squared-speed
+  minimum is `1/4`, so a reported floor above a dense-sampled minimum of `|C′|²`
+  fails the test. Assert the consequence on a CURVED rational span too — the
+  reported `MinRadius` interval must enclose the dense-sample tightest radius,
+  which a floor inflated by `W_max⁴` overstates.
+- Assert R9's OTHER branch — a reading whose proven bracket straddles its
+  threshold, not a §6.3 certificate failure. A free-form section whose §8.1 wall
+  interval straddles the tool diameter reads `Suspect`; the same section against
+  a tool the interval provenly clears reads its verdict from the gate, and
+  against one the interval provenly undercuts reads `Violating` at any
+  coarseness (§8.1). A test covering only the certificate branch cannot tell the
+  straddle rule from a certificate check.
 - Assert the §5.1 span rules on records `record.go` admits: a `NURBSSeg` with a
   repeated interior knot builds and its area matches a dense-sample reference,
   its empty span carrying no Bézier segment and no division by a zero span
@@ -905,11 +954,15 @@ rules).
   free-form fillet carrier, a free-form chamfer carrier, an `Extrude` whose
   through-all stop reads a free-form extent bracket straddling the sketch plane
   (R11), a `NURBSSeg` whose interior knot at multiplicity above its degree has
-  DIFFERENT one-sided limits (R12), a record R13 stages, and — while R10 stands —
-  an `Extrude` of a section carrying a Tier B or Tier C walk, whose Tier A
-  counterpart builds in the same test. Run each of R3–R5 on a DEGREE-1
-  `NURBSSeg` walk as well as a curved one and require the same
-  `ErrUnsupported`, so the refusal stays keyed on the recorded kind rather than
-  on the degree (§4.1).
+  DIFFERENT one-sided limits (R12), a record R13 stages, a Tier A section whose
+  exact-rational integration exhausts the §5.2 work budget (R7 `ErrUnsupported`,
+  and the same section under a budget that admits it integrates exactly — so the
+  refusal cannot be a float fallback in disguise), a free-form walk whose
+  chording needs more than the chord cap (R8 `ErrUnsupported` through
+  `errTooManyChords`), and — while R10 stands — an `Extrude` of a section
+  carrying a Tier B or Tier C walk, whose Tier A counterpart builds in the same
+  test. Run each of R3–R5 on a DEGREE-1 `NURBSSeg` walk as well as a curved one
+  and require the same `ErrUnsupported`, so the refusal stays keyed on the
+  recorded kind rather than on the degree (§4.1).
 - Assert recipe replay of every free-form step reproduces body order, provenance
   roles, and measurements within the evaluator's own exactness.
