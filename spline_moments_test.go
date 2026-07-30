@@ -1,8 +1,11 @@
 package decad_test
 
 import (
+	"encoding/json"
 	"math"
 	"math/big"
+	"runtime"
+	"slices"
 	"strconv"
 	"testing"
 	"time"
@@ -237,50 +240,108 @@ func TestDenseNURBSRecordRefusesWithinBudget(t *testing.T) {
 	require.Less(t, time.Since(start), 5*time.Second, "the refusal precedes the insertion pass")
 }
 
-// A NURBS whose interior knots repeat degree+1 times is four disconnected cubic
-// pieces, not one boundary curve: the four sides of a unit square, each its own
-// Bézier, spliced into a single segment. It satisfies every count, ordering and
-// clamping rule, so nothing else refuses it — and the exact conversion's
-// stride-degree slicing then reads five spans across those four pieces, rounding
-// the (1,1) corner and losing 1/180 of the area under a bound fourteen orders of
-// magnitude too small. The record is malformed and must be REFUSED, never
-// measured.
+// A NURBS whose interior knots repeat degree+1 times is four cubic pieces
+// spliced into one segment — the four sides of a unit square, each its own
+// Bézier. It satisfies every count, ordering and clamping rule, so nothing else
+// refuses it, and the exact conversion's stride-degree slicing then reads five
+// spans across those four pieces, rounding the (1,1) corner and losing 1/180 of
+// the area under a bound fourteen orders of magnitude too small. It must be
+// REFUSED, never measured.
+//
+// WHICH refusal is decided by the recorded curve rather than by the slicer. At
+// multiplicity degree+1 the two one-sided limits at a break are exactly two
+// recorded control points; when they are the SAME point the four pieces meet,
+// the curve is one connected curve and the body exists, so the refusal is this
+// evaluator's own limitation. Move one of those two points and the curve really
+// does break apart, so no such body exists.
 func TestBrokenNURBSKnotVectorRefuses(t *testing.T) {
 	third := 1.0 / 3
-	record := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
-		decad.NURBSSeg{
-			Degree: 3,
-			Control: []decad.Point2{
-				{U: 0, V: 0}, {U: third, V: 0}, {U: 2 * third, V: 0}, {U: 1, V: 0},
-				{U: 1, V: 0}, {U: 1, V: third}, {U: 1, V: 2 * third}, {U: 1, V: 1},
-				{U: 1, V: 1}, {U: 2 * third, V: 1}, {U: third, V: 1}, {U: 0, V: 1},
-				{U: 0, V: 1}, {U: 0, V: 2 * third}, {U: 0, V: third}, {U: 0, V: 0},
+	squareRecord := func(joint decad.Point2) decad.ProfileRecord {
+		return decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
+			decad.NURBSSeg{
+				Degree: 3,
+				Control: []decad.Point2{
+					{U: 0, V: 0}, {U: third, V: 0}, {U: 2 * third, V: 0}, {U: 1, V: 0},
+					joint, {U: 1, V: third}, {U: 1, V: 2 * third}, {U: 1, V: 1},
+					{U: 1, V: 1}, {U: 2 * third, V: 1}, {U: third, V: 1}, {U: 0, V: 1},
+					{U: 0, V: 1}, {U: 0, V: 2 * third}, {U: 0, V: third}, {U: 0, V: 0},
+				},
+				Knots: []float64{
+					0, 0, 0, 0,
+					0.25, 0.25, 0.25, 0.25,
+					0.5, 0.5, 0.5, 0.5,
+					0.75, 0.75, 0.75, 0.75,
+					1, 1, 1, 1,
+				},
+				Weights: []float64{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
+				TStart:  0,
+				TEnd:    1,
 			},
-			Knots: []float64{
-				0, 0, 0, 0,
-				0.25, 0.25, 0.25, 0.25,
-				0.5, 0.5, 0.5, 0.5,
-				0.75, 0.75, 0.75, 0.75,
-				1, 1, 1, 1,
-			},
-			Weights: []float64{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
-			TStart:  0,
-			TEnd:    1,
-		},
-	}}}
+		}}}
+	}
 
-	for name, measure := range map[string]func() error{
-		"Area":          func() error { _, err := record.Area(); return err },
-		"Centroid":      func() error { _, err := record.Centroid(); return err },
-		"SecondMoments": func() error { _, err := record.SecondMoments(); return err },
+	for _, tc := range []struct {
+		name     string
+		joint    decad.Point2
+		sentinel error
+		message  string
+	}{
+		{
+			name:     "continuous",
+			joint:    decad.Point2{U: 1, V: 0},
+			sentinel: decad.ErrUnsupported,
+			message:  "share no boundary control point",
+		},
+		{
+			name:     "discontinuous",
+			joint:    decad.Point2{U: 1.5, V: 0},
+			sentinel: decad.ErrDegenerate,
+			message:  "disjoint pieces",
+		},
 	} {
-		t.Run(name, func(t *testing.T) {
-			err := measure()
-			require.Error(t, err, "a broken knot vector states no single curve")
-			require.ErrorIs(t, err, decad.ErrDegenerate)
-			require.Contains(t, err.Error(), "disjoint pieces")
+		t.Run(tc.name, func(t *testing.T) {
+			record := squareRecord(tc.joint)
+			for name, measure := range map[string]func() error{
+				"Area":          func() error { _, err := record.Area(); return err },
+				"Centroid":      func() error { _, err := record.Centroid(); return err },
+				"SecondMoments": func() error { _, err := record.SecondMoments(); return err },
+			} {
+				t.Run(name, func(t *testing.T) {
+					err := measure()
+					require.Error(t, err, "the slicer's precondition does not hold on this record")
+					require.ErrorIs(t, err, tc.sentinel)
+					require.Contains(t, err.Error(), tc.message)
+				})
+			}
 		})
 	}
+}
+
+// record.go admits a knot vector clamped one repeat PAST degree+1 at an end: the
+// extra repeat leaves a dead control point and no discontinuity anywhere, so the
+// record states a perfectly ordinary single quadratic Bézier. The evaluator
+// still cannot slice it — 4 control points are not a whole number of degree-2
+// spans — and that is a limitation of the evaluator, not a claim that no such
+// body exists.
+func TestOverClampedNURBSRefusesAsUnsupported(t *testing.T) {
+	segment := decad.NURBSSeg{
+		Degree:  2,
+		Control: []decad.Point2{{U: 0, V: 0}, {U: 0, V: 0}, {U: 1, V: 2}, {U: 2, V: 0}},
+		Knots:   []float64{0, 0, 0, 0, 1, 1, 1},
+		Weights: []float64{1, 1, 1, 1},
+		TStart:  0,
+		TEnd:    1,
+	}
+	record := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
+		segment,
+		decad.LineSeg{Start: decad.Point2{U: 2}, End: decad.Point2{}, TStart: 0, TEnd: 1},
+	}}}
+
+	_, err := record.Area()
+	require.Error(t, err)
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+	require.NotErrorIs(t, err, decad.ErrDegenerate)
+	require.Contains(t, err.Error(), "whole number of degree-2 Bézier spans")
 }
 
 // The walk anchor is subtracted from every coordinate before integration, and
@@ -358,10 +419,11 @@ func TestOverBudgetFreeformRefusesBeforeSketchSampling(t *testing.T) {
 	require.Less(t, time.Since(start), 2*time.Second, "the refusal precedes the sketch reconstruction")
 }
 
-// A spline chained with a straight chord exercises the mixed path: the line
-// contributes through the existing exact-rational line formulas and the spline
-// through the Bézier integrals, into one region.
-func TestSplineAndChordProfileMoments(t *testing.T) {
+// recordSplineAndChord records the hump-and-chord region: an open cubic spline
+// closed by a straight line, recorded through sketch so the loop carries the
+// arrangement's own segment order and walk direction.
+func recordSplineAndChord(t *testing.T) decad.ProfileRecord {
+	t.Helper()
 	world := sketch.NewWorld()
 	s, err := world.CreateSketch(world.XY())
 	require.NoError(t, err)
@@ -379,6 +441,126 @@ func TestSplineAndChordProfileMoments(t *testing.T) {
 
 	record, _, err := decad.RecordProfile(s, profiles[0])
 	require.NoError(t, err)
+	return record
+}
+
+// allocatedBy reports how many bytes a call allocates in total, which is the
+// only way to tell a charge levied BEFORE an allocation from one levied after
+// it: both refuse, and only the measurement distinguishes them.
+func allocatedBy(call func()) uint64 {
+	runtime.GC()
+	var before, after runtime.MemStats
+	runtime.ReadMemStats(&before)
+	call()
+	runtime.ReadMemStats(&after)
+	return after.TotalAlloc - before.TotalAlloc
+}
+
+// The conversion's charge has to be RESERVED before the rational lift, not after
+// it. An open spline's conversion is quadratic, so the largest record the
+// ceiling can ever admit holds around 136 control points — and a record three
+// orders of magnitude past that was still lifting two big.Rat per control point
+// and a whole rational knot vector before its refusal: 118 MB and 179 ms at
+// 200,000 controls, against 16 us and no allocation at all one control point
+// past the point where the LIFT's own linear charge saturated. A refused record
+// must allocate on the order of the record itself.
+func TestOverBudgetConversionRefusesBeforeLifting(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		controls int
+		segment  func([]decad.Point2) decad.CurveSegment
+	}{
+		{
+			name:     "spline",
+			controls: 200000,
+			segment: func(control []decad.Point2) decad.CurveSegment {
+				return decad.SplineSeg{Control: control, TStart: 0, TEnd: 1}
+			},
+		},
+		{
+			name:     "closed spline",
+			controls: 300000,
+			segment: func(control []decad.Point2) decad.CurveSegment {
+				return decad.ClosedSplineSeg{Control: control, CCW: true, TStart: 0, TEnd: 1}
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			control := make([]decad.Point2, tc.controls)
+			for i := range control {
+				control[i] = decad.Point2{U: float64(i), V: float64(i % 5)}
+			}
+			record := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
+				tc.segment(control),
+			}}}
+
+			var err error
+			start := time.Now()
+			allocated := allocatedBy(func() { _, err = record.Area() })
+			elapsed := time.Since(start)
+
+			require.Error(t, err)
+			require.ErrorIs(t, err, decad.ErrUnsupported)
+			require.Contains(t, err.Error(), "work budget")
+			// The record's own control points are 16 bytes each and are already
+			// allocated when the measurement starts, so this budget is generous
+			// against a refusal that lifts nothing and tiny against one that does.
+			require.Less(t, allocated, uint64(tc.controls)*16,
+				"a refused record allocates on the order of the record, not the rationals it would have lifted")
+			require.Less(t, elapsed, 2*time.Second)
+		})
+	}
+}
+
+// The R7 ceiling has to model the sketch RECONSTRUCTION, which is the pass the
+// preflight was deliberately placed ahead of and the one a Tier A record
+// actually spends its time in. A closed spline's conversion is LINEAR in its
+// control count, so a ceiling counting only conversion and integration admitted
+// an 800-control record and then spent nearly five uncancellable seconds inside
+// ProfileRecord.Area — chording and arranging the curve in sketch, none of it
+// decad's own rational arithmetic, and none of it interruptible because the
+// public measurement methods take no context.
+//
+// With the reconstruction charged, the largest closed spline the ceiling admits
+// holds 224 control points; measuring it takes roughly half a second here. That
+// count is the bound the ceiling now guarantees for this kind, and it is exact
+// integer arithmetic, so it does not move from machine to machine.
+func TestReconstructionIsChargedBeforeItRuns(t *testing.T) {
+	ring := func(controls int) decad.ProfileRecord {
+		control := make([]decad.Point2, controls)
+		for i := range control {
+			angle := 2 * math.Pi * float64(i) / float64(controls)
+			control[i] = decad.Point2{U: 10 * math.Cos(angle), V: 10 * math.Sin(angle)}
+		}
+		return decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
+			decad.ClosedSplineSeg{Control: control, CCW: true, TStart: 0, TEnd: 1},
+		}}}
+	}
+
+	area, err := ring(224).Area()
+	require.NoError(t, err, "the largest record the ceiling admits still measures")
+	value, err := area.Value.In(units.SquareMillimeter)
+	require.NoError(t, err)
+	require.InDelta(t, math.Pi*100, value, 1.0, "a 224-control ring is very nearly its circle")
+
+	for _, controls := range []int{225, 800} {
+		start := time.Now()
+		_, err := ring(controls).Area()
+		require.Error(t, err, "%d controls is past the ceiling", controls)
+		require.ErrorIs(t, err, decad.ErrUnsupported)
+		require.Contains(t, err.Error(), "work budget")
+		require.Contains(t, err.Error(), "profile loop 0 segment 0 is invalid",
+			"the refusal is the preflight's, ahead of the reconstruction")
+		require.Less(t, time.Since(start), time.Second,
+			"no reconstruction ran before the refusal")
+	}
+}
+
+// A spline chained with a straight chord exercises the mixed path: the line
+// contributes through the existing exact-rational line formulas and the spline
+// through the Bézier integrals, into one region.
+func TestSplineAndChordProfileMoments(t *testing.T) {
+	record := recordSplineAndChord(t)
 
 	area, err := record.Area()
 	require.NoError(t, err)
@@ -499,13 +681,13 @@ func TestMalformedNURBSRefusesBeforeScanningControls(t *testing.T) {
 }
 
 // The work ceiling bounds a RECORD's total free-form work, never each segment's
-// own. Two closed splines of 500 controls are individually affordable — 547,000
+// own. Two closed splines of 200 controls are individually affordable — 858,800
 // charged units each against a ceiling of 1,048,576 — and unaffordable together,
 // so a counter opened per segment reads both as cheap and lets the record run to
 // a topology answer instead of refusing. The refusal names the SECOND segment,
 // which is the proof that the first segment's charge carried into it.
 func TestFreeformWorkBudgetBoundsTheWholeRecord(t *testing.T) {
-	const controls = 500
+	const controls = 200
 	record := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
 		closedSplineSegmentOf(controls, 10),
 		closedSplineSegmentOf(controls, 3),
@@ -592,6 +774,203 @@ func TestNonFiniteFreeformRangeIsNotFinite(t *testing.T) {
 	}
 }
 
+// The recorded range's FINITENESS and its FULL-DOMAIN shape are two different
+// refusals, and each has to reach the same verdict on every free-form kind.
+//
+// A non-finite range is a non-finite INPUT, so core §12 gives it ErrNotFinite on
+// all seven kinds — reading it inside the Tier A arms alone reports it there and
+// leaves the other four answering with their own kind reason instead. A trimmed
+// range is the opposite: Table R states R2 and R6 and the Tier B rows
+// unconditionally and carries no row for a trimmed range reaching the evaluator,
+// so a kind refused for its own cause keeps reporting that cause whatever its
+// range says.
+func TestFreeformRecordedRangeRefusals(t *testing.T) {
+	spline := func(tStart, tEnd float64) decad.ProfileRecord {
+		record := recordSplineAndChord(t)
+		segments := slices.Clone(record.Outer.Segments)
+		for i, segment := range segments {
+			seg, ok := segment.(decad.SplineSeg)
+			if !ok {
+				continue
+			}
+			// The arrangement decides which way this loop walks the spline, so the
+			// requested pair is applied in the recorded walk's own sense.
+			if seg.TStart > seg.TEnd {
+				tStart, tEnd = tEnd, tStart
+			}
+			seg.TStart, seg.TEnd = tStart, tEnd
+			segments[i] = seg
+		}
+		return decad.ProfileRecord{Outer: decad.LoopRecord{Segments: segments}}
+	}
+	closedSpline := func(tStart, tEnd float64) decad.ProfileRecord {
+		control := make([]decad.Point2, len(closedSplineControls))
+		for i, c := range closedSplineControls {
+			control[i] = decad.Point2{U: c[0], V: c[1]}
+		}
+		return decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
+			decad.ClosedSplineSeg{Control: control, CCW: true, TStart: tStart, TEnd: tEnd},
+		}}}
+	}
+	nurbs := func(tStart, tEnd float64) decad.ProfileRecord {
+		square := []decad.Point2{{}, {U: 1}, {U: 1, V: 1}, {V: 1}}
+		segments := make([]decad.CurveSegment, len(square))
+		for i := range square {
+			edge := nurbsEdge(square[i], square[(i+1)%len(square)])
+			edge.TStart, edge.TEnd = tStart, tEnd
+			segments[i] = edge
+		}
+		return decad.ProfileRecord{Outer: decad.LoopRecord{Segments: segments}}
+	}
+	single := func(build func(tStart, tEnd float64) decad.CurveSegment) func(float64, float64) decad.ProfileRecord {
+		return func(tStart, tEnd float64) decad.ProfileRecord {
+			return decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
+				build(tStart, tEnd),
+			}}}
+		}
+	}
+	fitSpline := single(func(tStart, tEnd float64) decad.CurveSegment {
+		return decad.FitSplineSeg{
+			Fit:    []decad.Point2{{}, {U: 1, V: 1}, {U: 2}},
+			TStart: tStart, TEnd: tEnd,
+		}
+	})
+	ellipticalArc := single(func(tStart, tEnd float64) decad.CurveSegment {
+		return decad.EllipticalArcSeg{
+			Center: decad.Point2{}, Start: decad.Point2{U: 2}, End: decad.Point2{V: 1},
+			Rx: units.Millimeters(2), Ry: units.Millimeters(1), Rotation: units.Radians(0),
+			TStart: tStart, TEnd: tEnd,
+		}
+	})
+	conic := single(func(tStart, tEnd float64) decad.CurveSegment {
+		return decad.ConicSeg{
+			Start: decad.Point2{}, Apex: decad.Point2{U: 1, V: 1}, End: decad.Point2{U: 2},
+			Rho: 0.4, TStart: tStart, TEnd: tEnd,
+		}
+	})
+	ellipse := single(func(tStart, tEnd float64) decad.CurveSegment {
+		return decad.EllipseSeg{
+			Center: decad.Point2{}, Rx: units.Millimeters(2), Ry: units.Millimeters(1),
+			Rotation: units.Radians(0), CCW: true, TStart: tStart, TEnd: tEnd,
+		}
+	})
+
+	for _, tc := range []struct {
+		name string
+		of   func(tStart, tEnd float64) decad.ProfileRecord
+		// fullSentinel is nil where the kind measures over its full domain.
+		fullSentinel error
+		fullMessage  string
+		// trimmedMessage names the cause that wins over the trimmed range.
+		trimmedMessage string
+	}{
+		{name: "spline", of: spline, trimmedMessage: "full domain"},
+		{name: "closed spline", of: closedSpline, trimmedMessage: "full domain"},
+		{name: "NURBS", of: nurbs, trimmedMessage: "full domain"},
+		{
+			name: "fit spline", of: fitSpline,
+			fullSentinel: decad.ErrUnsupported, fullMessage: "interpolation solve",
+			trimmedMessage: "interpolation solve",
+		},
+		{
+			name: "elliptical arc", of: ellipticalArc,
+			fullSentinel: decad.ErrUnsupported, fullMessage: "pinned endpoints",
+			trimmedMessage: "pinned endpoints",
+		},
+		{
+			name: "conic", of: conic,
+			fullSentinel: decad.ErrUnsupported, fullMessage: "no closed form",
+			trimmedMessage: "no closed form",
+		},
+		{
+			name: "ellipse", of: ellipse,
+			fullSentinel: decad.ErrUnsupported, fullMessage: "no closed form",
+			trimmedMessage: "no closed form",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			// Every cell is asserted twice: on the caller-built record, and on the
+			// same record decoded from its own wire form, so the codec cannot smuggle
+			// a different range in.
+			measure := func(t *testing.T, record decad.ProfileRecord) error {
+				t.Helper()
+				_, err := record.Area()
+				return err
+			}
+			decoded := func(t *testing.T, record decad.ProfileRecord) (decad.ProfileRecord, bool) {
+				t.Helper()
+				encoded, err := json.Marshal(record)
+				if err != nil {
+					return decad.ProfileRecord{}, false
+				}
+				var out decad.ProfileRecord
+				require.NoError(t, json.Unmarshal(encoded, &out))
+				return out, true
+			}
+
+			t.Run("full", func(t *testing.T) {
+				err := measure(t, tc.of(0, 1))
+				if tc.fullSentinel == nil {
+					require.NoError(t, err, "a full recorded domain measures")
+				} else {
+					require.ErrorIs(t, err, tc.fullSentinel)
+					require.Contains(t, err.Error(), tc.fullMessage)
+				}
+
+				record, ok := decoded(t, tc.of(0, 1))
+				require.True(t, ok, "a full range encodes")
+				err = measure(t, record)
+				if tc.fullSentinel == nil {
+					require.NoError(t, err)
+				} else {
+					require.ErrorIs(t, err, tc.fullSentinel)
+				}
+
+				// [1, 0] is the other full domain (spline design §2), so the range
+				// gate admits it too. What a reversed OUTER loop then fails on is its
+				// own negative area, never a range refusal.
+				if err := measure(t, tc.of(1, 0)); err != nil {
+					require.NotErrorIs(t, err, decad.ErrNotFinite)
+					require.NotContains(t, err.Error(), "full domain")
+				}
+			})
+
+			t.Run("trimmed", func(t *testing.T) {
+				err := measure(t, tc.of(0.25, 0.75))
+				require.ErrorIs(t, err, decad.ErrUnsupported)
+				require.NotErrorIs(t, err, decad.ErrNotFinite)
+				require.Contains(t, err.Error(), tc.trimmedMessage,
+					"the kind's own cause wins over the trimmed range")
+
+				record, ok := decoded(t, tc.of(0.25, 0.75))
+				require.True(t, ok, "a trimmed range encodes")
+				err = measure(t, record)
+				require.ErrorIs(t, err, decad.ErrUnsupported)
+				require.Contains(t, err.Error(), tc.trimmedMessage)
+			})
+
+			t.Run("non-finite", func(t *testing.T) {
+				for _, record := range []decad.ProfileRecord{
+					tc.of(math.NaN(), 1),
+					tc.of(0, math.Inf(1)),
+					tc.of(math.Inf(-1), math.NaN()),
+				} {
+					err := measure(t, record)
+					require.ErrorIs(t, err, decad.ErrNotFinite,
+						"a non-finite range is a non-finite input on every free-form kind")
+					require.NotErrorIs(t, err, decad.ErrUnsupported)
+					require.Contains(t, err.Error(), "not finite")
+
+					// No decoded recipe can present this cell: JSON has no NaN and no
+					// infinity, so the wire form cannot carry one either way.
+					_, ok := decoded(t, record)
+					require.False(t, ok, "a non-finite range has no wire form")
+				}
+			})
+		})
+	}
+}
+
 // A NURBS whose weights are ALL EQUAL is the same curve at every magnitude —
 // equal weights cancel in the homogeneous quotient — so it is Tier A and owes
 // an answer whatever magnitude the record states. The reconstruction sketch
@@ -657,6 +1036,80 @@ func TestUnderflowingSplineAreaPublishesBoundedZero(t *testing.T) {
 	require.NoError(t, err)
 	require.Positive(t, bound, "the bound is the rounding that produced the zero")
 	require.Equal(t, decad.Approximate, area.Exactness)
+}
+
+// The same underflowing section still has a CENTROID, and the accumulator that
+// proved its area positive is what holds it: the exact first moments divided by
+// the exact area are 2e-200 and 2.194...e-200, both perfectly representable.
+// Dividing the PUBLISHED floats instead reads a zero area with a subnormal bound
+// and refuses an answer already in hand.
+func TestUnderflowingSplineCentroidDividesExactly(t *testing.T) {
+	const scale = 1e-200
+	control := make([]decad.Point2, len(closedSplineControls))
+	for i, c := range closedSplineControls {
+		control[i] = decad.Point2{U: c[0] * scale, V: c[1] * scale}
+	}
+	record := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
+		decad.ClosedSplineSeg{Control: control, CCW: true, TStart: 0, TEnd: 1},
+	}}}
+
+	area, err := record.Area()
+	require.NoError(t, err)
+	value, err := area.Value.In(units.SquareMillimeter)
+	require.NoError(t, err)
+	require.Zero(t, value, "the fixture's own area underflows, which is what makes the guard fire")
+
+	centroid, err := record.Centroid()
+	require.NoError(t, err, "the exact area is strictly positive, so the centroid exists")
+	require.InDelta(t, 2*scale, centroid.Value.X, 1e-215, "∫u dA / A is 2, scaled")
+	require.InDelta(t, 2.1941383606912614*scale, centroid.Value.Y, 1e-215)
+	require.Zero(t, centroid.Value.Z)
+
+	// The unit section's own centroid is the same coordinates at scale 1, so the
+	// scaled reading is not a coincidence of the underflow.
+	unit, err := recordClosedSplineFrom(t, closedSplineControls).Centroid()
+	require.NoError(t, err)
+	require.InDelta(t, unit.Value.X*scale, centroid.Value.X, 1e-215)
+	require.InDelta(t, unit.Value.Y*scale, centroid.Value.Y, 1e-215)
+}
+
+// A centroid taken over the region's own rationals is rounded ONCE, so it obeys
+// the same spline design §3 rule the moments do: Exact with a zero bound exactly
+// when the quotient is representable, Approximate with a single rounding when it
+// is not. A unit square's centroid is (1/2, 1/2) and representable; the
+// closed-spline section's v is 293·.../… and is not.
+func TestFreeformCentroidRoundsOnce(t *testing.T) {
+	square := []decad.Point2{{}, {U: 1}, {U: 1, V: 1}, {V: 1}}
+	segments := make([]decad.CurveSegment, len(square))
+	for i := range square {
+		segments[i] = nurbsEdge(square[i], square[(i+1)%len(square)])
+	}
+	exactCentroid, err := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: segments}}.Centroid()
+	require.NoError(t, err)
+	require.Equal(t, 0.5, exactCentroid.Value.X)
+	require.Equal(t, 0.5, exactCentroid.Value.Y)
+	require.Equal(t, decad.Exact, exactCentroid.Exactness, "(1/2, 1/2) is representable")
+	bound, err := exactCentroid.Bound.In(units.Millimeter)
+	require.NoError(t, err)
+	require.Zero(t, bound)
+
+	approximate, err := recordClosedSplineFrom(t, closedSplineControls).Centroid()
+	require.NoError(t, err)
+	require.Equal(t, decad.Approximate, approximate.Exactness)
+	bound, err = approximate.Bound.In(units.Millimeter)
+	require.NoError(t, err)
+	require.Positive(t, bound)
+
+	// Each coordinate is one rounding — at most half an ulp — and the two are
+	// combined into a plane distance by the sqrt(2) enclosure, so the whole bound
+	// cannot exceed sqrt(2)/2 of an ulp of the larger coordinate. A bound
+	// accumulated through a float division of already-bounded moments is wider
+	// than that, because it carries the area's own rounding into the quotient.
+	largest := math.Max(math.Abs(approximate.Value.X), math.Abs(approximate.Value.Y))
+	halfUlp := (math.Nextafter(largest, math.Inf(1)) - largest) / 2
+	const sqrt2Up = 1.4142135623730952
+	require.LessOrEqual(t, bound, sqrt2Up*halfUlp,
+		"the bound is a single rounding per coordinate, not an accumulated interval")
 }
 
 // A caller-built record whose spline control points all coincide states no

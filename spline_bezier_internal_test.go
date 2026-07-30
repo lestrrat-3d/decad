@@ -198,12 +198,7 @@ func TestFreeformWorkLimitRefuses(t *testing.T) {
 // control record run for hours inside the ceiling.
 func TestClampedConversionCostIsQuadratic(t *testing.T) {
 	cost := func(controls int) uint64 {
-		knots := controls + 4
-		runs := make([]int, controls-4)
-		for i := range runs {
-			runs[i] = 1
-		}
-		return clampedConversionCost(3, controls, knots, runs)
+		return clampedConversionCost(controls, controls+4, uniformKnotDemand(controls, 3))
 	}
 	small, doubled := cost(100), cost(200)
 	require.Less(t, small, freeformWorkLimit, "a 100-control cubic stays inside the ceiling")
@@ -213,43 +208,121 @@ func TestClampedConversionCostIsQuadratic(t *testing.T) {
 
 	// A degree-1 record owes no insertion — every run is already at degree — so
 	// the whole charge is the terminating probe each target still pays for.
-	runs := make([]int, 2998)
-	for i := range runs {
-		runs[i] = 1
+	var probesOnly knotInsertionDemand
+	for range 2998 {
+		probesOnly.add(1, 1)
 	}
-	require.Equal(t, freeformCostCeiling, clampedConversionCost(1, 3000, 3002, runs),
+	require.Zero(t, probesOnly.insertions, "a degree-1 target is already at its own degree")
+	require.Equal(t, freeformCostCeiling, clampedConversionCost(3000, 3002, probesOnly),
 		"probes that insert nothing are charged")
+}
+
+// The demand a conversion is charged from must be readable WITHOUT lifting a
+// knot into a rational, because the charge has to clear before the lift
+// allocates. The float scan and the restated uniform vector must therefore agree
+// with the rational walk the insertion pass itself runs.
+func TestKnotInsertionDemandMatchesRationalWalk(t *testing.T) {
+	rationalDemand := func(degree, n int, knots []*big.Rat) knotInsertionDemand {
+		_, runs, _ := interiorKnotRuns(degree, n, knots)
+		var demand knotInsertionDemand
+		for _, run := range runs {
+			demand.add(degree, run)
+		}
+		return demand
+	}
+
+	for _, controls := range []int{4, 5, 9, 40} {
+		knots := clampedUniformKnots(controls, 3)
+		require.Equal(t,
+			rationalDemand(3, controls, knots),
+			uniformKnotDemand(controls, 3),
+			"restated uniform demand at %d controls", controls)
+	}
+
+	// A degree-2 vector mixing a simple interior knot with a doubled one.
+	floats := []float64{0, 0, 0, 0.25, 0.5, 0.5, 1, 1, 1}
+	rats := make([]*big.Rat, len(floats))
+	for i, value := range floats {
+		rats[i] = new(big.Rat).SetFloat64(value)
+	}
+	require.Equal(t, rationalDemand(2, 6, rats), floatKnotDemand(2, 6, floats))
 }
 
 // The stride-degree slicing rests on consecutive spans SHARING their boundary
 // control point, and the divisibility test that used to stand in for that
 // precondition is satisfied by inputs that break it: a cubic whose four interior
 // knots each sit at multiplicity 4 needs no insertion at all, holds 16 control
-// points, and 15 is divisible by 3 — so the slicer cut five spans across four
-// disconnected pieces and quietly rounded a corner. Validation now rejects that
-// record, so this asserts the slicer's own guard on the same shape.
-func TestBezierSliceCountRejectsBrokenKnotVector(t *testing.T) {
+// points, and 15 is divisible by 3 — so the slicer would cut five spans across
+// the four pieces the record states and quietly round a corner.
+//
+// The SENTINEL that refusal carries is decided by the curve, not by the slicer.
+// At multiplicity degree+1 the two one-sided limits are two recorded control
+// points; identical, and the curve is continuous and the body exists, so this
+// evaluator's inability to slice it is ErrUnsupported; different, and the curve
+// really does break apart, so no such body exists and it is ErrDegenerate.
+func TestBezierSliceCountSplitsBrokenFromUnsliceable(t *testing.T) {
 	third := 1.0 / 3
-	control := []Point2{
-		{U: 0, V: 0}, {U: third, V: 0}, {U: 2 * third, V: 0}, {U: 1, V: 0},
-		{U: 1, V: 0}, {U: 1, V: third}, {U: 1, V: 2 * third}, {U: 1, V: 1},
-		{U: 1, V: 1}, {U: 2 * third, V: 1}, {U: third, V: 1}, {U: 0, V: 1},
-		{U: 0, V: 1}, {U: 0, V: 2 * third}, {U: 0, V: third}, {U: 0, V: 0},
-	}
-	ctrl, err := ratPointsOf(control)
-	require.NoError(t, err)
-	knots := make([]*big.Rat, 0, 20)
-	for _, value := range []int64{0, 1, 2, 3, 4} {
-		for range 4 {
-			knots = append(knots, big.NewRat(value, 4))
+	squareControls := func(joint Point2) []Point2 {
+		return []Point2{
+			{U: 0, V: 0}, {U: third, V: 0}, {U: 2 * third, V: 0}, {U: 1, V: 0},
+			joint, {U: 1, V: third}, {U: 1, V: 2 * third}, {U: 1, V: 1},
+			{U: 1, V: 1}, {U: 2 * third, V: 1}, {U: third, V: 1}, {U: 0, V: 1},
+			{U: 0, V: 1}, {U: 0, V: 2 * third}, {U: 0, V: third}, {U: 0, V: 0},
 		}
 	}
-	require.Len(t, knots, len(ctrl)+3+1)
+	quarterKnots := func() []*big.Rat {
+		knots := make([]*big.Rat, 0, 20)
+		for _, value := range []int64{0, 1, 2, 3, 4} {
+			for range 4 {
+				knots = append(knots, big.NewRat(value, 4))
+			}
+		}
+		return knots
+	}
 
-	_, err = clampedBezierSpans(3, ctrl, knots, &freeformWork{})
-	require.Error(t, err)
-	require.ErrorIs(t, err, ErrDegenerate)
-	require.Contains(t, err.Error(), "multiplicity")
+	t.Run("continuous", func(t *testing.T) {
+		// The two one-sided limits at every break are the same recorded point, so
+		// the four cubic pieces meet: one connected curve this slicer cannot cut.
+		ctrl, err := ratPointsOf(squareControls(Point2{U: 1, V: 0}))
+		require.NoError(t, err)
+		knots := quarterKnots()
+		require.Len(t, knots, len(ctrl)+3+1)
+
+		_, err = clampedBezierSpans(3, ctrl, knots)
+		require.Error(t, err)
+		require.ErrorIs(t, err, ErrUnsupported)
+		require.Contains(t, err.Error(), "share no boundary control point")
+	})
+
+	t.Run("discontinuous", func(t *testing.T) {
+		// Move the first break's right-hand limit away from its left-hand one and
+		// the curve genuinely jumps there.
+		ctrl, err := ratPointsOf(squareControls(Point2{U: 1.5, V: 0}))
+		require.NoError(t, err)
+
+		_, err = clampedBezierSpans(3, ctrl, quarterKnots())
+		require.Error(t, err)
+		require.ErrorIs(t, err, ErrDegenerate)
+		require.Contains(t, err.Error(), "disjoint pieces")
+	})
+
+	t.Run("over-clamped end", func(t *testing.T) {
+		// A degree-2 vector clamped one repeat too far at the start: a single
+		// quadratic Bézier with one dead control point, continuous everywhere, but
+		// 3 control points do not stride into whole degree-2 spans.
+		ctrl, err := ratPointsOf([]Point2{{U: 0, V: 0}, {U: 0, V: 0}, {U: 1, V: 2}, {U: 2, V: 0}})
+		require.NoError(t, err)
+		knots := []*big.Rat{
+			new(big.Rat), new(big.Rat), new(big.Rat), new(big.Rat),
+			big.NewRat(1, 1), big.NewRat(1, 1), big.NewRat(1, 1),
+		}
+		require.Len(t, knots, len(ctrl)+2+1)
+
+		_, err = clampedBezierSpans(2, ctrl, knots)
+		require.Error(t, err)
+		require.ErrorIs(t, err, ErrUnsupported)
+		require.Contains(t, err.Error(), "whole number of degree-2 Bézier spans")
+	})
 }
 
 // The conversion budget must charge every knotMultiplicity PROBE, not only the

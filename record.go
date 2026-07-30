@@ -745,39 +745,67 @@ func validateNURBSSegmentContent(seg NURBSSeg) error {
 }
 
 // validateNURBSInteriorMultiplicity rejects a knot strictly inside the clamped
-// domain that repeats more than degree times.
+// domain at which the recorded curve BREAKS APART, so the record states several
+// disjoint pieces rather than the single connected boundary curve a loop's
+// segment is. That is a malformed record, on the same footing as the clamping,
+// monotonicity and empty-domain rules beside it.
 //
-// A multiplicity of degree is a corner: the curve is still one connected curve
-// through it. One more repeat drops the continuity below C⁰ and the curve
-// genuinely BREAKS APART there, so the record states several disjoint pieces
-// rather than the single connected boundary curve a loop's segment is. That is
-// a malformed record, on the same footing as the clamping, monotonicity and
-// empty-domain rules beside it — not a shape whose area the evaluator owes an
-// answer for. Callers rely on it: the exact Bézier conversion's spans share
-// their boundary control point, which a broken curve's do not.
+// Multiplicity alone does not decide it. A multiplicity of degree is a corner
+// and the curve is still one connected curve through it. At a multiplicity m of
+// degree+1 or more the two one-sided limits are exactly two RECORDED control
+// points — for the knot occupying indices j+1..j+m they are P_j and
+// P_{j+m−degree}, adjacent when m is degree+1 — and the weights do not enter, so
+// continuity there is decided SOLELY by whether those two coordinates are
+// identical. Identical, and the curve is continuous and the body exists, so this
+// admits it: what refuses it later is the evaluator's own stride-degree slicing
+// precondition (bezierSliceCount), which is a limitation of the evaluator and
+// reports ErrUnsupported. Different, and no such body exists, which is this
+// refusal.
+//
+// Equality is exact identity on the recorded coordinates, never a tolerance:
+// both directions are exactly decidable on the floats the record holds, which is
+// what the falsify-never-bless rule requires.
 func validateNURBSInteriorMultiplicity(seg NURBSSeg, n int) error {
-	run := 0
+	lo, hi := seg.Knots[seg.Degree], seg.Knots[n]
+	start, run := 0, 0
 	for i := seg.Degree + 1; i < n; i++ {
 		knot := seg.Knots[i]
-		if knot <= seg.Knots[seg.Degree] || knot >= seg.Knots[n] {
+		if knot <= lo || knot >= hi {
+			if err := validateNURBSKnotRun(seg, start, run); err != nil {
+				return err
+			}
+			run = 0
 			continue
 		}
-		if knot == seg.Knots[i-1] {
+		if run > 0 && knot == seg.Knots[start] {
 			run++
-		} else {
-			run = 1
+			continue
 		}
-		if run > seg.Degree {
-			return prependCodecPath(
-				fmt.Errorf(
-					`%w: NURBS segment interior knot %v repeats %d times, more than its degree %d, so the curve breaks into disjoint pieces`,
-					ErrDegenerate, knot, run, seg.Degree,
-				),
-				fmt.Sprintf(`knots[%d]`, i),
-			)
+		if err := validateNURBSKnotRun(seg, start, run); err != nil {
+			return err
 		}
+		start, run = i, 1
 	}
-	return nil
+	return validateNURBSKnotRun(seg, start, run)
+}
+
+// validateNURBSKnotRun refuses one interior knot run whose two one-sided limits
+// are different recorded control points.
+func validateNURBSKnotRun(seg NURBSSeg, start, run int) error {
+	if run <= seg.Degree {
+		return nil
+	}
+	left, right := start-1, start-1+run-seg.Degree
+	if left < 0 || right >= len(seg.Control) || seg.Control[left] == seg.Control[right] {
+		return nil
+	}
+	return prependCodecPath(
+		fmt.Errorf(
+			`%w: NURBS segment interior knot %v repeats %d times at degree %d and its two one-sided limits are different control points, so the curve breaks into disjoint pieces`,
+			ErrDegenerate, seg.Knots[start], run, seg.Degree,
+		),
+		fmt.Sprintf(`knots[%d]`, start),
+	)
 }
 
 // validateSegment enforces the CurveSegment checks from recipe replay §3.1:

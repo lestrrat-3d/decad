@@ -340,13 +340,15 @@ func validateAnalyticMomentSegment(segment CurveSegment) (CurveSegment, Point2, 
 // (docs/spline-design.md Table R), so no field test is duplicated here.
 //
 // Every charge this segment will EVER owe is levied here, on the record's own
-// counter: the conversion, the re-anchoring the moments pass performs, and the
-// exact integration it then runs. Everything between this step and that pass —
-// momentRecordMatchesSketch reconstructing the entity in a private sketch and
-// SAMPLING it a multiple of the control count — is work proportional to the
-// record's own size, and the R7 ceiling exists because the public ProfileRecord
-// methods take no context and so cannot be cancelled. A ceiling consulted at the
-// point of use fires after the work it is there to bound has already run.
+// counter: the conversion, the sketch RECONSTRUCTION that decides the region's
+// topology, the re-anchoring the moments pass performs, and the exact
+// integration it then runs. The R7 ceiling exists because the public
+// ProfileRecord methods take no context and so cannot be cancelled, and a
+// ceiling consulted at the point of use fires after the work it is there to
+// bound has already run. The reconstruction is charged here for exactly that
+// reason: momentRecordMatchesSketch chords each recorded curve and arranges the
+// result, which is the largest uncancellable pass a Tier A record runs, and
+// nothing in the conversion or integration charges speaks for it.
 func validateFreeformMomentSegment(segment CurveSegment, work *freeformWork) (CurveSegment, Point2, freeformPlan, error) {
 	spans, reversed, err := freeformBezierSpans(segment, work)
 	if err != nil {
@@ -356,6 +358,12 @@ func validateFreeformMomentSegment(segment CurveSegment, work *freeformWork) (Cu
 		return nil, Point2{}, freeformPlan{}, err
 	}
 	if err := chargeFreeformSpans(spans, work); err != nil {
+		return nil, Point2{}, freeformPlan{}, err
+	}
+	// The order among the preflight's own charges carries no guarantee — every
+	// one of them precedes the reconstruction, which is what the ceiling is for —
+	// so the reconstruction's sits after the charges for decad's own arithmetic.
+	if err := chargeFreeformReconstruction(segment, work); err != nil {
 		return nil, Point2{}, freeformPlan{}, err
 	}
 	start, _, err := freeformEndpoints(spans, reversed)

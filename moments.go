@@ -66,15 +66,28 @@ func (r ProfileRecord) Area() (Measurement, error) {
 // region's own plane coordinates, millimetres (§5.2), not a world position —
 // lift it through the profile's PlaneRecord to place it in space.
 //
-// A region whose net area is zero has no centroid and is [ErrDegenerate], and
-// one whose net area the evaluator cannot prove stays away from zero — an area
-// that underflows float64 among them — is [ErrUnsupported]: the division has no
-// bounded result. Record validation and arithmetic errors match
-// [ProfileRecord.Area].
+// A region whose exact area and first moments are all rational — a boundary of
+// line and Tier A free-form walks only — has its centroid taken over those
+// rationals and each coordinate rounded ONCE, so the reported bound is that
+// single rounding: zero, hence Exact, exactly when the quotient is
+// representable. The region's exact area is already proven strictly positive
+// there (see requirePositiveArea), so the quotient exists however small the
+// area's own float image is — a section scaled far enough down for its area to
+// underflow still reports its centroid.
+//
+// Only where some contribution has NO exact rational — a circular walk, whose
+// integral carries π — is the centroid divided in bounded floats. A region whose
+// net area is zero has no centroid and is [ErrDegenerate], and one whose net
+// area that float division cannot prove stays away from zero is
+// [ErrUnsupported]: the division has no bounded result. Record validation and
+// arithmetic errors match [ProfileRecord.Area].
 func (r ProfileRecord) Centroid() (VecMeasurement, error) {
 	ig, err := r.integralsTo(momentFirstOrder)
 	if err != nil {
 		return VecMeasurement{}, err
+	}
+	if exact, ok := ig.exactCentroid(); ok {
+		return exact, nil
 	}
 	if ig.area == 0 && ig.areaBound == 0 {
 		return VecMeasurement{}, fmt.Errorf(`%w: a region with zero net area has no centroid`, ErrDegenerate)
@@ -95,6 +108,39 @@ func (r ProfileRecord) Centroid() (VecMeasurement, error) {
 		Exactness: exactnessOf(bound),
 		Bound:     units.Millimeters(bound),
 	}, nil
+}
+
+// exactCentroid divides the region's exact first moments by its exact area over
+// rationals and rounds each quotient ONCE, which is the same single-rounding
+// rule publishExact applies to the moments themselves (docs/spline-design.md
+// §3). It reports whether the region has such an accumulator at all.
+//
+// It is what keeps the answer from being refused when it is already in hand.
+// requirePositiveArea has PROVEN the exact area strictly positive before this
+// runs, so the centroid exists; the float guards below it read the published
+// area, whose float image can be zero for a region whose exact area underflows,
+// and would report ErrUnsupported for a quotient that is perfectly
+// representable. The float path stays for the regions this one cannot serve:
+// those whose accumulator a circular contribution retired.
+func (ig regionIntegrals) exactCentroid() (VecMeasurement, bool) {
+	if ig.exactDead || !ig.exact.complete() || ig.exact.area.Sign() <= 0 {
+		return VecMeasurement{}, false
+	}
+	u := new(big.Rat).Quo(ig.exact.mu, ig.exact.area)
+	v := new(big.Rat).Quo(ig.exact.mv, ig.exact.area)
+	uHeld, _ := u.Float64()
+	vHeld, _ := v.Float64()
+	if isNonFinite(uHeld) || isNonFinite(vHeld) {
+		// No float64 holds this centroid, so there is no single rounding to
+		// publish; the bounded path answers, or refuses, on its own terms.
+		return VecMeasurement{}, false
+	}
+	bound := radius2D(rationalFloatError(u, uHeld), rationalFloatError(v, vHeld))
+	return VecMeasurement{
+		Value:     r3.NewVec(uHeld, vHeld, 0),
+		Exactness: exactnessOf(bound),
+		Bound:     units.Millimeters(bound),
+	}, true
 }
 
 // SecondMoments is a recorded region's second moments of area about the

@@ -249,10 +249,12 @@ rational convex combination, so the conversion is exact:
 in §5 and §6 runs per NONEMPTY span and must hold on a COLLAPSED one.**
 `validateNURBSSegment` checks the knots finite, non-decreasing, clamped at both
 ends and the whole domain nonempty (`Knots[Degree] < Knots[n]`), the control
-points finite and at least `Degree + 1` of them, and every weight positive; the
-`SplineSeg`/`ClosedSplineSeg` arms check control count, point finiteness and
-parameter range. Neither arm tests distinctness anywhere, and a recording gate
-rightly does not. Three consequences the constructions carry:
+points finite and at least `Degree + 1` of them, every weight positive, and R12's
+one continuity rule — an interior knot past `degree` whose two one-sided limits
+are different recorded control points; the `SplineSeg`/`ClosedSplineSeg` arms
+check control count, point finiteness and parameter range. Neither arm tests
+distinctness anywhere, and a recording gate rightly does not. Three consequences
+the constructions carry:
 
 - **an EMPTY knot span — `t_i = t_{i+1}`, a repeated interior knot — carries no
   Bézier segment.** It enters no sum here and is not a span any §6 row runs on.
@@ -273,14 +275,20 @@ rightly does not. Three consequences the constructions carry:
 
 The conversion raises every interior knot to multiplicity `degree` and then cuts
 consecutive spans that SHARE their boundary control point. A recorded interior
-knot repeating MORE than `degree` times admits no such cut: the curve is
-discontinuous there, so the record states several disjoint pieces rather than
-the one connected boundary curve a loop's segment is. That is a malformed
-record and it is rejected in NURBS validation (Table R, R12), never converted —
-narrowing the accepted input rather than widening the converter, which would
-push a new closure question into the moments path for no gain.
+knot repeating MORE than `degree` times admits no such cut, whatever the curve
+does there, so the conversion refuses it — narrowing the accepted input rather
+than widening the converter, which would push a new closure question into the
+moments path for no gain.
 
-The slicing must PROVE that shape on the knot vector before it cuts a single
+WHICH refusal is a fact about the recorded curve, not about the converter, and
+Table R's R12/R13 split states it: a record whose two one-sided limits at the
+knot differ is broken and rejected in NURBS validation, and one whose limits are
+identical is a continuous curve this converter cannot slice and is admitted as a
+record. A boundary knot over-clamped past `degree+1` is the same reading with no
+discontinuity available at all — the extra repeat leaves a dead control point —
+so it is R13 too.
+
+The slicing must PROVE its own shape on the knot vector before it cuts a single
 span. A divisibility test on the control count does not: a degree-3 curve with
 four multiplicity-4 interior knots holds 16 control points, and 15 divides by 3,
 so the stride-degree cut silently straddles the breaks.
@@ -368,6 +376,25 @@ the knot-multiplicity probes the conversion runs, including the probes that
 insert nothing, and the sketch reconstruction validation samples the curve
 through before any integral is taken. A ceiling consulted after such a pass
 bounds nothing it was added to bound.
+
+That applies to MEMORY as much as to time, and the conversion's own charge is
+where it bites: a record's insertion demand is readable from data already in
+hand as floats — a `SplineSeg`'s degree is fixed and its knot vector derived, a
+`ClosedSplineSeg` owes no insertion at all, and a `NURBSSeg`'s runs read off its
+RECORDED knots — so the whole conversion is charged before one `big.Rat` exists.
+Charging after the lift refuses a record that was hopeless from its control
+count alone only once it has allocated two rationals per control point and a
+whole rational knot vector. The open-spline charge is quadratic, so a refused
+record allocates orders of magnitude more than any accepted one ever could.
+
+The RECONSTRUCTION carries a charge of its own, sized on the control count and
+levied in the same record-level preflight. It is not covered by the conversion
+and integration charges: those bound decad's rational arithmetic, and the
+reconstruction is sketch's — it chords each recorded curve and ARRANGES the
+result, which is pairwise in what it arranges, so the model is quadratic in the
+control count. Without it a kind whose conversion is linear clears the ceiling
+at a control count whose reconstruction runs for seconds, uncancellable, inside
+a public measurement method.
 
 One record-level preflight therefore owns everything before the first expensive
 step, and it owns THREE things. Every cheap structural and finiteness refusal is
@@ -1014,11 +1041,30 @@ rules).
   test. Run each of R3–R5 on a DEGREE-1 `NURBSSeg` walk as well as a curved one
   and require the same `ErrUnsupported`, so the refusal stays keyed on the
   recorded kind rather than on the degree (§4.1).
+- Assert R12 and R13 on the SAME knot vector, moving only the one control point
+  that decides continuity: the record whose two one-sided limits differ is
+  `ErrDegenerate`, the record whose limits are identical is `ErrUnsupported`, and
+  a boundary knot over-clamped past `degree+1` — admitted by record validation,
+  a curve with one dead control point — is `ErrUnsupported` too. A test that
+  asserts only one of the two cannot tell the rule from a multiplicity test.
+- Assert every free-form kind's recorded-range refusals as a table over the kinds
+  crossed with {full, trimmed, non-finite}, each cell by its sentinel, on the
+  caller-built record and on the same record decoded from its own wire form: a
+  non-finite range is `ErrNotFinite` on EVERY kind, and a trimmed range never
+  displaces the cause a kind is already refused for. A test that covers Tier A
+  alone cannot see a kind reading the two refusals in the other order.
 - Assert the §5.2 charge fires BEFORE the pass it bounds, by MEASURING the
   refusal rather than reading the cost formula: a degree-1 record with thousands
   of distinct interior knots — needing no insertion, so an insertion-only charge
   sees nothing to charge — and a high-degree record whose over-budget
   integration would otherwise be reached only after validation had sampled the
   curve in sketch, must each refuse promptly.
+- Measure the ALLOCATION, not only the time: a record refused by the conversion
+  charge must allocate on the order of the record itself, which is what tells a
+  charge levied before the rational lift from one levied after it. Both refuse,
+  and only the measurement distinguishes them.
+- Measure the reconstruction charge by its own boundary: the largest record the
+  ceiling admits still measures, and the next control point past it refuses in
+  milliseconds. State the admitted worst case the ceiling guarantees.
 - Assert recipe replay of every free-form step reproduces body order, provenance
   roles, and measurements within the evaluator's own exactness.

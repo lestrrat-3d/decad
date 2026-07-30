@@ -122,6 +122,16 @@ func freeformBezierSpans(seg CurveSegment, work *freeformWork) ([]bezierSpan, bo
 	if err != nil {
 		return nil, false, err
 	}
+	// The finiteness of the recorded range is decided for EVERY free-form kind
+	// before the kind itself is, because it is a core §12 refusal about an input
+	// field and not a statement about which kinds this evaluator reaches. Reading
+	// it inside the Tier A arms alone would report a NaN range as ErrNotFinite on
+	// a spline and as the kind's own ErrUnsupported reason on the other four.
+	if tStart, tEnd, what, ok := freeformSegmentRange(seg); ok {
+		if err := requireFiniteFreeformRange(tStart, tEnd, what); err != nil {
+			return nil, false, err
+		}
+	}
 	switch seg := seg.(type) {
 	case SplineSeg:
 		spans, err := splineBezierSpans(seg, work)
@@ -152,25 +162,62 @@ func freeformBezierSpans(seg CurveSegment, work *freeformWork) ([]bezierSpan, bo
 	}
 }
 
+// freeformSegmentRange returns a recognized free-form segment's recorded
+// parameter range beside the name its refusals call it by. It is the one place
+// the free-form kinds' range fields are read generically, so the finiteness
+// refusal above reaches every one of them.
+func freeformSegmentRange(seg CurveSegment) (float64, float64, string, bool) {
+	switch seg := seg.(type) {
+	case SplineSeg:
+		return seg.TStart, seg.TEnd, "spline segment", true
+	case ClosedSplineSeg:
+		return seg.TStart, seg.TEnd, "closed spline segment", true
+	case NURBSSeg:
+		return seg.TStart, seg.TEnd, "NURBS segment", true
+	case FitSplineSeg:
+		return seg.TStart, seg.TEnd, "fit spline segment", true
+	case ConicSeg:
+		return seg.TStart, seg.TEnd, "conic segment", true
+	case EllipseSeg:
+		return seg.TStart, seg.TEnd, "ellipse segment", true
+	case EllipticalArcSeg:
+		return seg.TStart, seg.TEnd, "elliptical arc segment", true
+	default:
+		return 0, 0, "", false
+	}
+}
+
+// requireFiniteFreeformRange rejects a non-finite recorded range on ANY
+// free-form kind. Core §12 gives [ErrNotFinite] for a non-finite input, which is
+// what every other segment kind reports for exactly this field and what the
+// free-form path already reports for a non-finite control coordinate. It is
+// therefore decided ahead of the kind dispatch, never inside one kind's arm: a
+// NaN fails both full-domain equality tests, so a kind that tested the range
+// alone would report it as a trimmed range and a kind that never tested it at
+// all would report its own staging reason instead. The test is O(1) on the
+// recorded parameters, so it stands with the structural size refusals, ahead of
+// any content scan.
+func requireFiniteFreeformRange(tStart, tEnd float64, what string) error {
+	if finiteMomentValues(tStart, tEnd) {
+		return nil
+	}
+	return fmt.Errorf(
+		`%w: a %s's recorded range is not finite (range [%v, %v])`,
+		ErrNotFinite, what, tStart, tEnd,
+	)
+}
+
 // requireFullFreeformRange rejects a recorded free-form range that is not the
 // entity's full domain. spline design §2 proves none is recordable, so reaching
 // this is a caller-built or decoded record that bypassed the seam — refuse
 // rather than integrate a piece the conversion does not cover.
 //
-// A NON-FINITE range is a different refusal and takes precedence. NaN fails
-// both equality tests, so a range test alone would report a NaN parameter as a
-// trimmed range — [ErrUnsupported], the staging sentinel — where core §12 gives
-// [ErrNotFinite] for a non-finite input, which is what every other segment kind
-// reports for exactly this field and what the free-form path already reports for
-// a non-finite control coordinate. The test is O(1) on the recorded parameters,
-// so it stands with the structural size refusals, ahead of any content scan.
+// It is the Tier A arms' own gate, and it stays there. Table R states R2 and R6
+// unconditionally and carries no row for a trimmed range reaching the evaluator,
+// so a kind refused for its own cause reports that cause whatever its range
+// says. Finiteness is the separate refusal above, already decided for every kind
+// before this runs.
 func requireFullFreeformRange(tStart, tEnd float64, what string) error {
-	if !finiteMomentValues(tStart, tEnd) {
-		return fmt.Errorf(
-			`%w: a %s's recorded range is not finite (range [%v, %v])`,
-			ErrNotFinite, what, tStart, tEnd,
-		)
-	}
 	if (tStart == 0 && tEnd == 1) || (tStart == 1 && tEnd == 0) {
 		return nil
 	}
@@ -186,7 +233,11 @@ func requireFullFreeformRange(tStart, tEnd float64, what string) error {
 // large to hold rationally refuses at the ceiling rather than allocating first
 // and refusing afterwards.
 func chargeRationalLift(work *freeformWork, controls, knots int) error {
-	return work.step(costAdd(costMul(2, uint64(controls)), uint64(knots)))
+	return work.step(rationalLiftCost(controls, knots))
+}
+
+func rationalLiftCost(controls, knots int) uint64 {
+	return costAdd(costMul(2, uint64(controls)), uint64(knots))
 }
 
 // ratPointsOf lifts recorded control points into exact rationals. A
@@ -222,14 +273,25 @@ func splineBezierSpans(seg SplineSeg, work *freeformWork) ([]bezierSpan, error) 
 			ErrDegenerate, degree+1, len(seg.Control),
 		)
 	}
-	if err := chargeRationalLift(work, len(seg.Control), len(seg.Control)+4); err != nil {
+	// The whole conversion is charged BEFORE the first rational exists. degree is
+	// fixed and geom.ClampedKnots is derived from the control count, so this
+	// record's insertion demand is a pure function of that count — no knot has to
+	// be lifted to learn it. Charging after the lift would let a record whose
+	// conversion is hopelessly over budget allocate two rationals per control
+	// point first: the open-spline charge is quadratic, so a refused record
+	// allocated three orders of magnitude more than any accepted one.
+	knots := len(seg.Control) + 4
+	if err := work.step(costAdd(
+		rationalLiftCost(len(seg.Control), knots),
+		clampedConversionCost(len(seg.Control), knots, uniformKnotDemand(len(seg.Control), degree)),
+	)); err != nil {
 		return nil, err
 	}
 	ctrl, err := ratPointsOf(seg.Control)
 	if err != nil {
 		return nil, err
 	}
-	return clampedBezierSpans(degree, ctrl, clampedUniformKnots(len(ctrl), degree), work)
+	return clampedBezierSpans(degree, ctrl, clampedUniformKnots(len(ctrl), degree))
 }
 
 // clampedUniformKnots is geom.ClampedKnots in exact rationals: degree+1
@@ -282,6 +344,20 @@ func nurbsBezierSpans(seg NURBSSeg, work *freeformWork) ([]bezierSpan, error) {
 			)
 		}
 	}
+	// The conversion is charged before the rational lift, not after it. The
+	// insertion demand reads the RECORDED float knots — a single scan the size
+	// charge above already covers, over a vector the content check just proved
+	// finite and non-decreasing, so its runs are the multiplicities the rational
+	// vector will hold. Charging after the lift would let a record whose
+	// conversion is quadratically over budget allocate every one of its rationals
+	// first and refuse afterwards.
+	if err := work.step(clampedConversionCost(
+		len(seg.Control),
+		len(seg.Knots),
+		floatKnotDemand(seg.Degree, len(seg.Control), seg.Knots),
+	)); err != nil {
+		return nil, err
+	}
 	ctrl, err := ratPointsOf(seg.Control)
 	if err != nil {
 		return nil, err
@@ -294,7 +370,7 @@ func nurbsBezierSpans(seg NURBSSeg, work *freeformWork) ([]bezierSpan, error) {
 		}
 		knots[i] = rat
 	}
-	return clampedBezierSpans(seg.Degree, ctrl, knots, work)
+	return clampedBezierSpans(seg.Degree, ctrl, knots)
 }
 
 // closedSplineBezierSpans converts a ClosedSplineSeg — geom.ClosedSpline's
@@ -315,7 +391,14 @@ func closedSplineBezierSpans(seg ClosedSplineSeg, work *freeformWork) ([]bezierS
 			ErrDegenerate, len(seg.Control),
 		)
 	}
-	if err := chargeRationalLift(work, len(seg.Control), 0); err != nil {
+	// The lift and the whole conversion are charged together, before either
+	// allocates: this conversion needs no knot insertion, so its cost is the 4n
+	// control points of the n spans below and is known from the control count
+	// alone.
+	if err := work.step(costAdd(
+		rationalLiftCost(len(seg.Control), 0),
+		costMul(4, uint64(len(seg.Control))),
+	)); err != nil {
 		return nil, err
 	}
 	ctrl, err := ratPointsOf(seg.Control)
@@ -323,9 +406,6 @@ func closedSplineBezierSpans(seg ClosedSplineSeg, work *freeformWork) ([]bezierS
 		return nil, err
 	}
 	n := len(ctrl)
-	if err := work.step(uint64(n) * 4); err != nil {
-		return nil, err
-	}
 	spans := make([]bezierSpan, n)
 	for i := range n {
 		// The four cyclic controls of span i, matching geom's own indexing.
@@ -368,8 +448,13 @@ func ratWeighted(points []ratPoint, weights []int64, den int64) ratPoint {
 // one whose interior multiplicity already exceeded degree, so no insertion was
 // owed — refuses instead of being sliced on a stride it does not have.
 //
+// The whole pass is charged by the CALLER, before it lifts a coordinate into a
+// rational: every caller knows its own insertion demand from data it already
+// holds as floats, and a charge levied here would land after the lift it is
+// there to bound.
+//
 // Every arithmetic step is rational, so the extracted spans are the curve.
-func clampedBezierSpans(degree int, ctrl []ratPoint, knots []*big.Rat, work *freeformWork) ([]bezierSpan, error) {
+func clampedBezierSpans(degree int, ctrl []ratPoint, knots []*big.Rat) ([]bezierSpan, error) {
 	if degree < 1 {
 		return nil, fmt.Errorf(`%w: a B-spline degree must be at least 1, got %d`, ErrDegenerate, degree)
 	}
@@ -379,10 +464,7 @@ func clampedBezierSpans(degree int, ctrl []ratPoint, knots []*big.Rat, work *fre
 			ErrDegenerate, degree, len(ctrl), want, len(knots),
 		)
 	}
-	targets, runs := interiorKnotRuns(degree, len(ctrl), knots)
-	if err := work.step(clampedConversionCost(degree, len(ctrl), len(knots), runs)); err != nil {
-		return nil, err
-	}
+	targets, _, _ := interiorKnotRuns(degree, len(ctrl), knots)
 	for _, target := range targets {
 		for knotMultiplicity(knots, target) < degree {
 			inserted, insertedKnots, err := insertKnot(degree, ctrl, knots, target)
@@ -392,7 +474,7 @@ func clampedBezierSpans(degree int, ctrl []ratPoint, knots []*big.Rat, work *fre
 			ctrl, knots = inserted, insertedKnots
 		}
 	}
-	count, err := bezierSliceCount(degree, len(ctrl), knots)
+	count, err := bezierSliceCount(degree, ctrl, knots)
 	if err != nil {
 		return nil, err
 	}
@@ -409,56 +491,95 @@ func clampedBezierSpans(degree int, ctrl []ratPoint, knots []*big.Rat, work *fre
 // rests on, and returns the number of spans it may cut.
 //
 // The slicing reads control points [j*degree, j*degree+degree], so consecutive
-// spans SHARE their boundary control point. That is the Bézier form of a
-// clamped B-spline only while every interior knot sits at multiplicity EXACTLY
-// degree: at multiplicity degree+1 the curve is discontinuous there, the two
-// pieces meeting at that knot share no control point at all, and each piece
-// owns degree+1 of its own — so the stride is wrong and the slices straddle the
-// break. A divisibility test on the control count cannot see that (a degree-3
-// curve with four multiplicity-4 interior knots holds 16 controls, and 15 is
-// divisible by 3), so the check is the knot vector's own shape: as many
-// interior knots as there are joins between spans, each at exactly degree.
-func bezierSliceCount(degree, controls int, knots []*big.Rat) (int, error) {
-	if (controls-1)%degree != 0 {
-		return 0, fmt.Errorf(
-			`%w: knot insertion left %d control points, which is not a whole number of degree-%d Bézier spans`,
-			ErrDegenerate, controls, degree,
-		)
-	}
-	count := (controls - 1) / degree
-	if count == 0 {
-		return 0, fmt.Errorf(`%w: a B-spline with an empty knot domain bounds no curve`, ErrDegenerate)
-	}
-	values, runs := interiorKnotRuns(degree, controls, knots)
+// spans SHARE their boundary control point. That holds only while every interior
+// knot sits at multiplicity EXACTLY degree and the control count divides into
+// whole spans. A record that misses either shape is refused here rather than
+// sliced across a stride it does not have.
+//
+// The SENTINEL is not the same for every miss, and the difference is a fact
+// about the recorded curve rather than about this slicer. At an interior
+// multiplicity m ≥ degree+1 the curve's two one-sided limits at that knot are
+// exactly two recorded control points — for the knot occupying indices j+1..j+m
+// they are P_j and P_{j+m−degree} — so continuity there is decided SOLELY by
+// whether those two coordinates are identical, and weights never enter. When
+// they DIFFER the curve genuinely breaks apart, the record states several
+// disjoint pieces rather than one boundary curve, and no such body exists:
+// [ErrDegenerate]. When they are IDENTICAL the curve is continuous and the body
+// does exist — this evaluator simply cannot slice a stride whose spans share no
+// boundary control point, which is a limitation of the evaluator and so
+// [ErrUnsupported]. Equality is exact identity on the recorded coordinates,
+// never a tolerance: both directions are exactly decidable over rationals, which
+// is what the falsify-never-bless rule requires.
+//
+// The structural misses below carry the same reading. A control count that is
+// not a whole number of spans is reachable from a record record.go admits — a
+// knot vector over-clamped past degree+1 at an end, whose extra repeat leaves a
+// dead control point and no discontinuity anywhere — so it is this evaluator's
+// own stride precondition failing on a curve that exists: [ErrUnsupported].
+func bezierSliceCount(degree int, ctrl []ratPoint, knots []*big.Rat) (int, error) {
+	values, runs, starts := interiorKnotRuns(degree, len(ctrl), knots)
 	for i, run := range runs {
-		if run != degree {
+		if run == degree {
+			continue
+		}
+		if run > degree && brokenKnot(degree, ctrl, starts[i], run) {
 			return 0, fmt.Errorf(
-				`%w: interior knot %d sits at multiplicity %d rather than %d, so consecutive Bézier spans share no boundary control point`,
+				`%w: interior knot %d repeats %d times at degree %d and its two one-sided limits are different control points, so the recorded curve breaks into disjoint pieces`,
 				ErrDegenerate, i, run, degree,
 			)
 		}
+		return 0, fmt.Errorf(
+			`%w: interior knot %d sits at multiplicity %d rather than %d, so consecutive Bézier spans share no boundary control point`,
+			ErrUnsupported, i, run, degree,
+		)
+	}
+	if (len(ctrl)-1)%degree != 0 {
+		return 0, fmt.Errorf(
+			`%w: knot insertion left %d control points, which is not a whole number of degree-%d Bézier spans`,
+			ErrUnsupported, len(ctrl), degree,
+		)
+	}
+	count := (len(ctrl) - 1) / degree
+	if count == 0 {
+		return 0, fmt.Errorf(`%w: a B-spline with an empty knot domain bounds no curve`, ErrDegenerate)
 	}
 	if len(values) != count-1 {
 		return 0, fmt.Errorf(
 			`%w: a degree-%d B-spline over %d Bézier spans needs %d interior knots, got %d`,
-			ErrDegenerate, degree, count, count-1, len(values),
+			ErrUnsupported, degree, count, count-1, len(values),
 		)
 	}
 	return count, nil
 }
 
+// brokenKnot reports whether the curve is discontinuous at an interior knot of
+// multiplicity run beginning at knot index start. The two one-sided limits at a
+// knot occupying indices j+1..j+m are the recorded control points P_j and
+// P_{j+m−degree}; the curve breaks apart exactly when those two coordinates
+// differ, which is an exact comparison over rationals.
+func brokenKnot(degree int, ctrl []ratPoint, start, run int) bool {
+	left, right := start-1, start-1+run-degree
+	if left < 0 || right < 0 || left >= len(ctrl) || right >= len(ctrl) {
+		// No pair of recorded limits to compare, so nothing is proven broken.
+		return false
+	}
+	return ctrl[left].u.Cmp(ctrl[right].u) != 0 || ctrl[left].v.Cmp(ctrl[right].v) != 0
+}
+
 // interiorKnotRuns returns each distinct knot strictly inside the clamped
 // domain — the values insertion must raise — beside the length of its
-// contiguous run. The run is a SUBSET of the value's whole-vector multiplicity,
-// so treating it as that multiplicity can only OVERSTATE the insertions still
-// owed, which is what clampedConversionCost needs to stay an upper bound. The
-// insertion loop itself reads knotMultiplicity, so an unsorted vector costs a
-// wider estimate and never a wrong span.
-func interiorKnotRuns(degree, n int, knots []*big.Rat) ([]*big.Rat, []int) {
+// contiguous run and the index that run starts at. The run is a SUBSET of the
+// value's whole-vector multiplicity, so treating it as that multiplicity can
+// only OVERSTATE the insertions still owed, which is what clampedConversionCost
+// needs to stay an upper bound. The insertion loop itself reads
+// knotMultiplicity, so an unsorted vector costs a wider estimate and never a
+// wrong span.
+func interiorKnotRuns(degree, n int, knots []*big.Rat) ([]*big.Rat, []int, []int) {
 	lo, hi := knots[degree], knots[n]
 	var values []*big.Rat
 	var runs []int
-	for _, knot := range knots[degree+1 : n] {
+	var starts []int
+	for offset, knot := range knots[degree+1 : n] {
 		if knot.Cmp(lo) <= 0 || knot.Cmp(hi) >= 0 {
 			continue
 		}
@@ -468,8 +589,71 @@ func interiorKnotRuns(degree, n int, knots []*big.Rat) ([]*big.Rat, []int) {
 		}
 		values = append(values, knot)
 		runs = append(runs, 1)
+		starts = append(starts, degree+1+offset)
 	}
-	return values, runs
+	return values, runs, starts
+}
+
+// knotInsertionDemand is what the insertion pass will owe a knot vector: the
+// total single-knot insertions and the number of distinct interior targets it
+// probes. It is stated separately from the vector itself because every caller
+// can derive it WITHOUT lifting a knot into a rational, which is what lets the
+// conversion be charged before it allocates.
+type knotInsertionDemand struct {
+	insertions uint64
+	targets    uint64
+}
+
+func (d *knotInsertionDemand) add(degree, run int) {
+	d.targets++
+	if run < degree {
+		d.insertions = costAdd(d.insertions, uint64(degree-run))
+	}
+}
+
+// uniformKnotDemand is the demand of geom.ClampedKnots(n) at the given degree,
+// which splineBezierSpans restates rather than records: its interior knots are
+// the n−degree−1 distinct values j/(n−degree), each at multiplicity one, so each
+// owes degree−1 insertions. Being a pure function of the control count is
+// exactly what lets a SplineSeg charge its whole conversion before it lifts a
+// single coordinate.
+func uniformKnotDemand(n, degree int) knotInsertionDemand {
+	if n <= degree+1 || degree < 1 {
+		return knotInsertionDemand{}
+	}
+	targets := uint64(n - degree - 1)
+	return knotInsertionDemand{
+		insertions: costMul(targets, uint64(degree-1)),
+		targets:    targets,
+	}
+}
+
+// floatKnotDemand reads the demand off the RECORDED float knots, so a NURBS
+// record can be charged for its conversion before it allocates one rational. It
+// runs the same contiguous-run walk interiorKnotRuns does; its callers have
+// already proven the vector finite and non-decreasing, so the runs it counts are
+// the multiplicities the lifted rational vector holds.
+func floatKnotDemand(degree, n int, knots []float64) knotInsertionDemand {
+	lo, hi := knots[degree], knots[n]
+	var demand knotInsertionDemand
+	run, previous := 0, 0.0
+	for _, knot := range knots[degree+1 : n] {
+		if knot <= lo || knot >= hi {
+			continue
+		}
+		if run > 0 && knot == previous {
+			run++
+			continue
+		}
+		if run > 0 {
+			demand.add(degree, run)
+		}
+		previous, run = knot, 1
+	}
+	if run > 0 {
+		demand.add(degree, run)
+	}
+	return demand
 }
 
 // clampedConversionCost is the conservative preflight of the whole knot
@@ -490,19 +674,13 @@ func interiorKnotRuns(degree, n int, knots []*big.Rat) ([]*big.Rat, []int) {
 // still pays one full knot-vector scan per target — quadratic work a charge
 // counting insertions alone reads as nothing (a degree-1 record with thousands
 // of distinct interior knots is that shape exactly).
-func clampedConversionCost(degree, controls, knots int, runs []int) uint64 {
-	insertions := uint64(0)
-	for _, run := range runs {
-		if run < degree {
-			insertions = costAdd(insertions, uint64(degree-run))
-		}
-	}
-	finalControls := costAdd(uint64(controls), insertions)
-	finalKnots := costAdd(uint64(knots), insertions)
+func clampedConversionCost(controls, knots int, demand knotInsertionDemand) uint64 {
+	finalControls := costAdd(uint64(controls), demand.insertions)
+	finalKnots := costAdd(uint64(knots), demand.insertions)
 	perInsertion := costAdd(costMul(2, finalControls), costMul(3, finalKnots))
-	probes := costMul(uint64(len(runs)), finalKnots)
+	probes := costMul(demand.targets, finalKnots)
 	// The interiorKnotRuns pass itself walks the knot vector once.
-	return costAdd(costAdd(costMul(insertions, perInsertion), probes), uint64(knots))
+	return costAdd(costAdd(costMul(demand.insertions, perInsertion), probes), uint64(knots))
 }
 
 func knotMultiplicity(knots []*big.Rat, target *big.Rat) int {
@@ -555,6 +733,60 @@ func insertKnot(degree int, ctrl []ratPoint, knots []*big.Rat, target *big.Rat) 
 	outKnots = append(outKnots, target)
 	outKnots = append(outKnots, knots[span+1:]...)
 	return out, outKnots, nil
+}
+
+// freeformReconstructionChords is how many polyline chords the sketch
+// reconstruction is charged per recorded control point. sketch chords each
+// free-form curve before it arranges it, so the arrangement's element count
+// grows with the control count; this factor is the conversion from one to the
+// other, deliberately generous because the sampling density is sketch's own
+// decision and not a number decad may read.
+const freeformReconstructionChords = 4
+
+// freeformReconstructionCost is the record-level preflight of the sketch
+// reconstruction — momentRecordMatchesSketch (moments_validate.go), the pass
+// that asks sketch to decide the recorded region's topology.
+//
+// That pass is neither cheap nor cancellable: it CHORDS every free-form curve
+// and then ARRANGES the result, and a planar arrangement is pairwise in the
+// elements it arranges, so the model is QUADRATIC in the chord count and hence
+// in the control count. Nothing else in this file speaks for it — the conversion
+// and integration charges bound decad's own rational arithmetic, which the
+// profile of a slow record shows is not where its time goes — so a record whose
+// conversion is linear (a ClosedSplineSeg) cleared the ceiling with hundreds of
+// control points and then spent seconds inside a public ProfileRecord method
+// that takes no context and cannot be interrupted.
+//
+// The charge is levied in the SAME record-level preflight as the others
+// (validateFreeformMomentSegment), which runs before the reconstruction does. It
+// is charged for every record, including the paths that skip the reconstruction:
+// the ceiling is the record's, one preflight owns every charge it will ever owe,
+// and a charge that were conditional on a later branch would not be a preflight.
+func freeformReconstructionCost(controls int) uint64 {
+	chords := costMul(freeformReconstructionChords, uint64(controls))
+	return costMul(chords, chords)
+}
+
+// chargeFreeformReconstruction levies that charge on the record's counter.
+func chargeFreeformReconstruction(seg CurveSegment, work *freeformWork) error {
+	return work.step(freeformReconstructionCost(freeformControlCount(seg)))
+}
+
+// freeformControlCount is a converted free-form segment's own recorded control
+// count — the size the reconstruction's chord count grows with. A kind that
+// never converts is charged nothing here, because it refuses with its own Table
+// R reason before any reconstruction is reached.
+func freeformControlCount(seg CurveSegment) int {
+	switch seg := seg.(type) {
+	case SplineSeg:
+		return len(seg.Control)
+	case ClosedSplineSeg:
+		return len(seg.Control)
+	case NURBSSeg:
+		return len(seg.Control)
+	default:
+		return 0
+	}
 }
 
 // chargeFreeformShift preflights the re-anchoring of a whole converted chain:
