@@ -460,10 +460,8 @@ type Cylinder struct { Origin, Axis r3.Vec; Radius units.Value }
 type Cone struct     { Origin, Axis r3.Vec; Radius, HalfAngle units.Value }
 type Sphere struct   { Center r3.Vec; Radius units.Value }
 type Torus struct    { Center, Axis r3.Vec; Major, Minor units.Value }
-// NURBSSurface is a free-form face's geometry — the exact extruded or revolved
-// surface of a recorded free-form curve, so Exact by construction like every
-// other analytic variant. Its control net is private in v1
-// (`docs/spline-design.md` §7).
+// NURBSSurface is a free-form face's geometry. `docs/spline-design.md` §7 owns
+// its construction, its exactness and its v1 shape.
 type NURBSSurface struct { /* private */ }
 
 // Faceted is the honest v1 variant: a face a boolean produced, whose public

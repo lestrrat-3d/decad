@@ -145,6 +145,7 @@ exactly → `ErrUnrecordableProfile`.
 | **R7** | exact-rational integration exceeds its work budget | `ErrUnsupported` | no, §5.2 |
 | **R8** | chording a free-form walk needs more than the chord cap | `ErrUnsupported` | no, reuses `errTooManyChords` |
 | **R9** | a bracket cannot separate a `Verify` reading from its threshold | not an error — `Suspect` | no, §8 |
+| **R10** | a Tier B or Tier C walk reaches a BUILD before its moments land | `ErrUnsupported` | no, §8 |
 
 R9 is the one row that is not a refusal. An intent the evaluator cannot BUILD is
 `ErrUnsupported` at the call; a `Verify` question it cannot ANSWER is accepted
@@ -262,7 +263,14 @@ any tier. Bracket it instead:
 
 - the CHORD is a lower bound;
 - the CONTROL POLYGON is an upper bound (variation diminishing);
-- de Casteljau subdivision shrinks the gap by 4× per level.
+- de Casteljau subdivision shrinks the gap toward zero.
+
+**The stopping certificate is the MEASURED post-subdivision enclosure, never an
+assumed per-level rate.** Recompute both bounds on the child spans, sum them, and
+stop when that measured gap meets the target. The familiar 4× per level is
+ASYMPTOTIC only: the first levels of a span with a far control point shrink the
+gap by substantially less, so a depth sized from that rate reports a bound the
+actual enclosure does not support. NEVER size a depth from a rate.
 
 Both bounds are proven, not sampled. Report the interval midpoint as the value
 and its half width as the bound, `Approximate` always — a zero bound here would
@@ -280,16 +288,38 @@ a fixed depth budget, all context-aware. In Bézier form every free-form questio
 decad needs is one of its root problems. Reuse it. Do NOT fork a second root
 finder.
 
-| Question | Reduces to | Consumer |
-|---|---|---|
-| directional extreme | `d/dt(g·C(t)) = 0`, degree `p−1` per span | `extentAlong`, `Box`, through-all stops |
-| chord sagitta | control-point deviation from the linear interpolant, quartered per subdivision level | `chordCount`, tessellation |
-| tangent/normal cone | hodograph control hull — a degree `p−1` Bézier with control points `p·ΔP_i` | undercut survey |
-| curvature extreme | `(u′v″ − v′u″)` numerator roots | `MinRadius` |
+**Every row splits on the span's form, and the middle column's identities hold
+ONLY on a POLYNOMIAL Bézier span** — Tier A (Table F). Applying one to a span
+that is not a polynomial Bézier understates the extreme and unsounds the proof
+that reads it:
 
-An extreme VALUE bracket follows from the isolated parameter interval plus a
-Lipschitz bound off the hodograph hull, exactly the pattern
-`clearance_poly.go` already uses for its critical values.
+- a RATIONAL span — Tier C's unequal-weight `NURBSSeg`, and `ConicSeg`, which is
+  a rational quadratic — takes the RIGHT-hand column. Write it `u = U/W`,
+  `v = V/W`, with `W > 0` and its positive range proven (§5.4), and clear the
+  positive denominator before isolating anything;
+- a whole `EllipseSeg` is neither. Its record is the parametric ellipse, so
+  §5.3's closed forms answer these questions directly, exactly as they do for
+  `CircleSeg`/`ArcSeg`.
+
+| Question | Polynomial Bézier span (Tier A) | Rational span | Consumer |
+|---|---|---|---|
+| directional extreme | `d/dt(g·C(t)) = 0`, degree `p−1` per span | `(g·U)′W − (g·U)W′ = 0`, degree `≤ 2p−1` per span — the positive `W²` denominator cleared | `extentAlong`, `Box`, through-all stops |
+| chord sagitta | control-point deviation from the linear interpolant, MEASURED per subdivision level (§6.1) | the same deviation on the span's own control points, MEASURED per level | `chordCount`, tessellation |
+| tangent/normal DIRECTION cone | hodograph control hull — a degree `p−1` Bézier with control points `p·ΔP_i` | the control hull of the numerator hodograph `(U′W − UW′, V′W − VW′)`, degree `≤ 2p−1` — the positive `W²` scales `C′` and never rotates it, so the direction cone is the numerator's | undercut survey |
+| speed, for a Lipschitz bound | that same hodograph hull's maximum norm | the numerator hodograph hull's maximum norm divided by the square of `W`'s proven positive LOWER bound | extreme-VALUE brackets |
+| curvature extreme | `2K′S − 3KS′ = 0` with `K = u′v″ − v′u″` and `S = u′² + v′²`, degree `≤ 4p−6` — PLUS both span endpoints and every zero-speed (`S = 0`) parameter | the same stationarity over the rational derivative forms, the positive powers of `W` cleared before isolation — plus the same endpoint and zero-speed cases | `MinRadius` |
+
+`K` is the curvature NUMERATOR, so **`K`'s own roots are the inflections**
+(`κ = 0`, infinite radius) — the opposite end of the range `MinRadius` reports.
+They are not the candidate set and NEVER stand in for one: a span can hold its
+tightest radius at a parameter where `K` is far from zero.
+
+An extreme VALUE bracket follows from the isolated parameter interval plus the
+row's own Lipschitz bound, exactly the pattern `clearance_poly.go` already uses
+for its critical values. Bracket EVERY isolated root and both span endpoints
+before reporting a `Box`, a through-all stop or a `MinRadius`: a candidate set
+that misses an interior root understates the reading, which is the direction that
+breaks the proof rather than merely widening it.
 
 **Contract consequence.** `prismBoundsContext` reports `Exactness: Exact` with a
 zero bound today. A free-form interior extreme is an irrational root evaluation,
@@ -338,18 +368,25 @@ off `NormalAt`.
 
 ## 8. Table C — per-capability reach
 
+**Every build reads its section's moments, so a body's tier reach is its
+section's.** A section whose free-form walks are all Tier A builds; a section
+carrying a Tier B or Tier C walk is `ErrUnsupported` at EVERY build until §10's
+P9 supplies that tier's moments (§5.3, §5.4) — Table R R10. "Tier A section"
+below names exactly that condition. A `ProfileRecord` moment reading is not a
+build and is unaffected.
+
 | Capability | Free-form reach | Construction |
 |---|---|---|
 | `ProfileRecord.Area`/`Centroid`/`SecondMoments` | Tier A exactly rational, rounded once; B/C proven interval | §5 |
-| `Extrude` | full; `Volume` from the Tier A rational, `Area`/`Box` bounded | §6, §7 |
-| `Tessellate`, `STL`, `OBJ` | full for an extruded free-form section | §6.2 sagitta; rides the existing prism path, NOT tessellation T5 |
-| `Union`/`Cut`/`Intersect` | full, `Faceted` output as always | free once chording lands — the mesh boolean reads triangles, not kinds |
-| interference proof | full | free once chording lands — read-only mesh intersection already serves faceted pairs |
+| `Extrude` | Tier A section; `Volume` from the Tier A rational, `Area`/`Box` bounded | §6, §7 |
+| `Tessellate`, `STL`, `OBJ` | every section `Extrude` builds | §6.2 sagitta; rides the existing prism path, NOT tessellation T5 |
+| `Union`/`Cut`/`Intersect` | every body `Extrude` builds, `Faceted` output as always | free once chording lands — the mesh boolean reads triangles, not kinds |
+| interference proof | every body `Extrude` builds | free once chording lands — read-only mesh intersection already serves faceted pairs |
 | `Undercuts` | proven | §6.2 normal cones; reject-only use makes an enclosure sufficient |
 | `MinRadius` | proven interval | §6.2 curvature extremes; a measurement, never a verdict |
 | `MinWallThickness` | proven interval, else `Suspect` | §8.1 |
 | `Clearance` rows | `Suspect` until a free-form cell lands | box-disjoint pairs still read `Sound` |
-| `Revolve` | surfaces of revolution per §7 | Pappus over §6.1 brackets; meshing waits on tessellation T2–T5 |
+| `Revolve` | Tier A section; surfaces of revolution per §7 | Pappus over §6.1 brackets; meshing waits on tessellation T2–T5 |
 | `Fillet`/`Chamfer`/`Shell` | refused per R3–R5, except the §4.1 analytic-corner slice | §4.1 |
 
 The sequencing that falls out: **chording an extruded free-form section rides the
@@ -390,8 +427,15 @@ first four increments.
    a signature, not an algorithm. It retires R6, and it is the only way to:
    decad must NEVER re-run the interpolation solve (seam §2), and consuming
    `geom.EvalFitSpline` would build geometry from samples.
-2. **Pin `EllipticalArc` endpoints onto the parametric ellipse**, or export exact
-   eccentric parameters for them. Retires R2 (§2.2).
+2. **Pin `EllipticalArc` endpoints onto the parametric ellipse.** Retires R2
+   (§2.2): sketch's own coincidence constraint carries each moved endpoint to the
+   neighbouring segment, so the loop still closes on a shared join point.
+   Exporting exact eccentric parameters does NOT retire R2 on its own — it makes
+   the parametric evaluation exact while the segment's ends stay at
+   `ellipse(θ)`, which is precisely §2.2's rejected trust-the-parametric-curve
+   branch: the neighbour's pinned join point is elsewhere and the loop stays
+   open. Exported parameters retire R2 only together with an exact endpoint
+   representation that preserves the shared join.
 3. **Closed-form free-form intersection**, so a cut free-form fragment can report
    `TExact = true`. Retires R1 and lifts §2's whole-entities-only scope, letting
    free-form curves cross other curves in a sketch. Large upstream effort.
@@ -406,12 +450,12 @@ half-silent. These stages do not consume a global evaluator increment number.
 | **P1** | this document + the core/evaluator table updates it resolves | none |
 | **P2** | Bézier conversion, exact Tier A moments, the §5.2 budget | `ProfileRecord.Area`/`Centroid`/`SecondMoments` answer for Tier A, bounded by one rounding. No new types |
 | **P3** | walk-kind discriminant across every `segmentWalk` consumer | none — behaviour preserved |
-| **P4** | `NURBSSurface`/`NURBSCurve`, free-form extrude side faces, §6.1 length brackets, §6.2 extremes, `NormalAt` refusal | free-form prisms build; `Volume` from the Tier A rational, `Area`/`Box` bounded |
+| **P4** | `NURBSSurface`/`NURBSCurve`, free-form extrude side faces, §6.1 length brackets, §6.2 extremes, `NormalAt` refusal | Tier A free-form prisms build; `Volume` from the Tier A rational, `Area`/`Box` bounded. A Tier B or C section is R10 |
 | **P5** | free-form chording with proven sagitta + area slack | `Tessellate`/`STL`/`OBJ`, booleans, interference proof. Wall reading explicitly `Suspect` |
 | **P6** | hodograph normal cones, bracketed curvature extremes | `Undercuts` proven, `MinRadius` bounded |
 | **P7** | certified branch-and-bound inscribed-disk interval | `MinWallThickness` answered, with its own convergence evidence |
-| **P8** | free-form surfaces of revolution | `Revolve` builds |
-| **P9** | Tier B formulas; Tier C certified quadrature | breadth per Table F |
+| **P8** | free-form surfaces of revolution | `Revolve` builds for a Tier A section |
+| **P9** | Tier B formulas; Tier C certified quadrature | Tier B/C moment readings answer, and the builds Table C stages on them follow — R10 retires |
 | **P10** | the §4.1 analytic-corner modify slice | fillet/chamfer on analytic corners of a mixed section |
 
 ## 11. Test obligations
@@ -429,7 +473,17 @@ rules).
 - Assert `Box` reports `Approximate` with a positive bound for a Tier A prism
   (§6.2).
 - Assert an arc-length bracket strictly narrows with subdivision depth and
-  encloses a dense-sample reference at every depth.
+  encloses a dense-sample reference at every depth, and that the depth is chosen
+  from the MEASURED enclosure — a case whose first level narrows by well under 4×
+  must still reach its target rather than stop at a rate-sized depth (§6.1).
+- Assert each §6.2 rational row on a RATIONAL span whose true reading the
+  polynomial-span identity would miss: a directional extreme attained at an
+  interior parameter that is not a root of `d/dt(g·U)`, so the `Box` is not
+  understated, and a true maximum speed above the `p·ΔP_i` hull's norm, so the
+  Lipschitz bound still holds. Falsify both against a dense sample.
+- Assert `MinRadius` on a span carrying an INFLECTION: the reported interval
+  encloses the tightest radius, which is attained where `K ≠ 0`, so a candidate
+  set built from `K`'s roots alone fails the test (§6.2).
 - Assert directed-edge closure, positive triangle area, outward winding, and
   `len(SourceFaces) == len(Triangles)` on a free-form prism mesh.
 - Assert byte-identical repeated STL/OBJ output.
@@ -440,6 +494,8 @@ rules).
   derivation.
 - Assert every Table R row by behaviour, each with its own sentinel: a crossed
   spline, a `FitSplineSeg`, an `EllipticalArcSeg`, a free-form `Shell`, a
-  free-form fillet carrier, a free-form chamfer carrier.
+  free-form fillet carrier, a free-form chamfer carrier, and — while R10 stands —
+  an `Extrude` of a section carrying a Tier B or Tier C walk, whose Tier A
+  counterpart builds in the same test.
 - Assert recipe replay of every free-form step reproduces body order, provenance
   roles, and measurements within the evaluator's own exactness.

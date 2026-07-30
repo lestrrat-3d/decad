@@ -144,11 +144,11 @@ below sketch's general arrangement threshold. Reject malformed or overflowing
 input; NEVER return a non-finite `Exact` result.
 
 Increment 1 implements the closed forms for `LineSeg`/`CircleSeg`/`ArcSeg`.
-`docs/spline-design.md` owns the free-form kinds: Table F there assigns each an
-exactness tier, and §5 gives the construction. A Tier A kind integrates to an
-EXACT rational through Bézier conversion, so its moments carry a zero bound like
-a line's. Each kind rejects `ErrUnsupported` until its increment lands
-(spline design §10).
+`docs/spline-design.md` owns the free-form kinds entirely: Table F there assigns
+each an exactness tier and what a measurement over it may claim, §5 gives the
+construction, Table R owns every refusal and its sentinel — the permanent and the
+upstream-blocked ones among them — and §10 owns the landing order. This section
+restates none of it; read it there.
 
 ## 5. Extrude
 
@@ -162,7 +162,7 @@ Faces, per recorded loop segment (roles in parentheses):
 | `LineSeg` | `Plane` (`side(i,j)`) |
 | `CircleSeg` (whole) | full `Cylinder`, no seam edge |
 | `CircleSeg` (fragment) / `ArcSeg` | `Cylinder` patch bounded by two line edges + two arc edges |
-| free-form kinds | `NURBSSurface` from the recorded control net, which the extruded surface exactly IS — `docs/spline-design.md` §7 owns the variant, Table F its per-kind reach, Table R its refusals (`FitSplineSeg` and `EllipticalArcSeg` among them) |
+| free-form kinds | `NURBSSurface` — `docs/spline-design.md` §7 owns the variant and its exactness, Table C the extrude reach, Table F the per-kind tier, Table R the refusals |
 
 Caps: one planar face per end (`capStart`/`capEnd`), the outer loop plus one
 loop per hole, holes wound opposite.
@@ -217,11 +217,10 @@ endpoint on the axis is its apex); perpendicular → planar annulus (a disk
 when it reaches the axis); `ArcSeg`/`CircleSeg` → `Torus`, or `Sphere` when
 the arc's center lies on the axis — an endpoint ON the axis closes at a pole,
 and an endpoint off it leaves a latitude-circle edge (a spherical band when
-neither endpoint reaches the axis). The free-form segment kinds follow the
-same staging as extrude (§5): `NURBSSurface` surfaces of revolution, which the
-revolved surface of a recorded free-form curve exactly IS, and `ErrUnsupported`
-until `docs/spline-design.md` §10's revolve increment lands. Table R there owns
-the kinds that stay refused.
+neither endpoint reaches the axis). The free-form segment kinds emit
+`NURBSSurface` faces; `docs/spline-design.md` §7 owns the variant and its
+exactness, Table C the revolve reach, Table R the refusals, and §10 the revolve
+increment.
 Partial sweeps get two planar cap faces. Volume by Pappus on the §4 first moments; the solid centroid from the §4
 second and mixed moments (`∫u² dA`, `∫uv dA`) — a full revolution's centroid
 lies on the axis with its axial position from the mixed moment, and a partial
