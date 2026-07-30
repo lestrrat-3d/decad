@@ -51,10 +51,100 @@ func TestFreeformArcLengthBracketEnclosesAndNarrows(t *testing.T) {
 		require.Less(t, width, previous, "depth %d must narrow the bracket", depth)
 		previous = width
 	}
-	// At full depth the bracket is ~1.5e-6 mm on an 11 mm curve — a relative
-	// width near 1e-7, far below any tolerance a caller would set.
-	require.Less(t, previous, 1e-5, "the bracket closes to well under 10 nm at full depth")
-	require.Less(t, previous/reference, 1e-6, "the relative bracket width closes past 1e-6")
+	// THIS fixture's own numbers, not a promise of the depth: an ordinary
+	// six-control spline of 9.6 mm closes to ~1.5e-6 mm at full depth, a relative
+	// width of 1.5e-7. The depth is fixed and carries no relative-width promise
+	// at all, and a span two orders of magnitude coarser is pinned below in
+	// TestFreeformArcLengthRelativeWidthVariesWithTheSpan.
+	require.Less(t, previous, 1e-5, "this ordinary spline closes to well under 10 nm at full depth")
+	require.Less(t, previous/reference, 2e-7, "this ordinary spline's relative bracket width")
+}
+
+// The reported bound is the enclosure MEASURED at the fixed depth, and a fixed
+// depth promises no relative width: what a span reaches varies with the span.
+// Both ends of that spread are pinned here, because a single figure stated for
+// the depth is false for one of them. The ordinary cubic measures 1.92e-07. The
+// widest span the bracket's own preflight admits — 32 controls, a degree-31
+// Bézier whose control points wind eight times around a 10 mm circle — measures
+// 2.20e-05, over a hundred times coarser, and it narrows by as little as 1.37x
+// at one of its ten levels, so no per-level rate sizes it either.
+func TestFreeformArcLengthRelativeWidthVariesWithTheSpan(t *testing.T) {
+	require.LessOrEqual(t, freeformBracketCost(32), freeformWorkLimit,
+		"a 32-control span's bracket is affordable")
+	require.Greater(t, freeformBracketCost(33), freeformWorkLimit,
+		"33 controls is past the ceiling, so 32 is the widest span measured here")
+
+	cubic := []Point2{{U: 0, V: 0}, {U: 1, V: 2}, {U: 3, V: 2}, {U: 4, V: 0}}
+	spans, err := splineBezierSpans(SplineSeg{Control: cubic, TStart: 0, TEnd: 1}, &freeformWork{})
+	require.NoError(t, err)
+	value, bound, err := freeformArcLength(spans, &freeformWork{})
+	require.NoError(t, err)
+	require.InDelta(t, 1.9213e-07, bound/value, 1e-11,
+		"an ordinary cubic's measured relative half width")
+
+	wide := windingControlNet(32, 8, 10)
+	seg := equalWeightNURBS(wide)
+	require.NoError(t, validateNURBSSegment(seg), "the widest span is a well-formed record")
+	wideSpans, _, err := freeformBezierSpans(seg, &freeformWork{})
+	require.NoError(t, err)
+	require.Len(t, wideSpans, 1, "no interior knot, so the record IS one Bézier span")
+
+	value, bound, err = freeformArcLength(wideSpans, &freeformWork{})
+	require.NoError(t, err)
+	require.Greater(t, bound/value, 1e-05,
+		"the widest admitted span's width is nowhere near an ordinary curve's")
+	require.InDelta(t, 2.1985e-05, bound/value, 1e-08,
+		"the widest admitted span's measured relative half width")
+
+	// The width is coarse and the enclosure still holds: a dense polyline over
+	// the same control net, evaluated in floats by an independent de Casteljau,
+	// lands inside the reported interval.
+	reference := denseBezierLength(wide, 200000)
+	require.GreaterOrEqual(t, value+bound, reference, "the interval's top encloses the true length")
+	require.LessOrEqual(t, value-bound, reference, "the interval's bottom encloses the true length")
+}
+
+// windingControlNet places n control points on a circle of radius r, walking
+// turns full revolutions from the first to the last. The winding is what buys
+// the span its curvature: an alternating net of the same degree is damped by the
+// Bernstein weighting into an almost straight curve.
+func windingControlNet(n, turns int, r float64) []Point2 {
+	control := make([]Point2, n)
+	for i := range control {
+		a := 2 * math.Pi * float64(turns) * float64(i) / float64(n-1)
+		control[i] = Point2{U: r * math.Cos(a), V: r * math.Sin(a)}
+	}
+	return control
+}
+
+// denseBezierLength is the falsifier for the widest span: a float de Casteljau
+// polyline over the recorded control net, sharing no code with the rational
+// bracket. A polyline undercuts the arc, so it is a reference the interval must
+// contain, never the answer.
+func denseBezierLength(control []Point2, samples int) float64 {
+	net := make([][2]float64, len(control))
+	for i, p := range control {
+		net[i] = [2]float64{p.U, p.V}
+	}
+	work := make([][2]float64, len(net))
+	at := func(t float64) [2]float64 {
+		copy(work, net)
+		for round := len(work) - 1; round > 0; round-- {
+			for i := range round {
+				work[i][0] += t * (work[i+1][0] - work[i][0])
+				work[i][1] += t * (work[i+1][1] - work[i][1])
+			}
+		}
+		return work[0]
+	}
+	previous := at(0)
+	total := 0.0
+	for i := 1; i <= samples; i++ {
+		current := at(float64(i) / float64(samples))
+		total += math.Hypot(current[0]-previous[0], current[1]-previous[1])
+		previous = current
+	}
+	return total
 }
 
 func TestFreeformArcLengthReportsPositiveBound(t *testing.T) {
@@ -196,7 +286,8 @@ func TestFreeformArcLengthBracketsAtExtremeScale(t *testing.T) {
 			reference := denseSplineLength(t, coords)
 			require.GreaterOrEqual(t, value+bound, reference, "the interval's top encloses the true length")
 			require.LessOrEqual(t, value-bound, reference, "the interval's bottom encloses the true length")
-			require.Less(t, bound/value, 1e-6, "the relative width is the same one an ordinary curve gets")
+			require.InDelta(t, 1.9213e-07, bound/value, 1e-11,
+				"the relative width is the unscaled ordinary cubic's own, to the ulp")
 		})
 	}
 }
@@ -316,19 +407,28 @@ func TestWideSpanBracketRefusesBeforeSubdividing(t *testing.T) {
 // Bézier span and the conversion pass itself charges almost nothing.
 func oneSpanNURBS(degree int) NURBSSeg {
 	control := make([]Point2, degree+1)
-	weights := make([]float64, degree+1)
-	knots := make([]float64, 0, 2*(degree+1))
 	for i := range control {
 		control[i] = Point2{U: float64(i), V: float64(i % 7)}
+	}
+	return equalWeightNURBS(control)
+}
+
+// equalWeightNURBS clamps the given control net into a single-span, equal-weight
+// NURBSSeg: degree len-1, no interior knot.
+func equalWeightNURBS(control []Point2) NURBSSeg {
+	n := len(control)
+	weights := make([]float64, n)
+	knots := make([]float64, 0, 2*n)
+	for i := range weights {
 		weights[i] = 1
 	}
-	for range degree + 1 {
+	for range n {
 		knots = append(knots, 0)
 	}
-	for range degree + 1 {
+	for range n {
 		knots = append(knots, 1)
 	}
-	return NURBSSeg{Degree: degree, Control: control, Knots: knots, Weights: weights, TStart: 0, TEnd: 1}
+	return NURBSSeg{Degree: n - 1, Control: control, Knots: knots, Weights: weights, TStart: 0, TEnd: 1}
 }
 
 // The R7 ceiling belongs to the RECORD, across every phase of one operation

@@ -554,7 +554,9 @@ general.
 `W > 0` is GUARANTEED — `record.go` validates every NURBS weight positive — which
 is what makes a rigorous remainder bound reachable: bound the integrand's
 derivatives on each span from `W`'s proven positive range, then bisect
-adaptively until the remainder bound closes. The result is a proven `[lo, hi]`,
+adaptively until the remainder bound closes, under §6.1's iteration cap — a
+measured target is not on its own a termination proof. The result is a proven
+`[lo, hi]`,
 never an adaptive estimate compared against itself. An estimate that measures
 its own convergence is not a bound.
 
@@ -569,20 +571,38 @@ antiderivative in any tier. Bracket it instead:
 - the CONTROL POLYGON is an upper bound (variation diminishing);
 - de Casteljau subdivision shrinks the gap toward zero.
 
-**The stopping certificate is the MEASURED post-subdivision enclosure, never an
+**The reported bound is the MEASURED post-subdivision enclosure, never an
 assumed per-level rate.** Recompute both bounds on the child spans, sum them, and
-stop when that measured gap meets the target. The familiar 4× per level is
-ASYMPTOTIC only: the first levels of a span with a far control point shrink the
-gap by substantially less, so a depth sized from that rate reports a bound the
-actual enclosure does not support. NEVER size a depth from a rate.
+report the half width of the gap that sum actually shows. The familiar 4× per
+level is ASYMPTOTIC only: the first levels of a span with a far control point
+shrink the gap by substantially less, so a bound read off that rate claims a
+precision the actual enclosure does not support. NEVER size a depth from a rate,
+and NEVER state a width the enclosure has not been measured to reach.
+
+**This bracket subdivides to a FIXED depth, because it has no target of its
+own.** No reading downstream compares an arc length against a caller tolerance,
+so there is no threshold for a loop to stop on; the depth is sized to bound the
+work and the rational denominators instead. A fixed depth therefore promises no
+relative width at all — what a span's enclosure comes to varies with the span,
+and the reported bound is whatever that enclosure measured.
+
+Where a target DOES exist, the loop belongs there: §6.4's build-time gate and
+§6.1.1's product enclosure. Such a loop subdivides until the MEASURED enclosure
+meets the target, under a HARD ITERATION CAP. The cap is not a safety net but a
+termination proof: every leaf sum is rounded outward, so the measured relative
+gap cannot fall below a small multiple of `2⁻⁵³` — a few tens of ulps on the
+spans measured — and a target below that floor never arrives however long the
+loop runs. `clearance_poly.go`'s `rpRefineRootContext` is the shape that already
+does this correctly: a measured stopping predicate, a fixed iteration cap, and
+the honest wide interval standing when the cap is reached.
 
 Both bounds are proven, not sampled. Report the interval midpoint as the value
 and its half width as the bound, `Approximate` always — a zero bound here would
 be a false Exact.
 
 A COLLAPSED span (§5.1) has a POINT enclosure: its chord and its control polygon
-are both `0`, which is that span's true length, so the measured gap meets any
-target at depth zero and the span contributes an honest `0` to the walk's sum. It
+are both `0`, which is that span's true length, so its enclosure is already a
+point at depth zero and the span contributes an honest `0` to the walk's sum. It
 never reaches a reading alone — a walk of nothing but collapsed spans is the
 zero-length walk §5.1 refuses.
 
@@ -702,7 +722,8 @@ stopping certificate is again the MEASURED enclosure, never an assumed rate**
 honest, slack, and no reason to stop. A COLLAPSED span (§5.1) contributes
 `[0, 0]` — `L_lo = L_hi = 0`, and its hull is the single walk point whose radius
 the axis gate already proved non-negative, so the clamp needs no exception
-there. Subdivide until the measured product enclosure meets its target. Report
+there. Subdivide until the measured product enclosure meets its target, under
+§6.1's iteration cap. Report
 the interval midpoint as the value and its half width as the bound,
 `Approximate` always.
 
@@ -921,7 +942,8 @@ time refuses as R11 when the bracket straddles it. Two gates do:
   R11.
 
 R11 is not permanent: refining the bracket decides every case but an exact
-tangency, and a tangency is a contact the §5 audit refuses anyway.
+tangency, and a tangency is a contact the §5 audit refuses anyway. That
+refinement is a measured-target loop, so it carries §6.1's iteration cap.
 
 ## 7. `NURBSSurface` and `NURBSCurve`
 
@@ -1081,9 +1103,13 @@ rules).
 - Assert `Box` reports `Approximate` with a positive bound for a Tier A prism
   (§6.2).
 - Assert an arc-length bracket strictly narrows with subdivision depth and
-  encloses a dense-sample reference at every depth, and that the depth is chosen
-  from the MEASURED enclosure — a case whose first level narrows by well under 4×
-  must still reach its target rather than stop at a rate-sized depth (§6.1).
+  encloses a dense-sample reference at every depth, and that the reported bound
+  is the enclosure MEASURED at the fixed depth rather than a width read off a
+  rate (§6.1). Pin the relative half width of an ordinary span AND of the widest
+  span the bracket's own preflight admits: they differ by two orders of
+  magnitude, so a single figure stated for the depth is false for one of them,
+  and a case that narrows by well under 4× at one of its levels must be among
+  them. Scope any assertion of a particular width to the fixture it measures.
 - Assert every §6.2 row whose rational identity differs from its polynomial one,
   each on a RATIONAL span whose true reading the polynomial-span identity would
   miss, and falsify each against a dense sample: a directional extreme attained

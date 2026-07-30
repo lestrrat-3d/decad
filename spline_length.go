@@ -14,7 +14,9 @@ import (
 //     curve is no longer than the curve between them;
 //   - the CONTROL POLYGON is above it — a Bézier is variation diminishing, so
 //     its arc length never exceeds its control polygon's length;
-//   - de Casteljau subdivision closes the gap by roughly 4x per level.
+//   - de Casteljau subdivision narrows the gap, at NO guaranteed per-level rate:
+//     the familiar 4x is asymptotic, and an early level can do far less — the
+//     degree-31 span the tests pin narrows by 1.37x at one of its levels.
 //
 // Both bounds are proofs, not samples, and the subdivision runs over exact
 // rationals so no level introduces error of its own. Only the final square
@@ -22,11 +24,20 @@ import (
 // comparison — so the reported interval encloses the true length whatever the
 // platform's sqrt does.
 
-// freeformLengthDepth is how far the bracket subdivides. Each level quarters
-// the gap: 10 levels bring a hand-sized curve's bracket to a RELATIVE width
-// near 1e-7 (about 1.5e-6 mm on an 11 mm curve), which is far below any
-// tolerance a caller sets, while keeping both the work and the rational
-// denominators the subdivision introduces (they double per level) modest.
+// freeformLengthDepth is how far the bracket subdivides, and the depth is
+// FIXED. This bracket has no target of its own — nothing downstream compares an
+// arc length against a caller tolerance — so there is no threshold for a
+// measured-target loop to stop on, and the depth is sized to bound both the work
+// and the rational denominators the subdivision introduces (they double per
+// level) instead. Where a target does exist, docs/spline-design.md §6.1 puts the
+// loop there: §6.4's build-time gate and §6.1.1's product enclosure.
+//
+// A fixed depth promises NO relative width, and nothing here claims one:
+// freeformArcLength sums the ACTUAL leaf brackets at this depth and reports the
+// half width of the enclosure it just measured. What that width comes to varies
+// with the span, and the spread is wide — an ordinary cubic measures a relative
+// half width of 1.9e-7, while the widest span this bracket's own preflight
+// admits (32 controls, freeformBracketCost) measures above 2e-5.
 const freeformLengthDepth = 10
 
 // freeformArcLength brackets the converted chain's arc length. It returns the
