@@ -190,6 +190,29 @@ func validateMomentFieldsWithPoll(poll func() error, record ProfileRecord) (mome
 	// sketch anything at all, which is what the ceiling is for: the public
 	// ProfileRecord methods take no context, so a charge levied after the
 	// reconstruction bounds nothing it was added to bound.
+	//
+	// The placement is checkable, and the claim is that every charge precedes the
+	// arrangement it pays for. This record-wide charge sits ahead of both
+	// arrangements validation always runs; each candidate's own re-arrangement is
+	// charged immediately before its RecordProfile call
+	// (momentRecordMatchesSketch); and every free-form conversion is charged
+	// before its rational lift (spline_bezier.go). What runs AHEAD of this charge
+	// is the loop above: one linear pass over slices the caller already holds,
+	// which docs/spline-design.md §5.2 excludes from the ceiling by design and
+	// whose order §5.2 requires, because a segment's tier is decided before it is
+	// charged. Hoisting a record-wide charge ahead of per-segment validation
+	// breaks that rule: a valid rational NURBS would then report the R7 ceiling
+	// instead of its own Table R reason.
+	//
+	// A record with a large analytic prefix is expensive on its own account, not
+	// because of this charge. 500,000 line segments plus one minimal spline take
+	// 2.641 s and 1,976,749 KiB here, against 2.541 s and 1,961,167 KiB with this
+	// charge removed, and either way the refusal lands at the same trailing
+	// segment after the same full scan. That cost is extrude.go's lineWalkBounds
+	// doing big.Rat arithmetic through walkOf, once per segment, which no charge
+	// placement here changes. An analytic-only record returns above and levies no
+	// arrangement charge at all — the separate question the arrangement field
+	// documents.
 	arrangement, err := chargeFreeformReconstruction(pre.record, work)
 	if err != nil {
 		return momentPreflight{}, fmt.Errorf(`decad: profile record is invalid: %w`, err)
