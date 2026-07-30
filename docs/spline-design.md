@@ -29,6 +29,7 @@ Three tables are normative:
 | why a crossed spline is rejected | §2.1 |
 | why an elliptical arc cannot build | §2.2 |
 | how a spline's area is EXACT | §5 |
+| what a repeated knot or a repeated control net does | §5.1 |
 | how a length/extreme is bounded | §6 |
 | what a revolve's area needs beyond length | §6.1.1 |
 | why an undercut or radius reading is `Suspect` | §6.3 |
@@ -150,6 +151,7 @@ exactly → `ErrUnrecordableProfile`.
 | **R9** | a `Verify` reading's proof does not close — its bracket cannot separate it from its threshold, or a §6.3 certificate fails | not an error — `Suspect` | no, §8 |
 | **R10** | a Tier B or Tier C walk reaches a BUILD before its moments land | `ErrUnsupported` | no, §8 |
 | **R11** | a free-form bracket cannot decide a BUILD-time comparison | `ErrUnsupported` | no, §6.4 |
+| **R12** | an interior knot multiplicity above the degree — the recorded curve is discontinuous | `ErrDegenerate` | yes, §5.1 |
 
 R9 is the one row that is not a refusal. An intent the evaluator cannot BUILD is
 `ErrUnsupported` at the call; a `Verify` question it cannot ANSWER is accepted
@@ -197,7 +199,32 @@ rational convex combination, so the conversion is exact:
 |---|---|
 | `SplineSeg` | clamped uniform cubic → one Bézier per span |
 | `ClosedSplineSeg` | periodic uniform cubic → one Bézier per span, `n` spans for `n` control points |
-| `NURBSSeg` | clamped arbitrary degree → one Bézier per knot span |
+| `NURBSSeg` | clamped arbitrary degree → one Bézier per NONEMPTY knot span |
+
+**Repeated knots and repeated control points are admitted, so every construction
+in §5 and §6 runs per NONEMPTY span and must hold on a COLLAPSED one.**
+`validateNURBSSegment` checks the knots finite, non-decreasing, clamped at both
+ends and the whole domain nonempty (`Knots[Degree] < Knots[n]`), the control
+points finite and at least `Degree + 1` of them, and every weight positive; the
+`SplineSeg`/`ClosedSplineSeg` arms check control count, point finiteness and
+parameter range. Neither arm tests distinctness anywhere, and a recording gate
+rightly does not. Three consequences the constructions carry:
+
+- **an EMPTY knot span — `t_i = t_{i+1}`, a repeated interior knot — carries no
+  Bézier segment.** It enters no sum here and is not a span any §6 row runs on.
+  The nonempty-domain check leaves at least one span to run on.
+- **an interior knot whose multiplicity EXCEEDS the degree breaks the curve into
+  disconnected pieces**, so the record describes no single walk and bounds no
+  region — R12.
+- **a COLLAPSED span — every control point of that span the same point — is a
+  span of zero length**, on which `C(t)` is constant and `C′ ≡ 0`. A walk whose
+  spans ALL collapse has zero length, and the free-form walk owes it the refusal
+  the analytic walk already makes: `validateMomentWalk`'s `ErrDegenerate`, a
+  zero-length segment contributes no boundary. That refusal does NOT reach one
+  collapsed span inside a longer walk — four coincident controls in the middle of
+  a clamped cubic net collapse a span while the walk's own length stays positive
+  — so every §6 row must bound, bracket or refuse a collapsed span on its own
+  terms. §6.3's speed floor is where that bites.
 
 Integrate the Green's-theorem boundary forms. Each integrand is a POLYNOMIAL, so
 each integral is an exact rational — which the reported measurement then rounds
@@ -284,6 +311,13 @@ Both bounds are proven, not sampled. Report the interval midpoint as the value
 and its half width as the bound, `Approximate` always — a zero bound here would
 be a false Exact.
 
+A COLLAPSED span (§5.1) is the one span whose enclosure is a POINT: its chord and
+its control polygon are both `0`, which is that span's true length, so the
+measured gap meets any target at depth zero and the span contributes an honest
+`0` to the walk's sum. It never reaches a reading alone — a walk of nothing but
+collapsed spans is the zero-length walk §5.1 refuses — so the `Approximate` rule
+above still speaks for every length decad reports.
+
 Consumers: a prism's side-face `Area` (`length × height`), `Edge.Length()`, and
 the setback R5 refuses. A revolve's lateral area is NOT one of them — length
 alone cannot determine it, and §6.1.1 supplies what it needs.
@@ -348,9 +382,12 @@ Sum the per-span enclosures. de Casteljau subdivision shrinks `[L_lo, L_hi]` and
 toward the sub-span's own minimum radius and the clamp goes inert — and **the
 stopping certificate is again the MEASURED enclosure, never an assumed rate**
 (§6.1). A span still holding `r_lo < 0` contributes a lower bound of `0`:
-honest, slack, and no reason to stop. Subdivide until the measured product
-enclosure meets its target. Report the interval midpoint as the value and its
-half width as the bound, `Approximate` always.
+honest, slack, and no reason to stop. A COLLAPSED span (§5.1) contributes
+`[0, 0]` — `L_lo = L_hi = 0`, and its hull is the single walk point whose radius
+the axis gate already proved non-negative, so the clamp needs no exception
+there. Subdivide until the measured product enclosure meets its target. Report
+the interval midpoint as the value and its half width as the bound,
+`Approximate` always.
 
 This bracket serves the lateral area alone. A revolve's `Volume` takes Pappus's
 SECOND theorem over the region's area first moment `∫u dA`, which §5 integrates
@@ -385,7 +422,7 @@ rational span unchanged.
 
 | Question | Polynomial Bézier span (Tier A) | Rational span | Consumer |
 |---|---|---|---|
-| directional extreme | `d/dt(g·C(t)) = 0`, degree `p−1` per span | `(g·U)′W − (g·U)W′ = 0`, degree `≤ 2p−1` per span — the positive `W²` denominator cleared | `extentAlong`, `Box`, through-all stops |
+| directional extreme | `d/dt(g·C(t)) = 0`, degree `≤ p−1` per span | `(g·U)′W − (g·U)W′ = 0`, degree `≤ 2p−1` per span — the positive `W²` denominator cleared | `extentAlong`, `Box`, through-all stops |
 | chord sagitta | the control points' distance to the chord SEGMENT `P_0 P_p`, MEASURED per subdivision level (§6.1) | the same distance on the span's own control points, MEASURED per level | `chordCount`, tessellation |
 | tangent/normal DIRECTION cone | hodograph control hull — a degree `p−1` Bézier with control points `p·ΔP_i` — a CONE only where that hull excludes the origin (§6.3) | the control hull of the numerator hodograph `(U′W − UW′, V′W − VW′)`, degree `≤ 2p−1` — the positive `W²` scales `C′` and never rotates it, so the direction cone is the numerator's, under the same origin-exclusion test (§6.3) | undercut survey |
 | speed, for a Lipschitz bound | that same hodograph hull's maximum norm | the numerator hodograph hull's maximum norm divided by the square of `W`'s proven positive LOWER bound | extreme-VALUE brackets |
@@ -402,6 +439,20 @@ for its critical values. Bracket EVERY isolated root and both span endpoints
 before reporting a `Box`, a through-all stop or a `MinRadius`: a candidate set
 that misses an interior root understates the reading, which is the direction that
 breaks the proof rather than merely widening it.
+
+**A stationarity polynomial that is identically ZERO makes its objective
+constant, and a zero root count is never on its own the proof of anything.**
+Isolation returns an empty list for every polynomial below degree 1 —
+`clearance_poly.go` trims trailing zero coefficients and returns early for
+`rpDeg < 1` — so a nonzero constant, which genuinely has no root, and the zero
+polynomial, which is a root everywhere, come back identical. The rows above
+survive that because each candidate set carries BOTH span endpoints and a
+constant attains its extreme there: a collapsed span (§5.1) has a constant
+directional extreme and a zero sagitta, and the endpoints report each exactly.
+The curvature row reads no candidate list on such a span at all — §6.3's speed
+floor gates it first, and there `S` is the zero polynomial. That floor is the one
+certificate reading the COUNT itself as its proof, so it owes the extra test §6.3
+states.
 
 **Contract consequence.** `prismBoundsContext` reports `Exactness: Exact` with a
 zero bound today. A free-form interior extreme is an irrational root evaluation,
@@ -433,7 +484,10 @@ each other here, and only one of them is the bound:
   combination of the same control points, positive weights included (`W > 0`,
   §5.4). That argument reads no parameterisation at all, which is why the row's
   two columns measure the same thing and why §11 asks for no rational fixture
-  here.
+  here. It reads no NONDEGENERACY either: a collapsed span's chord is a single
+  POINT (§5.1), distance to a one-point convex set is convex like any other, and
+  the same maximum-at-a-control-point argument reports the sagitta `0` — that
+  span's true deviation, and one chord covers it.
 
 ### 6.3 The speed floor, and when a direction cone is a cone
 
@@ -453,7 +507,9 @@ undecided, which is `Suspect`. Two mechanisms put the origin inside the hull:
   with `C″(1/2) ≠ 0`: an ordinary cusp, where the tangent reverses and the curve
   has no direction at all. `record.go` admits it, and rightly so — the `SplineSeg`
   arm checks control count, point finiteness and parameter range, and a speed test
-  is not a recording question.
+  is not a recording question. That same arm admits an ALL-COINCIDENT net, where
+  `C′ ≡ 0` across the whole span rather than at one `t`: the hodograph hull is
+  the origin itself and `S` below is the zero polynomial (§5.1).
 - **a wide turn.** A tangent turning through half a revolution across one span
   sweeps the hull across the origin even where the speed never vanishes.
 
@@ -461,26 +517,37 @@ Both are decided EXACTLY, never at a tolerance — the control points are floats
 taken exactly as rationals (§5.1):
 
 - **the speed floor.** `S(t) = u′² + v′²` is a polynomial with exact rational
-  coefficients. Count its real roots on the closed span with `ratPoly`'s Sturm
-  chain (§6.2): zero roots proves `S > 0` there, and bracketing `S`'s minimum over
-  its own isolated stationary points and the span endpoints gives the positive
-  floor `s_min` that the Lipschitz and curvature brackets need. A rational span
-  clears the positive `W²` first and tests the numerator hodograph.
+  coefficients, degree `≤ 2(p−1)`, and `S ≥ 0` everywhere by construction. Test
+  its COEFFICIENTS before its roots: an identically zero `S` is a collapsed span
+  (§5.1) — a curve with no speed anywhere — and it FAILS this certificate
+  outright. Its root count is not evidence either way, because isolation returns
+  the same empty list for the zero polynomial as for a positive constant `S`
+  (§6.2). For a NONZERO `S`, count its real roots on the closed span with
+  `ratPoly`'s Sturm chain (§6.2): `S ≥ 0` with no root there proves `S > 0`, and
+  bracketing `S`'s minimum over its own isolated stationary points and the span
+  endpoints gives the floor `s_min` that the Lipschitz and curvature brackets
+  need. The certificate closes only where that bracket's LOWER end is strictly
+  positive; a bracket reaching `0` is a failed certificate, never a floor. A
+  rational span clears the positive `W²` first and tests the numerator
+  hodograph, under both tests.
 - **origin exclusion.** Whether the origin lies in the convex hull of the
   hodograph's control points is an exact rational sign test — no root-find. Where
-  a hull fails it, subdivide the hodograph and retest the children: under a
-  proven `s_min > 0` the child hulls shrink toward a curve that stays `√s_min`
-  away from the origin. `s_min` floors `S`, the SQUARED speed, so the separation
-  it certifies in the hodograph plane is its SQUARE ROOT — `|C′(t)| = √S(t) ≥
-  √s_min` — and a child hull whose own diameter has fallen below that distance
-  cannot contain the origin. So the subdivision terminates.
+  a hull fails it, subdivide the hodograph and retest the children, and run that
+  subdivision ONLY on a span whose speed floor closed: the termination argument
+  below is `s_min`'s, so subdividing a span without one can only spend the budget
+  on a reading already `Suspect`. Under a proven `s_min > 0` the child hulls
+  shrink toward a curve that stays `√s_min` away from the origin. `s_min` floors
+  `S`, the SQUARED speed, so the separation it certifies in the hodograph plane
+  is its SQUARE ROOT — `|C′(t)| = √S(t) ≥ √s_min` — and a child hull whose own
+  diameter has fallen below that distance cannot contain the origin. So the
+  subdivision terminates.
 
 What each failure costs, per R9 — a `Verify` question the evaluator cannot answer
 is accepted and reads `Suspect`:
 
 | Certificate | Fails when | Cost |
 |---|---|---|
-| speed floor `s_min > 0` | `S` has a root on the span | `Undercuts` AND `MinRadius` read `Suspect` for that body |
+| speed floor `s_min > 0` | `S` is identically zero — the collapsed span — or `S` has a root on the span, or its bracketed minimum reaches `0` | `Undercuts` AND `MinRadius` read `Suspect` for that body |
 | origin exclusion on every subdivided hull | the turn is too wide to separate within the subdivision budget | `Undercuts` reads `Suspect` |
 
 **Neither failure refuses a BUILD.** Chording, volume, area, export and the
@@ -488,7 +555,10 @@ boolean path read no direction cone, so a cusped section still extrudes and stil
 takes part in an interference proof — the readings that need a direction are the
 only ones that go undecided. A build refusal would also refuse an ordinary spline
 whose first two control points coincide: that is zero speed at a span END, which
-costs the same two readings and nothing else.
+costs the same two readings and nothing else. A collapsed span stands the same
+way — it costs those two readings on a body that still builds, and what refuses
+an ALL-collapsed walk at build time is §5.1's zero-length walk rule, never this
+certificate.
 
 ### 6.4 A build-time comparison a bracket cannot decide
 
@@ -707,7 +777,20 @@ rules).
   span whose FIRST hodograph hull still contains the origin (a wide turn),
   subdivision must reach origin exclusion and report a proper cone. On a span
   with a coincident first control pair — zero speed at the span END — the same
-  two readings are `Suspect` while the build succeeds.
+  two readings are `Suspect` while the build succeeds. On a walk carrying ONE
+  collapsed span — four coincident controls inside a longer clamped net, so `S`
+  is the zero polynomial there while the walk's own length stays positive — the
+  speed floor must FAIL, those two readings must read `Suspect`, and the body
+  must still build and report its `Volume`. A certificate that reads the isolated
+  root count alone reports a floor on that span and passes silently, so it must
+  fail this test.
+- Assert the §5.1 span rules on records `record.go` admits: a `NURBSSeg` with a
+  repeated interior knot builds and its area matches a dense-sample reference,
+  its empty span carrying no Bézier segment and no division by a zero span
+  width; a free-form walk whose every span is collapsed is refused as a
+  zero-length walk (`ErrDegenerate`); and the §6.1 length, §6.1.1 radial and
+  §6.2.1 sagitta enclosures of a walk holding one collapsed span each contain a
+  dense-sample reference, with that span contributing `0`.
 - Assert `Undercuts` on a free-form face whose certified cone is proper: a face
   whose cone puts every point provenly opposing the pull is listed, and a face
   whose cone clears at every point is not.
@@ -723,7 +806,8 @@ rules).
   spline, a `FitSplineSeg`, an `EllipticalArcSeg`, a free-form `Shell`, a
   free-form fillet carrier, a free-form chamfer carrier, an `Extrude` whose
   through-all stop reads a free-form extent bracket straddling the sketch plane
-  (R11), and — while R10 stands — an `Extrude` of a section carrying a Tier B or
+  (R11), a `NURBSSeg` whose interior knot multiplicity exceeds its degree (R12),
+  and — while R10 stands — an `Extrude` of a section carrying a Tier B or
   Tier C walk, whose Tier A counterpart builds in the same test.
 - Assert recipe replay of every free-form step reproduces body order, provenance
   roles, and measurements within the evaluator's own exactness.
