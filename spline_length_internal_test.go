@@ -2,6 +2,7 @@ package decad
 
 import (
 	"math"
+	"strconv"
 	"testing"
 	"time"
 
@@ -119,6 +120,133 @@ func TestDirectedSqrtBracketsIrrationalLength(t *testing.T) {
 	require.GreaterOrEqual(t, hi*hi, 2.0)
 	require.LessOrEqual(t, lo, hi)
 	require.InDelta(t, math.Sqrt2, lo, 1e-15)
+}
+
+// The square-root seed must survive every scale a finite coordinate reaches.
+// Rounding the exact squared distance to a float64 first does not: a leg small
+// enough to make it subnormal loses most of its significand and one large
+// enough to make it overflow loses it entirely, so the seed lands far outside
+// the eight-step adjustment walk and the bound escapes to its outward extreme.
+// Both ends of the range must bracket, and both bounds must be finite.
+func TestDirectedSqrtBracketsAtExtremeScale(t *testing.T) {
+	for _, leg := range []float64{
+		math.SmallestNonzeroFloat64, // the exact bottom of the range
+		1e-320,                      // subnormal leg, subnormal square
+		1e-200,                      // the square underflows to zero
+		5.840241926400845e-156,      // the square is subnormal and nonzero
+		1e-100,
+		10,
+		1e150,
+		1.34e154,            // the square overflows
+		1e300,               // the square overflows by orders of magnitude
+		math.MaxFloat64 / 2, // the largest leg whose root still fits
+	} {
+		t.Run(strconv.FormatFloat(leg, 'g', -1, 64), func(t *testing.T) {
+			q := ratSquaredDistance(
+				ratPoint{u: mustRatOf(0), v: mustRatOf(0)},
+				ratPoint{u: mustRatOf(leg), v: mustRatOf(0)},
+			)
+
+			lo := ratSqrtDown(q)
+			hi := ratSqrtUp(q)
+			require.False(t, isNonFinite(lo), "the lower bound stays finite")
+			require.False(t, isNonFinite(hi), "the upper bound stays finite")
+			require.True(t, ratSquareAtMost(lo, q), "the lower bound's square does not exceed the exact distance")
+			require.False(t, ratSquareAtMost(hi, q) && !ratSquareEquals(hi, q),
+				"the upper bound's square is not below the exact distance")
+			require.LessOrEqual(t, lo, hi)
+			// The leg is its own exact root here, so a seed that works at this
+			// scale brackets it to a point rather than to a decade-wide gap.
+			require.Equal(t, leg, lo)
+			require.Equal(t, leg, hi)
+		})
+	}
+}
+
+// The ordinary curve, rescaled to each end of the float64 range. Every one of
+// these is a valid record with finite coordinates, so every one must MEASURE:
+// 4.572036268370589e-153 and 1.3729595320261218e+157 are the two control
+// scales at which a seed read off the ROUNDED square stops bracketing, one at
+// each end. The curve is a pure scaling of the ordinary one, so the bracket
+// must also keep its relative width — a bound that survives only by widening
+// is no fix.
+func TestFreeformArcLengthBracketsAtExtremeScale(t *testing.T) {
+	for _, scale := range []float64{
+		4.572036268370589e-153,
+		1e-200,
+		1e-300,
+		1.3729595320261218e+157,
+		1e300,
+	} {
+		t.Run(strconv.FormatFloat(scale, 'g', -1, 64), func(t *testing.T) {
+			coords := [][2]float64{{0, 0}, {scale, 2 * scale}, {3 * scale, 2 * scale}, {4 * scale, 0}}
+			control := make([]Point2, len(coords))
+			for i, c := range coords {
+				control[i] = Point2{U: c[0], V: c[1]}
+			}
+			spans, err := splineBezierSpans(SplineSeg{Control: control, TStart: 0, TEnd: 1}, &freeformWork{})
+			require.NoError(t, err)
+
+			value, bound, err := freeformArcLength(spans, &freeformWork{})
+			require.NoError(t, err, "a valid curve is never refused for its scale alone")
+			require.Positive(t, value)
+			require.Positive(t, bound, "an arc length is never exact")
+
+			reference := denseSplineLength(t, coords)
+			require.GreaterOrEqual(t, value+bound, reference, "the interval's top encloses the true length")
+			require.LessOrEqual(t, value-bound, reference, "the interval's bottom encloses the true length")
+			require.Less(t, bound/value, 1e-6, "the relative width is the same one an ordinary curve gets")
+		})
+	}
+}
+
+// A single near-duplicate control pair used to poison an otherwise ordinary
+// 10 mm curve: that one leg's squared distance underflowed, its upper bound
+// escaped to +Inf, and the whole walk's length went with it.
+func TestFreeformArcLengthNearDuplicateControlPair(t *testing.T) {
+	for _, gap := range []float64{4.572036268370589e-153, 1e-200, 1e-300} {
+		t.Run(strconv.FormatFloat(gap, 'g', -1, 64), func(t *testing.T) {
+			coords := [][2]float64{{0, 0}, {gap, 0}, {5, 3}, {10, 0}}
+			control := make([]Point2, len(coords))
+			for i, c := range coords {
+				control[i] = Point2{U: c[0], V: c[1]}
+			}
+			spans, err := splineBezierSpans(SplineSeg{Control: control, TStart: 0, TEnd: 1}, &freeformWork{})
+			require.NoError(t, err)
+
+			value, bound, err := freeformArcLength(spans, &freeformWork{})
+			require.NoError(t, err, "a near-duplicate pair is a valid curve, not a refusal")
+
+			reference := denseSplineLength(t, coords)
+			require.InDelta(t, reference, value, bound+1e-9, "the reported interval encloses the true length")
+		})
+	}
+}
+
+// The one length that genuinely has no float64 interval: a curve whose proven
+// upper bound runs past MaxFloat64. Refusing is right, and the sentinel is
+// R15's ErrUnsupported — the curve exists and this evaluator cannot state its
+// length — never ErrNotFinite, which would assert something false about an
+// input whose every coordinate is finite.
+func TestFreeformArcLengthAboveFloat64RangeRefused(t *testing.T) {
+	const m = math.MaxFloat64
+	seg := SplineSeg{
+		Control: []Point2{{U: -m, V: -m}, {U: -m, V: m}, {U: m, V: -m}, {U: m, V: m}},
+		TStart:  0,
+		TEnd:    1,
+	}
+
+	spans, err := splineBezierSpans(seg, &freeformWork{})
+	require.NoError(t, err, "the record itself is finite and converts")
+
+	_, _, err = freeformArcLength(spans, &freeformWork{})
+	require.ErrorIs(t, err, ErrUnsupported)
+	require.NotErrorIs(t, err, ErrNotFinite, "every coordinate here is finite")
+	require.Contains(t, err.Error(), "representable float64 range")
+
+	_, err = walkOf(seg)
+	require.ErrorIs(t, err, ErrUnsupported, "the walk carries the same refusal")
+	require.NotErrorIs(t, err, ErrNotFinite)
 }
 
 // Every consumer that has no free-form construction must refuse a free-form

@@ -179,6 +179,7 @@ exactly → `ErrUnrecordableProfile`.
 | **R12** | an interior knot at multiplicity above the degree whose two one-sided limits are DIFFERENT recorded coordinates | `ErrDegenerate` | yes, §5.1.1 |
 | **R13** | an admitted record whose Bézier extraction this evaluator cannot slice — a C0 join's stride, an over-clamped end knot's dead control | `ErrUnsupported` | no, §5.1.1 |
 | **R14** | a free-form curve whose control points all coincide reaches a length bracket or an integral | `ErrDegenerate` | yes, §6.1 |
+| **R15** | a free-form arc-length enclosure whose upper bound runs past `MaxFloat64` | `ErrUnsupported` | yes, §6.1 |
 
 R9 is the one row that is not a refusal. An intent the evaluator cannot BUILD is
 `ErrUnsupported` at the call; a `Verify` question it cannot ANSWER is accepted
@@ -585,6 +586,31 @@ the moments path gives the identical record. Nothing else reaches it: a degree-1
 span reports its float square root carrying that root's own rounding (above),
 and on a curved span every subdivision level rounds the lower sum down and the
 upper sum up, so a curve of positive length can never close its own interval.
+
+**SCALE IS NOT A REFUSAL.** Every bound here is a float square root of an exact
+rational squared distance, decided by exact comparison and seeded by a float
+`sqrt`. Seeding it from that rational ROUNDED TO A FLOAT is what turns scale
+into a refusal: a leg short enough to make the squared distance subnormal keeps
+only a few significand bits, a leg long enough to make it overflow keeps none,
+and either seed lands far outside the few-ulp adjustment walk, so the walk
+exhausts and the bound escapes to its outward extreme. Seed by SCALING instead —
+split the rational into mantissa and binary exponent, force the exponent even,
+root a mantissa that always sits in `[0.5, 2)`, and scale back by half the
+exponent, which moves no significand bit. Then every valid record measures at
+every scale a finite coordinate can reach, and one near-duplicate control pair
+cannot poison an otherwise ordinary curve. The seed is never the proof: the
+exact comparisons still decide each bound, so a better seed can only remove
+false refusals and can never widen or invert the interval.
+
+**The one length that has no interval to report is R15.** A curve long enough
+that its proven UPPER bound runs past `MaxFloat64` has no float64 interval,
+so there is nothing to publish and it refuses — `ErrUnsupported`, because the
+curve EXISTS and this evaluator cannot state its length. It is never
+`ErrNotFinite`: that sentinel's subject is a non-finite INPUT, and every
+coordinate reaching a bracket is finite. The test is on the ENCLOSURE, so a
+length just under the top of the range whose upper bound is not representable
+refuses too — the enclosure is the only length in hand, and refusing an answer
+decad cannot state is right.
 
 The subdivision is CHARGED like every other free-form pass (§5.2), and the
 charge must read the span's DEGREE, not only the depth. Subdividing to depth `d`
@@ -1117,6 +1143,14 @@ rules).
   zero-length walk (R14, `ErrDegenerate`); and the §6.1 length, §6.1.1 radial and
   §6.2.1 sagitta enclosures of a walk holding one collapsed span each contain a
   dense-sample reference, with that span contributing `0`.
+- Assert §6.1's scale rule at BOTH ends of the float64 range, not at one: the
+  ordinary curve rescaled so its legs make the squared distance subnormal, and
+  rescaled so they make it overflow, must each measure, enclose a dense-sample
+  reference and keep the relative bracket width the unscaled curve gets. Add the
+  near-duplicate case — one control pair a few hundred decades below the rest of
+  an ordinary curve — since it is what turns the rule from a curiosity about
+  extreme parts into a defect on an ordinary one. A test at one end only cannot
+  tell a rescaled seed from a seed patched for underflow.
 - Assert both §5.1.1 rules on records `record.go` admits today, each against a
   dense-sample reference. A `NURBSSeg` whose interior knot sits at multiplicity
   above its degree with the two one-sided limits at DIFFERENT coordinates is
@@ -1158,7 +1192,9 @@ rules).
   in disguise), a valid single-span record whose DEGREE alone exhausts that
   budget through §6.1's subdivision charge rather than through the integration
   one (R7 again), a free-form walk whose chording needs more than the chord cap
-  (R8 `ErrUnsupported` through `errTooManyChords`), and — while R10 stands — an
+  (R8 `ErrUnsupported` through `errTooManyChords`), a curve whose arc-length
+  enclosure runs past `MaxFloat64` (R15 `ErrUnsupported`, and NEVER
+  `ErrNotFinite`), and — while R10 stands — an
   `Extrude` of a section carrying a Tier B or Tier C walk, whose Tier A
   counterpart builds in the same test. Run each of R3–R5 on a DEGREE-1
   `NURBSSeg` walk as well as a curved one and require the same `ErrUnsupported`,

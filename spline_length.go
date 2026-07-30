@@ -41,6 +41,16 @@ const freeformLengthDepth = 10
 // moments_validate.go). Every curve that is not a point brackets strictly wide:
 // each subdivision level rounds the lower sum down and the upper sum up, so a
 // positive length can never close its own interval.
+//
+// The other refusal is the interval float64 cannot hold: a curve long enough
+// that its proven upper bound runs past MaxFloat64 has no representable
+// interval to report, and that is Table R row R15, ErrUnsupported. The test is
+// on the ENCLOSURE, so a length just under the top of the range whose upper
+// bound is not representable refuses too — refusing an answer decad cannot
+// state is right, and the enclosure is the only length in hand. Scale alone
+// never refuses otherwise: the square-root seeds work at every scale a finite
+// coordinate can reach (ratSqrtSeed), so a valid curve is never turned away for
+// being merely small or large.
 func freeformArcLength(spans []bezierSpan, work *freeformWork) (float64, float64, error) {
 	lo, hi := 0.0, 0.0
 	for _, span := range spans {
@@ -52,7 +62,7 @@ func freeformArcLength(spans []bezierSpan, work *freeformWork) (float64, float64
 		hi = upRound(hi + spanHi)
 	}
 	if isNonFinite(lo) || isNonFinite(hi) || hi < lo {
-		return 0, 0, errFreeformLengthUnbounded
+		return 0, 0, errFreeformLengthUnrepresentable
 	}
 	mid := lo + (hi-lo)/2
 	bound := upRound(math.Max(mid-lo, hi-mid))
@@ -62,8 +72,15 @@ func freeformArcLength(spans []bezierSpan, work *freeformWork) (float64, float64
 	return mid, bound, nil
 }
 
-var errFreeformLengthUnbounded = fmt.Errorf(
-	`%w: a free-form segment's arc length has no finite bracket`, ErrNotFinite,
+// errFreeformLengthUnrepresentable is Table R row R15: the enclosure is still
+// proven, but no float64 interval holds it, so there is no Measurement to
+// publish. The sentinel is ErrUnsupported — the curve EXISTS and this evaluator
+// cannot report its length — never ErrNotFinite, whose subject is a non-finite
+// INPUT while every coordinate reaching here is finite. The guard also catches
+// an inverted interval, which the outward rounding makes unreachable and which
+// no reading could use either.
+var errFreeformLengthUnrepresentable = fmt.Errorf(
+	`%w: a free-form segment's arc length runs past the representable float64 range`, ErrUnsupported,
 )
 
 var errFreeformLengthDegenerate = fmt.Errorf(
@@ -159,6 +176,32 @@ func ratSquaredDistance(a, b ratPoint) *big.Rat {
 	return du.Add(du, dv)
 }
 
+// ratSqrtSeed approximates sqrt(q) for a positive rational at EVERY scale a
+// recorded coordinate can reach. It is only a seed: the exact rational
+// comparisons below decide each bound, so a better seed can only reduce false
+// refusals and can never widen or invert the interval.
+//
+// Rounding q to a float64 first is what a seed must not do. A leg distance
+// small enough to make q subnormal loses most of q's significand, and one large
+// enough to make q overflow loses q entirely — either way the seed lands far
+// more than sqrtAdjustLimit ulps from the true root, the walk exhausts, and a
+// perfectly valid curve is refused. Scaling instead is exact: split q into
+// mantissa and binary exponent, force the exponent EVEN so half of it is an
+// integer, take the square root of a mantissa that always sits in [0.5, 2), and
+// scale the result back by a power of two, which moves no significand bit.
+func ratSqrtSeed(q *big.Rat) float64 {
+	mant := new(big.Float).SetPrec(64)
+	exp := new(big.Float).SetPrec(64).SetRat(q).MantExp(mant)
+	if exp%2 != 0 {
+		// Halving an odd exponent is not an integer, so shift one power of two
+		// into the mantissa: [0.5, 1) becomes [1, 2), which still roots cleanly.
+		exp--
+		mant.SetMantExp(mant, 1)
+	}
+	m, _ := mant.Float64()
+	return math.Ldexp(math.Sqrt(m), exp/2)
+}
+
 // ratSqrtDown returns a float f with f*f <= q, proven by exact comparison. The
 // float sqrt seeds the answer; the exact test decides it, so no platform's
 // sqrt accuracy can widen or invert the bracket.
@@ -166,10 +209,11 @@ func ratSqrtDown(q *big.Rat) float64 {
 	if q.Sign() <= 0 {
 		return 0
 	}
-	seed, _ := q.Float64()
-	f := math.Sqrt(seed)
+	f := ratSqrtSeed(q)
 	if isNonFinite(f) {
-		return 0
+		// sqrt(q) is at or beyond the top of the range, so the largest float
+		// there is starts the walk; the exact test still decides it.
+		f = math.MaxFloat64
 	}
 	for range sqrtAdjustLimit {
 		if ratSquareAtMost(f, q) {
@@ -180,15 +224,16 @@ func ratSqrtDown(q *big.Rat) float64 {
 	return 0
 }
 
-// ratSqrtUp returns a float f with f*f >= q, proven by exact comparison.
+// ratSqrtUp returns a float f with f*f >= q, proven by exact comparison. It
+// returns +Inf only where sqrt(q) genuinely exceeds MaxFloat64, which
+// freeformArcLength refuses as R15 rather than report.
 func ratSqrtUp(q *big.Rat) float64 {
 	if q.Sign() <= 0 {
 		return 0
 	}
-	seed, _ := q.Float64()
-	f := math.Sqrt(seed)
+	f := ratSqrtSeed(q)
 	if isNonFinite(f) {
-		return math.Inf(1)
+		f = math.MaxFloat64
 	}
 	for range sqrtAdjustLimit {
 		if !ratSquareAtMost(f, q) || ratSquareEquals(f, q) {
