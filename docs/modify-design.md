@@ -102,10 +102,13 @@ circle, and a corner closes with an arc or a miter — so the result is again a
 `ProfileRecord` in the increment-1 vocabulary, and the body is again built by
 `evalPrism` from it.
 
-A prism's recorded section is line and arc segments and nothing else: a
-free-form segment kind does not build as an extrude (evaluator §5), so no
-prism carries one, and a modify op needs no gate against a shape that cannot
-reach it.
+That exactness is what needs the rewritten walks to be line and arc segments,
+and it is the whole of the requirement. A prism's section may also carry a
+free-form walk, so each modify op does need a gate against a free-form carrier.
+`docs/spline-design.md` owns those gates: Table C there gives what a free-form
+section builds, Table R the modify refusals and their sentinels, and §4.1 both
+their derivation from this reduction and the analytic-corner slice that
+survives it.
 
 That is the whole design, and everything else follows from it:
 
@@ -839,3 +842,7 @@ do with; PR 1 builds on them and carries none of them.
 
 The extension's PR order and required tests are reach §§13–14. No reach choice
 in this document remains open.
+
+Free-form reach is `docs/spline-design.md`'s, not this document's or the
+extension's: Table C there owns what a free-form section builds, Table R the
+modify refusals it earns, and §4.1 the analytic-corner slice (§2).
