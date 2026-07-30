@@ -163,6 +163,8 @@ func (b *Body) ChamferContext(ctx context.Context, sel EdgeSelector, d units.Val
 	ref := doc.nextStepRef()
 	// The blend descriptors ride on the payload so a re-evaluation (a copy or a
 	// placement) re-mints its own chamfer(i,j) roles; evalPrism applies them.
+	// The rewritten section is a NEW record no preflight has seen, so the build
+	// opens its one counter here (docs/spline-design.md §5.2).
 	body, err := evalPrismContext(ctx, doc, ref, prismPayload{
 		profile:   profile,
 		frame:     pp.frame,
@@ -171,7 +173,7 @@ func (b *Body) ChamferContext(ctx context.Context, sel EdgeSelector, d units.Val
 		xform:     pp.xform,
 		blendSegs: chamferSegs,
 		blendKind: "chamfer",
-	})
+	}, newFreeformWork())
 	if err != nil {
 		return nil, err
 	}
@@ -231,7 +233,7 @@ func computeChamfer(loop cornerLoop, ci int, d float64) (*cornerBlend, error) {
 // in the walk's own turn sense — CCW (th1 > th0) increases the bearing, CW
 // decreases it — so the foot lands on the arc itself, exactly.
 func setbackFoot(w sideWalk, d float64, back bool) Point2 {
-	if !w.circular {
+	if !w.isCircular() {
 		if back {
 			ux, uy, _ := normalize2(w.tanOutU, w.tanOutV)
 			return Point2{U: w.endU - d*ux, V: w.endV - d*uy}

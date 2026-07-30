@@ -16,13 +16,14 @@ import (
 // Bézier chain of every free-form segment.
 //
 // It is the record-level step docs/spline-design.md §5's work ceiling needs.
-// ONE freeformWork counter runs through the entire record — the ceiling bounds a
-// RECORD's total free-form work, not each segment's separately, so a record of
-// individually cheap segments whose aggregate is unaffordable refuses here
-// rather than running to completion — and every charge is levied before the work
-// it pays for: the rational lift and knot insertion of the conversion, the
-// re-anchoring of each converted chain, the exact integration that runs only
-// later in the moments pass, and the whole-scene arrangement the topology
+// ONE freeformWork counter runs through the entire record, and through every
+// later phase of the operation that reads it — the ceiling bounds a RECORD's
+// total free-form work, not each segment's separately and not each pass's, so a
+// record of individually cheap segments whose aggregate is unaffordable refuses
+// here rather than running to completion — and every charge is levied before
+// the work it pays for: the rational lift and knot insertion of the
+// conversion, the re-anchoring of each converted chain, the exact integration
+// that runs only later in the moments pass, and the whole-scene arrangement the topology
 // reconstruction runs. A charge levied where its work runs fires after the
 // sketch reconstruction and the sampling that reconstruction does, which is
 // precisely the work the ceiling exists to precede: the public ProfileRecord
@@ -48,9 +49,12 @@ type momentPreflight struct {
 	// untrusted record ahead of the first per-segment charge, which is the one
 	// thing that can refuse it.
 	plans map[[2]int]freeformPlan
-	// work is the record's own counter, still open. The topology reconstruction
-	// re-arranges the whole scene once per candidate profile it authenticates, so
-	// those arrangements are charged here as they happen rather than predicted.
+	// work is the record's own counter, still open — and it is the OPERATION's
+	// where one was handed in, so a caller that spent part of the ceiling on
+	// this record earlier reads what is left rather than a fresh one (§5.2). The
+	// topology reconstruction re-arranges the whole scene once per candidate
+	// profile it authenticates, so those arrangements are charged here as they
+	// happen rather than predicted.
 	work *freeformWork
 	// arrangement is one whole-scene arrangement's charge. It is zero for a record
 	// holding no free-form segment: an analytic record reaches the same
@@ -123,23 +127,37 @@ func validateMomentFields(record ProfileRecord) (momentPreflight, error) {
 	return validateMomentFieldsBudget(nil, record)
 }
 
+// validateMomentFieldsWork is the preflight an evaluator runs when it already
+// holds this record's counter: the charges below continue it rather than start a
+// second full ceiling on the same record (docs/spline-design.md §5.2).
+func validateMomentFieldsWork(work *freeformWork, record ProfileRecord) (momentPreflight, error) {
+	return validateMomentFieldsWithPoll(nil, record, work)
+}
+
 func validateMomentFieldsBudget(budget *workBudget, record ProfileRecord) (momentPreflight, error) {
-	return validateMomentFieldsWithPoll(func() error { return wallBudgetStep(budget) }, record)
+	return validateMomentFieldsWithPoll(func() error { return wallBudgetStep(budget) }, record, newFreeformWork())
 }
 
-func validateMomentFieldsContext(ctx context.Context, record ProfileRecord) (momentPreflight, error) {
-	return validateMomentFieldsWithPoll(ctx.Err, record)
+func validateMomentFieldsContext(ctx context.Context, work *freeformWork, record ProfileRecord) (momentPreflight, error) {
+	return validateMomentFieldsWithPoll(ctx.Err, record, work)
 }
 
-func validateMomentFieldsWithPoll(poll func() error, record ProfileRecord) (momentPreflight, error) {
+// work is the counter this record spends against freeformWorkLimit. It is a
+// parameter rather than a local because the ceiling is the RECORD's across a
+// whole operation: an evaluator that already charged this record's conversion
+// passes the same counter back in, so a later phase spends what is left instead
+// of a fresh ceiling.
+func validateMomentFieldsWithPoll(poll func() error, record ProfileRecord, work *freeformWork) (momentPreflight, error) {
 	loops := append([]LoopRecord{record.Outer}, record.Holes...)
 	normalized := make([]LoopRecord, len(loops))
 	// Plan storage is minted on the first segment that converts, so a record
 	// naming none allocates none (see momentPreflight.plans).
 	var plans map[[2]int]freeformPlan
-	// One counter for the whole record: the ceiling bounds the record's total
-	// free-form work, never each segment's own.
-	work := &freeformWork{}
+	if work == nil {
+		// One counter for the whole record: the ceiling bounds the record's total
+		// free-form work, never each segment's own.
+		work = newFreeformWork()
+	}
 	var anchor Point2
 	freeform := false
 	for loopIndex := range normalized {
@@ -336,14 +354,14 @@ func validateMomentSegment(segment CurveSegment, work *freeformWork) (CurveSegme
 	if isFreeformSegment(segment) {
 		return validateFreeformMomentSegment(segment, work)
 	}
-	checked, start, err := validateAnalyticMomentSegment(segment)
+	checked, start, err := validateAnalyticMomentSegment(segment, work)
 	return checked, start, freeformPlan{}, err
 }
 
 // validateAnalyticMomentSegment normalizes and checks one line, circle or arc
 // segment — the kinds integrated from their own closed forms, with no
 // conversion and so no charge against the record's work counter.
-func validateAnalyticMomentSegment(segment CurveSegment) (CurveSegment, Point2, error) {
+func validateAnalyticMomentSegment(segment CurveSegment, work *freeformWork) (CurveSegment, Point2, error) {
 	switch segment := segment.(type) {
 	case LineSeg:
 		if !finiteMomentValues(
@@ -374,7 +392,7 @@ func validateAnalyticMomentSegment(segment CurveSegment) (CurveSegment, Point2, 
 			return nil, Point2{}, fmt.Errorf(`%w: a circle segment's CCW flag contradicts its range order`, ErrDegenerate)
 		}
 		segment.Radius = units.Millimeters(radius)
-		return validateMomentWalk(segment)
+		return validateMomentWalk(segment, work)
 	case ArcSeg:
 		if !finiteMomentValues(
 			segment.Center.U,
@@ -411,7 +429,7 @@ func validateAnalyticMomentSegment(segment CurveSegment) (CurveSegment, Point2, 
 			segment,
 		)
 	}
-	return validateMomentWalk(segment)
+	return validateMomentWalk(segment, work)
 }
 
 // validateFreeformMomentSegment checks the fields the exact integrator reads on
@@ -457,6 +475,10 @@ func validateFreeformMomentSegment(segment CurveSegment, work *freeformWork) (Cu
 // is the same coordinate. The convex hull property makes that the exact
 // condition for the curve to be a single point, so the test is a proof rather
 // than a tolerance.
+//
+// It is this path's half of Table R row R14. The length bracket refuses the
+// same record on its own terms — a collapsed net is the one shape whose bracket
+// has zero width (spline_length.go) — so the two paths agree.
 func freeformDegenerate(spans []bezierSpan) bool {
 	if len(spans) == 0 || len(spans[0]) == 0 {
 		return true
@@ -472,8 +494,8 @@ func freeformDegenerate(spans []bezierSpan) bool {
 	return true
 }
 
-func validateMomentWalk(segment CurveSegment) (CurveSegment, Point2, error) {
-	walk, err := walkOf(segment)
+func validateMomentWalk(segment CurveSegment, work *freeformWork) (CurveSegment, Point2, error) {
+	walk, err := walkOf(segment, work)
 	if err != nil {
 		return nil, Point2{}, err
 	}

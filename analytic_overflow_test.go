@@ -44,7 +44,7 @@ func TestEvalPrismRejectsOverflowedMeasurements(t *testing.T) {
 		frame:   overflowFrame(t),
 		z1:      100,
 		xform:   r3.Identity(),
-	})
+	}, newFreeformWork())
 	require.ErrorIs(t, err, ErrNotFinite)
 	require.Nil(t, body)
 }
@@ -121,7 +121,7 @@ func TestAnalyticCircularEdgesCarryLengthBounds(t *testing.T) {
 		frame:   overflowFrame(t),
 		z1:      2,
 		xform:   r3.Identity(),
-	})
+	}, newFreeformWork())
 	require.NoError(t, err)
 	circular := 0
 	for _, edge := range prism.Edges() {
@@ -188,7 +188,7 @@ func TestCoalescedAnalyticEdgesCarryLengthBounds(t *testing.T) {
 		frame:   overflowFrame(t),
 		z1:      1,
 		xform:   r3.Identity(),
-	})
+	}, newFreeformWork())
 	require.NoError(t, err)
 	coalesced := 0
 	for _, edge := range body.Edges() {

@@ -153,12 +153,14 @@ func tessellateContext(ctx context.Context, b *Body, tol units.Value) (*Mesh, er
 	var pts2 []Point2
 	var loopIdx [][]int
 	var loopSag []float64
+	// One free-form counter for the whole chorded record (see chordLoop).
+	work := newFreeformWork()
 	loops := append([]LoopRecord{pp.profile.Outer}, pp.profile.Holes...)
 	for li, loop := range loops {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		samples, faceOf, maxSag, slack, err := chordLoop(ctx, loop, chord, pp.z1-pp.z0, func(w sideWalk) (*Face, error) {
+		samples, faceOf, maxSag, slack, err := chordLoop(ctx, loop, chord, pp.z1-pp.z0, work, func(w sideWalk) (*Face, error) {
 			return faceOfRole(fmt.Sprintf("side(%d,%d)", li, w.segs[0]))
 		})
 		if err != nil {
@@ -237,7 +239,10 @@ func tessellateContext(ctx context.Context, b *Body, tol units.Value) (*Mesh, er
 // area slack over the given sweep height. The same chording feeds every face
 // that meets the loop — walls and caps alike — so the mesh is watertight by
 // construction.
-func chordLoop(ctx context.Context, loop LoopRecord, chord, height float64, wallFace func(w sideWalk) (*Face, error)) ([]Point2, []*Face, float64, float64, error) {
+// work is the free-form counter of the RECORD being chorded, opened once by the
+// caller and shared by every loop of it: chording holds no preflight counter, so
+// the ceiling starts at the tessellation entry rather than at each loop.
+func chordLoop(ctx context.Context, loop LoopRecord, chord, height float64, work *freeformWork, wallFace func(w sideWalk) (*Face, error)) ([]Point2, []*Face, float64, float64, error) {
 	if len(loop.Segments) == 0 {
 		return nil, nil, 0, 0, fmt.Errorf(`%w: a recorded loop holds no segments`, ErrDegenerate)
 	}
@@ -250,8 +255,11 @@ func chordLoop(ctx context.Context, loop LoopRecord, chord, height float64, wall
 		if err := budget.step(); err != nil {
 			return nil, nil, 0, 0, err
 		}
-		w, err := walkOf(seg)
+		w, err := walkOf(seg, work)
 		if err != nil {
+			return nil, nil, 0, 0, err
+		}
+		if err := requireAnalyticWalk(w, "chording a boundary loop"); err != nil {
 			return nil, nil, 0, 0, err
 		}
 		raw[i] = sideWalk{segmentWalk: w, segs: []int{i}}
@@ -272,7 +280,7 @@ func chordLoop(ctx context.Context, loop LoopRecord, chord, height float64, wall
 		if err != nil {
 			return nil, nil, 0, 0, err
 		}
-		if !w.circular {
+		if !w.isCircular() {
 			samples = append(samples, Point2{U: w.startU, V: w.startV})
 			faceOf = append(faceOf, face)
 			continue
@@ -332,6 +340,9 @@ func tessellateCup(ctx context.Context, b *Body, cp cupPayload, chord float64) (
 		return nil, err
 	}
 
+	// One free-form counter for the whole chorded record — the cup's outer region
+	// and its cavity are the two halves of one section (see chordLoop).
+	work := newFreeformWork()
 	oLoops := append([]LoopRecord{cp.outer.Outer}, cp.outer.Holes...)
 	cLoops := append([]LoopRecord{cp.cavity.Outer}, cp.cavity.Holes...)
 	if len(oLoops) != len(cLoops) {
@@ -359,7 +370,7 @@ func tessellateCup(ctx context.Context, b *Body, cp cupPayload, chord float64) (
 		sag     float64
 	}
 	chordRing := func(loop LoopRecord, h, lo, hi float64, role string) (ring, error) {
-		samples, faceOf, sag, slack, err := chordLoop(ctx, loop, chord, h, func(w sideWalk) (*Face, error) {
+		samples, faceOf, sag, slack, err := chordLoop(ctx, loop, chord, h, work, func(w sideWalk) (*Face, error) {
 			return faceOfRole(fmt.Sprintf(role, w.segs[0]))
 		})
 		if err != nil {

@@ -1349,3 +1349,84 @@ func TestDegenerateSplineRecordRefuses(t *testing.T) {
 	require.Error(t, err)
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 }
+
+// A spline profile's moments now answer, so Extrude reaches its own side-face
+// build. It must refuse there rather than sweep the spline as a straight line —
+// the walk-kind discriminant exists to make that refusal explicit.
+func TestExtrudeSplineProfileRefusesAtSideFaces(t *testing.T) {
+	world := sketch.NewWorld()
+	s, err := world.CreateSketch(world.XY())
+	require.NoError(t, err)
+	points := make([]*sketch.Point, len(closedSplineControls))
+	for i, control := range closedSplineControls {
+		points[i] = s.CreatePoint(control[0], control[1])
+	}
+	_, err = s.CreateClosedSpline(points...)
+	require.NoError(t, err)
+	profiles := s.Profiles()
+	require.Len(t, profiles, 1)
+
+	d := decad.New()
+	body, err := d.Extrude(s, profiles[0], &decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	require.Error(t, err)
+	require.Nil(t, body)
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+	require.Contains(t, err.Error(), "free-form")
+	require.Empty(t, d.Bodies(), "a refused extrude registers no body")
+	require.Empty(t, d.Recipe().Steps, "a refused extrude records no step")
+}
+
+// One public operation over one record spends ONE R7 work ceiling
+// (docs/spline-design.md §5.2). Extrude runs the record-wide moments preflight
+// for its area falsifier, the same preflight again inside the prism build, and
+// then resolves every boundary segment into a walk before staging out on the
+// free-form side face. Those are phases of one operation over one record, so
+// they share the record's counter; a counter per phase gave the same record a
+// fresh full ceiling each time, and the last of them subdivided for seconds over
+// a chain the first phase had already proved unaffordable.
+//
+// The assertion is a MEASUREMENT: every counter reads under the limit either
+// way, so only the cost of the extra ceiling tells them apart.
+func TestExtrudeSplineProfileSpendsOneWorkCeiling(t *testing.T) {
+	world := sketch.NewWorld()
+	s, err := world.CreateSketch(world.XY())
+	require.NoError(t, err)
+	// An open cubic arch of 45 control points, closed by its chord: the widest
+	// single Tier A segment the record preflight still admits, which is what
+	// leaves the second phase almost no budget of the record's own.
+	const controls = 45
+	points := make([]*sketch.Point, controls)
+	for i := range points {
+		a := math.Pi * float64(i) / float64(controls-1)
+		points[i] = s.CreatePoint(10*math.Cos(a), 10*math.Sin(a))
+	}
+	_, err = s.CreateSpline(points...)
+	require.NoError(t, err)
+	s.CreateLine(points[len(points)-1], points[0])
+	profiles := s.Profiles()
+	require.Len(t, profiles, 1)
+	require.True(t, profiles[0].Valid)
+
+	d := decad.New()
+	var body *decad.Body
+	start := time.Now()
+	allocated := allocatedBy(func() {
+		body, err = d.Extrude(s, profiles[0], &decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	})
+	elapsed := time.Since(start)
+
+	require.Error(t, err)
+	require.Nil(t, body)
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+	require.Contains(t, err.Error(), "free-form")
+	require.Empty(t, d.Bodies(), "a refused extrude registers no body")
+	require.Empty(t, d.Recipe().Steps, "a refused extrude records no step")
+
+	// A per-phase ceiling ran the whole arc-length bracket over this chain after
+	// two full preflights had already run: 1.51 GB and 2.37 s measured. One
+	// ceiling refuses the moment the record's own budget is gone.
+	require.Less(t, allocated, uint64(256)<<20,
+		"a second ceiling would allocate gigabytes over a record already found unaffordable")
+	require.Less(t, elapsed, 2*time.Second,
+		"a second ceiling would subdivide for seconds before staging out")
+}

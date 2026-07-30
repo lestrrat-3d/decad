@@ -61,7 +61,13 @@ func (d *Document) Extrude(s *sketch.Sketch, p *sketch.Profile, e Extent, opts .
 	if err != nil {
 		return nil, err
 	}
-	if err := falsifyRecordedArea(profile, profileArea); err != nil {
+	// ONE free-form work counter for this whole operation over this record: the
+	// area falsifier's preflight opens it, the prism build's own preflight
+	// continues it, and every walkOf under that build spends what is left
+	// (docs/spline-design.md §5.2). A counter per phase would give the same
+	// record a fresh full ceiling in each.
+	work := newFreeformWork()
+	if err := falsifyRecordedArea(profile, profileArea, work); err != nil {
 		return nil, err
 	}
 
@@ -120,7 +126,7 @@ func (d *Document) Extrude(s *sketch.Sketch, p *sketch.Profile, e Extent, opts .
 		z0:      z0,
 		z1:      z1,
 		xform:   r3.Identity(),
-	})
+	}, work)
 	if err != nil {
 		return nil, err
 	}
@@ -134,8 +140,8 @@ func (d *Document) Extrude(s *sketch.Sketch, p *sketch.Profile, e Extent, opts .
 // disagree, which is a bug somewhere. A small residual proves nothing and
 // admits nothing; the check can only reject, the same one-sided shape as the
 // seam's range falsifier.
-func falsifyRecordedArea(profile ProfileRecord, sketchArea float64) error {
-	ig, err := profile.evaluatorIntegrals(momentAreaOrder)
+func falsifyRecordedArea(profile ProfileRecord, sketchArea float64, work *freeformWork) error {
+	ig, err := profile.evaluatorIntegrals(momentAreaOrder, work)
 	if err != nil {
 		return err
 	}
@@ -371,12 +377,15 @@ func vecL1(v r3.Vec) float64 {
 	return absSumUpper(v.X, v.Y, v.Z)
 }
 
-func profileCoordinateUpper(profile ProfileRecord) (float64, error) {
+func profileCoordinateUpper(profile ProfileRecord, work *freeformWork) (float64, error) {
 	upper := 0.0
 	for _, loop := range append([]LoopRecord{profile.Outer}, profile.Holes...) {
 		for _, seg := range loop.Segments {
-			w, err := walkOf(seg)
+			w, err := walkOf(seg, work)
 			if err != nil {
+				return 0, err
+			}
+			if err := requireAnalyticWalk(w, "a placed cap frame"); err != nil {
 				return 0, err
 			}
 			upper = math.Max(upper, w.coordUpper)
@@ -389,8 +398,8 @@ func profileCoordinateUpper(profile ProfileRecord) (float64, error) {
 // centroid is a convex combination of its material points, so it lies within
 // the outer prism. The L1 envelope below bounds every such point through the
 // frame and rigid placement, and therefore bounds the distance from held.
-func prismCentroidGeometryBound(pp prismPayload, profile ProfileRecord, held r3.Vec) (float64, error) {
-	coordUpper, err := profileCoordinateUpper(profile)
+func prismCentroidGeometryBound(pp prismPayload, profile ProfileRecord, held r3.Vec, work *freeformWork) (float64, error) {
+	coordUpper, err := profileCoordinateUpper(profile, work)
 	if err != nil {
 		return 0, err
 	}
@@ -421,10 +430,12 @@ func (pp prismPayload) reflected() bool { return pp.xform.IsReflection() }
 // transform is the accumulated rigid placement.
 func (pp prismPayload) transform() r3.Transform { return pp.xform }
 
-// placed re-evaluates the same record under the composed motion.
+// placed re-evaluates the same record under the composed motion. It is a
+// re-evaluation path: no moments preflight has run on this record within the
+// call, so the build opens the record's one counter itself.
 func (pp prismPayload) placed(ctx context.Context, d *Document, ref StepRef, composed r3.Transform) (*Body, error) {
 	pp.xform = composed
-	return evalPrismContext(ctx, d, ref, pp)
+	return evalPrismContext(ctx, d, ref, pp, newFreeformWork())
 }
 
 // evalPrism builds the analytic prism body from the payload: side faces per
@@ -432,15 +443,19 @@ func (pp prismPayload) placed(ctx context.Context, d *Document, ref StepRef, com
 // measurements (docs/evaluator-design.md §5). The payload's segment kinds
 // are line, circle and arc; anything else has already been rejected by the
 // mass-property integrals it runs first.
-func evalPrism(d *Document, ref StepRef, pp prismPayload) (*Body, error) {
-	return evalPrismContext(context.Background(), d, ref, pp)
+//
+// work is the record's ONE free-form work counter: the preflight this build runs
+// and every walkOf under it charge the same ceiling, and a caller that already
+// spent part of it on this record passes it in rather than opening a second one.
+func evalPrism(d *Document, ref StepRef, pp prismPayload, work *freeformWork) (*Body, error) {
+	return evalPrismContext(context.Background(), d, ref, pp, work)
 }
 
-func evalPrismContext(ctx context.Context, d *Document, ref StepRef, pp prismPayload) (*Body, error) {
+func evalPrismContext(ctx context.Context, d *Document, ref StepRef, pp prismPayload, work *freeformWork) (*Body, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	ig, err := pp.profile.evaluatorIntegralsUncheckedContext(ctx, momentFirstOrder)
+	ig, err := pp.profile.evaluatorIntegralsUncheckedContext(ctx, momentFirstOrder, work)
 	if err != nil {
 		return nil, err
 	}
@@ -488,7 +503,7 @@ func evalPrismContext(ctx context.Context, d *Document, ref StepRef, pp prismPay
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		sideFaces, bottom, top, loopLen, err := buildLoopSides(ctx, body, ref, pp, li, loop)
+		sideFaces, bottom, top, loopLen, err := buildLoopSides(ctx, body, ref, pp, li, loop, work)
 		if err != nil {
 			return nil, err
 		}
@@ -527,7 +542,7 @@ func evalPrismContext(ctx context.Context, d *Document, ref StepRef, pp prismPay
 	zc := boundedDiv(boundedAdd(exactScalar(pp.z0), exactScalar(pp.z1)), exactScalar(2))
 	centroidValue := pp.point(cu.value, cv.value, zc.value)
 	centroidBound := prismPointBound(pp, cu, cv, zc)
-	geometryBound, err := prismCentroidGeometryBound(pp, pp.profile, centroidValue)
+	geometryBound, err := prismCentroidGeometryBound(pp, pp.profile, centroidValue, work)
 	if err != nil {
 		return nil, err
 	}
@@ -537,7 +552,7 @@ func evalPrismContext(ctx context.Context, d *Document, ref StepRef, pp prismPay
 		Exactness: exactnessOf(centroidBound),
 		Bound:     units.Millimeters(centroidBound),
 	}
-	bounds, err := prismBoundsContext(ctx, pp)
+	bounds, err := prismBoundsContext(ctx, pp, work)
 	if err != nil {
 		return nil, err
 	}
@@ -605,6 +620,27 @@ func capFrame(pp prismPayload, z float64, flip bool) (r3.Frame, error) {
 	return f, nil
 }
 
+// walkKind discriminates what a segmentWalk's geometry IS. It replaced a
+// line-versus-circular boolean because a free-form walk is neither: a two-state
+// flag left every "not circular" branch silently building a straight line out of
+// a spline, which is exactly the confidently-wrong answer decad exists to
+// prevent (docs/spline-design.md §6.2).
+//
+// A switch on walkKind MUST be total. Where a consumer cannot yet handle
+// walkFreeform, it refuses through requireAnalyticWalk rather than falling
+// through to the line branch.
+type walkKind uint8
+
+const (
+	// walkLine is a straight walk between its endpoints.
+	walkLine walkKind = iota
+	// walkCircular is a circular walk about (cU, cV) — a circle or an arc.
+	walkCircular
+	// walkFreeform is a free-form walk, whose geometry lives in its converted
+	// Bézier spans rather than in the circular fields.
+	walkFreeform
+)
+
 // segmentWalk is one boundary segment's walk geometry in plane coordinates.
 type segmentWalk struct {
 	// start/end are the walk's endpoints in (u, v); closed is true for a
@@ -622,15 +658,50 @@ type segmentWalk struct {
 	coordUpper       float64
 	axisRadiusUpper  float64
 	axisMomentUpper  float64
-	// circular geometry when the segment is a circle/arc walk.
-	circular bool
+	// kind says which geometry the walk carries; the fields below it are
+	// meaningful only for walkCircular.
+	kind     walkKind
 	cU, cV   float64
 	radius   float64
 	th0, th1 float64
+	// spans is the converted Bézier chain of a walkFreeform walk, in the
+	// curve's natural direction; reversed says the walk runs against it. Both
+	// are zero for every other kind.
+	spans    []bezierSpan
+	reversed bool
 }
 
-// walkOf resolves one line, circle or arc segment into its walk geometry.
-func walkOf(seg CurveSegment) (segmentWalk, error) {
+// isCircular reports whether the walk is a circle or arc — the question the
+// closed-form circular branches ask.
+func (w segmentWalk) isCircular() bool { return w.kind == walkCircular }
+
+// isLine reports whether the walk is straight. It is NOT "not circular": a
+// free-form walk answers false to both.
+func (w segmentWalk) isLine() bool { return w.kind == walkLine }
+
+// requireAnalyticWalk refuses a free-form walk on behalf of a consumer that has
+// no free-form construction yet. Reaching it is a staging limit, never a wrong
+// answer — the reason each consumer stages is its own row in
+// docs/spline-design.md Table R.
+func requireAnalyticWalk(w segmentWalk, what string) error {
+	if w.kind != walkFreeform {
+		return nil
+	}
+	return fmt.Errorf(`%w: %s does not support a free-form boundary segment`, ErrUnsupported, what)
+}
+
+// walkOf resolves one recorded segment into its walk geometry.
+//
+// work is the RECORD's free-form work counter (docs/spline-design.md §5.2), and
+// walkOf NEVER mints one: the R7 ceiling bounds one record's total free-form
+// work, so a counter minted per call would hand every segment — and every later
+// phase of the same operation — a fresh full ceiling. Callers that already hold
+// the counter a moments preflight opened for this record pass THAT one, so the
+// walk's arc-length bracket spends what the preflight left rather than a second
+// ceiling; callers with no preflight in hand mint exactly one for the whole
+// record walk. An analytic segment charges nothing, so a nil counter is harmless
+// there and refused on the free-form arm rather than quietly replaced.
+func walkOf(seg CurveSegment, work *freeformWork) (segmentWalk, error) {
 	seg, err := normalizeSegment(seg)
 	if err != nil {
 		return segmentWalk{}, err
@@ -688,9 +759,82 @@ func walkOf(seg CurveSegment) (segmentWalk, error) {
 			circularSweepUpper(seg.TStart, seg.TEnd),
 		), nil
 	default:
-		return segmentWalk{}, fmt.Errorf(`%w: this evaluator sweeps profiles of line, arc and circle segments only; the profile has a %T segment it cannot sweep into a side face yet`, ErrUnsupported, seg)
+		if !isFreeformSegment(seg) {
+			return segmentWalk{}, fmt.Errorf(`%w: this evaluator sweeps profiles of line, arc, circle and Tier A free-form segments only; the profile has a %T segment it cannot sweep into a side face yet`, ErrUnsupported, seg)
+		}
+		return freeformWalk(seg, work)
 	}
 }
+
+// freeformWalk resolves a Tier A free-form segment into its walk geometry
+// (docs/spline-design.md Table F). Every field it fills is a proof:
+//
+//   - the endpoints are the converted chain's own first and last control
+//     points, which a Bézier interpolates exactly;
+//   - the tangents are the hodograph at those ends, exact directions;
+//   - the length is §6.1's proven two-sided bracket, so lengthBound is
+//     positive and the walk NEVER claims an exact length — a control net
+//     collapsed to a single point has no positive bracket and refuses as
+//     ErrDegenerate rather than resolve into a walk (Table R row R14), and a
+//     curve whose enclosure runs past MaxFloat64 refuses as ErrUnsupported
+//     (R15); freeformArcLength owns both;
+//   - coordUpper and lengthUpper are convex-hull envelopes, so they bound the
+//     curve and not merely its control net.
+//
+// axisRadiusUpper and axisMomentUpper stay zero: they are revolve's readings,
+// and revolve refuses a free-form walk before reaching them.
+//
+// The conversion and the length bracket are charged against the caller's counter
+// — the record's, never one minted here. A caller that reaches this arm with no
+// counter has no ceiling at all, which is the one thing §5.2 forbids, so the
+// resolution refuses rather than run unbounded work.
+func freeformWalk(seg CurveSegment, work *freeformWork) (segmentWalk, error) {
+	if work == nil {
+		return segmentWalk{}, errFreeformWalkUncounted
+	}
+	spans, reversed, err := freeformBezierSpans(seg, work)
+	if err != nil {
+		return segmentWalk{}, err
+	}
+	start, end, err := freeformEndpoints(spans, reversed)
+	if err != nil {
+		return segmentWalk{}, err
+	}
+	length, bound, err := freeformArcLength(spans, work)
+	if err != nil {
+		return segmentWalk{}, err
+	}
+	tanInU, tanInV, tanOutU, tanOutV, err := freeformEndTangents(spans, reversed)
+	if err != nil {
+		return segmentWalk{}, err
+	}
+	return segmentWalk{
+		startU: start.U, startV: start.V,
+		endU: end.U, endV: end.V,
+		// A closed free-form curve returns to its start, so it carries no
+		// junction vertex — the same fact CircleSeg's closed walk states.
+		closed:      start == end,
+		tanInU:      tanInU,
+		tanInV:      tanInV,
+		tanOutU:     tanOutU,
+		tanOutV:     tanOutV,
+		length:      length,
+		lengthBound: bound,
+		lengthUpper: upRound(length + bound),
+		coordUpper:  freeformControlExtent(spans),
+		kind:        walkFreeform,
+		spans:       spans,
+		reversed:    reversed,
+	}, nil
+}
+
+// errFreeformWalkUncounted is the refusal of a free-form resolution handed no
+// record counter. It is ErrUnsupported because the curve exists and this
+// evaluator declines to resolve it without the ceiling §5.2 requires — never a
+// silently minted counter, which is the second full ceiling the rule forbids.
+var errFreeformWalkUncounted = fmt.Errorf(
+	`%w: a free-form segment's walk needs its record's free-form work counter`, ErrUnsupported,
+)
 
 // circularWalk builds the walk geometry of a circular path about (cu, cv).
 func circularWalk(cu, cv, r, th0, th1, radiusUpper, sweepUpper float64) segmentWalk {
@@ -712,7 +856,7 @@ func circularWalk(cu, cv, r, th0, th1, radiusUpper, sweepUpper float64) segmentW
 		lengthBound: conservativeValueError(length, lengthUpper),
 		lengthUpper: lengthUpper,
 		coordUpper:  coordUpper,
-		circular:    true,
+		kind:        walkCircular,
 		cU:          cu, cV: cv, radius: r, th0: th0, th1: th1,
 	}
 }
@@ -788,7 +932,7 @@ func coalesceWalksContext(ctx context.Context, walks []sideWalk) ([]sideWalk, er
 
 func coalesceWalksWithPoll(poll func() error, walks []sideWalk) ([]sideWalk, error) {
 	collinear := func(a, b sideWalk) bool {
-		if a.circular || b.circular {
+		if !a.isLine() || !b.isLine() {
 			return false
 		}
 		cross := a.tanOutU*b.tanInV - a.tanOutV*b.tanInU
@@ -839,8 +983,8 @@ func coalesceWalksWithPoll(poll func() error, walks []sideWalk) ([]sideWalk, err
 // and the loop's perimeter length. A loop's index is both its role index and,
 // via li != 0, its orientation: loop 0 is an outer loop (material inside),
 // every other a hole (material outside).
-func buildLoopSides(ctx context.Context, body *Body, ref StepRef, pp prismPayload, li int, loop LoopRecord) ([]*Face, []coedge, []coedge, boundedScalar, error) {
-	return buildLoopSidesAs(ctx, body, ref, pp, li, li != 0, loop)
+func buildLoopSides(ctx context.Context, body *Body, ref StepRef, pp prismPayload, li int, loop LoopRecord, work *freeformWork) ([]*Face, []coedge, []coedge, boundedScalar, error) {
+	return buildLoopSidesAs(ctx, body, ref, pp, li, li != 0, loop, work)
 }
 
 // buildLoopSidesAs is buildLoopSides with the role index and the orientation
@@ -850,7 +994,7 @@ func buildLoopSides(ctx context.Context, body *Body, ref StepRef, pp prismPayloa
 // hole in the solid (holeLoop true), each of the void's own holes a solid post
 // (holeLoop false) — a pairing the natural li != 0 rule cannot express
 // (docs/modify-design.md §9).
-func buildLoopSidesAs(ctx context.Context, body *Body, ref StepRef, pp prismPayload, roleLoop int, holeLoop bool, loop LoopRecord) ([]*Face, []coedge, []coedge, boundedScalar, error) {
+func buildLoopSidesAs(ctx context.Context, body *Body, ref StepRef, pp prismPayload, roleLoop int, holeLoop bool, loop LoopRecord, work *freeformWork) ([]*Face, []coedge, []coedge, boundedScalar, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, nil, nil, boundedScalar{}, err
 	}
@@ -863,8 +1007,11 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref StepRef, pp prismPayl
 		if err := ctx.Err(); err != nil {
 			return nil, nil, nil, boundedScalar{}, err
 		}
-		w, err := walkOf(seg)
+		w, err := walkOf(seg, work)
 		if err != nil {
+			return nil, nil, nil, boundedScalar{}, err
+		}
+		if err := requireAnalyticWalk(w, "the prism side-face build"); err != nil {
 			return nil, nil, nil, boundedScalar{}, err
 		}
 		raw[i] = sideWalk{segmentWalk: w, segs: []int{i}}
@@ -934,7 +1081,7 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref StepRef, pp prismPayl
 		var bottomEdge, topEdge *Edge
 		var surf Surface
 		faceReversed := false
-		if w.circular {
+		if w.isCircular() {
 			axis := pp.dir(0, 0, 1)
 			// The material's side of a circular wall is decided by the WALK,
 			// not by the loop's role: the outward normal is the walk tangent
@@ -1067,16 +1214,23 @@ func sideOriginsContext(ctx context.Context, ref StepRef, roleLoop int, segs []i
 // + v·(V'·g) + z·(N'·g), primes the placed directions, extremized over the
 // region boundary and the sweep. Shared by prismBoundsContext and the through-all
 // stop resolution (docs/evaluator-design.md §5).
+// The stop and clearance callers hold no preflight counter for this record, so
+// the interface forms open the record's own — one per extent reading, never one
+// per segment.
 func (pp prismPayload) extentAlong(g r3.Vec) (float64, float64, error) {
 	return pp.extentAlongContext(context.Background(), g)
 }
 
 func (pp prismPayload) extentAlongContext(ctx context.Context, g r3.Vec) (float64, float64, error) {
+	return pp.extentAlongWork(ctx, g, newFreeformWork())
+}
+
+func (pp prismPayload) extentAlongWork(ctx context.Context, g r3.Vec, work *freeformWork) (float64, float64, error) {
 	base := pp.xform.Apply(pp.frame.Origin()).Dot(g)
 	gu := pp.dir(1, 0, 0).Dot(g)
 	gv := pp.dir(0, 1, 0).Dot(g)
 	gz := pp.dir(0, 0, 1).Dot(g)
-	lo, hi, err := boundaryExtremesContext(ctx, pp.profile, gu, gv)
+	lo, hi, err := boundaryExtremesContext(ctx, pp.profile, gu, gv, work)
 	if err != nil {
 		return 0, 0, err
 	}
@@ -1089,14 +1243,14 @@ func (pp prismPayload) extentAlongContext(ctx context.Context, g r3.Vec) (float6
 // for each world axis, the directional extreme of the region boundary under
 // the lifted linear functional, plus the sweep's own extreme
 // (docs/evaluator-design.md §5).
-func prismBoundsContext(ctx context.Context, pp prismPayload) (Box, error) {
+func prismBoundsContext(ctx context.Context, pp prismPayload, work *freeformWork) (Box, error) {
 	axes := []r3.Vec{r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1)}
 	var minC, maxC [3]float64
 	for i, axis := range axes {
 		if err := ctx.Err(); err != nil {
 			return Box{}, err
 		}
-		lo, hi, err := pp.extentAlongContext(ctx, axis)
+		lo, hi, err := pp.extentAlongWork(ctx, axis, work)
 		if err != nil {
 			return Box{}, err
 		}
@@ -1115,11 +1269,11 @@ func prismBoundsContext(ctx context.Context, pp prismPayload) (Box, error) {
 // g(u, v) = gu·u + gv·v over the recorded region's boundary — exact per
 // segment kind: line extremes at endpoints, circular extremes at the
 // functional's own angle when the walk sweeps it.
-func boundaryExtremes(profile ProfileRecord, gu, gv float64) (float64, float64, error) {
-	return boundaryExtremesContext(context.Background(), profile, gu, gv)
+func boundaryExtremes(profile ProfileRecord, gu, gv float64, work *freeformWork) (float64, float64, error) {
+	return boundaryExtremesContext(context.Background(), profile, gu, gv, work)
 }
 
-func boundaryExtremesContext(ctx context.Context, profile ProfileRecord, gu, gv float64) (float64, float64, error) {
+func boundaryExtremesContext(ctx context.Context, profile ProfileRecord, gu, gv float64, work *freeformWork) (float64, float64, error) {
 	lo, hi := math.Inf(1), math.Inf(-1)
 	take := func(u, v float64) {
 		g := gu*u + gv*v
@@ -1131,13 +1285,16 @@ func boundaryExtremesContext(ctx context.Context, profile ProfileRecord, gu, gv 
 			if err := ctx.Err(); err != nil {
 				return 0, 0, err
 			}
-			w, err := walkOf(seg)
+			w, err := walkOf(seg, work)
 			if err != nil {
+				return 0, 0, err
+			}
+			if err := requireAnalyticWalk(w, "the boundary extreme scan"); err != nil {
 				return 0, 0, err
 			}
 			take(w.startU, w.startV)
 			take(w.endU, w.endV)
-			if !w.circular {
+			if !w.isCircular() {
 				continue
 			}
 			// Interior extremes at θ* where the functional's gradient

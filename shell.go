@@ -443,11 +443,13 @@ func evalTubeContext(ctx context.Context, d *Document, ref StepRef, pp prismPayl
 		return nil, err
 	}
 	section := ProfileRecord{Outer: outer, Holes: []LoopRecord{holeLoop}}
+	// The annular section is a NEW record no preflight has seen, so the build
+	// opens its one counter here (docs/spline-design.md §5.2).
 	return evalPrismContext(ctx, d, ref, prismPayload{
 		profile: section,
 		frame:   pp.frame,
 		z0:      pp.z0,
 		z1:      pp.z1,
 		xform:   pp.xform,
-	})
+	}, newFreeformWork())
 }

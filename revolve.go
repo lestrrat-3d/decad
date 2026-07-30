@@ -263,7 +263,12 @@ func (d *Document) Revolve(s *sketch.Sketch, p *sketch.Profile, axis Axis, a Ang
 	if err != nil {
 		return nil, err
 	}
-	if err := falsifyRecordedArea(profile, profileArea); err != nil {
+	// ONE free-form work counter for this whole operation over this record: the
+	// area falsifier's preflight opens it, the axis gates and the revolve build's
+	// own preflight continue it, and every walkOf under them spends what is left
+	// (docs/spline-design.md §5.2).
+	work := newFreeformWork()
+	if err := falsifyRecordedArea(profile, profileArea, work); err != nil {
 		return nil, err
 	}
 	for _, o := range opts {
@@ -307,7 +312,7 @@ func (d *Document) Revolve(s *sketch.Sketch, p *sketch.Profile, axis Axis, a Ang
 	if err != nil {
 		return nil, err
 	}
-	ax, side, err := resolveAxisSide(profile, line)
+	ax, side, err := resolveAxisSide(profile, line, work)
 	if err != nil {
 		return nil, err
 	}
@@ -333,7 +338,7 @@ func (d *Document) Revolve(s *sketch.Sketch, p *sketch.Profile, axis Axis, a Ang
 		Axis:    axis,
 	}
 	ref := d.nextStepRef()
-	body, err := evalRevolve(d, ref, revolvePayload{
+	body, err := evalRevolveWork(d, ref, work, revolvePayload{
 		profile: profile,
 		frame:   frame,
 		ax:      ax,
@@ -727,7 +732,7 @@ func (ax axisFrame) walk(w segmentWalk) segmentWalk {
 	if math.Abs(out.endV) <= ax.snapTol {
 		out.endV = 0
 	}
-	if w.circular {
+	if w.isCircular() {
 		beta := math.Atan2(ax.dV, ax.dU)
 		out.cU, out.cV = ax.toAxis(w.cU, w.cV)
 		out.th0 = w.th0 - beta
@@ -765,7 +770,7 @@ const (
 
 // classify names the surface of revolution one axis-coordinate walk sweeps.
 func (ax axisFrame) classify(w segmentWalk) wallKind {
-	if w.circular {
+	if w.isCircular() {
 		if math.Abs(w.cV) <= ax.snapTol {
 			return wallSphere
 		}
@@ -791,15 +796,15 @@ func (ax axisFrame) classify(w segmentWalk) wallKind {
 // tangent to the axis at an interior point (a circle kissing the axis would
 // sweep a self-touching horn torus). It returns the oriented frame and the
 // side sign the sweep interval must be remapped by.
-func resolveAxisSide(profile ProfileRecord, line axisLine2) (axisFrame, float64, error) {
+func resolveAxisSide(profile ProfileRecord, line axisLine2, work *freeformWork) (axisFrame, float64, error) {
 	nU, nV := -line.dV, line.dU
-	rlo, rhi, err := boundaryExtremes(profile, nU, nV)
+	rlo, rhi, err := boundaryExtremes(profile, nU, nV, work)
 	if err != nil {
 		return axisFrame{}, 0, err
 	}
 	roff := nU*line.aU + nV*line.aV
 	rlo, rhi = rlo-roff, rhi-roff
-	zlo, zhi, err := boundaryExtremes(profile, line.dU, line.dV)
+	zlo, zhi, err := boundaryExtremes(profile, line.dU, line.dV, work)
 	if err != nil {
 		return axisFrame{}, 0, err
 	}
@@ -825,7 +830,7 @@ func resolveAxisSide(profile ProfileRecord, line axisLine2) (axisFrame, float64,
 		dUBound: line.dUBound, dVBound: line.dVBound,
 		snapTol: tol,
 	}
-	if err := ax.rejectInteriorContact(profile); err != nil {
+	if err := ax.rejectInteriorContact(profile, work); err != nil {
 		return axisFrame{}, 0, err
 	}
 	return ax, side, nil
@@ -840,17 +845,20 @@ func resolveAxisSide(profile ProfileRecord, line axisLine2) (axisFrame, float64,
 // For the tangency, the circle's radial minimum sits at its lowest angle;
 // when that angle is strictly inside the walked range and the minimum
 // reaches the axis, the contact is neither of the two allowed forms.
-func (ax axisFrame) rejectInteriorContact(profile ProfileRecord) error {
+func (ax axisFrame) rejectInteriorContact(profile ProfileRecord, work *freeformWork) error {
 	const angEps = 1e-9
 	loops := append([]LoopRecord{profile.Outer}, profile.Holes...)
 	for _, loop := range loops {
 		for _, seg := range loop.Segments {
-			w, err := walkOf(seg)
+			w, err := walkOf(seg, work)
 			if err != nil {
 				return err
 			}
+			if err := requireAnalyticWalk(w, "the revolve axis-contact audit"); err != nil {
+				return err
+			}
 			w = ax.walk(w)
-			if !w.circular {
+			if !w.isCircular() {
 				continue
 			}
 			if w.cV < -ax.snapTol {
@@ -920,8 +928,8 @@ func (rp revolvePayload) basis() revolveBasis {
 // Pappus quotient. Every material point starts in the recorded profile plane,
 // rotates about the resolved axis, then passes through a rigid placement. The
 // L1 envelopes use three times an input L1 norm for any orthogonal map.
-func revolveCentroidGeometryBound(rp revolvePayload, held r3.Vec) (float64, error) {
-	coordUpper, err := profileCoordinateUpper(rp.profile)
+func revolveCentroidGeometryBound(rp revolvePayload, held r3.Vec, work *freeformWork) (float64, error) {
+	coordUpper, err := profileCoordinateUpper(rp.profile, work)
 	if err != nil {
 		return 0, err
 	}
@@ -1019,14 +1027,25 @@ func boundedRevolveSweep(phi0, phi1 float64) boundedScalar {
 // and arc; anything else has already been rejected by the mass-property
 // integrals it runs first.
 func evalRevolve(d *Document, ref StepRef, rp revolvePayload) (*Body, error) {
-	return evalRevolveContext(context.Background(), d, ref, rp)
+	return evalRevolveWork(d, ref, newFreeformWork(), rp)
+}
+
+// evalRevolveWork is the build an operation that already holds this record's
+// free-form work counter runs: the preflight below and every walkOf under it
+// continue that counter rather than open a second ceiling on the same record.
+func evalRevolveWork(d *Document, ref StepRef, work *freeformWork, rp revolvePayload) (*Body, error) {
+	return evalRevolveContextWork(context.Background(), d, ref, rp, work)
 }
 
 func evalRevolveContext(ctx context.Context, d *Document, ref StepRef, rp revolvePayload) (*Body, error) {
+	return evalRevolveContextWork(ctx, d, ref, rp, newFreeformWork())
+}
+
+func evalRevolveContextWork(ctx context.Context, d *Document, ref StepRef, rp revolvePayload, work *freeformWork) (*Body, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	ig, err := rp.profile.evaluatorIntegralsUncheckedContext(ctx, momentSecondOrder)
+	ig, err := rp.profile.evaluatorIntegralsUncheckedContext(ctx, momentSecondOrder, work)
 	if err != nil {
 		return nil, err
 	}
@@ -1080,7 +1099,7 @@ func evalRevolveContext(ctx context.Context, d *Document, ref StepRef, rp revolv
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		parts, err := buildRevolveLoop(ctx, body, ref, rp, b, li, loop)
+		parts, err := buildRevolveLoop(ctx, body, ref, rp, b, li, loop, work)
 		if err != nil {
 			return nil, err
 		}
@@ -1164,7 +1183,7 @@ func evalRevolveContext(ctx context.Context, d *Document, ref StepRef, rp revolv
 		rigidRoundAllow(vecMaxAbs(cen), vecMaxAbs(rp.xform.Translation())),
 	)
 	centroidValue := rp.xform.Apply(cen)
-	geometryBound, err := revolveCentroidGeometryBound(rp, centroidValue)
+	geometryBound, err := revolveCentroidGeometryBound(rp, centroidValue, work)
 	if err != nil {
 		return nil, err
 	}
@@ -1175,7 +1194,7 @@ func evalRevolveContext(ctx context.Context, d *Document, ref StepRef, rp revolv
 		Bound:     units.Millimeters(centroidBound),
 	}
 
-	bounds, err := revolveBoundsContext(ctx, rp)
+	bounds, err := revolveBoundsContext(ctx, rp, work)
 	if err != nil {
 		return nil, err
 	}
@@ -1237,7 +1256,7 @@ type revJunction struct {
 // buildRevolveLoop builds one loop's side faces with shared vertices and
 // edges, returning the faces, the two caps' coedges in walk order, and the
 // loop's side area.
-func buildRevolveLoop(ctx context.Context, body *Body, ref StepRef, rp revolvePayload, b revolveBasis, li int, loop LoopRecord) (revLoopParts, error) {
+func buildRevolveLoop(ctx context.Context, body *Body, ref StepRef, rp revolvePayload, b revolveBasis, li int, loop LoopRecord, work *freeformWork) (revLoopParts, error) {
 	if err := ctx.Err(); err != nil {
 		return revLoopParts{}, err
 	}
@@ -1249,8 +1268,11 @@ func buildRevolveLoop(ctx context.Context, body *Body, ref StepRef, rp revolvePa
 		if err := ctx.Err(); err != nil {
 			return revLoopParts{}, err
 		}
-		w, err := walkOf(seg)
+		w, err := walkOf(seg, work)
 		if err != nil {
+			return revLoopParts{}, err
+		}
+		if err := requireAnalyticWalk(w, "the revolve wall build"); err != nil {
 			return revLoopParts{}, err
 		}
 		raw[i] = sideWalk{segmentWalk: rp.ax.walk(w), segs: []int{i}}
@@ -1483,11 +1505,11 @@ func fullRevLoops(j0, j1 revJunction, kind wallKind) []*Loop {
 // takes the loop's: outer convex, hole concave.
 func (rp revolvePayload) capEdge(b revolveBasis, w segmentWalk, closed bool, vs, ve *Vertex, phi float64, holeLoop bool) *Edge {
 	convex := !holeLoop
-	if w.circular {
+	if w.isCircular() {
 		convex = w.th0 < w.th1
 	}
 	e := &Edge{convex: convex, length: w.length, lengthBound: w.lengthBound}
-	if !w.circular {
+	if !w.isCircular() {
 		e.curve = Line3{}
 		e.start, e.end = vs, ve
 		return e
@@ -1598,7 +1620,7 @@ func walkAxisMoment(w segmentWalk, kind wallKind) boundedScalar {
 	if kind == wallAxis {
 		return boundedScalar{}
 	}
-	if !w.circular {
+	if !w.isCircular() {
 		meanRadius := boundedDiv(
 			boundedAdd(exactScalar(w.startV), exactScalar(w.endV)),
 			exactScalar(2),
@@ -1634,15 +1656,19 @@ func (rp revolvePayload) extentAlong(g r3.Vec) (float64, float64, error) {
 }
 
 func (rp revolvePayload) extentAlongContext(ctx context.Context, g r3.Vec) (float64, float64, error) {
+	return rp.extentAlongWork(ctx, g, newFreeformWork())
+}
+
+func (rp revolvePayload) extentAlongWork(ctx context.Context, g r3.Vec, work *freeformWork) (float64, float64, error) {
 	b := rp.basis()
 	base := rp.xform.Apply(b.a3).Dot(g)
 	wg := rp.xform.ApplyDir(b.w).Dot(g)
 	mlo, mhi := sweepExtremes(rp.xform.ApplyDir(b.e0).Dot(g), rp.xform.ApplyDir(b.e1).Dot(g), rp.phi0, rp.phi1, rp.full)
-	hi, err := axisExtremeContext(ctx, rp, wg, mhi, true)
+	hi, err := axisExtremeContext(ctx, rp, wg, mhi, true, work)
 	if err != nil {
 		return 0, 0, err
 	}
-	lo, err := axisExtremeContext(ctx, rp, wg, mlo, false)
+	lo, err := axisExtremeContext(ctx, rp, wg, mlo, false, work)
 	if err != nil {
 		return 0, 0, err
 	}
@@ -1652,14 +1678,14 @@ func (rp revolvePayload) extentAlongContext(ctx context.Context, g r3.Vec) (floa
 // revolveBoundsContext computes the exact axis-aligned bounds of the placed
 // revolved solid — the same directional-extreme analysis the prism uses, in
 // cylindrical coordinates (docs/evaluator-design.md §6).
-func revolveBoundsContext(ctx context.Context, rp revolvePayload) (Box, error) {
+func revolveBoundsContext(ctx context.Context, rp revolvePayload, work *freeformWork) (Box, error) {
 	axes := []r3.Vec{r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1)}
 	var minC, maxC [3]float64
 	for i, g := range axes {
 		if err := ctx.Err(); err != nil {
 			return Box{}, err
 		}
-		lo, hi, err := rp.extentAlongContext(ctx, g)
+		lo, hi, err := rp.extentAlongWork(ctx, g, work)
 		if err != nil {
 			return Box{}, err
 		}
@@ -1705,10 +1731,10 @@ func sweepExtremes(c0, c1, phi0, phi1 float64, full bool) (float64, float64) {
 // axisExtremeContext is one extreme of the linear functional wg·z + k·ρ over the
 // recorded boundary, evaluated in axis coordinates through the plane-local
 // boundary extremes.
-func axisExtremeContext(ctx context.Context, rp revolvePayload, wg, k float64, wantMax bool) (float64, error) {
+func axisExtremeContext(ctx context.Context, rp revolvePayload, wg, k float64, wantMax bool, work *freeformWork) (float64, error) {
 	gu := wg*rp.ax.dU - k*rp.ax.dV
 	gv := wg*rp.ax.dV + k*rp.ax.dU
-	lo, hi, err := boundaryExtremesContext(ctx, rp.profile, gu, gv)
+	lo, hi, err := boundaryExtremesContext(ctx, rp.profile, gu, gv, work)
 	if err != nil {
 		return 0, err
 	}
