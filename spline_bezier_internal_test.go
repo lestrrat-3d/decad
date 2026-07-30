@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/lestrrat-3d/sketch/geom"
+	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
 
@@ -189,6 +190,136 @@ func TestFreeformWorkLimitRefuses(t *testing.T) {
 	require.Error(t, err)
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.Contains(t, err.Error(), "work budget")
+}
+
+// Whether a NURBS segment is Tier A at all is decided by its recorded weights,
+// so a rational one owes its OWN Table R reason however large the record is and
+// whatever the counter has left. Charging the rational lift first hands it the
+// generic ceiling message instead, and the two are different answers: one says
+// this evaluator has no certified quadrature for a rational curve, the other says
+// a record this size will not fit the budget. On the public path the swap needed
+// a record big enough for the lift charge alone to exhaust the ceiling — 349,525
+// control points at a ceiling of 2^20 — and an exhausted counter is the same
+// condition without the record.
+func TestRationalNURBSReasonPrecedesTheLiftCharge(t *testing.T) {
+	work := &freeformWork{spent: freeformWorkLimit}
+	_, _, err := freeformBezierSpans(rationalNURBSFixture(), work)
+	require.Error(t, err)
+	require.ErrorIs(t, err, ErrUnsupported)
+	require.Contains(t, err.Error(), "rational NURBS")
+	require.NotContains(t, err.Error(), "work budget",
+		"the tier is decided from the record's own weights, before anything is charged")
+}
+
+// The chord counts the reconstruction charge is built on are sketch's own
+// (geom/arrange.go sampleParams), restated here because the charge has to be
+// levied before that sampler runs. They are asserted per kind because each row
+// is a separate fact: the FLOOR is what makes a record of tiny curves expensive,
+// and the open spline is the one free-form kind sampled per span rather than per
+// control point.
+func TestReconstructionChordsRestateSketchSampling(t *testing.T) {
+	point := func(u, v float64) Point2 { return Point2{U: u, V: v} }
+	controls := func(n int) []Point2 {
+		out := make([]Point2, n)
+		for i := range out {
+			out[i] = point(float64(i), float64(i%3))
+		}
+		return out
+	}
+
+	for _, tc := range []struct {
+		name    string
+		segment CurveSegment
+		want    uint64
+	}{
+		{name: "line", segment: LineSeg{Start: point(0, 0), End: point(1, 0)}, want: 1},
+		{
+			name:    "circle",
+			segment: CircleSeg{Center: point(0, 0), Radius: units.Millimeters(1), CCW: true},
+			want:    256,
+		},
+		{
+			name:    "quarter arc",
+			segment: ArcSeg{Center: point(0, 0), Start: point(1, 0), End: point(0, 1)},
+			want:    64,
+		},
+		{
+			name:    "half arc",
+			segment: ArcSeg{Center: point(0, 0), Start: point(1, 0), End: point(-1, 0)},
+			want:    128,
+		},
+		{
+			name:    "three-control closed spline floors at 64",
+			segment: ClosedSplineSeg{Control: controls(3), CCW: true},
+			want:    64,
+		},
+		{
+			name:    "large closed spline is 16 per control",
+			segment: ClosedSplineSeg{Control: controls(100), CCW: true},
+			want:    1600,
+		},
+		{
+			name:    "open spline is 16 per span",
+			segment: SplineSeg{Control: controls(100)},
+			want:    16 * 97,
+		},
+		{
+			name:    "four-control open spline floors at 64",
+			segment: SplineSeg{Control: controls(4)},
+			want:    64,
+		},
+		{
+			name: "NURBS is 16 per control",
+			segment: NURBSSeg{
+				Degree: 1, Control: controls(100),
+				Knots: make([]float64, 102), Weights: make([]float64, 100),
+			},
+			want: 1600,
+		},
+		{name: "fit spline is 16 per fit point", segment: FitSplineSeg{Fit: controls(100)}, want: 1600},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			require.Equal(t, tc.want, reconstructionChords(tc.segment))
+		})
+	}
+}
+
+// The arrangement is GLOBAL, so the charge squares the record-wide chord total
+// rather than summing per-source squares. The difference is every cross-source
+// pair, which is most of them: two sources of 64 chords each arrange 16384
+// ordered pairs, where per-source squares see 8192.
+func TestReconstructionChargeSquaresTheRecordTotal(t *testing.T) {
+	control := []Point2{{U: 0, V: 0}, {U: 4, V: 0}, {U: 2, V: 3}}
+	one := ClosedSplineSeg{Control: control, CCW: true, TStart: 0, TEnd: 1}
+
+	single := reconstructionOf(ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{one}}})
+	require.Equal(t, uint64(64), single.chords)
+	require.Equal(t, uint64(64*64), single.arrangement)
+
+	pair := reconstructionOf(ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{one, one}}})
+	require.Equal(t, uint64(128), pair.chords, "the chord total is the whole record's")
+	require.Equal(t, uint64(128*128), pair.arrangement)
+	require.Greater(t, pair.arrangement, 2*single.arrangement,
+		"a sum of per-source squares drops every cross-source pair")
+
+	// A hole's chords are in the same arrangement as the outer loop's.
+	withHole := reconstructionOf(ProfileRecord{
+		Outer: LoopRecord{Segments: []CurveSegment{one}},
+		Holes: []LoopRecord{{Segments: []CurveSegment{one}}},
+	})
+	require.Equal(t, pair, withHole)
+
+	// The record-level half of the charge pays for the two whole-scene
+	// arrangements the validation always runs, and reports the per-arrangement
+	// charge each candidate profile then levies for itself.
+	work := &freeformWork{}
+	arrangement, err := chargeFreeformReconstruction(
+		ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{one}}},
+		work,
+	)
+	require.NoError(t, err)
+	require.Equal(t, single.arrangement, arrangement)
+	require.Equal(t, 2*single.arrangement, work.spent)
 }
 
 // The charge a conversion levies must grow with the work it actually does. A

@@ -19,14 +19,15 @@ import (
 // ONE freeformWork counter runs through the entire record — the ceiling bounds a
 // RECORD's total free-form work, not each segment's separately, so a record of
 // individually cheap segments whose aggregate is unaffordable refuses here
-// rather than running to completion — and every charge that record will ever owe
-// is levied here, before the first expensive step: the rational lift and knot
-// insertion of the conversion, the re-anchoring of each converted chain, and the
-// exact integration that runs only later in the moments pass. A charge levied
-// where its work runs fires after the sketch reconstruction and the sampling
-// that reconstruction does, which is precisely the work the ceiling exists to
-// precede: the public ProfileRecord methods take no context, so a late refusal
-// cannot be cancelled and bounds nothing.
+// rather than running to completion — and every charge is levied before the work
+// it pays for: the rational lift and knot insertion of the conversion, the
+// re-anchoring of each converted chain, the exact integration that runs only
+// later in the moments pass, and the whole-scene arrangement the topology
+// reconstruction runs. A charge levied where its work runs fires after the
+// sketch reconstruction and the sampling that reconstruction does, which is
+// precisely the work the ceiling exists to precede: the public ProfileRecord
+// methods take no context, so a late refusal cannot be cancelled and bounds
+// nothing.
 //
 // The converted chains are kept for the same reason. The moments pass
 // integrates the chains this preflight already converted and paid for, rather
@@ -38,6 +39,15 @@ type momentPreflight struct {
 	// plans is indexed [loop][segment] over the checked record's loops in
 	// outer-then-holes order — the order the moments pass walks them in.
 	plans [][]freeformPlan
+	// work is the record's own counter, still open. The topology reconstruction
+	// re-arranges the whole scene once per candidate profile it authenticates, so
+	// those arrangements are charged here as they happen rather than predicted.
+	work *freeformWork
+	// arrangement is one whole-scene arrangement's charge. It is zero for a record
+	// holding no free-form segment: an analytic record reaches the same
+	// reconstruction, and whether that path carries a ceiling of its own is a
+	// separate question from the free-form one this preflight owns.
+	arrangement uint64
 }
 
 // freeformPlan is one free-form segment's converted Bézier chain beside the
@@ -71,12 +81,22 @@ func validateMomentRecord(record ProfileRecord) (momentPreflight, error) {
 		}
 		return pre, nil
 	}
-	if !momentRecordMatchesSketch(pre.record) {
+	matched, err := pre.matchesSketch(pre.record)
+	if err != nil {
+		return momentPreflight{}, err
+	}
+	if !matched {
 		validationRecord, err := scaleMomentRecordForValidation(pre.record, pre.anchor)
 		if err != nil {
 			return momentPreflight{}, err
 		}
-		if !momentRecordMatchesSketch(validationRecord) {
+		// The rescaled record names the same entities at unit scale, so it holds
+		// the same chord total and each of its arrangements costs the same.
+		matched, err := pre.matchesSketch(validationRecord)
+		if err != nil {
+			return momentPreflight{}, err
+		}
+		if !matched {
 			return momentPreflight{}, fmt.Errorf(
 				`%w: the recorded segments do not form the stated closed region`,
 				ErrDegenerate,
@@ -84,6 +104,11 @@ func validateMomentRecord(record ProfileRecord) (momentPreflight, error) {
 		}
 	}
 	return pre, nil
+}
+
+// matchesSketch runs one reconstruction pass on the record's own counter.
+func (p momentPreflight) matchesSketch(record ProfileRecord) (bool, error) {
+	return momentRecordMatchesSketch(record, p.work, p.arrangement)
 }
 
 func validateMomentFields(record ProfileRecord) (momentPreflight, error) {
@@ -106,6 +131,7 @@ func validateMomentFieldsWithPoll(poll func() error, record ProfileRecord) (mome
 	// free-form work, never each segment's own.
 	work := &freeformWork{}
 	var anchor Point2
+	freeform := false
 	for loopIndex := range normalized {
 		if poll != nil {
 			if err := poll(); err != nil {
@@ -142,16 +168,34 @@ func validateMomentFieldsWithPoll(poll func() error, record ProfileRecord) (mome
 			}
 			normalized[loopIndex].Segments[segmentIndex] = checked
 			plans[loopIndex][segmentIndex] = plan
+			freeform = freeform || isFreeformSegment(checked)
 			if loopIndex == 0 && segmentIndex == 0 {
 				anchor = start
 			}
 		}
 	}
-	return momentPreflight{
+	pre := momentPreflight{
 		record: ProfileRecord{Outer: normalized[0], Holes: normalized[1:]},
 		anchor: anchor,
 		plans:  plans,
-	}, nil
+		work:   work,
+	}
+	if !freeform {
+		return pre, nil
+	}
+	// The reconstruction's charge is the record's, so it is levied here — once,
+	// over the whole scene that pass will arrange — rather than per segment. It
+	// comes after the per-segment charges because those bound the conversion each
+	// segment has ALREADY run above, and it comes before validateMomentRecord asks
+	// sketch anything at all, which is what the ceiling is for: the public
+	// ProfileRecord methods take no context, so a charge levied after the
+	// reconstruction bounds nothing it was added to bound.
+	arrangement, err := chargeFreeformReconstruction(pre.record, work)
+	if err != nil {
+		return momentPreflight{}, fmt.Errorf(`decad: profile record is invalid: %w`, err)
+	}
+	pre.arrangement = arrangement
+	return pre, nil
 }
 
 func scaleMomentRecordForValidation(record ProfileRecord, anchor Point2) (ProfileRecord, error) {
@@ -339,16 +383,14 @@ func validateAnalyticMomentSegment(segment CurveSegment) (CurveSegment, Point2, 
 // rational NURBS and every non-Tier-A kind with its own reason
 // (docs/spline-design.md Table R), so no field test is duplicated here.
 //
-// Every charge this segment will EVER owe is levied here, on the record's own
-// counter: the conversion, the sketch RECONSTRUCTION that decides the region's
-// topology, the re-anchoring the moments pass performs, and the exact
+// Every charge this SEGMENT owes is levied here, on the record's own counter:
+// the conversion, the re-anchoring the moments pass performs, and the exact
 // integration it then runs. The R7 ceiling exists because the public
 // ProfileRecord methods take no context and so cannot be cancelled, and a
 // ceiling consulted at the point of use fires after the work it is there to
-// bound has already run. The reconstruction is charged here for exactly that
-// reason: momentRecordMatchesSketch chords each recorded curve and arranges the
-// result, which is the largest uncancellable pass a Tier A record runs, and
-// nothing in the conversion or integration charges speaks for it.
+// bound has already run. The sketch RECONSTRUCTION is charged separately, by
+// the record-level preflight above: it arranges the whole scene at once, so its
+// cost is a property of the record rather than of any segment in it.
 func validateFreeformMomentSegment(segment CurveSegment, work *freeformWork) (CurveSegment, Point2, freeformPlan, error) {
 	spans, reversed, err := freeformBezierSpans(segment, work)
 	if err != nil {
@@ -358,12 +400,6 @@ func validateFreeformMomentSegment(segment CurveSegment, work *freeformWork) (Cu
 		return nil, Point2{}, freeformPlan{}, err
 	}
 	if err := chargeFreeformSpans(spans, work); err != nil {
-		return nil, Point2{}, freeformPlan{}, err
-	}
-	// The order among the preflight's own charges carries no guarantee — every
-	// one of them precedes the reconstruction, which is what the ceiling is for —
-	// so the reconstruction's sits after the charges for decad's own arithmetic.
-	if err := chargeFreeformReconstruction(segment, work); err != nil {
 		return nil, Point2{}, freeformPlan{}, err
 	}
 	start, _, err := freeformEndpoints(spans, reversed)
@@ -594,12 +630,48 @@ func equalNURBSWeights(weights []float64) bool {
 	return true
 }
 
-func momentRecordMatchesSketch(record ProfileRecord) bool {
+// momentRecordMatchesSketch asks sketch whether the recorded segments form the
+// recorded region. It builds the scene, arranges it once to list the candidate
+// profiles, and authenticates each candidate through RecordProfile.
+//
+// arrangement is one whole-scene arrangement's charge and work is the record's
+// own counter (spline_bezier.go). The preflight already paid for this pass's own
+// arrangement; each candidate costs one MORE, because RecordProfile
+// authenticates against a fresh Sketch.Profiles and that rebuilds the whole
+// arrangement. Charging each of them here, before it runs, is what keeps the
+// ceiling a bound on the pass rather than on a prediction of it. A zero
+// arrangement charge leaves the loop free, which is the analytic-only record.
+func momentRecordMatchesSketch(record ProfileRecord, work *freeformWork, arrangement uint64) (bool, error) {
 	record = normalizeReconstructionWeights(record)
+	s, built := momentRecordScene(record)
+	if !built {
+		return false, nil
+	}
+	for _, profile := range s.Profiles() {
+		if !profile.Valid {
+			continue
+		}
+		// One more whole-scene arrangement, charged before it runs.
+		if err := work.step(arrangement); err != nil {
+			return false, err
+		}
+		candidate, _, err := RecordProfile(s, profile)
+		if err == nil && momentRecordsEqual(record, candidate) {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// momentRecordScene builds the sketch entities the record names, deduplicating
+// the ones several segments share. It reports whether every entity was created:
+// an entity sketch declines to build is a record that does not reconstruct, so
+// the answer above is a no-match rather than a failure to report.
+func momentRecordScene(record ProfileRecord) (*sketch.Sketch, bool) {
 	world := sketch.NewWorld()
 	s, err := world.CreateSketch(world.XY())
 	if err != nil {
-		return false
+		return nil, false
 	}
 
 	interned := make(map[Point2]*sketch.Point)
@@ -650,7 +722,7 @@ func momentRecordMatchesSketch(record ProfileRecord) bool {
 				key := freeformEntityKey(4, segment.Control)
 				if _, ok := entities[key]; !ok {
 					if _, err := s.CreateSpline(points(segment.Control)...); err != nil {
-						return false
+						return nil, false
 					}
 					entities[key] = struct{}{}
 				}
@@ -658,7 +730,7 @@ func momentRecordMatchesSketch(record ProfileRecord) bool {
 				key := freeformEntityKey(5, segment.Control)
 				if _, ok := entities[key]; !ok {
 					if _, err := s.CreateClosedSpline(points(segment.Control)...); err != nil {
-						return false
+						return nil, false
 					}
 					entities[key] = struct{}{}
 				}
@@ -668,26 +740,16 @@ func momentRecordMatchesSketch(record ProfileRecord) bool {
 				key := freeformEntityKey(6, segment.Control, extra...)
 				if _, ok := entities[key]; !ok {
 					if _, err := s.CreateNURBS(segment.Degree, points(segment.Control), segment.Weights, segment.Knots); err != nil {
-						return false
+						return nil, false
 					}
 					entities[key] = struct{}{}
 				}
 			default:
-				return false
+				return nil, false
 			}
 		}
 	}
-
-	for _, profile := range s.Profiles() {
-		if !profile.Valid {
-			continue
-		}
-		candidate, _, err := RecordProfile(s, profile)
-		if err == nil && momentRecordsEqual(record, candidate) {
-			return true
-		}
-	}
-	return false
+	return s, true
 }
 
 func momentRecordsEqual(a, b ProfileRecord) bool {

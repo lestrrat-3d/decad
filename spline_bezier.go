@@ -2,6 +2,7 @@ package decad
 
 import (
 	"fmt"
+	"math"
 	"math/big"
 )
 
@@ -231,7 +232,9 @@ func requireFullFreeformRange(tStart, tEnd float64, what string) error {
 // arrays before any of them is allocated: two rationals per control point and
 // one per knot. It is the linear floor under the conversion, so a record too
 // large to hold rationally refuses at the ceiling rather than allocating first
-// and refusing afterwards.
+// and refusing afterwards. It is levied after the recorded content has decided
+// the segment's TIER, so a kind refused for its own cause reports that cause
+// rather than the ceiling.
 func chargeRationalLift(work *freeformWork, controls, knots int) error {
 	return work.step(rationalLiftCost(controls, knots))
 }
@@ -318,19 +321,24 @@ func clampedUniformKnots(n, degree int) []*big.Rat {
 // report the result as exact.
 func nurbsBezierSpans(seg NURBSSeg, work *freeformWork) ([]bezierSpan, error) {
 	// Order is the preflight's own: the O(1) refusals — the recorded range, then
-	// every slice size — decide first, because they read no element; then the
-	// rational lift is charged, because it is the linear floor under every scan
-	// below it; only then is any content read. A record whose knot count cannot
-	// match its control count is refused in constant time however many control
-	// points it holds, and one whose arrays are too large to lift refuses at the
-	// ceiling before they are scanned.
+	// every slice size — decide first, because they read no element, so a record
+	// whose knot count cannot match its control count is refused in constant time
+	// however many control points it holds. Then the record's OWN CONTENT is read
+	// and the TIER is decided, and only after that is anything charged.
+	//
+	// The tier has to precede the charge. Whether this segment is Tier A at all is
+	// a property of the recorded weights, so a record that is not Tier A owes its
+	// own Table R reason whatever its size: charging the rational lift first hands
+	// a large VALID rational NURBS the generic ceiling message instead, and the
+	// two are different answers to the caller — one says this evaluator has no
+	// certified quadrature for a rational curve, the other says a record this
+	// large will not fit the budget. Reading the arrays to decide it is a single
+	// linear pass over slices the caller already holds, which is not the
+	// super-linear work the ceiling exists to bound.
 	if err := requireFullFreeformRange(seg.TStart, seg.TEnd, "NURBS segment"); err != nil {
 		return nil, err
 	}
 	if err := validateNURBSSegmentSizes(seg); err != nil {
-		return nil, err
-	}
-	if err := chargeRationalLift(work, len(seg.Control), len(seg.Knots)); err != nil {
 		return nil, err
 	}
 	if err := validateNURBSSegmentContent(seg); err != nil {
@@ -344,13 +352,17 @@ func nurbsBezierSpans(seg NURBSSeg, work *freeformWork) ([]bezierSpan, error) {
 			)
 		}
 	}
-	// The conversion is charged before the rational lift, not after it. The
-	// insertion demand reads the RECORDED float knots — a single scan the size
-	// charge above already covers, over a vector the content check just proved
-	// finite and non-decreasing, so its runs are the multiplicities the rational
-	// vector will hold. Charging after the lift would let a record whose
-	// conversion is quadratically over budget allocate every one of its rationals
-	// first and refuse afterwards.
+	// The rational lift is charged next, as the linear floor under the conversion
+	// below it.
+	if err := chargeRationalLift(work, len(seg.Control), len(seg.Knots)); err != nil {
+		return nil, err
+	}
+	// The conversion is charged before the rational lift RUNS, not after it. The
+	// insertion demand reads the RECORDED float knots, over a vector the content
+	// check above just proved finite and non-decreasing, so its runs are the
+	// multiplicities the rational vector will hold. Charging after the lift would
+	// let a record whose conversion is quadratically over budget allocate every one
+	// of its rationals first and refuse afterwards.
 	if err := work.step(clampedConversionCost(
 		len(seg.Control),
 		len(seg.Knots),
@@ -735,58 +747,149 @@ func insertKnot(degree int, ctrl []ratPoint, knots []*big.Rat, target *big.Rat) 
 	return out, outKnots, nil
 }
 
-// freeformReconstructionChords is how many polyline chords the sketch
-// reconstruction is charged per recorded control point. sketch chords each
-// free-form curve before it arranges it, so the arrangement's element count
-// grows with the control count; this factor is the conversion from one to the
-// other, deliberately generous because the sampling density is sketch's own
-// decision and not a number decad may read.
-const freeformReconstructionChords = 4
+// The chord counts sketch's own reconstruction sampler produces, restated from
+// geom/arrange.go's sampleParams. They are restated rather than read because the
+// reconstruction charge below has to be levied before that sampler runs and no
+// recorded field reports them: a free-form source is chorded
+// freeformChordsPerControl times per control point with freeformChordFloor as
+// its floor, and a curved analytic source analyticChordsPerTurn times per full
+// turn. They are sketch's numbers, so a change upstream is a change here — and
+// they are FLOORED, which is why a record of many tiny curves arranges far more
+// chords than its control count suggests.
+const (
+	freeformChordsPerControl = 16
+	freeformChordFloor       = 64
+	analyticChordsPerTurn    = 256
+)
 
-// freeformReconstructionCost is the record-level preflight of the sketch
-// reconstruction — momentRecordMatchesSketch (moments_validate.go), the pass
-// that asks sketch to decide the recorded region's topology.
+// freeformReconstruction is the whole-RECORD model of the sketch reconstruction
+// momentRecordMatchesSketch runs (moments_validate.go) — the pass that asks
+// sketch to decide the recorded region's topology.
 //
-// That pass is neither cheap nor cancellable: it CHORDS every free-form curve
-// and then ARRANGES the result, and a planar arrangement is pairwise in the
-// elements it arranges, so the model is QUADRATIC in the chord count and hence
-// in the control count. Nothing else in this file speaks for it — the conversion
-// and integration charges bound decad's own rational arithmetic, which the
-// profile of a slow record shows is not where its time goes — so a record whose
-// conversion is linear (a ClosedSplineSeg) cleared the ceiling with hundreds of
-// control points and then spent seconds inside a public ProfileRecord method
-// that takes no context and cannot be interrupted.
+// That pass is neither cheap nor cancellable, and its cost belongs to the record
+// rather than to any one segment. sketch chords every source it is given and
+// then ARRANGES THE WHOLE SCENE AT ONCE: geom's arranger tests every PAIR of
+// chords in one global i<j loop over every chord of every source. So the charge
+// is a quadratic in the record-wide chord TOTAL, and a charge summing per-source
+// squares drops every cross-source pair — which is nearly all of them once a
+// record holds more than one curve.
 //
-// The charge is levied in the SAME record-level preflight as the others
-// (validateFreeformMomentSegment), which runs before the reconstruction does. It
-// is charged for every record, including the paths that skip the reconstruction:
-// the ceiling is the record's, one preflight owns every charge it will ever owe,
-// and a charge that were conditional on a later branch would not be a preflight.
-func freeformReconstructionCost(controls int) uint64 {
-	chords := costMul(freeformReconstructionChords, uint64(controls))
-	return costMul(chords, chords)
+// Analytic sources are counted too. The arrangement is global, so a chord total
+// that skips the lines, arcs and circles beside a spline bounds nothing about
+// the pass those sources are arranged in.
+//
+// The pass also runs the arrangement MORE THAN ONCE. It arranges the scene to
+// list the candidate profiles, RecordProfile arranges it again for each
+// candidate it authenticates (Sketch.Profiles rebuilds the arrangement on every
+// call), and validateMomentRecord repeats the whole pass on a rescaled record.
+// The cost is therefore one arrangement's quadratic times the number of
+// arrangements, which is what makes an uncharged record CUBIC in its source
+// count rather than quadratic.
+//
+// The charge is split so that every arrangement is paid for before it happens:
+// the two whole-scene arrangements the validation always runs are levied once,
+// at the record-level preflight, ahead of the first reconstruction, and each
+// candidate profile's own re-arrangement is charged on the same record counter
+// immediately before it runs.
+type freeformReconstruction struct {
+	// chords is the record-wide chord total the arrangement will hold.
+	chords uint64
+	// arrangement is one whole-scene arrangement's charge: the ORDERED pair
+	// count, twice the i<j pairs the intersection loop runs, so the doubling
+	// stands for the rest of the pass — the vertex table, the chord splitting
+	// and the region walk — rather than being modelled separately.
+	arrangement uint64
 }
 
-// chargeFreeformReconstruction levies that charge on the record's counter.
-func chargeFreeformReconstruction(seg CurveSegment, work *freeformWork) error {
-	return work.step(freeformReconstructionCost(freeformControlCount(seg)))
-}
-
-// freeformControlCount is a converted free-form segment's own recorded control
-// count — the size the reconstruction's chord count grows with. A kind that
-// never converts is charged nothing here, because it refuses with its own Table
-// R reason before any reconstruction is reached.
-func freeformControlCount(seg CurveSegment) int {
-	switch seg := seg.(type) {
-	case SplineSeg:
-		return len(seg.Control)
-	case ClosedSplineSeg:
-		return len(seg.Control)
-	case NURBSSeg:
-		return len(seg.Control)
-	default:
-		return 0
+// reconstructionOf reads that model off a checked record. Every segment is
+// counted, whatever its kind: the chord total is the arrangement's own element
+// count, and the arrangement is global.
+func reconstructionOf(record ProfileRecord) freeformReconstruction {
+	var chords uint64
+	for _, loop := range append([]LoopRecord{record.Outer}, record.Holes...) {
+		for _, segment := range loop.Segments {
+			chords = costAdd(chords, reconstructionChords(segment))
+		}
 	}
+	return freeformReconstruction{chords: chords, arrangement: costMul(chords, chords)}
+}
+
+// chargeFreeformReconstruction levies the record-level part of that charge — the
+// scene arrangement the validation runs to list its candidate profiles, and the
+// one its rescaled retry runs — and returns the per-arrangement charge the
+// candidate loop then levies for itself.
+func chargeFreeformReconstruction(record ProfileRecord, work *freeformWork) (uint64, error) {
+	demand := reconstructionOf(record)
+	if err := work.step(costMul(2, demand.arrangement)); err != nil {
+		return 0, err
+	}
+	return demand.arrangement, nil
+}
+
+// reconstructionChords is how many polyline chords sketch will create for the
+// entity one recorded segment names. It is sampleParams's own table, keyed on
+// the kind: a line is its own single chord, a free-form curve is chorded per
+// control point over a floor, and everything curved and analytic is chorded per
+// turn.
+func reconstructionChords(segment CurveSegment) uint64 {
+	switch segment := segment.(type) {
+	case LineSeg:
+		return 1
+	case ArcSeg:
+		return arcChords(segment)
+	case SplineSeg:
+		// An open cubic B-spline is sampled per SPAN, so the count comes off the
+		// control count less the degree — the one free-form kind whose sample
+		// count is not simply its control count.
+		return freeformChords(len(segment.Control) - 3)
+	case ClosedSplineSeg:
+		return freeformChords(len(segment.Control))
+	case NURBSSeg:
+		return freeformChords(len(segment.Control))
+	case FitSplineSeg:
+		return freeformChords(len(segment.Fit))
+	default:
+		// A circle, an ellipse, a conic and an elliptical arc all reach the same
+		// per-turn branch. A whole turn is its own upper bound, and a partial
+		// sweep is charged for a whole one rather than re-deriving a sweep the
+		// record states as no field of its own.
+		return analyticChordsPerTurn
+	}
+}
+
+// freeformChords is the per-control sample count with sketch's own floor. The
+// floor is what makes a record of many three-control splines expensive: each one
+// arranges freeformChordFloor chords however few controls it holds.
+func freeformChords(count int) uint64 {
+	if count <= 0 {
+		return freeformChordFloor
+	}
+	chords := costMul(freeformChordsPerControl, uint64(count))
+	if chords < freeformChordFloor {
+		return freeformChordFloor
+	}
+	return chords
+}
+
+// arcChords is the per-turn count scaled by the arc's own sweep — an ArcSeg is
+// swept counter-clockwise from Start to End about Center, which is the sweep
+// sketch derives from the same three pinned points. A sweep that is not a
+// positive angle inside one turn is charged a whole turn, which the sampler
+// itself cannot exceed.
+func arcChords(seg ArcSeg) uint64 {
+	sweep := math.Atan2(seg.End.V-seg.Center.V, seg.End.U-seg.Center.U) -
+		math.Atan2(seg.Start.V-seg.Center.V, seg.Start.U-seg.Center.U)
+	if sweep <= 0 {
+		sweep += 2 * math.Pi
+	}
+	if !(sweep > 0) || sweep > 2*math.Pi {
+		return analyticChordsPerTurn
+	}
+	chords := uint64(math.Ceil(analyticChordsPerTurn * sweep / (2 * math.Pi)))
+	if chords < 2 {
+		return 2
+	}
+	return chords
 }
 
 // chargeFreeformShift preflights the re-anchoring of a whole converted chain:

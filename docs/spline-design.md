@@ -387,24 +387,73 @@ count alone only once it has allocated two rationals per control point and a
 whole rational knot vector. The open-spline charge is quadratic, so a refused
 record allocates orders of magnitude more than any accepted one ever could.
 
-The RECONSTRUCTION carries a charge of its own, sized on the control count and
-levied in the same record-level preflight. It is not covered by the conversion
-and integration charges: those bound decad's rational arithmetic, and the
-reconstruction is sketch's — it chords each recorded curve and ARRANGES the
-result, which is pairwise in what it arranges, so the model is quadratic in the
-control count. Without it a kind whose conversion is linear clears the ceiling
-at a control count whose reconstruction runs for seconds, uncancellable, inside
-a public measurement method.
+The RECONSTRUCTION carries a charge of its own. It is not covered by the
+conversion and integration charges: those bound decad's rational arithmetic, and
+the reconstruction is sketch's — it chords each recorded source and ARRANGES the
+result. Without it a kind whose conversion is linear clears the ceiling at a
+control count whose reconstruction runs for seconds, uncancellable, inside a
+public measurement method.
+
+That charge is the RECORD's, not any source's, because the arrangement is
+GLOBAL: sketch chords every source it was given and then tests every PAIR of
+chords in one loop over the whole scene. So the charge is a saturated quadratic
+in the record-wide chord TOTAL. A sum of per-source squares is not a bound on
+it — it drops every cross-source pair, which is nearly all of them once a record
+holds more than one curve.
+
+Every source counts toward that total, analytic ones included. A chord total
+that skips the lines, arcs and circles beside a spline says nothing about the
+pass they are arranged in.
+
+The chord counts are sketch's own, restated: a free-form source is chorded 16
+times per control point (an OPEN spline per span, so 16 per control point less
+its degree) with a FLOOR of 64, a circle 256 times, an arc 256 times its share
+of a turn, a line once. The floor is what makes a record of many tiny curves
+expensive, and a charge reading the control count alone misses it entirely.
+
+The pass runs the arrangement more than ONCE, so the charge is one
+arrangement's quadratic times the number of arrangements — which is what makes
+an uncharged record cubic in its source count rather than quadratic. Validation
+arranges the scene to list its candidate profiles, `RecordProfile` arranges it
+again for each candidate it authenticates (`Sketch.Profiles` rebuilds the
+arrangement on every call), and the whole pass repeats on the rescaled record.
+The two whole-scene arrangements validation always runs are levied ONCE, at the
+record-level preflight, before sketch is asked anything; each candidate's own
+re-arrangement is charged on the same record counter immediately before it runs.
+Every arrangement is therefore paid for before it happens, and a record may
+clear the preflight and still be refused inside the pass.
+
+The ceiling stands at 2^20 charged units under that model, which admits far
+fewer sources than the earlier per-source charge did — nine chorded sources, or
+a lone closed spline of 36 control points — and the largest record it admits
+measures in tens of milliseconds rather than the hundreds the earlier charge
+allowed. Raising it is a separate change from levying the charge honestly: the
+conversion charges beneath it must first move ahead of the chains they precede,
+because a closed spline converts linearly while integrating its chain costs some
+270 times more per span, so a record whose integration is over budget allocates
+every span before the ceiling can see it.
 
 One record-level preflight therefore owns everything before the first expensive
-step, and it owns THREE things. Every cheap structural and finiteness refusal is
-evaluated on SIZES — knot count, degree, slice lengths, the recorded range —
-before any array is scanned, so a record that cannot be well formed at any
-content refuses in constant time however large a caller made it. Every charge is
-levied THERE: the conversion, the re-anchoring of each converted chain, and the
-integration that runs only in the later moments pass. And the chains the
-preflight converted are what that pass integrates, so the conversion the record
-paid for happens once.
+step, and it owns FOUR things. Every cheap structural refusal is evaluated on
+SIZES — knot count, degree, slice lengths, the recorded range — before any array
+is scanned, so a record that cannot be well formed at any content refuses in
+constant time however large a caller made it. Every charge is levied THERE: the
+conversion, the re-anchoring of each converted chain, the integration that runs
+only in the later moments pass, and the reconstruction's whole-scene
+arrangements. The chains the preflight converted are what that pass integrates,
+so the conversion the record paid for happens once. And the segment's TIER is
+decided before it is charged.
+
+That last one is a rule about which ANSWER a caller gets, not about cost. Whether
+a `NURBSSeg` is Tier A at all is a property of its recorded weights, so a
+rational one owes its own Tier C reason (§5.4) however large the record is:
+charging the
+rational lift first hands a large VALID rational NURBS the R7 ceiling message
+instead, and the two are different answers — one says this evaluator has no
+certified quadrature for a rational curve, the other says a record this size will
+not fit the budget. Reading the recorded arrays once to decide it is a single
+linear pass over slices the caller already holds, which is not the super-linear
+work the ceiling exists to bound.
 
 The independent-implementation rule stands. sketch computes its own free-form
 area internally and reports it as `Profile.Area`; decad integrates its OWN
@@ -1066,5 +1115,18 @@ rules).
 - Measure the reconstruction charge by its own boundary: the largest record the
   ceiling admits still measures, and the next control point past it refuses in
   milliseconds. State the admitted worst case the ceiling guarantees.
+- Assert the reconstruction charge on the whole RECORD, not a source at a time:
+  the chord total of a two-source record is the sum, and its charge exceeds twice
+  a single source's, which is the cross-source pairs a per-source charge drops. A
+  record of many tiny curves must refuse on the chord FLOOR, and one of many arcs
+  or circles beside a single spline must refuse on the analytic chords a
+  free-form-only count cannot see.
+- Assert the per-kind chord counts against sketch's own sampler as a table over
+  the kinds, the floor and the open spline's per-span count among them. A test
+  that checks one kind cannot see a row that reads the wrong field.
+- Assert a rational `NURBSSeg` reports its Tier C reason with the work counter
+  ALREADY EXHAUSTED. That is the condition a record large enough to exhaust the
+  ceiling on its rational lift alone creates, and only it distinguishes a tier
+  decided before the charge from one decided after.
 - Assert recipe replay of every free-form step reproduces body order, provenance
   roles, and measurements within the evaluator's own exactness.

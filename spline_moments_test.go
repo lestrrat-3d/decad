@@ -521,39 +521,116 @@ func TestOverBudgetConversionRefusesBeforeLifting(t *testing.T) {
 // decad's own rational arithmetic, and none of it interruptible because the
 // public measurement methods take no context.
 //
-// With the reconstruction charged, the largest closed spline the ceiling admits
-// holds 224 control points; measuring it takes roughly half a second here. That
-// count is the bound the ceiling now guarantees for this kind, and it is exact
-// integer arithmetic, so it does not move from machine to machine.
+// The largest closed spline the ceiling admits holds 36 control points, and it
+// measures in about forty milliseconds here. That count is the bound the ceiling
+// guarantees for this kind, and it is exact integer arithmetic, so it does not
+// move from machine to machine.
+//
+// The next control point past it refuses, and WHERE it refuses tells the two
+// halves of the charge apart. A record far past the ceiling refuses at the
+// record-level preflight, before sketch is asked anything at all. One just past
+// it clears that preflight and refuses inside the pass instead — the candidate
+// profiles each cost one more whole-scene arrangement, and each of those is
+// charged before it runs, so the total stays bounded either way.
 func TestReconstructionIsChargedBeforeItRuns(t *testing.T) {
-	ring := func(controls int) decad.ProfileRecord {
-		control := make([]decad.Point2, controls)
-		for i := range control {
-			angle := 2 * math.Pi * float64(i) / float64(controls)
-			control[i] = decad.Point2{U: 10 * math.Cos(angle), V: 10 * math.Sin(angle)}
-		}
-		return decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
-			decad.ClosedSplineSeg{Control: control, CCW: true, TStart: 0, TEnd: 1},
-		}}}
-	}
-
-	area, err := ring(224).Area()
+	area, err := closedSplineRecordOf(36).Area()
 	require.NoError(t, err, "the largest record the ceiling admits still measures")
 	value, err := area.Value.In(units.SquareMillimeter)
 	require.NoError(t, err)
-	require.InDelta(t, math.Pi*100, value, 1.0, "a 224-control ring is very nearly its circle")
+	require.InDelta(t, math.Pi*100, value, 4.0, "a 36-control ring is nearly its circle")
 
-	for _, controls := range []int{225, 800} {
+	for _, tc := range []struct {
+		controls  int
+		preflight bool
+	}{
+		{controls: 37, preflight: false},
+		{controls: 800, preflight: true},
+	} {
 		start := time.Now()
-		_, err := ring(controls).Area()
-		require.Error(t, err, "%d controls is past the ceiling", controls)
+		_, err := closedSplineRecordOf(tc.controls).Area()
+		require.Error(t, err, "%d controls is past the ceiling", tc.controls)
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		require.Contains(t, err.Error(), "work budget")
-		require.Contains(t, err.Error(), "profile loop 0 segment 0 is invalid",
-			"the refusal is the preflight's, ahead of the reconstruction")
+		if tc.preflight {
+			require.Contains(t, err.Error(), "profile record is invalid",
+				"the refusal is the record-level preflight's, ahead of any reconstruction")
+		} else {
+			require.NotContains(t, err.Error(), "profile record is invalid",
+				"this record clears the preflight and is refused by the arrangement charge inside the pass")
+		}
 		require.Less(t, time.Since(start), time.Second,
-			"no reconstruction ran before the refusal")
+			"the charge bounds the reconstruction rather than following it")
 	}
+}
+
+// The reconstruction charge is the RECORD's, and the arrangement it pays for is
+// GLOBAL: sketch chords every source in the scene and then tests every pair of
+// chords in one loop. A charge summing per-source squares therefore drops every
+// cross-source pair, which is nearly all of them — and it undercounts each
+// source too, because sketch floors free-form sampling at 64 chords however few
+// control points a curve holds.
+//
+// Thirty-one three-control closed splines are the measured shape: 1984 chords
+// and about two million pairs per arrangement, run once per candidate profile
+// and again for the rescaled retry. Charged per source they cost 144 units each
+// and were admitted, and such a record occupied ProfileRecord.Area for 7.7
+// uncancellable seconds. Charged on the record-wide total they refuse at the
+// preflight in about a millisecond.
+//
+// The fixture's own topology is never reached, which is the point: the charge is
+// levied before sketch is asked anything.
+func TestCrossSourceChordsAreChargedOnTheWholeRecord(t *testing.T) {
+	segments := make([]decad.CurveSegment, 31)
+	for i := range segments {
+		control := make([]decad.Point2, 3)
+		for j := range control {
+			angle := 2 * math.Pi * float64(j) / 3
+			control[j] = decad.Point2{U: float64(i)*20 + 3*math.Cos(angle), V: 3 * math.Sin(angle)}
+		}
+		segments[i] = decad.ClosedSplineSeg{Control: control, CCW: true, TStart: 0, TEnd: 1}
+	}
+	record := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: segments}}
+
+	start := time.Now()
+	_, err := record.Area()
+	require.Error(t, err)
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+	require.Contains(t, err.Error(), "work budget")
+	require.Contains(t, err.Error(), "profile record is invalid",
+		"the record-level charge fires, not a per-segment one")
+	require.Less(t, time.Since(start), time.Second, "no arrangement ran before the refusal")
+}
+
+// Analytic sources are chorded and arranged beside the free-form ones, so they
+// have to be counted. A chord total that skips them bounds nothing about the
+// pass they are arranged in: a hundred quarter arcs contribute 6400 chords to
+// the same global pair loop one four-control spline contributes 64 to, and a
+// charge reading only the spline admits the record and then spends seconds
+// arranging all of it.
+func TestAnalyticChordsAreCharged(t *testing.T) {
+	segments := make([]decad.CurveSegment, 0, 101)
+	for i := range 100 {
+		center := decad.Point2{U: float64(i) * 10}
+		segments = append(segments, decad.ArcSeg{
+			Center: center,
+			Start:  decad.Point2{U: center.U + 4, V: center.V},
+			End:    decad.Point2{U: center.U, V: center.V + 4},
+			TStart: 0, TEnd: 1,
+		})
+	}
+	segments = append(segments, decad.SplineSeg{
+		Control: []decad.Point2{{}, {U: 1, V: 1}, {U: 2, V: 1}, {U: 3}},
+		TStart:  0, TEnd: 1,
+	})
+	record := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: segments}}
+
+	start := time.Now()
+	_, err := record.Area()
+	require.Error(t, err)
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+	require.Contains(t, err.Error(), "work budget")
+	require.Contains(t, err.Error(), "profile record is invalid")
+	require.Less(t, time.Since(start), time.Second, "no arrangement ran before the refusal")
 }
 
 // A spline chained with a straight chord exercises the mixed path: the line
@@ -681,13 +758,13 @@ func TestMalformedNURBSRefusesBeforeScanningControls(t *testing.T) {
 }
 
 // The work ceiling bounds a RECORD's total free-form work, never each segment's
-// own. Two closed splines of 200 controls are individually affordable — 858,800
+// own. Two closed splines of 700 controls are individually affordable — 765,800
 // charged units each against a ceiling of 1,048,576 — and unaffordable together,
 // so a counter opened per segment reads both as cheap and lets the record run to
 // a topology answer instead of refusing. The refusal names the SECOND segment,
 // which is the proof that the first segment's charge carried into it.
 func TestFreeformWorkBudgetBoundsTheWholeRecord(t *testing.T) {
-	const controls = 200
+	const controls = 700
 	record := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
 		closedSplineSegmentOf(controls, 10),
 		closedSplineSegmentOf(controls, 3),
@@ -703,14 +780,13 @@ func TestFreeformWorkBudgetBoundsTheWholeRecord(t *testing.T) {
 	require.Less(t, time.Since(start), 10*time.Second, "the refusal precedes the topology reconstruction")
 }
 
-// Every charge a free-form segment will ever owe is levied at the record-level
-// preflight, the re-anchoring of its converted chain among them. A 960-control
-// closed spline charges 1,050,240 units — over the 1,048,576 ceiling by less
-// than the 7,680 its re-anchoring contributes — so a preflight that omits that
-// term admits the record, spends about six uncancellable seconds reconstructing
-// and sampling the curve in sketch, and only then refuses from the moments pass.
-// The validation prefix is what tells the two apart: validateMomentFields adds
-// it to everything the preflight refuses, and the moments pass adds nothing.
+// Every charge a free-form SEGMENT owes is levied at the record-level preflight,
+// the re-anchoring of its converted chain among them. A 960-control closed
+// spline charges 1,050,240 units — over the 1,048,576 ceiling by less than the
+// 7,680 its re-anchoring contributes — so a preflight that omits that term
+// admits the record and refuses from the moments pass instead. The validation
+// prefix is what tells the two apart: validateMomentFields adds it to everything
+// the preflight refuses, and the moments pass adds nothing.
 func TestFreeformReanchoringChargeRefusesAtValidation(t *testing.T) {
 	record := closedSplineRecordOf(960)
 
