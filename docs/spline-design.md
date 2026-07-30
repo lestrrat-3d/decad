@@ -30,6 +30,7 @@ Three tables are normative:
 | why an elliptical arc cannot build | §2.2 |
 | how a spline's area is EXACT | §5 |
 | what a repeated knot or a repeated control net does | §5.1 |
+| what a knot multiplicity above the degree does | §5.1.1 |
 | how a length/extreme is bounded | §6 |
 | what a revolve's area needs beyond length | §6.1.1 |
 | why an undercut or radius reading is `Suspect` | §6.3 |
@@ -142,16 +143,17 @@ exactly → `ErrUnrecordableProfile`.
 |---|---|---|---|
 | **R1** | free-form fragment (`TExact` false) | `ErrUnrecordableProfile` | yes, §2.1 |
 | **R2** | `EllipticalArcSeg` reaches a build or an integral | `ErrUnsupported` | yes, §2.2 |
-| **R3** | free-form walk in a section a `Shell` offsets | `ErrUnsupported` | yes, §4.1 |
-| **R4** | `Fillet` corner with a free-form carrier | `ErrUnsupported` | yes, §4.1 |
-| **R5** | `Chamfer` corner with a free-form carrier | `ErrUnsupported` | yes, §4.1 |
+| **R3** | free-form walk in a section a `Shell` offsets | `ErrUnsupported` | yes for a curved walk, §4.1 |
+| **R4** | `Fillet` corner with a free-form carrier | `ErrUnsupported` | yes for a curved walk, §4.1 |
+| **R5** | `Chamfer` corner with a free-form carrier | `ErrUnsupported` | yes for a curved walk, §4.1 |
 | **R6** | `FitSplineSeg` reaches a build or an integral | `ErrUnsupported` | pending §9 ask 1 |
 | **R7** | exact-rational integration exceeds its work budget | `ErrUnsupported` | no, §5.2 |
 | **R8** | chording a free-form walk needs more than the chord cap | `ErrUnsupported` | no, reuses `errTooManyChords` |
 | **R9** | a `Verify` reading's proof does not close — its bracket cannot separate it from its threshold, or a §6.3 certificate fails | not an error — `Suspect` | no, §8 |
 | **R10** | a Tier B or Tier C walk reaches a BUILD before its moments land | `ErrUnsupported` | no, §8 |
 | **R11** | a free-form bracket cannot decide a BUILD-time comparison | `ErrUnsupported` | no, §6.4 |
-| **R12** | an interior knot multiplicity above the degree — the recorded curve is discontinuous | `ErrDegenerate` | yes, §5.1 |
+| **R12** | an interior knot at multiplicity above the degree whose two one-sided limits are DIFFERENT recorded coordinates | `ErrDegenerate` | yes, §5.1.1 |
+| **R13** | an admitted record whose Bézier extraction this evaluator cannot slice — a C0 join's stride, an over-clamped end knot's dead control | `ErrUnsupported` | no, §5.1.1 |
 
 R9 is the one row that is not a refusal. An intent the evaluator cannot BUILD is
 `ErrUnsupported` at the call; a `Verify` question it cannot ANSWER is accepted
@@ -160,21 +162,39 @@ straddles its threshold is the second case, and so is a direction cone §6.3
 cannot certify. R11 is the first case reached from the same brackets: a build
 gate has no `Suspect` to fall back on (§6.4).
 
-### 4.1 Why the modify refusals are permanent
+### 4.1 Why the modify refusals stand
 
 Modify §2 reduces every modify op to an EXACT rewrite of the recorded 2D
-section. Each free-form refusal follows from that reduction, not from missing
-effort:
+section. Each reason below follows from that reduction, not from missing effort
+— and each is stated for a CURVED free-form walk, which is the whole of what the
+exactness barrier covers. The STRAIGHT slice is refused by the same rows on a
+different ground, stated after them.
 
-- **R3.** `Shell` needs the section's exact offset. The exact offset of a
+- **R3.** `Shell` needs the section's exact offset. The exact offset of a curved
   polynomial spline is not polynomial, so no recordable section represents it.
 - **R4.** A fillet's blend centre is the intersection of the two carriers'
-  material-side offsets. One offset is not representable, so there is no exact
-  centre to record.
+  material-side offsets. A curved carrier's offset is not representable, so
+  there is no exact centre to record.
 - **R5.** A chamfer's foot sits a setback distance along the boundary curve,
-  measured as ARC LENGTH. Arc length is never exact (§6.1), so the foot is not
-  exact, so the chord's recorded endpoints would be approximate coordinates —
-  which core §6.2 forbids outright.
+  measured as ARC LENGTH. On a curved span that length is a bracket and never
+  exact (§6.1), so the foot is not exact, so the chord's recorded endpoints
+  would be approximate coordinates — which core §6.2 forbids outright.
+
+**The straight slice is refused too, and NOT for those reasons.** A degree-1
+`NURBSSeg` is a polyline: a rational degree-1 Bézier is a convex combination of
+its two control points, so the point set is the polyline through the control
+points whatever the positive weights. Every barrier above dissolves on it — the
+exact offset of a straight walk is a straight walk with miter or arc corner
+joins, all recordable; a corner between two of its segments has the exact blend
+centre the line/line case already computes; and its length enclosure is a POINT,
+chord and control polygon coinciding (§6.1), so its setback foot is the same
+closed form the analytic `LineSeg` walk already records. R3–R5 refuse it anyway,
+on the recorded segment KIND: no modify construction reads a free-form walk at
+all, so admitting the straight slice means building offset, blend-centre and
+setback cases for a kind that has none. That refusal is staging, so
+`ErrUnsupported` is the right sentinel for it as well — the same sentinel, a
+different reason, and the only part of R3–R5 decad could lift on its own. No §10
+increment schedules it.
 
 **The admissible slice, and it is not a refusal.** A corner whose BOTH carriers
 are analytic stays buildable in a section that holds free-form walks elsewhere:
@@ -213,9 +233,10 @@ rightly does not. Three consequences the constructions carry:
 - **an EMPTY knot span — `t_i = t_{i+1}`, a repeated interior knot — carries no
   Bézier segment.** It enters no sum here and is not a span any §6 row runs on.
   The nonempty-domain check leaves at least one span to run on.
-- **an interior knot whose multiplicity EXCEEDS the degree breaks the curve into
-  disconnected pieces**, so the record describes no single walk and bounds no
-  region — R12.
+- **an interior knot whose multiplicity EXCEEDS the degree carries the two
+  one-sided limits onto two RECORDED control points**, and whether the record
+  describes one walk is decided by whether those two coordinates are identical —
+  §5.1.1, R12 and R13.
 - **a COLLAPSED span — every control point of that span the same point — is a
   span of zero length**, on which `C(t)` is constant and `C′ ≡ 0`. A walk whose
   spans ALL collapse has zero length, and the free-form walk owes it the refusal
@@ -240,6 +261,45 @@ once, per §3:
 
 Walk direction carries the sign through the recorded range order, exactly as
 §2's `[1, 0]` case states. Nothing is reordered.
+
+#### 5.1.1 A knot above the degree, and the record it still describes
+
+**At an interior knot of multiplicity `m ≥ p + 1` the two one-sided limits are
+two RECORDED control points, and the record describes one walk exactly when
+those two coordinates are identical.** For the knot occupying knot indices
+`j+1 … j+m` they are `P_j`, which ends the left piece, and `P_{j+m−p}`, which
+starts the right piece — adjacent exactly when `m = p + 1`, with `m − p − 1` DEAD
+control points between them otherwise. Weights do not enter: a single control
+point projects to itself under any positive weight. Degree 1 is representative
+rather than a special case; the same two limits stand at degree 2 with `m = 3`
+and at degree 3 with `m = 4` and `m = 5`.
+
+Equality is EXACT float identity, NEVER a tolerance. Both directions are exactly
+decidable on the recorded floats, so no admission here rests on a residual —
+which is what the core falsify-never-bless rule requires.
+
+- **the two limits at DIFFERENT coordinates — R12, `ErrDegenerate`,
+  permanent.** The record describes two disconnected walks, which close no loop
+  and bound no region, so no such body exists.
+- **the two limits at the IDENTICAL coordinate — a C0 join, ADMITTED.** The
+  curve is bit-for-bit the concatenation of its Bézier pieces, which is the walk
+  §2 already admits when the same shape is spelled as a chain of free-form
+  curves joined at shared endpoints; a closed one closes with a gap of exactly
+  `0` and encloses positive area. `record.go` admits it today —
+  `validateNURBSSegment` tests distinctness nowhere — so the evaluator owes it a
+  build or a staged refusal. Where the Bézier extraction cannot slice a stride
+  whose spans share no boundary control point, that is R13 `ErrUnsupported`, and
+  it is not permanent.
+
+**An END knot above multiplicity `p + 1` is the same record with no piece on the
+far side, and it is a valid body.** `validateNURBSSegment` requires the first
+`p + 1` knots equal and the last `p + 1` equal, and rejects no repeat beyond
+them: degree 2 with knots `[0, 0, 0, 0, 1, 1, 1]` and 4 control points is
+admitted, and it is one quadratic Bézier over `P_1, P_2, P_3` with `P_0` DEAD. A
+dead control point enters no nonempty span, so it enters no §5 sum, no §6 hull
+and no bracket, and the walk is exactly the concatenation of its nonempty spans.
+Admit it; where the extraction cannot slice it, that is R13 `ErrUnsupported`,
+never `ErrDegenerate`.
 
 ### 5.2 Discipline
 
@@ -293,8 +353,8 @@ its own convergence is not a bound.
 
 ### 6.1 Arc length — a proven two-sided bracket
 
-Arc length integrates `√(u′² + v′²)`, which has no polynomial antiderivative in
-any tier. Bracket it instead:
+Arc length integrates `√(u′² + v′²)`, which on a curved span has no polynomial
+antiderivative in any tier. Bracket it instead:
 
 - the CHORD is a lower bound;
 - the CONTROL POLYGON is an upper bound (variation diminishing);
@@ -311,12 +371,18 @@ Both bounds are proven, not sampled. Report the interval midpoint as the value
 and its half width as the bound, `Approximate` always — a zero bound here would
 be a false Exact.
 
-A COLLAPSED span (§5.1) is the one span whose enclosure is a POINT: its chord and
-its control polygon are both `0`, which is that span's true length, so the
-measured gap meets any target at depth zero and the span contributes an honest
-`0` to the walk's sum. It never reaches a reading alone — a walk of nothing but
-collapsed spans is the zero-length walk §5.1 refuses — so the `Approximate` rule
-above still speaks for every length decad reports.
+A COLLAPSED span (§5.1) has a POINT enclosure: its chord and its control polygon
+are both `0`, which is that span's true length, so the measured gap meets any
+target at depth zero and the span contributes an honest `0` to the walk's sum. It
+never reaches a reading alone — a walk of nothing but collapsed spans is the
+zero-length walk §5.1 refuses.
+
+A DEGREE-1 span's enclosure is a point too, its chord BEING its control polygon,
+and the point it encloses is that span's exact length — which is what §4.1's
+straight slice reads. It does reach a reading alone, and the `Approximate` rule
+above still holds for it: the enclosed length is a float square root, so the
+reported value carries that rounding and never a zero bound. So the rule speaks
+for every length decad reports.
 
 Consumers: a prism's side-face `Area` (`length × height`), `Edge.Length()`, and
 the setback R5 refuses. A revolve's lateral area is NOT one of them — length
@@ -791,6 +857,24 @@ rules).
   zero-length walk (`ErrDegenerate`); and the §6.1 length, §6.1.1 radial and
   §6.2.1 sagitta enclosures of a walk holding one collapsed span each contain a
   dense-sample reference, with that span contributing `0`.
+- Assert both §5.1.1 rules on records `record.go` admits today, each against a
+  dense-sample reference. A `NURBSSeg` whose interior knot sits at multiplicity
+  above its degree with the two one-sided limits at DIFFERENT coordinates is
+  refused `ErrDegenerate` (R12). The SAME record with those two limits at the
+  IDENTICAL coordinate either builds — its area matching the chain-of-curves
+  section that spells the same walk as separate segments joined at that shared
+  endpoint — or refuses `ErrUnsupported` while R13 stands, NEVER `ErrDegenerate`;
+  a test that asserts only the different-coordinate direction cannot tell the
+  rule from a multiplicity check. Cover an adjacent limit pair (degree 1,
+  `m = 2`) and a non-adjacent one (degree 3, `m = 5`, whose limits `P_j` and
+  `P_{j+m−p}` have a dead control between them), so neither direction can pass by
+  assuming adjacency.
+- Assert the §5.1.1 END-knot rule on the over-clamped record `record.go` admits —
+  degree 2, knots `[0, 0, 0, 0, 1, 1, 1]`, 4 control points, `P_0` dead: the body
+  either builds with the area of the single quadratic Bézier over `P_1, P_2, P_3`
+  against a dense-sample reference, or refuses `ErrUnsupported` (R13), never
+  `ErrDegenerate`. Assert the dead control point moves no reading: displacing
+  `P_0` alone changes no area, no length enclosure and no `Box`.
 - Assert `Undercuts` on a free-form face whose certified cone is proper: a face
   whose cone puts every point provenly opposing the pull is listed, and a face
   whose cone clears at every point is not.
@@ -806,8 +890,12 @@ rules).
   spline, a `FitSplineSeg`, an `EllipticalArcSeg`, a free-form `Shell`, a
   free-form fillet carrier, a free-form chamfer carrier, an `Extrude` whose
   through-all stop reads a free-form extent bracket straddling the sketch plane
-  (R11), a `NURBSSeg` whose interior knot multiplicity exceeds its degree (R12),
-  and — while R10 stands — an `Extrude` of a section carrying a Tier B or
-  Tier C walk, whose Tier A counterpart builds in the same test.
+  (R11), a `NURBSSeg` whose interior knot at multiplicity above its degree has
+  DIFFERENT one-sided limits (R12), a record R13 stages, and — while R10 stands —
+  an `Extrude` of a section carrying a Tier B or Tier C walk, whose Tier A
+  counterpart builds in the same test. Run each of R3–R5 on a DEGREE-1
+  `NURBSSeg` walk as well as a curved one and require the same
+  `ErrUnsupported`, so the refusal stays keyed on the recorded kind rather than
+  on the degree (§4.1).
 - Assert recipe replay of every free-form step reproduces body order, provenance
   roles, and measurements within the evaluator's own exactness.
