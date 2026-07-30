@@ -46,12 +46,13 @@ func freeformSpanCost(controls int) uint64 {
 }
 
 // chargeFreeformSpans preflights the exact integration of a WHOLE converted
-// chain, before any of it runs. Charging it up front rather than span by span
-// is what lets a caller levy the cost at a validation step that precedes the
-// integration entirely (moments_validate.go): a record whose integration cannot
-// fit the budget must refuse before anything downstream of the conversion
-// samples or reconstructs the curve, since the ceiling exists precisely because
-// the public ProfileRecord methods take no context and cannot be cancelled.
+// chain, before any of it runs. It is the SINGLE owner of that charge: the
+// record-level preflight levies it (moments_validate.go) and the moments pass
+// then integrates the chain the preflight already paid for. A record whose
+// integration cannot fit the budget must refuse before anything downstream of
+// the conversion samples or reconstructs the curve, since the ceiling exists
+// precisely because the public ProfileRecord methods take no context and cannot
+// be cancelled.
 func chargeFreeformSpans(spans []bezierSpan, work *freeformWork) error {
 	for _, span := range spans {
 		if err := work.step(freeformSpanCost(len(span))); err != nil {
@@ -131,10 +132,7 @@ func spanCoordinatePolys(span bezierSpan) (ratPoly, ratPoly) {
 //	∫u² dA = ⅓∮u³ dv
 //	∫v² dA = −⅓∮v³ du
 //	∫uv dA = ½∮u²v dv
-func exactFreeformMoments(spans []bezierSpan, reversed bool, work *freeformWork) (exactMoments, error) {
-	if err := chargeFreeformSpans(spans, work); err != nil {
-		return exactMoments{}, err
-	}
+func exactFreeformMoments(spans []bezierSpan, reversed bool) exactMoments {
 	half := big.NewRat(1, 2)
 	third := big.NewRat(1, 3)
 	out := exactMoments{
@@ -163,7 +161,7 @@ func exactFreeformMoments(spans []bezierSpan, reversed bool, work *freeformWork)
 			value.Neg(value)
 		}
 	}
-	return out, nil
+	return out
 }
 
 // addFreeform accumulates one converted free-form curve's contribution. The
@@ -175,11 +173,11 @@ func exactFreeformMoments(spans []bezierSpan, reversed bool, work *freeformWork)
 // region whose whole boundary is one segment. The float accumulation below is
 // what the region publishes instead when some OTHER segment — a circular walk —
 // leaves it with no exact rational at all.
-func (ig *regionIntegrals) addFreeform(spans []bezierSpan, reversed bool, work *freeformWork) error {
-	exact, err := exactFreeformMoments(spans, reversed, work)
-	if err != nil {
-		return err
-	}
+//
+// The chain arrives already converted, re-anchored and CHARGED by the
+// record-level preflight, so nothing here consults the work counter.
+func (ig *regionIntegrals) addFreeform(spans []bezierSpan, reversed bool) {
+	exact := exactFreeformMoments(spans, reversed)
 	if extent := freeformControlExtent(spans); extent > ig.coordUpper {
 		ig.coordUpper = extent
 	}
@@ -199,5 +197,4 @@ func (ig *regionIntegrals) addFreeform(spans []bezierSpan, reversed bool, work *
 		accumulateMoment(moment.value, moment.bound, held, rationalFloatError(moment.exact, held))
 	}
 	ig.addExact(exact)
-	return nil
 }

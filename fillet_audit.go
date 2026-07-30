@@ -240,7 +240,7 @@ func loopSignedAreaBudget(budget *workBudget, loop LoopRecord) (float64, error) 
 		}
 		// Integrated about the plane origin itself: this audit compares one
 		// loop's own signed area against zero, so it needs no walk anchor.
-		if err := ig.add(seg, Point2{}); err != nil {
+		if err := ig.addAnalytic(seg, Point2{}); err != nil {
 			return 0, err
 		}
 	}

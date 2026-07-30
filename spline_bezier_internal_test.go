@@ -297,8 +297,9 @@ func TestFreeformSpanCostIsCubic(t *testing.T) {
 }
 
 // The measured defect: a validator-accepted degree-1024 single-span NURBS
-// integrated for over seven minutes and returned success. The preflight must
-// refuse it before a single Bernstein coefficient is expanded.
+// integrated for over seven minutes and returned success. The record-level
+// preflight — which owns every free-form charge — must refuse it before a single
+// Bernstein coefficient is expanded.
 func TestWideSpanIntegrationRefusesBeforeExpanding(t *testing.T) {
 	const degree = 1024
 	control := make([]Point2, degree+1)
@@ -317,15 +318,17 @@ func TestWideSpanIntegrationRefusesBeforeExpanding(t *testing.T) {
 	seg := NURBSSeg{Degree: degree, Control: control, Knots: knots, Weights: weights, TStart: 0, TEnd: 1}
 	require.NoError(t, validateNURBSSegment(seg), "the record itself is well formed")
 
-	work := &freeformWork{}
-	spans, reversed, err := freeformBezierSpans(seg, work)
+	spans, _, err := freeformBezierSpans(seg, &freeformWork{})
 	require.NoError(t, err, "a single span needs no knot insertion")
 	require.Len(t, spans, 1)
 
 	start := time.Now()
-	_, err = exactFreeformMoments(spans, reversed, work)
+	checked, anchor, plan, err := validateFreeformMomentSegment(seg, &freeformWork{})
 	require.Error(t, err)
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.Contains(t, err.Error(), "work budget")
 	require.Less(t, time.Since(start), 10*time.Second, "the refusal precedes the expansion")
+	require.Nil(t, checked, "a refused segment is not admitted")
+	require.Zero(t, anchor)
+	require.Nil(t, plan.spans, "no chain is carried into the moments pass")
 }

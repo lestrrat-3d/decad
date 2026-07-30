@@ -3,6 +3,7 @@ package decad_test
 import (
 	"math"
 	"math/big"
+	"strconv"
 	"testing"
 	"time"
 
@@ -452,6 +453,210 @@ func TestFreeformProfileRefusals(t *testing.T) {
 			require.Contains(t, err.Error(), tc.message)
 		})
 	}
+}
+
+// closedSplineRecordOf is a caller-built ClosedSplineSeg record over a ring of
+// controls — the shape the record-level work counter is calibrated on, since a
+// closed spline converts to one Bézier span per control point.
+func closedSplineRecordOf(controls int) decad.ProfileRecord {
+	segments := []decad.CurveSegment{closedSplineSegmentOf(controls, 10)}
+	return decad.ProfileRecord{Outer: decad.LoopRecord{Segments: segments}}
+}
+
+func closedSplineSegmentOf(controls int, radius float64) decad.ClosedSplineSeg {
+	control := make([]decad.Point2, controls)
+	for i := range control {
+		angle := 2 * math.Pi * float64(i) / float64(controls)
+		control[i] = decad.Point2{U: radius * math.Cos(angle), V: radius * math.Sin(angle)}
+	}
+	return decad.ClosedSplineSeg{Control: control, CCW: true, TStart: 0, TEnd: 1}
+}
+
+// A caller can hand a degree-1 NURBS segment millions of control points and no
+// knots at all. Whether the knot count can match the control count is an O(1)
+// question about SIZES, so it must be answered before the control array is
+// read: the point scan formats a description per point, so a record that cannot
+// be well formed at ANY content used to cost three allocations and about 90ns
+// per control point before its refusal — 12 million allocations on a
+// four-million-point record, and none of it charged against the work ceiling.
+func TestMalformedNURBSRefusesBeforeScanningControls(t *testing.T) {
+	const controls = 200000
+	control := make([]decad.Point2, controls)
+	for i := range control {
+		control[i] = decad.Point2{U: float64(i), V: float64(i % 3)}
+	}
+	record := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
+		decad.NURBSSeg{Degree: 1, Control: control, TStart: 0, TEnd: 1},
+	}}}
+
+	var err error
+	allocs := testing.AllocsPerRun(1, func() { _, err = record.Area() })
+	require.Error(t, err)
+	require.ErrorIs(t, err, decad.ErrDegenerate)
+	require.Contains(t, err.Error(), "knots")
+	require.Less(t, allocs, 1000.0,
+		"the refusal reads sizes only, never the %d recorded control points", controls)
+}
+
+// The work ceiling bounds a RECORD's total free-form work, never each segment's
+// own. Two closed splines of 500 controls are individually affordable — 547,000
+// charged units each against a ceiling of 1,048,576 — and unaffordable together,
+// so a counter opened per segment reads both as cheap and lets the record run to
+// a topology answer instead of refusing. The refusal names the SECOND segment,
+// which is the proof that the first segment's charge carried into it.
+func TestFreeformWorkBudgetBoundsTheWholeRecord(t *testing.T) {
+	const controls = 500
+	record := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
+		closedSplineSegmentOf(controls, 10),
+		closedSplineSegmentOf(controls, 3),
+	}}}
+
+	start := time.Now()
+	_, err := record.Area()
+	require.Error(t, err)
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+	require.Contains(t, err.Error(), "work budget")
+	require.Contains(t, err.Error(), "profile loop 0 segment 1 is invalid",
+		"the first segment was affordable, so the record's own counter is what refused the second")
+	require.Less(t, time.Since(start), 10*time.Second, "the refusal precedes the topology reconstruction")
+}
+
+// Every charge a free-form segment will ever owe is levied at the record-level
+// preflight, the re-anchoring of its converted chain among them. A 960-control
+// closed spline charges 1,050,240 units — over the 1,048,576 ceiling by less
+// than the 7,680 its re-anchoring contributes — so a preflight that omits that
+// term admits the record, spends about six uncancellable seconds reconstructing
+// and sampling the curve in sketch, and only then refuses from the moments pass.
+// The validation prefix is what tells the two apart: validateMomentFields adds
+// it to everything the preflight refuses, and the moments pass adds nothing.
+func TestFreeformReanchoringChargeRefusesAtValidation(t *testing.T) {
+	record := closedSplineRecordOf(960)
+
+	start := time.Now()
+	_, err := record.Area()
+	require.Error(t, err)
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+	require.Contains(t, err.Error(), "work budget")
+	require.Contains(t, err.Error(), "profile loop 0 segment 0 is invalid",
+		"the refusal is the preflight's, ahead of the sketch reconstruction")
+	require.Less(t, time.Since(start), 3*time.Second, "no reconstruction ran before the refusal")
+}
+
+// A non-finite recorded range is a non-finite INPUT, and core §12 gives it
+// ErrNotFinite — which is what a line, a circle and an arc all report for
+// exactly this field, and what the free-form path itself reports for a
+// non-finite control coordinate. NaN fails both of the full-domain equality
+// tests, so a range test consulted first reads it as a trimmed range and
+// reports the staging sentinel ErrUnsupported instead.
+func TestNonFiniteFreeformRangeIsNotFinite(t *testing.T) {
+	control := []decad.Point2{{}, {U: 1, V: 1}, {U: 2, V: 1}, {U: 3}}
+	for _, tc := range []struct {
+		name    string
+		segment decad.CurveSegment
+	}{
+		{
+			name:    "spline NaN start",
+			segment: decad.SplineSeg{Control: control, TStart: math.NaN(), TEnd: 1},
+		},
+		{
+			name:    "spline Inf end",
+			segment: decad.SplineSeg{Control: control, TStart: 0, TEnd: math.Inf(1)},
+		},
+		{
+			name: "closed spline NaN end",
+			segment: decad.ClosedSplineSeg{
+				Control: []decad.Point2{{}, {U: 4}, {U: 2, V: 3}}, CCW: true,
+				TStart: 0, TEnd: math.NaN(),
+			},
+		},
+		{
+			name: "NURBS NaN start",
+			segment: decad.NURBSSeg{
+				Degree: 1, Control: []decad.Point2{{}, {U: 1}},
+				Knots: []float64{0, 0, 1, 1}, Weights: []float64{1, 1},
+				TStart: math.NaN(), TEnd: 1,
+			},
+		},
+		{
+			name:    "line NaN start",
+			segment: decad.LineSeg{Start: decad.Point2{}, End: decad.Point2{U: 1}, TStart: math.NaN(), TEnd: 1},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			record := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{tc.segment}}}
+			_, err := record.Area()
+			require.Error(t, err)
+			require.ErrorIs(t, err, decad.ErrNotFinite)
+			require.NotErrorIs(t, err, decad.ErrUnsupported)
+		})
+	}
+}
+
+// A NURBS whose weights are ALL EQUAL is the same curve at every magnitude —
+// equal weights cancel in the homogeneous quotient — so it is Tier A and owes
+// an answer whatever magnitude the record states. The reconstruction sketch
+// runs to decide topology squares the homogeneous denominator, which overflows
+// past about sqrt(MaxFloat64), so the raw magnitudes have to be normalized for
+// it: without that, the unit square at weight 1e300 is refused as a region that
+// does not close while the identical curve at weight 1 measures exactly 1 mm².
+func TestEqualWeightNURBSMeasuresAtEveryMagnitude(t *testing.T) {
+	square := []decad.Point2{{}, {U: 1}, {U: 1, V: 1}, {V: 1}, {}}
+	for _, weight := range []float64{1, 1e150, 1e300, math.MaxFloat64} {
+		t.Run(strconv.FormatFloat(weight, 'g', -1, 64), func(t *testing.T) {
+			weights := make([]float64, len(square))
+			for i := range weights {
+				weights[i] = weight
+			}
+			record := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
+				decad.NURBSSeg{
+					Degree:  1,
+					Control: square,
+					Knots:   []float64{0, 0, 0.25, 0.5, 0.75, 1, 1},
+					Weights: weights,
+					TStart:  0,
+					TEnd:    1,
+				},
+			}}}
+
+			area, err := record.Area()
+			require.NoError(t, err)
+			value, err := area.Value.In(units.SquareMillimeter)
+			require.NoError(t, err)
+			require.Equal(t, 1.0, value, "the unit square's area does not depend on its weights")
+			require.Equal(t, decad.Exact, area.Exactness, "1 is representable")
+		})
+	}
+}
+
+// A region whose exact area is strictly positive owes a measurement even when
+// that area underflows float64: the accumulator holds the positive rational, so
+// the honest reading is the bounded zero it rounds to — value 0 with the
+// rational rounded up as its bound, hence Approximate — not a refusal. The
+// module already publishes a subnormal area one step above this scale, so a gate
+// reading the float accumulator refuses the very next step down.
+func TestUnderflowingSplineAreaPublishesBoundedZero(t *testing.T) {
+	const scale = 1e-200
+	controls := make([][2]float64, len(closedSplineControls))
+	for i, control := range closedSplineControls {
+		controls[i] = [2]float64{control[0] * scale, control[1] * scale}
+	}
+	control := make([]decad.Point2, len(controls))
+	for i, c := range controls {
+		control[i] = decad.Point2{U: c[0], V: c[1]}
+	}
+	record := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
+		decad.ClosedSplineSeg{Control: control, CCW: true, TStart: 0, TEnd: 1},
+	}}}
+
+	area, err := record.Area()
+	require.NoError(t, err, "the exact rational area is 293/18 x 1e-400, which is strictly positive")
+	value, err := area.Value.In(units.SquareMillimeter)
+	require.NoError(t, err)
+	require.Zero(t, value, "no float64 holds this area")
+	bound, err := area.Bound.In(units.SquareMillimeter)
+	require.NoError(t, err)
+	require.Positive(t, bound, "the bound is the rounding that produced the zero")
+	require.Equal(t, decad.Approximate, area.Exactness)
 }
 
 // A caller-built record whose spline control points all coincide states no

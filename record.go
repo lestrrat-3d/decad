@@ -655,7 +655,21 @@ func validateSegmentQuantity(v units.Value, kind units.Kind, unit units.Unit, wh
 	return nil
 }
 
+// validateNURBSSegment applies the sizes before the contents, so no caller pays
+// for a scan of an array a record that cannot be well formed at any content.
 func validateNURBSSegment(seg NURBSSeg) error {
+	if err := validateNURBSSegmentSizes(seg); err != nil {
+		return err
+	}
+	return validateNURBSSegmentContent(seg)
+}
+
+// validateNURBSSegmentSizes is the O(1) structural preflight: the degree and
+// every slice length the content checks below index through. It reads no
+// element, so a caller can refuse a malformed record before scanning — or
+// charging for — a control array the caller sized. A degree-1 segment holding
+// millions of control points and no knots is refused here in constant time.
+func validateNURBSSegmentSizes(seg NURBSSeg) error {
 	if seg.Degree < 1 {
 		return prependCodecPath(
 			fmt.Errorf(`%w: NURBS segment degree must be at least 1, got %d`, ErrDegenerate, seg.Degree),
@@ -669,14 +683,30 @@ func validateNURBSSegment(seg NURBSSeg) error {
 			"degree",
 		)
 	}
-	if err := validateSegmentPoints(seg.Control, seg.Degree+1, "NURBS segment control"); err != nil {
-		return prependCodecPath(err, "control")
-	}
 	if len(seg.Knots) != n+seg.Degree+1 {
 		return prependCodecPath(
 			fmt.Errorf(`%w: NURBS segment needs %d knots, got %d`, ErrDegenerate, n+seg.Degree+1, len(seg.Knots)),
 			"knots",
 		)
+	}
+	if len(seg.Weights) != n {
+		return prependCodecPath(
+			fmt.Errorf(`%w: NURBS segment needs %d weights, got %d`, ErrDegenerate, n, len(seg.Weights)),
+			"weights",
+		)
+	}
+	return nil
+}
+
+// validateNURBSSegmentContent checks every element the sizes above admit:
+// control-point finiteness, the knot vector's finiteness, ordering, clamping,
+// domain and interior multiplicity, and each weight. Its callers run
+// validateNURBSSegmentSizes first, which is what lets it index without
+// re-testing a length.
+func validateNURBSSegmentContent(seg NURBSSeg) error {
+	n := len(seg.Control)
+	if err := validateSegmentPoints(seg.Control, seg.Degree+1, "NURBS segment control"); err != nil {
+		return prependCodecPath(err, "control")
 	}
 	for i, knot := range seg.Knots {
 		if err := validateSegmentParameter(knot, fmt.Sprintf(`NURBS segment knot %d`, i)); err != nil {
@@ -699,12 +729,6 @@ func validateNURBSSegment(seg NURBSSeg) error {
 	}
 	if err := validateNURBSInteriorMultiplicity(seg, n); err != nil {
 		return err
-	}
-	if len(seg.Weights) != n {
-		return prependCodecPath(
-			fmt.Errorf(`%w: NURBS segment needs %d weights, got %d`, ErrDegenerate, n, len(seg.Weights)),
-			"weights",
-		)
 	}
 	for i, weight := range seg.Weights {
 		if err := validateSegmentParameter(weight, fmt.Sprintf(`NURBS segment weight %d`, i)); err != nil {

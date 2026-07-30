@@ -11,55 +11,105 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
+// momentPreflight is one whole ProfileRecord's preflight: the checked record,
+// the walk anchor the integrator re-references its moments to, and the converted
+// Bézier chain of every free-form segment.
+//
+// It is the record-level step docs/spline-design.md §5's work ceiling needs.
+// ONE freeformWork counter runs through the entire record — the ceiling bounds a
+// RECORD's total free-form work, not each segment's separately, so a record of
+// individually cheap segments whose aggregate is unaffordable refuses here
+// rather than running to completion — and every charge that record will ever owe
+// is levied here, before the first expensive step: the rational lift and knot
+// insertion of the conversion, the re-anchoring of each converted chain, and the
+// exact integration that runs only later in the moments pass. A charge levied
+// where its work runs fires after the sketch reconstruction and the sampling
+// that reconstruction does, which is precisely the work the ceiling exists to
+// precede: the public ProfileRecord methods take no context, so a late refusal
+// cannot be cancelled and bounds nothing.
+//
+// The converted chains are kept for the same reason. The moments pass
+// integrates the chains this preflight already converted and paid for, rather
+// than converting a second time on a counter that would have to be charged
+// again.
+type momentPreflight struct {
+	record ProfileRecord
+	anchor Point2
+	// plans is indexed [loop][segment] over the checked record's loops in
+	// outer-then-holes order — the order the moments pass walks them in.
+	plans [][]freeformPlan
+}
+
+// freeformPlan is one free-form segment's converted Bézier chain beside the
+// walk direction its recorded range order states. A zero plan (nil spans) means
+// the segment is not a converted free-form one — a line, an arc or a circle,
+// each integrated from its own closed form.
+type freeformPlan struct {
+	spans    []bezierSpan
+	reversed bool
+}
+
+// planAt returns the plan the preflight converted for one segment.
+func (p momentPreflight) planAt(loopIndex, segmentIndex int) freeformPlan {
+	if loopIndex >= len(p.plans) || segmentIndex >= len(p.plans[loopIndex]) {
+		return freeformPlan{}
+	}
+	return p.plans[loopIndex][segmentIndex]
+}
+
 // validateMomentRecord normalizes and checks the fields the integrator reads,
 // then asks sketch to decide whether those entities form the recorded region.
 // decad does not carry a second planar-arrangement implementation.
-func validateMomentRecord(record ProfileRecord) (ProfileRecord, Point2, error) {
-	checked, anchor, err := validateMomentFields(record)
+func validateMomentRecord(record ProfileRecord) (momentPreflight, error) {
+	pre, err := validateMomentFields(record)
 	if err != nil {
-		return ProfileRecord{}, Point2{}, err
+		return momentPreflight{}, err
 	}
-	if circular, err := validateWholeCircleRegion(checked); circular {
+	if circular, err := validateWholeCircleRegion(pre.record); circular {
 		if err != nil {
-			return ProfileRecord{}, Point2{}, err
+			return momentPreflight{}, err
 		}
-		return checked, anchor, nil
+		return pre, nil
 	}
-	if !momentRecordMatchesSketch(checked) {
-		validationRecord, err := scaleMomentRecordForValidation(checked, anchor)
+	if !momentRecordMatchesSketch(pre.record) {
+		validationRecord, err := scaleMomentRecordForValidation(pre.record, pre.anchor)
 		if err != nil {
-			return ProfileRecord{}, Point2{}, err
+			return momentPreflight{}, err
 		}
 		if !momentRecordMatchesSketch(validationRecord) {
-			return ProfileRecord{}, Point2{}, fmt.Errorf(
+			return momentPreflight{}, fmt.Errorf(
 				`%w: the recorded segments do not form the stated closed region`,
 				ErrDegenerate,
 			)
 		}
 	}
-	return checked, anchor, nil
+	return pre, nil
 }
 
-func validateMomentFields(record ProfileRecord) (ProfileRecord, Point2, error) {
+func validateMomentFields(record ProfileRecord) (momentPreflight, error) {
 	return validateMomentFieldsBudget(nil, record)
 }
 
-func validateMomentFieldsBudget(budget *workBudget, record ProfileRecord) (ProfileRecord, Point2, error) {
+func validateMomentFieldsBudget(budget *workBudget, record ProfileRecord) (momentPreflight, error) {
 	return validateMomentFieldsWithPoll(func() error { return wallBudgetStep(budget) }, record)
 }
 
-func validateMomentFieldsContext(ctx context.Context, record ProfileRecord) (ProfileRecord, Point2, error) {
+func validateMomentFieldsContext(ctx context.Context, record ProfileRecord) (momentPreflight, error) {
 	return validateMomentFieldsWithPoll(ctx.Err, record)
 }
 
-func validateMomentFieldsWithPoll(poll func() error, record ProfileRecord) (ProfileRecord, Point2, error) {
+func validateMomentFieldsWithPoll(poll func() error, record ProfileRecord) (momentPreflight, error) {
 	loops := append([]LoopRecord{record.Outer}, record.Holes...)
 	normalized := make([]LoopRecord, len(loops))
+	plans := make([][]freeformPlan, len(loops))
+	// One counter for the whole record: the ceiling bounds the record's total
+	// free-form work, never each segment's own.
+	work := &freeformWork{}
 	var anchor Point2
 	for loopIndex := range normalized {
 		if poll != nil {
 			if err := poll(); err != nil {
-				return ProfileRecord{}, Point2{}, err
+				return momentPreflight{}, err
 			}
 		}
 		loop := record.Outer
@@ -67,22 +117,23 @@ func validateMomentFieldsWithPoll(poll func() error, record ProfileRecord) (Prof
 			loop = record.Holes[loopIndex-1]
 		}
 		if len(loop.Segments) == 0 {
-			return ProfileRecord{}, Point2{}, fmt.Errorf(
+			return momentPreflight{}, fmt.Errorf(
 				`decad: profile loop %d is invalid: %w: a recorded loop holds no segments`,
 				loopIndex,
 				ErrDegenerate,
 			)
 		}
 		normalized[loopIndex].Segments = make([]CurveSegment, len(loop.Segments))
+		plans[loopIndex] = make([]freeformPlan, len(loop.Segments))
 		for segmentIndex, segment := range loop.Segments {
 			if poll != nil {
 				if err := poll(); err != nil {
-					return ProfileRecord{}, Point2{}, err
+					return momentPreflight{}, err
 				}
 			}
-			checked, start, err := validateMomentSegment(segment)
+			checked, start, plan, err := validateMomentSegment(segment, work)
 			if err != nil {
-				return ProfileRecord{}, Point2{}, fmt.Errorf(
+				return momentPreflight{}, fmt.Errorf(
 					`decad: profile loop %d segment %d is invalid: %w`,
 					loopIndex,
 					segmentIndex,
@@ -90,13 +141,17 @@ func validateMomentFieldsWithPoll(poll func() error, record ProfileRecord) (Prof
 				)
 			}
 			normalized[loopIndex].Segments[segmentIndex] = checked
+			plans[loopIndex][segmentIndex] = plan
 			if loopIndex == 0 && segmentIndex == 0 {
 				anchor = start
 			}
 		}
 	}
-	checked := ProfileRecord{Outer: normalized[0], Holes: normalized[1:]}
-	return checked, anchor, nil
+	return momentPreflight{
+		record: ProfileRecord{Outer: normalized[0], Holes: normalized[1:]},
+		anchor: anchor,
+		plans:  plans,
+	}, nil
 }
 
 func scaleMomentRecordForValidation(record ProfileRecord, anchor Point2) (ProfileRecord, error) {
@@ -188,18 +243,25 @@ func growAll(points []Point2, grow func(Point2)) {
 // chain rather than through walkOf, which still refuses free-form kinds: the
 // walk vocabulary carries no free-form state yet, and a free-form walk that
 // merely read as non-circular would be built as a straight line.
-func validateMomentSegment(segment CurveSegment) (CurveSegment, Point2, error) {
+func validateMomentSegment(segment CurveSegment, work *freeformWork) (CurveSegment, Point2, freeformPlan, error) {
 	segment, err := normalizeSegment(segment)
 	if err != nil {
-		return nil, Point2{}, err
+		return nil, Point2{}, freeformPlan{}, err
 	}
 	if segment == nil {
-		return nil, Point2{}, errNilSegment
+		return nil, Point2{}, freeformPlan{}, errNilSegment
 	}
 	if isFreeformSegment(segment) {
-		return validateFreeformMomentSegment(segment)
+		return validateFreeformMomentSegment(segment, work)
 	}
+	checked, start, err := validateAnalyticMomentSegment(segment)
+	return checked, start, freeformPlan{}, err
+}
 
+// validateAnalyticMomentSegment normalizes and checks one line, circle or arc
+// segment — the kinds integrated from their own closed forms, with no
+// conversion and so no charge against the record's work counter.
+func validateAnalyticMomentSegment(segment CurveSegment) (CurveSegment, Point2, error) {
 	switch segment := segment.(type) {
 	case LineSeg:
 		if !finiteMomentValues(
@@ -271,39 +333,42 @@ func validateMomentSegment(segment CurveSegment) (CurveSegment, Point2, error) {
 }
 
 // validateFreeformMomentSegment checks the fields the exact integrator reads on
-// a Tier A free-form segment and returns the walk's own start point. The
-// conversion itself is the check: it rejects a non-finite control coordinate, a
-// trimmed range, a rational NURBS and every non-Tier-A kind with its own reason
+// a Tier A free-form segment and returns the walk's own start point beside the
+// converted chain the moments pass will integrate. The conversion itself is the
+// check: it rejects a non-finite range or control coordinate, a trimmed range, a
+// rational NURBS and every non-Tier-A kind with its own reason
 // (docs/spline-design.md Table R), so no field test is duplicated here.
 //
-// The integration that segment will later run is charged HERE too, on the same
-// counter, so an over-budget record refuses at validation. Everything between
-// this step and the moments pass — momentRecordMatchesSketch reconstructing the
-// entity in a private sketch and SAMPLING it a multiple of the control count —
-// is work proportional to the record's own size, and the R7 ceiling exists
-// because the public ProfileRecord methods take no context and so cannot be
-// cancelled. A ceiling consulted only downstream fires after the work it is
-// there to bound has already run.
-func validateFreeformMomentSegment(segment CurveSegment) (CurveSegment, Point2, error) {
-	work := &freeformWork{}
+// Every charge this segment will EVER owe is levied here, on the record's own
+// counter: the conversion, the re-anchoring the moments pass performs, and the
+// exact integration it then runs. Everything between this step and that pass —
+// momentRecordMatchesSketch reconstructing the entity in a private sketch and
+// SAMPLING it a multiple of the control count — is work proportional to the
+// record's own size, and the R7 ceiling exists because the public ProfileRecord
+// methods take no context and so cannot be cancelled. A ceiling consulted at the
+// point of use fires after the work it is there to bound has already run.
+func validateFreeformMomentSegment(segment CurveSegment, work *freeformWork) (CurveSegment, Point2, freeformPlan, error) {
 	spans, reversed, err := freeformBezierSpans(segment, work)
 	if err != nil {
-		return nil, Point2{}, err
+		return nil, Point2{}, freeformPlan{}, err
+	}
+	if err := chargeFreeformShift(spans, work); err != nil {
+		return nil, Point2{}, freeformPlan{}, err
 	}
 	if err := chargeFreeformSpans(spans, work); err != nil {
-		return nil, Point2{}, err
+		return nil, Point2{}, freeformPlan{}, err
 	}
 	start, _, err := freeformEndpoints(spans, reversed)
 	if err != nil {
-		return nil, Point2{}, err
+		return nil, Point2{}, freeformPlan{}, err
 	}
 	if !finiteMomentValues(start.U, start.V) {
-		return nil, Point2{}, fmt.Errorf(`%w: a free-form segment's start point is not finite`, ErrNotFinite)
+		return nil, Point2{}, freeformPlan{}, fmt.Errorf(`%w: a free-form segment's start point is not finite`, ErrNotFinite)
 	}
 	if freeformDegenerate(spans) {
-		return nil, Point2{}, fmt.Errorf(`%w: a free-form segment whose control points all coincide contributes no boundary`, ErrDegenerate)
+		return nil, Point2{}, freeformPlan{}, fmt.Errorf(`%w: a free-form segment whose control points all coincide contributes no boundary`, ErrDegenerate)
 	}
-	return segment, start, nil
+	return segment, start, freeformPlan{spans: spans, reversed: reversed}, nil
 }
 
 // freeformDegenerate reports whether every control point of the converted chain
@@ -460,7 +525,69 @@ func freeformEntityKey(kind uint8, points []Point2, extra ...float64) momentEnti
 	return momentEntityKey{kind: kind, control: b.String()}
 }
 
+// normalizeReconstructionWeights rewrites every all-equal NURBS weight vector
+// in a record to ones, for the sketch reconstruction only.
+//
+// Equal weights CANCEL in the homogeneous quotient, so the normalized segment
+// names the very same curve — the exact integration reads the recorded weights
+// and is untouched by this. What changes is the magnitude sketch's own evaluator
+// works in: it squares the homogeneous denominator to differentiate, so weights
+// past about sqrt(MaxFloat64) overflow it and the reconstruction yields no valid
+// profile at all. A record whose weights are all 1e300 is then refused as a
+// region that does not close, while the identical curve at weight 1 measures
+// fine. The record is Tier A and owes an answer, so the reconstruction is asked
+// about the representable spelling of the same curve.
+//
+// The normalized record is what the comparison below runs against too: sketch
+// records the entity it was given, so a candidate carries the normalized weights
+// and must be matched against a record carrying them as well.
+func normalizeReconstructionWeights(record ProfileRecord) ProfileRecord {
+	loops := append([]LoopRecord{record.Outer}, record.Holes...)
+	out := make([]LoopRecord, len(loops))
+	changed := false
+	for loopIndex, loop := range loops {
+		out[loopIndex] = loop
+		for segmentIndex, segment := range loop.Segments {
+			seg, ok := segment.(NURBSSeg)
+			if !ok || !equalNURBSWeights(seg.Weights) || seg.Weights[0] == 1 {
+				continue
+			}
+			if !changed {
+				for i, source := range loops {
+					out[i].Segments = slices.Clone(source.Segments)
+				}
+				changed = true
+			}
+			ones := make([]float64, len(seg.Weights))
+			for i := range ones {
+				ones[i] = 1
+			}
+			seg.Weights = ones
+			out[loopIndex].Segments[segmentIndex] = seg
+		}
+	}
+	if !changed {
+		return record
+	}
+	return ProfileRecord{Outer: out[0], Holes: out[1:]}
+}
+
+// equalNURBSWeights reports whether every weight is the same value — the
+// non-rational (Tier A) condition the exact conversion also tests.
+func equalNURBSWeights(weights []float64) bool {
+	if len(weights) == 0 {
+		return false
+	}
+	for _, weight := range weights {
+		if weight != weights[0] {
+			return false
+		}
+	}
+	return true
+}
+
 func momentRecordMatchesSketch(record ProfileRecord) bool {
+	record = normalizeReconstructionWeights(record)
 	world := sketch.NewWorld()
 	s, err := world.CreateSketch(world.XY())
 	if err != nil {

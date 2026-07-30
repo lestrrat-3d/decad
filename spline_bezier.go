@@ -33,12 +33,15 @@ type ratPoint struct{ u, v *big.Rat }
 // last control points ARE the recorded curve's own endpoints.
 type bezierSpan []ratPoint
 
-// freeformWorkLimit is the fixed ceiling on one free-form curve's conversion
+// freeformWorkLimit is the fixed ceiling on ONE RECORD's free-form conversion
 // and integration work, in charged units (one scanned or copied knot-insertion
-// entry, or one integrand coefficient product). Public ProfileRecord methods
-// take no context, so the limit is fixed rather than caller-set, exactly as
-// shellInradiusWorkLimit is for the inward shell survey. Reaching it is Table R
-// row R7: ErrUnsupported, never a widened float path.
+// entry, or one integrand coefficient product). It bounds a whole ProfileRecord
+// rather than each of its segments: a counter opened per segment reads a record
+// of individually cheap curves as cheap however many of them it holds, so the
+// aggregate — which is what actually runs — would be unbounded. Public
+// ProfileRecord methods take no context, so the limit is fixed rather than
+// caller-set, exactly as shellInradiusWorkLimit is for the inward shell survey.
+// Reaching it is Table R row R7: ErrUnsupported, never a widened float path.
 const freeformWorkLimit uint64 = 1 << 20
 
 // freeformCostCeiling is where the conservative cost arithmetic below
@@ -153,7 +156,21 @@ func freeformBezierSpans(seg CurveSegment, work *freeformWork) ([]bezierSpan, bo
 // entity's full domain. spline design §2 proves none is recordable, so reaching
 // this is a caller-built or decoded record that bypassed the seam — refuse
 // rather than integrate a piece the conversion does not cover.
+//
+// A NON-FINITE range is a different refusal and takes precedence. NaN fails
+// both equality tests, so a range test alone would report a NaN parameter as a
+// trimmed range — [ErrUnsupported], the staging sentinel — where core §12 gives
+// [ErrNotFinite] for a non-finite input, which is what every other segment kind
+// reports for exactly this field and what the free-form path already reports for
+// a non-finite control coordinate. The test is O(1) on the recorded parameters,
+// so it stands with the structural size refusals, ahead of any content scan.
 func requireFullFreeformRange(tStart, tEnd float64, what string) error {
+	if !finiteMomentValues(tStart, tEnd) {
+		return fmt.Errorf(
+			`%w: a %s's recorded range is not finite (range [%v, %v])`,
+			ErrNotFinite, what, tStart, tEnd,
+		)
+	}
 	if (tStart == 0 && tEnd == 1) || (tStart == 1 && tEnd == 0) {
 		return nil
 	}
@@ -193,8 +210,17 @@ func ratPointsOf(points []Point2) ([]ratPoint, error) {
 // zeros, n−4 evenly spaced interior knots, four ones. Those interior knots are
 // j/(n−3), exact rationals.
 func splineBezierSpans(seg SplineSeg, work *freeformWork) ([]bezierSpan, error) {
+	const degree = 3
 	if err := requireFullFreeformRange(seg.TStart, seg.TEnd, "spline segment"); err != nil {
 		return nil, err
+	}
+	// The control count is a SIZE, so it refuses before the scan below rather
+	// than after it.
+	if len(seg.Control) < degree+1 {
+		return nil, fmt.Errorf(
+			`%w: a cubic B-spline needs at least %d control points, got %d`,
+			ErrDegenerate, degree+1, len(seg.Control),
+		)
 	}
 	if err := chargeRationalLift(work, len(seg.Control), len(seg.Control)+4); err != nil {
 		return nil, err
@@ -202,13 +228,6 @@ func splineBezierSpans(seg SplineSeg, work *freeformWork) ([]bezierSpan, error) 
 	ctrl, err := ratPointsOf(seg.Control)
 	if err != nil {
 		return nil, err
-	}
-	const degree = 3
-	if len(ctrl) < degree+1 {
-		return nil, fmt.Errorf(
-			`%w: a cubic B-spline needs at least %d control points, got %d`,
-			ErrDegenerate, degree+1, len(ctrl),
-		)
 	}
 	return clampedBezierSpans(degree, ctrl, clampedUniformKnots(len(ctrl), degree), work)
 }
@@ -236,10 +255,23 @@ func clampedUniformKnots(n, degree int) []*big.Rat {
 // converting it to a polynomial Bézier would integrate a DIFFERENT curve and
 // report the result as exact.
 func nurbsBezierSpans(seg NURBSSeg, work *freeformWork) ([]bezierSpan, error) {
+	// Order is the preflight's own: the O(1) refusals — the recorded range, then
+	// every slice size — decide first, because they read no element; then the
+	// rational lift is charged, because it is the linear floor under every scan
+	// below it; only then is any content read. A record whose knot count cannot
+	// match its control count is refused in constant time however many control
+	// points it holds, and one whose arrays are too large to lift refuses at the
+	// ceiling before they are scanned.
 	if err := requireFullFreeformRange(seg.TStart, seg.TEnd, "NURBS segment"); err != nil {
 		return nil, err
 	}
-	if err := validateNURBSSegment(seg); err != nil {
+	if err := validateNURBSSegmentSizes(seg); err != nil {
+		return nil, err
+	}
+	if err := chargeRationalLift(work, len(seg.Control), len(seg.Knots)); err != nil {
+		return nil, err
+	}
+	if err := validateNURBSSegmentContent(seg); err != nil {
 		return nil, err
 	}
 	for i, weight := range seg.Weights {
@@ -249,9 +281,6 @@ func nurbsBezierSpans(seg NURBSSeg, work *freeformWork) ([]bezierSpan, error) {
 				ErrUnsupported, i,
 			)
 		}
-	}
-	if err := chargeRationalLift(work, len(seg.Control), len(seg.Knots)); err != nil {
-		return nil, err
 	}
 	ctrl, err := ratPointsOf(seg.Control)
 	if err != nil {
@@ -278,6 +307,14 @@ func closedSplineBezierSpans(seg ClosedSplineSeg, work *freeformWork) ([]bezierS
 	if err := requireFullFreeformRange(seg.TStart, seg.TEnd, "closed spline segment"); err != nil {
 		return nil, err
 	}
+	// The control count is a SIZE, so it refuses before the scan below rather
+	// than after it.
+	if len(seg.Control) < 3 {
+		return nil, fmt.Errorf(
+			`%w: a closed cubic B-spline needs at least 3 control points, got %d`,
+			ErrDegenerate, len(seg.Control),
+		)
+	}
 	if err := chargeRationalLift(work, len(seg.Control), 0); err != nil {
 		return nil, err
 	}
@@ -286,12 +323,6 @@ func closedSplineBezierSpans(seg ClosedSplineSeg, work *freeformWork) ([]bezierS
 		return nil, err
 	}
 	n := len(ctrl)
-	if n < 3 {
-		return nil, fmt.Errorf(
-			`%w: a closed cubic B-spline needs at least 3 control points, got %d`,
-			ErrDegenerate, n,
-		)
-	}
 	if err := work.step(uint64(n) * 4); err != nil {
 		return nil, err
 	}
@@ -526,8 +557,25 @@ func insertKnot(degree int, ctrl []ratPoint, knots []*big.Rat, target *big.Rat) 
 	return out, outKnots, nil
 }
 
+// chargeFreeformShift preflights the re-anchoring of a whole converted chain:
+// two rational subtractions per control point of every span. It is levied at
+// the record-level preflight beside the conversion and integration charges
+// (moments_validate.go), never where the shift itself runs — a charge levied at
+// the point of use lands after the sketch reconstruction the ceiling exists to
+// precede, so a chain that fits the budget everywhere except its re-anchoring
+// would run minutes of uncancellable work before refusing.
+func chargeFreeformShift(spans []bezierSpan, work *freeformWork) error {
+	for _, span := range spans {
+		if err := work.step(costMul(2, uint64(len(span)))); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // shiftFreeformSpans re-references a converted chain to the walk anchor over
-// EXACT rationals, in place.
+// EXACT rationals, in place. Its cost is charged by chargeFreeformShift at the
+// preflight, so it takes no counter of its own.
 //
 // The anchor must never be subtracted from the recorded floats first. A Bézier
 // span IS the recorded curve (§5.1) only while its control coordinates are the
@@ -537,16 +585,13 @@ func insertKnot(degree int, ctrl []ratPoint, knots []*big.Rat, target *big.Rat) 
 // Exact — would then speak for that curve instead of the recorded one.
 // Subtracting here is exact, because a float and the anchor are both exact
 // rationals.
-func shiftFreeformSpans(spans []bezierSpan, anchor Point2, work *freeformWork) error {
+func shiftFreeformSpans(spans []bezierSpan, anchor Point2) error {
 	u, okU := ratOf(anchor.U)
 	v, okV := ratOf(anchor.V)
 	if !okU || !okV {
 		return fmt.Errorf(`%w: a free-form walk's anchor is not finite`, ErrNotFinite)
 	}
 	for _, span := range spans {
-		if err := work.step(costMul(2, uint64(len(span)))); err != nil {
-			return err
-		}
 		for i, point := range span {
 			span[i] = ratPoint{
 				u: new(big.Rat).Sub(point.u, u),

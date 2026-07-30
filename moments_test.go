@@ -676,6 +676,24 @@ func TestLineRationalRoundingIsBounded(t *testing.T) {
 	require.LessOrEqual(t, math.Abs(got-1.0/12), moments.UU.Bound.Base())
 }
 
+// The underflow reading is not free-form-specific: the line path integrates to
+// exact rationals too, so a square of four LineSegs whose exact area is strictly
+// positive and below the smallest float64 owes the same bounded zero — value 0
+// with the rounding that produced it as the bound — rather than a refusal for
+// enclosing no positive area.
+func TestUnderflowingLineRegionAreaPublishesBoundedZero(t *testing.T) {
+	const side = 1e-163
+	record := decad.ProfileRecord{Outer: momentSquare(0, 0, side, side, false)}
+
+	area, err := record.Area()
+	require.NoError(t, err, "the exact rational area is side², which is strictly positive")
+	value, err := area.Value.In(units.SquareMillimeter)
+	require.NoError(t, err)
+	require.Zero(t, value, "no float64 holds 1e-326")
+	require.Equal(t, decad.Approximate, area.Exactness)
+	require.Positive(t, area.Bound.Base(), "the bound is the rounding that produced the zero")
+}
+
 func TestArcSegExactQuarterDisk(t *testing.T) {
 	world := sketch.NewWorld()
 	s, err := world.CreateSketch(world.XY())

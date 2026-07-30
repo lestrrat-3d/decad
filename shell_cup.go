@@ -455,7 +455,7 @@ func loopEnclosedAreaContext(ctx context.Context, l LoopRecord) (boundedScalar, 
 		}
 		// Integrated about the plane origin itself; the band's area is a
 		// difference of two loop areas, so no walk anchor is involved.
-		if err := ig.add(seg, Point2{}); err != nil {
+		if err := ig.addAnalytic(seg, Point2{}); err != nil {
 			return boundedScalar{}, err
 		}
 	}

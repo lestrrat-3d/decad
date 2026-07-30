@@ -34,6 +34,11 @@ import (
 // unconditionally. A circular contribution has no exact rational and carries a
 // proven float evaluation bound, which the whole region then inherits.
 //
+// A region whose exact area is strictly positive is measured even where no
+// float64 holds it: a section scaled far enough down reports the zero its
+// rational rounds to, with that rounding as the bound — Approximate, never a
+// refusal. A region whose area is genuinely zero or negative is [ErrDegenerate].
+//
 // The remaining free-form kinds are [ErrUnsupported] (docs/spline-design.md
 // Table R) — never approximated: an ellipse, a conic and a rational NURBS have
 // no exact rational moments yet, an elliptical arc's record is self-inconsistent,
@@ -61,8 +66,11 @@ func (r ProfileRecord) Area() (Measurement, error) {
 // region's own plane coordinates, millimetres (§5.2), not a world position —
 // lift it through the profile's PlaneRecord to place it in space.
 //
-// A region whose net area is zero has no centroid and is [ErrDegenerate].
-// Record validation and arithmetic errors match [ProfileRecord.Area].
+// A region whose net area is zero has no centroid and is [ErrDegenerate], and
+// one whose net area the evaluator cannot prove stays away from zero — an area
+// that underflows float64 among them — is [ErrUnsupported]: the division has no
+// bounded result. Record validation and arithmetic errors match
+// [ProfileRecord.Area].
 func (r ProfileRecord) Centroid() (VecMeasurement, error) {
 	ig, err := r.integralsTo(momentFirstOrder)
 	if err != nil {
@@ -651,19 +659,19 @@ func (r ProfileRecord) integralsBudget(budget *workBudget) (regionIntegrals, err
 	if err := wallBudgetErr(budget); err != nil {
 		return regionIntegrals{}, err
 	}
-	record, anchor, err := validateMomentFieldsBudget(budget, r)
+	pre, err := validateMomentFieldsBudget(budget, r)
 	if err != nil {
 		return regionIntegrals{}, err
 	}
-	return integrateMomentRecordBudget(record, anchor, momentSecondOrder, budget)
+	return integrateMomentRecordBudget(pre, momentSecondOrder, budget)
 }
 
 func (r ProfileRecord) integralsTo(order momentIntegralOrder) (regionIntegrals, error) {
-	record, anchor, err := validateMomentRecord(r)
+	pre, err := validateMomentRecord(r)
 	if err != nil {
 		return regionIntegrals{}, err
 	}
-	return integrateMomentRecord(record, anchor, order)
+	return integrateMomentRecord(pre, order)
 }
 
 // evaluatorIntegrals supplies only the mass properties an evaluator needs.
@@ -671,52 +679,52 @@ func (r ProfileRecord) integralsTo(order momentIntegralOrder) (regionIntegrals, 
 // finiteness checks; evaluator construction must not let unused higher-order
 // overflow prevent clearance verification from running.
 func (r ProfileRecord) evaluatorIntegrals(order momentIntegralOrder) (regionIntegrals, error) {
-	record, anchor, err := validateMomentFields(r)
+	pre, err := validateMomentFields(r)
 	if err != nil {
 		return regionIntegrals{}, err
 	}
-	return integrateMomentRecord(record, anchor, order)
+	return integrateMomentRecord(pre, order)
 }
 
 func (r ProfileRecord) evaluatorIntegralsContext(ctx context.Context, order momentIntegralOrder) (regionIntegrals, error) {
-	record, anchor, err := validateMomentFieldsContext(ctx, r)
+	pre, err := validateMomentFieldsContext(ctx, r)
 	if err != nil {
 		return regionIntegrals{}, err
 	}
-	return integrateMomentRecordModeContext(ctx, record, anchor, order, true)
+	return integrateMomentRecordModeContext(ctx, pre, order, true)
 }
 
 func (r ProfileRecord) evaluatorIntegralsUncheckedContext(ctx context.Context, order momentIntegralOrder) (regionIntegrals, error) {
-	record, anchor, err := validateMomentFieldsContext(ctx, r)
+	pre, err := validateMomentFieldsContext(ctx, r)
 	if err != nil {
 		return regionIntegrals{}, err
 	}
-	return integrateMomentRecordUncheckedContext(ctx, record, anchor, order)
+	return integrateMomentRecordUncheckedContext(ctx, pre, order)
 }
 
-func integrateMomentRecord(record ProfileRecord, anchor Point2, order momentIntegralOrder) (regionIntegrals, error) {
-	return integrateMomentRecordBudget(record, anchor, order, nil)
+func integrateMomentRecord(pre momentPreflight, order momentIntegralOrder) (regionIntegrals, error) {
+	return integrateMomentRecordBudget(pre, order, nil)
 }
 
-func integrateMomentRecordBudget(record ProfileRecord, anchor Point2, order momentIntegralOrder, budget *workBudget) (regionIntegrals, error) {
-	return integrateMomentRecordMode(record, anchor, order, true, budget)
+func integrateMomentRecordBudget(pre momentPreflight, order momentIntegralOrder, budget *workBudget) (regionIntegrals, error) {
+	return integrateMomentRecordMode(pre, order, true, budget)
 }
 
-func integrateMomentRecordMode(record ProfileRecord, anchor Point2, order momentIntegralOrder, checkFinite bool, budget *workBudget) (regionIntegrals, error) {
-	return integrateMomentRecordWithPoll(func() error { return wallBudgetStep(budget) }, record, anchor, order, checkFinite)
+func integrateMomentRecordMode(pre momentPreflight, order momentIntegralOrder, checkFinite bool, budget *workBudget) (regionIntegrals, error) {
+	return integrateMomentRecordWithPoll(func() error { return wallBudgetStep(budget) }, pre, order, checkFinite)
 }
 
-func integrateMomentRecordUncheckedContext(ctx context.Context, record ProfileRecord, anchor Point2, order momentIntegralOrder) (regionIntegrals, error) {
-	return integrateMomentRecordModeContext(ctx, record, anchor, order, false)
+func integrateMomentRecordUncheckedContext(ctx context.Context, pre momentPreflight, order momentIntegralOrder) (regionIntegrals, error) {
+	return integrateMomentRecordModeContext(ctx, pre, order, false)
 }
 
-func integrateMomentRecordModeContext(ctx context.Context, record ProfileRecord, anchor Point2, order momentIntegralOrder, checkFinite bool) (regionIntegrals, error) {
-	return integrateMomentRecordWithPoll(ctx.Err, record, anchor, order, checkFinite)
+func integrateMomentRecordModeContext(ctx context.Context, pre momentPreflight, order momentIntegralOrder, checkFinite bool) (regionIntegrals, error) {
+	return integrateMomentRecordWithPoll(ctx.Err, pre, order, checkFinite)
 }
 
-func integrateMomentRecordWithPoll(poll func() error, record ProfileRecord, anchor Point2, order momentIntegralOrder, checkFinite bool) (regionIntegrals, error) {
+func integrateMomentRecordWithPoll(poll func() error, pre momentPreflight, order momentIntegralOrder, checkFinite bool) (regionIntegrals, error) {
 	var ig regionIntegrals
-	for loopIndex, loop := range append([]LoopRecord{record.Outer}, record.Holes...) {
+	for loopIndex, loop := range append([]LoopRecord{pre.record.Outer}, pre.record.Holes...) {
 		if poll != nil {
 			if err := poll(); err != nil {
 				return regionIntegrals{}, err
@@ -728,7 +736,7 @@ func integrateMomentRecordWithPoll(poll func() error, record ProfileRecord, anch
 					return regionIntegrals{}, err
 				}
 			}
-			if err := ig.addFor(segment, anchor, order); err != nil {
+			if err := ig.addFor(segment, pre.planAt(loopIndex, segmentIndex), pre.anchor, order); err != nil {
 				return regionIntegrals{}, err
 			}
 			if checkFinite && !ig.isFinite(order) {
@@ -736,15 +744,40 @@ func integrateMomentRecordWithPoll(poll func() error, record ProfileRecord, anch
 			}
 		}
 	}
-	if ig.area <= 0 {
-		return regionIntegrals{}, fmt.Errorf(`%w: the recorded region encloses no positive net area`, ErrDegenerate)
-	}
-	ig = translateMomentIntegrals(ig, anchor, order)
+	ig = translateMomentIntegrals(ig, pre.anchor, order)
 	ig.publishExact()
+	if err := ig.requirePositiveArea(); err != nil {
+		return regionIntegrals{}, err
+	}
 	if checkFinite && !ig.isFinite(order) {
 		return regionIntegrals{}, fmt.Errorf(`%w: mass-property integration overflowed while restoring the profile origin`, ErrNotFinite)
 	}
 	return ig, nil
+}
+
+// requirePositiveArea refuses a region whose net area is not positive.
+//
+// The region's own EXACT rational decides wherever there is one, because a
+// strictly positive area can have a float64 image of zero: a valid section
+// scaled far enough down has an exact area of s²·A > 0 that underflows, and a
+// gate reading the float accumulator would refuse the region rather than publish
+// the bounded zero the accumulator already holds — value 0 with the rational
+// rounded up as its bound, hence Approximate, which is the honest reading of a
+// positive area no float64 can hold. Every exactly integrated boundary is
+// covered: the line path's closed forms and the Tier A free-form chains alike.
+// Only where a contribution has no exact rational at all — a circular walk,
+// whose integral carries π — does the float sum decide, as it always has.
+func (ig *regionIntegrals) requirePositiveArea() error {
+	if !ig.exactDead && ig.exact.complete() {
+		if ig.exact.area.Sign() > 0 {
+			return nil
+		}
+		return fmt.Errorf(`%w: the recorded region encloses no positive net area`, ErrDegenerate)
+	}
+	if ig.area <= 0 {
+		return fmt.Errorf(`%w: the recorded region encloses no positive net area`, ErrDegenerate)
+	}
+	return nil
 }
 
 // shiftPoint re-references one recorded coordinate to the walk anchor in
@@ -830,7 +863,10 @@ func translateMomentIntegrals(ig regionIntegrals, anchor Point2, order momentInt
 // the exact answer for a region the caller did not record, and publishExact
 // would round an already representable value and report Exact with a zero bound
 // for it.
-func (ig *regionIntegrals) add(segment CurveSegment, anchor Point2) error {
+// A free-form segment arrives with the chain the record-level preflight already
+// converted and charged (moments_validate.go), so this pass converts nothing and
+// charges nothing.
+func (ig *regionIntegrals) add(segment CurveSegment, plan freeformPlan, anchor Point2) error {
 	segment, err := normalizeSegment(segment)
 	if err != nil {
 		return err
@@ -890,28 +926,34 @@ func (ig *regionIntegrals) add(segment CurveSegment, anchor Point2) error {
 		)
 		return nil
 	default:
-		if !isFreeformSegment(segment) {
+		// A free-form kind with no converted chain is one the preflight could
+		// not convert, so this evaluator has no integral for it.
+		if !isFreeformSegment(segment) || len(plan.spans) == 0 {
 			return fmt.Errorf(`%w: this evaluator computes mass properties over line, arc, circle and Tier A free-form profile segments only; the profile has a %T segment`, ErrUnsupported, segment)
 		}
-		work := &freeformWork{}
-		// The chain is converted from the RECORDED control points and shifted
-		// afterwards over rationals, so the spans stay the recorded curve.
-		spans, reversed, err := freeformBezierSpans(segment, work)
-		if err != nil {
+		// The chain was converted from the RECORDED control points, so shifting
+		// it here over rationals keeps the spans the recorded curve.
+		if err := shiftFreeformSpans(plan.spans, anchor); err != nil {
 			return err
 		}
-		if err := shiftFreeformSpans(spans, anchor, work); err != nil {
-			return err
-		}
-		return ig.addFreeform(spans, reversed, work)
+		ig.addFreeform(plan.spans, plan.reversed)
+		return nil
 	}
+}
+
+// addAnalytic accumulates one line, circle or arc segment about the given
+// anchor. It is how the section audits take a loop's own signed area: their
+// loops are proven walkable before any area is asked for — walkOf refuses every
+// free-form kind — so no converted chain is involved and no work is charged.
+func (ig *regionIntegrals) addAnalytic(segment CurveSegment, anchor Point2) error {
+	return ig.add(segment, freeformPlan{}, anchor)
 }
 
 // addFor preserves the evaluator helper's order-aware call shape. The bounded
 // implementation computes all moments together, so the requested order does
 // not change the accumulated result.
-func (ig *regionIntegrals) addFor(segment CurveSegment, anchor Point2, _ momentIntegralOrder) error {
-	return ig.add(segment, anchor)
+func (ig *regionIntegrals) addFor(segment CurveSegment, plan freeformPlan, anchor Point2, _ momentIntegralOrder) error {
+	return ig.add(segment, plan, anchor)
 }
 
 // addLine accumulates the straight chord from the walk's start point to its

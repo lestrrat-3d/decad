@@ -135,6 +135,18 @@ A 5-control closed spline whose area is 293/18 reports `Approximate` with a
 one-ulp bound; the same section scaled by 3 has area 293/2, is representable, and
 reports `Exact`.
 
+Equal weights are equal at any MAGNITUDE. They cancel in the homogeneous
+quotient, so a `NURBSSeg` whose weights are all 1e300 names the very same curve
+as one whose weights are all 1, and it is Tier A on the same terms. The
+reconstruction decad asks sketch for region topology through is where the
+magnitude bites — differentiating a rational curve squares its homogeneous
+denominator, so weights past about the square root of the largest float64
+overflow it and the entity reconstructs as no valid profile at all. The weights
+are normalized to 1 for THAT reconstruction only: the question sketch is asked
+is about the same curve, and the exact integration reads the recorded weights
+untouched. Refusing instead would deny a measurement to a record that is exactly
+representable and owes one.
+
 That is precisely the standing the LINE path already has, and it is the point:
 Tier A's bound is one rounding rather than a quadrature estimate, so free-form
 support costs decad none of its exactness discipline. NEVER describe a Tier A
@@ -343,6 +355,12 @@ every coefficient product and every integral term against a `workBudget`
 (`budget.go`), and refuse as R7 when it runs out. NEVER widen to a float path to
 stay inside the budget.
 
+The counter is the RECORD's, not each segment's. One `ProfileRecord` pass opens
+one counter and every segment in it charges that same counter, because the work
+that actually runs is the aggregate: a counter opened per segment reads a record
+of individually cheap curves as cheap however many of them it holds, and bounds
+nothing.
+
 Charge EARLY as well as conservatively. The ceiling is fixed because the public
 `ProfileRecord` methods take no context and so cannot be cancelled, so every
 pass whose cost grows with the record must sit BEHIND a charge already levied —
@@ -350,6 +368,16 @@ the knot-multiplicity probes the conversion runs, including the probes that
 insert nothing, and the sketch reconstruction validation samples the curve
 through before any integral is taken. A ceiling consulted after such a pass
 bounds nothing it was added to bound.
+
+One record-level preflight therefore owns everything before the first expensive
+step, and it owns THREE things. Every cheap structural and finiteness refusal is
+evaluated on SIZES — knot count, degree, slice lengths, the recorded range —
+before any array is scanned, so a record that cannot be well formed at any
+content refuses in constant time however large a caller made it. Every charge is
+levied THERE: the conversion, the re-anchoring of each converted chain, and the
+integration that runs only in the later moments pass. And the chains the
+preflight converted are what that pass integrates, so the conversion the record
+paid for happens once.
 
 The independent-implementation rule stands. sketch computes its own free-form
 area internally and reports it as `Profile.Area`; decad integrates its OWN
