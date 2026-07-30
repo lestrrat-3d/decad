@@ -14,6 +14,37 @@ import (
 // forked (spline design §6.2): that file already owns dense rational
 // polynomials with the products and derivatives these forms need.
 
+// freeformSpanCeiling is the span length, in control points, past which
+// freeformSpanCost stops evaluating its own formula: a span this wide is
+// hopeless at any budget, and cutting off here keeps the cubic term far inside
+// uint64 rather than relying on saturation to catch an overflow.
+const freeformSpanCeiling = 1 << 12
+
+// freeformSpanCost is the conservative preflight of one span's exact
+// integration, charged BEFORE any coefficient is allocated. Cost is CUBIC in
+// the span degree p while the span itself is only p+1 control points long, so
+// a charge read off the control count alone lets an arbitrarily wide span
+// through — which is what the whole ceiling exists to stop.
+//
+// The dominant term is the Bernstein-to-monomial expansion (rpFromBernstein),
+// run once per coordinate: term i starts at degree i and is multiplied by
+// (1−t) until it reaches degree p, so it costs Σᵢ Σ_{d=i}^{p−1} 2(d+1) =
+// p(p+1)(2p+1)/3 coefficient products. Everything else is QUADRATIC in p — the
+// per-term add and scale inside that expansion, the six Green's-theorem
+// products (none above degree 4p, so under 24(p+1)² together) and their ∫₀¹
+// terms — and 64(p+1)² covers all of it at once.
+func freeformSpanCost(controls int) uint64 {
+	if controls <= 0 {
+		return 0
+	}
+	if controls > freeformSpanCeiling {
+		return freeformCostCeiling
+	}
+	p, n := uint64(controls-1), uint64(controls)
+	bernstein := 2 * (p * n * (2*p + 1) / 3)
+	return costAdd(bernstein, 64*n*n)
+}
+
 // rpIntegral01 is the exact ∫₀¹ of a rational polynomial: Σ cᵢ/(i+1).
 func rpIntegral01(p ratPoly) *big.Rat {
 	out := new(big.Rat)
@@ -96,7 +127,7 @@ func exactFreeformMoments(spans []bezierSpan, reversed bool, work *freeformWork)
 		mvv:  new(big.Rat),
 	}
 	for _, span := range spans {
-		if err := work.step(uint64(len(span)) * 8); err != nil {
+		if err := work.step(freeformSpanCost(len(span))); err != nil {
 			return exactMoments{}, err
 		}
 		u, v := spanCoordinatePolys(span)
@@ -120,9 +151,14 @@ func exactFreeformMoments(spans []bezierSpan, reversed bool, work *freeformWork)
 }
 
 // addFreeform accumulates one converted free-form curve's contribution. The
-// held float of each moment is the exact rational rounded ONCE, so the reported
-// bound is that single rounding — zero whenever the exact value is
-// representable, which is what lets a Tier A section report Exact.
+// exact rational goes into the REGION's own accumulator, which is what the
+// published float is rounded from — once, after the complete signed
+// outer-minus-holes sum (moments.go). Rounding here instead would make a
+// multi-segment region's held float a sum of per-curve roundings, and the
+// single-rounding bound docs/spline-design.md §3 requires would hold only for a
+// region whose whole boundary is one segment. The float accumulation below is
+// what the region publishes instead when some OTHER segment — a circular walk —
+// leaves it with no exact rational at all.
 func (ig *regionIntegrals) addFreeform(spans []bezierSpan, reversed bool, work *freeformWork) error {
 	exact, err := exactFreeformMoments(spans, reversed, work)
 	if err != nil {
@@ -146,5 +182,6 @@ func (ig *regionIntegrals) addFreeform(spans []bezierSpan, reversed bool, work *
 		held, _ := moment.exact.Float64()
 		accumulateMoment(moment.value, moment.bound, held, rationalFloatError(moment.exact, held))
 	}
+	ig.addExact(exact)
 	return nil
 }

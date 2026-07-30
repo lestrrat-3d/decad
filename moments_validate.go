@@ -262,7 +262,7 @@ func validateMomentSegment(segment CurveSegment) (CurveSegment, Point2, error) {
 		}
 	default:
 		return nil, Point2{}, fmt.Errorf(
-			`%w: this evaluator computes mass properties over line, arc and circle profile segments only; the profile has a %T segment`,
+			`%w: this evaluator computes mass properties over line, arc, circle and Tier A free-form profile segments only; the profile has a %T segment`,
 			ErrUnsupported,
 			segment,
 		)

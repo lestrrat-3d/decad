@@ -4,6 +4,7 @@ import (
 	"math"
 	"math/big"
 	"testing"
+	"time"
 
 	"github.com/lestrrat-3d/sketch/geom"
 	"github.com/stretchr/testify/require"
@@ -188,4 +189,73 @@ func TestFreeformWorkLimitRefuses(t *testing.T) {
 	require.Error(t, err)
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.Contains(t, err.Error(), "work budget")
+}
+
+// The charge a conversion levies must grow with the work it actually does. A
+// clamped degree-3 B-spline inserts twice per interior knot and each insertion
+// scans and copies both whole vectors, so the cost is QUADRATIC in the control
+// count — a charge that only counted insertions would let a hundred-thousand
+// control record run for hours inside the ceiling.
+func TestClampedConversionCostIsQuadratic(t *testing.T) {
+	cost := func(controls int) uint64 {
+		knots := controls + 4
+		runs := make([]int, controls-4)
+		for i := range runs {
+			runs[i] = 1
+		}
+		return clampedConversionCost(3, controls, knots, runs)
+	}
+	small, doubled := cost(100), cost(200)
+	require.Less(t, small, freeformWorkLimit, "a 100-control cubic stays inside the ceiling")
+	require.Greater(t, doubled, 3*small, "doubling the controls more than triples the charge")
+	require.Equal(t, freeformCostCeiling, cost(100000), "the finding's shape saturates over budget")
+	require.Equal(t, freeformCostCeiling, cost(2000), "a quadratic cost the old charge admitted now refuses")
+}
+
+// The integration cost is CUBIC in span degree while the span is only degree+1
+// control points long, so a charge read off the control count alone admits an
+// arbitrarily wide span. The finding's degree-1024 span must be over budget.
+func TestFreeformSpanCostIsCubic(t *testing.T) {
+	require.Less(t, freeformSpanCost(4), freeformWorkLimit, "a cubic Bézier span is cheap")
+	require.Less(t, freeformSpanCost(2), freeformSpanCost(4))
+	require.Greater(t, freeformSpanCost(65), 20*freeformSpanCost(17),
+		"quadrupling the degree raises the charge by more than its square")
+	require.Equal(t, freeformCostCeiling, freeformSpanCost(1025), "the finding's degree-1024 span")
+	require.Equal(t, freeformCostCeiling, freeformSpanCost(1<<20), "an absurd degree saturates, never wraps")
+	require.Less(t, uint64(8*1025), freeformWorkLimit,
+		"a charge proportional to the span length is what let that degree through")
+}
+
+// The measured defect: a validator-accepted degree-1024 single-span NURBS
+// integrated for over seven minutes and returned success. The preflight must
+// refuse it before a single Bernstein coefficient is expanded.
+func TestWideSpanIntegrationRefusesBeforeExpanding(t *testing.T) {
+	const degree = 1024
+	control := make([]Point2, degree+1)
+	knots := make([]float64, 0, 2*(degree+1))
+	weights := make([]float64, degree+1)
+	for i := range control {
+		control[i] = Point2{U: float64(i), V: float64(i % 7)}
+		weights[i] = 1
+	}
+	for range degree + 1 {
+		knots = append(knots, 0)
+	}
+	for range degree + 1 {
+		knots = append(knots, 1)
+	}
+	seg := NURBSSeg{Degree: degree, Control: control, Knots: knots, Weights: weights, TStart: 0, TEnd: 1}
+	require.NoError(t, validateNURBSSegment(seg), "the record itself is well formed")
+
+	work := &freeformWork{}
+	spans, reversed, err := freeformBezierSpans(seg, work)
+	require.NoError(t, err, "a single span needs no knot insertion")
+	require.Len(t, spans, 1)
+
+	start := time.Now()
+	_, err = exactFreeformMoments(spans, reversed, work)
+	require.Error(t, err)
+	require.ErrorIs(t, err, ErrUnsupported)
+	require.Contains(t, err.Error(), "work budget")
+	require.Less(t, time.Since(start), 10*time.Second, "the refusal precedes the expansion")
 }

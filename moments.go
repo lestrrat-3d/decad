@@ -14,24 +14,35 @@ import (
 // decad integrating its OWN records. sketch decides topology and
 // admissibility; once a region is recorded, its areas and moments are decad's
 // job, computed by closed-form boundary integrals (Green's theorem) per
-// segment kind. Exactly representable line results retain zero bounds;
-// circular evaluations carry outward bounds. Free-form kinds are unsupported.
+// segment kind. Line and Tier A free-form walks (docs/spline-design.md Table F)
+// integrate to exact rationals, so a region built only from them is published
+// as its own rational rounded ONCE and retains a zero bound wherever that
+// rational is representable; circular evaluations have no exact rational and
+// carry outward bounds instead. Every other free-form kind is unsupported.
 
 // Area returns the recorded region's net area — the outer loop minus its
 // holes — as a [Measurement] of Kind Area (mm²): a computed quantity carries
 // its Exactness and Bound (docs/api-design.md §6). Each boundary segment
 // contributes its Green's-theorem integral in walk order, so a hole's clockwise
-// walk subtracts without a special case. Line contributions are accumulated
-// against exact rationals; circular contributions carry a proven float
-// evaluation bound.
+// walk subtracts without a special case.
 //
-// A region whose boundary contains a free-form segment kind (ellipse,
-// elliptical arc, conic, spline, closed spline, fit spline, NURBS) is
-// [ErrUnsupported] (docs/evaluator-design.md §11) — never approximated.
-// A malformed or open record is [ErrDegenerate]. A circle radius of the wrong
-// kind is [ErrUnitKind], a negative radius is [ErrNegativeMagnitude], and a
-// non-finite field or arithmetic result is [ErrNotFinite]. No measurement is
-// returned on error.
+// Line and Tier A free-form contributions — a spline, a closed spline, and a
+// NURBS whose weights are all equal (docs/spline-design.md Table F) — integrate
+// to exact rationals. A region built only from them is reported as the whole
+// region's rational rounded ONCE, so its bound is that single rounding: zero,
+// hence Exact, exactly when the rational is representable in float64, and never
+// unconditionally. A circular contribution has no exact rational and carries a
+// proven float evaluation bound, which the whole region then inherits.
+//
+// The remaining free-form kinds are [ErrUnsupported] (docs/spline-design.md
+// Table R) — never approximated: an ellipse, a conic and a rational NURBS have
+// no exact rational moments yet, an elliptical arc's record is self-inconsistent,
+// and a fit spline's curve is sketch's own interpolation solve. So is a Tier A
+// boundary whose exact integration would exceed this evaluator's fixed work
+// budget (Table R row R7). A malformed or open record is [ErrDegenerate].
+// A circle radius of the wrong kind is [ErrUnitKind], a negative radius is
+// [ErrNegativeMagnitude], and a non-finite field or arithmetic result is
+// [ErrNotFinite]. No measurement is returned on error.
 func (r ProfileRecord) Area() (Measurement, error) {
 	ig, err := r.integralsTo(momentAreaOrder)
 	if err != nil {
@@ -92,9 +103,10 @@ type SecondMoments struct {
 }
 
 // SecondMoments returns the region's bounded second moments of area about the
-// plane origin. The staging matches Area: a free-form boundary kind is
-// [ErrUnsupported], and malformed or non-finite records are rejected before a
-// measurement is constructed.
+// plane origin. The staging matches [ProfileRecord.Area]: a Tier A free-form
+// boundary is integrated exactly and rounded once, every other free-form kind
+// is [ErrUnsupported], and malformed or non-finite records are rejected before
+// a measurement is constructed.
 func (r ProfileRecord) SecondMoments() (SecondMoments, error) {
 	ig, err := r.integralsTo(momentSecondOrder)
 	if err != nil {
@@ -131,6 +143,21 @@ type regionIntegrals struct {
 	muvBound   float64
 	mvv        float64 // ∫v² dA
 	mvvBound   float64
+
+	// exact is the WHOLE region's moments as exact rationals — every line and
+	// Tier A free-form contribution added into it, and the anchor
+	// re-referencing applied over rationals too. It stays alive only while
+	// every contribution so far has had an exact rational, and when it does the
+	// published float is that region-level rational rounded ONCE
+	// (docs/spline-design.md §3/§5.2). Rounding per segment instead would make
+	// the held float a sum of roundings, so a multi-segment region would miss
+	// the single-rounding property a one-segment region has.
+	exact exactMoments
+	// exactDead records that some contribution had no exact rational — a
+	// circular walk's integral carries π and trig terms — so the region's own
+	// sum is not exact and the per-segment float accumulation with its own
+	// proven bounds is what gets published.
+	exactDead bool
 }
 
 // boundedScalar is a held float64 and a proven absolute error bound. The
@@ -698,6 +725,7 @@ func integrateMomentRecordWithPoll(poll func() error, record ProfileRecord, anch
 		return regionIntegrals{}, fmt.Errorf(`%w: the recorded region encloses no positive net area`, ErrDegenerate)
 	}
 	ig = translateMomentIntegrals(ig, anchor, order)
+	ig.publishExact()
 	if checkFinite && !ig.isFinite(order) {
 		return regionIntegrals{}, fmt.Errorf(`%w: mass-property integration overflowed while restoring the profile origin`, ErrNotFinite)
 	}
@@ -750,6 +778,9 @@ func shiftPoints(points []Point2, shift func(Point2) Point2) []Point2 {
 }
 
 func translateMomentIntegrals(ig regionIntegrals, anchor Point2, order momentIntegralOrder) regionIntegrals {
+	if !ig.exactDead {
+		ig.exact = translateExactMoments(ig.exact, anchor, order)
+	}
 	if order == momentAreaOrder {
 		return ig
 	}
@@ -906,6 +937,7 @@ func (ig *regionIntegrals) addLine(seg LineSeg) {
 	accumulateMoment(&ig.muu, &ig.muuBound, muu, rationalFloatError(exact.muu, muu))
 	accumulateMoment(&ig.muv, &ig.muvBound, muv, rationalFloatError(exact.muv, muv))
 	accumulateMoment(&ig.mvv, &ig.mvvBound, mvv, rationalFloatError(exact.mvv, mvv))
+	ig.addExact(exact)
 }
 
 type exactMoments struct {
@@ -915,6 +947,130 @@ type exactMoments struct {
 	muu  *big.Rat
 	muv  *big.Rat
 	mvv  *big.Rat
+}
+
+func newExactMoments() exactMoments {
+	return exactMoments{
+		area: new(big.Rat),
+		mu:   new(big.Rat),
+		mv:   new(big.Rat),
+		muu:  new(big.Rat),
+		muv:  new(big.Rat),
+		mvv:  new(big.Rat),
+	}
+}
+
+// complete reports whether every moment has an exact rational. A contributor
+// that could not build one leaves a nil field, which is the signal to retire
+// the region-level accumulator rather than publish a partial sum.
+func (m exactMoments) complete() bool {
+	return m.area != nil && m.mu != nil && m.mv != nil &&
+		m.muu != nil && m.muv != nil && m.mvv != nil
+}
+
+func (m exactMoments) fields() [6]*big.Rat {
+	return [6]*big.Rat{m.area, m.mu, m.mv, m.muu, m.muv, m.mvv}
+}
+
+// heldFields pairs each accumulated float moment with its bound, in the same
+// order exactMoments.fields uses, so a rational and its published float are
+// never matched up by hand at a call site.
+func (ig *regionIntegrals) heldFields() [6]struct{ value, bound *float64 } {
+	return [6]struct{ value, bound *float64 }{
+		{&ig.area, &ig.areaBound},
+		{&ig.mu, &ig.muBound},
+		{&ig.mv, &ig.mvBound},
+		{&ig.muu, &ig.muuBound},
+		{&ig.muv, &ig.muvBound},
+		{&ig.mvv, &ig.mvvBound},
+	}
+}
+
+// addExact folds one segment's exact contribution into the region-level
+// rational accumulator.
+func (ig *regionIntegrals) addExact(exact exactMoments) {
+	if ig.exactDead {
+		return
+	}
+	if !exact.complete() {
+		ig.dropExact()
+		return
+	}
+	if !ig.exact.complete() {
+		ig.exact = newExactMoments()
+	}
+	running := ig.exact.fields()
+	for i, term := range exact.fields() {
+		running[i].Add(running[i], term)
+	}
+}
+
+// dropExact retires the region-level rational accumulator for good: once one
+// contribution has no exact rational, the region's own sum has none either.
+func (ig *regionIntegrals) dropExact() {
+	ig.exactDead = true
+	ig.exact = exactMoments{}
+}
+
+// publishExact replaces the per-segment float accumulation with the region's
+// own exact rational rounded ONCE, and the bound with that single rounding —
+// zero, hence Exact, exactly when the rational is representable
+// (docs/spline-design.md §3). It is a no-op once any contribution lacked an
+// exact rational, and it declines a rational no float can hold rather than
+// publish an infinity over a finite running sum.
+func (ig *regionIntegrals) publishExact() {
+	if ig.exactDead || !ig.exact.complete() {
+		return
+	}
+	exact := ig.exact.fields()
+	var held [6]float64
+	for i, value := range exact {
+		held[i], _ = value.Float64()
+		if isNonFinite(held[i]) {
+			return
+		}
+	}
+	for i, field := range ig.heldFields() {
+		*field.value = held[i]
+		*field.bound = rationalFloatError(exact[i], held[i])
+	}
+}
+
+// translateExactMoments re-references the exact accumulator from the walk
+// anchor back to the profile origin, mirroring translateMomentIntegrals step
+// for step but over rationals — the anchor coordinates are floats, hence exact
+// rationals, and the shift is only sums and products, so nothing rounds here.
+func translateExactMoments(exact exactMoments, anchor Point2, order momentIntegralOrder) exactMoments {
+	if order == momentAreaOrder || !exact.complete() {
+		return exact
+	}
+	anchorU, anchorV := floatRat(anchor.U), floatRat(anchor.V)
+	if anchorU == nil || anchorV == nil {
+		return exactMoments{}
+	}
+	if order == momentSecondOrder {
+		// Second-order terms read the PRE-shift first moments, so they are
+		// re-referenced before mu and mv are.
+		exact.muu = ratAdd(
+			exact.muu,
+			ratMul(big.NewRat(2, 1), anchorU, exact.mu),
+			ratMul(anchorU, anchorU, exact.area),
+		)
+		exact.muv = ratAdd(
+			exact.muv,
+			ratMul(anchorV, exact.mu),
+			ratMul(anchorU, exact.mv),
+			ratMul(anchorU, anchorV, exact.area),
+		)
+		exact.mvv = ratAdd(
+			exact.mvv,
+			ratMul(big.NewRat(2, 1), anchorV, exact.mv),
+			ratMul(anchorV, anchorV, exact.area),
+		)
+	}
+	exact.mu = ratAdd(exact.mu, ratMul(anchorU, exact.area))
+	exact.mv = ratAdd(exact.mv, ratMul(anchorV, exact.area))
+	return exact
 }
 
 func ratAdd(values ...*big.Rat) *big.Rat {
@@ -1056,6 +1212,9 @@ func (ig *regionIntegrals) addCircular(
 	if haveAreaProof {
 		areaBound = math.Min(areaBound, intervalFloatError(areaProof, area))
 	}
+	// A circular integral's exact value carries π and trig terms, so it has no
+	// exact rational and the region's rational sum ends here.
+	ig.dropExact()
 	accumulateMoment(&ig.area, &ig.areaBound, area, areaBound)
 	accumulateMoment(&ig.mu, &ig.muBound, mu, conservativeValueError(mu, muScale))
 	accumulateMoment(&ig.mv, &ig.mvBound, mv, conservativeValueError(mv, mvScale))

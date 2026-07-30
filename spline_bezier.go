@@ -34,12 +34,39 @@ type ratPoint struct{ u, v *big.Rat }
 type bezierSpan []ratPoint
 
 // freeformWorkLimit is the fixed ceiling on one free-form curve's conversion
-// and integration work, in charged units (one knot insertion's control-point
-// update, or one integrand coefficient product). Public ProfileRecord methods
+// and integration work, in charged units (one scanned or copied knot-insertion
+// entry, or one integrand coefficient product). Public ProfileRecord methods
 // take no context, so the limit is fixed rather than caller-set, exactly as
 // shellInradiusWorkLimit is for the inward shell survey. Reaching it is Table R
 // row R7: ErrUnsupported, never a widened float path.
 const freeformWorkLimit uint64 = 1 << 20
+
+// freeformCostCeiling is where the conservative cost arithmetic below
+// saturates. Any estimate that reaches it is already over budget on its own —
+// step refuses at freeformWorkLimit and this sits one unit above it — so the
+// helpers never need to represent a larger number and can never wrap.
+const freeformCostCeiling = freeformWorkLimit + 1
+
+// costAdd and costMul are the saturating arithmetic every preflight estimate is
+// built from. A preflight is charged BEFORE the work it pays for is allocated,
+// so it must be an UPPER bound: saturating (never wrapping) is what keeps an
+// astronomically large shape refusing instead of charging a small number.
+func costAdd(a, b uint64) uint64 {
+	if a >= freeformCostCeiling || b >= freeformCostCeiling || a > freeformCostCeiling-b {
+		return freeformCostCeiling
+	}
+	return a + b
+}
+
+func costMul(a, b uint64) uint64 {
+	if a == 0 || b == 0 {
+		return 0
+	}
+	if a >= freeformCostCeiling || b >= freeformCostCeiling || a > freeformCostCeiling/b {
+		return freeformCostCeiling
+	}
+	return a * b
+}
 
 // freeformWork is the charged counter behind freeformWorkLimit.
 type freeformWork struct{ spent uint64 }
@@ -136,6 +163,15 @@ func requireFullFreeformRange(tStart, tEnd float64, what string) error {
 	)
 }
 
+// chargeRationalLift charges the rational lift of a recorded curve's own
+// arrays before any of them is allocated: two rationals per control point and
+// one per knot. It is the linear floor under the conversion, so a record too
+// large to hold rationally refuses at the ceiling rather than allocating first
+// and refusing afterwards.
+func chargeRationalLift(work *freeformWork, controls, knots int) error {
+	return work.step(costAdd(costMul(2, uint64(controls)), uint64(knots)))
+}
+
 // ratPointsOf lifts recorded control points into exact rationals. A
 // non-finite coordinate has no rational form and is rejected.
 func ratPointsOf(points []Point2) ([]ratPoint, error) {
@@ -158,6 +194,9 @@ func ratPointsOf(points []Point2) ([]ratPoint, error) {
 // j/(n−3), exact rationals.
 func splineBezierSpans(seg SplineSeg, work *freeformWork) ([]bezierSpan, error) {
 	if err := requireFullFreeformRange(seg.TStart, seg.TEnd, "spline segment"); err != nil {
+		return nil, err
+	}
+	if err := chargeRationalLift(work, len(seg.Control), len(seg.Control)+4); err != nil {
 		return nil, err
 	}
 	ctrl, err := ratPointsOf(seg.Control)
@@ -211,6 +250,9 @@ func nurbsBezierSpans(seg NURBSSeg, work *freeformWork) ([]bezierSpan, error) {
 			)
 		}
 	}
+	if err := chargeRationalLift(work, len(seg.Control), len(seg.Knots)); err != nil {
+		return nil, err
+	}
 	ctrl, err := ratPointsOf(seg.Control)
 	if err != nil {
 		return nil, err
@@ -234,6 +276,9 @@ func nurbsBezierSpans(seg NURBSSeg, work *freeformWork) ([]bezierSpan, error) {
 // give n spans, which is what closes the loop.
 func closedSplineBezierSpans(seg ClosedSplineSeg, work *freeformWork) ([]bezierSpan, error) {
 	if err := requireFullFreeformRange(seg.TStart, seg.TEnd, "closed spline segment"); err != nil {
+		return nil, err
+	}
+	if err := chargeRationalLift(work, len(seg.Control), 0); err != nil {
 		return nil, err
 	}
 	ctrl, err := ratPointsOf(seg.Control)
@@ -300,11 +345,12 @@ func clampedBezierSpans(degree int, ctrl []ratPoint, knots []*big.Rat, work *fre
 			ErrDegenerate, degree, len(ctrl), want, len(knots),
 		)
 	}
-	for _, target := range interiorKnotValues(degree, len(ctrl), knots) {
+	targets, runs := interiorKnotRuns(degree, len(ctrl), knots)
+	if err := work.step(clampedConversionCost(degree, len(ctrl), len(knots), runs)); err != nil {
+		return nil, err
+	}
+	for _, target := range targets {
 		for knotMultiplicity(knots, target) < degree {
-			if err := work.step(uint64(degree + 1)); err != nil {
-				return nil, err
-			}
 			inserted, insertedKnots, err := insertKnot(degree, ctrl, knots, target)
 			if err != nil {
 				return nil, err
@@ -333,21 +379,54 @@ func clampedBezierSpans(degree int, ctrl []ratPoint, knots []*big.Rat, work *fre
 	return spans, nil
 }
 
-// interiorKnotValues returns each distinct knot strictly inside the clamped
-// domain, in ascending order — the values insertion must raise.
-func interiorKnotValues(degree, n int, knots []*big.Rat) []*big.Rat {
+// interiorKnotRuns returns each distinct knot strictly inside the clamped
+// domain — the values insertion must raise — beside the length of its
+// contiguous run. The run is a SUBSET of the value's whole-vector multiplicity,
+// so treating it as that multiplicity can only OVERSTATE the insertions still
+// owed, which is what clampedConversionCost needs to stay an upper bound. The
+// insertion loop itself reads knotMultiplicity, so an unsorted vector costs a
+// wider estimate and never a wrong span.
+func interiorKnotRuns(degree, n int, knots []*big.Rat) ([]*big.Rat, []int) {
 	lo, hi := knots[degree], knots[n]
-	var out []*big.Rat
+	var values []*big.Rat
+	var runs []int
 	for _, knot := range knots[degree+1 : n] {
 		if knot.Cmp(lo) <= 0 || knot.Cmp(hi) >= 0 {
 			continue
 		}
-		if len(out) > 0 && out[len(out)-1].Cmp(knot) == 0 {
+		if len(values) > 0 && values[len(values)-1].Cmp(knot) == 0 {
+			runs[len(runs)-1]++
 			continue
 		}
-		out = append(out, knot)
+		values = append(values, knot)
+		runs = append(runs, 1)
 	}
-	return out
+	return values, runs
+}
+
+// clampedConversionCost is the conservative preflight of the whole knot
+// insertion pass, charged before a single control point is allocated.
+//
+// The charge is the work the pass actually pays, not the number of insertions:
+// one insertKnot scans every control point looking for the span and then COPIES
+// both vectors, and the loop's own knotMultiplicity condition rescans the knot
+// vector once per attempt. So an insertion costs the length of the vectors it
+// touches, and since each insertion lengthens both by one, the FINAL lengths
+// bound every insertion in the pass. Quadratic total work therefore charges
+// quadratically, which is what keeps a hundred-thousand-control degree-3
+// record refusing at the ceiling instead of running for hours inside it.
+func clampedConversionCost(degree, controls, knots int, runs []int) uint64 {
+	insertions := uint64(0)
+	for _, run := range runs {
+		if run < degree {
+			insertions = costAdd(insertions, uint64(degree-run))
+		}
+	}
+	finalControls := costAdd(uint64(controls), insertions)
+	finalKnots := costAdd(uint64(knots), insertions)
+	perInsertion := costAdd(costMul(2, finalControls), costMul(3, finalKnots))
+	// The interiorKnotRuns pass itself walks the knot vector once.
+	return costAdd(costMul(insertions, perInsertion), uint64(knots))
 }
 
 func knotMultiplicity(knots []*big.Rat, target *big.Rat) int {

@@ -2,7 +2,9 @@ package decad_test
 
 import (
 	"math"
+	"math/big"
 	"testing"
+	"time"
 
 	"github.com/lestrrat-3d/decad"
 	"github.com/lestrrat-3d/sketch"
@@ -130,6 +132,110 @@ func TestClosedSplineProfileAreaExactWhenRepresentable(t *testing.T) {
 	require.InDelta(t, densePolylineArea(t, controls), value, 1e-5)
 }
 
+// requireSingleRounding proves a published moment IS its region's exact
+// rational rounded once: the held float is that rational's own nearest float64,
+// and the bound is the distance between them, which correct rounding keeps
+// within half an ulp. A held float summed from PER-SEGMENT roundings fails
+// both — its value drifts off the correctly rounded one and its bound is the
+// sum of the roundings that produced the drift.
+func requireSingleRounding(t *testing.T, exact *big.Rat, value, bound float64) {
+	t.Helper()
+	want, _ := exact.Float64()
+	require.Equal(t, want, value, "the held float is the region rational rounded once")
+	halfUlp := (math.Nextafter(value, math.Inf(1)) - value) / 2
+	require.LessOrEqual(t, bound, math.Nextafter(halfUlp, math.Inf(1)),
+		"a single rounding never exceeds half an ulp")
+	// The enclosure is checked over rationals: the bound is a small fraction of
+	// an ulp here, so value±bound would round straight back to value.
+	drift := new(big.Rat).Sub(new(big.Rat).SetFloat64(value), exact)
+	require.LessOrEqual(t, drift.Abs(drift).Cmp(new(big.Rat).SetFloat64(bound)), 0,
+		"the bound encloses the exact value")
+}
+
+// nurbsEdge is one straight polygon side recorded as its own degree-1 NURBS
+// segment, so a polygon built from them is a MULTI-segment Tier A region.
+func nurbsEdge(a, b decad.Point2) decad.NURBSSeg {
+	return decad.NURBSSeg{
+		Degree:  1,
+		Control: []decad.Point2{a, b},
+		Knots:   []float64{0, 0, 1, 1},
+		Weights: []float64{1, 1},
+		TStart:  0,
+		TEnd:    1,
+	}
+}
+
+// spline design §3 requires the held float to be the exact rational rounded
+// ONCE. A region with several Tier A boundary segments must therefore round
+// its own region-level sum, not each segment's contribution: five separate
+// degree-1 NURBS edges whose per-curve roundings are summed land a full ulp
+// off the correctly rounded area and report a bound wider than the rounding
+// they actually committed.
+func TestMultiSegmentFreeformRegionRoundsOnce(t *testing.T) {
+	polygon := []decad.Point2{{}, {U: 0.1}, {U: 0.3, V: 0.2}, {U: 0.05, V: 0.1}, {V: 0.4}}
+	segments := make([]decad.CurveSegment, len(polygon))
+	for i := range polygon {
+		segments[i] = nurbsEdge(polygon[i], polygon[(i+1)%len(polygon)])
+	}
+	record := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: segments}}
+
+	// The falsifier: the polygon's own shoelace over exact rationals.
+	exact := new(big.Rat)
+	for i := range polygon {
+		j := (i + 1) % len(polygon)
+		ax, ay := new(big.Rat).SetFloat64(polygon[i].U), new(big.Rat).SetFloat64(polygon[i].V)
+		bx, by := new(big.Rat).SetFloat64(polygon[j].U), new(big.Rat).SetFloat64(polygon[j].V)
+		exact.Add(exact, new(big.Rat).Sub(new(big.Rat).Mul(ax, by), new(big.Rat).Mul(bx, ay)))
+	}
+	exact.Quo(exact, big.NewRat(2, 1))
+
+	area, err := record.Area()
+	require.NoError(t, err)
+	value, err := area.Value.In(units.SquareMillimeter)
+	require.NoError(t, err)
+	bound, err := area.Bound.In(units.SquareMillimeter)
+	require.NoError(t, err)
+	require.Equal(t, decad.Approximate, area.Exactness, "this polygon's area is not representable")
+	requireSingleRounding(t, exact, value, bound)
+}
+
+// The measured defect behind the conversion budget: a validator-accepted
+// degree-3 NURBS with thousands of control points charged eight units per
+// insertion while each insertion scanned and copied the whole vectors, so the
+// ceiling could not fire until billions of operations had run. It must refuse
+// promptly instead.
+func TestDenseNURBSRecordRefusesWithinBudget(t *testing.T) {
+	const controls = 2000
+	const degree = 3
+	control := make([]decad.Point2, controls)
+	weights := make([]float64, controls)
+	for i := range control {
+		control[i] = decad.Point2{U: float64(i), V: float64(i % 5)}
+		weights[i] = 1
+	}
+	spans := float64(controls - degree)
+	knots := make([]float64, 0, controls+degree+1)
+	for range degree + 1 {
+		knots = append(knots, 0)
+	}
+	for j := 1; j < int(spans); j++ {
+		knots = append(knots, float64(j)/spans)
+	}
+	for range degree + 1 {
+		knots = append(knots, 1)
+	}
+	record := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
+		decad.NURBSSeg{Degree: degree, Control: control, Knots: knots, Weights: weights, TStart: 0, TEnd: 1},
+	}}}
+
+	start := time.Now()
+	_, err := record.Area()
+	require.Error(t, err)
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+	require.Contains(t, err.Error(), "work budget")
+	require.Less(t, time.Since(start), 5*time.Second, "the refusal precedes the insertion pass")
+}
+
 // A spline chained with a straight chord exercises the mixed path: the line
 // contributes through the existing exact-rational line formulas and the spline
 // through the Bézier integrals, into one region.
@@ -157,6 +263,18 @@ func TestSplineAndChordProfileMoments(t *testing.T) {
 	value, err := area.Value.In(units.SquareMillimeter)
 	require.NoError(t, err)
 	require.Greater(t, value, 0.0, "the region area is a positive magnitude")
+
+	// Both kinds integrate to exact rationals, so the mixed region is summed
+	// exactly and rounded once — its bound stays within a single rounding
+	// rather than adding the line's rounding to the spline's.
+	bound, err := area.Bound.In(units.SquareMillimeter)
+	require.NoError(t, err)
+	require.LessOrEqual(
+		t,
+		bound,
+		math.Nextafter((math.Nextafter(value, math.Inf(1))-value)/2, math.Inf(1)),
+		"a single rounding never exceeds half an ulp",
+	)
 
 	// The dense reference: the hump's sampled area closed by its chord.
 	ring, err := geom.SampleCubicBSpline([][2]float64{{0, 0}, {1, 2}, {3, 2}, {4, 0}}, 200000)
