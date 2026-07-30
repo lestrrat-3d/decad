@@ -276,7 +276,14 @@ Recipe validation checks every reachable value:
 - every loop is non-empty;
 - every segment variant satisfies its own field-count, unit, range, and winding
   rules;
-- NURBS degree/control/knot/weight counts agree;
+- a NURBS record satisfies the whole clamped knot-vector shape:
+  degree/control/knot/weight counts agree, the knots are non-decreasing and
+  clamped at both ends over a non-empty domain, every weight is positive, and no
+  interior knot repeating more than `degree` times has different recorded
+  control points for its two one-sided limits (spline design §5.1 Table R row
+  R12 — such a curve breaks apart and states no single boundary curve; one whose
+  limits are identical is continuous, is admitted here, and is refused at the
+  evaluator as R13);
 - selectors have the correct query kind, valid cardinality, valid predicates,
   finite directions, and valid provenance references;
 - role strings are non-empty, valid UTF-8, and within limits;

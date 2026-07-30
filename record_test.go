@@ -351,6 +351,14 @@ func TestNURBSSegmentDecodeRejectsInvalidShape(t *testing.T) {
 			name:    "non-positive weight",
 			segment: `{"kind":"nurbs","degree":2,"control":[{"u":0,"v":0},{"u":1,"v":1},{"u":2,"v":0}],"knots":[0,0,0,1,1,1],"weights":[1,0,1],"t_start":0,"t_end":1}`,
 		},
+		{
+			// The interior knot 0.5 repeats degree+1 times, and its two one-sided
+			// limits are the recorded control points (2,0) and (3,1) — different,
+			// so the curve breaks apart and the record states no single connected
+			// boundary curve.
+			name:    "interior knot multiplicity above degree",
+			segment: `{"kind":"nurbs","degree":2,"control":[{"u":0,"v":0},{"u":1,"v":1},{"u":2,"v":0},{"u":3,"v":1},{"u":4,"v":0},{"u":5,"v":1}],"knots":[0,0,0,0.5,0.5,0.5,1,1,1],"weights":[1,1,1,1,1,1],"t_start":0,"t_end":1}`,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -358,6 +366,38 @@ func TestNURBSSegmentDecodeRejectsInvalidShape(t *testing.T) {
 			err := json.Unmarshal([]byte(`{"segments":[`+tt.segment+`]}`), &loop)
 			require.Error(t, err)
 			require.ErrorIs(t, err, decad.ErrDegenerate)
+		})
+	}
+}
+
+// Multiplicity above the degree is not itself a discontinuity, so record
+// validation must not refuse it as one: the sentinel it would carry —
+// ErrDegenerate — asserts that no such body exists, and these curves exist.
+// Both records here are the same shapes the case above rejects, with the one
+// control point that decides continuity moved onto its partner.
+func TestNURBSSegmentDecodeAdmitsContinuousMultiplicity(t *testing.T) {
+	for _, tt := range []struct {
+		name    string
+		segment string
+	}{
+		{
+			// The interior knot 0.5 repeats degree+1 times and its two one-sided
+			// limits are the SAME recorded point (2,0), so the two quadratic pieces
+			// meet and the record states one connected curve.
+			name:    "interior knot with meeting limits",
+			segment: `{"kind":"nurbs","degree":2,"control":[{"u":0,"v":0},{"u":1,"v":1},{"u":2,"v":0},{"u":2,"v":0},{"u":4,"v":0},{"u":5,"v":1}],"knots":[0,0,0,0.5,0.5,0.5,1,1,1],"weights":[1,1,1,1,1,1],"t_start":0,"t_end":1}`,
+		},
+		{
+			// A start knot clamped one repeat past degree+1: a single quadratic
+			// Bézier with one dead control point, continuous everywhere.
+			name:    "over-clamped start knot",
+			segment: `{"kind":"nurbs","degree":2,"control":[{"u":0,"v":0},{"u":0,"v":0},{"u":1,"v":2},{"u":2,"v":0}],"knots":[0,0,0,0,1,1,1],"weights":[1,1,1,1],"t_start":0,"t_end":1}`,
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			var loop decad.LoopRecord
+			require.NoError(t, json.Unmarshal([]byte(`{"segments":[`+tt.segment+`]}`), &loop))
+			require.Len(t, loop.Segments, 1)
 		})
 	}
 }

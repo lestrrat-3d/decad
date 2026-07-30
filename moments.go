@@ -14,24 +14,40 @@ import (
 // decad integrating its OWN records. sketch decides topology and
 // admissibility; once a region is recorded, its areas and moments are decad's
 // job, computed by closed-form boundary integrals (Green's theorem) per
-// segment kind. Exactly representable line results retain zero bounds;
-// circular evaluations carry outward bounds. Free-form kinds are unsupported.
+// segment kind. Line and Tier A free-form walks (docs/spline-design.md Table F)
+// integrate to exact rationals, so a region built only from them is published
+// as its own rational rounded ONCE and retains a zero bound wherever that
+// rational is representable; circular evaluations have no exact rational and
+// carry outward bounds instead. Every other free-form kind is unsupported.
 
 // Area returns the recorded region's net area — the outer loop minus its
 // holes — as a [Measurement] of Kind Area (mm²): a computed quantity carries
 // its Exactness and Bound (docs/api-design.md §6). Each boundary segment
 // contributes its Green's-theorem integral in walk order, so a hole's clockwise
-// walk subtracts without a special case. Line contributions are accumulated
-// against exact rationals; circular contributions carry a proven float
-// evaluation bound.
+// walk subtracts without a special case.
 //
-// A region whose boundary contains a free-form segment kind (ellipse,
-// elliptical arc, conic, spline, closed spline, fit spline, NURBS) is
-// [ErrUnsupported] (docs/evaluator-design.md §11) — never approximated.
-// A malformed or open record is [ErrDegenerate]. A circle radius of the wrong
-// kind is [ErrUnitKind], a negative radius is [ErrNegativeMagnitude], and a
-// non-finite field or arithmetic result is [ErrNotFinite]. No measurement is
-// returned on error.
+// Line and Tier A free-form contributions — a spline, a closed spline, and a
+// NURBS whose weights are all equal (docs/spline-design.md Table F) — integrate
+// to exact rationals. A region built only from them is reported as the whole
+// region's rational rounded ONCE, so its bound is that single rounding: zero,
+// hence Exact, exactly when the rational is representable in float64, and never
+// unconditionally. A circular contribution has no exact rational and carries a
+// proven float evaluation bound, which the whole region then inherits.
+//
+// A region whose exact area is strictly positive is measured even where no
+// float64 holds it: a section scaled far enough down reports the zero its
+// rational rounds to, with that rounding as the bound — Approximate, never a
+// refusal. A region whose area is genuinely zero or negative is [ErrDegenerate].
+//
+// The remaining free-form kinds are [ErrUnsupported] (docs/spline-design.md
+// Table R) — never approximated: an ellipse, a conic and a rational NURBS have
+// no exact rational moments yet, an elliptical arc's record is self-inconsistent,
+// and a fit spline's curve is sketch's own interpolation solve. So is a Tier A
+// boundary whose exact integration would exceed this evaluator's fixed work
+// budget (Table R row R7). A malformed or open record is [ErrDegenerate].
+// A circle radius of the wrong kind is [ErrUnitKind], a negative radius is
+// [ErrNegativeMagnitude], and a non-finite field or arithmetic result is
+// [ErrNotFinite]. No measurement is returned on error.
 func (r ProfileRecord) Area() (Measurement, error) {
 	ig, err := r.integralsTo(momentAreaOrder)
 	if err != nil {
@@ -50,12 +66,28 @@ func (r ProfileRecord) Area() (Measurement, error) {
 // region's own plane coordinates, millimetres (§5.2), not a world position —
 // lift it through the profile's PlaneRecord to place it in space.
 //
-// A region whose net area is zero has no centroid and is [ErrDegenerate].
-// Record validation and arithmetic errors match [ProfileRecord.Area].
+// A region whose exact area and first moments are all rational — a boundary of
+// line and Tier A free-form walks only — has its centroid taken over those
+// rationals and each coordinate rounded ONCE, so the reported bound is that
+// single rounding: zero, hence Exact, exactly when the quotient is
+// representable. The region's exact area is already proven strictly positive
+// there (see requirePositiveArea), so the quotient exists however small the
+// area's own float image is — a section scaled far enough down for its area to
+// underflow still reports its centroid.
+//
+// Only where some contribution has NO exact rational — a circular walk, whose
+// integral carries π — is the centroid divided in bounded floats. A region whose
+// net area is zero has no centroid and is [ErrDegenerate], and one whose net
+// area that float division cannot prove stays away from zero is
+// [ErrUnsupported]: the division has no bounded result. Record validation and
+// arithmetic errors match [ProfileRecord.Area].
 func (r ProfileRecord) Centroid() (VecMeasurement, error) {
 	ig, err := r.integralsTo(momentFirstOrder)
 	if err != nil {
 		return VecMeasurement{}, err
+	}
+	if exact, ok := ig.exactCentroid(); ok {
+		return exact, nil
 	}
 	if ig.area == 0 && ig.areaBound == 0 {
 		return VecMeasurement{}, fmt.Errorf(`%w: a region with zero net area has no centroid`, ErrDegenerate)
@@ -78,6 +110,39 @@ func (r ProfileRecord) Centroid() (VecMeasurement, error) {
 	}, nil
 }
 
+// exactCentroid divides the region's exact first moments by its exact area over
+// rationals and rounds each quotient ONCE, which is the same single-rounding
+// rule publishExact applies to the moments themselves (docs/spline-design.md
+// §3). It reports whether the region has such an accumulator at all.
+//
+// It is what keeps the answer from being refused when it is already in hand.
+// requirePositiveArea has PROVEN the exact area strictly positive before this
+// runs, so the centroid exists; the float guards below it read the published
+// area, whose float image can be zero for a region whose exact area underflows,
+// and would report ErrUnsupported for a quotient that is perfectly
+// representable. The float path stays for the regions this one cannot serve:
+// those whose accumulator a circular contribution retired.
+func (ig regionIntegrals) exactCentroid() (VecMeasurement, bool) {
+	if ig.exactDead || !ig.exact.complete() || ig.exact.area.Sign() <= 0 {
+		return VecMeasurement{}, false
+	}
+	u := new(big.Rat).Quo(ig.exact.mu, ig.exact.area)
+	v := new(big.Rat).Quo(ig.exact.mv, ig.exact.area)
+	uHeld, _ := u.Float64()
+	vHeld, _ := v.Float64()
+	if isNonFinite(uHeld) || isNonFinite(vHeld) {
+		// No float64 holds this centroid, so there is no single rounding to
+		// publish; the bounded path answers, or refuses, on its own terms.
+		return VecMeasurement{}, false
+	}
+	bound := radius2D(rationalFloatError(u, uHeld), rationalFloatError(v, vHeld))
+	return VecMeasurement{
+		Value:     r3.NewVec(uHeld, vHeld, 0),
+		Exactness: exactnessOf(bound),
+		Bound:     units.Millimeters(bound),
+	}, true
+}
+
 // SecondMoments is a recorded region's second moments of area about the
 // plane origin, in the plane's own (u, v): every field is a Measurement of
 // Kind SecondMomentOfArea (mm⁴), with the closed-form evaluation's proven
@@ -92,9 +157,10 @@ type SecondMoments struct {
 }
 
 // SecondMoments returns the region's bounded second moments of area about the
-// plane origin. The staging matches Area: a free-form boundary kind is
-// [ErrUnsupported], and malformed or non-finite records are rejected before a
-// measurement is constructed.
+// plane origin. The staging matches [ProfileRecord.Area]: a Tier A free-form
+// boundary is integrated exactly and rounded once, every other free-form kind
+// is [ErrUnsupported], and malformed or non-finite records are rejected before
+// a measurement is constructed.
 func (r ProfileRecord) SecondMoments() (SecondMoments, error) {
 	ig, err := r.integralsTo(momentSecondOrder)
 	if err != nil {
@@ -131,6 +197,21 @@ type regionIntegrals struct {
 	muvBound   float64
 	mvv        float64 // ∫v² dA
 	mvvBound   float64
+
+	// exact is the WHOLE region's moments as exact rationals — every line and
+	// Tier A free-form contribution added into it, and the anchor
+	// re-referencing applied over rationals too. It stays alive only while
+	// every contribution so far has had an exact rational, and when it does the
+	// published float is that region-level rational rounded ONCE
+	// (docs/spline-design.md §3/§5.2). Rounding per segment instead would make
+	// the held float a sum of roundings, so a multi-segment region would miss
+	// the single-rounding property a one-segment region has.
+	exact exactMoments
+	// exactDead records that some contribution had no exact rational — a
+	// circular walk's integral carries π and trig terms — so the region's own
+	// sum is not exact and the per-segment float accumulation with its own
+	// proven bounds is what gets published.
+	exactDead bool
 }
 
 // boundedScalar is a held float64 and a proven absolute error bound. The
@@ -461,7 +542,17 @@ func exactCoordinateDelta(a, b float64) *big.Rat {
 	return new(big.Rat).Sub(floatRat(a), floatRat(b))
 }
 
-func circularAreaInterval(seg CurveSegment) (ratInterval, bool) {
+// circularAreaInterval brackets one circular walk's exact area contribution
+// about the walk anchor. The segment holds the RECORDED coordinates and the
+// anchor is subtracted here over rationals: every radial term is a difference
+// the shift cancels out of exactly, and only the centre term carries it, so
+// this bracket stays a proof about the recorded arc rather than about a
+// float-shifted copy of it.
+func circularAreaInterval(seg CurveSegment, anchor Point2) (ratInterval, bool) {
+	anchorU, anchorV := floatRat(anchor.U), floatRat(anchor.V)
+	if anchorU == nil || anchorV == nil {
+		return ratInterval{}, false
+	}
 	switch seg := seg.(type) {
 	case CircleSeg:
 		dt := exactCoordinateDelta(seg.TEnd, seg.TStart)
@@ -498,13 +589,18 @@ func circularAreaInterval(seg CurveSegment) (ratInterval, bool) {
 			new(big.Rat).Mul(dx1, dx1),
 			new(big.Rat).Mul(dy1, dy1),
 		)
-		heldDY0 := seg.Start.V - seg.Center.V
-		heldDY1 := seg.End.V - seg.Center.V
+		// The held angles read the same float-shifted coordinates the float
+		// evaluation does, so this bracket brackets THAT walk's sweep branch.
+		heldCenter := shiftPoint(seg.Center, anchor)
+		heldStart := shiftPoint(seg.Start, anchor)
+		heldEnd := shiftPoint(seg.End, anchor)
+		heldDY0 := heldStart.V - heldCenter.V
+		heldDY1 := heldEnd.V - heldCenter.V
 		a0 := atan2Interval(dy0, dx0, heldDY0 == 0 && math.Signbit(heldDY0))
 		a1 := atan2Interval(dy1, dx1, heldDY1 == 0 && math.Signbit(heldDY1))
 		sweep := intervalSub(a1, a0)
-		heldA0 := math.Atan2(seg.Start.V-seg.Center.V, seg.Start.U-seg.Center.U)
-		heldA1 := math.Atan2(seg.End.V-seg.Center.V, seg.End.U-seg.Center.U)
+		heldA0 := math.Atan2(heldStart.V-heldCenter.V, heldStart.U-heldCenter.U)
+		heldA1 := math.Atan2(heldEnd.V-heldCenter.V, heldEnd.U-heldCenter.U)
 		if heldA1-heldA0 <= 0 {
 			sweep = intervalAdd(sweep, intervalScale(interval(piLower, piUpper), big.NewRat(2, 1)))
 		}
@@ -516,9 +612,13 @@ func circularAreaInterval(seg CurveSegment) (ratInterval, bool) {
 			dy.Neg(dy)
 		}
 		sector := intervalScale(sweep, new(big.Rat).Mul(sign, r2))
+		// Only the centre carries the anchor: every radial term above is a
+		// difference the shift cancels out of.
+		centerU := new(big.Rat).Sub(floatRat(seg.Center.U), anchorU)
+		centerV := new(big.Rat).Sub(floatRat(seg.Center.V), anchorV)
 		centerTerm := new(big.Rat).Sub(
-			new(big.Rat).Mul(floatRat(seg.Center.U), dy),
-			new(big.Rat).Mul(floatRat(seg.Center.V), dx),
+			new(big.Rat).Mul(centerU, dy),
+			new(big.Rat).Mul(centerV, dx),
 		)
 		areaProof := intervalAdd(sector, pointInterval(centerTerm))
 		if endR2.Cmp(r2) != 0 {
@@ -530,11 +630,11 @@ func circularAreaInterval(seg CurveSegment) (ratInterval, bool) {
 			radialRatioUpper := new(big.Rat).Quo(radialGap, endR2)
 			endpointScale := new(big.Rat).Add(
 				new(big.Rat).Mul(
-					new(big.Rat).Abs(floatRat(seg.Center.U)),
+					new(big.Rat).Abs(centerU),
 					new(big.Rat).Abs(dy1),
 				),
 				new(big.Rat).Mul(
-					new(big.Rat).Abs(floatRat(seg.Center.V)),
+					new(big.Rat).Abs(centerV),
 					new(big.Rat).Abs(dx1),
 				),
 			)
@@ -546,10 +646,10 @@ func circularAreaInterval(seg CurveSegment) (ratInterval, bool) {
 			correctionFloat = absSumUpper(
 				correctionFloat,
 				analyticRoundBound(absSumUpper(
-					seg.Center.U,
-					seg.Center.V,
-					seg.End.U-seg.Center.U,
-					seg.End.V-seg.Center.V,
+					heldCenter.U,
+					heldCenter.V,
+					heldEnd.U-heldCenter.U,
+					heldEnd.V-heldCenter.V,
 				)),
 			)
 			correction = floatRat(correctionFloat)
@@ -605,19 +705,19 @@ func (r ProfileRecord) integralsBudget(budget *workBudget) (regionIntegrals, err
 	if err := wallBudgetErr(budget); err != nil {
 		return regionIntegrals{}, err
 	}
-	record, anchor, err := validateMomentFieldsBudget(budget, r)
+	pre, err := validateMomentFieldsBudget(budget, r)
 	if err != nil {
 		return regionIntegrals{}, err
 	}
-	return integrateMomentRecordBudget(record, anchor, momentSecondOrder, budget)
+	return integrateMomentRecordBudget(pre, momentSecondOrder, budget)
 }
 
 func (r ProfileRecord) integralsTo(order momentIntegralOrder) (regionIntegrals, error) {
-	record, anchor, err := validateMomentRecord(r)
+	pre, err := validateMomentRecord(r)
 	if err != nil {
 		return regionIntegrals{}, err
 	}
-	return integrateMomentRecord(record, anchor, order)
+	return integrateMomentRecord(pre, order)
 }
 
 // evaluatorIntegrals supplies only the mass properties an evaluator needs.
@@ -625,52 +725,52 @@ func (r ProfileRecord) integralsTo(order momentIntegralOrder) (regionIntegrals, 
 // finiteness checks; evaluator construction must not let unused higher-order
 // overflow prevent clearance verification from running.
 func (r ProfileRecord) evaluatorIntegrals(order momentIntegralOrder) (regionIntegrals, error) {
-	record, anchor, err := validateMomentFields(r)
+	pre, err := validateMomentFields(r)
 	if err != nil {
 		return regionIntegrals{}, err
 	}
-	return integrateMomentRecord(record, anchor, order)
+	return integrateMomentRecord(pre, order)
 }
 
 func (r ProfileRecord) evaluatorIntegralsContext(ctx context.Context, order momentIntegralOrder) (regionIntegrals, error) {
-	record, anchor, err := validateMomentFieldsContext(ctx, r)
+	pre, err := validateMomentFieldsContext(ctx, r)
 	if err != nil {
 		return regionIntegrals{}, err
 	}
-	return integrateMomentRecordModeContext(ctx, record, anchor, order, true)
+	return integrateMomentRecordModeContext(ctx, pre, order, true)
 }
 
 func (r ProfileRecord) evaluatorIntegralsUncheckedContext(ctx context.Context, order momentIntegralOrder) (regionIntegrals, error) {
-	record, anchor, err := validateMomentFieldsContext(ctx, r)
+	pre, err := validateMomentFieldsContext(ctx, r)
 	if err != nil {
 		return regionIntegrals{}, err
 	}
-	return integrateMomentRecordUncheckedContext(ctx, record, anchor, order)
+	return integrateMomentRecordUncheckedContext(ctx, pre, order)
 }
 
-func integrateMomentRecord(record ProfileRecord, anchor Point2, order momentIntegralOrder) (regionIntegrals, error) {
-	return integrateMomentRecordBudget(record, anchor, order, nil)
+func integrateMomentRecord(pre momentPreflight, order momentIntegralOrder) (regionIntegrals, error) {
+	return integrateMomentRecordBudget(pre, order, nil)
 }
 
-func integrateMomentRecordBudget(record ProfileRecord, anchor Point2, order momentIntegralOrder, budget *workBudget) (regionIntegrals, error) {
-	return integrateMomentRecordMode(record, anchor, order, true, budget)
+func integrateMomentRecordBudget(pre momentPreflight, order momentIntegralOrder, budget *workBudget) (regionIntegrals, error) {
+	return integrateMomentRecordMode(pre, order, true, budget)
 }
 
-func integrateMomentRecordMode(record ProfileRecord, anchor Point2, order momentIntegralOrder, checkFinite bool, budget *workBudget) (regionIntegrals, error) {
-	return integrateMomentRecordWithPoll(func() error { return wallBudgetStep(budget) }, record, anchor, order, checkFinite)
+func integrateMomentRecordMode(pre momentPreflight, order momentIntegralOrder, checkFinite bool, budget *workBudget) (regionIntegrals, error) {
+	return integrateMomentRecordWithPoll(func() error { return wallBudgetStep(budget) }, pre, order, checkFinite)
 }
 
-func integrateMomentRecordUncheckedContext(ctx context.Context, record ProfileRecord, anchor Point2, order momentIntegralOrder) (regionIntegrals, error) {
-	return integrateMomentRecordModeContext(ctx, record, anchor, order, false)
+func integrateMomentRecordUncheckedContext(ctx context.Context, pre momentPreflight, order momentIntegralOrder) (regionIntegrals, error) {
+	return integrateMomentRecordModeContext(ctx, pre, order, false)
 }
 
-func integrateMomentRecordModeContext(ctx context.Context, record ProfileRecord, anchor Point2, order momentIntegralOrder, checkFinite bool) (regionIntegrals, error) {
-	return integrateMomentRecordWithPoll(ctx.Err, record, anchor, order, checkFinite)
+func integrateMomentRecordModeContext(ctx context.Context, pre momentPreflight, order momentIntegralOrder, checkFinite bool) (regionIntegrals, error) {
+	return integrateMomentRecordWithPoll(ctx.Err, pre, order, checkFinite)
 }
 
-func integrateMomentRecordWithPoll(poll func() error, record ProfileRecord, anchor Point2, order momentIntegralOrder, checkFinite bool) (regionIntegrals, error) {
+func integrateMomentRecordWithPoll(poll func() error, pre momentPreflight, order momentIntegralOrder, checkFinite bool) (regionIntegrals, error) {
 	var ig regionIntegrals
-	for loopIndex, loop := range append([]LoopRecord{record.Outer}, record.Holes...) {
+	for loopIndex, loop := range append([]LoopRecord{pre.record.Outer}, pre.record.Holes...) {
 		if poll != nil {
 			if err := poll(); err != nil {
 				return regionIntegrals{}, err
@@ -682,11 +782,7 @@ func integrateMomentRecordWithPoll(poll func() error, record ProfileRecord, anch
 					return regionIntegrals{}, err
 				}
 			}
-			shifted, err := shiftMomentSegment(segment, anchor)
-			if err != nil {
-				return regionIntegrals{}, err
-			}
-			if err := ig.addFor(shifted, order); err != nil {
+			if err := ig.addFor(segment, pre.planAt(loopIndex, segmentIndex), pre.anchor, order); err != nil {
 				return regionIntegrals{}, err
 			}
 			if checkFinite && !ig.isFinite(order) {
@@ -694,43 +790,65 @@ func integrateMomentRecordWithPoll(poll func() error, record ProfileRecord, anch
 			}
 		}
 	}
-	if ig.area <= 0 {
-		return regionIntegrals{}, fmt.Errorf(`%w: the recorded region encloses no positive net area`, ErrDegenerate)
+	ig = translateMomentIntegrals(ig, pre.anchor, order)
+	ig.publishExact()
+	if err := ig.requirePositiveArea(); err != nil {
+		return regionIntegrals{}, err
 	}
-	ig = translateMomentIntegrals(ig, anchor, order)
 	if checkFinite && !ig.isFinite(order) {
 		return regionIntegrals{}, fmt.Errorf(`%w: mass-property integration overflowed while restoring the profile origin`, ErrNotFinite)
 	}
 	return ig, nil
 }
 
-func shiftMomentSegment(segment CurveSegment, anchor Point2) (CurveSegment, error) {
-	segment, err := normalizeSegment(segment)
-	if err != nil {
-		return nil, err
+// requirePositiveArea refuses a region whose net area is not positive.
+//
+// The region's own EXACT rational decides wherever there is one, because a
+// strictly positive area can have a float64 image of zero: a valid section
+// scaled far enough down has an exact area of s²·A > 0 that underflows, and a
+// gate reading the float accumulator would refuse the region rather than publish
+// the bounded zero the accumulator already holds — value 0 with the rational
+// rounded up as its bound, hence Approximate, which is the honest reading of a
+// positive area no float64 can hold. Every exactly integrated boundary is
+// covered: the line path's closed forms and the Tier A free-form chains alike.
+// Only where a contribution has no exact rational at all — a circular walk,
+// whose integral carries π — does the float sum decide, as it always has.
+func (ig *regionIntegrals) requirePositiveArea() error {
+	if !ig.exactDead && ig.exact.complete() {
+		if ig.exact.area.Sign() > 0 {
+			return nil
+		}
+		return fmt.Errorf(`%w: the recorded region encloses no positive net area`, ErrDegenerate)
 	}
-	shift := func(point Point2) Point2 {
-		return Point2{U: point.U - anchor.U, V: point.V - anchor.V}
+	if ig.area <= 0 {
+		return fmt.Errorf(`%w: the recorded region encloses no positive net area`, ErrDegenerate)
 	}
-	switch segment := segment.(type) {
-	case LineSeg:
-		segment.Start = shift(segment.Start)
-		segment.End = shift(segment.End)
-		return segment, nil
-	case CircleSeg:
-		segment.Center = shift(segment.Center)
-		return segment, nil
-	case ArcSeg:
-		segment.Center = shift(segment.Center)
-		segment.Start = shift(segment.Start)
-		segment.End = shift(segment.End)
-		return segment, nil
-	default:
-		return nil, fmt.Errorf(`%w: this evaluator computes mass properties over line, arc and circle profile segments only; the profile has a %T segment`, ErrUnsupported, segment)
+	return nil
+}
+
+// shiftPoint re-references one recorded coordinate to the walk anchor in
+// float64. It conditions the FLOAT evaluation only: every exact rational
+// subtracts the anchor over rationals instead, because fl(p−anchor) rounds and
+// an exact result taken over rounded coordinates is the exact answer for a
+// different region (see regionIntegrals.add).
+func shiftPoint(point, anchor Point2) Point2 {
+	return Point2{U: point.U - anchor.U, V: point.V - anchor.V}
+}
+
+// shiftPoints translates a control-point slice into a fresh slice, leaving the
+// caller's recorded segment untouched.
+func shiftPoints(points []Point2, shift func(Point2) Point2) []Point2 {
+	out := make([]Point2, len(points))
+	for i, point := range points {
+		out[i] = shift(point)
 	}
+	return out
 }
 
 func translateMomentIntegrals(ig regionIntegrals, anchor Point2, order momentIntegralOrder) regionIntegrals {
+	if !ig.exactDead {
+		ig.exact = translateExactMoments(ig.exact, anchor, order)
+	}
 	if order == momentAreaOrder {
 		return ig
 	}
@@ -780,14 +898,28 @@ func translateMomentIntegrals(ig regionIntegrals, anchor Point2, order momentInt
 // add accumulates one segment's boundary-integral contribution, in the
 // segment's recorded walk direction. Circular contributions carry an outward
 // evaluation bound.
-func (ig *regionIntegrals) add(segment CurveSegment) error {
+//
+// Every contribution is re-referenced to the walk anchor, and the two
+// arithmetics do it differently ON PURPOSE. The FLOAT evaluation reads
+// anchor-shifted float coordinates, which is what keeps it conditioned. Every
+// EXACT rational — a line's closed form, an arc's proven area interval, a
+// converted free-form chain — subtracts the anchor over rationals instead,
+// from the recorded coordinates themselves. Shifting in float first would round
+// the geometry before the exact pipeline ever saw it, so the rational would be
+// the exact answer for a region the caller did not record, and publishExact
+// would round an already representable value and report Exact with a zero bound
+// for it.
+// A free-form segment arrives with the chain the record-level preflight already
+// converted and charged (moments_validate.go), so this pass converts nothing and
+// charges nothing.
+func (ig *regionIntegrals) add(segment CurveSegment, plan freeformPlan, anchor Point2) error {
 	segment, err := normalizeSegment(segment)
 	if err != nil {
 		return err
 	}
 	switch segment := segment.(type) {
 	case LineSeg:
-		ig.addLine(segment)
+		ig.addLine(segment, anchor)
 		return nil
 	case CircleSeg:
 		if segment.Radius.Kind() != units.Length {
@@ -800,7 +932,8 @@ func (ig *regionIntegrals) add(segment CurveSegment) error {
 		if segment.CCW != (segment.TStart < segment.TEnd) {
 			return fmt.Errorf(`%w: a circle segment's CCW flag contradicts its range order`, ErrDegenerate)
 		}
-		areaProof, haveAreaProof := circularAreaInterval(segment)
+		areaProof, haveAreaProof := circularAreaInterval(segment, anchor)
+		segment.Center = shiftPoint(segment.Center, anchor)
 		// The arrangement's normalized t is the angle 2π·t from +u
 		// (geom.BoundaryEdge); the recorded range order is the walk.
 		ig.addCircular(
@@ -815,6 +948,10 @@ func (ig *regionIntegrals) add(segment CurveSegment) error {
 		)
 		return nil
 	case ArcSeg:
+		areaProof, haveAreaProof := circularAreaInterval(segment, anchor)
+		segment.Center = shiftPoint(segment.Center, anchor)
+		segment.Start = shiftPoint(segment.Start, anchor)
+		segment.End = shiftPoint(segment.End, anchor)
 		radius := math.Hypot(segment.Start.U-segment.Center.U, segment.Start.V-segment.Center.V)
 		a0 := math.Atan2(segment.Start.V-segment.Center.V, segment.Start.U-segment.Center.U)
 		a1 := math.Atan2(segment.End.V-segment.Center.V, segment.End.U-segment.Center.U)
@@ -822,7 +959,6 @@ func (ig *regionIntegrals) add(segment CurveSegment) error {
 		if sweep <= 0 {
 			sweep += 2 * math.Pi
 		}
-		areaProof, haveAreaProof := circularAreaInterval(segment)
 		// normalized t maps to angle = a0 + t·sweep; the range order is the walk.
 		ig.addCircular(
 			segment.Center,
@@ -836,24 +972,45 @@ func (ig *regionIntegrals) add(segment CurveSegment) error {
 		)
 		return nil
 	default:
-		return fmt.Errorf(`%w: this evaluator computes mass properties over line, arc and circle profile segments only; the profile has a %T segment`, ErrUnsupported, segment)
+		// A free-form kind with no converted chain is one the preflight could
+		// not convert, so this evaluator has no integral for it.
+		if !isFreeformSegment(segment) || len(plan.spans) == 0 {
+			return fmt.Errorf(`%w: this evaluator computes mass properties over line, arc, circle and Tier A free-form profile segments only; the profile has a %T segment`, ErrUnsupported, segment)
+		}
+		// The chain was converted from the RECORDED control points, so shifting
+		// it here over rationals keeps the spans the recorded curve.
+		if err := shiftFreeformSpans(plan.spans, anchor); err != nil {
+			return err
+		}
+		ig.addFreeform(plan.spans, plan.reversed)
+		return nil
 	}
+}
+
+// addAnalytic accumulates one line, circle or arc segment about the given
+// anchor. It is how the section audits take a loop's own signed area: their
+// loops are proven walkable before any area is asked for — walkOf refuses every
+// free-form kind — so no converted chain is involved and no work is charged.
+func (ig *regionIntegrals) addAnalytic(segment CurveSegment, anchor Point2) error {
+	return ig.add(segment, freeformPlan{}, anchor)
 }
 
 // addFor preserves the evaluator helper's order-aware call shape. The bounded
 // implementation computes all moments together, so the requested order does
 // not change the accumulated result.
-func (ig *regionIntegrals) addFor(segment CurveSegment, _ momentIntegralOrder) error {
-	return ig.add(segment)
+func (ig *regionIntegrals) addFor(segment CurveSegment, plan freeformPlan, anchor Point2, _ momentIntegralOrder) error {
+	return ig.add(segment, plan, anchor)
 }
 
 // addLine accumulates the straight chord from the walk's start point to its
 // end point. The recorded range picks the walked piece of the entity's own
 // Start→End parameterization.
-func (ig *regionIntegrals) addLine(seg LineSeg) {
+func (ig *regionIntegrals) addLine(seg LineSeg, anchor Point2) {
+	exact := exactLineMoments(seg, anchor)
+	seg.Start = shiftPoint(seg.Start, anchor)
+	seg.End = shiftPoint(seg.End, anchor)
 	u0, v0 := lerp2(seg.Start, seg.End, seg.TStart)
 	u1, v1 := lerp2(seg.Start, seg.End, seg.TEnd)
-	exact := exactLineMoments(seg)
 	_, _, coordUpper := lineWalkBounds(seg, math.Hypot(u1-u0, v1-v0))
 	ig.coordUpper = math.Max(ig.coordUpper, coordUpper)
 
@@ -879,6 +1036,7 @@ func (ig *regionIntegrals) addLine(seg LineSeg) {
 	accumulateMoment(&ig.muu, &ig.muuBound, muu, rationalFloatError(exact.muu, muu))
 	accumulateMoment(&ig.muv, &ig.muvBound, muv, rationalFloatError(exact.muv, muv))
 	accumulateMoment(&ig.mvv, &ig.mvvBound, mvv, rationalFloatError(exact.mvv, mvv))
+	ig.addExact(exact)
 }
 
 type exactMoments struct {
@@ -888,6 +1046,142 @@ type exactMoments struct {
 	muu  *big.Rat
 	muv  *big.Rat
 	mvv  *big.Rat
+}
+
+func newExactMoments() exactMoments {
+	return exactMoments{
+		area: new(big.Rat),
+		mu:   new(big.Rat),
+		mv:   new(big.Rat),
+		muu:  new(big.Rat),
+		muv:  new(big.Rat),
+		mvv:  new(big.Rat),
+	}
+}
+
+// complete reports whether every moment has an exact rational. A contributor
+// that could not build one leaves a nil field, which is the signal to retire
+// the region-level accumulator rather than publish a partial sum.
+func (m exactMoments) complete() bool {
+	return m.area != nil && m.mu != nil && m.mv != nil &&
+		m.muu != nil && m.muv != nil && m.mvv != nil
+}
+
+func (m exactMoments) fields() [6]*big.Rat {
+	return [6]*big.Rat{m.area, m.mu, m.mv, m.muu, m.muv, m.mvv}
+}
+
+// heldFields pairs each accumulated float moment with its bound, in the same
+// order exactMoments.fields uses, so a rational and its published float are
+// never matched up by hand at a call site.
+func (ig *regionIntegrals) heldFields() [6]struct{ value, bound *float64 } {
+	return [6]struct{ value, bound *float64 }{
+		{&ig.area, &ig.areaBound},
+		{&ig.mu, &ig.muBound},
+		{&ig.mv, &ig.mvBound},
+		{&ig.muu, &ig.muuBound},
+		{&ig.muv, &ig.muvBound},
+		{&ig.mvv, &ig.mvvBound},
+	}
+}
+
+// addExact folds one segment's exact contribution into the region-level
+// rational accumulator.
+func (ig *regionIntegrals) addExact(exact exactMoments) {
+	if ig.exactDead {
+		return
+	}
+	if !exact.complete() {
+		ig.dropExact()
+		return
+	}
+	if !ig.exact.complete() {
+		ig.exact = newExactMoments()
+	}
+	running := ig.exact.fields()
+	for i, term := range exact.fields() {
+		running[i].Add(running[i], term)
+	}
+}
+
+// dropExact retires the region-level rational accumulator for good: once one
+// contribution has no exact rational, the region's own sum has none either.
+func (ig *regionIntegrals) dropExact() {
+	ig.exactDead = true
+	ig.exact = exactMoments{}
+}
+
+// publishExact replaces the per-segment float accumulation with the region's
+// own exact rational rounded ONCE, and the bound with that single rounding —
+// zero, hence Exact, exactly when the rational is representable
+// (docs/spline-design.md §3). It is a no-op once any contribution lacked an
+// exact rational.
+//
+// Each field is published INDEPENDENTLY, and it must be: a field's value and
+// bound are self-contained — the value is fl(exact) and the bound |exact −
+// value| over rationals — so a rational no float64 can hold costs only its own
+// field its single rounding. Publishing the six together instead abandons every
+// one of them, so a second moment overflowing at coordinates near 1e78 mm denies
+// Area the rational already in hand and leaves it the SUM of its per-segment
+// roundings, past the half ulp §3 promises unconditionally. The mixed result is
+// sound because every consumer reads each field through its own (value, bound)
+// pair, and all cross-field composition — a revolve's axisMoments, the cup mass
+// properties, Centroid's bounded-quotient fallback — is interval arithmetic,
+// which asks only that each input interval encloses the truth.
+func (ig *regionIntegrals) publishExact() {
+	if ig.exactDead || !ig.exact.complete() {
+		return
+	}
+	exact := ig.exact.fields()
+	for i, field := range ig.heldFields() {
+		held, _ := exact[i].Float64()
+		if isNonFinite(held) {
+			// No float64 holds this moment, so it has no single rounding to
+			// publish; its own float accumulation and proven bound stand, and a
+			// non-finite accumulation is refused by the order's finiteness check
+			// rather than reported.
+			continue
+		}
+		*field.value = held
+		*field.bound = rationalFloatError(exact[i], held)
+	}
+}
+
+// translateExactMoments re-references the exact accumulator from the walk
+// anchor back to the profile origin, mirroring translateMomentIntegrals step
+// for step but over rationals — the anchor coordinates are floats, hence exact
+// rationals, and the shift is only sums and products, so nothing rounds here.
+func translateExactMoments(exact exactMoments, anchor Point2, order momentIntegralOrder) exactMoments {
+	if order == momentAreaOrder || !exact.complete() {
+		return exact
+	}
+	anchorU, anchorV := floatRat(anchor.U), floatRat(anchor.V)
+	if anchorU == nil || anchorV == nil {
+		return exactMoments{}
+	}
+	if order == momentSecondOrder {
+		// Second-order terms read the PRE-shift first moments, so they are
+		// re-referenced before mu and mv are.
+		exact.muu = ratAdd(
+			exact.muu,
+			ratMul(big.NewRat(2, 1), anchorU, exact.mu),
+			ratMul(anchorU, anchorU, exact.area),
+		)
+		exact.muv = ratAdd(
+			exact.muv,
+			ratMul(anchorV, exact.mu),
+			ratMul(anchorU, exact.mv),
+			ratMul(anchorU, anchorV, exact.area),
+		)
+		exact.mvv = ratAdd(
+			exact.mvv,
+			ratMul(big.NewRat(2, 1), anchorV, exact.mv),
+			ratMul(anchorV, anchorV, exact.area),
+		)
+	}
+	exact.mu = ratAdd(exact.mu, ratMul(anchorU, exact.area))
+	exact.mv = ratAdd(exact.mv, ratMul(anchorV, exact.area))
+	return exact
 }
 
 func ratAdd(values ...*big.Rat) *big.Rat {
@@ -918,17 +1212,29 @@ func ratLerp(start, end, t float64) *big.Rat {
 	return new(big.Rat).Add(rs, new(big.Rat).Mul(rt, new(big.Rat).Sub(re, rs)))
 }
 
-// exactLineMoments evaluates the polynomial line formulas over exact rationals.
-// The public values retain the existing float evaluation; the rational result
-// proves whether its rounding is exact and, when it is not, the precise error.
-func exactLineMoments(seg LineSeg) exactMoments {
+// exactLineMoments evaluates the polynomial line formulas over exact rationals,
+// about the walk anchor. The public values retain the existing float
+// evaluation; the rational result proves whether its rounding is exact and,
+// when it is not, the precise error.
+//
+// The segment handed in holds the RECORDED coordinates and the anchor is
+// subtracted here, over rationals. A lerp is affine, so lerping then
+// subtracting is identical to subtracting then lerping — but only in exact
+// arithmetic: fl(p−anchor) rounds, and the rational taken over those rounded
+// coordinates would be a different chord's exact area.
+func exactLineMoments(seg LineSeg, anchor Point2) exactMoments {
 	u0 := ratLerp(seg.Start.U, seg.End.U, seg.TStart)
 	v0 := ratLerp(seg.Start.V, seg.End.V, seg.TStart)
 	u1 := ratLerp(seg.Start.U, seg.End.U, seg.TEnd)
 	v1 := ratLerp(seg.Start.V, seg.End.V, seg.TEnd)
-	if u0 == nil || v0 == nil || u1 == nil || v1 == nil {
+	anchorU, anchorV := floatRat(anchor.U), floatRat(anchor.V)
+	if u0 == nil || v0 == nil || u1 == nil || v1 == nil || anchorU == nil || anchorV == nil {
 		return exactMoments{}
 	}
+	u0.Sub(u0, anchorU)
+	u1.Sub(u1, anchorU)
+	v0.Sub(v0, anchorV)
+	v1.Sub(v1, anchorV)
 	du := new(big.Rat).Sub(u1, u0)
 	dv := new(big.Rat).Sub(v1, v0)
 
@@ -1029,6 +1335,9 @@ func (ig *regionIntegrals) addCircular(
 	if haveAreaProof {
 		areaBound = math.Min(areaBound, intervalFloatError(areaProof, area))
 	}
+	// A circular integral's exact value carries π and trig terms, so it has no
+	// exact rational and the region's rational sum ends here.
+	ig.dropExact()
 	accumulateMoment(&ig.area, &ig.areaBound, area, areaBound)
 	accumulateMoment(&ig.mu, &ig.muBound, mu, conservativeValueError(mu, muScale))
 	accumulateMoment(&ig.mv, &ig.mvBound, mv, conservativeValueError(mv, mvScale))

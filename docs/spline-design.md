@@ -135,6 +135,18 @@ A 5-control closed spline whose area is 293/18 reports `Approximate` with a
 one-ulp bound; the same section scaled by 3 has area 293/2, is representable, and
 reports `Exact`.
 
+Equal weights are equal at any MAGNITUDE. They cancel in the homogeneous
+quotient, so a `NURBSSeg` whose weights are all 1e300 names the very same curve
+as one whose weights are all 1, and it is Tier A on the same terms. The
+reconstruction decad asks sketch for region topology through is where the
+magnitude bites — differentiating a rational curve squares its homogeneous
+denominator, so weights past about the square root of the largest float64
+overflow it and the entity reconstructs as no valid profile at all. The weights
+are normalized to 1 for THAT reconstruction only: the question sketch is asked
+is about the same curve, and the exact integration reads the recorded weights
+untouched. Refusing instead would deny a measurement to a record that is exactly
+representable and owes one.
+
 That is precisely the standing the LINE path already has, and it is the point:
 Tier A's bound is one rounding rather than a quadrature estimate, so free-form
 support costs decad none of its exactness discipline. NEVER describe a Tier A
@@ -224,23 +236,40 @@ Take the control coordinates exactly. They are floats, so they are exact
 rationals — the same take-the-floats-exactly discipline `clearance_poly.go`
 already uses.
 
+**Take the KNOT VECTOR exactly too, from sketch, and NEVER re-derive it.** Every
+number the conversion reads is upstream's own float lifted into a rational: a
+`NURBSSeg`'s knots are recorded verbatim, and a `SplineSeg`'s are not recorded at
+all, so the evaluator reads `geom.ClampedKnots` and lifts what it returns.
+`geom` builds each interior knot as `float64(j)/float64(n−3)`, so sketch stores
+the ROUNDING of `j/(n−3)` and not that rational; rebuilding the vector from the
+closed form is the no-re-derivation rule broken, and the cost is not confined to
+a bound. The exact area over the rational knots is often representable where the
+area over sketch's own knots is not, so the conversion publishes a zero bound and
+an `Exact` claim about a curve nobody recorded, and on a near-cancelling section
+the published magnitude moves too. The two vectors agree only where `n−3` is a
+power of two, which is why four- and five-control fixtures cannot see the
+difference. Whichever kind is converted, the knots come from sketch and the
+conversion is over them.
+
 Convert the recorded curve to piecewise Bézier form. Knot insertion is a
 rational convex combination, so the conversion is exact:
 
-| Recorded kind | Conversion |
-|---|---|
-| `SplineSeg` | clamped uniform cubic → one Bézier per span |
-| `ClosedSplineSeg` | periodic uniform cubic → one Bézier per span, `n` spans for `n` control points |
-| `NURBSSeg` | clamped arbitrary degree → one Bézier per NONEMPTY knot span |
+| Recorded kind | Conversion | Knot vector |
+|---|---|---|
+| `SplineSeg` | clamped uniform cubic → one Bézier per span | `geom.ClampedKnots(n)`'s floats, lifted |
+| `ClosedSplineSeg` | periodic uniform cubic → one Bézier per span, `n` spans for `n` control points | none — the periodic uniform basis is per span |
+| `NURBSSeg` | clamped arbitrary degree → one Bézier per NONEMPTY knot span | the recorded `Knots`, lifted |
 
 **Repeated knots and repeated control points are admitted, so every construction
 in §5 and §6 runs per NONEMPTY span and must hold on a COLLAPSED one.**
 `validateNURBSSegment` checks the knots finite, non-decreasing, clamped at both
 ends and the whole domain nonempty (`Knots[Degree] < Knots[n]`), the control
-points finite and at least `Degree + 1` of them, and every weight positive; the
-`SplineSeg`/`ClosedSplineSeg` arms check control count, point finiteness and
-parameter range. Neither arm tests distinctness anywhere, and a recording gate
-rightly does not. Three consequences the constructions carry:
+points finite and at least `Degree + 1` of them, every weight positive, and R12's
+one continuity rule — an interior knot past `degree` whose two one-sided limits
+are different recorded control points; the `SplineSeg`/`ClosedSplineSeg` arms
+check control count, point finiteness and parameter range. Neither arm tests
+distinctness anywhere, and a recording gate rightly does not. Three consequences
+the constructions carry:
 
 - **an EMPTY knot span — `t_i = t_{i+1}`, a repeated interior knot — carries no
   Bézier segment.** It enters no sum here and is not a span any §6 row runs on.
@@ -258,6 +287,26 @@ rightly does not. Three consequences the constructions carry:
   a clamped cubic net collapse a span while the walk's own length stays positive
   — so every §6 row must bound, bracket or refuse a collapsed span on its own
   terms. §6.3's speed floor is where that bites.
+
+The conversion raises every interior knot to multiplicity `degree` and then cuts
+consecutive spans that SHARE their boundary control point. A recorded interior
+knot repeating MORE than `degree` times admits no such cut, whatever the curve
+does there, so the conversion refuses it — narrowing the accepted input rather
+than widening the converter, which would push a new closure question into the
+moments path for no gain.
+
+WHICH refusal is a fact about the recorded curve, not about the converter, and
+Table R's R12/R13 split states it: a record whose two one-sided limits at the
+knot differ is broken and rejected in NURBS validation, and one whose limits are
+identical is a continuous curve this converter cannot slice and is admitted as a
+record. A boundary knot over-clamped past `degree+1` is the same reading with no
+discontinuity available at all — the extra repeat leaves a dead control point —
+so it is R13 too.
+
+The slicing must PROVE its own shape on the knot vector before it cuts a single
+span. A divisibility test on the control count does not: a degree-3 curve with
+four multiplicity-4 interior knots holds 16 control points, and 15 divides by 3,
+so the stride-degree cut silently straddles the breaks.
 
 Integrate the Green's-theorem boundary forms. Each integrand is a POLYNOMIAL, so
 each integral is an exact rational — which the reported measurement then rounds
@@ -328,6 +377,135 @@ Rational coefficient size grows with degree and span count. Charge every span,
 every coefficient product and every integral term against a `workBudget`
 (`budget.go`), and refuse as R7 when it runs out. NEVER widen to a float path to
 stay inside the budget.
+
+The counter is the RECORD's, not each segment's. One `ProfileRecord` pass opens
+one counter and every segment in it charges that same counter, because the work
+that actually runs is the aggregate: a counter opened per segment reads a record
+of individually cheap curves as cheap however many of them it holds, and bounds
+nothing.
+
+Charge EARLY as well as conservatively. The ceiling is fixed because the public
+`ProfileRecord` methods take no context and so cannot be cancelled, so every
+pass whose cost grows with the record must sit BEHIND a charge already levied —
+the knot-multiplicity probes the conversion runs, including the probes that
+insert nothing, and the sketch reconstruction validation samples the curve
+through before any integral is taken. A ceiling consulted after such a pass
+bounds nothing it was added to bound.
+
+That applies to MEMORY as much as to time, and the conversion's own charge is
+where it bites: a record's insertion demand is readable from SIZES and from data
+already in hand as floats — a `SplineSeg`'s degree is fixed and the shape of the
+vector `geom.ClampedKnots` returns follows from its control count, a
+`ClosedSplineSeg` owes no insertion at all, and a `NURBSSeg`'s runs read off its
+RECORDED knots — so the whole conversion is charged before one `big.Rat` exists.
+Charging after the lift refuses a record that was hopeless from its control
+count alone only once it has allocated two rationals per control point and a
+whole rational knot vector. The open-spline charge is quadratic, so a refused
+record allocates orders of magnitude more than any accepted one ever could.
+
+The RECONSTRUCTION carries a charge of its own. It is not covered by the
+conversion and integration charges: those bound decad's rational arithmetic, and
+the reconstruction is sketch's — it chords each recorded source and ARRANGES the
+result. Without it a kind whose conversion is linear clears the ceiling at a
+control count whose reconstruction runs for seconds, uncancellable, inside a
+public measurement method.
+
+That charge is the RECORD's, not any source's, because the arrangement is
+GLOBAL: sketch chords every source it was given and then tests every PAIR of
+chords in one loop over the whole scene. So the charge is a saturated quadratic
+in the record-wide chord TOTAL. A sum of per-source squares is not a bound on
+it — it drops every cross-source pair, which is nearly all of them once a record
+holds more than one curve.
+
+Every source counts toward that total, analytic ones included. A chord total
+that skips the lines, arcs and circles beside a spline says nothing about the
+pass they are arranged in.
+
+The chord counts are sketch's own, restated: a free-form source is chorded 16
+times per control point (an OPEN spline per span, so 16 per control point less
+its degree) with a FLOOR of 64, a circle 256 times, an arc 256 times its share
+of a turn, a line once. The floor is what makes a record of many tiny curves
+expensive, and a charge reading the control count alone misses it entirely.
+
+The pass runs the arrangement more than ONCE, so the charge is one
+arrangement's quadratic times the number of arrangements — which is what makes
+an uncharged record cubic in its source count rather than quadratic. Validation
+arranges the scene to list its candidate profiles, `RecordProfile` arranges it
+again for each candidate it authenticates (`Sketch.Profiles` rebuilds the
+arrangement on every call), and the whole pass repeats on the rescaled record.
+The two whole-scene arrangements validation always runs are levied ONCE, at the
+record-level preflight, before sketch is asked anything; each candidate's own
+re-arrangement is charged on the same record counter immediately before it runs.
+Every arrangement is therefore paid for before it happens, and a record may
+clear the preflight and still be refused inside the pass.
+
+The ceiling stands at 2^20 charged units under that model, which admits far
+fewer sources than the earlier per-source charge did — nine chorded sources, or
+a lone closed spline of 36 control points — and the largest record it admits
+measures in tens of milliseconds rather than the hundreds the earlier charge
+allowed. Raising it is a separate change from levying the charge honestly: the
+conversion charges beneath it must first move ahead of the chains they precede,
+because a closed spline converts linearly while integrating its chain costs some
+270 times more per span, so a record whose integration is over budget allocates
+every span before the ceiling can see it.
+
+One record-level preflight therefore owns everything before the first expensive
+step, and it owns FOUR things. Every cheap structural refusal is evaluated on
+SIZES — knot count, degree, slice lengths, the recorded range — before any array
+is scanned, so a record that cannot be well formed at any content refuses in
+constant time however large a caller made it. Every charge is levied THERE: the
+conversion, the re-anchoring of each converted chain, the integration that runs
+only in the later moments pass, and the reconstruction's whole-scene
+arrangements. The chains the preflight converted are what that pass integrates,
+so the conversion the record paid for happens once. And a segment's TIER is
+decided before its CONVERSION charge.
+
+That last one is a rule about which ANSWER a caller gets, not about cost. Whether
+a `NURBSSeg` is Tier A at all is a property of its recorded weights, so a
+rational one owes its own Tier C reason (§5.4) rather than the R7 ceiling message:
+the two are different answers — one says this evaluator has no certified
+quadrature for a rational curve, the other says a record this size will not fit
+the budget.
+
+**The scope of that rule is the conversion charge, not every charge, and the
+BOUND is why.** Deciding the tier means reading all `n` weights, so it is
+inherently linear and no O(1) charge can follow it. A scan placed ahead of every
+charge is therefore unbounded and uncancellable — exactly what the ceiling exists
+to stop — so the SIZE-DERIVED rational-lift charge is levied first, from slice
+lengths alone, and it bounds every element scan behind it. The order is the
+recorded range, the slice sizes, the size-derived lift charge, the content checks
+and the tier test, the conversion charge, and only then the rational lift itself.
+
+What that charge bounds those scans BY is a constant factor, not an equality.
+The property to state and to keep is: **every element-touching pass between the
+size-derived charge and the conversion charge is a single walk over one array
+whose own length is a term of that charge.** The charge therefore counts every
+such array — the controls, the knots AND the weights — and a record's element
+visits are at most `K` times the units it levies, so a whole record's are at most
+`K·2^20` however the record is split into segments. Adding a validator of that
+shape can only raise `K`; it can never unbound the work. A pass of any other
+shape — one over an array no term counts, or more than a constant number of walks
+over a counted one — is outside the invariant and owes a charge of its own,
+exactly as the conversion's quadratic does.
+
+Counting every walked array is what sets the admission boundary: a degree-1
+`NURBSSeg` holds `n` controls, `n+2` knots and `n` weights, so it charges `4n+2`
+units and the ceiling admits a few hundred thousand control points on size alone.
+That is three orders of magnitude above anything that can produce a measurement,
+because the reconstruction charge above already caps a lone free-form source at a
+few dozen control points.
+
+What that costs is stated exactly: a record whose SIZE alone cannot fit the
+ceiling reports R7 rather than its kind's reason. Every record within the
+budget — which is every record that could ever yield a measurement — still reads
+its own Table R reason, and a record over it is refused either way, so R7 is
+equally true of it.
+
+The per-element diagnostic is part of that bound. A description formatted for
+every knot and every weight rather than only for the element that fails made the
+content scan roughly seventy times the cost of the slice walk it is, so a "single
+linear pass over slices the caller already holds" is a claim about the WALK and
+the walk alone.
 
 The independent-implementation rule stands. sketch computes its own free-form
 area internally and reports it as `Profile.Area`; decad integrates its OWN
@@ -964,5 +1142,63 @@ rules).
   test. Run each of R3–R5 on a DEGREE-1 `NURBSSeg` walk as well as a curved one
   and require the same `ErrUnsupported`, so the refusal stays keyed on the
   recorded kind rather than on the degree (§4.1).
+- Assert R12 and R13 on the SAME knot vector, moving only the one control point
+  that decides continuity: the record whose two one-sided limits differ is
+  `ErrDegenerate`, the record whose limits are identical is `ErrUnsupported`, and
+  a boundary knot over-clamped past `degree+1` — admitted by record validation,
+  a curve with one dead control point — is `ErrUnsupported` too. A test that
+  asserts only one of the two cannot tell the rule from a multiplicity test.
+- Assert every free-form kind's recorded-range refusals as a table over the kinds
+  crossed with {full, trimmed, non-finite}, each cell by its sentinel, on the
+  caller-built record and on the same record decoded from its own wire form: a
+  non-finite range is `ErrNotFinite` on EVERY kind, and a trimmed range never
+  displaces the cause a kind is already refused for. A test that covers Tier A
+  alone cannot see a kind reading the two refusals in the other order.
+- Assert the §5.2 charge fires BEFORE the pass it bounds, by MEASURING the
+  refusal rather than reading the cost formula: a degree-1 record with thousands
+  of distinct interior knots — needing no insertion, so an insertion-only charge
+  sees nothing to charge — and a high-degree record whose over-budget
+  integration would otherwise be reached only after validation had sampled the
+  curve in sketch, must each refuse promptly.
+- Measure the ALLOCATION, not only the time: a record refused by the conversion
+  charge must allocate on the order of the record itself, which is what tells a
+  charge levied before the rational lift from one levied after it. Both refuse,
+  and only the measurement distinguishes them.
+- Measure the reconstruction charge by its own boundary: the largest record the
+  ceiling admits still measures, and the next control point past it refuses in
+  milliseconds. State the admitted worst case the ceiling guarantees.
+- Assert the reconstruction charge on the whole RECORD, not a source at a time:
+  the chord total of a two-source record is the sum, and its charge exceeds twice
+  a single source's, which is the cross-source pairs a per-source charge drops. A
+  record of many tiny curves must refuse on the chord FLOOR, and one of many arcs
+  or circles beside a single spline must refuse on the analytic chords a
+  free-form-only count cannot see.
+- Assert the per-kind chord counts against sketch's own sampler as a table over
+  the kinds, the floor and the open spline's per-span count among them. A test
+  that checks one kind cannot see a row that reads the wrong field.
+- Assert a rational `NURBSSeg` reports its Tier C reason with the counter left
+  holding exactly its rational lift and nothing more, which is what distinguishes
+  a tier decided before the CONVERSION charge from one decided after. Assert the
+  stated cost beside it: with the counter exhausted the same record reports R7.
+- Assert the size-derived lift charge precedes the per-element content scan
+  MECHANICALLY rather than by timing, on two records one control point apart
+  across the ceiling, each carrying a non-finite element at the end of its
+  vector. The record inside the ceiling reports that element's own refusal, so
+  the scan ran; the record past it reports R7, which it can only do by never
+  reading the element.
+- Back the constant-factor invariant with a BOUNDARY REGRESSION on measured cost
+  rather than a per-pass accounting identity: the worst record that charge
+  admits — well formed, so every pass it bounds runs before the refusal — must
+  stay within a stated wall-clock and allocation budget, and the first record past
+  the boundary must refuse without any of them running. An identity has to be
+  restated whenever a validator is added and goes stale silently; a cost boundary
+  fails when a pass is uncharged or allocates per element, whatever the accounting
+  says.
+- Assert an OPEN spline's converted spans against an exact Cox–de Boor evaluation
+  over `geom.ClampedKnots`'s own FLOAT knots, at a control count where `n−3` is
+  not a power of two, comparing rationals rather than a tolerance. A fixture whose
+  `n−3` is a power of two cannot see a re-derived knot vector, and a tolerance
+  cannot see it either — the divergence is smaller than an ulp of the reading and
+  still turns an `Approximate` into a false `Exact`.
 - Assert recipe replay of every free-form step reproduces body order, provenance
   roles, and measurements within the evaluator's own exactness.

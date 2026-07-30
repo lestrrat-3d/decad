@@ -588,6 +588,55 @@ func TestRegionMomentsRequestedOrderControlsOverflow(t *testing.T) {
 	require.ErrorIs(t, err, decad.ErrNotFinite)
 }
 
+// The measured defect behind publishExact's per-field publication. The exact
+// rational accumulator holds all six moments whatever order the caller asked
+// for, so a region whose SECOND moment has no float64 image still has an exact
+// area rational in hand. Publishing the six together abandoned every one of
+// them on the first overflow, and Area fell back to the sum of its per-segment
+// float roundings: one ulp off the correctly rounded area, carrying a bound past
+// the half ulp spline design §3 promises unconditionally. Each field publishes on
+// its own now, so Area carries its single rounding while SecondMoments still
+// refuses honestly.
+//
+// The polygon is LineSeg-only on purpose: the accumulator is shared with the
+// Tier A free-form path, and the defect was never specific to it.
+func TestOverflowingSecondMomentKeepsExactArea(t *testing.T) {
+	// 1e78 mm squares to a finite area and raises the second moment past
+	// float64's range. No plausible model reaches this scale; the guarantee is
+	// unconditional, so it is asserted where it is reachable at all.
+	const scale = 1e78
+	polygon := []decad.Point2{{}, {U: 0.1 * scale}, {U: 0.3 * scale, V: 0.2 * scale}, {U: 0.05 * scale, V: 0.1 * scale}, {V: 0.4 * scale}}
+	segments := make([]decad.CurveSegment, len(polygon))
+	for i, corner := range polygon {
+		next := polygon[(i+1)%len(polygon)]
+		segments[i] = momentLine(corner.U, corner.V, next.U, next.V)
+	}
+	record := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: segments}}
+
+	// The falsifier: the polygon's own shoelace over exact rationals.
+	exact := new(big.Rat)
+	for i, corner := range polygon {
+		next := polygon[(i+1)%len(polygon)]
+		au, av := new(big.Rat).SetFloat64(corner.U), new(big.Rat).SetFloat64(corner.V)
+		bu, bv := new(big.Rat).SetFloat64(next.U), new(big.Rat).SetFloat64(next.V)
+		exact.Add(exact, new(big.Rat).Sub(new(big.Rat).Mul(au, bv), new(big.Rat).Mul(bu, av)))
+	}
+	exact.Quo(exact, big.NewRat(2, 1))
+
+	area, err := record.Area()
+	require.NoError(t, err)
+	require.Equal(t, decad.Approximate, area.Exactness, "this area is not representable in float64")
+	value, err := area.Value.In(units.SquareMillimeter)
+	require.NoError(t, err)
+	bound, err := area.Bound.In(units.SquareMillimeter)
+	require.NoError(t, err)
+	requireSingleRounding(t, exact, value, bound)
+
+	_, err = record.SecondMoments()
+	require.ErrorIs(t, err, decad.ErrNotFinite,
+		"the second moment has no float64 image and is still refused, not published")
+}
+
 func TestSecondMomentsRectangle(t *testing.T) {
 	world := sketch.NewWorld()
 	s, err := world.CreateSketch(world.XY())
@@ -674,6 +723,24 @@ func TestLineRationalRoundingIsBounded(t *testing.T) {
 	got, err := moments.UU.Value.In(units.QuarticMillimeter)
 	require.NoError(t, err)
 	require.LessOrEqual(t, math.Abs(got-1.0/12), moments.UU.Bound.Base())
+}
+
+// The underflow reading is not free-form-specific: the line path integrates to
+// exact rationals too, so a square of four LineSegs whose exact area is strictly
+// positive and below the smallest float64 owes the same bounded zero — value 0
+// with the rounding that produced it as the bound — rather than a refusal for
+// enclosing no positive area.
+func TestUnderflowingLineRegionAreaPublishesBoundedZero(t *testing.T) {
+	const side = 1e-163
+	record := decad.ProfileRecord{Outer: momentSquare(0, 0, side, side, false)}
+
+	area, err := record.Area()
+	require.NoError(t, err, "the exact rational area is side², which is strictly positive")
+	value, err := area.Value.In(units.SquareMillimeter)
+	require.NoError(t, err)
+	require.Zero(t, value, "no float64 holds 1e-326")
+	require.Equal(t, decad.Approximate, area.Exactness)
+	require.Positive(t, area.Bound.Base(), "the bound is the rounding that produced the zero")
 }
 
 func TestArcSegExactQuarterDisk(t *testing.T) {
