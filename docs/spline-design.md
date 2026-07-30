@@ -30,6 +30,9 @@ Three tables are normative:
 | why an elliptical arc cannot build | §2.2 |
 | how a spline's area is EXACT | §5 |
 | how a length/extreme is bounded | §6 |
+| what a revolve's area needs beyond length | §6.1.1 |
+| why an undercut or radius reading is `Suspect` | §6.3 |
+| why a build refuses on a bracket it cannot decide | §6.4 |
 | what surface an extruded spline gets | §7 |
 | what each capability answers | Table C §8 |
 | what stays refused forever | Table R §4 |
@@ -144,13 +147,16 @@ exactly → `ErrUnrecordableProfile`.
 | **R6** | `FitSplineSeg` reaches a build or an integral | `ErrUnsupported` | pending §9 ask 1 |
 | **R7** | exact-rational integration exceeds its work budget | `ErrUnsupported` | no, §5.2 |
 | **R8** | chording a free-form walk needs more than the chord cap | `ErrUnsupported` | no, reuses `errTooManyChords` |
-| **R9** | a bracket cannot separate a `Verify` reading from its threshold | not an error — `Suspect` | no, §8 |
+| **R9** | a `Verify` reading's proof does not close — its bracket cannot separate it from its threshold, or a §6.3 certificate fails | not an error — `Suspect` | no, §8 |
 | **R10** | a Tier B or Tier C walk reaches a BUILD before its moments land | `ErrUnsupported` | no, §8 |
+| **R11** | a free-form bracket cannot decide a BUILD-time comparison | `ErrUnsupported` | no, §6.4 |
 
 R9 is the one row that is not a refusal. An intent the evaluator cannot BUILD is
 `ErrUnsupported` at the call; a `Verify` question it cannot ANSWER is accepted
 and reads `Suspect` (evaluator §11). A free-form reading whose proven interval
-straddles its threshold is the second case.
+straddles its threshold is the second case, and so is a direction cone §6.3
+cannot certify. R11 is the first case reached from the same brackets: a build
+gate has no `Suspect` to fall back on (§6.4).
 
 ### 4.1 Why the modify refusals are permanent
 
@@ -171,8 +177,10 @@ effort:
 **The admissible slice, and it is not a refusal.** A corner whose BOTH carriers
 are analytic stays buildable in a section that holds free-form walks elsewhere:
 the rewrite is local to the corner, and every untouched walk re-emits verbatim.
-It needs only the §5 audit to run over free-form elements, which §8 requires
-anyway.
+What it needs beyond that is the modify §5 audit running over free-form
+elements — a crossing test and a boundary-contact test no other capability here
+calls for. §6.4 owns both constructions and the R11 refusal for a contact they
+cannot decide.
 
 ## 5. Exact rational moments — Tier A
 
@@ -276,8 +284,53 @@ Both bounds are proven, not sampled. Report the interval midpoint as the value
 and its half width as the bound, `Approximate` always — a zero bound here would
 be a false Exact.
 
-Consumers: a prism's side-face `Area` (`length × height`), a revolve's Pappus
-area, `Edge.Length()`, and the setback R5 refuses.
+Consumers: a prism's side-face `Area` (`length × height`), `Edge.Length()`, and
+the setback R5 refuses. A revolve's lateral area is NOT one of them — length
+alone cannot determine it, and §6.1.1 supplies what it needs.
+
+### 6.1.1 The radial first moment `∫ r ds` — what a revolve's area needs
+
+Pappus's first theorem gives a revolved curve's lateral area as `θ · ∫ r ds`:
+the sweep angle times the curve's FIRST MOMENT about the axis, never `θ ×
+length`. Two meridian walks of equal length at different radii sweep different
+areas, so §6.1's bracket cannot decide the reading on its own. Bracket the first
+moment itself. This is the same quantity the analytic path already supplies per
+segment kind (evaluator §6's swept-arc-length × sweep angle × centroidal radius),
+so the free-form path owes its own bracket for it rather than a length.
+
+`r` is AFFINE in the point. The axis is coplanar with the profile plane
+(evaluator §6's axis gate), so in plane coordinates it is a line, and the region
+lies in one closed half-plane of it — so with the sign chosen toward the material,
+`r(u, v) = a·u + b·v + c` with `a² + b² = 1` and `r ≥ 0` over every walk.
+Evaluating that affine form at the span's control points gives the span's radial
+control values `r(P_i)`, and the convex-hull property bounds `r` over the span
+with no root-find at all:
+
+```
+r_lo = min_i r(P_i)  ≤  r(t)  ≤  max_i r(P_i) = r_hi
+```
+
+A rational span uses the same control points — a positive-weight rational Bézier
+lies in their hull too, and `W > 0` is proven (§5.4) — so this construction needs
+no separate rational form.
+
+Per span, with `[L_lo, L_hi]` the §6.1 length bracket of that SAME span and
+`r_lo ≥ 0`:
+
+```
+r_lo · L_lo  ≤  ∫ r ds  ≤  r_hi · L_hi
+```
+
+Sum the per-span enclosures. de Casteljau subdivision shrinks `[L_lo, L_hi]` and
+`[r_lo, r_hi]` together, so the product enclosure closes, and **the stopping
+certificate is again the MEASURED enclosure, never an assumed rate** (§6.1).
+Report the interval midpoint as the value and its half width as the bound,
+`Approximate` always.
+
+This bracket serves the lateral area alone. A revolve's `Volume` takes Pappus's
+SECOND theorem over the region's area first moment `∫u dA`, which §5 integrates
+exactly as a rational — a different integral, and the exact one. A partial
+sweep's cap areas are the §5 region area, likewise exact.
 
 ### 6.2 Extremes, sagitta, normals and curvature reduce to one existing engine
 
@@ -305,9 +358,9 @@ that reads it:
 |---|---|---|---|
 | directional extreme | `d/dt(g·C(t)) = 0`, degree `p−1` per span | `(g·U)′W − (g·U)W′ = 0`, degree `≤ 2p−1` per span — the positive `W²` denominator cleared | `extentAlong`, `Box`, through-all stops |
 | chord sagitta | control-point deviation from the linear interpolant, MEASURED per subdivision level (§6.1) | the same deviation on the span's own control points, MEASURED per level | `chordCount`, tessellation |
-| tangent/normal DIRECTION cone | hodograph control hull — a degree `p−1` Bézier with control points `p·ΔP_i` | the control hull of the numerator hodograph `(U′W − UW′, V′W − VW′)`, degree `≤ 2p−1` — the positive `W²` scales `C′` and never rotates it, so the direction cone is the numerator's | undercut survey |
+| tangent/normal DIRECTION cone | hodograph control hull — a degree `p−1` Bézier with control points `p·ΔP_i` — a CONE only where that hull excludes the origin (§6.3) | the control hull of the numerator hodograph `(U′W − UW′, V′W − VW′)`, degree `≤ 2p−1` — the positive `W²` scales `C′` and never rotates it, so the direction cone is the numerator's, under the same origin-exclusion test (§6.3) | undercut survey |
 | speed, for a Lipschitz bound | that same hodograph hull's maximum norm | the numerator hodograph hull's maximum norm divided by the square of `W`'s proven positive LOWER bound | extreme-VALUE brackets |
-| curvature extreme | `2K′S − 3KS′ = 0` with `K = u′v″ − v′u″` and `S = u′² + v′²`, degree `≤ 4p−6` — PLUS both span endpoints and every zero-speed (`S = 0`) parameter | the same stationarity over the rational derivative forms, the positive powers of `W` cleared before isolation — plus the same endpoint and zero-speed cases | `MinRadius` |
+| curvature extreme | `2K′S − 3KS′ = 0` with `K = u′v″ − v′u″` and `S = u′² + v′²`, degree `≤ 4p−6` — PLUS both span endpoints; the bracket needs `S`'s proven positive floor, so a span without one is `Suspect` (§6.3) rather than a candidate list | the same stationarity over the rational derivative forms, the positive powers of `W` cleared before isolation — plus the same endpoint and speed-floor cases | `MinRadius` |
 
 `K` is the curvature NUMERATOR, so **`K`'s own roots are the inflections**
 (`κ = 0`, infinite radius) — the opposite end of the range `MinRadius` reports.
@@ -325,6 +378,79 @@ breaks the proof rather than merely widening it.
 zero bound today. A free-form interior extreme is an irrational root evaluation,
 so **a free-form prism's `Box` is `Approximate`** with the bracket's bound. State
 it; never paper over it.
+
+### 6.3 The speed floor, and when a direction cone is a cone
+
+**A hodograph control hull that CONTAINS the origin encloses every direction, so
+it proves nothing.** The cone is what supplies a free-form face's proven normal
+interval, and verification §6 decides undercut membership from that interval
+pointwise. A whole-plane interval straddles at every point, so no point provenly
+opposes and none provenly clears. Read carelessly that face is simply not listed
+and its body passes — the silent pass §8.1 forbids. Read honestly it is
+undecided, which is `Suspect`. Two mechanisms put the origin inside the hull:
+
+- **zero speed.** `C′(t) = 0` at some `t` puts the origin ON the hodograph, so
+  every hull covering that `t` contains it and no subdivision escapes. A recorded
+  net can do exactly this: the 4-control `SplineSeg` `(−1/8, 1/4)`,
+  `(1/8, −1/12)`, `(−1/8, −1/12)`, `(1/8, 1/4)` — clamped, so §5.1's conversion
+  gives the one Bézier span over that same net — has `C′(1/2) = (0, 0)` exactly,
+  with `C″(1/2) ≠ 0`: an ordinary cusp, where the tangent reverses and the curve
+  has no direction at all. `record.go` admits it, and rightly so — the `SplineSeg`
+  arm checks control count, point finiteness and parameter range, and a speed test
+  is not a recording question.
+- **a wide turn.** A tangent turning through half a revolution across one span
+  sweeps the hull across the origin even where the speed never vanishes.
+
+Both are decided EXACTLY, never at a tolerance — the control points are floats
+taken exactly as rationals (§5.1):
+
+- **the speed floor.** `S(t) = u′² + v′²` is a polynomial with exact rational
+  coefficients. Count its real roots on the closed span with `ratPoly`'s Sturm
+  chain (§6.2): zero roots proves `S > 0` there, and bracketing `S`'s minimum over
+  its own isolated stationary points and the span endpoints gives the positive
+  floor `s_min` that the Lipschitz and curvature brackets need. A rational span
+  clears the positive `W²` first and tests the numerator hodograph.
+- **origin exclusion.** Whether the origin lies in the convex hull of the
+  hodograph's control points is an exact rational sign test — no root-find. Where
+  a hull fails it, subdivide the hodograph and retest the children: under a proven
+  `s_min > 0` the child hulls shrink toward a curve that stays `s_min` away from
+  the origin, so the subdivision terminates.
+
+What each failure costs, per R9 — a `Verify` question the evaluator cannot answer
+is accepted and reads `Suspect`:
+
+| Certificate | Fails when | Cost |
+|---|---|---|
+| speed floor `s_min > 0` | `S` has a root on the span | `Undercuts` AND `MinRadius` read `Suspect` for that body |
+| origin exclusion on every subdivided hull | the turn is too wide to separate within the subdivision budget | `Undercuts` reads `Suspect` |
+
+**Neither failure refuses a BUILD.** Chording, volume, area, export and the
+boolean path read no direction cone, so a cusped section still extrudes and still
+takes part in an interference proof — the readings that need a direction are the
+only ones that go undecided. A build refusal would also refuse an ordinary spline
+whose first two control points coincide: that is zero speed at a span END, which
+costs the same two readings and nothing else.
+
+### 6.4 A build-time comparison a bracket cannot decide
+
+`Suspect` is a `Verify` answer. A BUILD has no such fallback — it produces a body
+or refuses, exactly as the modify audit's undecidable nesting does (modify §5
+S9). So a gate that compares a free-form bracket against a threshold at build
+time refuses as R11 when the bracket straddles it. Two gates do:
+
+- **a through-all stop's in-path test.** `stops.go` decides EXACTLY, on each
+  body's closed-form `extentAlong`, whether the sweep meets that body. A
+  free-form body's extent is a bracket (§6.2), so a stop whose bracket straddles
+  the sketch plane in the travel sense is R11 — never a guessed dependency.
+- **the §4.1 analytic-corner slice's audit.** The modify §5 crossing and
+  boundary-contact audit must run over the section's free-form walks. A crossing
+  is a root problem for §6.2's engine, exactly; the contact floor `δ = ε·D` needs
+  a certified minimum-distance bracket between two spans — a control-hull
+  branch-and-bound, structurally §8.1's. A contact that bracket cannot decide is
+  R11.
+
+R11 is not permanent: refining the bracket decides every case but an exact
+tangency, and a tangency is a contact the §5 audit refuses anyway.
 
 ## 7. `NURBSSurface` and `NURBSCurve`
 
@@ -378,16 +504,16 @@ build and is unaffected.
 | Capability | Free-form reach | Construction |
 |---|---|---|
 | `ProfileRecord.Area`/`Centroid`/`SecondMoments` | Tier A exactly rational, rounded once; B/C proven interval | §5 |
-| `Extrude` | Tier A section; `Volume` from the Tier A rational, `Area`/`Box` bounded | §6, §7 |
+| `Extrude` | Tier A section; `Volume` from the Tier A rational, `Area`/`Box` bounded | §6.1 length, §6.2 extremes, §7 surfaces; a through-all stop reading the bracket is §6.4 |
 | `Tessellate`, `STL`, `OBJ` | every section `Extrude` builds | §6.2 sagitta; rides the existing prism path, NOT tessellation T5 |
 | `Union`/`Cut`/`Intersect` | every body `Extrude` builds, `Faceted` output as always | free once chording lands — the mesh boolean reads triangles, not kinds |
 | interference proof | every body `Extrude` builds | free once chording lands — read-only mesh intersection already serves faceted pairs |
-| `Undercuts` | proven | §6.2 normal cones; reject-only use makes an enclosure sufficient |
-| `MinRadius` | proven interval | §6.2 curvature extremes; a measurement, never a verdict |
+| `Undercuts` | proven where §6.3's certificates close, else `Suspect` | §6.2 normal cones; an enclosure decides a face only while it is a proper cone (§6.3) |
+| `MinRadius` | proven interval under §6.3's speed floor, else `Suspect` | §6.2 curvature extremes; a measurement, never a verdict |
 | `MinWallThickness` | proven interval, else `Suspect` | §8.1 |
 | `Clearance` rows | `Suspect` until a free-form cell lands | box-disjoint pairs still read `Sound` |
-| `Revolve` | Tier A section; surfaces of revolution per §7 | Pappus over §6.1 brackets; meshing waits on tessellation T2–T5 |
-| `Fillet`/`Chamfer`/`Shell` | refused per R3–R5, except the §4.1 analytic-corner slice | §4.1 |
+| `Revolve` | Tier A section; surfaces of revolution per §7 | lateral `Area` by Pappus over §6.1.1's radial first moment, `Volume` and cap areas from §5's exact rational; meshing waits on tessellation T2–T5 |
+| `Fillet`/`Chamfer`/`Shell` | refused per R3–R5, except the §4.1 analytic-corner slice | §4.1, with the free-form audit and its R11 refusal in §6.4 |
 
 The sequencing that falls out: **chording an extruded free-form section rides the
 existing prism tessellation path.** Only the boundary chording is per-segment.
@@ -450,13 +576,13 @@ half-silent. These stages do not consume a global evaluator increment number.
 | **P1** | this document + the core/evaluator table updates it resolves | none |
 | **P2** | Bézier conversion, exact Tier A moments, the §5.2 budget | `ProfileRecord.Area`/`Centroid`/`SecondMoments` answer for Tier A, bounded by one rounding. No new types |
 | **P3** | walk-kind discriminant across every `segmentWalk` consumer | none — behaviour preserved |
-| **P4** | `NURBSSurface`/`NURBSCurve`, free-form extrude side faces, §6.1 length brackets, §6.2 extremes, `NormalAt` refusal | Tier A free-form prisms build; `Volume` from the Tier A rational, `Area`/`Box` bounded. A Tier B or C section is R10 |
+| **P4** | `NURBSSurface`/`NURBSCurve`, free-form extrude side faces, §6.1 length brackets, §6.2 extremes, `NormalAt` refusal, §6.4's stop gate | Tier A free-form prisms build; `Volume` from the Tier A rational, `Area`/`Box` bounded. A Tier B or C section is R10; an undecidable through-all stop is R11 |
 | **P5** | free-form chording with proven sagitta + area slack | `Tessellate`/`STL`/`OBJ`, booleans, interference proof. Wall reading explicitly `Suspect` |
-| **P6** | hodograph normal cones, bracketed curvature extremes | `Undercuts` proven, `MinRadius` bounded |
+| **P6** | §6.3's speed floor and origin-exclusion certificates, hodograph normal cones, bracketed curvature extremes | `Undercuts` and `MinRadius` answer where those certificates close, `Suspect` where they do not |
 | **P7** | certified branch-and-bound inscribed-disk interval | `MinWallThickness` answered, with its own convergence evidence |
-| **P8** | free-form surfaces of revolution | `Revolve` builds for a Tier A section |
+| **P8** | free-form surfaces of revolution, §6.1.1's radial first-moment bracket | `Revolve` builds for a Tier A section |
 | **P9** | Tier B formulas; Tier C certified quadrature | Tier B/C moment readings answer, and the builds Table C stages on them follow — R10 retires |
-| **P10** | the §4.1 analytic-corner modify slice | fillet/chamfer on analytic corners of a mixed section |
+| **P10** | the §4.1 analytic-corner modify slice over §6.4's free-form crossing and contact tests | fillet/chamfer on analytic corners of a mixed section |
 
 ## 11. Test obligations
 
@@ -491,6 +617,26 @@ rules).
 - Assert `MinRadius` on a span carrying an INFLECTION: the reported interval
   encloses the tightest radius, which is attained where `K ≠ 0`, so a candidate
   set built from `K`'s roots alone fails the test (§6.2).
+- Assert the §6.1.1 radial bracket on the reading a length bracket cannot make:
+  two meridian walks of EQUAL length at different radii, whose §6.1 brackets
+  coincide, must produce different `∫ r ds` enclosures, and each enclosure must
+  contain a dense-sample reference. Then assert the P8 revolve's lateral `Area`
+  falls inside `θ ·` that enclosure, and that a walk revolved twice at different
+  radii reports areas in the ratio of those radii — a length-only construction
+  reports them equal and fails.
+- Assert both §6.3 certificates by the readings they gate. On the cusp net
+  `(−1/8, 1/4)`, `(1/8, −1/12)`, `(−1/8, −1/12)`, `(1/8, 1/4)`: the hodograph
+  hull contains the origin, subdivision never separates it, `Undercuts` and
+  `MinRadius` read `Suspect`, and the same body still reports its `Volume` and
+  tessellates — a survey that instead returns an empty `Undercuts` list on that
+  body is the silent pass §8.1 forbids, and must fail the test. On a cusp-free
+  span whose FIRST hodograph hull still contains the origin (a wide turn),
+  subdivision must reach origin exclusion and report a proper cone. On a span
+  with a coincident first control pair — zero speed at the span END — the same
+  two readings are `Suspect` while the build succeeds.
+- Assert `Undercuts` on a free-form face whose certified cone is proper: a face
+  whose cone puts every point provenly opposing the pull is listed, and a face
+  whose cone clears at every point is not.
 - Assert directed-edge closure, positive triangle area, outward winding, and
   `len(SourceFaces) == len(Triangles)` on a free-form prism mesh.
 - Assert byte-identical repeated STL/OBJ output.
@@ -501,8 +647,9 @@ rules).
   derivation.
 - Assert every Table R row by behaviour, each with its own sentinel: a crossed
   spline, a `FitSplineSeg`, an `EllipticalArcSeg`, a free-form `Shell`, a
-  free-form fillet carrier, a free-form chamfer carrier, and — while R10 stands —
-  an `Extrude` of a section carrying a Tier B or Tier C walk, whose Tier A
-  counterpart builds in the same test.
+  free-form fillet carrier, a free-form chamfer carrier, an `Extrude` whose
+  through-all stop reads a free-form extent bracket straddling the sketch plane
+  (R11), and — while R10 stands — an `Extrude` of a section carrying a Tier B or
+  Tier C walk, whose Tier A counterpart builds in the same test.
 - Assert recipe replay of every free-form step reproduces body order, provenance
   roles, and measurements within the evaluator's own exactness.

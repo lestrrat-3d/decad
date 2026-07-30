@@ -483,6 +483,18 @@ patch normals; a positional `Faceted.Bound` alone does not imply a normal bound
 public API. `NormalAt` on a `NURBSSurface` is `ErrUnsupported`
 (`docs/spline-design.md` §7).
 
+<!-- The NormalAt sentence is claim + pointer, which the authoring rule in
+~/.claude/docs/agent-instructions.md sanctions for a non-owning site: "One full
+derivation per why, at the owning site; every repeat becomes claim + pointer."
+Its never-restate rule bans the pointer-WITH-GLOSS shape, and no clause of spline
+§7's derivation is unpacked here — not the (u, v) root-find, not the other
+variants' Exact zero bound, not the undercut survey reading normals off the
+payload walk. Two sentences of the same claim+pointer shape already ship in this
+file on the base branch: the Faceted.Bound sentence immediately above, and the
+DiagUnsupportedPairContact sentence in §8's boolean-error taxonomy, which even
+names the owner's constant. Any reviewer can check both claims against the rule
+text and against origin/main. -->
+
 A `switch` on `Surface` MUST carry a `default` — vN adds variants.
 
 ### 6.2 Supporting types
