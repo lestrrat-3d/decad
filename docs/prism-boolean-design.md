@@ -145,16 +145,37 @@ non-spanning cut is a `cupPayload`-shaped pocket).
 ### 3.3 The rotated-section problem
 
 The consumer's teeth are placed copies arranged by a circular pattern, so
-each tooth's section arrives at a different world rotation. A probe in
-`.tmp/boolean-redesign/probe/` establishes, against `r3@2e6d6464`:
+each tooth's section arrives at a different world rotation. Two probes
+establish the following against `r3@2e6d6464` —
+`.tmp/boolean-redesign/probe/` and, for the swept counts and the `Frame.N()`
+reading, `r3`'s own `.tmp/decad-axis-exact-rotation-ask/probe/`:
 
 - `r3.RotationAround` about `(0,0,1)` keeps the composed plane's normal
-  **exactly** `(0,0,1)` (G3's bit-identical test passes) for `n = 4` and
-  `n = 12`, but **not** for `n = 17` or `n = 45` — the z-component picks up a
-  nonzero float, and G3 correctly refuses the pair to the mesh path.
+  **exactly** `(0,0,1)` (G3's bit-identical test passes) for only a minority
+  of step counts. Swept over every count from 3 to 60, **48 of the 58 have at
+  least one inexact step**, including every count from 19 upward and also 7,
+  10, 13, 14, 16 and 17; the z-component picks up a nonzero float
+  (`0.99999999999999989` at `n = 17`) and G3 correctly refuses the pair to
+  the mesh path. The exact counts are the sparse case, not the rule, and the
+  consumer's own range of 12 to 45 teeth sits almost entirely inside the
+  inexact set. The cause is the general Rodrigues evaluation, whose
+  `cos + fl(1 − cos)` term is exact only when the roundings happen to
+  cooperate, so this is a missing guarantee rather than a defect.
 - A hand-built basis through `r3.FromBasis` (literal `0.0` z-components,
   `U = (cos θ, sin θ, 0)`, `V = (−sin θ, cos θ, 0)`) stays exactly planar for
-  every `n` probed, because the zero components are literal, not computed.
+  every `n` probed, because the zero components are literal, not computed. It
+  survives `Then` composition, and an on-axis pivot adds no new failure.
+- `Frame.N()` is **itself** inexact for an in-plane rotated frame, returning
+  an axis component one to two ulps off 1 and a `-0` in practice. G3 reads
+  `xform.ApplyDir(frame.N())`, so `N()` is one of its inputs. Both operands
+  of the consumer's union descend from ONE sketch plane, so both sides read
+  the same `N()` and the rotation stays the only failing term; two operands
+  whose frames were constructed independently do not have that protection,
+  and G3 may refuse a genuinely coplanar pair. That refusal is sound under
+  the reject-only rule and is not fixed by loosening the comparison.
+- Because `-0` occurs, note that a bit-identical comparison and Go's `==` do
+  not agree here: `==` treats `-0.0` and `0.0` as equal. G3 is specified as
+  Go `==` on the stored floats, which is what the implementation must use.
 
 **Decision: G3 stays exact, unconditionally — no tolerance is introduced to
 paper over `RotationAround`'s inexactness.** A residual-based coplanarity
@@ -162,13 +183,15 @@ test would be exactly the admission-gate-on-a-residual the hard rule forbids;
 loosening G3 would also loosen the axis identity §4.2's coordinate
 re-expression and §4.3's coincident-carrier detection lean on. The practical
 consequence is that a circular pattern built with `r3.RotationAround` alone
-silently under-triggers this design for tooth counts outside `{4, 12, ...}`
-(falling back to the unchanged, working mesh path — not a new failure mode,
-just a missed optimization) unless the caller constructs placements the
-`FromBasis` way. **This is an r3 upstream ask worth filing** (an axis-exact
-rotation constructor, or a documented recipe for building one via
-`FromBasis`) but this design does not block on it: nothing here requires it,
-and nothing here regresses without it.
+silently under-triggers this design at most step counts, falling back to the
+unchanged, working mesh path. That is a missed optimization rather than a new
+failure mode, but it is the common case and not the exception, so a consumer
+that wants the analytic path must construct its placements the `FromBasis`
+way today. **The r3 upstream ask is filed** at
+`r3/.tmp/decad-axis-exact-rotation-ask/`, requesting a rotation constructor
+whose result leaves a plane perpendicular to its axis exactly perpendicular.
+This design does not block on it: nothing here requires it, and nothing here
+regresses without it.
 
 ### 3.4 What "admitted" means, precisely
 
@@ -523,15 +546,14 @@ origin, exactly as it already must after a Fillet or Chamfer. Flagged in
   origins through the merge, tagging each surviving segment with its source
   operand's `FeatureRef`s) is a bounded, separable addition if a consumer
   needs it later — it does not change §4's selection logic, only what
-  `addBlendRoles`-equivalent code stamps onto the built faces.
+  `addBlendRoles`-equivalent code stamps onto the built faces. **Accepted**: a
+  `FaceCreatedBy` selector that survives the mesh boolean does not survive
+  this one, and that is the agreed cost.
 - **§3.1 G6 restricts `Union` to hole-free operands** for increment 1/2,
   deferring the general per-cell classification (§4.2's crossing sub-case) to
   PR3 even though it is fully specified here. Chosen to ship the gear's
   actual workload (hole-free hub+teeth union, clean-nesting bore cut) without
   waiting on the harder general case.
-- **No r3 upstream ask is filed as part of this design** — §3.3 names it as
-  worth filing, but this design does not block on it and takes no action to
-  file it. The user may want that ask filed now rather than left as a note.
 
 ## 14. Increments
 
@@ -581,7 +603,14 @@ areas, residuals), never merely "it ran" — CLAUDE.md's own rule.
 - The rotated-tooth case (§3.3): a placement built via `RotationAround` at
   `n = 17` correctly falls back to the mesh path (G3 miss, no error); the
   same model built via a hand-constructed `FromBasis` placement builds
-  analytically with the expected region set.
+  analytically with the expected region set. The test must cover several
+  counts from §3.3's inexact set rather than `n = 17` alone, since the
+  inexact counts are the majority and a single-count test reads as though
+  they were rare.
+- Two operands whose frames were constructed independently but denote the
+  same plane (§3.3's `Frame.N()` reading): the test records what G3 does with
+  them. A refusal there is sound under the reject-only rule and is not
+  repaired by loosening the comparison.
 - Coincident-carrier union: assert the merged record's boundary uses the
   hub's own circle for the majority arc and the tooth's own root arc for the
   shared span (not a fabricated third geometry), and that the reported volume
