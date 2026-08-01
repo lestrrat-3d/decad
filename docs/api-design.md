@@ -928,8 +928,9 @@ before extruding. decad never re-derives it.
 ## 8. Features
 
 v1 vocabulary, deliberately small: **Extrude, Revolve, Union/Cut/Intersect,
-Fillet, Chamfer, Shell, Placed, Duplicate, PlacedCopy**. Sweep and Loft are
-deferred.
+Fillet, Chamfer, Shell, Placed, Duplicate, PlacedCopy, Loft**. Sweep is
+deferred. `docs/loft-design.md` owns `Loft`'s signature, its two-profile
+correspondence rule, and its increment-1 scope.
 
 ```go
 func (d *Document) Extrude(s *sketch.Sketch, p *sketch.Profile, e Extent, opts ...ExtrudeOption) (*Body, error)
@@ -1792,7 +1793,7 @@ to make that mechanical.
 ## 13. Non-goals for v1
 
 Assemblies (`Component`/`Occurrence` instancing and the DAG that comes with it), a
-feature tree / timeline / rollback, sweep and loft, STEP, sheet metal, mesh import,
+feature tree / timeline / rollback, sweep, STEP, sheet metal, mesh import,
 GUI or view state of any kind, and Fusion code generation.
 
 The assemblies non-goal rests on a capability in hand, not on an instancing
