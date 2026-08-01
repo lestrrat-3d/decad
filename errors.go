@@ -166,6 +166,18 @@ const (
 	// the evaluator's reach, so the [BooleanError] wraps [ErrUnsupported], never
 	// [ErrDegenerate]. Choose a construction that does not lean on a tangent
 	// contact, or wait for a later evaluator.
+	//
+	// The construction this most often costs is two bodies extruded from ONE
+	// sketch plane to one end plane: their caps are coplanar by construction, so
+	// every boolean over the pair refuses. What replaces the tangent contact is an
+	// INTERIOR overlap — displace one operand so no face pair is coplanar and let
+	// the displaced body reach into the other's interior, which makes every
+	// contact a transversal crossing this evaluator does classify. The two
+	// directions are not equally free, and the caller owns the difference:
+	// material pushed sideways into the other body's interior leaves the union's
+	// enclosed solid unchanged, while a displacement ALONG the sweep changes it —
+	// the operand no longer spans cap to cap, and the result is short by the
+	// displacement at that end.
 	BooleanUnsupportedContact
 	// BooleanEvaluatorFailure is an internal invariant break: the stitched
 	// boundary did not close, a split line was not found, a chain dangled. It is a

@@ -1048,6 +1048,40 @@ outcome: the coplanar `Plane`×`Plane` contact certificate
 coplanar touch reads as a touching/clearance result — an `Exact`-zero gap, no
 interference — and emits no `DiagUnsupportedPairContact`.
 
+**What each boolean refusal leaves the caller.**
+"Choose a construction that does not lean on a tangent contact" names a move
+without naming the move, so the two refusals a modelling caller actually meets
+are stated here concretely.
+
+**The coplanar contact.** Two bodies extruded from ONE sketch plane to one end
+plane have coplanar caps by construction, so every boolean over the pair is
+`BooleanUnsupportedContact`. What replaces the tangent contact is an INTERIOR
+overlap: displace one operand so no face pair is coplanar and let the displaced
+body reach into the other's interior, which makes every contact a transversal
+crossing the evaluator does classify. The two displacement directions cost
+differently, and the caller owns the difference — material pushed sideways into
+the other body's interior leaves the union's enclosed solid unchanged, while a
+displacement ALONG the sweep changes it, since the operand no longer spans cap to
+cap and the result is short by the displacement at that end. A caller proving a
+part against a model built elsewhere has to state that second deviation; it is
+not free.
+
+**The chain depth.** A boolean's result is a `Faceted` body whose held `Bound`
+composes from the operation that made it, while §9's chord tolerance for the next
+pair is a fixed fraction of that pair's diameter. Where the composed bound is the
+coarser of the two, feeding the result back in as an operand is refused before
+any contact is examined — a plain `ErrUnsupported`, not a `BooleanError`, since
+the operand cannot be re-tessellated finer than the boundary it holds. Successive
+booleans over one part stay at one diameter, so the tolerance they ask for stays
+put while the held bound only grows: that is what limits how far booleans chain,
+and it is geometry rather than an argument the caller got wrong. The booleans
+take no tolerance parameter (§9), by the same decision that puts the tolerance's
+whole effect on the result's proven `Bound`. The bound is readable rather than
+merely printed in the refusal — `Body.Tessellate` at any tolerance the faceted
+body already meets returns a `Mesh` whose `Bound` is that held bound — so a
+caller can size the limit before planning a chain. A construction needing many
+booleans over one part has to be reshaped, not retried.
+
 Modify operations return a new body, retiring the receiver, on the same terms:
 
 ```go
