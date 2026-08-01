@@ -94,8 +94,8 @@ func (b *Body) ChamferContext(ctx context.Context, sel EdgeSelector, d units.Val
 	// edge is a lateral edge mapped to a section corner (S1).
 	pp, ok := b.payload.(prismPayload)
 	if !ok {
-		return nil, fmt.Errorf(`selector %s matched [%s]: %w: this evaluator chamfers a straight prism only`,
-			sel, selectedEdgesContext(edges), ErrUnsupported)
+		return nil, fmt.Errorf(`%w: this evaluator chamfers a straight prism only; selector %s matched [%s]`,
+			ErrUnsupported, sel, selectedEdgesContext(edges))
 	}
 
 	budget := newWorkBudget(ctx)
@@ -114,8 +114,8 @@ func (b *Body) ChamferContext(ctx context.Context, sel EdgeSelector, d units.Val
 			return nil, err
 		}
 		if !found {
-			return nil, fmt.Errorf(`selector %s, %s: %w: a chamfer of a cap edge is the vertex-blend problem, not yet supported`,
-				sel, selectedEdgeContext(ei, e), ErrUnsupported)
+			return nil, fmt.Errorf(`%w: a chamfer of a cap edge is the vertex-blend problem, not yet supported; selector %s, %s`,
+				ErrUnsupported, sel, selectedEdgeContext(ei, e))
 		}
 		matched = append(matched, newMatchedCorner(ei, e, li, ci, loops[li]))
 		blendAt[li][ci] = nil // marked; the bevel is computed in stage 3
@@ -129,7 +129,7 @@ func (b *Body) ChamferContext(ctx context.Context, sel EdgeSelector, d units.Val
 		}
 		cb, err := computeChamfer(loops[corner.loop], corner.corner, dmm)
 		if err != nil {
-			return nil, fmt.Errorf(`selector %s, %s: %w`, sel, corner, err)
+			return nil, fmt.Errorf(`%w; selector %s, %s`, err, sel, corner)
 		}
 		blendAt[corner.loop][corner.corner] = cb
 	}

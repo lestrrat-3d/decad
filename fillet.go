@@ -101,8 +101,8 @@ func (b *Body) FilletContext(ctx context.Context, sel EdgeSelector, r units.Valu
 	// edge is a lateral edge mapped to a section corner (S1).
 	pp, ok := b.payload.(prismPayload)
 	if !ok {
-		return nil, fmt.Errorf(`selector %s matched [%s]: %w: this evaluator fillets a straight prism only`,
-			sel, selectedEdgesContext(edges), ErrUnsupported)
+		return nil, fmt.Errorf(`%w: this evaluator fillets a straight prism only; selector %s matched [%s]`,
+			ErrUnsupported, sel, selectedEdgesContext(edges))
 	}
 
 	budget := newWorkBudget(ctx)
@@ -122,8 +122,8 @@ func (b *Body) FilletContext(ctx context.Context, sel EdgeSelector, r units.Valu
 			return nil, err
 		}
 		if !found {
-			return nil, fmt.Errorf(`selector %s, %s: %w: a fillet of a cap edge is the vertex-blend problem, not yet supported`,
-				sel, selectedEdgeContext(ei, e), ErrUnsupported)
+			return nil, fmt.Errorf(`%w: a fillet of a cap edge is the vertex-blend problem, not yet supported; selector %s, %s`,
+				ErrUnsupported, sel, selectedEdgeContext(ei, e))
 		}
 		matched = append(matched, newMatchedCorner(ei, e, li, ci, loops[li]))
 		blendAt[li][ci] = nil // marked; the blend is computed in stage 3
@@ -137,7 +137,7 @@ func (b *Body) FilletContext(ctx context.Context, sel EdgeSelector, r units.Valu
 		}
 		cb, err := computeFillet(loops[corner.loop], corner.corner, rmm)
 		if err != nil {
-			return nil, fmt.Errorf(`selector %s, %s: %w`, sel, corner, err)
+			return nil, fmt.Errorf(`%w; selector %s, %s`, err, sel, corner)
 		}
 		blendAt[corner.loop][corner.corner] = cb
 	}
@@ -231,9 +231,23 @@ func (m matchedCorner) String() string {
 		renderCoord(m.point.U), renderCoord(m.point.V))
 }
 
+// selectedEdgeContext renders one selected edge as its result ordinal plus the
+// geometry that identifies it.
+//
+// A full circle's edge has its start and end vertex coincide (topology.go), so
+// the from/to form renders it "from (p) to (p)" — correct, but indistinguishable
+// from a genuinely collapsed edge. A Circle3 therefore names itself a closed
+// circle and reports the centre and radius no endpoint pair can carry; every
+// other curve keeps the from/to form, so coincident endpoints there still read
+// as the zero-length edge they are. Coordinates go through renderVec, so
+// value-equal geometry renders identically.
 func selectedEdgeContext(ordinal int, edge *Edge) string {
 	if edge == nil || edge.start == nil || edge.end == nil {
 		return fmt.Sprintf(`selected edge[%d]`, ordinal)
+	}
+	if c, ok := edge.curve.(Circle3); ok {
+		return fmt.Sprintf(`selected edge[%d] closed circle through (%s), centre (%s), radius %s`,
+			ordinal, renderVec(edge.start.position), renderVec(c.Center), c.Radius)
 	}
 	return fmt.Sprintf(`selected edge[%d] from (%s) to (%s)`, ordinal,
 		renderVec(edge.start.position), renderVec(edge.end.position))
@@ -247,13 +261,18 @@ func selectedEdgesContext(edges []*Edge) string {
 	return strings.Join(contexts, `; `)
 }
 
+// wrapModifyAuditError attaches the matched-entity context to an audit failure.
+// The audit's own error — sentinel and reason — leads, and the selector plus the
+// per-corner mappings follow it, so a refusal over many selected edges still
+// reads its cause first. The wrapped sentinel is unchanged, so errors.Is keeps
+// branching on it.
 func wrapModifyAuditError(sel EdgeSelector, matched []matchedCorner, err error) error {
 	coordinates := make([]string, len(matched))
 	for i, corner := range matched {
 		coordinates[i] = corner.String()
 	}
 	err = renderAuditCoordinates(err)
-	return fmt.Errorf(`selector %s matched [%s]: %w`, sel, strings.Join(coordinates, `; `), err)
+	return fmt.Errorf(`%w; selector %s matched [%s]`, err, sel, strings.Join(coordinates, `; `))
 }
 
 func prismCornerLoopsBudget(budget *workBudget, pp prismPayload) ([]cornerLoop, error) {
