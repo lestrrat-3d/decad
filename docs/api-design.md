@@ -903,10 +903,11 @@ region-validity answer, not one decad recomputes. Snapshot authentication is a
 separate integrity gate, also reported as `ErrInvalidProfile`. The one further
 rejection is not a validity judgement at all: a valid profile whose boundary
 decad cannot record exactly — a profile containing a
-`Partial` fragment whose cut `sketch` reports sampled, `TExact == false`, or one
-whose certified range the seam's falsifier disproves —
+`Partial` fragment `sketch` could not certify, `TExact == false` — whether the
+arrangement sampled its cut or the whole-sketch gate withheld certification —
+or one whose certified range the seam's falsifier disproves —
 is `ErrUnrecordableProfile` (§12), because a `Step` that recorded the whole curve
-where the caller drew a piece of it, or an approximate range as an exact trim,
+where the caller drew a piece of it, or an uncertified range as an exact trim,
 would be the lossy record the completeness rule (§6.2) forbids.
 
 **The seam's read-outs are `sketch`'s answers, and its one check can only
@@ -1679,7 +1680,8 @@ to make that mechanical.
   given as a negative value; magnitudes are non-negative and sense is enumerated,
   §8.1), `ErrUnrecordableProfile` (a feature was handed a profile whose boundary
   contains a `Partial` fragment `sketch` could not certify — `TExact == false`,
-  its cut sampled — or one whose certified range the seam's falsifier disproves.
+  from a sampled arrangement cut or whole-sketch withholding — or one whose
+  certified range the seam's falsifier disproves.
   A `Partial` fragment `sketch` certifies exact records as its entity's own
   variant with the certified range, and a whole edge of every kind records;
   full semantics in `docs/sketch-seam-design.md`),

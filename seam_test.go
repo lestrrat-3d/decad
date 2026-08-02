@@ -183,6 +183,48 @@ func TestRecordProfileRejectsSampledCuts(t *testing.T) {
 	require.NotZero(t, rejected, `regions bounded by sampled spline cuts should be rejected`)
 }
 
+func TestRecordProfileRejectsWholeSketchTExactWithholding(t *testing.T) {
+	// A distant spline withholds certification but leaves the analytic
+	// circle/circle fragments and their ranges unchanged.
+	newProfiles := func(withSpline bool) (*sketch.Sketch, []*sketch.Profile) {
+		w := sketch.NewWorld()
+		s, err := w.CreateSketch(w.XY())
+		require.NoError(t, err)
+		s.CreateCircle(s.CreatePoint(0, 0), 5)
+		s.CreateCircle(s.CreatePoint(6, 0), 5)
+		if withSpline {
+			_, err = s.CreateSpline(
+				s.CreatePoint(40, 0), s.CreatePoint(42, 4),
+				s.CreatePoint(46, 4), s.CreatePoint(48, 0),
+			)
+			require.NoError(t, err)
+		}
+		return s, s.Profiles()
+	}
+
+	certifiedSketch, certified := newProfiles(false)
+	withheldSketch, withheld := newProfiles(true)
+	require.Len(t, certified, 3, `the circles should form two caps and one lens`)
+	require.Len(t, withheld, len(certified), `the distant spline should not change the profile set`)
+	for i, certifiedProfile := range certified {
+		withheldProfile := withheld[i]
+		require.Len(t, withheldProfile.Outer, len(certifiedProfile.Outer))
+		for j, certifiedEdge := range certifiedProfile.Outer {
+			withheldEdge := withheldProfile.Outer[j]
+			require.True(t, certifiedEdge.Partial)
+			require.True(t, certifiedEdge.TExact, `the circle/circle bound should be certified without the spline`)
+			require.True(t, withheldEdge.Partial)
+			require.False(t, withheldEdge.TExact, `the whole-sketch gate should withhold certification`)
+			require.Equal(t, certifiedEdge.TStart, withheldEdge.TStart, `the gate must not change the start parameter`)
+			require.Equal(t, certifiedEdge.TEnd, withheldEdge.TEnd, `the gate must not change the end parameter`)
+		}
+		_, _, err := decad.RecordProfile(certifiedSketch, certifiedProfile)
+		require.NoError(t, err, `the certified circle profile should record`)
+		_, _, err = decad.RecordProfile(withheldSketch, withheldProfile)
+		require.ErrorIs(t, err, decad.ErrUnrecordableProfile)
+	}
+}
+
 func TestRecordProfileReportsOuterEdgeIndex(t *testing.T) {
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())

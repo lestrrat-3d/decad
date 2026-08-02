@@ -46,8 +46,9 @@ spline design before writing any free-form geometry, `NURBSSurface`/
 - **NEVER re-derive a 2D answer.** Profile closure, DOF, constraint conflicts,
   sketch validity, an intersection, a cut parameter, a projection onto a curve →
   ask `sketch`, consume its answer. Where `sketch` reports its own answer
-  approximate — a `Partial` fragment whose cut is sampled, `BoundaryEdge.TExact`
-  false (`docs/sketch-seam-design.md`) — decad **rejects**. It never repairs,
+  approximate — a `Partial` fragment whose cut is sampled, or an uncertified
+  `Partial` fragment (`BoundaryEdge.TExact` false;
+  `docs/sketch-seam-design.md`) — decad **rejects**. It never repairs,
   projects, fits, or infers the exact answer. A whole (non-`Partial`) edge
   records from the entity's own data and never consults `TExact`.
 - **A decad-side check may only FALSIFY an upstream claim, never bless one.**
