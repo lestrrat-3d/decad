@@ -32,7 +32,7 @@ import (
 // A profile whose Valid is false is also never silently swept
 // ([ErrInvalidProfile]). The one further rejection is not a validity judgement:
 // an authenticated valid profile whose boundary cannot be recorded exactly —
-// a Partial fragment whose cut sketch reports sampled
+// a Partial fragment sketch could not certify
 // (BoundaryEdge.TExact == false), or a certified range the seam's reject-only
 // falsifier disproves — is [ErrUnrecordableProfile]. decad never repairs,
 // projects or fits a point sketch handed over, and it never solves for one.
@@ -221,7 +221,7 @@ func recordLoop(name string, edges []sketch.BoundaryEdge) (LoopRecord, error) {
 func recordEdge(e sketch.BoundaryEdge) (CurveSegment, error) {
 	if e.Partial {
 		if !e.TExact {
-			return nil, fmt.Errorf(`%w: a %T fragment is bounded by a sampled cut (TExact = false); an approximate range is never recorded as an exact trim`, ErrUnrecordableProfile, e.Entity)
+			return nil, fmt.Errorf(`%w: a %T fragment has an uncertified trim (TExact = false); an uncertified range is never recorded as an exact trim`, ErrUnrecordableProfile, e.Entity)
 		}
 		if err := falsifyRange(e); err != nil {
 			return nil, err

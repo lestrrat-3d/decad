@@ -149,17 +149,21 @@ func TestRecordProfileCertifiedFragments(t *testing.T) {
 }
 
 func TestRecordProfileRejectsSampledCuts(t *testing.T) {
-	// Two overlapping circles: a curve/curve crossing has no closed form, so
-	// sketch reports the cut sampled (TExact false) and decad refuses to
-	// record the fragment — never approximately, never as the whole curve.
+	// A spline crossing a circle: free-form intersection has no closed form
+	// upstream (docs/spline-design.md §9 ask 3), so sketch reports the cut
+	// sampled (TExact false) and decad refuses to record the fragment — never
+	// approximately, never as the whole curve.
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	require.NoError(t, err)
-	c1 := s.CreatePoint(0, 0)
-	s.Fix(c1)
-	s.CreateCircle(c1, 20)
-	c2 := s.CreatePoint(25, 0)
-	s.CreateCircle(c2, 20)
+	_, err = s.CreateSpline(
+		s.CreatePoint(-30, -30), s.CreatePoint(-10, 30),
+		s.CreatePoint(10, -30), s.CreatePoint(30, 30),
+	)
+	require.NoError(t, err)
+	c := s.CreatePoint(0, 0)
+	s.Fix(c)
+	s.CreateCircle(c, 20)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 
@@ -176,7 +180,49 @@ func TestRecordProfileRejectsSampledCuts(t *testing.T) {
 			rejected++
 		}
 	}
-	require.NotZero(t, rejected, `regions bounded by sampled circle/circle cuts should be rejected`)
+	require.NotZero(t, rejected, `regions bounded by sampled spline cuts should be rejected`)
+}
+
+func TestRecordProfileRejectsWholeSketchTExactWithholding(t *testing.T) {
+	// A distant spline withholds certification but leaves the analytic
+	// circle/circle fragments and their ranges unchanged.
+	newProfiles := func(withSpline bool) (*sketch.Sketch, []*sketch.Profile) {
+		w := sketch.NewWorld()
+		s, err := w.CreateSketch(w.XY())
+		require.NoError(t, err)
+		s.CreateCircle(s.CreatePoint(0, 0), 5)
+		s.CreateCircle(s.CreatePoint(6, 0), 5)
+		if withSpline {
+			_, err = s.CreateSpline(
+				s.CreatePoint(40, 0), s.CreatePoint(42, 4),
+				s.CreatePoint(46, 4), s.CreatePoint(48, 0),
+			)
+			require.NoError(t, err)
+		}
+		return s, s.Profiles()
+	}
+
+	certifiedSketch, certified := newProfiles(false)
+	withheldSketch, withheld := newProfiles(true)
+	require.Len(t, certified, 3, `the circles should form two caps and one lens`)
+	require.Len(t, withheld, len(certified), `the distant spline should not change the profile set`)
+	for i, certifiedProfile := range certified {
+		withheldProfile := withheld[i]
+		require.Len(t, withheldProfile.Outer, len(certifiedProfile.Outer))
+		for j, certifiedEdge := range certifiedProfile.Outer {
+			withheldEdge := withheldProfile.Outer[j]
+			require.True(t, certifiedEdge.Partial)
+			require.True(t, certifiedEdge.TExact, `the circle/circle bound should be certified without the spline`)
+			require.True(t, withheldEdge.Partial)
+			require.False(t, withheldEdge.TExact, `the whole-sketch gate should withhold certification`)
+			require.Equal(t, certifiedEdge.TStart, withheldEdge.TStart, `the gate must not change the start parameter`)
+			require.Equal(t, certifiedEdge.TEnd, withheldEdge.TEnd, `the gate must not change the end parameter`)
+		}
+		_, _, err := decad.RecordProfile(certifiedSketch, certifiedProfile)
+		require.NoError(t, err, `the certified circle profile should record`)
+		_, _, err = decad.RecordProfile(withheldSketch, withheldProfile)
+		require.ErrorIs(t, err, decad.ErrUnrecordableProfile)
+	}
 }
 
 func TestRecordProfileReportsOuterEdgeIndex(t *testing.T) {
@@ -185,25 +231,33 @@ func TestRecordProfileReportsOuterEdgeIndex(t *testing.T) {
 	require.NoError(t, err)
 	rect := s.CreateRectangle(-20, -20, 20, 20)
 	s.Fix(rect.A)
-	s.CreateCircle(s.CreatePoint(-8, 0), 20)
-	s.CreateCircle(s.CreatePoint(8, 0), 20)
+	_, err = s.CreateSpline(
+		s.CreatePoint(-30, -5), s.CreatePoint(-5, 15),
+		s.CreatePoint(5, -15), s.CreatePoint(30, 5),
+	)
+	require.NoError(t, err)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 
+	// The reported index is the FIRST rejected edge, so a fixture whose whole
+	// edge comes before its sampled one proves the index is walked, not zero.
 	var prof *sketch.Profile
 	for _, candidate := range s.Profiles() {
-		if len(candidate.Outer) == 5 && !candidate.Outer[0].Partial {
+		if !candidate.Valid || len(candidate.Outer) != 4 {
+			continue
+		}
+		if !candidate.Outer[0].Partial && candidate.Outer[1].Partial {
 			prof = candidate
 			break
 		}
 	}
-	require.NotNil(t, prof, `the rectangle-and-overlapping-circles region should exist`)
-	require.True(t, prof.Outer[2].Partial)
-	require.False(t, prof.Outer[2].TExact)
+	require.NotNil(t, prof, `the rectangle-cut-by-a-spline region should exist`)
+	require.True(t, prof.Outer[1].Partial)
+	require.False(t, prof.Outer[1].TExact)
 
 	_, _, err = decad.RecordProfile(s, prof)
 	require.ErrorIs(t, err, decad.ErrUnrecordableProfile)
-	require.ErrorContains(t, err, `outer edge 2`)
+	require.ErrorContains(t, err, `outer edge 1`)
 }
 
 func TestRecordProfileReportsHoleAndEdgeIndices(t *testing.T) {
@@ -213,21 +267,26 @@ func TestRecordProfileReportsHoleAndEdgeIndices(t *testing.T) {
 	rect := s.CreateRectangle(-80, -50, 80, 50)
 	s.Fix(rect.A)
 	s.CreateCircle(s.CreatePoint(-50, 0), 8)
-	s.CreateCircle(s.CreatePoint(10, 0), 20)
-	s.CreateCircle(s.CreatePoint(26, 0), 20)
+	s.CreateCircle(s.CreatePoint(20, 0), 20)
+	_, err = s.CreateClosedSpline(
+		s.CreatePoint(45, -18), s.CreatePoint(60, 0),
+		s.CreatePoint(45, 18), s.CreatePoint(30, 0),
+	)
+	require.NoError(t, err)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 
 	var prof *sketch.Profile
 	for _, candidate := range s.Profiles() {
-		if len(candidate.Outer) == 4 && len(candidate.Holes) == 2 {
+		if candidate.Valid && len(candidate.Outer) == 4 && len(candidate.Holes) == 2 {
 			prof = candidate
 			break
 		}
 	}
 	require.NotNil(t, prof, `the rectangle-with-two-holes region should exist`)
+	// Hole 0 is a whole circle, which records from the entity's own data and
+	// never consults TExact. Hole 1 is cut by a spline, so it is sampled.
 	require.False(t, prof.Holes[0][0].Partial)
-	require.True(t, prof.Holes[0][0].TExact)
 	require.True(t, prof.Holes[1][0].Partial)
 	require.False(t, prof.Holes[1][0].TExact)
 

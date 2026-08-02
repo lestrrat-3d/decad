@@ -27,34 +27,46 @@ a crossing. A `BoundaryEdge` carries `Entity`, `Partial`, `Reversed` and
   natural-direction range: it, and never the order of the pair, says the
   boundary walks the range backwards. A whole edge spans the entity's full
   domain.
-- **`TExact`** reports whether that range is the true parameters on `Entity`
-  rather than a sampling-accurate approximation, and its meaning is precise and
+- **`TExact`** reports whether `sketch` certifies that range as the true
+  parameters on `Entity`. `false` means certification was withheld. On a
+  `Partial` fragment, it is an uncertified trim: the sampled arrangement
+  fallback can produce one, and the whole-sketch gate can withhold
+  certification without changing a range. A `true` flag's claim is precise and
   checkable: evaluating `Entity` at `TStart` / `TEnd` reproduces the fragment's
   `Polyline` endpoints to machine precision, at both bounds.
 
-**Which cuts `sketch` certifies exact is a property of the pair.** A cut bound
-is exact only when `sketch`'s closed-form kernel placed it, and that kernel
-places a cut for exactly one kind of contact: a **crossing** whose source
-curves are **both** a line, a circle or an arc, with a line on at least one
-side. Among line/circle/arc sources a tangency is never a cut: the kernel
+**`sketch` decides exactness in two stages, and the first is whole-sketch.**
+Exact bounds are published only when **every** entity the profile pass sees is
+a `*Line`, `*Circle` or `*Arc`; one `*Ellipse`, `*EllipticalArc`, `*Conic`,
+`*Spline`, `*ClosedSpline`, `*FitSpline` or `*NURBS` anywhere in the sketch
+makes every `BoundaryEdge` of every profile read `false` — whole edges and
+fragments alike, the lines, circles and arcs beside it included, however far
+apart they sit. Inside an all line/circle/arc sketch the second stage is the
+pair: a cut bound is exact where `sketch`'s closed-form kernel placed it, and
+that kernel places a cut for **any** crossing pair among the three. Among
+line/circle/arc sources a tangency is never a cut: the kernel
 classifies it as a **non-splitting** contact — a shared-endpoint tangency is a
 smooth join, an interior touch splits neither curve — so analytically tangent
 entities arrive as whole edges (two externally tangent circles are two whole
 one-edge loops). A grazing contact involving any other curve kind has no such
 rule: it is resolved on the sampled polylines below, which can cut at the
-touch. Every other cut is **sampled**: every
-curve/curve crossing (circle × circle, circle × arc, arc × arc), and every cut
-at a contact involving an ellipse, elliptical arc, conic, spline, closed
-spline, fit spline or NURBS — **including a plain line** against one of those,
-whether it crosses or merely grazes: such pairs are resolved on the sampled
-polylines, and where the sampled arrangement cuts — it can cut at a grazing
-touch — the parameter is sampled. A sampled cut yields `TExact == false` on
-every fragment it bounds.
+touch. A **curve-against-curve** crossing — a circle or an arc against a circle
+or an arc — carries one further condition inside that all line/circle/arc
+sketch: both sides reach the arrangement as chords there, so its cut is exact
+only where the arrangement certifies that placing the exact crossing points
+leaves the sampled topology unchanged, and an uncertified one falls back to the
+sampled path. A sampled arrangement cut yields `TExact == false` on every
+fragment it bounds. The whole-sketch gate separately withholds certification:
+it leaves profiles, areas and ranges unchanged, so it can yield `TExact ==
+false` on an analytic cut whose reported range was never sampled.
 
 **Evaluator consequence, and it is scope rather than a footnote:** no free-form
 fragment is ever recordable, so the evaluator only ever sees a free-form curve
 over its FULL domain. `docs/spline-design.md` §2 owns that scope and what the
-public doc comments must tell a caller whose spline crosses another curve.
+public doc comments must tell a caller whose spline crosses another curve. The
+whole-sketch gate reaches past the free-form curve itself: a sketch holding one
+records no fragment at all, whatever cut it, so two crossing rectangles beside
+an untouched spline record nothing.
 
 **No residual test on a fragment's endpoints could stand in for the flag, at any
 tolerance.** A `Polyline` is a **sample of the curve**: its vertices are
@@ -62,9 +74,11 @@ evaluated from the curve (the one exception is an elliptical arc's two end
 vertices, which are its pinned ends, §2). A sampled cut is the crossing of a
 **chord** between two such vertices, so as the crossing approaches an evaluated
 vertex the cut point approaches the curve, and its residual against the curve
-goes to zero. A sampled
-circle/circle cut has been measured with a normalised radial residual of
-**7.07e-10** — indistinguishable from an exact cut by any threshold. Exactly-cut
+goes to zero. It can reach zero: in a
+rectangle-and-spline arrangement a line fragment reads `TExact == false` while
+evaluating its reported range reproduces its `Polyline` endpoints with a
+residual of exactly **0.0** — a sampled cut sitting precisely where an exact one
+would, which no threshold can separate from an exact cut. Exactly-cut
 endpoints and sampled ones are therefore not separated populations, and an
 endpoint-residual test is **unsound as an admission gate**: it is not a mistuned
 test, it is a quantity that does not answer the question asked of it.
@@ -88,7 +102,7 @@ the flag nor re-derives it — re-deriving a 2D answer is what core §7 forbids.
 - `TExact == true` → the fragment records: the entity's own variant, built
   from the entity's defining data and `TStart` / `TEnd` (the table in §2).
   A circle crossed by a rectangle records.
-- `TExact == false` → `ErrUnrecordableProfile` (§3). An approximate parameter
+- `TExact == false` → `ErrUnrecordableProfile` (§3). An uncertified parameter
   range is never recorded as an exact analytic fragment, never recorded as the
   whole entity — a different region than the caller drew — and never repaired.
 - **A residual check is retained purely as a one-sided falsifier, never as an
@@ -100,48 +114,57 @@ the flag nor re-derives it — re-deriving a 2D answer is what core §7 forbids.
   residual proves nothing — that is the asymmetry above, and re-reading it as an
   accept is the unsound gate it forbids.
 
-**`TExact` is per-fragment, and it is per-fragment because exactness is a property of the
-crossing that produced the fragment — of *both* its source curves — never of the entity
-the fragment lies on.** A circle cut by a rectangle edge is exact: both sources are
-line/circle/arc, and the crossing is line-involved. The *same circle* cut by another
-circle is sampled: both sources are curves. One entity, two fragments, two verdicts — so a
-per-entity flag, or any rule keyed on the entity kind, would be wrong on one of them.
+**`TExact` is exposed per fragment, but a false flag does not identify a
+per-fragment cause.** In an all line/circle/arc sketch, exactness is a property
+of the crossing that produced the fragment — of *both* source curves and the
+arrangement the fragment sits in, never of the entity it lies on. One entity
+can carry both verdicts at once: a circle cut on one side by a rectangle edge
+and on the other by a second circle has its line-involved cut exact by
+placement, while its curve-against-curve cut is exact only where the
+arrangement certifies it and is sampled otherwise. Two fragments of one entity,
+two verdicts — so a per-entity flag, or any rule keyed on entity kind, would be
+wrong on one of them. The whole-sketch gate takes precedence and withholds the
+flag from every edge without changing the underlying range.
 
-**The rule is about the pair, and no shorthand on one source survives it.** "Line-involved"
-is not one either: a line crossing an *ellipse*, a conic, a spline or a NURBS is sampled,
-because the other source is not a line, a circle or an arc. decad reads the flag on the
-fragment it is recording, and derives it from nothing.
+**No shorthand on one source survives that, and the whole-sketch gate answers before any
+pair rule does.** "Line-involved" is not a shorthand for exactness, and neither is "both
+sources are a line, a circle or an arc": in a sketch that also holds an ellipse, a conic, a
+spline or a NURBS every fragment of every profile reads `false`, whatever pair cut it.
+decad reads the flag on the fragment it is recording, and derives it from nothing.
 
 **Whole (non-`Partial`) edges never consult `TExact`.** A whole edge records
 from the entity's own defining data — there is no trim to recover, so the flag
 answers a question decad is not asking. `sketch` decides the flag by
-reproduction — the checkable meaning above — so on a whole edge it turns on how
-the entity's domain ends arise. Every kind but one evaluates them from the
-curve itself, so its whole edge reads `true`. The exception is the whole
-`*EllipticalArc` edge, whose flag is **contingent**: the arc's endpoints are
-pinned to sketch points rather than evaluated from the curve, so the flag reads
-`false` whenever those pinned points miss the parametric ellipse — the typical
-solver outcome, a miss on the order of the solver tolerance — and `true` when
-they happen to land on it. Either reading is a fact about the pinning, **not
-topology distrust**, and neither may affect whole-edge recording: an
-implementer who "helpfully" gates whole edges on `TExact` would make an
-elliptical-arc boundary's recordability turn on how the solver converged —
-nondeterministic on data the entity itself records exactly.
+reproduction when it certifies a `true` result, while the whole-sketch gate can
+withhold certification. A whole edge's ends are its entity's own `t = 0` /
+`t = 1` evaluation, so in an all line/circle/arc sketch it reads `true`; every
+whole edge in a sketch that also holds an ellipse, elliptical arc, conic,
+spline, closed spline, fit spline or NURBS reads `false`, a rectangle's own
+whole edges included. The whole `*EllipticalArc` edge reads `false` from its own
+ends anyway: they are pinned to sketch points rather than evaluated from the
+curve, so they lie on the parametric ellipse only within solver tolerance.
+Neither reading is **topology distrust**, and neither may affect whole-edge
+recording: an implementer who "helpfully" gates whole edges on `TExact` would
+make a rectangle's recordability turn on whether a spline sits elsewhere in the
+sketch, touching it nowhere, and an elliptical-arc boundary's on how the solver
+converged — both nondeterministic on data the entities themselves record
+exactly.
 
 **What records reaches exactly as far as `sketch`'s exact kernel does, and no further.**
-For fragments, that is a line, circle or arc fragment whose bounding cuts were
-placed by the closed-form crossing kernel — each cut a line-involved crossing
-between line/circle/arc sources — plus whole edges of every recordable kind,
+For fragments, that is a line, circle or arc fragment in a sketch holding
+nothing but lines, circles and arcs, each of its bounding cuts placed by the
+closed-form crossing kernel and — where that cut is curve against curve —
+certified by the arrangement, plus whole edges of every recordable kind,
 which record from entity data with no cut to certify. Tangencies add nothing
 to that set: among lines, circles and arcs a tangency splits nothing (above),
 so no fragment is ever bounded at one — a tangent entity arrives whole, or in
-fragments whose every bound is a crossing. A fragment cut by anything else — an
-ellipse, elliptical arc, conic, spline, closed spline, fit spline or NURBS on
-either side of the contact, and every curve/curve crossing — carries
-`TExact == false` and is `ErrUnrecordableProfile`.
-That is not decad declining to record it; it is `sketch` reporting that the parameter is
-sampled, and decad recording no fragment on a range it was told is approximate. Widening
-that set is an upstream question about the arrangement, not an API question here.
+fragments whose every bound is a crossing. Every fragment in a sketch that also
+holds an ellipse, elliptical arc, conic, spline, closed spline, fit spline or
+NURBS carries `TExact == false` and is `ErrUnrecordableProfile`, whatever pair
+cut it; so does a fragment bounded by an uncertified curve-against-curve cut.
+That is not decad declining to record it; `sketch` withheld certification, and
+decad records no fragment on an uncertified range. Widening that set is an
+upstream question about the arrangement, not an API question here.
 
 ## 2. The recording IR
 
@@ -344,8 +367,8 @@ never held — synthesized fields, not verbatim ones. So **every entity `sketch`
 can put on a boundary has a record** — whole, and trimmed: a `Partial`
 fragment records through the same ten variants — its entity's own variant,
 with the certified range — so the vocabulary needs no fragment-specific
-kinds. What has no record is a `Partial` fragment whose cut
-`sketch` samples — `TExact == false` (§1) — and such a profile is rejected
+kinds. What has no record is a `Partial` fragment `sketch` could not certify
+— `TExact == false` (§1) — and such a profile is rejected
 rather than recorded lossily. A
 new entity kind upstream needs a new `CurveSegment` variant before decad accepts a
 profile that uses it; there is no fallback to a sample.
@@ -368,18 +391,19 @@ variant records it. Whole edges never consult the flag (§1).
 | `*EllipticalArc` | `EllipticalArcSeg` — the entity's pinned points, axes and frame; the full domain | `EllipticalArcSeg` — the same; the certified range |
 | the free-form five | the matching free-form variant, `TStart`/`TEnd` spanning the full domain | the matching free-form variant, `TStart`/`TEnd` the fragment's range |
 
-**Every row records a certified fragment, and every row rejects a sampled one.**
+**Every row records a certified fragment, and every row rejects an uncertified one.**
 Every row records the entity's fields verbatim, and the two columns differ only
 in the range. There is no per-row parameter mapping to apply: every variant
 records `sketch`'s normalized `t` itself — `geom.BoundaryEdge`'s published
 contract — so the range is handed over, never converted; nothing is solved
 for, no point is evaluated from a parameter, and no point is ever inverted to
 one (core §7). Under `sketch`'s exact kernel the fragments that carry `TExact == true`
-are those of a line, a circle or an arc cut within that family (§1), so those
-are the rows the true column reaches today: a circle cut by a rectangle edge
-records, and a circle cut by another circle — or an ellipse cut by anything,
-including the line fragments that crossing leaves on the rectangle — is
-`ErrUnrecordableProfile`, because its range is sampled.
+are those of a line, a circle or an arc in a sketch holding nothing else, cut
+where the closed-form kernel placed the bound and — curve against curve — the
+arrangement certified it (§1), so those are the rows the true column reaches
+today: a circle cut by a rectangle edge records, and an ellipse cut by anything
+— including the line fragments that crossing leaves on the rectangle — is
+`ErrUnrecordableProfile`, because `sketch` could not certify its range.
 
 Conversion is mechanical, and it happens once, in the feature call.
 `RecordProfile` first rejects every nil boundary entity and every boundary
@@ -472,8 +496,10 @@ snapshot-integrity judgement — those are separate gates (core §7) — and it 
 a sentinel error the caller can branch on (core §12). It is returned in exactly
 two cases:
 
-- **a `Partial` fragment whose cut `sketch` reports sampled** — `TExact ==
-  false` (§1). An approximate parameter range is never recorded as an exact
+- **a `Partial` fragment `sketch` could not certify** — `TExact == false`
+  (§1). The sampled arrangement fallback can produce such a range, and the
+  whole-sketch gate can withhold certification while leaving the range unchanged.
+  An uncertified parameter range is never recorded as an exact
   analytic fragment, never recorded as the whole entity — a different region
   than the caller drew — and never repaired;
 - **a certified range the falsifier disproves** — `TExact == true`, but
@@ -483,7 +509,7 @@ two cases:
   as a `sketch` bug.
 
 A `Step` that recorded the whole curve where the caller drew a piece of it, or
-an approximate range as an exact trim, would be the lossy record the
+an uncertified range as an exact trim, would be the lossy record the
 completeness rule forbids (core §6.2). So decad rejects: it never repairs,
 projects or fits a point `sketch` handed over, and it never solves for one —
 admission is decided by what `sketch` says, and a decad-side check may only

@@ -65,11 +65,11 @@ var ErrUnresolvedBody = errors.New("decad: a live body is required, not a step r
 var ErrNegativeMagnitude = errors.New("decad: negative magnitude")
 
 // ErrUnrecordableProfile is returned when a feature is handed a valid profile
-// whose boundary decad cannot record exactly: a Partial fragment whose cut
-// sketch reports sampled (BoundaryEdge.TExact == false), or one whose
+// whose boundary decad cannot record exactly: a Partial fragment sketch could
+// not certify (BoundaryEdge.TExact == false), or one whose
 // certified range the seam's one-sided falsifier disproves. A Step that
 // recorded the whole curve where the caller drew a piece of it, or an
-// approximate range as an exact trim, would be a lossy record of intent, so
+// uncertified range as an exact trim, would be a lossy record of intent, so
 // decad rejects — it never repairs, projects, fits or solves for a point.
 // Full semantics in docs/sketch-seam-design.md.
 var ErrUnrecordableProfile = errors.New("decad: profile boundary cannot be recorded exactly")
