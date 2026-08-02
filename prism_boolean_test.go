@@ -185,7 +185,7 @@ func TestPrismUnionG1FallsBackWithUnchangedBehavior(t *testing.T) {
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 }
 
-// TestPrismUnionRotatedToothG3 is §3.3/§15's rotated-tooth case, at the
+// TestPrismUnionRotatedToothFallback is §3.3/§15's rotated-tooth case, at the
 // r3-probe-measured breadth: r3.RotationAround about (0,0,1) is inexact at
 // MOST step counts, not merely 17 — the probe at
 // r3/.tmp/decad-axis-exact-rotation-ask swept 3..60 and found 48 of 58
@@ -203,8 +203,9 @@ func TestPrismUnionG1FallsBackWithUnchangedBehavior(t *testing.T) {
 // a defect introduced by it.
 //
 // A hand-built r3.FromBasis placement (literal-zero z components) stays
-// exactly planar for the same n, k and builds analytically instead.
-func TestPrismUnionRotatedToothG3(t *testing.T) {
+// exactly planar for the same n, k and clears G3. Its re-expression still
+// creates split boundaries, so §3.4 now routes it through the mesh path too.
+func TestPrismUnionRotatedToothFallback(t *testing.T) {
 	const r, r2, th1, th2, h = 20.0, 25.0, 0.0, 0.2, 10.0
 	const n, k = 17, 10
 	pivot := r3.Vec{}
@@ -227,7 +228,7 @@ func TestPrismUnionRotatedToothG3(t *testing.T) {
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 	})
 
-	t.Run("hand-built FromBasis builds analytically", func(t *testing.T) {
+	t.Run("hand-built FromBasis falls back after a re-expressed split", func(t *testing.T) {
 		theta := 2 * math.Pi * float64(k) / float64(n)
 		cos, sin := math.Cos(theta), math.Sin(theta)
 		basis := r3.Basis{
@@ -237,15 +238,8 @@ func TestPrismUnionRotatedToothG3(t *testing.T) {
 		}
 		tr, err := r3.FromBasis(basis, r3.Vec{})
 		require.NoError(t, err)
-		got, err := build(t, tr)
-		require.NoError(t, err)
-		for _, f := range got.Faces() {
-			require.NotEqual(t, decad.KindFaceted, f.Surface().Kind())
-		}
-		vol, err := got.Volume()
-		require.NoError(t, err)
-		require.Equal(t, decad.Approximate, vol.Exactness) // a circular contribution retires Exact
-		require.Greater(t, boundMM3(t, vol), 0.0)
+		_, err = build(t, tr)
+		require.ErrorIs(t, err, decad.ErrUnsupported)
 	})
 }
 
@@ -260,7 +254,7 @@ func TestPrismUnionRotatedToothG3(t *testing.T) {
 // though the two planes are genuinely, geometrically coplanar. Because they
 // really are coplanar, the fallback does not merely miss an optimization: it
 // lands on the mesh path's own coplanar-contact refusal (the same shape
-// TestPrismUnionRotatedToothG3 hits), a more serious cost than a
+// TestPrismUnionRotatedToothFallback hits), a more serious cost than a
 // non-coplanar miss. This is a finding for the design (recorded in the
 // implementation report), not a bug this test papers over: G3 stays exact
 // and unconditional (§3.1's own decision), so the pair correctly declines to

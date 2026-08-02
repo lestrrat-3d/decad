@@ -14,9 +14,11 @@ import (
 // through sketch (§4) rather than through the mesh boolean (evaluator-design
 // §9). The entry gate (§3) is reject-only and never surfaces an error on a
 // miss — the caller falls back to the unchanged mesh path exactly as it did
-// before this file existed. Only once §4.2's resolution finds a unique
-// candidate does a further problem become a genuine, typed refusal (§3.4,
-// §9) rather than a reroute to the mesh path.
+// before this file existed. A nonidentity re-expression that leaves a
+// sketch-split boundary also reroutes before resolution accepts a candidate:
+// its coordinate rounding can amplify at the cut. Only once §4.2's remaining
+// resolution finds a unique candidate does a further problem become a genuine,
+// typed refusal (§3.4, §9) rather than a reroute to the mesh path.
 //
 // PR1 implements Union's hole-free select-all/merge/chain path only (§4.2);
 // Cut/Intersect's clean-nesting structural match (PR2) and the general
@@ -26,7 +28,8 @@ import (
 
 // tryPrismUnion attempts the PR1 analytic reduction for op. ok=false (err
 // always nil in that case) means "not admitted" per §3.1/§3.4: the caller
-// MUST fall back to the unchanged mesh path with no error surfaced. A
+// MUST fall back to the unchanged mesh path with no error surfaced. That
+// includes a nonidentity re-expression whose arranged boundary was split. A
 // non-nil err means the bounded analytic resolution reached a genuine refusal
 // (§3.4) — the caller MUST propagate it rather than reroute to the mesh path.
 func tryPrismUnion(ctx context.Context, op OpKind, a, b *Body) (prismPayload, bool, error) {
@@ -204,10 +207,11 @@ func prismUnionZIntervalMatches(pa, pb prismPayload) bool {
 }
 
 // resolvePrismUnion is §4.2's hole-free select-all/merge/chain path.
-// resolved=false (err always nil in that case) means this pair's topology is
-// unresolved (§4.4): the caller falls back to the mesh path with no error. A
-// non-nil error — including ctx cancellation surfacing through budget — is
-// always genuine and must propagate.
+// resolved=false (err always nil in that case) means the pair's topology is
+// unresolved (§4.4), or a nonidentity re-expression left a split boundary
+// (§3.4): the caller falls back to the mesh path with no error. A non-nil
+// error — including ctx cancellation surfacing through budget — is always
+// genuine and must propagate.
 func resolvePrismUnion(ctx context.Context, budget *workBudget, pa, pb prismPayload, reexpress *prismReexpression) (ProfileRecord, bool, error) {
 	s, err := buildPrismUnionScene(budget, pa, pb, reexpress)
 	if err != nil {
@@ -228,6 +232,19 @@ func resolvePrismUnion(ctx context.Context, budget *workBudget, pa, pb prismPayl
 	}
 	if len(profiles) == 0 {
 		return ProfileRecord{}, false, nil // §4.4: the scene holds no bounded cell at all
+	}
+	if !reexpress.identity {
+		split, err := prismUnionProfilesHaveSplitBoundary(budget, profiles)
+		if err != nil {
+			return ProfileRecord{}, false, err
+		}
+		if split {
+			// A coordinate error in re-expressed B can move its intersection
+			// with an unchanged A carrier by delta/sin(theta). This increment
+			// has no certified lower crossing-angle bound, so it cannot carry
+			// reexpression.delta as an honest bound for the recorded fragment.
+			return ProfileRecord{}, false, nil
+		}
 	}
 
 	// Union, hole-free operands (G6): select every returned cell — by
@@ -314,6 +331,29 @@ func resolvePrismUnion(ctx context.Context, budget *workBudget, pa, pb prismPayl
 		segs[i] = seg
 	}
 	return ProfileRecord{Outer: LoopRecord{Segments: segs}}, true, nil
+}
+
+// prismUnionProfilesHaveSplitBoundary reports whether sketch narrowed any
+// arranged boundary edge. A nonidentity re-expression followed by such a cut
+// falls back before recordEdge can publish a trim whose coordinate error may be
+// amplified by the crossing angle (prism-boolean-design §3.4, §7).
+func prismUnionProfilesHaveSplitBoundary(budget *workBudget, profiles []*sketch.Profile) (bool, error) {
+	for _, profile := range profiles {
+		if err := budget.step(); err != nil {
+			return false, err
+		}
+		for _, loop := range append([][]sketch.BoundaryEdge{profile.Outer}, profile.Holes...) {
+			for _, edge := range loop {
+				if err := budget.step(); err != nil {
+					return false, err
+				}
+				if edge.Partial {
+					return true, nil
+				}
+			}
+		}
+	}
+	return false, nil
 }
 
 // prismProfilesContext makes sketch's synchronous arrangement observable to a

@@ -71,11 +71,11 @@ with `modify §5`'s existing closed-form checks, and rebuilds through
 so the re-expressed operand's rounding reaches every measurement.
 `Cut` and `Intersect` remain on the mesh path until later increments. A
 non-admitted `Union` pair — wrong payload class, non-coplanar, a segment kind
-outside the admitted set, an unequal
-z-interval for `Union`, or a topology this increment's region resolution does
-not cover — takes the unchanged mesh path, with **zero behavior change**: no
-new error, no new refusal text, nothing a caller not making booleans this
-shape will ever observe.
+outside the admitted set, an unequal z-interval for `Union`, a nonidentity
+re-expression whose arranged boundary is split, or a topology this increment's
+region resolution does not cover — takes the unchanged mesh path, with **zero
+behavior change**: no new error, no new refusal text, nothing a caller not
+making booleans this shape will ever observe.
 
 **Alternatives considered:**
 
@@ -188,9 +188,9 @@ re-expression and §4.3's coincident-carrier detection lean on. The practical
 consequence is that a circular pattern built with `r3.RotationAround` alone
 silently under-triggers this design at most step counts, falling back to the
 unchanged, working mesh path. That is a missed optimization rather than a new
-failure mode, but it is the common case and not the exception, so a consumer
-that wants the analytic path must construct its placements the `FromBasis`
-way today. **The r3 upstream ask is filed** at
+failure mode, but it is the common case and not the exception. A consumer can
+use `FromBasis` to clear G3, but §3.4 still routes any re-expressed arrangement
+with a split boundary to the mesh path. **The r3 upstream ask is filed** at
 `r3/.tmp/decad-axis-exact-rotation-ask/`, requesting a rotation constructor
 whose result leaves a plane perpendicular to its axis exactly perpendicular.
 This design does not block on it: nothing here requires it, and nothing here
@@ -210,13 +210,17 @@ silent fallback stops being available:
    builds the private scene, arranges it, and attempts to resolve a unique
    candidate result. **A pair whose topology this increment's resolution logic
    does not cover (§4.4) is treated exactly like a stage-1 gate miss: silent
-   fallback, no error.** Every capacity, arrangement, candidate-validity, or
-   assembly-audit problem is a genuine refusal (§9's table), **never** a reroute
-   to the mesh path. An admitted-then-failed pair does not silently become an
-   `Approximate` mesh result whose exactness claim the caller never asked to
-   downgrade to; it becomes an explicit `ErrUnsupported`/`ErrDegenerate` the
-   caller can branch on, matching every other modify-op refusal in this
-   codebase.
+   fallback, no error.** The same routing rule applies before a candidate is
+   accepted when B's re-expression is nonidentity and `sketch` returns any
+   `Partial` boundary edge: a coordinate error in B can move a transverse cut
+   on A by that error divided by the crossing sine, and this increment carries
+   no certified crossing-sensitivity bound. Every other capacity, arrangement,
+   candidate-validity, or assembly-audit problem is a genuine refusal (§9's
+   table), **never** a reroute to the mesh path. An admitted-then-failed pair
+   does not silently become an `Approximate` mesh result whose exactness claim
+   the caller never asked to downgrade to; it becomes an explicit
+   `ErrUnsupported`/`ErrDegenerate` the caller can branch on, matching every
+   other modify-op refusal in this codebase.
 
 ## 4. Design
 
@@ -376,6 +380,7 @@ regardless of who authored the input curves it was cut from.
 | `Cut` whose tool does not span the target | G5, mesh path; future `cupPayload`-shaped pocket |
 | `Intersect` with disjoint intervals | G5, mesh path (result is empty; unchanged `BooleanEmpty`) |
 | `Union` with a holed operand | G6, mesh path; §9 PR3 |
+| A nonidentity re-expression whose arranged boundary is split | §3.4 safety routing, mesh path; a future crossing-sensitivity proof may admit it |
 | `Cut` with a holed tool | G6, mesh path; the surviving material inside each tool hole is a separate lump, so it waits on the multi-lump prism payload of the row below, not on PR3 |
 | `Cut`/`Intersect` crossing sub-case (§4.2) | resolution unresolved (§3.4), mesh path; §9 PR3 |
 | A disjoint-footprint `Union` (two separate lumps) | resolution fails to close one loop (§4.2), mesh path; a future multi-lump prism payload, not currently planned |
@@ -447,10 +452,14 @@ Every recorded field, after §4.1's re-expression, is one of:
   record.go's existing contract: a cut fragment never gets new `Center`/
   `Start`/`End` fields, only a narrower range over the same ones).
 
-Operand A's fields and every `sketch`-cut range carry no new rounding from this
-union, and operand B's re-expressed coordinates carry the new allowance
-`δ_reexpress`. Either input can already carry a section displacement from an
-earlier analytic union, `δ_A` or `δ_B`. The rebuilt section therefore carries
+When the re-expression is the identity, operand A's fields and every
+`sketch`-cut range carry no new rounding from this union. When the
+re-expression is nonidentity, §3.4 routes any scene with a `Partial` boundary
+edge to the mesh path before it records a fragment, so an analytic result has
+no newly cut range whose position could amplify B's coordinate rounding.
+Operand B's re-expressed coordinates carry the new allowance `δ_reexpress`.
+Either input can already carry a section displacement from an earlier analytic
+union, `δ_A` or `δ_B`. The rebuilt section therefore carries
 `δ = max(δ_A, δ_B, δ_reexpress)`: it preserves the greatest proven boundary
 displacement of every source coordinate and the allowance this union commits.
 It is **exactly zero in one decidable case**: both inputs carry zero displacement
@@ -696,12 +705,12 @@ areas, residuals), never merely "it ran" — CLAUDE.md's own rule.
   asserts the mesh result keeps the material standing inside the tool's hole,
   which is the body the analytic path would have dropped.
 - The rotated-tooth case (§3.3): a placement built via `RotationAround` at
-  `n = 17` correctly falls back to the mesh path (G3 miss, no error); the
-  same model built via a hand-constructed `FromBasis` placement builds
-  analytically with the expected region set. The test must cover several
-  counts from §3.3's inexact set rather than `n = 17` alone, since the
-  inexact counts are the majority and a single-count test reads as though
-  they were rare.
+  `n = 17` correctly falls back to the mesh path (G3 miss, no error). The
+  same model built via a hand-constructed `FromBasis` placement clears G3 but
+  falls back on §3.4's re-expressed split-boundary rule. The test must cover
+  several counts from §3.3's inexact set rather than `n = 17` alone, since the
+  inexact counts are the majority and a single-count test reads as though they
+  were rare.
 - Two operands whose frames were constructed independently but denote the
   same plane (§3.3's `Frame.N()` reading): the test records what G3 does with
   them. A refusal there is sound under the reject-only rule and is not
@@ -717,12 +726,17 @@ areas, residuals), never merely "it ran" — CLAUDE.md's own rule.
   outer loop (verbatim reproduction, §4.2's structural-match claim).
 - Exactness, one test per §7 arm: a line-only merged section over operands
   that share a frame reports `Exact` volume with a zero bound; the same
-  section over an operand B placed away from A reports `Approximate` with a
-  bound the §7 displacement term alone explains (assert it scales with the
-  placement's own magnitude, so a payload silently dropping the term fails);
+  section over an operand B with a nonidentity re-expression but no split
+  boundary reports `Approximate` with a bound the §7 displacement term alone
+  explains (assert it scales with the placement's own magnitude, so a payload
+  silently dropping the term fails);
   a merged section retaining a `CircleSeg`/`ArcSeg` reports `Approximate` with
   a bound composed from `moments.go`'s and `bounds.go`'s machinery, asserted
   against the closed-form answer.
+- A nonidentity re-expression whose arranged profile contains a `Partial`
+  boundary edge falls back before a fragment is recorded. The focused fixture
+  must prove that the arrangement splits, then assert that `tryPrismUnion`
+  returns `ok == false` without an analytic-resolution error.
 - Downstream chaining: fillet a corner of an analytically-unioned body and
   read `MinWallThickness` on the result — both refuse today (SX9, all three
   surveys) on a mesh-path union of the same model, and both succeed here.

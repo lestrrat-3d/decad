@@ -2,6 +2,7 @@ package decad
 
 import (
 	"context"
+	"math"
 	"testing"
 
 	"github.com/lestrrat-3d/r3"
@@ -227,6 +228,58 @@ func TestPrismBooleanGateG6RestrictsUnionToHoleFreeOperands(t *testing.T) {
 	_, ok, err = tryPrismUnion(t.Context(), OpUnion, a, c)
 	require.NoError(t, err)
 	require.True(t, ok, "a hole-free pair otherwise identical clears G6")
+}
+
+// TestPrismUnionReexpressedSplitFallsBack keeps a nonidentity coordinate
+// re-expression from publishing a section bound for a shallow sketch-cut edge.
+// A transverse cut can magnify the coordinate error by the crossing angle, so
+// the current analytic path must route this pair through the mesh evaluator.
+func TestPrismUnionReexpressedSplitFallsBack(t *testing.T) {
+	frame := canonicalPrismFrame(t)
+	pa := prismPayload{
+		profile: ProfileRecord{Outer: synthRectLoop(0, 0, 10, 10)},
+		frame:   frame, z0: 0, z1: 10, xform: r3.Identity(),
+	}
+	const theta = 0.01
+	basis := r3.Basis{
+		EX: r3.Vec{X: math.Cos(theta), Y: math.Sin(theta), Z: 0},
+		EY: r3.Vec{X: -math.Sin(theta), Y: math.Cos(theta), Z: 0},
+		EZ: r3.Vec{X: 0, Y: 0, Z: 1},
+	}
+	rotation, err := r3.FromBasis(basis, r3.Vec{})
+	require.NoError(t, err)
+	pb := pa
+	// The lower long edge crosses A's upper edge at theta, so this fixture
+	// reaches the trim-amplification path without relying on a degenerate
+	// contact classification.
+	pb.profile = ProfileRecord{Outer: synthRectLoop(-5, 9.9, 15, 11.9)}
+	pb.xform = rotation
+	_, _, admitted := admitPrismPair(&Body{payload: pa}, &Body{payload: pb})
+	require.True(t, admitted, "the fixture must clear G1-G4 before the split guard runs")
+	require.True(t, prismUnionZIntervalMatches(pa, pb), "the fixture must clear G5")
+
+	reexpression, err := newPrismReexpression(pa, pb)
+	require.NoError(t, err)
+	require.False(t, reexpression.identity)
+	scene, err := buildPrismUnionScene(newWorkBudget(t.Context()), pa, pb, reexpression)
+	require.NoError(t, err)
+	profiles, err := prismProfilesContext(t.Context(), scene.Profiles)
+	require.NoError(t, err)
+
+	split := false
+	for _, profile := range profiles {
+		require.True(t, profile.Valid, "the shallow crossing must not depend on an invalid arrangement")
+		for _, loop := range append([][]sketch.BoundaryEdge{profile.Outer}, profile.Holes...) {
+			for _, edge := range loop {
+				split = split || edge.Partial
+			}
+		}
+	}
+	require.True(t, split, "the overlapping rectangles must produce a split boundary")
+
+	_, ok, err := tryPrismUnion(t.Context(), OpUnion, &Body{payload: pa}, &Body{payload: pb})
+	require.NoError(t, err)
+	require.False(t, ok, "a re-expressed arrangement with a split boundary must fall back")
 }
 
 // TestTryPrismUnionOnlyImplementsUnion confirms §4.2's stated PR1 scope: Cut

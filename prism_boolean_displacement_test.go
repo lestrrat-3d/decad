@@ -133,11 +133,11 @@ func TestPrismUnionFarPlacementReturnsTheTrueUnion(t *testing.T) {
 }
 
 // TestPrismUnionReExpressionDisplacementBoundEnclosesTheError is §7's
-// Approximate arm. Operand B is drawn far from the origin and placed back over
-// operand A, so its re-expression into A's frame is a genuine rigid-transform
-// recomputation at that magnitude rather than a copy: the merged section then
-// carries a displacement, and every measurement of it must carry a bound that
-// encloses the difference from the section the two operands denote.
+// Approximate arm. Operand B is drawn far from the origin and placed exactly
+// over operand A, so its re-expression into A's frame is a genuine
+// rigid-transform recomputation at that magnitude rather than a copy. B stays
+// strictly inside A, so the arrangement leaves every boundary whole and the
+// merged section carries a displacement every measurement must report.
 //
 // The bound must also SCALE with the placement magnitude — the rounding is an
 // ulp at that magnitude — which is what fails if a later change drops the
@@ -150,10 +150,10 @@ func TestPrismUnionReExpressionDisplacementBoundEnclosesTheError(t *testing.T) {
 			doc := decad.New()
 			a := boxBody(t, doc, 0, 0, 10, 10, 10)
 			// B's own record sits at the far magnitude along u; its placement
-			// brings it back over A, so the pair overlaps while the
-			// re-expression runs at the far magnitude's own ulp.
-			lo, hi := 5-shift, 15-shift
-			b := placedFar(t, boxBody(t, doc, lo, 5, hi, 15, 10), shift)
+			// brings it strictly inside A, so the pair has no split boundary
+			// while the re-expression runs at the far magnitude's own ulp.
+			lo, hi := 2-shift, 8-shift
+			b := placedFar(t, boxBody(t, doc, lo, 2, hi, 8, 10), shift)
 
 			got, err := decad.Union(a, b)
 			require.NoError(t, err)
@@ -166,7 +166,7 @@ func TestPrismUnionReExpressionDisplacementBoundEnclosesTheError(t *testing.T) {
 			// wrote them from.
 			truth := trueBoxUnionVolume(
 				[4]float64{0, 0, 10, 10},
-				[4]float64{lo + shift, 5, hi + shift, 15},
+				[4]float64{lo + shift, 2, hi + shift, 8},
 				10,
 			)
 			residual := math.Abs(volumeMM(t, vol) - ratFloat(truth))
@@ -198,19 +198,18 @@ func TestPrismUnionReExpressionDisplacementBoundEnclosesTheError(t *testing.T) {
 	}
 }
 
-// TestPrismUnionRoundedReExpressionStaysWithinItsBound is the same arm on a
-// section whose corners are not representable at the placement magnitude, so
-// none of the fixture's own arithmetic cancels and the re-expression is the
-// whole of what puts the merged section where it is. The reported volume must
-// still sit inside its own bound of the union the two operands denote, and that
-// bound must be the DISPLACEMENT's — orders above anything the section's own
+// TestPrismUnionRoundedReExpressionStaysWithinItsBound pins the same arm at a
+// large placement magnitude. B stays strictly inside A, so no split boundary
+// hides the re-expression behind the mesh path. The reported volume must still
+// sit inside its own bound of the union the two operands denote, and that bound
+// must be the DISPLACEMENT's — orders above anything the section's own
 // 10 mm-scale arithmetic can produce.
 func TestPrismUnionRoundedReExpressionStaysWithinItsBound(t *testing.T) {
 	const shift = 1e12
 	doc := decad.New()
 	a := boxBody(t, doc, 0, 0, 10, 10, 10)
-	lo, hi := 5.1-shift, 15.1-shift
-	b := placedFar(t, boxBody(t, doc, lo, 5.1, hi, 15.1, 10), shift)
+	lo, hi := 2-shift, 8-shift
+	b := placedFar(t, boxBody(t, doc, lo, 2, hi, 8, 10), shift)
 
 	got, err := decad.Union(a, b)
 	require.NoError(t, err)
@@ -220,7 +219,7 @@ func TestPrismUnionRoundedReExpressionStaysWithinItsBound(t *testing.T) {
 	require.NoError(t, err)
 	truth := trueBoxUnionVolume(
 		[4]float64{0, 0, 10, 10},
-		[4]float64{lo + shift, 5.1, hi + shift, 15.1},
+		[4]float64{lo + shift, 2, hi + shift, 8},
 		10,
 	)
 	residual := math.Abs(volumeMM(t, vol) - ratFloat(truth))
@@ -240,7 +239,7 @@ func TestPrismUnionChainedDisplacementIsNotDiscarded(t *testing.T) {
 	doc := decad.New()
 	a := boxBody(t, doc, 0, 0, 10, 10, 10)
 	const shift = 1e9
-	b := placedFar(t, boxBody(t, doc, 5-shift, 5, 15-shift, 15, 10), shift)
+	b := placedFar(t, boxBody(t, doc, 2-shift, 2, 8-shift, 8, 10), shift)
 	first, err := decad.Union(a, b)
 	require.NoError(t, err)
 	firstVolume, err := first.Volume()
@@ -256,7 +255,7 @@ func TestPrismUnionChainedDisplacementIsNotDiscarded(t *testing.T) {
 	require.Equal(t, decad.Approximate, volume.Exactness)
 	require.Positive(t, volume.Bound.Base())
 
-	_, err = chained.Fillet(verticalConvexEdge(), units.Millimeters(1))
+	_, err = chained.Fillet(decad.Edges().AtLeast(1), units.Millimeters(1))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 }
 
@@ -269,7 +268,7 @@ func TestPrismUnionDisplacedSectionRefusesTheSectionRewrites(t *testing.T) {
 	doc := decad.New()
 	a := boxBody(t, doc, 0, 0, 10, 10, 10)
 	const shift = 1e9
-	b := placedFar(t, boxBody(t, doc, 5-shift, 5, 15-shift, 15, 10), shift)
+	b := placedFar(t, boxBody(t, doc, 2-shift, 2, 8-shift, 8, 10), shift)
 	got, err := decad.Union(a, b)
 	require.NoError(t, err)
 
@@ -287,7 +286,7 @@ func TestPrismUnionDisplacedSectionDownstreamReadings(t *testing.T) {
 	doc := decad.New()
 	a := boxBody(t, doc, 0, 0, 10, 10, 10)
 	const shift = 1e9
-	b := placedFar(t, boxBody(t, doc, 5-shift, 5, 15-shift, 15, 10), shift)
+	b := placedFar(t, boxBody(t, doc, 2-shift, 2, 8-shift, 8, 10), shift)
 	got, err := decad.Union(a, b)
 	require.NoError(t, err)
 	box, err := got.Bounds()
