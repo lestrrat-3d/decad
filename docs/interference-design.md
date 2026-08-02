@@ -182,10 +182,12 @@ the same grounds: `A = B` proves `A ∩ B = A`.
 The shipped certificate is analytic and exact. It compares the payload fields
 that determine the represented point set with exact structural equality, never
 samples, bounding boxes, tolerances, or topology counts. Derived metadata that
-does not change that set — `cupPayload.thickness`/`sense` and
-`prismPayload.blendSegs`/`blendKind` — is deliberately excluded. Equal
-represented-set fields in `prismPayload`, `cupPayload`, or `revolvePayload`
-prove identical represented sets.
+does not change that set — `cupPayload.thickness`/`sense`,
+`prismPayload.blendSegs`/`blendKind`, and the section displacement bound
+`docs/prism-boolean-design.md` §7 puts on `prismPayload` — is deliberately
+excluded, as is every later derived field that leaves the boundary where it is.
+Equal represented-set fields in `prismPayload`, `cupPayload`, or
+`revolvePayload` prove identical represented sets.
 
 Broader equality is staged. A future normalizer may prove harmless
 representation choices equivalent:
@@ -302,9 +304,11 @@ The current symmetric triangle classifier refuses a two-dimensional coplanar
 intersection. That refusal stays correct until this complete replacement
 lands; it must not be weakened one pair at a time. `docs/prism-boolean-design.md`
 supersedes this section for the narrower case of two co-directional coplanar
-prisms — an admitted pair gets an exact overlap volume through `evaluateBoolean`'s
-analytic dispatch, never reaching this mesh-side arrangement; this section
-still governs every coplanar pair that design does not admit.
+prisms — an admitted pair gets an analytic overlap volume through
+`evaluateBoolean`'s analytic dispatch, exact under that design's §7 rule and
+otherwise bounded by that rule's own terms, never reaching this mesh-side
+arrangement; this section still governs every coplanar pair that design does
+not admit.
 
 Coplanar breadth support constructs one exact 2D arrangement per coplanar face
 patch in the dominant-axis projection already used by the boolean's rational
