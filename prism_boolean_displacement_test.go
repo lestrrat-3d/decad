@@ -230,30 +230,33 @@ func TestPrismUnionRoundedReExpressionStaysWithinItsBound(t *testing.T) {
 	require.Greater(t, vol.Bound.Base(), 1e-3)
 }
 
-// TestPrismUnionChainedDisplacementIsNotDiscarded covers a second analytic
-// union whose A operand already carries a section displacement. Its B operand
-// shares the first result's frame and placement, so that re-expression is the
-// identity and can prove no new displacement. The rebuilt payload must still
-// retain the first union's uncertainty.
-func TestPrismUnionChainedDisplacementIsNotDiscarded(t *testing.T) {
+// TestPrismUnionChainedSecondOperandReexpressionAccumulatesDisplacement
+// exercises the public chained-Union path where the approximate first result
+// is operand B of a second nonidentity union. B's existing displacement passes
+// unchanged through the rigid map and the new coordinate rounding adds to it.
+func TestPrismUnionChainedSecondOperandReexpressionAccumulatesDisplacement(t *testing.T) {
 	doc := decad.New()
-	a := boxBody(t, doc, 0, 0, 10, 10, 10)
-	const shift = 1e9
-	b := placedFar(t, boxBody(t, doc, 2-shift, 2, 8-shift, 8, 10), shift)
-	first, err := decad.Union(a, b)
+	const firstShift = 1e8
+	inside := boxBody(t, doc, 2, 2, 8, 8, 10)
+	outer := placedFar(t, boxBody(t, doc, -firstShift, 0, 10-firstShift, 10, 10), firstShift)
+	first, err := decad.Union(inside, outer)
 	require.NoError(t, err)
+	require.False(t, anyFaceIsFaceted(first), "the analytic reduction must own the first union")
 	firstVolume, err := first.Volume()
 	require.NoError(t, err)
 	require.Equal(t, decad.Approximate, firstVolume.Exactness)
 	require.Positive(t, firstVolume.Bound.Base())
 
-	c := boxBody(t, doc, 12, 8, 22, 18, 10)
-	chained, err := decad.Union(first, c)
+	const secondShift = 3e8
+	insideAgain := placedFar(t, boxBody(t, doc, 2-secondShift, 2, 8-secondShift, 8, 10), secondShift)
+	chained, err := decad.Union(insideAgain, first)
 	require.NoError(t, err)
+	require.False(t, anyFaceIsFaceted(chained), "the analytic reduction must own the chained union")
 	volume, err := chained.Volume()
 	require.NoError(t, err)
 	require.Equal(t, decad.Approximate, volume.Exactness)
-	require.Positive(t, volume.Bound.Base())
+	require.Greater(t, volume.Bound.Base(), firstVolume.Bound.Base(),
+		"B's existing displacement and its new re-expression allowance must both reach the result")
 
 	_, err = chained.Fillet(decad.Edges().AtLeast(1), units.Millimeters(1))
 	require.ErrorIs(t, err, decad.ErrUnsupported)

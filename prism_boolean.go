@@ -85,11 +85,11 @@ func tryPrismUnion(ctx context.Context, op OpKind, a, b *Body) (prismPayload, bo
 		z0:      pa.z0,
 		z1:      pa.z1,
 		xform:   pa.xform,
-		// §7: a rebuilt section keeps the greatest displacement every source
-		// coordinate already carried, as well as the allowance this union's
-		// re-expression commits. A chained identity re-expression must not erase
-		// an earlier union's uncertainty.
-		sectionDelta: max(pa.sectionDelta, pb.sectionDelta, reexpress.delta),
+		// §7: operand A's coordinates are unchanged, while B's existing
+		// displacement passes through its rigid re-expression and accumulates
+		// the rounding that re-expression commits. A chained union must not
+		// discard either contribution.
+		sectionDelta: max(pa.sectionDelta, absSumUpper(pb.sectionDelta, reexpress.delta)),
 	}
 	return result, true, nil
 }

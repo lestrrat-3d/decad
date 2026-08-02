@@ -460,8 +460,9 @@ no newly cut range whose position could amplify B's coordinate rounding.
 Operand B's re-expressed coordinates carry the new allowance `δ_reexpress`.
 Either input can already carry a section displacement from an earlier analytic
 union, `δ_A` or `δ_B`. The rebuilt section therefore carries
-`δ = max(δ_A, δ_B, δ_reexpress)`: it preserves the greatest proven boundary
-displacement of every source coordinate and the allowance this union commits.
+`δ = max(δ_A, up(δ_B + δ_reexpress))`: A's coordinates are unchanged, while
+B's prior displacement passes through the rigid map and accumulates the new
+coordinate-rounding allowance. `up` rounds the positive sum outward.
 It is **exactly zero in one decidable case**: both inputs carry zero displacement
 and operand B's composed map into A's frame is the identity in the stored floats
 (`frameB == frameA` and `xformB == xformA`, component-wise `==` — G3's own
@@ -531,7 +532,7 @@ needed for each.
 
 | Consequence (§1) | Admitted class | Outside it |
 |---|---|---|
-| 1. No chaining | Removed. Result is `prismPayload`; no `meshBound` to compose, so no chord tolerance for the next pair to fall below. A chained boolean re-checks §3's gate on the new pair and carries the greatest incoming or newly-re-expressed §7 section displacement. | Unchanged — general-position or non-analytic pairs still degrade per evaluator §9. |
+| 1. No chaining | Removed. Result is `prismPayload`; no `meshBound` to compose, so no chord tolerance for the next pair to fall below. A chained boolean re-checks §3's gate on the new pair and carries the greater of A's incoming displacement and B's incoming displacement plus its new re-expression allowance (§7). | Unchanged — general-position or non-analytic pairs still degrade per evaluator §9. |
 | 2. Coplanar contact refuses | Removed. Coplanar, co-directional contact is the admitted case's whole premise. | Unchanged — non-coplanar or non-prism coplanar contact (e.g. a prism against a revolve cap) stays on the mesh path. |
 | 3. Analytic identity dies | Removed where `δ == 0`. Result is `prismPayload`: Fillet/Chamfer/Shell, all three surveys, and the clearance kernel already dispatch on payload class and need zero new code for it. Where `δ > 0`, §12's own rows stage the readings that have no place to put a displacement. | Unchanged for mesh-path results — `facetedPayload` still permanently refuses modify ops (modify-reach SX9) and all three surveys. |
 
@@ -740,9 +741,10 @@ areas, residuals), never merely "it ran" — CLAUDE.md's own rule.
 - Downstream chaining: fillet a corner of an analytically-unioned body and
   read `MinWallThickness` on the result — both refuse today (SX9, all three
   surveys) on a mesh-path union of the same model, and both succeed here.
-- A second boolean consuming the first's result (chaining) carries no
-  `meshBound` — assert `Exactness`/`Bound` on the second result are governed
-  purely by §7's rule, not by any accumulated tessellation tolerance.
+- A second boolean consuming the first's result as operand B under a
+  nonidentity re-expression carries B's prior displacement plus its new
+  allowance — assert `Exactness`/`Bound` on the second result follow §7,
+  not accumulated tessellation tolerance.
 - Cancellation: a canceled `ctx` mid-resolution returns `ctx.Err()` unchanged
   with the document and recipe untouched, matching the existing modify-op
   contract.
