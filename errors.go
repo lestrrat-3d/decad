@@ -168,16 +168,22 @@ const (
 	// contact, or wait for a later evaluator.
 	//
 	// The construction this most often costs is two bodies extruded from ONE
-	// sketch plane to one end plane: their caps are coplanar by construction, so
-	// every boolean over the pair refuses. What replaces the tangent contact is an
-	// INTERIOR overlap — displace one operand so no face pair is coplanar and let
-	// the displaced body reach into the other's interior, which makes every
-	// contact a transversal crossing this evaluator does classify. The two
-	// directions are not equally free, and the caller owns the difference:
-	// material pushed sideways into the other body's interior leaves the union's
-	// enclosed solid unchanged, while a displacement ALONG the sweep changes it —
-	// the operand no longer spans cap to cap, and the result is short by the
-	// displacement at that end.
+	// sketch plane to one end plane whose footprints OVERLAP: their caps are
+	// coplanar by construction and share positive area, and a shared area is what
+	// the refusal reads. Coplanar caps on their own are not a contact — two such
+	// bodies standing apart in the plane share no cap area, and every boolean
+	// over them runs. What replaces the tangent contact is an INTERIOR overlap:
+	// no face pair coplanar, and each operand reaching into the other's interior,
+	// so every contact is a transversal crossing this evaluator does classify.
+	// Both operands span the same interval here, so a LATERAL displacement never
+	// reaches that state — moving one body sideways leaves its caps in the two
+	// planes the other's caps lie in, and the overlap stands wherever the
+	// footprints still meet. The displacement has to run ALONG the sweep, and the
+	// caller owns what it costs: the moved operand no longer spans cap to cap, so
+	// the result is short by the displacement at that end. The one displacement
+	// that leaves the union's enclosed solid unchanged is one that lands the
+	// moved operand wholly inside the other body, where the union is that other
+	// body either way.
 	BooleanUnsupportedContact
 	// BooleanEvaluatorFailure is an internal invariant break: the stitched
 	// boundary did not close, a split line was not found, a chain dangled. It is a

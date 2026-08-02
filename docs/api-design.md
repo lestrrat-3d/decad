@@ -1054,16 +1054,22 @@ without naming the move, so the two refusals a modelling caller actually meets
 are stated here concretely.
 
 **The coplanar contact.** Two bodies extruded from ONE sketch plane to one end
-plane have coplanar caps by construction, so every boolean over the pair is
-`BooleanUnsupportedContact`. What replaces the tangent contact is an INTERIOR
-overlap: displace one operand so no face pair is coplanar and let the displaced
-body reach into the other's interior, which makes every contact a transversal
-crossing the evaluator does classify. The two displacement directions cost
-differently, and the caller owns the difference — material pushed sideways into
-the other body's interior leaves the union's enclosed solid unchanged, while a
-displacement ALONG the sweep changes it, since the operand no longer spans cap to
-cap and the result is short by the displacement at that end. A caller proving a
-part against a model built elsewhere has to state that second deviation; it is
+plane have coplanar caps by construction, and where their footprints OVERLAP
+those caps share positive area, which is the contact the boolean reads:
+`BooleanUnsupportedContact`. Coplanar caps on their own are not a contact — two
+such bodies standing apart in the plane share no cap area, and every boolean
+over them runs. What replaces the tangent contact is an INTERIOR overlap: no
+face pair coplanar, and each operand reaching into the other's interior, so
+every contact is a transversal crossing the evaluator does classify. Both
+operands span the same interval here, so a LATERAL displacement never reaches
+that state — moving one body sideways leaves its caps in the two planes the
+other's caps lie in, and the overlap stands wherever the footprints still meet.
+The displacement has to run ALONG the sweep, and the caller owns what it costs:
+the moved operand no longer spans cap to cap, so the result is short by the
+displacement at that end. The one displacement that leaves the union's enclosed
+solid unchanged is one that lands the moved operand wholly inside the other
+body, where the union is that other body either way. A caller proving a part
+against a model built elsewhere has to state the deviation it accepted; it is
 not free.
 
 **The chain depth.** A boolean's result is a `Faceted` body whose held `Bound`
@@ -1071,12 +1077,15 @@ composes from the operation that made it, while §9's chord tolerance for the ne
 pair is a fixed fraction of that pair's diameter. Where the composed bound is the
 coarser of the two, feeding the result back in as an operand is refused before
 any contact is examined — a plain `ErrUnsupported`, not a `BooleanError`, since
-the operand cannot be re-tessellated finer than the boundary it holds. Successive
-booleans over one part stay at one diameter, so the tolerance they ask for stays
-put while the held bound only grows: that is what limits how far booleans chain,
-and it is geometry rather than an argument the caller got wrong. The booleans
-take no tolerance parameter (§9), by the same decision that puts the tolerance's
-whole effect on the result's proven `Bound`. The bound is readable rather than
+the operand cannot be re-tessellated finer than the boundary it holds. Where the
+held bound stays under that tolerance the result is an ordinary operand and the
+chain continues, so the comparison at each step is what limits a chain, not the
+fact that an operand came out of a boolean: successive booleans over one part
+hold a bound that stays effectively flat, while a step whose operands extend the
+pair's bounding box raises the tolerance the next pair asks for. Where the
+comparison does refuse, it is geometry rather than an argument the caller got
+wrong. The booleans take no tolerance parameter (§9), by the same decision that
+puts the tolerance's whole effect on the result's proven `Bound`. The bound is readable rather than
 merely printed in the refusal — `Body.Tessellate` at any tolerance the faceted
 body already meets returns a `Mesh` whose `Bound` is that held bound — so a
 caller can size the limit before planning a chain. A construction needing many
