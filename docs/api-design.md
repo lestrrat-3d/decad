@@ -111,7 +111,7 @@ These are cheap now and expensive to retrofit. They are the upgrade path.
 | 5 | **Imported meshes are a separate type.** A `MeshBody` never claims to be a solid B-rep. | For imported triangle soup, no future kernel can recover exactness. Keeping it separate stops approximate-forever geometry from contaminating the type we promise to make exact. |
 
 **What will still churn**, stated honestly: face/edge *counts* may change under an
-exact kernel (canonicalize aggressively — merge coplanar faces — so v1 counts
+exact kernel (canonicalize under evaluator §3's rules, so v1 counts
 already match the analytic answer); numeric outputs shift (`12.9997 → 13.0000`, so
 tests compare with tolerances, never goldens); and vN's surface set is a superset,
 so a `switch` on `Surface` MUST have a `default` branch.
@@ -535,10 +535,10 @@ type Recipe struct {
 type StepRef int
 
 type Step struct {
-    Op        OpKind          // Extrude / Revolve / Union / Cut / Intersect / Fillet / Chamfer / Shell / Placed / Duplicate / PlacedCopy
+    Op        OpKind          // Extrude / Revolve / Loft / Union / Cut / Intersect / Fillet / Chamfer / Shell / Placed / Duplicate / PlacedCopy
     Inputs    []StepRef       // the bodies this step depends on. Cut is [target, tool].
-    Profile   ProfileRecord   // Extrude / Revolve — decad's own analytic 2D record of the region
-    Plane     PlaneRecord     // Extrude / Revolve — the sketch plane; lifts Profile into world space
+    Profile   ProfileRecord   // Extrude / Revolve / Loft ("from" section) — decad's own analytic 2D record of the region
+    Plane     PlaneRecord     // Extrude / Revolve / Loft ("from" section) — the sketch plane; lifts Profile into world space
     Extent    Extent          // Extrude
     Angular   AngularExtent   // Revolve
     Axis      Axis            // Revolve
@@ -594,14 +594,16 @@ read back: an unnamed or overflowed kind, a non-finite magnitude. Every quantity
 a `Step` records therefore encodes.
 
 **The root wire format is versioned and strict.** Canonical JSON is
-`{"format":"decad.recipe","version":1,"steps":[...]}`. The existing
-unversioned `{"steps":[...]}` shape is accepted as legacy version 1 and always
-re-encodes canonically. `json.Marshal` runs full recipe validation under default
-limits; `EncodeRecipe` runs the same encoder under explicit limits for trusted
-larger recipes. Invalid Unicode, unknown versions, unknown fields, duplicate
-keys, trailing values, malformed operation shapes, invalid references and
-configured resource-limit overruns reject. The in-memory `Recipe` keeps no
-version field: format metadata is not design intent.
+`{"format":"decad.recipe","version":2,"steps":[...]}`. Unversioned and
+version-1 input are accepted under the version-1 grammar and re-encode as
+canonical version 2. A version-1-only decoder rejects a version-2 envelope
+with `ErrUnsupportedRecipeVersion` before step dispatch. `json.Marshal` runs
+full recipe validation under default limits; `EncodeRecipe` runs the same
+encoder under explicit limits for trusted larger recipes. Invalid Unicode,
+unknown versions, unknown fields, duplicate keys, trailing values, malformed
+operation shapes, invalid references and configured resource-limit overruns
+reject. The in-memory `Recipe` keeps no version field: format metadata is not
+design intent.
 `docs/recipe-replay-design.md` §§2–7 is normative.
 
 **A recipe is evaluable, not merely encodable.** `Recipe.Validate` checks every
@@ -663,6 +665,8 @@ always a body it consumes:
   `TwoSided{One: ToFace{Body: a…}, Two: ToFace{Body: b…}}` records both. Without
   this the recipe would not be a complete graph: a second evaluator would reach the
   extrude with no way to know which body's face it stops at.
+- `Loft` depends on and consumes no body. Its increment-1 form has no
+  body-relative stop, so its `Inputs` is empty.
 - **`ThroughAll` and `ThroughAllSide` depend on bodies they do not name.** Their
   stops are the far sides of the live bodies the sweep meets, so the dependency is
   ambient at the CALL but must never be ambient in the RECORD: the feature call
@@ -673,9 +677,9 @@ always a body it consumes:
   re-evaluate to a different model in a different document state, which the
   completeness rule forbids.
 
-Depending on a body is **not** consuming it: `Extrude` and `Revolve` retire
-nothing, and the body a `ToFace` names stays live in `Document.Bodies()`. §6's
-retire rule is unchanged, and lists exactly the operations it covers.
+Depending on a body is **not** consuming it: `Extrude`, `Revolve`, and `Loft`
+retire nothing, and the body a `ToFace` names stays live in `Document.Bodies()`.
+§6's retire rule is unchanged, and lists exactly the operations it covers.
 
 **A `StepRef` is not the index invariant #3 forbids.** Invariant #3 forbids indices
 as *topology* selectors — `Edges()[3]` — because an exact kernel decomposes a body
@@ -719,20 +723,25 @@ type ShellOpts struct {
     Sense      ShellSense
     NoOpenings bool
 }
+type LoftOpts struct {
+    Profile2  ProfileRecord // the "to" section
+    Plane2    PlaneRecord   // the "to" section's plane
+    Alignment []int         // per-loop segment-rotation offset; absent means every offset is 0
+}
 ```
 
-For the current wire variants, `ExtrudeOpts.Taper` and `ShellOpts.Sense` are
-required payload fields. The decoder reads them through presence-aware pointer
-wire fields, then constructs the value-form variant. A missing or explicit-null
-payload rejects; it NEVER means zero taper or `Inward`. Feature-call defaults
-are materialized in the recorded `StepOpts`, so canonical output always carries
-the field.
+`docs/recipe-replay-design.md` §3.2 owns required `StepOpts` wire payload
+fields and their absent/null rules. The decoder reads required fields through
+presence-aware pointer wire fields, then constructs the value-form variant.
+Feature-call defaults are materialized in the recorded `StepOpts`, so canonical
+output always carries the required field.
 
 The completeness rule applied to options: **every `ExtrudeOption`,
-`RevolveOption`, `FilletOption`, `ChamferOption` and `ShellOption` MUST be
-representable in the corresponding `…Opts` struct.** An option with nowhere to land
-in the recipe does not ship — a tapered extrude that round-tripped as an untapered
-one would be exactly the lossy record the completeness rule forbids.
+`RevolveOption`, `FilletOption`, `ChamferOption`, `ShellOption`, and
+`LoftOption` MUST be representable in the corresponding `…Opts` struct.** An
+option with nowhere to land in the recipe does not ship — a tapered extrude that
+round-tripped as an untapered one would be exactly the lossy record the
+completeness rule forbids.
 
 `Selector` is the sealed root of the selector vocabulary, so a `Step` never holds
 an `any` — Fusion's `core.Base`-as-anything is rejected in §4, and `Recipe` is the
@@ -928,8 +937,9 @@ before extruding. decad never re-derives it.
 ## 8. Features
 
 v1 vocabulary, deliberately small: **Extrude, Revolve, Union/Cut/Intersect,
-Fillet, Chamfer, Shell, Placed, Duplicate, PlacedCopy**. Sweep and Loft are
-deferred.
+Fillet, Chamfer, Shell, Placed, Duplicate, PlacedCopy, Loft**. Sweep is
+deferred. `docs/loft-design.md` owns `Loft`'s signature, its two-profile
+correspondence rule, and its increment-1 scope.
 
 ```go
 func (d *Document) Extrude(s *sketch.Sketch, p *sketch.Profile, e Extent, opts ...ExtrudeOption) (*Body, error)
@@ -1792,7 +1802,7 @@ to make that mechanical.
 ## 13. Non-goals for v1
 
 Assemblies (`Component`/`Occurrence` instancing and the DAG that comes with it), a
-feature tree / timeline / rollback, sweep and loft, STEP, sheet metal, mesh import,
+feature tree / timeline / rollback, sweep, STEP, sheet metal, mesh import,
 GUI or view state of any kind, and Fusion code generation.
 
 The assemblies non-goal rests on a capability in hand, not on an instancing

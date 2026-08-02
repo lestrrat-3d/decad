@@ -84,14 +84,18 @@ Rules:
   body; concurrency safety (core §12) falls out.
 - **Provenance is structural.** `FeatureRef` identifies the producing
   `StepRef` plus a stable role within it — `side(i, j)` (loop `i`, segment
-  `j`), `capStart`, `capEnd`, and the revolve/boolean analogs. Roles derive
-  from the recorded step, so re-evaluation reproduces them, and the
-  provenance predicates — `CreatedBy` for edges, `FaceCreatedBy` for faces
-  (core §9) — select the same entities under every run.
-- **Canonicalize at build.** Adjacent coplanar side faces merge; a full
-  cylinder is one face with two circular-edge loops and no seam edge. v1
-  counts already match the analytic answer, so vN does not churn them
-  (core §3).
+  `j`) for a swept wall; `side(i, j, k)` for a Loft wall triangle, where
+  `k=0` is lower and `k=1` is upper; `capStart`, `capEnd`, and the
+  revolve/boolean analogs. Roles derive from the recorded step, so
+  re-evaluation reproduces them, and the provenance predicates — `CreatedBy`
+  for edges, `FaceCreatedBy` for faces (core §9) — select the same entities
+  under every run.
+- **Canonicalize at build.** Adjacent coplanar side faces merge, except no
+  Loft wall triangle merges with another face. This keeps
+  `side(i,j,0)`/`side(i,j,1)` distinct within a cell and preserves every
+  cross-cell rung between coplanar Loft triangles. A full cylinder is one
+  face with two circular-edge loops and no seam edge. v1 counts already match
+  the analytic answer, so vN does not churn them (core §3).
 - **Every vertex carries its bound.** Feature-built vertices are exact (bound
   zero); boolean-built vertices carry the tessellation's chord bound. The
   verification gate reads these (verification §4).
@@ -568,6 +572,15 @@ silent pass.
 
 Free-form support is `docs/spline-design.md`'s own increment plan (§10 there).
 Its stages do not consume a global evaluator increment number.
+
+Loft follows `docs/loft-design.md` §12's count-free three-PR delivery plan.
+PR 1 adds `Document.Loft`, its four measurements, and structural/tolerance
+`Verify`; PR 2 adds tessellation, mesh-boolean admission, and placement; PR 3
+reserves same-kind `CircleSeg`/`ArcSeg` correspondence and N-section and
+guide-rail/centerline lofts, and stages the analytic clearance adapter and
+non-constant-section wall survey.
+Every unlanded Loft `Verify` question remains `Suspect`; a call this evaluator
+cannot yet build returns `ErrUnsupported`.
 
 Payload verification §13 gives count-free stages for the cup adapter and
 faceted validity/clearance/survey work. Every later question stays `Suspect`

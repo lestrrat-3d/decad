@@ -148,7 +148,7 @@ Canonical JSON uses this envelope:
 ```json
 {
   "format": "decad.recipe",
-  "version": 1,
+  "version": 2,
   "steps": []
 }
 ```
@@ -182,22 +182,37 @@ format version.
 - `json.Unmarshal` into `Recipe` uses the strict decoder and default limits.
 - `DecodeRecipe` is the untrusted-reader API and allows explicit limits.
 - Existing unversioned `{"steps": ...}` input is legacy version 1 and remains
-  accepted. It MUST contain only `steps`.
+  accepted under the version-1 grammar. It MUST contain only `steps`.
 - Legacy `{"steps":null}` is accepted as empty because the original default Go
   codec emitted it for `Recipe{}`. Versioned input requires an array.
 - If either `format` or `version` is present, both are required.
 - `format` MUST equal `decad.recipe`.
-- `version` MUST equal `1`.
+- `version` MUST equal `1` or `2`.
 - Unknown versions return `ErrUnsupportedRecipeVersion`. NEVER ignore fields
   from a newer version.
+- Version 1 is the pre-loft vocabulary. Its closed `OpKind` set excludes
+  `"loft"` and it has no `LoftOpts` wire payload.
+- Version 2 adds `OpLoft` and its required `LoftOpts.profile2` and
+  `LoftOpts.plane2` wire fields.
+- A version-2 decoder accepts both versions. It preflights and decodes a
+  version-1 envelope under the version-1 grammar, then normalizes it into the
+  current in-memory `Recipe`; it preflights and decodes a version-2 envelope
+  under the version-2 grammar. A version-1 envelope containing `"loft"` is
+  invalid; it is never interpreted with version-2 rules.
+- The canonical encoder ALWAYS writes version 2. It never writes a version-1
+  envelope for a recipe containing `OpLoft`.
+- A decoder that supports only version 1 MUST reject a complete version-2
+  envelope with `ErrUnsupportedRecipeVersion` before it decodes any step. It
+  MUST NOT reach closed-variant dispatch for `"loft"`.
 - Every change that adds, removes, or changes the meaning of a wire field bumps
   `version`, even when old decoders could ignore the field.
 - Adding an evaluator does NOT bump recipe version.
 - Evaluator identity, tessellation tolerance, error bounds, and cached topology
   NEVER enter the envelope.
 
-Legacy input re-encodes as the canonical versioned envelope. No separate
-migration API exists for version 1.
+Legacy or version-1 input re-encodes as the canonical version-2 envelope. The
+version-2 decoder's normalization and canonical encoder are the migration path;
+no separate migration API exists.
 
 ### 2.2 Strict JSON
 
@@ -238,12 +253,14 @@ whose sealed forms are pointers by design. Decoded selectors are newly
 allocated. Every slice is newly owned. `StepOpts` receives the same normalize +
 clone path as extents, axes, segments, and selectors.
 
-Every current `StepOpts` payload field is required on the wire:
-`{"kind":"extrude"}` requires `taper`, and `{"kind":"shell"}` requires `sense`.
-Each variant decodes through pointer payload fields before constructing its
-value form. A missing or explicit-null payload is invalid; it NEVER becomes
-zero taper or `Inward`. Immediate feature-call defaults are materialized and
-recorded explicitly before encoding.
+Every required `StepOpts` payload field is required on the wire:
+`{"kind":"extrude"}` requires `taper`, `{"kind":"shell"}` requires `sense`,
+and `{"kind":"loft"}` requires `profile2` and `plane2`. `alignment` is
+optional only for `LoftOpts`: its absence records every offset as zero. Each
+variant decodes through pointer payload fields before constructing its value
+form. A missing or explicit-null required payload is invalid; it NEVER becomes
+zero taper, `Inward`, or a zero-value second loft section. Immediate
+feature-call defaults are materialized and recorded explicitly before encoding.
 
 ## 3. Validation layers
 
@@ -326,6 +343,7 @@ value. Every field not listed as required or allowed MUST be absent.
 |---|---:|---|---|---:|
 | `OpExtrude` | 0+ unique | `Profile`, `Plane`, `Extent`, `ExtrudeOpts` | dependencies named/resolved by extent | 0 |
 | `OpRevolve` | 0+ unique | `Profile`, `Plane`, `Angular`, `Axis` | dependencies named by angular extent/axis | 0 |
+| `OpLoft` | 0 | `Profile`, `Plane`, `LoftOpts` | none | 0 |
 | `OpUnion` | 2 distinct | none | none | 2 |
 | `OpCut` | 2 distinct, `[target, tool]` | none | none | 2 |
 | `OpIntersect` | 2 distinct | none | none | 2 |
@@ -343,7 +361,14 @@ Additional rules:
 - Fillet radius, chamfer distance, and shell thickness MUST be positive lengths.
 - `ShellOpts.Sense` MUST be present on the wire and MUST be `Inward` or
   `Outward`.
-- Extrude and revolve `Profile.Outer` MUST be non-empty.
+- `LoftOpts.Profile2` and `LoftOpts.Plane2` MUST be present on the wire. Both
+  profiles MUST independently pass §3.1's record checks. Their hole counts and
+  the segment counts of each ordinally paired outer/hole loop MUST match.
+- `LoftOpts.Alignment` MAY be absent, which means an all-zero offset for every
+  loop. When present, it MUST contain exactly one offset for the outer loop and
+  each hole loop; every offset MUST be in `[0, len(pairedLoop.Segments))`.
+- Extrude and revolve `Profile.Outer`, and both profiles of a loft, MUST be
+  non-empty.
 - `Extent` is required only for extrude.
 - `Angular` + `Axis` are required only for revolve.
 - `Placement` is required for placed and placed_copy, and forbidden on every
@@ -356,7 +381,8 @@ Additional rules:
   (`consumed inputs: 0`): the source stays live for later instances.
 - `Selectors` are required only for modify operations.
 - `Values` are required only for modify operations.
-- `Opts` is required only for extrude + shell under the current vocabulary.
+- `Opts` is required only for extrude, shell, and loft under the current
+  vocabulary.
 - Empty recipe is valid and evaluates to an empty document.
 
 ## 4. References and liveness
@@ -727,7 +753,7 @@ Canonical JSON is byte-stable for one normalized recipe:
 - closed variants use named tags;
 - no maps enter the wire form;
 - units retain their registered text form;
-- legacy input re-encodes in canonical version 1 form.
+- legacy or version-1 input re-encodes in canonical version-2 form.
 
 For the same normalized recipe + evaluator implementation:
 
@@ -756,7 +782,7 @@ evaluator cannot build returns `ErrUnsupported` at its first unsupported step.
 
 No public half-replay surface ships. Internal changes may land in this order:
 
-1. strict envelope codec + version 1 legacy reader;
+1. strict version-2 envelope codec + version-1 legacy reader;
 2. deep normalization, including `StepOpts`;
 3. schema-aware decode counters + evaluation counters + full recipe validator;
 4. shared recorded-step helpers for extrude/revolve/placed;
@@ -774,8 +800,12 @@ immediate feature call.
 
 ### 10.1 Wire
 
-- versioned round-trip for every closed variant;
-- legacy unversioned decode → canonical versioned encode;
+- version-2 round-trip for every closed variant, including `OpLoft` with both
+  required `LoftOpts` fields;
+- legacy unversioned and version-1 decode → canonical version-2 encode;
+- a version-1-only decoder rejects a complete version-2 envelope with
+  `ErrUnsupportedRecipeVersion` before step dispatch; the fixture proves that
+  its `"loft"` operation is never decoded as an unknown closed variant;
 - `Recipe.MarshalJSON` runs full profile validation with default limits;
   `EncodeRecipe` produces identical canonical bytes under the same limits;
 - exact-limit + one-over marshal profile-arrangement work, with instrumentation
@@ -807,6 +837,10 @@ immediate feature call.
 ### 10.2 Validation
 
 - one valid + every invalid field combination for every `OpKind`;
+- `OpLoft` accepts two valid ordinally compatible profiles with absent
+  `Alignment`, and rejects non-empty `Inputs`, absent `Opts`/`Profile2`/`Plane2`,
+  unequal hole or paired-loop segment counts, and malformed alignment length or
+  offset;
 - wrong unit, negative magnitude, non-finite number, invalid frame/transform;
 - malformed segment arrays + winding contradictions;
 - hostile stored profiles: open positive-area walk, self-crossing/touching loop,
