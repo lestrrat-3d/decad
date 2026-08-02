@@ -11,8 +11,10 @@ Companion to `docs/verification-design.md`, which owns what a `Clearance` IS
 and how its `Gap` is judged (references "verification §N"), and
 `docs/evaluator-design.md`, which owns the evaluator's staging and the shipped
 box-disjointness proofs ("evaluator §N") — this is the increment-3 design its
-§11 row 3 names. `docs/payload-verification-design.md` owns the cup/faceted
-boundary adapters and the proof-bound expansion around this analytic kernel.
+§11 row 3 names. `docs/payload-verification-design.md` owns the `cupPayload`
+and `facetedPayload` boundary adapters, `loftPayload` construction and
+box-disjoint staging, and the proof-bound expansion around this analytic
+kernel.
 `docs/interference-design.md` owns how a proven overlap is turned into a
 non-mutating, bounded `Interference` row. Nothing here changes those
 contracts.
@@ -100,8 +102,11 @@ analytic tiers and exact nesting casts apply. A faceted payload expands every
 held triangle to a trimmed plane and carries one body-level displacement
 `delta`; after held candidate aggregation the true distance interval is widened
 once by the two payload deltas. A nonzero widened interval that reaches zero is
-undecided unless a separate exact contact certificate settles it. Payload
-verification §3/§7 owns these adapters and their tests.
+undecided unless a separate exact contact certificate settles it. A
+`loftPayload` has no analytic adapter: exact bounds may decide a box-disjoint
+partition, but a requested `WithClearances` gap remains `Suspect` until its
+analytic adapter lands. Payload verification §3/§7 owns the cup/faceted
+adapters and their tests; §13/§14.1 own the loft staging and tests.
 
 ## 3. The candidate enumeration
 
@@ -458,7 +463,11 @@ reads `Suspect`, never an error, never a silent pass:
 
 Cup and faceted adapters land in payload verification §13. Until their stages
 land, an invoked pair containing that payload remains `Suspect`; the analytic
-kernel does not tessellate a cup or discard a faceted displacement bound.
+kernel does not tessellate a cup or discard a faceted displacement bound. A
+`loftPayload` has no analytic adapter in these stages. A requested
+`WithClearances` gap involving it remains `Suspect` until that adapter lands.
+The staged test MUST prove a bounds-disjoint loft pair has no `Clearance` row
+and reports `Suspect` before the adapter lands.
 
 Modify reach DX6 adds boundary readers for `capBlendPayload` and
 `stackedPrismPayload`; it does not add a weaker clearance proof. Readers emit

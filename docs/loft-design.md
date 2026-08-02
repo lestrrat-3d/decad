@@ -498,6 +498,9 @@ beyond what §6 already states.
 
 ## 12. Increments
 
+These PR labels are the count-free Loft delivery plan. They do not consume a
+global evaluator increment.
+
 | PR | Lands | Still refused after it |
 |---|---|---|
 | 1 | `OpLoft` wire/recipe plumbing (`LoftOpts` codec, `Op` token, `Step.Profile`/`Plane` reuse), Table P pairing + Table S gates S1–S5/S9/S10, the flat-triangle wall construction (§5), the crossing audit (§6, Table S S6–S8), `Document.Loft` / `LoftContext`, `Volume` / `Centroid` (§8's rational accumulator) / `Area` / `Bounds`, `Verify` (D6: the structural audit and the tolerance gate over all four) | curved-segment correspondence; N-section/guide-rail loft; reversed correspondence; surveys, clearance, interference beyond box-disjoint |

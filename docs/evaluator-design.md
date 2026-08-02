@@ -573,6 +573,13 @@ silent pass.
 Free-form support is `docs/spline-design.md`'s own increment plan (§10 there).
 Its stages do not consume a global evaluator increment number.
 
+Loft follows `docs/loft-design.md` §12's count-free three-PR delivery plan.
+PR 1 adds `Document.Loft`, its four measurements, and structural/tolerance
+`Verify`; PR 2 adds tessellation, mesh-boolean admission, and placement; PR 3
+stages the analytic clearance adapter and non-constant-section wall survey.
+Every unlanded Loft `Verify` question remains `Suspect`; a call this evaluator
+cannot yet build returns `ErrUnsupported`.
+
 Payload verification §13 gives count-free stages for the cup adapter and
 faceted validity/clearance/survey work. Every later question stays `Suspect`
 until its stage lands. These stages do not consume global evaluator increment

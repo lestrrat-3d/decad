@@ -23,7 +23,7 @@ case into nil, an empty list, or `Sound`.
 | `prismPayload` | exact construction proof | analytic kernel | exact 2D reduction | exact normal range | exact curvature |
 | `revolvePayload` | exact construction proof | analytic kernel | exact meridian reduction | exact normal range | exact curvature |
 | `cupPayload` | exact construction proof | exact analytic adapter (§3) | exact shell theorem (§4) | existing exact cup walk | existing exact cup walk |
-| `loftPayload` | exact construction audit | exact bounds-disjoint shortcut; mesh path staged | `Suspect` | `Suspect` | `Suspect` |
+| `loftPayload` | exact construction audit | exact bounds-disjoint shortcut; `WithClearances` stays `Suspect` until an analytic adapter lands; mesh path staged | `Suspect` | `Suspect` | `Suspect` |
 | `facetedPayload` | bounded boundary proof (§6) | bounded triangle adapter (§7) | bounded medial survey (§10) | certified normal patches (§8) | certified curvature patches (§9) |
 
 Three payload classes require different treatment:
@@ -33,7 +33,8 @@ Three payload classes require different treatment:
 - `facetedPayload` is an approximate boundary backed by a proof certificate.
   Read held polygons exactly, then widen every claim by that certificate.
 - `loftPayload` is an exact closed triangle boundary. Its construction audit
-  proves validity. Exact bounds settle bounds-disjoint pairs; a pair requiring
+  proves validity. Exact bounds settle bounds-disjoint pairs; a requested
+  clearance remains `Suspect` until an analytic adapter lands; a pair requiring
   the mesh path remains `Suspect` until that path lands, and every survey
   remains `Suspect` until it gains a non-constant-section proof.
 
@@ -657,7 +658,7 @@ Each row leaves every later question staged as `Suspect`.
 | faceted clearance | triangle boundary adapter + bounded clearance |
 | faceted shape surveys | undercut + min-radius certificates/surveys |
 | faceted wall | medial wall survey |
-| loft verification | construction validity + exact bounds-disjoint staging; pairs that need the mesh path, requested clearances, and requested surveys remain `Suspect` until their payload path lands |
+| loft verification | construction validity + exact bounds-disjoint staging; pairs that need the mesh path and requested surveys remain `Suspect` until their payload path lands; requested clearances remain `Suspect` until the analytic adapter lands |
 
 Tolerance-gate implementation MUST exist by the faceted-validity stage.
 Otherwise a proven valid faceted body still cannot become `Sound` when all
@@ -671,7 +672,7 @@ numbers.
 | Area | Cases |
 |---|---|
 | validity | accepted loft construction is valid; the tolerance gate judges its volume, area, centroid, and bounds without a fabricated payload-specific reading |
-| pair staging | a bounds-disjoint loft pair is proven disjoint; `WithClearances` remains `Suspect` for that pair until the clearance path lands; a pair that needs the mesh path is `Suspect` before that path lands |
+| pair staging | a bounds-disjoint loft pair is proven disjoint; `WithClearances` has no `Clearance` row and remains `Suspect` for that pair until the analytic adapter lands; a pair that needs the mesh path is `Suspect` before that path lands |
 | surveys | Each requested `MinWallThickness`, `Undercuts`, and `MinRadius` survey is `Suspect`, never absent or silently exact |
 
 ### 14.2 Cup
