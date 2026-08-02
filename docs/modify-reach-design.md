@@ -592,6 +592,30 @@ polygons would record one evaluator's decomposition as the meaning of a recipe
 whose exact-kernel replay modifies a different B-rep. SX9 is therefore a
 permanent limit of this evaluator reach, not an unfinished zero-bound shortcut.
 
+**What SX9 leaves a caller proving.** Because SX9 never lifts, a caller whose
+part fillets or chamfers a boolean result cannot reach the modified solid here at
+all, and waiting is not one of the options. What replaces it is a proof of the
+op's INPUTS rather than of its output: resolve the selector against the
+boolean body and assert the edge set the step would collect, then assert the
+material the op would leave — the wall or radius the requested size implies —
+against the analytic bodies that went INTO the boolean, which are analytic
+operands — a prism payload, a tube among them, or a cup payload — and answer
+every survey from that payload. That reading has to be taken before the operands
+are consumed, since a boolean retires them. It proves a weaker claim than the
+built solid would, and a caller choosing it should say which claim it is: the op's
+inputs are well formed and the material it removes is affordable, not that the
+modified body exists and is sound.
+
+Taking the reading off the operands is what makes the substitute reachable at
+all. The wall, undercut and minimum-radius surveys each answer from an analytic
+payload, so the same question asked on the boolean RESULT is undecided today and
+reads `Suspect` — the faceted surveys that would answer it are
+`docs/payload-verification-design.md`'s design, not shipped behaviour — while
+asked on an operand carrying an analytic payload, a prism or a cup, it is
+answered outright. An operand that is itself a boolean result carries a
+`facetedPayload` and leaves the same question undecided, so the substitute
+reaches only the analytic bodies at the start of a chain.
+
 ## 12. Table DX — downstream
 
 | DX | Consumer | Revolve rewrite | `capBlendPayload` | `stackedPrismPayload` |

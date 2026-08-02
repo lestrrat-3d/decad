@@ -1048,6 +1048,55 @@ outcome: the coplanar `Plane`×`Plane` contact certificate
 coplanar touch reads as a touching/clearance result — an `Exact`-zero gap, no
 interference — and emits no `DiagUnsupportedPairContact`.
 
+**What each boolean refusal leaves the caller.**
+"Choose a construction that does not lean on a tangent contact" names a move
+without naming the move, so the two refusals a modelling caller actually meets
+are stated here concretely.
+
+**The coplanar contact.** Two bodies extruded from ONE sketch plane to one end
+plane have coplanar caps by construction, and where their footprints OVERLAP
+those caps share positive area, which is the contact the boolean reads:
+`BooleanUnsupportedContact`. Coplanar caps on their own are not a contact — two
+such bodies standing apart in the plane share no cap area, and every boolean
+over them runs. What replaces the tangent contact is an INTERIOR overlap: no
+face pair coplanar, and each operand reaching into the other's interior, so
+every contact is a transversal crossing the evaluator does classify. Both
+operands span the same interval here, so a LATERAL displacement never reaches
+that state — moving one body sideways leaves its caps in the two planes the
+other's caps lie in, and the overlap stands wherever the footprints still meet.
+The displacement has to run ALONG the sweep, and the caller owns what it costs:
+it changes the enclosed solid, with an effect that depends on the operation and
+geometry. That displacement is necessary but insufficient when
+the profiles retain coplanar lateral faces: identical footprints still share
+lateral face area after their caps separate and return
+`BooleanUnsupportedContact`. The caller has to change the profile or otherwise
+prove that no face pair is coplanar. A displacement leaves a union's enclosed
+solid unchanged only when the moved operand is wholly inside the other body
+both before and after the displacement. Moving an operand into containment
+removes any former protruding volume. A caller proving a part against a model
+built elsewhere has to state the deviation it accepted; it is not free.
+
+**The chain depth.** A boolean's result is a `Faceted` body whose held `Bound`
+composes from the operation that made it, while §9's chord tolerance for the next
+pair is a fixed fraction of that pair's diameter. Where the composed bound is the
+coarser of the two, feeding the result back in as an operand is refused before
+any contact is examined — a plain `ErrUnsupported`, not a `BooleanError`, since
+the operand cannot be re-tessellated finer than the boundary it holds. Where the
+held bound stays under that tolerance the result is an ordinary operand and the
+chain continues, so the comparison at each step is what limits a chain, not the
+fact that an operand came out of a boolean. At every step, the result's held
+bound recomposes both operand bounds through `rimDelta`, then adds the final
+rounding displacement. A chained boolean whose first operand carries a bound
+and whose second operand also carries a nonzero bound therefore raises the held
+bound for the next pair; successive booleans do not keep that bound flat. Where
+the comparison does refuse, it is geometry rather than an argument the caller got
+wrong. The booleans take no tolerance parameter (§9), by the same decision that
+puts the tolerance's whole effect on the result's proven `Bound`. The bound is readable rather than
+merely printed in the refusal — `Body.Tessellate` at any tolerance the faceted
+body already meets returns a `Mesh` whose `Bound` is that held bound — so a
+caller can size the limit before planning a chain. A construction needing many
+booleans over one part has to be reshaped, not retried.
+
 Modify operations return a new body, retiring the receiver, on the same terms:
 
 ```go

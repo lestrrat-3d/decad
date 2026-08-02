@@ -214,6 +214,120 @@ func TestUnionDisjointCubes(t *testing.T) {
 	requireBodyWatertight(t, got)
 }
 
+// TestUnionCoplanarCapsReadSharedArea pins what the coplanar refusal actually
+// reads. Every prism boxBody builds is extruded from one sketch plane to one
+// end plane, so a same-height pair has its caps in the same two planes whatever
+// the footprints do. Coplanarity alone is therefore not the contact: the pair
+// separates on whether the caps share AREA, which also decides that no lateral
+// displacement escapes the refusal (docs/api-design.md §8).
+func TestUnionCoplanarCapsReadSharedArea(t *testing.T) {
+	t.Run("DisjointFootprints", func(t *testing.T) {
+		doc := decad.New()
+		a := boxBody(t, doc, 0, 0, 10, 10, 10)
+		b := boxBody(t, doc, 20, 0, 30, 10, 10)
+
+		got, err := decad.Union(a, b)
+		require.NoError(t, err, `coplanar caps sharing no area are not a contact`)
+		vol, err := got.Volume()
+		require.NoError(t, err)
+		require.Equal(t, 2000.0, volumeMM(t, vol))
+	})
+
+	t.Run("PartiallyOverlappingFootprints", func(t *testing.T) {
+		doc := decad.New()
+		a := boxBody(t, doc, 0, 0, 10, 10, 10)
+		b := boxBody(t, doc, 5, 5, 15, 15, 10)
+
+		_, err := decad.Union(a, b)
+		requireCoplanarFaceRefusal(t, err)
+		require.Len(t, doc.Bodies(), 2)
+	})
+
+	t.Run("ContainedFootprint", func(t *testing.T) {
+		doc := decad.New()
+		a := boxBody(t, doc, 0, 0, 10, 10, 10)
+		b := boxBody(t, doc, 2, 2, 8, 8, 10)
+
+		_, err := decad.Union(a, b)
+		requireCoplanarFaceRefusal(t, err)
+		require.Len(t, doc.Bodies(), 2)
+	})
+}
+
+// TestUnionIdenticalFootprintsShiftedAlongSweepRefusesCoplanarLateralFaces
+// proves that moving an identical footprint along the sweep separates its caps
+// but leaves its lateral faces coplanar. Their shared lateral area remains a
+// refused contact.
+func TestUnionIdenticalFootprintsShiftedAlongSweepRefusesCoplanarLateralFaces(t *testing.T) {
+	doc := decad.New()
+	a := boxBody(t, doc, 0, 0, 10, 10, 10)
+	b := translated(t, boxBody(t, doc, 0, 0, 10, 10, 10), 0, 0, 5)
+
+	_, err := decad.Union(a, b)
+	requireCoplanarFaceRefusal(t, err)
+	require.Len(t, doc.Bodies(), 2)
+}
+
+func TestUnionSweepDisplacementChangesEnclosedSolid(t *testing.T) {
+	t.Run("IntoContainmentRemovesProtrusion", func(t *testing.T) {
+		beforeDoc := decad.New()
+		beforeA := boxBody(t, beforeDoc, 0, 0, 10, 10, 10)
+		beforeB := translated(t, boxBody(t, beforeDoc, 2, 2, 8, 8, 10), 0, 0, 5)
+		before, err := decad.Union(beforeA, beforeB)
+		require.NoError(t, err)
+		beforeVolume, err := before.Volume()
+		require.NoError(t, err)
+		require.Equal(t, 1180.0, volumeMM(t, beforeVolume))
+
+		afterDoc := decad.New()
+		afterA := boxBody(t, afterDoc, 0, 0, 10, 10, 10)
+		afterB := translated(t, boxBody(t, afterDoc, 2, 2, 8, 8, 10), 0, 0, 5)
+		afterB = translated(t, afterB, 0, 0, -5)
+		afterVolume, err := afterA.Volume()
+		require.NoError(t, err)
+		require.Equal(t, 1000.0, volumeMM(t, afterVolume))
+		afterMesh, err := afterB.Tessellate(units.Millimeters(1))
+		require.NoError(t, err)
+		for _, vertex := range afterMesh.Vertices() {
+			require.GreaterOrEqual(t, vertex.X, 0.0)
+			require.LessOrEqual(t, vertex.X, 10.0)
+			require.GreaterOrEqual(t, vertex.Y, 0.0)
+			require.LessOrEqual(t, vertex.Y, 10.0)
+			require.GreaterOrEqual(t, vertex.Z, 0.0)
+			require.LessOrEqual(t, vertex.Z, 10.0)
+		}
+	})
+
+	t.Run("OutOfContainmentAddsProtrusion", func(t *testing.T) {
+		doc := decad.New()
+		a := boxBody(t, doc, 0, 0, 10, 10, 10)
+		inside := boxBody(t, doc, 2, 2, 8, 8, 10)
+		containedVolume, err := a.Volume()
+		require.NoError(t, err)
+		require.Equal(t, 1000.0, volumeMM(t, containedVolume))
+
+		moved := translated(t, inside, 0, 0, 5)
+		got, err := decad.Union(a, moved)
+		require.NoError(t, err)
+		gotVolume, err := got.Volume()
+		require.NoError(t, err)
+		require.Equal(t, 1180.0, volumeMM(t, gotVolume))
+	})
+}
+
+// requireCoplanarFaceRefusal asserts a shared-area coplanar face contact: a
+// valid model this evaluator cannot classify, so BooleanUnsupportedContact
+// wraps ErrUnsupported.
+func requireCoplanarFaceRefusal(t *testing.T, err error) {
+	t.Helper()
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+	require.NotErrorIs(t, err, decad.ErrDegenerate)
+	require.ErrorContains(t, err, `overlap in one plane`, `the refusal is the shared cap area, not some other contact`)
+	var be *decad.BooleanError
+	require.ErrorAs(t, err, &be)
+	require.Equal(t, decad.BooleanUnsupportedContact, be.Code)
+}
+
 func TestIntersectOverlappingCubes(t *testing.T) {
 	doc := decad.New()
 	a := boxBody(t, doc, 0, 0, 10, 10, 10)
@@ -415,21 +529,88 @@ func TestBooleanBoundComposition(t *testing.T) {
 	doc := decad.New()
 	plate := boxBody(t, doc, 0, 0, 20, 20, 8)
 	tool := translated(t, diskBody(t, doc, 14, 6, 2), 0, 0, -6)
-	cutBody, err := decad.Cut(plate, tool)
+	first, err := decad.Cut(plate, tool)
 	require.NoError(t, err)
-	cutVol, err := cutBody.Volume()
+	firstMesh, err := first.Tessellate(units.Millimeters(1000))
 	require.NoError(t, err)
+	require.Positive(t, firstMesh.Bound().Mag())
 
-	// A boolean of a boolean: the composed bound never shrinks below what
-	// the first result already carried.
-	extra := translated(t, boxBody(t, doc, 0, 0, 5, 5, 5), 30, 0, 0)
-	both, err := decad.Union(cutBody, extra)
+	secondPlate := translated(t, boxBody(t, doc, 0, 0, 20, 20, 8), 40, 0, 0)
+	secondTool := translated(t, diskBody(t, doc, 14, 6, 2), 40, 0, -6)
+	second, err := decad.Cut(secondPlate, secondTool)
 	require.NoError(t, err)
+	secondMesh, err := second.Tessellate(units.Millimeters(1000))
+	require.NoError(t, err)
+	require.Positive(t, secondMesh.Bound().Mag())
+
+	// Both operands carry a held bound. The final union must compose both
+	// rather than treating the first result's bound as effectively flat.
+	both, err := decad.Union(first, second)
+	require.NoError(t, err)
+	bothMesh, err := both.Tessellate(units.Millimeters(1000))
+	require.NoError(t, err)
+	require.Greater(t, bothMesh.Bound().Mag(), firstMesh.Bound().Mag())
+	require.Greater(t, bothMesh.Bound().Mag(), secondMesh.Bound().Mag())
 	bothVol, err := both.Volume()
 	require.NoError(t, err)
-	require.GreaterOrEqual(t, boundMM3(t, bothVol), boundMM3(t, cutVol))
 	require.Equal(t, decad.Approximate, bothVol.Exactness)
 	requireBodyWatertight(t, both)
+}
+
+// TestBooleanChainsWithinHeldBound pins the chain limit as a comparison rather
+// than a category: a Faceted operand refuses only where its held Bound exceeds
+// the chord tolerance the next pair derives from its own diameter, so a result
+// whose bound fits chains straight back in — twice here (boolean.go, core §8).
+func TestBooleanChainsWithinHeldBound(t *testing.T) {
+	doc := decad.New()
+	plate := boxBody(t, doc, 0, 0, 20, 20, 8)
+	tool := translated(t, diskBody(t, doc, 14, 6, 2), 0, 0, -6)
+	drilled, err := decad.Cut(plate, tool)
+	require.NoError(t, err)
+	drilledVol, err := drilled.Volume()
+	require.NoError(t, err)
+
+	first := translated(t, boxBody(t, doc, 0, 0, 5, 5, 5), 30, 0, 0)
+	once, err := decad.Union(drilled, first)
+	require.NoError(t, err)
+
+	second := translated(t, boxBody(t, doc, 0, 0, 5, 5, 5), 60, 0, 0)
+	twice, err := decad.Union(once, second)
+	require.NoError(t, err, `a boolean result whose held bound fits the next pair's tolerance is an ordinary operand`)
+
+	twiceVol, err := twice.Volume()
+	require.NoError(t, err)
+	// Both added boxes are disjoint from the drilled plate and from each
+	// other, so the chained union encloses the sum.
+	require.InDelta(t, volumeMM(t, drilledVol)+250.0, volumeMM(t, twiceVol), 1e-6)
+	require.Len(t, twice.Lumps(), 3)
+	requireBodyWatertight(t, twice)
+}
+
+// TestUnionCupOperand pins the operand admission set: booleans tessellate their
+// operands, and tessellation accepts the prism, cup and faceted payload
+// classes, so a Shell-built cup is a first-class operand
+// (docs/modify-reach-design.md §11).
+func TestUnionCupOperand(t *testing.T) {
+	doc, box := shellBox(t)
+	cup, err := box.Shell(topCap(box), units.Millimeters(5))
+	require.NoError(t, err)
+	cupVol, err := cup.Volume()
+	require.NoError(t, err)
+
+	// Clear of the 100×60 plate's footprint, so the only coplanar caps share
+	// no area.
+	extra := boxBody(t, doc, 200, 0, 210, 10, 10)
+	extraVol, err := extra.Volume()
+	require.NoError(t, err)
+
+	got, err := decad.Union(cup, extra)
+	require.NoError(t, err)
+	gotVol, err := got.Volume()
+	require.NoError(t, err)
+	require.InDelta(t, volumeMM(t, cupVol)+volumeMM(t, extraVol), volumeMM(t, gotVol), 1e-6)
+	require.Len(t, got.Lumps(), 2)
+	requireBodyWatertight(t, got)
 }
 
 func TestFacetedPlaced(t *testing.T) {

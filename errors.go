@@ -166,6 +166,28 @@ const (
 	// the evaluator's reach, so the [BooleanError] wraps [ErrUnsupported], never
 	// [ErrDegenerate]. Choose a construction that does not lean on a tangent
 	// contact, or wait for a later evaluator.
+	//
+	// The construction this most often costs is two bodies extruded from ONE
+	// sketch plane to one end plane whose footprints OVERLAP: their caps are
+	// coplanar by construction and share positive area, and a shared area is what
+	// the refusal reads. Coplanar caps on their own are not a contact — two such
+	// bodies standing apart in the plane share no cap area, and every boolean
+	// over them runs. What replaces the tangent contact is an INTERIOR overlap:
+	// no face pair coplanar, and each operand reaching into the other's interior,
+	// so every contact is a transversal crossing this evaluator does classify.
+	// Both operands span the same interval here, so a LATERAL displacement never
+	// reaches that state — moving one body sideways leaves its caps in the two
+	// planes the other's caps lie in, and the overlap stands wherever the
+	// footprints still meet. The displacement has to run ALONG the sweep, and the
+	// caller owns what it costs: it changes the enclosed solid, with an effect
+	// that depends on the operation and geometry. That displacement is necessary
+	// but insufficient when the profiles retain coplanar lateral faces:
+	// identical footprints still share lateral face area after their caps separate
+	// and return BooleanUnsupportedContact. The caller has to change the profile
+	// or otherwise prove that no face pair is coplanar. A displacement leaves a
+	// union's enclosed solid unchanged only when the moved operand is wholly
+	// inside the other body both before and after the displacement. Moving an
+	// operand into containment removes any former protruding volume.
 	BooleanUnsupportedContact
 	// BooleanEvaluatorFailure is an internal invariant break: the stitched
 	// boundary did not close, a split line was not found, a chain dangled. It is a

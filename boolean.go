@@ -57,6 +57,20 @@ const boolChordFactor = 2e-5
 // cannot be chorded finely enough to tessellate surfaces the retryable
 // coarse-chording ErrDegenerate on that operand — a finer chord tolerance may
 // clear it — not a BooleanError.
+//
+// The Faceted-operand half of that limit is what bounds how far booleans CHAIN,
+// and it binds CONDITIONALLY: a result's held Bound is composed from the
+// operation that made it, and feeding that result straight back in as an
+// operand refuses exactly when the held Bound exceeds the chord tolerance the
+// next pair derives from its own diameter. A result whose held Bound stays
+// under that tolerance is an ordinary operand and chains, so what limits a
+// chain is the comparison at each step, not the fact that an operand came out
+// of a boolean. There is no caller-side tolerance to raise — §9 keeps the
+// booleans free of a tolerance parameter on purpose — so where the comparison
+// does refuse, it is geometry rather than an argument the caller got wrong. The
+// number itself is readable, not only printed in that refusal:
+// [Body.Tessellate] at any tolerance the faceted body already meets returns a
+// [Mesh] whose Bound is exactly the held bound the refusal names.
 func Union(a, b *Body) (*Body, error) {
 	return UnionContext(context.Background(), a, b)
 }

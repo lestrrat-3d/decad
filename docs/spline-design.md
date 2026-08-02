@@ -188,6 +188,20 @@ straddles its threshold is the second case, and so is a direction cone §6.3
 cannot certify. R11 is the first case reached from the same brackets: a build
 gate has no `Suspect` to fall back on (§6.4).
 
+**What a caller does while a row stands.** A curve refused here has one
+substitute in the caller's own hands, and it is a different curve rather than a
+workaround for the same one: build the sketch entity as a POLYLINE through the
+points the free-form curve was defined by, which is analytic and which every
+current build accepts. Nothing about that is decad's inference — the caller
+chooses the chords, so the caller knows the sagitta, and the resulting body is
+the exact prism over the polygon rather than an approximation of the intended
+one. What the caller owes is to say so: a proof over a chorded section proves a
+chord approximation of the intended part, and any volume or clearance assertion
+it makes has to carry the chording error the caller introduced, on top of the
+`Bound` decad reports. This is the standing answer for R6 in particular, whose
+retirement waits on §9 ask 1 and, for a section that must then BUILD, on §10's
+P4.
+
 ### 4.1 Why the modify refusals stand
 
 Modify §2 reduces every modify op to an EXACT rewrite of the recorded 2D
