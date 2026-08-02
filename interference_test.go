@@ -77,6 +77,22 @@ func TestVerifyOffsetBoxesReportBoundedInterference(t *testing.T) {
 	requireDocumentUnchanged(t, doc, before)
 }
 
+// TestVerifyCoplanarPrismOverlapStaysOnMeshPath confirms the PR1 boundary:
+// the public Union path may use the analytic reduction, but Verify still
+// runs its read-only intersection through the coplanar-contact mesh path.
+func TestVerifyCoplanarPrismOverlapStaysOnMeshPath(t *testing.T) {
+	doc := decad.New()
+	boxBody(t, doc, 0, 0, 10, 10, 10)
+	boxBody(t, doc, 5, 5, 15, 15, 10)
+	before := snapshotDocument(t, doc)
+
+	report, err := doc.Verify(t.Context())
+	require.NoError(t, err)
+	require.Equal(t, decad.Suspect, report.Status)
+	require.Empty(t, report.Interferences)
+	requireDocumentUnchanged(t, doc, before)
+}
+
 func TestVerifyStrictContainmentReusesInnerVolume(t *testing.T) {
 	doc := decad.New()
 	outer := boxBody(t, doc, 0, 0, 10, 10, 10)

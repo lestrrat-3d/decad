@@ -300,11 +300,11 @@ and bound helpers. A verification-only approximate volume formula is forbidden.
 
 The current symmetric triangle classifier refuses a two-dimensional coplanar
 intersection. That refusal stays correct until this complete replacement
-lands; it must not be weakened one pair at a time. `docs/prism-boolean-design.md`
-supersedes this section for the narrower case of two co-directional coplanar
-prisms — an admitted pair gets an exact overlap volume through `evaluateBoolean`'s
-analytic dispatch, never reaching this mesh-side arrangement; this section
-still governs every coplanar pair that design does not admit.
+lands; it must not be weakened one pair at a time. PR1 of
+`docs/prism-boolean-design.md` dispatches only public `Union` pairs from
+`performBoolean`; `Verify` continues through `evaluateBoolean`'s mesh path.
+PR4 separately adds read-only analytic `Intersect`. This section still governs
+every coplanar pair the mesh path receives.
 
 Coplanar breadth support constructs one exact 2D arrangement per coplanar face
 patch in the dominant-axis projection already used by the boolean's rational

@@ -297,10 +297,12 @@ different topology split but MUST preserve role/query meaning.
 
 Increment 4, the deep end. Strategy:
 
-`docs/prism-boolean-design.md` is the approved analytic reduction
-`evaluateBoolean` dispatches to first, ahead of the tessellation path below,
-for co-directional coplanar prism pairs — a reject-only gate falls back to
-this section's mesh path unchanged for everything it does not admit.
+`docs/prism-boolean-design.md` is the approved analytic reduction PR1
+dispatches from `performBoolean`, ahead of the tessellation path below, for
+co-directional coplanar prism `Union` pairs. `evaluateBoolean` remains this
+section's mesh path; a rejected PR1 candidate and every other operation falls
+back to it unchanged. PR4 separately adds the read-only analytic `Intersect`
+path.
 
 **Interference evaluation MUST be read-only; committing a public boolean stays
 a wrapper.** Interference PR 1 (`docs/interference-design.md` §11) factors one

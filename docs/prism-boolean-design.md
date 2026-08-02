@@ -61,16 +61,17 @@ the admitted class and which stand outside it.
 
 ## 2. Approach
 
-**Chosen direction.** Dispatch a reject-only admission gate inside the
-existing `Union`/`Cut`/`Intersect` (via the shared `evaluateBoolean`). An
-admitted pair combines its two operands' `ProfileRecord`s through a private
-`sketch` scene decad builds, records the selected result region(s) through the
-existing seam (`RecordProfile`/`recordEdge`), audits the assembly with the
-same closed-form checks `modify §5` already runs on a rewritten section, and
-rebuilds through `evalPrism`, which §7 extends with one section-displacement
-bound so the re-expressed operand's rounding reaches every measurement. A
-non-admitted pair — wrong payload class, non-coplanar, a segment kind outside
-the admitted set, an unequal
+**Chosen direction.** PR1 dispatches a reject-only admission gate from
+`performBoolean` for `Union`, ahead of the shared `evaluateBoolean` mesh
+pipeline. An admitted pair combines its two operands' `ProfileRecord`s through
+a private `sketch` scene decad builds. It records the selected result regions
+through the existing seam (`RecordProfile`/`recordEdge`), audits the assembly
+with `modify §5`'s existing closed-form checks, and rebuilds through
+`evalPrism`. Section 7 extends the result with one section-displacement bound
+so the re-expressed operand's rounding reaches every measurement.
+`Cut` and `Intersect` remain on the mesh path until later increments. A
+non-admitted `Union` pair — wrong payload class, non-coplanar, a segment kind
+outside the admitted set, an unequal
 z-interval for `Union`, or a topology this increment's region resolution does
 not cover — takes the unchanged mesh path, with **zero behavior change**: no
 new error, no new refusal text, nothing a caller not making booleans this
@@ -553,8 +554,8 @@ a differently-authored model of the same intent can clear it.
 
 Reuses `budget.go`'s existing `workBudget` (`newWorkBudget(ctx)`), the same
 shared counter Fillet/Chamfer/Shell already thread through their own audits
-(CLAUDE.md's "Modify audit cancellation"). One counter opens per
-`evaluateBoolean` call and threads through: the G4 segment scan, scene
+(CLAUDE.md's "Modify audit cancellation"). PR1 opens one counter per
+`tryPrismUnion` attempt and threads it through: the G4 segment scan, scene
 construction (one charge per created entity), the §4.2 selection/merge walk
 (one charge per candidate edge/cell touched, matching `crossingAuditBudget`'s
 own per-pair charge shape), and §6's audit (its existing budget parameter,
@@ -598,7 +599,7 @@ origin, exactly as it already must after a Fillet or Chamfer. Flagged in
 |---|---|
 | Tessellation | No new code — the result is an ordinary `prismPayload` and `docs/tessellation-design.md` §5's existing prism contract applies. §7's section displacement rides in that contract's own stored-coordinate rounding term (tessellation §5's prism row), so a mesh of an assembled body is `Exact`-trimmed only where `δ == 0`. |
 | Clearance kernel | Unchanged where `δ == 0` — dispatches on payload class; `prismPayload` already has full analytic support (`clearance.go`'s coplanar `Plane`×`Plane` certificate, `offsetPair`, etc.). Where `δ > 0` the kernel builds no model for the body and the pair reads `Suspect`: every certificate it emits is an exact statement about the carriers it read, and a carrier the payload holds only within `δ` of the one it denotes cannot support one. Widening the kernel's own candidate intervals by `δ` is a separate piece of work, not this design's. |
-| Interference (`Verify`) | **Still on the mesh path.** `interference.go`'s `measuredInterference` calls `evaluateBoolean(ctx, OpIntersect, ...)` directly after its containment and represented-set-equality certificates. The analytic dispatch is in `performBoolean`, which this PR implements only for `Union`, so an admitted coplanar-prism pair still reaches the existing read-only mesh intersection and may be coarse or `Suspect`. PR4 separately wires a read-only analytic `Intersect` path and its tests. `docs/interference-design.md` §5.2 therefore remains unchanged. |
+| Interference (`Verify`) | **Still on the mesh path.** `interference.go`'s `measuredInterference` calls `evaluateBoolean(ctx, OpIntersect, ...)` directly after its containment and represented-set-equality certificates. The analytic dispatch is in `performBoolean`, which this PR implements only for `Union`, so an admitted coplanar-prism pair still reaches the existing read-only mesh intersection and may be coarse or `Suspect`. PR4 separately wires a read-only analytic `Intersect` path and its tests. `docs/interference-design.md` §5.2 records this PR1 boundary. |
 | Surveys (wall/undercut/min-radius) | No new code — they dispatch on payload class, and support is immediate where `δ == 0`. The undercut reading is a normal-direction membership and is unaffected at any `δ`. The wall and min-radius readings are staged at `δ > 0` and answer undecided (`Suspect`, never a silent pass): each publishes a bare reading with no bound beside it, and the wall reading is not a quantity a displacement widens by a fixed amount anyway — its allowance-angle contact families (verification §6) can change membership under a boundary perturbation, so a proven displaced reading needs the survey's own theory extended, not a term added to a bound. |
 | `Verify`'s structural/tolerance gates | Unchanged — `prismPayload` is valid by construction as always. |
 | Export (STL/OBJ) | Unchanged — reads `Tessellate`'s output. |
@@ -646,8 +647,9 @@ origin, exactly as it already must after a Fillet or Chamfer. Flagged in
    §4.1's scene builder and re-expression, `Union`'s select-all/merge/chain,
    §6's audit reuse, §5's authentication, §7's exactness (the section
    displacement bound on `prismPayload`, its one `bounds.go` helper, and
-   `evalPrism`'s composition of it), `evaluateBoolean`/`performBoolean`'s
-   branch to build via `evalPrism` instead of `buildFacetedBody` on admission.
+   `evalPrism`'s composition of it), and `performBoolean`'s branch before
+   `evaluateBoolean` to build via `evalPrism` instead of `buildFacetedBody`
+   on admission.
    Tests: a two-box union sharing a cap plane (the "control" case from the
    consumer's report) builds analytically, with `Exact` volume where both boxes
    sit on one frame (§7's `δ == 0` case); the gear's tooth-on-hub
