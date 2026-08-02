@@ -188,8 +188,8 @@ individually non-degenerate.
 **Every wall is two flat triangles, split along the same fixed diagonal
 `tessellate.go` already uses for a prism's lateral quad.** A loft reuses that
 convention as its actual TOPOLOGY, not merely its tessellation. The local
-order below fixes the diagonal and roles; the whole-shell rule that follows
-fixes outward winding.
+order below fixes the diagonal and roles. The cap seed plus whole-shell rule
+that follows fixes outward winding.
 
 For paired segment `j` of a loop — `V_j -> V_{j+1}` on `p0`, `W_j -> W_{j+1}`
 on `p1` (indices already rotated by §3's alignment) — the quad `V_j, V_{j+1},
@@ -200,14 +200,20 @@ W_{j+1}, W_j` splits into:
 | lower | `V_j, V_{j+1}, W_{j+1}` | the full `p0` segment (shared with `capStart`'s boundary) | `side(i,j,0)` |
 | upper | `V_j, W_{j+1}, W_j` | the full `p1` segment, reversed (shared with `capEnd`'s boundary) | `side(i,j,1)` |
 
-**Orient the complete shell once after constructing every wall and both
-caps.** Compute §8's signed tetrahedron sum from the complete triangle set,
-using `p0`'s `PlaneRecord.Origin` as its fixed anchor. Its sign is nonzero
-after S5–S7. Retain every triangle when the sum is positive. When it is
-negative, reverse every triangle's winding, including both caps, by swapping
-its second and third vertices. Never orient a wall or cap independently. This
-deterministic whole-shell step makes Table B, mass properties, and
-`Tessellate` receive one positively oriented material boundary.
+**Seed cap winding from shared-edge adjacency before orienting the complete
+shell.** Retain each `capEnd` triangle from `p1`'s triangulation. Reverse each
+`capStart` triangle from `p0`'s triangulation by swapping its second and third
+vertices. Every cap-boundary edge then opposes its incident wall edge.
+
+**Orient the already coherent complete shell once after constructing every
+wall and both caps.** Compute §8's signed tetrahedron sum from the complete
+triangle set, using `p0`'s `PlaneRecord.Origin` as its fixed anchor. Its sign
+is nonzero after cap seeding and S5–S7. Retain every triangle when the sum is
+positive. When it is negative, reverse every triangle's winding, including
+both caps, by swapping its second and third vertices. Never orient an
+individual wall or cap after cap seeding. This deterministic whole-shell step
+makes Table B, mass properties, and `Tessellate` receive one positively
+oriented material boundary.
 
 Evaluator §3 owns the `side(i,j,k)` grammar. Here `i` is the loop index
 (`0` for `Outer`, `1+h` for `Holes[h]`), matching Table P's own indexing.
@@ -393,9 +399,9 @@ from the record and the deterministic walk order").
 ## 8. Mass properties — derived, not asserted
 
 Write `T` for the set of `2*sum(n_i)` wall triangles plus the two caps'
-own triangulations, each triangle `(A, B, C)` outward-oriented by §5's
-whole-shell rule (material on the left, the same walk-order convention every
-payload already uses).
+own triangulations, each triangle `(A, B, C)` outward-oriented by §5's cap
+seeding and complete-shell rule (material on the left, the same walk-order
+convention every payload already uses).
 
 **Volume is a signed sum of tetrahedron volumes from a fixed anchor** —
 the standard divergence-theorem reduction for a closed triangulated
@@ -571,11 +577,14 @@ never merely that a call ran (project rule).
 - **Construction**: every wall/cap edge bounds exactly two faces; every
   triangle has positive area; the two caps' triangulation matches
   `triangulate.go`'s existing polygon-with-holes output for each profile in
-  isolation; matching square profiles at `z=0` and `z=-1` with identical
-  frames normalize all wall and cap windings to a positive signed
-  tetrahedron sum, asserted before mass properties and tessellation read the
-  payload; a junction's `Edge.IsConvex` matches its hand-computed
-  walked-boundary turn; an outer rim is convex and a hole rim is concave. An
+  isolation; matching counter-clockwise square `LineSeg` profiles on identity
+  frames at `z=0` and `z=1` first assert that `capStart` reverses `p0`'s
+  triangulation while `capEnd` retains `p1`'s, with every cap-boundary edge
+  opposite its wall neighbor; that fixture then normalizes all wall and cap
+  windings to a positive signed tetrahedron sum before mass properties and
+  tessellation read the payload; a junction's `Edge.IsConvex` matches its
+  hand-computed walked-boundary turn; an outer rim is convex and a hole rim is
+  concave. An
   untwisted congruent parallel loft with one outer side deliberately split
   into two collinear `LineSeg`s retains exactly two `Plane` faces per wall
   cell. At the flat split rung, the preceding cell's lower triangle and the
