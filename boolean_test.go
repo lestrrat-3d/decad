@@ -239,7 +239,7 @@ func TestUnionCoplanarCapsReadSharedArea(t *testing.T) {
 		b := boxBody(t, doc, 5, 5, 15, 15, 10)
 
 		_, err := decad.Union(a, b)
-		requireCoplanarCapRefusal(t, err)
+		requireCoplanarFaceRefusal(t, err)
 		require.Len(t, doc.Bodies(), 2)
 	})
 
@@ -249,15 +249,29 @@ func TestUnionCoplanarCapsReadSharedArea(t *testing.T) {
 		b := boxBody(t, doc, 2, 2, 8, 8, 10)
 
 		_, err := decad.Union(a, b)
-		requireCoplanarCapRefusal(t, err)
+		requireCoplanarFaceRefusal(t, err)
 		require.Len(t, doc.Bodies(), 2)
 	})
 }
 
-// requireCoplanarCapRefusal asserts the shared-area cap contact: a valid model
-// this evaluator cannot classify, so BooleanUnsupportedContact wrapping
-// ErrUnsupported.
-func requireCoplanarCapRefusal(t *testing.T, err error) {
+// TestUnionIdenticalFootprintsShiftedAlongSweepRefusesCoplanarLateralFaces
+// proves that moving an identical footprint along the sweep separates its caps
+// but leaves its lateral faces coplanar. Their shared lateral area remains a
+// refused contact.
+func TestUnionIdenticalFootprintsShiftedAlongSweepRefusesCoplanarLateralFaces(t *testing.T) {
+	doc := decad.New()
+	a := boxBody(t, doc, 0, 0, 10, 10, 10)
+	b := translated(t, boxBody(t, doc, 0, 0, 10, 10, 10), 0, 0, 5)
+
+	_, err := decad.Union(a, b)
+	requireCoplanarFaceRefusal(t, err)
+	require.Len(t, doc.Bodies(), 2)
+}
+
+// requireCoplanarFaceRefusal asserts a shared-area coplanar face contact: a
+// valid model this evaluator cannot classify, so BooleanUnsupportedContact
+// wraps ErrUnsupported.
+func requireCoplanarFaceRefusal(t *testing.T, err error) {
 	t.Helper()
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.NotErrorIs(t, err, decad.ErrDegenerate)

@@ -180,10 +180,14 @@ const (
 	// planes the other's caps lie in, and the overlap stands wherever the
 	// footprints still meet. The displacement has to run ALONG the sweep, and the
 	// caller owns what it costs: the moved operand no longer spans cap to cap, so
-	// the result is short by the displacement at that end. The one displacement
-	// that leaves the union's enclosed solid unchanged is one that lands the
-	// moved operand wholly inside the other body, where the union is that other
-	// body either way.
+	// the result is short by the displacement at that end. That displacement is
+	// necessary but insufficient when the profiles retain coplanar lateral faces:
+	// identical footprints still share lateral face area after their caps separate
+	// and return BooleanUnsupportedContact. The caller has to change the profile
+	// or otherwise prove that no face pair is coplanar. The one displacement that
+	// leaves the union's enclosed solid unchanged is one that lands the moved
+	// operand wholly inside the other body, where the union is that other body
+	// either way.
 	BooleanUnsupportedContact
 	// BooleanEvaluatorFailure is an internal invariant break: the stitched
 	// boundary did not close, a split line was not found, a chain dangled. It is a
