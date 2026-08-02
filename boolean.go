@@ -191,6 +191,29 @@ func performBoolean(ctx context.Context, op OpKind, a, b *Body) (*Body, error) {
 		return nil, fmt.Errorf(`%w: a boolean needs two distinct bodies`, ErrDegenerate)
 	}
 	inputs := []StepRef{a.originStep(), b.originStep()}
+
+	// docs/prism-boolean-design.md PR1: a reject-only analytic reduction for
+	// a co-directional coplanar prism pair, dispatched ahead of the mesh
+	// path. ok=false is never an error — the pair falls back to the
+	// unchanged mesh path below exactly as it did before this design
+	// existed. A non-nil err here is a genuine, typed post-admission refusal
+	// (§3.4) and must propagate rather than reroute to the mesh path.
+	if pp, ok, err := tryPrismUnion(ctx, op, a, b); err != nil {
+		return nil, err
+	} else if ok {
+		step := Step{Op: op, Inputs: inputs}
+		ref := d.nextStepRef()
+		body, err := evalPrismContext(ctx, d, ref, pp, newFreeformWork())
+		if err != nil {
+			return nil, err
+		}
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		d.commit(step, body, a, b)
+		return body, nil
+	}
+
 	eval, err := evaluateBoolean(ctx, op, a, b)
 	if err != nil {
 		return nil, asBooleanError(op, inputs, err)
