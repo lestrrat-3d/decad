@@ -296,11 +296,12 @@ each polygon-with-holes cap). A recorded shared edge or vertex does not prove
 that it is the pair's only contact. **Adjacency states the expected contact;
 every pair is classified against that expectation:**
 
-- **A pair sharing an EDGE is admitted only when `triTriClassify` reports the
-  exact recorded common edge as its whole shared segment.** This applies to a
-  rung, a diagonal, a cap-boundary edge, and an internal edge of one cap's own
-  triangulation. The matching segment proves the triangle interiors are
-  disjoint; a point, an extra segment, a 2-D region, or a crossing refuses.
+- **A pair sharing an EDGE is admitted only when the edge-adjacency check
+  reports the exact recorded common edge as its whole shared segment.** This
+  applies to a rung, a diagonal, a cap-boundary edge, and an internal edge of
+  one cap's own triangulation. The matching segment proves the triangle
+  interiors are disjoint; a point, an extra segment, a 2-D region, or a
+  crossing refuses.
 - **A pair sharing exactly one VERTEX and no edge is admitted only when its
   sole contact is that recorded vertex.** A point elsewhere, a shared segment,
   a 2-D region, or a transversal crossing refuses. Vertex-sharing pairs need
@@ -322,6 +323,19 @@ triangles are disjoint, share a point, share a segment, or overlap in a 2-D
 region. Two flat triangles need no bracket, no interval subdivision, and no
 certified polynomial isolation the way two curved bilinear patches would: the
 predicate is exact and total.
+
+**`triTriClassify` remains the boolean classifier.** It continues to report
+`contactRegion` for every coplanar positive-area intersection and every
+positive-length coplanar shared boundary. The audit adds
+`triTriCoplanarSharedEdge` for an edge-adjacent pair when that classifier
+reports `contactRegion`. The helper receives both exact triangles and the
+recorded edge. It projects them exactly onto their common plane and accepts
+only when the recorded endpoints are an edge of both triangles and the two
+opposite vertices lie strictly on opposite sides of that edge's supporting
+line. Those conditions prove that the closed-triangle intersection is exactly
+the recorded segment. Every other result refuses under S7. The helper is
+audit-only and MUST NOT change `triTriClassify` or mesh-boolean contact
+classification.
 
 - **empty** (disjoint) → admitted only for a pair with no recorded shared
   edge or vertex;
@@ -572,9 +586,12 @@ never merely that a call ran (project rule).
 - **Audit**: a deliberately over-twisted correspondence (e.g. an intentional
   wrong `WithLoftAlignment` offset on a non-convex profile) proves a
   crossing → S7, asserted against the specific triangle pair the crossing
-  predicate found; a rectangular loft passes when its cap-triangle pairs
-  classify as their recorded internal diagonals and consecutive wall pairs
-  classify as their recorded vertices; a vertex-sharing wall pair that crosses
+  predicate found; two matching square `LineSeg` profiles on parallel planes
+  pass when their coplanar cap-triangulation pairs and coplanar wall-diagonal
+  pairs are admitted through `triTriCoplanarSharedEdge`. The same pairs remain
+  `contactRegion` in `triTriClassify`, proving that the adjacency helper does
+  not change mesh-boolean contact classification. Consecutive wall pairs
+  classify as their recorded vertices. A vertex-sharing wall pair that crosses
   away from that vertex → S7. Two valid square `LineSeg` profiles with `p0` frame
   `U=(1,0,0)`, `V=(0,1,0)`, origin `(0,0,0)` and `p1` frame
   `U=(-1,0,0)`, `V=(0,1,0)`, origin `(1,0,1)`, carrying the same local
