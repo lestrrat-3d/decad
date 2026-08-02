@@ -97,6 +97,9 @@ func (b *Body) ChamferContext(ctx context.Context, sel EdgeSelector, d units.Val
 		return nil, fmt.Errorf(`%w: this evaluator chamfers a straight prism only; selector %s matched [%s]`,
 			ErrUnsupported, sel, selectedEdgesContext(edges))
 	}
+	if err := requireExactSection(pp, "chamfers"); err != nil {
+		return nil, err
+	}
 
 	budget := newWorkBudget(ctx)
 	loops, err := prismCornerLoopsBudget(budget, pp)

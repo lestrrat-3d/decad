@@ -228,6 +228,12 @@ func tessellateContext(ctx context.Context, b *Body, tol units.Value) (*Mesh, er
 			mesh.triangles[i][1], mesh.triangles[i][2] = mesh.triangles[i][2], mesh.triangles[i][1]
 		}
 	}
+	// Every vertex sits exactly on the RECORDED boundary, which a payload
+	// carrying a section displacement holds only within that displacement of the
+	// boundary it denotes (docs/prism-boolean-design.md §7), so the mesh deviates
+	// by its own chording plus that displacement. Zero for every payload a caller
+	// draws.
+	mesh.bound = upRound(mesh.bound + pp.sectionDelta)
 	return &mesh, nil
 }
 

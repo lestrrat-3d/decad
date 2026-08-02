@@ -3,6 +3,7 @@ package decad
 import (
 	"context"
 	"fmt"
+	"math"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
@@ -47,7 +48,11 @@ func tryPrismUnion(ctx context.Context, op OpKind, a, b *Body) (prismPayload, bo
 	}
 
 	budget := newWorkBudget(ctx) // §10: one counter for the whole attempt
-	merged, resolved, err := resolvePrismUnion(budget, pa, pb)
+	reexpress, err := newPrismReexpression(pa, pb)
+	if err != nil {
+		return prismPayload{}, false, err
+	}
+	merged, resolved, err := resolvePrismUnion(budget, pa, pb, reexpress)
 	if err != nil {
 		return prismPayload{}, false, err
 	}
@@ -65,6 +70,12 @@ func tryPrismUnion(ctx context.Context, op OpKind, a, b *Body) (prismPayload, bo
 		z0:      pa.z0,
 		z1:      pa.z1,
 		xform:   pa.xform,
+		// §7: the merged section holds operand B's re-expressed coordinates, so
+		// it carries their proven displacement into every measurement evalPrism
+		// publishes. A's coordinates are verbatim and every sketch-cut range
+		// narrows the entity's own unchanged defining data, so B's re-expression
+		// is the whole of it.
+		sectionDelta: reexpress.delta,
 	}
 	return result, true, nil
 }
@@ -136,8 +147,8 @@ func prismUnionZIntervalMatches(pa, pb prismPayload) bool {
 // unresolved (§4.4): the caller falls back to the mesh path with no error. A
 // non-nil error — including ctx cancellation surfacing through budget — is
 // always genuine and must propagate.
-func resolvePrismUnion(budget *workBudget, pa, pb prismPayload) (ProfileRecord, bool, error) {
-	s, err := buildPrismUnionScene(budget, pa, pb)
+func resolvePrismUnion(budget *workBudget, pa, pb prismPayload, reexpress *prismReexpression) (ProfileRecord, bool, error) {
+	s, err := buildPrismUnionScene(budget, pa, pb, reexpress)
 	if err != nil {
 		return ProfileRecord{}, false, err
 	}
@@ -344,15 +355,11 @@ func auditPrismUnionSection(budget *workBudget, pa prismPayload, merged ProfileR
 // region in whatever new arrangement it enters. Every segment's OWN walked
 // portion, and nothing more, is what this operand's boundary IS, whole or
 // partial alike — so that is what gets built.
-func buildPrismUnionScene(budget *workBudget, pa, pb prismPayload) (*sketch.Sketch, error) {
+func buildPrismUnionScene(budget *workBudget, pa, pb prismPayload, reexpress *prismReexpression) (*sketch.Sketch, error) {
 	world := sketch.NewWorld()
 	s, err := world.CreateSketch(world.XY())
 	if err != nil {
 		return nil, fmt.Errorf(`decad: failed to build the private union scene: %w`, err)
-	}
-	invA, err := pa.xform.Inverse()
-	if err != nil {
-		return nil, fmt.Errorf(`decad: the receiver's placement has no inverse: %w`, err)
 	}
 
 	points := map[Point2]*sketch.Point{}
@@ -365,7 +372,7 @@ func buildPrismUnionScene(budget *workBudget, pa, pb prismPayload) (*sketch.Sket
 		return created
 	}
 
-	addOperand := func(profile ProfileRecord, reexpress bool) error {
+	addOperand := func(profile ProfileRecord, isB bool) error {
 		type entityKey struct {
 			kind    uint8 // 1 = line, 2 = whole circle, 3 = arc (incl. a partial circle)
 			a, b, c Point2
@@ -375,10 +382,10 @@ func buildPrismUnionScene(budget *workBudget, pa, pb prismPayload) (*sketch.Sket
 		// two operands, even where the same physical curve appears in both.
 		entities := map[entityKey]struct{}{}
 		reexpressPt := func(p Point2) Point2 {
-			if !reexpress {
+			if !isB {
 				return p
 			}
-			return reexpressPrismPoint(pa.frame, invA, pb, p)
+			return reexpress.point(p)
 		}
 		for _, seg := range profile.Outer.Segments {
 			if err := budget.step(); err != nil {
@@ -440,18 +447,87 @@ func buildPrismUnionScene(budget *workBudget, pa, pb prismPayload) (*sketch.Sket
 	return s, nil
 }
 
-// reexpressPrismPoint is §4.1's coordinate re-expression: a plane-local point
-// of operand B is lifted to world space through B's own composed map, then
-// projected into operand A's local frame — frameA.ToLocal(invA.Apply(...)),
-// dropping the resulting local z, which G3 already certified is the shared
-// plane's own zero axis. invA is xformA.Inverse(), computed once by the
-// caller (r3.Transform's inverse is exact — the transpose — since a Frame
-// and a rigid Transform are both orthonormal, so this is a dot product,
-// never a solve). This is the one and only new rounding this design
-// introduces: an ordinary rigid-transform coordinate computation, rounded
-// once per coordinate, on operand B's segments only.
-func reexpressPrismPoint(frameA r3.Frame, invA r3.Transform, pb prismPayload, p Point2) Point2 {
-	worldPt := pb.xform.Apply(pb.frame.ToWorldUV(p.U, p.V))
-	local := frameA.ToLocal(invA.Apply(worldPt))
-	return Point2{U: local.X, V: local.Y}
+// prismReexpression is §4.1's coordinate re-expression of operand B into
+// operand A's frame, and §7's proven displacement bound on what that
+// re-expression rounds. It is stateful on purpose: point accumulates the largest
+// allowance any coordinate it re-expressed owes, which is the section
+// displacement the built payload carries.
+//
+// The map is COMPOSED first and applied once — B's frame to world, B's
+// placement, A's placement inverted, A's frame inverted, all folded into one
+// rigid transform — rather than walked point by point through world space. The
+// two routes are the same algebra and differ only in where they round: the
+// composed one rounds at the RELATIVE offset between the two operands, the
+// walked one at each operand's own world magnitude, so a pair sitting far from
+// the origin loses the whole difference between those magnitudes for nothing.
+// The composed route is not a proof of anything, though — it narrows the
+// rounding, it does not remove it — which is why the displacement below is
+// carried regardless.
+type prismReexpression struct {
+	relative r3.Transform
+	// identity records §7's one decidable zero case: B's composed map into A's
+	// frame is the identity in the stored floats, so B's Point2 fields are
+	// copied verbatim and nothing is computed at all. Two profiles drawn on one
+	// sketch plane under one placement are that case.
+	identity bool
+	transAbs float64
+	delta    float64
+}
+
+// newPrismReexpression composes the map once. A rigid map's inverse is exact —
+// the transpose, r3.Transform's own contract — and a Frame is orthonormal, so
+// every step here is a dot product, never a solve.
+func newPrismReexpression(pa, pb prismPayload) (*prismReexpression, error) {
+	if pa.frame == pb.frame && pa.xform == pb.xform {
+		return &prismReexpression{identity: true}, nil
+	}
+	fail := func(err error) (*prismReexpression, error) {
+		return nil, fmt.Errorf(`decad: the union operands' relative placement has no rigid composition: %w`, err)
+	}
+	m, err := r3.FromFrame(pb.frame)
+	if err != nil {
+		return fail(err)
+	}
+	if m, err = m.Then(pb.xform); err != nil {
+		return fail(err)
+	}
+	invA, err := pa.xform.Inverse()
+	if err != nil {
+		return fail(err)
+	}
+	if m, err = m.Then(invA); err != nil {
+		return fail(err)
+	}
+	toWorldA, err := r3.FromFrame(pa.frame)
+	if err != nil {
+		return fail(err)
+	}
+	invFrameA, err := toWorldA.Inverse()
+	if err != nil {
+		return fail(err)
+	}
+	if m, err = m.Then(invFrameA); err != nil {
+		return fail(err)
+	}
+	return &prismReexpression{relative: m, transAbs: vecMaxAbs(m.Translation())}, nil
+}
+
+// point re-expresses one of operand B's plane-local points into operand A's
+// frame, dropping the resulting local z — which G3 already certified is the
+// shared plane's own zero axis — and charges the rounding it commits.
+//
+// The charge is rigidRoundAllow's existing shape, at the INPUT coordinate and
+// the composed map's own translation, and it covers the composition as well as
+// the application: each r3.Transform.Then rounds a unit-magnitude basis entry
+// and a translation-magnitude component a handful of ulps, so three
+// compositions and one application together stay under ~48·u·|input| +
+// ~40·u·|translation|, where rigidRoundAllow's 16 ulps at 2·|input| +
+// |translation|, read as a 3D radius, allow ~110·u·|input| + ~55·u·|translation|.
+func (re *prismReexpression) point(p Point2) Point2 {
+	if re.identity {
+		return p
+	}
+	out := re.relative.Apply(r3.NewVec(p.U, p.V, 0))
+	re.delta = math.Max(re.delta, rigidRoundAllow(max(math.Abs(p.U), math.Abs(p.V)), re.transAbs))
+	return Point2{U: out.X, V: out.Y}
 }

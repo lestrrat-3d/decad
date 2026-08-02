@@ -296,13 +296,24 @@ func (d *Document) resolveLinearSide(s SideExtent, frame r3.Frame, travel float6
 // and blendKind is "fillet" or "chamfer". They are part of the re-evaluable
 // record so a copy or placement re-mints its own blend roles from its own record
 // (the modify §9 role rule) — a plain extrude leaves them empty (no-op).
+//
+// sectionDelta is the proven upper bound on how far any recorded boundary
+// coordinate of the section sits from the section this payload's construction
+// DENOTES (docs/prism-boolean-design.md §7). It is zero for every payload a
+// caller draws directly — a plain extrude, a placement and every modify rewrite
+// record their own coordinates, so the record IS the section they denote — and
+// the analytic prism boolean is the one construction that sets it, to the
+// displacement its coordinate re-expression commits. Being a payload field it
+// re-evaluates with the payload, so a placement or copy keeps it, and every
+// measurement evalPrism publishes composes it (never Exact while it is nonzero).
 type prismPayload struct {
-	profile   ProfileRecord
-	frame     r3.Frame
-	z0, z1    float64
-	xform     r3.Transform
-	blendSegs []map[int]struct{}
-	blendKind string
+	profile      ProfileRecord
+	frame        r3.Frame
+	z0, z1       float64
+	xform        r3.Transform
+	blendSegs    []map[int]struct{}
+	blendKind    string
+	sectionDelta float64
 }
 
 // point lifts a plane-local (u, v) at height z into placed world space.
@@ -498,7 +509,11 @@ func evalPrismContext(ctx context.Context, d *Document, ref StepRef, pp prismPay
 	}
 
 	perimeter := boundedScalar{}
+	walks := 0
 	loops := append([]LoopRecord{pp.profile.Outer}, pp.profile.Holes...)
+	for _, loop := range loops {
+		walks += len(loop.Segments)
+	}
 	for li, loop := range loops {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -521,8 +536,20 @@ func evalPrismContext(ctx context.Context, d *Document, ref StepRef, pp prismPay
 	body.lumps = []*Lump{{shells: []*Shell{shell}}}
 
 	// Measurements carry the closed forms' proven float bounds
-	// (docs/evaluator-design.md §5).
-	regionArea := measuredScalar(ig.area, ig.areaBound)
+	// (docs/evaluator-design.md §5), plus — where the payload carries one — the
+	// section's own displacement from the section it denotes
+	// (docs/prism-boolean-design.md §7). The area a displaced boundary moves is
+	// bounds.go's sectionDisplacementArea, charged once into the region area, so
+	// the volume takes it through the height and each cap takes it once; the
+	// walls take it through the perimeter, which every walk already charged its
+	// own length displacement into (buildLoopSidesAs).
+	delta := pp.sectionDelta
+	regionArea := measuredScalar(ig.area, absSumUpper(
+		ig.areaBound,
+		sectionDisplacementArea(delta, walks, absSumUpper(perimeter.value, perimeter.bound)),
+	))
+	capStart.areaBound = regionArea.bound
+	capEnd.areaBound = regionArea.bound
 	volume := boundedMul(regionArea, height)
 	caps := boundedMul(exactScalar(2), regionArea)
 	sides := boundedMul(perimeter, height)
@@ -541,12 +568,20 @@ func evalPrismContext(ctx context.Context, d *Document, ref StepRef, pp prismPay
 	cv := boundedQuotient(ig.mv, ig.mvBound, ig.area, ig.areaBound)
 	zc := boundedDiv(boundedAdd(exactScalar(pp.z0), exactScalar(pp.z1)), exactScalar(2))
 	centroidValue := pp.point(cu.value, cv.value, zc.value)
+	// A displaced section moves its own centroid, so the displacement enters the
+	// plane-local source term prismPointBound already carries through the frame
+	// and placement (docs/prism-boolean-design.md §7). The geometry envelope is a
+	// separate proof — the centroid lies inside the prism — so it takes the same
+	// displacement rather than being allowed to undercut the formula bound with a
+	// figure proven only for the recorded section.
+	cu.bound = absSumUpper(cu.bound, delta)
+	cv.bound = absSumUpper(cv.bound, delta)
 	centroidBound := prismPointBound(pp, cu, cv, zc)
 	geometryBound, err := prismCentroidGeometryBound(pp, pp.profile, centroidValue, work)
 	if err != nil {
 		return nil, err
 	}
-	centroidBound = math.Min(centroidBound, geometryBound)
+	centroidBound = math.Min(centroidBound, absSumUpper(geometryBound, delta))
 	body.centroid = VecMeasurement{
 		Value:     centroidValue,
 		Exactness: exactnessOf(centroidBound),
@@ -1001,6 +1036,13 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref StepRef, pp prismPayl
 	if len(loop.Segments) == 0 {
 		return nil, nil, nil, boundedScalar{}, fmt.Errorf(`%w: a recorded loop holds no segments`, ErrDegenerate)
 	}
+	// Every coordinate this loop's walks read sits within the payload's own
+	// section displacement of the section it denotes, so each walk's length, each
+	// junction vertex and each side face carries that displacement too
+	// (docs/prism-boolean-design.md §7). It is zero for every payload a caller
+	// draws, and the arithmetic below is then the unchanged one.
+	delta := pp.sectionDelta
+	walkLenAllow := sectionDisplacementLength(delta, 1)
 	raw := make([]sideWalk, len(loop.Segments))
 	total := boundedScalar{}
 	for i, seg := range loop.Segments {
@@ -1014,6 +1056,7 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref StepRef, pp prismPayl
 		if err := requireAnalyticWalk(w, "the prism side-face build"); err != nil {
 			return nil, nil, nil, boundedScalar{}, err
 		}
+		w.lengthBound = absSumUpper(w.lengthBound, walkLenAllow)
 		raw[i] = sideWalk{segmentWalk: w, segs: []int{i}}
 		total = boundedAdd(total, measuredScalar(w.length, w.lengthBound))
 	}
@@ -1035,8 +1078,8 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref StepRef, pp prismPayl
 			if err := ctx.Err(); err != nil {
 				return nil, nil, nil, boundedScalar{}, err
 			}
-			bottomV[i] = &Vertex{position: pp.point(w.startU, w.startV, pp.z0), bound: units.Millimeters(0)}
-			topV[i] = &Vertex{position: pp.point(w.startU, w.startV, pp.z1), bound: units.Millimeters(0)}
+			bottomV[i] = &Vertex{position: pp.point(w.startU, w.startV, pp.z0), bound: units.Millimeters(delta)}
+			topV[i] = &Vertex{position: pp.point(w.startU, w.startV, pp.z1), bound: units.Millimeters(delta)}
 		}
 	}
 
@@ -1112,8 +1155,8 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref StepRef, pp prismPayl
 			if singleClosed {
 				// A full circle's edge closes on itself: one vertex per cap
 				// edge, start == end (topology.go's Circle3 contract).
-				seam0 := &Vertex{position: pp.point(w.startU, w.startV, pp.z0), bound: units.Millimeters(0)}
-				seam1 := &Vertex{position: pp.point(w.startU, w.startV, pp.z1), bound: units.Millimeters(0)}
+				seam0 := &Vertex{position: pp.point(w.startU, w.startV, pp.z0), bound: units.Millimeters(delta)}
+				seam1 := &Vertex{position: pp.point(w.startU, w.startV, pp.z1), bound: units.Millimeters(delta)}
 				bStart, bEnd = seam0, seam0
 				tStart, tEnd = seam1, seam1
 				curve0, curve1 = Circle3{Center: center0, Axis: edgeAxis, Radius: radius}, Circle3{Center: center1, Axis: edgeAxis, Radius: radius}
@@ -1257,11 +1300,16 @@ func prismBoundsContext(ctx context.Context, pp prismPayload, work *freeformWork
 		minC[i] = lo
 		maxC[i] = hi
 	}
+	// A displaced section displaces every extreme it holds, and the frame and
+	// placement are isometries, so the box's own error is the section
+	// displacement itself — δ outward on every face
+	// (docs/prism-boolean-design.md §7). It is zero for every payload a caller
+	// draws, which keeps the ordinary prism's box Exact as before.
 	return Box{
 		Min:       r3.NewVec(minC[0], minC[1], minC[2]),
 		Max:       r3.NewVec(maxC[0], maxC[1], maxC[2]),
-		Exactness: Exact,
-		Bound:     units.Millimeters(0),
+		Exactness: exactnessOf(pp.sectionDelta),
+		Bound:     units.Millimeters(pp.sectionDelta),
 	}, nil
 }
 

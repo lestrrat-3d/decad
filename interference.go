@@ -28,6 +28,14 @@ func analyticBodiesEqual(budget *workBudget, a, b *Body) (bool, error) {
 		if !ok || pa.frame != pb.frame || pa.z0 != pb.z0 || pa.z1 != pb.z1 || pa.xform != pb.xform {
 			return false, nil
 		}
+		if pa.sectionDelta != 0 || pb.sectionDelta != 0 {
+			// Equal records are a certificate of equal SETS only while each
+			// record IS the set it denotes. A payload carrying a section
+			// displacement (docs/prism-boolean-design.md §7) denotes a set its
+			// record is only within that displacement of, and two such records
+			// being equal says nothing about the two sets. Undecided.
+			return false, nil
+		}
 		return profileRecordsEqual(budget, pa.profile, pb.profile)
 	case cupPayload:
 		pb, ok := b.payload.(cupPayload)

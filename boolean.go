@@ -818,9 +818,28 @@ func faceChordDelta(budget *workBudget, f *Face, meshBound float64) (float64, er
 				return meshBound, nil
 			}
 		}
-		return 0, nil
+		// Held exactly only where the body's own record IS the boundary it
+		// denotes: a payload carrying a section displacement
+		// (docs/prism-boolean-design.md §7) holds this face that far off, and the
+		// tangency gate must charge it.
+		return sectionDisplacementOf(f.body), nil
 	}
 	return meshBound, nil
+}
+
+// sectionDisplacementOf is the proven displacement between a body's recorded
+// boundary and the boundary its construction denotes: the analytic prism
+// boolean's re-expression rounding, and zero for every other body
+// (docs/prism-boolean-design.md §7).
+func sectionDisplacementOf(b *Body) float64 {
+	if b == nil {
+		return 0
+	}
+	pp, ok := b.payload.(prismPayload)
+	if !ok {
+		return 0
+	}
+	return pp.sectionDelta
 }
 
 // boxesWithin reports whether the two boxes come within slack of each other.
