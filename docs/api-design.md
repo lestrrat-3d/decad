@@ -985,8 +985,8 @@ over their `Context` variants with `context.Background()`; success keeps the
 same consuming behavior and recorded step.
 
 **A boolean failure is typed, because its three failures are three different
-caller actions.** A boolean that produces no body, that meets a contact this
-evaluator cannot classify, or that breaks an internal invariant returns a
+caller actions.** A boolean that produces no body, reaches a valid-model limit
+this evaluator cannot handle, or breaks an internal invariant returns a
 `BooleanError` — the operation, its operand `StepRef`s, and a branchable `Code`
 — wrapping the sentinel `errors.Is` already branches on, so compatibility
 holds:
@@ -1005,10 +1005,11 @@ const (
     // BooleanEmpty is a NORMAL geometric outcome: the result encloses no
     // volume — a disjoint Intersect, an all-removing Cut. Wraps ErrBooleanFailed.
     BooleanEmpty BooleanErrorCode = iota
-    // BooleanUnsupportedContact is a VALID model whose operands meet in a
-    // contact this evaluator cannot classify from chords: a curved-surface
-    // tangency or near-contact, a coplanar face-on-face overlap, a grazing
-    // edge, an isolated-point pinch. Recipe-recordable, evaluator-staged.
+    // BooleanUnsupportedContact is a VALID model whose boolean geometry reaches
+    // a limit: a curved-surface tangency or near-contact, a coplanar
+    // face-on-face overlap, a grazing edge, an isolated-point pinch, or a
+    // analytic prism-arrangement refusal wrapping ErrUnsupported.
+    // Recipe-recordable, evaluator-staged.
     // Wraps ErrUnsupported.
     BooleanUnsupportedContact
     // BooleanEvaluatorFailure is an internal invariant break: the stitched
@@ -1023,18 +1024,20 @@ const (
 branch. The three separate a caller's three moves: `BooleanEmpty` — the model is
 sound and the operation asked for nothing (change the geometry, or drop the
 call); `BooleanUnsupportedContact` — the model is valid but past this
-evaluator's reach (choose a construction that does not lean on a tangent
-contact, or wait for vN); `BooleanEvaluatorFailure` — a bug to file. Mixing the
+evaluator's reach (choose a construction that does not lean on that limit, or
+wait for vN); `BooleanEvaluatorFailure` — a bug to file. Mixing the
 three under one sentinel is what makes `errors.Is(err, ErrBooleanFailed)` too
 coarse to drive recovery, so the `Code` draws the line the sentinel cannot.
 
-**A valid tangent contact is staged, not malformed.** A curved-surface or
-coplanar contact this evaluator cannot classify is `BooleanUnsupportedContact`
-(wrapping `ErrUnsupported`), NEVER `ErrDegenerate`: the input names a real
+**A valid-model boolean limit is staged, not malformed.** A curved-surface or
+coplanar contact this evaluator cannot classify, and an analytic
+prism-arrangement refusal wrapping `ErrUnsupported`, are
+`BooleanUnsupportedContact`, NEVER `ErrDegenerate`: the input names a real
 solid, and the refusal is the evaluator's reach, not a zero or self-crossing
-region. That "never `ErrDegenerate`" scopes to the CONTACT-CLASSIFICATION
-refusals — the coplanar / tangent / grazing / isolated-point contact. It does
-not reach a distinct case: a valid operand whose boolean OUTPUT cannot be
+region. That
+"never `ErrDegenerate`" scopes to the contact-classification and analytic
+arrangement refusals. It does not reach a distinct case: a valid operand whose
+boolean OUTPUT cannot be
 chorded finely enough to tessellate (a bridge pinch, a stalled ear clip)
 surfaces `errors.Is(err, ErrDegenerate)` publicly, and that is a retryable
 coarse-chording `ErrDegenerate` on that operand — a finer chord tolerance may
@@ -1468,17 +1471,19 @@ reference is already `Body.Origin()`, so no helper duplicates it.
 `CapEnd(b)` name `b`'s OWN producing step, so they resolve to a face only when
 that step actually mints the fixed cap role: an extrude, a partial revolve, a
 shell that built a tube — the analytic prisms and partial revolves whose
-evaluator emits `capStart` / `capEnd` — and a `Placed` / `PlacedCopy` /
-`Duplicate` of one, which re-mints those roles under the copy's own step (the
-copy-provenance rule above). On a body whose step mints no such role the helper
-still returns a well-formed `FeatureRef` — it just matches nothing, an ordinary
-`ErrNoMatch` at resolve (or `ErrCardinality` under an implicit exactly-one). That
-covers a `Union` / `Cut` / `Intersect` result (its faces carry the operands'
-UPSTREAM origins, not a cap role keyed to the boolean's own step), a full
-revolution (no caps at all), and `CapEnd` on a cup (a cup mints `capStart` and a
-`shellCap` pocket floor, no `capEnd`). To name a cap that a boolean's operand
-contributed, select `FaceCreatedBy(CapStart(originalBody))` against the upstream
-body whose provenance the boolean preserved (§9), never `CapStart(booleanResult)`.
+evaluator emits `capStart` / `capEnd` — an admitted analytic `Union`, which
+rebuilds an analytic prism with fresh roles under its own step, and a `Placed` /
+`PlacedCopy` / `Duplicate` of one, which re-mints those roles under the copy's
+own step (the copy-provenance rule above). On a body whose step mints no such
+role the helper still returns a well-formed `FeatureRef` — it just matches
+nothing, an ordinary `ErrNoMatch` at resolve (or `ErrCardinality` under an
+implicit exactly-one). That covers a mesh-path `Union` / `Cut` / `Intersect`
+result (its faces carry the operands' UPSTREAM origins, not a cap role keyed to
+the boolean's own step), a full revolution (no caps at all), and `CapEnd` on a
+cup (a cup mints `capStart` and a `shellCap` pocket floor, no `capEnd`). To name
+a cap that a mesh boolean's operand contributed, select
+`FaceCreatedBy(CapStart(originalBody))` against the upstream body whose
+provenance the mesh boolean preserved (§9), never `CapStart(meshBooleanResult)`.
 
 The **indexed** `side(i, j)` roles stay positional and get no helper: a wall
 is named by geometry — `Faces(Planar(), Facing(v))` — never by a hand-counted

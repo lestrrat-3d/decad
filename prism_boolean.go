@@ -27,16 +27,22 @@ import (
 // tryPrismUnion attempts the PR1 analytic reduction for op. ok=false (err
 // always nil in that case) means "not admitted" per §3.1/§3.4: the caller
 // MUST fall back to the unchanged mesh path with no error surfaced. A
-// non-nil err means resolution found a unique candidate (§3.4's point of no
-// return) and then failed — the caller MUST propagate it rather than reroute
-// to the mesh path.
+// non-nil err means the bounded analytic resolution reached a genuine refusal
+// (§3.4) — the caller MUST propagate it rather than reroute to the mesh path.
 func tryPrismUnion(ctx context.Context, op OpKind, a, b *Body) (prismPayload, bool, error) {
 	// §4.2 implements resolution for Union only; every other op falls
 	// through even where G1-G5 would pass (§4.4).
 	if op != OpUnion {
 		return prismPayload{}, false, nil
 	}
-	pa, pb, ok := admitPrismPair(a, b) // G1-G4
+	budget := newWorkBudget(ctx) // §10: one counter for the whole attempt
+	if err := budget.err(); err != nil {
+		return prismPayload{}, false, err
+	}
+	pa, pb, ok, err := admitPrismPairBudget(budget, a, b) // G1-G4
+	if err != nil {
+		return prismPayload{}, false, err
+	}
 	if !ok {
 		return prismPayload{}, false, nil
 	}
@@ -46,13 +52,19 @@ func tryPrismUnion(ctx context.Context, op OpKind, a, b *Body) (prismPayload, bo
 	if !prismUnionZIntervalMatches(pa, pb) { // G5, §3.2's Union row
 		return prismPayload{}, false, nil
 	}
+	withinCap, err := prismUnionSceneWithinWorkCap(budget, pa, pb)
+	if err != nil {
+		return prismPayload{}, false, err
+	}
+	if !withinCap {
+		return prismPayload{}, false, fmt.Errorf(`%w: the analytic union scene exceeds this evaluator's arrangement work cap`, ErrUnsupported)
+	}
 
-	budget := newWorkBudget(ctx) // §10: one counter for the whole attempt
 	reexpress, err := newPrismReexpression(pa, pb)
 	if err != nil {
 		return prismPayload{}, false, err
 	}
-	merged, resolved, err := resolvePrismUnion(budget, pa, pb, reexpress)
+	merged, resolved, err := resolvePrismUnion(ctx, budget, pa, pb, reexpress)
 	if err != nil {
 		return prismPayload{}, false, err
 	}
@@ -70,12 +82,11 @@ func tryPrismUnion(ctx context.Context, op OpKind, a, b *Body) (prismPayload, bo
 		z0:      pa.z0,
 		z1:      pa.z1,
 		xform:   pa.xform,
-		// §7: the merged section holds operand B's re-expressed coordinates, so
-		// it carries their proven displacement into every measurement evalPrism
-		// publishes. A's coordinates are verbatim and every sketch-cut range
-		// narrows the entity's own unchanged defining data, so B's re-expression
-		// is the whole of it.
-		sectionDelta: reexpress.delta,
+		// §7: a rebuilt section keeps the greatest displacement every source
+		// coordinate already carried, as well as the allowance this union's
+		// re-expression commits. A chained identity re-expression must not erase
+		// an earlier union's uncertainty.
+		sectionDelta: max(pa.sectionDelta, pb.sectionDelta, reexpress.delta),
 	}
 	return result, true, nil
 }
@@ -87,47 +98,97 @@ func tryPrismUnion(ctx context.Context, op OpKind, a, b *Body) (prismPayload, bo
 // (the design's "bit-identical" / "the literal zero"): Go's == already
 // treats -0.0 and 0.0 as equal, so no separate zero-sign handling is needed.
 // A miss on any row returns ok=false, never an error (§3.1: "passing them is
-// not admission" for what follows, but MISSING one is never a refusal).
-func admitPrismPair(a, b *Body) (pa, pb prismPayload, ok bool) {
+// not admission" for what follows, but MISSING one is never a refusal). The
+// G4 scan shares the operation budget because a large rejected profile must
+// remain cancelable too.
+func admitPrismPairBudget(budget *workBudget, a, b *Body) (pa, pb prismPayload, ok bool, err error) {
 	pa, aok := a.payload.(prismPayload) // G1
 	pb, bok := b.payload.(prismPayload)
 	if !aok || !bok {
-		return prismPayload{}, prismPayload{}, false
+		return prismPayload{}, prismPayload{}, false, nil
 	}
 	if pa.reflected() || pb.reflected() { // G2
-		return prismPayload{}, prismPayload{}, false
+		return prismPayload{}, prismPayload{}, false, nil
 	}
-	if !prismProfileIsAnalytic(pa.profile) || !prismProfileIsAnalytic(pb.profile) { // G4
-		return prismPayload{}, prismPayload{}, false
+	aAnalytic, err := prismProfileIsAnalytic(budget, pa.profile)
+	if err != nil {
+		return prismPayload{}, prismPayload{}, false, err
+	}
+	bAnalytic, err := prismProfileIsAnalytic(budget, pb.profile)
+	if err != nil {
+		return prismPayload{}, prismPayload{}, false, err
+	}
+	if !aAnalytic || !bAnalytic { // G4
+		return prismPayload{}, prismPayload{}, false, nil
 	}
 	worldNormalA := pa.xform.ApplyDir(pa.frame.N())
 	worldNormalB := pb.xform.ApplyDir(pb.frame.N())
 	if worldNormalA != worldNormalB { // G3: co-directional, bit-identical
-		return prismPayload{}, prismPayload{}, false
+		return prismPayload{}, prismPayload{}, false, nil
 	}
 	worldOriginA := pa.xform.Apply(pa.frame.Origin())
 	worldOriginB := pb.xform.Apply(pb.frame.Origin())
 	if worldOriginB.Sub(worldOriginA).Dot(worldNormalA) != 0.0 { // G3: coplanar
-		return prismPayload{}, prismPayload{}, false
+		return prismPayload{}, prismPayload{}, false, nil
 	}
-	return pa, pb, true
+	return pa, pb, true, nil
+}
+
+func admitPrismPair(a, b *Body) (pa, pb prismPayload, ok bool) {
+	pa, pb, ok, _ = admitPrismPairBudget(newWorkBudget(context.Background()), a, b)
+	return pa, pb, ok
 }
 
 // prismProfileIsAnalytic reports G4: every segment of every loop is a
 // LineSeg, CircleSeg or ArcSeg. A single free-form segment blinds sketch's
 // whole-scene TExact gate (§3.1's own reasoning), so the class excludes the
 // kind entirely rather than admitting "the free-form parts don't touch."
-func prismProfileIsAnalytic(p ProfileRecord) bool {
+func prismProfileIsAnalytic(budget *workBudget, p ProfileRecord) (bool, error) {
 	for _, loop := range append([]LoopRecord{p.Outer}, p.Holes...) {
 		for _, seg := range loop.Segments {
+			if err := budget.step(); err != nil {
+				return false, err
+			}
 			switch seg.(type) {
 			case LineSeg, CircleSeg, ArcSeg:
 			default:
-				return false
+				return false, nil
 			}
 		}
 	}
-	return true
+	return true, nil
+}
+
+// prismUnionMaxArrangementSegments bounds the private sketch arrangement before
+// s.Profiles starts. The pinned sketch arranger densifies each line to one tiny
+// segment and each admitted circle or arc to no more than 256, then compares
+// every tiny-segment pair. Capping this upper bound keeps a canceled caller from
+// leaving an unbounded private arrangement behind.
+const prismUnionMaxArrangementSegments = 512
+
+func prismUnionSceneWithinWorkCap(budget *workBudget, pa, pb prismPayload) (bool, error) {
+	segments := 0
+	for _, profile := range []ProfileRecord{pa.profile, pb.profile} {
+		for _, loop := range append([]LoopRecord{profile.Outer}, profile.Holes...) {
+			for _, seg := range loop.Segments {
+				if err := budget.step(); err != nil {
+					return false, err
+				}
+				switch seg.(type) {
+				case LineSeg:
+					segments++
+				case CircleSeg, ArcSeg:
+					segments += 256
+				default:
+					return false, nil // G4 already excluded this case.
+				}
+				if segments > prismUnionMaxArrangementSegments {
+					return false, nil
+				}
+			}
+		}
+	}
+	return true, nil
 }
 
 // prismUnionZIntervalMatches is G5 for Union (§3.2): operand B's [z0, z1] is
@@ -147,7 +208,7 @@ func prismUnionZIntervalMatches(pa, pb prismPayload) bool {
 // unresolved (§4.4): the caller falls back to the mesh path with no error. A
 // non-nil error — including ctx cancellation surfacing through budget — is
 // always genuine and must propagate.
-func resolvePrismUnion(budget *workBudget, pa, pb prismPayload, reexpress *prismReexpression) (ProfileRecord, bool, error) {
+func resolvePrismUnion(ctx context.Context, budget *workBudget, pa, pb prismPayload, reexpress *prismReexpression) (ProfileRecord, bool, error) {
 	s, err := buildPrismUnionScene(budget, pa, pb, reexpress)
 	if err != nil {
 		return ProfileRecord{}, false, err
@@ -155,7 +216,13 @@ func resolvePrismUnion(budget *workBudget, pa, pb prismPayload, reexpress *prism
 	if err := budget.err(); err != nil {
 		return ProfileRecord{}, false, err
 	}
-	profiles := s.Profiles()
+	profiles, err := prismProfilesContext(ctx, s.Profiles)
+	if err != nil {
+		return ProfileRecord{}, false, err
+	}
+	if err := budget.err(); err != nil {
+		return ProfileRecord{}, false, err
+	}
 	if err := budget.step(); err != nil {
 		return ProfileRecord{}, false, err
 	}
@@ -247,6 +314,29 @@ func resolvePrismUnion(budget *workBudget, pa, pb prismPayload, reexpress *prism
 		segs[i] = seg
 	}
 	return ProfileRecord{Outer: LoopRecord{Segments: segs}}, true, nil
+}
+
+// prismProfilesContext makes sketch's synchronous arrangement observable to a
+// caller's context. The scene belongs only to this operation, so it is safe for
+// the worker to finish after cancellation; its buffered result is discarded and
+// cannot reach the document or its operands.
+func prismProfilesContext(ctx context.Context, profiles func() []*sketch.Profile) ([]*sketch.Profile, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	type result struct {
+		profiles []*sketch.Profile
+	}
+	done := make(chan result, 1)
+	go func() {
+		done <- result{profiles: profiles()}
+	}()
+	select {
+	case result := <-done:
+		return result.profiles, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
 }
 
 // chainPrismUnionSurvivors chains the surviving boundary edges into one

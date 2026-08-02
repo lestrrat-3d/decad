@@ -31,25 +31,30 @@ import (
 const boolChordFactor = 2e-5
 
 // Union returns the body enclosing the volume of a or b, retiring both
-// operands from their document (core §8). The result is a Faceted body: its
-// faces are grouped by the operands' source faces, so provenance
+// operands from their document (core §8). The general result is a Faceted body:
+// its faces are grouped by the operands' source faces, so provenance
 // (FaceCreatedBy) survives, and its measurements are Approximate with proven
 // bounds (docs/evaluator-design.md §9) — except that an all-planar pair whose
 // contact points round exactly keeps an Exact VOLUME (the volume integral is
 // computed in exact arithmetic); the surface area always carries at least an
 // ulp-scale float-summation bound, so it reads Approximate with a bound tiny
-// against any real tolerance. Operands from different
+// against any real tolerance. An admitted co-directional, coplanar analytic
+// prism pair instead returns an analytic prism. Its faces have fresh roles under
+// the Union step, including CapStart and CapEnd, and do not retain the operands'
+// origins. Operands from different
 // documents are ErrForeignBody; retired operands ErrRetiredBody. A boolean
 // that fails on the geometry returns a typed [BooleanError] wrapping the §12
 // sentinel: a valid but unclassifiable contact — a curved-surface tangency or
 // near-contact whose chord facets never provably interpenetrate, an exact
-// coplanar / face-on-face overlap, a grazing edge, or an isolated-point pinch —
-// is BooleanUnsupportedContact (wrapping ErrUnsupported), never ErrDegenerate;
+// coplanar / face-on-face overlap, a grazing edge, an isolated-point pinch, or
+// an analytic prism-arrangement refusal wrapping ErrUnsupported —
+// is BooleanUnsupportedContact, never ErrDegenerate;
 // a result with no volume is BooleanEmpty (wrapping ErrBooleanFailed); an
 // internal invariant break is BooleanEvaluatorFailure (wrapping
 // ErrBooleanFailed). errors.As(err, &be) reads the Code.
-// Both operands are tessellated first at a chord tolerance derived from the
-// pair's diameter, so an operand this evaluator cannot tessellate — a revolve
+// Every pair outside that analytic path tessellates both operands at a chord
+// tolerance derived from the pair's diameter, so an operand this evaluator
+// cannot tessellate — a revolve
 // body, which has no tessellator, or a Faceted operand whose own held Bound is
 // coarser than that pair tolerance (it cannot be re-tessellated finer than its
 // bound) — surfaces a plain ErrUnsupported before any contact is examined: a
@@ -196,9 +201,12 @@ func performBoolean(ctx context.Context, op OpKind, a, b *Body) (*Body, error) {
 	// a co-directional coplanar prism pair, dispatched ahead of the mesh
 	// path. ok=false is never an error — the pair falls back to the
 	// unchanged mesh path below exactly as it did before this design
-	// existed. A non-nil err here is a genuine, typed post-admission refusal
-	// (§3.4) and must propagate rather than reroute to the mesh path.
+	// existed. A non-nil err here is a genuine, typed analytic-resolution
+	// refusal (§3.4) and must propagate rather than reroute to the mesh path.
 	if pp, ok, err := tryPrismUnion(ctx, op, a, b); err != nil {
+		if errors.Is(err, ErrUnsupported) {
+			return nil, asBooleanError(op, inputs, expectedBoolean(booleanExpectedUnsupported, err))
+		}
 		return nil, err
 	} else if ok {
 		step := Step{Op: op, Inputs: inputs}

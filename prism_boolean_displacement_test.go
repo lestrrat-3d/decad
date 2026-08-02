@@ -231,6 +231,35 @@ func TestPrismUnionRoundedReExpressionStaysWithinItsBound(t *testing.T) {
 	require.Greater(t, vol.Bound.Base(), 1e-3)
 }
 
+// TestPrismUnionChainedDisplacementIsNotDiscarded covers a second analytic
+// union whose A operand already carries a section displacement. Its B operand
+// shares the first result's frame and placement, so that re-expression is the
+// identity and can prove no new displacement. The rebuilt payload must still
+// retain the first union's uncertainty.
+func TestPrismUnionChainedDisplacementIsNotDiscarded(t *testing.T) {
+	doc := decad.New()
+	a := boxBody(t, doc, 0, 0, 10, 10, 10)
+	const shift = 1e9
+	b := placedFar(t, boxBody(t, doc, 5-shift, 5, 15-shift, 15, 10), shift)
+	first, err := decad.Union(a, b)
+	require.NoError(t, err)
+	firstVolume, err := first.Volume()
+	require.NoError(t, err)
+	require.Equal(t, decad.Approximate, firstVolume.Exactness)
+	require.Positive(t, firstVolume.Bound.Base())
+
+	c := boxBody(t, doc, 12, 8, 22, 18, 10)
+	chained, err := decad.Union(first, c)
+	require.NoError(t, err)
+	volume, err := chained.Volume()
+	require.NoError(t, err)
+	require.Equal(t, decad.Approximate, volume.Exactness)
+	require.Positive(t, volume.Bound.Base())
+
+	_, err = chained.Fillet(verticalConvexEdge(), units.Millimeters(1))
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+}
+
 // TestPrismUnionDisplacedSectionRefusesTheSectionRewrites pins what a payload
 // carrying a section displacement is NOT allowed to do quietly: a modify op
 // rewrites the recorded section (modify §2) and has no proven displacement of

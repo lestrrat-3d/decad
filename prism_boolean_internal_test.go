@@ -1,9 +1,11 @@
 package decad
 
 import (
+	"context"
 	"testing"
 
 	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
@@ -48,6 +50,27 @@ func synthRectLoop(u0, v0, u1, v1 float64) LoopRecord {
 		LineSeg{Start: Point2{U: u1, V: v1}, End: Point2{U: u0, V: v1}, TStart: 0, TEnd: 1},
 		LineSeg{Start: Point2{U: u0, V: v1}, End: Point2{U: u0, V: v0}, TStart: 0, TEnd: 1},
 	}}
+}
+
+func synthDenseRectLoop(segmentsPerSide int) LoopRecord {
+	point := func(i int) Point2 {
+		switch {
+		case i <= segmentsPerSide:
+			return Point2{U: float64(i)}
+		case i <= 2*segmentsPerSide:
+			return Point2{U: float64(segmentsPerSide), V: float64(i - segmentsPerSide)}
+		case i <= 3*segmentsPerSide:
+			return Point2{U: float64(3*segmentsPerSide - i), V: float64(segmentsPerSide)}
+		default:
+			return Point2{V: float64(4*segmentsPerSide - i)}
+		}
+	}
+	count := 4 * segmentsPerSide
+	segs := make([]CurveSegment, count)
+	for i := range count {
+		segs[i] = LineSeg{Start: point(i), End: point(i + 1), TStart: 0, TEnd: 1}
+	}
+	return LoopRecord{Segments: segs}
 }
 
 func TestPrismBooleanGateG1RequiresBothOperandsPrismPayload(t *testing.T) {
@@ -224,4 +247,41 @@ func TestTryPrismUnionOnlyImplementsUnion(t *testing.T) {
 		require.NoError(t, err)
 		require.False(t, ok)
 	}
+}
+
+func TestPrismUnionArrangementCapRejectsLargeLineOnlyScene(t *testing.T) {
+	frame := canonicalPrismFrame(t)
+	pp := prismPayload{
+		profile: ProfileRecord{Outer: synthDenseRectLoop(65)},
+		frame:   frame, z0: 0, z1: 10, xform: r3.Identity(),
+	}
+	a := &Body{payload: pp}
+	b := &Body{payload: pp}
+
+	_, ok, err := tryPrismUnion(t.Context(), OpUnion, a, b)
+	require.ErrorIs(t, err, ErrUnsupported)
+	require.False(t, ok)
+}
+
+func TestPrismProfilesContextReturnsCancellationDuringArrangement(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	started := make(chan struct{})
+	release := make(chan struct{})
+	finished := make(chan struct{})
+	profiles := func() []*sketch.Profile {
+		close(started)
+		<-release
+		close(finished)
+		return nil
+	}
+	go func() {
+		<-started
+		cancel()
+	}()
+
+	_, err := prismProfilesContext(ctx, profiles)
+	require.ErrorIs(t, err, context.Canceled)
+
+	close(release)
+	<-finished
 }

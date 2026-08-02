@@ -115,6 +115,11 @@ func TestPrismUnionTwoBoxesSharingCapPlaneBuildsAnalyticExact(t *testing.T) {
 	area, err := got.Area()
 	require.NoError(t, err)
 	require.Equal(t, decad.Exact, area.Exactness)
+	start, err := decad.Faces(decad.FaceCreatedBy(decad.CapStart(got))).Exactly(1).SelectFaces(got)
+	require.NoError(t, err)
+	require.Contains(t, start[0].Origins(), decad.CapStart(got))
+	require.NotContains(t, start[0].Origins(), decad.CapStart(a))
+	require.NotContains(t, start[0].Origins(), decad.CapStart(b))
 }
 
 // TestPrismUnionGearToothOnHubSharedCarrier is §15's coincident-carrier
@@ -304,6 +309,9 @@ func TestPrismUnionAdmittedThenInvalidRegionRefuses(t *testing.T) {
 	_, err := decad.Union(a, b)
 	require.Error(t, err)
 	require.ErrorIs(t, err, decad.ErrUnsupported)
+	var booleanErr *decad.BooleanError
+	require.ErrorAs(t, err, &booleanErr)
+	require.Equal(t, decad.BooleanUnsupportedContact, booleanErr.Code)
 	require.Equal(t, beforeRecipe, doc.Recipe())
 	require.Equal(t, beforeBodies, doc.Bodies())
 }
