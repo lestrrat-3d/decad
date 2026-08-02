@@ -827,8 +827,11 @@ func TestFilletContactToleranceScaleInvariant(t *testing.T) {
 	}
 }
 
-func TestFilletNonPrismReceiver(t *testing.T) {
-	// A revolve is not a prismPayload, so a fillet of it is staged: S3.
+// revolvedRing revolves the 10×10 rectangle at (0,5) a full turn about the
+// u-axis — a revolve payload no modify op builds, whose four selected edges are
+// all full circles.
+func revolvedRing(t *testing.T) *decad.Body {
+	t.Helper()
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	require.NoError(t, err)
@@ -838,19 +841,110 @@ func TestFilletNonPrismReceiver(t *testing.T) {
 	require.NoError(t, err)
 
 	uAxis := decad.SketchLine{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 1, V: 0}}
-	doc := decad.New()
-	body, err := doc.Revolve(s, s.Profiles()[0], uAxis, decad.FullRevolution{})
+	body, err := decad.New().Revolve(s, s.Profiles()[0], uAxis, decad.FullRevolution{})
 	require.NoError(t, err)
+	return body
+}
+
+func TestFilletNonPrismReceiver(t *testing.T) {
+	// A revolve is not a prismPayload, so a fillet of it is staged: S3.
+	body := revolvedRing(t)
 	sel := decad.Edges(decad.Circular())
+	var err error
 	_, err = body.Fillet(sel, units.Millimeters(1))
 	require.ErrorIs(t, err, decad.ErrUnsupported, `this evaluator fillets a straight prism only`)
+	require.ErrorContains(t, err, `this evaluator fillets a straight prism only`,
+		`the refusal states its own reason`)
 	require.ErrorContains(t, err, `selector `+sel.String())
+	// Every selected edge is a full circle, so each names itself closed and
+	// carries the centre and radius that identify it.
 	for _, want := range []string{
-		`selected edge[0] from (0,5,0) to (0,5,0)`,
-		`selected edge[1] from (10,5,0) to (10,5,0)`,
-		`selected edge[2] from (10,15,0) to (10,15,0)`,
-		`selected edge[3] from (0,15,0) to (0,15,0)`,
+		`selected edge[0] closed circle through (0,5,0), centre (0,0,0), radius 5 mm`,
+		`selected edge[1] closed circle through (10,5,0), centre (10,0,0), radius 5 mm`,
+		`selected edge[2] closed circle through (10,15,0), centre (10,0,0), radius 15 mm`,
+		`selected edge[3] closed circle through (0,15,0), centre (0,0,0), radius 15 mm`,
 	} {
 		require.ErrorContains(t, err, want)
 	}
+}
+
+// requireReasonLeads asserts that reason appears in err's message and that the
+// matched-entity context — everything from "; selector " on — follows it, so a
+// refusal over many selected edges still reads its cause at a glance.
+func requireReasonLeads(t *testing.T, err error, reason string) {
+	t.Helper()
+	require.Error(t, err)
+	msg := err.Error()
+	reasonAt := strings.Index(msg, reason)
+	require.GreaterOrEqual(t, reasonAt, 0, `the message states its reason: %s`, msg)
+	contextAt := strings.Index(msg, `; selector `)
+	require.GreaterOrEqual(t, contextAt, 0, `the message keeps the matched-entity context: %s`, msg)
+	require.Less(t, reasonAt, contextAt, `the reason precedes the matched-entity context: %s`, msg)
+}
+
+func TestModifyRefusalLeadsWithItsReason(t *testing.T) {
+	// A modify refusal states its sentinel and its reason first and appends the
+	// selector and the entities it matched, so the operative words are not buried
+	// behind a per-edge dump. errors.Is still branches on the sentinel.
+	t.Run(`non-prism receiver`, func(t *testing.T) {
+		_, err := revolvedRing(t).Fillet(decad.Edges(decad.Circular()), units.Millimeters(1))
+		require.ErrorIs(t, err, decad.ErrUnsupported)
+		requireReasonLeads(t, err, `this evaluator fillets a straight prism only`)
+
+		_, err = revolvedRing(t).Chamfer(decad.Edges(decad.Circular()), units.Millimeters(1))
+		require.ErrorIs(t, err, decad.ErrUnsupported)
+		requireReasonLeads(t, err, `this evaluator chamfers a straight prism only`)
+	})
+
+	t.Run(`cap edge`, func(t *testing.T) {
+		capEdges := decad.Edges(decad.ParallelTo(r3.NewVec(1, 0, 0)))
+		_, box := filletBox(t)
+		_, err := box.Fillet(capEdges, units.Millimeters(5))
+		require.ErrorIs(t, err, decad.ErrUnsupported)
+		requireReasonLeads(t, err, `a fillet of a cap edge is the vertex-blend problem`)
+
+		_, box = filletBox(t)
+		_, err = box.Chamfer(capEdges, units.Millimeters(5))
+		require.ErrorIs(t, err, decad.ErrUnsupported)
+		requireReasonLeads(t, err, `a chamfer of a cap edge is the vertex-blend problem`)
+	})
+
+	t.Run(`audit failure`, func(t *testing.T) {
+		// The S6 overrun of TestChamferOverLargeSetbackRefused: the audit's own
+		// reason leads, the four corner mappings follow it.
+		_, box := filletBox(t)
+		_, err := box.Chamfer(verticalEdges(), units.Millimeters(40))
+		require.ErrorIs(t, err, decad.ErrUnsupported)
+		requireReasonLeads(t, err, `is consumed by its corner setbacks`)
+		require.Equal(t, 4, strings.Count(err.Error(), `selected edge[`),
+			`the matched-entity context survives the reordering`)
+	})
+}
+
+func TestModifyRefusalRendersAClosedCircleAsClosed(t *testing.T) {
+	// A full circle's edge has coincident start and end vertices, so the from/to
+	// form renders it "from (p) to (p)" — correct, yet indistinguishable from a
+	// collapsed edge. A Circle3 says it is closed and reports its centre and
+	// radius; every other curve keeps from/to, so that form still means exactly
+	// what its two coordinates say.
+	_, err := revolvedRing(t).Fillet(decad.Edges(decad.Circular()), units.Millimeters(1))
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+	require.ErrorContains(t, err,
+		`selected edge[0] closed circle through (0,5,0), centre (0,0,0), radius 5 mm`,
+		`a full circle names itself closed and carries the centre and radius`)
+	require.NotContains(t, err.Error(), `from (0,5,0) to (0,5,0)`,
+		`a closed circle never renders as a zero-length edge`)
+	require.NotContains(t, err.Error(), `to (0,5,0)`,
+		`no selected circle renders through the from/to form at all`)
+
+	// The two renderings are distinguishable: a straight cap edge — the only
+	// shape whose coincident endpoints would mean a genuine collapse — still
+	// reads from/to, with the two distinct coordinates it really has.
+	_, box := filletBox(t)
+	_, err = box.Fillet(decad.Edges(decad.ParallelTo(r3.NewVec(1, 0, 0))), units.Millimeters(5))
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+	require.ErrorContains(t, err, `selected edge[0] from (0,0,0) to (100,0,0)`,
+		`a non-circular edge keeps the from/to form`)
+	require.NotContains(t, err.Error(), `closed circle`,
+		`a straight edge is never described as a circle`)
 }

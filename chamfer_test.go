@@ -543,12 +543,16 @@ func TestChamferNonPrismReceiver(t *testing.T) {
 	sel := decad.Edges(decad.Circular())
 	_, err = body.Chamfer(sel, units.Millimeters(1))
 	require.ErrorIs(t, err, decad.ErrUnsupported, `this evaluator chamfers a straight prism only`)
+	require.ErrorContains(t, err, `this evaluator chamfers a straight prism only`,
+		`the refusal states its own reason`)
 	require.ErrorContains(t, err, `selector `+sel.String())
+	// Every selected edge is a full circle, so each names itself closed and
+	// carries the centre and radius that identify it.
 	for _, want := range []string{
-		`selected edge[0] from (0,5,0) to (0,5,0)`,
-		`selected edge[1] from (10,5,0) to (10,5,0)`,
-		`selected edge[2] from (10,15,0) to (10,15,0)`,
-		`selected edge[3] from (0,15,0) to (0,15,0)`,
+		`selected edge[0] closed circle through (0,5,0), centre (0,0,0), radius 5 mm`,
+		`selected edge[1] closed circle through (10,5,0), centre (10,0,0), radius 5 mm`,
+		`selected edge[2] closed circle through (10,15,0), centre (10,0,0), radius 15 mm`,
+		`selected edge[3] closed circle through (0,15,0), centre (0,0,0), radius 15 mm`,
 	} {
 		require.ErrorContains(t, err, want)
 	}
