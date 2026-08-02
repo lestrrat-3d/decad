@@ -88,6 +88,12 @@ type LoftOption interface{ /* ... */ }
 func WithLoftAlignment(offsets ...int) LoftOption
 ```
 
+**Every `LoftOption` value MUST be non-nil and use decad's owned concrete
+implementation.** A foreign type can embed the sealed marker, so `Loft` and
+`LoftContext` check the concrete option before invoking any option callback.
+They reject a nil or foreign value with `ErrDegenerate`, without changing the
+document (Table S row S11).
+
 **`WithLoftAlignment` is accepted at most once.** The variadic signature
 type-checks a call that passes it twice, so the arity is a stated gate rather
 than a compile-time one: zero occurrences mean every offset is 0, exactly one
@@ -165,6 +171,7 @@ that exists and this evaluator cannot build → `ErrUnsupported`.**
 | **S8** | the crossing audit exhausts its fixed work budget (§6, §10) before every pair is decided | this evaluator cannot tell | `ErrUnsupported` | no, §6 — a resource ceiling, not a shape rule |
 | **S9** | either profile fails a seam gate (§2): foreign, stale, invalid, or an unrecordable `Partial` fragment | seam design's own answer, per profile | `ErrForeignProfile` / `ErrStaleProfile` / `ErrInvalidProfile` / `ErrUnrecordableProfile` | seam design's own answer, per gate; this document adds no permanence of its own (§2) |
 | **S10** | a nil `*sketch.Sketch` or `*sketch.Profile` argument | no call at all | `ErrDegenerate` | yes, §2 |
+| **S11** | a nil or foreign `LoftOption` value, including a foreign type that embeds the sealed marker | no well-defined decad operation can invoke an unowned callback | `ErrDegenerate` | yes, §2 |
 
 **S5 compares geometric planes, not `PlaneRecord` fields.** Its normal is
 `U × V`; it refuses when the two normals are parallel and the displacement
@@ -173,11 +180,11 @@ construction for every coplanar section pair, even when their authenticated
 records use distinct origins or bases.
 
 **Gate order**, the same "ask what could be asked" discipline modify §4
-states: pre-gates first (S10 nil check, S9 seam authentication of both
-profiles — nothing downstream is safe to read before this), then the shape
-gates that need only the two authenticated records (S1 hole count, S2
-segment count, S4 malformed alignment, S3 segment kind, S5 geometric-plane
-coincidence —
+states: pre-gates first (S10 nil check, S11 concrete option ownership without
+invoking a callback, S9 seam authentication of both profiles — nothing
+downstream is safe to read before this), then the shape gates that need only
+the two authenticated records (S1 hole count, S2 segment count, S4 malformed
+alignment, S3 segment kind, S5 geometric-plane coincidence —
 all decidable without building a single triangle), then construction (§5),
 then the per-triangle existence gate S6, then the crossing audit (S7/S8,
 §6) — the most expensive step, run last, over triangles already proven
@@ -544,7 +551,7 @@ global evaluator increment.
 
 | PR | Lands | Still refused after it |
 |---|---|---|
-| 1 | `OpLoft` wire/recipe plumbing (`LoftOpts` codec, `Op` token, `Step.Profile`/`Plane` reuse), Table P pairing + Table S gates S1–S5/S9/S10, the flat-triangle wall construction (§5), the crossing audit (§6, Table S S6–S8), `Document.Loft` / `LoftContext`, `Volume` / `Centroid` (§8's rational accumulator) / `Area` / `Bounds`, `Verify` (D6: the structural audit and the tolerance gate over all four) | same-kind `CircleSeg`/`ArcSeg` correspondence; N-section/guide-rail/centerline loft; `Placed`/`Duplicate`/`PlacedCopy`; reversed correspondence; surveys, clearance, interference beyond box-disjoint |
+| 1 | `OpLoft` wire/recipe plumbing (`LoftOpts` codec, `Op` token, `Step.Profile`/`Plane` reuse), Table P pairing + Table S gates S1–S5/S9–S11, the flat-triangle wall construction (§5), the crossing audit (§6, Table S S6–S8), `Document.Loft` / `LoftContext`, `Volume` / `Centroid` (§8's rational accumulator) / `Area` / `Bounds`, `Verify` (D6: the structural audit and the tolerance gate over all four) | same-kind `CircleSeg`/`ArcSeg` correspondence; N-section/guide-rail/centerline loft; `Placed`/`Duplicate`/`PlacedCopy`; reversed correspondence; surveys, clearance, interference beyond box-disjoint |
 | 2 | `Tessellate` / `STL` / `OBJ` (D1), mesh-boolean admission (D2), `Placed` / `Duplicate` / `PlacedCopy` (D7) | D3/D4's analytic-kernel case, D5 |
 | 3 (reach, not committed by this document) | same-kind `CircleSeg`/`ArcSeg` correspondence, N-section and guide-rail/centerline lofts, a loft case in `clearance_geom.go`, a non-constant-cross-section wall survey kernel | — |
 
@@ -567,10 +574,12 @@ never merely that a call ran (project rule).
 - **Pairing**: hole-count mismatch → S1; segment-count mismatch → S2;
   mixed/curved segment pair (including same-kind circular) → S3; malformed
   `WithLoftAlignment` (wrong length, out-of-range offset, or duplicate
-  option) → S4; geometrically coplanar sections → S5, including two distinct
-  `PlaneRecord`s with the same plane but rotated `U`/`V` bases; a nonzero
-  alignment offset pairs the expected rotated vertex, asserted on the built
-  wall's own coordinates. A
+  option) → S4; nil and foreign `LoftOption` values (including a type with a
+  promoted sealed marker) → S11 before their callbacks run and with the
+  document unchanged; geometrically coplanar sections → S5, including two
+  distinct `PlaneRecord`s with the same plane but rotated `U`/`V` bases; a
+  nonzero alignment offset pairs the expected rotated vertex, asserted on the
+  built wall's own coordinates. A
   two-hole fixture whose recorded `Holes` order is swapped between the two
   profiles MUST assert the two ordinal pairings by wall coordinates, or S7 for
   the resulting crossed correspondence; a nearest-hole matcher MUST fail it.
