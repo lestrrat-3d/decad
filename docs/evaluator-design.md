@@ -84,13 +84,17 @@ Rules:
   body; concurrency safety (core §12) falls out.
 - **Provenance is structural.** `FeatureRef` identifies the producing
   `StepRef` plus a stable role within it — `side(i, j)` (loop `i`, segment
-  `j`), `capStart`, `capEnd`, and the revolve/boolean analogs. Roles derive
-  from the recorded step, so re-evaluation reproduces them, and the
-  provenance predicates — `CreatedBy` for edges, `FaceCreatedBy` for faces
-  (core §9) — select the same entities under every run.
-- **Canonicalize at build.** Adjacent coplanar side faces merge; a full
-  cylinder is one face with two circular-edge loops and no seam edge. v1
-  counts already match the analytic answer, so vN does not churn them
+  `j`) for a swept wall; `side(i, j, k)` for a Loft wall triangle, where
+  `k=0` is lower and `k=1` is upper; `capStart`, `capEnd`, and the
+  revolve/boolean analogs. Roles derive from the recorded step, so
+  re-evaluation reproduces them, and the provenance predicates — `CreatedBy`
+  for edges, `FaceCreatedBy` for faces (core §9) — select the same entities
+  under every run.
+- **Canonicalize at build.** Adjacent coplanar side faces merge, except the
+  two fixed triangle faces of each Loft wall cell: `side(i,j,0)` and
+  `side(i,j,1)` remain distinct even when their common diagonal is coplanar.
+  A full cylinder is one face with two circular-edge loops and no seam edge.
+  v1 counts already match the analytic answer, so vN does not churn them
   (core §3).
 - **Every vertex carries its bound.** Feature-built vertices are exact (bound
   zero); boolean-built vertices carry the tessellation's chord bound. The

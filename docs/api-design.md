@@ -111,7 +111,7 @@ These are cheap now and expensive to retrofit. They are the upgrade path.
 | 5 | **Imported meshes are a separate type.** A `MeshBody` never claims to be a solid B-rep. | For imported triangle soup, no future kernel can recover exactness. Keeping it separate stops approximate-forever geometry from contaminating the type we promise to make exact. |
 
 **What will still churn**, stated honestly: face/edge *counts* may change under an
-exact kernel (canonicalize aggressively — merge coplanar faces — so v1 counts
+exact kernel (canonicalize under evaluator §3's rules, so v1 counts
 already match the analytic answer); numeric outputs shift (`12.9997 → 13.0000`, so
 tests compare with tolerances, never goldens); and vN's surface set is a superset,
 so a `switch` on `Surface` MUST have a `default` branch.
@@ -535,10 +535,10 @@ type Recipe struct {
 type StepRef int
 
 type Step struct {
-    Op        OpKind          // Extrude / Revolve / Union / Cut / Intersect / Fillet / Chamfer / Shell / Placed / Duplicate / PlacedCopy
+    Op        OpKind          // Extrude / Revolve / Loft / Union / Cut / Intersect / Fillet / Chamfer / Shell / Placed / Duplicate / PlacedCopy
     Inputs    []StepRef       // the bodies this step depends on. Cut is [target, tool].
-    Profile   ProfileRecord   // Extrude / Revolve — decad's own analytic 2D record of the region
-    Plane     PlaneRecord     // Extrude / Revolve — the sketch plane; lifts Profile into world space
+    Profile   ProfileRecord   // Extrude / Revolve / Loft ("from" section) — decad's own analytic 2D record of the region
+    Plane     PlaneRecord     // Extrude / Revolve / Loft ("from" section) — the sketch plane; lifts Profile into world space
     Extent    Extent          // Extrude
     Angular   AngularExtent   // Revolve
     Axis      Axis            // Revolve
@@ -718,6 +718,11 @@ type ChamferOpts struct {
 type ShellOpts struct {
     Sense      ShellSense
     NoOpenings bool
+}
+type LoftOpts struct {
+    Profile2  ProfileRecord // the "to" section
+    Plane2    PlaneRecord   // the "to" section's plane
+    Alignment []int         // per-loop segment-rotation offset; absent means every offset is 0
 }
 ```
 

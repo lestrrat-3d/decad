@@ -179,14 +179,16 @@ increments the one global angular count; rebuild and re-audit.
 
 Build one `role -> *Face` map from the body's live topology. A coalesced wall
 may carry several `side(i,j)` origins; all of them MUST resolve to the same face.
-Missing or conflicting roles are an evaluator invariant failure and no mesh is
-returned.
+A Loft wall cell has the two distinct `side(i,j,0)` and `side(i,j,1)` faces
+evaluator §3 defines, even when its two triangles are coplanar. Missing or
+conflicting roles are an evaluator invariant failure and no mesh is returned.
 
 Assign sources by patch:
 
 | Facet patch | `SourceFaces` entry |
 |---|---|
 | prism/cup side cell | face carrying that walk's `side(i,j)` / `shellSide(i,j)` role |
+| Loft wall triangle `k` | face carrying that cell's `side(i,j,k)` role |
 | revolve wall cell or pole fan | face carrying that generator's `side(i,j)` role |
 | start/end cap | `capStart` / `capEnd` face |
 | cup kept cap, pocket floor, rim band | the corresponding `capStart`, `shellCap`, or `rim(i)` face |
