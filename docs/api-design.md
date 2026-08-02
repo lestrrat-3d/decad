@@ -594,14 +594,16 @@ read back: an unnamed or overflowed kind, a non-finite magnitude. Every quantity
 a `Step` records therefore encodes.
 
 **The root wire format is versioned and strict.** Canonical JSON is
-`{"format":"decad.recipe","version":1,"steps":[...]}`. The existing
-unversioned `{"steps":[...]}` shape is accepted as legacy version 1 and always
-re-encodes canonically. `json.Marshal` runs full recipe validation under default
-limits; `EncodeRecipe` runs the same encoder under explicit limits for trusted
-larger recipes. Invalid Unicode, unknown versions, unknown fields, duplicate
-keys, trailing values, malformed operation shapes, invalid references and
-configured resource-limit overruns reject. The in-memory `Recipe` keeps no
-version field: format metadata is not design intent.
+`{"format":"decad.recipe","version":2,"steps":[...]}`. Unversioned and
+version-1 input are accepted under the version-1 grammar and re-encode as
+canonical version 2. A version-1-only decoder rejects a version-2 envelope
+with `ErrUnsupportedRecipeVersion` before step dispatch. `json.Marshal` runs
+full recipe validation under default limits; `EncodeRecipe` runs the same
+encoder under explicit limits for trusted larger recipes. Invalid Unicode,
+unknown versions, unknown fields, duplicate keys, trailing values, malformed
+operation shapes, invalid references and configured resource-limit overruns
+reject. The in-memory `Recipe` keeps no version field: format metadata is not
+design intent.
 `docs/recipe-replay-design.md` §§2–7 is normative.
 
 **A recipe is evaluable, not merely encodable.** `Recipe.Validate` checks every

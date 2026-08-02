@@ -1,8 +1,8 @@
 # Loft Design
 
-The increment-1 `Loft` feature: a solid between two recorded planar profiles,
-built by straight rules between corresponding boundary points, with no guide
-rail and no centerline. Companion to `docs/api-design.md` (public surface,
+The increment-1 `Loft` feature: a solid between two recorded planar profiles on
+distinct geometric planes, built by straight rules between corresponding boundary
+points, with no guide rail and no centerline. Companion to `docs/api-design.md` (public surface,
 "core §N"), `docs/sketch-seam-design.md` (the recording IR both profiles are
 authenticated into, "seam §N"), `docs/evaluator-design.md` ("evaluator §N"),
 `docs/modify-design.md` (the receiver/refusal/result/downstream table
@@ -32,9 +32,9 @@ established:
 
 The target case, stated by the consuming project
 (`fusion360-gear-generator`'s 3D proof stage): two profiles, each already
-closed and valid per `sketch`, each recorded on its own plane, with the same
-topology (same loop count, same segment count per loop), no guide rail, no
-centerline, ruled between corresponding points. A helical gear tooth is one
+closed and valid per `sketch`, recorded on distinct geometric planes, with the
+same topology (same loop count, same segment count per loop), no guide rail,
+no centerline, ruled between corresponding points. A helical gear tooth is one
 such loft (bottom tooth loop to a twisted top loop); a bevel gear is two;
 herringbone and spiral bevel compose those.
 
@@ -106,7 +106,7 @@ refuses a repeated contradictory option on.
 `s0`/`p0` is the **from** section (`capStart`); `s1`/`p1` is the **to**
 section (`capEnd`) — the same naming Extrude already uses for its two caps.
 Two sketches are required, never one, because `sketch.Sketch` has one plane
-(core §7): a loft between two differently-posed sections needs two.
+(core §7): an admitted loft between two non-coplanar sections needs two.
 
 **Both profiles pass through the unmodified seam gates of core §7 / seam
 design, independently, in argument order.** `p0` MUST be a current,
@@ -522,6 +522,9 @@ missing or explicit-null `LoftOpts`, or one missing either field, rejects.
 offset 0" when absent — never distinguished from an explicit all-zero list,
 since the two mean the same intent.
 
+`OpLoft`, `Profile2`, and `Plane2` are version-2 wire content. Replay §2.1
+owns the version-1/version-2 decode, canonical encode, and migration rules.
+
 **Recipe validation (replay §3) independently re-proves BOTH profiles**,
 exactly as it already re-proves the one profile an Extrude or Revolve step
 carries — reconstructing each in a private `sketch` arrangement and matching
@@ -635,9 +638,11 @@ never merely that a call ran (project rule).
   kernel adds loft; each requested D5 survey reads `Suspect`, never absent or
   a silently wrong number.
 - **Recipe/replay**: round-trip a `LoftOpts` payload including a non-zero
-  `Alignment`; a missing `Profile2`/`Plane2` on the wire rejects; replay
-  reproduces the same triangles, roles, and measurements as the immediate
-  call; a failed call leaves the document and recipe unchanged.
+  `Alignment` through a version-2 envelope; a missing `Profile2`/`Plane2` on
+  the wire rejects; a version-1-only decoder rejects that complete version-2
+  envelope before it dispatches `"loft"`; replay reproduces the same triangles,
+  roles, and measurements as the immediate call; a failed call leaves the
+  document and recipe unchanged.
 
 ## 14. Open questions
 

@@ -148,7 +148,7 @@ Canonical JSON uses this envelope:
 ```json
 {
   "format": "decad.recipe",
-  "version": 1,
+  "version": 2,
   "steps": []
 }
 ```
@@ -182,22 +182,37 @@ format version.
 - `json.Unmarshal` into `Recipe` uses the strict decoder and default limits.
 - `DecodeRecipe` is the untrusted-reader API and allows explicit limits.
 - Existing unversioned `{"steps": ...}` input is legacy version 1 and remains
-  accepted. It MUST contain only `steps`.
+  accepted under the version-1 grammar. It MUST contain only `steps`.
 - Legacy `{"steps":null}` is accepted as empty because the original default Go
   codec emitted it for `Recipe{}`. Versioned input requires an array.
 - If either `format` or `version` is present, both are required.
 - `format` MUST equal `decad.recipe`.
-- `version` MUST equal `1`.
+- `version` MUST equal `1` or `2`.
 - Unknown versions return `ErrUnsupportedRecipeVersion`. NEVER ignore fields
   from a newer version.
+- Version 1 is the pre-loft vocabulary. Its closed `OpKind` set excludes
+  `"loft"` and it has no `LoftOpts` wire payload.
+- Version 2 adds `OpLoft` and its required `LoftOpts.profile2` and
+  `LoftOpts.plane2` wire fields.
+- A version-2 decoder accepts both versions. It preflights and decodes a
+  version-1 envelope under the version-1 grammar, then normalizes it into the
+  current in-memory `Recipe`; it preflights and decodes a version-2 envelope
+  under the version-2 grammar. A version-1 envelope containing `"loft"` is
+  invalid; it is never interpreted with version-2 rules.
+- The canonical encoder ALWAYS writes version 2. It never writes a version-1
+  envelope for a recipe containing `OpLoft`.
+- A decoder that supports only version 1 MUST reject a complete version-2
+  envelope with `ErrUnsupportedRecipeVersion` before it decodes any step. It
+  MUST NOT reach closed-variant dispatch for `"loft"`.
 - Every change that adds, removes, or changes the meaning of a wire field bumps
   `version`, even when old decoders could ignore the field.
 - Adding an evaluator does NOT bump recipe version.
 - Evaluator identity, tessellation tolerance, error bounds, and cached topology
   NEVER enter the envelope.
 
-Legacy input re-encodes as the canonical versioned envelope. No separate
-migration API exists for version 1.
+Legacy or version-1 input re-encodes as the canonical version-2 envelope. The
+version-2 decoder's normalization and canonical encoder are the migration path;
+no separate migration API exists.
 
 ### 2.2 Strict JSON
 
@@ -738,7 +753,7 @@ Canonical JSON is byte-stable for one normalized recipe:
 - closed variants use named tags;
 - no maps enter the wire form;
 - units retain their registered text form;
-- legacy input re-encodes in canonical version 1 form.
+- legacy or version-1 input re-encodes in canonical version-2 form.
 
 For the same normalized recipe + evaluator implementation:
 
@@ -767,7 +782,7 @@ evaluator cannot build returns `ErrUnsupported` at its first unsupported step.
 
 No public half-replay surface ships. Internal changes may land in this order:
 
-1. strict envelope codec + version 1 legacy reader;
+1. strict version-2 envelope codec + version-1 legacy reader;
 2. deep normalization, including `StepOpts`;
 3. schema-aware decode counters + evaluation counters + full recipe validator;
 4. shared recorded-step helpers for extrude/revolve/placed;
@@ -785,8 +800,12 @@ immediate feature call.
 
 ### 10.1 Wire
 
-- versioned round-trip for every closed variant;
-- legacy unversioned decode → canonical versioned encode;
+- version-2 round-trip for every closed variant, including `OpLoft` with both
+  required `LoftOpts` fields;
+- legacy unversioned and version-1 decode → canonical version-2 encode;
+- a version-1-only decoder rejects a complete version-2 envelope with
+  `ErrUnsupportedRecipeVersion` before step dispatch; the fixture proves that
+  its `"loft"` operation is never decoded as an unknown closed variant;
 - `Recipe.MarshalJSON` runs full profile validation with default limits;
   `EncodeRecipe` produces identical canonical bytes under the same limits;
 - exact-limit + one-over marshal profile-arrangement work, with instrumentation
