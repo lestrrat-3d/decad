@@ -90,12 +90,12 @@ Rules:
   re-evaluation reproduces them, and the provenance predicates — `CreatedBy`
   for edges, `FaceCreatedBy` for faces (core §9) — select the same entities
   under every run.
-- **Canonicalize at build.** Adjacent coplanar side faces merge, except the
-  two fixed triangle faces of each Loft wall cell: `side(i,j,0)` and
-  `side(i,j,1)` remain distinct even when their common diagonal is coplanar.
-  A full cylinder is one face with two circular-edge loops and no seam edge.
-  v1 counts already match the analytic answer, so vN does not churn them
-  (core §3).
+- **Canonicalize at build.** Adjacent coplanar side faces merge, except no
+  Loft wall triangle merges with another face. This keeps
+  `side(i,j,0)`/`side(i,j,1)` distinct within a cell and preserves every
+  cross-cell rung between coplanar Loft triangles. A full cylinder is one
+  face with two circular-edge loops and no seam edge. v1 counts already match
+  the analytic answer, so vN does not churn them (core §3).
 - **Every vertex carries its bound.** Feature-built vertices are exact (bound
   zero); boolean-built vertices carry the tessellation's chord bound. The
   verification gate reads these (verification §4).

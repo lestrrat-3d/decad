@@ -156,7 +156,7 @@ that exists and this evaluator cannot build → `ErrUnsupported`.**
 | **S4** | a `WithLoftAlignment` payload of the wrong length, an offset outside `[0, n)` for its loop, or the option passed more than once | no single intent (mirrors modify-reach SX1, which refuses a repeated contradictory option on the same ground) | `ErrDegenerate` | yes, §2 |
 | **S5** | `p0`'s and `p1`'s `PlaneRecord`s are exactly equal (`Origin`, `U`, `V` all equal) | no — every wall vertex then lies in one plane, so the solid is provably flat: the tetrahedron-sum volume (§8) is a structural zero, not a computed one | `ErrDegenerate` | yes, §4 |
 | **S6** | a wall or cap triangle whose three recorded points collapse (coincident vertices, zero area) | no — the modification consumed the region, the same existence answer modify §5 test 1 gives an inside-out loop | `ErrDegenerate` | yes, §4 |
-| **S7** | the crossing audit (§6) proves two non-adjacent triangles intersect | no — a self-intersecting shell bounds no solid | `ErrDegenerate` | yes, §6 |
+| **S7** | the crossing audit (§6) finds contact other than the pair's recorded expected contact | no — a self-intersecting or self-touching shell bounds no solid | `ErrDegenerate` | yes, §6 |
 | **S8** | the crossing audit exhausts its fixed work budget (§6, §10) before every pair is decided | this evaluator cannot tell | `ErrUnsupported` | no, §6 — a resource ceiling, not a shape rule |
 | **S9** | either profile fails a seam gate (§2): foreign, stale, invalid, or an unrecordable `Partial` fragment | seam design's own answer, per profile | `ErrForeignProfile` / `ErrStaleProfile` / `ErrInvalidProfile` / `ErrUnrecordableProfile` | seam design's own answer, per gate; this document adds no permanence of its own (§2) |
 | **S10** | a nil `*sketch.Sketch` or `*sketch.Profile` argument | no call at all | `ErrDegenerate` | yes, §2 |
@@ -191,17 +191,18 @@ W_{j+1}, W_j` splits into:
 Evaluator §3 owns the `side(i,j,k)` grammar. Here `i` is the loop index
 (`0` for `Outer`, `1+h` for `Holes[h]`), matching Table P's own indexing.
 
-**A loft wall's own triangle pair is exempt from evaluator §3's
-adjacent-coplanar-side-face canonicalization**, and evaluator §3's canonicalize
-bullet states that exemption on its own side. A loft wall quad is generally
-non-planar — `V_j`, `V_{j+1}`, `W_{j+1}`, `W_j` lie in one plane only where the
-two recorded segments happen to be parallel and equally posed — so merging the
-planar cases would make the face count, the role grammar, and the diagonal's
-own two-face incidence depend on an accident of the caller's two sections. The
-uniform two-face topology keeps `side(i,j,0)` / `side(i,j,1)` and Table B's
-counts identical whether or not a wall happens to be planar, which is what
-makes §5's manifold argument and §6's adjacency exclusions read off the
-recorded pairing alone.
+**Every Loft wall triangle is exempt from evaluator §3's
+adjacent-coplanar-side-face canonicalization**, and evaluator §3 owns that
+rule. No wall triangle merges with its mate or with a triangle in another
+cell. A wall quad is generally non-planar — `V_j`, `V_{j+1}`, `W_{j+1}`,
+`W_j` lie in one plane only where the two recorded segments happen to be
+parallel and equally posed — while a split collinear side can make triangles
+from neighboring cells coplanar. Merging either case would make the face
+count, role grammar, diagonal incidence, or split-rung incidence depend on an
+accident of the caller's two sections. The uniform two-face-per-cell topology
+keeps Table B's roles and counts identical for every correspondence, which
+makes §5's manifold argument and §6's adjacency checks read from recorded
+pairing alone.
 
 **Every vertex position is `V = Plane.Origin + p.U * Plane.U + p.V *
 Plane.V`, the identical single float64 evaluation Extrude already performs
@@ -268,51 +269,48 @@ reveal** — extreme twist between the two sections is exactly the shape the
 target case (a helical tooth) invites. decad never builds an unproven
 solid (modify §1), so this is a build-time gate, not a `Verify` question.
 
-The audit tests every pair of non-adjacent triangles among the `2n` wall
-triangles and the two triangulated caps (`triangulate.go`'s existing
-ear-clipping triangulation of each polygon-with-holes cap; capStart/capEnd
-triangles are adjacent to their own wall triangles along shared cap-boundary
-edges, exactly as a prism's cap triangles are, and are never tested against
-those neighbors). **Adjacency is decided on what the two triangles SHARE, and
-the rule has two parts:**
+The audit tests every pair among the `2n` wall triangles and the two
+triangulated caps (`triangulate.go`'s existing ear-clipping triangulation of
+each polygon-with-holes cap). A recorded shared edge or vertex does not prove
+that it is the pair's only contact. **Adjacency states the expected contact;
+every pair is classified against that expectation:**
 
-- **A pair sharing an EDGE is excluded by construction and never tested** —
-  a rung, a diagonal, a cap-boundary edge, or an internal edge of one cap's
-  own triangulation. The two triangles meet exactly along that shared edge,
-  the same way two prism side faces do.
-- **A pair sharing exactly one VERTEX and no edge IS tested**, and its
-  result is read one way only: a point contact whose single point is that
-  shared vertex is admitted, and every other classification — a point
-  contact elsewhere, a shared segment, a 2-D region, a transversal crossing
-  — refuses. Vertex-sharing pairs are not excluded outright, because two
-  triangles sharing one vertex can still cross away from it; the shared
-  vertex is the one contact the recorded topology already accounts for.
+- **A pair sharing an EDGE is admitted only when `triTriClassify` reports the
+  exact recorded common edge as its whole shared segment.** This applies to a
+  rung, a diagonal, a cap-boundary edge, and an internal edge of one cap's own
+  triangulation. The matching segment proves the triangle interiors are
+  disjoint; a point, an extra segment, a 2-D region, or a crossing refuses.
+- **A pair sharing exactly one VERTEX and no edge is admitted only when its
+  sole contact is that recorded vertex.** A point elsewhere, a shared segment,
+  a 2-D region, or a transversal crossing refuses. Vertex-sharing pairs need
+  this check because they can cross away from their recorded vertex.
 
 The vertex rule is what every consecutive wall pair needs: the lower
 triangles of paired segments `j` and `j+1` share only `V_{j+1}`, and their
-upper triangles share only `W_{j+1}`, so no edge exclusion covers either
-pair. `triangulate.go` produces an interior-disjoint conforming
+upper triangles share only `W_{j+1}`, so each pair must pass the recorded-
+vertex check. `triangulate.go` produces an interior-disjoint conforming
 triangulation of one planar region, so two triangles of the SAME cap meet
-only in shared edges and shared vertices — both covered above — and a cap
-triangle is still tested against every non-neighboring wall triangle and
-against every triangle of the opposite cap.
+only in shared edges and shared vertices — each must produce the expected
+classification above. Every cap triangle is also tested against every wall
+triangle and every triangle of the opposite cap.
 
-Every remaining pair is tested with `boolean_exact.go`'s existing adaptive
+Every pair is tested with `boolean_exact.go`'s existing adaptive
 triangle/triangle predicate and `boolean_mesh.go`'s `triTriClassify` — the
-identical exact machinery the mesh boolean already uses to decide whether
-two triangles are disjoint, share a point, share a segment, or overlap in a
-2-D region. Two flat triangles need no bracket, no interval subdivision, and
-no certified polynomial isolation the way two curved bilinear patches would:
-the predicate is exact and total.
+identical exact machinery the mesh boolean already uses to decide whether two
+triangles are disjoint, share a point, share a segment, or overlap in a 2-D
+region. Two flat triangles need no bracket, no interval subdivision, and no
+certified polynomial isolation the way two curved bilinear patches would: the
+predicate is exact and total.
 
-- **empty** (disjoint) → excluded, no refusal;
-- **a point contact at the pair's own shared vertex** → the contact the
-  recorded topology already states, admitted, no refusal;
-- **a point contact anywhere else, or a shared segment** → the two walls
-  touch where the recorded topology says they should not — proven
-  self-contact, `ErrDegenerate` (S7);
-- **a 2-D overlap, or a genuine transversal crossing** → proven
-  self-intersection, `ErrDegenerate` (S7);
+- **empty** (disjoint) → admitted only for a pair with no recorded shared
+  edge or vertex;
+- **the exact recorded common-edge segment** → admitted only for a pair that
+  records that edge;
+- **a point contact at the pair's own recorded shared vertex** → admitted
+  only for that vertex-sharing pair;
+- **every other classification** — a missing expected contact, a point or
+  segment elsewhere, a shared area, or a genuine transversal crossing →
+  proven self-contact or self-intersection, `ErrDegenerate` (S7);
 - exhausting the fixed work budget before every pair is decided →
   `ErrUnsupported` (S8), never a guess.
 
@@ -535,18 +533,26 @@ never merely that a call ran (project rule).
   `triangulate.go`'s existing polygon-with-holes output for each profile in
   isolation; a junction's `Edge.IsConvex` matches its hand-computed
   walked-boundary turn; an outer rim is convex and a hole rim is concave. An
-  untwisted congruent parallel loft has `orient3d == 0` on every retained flat
-  diagonal and on a rung at a deliberately split straight side; each reports
-  `IsConvex() == false`, is selected by `Concave()`, and is not selected by
-  `Convex()`. A collapsed (coincident-vertex) segment pair → S6.
+  untwisted congruent parallel loft with one outer side deliberately split
+  into two collinear `LineSeg`s retains exactly two `Plane` faces per wall
+  cell. At the flat split rung, the preceding cell's lower triangle and the
+  next cell's upper triangle remain distinct faces. Every retained flat
+  diagonal and that rung report `IsConvex() == false`, are selected by
+  `Concave()`, and are not selected by `Convex()`. A collapsed
+  (coincident-vertex) segment pair → S6.
 - **Audit**: a deliberately over-twisted correspondence (e.g. an intentional
   wrong `WithLoftAlignment` offset on a non-convex profile) proves a
   crossing → S7, asserted against the specific triangle pair the crossing
-  predicate found; a rectangular loft passes when its cap triangles share
-  their internal diagonal and consecutive wall triangles share only their
-  recorded vertex; a vertex-sharing wall pair that crosses away from that
-  vertex → S7; a synthetic profile pair sized to exceed the fixed pair-test
-  budget → S8, refused before any pair result is trusted.
+  predicate found; a rectangular loft passes when its cap-triangle pairs
+  classify as their recorded internal diagonals and consecutive wall pairs
+  classify as their recorded vertices; a vertex-sharing wall pair that crosses
+  away from that vertex → S7. Two valid square `LineSeg` profiles with `p0` frame
+  `U=(1,0,0)`, `V=(0,1,0)`, origin `(0,0,0)` and `p1` frame
+  `U=(-1,0,0)`, `V=(0,1,0)`, origin `(1,0,1)`, carrying the same local
+  square, make cell 0's two triangles share their recorded diagonal but
+  overlap in area; the audit rejects them as S7. A synthetic profile pair
+  sized to exceed the fixed pair-test budget → S8, refused before any pair
+  result is trusted.
 - **Mass properties**: a scaled cube-like loft (two congruent squares,
   parallel planes, no twist) reproduces the closed-form prism volume/
   centroid exactly, asserted `Exact` when the rational happens to be
