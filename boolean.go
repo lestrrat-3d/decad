@@ -41,13 +41,15 @@ const boolChordFactor = 2e-5
 // against any real tolerance. Operands from different
 // documents are ErrForeignBody; retired operands ErrRetiredBody. A boolean
 // that fails on the geometry returns a typed [BooleanError] wrapping the §12
-// sentinel: a valid but unclassifiable contact — a curved-surface tangency or
-// near-contact whose chord facets never provably interpenetrate, an exact
-// coplanar / face-on-face overlap, a grazing edge, or an isolated-point pinch —
-// is BooleanUnsupportedContact (wrapping ErrUnsupported), never ErrDegenerate;
-// a result with no volume is BooleanEmpty (wrapping ErrBooleanFailed); an
-// internal invariant break is BooleanEvaluatorFailure (wrapping
-// ErrBooleanFailed). errors.As(err, &be) reads the Code.
+// sentinel: a valid evaluator-limit result — an unclassifiable contact (a
+// curved-surface tangency or near-contact whose chord facets never provably
+// interpenetrate, an exact coplanar / face-on-face overlap, a grazing edge, or
+// an isolated-point pinch), or an admitted analytic candidate that fails its
+// post-admission audit — is BooleanUnsupportedContact (wrapping
+// ErrUnsupported), never ErrDegenerate; a result with no volume is BooleanEmpty
+// (wrapping ErrBooleanFailed); an internal invariant break is
+// BooleanEvaluatorFailure (wrapping ErrBooleanFailed). errors.As(err, &be)
+// reads the Code.
 // Both operands are tessellated first at a chord tolerance derived from the
 // pair's diameter, so an operand this evaluator cannot tessellate — a revolve
 // body, which has no tessellator, or a Faceted operand whose own held Bound is
@@ -103,11 +105,12 @@ const (
 	// / meshBoolean) or an undecidable near-miss (refuseUndecidableProximity). It
 	// maps to the public BooleanUnsupportedContact.
 	booleanExpectedContact
-	// booleanExpectedUnsupported is an in-pipeline reach of the boolean geometry
-	// on operands that DID tessellate — a collapsed or welded-away facet
-	// (prepBoolMesh / stitchFacets) or a trim amplification that outgrew the pair
-	// diameter (rimDelta). Like a contact refusal the model is real and the limit
-	// is the evaluator's reach, so it too maps to BooleanUnsupportedContact.
+	// booleanExpectedUnsupported is an in-pipeline reach of the boolean geometry:
+	// a collapsed or welded-away facet (prepBoolMesh / stitchFacets), a trim
+	// amplification that outgrew the pair diameter (rimDelta), or an admitted
+	// analytic candidate that fails its post-admission audit. The model is real
+	// and the limit is the evaluator's reach, so it maps to
+	// BooleanUnsupportedContact.
 	booleanExpectedUnsupported
 	// booleanExpectedStaging is a capability/staging limit reached BEFORE any
 	// contact is examined: an operand this evaluator cannot tessellate at all (a
@@ -201,13 +204,14 @@ func performBoolean(ctx context.Context, op OpKind, a, b *Body) (*Body, error) {
 // asBooleanError maps an evaluateBoolean or buildFacetedBody error to the
 // public typed BooleanError (docs/api-design.md §8 / H2). The private
 // expected-outcome kinds decide the Code and the wrapped sentinel: an empty
-// result is BooleanEmpty; a valid but unclassifiable coplanar / tangent /
+// result is BooleanEmpty. A valid but unclassifiable coplanar / tangent /
 // grazing / isolated-point contact, and an in-pipeline reach of the boolean
-// geometry on operands that DID tessellate (a proximity refusal, a collapsed or
-// welded-away facet, a trim amplification past the pair diameter), are
-// BooleanUnsupportedContact — the model is real and the refusal is the
-// evaluator's contact reach, so the wrapped sentinel is ErrUnsupported, never
-// ErrDegenerate. A capability/staging limit reached BEFORE any contact is
+// geometry (a proximity refusal, a collapsed or welded-away facet, a trim
+// amplification past the pair diameter, or an admitted analytic candidate that
+// fails its post-admission audit), are BooleanUnsupportedContact — the model is
+// real and the refusal is the evaluator's reach, so the wrapped sentinel is
+// ErrUnsupported, never ErrDegenerate. A capability/staging limit reached
+// BEFORE any contact is
 // examined — an operand this evaluator cannot tessellate (a revolve body, or a
 // Faceted operand coarser than the pair tolerance) — is NOT a contact refusal
 // and passes through unwrapped as a plain ErrUnsupported, not a BooleanError. A

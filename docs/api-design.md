@@ -973,9 +973,9 @@ the recipe unchanged. `Union` / `Cut` / `Intersect` are compatibility wrappers
 over their `Context` variants with `context.Background()`; success keeps the
 same consuming behavior and recorded step.
 
-**A boolean failure is typed, because its three failures are three different
-caller actions.** A boolean that produces no body, that meets a contact this
-evaluator cannot classify, or that breaks an internal invariant returns a
+**The normal boolean outcomes are typed, because their three failures are three
+different caller actions.** A boolean that produces no body, reaches an
+evaluator limit on valid geometry, or breaks an internal invariant returns a
 `BooleanError` — the operation, its operand `StepRef`s, and a branchable `Code`
 — wrapping the sentinel `errors.Is` already branches on, so compatibility
 holds:
@@ -994,10 +994,10 @@ const (
     // BooleanEmpty is a NORMAL geometric outcome: the result encloses no
     // volume — a disjoint Intersect, an all-removing Cut. Wraps ErrBooleanFailed.
     BooleanEmpty BooleanErrorCode = iota
-    // BooleanUnsupportedContact is a VALID model whose operands meet in a
-    // contact this evaluator cannot classify from chords: a curved-surface
-    // tangency or near-contact, a coplanar face-on-face overlap, a grazing
-    // edge, an isolated-point pinch. Recipe-recordable, evaluator-staged.
+    // BooleanUnsupportedContact is a VALID model that reaches a boolean
+    // geometry limit: an unclassifiable chord contact, or an admitted analytic
+    // candidate that fails its post-admission audit. Recipe-recordable,
+    // evaluator-staged.
     // Wraps ErrUnsupported.
     BooleanUnsupportedContact
     // BooleanEvaluatorFailure is an internal invariant break: the stitched
@@ -1017,24 +1017,25 @@ contact, or wait for vN); `BooleanEvaluatorFailure` — a bug to file. Mixing th
 three under one sentinel is what makes `errors.Is(err, ErrBooleanFailed)` too
 coarse to drive recovery, so the `Code` draws the line the sentinel cannot.
 
-**A valid tangent contact is staged, not malformed.** A curved-surface or
-coplanar contact this evaluator cannot classify is `BooleanUnsupportedContact`
-(wrapping `ErrUnsupported`), NEVER `ErrDegenerate`: the input names a real
-solid, and the refusal is the evaluator's reach, not a zero or self-crossing
-region. That "never `ErrDegenerate`" scopes to the CONTACT-CLASSIFICATION
-refusals — the coplanar / tangent / grazing / isolated-point contact. It does
-not reach a distinct case: a valid operand whose boolean OUTPUT cannot be
-chorded finely enough to tessellate (a bridge pinch, a stalled ear clip)
-surfaces `errors.Is(err, ErrDegenerate)` publicly, and that is a retryable
-coarse-chording `ErrDegenerate` on that operand — a finer chord tolerance may
-clear it — not a `BooleanError`. So `ErrDegenerate` covers BOTH an input with
-no usable geometry (its §12 meaning) AND the coarse-chording tessellation
-refusal, while the typed `BooleanError` family covers the empty result, the
-unclassifiable contact, and the evaluator-internal failure. This
-sentinel mapping fixes the test impact mechanically: a valid-contact assertion
-checks `errors.Is(err, ErrUnsupported)` where a coarser taxonomy would check
-`ErrDegenerate`, and landing those assertion changes is the implementation PR's
-work, not this contract's.
+**A valid evaluator-limit result is staged, not malformed.** A curved-surface
+or coplanar contact this evaluator cannot classify, or an admitted analytic
+candidate that fails its post-admission audit, is
+`BooleanUnsupportedContact` (wrapping `ErrUnsupported`), NEVER
+`ErrDegenerate`: the input names a real solid, and the refusal is the
+evaluator's reach, not a zero or self-crossing region. That "never
+`ErrDegenerate`" scopes to contact-classification and post-admission analytic
+refusals. It does not reach a distinct case: a valid operand whose boolean
+OUTPUT cannot be chorded finely enough to tessellate (a bridge pinch, a
+stalled ear clip) surfaces `errors.Is(err, ErrDegenerate)` publicly, and that
+is a retryable coarse-chording `ErrDegenerate` on that operand — a finer chord
+tolerance may clear it — not a `BooleanError`. So `ErrDegenerate` covers BOTH
+an input with no usable geometry (its §12 meaning) AND the coarse-chording
+tessellation refusal, while the typed `BooleanError` family covers the empty
+result, an evaluator-limit result, and the evaluator-internal failure. This
+sentinel mapping fixes the test impact mechanically: a valid-evaluator-limit
+assertion checks `errors.Is(err, ErrUnsupported)` where a coarser taxonomy
+would check `ErrDegenerate`, and landing those assertion changes is the
+implementation PR's work, not this contract's.
 
 This is one taxonomy with `Verify` FOR A CONTACT THAT REACHES `Verify`'s
 read-only boolean: an unsupported-contact pair the boolean gives its

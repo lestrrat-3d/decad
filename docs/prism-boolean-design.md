@@ -216,9 +216,10 @@ silent fallback stops being available:
    genuine refusal (§9's table), **never** a reroute to the mesh path. An
    admitted-then-failed pair does not silently become an
    `Approximate` mesh result whose exactness claim the caller never asked to
-   downgrade to; it becomes an explicit `ErrUnsupported`/`ErrDegenerate` the
-   caller can branch on, matching every other modify-op refusal in this
-   codebase.
+   downgrade to; RB1–RB5 become a public `BooleanUnsupportedContact` outcome
+   wrapping `ErrUnsupported`, while RB6 remains its seam-specific
+   `ErrUnrecordableProfile` failure. Neither outcome reroutes to the mesh
+   path.
 
 ## 4. Design
 
@@ -230,7 +231,8 @@ For an admitted pair, decad builds one private `sketch.Sketch` (the same
 
 - Operand A's frame is the reference (`target`'s, for `Cut`). Operand A's
   `ProfileRecord` entities are created verbatim — same `Point2` floats, zero
-  new rounding.
+  newly introduced rounding. A pre-existing section-displacement bound on A's
+  payload still enters the result composition in §7.
 - Operand B's `ProfileRecord` is **re-expressed into A's frame** before its
   entities are created: for each `Point2` field of each segment, compute the
   world point via B's own composed map
@@ -258,12 +260,14 @@ For an admitted pair, decad builds one private `sketch.Sketch` (the same
   upward-rounded maximum over every B `Point2` field. This direct exact-versus-
   held comparison proves the bound because its rational reference is the
   unrounded value of the complete composition and `rationalFloatError` bounds
-  each final coordinate's absolute difference. A non-finite held result is an
-  `ErrUnsupported` refusal before a candidate commits.
+  each final coordinate's absolute difference. Call this newly introduced
+  bound `δ_reexpress`; it composes with B's inherited payload displacement in
+  §7 rather than replacing it. A non-finite held result is an `ErrUnsupported`
+  refusal before a candidate commits.
 
   The identity case remains a shortcut: when `frameB == frameA` and
   `xformB == xformA` component-wise, §4.1 copies B's `Point2` fields verbatim
-  and sets this bound to zero without evaluating the sequence. Every other
+  and sets `δ_reexpress` to zero without evaluating the sequence. Every other
   case evaluates the sequence and keeps its computed bound. It is zero only
   when every re-expressed field equals its rational reference exactly.
   Non-`Point2` fields (a
@@ -328,9 +332,11 @@ verbatim (same entities, same order, every edge `Whole`) — for `Cut`, whose
 `Holes` additionally reproduce target's original holes plus **one new hole**
 that structurally reproduces tool/B's own `Outer` verbatim (also every edge
 `Whole`; G6 keeps the tool hole-free, so that one hole is the tool's whole
-solid and no material inside a tool hole is dropped); for `Intersect` with B
-fully inside A, the match is simply B's own
-disk cell, `Outer` reproducing B's original loop verbatim. A structural
+solid and no material inside a tool hole is dropped); for `Intersect`, whether
+B is fully inside A or A is fully inside B, the match is the inner operand's
+own disk cell, with `Outer` reproducing that operand's original loop verbatim.
+The structural scan checks both orientations, so operand order cannot decide
+whether this analytic path resolves. A structural
 match — entity identity, order, and `Whole`-ness, nothing geometric — is a
 pure data comparison against decad's own tag map. **When a unique such
 profile exists, it is not assembled at all: it is one of `s.Profiles()`'s own
@@ -441,18 +447,25 @@ Reuses the modify §5 machinery verbatim — `crossingAuditBudget`,
 take generic `[]segEntry`/`LoopRecord` shapes with no fillet-specific
 coupling, so the merged `ProfileRecord` feeds them directly with an empty
 blend map (`shell_offset.go`'s own precedent for "no cutback data, still run
-the shared audit"). Order matches modify §4's:
+the shared audit"). The existing helpers may report their ordinary raw
+sentinels internally, but after a unique candidate exists this boolean adapter
+maps every S8/S7/S9 failure to `BooleanUnsupportedContact`, wrapping
+`ErrUnsupported`; an audit's raw `ErrDegenerate` never reaches this public
+boolean boundary. Order matches modify §4's:
 
 | Step | Check | Sentinel |
 |---|---|---|
 | resolution | surviving edges chain into exactly one simple closed loop | no candidate exists (§4.2/§4.4), silent mesh fallback — not a refusal |
-| S8-equiv | assembled loop's signed area does not flip/collapse | `ErrDegenerate` |
-| S7-equiv | no non-adjacent segment pair crosses or contacts within the diameter-anchored `contactFloor` band (verification §4's noise floor, reused unchanged) | `ErrUnsupported` |
-| S9-equiv | outer loop provably contains every hole (both operands' original holes survive into the result unchanged, since `Union`'s admitted class is hole-free per G6 — this step is a no-op until §9 PR3 relaxes G6's union arm) | `ErrDegenerate` (decidably broken) / `ErrUnsupported` (undecidable) |
+| S8-equiv | assembled loop's signed area does not flip/collapse | `BooleanUnsupportedContact` wrapping `ErrUnsupported` |
+| S7-equiv | no non-adjacent segment pair crosses or contacts within the diameter-anchored `contactFloor` band (verification §4's noise floor, reused unchanged) | `BooleanUnsupportedContact` wrapping `ErrUnsupported` |
+| S9-equiv | outer loop provably contains every hole (both operands' original holes survive into the result unchanged, since `Union`'s admitted class is hole-free per G6 — this step is a no-op until §9 PR3 relaxes G6's union arm) | `BooleanUnsupportedContact` wrapping `ErrUnsupported` |
 
 ## 7. Exactness derivation
 
-Every recorded field, after §4.1's re-expression, is one of:
+Let `δ_A` and `δ_B` be the section-displacement bounds carried by the source
+`prismPayload`s. They are zero for a plain extrude and every existing rewrite,
+but either can be nonzero when an earlier analytic boolean is an input. Every
+recorded field, after §4.1's re-expression, is one of:
 
 - **Unchanged from operand A's own record** (A's segments are created
   verbatim into the scene — zero new rounding), or
@@ -467,22 +480,25 @@ Every recorded field, after §4.1's re-expression, is one of:
   record.go's existing contract: a cut fragment never gets new `Center`/
   `Start`/`End` fields, only a narrower range over the same ones).
 
-Operand A's fields and every `sketch`-cut range carry no new rounding, so they
-are as exact as an ordinary caller-drawn record's. Operand B's re-expressed
-coordinates carry §4.1's complete five-stage bound, so the merged section's
-boundary can sit up to a proven displacement `δ_B` from the section the two
-operands jointly describe. `δ_B` is the upward-rounded maximum from
-`sectionReexpressAllow`, combined with the one rounded B endpoint G5 may
-contribute to `Intersect`; it is not `rigidRoundAllow` applied to an imagined
-single map. It is zero only when every re-expressed coordinate, and any B
-endpoint `Intersect` keeps, equals its exact rational reference. Operand B's
-composed map into A's frame being the identity in the stored floats
-(`frameB == frameA` and `xformB == xformA`, component-wise `==` — G3's own
-comparison) is the fast decidable zero case: §4.1 copies B's `Point2` fields
-verbatim and computes nothing at all. Two profiles drawn on one sketch plane
-with no placement between them are that case.
+Operand A's fields and every `sketch`-cut range introduce no further rounding,
+but they retain `δ_A`. Operand B's re-expressed coordinates carry §4.1's
+complete five-stage `δ_reexpress` bound and retain `δ_B`; `Intersect` may add
+one rounded B endpoint from G5, bounded by `δ_endpoint`. The result stores the
+single, upward-rounded composition
 
-**The evaluator's current measurement path cannot carry `δ_B`, so this design
+`δ_result = upRound(δ_A + δ_B + δ_reexpress + δ_endpoint)`.
+
+This deliberately conservative composition covers both source payloads and
+every coordinate error newly committed by this operation. `δ_endpoint` is zero
+outside the shifted-endpoint `Intersect` case. The result is zero only when
+every term is zero. Operand B's composed map into A's frame being the identity
+in the stored floats (`frameB == frameA` and `xformB == xformA`, component-wise
+`==` — G3's own comparison) proves only `δ_reexpress == 0`: §4.1 copies B's
+`Point2` fields verbatim and computes nothing at all. Two profiles drawn on one
+sketch plane with no placement between them have that new-error term, but not
+necessarily both inherited source terms, equal to zero.
+
+**The evaluator's current measurement path cannot carry `δ_result`, so this design
 extends it.** `prismPayload` holds the section, the frame, the sweep interval,
 the placement and its blend descriptors, and no coordinate-error term;
 `evalPrism` derives area and volume from the profile integrals and the z
@@ -499,7 +515,7 @@ extension is two pieces, each in the existing machinery's own shape:
   the section its construction denotes. It is zero for every payload built
   today (a plain extrude, a placement, and every modify rewrite record their
   own coordinates), and this design's assembly is the first construction that
-  sets it, to `δ_B`. Being a payload field, it re-evaluates with the payload,
+  sets it, to `δ_result`. Being a payload field, it re-evaluates with the payload,
   so a placement or copy of an analytically-combined body keeps it.
 - **`bounds.go` gains one helper for the mechanism**, under that file's own
   rule that each error mechanism has exactly one helper and no measurement site
@@ -517,19 +533,22 @@ extension is two pieces, each in the existing machinery's own shape:
   interval adds no term of its own for `Union` or `Cut`, whose result interval
   is one operand's own endpoints verbatim (§3.2); `Intersect` may take a
   shifted endpoint, whose one exact-rational-to-float conversion already rides
-  in `δ_B`.
+  in `δ_result`.
 
 The result's `Exactness` is then the existing rule with that displacement as
 its one added term:
 
-- **`Exact`, zero bound**, when every surviving segment is a `LineSeg` **and**
-  `δ_B == 0` — `moments.go`'s region-level exact rational accumulator with its
-  single final rounding, over a section no coordinate of which was recomputed.
+- **`Exact`, zero bound**, for a published rational mass property only when
+  every surviving segment is a `LineSeg`, `δ_result == 0`, **and that property's
+  final exact rational is representable in its published `float64` value**.
+  `moments.go`'s region-level accumulator rounds the complete rational once;
+  line-only input does not make that final rounding disappear.
 - **`Approximate` otherwise**, carrying the same per-mechanism proven bounds an
-  ordinary prism already reports plus the displacement term: the accumulator
-  retires the moment any `CircleSeg`/`ArcSeg` survives (no `π` is ever exact),
-  and the displacement stands whenever `δ_B > 0`, whatever the segment kinds
-  are.
+  ordinary prism already reports plus the displacement term. A nonrepresentable
+  final rational retains `rationalFloatError` even when `δ_result == 0`; the
+  accumulator retires the moment any `CircleSeg`/`ArcSeg` survives (no `π` is
+  ever exact), and the displacement stands whenever `δ_result > 0`, whatever
+  the segment kinds are.
 
 Volume, Centroid and `Box` all read that same accumulator and that same
 displacement term (evaluator §4, `moments.go`), so no separate derivation is
@@ -539,7 +558,7 @@ needed for each.
 
 | Consequence (§1) | Admitted class | Outside it |
 |---|---|---|
-| 1. No chaining | Removed. Result is `prismPayload`; no `meshBound` to compose, so no chord tolerance for the next pair to fall below. A chained boolean re-checks §3's gate on the new pair and carries forward only §7's section displacement, which is zero only where §7's exact rational comparison proves it. | Unchanged — general-position or non-analytic pairs still degrade per evaluator §9. |
+| 1. No chaining | Removed. Result is `prismPayload`; no `meshBound` composes, so no chord tolerance blocks the next pair. A chained boolean re-checks §3's gate and computes §7's upward-rounded `δ_result` from both source payload bounds and its newly committed errors. | Unchanged — general-position or non-analytic pairs still degrade per evaluator §9. |
 | 2. Coplanar contact refuses | Removed. Coplanar, co-directional contact is the admitted case's whole premise. | Unchanged — non-coplanar or non-prism coplanar contact (e.g. a prism against a revolve cap) stays on the mesh path. |
 | 3. Analytic identity dies | Removed. Result is `prismPayload`: Fillet/Chamfer/Shell, all three surveys, and the clearance kernel already dispatch on payload class and need zero new code for it. | Unchanged for mesh-path results — `facetedPayload` still permanently refuses modify ops (modify-reach SX9) and all three surveys. |
 
@@ -547,18 +566,19 @@ needed for each.
 
 Entry-gate misses (§3.1's G1–G6) and unresolved region-topology (§4.4) are
 **not refusals** — no error, silent fallback. The table below is exclusively
-the post-admission refusals (§3.4's stage 2), each stated once with its
-sentinel, decided by the existence test (modify §1: no such body exists is
-`ErrDegenerate`; a body this evaluator cannot build is `ErrUnsupported`) and
-whether it is permanent.
+the post-admission refusals (§3.4's stage 2). RB1–RB5 are valid admitted-output
+failures, so the public boolean returns `BooleanUnsupportedContact` wrapping
+`ErrUnsupported`; `ErrDegenerate` is not reachable from any of those rows.
+RB6 retains the seam's own sentinel because it reports a disproven upstream
+arrangement claim. None is permanent.
 
-| Row | Condition | Sentinel | Permanent? |
+| Row | Condition | Public outcome | Permanent? |
 |---|---|---|---|
-| RB1 | A candidate region (or one the merge depends on) reports `Profile.Valid == false` — the arrangement is degenerate or self-intersecting where it reaches a needed cell | `ErrUnsupported` | No — a differently-shaped input to the same op may resolve |
-| RB2 | §6's S8-equivalent: assembled loop's signed area flips or collapses | `ErrDegenerate` | No — depends on operand geometry |
-| RB3 | §6's S7-equivalent: a non-adjacent pair crosses, or contacts within the diameter-anchored noise floor | `ErrUnsupported` | No |
-| RB4 | §6's S9-equivalent, decidably broken (a hole proven outside the outer loop or nested wrong) | `ErrDegenerate` | No |
-| RB5 | §6's S9-equivalent, undecidable | `ErrUnsupported` | No |
+| RB1 | A candidate region (or one the merge depends on) reports `Profile.Valid == false` — the arrangement is degenerate or self-intersecting where it reaches a needed cell | `BooleanUnsupportedContact` wrapping `ErrUnsupported` | No — a differently-shaped input to the same op may resolve |
+| RB2 | §6's S8-equivalent: assembled loop's signed area flips or collapses | `BooleanUnsupportedContact` wrapping `ErrUnsupported` | No — depends on operand geometry |
+| RB3 | §6's S7-equivalent: a non-adjacent pair crosses, or contacts within the diameter-anchored noise floor | `BooleanUnsupportedContact` wrapping `ErrUnsupported` | No |
+| RB4 | §6's S9-equivalent, decidably broken (a hole proven outside the outer loop or nested wrong) | `BooleanUnsupportedContact` wrapping `ErrUnsupported` | No |
+| RB5 | §6's S9-equivalent, undecidable | `BooleanUnsupportedContact` wrapping `ErrUnsupported` | No |
 | RB6 | `recordEdge`/`falsifyRange` rejects a surviving segment (`TExact` disproven on a merged edge — an internal `sketch` inconsistency, reported upstream per seam §3) | `ErrUnrecordableProfile` | No, but should not occur on a certified arrangement; a defensive check |
 
 None of these rows is permanent in the modify-reach SX9 sense: every one is a
@@ -616,10 +636,10 @@ origin, exactly as it already must after a Fillet or Chamfer. Flagged in
 
 | Consumer | Effect |
 |---|---|
-| Tessellation | No new code — the result is an ordinary `prismPayload` and `docs/tessellation-design.md` §5's existing prism contract applies. §7's section displacement rides in that contract's own stored-coordinate rounding term (tessellation §5's prism row), so a mesh of an assembled body is `Exact`-trimmed only where `δ_B == 0`. |
+| Tessellation | No new code — the result is an ordinary `prismPayload` and `docs/tessellation-design.md` §5's existing prism contract applies. §7's `δ_result` rides in that contract's own stored-coordinate rounding term (tessellation §5's prism row), so a mesh of an assembled body is `Exact`-trimmed only where `δ_result == 0`. |
 | Clearance kernel | Unchanged — dispatches on payload class; `prismPayload` already has full analytic support (`clearance.go`'s coplanar `Plane`×`Plane` certificate, `offsetPair`, etc.). |
-| Interference (`Verify`) | **Upgraded for free.** `interference.go`'s `measuredInterference` calls the same `evaluateBoolean(ctx, OpIntersect, ...)` this design's gate sits inside; an admitted coplanar-prism pair now reports an analytic overlap volume in a `Verify` `Interference` row instead of a coarse or `Suspect` mesh-based one — **exact** where §7's rule makes it exact (a line-only intersection section with `δ_B == 0`), and otherwise bounded by §7's terms alone, orders below the mesh path's chord-derived bound. This partly supersedes interference-design §5.2's staged mesh-side coplanar arrangement for the prism case, and is strictly stronger where it applies (interference-design §5.2 stays as written for non-prism coplanar pairs). |
-| Surveys (wall/undercut/min-radius) | No new code — they dispatch on payload class, and support is immediate. A bounded reading on an assembled section carries §7's displacement like every other measurement of it, so a wall thickness is `Exact` only where `δ_B == 0`; the undercut reading is a normal-direction membership and is unaffected. |
+| Interference (`Verify`) | **Upgraded for free.** `interference.go`'s `measuredInterference` calls the same `evaluateBoolean(ctx, OpIntersect, ...)` this design's gate sits inside; an admitted coplanar-prism pair now reports an analytic overlap volume in a `Verify` `Interference` row instead of a coarse or `Suspect` mesh-based one — **exact** where §7's rule makes it exact (a line-only intersection section with `δ_result == 0` and a representable final volume rational), and otherwise bounded by §7's terms alone, orders below the mesh path's chord-derived bound. This partly supersedes interference-design §5.2's staged mesh-side coplanar arrangement for the prism case, and is strictly stronger where it applies (interference-design §5.2 stays as written for non-prism coplanar pairs). |
+| Surveys (wall/undercut/min-radius) | No new code — they dispatch on payload class, and support is immediate. A bounded reading on an assembled section carries §7's displacement like every other measurement of it, so a wall thickness follows §7's zero-displacement and final-representability rule; the undercut reading is a normal-direction membership and is unaffected. |
 | `Verify`'s structural/tolerance gates | Unchanged — `prismPayload` is valid by construction as always. |
 | Export (STL/OBJ) | Unchanged — reads `Tessellate`'s output. |
 | Recipe/replay | **No wire change.** The step still records the existing `OpUnion`/`OpCut`/`OpIntersect` + `Inputs` (`[a, b]` or `[target, tool]`), unmodified — recipe-replay-design §8's own contract already allows this: "A later evaluator MUST reproduce ... one produced body per step ... measurements valid under its own `Exactness`/`Bound`. It need not reproduce v1's internal payload." A replayed recipe simply builds via the analytic path wherever it now qualifies; nothing in §2 (wire envelope), §3 (validation), or §4 (references/liveness) changes. |
@@ -662,7 +682,7 @@ origin, exactly as it already must after a Fillet or Chamfer. Flagged in
    branch to build via `evalPrism` instead of `buildFacetedBody` on admission.
    Tests: a two-box union sharing a cap plane (the "control" case from the
    consumer's report) builds analytically, with `Exact` volume where both boxes
-   use the same unplaced stored frame (§7's `δ_B == 0` case); the gear's tooth-on-hub
+   use the same unplaced stored frame (§7's `δ_result == 0` and representable-volume case); the gear's tooth-on-hub
    shared-carrier union builds with the correct region set and an
    `Approximate` volume within the composed bound of the closed-form Pappus/
    Green's-theorem answer; a non-coplanar pair still takes the mesh path
@@ -673,7 +693,7 @@ origin, exactly as it already must after a Fillet or Chamfer. Flagged in
    a bore cut through a hole-free hub (the F1 workload) builds analytically
    with the correct hole added and the target's original outer loop
    byte-identical to its pre-cut record; an `Intersect` of a fully-nested pair
-   returns the inner operand's own geometry.
+   returns the inner operand's own geometry in both operand orders.
 3. **PR3 — general per-cell classification.** §4.2's edge-orientation
    propagation and coincident-carrier detection, relaxing G6's union arm
    (holed unions; its `Cut` tool arm stands, §13) and admitting the crossing
@@ -733,10 +753,22 @@ areas, residuals), never merely "it ran" — CLAUDE.md's own rule.
   (`Point2` fields, not just area) to the target's own pre-cut outer loop,
   and the new hole's fields are byte-identical to the tool's own pre-cut
   outer loop (verbatim reproduction, §4.2's structural-match claim).
+- Clean-nesting intersect: assert both operand orders select the same inner
+  operand's byte-identical disk profile and build analytically, rather than
+  letting the reverse order fall through to the mesh path.
+- Post-admission refusal: force a unique candidate, then trigger each RB1–RB6
+  condition. RB1–RB5 must return `BooleanUnsupportedContact` wrapping
+  `ErrUnsupported`; RB6 must return `ErrUnrecordableProfile`. Every case
+  asserts the document and recipe are unchanged and uses a mesh-path probe to
+  prove that none silently reroutes after admission.
 - Exactness, one test per §7 arm: a line-only merged section over operands
-  with the same unplaced stored frame reports `Exact` volume with a zero bound; the same
-  section over an operand B placed away from A reports `Approximate` with a
-  bound the §7 displacement term alone explains. The latter test compares the
+  with the same unplaced stored frame and a representable final volume rational
+  reports `Exact` volume with a zero bound. An admitted zero-displacement union
+  retaining a right triangle with both legs `1 + 2^-52` reports `Approximate`:
+  its exact area is `1/2 + 2^-52 + 2^-105`, so the final rational does not fit
+  `float64` and its bound includes `rationalFloatError`. The same section over
+  an operand B placed away from A reports `Approximate` with a bound the §7
+  displacement term alone explains. The latter test compares the
   held result of every `frameB.ToWorldUV` → `xformB.Apply` →
   `xformA.Inverse` → inverse `Apply` → `frameA.ToLocal` re-expression against
   its exact rational composition, including inverse-translation construction,
@@ -750,8 +782,12 @@ areas, residuals), never merely "it ran" — CLAUDE.md's own rule.
   read `MinWallThickness` on the result — both refuse today (SX9, all three
   surveys) on a mesh-path union of the same model, and both succeed here.
 - A second boolean consuming the first's result (chaining) carries no
-  `meshBound` — assert `Exactness`/`Bound` on the second result are governed
-  purely by §7's rule, not by any accumulated tessellation tolerance.
+  `meshBound`. Its first analytic result must have a nonzero section
+  displacement; the second result's `δ_result` must include that inherited
+  bound, the second input's bound, and every new re-expression or endpoint
+  term under §7's upward-rounded composition. Assert the second result remains
+  `Approximate` and its bound encloses the first result's displacement, so the
+  first bound cannot be dropped between analytic booleans.
 - Cancellation: cancellation before `s.Profiles()` and during decad's own
   selection or audit returns `ctx.Err()` with the document and recipe
   untouched. Cancellation while `s.Profiles()` arranges is intentionally not
