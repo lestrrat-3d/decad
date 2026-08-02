@@ -524,7 +524,10 @@ never merely that a call ran (project rule).
   mixed/curved segment pair (including same-kind circular) → S3; malformed
   `WithLoftAlignment` (wrong length, out-of-range offset, or duplicate
   option) → S4; identical planes → S5; a nonzero alignment offset pairs the
-  expected rotated vertex, asserted on the built wall's own coordinates.
+  expected rotated vertex, asserted on the built wall's own coordinates. A
+  two-hole fixture whose recorded `Holes` order is swapped between the two
+  profiles MUST assert the two ordinal pairings by wall coordinates, or S7 for
+  the resulting crossed correspondence; a nearest-hole matcher MUST fail it.
 - **Construction**: every wall/cap edge bounds exactly two faces; every
   triangle has positive area; the two caps' triangulation matches
   `triangulate.go`'s existing polygon-with-holes output for each profile in

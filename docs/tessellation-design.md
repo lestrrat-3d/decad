@@ -1,9 +1,9 @@
 # Tessellation Design
 
 Normative design for `Body.Tessellate` / `Body.TessellateContext`: the public
-mesh contract, the shared chording rules for prism and cup payloads,
-faceted-body restatement, revolve tessellation, and the private proofs the mesh
-boolean consumes. Companion to
+mesh contract, the shared chording rules for prism and cup payloads, exact loft
+restatement, faceted-body restatement, revolve tessellation, and the private
+proofs the mesh boolean consumes. Companion to
 `docs/api-design.md` (public surface, "core §N"),
 `docs/evaluator-design.md` (analytic evaluator + boolean, "evaluator §N"), and
 `docs/verification-design.md` (how bounded results are judged,
@@ -108,8 +108,24 @@ The payload table is normative:
 |---|---|---|---|---|---|
 | `prismPayload` | one chording per recorded section loop, shared by walls + caps | wall sagitta; each cap's maximum curved-trim sagitta; plus proven coordinate/placement rounding for either; zero only for an exact held trim with exact stored coordinates | max per-face source bound | non-cancelling wall error + both cap circular-segment deficits + coordinate-movement allowance | section symmetric-difference allowance × sweep height + coordinate swept allowance (§5) |
 | `cupPayload` | one chording per outer/cavity loop, shared by walls + floors + rims | wall sagitta; each floor/rim patch's maximum curved-trim sagitta; plus proven coordinate/placement rounding for either; zero only for an exact held trim with exact stored coordinates | max per-face source bound | non-cancelling per-wall/per-planar-patch error + coordinate-movement allowance | outer-prism + cavity-prism allowances + coordinate swept allowance (§6) |
+| `loftPayload` | exact wall and cap triangles already held by the payload | zero: every held facet is the payload's exact triangle for its source face | zero | zero | zero; `symDiffOK == true` |
 | `revolvePayload` | one meridian chording + one global angular sequence, then final rigid placement | current meridian + angular displacement for that analytic patch, plus construction rounding `deltaC` and final-placement rounding `deltaR`; `deltaC + deltaR` for otherwise exact planar patches | max per-face source bound (§8) | integral of absolute local true-vs-held area-density error + cap deficits + construction/placement area allowances (§10) | meridian/angular + construction/placement homotopy allowances (§11) |
 | `facetedPayload` | held polygons + inherited boundary certificate | inherited certified face displacement, or global composed `Delta` when no tighter face value exists | max per-face source bound | payload's composed slack | payload's composed symmetric-difference bound |
+
+### `loftPayload` exact restatement
+
+A `loftPayload` already holds the cap triangles from its polygon-with-holes
+triangulation and the two exact wall triangles for every paired segment. Its
+construction audit proves this fixed triangle boundary is closed, positively
+oriented, and free of non-adjacent contact. `Tessellate` copies that triangle
+connectivity, vertices, and source faces directly. It MUST NOT chord,
+retriangulate, move, round, weld, or otherwise alter a loft facet.
+
+The true boundary is therefore the held triangle boundary. Every
+`sourceBound(face)`, `Bound`, and `areaSlack` is zero, and the identical
+occupied volumes prove `volSymDiff == 0` with `symDiffOK == true`. The normal
+closed-mesh and source-face audits still run. A successful loft mesh is thus
+admitted to the mesh boolean as an all-planar zero-bound operand.
 
 ## 3. Shared curve chording
 
@@ -728,8 +744,8 @@ Boolean composition then stays evaluator §9's:
 9. Compose `areaSlackA + areaSlackB` plus area dropped by the final weld.
 
 A faceted operand contributes its payload's already composed `volSymDiff`.
-Prism, cup, and revolve operands contribute their mesh proofs. No analytic
-operand is admitted through a generic `delta * area` shortcut.
+Prism, cup, loft, and revolve operands contribute their mesh proofs. No
+analytic operand is admitted through a generic `delta * area` shortcut.
 
 The hidden-tangency and occupied-volume proofs answer different questions.
 `volSymDiff` bounds changed occupied volume; it does not prove that a displaced
@@ -785,6 +801,7 @@ sample to make an analytic mesh close. Refine or refuse.
 | **T3** | circular meridian generators: sphere/torus cells, axis-to-axis minimum, circular meridian nesting/homotopy audit, non-adjacent-intersection refinement, cut-stable circular-cell area proof | revolve booleans |
 | **T4** | meridian first-moment allowance + certified per-cell angular homotopy integral; finite `volSymDiff`; revolve admitted to booleans | density improvements |
 | **T5** | deterministic local meridian refinement and global angular density improvements that preserve every earlier proof | free-form/NURBS generators |
+| **T6** | `loftPayload` exact restatement: source-face-preserving wall/cap triangle copy, zero proof record, and mesh-boolean admission | loft surveys and analytic pair clearance |
 
 Each increment ships its computed geometry tests with it. T2/T3 may export a
 revolve because §§8–10 prove the mesh itself; they do not enter the boolean
@@ -834,6 +851,9 @@ until T4 proves occupied-volume error.
   and a downstream boolean retaining one sign lobe; the certified `Ecell` MUST
   bound the retained error without whole-cell cancellation.
 - Check prism/cup `volSymDiff` against exact circular-segment examples.
+- Cover an admitted `loftPayload`: every wall/cap triangle and source face is
+  copied unchanged, `sourceBound`, `Bound`, `areaSlack`, and `volSymDiff` are
+  zero, and a loft/prism boolean succeeds through the all-planar path.
 - Prove the T4 interval integrator encloses analytic fixed-sign cells and
   adversarial sign-changing cells; budget exhaustion MUST refuse.
 - Exercise revolve×prism and revolve×revolve booleans after T4, including a

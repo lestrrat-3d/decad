@@ -663,6 +663,8 @@ always a body it consumes:
   `TwoSided{One: ToFace{Body: a…}, Two: ToFace{Body: b…}}` records both. Without
   this the recipe would not be a complete graph: a second evaluator would reach the
   extrude with no way to know which body's face it stops at.
+- `Loft` depends on and consumes no body. Its increment-1 form has no
+  body-relative stop, so its `Inputs` is empty.
 - **`ThroughAll` and `ThroughAllSide` depend on bodies they do not name.** Their
   stops are the far sides of the live bodies the sweep meets, so the dependency is
   ambient at the CALL but must never be ambient in the RECORD: the feature call
@@ -673,9 +675,9 @@ always a body it consumes:
   re-evaluate to a different model in a different document state, which the
   completeness rule forbids.
 
-Depending on a body is **not** consuming it: `Extrude` and `Revolve` retire
-nothing, and the body a `ToFace` names stays live in `Document.Bodies()`. §6's
-retire rule is unchanged, and lists exactly the operations it covers.
+Depending on a body is **not** consuming it: `Extrude`, `Revolve`, and `Loft`
+retire nothing, and the body a `ToFace` names stays live in `Document.Bodies()`.
+§6's retire rule is unchanged, and lists exactly the operations it covers.
 
 **A `StepRef` is not the index invariant #3 forbids.** Invariant #3 forbids indices
 as *topology* selectors — `Edges()[3]` — because an exact kernel decomposes a body
@@ -726,18 +728,18 @@ type LoftOpts struct {
 }
 ```
 
-For the current wire variants, `ExtrudeOpts.Taper` and `ShellOpts.Sense` are
-required payload fields. The decoder reads them through presence-aware pointer
-wire fields, then constructs the value-form variant. A missing or explicit-null
-payload rejects; it NEVER means zero taper or `Inward`. Feature-call defaults
-are materialized in the recorded `StepOpts`, so canonical output always carries
-the field.
+`docs/recipe-replay-design.md` §3.2 owns required `StepOpts` wire payload
+fields and their absent/null rules. The decoder reads required fields through
+presence-aware pointer wire fields, then constructs the value-form variant.
+Feature-call defaults are materialized in the recorded `StepOpts`, so canonical
+output always carries the required field.
 
 The completeness rule applied to options: **every `ExtrudeOption`,
-`RevolveOption`, `FilletOption`, `ChamferOption` and `ShellOption` MUST be
-representable in the corresponding `…Opts` struct.** An option with nowhere to land
-in the recipe does not ship — a tapered extrude that round-tripped as an untapered
-one would be exactly the lossy record the completeness rule forbids.
+`RevolveOption`, `FilletOption`, `ChamferOption`, `ShellOption`, and
+`LoftOption` MUST be representable in the corresponding `…Opts` struct.** An
+option with nowhere to land in the recipe does not ship — a tapered extrude that
+round-tripped as an untapered one would be exactly the lossy record the
+completeness rule forbids.
 
 `Selector` is the sealed root of the selector vocabulary, so a `Step` never holds
 an `any` — Fusion's `core.Base`-as-anything is rejected in §4, and `Recipe` is the
