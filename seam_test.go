@@ -180,7 +180,7 @@ func TestRecordProfileRejectsSampledCuts(t *testing.T) {
 			rejected++
 		}
 	}
-	require.NotZero(t, rejected, `regions bounded by sampled circle/circle cuts should be rejected`)
+	require.NotZero(t, rejected, `regions bounded by sampled spline cuts should be rejected`)
 }
 
 func TestRecordProfileReportsOuterEdgeIndex(t *testing.T) {
