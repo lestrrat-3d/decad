@@ -164,7 +164,7 @@ func prismProfileIsAnalytic(budget *workBudget, p ProfileRecord) (bool, error) {
 // segment and each admitted circle or arc to no more than 256, then compares
 // every tiny-segment pair. Capping this upper bound keeps a canceled caller from
 // leaving an unbounded private arrangement behind.
-const prismUnionMaxArrangementSegments = 512
+const prismUnionMaxArrangementSegments = 1024
 
 func prismUnionSceneWithinWorkCap(budget *workBudget, pa, pb prismPayload) (bool, error) {
 	segments := 0

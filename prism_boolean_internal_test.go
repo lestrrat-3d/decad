@@ -252,7 +252,7 @@ func TestTryPrismUnionOnlyImplementsUnion(t *testing.T) {
 func TestPrismUnionArrangementCapRejectsLargeLineOnlyScene(t *testing.T) {
 	frame := canonicalPrismFrame(t)
 	pp := prismPayload{
-		profile: ProfileRecord{Outer: synthDenseRectLoop(65)},
+		profile: ProfileRecord{Outer: synthDenseRectLoop(prismUnionMaxArrangementSegments/8 + 1)},
 		frame:   frame, z0: 0, z1: 10, xform: r3.Identity(),
 	}
 	a := &Body{payload: pp}
