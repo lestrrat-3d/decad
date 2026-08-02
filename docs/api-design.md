@@ -1084,10 +1084,12 @@ any contact is examined — a plain `ErrUnsupported`, not a `BooleanError`, sinc
 the operand cannot be re-tessellated finer than the boundary it holds. Where the
 held bound stays under that tolerance the result is an ordinary operand and the
 chain continues, so the comparison at each step is what limits a chain, not the
-fact that an operand came out of a boolean: successive booleans over one part
-hold a bound that stays effectively flat, while a step whose operands extend the
-pair's bounding box raises the tolerance the next pair asks for. Where the
-comparison does refuse, it is geometry rather than an argument the caller got
+fact that an operand came out of a boolean. At every step, the result's held
+bound recomposes both operand bounds through `rimDelta`, then adds the final
+rounding displacement. A chained boolean whose first operand carries a bound
+and whose second operand also carries a nonzero bound therefore raises the held
+bound for the next pair; successive booleans do not keep that bound flat. Where
+the comparison does refuse, it is geometry rather than an argument the caller got
 wrong. The booleans take no tolerance parameter (§9), by the same decision that
 puts the tolerance's whole effect on the result's proven `Bound`. The bound is readable rather than
 merely printed in the refusal — `Body.Tessellate` at any tolerance the faceted

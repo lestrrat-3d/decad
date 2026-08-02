@@ -529,19 +529,30 @@ func TestBooleanBoundComposition(t *testing.T) {
 	doc := decad.New()
 	plate := boxBody(t, doc, 0, 0, 20, 20, 8)
 	tool := translated(t, diskBody(t, doc, 14, 6, 2), 0, 0, -6)
-	cutBody, err := decad.Cut(plate, tool)
+	first, err := decad.Cut(plate, tool)
 	require.NoError(t, err)
-	cutVol, err := cutBody.Volume()
+	firstMesh, err := first.Tessellate(units.Millimeters(1000))
 	require.NoError(t, err)
+	require.Positive(t, firstMesh.Bound().Mag())
 
-	// A boolean of a boolean: the composed bound never shrinks below what
-	// the first result already carried.
-	extra := translated(t, boxBody(t, doc, 0, 0, 5, 5, 5), 30, 0, 0)
-	both, err := decad.Union(cutBody, extra)
+	secondPlate := translated(t, boxBody(t, doc, 0, 0, 20, 20, 8), 40, 0, 0)
+	secondTool := translated(t, diskBody(t, doc, 14, 6, 2), 40, 0, -6)
+	second, err := decad.Cut(secondPlate, secondTool)
 	require.NoError(t, err)
+	secondMesh, err := second.Tessellate(units.Millimeters(1000))
+	require.NoError(t, err)
+	require.Positive(t, secondMesh.Bound().Mag())
+
+	// Both operands carry a held bound. The final union must compose both
+	// rather than treating the first result's bound as effectively flat.
+	both, err := decad.Union(first, second)
+	require.NoError(t, err)
+	bothMesh, err := both.Tessellate(units.Millimeters(1000))
+	require.NoError(t, err)
+	require.Greater(t, bothMesh.Bound().Mag(), firstMesh.Bound().Mag())
+	require.Greater(t, bothMesh.Bound().Mag(), secondMesh.Bound().Mag())
 	bothVol, err := both.Volume()
 	require.NoError(t, err)
-	require.GreaterOrEqual(t, boundMM3(t, bothVol), boundMM3(t, cutVol))
 	require.Equal(t, decad.Approximate, bothVol.Exactness)
 	requireBodyWatertight(t, both)
 }
