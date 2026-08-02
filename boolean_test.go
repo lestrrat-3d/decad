@@ -268,6 +268,53 @@ func TestUnionIdenticalFootprintsShiftedAlongSweepRefusesCoplanarLateralFaces(t 
 	require.Len(t, doc.Bodies(), 2)
 }
 
+func TestUnionSweepDisplacementChangesEnclosedSolid(t *testing.T) {
+	t.Run("IntoContainmentRemovesProtrusion", func(t *testing.T) {
+		beforeDoc := decad.New()
+		beforeA := boxBody(t, beforeDoc, 0, 0, 10, 10, 10)
+		beforeB := translated(t, boxBody(t, beforeDoc, 2, 2, 8, 8, 10), 0, 0, 5)
+		before, err := decad.Union(beforeA, beforeB)
+		require.NoError(t, err)
+		beforeVolume, err := before.Volume()
+		require.NoError(t, err)
+		require.Equal(t, 1180.0, volumeMM(t, beforeVolume))
+
+		afterDoc := decad.New()
+		afterA := boxBody(t, afterDoc, 0, 0, 10, 10, 10)
+		afterB := translated(t, boxBody(t, afterDoc, 2, 2, 8, 8, 10), 0, 0, 5)
+		afterB = translated(t, afterB, 0, 0, -5)
+		afterVolume, err := afterA.Volume()
+		require.NoError(t, err)
+		require.Equal(t, 1000.0, volumeMM(t, afterVolume))
+		afterMesh, err := afterB.Tessellate(units.Millimeters(1))
+		require.NoError(t, err)
+		for _, vertex := range afterMesh.Vertices() {
+			require.GreaterOrEqual(t, vertex.X, 0.0)
+			require.LessOrEqual(t, vertex.X, 10.0)
+			require.GreaterOrEqual(t, vertex.Y, 0.0)
+			require.LessOrEqual(t, vertex.Y, 10.0)
+			require.GreaterOrEqual(t, vertex.Z, 0.0)
+			require.LessOrEqual(t, vertex.Z, 10.0)
+		}
+	})
+
+	t.Run("OutOfContainmentAddsProtrusion", func(t *testing.T) {
+		doc := decad.New()
+		a := boxBody(t, doc, 0, 0, 10, 10, 10)
+		inside := boxBody(t, doc, 2, 2, 8, 8, 10)
+		containedVolume, err := a.Volume()
+		require.NoError(t, err)
+		require.Equal(t, 1000.0, volumeMM(t, containedVolume))
+
+		moved := translated(t, inside, 0, 0, 5)
+		got, err := decad.Union(a, moved)
+		require.NoError(t, err)
+		gotVolume, err := got.Volume()
+		require.NoError(t, err)
+		require.Equal(t, 1180.0, volumeMM(t, gotVolume))
+	})
+}
+
 // requireCoplanarFaceRefusal asserts a shared-area coplanar face contact: a
 // valid model this evaluator cannot classify, so BooleanUnsupportedContact
 // wraps ErrUnsupported.

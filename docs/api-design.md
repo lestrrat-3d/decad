@@ -1065,16 +1065,16 @@ operands span the same interval here, so a LATERAL displacement never reaches
 that state — moving one body sideways leaves its caps in the two planes the
 other's caps lie in, and the overlap stands wherever the footprints still meet.
 The displacement has to run ALONG the sweep, and the caller owns what it costs:
-the moved operand no longer spans cap to cap, so the result is short by the
-displacement at that end. That displacement is necessary but insufficient when
+it changes the enclosed solid, with an effect that depends on the operation and
+geometry. That displacement is necessary but insufficient when
 the profiles retain coplanar lateral faces: identical footprints still share
 lateral face area after their caps separate and return
 `BooleanUnsupportedContact`. The caller has to change the profile or otherwise
-prove that no face pair is coplanar. The one displacement that leaves the
-union's enclosed solid unchanged is one that lands the moved operand wholly
-inside the other body, where the union is that other body either way. A caller
-proving a part against a model built elsewhere has to state the deviation it
-accepted; it is not free.
+prove that no face pair is coplanar. A displacement leaves a union's enclosed
+solid unchanged only when the moved operand is wholly inside the other body
+both before and after the displacement. Moving an operand into containment
+removes any former protruding volume. A caller proving a part against a model
+built elsewhere has to state the deviation it accepted; it is not free.
 
 **The chain depth.** A boolean's result is a `Faceted` body whose held `Bound`
 composes from the operation that made it, while §9's chord tolerance for the next
