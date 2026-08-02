@@ -28,7 +28,7 @@ established:
 | **B** | the result: topology, faces, roles | §7 |
 | **D** | one row per downstream consumer, and what it can prove today | §9 |
 
-## 1. Scope — the increment-1 case, and what is deferred permanently
+## 1. Scope — the increment-1 case, deferred reach, and permanent exclusions
 
 The target case, stated by the consuming project
 (`fusion360-gear-generator`'s 3D proof stage): two profiles, each already
@@ -39,27 +39,32 @@ such loft (bottom tooth loop to a twisted top loop); a bevel gear is two;
 herringbone and spiral bevel compose those.
 
 **Increment 1 admits exactly this shape, narrowed once more: every
-corresponding segment pair MUST be `LineSeg`.** A profile with a curved
-boundary (`CircleSeg`, `ArcSeg`, or any free-form kind) is `ErrUnsupported`
-at the call — Table S row S3 — even where both sides carry the *same* curved
-kind. This is the one deliberate narrowing beyond what the consumer described
-as its easy case, and it is what makes every wall face an exact `Plane`
-(§5) rather than a new ruled-surface `Surface` variant this evaluator does not
-otherwise have a construction for. The reason is stated once, not per row:
-representing a ruled surface between two circular arcs exactly needs a
-rational-quadratic-Bézier-per-arc construction this evaluator does not build,
-and approximating it would be exactly the confidently-wrong failure
-`docs/api-design.md` §1 exists to prevent. Lifting it is future reach, listed
-in §12 as a decad-side capability, not an upstream ask.
+corresponding segment pair MUST be `LineSeg`.** Any non-`LineSeg` pair is
+`ErrUnsupported` at the call — Table S row S3 — including a same-kind
+`CircleSeg` or `ArcSeg` pair. This is the one deliberate narrowing beyond what
+the consumer described as its easy case, and it is what makes every wall face
+an exact `Plane` (§5) rather than a new ruled-surface `Surface` variant this
+evaluator does not otherwise have a construction for.
 
-**Permanently out of scope, for reasons stated once:**
+**Deferred reach, for reasons stated once:**
 
 - **N-section lofts and guide-rail / centerline lofts.** Without a guide
   rail, ruling more than two sections needs an interpolation scheme this
   design has no closed-form, non-fitting answer for. The consumer does not
   need it either: a bevel gear is two 2-section lofts, not one 3-section
-  loft. A future design may add it; this one does not reserve a shape for it.
-- **Free-form and curved-segment correspondence** (§1 above).
+  loft. §12 defers this reach to PR 3; this design does not reserve a shape
+  for it.
+- **Same-kind `CircleSeg` and `ArcSeg` correspondence.** Representing a
+  ruled surface between circular arcs exactly needs a
+  rational-quadratic-Bézier-per-arc construction this evaluator does not
+  build. §12 defers that construction to PR 3; approximating it would be the
+  confidently-wrong failure `docs/api-design.md` §1 exists to prevent.
+
+**Permanently out of scope, for reasons stated once:**
+
+- **Free-form and mixed-kind correspondence.** The target needs only
+  same-kind straight rules; every other correspondence needs its own surface
+  and pairing design.
 - **Reversed correspondence** (pairing segment `j` of one loop against
   segment `n-1-j` of the other). §3's alignment offset is a rotation only.
   Reversal changes which vertices are material-adjacent, which needs its own
@@ -152,7 +157,7 @@ that exists and this evaluator cannot build → `ErrUnsupported`.**
 |---|---|---|---|---|
 | **S1** | a hole-loop count mismatch (P2) | this evaluator has no positional pairing for it, though a smarter kernel could still loft a differing hole count by point-degenerate construction | `ErrUnsupported` | no — reach no increment in §12 claims |
 | **S2** | a paired loop's segment-count mismatch (P3) | same — a smarter kernel could subdivide to match; this evaluator's ordinal correspondence cannot | `ErrUnsupported` | no — reach no increment in §12 claims |
-| **S3** | a paired segment where either side is not `LineSeg` (§1, P5) | the ruled surface exists; this evaluator has no exact construction for it | `ErrUnsupported` | no, §12 PR 3 |
+| **S3** | a paired segment where either side is not `LineSeg` (§1, P5) | the ruled surface exists; this evaluator has no exact construction for it | `ErrUnsupported` | same-kind `CircleSeg`/`ArcSeg`: no, §12 PR 3; free-form or mixed-kind pairs: yes, §1 |
 | **S4** | a `WithLoftAlignment` payload of the wrong length, an offset outside `[0, n)` for its loop, or the option passed more than once | no single intent (mirrors modify-reach SX1, which refuses a repeated contradictory option on the same ground) | `ErrDegenerate` | yes, §2 |
 | **S5** | `p0`'s and `p1`'s `PlaneRecord`s are exactly equal (`Origin`, `U`, `V` all equal) | no — every wall vertex then lies in one plane, so the solid is provably flat: the tetrahedron-sum volume (§8) is a structural zero, not a computed one | `ErrDegenerate` | yes, §4 |
 | **S6** | a wall or cap triangle whose three recorded points collapse (coincident vertices, zero area) | no — the modification consumed the region, the same existence answer modify §5 test 1 gives an inside-out loop | `ErrDegenerate` | yes, §4 |
@@ -348,12 +353,12 @@ row B4).
 **`Body.Origin()`** is the loft step, role `"body"`, the same uniform rule
 every other feature follows (modify §11).
 
-**Placement.** `Body.Placed` / `Duplicate` / `PlacedCopy` need no new case:
-every loft surface is a `Plane`, and evaluator §8 already states "every v1
-surface variant maps to itself under an isometry (plane→plane, …)." A
-placed, duplicated, or placed-copied loft body re-evaluates from the same
-`Step` record, reproducing the same roles (modify §11's "roles derive from
-the record and the deterministic walk order").
+**Placement is staged until PR 2.** It needs no geometry-specific payload
+case: every loft surface is a `Plane`, and evaluator §8 already states "every
+v1 surface variant maps to itself under an isometry (plane→plane, …)." Once
+PR 2 lands, a placed, duplicated, or placed-copied loft body re-evaluates from
+the same `Step` record, reproducing the same roles (modify §11's "roles derive
+from the record and the deterministic walk order").
 
 ## 8. Mass properties — derived, not asserted
 
@@ -438,7 +443,7 @@ for the body-level quantities.
 | **D4** | Clearance (`WithClearances`, `docs/clearance-design.md`) | the analytic pair kernel's payload switch | `WithClearances` stays `Suspect`, even for a box-disjoint pair: box separation proves disjoint interiors but does not measure the gap. No loft case exists in the kernel yet. |
 | **D5** | `MinWallThickness` / `Undercuts` / `MinRadius` (verification §6, `survey2d.go`) | one constant 2D cross-section (a prism's section, a revolve's meridian) | The corresponding requested survey is `Suspect` until its loft implementation lands. In increment 1, a loft's cross-section varies continuously between the two profiles, so the existing spanning-disk / meridian-walk reduction does not reach it; `docs/modify-reach-design.md` DX9 states the identical cap-blend reason: "not one constant section at one height… the existing 2D spanning-disk proof does not decide them" |
 | **D6** | `Verify` — structural audit + tolerance gate | topology + measurements | valid by construction once §6's audit has passed at build time (modify §1's standard); the tolerance gate judges `Volume`/`Area`/`Centroid`/`Bounds` on the terms §8 derives |
-| **D7** | `Placed` / `Duplicate` / `PlacedCopy` | the payload | works unchanged (§7) |
+| **D7** | `Placed` / `Duplicate` / `PlacedCopy` | the payload | staged until PR 2 (§12); until then the evaluator returns `ErrUnsupported`. PR 2 needs no geometry-specific payload case (§7). |
 
 ## 10. Recipe, provenance, and replay
 
@@ -503,9 +508,9 @@ global evaluator increment.
 
 | PR | Lands | Still refused after it |
 |---|---|---|
-| 1 | `OpLoft` wire/recipe plumbing (`LoftOpts` codec, `Op` token, `Step.Profile`/`Plane` reuse), Table P pairing + Table S gates S1–S5/S9/S10, the flat-triangle wall construction (§5), the crossing audit (§6, Table S S6–S8), `Document.Loft` / `LoftContext`, `Volume` / `Centroid` (§8's rational accumulator) / `Area` / `Bounds`, `Verify` (D6: the structural audit and the tolerance gate over all four) | curved-segment correspondence; N-section/guide-rail loft; reversed correspondence; surveys, clearance, interference beyond box-disjoint |
+| 1 | `OpLoft` wire/recipe plumbing (`LoftOpts` codec, `Op` token, `Step.Profile`/`Plane` reuse), Table P pairing + Table S gates S1–S5/S9/S10, the flat-triangle wall construction (§5), the crossing audit (§6, Table S S6–S8), `Document.Loft` / `LoftContext`, `Volume` / `Centroid` (§8's rational accumulator) / `Area` / `Bounds`, `Verify` (D6: the structural audit and the tolerance gate over all four) | same-kind `CircleSeg`/`ArcSeg` correspondence; N-section/guide-rail/centerline loft; `Placed`/`Duplicate`/`PlacedCopy`; reversed correspondence; surveys, clearance, interference beyond box-disjoint |
 | 2 | `Tessellate` / `STL` / `OBJ` (D1), mesh-boolean admission (D2), `Placed` / `Duplicate` / `PlacedCopy` (D7) | D3/D4's analytic-kernel case, D5 |
-| 3 (reach, not committed by this document) | curved (`CircleSeg`/`ArcSeg`) same-kind correspondence, a loft case in `clearance_geom.go`, a non-constant-cross-section wall survey kernel | — |
+| 3 (reach, not committed by this document) | same-kind `CircleSeg`/`ArcSeg` correspondence, N-section and guide-rail/centerline lofts, a loft case in `clearance_geom.go`, a non-constant-cross-section wall survey kernel | — |
 
 **The four measurements land with the operation, never after it.** A `Body`
 caches `Volume` / `Centroid` / `Area` / `Bounds` at build and its accessors
@@ -581,10 +586,10 @@ never merely that a call ran (project rule).
 ## 14. Open questions
 
 None — every design variable this document depends on is resolved above.
-The reach items in §12's PR 3 row are future work, not open questions of
-this design: curved correspondence, guide-rail/N-section loft, and a loft
-case in the analytic clearance kernel are each named and deferred with a
-one-line reason, not left undecided.
+The reach items in §12's PR 3 row are future work, not open questions of this
+design: same-kind `CircleSeg`/`ArcSeg` correspondence, N-section and
+guide-rail/centerline lofts, and a loft case in the analytic clearance kernel
+are each named and deferred with a one-line reason, not left undecided.
 
 ## 15. Companion edits
 
