@@ -426,10 +426,11 @@ divided by the total). Both are **polynomial in the vertex coordinates —
 no square root anywhere** — so both reduce to `moments.go`'s existing
 discipline: every vertex coordinate is a float, taken exactly as a
 `math/big.Rat` (the same "take the floats exactly" rule `clearance_poly.go`
-and `spline_bezier.go` already follow), accumulated into ONE rational sum
-per body (anchored at `p0`'s own `PlaneRecord.Origin`, mirroring
-`moments.go`'s own anchor-then-publish-once discipline, §3), and rounded to
-float64 **once**, at publication — the identical `addExact` /
+and `spline_bezier.go` already follow), accumulated into the rational volume
+and three rational centroid coordinates (anchored at `p0`'s own
+`PlaneRecord.Origin`, mirroring `moments.go`'s own
+anchor-then-publish-once discipline, §3). At publication, the volume rounds
+once and each centroid coordinate rounds once — the identical `addExact` /
 `translateExactMoments` / `publishExact` shape `moments.go` already
 implements for a 2D region's exact rational accumulator, extended here to a
 3D triangulated boundary rather than invented as new machinery.
@@ -440,14 +441,22 @@ there (evaluator §4); the two caps' contribution to the 3D volume/centroid
 sum is that same 2D exact rational, lifted through the cap's own
 `PlaneRecord` — no new 2D integration is written.
 
-**Therefore `Volume` and `Centroid` are `Exact` exactly when their published
-rational is representable in the `units.Value` magnitude actually carried —
-never unconditionally.** This is spline design §3's Tier A rule, verbatim:
-"the reported bound is a SINGLE rounding of that rational into that
-magnitude, and it is zero — hence `Exact` — exactly when the rational is
-representable in the magnitude the value ACTUALLY CARRIES." A loft's volume
-earns that ceiling for the same reason a Tier A free-form region's area
-does: the integral is exactly rational; only its final publication rounds.
+**`Volume` is `Exact` exactly when its published rational is representable in
+the `units.Value` magnitude it carries — never unconditionally.** This is
+spline design §3's Tier A rule, verbatim: "the reported bound is a SINGLE
+rounding of that rational into that magnitude, and it is zero — hence `Exact`
+— exactly when the rational is representable in the magnitude the value
+ACTUALLY CARRIES." A loft's volume earns that ceiling for the same reason a
+Tier A free-form region's area does: the integral is exactly rational; only
+its final publication rounds.
+
+**`Centroid` publishes three exact rational coordinates as a
+`VecMeasurement`, not a `units.Value`.** Round each coordinate once into the
+returned `r3.Vec`. Its `Bound` is the length radius enclosing all three
+coordinate-rounding errors, and it is `Exact` only when every coordinate has
+zero rounding error. This is the existing `moments.go` centroid publication
+pattern, extended from the plane-local two-coordinate result to this 3D
+triangulated boundary.
 
 **`Area` is never Exact.** A triangle's own area is `(1/2) * |(B-A) x
 (C-A)|` — a square root of a rational, generically irrational — so a wall
@@ -621,14 +630,17 @@ never merely that a call ran (project rule).
   sized to exceed the fixed pair-test budget → S8, refused before any pair
   result is trusted.
 - **Mass properties**: a scaled cube-like loft (two congruent squares,
-  parallel planes, no twist) reproduces the closed-form prism volume/
-  centroid exactly, asserted `Exact` when the rational happens to be
-  representable and `Approximate` with a correctly-signed one-ulp bound when
-  scaled to force a non-representable rational (mirroring spline design
-  Table F's own 293/18 vs 293/2 worked example); `Area` is `Approximate`
-  whenever any wall triangle has nonzero area, with the bound checked
-  against a high-precision reference sum, never merely asserted present.
-  `Bounds` matches the exact per-vertex componentwise extreme.
+  parallel planes, no twist) reproduces the closed-form prism volume and all
+  three centroid coordinates exactly. The fixture asserts `Volume` is `Exact`
+  only when its rational is representable, and `Centroid` is `Exact` only when
+  every coordinate is representable. A non-representable volume carries its
+  single-rounding bound; a non-representable centroid coordinate makes the
+  centroid `Approximate` with a length-radius bound enclosing all three
+  coordinate-rounding errors (mirroring spline design Table F's own 293/18 vs
+  293/2 worked example). `Area` is `Approximate` whenever any wall triangle
+  has nonzero area, with the bound checked against a high-precision reference
+  sum, never merely asserted present. `Bounds` matches the exact per-vertex
+  componentwise extreme.
 - **Downstream**: D1's `Bound` is exactly zero for an admitted loft; a D2
   boolean between a loft and a prism succeeds through the existing
   all-planar path; a box-disjoint loft/loft pair proves only its
