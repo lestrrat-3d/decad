@@ -116,9 +116,10 @@ The payload table is normative:
 
 A `loftPayload` already holds the cap triangles from its polygon-with-holes
 triangulation and the two exact wall triangles for every paired segment. Its
-construction audit proves this fixed triangle boundary is closed, positively
-oriented, and free of non-adjacent contact. `Tessellate` copies that triangle
-connectivity, vertices, and source faces directly. It MUST NOT chord,
+construction normalizes the complete triangle shell to a positive signed
+tetrahedron sum (loft §5), and the crossing audit proves it free of
+non-adjacent contact. `Tessellate` copies that triangle connectivity, vertices,
+and source faces directly. It MUST NOT chord,
 retriangulate, move, round, weld, or otherwise alter a loft facet.
 
 The true boundary is therefore the held triangle boundary. Every

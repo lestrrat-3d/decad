@@ -159,18 +159,25 @@ that exists and this evaluator cannot build → `ErrUnsupported`.**
 | **S2** | a paired loop's segment-count mismatch (P3) | same — a smarter kernel could subdivide to match; this evaluator's ordinal correspondence cannot | `ErrUnsupported` | no — reach no increment in §12 claims |
 | **S3** | a paired segment where either side is not `LineSeg` (§1, P5) | the ruled surface exists; this evaluator has no exact construction for it | `ErrUnsupported` | same-kind `CircleSeg`/`ArcSeg`: no, §12 PR 3; free-form or mixed-kind pairs: yes, §1 |
 | **S4** | a `WithLoftAlignment` payload of the wrong length, an offset outside `[0, n)` for its loop, or the option passed more than once | no single intent (mirrors modify-reach SX1, which refuses a repeated contradictory option on the same ground) | `ErrDegenerate` | yes, §2 |
-| **S5** | `p0`'s and `p1`'s `PlaneRecord`s are exactly equal (`Origin`, `U`, `V` all equal) | no — every wall vertex then lies in one plane, so the solid is provably flat: the tetrahedron-sum volume (§8) is a structural zero, not a computed one | `ErrDegenerate` | yes, §4 |
+| **S5** | `p0` and `p1` represent the same geometric plane, regardless of which in-plane origin or right-handed `U`/`V` basis each `PlaneRecord` uses | no — every wall vertex then lies in one plane, so the solid is provably flat: the tetrahedron-sum volume (§8) is a structural zero, not a computed one | `ErrDegenerate` | yes, §4 |
 | **S6** | a wall or cap triangle whose three recorded points collapse (coincident vertices, zero area) | no — the modification consumed the region, the same existence answer modify §5 test 1 gives an inside-out loop | `ErrDegenerate` | yes, §4 |
 | **S7** | the crossing audit (§6) finds contact other than the pair's recorded expected contact | no — a self-intersecting or self-touching shell bounds no solid | `ErrDegenerate` | yes, §6 |
 | **S8** | the crossing audit exhausts its fixed work budget (§6, §10) before every pair is decided | this evaluator cannot tell | `ErrUnsupported` | no, §6 — a resource ceiling, not a shape rule |
 | **S9** | either profile fails a seam gate (§2): foreign, stale, invalid, or an unrecordable `Partial` fragment | seam design's own answer, per profile | `ErrForeignProfile` / `ErrStaleProfile` / `ErrInvalidProfile` / `ErrUnrecordableProfile` | seam design's own answer, per gate; this document adds no permanence of its own (§2) |
 | **S10** | a nil `*sketch.Sketch` or `*sketch.Profile` argument | no call at all | `ErrDegenerate` | yes, §2 |
 
+**S5 compares geometric planes, not `PlaneRecord` fields.** Its normal is
+`U × V`; it refuses when the two normals are parallel and the displacement
+between their origins lies in that plane. It returns `ErrDegenerate` before
+construction for every coplanar section pair, even when their authenticated
+records use distinct origins or bases.
+
 **Gate order**, the same "ask what could be asked" discipline modify §4
 states: pre-gates first (S10 nil check, S9 seam authentication of both
 profiles — nothing downstream is safe to read before this), then the shape
 gates that need only the two authenticated records (S1 hole count, S2
-segment count, S4 malformed alignment, S3 segment kind, S5 plane identity —
+segment count, S4 malformed alignment, S3 segment kind, S5 geometric-plane
+coincidence —
 all decidable without building a single triangle), then construction (§5),
 then the per-triangle existence gate S6, then the crossing audit (S7/S8,
 §6) — the most expensive step, run last, over triangles already proven
@@ -179,10 +186,10 @@ individually non-degenerate.
 ## 5. Construction — flat triangular walls, never a curved ruled surface
 
 **Every wall is two flat triangles, split along the same fixed diagonal
-`tessellate.go` already uses for a prism's lateral quad**: "split it along
-the fixed (bottom-start, top-end) diagonal into two outward triangles." A
-loft reuses that convention as its actual TOPOLOGY, not merely its
-tessellation.
+`tessellate.go` already uses for a prism's lateral quad.** A loft reuses that
+convention as its actual TOPOLOGY, not merely its tessellation. The local
+order below fixes the diagonal and roles; the whole-shell rule that follows
+fixes outward winding.
 
 For paired segment `j` of a loop — `V_j -> V_{j+1}` on `p0`, `W_j -> W_{j+1}`
 on `p1` (indices already rotated by §3's alignment) — the quad `V_j, V_{j+1},
@@ -192,6 +199,15 @@ W_{j+1}, W_j` splits into:
 |---|---|---|---|
 | lower | `V_j, V_{j+1}, W_{j+1}` | the full `p0` segment (shared with `capStart`'s boundary) | `side(i,j,0)` |
 | upper | `V_j, W_{j+1}, W_j` | the full `p1` segment, reversed (shared with `capEnd`'s boundary) | `side(i,j,1)` |
+
+**Orient the complete shell once after constructing every wall and both
+caps.** Compute §8's signed tetrahedron sum from the complete triangle set,
+using `p0`'s `PlaneRecord.Origin` as its fixed anchor. Its sign is nonzero
+after S5–S7. Retain every triangle when the sum is positive. When it is
+negative, reverse every triangle's winding, including both caps, by swapping
+its second and third vertices. Never orient a wall or cap independently. This
+deterministic whole-shell step makes Table B, mass properties, and
+`Tessellate` receive one positively oriented material boundary.
 
 Evaluator §3 owns the `side(i,j,k)` grammar. Here `i` is the loop index
 (`0` for `Outer`, `1+h` for `Holes[h]`), matching Table P's own indexing.
@@ -363,9 +379,9 @@ from the record and the deterministic walk order").
 ## 8. Mass properties — derived, not asserted
 
 Write `T` for the set of `2*sum(n_i)` wall triangles plus the two caps'
-own triangulations, each triangle `(A, B, C)` consistently outward-oriented
-(material on the left, the same walk-order convention every payload already
-uses).
+own triangulations, each triangle `(A, B, C)` outward-oriented by §5's
+whole-shell rule (material on the left, the same walk-order convention every
+payload already uses).
 
 **Volume is a signed sum of tetrahedron volumes from a fixed anchor** —
 the standard divergence-theorem reduction for a closed triangulated
@@ -531,15 +547,20 @@ never merely that a call ran (project rule).
 - **Pairing**: hole-count mismatch → S1; segment-count mismatch → S2;
   mixed/curved segment pair (including same-kind circular) → S3; malformed
   `WithLoftAlignment` (wrong length, out-of-range offset, or duplicate
-  option) → S4; identical planes → S5; a nonzero alignment offset pairs the
-  expected rotated vertex, asserted on the built wall's own coordinates. A
+  option) → S4; geometrically coplanar sections → S5, including two distinct
+  `PlaneRecord`s with the same plane but rotated `U`/`V` bases; a nonzero
+  alignment offset pairs the expected rotated vertex, asserted on the built
+  wall's own coordinates. A
   two-hole fixture whose recorded `Holes` order is swapped between the two
   profiles MUST assert the two ordinal pairings by wall coordinates, or S7 for
   the resulting crossed correspondence; a nearest-hole matcher MUST fail it.
 - **Construction**: every wall/cap edge bounds exactly two faces; every
   triangle has positive area; the two caps' triangulation matches
   `triangulate.go`'s existing polygon-with-holes output for each profile in
-  isolation; a junction's `Edge.IsConvex` matches its hand-computed
+  isolation; matching square profiles at `z=0` and `z=-1` with identical
+  frames normalize all wall and cap windings to a positive signed
+  tetrahedron sum, asserted before mass properties and tessellation read the
+  payload; a junction's `Edge.IsConvex` matches its hand-computed
   walked-boundary turn; an outer rim is convex and a hole rim is concave. An
   untwisted congruent parallel loft with one outer side deliberately split
   into two collinear `LineSeg`s retains exactly two `Plane` faces per wall
