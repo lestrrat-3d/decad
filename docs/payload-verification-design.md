@@ -657,7 +657,7 @@ Each row leaves every later question staged as `Suspect`.
 | faceted clearance | triangle boundary adapter + bounded clearance |
 | faceted shape surveys | undercut + min-radius certificates/surveys |
 | faceted wall | medial wall survey |
-| loft verification | construction validity + exact bounds-disjoint staging; mesh pairs and every survey remain `Suspect` until their payload path lands |
+| loft verification | construction validity + exact bounds-disjoint staging; pairs that need the mesh path, requested clearances, and requested surveys remain `Suspect` until their payload path lands |
 
 Tolerance-gate implementation MUST exist by the faceted-validity stage.
 Otherwise a proven valid faceted body still cannot become `Sound` when all
@@ -671,8 +671,8 @@ numbers.
 | Area | Cases |
 |---|---|
 | validity | accepted loft construction is valid; the tolerance gate judges its volume, area, centroid, and bounds without a fabricated payload-specific reading |
-| pair staging | a bounds-disjoint loft pair is proven disjoint; a pair that needs the mesh path is `Suspect` before that path lands |
-| surveys | `MinWallThickness`, `Undercuts`, and `MinRadius` are each `Suspect`, never absent or silently exact |
+| pair staging | a bounds-disjoint loft pair is proven disjoint; `WithClearances` remains `Suspect` for that pair until the clearance path lands; a pair that needs the mesh path is `Suspect` before that path lands |
+| surveys | Each requested `MinWallThickness`, `Undercuts`, and `MinRadius` survey is `Suspect`, never absent or silently exact |
 
 ### 14.2 Cup
 

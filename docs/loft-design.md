@@ -246,7 +246,9 @@ computed:
   tolerance. The predicate is needed because a prism's junction turn is read
   off the single recorded 2D section it sweeps rigidly (evaluator §3), while
   a loft has two sections whose own corner turns can disagree at the same
-  paired vertex;
+  paired vertex. A zero result retains a flat rung or diagonal as a decided
+  non-convex edge: `IsConvex()` is false, `Convex()` does not select it, and
+  `Concave()` does;
 - a **cap-boundary** edge is a RIM edge, and takes evaluator §3's existing
   rim rule unchanged: a straight wall has no turn, so the edge takes the role
   of its loop — outer convex, hole concave. A loft therefore answers
@@ -434,9 +436,9 @@ for the body-level quantities.
 |---|---|---|---|
 | **D1** | `Tessellate` / `STL` / `OBJ` | the payload | works from the first PR that wires it in, and the returned `Bound` is **zero**: every wall and cap face is already a flat triangle with exact vertices, so tessellation is restatement, not chording (`triangulate.go`'s existing polygon-with-holes triangulator for the two caps; no chording anywhere) |
 | **D2** | the mesh boolean (`Union`/`Cut`/`Intersect`, evaluator §9) | the tessellation | a first-class operand once D1 lands, admitted through the existing all-planar zero-bound path (`docs/evaluator-design.md` §2 — "the VOLUME of an all-planar pair whose contact points round exactly") — no new boolean code, a loft body is just another all-planar operand |
-| **D3** | Interference (`docs/interference-design.md`) | box separation (D6-style) reads `Bounds` directly; the read-only mesh-boolean path reads D2's tessellation | box-disjoint pairs prove `Sound` immediately (`Bounds` is Exact, §8); a pair needing the mesh boolean works once D2 lands; a pair needing the analytic containment/pair kernel stays `Suspect` until a loft case is added to `clearance_geom.go`'s payload switch — identical staging to the cup's own D6 row in `docs/modify-design.md` |
-| **D4** | Clearance (`WithClearances`, `docs/clearance-design.md`) | the analytic pair kernel's payload switch | `Suspect` unless box-disjoint, for the same reason as D3 — no loft case in the kernel yet |
-| **D5** | `MinWallThickness` / `Undercuts` / `MinRadius` (verification §6, `survey2d.go`) | one constant 2D cross-section (a prism's section, a revolve's meridian) | `Suspect` always in increment 1 — a loft's cross-section varies continuously between the two profiles, so the existing spanning-disk / meridian-walk reduction does not reach it, the identical reasoning `docs/modify-reach-design.md` DX9 already states for a cap blend: "not one constant section at one height… the existing 2D spanning-disk proof does not decide them" |
+| **D3** | Interference (`docs/interference-design.md`) | box separation (D6-style) reads `Bounds` directly; the read-only mesh-boolean path reads D2's tessellation | box-disjoint pairs prove only their disjoint-interior interference relation (`Bounds` is Exact, §8). `Verify` is `Sound` only when every other required or requested body and pair check is decided and trusted; a pair needing the mesh boolean works once D2 lands; a pair needing the analytic containment/pair kernel stays `Suspect` until a loft case is added to `clearance_geom.go`'s payload switch — identical staging to the cup's own D6 row in `docs/modify-design.md` |
+| **D4** | Clearance (`WithClearances`, `docs/clearance-design.md`) | the analytic pair kernel's payload switch | `WithClearances` stays `Suspect`, even for a box-disjoint pair: box separation proves disjoint interiors but does not measure the gap. No loft case exists in the kernel yet. |
+| **D5** | `MinWallThickness` / `Undercuts` / `MinRadius` (verification §6, `survey2d.go`) | one constant 2D cross-section (a prism's section, a revolve's meridian) | The corresponding requested survey is `Suspect` until its loft implementation lands. In increment 1, a loft's cross-section varies continuously between the two profiles, so the existing spanning-disk / meridian-walk reduction does not reach it; `docs/modify-reach-design.md` DX9 states the identical cap-blend reason: "not one constant section at one height… the existing 2D spanning-disk proof does not decide them" |
 | **D6** | `Verify` — structural audit + tolerance gate | topology + measurements | valid by construction once §6's audit has passed at build time (modify §1's standard); the tolerance gate judges `Volume`/`Area`/`Centroid`/`Bounds` on the terms §8 derives |
 | **D7** | `Placed` / `Duplicate` / `PlacedCopy` | the payload | works unchanged (§7) |
 
@@ -532,8 +534,11 @@ never merely that a call ran (project rule).
   triangle has positive area; the two caps' triangulation matches
   `triangulate.go`'s existing polygon-with-holes output for each profile in
   isolation; a junction's `Edge.IsConvex` matches its hand-computed
-  walked-boundary turn; an outer rim is convex and a hole rim is concave.
-  A collapsed (coincident-vertex) segment pair → S6.
+  walked-boundary turn; an outer rim is convex and a hole rim is concave. An
+  untwisted congruent parallel loft has `orient3d == 0` on every retained flat
+  diagonal and on a rung at a deliberately split straight side; each reports
+  `IsConvex() == false`, is selected by `Concave()`, and is not selected by
+  `Convex()`. A collapsed (coincident-vertex) segment pair → S6.
 - **Audit**: a deliberately over-twisted correspondence (e.g. an intentional
   wrong `WithLoftAlignment` offset on a non-convex profile) proves a
   crossing → S7, asserted against the specific triangle pair the crossing
@@ -553,9 +558,12 @@ never merely that a call ran (project rule).
   `Bounds` matches the exact per-vertex componentwise extreme.
 - **Downstream**: D1's `Bound` is exactly zero for an admitted loft; a D2
   boolean between a loft and a prism succeeds through the existing
-  all-planar path; a box-disjoint loft/loft pair reads `Sound` under D3
-  with no analytic-kernel case implemented; `MinWallThickness` on a loft
-  body reads `Suspect`, never absent or a silently wrong number (D5).
+  all-planar path; a box-disjoint loft/loft pair proves only its
+  disjoint-interior interference relation under D3, and its `Verify` report
+  is `Sound` only with no other undecided required or requested check; a
+  box-disjoint pair with `WithClearances` reads `Suspect` until the analytic
+  kernel adds loft; each requested D5 survey reads `Suspect`, never absent or
+  a silently wrong number.
 - **Recipe/replay**: round-trip a `LoftOpts` payload including a non-zero
   `Alignment`; a missing `Profile2`/`Plane2` on the wire rejects; replay
   reproduces the same triangles, roles, and measurements as the immediate
