@@ -362,24 +362,22 @@ func prismUnionProfilesHaveSplitBoundary(budget *workBudget, profiles []*sketch.
 }
 
 // prismProfilesContext makes sketch's synchronous arrangement observable to a
-// caller's context. The scene belongs only to this operation, so it is safe for
-// the worker to finish after cancellation; its buffered result is discarded and
-// cannot reach the document or its operands.
+// caller's context. Cancellation waits for the bounded arrangement worker to
+// finish, so no worker survives the operation. Its discarded result cannot
+// reach the document or its operands.
 func prismProfilesContext(ctx context.Context, profiles func() []*sketch.Profile) ([]*sketch.Profile, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	type result struct {
-		profiles []*sketch.Profile
-	}
-	done := make(chan result, 1)
+	done := make(chan []*sketch.Profile)
 	go func() {
-		done <- result{profiles: profiles()}
+		done <- profiles()
 	}()
 	select {
 	case result := <-done:
-		return result.profiles, nil
+		return result, nil
 	case <-ctx.Done():
+		<-done
 		return nil, ctx.Err()
 	}
 }

@@ -579,8 +579,9 @@ single code-owned pre-`Profiles` cap: it bounds the private arrangers'
 tiny-segment pair work for the pinned line/circle/arc density. `sketch.Sketch.
 Profiles` is synchronous and has no context parameter, so a capped private
 scene runs in one worker while the caller selects its result against
-`ctx.Done()`. Cancellation returns before that arrangement reaches the
-document; its buffered result is discarded after the worker finishes.
+`ctx.Done()`. On cancellation, the caller waits for that bounded arrangement
+worker to finish, discards its result, and then returns `ctx.Err()` before the
+arrangement reaches the document.
 `UnionContext`/`CutContext`/`IntersectContext` add no public cancellation
 surface. Exhaustion is RB7 (§9), not silent truncation.
 

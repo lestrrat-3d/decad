@@ -4,6 +4,7 @@ import (
 	"context"
 	"math"
 	"testing"
+	"time"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
@@ -365,7 +366,7 @@ func TestPrismUnionArrangementCapRejectsLargeLineOnlyScene(t *testing.T) {
 	require.False(t, ok)
 }
 
-func TestPrismProfilesContextReturnsCancellationDuringArrangement(t *testing.T) {
+func TestPrismProfilesContextWaitsForArrangementAfterCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	started := make(chan struct{})
 	release := make(chan struct{})
@@ -374,16 +375,23 @@ func TestPrismProfilesContextReturnsCancellationDuringArrangement(t *testing.T) 
 		close(started)
 		<-release
 		close(finished)
-		return nil
+		return []*sketch.Profile{}
 	}
+	result := make(chan error, 1)
 	go func() {
-		<-started
-		cancel()
+		_, err := prismProfilesContext(ctx, profiles)
+		result <- err
 	}()
 
-	_, err := prismProfilesContext(ctx, profiles)
-	require.ErrorIs(t, err, context.Canceled)
+	<-started
+	cancel()
+	select {
+	case err := <-result:
+		t.Fatalf("prismProfilesContext returned before arrangement finished: %v", err)
+	case <-time.After(100 * time.Millisecond):
+	}
 
 	close(release)
 	<-finished
+	require.ErrorIs(t, <-result, context.Canceled)
 }
