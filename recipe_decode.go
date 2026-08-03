@@ -27,8 +27,11 @@ type recipeDecodeLimits struct {
 const maxRecipeInputsPerStep = 4_096
 
 // maxRecipeAlignmentPerStep bounds LoftOpts.Alignment's wire array before any
-// typed decode, the same preflight-before-allocation discipline
-// maxRecipeInputsPerStep already applies to Step.Inputs.
+// typed decode, on both decode paths — the recipe preflight below, and
+// validateStepAlignmentLimit for a Step unmarshalled on its own, which reads
+// this ceiling from recipeJSONArrayHardLimit so the two cannot drift. That is
+// the same two-path, count-before-allocation discipline maxRecipeInputsPerStep
+// has for Step.Inputs.
 const maxRecipeAlignmentPerStep = 4_096
 
 func defaultRecipeDecodeLimits() recipeDecodeLimits {

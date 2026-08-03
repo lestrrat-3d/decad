@@ -3,6 +3,7 @@ package decad
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"slices"
@@ -593,13 +594,25 @@ func stepShapeFieldsFromJSON(raw jsonStepDecode, op OpKind) (stepShapeFields, er
 	if err != nil {
 		return stepShapeFields{}, err
 	}
+	if err := validateStepAlignmentLimit(raw.Opts); err != nil {
+		return stepShapeFields{}, err
+	}
 	fields.inputs = inputs
 	fields.selectors = selectors
 	fields.values = values
 	return fields, nil
 }
 
+// jsonArrayLength counts a top-level step array's elements by token, under the
+// ceiling every such array shares.
 func jsonArrayLength(data json.RawMessage, field string) (int, error) {
+	return jsonArrayLengthUnder(data, field, maxRecipeInputsPerStep, field+" per step")
+}
+
+// jsonArrayLengthUnder is the same count against a stated ceiling, so a nested
+// array — LoftOpts.Alignment inside "opts" — reports its own limit under its
+// own path.
+func jsonArrayLengthUnder(data json.RawMessage, field string, limit int, name string) (int, error) {
 	if data == nil || isJSONNull(data) {
 		return 0, nil
 	}
@@ -615,12 +628,12 @@ func jsonArrayLength(data json.RawMessage, field string) (int, error) {
 
 	length := 0
 	for decoder.More() {
-		if length >= maxRecipeInputsPerStep {
+		if length >= limit {
 			return 0, recipeDecodeLimitError(
 				fmt.Sprintf("%s[%d]", field, length),
 				-1,
-				field+" per step",
-				int64(maxRecipeInputsPerStep),
+				name,
+				int64(limit),
 			)
 		}
 		if err := skipJSONValue(decoder); err != nil {
@@ -695,6 +708,46 @@ func validateStepInputLimit(inputs int) error {
 		"inputs per step",
 		int64(maxRecipeInputsPerStep),
 	)
+}
+
+// validateStepAlignmentLimit counts LoftOpts.Alignment's wire elements off the
+// raw "opts" object and refuses past its ceiling, so a Step decoded on its own
+// — the path the recipe preflight never runs on — is bounded before
+// unmarshalStepOpts allocates the []int. It is the step-local half of the same
+// discipline validateStepInputLimit gives Step.Inputs.
+//
+// It reads the ceiling and its name from the preflight's own hard-limit table,
+// so the two decode paths cannot drift apart, and it is keyed on the field
+// name exactly as that table is — no options kind is decided here.
+//
+// The count is all this owns: unmarshalStepOpts owns every options
+// diagnostic, so a malformed opts object or a non-array alignment passes
+// through to be judged there.
+func validateStepAlignmentLimit(opts json.RawMessage) error {
+	limit, name, bounded := recipeJSONArrayHardLimit(recipeJSONAlignment)
+	if !bounded {
+		return nil
+	}
+	if _, err := jsonArrayLengthUnder(stepOptsAlignmentField(opts), "opts.alignment", limit, name); errors.Is(err, ErrResourceLimit) {
+		return err
+	}
+	return nil
+}
+
+// stepOptsAlignmentField reads the raw "alignment" array out of a step's
+// options object, leaving it raw so the count above runs on tokens. An options
+// object this cannot read yields no array: unmarshalStepOpts reports it.
+func stepOptsAlignmentField(opts json.RawMessage) json.RawMessage {
+	if opts == nil || isJSONNull(opts) {
+		return nil
+	}
+	var probe struct {
+		Alignment json.RawMessage `json:"alignment"`
+	}
+	if json.Unmarshal(opts, &probe) != nil {
+		return nil
+	}
+	return probe.Alignment
 }
 
 func unmarshalPresentJSONSlice[T any](data json.RawMessage, field string) ([]T, error) {
