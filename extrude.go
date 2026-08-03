@@ -1255,12 +1255,17 @@ func sideOriginsContext(ctx context.Context, ref StepRef, roleLoop int, segs []i
 // extentAlong is the prism's exact extent interval along an arbitrary world
 // direction g — the lifted linear functional point·g = origin·g + u·(U'·g)
 // + v·(V'·g) + z·(N'·g), primes the placed directions, extremized over the
-// region boundary and the sweep. Shared by prismBoundsContext and the through-all
-// stop resolution (docs/evaluator-design.md §5).
+// region boundary and the sweep. A through-all stop records its result as an
+// exact endpoint, so it refuses a prism with a proven section displacement.
+// prismBoundsContext reads extentAlongWork directly and carries that
+// displacement as its own outward bound instead.
 // The stop and clearance callers hold no preflight counter for this record, so
 // the interface forms open the record's own — one per extent reading, never one
 // per segment.
 func (pp prismPayload) extentAlong(g r3.Vec) (float64, float64, error) {
+	if pp.sectionDelta != 0 {
+		return 0, 0, fmt.Errorf(`%w: a through-all stop cannot use a prism with a proven section displacement`, ErrUnsupported)
+	}
 	return pp.extentAlongContext(context.Background(), g)
 }
 

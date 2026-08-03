@@ -188,8 +188,10 @@ whose interval the step's own quantities determine. `ThroughAll` and
 far side of every body the sweep meets), so they are body-relative exactly
 like `ToFace`: all three land in increment 2 with selectors (§7), the stop an
 intersection of the sweep direction with analytic target surfaces — closed
-form — and `ErrUnsupported` until then. A through-all dependency is ambient
-at the CALL but never in the RECORD: core §6.2's depends-on rule covers this
+form — and `ErrUnsupported` until then. A through-all payload must provide an
+exact directional extent. A prism with a nonzero section displacement returns
+`ErrUnsupported`: the recorded stop has no bound to widen. A through-all
+dependency is ambient at the CALL but never in the RECORD: core §6.2's depends-on rule covers this
 case explicitly — the feature call resolves which live bodies actually bound
 the stops and records each one's `StepRef` in the step's `Inputs`, in stop
 order — so re-evaluation reaches the same stops with no ambient body-set

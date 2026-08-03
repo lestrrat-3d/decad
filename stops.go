@@ -25,7 +25,8 @@ import (
 // directionalExtent is what a through-all stop needs from a body's payload:
 // the body's exact extent interval along an arbitrary world direction — the
 // closed-form intersection of the sweep direction with the body's analytic
-// surfaces (docs/evaluator-design.md §5).
+// surfaces (docs/evaluator-design.md §5). A payload that cannot provide an
+// exact recorded stop returns ErrUnsupported.
 type directionalExtent interface {
 	extentAlong(g r3.Vec) (float64, float64, error)
 }

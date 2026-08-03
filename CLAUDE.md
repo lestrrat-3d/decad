@@ -183,8 +183,9 @@ RECORDED section. Every other consumer either cannot state it or has no bound to
 state it in, and each therefore withholds its answer rather than measuring the
 recorded section as though it were the denoted one: `survey.go`'s wall and
 `MinRadius` readings answer undecided (which reads `Suspect`; the undercut
-reading is a normal-direction membership and is unaffected), `clearance_geom.go`
-builds no model for the pair, `interference.go` withholds the equal-records
+reading is a normal-direction membership and is unaffected), `ThroughAll` and
+`ThroughAllSide` return `ErrUnsupported` because their recorded stop has no
+bound to widen, `clearance_geom.go` builds no model for the pair, `interference.go` withholds the equal-records
 set-identity certificate, `boolean.go`'s `faceChordDelta` charges it as a planar
 face's own displacement so the mesh path's tangency gate cannot read the face as
 held exactly, and `Fillet`/`Chamfer`/`Shell` refuse the receiver
