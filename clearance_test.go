@@ -196,7 +196,7 @@ func TestClearanceBeyondBoxesInHole(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, before, doc.Recipe(), `Verify never mutates the document`)
 	require.Len(t, doc.Bodies(), 2)
-	require.Equal(t, decad.Suspect, report.Status)
+	require.Equal(t, decad.Sound, report.Status)
 	requireExactGap(t, report, 10-2.5*math.Sqrt2)
 }
 

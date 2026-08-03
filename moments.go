@@ -347,10 +347,15 @@ func radius2D(x, y float64) float64 {
 // than 128 additions, multiplications or divisions, so 256·u·scale dominates
 // their round-to-nearest error without cancellation shrinking the bound.
 //
-// Go deliberately gives Sin, Cos, Atan2 and Hypot no public ulp contract. Their
-// results never use this helper. conservativeValueError instead applies the
-// triangle inequality to a mathematical magnitude envelope, so those results
-// remain bounded without assuming an undocumented library accuracy.
+// Go deliberately gives Sin, Cos, Atan2 and Hypot no public ulp contract, so a
+// result computed through them never trusts this helper's roundoff budget on
+// its own. Where no certified rational bracket exists for the result,
+// conservativeValueError's magnitude envelope is what stands; where one does
+// (circularAreaInterval, circularLengthInterval, circularFirstMomentInterval —
+// each reducing the trig terms to exact rationals, or to a proven
+// atan2Interval/ratSqrtDown/ratSqrtUp bracket, so no libm accuracy is assumed
+// either), the caller takes math.Min of the two, which can only shrink the
+// published bound.
 func analyticRoundBound(scale float64) float64 {
 	if scale <= 0 {
 		return 0
@@ -364,7 +369,11 @@ func analyticRoundBound(scale float64) float64 {
 // conservativeValueError proves |held-true| from |true| <= trueAbsUpper:
 // |held-true| <= |held|+|true|. It is intentionally wider than an ulp estimate,
 // but it is portable across every conforming implementation of Go's math
-// package and remains finite for finite geometry.
+// package and remains finite for finite geometry. It is the bound a circular
+// reading falls back to wherever no certified rational bracket admits it (a
+// trimmed CircleSeg fragment used as a first moment, an ArcSeg fragment whose
+// two endpoints round to different radii); every reading a bracket does admit
+// takes math.Min against this value, never a replacement of it.
 func conservativeValueError(held, trueAbsUpper float64) float64 {
 	if isNonFinite(held) || isNonFinite(trueAbsUpper) {
 		return math.Inf(1)
@@ -452,6 +461,29 @@ func intervalScale(a ratInterval, scale *big.Rat) ratInterval {
 
 func pointInterval(value *big.Rat) ratInterval {
 	return interval(value, value)
+}
+
+// intervalMul multiplies two rational-bounded intervals by their four corner
+// products, the general bound that assumes nothing about either interval's
+// sign — what a radius bracket times a swept-angle bracket needs, since
+// neither is known to be sign-fixed at the call site.
+func intervalMul(a, b ratInterval) ratInterval {
+	corners := [4]*big.Rat{
+		new(big.Rat).Mul(a.lo, b.lo),
+		new(big.Rat).Mul(a.lo, b.hi),
+		new(big.Rat).Mul(a.hi, b.lo),
+		new(big.Rat).Mul(a.hi, b.hi),
+	}
+	lo, hi := corners[0], corners[0]
+	for _, c := range corners[1:] {
+		if c.Cmp(lo) < 0 {
+			lo = c
+		}
+		if c.Cmp(hi) > 0 {
+			hi = c
+		}
+	}
+	return interval(lo, hi)
 }
 
 func intervalFloatError(a ratInterval, held float64) float64 {
@@ -664,6 +696,177 @@ func circularAreaInterval(seg CurveSegment, anchor Point2) (ratInterval, bool) {
 		), true
 	default:
 		return ratInterval{}, false
+	}
+}
+
+// circularLengthInterval brackets one circular walk's exact arc length with no
+// dependence on Sin/Cos/Atan2/Hypot's undocumented accuracy: a CircleSeg's
+// length is exactly |dT|·2π·r over its own recorded range, whole or
+// fractional — no restriction to a whole turn, unlike circularAreaInterval,
+// because a length has no cross-term that needs one — and an ArcSeg's is its
+// own radius (ratSqrtDown/ratSqrtUp of the exact squared Start-to-Center
+// distance, the same radius circularWalk uses throughout) times its own swept
+// angle (atan2Interval, with the same +2π branch correction
+// circularAreaInterval applies), multiplied as intervals.
+func circularLengthInterval(seg CurveSegment) (ratInterval, bool) {
+	switch seg := seg.(type) {
+	case CircleSeg:
+		radius, err := seg.Radius.In(units.Millimeter)
+		if err != nil {
+			return ratInterval{}, false
+		}
+		r := floatRat(radius)
+		if r == nil {
+			return ratInterval{}, false
+		}
+		r.Abs(r)
+		dt := exactCoordinateDelta(seg.TEnd, seg.TStart)
+		dt.Abs(dt)
+		scale := new(big.Rat).Mul(big.NewRat(2, 1), new(big.Rat).Mul(dt, r))
+		return intervalScale(interval(piLower, piUpper), scale), true
+	case ArcSeg:
+		dx0 := exactCoordinateDelta(seg.Start.U, seg.Center.U)
+		dy0 := exactCoordinateDelta(seg.Start.V, seg.Center.V)
+		dx1 := exactCoordinateDelta(seg.End.U, seg.Center.U)
+		dy1 := exactCoordinateDelta(seg.End.V, seg.Center.V)
+		r2 := new(big.Rat).Add(new(big.Rat).Mul(dx0, dx0), new(big.Rat).Mul(dy0, dy0))
+		rLo, rHi := floatRat(ratSqrtDown(r2)), floatRat(ratSqrtUp(r2))
+		if rLo == nil || rHi == nil {
+			return ratInterval{}, false
+		}
+		heldDY0 := seg.Start.V - seg.Center.V
+		heldDY1 := seg.End.V - seg.Center.V
+		a0 := atan2Interval(dy0, dx0, heldDY0 == 0 && math.Signbit(heldDY0))
+		a1 := atan2Interval(dy1, dx1, heldDY1 == 0 && math.Signbit(heldDY1))
+		sweep := intervalSub(a1, a0)
+		heldA0 := math.Atan2(heldDY0, seg.Start.U-seg.Center.U)
+		heldA1 := math.Atan2(heldDY1, seg.End.U-seg.Center.U)
+		if heldA1-heldA0 <= 0 {
+			sweep = intervalAdd(sweep, intervalScale(interval(piLower, piUpper), big.NewRat(2, 1)))
+		}
+		dt := exactCoordinateDelta(seg.TEnd, seg.TStart)
+		dt.Abs(dt)
+		return intervalMul(interval(rLo, rHi), intervalScale(sweep, dt)), true
+	default:
+		return ratInterval{}, false
+	}
+}
+
+// circularFirstMomentInterval brackets one circular walk's exact first-moment
+// contributions (∫u dA, ∫v dA) about the walk anchor, under the same
+// admission circularAreaInterval uses: a CircleSeg only over an exact integer
+// number of turns, an ArcSeg only over its own full recorded range (forward
+// or reverse), never a trimmed fragment, and never a fragment whose two
+// endpoints round to different radii — the area bracket's endpoint-radius
+// correction has no first-moment analogue, so a mismatched fragment is left
+// to the conservative bound.
+//
+// A CircleSeg's whole turns are the enclosed disk's own boundary, whose first
+// moment about each axis is its centroid times its area: every odd trig
+// moment over a whole period cancels exactly, leaving mu = c.U·r²·π·dt and
+// mv = c.V·r²·π·dt (dt the signed turn count).
+//
+// An ArcSeg's fragment restates addCircular's own mu/mv closed forms
+// (0.5·r·(c.U²·intCos + 2·c.U·r·intCos2 + r²·intCos3), and the mv analogue)
+// with sin/cos of the endpoints read as the exact ratios dy/r, dx/r rather
+// than evaluated: every r that multiplies one of those ratios cancels it
+// back to a rational coordinate difference, and the one term that does not
+// cancel — the θ term inside intCos2/intSin2 — is exactly the swept angle
+// atan2Interval already brackets. What is left after multiplying through is
+// rational except for that single c.U·r²·dth (respectively c.V·r²·dth) term,
+// so the whole expression is one rational point plus one scaled interval.
+// Forward walks th0→th1 through (Start, End) in the sweep direction; reverse
+// walks the same arc the other way, so the two endpoints swap which
+// "th0"/"th1" role they play and the signed sweep negates.
+func circularFirstMomentInterval(seg CurveSegment, anchor Point2) (ratInterval, ratInterval, bool) {
+	anchorU, anchorV := floatRat(anchor.U), floatRat(anchor.V)
+	if anchorU == nil || anchorV == nil {
+		return ratInterval{}, ratInterval{}, false
+	}
+	switch seg := seg.(type) {
+	case CircleSeg:
+		dt := exactCoordinateDelta(seg.TEnd, seg.TStart)
+		if !dt.IsInt() {
+			return ratInterval{}, ratInterval{}, false
+		}
+		radius, err := seg.Radius.In(units.Millimeter)
+		if err != nil {
+			return ratInterval{}, ratInterval{}, false
+		}
+		r := floatRat(radius)
+		if r == nil {
+			return ratInterval{}, ratInterval{}, false
+		}
+		centerU := new(big.Rat).Sub(floatRat(seg.Center.U), anchorU)
+		centerV := new(big.Rat).Sub(floatRat(seg.Center.V), anchorV)
+		piIv := interval(piLower, piUpper)
+		r2dt := ratMul(r, r, dt)
+		return intervalScale(piIv, ratMul(centerU, r2dt)), intervalScale(piIv, ratMul(centerV, r2dt)), true
+	case ArcSeg:
+		forward := seg.TStart == 0 && seg.TEnd == 1
+		reverse := seg.TStart == 1 && seg.TEnd == 0
+		if !forward && !reverse {
+			return ratInterval{}, ratInterval{}, false
+		}
+		dx0 := exactCoordinateDelta(seg.Start.U, seg.Center.U)
+		dy0 := exactCoordinateDelta(seg.Start.V, seg.Center.V)
+		dx1 := exactCoordinateDelta(seg.End.U, seg.Center.U)
+		dy1 := exactCoordinateDelta(seg.End.V, seg.Center.V)
+		r2 := ratAdd(ratMul(dx0, dx0), ratMul(dy0, dy0))
+		endR2 := ratAdd(ratMul(dx1, dx1), ratMul(dy1, dy1))
+		if endR2.Cmp(r2) != 0 {
+			return ratInterval{}, ratInterval{}, false
+		}
+		heldCenter := shiftPoint(seg.Center, anchor)
+		heldStart := shiftPoint(seg.Start, anchor)
+		heldEnd := shiftPoint(seg.End, anchor)
+		heldDY0 := heldStart.V - heldCenter.V
+		heldDY1 := heldEnd.V - heldCenter.V
+		a0 := atan2Interval(dy0, dx0, heldDY0 == 0 && math.Signbit(heldDY0))
+		a1 := atan2Interval(dy1, dx1, heldDY1 == 0 && math.Signbit(heldDY1))
+		sweep := intervalSub(a1, a0)
+		heldA0 := math.Atan2(heldStart.V-heldCenter.V, heldStart.U-heldCenter.U)
+		heldA1 := math.Atan2(heldEnd.V-heldCenter.V, heldEnd.U-heldCenter.U)
+		if heldA1-heldA0 <= 0 {
+			sweep = intervalAdd(sweep, intervalScale(interval(piLower, piUpper), big.NewRat(2, 1)))
+		}
+		p0x, p0y, p1x, p1y, dth := dx0, dy0, dx1, dy1, sweep
+		if reverse {
+			p0x, p0y, p1x, p1y = dx1, dy1, dx0, dy0
+			dth = intervalNeg(sweep)
+		}
+		centerU := new(big.Rat).Sub(floatRat(seg.Center.U), anchorU)
+		centerV := new(big.Rat).Sub(floatRat(seg.Center.V), anchorV)
+		dy := new(big.Rat).Sub(p1y, p0y)
+		dx := new(big.Rat).Sub(p1x, p0x)
+		cross := new(big.Rat).Sub(ratMul(p1y, p1x), ratMul(p0y, p0x))
+		cubeThird := func(v *big.Rat) *big.Rat { return ratScale(ratMul(v, v, v), 1, 3) }
+
+		muConst := ratAdd(
+			ratMul(centerU, centerU, dy),
+			ratMul(centerU, cross),
+			ratMul(p1y, r2),
+			new(big.Rat).Neg(cubeThird(p1y)),
+			new(big.Rat).Neg(ratMul(p0y, r2)),
+			cubeThird(p0y),
+		)
+		muDthCoeff := ratMul(centerU, r2)
+		mu := intervalScale(intervalAdd(pointInterval(muConst), intervalScale(dth, muDthCoeff)), big.NewRat(1, 2))
+
+		mvConst := ratAdd(
+			new(big.Rat).Neg(ratMul(centerV, centerV, dx)),
+			new(big.Rat).Neg(ratMul(centerV, cross)),
+			ratMul(p0x, r2),
+			new(big.Rat).Neg(ratMul(p1x, r2)),
+			new(big.Rat).Neg(cubeThird(p0x)),
+			cubeThird(p1x),
+		)
+		mvDthCoeff := ratMul(centerV, r2)
+		mv := intervalScale(intervalAdd(pointInterval(mvConst), intervalScale(dth, mvDthCoeff)), big.NewRat(1, 2))
+
+		return mu, mv, true
+	default:
+		return ratInterval{}, ratInterval{}, false
 	}
 }
 
@@ -937,6 +1140,7 @@ func (ig *regionIntegrals) add(segment CurveSegment, plan freeformPlan, anchor P
 			return fmt.Errorf(`%w: a circle segment's CCW flag contradicts its range order`, ErrDegenerate)
 		}
 		areaProof, haveAreaProof := circularAreaInterval(segment, anchor)
+		muProof, mvProof, haveMomentProof := circularFirstMomentInterval(segment, anchor)
 		segment.Center = shiftPoint(segment.Center, anchor)
 		// The arrangement's normalized t is the angle 2π·t from +u
 		// (geom.BoundaryEdge); the recorded range order is the walk.
@@ -949,10 +1153,14 @@ func (ig *regionIntegrals) add(segment CurveSegment, plan freeformPlan, anchor P
 			circularSweepUpper(segment.TStart, segment.TEnd),
 			areaProof,
 			haveAreaProof,
+			muProof,
+			mvProof,
+			haveMomentProof,
 		)
 		return nil
 	case ArcSeg:
 		areaProof, haveAreaProof := circularAreaInterval(segment, anchor)
+		muProof, mvProof, haveMomentProof := circularFirstMomentInterval(segment, anchor)
 		segment.Center = shiftPoint(segment.Center, anchor)
 		segment.Start = shiftPoint(segment.Start, anchor)
 		segment.End = shiftPoint(segment.End, anchor)
@@ -973,6 +1181,9 @@ func (ig *regionIntegrals) add(segment CurveSegment, plan freeformPlan, anchor P
 			circularSweepUpper(segment.TStart, segment.TEnd),
 			areaProof,
 			haveAreaProof,
+			muProof,
+			mvProof,
+			haveMomentProof,
 		)
 		return nil
 	default:
@@ -1281,6 +1492,8 @@ func (ig *regionIntegrals) addCircular(
 	r, th0, th1, radiusUpper, sweepUpper float64,
 	areaProof ratInterval,
 	haveAreaProof bool,
+	muProof, mvProof ratInterval,
+	haveMomentProof bool,
 ) {
 	sin0, cos0 := math.Sincos(th0)
 	sin1, cos1 := math.Sincos(th1)
@@ -1339,12 +1552,18 @@ func (ig *regionIntegrals) addCircular(
 	if haveAreaProof {
 		areaBound = math.Min(areaBound, intervalFloatError(areaProof, area))
 	}
+	muBound := conservativeValueError(mu, muScale)
+	mvBound := conservativeValueError(mv, mvScale)
+	if haveMomentProof {
+		muBound = math.Min(muBound, intervalFloatError(muProof, mu))
+		mvBound = math.Min(mvBound, intervalFloatError(mvProof, mv))
+	}
 	// A circular integral's exact value carries π and trig terms, so it has no
 	// exact rational and the region's rational sum ends here.
 	ig.dropExact()
 	accumulateMoment(&ig.area, &ig.areaBound, area, areaBound)
-	accumulateMoment(&ig.mu, &ig.muBound, mu, conservativeValueError(mu, muScale))
-	accumulateMoment(&ig.mv, &ig.mvBound, mv, conservativeValueError(mv, mvScale))
+	accumulateMoment(&ig.mu, &ig.muBound, mu, muBound)
+	accumulateMoment(&ig.mv, &ig.mvBound, mv, mvBound)
 	accumulateMoment(&ig.muu, &ig.muuBound, muu, conservativeValueError(muu, muuScale))
 	accumulateMoment(&ig.muv, &ig.muvBound, muv, conservativeValueError(muv, muvScale))
 	accumulateMoment(&ig.mvv, &ig.mvvBound, mvv, conservativeValueError(mvv, mvvScale))

@@ -199,7 +199,7 @@ func TestChamferBoxAllConvexEdges(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, rep.Bodies, 1)
 	require.Nil(t, rep.Bodies[0].MinRadius, `a planar chamfer bevel is not a concave radius`)
-	require.False(t, rep.Trustworthy(), `the irrational bevel area carries a nonzero bound`)
+	require.True(t, rep.Trustworthy(), `the irrational bevel length's certified square-root bracket keeps the bound within default tolerance`)
 }
 
 func TestChamferRecipeAndRetire(t *testing.T) {
@@ -598,5 +598,5 @@ func TestChamferClearOfHoleBuilds(t *testing.T) {
 
 	rep, err := doc.Verify(t.Context())
 	require.NoError(t, err)
-	require.False(t, rep.Trustworthy(), `bounded analytic mass results need a nonzero tolerance`)
+	require.True(t, rep.Trustworthy(), `the certified square-root length bracket keeps the bound within default tolerance`)
 }

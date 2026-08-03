@@ -354,11 +354,31 @@ func runFilletCase(t *testing.T, fc filletCase, plan filletPlan, r float64) bool
 	// per rounded corner.
 	requireBlendCylinders(t, filleted, count, r)
 
-	// Zero-tolerance verification surfaces the bounded mass results.
+	// Default-tolerance verification never reads worse than Suspect: a built
+	// fillet is always a valid, watertight solid (item 2's own tessellation
+	// check already proves it), so nothing here can be Unsound or Violating.
+	// Which of the two remaining outcomes a corner gets depends on a
+	// floating-point fact of its own construction: where the blend arc's two
+	// endpoints land at the identical exact radius from the corner's offset
+	// intersection, the certified rational moment bracket applies and the
+	// centroid bound is tight enough to read Sound outright; where a sub-ulp
+	// construction residual leaves the two radii merely equal to machine
+	// precision (never exactly, in `big.Rat`), the bracket declines and the
+	// coarser magnitude-envelope bound stands, which is honestly too wide for
+	// the default tolerance and reads Suspect — never a wrong answer, only an
+	// unproven one.
 	rep, err := doc.Verify(t.Context())
 	require.NoError(t, err)
-	require.Equalf(t, decad.Suspect, rep.Status, "%s/%s has bounded mass results", fc.name, plan.name)
-	require.False(t, rep.Trustworthy())
+	require.Containsf(t, []decad.Status{decad.Sound, decad.Suspect}, rep.Status,
+		"%s/%s r=%g: a built fillet is never Unsound or Violating", fc.name, plan.name, r)
+	if rep.Status == decad.Suspect {
+		for _, d := range rep.Diagnostics {
+			require.Equalf(t, decad.DiagMeasurementBeyondTolerance, d.Code,
+				"%s/%s r=%g: the only Suspect reason is an honestly wide mass-property bound", fc.name, plan.name, r)
+			require.Containsf(t, []decad.ReadingKind{decad.ReadingArea, decad.ReadingCentroid, decad.ReadingBounds}, d.Reading,
+				"%s/%s r=%g: the wide bound is on area, centroid or bounds, never a survey or structural reading", fc.name, plan.name, r)
+		}
+	}
 
 	// A concave rectilinear fillet is the section's only concave curved feature,
 	// so the min-radius survey reads exactly the fillet radius.
