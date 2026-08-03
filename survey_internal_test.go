@@ -305,6 +305,7 @@ func TestRevolveLoopsCancellationIsBounded(t *testing.T) {
 }
 
 func TestCupWallCancellationCoversOffsetAuditAndReverse(t *testing.T) {
+	t.Parallel()
 	outer := manySegmentProfile(workPollInterval + 64)
 	cavity, err := offsetProfile(nil, outer, 1, 5)
 	require.NoError(t, err)

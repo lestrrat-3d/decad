@@ -195,6 +195,7 @@ func cleanTransversalPair(rng *rand.Rand) (abox, abox) {
 }
 
 func TestBooleanBoundSoundnessAxisAligned(t *testing.T) {
+	t.Parallel()
 	t.Logf("boolPropSeed=%#x", boolPropSeed)
 	rng := rand.New(rand.NewSource(boolPropSeed))
 	ops := []decad.OpKind{decad.OpUnion, decad.OpIntersect, decad.OpCut}
@@ -247,6 +248,7 @@ func TestBooleanBoundSoundnessAxisAligned(t *testing.T) {
 }
 
 func TestBooleanBoundSoundnessRotated(t *testing.T) {
+	t.Parallel()
 	t.Logf("boolPropSeed=%#x", boolPropSeed)
 	rng := rand.New(rand.NewSource(boolPropSeed + 1))
 	ops := []decad.OpKind{decad.OpUnion, decad.OpIntersect, decad.OpCut}
@@ -298,6 +300,7 @@ func TestBooleanBoundSoundnessRotated(t *testing.T) {
 }
 
 func TestBooleanAlgebraicIdentities(t *testing.T) {
+	t.Parallel()
 	t.Logf("boolPropSeed=%#x", boolPropSeed)
 	rng := rand.New(rand.NewSource(boolPropSeed + 2))
 
@@ -399,6 +402,7 @@ func degenerateBox(rng *rand.Rand) abox {
 }
 
 func TestBooleanDegenerateClusterSoundness(t *testing.T) {
+	t.Parallel()
 	t.Logf("boolPropSeed=%#x", boolPropSeed)
 	rng := rand.New(rand.NewSource(boolPropSeed + 3))
 	ops := []decad.OpKind{decad.OpUnion, decad.OpIntersect, decad.OpCut}
@@ -437,6 +441,7 @@ func TestBooleanDegenerateClusterSoundness(t *testing.T) {
 }
 
 func TestBooleanRefusalSoundnessTangentCylinder(t *testing.T) {
+	t.Parallel()
 	t.Logf("boolPropSeed=%#x", boolPropSeed)
 	rng := rand.New(rand.NewSource(boolPropSeed + 4))
 
@@ -534,6 +539,7 @@ func plateWithHoleBody(t *testing.T, doc *decad.Document, half, rHole, h float64
 }
 
 func TestBooleanRefusalConcaveHoleSpuriousContact(t *testing.T) {
+	t.Parallel()
 	// The unsoundness the depth discriminator closes: a solid plug sits inside a
 	// plate's circular through-hole with a TRUE positive radial gap, but the
 	// tessellation chords the concave hole wall INWARD (a chord lies inside the

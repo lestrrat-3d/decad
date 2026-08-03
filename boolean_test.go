@@ -394,6 +394,7 @@ func TestIntersectDisjointIsEmpty(t *testing.T) {
 }
 
 func TestCutDrillsHole(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	plate := boxBody(t, doc, 0, 0, 20, 20, 8)
 	// An off-center hole so the tool circle lands wholly inside one cap
@@ -556,6 +557,7 @@ func TestBooleanRejections(t *testing.T) {
 }
 
 func TestBooleanBoundComposition(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	plate := boxBody(t, doc, 0, 0, 20, 20, 8)
 	tool := translated(t, diskBody(t, doc, 14, 6, 2), 0, 0, -6)
@@ -592,6 +594,7 @@ func TestBooleanBoundComposition(t *testing.T) {
 // the chord tolerance the next pair derives from its own diameter, so a result
 // whose bound fits chains straight back in — twice here (boolean.go, core §8).
 func TestBooleanChainsWithinHeldBound(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	plate := boxBody(t, doc, 0, 0, 20, 20, 8)
 	tool := translated(t, diskBody(t, doc, 14, 6, 2), 0, 0, -6)
@@ -644,6 +647,7 @@ func TestUnionCupOperand(t *testing.T) {
 }
 
 func TestFacetedPlaced(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	plate := boxBody(t, doc, 0, 0, 20, 20, 8)
 	tool := translated(t, diskBody(t, doc, 14, 6, 2), 0, 0, -6)
@@ -669,6 +673,7 @@ func TestFacetedPlaced(t *testing.T) {
 }
 
 func TestBooleanRecipeRoundTrip(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	plate := boxBody(t, doc, 0, 0, 20, 20, 8)
 	tool := translated(t, diskBody(t, doc, 14, 6, 3), 0, 0, -6)
@@ -685,6 +690,7 @@ func TestBooleanRecipeRoundTrip(t *testing.T) {
 }
 
 func TestBooleanVerifyUsesProvenToleranceBound(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	plate := boxBody(t, doc, 0, 0, 20, 20, 8)
 	tool := translated(t, diskBody(t, doc, 14, 6, 2), 0, 0, -6)
@@ -715,6 +721,7 @@ func TestBooleanVerifyUsesProvenToleranceBound(t *testing.T) {
 }
 
 func TestFacetedTessellateAndExport(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	plate := boxBody(t, doc, 0, 0, 20, 20, 8)
 	// A centered hole: the tool circle crosses the cap facets' shared
@@ -745,6 +752,7 @@ func TestFacetedTessellateAndExport(t *testing.T) {
 }
 
 func TestCurvedRimLengthRefuses(t *testing.T) {
+	t.Parallel()
 	// A hole drilled by a cylindrical tool leaves boolean rims on a curved
 	// source: their chord-chain length provably understates the true rim,
 	// no chord bound covers the excess, and Length refuses. Straight rims
@@ -997,6 +1005,7 @@ func TestUnionRejectsKnifeEdgeGraze(t *testing.T) {
 }
 
 func TestBooleanRimVertexBoundCoversTrimAmplification(t *testing.T) {
+	t.Parallel()
 	// Two Ø10 prisms 9.9 mm apart: their walls cross at a shallow angle, so a rim
 	// vertex — which sits at the crossing of two chord PLANES, not on either
 	// surface — is displaced from the TRUE rim by (δA + δB)/sin θ, not by δ. The
@@ -1028,6 +1037,7 @@ func TestBooleanRimVertexBoundCoversTrimAmplification(t *testing.T) {
 }
 
 func TestBooleanAreaBoundsCoverShallowCrossing(t *testing.T) {
+	t.Parallel()
 	// The intersection of two parallel-axis circular prisms is a prism over the
 	// 2-D lens, so its true area and volume are closed form. At a 9.99 mm centre
 	// distance the two Ø10 walls cross at a very shallow angle: the rim moves far
@@ -1109,6 +1119,7 @@ func TestFacetedPlacedFarFromOriginBoundHolds(t *testing.T) {
 }
 
 func TestFacetedBoxBoundIsA3DRadius(t *testing.T) {
+	t.Parallel()
 	// Box.Min and Box.Max are POSITIONS, and Bound is the error bound on them:
 	// a 3-D radius, not a per-axis extent. The held extreme sits one chord
 	// displacement inside the truth on EVERY axis at once, so the per-coordinate

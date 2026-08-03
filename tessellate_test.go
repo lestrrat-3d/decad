@@ -106,6 +106,7 @@ func TestTessellatePlate(t *testing.T) {
 }
 
 func TestTessellateFacetedToleranceBoundary(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	plate := boxBody(t, doc, 0, 0, 20, 20, 8)
 	tool := translated(t, diskBody(t, doc, 10, 10, 2), 0, 0, -6)
@@ -139,6 +140,7 @@ func TestTessellateFacetedToleranceBoundary(t *testing.T) {
 }
 
 func TestTessellatePayloadClasses(t *testing.T) {
+	t.Parallel()
 	t.Run("prism", func(t *testing.T) {
 		mesh, err := holedPlateBody(t).Tessellate(units.Millimeters(1))
 		require.NoError(t, err)
