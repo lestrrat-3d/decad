@@ -489,7 +489,7 @@ func TestClearancePolyBracketContainsTruth(t *testing.T) {
 
 			report, err := doc.Verify(t.Context(), decad.WithClearances())
 			require.NoError(t, err)
-			require.Equal(t, decad.Suspect, report.Status)
+			require.Equal(t, decad.Sound, report.Status)
 			require.Len(t, report.Clearances, 1)
 			row := report.Clearances[0]
 			lo := row.Gap.Value.Mag() - row.Gap.Bound.Mag()

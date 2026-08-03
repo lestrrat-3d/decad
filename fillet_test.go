@@ -299,7 +299,7 @@ func TestFilletBoxAllConvexEdges(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, rep.Bodies, 1)
 	require.Nil(t, rep.Bodies[0].MinRadius, `a convex fillet is not a concave feature`)
-	require.False(t, rep.Trustworthy(), `bounded circular mass results need a nonzero tolerance`)
+	require.True(t, rep.Trustworthy(), `the certified circular moment bracket keeps the bound within default tolerance`)
 }
 
 func TestFilletRecipeAndRetire(t *testing.T) {
@@ -667,7 +667,7 @@ func TestFilletClearOfHoleBuilds(t *testing.T) {
 
 	rep, err := doc.Verify(t.Context())
 	require.NoError(t, err)
-	require.False(t, rep.Trustworthy(), `bounded circular mass results need a nonzero tolerance`)
+	require.True(t, rep.Trustworthy(), `the certified circular moment bracket keeps the bound within default tolerance`)
 }
 
 // plateWithDiskHole extrudes a 100×100 plate with a circular hole of radius rho
@@ -741,7 +741,7 @@ func TestFilletHoleWellInsideRoundedLoopBuilds(t *testing.T) {
 
 	rep, err := doc.Verify(t.Context())
 	require.NoError(t, err)
-	require.False(t, rep.Trustworthy(), `bounded circular mass results need a nonzero tolerance`)
+	require.True(t, rep.Trustworthy(), `the certified circular moment bracket keeps the bound within default tolerance`)
 }
 
 // scaledDiskInCornerFillet builds a k-scaled plate whose (0,0) outer corner is

@@ -107,8 +107,8 @@ func TestWallWedgePrismNoWall(t *testing.T) {
 	require.NoError(t, err)
 	br := report.Bodies[0]
 	require.Nil(t, br.MinWallThickness)
-	require.Equal(t, decad.Suspect, br.Status)
-	require.False(t, report.Trustworthy())
+	require.Equal(t, decad.Sound, br.Status)
+	require.True(t, report.Trustworthy())
 }
 
 func TestWallConeNoWall(t *testing.T) {
@@ -156,7 +156,7 @@ func TestWallAnnularPrism(t *testing.T) {
 	report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(1)))
 	require.NoError(t, err)
 	requireWall(t, report.Bodies[0], 5)
-	require.Equal(t, decad.Suspect, report.Status)
+	require.Equal(t, decad.Sound, report.Status)
 
 	report, err = doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(6)))
 	require.NoError(t, err)
@@ -189,7 +189,7 @@ func TestWallDraftAllowanceBoundary(t *testing.T) {
 		decad.WithMinWallThickness(units.Millimeters(1.2), decad.WithDraftAllowance(units.Degrees(14))))
 	require.NoError(t, err)
 	require.Nil(t, report.Bodies[0].MinWallThickness)
-	require.Equal(t, decad.Suspect, report.Status)
+	require.Equal(t, decad.Sound, report.Status)
 }
 
 func TestWallKnifeEdgeExactZero(t *testing.T) {
@@ -386,7 +386,7 @@ func TestUndercutsVerticalHoleClear(t *testing.T) {
 	br := report.Bodies[0]
 	require.NotNil(t, br.Undercuts)
 	require.Empty(t, br.Undercuts)
-	require.Equal(t, decad.Suspect, br.Status)
+	require.Equal(t, decad.Sound, br.Status)
 }
 
 // holePlate extrudes a 100×60×8 plate with a Ø20 through hole at (70, 30).
@@ -424,8 +424,8 @@ func TestMinRadiusHolePlate(t *testing.T) {
 	require.NotNil(t, br.MinRadius)
 	require.Equal(t, decad.Exact, br.MinRadius.Exactness)
 	require.True(t, br.MinRadius.Value.Equal(units.Millimeters(10), 1e-9))
-	require.Equal(t, decad.Suspect, br.Status)
-	require.False(t, report.Trustworthy())
+	require.Equal(t, decad.Sound, br.Status)
+	require.True(t, report.Trustworthy())
 }
 
 func TestMinRadiusPlainBlockNil(t *testing.T) {
@@ -471,7 +471,7 @@ func TestWallHolePlateReadsThickness(t *testing.T) {
 	report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(1)))
 	require.NoError(t, err)
 	requireWall(t, report.Bodies[0], 8)
-	require.Equal(t, decad.Suspect, report.Status)
+	require.Equal(t, decad.Sound, report.Status)
 }
 
 func TestSurveysAnsweredTogether(t *testing.T) {

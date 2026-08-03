@@ -775,6 +775,9 @@ func walkOf(seg CurveSegment, work *freeformWork) (segmentWalk, error) {
 			circularSweepUpper(seg.TStart, seg.TEnd),
 		)
 		w.closed = math.Abs(math.Abs(th1-th0)-2*math.Pi) < 1e-12
+		if iv, ok := circularLengthInterval(seg); ok {
+			w.lengthBound = math.Min(w.lengthBound, intervalFloatError(iv, w.length))
+		}
 		return w, nil
 	case ArcSeg:
 		radius := math.Hypot(seg.Start.U-seg.Center.U, seg.Start.V-seg.Center.V)
@@ -784,7 +787,7 @@ func walkOf(seg CurveSegment, work *freeformWork) (segmentWalk, error) {
 		if sweep <= 0 {
 			sweep += 2 * math.Pi
 		}
-		return circularWalk(
+		w := circularWalk(
 			seg.Center.U,
 			seg.Center.V,
 			radius,
@@ -792,7 +795,11 @@ func walkOf(seg CurveSegment, work *freeformWork) (segmentWalk, error) {
 			a0+seg.TEnd*sweep,
 			arcRadiusUpper(seg),
 			circularSweepUpper(seg.TStart, seg.TEnd),
-		), nil
+		)
+		if iv, ok := circularLengthInterval(seg); ok {
+			w.lengthBound = math.Min(w.lengthBound, intervalFloatError(iv, w.length))
+		}
+		return w, nil
 	default:
 		if !isFreeformSegment(seg) {
 			return segmentWalk{}, fmt.Errorf(`%w: this evaluator sweeps profiles of line, arc, circle and Tier A free-form segments only; the profile has a %T segment it cannot sweep into a side face yet`, ErrUnsupported, seg)
@@ -925,7 +932,21 @@ func lineWalkBounds(seg LineSeg, held float64) (float64, float64, float64) {
 	if !exact {
 		upper = math.Nextafter(upper, math.Inf(1))
 	}
-	return conservativeValueError(held, upper), upper, coordUpper
+	bound := math.Min(conservativeValueError(held, upper), sqrtIntervalError(lengthSquared, held))
+	return bound, upper, coordUpper
+}
+
+// sqrtIntervalError proves |held-sqrt(lengthSquared)| from the
+// directed-rounding square root bracket (ratSqrtDown/ratSqrtUp,
+// spline_length.go), assuming no ulp contract from Hypot or Sqrt. It returns
+// +Inf when the bracket cannot be built (a non-finite endpoint), so a
+// math.Min against it can only ever keep the caller's own bound.
+func sqrtIntervalError(lengthSquared *big.Rat, held float64) float64 {
+	lo, hi := floatRat(ratSqrtDown(lengthSquared)), floatRat(ratSqrtUp(lengthSquared))
+	if lo == nil || hi == nil {
+		return math.Inf(1)
+	}
+	return intervalFloatError(interval(lo, hi), held)
 }
 
 func ratL1Upper(values ...*big.Rat) float64 {
