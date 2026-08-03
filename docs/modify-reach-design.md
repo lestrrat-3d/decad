@@ -622,10 +622,10 @@ reaches only the analytic bodies at the start of a chain.
 |---|---|---|---|---|
 | **DX1** | mass properties / bounds | existing bounded path | bounded analytic patch integrals | bounded slab-region sums |
 | **DX2** | topology / structural Verify | existing builder | payload builder | slab-region union builder |
-| **DX3** | `Tessellate` / STL / OBJ | waits on revolve tessellator; feature itself still builds | required patch tessellator | required slab-region tessellator |
+| **DX3** | `Tessellate` / STL / OBJ | waits on revolve tessellator; feature itself still builds | required patch tessellator; staged for the cap-loop chamfer, whose asked reading is `ErrUnsupported` | required slab-region tessellator |
 | **DX4** | mesh boolean | available once DX3 exists | available once DX3 exists | available once DX3 exists |
 | **DX5** | `ThroughAll` directional extent | existing | analytic patch extrema | union of slab-region extents |
-| **DX6** | clearance | existing revolve boundary reader | add trimmed patch faces to boundary model; undecidable cells stay `Suspect` | union exposed slab faces; never include cancelled interfaces |
+| **DX6** | clearance | existing revolve boundary reader | add trimmed patch faces to boundary model; undecidable cells stay `Suspect`; staged for the cap-loop chamfer, whose pairs read `Suspect` unless boxes already decide them | union exposed slab faces; never include cancelled interfaces |
 | **DX7** | undercut | existing revolve survey | exact normal ranges per patch | exact normal ranges per exposed face |
 | **DX8** | minimum radius | existing meridian survey | minimum concave principal radius over sphere/torus/cylinder/cone patches | section arcs + exposed rim geometry |
 | **DX9** | minimum wall thickness | existing revolve rewrite survey | staged: asked reading is `Suspect` | staged: asked reading is `Suspect` |
@@ -637,6 +637,23 @@ asked wall survey is undecided. No open implementation claim remains.
 
 Clearance may also return undecided for surface cells its certified kernel does
 not solve. This is the existing `Verify` contract, not a modify-build refusal.
+
+DX3 and DX6 are staged for the cap-loop chamfer, and §14's rule that a PR may
+leave a DX question staged only where this table says so is what these two cells
+now say. Both remain required for the cap-loop fillet.
+
+The chamfer's DX3 reading is `ErrUnsupported` through the unknown-payload path.
+A patch tessellator must chord the cap-level offset boundary and the side-level
+original boundary into one strip, and the two may need different sample
+densities; a strip whose densities disagree is not watertight, and a mesh that
+is not watertight is a wrong answer rather than a coarse one.
+
+The chamfer's DX6 reading is `Suspect` for any pair its bounding boxes do not
+already decide, which is the same staging the cup payload took before its own
+clearance model landed. A trimmed patch face admitted into the certified kernel
+without a proof of its trim yields a false disjointness certificate, and a false
+certificate is worse than an undecided pair: `Verify` would report a clearance
+the geometry does not have.
 
 ## 13. Required tests
 
