@@ -2,6 +2,7 @@ package decad
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -182,6 +183,26 @@ func TestRecipeUnmarshalStructuralCollectionLimits(t *testing.T) {
 		got := original
 		err := json.Unmarshal([]byte(`{"steps":[{"op":"fillet","inputs":[0],"selectors":[{"kind":"edges","preds":[]}],"values":["1 mm","2 mm"]}]}`), &got)
 		requireRecipeLimitPath(t, err, "steps[0].values[1]", 0)
+		require.Equal(t, original, got)
+	})
+
+	t.Run("loft alignment exact limit", func(t *testing.T) {
+		elements := strings.TrimSuffix(strings.Repeat("0,", maxRecipeAlignmentPerStep), ",")
+		input := []byte(`{"steps":[{"op":"loft","opts":{"kind":"loft","alignment":[` + elements + `]}}]}`)
+		// The alignment array clears the decode-limit preflight at exactly
+		// maxRecipeAlignmentPerStep elements; profile2/plane2 are omitted
+		// here on purpose (LoftOpts.MISSING required fields fail typed
+		// decode independently of this preflight charge), so this only
+		// exercises the array-length gate itself.
+		err := preflightRecipeJSON(input, defaultRecipeDecodeLimits())
+		require.NoError(t, err)
+	})
+
+	t.Run("loft alignment one over", func(t *testing.T) {
+		got := original
+		elements := strings.TrimSuffix(strings.Repeat("0,", maxRecipeAlignmentPerStep), ",") + ",0"
+		err := json.Unmarshal([]byte(`{"steps":[{"op":"loft","opts":{"kind":"loft","alignment":[`+elements+`]}}]}`), &got)
+		requireRecipeLimitPath(t, err, fmt.Sprintf("steps[0].opts.alignment[%d]", maxRecipeAlignmentPerStep), 0)
 		require.Equal(t, original, got)
 	})
 }

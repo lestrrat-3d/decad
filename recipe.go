@@ -75,6 +75,22 @@ type ShellOpts struct {
 
 func (ShellOpts) stepOpts() {}
 
+// LoftOpts records a loft's second ("to") section and its per-loop
+// correspondence rotation (docs/loft-design.md §10). Step.Profile/Step.Plane
+// already carry the "from" section, so this variant carries only what those
+// fields cannot: Profile2 and Plane2 are required wire content, exactly as
+// ExtrudeOpts.Taper and ShellOpts.Sense are; Alignment is the one optional
+// field — its absence records every loop's offset as zero, never
+// distinguished from an explicit all-zero list. `OpLoft`, `Profile2`, and
+// `Plane2` are version-2 wire content (docs/recipe-replay-design.md §2.1).
+type LoftOpts struct {
+	Profile2  ProfileRecord `json:"profile2"`
+	Plane2    PlaneRecord   `json:"plane2"`
+	Alignment []int         `json:"alignment,omitempty"`
+}
+
+func (LoftOpts) stepOpts() {}
+
 // OpKind names the operation a Step records.
 type OpKind int
 
@@ -103,6 +119,10 @@ const (
 	// OpPlacedCopy re-registers a body under a recorded rigid placement without
 	// consuming the source.
 	OpPlacedCopy
+	// OpLoft rules a solid between two recorded profiles on distinct planes.
+	// Appended after OpPlacedCopy rather than renumbered — the wire codec goes
+	// through opKindNames, never the constant's ordinal.
+	OpLoft
 )
 
 // opKindNames is the stable wire vocabulary; the constant order is never a
@@ -119,6 +139,7 @@ var opKindNames = map[OpKind]string{
 	OpPlaced:     "placed",
 	OpDuplicate:  "duplicate",
 	OpPlacedCopy: "placed_copy",
+	OpLoft:       "loft",
 }
 
 // String renders the op kind for diagnostics.
@@ -187,6 +208,7 @@ type Step struct {
 // stepOptsKind and the codec below: StepOpts is a closed set decad owns.
 const optsKindExtrude = "extrude"
 const optsKindShell = "shell"
+const optsKindLoft = "loft"
 
 type jsonExtrudeOpts struct {
 	Taper *units.Value `json:"taper"`
@@ -194,6 +216,16 @@ type jsonExtrudeOpts struct {
 
 type jsonShellOpts struct {
 	Sense *ShellSense `json:"sense"`
+}
+
+// jsonLoftOpts decodes through pointer payload fields for Profile2/Plane2 —
+// the same pattern jsonExtrudeOpts/jsonShellOpts use — so a missing or
+// explicit-null required field never decodes into a zero-value second
+// section. Alignment is the one optional field.
+type jsonLoftOpts struct {
+	Profile2  *ProfileRecord `json:"profile2"`
+	Plane2    *PlaneRecord   `json:"plane2"`
+	Alignment []int          `json:"alignment,omitempty"`
 }
 
 // marshalStepOpts encodes one options record as its tagged object. Pointer
@@ -212,11 +244,19 @@ func marshalStepOpts(o StepOpts) ([]byte, error) {
 		}
 		o = *p
 	}
+	if p, ok := o.(*LoftOpts); ok {
+		if p == nil {
+			return nil, fmt.Errorf(`decad: nil step options`)
+		}
+		o = *p
+	}
 	switch o := o.(type) {
 	case ExtrudeOpts:
 		return marshalTagged(optsKindExtrude, o)
 	case ShellOpts:
 		return marshalTagged(optsKindShell, o)
+	case LoftOpts:
+		return marshalTagged(optsKindLoft, o)
 	default:
 		return nil, fmt.Errorf(`decad: unencodable step options type %T`, o)
 	}
@@ -251,6 +291,18 @@ func unmarshalStepOpts(data []byte) (StepOpts, error) {
 			return nil, prependCodecPath(fmt.Errorf(`decad: shell options are missing sense`), "sense")
 		}
 		return ShellOpts{Sense: *wire.Sense}, nil
+	case optsKindLoft:
+		var wire jsonLoftOpts
+		if err := json.Unmarshal(data, &wire); err != nil {
+			return nil, codecJSONErrorAt(data, &wire, fmt.Errorf(`decad: failed to decode loft options: %w`, err))
+		}
+		if wire.Profile2 == nil {
+			return nil, prependCodecPath(fmt.Errorf(`decad: loft options are missing profile2`), "profile2")
+		}
+		if wire.Plane2 == nil {
+			return nil, prependCodecPath(fmt.Errorf(`decad: loft options are missing plane2`), "plane2")
+		}
+		return LoftOpts{Profile2: *wire.Profile2, Plane2: *wire.Plane2, Alignment: wire.Alignment}, nil
 	case "":
 		return nil, prependCodecPath(fmt.Errorf(`decad: step options are missing their kind tag`), "kind")
 	default:
@@ -343,6 +395,7 @@ const (
 	stepOptsNone stepOptsKind = iota
 	stepOptsExtrude
 	stepOptsShell
+	stepOptsLoft
 )
 
 type operationShape struct {
@@ -402,6 +455,14 @@ func shapeForOperation(op OpKind) (operationShape, bool) {
 		return operationShape{minInputs: 1, maxInputs: 1}, true
 	case OpPlacedCopy:
 		return operationShape{minInputs: 1, maxInputs: 1, placement: true}, true
+	case OpLoft:
+		return operationShape{
+			minInputs: 0,
+			maxInputs: 0,
+			profile:   true,
+			plane:     true,
+			opts:      stepOptsLoft,
+		}, true
 	default:
 		return operationShape{}, false
 	}
@@ -676,6 +737,13 @@ func validStepOptsKind(opts StepOpts, want stepOptsKind) bool {
 		case ShellOpts:
 			return true
 		case *ShellOpts:
+			return o != nil
+		}
+	case stepOptsLoft:
+		switch o := opts.(type) {
+		case LoftOpts:
+			return true
+		case *LoftOpts:
 			return o != nil
 		}
 	}

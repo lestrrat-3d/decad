@@ -16,11 +16,11 @@ func TestRecipeWireCanonicalEmptyEnvelope(t *testing.T) {
 		data, err := json.Marshal(recipe)
 		require.NoError(t, err)
 		require.JSONEq(t,
-			`{"format":"decad.recipe","version":1,"steps":[]}`,
+			`{"format":"decad.recipe","version":2,"steps":[]}`,
 			string(data),
 		)
 		require.Equal(t,
-			`{"format":"decad.recipe","version":1,"steps":[]}`,
+			`{"format":"decad.recipe","version":2,"steps":[]}`,
 			string(data),
 			`canonical field order and empty-array normalization are stable`,
 		)
@@ -40,7 +40,7 @@ func TestRecipeWireLegacyV1Compatibility(t *testing.T) {
 		data, err := json.Marshal(recipe)
 		require.NoError(t, err)
 		require.Equal(t,
-			`{"format":"decad.recipe","version":1,"steps":[]}`,
+			`{"format":"decad.recipe","version":2,"steps":[]}`,
 			string(data),
 			`legacy version 1 always re-encodes canonically`,
 		)
@@ -78,9 +78,9 @@ func TestRecipeWireRejectsInvalidEnvelopes(t *testing.T) {
 		{name: "format only", input: `{"format":"decad.recipe","steps":[]}`, target: decad.ErrInvalidRecipe},
 		{name: "version only", input: `{"version":1,"steps":[]}`, target: decad.ErrInvalidRecipe},
 		{name: "wrong format", input: `{"format":"other","version":1,"steps":[]}`, target: decad.ErrInvalidRecipe},
-		{name: "unknown version", input: `{"format":"decad.recipe","version":2,"steps":[]}`, target: decad.ErrUnsupportedRecipeVersion},
+		{name: "unknown version", input: `{"format":"decad.recipe","version":3,"steps":[]}`, target: decad.ErrUnsupportedRecipeVersion},
 		{name: "null version", input: `{"format":"decad.recipe","version":null,"steps":[]}`, target: decad.ErrInvalidRecipe, notTarget: decad.ErrUnsupportedRecipeVersion},
-		{name: "unknown version before null steps", input: `{"format":"decad.recipe","version":2,"steps":null}`, target: decad.ErrUnsupportedRecipeVersion, notTarget: decad.ErrInvalidRecipe},
+		{name: "unknown version before null steps", input: `{"format":"decad.recipe","version":3,"steps":null}`, target: decad.ErrUnsupportedRecipeVersion, notTarget: decad.ErrInvalidRecipe},
 		{name: "null versioned steps", input: `{"format":"decad.recipe","version":1,"steps":null}`, target: decad.ErrInvalidRecipe},
 		{name: "non-array steps", input: `{"format":"decad.recipe","version":1,"steps":{}}`, target: decad.ErrInvalidRecipe},
 		{name: "trailing value", input: `{"steps":[]} true`},
