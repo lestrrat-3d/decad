@@ -237,12 +237,18 @@ func (m matchedCorner) String() string {
 // selectedEdgeContext renders one selected edge as its result ordinal plus the
 // geometry that identifies it.
 //
-// A full circle's edge has its start and end vertex coincide (topology.go), so
-// the from/to form renders it "from (p) to (p)" — correct, but indistinguishable
-// from a genuinely collapsed edge. A Circle3 therefore names itself a closed
-// circle and reports the centre and radius no endpoint pair can carry; every
-// other curve keeps the from/to form, so coincident endpoints there still read
-// as the zero-length edge they are. Coordinates go through renderVec, so
+// Closure is decided by shared vertex identity, never by coordinates: both
+// builders that mint a closed edge intern one *Vertex for its two ends
+// (boolean_body.go's vertexOf memoizes by mesh-vertex index; extrude.go
+// assigns a full circle's edge the same start and end vertex), so the test is
+// the pointer comparison edge.start == edge.end. A Circle3 additionally
+// reports the centre and radius no endpoint pair can carry, and falls under
+// that same closed case; every other closed curve — including a
+// boolean-built body's FacetedCurve rim — renders "closed through (p)"
+// instead of repeating the one point as if it were two. Two DISTINCT
+// vertices that merely sit at one position are a genuinely collapsed edge,
+// not a closed one, and still render "from (p) to (p)" — that is the
+// zero-length edge they are. Coordinates go through renderVec, so
 // value-equal geometry renders identically.
 func selectedEdgeContext(ordinal int, edge *Edge) string {
 	if edge == nil || edge.start == nil || edge.end == nil {
@@ -251,6 +257,9 @@ func selectedEdgeContext(ordinal int, edge *Edge) string {
 	if c, ok := edge.curve.(Circle3); ok {
 		return fmt.Sprintf(`selected edge[%d] closed circle through (%s), centre (%s), radius %s`,
 			ordinal, renderVec(edge.start.position), renderVec(c.Center), c.Radius)
+	}
+	if edge.start == edge.end {
+		return fmt.Sprintf(`selected edge[%d] closed through (%s)`, ordinal, renderVec(edge.start.position))
 	}
 	return fmt.Sprintf(`selected edge[%d] from (%s) to (%s)`, ordinal,
 		renderVec(edge.start.position), renderVec(edge.end.position))

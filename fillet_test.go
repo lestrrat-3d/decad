@@ -947,4 +947,24 @@ func TestModifyRefusalRendersAClosedCircleAsClosed(t *testing.T) {
 		`a non-circular edge keeps the from/to form`)
 	require.NotContains(t, err.Error(), `closed circle`,
 		`a straight edge is never described as a circle`)
+
+	// A boolean-built body's closed rim edges carry FacetedCurve, not Circle3,
+	// so the Circle3 branch above never fires for them; closure still comes
+	// from the edge's own shared start/end vertex, not from its curve type.
+	// booleanRimBody's bar crosses the disc strictly between its caps, so both
+	// cap rims survive the boolean untouched.
+	_, err = booleanRimBody(t, decad.New()).Fillet(decad.Edges(), units.Millimeters(1))
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+	require.NotContains(t, err.Error(), `closed circle`,
+		`every rim of a boolean-built body is a FacetedCurve, so the Circle3 branch never fires`)
+	require.ErrorContains(t, err, `selected edge[0] closed through (10,0,0)`,
+		`an untouched boolean rim renders closed from shared vertex identity, not a Circle3 check`)
+	require.NotContains(t, err.Error(), `from (10,0,0) to (10,0,0)`,
+		`the closed rim never renders as a zero-length edge`)
+	require.ErrorContains(t, err, `selected edge[5] closed through (9.996425888107836,0.2673377331530885,20)`,
+		`every untouched rim in the selection renders closed, not just the first`)
+	require.NotContains(t, err.Error(), `from (9.996425888107836,0.2673377331530885,20) to (9.996425888107836,0.2673377331530885,20)`,
+		`no untouched boolean rim renders as a zero-length edge`)
+	require.Contains(t, err.Error(), `selected edge[1] from (9.164221314665161,4,5) to (9.164221314665161,-4,5)`,
+		`an open edge of the same body keeps the from/to form`)
 }

@@ -36,6 +36,23 @@ func diskBody(t *testing.T, doc *decad.Document, cx, cy, r float64) *decad.Body 
 	return body
 }
 
+// booleanRimBody unions a radius-10 disc with a bar that crosses its wall
+// strictly between the caps, so the result is a boolean-built body whose two
+// cap rims are untouched closed edges carrying FacetedCurve rather than
+// Circle3. The bar is what keeps the fixture cheap: the mesh boolean tests
+// every facet of one operand against every facet of the other, so a second
+// disc — whose circle chords into roughly a thousand facets — costs about an
+// order of magnitude more than a bar's dozen, while leaving the same two rims
+// whole.
+func booleanRimBody(t *testing.T, doc *decad.Document) *decad.Body {
+	t.Helper()
+	disc := diskBody(t, doc, 0, 0, 10)
+	bar := translated(t, boxBody(t, doc, 5, -4, 25, 4, 10), 0, 0, 5)
+	union, err := decad.Union(disc, bar)
+	require.NoError(t, err)
+	return union
+}
+
 // wedgePrism extrudes the triangle through the three plane-local points to a
 // prism symmetric about its sketch plane: the sweep of the first point is a
 // knife edge, and the other two share the corner's opposite side.
