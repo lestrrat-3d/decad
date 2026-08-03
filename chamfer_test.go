@@ -564,25 +564,23 @@ func TestChamferNonPrismReceiverBooleanBuilt(t *testing.T) {
 	// above never fires for them. Closure still comes from the edge's own
 	// shared start/end vertex, so each untouched rim renders "closed through
 	// (p)" rather than the from/to form a genuinely collapsed edge would.
-	// Lifting the tool disc keeps the two discs' caps from sharing a face — a
-	// coplanar pair is refused by the boolean itself, for an unrelated
-	// reason — while still leaving each disc's far cap rim untouched.
-	doc := decad.New()
-	target := diskBody(t, doc, 0, 0, 10)
-	tool := translated(t, diskBody(t, doc, 15, 0, 10), 0, 0, 3)
-	union, err := decad.Union(target, tool)
-	require.NoError(t, err)
+	// booleanRimBody's bar crosses the disc strictly between its caps, so both
+	// cap rims survive the boolean untouched.
 	sel := decad.Edges()
-	_, err = union.Chamfer(sel, units.Millimeters(1))
+	_, err := booleanRimBody(t, decad.New()).Chamfer(sel, units.Millimeters(1))
 	require.ErrorIs(t, err, decad.ErrUnsupported, `this evaluator chamfers a straight prism only`)
-	require.ErrorContains(t, err, `selected edge[4] closed through (10,0,0)`,
+	require.NotContains(t, err.Error(), `closed circle`,
+		`every rim of a boolean-built body is a FacetedCurve, so the Circle3 branch never fires`)
+	require.ErrorContains(t, err, `selected edge[0] closed through (10,0,0)`,
 		`an untouched boolean rim renders closed from shared vertex identity, not a Circle3 check`)
 	require.NotContains(t, err.Error(), `from (10,0,0) to (10,0,0)`,
 		`the closed rim never renders as a zero-length edge`)
-	require.ErrorContains(t, err, `selected edge[7] closed through (7.487209066866568,6.599846391775197,23)`,
+	require.ErrorContains(t, err, `selected edge[5] closed through (9.996425888107836,0.2673377331530885,20)`,
 		`every untouched rim in the selection renders closed, not just the first`)
-	require.NotContains(t, err.Error(), `from (7.487209066866568,6.599846391775197,23) to (7.487209066866568,6.599846391775197,23)`,
+	require.NotContains(t, err.Error(), `from (9.996425888107836,0.2673377331530885,20) to (9.996425888107836,0.2673377331530885,20)`,
 		`no untouched boolean rim renders as a zero-length edge`)
+	require.Contains(t, err.Error(), `selected edge[1] from (9.164221314665161,4,5) to (9.164221314665161,-4,5)`,
+		`an open edge of the same body keeps the from/to form`)
 }
 
 func TestChamferBreaksNestingRefused(t *testing.T) {
