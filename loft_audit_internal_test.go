@@ -215,3 +215,45 @@ func TestLoftCrossingAuditCancellation(t *testing.T) {
 	err := loftCrossingAudit(budget, verts, tris)
 	require.ErrorIs(t, err, context.Canceled)
 }
+
+// TestLoftCrossingAuditPollsAfterFinalPair proves the audit observes a context
+// cancelled after the S6 boundary check even when no step call ever reaches a
+// poll. The budget here mirrors newWorkBudget's real semantics — step observes
+// the context only on every workPollInterval-th call, err observes it
+// unconditionally — so three triangles (three S6 steps, three S7 pair steps)
+// finish the whole audit without a single step poll landing. The trailing
+// budget.err() after S7 is the only thing that can return ctx.Err() here.
+func TestLoftCrossingAuditPollsAfterFinalPair(t *testing.T) {
+	verts, tris := syntheticLoftTriangles(3)
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	const finalPairStep = 6 // 3 triangles in S6, then 3 pairs in S7
+	steps, errs := 0, 0
+	budget := &workBudget{
+		stepFn: func() error {
+			steps++
+			if steps == finalPairStep {
+				cancel()
+			}
+			if steps%workPollInterval == 0 {
+				return ctx.Err()
+			}
+			return nil
+		},
+		errFn: func() error {
+			errs++
+			return ctx.Err()
+		},
+	}
+
+	err := loftCrossingAudit(budget, verts, tris)
+	require.ErrorIs(t, err, context.Canceled,
+		"a context cancelled on the final S7 step must come back from the audit")
+	require.Equal(t, finalPairStep, steps,
+		"no step call may reach a poll at this size, so the trailing err is the only observer")
+	require.Equal(t, 3, errs,
+		"err runs at entry, at the S6 boundary, and once more after the S7 loops")
+	require.ErrorIs(t, ctx.Err(), context.Canceled)
+}

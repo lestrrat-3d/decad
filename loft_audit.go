@@ -181,7 +181,7 @@ func auditLoftPair(verts []r3.Vec, tris [][3]int, i, j int) error {
 // with the rest of the pre-commit cancellation path exactly as
 // docs/modify-design.md §5's audits already share one (fillet_audit.go);
 // step is called once per candidate (each triangle in S6, each pair in S7)
-// and err at every phase boundary.
+// and err at every phase boundary, the end of S7 among them.
 func loftCrossingAudit(budget *workBudget, verts []r3.Vec, tris [][3]int) error {
 	if err := budget.err(); err != nil {
 		return err
@@ -219,5 +219,20 @@ func loftCrossingAudit(budget *workBudget, verts []r3.Vec, tris [][3]int) error 
 			}
 		}
 	}
-	return nil
+
+	// The trailing poll is what closes the gap between S7's last step and this
+	// return: step observes the context only on the polling interval, so a
+	// small triangle set finishes every pair without one landing, while err
+	// polls unconditionally. It cannot fail an audit that legitimately
+	// completed — errFn is ctx.Err, and a live context yields nil.
+	//
+	// Cancellation is answered in two places, and this is only one of them.
+	// The audit kernel polls its own loops, which is what bounds the time
+	// spent inside a single expensive phase; the caller-facing contract — a
+	// cancelled operation leaves the receiver live and the recipe and document
+	// unchanged — is discharged at the commit edge by the entry point, the way
+	// fillet.go, chamfer.go and shell.go each check ctx.Err() immediately
+	// before Document.commit. Loft's own commit-edge check belongs to
+	// LoftContext.
+	return budget.err()
 }
