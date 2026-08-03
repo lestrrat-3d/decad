@@ -1006,6 +1006,14 @@ func shellWitness(sh *Shell) (r3.Vec, bool) {
 // addPrismFaces builds the prism's faces from its own payload, mirroring the
 // walk decomposition the evaluator built the topology from.
 func (g *bodyGeom) addPrismFaces(budget *workBudget, pp prismPayload) (bool, error) {
+	if pp.sectionDelta != 0 {
+		// The kernel's certificates are exact statements about the carriers it
+		// reads, so a section the payload only holds within a displacement of
+		// (docs/prism-boolean-design.md §7) is a payload it cannot model: no
+		// model, which leaves the pair undecided rather than certifying a gap
+		// against the wrong boundary.
+		return false, nil
+	}
 	loops, err := recordLoops(budget, pp.profile)
 	if err != nil {
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {

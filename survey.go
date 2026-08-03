@@ -192,6 +192,13 @@ func prismWall(budget *workBudget, pp prismPayload, alpha float64) (wallOutcome,
 	if err := wallBudgetErr(budget); err != nil {
 		return wallOutcome{}, err
 	}
+	if pp.sectionDelta != 0 {
+		// A spanning ball fitted to the RECORDED section is not a proof about a
+		// section that section is only within the payload's own displacement of
+		// (docs/prism-boolean-design.md §7), and the reading carries no bound to
+		// widen. Undecided, which reads Suspect — never a silent pass.
+		return wallOutcome{}, nil
+	}
 	loops, err := recordLoops(budget, pp.profile)
 	if err != nil {
 		return wallOutcome{}, err
@@ -600,6 +607,15 @@ func revolveUndercuts(b *Body, rp revolvePayload, pull r3.Vec) undercutOutcome {
 // hole wall, a notch — curves away from the material, and its radius is the
 // walk's own.
 func prismMinRadius(pp prismPayload) (radiusOutcome, bool) {
+	if pp.sectionDelta != 0 {
+		// The reading is a radius READ OFF the recorded section, and a payload
+		// carrying a section displacement (docs/prism-boolean-design.md §7)
+		// denotes a section its own record is only within that displacement of.
+		// The survey answers a measurement with no bound of its own, so it leaves
+		// the question undecided rather than publishing a radius for the wrong
+		// section.
+		return radiusOutcome{}, false
+	}
 	loops, err := recordLoops(nil, pp.profile)
 	if err != nil {
 		return radiusOutcome{}, false

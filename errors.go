@@ -86,8 +86,8 @@ var ErrNotSolid = errors.New("decad: body is not a solid")
 // self, or extent-less body) and for the retryable coarse-chording
 // tessellation refusal — a valid operand whose boolean output cannot be
 // chorded finely enough (a finer tolerance may clear it). A valid but
-// unclassifiable contact is [BooleanUnsupportedContact], never ErrDegenerate
-// (docs/api-design.md §8 / H2).
+// unclassifiable contact or analytic prism-arrangement refusal is
+// [BooleanUnsupportedContact], never ErrDegenerate (docs/api-design.md §8 / H2).
 var ErrDegenerate = errors.New("decad: degenerate input")
 
 // ErrBooleanFailed is returned when a boolean operation cannot produce a
@@ -128,12 +128,12 @@ var ErrResourceLimit = errors.New("decad: resource limit exceeded")
 // and rejected at the call — never silently approximated or narrowed — and a
 // rejected operation leaves the recipe and the document untouched. See
 // docs/evaluator-design.md §2. A public Union, Cut or Intersect wraps a valid
-// but unclassifiable contact in a [BooleanError] carrying
-// [BooleanUnsupportedContact], but an operand this evaluator cannot tessellate
-// at all (a revolve body, or a Faceted operand coarser than the pair tolerance)
-// is a capability limit reached before any contact — it passes through as a
-// plain ErrUnsupported, not a [BooleanError]. errors.Is(err, ErrUnsupported)
-// branches on both.
+// but unclassifiable contact or analytic prism-arrangement refusal in a
+// [BooleanError] carrying [BooleanUnsupportedContact], but an operand this
+// evaluator cannot tessellate at all (a revolve body, or a Faceted operand
+// coarser than the pair tolerance) is a capability limit reached before any
+// contact — it passes through as a plain ErrUnsupported, not a [BooleanError].
+// errors.Is(err, ErrUnsupported) branches on both.
 var ErrUnsupported = errors.New("decad: not supported by the current evaluator")
 
 // ErrInvalidRecipe is returned when stored recipe data violates the recipe
@@ -159,35 +159,38 @@ const (
 	// the operation asked for nothing; change the geometry or drop the call. The
 	// [BooleanError] wraps [ErrBooleanFailed].
 	BooleanEmpty BooleanErrorCode = iota
-	// BooleanUnsupportedContact is a VALID model whose operands meet in a contact
-	// this evaluator cannot classify from the tessellated chords: a curved-surface
-	// tangency or near-contact, a coplanar face-on-face overlap, a grazing edge,
-	// or an isolated-point pinch. The input names a real solid and the refusal is
-	// the evaluator's reach, so the [BooleanError] wraps [ErrUnsupported], never
-	// [ErrDegenerate]. Choose a construction that does not lean on a tangent
-	// contact, or wait for a later evaluator.
+	// BooleanUnsupportedContact is a VALID model whose boolean geometry reaches a
+	// limit: a tessellated curved-surface tangency or near-contact, a coplanar
+	// face-on-face overlap, a grazing edge, an isolated-point pinch, or an
+	// analytic prism-arrangement refusal wrapping [ErrUnsupported]. The input
+	// names a real solid and the refusal is the evaluator's reach, so the
+	// [BooleanError] wraps [ErrUnsupported], never [ErrDegenerate]. Choose a
+	// construction that does not lean on that limit, or wait for a later evaluator.
 	//
-	// The construction this most often costs is two bodies extruded from ONE
-	// sketch plane to one end plane whose footprints OVERLAP: their caps are
-	// coplanar by construction and share positive area, and a shared area is what
-	// the refusal reads. Coplanar caps on their own are not a contact — two such
-	// bodies standing apart in the plane share no cap area, and every boolean
-	// over them runs. What replaces the tangent contact is an INTERIOR overlap:
-	// no face pair coplanar, and each operand reaching into the other's interior,
-	// so every contact is a transversal crossing this evaluator does classify.
-	// Both operands span the same interval here, so a LATERAL displacement never
-	// reaches that state — moving one body sideways leaves its caps in the two
-	// planes the other's caps lie in, and the overlap stands wherever the
-	// footprints still meet. The displacement has to run ALONG the sweep, and the
-	// caller owns what it costs: it changes the enclosed solid, with an effect
-	// that depends on the operation and geometry. That displacement is necessary
-	// but insufficient when the profiles retain coplanar lateral faces:
-	// identical footprints still share lateral face area after their caps separate
-	// and return BooleanUnsupportedContact. The caller has to change the profile
-	// or otherwise prove that no face pair is coplanar. A displacement leaves a
-	// union's enclosed solid unchanged only when the moved operand is wholly
-	// inside the other body both before and after the displacement. Moving an
-	// operand into containment removes any former protruding volume.
+	// A co-directional, coplanar pair of analytic straight prisms takes Union's
+	// analytic reduction and can build. The mesh-path construction this most
+	// often costs applies to every other operation and to Union pairs outside
+	// that admitted class: two bodies extruded from ONE sketch plane to one end
+	// plane whose footprints OVERLAP. Their caps are coplanar by construction and
+	// share positive area, which the refusal reads. Coplanar caps on their own
+	// are not a contact — two such bodies standing apart in the plane share no cap
+	// area, and every boolean over them runs. What replaces the tangent contact is
+	// an INTERIOR overlap: no face pair coplanar, and each operand reaching into
+	// the other's interior, so every contact is a transversal crossing this
+	// evaluator does classify. Both operands span the same interval here, so a
+	// LATERAL displacement never reaches that state — moving one body sideways
+	// leaves its caps in the two planes the other's caps lie in, and the overlap
+	// stands wherever the footprints still meet. The displacement has to run
+	// ALONG the sweep, and the caller owns what it costs: it changes the enclosed
+	// solid, with an effect that depends on the operation and geometry. That
+	// displacement is necessary but insufficient when the profiles retain
+	// coplanar lateral faces: identical footprints still share lateral face area
+	// after their caps separate and return BooleanUnsupportedContact. The caller
+	// has to change the profile or otherwise prove that no face pair is coplanar.
+	// A displacement leaves a union's enclosed solid unchanged only when the
+	// moved operand is wholly inside the other body both before and after the
+	// displacement. Moving an operand into containment removes any former
+	// protruding volume.
 	BooleanUnsupportedContact
 	// BooleanEvaluatorFailure is an internal invariant break: the stitched
 	// boundary did not close, a split line was not found, a chain dangled. It is a
@@ -205,8 +208,9 @@ const (
 // be.Code is the fine branch.
 //
 // A valid but unclassifiable coplanar / tangent / grazing / isolated-point
-// contact is [BooleanUnsupportedContact]. [ErrDegenerate] stays reserved for a
-// genuinely malformed operand and for the retryable coarse-chording
+// contact, and an analytic prism-arrangement refusal wrapping
+// [ErrUnsupported], are [BooleanUnsupportedContact]. [ErrDegenerate] stays
+// reserved for a genuinely malformed operand and for the retryable coarse-chording
 // tessellation refusal; a whole-operand tessellation-staging [ErrUnsupported]
 // (a revolve operand, or a Faceted operand coarser than the pair tolerance)
 // passes through plain — none of these three is a BooleanError.

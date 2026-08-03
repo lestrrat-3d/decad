@@ -188,8 +188,10 @@ whose interval the step's own quantities determine. `ThroughAll` and
 far side of every body the sweep meets), so they are body-relative exactly
 like `ToFace`: all three land in increment 2 with selectors (§7), the stop an
 intersection of the sweep direction with analytic target surfaces — closed
-form — and `ErrUnsupported` until then. A through-all dependency is ambient
-at the CALL but never in the RECORD: core §6.2's depends-on rule covers this
+form — and `ErrUnsupported` until then. A through-all payload must provide an
+exact directional extent. A prism with a nonzero section displacement returns
+`ErrUnsupported`: the recorded stop has no bound to widen. A through-all
+dependency is ambient at the CALL but never in the RECORD: core §6.2's depends-on rule covers this
 case explicitly — the feature call resolves which live bodies actually bound
 the stops and records each one's `StepRef` in the step's `Inputs`, in stop
 order — so re-evaluation reaches the same stops with no ambient body-set
@@ -296,6 +298,13 @@ different topology split but MUST preserve role/query meaning.
 ## 9. The boolean — where exactness dies, and how
 
 Increment 4, the deep end. Strategy:
+
+`docs/prism-boolean-design.md` is the approved analytic reduction PR1
+dispatches from `performBoolean`, ahead of the tessellation path below, for
+co-directional coplanar prism `Union` pairs. `evaluateBoolean` remains this
+section's mesh path; a rejected PR1 candidate and every other operation falls
+back to it unchanged. PR4 separately adds the read-only analytic `Intersect`
+path.
 
 **Interference evaluation MUST be read-only; committing a public boolean stays
 a wrapper.** Interference PR 1 (`docs/interference-design.md` §11) factors one

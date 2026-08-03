@@ -32,6 +32,10 @@ import (
 //   - the VOLUME a vertex displacement sweeps out → sweptVolumeAllow, charged
 //     against perturbedAreaUpper — the area of the surface the displacement
 //     acted ON, which is NOT the area of the mesh that survived it;
+//   - the AREA a 2D boundary displacement sweeps out → sectionDisplacementArea,
+//     the same identity one dimension down: the region a recorded section can
+//     move is a tube about its own recorded boundary, with
+//     sectionDisplacementLength reading the same displacement as a perimeter;
 //   - a per-coordinate maximum read as a 3D DISTANCE → radius3D.
 
 const (
@@ -174,6 +178,58 @@ func sweptVolumeAllow(delta, areaUpper float64) float64 {
 		return 0
 	}
 	return upRound(delta * areaUpper)
+}
+
+// sectionDisplacementArea bounds the AREA a recorded 2D section can differ from
+// the section its construction denotes, given that every recorded boundary
+// coordinate sits within delta of that denoted boundary
+// (docs/prism-boolean-design.md §7).
+//
+// The two regions' symmetric difference lies inside the delta-neighbourhood of
+// the recorded boundary: a point in one region and not the other has the two
+// boundaries between it and either interior, so it is within delta of the
+// recorded one. That neighbourhood is covered by a rectangle 2·delta wide along
+// each of the walks — perimeterUpper must be a PROVEN upper bound on their total
+// length — plus a disk of radius delta at each of the walks joints, so
+// 2·delta·p + n·π·delta² encloses it. The bound is therefore a bound on the
+// whole SET displacement, not on the arithmetic that produced the coordinates:
+// it stands even where moving the boundary by delta changes which regions the
+// construction merged, which coordinate-rounding terms alone cannot cover.
+func sectionDisplacementArea(delta float64, walks int, perimeterUpper float64) float64 {
+	if delta <= 0 || walks <= 0 {
+		return 0
+	}
+	tube := productUpper(productUpper(2, delta), perimeterUpper)
+	joints := productUpper(
+		productUpper(float64(walks), math.Nextafter(math.Pi, math.Inf(1))),
+		productUpper(delta, delta),
+	)
+	return upRound(tube + joints)
+}
+
+// sectionDisplacementLength bounds how far the total LENGTH of a recorded
+// section's boundary — walks lines and circular arcs, the class
+// docs/prism-boolean-design.md §3.1's G4 admits — can differ from the length of
+// the boundary it denotes, given that every recorded coordinate sits within
+// delta of that denoted boundary. It is the perimeter's own reading of the same
+// displacement sectionDisplacementArea reads as an area.
+//
+// The per-walk factor is 12·π, which covers both walk kinds. A straight walk's
+// two ends each move by at most delta, so its length moves by at most 2·delta
+// (chainLengthBound's own reasoning). A circular walk moves more, because its
+// radius and its swept angle both move: its centre and both endpoints sit within
+// delta, so the radius moves by at most 2·delta and — while the radius is at
+// least 4·delta — each endpoint's angle by at most π·delta/R, giving
+// |R'θ' − Rθ| ≤ 2·delta·2π + R'·2π·delta/R' = 6·π·delta; a radius under 4·delta
+// leaves both arcs shorter than 12·π·delta outright, so the same figure stands.
+// The held sum's own float slop is NOT included: the perimeter this composes
+// into already carries it.
+func sectionDisplacementLength(delta float64, walks int) float64 {
+	if delta <= 0 || walks <= 0 {
+		return 0
+	}
+	perWalk := productUpper(12, math.Nextafter(math.Pi, math.Inf(1)))
+	return productUpper(productUpper(float64(walks), perWalk), delta)
 }
 
 // rimDelta is the trim-amplified displacement bound of a vertex the boolean

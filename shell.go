@@ -179,6 +179,9 @@ func (b *Body) ShellContext(ctx context.Context, sel FaceSelector, t units.Value
 	if !ok {
 		return nil, fmt.Errorf(`%w: this evaluator shells a straight prism only`, ErrUnsupported)
 	}
+	if err := requireExactSection(pp, "shells"); err != nil {
+		return nil, err
+	}
 	removedStart, removedEnd, err := classifyRemovedCaps(b, removed)
 	if err != nil {
 		return nil, err

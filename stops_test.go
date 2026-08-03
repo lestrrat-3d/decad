@@ -88,6 +88,45 @@ func TestExtrudeThroughAll(t *testing.T) {
 	}
 }
 
+func TestExtrudeThroughAllRefusesDisplacedPrismExtentOnYZPlane(t *testing.T) {
+	doc := decad.New()
+	a := boxBody(t, doc, 0, 0, 10, 10, 10)
+	const shift = 1e9
+	b := placedFar(t, boxBody(t, doc, 2-shift, 2, 8-shift, 8, 10), shift)
+	union, err := decad.Union(a, b)
+	require.NoError(t, err)
+	box, err := union.Bounds()
+	require.NoError(t, err)
+	require.Positive(t, box.Bound.Base())
+
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.YZ())
+	require.NoError(t, err)
+	profile := s.CreateRectangle(0, 0, 10, 10)
+	s.Fix(profile.A)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	before := snapshotDocument(t, doc)
+
+	for _, tc := range []struct {
+		name   string
+		extent decad.Extent
+	}{
+		{name: "through all", extent: decad.ThroughAll{Dir: decad.Along}},
+		{name: "through all side", extent: decad.TwoSided{
+			One: decad.ThroughAllSide{},
+			Two: decad.DistanceSide{D: units.Millimeters(1)},
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := doc.Extrude(s, s.Profiles()[0], tc.extent)
+			require.ErrorIs(t, err, decad.ErrUnsupported)
+			require.ErrorContains(t, err, "proven section displacement")
+			requireDocumentUnchanged(t, doc, before)
+		})
+	}
+}
+
 func TestExtrudeThroughAllStacked(t *testing.T) {
 	s, plateProf, pinProf := plateAndPin(t)
 	doc := decad.New()

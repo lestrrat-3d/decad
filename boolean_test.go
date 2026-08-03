@@ -214,13 +214,12 @@ func TestUnionDisjointCubes(t *testing.T) {
 	requireBodyWatertight(t, got)
 }
 
-// TestUnionCoplanarCapsReadSharedArea pins what the coplanar refusal actually
-// reads. Every prism boxBody builds is extruded from one sketch plane to one
-// end plane, so a same-height pair has its caps in the same two planes whatever
-// the footprints do. Coplanarity alone is therefore not the contact: the pair
-// separates on whether the caps share AREA, which also decides that no lateral
-// displacement escapes the refusal (docs/api-design.md §8).
-func TestUnionCoplanarCapsReadSharedArea(t *testing.T) {
+// TestUnionCoplanarCapsBuildAnalyticPrismUnion distinguishes a same-height
+// pair's two routes. Disjoint footprints stay on the mesh path because the
+// PR1 analytic result has two lumps. Overlapping and contained analytic prisms
+// reach the analytic union and build one exact prism instead of a coplanar
+// mesh-path refusal (docs/prism-boolean-design.md §4.4).
+func TestUnionCoplanarCapsBuildAnalyticPrismUnion(t *testing.T) {
 	t.Run("DisjointFootprints", func(t *testing.T) {
 		doc := decad.New()
 		a := boxBody(t, doc, 0, 0, 10, 10, 10)
@@ -238,9 +237,16 @@ func TestUnionCoplanarCapsReadSharedArea(t *testing.T) {
 		a := boxBody(t, doc, 0, 0, 10, 10, 10)
 		b := boxBody(t, doc, 5, 5, 15, 15, 10)
 
-		_, err := decad.Union(a, b)
-		requireCoplanarFaceRefusal(t, err)
-		require.Len(t, doc.Bodies(), 2)
+		got, err := decad.Union(a, b)
+		require.NoError(t, err)
+		vol, err := got.Volume()
+		require.NoError(t, err)
+		require.Equal(t, decad.Exact, vol.Exactness)
+		require.Zero(t, boundMM3(t, vol))
+		require.Equal(t, 1750.0, volumeMM(t, vol))
+		require.Len(t, got.Lumps(), 1)
+		requireBodyWatertight(t, got)
+		require.Equal(t, []*decad.Body{got}, doc.Bodies())
 	})
 
 	t.Run("ContainedFootprint", func(t *testing.T) {
@@ -248,9 +254,16 @@ func TestUnionCoplanarCapsReadSharedArea(t *testing.T) {
 		a := boxBody(t, doc, 0, 0, 10, 10, 10)
 		b := boxBody(t, doc, 2, 2, 8, 8, 10)
 
-		_, err := decad.Union(a, b)
-		requireCoplanarFaceRefusal(t, err)
-		require.Len(t, doc.Bodies(), 2)
+		got, err := decad.Union(a, b)
+		require.NoError(t, err)
+		vol, err := got.Volume()
+		require.NoError(t, err)
+		require.Equal(t, decad.Exact, vol.Exactness)
+		require.Zero(t, boundMM3(t, vol))
+		require.Equal(t, 1000.0, volumeMM(t, vol))
+		require.Len(t, got.Lumps(), 1)
+		requireBodyWatertight(t, got)
+		require.Equal(t, []*decad.Body{got}, doc.Bodies())
 	})
 }
 
@@ -315,14 +328,14 @@ func TestUnionSweepDisplacementChangesEnclosedSolid(t *testing.T) {
 	})
 }
 
-// requireCoplanarFaceRefusal asserts a shared-area coplanar face contact: a
-// valid model this evaluator cannot classify, so BooleanUnsupportedContact
-// wraps ErrUnsupported.
+// requireCoplanarFaceRefusal asserts a mesh-path shared-area coplanar face
+// contact: a valid model this evaluator cannot classify, so
+// BooleanUnsupportedContact wraps ErrUnsupported.
 func requireCoplanarFaceRefusal(t *testing.T, err error) {
 	t.Helper()
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.NotErrorIs(t, err, decad.ErrDegenerate)
-	require.ErrorContains(t, err, `overlap in one plane`, `the refusal is the shared cap area, not some other contact`)
+	require.ErrorContains(t, err, `overlap in one plane`, `the refusal is the shared face area, not some other contact`)
 	var be *decad.BooleanError
 	require.ErrorAs(t, err, &be)
 	require.Equal(t, decad.BooleanUnsupportedContact, be.Code)
