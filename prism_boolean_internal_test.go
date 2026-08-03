@@ -282,6 +282,55 @@ func TestPrismUnionReexpressedSplitFallsBack(t *testing.T) {
 	require.False(t, ok, "a re-expressed arrangement with a split boundary must fall back")
 }
 
+// TestPrismUnionDisplacedSourceSplitFallsBack covers a chained union whose
+// second re-expression is identity. The first union carries its own section
+// displacement from re-expressing a containing operand. A shallow crossing in
+// the second union must still fall back: moving the prior section can move the
+// new trim by that displacement divided by the crossing sine.
+func TestPrismUnionDisplacedSourceSplitFallsBack(t *testing.T) {
+	frame := canonicalPrismFrame(t)
+	inner := prismPayload{
+		profile: ProfileRecord{Outer: synthRectLoop(2, 2, 8, 8)},
+		frame:   frame, z0: 0, z1: 10, xform: r3.Identity(),
+	}
+	const shift = 1e8
+	translation, err := r3.Translation(r3.NewVec(shift, 0, 0))
+	require.NoError(t, err)
+	containing := prismPayload{
+		profile: ProfileRecord{Outer: synthRectLoop(-shift, 0, 10-shift, 10)},
+		frame:   frame, z0: 0, z1: 10, xform: translation,
+	}
+	first, ok, err := tryPrismUnion(t.Context(), OpUnion, &Body{payload: inner}, &Body{payload: containing})
+	require.NoError(t, err)
+	require.True(t, ok, "the containing first union must resolve analytically")
+	require.Positive(t, first.sectionDelta, "the nonidentity first union must carry its re-expression displacement")
+
+	shallow := prismPayload{
+		profile: ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{
+			LineSeg{Start: Point2{U: -5, V: 9.9}, End: Point2{U: 15, V: 10.1}, TStart: 0, TEnd: 1},
+			LineSeg{Start: Point2{U: 15, V: 10.1}, End: Point2{U: 15, V: 12.1}, TStart: 0, TEnd: 1},
+			LineSeg{Start: Point2{U: 15, V: 12.1}, End: Point2{U: -5, V: 11.9}, TStart: 0, TEnd: 1},
+			LineSeg{Start: Point2{U: -5, V: 11.9}, End: Point2{U: -5, V: 9.9}, TStart: 0, TEnd: 1},
+		}}},
+		frame: first.frame, z0: first.z0, z1: first.z1, xform: first.xform,
+	}
+	reexpression, err := newPrismReexpression(first, shallow)
+	require.NoError(t, err)
+	require.True(t, reexpression.identity, "the second union must take the identity re-expression path")
+
+	scene, err := buildPrismUnionScene(newWorkBudget(t.Context()), first, shallow, reexpression)
+	require.NoError(t, err)
+	profiles, err := prismProfilesContext(t.Context(), scene.Profiles)
+	require.NoError(t, err)
+	split, err := prismUnionProfilesHaveSplitBoundary(newWorkBudget(t.Context()), profiles)
+	require.NoError(t, err)
+	require.True(t, split, "the shallow crossing must create a trimmed edge")
+
+	_, ok, err = tryPrismUnion(t.Context(), OpUnion, &Body{payload: first}, &Body{payload: shallow})
+	require.NoError(t, err)
+	require.False(t, ok, "a split boundary with an uncertain source must fall back before recordEdge")
+}
+
 // TestTryPrismUnionOnlyImplementsUnion confirms §4.2's stated PR1 scope: Cut
 // and Intersect fall through unconditionally even where G1-G5 would pass,
 // since PR1 implements region resolution for Union's select-all path only

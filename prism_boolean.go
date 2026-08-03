@@ -14,11 +14,12 @@ import (
 // through sketch (§4) rather than through the mesh boolean (evaluator-design
 // §9). The entry gate (§3) is reject-only and never surfaces an error on a
 // miss — the caller falls back to the unchanged mesh path exactly as it did
-// before this file existed. A nonidentity re-expression that leaves a
-// sketch-split boundary also reroutes before resolution accepts a candidate:
-// its coordinate rounding can amplify at the cut. Only once §4.2's remaining
-// resolution finds a unique candidate does a further problem become a genuine,
-// typed refusal (§3.4, §9) rather than a reroute to the mesh path.
+// before this file existed. A sketch-split boundary also reroutes before
+// resolution accepts a candidate whenever either input carries a section
+// displacement or B's re-expression is nonidentity: either uncertainty can
+// amplify at the cut. Only once §4.2's remaining resolution finds a unique
+// candidate does a further problem become a genuine, typed refusal (§3.4,
+// §9) rather than a reroute to the mesh path.
 //
 // PR1 implements Union's hole-free select-all/merge/chain path only (§4.2);
 // Cut/Intersect's clean-nesting structural match (PR2) and the general
@@ -29,9 +30,10 @@ import (
 // tryPrismUnion attempts the PR1 analytic reduction for op. ok=false (err
 // always nil in that case) means "not admitted" per §3.1/§3.4: the caller
 // MUST fall back to the unchanged mesh path with no error surfaced. That
-// includes a nonidentity re-expression whose arranged boundary was split. A
-// non-nil err means the bounded analytic resolution reached a genuine refusal
-// (§3.4) — the caller MUST propagate it rather than reroute to the mesh path.
+// includes a split arranged boundary when either input carries a section
+// displacement or B's re-expression is nonidentity. A non-nil err means the
+// bounded analytic resolution reached a genuine refusal (§3.4) — the caller
+// MUST propagate it rather than reroute to the mesh path.
 func tryPrismUnion(ctx context.Context, op OpKind, a, b *Body) (prismPayload, bool, error) {
 	// §4.2 implements resolution for Union only; every other op falls
 	// through even where G1-G5 would pass (§4.4).
@@ -208,10 +210,11 @@ func prismUnionZIntervalMatches(pa, pb prismPayload) bool {
 
 // resolvePrismUnion is §4.2's hole-free select-all/merge/chain path.
 // resolved=false (err always nil in that case) means the pair's topology is
-// unresolved (§4.4), or a nonidentity re-expression left a split boundary
-// (§3.4): the caller falls back to the mesh path with no error. A non-nil
-// error — including ctx cancellation surfacing through budget — is always
-// genuine and must propagate.
+// unresolved (§4.4), or a split boundary can amplify either input's section
+// displacement or B's nonidentity re-expression (§3.4): the caller falls
+// back to the mesh path with no error. A non-nil error — including ctx
+// cancellation surfacing through budget — is always genuine and must
+// propagate.
 func resolvePrismUnion(ctx context.Context, budget *workBudget, pa, pb prismPayload, reexpress *prismReexpression) (ProfileRecord, bool, error) {
 	s, err := buildPrismUnionScene(budget, pa, pb, reexpress)
 	if err != nil {
@@ -233,16 +236,17 @@ func resolvePrismUnion(ctx context.Context, budget *workBudget, pa, pb prismPayl
 	if len(profiles) == 0 {
 		return ProfileRecord{}, false, nil // §4.4: the scene holds no bounded cell at all
 	}
-	if !reexpress.identity {
+	if pa.sectionDelta != 0 || pb.sectionDelta != 0 || !reexpress.identity {
 		split, err := prismUnionProfilesHaveSplitBoundary(budget, profiles)
 		if err != nil {
 			return ProfileRecord{}, false, err
 		}
 		if split {
-			// A coordinate error in re-expressed B can move its intersection
-			// with an unchanged A carrier by delta/sin(theta). This increment
-			// has no certified lower crossing-angle bound, so it cannot carry
-			// reexpression.delta as an honest bound for the recorded fragment.
+			// A coordinate error in re-expressed B, or either source section's
+			// existing displacement, can move an intersection by
+			// delta/sin(theta). This increment has no certified lower
+			// crossing-angle bound, so it cannot record the fragment with an
+			// honest displacement bound.
 			return ProfileRecord{}, false, nil
 		}
 	}
@@ -334,9 +338,10 @@ func resolvePrismUnion(ctx context.Context, budget *workBudget, pa, pb prismPayl
 }
 
 // prismUnionProfilesHaveSplitBoundary reports whether sketch narrowed any
-// arranged boundary edge. A nonidentity re-expression followed by such a cut
-// falls back before recordEdge can publish a trim whose coordinate error may be
-// amplified by the crossing angle (prism-boolean-design §3.4, §7).
+// arranged boundary edge. Such a cut falls back before recordEdge can publish
+// a trim when either source carries a section displacement or B's re-expression
+// is nonidentity, because that uncertainty may be amplified by the crossing
+// angle (prism-boolean-design §3.4, §7).
 func prismUnionProfilesHaveSplitBoundary(budget *workBudget, profiles []*sketch.Profile) (bool, error) {
 	for _, profile := range profiles {
 		if err := budget.step(); err != nil {

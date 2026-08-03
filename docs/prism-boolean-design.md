@@ -72,8 +72,9 @@ so the re-expressed operand's rounding reaches every measurement.
 `Cut` and `Intersect` remain on the mesh path until later increments. A
 non-admitted `Union` pair — wrong payload class, non-coplanar, a segment kind
 outside the admitted set, an unequal z-interval for `Union`, a nonidentity
-re-expression whose arranged boundary is split, or a topology this increment's
-region resolution does not cover — takes the unchanged mesh path, with **zero
+re-expression or prior source displacement whose arranged boundary is split,
+or a topology this increment's region resolution does not cover — takes the
+unchanged mesh path, with **zero
 behavior change**: no new error, no new refusal text, nothing a caller not
 making booleans this shape will ever observe.
 
@@ -211,10 +212,11 @@ silent fallback stops being available:
    candidate result. **A pair whose topology this increment's resolution logic
    does not cover (§4.4) is treated exactly like a stage-1 gate miss: silent
    fallback, no error.** The same routing rule applies before a candidate is
-   accepted when B's re-expression is nonidentity and `sketch` returns any
-   `Partial` boundary edge: a coordinate error in B can move a transverse cut
-   on A by that error divided by the crossing sine, and this increment carries
-   no certified crossing-sensitivity bound. Every other capacity, arrangement,
+   accepted when `sketch` returns any `Partial` boundary edge and either source
+   carries a nonzero section displacement or B's re-expression is nonidentity:
+   either uncertainty can move a transverse cut by its displacement divided by
+   the crossing sine, and this increment carries no certified
+   crossing-sensitivity bound. Every other capacity, arrangement,
    candidate-validity, or assembly-audit problem is a genuine refusal (§9's
    table), **never** a reroute to the mesh path. An admitted-then-failed pair
    does not silently become an `Approximate` mesh result whose exactness claim
@@ -380,7 +382,7 @@ regardless of who authored the input curves it was cut from.
 | `Cut` whose tool does not span the target | G5, mesh path; future `cupPayload`-shaped pocket |
 | `Intersect` with disjoint intervals | G5, mesh path (result is empty; unchanged `BooleanEmpty`) |
 | `Union` with a holed operand | G6, mesh path; §9 PR3 |
-| A nonidentity re-expression whose arranged boundary is split | §3.4 safety routing, mesh path; a future crossing-sensitivity proof may admit it |
+| A split arranged boundary with a nonzero source displacement or a nonidentity re-expression | §3.4 safety routing, mesh path; a future crossing-sensitivity proof may admit it |
 | `Cut` with a holed tool | G6, mesh path; the surviving material inside each tool hole is a separate lump, so it waits on the multi-lump prism payload of the row below, not on PR3 |
 | `Cut`/`Intersect` crossing sub-case (§4.2) | resolution unresolved (§3.4), mesh path; §9 PR3 |
 | A disjoint-footprint `Union` (two separate lumps) | resolution fails to close one loop (§4.2), mesh path; a future multi-lump prism payload, not currently planned |
@@ -453,10 +455,12 @@ Every recorded field, after §4.1's re-expression, is one of:
   `Start`/`End` fields, only a narrower range over the same ones).
 
 When the re-expression is the identity, operand A's fields and every
-`sketch`-cut range carry no new rounding from this union. When the
-re-expression is nonidentity, §3.4 routes any scene with a `Partial` boundary
-edge to the mesh path before it records a fragment, so an analytic result has
-no newly cut range whose position could amplify B's coordinate rounding.
+`sketch`-cut range carry no new rounding from this union, but a pre-existing
+source displacement can still amplify at a cut. Section 3.4 therefore routes
+any scene with a `Partial` boundary edge to the mesh path before it records a
+fragment whenever either source carries a nonzero displacement or the
+re-expression is nonidentity. An analytic result has no newly cut range whose
+position could amplify an input uncertainty.
 Operand B's re-expressed coordinates carry the new allowance `δ_reexpress`.
 Either input can already carry a section displacement from an earlier analytic
 union, `δ_A` or `δ_B`. The rebuilt section therefore carries
@@ -660,7 +664,9 @@ origin, exactly as it already must after a Fillet or Chamfer. Flagged in
    displacement bound on `prismPayload`, its one `bounds.go` helper, and
    `evalPrism`'s composition of it), and `performBoolean`'s branch before
    `evaluateBoolean` to build via `evalPrism` instead of `buildFacetedBody`
-   on admission.
+   on admission. A split boundary routes to the mesh path before recording
+   when either source carries a section displacement or B's re-expression is
+   nonidentity.
    Tests: a two-box union sharing a cap plane (the "control" case from the
    consumer's report) builds analytically, with `Exact` volume where both boxes
    sit on one frame (§7's `δ == 0` case); the gear's tooth-on-hub
@@ -735,10 +741,12 @@ areas, residuals), never merely "it ran" — CLAUDE.md's own rule.
   a merged section retaining a `CircleSeg`/`ArcSeg` reports `Approximate` with
   a bound composed from `moments.go`'s and `bounds.go`'s machinery, asserted
   against the closed-form answer.
-- A nonidentity re-expression whose arranged profile contains a `Partial`
-  boundary edge falls back before a fragment is recorded. The focused fixture
-  must prove that the arrangement splits, then assert that `tryPrismUnion`
-  returns `ok == false` without an analytic-resolution error.
+- An arranged profile containing a `Partial` boundary edge falls back before a
+  fragment is recorded when either source carries a nonzero section
+  displacement or B's re-expression is nonidentity. The focused fixtures must
+  prove the arrangement splits, including an identity second re-expression
+  after a displaced first result, then assert that `tryPrismUnion` returns
+  `ok == false` without an analytic-resolution error.
 - Downstream chaining: fillet a corner of an analytically-unioned body and
   read `MinWallThickness` on the result — both refuse today (SX9, all three
   surveys) on a mesh-path union of the same model, and both succeed here.
