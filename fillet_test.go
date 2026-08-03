@@ -947,4 +947,26 @@ func TestModifyRefusalRendersAClosedCircleAsClosed(t *testing.T) {
 		`a non-circular edge keeps the from/to form`)
 	require.NotContains(t, err.Error(), `closed circle`,
 		`a straight edge is never described as a circle`)
+
+	// A boolean-built body's closed rim edges carry FacetedCurve, not Circle3,
+	// so the Circle3 branch above never fires for them; closure still comes
+	// from the edge's own shared start/end vertex, not from its curve type.
+	// Lifting the tool disc keeps the two discs' caps from sharing a face — a
+	// coplanar pair is refused by the boolean itself, for an unrelated reason
+	// — while still leaving each disc's far cap rim untouched by the other.
+	doc := decad.New()
+	target := diskBody(t, doc, 0, 0, 10)
+	tool := translated(t, diskBody(t, doc, 15, 0, 10), 0, 0, 3)
+	union, err := decad.Union(target, tool)
+	require.NoError(t, err)
+	_, err = union.Fillet(decad.Edges(), units.Millimeters(1))
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+	require.ErrorContains(t, err, `selected edge[4] closed through (10,0,0)`,
+		`an untouched boolean rim renders closed from shared vertex identity, not a Circle3 check`)
+	require.NotContains(t, err.Error(), `from (10,0,0) to (10,0,0)`,
+		`the closed rim never renders as a zero-length edge`)
+	require.ErrorContains(t, err, `selected edge[7] closed through (7.487209066866568,6.599846391775197,23)`,
+		`every untouched rim in the selection renders closed, not just the first`)
+	require.NotContains(t, err.Error(), `from (7.487209066866568,6.599846391775197,23) to (7.487209066866568,6.599846391775197,23)`,
+		`no untouched boolean rim renders as a zero-length edge`)
 }

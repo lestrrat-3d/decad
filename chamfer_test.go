@@ -558,6 +558,33 @@ func TestChamferNonPrismReceiver(t *testing.T) {
 	}
 }
 
+func TestChamferNonPrismReceiverBooleanBuilt(t *testing.T) {
+	// A boolean union is not a prismPayload either, and its closed rim edges
+	// carry FacetedCurve rather than Circle3, so the centre-and-radius form
+	// above never fires for them. Closure still comes from the edge's own
+	// shared start/end vertex, so each untouched rim renders "closed through
+	// (p)" rather than the from/to form a genuinely collapsed edge would.
+	// Lifting the tool disc keeps the two discs' caps from sharing a face — a
+	// coplanar pair is refused by the boolean itself, for an unrelated
+	// reason — while still leaving each disc's far cap rim untouched.
+	doc := decad.New()
+	target := diskBody(t, doc, 0, 0, 10)
+	tool := translated(t, diskBody(t, doc, 15, 0, 10), 0, 0, 3)
+	union, err := decad.Union(target, tool)
+	require.NoError(t, err)
+	sel := decad.Edges()
+	_, err = union.Chamfer(sel, units.Millimeters(1))
+	require.ErrorIs(t, err, decad.ErrUnsupported, `this evaluator chamfers a straight prism only`)
+	require.ErrorContains(t, err, `selected edge[4] closed through (10,0,0)`,
+		`an untouched boolean rim renders closed from shared vertex identity, not a Circle3 check`)
+	require.NotContains(t, err.Error(), `from (10,0,0) to (10,0,0)`,
+		`the closed rim never renders as a zero-length edge`)
+	require.ErrorContains(t, err, `selected edge[7] closed through (7.487209066866568,6.599846391775197,23)`,
+		`every untouched rim in the selection renders closed, not just the first`)
+	require.NotContains(t, err.Error(), `from (7.487209066866568,6.599846391775197,23) to (7.487209066866568,6.599846391775197,23)`,
+		`no untouched boolean rim renders as a zero-length edge`)
+}
+
 func TestChamferBreaksNestingRefused(t *testing.T) {
 	// A large corner chamfer can shrink the outer loop PAST a near-corner hole: the
 	// (0,0) corner's d = 20 chord runs from (0,20) to (20,0), and the hole at
