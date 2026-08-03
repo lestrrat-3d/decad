@@ -173,6 +173,12 @@ func (b *Body) ShellContext(ctx context.Context, sel FaceSelector, t units.Value
 		return nil, err
 	}
 
+	// SX10: a capBlendPayload receiver is staged before the generic "not a
+	// prism" refusal, so the more specific reason leads.
+	if err := requireNotCapBlendReceiver(b.payload, "shells"); err != nil {
+		return nil, err
+	}
+
 	// Stage 2 (§4): the receiver's payload class (S3), then every removed face
 	// is a cap (S2).
 	pp, ok := b.payload.(prismPayload)

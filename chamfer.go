@@ -90,8 +90,16 @@ func (b *Body) ChamferContext(ctx context.Context, sel EdgeSelector, d units.Val
 		return nil, err
 	}
 
+	// SX10: a capBlendPayload receiver is staged before the generic
+	// "not a prism" refusal, so the more specific reason leads.
+	if err := requireNotCapBlendReceiver(b.payload, "chamfers"); err != nil {
+		return nil, err
+	}
+
 	// Stage 2 (§4): the receiver's payload class (S3), then every selected
-	// edge is a lateral edge mapped to a section corner (S1).
+	// edge is a lateral edge mapped to a section corner (S1) OR — reach RX1's
+	// second class — every geometric edge of one or more complete prism cap
+	// loops (SX4 otherwise; docs/modify-reach-design.md §4/§8.3).
 	pp, ok := b.payload.(prismPayload)
 	if !ok {
 		return nil, fmt.Errorf(`%w: this evaluator chamfers a straight prism only; selector %s matched [%s]`,
@@ -99,6 +107,32 @@ func (b *Body) ChamferContext(ctx context.Context, sel EdgeSelector, d units.Val
 	}
 	if err := requireExactSection(pp, "chamfers"); err != nil {
 		return nil, err
+	}
+
+	startLoops, endLoops, lateral, err := classifyChamferSelection(ctx, pp, b, sel, edges)
+	if err != nil {
+		return nil, err
+	}
+	if !lateral {
+		ref := doc.nextStepRef()
+		body, err := buildCapBlend(ctx, doc, ref, pp, dmm, startLoops, endLoops)
+		if err != nil {
+			return nil, err
+		}
+		if err := doc.requireLive(b); err != nil {
+			return nil, err
+		}
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		step := Step{
+			Op:        OpChamfer,
+			Inputs:    []StepRef{b.originStep()},
+			Selectors: cloneSelectors([]Selector{q}),
+			Values:    []units.Value{d},
+		}
+		doc.commit(step, body, b)
+		return body, nil
 	}
 
 	budget := newWorkBudget(ctx)

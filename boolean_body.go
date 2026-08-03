@@ -336,7 +336,7 @@ func buildFacetedBody(ctx context.Context, d *Document, ref StepRef, pp facetedP
 	xverts, comp, adj := audit.xverts, audit.comp, audit.adj
 	members, compVol, contains := audit.members, audit.compVol, audit.contains
 
-	body := &Body{doc: d, origin: FeatureRef{Step: ref, Role: "body"}, solid: true}
+	body := &Body{doc: d, origin: FeatureRef{Step: ref, Role: roleBody}, solid: true}
 	boundMM := units.Millimeters(pp.meshBound)
 
 	for _, s := range pp.src {

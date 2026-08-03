@@ -1015,6 +1015,11 @@ func runSurveys(budget *workBudget, br *BodyReport, cfg verifyConfig) ([]Diagnos
 			out, err = revolveWall(budget, pl, cfg.allowRad)
 		case cupPayload:
 			out, err = cupWall(budget, pl, cfg.allowRad)
+		case capBlendPayload:
+			// DX9 (docs/modify-reach-design.md Table DX): a cap blend is not
+			// one constant section at one height, so the existing 2D
+			// spanning-disk proof does not decide it. A deliberate evaluator
+			// limit — the asked reading is Suspect, never fabricated.
 		case facetedPayload:
 			out.reason = surveyFacetedUnsupported
 		}
@@ -1073,6 +1078,10 @@ func runSurveys(budget *workBudget, br *BodyReport, cfg verifyConfig) ([]Diagnos
 			out = revolveUndercuts(b, pl, *cfg.pull)
 		case cupPayload:
 			out = cupUndercuts(b, pl, *cfg.pull)
+		case capBlendPayload:
+			// docs/modify-reach-design.md Table DX (DX7) requires exact
+			// per-patch normal ranges; not yet implemented for this PR's
+			// slice. Undecided, never fabricated (Suspect).
 		case facetedPayload:
 			out.reason = surveyFacetedUnsupported
 		}
@@ -1115,6 +1124,10 @@ func runSurveys(budget *workBudget, br *BodyReport, cfg verifyConfig) ([]Diagnos
 			out, ok = revolveMinRadius(pl)
 		case cupPayload:
 			out, ok = cupMinRadius(pl)
+		case capBlendPayload:
+			// docs/modify-reach-design.md Table DX (DX8) requires the exact
+			// minimum concave principal radius over the patches; not yet
+			// implemented for this PR's slice. Undecided (Suspect).
 		case facetedPayload:
 			out.reason = surveyFacetedUnsupported
 		}

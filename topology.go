@@ -19,6 +19,9 @@ import (
 const (
 	roleCapStart = "capStart"
 	roleCapEnd   = "capEnd"
+	// roleBody is the body's own Origin() role, minted by every evaluator
+	// build.
+	roleBody = "body"
 )
 
 // FeatureRef identifies the feature role that created a body, a face or an

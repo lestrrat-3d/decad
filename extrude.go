@@ -479,7 +479,7 @@ func evalPrismContext(ctx context.Context, d *Document, ref StepRef, pp prismPay
 		return nil, fmt.Errorf(`%w: the sweep interval is empty`, ErrDegenerate)
 	}
 
-	body := &Body{doc: d, origin: FeatureRef{Step: ref, Role: "body"}, solid: true}
+	body := &Body{doc: d, origin: FeatureRef{Step: ref, Role: roleBody}, solid: true}
 
 	// Topology: one shell over every loop's side faces plus the two caps.
 	var faces []*Face
