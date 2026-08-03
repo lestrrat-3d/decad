@@ -3,6 +3,7 @@ package decad
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"slices"
@@ -75,6 +76,22 @@ type ShellOpts struct {
 
 func (ShellOpts) stepOpts() {}
 
+// LoftOpts records a loft's second ("to") section and its per-loop
+// correspondence rotation (docs/loft-design.md §10). Step.Profile/Step.Plane
+// already carry the "from" section, so this variant carries only what those
+// fields cannot: Profile2 and Plane2 are required wire content, exactly as
+// ExtrudeOpts.Taper and ShellOpts.Sense are; Alignment is the one optional
+// field — its absence records every loop's offset as zero, never
+// distinguished from an explicit all-zero list. `OpLoft`, `Profile2`, and
+// `Plane2` are version-2 wire content (docs/recipe-replay-design.md §2.1).
+type LoftOpts struct {
+	Profile2  ProfileRecord `json:"profile2"`
+	Plane2    PlaneRecord   `json:"plane2"`
+	Alignment []int         `json:"alignment,omitempty"`
+}
+
+func (LoftOpts) stepOpts() {}
+
 // OpKind names the operation a Step records.
 type OpKind int
 
@@ -103,6 +120,10 @@ const (
 	// OpPlacedCopy re-registers a body under a recorded rigid placement without
 	// consuming the source.
 	OpPlacedCopy
+	// OpLoft rules a solid between two recorded profiles on distinct planes.
+	// Appended after OpPlacedCopy rather than renumbered — the wire codec goes
+	// through opKindNames, never the constant's ordinal.
+	OpLoft
 )
 
 // opKindNames is the stable wire vocabulary; the constant order is never a
@@ -119,6 +140,7 @@ var opKindNames = map[OpKind]string{
 	OpPlaced:     "placed",
 	OpDuplicate:  "duplicate",
 	OpPlacedCopy: "placed_copy",
+	OpLoft:       "loft",
 }
 
 // String renders the op kind for diagnostics.
@@ -187,6 +209,7 @@ type Step struct {
 // stepOptsKind and the codec below: StepOpts is a closed set decad owns.
 const optsKindExtrude = "extrude"
 const optsKindShell = "shell"
+const optsKindLoft = "loft"
 
 type jsonExtrudeOpts struct {
 	Taper *units.Value `json:"taper"`
@@ -194,6 +217,16 @@ type jsonExtrudeOpts struct {
 
 type jsonShellOpts struct {
 	Sense *ShellSense `json:"sense"`
+}
+
+// jsonLoftOpts decodes through pointer payload fields for Profile2/Plane2 —
+// the same pattern jsonExtrudeOpts/jsonShellOpts use — so a missing or
+// explicit-null required field never decodes into a zero-value second
+// section. Alignment is the one optional field.
+type jsonLoftOpts struct {
+	Profile2  *ProfileRecord `json:"profile2"`
+	Plane2    *PlaneRecord   `json:"plane2"`
+	Alignment []int          `json:"alignment,omitempty"`
 }
 
 // marshalStepOpts encodes one options record as its tagged object. Pointer
@@ -212,11 +245,19 @@ func marshalStepOpts(o StepOpts) ([]byte, error) {
 		}
 		o = *p
 	}
+	if p, ok := o.(*LoftOpts); ok {
+		if p == nil {
+			return nil, fmt.Errorf(`decad: nil step options`)
+		}
+		o = *p
+	}
 	switch o := o.(type) {
 	case ExtrudeOpts:
 		return marshalTagged(optsKindExtrude, o)
 	case ShellOpts:
 		return marshalTagged(optsKindShell, o)
+	case LoftOpts:
+		return marshalTagged(optsKindLoft, o)
 	default:
 		return nil, fmt.Errorf(`decad: unencodable step options type %T`, o)
 	}
@@ -251,6 +292,18 @@ func unmarshalStepOpts(data []byte) (StepOpts, error) {
 			return nil, prependCodecPath(fmt.Errorf(`decad: shell options are missing sense`), "sense")
 		}
 		return ShellOpts{Sense: *wire.Sense}, nil
+	case optsKindLoft:
+		var wire jsonLoftOpts
+		if err := json.Unmarshal(data, &wire); err != nil {
+			return nil, codecJSONErrorAt(data, &wire, fmt.Errorf(`decad: failed to decode loft options: %w`, err))
+		}
+		if wire.Profile2 == nil {
+			return nil, prependCodecPath(fmt.Errorf(`decad: loft options are missing profile2`), "profile2")
+		}
+		if wire.Plane2 == nil {
+			return nil, prependCodecPath(fmt.Errorf(`decad: loft options are missing plane2`), "plane2")
+		}
+		return LoftOpts{Profile2: *wire.Profile2, Plane2: *wire.Plane2, Alignment: wire.Alignment}, nil
 	case "":
 		return nil, prependCodecPath(fmt.Errorf(`decad: step options are missing their kind tag`), "kind")
 	default:
@@ -343,6 +396,7 @@ const (
 	stepOptsNone stepOptsKind = iota
 	stepOptsExtrude
 	stepOptsShell
+	stepOptsLoft
 )
 
 type operationShape struct {
@@ -402,6 +456,14 @@ func shapeForOperation(op OpKind) (operationShape, bool) {
 		return operationShape{minInputs: 1, maxInputs: 1}, true
 	case OpPlacedCopy:
 		return operationShape{minInputs: 1, maxInputs: 1, placement: true}, true
+	case OpLoft:
+		return operationShape{
+			minInputs: 0,
+			maxInputs: 0,
+			profile:   true,
+			plane:     true,
+			opts:      stepOptsLoft,
+		}, true
 	default:
 		return operationShape{}, false
 	}
@@ -532,13 +594,25 @@ func stepShapeFieldsFromJSON(raw jsonStepDecode, op OpKind) (stepShapeFields, er
 	if err != nil {
 		return stepShapeFields{}, err
 	}
+	if err := validateStepAlignmentLimit(raw.Opts); err != nil {
+		return stepShapeFields{}, err
+	}
 	fields.inputs = inputs
 	fields.selectors = selectors
 	fields.values = values
 	return fields, nil
 }
 
+// jsonArrayLength counts a top-level step array's elements by token, under the
+// ceiling every such array shares.
 func jsonArrayLength(data json.RawMessage, field string) (int, error) {
+	return jsonArrayLengthUnder(data, field, maxRecipeInputsPerStep, field+" per step")
+}
+
+// jsonArrayLengthUnder is the same count against a stated ceiling, so a nested
+// array — LoftOpts.Alignment inside "opts" — reports its own limit under its
+// own path.
+func jsonArrayLengthUnder(data json.RawMessage, field string, limit int, name string) (int, error) {
 	if data == nil || isJSONNull(data) {
 		return 0, nil
 	}
@@ -554,12 +628,12 @@ func jsonArrayLength(data json.RawMessage, field string) (int, error) {
 
 	length := 0
 	for decoder.More() {
-		if length >= maxRecipeInputsPerStep {
+		if length >= limit {
 			return 0, recipeDecodeLimitError(
 				fmt.Sprintf("%s[%d]", field, length),
 				-1,
-				field+" per step",
-				int64(maxRecipeInputsPerStep),
+				name,
+				int64(limit),
 			)
 		}
 		if err := skipJSONValue(decoder); err != nil {
@@ -636,6 +710,46 @@ func validateStepInputLimit(inputs int) error {
 	)
 }
 
+// validateStepAlignmentLimit counts LoftOpts.Alignment's wire elements off the
+// raw "opts" object and refuses past its ceiling, so a Step decoded on its own
+// — the path the recipe preflight never runs on — is bounded before
+// unmarshalStepOpts allocates the []int. It is the step-local half of the same
+// discipline validateStepInputLimit gives Step.Inputs.
+//
+// It reads the ceiling and its name from the preflight's own hard-limit table,
+// so the two decode paths cannot drift apart, and it is keyed on the field
+// name exactly as that table is — no options kind is decided here.
+//
+// The count is all this owns: unmarshalStepOpts owns every options
+// diagnostic, so a malformed opts object or a non-array alignment passes
+// through to be judged there.
+func validateStepAlignmentLimit(opts json.RawMessage) error {
+	limit, name, bounded := recipeJSONArrayHardLimit(recipeJSONAlignment)
+	if !bounded {
+		return nil
+	}
+	if _, err := jsonArrayLengthUnder(stepOptsAlignmentField(opts), "opts.alignment", limit, name); errors.Is(err, ErrResourceLimit) {
+		return err
+	}
+	return nil
+}
+
+// stepOptsAlignmentField reads the raw "alignment" array out of a step's
+// options object, leaving it raw so the count above runs on tokens. An options
+// object this cannot read yields no array: unmarshalStepOpts reports it.
+func stepOptsAlignmentField(opts json.RawMessage) json.RawMessage {
+	if opts == nil || isJSONNull(opts) {
+		return nil
+	}
+	var probe struct {
+		Alignment json.RawMessage `json:"alignment"`
+	}
+	if json.Unmarshal(opts, &probe) != nil {
+		return nil
+	}
+	return probe.Alignment
+}
+
 func unmarshalPresentJSONSlice[T any](data json.RawMessage, field string) ([]T, error) {
 	if isJSONNull(data) {
 		return nil, prependCodecPath(fmt.Errorf(`decad: step field %q must be an array`, field), field)
@@ -676,6 +790,13 @@ func validStepOptsKind(opts StepOpts, want stepOptsKind) bool {
 		case ShellOpts:
 			return true
 		case *ShellOpts:
+			return o != nil
+		}
+	case stepOptsLoft:
+		switch o := opts.(type) {
+		case LoftOpts:
+			return true
+		case *LoftOpts:
 			return o != nil
 		}
 	}

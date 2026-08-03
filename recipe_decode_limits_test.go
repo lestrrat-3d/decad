@@ -2,9 +2,11 @@ package decad
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 
+	"github.com/lestrrat-3d/r3"
 	"github.com/stretchr/testify/require"
 )
 
@@ -184,6 +186,26 @@ func TestRecipeUnmarshalStructuralCollectionLimits(t *testing.T) {
 		requireRecipeLimitPath(t, err, "steps[0].values[1]", 0)
 		require.Equal(t, original, got)
 	})
+
+	t.Run("loft alignment exact limit", func(t *testing.T) {
+		elements := strings.TrimSuffix(strings.Repeat("0,", maxRecipeAlignmentPerStep), ",")
+		input := []byte(`{"steps":[{"op":"loft","opts":{"kind":"loft","alignment":[` + elements + `]}}]}`)
+		// The alignment array clears the decode-limit preflight at exactly
+		// maxRecipeAlignmentPerStep elements; profile2/plane2 are omitted
+		// here on purpose (LoftOpts.MISSING required fields fail typed
+		// decode independently of this preflight charge), so this only
+		// exercises the array-length gate itself.
+		err := preflightRecipeJSON(input, defaultRecipeDecodeLimits())
+		require.NoError(t, err)
+	})
+
+	t.Run("loft alignment one over", func(t *testing.T) {
+		got := original
+		elements := strings.TrimSuffix(strings.Repeat("0,", maxRecipeAlignmentPerStep), ",") + ",0"
+		err := json.Unmarshal([]byte(`{"steps":[{"op":"loft","opts":{"kind":"loft","alignment":[`+elements+`]}}]}`), &got)
+		requireRecipeLimitPath(t, err, fmt.Sprintf("steps[0].opts.alignment[%d]", maxRecipeAlignmentPerStep), 0)
+		require.Equal(t, original, got)
+	})
 }
 
 func TestStepCodecInputLimit(t *testing.T) {
@@ -197,6 +219,56 @@ func TestStepCodecInputLimit(t *testing.T) {
 	step = Step{Op: OpExtrude, Inputs: make([]StepRef, maxRecipeInputsPerStep+1)}
 	_, err = json.Marshal(step)
 	requireRecipeLimitPath(t, err, "inputs[4096]", -1)
+}
+
+// loftStepWireWithAlignment marshals a structurally valid OpLoft step whose
+// LoftOpts carries n alignment offsets, so a decode of the result exercises
+// the alignment ceiling and nothing else about the step's shape.
+func loftStepWireWithAlignment(t *testing.T, n int) []byte {
+	t.Helper()
+	square := ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{
+		LineSeg{Start: Point2{U: 0, V: 0}, End: Point2{U: 1, V: 0}, TStart: 0, TEnd: 1},
+		LineSeg{Start: Point2{U: 1, V: 0}, End: Point2{U: 1, V: 1}, TStart: 0, TEnd: 1},
+		LineSeg{Start: Point2{U: 1, V: 1}, End: Point2{U: 0, V: 1}, TStart: 0, TEnd: 1},
+		LineSeg{Start: Point2{U: 0, V: 1}, End: Point2{U: 0, V: 0}, TStart: 0, TEnd: 1},
+	}}}
+	step := Step{
+		Op:      OpLoft,
+		Profile: square,
+		Plane:   PlaneRecord{U: r3.NewVec(1, 0, 0), V: r3.NewVec(0, 1, 0)},
+		Opts: LoftOpts{
+			Profile2:  square,
+			Plane2:    PlaneRecord{Origin: r3.NewVec(0, 0, 1), U: r3.NewVec(1, 0, 0), V: r3.NewVec(0, 1, 0)},
+			Alignment: make([]int, n),
+		},
+	}
+	data, err := json.Marshal(step)
+	require.NoError(t, err)
+	return data
+}
+
+// TestStepCodecAlignmentLimit pins LoftOpts.Alignment to the same step-local
+// ceiling TestStepCodecInputLimit pins Step.Inputs to. A Step unmarshalled on
+// its own never runs the recipe preflight, so the ceiling has to hold here
+// too: exactly maxRecipeAlignmentPerStep offsets decode and are retained, one
+// more is refused before the []int is allocated, and the destination step is
+// left untouched.
+func TestStepCodecAlignmentLimit(t *testing.T) {
+	t.Run("exact limit", func(t *testing.T) {
+		var step Step
+		require.NoError(t, json.Unmarshal(loftStepWireWithAlignment(t, maxRecipeAlignmentPerStep), &step))
+		opts, ok := step.Opts.(LoftOpts)
+		require.True(t, ok)
+		require.Len(t, opts.Alignment, maxRecipeAlignmentPerStep)
+	})
+
+	t.Run("one over", func(t *testing.T) {
+		original := Step{Op: OpUnion}
+		step := original
+		err := json.Unmarshal(loftStepWireWithAlignment(t, maxRecipeAlignmentPerStep+1), &step)
+		requireRecipeLimitPath(t, err, fmt.Sprintf("opts.alignment[%d]", maxRecipeAlignmentPerStep), -1)
+		require.Equal(t, original, step)
+	})
 }
 
 func TestStepCodecArrayCountLimit(t *testing.T) {

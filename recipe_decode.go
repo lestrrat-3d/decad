@@ -26,6 +26,14 @@ type recipeDecodeLimits struct {
 
 const maxRecipeInputsPerStep = 4_096
 
+// maxRecipeAlignmentPerStep bounds LoftOpts.Alignment's wire array before any
+// typed decode, on both decode paths — the recipe preflight below, and
+// validateStepAlignmentLimit for a Step unmarshalled on its own, which reads
+// this ceiling from recipeJSONArrayHardLimit so the two cannot drift. That is
+// the same two-path, count-before-allocation discipline maxRecipeInputsPerStep
+// has for Step.Inputs.
+const maxRecipeAlignmentPerStep = 4_096
+
 func defaultRecipeDecodeLimits() recipeDecodeLimits {
 	return recipeDecodeLimits{
 		MaxBytes:            16 << 20,
@@ -73,6 +81,7 @@ const (
 	recipeJSONValues
 	recipeJSONString
 	recipeJSONRoleString
+	recipeJSONAlignment
 )
 
 type recipeJSONLimit uint8
@@ -316,6 +325,8 @@ func recipeJSONArrayHardLimit(role recipeJSONRole) (int, string, bool) {
 		return maxRecipeInputsPerStep, "inputs per step", true
 	case recipeJSONValues:
 		return 1, "values per step", true
+	case recipeJSONAlignment:
+		return maxRecipeAlignmentPerStep, "alignment offsets per step", true
 	default:
 		return 0, "", false
 	}
@@ -443,6 +454,16 @@ func recipeJSONFieldRole(parent recipeJSONRole, field string) recipeJSONRole {
 		switch {
 		case strings.EqualFold(field, "kind"), strings.EqualFold(field, "taper"), strings.EqualFold(field, "sense"):
 			return recipeJSONString
+		case strings.EqualFold(field, "profile2"):
+			// LoftOpts's second section charges MaxLoops/MaxSegments exactly
+			// as the step's own profile does.
+			return recipeJSONProfile
+		case strings.EqualFold(field, "plane2"):
+			// A plane carries no charged aggregate (three fixed vectors),
+			// the same standing the step's own top-level "plane" field has.
+			return recipeJSONIgnore
+		case strings.EqualFold(field, "alignment"):
+			return recipeJSONAlignment
 		}
 	}
 	return recipeJSONIgnore

@@ -11,7 +11,16 @@ import (
 )
 
 const recipeWireFormat = "decad.recipe"
-const recipeWireVersion = 1
+
+// recipeWireLegacyVersion is the pre-loft wire vocabulary (replay design
+// §2.1): the version an unversioned legacy envelope implies, and the lowest
+// version a versioned envelope may declare. recipeWireVersion is the
+// canonical version the encoder always writes and the highest version this
+// decoder accepts; it adds OpLoft and LoftOpts.profile2/plane2. A version-1
+// envelope carrying a "loft" step is invalid under the version-1 grammar and
+// is never reinterpreted with version-2 rules.
+const recipeWireLegacyVersion = 1
+const recipeWireVersion = 2
 
 // RecipeError reports a stored-recipe failure with its location and
 // branchable identity. StepIndex is -1 for an envelope or root failure.
@@ -49,7 +58,7 @@ func (e *RecipeError) Is(target error) bool {
 	return errors.Is(e.Kind, target) || errors.Is(e.Err, target)
 }
 
-type recipeWireV1 struct {
+type recipeWireEnvelope struct {
 	Format  string `json:"format"`
 	Version int    `json:"version"`
 	Steps   []Step `json:"steps"`
@@ -61,14 +70,15 @@ type rawRecipeWire struct {
 	Steps   json.RawMessage `json:"steps"`
 }
 
-// MarshalJSON writes the canonical version 1 recipe envelope. Nil and empty
-// step slices both encode as an array.
+// MarshalJSON writes the canonical version-2 recipe envelope (replay design
+// §2.1: the encoder always writes the current version). Nil and empty step
+// slices both encode as an array.
 func (r Recipe) MarshalJSON() ([]byte, error) {
 	steps := r.Steps
 	if steps == nil {
 		steps = []Step{}
 	}
-	data, err := json.Marshal(recipeWireV1{
+	data, err := json.Marshal(recipeWireEnvelope{
 		Format:  recipeWireFormat,
 		Version: recipeWireVersion,
 		Steps:   steps,
@@ -79,9 +89,11 @@ func (r Recipe) MarshalJSON() ([]byte, error) {
 	return data, nil
 }
 
-// UnmarshalJSON accepts the canonical version 1 envelope and the legacy
-// unversioned {"steps": ...} form. It rejects unknown root fields and
-// duplicate keys before typed step decoding.
+// UnmarshalJSON accepts the canonical version 1 and version 2 envelopes and
+// the legacy unversioned {"steps": ...} form, which decodes under the
+// version-1 grammar. It rejects unknown root fields and duplicate keys
+// before typed step decoding, and rejects a "loft" step under version-1
+// rules (replay design §2.1).
 func (r *Recipe) UnmarshalJSON(data []byte) error {
 	if err := preflightRecipeJSON(data, defaultRecipeDecodeLimits()); err != nil {
 		return err
@@ -105,6 +117,9 @@ func (r *Recipe) UnmarshalJSON(data []byte) error {
 	if !stepsPresent {
 		return rootRecipeError(ErrInvalidRecipe, errors.New(`recipe is missing required field "steps"`))
 	}
+	// version defaults to the legacy grammar for an unversioned envelope
+	// (replay design §2.1); a versioned envelope overrides it below.
+	version := recipeWireLegacyVersion
 	if versioned {
 		if !formatPresent {
 			return rootRecipeError(ErrInvalidRecipe, errors.New(`recipe is missing required field "format"`))
@@ -124,11 +139,14 @@ func (r *Recipe) UnmarshalJSON(data []byte) error {
 		if isJSONNull(raw.Version) {
 			return rootRecipeError(ErrInvalidRecipe, errors.New(`invalid recipe field "version": null`))
 		}
-		var version int
 		if err := json.Unmarshal(raw.Version, &version); err != nil {
 			return rootRecipeError(ErrInvalidRecipe, fmt.Errorf(`invalid recipe field "version": %w`, err))
 		}
-		if version != recipeWireVersion {
+		// A decoder that supports only version N MUST reject a complete
+		// version-(N+1) envelope before it decodes any step (replay design
+		// §2.1) — this decoder supports 1 and 2, so this is the whole gate:
+		// no step in raw.Steps is ever inspected for an unsupported version.
+		if version < recipeWireLegacyVersion || version > recipeWireVersion {
 			return rootRecipeError(
 				ErrUnsupportedRecipeVersion,
 				fmt.Errorf("unsupported recipe version %d", version),
@@ -150,6 +168,15 @@ func (r *Recipe) UnmarshalJSON(data []byte) error {
 			var step Step
 			if err := json.Unmarshal(data, &step); err != nil {
 				return newRecipeDecodeError(i, fmt.Sprintf(`steps[%d]`, i), err)
+			}
+			// Version 1 is the pre-loft vocabulary (replay design §2.1): a
+			// "loft" step under version-1 rules is invalid, never
+			// reinterpreted with version-2 rules.
+			if version < recipeWireVersion && step.Op == OpLoft {
+				return newRecipeDecodeError(
+					i, fmt.Sprintf(`steps[%d].op`, i),
+					fmt.Errorf(`decad: the %q op requires recipe version %d`, step.Op, recipeWireVersion),
+				)
 			}
 			steps = append(steps, step)
 		}
