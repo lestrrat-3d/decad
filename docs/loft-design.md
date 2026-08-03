@@ -460,10 +460,18 @@ triangulated boundary.
 
 **`Area` is never Exact.** A triangle's own area is `(1/2) * |(B-A) x
 (C-A)|` — a square root of a rational, generically irrational — so a wall
-triangle's area contribution is a float evaluation with a proven outward
-bound (`bounds.go`'s `sumSlop`: "a PROVEN bound for the NAIVE float sum
-that produced the value — never zero for a nonzero float-computed
-quantity"). Spline design §3 states the identical asymmetry for arc length:
+triangle's area contribution carries a proven outward bound derived at that
+triangle's OWN scale: `(B-A) x (C-A)` is taken over exact rationals (the same
+"take the floats exactly" lift the volume sum already uses), its squared norm
+is therefore an exact rational, and `spline_length.go`'s outward-rounded
+`ratSqrtDown` / `ratSqrtUp` bracket that rational's square root. The published
+bound sums those per-triangle enclosure widths beside the summation loop's own
+slop (`bounds.go`'s `sumSlop`). A bound scaled off the held TOTAL bounds only
+the loop: a float cross product's forward error scales with its products
+rather than with its result, so on a thin triangle it exceeds any such bound by
+roughly one over the triangle's aspect ratio — and Table B's diagonal split
+makes thin walls the ordinary case for a short loft over long recorded
+`LineSeg`s. Spline design §3 states the identical asymmetry for arc length:
 "Arc length is never exact in ANY tier… a Tier A body's `Area` always
 carries a positive bound even where its `Volume` does not." A loft's `Area`
 is the two caps' own exact rational area (from `moments.go`, contributing no
@@ -638,8 +646,11 @@ never merely that a call ran (project rule).
   centroid `Approximate` with a length-radius bound enclosing all three
   coordinate-rounding errors (mirroring spline design Table F's own 293/18 vs
   293/2 worked example). `Area` is `Approximate` whenever any wall triangle
-  has nonzero area, with the bound checked against a high-precision reference
-  sum, never merely asserted present. `Bounds` matches the exact per-vertex
+  has nonzero area, and its reported bound ENCLOSES `|held - true|` against a
+  high-precision reference, never merely asserted present — over a table of
+  slivers at aspect 1e-2, 1e-3 and 1e-6 and at least one large-coordinate
+  case, and over a many-triangle wall set so the summation loop is covered
+  beside the per-triangle brackets. `Bounds` matches the exact per-vertex
   componentwise extreme.
 - **Downstream**: D1's `Bound` is exactly zero for an admitted loft; a D2
   boolean between a loft and a prism succeeds through the existing

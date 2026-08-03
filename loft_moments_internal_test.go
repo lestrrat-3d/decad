@@ -190,6 +190,142 @@ func TestLoftMassAccumulatorAreaApproximateBoundedByReference(t *testing.T) {
 		"the proven bound must cover the gap to a high-precision reference sum")
 }
 
+// referenceTriangleArea returns one triangle's true area at prec bits. The
+// edge vectors, their cross product and its squared norm are taken over exact
+// rationals — a float64 IS a rational — so the only inexactness anywhere is
+// the closing square root, computed at far more precision than float64 holds.
+func referenceTriangleArea(a, b, c r3.Vec, prec uint) *big.Float {
+	u := xsub(xptOf(b), xptOf(a))
+	v := xsub(xptOf(c), xptOf(a))
+	w := xcross(u, v)
+	q := xdot(w, w)
+	q.Quo(q, big.NewRat(4, 1))
+	return new(big.Float).SetPrec(prec).Sqrt(new(big.Float).SetPrec(prec).SetRat(q))
+}
+
+// TestLoftMassAccumulatorAreaBoundEnclosesTrueError is the enclosure
+// assertion the reported bound exists to earn: for every row the published
+// |held - true| must be at or under the published Bound, with the truth
+// computed at 400 bits.
+//
+// The table is deliberately weighted toward SLIVERS — the perpendicular offset
+// over the base length runs from 1 down to 1e-9 — because a thin triangle is
+// where a float cross product cancels and a bound scaled off the held total
+// stops enclosing anything. docs/loft-design.md Table B splits every wall quad
+// along a diagonal, so a short loft over long recorded LineSegs produces
+// exactly these aspect ratios as its ordinary walls, and no Table S gate
+// refuses a thin-but-valid triangle or caps coordinate magnitude — hence the
+// large-coordinate row too.
+func TestLoftMassAccumulatorAreaBoundEnclosesTrueError(t *testing.T) {
+	// Two orthonormal, non-axis-aligned directions: dir.perp is exactly 0 and
+	// both have unit length, so a row's aspect really is its offset over its
+	// base and no coordinate is a special case of the arithmetic.
+	dir := r3.NewVec(0.6, 0.8, 0)
+	perp := r3.NewVec(-0.48, 0.36, 0.8)
+	require.Equal(t, 0.0, dir.Dot(perp))
+
+	// sliver spans base along dir and offsets its apex base*aspect along perp,
+	// planted a third of the way along so no two edges share a length.
+	sliver := func(origin r3.Vec, base, aspect float64) [3]r3.Vec {
+		return [3]r3.Vec{
+			origin,
+			origin.Add(dir.Scale(base)),
+			origin.Add(dir.Scale(base * 0.37)).Add(perp.Scale(base * aspect)),
+		}
+	}
+
+	origin := r3.NewVec(12.5, -7.25, 3.5)
+	far := r3.NewVec(1e10, -1e10, 1e10)
+	for _, tc := range []struct {
+		name string
+		tri  [3]r3.Vec
+	}{
+		{name: "aspect 1", tri: sliver(origin, 100, 1)},
+		{name: "aspect 1e-2", tri: sliver(origin, 100, 1e-2)},
+		{name: "aspect 1e-3", tri: sliver(origin, 100, 1e-3)},
+		{name: "aspect 1e-6", tri: sliver(origin, 100, 1e-6)},
+		{name: "aspect 1e-9", tri: sliver(origin, 100, 1e-9)},
+		{name: "large coordinates aspect 1e-3", tri: sliver(far, 8192, 1e-3)},
+		{name: "large coordinates aspect 1e-6", tri: sliver(far, 8192, 1e-6)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := newLoftMassAccumulator(r3.NewVec(0, 0, 0))
+			m.add(tc.tri[0], tc.tri[1], tc.tri[2], true)
+			area := m.area()
+
+			require.Equal(t, Approximate, area.Exactness,
+				"a wall triangle's area is a square root of a rational and is never Exact")
+			require.Greater(t, area.Bound.Base(), 0.0)
+
+			const prec = 400
+			ref := referenceTriangleArea(tc.tri[0], tc.tri[1], tc.tri[2], prec)
+			require.Equal(t, 1, ref.Sign(), "the fixture must have positive area")
+
+			held := new(big.Float).SetPrec(prec).SetFloat64(area.Value.Base())
+			diff := new(big.Float).SetPrec(prec).Sub(ref, held)
+			diff.Abs(diff)
+			// Round the measured error UPWARD, so the assertion can never pass
+			// on the reference's own rounding.
+			diffF, acc := diff.Float64()
+			if acc == big.Below {
+				diffF = math.Nextafter(diffF, math.Inf(1))
+			}
+
+			refF, _ := ref.Float64()
+			t.Logf("true=%.17g held=%.17g error=%.17g bound=%.17g",
+				refF, area.Value.Base(), diffF, area.Bound.Base())
+			require.LessOrEqual(t, diffF, area.Bound.Base(),
+				"the reported bound must ENCLOSE the true error, not estimate it")
+		})
+	}
+}
+
+// TestLoftMassAccumulatorAreaBoundEnclosesSliverSum repeats the enclosure
+// assertion over a MANY-triangle wall set, so the summation loop's own slop is
+// under test beside the per-triangle brackets: 64 slivers at aspect 1e-5 and
+// 1e-6, spread over a growing coordinate range with long bases, plus a
+// non-representable exact rational cap contribution. Charging every triangle
+// at the held total's scale does not cover this set either — the per-triangle
+// enclosure widths are what carry it.
+func TestLoftMassAccumulatorAreaBoundEnclosesSliverSum(t *testing.T) {
+	dir := r3.NewVec(0.6, 0.8, 0)
+	perp := r3.NewVec(-0.48, 0.36, 0.8)
+
+	const prec = 400
+	m := newLoftMassAccumulator(r3.NewVec(0, 0, 0))
+	ref := new(big.Float).SetPrec(prec)
+	for i := range 64 {
+		origin := r3.NewVec(100*float64(i), -25*float64(i), 3.5)
+		base := 1e4 + 100*float64(i)
+		aspect := math.Pow(10, -float64(5+i%2))
+		a := origin
+		b := origin.Add(dir.Scale(base))
+		c := origin.Add(dir.Scale(base * 0.37)).Add(perp.Scale(base * aspect))
+		m.add(a, b, c, true)
+		ref.Add(ref, referenceTriangleArea(a, b, c, prec))
+	}
+
+	capArea := big.NewRat(5, 3)
+	ref.Add(ref, new(big.Float).SetPrec(prec).SetRat(capArea))
+
+	area := m.area(capArea)
+	require.Equal(t, Approximate, area.Exactness)
+
+	held := new(big.Float).SetPrec(prec).SetFloat64(area.Value.Base())
+	diff := new(big.Float).SetPrec(prec).Sub(ref, held)
+	diff.Abs(diff)
+	diffF, acc := diff.Float64()
+	if acc == big.Below {
+		diffF = math.Nextafter(diffF, math.Inf(1))
+	}
+
+	refF, _ := ref.Float64()
+	t.Logf("true=%.17g held=%.17g error=%.17g bound=%.17g",
+		refF, area.Value.Base(), diffF, area.Bound.Base())
+	require.LessOrEqual(t, diffF, area.Bound.Base(),
+		"the reported bound must ENCLOSE the true error over a whole wall set")
+}
+
 // TestLoftMassAccumulatorBoundsEmpty proves bounds reports false before any
 // triangle has been added.
 func TestLoftMassAccumulatorBoundsEmpty(t *testing.T) {

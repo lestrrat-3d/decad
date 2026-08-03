@@ -18,7 +18,10 @@ import (
 // profile's own plane origin, and rounded to float64 exactly ONCE at
 // publication. Area has no such closed form (a triangle's own area is a
 // square root of a rational, generically irrational) and is never Exact,
-// for the same reason spline design §3 gives arc length.
+// for the same reason spline design §3 gives arc length. It is still PROVEN:
+// each triangle's area is bracketed from its own exact rational cross-norm by
+// spline_length.go's outward-rounded ratSqrtDown/ratSqrtUp, and the published
+// bound sums those per-triangle widths beside the summation loop's own slop.
 
 // loftMassAccumulator is docs/loft-design.md §8's tetrahedron-sum kernel. It
 // streams one outward-oriented triangle of T at a time — a wall or a cap
@@ -40,8 +43,16 @@ type loftMassAccumulator struct {
 	haveBounds bool
 	lo, hi     r3.Vec // componentwise extremes over every held vertex
 
-	wallAreaSum float64 // naive float sum of wall triangles' own areas
-	wallTerms   int     // term count sumSlop needs to bound that sum
+	// wallAreaSum is the naive float sum of the per-triangle PROVEN LOWER
+	// bounds wallTriangleArea returns; wallAreaAbs is an upper bound on
+	// Σ|term|, the scale sumSlop's summation proof reads; wallAreaSlack is an
+	// upper bound on Σ (upper − lower), the enclosure width each triangle's
+	// own area contributes. The three are what make the published bound a
+	// proof rather than an estimate.
+	wallAreaSum   float64
+	wallAreaAbs   float64
+	wallAreaSlack float64
+	wallTerms     int // term count sumSlop needs to bound that sum
 }
 
 // newLoftMassAccumulator opens a fresh accumulator anchored at the loft's
@@ -57,10 +68,12 @@ func newLoftMassAccumulator(anchor r3.Vec) *loftMassAccumulator {
 }
 
 // add folds one outward-oriented triangle (A, B, C) of T into the volume,
-// centroid and bounds accumulators, and — when wall is true — into the
-// area accumulator's naive float sum. Every vertex coordinate is a float64,
-// hence an exact rational (clearance_poly.go's take-the-floats-exactly
-// discipline); nothing here rounds until publication.
+// centroid and bounds accumulators, and — when wall is true — into the area
+// accumulator's float sum and that sum's two proof terms. Every vertex
+// coordinate is a float64, hence an exact rational (clearance_poly.go's
+// take-the-floats-exactly discipline); the volume and centroid sums round
+// nothing until publication, and the area sum's own terms are the endpoints
+// of a proven per-triangle enclosure rather than a float evaluation.
 func (m *loftMassAccumulator) add(a, b, c r3.Vec, wall bool) {
 	sa := xsub(xptOf(a), m.anchor)
 	sb := xsub(xptOf(b), m.anchor)
@@ -83,9 +96,35 @@ func (m *loftMassAccumulator) add(a, b, c r3.Vec, wall bool) {
 	if !wall {
 		return
 	}
-	u, v := b.Sub(a), c.Sub(a)
-	m.wallAreaSum += 0.5 * u.Cross(v).Len()
+	// sb-sa and sc-sa are b-a and c-a exactly: the anchor cancels over
+	// rationals, so the already-lifted vertices serve the area bracket too.
+	lo, hi := wallTriangleArea(xsub(sb, sa), xsub(sc, sa))
+	m.wallAreaSum += lo
+	m.wallAreaAbs = upRound(m.wallAreaAbs + lo)
+	m.wallAreaSlack = upRound(m.wallAreaSlack + upRound(hi-lo))
 	m.wallTerms++
+}
+
+// wallTriangleArea brackets one wall triangle's own area between two floats,
+// both PROVEN. u and v are the triangle's exact rational edge vectors, so
+// |u×v|² is an exact rational and the area is the square root of |u×v|²/4;
+// ratSqrtDown/ratSqrtUp (spline_length.go) bracket that rational root with
+// OUTWARD rounding decided by exact comparison, so lo ≤ area ≤ hi holds
+// whatever the platform's own sqrt does.
+//
+// The cross product is taken over rationals and NEVER in float64.
+// r3.Vec.Cross is the naive difference-of-products form, whose forward error
+// scales with the PRODUCTS rather than with the result, so a thin triangle's
+// float area carries an error larger than the held sum's own summation slop by
+// roughly one over the triangle's aspect ratio — and a bound read off that
+// held sum would not enclose it. The wall of a short loft over long recorded
+// LineSegs is exactly that shape (docs/loft-design.md Table B splits every
+// wall quad along a diagonal), so this is the ordinary case, not an edge one.
+func wallTriangleArea(u, v xpt) (float64, float64) {
+	w := xcross(u, v)
+	q := xdot(w, w)
+	q.Quo(q, big.NewRat(4, 1))
+	return ratSqrtDown(q), ratSqrtUp(q)
 }
 
 // foldBounds extends the componentwise extreme box over one held vertex.
@@ -164,10 +203,18 @@ func (m *loftMassAccumulator) bounds() (Box, bool) {
 
 // area publishes the two caps' own exact rational areas (moments.go's
 // ProfileRecord.Area, already-exact rationals — never the sum of their own
-// triangulations' float areas) plus the wall triangles' naive float sum,
-// bounded by sumSlop (the wall sum's own summation-and-square-root proof)
-// plus the caps' single-rounding error plus the final addition's own
-// rounding. Area is never Exact whenever any wall triangle has nonzero area
+// triangulations' float areas) plus the wall triangles' float sum. Four proven
+// terms bound the total, and every one of them is charged at the magnitude
+// where its own rounding happens:
+//
+//   - wallAreaSlack — Σ over the triangles of the exact-rational cross-norm
+//     bracket's own width, so each triangle's area is charged at ITS OWN
+//     scale, never at the held total's;
+//   - sumSlop over wallAreaAbs — the summation loop that added those terms;
+//   - capBound — the caps' exact rational rounding once into float64;
+//   - addBound — the final wall+cap addition's own rounding, exact.
+//
+// Area is never Exact whenever any wall triangle has nonzero area
 // (docs/loft-design.md §8, spline design §3's arc-length asymmetry).
 func (m *loftMassAccumulator) area(capAreas ...*big.Rat) Measurement {
 	capTotal := new(big.Rat)
@@ -179,7 +226,7 @@ func (m *loftMassAccumulator) area(capAreas ...*big.Rat) Measurement {
 	capFloat, _ := capTotal.Float64()
 	capBound := rationalFloatError(capTotal, capFloat)
 
-	wallBound := sumSlop(m.wallTerms, math.Abs(m.wallAreaSum))
+	wallBound := absSumUpper(m.wallAreaSlack, sumSlop(m.wallTerms, m.wallAreaAbs))
 	value := m.wallAreaSum + capFloat
 	addBound := addRoundError(m.wallAreaSum, capFloat, value)
 	bound := absSumUpper(wallBound, capBound, addBound)
