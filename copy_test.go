@@ -246,6 +246,7 @@ func TestDuplicatePlainExtrudeHasNoBlendRoles(t *testing.T) {
 }
 
 func TestDuplicatePreservesFacetedProvenance(t *testing.T) {
+	t.Parallel()
 	doc := decad.New()
 	plate := boxBody(t, doc, 0, 0, 20, 20, 8)
 	tool := translated(t, diskBody(t, doc, 14, 6, 2), 0, 0, -6)

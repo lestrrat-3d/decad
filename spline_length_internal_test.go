@@ -69,6 +69,7 @@ func TestFreeformArcLengthBracketEnclosesAndNarrows(t *testing.T) {
 // 2.20e-05, over a hundred times coarser, and it narrows by as little as 1.37x
 // at one of its ten levels, so no per-level rate sizes it either.
 func TestFreeformArcLengthRelativeWidthVariesWithTheSpan(t *testing.T) {
+	t.Parallel()
 	require.LessOrEqual(t, freeformBracketCost(32), freeformWorkLimit,
 		"a 32-control span's bracket is affordable")
 	require.Greater(t, freeformBracketCost(33), freeformWorkLimit,
@@ -262,6 +263,7 @@ func TestDirectedSqrtBracketsAtExtremeScale(t *testing.T) {
 // must also keep its relative width — a bound that survives only by widening
 // is no fix.
 func TestFreeformArcLengthBracketsAtExtremeScale(t *testing.T) {
+	t.Parallel()
 	for _, scale := range []float64{
 		4.572036268370589e-153,
 		1e-200,
@@ -296,6 +298,7 @@ func TestFreeformArcLengthBracketsAtExtremeScale(t *testing.T) {
 // 10 mm curve: that one leg's squared distance underflowed, its upper bound
 // escaped to +Inf, and the whole walk's length went with it.
 func TestFreeformArcLengthNearDuplicateControlPair(t *testing.T) {
+	t.Parallel()
 	for _, gap := range []float64{4.572036268370589e-153, 1e-200, 1e-300} {
 		t.Run(strconv.FormatFloat(gap, 'g', -1, 64), func(t *testing.T) {
 			coords := [][2]float64{{0, 0}, {gap, 0}, {5, 3}, {10, 0}}

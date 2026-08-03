@@ -268,6 +268,7 @@ func filletPlans(fc filletCase) []filletPlan {
 }
 
 func TestFilletPropertyInvariants(t *testing.T) {
+	t.Parallel()
 	rng := rand.New(rand.NewSource(filletPropertySeed))
 	t.Logf("fillet property seed = %#x", filletPropertySeed)
 

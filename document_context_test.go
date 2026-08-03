@@ -71,8 +71,15 @@ func facetedContextBody(t *testing.T) (*decad.Document, *decad.Body) {
 }
 
 func TestPlacementContextVariantsCancelFacetedRebuild(t *testing.T) {
+	t.Parallel()
 	shift, err := r3.Translation(r3.NewVec(100, 0, 0))
 	require.NoError(t, err)
+
+	// One fixture serves every variant: each case cancels its rebuild and then
+	// asserts the document is untouched, so the drilled plate this test costs
+	// most of its time building is still the same live body the next case
+	// needs. Rebuilding it per case repeats an identical boolean.
+	doc, body := facetedContextBody(t)
 
 	tests := []struct {
 		name string
@@ -100,7 +107,6 @@ func TestPlacementContextVariantsCancelFacetedRebuild(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			doc, body := facetedContextBody(t)
 			beforeBodies := doc.Bodies()
 			beforeRecipe := doc.Recipe()
 			ctx := newCancelAfterContext(t.Context(), 3)
@@ -119,8 +125,13 @@ func TestPlacementContextVariantsCancelFacetedRebuild(t *testing.T) {
 }
 
 func TestPlacementContextChecksCancellationBeforeCommit(t *testing.T) {
+	t.Parallel()
 	shift, err := r3.Translation(r3.NewVec(100, 0, 0))
 	require.NoError(t, err)
+
+	// As above: every case leaves the document unchanged, so one drilled plate
+	// serves them all.
+	doc, body := facetedContextBody(t)
 
 	tests := []struct {
 		name   string
@@ -152,7 +163,6 @@ func TestPlacementContextChecksCancellationBeforeCommit(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			doc, body := facetedContextBody(t)
 			beforeBodies := doc.Bodies()
 			beforeRecipe := doc.Recipe()
 			ctx := &cancelOnSecondDirectCallContext{

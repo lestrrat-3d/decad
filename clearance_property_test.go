@@ -219,6 +219,7 @@ func assertBracket(t *testing.T, c decad.Clearance, sampledMin, slack float64, t
 // --- invariants 1 & 2: prism pairs ------------------------------------------
 
 func TestClearanceOraclePrismPairs(t *testing.T) {
+	t.Parallel()
 	t.Logf("seed=%#x", oracleSeed)
 	rng := rand.New(rand.NewSource(oracleSeed + 1))
 	rows := 0
@@ -263,6 +264,7 @@ func TestClearanceOraclePrismPairs(t *testing.T) {
 // --- invariants 1 & 2: curved pairs (P8 / CF cells) -------------------------
 
 func TestClearanceOracleCurvedPairs(t *testing.T) {
+	t.Parallel()
 	t.Logf("seed=%#x", oracleSeed)
 	rng := rand.New(rand.NewSource(oracleSeed + 2))
 	rows := 0
@@ -320,6 +322,7 @@ func randBallOrTorus(t *testing.T, doc *decad.Document, rng *rand.Rand) *decad.B
 // --- invariant 3: interpenetration is never Sound ---------------------------
 
 func TestClearanceOracleOverlapNeverSound(t *testing.T) {
+	t.Parallel()
 	t.Logf("seed=%#x", oracleSeed)
 	rng := rand.New(rand.NewSource(oracleSeed + 3))
 
@@ -375,6 +378,7 @@ func TestClearanceOracleOverlapNeverSound(t *testing.T) {
 // --- invariant 4: easy pairs stay non-violating -----------------------------
 
 func TestClearanceOracleWellSeparatedSound(t *testing.T) {
+	t.Parallel()
 	t.Logf("seed=%#x", oracleSeed)
 	rng := rand.New(rand.NewSource(oracleSeed + 4))
 	for range 14 {
@@ -406,6 +410,7 @@ func TestClearanceOracleWellSeparatedSound(t *testing.T) {
 // design's noise floor (the default rel = 1e-3 gate — so a too-wide bracket
 // would read Suspect rather than Sound).
 func TestClearancePolyBracketContainsTruth(t *testing.T) {
+	t.Parallel()
 	t.Logf("seed=%#x", oracleSeed)
 	rng := rand.New(rand.NewSource(oracleSeed + 5))
 

@@ -81,6 +81,7 @@ func TestSTLChordTolerance(t *testing.T) {
 }
 
 func TestSTLDefaultChordTolerance(t *testing.T) {
+	t.Parallel()
 	sizeDefault := func(t *testing.T, body *decad.Body) units.Value {
 		t.Helper()
 		bounds, err := body.Bounds()

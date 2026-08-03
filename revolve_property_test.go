@@ -430,6 +430,7 @@ func newCone(rng *rand.Rand) setup {
 // --- the property driver -----------------------------------------------------
 
 func TestRevolvePropertyInvariants(t *testing.T) {
+	t.Parallel()
 	rng := rand.New(rand.NewSource(revolvePropertySeed))
 	t.Logf("revolve property seed = %#x", revolvePropertySeed)
 
