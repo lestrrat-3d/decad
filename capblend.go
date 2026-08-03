@@ -51,6 +51,11 @@ type capBlendPayload struct {
 	d          float64
 	startLoops map[int]bool // loop index -> chamfered on the z0 cap
 	endLoops   map[int]bool // loop index -> chamfered on the z1 cap
+	// patches indexes every chamferCap(...) role by its plane-local geometry
+	// (capPatchGeom), populated once at build time (evalCapBlendContext) and
+	// reused by the DX7/DX8 surveys — placement-invariant, since capPatchGeom
+	// is entirely plane-local (u, v, z), unaffected by xform.
+	patches map[string]capPatchGeom
 }
 
 // transform is the accumulated rigid placement.

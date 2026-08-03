@@ -178,8 +178,25 @@ func buildCapBand(ctx context.Context, body *Body, ref StepRef, cbp capBlendPayl
 		}
 		seam0 := sideCo[0].edge // the side wall's own whole-circle bottom/top edge
 		capEdge := wholeCircleEdge(pl, w.cU, w.cV, capRadius, capZ, w.th1 > w.th0)
-		patch := buildConePatch(pl, body, ref, li, 0, w.cU, w.cV, w.radius, capRadius, sideZ, capZ, matSign, seam0, capEdge)
-		geom := capPatchGeom{circular: true, cU: w.cU, cV: w.cV, sideRadius: w.radius, capRadius: capRadius, th0: w.th0, th1: w.th1, sideZ: sideZ, capZ: capZ}
+		patch := buildConePatch(pl, body, ref, li, 0, w.cU, w.cV, w.radius, capRadius, sideZ, capZ, matSign, false, seam0, capEdge)
+		sign := 1.0
+		if w.th1 < w.th0 {
+			sign = -1
+		}
+		samplePoint := pl.point(w.cU+w.radius, w.cV, sideZ)
+		fixPatchOrientation(patch, pl, samplePoint, sign, 0, -matSign)
+		// th0, th1 record the patch's ANGULAR EXTENT, not the wall's own
+		// walked sense — the material-side semantics are already carried by
+		// the -matSign correction in capBandVolume/patchRawFlux, so a
+		// clockwise (hole) wall's reversed (th1 < th0) recording is
+		// normalized to an increasing pair here, or patchRawFlux's trig terms
+		// would silently take the wrong sign for the removed/added volume
+		// (found via TestCapBlendHoleLoopChamferVolume).
+		gth0, gth1 := w.th0, w.th1
+		if gth1 < gth0 {
+			gth0, gth1 = gth1, gth0
+		}
+		geom := capPatchGeom{circular: true, cU: w.cU, cV: w.cV, sideRadius: w.radius, capRadius: capRadius, th0: gth0, th1: gth1, sideZ: sideZ, capZ: capZ}
 		capLoop := []coedge{{edge: capEdge, forward: true}}
 		return capBandResult{patches: []*Face{patch}, capCo: capLoop, geom: []capPatchGeom{geom}}, nil
 	}
@@ -263,6 +280,19 @@ func buildCapBand(ctx context.Context, body *Body, ref StepRef, cbp capBlendPayl
 				{edge: slantIn[i], forward: false},
 			}, outer: true}},
 		}
+		// Orientation: a corner's own offset carrier is an EROSION (the
+		// per-feature offset construction, shell_offset.go, is a Minkowski
+		// erosion: the offset boundary is always a SUBSET of the original
+		// material, at a reflex corner as much as a convex one). So a fixed
+		// radius r < d, near the corner, sits within the ORIGINAL material at
+		// sideZ (the unchanged corner) and within the ERODED-AWAY void at
+		// capZ — material retreats toward the cap exactly as a regular wall
+		// patch's does, and outward tilts the SAME way: toward the cap, plus
+		// away from the corner point radially (the direction the offset arc
+		// bulges). Verified empirically (never hand-trusted):
+		// fixPatchOrientation checks the actual built surface's own NormalAt
+		// against this reference and reverses only if they disagree.
+		fixPatchOrientation(face, pl, pl.point(j.vU+d*math.Cos(arcTh0[i]), j.vV+d*math.Sin(arcTh0[i]), capZ), math.Cos(arcTh0[i]), math.Sin(arcTh0[i]), -matSign)
 		slantIn[i].faces = append(slantIn[i].faces, face)
 		arc.faces = append(arc.faces, face)
 		slantOut[i].faces = append(slantOut[i].faces, face)
@@ -328,6 +358,27 @@ func buildCapBand(ctx context.Context, body *Body, ref StepRef, cbp capBlendPayl
 				{edge: leadSlant, forward: true},
 			}, outer: true}},
 		}
+		// Orientation: the reference is the ORIGINAL wall's own outward
+		// convention (the same "tangent rotated a quarter turn" rule
+		// extrude.go's prism side walls use — it already covers hole walls
+		// through the wall's OWN walked sense, no separate case needed) plus
+		// the toward-the-cap Z sense every patch in this band shares. Checked
+		// empirically against the patch's own built NormalAt, never hand
+		// trusted: fixPatchOrientation reverses only if they disagree.
+		var refU, refV float64
+		var samplePoint r3.Vec
+		if !w.isCircular() {
+			refU, refV = w.tanInV, -w.tanInU
+			samplePoint = liftSide(Point2{U: w.startU, V: w.startV})
+		} else {
+			sign := 1.0
+			if w.th1 < w.th0 {
+				sign = -1
+			}
+			refU, refV = sign*math.Cos(w.th0), sign*math.Sin(w.th0)
+			samplePoint = pl.point(w.cU+w.radius*math.Cos(w.th0), w.cV+w.radius*math.Sin(w.th0), sideZ)
+		}
+		fixPatchOrientation(face, pl, samplePoint, refU, refV, -matSign)
 		side.faces = append(side.faces, face)
 		trailSlant.faces = append(trailSlant.faces, face)
 		capEdge.faces = append(capEdge.faces, face)
@@ -340,7 +391,13 @@ func buildCapBand(ctx context.Context, body *Body, ref StepRef, cbp capBlendPayl
 			g.circular = true
 			g.cU, g.cV = w.cU, w.cV
 			g.sideRadius, g.capRadius = w.radius, capRadius
+			// th0, th1 record the ANGULAR EXTENT, not the wall's own walked
+			// sense — see the single-closed-circle branch's comment above;
+			// the same normalization applies to a partial arc wall.
 			g.th0, g.th1 = w.th0, w.th1
+			if g.th1 < g.th0 {
+				g.th0, g.th1 = g.th1, g.th0
+			}
 		} else {
 			g.sideA = Point2{U: w.startU, V: w.startV}
 			g.sideB = Point2{U: w.endU, V: w.endV}
@@ -425,15 +482,18 @@ func coneSurface(pl prismPayload, cu, cv, r0, r1, z0, z1 float64) Surface {
 }
 
 // buildConePatch builds a full-turn Cone chamfer patch (a whole circular
-// loop's own chamfer) between two full-circle edges.
-func buildConePatch(pl prismPayload, body *Body, ref StepRef, li, patchIdx int, cu, cv, sideRadius, capRadius, sideZ, capZ float64, matSign float64, sideEdge, capEdge *Edge) *Face {
+// loop's own chamfer) between two full-circle edges. reversed follows the
+// original wall's own sense (a hole/clockwise wall's material lies outside
+// its cylinder, so its chamfer cone's geometric normal needs reversing too —
+// extrude.go's same rule for a clockwise circular wall).
+func buildConePatch(pl prismPayload, body *Body, ref StepRef, li, patchIdx int, cu, cv, sideRadius, capRadius, sideZ, capZ float64, matSign float64, reversed bool, sideEdge, capEdge *Edge) *Face {
 	role := fmt.Sprintf("chamferCap(%s,%d,%d)", capNameOf(matSign), li, patchIdx)
 	surf := coneSurface(pl, cu, cv, sideRadius, capRadius, sideZ, capZ)
 	loops := []*Loop{
 		{coedges: []coedge{{edge: sideEdge, forward: true}}, outer: true},
 		{coedges: []coedge{{edge: capEdge, forward: false}}, outer: true},
 	}
-	face := &Face{surface: surf, origins: []FeatureRef{{Step: ref, Role: role}}, body: body, loops: loops}
+	face := &Face{surface: surf, origins: []FeatureRef{{Step: ref, Role: role}}, body: body, reversed: reversed, loops: loops}
 	sideEdge.faces = append(sideEdge.faces, face)
 	capEdge.faces = append(capEdge.faces, face)
 	return face
@@ -444,4 +504,25 @@ func capNameOf(matSign float64) string {
 		return "end"
 	}
 	return "start"
+}
+
+// fixPatchOrientation empirically verifies a patch's outward normal sign
+// against a plane-local reference direction (refU, refV, refZ), reversing
+// face.reversed if the two disagree. samplePoint must lie on the patch's own
+// built surface. It reads the surface's OWN Face.NormalAt — the exact
+// formula every downstream reader (DX7's undercut survey included) uses — so
+// no consumer can see a different answer than what was checked here, and the
+// check never trusts a hand-derived sign convention: a Plane's u x v and a
+// Cone's radially-outward formula both flip with which cap a band is on
+// (docs/modify-reach-design.md §8.3), so this call is the ONE place that
+// decides the sign, from the analytic geometry itself.
+func fixPatchOrientation(f *Face, pl prismPayload, samplePoint r3.Vec, refU, refV, refZ float64) {
+	n, err := f.NormalAt(samplePoint)
+	if err != nil {
+		return
+	}
+	ref := pl.dir(refU, refV, refZ)
+	if n.Value.Dot(ref) < 0 {
+		f.reversed = !f.reversed
+	}
 }

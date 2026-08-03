@@ -1079,9 +1079,7 @@ func runSurveys(budget *workBudget, br *BodyReport, cfg verifyConfig) ([]Diagnos
 		case cupPayload:
 			out = cupUndercuts(b, pl, *cfg.pull)
 		case capBlendPayload:
-			// docs/modify-reach-design.md Table DX (DX7) requires exact
-			// per-patch normal ranges; not yet implemented for this PR's
-			// slice. Undecided, never fabricated (Suspect).
+			out = capBlendUndercuts(b, pl, *cfg.pull)
 		case facetedPayload:
 			out.reason = surveyFacetedUnsupported
 		}
@@ -1125,9 +1123,7 @@ func runSurveys(budget *workBudget, br *BodyReport, cfg verifyConfig) ([]Diagnos
 		case cupPayload:
 			out, ok = cupMinRadius(pl)
 		case capBlendPayload:
-			// docs/modify-reach-design.md Table DX (DX8) requires the exact
-			// minimum concave principal radius over the patches; not yet
-			// implemented for this PR's slice. Undecided (Suspect).
+			out, ok = capBlendMinRadius(pl)
 		case facetedPayload:
 			out.reason = surveyFacetedUnsupported
 		}

@@ -50,6 +50,15 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref StepRef, cbp capB
 	endLoopObjs := make([]*Loop, len(loops))
 	var startArea, endArea, sideArea, patchArea, slabVolume boundedScalar
 	var bandVolume float64
+	patchGeoms := map[string]capPatchGeom{}
+	collectPatchGeoms := func(band capBandResult) {
+		for i, f := range band.patches {
+			if len(f.origins) == 0 {
+				continue
+			}
+			patchGeoms[f.origins[0].Role] = band.geom[i]
+		}
+	}
 
 	for li, loop := range loops {
 		if err := ctx.Err(); err != nil {
@@ -95,6 +104,7 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref StepRef, cbp capB
 				return nil, err
 			}
 			faces = append(faces, band.patches...)
+			collectPatchGeoms(band)
 			startCo = band.capCo
 			v, err := capBandVolume(ctx, loop, cbp, band.geom, cbp.z0, +1)
 			if err != nil {
@@ -112,6 +122,7 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref StepRef, cbp capB
 				return nil, err
 			}
 			faces = append(faces, band.patches...)
+			collectPatchGeoms(band)
 			endCo = band.capCo
 			v, err := capBandVolume(ctx, loop, cbp, band.geom, cbp.z1, -1)
 			if err != nil {
@@ -219,6 +230,7 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref StepRef, cbp capB
 	if err := validateAnalyticBodyMeasurements(body); err != nil {
 		return nil, err
 	}
+	cbp.patches = patchGeoms
 	body.payload = cbp
 	return body, nil
 }
@@ -263,12 +275,18 @@ func capBandVolume(ctx context.Context, loop LoopRecord, cbp capBlendPayload, ge
 	// capZ faces -matSign*Z, the disk at sideZ faces +matSign*Z, both away
 	// from the band's own material. A flat disk's raw flux (P.N over the
 	// disk) is its constant Z coordinate times its signed normal times its
-	// area — no triangulation needed, and no extra factor: patchRawFlux's
-	// Plane/Cone terms are already in this same "raw flux" convention (the
-	// grand total is divided by 3 exactly once, below).
+	// area — no triangulation needed.
 	fluxTotal := capZ*(-matSign)*capArea.value + sideZ*matSign*sideArea.value
+	// patchRawFlux's own v0..v3 (or triangle-fan) vertex order is FIXED —
+	// side-level vertices first, cap-level second — regardless of which cap
+	// the band sits on. That fixed order is "CCW as seen from outside" for
+	// one Z ordering of (sideZ, capZ) and its mirror for the other, exactly
+	// the same start/end asymmetry capblend_geom.go's fixPatchOrientation
+	// corrects for the SURFACE normal — so the flux sign needs the same
+	// -matSign correction here, confirmed empirically
+	// (TestCapBlendStartCapVolumeMatchesEndCap).
 	for _, g := range geom {
-		fluxTotal += patchRawFlux(g)
+		fluxTotal += -matSign * patchRawFlux(g)
 	}
 	return fluxTotal / 3, nil
 }
