@@ -1271,16 +1271,31 @@ func bodyGateDiameter(ctx context.Context, body *Body) (float64, bool, error) {
 // containment this fallback leans on), and a cup's whole solid — walls, floor
 // and cavity alike — sits inside its own outer region's full-height prism,
 // exactly the containment `cupPayload.extentAlong` already relies on ("the
-// OUTER prism's directional extent... the cavity being interior"). So the
-// envelope's own analytic diameter, built through the exact witness machinery
-// addPrismFaces gives a shipped prismPayload, is a diameter of a body that
-// PROVABLY CONTAINS the true one: it can only overstate, never understate,
-// which is the one direction this gate may err in (verification design §3 —
-// an understated D tightens Ref and can turn a passing reading into a false
-// failure; an overstated one only loosens it). It stays intrinsic to the
-// body's own geometry — built from the payload's own frame/xform, the same
-// map a shipped prism's diameter is read through — so it carries none of the
-// pose-dependence verification design §4 excludes an axis-aligned box for.
+// OUTER prism's directional extent... the cavity being interior"). As a
+// SHAPE, that envelope PROVABLY CONTAINS the true body, so the reduction
+// itself can only overstate the true diameter, never understate it.
+//
+// What this function actually reports, though, is a reading of that shape,
+// taken through the identical witness maximum a shipped prismPayload already
+// reads its own diameter through above (addPrismFaces gives two witnesses
+// per circular wall — the mid-angle point at mid-height and th0 at z0 —
+// which pointSetDiameterWithBudget maxes pairwise). That reader is exact for
+// a full circle, for any arc at or below 180 degrees of sweep, and for any
+// all-line section; above 180 degrees it can miss a wall's true farthest
+// pair, understating what it reports by a ratio that peaks at 2/sqrt(3),
+// about 15.5%, at 240 degrees of sweep (docs/verification-design.md §3
+// works the figure). That understatement is not something this fallback
+// introduces: the same reader already returns it for an ordinary shipped
+// prismPayload built from the same curved section, so this fallback is no
+// weaker than the exact path it stands in for, and the repair belongs to
+// that shared reader rather than to this construction. The consequence
+// stays inside the one direction this gate is free to err in: an
+// understated D tightens Ref and can turn a passing reading into a false
+// Suspect, never a false Sound (verification design §3). It stays intrinsic
+// to the body's own geometry — built from the payload's own frame/xform, the
+// same map a shipped prism's diameter is read through — so it carries none
+// of the pose-dependence verification design §4 excludes an axis-aligned box
+// for.
 func envelopeGateDiameter(budget *workBudget, body *Body) (float64, bool, error) {
 	env, ok := envelopePrismFor(body.payload)
 	if !ok {

@@ -317,10 +317,32 @@ the receiver's own extruded envelope — the same containment
 `docs/modify-reach-design.md`'s own `capBlendPayload` row and
 `cupPayload.extentAlong` both already rely on — and a cup's whole solid sits
 inside its outer region's own full-height envelope, the cavity being
-interior. That envelope diameter can therefore only OVERSTATE the body's true
-diameter, never understate it — the one direction this gate is free to err in
+interior. As a **shape**, that envelope therefore can only OVERSTATE the
+body's true diameter, never understate it — the reduction itself is sound.
+
+What `envelopeGateDiameter` reports is not that shape's true diameter, though,
+but a *reading* of it, taken through the identical witness maximum a shipped
+`prismPayload` already reads its own diameter through: `addPrismFaces` emits
+only two witnesses per circular wall — the mid-angle point at mid-height, and
+`th0` at `z0` — and `pointSetDiameter` maxes over that sparse set. That
+reader is exact for a full circle, for any arc at or below **180°** of sweep,
+and for any all-line section. Above 180° it can miss the wall's true
+farthest pair: measured across arc sweeps from 90° to 355° and heights from
+0.001 to 1, the understatement begins past 180° and peaks at **240°**, where
+the only sampled points are `th0`, the mid-angle, and `th1`, mutually
+`2R·sin(120°)` apart while the wall's true diameter is `2R` — a ratio of
+`2/√3 ≈ 1.1547`, **about 15.5%**. This is not a defect the fallback
+introduces: the same reader already understates the identical way for an
+ordinary shipped `prismPayload` built from the same curved section, through
+`newBodyGeomBudget`'s own carrier model, so `envelopeGateDiameter` is no
+weaker than the exact path it stands in for. The repair belongs to that
+shared reader — every consumer of `addPrismFaces`'s witnesses gains it at
+once — and is tracked as a follow-up rather than fixed here. The
+understatement stays inside the one direction this gate is free to err in
 (§3's own rule: an understated `D` tightens `Ref` and can turn a passing
-reading into a false failure, while an overstated one only loosens the gate).
+reading into a false `Suspect`; an overstated one only loosens the gate) —
+never a false `Sound`.
+
 Every tolerance-gate `Suspect` is therefore a genuine `bound > rel*Ref`,
 already carried by `DiagMeasurementBeyondTolerance`, so the "empty
 **exactly** when `Sound`" completeness holds.
