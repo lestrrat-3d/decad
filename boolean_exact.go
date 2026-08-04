@@ -120,8 +120,22 @@ const (
 	segFilterErrCoef = 64 * unitRoundoff
 	// segFilterFloor is one absolute term covering every gradual-underflow
 	// crumb the same evaluation can commit. Each is at most 2⁻¹⁰⁷⁵ and there
-	// are a few dozen of them, so 2⁻¹⁰⁰⁰ dominates them all together.
+	// are a few dozen of them, so 2⁻¹⁰⁰⁰ dominates them all together. It is an
+	// absolute term at the FINAL threshold, so it speaks only for a crumb
+	// nothing amplifies afterwards; segFilterMinNormal is what keeps the
+	// interior branch inside that promise.
 	segFilterFloor = 0x1p-1000
+	// segFilterMinNormal is the smallest positive NORMAL float64. tooFar's
+	// forward-error bound is a RELATIVE one and holds only over normalized
+	// arithmetic; a subnormal intermediate carries absolute error instead, and
+	// a later division by a small quantity amplifies that crumb back up to the
+	// scale of the answer, which segFilterFloor does not cover.
+	segFilterMinNormal = 0x1p-1022
+	// segFilterMinDot is the smallest c₁ whose SQUARE is still normal. The
+	// interior branch works at the (D·L)² scale, which reaches the subnormal
+	// range at the SQUARE ROOT of the coordinate scale that would underflow ww
+	// or vv — so the positivity guards on those two say nothing about it.
+	segFilterMinDot = 0x1p-511
 )
 
 // segAdmissionRadius2 is τ², the squared distance from the FLOAT segment beyond
@@ -230,9 +244,33 @@ func newSegFilter(a, b r3.Vec, tau2 float64) segFilter {
 // which the budget swallows whole. So segFilterErrCoef = 64·u is 2.6× the worst
 // branch bound, and mag carries the branch's own magnitude.
 //
+// THAT WHOLE BOUND ASSUMES NORMALIZED ARITHMETIC, and the interior branch is
+// the one place this evaluation leaves it while the guards already in place
+// still read healthy. W and V are sums of squares of coordinates, but c₁²
+// sits at (D·L)² — the SQUARE of the scale W and V sit at — so it reaches the
+// subnormal range at the square root of the coordinate scale that would
+// underflow either of them. A subnormal c₁² has lost an absolute crumb rather
+// than a relative one, and the division by V that follows multiplies that
+// crumb by 1/V, which is large exactly when V is small: at the bottom of the
+// range the lost crumb comes back as the whole of W, so a candidate exactly ON
+// the segment computes d² = W and is REJECTED. segFilterFloor cannot cover it,
+// being an absolute term at the final threshold rather than at the intermediate
+// the division amplifies.
+//
+// Two things answer it, and the branch takes both. It forms the subtrahend as
+// (c₁/V)·c₁, so the division comes FIRST and every intermediate sits at the
+// scale of the result rather than at (D·L)²; and it ABSTAINS — returns false,
+// sending the candidate to the exact predicate that decides it anyway —
+// whenever any of those intermediates, or c₁² itself, is not a normal float.
+// Abstaining needs no error analysis of its own: it is exactly what the filter
+// does for every candidate it cannot prove far away. The rescale is an
+// improvement on the arrangement; the abstain is the guarantee.
+//
 // Any overflow to ±Inf makes the final subtraction NaN or −Inf and the
 // comparison false, so the candidate goes to the exact predicate: the filter
 // fails closed by construction, with no non-finite special case of its own.
+// A NaN intermediate fails every normality test below and abstains there
+// instead, which is the same answer.
 func (f segFilter) tooFar(p r3.Vec) bool {
 	if !(f.vv > 0) {
 		// The float segment has no length to project onto — both endpoints
@@ -245,7 +283,16 @@ func (f segFilter) tooFar(p r3.Vec) bool {
 	d2, mag := ww, ww
 	if c1 := w.Dot(f.v); c1 > 0 {
 		if c1 < f.vv {
-			d2 = ww - c1*c1/f.vv
+			// c₁²/V, divided before it is squared. The guard is written so a
+			// NaN fails it: every intermediate this branch could form — the
+			// two below and the c₁² the unscaled arrangement would form — has
+			// to be normal, or the branch has no proven bound and abstains.
+			t := c1 / f.vv
+			proj := t * c1
+			if !(c1 >= segFilterMinDot && t >= segFilterMinNormal && proj >= segFilterMinNormal) {
+				return false
+			}
+			d2 = ww - proj
 		} else {
 			e := p.Sub(f.b)
 			d2 = e.Dot(e)

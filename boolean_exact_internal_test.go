@@ -109,6 +109,73 @@ func TestSegFilterNeverRejectsAnExactHit(t *testing.T) {
 	}
 }
 
+// TestSegFilterNeverRejectsAnExactHitAtEveryScale is the same property as
+// TestSegFilterNeverRejectsAnExactHit over the whole float64 exponent range
+// rather than a [−100, 100] coordinate box.
+//
+// It has to be a SWEEP rather than a witness. The interior branch works at the
+// (D·L)² scale — the square of the scale ww and vv work at — so it leaves the
+// normalized range across a wide band of coordinate scales, and the two halves
+// of that band fail differently: at the bottom c₁² flushes to zero outright,
+// while most of the band loses it gradually and keeps a shrinking number of
+// significand bits. A case pinned to either end says nothing about the other,
+// so the sweep asserts mechanically that it visited both.
+func TestSegFilterNeverRejectsAnExactHitAtEveryScale(t *testing.T) {
+	rng := rand.New(rand.NewPCG(19, 23))
+	// A coordinate is a random magnitude within one binade of the scale, so
+	// every component stays normal down to the bottom of the sweep and the
+	// exponent alone moves.
+	coord := func(s float64) float64 {
+		x := (rng.Float64()*0.5 + 0.5) * s
+		if rng.IntN(2) == 0 {
+			return -x
+		}
+		return x
+	}
+	flushed, gradual := 0, 0
+	for e := -1020; e <= 500; e++ {
+		s := math.Ldexp(1, e)
+		for range 8 {
+			a := r3.NewVec(coord(s), coord(s), coord(s))
+			b := r3.NewVec(coord(s), coord(s), coord(s))
+			xa, xb := xptOf(a), xptOf(b)
+			tt := big.NewRat(int64(rng.IntN(9999)+1), 10000)
+			xp := xlerp(xa, xb, tt)
+			p := xp.vec()
+			require.True(t, onSegmentInterior3(xa, xb, xp),
+				`the constructed point must be exactly interior to the exact segment at 2^%d`, e)
+
+			maxAbs := 0.0
+			for _, v := range []r3.Vec{a, b, p} {
+				maxAbs = math.Max(maxAbs, math.Max(math.Abs(v.X), math.Max(math.Abs(v.Y), math.Abs(v.Z))))
+			}
+			f := newSegFilter(a, b, segAdmissionRadius2(0, maxAbs))
+			require.False(t, f.tooFar(p),
+				`the filter must never reject the float rounding of a point exactly on the segment, at 2^%d`, e)
+
+			// Record which underflow regime this case put the interior branch
+			// in, counting only cases whose distance term clears the absolute
+			// floor — below that the filter could not reject at any accuracy,
+			// so such a case would prove nothing.
+			w, v := p.Sub(a), b.Sub(a)
+			ww, c1 := w.Dot(w), w.Dot(v)
+			if c1 <= 0 || c1 >= f.vv || !(ww > segFilterFloor) {
+				continue
+			}
+			switch sq := c1 * c1; {
+			case sq == 0:
+				flushed++
+			case sq < segFilterMinNormal:
+				gradual++
+			}
+		}
+	}
+	require.Positive(t, flushed,
+		`the sweep must reach scales where the (D·L)² intermediate flushes to zero`)
+	require.Positive(t, gradual,
+		`the sweep must reach scales where the (D·L)² intermediate underflows gradually`)
+}
+
 // TestSegFilterRejectsTheOverwhelmingMajority is the reason the filter exists:
 // on a mesh-spanning edge nearly every vertex must be turned away before the
 // rational predicate ever runs.
