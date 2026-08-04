@@ -147,12 +147,18 @@ func oneLoopCornerLoop(budget *workBudget, loop LoopRecord, work *freeformWork) 
 
 // capBandResult is what buildCapBand contributes to the enclosing build: the
 // new patch faces, the cap-level coedges bounding the loop's rewritten cap
-// boundary (in walk order), and the exact-rational patch geometry the
-// moments pass integrates.
+// boundary (in walk order), the exact-rational patch geometry the moments
+// pass integrates, and the band's own contour displacement (delta,
+// capblend_contour.go's capContourDelta/capWholeCircleDelta) — computed once
+// here, since buildCapBand already needs it for every cap-level vertex and
+// edge bound, and returned so the cap face area and band volume readings
+// (capblend_moments.go) charge the SAME value rather than each re-deriving it
+// through loopContourDelta.
 type capBandResult struct {
 	patches []*Face
 	capCo   []coedge
 	geom    []capPatchGeom
+	delta   float64
 }
 
 // capPatchGeom is one patch's exact analytic description, plane-local (u, v)
@@ -194,6 +200,16 @@ type capPatchGeom struct {
 	wholeTurn bool
 
 	sideZ, capZ float64
+
+	// contourAllow is this ONE patch's own proven allowance for how far its
+	// area can differ from the ruled quad the construction denotes, given the
+	// cap-level directrix's own displacement (bounds.go's
+	// bandPatchAreaAllow) — computed once, at build time, from this patch's
+	// own held chord length and slant distance, and added into patchAreaOf's
+	// returned bound. It is zero wherever the band's own contour displacement
+	// is zero (an axis-aligned section's exact miters), which is what keeps
+	// patchAreaOf's Plane/Cone arithmetic-only bound unchanged there.
+	contourAllow float64
 }
 
 // buildCapBand builds the chamfer band for one loop selected on one cap: the
@@ -261,10 +277,15 @@ func buildCapBand(ctx context.Context, body *Body, ref StepRef, cbp capBlendPayl
 		if gth1 < gth0 {
 			gth0, gth1 = gth1, gth0
 		}
-		geom := capPatchGeom{circular: true, cU: w.cU, cV: w.cV, sideRadius: w.radius, capRadius: capRadius, th0: gth0, th1: gth1, sweepCCW: w.th1 > w.th0, wholeTurn: true, sideZ: sideZ, capZ: capZ}
+		// chordUpper/slant are this whole-circle patch's own held chord (its
+		// full circumference) and slant distance (the radial change ruled
+		// against the axial one), the two factors bandPatchAreaAllow needs.
+		chordUpper := absSumUpper(capEdge.length, capEdge.lengthBound)
+		slant := math.Hypot(math.Abs(capRadius-w.radius), math.Abs(capZ-sideZ))
+		geom := capPatchGeom{circular: true, cU: w.cU, cV: w.cV, sideRadius: w.radius, capRadius: capRadius, th0: gth0, th1: gth1, sweepCCW: w.th1 > w.th0, wholeTurn: true, sideZ: sideZ, capZ: capZ, contourAllow: bandPatchAreaAllow(delta, chordUpper, slant)}
 		setPatchArea(patch, geom)
 		capLoop := []coedge{{edge: capEdge, forward: true}}
-		return capBandResult{patches: []*Face{patch}, capCo: capLoop, geom: []capPatchGeom{geom}}, nil
+		return capBandResult{patches: []*Face{patch}, capCo: capLoop, geom: []capPatchGeom{geom}, delta: delta}, nil
 	}
 
 	joins, err := capOffsetJoins(budget, cl, d)
@@ -405,10 +426,21 @@ func buildCapBand(ctx context.Context, body *Body, ref StepRef, cbp capBlendPayl
 		if gth1 < gth0 {
 			gth0, gth1 = gth1, gth0
 		}
+		// chordUpper/slant are this apex patch's own held chord (the arc
+		// joining the two offset feet) and slant distance (either of its two
+		// triangle-like edges from an offset foot down to the shared
+		// side-level apex — the two are not necessarily equal, so the larger
+		// is the sound upper bound).
+		chordUpper := absSumUpper(arc.length, arc.lengthBound)
+		slant := math.Max(
+			absSumUpper(slantOut[i].length, slantOut[i].lengthBound),
+			absSumUpper(slantIn[i].length, slantIn[i].lengthBound),
+		)
 		g := capPatchGeom{
 			circular: true, sweepCCW: false,
 			cU: j.vU, cV: j.vV, sideRadius: 0, capRadius: d,
 			th0: gth0, th1: gth1, sideZ: sideZ, capZ: capZ,
+			contourAllow: bandPatchAreaAllow(delta, chordUpper, slant),
 		}
 		setPatchArea(face, g)
 		geoms = append(geoms, g)
@@ -538,6 +570,16 @@ func buildCapBand(ctx context.Context, body *Body, ref StepRef, cbp capBlendPayl
 			g.sideB = Point2{U: w.endU, V: w.endV}
 			g.capA, g.capB = start, end
 		}
+		// chordUpper/slant are this wall patch's own held chord (its cap-level
+		// edge) and slant distance (either of its two bounding slant edges,
+		// which can differ at a mitered corner — the larger is the sound
+		// upper bound).
+		chordUpper := absSumUpper(capEdge.length, capEdge.lengthBound)
+		slant := math.Max(
+			absSumUpper(leadSlant.length, leadSlant.lengthBound),
+			absSumUpper(trailSlant.length, trailSlant.lengthBound),
+		)
+		g.contourAllow = bandPatchAreaAllow(delta, chordUpper, slant)
 		setPatchArea(face, g)
 		geoms = append(geoms, g)
 		capCo = append(capCo, coedge{edge: capEdge, forward: true})
@@ -548,7 +590,7 @@ func buildCapBand(ctx context.Context, body *Body, ref StepRef, cbp capBlendPayl
 			capCo = append(capCo, coedge{edge: arc, forward: true})
 		}
 	}
-	return capBandResult{patches: patches, capCo: capCo, geom: geoms}, nil
+	return capBandResult{patches: patches, capCo: capCo, geom: geoms, delta: delta}, nil
 }
 
 // setPatchArea gives a constructed chamfer patch the area and bound its OWN

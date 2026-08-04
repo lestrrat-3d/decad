@@ -1602,3 +1602,90 @@ func TestCapBlendContourHeldExtentCarriesItsDisplacement(t *testing.T) {
 		require.LessOrEqual(t, p.Z, tiltedBounds.Max.Z+slack)
 	}
 }
+
+// rightTriangleBodyLegs is rightTriangleBody with caller-chosen leg lengths:
+// a right triangle with legs a (along x) and b (along y), right angle at the
+// origin, extruded by h.
+func rightTriangleBodyLegs(t *testing.T, a, b, h float64) *decad.Body {
+	t.Helper()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	pts := []*sketch.Point{s.CreatePoint(0, 0), s.CreatePoint(a, 0), s.CreatePoint(0, b)}
+	for i := range pts {
+		s.CreateLine(pts[i], pts[(i+1)%len(pts)])
+	}
+	for _, p := range pts {
+		s.Fix(p)
+	}
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	require.Len(t, s.Profiles(), 1)
+
+	doc := decad.New()
+	body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+	require.NoError(t, err)
+	return body
+}
+
+// exactWedgeChamferReadings is the high-precision (400-bit) reference for a
+// right triangle's cap-loop chamfer: legs a, b (right angle at the origin),
+// swept h, chamfered by setback d on one cap. Offsetting all three sides of a
+// triangle inward by t produces a similar triangle, homothetic to the
+// original about the incenter with ratio (r-t)/r — r the inradius, a
+// classical fact about triangles independent of float64's own
+// offset-intersection arithmetic — so the cap contour's area at setback t is
+// exactly A0*((r-t)/r)^2, and the band between the original and offset
+// triangles is a pyramid frustum of height d: d/3*(A0+A1+sqrt(A0*A1)).
+func exactWedgeChamferReadings(t *testing.T, a, b, h, d float64) (capArea, volume *big.Float) {
+	t.Helper()
+	const prec = 400
+	bf := func(x float64) *big.Float { return new(big.Float).SetPrec(prec).SetFloat64(x) }
+	mul := func(x, y *big.Float) *big.Float { return new(big.Float).SetPrec(prec).Mul(x, y) }
+	add := func(x, y *big.Float) *big.Float { return new(big.Float).SetPrec(prec).Add(x, y) }
+	sub := func(x, y *big.Float) *big.Float { return new(big.Float).SetPrec(prec).Sub(x, y) }
+	quo := func(x, y *big.Float) *big.Float { return new(big.Float).SetPrec(prec).Quo(x, y) }
+	sqrt := func(x *big.Float) *big.Float { return new(big.Float).SetPrec(prec).Sqrt(x) }
+
+	A, B, H, D := bf(a), bf(b), bf(h), bf(d)
+	c := sqrt(add(mul(A, A), mul(B, B)))
+	A0 := quo(mul(A, B), bf(2))
+	s := quo(add(add(A, B), c), bf(2))
+	r := quo(A0, s)
+	k := quo(sub(r, D), r)
+	A1 := mul(A0, mul(k, k))
+	band := quo(mul(D, add(add(A0, A1), sqrt(mul(A0, A1)))), bf(3))
+	vol := add(mul(A0, sub(H, D)), band)
+	return A1, vol
+}
+
+// TestCapBlendWedgeAreaAndVolumeBoundsEncloseTrueError is the counterexample
+// that shows the missing cap-contour displacement term is a real defect, not
+// a theoretical one. An extreme-aspect-ratio right triangle wedge's offset
+// feet round far enough from the point they denote that the area and volume
+// bounds — built only from the arithmetic that measured the BUILT contour,
+// never from how far that contour sits from the one the offset DENOTES —
+// fall short of the true residual against a 400-bit reference.
+func TestCapBlendWedgeAreaAndVolumeBoundsEncloseTrueError(t *testing.T) {
+	const a, b, h, d = 9e4, 3e6, 50000.0, 13500.0
+	body := rightTriangleBodyLegs(t, a, b, h)
+	chamfered, err := body.Chamfer(capLoopEdges(body), units.Millimeters(d))
+	require.NoError(t, err)
+
+	wantArea, wantVol := exactWedgeChamferReadings(t, a, b, h, d)
+
+	capEnd := faceWithRole(t, chamfered, roleCapEnd)
+	area, err := capEnd.Area()
+	require.NoError(t, err)
+	heldArea := new(big.Float).SetPrec(400).SetFloat64(area.Value.Mag())
+	areaResidual, _ := new(big.Float).Abs(new(big.Float).SetPrec(400).Sub(heldArea, wantArea)).Float64()
+	require.LessOrEqual(t, areaResidual, area.Bound.Mag(),
+		`the published cap face area bound must enclose the true residual against the denoted (homothetic) contour`)
+
+	vol, err := chamfered.Volume()
+	require.NoError(t, err)
+	heldVol := new(big.Float).SetPrec(400).SetFloat64(vol.Value.Mag())
+	volResidual, _ := new(big.Float).Abs(new(big.Float).SetPrec(400).Sub(heldVol, wantVol)).Float64()
+	require.LessOrEqual(t, volResidual, vol.Bound.Mag(),
+		`the published volume bound must enclose the true residual against the denoted (homothetic) band`)
+}
