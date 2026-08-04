@@ -163,6 +163,7 @@ more specific SX row replaces that base refusal.
 | **SX10** | another modify op on `stackedPrismPayload` or `capBlendPayload` | body exists; compound feature composition not built | `ErrUnsupported` |
 | **SX11** | inward closed/side-opening prism shell leaves axial cavity height `h - k*t <= 0`, where `k` is kept cap count; or section cavity is empty | no cavity | `ErrDegenerate` |
 | **SX12** | cap chamfer ruled patches intersect away from shared boundaries or cannot be certified disjoint | body exists under trim kernel | `ErrUnsupported` |
+| **SX13** | a cap-loop chamfer whose circular wall is large enough beside `d` that the cap contour's offset radius rounds back onto the wall's own radius | body exists; its taper is real but finer than float64 names at that radius, so the band's cone patch cannot be told from a cylinder | `ErrUnsupported` |
 
 Gate order:
 
@@ -173,12 +174,19 @@ Gate order:
 | 3. reference | resolve asymmetric reference; SX3 |
 | 4. receiver/target | base R + RX; SX4/SX5/SX8/SX9/SX10 |
 | 5. existence | base S4/S5/S18/S10; SX6/SX11 |
-| 6. constructed-geometry audit | base S8/S6/S7/S9/S11; SX7/SX12 |
+| 6. constructed-geometry audit | base S8/S6/S7/S9/S11; SX7/SX12/SX13 |
 | 7. payload | base S12 until `stackedPrismPayload` lands; BX8 handles that exact case afterward |
 
 The existence-first rule remains load-bearing. SX6 precedes SX7: an empty
 offset means no regular rolling-ball surface; intersecting valid patches mean
 the surface exists but this evaluator cannot trim it.
+
+SX13 sits with SX7/SX12 in stage 6 and after SX6 for the same reason, on the
+same offset radius: SX6 is the offset that reaches the centre and leaves nothing
+(the existence question), while SX13 is the offset that leaves a circle this
+evaluator cannot tell from the one it started with. It is decided as each band
+patch's carrier is constructed — not from `d` alone, since the same `d` is
+perfectly representable against a smaller wall in the same section.
 
 ## 5. Tangent-chain expansion
 
@@ -369,6 +377,14 @@ Join corresponding analytic pieces:
 | line ↔ parallel line | `Plane` |
 | concentric circle/arc ↔ circle/arc | `Cone` (a cylinder only at equal radii) |
 | offset reflex connector ↔ original corner | trimmed `Cone` with corner apex |
+
+"A cylinder only at equal radii" is exact equality and nothing looser. Two radii
+that merely round close still name a cone, and the surface built for them must
+be one: the taper is what DX7 reads off that surface, and a tolerance deciding
+the kind would answer a whole scale of legitimate chamfers — a large radius with
+a small setback — with a shape of different geometry. Where the offset radius is
+not merely close to the wall's but bit-identical to it, the requested taper has
+no float64 representation at that radius and the call is SX13.
 
 Adjacent miter patches meet on their common analytic edge and need no extra
 vertex face. At axial fraction `s`, every patch intersects the parallel section
@@ -707,7 +723,13 @@ Every implementation PR MUST add geometry assertions, not run-only coverage.
 - opposite cap bands meeting → SX7;
 - carrier collapse → SX6;
 - non-adjacent patch crossing/touch → SX7/SX12;
+- a chamfer band over a circular wall whose radius dwarfs `d` still carries a
+  `Cone`, its taper still reaches DX7, and volume and area are unmoved by the
+  kind decision; an offset radius identical to the wall's → SX13;
 - every topology edge has exactly two adjacent faces;
+- every patch `Face` reports its own area, and no float-computed one is `Exact`;
+- the centroid bound encloses the true centroid, tested on a box far wider than
+  it is tall — the shape whose farthest corner is neither `Min` nor `Max`;
 - bounded mass properties from independent closed forms;
 - shared-curve tessellation is watertight and bound `<= tol`;
 - selected/unselected hole loops retain correct nesting.

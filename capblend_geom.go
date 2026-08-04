@@ -32,8 +32,8 @@ func capOffsetJoins(budget *workBudget, cl cornerLoop, d float64) ([]cornerJoin,
 			return nil, err
 		}
 		if w.isCircular() {
-			if _, ok := offsetRadius(w, 1, d); !ok {
-				return nil, errOffsetDrop
+			if _, err := capBandRadius(w, d); err != nil {
+				return nil, err
 			}
 		}
 	}
@@ -69,6 +69,34 @@ func capOffsetJoins(budget *workBudget, cl cornerLoop, d float64) ([]cornerJoin,
 		joins[i] = cornerJoin{vU: vU, vV: vV, m: Point2{U: mx, V: my}}
 	}
 	return joins, nil
+}
+
+// capBandRadius is the ONE place a circular cap-band wall's cap-level offset
+// radius is resolved, and it proves that the offset the caller asked for
+// SURVIVED float64 at this wall's own scale before any patch is built from it.
+//
+// offsetRadius's own refusal is the empty one: an inward offset that reaches or
+// passes the centre leaves no circle at all (errOffsetDrop). The second refusal
+// is this one, and it is the opposite failure — an offset so small RELATIVE to
+// the radius that `R -/+ d` rounds back onto `R` itself. The band's patch is a
+// cone by construction (its two directrices are circles of different radii), and
+// a cone whose two stored radii are bit-identical is a CYLINDER: the taper the
+// chamfer exists to create is gone, so every reader of that surface — the DX7
+// undercut survey above all, which asks exactly about the taper — is answered by
+// a shape the caller never asked for. Substituting it is a wrong answer, not a
+// coarse one, so the call refuses. The body exists (the cone has a real, if
+// tiny, taper) and this evaluator cannot state its carrier in float64 at that
+// scale, which is §4's ErrUnsupported side of the existence test (Table SX row
+// SX13).
+func capBandRadius(w sideWalk, d float64) (float64, error) {
+	r, ok := offsetRadius(w, 1, d)
+	if !ok {
+		return 0, errOffsetDrop
+	}
+	if r == w.radius {
+		return 0, fmt.Errorf(`%w: the chamfer setback %v mm is below the float64 spacing of a circular wall's own radius %v mm, so the cap contour's radial change rounds away and the band's cone patch cannot be told from a cylinder; a wider setback or a smaller radius states a chamfer this evaluator can build`, ErrUnsupported, d, w.radius)
+	}
+	return r, nil
 }
 
 // capWallFoot returns the offset segment's own (start, end) feet for wall i,
@@ -182,9 +210,9 @@ func buildCapBand(ctx context.Context, body *Body, ref StepRef, cbp capBlendPayl
 	// A single closed circle has no corner: one Cone patch, full turn.
 	if n == 1 && walks[0].closed {
 		w := walks[0]
-		capRadius, ok := offsetRadius(w, 1, d)
-		if !ok {
-			return capBandResult{}, errOffsetDrop
+		capRadius, err := capBandRadius(w, d)
+		if err != nil {
+			return capBandResult{}, err
 		}
 		seam0 := sideCo[0].edge // the side wall's own whole-circle bottom/top edge
 		capEdge := wholeCircleEdge(pl, w.cU, w.cV, capRadius, capZ, w.th1 > w.th0)
@@ -204,6 +232,7 @@ func buildCapBand(ctx context.Context, body *Body, ref StepRef, cbp capBlendPayl
 			gth0, gth1 = gth1, gth0
 		}
 		geom := capPatchGeom{circular: true, cU: w.cU, cV: w.cV, sideRadius: w.radius, capRadius: capRadius, th0: gth0, th1: gth1, sweepCCW: w.th1 > w.th0, sideZ: sideZ, capZ: capZ}
+		setPatchArea(patch, geom)
 		capLoop := []coedge{{edge: capEdge, forward: true}}
 		return capBandResult{patches: []*Face{patch}, capCo: capLoop, geom: []capPatchGeom{geom}}, nil
 	}
@@ -331,11 +360,13 @@ func buildCapBand(ctx context.Context, body *Body, ref StepRef, cbp capBlendPayl
 		if gth1 < gth0 {
 			gth0, gth1 = gth1, gth0
 		}
-		geoms = append(geoms, capPatchGeom{
+		g := capPatchGeom{
 			circular: true, sweepCCW: false,
 			cU: j.vU, cV: j.vV, sideRadius: 0, capRadius: d,
 			th0: gth0, th1: gth1, sideZ: sideZ, capZ: capZ,
-		})
+		}
+		setPatchArea(face, g)
+		geoms = append(geoms, g)
 	}
 
 	// Pass 3: the wall patches (Plane or Cone) AND the cap-level boundary
@@ -350,14 +381,23 @@ func buildCapBand(ctx context.Context, body *Body, ref StepRef, cbp capBlendPayl
 		side := sideCo[i].edge
 		leadSlant, trailSlant := slantOut[i], slantIn[nextI]
 
+		// A circular wall's cap-level radius is resolved ONCE per wall and
+		// shared by the wall's edge, its surface and its recorded geometry, so
+		// no two of them can disagree about the offset and capBandRadius's own
+		// refusals are decided before any of the three is built.
+		capRadius := 0.0
+		if w.isCircular() {
+			r, err := capBandRadius(w, d)
+			if err != nil {
+				return capBandResult{}, err
+			}
+			capRadius = r
+		}
+
 		var capEdge *Edge
 		if !w.isCircular() {
 			capEdge = &Edge{curve: Line3{}, start: capA, end: capB, convex: true, length: math.Hypot(end.U-start.U, end.V-start.V), lengthBound: math.Inf(1)}
 		} else {
-			capRadius, ok := offsetRadius(w, 1, d)
-			if !ok {
-				return capBandResult{}, errOffsetDrop
-			}
 			capEdge = arcEdge(pl, w.cU, w.cV, capRadius, capZ, capA, capB, w.th0, w.th1)
 		}
 
@@ -369,7 +409,6 @@ func buildCapBand(ctx context.Context, body *Body, ref StepRef, cbp capBlendPayl
 			}
 			surf = f
 		} else {
-			capRadius, _ := offsetRadius(w, 1, d)
 			surf = coneSurface(pl, w.cU, w.cV, w.radius, capRadius, sideZ, capZ)
 		}
 
@@ -424,7 +463,6 @@ func buildCapBand(ctx context.Context, body *Body, ref StepRef, cbp capBlendPayl
 
 		g := capPatchGeom{sideZ: sideZ, capZ: capZ}
 		if w.isCircular() {
-			capRadius, _ := offsetRadius(w, 1, d)
 			g.circular = true
 			g.cU, g.cV = w.cU, w.cV
 			g.sideRadius, g.capRadius = w.radius, capRadius
@@ -442,6 +480,7 @@ func buildCapBand(ctx context.Context, body *Body, ref StepRef, cbp capBlendPayl
 			g.sideB = Point2{U: w.endU, V: w.endV}
 			g.capA, g.capB = start, end
 		}
+		setPatchArea(face, g)
 		geoms = append(geoms, g)
 		capCo = append(capCo, coedge{edge: capEdge, forward: true})
 		if arc := arcByCorner[nextI]; arc != nil {
@@ -452,6 +491,19 @@ func buildCapBand(ctx context.Context, body *Body, ref StepRef, cbp capBlendPayl
 		}
 	}
 	return capBandResult{patches: patches, capCo: capCo, geom: geoms}, nil
+}
+
+// setPatchArea gives a constructed chamfer patch the area and bound its OWN
+// geometry already states (patchAreaOf, capblend_moments.go) — the same numbers
+// the body's area sum is built from, so a caller reading `Face.Area()` and a
+// caller reading `Body.Area()` are told the same thing about the same surface.
+// Left unset, a patch Face reports a zero area with a zero bound, which
+// `exactnessOf` publishes as an EXACT zero: not merely a missing reading but a
+// positively wrong one, asserted as a fact about a face that plainly has area.
+// Every patch this file builds passes through here, and each does so with the
+// geometry the moments pass then integrates, so the two can never disagree.
+func setPatchArea(f *Face, g capPatchGeom) {
+	f.area, f.areaBound = patchAreaOf(g)
 }
 
 // wholeCircleEdge builds a full-circle Edge (Circle3) in the cap plane at z,
@@ -498,14 +550,29 @@ func planeFromThree(p0, p1, p2 r3.Vec) (Plane, error) {
 	return Plane{Frame: f}, nil
 }
 
-// coneSurface builds the Cone surface a circular chamfer patch's wall
-// occupies: Origin is the apex where the ruling reaches radius 0 (which may
-// lie outside [sideZ, capZ] for a regular frustum), Axis the growth
-// direction, Radius/HalfAngle read off the two known (z, r) pairs.
+// coneSurface builds the surface a circular chamfer patch's wall occupies from
+// the two (z, r) pairs it is ruled between. The KIND is decided by what the two
+// stored radii ARE, never by how close they are: two DIFFERENT radii name a
+// cone, and a cone is what this returns, however small the difference —
+// substituting a cylinder there discards the taper the surface exists to carry,
+// and the DX7 undercut survey reads that taper directly off this surface's own
+// NormalAt. A tolerance here would silently answer a whole scale of legitimate
+// chamfers (a large radius with a small setback) with a shape of different
+// geometry, which is a wrong answer rather than a coarse one.
+//
+// Cylinder is therefore reserved for radii that are EXACTLY equal — the one
+// configuration in which the surface really is a cylinder. The cap-band callers
+// never reach it: capBandRadius refuses an offset whose radial change rounded
+// away before a patch is built from it, and an apex patch runs from radius 0 to
+// the setback d, which S13 already proved non-zero.
+//
+// For a cone, Origin is the apex where the ruling reaches radius 0 (which may
+// lie outside [sideZ, capZ] for a regular frustum), Axis is the growth
+// direction, and Radius/HalfAngle are read off the same two (z, r) pairs.
 func coneSurface(pl prismPayload, cu, cv, r0, r1, z0, z1 float64) Surface {
 	dz, dr := z1-z0, r1-r0
-	if math.Abs(dr) <= 1e-12*math.Max(1, math.Max(r0, r1)) {
-		return Cylinder{Origin: pl.point(cu, cv, z0), Axis: pl.dir(0, 0, 1), Radius: units.Millimeters((r0 + r1) / 2)}
+	if dr == 0 {
+		return Cylinder{Origin: pl.point(cu, cv, z0), Axis: pl.dir(0, 0, 1), Radius: units.Millimeters(r0)}
 	}
 	apexZ := z0 - r0*dz/dr
 	growth := 1.0

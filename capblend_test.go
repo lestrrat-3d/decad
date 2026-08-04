@@ -998,3 +998,196 @@ func TestCapBlendUndercutOrderIsDeterministic(t *testing.T) {
 		require.Equal(t, want, got, `the same body under the same pull reports the same faces in the same order`)
 	}
 }
+
+// TestCapBlendConePatchKeepsTaperAtHugeRadius pins the surface KIND a chamfer
+// band patch is built with against what its two stored radii ARE, never against
+// how close they are. A 1e12 mm disk chamfered by 1 micron offsets its cap
+// contour to a radius that differs from the wall's, so the patch is a cone —
+// but the difference is a millionth of a part in the radius, which any relative
+// tolerance on the radial change reads as zero. Calling that a cylinder throws
+// away the taper the chamfer exists to create, and the DX7 undercut survey then
+// answers about a shape nobody asked for: a cylinder's normal has no axial
+// component at all, so the bevel reads as free of a pull it plainly opposes.
+//
+// The volume and area readings are checked here as well, because changing a
+// surface kind may move them: they are integrated from the patch's own recorded
+// radii rather than from its carrier surface, so both must stand unchanged.
+func TestCapBlendConePatchKeepsTaperAtHugeRadius(t *testing.T) {
+	const R, H, d = 1e12, 10.0, 1e-3
+	disk := circleProfile(t, R, H)
+	chamfered, err := disk.Chamfer(capLoopEdges(disk), units.Millimeters(d))
+	require.NoError(t, err)
+	requireManifold(t, chamfered)
+
+	patch := faceWithRole(t, chamfered, `chamferCap(end,0,0)`)
+	cone, ok := patch.Surface().(decad.Cone)
+	require.True(t, ok, `a band patch whose two radii differ is a cone, got %T`, patch.Surface())
+	// dc = ds = d stands every chamfer cone at 45 degrees in exact arithmetic;
+	// at this radius the offset rounds to the nearest 8 ulps of 1e12, so the
+	// held half-angle sits near it without reaching it. What matters is that it
+	// is a real taper and not the zero a cylinder would carry.
+	require.InDelta(t, math.Pi/4, cone.HalfAngle.Mag(), 0.05)
+
+	// The two mass readings are integrated from the recorded radii, so the kind
+	// decision must leave them exactly where the closed form puts them. Both are
+	// judged against the body's own proven bound.
+	capRadius := R - d
+	vol, err := chamfered.Volume()
+	require.NoError(t, err)
+	wantVol := math.Pi*R*R*(H-d) + math.Pi*d/3*(R*R+R*capRadius+capRadius*capRadius)
+	require.InDelta(t, wantVol, vol.Value.Mag(), vol.Bound.Mag())
+
+	area, err := chamfered.Area()
+	require.NoError(t, err)
+	slant := math.Hypot(R-capRadius, d)
+	wantArea := math.Pi*R*R + 2*math.Pi*R*(H-d) + math.Pi*(R+capRadius)*slant + math.Pi*capRadius*capRadius
+	require.InDelta(t, wantArea, area.Value.Mag(), area.Bound.Mag())
+
+	// DX7 through the public API: the band tilts toward the chamfered end, so
+	// pulling away from it is an undercut — the same reading the ordinary-scale
+	// plate gives in TestCapBlendUndercutSurvey.
+	rep, err := chamfered.Document().Verify(t.Context(), decad.WithPullDirection(r3.NewVec(0, 0, -1)))
+	require.NoError(t, err)
+	require.Len(t, rep.Bodies, 1)
+	require.Equal(t, []*decad.Face{patch}, rep.Bodies[0].Undercuts,
+		`the tapered band opposes a pull away from the chamfered end`)
+}
+
+// TestCapBlendUnrepresentableRadialChangeRefused is the other half of the same
+// rule. Where the setback is so small beside the radius that `R - d` rounds back
+// onto `R`, the cap contour this evaluator would build is the original circle
+// and the band's patch really is a cylinder — a different solid from the one the
+// caller asked for. The call refuses rather than return it: the body exists (its
+// taper is real, just finer than float64 names at that radius), so the sentinel
+// is ErrUnsupported, and the receiver and recipe are untouched.
+func TestCapBlendUnrepresentableRadialChangeRefused(t *testing.T) {
+	const R, H, d = 1e12, 10.0, 1e-9
+	require.Equal(t, R, R-d, `the premise: this setback is below the radius's own float64 spacing`)
+	disk := circleProfile(t, R, H)
+	doc := disk.Document()
+	before := doc.Recipe()
+
+	_, err := disk.Chamfer(capLoopEdges(disk), units.Millimeters(d))
+	require.Error(t, err)
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+	require.NotErrorIs(t, err, decad.ErrDegenerate)
+	require.Equal(t, before, doc.Recipe())
+	require.Equal(t, []*decad.Body{disk}, doc.Bodies())
+}
+
+// TestCapBlendPatchFacesReportTheirOwnArea checks that every constructed patch
+// Face carries the area its own geometry has. An unset Face.area is a zero value
+// with a zero bound, which the public reading publishes as an EXACT zero — not a
+// missing answer but a wrong one, asserted as fact about a face the body's own
+// area sum meanwhile counts in full. The two readings must agree, and neither
+// may claim Exact: a plane patch's area is a float cross product, a norm and a
+// sum, and a cone patch's carries a square root.
+func TestCapBlendPatchFacesReportTheirOwnArea(t *testing.T) {
+	const d = 5.0
+	_, box := capBlendBox(t)
+	chamfered, err := box.Chamfer(capLoopEdges(box), units.Millimeters(d))
+	require.NoError(t, err)
+
+	// The plate's four bevels are trapezoids between the original rim and the
+	// rim offset inward by d, slanted over the setback: an independent closed
+	// form per wall, derived from the section alone.
+	slant := math.Hypot(d, d)
+	want := map[string]float64{
+		`chamferCap(end,0,0)`: (100 + (100 - 2*d)) / 2 * slant,
+		`chamferCap(end,0,1)`: (60 + (60 - 2*d)) / 2 * slant,
+		`chamferCap(end,0,2)`: (100 + (100 - 2*d)) / 2 * slant,
+		`chamferCap(end,0,3)`: (60 + (60 - 2*d)) / 2 * slant,
+	}
+	var faceSum float64
+	seen := 0
+	for _, f := range chamfered.Faces() {
+		a, err := f.Area()
+		require.NoError(t, err)
+		faceSum += a.Value.Mag()
+		role := f.Origins()[0].Role
+		w, ok := want[role]
+		if !ok {
+			continue
+		}
+		seen++
+		require.InDelta(t, w, a.Value.Mag(), 1e-9, `role %s`, role)
+		require.Greater(t, a.Bound.Mag(), 0.0, `role %s: a float-computed area is never Exact`, role)
+		require.Equal(t, decad.Approximate, a.Exactness, `role %s`, role)
+	}
+	require.Equal(t, len(want), seen, `every bevel patch was inspected`)
+
+	// A caller adding up the faces and a caller asking the body must be told the
+	// same thing about the same surface.
+	area, err := chamfered.Area()
+	require.NoError(t, err)
+	require.InDelta(t, area.Value.Mag(), faceSum, area.Bound.Mag()+1e-9)
+}
+
+// smallSkewSection extrudes the CCW loop (0,1), (0.5,0.5), (0.5,0), (1,0),
+// (1,0.5), (0.51,0.51) by h. Its footprint spans a full unit in x and y while
+// its sweep is a thousandth of that, so the bounding box is extremely flat — the
+// shape whose farthest corner from an interior point is one of the six corners
+// that are neither Min nor Max.
+func smallSkewSection(t *testing.T, h float64) *decad.Body {
+	t.Helper()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	coords := [][2]float64{{0, 1}, {0.5, 0.5}, {0.5, 0}, {1, 0}, {1, 0.5}, {0.51, 0.51}}
+	pts := make([]*sketch.Point, len(coords))
+	for i, c := range coords {
+		pts[i] = s.CreatePoint(c[0], c[1])
+	}
+	for i := range pts {
+		s.CreateLine(pts[i], pts[(i+1)%len(pts)])
+	}
+	s.Fix(pts[0])
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	require.Len(t, s.Profiles(), 1)
+
+	doc := decad.New()
+	body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+	require.NoError(t, err)
+	return body
+}
+
+// TestCapBlendCentroidBoundEncloses checks the centroid bound for what a bound
+// IS — an enclosure — rather than for a particular value. The reported bound is
+// the reach of the body's own Bounds box from the estimate, and the true
+// centroid may sit anywhere in that box, so the bound must cover every point of
+// it. p -> |p - estimate| is convex, so its maximum over the box is attained at
+// a CORNER: reading only Min and Max leaves six corners unexamined, and on a box
+// far wider than it is tall the farthest corner is among exactly those six.
+func TestCapBlendCentroidBoundEncloses(t *testing.T) {
+	const h, d = 1e-3, 1e-7
+	body := smallSkewSection(t, h)
+	// The receiver's own centroid stands in for the chamfered body's true one.
+	// The band removes a boundary sliver of relative volume about 1e-10 here, so
+	// the true centroid moves by far less than the margin under test.
+	receiver, err := body.Centroid()
+	require.NoError(t, err)
+
+	chamfered, err := body.Chamfer(capLoopEdges(body), units.Millimeters(d))
+	require.NoError(t, err)
+	centroid, err := chamfered.Centroid()
+	require.NoError(t, err)
+	bound := centroid.Bound.Mag()
+
+	require.LessOrEqual(t, centroid.Value.Sub(receiver.Value).Len(), bound,
+		`the bound must enclose the true centroid, not merely be near the estimate`)
+
+	// And the property the bound claims outright: every point the Bounds box
+	// holds is within it, corners included.
+	bounds, err := chamfered.Bounds()
+	require.NoError(t, err)
+	for _, x := range []float64{bounds.Min.X, bounds.Max.X} {
+		for _, y := range []float64{bounds.Min.Y, bounds.Max.Y} {
+			for _, z := range []float64{bounds.Min.Z, bounds.Max.Z} {
+				corner := r3.NewVec(x, y, z)
+				require.LessOrEqual(t, corner.Sub(centroid.Value).Len(), bound,
+					`corner %v of the bounds box the true centroid may occupy`, corner)
+			}
+		}
+	}
+}

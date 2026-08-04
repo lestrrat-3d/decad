@@ -364,9 +364,15 @@ func capBlendVolumeBound(bandVolume float64) float64 {
 	return analyticRoundBound(math.Abs(bandVolume))
 }
 
-// patchAreaOf is one patch's own surface area: exact (a cross-product
-// magnitude) for a Plane, closed form with a proven bound (a slant length
-// involving a square root) for a Cone.
+// patchAreaOf is one patch's own surface area and the proven bound on it:
+// a two-triangle cross-product sum for a Plane, a closed form for a Cone. The
+// Plane reading is NEVER exact. Its two terms are each a float subtraction, a
+// float cross product and a float norm — r3's own Len is a nested Hypot, which
+// carries no ulp contract at all — and their sum rounds once more, so the held
+// value is a float evaluation and sumSlop is exactly the proven, never-zero
+// bound bounds.go keeps for that shape (the same one boolean_body.go's mesh
+// facet areas take). Returning a zero bound there would publish an Exact the
+// arithmetic has not earned, on the face AND in the body's own area sum.
 func patchAreaOf(g capPatchGeom) (float64, float64) {
 	if !g.circular {
 		v0 := r3.NewVec(g.sideA.U, g.sideA.V, g.sideZ)
@@ -375,7 +381,8 @@ func patchAreaOf(g capPatchGeom) (float64, float64) {
 		v3 := r3.NewVec(g.capA.U, g.capA.V, g.capZ)
 		a1 := v1.Sub(v0).Cross(v2.Sub(v0)).Len() / 2
 		a2 := v2.Sub(v0).Cross(v3.Sub(v0)).Len() / 2
-		return a1 + a2, 0
+		area := a1 + a2
+		return area, sumSlop(2, absSumUpper(a1, a2))
 	}
 	R0, R1 := g.sideRadius, g.capRadius
 	H := g.capZ - g.sideZ
@@ -422,6 +429,16 @@ func capBlendBoundsContext(ctx context.Context, cbp capBlendPayload, work *freef
 // centroid already falls back to: the true centroid lies within the returned
 // Bounds box, so |estimate-true| is bounded by the box's own reach from the
 // estimate — sound whatever the estimate's own accuracy.
+//
+// The reach is maximized over all EIGHT corners of the box, and that is the
+// whole of the proof rather than a thoroughness flourish. p -> |p - estimate| is
+// convex, so its maximum over the box — a convex hull of its eight corners — is
+// attained AT a corner; taking the max over all eight therefore bounds the
+// distance to every point the box holds, the true centroid among them, wherever
+// the estimate itself sits. Reading only Min and Max leaves six corners
+// unexamined, and a box whose extent along one axis is far larger than along
+// another puts its farthest corner among exactly those six: the reported bound
+// is then smaller than the estimate's own error and encloses nothing.
 func capBlendCentroidEstimate(faces []*Face, bounds Box) (r3.Vec, float64) {
 	var sum r3.Vec
 	var totalArea float64
@@ -434,11 +451,18 @@ func capBlendCentroidEstimate(faces []*Face, bounds Box) (r3.Vec, float64) {
 	if totalArea > 0 {
 		estimate = sum.Scale(1 / totalArea)
 	}
+	xs := [2]float64{bounds.Min.X, bounds.Max.X}
+	ys := [2]float64{bounds.Min.Y, bounds.Max.Y}
+	zs := [2]float64{bounds.Min.Z, bounds.Max.Z}
 	reach := 0.0
-	for _, c := range []r3.Vec{bounds.Min, bounds.Max} {
-		dd := c.Sub(estimate).Len()
-		if dd > reach {
-			reach = dd
+	for _, x := range xs {
+		for _, y := range ys {
+			for _, z := range zs {
+				dd := r3.NewVec(x, y, z).Sub(estimate).Len()
+				if dd > reach {
+					reach = dd
+				}
+			}
 		}
 	}
 	return estimate, upRound(reach)

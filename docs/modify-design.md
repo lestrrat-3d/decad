@@ -155,10 +155,13 @@ a retired body is S17, by core §6's retire rule.
 | **R5** | reach payload (`stackedPrismPayload` / `capBlendPayload`) | reach SX10 | reach SX10 |
 
 A full-circle loop is a single closed wall with **no** lateral edge at all
-(evaluator §5 emits no seam), so a cylinder has no edge a fillet can name but
-its cap rims — and a query naming one is S1, a query naming nothing is S16.
-That is the honest reading of the class, not an oversight: the blend of a cap
-edge is the vertex-blend problem (§6), and this increment does not solve it.
+(evaluator §5 emits no seam), so a cylinder has no edge the corner rewrite can
+name but its cap rims — and a query naming one is S1 for a `Fillet`, a query
+naming nothing is S16. That is the honest reading of the class, not an
+oversight: the rolling blend of a cap edge is the vertex-blend problem (§6), and
+this increment does not solve it. A `Chamfer` of that same rim leaves the corner
+rewrite instead of refusing, because a cylinder's rim **is** one complete cap
+loop and reach §8.3 builds it (RX1's second class).
 
 ## 4. Table S — the refusals
 
@@ -199,7 +202,7 @@ the same for every op:
 | Stage | Asks | Gates, in order |
 |---|---|---|
 | **1 — the pre-gates** | is this a call at all? Decided before any geometry | S17 (a live receiver), S15 (a magnitude of the right `Kind`, finite and non-negative), S13 / S14 (a non-zero one), S16 (a selector that matches) |
-| **2 — the receiver and its targets** | is this body one a modify op takes, and is what the query named a thing it can act on? | S3 (Table R's payload class), then S1 (every selected edge is lateral) / S2 (every removed face is a cap) |
+| **2 — the receiver and its targets** | is this body one a modify op takes, and is what the query named a thing it can act on? | S3 (Table R's payload class), then S1 (every selected edge is lateral — or, for a `Chamfer`, every geometric edge of one or more complete cap loops, which leaves this route for reach §8.3 and takes reach Table SX's gates from here on) / S2 (every removed face is a cap) |
 | **3 — the construction's own gates** | does the rewrite the caller asked for exist, feature by feature? | fillet / chamfer: S4 (there is a corner), then S5 (a blend of that radius exists — fillet only). Shell: S18 (the inward section survey fits its fixed work limit), S10 (the cavity is non-empty — inward only: the eroded section, and the height a kept cap's floor leaves), then S11a (no feature the offset drops as it is built) |
 | **4 — the §5 audit of the rewritten profile** | do the pieces bound a simple, correctly nested region? | S8 (orientation — the existence question, so a consumed region never reads `ErrUnsupported`), then S6 (no walk consumed by its own corners — an offset mints none, §8), then S7 (no crossing and no boundary contact; for a **shell** either is S11b, §8), then S9 (nesting, which is decidable only once no two loops cross or touch) |
 | **5 — what the result can be held as** | the region is proven; can a payload hold it? | S12 (a both-caps shell of a holed section is `1 + k` lumps) |
@@ -477,9 +480,14 @@ silently narrowed (core §8.1: an option that cannot be recorded does not ship).
 
 The rewrite trims both walks back by `d` and joins the feet with a `LineSeg`.
 The gates are the fillet's, in §4's order: S15 for a magnitude that is not a
-valid length and S13 for a zero `d`; S1 for a cap edge; S4 for a smooth or
+valid length and S13 for a zero `d`; S1 for a cap edge **the corner rewrite is
+asked to take** — a partial cap chain, or a cap edge mixed with lateral ones,
+which reach RX1 renumbers SX4; S4 for a smooth or
 cusped corner; then the §5 audit — S8, S6 for a setback that reaches or passes
-the far end of a walk, S7, S9. A corner with a circular neighbour
+the far end of a walk, S7, S9. A selection covering every geometric edge of one
+or more **complete** cap loops is not this route at all: it leaves the corner
+rewrite entirely and builds through reach §8.3's cap-loop chamfer, whose own
+refusals are reach Table SX's. A corner with a circular neighbour
 builds: the chord from a point on a line to a point on an arc, or from arc to
 arc, is still a `LineSeg`, and the bevel face is still a `Plane` — a chamfer
 against a cylindrical wall meets it in a straight ruling, because both are
@@ -831,7 +839,9 @@ do with; PR 1 builds on them and carries none of them.
 - minimum wall on cap-blend/stacked payloads deliberately reads `Suspect` when
   asked;
 - clearance reads exposed analytic faces of the new payloads and may return its
-  existing undecided pair result;
+  existing undecided pair result — reach DX6, whose reader is staged for the
+  cap-loop chamfer: boxes may still decide a pair, and every other requested
+  pair reads `Suspect` until that reader lands;
 - `WithNoOpenings()` spells a closed shell and is the only nil-selector shell;
 - consuming modify results do not inherit ancestor face roles;
 - `WithAsymmetricChamfer` carries a reference face + second distance;

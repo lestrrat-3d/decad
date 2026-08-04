@@ -59,9 +59,12 @@ type ChamferOption interface {
 // analytic patches, and the result is a cap-blend body whose volume, area,
 // bounds, undercut and minimum-radius readings all answer. A cap-edge
 // selection that is not one or more complete loops, and one that mixes cap
-// edges with lateral ones, are both SX4 (ErrUnsupported). A further modify op
-// on the result is SX10 (ErrUnsupported), and it does not tessellate yet
-// (Table DX rows DX3/DX6).
+// edges with lateral ones, are both SX4 (ErrUnsupported). A cap loop whose
+// circular wall is so large beside d that the offset's radial change rounds
+// away is SX13 (ErrUnsupported), rather than a band of cylinders with the taper
+// gone. A further modify op on the result is SX10 (ErrUnsupported); the result
+// does not tessellate yet (Table DX row DX3, ErrUnsupported), and a clearance
+// pair its bounding boxes do not already decide reads Suspect (row DX6).
 func (b *Body) Chamfer(sel EdgeSelector, d units.Value, opts ...ChamferOption) (*Body, error) {
 	return b.ChamferContext(context.Background(), sel, d, opts...)
 }
