@@ -637,7 +637,7 @@ func crossProductUpper(a, b r3.Vec) float64 {
 // to 5.236122866634288e-06 / 8.892307483919435e-06 / 2.7272066797437425e-06
 // mm^2 once only the side level is corrected, with levelDelta itself equal to
 // 0.04999999999999999 mm at that head. Threading levelDelta into this
-// function is a separate change, tracked as fu98.
+// function is a separate change.
 func patchAreaOf(g capPatchGeom) (float64, float64) {
 	if !g.circular {
 		v0 := r3.NewVec(g.sideA.U, g.sideA.V, g.sideZ)
