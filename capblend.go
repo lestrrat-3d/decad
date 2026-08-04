@@ -13,7 +13,7 @@ import (
 // cap-loop chamfer: capBlendPayload, the receiver/selection classification
 // RX1's second class needs (every geometric edge of one or more COMPLETE
 // prism cap loops, never mixed with lateral edges — S4), gates
-// SX4/SX6/SX7/SX10/SX12, the BX3 roles, and the build. The cap-loop FILLET
+// SX4/SX6/SX7/SX10/SX12/SX13, the BX3 roles, and the build. The cap-loop FILLET
 // (§8.2, Cylinder/Torus/Sphere patches) is in row E's staged column and is
 // not implemented here; neither is WithAsymmetricChamfer (PR A) — this PR
 // covers the equal-setback case only, dc = ds = d (§8.3).
@@ -294,8 +294,10 @@ func classifyChamferSelection(ctx context.Context, pp prismPayload, b *Body, sel
 }
 
 // buildCapBlend runs the existence and constructed-geometry gates (SX6, SX7,
-// SX12) and, once every gate passes, builds the body. It is the shared entry
-// ChamferContext calls once a clean cap-loop selection is classified.
+// SX12, and SX13's axial half) and, once every gate passes, builds the body. It
+// is the shared entry ChamferContext calls once a clean cap-loop selection is
+// classified. SX13's radial half is decided per circular wall as the band is
+// constructed, in capblend_geom.go's capBandRadius.
 func buildCapBlend(ctx context.Context, doc *Document, ref StepRef, pp prismPayload, d float64, startLoops, endLoops map[int]bool) (*Body, error) {
 	height := pp.z1 - pp.z0
 	loops := append([]LoopRecord{pp.profile.Outer}, pp.profile.Holes...)
@@ -341,6 +343,9 @@ func buildCapBlend(ctx context.Context, doc *Document, ref StepRef, pp prismPayl
 	if err := auditOffsetSectionBudget(budget, pp.profile, mixed); err != nil {
 		return nil, wrapCapBlendAuditError(err)
 	}
+	if err := requireCapBlendLevelsSeparate(pp.z0, pp.z1, d, startLoops, endLoops); err != nil {
+		return nil, err
+	}
 
 	cbp := capBlendPayload{
 		profile:    pp.profile,
@@ -353,6 +358,55 @@ func buildCapBlend(ctx context.Context, doc *Document, ref StepRef, pp prismPayl
 		endLoops:   endLoops,
 	}
 	return evalCapBlendContext(ctx, doc, ref, cbp)
+}
+
+// requireCapBlendLevelsSeparate is SX13's AXIAL half (Table SX,
+// docs/modify-reach-design.md §4 stage 6 and §8.3), the sibling of
+// capblend_geom.go's capBandRadius. The band has two directrices and the
+// setback displaces both: `d` in the plane, which capBandRadius proves survived
+// float64 at each circular wall's own radius, and `d` along the sweep, which
+// carries the original loop from the cap level to the side level. A tall enough
+// sweep puts `d` under the float64 spacing of that coordinate, and `z1 - d`
+// rounds back onto `z1` (or `z0 + d` onto `z0`).
+//
+// What that returns is not a coarse body but a wrong one, for the same reason
+// the radial collapse is. Every patch of the band comes out flat IN the cap
+// plane, and a Plane carries its normal with no bound, so each of those faces
+// asserts the chamfer's 45-degree taper as a fact about geometry that has none —
+// which is exactly what the DX7 undercut survey reads off the surface. (The
+// volume is not what refuses the call: the collapsed level reports the correctly
+// rounded volume of the true chamfered solid, and its bound honestly charges the
+// collapse.) The requested body exists — a real prism with a real, if tiny,
+// chamfer — and only float64 cannot name its side level at that sweep
+// coordinate, which is §4's ErrUnsupported side of the existence test.
+//
+// The axial half is a fact about the sweep interval and the setback alone, so it
+// is decided once per chamfered cap rather than per wall. SX7's band-reach gate
+// above is the opposite failure on the same two numbers and never overlaps this
+// one: SX7 refuses a setback so LARGE beside the sweep that the band passes the
+// far end, this one a setback so SMALL beside the sweep's own coordinates that
+// the level it displaces does not move.
+func requireCapBlendLevelsSeparate(z0, z1, d float64, startLoops, endLoops map[int]bool) error {
+	refuse := func(which string, level float64) error {
+		return fmt.Errorf(`%w: the chamfer setback %v mm is below the float64 spacing of the %s cap's own sweep level %v mm, so the band's side level rounds back onto the cap level and every patch is emitted flat in the cap plane; a wider setback or a shorter sweep states a chamfer this evaluator can build`, ErrUnsupported, d, which, level)
+	}
+	if anyLoopSelected(startLoops) && z0+d == z0 {
+		return refuse(`start`, z0)
+	}
+	if anyLoopSelected(endLoops) && z1-d == z1 {
+		return refuse(`end`, z1)
+	}
+	return nil
+}
+
+// anyLoopSelected reports whether a per-cap loop set names at least one loop.
+func anyLoopSelected(loops map[int]bool) bool {
+	for _, on := range loops {
+		if on {
+			return true
+		}
+	}
+	return false
 }
 
 // mixedOffsetProfile offsets exactly the loops named in startLoops/endLoops

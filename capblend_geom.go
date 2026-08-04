@@ -74,6 +74,10 @@ func capOffsetJoins(budget *workBudget, cl cornerLoop, d float64) ([]cornerJoin,
 // capBandRadius is the ONE place a circular cap-band wall's cap-level offset
 // radius is resolved, and it proves that the offset the caller asked for
 // SURVIVED float64 at this wall's own scale before any patch is built from it.
+// It is SX13's RADIAL half; the axial half — the same collapse in the sweep
+// direction, where the band's side level rounds back onto its own cap level —
+// is a fact about the sweep interval alone and is decided once per chamfered
+// cap in capblend.go's requireCapBlendLevelsSeparate.
 //
 // offsetRadius's own refusal is the empty one: an inward offset that reaches or
 // passes the centre leaves no circle at all (errOffsetDrop). The second refusal

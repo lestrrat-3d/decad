@@ -3,6 +3,7 @@ package decad
 import (
 	"context"
 	"math"
+	"math/big"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -28,20 +29,25 @@ import (
 // relative to the plane-local origin (valid because the WHOLE band, patches
 // plus its two disks, is a closed surface, and a closed surface's flux
 // integral is reference-point independent). A flat Plane patch's flux is the
-// tetrahedron identity evaluated in floats; a Cone patch's is a closed-form
-// polynomial-plus-trig expression. Neither is ever claimed Exact.
+// tetrahedron identity, a polynomial in the payload's own floats, taken
+// EXACTLY over big.Rat and rounded once at the end; a Cone patch's is a
+// closed-form polynomial-plus-trig expression evaluated in floats and never
+// claimed Exact.
 //
 // The volume bound is composed term by term, and the reason is the band's own
 // shape. Every one of these flux terms is a DIFFERENCE that cancels: the two
 // closing disks each carry the whole prism's flux and differ by the band's,
-// smaller by the ratio of the sweep height to the setback; a tetrahedron
-// identity and a ruled-cone integral cancel likewise. A rounding budget
-// scaled by the sum they cancelled to under-counts by exactly that ratio, so
-// no bound here is ever read off a summed result — each is charged against
-// the absolute terms the step acted on, and boundedAdd/boundedMul then sum
-// bounds while the values cancel. The one term that passes through
-// math.Sincos carries the magnitude envelope moments.go's analyticRoundBound
-// doc reserves for a libm result, never that helper's roundoff budget.
+// smaller by the ratio of the sweep height to the setback; a ruled-cone
+// integral cancels likewise. A rounding budget scaled by the sum they
+// cancelled to under-counts by exactly that ratio, so no bound here is ever
+// read off a summed result — each is charged against the absolute terms the
+// step acted on, and boundedAdd/boundedMul then sum bounds while the values
+// cancel. The Plane arm escapes that composition entirely rather than manage
+// it: an exact rational has nothing to cancel, and its committed rounding is
+// measured (rationalFloatError), not budgeted. The one term that passes
+// through math.Sincos carries the magnitude envelope moments.go's
+// analyticRoundBound doc reserves for a libm result, never that helper's
+// roundoff budget.
 
 // evalCapBlendContext builds the analytic cap-blend body from the payload
 // (BX3): the trimmed prism side walls (buildLoopSidesAs, unmodified) plus,
@@ -363,21 +369,40 @@ func capBandVolume(ctx context.Context, loop LoopRecord, cbp capBlendPayload, ge
 // patchRawFlux is one patch's contribution to the band's total raw flux
 // (3x its own volume-by-divergence-theorem share), taken relative to the
 // plane-local origin (0, 0, 0), WITH its own proven bound. A flat Plane
-// patch's contribution is the tetrahedron identity in floats
-// (Flux_triangle = 3*tetraVolume = (1/2)*v0.(v1 x v2)); a Cone patch's is the
-// closed-form polynomial-plus-trig integral over its linear-in-s ruled
-// parametrization.
+// patch's contribution is the tetrahedron identity
+// (Flux_triangle = 3*tetraVolume = (1/2)*v0.(v1 x v2)), evaluated over
+// big.Rat; a Cone patch's is the closed-form polynomial-plus-trig integral
+// over its linear-in-s ruled parametrization, evaluated in floats.
 //
-// Both bounds are scaled by the envelope of the ABSOLUTE terms the expression
-// is built from, never by the value those terms summed to: a triple product
-// and a ruled-cone flux both cancel, and a budget read off the cancelled
-// result under-counts by exactly the cancellation ratio.
+// The two arms differ in KIND of bound and that is §8.4's own rule ("report
+// each exactly representable result as Exact") deciding it, not a preference.
+// A Plane patch's flux is a polynomial in the payload's own float coordinates,
+// so its exact value is a rational the arithmetic can carry and the ONLY
+// rounding is the final one into a float64: exactPlanePatchFlux takes it, and
+// rationalFloatError reports the committed |rational - held| — zero wherever
+// the true flux is a float64, which is what lets an all-Plane cap-loop band
+// publish the Exact volume §8.4 owes it. Evaluating the same identity in
+// floats forfeits that Exact and cannot get it back: a triple product cancels,
+// so the only honest budget for a float evaluation is an envelope of the
+// ABSOLUTE terms it is built from (tripleProductUpper), and an envelope over
+// an exact value is still positive, which publishes Approximate. The float
+// path therefore survives only as the fallback for a patch whose coordinates
+// do not lift (a non-finite one), where the float result is no better.
+//
+// A Cone patch keeps the float closed form and its envelope bound for the same
+// reason in reverse: its flux passes through math.Sincos, whose result no
+// rational carries, so a mixed section holding one circular wall stays
+// Approximate however exactly its Plane patches integrate.
 func patchRawFlux(g capPatchGeom) boundedScalar {
 	if !g.circular {
 		v0 := r3.NewVec(g.sideA.U, g.sideA.V, g.sideZ)
 		v1 := r3.NewVec(g.sideB.U, g.sideB.V, g.sideZ)
 		v2 := r3.NewVec(g.capB.U, g.capB.V, g.capZ)
 		v3 := r3.NewVec(g.capA.U, g.capA.V, g.capZ)
+		if exact, ok := exactPlanePatchFlux(v0, v1, v2, v3); ok {
+			held, _ := exact.Float64()
+			return measuredScalar(held, rationalFloatError(exact, held))
+		}
 		tri := func(a, b, c r3.Vec) float64 { return a.Dot(b.Cross(c)) }
 		value := 0.5*tri(v0, v1, v2) + 0.5*tri(v0, v2, v3)
 		// tripleProductUpper is an upper bound on every intermediate of one
@@ -445,6 +470,38 @@ func patchRawFlux(g capPatchGeom) boundedScalar {
 		return measuredScalar(-flux, bound)
 	}
 	return measuredScalar(flux, bound)
+}
+
+// exactPlanePatchFlux is the flat quad patch's raw flux
+// (1/2)*v0.(v1 x v2) + (1/2)*v0.(v2 x v3) as an EXACT rational. Every
+// coordinate it reads is one of the payload's own float64s, hence an exact
+// rational already, and every operation the identity performs is an addition,
+// a subtraction or a multiplication — closed over the rationals — so the
+// returned value is the true flux of the quad the topology actually built,
+// with no rounding anywhere on the way. Its one caller rounds it to a float64
+// once and reports that single rounding as the bound.
+//
+// It reports ok=false rather than panicking where a coordinate does not lift,
+// which is exactly the non-finite case: a public measurement must refuse or
+// bound, never abort, and its caller has a float evaluation to fall back on
+// that is no worse.
+func exactPlanePatchFlux(v0, v1, v2, v3 r3.Vec) (*big.Rat, bool) {
+	lift := func(v r3.Vec) (ratV3, bool) {
+		x, y, z := floatRat(v.X), floatRat(v.Y), floatRat(v.Z)
+		if x == nil || y == nil || z == nil {
+			return ratV3{}, false
+		}
+		return ratV3{x, y, z}, true
+	}
+	r0, ok0 := lift(v0)
+	r1, ok1 := lift(v1)
+	r2, ok2 := lift(v2)
+	r3v, ok3 := lift(v3)
+	if !ok0 || !ok1 || !ok2 || !ok3 {
+		return nil, false
+	}
+	sum := new(big.Rat).Add(rvDot(r0, rvCross(r1, r2)), rvDot(r0, rvCross(r2, r3v)))
+	return sum.Mul(sum, big.NewRat(1, 2)), true
 }
 
 // tripleProductUpper bounds |a·(b×c)| and every intermediate the float

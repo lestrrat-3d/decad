@@ -163,7 +163,7 @@ more specific SX row replaces that base refusal.
 | **SX10** | another modify op on `stackedPrismPayload` or `capBlendPayload` | body exists; compound feature composition not built | `ErrUnsupported` |
 | **SX11** | inward closed/side-opening prism shell leaves axial cavity height `h - k*t <= 0`, where `k` is kept cap count; or section cavity is empty | no cavity | `ErrDegenerate` |
 | **SX12** | cap chamfer ruled patches intersect away from shared boundaries or cannot be certified disjoint | body exists under trim kernel | `ErrUnsupported` |
-| **SX13** | a cap-loop chamfer whose circular wall is large enough beside `d` that the cap contour's offset radius rounds back onto the wall's own radius | body exists; its taper is real but finer than float64 names at that radius, so the band's cone patch cannot be told from a cylinder | `ErrUnsupported` |
+| **SX13** | a cap-loop chamfer whose setback rounds away against the level it displaces: the cap contour's offset radius rounds back onto a circular wall's own radius (`R -/+ d == R`), or the band's side level rounds back onto its own cap level (`z1 - d == z1` on the end cap, `z0 + d == z0` on the start cap) | body exists; its taper is real but finer than float64 names at that radius or at that sweep level, so the band's patches cannot be told from a cylinder or from the cap plane | `ErrUnsupported` |
 
 Gate order:
 
@@ -181,12 +181,33 @@ The existence-first rule remains load-bearing. SX6 precedes SX7: an empty
 offset means no regular rolling-ball surface; intersecting valid patches mean
 the surface exists but this evaluator cannot trim it.
 
-SX13 sits with SX7/SX12 in stage 6 and after SX6 for the same reason, on the
-same offset radius: SX6 is the offset that reaches the centre and leaves nothing
-(the existence question), while SX13 is the offset that leaves a circle this
-evaluator cannot tell from the one it started with. It is decided as each band
-patch's carrier is constructed — not from `d` alone, since the same `d` is
-perfectly representable against a smaller wall in the same section.
+SX13's RADIAL half sits with SX7/SX12 in stage 6 and after SX6 for the same
+reason, on the same offset radius: SX6 is the offset that reaches the centre and
+leaves nothing (the existence question), while SX13 is the offset that leaves a
+circle this evaluator cannot tell from the one it started with. It is decided as
+each band patch's carrier is constructed — not from `d` alone, since the same `d`
+is perfectly representable against a smaller wall in the same section.
+
+SX13 covers the AXIAL direction on the same terms. The band has two directrices
+and the setback displaces both: `d` in the plane, which is the radial half above,
+and `d` along the sweep, which carries the original loop from the cap level to
+the side level. A tall enough sweep makes `d` fall under the float64 spacing of
+that level too, and `z1 - d` rounds back onto `z1` (or `z0 + d` onto `z0`).
+Every patch of the band is then emitted flat IN the cap plane, so a `Plane`
+patch — which carries its normal with no bound — asserts a 45° taper the solid
+does not have, and the DX7 undercut survey reads that assertion off the surface
+and answers about a shape the caller never asked for. Substituting it is a wrong
+answer, not a coarse one, exactly as in the radial case. The volume the collapsed
+level reports is not what refuses the call: it is the correctly rounded volume of
+the true chamfered solid, and its bound honestly charges the collapsed level. The
+axial half is a fact about the sweep interval and the setback alone, so it is
+decided once per chamfered cap; the radial half stays per circular wall.
+
+SX7 is the neighbouring axial gate and the two do not overlap. SX7 refuses a
+setback so LARGE beside the sweep that the band reaches or passes the far end
+(`reach >= height`); SX13 refuses one so SMALL beside the sweep's own coordinates
+that the level it displaces does not move at all. A tall prism with a tiny
+setback clears SX7 by an enormous margin and is precisely the shape SX13 catches.
 
 ## 5. Tangent-chain expansion
 
@@ -385,6 +406,16 @@ the kind would answer a whole scale of legitimate chamfers — a large radius wi
 a small setback — with a shape of different geometry. Where the offset radius is
 not merely close to the wall's but bit-identical to it, the requested taper has
 no float64 representation at that radius and the call is SX13.
+
+The side contour is subject to the same rule along the sweep. Its level is the
+cap level moved axially by `ds`, and where that sum is bit-identical to the cap
+level the two contours share one level: every patch of the band comes out flat in
+the cap plane, a `Plane` patch asserting a taper of 45° that the emitted geometry
+does not have, and DX7 reads the assertion. Bit-identical is again exact equality
+and nothing looser — a level that merely rounds close still separates the two
+contours and still builds — and the refusal is SX13 for the same reason the
+radial one is: the requested band exists and only float64 cannot name its side
+level at that sweep coordinate.
 
 Adjacent miter patches meet on their common analytic edge and need no extra
 vertex face. At axial fraction `s`, every patch intersects the parallel section
@@ -726,8 +757,13 @@ Every implementation PR MUST add geometry assertions, not run-only coverage.
 - a chamfer band over a circular wall whose radius dwarfs `d` still carries a
   `Cone`, its taper still reaches DX7, and volume and area are unmoved by the
   kind decision; an offset radius identical to the wall's → SX13;
+- a chamfer band under a sweep whose height dwarfs `d` still separates its two
+  levels; a side level identical to its own cap level → SX13, and the receiver
+  and recipe stay untouched;
 - every topology edge has exactly two adjacent faces;
 - every patch `Face` reports its own area, and no float-computed one is `Exact`;
+- an all-`Plane` cap-loop band whose true volume is a float64 reports it `Exact`
+  with a zero bound, and a band carrying a `Cone` patch reports `Approximate`;
 - the centroid bound encloses the true centroid, tested on a box far wider than
   it is tall — the shape whose farthest corner is neither `Min` nor `Max`;
 - bounded mass properties from independent closed forms;

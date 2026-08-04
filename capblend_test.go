@@ -1148,6 +1148,114 @@ func TestCapBlendUnrepresentableRadialChangeRefused(t *testing.T) {
 	require.Equal(t, []*decad.Body{disk}, doc.Bodies())
 }
 
+// TestCapBlendUnrepresentableAxialChangeRefused is SX13's axial half, the
+// sibling of the radial refusal above on the band's OTHER directrix. The band
+// runs between the cap contour at the cap level and the original loop at the
+// side level, and the setback displaces both. Under a sweep tall enough that
+// `z1 - d` rounds back onto `z1`, the axial displacement is the one that
+// vanishes: both contours land on one level and every patch of the band comes
+// out flat in the cap plane.
+//
+// What makes this worth a refusal is the SURFACE, not the volume. The volume the
+// collapsed body reports is the correctly rounded volume of the true chamfered
+// solid — the real chamfer here removes about 2e-18 mm³ — and the shell stays
+// watertight. But a Plane carries its normal with no bound, so each of those four
+// flat faces asserts the chamfer's 45-degree taper as a fact about geometry that
+// has none, and the DX7 undercut survey reads that assertion straight off the
+// surface. The requested body exists, so the sentinel is ErrUnsupported and never
+// ErrDegenerate, and the receiver and recipe are untouched.
+//
+// SX7's band-reach gate cannot catch this and is not meant to: it refuses a
+// setback so LARGE beside the sweep that the band passes the far end, while this
+// one is smaller than the sweep by twenty-one orders of magnitude.
+func TestCapBlendUnrepresentableAxialChangeRefused(t *testing.T) {
+	const H, d = 1e12, 1e-9
+	require.Equal(t, H, H-d, `the premise: this setback is below the sweep level's own float64 spacing`)
+
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	rect := s.CreateRectangle(0, 0, 1, 1)
+	s.Fix(rect.A)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	require.Len(t, s.Profiles(), 1)
+
+	doc := decad.New()
+	tower, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(H), Dir: decad.Along})
+	require.NoError(t, err)
+	before := doc.Recipe()
+
+	_, err = tower.Chamfer(capLoopEdges(tower), units.Millimeters(d))
+	require.Error(t, err)
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+	require.NotErrorIs(t, err, decad.ErrDegenerate)
+	require.Equal(t, before, doc.Recipe())
+	require.Equal(t, []*decad.Body{tower}, doc.Bodies())
+
+	// The same tower with a setback the level can name still builds, so the gate
+	// refuses the collapse and not the shape.
+	chamfered, err := tower.Chamfer(capLoopEdges(tower), units.Millimeters(1e-3))
+	require.NoError(t, err)
+	requireManifold(t, chamfered)
+}
+
+// TestCapBlendPlanePatchVolumeIsExact checks §8.4's opening rule — "report each
+// exactly representable result as Exact" — on the shape that can actually keep
+// it. Every patch of an all-line cap loop's band is a Plane, whose flux is the
+// tetrahedron identity: a polynomial in the payload's own float coordinates, so
+// its exact value is a rational and the only rounding in the whole reading is the
+// final one into a float64.
+//
+// The setback is chosen so the true answer IS a float64. A w×h rectangle's
+// cap-loop chamfer removes `(w+h)·d² − (4/3)·d³`, so a `d` divisible by 3 clears
+// the thirds; d=3 on the 100×60×20 plate leaves 120000 − 1404 = 118596 exactly.
+// Evaluating the same identity in floats cannot pass this: a triple product
+// cancels, so its only honest budget is an envelope of the absolute terms it was
+// built from, and a positive bound over an exact value publishes Approximate.
+//
+// The `Cone` row is the other half of the rule. A circular wall's flux passes
+// through math.Sincos, which no rational carries, so a band holding one stays
+// Approximate however exactly its Plane patches integrate — the win is confined
+// to all-Plane cap loops and must not leak past them.
+func TestCapBlendPlanePatchVolumeIsExact(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		d    float64
+		want float64
+	}{
+		{`d=3 clears the thirds`, 3, 118596},
+		{`d=6 clears them too`, 6, 114528},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, box := capBlendBox(t)
+			const L, W, H = 100.0, 60.0, filletBoxHeight
+			require.Equal(t, tc.want, L*W*H-((L+W)*tc.d*tc.d-(4.0/3.0)*tc.d*tc.d*tc.d),
+				`the premise: this setback's true volume is a float64`)
+
+			chamfered, err := box.Chamfer(capLoopEdges(box), units.Millimeters(tc.d))
+			require.NoError(t, err)
+			vol, err := chamfered.Volume()
+			require.NoError(t, err)
+			require.Equal(t, tc.want, vol.Value.Mag())
+			require.Equal(t, 0.0, vol.Bound.Mag(),
+				`an exact rational tetrahedron sum commits only its final rounding, and here that rounding is zero`)
+			require.Equal(t, decad.Exact, vol.Exactness)
+		})
+	}
+
+	t.Run(`a Cone patch keeps the band Approximate`, func(t *testing.T) {
+		disk := circleProfile(t, 30, 20)
+		chamfered, err := disk.Chamfer(capLoopEdges(disk), units.Millimeters(3))
+		require.NoError(t, err)
+		vol, err := chamfered.Volume()
+		require.NoError(t, err)
+		require.Equal(t, decad.Approximate, vol.Exactness,
+			`a flux term through math.Sincos is never Exact`)
+		require.Greater(t, vol.Bound.Mag(), 0.0)
+	})
+}
+
 // TestCapBlendPatchFacesReportTheirOwnArea checks that every constructed patch
 // Face carries the area its own geometry has. An unset Face.area is a zero value
 // with a zero bound, which the public reading publishes as an EXACT zero — not a
