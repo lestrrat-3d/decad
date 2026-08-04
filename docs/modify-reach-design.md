@@ -164,6 +164,7 @@ more specific SX row replaces that base refusal.
 | **SX11** | inward closed/side-opening prism shell leaves axial cavity height `h - k*t <= 0`, where `k` is kept cap count; or section cavity is empty | no cavity | `ErrDegenerate` |
 | **SX12** | cap chamfer ruled patches intersect away from shared boundaries or cannot be certified disjoint | body exists under trim kernel | `ErrUnsupported` |
 | **SX13** | a cap-loop chamfer whose setback rounds away against the level it displaces: the cap contour's offset radius rounds back onto a circular wall's own radius (`R -/+ d == R`), or the band's side level rounds back onto its own cap level (`z1 - d == z1` on the end cap, `z0 + d == z0` on the start cap) | body exists; its taper is real but finer than float64 names at that radius or at that sweep level, so the band's patches cannot be told from a cylinder or from the cap plane | `ErrUnsupported` |
+| **SX14** | a cap-loop chamfer whose denoted contour corner cannot be enclosed: the two offset carriers' interval intersection is unbounded, or the exact carriers do not meet where the float solve found a root | body exists; its offset corner is real and this evaluator cannot state where it is, so no cap-level coordinate there can publish a proven displacement | `ErrUnsupported` |
 
 Gate order:
 
@@ -174,7 +175,7 @@ Gate order:
 | 3. reference | resolve asymmetric reference; SX3 |
 | 4. receiver/target | base R + RX; SX4/SX5/SX8/SX9/SX10 |
 | 5. existence | base S4/S5/S18/S10; SX6/SX11 |
-| 6. constructed-geometry audit | base S8/S6/S7/S9/S11; SX7/SX12/SX13 |
+| 6. constructed-geometry audit | base S8/S6/S7/S9/S11; SX7/SX12/SX13/SX14 |
 | 7. payload | base S12 until `stackedPrismPayload` lands; BX8 handles that exact case afterward |
 
 The existence-first rule remains load-bearing. SX6 precedes SX7: an empty
@@ -208,6 +209,23 @@ setback so LARGE beside the sweep that the band reaches or passes the far end
 (`reach >= height`); SX13 refuses one so SMALL beside the sweep's own coordinates
 that the level it displaces does not move at all. A tall prism with a tiny
 setback clears SX7 by an enormous margin and is precisely the shape SX13 catches.
+
+SX7's own place in the order matters for the same reason SX13's does, and it is
+the one place two rows really can fire on one input. A setback that empties the
+cap contour is SX6 at any sweep height, and a short enough sweep also satisfies
+SX7's `reach >= height`. Since SX6 and SX7 make OPPOSITE existence claims, the
+stage order is what keeps that one nonexistent body from reporting two
+sentinels: the offset is built first and SX6 decides it, and only a contour that
+exists reaches the band-reach test. Deciding the reach from the sweep interval
+alone, ahead of the offset, lets the sweep height pick the sentinel for a body
+whose non-existence has nothing to do with the sweep.
+
+SX14 is not about the setback's size at all. It is about the corner's own
+conditioning: the miter is a float solve over unit directions, so its result
+sits some distance from the point the offset denotes, and §8.4 requires every
+cap-level reading to publish that distance. Where the two offset carriers are so
+nearly parallel that no bounded box holds the denoted corner, there is no such
+distance to publish and the call refuses rather than name one.
 
 ## 5. Tangent-chain expansion
 
@@ -438,6 +456,34 @@ trigonometric endpoint terms. NEVER use quadrature to claim Exact.
 Compute bounds from patch boundary extrema plus interior stationary points.
 An unisolated stationary family is `ErrUnsupported` at build, not a loose Exact
 box.
+
+**The cap contour's displacement.** A cap-blend band has two directrices and
+only one of them is recorded. The side contour is the receiver's own loop held
+at its own `(u, v)`, so its coordinates are the record's. The CAP contour is
+not: every corner of it comes out of the float offset solve — a line/line,
+line/circle or circle/circle intersection over directions divided by a hypot —
+so it is a COMPUTED coordinate sitting some distance from the point the offset
+denotes. Derive that distance ONCE per band and route every cap-level reading
+through it. A zero bound there publishes an `Exact` the solve never had; an
+infinite one, beside a finite value, bounds nothing.
+
+Derive it as an ENCLOSURE, never as an error model: re-evaluate the same closed
+forms over rational intervals with the recorded coordinates taken exactly and
+outward-rounded square roots, and report the enclosure's greatest reach from the
+float point the build holds. Interval arithmetic is inclusion-monotonic, so the
+box holds the denoted point whatever the platform's `sqrt` and `hypot` did, and
+nothing in the derivation assumes an ulp contract. Where no bounded box exists
+the call is SX14.
+
+The readings that carry it: every cap-level vertex `bound`; every cap-level
+edge length — the corner-to-apex slants, a wall's own cap edge, a reflex
+corner's connector arc, and a whole circle's circumference — beside that edge's
+own evaluation error; and the payload's directional extent, weighted by how much
+of the direction lies in the plane, since the contour sits at the cap's own
+recorded level and a direction along the sweep reads none of its displacement.
+`Bounds` reports the same figure as the box's own `Bound`, per candidate: a
+contour that loses the extremization contributes nothing, so a plate whose
+world-axis extremes are all recorded coordinates still reports an `Exact` box.
 
 Tessellation chords each shared boundary once. For a two-parameter tube patch,
 choose parameter counts so the sum of path sagitta and minor-circle sagitta is
@@ -671,7 +717,7 @@ reaches only the analytic bodies at the start of a chain.
 | **DX2** | topology / structural Verify | existing builder | payload builder | slab-region union builder |
 | **DX3** | `Tessellate` / STL / OBJ | waits on revolve tessellator; feature itself still builds | required patch tessellator; staged for the cap-loop chamfer, whose asked reading is `ErrUnsupported` | required slab-region tessellator |
 | **DX4** | mesh boolean | available once DX3 exists | available once DX3 exists | available once DX3 exists |
-| **DX5** | `ThroughAll` directional extent | existing | analytic patch extrema | union of slab-region extents |
+| **DX5** | `ThroughAll` directional extent | existing | analytic patch extrema; a direction whose extreme is held by the COMPUTED cap contour with in-plane weight is `ErrUnsupported`, since a stop reads this coordinate as exact and has no bound to widen (§8.4) | union of slab-region extents |
 | **DX6** | clearance | existing revolve boundary reader | add trimmed patch faces to boundary model; undecidable cells stay `Suspect`; staged for the cap-loop chamfer, whose pairs read `Suspect` unless boxes already decide them | union exposed slab faces; never include cancelled interfaces |
 | **DX7** | undercut | existing revolve survey | exact normal ranges per patch | exact normal ranges per exposed face |
 | **DX8** | minimum radius | existing meridian survey | minimum concave principal radius over sphere/torus/cylinder/cone patches | section arcs + exposed rim geometry |
@@ -752,8 +798,18 @@ Every implementation PR MUST add geometry assertions, not run-only coverage.
 - partial loop and mixed cap/lateral selection → SX4;
 - mixed cap/side asymmetric assignment on one loop → SX4;
 - opposite cap bands meeting → SX7;
-- carrier collapse → SX6;
+- carrier collapse → SX6, including where the same call ALSO satisfies SX7's
+  `reach >= height`, so the sweep height alone can never pick the sentinel;
 - non-adjacent patch crossing/touch → SX7/SX12;
+- every cap-level edge reports a finite length and a finite bound, and a
+  `LongerThan` query no longer matches a slant edge on an infinity;
+- a cap-level vertex's bound ENCLOSES its distance to the denoted contour
+  point, taken over exact rationals from a section whose offset has a closed
+  form (the 12-9-15 right triangle, whose feet are `(t, t)`, `(12 - 3t, t)` and
+  `(t, 9 - 2t)` exactly);
+- a body whose world-axis extremes are recorded coordinates reports an `Exact`
+  `Bounds` box, and one tilted so an axis reads both plane and sweep reports the
+  contour's own displacement instead;
 - a chamfer band over a circular wall whose radius dwarfs `d` still carries a
   `Cone`, its taper still reaches DX7, and volume and area are unmoved by the
   kind decision; an offset radius identical to the wall's → SX13;

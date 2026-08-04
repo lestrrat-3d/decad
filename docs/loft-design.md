@@ -240,10 +240,12 @@ pairing alone.
 
 **Every vertex position is `V = Plane.Origin + p.U * Plane.U + p.V *
 Plane.V`, the identical single float64 evaluation Extrude already performs
-for a cap vertex.** Per topology §3's "feature-built vertices are exact
-(bound zero)," a loft vertex carries the same standing — no new rounding
-risk is introduced; it is the same closed-form coordinate lift every other
-feature already treats as truth.
+for a cap vertex.** Topology §3 grants a zero bound to a vertex whose
+plane-local coordinates come from the RECORD rather than to every vertex a
+feature builds, and `p` here is the recorded section's own point, so a loft
+vertex carries the same standing a cap vertex does — no new rounding risk is
+introduced; it is the same closed-form coordinate lift every other feature
+already treats as truth.
 
 **Edges get no new role mechanism.** Selector.go's existing rule already
 covers loft: "`CreatedBy` matches an edge through its adjacent faces'

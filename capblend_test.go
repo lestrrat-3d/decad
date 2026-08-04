@@ -1372,3 +1372,233 @@ func TestCapBlendCentroidBoundEncloses(t *testing.T) {
 		}
 	}
 }
+
+// TestCapBlendBandReachRefusalKeepsSX6Degenerate pins §4's stage order for the
+// two rows that can both fire on one call. SX6 (stage 5) says the cap contour
+// the caller named is EMPTY, so no such body exists at any sweep height; SX7
+// (stage 6) says the bands meet, so a body exists that this evaluator cannot
+// merge. Those are opposite existence claims, and §4's one-sentinel rule is
+// what keeps the same nonexistent body from reporting both: SX6 precedes SX7.
+//
+// A radius-4 disk eroded by 4 leaves nothing whatever the sweep is, so both
+// halves of this test name the same nonexistent body and both must answer
+// ErrDegenerate. The 20mm sweep is the case TestCapBlendCarrierCollapseRefused
+// already covers; the 4mm sweep is the one where SX7's own condition (reach >=
+// height) is ALSO satisfied, and deciding it first would let the sweep height
+// alone pick the sentinel.
+func TestCapBlendBandReachRefusalKeepsSX6Degenerate(t *testing.T) {
+	for _, height := range []float64{4.0, 20.0} {
+		t.Run(fmt.Sprintf("H=%g", height), func(t *testing.T) {
+			disk := circleProfile(t, 4, height)
+			_, err := disk.Chamfer(capLoopEdges(disk), units.Millimeters(4))
+			require.Error(t, err)
+			require.ErrorIs(t, err, decad.ErrDegenerate)
+			require.NotErrorIs(t, err, decad.ErrUnsupported,
+				`SX6 precedes SX7, so an empty cap contour keeps its own sentinel however short the sweep`)
+		})
+	}
+
+	// The other side of the same order: a contour that exists and a band that
+	// does not fit is still SX7's own ErrUnsupported. Eroding a radius-30 disk
+	// by 4 leaves a radius-26 circle, so nothing about SX6 applies.
+	disk := circleProfile(t, 30, 4)
+	_, err := disk.Chamfer(capLoopEdges(disk), units.Millimeters(4))
+	require.Error(t, err)
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+	require.NotErrorIs(t, err, decad.ErrDegenerate)
+}
+
+// TestCapBlendCapLevelEdgesReportFiniteLengths is defect-2's public shape: a
+// cap-level edge is a real edge of a real body and Edge.Length() is a public
+// reading of it, so it must report the length the edge HAS with a proven bound
+// on it. An infinite value is a wrong answer that selector.go's LongerThan
+// reads straight off the raw field, and an infinite bound beside a finite value
+// bounds nothing at all.
+//
+// The four slant edges of a right-angled corner are the closed form: the miter
+// foot sits a full setback from each of the two walls, hence d*sqrt(2) from the
+// corner in the plane, and the apex sits one setback below it, so the slant is
+// d*sqrt(3).
+func TestCapBlendCapLevelEdgesReportFiniteLengths(t *testing.T) {
+	const d = 5.0
+	_, box := capBlendBox(t)
+	chamfered, err := box.Chamfer(capLoopEdges(box), units.Millimeters(d))
+	require.NoError(t, err)
+
+	slants := 0
+	for _, e := range chamfered.Edges() {
+		length, err := e.Length()
+		require.NoError(t, err)
+		require.False(t, math.IsInf(length.Value.Mag(), 0), `an edge length is a measurement, never an infinity`)
+		require.False(t, math.IsInf(length.Bound.Mag(), 0), `an infinite bound bounds nothing`)
+		if math.Abs(length.Value.Mag()-d*math.Sqrt(3)) < 1e-9 {
+			slants++
+		}
+	}
+	require.Equal(t, 4, slants, `one slant edge per corner of the rectangular cap loop`)
+
+	// The propagation the raw field drives: LongerThan compares e.length
+	// directly, so an infinite length matched every threshold a caller could
+	// name.
+	_, err = decad.Edges(decad.LongerThan(units.Millimeters(1e6))).SelectEdges(chamfered)
+	require.Error(t, err)
+	require.ErrorIs(t, err, decad.ErrNoMatch)
+}
+
+// rightTriangleBody extrudes the 12-9-15 right triangle, walked
+// counter-clockwise from the right angle at the origin. Its inward offset has a
+// closed form in EXACT rationals at every corner, which is what lets a test
+// state the denoted cap contour rather than approximate it: the two legs are
+// axis aligned, and the hypotenuse's direction (-12, 9) has exact length 15, so
+// the three unit normals are (0, 1), (-3/5, -4/5) and (-1, 0) as REALS. The
+// feet are then (t, t), (12 - 3t, t) and (t, 9 - 2t) for a setback t, exactly.
+//
+// Nothing about that is exact in float64: normalize2 divides by the hypot, so
+// the offset carriers the build intersects hold rounded directions, and the
+// miter it solves for lands some ulps off the rational point above.
+func rightTriangleBody(t *testing.T, h float64) *decad.Body {
+	t.Helper()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	pts := []*sketch.Point{s.CreatePoint(0, 0), s.CreatePoint(12, 0), s.CreatePoint(0, 9)}
+	for i := range pts {
+		s.CreateLine(pts[i], pts[(i+1)%len(pts)])
+	}
+	for _, p := range pts {
+		s.Fix(p)
+	}
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	require.Len(t, s.Profiles(), 1)
+
+	doc := decad.New()
+	body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+	require.NoError(t, err)
+	// The closed form below is a fact about THESE coordinates, so the test
+	// states them rather than trusting the solver to have left them alone.
+	corners := map[[2]float64]bool{}
+	for _, v := range body.Vertices() {
+		p := v.Position().Value
+		if p.Z != 0 {
+			continue
+		}
+		corners[[2]float64{p.X, p.Y}] = true
+	}
+	require.Equal(t, map[[2]float64]bool{{0, 0}: true, {12, 0}: true, {0, 9}: true}, corners)
+	return body
+}
+
+// TestCapBlendCapContourVertexBoundEncloses is defect-3's property, and it is
+// stated as ENCLOSURE rather than as a particular bound: a cap-level vertex
+// sits where a float miter solve put it, and whatever bound it publishes must
+// cover the distance from there to the point the offset DENOTES. A zero bound
+// publishes Exact, which asserts that distance is nothing at all.
+//
+// The truth is taken over exact rationals from rightTriangleBody's closed form,
+// never from a second float evaluation, so the assertion is about the denoted
+// contour and not about two roundings agreeing.
+func TestCapBlendCapContourVertexBoundEncloses(t *testing.T) {
+	const height = 20.0
+	for _, d := range []float64{0.1, 0.3, 0.7, 1.3, 2.5, 2.9} {
+		t.Run(fmt.Sprintf("d=%v", d), func(t *testing.T) {
+			body := rightTriangleBody(t, height)
+			chamfered, err := body.Chamfer(capLoopEdges(body), units.Millimeters(d))
+			require.NoError(t, err)
+
+			rd := new(big.Rat).SetFloat64(d)
+			feet := [3][2]*big.Rat{
+				{new(big.Rat).Set(rd), new(big.Rat).Set(rd)},
+				{new(big.Rat).Sub(big.NewRat(12, 1), new(big.Rat).Mul(big.NewRat(3, 1), rd)), new(big.Rat).Set(rd)},
+				{new(big.Rat).Set(rd), new(big.Rat).Sub(big.NewRat(9, 1), new(big.Rat).Mul(big.NewRat(2, 1), rd))},
+			}
+
+			checked := 0
+			for _, v := range chamfered.Vertices() {
+				p := v.Position()
+				if p.Value.Z != height {
+					continue // a side-level corner, at its own recorded (u, v)
+				}
+				checked++
+				gap := math.Inf(1)
+				for _, foot := range feet {
+					gap = math.Min(gap, ratDistance2D(p.Value.X, p.Value.Y, foot[0], foot[1]))
+				}
+				require.LessOrEqual(t, gap, p.Bound.Mag(),
+					`vertex %v must publish a bound covering its distance to the denoted foot`, p.Value)
+			}
+			require.Equal(t, 3, checked, `one cap-level foot per corner`)
+		})
+	}
+}
+
+// ratDistance2D is the distance from a float64 point to an exact rational one,
+// rounded upward through a 200-bit square root so the test never asks the
+// bound to cover its own arithmetic.
+func ratDistance2D(x, y float64, wantU, wantV *big.Rat) float64 {
+	du := new(big.Rat).Sub(new(big.Rat).SetFloat64(x), wantU)
+	dv := new(big.Rat).Sub(new(big.Rat).SetFloat64(y), wantV)
+	sum := new(big.Rat).Add(new(big.Rat).Mul(du, du), new(big.Rat).Mul(dv, dv))
+	root := new(big.Float).SetPrec(200).Sqrt(new(big.Float).SetPrec(200).SetRat(sum))
+	out, _ := root.Float64()
+	return out
+}
+
+// TestCapBlendContourHeldExtentCarriesItsDisplacement is the same term where
+// the payload's own directional reading picks it up. Along a world axis of an
+// axis-aligned plate the extreme is always held by a RECORDED coordinate — the
+// cap contour offsets inward, so it never holds an in-plane extreme — and the
+// box is exact. Tilt the body and one axis reads both the plane and the sweep
+// at once; there the 45-degree band can carry the contour past the trimmed
+// straight level, and the box may not then claim its faces are exact.
+func TestCapBlendContourHeldExtentCarriesItsDisplacement(t *testing.T) {
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	var pts []*sketch.Point
+	for i := range 6 {
+		a := 2 * math.Pi * float64(i) / 6
+		pts = append(pts, s.CreatePoint(100*math.Cos(a), 100*math.Sin(a)))
+	}
+	for i := range pts {
+		s.CreateLine(pts[i], pts[(i+1)%len(pts)])
+	}
+	s.Fix(pts[0])
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	require.Len(t, s.Profiles(), 1)
+
+	doc := decad.New()
+	body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+	require.NoError(t, err)
+	chamfered, err := body.Chamfer(capLoopEdges(body), units.Millimeters(5))
+	require.NoError(t, err)
+
+	upright, err := chamfered.Bounds()
+	require.NoError(t, err)
+	require.Equal(t, decad.Exact, upright.Exactness, `every world-axis extreme is a recorded coordinate here`)
+	require.Zero(t, upright.Bound.Mag())
+
+	rot, err := r3.Rotation(r3.NewVec(1, 0, 0), units.Radians(0.4))
+	require.NoError(t, err)
+	tilted, err := chamfered.Placed(rot)
+	require.NoError(t, err)
+	tiltedBounds, err := tilted.Bounds()
+	require.NoError(t, err)
+	require.Equal(t, decad.Approximate, tiltedBounds.Exactness,
+		`an extreme held by the computed cap contour is known only to that contour's displacement`)
+	require.Positive(t, tiltedBounds.Bound.Mag())
+
+	// Every vertex the body holds still lies inside the reported box widened by
+	// its own bound — the claim the bound actually makes.
+	slack := tiltedBounds.Bound.Mag()
+	for _, v := range tilted.Vertices() {
+		p := v.Position().Value
+		require.GreaterOrEqual(t, p.X, tiltedBounds.Min.X-slack)
+		require.GreaterOrEqual(t, p.Y, tiltedBounds.Min.Y-slack)
+		require.GreaterOrEqual(t, p.Z, tiltedBounds.Min.Z-slack)
+		require.LessOrEqual(t, p.X, tiltedBounds.Max.X+slack)
+		require.LessOrEqual(t, p.Y, tiltedBounds.Max.Y+slack)
+		require.LessOrEqual(t, p.Z, tiltedBounds.Max.Z+slack)
+	}
+}

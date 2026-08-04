@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"math/big"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -221,6 +222,13 @@ func buildCapBand(ctx context.Context, body *Body, ref StepRef, cbp capBlendPayl
 	liftCap := func(p Point2) r3.Vec { return pl.point(p.U, p.V, capZ) }
 	liftSide := func(p Point2) r3.Vec { return pl.point(p.U, p.V, sideZ) }
 
+	// levelDelta is the side level's own rounding: sideZ is a float sum, so the
+	// band's side directrix sits that far from the level it denotes, and every
+	// edge with an endpoint there carries it beside the contour's own
+	// displacement. It is the same term capBandVolume charges for the identical
+	// level (capblend_moments.go).
+	levelDelta := addRoundError(capZ, matSign*d, sideZ)
+
 	// A single closed circle has no corner: one Cone patch, full turn.
 	if n == 1 && walks[0].closed {
 		w := walks[0]
@@ -228,8 +236,16 @@ func buildCapBand(ctx context.Context, body *Body, ref StepRef, cbp capBlendPayl
 		if err != nil {
 			return capBandResult{}, err
 		}
+		delta, err := capWholeCircleDelta(w, d)
+		if err != nil {
+			return capBandResult{}, err
+		}
+		exactRadius, ok := ivExactOffsetRadius(w, d)
+		if !ok {
+			return capBandResult{}, errCapContourUnbounded
+		}
 		seam0 := sideCo[0].edge // the side wall's own whole-circle bottom/top edge
-		capEdge := wholeCircleEdge(pl, w.cU, w.cV, capRadius, capZ, w.th1 > w.th0)
+		capEdge := wholeCircleEdge(pl, w.cU, w.cV, capRadius, capZ, w.th1 > w.th0, delta, exactRadius)
 		patch := buildConePatch(pl, body, ref, li, 0, w.cU, w.cV, w.radius, capRadius, sideZ, capZ, matSign, false, seam0, capEdge)
 		sign := 1.0
 		if w.th1 < w.th0 {
@@ -252,6 +268,18 @@ func buildCapBand(ctx context.Context, body *Body, ref StepRef, cbp capBlendPayl
 	}
 
 	joins, err := capOffsetJoins(budget, cl, d)
+	if err != nil {
+		return capBandResult{}, err
+	}
+
+	// delta is this band's CONTOUR DISPLACEMENT (capblend_contour.go): the one
+	// proven upper bound on how far a cap-level point the build emits sits from
+	// the point the offset denotes. Every cap-level vertex and every cap-level
+	// edge below is bounded through it, so no two readers of the same contour
+	// are told a different story about it — and neither the zero bound a
+	// recorded coordinate earns nor an infinite one that bounds nothing is
+	// published for a coordinate this solve computed.
+	delta, err := capContourDelta(walks, joins, d)
 	if err != nil {
 		return capBandResult{}, err
 	}
@@ -280,15 +308,15 @@ func buildCapBand(ctx context.Context, body *Body, ref StepRef, cbp capBlendPayl
 		j := joins[i]
 		apex := sideVertexAt(i)
 		if !j.arc {
-			capV := &Vertex{position: liftCap(j.m), bound: units.Millimeters(0)}
-			e := &Edge{curve: Line3{}, start: capV, end: apex, convex: true, length: math.Inf(1), lengthBound: math.Inf(1)}
+			capV := &Vertex{position: liftCap(j.m), bound: units.Millimeters(delta)}
+			e := capSlantEdge(j.m, capV, apex, j.vU, j.vV, capZ, sideZ, delta, levelDelta)
 			slantIn[i], slantOut[i] = e, e
 			continue
 		}
-		pAV := &Vertex{position: liftCap(j.pA), bound: units.Millimeters(0)}
-		pBV := &Vertex{position: liftCap(j.pB), bound: units.Millimeters(0)}
-		slantIn[i] = &Edge{curve: Line3{}, start: pAV, end: apex, convex: true, length: math.Inf(1), lengthBound: math.Inf(1)}
-		slantOut[i] = &Edge{curve: Line3{}, start: pBV, end: apex, convex: true, length: math.Inf(1), lengthBound: math.Inf(1)}
+		pAV := &Vertex{position: liftCap(j.pA), bound: units.Millimeters(delta)}
+		pBV := &Vertex{position: liftCap(j.pB), bound: units.Millimeters(delta)}
+		slantIn[i] = capSlantEdge(j.pA, pAV, apex, j.vU, j.vV, capZ, sideZ, delta, levelDelta)
+		slantOut[i] = capSlantEdge(j.pB, pBV, apex, j.vU, j.vV, capZ, sideZ, delta, levelDelta)
 		th0 := math.Atan2(j.pA.V-j.vV, j.pA.U-j.vU)
 		th1 := math.Atan2(j.pB.V-j.vV, j.pB.U-j.vU)
 		// The inward offset's reflex connector walks CLOCKWISE from pA to pB
@@ -300,15 +328,18 @@ func buildCapBand(ctx context.Context, body *Body, ref StepRef, cbp capBlendPayl
 		// offset never emitted, and every reader of the window (the edge's own
 		// length, the band's flux integral, the patch's normal range) inherits
 		// that error.
+		wraps := 0
 		for th1 > th0 {
 			th1 -= 2 * math.Pi
+			wraps++
 		}
 		arcTh0[i], arcTh1[i] = th0, th1
+		arcLength := d * (th0 - th1)
 		arcByCorner[i] = &Edge{
 			curve: Arc3{Center: liftCap(Point2{U: j.vU, V: j.vV}), Axis: pl.dir(0, 0, 1).Scale(-1), Radius: units.Millimeters(d)},
 			start: pAV, end: pBV,
 			convex: false,
-			length: d * (th0 - th1), lengthBound: math.Inf(1),
+			length: arcLength, lengthBound: capApexArcBound(j, d, arcLength, wraps, delta),
 		}
 	}
 
@@ -399,20 +430,33 @@ func buildCapBand(ctx context.Context, body *Body, ref StepRef, cbp capBlendPayl
 		// shared by the wall's edge, its surface and its recorded geometry, so
 		// no two of them can disagree about the offset and capBandRadius's own
 		// refusals are decided before any of the three is built.
-		capRadius := 0.0
+		capRadius, radiusDelta := 0.0, 0.0
 		if w.isCircular() {
 			r, err := capBandRadius(w, d)
 			if err != nil {
 				return capBandResult{}, err
 			}
-			capRadius = r
+			exactRadius, ok := ivExactOffsetRadius(w, d)
+			if !ok {
+				return capBandResult{}, errCapContourUnbounded
+			}
+			capRadius, radiusDelta = r, rationalFloatError(exactRadius, r)
 		}
 
 		var capEdge *Edge
 		if !w.isCircular() {
-			capEdge = &Edge{curve: Line3{}, start: capA, end: capB, convex: true, length: math.Hypot(end.U-start.U, end.V-start.V), lengthBound: math.Inf(1)}
+			held := math.Hypot(end.U-start.U, end.V-start.V)
+			// Both endpoints are contour points, so both carry the band's own
+			// displacement; the square root's own committed error is measured
+			// against the exact rational squared length.
+			capEdge = &Edge{
+				curve: Line3{}, start: capA, end: capB, convex: true,
+				length:      held,
+				lengthBound: straightEdgeBound(held, ratSquaredDistance3(end.U, end.V, 0, start.U, start.V, 0), delta, delta),
+			}
 		} else {
-			capEdge = arcEdge(pl, w.cU, w.cV, capRadius, capZ, capA, capB, w.th0, w.th1)
+			held := capRadius * math.Abs(w.th1-w.th0)
+			capEdge = arcEdge(pl, w.cU, w.cV, capRadius, capZ, capA, capB, w.th0, w.th1, held, capArcLengthBound(w, capRadius, radiusDelta, held, delta))
 		}
 
 		var surf Surface
@@ -520,25 +564,54 @@ func setPatchArea(f *Face, g capPatchGeom) {
 	f.area, f.areaBound = patchAreaOf(g)
 }
 
+// capSlantEdge is one cap-level contour point's slant edge down to the
+// side-level apex it closes on. The apex is a recorded (u, v) at the band's own
+// side level, so the edge's whole displacement is the contour's at one end and
+// the level's rounding at the other — and the held length is the float square
+// root's, charged what it committed against the exact rational squared length
+// rather than an ulp contract math.Hypot does not offer.
+func capSlantEdge(capP Point2, capV, apex *Vertex, apexU, apexV, capZ, sideZ, delta, levelDelta float64) *Edge {
+	held := math.Hypot(math.Hypot(capP.U-apexU, capP.V-apexV), capZ-sideZ)
+	squared := ratSquaredDistance3(capP.U, capP.V, capZ, apexU, apexV, sideZ)
+	return &Edge{
+		curve: Line3{}, start: capV, end: apex, convex: true,
+		length:      held,
+		lengthBound: straightEdgeBound(held, squared, delta, levelDelta),
+	}
+}
+
 // wholeCircleEdge builds a full-circle Edge (Circle3) in the cap plane at z,
-// the same seam-vertex convention extrude.go's singleClosed branch uses.
-func wholeCircleEdge(pl prismPayload, cu, cv, r, z float64, ccw bool) *Edge {
-	seam := &Vertex{position: pl.point(cu+r, cv, z), bound: units.Millimeters(0)}
+// the same seam-vertex convention extrude.go's singleClosed branch uses. delta
+// is the contour displacement of the concentric offset circle and exactRadius
+// the radius it denotes, so the seam vertex publishes the displacement it
+// actually has (its own coordinate is a float SUM of the centre and that
+// radius, which rounds once more) and the circumference is bounded against π's
+// own rational bracket.
+func wholeCircleEdge(pl prismPayload, cu, cv, r, z float64, ccw bool, delta float64, exactRadius *big.Rat) *Edge {
+	seamU := cu + r
+	seam := &Vertex{
+		position: pl.point(seamU, cv, z),
+		bound:    units.Millimeters(absSumUpper(delta, addRoundError(cu, r, seamU))),
+	}
 	axis := pl.dir(0, 0, 1)
 	if !ccw {
 		axis = axis.Scale(-1)
 	}
+	held := 2 * math.Pi * r
 	return &Edge{
 		curve: Circle3{Center: pl.point(cu, cv, z), Axis: axis, Radius: units.Millimeters(r)},
 		start: seam, end: seam,
 		convex: ccw,
-		length: 2 * math.Pi * r, lengthBound: math.Inf(1),
+		length: held, lengthBound: capCircleLengthBound(exactRadius, held),
 	}
 }
 
 // arcEdge builds an Arc3 Edge in the cap plane at z between the given
-// vertices, walking the same sense (th0, th1) the original wall does.
-func arcEdge(pl prismPayload, cu, cv, r, z float64, start, end *Vertex, th0, th1 float64) *Edge {
+// vertices, walking the same sense (th0, th1) the original wall does. length is
+// the held sweep r*|th1-th0| and lengthBound is capArcLengthBound's proven
+// bound on it — the caller forms the two together so the bound is never
+// computed against a value spelled a second time.
+func arcEdge(pl prismPayload, cu, cv, r, z float64, start, end *Vertex, th0, th1, length, lengthBound float64) *Edge {
 	axis := pl.dir(0, 0, 1)
 	if th1 < th0 {
 		axis = axis.Scale(-1)
@@ -547,7 +620,7 @@ func arcEdge(pl prismPayload, cu, cv, r, z float64, start, end *Vertex, th0, th1
 		curve: Arc3{Center: pl.point(cu, cv, z), Axis: axis, Radius: units.Millimeters(r)},
 		start: start, end: end,
 		convex: th1 > th0,
-		length: r * math.Abs(th1-th0), lengthBound: math.Inf(1),
+		length: length, lengthBound: lengthBound,
 	}
 }
 

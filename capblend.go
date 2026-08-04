@@ -111,6 +111,17 @@ func (cbp capBlendPayload) prismLike(z0, z1 float64) prismPayload {
 // chamfer removes. A stop reads this as an exact endpoint AND as the "is this
 // body in the sweep's path" test (stops.go), so an approximation here both
 // overruns the sweep and fabricates a dependency on a body it never meets.
+//
+// That is why this method REFUSES rather than approximates wherever the
+// extreme is held by the cap contour with a direction that reads the contour's
+// own in-plane displacement (capblend_contour.go). The contour is a computed
+// section, not a recorded one, so an extreme it holds is only known to a
+// proven displacement — and a stop has no bound to widen, exactly as
+// prismPayload's own section displacement leaves ThroughAll/ThroughAllSide
+// ErrUnsupported. Every direction whose extreme is held by a recorded
+// coordinate, and every direction that reads the contour with no in-plane
+// weight at all (the sweep's own axis, where the contour sits at the exact cap
+// level), still answers the exact interval it always did.
 func (cbp capBlendPayload) extentAlong(g r3.Vec) (float64, float64, error) {
 	return cbp.extentAlongContext(context.Background(), g)
 }
@@ -124,60 +135,119 @@ func (cbp capBlendPayload) extentAlongContext(ctx context.Context, g r3.Vec) (fl
 // which asks for three directions in a row) spends what is left of the R7
 // ceiling rather than opening a fresh one per axis.
 func (cbp capBlendPayload) extentAlongWork(ctx context.Context, g r3.Vec, work *freeformWork) (float64, float64, error) {
+	lo, hi, bound, err := cbp.extentBoundedAlong(ctx, g, work)
+	if err != nil {
+		return 0, 0, err
+	}
+	if bound != 0 {
+		return 0, 0, fmt.Errorf(`%w: a cap-loop chamfer's extent along this direction is held by its own computed cap contour, which is known only to a displacement of %v mm; a stop reads this coordinate as exact and has no bound to widen`, ErrUnsupported, bound)
+	}
+	return lo, hi, nil
+}
+
+// extentBoundedAlong is the reading itself: the interval AND the proven
+// displacement of its two endpoints. The displacement is per CANDIDATE and the
+// endpoints keep only what survives the extremization, which is what keeps the
+// answer exact wherever a recorded coordinate wins: the true minimum lies
+// between the minimum of the candidates' lower ends and the minimum of their
+// upper ends, so a candidate that loses by more than its own displacement
+// contributes nothing to the reported bound. Two mechanisms displace a
+// candidate and no others do — the cap contour's own in-plane displacement,
+// weighted by how much of the direction lies in the plane, and the rounding of
+// a chamfered end's trimmed straight level, weighted by the axial component.
+func (cbp capBlendPayload) extentBoundedAlong(ctx context.Context, g r3.Vec, work *freeformWork) (float64, float64, float64, error) {
 	pl := cbp.prismLike(0, 0)
 	base := cbp.xform.Apply(cbp.frame.Origin()).Dot(g)
 	gu := pl.dir(1, 0, 0).Dot(g)
 	gv := pl.dir(0, 1, 0).Dot(g)
 	gz := pl.dir(0, 0, 1).Dot(g)
+	inPlane := upRound(math.Hypot(gu, gv))
+	axial := math.Abs(gz)
 	lo, hi := math.Inf(1), math.Inf(-1)
-	take := func(l, h, z float64) {
-		lo = math.Min(lo, l+z*gz)
-		hi = math.Max(hi, h+z*gz)
+	loLower, loUpper := math.Inf(1), math.Inf(1)
+	hiLower, hiUpper := math.Inf(-1), math.Inf(-1)
+	// A candidate with no displacement at all keeps its exact value at both
+	// ends: widening it by a directed rounding would mint a bound out of an
+	// arithmetic that committed nothing, which is precisely the claim this
+	// reading exists to avoid making in the other direction.
+	outward := func(v, allow float64, up bool) float64 {
+		if allow == 0 {
+			return v
+		}
+		if up {
+			return upRound(v + allow)
+		}
+		return downRound(v - allow)
+	}
+	take := func(l, h, z, allow float64) {
+		lv, hv := l+z*gz, h+z*gz
+		lo = math.Min(lo, lv)
+		hi = math.Max(hi, hv)
+		loLower = math.Min(loLower, outward(lv, allow, false))
+		loUpper = math.Min(loUpper, outward(lv, allow, true))
+		hiLower = math.Max(hiLower, outward(hv, allow, false))
+		hiUpper = math.Max(hiUpper, outward(hv, allow, true))
 	}
 	for li, loop := range cbp.loops() {
 		if err := ctx.Err(); err != nil {
-			return 0, 0, err
+			return 0, 0, 0, err
 		}
 		onStart, onEnd := cbp.startLoops[li], cbp.endLoops[li]
 		zLo, zHi := cbp.z0, cbp.z1
+		loAllow, hiAllow := 0.0, 0.0
 		if onStart {
 			zLo = cbp.z0 + cbp.d
+			loAllow = productUpper(axial, addRoundError(cbp.z0, cbp.d, zLo))
 		}
 		if onEnd {
 			zHi = cbp.z1 - cbp.d
+			hiAllow = productUpper(axial, addRoundError(cbp.z1, -cbp.d, zHi))
 		}
 		l, h, err := boundaryExtremesContext(ctx, ProfileRecord{Outer: loop}, gu, gv, work)
 		if err != nil {
-			return 0, 0, err
+			return 0, 0, 0, err
 		}
 		// The original loop bounds the straight slab at both its own levels;
-		// a chamfered end's level is also that band's side-level directrix.
-		take(l, h, zLo)
-		take(l, h, zHi)
+		// a chamfered end's level is also that band's side-level directrix, and
+		// that level is a float sum whose rounding moves the candidate.
+		take(l, h, zLo, loAllow)
+		take(l, h, zHi, hiAllow)
 		if !onStart && !onEnd {
 			continue
 		}
 		// The cap contour is the band's cap-level directrix and the chamfered
-		// cap face's own boundary — the same offset loop the build emits.
+		// cap face's own boundary — the same offset loop the build emits, and
+		// the same displacement the band's own vertices and edges carry.
 		contour, err := capLoopBoundary(ctx, loop, cbp.d)
 		if err != nil {
-			return 0, 0, err
+			return 0, 0, 0, err
+		}
+		delta, err := loopContourDelta(ctx, loop, cbp.d)
+		if err != nil {
+			return 0, 0, 0, err
 		}
 		cl, ch, err := boundaryExtremesContext(ctx, ProfileRecord{Outer: contour}, gu, gv, work)
 		if err != nil {
-			return 0, 0, err
+			return 0, 0, 0, err
 		}
+		// The contour sits at the cap's own recorded level, so only the
+		// in-plane part of the direction reads its displacement at all.
+		contourAllow := productUpper(inPlane, delta)
 		if onStart {
-			take(cl, ch, cbp.z0)
+			take(cl, ch, cbp.z0, contourAllow)
 		}
 		if onEnd {
-			take(cl, ch, cbp.z1)
+			take(cl, ch, cbp.z1, contourAllow)
 		}
 	}
 	if math.IsInf(lo, 1) {
-		return 0, 0, fmt.Errorf(`%w: the recorded region has no boundary`, ErrDegenerate)
+		return 0, 0, 0, fmt.Errorf(`%w: the recorded region has no boundary`, ErrDegenerate)
 	}
-	return base + lo, base + hi, nil
+	bound := absSumUpper(math.Max(
+		math.Max(loUpper-lo, lo-loLower),
+		math.Max(hiUpper-hi, hi-hiLower),
+	))
+	return base + lo, base + hi, bound, nil
 }
 
 // requireNotCapBlendReceiver is SX10 (docs/modify-reach-design.md Table SX):
@@ -302,23 +372,6 @@ func buildCapBlend(ctx context.Context, doc *Document, ref StepRef, pp prismPayl
 	height := pp.z1 - pp.z0
 	loops := append([]LoopRecord{pp.profile.Outer}, pp.profile.Holes...)
 
-	// SX7 (band-meeting): a loop chamfered on both caps needs both bands to
-	// fit without meeting; a loop chamfered on one cap needs its own band to
-	// fit within the sweep. Existence-first: this is a fact about the sweep
-	// interval alone, decided before the 2D offset is built.
-	for li := range loops {
-		reach := 0.0
-		if startLoops[li] {
-			reach += d
-		}
-		if endLoops[li] {
-			reach += d
-		}
-		if reach >= height {
-			return nil, fmt.Errorf(`%w: the chamfer band(s) on loop %d reach or pass the opposite end of the sweep; a merging kernel is not available`, ErrUnsupported, li)
-		}
-	}
-
 	// SX6 + SX7/SX12: build the "mixed" profile — every selected loop offset
 	// d into the material (the cap contour at whichever cap it is selected
 	// on; when a loop is selected on BOTH caps the two contours are equal —
@@ -340,6 +393,32 @@ func buildCapBlend(ctx context.Context, doc *Document, ref StepRef, pp prismPayl
 	if err != nil {
 		return nil, wrapCapBlendDropError(err)
 	}
+
+	// SX7 (band-meeting): a loop chamfered on both caps needs both bands to
+	// fit without meeting; a loop chamfered on one cap needs its own band to
+	// fit within the sweep.
+	//
+	// It runs AFTER SX6, which docs/modify-reach-design.md puts in stage 5 while
+	// this row is stage 6 ("SX6 precedes SX7"). The two rows answer the same §4
+	// existence test in opposite directions, and stage order is how §4 keeps one
+	// input from having two sentinels: a setback that empties the cap contour
+	// names a body that does not exist at any sweep height, so it is SX6's
+	// ErrDegenerate whether the sweep is short enough for the bands to meet or
+	// not. Deciding the band reach first would let the sweep height alone pick
+	// which sentinel that one nonexistent body reports.
+	for li := range loops {
+		reach := 0.0
+		if startLoops[li] {
+			reach += d
+		}
+		if endLoops[li] {
+			reach += d
+		}
+		if reach >= height {
+			return nil, fmt.Errorf(`%w: the chamfer band(s) on loop %d reach or pass the opposite end of the sweep; a merging kernel is not available`, ErrUnsupported, li)
+		}
+	}
+
 	if err := auditOffsetSectionBudget(budget, pp.profile, mixed); err != nil {
 		return nil, wrapCapBlendAuditError(err)
 	}

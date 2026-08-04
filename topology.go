@@ -192,8 +192,15 @@ type Vertex struct {
 }
 
 // Position returns the vertex position in millimetres — a computed
-// coordinate, so it is bounded (core §6): feature-built vertices are Exact
-// with a zero bound, boolean-built ones carry the tessellation's chord bound.
+// coordinate, so it is bounded (core §6). A vertex whose plane-local
+// coordinates come straight from the RECORD is Exact with a zero bound, which
+// is every vertex a plain extrude, revolve, loft or cup mints; a boolean-built
+// one carries the tessellation's chord bound; and a vertex a feature COMPUTED
+// rather than read carries that construction's own proven displacement — a
+// cap-loop chamfer's cap-level feet, which a float offset solve places
+// (docs/modify-reach-design.md §8.4), are the shipped case. Being
+// feature-built is not by itself a claim of exactness: what the coordinate was
+// READ FROM is.
 func (v *Vertex) Position() VecMeasurement {
 	exactness := Exact
 	if v.bound.Mag() != 0 {

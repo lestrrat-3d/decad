@@ -96,6 +96,7 @@
 //	  Fillet of a cap edge (the vertex blend)                 ErrUnsupported
 //	  partial or lateral-mixed cap-loop selection             ErrUnsupported
 //	  cap-loop setback the radius or sweep cannot name        ErrUnsupported
+//	  cap-loop corner whose offset cannot be enclosed         ErrUnsupported
 //	  non-prism receiver, or a cap-loop chamfer result        ErrUnsupported
 //	Shell         straight prism (tube or cup)                builds
 //	  both caps removed from a holed section                  ErrUnsupported

@@ -580,33 +580,42 @@ func patchAreaOf(g capPatchGeom) (float64, float64) {
 }
 
 // capBlendBoundsContext is the placed body's axis-aligned bounding box, read
-// along each world axis from the payload's OWN exact patch extrema
-// (extentAlongWork, Table DX row DX5) exactly as prismBoundsContext reads a
-// prism's — so every face of the box is a value the body attains, and the
-// reported zero Bound is the truth about it. Min and Max are positions and
-// Bound is the absolute error on them (measurement.go), so a box widened
-// outward by the setback d would be a Min sitting d millimetres from the true
-// extreme while claiming an error of zero; §8.4 asks for bounds from patch
-// extrema for that reason, and capblend.go's extentAlong already states why
-// padding the receiver prism by d proves nothing about attainment.
+// along each world axis from the payload's OWN patch extrema
+// (extentBoundedAlong, Table DX row DX5) exactly as prismBoundsContext reads a
+// prism's — so every face of the box is a value the body attains. Min and Max
+// are positions and Bound is the absolute error on them (measurement.go), so a
+// box widened outward by the setback d would be a Min sitting d millimetres
+// from the true extreme while claiming an error of zero; §8.4 asks for bounds
+// from patch extrema for that reason, and capblend.go's extentAlong already
+// states why padding the receiver prism by d proves nothing about attainment.
+//
+// The Bound is the reading's own, never a fixed zero. An extreme held by a
+// recorded coordinate really does have none, which is the ordinary case on a
+// body whose plane is axis aligned; an extreme held by the COMPUTED cap
+// contour is known only to that contour's proven displacement, and publishing
+// it as an Exact position would assert an accuracy the offset solve never had.
+// extentBoundedAlong keeps the two apart per candidate, so a contour that loses
+// the extremization contributes nothing here.
 func capBlendBoundsContext(ctx context.Context, cbp capBlendPayload, work *freeformWork) (Box, error) {
 	axes := []r3.Vec{r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1)}
 	var minC, maxC [3]float64
+	bound := 0.0
 	for i, axis := range axes {
 		if err := ctx.Err(); err != nil {
 			return Box{}, err
 		}
-		lo, hi, err := cbp.extentAlongWork(ctx, axis, work)
+		lo, hi, axisBound, err := cbp.extentBoundedAlong(ctx, axis, work)
 		if err != nil {
 			return Box{}, err
 		}
 		minC[i], maxC[i] = lo, hi
+		bound = math.Max(bound, axisBound)
 	}
 	return Box{
 		Min:       r3.NewVec(minC[0], minC[1], minC[2]),
 		Max:       r3.NewVec(maxC[0], maxC[1], maxC[2]),
-		Exactness: Exact,
-		Bound:     units.Millimeters(0),
+		Exactness: exactnessOf(bound),
+		Bound:     units.Millimeters(bound),
 	}, nil
 }
 
@@ -625,6 +634,11 @@ func capBlendBoundsContext(ctx context.Context, cbp capBlendPayload, work *freef
 // unexamined, and a box whose extent along one axis is far larger than along
 // another puts its farthest corner among exactly those six: the reported bound
 // is then smaller than the estimate's own error and encloses nothing.
+//
+// The box's own Bound is added on top for the same reason: the safety net is
+// "the true centroid lies within the box", and where a face of the box is
+// itself known only to a displacement, the box that provably contains the body
+// is the reported one widened by it.
 func capBlendCentroidEstimate(faces []*Face, bounds Box) (r3.Vec, float64) {
 	var sum r3.Vec
 	var totalArea float64
@@ -651,7 +665,7 @@ func capBlendCentroidEstimate(faces []*Face, bounds Box) (r3.Vec, float64) {
 			}
 		}
 	}
-	return estimate, upRound(reach)
+	return estimate, absSumUpper(reach, bounds.Bound.Mag())
 }
 
 // faceRepresentativePoint is any point provably on the face, used only to
