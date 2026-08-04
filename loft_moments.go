@@ -21,7 +21,9 @@ import (
 // for the same reason spline design §3 gives arc length. It is still PROVEN:
 // each triangle's area is bracketed from its own exact rational cross-norm by
 // spline_length.go's outward-rounded ratSqrtDown/ratSqrtUp, and the published
-// bound sums those per-triangle widths beside the summation loop's own slop.
+// bound sums those per-triangle widths beside the summation loop's own slop —
+// or is +Inf where either of those two terms has itself saturated, since a
+// saturated term states no scale for the bound to be proven at (wallBound).
 
 // loftMassAccumulator is docs/loft-design.md §8's tetrahedron-sum kernel. It
 // streams one outward-oriented triangle of T at a time — a wall or a cap
@@ -49,6 +51,12 @@ type loftMassAccumulator struct {
 	// upper bound on Σ (upper − lower), the enclosure width each triangle's
 	// own area contributes. The three are what make the published bound a
 	// proof rather than an estimate.
+	//
+	// Each of the two proof terms is an UPPER bound and is nudged outward once
+	// per term, so each diverges upward from the value it speaks for and can
+	// SATURATE at +Inf while wallAreaSum is still finite. A saturated term has
+	// stopped being a proven scale, and area() publishes an infinite bound
+	// rather than the zero sumSlop reports for a non-finite absSum.
 	wallAreaSum   float64
 	wallAreaAbs   float64
 	wallAreaSlack float64
@@ -214,6 +222,9 @@ func (m *loftMassAccumulator) bounds() (Box, bool) {
 //   - capBound — the caps' exact rational rounding once into float64;
 //   - addBound — the final wall+cap addition's own rounding, exact.
 //
+// wallBound owns the first two and answers +Inf where either has saturated,
+// since neither is a proven scale any more.
+//
 // Area is never Exact whenever any wall triangle has nonzero area
 // (docs/loft-design.md §8, spline design §3's arc-length asymmetry).
 func (m *loftMassAccumulator) area(capAreas ...*big.Rat) Measurement {
@@ -226,14 +237,36 @@ func (m *loftMassAccumulator) area(capAreas ...*big.Rat) Measurement {
 	capFloat, _ := capTotal.Float64()
 	capBound := rationalFloatError(capTotal, capFloat)
 
-	wallBound := absSumUpper(m.wallAreaSlack, sumSlop(m.wallTerms, m.wallAreaAbs))
 	value := m.wallAreaSum + capFloat
 	addBound := addRoundError(m.wallAreaSum, capFloat, value)
-	bound := absSumUpper(wallBound, capBound, addBound)
+	bound := absSumUpper(m.wallBound(), capBound, addBound)
 
 	return Measurement{
 		Value:     units.SquareMillimeters(value),
 		Exactness: exactnessOf(bound),
 		Bound:     units.SquareMillimeters(bound),
 	}
+}
+
+// wallBound is the wall summation's own share of area's proven bound: the
+// per-triangle enclosure widths beside the summation loop's slop.
+//
+// Both held terms are upper bounds nudged outward once per triangle, so either
+// can SATURATE at +Inf on a wall set whose areas approach float64's own
+// ceiling, while the plain sum they speak for stays finite by rounding whole
+// triangles away. sumSlop answers a non-finite absSum with 0 — correct for a
+// helper that cannot invent a scale, and fatal here, because that term is the
+// ONLY cover the wall loop's rounding has: the slack is exactly 0 whenever
+// every triangle's own area is representable, so the two together would leave
+// a saturated sum claiming Exact over mass it has already swallowed.
+//
+// A saturated term is not a small bound, it is the absence of a proven scale,
+// and the error it stands for here runs past MaxFloat64 — so the honest answer
+// is +Inf. Any finite substitute would be a guess, which is what this kernel's
+// proven-bound discipline exists to prevent (docs/loft-design.md §8).
+func (m *loftMassAccumulator) wallBound() float64 {
+	if isNonFinite(m.wallAreaAbs) || isNonFinite(m.wallAreaSlack) {
+		return math.Inf(1)
+	}
+	return absSumUpper(m.wallAreaSlack, sumSlop(m.wallTerms, m.wallAreaAbs))
 }

@@ -326,6 +326,99 @@ func TestLoftMassAccumulatorAreaBoundEnclosesSliverSum(t *testing.T) {
 		"the reported bound must ENCLOSE the true error over a whole wall set")
 }
 
+// addLoftWalls folds the wall triangles of a loft between two congruent
+// planar loops into the accumulator, in profile segment order and split the
+// way docs/loft-design.md Table B splits every wall quad — along the
+// bottom-start/top-end diagonal, so segment i contributes (b_i, b_i+1, t_i+1)
+// then (b_i, t_i+1, t_i). bottom and top must list corresponding points.
+func addLoftWalls(m *loftMassAccumulator, bottom, top []r3.Vec) {
+	for i := range bottom {
+		j := (i + 1) % len(bottom)
+		m.add(bottom[i], bottom[j], top[j], true)
+		m.add(bottom[i], top[j], top[i], true)
+	}
+}
+
+// TestLoftMassAccumulatorAreaBoundSurvivesSaturatedScale is the regression for
+// the wall summation's own SCALE saturating while the summed value does not.
+//
+// wallAreaAbs diverges upward from wallAreaSum by one upRound per term, so it
+// can reach +Inf while wallAreaSum is still finite — and sumSlop reports 0 for
+// a non-finite absSum, which is the whole of the wall loop's summation cover.
+// With every triangle's own area exactly representable the enclosure slack is
+// 0 too, so an unguarded area() publishes a zero bound and Exact over a value
+// that has silently swallowed four whole triangles.
+//
+// The witness is two congruent rectangles of width 2^-27 and height
+// 2^27 − 2^-26 on the planes z = 0 and z = 2^996: four long wall triangles of
+// area exactly MaxFloat64/4 and four short ones of area exactly 2^968, just
+// under half an ulp of MaxFloat64. Their float sum saturates at MaxFloat64
+// while the true total runs past it.
+func TestLoftMassAccumulatorAreaBoundSurvivesSaturatedScale(t *testing.T) {
+	width := math.Ldexp(1, -27)
+	height := math.Ldexp(1, 27) - math.Ldexp(1, -26)
+	lift := math.Ldexp(1, 996)
+
+	corners := func(z float64) []r3.Vec {
+		return []r3.Vec{
+			r3.NewVec(0, 0, z),
+			r3.NewVec(height, 0, z),
+			r3.NewVec(height, width, z),
+			r3.NewVec(0, width, z),
+		}
+	}
+
+	m := newLoftMassAccumulator(r3.NewVec(0, 0, 0))
+	addLoftWalls(m, corners(0), corners(lift))
+
+	// The fixture is only meaningful while it really does saturate the scale
+	// without saturating the sum, and while no triangle's own bracket has any
+	// width of its own to carry the bound.
+	require.Equal(t, 8, m.wallTerms)
+	require.True(t, math.IsInf(m.wallAreaAbs, 1),
+		"the fixture must drive the summation scale to +Inf")
+	require.False(t, math.IsInf(m.wallAreaSum, 1),
+		"the fixture must leave the summed value finite")
+	require.Equal(t, 0.0, m.wallAreaSlack,
+		"every triangle area here is exactly representable, so the enclosure slack must be 0")
+	require.Equal(t, 0.0, sumSlop(m.wallTerms, m.wallAreaAbs),
+		"sumSlop reports nothing for a saturated scale — the hole this test guards")
+
+	area := m.area()
+	require.Equal(t, math.MaxFloat64, area.Value.Base(),
+		"the naive float sum saturates at MaxFloat64")
+
+	// The truth, at 400 bits: four times MaxFloat64/4 plus four times 2^968.
+	const prec = 400
+	ref := new(big.Float).SetPrec(prec)
+	quarter := new(big.Float).SetPrec(prec).SetFloat64(math.MaxFloat64 / 4)
+	short := new(big.Float).SetPrec(prec).SetFloat64(math.Ldexp(1, 968))
+	for range 4 {
+		ref.Add(ref, quarter)
+		ref.Add(ref, short)
+	}
+
+	held := new(big.Float).SetPrec(prec).SetFloat64(area.Value.Base())
+	diff := new(big.Float).SetPrec(prec).Sub(ref, held)
+	diff.Abs(diff)
+	diffF, acc := diff.Float64()
+	if acc == big.Below {
+		diffF = math.Nextafter(diffF, math.Inf(1))
+	}
+	require.Greater(t, diffF, 0.0, "the fixture must actually lose mass")
+	t.Logf("held=%.17g error=%.17g bound=%.17g", area.Value.Base(), diffF, area.Bound.Base())
+
+	require.LessOrEqual(t, diffF, area.Bound.Base(),
+		"the reported bound must ENCLOSE the true error even where the summation scale saturated")
+
+	// Once the scale has overflowed there is no finite proven scale left, and
+	// the true error here already exceeds MaxFloat64's own ulp by orders of
+	// magnitude — any finite substitute would be a guess.
+	require.True(t, math.IsInf(area.Bound.Base(), 1),
+		"a saturated summation scale must publish an infinite bound, never a finite guess")
+	require.Equal(t, Approximate, area.Exactness)
+}
+
 // TestLoftMassAccumulatorBoundsEmpty proves bounds reports false before any
 // triangle has been added.
 func TestLoftMassAccumulatorBoundsEmpty(t *testing.T) {

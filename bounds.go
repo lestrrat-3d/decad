@@ -74,8 +74,18 @@ func radius3D(perCoord float64) float64 {
 // is itself a float evaluation (a cross product, a norm, a square root): a
 // handful of ulps, charged as 4·u per term.
 //
-// It is NEVER zero for a positive absSum. That is the point: a float-computed
-// value is not exactly representable, so it may never reach Exact.
+// It is NEVER zero for a positive FINITE absSum. That is the point: a
+// float-computed value is not exactly representable, so it may never reach
+// Exact.
+//
+// A non-finite absSum is the one case it answers 0 for, because a saturated
+// scale is no scale and this helper may not invent one. That answer is a
+// PRECONDITION on the caller, not a bound: a caller whose absSum can saturate
+// independently of the value it speaks for must state its own bound for that
+// case, or the term silently vanishes (loft_moments.go's wallBound does, with
+// +Inf). Every other caller here passes the held value itself as absSum and
+// adds this term to it, so a saturation carries +Inf into the published bound
+// on its own.
 func sumSlop(n int, absSum float64) float64 {
 	if n <= 0 || absSum <= 0 || isNonFinite(absSum) {
 		return 0

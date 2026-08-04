@@ -466,7 +466,16 @@ triangle's OWN scale: `(B-A) x (C-A)` is taken over exact rationals (the same
 is therefore an exact rational, and `spline_length.go`'s outward-rounded
 `ratSqrtDown` / `ratSqrtUp` bracket that rational's square root. The published
 bound sums those per-triangle enclosure widths beside the summation loop's own
-slop (`bounds.go`'s `sumSlop`). A bound scaled off the held TOTAL bounds only
+slop (`bounds.go`'s `sumSlop`). **Both of those two terms are upper bounds
+nudged outward once per triangle, so each can SATURATE at `+Inf` on a wall set
+whose areas approach `float64`'s own ceiling — while the plain sum they speak
+for stays finite by rounding whole triangles away. A saturated term states no
+scale, so the published bound is `+Inf`, never the zero `sumSlop` reports for a
+non-finite `absSum`**: the enclosure widths are exactly zero whenever every
+triangle's own area is representable, so the two together would otherwise leave
+a saturated sum claiming `Exact` over mass it has already swallowed, with a true
+error that here runs past `MaxFloat64`. Any finite substitute would be an
+unproven guess. A bound scaled off the held TOTAL bounds only
 the loop: a float cross product's forward error scales with its products
 rather than with its result, so on a thin triangle it exceeds any such bound by
 roughly one over the triangle's aspect ratio — and Table B's diagonal split
@@ -650,8 +659,14 @@ never merely that a call ran (project rule).
   high-precision reference, never merely asserted present — over a table of
   slivers at aspect 1e-2, 1e-3 and 1e-6 and at least one large-coordinate
   case, and over a many-triangle wall set so the summation loop is covered
-  beside the per-triangle brackets. `Bounds` matches the exact per-vertex
-  componentwise extreme.
+  beside the per-triangle brackets. One fixture drives the summation SCALE to
+  `+Inf` while the summed value stays finite and every triangle's own bracket
+  has zero width — two congruent rectangles of width 2^-27 and height
+  2^27 − 2^-26 on the planes z = 0 and z = 2^996, whose four long wall
+  triangles have area exactly `MaxFloat64`/4 and whose four short ones have
+  area exactly 2^968 — and asserts the published bound is `+Inf` and the
+  reading `Approximate`, never a zero bound over a value that has swallowed
+  whole triangles. `Bounds` matches the exact per-vertex componentwise extreme.
 - **Downstream**: D1's `Bound` is exactly zero for an admitted loft; a D2
   boolean between a loft and a prism succeeds through the existing
   all-planar path; a box-disjoint loft/loft pair proves only its
