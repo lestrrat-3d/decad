@@ -460,10 +460,27 @@ triangulated boundary.
 
 **`Area` is never Exact.** A triangle's own area is `(1/2) * |(B-A) x
 (C-A)|` — a square root of a rational, generically irrational — so a wall
-triangle's area contribution is a float evaluation with a proven outward
-bound (`bounds.go`'s `sumSlop`: "a PROVEN bound for the NAIVE float sum
-that produced the value — never zero for a nonzero float-computed
-quantity"). Spline design §3 states the identical asymmetry for arc length:
+triangle's area contribution carries a proven outward bound derived at that
+triangle's OWN scale: `(B-A) x (C-A)` is taken over exact rationals (the same
+"take the floats exactly" lift the volume sum already uses), its squared norm
+is therefore an exact rational, and `spline_length.go`'s outward-rounded
+`ratSqrtDown` / `ratSqrtUp` bracket that rational's square root. The published
+bound sums those per-triangle enclosure widths beside the summation loop's own
+slop (`bounds.go`'s `sumSlop`). **Both of those two terms are upper bounds
+nudged outward once per triangle, so each can SATURATE at `+Inf` on a wall set
+whose areas approach `float64`'s own ceiling — while the plain sum they speak
+for stays finite by rounding whole triangles away. A saturated term states no
+scale, so the published bound is `+Inf`, never the zero `sumSlop` reports for a
+non-finite `absSum`**: the enclosure widths are exactly zero whenever every
+triangle's own area is representable, so the two together would otherwise leave
+a saturated sum claiming `Exact` over mass it has already swallowed, with a true
+error that here runs past `MaxFloat64`. Any finite substitute would be an
+unproven guess. A bound scaled off the held TOTAL bounds only
+the loop: a float cross product's forward error scales with its products
+rather than with its result, so on a thin triangle it exceeds any such bound by
+roughly one over the triangle's aspect ratio — and Table B's diagonal split
+makes thin walls the ordinary case for a short loft over long recorded
+`LineSeg`s. Spline design §3 states the identical asymmetry for arc length:
 "Arc length is never exact in ANY tier… a Tier A body's `Area` always
 carries a positive bound even where its `Volume` does not." A loft's `Area`
 is the two caps' own exact rational area (from `moments.go`, contributing no
@@ -638,9 +655,18 @@ never merely that a call ran (project rule).
   centroid `Approximate` with a length-radius bound enclosing all three
   coordinate-rounding errors (mirroring spline design Table F's own 293/18 vs
   293/2 worked example). `Area` is `Approximate` whenever any wall triangle
-  has nonzero area, with the bound checked against a high-precision reference
-  sum, never merely asserted present. `Bounds` matches the exact per-vertex
-  componentwise extreme.
+  has nonzero area, and its reported bound ENCLOSES `|held - true|` against a
+  high-precision reference, never merely asserted present — over a table of
+  slivers at aspect 1e-2, 1e-3 and 1e-6 and at least one large-coordinate
+  case, and over a many-triangle wall set so the summation loop is covered
+  beside the per-triangle brackets. One fixture drives the summation SCALE to
+  `+Inf` while the summed value stays finite and every triangle's own bracket
+  has zero width — two congruent rectangles of width 2^-27 and height
+  2^27 − 2^-26 on the planes z = 0 and z = 2^996, whose four long wall
+  triangles have area exactly `MaxFloat64`/4 and whose four short ones have
+  area exactly 2^968 — and asserts the published bound is `+Inf` and the
+  reading `Approximate`, never a zero bound over a value that has swallowed
+  whole triangles. `Bounds` matches the exact per-vertex componentwise extreme.
 - **Downstream**: D1's `Bound` is exactly zero for an admitted loft; a D2
   boolean between a loft and a prism succeeds through the existing
   all-planar path; a box-disjoint loft/loft pair proves only its

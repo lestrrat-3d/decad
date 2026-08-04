@@ -158,6 +158,13 @@ func wallCandidateWork(elementCount, vertexCount int, wedge bool) (uint64, bool)
 // polls (docs/interference-design.md §7.2).
 const workPollInterval = 256
 
+// maxFacetPairTestsPerCall is the fixed ceiling on exact triangle-pair
+// predicate invocations for one call (docs/tessellation-design.md §3): the
+// tessellation boolean pre-pass and the loft crossing audit
+// (docs/loft-design.md §6) both charge every pair test against this one
+// constant rather than minting a second ceiling for the identical quantity.
+const maxFacetPairTestsPerCall = 8_000_000
+
 // workBudget shares one bounded cancellation counter across every nested loop
 // of one read-only or pre-commit audit phase. Leaf exact predicates stay
 // context-free (docs/interference-design.md §7.2); their callers step this
