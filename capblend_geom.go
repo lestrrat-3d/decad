@@ -283,11 +283,12 @@ func buildCapBand(ctx context.Context, body *Body, ref StepRef, cbp capBlendPayl
 		arc := arcByCorner[i]
 		// p is Table BX row BX3's "deterministic patch order in the result's
 		// own capBlendPayload" — the patch's index in this band's own patch
-		// slice, which is what capblend_moments.go keys its geometry by. It is
-		// NEVER the corner or wall index: those two index spaces collide (corner
-		// i sits at walks[i].start), and two faces sharing one role string
-		// collapse every last-wins reader — the payload's patch map, facesByRole,
-		// and FaceCreatedBy alike — onto whichever face was built second.
+		// slice, which is the order capblend_moments.go pairs its geometry in.
+		// It is NEVER the corner or wall index: those two index spaces collide
+		// (corner i sits at walks[i].start), and two faces sharing one role
+		// string collapse every last-wins reader — facesByRole, FaceCreatedBy,
+		// and the survey's own role lookup alike — onto whichever face was
+		// built second.
 		role := fmt.Sprintf("chamferCap(%s,%d,%d)", capName, li, len(patches))
 		surf := coneSurface(pl, j.vU, j.vV, 0, d, sideZ, capZ)
 		// Walk order: arc (pAV -> pBV, cap level), slantOut forward

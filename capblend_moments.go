@@ -50,13 +50,16 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref StepRef, cbp capB
 	endLoopObjs := make([]*Loop, len(loops))
 	var startArea, endArea, sideArea, patchArea, slabVolume boundedScalar
 	var bandVolume float64
-	patchGeoms := map[string]capPatchGeom{}
+	// Appended in build order — loop index, then the chamfered cap, then each
+	// band's own patch index — which IS Table BX row BX3's deterministic patch
+	// order, the order the DX7 survey then reports its faces in.
+	var patchGeoms []capPatch
 	collectPatchGeoms := func(band capBandResult) {
 		for i, f := range band.patches {
 			if len(f.origins) == 0 {
 				continue
 			}
-			patchGeoms[f.origins[0].Role] = band.geom[i]
+			patchGeoms = append(patchGeoms, capPatch{role: f.origins[0].Role, geom: band.geom[i]})
 		}
 	}
 
@@ -383,23 +386,33 @@ func patchAreaOf(g capPatchGeom) (float64, float64) {
 	return area, conservativeValueError(area, dth*(R0+R1)*(math.Abs(dR)+math.Abs(H)))
 }
 
-// capBlendBoundsContext is the placed body's axis-aligned bounding box: the
-// receiver's own bounds widened by d along every axis — a chamfer point
-// never lies farther than d beyond the original prism's boundary (a convex
-// removal stays strictly inside it; a reflex corner's apex patch bulges by
-// at most d) — a sound, if not razor-tight, envelope, evaluated directly for
-// soundness rather than reused from a tighter but unproven claim.
+// capBlendBoundsContext is the placed body's axis-aligned bounding box, read
+// along each world axis from the payload's OWN exact patch extrema
+// (extentAlongWork, Table DX row DX5) exactly as prismBoundsContext reads a
+// prism's — so every face of the box is a value the body attains, and the
+// reported zero Bound is the truth about it. Min and Max are positions and
+// Bound is the absolute error on them (measurement.go), so a box widened
+// outward by the setback d would be a Min sitting d millimetres from the true
+// extreme while claiming an error of zero; §8.4 asks for bounds from patch
+// extrema for that reason, and capblend.go's extentAlong already states why
+// padding the receiver prism by d proves nothing about attainment.
 func capBlendBoundsContext(ctx context.Context, cbp capBlendPayload, work *freeformWork) (Box, error) {
-	pp := prismPayload{profile: cbp.profile, frame: cbp.frame, z0: cbp.z0, z1: cbp.z1, xform: cbp.xform}
-	base, err := prismBoundsContext(ctx, pp, work)
-	if err != nil {
-		return Box{}, err
+	axes := []r3.Vec{r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1)}
+	var minC, maxC [3]float64
+	for i, axis := range axes {
+		if err := ctx.Err(); err != nil {
+			return Box{}, err
+		}
+		lo, hi, err := cbp.extentAlongWork(ctx, axis, work)
+		if err != nil {
+			return Box{}, err
+		}
+		minC[i], maxC[i] = lo, hi
 	}
-	pad := r3.NewVec(cbp.d, cbp.d, cbp.d)
 	return Box{
-		Min:       base.Min.Sub(pad),
-		Max:       base.Max.Add(pad),
-		Exactness: Approximate,
+		Min:       r3.NewVec(minC[0], minC[1], minC[2]),
+		Max:       r3.NewVec(maxC[0], maxC[1], maxC[2]),
+		Exactness: Exact,
 		Bound:     units.Millimeters(0),
 	}, nil
 }

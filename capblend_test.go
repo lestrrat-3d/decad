@@ -270,7 +270,7 @@ func TestCapBlendReflexCornerBuilds(t *testing.T) {
 // by a CORNER and a wall patch by a WALL, and capOffsetJoins puts corner i at
 // walks[i].start, so keying either role by that index puts two faces on one
 // role string. Every last-wins reader then collapses onto whichever face was
-// built second — the payload's own patch map, facesByRole, and FaceCreatedBy.
+// built second — facesByRole, FaceCreatedBy, and the survey's role lookup.
 func TestCapBlendReflexApexPatchRolesDistinct(t *testing.T) {
 	body := reflexLBody(t)
 	chamfered, err := body.Chamfer(capLoopEdges(body), units.Millimeters(3))
@@ -891,4 +891,110 @@ func TestCapBlendBooleanReceiverRefusedSX9(t *testing.T) {
 	_, err = union.Chamfer(decad.Edges(decad.Convex()).AtLeast(1), units.Millimeters(1))
 	require.Error(t, err)
 	require.ErrorIs(t, err, decad.ErrUnsupported)
+}
+
+// TestCapBlendBoundsAreAttainedNotPadded checks §8.4's "bounds from patch
+// extrema, not a loose box": the cap contour offsets INTO the material and
+// [z0, z1] is unchanged, so a cap-loop chamfer of the 100x60x20 plate holds
+// exactly the receiver's own extent whatever the setback is. Box.Min and
+// Box.Max are positions and Bound is the absolute error on them, so a box
+// widened outward by d has an error of d and may not report zero.
+func TestCapBlendBoundsAreAttainedNotPadded(t *testing.T) {
+	for _, d := range []float64{1, 5, 9} {
+		t.Run(fmt.Sprintf("d=%v", d), func(t *testing.T) {
+			_, box := capBlendBox(t)
+			chamfered, err := box.Chamfer(capLoopEdges(box), units.Millimeters(d))
+			require.NoError(t, err)
+
+			bounds, err := chamfered.Bounds()
+			require.NoError(t, err)
+			require.Equal(t, r3.NewVec(0, 0, 0), bounds.Min)
+			require.Equal(t, r3.NewVec(100, 60, filletBoxHeight), bounds.Max)
+			require.Equal(t, decad.Exact, bounds.Exactness)
+			require.Zero(t, bounds.Bound.Mag())
+
+			// The same extent read independently off the body's own vertices:
+			// every face of this body is flat, so each extreme is attained at a
+			// vertex, and the box may not sit outside that hull.
+			lo := r3.NewVec(math.Inf(1), math.Inf(1), math.Inf(1))
+			hi := r3.NewVec(math.Inf(-1), math.Inf(-1), math.Inf(-1))
+			for _, e := range chamfered.Edges() {
+				for _, v := range []*decad.Vertex{e.Start(), e.End()} {
+					p := v.Position().Value
+					lo = r3.NewVec(math.Min(lo.X, p.X), math.Min(lo.Y, p.Y), math.Min(lo.Z, p.Z))
+					hi = r3.NewVec(math.Max(hi.X, p.X), math.Max(hi.Y, p.Y), math.Max(hi.Z, p.Z))
+				}
+			}
+			require.Equal(t, lo, bounds.Min, `the box's Min is a point the body holds`)
+			require.Equal(t, hi, bounds.Max, `the box's Max is a point the body holds`)
+		})
+	}
+}
+
+// TestCapBlendNestingRefusalKeepsDegenerate checks §4 stage 6's sentinel
+// discipline on the base S9 row the cap-loop chamfer inherits. A 60x60 plate
+// holding a radius-14 hole at (30, 30), chamfered by 12, offsets the outer
+// loop inward to a 36x36 rectangle and grows the hole to radius 26, which
+// swallows it: the two loops stay strictly disjoint, so the audit reaches S9
+// and decides the nesting is broken. No such body exists, which is the
+// opposite existence claim to SX7/SX12's, so the refusal answers to
+// ErrDegenerate and not to ErrUnsupported.
+func TestCapBlendNestingRefusalKeepsDegenerate(t *testing.T) {
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	outer := s.CreateRectangle(0, 0, 60, 60)
+	s.Fix(outer.A)
+	s.CreateCircle(s.CreatePoint(30, 30), 14)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	var prof *sketch.Profile
+	for _, p := range s.Profiles() {
+		if len(p.Outer) == 4 && len(p.Holes) == 1 {
+			prof = p
+			break
+		}
+	}
+	require.NotNil(t, prof, `the plate-with-disk region should exist`)
+
+	doc := decad.New()
+	body, err := doc.Extrude(s, prof, decad.Distance{D: units.Millimeters(40), Dir: decad.Along})
+	require.NoError(t, err)
+	before := doc.Recipe()
+
+	_, err = body.Chamfer(capLoopEdges(body), units.Millimeters(12))
+	require.Error(t, err)
+	require.ErrorIs(t, err, decad.ErrDegenerate, `an S9 nesting refusal keeps its own sentinel`)
+	require.NotErrorIs(t, err, decad.ErrUnsupported)
+	require.Equal(t, before, doc.Recipe())
+}
+
+// TestCapBlendUndercutOrderIsDeterministic checks that Table BX row BX3's
+// "deterministic patch order" survives into the DX7 survey's public output. A
+// straight-down pull catches all four end-cap bevels of the plate, so the
+// reported sequence IS the payload's own patch order; a caller may diff or
+// golden-test Report.Bodies[i].Undercuts, so repeated calls must agree.
+func TestCapBlendUndercutOrderIsDeterministic(t *testing.T) {
+	_, box := capBlendBox(t)
+	chamfered, err := box.Chamfer(capLoopEdges(box), units.Millimeters(5))
+	require.NoError(t, err)
+	doc := chamfered.Document()
+
+	want := []string{
+		`chamferCap(end,0,0)`,
+		`chamferCap(end,0,1)`,
+		`chamferCap(end,0,2)`,
+		`chamferCap(end,0,3)`,
+	}
+	for range 20 {
+		rep, err := doc.Verify(t.Context(), decad.WithPullDirection(r3.NewVec(0, 0, -1)))
+		require.NoError(t, err)
+		require.Len(t, rep.Bodies, 1)
+		got := make([]string, 0, len(rep.Bodies[0].Undercuts))
+		for _, f := range rep.Bodies[0].Undercuts {
+			require.Len(t, f.Origins(), 1)
+			got = append(got, f.Origins()[0].Role)
+		}
+		require.Equal(t, want, got, `the same body under the same pull reports the same faces in the same order`)
+	}
 }

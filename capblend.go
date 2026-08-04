@@ -52,11 +52,24 @@ type capBlendPayload struct {
 	d          float64
 	startLoops map[int]bool // loop index -> chamfered on the z0 cap
 	endLoops   map[int]bool // loop index -> chamfered on the z1 cap
-	// patches indexes every chamferCap(...) role by its plane-local geometry
-	// (capPatchGeom), populated once at build time (evalCapBlendContext) and
-	// reused by the DX7/DX8 surveys — placement-invariant, since capPatchGeom
-	// is entirely plane-local (u, v, z), unaffected by xform.
-	patches map[string]capPatchGeom
+	// patches carries every chamferCap(...) role beside its plane-local
+	// geometry (capPatchGeom), populated once at build time
+	// (evalCapBlendContext) and reused by the DX7/DX8 surveys —
+	// placement-invariant, since capPatchGeom is entirely plane-local
+	// (u, v, z), unaffected by xform. It is a SLICE in Table BX row BX3's own
+	// deterministic patch order (loop index, then the chamfered cap, then the
+	// patch's index within that band), because a survey that walks it emits
+	// public output a caller may diff: a map hands Go's randomized start order
+	// to every reader, and sorting the role strings is not this order either —
+	// it puts patch 10 ahead of patch 2.
+	patches []capPatch
+}
+
+// capPatch is one built chamfer patch's role paired with the geometry that
+// role labels.
+type capPatch struct {
+	role string
+	geom capPatchGeom
 }
 
 // transform is the accumulated rigid placement.
@@ -103,12 +116,19 @@ func (cbp capBlendPayload) extentAlong(g r3.Vec) (float64, float64, error) {
 }
 
 func (cbp capBlendPayload) extentAlongContext(ctx context.Context, g r3.Vec) (float64, float64, error) {
+	return cbp.extentAlongWork(ctx, g, newFreeformWork())
+}
+
+// extentAlongWork is the same reading against a caller-owned free-form work
+// counter, so a caller already holding one for this record (the bounds pass,
+// which asks for three directions in a row) spends what is left of the R7
+// ceiling rather than opening a fresh one per axis.
+func (cbp capBlendPayload) extentAlongWork(ctx context.Context, g r3.Vec, work *freeformWork) (float64, float64, error) {
 	pl := cbp.prismLike(0, 0)
 	base := cbp.xform.Apply(cbp.frame.Origin()).Dot(g)
 	gu := pl.dir(1, 0, 0).Dot(g)
 	gv := pl.dir(0, 1, 0).Dot(g)
 	gz := pl.dir(0, 0, 1).Dot(g)
-	work := newFreeformWork()
 	lo, hi := math.Inf(1), math.Inf(-1)
 	take := func(l, h, z float64) {
 		lo = math.Min(lo, l+z*gz)
@@ -303,8 +323,10 @@ func buildCapBlend(ctx context.Context, doc *Document, ref StepRef, pp prismPayl
 	// the offset does not depend on which cap — so one offset serves both),
 	// every unselected loop left unchanged — and run the existing exact
 	// offset + §5 audit machinery on it. SX6 is the offset's own drop
-	// refusal, re-sentinelled here (wrapCapBlendDropError); SX7/SX12 are the
-	// audit's crossing/contact/nesting refusals. Because dc = ds = d in this
+	// refusal, re-sentinelled here (wrapCapBlendDropError); the audit's own
+	// refusals keep the sentinel their §4 stage-6 row decided
+	// (wrapCapBlendAuditError) — SX7/SX12 for a crossing or contact, the base
+	// S8/S9 ErrDegenerate for broken nesting. Because dc = ds = d in this
 	// PR, the ruled patch at axial fraction s meets the parallel section as
 	// exactly the loop offset by s*d (docs/modify-reach-design.md §8.3): the
 	// offset distance to any fixed feature is monotone non-increasing as the
@@ -381,17 +403,25 @@ func wrapCapBlendDropError(err error) error {
 	return fmt.Errorf(`%w: the cap-loop offset drops a section feature, so the requested cap contour is empty`, ErrDegenerate)
 }
 
-// wrapCapBlendAuditError relabels the shared offset audit's refusal with
-// SX7/SX12's own wording: SX6 (drop) has already been decided by
-// mixedOffsetProfile's own call to offsetLoopBudget before the audit runs, so
-// every refusal reaching here is the audit's crossing/contact/nesting one —
-// modify-reach §8.3's ruled-patch intersection question, §4's SX7/SX12.
+// wrapCapBlendAuditError relabels the shared offset audit's refusal with the
+// wording of the stage-6 row it came from, and preserves the sentinel that row
+// already decided. SX6 (drop) is settled by mixedOffsetProfile's own call to
+// offsetLoopBudget before the audit runs, so a refusal reaching here is one of
+// the audit's own: the base S8/S9 nesting rows, which say the offset section is
+// decidably broken and therefore that no such body exists (ErrDegenerate), or
+// SX7/SX12, which say the body exists and this evaluator cannot trim or merge
+// it (ErrUnsupported). Those are opposite existence claims (§4's one-sentinel
+// rule), so an S9 refusal keeps ErrDegenerate through %w and errors.Is keeps
+// branching on it; only the ErrUnsupported family is restated as SX7/SX12.
 func wrapCapBlendAuditError(err error) error {
 	if errors.Is(err, context.Canceled) {
 		return context.Canceled
 	}
 	if errors.Is(err, context.DeadlineExceeded) {
 		return context.DeadlineExceeded
+	}
+	if errors.Is(err, ErrDegenerate) {
+		return fmt.Errorf(`%w; the section that broke is the cap-loop chamfer's own offset of the selected loop(s) by d`, err)
 	}
 	return fmt.Errorf(`%w: the cap-loop chamfer's ruled patches cannot be certified disjoint from a non-adjacent boundary (%v); a trimming kernel is not available`, ErrUnsupported, err)
 }

@@ -72,13 +72,16 @@ func capBlendUndercuts(b *Body, cbp capBlendPayload, pull r3.Vec) undercutOutcom
 		}
 	}
 
-	// The new patches: read each one's OWN built Face.NormalAt.
-	for role, g := range cbp.patches {
-		f := roles[role]
+	// The new patches: read each one's OWN built Face.NormalAt, walked in the
+	// payload's own deterministic patch order (Table BX row BX3), so the faces
+	// this survey reports — public output through Report.Bodies[i].Undercuts —
+	// come back in the same sequence on every call.
+	for _, patch := range cbp.patches {
+		f := roles[patch.role]
 		if f == nil {
 			return undercutOutcome{}
 		}
-		mn, mx, ok := capPatchNormalRange(f, pl, g, p)
+		mn, mx, ok := capPatchNormalRange(f, pl, patch.geom, p)
 		if !ok {
 			return undercutOutcome{}
 		}
