@@ -19,6 +19,9 @@ import (
 const (
 	roleCapStart = "capStart"
 	roleCapEnd   = "capEnd"
+	// roleBody is the body's own Origin() role, minted by every evaluator
+	// build.
+	roleBody = "body"
 )
 
 // FeatureRef identifies the feature role that created a body, a face or an
@@ -189,8 +192,18 @@ type Vertex struct {
 }
 
 // Position returns the vertex position in millimetres — a computed
-// coordinate, so it is bounded (core §6): feature-built vertices are Exact
-// with a zero bound, boolean-built ones carry the tessellation's chord bound.
+// coordinate, so it is bounded (core §6). A vertex read from a recorded
+// coordinate is Exact with a zero bound. A vertex at a COMPUTED coordinate
+// carries that computation's own proven displacement wherever the payload
+// tracks one: a boolean-built vertex carries the tessellation's chord bound,
+// and a cap-loop chamfer's cap-level feet, which a float offset solve places
+// (docs/modify-reach-design.md §8.4), carry that solve's own displacement.
+// Not every computed coordinate is tracked yet — a prism side vertex sits at
+// a sweep level a ToFace or ThroughAll extent computed in float (stops.go) and
+// still reports a zero bound, an untracked axial rounding recorded as a
+// follow-up beside the bound stamp in extrude.go's buildLoopSidesAs. Being
+// feature-built is not by itself a claim of exactness: what the coordinate was
+// READ FROM is.
 func (v *Vertex) Position() VecMeasurement {
 	exactness := Exact
 	if v.bound.Mag() != 0 {

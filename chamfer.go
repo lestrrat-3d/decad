@@ -26,8 +26,14 @@ import (
 // along EACH walk (equal setback: the whole of v1; an asymmetric chamfer is an
 // option that has not shipped, §7). There is NO S5 gate: a chord exists between
 // any two distinct feet, so the fillet's no-blend-centre refusal has no chamfer
-// case (Table B, B1). A cap-edge selector is S1 (ErrUnsupported, the vertex
-// blend §6); a non-prism receiver is S3 (ErrUnsupported).
+// case (Table B, B1). A non-prism receiver is S3 (ErrUnsupported).
+//
+// Chamfer also takes docs/modify-reach-design.md §8.3's second receiver class,
+// which the fillet does not: a selection covering every geometric edge of one
+// or more COMPLETE prism cap loops builds a cap-loop chamfer through
+// capblend.go instead of this file's corner rewrite. A cap-edge selection that
+// is not one or more complete loops, or one mixing cap edges with lateral
+// ones, is SX4 (ErrUnsupported).
 
 // ChamferOption configures Chamfer. No options are currently supported: a
 // chamfer Step's Opts is nil (§7), and the option group exists so an
@@ -42,11 +48,26 @@ type ChamferOption interface {
 // and retiring the receiver (docs/modify-design.md §7, core §8). sel is resolved
 // against the live receiver; a query matching nothing is loud (ErrNoMatch /
 // ErrCardinality, S16). d is a length magnitude, gated like every other (S15); a
-// zero d is S13. A selected edge that is not a lateral edge — a cap edge — is S1
-// (ErrUnsupported), and a receiver whose payload is not a prism is S3
+// zero d is S13. A receiver whose payload is not a prism is S3
 // (ErrUnsupported). The rewritten section faces the §5 audit before anything is
 // built, so no unproven body is ever made and an over-large setback is refused
 // (S6), never clipped.
+//
+// A selection of CAP edges is the cap-loop chamfer of
+// docs/modify-reach-design.md §8.3: sel covering every geometric edge of one
+// or more complete prism cap loops bevels each of those loops with a band of
+// analytic patches, and the result is a cap-blend body whose volume, area,
+// bounds, undercut and minimum-radius readings all answer. A cap-edge
+// selection that is not one or more complete loops, and one that mixes cap
+// edges with lateral ones, are both SX4 (ErrUnsupported). A chamfer whose
+// setback is so small beside the geometry it displaces that the displacement
+// rounds away is SX13 (ErrUnsupported), rather than a band with the taper gone:
+// a circular wall so large beside d that the offset's radial change rounds back
+// onto its own radius, or a sweep so tall beside d that the band's side level
+// rounds back onto its cap level. A further modify op on the result is SX10
+// (ErrUnsupported); the result
+// does not tessellate yet (Table DX row DX3, ErrUnsupported), and a clearance
+// pair its bounding boxes do not already decide reads Suspect (row DX6).
 func (b *Body) Chamfer(sel EdgeSelector, d units.Value, opts ...ChamferOption) (*Body, error) {
 	return b.ChamferContext(context.Background(), sel, d, opts...)
 }
@@ -90,8 +111,16 @@ func (b *Body) ChamferContext(ctx context.Context, sel EdgeSelector, d units.Val
 		return nil, err
 	}
 
+	// SX10: a capBlendPayload receiver is staged before the generic
+	// "not a prism" refusal, so the more specific reason leads.
+	if err := requireNotCapBlendReceiver(b.payload, "chamfers"); err != nil {
+		return nil, err
+	}
+
 	// Stage 2 (§4): the receiver's payload class (S3), then every selected
-	// edge is a lateral edge mapped to a section corner (S1).
+	// edge is a lateral edge mapped to a section corner (S1) OR — reach RX1's
+	// second class — every geometric edge of one or more complete prism cap
+	// loops (SX4 otherwise; docs/modify-reach-design.md §4/§8.3).
 	pp, ok := b.payload.(prismPayload)
 	if !ok {
 		return nil, fmt.Errorf(`%w: this evaluator chamfers a straight prism only; selector %s matched [%s]`,
@@ -99,6 +128,32 @@ func (b *Body) ChamferContext(ctx context.Context, sel EdgeSelector, d units.Val
 	}
 	if err := requireExactSection(pp, "chamfers"); err != nil {
 		return nil, err
+	}
+
+	startLoops, endLoops, lateral, err := classifyChamferSelection(ctx, pp, b, sel, edges)
+	if err != nil {
+		return nil, err
+	}
+	if !lateral {
+		ref := doc.nextStepRef()
+		body, err := buildCapBlend(ctx, doc, ref, pp, dmm, startLoops, endLoops)
+		if err != nil {
+			return nil, err
+		}
+		if err := doc.requireLive(b); err != nil {
+			return nil, err
+		}
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		step := Step{
+			Op:        OpChamfer,
+			Inputs:    []StepRef{b.originStep()},
+			Selectors: cloneSelectors([]Selector{q}),
+			Values:    []units.Value{d},
+		}
+		doc.commit(step, body, b)
+		return body, nil
 	}
 
 	budget := newWorkBudget(ctx)

@@ -897,16 +897,22 @@ func TestModifyRefusalLeadsWithItsReason(t *testing.T) {
 	})
 
 	t.Run(`cap edge`, func(t *testing.T) {
+		// Fillet has no cap-loop reach (docs/modify-reach-design.md §8.2 is a
+		// separate PR): every cap edge is still the base vertex-blend refusal.
 		capEdges := decad.Edges(decad.ParallelTo(r3.NewVec(1, 0, 0)))
 		_, box := filletBox(t)
 		_, err := box.Fillet(capEdges, units.Millimeters(5))
 		require.ErrorIs(t, err, decad.ErrUnsupported)
 		requireReasonLeads(t, err, `a fillet of a cap edge is the vertex-blend problem`)
 
+		// Chamfer's cap-loop reach (§8.3, RX1) reclassifies this selection: it
+		// is two of the four edges of each cap's rim loop — a partial loop —
+		// so it now reads SX4's more specific reason instead of the base
+		// vertex-blend one.
 		_, box = filletBox(t)
 		_, err = box.Chamfer(capEdges, units.Millimeters(5))
 		require.ErrorIs(t, err, decad.ErrUnsupported)
-		requireReasonLeads(t, err, `a chamfer of a cap edge is the vertex-blend problem`)
+		requireReasonLeads(t, err, `the selection covers only part of a cap loop`)
 	})
 
 	t.Run(`audit failure`, func(t *testing.T) {

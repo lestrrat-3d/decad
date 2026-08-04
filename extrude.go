@@ -479,7 +479,7 @@ func evalPrismContext(ctx context.Context, d *Document, ref StepRef, pp prismPay
 		return nil, fmt.Errorf(`%w: the sweep interval is empty`, ErrDegenerate)
 	}
 
-	body := &Body{doc: d, origin: FeatureRef{Step: ref, Role: "body"}, solid: true}
+	body := &Body{doc: d, origin: FeatureRef{Step: ref, Role: roleBody}, solid: true}
 
 	// Topology: one shell over every loop's side faces plus the two caps.
 	var faces []*Face
@@ -1090,7 +1090,28 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref StepRef, pp prismPayl
 	// Junction vertices, shared between neighbors: junction i sits at walk
 	// i's start (== walk i−1's end). A single whole closed curve has none.
 	singleClosed := n == 1 && walks[0].closed
+	// exactScalar declares both sweep levels exact, so the vertical edges below
+	// report Edge.Length() Exact with a zero bound even where a level was
+	// COMPUTED — the same discarded axial provenance the vertex bound a few
+	// lines down states in full, reached by the same plain extrude and deferred
+	// for the same reason.
 	height := boundedSub(exactScalar(pp.z1), exactScalar(pp.z0))
+	// The bound stamped below is sectionDelta, which is zero for every
+	// caller-drawn payload — including one whose z level was COMPUTED rather
+	// than recorded. stops.go derives a ToFace level as `zFace + travel*offset`
+	// and a ThroughAll level as `hi - base`, both in float: extrude a plate
+	// `Distance 1e12 mm`, then extrude to `ToFace{Face: capEnd, Offset: -0.001
+	// mm}`, and the stop is fl(1e12 - 0.001) = 999999999999.9990234375, which is
+	// 2.34375e-05 mm (0.192 ulp) from the exact level, while the four side
+	// vertices at that level still report Exact with a zero bound, and their four
+	// vertical edges report that same length Exact. No blend is involved — a
+	// plain extrude reaches it, so this is shared prism behaviour and not any
+	// one feature's. sectionDelta cannot absorb it: it is an IN-PLANE displacement,
+	// consumed by sectionDisplacementArea/sectionDisplacementLength, evalPrism's
+	// Exactness gate and requireExactSection. Repairing it needs a separate
+	// per-end axial bound read here, by the vertical edge lengths and by the
+	// side face areas alike, plus stops.go's own rounding — that reaches
+	// prism, cup and tube, so it is tracked as its own follow-up change.
 	var bottomV, topV []*Vertex
 	if !singleClosed {
 		bottomV = make([]*Vertex, n)

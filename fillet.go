@@ -97,6 +97,12 @@ func (b *Body) FilletContext(ctx context.Context, sel EdgeSelector, r units.Valu
 		return nil, err
 	}
 
+	// SX10: a capBlendPayload receiver is staged before the generic "not a
+	// prism" refusal, so the more specific reason leads.
+	if err := requireNotCapBlendReceiver(b.payload, "fillets"); err != nil {
+		return nil, err
+	}
+
 	// Stage 2 (§4): the receiver's payload class (S3), then every selected
 	// edge is a lateral edge mapped to a section corner (S1).
 	pp, ok := b.payload.(prismPayload)

@@ -474,6 +474,15 @@ Modify reach DX6 adds boundary readers for `capBlendPayload` and
 only exposed analytic faces and omit cancelled slab interfaces. Any new face
 cell this kernel cannot certify follows §7's existing undecided result.
 
+Neither reader has landed. The cap-loop chamfer's DX6 cell is staged: this
+kernel builds no boundary model for a `capBlendPayload`, so boxes may still
+prove a pair disjoint on their own, and every other requested pair involving one
+returns `Suspect` until trimmed patch faces have a certified kernel reader.
+That staging is the same one the cup payload took before its own model landed,
+and for the same reason: admitting a trimmed patch face without a proof of its
+trim would yield a false disjointness certificate, which is worse than an
+undecided pair — `Verify` would report a clearance the geometry does not have.
+
 ## 9. Open questions
 
 - **Contact breadth.** Osculation (equal-curvature touching), vertex and edge

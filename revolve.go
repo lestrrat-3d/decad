@@ -1063,7 +1063,7 @@ func evalRevolveContextWork(ctx context.Context, d *Document, ref StepRef, rp re
 	}
 
 	b := rp.basis()
-	body := &Body{doc: d, origin: FeatureRef{Step: ref, Role: "body"}, solid: true}
+	body := &Body{doc: d, origin: FeatureRef{Step: ref, Role: roleBody}, solid: true}
 
 	// Partial sweeps get two planar cap faces; a full revolution has none.
 	var capStart, capEnd *Face

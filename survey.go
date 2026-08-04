@@ -1015,6 +1015,11 @@ func runSurveys(budget *workBudget, br *BodyReport, cfg verifyConfig) ([]Diagnos
 			out, err = revolveWall(budget, pl, cfg.allowRad)
 		case cupPayload:
 			out, err = cupWall(budget, pl, cfg.allowRad)
+		case capBlendPayload:
+			// DX9 (docs/modify-reach-design.md Table DX): a cap blend is not
+			// one constant section at one height, so the existing 2D
+			// spanning-disk proof does not decide it. A deliberate evaluator
+			// limit — the asked reading is Suspect, never fabricated.
 		case facetedPayload:
 			out.reason = surveyFacetedUnsupported
 		}
@@ -1073,6 +1078,8 @@ func runSurveys(budget *workBudget, br *BodyReport, cfg verifyConfig) ([]Diagnos
 			out = revolveUndercuts(b, pl, *cfg.pull)
 		case cupPayload:
 			out = cupUndercuts(b, pl, *cfg.pull)
+		case capBlendPayload:
+			out = capBlendUndercuts(b, pl, *cfg.pull)
 		case facetedPayload:
 			out.reason = surveyFacetedUnsupported
 		}
@@ -1115,6 +1122,8 @@ func runSurveys(budget *workBudget, br *BodyReport, cfg verifyConfig) ([]Diagnos
 			out, ok = revolveMinRadius(pl)
 		case cupPayload:
 			out, ok = cupMinRadius(pl)
+		case capBlendPayload:
+			out, ok = capBlendMinRadius(pl)
 		case facetedPayload:
 			out.reason = surveyFacetedUnsupported
 		}

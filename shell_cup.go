@@ -160,7 +160,7 @@ func evalCupContext(ctx context.Context, d *Document, ref StepRef, cp cupPayload
 	}
 	openIsMax := cp.zOpen > cp.zOuter
 
-	body := &Body{doc: d, origin: FeatureRef{Step: ref, Role: "body"}, solid: true}
+	body := &Body{doc: d, origin: FeatureRef{Step: ref, Role: roleBody}, solid: true}
 
 	// floorOpen splits a wall's (bottom, top) cap coedges into the floor-side
 	// set (kept cap / pocket floor) and the open-side set (the rim).

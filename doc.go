@@ -92,14 +92,20 @@
 //	    admitted analytic prism Union                         ErrUnsupported
 //	  empty result (disjoint intersect, emptied cut)          ErrBooleanFailed
 //	Fillet/Chamfer  straight prism, lateral edges             builds
-//	  cap edge, or non-prism receiver                         ErrUnsupported
+//	Chamfer       complete prism cap loop(s)                  builds
+//	  Fillet of a cap edge (the vertex blend)                 ErrUnsupported
+//	  partial or lateral-mixed cap-loop selection             ErrUnsupported
+//	  cap-loop setback the radius or sweep cannot name        ErrUnsupported
+//	  cap-loop corner whose offset cannot be enclosed         ErrUnsupported
+//	  non-prism receiver, or a cap-loop chamfer result        ErrUnsupported
 //	Shell         straight prism (tube or cup)                builds
 //	  both caps removed from a holed section                  ErrUnsupported
 //	Placed        any body this evaluator built               builds
-//	Verify        every body; surveys read prisms/revolves/cups
+//	Verify        every body; surveys read prisms/revolves/cups/cap blends
 //	  a question the evaluator cannot decide                  Status Suspect
 //	Tessellate / STL / OBJ  prism, cup, boolean body          builds
 //	  revolve payload                                         ErrUnsupported
+//	  cap-loop chamfer result                                 ErrUnsupported
 //	  boolean body at a tolerance finer than its bound        ErrUnsupported
 //
 // Options: among the MODEL-CONSTRUCTION verbs, New, Revolve, Fillet and
