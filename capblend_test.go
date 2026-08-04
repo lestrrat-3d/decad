@@ -696,21 +696,67 @@ func TestCapBlendMinRadiusMatchesUnchamferedSection(t *testing.T) {
 // start/end orientation asymmetry TestCapBlendPlanePatchNormalOutwardBothCaps
 // also covers: chamfering either cap of the same straight prism by the same
 // distance must give the SAME volume (the loop offset and the band's own
-// closed-form integral do not depend on which end the band sits at).
+// closed-form integral do not depend on which end the band sits at). This is
+// REFERENCE-FREE — it needs no independent formula, only that mirroring the
+// band does not change what it measures — so it catches capblend_geom.go's
+// side-window/cap-window defect (docs/modify-reach-design.md §8.3) even
+// without a value to check the result against: the quarter-disk case's
+// circular wall meets its two line neighbours at a non-tangential miter on
+// BOTH ends, so a Cone patch integrated over the wrong (shared, wall-only)
+// window there reads a DIFFERENT residual against the true miter locus on the
+// start cap than on the end cap (the two bands are not mirror images of the
+// SAME error), and the two volumes disagree.
 func TestCapBlendStartCapVolumeMatchesEndCap(t *testing.T) {
-	_, endBox := capBlendBox(t)
-	endChamfered, err := endBox.Chamfer(capLoopEdgesOn(endBox, true), units.Millimeters(5))
-	require.NoError(t, err)
-	endVol, err := endChamfered.Volume()
-	require.NoError(t, err)
+	for _, tc := range []struct {
+		name  string
+		build func(t *testing.T) *decad.Body
+		d     float64
+	}{
+		{`rectangular box`, func(t *testing.T) *decad.Body { _, b := capBlendBox(t); return b }, 5},
+		{`partially-swept arc (quarter disk)`, func(t *testing.T) *decad.Body { return quarterDiskBody(t, 60, 20) }, 4},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			endBody := tc.build(t)
+			endChamfered, err := endBody.Chamfer(capLoopEdgesOn(endBody, true), units.Millimeters(tc.d))
+			require.NoError(t, err)
+			endVol, err := endChamfered.Volume()
+			require.NoError(t, err)
 
-	_, startBox := capBlendBox(t)
-	startChamfered, err := startBox.Chamfer(capLoopEdgesOn(startBox, false), units.Millimeters(5))
-	require.NoError(t, err)
-	startVol, err := startChamfered.Volume()
-	require.NoError(t, err)
+			startBody := tc.build(t)
+			startChamfered, err := startBody.Chamfer(capLoopEdgesOn(startBody, false), units.Millimeters(tc.d))
+			require.NoError(t, err)
+			startVol, err := startChamfered.Volume()
+			require.NoError(t, err)
 
-	require.InDelta(t, endVol.Value.Mag(), startVol.Value.Mag(), 1e-6)
+			require.InDelta(t, endVol.Value.Mag(), startVol.Value.Mag(), 1e-6)
+		})
+	}
+}
+
+// quarterDiskBody extrudes the quarter disk (0,0)->(r,0), a CCW arc about the
+// origin from (r,0) to (0,r), (0,r)->(0,0), by h — a single circular wall
+// meeting a straight neighbour at a non-tangential miter corner at BOTH its
+// own ends (docs/modify-reach-design.md §8.3's affected shape).
+func quarterDiskBody(t *testing.T, r, h float64) *decad.Body {
+	t.Helper()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	o := s.CreatePoint(0, 0)
+	s.Fix(o)
+	px := s.CreatePoint(r, 0)
+	py := s.CreatePoint(0, r)
+	s.CreateLine(o, px)
+	s.CreateLine(py, o)
+	s.CreateArc(o, px, py)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	require.Len(t, s.Profiles(), 1)
+
+	doc := decad.New()
+	body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+	require.NoError(t, err)
+	return body
 }
 
 // TestCapBlendHoleLoopChamferVolume chamfers a HOLE loop directly (not just
