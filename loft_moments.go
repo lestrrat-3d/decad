@@ -211,9 +211,19 @@ func (m *loftMassAccumulator) bounds() (Box, bool) {
 
 // area publishes the two caps' own exact rational areas (moments.go's
 // ProfileRecord.Area, already-exact rationals — never the sum of their own
-// triangulations' float areas) plus the wall triangles' float sum. Four proven
-// terms bound the total, and every one of them is charged at the magnitude
-// where its own rounding happens:
+// triangulations' float areas) plus the wall triangles' float sum.
+//
+// The Exactness is the CONSTANT Approximate — docs/loft-design.md §8's
+// "Area is never Exact", spline design §3's arc-length asymmetry — and is
+// never derived from the published bound. A triangle's own area is a square
+// root of a rational and is generically irrational, so no arithmetic on the
+// bound can make the reading exactly representable; a bound that reaches zero
+// says only that the bound arithmetic ran out of scale to state (sumSlop
+// underflowing on a subnormal wall triangle, a saturated wallAreaAbs), which
+// is a fact about the proof term and not about the value.
+//
+// Bound is proven independently, and every one of its four terms is charged
+// at the magnitude where its own rounding happens:
 //
 //   - wallAreaSlack — Σ over the triangles of the exact-rational cross-norm
 //     bracket's own width, so each triangle's area is charged at ITS OWN
@@ -224,9 +234,6 @@ func (m *loftMassAccumulator) bounds() (Box, bool) {
 //
 // wallBound owns the first two and answers +Inf where either has saturated,
 // since neither is a proven scale any more.
-//
-// Area is never Exact whenever any wall triangle has nonzero area
-// (docs/loft-design.md §8, spline design §3's arc-length asymmetry).
 func (m *loftMassAccumulator) area(capAreas ...*big.Rat) Measurement {
 	capTotal := new(big.Rat)
 	for _, ca := range capAreas {
@@ -243,7 +250,7 @@ func (m *loftMassAccumulator) area(capAreas ...*big.Rat) Measurement {
 
 	return Measurement{
 		Value:     units.SquareMillimeters(value),
-		Exactness: exactnessOf(bound),
+		Exactness: Approximate,
 		Bound:     units.SquareMillimeters(bound),
 	}
 }
@@ -258,7 +265,7 @@ func (m *loftMassAccumulator) area(capAreas ...*big.Rat) Measurement {
 // helper that cannot invent a scale, and fatal here, because that term is the
 // ONLY cover the wall loop's rounding has: the slack is exactly 0 whenever
 // every triangle's own area is representable, so the two together would leave
-// a saturated sum claiming Exact over mass it has already swallowed.
+// a saturated sum publishing a ZERO bound over mass it has already swallowed.
 //
 // A saturated term is not a small bound, it is the absence of a proven scale,
 // and the error it stands for here runs past MaxFloat64 — so the honest answer

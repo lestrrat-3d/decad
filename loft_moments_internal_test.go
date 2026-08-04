@@ -419,6 +419,87 @@ func TestLoftMassAccumulatorAreaBoundSurvivesSaturatedScale(t *testing.T) {
 	require.Equal(t, Approximate, area.Exactness)
 }
 
+// TestLoftMassAccumulatorAreaNeverExact pins docs/loft-design.md §8's rule
+// itself — "Area is never Exact" — rather than any single input that breaks a
+// derived Exactness. A triangle's own area is a square root of a rational and
+// is generically irrational, so the published reading is the CONSTANT
+// Approximate and no arithmetic on the proven bound decides it.
+//
+// The table is keyed on the BOUND REGIME rather than on a witness, because a
+// bound-derived Exactness fails wherever the bound arithmetic runs out of
+// scale to state, and that happens at BOTH ends of float range. Each row whose
+// bound is zero would read Exact under a derived Exactness — asserted per row,
+// so the test fails loudly if the derivation returns — and three independent
+// mechanisms reach a zero bound here: an empty wall set, a representable cap
+// rational with no wall at all, and a subnormal wall triangle whose summation
+// term underflows. The +Inf regime at the far end is pinned by
+// TestLoftMassAccumulatorAreaBoundSurvivesSaturatedScale, which asserts the
+// same constant.
+func TestLoftMassAccumulatorAreaNeverExact(t *testing.T) {
+	// square is a unit square's corners on the plane z, in walk order.
+	square := func(z float64) []r3.Vec {
+		return []r3.Vec{
+			r3.NewVec(0, 0, z), r3.NewVec(1, 0, z),
+			r3.NewVec(1, 1, z), r3.NewVec(0, 1, z),
+		}
+	}
+
+	for _, tc := range []struct {
+		name      string
+		build     func(*loftMassAccumulator)
+		caps      []*big.Rat
+		zeroBound bool
+	}{
+		{
+			// An ordinary loft: two congruent unit squares three apart, every
+			// wall triangle's own area representable and the whole set well
+			// conditioned. Nothing here is near a float limit.
+			name:  "ordinary well-conditioned wall set",
+			build: func(m *loftMassAccumulator) { addLoftWalls(m, square(0), square(3)) },
+			caps:  []*big.Rat{big.NewRat(1, 1), big.NewRat(1, 1)},
+		},
+		{
+			name:      "no triangle and no cap",
+			build:     func(*loftMassAccumulator) {},
+			zeroBound: true,
+		},
+		{
+			name:      "representable cap rational with no wall",
+			build:     func(*loftMassAccumulator) {},
+			caps:      []*big.Rat{big.NewRat(4, 1)},
+			zeroBound: true,
+		},
+		{
+			// The smallest positive area float64 holds: |u x v|/2 is exactly
+			// 2^-1074, so the per-triangle bracket has zero width, and the
+			// summation term scaled off that magnitude underflows to zero.
+			name: "subnormal wall triangle",
+			build: func(m *loftMassAccumulator) {
+				m.add(r3.NewVec(0, 0, 0), r3.NewVec(1, 0, 0), r3.NewVec(0, math.Ldexp(1, -1073), 0), true)
+			},
+			zeroBound: true,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := newLoftMassAccumulator(r3.NewVec(0, 0, 0))
+			tc.build(m)
+			area := m.area(tc.caps...)
+
+			require.Equal(t, Approximate, area.Exactness,
+				"a loft's Area is never Exact, whatever the bound arithmetic produced")
+
+			if !tc.zeroBound {
+				require.Greater(t, area.Bound.Base(), 0.0)
+				return
+			}
+			require.Equal(t, 0.0, area.Bound.Base(),
+				"this row exists to drive the bound to zero")
+			require.Equal(t, Exact, exactnessOf(area.Bound.Base()),
+				"a bound-derived Exactness reads Exact here — the derivation this rule forbids")
+		})
+	}
+}
+
 // TestLoftMassAccumulatorBoundsEmpty proves bounds reports false before any
 // triangle has been added.
 func TestLoftMassAccumulatorBoundsEmpty(t *testing.T) {
