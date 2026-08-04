@@ -1214,40 +1214,9 @@ func conformOnce(ctx context.Context, xverts *[]xpt, tris *[][3]int, src *[]int)
 	if err := budget.err(); err != nil {
 		return false, err
 	}
-	// A coarse uniform grid over float approximations prunes the exact
-	// on-edge tests; the slack absorbs the approximation, so no incidence is
-	// missed.
-	lo, hi := r3.Vec{}, r3.Vec{}
-	for i, p := range verts {
-		if err := budget.step(); err != nil {
-			return false, err
-		}
-		v := p.vec()
-		if i == 0 {
-			lo, hi = v, v
-			continue
-		}
-		lo = r3.Vec{X: math.Min(lo.X, v.X), Y: math.Min(lo.Y, v.Y), Z: math.Min(lo.Z, v.Z)}
-		hi = r3.Vec{X: math.Max(hi.X, v.X), Y: math.Max(hi.Y, v.Y), Z: math.Max(hi.Z, v.Z)}
-	}
-	diag := hi.Sub(lo).Len()
-	if diag == 0 {
-		return false, fmt.Errorf(`%w: the stitched boundary has no extent`, ErrBooleanFailed)
-	}
-	cell := diag / 64
-	slack := diag*1e-9 + cell*1e-9
-	cellOf := func(x, y, z float64) [3]int {
-		return [3]int{int(math.Floor((x - lo.X) / cell)), int(math.Floor((y - lo.Y) / cell)), int(math.Floor((z - lo.Z) / cell))}
-	}
-	grid := map[[3]int][]int{}
-	approx := make([]r3.Vec, len(verts))
-	for i, p := range verts {
-		if err := budget.step(); err != nil {
-			return false, err
-		}
-		approx[i] = p.vec()
-		c := cellOf(approx[i].X, approx[i].Y, approx[i].Z)
-		grid[c] = append(grid[c], i)
+	scan, err := newConformScan(budget, verts)
+	if err != nil {
+		return false, err
 	}
 
 	var outTris [][3]int
@@ -1260,10 +1229,7 @@ func conformOnce(ctx context.Context, xverts *[]xpt, tris *[][3]int, src *[]int)
 		inserted := [3][]int{}
 		for k := range 3 {
 			a, b := tri[k], tri[(k+1)%3]
-			pa, pb := approx[a], approx[b]
-			cLo := cellOf(math.Min(pa.X, pb.X)-slack, math.Min(pa.Y, pb.Y)-slack, math.Min(pa.Z, pb.Z)-slack)
-			cHi := cellOf(math.Max(pa.X, pb.X)+slack, math.Max(pa.Y, pb.Y)+slack, math.Max(pa.Z, pb.Z)+slack)
-			hits, err := edgeInteriorHits(budget, grid, verts, cLo, cHi, a, b, tri)
+			hits, err := scan.edgeInteriorHits(budget, a, b, tri)
 			if err != nil {
 				return false, err
 			}
@@ -1331,27 +1297,112 @@ func dominantAxis(d xpt) int {
 	return 2
 }
 
+// conformScan is the searchable form of the stitched vertex set each facet edge
+// is swept through: the exact vertices, their float approximations, a coarse
+// uniform grid over those approximations, and the reject-only filter threshold
+// every candidate is measured against. The grid prunes the exact on-edge tests;
+// the slack absorbs the approximation, so no incidence is missed.
+type conformScan struct {
+	verts  []xpt
+	approx []r3.Vec
+	grid   map[[3]int][]int
+	lo     r3.Vec
+	cell   float64
+	slack  float64
+	tau2   float64
+}
+
+func newConformScan(budget *workBudget, verts []xpt) (*conformScan, error) {
+	lo, hi := r3.Vec{}, r3.Vec{}
+	approx := make([]r3.Vec, len(verts))
+	for i, p := range verts {
+		if err := budget.step(); err != nil {
+			return nil, err
+		}
+		v := p.vec()
+		approx[i] = v
+		if i == 0 {
+			lo, hi = v, v
+			continue
+		}
+		lo = r3.Vec{X: math.Min(lo.X, v.X), Y: math.Min(lo.Y, v.Y), Z: math.Min(lo.Z, v.Z)}
+		hi = r3.Vec{X: math.Max(hi.X, v.X), Y: math.Max(hi.Y, v.Y), Z: math.Max(hi.Z, v.Z)}
+	}
+	diag := hi.Sub(lo).Len()
+	if diag == 0 {
+		return nil, fmt.Errorf(`%w: the stitched boundary has no extent`, ErrBooleanFailed)
+	}
+	cell := diag / 64
+	// maxAbs bounds every coordinate of every vertex, so the one threshold it
+	// yields serves every segment and every candidate (segAdmissionRadius2).
+	maxAbs := math.Max(
+		math.Max(math.Abs(lo.X), math.Abs(hi.X)),
+		math.Max(math.Max(math.Abs(lo.Y), math.Abs(hi.Y)), math.Max(math.Abs(lo.Z), math.Abs(hi.Z))),
+	)
+	s := &conformScan{
+		verts:  verts,
+		approx: approx,
+		grid:   map[[3]int][]int{},
+		lo:     lo,
+		cell:   cell,
+		slack:  diag*1e-9 + cell*1e-9,
+	}
+	s.tau2 = segAdmissionRadius2(s.slack, maxAbs)
+	for i := range verts {
+		if err := budget.step(); err != nil {
+			return nil, err
+		}
+		c := s.cellOf(approx[i].X, approx[i].Y, approx[i].Z)
+		s.grid[c] = append(s.grid[c], i)
+	}
+	return s, nil
+}
+
+func (s *conformScan) cellOf(x, y, z float64) [3]int {
+	return [3]int{
+		int(math.Floor((x - s.lo.X) / s.cell)),
+		int(math.Floor((y - s.lo.Y) / s.cell)),
+		int(math.Floor((z - s.lo.Z) / s.cell)),
+	}
+}
+
 // edgeInteriorHits returns the mesh vertices lying exactly in the interior of
 // facet edge (a, b), searched through the grid cells the edge's slack box
 // covers. An edge spanning the mesh sweeps the whole grid, so the cells and the
 // candidate vertices in them — not the facets — are the candidate operations
 // §7.2 counts, and both step the budget.
-func edgeInteriorHits(budget *workBudget, grid map[[3]int][]int, verts []xpt, cLo, cHi [3]int, a, b int, tri [3]int) ([]int, error) {
+//
+// Every candidate meets the reject-only segFilter before the exact predicate,
+// and the exact predicate still decides every candidate the filter does not
+// reject. The traversal itself is untouched by that filter: it still visits the
+// whole slack box, which is a SUPERSET of the cells the edge can touch. Walking
+// only the cells the segment really passes through would cut the candidate set
+// at its source, but it would also owe a completeness proof a superset does not
+// — and it measured no faster here, because the filter has already reduced what
+// a visited cell costs to a handful of float operations.
+func (s *conformScan) edgeInteriorHits(budget *workBudget, a, b int, tri [3]int) ([]int, error) {
+	pa, pb := s.approx[a], s.approx[b]
+	filter := newSegFilter(pa, pb, s.tau2)
 	var hits []int
+	cLo := s.cellOf(math.Min(pa.X, pb.X)-s.slack, math.Min(pa.Y, pb.Y)-s.slack, math.Min(pa.Z, pb.Z)-s.slack)
+	cHi := s.cellOf(math.Max(pa.X, pb.X)+s.slack, math.Max(pa.Y, pb.Y)+s.slack, math.Max(pa.Z, pb.Z)+s.slack)
 	for cx := cLo[0]; cx <= cHi[0]; cx++ {
 		for cy := cLo[1]; cy <= cHi[1]; cy++ {
 			for cz := cLo[2]; cz <= cHi[2]; cz++ {
 				if err := budget.step(); err != nil {
 					return nil, err
 				}
-				for _, vi := range grid[[3]int{cx, cy, cz}] {
+				for _, vi := range s.grid[[3]int{cx, cy, cz}] {
 					if err := budget.step(); err != nil {
 						return nil, err
 					}
 					if vi == tri[0] || vi == tri[1] || vi == tri[2] {
 						continue
 					}
-					if onSegmentInterior3(verts[a], verts[b], verts[vi]) {
+					if filter.tooFar(s.approx[vi]) {
+						continue
+					}
+					if onSegmentInterior3(s.verts[a], s.verts[b], s.verts[vi]) {
 						hits = append(hits, vi)
 					}
 				}
