@@ -259,6 +259,20 @@ func capLoopBoundary(ctx context.Context, loop LoopRecord, d float64) (LoopRecor
 // capZ and at sideZ) plus the patches (buildCapBand's geom).
 func capBandVolume(ctx context.Context, loop LoopRecord, cbp capBlendPayload, geom []capPatchGeom, capZ, matSign float64) (float64, error) {
 	sideZ := capZ + matSign*cbp.d
+	// The two closing disks are loopEnclosedAreaContext's ABSOLUTE areas, so
+	// the sub-solid they close off is the region the loop encloses read as
+	// POSITIVELY oriented — counter-clockwise — whichever way the loop was
+	// actually recorded. Every patch, in contrast, is built from the loop's
+	// OWN walk, so a clockwise loop (a hole) hands the band patches facing
+	// into it. orient rotates them back onto the disks' own orientation.
+	signedArea, err := loopSignedAreaBudget(newWorkBudget(ctx), loop)
+	if err != nil {
+		return 0, err
+	}
+	orient := 1.0
+	if signedArea < 0 {
+		orient = -1
+	}
 	sideArea, err := loopEnclosedAreaContext(ctx, loop)
 	if err != nil {
 		return 0, err
@@ -284,11 +298,11 @@ func capBandVolume(ctx context.Context, loop LoopRecord, cbp capBlendPayload, ge
 	// the same start/end asymmetry capblend_geom.go's fixPatchOrientation
 	// corrects for the SURFACE normal — so the flux sign needs the same
 	// -matSign correction here, confirmed empirically
-	// (TestCapBlendStartCapVolumeMatchesEndCap). That correction speaks for
-	// the AXIAL half only; an apex patch's own radial inversion is charged
-	// inside patchRawFlux.
+	// (TestCapBlendStartCapVolumeMatchesEndCap). -matSign speaks for the
+	// AXIAL half and orient for the IN-PLANE half; patchRawFlux itself has
+	// already put each patch in its own walk's sense.
 	for _, g := range geom {
-		fluxTotal += -matSign * patchRawFlux(g)
+		fluxTotal += -matSign * orient * patchRawFlux(g)
 	}
 	return fluxTotal / 3, nil
 }
@@ -322,18 +336,15 @@ func patchRawFlux(g capPatchGeom) float64 {
 	term2 := H * dth * (R0*R0 + R0*R1 + R1*R1) / 3
 	term3 := -dR * dth * (z0*R0 + (z0*dR+H*R0)/2 + H*dR/3)
 	flux := term1 + term2 + term3
-	if g.apex {
-		// The fixed parameter order this integral is taken in orients a Cone
-		// patch RADIALLY OUTWARD (its normal reads (H*cos, H*sin, -dR), so a
-		// regular wall patch — whose offset SHRINKS the radius, dR < 0 — comes
-		// out pointing away from the axis, which is that patch's own outward
-		// sense; the caller's -matSign then fixes the axial half). An apex
-		// patch inverts BOTH: its offset GROWS the radius from zero (dR > 0),
-		// and the sector it cuts off is the void, so the solid lies radially
-		// OUTSIDE the cone and the true outward normal points at the axis. The
-		// caller's single -matSign speaks only for the axial ordering, so the
-		// radial inversion is charged here — the same fact capblend_geom.go's
-		// apex orientation reference states for the surface normal.
+	if !g.sweepCCW {
+		// The integral is taken over the NORMALIZED window th0 < th1, which
+		// orients the patch radially OUTWARD from its own centre. That is the
+		// orientation the patch's own walk gives only while the walk runs
+		// counter-clockwise; a clockwise-walked one (a hole's whole circle, a
+		// concave arc, and every reflex corner's apex connector) bounds the
+		// mirror surface, so its flux is negated back to the sense its walk
+		// actually has. The caller then rotates the whole band into the
+		// virtual band's own orientation.
 		return -flux
 	}
 	return flux

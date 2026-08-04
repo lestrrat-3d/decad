@@ -138,9 +138,17 @@ type capPatchGeom struct {
 	cU, cV                float64
 	sideRadius, capRadius float64
 	th0, th1              float64
-	// apex marks a reflex-corner patch: side is the single original corner
-	// point (sideA), not a wall — capA/capB are the offset arc's feet.
-	apex bool
+	// sweepCCW records whether the patch's OWN angular walk runs
+	// counter-clockwise (increasing theta). th0/th1 above are normalized to
+	// th0 < th1 because the DX7 survey reads them as an increasing window,
+	// and that normalization discards the walk's sense — so patchRawFlux
+	// reads it from here: a clockwise-walked patch integrated over the
+	// normalized window comes out with its surface facing the wrong way, and
+	// its flux is negated. A reflex corner's apex patch is always clockwise
+	// (the inward offset's connector arc runs pA -> pB with theta
+	// decreasing), and a plane patch never reads this field at all — its own
+	// walk lives in the sideA -> sideB vertex order.
+	sweepCCW bool
 
 	sideZ, capZ float64
 }
@@ -188,17 +196,14 @@ func buildCapBand(ctx context.Context, body *Body, ref StepRef, cbp capBlendPayl
 		samplePoint := pl.point(w.cU+w.radius, w.cV, sideZ)
 		fixPatchOrientation(patch, pl, samplePoint, sign, 0, -matSign)
 		// th0, th1 record the patch's ANGULAR EXTENT, not the wall's own
-		// walked sense — the material-side semantics are already carried by
-		// the -matSign correction in capBandVolume/patchRawFlux, so a
-		// clockwise (hole) wall's reversed (th1 < th0) recording is
-		// normalized to an increasing pair here, or patchRawFlux's trig terms
-		// would silently take the wrong sign for the removed/added volume
-		// (found via TestCapBlendHoleLoopChamferVolume).
+		// walked sense: the DX7 survey reads the window as an increasing
+		// pair. The sense itself is not discarded — sweepCCW keeps it, and
+		// patchRawFlux negates a clockwise-walked patch's flux with it.
 		gth0, gth1 := w.th0, w.th1
 		if gth1 < gth0 {
 			gth0, gth1 = gth1, gth0
 		}
-		geom := capPatchGeom{circular: true, cU: w.cU, cV: w.cV, sideRadius: w.radius, capRadius: capRadius, th0: gth0, th1: gth1, sideZ: sideZ, capZ: capZ}
+		geom := capPatchGeom{circular: true, cU: w.cU, cV: w.cV, sideRadius: w.radius, capRadius: capRadius, th0: gth0, th1: gth1, sweepCCW: w.th1 > w.th0, sideZ: sideZ, capZ: capZ}
 		capLoop := []coedge{{edge: capEdge, forward: true}}
 		return capBandResult{patches: []*Face{patch}, capCo: capLoop, geom: []capPatchGeom{geom}}, nil
 	}
@@ -318,14 +323,15 @@ func buildCapBand(ctx context.Context, body *Body, ref StepRef, cbp capBlendPayl
 		patches = append(patches, face)
 		// th0, th1 record the patch's ANGULAR EXTENT, not the connector's own
 		// clockwise walk — the same normalization every other patch's geometry
-		// takes, since patchRawFlux carries the material-side semantics in
-		// -matSign and trigRange reads an increasing window.
+		// takes, since trigRange reads an increasing window. The connector
+		// arc is walked CLOCKWISE (arcTh1 below arcTh0 by construction), and
+		// sweepCCW is what carries that fact to patchRawFlux.
 		gth0, gth1 := arcTh0[i], arcTh1[i]
 		if gth1 < gth0 {
 			gth0, gth1 = gth1, gth0
 		}
 		geoms = append(geoms, capPatchGeom{
-			circular: true, apex: true,
+			circular: true, sweepCCW: false,
 			cU: j.vU, cV: j.vV, sideRadius: 0, capRadius: d,
 			th0: gth0, th1: gth1, sideZ: sideZ, capZ: capZ,
 		})
@@ -423,7 +429,9 @@ func buildCapBand(ctx context.Context, body *Body, ref StepRef, cbp capBlendPayl
 			g.sideRadius, g.capRadius = w.radius, capRadius
 			// th0, th1 record the ANGULAR EXTENT, not the wall's own walked
 			// sense — see the single-closed-circle branch's comment above;
-			// the same normalization applies to a partial arc wall.
+			// the same normalization applies to a partial arc wall, and
+			// sweepCCW keeps the sense the normalization drops.
+			g.sweepCCW = w.th1 > w.th0
 			g.th0, g.th1 = w.th0, w.th1
 			if g.th1 < g.th0 {
 				g.th0, g.th1 = g.th1, g.th0

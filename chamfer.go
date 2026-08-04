@@ -26,8 +26,14 @@ import (
 // along EACH walk (equal setback: the whole of v1; an asymmetric chamfer is an
 // option that has not shipped, §7). There is NO S5 gate: a chord exists between
 // any two distinct feet, so the fillet's no-blend-centre refusal has no chamfer
-// case (Table B, B1). A cap-edge selector is S1 (ErrUnsupported, the vertex
-// blend §6); a non-prism receiver is S3 (ErrUnsupported).
+// case (Table B, B1). A non-prism receiver is S3 (ErrUnsupported).
+//
+// Chamfer also takes docs/modify-reach-design.md §8.3's second receiver class,
+// which the fillet does not: a selection covering every geometric edge of one
+// or more COMPLETE prism cap loops builds a cap-loop chamfer through
+// capblend.go instead of this file's corner rewrite. A cap-edge selection that
+// is not one or more complete loops, or one mixing cap edges with lateral
+// ones, is SX4 (ErrUnsupported).
 
 // ChamferOption configures Chamfer. No options are currently supported: a
 // chamfer Step's Opts is nil (§7), and the option group exists so an
@@ -42,11 +48,20 @@ type ChamferOption interface {
 // and retiring the receiver (docs/modify-design.md §7, core §8). sel is resolved
 // against the live receiver; a query matching nothing is loud (ErrNoMatch /
 // ErrCardinality, S16). d is a length magnitude, gated like every other (S15); a
-// zero d is S13. A selected edge that is not a lateral edge — a cap edge — is S1
-// (ErrUnsupported), and a receiver whose payload is not a prism is S3
+// zero d is S13. A receiver whose payload is not a prism is S3
 // (ErrUnsupported). The rewritten section faces the §5 audit before anything is
 // built, so no unproven body is ever made and an over-large setback is refused
 // (S6), never clipped.
+//
+// A selection of CAP edges is the cap-loop chamfer of
+// docs/modify-reach-design.md §8.3: sel covering every geometric edge of one
+// or more complete prism cap loops bevels each of those loops with a band of
+// analytic patches, and the result is a cap-blend body whose volume, area,
+// bounds, undercut and minimum-radius readings all answer. A cap-edge
+// selection that is not one or more complete loops, and one that mixes cap
+// edges with lateral ones, are both SX4 (ErrUnsupported). A further modify op
+// on the result is SX10 (ErrUnsupported), and it does not tessellate yet
+// (Table DX rows DX3/DX6).
 func (b *Body) Chamfer(sel EdgeSelector, d units.Value, opts ...ChamferOption) (*Body, error) {
 	return b.ChamferContext(context.Background(), sel, d, opts...)
 }

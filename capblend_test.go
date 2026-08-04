@@ -2,6 +2,7 @@ package decad_test
 
 import (
 	"encoding/json"
+	"fmt"
 	"math"
 	"strings"
 	"testing"
@@ -159,13 +160,28 @@ func TestCapBlendBothCapsBuildsWhenClear(t *testing.T) {
 	require.Less(t, vol.Value.Mag(), 100*60*filletBoxHeight)
 }
 
+// TestCapBlendCarrierCollapseRefused pins SX6's sentinel
+// (docs/modify-reach-design.md Table SX): eroding a radius-R circle by R or
+// more leaves the empty set, so the cap contour the caller asked for does not
+// exist and the refusal is ErrDegenerate — the same existence test §4 puts in
+// stage 5. The shared offset raises this as Shell's own S11a ErrUnsupported,
+// which is correct where a shell body exists and only a trimmed-offset kernel
+// is missing; the cap-blend call site is the one that translates it, and
+// shell_test.go's own "outward offset erasing a hole is S11a" subtest is the
+// other half — it still reads ErrUnsupported, which a global re-sentinelling
+// of errOffsetDrop would have broken.
 func TestCapBlendCarrierCollapseRefused(t *testing.T) {
-	const R, H = 4.0, 20.0
-	disk := circleProfile(t, R, H)
-	// A setback at or beyond the radius drops the circular carrier (SX6).
-	_, err := disk.Chamfer(capLoopEdges(disk), units.Millimeters(R))
-	require.Error(t, err)
-	require.ErrorIs(t, err, decad.ErrUnsupported)
+	for _, d := range []float64{4.0, 5.0} {
+		t.Run(fmt.Sprintf("d=%g", d), func(t *testing.T) {
+			const R, H = 4.0, 20.0
+			disk := circleProfile(t, R, H)
+			_, err := disk.Chamfer(capLoopEdges(disk), units.Millimeters(d))
+			require.Error(t, err)
+			require.ErrorIs(t, err, decad.ErrDegenerate)
+			require.NotErrorIs(t, err, decad.ErrUnsupported,
+				`SX6 answers to one sentinel; the shell's S11a must not ride along`)
+		})
+	}
 }
 
 // reflexLBody extrudes the L-shaped section — five convex corners and ONE
@@ -723,6 +739,79 @@ func TestCapBlendHoleLoopChamferVolume(t *testing.T) {
 	holeFrustum := math.Pi * d / 3 * (R*R + R*R1 + R1*R1)
 	want := outer - holeStraight - holeFrustum
 	require.InDelta(t, want, vol.Value.Mag(), 1e-1)
+}
+
+// plateWithRectHole extrudes a 100×100 plate with a side×side square hole
+// centred at (50, 50), by 10 mm — a straight prism whose section is a
+// rectangle with a POLYGONAL hole, so the hole loop is a clockwise walk of
+// four straight walls and four corners.
+func plateWithRectHole(t *testing.T, side float64) *decad.Body {
+	t.Helper()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	outer := s.CreateRectangle(0, 0, 100, 100)
+	s.Fix(outer.A)
+	s.CreateRectangle(50-side/2, 50-side/2, 50+side/2, 50+side/2)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+
+	var prof *sketch.Profile
+	for _, p := range s.Profiles() {
+		if len(p.Outer) == 4 && len(p.Holes) == 1 {
+			prof = p
+			break
+		}
+	}
+	require.NotNil(t, prof, `the rectangle-with-square-hole region should exist`)
+
+	doc := decad.New()
+	body, err := doc.Extrude(s, prof, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	require.NoError(t, err)
+	return body
+}
+
+// TestCapBlendPolygonalHoleChamferVolume is the hole-loop case
+// TestCapBlendHoleLoopChamferVolume cannot reach. A hole is walked CLOCKWISE,
+// so every patch built from that walk faces into the band, while the band's
+// two closing disks are absolute areas and so describe the loop's region read
+// counter-clockwise. A whole-turn cone hides the mismatch — its own flux does
+// not depend on which way round the circle was walked — but a polygonal hole's
+// straight walls and quarter-turn apex cones both do, and each sign is
+// independent of the other.
+//
+// The reference is derived from the section alone, never from the evaluator:
+// at depth h below the chamfered cap the section is the original eroded by h,
+// so the outer contributes (L − 2h)² and the hole dilates to
+// side² + 4·side·h + π·h² (its four corners round off to quarter disks of
+// radius h). Integrating each over [0, d] and adding the straight slab below
+// gives the whole volume in closed form.
+func TestCapBlendPolygonalHoleChamferVolume(t *testing.T) {
+	const L, H, side, d = 100.0, 10.0, 20.0, 2.0
+	box := plateWithRectHole(t, side)
+	chamfered, err := box.Chamfer(capLoopEdges(box), units.Millimeters(d))
+	require.NoError(t, err)
+	requireManifold(t, chamfered)
+
+	// The hole's four corners are reflex under the inward offset, so the band
+	// really does mint apex cones — without them this case degenerates into
+	// the straight-wall one and stops testing what it is here for.
+	apexes := 0
+	for _, f := range chamfered.Faces() {
+		for _, o := range f.Origins() {
+			if strings.HasPrefix(o.Role, "chamferCap(") && len(f.Loops()[0].CoEdges()) == 3 {
+				apexes++
+			}
+		}
+	}
+	require.Equal(t, 4, apexes, `one apex cone per corner of the dilating hole`)
+
+	vol, err := chamfered.Volume()
+	require.NoError(t, err)
+	straight := (L*L - side*side) * (H - d)
+	outerBand := (L*L*L - (L-2*d)*(L-2*d)*(L-2*d)) / 6
+	holeBand := side*side*d + 2*side*d*d + math.Pi*d*d*d/3
+	require.InDelta(t, straight+outerBand-holeBand, vol.Value.Mag(), 1e-6)
 }
 
 // TestCapBlendThroughAllStopsAtBuiltExtent is Table DX row DX5: a through-all

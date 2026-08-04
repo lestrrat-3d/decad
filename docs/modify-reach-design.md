@@ -747,7 +747,7 @@ Every implementation PR MUST add geometry assertions, not run-only coverage.
 | **B** | revolve junction rewrite + roles + surveys | cap loops; shell reach; DX3 until revolve tessellation lands |
 | **C** | multi-region `stackedPrismPayload`; migrate cups; lift base S12 through BX8; closed + side-opening prism shell; tessellation/clearance cases | cap loops; revolve shell |
 | **D** | full/partial allowed revolve shell | cap loops |
-| **E** | `capBlendPayload`; complete cap-loop fillet/chamfer; analytic integrals + tessellation + clearance model | partial cap chains; mixed edge classes; faceted receivers |
+| **E** | `capBlendPayload`; complete cap-loop chamfer; analytic integrals | complete cap-loop fillet; DX3 patch tessellation; DX6 clearance model; partial cap chains; mixed edge classes; faceted receivers |
 
 Each PR lands its result payload, structural topology, measurement path, recipe
 round trip, and tests together. A PR may leave a DX question staged only where

@@ -9,12 +9,12 @@ import (
 	"github.com/lestrrat-3d/r3"
 )
 
-// This file is the chamfer half of docs/modify-reach-design.md PR E (§8.3),
-// scoped to §8.3's cap-loop chamfer only: capBlendPayload, the receiver/
-// selection classification RX1's second class needs (every geometric edge of
-// one or more COMPLETE prism cap loops, never mixed with lateral edges — S4),
-// gates SX4/SX6/SX7/SX10/SX12, the BX3 roles, and the build. The cap-loop
-// FILLET (§8.2, Cylinder/Torus/Sphere patches) is a separate PR (E2) and is
+// This file is docs/modify-reach-design.md PR E (§14), which lands §8.3's
+// cap-loop chamfer: capBlendPayload, the receiver/selection classification
+// RX1's second class needs (every geometric edge of one or more COMPLETE
+// prism cap loops, never mixed with lateral edges — S4), gates
+// SX4/SX6/SX7/SX10/SX12, the BX3 roles, and the build. The cap-loop FILLET
+// (§8.2, Cylinder/Torus/Sphere patches) is in row E's staged column and is
 // not implemented here; neither is WithAsymmetricChamfer (PR A) — this PR
 // covers the equal-setback case only, dc = ds = d (§8.3).
 //
@@ -303,7 +303,7 @@ func buildCapBlend(ctx context.Context, doc *Document, ref StepRef, pp prismPayl
 	// the offset does not depend on which cap — so one offset serves both),
 	// every unselected loop left unchanged — and run the existing exact
 	// offset + §5 audit machinery on it. SX6 is the offset's own drop
-	// refusal (errOffsetDrop, wrapping ErrUnsupported); SX7/SX12 are the
+	// refusal, re-sentinelled here (wrapCapBlendDropError); SX7/SX12 are the
 	// audit's crossing/contact/nesting refusals. Because dc = ds = d in this
 	// PR, the ruled patch at axial fraction s meets the parallel section as
 	// exactly the loop offset by s*d (docs/modify-reach-design.md §8.3): the
@@ -314,7 +314,7 @@ func buildCapBlend(ctx context.Context, doc *Document, ref StepRef, pp prismPayl
 	budget := newWorkBudget(ctx)
 	mixed, err := mixedOffsetProfile(budget, pp.profile, d, startLoops, endLoops)
 	if err != nil {
-		return nil, err
+		return nil, wrapCapBlendDropError(err)
 	}
 	if err := auditOffsetSectionBudget(budget, pp.profile, mixed); err != nil {
 		return nil, wrapCapBlendAuditError(err)
@@ -359,6 +359,26 @@ func mixedOffsetProfile(budget *workBudget, profile ProfileRecord, d float64, st
 		out[li] = LoopRecord{Segments: segs}
 	}
 	return ProfileRecord{Outer: out[0], Holes: out[1:]}, nil
+}
+
+// wrapCapBlendDropError re-sentinels the shared offset's own drop refusal as
+// SX6 (docs/modify-reach-design.md Table SX). The offset code is Shell's, and
+// there its drop is S11a — ErrUnsupported, because the shell body exists and
+// only a trimmed-offset kernel is missing. A CAP-LOOP CHAMFER asks a different
+// question of the same machinery: the drop says the requested cap contour is
+// the empty set (offsetting a radius-4 circle inward by 4 leaves nothing), so
+// the body the caller named does not exist at all. §4's existence test puts
+// that in stage 5 with ErrDegenerate. The translation lives here, at the one
+// call site that asks the existence question, never on errOffsetDrop itself —
+// Shell's own sentinel is correct for Shell. The result does not wrap
+// errOffsetDrop: carrying its ErrUnsupported along would leave the refusal
+// answering to both sentinels, and a caller branching on either would be
+// right, which is the ambiguity §4's one-sentinel rule exists to prevent.
+func wrapCapBlendDropError(err error) error {
+	if !errors.Is(err, errOffsetDrop) {
+		return err
+	}
+	return fmt.Errorf(`%w: the cap-loop offset drops a section feature, so the requested cap contour is empty`, ErrDegenerate)
 }
 
 // wrapCapBlendAuditError relabels the shared offset audit's refusal with
