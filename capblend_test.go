@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"math/big"
 	"strings"
 	"testing"
 
@@ -1051,6 +1052,78 @@ func TestCapBlendConePatchKeepsTaperAtHugeRadius(t *testing.T) {
 	require.Len(t, rep.Bodies, 1)
 	require.Equal(t, []*decad.Face{patch}, rep.Bodies[0].Undercuts,
 		`the tapered band opposes a pull away from the chamfered end`)
+}
+
+// volumeRefPrec and piRef are the reference arithmetic the enclosure check
+// below judges against: 400 bits of significand and pi to 62 decimal digits
+// (the same expansion Go's own math.Pi constant carries), so the reference is
+// nearer the true volume than a float64 can represent and the residual the
+// test measures is the SHIPPED value's, not the reference's.
+const volumeRefPrec = 400
+
+const piRef = `3.14159265358979323846264338327950288419716939937510582097494459`
+
+// exactChamferedDiskVolume is the volume of a radius-r disk swept h and
+// chamfered by d on one cap, in reference arithmetic: the straight slab
+// pi*r^2*(h-d) plus the band frustum pi*d/3*(r^2 + r*rc + rc^2) with
+// rc = r-d. It restates TestCapBlendConePatchKeepsTaperAtHugeRadius's own
+// closed form, evaluated without float64 rounding anywhere.
+func exactChamferedDiskVolume(t *testing.T, r, h, d float64) *big.Float {
+	t.Helper()
+	pi, ok := new(big.Float).SetPrec(volumeRefPrec).SetString(piRef)
+	require.True(t, ok)
+	bf := func(x float64) *big.Float { return new(big.Float).SetPrec(volumeRefPrec).SetFloat64(x) }
+	mul := func(a, b *big.Float) *big.Float { return new(big.Float).SetPrec(volumeRefPrec).Mul(a, b) }
+	add := func(a, b *big.Float) *big.Float { return new(big.Float).SetPrec(volumeRefPrec).Add(a, b) }
+	sub := func(a, b *big.Float) *big.Float { return new(big.Float).SetPrec(volumeRefPrec).Sub(a, b) }
+
+	R, H, D := bf(r), bf(h), bf(d)
+	rc := sub(R, D)
+	slab := mul(pi, mul(mul(R, R), sub(H, D)))
+	sum := add(add(mul(R, R), mul(R, rc)), mul(rc, rc))
+	band := new(big.Float).SetPrec(volumeRefPrec).Quo(mul(mul(pi, D), sum), bf(3))
+	return add(slab, band)
+}
+
+// TestCapBlendVolumeBoundEnclosesExactVolume is the promise the whole package
+// makes about a Measurement, checked where it is hardest to keep: the true
+// value lies inside [Value-Bound, Value+Bound]. The reference is computed in
+// 400-bit arithmetic rather than in float64, so what the residual measures is
+// the shipped reading's own error and nothing else — a float64 reference at
+// these magnitudes carries a residual of its own within an ulp of the one
+// under test.
+//
+// The configurations are the ones the band's cancellation is worst at. A
+// chamfer band is a difference of two flux terms of magnitude sweep-height
+// times section-area, so the reading's error scales with the SWEEP while the
+// band it lands in scales with the SETBACK; the first two rows below run that
+// ratio to 1e4 and 1e8. The third is ordinary scale, where the same
+// composition must not have become loose.
+func TestCapBlendVolumeBoundEnclosesExactVolume(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		r, h, d float64
+	}{
+		{`a 1e12 disk with a 1e-3 setback under a 10 mm sweep`, 1e12, 10, 1e-3},
+		{`a 1e6 disk with a 1e-3 setback under a 1e5 mm sweep`, 1e6, 1e5, 1e-3},
+		{`ordinary scale`, 30, 20, 5},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			disk := circleProfile(t, tc.r, tc.h)
+			chamfered, err := disk.Chamfer(capLoopEdges(disk), units.Millimeters(tc.d))
+			require.NoError(t, err)
+			vol, err := chamfered.Volume()
+			require.NoError(t, err)
+			require.Equal(t, decad.Approximate, vol.Exactness,
+				`a flux sum through a trig closed form is never Exact`)
+
+			held := new(big.Float).SetPrec(volumeRefPrec).SetFloat64(vol.Value.Mag())
+			residual := new(big.Float).SetPrec(volumeRefPrec).Sub(held, exactChamferedDiskVolume(t, tc.r, tc.h, tc.d))
+			got, _ := new(big.Float).Abs(residual).Float64()
+			require.LessOrEqual(t, got, vol.Bound.Mag(),
+				`the published bound must contain the true volume, not merely look small`)
+		})
+	}
 }
 
 // TestCapBlendUnrepresentableRadialChangeRefused is the other half of the same

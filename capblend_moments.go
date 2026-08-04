@@ -27,9 +27,21 @@ import (
 // divergence-theorem flux sum over its patches and the two disks, taken
 // relative to the plane-local origin (valid because the WHOLE band, patches
 // plus its two disks, is a closed surface, and a closed surface's flux
-// integral is reference-point independent). A flat Plane patch's flux is
-// exact (the rational tetrahedron identity); a Cone patch's is a closed-form
-// polynomial-plus-trig expression, bounded — never claimed Exact.
+// integral is reference-point independent). A flat Plane patch's flux is the
+// tetrahedron identity evaluated in floats; a Cone patch's is a closed-form
+// polynomial-plus-trig expression. Neither is ever claimed Exact.
+//
+// The volume bound is composed term by term, and the reason is the band's own
+// shape. Every one of these flux terms is a DIFFERENCE that cancels: the two
+// closing disks each carry the whole prism's flux and differ by the band's,
+// smaller by the ratio of the sweep height to the setback; a tetrahedron
+// identity and a ruled-cone integral cancel likewise. A rounding budget
+// scaled by the sum they cancelled to under-counts by exactly that ratio, so
+// no bound here is ever read off a summed result — each is charged against
+// the absolute terms the step acted on, and boundedAdd/boundedMul then sum
+// bounds while the values cancel. The one term that passes through
+// math.Sincos carries the magnitude envelope moments.go's analyticRoundBound
+// doc reserves for a libm result, never that helper's roundoff budget.
 
 // evalCapBlendContext builds the analytic cap-blend body from the payload
 // (BX3): the trimmed prism side walls (buildLoopSidesAs, unmodified) plus,
@@ -48,8 +60,7 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref StepRef, cbp capB
 	var faces []*Face
 	startLoopObjs := make([]*Loop, len(loops))
 	endLoopObjs := make([]*Loop, len(loops))
-	var startArea, endArea, sideArea, patchArea, slabVolume boundedScalar
-	var bandVolume float64
+	var startArea, endArea, sideArea, patchArea, slabVolume, bandVolume boundedScalar
 	// Appended in build order — loop index, then the chamfered cap, then each
 	// band's own patch index — which IS Table BX row BX3's deterministic patch
 	// order, the order the DX7 survey then reports its faces in.
@@ -73,14 +84,21 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref StepRef, cbp capB
 			sign = -1
 		}
 
-		zLo, zHi := cbp.z0, cbp.z1
+		// A chamfered end pulls its own straight level in by the setback, and
+		// that float sum rounds. The rounding is an ulp of the SWEEP, but it
+		// multiplies the whole section area below, so it reaches the volume at
+		// the scale of the band itself and is charged here — the same term
+		// capBandVolume charges for the identical level it reads as sideZ.
+		zLo, zHi := exactScalar(cbp.z0), exactScalar(cbp.z1)
 		if onStart {
-			zLo = cbp.z0 + cbp.d
+			v := cbp.z0 + cbp.d
+			zLo = measuredScalar(v, addRoundError(cbp.z0, cbp.d, v))
 		}
 		if onEnd {
-			zHi = cbp.z1 - cbp.d
+			v := cbp.z1 - cbp.d
+			zHi = measuredScalar(v, addRoundError(cbp.z1, -cbp.d, v))
 		}
-		ppFor := prismPayload{frame: cbp.frame, z0: zLo, z1: zHi, xform: cbp.xform}
+		ppFor := prismPayload{frame: cbp.frame, z0: zLo.value, z1: zHi.value, xform: cbp.xform}
 		sideFaces, bottomCo, topCo, loopLen, err := buildLoopSidesAs(ctx, body, ref, ppFor, li, li != 0, loop, work)
 		if err != nil {
 			return nil, err
@@ -95,7 +113,7 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref StepRef, cbp capB
 		if err != nil {
 			return nil, err
 		}
-		straightHeight := boundedSub(exactScalar(zHi), exactScalar(zLo))
+		straightHeight := boundedSub(zHi, zLo)
 		loopSlab := boundedMul(loopArea, straightHeight)
 		slabVolume = boundedAdd(slabVolume, measuredScalar(sign*loopSlab.value, loopSlab.bound))
 
@@ -113,7 +131,7 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref StepRef, cbp capB
 			if err != nil {
 				return nil, err
 			}
-			bandVolume += sign * v
+			bandVolume = boundedAdd(bandVolume, measuredScalar(sign*v.value, v.bound))
 			for _, g := range band.geom {
 				pa, pb := patchAreaOf(g)
 				patchArea = boundedAdd(patchArea, measuredScalar(pa, pb))
@@ -131,7 +149,7 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref StepRef, cbp capB
 			if err != nil {
 				return nil, err
 			}
-			bandVolume += sign * v
+			bandVolume = boundedAdd(bandVolume, measuredScalar(sign*v.value, v.bound))
 			for _, g := range band.geom {
 				pa, pb := patchAreaOf(g)
 				patchArea = boundedAdd(patchArea, measuredScalar(pa, pb))
@@ -199,7 +217,7 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref StepRef, cbp capB
 	faces = append(faces, capStart, capEnd)
 	body.lumps = []*Lump{{shells: []*Shell{{faces: faces}}}}
 
-	volume := boundedAdd(slabVolume, measuredScalar(bandVolume, capBlendVolumeBound(bandVolume)))
+	volume := boundedAdd(slabVolume, bandVolume)
 	body.volume = Measurement{
 		Value:     units.CubicMillimeters(volume.value),
 		Exactness: exactnessOf(volume.bound),
@@ -260,8 +278,33 @@ func capLoopBoundary(ctx context.Context, loop LoopRecord, d float64) (LoopRecor
 // covers the straight portion), by the divergence theorem over the band's
 // own closed boundary: the two flat disks (the loop's own enclosed area at
 // capZ and at sideZ) plus the patches (buildCapBand's geom).
-func capBandVolume(ctx context.Context, loop LoopRecord, cbp capBlendPayload, geom []capPatchGeom, capZ, matSign float64) (float64, error) {
+//
+// It returns the contribution WITH its own bound, and that is the whole of
+// why the bound is sound. The two disk terms are each of magnitude
+// |capZ|·|area| — the whole prism's flux — while their sum is the band's,
+// smaller by a factor of the sweep height over the setback (H/d). A budget
+// scaled by the SUM is scaled by a quantity these terms cancelled away, so
+// every mechanism below is charged against the term it acts on, before the
+// cancellation:
+//
+//   - each disk's own area bound (loopEnclosedAreaContext's, which for a
+//     circular contour is a certified bracket and for a polygonal one is the
+//     exact rational's rounding) multiplied by the level it sits at;
+//   - the rounding of sideZ itself, which multiplies a whole disk area;
+//   - each float multiplication and addition, whose committed error
+//     boundedMul/boundedAdd take EXACTLY over big.Rat rather than estimate;
+//   - each patch's own flux bound (patchRawFlux), including the Sincos term
+//     that analyticRoundBound may never speak for.
+//
+// boundedAdd sums bounds, so no step of this composition is ever rescaled by
+// a result the step's own operands cancelled down to.
+func capBandVolume(ctx context.Context, loop LoopRecord, cbp capBlendPayload, geom []capPatchGeom, capZ, matSign float64) (boundedScalar, error) {
 	sideZ := capZ + matSign*cbp.d
+	// sideZ multiplies a whole disk area below, so its own rounding is a term
+	// of the band and is charged here — an error the size of an ulp of the
+	// sweep height, amplified by the section's area, which is of the order of
+	// the band itself once the disks cancel.
+	sideZBound := addRoundError(capZ, matSign*cbp.d, sideZ)
 	// The two closing disks are loopEnclosedAreaContext's ABSOLUTE areas, so
 	// the sub-solid they close off is the region the loop encloses read as
 	// POSITIVELY oriented — counter-clockwise — whichever way the loop was
@@ -270,7 +313,7 @@ func capBandVolume(ctx context.Context, loop LoopRecord, cbp capBlendPayload, ge
 	// into it. orient rotates them back onto the disks' own orientation.
 	signedArea, err := loopSignedAreaBudget(newWorkBudget(ctx), loop)
 	if err != nil {
-		return 0, err
+		return boundedScalar{}, err
 	}
 	orient := 1.0
 	if signedArea < 0 {
@@ -278,22 +321,28 @@ func capBandVolume(ctx context.Context, loop LoopRecord, cbp capBlendPayload, ge
 	}
 	sideArea, err := loopEnclosedAreaContext(ctx, loop)
 	if err != nil {
-		return 0, err
+		return boundedScalar{}, err
 	}
 	capBoundary, err := capLoopBoundary(ctx, loop, cbp.d)
 	if err != nil {
-		return 0, err
+		return boundedScalar{}, err
 	}
 	capArea, err := loopEnclosedAreaContext(ctx, capBoundary)
 	if err != nil {
-		return 0, err
+		return boundedScalar{}, err
 	}
 	// Outward normal signs (docs/modify-reach-design.md §8.4): the disk at
 	// capZ faces -matSign*Z, the disk at sideZ faces +matSign*Z, both away
 	// from the band's own material. A flat disk's raw flux (P.N over the
 	// disk) is its constant Z coordinate times its signed normal times its
 	// area — no triangulation needed.
-	fluxTotal := capZ*(-matSign)*capArea.value + sideZ*matSign*sideArea.value
+	// The two sign factors are +1 or -1, so applying them is exact and each
+	// level keeps whatever bound it arrived with: capZ is a payload coordinate
+	// and exact, sideZ carries the rounding of its own sum.
+	fluxTotal := boundedAdd(
+		boundedMul(exactScalar(capZ*(-matSign)), capArea),
+		boundedMul(measuredScalar(sideZ*matSign, sideZBound), sideArea),
+	)
 	// patchRawFlux's own v0..v3 (or triangle-fan) vertex order is FIXED —
 	// side-level vertices first, cap-level second — regardless of which cap
 	// the band sits on. That fixed order is "CCW as seen from outside" for
@@ -305,25 +354,38 @@ func capBandVolume(ctx context.Context, loop LoopRecord, cbp capBlendPayload, ge
 	// AXIAL half and orient for the IN-PLANE half; patchRawFlux itself has
 	// already put each patch in its own walk's sense.
 	for _, g := range geom {
-		fluxTotal += -matSign * orient * patchRawFlux(g)
+		f := patchRawFlux(g)
+		fluxTotal = boundedAdd(fluxTotal, measuredScalar(-matSign*orient*f.value, f.bound))
 	}
-	return fluxTotal / 3, nil
+	return boundedQuotient(fluxTotal.value, fluxTotal.bound, 3, 0), nil
 }
 
 // patchRawFlux is one patch's contribution to the band's total raw flux
 // (3x its own volume-by-divergence-theorem share), taken relative to the
-// plane-local origin (0, 0, 0). A flat Plane patch's contribution is the
-// exact rational tetrahedron identity (Flux_triangle = 3*tetraVolume =
-// (1/2)*v0.(v1 x v2)); a Cone patch's is the closed-form
-// polynomial-plus-trig integral over its linear-in-s ruled parametrization.
-func patchRawFlux(g capPatchGeom) float64 {
+// plane-local origin (0, 0, 0), WITH its own proven bound. A flat Plane
+// patch's contribution is the tetrahedron identity in floats
+// (Flux_triangle = 3*tetraVolume = (1/2)*v0.(v1 x v2)); a Cone patch's is the
+// closed-form polynomial-plus-trig integral over its linear-in-s ruled
+// parametrization.
+//
+// Both bounds are scaled by the envelope of the ABSOLUTE terms the expression
+// is built from, never by the value those terms summed to: a triple product
+// and a ruled-cone flux both cancel, and a budget read off the cancelled
+// result under-counts by exactly the cancellation ratio.
+func patchRawFlux(g capPatchGeom) boundedScalar {
 	if !g.circular {
 		v0 := r3.NewVec(g.sideA.U, g.sideA.V, g.sideZ)
 		v1 := r3.NewVec(g.sideB.U, g.sideB.V, g.sideZ)
 		v2 := r3.NewVec(g.capB.U, g.capB.V, g.capZ)
 		v3 := r3.NewVec(g.capA.U, g.capA.V, g.capZ)
 		tri := func(a, b, c r3.Vec) float64 { return a.Dot(b.Cross(c)) }
-		return 0.5*tri(v0, v1, v2) + 0.5*tri(v0, v2, v3)
+		value := 0.5*tri(v0, v1, v2) + 0.5*tri(v0, v2, v3)
+		// tripleProductUpper is an upper bound on every intermediate of one
+		// triple product AND on the product itself, so the two together are
+		// the envelope of the whole expression; the dropped halvings only
+		// widen it.
+		env := absSumUpper(tripleProductUpper(v0, v1, v2), tripleProductUpper(v0, v2, v3))
+		return measuredScalar(value, analyticRoundBound(env))
 	}
 	R0, R1 := g.sideRadius, g.capRadius
 	z0, z1 := g.sideZ, g.capZ
@@ -339,6 +401,38 @@ func patchRawFlux(g capPatchGeom) float64 {
 	term2 := H * dth * (R0*R0 + R0*R1 + R1*R1) / 3
 	term3 := -dR * dth * (z0*R0 + (z0*dR+H*R0)/2 + H*dR/3)
 	flux := term1 + term2 + term3
+
+	absH, absDth, absDR := math.Abs(H), math.Abs(dth), math.Abs(dR)
+	absR0, absR1, absZ0 := math.Abs(R0), math.Abs(R1), math.Abs(z0)
+	// polyEnv envelopes term2 and term3 and every intermediate of both: the
+	// same products over absolute operands, with the 1/2 and 1/3 divisors
+	// dropped because dropping a divisor above one only widens an envelope.
+	// These two terms carry no libm result, so their rounding is ordinary
+	// basic arithmetic and analyticRoundBound is the budget for it.
+	polyEnv := absSumUpper(
+		productUpper(productUpper(absH, absDth), absSumUpper(
+			productUpper(absR0, absR0), productUpper(absR0, absR1), productUpper(absR1, absR1))),
+		productUpper(productUpper(absDR, absDth), absSumUpper(
+			productUpper(absZ0, absR0), productUpper(absZ0, absDR),
+			productUpper(absH, absR0), productUpper(absH, absDR))),
+	)
+	// term1 is the eccentric term, and it is the one that passes through
+	// math.Sincos. moments.go's analyticRoundBound states the rule it breaks:
+	// Go gives Sin and Cos no ulp contract, so a result computed through them
+	// never rests on that roundoff budget. trigEnv is the magnitude envelope
+	// that stands in its place — |sin| and |cos| never exceed 1, so |sc| and
+	// |ss| never exceed 2 and the TRUE term1 never exceeds
+	// |H|·(R0+R1)/2 · 2·(|cU|+|cV|), whatever the platform's libm returns.
+	trigEnv := productUpper(productUpper(absH, absSumUpper(absR0, absR1)), absSumUpper(g.cU, g.cV))
+	trigBound := conservativeValueError(term1, trigEnv)
+	if g.wholeTurn {
+		// A full period integrates both cos and sin to exactly zero, so this
+		// patch's TRUE term1 is zero and the held value is its own whole
+		// error — a fact about the surface, read off capblend_geom.go's
+		// structural flag and never off a comparison of th0 and th1.
+		trigBound = upRound(math.Abs(term1))
+	}
+	bound := absSumUpper(analyticRoundBound(absSumUpper(polyEnv, trigEnv)), trigBound)
 	if !g.sweepCCW {
 		// The integral is taken over the NORMALIZED window th0 < th1, which
 		// orients the patch radially OUTWARD from its own centre. That is the
@@ -348,20 +442,45 @@ func patchRawFlux(g capPatchGeom) float64 {
 		// mirror surface, so its flux is negated back to the sense its walk
 		// actually has. The caller then rotates the whole band into the
 		// virtual band's own orientation.
-		return -flux
+		return measuredScalar(-flux, bound)
 	}
-	return flux
+	return measuredScalar(flux, bound)
 }
 
-// capBlendVolumeBound is a conservative outward bound on the band-volume
-// contribution's rounding: the flux formula mixes trig terms with polynomial
-// ones, so it is never claimed Exact except the proven-zero case of no
-// chamfered loop at all.
-func capBlendVolumeBound(bandVolume float64) float64 {
-	if bandVolume == 0 {
-		return 0
-	}
-	return analyticRoundBound(math.Abs(bandVolume))
+// tripleProductUpper bounds |a·(b×c)| and every intermediate the float
+// evaluation of it passes through: each cross-product component is a
+// difference of two of the six products below, and each final product is one
+// of a_i times such a difference, so their absolute sum dominates all of
+// them. It is the envelope analyticRoundBound is owed for a determinant,
+// whose own value cancels to an arbitrarily small fraction of it.
+func tripleProductUpper(a, b, c r3.Vec) float64 {
+	return absSumUpper(
+		productUpper(math.Abs(a.X), productUpper(math.Abs(b.Y), math.Abs(c.Z))),
+		productUpper(math.Abs(a.X), productUpper(math.Abs(b.Z), math.Abs(c.Y))),
+		productUpper(math.Abs(a.Y), productUpper(math.Abs(b.Z), math.Abs(c.X))),
+		productUpper(math.Abs(a.Y), productUpper(math.Abs(b.X), math.Abs(c.Z))),
+		productUpper(math.Abs(a.Z), productUpper(math.Abs(b.X), math.Abs(c.Y))),
+		productUpper(math.Abs(a.Z), productUpper(math.Abs(b.Y), math.Abs(c.X))),
+	)
+}
+
+// crossProductUpper bounds every component of a×b and every product the float
+// evaluation forms on the way: each component is a difference of two of the
+// six products below, so their absolute sum dominates all of them AND the
+// resulting vector's own norm. A band patch is a thin ruled quad, so that
+// difference is exactly where its cross product cancels — the wall direction
+// crossed with the offset displacement is smaller than either term by the
+// ratio of the wall's length to the setback — and a budget read off the
+// surviving area under-counts by that ratio.
+func crossProductUpper(a, b r3.Vec) float64 {
+	return absSumUpper(
+		productUpper(math.Abs(a.Y), math.Abs(b.Z)),
+		productUpper(math.Abs(a.Z), math.Abs(b.Y)),
+		productUpper(math.Abs(a.Z), math.Abs(b.X)),
+		productUpper(math.Abs(a.X), math.Abs(b.Z)),
+		productUpper(math.Abs(a.X), math.Abs(b.Y)),
+		productUpper(math.Abs(a.Y), math.Abs(b.X)),
+	)
 }
 
 // patchAreaOf is one patch's own surface area and the proven bound on it:
@@ -369,10 +488,16 @@ func capBlendVolumeBound(bandVolume float64) float64 {
 // Plane reading is NEVER exact. Its two terms are each a float subtraction, a
 // float cross product and a float norm — r3's own Len is a nested Hypot, which
 // carries no ulp contract at all — and their sum rounds once more, so the held
-// value is a float evaluation and sumSlop is exactly the proven, never-zero
-// bound bounds.go keeps for that shape (the same one boolean_body.go's mesh
-// facet areas take). Returning a zero bound there would publish an Exact the
+// value is a float evaluation and sumSlop is the proven, never-zero bound
+// bounds.go keeps for that shape (the same one boolean_body.go's mesh facet
+// areas take). Returning a zero bound there would publish an Exact the
 // arithmetic has not earned, on the face AND in the body's own area sum.
+//
+// sumSlop alone is not the whole of it, because it charges each term a few
+// ulps of the term's OWN value and a band patch's cross product cancels
+// before that value is reached. crossProductUpper carries the envelope those
+// products actually reach, so the charge tracks the terms rather than what
+// they cancelled to — the same correction capBandVolume makes for the flux.
 func patchAreaOf(g capPatchGeom) (float64, float64) {
 	if !g.circular {
 		v0 := r3.NewVec(g.sideA.U, g.sideA.V, g.sideZ)
@@ -382,7 +507,11 @@ func patchAreaOf(g capPatchGeom) (float64, float64) {
 		a1 := v1.Sub(v0).Cross(v2.Sub(v0)).Len() / 2
 		a2 := v2.Sub(v0).Cross(v3.Sub(v0)).Len() / 2
 		area := a1 + a2
-		return area, sumSlop(2, absSumUpper(a1, a2))
+		crossEnv := absSumUpper(
+			crossProductUpper(v1.Sub(v0), v2.Sub(v0)),
+			crossProductUpper(v2.Sub(v0), v3.Sub(v0)),
+		)
+		return area, absSumUpper(sumSlop(2, absSumUpper(a1, a2)), analyticRoundBound(crossEnv))
 	}
 	R0, R1 := g.sideRadius, g.capRadius
 	H := g.capZ - g.sideZ

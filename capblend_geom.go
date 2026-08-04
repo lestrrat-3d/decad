@@ -177,6 +177,16 @@ type capPatchGeom struct {
 	// decreasing), and a plane patch never reads this field at all — its own
 	// walk lives in the sideA -> sideB vertex order.
 	sweepCCW bool
+	// wholeTurn records that this patch's angular window really is the FULL
+	// period — the single closed circle a cornerless loop offsets into, the
+	// one shape below that is built without a corner join. It is set from
+	// that structural fact and never from a comparison of th0 and th1: fl(2π)
+	// is not 2π, so no float window ever proves a full period. It is read by
+	// capblend_moments.go's flux bound alone, where ∮cos = ∮sin = 0 over a
+	// full period makes the eccentric term's TRUE value exactly zero, so the
+	// whole held value is its own error and no Sincos magnitude envelope is
+	// owed for it.
+	wholeTurn bool
 
 	sideZ, capZ float64
 }
@@ -231,7 +241,7 @@ func buildCapBand(ctx context.Context, body *Body, ref StepRef, cbp capBlendPayl
 		if gth1 < gth0 {
 			gth0, gth1 = gth1, gth0
 		}
-		geom := capPatchGeom{circular: true, cU: w.cU, cV: w.cV, sideRadius: w.radius, capRadius: capRadius, th0: gth0, th1: gth1, sweepCCW: w.th1 > w.th0, sideZ: sideZ, capZ: capZ}
+		geom := capPatchGeom{circular: true, cU: w.cU, cV: w.cV, sideRadius: w.radius, capRadius: capRadius, th0: gth0, th1: gth1, sweepCCW: w.th1 > w.th0, wholeTurn: true, sideZ: sideZ, capZ: capZ}
 		setPatchArea(patch, geom)
 		capLoop := []coedge{{edge: capEdge, forward: true}}
 		return capBandResult{patches: []*Face{patch}, capCo: capLoop, geom: []capPatchGeom{geom}}, nil
