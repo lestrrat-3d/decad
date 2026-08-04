@@ -125,6 +125,12 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref StepRef, cbp capB
 
 		startCo, endCo := bottomCo, topCo
 
+		// startBand/endBand default to the zero capBandResult (delta 0, capCo
+		// nil) where the loop is not chamfered on that cap, which is what
+		// leaves the area correction below at its own zero — the delta<=0
+		// guards in sectionDisplacementArea and bandPatchAreaAllow, not a
+		// separate onStart/onEnd branch.
+		var startBand, endBand capBandResult
 		if onStart {
 			band, err := buildCapBand(ctx, body, ref, cbp, li, loop, cbp.z0, +1, bottomCo, work)
 			if err != nil {
@@ -133,7 +139,8 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref StepRef, cbp capB
 			faces = append(faces, band.patches...)
 			collectPatchGeoms(band)
 			startCo = band.capCo
-			v, err := capBandVolume(ctx, loop, cbp, band.geom, cbp.z0, +1)
+			startBand = band
+			v, err := capBandVolume(ctx, loop, cbp, band.geom, cbp.z0, +1, band.delta)
 			if err != nil {
 				return nil, err
 			}
@@ -151,7 +158,8 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref StepRef, cbp capB
 			faces = append(faces, band.patches...)
 			collectPatchGeoms(band)
 			endCo = band.capCo
-			v, err := capBandVolume(ctx, loop, cbp, band.geom, cbp.z1, -1)
+			endBand = band
+			v, err := capBandVolume(ctx, loop, cbp, band.geom, cbp.z1, -1, band.delta)
 			if err != nil {
 				return nil, err
 			}
@@ -176,7 +184,18 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref StepRef, cbp capB
 		if err != nil {
 			return nil, err
 		}
-		startArea = boundedAdd(startArea, measuredScalar(sign*sArea.value, sArea.bound))
+		// sArea is measured on the BUILT cap contour (loopEnclosedAreaContext's
+		// own arithmetic bound), which says nothing about how far that contour
+		// sits from the one the offset DENOTES. sectionDisplacementArea is the
+		// same 2D set-displacement identity extrude.go's own region area
+		// composes (docs/prism-boolean-design.md §7, one dimension down from
+		// sweptVolumeAllow above): a set bound, sound even where the
+		// displacement changes which regions the offset merged, charged
+		// against this loop's own held boundary via capContourPerimeterUpper
+		// so it stands whatever the corner geometry did.
+		sBound := absSumUpper(sArea.bound,
+			sectionDisplacementArea(startBand.delta, len(loop.Segments), capContourPerimeterUpper(startBand.capCo)))
+		startArea = boundedAdd(startArea, measuredScalar(sign*sArea.value, sBound))
 
 		endBoundary := loop
 		if onEnd {
@@ -189,7 +208,9 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref StepRef, cbp capB
 		if err != nil {
 			return nil, err
 		}
-		endArea = boundedAdd(endArea, measuredScalar(sign*eArea.value, eArea.bound))
+		eBound := absSumUpper(eArea.bound,
+			sectionDisplacementArea(endBand.delta, len(loop.Segments), capContourPerimeterUpper(endBand.capCo)))
+		endArea = boundedAdd(endArea, measuredScalar(sign*eArea.value, eBound))
 	}
 
 	pl := prismPayload{frame: cbp.frame, xform: cbp.xform}
@@ -262,6 +283,24 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref StepRef, cbp capB
 	return body, nil
 }
 
+// capContourPerimeterUpper is a proven upper bound on the total length of a
+// chamfer band's own cap-level boundary, read off the coedges buildCapBand
+// already built for it (band.capCo) rather than re-walked: each edge on that
+// boundary already carries its own held length and proven bound (a wall's
+// straight or circular capEdge, a reflex corner's connector arc), computed
+// from the SAME offset math loopEnclosedAreaContext(capLoopBoundary(...))
+// measures the area of, so the two readings of one contour never disagree
+// about which boundary they describe. A nil capCo (the loop is not chamfered
+// on this cap) sums to zero, which is what leaves sectionDisplacementArea's
+// own delta<=0 guard as the only gate that matters.
+func capContourPerimeterUpper(capCo []coedge) float64 {
+	total := boundedScalar{}
+	for _, ce := range capCo {
+		total = boundedAdd(total, measuredScalar(ce.edge.length, ce.edge.lengthBound))
+	}
+	return absSumUpper(total.value, total.bound)
+}
+
 // capLoopBoundary returns loop_li's OWN offset-by-d boundary as a standalone
 // LoopRecord, used to compute a chamfered cap's per-loop enclosed area and
 // the band's closing disk at the cap level.
@@ -304,7 +343,17 @@ func capLoopBoundary(ctx context.Context, loop LoopRecord, d float64) (LoopRecor
 //
 // boundedAdd sums bounds, so no step of this composition is ever rescaled by
 // a result the step's own operands cancelled down to.
-func capBandVolume(ctx context.Context, loop LoopRecord, cbp capBlendPayload, geom []capPatchGeom, capZ, matSign float64) (boundedScalar, error) {
+//
+// None of those terms speaks for the cap contour's own displacement (delta,
+// capblend_contour.go): capArea and every patchRawFlux term above read the
+// contour's coordinates as exact inputs, but the contour is a COMPUTED offset
+// that sits within delta of the one it denotes. That is one displacement
+// acting on the whole surface the band closes on — this loop's patches AND
+// the cap disk they meet — so it is composed ONCE here, after the flux sum,
+// via bounds.go's sweptVolumeAllow(delta, areaUpper): charging it inside
+// capArea's own bound, or inside each patchRawFlux term, would count the SAME
+// displaced coordinates twice, since patchRawFlux already reads them.
+func capBandVolume(ctx context.Context, loop LoopRecord, cbp capBlendPayload, geom []capPatchGeom, capZ, matSign, delta float64) (boundedScalar, error) {
 	sideZ := capZ + matSign*cbp.d
 	// sideZ multiplies a whole disk area below, so its own rounding is a term
 	// of the band and is charged here — an error the size of an ulp of the
@@ -359,11 +408,21 @@ func capBandVolume(ctx context.Context, loop LoopRecord, cbp capBlendPayload, ge
 	// (TestCapBlendStartCapVolumeMatchesEndCap). -matSign speaks for the
 	// AXIAL half and orient for the IN-PLANE half; patchRawFlux itself has
 	// already put each patch in its own walk's sense.
+	patchAreaTotal := boundedScalar{}
 	for _, g := range geom {
 		f := patchRawFlux(g)
 		fluxTotal = boundedAdd(fluxTotal, measuredScalar(-matSign*orient*f.value, f.bound))
+		pa, pb := patchAreaOf(g)
+		patchAreaTotal = boundedAdd(patchAreaTotal, measuredScalar(pa, pb))
 	}
-	return boundedQuotient(fluxTotal.value, fluxTotal.bound, 3, 0), nil
+	result := boundedQuotient(fluxTotal.value, fluxTotal.bound, 3, 0)
+	// areaUpper is the surface the contour's own displacement acted on: this
+	// band's patches plus the cap disk they close on (capArea) — the same two
+	// terms patchRawFlux and the disk flux above both read displaced
+	// coordinates from.
+	areaUpper := absSumUpper(patchAreaTotal.value, patchAreaTotal.bound, capArea.value, capArea.bound)
+	result.bound = absSumUpper(result.bound, sweptVolumeAllow(delta, areaUpper))
+	return result, nil
 }
 
 // patchRawFlux is one patch's contribution to the band's total raw flux
@@ -555,6 +614,30 @@ func crossProductUpper(a, b r3.Vec) float64 {
 // before that value is reached. crossProductUpper carries the envelope those
 // products actually reach, so the charge tracks the terms rather than what
 // they cancelled to — the same correction capBandVolume makes for the flux.
+//
+// Neither arm's arithmetic bound speaks for the cap-level directrix's own
+// contour displacement (capblend_contour.go): both read g's coordinates as
+// exact inputs, but a chamfered patch's cap-level corner sits where a float
+// offset solve put it, not where the offset denotes. g.contourAllow is that
+// allowance, computed once at build time (bounds.go's bandPatchAreaAllow)
+// from this patch's own held chord and slant, and it is zero wherever the
+// band's contour displacement is zero — an axis-aligned section's exact
+// miters — which is what keeps TestCapBlendPlanePatchVolumeIsExact's area
+// arithmetic unchanged there.
+//
+// What neither arm charges either is the SIDE level's own rounding: g.sideZ
+// is capZ + matSign*d rounded to a float (levelDelta, capblend_geom.go:246),
+// already charged into capSlantEdge's length and into capBandVolume, but
+// never read here, so this function's bound covers only the cap-contour
+// displacement above and not the side-level one. On a right-triangle band
+// (legs 9e4 x 3e6 mm, 1e15 mm sweep, 0.2 mm chamfer) substituting the HELD
+// side level for the denoted one in a 512-bit reference accounts for
+// essentially the whole patch-area residual: the three patches' residuals
+// fall from 3358.207374649123 / 111990.60743768104 / 111940.24564437279 mm^2
+// to 5.236122866634288e-06 / 8.892307483919435e-06 / 2.7272066797437425e-06
+// mm^2 once only the side level is corrected, with levelDelta itself equal to
+// 0.04999999999999999 mm at that head. Threading levelDelta into this
+// function is a separate change.
 func patchAreaOf(g capPatchGeom) (float64, float64) {
 	if !g.circular {
 		v0 := r3.NewVec(g.sideA.U, g.sideA.V, g.sideZ)
@@ -568,7 +651,8 @@ func patchAreaOf(g capPatchGeom) (float64, float64) {
 			crossProductUpper(v1.Sub(v0), v2.Sub(v0)),
 			crossProductUpper(v2.Sub(v0), v3.Sub(v0)),
 		)
-		return area, absSumUpper(sumSlop(2, absSumUpper(a1, a2)), analyticRoundBound(crossEnv))
+		bound := absSumUpper(sumSlop(2, absSumUpper(a1, a2)), analyticRoundBound(crossEnv), g.contourAllow)
+		return area, bound
 	}
 	R0, R1 := g.sideRadius, g.capRadius
 	H := g.capZ - g.sideZ
@@ -576,7 +660,8 @@ func patchAreaOf(g capPatchGeom) (float64, float64) {
 	slant := math.Hypot(dR, H)
 	dth := math.Abs(g.th1 - g.th0)
 	area := dth / 2 * (R0 + R1) * slant
-	return area, conservativeValueError(area, dth*(R0+R1)*(math.Abs(dR)+math.Abs(H)))
+	bound := absSumUpper(conservativeValueError(area, dth*(R0+R1)*(math.Abs(dR)+math.Abs(H))), g.contourAllow)
+	return area, bound
 }
 
 // capBlendBoundsContext is the placed body's axis-aligned bounding box, read

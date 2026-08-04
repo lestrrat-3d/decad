@@ -36,6 +36,10 @@ import (
 //     the same identity one dimension down: the region a recorded section can
 //     move is a tube about its own recorded boundary, with
 //     sectionDisplacementLength reading the same displacement as a perimeter;
+//   - the AREA of ONE RULED QUAD whose cap-level chord alone is displaced (the
+//     cap-loop chamfer's own band patches, docs/modify-reach-design.md §8.4) →
+//     bandPatchAreaAllow, the same two-factor product one patch at a time
+//     rather than one whole section;
 //   - a per-coordinate maximum read as a 3D DISTANCE → radius3D.
 
 const (
@@ -240,6 +244,32 @@ func sectionDisplacementLength(delta float64, walks int) float64 {
 	}
 	perWalk := productUpper(12, math.Nextafter(math.Pi, math.Inf(1)))
 	return productUpper(productUpper(float64(walks), perWalk), delta)
+}
+
+// bandPatchAreaAllow bounds how far ONE chamfer band patch's own area
+// (docs/modify-reach-design.md §8.4) can differ from the area of the ruled
+// quad the construction DENOTES, given that its cap-level directrix sits
+// within delta of the point it denotes (docs/prism-boolean-design.md §7's
+// identity, one ruled patch at a time rather than one whole section). The
+// side-level directrix is NOT exact — it carries its own rounding, which
+// this helper does not charge (patchAreaOf's own note, capblend_moments.go).
+//
+// A ruled quad's area is, to first order, its chord length times its slant
+// distance, so moving only the cap-level chord changes area two ways at
+// once: the chord's own length can change by at most
+// sectionDisplacementLength(delta, 1) — the SAME per-walk bound a recorded
+// boundary segment's length carries under this displacement, since a single
+// chord is exactly what that helper already bounds for one walk — which
+// moves area at the rate of the patch's own slant distance; and the slant
+// distance can itself change by at most delta, because only its cap-level
+// endpoint moves, which moves area at the rate of the chord length it rules
+// along. chordUpper and slantUpper must each be a PROVEN upper bound on the
+// patch's own held chord length and held slant distance.
+func bandPatchAreaAllow(delta, chordUpper, slantUpper float64) float64 {
+	if delta <= 0 {
+		return 0
+	}
+	return upRound(productUpper(sectionDisplacementLength(delta, 1), slantUpper) + productUpper(chordUpper, delta))
 }
 
 // rimDelta is the trim-amplified displacement bound of a vertex the boolean

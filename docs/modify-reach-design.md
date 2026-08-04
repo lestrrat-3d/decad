@@ -490,6 +490,37 @@ choose parameter counts so the sum of path sagitta and minor-circle sagitta is
 `<= tol`. Reuse the same samples on every adjacent patch. Mesh remains
 watertight and carries the proven maximum sum.
 
+The chamfer's cap contour is a COMPUTED offset (a float line/circle solve),
+not a recorded one, so every reading built from it carries that offset's own
+proven displacement (delta) beside its arithmetic bound, exactly as a
+recorded 2D section carries its own displacement one layer down
+(`docs/prism-boolean-design.md` §7's `sectionDelta` identity). Three readings
+need it, each composing a different existing bound for a different reason:
+
+- the chamfered cap FACE AREA (the offset loop's own enclosed area, feeding
+  both `capStart`/`capEnd`'s `Face.Area()` and `Body.Area()`) composes
+  `sectionDisplacementArea(delta, walks, perimeterUpper)` — the same 2D
+  set-displacement identity a recorded section's own area composes, since the
+  offset loop IS a 2D boundary known only to within delta of the one it
+  denotes;
+- the BAND VOLUME composes `sweptVolumeAllow(delta, areaUpper)` exactly ONCE,
+  after the flux sum, with `areaUpper` the band's own patch area plus the
+  cap-level disk area it closes on — never inside the disk area's own bound or
+  inside a patch's own flux term, because the flux integral already reads the
+  SAME displaced cap-level coordinates the disk does, and composing the term
+  in both places would charge it twice;
+- each BAND PATCH's own area (one ruled quad between a side-level chord —
+  whose own rounding this bound does not charge — and a cap-level chord
+  displaced by delta) composes
+  `bandPatchAreaAllow(delta, chordUpper, slantUpper)` — a ruled quad's area is
+  its chord length times its slant distance to first order, so the chord's own
+  length can move by `sectionDisplacementLength(delta, 1)` and the slant can
+  move by delta, each read against the OTHER factor's own held magnitude.
+
+All three helpers are zero wherever delta is zero (an axis-aligned section's
+exact miters), which is what keeps an all-Plane cap loop's Exact volume and
+its arithmetic-only area bound unchanged in that case.
+
 ## 9. Shell reach
 
 ### 9.1 `stackedPrismPayload`
