@@ -65,6 +65,14 @@ func requireDiagnosticInvariants(t *testing.T, report *decad.Report) {
 
 		require.NotEmpty(t, d.Message, `%s carries a human-readable message`, d.Code)
 		require.NotEqual(t, d.Code.String(), d.Message, `the message is never the branch key`)
+
+		// A proven solid always forms its tolerance reference (verification
+		// design §3), so every DiagMeasurementBeyondTolerance carries the
+		// threshold the reading was judged against — never a reference-less
+		// Suspect.
+		if d.Code == decad.DiagMeasurementBeyondTolerance {
+			require.NotNil(t, d.Required, `%s: a reference-less Suspect never reaches the report`, d.Code)
+		}
 	}
 }
 
@@ -340,10 +348,11 @@ func TestVerifyDiagnosticsUndecidedClearance(t *testing.T) {
 	_, err = box2.Shell(topCap(box2), units.Millimeters(5))
 	require.NoError(t, err)
 
-	// No clearance asked: bounded cup mass results remain visible.
+	// No clearance asked: the box test alone proves the pair apart, so neither
+	// cup's own bounded mass results reach the kernel and both verify Sound.
 	quiet, err := doc.Verify(t.Context())
 	require.NoError(t, err)
-	require.Equal(t, decad.Suspect, quiet.Status)
+	require.Equal(t, decad.Sound, quiet.Status)
 	requireDiagnosticInvariants(t, quiet)
 
 	// WithClearances invokes the staged kernel: the gap is unmeasured.

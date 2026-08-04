@@ -301,9 +301,29 @@ and short-circuits the gate before any reference is consulted
 (`verify.go:607-609,:624-626`), and a faceted body always forms a usable
 reference — its `payload.diameter` is guaranteed at build
 (`boolean_body.go:300-304`) and an edge length is a finite chord sum
-(`boolean_body.go:757-778`). Every tolerance-gate `Suspect` is therefore a
-genuine `bound > rel*Ref`, already carried by `DiagMeasurementBeyondTolerance`,
-so the "empty **exactly** when `Sound`" completeness holds.
+(`boolean_body.go:757-778`). For every OTHER shipped payload — every one a
+nonzero-bound body result can currently be read from — `bodyGateDiameter`
+(`verify.go`) forms a body diameter too, through one of two carrier models. A
+`prismPayload` or `revolvePayload` reads it exactly, off the same analytic
+carrier the clearance kernel proves against
+(`newBodyGeomBudget`/`clearance_geom.go`). A `cupPayload` or `capBlendPayload`
+reduces to a modify op applied to a straight-prism receiver section, and
+`envelopeGateDiameter` reads their diameter off that RECEIVER's own
+unmodified prism envelope rather than off the kernel's exact model, which does
+not cover them: a cap-loop chamfer only ever cuts along a chord whose feet sit
+on the receiver's own recorded walls, and fills a concave corner strictly
+within the convex hull of its neighbors, so it can never place a point beyond
+the receiver's own extruded envelope — the same containment
+`docs/modify-reach-design.md`'s own `capBlendPayload` row and
+`cupPayload.extentAlong` both already rely on — and a cup's whole solid sits
+inside its outer region's own full-height envelope, the cavity being
+interior. That envelope diameter can therefore only OVERSTATE the body's true
+diameter, never understate it — the one direction this gate is free to err in
+(§3's own rule: an understated `D` tightens `Ref` and can turn a passing
+reading into a false failure, while an overstated one only loosens the gate).
+Every tolerance-gate `Suspect` is therefore a genuine `bound > rel*Ref`,
+already carried by `DiagMeasurementBeyondTolerance`, so the "empty
+**exactly** when `Sound`" completeness holds.
 
 **The undecided pair is now RECORDED.** Where §6 folds a pair the evaluator
 could not decide into the report's `Suspect` rung, a `DiagUndecidedPair` or
