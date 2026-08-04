@@ -66,12 +66,14 @@ func requireDiagnosticInvariants(t *testing.T, report *decad.Report) {
 		require.NotEmpty(t, d.Message, `%s carries a human-readable message`, d.Code)
 		require.NotEqual(t, d.Code.String(), d.Message, `the message is never the branch key`)
 
-		// A proven solid always forms its tolerance reference (verification
-		// design §3), so every DiagMeasurementBeyondTolerance carries the
-		// threshold the reading was judged against — never a reference-less
-		// Suspect.
+		// Almost every proven solid forms its tolerance reference (verification
+		// design §3), so a DiagMeasurementBeyondTolerance carries the threshold
+		// the reading was judged against. The one payload that forms none is a
+		// prismPayload whose own sectionDelta is nonzero, and no body reaching
+		// this helper is one — TestVerifyDiagnosticsSectionDeltaPrismHasNoReferenceDiameter
+		// builds that body and deliberately does not call here.
 		if d.Code == decad.DiagMeasurementBeyondTolerance {
-			require.NotNil(t, d.Required, `%s: a reference-less Suspect never reaches the report`, d.Code)
+			require.NotNil(t, d.Required, `%s: this body's readings are all judged against a reference`, d.Code)
 		}
 	}
 }
