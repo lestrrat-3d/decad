@@ -295,15 +295,81 @@ region quantity to gate.
 For a staged pair cause, the slice carries both the deprecated broad
 `DiagUnsupportedPair` compatibility entry and the cause-specific entry.
 
-A proven solid always forms its tolerance reference, so the tolerance gate never
-yields a reference-less `Suspect`: an analytic reading carries a zero `Bound`
-and short-circuits the gate before any reference is consulted
-(`verify.go:607-609,:624-626`), and a faceted body always forms a usable
-reference — its `payload.diameter` is guaranteed at build
+A proven solid almost always forms its tolerance reference, so the tolerance
+gate almost never yields a reference-less `Suspect`: an analytic reading
+carries a zero `Bound` and short-circuits the gate before any reference is
+consulted (`verify.go:607-609,:624-626`), and a faceted body always forms a
+usable reference — its `payload.diameter` is guaranteed at build
 (`boolean_body.go:300-304`) and an edge length is a finite chord sum
-(`boolean_body.go:757-778`). Every tolerance-gate `Suspect` is therefore a
-genuine `bound > rel*Ref`, already carried by `DiagMeasurementBeyondTolerance`,
-so the "empty **exactly** when `Sound`" completeness holds.
+(`boolean_body.go:757-778`). For most other shipped payloads `bodyGateDiameter`
+(`verify.go`) forms a body diameter too, through one of two carrier models. A
+`prismPayload` or `revolvePayload` reads it exactly, off the same analytic
+carrier the clearance kernel proves against
+(`newBodyGeomBudget`/`clearance_geom.go`) — **except a `prismPayload` whose own
+`sectionDelta` is nonzero** (`docs/prism-boolean-design.md` §7's re-expressed
+section, e.g. the analytic `Union` of a placed prism pair): that carrier model
+refuses it (`clearance_geom.go`'s `addPrismFaces`), `envelopePrismFor` below has
+no arm for a bare `prismPayload` either, and `bodyGateDiameter` returns no
+diameter at all. Every `DiagMeasurementBeyondTolerance` such a body's area,
+bounds, volume or centroid readings raise then carries a nil `Required` — the
+one documented reference-less `Suspect` this design admits
+(`verify_diagnostics_test.go` pins it).
+
+A `cupPayload` or `capBlendPayload` reduces to a modify op applied to a
+straight-prism receiver section, and `envelopeGateDiameter`/`envelopePrismFor`
+read their diameter off a containing prism envelope rather than off the
+kernel's exact model, which does not cover them — the two arms read different
+geometry and contain the body for different reasons. `capBlendPayload` reads
+the receiver's own unrewritten section on its unchanged interval: a cap-loop
+chamfer only ever cuts along a chord whose feet sit on the receiver's own
+recorded walls, and fills a concave corner strictly within the convex hull of
+its neighbors, so it can never place a point beyond the receiver's own
+extruded envelope — the same containment `docs/modify-reach-design.md`'s own
+`capBlendPayload` row relies on. `cupPayload` reads `pl.outer`, the cup's own
+outer region — the receiver's unmodified section for an INWARD shell, but the
+wider OFFSET (expanded) region for an OUTWARD one, since an outward shell adds
+material and `cupPayloadFor` (`shell_cup.go`) always assigns the wider of the
+two profiles to `outer` regardless of sense. Either way the whole cup solid —
+walls, floor and cavity alike — sits inside `pl.outer`'s own full-height
+envelope: the cavity never reaches farther than the outer region, the same
+containment `cupPayload.extentAlong` already relies on. As a **shape**, each
+arm's envelope therefore can only OVERSTATE the body's true diameter, never
+understate it — the reduction itself is sound.
+
+What `envelopeGateDiameter` reports is not that shape's true diameter, though,
+but a *reading* of it, taken through the identical witness maximum a shipped
+`prismPayload` already reads its own diameter through: `addPrismFaces` emits
+only two witnesses per circular wall — the mid-angle point at mid-height, and
+`th0` at `z0` — `region2.samples` adds each cap arc's own `th0` and
+mid-angle, and `pointSetDiameter` maxes over that sparse set. The reading is
+exact exactly when the body's farthest pair lands on one of those three
+sampled angles (`th0`, mid-angle, `th1`) of each circular wall — guaranteed
+for an all-line section (the diameter is realized at vertices, all sampled),
+for a full circle (the two samples are antipodal), and for the arc-plus-chord
+family at or below **180°** of sweep (the diameter is realized at the arc
+endpoints) — but **never guaranteed by a bound on the sweep alone**: an
+outward cup's own four 90° corner arcs already understate this fallback's own
+output, read at 64.922642 against that body's true diameter 65, a ratio of
+1.0012 — its bounding-box diagonal is 68.738635, which the rounded corners keep
+it well inside of — and a bare arc-plus-chord section peaks at **240°**, where
+the only sampled points are `th0`, the mid-angle, and `th1`, mutually
+`2R·sin(120°)` apart while the wall's true diameter is `2R` — a ratio of
+`2/√3 ≈ 1.1547`, **about 15.5%** (measured across arc sweeps from 90° to
+355° and heights from 0.001 to 1 — that family's own figure). This is not a
+defect the fallback introduces: the same reader already understates the
+identical way for an ordinary shipped `prismPayload` built from the same
+curved section, through `newBodyGeomBudget`'s own carrier model, so
+`envelopeGateDiameter` is no weaker than the exact path it stands in for. The
+repair belongs to that shared reader — every consumer of `addPrismFaces`'s and
+`region2.samples`'s witnesses gains it at once — and is tracked as a
+follow-up rather than fixed here. The understatement stays inside the one
+direction this gate is free to err in (§3's own rule: an understated `D`
+tightens `Ref` and can turn a passing reading into a false `Suspect`; an
+overstated one only loosens the gate) — never a false `Sound`.
+
+Every tolerance-gate `Suspect` is therefore a genuine `bound > rel*Ref`,
+already carried by `DiagMeasurementBeyondTolerance`, so the "empty
+**exactly** when `Sound`" completeness holds.
 
 **The undecided pair is now RECORDED.** Where §6 folds a pair the evaluator
 could not decide into the report's `Suspect` rung, a `DiagUndecidedPair` or

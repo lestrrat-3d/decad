@@ -1229,7 +1229,21 @@ func (in pairToleranceInputs) lengthReference(value float64) (float64, bool) {
 // payload vertex, including vertices absent from the B-rep boundary loops. The
 // analytic carrier model is built through the shared work budget (§7.2), so a
 // cancelled Verify observes cancellation during the build instead of waiting for
-// the whole model to finish.
+// the whole model to finish. newBodyGeomBudget's payload switch is the
+// clearance kernel's own — it only covers the payloads whose carrier model is
+// an exact restatement of the shipped boundary, because clearance.go and
+// interference.go trust that model for containment and contact proofs, not
+// only for a diameter. A miss there is not necessarily a body with no usable
+// diameter: envelopeGateDiameter covers the payloads it does not (cup,
+// cap-loop chamfer) with a bound that is sound for THIS gate without being
+// eligible for that stronger trust. One miss stays uncovered: a prismPayload
+// whose own sectionDelta is nonzero (docs/prism-boolean-design.md §7, e.g.
+// the analytic Union of a placed prism pair) fails newBodyGeomBudget's exact
+// path (clearance_geom.go's addPrismFaces refuses it) and has no
+// envelopePrismFor arm either, so this function answers (0, false) for it.
+// Every DiagMeasurementBeyondTolerance such a body's area, bounds, volume or
+// centroid readings raise then carries a nil Required — the one documented
+// reference-less Suspect this design admits.
 func bodyGateDiameter(ctx context.Context, body *Body) (float64, bool, error) {
 	if body == nil {
 		return 0, false, nil
@@ -1237,15 +1251,116 @@ func bodyGateDiameter(ctx context.Context, body *Body) (float64, bool, error) {
 	if payload, ok := body.payload.(facetedPayload); ok {
 		return payload.diameter, usableMagnitude(payload.diameter), nil
 	}
-	geom, ok, err := newBodyGeomBudget(newWorkBudget(ctx), body)
+	budget := newWorkBudget(ctx)
+	geom, ok, err := newBodyGeomBudget(budget, body)
 	if err != nil {
 		return 0, false, err
 	}
+	if ok {
+		d, ok := pointSetDiameter(geom.supports)
+		return d, ok, nil
+	}
+	return envelopeGateDiameter(budget, body)
+}
+
+// envelopeGateDiameter is bodyGateDiameter's fallback for a payload whose true
+// boundary the clearance kernel's exact carrier model does not cover
+// (cupPayload, capBlendPayload — verification design §3's "usable finite,
+// non-negative body diameter", never a box diagonal, document scale or zero).
+//
+// The two payloads reach containment for different reasons, and
+// envelopePrismFor's doc comment states each arm separately rather than
+// pooling them behind one justification: a cap-loop chamfer never cuts past
+// the receiver's own recorded walls, while a cup's shell can ADD material
+// (an outward shell), so what "never places a point beyond X" proves has to
+// be checked against the shape each arm actually returns, not against "the
+// receiver" as a stand-in for both. In both cases, though, the returned
+// prism is a SHAPE that provably contains the true body, so the reduction
+// itself can only overstate the true diameter, never understate it.
+//
+// What this function actually reports, though, is a reading of that shape,
+// taken through the identical witness maximum a shipped prismPayload already
+// reads its own diameter through above (addPrismFaces gives two witnesses
+// per circular wall — the mid-angle point at mid-height and th0 at z0 —
+// which pointSetDiameterWithBudget maxes pairwise, and region2.samples adds
+// each cap arc's own th0 and mid-angle). That reader is exact exactly when a
+// circular wall's farthest pair lands on one of those three sampled angles
+// (th0, mid-angle, th1) — guaranteed for an all-line section (the diameter
+// is realized at vertices, all sampled), for a full circle (the two samples
+// are antipodal), and for the arc-plus-chord family at or below 180 degrees
+// of sweep (the diameter is realized at the arc endpoints) — but NEVER
+// guaranteed by a bound on the sweep alone: an outward cup's own four 90
+// degree corner arcs already understate this fallback's own output — read
+// 64.922642 against that body's true diameter 65, a ratio of 1.0012 (its
+// bounding-box diagonal is 68.738635, which the rounded corners keep it
+// well inside of) — and a bare arc-plus-chord section peaks at 240 degrees, where the
+// only sampled points are th0, the mid-angle, and th1, mutually
+// 2R*sin(120 degrees) apart while the wall's true diameter is 2R — a ratio
+// of 2/sqrt(3), about 15.5% (docs/verification-design.md §3 works that
+// family's own figure). That understatement is not something this fallback
+// introduces: the same reader already returns it for an ordinary shipped
+// prismPayload built from the same curved section, so this fallback is no
+// weaker than the exact path it stands in for, and the repair belongs to
+// that shared reader rather than to this construction. The consequence
+// stays inside the one direction this gate is free to err in: an
+// understated D tightens Ref and can turn a passing reading into a false
+// Suspect, never a false Sound (verification design §3). It stays intrinsic
+// to the body's own geometry — built from the payload's own frame/xform, the
+// same map a shipped prism's diameter is read through — so it carries none
+// of the pose-dependence verification design §4 excludes an axis-aligned box
+// for.
+func envelopeGateDiameter(budget *workBudget, body *Body) (float64, bool, error) {
+	env, ok := envelopePrismFor(body.payload)
 	if !ok {
 		return 0, false, nil
 	}
-	d, ok := pointSetDiameter(geom.supports)
-	return d, ok, nil
+	g := &bodyGeom{body: body}
+	ok, err := g.addPrismFaces(budget, env)
+	if err != nil || !ok {
+		return 0, false, err
+	}
+	var pts []r3.Vec
+	for _, f := range g.faces {
+		if err := budget.step(); err != nil {
+			return 0, false, err
+		}
+		pts = append(pts, f.wit...)
+	}
+	return pointSetDiameterWithBudget(budget, pts)
+}
+
+// envelopePrismFor builds the containing straight-prism envelope for a
+// payload envelopeGateDiameter covers. ok is false for every other payload,
+// including prismPayload and revolvePayload themselves (those are already
+// exact through newBodyGeomBudget and never reach this fallback) and
+// including a prismPayload whose own sectionDelta is nonzero (a
+// docs/prism-boolean-design.md §7 re-expressed section): that payload has no
+// arm here either, so bodyGateDiameter answers no diameter at all for it
+// rather than a fallback one (verify_diagnostics_test.go pins that case).
+//
+// The two arms below read different geometry and contain the body for
+// different reasons. capBlendPayload reads pl.profile, the receiver's own
+// unrewritten section on its unchanged interval: a cap-loop chamfer only
+// ever cuts along a chord whose feet sit on the receiver's own recorded
+// walls, so it can never place a point beyond the receiver's own extruded
+// envelope. cupPayload reads pl.outer, the cup's own outer region — the
+// receiver's unmodified section for an INWARD shell, but the wider OFFSET
+// (expanded) region for an OUTWARD one, since an outward shell adds
+// material and cupPayloadFor (shell_cup.go) always assigns the wider of the
+// two profiles to outer regardless of sense. Either way the whole cup
+// body — walls, floor and cavity alike — sits inside pl.outer's own
+// full-height prism: the cavity never reaches farther than the outer
+// region, the same containment cupPayload.extentAlong already relies on.
+func envelopePrismFor(payload featurePayload) (prismPayload, bool) {
+	switch pl := payload.(type) {
+	case capBlendPayload:
+		return prismPayload{profile: pl.profile, frame: pl.frame, z0: pl.z0, z1: pl.z1, xform: pl.xform}, true
+	case cupPayload:
+		lo, hi := math.Min(pl.zOuter, pl.zOpen), math.Max(pl.zOuter, pl.zOpen)
+		return prismPayload{profile: pl.outer, frame: pl.frame, z0: lo, z1: hi, xform: pl.xform}, true
+	default:
+		return prismPayload{}, false
+	}
 }
 
 func pointSetDiameter(points []r3.Vec) (float64, bool) {

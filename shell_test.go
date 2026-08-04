@@ -610,8 +610,8 @@ func TestShellCupHoledInward(t *testing.T) {
 	// A lone cup verifies Sound (no pairs to clear, valid by construction).
 	report, err := doc.Verify(t.Context())
 	require.NoError(t, err)
-	require.Equal(t, decad.Suspect, report.Status)
-	require.False(t, report.Trustworthy())
+	require.Equal(t, decad.Sound, report.Status)
+	require.True(t, report.Trustworthy())
 }
 
 // rimByRole returns the body's face carrying the given rim role.
@@ -680,7 +680,7 @@ func TestShellCupHoledTwoPosts(t *testing.T) {
 
 	report, err := doc.Verify(t.Context())
 	require.NoError(t, err)
-	require.Equal(t, decad.Suspect, report.Status)
+	require.Equal(t, decad.Sound, report.Status)
 }
 
 func TestShellCupHoledOutward(t *testing.T) {
@@ -924,8 +924,8 @@ func TestShellCupDownstream(t *testing.T) {
 		require.NoError(t, err)
 		br := report.Bodies[0]
 		requireWall(t, br, th)
-		require.Equal(t, decad.Suspect, br.Status)
-		require.False(t, report.Trustworthy())
+		require.Equal(t, decad.Sound, br.Status)
+		require.True(t, report.Trustworthy())
 	})
 
 	t.Run("a lone cup verifies Sound", func(t *testing.T) {
@@ -934,8 +934,8 @@ func TestShellCupDownstream(t *testing.T) {
 		require.NoError(t, err)
 		report, err := doc.Verify(t.Context())
 		require.NoError(t, err)
-		require.Equal(t, decad.Suspect, report.Status, `bounded mass results need a nonzero tolerance`)
-		require.False(t, report.Trustworthy())
+		require.Equal(t, decad.Sound, report.Status)
+		require.True(t, report.Trustworthy())
 	})
 
 	t.Run("a box-disjoint cup pair is Sound, but WithClearances invokes the kernel and reads Suspect", func(t *testing.T) {
@@ -959,7 +959,7 @@ func TestShellCupDownstream(t *testing.T) {
 		// invoked, so both cups verify Sound.
 		report, err := doc.Verify(t.Context())
 		require.NoError(t, err)
-		require.Equal(t, decad.Suspect, report.Status, `bounded mass results need a nonzero tolerance`)
+		require.Equal(t, decad.Sound, report.Status)
 
 		// WithClearances asks for the gap, which invokes the kernel; it has no
 		// cupPayload case, so the pair reads Suspect — never a fabricated pass.
