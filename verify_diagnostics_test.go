@@ -369,3 +369,50 @@ func TestVerifyDiagnosticsUndecidedClearance(t *testing.T) {
 	require.Nil(t, d.Body)
 	require.Empty(t, report.Clearances, `no Clearance row is fabricated`)
 }
+
+// TestVerifyDiagnosticsSectionDeltaPrismHasNoReferenceDiameter pins
+// verification design §3's one documented exception: a prismPayload whose own
+// sectionDelta is nonzero (docs/prism-boolean-design.md §7's re-expressed
+// section, e.g. the analytic Union of a placed prism pair) has no carrier
+// model bodyGateDiameter can read — clearance_geom.go's addPrismFaces refuses
+// it, and envelopePrismFor has no arm for a bare prismPayload — so
+// bodyGateDiameter answers no diameter at all and every
+// DiagMeasurementBeyondTolerance the body's readings raise carries a nil
+// Required. requireDiagnosticInvariants is deliberately NOT run on this
+// report: its Required-non-nil assertion holds for every other payload this
+// suite exercises, and this test pins the one documented place it does not.
+func TestVerifyDiagnosticsSectionDeltaPrismHasNoReferenceDiameter(t *testing.T) {
+	doc := decad.New()
+	a := boxBody(t, doc, 0, 0, 10, 10, 10)
+	const shift = 1e3
+	lo, hi := 2-shift, 8-shift
+	b := placedFar(t, boxBody(t, doc, lo, 2, hi, 8, 10), shift)
+
+	got, err := decad.Union(a, b)
+	require.NoError(t, err)
+	require.False(t, anyFaceIsFaceted(got), "the analytic reduction must own this pair")
+
+	vol, err := got.Volume()
+	require.NoError(t, err)
+	require.Equal(t, decad.Approximate, vol.Exactness)
+	require.Positive(t, vol.Bound.Base(), "a zero bound would pass the gate without a reference")
+
+	report, err := doc.Verify(t.Context())
+	require.NoError(t, err)
+	require.Equal(t, decad.Suspect, report.Status)
+
+	var beyond []decad.Diagnostic
+	for _, d := range report.Diagnostics {
+		if d.Code == decad.DiagMeasurementBeyondTolerance {
+			beyond = append(beyond, d)
+		}
+	}
+	require.Len(t, beyond, 4, "area, bounds, volume and centroid each raise one")
+	for _, d := range beyond {
+		require.Equal(t, decad.Suspect, d.Status)
+		require.NotNil(t, d.Body)
+		require.Nil(t, d.Pair)
+		require.Nil(t, d.Required,
+			"%s: a sectionDelta prism has no reference diameter to compute Required from", d.Reading)
+	}
+}
