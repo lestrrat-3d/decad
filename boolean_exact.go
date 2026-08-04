@@ -185,9 +185,35 @@ const (
 // segFilterFloor already demands a distance above 2⁻⁵⁰⁰ before tooFar will
 // reject anything — eleven orders above any τ that small — so a threshold that
 // rounds to zero there costs no soundness.
+//
+// The OTHER end of the range, and the two arguments themselves, are answered by
+// returning +Inf, which is the abstain-everywhere threshold: tooFar's left-hand
+// side is always finite, so a comparison against +Inf is false for every
+// candidate. Two cases earn it, and between them they are every value the
+// signature admits that the derivation above does not speak for.
+//
+//   - A NON-FINITE OR NEGATIVE argument. Both are outside the derivation's
+//     terms — maxAbs is a coordinate magnitude and slack a grid width, and
+//     neither can be NaN, infinite or below zero and still name what the
+//     derivation reads it as. A negative slack is the one that would bite: it
+//     can cancel the rounding term instead of widening it, leaving a τ² BELOW
+//     the proven requirement, which is a threshold that rejects true hits.
+//     newConformScan cannot produce one (its slack is built from a vector
+//     length and a positive cell width), so this is a precondition made
+//     total rather than a live defect.
+//   - AN OVERFLOWED τ². τ passes 2⁻⁵³⁷'s mirror at about 1.34e154, above which
+//     τ·τ saturates. Nothing is proven about a saturated threshold, and +Inf is
+//     the reading that costs only the rejections the filter would have made on
+//     a mesh whose coordinates run past 1e204.
 func segAdmissionRadius2(slack, maxAbs float64) float64 {
+	if !(slack >= 0 && slack <= math.MaxFloat64) || !(maxAbs >= 0 && maxAbs <= math.MaxFloat64) {
+		return math.Inf(1)
+	}
 	tau := slack + (maxAbs*0x1p-50 + segFilterFloor)
-	return upRound(tau * tau)
+	if tau2 := upRound(tau * tau); !isNonFinite(tau2) {
+		return tau2
+	}
+	return math.Inf(1)
 }
 
 // segFilter is the reject-only float pre-filter in front of the exact
@@ -244,10 +270,13 @@ func newSegFilter(a, b r3.Vec, tau2 float64) segFilter {
 // which the budget swallows whole. So segFilterErrCoef = 64·u is 2.6× the worst
 // branch bound, and mag carries the branch's own magnitude.
 //
-// THAT WHOLE BOUND ASSUMES NORMALIZED ARITHMETIC, and the interior branch is
-// the one place this evaluation leaves it while the guards already in place
-// still read healthy. W and V are sums of squares of coordinates, but c₁²
-// sits at (D·L)² — the SQUARE of the scale W and V sit at — so it reaches the
+// THAT WHOLE BOUND ASSUMES NORMALIZED ARITHMETIC, which this evaluation leaves
+// at both ends of the range. UNDERFLOW reaches the interior branch, immediately
+// below; OVERFLOW reaches vv, ww, c₁ and |P−B|², and the enumeration at the end
+// of this comment is where it is answered.
+//
+// W and V are sums of squares of coordinates, but c₁² sits at (D·L)² — the
+// SQUARE of the scale W and V sit at — so it reaches the
 // subnormal range at the square root of the coordinate scale that would
 // underflow either of them. A subnormal c₁² has lost an absolute crumb rather
 // than a relative one, and the division by V that follows multiplies that
@@ -266,22 +295,74 @@ func newSegFilter(a, b r3.Vec, tau2 float64) segFilter {
 // does for every candidate it cannot prove far away. The rescale is an
 // improvement on the arrangement; the abstain is the guarantee.
 //
-// Any overflow to ±Inf makes the final subtraction NaN or −Inf and the
-// comparison false, so the candidate goes to the exact predicate: the filter
-// fails closed by construction, with no non-finite special case of its own.
-// A NaN intermediate fails every normality test below and abstains there
-// instead, which is the same answer.
+// SATURATION IS TESTED, NOT ARGUED. The bound above is relative and holds only
+// over finite normalized arithmetic, so it says nothing once an intermediate
+// reaches ±Inf or NaN — and a saturated intermediate does not merely widen the
+// answer, it redirects the BRANCH. Inf < Inf is false, so a saturated vv sends
+// a projection sitting deep in the interior down the clamp-to-B arm, which then
+// computes a perfectly finite |P−B|² and rejects on it. Nothing about that is
+// self-announcing: no NaN appears, no guard below trips, and the rejection is
+// simply wrong. −Inf and NaN do the same through c₁ > 0 and the clamp-to-A arm.
+//
+// So every intermediate this evaluation forms is tested for finiteness before
+// anything reads it, and the filter abstains on any that is not. The list below
+// is complete because it is enumerated from the evaluation's own operations
+// rather than from the ways they were expected to fail — each line names one
+// operation in the order the code performs it, and the last line closes the
+// comparison the operations feed:
+//
+//   - vv, hence v, hence a and b. The gate at the top, and the one the reported
+//     defect needed: a segment longer than about 1.34e154 saturates vv, and a
+//     coordinate difference past MaxFloat64 saturates a component of v first.
+//     A non-finite a or b arrives here only through this gate, since v is
+//     finite in a coordinate only when both endpoints are (Inf − finite is Inf,
+//     Inf − Inf is NaN).
+//   - ww, hence w, hence p. A saturated |P−A|² is not a distance, and a
+//     non-finite candidate coordinate reaches the filter only through it. It
+//     cannot arise for a candidate the exact predicate would accept — a point
+//     ON the segment has |P−A| ≤ |B−A|, so its ww is within a rounding of a vv
+//     the gate above already found finite — which makes this a guard on the
+//     branch logic rather than a second soundness route. It costs only
+//     rejections of candidates far past a mesh-spanning segment's endpoint.
+//   - c₁ = w·v. Behind the two gates above, Cauchy–Schwarz caps |c₁| and each
+//     of the dot product's partial sums at √(ww·vv) ≤ MaxFloat64, so a
+//     saturation is reachable at most through the last ulp of a value already
+//     at MaxFloat64 — no witness for it is in the tests. The guard stands
+//     anyway: abstaining costs a candidate one rational predicate, and the two
+//     soundness breaks this function has had were both a saturation somebody
+//     had argued away.
+//   - t, proj, and the c₁² the unscaled arrangement would form. The normality
+//     guards inside the interior branch, which UNDERFLOW rather than overflow
+//     reaches — t and proj are each bounded by c₁ < vv. They are the round-one
+//     guards and the paragraphs above are their derivation.
+//   - |P−B|². The guard inside the clamp-to-B branch. It is in the same
+//     position as c₁'s: |P−B|² = ww − 2·c₁ + vv, and the branch is only taken
+//     for c₁ ≥ vv, so the identity caps it at ww − vv ≤ MaxFloat64 and only the
+//     last ulp can carry it over. Guarding it is what keeps the branch from
+//     resting on the accident that d2 and mag saturate together and the NaN
+//     they make happens to compare false.
+//   - the final difference and the comparison. d2 and mag are finite by every
+//     line above, and segFilterErrCoef·mag cannot overflow a finite mag, so the
+//     left-hand side is ALWAYS finite. A non-finite τ² therefore never meets a
+//     non-finite left-hand side: segAdmissionRadius2 returns +Inf for every
+//     threshold it cannot state, and a finite value is never above +Inf.
 func (f segFilter) tooFar(p r3.Vec) bool {
-	if !(f.vv > 0) {
-		// The float segment has no length to project onto — both endpoints
-		// rounded to one float, or v underflowed. Abstaining is always sound,
-		// and the case is far too rare to be worth its own proof.
+	if !(f.vv > 0) || isNonFinite(f.vv) {
+		// The float segment has nothing to project onto — both endpoints
+		// rounded to one float, or v underflowed — or it is long enough that a
+		// component of v, or vv itself, saturated. Abstaining is always sound.
 		return false
 	}
 	w := p.Sub(f.a)
 	ww := w.Dot(w)
+	c1 := w.Dot(f.v)
+	if isNonFinite(ww) || isNonFinite(c1) {
+		// Both feed the branch decision below, so a saturated one does not
+		// widen the answer, it picks the wrong formula for it.
+		return false
+	}
 	d2, mag := ww, ww
-	if c1 := w.Dot(f.v); c1 > 0 {
+	if c1 > 0 {
 		if c1 < f.vv {
 			// c₁²/V, divided before it is squared. The guard is written so a
 			// NaN fails it: every intermediate this branch could form — the
@@ -296,6 +377,9 @@ func (f segFilter) tooFar(p r3.Vec) bool {
 		} else {
 			e := p.Sub(f.b)
 			d2 = e.Dot(e)
+			if isNonFinite(d2) {
+				return false
+			}
 			mag = d2
 		}
 	}
