@@ -114,6 +114,147 @@ func orientSignMixed(a, b, c r3.Vec, d xpt) int {
 	return orientVal(xptOf(a), xptOf(b), xptOf(c), d).Sign()
 }
 
+const (
+	// segFilterErrCoef covers segFilter.tooFar's own float evaluation: 64·u,
+	// against the magnitude the branch taken carries. tooFar derives it.
+	segFilterErrCoef = 64 * unitRoundoff
+	// segFilterFloor is one absolute term covering every gradual-underflow
+	// crumb the same evaluation can commit. Each is at most 2⁻¹⁰⁷⁵ and there
+	// are a few dozen of them, so 2⁻¹⁰⁰⁰ dominates them all together.
+	segFilterFloor = 0x1p-1000
+)
+
+// segAdmissionRadius2 is τ², the squared distance from the FLOAT segment beyond
+// which a candidate provably cannot be an interior point of the EXACT one. It
+// is read once per conforming pass: maxAbs is the largest |coordinate| over
+// every vertex of the stitched mesh, and slack is that pass's own grid slack.
+//
+// DERIVATION. Write a, b, p for the exact rational endpoints and candidate and
+// A, B, P for their float64 roundings (xpt.vec, round to nearest). Suppose the
+// exact predicate WOULD accept p — that is, p = (1−t)·a + t·b for some
+// t ∈ (0, 1). Put Q = (1−t)·A + t·B, which is a point OF the float segment
+// [A, B]. Then
+//
+//	dist(P, [A,B]) ≤ |P − Q| ≤ |P − p| + |p − Q|
+//	              = |P − p| + |(1−t)·(a − A) + t·(b − B)|
+//	              ≤ |P − p| + max(|a − A|, |b − B|)                        (1)
+//
+// the last step because a convex combination is bounded by its largest term.
+// So a candidate whose float point sits FARTHER than the right-hand side of (1)
+// from the float segment cannot be an interior point of the exact segment, and
+// (1) is the whole of what the threshold has to cover.
+//
+// Each of those three terms is one coordinate-wise rounding. Round-to-nearest
+// gives |fl(x) − x| ≤ ½·ulp(fl(x)), which is at most 2⁻⁵³·|fl(x)| where fl(x)
+// is normal and at most 2⁻¹⁰⁷⁵ where it is subnormal or zero — so
+// |fl(x) − x| ≤ 2⁻⁵³·|fl(x)| + 2⁻¹⁰⁷⁵ in every case. Reading the three
+// coordinates as a vector and applying the triangle inequality,
+//
+//	|P − p| ≤ 2⁻⁵³·‖P‖ + √3·2⁻¹⁰⁷⁵ ≤ √3·2⁻⁵³·maxAbs + √3·2⁻¹⁰⁷⁵
+//
+// since ‖P‖ ≤ √3·maxAbs, and the same bound holds for |a − A| and |b − B|
+// because maxAbs bounds all three points at once. Substituting into (1),
+//
+//	dist(P, [A,B]) ≤ 2·√3·2⁻⁵³·maxAbs + 2·√3·2⁻¹⁰⁷⁵ < maxAbs·2⁻⁵⁰ + 2⁻¹⁰⁰⁰
+//
+// because 2·√3·2⁻⁵³ ≈ 3.85e-16 sits 2.3× below 2⁻⁵⁰ ≈ 8.88e-16, and
+// 2·√3·2⁻¹⁰⁷⁵ sits far below 2⁻¹⁰⁰⁰. That 2.3× margin also absorbs the
+// rounding of evaluating the bound itself, so no outward rounding is owed on
+// the sum.
+//
+// The pass's own slack is then ADDED to it. The proven requirement is the
+// rounding term alone; carrying slack keeps this filter no tighter than the
+// grid box that precedes it (conformOnce), which is that pass's own statement
+// of how far a float approximation may sit from its exact point.
+//
+// τ² underflows to zero only for τ below 2⁻⁵³⁷, and at that scale
+// segFilterFloor already demands a distance above 2⁻⁵⁰⁰ before tooFar will
+// reject anything — eleven orders above any τ that small — so a threshold that
+// rounds to zero there costs no soundness.
+func segAdmissionRadius2(slack, maxAbs float64) float64 {
+	tau := slack + (maxAbs*0x1p-50 + segFilterFloor)
+	return upRound(tau * tau)
+}
+
+// segFilter is the reject-only float pre-filter in front of the exact
+// onSegmentInterior3 predicate (docs/evaluator-design.md §9). The conforming
+// pass hands it every vertex the grid says a facet edge might touch, and a long
+// diagonal edge reaches most of the mesh — so without a filter nearly every
+// vertex earns a full math/big.Rat cross product to establish what a dozen
+// float operations already establish: it is nowhere near the segment.
+//
+// The filter REJECTS a candidate only when the rejection is proven. It never
+// admits one: a candidate it does not reject still goes to the exact predicate,
+// which decides it. That direction is the whole safety argument. A filter that
+// could ADMIT would be an admission gate on a residual, which this package
+// forbids outright; a filter that could reject a true hit would silently drop
+// an on-edge vertex and hand back a subdivision that is not conforming, which
+// is a WRONG boolean rather than a slow one.
+type segFilter struct {
+	// a and b are the float roundings of the segment's exact endpoints, v is
+	// the float b − a, and vv is the float v·v.
+	a, b, v r3.Vec
+	vv      float64
+	// tau2 is τ² from segAdmissionRadius2.
+	tau2 float64
+}
+
+func newSegFilter(a, b r3.Vec, tau2 float64) segFilter {
+	v := b.Sub(a)
+	return segFilter{a: a, b: b, v: v, vv: v.Dot(v), tau2: tau2}
+}
+
+// tooFar reports whether p — the float rounding of a candidate's exact
+// coordinates — is PROVABLY farther than τ from the float segment [a, b]. A
+// false answer means "not proven", never "close enough".
+//
+// The value is the textbook clamped projection and segFilterErrCoef covers its
+// own float evaluation. With u = 2⁻⁵³, W = |P − A|² (what ww holds) and
+// V = |v|², the forward error of each branch is:
+//
+//   - clamped to A, or to B: the value is a sum of three squares of correctly
+//     rounded differences, so it carries RELATIVE error only — three roundings
+//     per term and two for the sum give |computed − true| ≤ 5·u·W.
+//   - interior: the value is W − c₁²/c₂ with c₁ = w·v and c₂ = V. Each dot
+//     product is off by at most 5·u·Σ|term|, and Cauchy–Schwarz bounds
+//     Σ|wᵢ·vᵢ| by √(W·V). Propagating that through the square, the division and
+//     the final subtraction — and using c₁² ≤ W·V, which cancels the V's —
+//     gives |computed − true| ≤ 24·u·W. The cancellation in that subtraction is
+//     real, but it is ABSOLUTE error measured against W, and the cases where it
+//     swamps the result are exactly the near-the-segment cases the filter must
+//     not reject anyway.
+//
+// The branch is chosen on the COMPUTED c₁, so it can disagree with the true
+// projection near c₁ = 0 and c₁ = V. That costs nothing: at either boundary the
+// clamped and interior values differ by c₁²/V ≤ (5·u·√(W·V))²/V = 25·u²·W,
+// which the budget swallows whole. So segFilterErrCoef = 64·u is 2.6× the worst
+// branch bound, and mag carries the branch's own magnitude.
+//
+// Any overflow to ±Inf makes the final subtraction NaN or −Inf and the
+// comparison false, so the candidate goes to the exact predicate: the filter
+// fails closed by construction, with no non-finite special case of its own.
+func (f segFilter) tooFar(p r3.Vec) bool {
+	if !(f.vv > 0) {
+		// The float segment has no length to project onto — both endpoints
+		// rounded to one float, or v underflowed. Abstaining is always sound,
+		// and the case is far too rare to be worth its own proof.
+		return false
+	}
+	w := p.Sub(f.a)
+	ww := w.Dot(w)
+	d2, mag := ww, ww
+	if c1 := w.Dot(f.v); c1 > 0 {
+		if c1 < f.vv {
+			d2 = ww - c1*c1/f.vv
+		} else {
+			e := p.Sub(f.b)
+			d2 = e.Dot(e)
+			mag = d2
+		}
+	}
+	return d2-(segFilterErrCoef*mag+segFilterFloor) > f.tau2
+}
+
 // xp2 is an exact 2D point (a plane projection of an xpt).
 type xp2 struct{ u, v *big.Rat }
 

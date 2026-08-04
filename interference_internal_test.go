@@ -385,12 +385,17 @@ func TestConformCandidateScanCancellationIsBounded(t *testing.T) {
 		xptOf(r3.NewVec(1000, 0, 0)),
 		xptOf(r3.NewVec(0, 1, 0)),
 	}
-	// A ten-cubed cell sweep — what an edge spanning the mesh diagonal costs —
-	// steps well past the polling interval on the cells alone.
+	// An edge spanning the mesh diagonal sweeps the cells of the whole grid and
+	// every vertex standing in them, which is well past the polling interval on
+	// either count.
+	for i := range 2 * workPollInterval {
+		verts = append(verts, xptOf(r3.NewVec(float64(i)+0.5, 7, 0)))
+	}
+	scan, err := newConformScan(newWorkBudget(t.Context()), verts)
+	require.NoError(t, err)
 	ctx := &internalFrameCancelContext{Context: t.Context(), target: "edgeInteriorHits"}
 
-	_, err := edgeInteriorHits(newWorkBudget(ctx), map[[3]int][]int{}, verts,
-		[3]int{0, 0, 0}, [3]int{9, 9, 9}, 0, 1, [3]int{0, 1, 2})
+	_, err = scan.edgeInteriorHits(newWorkBudget(ctx), 0, 1, [3]int{0, 1, 2})
 	require.ErrorIs(t, err, context.Canceled)
 	require.True(t, ctx.entered,
 		`the grid-cell candidate scan must poll, not run to completion between facet polls`)
@@ -405,10 +410,10 @@ func TestConformCandidateScanFindsEdgeInteriorVertices(t *testing.T) {
 		xptOf(r3.NewVec(4, 5, 0)),  // off the edge
 		xptOf(r3.NewVec(10, 0, 0)), // the edge's own endpoint, by position
 	}
-	grid := map[[3]int][]int{{0, 0, 0}: {2, 3, 4, 5}}
+	scan, err := newConformScan(newWorkBudget(t.Context()), verts)
+	require.NoError(t, err)
 
-	hits, err := edgeInteriorHits(newWorkBudget(t.Context()), grid, verts,
-		[3]int{0, 0, 0}, [3]int{0, 0, 0}, 0, 1, [3]int{0, 1, 2})
+	hits, err := scan.edgeInteriorHits(newWorkBudget(t.Context()), 0, 1, [3]int{0, 1, 2})
 	require.NoError(t, err)
 	require.Equal(t, []int{3}, hits,
 		`only the vertex exactly in the edge's interior conforms the subdivision`)
