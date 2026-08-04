@@ -509,8 +509,9 @@ need it, each composing a different existing bound for a different reason:
   inside a patch's own flux term, because the flux integral already reads the
   SAME displaced cap-level coordinates the disk does, and composing the term
   in both places would charge it twice;
-- each BAND PATCH's own area (one ruled quad between an exact side-level
-  chord and a cap-level chord displaced by delta) composes
+- each BAND PATCH's own area (one ruled quad between a side-level chord —
+  whose own rounding this bound does not charge — and a cap-level chord
+  displaced by delta) composes
   `bandPatchAreaAllow(delta, chordUpper, slantUpper)` — a ruled quad's area is
   its chord length times its slant distance to first order, so the chord's own
   length can move by `sectionDisplacementLength(delta, 1)` and the slant can

@@ -249,9 +249,10 @@ func sectionDisplacementLength(delta float64, walks int) float64 {
 // bandPatchAreaAllow bounds how far ONE chamfer band patch's own area
 // (docs/modify-reach-design.md §8.4) can differ from the area of the ruled
 // quad the construction DENOTES, given that its cap-level directrix sits
-// within delta of the point it denotes while its side-level directrix is
-// exact (docs/prism-boolean-design.md §7's identity, one ruled patch at a
-// time rather than one whole section).
+// within delta of the point it denotes (docs/prism-boolean-design.md §7's
+// identity, one ruled patch at a time rather than one whole section). The
+// side-level directrix is NOT exact — it carries its own rounding, which
+// this helper does not charge (patchAreaOf's own note, capblend_moments.go).
 //
 // A ruled quad's area is, to first order, its chord length times its slant
 // distance, so moving only the cap-level chord changes area two ways at

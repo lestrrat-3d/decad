@@ -624,6 +624,20 @@ func crossProductUpper(a, b r3.Vec) float64 {
 // band's contour displacement is zero — an axis-aligned section's exact
 // miters — which is what keeps TestCapBlendPlanePatchVolumeIsExact's area
 // arithmetic unchanged there.
+//
+// What neither arm charges either is the SIDE level's own rounding: g.sideZ
+// is capZ + matSign*d rounded to a float (levelDelta, capblend_geom.go:246),
+// already charged into capSlantEdge's length and into capBandVolume, but
+// never read here, so this function's bound covers only the cap-contour
+// displacement above and not the side-level one. On a right-triangle band
+// (legs 9e4 x 3e6 mm, 1e15 mm sweep, 0.2 mm chamfer) substituting the HELD
+// side level for the denoted one in a 512-bit reference accounts for
+// essentially the whole patch-area residual: the three patches' residuals
+// fall from 3358.207374649123 / 111990.60743768104 / 111940.24564437279 mm^2
+// to 5.236122866634288e-06 / 8.892307483919435e-06 / 2.7272066797437425e-06
+// mm^2 once only the side level is corrected, with levelDelta itself equal to
+// 0.04999999999999999 mm at that head. Threading levelDelta into this
+// function is a separate change, tracked as fu98.
 func patchAreaOf(g capPatchGeom) (float64, float64) {
 	if !g.circular {
 		v0 := r3.NewVec(g.sideA.U, g.sideA.V, g.sideZ)
