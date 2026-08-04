@@ -349,8 +349,9 @@ for a full circle (the two samples are antipodal), and for the arc-plus-chord
 family at or below **180°** of sweep (the diameter is realized at the arc
 endpoints) — but **never guaranteed by a bound on the sweep alone**: an
 outward cup's own four 90° corner arcs already understate this fallback's own
-output, read at 64.922642 against the true outer-box diagonal 68.738635, a
-ratio of 1.0588, and a bare arc-plus-chord section peaks at **240°**, where
+output, read at 64.922642 against that body's true diameter 65, a ratio of
+1.0012 — its bounding-box diagonal is 68.738635, which the rounded corners keep
+it well inside of — and a bare arc-plus-chord section peaks at **240°**, where
 the only sampled points are `th0`, the mid-angle, and `th1`, mutually
 `2R·sin(120°)` apart while the wall's true diameter is `2R` — a ratio of
 `2/√3 ≈ 1.1547`, **about 15.5%** (measured across arc sweeps from 90° to

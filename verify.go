@@ -1291,8 +1291,9 @@ func bodyGateDiameter(ctx context.Context, body *Body) (float64, bool, error) {
 // of sweep (the diameter is realized at the arc endpoints) — but NEVER
 // guaranteed by a bound on the sweep alone: an outward cup's own four 90
 // degree corner arcs already understate this fallback's own output — read
-// 64.922642 against the true outer-box diagonal 68.738635, a ratio of
-// 1.0588 — and a bare arc-plus-chord section peaks at 240 degrees, where the
+// 64.922642 against that body's true diameter 65, a ratio of 1.0012 (its
+// bounding-box diagonal is 68.738635, which the rounded corners keep it
+// well inside of) — and a bare arc-plus-chord section peaks at 240 degrees, where the
 // only sampled points are th0, the mid-angle, and th1, mutually
 // 2R*sin(120 degrees) apart while the wall's true diameter is 2R — a ratio
 // of 2/sqrt(3), about 15.5% (docs/verification-design.md §3 works that
