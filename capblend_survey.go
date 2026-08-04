@@ -92,10 +92,13 @@ func capBlendUndercuts(b *Body, cbp capBlendPayload, pull r3.Vec) undercutOutcom
 // capPatchNormalRange is one patch's exact normal-component range against
 // the unit pull p, read off its own Face.NormalAt (which already carries the
 // correct outward sign): a Plane's is a single value; a Cone's (regular or
-// apex) is A*cos(theta)+B*sin(theta)+C in its own local azimuth, recovered
-// EXACTLY from three NormalAt evaluations at theta = th0, th0+pi/2, th0+pi —
-// f(th0)=A+C, f(th0+pi/2)=B+C, f(th0+pi)=-A+C solves uniquely for A, B, C —
-// then read over [th0, th1] with the closed-form trigRange.
+// apex) is A*cos(phi)+B*sin(phi)+C in the azimuth phi = theta - th0 measured
+// from the window's own start, recovered EXACTLY from three NormalAt
+// evaluations at phi = 0, pi/2, pi — f(0)=A+C, f(pi/2)=B+C, f(pi)=-A+C solves
+// uniquely for A, B, C — then read with the closed-form trigRange over
+// [0, th1-th0], the window IN THAT SAME azimuth. Reading the recovered local
+// coefficients over the global [th0, th1] instead scans the wrong arc of the
+// circle whenever th0 is not zero, and reports a range the patch never takes.
 func capPatchNormalRange(f *Face, pl prismPayload, g capPatchGeom, p r3.Vec) (float64, float64, bool) {
 	if !g.circular {
 		n, err := f.NormalAt(pl.point(g.sideA.U, g.sideA.V, g.sideZ))
@@ -127,7 +130,7 @@ func capPatchNormalRange(f *Face, pl prismPayload, g capPatchGeom, p r3.Vec) (fl
 	c := (f0 + f180) / 2
 	a := f0 - c
 	b := f90 - c
-	mn, mx := trigRange(a, b, g.th0, g.th1)
+	mn, mx := trigRange(a, b, 0, g.th1-g.th0)
 	return mn + c, mx + c, true
 }
 

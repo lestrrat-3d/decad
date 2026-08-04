@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 
 	"github.com/lestrrat-3d/r3"
 )
@@ -76,21 +77,87 @@ func (cbp capBlendPayload) prismLike(z0, z1 float64) prismPayload {
 	return prismPayload{frame: cbp.frame, z0: z0, z1: z1, xform: cbp.xform}
 }
 
-// extentAlong is the cap-blend body's extent interval along an arbitrary
-// world direction g (Table DX, DX5): the unrewritten receiver's own exact
-// extent, widened by d on both ends. Every chamfer point lies within d of the
-// original prism's own boundary (a convex reduction stays strictly inside
-// it; a reflex corner's apex patch bulges by at most d), so this is a sound
-// — if not razor-tight — envelope, evaluated directly rather than reused from
-// a tighter but unproven closed form.
+// extentAlong is the cap-blend body's exact extent interval along an
+// arbitrary world direction g (Table DX, DX5: "analytic patch extrema"). A
+// linear functional over a compact solid attains its extremes on the
+// boundary, and every piece of THIS boundary is ruled between two level
+// curves: a trimmed side wall between the original loop at its own two
+// straight-slab levels, a chamfer patch (a quad Plane, a trimmed Cone, a
+// corner-apex Cone) between the original loop at the side level and the
+// offset cap contour at the cap level, and each cap face inside its own
+// boundary. A linear functional on a segment is extremized at an endpoint, so
+// extremizing the level curves themselves is complete — and every candidate
+// is a point the body actually holds, so the interval is attained, not an
+// envelope.
+//
+// The receiver prism's own extent is NOT reusable in either form. Padding it
+// by d is unsound as a claim of attainment and never needed: the cap contour
+// offsets INTO the material and [z0, z1] is unchanged, so the body is
+// contained in the receiver prism. Reusing it unpadded is still wrong,
+// because along a diagonal the prism's maximum can sit at the very corner the
+// chamfer removes. A stop reads this as an exact endpoint AND as the "is this
+// body in the sweep's path" test (stops.go), so an approximation here both
+// overruns the sweep and fabricates a dependency on a body it never meets.
 func (cbp capBlendPayload) extentAlong(g r3.Vec) (float64, float64, error) {
-	pp := prismPayload{profile: cbp.profile, frame: cbp.frame, z0: cbp.z0, z1: cbp.z1, xform: cbp.xform}
-	lo, hi, err := pp.extentAlong(g)
-	if err != nil {
-		return 0, 0, err
+	return cbp.extentAlongContext(context.Background(), g)
+}
+
+func (cbp capBlendPayload) extentAlongContext(ctx context.Context, g r3.Vec) (float64, float64, error) {
+	pl := cbp.prismLike(0, 0)
+	base := cbp.xform.Apply(cbp.frame.Origin()).Dot(g)
+	gu := pl.dir(1, 0, 0).Dot(g)
+	gv := pl.dir(0, 1, 0).Dot(g)
+	gz := pl.dir(0, 0, 1).Dot(g)
+	work := newFreeformWork()
+	lo, hi := math.Inf(1), math.Inf(-1)
+	take := func(l, h, z float64) {
+		lo = math.Min(lo, l+z*gz)
+		hi = math.Max(hi, h+z*gz)
 	}
-	pad := cbp.d * g.Len()
-	return lo - pad, hi + pad, nil
+	for li, loop := range cbp.loops() {
+		if err := ctx.Err(); err != nil {
+			return 0, 0, err
+		}
+		onStart, onEnd := cbp.startLoops[li], cbp.endLoops[li]
+		zLo, zHi := cbp.z0, cbp.z1
+		if onStart {
+			zLo = cbp.z0 + cbp.d
+		}
+		if onEnd {
+			zHi = cbp.z1 - cbp.d
+		}
+		l, h, err := boundaryExtremesContext(ctx, ProfileRecord{Outer: loop}, gu, gv, work)
+		if err != nil {
+			return 0, 0, err
+		}
+		// The original loop bounds the straight slab at both its own levels;
+		// a chamfered end's level is also that band's side-level directrix.
+		take(l, h, zLo)
+		take(l, h, zHi)
+		if !onStart && !onEnd {
+			continue
+		}
+		// The cap contour is the band's cap-level directrix and the chamfered
+		// cap face's own boundary — the same offset loop the build emits.
+		contour, err := capLoopBoundary(ctx, loop, cbp.d)
+		if err != nil {
+			return 0, 0, err
+		}
+		cl, ch, err := boundaryExtremesContext(ctx, ProfileRecord{Outer: contour}, gu, gv, work)
+		if err != nil {
+			return 0, 0, err
+		}
+		if onStart {
+			take(cl, ch, cbp.z0)
+		}
+		if onEnd {
+			take(cl, ch, cbp.z1)
+		}
+	}
+	if math.IsInf(lo, 1) {
+		return 0, 0, fmt.Errorf(`%w: the recorded region has no boundary`, ErrDegenerate)
+	}
+	return base + lo, base + hi, nil
 }
 
 // requireNotCapBlendReceiver is SX10 (docs/modify-reach-design.md Table SX):

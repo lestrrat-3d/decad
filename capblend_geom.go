@@ -132,7 +132,9 @@ type capPatchGeom struct {
 	sideA, sideB, capA, capB Point2
 	// Cone patch (circular == true): concentric center, the two radii
 	// (side = original wall radius, cap = offset radius) and the angular
-	// range in the walk's own sense (th1 < th0 is a clockwise walk).
+	// EXTENT — always normalized to th0 < th1, never the walk's own sense,
+	// since patchRawFlux carries the material side in its own sign
+	// corrections and trigRange reads an increasing window.
 	cU, cV                float64
 	sideRadius, capRadius float64
 	th0, th1              float64
@@ -241,15 +243,24 @@ func buildCapBand(ctx context.Context, body *Body, ref StepRef, cbp capBlendPayl
 		slantOut[i] = &Edge{curve: Line3{}, start: pBV, end: apex, convex: true, length: math.Inf(1), lengthBound: math.Inf(1)}
 		th0 := math.Atan2(j.pA.V-j.vV, j.pA.U-j.vU)
 		th1 := math.Atan2(j.pB.V-j.vV, j.pB.U-j.vU)
-		for th1 < th0 {
-			th1 += 2 * math.Pi
+		// The inward offset's reflex connector walks CLOCKWISE from pA to pB
+		// (shell_offset.go's arcSegment with ccw = s < 0, and this band offsets
+		// with s = +1), so th1 is normalized BELOW th0 and the swept angle is
+		// the corner's own reflex turn — strictly less than a half turn — never
+		// its 2*pi complement. Taking the complement records the arc that runs
+		// the wrong way around the corner: it lands on a cap-level curve the
+		// offset never emitted, and every reader of the window (the edge's own
+		// length, the band's flux integral, the patch's normal range) inherits
+		// that error.
+		for th1 > th0 {
+			th1 -= 2 * math.Pi
 		}
 		arcTh0[i], arcTh1[i] = th0, th1
 		arcByCorner[i] = &Edge{
-			curve: Arc3{Center: liftCap(Point2{U: j.vU, V: j.vV}), Axis: pl.dir(0, 0, 1), Radius: units.Millimeters(d)},
+			curve: Arc3{Center: liftCap(Point2{U: j.vU, V: j.vV}), Axis: pl.dir(0, 0, 1).Scale(-1), Radius: units.Millimeters(d)},
 			start: pAV, end: pBV,
 			convex: false,
-			length: d * (th1 - th0), lengthBound: math.Inf(1),
+			length: d * (th0 - th1), lengthBound: math.Inf(1),
 		}
 	}
 
@@ -265,7 +276,14 @@ func buildCapBand(ctx context.Context, body *Body, ref StepRef, cbp capBlendPayl
 		}
 		j := joins[i]
 		arc := arcByCorner[i]
-		role := fmt.Sprintf("chamferCap(%s,%d,%d)", capName, li, i)
+		// p is Table BX row BX3's "deterministic patch order in the result's
+		// own capBlendPayload" — the patch's index in this band's own patch
+		// slice, which is what capblend_moments.go keys its geometry by. It is
+		// NEVER the corner or wall index: those two index spaces collide (corner
+		// i sits at walks[i].start), and two faces sharing one role string
+		// collapse every last-wins reader — the payload's patch map, facesByRole,
+		// and FaceCreatedBy alike — onto whichever face was built second.
+		role := fmt.Sprintf("chamferCap(%s,%d,%d)", capName, li, len(patches))
 		surf := coneSurface(pl, j.vU, j.vV, 0, d, sideZ, capZ)
 		// Walk order: arc (pAV -> pBV, cap level), slantOut forward
 		// (pBV -> apex), slantIn reversed (apex -> pAV) — a closed
@@ -280,27 +298,36 @@ func buildCapBand(ctx context.Context, body *Body, ref StepRef, cbp capBlendPayl
 				{edge: slantIn[i], forward: false},
 			}, outer: true}},
 		}
-		// Orientation: a corner's own offset carrier is an EROSION (the
-		// per-feature offset construction, shell_offset.go, is a Minkowski
-		// erosion: the offset boundary is always a SUBSET of the original
-		// material, at a reflex corner as much as a convex one). So a fixed
-		// radius r < d, near the corner, sits within the ORIGINAL material at
-		// sideZ (the unchanged corner) and within the ERODED-AWAY void at
-		// capZ — material retreats toward the cap exactly as a regular wall
-		// patch's does, and outward tilts the SAME way: toward the cap, plus
-		// away from the corner point radially (the direction the offset arc
-		// bulges). Verified empirically (never hand-trusted):
+		// Orientation: a corner's own offset carrier is an EROSION, and at a
+		// REFLEX corner the eroded boundary is the arc of radius d about the
+		// corner with the surviving material radially OUTSIDE it — the removed
+		// wedge is the disk sector the arc cuts off, so this patch's cone has
+		// the VOID inside it and the solid outside. Its outward normal
+		// therefore points radially INWARD, toward the corner's own axis, and
+		// toward the chamfered cap (-matSign), exactly as a regular wall
+		// patch's does axially. The radially-outward reading is not merely the
+		// wrong sign: with dc = ds = d the cone stands at 45 degrees, so
+		// (cos, sin, -matSign) is EXACTLY perpendicular to the true normal and
+		// decides nothing at all. Verified empirically (never hand-trusted):
 		// fixPatchOrientation checks the actual built surface's own NormalAt
 		// against this reference and reverses only if they disagree.
-		fixPatchOrientation(face, pl, pl.point(j.vU+d*math.Cos(arcTh0[i]), j.vV+d*math.Sin(arcTh0[i]), capZ), math.Cos(arcTh0[i]), math.Sin(arcTh0[i]), -matSign)
+		fixPatchOrientation(face, pl, pl.point(j.vU+d*math.Cos(arcTh0[i]), j.vV+d*math.Sin(arcTh0[i]), capZ), -math.Cos(arcTh0[i]), -math.Sin(arcTh0[i]), -matSign)
 		slantIn[i].faces = append(slantIn[i].faces, face)
 		arc.faces = append(arc.faces, face)
 		slantOut[i].faces = append(slantOut[i].faces, face)
 		patches = append(patches, face)
+		// th0, th1 record the patch's ANGULAR EXTENT, not the connector's own
+		// clockwise walk — the same normalization every other patch's geometry
+		// takes, since patchRawFlux carries the material-side semantics in
+		// -matSign and trigRange reads an increasing window.
+		gth0, gth1 := arcTh0[i], arcTh1[i]
+		if gth1 < gth0 {
+			gth0, gth1 = gth1, gth0
+		}
 		geoms = append(geoms, capPatchGeom{
 			circular: true, apex: true,
 			cU: j.vU, cV: j.vV, sideRadius: 0, capRadius: d,
-			th0: arcTh0[i], th1: arcTh1[i], sideZ: sideZ, capZ: capZ,
+			th0: gth0, th1: gth1, sideZ: sideZ, capZ: capZ,
 		})
 	}
 
@@ -346,7 +373,10 @@ func buildCapBand(ctx context.Context, body *Body, ref StepRef, cbp capBlendPayl
 		// capB -> sideVertexAt(nextI), so reversed walks UP to capB),
 		// capEdge reversed (capB -> capA), leadSlant forward (its natural
 		// direction is capA -> sideVertexAt(i), walking back DOWN to close).
-		role := fmt.Sprintf("chamferCap(%s,%d,%d)", capName, li, i)
+		// p is the patch's own index in this band's patch slice (Table BX row
+		// BX3), so an apex patch minted in pass 2 and a wall patch minted here
+		// never share a role — see the pass-2 comment.
+		role := fmt.Sprintf("chamferCap(%s,%d,%d)", capName, li, len(patches))
 		face := &Face{
 			surface: surf,
 			origins: []FeatureRef{{Step: ref, Role: role}},

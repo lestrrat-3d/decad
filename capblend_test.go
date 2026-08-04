@@ -168,9 +168,17 @@ func TestCapBlendCarrierCollapseRefused(t *testing.T) {
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 }
 
-func TestCapBlendReflexCornerBuilds(t *testing.T) {
-	// An L-shaped section has one reflex corner; its cap-loop chamfer needs
-	// a Cone-with-apex patch there.
+// reflexLBody extrudes the L-shaped section — five convex corners and ONE
+// reflex corner at (20, 20), walked counter-clockwise — by reflexLHeight. Its
+// cap-loop chamfer is the only case that mints a Cone-with-apex patch.
+const (
+	reflexLHeight = 20.0
+	reflexLArea   = 1200.0
+	reflexLPerim  = 160.0
+)
+
+func reflexLBody(t *testing.T) *decad.Body {
+	t.Helper()
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	require.NoError(t, err)
@@ -187,8 +195,48 @@ func TestCapBlendReflexCornerBuilds(t *testing.T) {
 	require.Len(t, s.Profiles(), 1)
 
 	doc := decad.New()
-	body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+	body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(reflexLHeight), Dir: decad.Along})
 	require.NoError(t, err)
+	return body
+}
+
+// reflexLChamferVolume is the L section's own cap-chamfered volume, derived
+// independently of the evaluator: the straight slab plus the integral of the
+// eroded section's area over the setback. Eroding the L by t keeps a polygon
+// whose area is A - P*t + t^2 * sum(f_i) over its corners, with f = tan(45
+// degrees) = 1 at each of the five convex (miter) corners and f = -pi/4 at the
+// reflex one, whose erosion rounds off a quarter disk of radius t rather than
+// mitering. Integrating that over [0, d] gives the band.
+func reflexLChamferVolume(d float64) float64 {
+	corner := 5 - math.Pi/4
+	band := reflexLArea*d - reflexLPerim*d*d/2 + corner*d*d*d/3
+	return reflexLArea*(reflexLHeight-d) + band
+}
+
+// apexPatchOf returns the reflex corner's Cone-with-apex patch — the one
+// chamferCap face on the named cap whose loop is the three-coedge arc/slant/
+// slant triangle — and asserts there is exactly one.
+func apexPatchOf(t *testing.T, b *decad.Body, prefix string) *decad.Face {
+	t.Helper()
+	var found []*decad.Face
+	for _, f := range b.Faces() {
+		for _, o := range f.Origins() {
+			if !strings.HasPrefix(o.Role, prefix) {
+				continue
+			}
+			if len(f.Loops()[0].CoEdges()) == 3 {
+				found = append(found, f)
+			}
+		}
+	}
+	require.Len(t, found, 1, "exactly one reflex-corner apex patch")
+	return found[0]
+}
+
+func TestCapBlendReflexCornerBuilds(t *testing.T) {
+	// An L-shaped section has one reflex corner; its cap-loop chamfer needs
+	// a Cone-with-apex patch there.
+	body := reflexLBody(t)
 
 	chamfered, err := body.Chamfer(capLoopEdges(body), units.Millimeters(3))
 	require.NoError(t, err)
@@ -196,6 +244,66 @@ func TestCapBlendReflexCornerBuilds(t *testing.T) {
 	vol, err := chamfered.Volume()
 	require.NoError(t, err)
 	require.Greater(t, vol.Value.Mag(), 0.0)
+	// The apex patch's own angular window and flux orientation both enter this
+	// number, so the independent closed form pins them.
+	require.InDelta(t, reflexLChamferVolume(3), vol.Value.Mag(), 1e-6)
+}
+
+// TestCapBlendReflexApexPatchRolesDistinct pins Table BX row BX3's `p` as the
+// patch's own order in the result's `capBlendPayload`: an apex patch is keyed
+// by a CORNER and a wall patch by a WALL, and capOffsetJoins puts corner i at
+// walks[i].start, so keying either role by that index puts two faces on one
+// role string. Every last-wins reader then collapses onto whichever face was
+// built second — the payload's own patch map, facesByRole, and FaceCreatedBy.
+func TestCapBlendReflexApexPatchRolesDistinct(t *testing.T) {
+	body := reflexLBody(t)
+	chamfered, err := body.Chamfer(capLoopEdges(body), units.Millimeters(3))
+	require.NoError(t, err)
+
+	count := map[string]int{}
+	for _, f := range chamfered.Faces() {
+		for _, o := range f.Origins() {
+			if strings.HasPrefix(o.Role, "chamferCap(") {
+				count[o.Role]++
+			}
+		}
+	}
+	// Six walls plus one reflex apex.
+	require.Len(t, count, 7)
+	for role, n := range count {
+		require.Equal(t, 1, n, "role %s must name exactly one face", role)
+	}
+}
+
+// TestCapBlendReflexApexArcLength pins the apex patch's cap-level connector.
+// The inward offset's reflex corner closes with a CLOCKWISE arc of radius d
+// spanning the corner's own reflex turn — a quarter turn here, 3*pi/2 mm long
+// — never the counter-clockwise complement, which is the arc on the far side
+// of the corner and three times as long.
+func TestCapBlendReflexApexArcLength(t *testing.T) {
+	const d = 3.0
+	body := reflexLBody(t)
+	chamfered, err := body.Chamfer(capLoopEdges(body), units.Millimeters(d))
+	require.NoError(t, err)
+
+	apex := apexPatchOf(t, chamfered, "chamferCap(end,")
+	var arcs int
+	for _, ce := range apex.Loops()[0].CoEdges() {
+		e := ce.Edge()
+		if _, ok := e.Curve().(decad.Arc3); !ok {
+			continue
+		}
+		arcs++
+		length, err := e.Length()
+		require.NoError(t, err)
+		require.InDelta(t, d*math.Pi/2, length.Value.Mag(), 1e-9)
+		// Both feet sit a full setback from the corner, and the arc between
+		// them is the shorter way around.
+		start := ce.Start().Position().Value
+		end := ce.End().Position().Value
+		require.InDelta(t, d*math.Sqrt2, start.Sub(end).Len(), 1e-9, "a quarter-turn chord")
+	}
+	require.Equal(t, 1, arcs, "the apex patch's one cap-level arc")
 }
 
 func TestCapBlendHoleLoopNestingPreserved(t *testing.T) {
@@ -375,61 +483,139 @@ func TestCapBlendConePatchNormalOutwardBothCaps(t *testing.T) {
 }
 
 // TestCapBlendReflexApexNormalOutward checks the reflex corner's Cone-apex
-// patch: its outward normal must point AWAY from the corner (into the
-// former void the chamfer fills) and, for an end-cap chamfer, toward +Z.
+// patch against a reference derived from the topology alone, never from the
+// builder's own formula.
+//
+// The offset is an EROSION, and at a reflex corner the eroded boundary is the
+// arc of radius d about the corner with the surviving material radially
+// OUTSIDE it — the sector the arc cuts off is exactly what the chamfer
+// removes. So this patch's cone has the VOID inside and the solid outside,
+// and its outward normal points radially INWARD, at the corner's own axis,
+// while tilting toward the chamfered cap like every other patch in the band.
+//
+// The reference is built from the apex vertex, the arc foot and the cap face's
+// own outward normal: with dc = ds = d the cone stands at 45 degrees, so the
+// outward normal is (capNormal - radialUnit)/sqrt(2) exactly. The check is a
+// vector identity rather than a pair of sign predicates, so an inverted normal
+// fails it — and so does the radially-outward reading, which is EXACTLY
+// perpendicular to the truth here and passes every sign test written against a
+// cone ruling.
 func TestCapBlendReflexApexNormalOutward(t *testing.T) {
-	w := sketch.NewWorld()
-	s, err := w.CreateSketch(w.XY())
-	require.NoError(t, err)
-	pts := []*sketch.Point{
-		s.CreatePoint(0, 0), s.CreatePoint(40, 0), s.CreatePoint(40, 20),
-		s.CreatePoint(20, 20), s.CreatePoint(20, 40), s.CreatePoint(0, 40),
-	}
-	for i := range pts {
-		s.CreateLine(pts[i], pts[(i+1)%len(pts)])
-	}
-	s.Fix(pts[0])
-	_, err = s.Solve(t.Context())
-	require.NoError(t, err)
+	for _, tc := range []struct {
+		name string
+		end  bool
+	}{
+		{"end cap", true},
+		{"start cap", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			const d = 3.0
+			body := reflexLBody(t)
+			chamfered, err := body.Chamfer(capLoopEdgesOn(body, tc.end), units.Millimeters(d))
+			require.NoError(t, err)
 
-	doc := decad.New()
-	body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
-	require.NoError(t, err)
-	chamfered, err := body.Chamfer(capLoopEdgesOn(body, true), units.Millimeters(3))
-	require.NoError(t, err)
+			prefix := "chamferCap(end,"
+			capRole := roleCapEnd
+			if !tc.end {
+				prefix = "chamferCap(start,"
+				capRole = roleCapStart
+			}
+			apex := apexPatchOf(t, chamfered, prefix)
 
-	normals := patchNormalsByRolePrefix(t, chamfered, "chamferCap(end,")
-	// The reflex corner is at (20, 20); its apex patch's outward normal must
-	// point away from that corner (a positive dot with the vector from the
-	// corner to the sample point) and, exactly like a regular wall patch,
-	// TOWARD the chamfered end: the offset carrier is an erosion (a subset of
-	// the original material) at a reflex corner as much as a convex one, so
-	// material retreats toward the cap there too
-	// (capblend_geom.go's fixPatchOrientation comment).
-	found := false
-	for _, f := range chamfered.Faces() {
+			// The cap face's own outward normal is the band's axial reference;
+			// it is independently pinned by the plane- and cone-patch tests.
+			capFace := faceWithRole(t, chamfered, capRole)
+			capN, err := capFace.NormalAt(capFace.Loops()[0].CoEdges()[0].Start().Position().Value)
+			require.NoError(t, err)
+			axis := capN.Value
+
+			// The apex vertex is the ORIGINAL corner, held where the receiver
+			// had it; the arc's own start is one foot of the offset connector.
+			coedges := apex.Loops()[0].CoEdges()
+			corner := coedges[1].End().Position().Value
+			p := coedges[0].Start().Position().Value
+			v := p.Sub(corner)
+			require.InDelta(t, d, v.Dot(axis), 1e-9, "one setback along the cap's own outward sense")
+			radial, ok := v.Sub(axis.Scale(v.Dot(axis))).Normalize()
+			require.True(t, ok)
+
+			want, ok := axis.Sub(radial).Normalize()
+			require.True(t, ok)
+			n, err := apex.NormalAt(p)
+			require.NoError(t, err)
+			require.InDelta(t, 1.0, n.Value.Dot(want), 1e-9, "the apex patch's outward normal")
+			// Restated as the two facts the identity carries, so a failure
+			// names which half moved.
+			require.Less(t, n.Value.Dot(radial), 0.0, "toward the corner's own axis")
+			require.Greater(t, n.Value.Dot(axis), 0.0, "toward the chamfered end")
+		})
+	}
+}
+
+// faceWithRole returns the single face carrying role on b.
+func faceWithRole(t *testing.T, b *decad.Body, role string) *decad.Face {
+	t.Helper()
+	var found []*decad.Face
+	for _, f := range b.Faces() {
 		for _, o := range f.Origins() {
-			if !strings.HasPrefix(o.Role, "chamferCap(end,") {
-				continue
+			if o.Role == role {
+				found = append(found, f)
 			}
-			loops := f.Loops()
-			if len(loops[0].CoEdges()) != 3 {
-				continue // the reflex apex patch is the only 3-edge patch
-			}
-			found = true
-			p := loops[0].CoEdges()[0].Start().Position().Value
-			// The corner's own WORLD position is read off the topology
-			// itself (the apex vertex, shared by slantOut's end) rather than
-			// assumed from the sketch's local (u, v) — the sketch plane's
-			// frame axes need not align with world (X, Y, Z).
-			corner := loops[0].CoEdges()[1].End().Position().Value
-			away := p.Sub(corner)
-			n := normals[o.Role]
-			require.Greater(t, n.Dot(away), 0.0, "outward from the corner")
-			require.Greater(t, n.Z, 0.0, "toward the chamfered end")
 		}
 	}
-	require.True(t, found, "the reflex corner must produce an apex patch")
+	require.Len(t, found, 1, "exactly one %s face", role)
+	return found[0]
+}
+
+// TestCapBlendReflexApexUndercutSurvey is DX7 over the apex patch, through the
+// public Verify API. A pull opposing the apex patch alone must list it: the
+// role collision that put a wall patch on the apex patch's role made the
+// survey read the wall's face AND the wall's geometry, so the apex patch was
+// reported for no pull at all. The (0, 0, 1) case is the proven-free reading —
+// the band's own normals all tilt toward the chamfered end, so pulling that
+// way frees every patch, and the empty list is only correct while the apex
+// patch's normal really does point that way.
+func TestCapBlendReflexApexUndercutSurvey(t *testing.T) {
+	body := reflexLBody(t)
+	chamfered, err := body.Chamfer(capLoopEdges(body), units.Millimeters(3))
+	require.NoError(t, err)
+	apex := apexPatchOf(t, chamfered, "chamferCap(end,")
+	doc := chamfered.Document()
+
+	// (-1, -1, 1) opposes the apex patch's inward-and-up normal over its own
+	// quarter turn and no other patch in the band: every wall patch's normal
+	// is exactly perpendicular to it or better.
+	opposing, err := doc.Verify(t.Context(), decad.WithPullDirection(r3.NewVec(-1, -1, 1)))
+	require.NoError(t, err)
+	require.Len(t, opposing.Bodies, 1)
+	var patches []*decad.Face
+	apexReported := false
+	for _, f := range opposing.Bodies[0].Undercuts {
+		for _, o := range f.Origins() {
+			if strings.HasPrefix(o.Role, "chamferCap(") {
+				patches = append(patches, f)
+			}
+		}
+		if f == apex {
+			apexReported = true
+		}
+	}
+	require.True(t, apexReported, "the apex patch opposes this pull and must be listed")
+	require.Equal(t, []*decad.Face{apex}, patches, "and it is the only patch that does")
+	require.Equal(t, decad.Violating, opposing.Bodies[0].Status)
+
+	// Pulling toward the chamfered end frees the whole band, apex included.
+	free, err := doc.Verify(t.Context(), decad.WithPullDirection(r3.NewVec(0, 0, 1)))
+	require.NoError(t, err)
+	for _, f := range free.Bodies[0].Undercuts {
+		for _, o := range f.Origins() {
+			require.False(t, strings.HasPrefix(o.Role, "chamferCap("), "role %s", o.Role)
+		}
+	}
+	p := apex.Loops()[0].CoEdges()[0].Start().Position().Value
+	n, err := apex.NormalAt(p)
+	require.NoError(t, err)
+	require.Greater(t, n.Value.Z, 0.0, "the apex patch is free of that pull because it tilts with it")
 }
 
 // TestCapBlendUndercutSurvey checks DX7 through the public Verify API: a
@@ -537,6 +723,68 @@ func TestCapBlendHoleLoopChamferVolume(t *testing.T) {
 	holeFrustum := math.Pi * d / 3 * (R*R + R*R1 + R1*R1)
 	want := outer - holeStraight - holeFrustum
 	require.InDelta(t, want, vol.Value.Mag(), 1e-1)
+}
+
+// TestCapBlendThroughAllStopsAtBuiltExtent is Table DX row DX5: a through-all
+// sweep reads the stop body's extent as an EXACT endpoint, so a cap-blend
+// body must report the extent its own patches attain. Padding the receiver
+// prism's extent by the setback overruns the sweep by exactly that setback,
+// silently and with no diagnostic — the sweep runs past a body that ends at
+// the sketch plane's own 20 mm.
+func TestCapBlendThroughAllStopsAtBuiltExtent(t *testing.T) {
+	const height, d = 20.0, 5.0
+	s, plateProf, pinProf := plateAndPin(t)
+	doc := decad.New()
+	plate, err := doc.Extrude(s, plateProf, decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
+	require.NoError(t, err)
+	chamfered, err := plate.Chamfer(capLoopEdges(plate), units.Millimeters(d))
+	require.NoError(t, err)
+
+	// The chamfer offsets INTO the material at the cap and leaves [z0, z1]
+	// alone, so every vertex the build made still sits within the receiver's
+	// own sweep.
+	zHi := math.Inf(-1)
+	for _, v := range chamfered.Vertices() {
+		zHi = math.Max(zHi, v.Position().Value.Z)
+	}
+	require.InDelta(t, height, zHi, 1e-9)
+
+	pin, err := doc.Extrude(s, pinProf, decad.ThroughAll{Dir: decad.Along})
+	require.NoError(t, err)
+	requireVolume(t, pin, 20*20*height)
+	requireBounds(t, pin, 120, 0, 0, 140, 20, height)
+}
+
+// TestCapBlendThroughAllBehindPlaneRefused is the same reading's other half:
+// "is this body in the sweep's path" is decided by the same extent, so a
+// padded one puts a body the sweep never reaches into the path. A chamfered
+// plate lying entirely behind the sketch plane must leave the sweep with no
+// stop at all rather than build a body in empty space and record a dependency
+// on a plate it never meets.
+func TestCapBlendThroughAllBehindPlaneRefused(t *testing.T) {
+	const height, d, drop = 20.0, 5.0, 24.0
+	s, plateProf, pinProf := plateAndPin(t)
+	doc := decad.New()
+	plate, err := doc.Extrude(s, plateProf, decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
+	require.NoError(t, err)
+	chamfered, err := plate.Chamfer(capLoopEdges(plate), units.Millimeters(d))
+	require.NoError(t, err)
+	shift, err := r3.Translation(r3.NewVec(0, 0, -drop))
+	require.NoError(t, err)
+	behind, err := chamfered.Placed(shift)
+	require.NoError(t, err)
+
+	zHi := math.Inf(-1)
+	for _, v := range behind.Vertices() {
+		zHi = math.Max(zHi, v.Position().Value.Z)
+	}
+	require.InDelta(t, height-drop, zHi, 1e-9, "the whole body sits behind the sketch plane")
+
+	before := doc.Recipe()
+	_, err = doc.Extrude(s, pinProf, decad.ThroughAll{Dir: decad.Along})
+	require.Error(t, err)
+	require.ErrorIs(t, err, decad.ErrDegenerate)
+	require.Equal(t, before, doc.Recipe())
 }
 
 func TestCapBlendBooleanReceiverRefusedSX9(t *testing.T) {

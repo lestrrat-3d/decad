@@ -284,7 +284,9 @@ func capBandVolume(ctx context.Context, loop LoopRecord, cbp capBlendPayload, ge
 	// the same start/end asymmetry capblend_geom.go's fixPatchOrientation
 	// corrects for the SURFACE normal — so the flux sign needs the same
 	// -matSign correction here, confirmed empirically
-	// (TestCapBlendStartCapVolumeMatchesEndCap).
+	// (TestCapBlendStartCapVolumeMatchesEndCap). That correction speaks for
+	// the AXIAL half only; an apex patch's own radial inversion is charged
+	// inside patchRawFlux.
 	for _, g := range geom {
 		fluxTotal += -matSign * patchRawFlux(g)
 	}
@@ -319,7 +321,22 @@ func patchRawFlux(g capPatchGeom) float64 {
 	term1 := H * (R0 + R1) / 2 * (g.cU*sc + g.cV*ss)
 	term2 := H * dth * (R0*R0 + R0*R1 + R1*R1) / 3
 	term3 := -dR * dth * (z0*R0 + (z0*dR+H*R0)/2 + H*dR/3)
-	return term1 + term2 + term3
+	flux := term1 + term2 + term3
+	if g.apex {
+		// The fixed parameter order this integral is taken in orients a Cone
+		// patch RADIALLY OUTWARD (its normal reads (H*cos, H*sin, -dR), so a
+		// regular wall patch — whose offset SHRINKS the radius, dR < 0 — comes
+		// out pointing away from the axis, which is that patch's own outward
+		// sense; the caller's -matSign then fixes the axial half). An apex
+		// patch inverts BOTH: its offset GROWS the radius from zero (dR > 0),
+		// and the sector it cuts off is the void, so the solid lies radially
+		// OUTSIDE the cone and the true outward normal points at the axis. The
+		// caller's single -matSign speaks only for the axial ordering, so the
+		// radial inversion is charged here — the same fact capblend_geom.go's
+		// apex orientation reference states for the surface normal.
+		return -flux
+	}
+	return flux
 }
 
 // capBlendVolumeBound is a conservative outward bound on the band-volume
