@@ -126,65 +126,163 @@ func freeformBracketCost(controls int) uint64 {
 // spanLengthBracket brackets one Bézier span's arc length, subdividing to the
 // given depth and summing each piece's chord (below) and control polygon
 // (above).
+//
+// The span is re-expressed once, here, into the split form below; every level
+// under it works in that form and only the leaves come back out as rationals.
 func spanLengthBracket(span bezierSpan, depth int) (float64, float64) {
-	if depth == 0 || len(span) < 2 {
-		return chordLower(span[0], span[len(span)-1]), polygonUpper(span)
+	return dyadicSpanOf(span).lengthBracket(depth)
+}
+
+// dyadicPoint is one split value: the plane-local coordinate
+// (u, v) / (den · 2ᵉˣᵖ), over its span's own shared den.
+//
+// SUBDIVIDING INTRODUCES NOTHING BUT POWERS OF TWO. Every blend below is a
+// MIDPOINT, so a child value is the sum of two values of the same denominator
+// halved — the denominator never gains a new odd factor at any depth, which is
+// what makes an integer numerator beside a binary exponent the exact form of the
+// arithmetic rather than an approximation of it. A midpoint is then one integer
+// addition and one exponent increment, with no common factor to strip, where a
+// normalising rational pays two GCDs to re-derive a denominator it already knows.
+//
+// The SPAN's own denominator is factored out because it is NOT a power of two.
+// A recorded control coordinate is a float64, hence dyadic, but a converted one
+// need not be: Boehm knot insertion divides by a knot difference and the
+// closed-spline identity divides by 3 and by 6 (spline_bezier.go), so a
+// converted control point carries whatever odd denominator that left it. That
+// denominator is a CONSTANT of the whole subdivision, so it is lifted out once
+// per span and the exponent carries everything the splitting adds.
+type dyadicPoint struct {
+	u, v *big.Int
+	exp  uint
+}
+
+// dyadicSpan is one Bézier span in that form: its split values beside the
+// denominator every one of them shares.
+type dyadicSpan struct {
+	points []dyadicPoint
+	den    *big.Int
+}
+
+// dyadicSpanOf re-expresses a converted span over one shared denominator. The
+// denominator is the least common multiple of the span's own, so every
+// coordinate lifts to an EXACT integer numerator and the span it describes is
+// the span it was given, to the last bit.
+func dyadicSpanOf(span bezierSpan) dyadicSpan {
+	den := big.NewInt(1)
+	for _, point := range span {
+		den = ratLCM(den, point.u.Denom())
+		den = ratLCM(den, point.v.Denom())
 	}
-	left, right := splitBezier(span)
-	leftLo, leftHi := spanLengthBracket(left, depth-1)
-	rightLo, rightHi := spanLengthBracket(right, depth-1)
+	points := make([]dyadicPoint, len(span))
+	for i, point := range span {
+		points[i] = dyadicPoint{u: scaledNumerator(point.u, den), v: scaledNumerator(point.v, den)}
+	}
+	return dyadicSpan{points: points, den: den}
+}
+
+// ratLCM returns the least common multiple of two positive integers. A big.Rat
+// denominator is always positive, so no sign case arises.
+func ratLCM(a, b *big.Int) *big.Int {
+	gcd := new(big.Int).GCD(nil, nil, a, b)
+	out := new(big.Int).Quo(a, gcd)
+	return out.Mul(out, b)
+}
+
+// scaledNumerator returns r·den as an exact integer. den is a common multiple
+// of every denominator in the span, so the division leaves no remainder.
+func scaledNumerator(r *big.Rat, den *big.Int) *big.Int {
+	out := new(big.Int).Quo(den, r.Denom())
+	return out.Mul(out, r.Num())
+}
+
+func (s dyadicSpan) lengthBracket(depth int) (float64, float64) {
+	if depth == 0 || len(s.points) < 2 {
+		return s.chordLower(), s.polygonUpper()
+	}
+	left, right := s.split()
+	leftLo, leftHi := left.lengthBracket(depth - 1)
+	rightLo, rightHi := right.lengthBracket(depth - 1)
 	return downRound(leftLo + rightLo), upRound(leftHi + rightHi)
 }
 
-// splitBezier halves a span by de Casteljau at t = 1/2, exactly: every blend is
-// a midpoint, so the arithmetic is a rational bisection.
-func splitBezier(span bezierSpan) (bezierSpan, bezierSpan) {
-	n := len(span)
-	work := make(bezierSpan, n)
-	copy(work, span)
-	left := make(bezierSpan, 0, n)
-	right := make(bezierSpan, n)
+// split halves a span by de Casteljau at t = 1/2, exactly: every blend is a
+// midpoint, so the arithmetic is a binary bisection over integer numerators.
+func (s dyadicSpan) split() (dyadicSpan, dyadicSpan) {
+	n := len(s.points)
+	work := make([]dyadicPoint, n)
+	copy(work, s.points)
+	left := make([]dyadicPoint, 0, n)
+	right := make([]dyadicPoint, n)
 	left = append(left, work[0])
 	right[n-1] = work[n-1]
 	for round := n - 1; round > 0; round-- {
 		for i := range round {
-			work[i] = ratPoint{
-				u: ratMidpoint(work[i].u, work[i+1].u),
-				v: ratMidpoint(work[i].v, work[i+1].v),
-			}
+			work[i] = dyadicMidpoint(work[i], work[i+1])
 		}
 		left = append(left, work[0])
 		right[round-1] = work[round-1]
 	}
-	return left, right
+	return dyadicSpan{points: left, den: s.den}, dyadicSpan{points: right, den: s.den}
 }
 
-func ratMidpoint(a, b *big.Rat) *big.Rat {
-	out := new(big.Rat).Add(a, b)
-	return out.Quo(out, big.NewRat(2, 1))
+// dyadicMidpoint is (a+b)/2 exactly: the two numerators are raised to their
+// common exponent, added, and the exponent goes up by one for the halving.
+func dyadicMidpoint(a, b dyadicPoint) dyadicPoint {
+	exp := max(a.exp, b.exp)
+	return dyadicPoint{
+		u:   alignedSum(a.u, exp-a.exp, b.u, exp-b.exp),
+		v:   alignedSum(a.v, exp-a.exp, b.v, exp-b.exp),
+		exp: exp + 1,
+	}
 }
 
-// chordLower is a proven lower bound on the distance between two exact points:
-// the largest float whose square does not exceed the exact squared distance.
-func chordLower(a, b ratPoint) float64 {
-	return ratSqrtDown(ratSquaredDistance(a, b))
+// alignedSum is a+b with each numerator first shifted up to the common
+// exponent. Shifting is exact, so the sum is the sum of the two values.
+func alignedSum(a *big.Int, aShift uint, b *big.Int, bShift uint) *big.Int {
+	out := new(big.Int).Lsh(a, aShift)
+	if bShift == 0 {
+		return out.Add(out, b)
+	}
+	return out.Add(out, new(big.Int).Lsh(b, bShift))
+}
+
+// alignedDifference is a−b under the same alignment.
+func alignedDifference(a *big.Int, aShift uint, b *big.Int, bShift uint) *big.Int {
+	out := new(big.Int).Lsh(a, aShift)
+	if bShift == 0 {
+		return out.Sub(out, b)
+	}
+	return out.Sub(out, new(big.Int).Lsh(b, bShift))
+}
+
+// chordLower is a proven lower bound on the distance between the span's two
+// ends: the largest float whose square does not exceed the exact squared
+// distance.
+func (s dyadicSpan) chordLower() float64 {
+	return ratSqrtDown(s.squaredDistance(s.points[0], s.points[len(s.points)-1]))
 }
 
 // polygonUpper is a proven upper bound on a control polygon's length.
-func polygonUpper(span bezierSpan) float64 {
+func (s dyadicSpan) polygonUpper() float64 {
 	total := 0.0
-	for i := 0; i+1 < len(span); i++ {
-		total = upRound(total + ratSqrtUp(ratSquaredDistance(span[i], span[i+1])))
+	for i := 0; i+1 < len(s.points); i++ {
+		total = upRound(total + ratSqrtUp(s.squaredDistance(s.points[i], s.points[i+1])))
 	}
 	return total
 }
 
-func ratSquaredDistance(a, b ratPoint) *big.Rat {
-	du := new(big.Rat).Sub(b.u, a.u)
-	dv := new(big.Rat).Sub(b.v, a.v)
-	du.Mul(du, du)
-	dv.Mul(dv, dv)
-	return du.Add(du, dv)
+// squaredDistance is the exact |b−a|² of two split values, handed to the
+// outward-rounded square roots as the rational they already read. This is the
+// one boundary where the split form becomes a big.Rat: the leaves are where the
+// bracket is decided, and everything above them stays free of normalisation.
+func (s dyadicSpan) squaredDistance(a, b dyadicPoint) *big.Rat {
+	exp := max(a.exp, b.exp)
+	du := alignedDifference(b.u, exp-b.exp, a.u, exp-a.exp)
+	dv := alignedDifference(b.v, exp-b.exp, a.v, exp-a.exp)
+	num := du.Mul(du, du)
+	num.Add(num, dv.Mul(dv, dv))
+	den := new(big.Int).Mul(s.den, s.den)
+	return new(big.Rat).SetFrac(num, den.Lsh(den, 2*exp))
 }
 
 // ratSqrtSeed approximates sqrt(q) for a positive rational at EVERY scale a

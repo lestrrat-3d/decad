@@ -2,6 +2,7 @@ package decad
 
 import (
 	"math"
+	"math/big"
 	"runtime"
 	"strconv"
 	"testing"
@@ -510,6 +511,153 @@ func TestFreeformWalkWithoutCounterRefuses(t *testing.T) {
 	// An analytic walk charges nothing, so it is unaffected.
 	_, err = walkOf(LineSeg{Start: Point2{}, End: Point2{U: 1, V: 1}, TEnd: 1}, nil)
 	require.NoError(t, err)
+}
+
+// The subdivision's own arithmetic must introduce NOTHING but powers of two.
+// That is what lets a split value be an integer numerator beside a binary
+// exponent (dyadicPoint), and it is a fact about de Casteljau at t = 1/2 rather
+// than about the representation: a blend anywhere else, or a level that scaled
+// by anything but a half, would bring a new odd factor into the denominators and
+// the exponent could no longer carry it.
+//
+// The reference below is the defining computation — plain big.Rat midpoints, the
+// normalising arithmetic that reduces every value to lowest terms — so the odd
+// part it reports is the true one. Two things are asserted over it: no level
+// gains an odd factor the span did not already carry, and the split form agrees
+// with it EXACTLY, value for value.
+//
+// The fixtures deliberately include curves whose control points are NOT dyadic:
+// a closed spline divides by 3 and 6, and a knot-inserted spline divides by a
+// knot difference. Their odd denominators are the span's own, and the invariant
+// is that subdividing never adds to them.
+func TestSubdivisionIntroducesOnlyPowersOfTwo(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		seg  CurveSegment
+	}{
+		{name: "cubic", seg: SplineSeg{
+			Control: []Point2{{U: 0, V: 0}, {U: 1, V: 2}, {U: 3, V: 2}, {U: 4, V: 0}},
+			TStart:  0, TEnd: 1,
+		}},
+		{name: "spline with inserted knots", seg: SplineSeg{
+			Control: []Point2{
+				{U: 0, V: 0}, {U: 1, V: 2}, {U: 3, V: 2}, {U: 4, V: 0}, {U: 6, V: 1}, {U: 7, V: -2},
+			},
+			TStart: 0, TEnd: 1,
+		}},
+		{name: "ring spline", seg: ringSplineSeg(9)},
+		{name: "closed spline", seg: ClosedSplineSeg{
+			Control: []Point2{{U: 0, V: 0}, {U: 4, V: 0}, {U: 4, V: 3}, {U: 0, V: 3}},
+			CCW:     true, TStart: 0, TEnd: 1,
+		}},
+		{name: "wide NURBS span", seg: equalWeightNURBS(windingControlNet(12, 3, 10))},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			spans, _, err := freeformBezierSpans(tc.seg, newFreeformWork())
+			require.NoError(t, err)
+			require.NotEmpty(t, spans)
+
+			for i, span := range spans {
+				dyadic := dyadicSpanOf(span)
+				odd := oddPart(dyadic.den)
+				requireSameSpan(t, dyadic, span, "span %d is re-expressed exactly", i)
+				requireSubdivisionStaysDyadic(t, dyadic, span, odd, 4)
+			}
+		})
+	}
+}
+
+// requireSubdivisionStaysDyadic walks the whole subdivision tree to the given
+// depth, checking every level of both computations against each other and every
+// reference denominator against the span's odd part.
+func requireSubdivisionStaysDyadic(t *testing.T, dyadic dyadicSpan, reference bezierSpan, odd *big.Int, depth int) {
+	t.Helper()
+	for _, point := range reference {
+		for _, coord := range []*big.Rat{point.u, point.v} {
+			require.Zero(t, new(big.Int).Mod(odd, oddPart(coord.Denom())).Sign(),
+				"a subdivided coordinate's odd denominator is the span's own, so only powers of two were introduced")
+		}
+	}
+	if depth == 0 {
+		return
+	}
+	dyadicLeft, dyadicRight := dyadic.split()
+	referenceLeft, referenceRight := referenceSplit(reference)
+	requireSameSpan(t, dyadicLeft, referenceLeft, "the left half agrees with the rational reference")
+	requireSameSpan(t, dyadicRight, referenceRight, "the right half agrees with the rational reference")
+	requireSubdivisionStaysDyadic(t, dyadicLeft, referenceLeft, odd, depth-1)
+	requireSubdivisionStaysDyadic(t, dyadicRight, referenceRight, odd, depth-1)
+}
+
+func requireSameSpan(t *testing.T, dyadic dyadicSpan, reference bezierSpan, msgAndArgs ...any) {
+	t.Helper()
+	require.Len(t, dyadic.points, len(reference), msgAndArgs...)
+	for i, point := range dyadic.points {
+		require.Zero(t, dyadicRat(dyadic.den, point.u, point.exp).Cmp(reference[i].u), msgAndArgs...)
+		require.Zero(t, dyadicRat(dyadic.den, point.v, point.exp).Cmp(reference[i].v), msgAndArgs...)
+	}
+	// The leaf reading is where the split form hands the bracket back a
+	// rational, so it is checked against the plain one every leg of the way.
+	for i := 0; i+1 < len(reference); i++ {
+		require.Zero(t,
+			dyadic.squaredDistance(dyadic.points[i], dyadic.points[i+1]).
+				Cmp(ratSquaredDistance(reference[i], reference[i+1])),
+			msgAndArgs...)
+	}
+}
+
+// dyadicRat reads a split value back as the rational it stands for.
+func dyadicRat(den, numerator *big.Int, exp uint) *big.Rat {
+	return new(big.Rat).SetFrac(numerator, new(big.Int).Lsh(den, exp))
+}
+
+// oddPart strips every factor of two, leaving what a power of two cannot carry.
+func oddPart(n *big.Int) *big.Int {
+	out := new(big.Int).Abs(n)
+	if out.Sign() == 0 {
+		return out
+	}
+	return out.Rsh(out, out.TrailingZeroBits())
+}
+
+// ratSquaredDistance is |b−a|² taken straight over normalising rationals — the
+// plain reading dyadicSpan.squaredDistance must reproduce exactly, and the exact
+// value the directed square-root bounds are proven against.
+func ratSquaredDistance(a, b ratPoint) *big.Rat {
+	du := new(big.Rat).Sub(b.u, a.u)
+	dv := new(big.Rat).Sub(b.v, a.v)
+	du.Mul(du, du)
+	dv.Mul(dv, dv)
+	return du.Add(du, dv)
+}
+
+// referenceSplit is the defining de Casteljau bisection over normalising
+// rationals: each blend an Add and a halving, each result reduced to lowest
+// terms. It is the yardstick the split form is measured against.
+func referenceSplit(span bezierSpan) (bezierSpan, bezierSpan) {
+	half := big.NewRat(1, 2)
+	midpoint := func(a, b *big.Rat) *big.Rat {
+		out := new(big.Rat).Add(a, b)
+		return out.Mul(out, half)
+	}
+	n := len(span)
+	work := make(bezierSpan, n)
+	copy(work, span)
+	left := make(bezierSpan, 0, n)
+	right := make(bezierSpan, n)
+	left = append(left, work[0])
+	right[n-1] = work[n-1]
+	for round := n - 1; round > 0; round-- {
+		for i := range round {
+			work[i] = ratPoint{
+				u: midpoint(work[i].u, work[i+1].u),
+				v: midpoint(work[i].v, work[i+1].v),
+			}
+		}
+		left = append(left, work[0])
+		right[round-1] = work[round-1]
+	}
+	return left, right
 }
 
 // ringSplineSeg is a cubic spline whose control points ride a circle. Its
