@@ -381,9 +381,11 @@ func buildCapBlend(ctx context.Context, doc *Document, ref StepRef, pp prismPayl
 	// refusal, re-sentinelled here (wrapCapBlendDropError); the audit's own
 	// refusals keep the sentinel their §4 stage-6 row decided
 	// (wrapCapBlendAuditError) — SX7/SX12 for a crossing or contact, the base
-	// S8/S9 ErrDegenerate for broken nesting. Because dc = ds = d in this
-	// PR, the ruled patch at axial fraction s meets the parallel section as
-	// exactly the loop offset by s*d (docs/modify-reach-design.md §8.3): the
+	// S8/S9 ErrDegenerate for broken nesting. SX12 audits the exact offset
+	// FAMILY, not the ruled patch the body builds: at axial fraction s, the
+	// denoted miter locus is the parallel section offset by s*d
+	// (docs/modify-reach-design.md §8.3) — a fact about that family alone,
+	// independent of which surface later reports the body's volume — and the
 	// offset distance to any fixed feature is monotone non-increasing as the
 	// offset grows from 0, so a crossing anywhere in the family occurs no
 	// later than it occurs at the full offset d — proving the family

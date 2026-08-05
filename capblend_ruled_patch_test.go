@@ -405,3 +405,88 @@ func TestCapBlendTangentJunctionAndWholeTurnBoundsStayTight(t *testing.T) {
 			vol.Bound.Mag())
 	})
 }
+
+// dHoleBody extrudes a 100x100 plate with a "D" shaped hole: a circle of
+// radius r centred at (cx, cy), cut by a chord between the points at
+// phi0Deg and phi1Deg (degrees, measured from the centre) — a straight wall
+// meeting a circular wall at two non-tangential miter corners, on a HOLE
+// loop rather than an outer one. minor picks which of the chord's two arcs
+// is the hole's own wall: true keeps the SHORT (<180 degrees) arc, false
+// the LONG (>180 degrees) one — the major-arc case is PR-122's own audited
+// branch-crossing repro (capWallSweep's raw Atan2 lands the offset foot's
+// angle a full turn from the wall's own recorded th0).
+func dHoleBody(t *testing.T, cx, cy, r, phi0Deg, phi1Deg float64, minor bool) *decad.Body {
+	t.Helper()
+	phi0 := phi0Deg * math.Pi / 180
+	phi1 := phi1Deg * math.Pi / 180
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	outer := s.CreateRectangle(0, 0, 100, 100)
+	s.Fix(outer.A)
+	o := s.CreatePoint(cx, cy)
+	p0 := s.CreatePoint(cx+r*math.Cos(phi0), cy+r*math.Sin(phi0))
+	p1 := s.CreatePoint(cx+r*math.Cos(phi1), cy+r*math.Sin(phi1))
+	s.CreateLine(p0, p1)
+	if minor {
+		s.CreateArc(o, p0, p1)
+	} else {
+		s.CreateArc(o, p1, p0)
+	}
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+
+	var prof *sketch.Profile
+	for _, p := range s.Profiles() {
+		if len(p.Outer) == 4 && len(p.Holes) == 1 {
+			prof = p
+		}
+	}
+	require.NotNil(t, prof, `the rectangle-with-D-hole region should exist`)
+
+	doc := decad.New()
+	body, err := doc.Extrude(s, prof, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	require.NoError(t, err)
+	return body
+}
+
+// TestCapBlendDHoleLoopBoundStaysTight is the fix's own hole-loop floor:
+// TestCapBlendTangentJunctionAndWholeTurnBoundsStayTight above pins the
+// tight-bound property for an outer-loop tangent fillet and a whole-turn
+// circle, but neither is a HOLE loop and neither has a genuinely
+// non-tangential miter corner, so neither could have caught PR-122's own
+// defect (a D-hole whose wall is the MAJOR arc: capWallSweep's raw Atan2
+// puts the offset foot's angle a full 2*pi from the wall's own recorded
+// th0, so chordLocusResidualAllow's windowSkewMax read close to 2*pi
+// instead of the corner's own small miter skew, and the published bound
+// inflated by orders of magnitude on a patch whose true residual is
+// negligible). The major-arc case below is that exact repro, audited at a
+// pre-fix bound of 22972.28860508683 mm^3 (windowSkewMax == 2*pi, up to
+// float rounding) against a post-fix bound of 7157.192745203181 mm^3; the
+// minor-arc case is the same hole family with the wall on the SHORT arc
+// instead, which never crosses branches and never needed the fix, given a
+// floor of its own so a future change to either patch cannot silently
+// regress it unnoticed.
+func TestCapBlendDHoleLoopBoundStaysTight(t *testing.T) {
+	t.Run(`major-arc hole (branch-crossing repro)`, func(t *testing.T) {
+		body := dHoleBody(t, 50, 50, 10, 30, 150, false)
+		chamfered, err := body.Chamfer(decad.Edges(decad.CreatedBy(decad.CapEnd(body))), units.Millimeters(2))
+		require.NoError(t, err)
+		vol, err := chamfered.Volume()
+		require.NoError(t, err)
+		require.Less(t, vol.Bound.Mag(), 10000.0,
+			`the major-arc D-hole bound (%v mm^3) must stay close to the post-fix reading (7157.192745203181 mm^3), not the pre-fix branch-mismatch regression (22972.28860508683 mm^3)`,
+			vol.Bound.Mag())
+	})
+
+	t.Run(`minor-arc hole`, func(t *testing.T) {
+		body := dHoleBody(t, 50, 50, 10, 30, 150, true)
+		chamfered, err := body.Chamfer(decad.Edges(decad.CreatedBy(decad.CapEnd(body))), units.Millimeters(2))
+		require.NoError(t, err)
+		vol, err := chamfered.Volume()
+		require.NoError(t, err)
+		require.Less(t, vol.Bound.Mag(), 5000.0,
+			`the minor-arc D-hole bound (%v mm^3) must stay close to the audited reading (2733.0793750625394 mm^3)`,
+			vol.Bound.Mag())
+	})
+}

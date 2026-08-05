@@ -281,10 +281,12 @@ func bandPatchAreaAllow(delta, chordUpper, slantUpper float64) float64 {
 // residual: the gap between a cap-loop chamfer's regular-wall Cone patch — the
 // STRAIGHT-RULED surface the topology actually builds between its two
 // directrices — and the TRUE denoted miter locus (docs/modify-reach-design.md
-// §8.3: "at axial fraction s, every patch intersects the parallel section as
-// the exact loop offset by s*dc"), at a non-tangential corner where the
-// cap-level directrix (capTh0, capTh1) sweeps a window narrower than the
-// side-level one (th0, th1) by windowSkewMax at its widest corner.
+// §8.3: "at axial fraction s, the denoted miter locus is the parallel section
+// offset by s*dc" — a contract the ruled Cone patch meets only at s=0 and
+// s=1, chording the true curve strictly between them), at a non-tangential
+// corner where the cap-level directrix (capTh0, capTh1) sweeps a window
+// narrower than the side-level one (th0, th1) by windowSkewMax at its widest
+// corner.
 //
 // The proof is a two-term decomposition, |Vol(true)-Vol(built)| <=
 // |Vol(true)-Vol(wide)| + |Vol(wide)-Vol(built)|, where "wide"/"narrow" are

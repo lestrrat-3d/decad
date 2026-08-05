@@ -646,19 +646,45 @@ func patchRawFlux(g capPatchGeom) boundedScalar {
 // sweptVolumeAllow needs. Zero wherever the two windows already coincide (a
 // tangent join, or either degenerate patch), matching every already-shipped
 // reading those configurations publish.
+//
+// g.capTh0/g.capTh1 and g.th0/g.th1 are not guaranteed to share a branch:
+// capWallSweep (capblend_geom.go) anchors capTh0 at a raw Atan2, always in
+// (-pi, pi], while th0 comes from the recorded arc range and can sit a full
+// turn away for a major-arc wall — the same corner, described a multiple of
+// 2*pi apart. capWindowOnBranch puts the cap window back on th0's own branch,
+// shifting capTh0 and capTh1 together so the window's WIDTH (capTh1-capTh0)
+// is untouched, before either is differenced against th0/th1 below; every
+// other reader of these two fields (patchAreaOf, patchRawFlux) only ever
+// takes a WITHIN-pair difference (a width), which a shared branch shift
+// cannot change, so this is the one site the mismatch reaches.
 func chordLocusResidualAllow(g capPatchGeom) float64 {
-	windowSkewMax := math.Max(g.capTh0-g.th0, g.th1-g.capTh1)
+	capTh0, capTh1 := capWindowOnBranch(g.capTh0, g.capTh1, g.th0)
+	windowSkewMax := math.Max(capTh0-g.th0, g.th1-capTh1)
 	if windowSkewMax <= 0 {
 		return 0
 	}
 	wideGeom, narrowGeom := g, g
 	wideGeom.capTh0, wideGeom.capTh1 = g.th0, g.th1
-	narrowGeom.th0, narrowGeom.th1 = g.capTh0, g.capTh1
+	narrowGeom.th0, narrowGeom.th1 = capTh0, capTh1
+	narrowGeom.capTh0, narrowGeom.capTh1 = capTh0, capTh1
 	wide := patchRawFlux(wideGeom)
 	narrow := patchRawFlux(narrowGeom)
 	pa, pb := patchAreaOf(g)
 	return chordLocusVolumeAllow(wide.value, wide.bound, narrow.value, narrow.bound,
 		g.sideRadius, g.capRadius, windowSkewMax, absSumUpper(pa, pb))
+}
+
+// capWindowOnBranch shifts the cap-level window (capTh0, capTh1) by the
+// integer multiple of 2*pi that lands capTh0 nearest th0, preserving the
+// window's own width (capTh1-capTh0) exactly — a pure rotation of the branch
+// index, never of the angle the window actually spans. The two windows
+// describe the SAME corner (capTh0 is the offset foot near the wall's own
+// th0 corner), so the nearest branch is the true one wherever a genuine
+// (non-tangent) miter's own skew stays under half a turn, which a chamfer
+// setback small relative to the wall's own radius always keeps it.
+func capWindowOnBranch(capTh0, capTh1, th0 float64) (float64, float64) {
+	shift := 2 * math.Pi * math.Round((th0-capTh0)/(2*math.Pi))
+	return capTh0 + shift, capTh1 + shift
 }
 
 // ruledAngleCos is the closed form of the ruled patch's one remaining
