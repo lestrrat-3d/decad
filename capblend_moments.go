@@ -878,6 +878,30 @@ func patchAreaOf(g capPatchGeom) (float64, float64) {
 	// area lies within the family this envelope already covers, and
 	// windowSkew is zero wherever the windows coincide (a tangent join, or
 	// either degenerate patch), leaving the rest of the bound unchanged.
+	// A reviewer reported this term failing to enclose on a REACHABLE body — a
+	// pi/2 sector sketch extruded 1e15 mm, cap chamfered 0.3 mm — quoting a
+	// true ruled-patch area of 2.9431408325276074 mm^2 against a published
+	// bound of 1.9647343287969778 mm^2. That reference is wrong, not this
+	// bound: it applied TRAPEZOID weights (1,2,2,...,2,1 per axis) under
+	// Simpson's 1/(9n^2) normalizer, so it returns exactly 4/9 of the
+	// integral. Its ratio to a converged reference is 0.4444444457 at n=200,
+	// 0.4444444447 at n=400 and 0.4444444445 at n=1200 — approaching 4/9
+	// rather than shrinking, which a genuine discretization error would.
+	// Tensor-product Gauss-Legendre on [0,1]^2 of |P_u x P_t| gives
+	// 6.4373261229841905 (n=8) through 6.4373261229841869 (n=64), successive
+	// deltas at float64 roundoff, and a correctly weighted composite Simpson
+	// agrees at 6.4373261229841914 (n=800). The true residual there is
+	// 0.6331514578014259, which this bound encloses with 3.10x margin. A sweep
+	// of 451 reachable Cone patches (height 10..1e16, phi pi/6..6, d 0.05..4,
+	// R 3/10/250) against GL-64/GL-96 found zero violations at a minimum
+	// enclosure ratio of 2.875871x.
+	//
+	// What that sweep does NOT cover, and what this term is therefore still
+	// only measured on: a side window of [0,2pi] against a cap window of
+	// [0.25,0.251] does exceed the bound, but reaching it means assigning
+	// capPatchGeom's fields directly. A regular wall's cap window is the
+	// offset trimmed at its own miter feet, so the skew is corner-local, and
+	// no reachable body in the sweep produced one.
 	sideDth := math.Abs(g.th1 - g.th0)
 	windowSkew := productUpper(math.Abs(sideDth-dth), productUpper(absSumUpper(R0, R1), slant))
 	// The core term (everything but windowSkew, contourAllow and the level
