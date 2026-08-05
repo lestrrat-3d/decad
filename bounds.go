@@ -40,6 +40,11 @@ import (
 //     cap-loop chamfer's own band patches, docs/modify-reach-design.md §8.4) →
 //     bandPatchAreaAllow, the same two-factor product one patch at a time
 //     rather than one whole section;
+//   - the VOLUME gap between a cap-loop chamfer's straight-ruled Cone patch
+//     and the curved miter locus it denotes at a non-tangential corner →
+//     chordLocusVolumeAllow, an erosion-monotonicity sandwich against the
+//     ordinary shared-window cone-sector flux plus a swept-volume term over
+//     the built patch's own closed-form displacement from it;
 //   - a per-coordinate maximum read as a 3D DISTANCE → radius3D.
 
 const (
@@ -270,6 +275,71 @@ func bandPatchAreaAllow(delta, chordUpper, slantUpper float64) float64 {
 		return 0
 	}
 	return upRound(productUpper(sectionDisplacementLength(delta, 1), slantUpper) + productUpper(chordUpper, delta))
+}
+
+// chordLocusVolumeAllow bounds capblend_moments.go's chord-versus-locus
+// residual: the gap between a cap-loop chamfer's regular-wall Cone patch — the
+// STRAIGHT-RULED surface the topology actually builds between its two
+// directrices — and the TRUE denoted miter locus (docs/modify-reach-design.md
+// §8.3: "at axial fraction s, the denoted miter locus is the parallel section
+// offset by s*dc" — a contract the ruled Cone patch meets only at s=0 and
+// s=1, chording the true curve strictly between them), at a non-tangential
+// corner where the cap-level directrix (capTh0, capTh1) sweeps a window
+// narrower than the side-level one (th0, th1) by windowSkewMax at its widest
+// corner.
+//
+// The proof is a two-term decomposition, |Vol(true)-Vol(built)| <=
+// |Vol(true)-Vol(wide)| + |Vol(wide)-Vol(built)|, where "wide"/"narrow" are
+// the ordinary ROTATIONALLY-SYMMETRIC cone-sector flux this file's own
+// pre-existing formula gives for the SIDE window (th0, th1) shared by both
+// directrices, and for the CAP window (capTh0, capTh1) shared by both:
+//
+//   - Vol(true) in [Vol(narrow), Vol(wide)]. Erosion is monotonic in its
+//     offset amount (a point surviving the deepest cut d always survived
+//     every shallower one, and every survivor of any cut is a point of the
+//     wall's own un-eroded extent), so the true swept solid's own
+//     cross-sectional window at every axial fraction s is a SET sandwiched
+//     between the cap window and the side window — its flux is therefore
+//     sandwiched the same way, and envelopeSlack = |Vol(wide)-Vol(narrow)|
+//     bounds |Vol(true)-Vol(wide)|.
+//   - |Vol(wide)-Vol(built)| <= sweptVolumeAllow(patchDeviation, areaUpper):
+//     the built patch is a convex combination, in Cartesian coordinates, of a
+//     side-level point at radius sideRadius and angle in [th0, th1] and a
+//     cap-level point at radius capRadius and angle in [capTh0, capTh1], so
+//     (triangle inequality on the two component vectors) its own radius never
+//     exceeds the radius the wide cone's own linear taper gives at that axial
+//     level, and (a convex combination of two rays stays angularly between
+//     them) its own angle never leaves [th0, th1] either — patchDeviation is
+//     the proven per-point cap on how far the built surface can then sit from
+//     the wide cone's own surface (a radial term from the two directrices'
+//     radii and the corner skew's own cosine, an angular term the same skew
+//     scaled by the larger radius), and sweptVolumeAllow turns a per-point
+//     displacement bound into a volume one exactly as it already does for a
+//     mesh vertex.
+//
+// windowSkewMax <= 0 (a tangent join, or either degenerate patch, where the
+// two windows coincide) leaves the term at zero, unchanged from the
+// already-shipped tangent-junction/apex/whole-turn readings.
+func chordLocusVolumeAllow(fluxWide, fluxWideBound, fluxNarrow, fluxNarrowBound, sideRadius, capRadius, windowSkewMax, areaUpper float64) float64 {
+	if windowSkewMax <= 0 || isNonFinite(windowSkewMax) {
+		return 0
+	}
+	envelopeSlack := absSumUpper(fluxWide-fluxNarrow, fluxWideBound, fluxNarrowBound)
+	// 1 - cos(x) = 2*sin(x/2)^2, the numerically stable form: the naive
+	// subtraction cancels catastrophically for a small skew, while sin(x/2)
+	// itself is computed directly and squaring a small accurate value stays
+	// accurate.
+	radialDeficit := math.Sqrt(math.Max(0, sideRadius*capRadius)) * math.Abs(math.Sin(windowSkewMax/2))
+	maxRadius := math.Max(math.Abs(sideRadius), math.Abs(capRadius))
+	patchDeviation := absSumUpper(radialDeficit, productUpper(maxRadius, windowSkewMax))
+	// sweptVolumeAllow returns a VOLUME, but this function's return value is a
+	// FLUX term (envelopeSlack is a difference of two patchRawFlux results,
+	// three times a volume) that patchRawFlux's own bound folds into, to be
+	// divided by 3 exactly once at capBandVolume's single division
+	// (capblend_moments.go:418). Scaling this volume term up by 3 here is what
+	// makes that later division land it back at its true size instead of a
+	// third of it.
+	return absSumUpper(envelopeSlack, productUpper(3, sweptVolumeAllow(patchDeviation, areaUpper)))
 }
 
 // rimDelta is the trim-amplified displacement bound of a vertex the boolean

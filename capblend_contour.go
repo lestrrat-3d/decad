@@ -606,27 +606,48 @@ func capCircleLengthBound(exactRadius *big.Rat, held float64) float64 {
 	return intervalFloatError(circumference, held)
 }
 
-// capArcLengthBound bounds a partial cap-level arc's held r·|th1 − th0|. The
-// cap arc is the wall's own arc offset concentrically, so it spans the wall's
-// own sweep: that sweep is the wall's already-bounded length over its exact
-// recorded radius, and the cap arc is that sweep times the cap radius, whose
-// own displacement rides in as a bounded factor. The held value keeps the
-// build's own spelling and is charged the gap to that composed reading, plus
-// the turn the two feet's displacement can account for.
-func capArcLengthBound(w sideWalk, capRadius, radiusDelta, held, delta float64) float64 {
+// capWallArcBound bounds a wall's own cap-level arc's held sweep
+// capRadius·(capTh1 − capTh0) (signed, matching held's own sign convention —
+// the caller passes capRadius*sweepSigned, never an absolute value, so the
+// bracket below and held agree on which branch they are stating). The cap
+// arc runs between the offset corner feet (start, end), whose angle about the
+// wall's exact centre is generally DIFFERENT from the wall's own recorded
+// th0/th1 wherever the corner is a genuine (non-tangent) miter
+// (docs/modify-reach-design.md §8.3) — the cap directrix is TRIMMED there —
+// so the sweep is bracketed straight from those feet, exactly the way
+// capApexArcBound brackets a reflex corner's own connector: an atan2Interval
+// enclosure of the two feet's own turn about the centre, so no libm accuracy
+// is assumed of the sweep itself, plus wraps (capWallSweep's own unwrap count)
+// to reproduce the same branch, plus the turn the two feet's own contour
+// displacement can account for.
+func capWallArcBound(cU, cV float64, start, end Point2, capRadius, held float64, wraps int, delta float64) float64 {
 	fallback := conservativeValueError(held, productUpper(twoPiUpper(), math.Abs(capRadius)))
-	if w.radius <= 0 {
+	aU, aV := floatRat(start.U-cU), floatRat(start.V-cV)
+	bU, bV := floatRat(end.U-cU), floatRat(end.V-cV)
+	rd := floatRat(capRadius)
+	if aU == nil || aV == nil || bU == nil || bV == nil || rd == nil {
 		return fallback
 	}
-	sweep := boundedQuotient(w.length, w.lengthBound, w.radius, 0)
-	composed := boundedMul(measuredScalar(capRadius, radiusDelta), sweep)
-	// The feet lie on the DENOTED offset circle, whose radius is the held one
-	// less its own displacement at worst; arcSweepAllow's turn grows as the
-	// radius shrinks, so the lower end is the one that bounds.
-	turn, ok := arcSweepAllow(downRound(capRadius-radiusDelta), delta)
+	sweep := intervalSub(atan2Interval(bV, bU, false), atan2Interval(aV, aU, false))
+	if wraps != 0 {
+		sweep = intervalAdd(sweep, intervalScale(
+			intervalScale(interval(piLower, piUpper), big.NewRat(2, 1)),
+			big.NewRat(int64(wraps), 1),
+		))
+	}
+	// The build's own float differences round, and that rounding displaces the
+	// direction the angle is read from just as the contour itself does.
+	shift := absSumUpper(
+		delta,
+		addRoundError(start.U, -cU, start.U-cU),
+		addRoundError(start.V, -cV, start.V-cV),
+		addRoundError(end.U, -cU, end.U-cU),
+		addRoundError(end.V, -cV, end.V-cV),
+	)
+	turn, ok := arcSweepAllow(downRound(math.Abs(capRadius)), shift)
 	if !ok {
 		return fallback
 	}
-	bound := absSumUpper(composed.bound, held-composed.value, turn)
+	bound := absSumUpper(intervalFloatError(intervalScale(sweep, rd), held), turn)
 	return math.Min(bound, fallback)
 }

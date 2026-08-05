@@ -452,6 +452,27 @@ func capBandVolume(ctx context.Context, loop LoopRecord, cbp capBlendPayload, ge
 // reason in reverse: its flux passes through math.Sincos, whose result no
 // rational carries, so a mixed section holding one circular wall stays
 // Approximate however exactly its Plane patches integrate.
+//
+// A regular wall's Cone patch (capPatchGeom.circular with a nonzero
+// sideRadius, i.e. neither a reflex corner's apex patch nor a cornerless
+// whole circle) is bounded by two STRAIGHT rulings between two directrices
+// that, at a non-tangential miter corner, sweep DIFFERENT angular windows
+// (th0/th1 the side, capTh0/capTh1 the trimmed cap — capblend_geom.go). What
+// this function integrates is the exact flux of THAT ruled patch — the
+// straight-Line3-bounded surface the topology actually builds — and its bound
+// above is sound for exactly that solid, but it is NOT a bound against the
+// DENOTED chamfer: the true miter locus at axial fraction s is the section
+// offset by s*d (docs/modify-reach-design.md §8.3's own reduction), a curve
+// the straight ruling only touches at s=0 and s=1 and chords in between. That
+// gap is real, grows as the setback approaches the section's own inradius (the
+// cap window closes hard against the side one), and can exceed the arithmetic
+// bound above by several times over — bounds.go's chordLocusVolumeAllow is the
+// dedicated proven term for it (chordLocusResidualAllow below gathers this
+// patch's own inputs to it), added into the bound whenever the two windows
+// genuinely differ and left at its own zero, unchanged, wherever they
+// coincide. TestCapBlendErosionFamilyVolumeBoundEncloses judges the composed
+// bound against an independent erosion-family reference, including the
+// setback-limit family this term exists for.
 func patchRawFlux(g capPatchGeom) boundedScalar {
 	if !g.circular {
 		v0 := r3.NewVec(g.sideA.U, g.sideA.V, g.sideZ)
@@ -473,50 +494,135 @@ func patchRawFlux(g capPatchGeom) boundedScalar {
 	}
 	R0, R1 := g.sideRadius, g.capRadius
 	z0, z1 := g.sideZ, g.capZ
-	th0, th1 := g.th0, g.th1
+	thS0, thS1 := g.th0, g.th1
+	thC0, thC1 := g.capTh0, g.capTh1
 	H := z1 - z0
-	dR := R1 - R0
-	dth := th1 - th0
-	sin0, cos0 := math.Sincos(th0)
-	sin1, cos1 := math.Sincos(th1)
-	sc := sin1 - sin0
-	ss := cos0 - cos1
-	term1 := H * (R0 + R1) / 2 * (g.cU*sc + g.cV*ss)
-	term2 := H * dth * (R0*R0 + R0*R1 + R1*R1) / 3
-	term3 := -dR * dth * (z0*R0 + (z0*dR+H*R0)/2 + H*dR/3)
-	flux := term1 + term2 + term3
+	dS := thS1 - thS0
+	dC := thC1 - thC0
 
-	absH, absDth, absDR := math.Abs(H), math.Abs(dth), math.Abs(dR)
-	absR0, absR1, absZ0 := math.Abs(R0), math.Abs(R1), math.Abs(z0)
-	// polyEnv envelopes term2 and term3 and every intermediate of both: the
-	// same products over absolute operands, with the 1/2 and 1/3 divisors
-	// dropped because dropping a divisor above one only widens an envelope.
-	// These two terms carry no libm result, so their rounding is ordinary
-	// basic arithmetic and analyticRoundBound is the budget for it.
-	polyEnv := absSumUpper(
-		productUpper(productUpper(absH, absDth), absSumUpper(
-			productUpper(absR0, absR0), productUpper(absR0, absR1), productUpper(absR1, absR1))),
-		productUpper(productUpper(absDR, absDth), absSumUpper(
-			productUpper(absZ0, absR0), productUpper(absZ0, absDR),
-			productUpper(absH, absR0), productUpper(absH, absDR))),
+	// The STRAIGHT-SLANT RULED PATCH (docs/modify-reach-design.md §8.3): the
+	// surface between the SIDE arc (radius R0, level z0, sweeping thS0..thS1,
+	// the wall's own full recorded window) and the CAP arc (radius R1, level
+	// z1, sweeping thC0..thC1, the offset TRIMMED at the mitered corner
+	// feet), joined by STRAIGHT rulings — exactly the Line3 slant edges the
+	// topology actually builds — never a single rotationally-symmetric cone
+	// sector spanning one shared window (the old, wrong shape whenever a
+	// circular wall meets a neighbour at a non-tangential miter corner).
+	//
+	// P(u, v) = (1-v)*(R0*cos(thS(u)), R0*sin(thS(u)), z0)
+	//         +    v *(R1*cos(thC(u)), R1*sin(thC(u)), z1),
+	// thS(u) = thS0 + u*dS, thC(u) = thC0 + u*dC, u, v in [0, 1] — matching
+	// all four boundary edges exactly (the two arcs at v=0/v=1, the two
+	// slants at u=0/u=1). Its raw flux P.(Pu x Pv), integrated over the unit
+	// square, splits — by linearity in the plane-local origin shift (cU, cV)
+	// — into an ORIGIN term (one sub-term per directrix, generalizing the old
+	// shared-window eccentric term1) and a LOCAL term: a pure polynomial
+	// piece (poly, generalizing term2+term3) plus one CROSS term whose own
+	// trig factor, ruledAngleCos, is closed form because thS(u) and thC(u)
+	// are both linear in u (a product-to-sum reduction, not a numerical
+	// integral). thS0=thC0 and dS=dC (a tangent join, or the degenerate
+	// single-window cases below) collapses this exactly onto the OLD
+	// term1+term2+term3 formula — verified algebraically and numerically,
+	// never merely asserted.
+	sinS0, cosS0 := math.Sincos(thS0)
+	sinS1, cosS1 := math.Sincos(thS1)
+	sinC0, cosC0 := math.Sincos(thC0)
+	sinC1, cosC1 := math.Sincos(thC1)
+	originR0 := H / 2 * R0 * (g.cU*(sinS1-sinS0) + g.cV*(cosS0-cosS1))
+	originR1 := H / 2 * R1 * (g.cU*(sinC1-sinC0) + g.cV*(cosC0-cosC1))
+	origin := originR0 + originR1
+
+	// poly and cross are regrouped about the band's OWN z origin — z0, the
+	// side level — rather than left as functions of the two absolute levels
+	// z0 AND z1 independently: z1 = z0 + H splits each into a piece
+	// proportional to z0 (the band's own position along the sweep, which can
+	// sit arbitrarily far from the plane-local origin) and a piece
+	// proportional to H alone (the band's own small axial extent) — the same
+	// split the cU/cV origin term above already makes for the in-plane
+	// eccentricity, and a constant z shift across every patch of a band and
+	// the cap disk it closes on cancels in the closed-surface sum the same
+	// way. Both identities are exact (reassociated, not approximated):
+	// R0²z1dS/2 - R1²z0dC/2 = z0·(R1²dSC - dS·dR·(R0+R1))/2 + R0²·H·dS/2, and
+	// R0R1/2·(z1dC - z0dS) = z0·R0R1·(dC-dS)/2 + R0R1·H·dC/2. dSC = dS - dC is
+	// the WINDOW SKEW — exactly zero at a tangent join or either degenerate
+	// patch (capTh0/capTh1 literally th0/th1) — so at every one of those
+	// already-shipped junctions the z0-proportional part of poly collapses to
+	// -z0·dS·dR·(R0+R1)/2, the SAME dR-scaled product the pre-restructure
+	// term3 already carried, and cross's z0-proportional part vanishes
+	// outright, rather than the unconstrained R0²/R1² an envelope read
+	// straight off z0, z1 independently would carry.
+	dR := R1 - R0
+	dSC := dS - dC
+	polyZ0 := R1*R1*dSC - dS*dR*(R0+R1)
+	poly := z0*polyZ0/2 + R0*R0*H*dS/2
+	crossZ0 := -R0 * R1 * dSC
+	cross := z0*crossZ0/2 + R0*R1*H*dC/2
+
+	absH, absR0, absR1 := math.Abs(H), math.Abs(R0), math.Abs(R1)
+	absZ0, absDS, absDC, absDR, absDSC := math.Abs(z0), math.Abs(dS), math.Abs(dC), math.Abs(dR), math.Abs(dSC)
+	// polyEnv envelopes poly and every intermediate of the regrouped form
+	// above: the z0-proportional coefficient's own envelope (a window-skew
+	// term plus a dR-scaled one, both zero-or-small at the already-shipped
+	// junctions) multiplied by |z0|, plus the H-only piece — with the /2
+	// divisors dropped because dropping a divisor above one only widens an
+	// envelope. It carries no libm result, so its rounding is ordinary basic
+	// arithmetic and analyticRoundBound is the budget for it.
+	polyZ0Env := absSumUpper(
+		productUpper(productUpper(absR1, absR1), absDSC),
+		productUpper(productUpper(absDS, absDR), absSumUpper(absR0, absR1)),
 	)
-	// term1 is the eccentric term, and it is the one that passes through
-	// math.Sincos. moments.go's analyticRoundBound states the rule it breaks:
-	// Go gives Sin and Cos no ulp contract, so a result computed through them
-	// never rests on that roundoff budget. trigEnv is the magnitude envelope
-	// that stands in its place — |sin| and |cos| never exceed 1, so |sc| and
-	// |ss| never exceed 2 and the TRUE term1 never exceeds
-	// |H|·(R0+R1)/2 · 2·(|cU|+|cV|), whatever the platform's libm returns.
-	trigEnv := productUpper(productUpper(absH, absSumUpper(absR0, absR1)), absSumUpper(g.cU, g.cV))
-	trigBound := conservativeValueError(term1, trigEnv)
+	polyEnv := absSumUpper(
+		productUpper(absZ0, polyZ0Env),
+		productUpper(productUpper(absR0, absR0), productUpper(absH, absDS)),
+	)
+	// origin and cross both carry a trig factor — origin through Sincos
+	// directly, cross through ruledAngleCos's cos/sinc — and moments.go's
+	// analyticRoundBound states the rule both break: Go gives Sin, Cos and
+	// Atan2 no ulp contract, so a result computed through them never rests on
+	// that roundoff budget alone. originEnv/crossEnv are the STRUCTURAL
+	// magnitude envelopes that stand in its place instead — never read off
+	// the computed value, so they bound the TRUE sub-term regardless of what
+	// the platform's libm returned: |sin| and |cos| never exceed 1, so
+	// origin's magnitude never exceeds |H|*(|R0|+|R1|)*(|cU|+|cV|), and
+	// |ruledAngleCos| never exceeds 1 (|cos| <= 1, |sinc| <= 1 for every
+	// real argument), so cross's magnitude never exceeds the same
+	// z0-proportional-plus-H-only envelope poly's own regrouping gives it.
+	originEnv := productUpper(productUpper(absH, absSumUpper(absR0, absR1)), absSumUpper(g.cU, g.cV))
+	crossZ0Env := productUpper(productUpper(absR0, absR1), absDSC)
+	crossEnv := absSumUpper(
+		productUpper(absZ0, crossZ0Env),
+		productUpper(productUpper(absR0, absR1), productUpper(absH, absDC)),
+	)
+
+	var flux, trigBound float64
 	if g.wholeTurn {
-		// A full period integrates both cos and sin to exactly zero, so this
-		// patch's TRUE term1 is zero and the held value is its own whole
-		// error — a fact about the surface, read off capblend_geom.go's
-		// structural flag and never off a comparison of th0 and th1.
-		trigBound = upRound(math.Abs(term1))
+		// Structural: this patch's window is a genuinely FULL period built
+		// from the SAME floats on both directrices (capblend_geom.go's
+		// cornerless closed circle branch, and every apex patch's degenerate
+		// R0 = 0 side), so thetaS(u) == thetaC(u) identically for every u —
+		// ruledAngleCos's TRUE value is exactly 1, never read off Sincos or
+		// sinc here at all — and origin's own TRUE value is exactly zero (a
+		// full period integrates both cos and sin to zero, capblend_geom.go's
+		// structural flag, never a comparison of the windows). The held
+		// origin is therefore its own whole error, and cross (now ordinary
+		// arithmetic, no trig) is charged the same rounding budget poly is.
+		flux = poly + cross + origin
+		trigBound = upRound(math.Abs(origin))
+	} else {
+		intCos := ruledAngleCos(thS0, thS1, thC0, thC1)
+		trig := origin + cross*intCos
+		flux = poly + trig
+		trigBound = conservativeValueError(trig, absSumUpper(originEnv, crossEnv))
 	}
-	bound := absSumUpper(analyticRoundBound(absSumUpper(polyEnv, trigEnv)), trigBound)
+	bound := absSumUpper(analyticRoundBound(absSumUpper(polyEnv, originEnv, crossEnv)), trigBound)
+	if !g.wholeTurn {
+		// The arithmetic bound above is only for the STRAIGHT-RULED patch
+		// this evaluator actually builds; at a non-tangential corner (where
+		// the cap-level window genuinely differs from the side-level one) it
+		// says nothing about that patch's own gap from the TRUE curved miter
+		// locus the construction denotes (bounds.go's chordLocusVolumeAllow).
+		bound = absSumUpper(bound, chordLocusResidualAllow(g))
+	}
 	if !g.sweepCCW {
 		// The integral is taken over the NORMALIZED window th0 < th1, which
 		// orients the patch radially OUTWARD from its own centre. That is the
@@ -529,6 +635,96 @@ func patchRawFlux(g capPatchGeom) boundedScalar {
 		return measuredScalar(-flux, bound)
 	}
 	return measuredScalar(flux, bound)
+}
+
+// chordLocusResidualAllow gathers this ONE patch's own inputs to
+// bounds.go's chordLocusVolumeAllow: the two reference cone-sector fluxes
+// (the wide, side-window-only reading and the narrow, cap-window-only one —
+// both this same patchRawFlux formula, degenerate to the ordinary
+// rotationally-symmetric cone sector once a patch's two directrices share one
+// window) and this patch's own held area, the surface bounds.go's
+// sweptVolumeAllow needs. Zero wherever the two windows already coincide (a
+// tangent join, or either degenerate patch), matching every already-shipped
+// reading those configurations publish.
+//
+// g.capTh0/g.capTh1 and g.th0/g.th1 are not guaranteed to share a branch:
+// capWallSweep (capblend_geom.go) anchors capTh0 at a raw Atan2, always in
+// (-pi, pi], while th0 comes from the recorded arc range and can sit a full
+// turn away for a major-arc wall — the same corner, described a multiple of
+// 2*pi apart. capWindowOnBranch puts the cap window back on th0's own branch,
+// shifting capTh0 and capTh1 together so the window's WIDTH (capTh1-capTh0)
+// is untouched, before either is differenced against th0/th1 below; every
+// other reader of these two fields (patchAreaOf, patchRawFlux) only ever
+// takes a WITHIN-pair difference (a width), which a shared branch shift
+// cannot change, so this is the one site the mismatch reaches.
+func chordLocusResidualAllow(g capPatchGeom) float64 {
+	capTh0, capTh1 := capWindowOnBranch(g.capTh0, g.capTh1, g.th0)
+	windowSkewMax := math.Max(capTh0-g.th0, g.th1-capTh1)
+	// windowSkewMax is never negative: this is a checkable fact, not a
+	// defensive assumption. The cap window is the SIDE window trimmed by
+	// erosion — the cap contour is the wall's own offset, and offsetting a
+	// point radially preserves its polar angle about the wall's centre — so
+	// the cap window is always a SUBSET of the side window and can only be
+	// narrower or equal, never wider. For a circle/line miter this reduces to
+	// a closed form: with the corner's own half-angle cosine a = cos(alpha)
+	// and setback d, the per-corner skew is a' - a = d(1-a)/(R+d) >= 0 for a
+	// hole wall (offset radius R+d) and d(1+a)/(R-d) >= 0 for an outer wall
+	// (offset radius R-d) — both non-negative for every admitted 0 < d < R
+	// and -1 <= a <= 1, zero only at a tangent join (a = 1) or a
+	// degenerate/whole-turn patch, which is the only way this guard fires.
+	if windowSkewMax <= 0 {
+		return 0
+	}
+	wideGeom, narrowGeom := g, g
+	wideGeom.capTh0, wideGeom.capTh1 = g.th0, g.th1
+	narrowGeom.th0, narrowGeom.th1 = capTh0, capTh1
+	narrowGeom.capTh0, narrowGeom.capTh1 = capTh0, capTh1
+	wide := patchRawFlux(wideGeom)
+	narrow := patchRawFlux(narrowGeom)
+	pa, pb := patchAreaOf(g)
+	return chordLocusVolumeAllow(wide.value, wide.bound, narrow.value, narrow.bound,
+		g.sideRadius, g.capRadius, windowSkewMax, absSumUpper(pa, pb))
+}
+
+// capWindowOnBranch shifts the cap-level window (capTh0, capTh1) by the
+// integer multiple of 2*pi that lands capTh0 nearest th0, preserving the
+// window's own width (capTh1-capTh0) exactly — a pure rotation of the branch
+// index, never of the angle the window actually spans. The two windows
+// describe the SAME corner (capTh0 is the offset foot near the wall's own
+// th0 corner), so the nearest branch is the true one wherever a genuine
+// (non-tangent) miter's own skew stays under half a turn, which a chamfer
+// setback small relative to the wall's own radius always keeps it.
+func capWindowOnBranch(capTh0, capTh1, th0 float64) (float64, float64) {
+	shift := 2 * math.Pi * math.Round((th0-capTh0)/(2*math.Pi))
+	return capTh0 + shift, capTh1 + shift
+}
+
+// ruledAngleCos is the closed form of the ruled patch's one remaining
+// integral, ∫[0,1] cos(thetaS(u) - thetaC(u))du with thetaS(u) = thS0 + u*dS
+// and thetaC(u) = thC0 + u*dC both linear in u: writing phi0 = thS0-thC0,
+// phi1 = thS1-thC1 and delta = dS-dC, the antiderivative is
+// (sin(phi0+delta)-sin(phi0))/delta = (sin(phi1)-sin(phi0))/delta, which the
+// product-to-sum identity restates as cos((phi0+phi1)/2)*sinc(delta/2) — the
+// numerically stable form (no difference-of-sines cancellation as delta gets
+// small, and no division at all at delta = 0, the equal-window case a tangent
+// join or either degenerate patch reaches). Both factors are magnitude-capped
+// at 1 for every real argument, which is what lets patchRawFlux's own
+// envelope bound this whole term without trusting Sin/Cos's accuracy.
+func ruledAngleCos(thS0, thS1, thC0, thC1 float64) float64 {
+	phi0 := thS0 - thC0
+	phi1 := thS1 - thC1
+	delta := (thS1 - thS0) - (thC1 - thC0)
+	return math.Cos((phi0+phi1)/2) * sincHalf(delta)
+}
+
+// sincHalf returns sin(x/2)/(x/2), continuous (and exactly 1, no library call
+// at all) at x = 0.
+func sincHalf(x float64) float64 {
+	h := x / 2
+	if h == 0 {
+		return 1
+	}
+	return math.Sin(h) / h
 }
 
 // exactPlanePatchFlux is the flat quad patch's raw flux
@@ -658,9 +854,29 @@ func patchAreaOf(g capPatchGeom) (float64, float64) {
 	H := g.capZ - g.sideZ
 	dR := R1 - R0
 	slant := math.Hypot(dR, H)
-	dth := math.Abs(g.th1 - g.th0)
+	// dth is the CAP-level (trimmed) sweep — the actual held chord's own
+	// angle, capTh1-capTh0 — never the wall's own recorded thS1-thS0: a
+	// regular wall's two directrices generally sweep different angles at a
+	// non-tangent miter corner (docs/modify-reach-design.md §8.3), the same
+	// fact patchRawFlux's ruled-patch integral reads off both windows.
+	dth := math.Abs(g.capTh1 - g.capTh0)
 	area := dth / 2 * (R0 + R1) * slant
-	bound := absSumUpper(conservativeValueError(area, dth*(R0+R1)*(math.Abs(dR)+math.Abs(H))), g.contourAllow)
+	// This formula is the constant-slant frustum-sector shape unchanged; it
+	// is never claimed exact even when the two windows coincide (a Plane
+	// patch's own two-triangle bound above is the same kind of arithmetic-
+	// only envelope, never a tight one). Where the windows genuinely differ,
+	// the true ruled surface's own rulings are not all the same length —
+	// this formula's own "slant" assumption — so windowSkew widens the
+	// envelope by the reading the OTHER window would have given, a sound
+	// (generous, not tight) allowance for the gap between the two: the true
+	// area lies within the family this envelope already covers, and
+	// windowSkew is zero wherever the windows coincide (a tangent join, or
+	// either degenerate patch), leaving the arithmetic-only bound unchanged.
+	sideDth := math.Abs(g.th1 - g.th0)
+	windowSkew := productUpper(math.Abs(sideDth-dth), productUpper(absSumUpper(R0, R1), slant))
+	bound := absSumUpper(
+		conservativeValueError(area, dth*(R0+R1)*(math.Abs(dR)+math.Abs(H))),
+		windowSkew, g.contourAllow)
 	return area, bound
 }
 

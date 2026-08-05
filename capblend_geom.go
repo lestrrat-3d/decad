@@ -120,6 +120,30 @@ func capWallFoot(joins []cornerJoin, i, n int) (Point2, Point2) {
 	return start, end
 }
 
+// capWallSweep returns a circular wall's own CAP-LEVEL angular window — the
+// offset corner feet's angles about the wall's exact centre — unwrapped to
+// the branch nearest the wall's own recorded sweep refSweep (w.th1 - w.th0).
+// A chamfer setback is small relative to a sane wall radius, so the offset
+// foot never turns the corner's point by anywhere near a half turn from the
+// wall's own endpoint; picking the nearest branch is what keeps delta small
+// in patchRawFlux's own ruled-angle term rather than off by a spurious full
+// turn. wraps is how many extra full turns that unwrap added, so
+// capWallArcBound's own exact bracket can reproduce the same branch.
+func capWallSweep(cU, cV float64, start, end Point2, refSweep float64) (capTh0, capTh1 float64, wraps int) {
+	capTh0 = math.Atan2(start.V-cV, start.U-cU)
+	raw1 := math.Atan2(end.V-cV, end.U-cU)
+	diff := raw1 - capTh0
+	for diff-refSweep > math.Pi {
+		diff -= 2 * math.Pi
+		wraps--
+	}
+	for diff-refSweep < -math.Pi {
+		diff += 2 * math.Pi
+		wraps++
+	}
+	return capTh0, capTh0 + diff, wraps
+}
+
 // oneLoopCornerLoop decomposes a single recorded loop into its coalesced
 // corner walk, the same decomposition prismCornerLoopsBudget applies to
 // every loop of a section.
@@ -198,6 +222,29 @@ type capPatchGeom struct {
 	// whole held value is its own error and no Sincos magnitude envelope is
 	// owed for it.
 	wholeTurn bool
+
+	// capTh0, capTh1 are the CAP-LEVEL directrix's own angular window,
+	// normalized (and swapped, where th0/th1 are) the SAME way — capTh0
+	// paired with th0's own corner, capTh1 with th1's. A regular wall's cap
+	// contour is the offset arc TRIMMED at the mitered corner feet
+	// (capWallFoot), which sit at a DIFFERENT angle than the wall's own
+	// endpoints wherever the corner is a genuine (non-tangent) miter
+	// (docs/modify-reach-design.md §8.3): th0/th1 above stay the wall's own
+	// full recorded sweep — the SIDE directrix, which the DX7 survey reads
+	// because the patch genuinely attains it there — while capTh0/capTh1 is
+	// the trimmed CAP directrix, and patchRawFlux integrates the
+	// straight-ruled patch BETWEEN the two windows rather than assume a
+	// single rotationally-symmetric cone sector spanning one shared window.
+	// patchAreaOf does not: its own area stays the constant-slant
+	// frustum-sector formula read against the trimmed CAP window alone, with
+	// the two windows genuinely differing widening its BOUND (windowSkew)
+	// rather than its own integral.
+	// A reflex corner's apex patch (side radius zero, so no side angle
+	// matters) and the single cornerless closed circle (no corner trims it
+	// at all, so both windows are the identical full period) set
+	// capTh0/capTh1 equal to th0/th1, which is what lets every circular
+	// patch route through the one general formula.
+	capTh0, capTh1 float64
 
 	sideZ, capZ float64
 
@@ -282,7 +329,7 @@ func buildCapBand(ctx context.Context, body *Body, ref StepRef, cbp capBlendPayl
 		// against the axial one), the two factors bandPatchAreaAllow needs.
 		chordUpper := absSumUpper(capEdge.length, capEdge.lengthBound)
 		slant := math.Hypot(math.Abs(capRadius-w.radius), math.Abs(capZ-sideZ))
-		geom := capPatchGeom{circular: true, cU: w.cU, cV: w.cV, sideRadius: w.radius, capRadius: capRadius, th0: gth0, th1: gth1, sweepCCW: w.th1 > w.th0, wholeTurn: true, sideZ: sideZ, capZ: capZ, contourAllow: bandPatchAreaAllow(delta, chordUpper, slant)}
+		geom := capPatchGeom{circular: true, cU: w.cU, cV: w.cV, sideRadius: w.radius, capRadius: capRadius, th0: gth0, th1: gth1, capTh0: gth0, capTh1: gth1, sweepCCW: w.th1 > w.th0, wholeTurn: true, sideZ: sideZ, capZ: capZ, contourAllow: bandPatchAreaAllow(delta, chordUpper, slant)}
 		setPatchArea(patch, geom)
 		capLoop := []coedge{{edge: capEdge, forward: true}}
 		return capBandResult{patches: []*Face{patch}, capCo: capLoop, geom: []capPatchGeom{geom}, delta: delta}, nil
@@ -439,7 +486,7 @@ func buildCapBand(ctx context.Context, body *Body, ref StepRef, cbp capBlendPayl
 		g := capPatchGeom{
 			circular: true, sweepCCW: false,
 			cU: j.vU, cV: j.vV, sideRadius: 0, capRadius: d,
-			th0: gth0, th1: gth1, sideZ: sideZ, capZ: capZ,
+			th0: gth0, th1: gth1, capTh0: gth0, capTh1: gth1, sideZ: sideZ, capZ: capZ,
 			contourAllow: bandPatchAreaAllow(delta, chordUpper, slant),
 		}
 		setPatchArea(face, g)
@@ -461,18 +508,24 @@ func buildCapBand(ctx context.Context, body *Body, ref StepRef, cbp capBlendPayl
 		// A circular wall's cap-level radius is resolved ONCE per wall and
 		// shared by the wall's edge, its surface and its recorded geometry, so
 		// no two of them can disagree about the offset and capBandRadius's own
-		// refusals are decided before any of the three is built.
-		capRadius, radiusDelta := 0.0, 0.0
+		// refusals are decided before any of the three is built. Its cap-level
+		// SWEEP (capTh0, capTh1) is resolved alongside it: the offset corner
+		// feet's own angles about the wall's exact centre, generally different
+		// from the wall's own w.th0/w.th1 wherever the corner is a genuine
+		// (non-tangent) miter (docs/modify-reach-design.md §8.3) — the cap
+		// directrix is TRIMMED there, the side directrix is not.
+		capRadius := 0.0
+		capTh0, capTh1, wraps := 0.0, 0.0, 0
 		if w.isCircular() {
 			r, err := capBandRadius(w, d)
 			if err != nil {
 				return capBandResult{}, err
 			}
-			exactRadius, ok := ivExactOffsetRadius(w, d)
-			if !ok {
+			if _, ok := ivExactOffsetRadius(w, d); !ok {
 				return capBandResult{}, errCapContourUnbounded
 			}
-			capRadius, radiusDelta = r, rationalFloatError(exactRadius, r)
+			capRadius = r
+			capTh0, capTh1, wraps = capWallSweep(w.cU, w.cV, start, end, w.th1-w.th0)
 		}
 
 		var capEdge *Edge
@@ -487,8 +540,10 @@ func buildCapBand(ctx context.Context, body *Body, ref StepRef, cbp capBlendPayl
 				lengthBound: straightEdgeBound(held, ratSquaredDistance3(end.U, end.V, 0, start.U, start.V, 0), delta, delta),
 			}
 		} else {
-			held := capRadius * math.Abs(w.th1-w.th0)
-			capEdge = arcEdge(pl, w.cU, w.cV, capRadius, capZ, capA, capB, w.th0, w.th1, held, capArcLengthBound(w, capRadius, radiusDelta, held, delta))
+			sweepSigned := capTh1 - capTh0
+			held := math.Abs(capRadius * sweepSigned)
+			capEdge = arcEdge(pl, w.cU, w.cV, capRadius, capZ, capA, capB, capTh0, capTh1, held,
+				capWallArcBound(w.cU, w.cV, start, end, capRadius, capRadius*sweepSigned, wraps, delta))
 		}
 
 		var surf Surface
@@ -562,8 +617,14 @@ func buildCapBand(ctx context.Context, body *Body, ref StepRef, cbp capBlendPayl
 			// sweepCCW keeps the sense the normalization drops.
 			g.sweepCCW = w.th1 > w.th0
 			g.th0, g.th1 = w.th0, w.th1
+			g.capTh0, g.capTh1 = capTh0, capTh1
 			if g.th1 < g.th0 {
+				// The SAME swap, applied to both pairs together: g.th0 must
+				// keep pairing with g.capTh0 (both the wall's OWN start
+				// corner) and g.th1 with g.capTh1 (both its end corner), or
+				// patchRawFlux's ruled-angle term pairs the wrong corners.
 				g.th0, g.th1 = g.th1, g.th0
+				g.capTh0, g.capTh1 = g.capTh1, g.capTh0
 			}
 		} else {
 			g.sideA = Point2{U: w.startU, V: w.startV}
@@ -649,10 +710,13 @@ func wholeCircleEdge(pl prismPayload, cu, cv, r, z float64, ccw bool, delta floa
 }
 
 // arcEdge builds an Arc3 Edge in the cap plane at z between the given
-// vertices, walking the same sense (th0, th1) the original wall does. length is
-// the held sweep r*|th1-th0| and lengthBound is capArcLengthBound's proven
-// bound on it — the caller forms the two together so the bound is never
-// computed against a value spelled a second time.
+// vertices, walking the sense (th0, th1) the caller's own directrix does —
+// the wall's own (th0, th1) for a whole-circle band, the cap-level
+// (capTh0, capTh1) capWallSweep resolved for a regular wall's own trimmed
+// arc. length is the held sweep r*|th1-th0| and lengthBound is
+// capWallArcBound's (or capCircleLengthBound's) proven bound on it — the
+// caller forms the two together so the bound is never computed against a
+// value spelled a second time.
 func arcEdge(pl prismPayload, cu, cv, r, z float64, start, end *Vertex, th0, th1, length, lengthBound float64) *Edge {
 	axis := pl.dir(0, 0, 1)
 	if th1 < th0 {

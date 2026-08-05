@@ -28,7 +28,8 @@ func capBandCircle(t *testing.T, r, d, capZ float64) boundedScalar {
 	}
 	g := capPatchGeom{
 		circular: true, sideRadius: r, capRadius: r - d,
-		th0: 0, th1: 2 * math.Pi, sweepCCW: true, wholeTurn: true,
+		th0: 0, th1: 2 * math.Pi, capTh0: 0, capTh1: 2 * math.Pi,
+		sweepCCW: true, wholeTurn: true,
 		sideZ: capZ - d, capZ: capZ,
 	}
 	v, err := capBandVolume(t.Context(), loop, cbp, []capPatchGeom{g}, capZ, -1, 0)
