@@ -606,27 +606,21 @@ func capCircleLengthBound(exactRadius *big.Rat, held float64) float64 {
 	return intervalFloatError(circumference, held)
 }
 
-// capWallArcBound bounds a wall's own cap-level arc's held sweep
-// capRadius·(capTh1 − capTh0) (signed, matching held's own sign convention —
-// the caller passes capRadius*sweepSigned, never an absolute value, so the
-// bracket below and held agree on which branch they are stating). The cap
-// arc runs between the offset corner feet (start, end), whose angle about the
-// wall's exact centre is generally DIFFERENT from the wall's own recorded
-// th0/th1 wherever the corner is a genuine (non-tangent) miter
-// (docs/modify-reach-design.md §8.3) — the cap directrix is TRIMMED there —
-// so the sweep is bracketed straight from those feet, exactly the way
-// capApexArcBound brackets a reflex corner's own connector: an atan2Interval
-// enclosure of the two feet's own turn about the centre, so no libm accuracy
-// is assumed of the sweep itself, plus wraps (capWallSweep's own unwrap count)
-// to reproduce the same branch, plus the turn the two feet's own contour
-// displacement can account for.
-func capWallArcBound(cU, cV float64, start, end Point2, capRadius, held float64, wraps int, delta float64) float64 {
-	fallback := conservativeValueError(held, productUpper(twoPiUpper(), math.Abs(capRadius)))
+// capSweepBracket is the atan2Interval enclosure of a cap-level directrix's
+// swept angle — atan2(end−centre) − atan2(start−centre), unwrapped by
+// wraps·2π to the same branch capWallSweep's own float computation picked —
+// plus the coordinate shift (the contour's own displacement, folded in by
+// the caller, plus each endpoint's own subtraction rounding) that a caller
+// turns into an allowance for how far those feet may sit from the point the
+// offset denotes. It is the ONE bracket capWallArcBound (a length bound,
+// scaled by the wall's own radius) and capSweepAllow (an angle bound, read
+// directly) both build from, so the two readers of one wall's cap-level
+// sweep are never told two different enclosures of it.
+func capSweepBracket(cU, cV float64, start, end Point2, wraps int, delta float64) (ratInterval, float64, bool) {
 	aU, aV := floatRat(start.U-cU), floatRat(start.V-cV)
 	bU, bV := floatRat(end.U-cU), floatRat(end.V-cV)
-	rd := floatRat(capRadius)
-	if aU == nil || aV == nil || bU == nil || bV == nil || rd == nil {
-		return fallback
+	if aU == nil || aV == nil || bU == nil || bV == nil {
+		return ratInterval{}, 0, false
 	}
 	sweep := intervalSub(atan2Interval(bV, bU, false), atan2Interval(aV, aU, false))
 	if wraps != 0 {
@@ -644,10 +638,66 @@ func capWallArcBound(cU, cV float64, start, end Point2, capRadius, held float64,
 		addRoundError(end.U, -cU, end.U-cU),
 		addRoundError(end.V, -cV, end.V-cV),
 	)
+	return sweep, shift, true
+}
+
+// capWallArcBound bounds a wall's own cap-level arc's held sweep
+// capRadius·(capTh1 − capTh0) (signed, matching held's own sign convention —
+// the caller passes capRadius*sweepSigned, never an absolute value, so the
+// bracket below and held agree on which branch they are stating). The cap
+// arc runs between the offset corner feet (start, end), whose angle about the
+// wall's exact centre is generally DIFFERENT from the wall's own recorded
+// th0/th1 wherever the corner is a genuine (non-tangent) miter
+// (docs/modify-reach-design.md §8.3) — the cap directrix is TRIMMED there —
+// so the sweep is bracketed straight from those feet, exactly the way
+// capApexArcBound brackets a reflex corner's own connector: an atan2Interval
+// enclosure of the two feet's own turn about the centre, so no libm accuracy
+// is assumed of the sweep itself, plus wraps (capWallSweep's own unwrap count)
+// to reproduce the same branch, plus the turn the two feet's own contour
+// displacement can account for.
+func capWallArcBound(cU, cV float64, start, end Point2, capRadius, held float64, wraps int, delta float64) float64 {
+	fallback := conservativeValueError(held, productUpper(twoPiUpper(), math.Abs(capRadius)))
+	sweep, shift, ok := capSweepBracket(cU, cV, start, end, wraps, delta)
+	if !ok {
+		return fallback
+	}
+	rd := floatRat(capRadius)
+	if rd == nil {
+		return fallback
+	}
 	turn, ok := arcSweepAllow(downRound(math.Abs(capRadius)), shift)
 	if !ok {
 		return fallback
 	}
 	bound := absSumUpper(intervalFloatError(intervalScale(sweep, rd), held), turn)
+	return math.Min(bound, fallback)
+}
+
+// capSweepAllow bounds |held − trueSweep| for a cap-level directrix's own RAW
+// swept angle in radians — capSweepBracket's same enclosure, reported against
+// the raw sweep rather than against radius·sweep, so patchAreaOf's Δθ factor
+// (the frustum-sector area formula's own sweep) and capWallArcBound's length
+// bound both read one proven enclosure of the same sweep
+// (docs/modify-reach-design.md §8.4). radius is the circle the two feet lie
+// on (capRadius for a regular wall's cap contour, d for a reflex corner's
+// connector) and is used only to turn the feet's own contour displacement
+// into the angular turn a foot at that radius can still account for:
+// arcSweepAllow's own arc-LENGTH allowance (independent of which radius it is
+// stated against, by its own derivation — see arcSweepAllow's doc comment)
+// divided by that same radius restates it in radians, rounded down before
+// dividing so the allowance can only widen, never tighten.
+func capSweepAllow(cU, cV, radius float64, start, end Point2, held float64, wraps int, delta float64) float64 {
+	fallback := conservativeValueError(held, twoPiUpper())
+	sweep, shift, ok := capSweepBracket(cU, cV, start, end, wraps, delta)
+	if !ok {
+		return fallback
+	}
+	r := downRound(math.Abs(radius))
+	lengthTurn, ok := arcSweepAllow(r, shift)
+	if !ok {
+		return fallback
+	}
+	angularTurn := upRound(lengthTurn / r)
+	bound := absSumUpper(intervalFloatError(sweep, held), angularTurn)
 	return math.Min(bound, fallback)
 }

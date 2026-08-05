@@ -2,6 +2,7 @@ package decad
 
 import (
 	"math"
+	"math/big"
 	"testing"
 
 	"github.com/lestrrat-3d/units"
@@ -69,4 +70,66 @@ func TestCapBandVolumeBoundTracksTheFluxNotTheCancelledBand(t *testing.T) {
 	// would be identical at both heights, because the band is.
 	require.Greater(t, hi.bound, 1e3*lo.bound,
 		`the bound has to grow with the flux the band was cancelled out of`)
+}
+
+// TestConeFrustumAreaBracketEnclosesReference is coneFrustumAreaBracket's own
+// soundness check, independent of any build. A = (dth/2)*(R0+R1)*slant is the
+// frustum-sector formula patchAreaOf's Cone arm evaluates; dthAllow claims
+// the true window sits within dthAllow of the held dth, so the certified
+// bound must enclose the reference area computed at every trueDth the caller
+// admits — dth-dthAllow, dth and dth+dthAllow — not merely at dth itself.
+// The reference is built from the SAME exact-rational construction
+// coneFrustumAreaBracket uses internally (big.Rat sums/differences, a
+// 512-bit square root), so no float64 rounding on the test's own side can
+// manufacture a false failure: what a real build hands this function is
+// always a float64 dth and a float64 dthAllow, and this is the honest
+// enclosure claim over the interval those two floats denote. This is the
+// property that must never regress — the tightening this fix makes over
+// conservativeValueError's old fallback is sound only where this still
+// holds.
+func TestConeFrustumAreaBracketEnclosesReference(t *testing.T) {
+	const prec = 512
+	ratOfFloat := func(x float64) *big.Rat { return new(big.Rat).SetFloat64(x) }
+	bfRat := func(r *big.Rat) *big.Float { return new(big.Float).SetPrec(prec).SetRat(r) }
+	mul := func(a, b *big.Float) *big.Float { return new(big.Float).SetPrec(prec).Mul(a, b) }
+	add := func(a, b *big.Float) *big.Float { return new(big.Float).SetPrec(prec).Add(a, b) }
+	quo := func(a, b *big.Float) *big.Float { return new(big.Float).SetPrec(prec).Quo(a, b) }
+	sqrtF := func(a *big.Float) *big.Float { return new(big.Float).SetPrec(prec).Sqrt(a) }
+
+	cases := []struct {
+		name                  string
+		R0, R1, H, dth, allow float64
+	}{
+		{"ordinary miter wall", 10, 9.5, 8, 0.3, 1e-9},
+		{"whole-turn cylinder cap", 10, 9.5, 8, 2 * math.Pi, 1e-12},
+		{"tiny apex sweep", 0.5, 0.5, 0.5, 0.001, 1e-6},
+		{"huge radius, tiny setback", 1e12, 1e12 - 1e-3, 10, math.Pi / 2, 1e-15},
+		{"zero allowance (a perfectly known window)", 20, 18, 5, 1.0, 0},
+		{"equal radii, pure axial slant", 15, 15, 6, 0.7, 1e-8},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dR := tc.R1 - tc.R0
+			H := tc.H
+			held := tc.dth / 2 * (tc.R0 + tc.R1) * math.Hypot(dR, H)
+			bound := coneFrustumAreaBracket(tc.R0, tc.R1, dR, H, tc.dth, tc.allow, held)
+			require.False(t, math.IsInf(bound, 1), "the bracket must build for well-formed finite inputs")
+
+			rDR, rH := ratOfFloat(dR), ratOfFloat(H)
+			slant := sqrtF(add(mul(bfRat(rDR), bfRat(rDR)), mul(bfRat(rH), bfRat(rH))))
+			radii := bfRat(new(big.Rat).Add(ratOfFloat(tc.R0), ratOfFloat(tc.R1)))
+			dthRat, allowRat := ratOfFloat(tc.dth), ratOfFloat(tc.allow)
+			for _, trueDthRat := range []*big.Rat{
+				new(big.Rat).Sub(dthRat, allowRat),
+				dthRat,
+				new(big.Rat).Add(dthRat, allowRat),
+			} {
+				ref := quo(mul(bfRat(trueDthRat), mul(radii, slant)), bfRat(big.NewRat(2, 1)))
+				refF, _ := ref.Float64()
+				residual := math.Abs(held - refF)
+				require.LessOrEqual(t, residual, bound,
+					"trueDth=%v residual %v must not exceed bound %v", trueDthRat, residual, bound)
+			}
+		})
+	}
 }

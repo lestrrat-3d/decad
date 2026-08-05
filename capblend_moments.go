@@ -874,10 +874,58 @@ func patchAreaOf(g capPatchGeom) (float64, float64) {
 	// either degenerate patch), leaving the arithmetic-only bound unchanged.
 	sideDth := math.Abs(g.th1 - g.th0)
 	windowSkew := productUpper(math.Abs(sideDth-dth), productUpper(absSumUpper(R0, R1), slant))
-	bound := absSumUpper(
+	// The core term (everything but windowSkew/contourAllow, which stand
+	// unchanged either way) takes the SMALLER of two independently sound
+	// bounds: the unconditional envelope conservativeValueError always gives,
+	// and coneFrustumAreaBracket's certified interval — sound wherever it
+	// manages to build one, +Inf (hence never the min) where it cannot. This
+	// can only shrink the published bound, never grow it.
+	core := math.Min(
 		conservativeValueError(area, dth*(R0+R1)*(math.Abs(dR)+math.Abs(H))),
-		windowSkew, g.contourAllow)
+		coneFrustumAreaBracket(R0, R1, dR, H, dth, g.capThAllow, area),
+	)
+	bound := absSumUpper(core, windowSkew, g.contourAllow)
 	return area, bound
+}
+
+// coneFrustumAreaBracket is the certified interval bound on patchAreaOf's
+// Cone-arm closed form A = (Δθ/2)·(R0+R1)·√(ΔR²+H²) — the constant-slant
+// frustum-sector area that formula denotes. R0, R1 (the patch's own
+// side/cap radii) and H (= capZ − sideZ, itself a difference of two payload
+// floats) are all payload float64s, hence exact rationals with NO rounding
+// on the way, so ΔR = R1−R0 and H both lift EXACTLY and the only inexact
+// factors are the sweep Δθ — bracketed by dthAllow, capThAllow's own proven
+// enclosure of the true window (an atan2Interval bracket on the patch's own
+// offset feet, or piLower/piUpper for the structurally whole-turn circle;
+// capblend_contour.go/capblend_geom.go) — and the square root, rounded
+// outward by intervalSqrt. Interval arithmetic is inclusion-monotonic, so
+// the composed product [dth−dthAllow, dth+dthAllow] × [R0+R1] × [slant]
+// encloses the true A whatever the platform's Hypot, Atan2 or Sincos
+// returned: nowhere here is an ulp contract on any of them assumed. Returns
+// +Inf where a factor fails to lift (non-finite geometry), so the caller's
+// math.Min falls back to the unconditional envelope.
+func coneFrustumAreaBracket(R0, R1, dR, H, dth, dthAllow, held float64) float64 {
+	if isNonFinite(dthAllow) {
+		return math.Inf(1)
+	}
+	rR0, rR1 := floatRat(R0), floatRat(R1)
+	rdR, rH := floatRat(dR), floatRat(H)
+	rdth, rAllow := floatRat(dth), floatRat(dthAllow)
+	if rR0 == nil || rR1 == nil || rdR == nil || rH == nil || rdth == nil || rAllow == nil {
+		return math.Inf(1)
+	}
+	slantIv, ok := intervalSqrt(intervalAdd(intervalSquare(pointInterval(rdR)), intervalSquare(pointInterval(rH))))
+	if !ok {
+		return math.Inf(1)
+	}
+	radiiIv := pointInterval(new(big.Rat).Add(rR0, rR1))
+	// [dth-dthAllow, dth+dthAllow], taken EXACTLY over rationals (never as a
+	// float subtraction/addition, which could round the interval's own
+	// endpoint the wrong way and silently exclude the true value it is
+	// supposed to enclose).
+	dthIv := interval(new(big.Rat).Sub(rdth, rAllow), new(big.Rat).Add(rdth, rAllow))
+	areaIv := intervalScale(intervalMul(dthIv, intervalMul(radiiIv, slantIv)), big.NewRat(1, 2))
+	return intervalFloatError(areaIv, held)
 }
 
 // capBlendBoundsContext is the placed body's axis-aligned bounding box, read

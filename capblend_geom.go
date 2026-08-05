@@ -257,6 +257,16 @@ type capPatchGeom struct {
 	// is zero (an axis-aligned section's exact miters), which is what keeps
 	// patchAreaOf's Plane/Cone arithmetic-only bound unchanged there.
 	contourAllow float64
+
+	// capThAllow is the proven bound on |held (capTh1−capTh0) − true window|,
+	// derived at build time from the same atan2Interval bracket capWallArcBound
+	// builds for this wall's own cap-level arc (capSweepAllow,
+	// capblend_contour.go), or from piLower/piUpper directly for the one
+	// whole-turn circle, whose cap-level sweep is a structural fact of that
+	// construction (wholeTurn) rather than an offset corner's own computed
+	// feet. patchAreaOf's Cone arm reads it to bracket the frustum-sector
+	// formula's Δθ factor; nothing else does.
+	capThAllow float64
 }
 
 // buildCapBand builds the chamfer band for one loop selected on one cap: the
@@ -329,7 +339,17 @@ func buildCapBand(ctx context.Context, body *Body, ref StepRef, cbp capBlendPayl
 		// against the axial one), the two factors bandPatchAreaAllow needs.
 		chordUpper := absSumUpper(capEdge.length, capEdge.lengthBound)
 		slant := math.Hypot(math.Abs(capRadius-w.radius), math.Abs(capZ-sideZ))
-		geom := capPatchGeom{circular: true, cU: w.cU, cV: w.cV, sideRadius: w.radius, capRadius: capRadius, th0: gth0, th1: gth1, capTh0: gth0, capTh1: gth1, sweepCCW: w.th1 > w.th0, wholeTurn: true, sideZ: sideZ, capZ: capZ, contourAllow: bandPatchAreaAllow(delta, chordUpper, slant)}
+		// capThAllow: the whole-turn patch's cap-level sweep is the WALL's own
+		// recorded th0/th1 (there is no offset corner to trim it — wholeTurn is
+		// exactly this structural fact), so its true value is 2π as a fact of
+		// the construction rather than something an offset solve computed. The
+		// only inexactness is the wall's own float representation of a full
+		// turn, bracketed against 2π's own exact rational constants — the same
+		// bracket capCircleLengthBound already takes for this circle's
+		// circumference.
+		dthHeld := gth1 - gth0
+		capThAllow := intervalFloatError(intervalScale(interval(piLower, piUpper), big.NewRat(2, 1)), dthHeld)
+		geom := capPatchGeom{circular: true, cU: w.cU, cV: w.cV, sideRadius: w.radius, capRadius: capRadius, th0: gth0, th1: gth1, capTh0: gth0, capTh1: gth1, sweepCCW: w.th1 > w.th0, wholeTurn: true, sideZ: sideZ, capZ: capZ, contourAllow: bandPatchAreaAllow(delta, chordUpper, slant), capThAllow: capThAllow}
 		setPatchArea(patch, geom)
 		capLoop := []coedge{{edge: capEdge, forward: true}}
 		return capBandResult{patches: []*Face{patch}, capCo: capLoop, geom: []capPatchGeom{geom}, delta: delta}, nil
@@ -372,6 +392,11 @@ func buildCapBand(ctx context.Context, body *Body, ref StepRef, cbp capBlendPayl
 	arcByCorner := make([]*Edge, n) // non-nil for a reflex corner's cap-level arc
 	arcTh0 := make([]float64, n)
 	arcTh1 := make([]float64, n)
+	// arcWraps carries each reflex corner's own unwrap count (below) into
+	// Pass 2's capThAllow computation, which needs the SAME branch this
+	// pass's arcTh0[i]/arcTh1[i] already committed to — recomputing it from
+	// those two alone would lose which multiple of 2π they were unwrapped by.
+	arcWraps := make([]int, n)
 	for i := range n {
 		j := joins[i]
 		apex := sideVertexAt(i)
@@ -401,6 +426,7 @@ func buildCapBand(ctx context.Context, body *Body, ref StepRef, cbp capBlendPayl
 			th1 -= 2 * math.Pi
 			wraps++
 		}
+		arcWraps[i] = wraps
 		arcTh0[i], arcTh1[i] = th0, th1
 		arcLength := d * (th0 - th1)
 		arcByCorner[i] = &Edge{
@@ -483,11 +509,21 @@ func buildCapBand(ctx context.Context, body *Body, ref StepRef, cbp capBlendPayl
 			absSumUpper(slantOut[i].length, slantOut[i].lengthBound),
 			absSumUpper(slantIn[i].length, slantIn[i].lengthBound),
 		)
+		// capThAllow: this apex patch's own connector runs pA -> pB (the same
+		// capApexArcBound bracket capApexArcBound already builds for the
+		// connector's own arc LENGTH above), so capSweepAllow reads the
+		// identical atan2Interval enclosure and reports it against the raw
+		// sweep gth1-gth0 = arcTh0[i]-arcTh1[i] instead of against d*sweep.
+		// start/end are passed as (pB, pA) so the bracket's own end-minus-start
+		// convention reproduces atan2(pA)-atan2(pB), matching arcWraps[i]'s own
+		// unwrap direction (Pass 1's "for th1 > th0 { th1 -= 2*math.Pi }").
+		capThAllow := capSweepAllow(j.vU, j.vV, d, j.pB, j.pA, arcTh0[i]-arcTh1[i], arcWraps[i], delta)
 		g := capPatchGeom{
 			circular: true, sweepCCW: false,
 			cU: j.vU, cV: j.vV, sideRadius: 0, capRadius: d,
 			th0: gth0, th1: gth1, capTh0: gth0, capTh1: gth1, sideZ: sideZ, capZ: capZ,
 			contourAllow: bandPatchAreaAllow(delta, chordUpper, slant),
+			capThAllow:   capThAllow,
 		}
 		setPatchArea(face, g)
 		geoms = append(geoms, g)
@@ -516,6 +552,7 @@ func buildCapBand(ctx context.Context, body *Body, ref StepRef, cbp capBlendPayl
 		// directrix is TRIMMED there, the side directrix is not.
 		capRadius := 0.0
 		capTh0, capTh1, wraps := 0.0, 0.0, 0
+		capThAllow := 0.0
 		if w.isCircular() {
 			r, err := capBandRadius(w, d)
 			if err != nil {
@@ -526,6 +563,13 @@ func buildCapBand(ctx context.Context, body *Body, ref StepRef, cbp capBlendPayl
 			}
 			capRadius = r
 			capTh0, capTh1, wraps = capWallSweep(w.cU, w.cV, start, end, w.th1-w.th0)
+			// capThAllow is capSweepAllow's own enclosure of THIS sweep
+			// (capTh1-capTh0), computed here where start/end/wraps are still
+			// the ones capWallSweep just resolved: patchAreaOf's later swap of
+			// g.capTh0/g.capTh1 (below) negates the raw difference but not its
+			// absolute value, and this bound is symmetric in sign (it bounds
+			// |held-true|), so computing it once, pre-swap, stays valid after.
+			capThAllow = capSweepAllow(w.cU, w.cV, capRadius, start, end, capTh1-capTh0, wraps, delta)
 		}
 
 		var capEdge *Edge
@@ -618,6 +662,7 @@ func buildCapBand(ctx context.Context, body *Body, ref StepRef, cbp capBlendPayl
 			g.sweepCCW = w.th1 > w.th0
 			g.th0, g.th1 = w.th0, w.th1
 			g.capTh0, g.capTh1 = capTh0, capTh1
+			g.capThAllow = capThAllow
 			if g.th1 < g.th0 {
 				// The SAME swap, applied to both pairs together: g.th0 must
 				// keep pairing with g.capTh0 (both the wall's OWN start
