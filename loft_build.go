@@ -183,6 +183,12 @@ type loftAssembly struct {
 	tris          [][3]int
 	walls         int
 	capStartCount int
+	// reversed records whether §5's whole-shell orientation step flipped
+	// every triangle's winding. buildLoftTopology fixes each face's directed
+	// boundary from the LOCAL (pre-flip) index convention, so it must reverse
+	// every walk it emits by exactly this flag or publish loops that run the
+	// material on the wrong side of their own face normal.
+	reversed bool
 	// cell/side parallel tris[:walls]: cell[k] is {loop index i, cell index
 	// j}, side[k] is 0 for lower_j and 1 for upper_j.
 	cell [][2]int
@@ -283,7 +289,8 @@ func assembleLoft(ctx context.Context, pairs []loftLoopPair, f0, f1 r3.Frame, pl
 	}
 
 	anchor := xform.Apply(plane0.Origin)
-	if loftOrientationSign(verts, tris, anchor) < 0 {
+	reversed := loftOrientationSign(verts, tris, anchor) < 0
+	if reversed {
 		for i, t := range tris {
 			tris[i] = [3]int{t[0], t[2], t[1]}
 		}
@@ -291,7 +298,7 @@ func assembleLoft(ctx context.Context, pairs []loftLoopPair, f0, f1 r3.Frame, pl
 
 	return loftAssembly{
 		verts: verts, tris: tris, walls: walls, capStartCount: capStartCount,
-		cell: cell, side: side, vIdx: vIdx, wIdx: wIdx,
+		reversed: reversed, cell: cell, side: side, vIdx: vIdx, wIdx: wIdx,
 	}, nil
 }
 
@@ -409,12 +416,43 @@ func buildLoftWallFace(body *Body, ref StepRef, verts []r3.Vec, tri [3]int, i, j
 	}, nil
 }
 
+// loftLoopCoedges carries §5's whole-shell reversal into one face's directed
+// boundary. Every walk buildLoftTopology emits is written from the LOCAL
+// vertex order of §5's construction table, which is the order the triangles
+// had BEFORE the whole-shell step; a face's Plane, by contrast, is rebuilt
+// from its own
+// already-flipped triple (planeFromTriangle), so on a reversed shell the two
+// disagree and the published boundary — Loop.CoEdges, CoEdge.Start/End/
+// IsForward — walks the material on the RIGHT of the face's own outward
+// normal, the opposite of decad's material-on-the-left convention.
+//
+// Reversing a walk is reversing its coedge order and negating each use's
+// sense; nothing but the direction changes. The edge identities and their
+// count are untouched, so every edge still bounds exactly the same two faces
+// and Loop.Edges' undirected view is merely re-ordered.
+func loftLoopCoedges(co []coedge, reversed bool) []coedge {
+	if !reversed {
+		return co
+	}
+	out := make([]coedge, len(co))
+	for i, ce := range co {
+		out[len(co)-1-i] = coedge{edge: ce.edge, forward: !ce.forward}
+	}
+	return out
+}
+
 // buildLoftTopology builds the B-rep topology from the assembled, globally
 // oriented triangle set (docs/loft-design.md §5/§7): real Vertex/Edge/Loop/
 // Face objects sharing indices with the assembly's own vertex table. Every
 // edge bounds exactly two faces by construction (§5's four edge families:
 // bottom rim, top rim, diagonal, rung), and every cap-boundary edge opposes
 // its incident wall edge, the standard two-manifold convention.
+//
+// Every loop this builds is stated in §5's LOCAL vertex order and then passed
+// through loftLoopCoedges, which is what carries the assembly's own
+// whole-shell reversal into the directed boundary each face publishes. A walk
+// emitted without it agrees with its face's Plane on one axial spelling of a
+// section pair and opposes it on the mirror.
 func buildLoftTopology(ctx context.Context, body *Body, ref StepRef, a loftAssembly, cap0Rat, cap1Rat *big.Rat) (*Face, *Face, []*Face, error) {
 	vertexObjs := make([]*Vertex, len(a.verts))
 	for i, p := range a.verts {
@@ -474,29 +512,29 @@ func buildLoftTopology(ctx context.Context, body *Body, ref StepRef, a loftAssem
 			if err != nil {
 				return nil, nil, nil, err
 			}
-			lowerFace.loops = []*Loop{{outer: true, coedges: []coedge{
+			lowerFace.loops = []*Loop{{outer: true, coedges: loftLoopCoedges([]coedge{
 				{edge: rimBottom[j], forward: true},
 				{edge: rungE[jn], forward: true},
 				{edge: diagE[j], forward: false},
-			}}}
+			}, a.reversed)}}
 			walls = append(walls, lowerFace)
 
 			upperFace, err := buildLoftWallFace(body, ref, a.verts, upperTri[i][j], i, j, 1)
 			if err != nil {
 				return nil, nil, nil, err
 			}
-			upperFace.loops = []*Loop{{outer: true, coedges: []coedge{
+			upperFace.loops = []*Loop{{outer: true, coedges: loftLoopCoedges([]coedge{
 				{edge: diagE[j], forward: true},
 				{edge: rimTop[j], forward: false},
 				{edge: rungE[j], forward: false},
-			}}}
+			}, a.reversed)}}
 			walls = append(walls, upperFace)
 
 			capStartCo[n-1-j] = coedge{edge: rimBottom[j], forward: false}
 			capEndCo[j] = coedge{edge: rimTop[j], forward: true}
 		}
-		capStartLoops = append(capStartLoops, &Loop{outer: isOuter, coedges: capStartCo})
-		capEndLoops = append(capEndLoops, &Loop{outer: isOuter, coedges: capEndCo})
+		capStartLoops = append(capStartLoops, &Loop{outer: isOuter, coedges: loftLoopCoedges(capStartCo, a.reversed)})
+		capEndLoops = append(capEndLoops, &Loop{outer: isOuter, coedges: loftLoopCoedges(capEndCo, a.reversed)})
 	}
 
 	capStartSurf, err := planeFromTriangle(a.verts, a.tris[a.walls])

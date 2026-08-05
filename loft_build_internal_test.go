@@ -55,21 +55,29 @@ func mustFrame(t *testing.T, pr PlaneRecord) r3.Frame {
 	return f
 }
 
-// boxLoftPayload is the untwisted unit-square-to-unit-square loft: the same
-// square recorded on parallel planes at z=0 and z=1. It is fixture U of
-// docs/loft-design.md §13, and its own raw (pre-flip) triangle winding is
-// already outward, so it also exercises the "no flip needed" path.
-func boxLoftPayload(t *testing.T) loftPayload {
+// boxLoftPayloadOn is the untwisted unit-square-to-unit-square loft with p0
+// recorded on the z=z0 plane and p1 on z=z1. Both spellings describe the same
+// unit box; which one is p0 decides whether §5's whole-shell orientation step
+// has to reverse the raw winding.
+func boxLoftPayloadOn(t *testing.T, z0, z1 float64) loftPayload {
 	t.Helper()
 	p := unitSquareProfile()
-	pl0 := planeAt(r3.NewVec(0, 0, 0))
-	pl1 := planeAt(r3.NewVec(0, 0, 1))
+	pl0 := planeAt(r3.NewVec(0, 0, z0))
+	pl1 := planeAt(r3.NewVec(0, 0, z1))
 	return loftPayload{
 		profile0: p, profile1: p,
 		plane0: pl0, plane1: pl1,
 		frame0: mustFrame(t, pl0), frame1: mustFrame(t, pl1),
 		xform: r3.Identity(),
 	}
+}
+
+// boxLoftPayload is fixture U of docs/loft-design.md §13, whose own raw
+// (pre-flip) triangle winding is already outward, so it also exercises the
+// "no flip needed" path.
+func boxLoftPayload(t *testing.T) loftPayload {
+	t.Helper()
+	return boxLoftPayloadOn(t, 0, 1)
 }
 
 func evalLoftFixture(t *testing.T, pl loftPayload) *Body {
@@ -187,19 +195,76 @@ func TestEvalLoftFaceAreasSumToBodyArea(t *testing.T) {
 // tetrahedron sum is negative before the flip, yet the published Volume is
 // still the correct positive 1 mm³ once the whole-shell flip has run.
 func TestEvalLoftWholeShellOrientationCorrectsSign(t *testing.T) {
-	p := unitSquareProfile()
-	pl0 := planeAt(r3.NewVec(0, 0, 1))
-	pl1 := planeAt(r3.NewVec(0, 0, 0))
-	pl := loftPayload{
-		profile0: p, profile1: p,
-		plane0: pl0, plane1: pl1,
-		frame0: mustFrame(t, pl0), frame1: mustFrame(t, pl1),
-		xform: r3.Identity(),
-	}
-
-	body := evalLoftFixture(t, pl)
+	body := evalLoftFixture(t, boxLoftPayloadOn(t, 1, 0))
 	require.InDelta(t, 1.0, body.volume.Value.Base(), 1e-12)
 	require.Equal(t, Exact, body.volume.Exactness)
+}
+
+// TestEvalLoftLoopWalksFollowTheFaceNormal proves §5's whole-shell
+// orientation step reaches the PUBLISHED DIRECTED BOUNDARY and not merely the
+// triangle set each face's Plane is rebuilt from. Volume, area and convexity
+// all read the flipped triangles and so agree either way; only the loop walk
+// — Loop.CoEdges, CoEdge.Start/End/IsForward — can witness a shell whose
+// faces were reversed while their walks were not.
+//
+// Both spellings of the same unit box are checked, because the defect this
+// pins is invisible on the one whose raw winding already came out outward.
+// For every face: the walk is a real closed chain, the face's own normal
+// genuinely points away from the box centre, and the walk's Newell normal
+// agrees with it — decad's material-on-the-left convention.
+func TestEvalLoftLoopWalksFollowTheFaceNormal(t *testing.T) {
+	// The unit box occupies [0,1]^3 under either spelling, so this is its
+	// interior centre in both.
+	center := r3.NewVec(0.5, 0.5, 0.5)
+
+	for _, tc := range []struct {
+		name   string
+		z0, z1 float64
+	}{
+		{name: "raw winding already outward", z0: 0, z1: 1},
+		{name: "raw winding reversed by the whole-shell step", z0: 1, z1: 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			body := evalLoftFixture(t, boxLoftPayloadOn(t, tc.z0, tc.z1))
+
+			faces := body.Faces()
+			require.Len(t, faces, 10, "8 wall triangles + capStart + capEnd")
+			for _, f := range faces {
+				role := f.Origins()[0].Role
+				loops := f.Loops()
+				require.Lenf(t, loops, 1, "face %s has no hole in this fixture", role)
+
+				co := loops[0].CoEdges()
+				require.GreaterOrEqualf(t, len(co), 3, "face %s", role)
+
+				walk := make([]r3.Vec, len(co))
+				for k, ce := range co {
+					require.Samef(t, ce.End(), co[(k+1)%len(co)].Start(),
+						"face %s: coedge %d must end where coedge %d starts", role, k, (k+1)%len(co))
+					walk[k] = ce.Start().Position().Value
+				}
+
+				// Newell's normal of the closed walk (twice the signed area
+				// vector), and the walk's own centroid.
+				area2 := r3.NewVec(0, 0, 0)
+				centroid := r3.NewVec(0, 0, 0)
+				for k, a := range walk {
+					b := walk[(k+1)%len(walk)]
+					area2 = area2.Add(a.Cross(b))
+					centroid = centroid.Add(a)
+				}
+				centroid = centroid.Scale(1 / float64(len(walk)))
+
+				n, err := f.NormalAt(centroid)
+				require.NoError(t, err)
+
+				require.Greaterf(t, centroid.Sub(center).Dot(n.Value), 0.0,
+					"face %s: its own normal must point away from the box centre", role)
+				require.Greaterf(t, area2.Dot(n.Value), 0.0,
+					"face %s: its loop walk must run material-on-the-left about its own outward normal", role)
+			}
+		})
+	}
 }
 
 // TestEvalLoftJunctionConvexity hand-verifies §5's junction rule on the box
