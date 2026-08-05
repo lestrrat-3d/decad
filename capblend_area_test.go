@@ -23,6 +23,12 @@ import (
 // (capblend_moments.go) replaces the fallback with a certified interval
 // wherever one can be built; these tests pin the result tight rather than
 // merely present.
+//
+// Tightness is only half of what a bound owes, so the suite carries the other
+// half beside it: a bound may only ever shrink to something that still
+// ENCLOSES the residual against the patch the chamfer DENOTES, and the
+// side-level rounding a tall sweep commits is the one displacement no
+// arithmetic reading of the held patch can see.
 
 // starPrismBody builds an n-point star (alternating outer/inner radius),
 // extruded by h: a cap-loop chamfer on it builds n Plane band patches plus n
@@ -128,6 +134,42 @@ func TestCapBlendApexPatchAreaBoundIsTight(t *testing.T) {
 	require.NoError(t, err)
 	require.LessOrEqual(t, bodyArea.Bound.Mag(), 1e-8,
 		`the star's whole-body area bound must be tight, not the 3.97 mm^2 six apex patches used to carry`)
+}
+
+// TestCapBlendConeAreaEnclosesTheDenotedPatch is the enclosure regression that
+// bounds the tightening above: a band's side level is the single float sum
+// capZ + matSign*d, and a sweep tall enough to round that sum leaves the patch
+// the build HOLDS a measurable distance from the patch the chamfer DENOTES.
+// The certified frustum bracket lifts H = capZ - sideZ as an exact rational —
+// it brackets the held patch — so without a charge for the level's own
+// rounding it published 5.81e-14 mm^2 against a 2.32 mm^2 residual here.
+//
+// A r10 disk swept 1e15 mm with a 0.2 mm cap chamfer is the shape that shows
+// it: ulp(1e15) is 0.125, so the side level lands 0.05 mm from where the
+// chamfer puts it and the band the build holds is 0.25 mm tall instead of
+// 0.2 mm. Nothing refuses the body — SX13's axial collapse gate reads the two
+// levels as separate, which they are — so the reading has to be honest about
+// the gap instead.
+func TestCapBlendConeAreaEnclosesTheDenotedPatch(t *testing.T) {
+	const R, H, d = 10.0, 1e15, 0.2
+	body := circleProfile(t, R, H)
+	chamfered, err := body.Chamfer(capLoopEdges(body), units.Millimeters(d))
+	require.NoError(t, err)
+
+	band := faceWithRole(t, chamfered, `chamferCap(end,0,0)`)
+	area, err := band.Area()
+	require.NoError(t, err)
+
+	// The frustum sector the chamfer denotes: the same two radii, at the
+	// DENOTED 0.2 mm axial separation rather than the held 0.25 mm one.
+	Rc := R - d
+	denoted := math.Pi * (R + Rc) * math.Hypot(R-Rc, d)
+	residual := math.Abs(area.Value.Mag() - denoted)
+	require.Greater(t, residual, 1.0,
+		`the premise: the rounded side level really does move whole mm^2 here`)
+	require.GreaterOrEqual(t, area.Bound.Mag(), residual,
+		`the published bound %v must enclose the %v mm^2 the rounded side level moves`,
+		area.Bound.Mag(), residual)
 }
 
 // TestCapBlendCircularRimVerifyArea is the cylinder case through the public

@@ -254,9 +254,20 @@ type capPatchGeom struct {
 	// bandPatchAreaAllow) — computed once, at build time, from this patch's
 	// own held chord length and slant distance, and added into patchAreaOf's
 	// returned bound. It is zero wherever the band's own contour displacement
-	// is zero (an axis-aligned section's exact miters), which is what keeps
-	// patchAreaOf's Plane/Cone arithmetic-only bound unchanged there.
+	// is zero (an axis-aligned section's exact miters), which is what leaves
+	// patchAreaOf's Plane/Cone bound carrying only its own arithmetic and the
+	// side level's allowance (levelDelta below) there.
 	contourAllow float64
+
+	// levelDelta is the SIDE level's own rounding: sideZ is the single float
+	// sum capZ + matSign*d, so this patch's whole side directrix sits that far
+	// from the level it denotes — the same term capSlantEdge charges into a
+	// slant edge's length and capBandVolume charges for the identical level.
+	// patchAreaOf reads it as the axial half of its own displacement
+	// allowance (bounds.go's bandLevelAreaAllow), beside contourAllow's
+	// cap-level half; without it both of that function's arms would read the
+	// side level as an exact input and bound only the patch they BUILT.
+	levelDelta float64
 
 	// capThAllow is the proven bound on |held (capTh1−capTh0) − true window|,
 	// derived at build time from the same atan2Interval bracket capWallArcBound
@@ -299,7 +310,8 @@ func buildCapBand(ctx context.Context, body *Body, ref StepRef, cbp capBlendPayl
 	// band's side directrix sits that far from the level it denotes, and every
 	// edge with an endpoint there carries it beside the contour's own
 	// displacement. It is the same term capBandVolume charges for the identical
-	// level (capblend_moments.go).
+	// level, and it rides onto every patch's own capPatchGeom, where
+	// patchAreaOf charges it against the patch's area (capblend_moments.go).
 	levelDelta := addRoundError(capZ, matSign*d, sideZ)
 
 	// A single closed circle has no corner: one Cone patch, full turn.
@@ -349,7 +361,7 @@ func buildCapBand(ctx context.Context, body *Body, ref StepRef, cbp capBlendPayl
 		// circumference.
 		dthHeld := gth1 - gth0
 		capThAllow := intervalFloatError(intervalScale(interval(piLower, piUpper), big.NewRat(2, 1)), dthHeld)
-		geom := capPatchGeom{circular: true, cU: w.cU, cV: w.cV, sideRadius: w.radius, capRadius: capRadius, th0: gth0, th1: gth1, capTh0: gth0, capTh1: gth1, sweepCCW: w.th1 > w.th0, wholeTurn: true, sideZ: sideZ, capZ: capZ, contourAllow: bandPatchAreaAllow(delta, chordUpper, slant), capThAllow: capThAllow}
+		geom := capPatchGeom{circular: true, cU: w.cU, cV: w.cV, sideRadius: w.radius, capRadius: capRadius, th0: gth0, th1: gth1, capTh0: gth0, capTh1: gth1, sweepCCW: w.th1 > w.th0, wholeTurn: true, sideZ: sideZ, capZ: capZ, contourAllow: bandPatchAreaAllow(delta, chordUpper, slant), levelDelta: levelDelta, capThAllow: capThAllow}
 		setPatchArea(patch, geom)
 		capLoop := []coedge{{edge: capEdge, forward: true}}
 		return capBandResult{patches: []*Face{patch}, capCo: capLoop, geom: []capPatchGeom{geom}, delta: delta}, nil
@@ -523,6 +535,7 @@ func buildCapBand(ctx context.Context, body *Body, ref StepRef, cbp capBlendPayl
 			cU: j.vU, cV: j.vV, sideRadius: 0, capRadius: d,
 			th0: gth0, th1: gth1, capTh0: gth0, capTh1: gth1, sideZ: sideZ, capZ: capZ,
 			contourAllow: bandPatchAreaAllow(delta, chordUpper, slant),
+			levelDelta:   levelDelta,
 			capThAllow:   capThAllow,
 		}
 		setPatchArea(face, g)
@@ -650,7 +663,7 @@ func buildCapBand(ctx context.Context, body *Body, ref StepRef, cbp capBlendPayl
 		leadSlant.faces = append(leadSlant.faces, face)
 		patches = append(patches, face)
 
-		g := capPatchGeom{sideZ: sideZ, capZ: capZ}
+		g := capPatchGeom{sideZ: sideZ, capZ: capZ, levelDelta: levelDelta}
 		if w.isCircular() {
 			g.circular = true
 			g.cU, g.cV = w.cU, w.cV

@@ -821,19 +821,20 @@ func crossProductUpper(a, b r3.Vec) float64 {
 // miters — which is what keeps TestCapBlendPlanePatchVolumeIsExact's area
 // arithmetic unchanged there.
 //
-// What neither arm charges either is the SIDE level's own rounding: g.sideZ
-// is capZ + matSign*d rounded to a float (levelDelta, capblend_geom.go:246),
-// already charged into capSlantEdge's length and into capBandVolume, but
-// never read here, so this function's bound covers only the cap-contour
-// displacement above and not the side-level one. On a right-triangle band
-// (legs 9e4 x 3e6 mm, 1e15 mm sweep, 0.2 mm chamfer) substituting the HELD
-// side level for the denoted one in a 512-bit reference accounts for
-// essentially the whole patch-area residual: the three patches' residuals
-// fall from 3358.207374649123 / 111990.60743768104 / 111940.24564437279 mm^2
-// to 5.236122866634288e-06 / 8.892307483919435e-06 / 2.7272066797437425e-06
-// mm^2 once only the side level is corrected, with levelDelta itself equal to
-// 0.04999999999999999 mm at that head. Threading levelDelta into this
-// function is a separate change.
+// The SIDE level owes the same kind of allowance and both arms charge it:
+// g.sideZ is capZ + matSign*d rounded to a float (g.levelDelta,
+// capblend_geom.go), so the whole side directrix sits that far from the level
+// it denotes, and an arm reading g.sideZ as an exact input bounds only the
+// patch it BUILT. It is the dominant residual wherever the sweep is large
+// enough to round that sum: on a right-triangle band (legs 9e4 x 3e6 mm, 1e15
+// mm sweep, 0.2 mm chamfer) levelDelta is 0.04999999999999999 mm, and
+// substituting the HELD side level for the denoted one in a 512-bit reference
+// drops the three patches' residuals from 3358.207374649123 /
+// 111990.60743768104 / 111940.24564437279 mm^2 to 5.236122866634288e-06 /
+// 8.892307483919435e-06 / 2.7272066797437425e-06 mm^2. bounds.go's
+// bandLevelAreaAllow is that charge, and it is zero wherever the sum is exact
+// (an ordinary sweep and setback), which is what leaves every tight reading
+// tight.
 func patchAreaOf(g capPatchGeom) (float64, float64) {
 	if !g.circular {
 		v0 := r3.NewVec(g.sideA.U, g.sideA.V, g.sideZ)
@@ -847,7 +848,12 @@ func patchAreaOf(g capPatchGeom) (float64, float64) {
 			crossProductUpper(v1.Sub(v0), v2.Sub(v0)),
 			crossProductUpper(v2.Sub(v0), v3.Sub(v0)),
 		)
-		bound := absSumUpper(sumSlop(2, absSumUpper(a1, a2)), analyticRoundBound(crossEnv), g.contourAllow)
+		// The quad's two directrices are its side-level chord (sideA -> sideB)
+		// and its cap-level one (capA -> capB), both plane-local at their own
+		// single level, so each 3D length IS its 2D one.
+		levelAllow := bandLevelAreaAllow(g.levelDelta,
+			absSumUpper(chordUpper2(g.sideA, g.sideB), chordUpper2(g.capA, g.capB)))
+		bound := absSumUpper(sumSlop(2, absSumUpper(a1, a2)), analyticRoundBound(crossEnv), g.contourAllow, levelAllow)
 		return area, bound
 	}
 	R0, R1 := g.sideRadius, g.capRadius
@@ -871,11 +877,12 @@ func patchAreaOf(g capPatchGeom) (float64, float64) {
 	// (generous, not tight) allowance for the gap between the two: the true
 	// area lies within the family this envelope already covers, and
 	// windowSkew is zero wherever the windows coincide (a tangent join, or
-	// either degenerate patch), leaving the arithmetic-only bound unchanged.
+	// either degenerate patch), leaving the rest of the bound unchanged.
 	sideDth := math.Abs(g.th1 - g.th0)
 	windowSkew := productUpper(math.Abs(sideDth-dth), productUpper(absSumUpper(R0, R1), slant))
-	// The core term (everything but windowSkew/contourAllow, which stand
-	// unchanged either way) takes the SMALLER of two independently sound
+	// The core term (everything but windowSkew, contourAllow and the level
+	// allowance below, which stand unchanged either way) takes the SMALLER of
+	// two independently sound
 	// bounds: the unconditional envelope conservativeValueError always gives,
 	// and coneFrustumAreaBracket's certified interval — sound wherever it
 	// manages to build one, +Inf (hence never the min) where it cannot. This
@@ -884,8 +891,29 @@ func patchAreaOf(g capPatchGeom) (float64, float64) {
 		conservativeValueError(area, dth*(R0+R1)*(math.Abs(dR)+math.Abs(H))),
 		coneFrustumAreaBracket(R0, R1, dR, H, dth, g.capThAllow, area),
 	)
-	bound := absSumUpper(core, windowSkew, g.contourAllow)
+	// The level allowance is the one term neither reading of the core speaks
+	// for: the bracket lifts H as an EXACT rational (it is a difference of two
+	// payload floats, so it brackets the area of the patch this build HOLDS),
+	// and the fallback envelope covers it only by accident of its own width.
+	// The axial displacement is the side level's own rounding plus whatever
+	// the H subtraction just above committed, and the frustum sector's two
+	// directrix arcs are Δθ·R0 and Δθ·R1, read at an upper bound on the true
+	// window rather than at the held one.
+	levelAllow := bandLevelAreaAllow(
+		absSumUpper(g.levelDelta, addRoundError(g.capZ, -g.sideZ, H)),
+		productUpper(absSumUpper(dth, g.capThAllow), absSumUpper(R0, R1)),
+	)
+	bound := absSumUpper(core, windowSkew, g.contourAllow, levelAllow)
 	return area, bound
+}
+
+// chordUpper2 is a PROVEN upper bound on the distance between two plane-local
+// points, taken without trusting any libm contract: the 1-norm dominates the
+// 2-norm, each coordinate difference is one float subtraction, and
+// analyticRoundBound covers those two roundings at the sum's own magnitude.
+func chordUpper2(a, b Point2) float64 {
+	raw := absSumUpper(b.U-a.U, b.V-a.V)
+	return absSumUpper(raw, analyticRoundBound(raw))
 }
 
 // coneFrustumAreaBracket is the certified interval bound on patchAreaOf's
@@ -904,6 +932,13 @@ func patchAreaOf(g capPatchGeom) (float64, float64) {
 // returned: nowhere here is an ulp contract on any of them assumed. Returns
 // +Inf where a factor fails to lift (non-finite geometry), so the caller's
 // math.Min falls back to the unconditional envelope.
+//
+// "The true A" here is the true area of the frustum sector the HELD R0, R1
+// and H describe, and lifting those three exactly is precisely what makes it
+// so. It is not a claim about the patch the chamfer DENOTES: H is capZ minus
+// a ROUNDED side level, and the distance between the two patches is the
+// caller's own separate charge (bandLevelAreaAllow), which no tightening here
+// can ever substitute for.
 func coneFrustumAreaBracket(R0, R1, dR, H, dth, dthAllow, held float64) float64 {
 	if isNonFinite(dthAllow) {
 		return math.Inf(1)

@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
@@ -70,6 +71,70 @@ func TestCapBandVolumeBoundTracksTheFluxNotTheCancelledBand(t *testing.T) {
 	// would be identical at both heights, because the band is.
 	require.Greater(t, hi.bound, 1e3*lo.bound,
 		`the bound has to grow with the flux the band was cancelled out of`)
+}
+
+// TestPatchAreaOfChargesTheSideLevelRounding is the mechanism-level enclosure
+// check behind TestCapBlendConeAreaEnclosesTheDenotedPatch, over BOTH of
+// patchAreaOf's arms. A band's side level is the single float sum
+// capZ + matSign*d, so a sweep tall enough to round that sum leaves the patch
+// the build HOLDS a measurable distance from the patch the chamfer DENOTES;
+// each arm reads the held level as an exact input, so its own arithmetic bound
+// — the Cone arm's certified frustum bracket most of all, which lifts
+// H = capZ - sideZ as an exact rational — speaks for the built patch alone
+// unless the level's rounding is charged separately.
+//
+// Each reference is the SAME closed form the arm evaluates, taken at the
+// DENOTED axial separation d and translated so the cap level sits at zero: an
+// area is translation invariant, and the shift keeps 1e15-scale cancellation
+// out of the test's own arithmetic.
+func TestPatchAreaOfChargesTheSideLevelRounding(t *testing.T) {
+	const capZ, d = 1e15, 0.2
+	sideZ := capZ - d
+	levelDelta := addRoundError(capZ, -d, sideZ)
+	require.Greater(t, levelDelta, 0.0,
+		"the premise: a 1e15 mm sweep really does round the side level")
+
+	t.Run("cone", func(t *testing.T) {
+		const R = 10.0
+		capR := R - d
+		g := capPatchGeom{
+			circular: true, sideRadius: R, capRadius: capR,
+			th0: 0, th1: 2 * math.Pi, capTh0: 0, capTh1: 2 * math.Pi,
+			sweepCCW: true, wholeTurn: true,
+			sideZ: sideZ, capZ: capZ, levelDelta: levelDelta,
+		}
+		area, bound := patchAreaOf(g)
+		denoted := math.Pi * (R + capR) * math.Hypot(R-capR, d)
+		residual := math.Abs(area - denoted)
+		require.Greater(t, residual, 1.0, "the premise: whole mm^2 of it")
+		require.GreaterOrEqual(t, bound, residual,
+			"bound %v must enclose the %v mm^2 residual", bound, residual)
+	})
+
+	t.Run("plane", func(t *testing.T) {
+		// A long straight wall's band patch, the shape whose residual the
+		// patchAreaOf head comment measures: the cap-level chord is the wall
+		// inset by the setback at both ends.
+		const L = 3e6
+		g := capPatchGeom{
+			sideA: Point2{U: 0, V: 0}, sideB: Point2{U: L, V: 0},
+			capA: Point2{U: d, V: d}, capB: Point2{U: L - d, V: d},
+			sideZ: sideZ, capZ: capZ, levelDelta: levelDelta,
+		}
+		area, bound := patchAreaOf(g)
+
+		// The same two-triangle sum, at the denoted separation.
+		v0 := r3.NewVec(g.sideA.U, g.sideA.V, -d)
+		v1 := r3.NewVec(g.sideB.U, g.sideB.V, -d)
+		v2 := r3.NewVec(g.capB.U, g.capB.V, 0)
+		v3 := r3.NewVec(g.capA.U, g.capA.V, 0)
+		denoted := v1.Sub(v0).Cross(v2.Sub(v0)).Len()/2 + v2.Sub(v0).Cross(v3.Sub(v0)).Len()/2
+
+		residual := math.Abs(area - denoted)
+		require.Greater(t, residual, 1.0, "the premise: whole mm^2 of it")
+		require.GreaterOrEqual(t, bound, residual,
+			"bound %v must enclose the %v mm^2 residual", bound, residual)
+	})
 }
 
 // TestConeFrustumAreaBracketEnclosesReference is coneFrustumAreaBracket's own
