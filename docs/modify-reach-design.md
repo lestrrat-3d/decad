@@ -436,12 +436,38 @@ radial one is: the requested band exists and only float64 cannot name its side
 level at that sweep coordinate.
 
 Adjacent miter patches meet on their common analytic edge and need no extra
-vertex face. At axial fraction `s`, every patch intersects the parallel section
-as the exact loop offset by `s*dc`. Audit the whole `s ∈ [0,1]` family with
-certified interval subdivision over `s` and the two line/arc parameters. A cell
-whose distance lower bound is positive is excluded; an exact admitted root is
-an intersection; budget exhaustion is undecided. Proven intersection and
-undecided both route to SX12. A sample or residual never admits disjointness.
+vertex face. The feature's contract is the exact offset family: at axial
+fraction `s`, the denoted miter locus is the parallel section offset by
+`s*dc`. A straight wall's `Plane` patch reaches it exactly — offsetting a
+line is affine in the offset amount, so ruling the wall between its
+side-level segment and its cap-level (offset) one reproduces the line offset
+by `s*dc` at every `s`. A circular wall's `Cone` patch does not: the build
+RULES it, with straight `Line3` rulings between the side-level directrix
+(its own `th0`/`th1` sweep) and the trimmed cap-level directrix
+(`capTh0`/`capTh1`, generally narrower at a non-tangential corner), so it
+meets the exact offset family only at `s=0` and `s=1` and chords the true
+curve strictly between them. That residual is bounded, never ignored:
+erosion by an increasing offset is monotone, so the true swept flux is
+sandwiched between the ordinary cone-sector flux read at the wide (side)
+window and the narrow (cap) one, and the ruled patch's own point-for-point
+departure from the wide cone is bounded in closed form from the two windows'
+angular skew; `chordLocusVolumeAllow` composes both terms into one proven
+volume bound. The residual, and its bound, are exactly zero wherever the two
+windows already coincide: a tangent join, an apex patch, and a whole turn.
+
+SX12 audits the exact offset family, not the ruled patch the body builds. It
+runs the existing line/arc offset audit on the section offset by the full
+setback `d` — the family's own `s=1` member — and certifies every
+`s ∈ [0,1]` from that single check by the offset distance's own
+monotonicity: a crossing anywhere in the family occurs no later than it
+occurs at the full offset, so disjointness at `s=1` implies disjointness
+throughout. Auditing one surface while measuring another is sound because
+the two ask different questions of the same family: SX12 proves the swept
+region the offset family denotes is well-formed — a fact about that family
+alone, independent of which surface later reports its volume — while the
+ruled `Cone` patch is a separate, proven-bounded stand-in used only for
+area/volume/moment measurement. A sample or residual never admits
+disjointness.
 
 ### 8.4 Measurements + tessellation
 
