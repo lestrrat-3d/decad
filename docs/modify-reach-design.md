@@ -535,17 +535,31 @@ need it, each composing a different existing bound for a different reason:
   inside a patch's own flux term, because the flux integral already reads the
   SAME displaced cap-level coordinates the disk does, and composing the term
   in both places would charge it twice;
-- each BAND PATCH's own area (one ruled quad between a side-level chord —
-  whose own rounding this bound does not charge — and a cap-level chord
-  displaced by delta) composes
+- each BAND PATCH's own area (one ruled quad between a side-level chord and a
+  cap-level chord displaced by delta) composes
   `bandPatchAreaAllow(delta, chordUpper, slantUpper)` — a ruled quad's area is
   its chord length times its slant distance to first order, so the chord's own
   length can move by `sectionDisplacementLength(delta, 1)` and the slant can
   move by delta, each read against the OTHER factor's own held magnitude.
 
 All three helpers are zero wherever delta is zero (an axis-aligned section's
-exact miters), which is what keeps an all-Plane cap loop's Exact volume and
-its arithmetic-only area bound unchanged in that case.
+exact miters), which is what keeps an all-Plane cap loop's Exact volume
+unchanged in that case.
+
+A band's SIDE level is displaced too, and by a different mechanism, so it is a
+separate term with its own helper. `sideZ` is the single float sum
+`capZ + matSign*d`, so the whole side directrix translates rigidly by that
+sum's own rounding (`levelDelta`) rather than moving point by point the way a
+solved contour does. Every reading built on that level charges it: a slant
+edge's own length, the band volume, and each BAND PATCH's own area, which
+composes `bandLevelAreaAllow(levelDelta, directrixSumUpper)` — under a rigid
+translation of one directrix a patch's area moves at the rate of its two
+directrix lengths, which is the Plane arm's two chords and the Cone arm's two
+frustum arcs alike. A patch bound that reads the held level as an exact input
+bounds only the patch the build HOLDS, not the one the chamfer denotes, and
+the gap is whole square millimetres wherever the sweep is large enough to
+round that sum. The term is zero wherever the sum is exact, which is the
+ordinary sweep and setback.
 
 ## 9. Shell reach
 

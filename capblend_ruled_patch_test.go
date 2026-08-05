@@ -267,9 +267,17 @@ func TestCapBlendErosionFamilyVolumeBoundEncloses(t *testing.T) {
 // as the setback approaches the section's own inradius, which is exactly the
 // case pinned here (the audited PR-122 wide-sector repro, near the setback
 // limit). Pre-fix (swept charged as a bare volume) this body's published
-// bound was 2383.4693377126996 mm^3; correctly scaled it is
-// 5796.19196853153 mm^3 — this test fails if the term regresses to the
-// under-scaled reading.
+// bound was 2383.4693377126996 mm^3; correctly scaled it was
+// 5796.19196853153 mm^3 at the time of that fix.
+//
+// It reads 5675.434906518183 mm^3 now: chordLocusResidualAllow feeds this
+// patch's own patchAreaOf(g) result into chordLocusVolumeAllow as areaUpper,
+// and patchAreaOf's Cone arm has since traded its unconditional envelope for
+// a certified interval bracket on the frustum-sector area formula wherever
+// one can be built (capThAllow, capblend_contour.go), so areaUpper is
+// tighter and this term shrinks with it — soundly, since a smaller PROVEN
+// upper bound on the same area still bounds the same swept volume. This test
+// still fails if the term regresses to the under-scaled (pre-PR-122) reading.
 func TestCapBlendChordLocusVolumeAllowScalesSweptTermToFlux(t *testing.T) {
 	body := circularSectorBody(t, 10, 2.7, 4.953329)
 	chamfered, err := body.Chamfer(capLoopEdges(body), units.Millimeters(4.928686))
@@ -281,7 +289,7 @@ func TestCapBlendChordLocusVolumeAllowScalesSweptTermToFlux(t *testing.T) {
 	require.Greater(t, vol.Bound.Mag(), preFixBound,
 		`the published bound (%v mm^3) must exceed the pre-fix under-scaled reading (%v mm^3): the swept-volume term must be scaled to flux before capBandVolume's own /3, not composed as a bare volume`,
 		vol.Bound.Mag(), preFixBound)
-	require.InDelta(t, 5796.19196853153, vol.Bound.Mag(), 0.01,
+	require.InDelta(t, 5675.434906518183, vol.Bound.Mag(), 0.01,
 		`the published bound (%v mm^3) must match the correctly-scaled reading`, vol.Bound.Mag())
 
 	erosion := sectorErosionVolume(10, 2.7, 4.953329, 4.928686)

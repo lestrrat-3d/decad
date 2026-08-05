@@ -40,6 +40,10 @@ import (
 //     cap-loop chamfer's own band patches, docs/modify-reach-design.md §8.4) →
 //     bandPatchAreaAllow, the same two-factor product one patch at a time
 //     rather than one whole section;
+//   - the AREA of that SAME patch under a displacement of its OTHER directrix
+//     — the side level, one rounded float sum, so the whole directrix
+//     translates rigidly rather than moving point by point →
+//     bandLevelAreaAllow;
 //   - the VOLUME gap between a cap-loop chamfer's straight-ruled Cone patch
 //     and the curved miter locus it denotes at a non-tangential corner →
 //     chordLocusVolumeAllow, an erosion-monotonicity sandwich against the
@@ -256,8 +260,9 @@ func sectionDisplacementLength(delta float64, walks int) float64 {
 // quad the construction DENOTES, given that its cap-level directrix sits
 // within delta of the point it denotes (docs/prism-boolean-design.md §7's
 // identity, one ruled patch at a time rather than one whole section). The
-// side-level directrix is NOT exact — it carries its own rounding, which
-// this helper does not charge (patchAreaOf's own note, capblend_moments.go).
+// side-level directrix is NOT exact either, but its displacement is a
+// different mechanism and has its own helper: bandLevelAreaAllow below, which
+// patchAreaOf composes beside this one.
 //
 // A ruled quad's area is, to first order, its chord length times its slant
 // distance, so moving only the cap-level chord changes area two ways at
@@ -275,6 +280,45 @@ func bandPatchAreaAllow(delta, chordUpper, slantUpper float64) float64 {
 		return 0
 	}
 	return upRound(productUpper(sectionDisplacementLength(delta, 1), slantUpper) + productUpper(chordUpper, delta))
+}
+
+// bandLevelAreaAllow is bandPatchAreaAllow's companion on the band's OTHER
+// directrix: how far ONE chamfer band patch's own area can differ from the
+// area of the patch the construction DENOTES, given that its SIDE-level
+// directrix sits within levelDelta of the level it denotes.
+//
+// The two directrices are displaced by different mechanisms and so are bounded
+// by different helpers. The cap-level contour is moved point by point by a
+// float offset solve, which is what bandPatchAreaAllow charges. The side level
+// is the single float sum capZ + matSign*d (capblend_geom.go's levelDelta), so
+// the whole side directrix is translated AXIALLY and RIGIDLY by at most that
+// much, its own in-plane shape untouched.
+//
+// Under such a translation a patch's area moves at the rate of its own two
+// directrix lengths, and both patch shapes the band builds give the same
+// figure:
+//
+//   - a Plane patch is two triangles over the quad (sideA, sideB, capB, capA).
+//     Moving sideA and sideB together by t leaves (sideB−sideA) alone, so the
+//     first triangle's cross product moves by at most |sideB−sideA|·|t|; the
+//     second triangle's only moved vertex is sideA, so its cross product moves
+//     by at most |capB−capA|·|t| + |t|². Halving each for the triangle areas,
+//     the quad's own area moves by at most
+//     ½·(|sideB−sideA| + |capB−capA|)·|t| + ½·|t|².
+//   - a Cone patch is the frustum sector A = (Δθ/2)·(R0+R1)·√(ΔR²+H²), whose
+//     derivative in H is (Δθ/2)·(R0+R1)·H/√(ΔR²+H²) and is therefore bounded
+//     by (Δθ/2)·(R0+R1) — half the sum of that patch's own two directrix arc
+//     lengths, Δθ·R0 and Δθ·R1.
+//
+// directrixSumUpper must be a PROVEN upper bound on the sum of the patch's two
+// directrix lengths and levelDelta a proven bound on the axial displacement.
+// The ½ is dropped and one levelDelta folded in, which dominates both readings
+// above.
+func bandLevelAreaAllow(levelDelta, directrixSumUpper float64) float64 {
+	if levelDelta <= 0 {
+		return 0
+	}
+	return productUpper(absSumUpper(directrixSumUpper, levelDelta), levelDelta)
 }
 
 // chordLocusVolumeAllow bounds capblend_moments.go's chord-versus-locus
