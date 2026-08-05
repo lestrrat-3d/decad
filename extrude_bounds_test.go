@@ -205,6 +205,58 @@ func TestExtrudeCircularReadingsStayApproximate(t *testing.T) {
 	}
 }
 
+// quarterDiscRecord builds the quarter disc of radius r as a ProfileRecord
+// whose curved boundary is a trimmed CircleSeg (TStart 0, TEnd 0.25) closed
+// by two straight radii — the exact fixture the defect diagnosis isolated:
+// the same geometry a whole-circle CircleSeg or a two-radius-plus-ArcSeg
+// record already bounds tightly, recorded instead the way a genuine
+// circle-circle overlap arrangement records a partial circle (seam.go's
+// recordEdge narrows CircleSeg's own TStart/TEnd rather than promoting it to
+// an ArcSeg).
+func quarterDiscRecord(r float64) decad.ProfileRecord {
+	return decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
+		decad.CircleSeg{
+			Center: decad.Point2{U: 0, V: 0},
+			Radius: units.Millimeters(r),
+			CCW:    true, TStart: 0, TEnd: 0.25,
+		},
+		decad.LineSeg{Start: decad.Point2{U: 0, V: r}, End: decad.Point2{U: 0, V: 0}, TStart: 0, TEnd: 1},
+		decad.LineSeg{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: r, V: 0}, TStart: 0, TEnd: 1},
+	}}}
+}
+
+// TestExtrudeTrimmedCircleSegPrismBoundsTighten is the diagnosed defect's own
+// fixture: moments.go's circularAreaInterval/circularFirstMomentInterval
+// refused a CircleSeg whose recorded range was not a whole turn, falling back
+// to conservativeValueError's body-scale envelope — a bound 4.9 orders of
+// magnitude looser than the identical quarter disc recorded as an ArcSeg
+// (design A7 §1.2: 385.619 against 4.91e-16 on an area of 78.5398). The
+// fractional-turn arm (moments_trig.go's turnSinCosInterval) now brackets a
+// trimmed CircleSeg the same way.
+func TestExtrudeTrimmedCircleSegPrismBoundsTighten(t *testing.T) {
+	const r = 10.0
+	rec := quarterDiscRecord(r)
+	wantArea := math.Pi * r * r / 4
+
+	area, err := rec.Area()
+	require.NoError(t, err)
+	require.LessOrEqual(t, math.Abs(area.Value.Base()-wantArea), area.Bound.Base(),
+		"the area bound does not enclose the true error against pi*r^2/4")
+	require.LessOrEqual(t, area.Bound.Base(), 1e-9*area.Value.Base(),
+		"the area bound is not tight against its value")
+	require.Equal(t, decad.Approximate, area.Exactness, "pi*r^2/4 is never exactly representable")
+
+	// The quarter disc's centroid sits at (4r/(3*pi), 4r/(3*pi)) — the
+	// standard quarter-circle centroid distance from each straight edge.
+	wantCentroid := 4 * r / (3 * math.Pi)
+	c, err := rec.Centroid()
+	require.NoError(t, err)
+	require.InDelta(t, wantCentroid, c.Value.X, 1e-9)
+	require.InDelta(t, wantCentroid, c.Value.Y, 1e-9)
+	require.LessOrEqual(t, c.Bound.Base(), 1e-6, "the centroid bound is not small")
+	require.Equal(t, decad.Approximate, c.Exactness)
+}
+
 // TestExtrudeSquarePrismStaysExact is the regression guard: an axis-aligned
 // square section's side lengths, area, volume and centroid are all exactly
 // representable, and none of the tightening above may disturb that.
