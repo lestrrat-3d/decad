@@ -256,6 +256,41 @@ func TestCapBlendErosionFamilyVolumeBoundEncloses(t *testing.T) {
 	}
 }
 
+// TestCapBlendChordLocusVolumeAllowScalesSweptTermToFlux is the units-mismatch
+// regression for bounds.go's chordLocusVolumeAllow (PR-122 review): the
+// function composes envelopeSlack (a difference of two patchRawFlux results —
+// raw FLUX, three times a volume) with sweptVolumeAllow(patchDeviation,
+// areaUpper) (already a VOLUME), and capBandVolume divides the composed sum
+// by 3 exactly once (capblend_moments.go's boundedQuotient at its own single
+// division site). Composing the two without first scaling the volume term up
+// to flux charged it at a third of its proven size — a shortfall that grows
+// as the setback approaches the section's own inradius, which is exactly the
+// case pinned here (the audited PR-122 wide-sector repro, near the setback
+// limit). Pre-fix (swept charged as a bare volume) this body's published
+// bound was 2383.4693377126996 mm^3; correctly scaled it is
+// 5796.19196853153 mm^3 — this test fails if the term regresses to the
+// under-scaled reading.
+func TestCapBlendChordLocusVolumeAllowScalesSweptTermToFlux(t *testing.T) {
+	body := circularSectorBody(t, 10, 2.7, 4.953329)
+	chamfered, err := body.Chamfer(capLoopEdges(body), units.Millimeters(4.928686))
+	require.NoError(t, err)
+	vol, err := chamfered.Volume()
+	require.NoError(t, err)
+
+	const preFixBound = 2383.4693377126996
+	require.Greater(t, vol.Bound.Mag(), preFixBound,
+		`the published bound (%v mm^3) must exceed the pre-fix under-scaled reading (%v mm^3): the swept-volume term must be scaled to flux before capBandVolume's own /3, not composed as a bare volume`,
+		vol.Bound.Mag(), preFixBound)
+	require.InDelta(t, 5796.19196853153, vol.Bound.Mag(), 0.01,
+		`the published bound (%v mm^3) must match the correctly-scaled reading`, vol.Bound.Mag())
+
+	erosion := sectorErosionVolume(10, 2.7, 4.953329, 4.928686)
+	residual := math.Abs(vol.Value.Mag() - erosion)
+	require.LessOrEqual(t, residual, vol.Bound.Mag(),
+		`the published bound (%v mm^3) must still enclose the erosion-family residual (%v mm^3)`,
+		vol.Bound.Mag(), residual)
+}
+
 // roundedRectBody extrudes an l x w rectangle by h and fillets its four
 // lateral corners to radius r — a TRUE tangent fillet, so every join between
 // a straight wall and a circular wall is tangential.

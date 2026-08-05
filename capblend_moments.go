@@ -660,6 +660,18 @@ func patchRawFlux(g capPatchGeom) boundedScalar {
 func chordLocusResidualAllow(g capPatchGeom) float64 {
 	capTh0, capTh1 := capWindowOnBranch(g.capTh0, g.capTh1, g.th0)
 	windowSkewMax := math.Max(capTh0-g.th0, g.th1-capTh1)
+	// windowSkewMax is never negative: this is a checkable fact, not a
+	// defensive assumption. The cap window is the SIDE window trimmed by
+	// erosion — the cap contour is the wall's own offset, and offsetting a
+	// point radially preserves its polar angle about the wall's centre — so
+	// the cap window is always a SUBSET of the side window and can only be
+	// narrower or equal, never wider. For a circle/line miter this reduces to
+	// a closed form: with the corner's own half-angle cosine a = cos(alpha)
+	// and setback d, the per-corner skew is a' - a = d(1-a)/(R+d) >= 0 for a
+	// hole wall (offset radius R+d) and d(1+a)/(R-d) >= 0 for an outer wall
+	// (offset radius R-d) — both non-negative for every admitted 0 < d < R
+	// and -1 <= a <= 1, zero only at a tangent join (a = 1) or a
+	// degenerate/whole-turn patch, which is the only way this guard fires.
 	if windowSkewMax <= 0 {
 		return 0
 	}

@@ -332,7 +332,14 @@ func chordLocusVolumeAllow(fluxWide, fluxWideBound, fluxNarrow, fluxNarrowBound,
 	radialDeficit := math.Sqrt(math.Max(0, sideRadius*capRadius)) * math.Abs(math.Sin(windowSkewMax/2))
 	maxRadius := math.Max(math.Abs(sideRadius), math.Abs(capRadius))
 	patchDeviation := absSumUpper(radialDeficit, productUpper(maxRadius, windowSkewMax))
-	return absSumUpper(envelopeSlack, sweptVolumeAllow(patchDeviation, areaUpper))
+	// sweptVolumeAllow returns a VOLUME, but this function's return value is a
+	// FLUX term (envelopeSlack is a difference of two patchRawFlux results,
+	// three times a volume) that patchRawFlux's own bound folds into, to be
+	// divided by 3 exactly once at capBandVolume's single division
+	// (capblend_moments.go:418). Scaling this volume term up by 3 here is what
+	// makes that later division land it back at its true size instead of a
+	// third of it.
+	return absSumUpper(envelopeSlack, productUpper(3, sweptVolumeAllow(patchDeviation, areaUpper)))
 }
 
 // rimDelta is the trim-amplified displacement bound of a vertex the boolean
