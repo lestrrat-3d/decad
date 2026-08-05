@@ -2,6 +2,7 @@ package decad_test
 
 import (
 	"math"
+	"math/big"
 	"strings"
 	"testing"
 
@@ -170,6 +171,130 @@ func TestCapBlendConeAreaEnclosesTheDenotedPatch(t *testing.T) {
 	require.GreaterOrEqual(t, area.Bound.Mag(), residual,
 		`the published bound %v must enclose the %v mm^2 the rounded side level moves`,
 		area.Bound.Mag(), residual)
+}
+
+// tallPlateWithDiskHole extrudes a 100x100 plate with a disk hole of radius r
+// centred at (50, 50) by h. The height is the one thing plateWithDiskHole
+// fixes: a hole cap-loop chamfer whose setback exceeds the hole's own radius
+// needs a sweep taller than that setback, or SX7 refuses the band for running
+// past the far end.
+func tallPlateWithDiskHole(t *testing.T, r, h float64) *decad.Body {
+	t.Helper()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	outer := s.CreateRectangle(0, 0, 100, 100)
+	s.Fix(outer.A)
+	s.CreateCircle(s.CreatePoint(50, 50), r)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+
+	var prof *sketch.Profile
+	for _, p := range s.Profiles() {
+		if len(p.Outer) == 4 && len(p.Holes) == 1 {
+			prof = p
+			break
+		}
+	}
+	require.NotNil(t, prof, `the rectangle-with-disk region should exist`)
+
+	doc := decad.New()
+	body, err := doc.Extrude(s, prof, decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+	require.NoError(t, err)
+	return body
+}
+
+// TestCapBlendConeAreaEnclosesRoundedRadiusDifference is the reachability
+// half of the ΔR enclosure regression whose arithmetic half is
+// TestPatchAreaOfEnclosesRoundedRadiusDifference: it builds through Chamfer
+// the very patch that test states by hand, so the geometry the bound is
+// judged on is a body a caller can actually make.
+//
+// Only one arm of the cap offset can round the ΔR = R1-R0 subtraction
+// patchAreaOf's Cone arm evaluates. The inward arm's cap radius is R-d with
+// 0<d<R, which is Sterbenz-exact; the reachable route is the outward arm — a
+// clockwise, material-outside circular wall, so a hole or a concave arc,
+// whose cap radius is R+d — and it begins rounding at a setback-to-radius
+// ratio just above 1. This body is an ordinary millimetre-scale countersink
+// at that ratio: a 9.011 mm hole with a 16.501 mm setback, whose 25.512 mm
+// cap radius puts fl(R1-R0) an ulp from the difference the two held radii
+// denote.
+//
+// The published bound asserted here is the whole composed one, contourAllow
+// among its terms, so it is the looser statement of the two — the built
+// contour's own displacement runs several times the arithmetic residual on
+// this body. The tight claim is the one the arithmetic makes, and the
+// internal test judges that alone.
+func TestCapBlendConeAreaEnclosesRoundedRadiusDifference(t *testing.T) {
+	const R, d, h = 9.011281351443861, 16.500928618916209, 40.0
+	body := tallPlateWithDiskHole(t, R, h)
+	q := decad.Edges(decad.CreatedBy(decad.CapEnd(body)), decad.Circular())
+	matched, err := q.SelectEdges(body)
+	require.NoError(t, err)
+	require.Len(t, matched, 1, "the hole loop's single whole-circle edge")
+
+	chamfered, err := body.Chamfer(q, units.Millimeters(d))
+	require.NoError(t, err)
+	requireManifold(t, chamfered)
+
+	// The band's own two radii and axial run, formed exactly as the build
+	// forms them: a hole is walked clockwise, so its cap contour offsets
+	// OUTWARD to R+d, and the side level is the cap level moved d into the
+	// material.
+	R0 := R
+	R1 := R + d
+	capZ := h
+	sideZ := capZ - d
+	H := capZ - sideZ
+
+	exactDR := new(big.Rat).Sub(new(big.Rat).SetFloat64(R1), new(big.Rat).SetFloat64(R0))
+	require.NotEqual(t, 0, new(big.Rat).SetFloat64(R1-R0).Cmp(exactDR),
+		`the premise: fl(R1-R0) really does round at this radius and setback`)
+
+	band := capBandPatch(t, chamfered)
+	area, err := band.Area()
+	require.NoError(t, err)
+
+	// A(true) = (2π/2)·(R0+R1)·√(ΔR²+H²) over the held radii, at 600 bits with
+	// the true π rather than the float64 the build swept through — the same
+	// window the patch's own capThAllow already brackets.
+	const prec = 600
+	const piDigits = "3.14159265358979323846264338327950288419716939937510582097494459230781640628620899862803482534211706798"
+	bf := func(r *big.Rat) *big.Float { return new(big.Float).SetPrec(prec).SetRat(r) }
+	mul := func(a, b *big.Float) *big.Float { return new(big.Float).SetPrec(prec).Mul(a, b) }
+	pi, ok := new(big.Float).SetPrec(prec).SetString(piDigits)
+	require.True(t, ok)
+	slantSq := new(big.Rat).Add(
+		new(big.Rat).Mul(exactDR, exactDR),
+		new(big.Rat).Mul(new(big.Rat).SetFloat64(H), new(big.Rat).SetFloat64(H)),
+	)
+	slant := new(big.Float).SetPrec(prec).Sqrt(bf(slantSq))
+	radii := bf(new(big.Rat).Add(new(big.Rat).SetFloat64(R0), new(big.Rat).SetFloat64(R1)))
+	ref, _ := mul(pi, mul(radii, slant)).Float64()
+
+	residual := math.Abs(area.Value.Mag() - ref)
+	require.Greater(t, residual, 0.0,
+		`the premise: the held area really does sit off the frustum its own radii denote`)
+	require.GreaterOrEqual(t, area.Bound.Mag(), residual,
+		`the published bound %v must enclose the %v mm^2 the rounded radius difference moves`,
+		area.Bound.Mag(), residual)
+}
+
+// capBandPatch returns the body's one chamferCap patch face, the shape a
+// single chamfered whole-circle loop builds.
+func capBandPatch(t *testing.T, b *decad.Body) *decad.Face {
+	t.Helper()
+	var found []*decad.Face
+	for _, f := range b.Faces() {
+		for _, o := range f.Origins() {
+			if strings.HasPrefix(o.Role, "chamferCap(") {
+				found = append(found, f)
+				break
+			}
+		}
+	}
+	require.Len(t, found, 1, "one chamfered loop builds one whole-turn band patch")
+	return found[0]
 }
 
 // TestCapBlendCircularRimVerifyArea is the cylinder case through the public

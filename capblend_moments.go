@@ -889,7 +889,7 @@ func patchAreaOf(g capPatchGeom) (float64, float64) {
 	// can only shrink the published bound, never grow it.
 	core := math.Min(
 		conservativeValueError(area, dth*(R0+R1)*(math.Abs(dR)+math.Abs(H))),
-		coneFrustumAreaBracket(R0, R1, dR, H, dth, g.capThAllow, area),
+		coneFrustumAreaBracket(R0, R1, H, dth, g.capThAllow, area),
 	)
 	// The level allowance is the one term neither reading of the core speaks
 	// for: the bracket lifts H as an EXACT rational (it is a difference of two
@@ -919,36 +919,47 @@ func chordUpper2(a, b Point2) float64 {
 // coneFrustumAreaBracket is the certified interval bound on patchAreaOf's
 // Cone-arm closed form A = (Δθ/2)·(R0+R1)·√(ΔR²+H²) — the constant-slant
 // frustum-sector area that formula denotes. R0, R1 (the patch's own
-// side/cap radii) and H (= capZ − sideZ, itself a difference of two payload
-// floats) are all payload float64s, hence exact rationals with NO rounding
-// on the way, so ΔR = R1−R0 and H both lift EXACTLY and the only inexact
-// factors are the sweep Δθ — bracketed by dthAllow, capThAllow's own proven
-// enclosure of the true window (an atan2Interval bracket on the patch's own
-// offset feet, or piLower/piUpper for the structurally whole-turn circle;
-// capblend_contour.go/capblend_geom.go) — and the square root, rounded
-// outward by intervalSqrt. Interval arithmetic is inclusion-monotonic, so
-// the composed product [dth−dthAllow, dth+dthAllow] × [R0+R1] × [slant]
-// encloses the true A whatever the platform's Hypot, Atan2 or Sincos
-// returned: nowhere here is an ulp contract on any of them assumed. Returns
-// +Inf where a factor fails to lift (non-finite geometry), so the caller's
-// math.Min falls back to the unconditional envelope.
+// side/cap radii) and H (= capZ − sideZ) are payload float64s, hence exact
+// rationals with NO rounding on the way, and ΔR is formed HERE as the exact
+// rational R1−R0 rather than lifted from the caller's own float subtraction:
+// fl(R1−R0) is a DIFFERENT number wherever the two radii are far enough apart
+// to round, and an interval built on it encloses the area of a frustum whose
+// slant is √(fl(R1−R0)²+H²) — a patch nobody holds and nobody denotes. Only
+// the outward arm of the cap offset reaches that (a hole or concave arc, whose
+// cap radius is R+d; the inward arm's R−d is Sterbenz-exact), and it starts
+// rounding at an ordinary setback-to-radius ratio, so forming the difference
+// inside is what keeps the interval a statement about the held patch.
+//
+// The remaining inexact factors are the sweep Δθ — bracketed by dthAllow,
+// capThAllow's own proven enclosure of the true window (an atan2Interval
+// bracket on the patch's own offset feet, or piLower/piUpper for the
+// structurally whole-turn circle; capblend_contour.go/capblend_geom.go) — and
+// the square root, rounded outward by intervalSqrt. Interval arithmetic is
+// inclusion-monotonic, so the composed product [dth−dthAllow, dth+dthAllow] ×
+// [R0+R1] × [slant] encloses the true A whatever the platform's Hypot, Atan2
+// or Sincos returned: nowhere here is an ulp contract on any of them assumed.
+// Returns +Inf where a factor fails to lift (non-finite geometry), so the
+// caller's math.Min falls back to the unconditional envelope.
 //
 // "The true A" here is the true area of the frustum sector the HELD R0, R1
 // and H describe, and lifting those three exactly is precisely what makes it
 // so. It is not a claim about the patch the chamfer DENOTES: H is capZ minus
 // a ROUNDED side level, and the distance between the two patches is the
 // caller's own separate charge (bandLevelAreaAllow), which no tightening here
-// can ever substitute for.
-func coneFrustumAreaBracket(R0, R1, dR, H, dth, dthAllow, held float64) float64 {
+// can ever substitute for. That charge already covers the H subtraction's own
+// rounding (patchAreaOf folds addRoundError(capZ, −sideZ, H) in beside the
+// level's displacement), which is why H stays a parameter where ΔR does not.
+func coneFrustumAreaBracket(R0, R1, H, dth, dthAllow, held float64) float64 {
 	if isNonFinite(dthAllow) {
 		return math.Inf(1)
 	}
 	rR0, rR1 := floatRat(R0), floatRat(R1)
-	rdR, rH := floatRat(dR), floatRat(H)
+	rH := floatRat(H)
 	rdth, rAllow := floatRat(dth), floatRat(dthAllow)
-	if rR0 == nil || rR1 == nil || rdR == nil || rH == nil || rdth == nil || rAllow == nil {
+	if rR0 == nil || rR1 == nil || rH == nil || rdth == nil || rAllow == nil {
 		return math.Inf(1)
 	}
+	rdR := new(big.Rat).Sub(rR1, rR0)
 	slantIv, ok := intervalSqrt(intervalAdd(intervalSquare(pointInterval(rdR)), intervalSquare(pointInterval(rH))))
 	if !ok {
 		return math.Inf(1)

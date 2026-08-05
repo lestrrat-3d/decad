@@ -137,6 +137,67 @@ func TestPatchAreaOfChargesTheSideLevelRounding(t *testing.T) {
 	})
 }
 
+// TestPatchAreaOfEnclosesRoundedRadiusDifference is the mechanism-level
+// enclosure check for the OTHER input the certified frustum bracket reads.
+// ΔR is not a number the payload holds: patchAreaOf forms it as the float
+// subtraction R1-R0, so a bracket lifting THAT value encloses the area of a
+// frustum whose slant is √(fl(R1-R0)²+H²) instead of √((R1-R0)²+H²) — a patch
+// neither held nor denoted.
+//
+// Only the outward arm of the cap offset can round that subtraction, and this
+// geometry is one real body's: a chamfered circular hole of radius 9.011 mm
+// with a 16.501 mm setback, whose cap contour offsets outward to 25.512 mm
+// (TestCapBlendConeAreaEnclosesRoundedRadiusDifference builds it through
+// Chamfer and reads these same numbers off the patch). Nothing here is at an
+// extreme scale; the ratio of setback to radius is the whole of it.
+//
+// contourAllow is left at its zero on purpose. That term is the band's own
+// built-versus-denoted contour displacement and speaks for a different
+// difference entirely; on the built body it happens to run several times
+// larger than this residual and would hide the arithmetic claim behind an
+// allowance that never promised to cover it. What is asserted here is the
+// claim patchAreaOf's own arithmetic makes: that the held area sits within
+// the returned bound of the frustum sector its own held radii, level
+// separation and true window describe.
+func TestPatchAreaOfEnclosesRoundedRadiusDifference(t *testing.T) {
+	const prec = 600
+	// π to 100 decimals: the reference window is the true 2π, which is what
+	// the patch's own capThAllow brackets the held fl(2π) against.
+	const piDigits = "3.14159265358979323846264338327950288419716939937510582097494459230781640628620899862803482534211706798"
+
+	g := capPatchGeom{
+		circular: true, sideRadius: 9.011281351443861, capRadius: 25.512209970360068,
+		th0: 0, th1: 2 * math.Pi, capTh0: 0, capTh1: 2 * math.Pi,
+		wholeTurn: true,
+		sideZ:     23.49907138108379, capZ: 40,
+		capThAllow: 2.449293598294707e-16,
+	}
+	ratOf := func(x float64) *big.Rat { return new(big.Rat).SetFloat64(x) }
+	exactDR := new(big.Rat).Sub(ratOf(g.capRadius), ratOf(g.sideRadius))
+	require.NotEqual(t, 0, ratOf(g.capRadius-g.sideRadius).Cmp(exactDR),
+		"the premise: fl(R1-R0) really does round at this radius and setback")
+
+	area, bound := patchAreaOf(g)
+
+	bf := func(r *big.Rat) *big.Float { return new(big.Float).SetPrec(prec).SetRat(r) }
+	pi, ok := new(big.Float).SetPrec(prec).SetString(piDigits)
+	require.True(t, ok)
+	H := ratOf(g.capZ - g.sideZ)
+	slant := new(big.Float).SetPrec(prec).Sqrt(bf(new(big.Rat).Add(
+		new(big.Rat).Mul(exactDR, exactDR),
+		new(big.Rat).Mul(H, H),
+	)))
+	radii := bf(new(big.Rat).Add(ratOf(g.sideRadius), ratOf(g.capRadius)))
+	ref, _ := new(big.Float).SetPrec(prec).Mul(pi,
+		new(big.Float).SetPrec(prec).Mul(radii, slant)).Float64()
+
+	residual := math.Abs(area - ref)
+	require.Greater(t, residual, 0.0,
+		"the premise: the held area really does sit off the frustum its own radii denote")
+	require.GreaterOrEqual(t, bound, residual,
+		"bound %v must enclose the %v mm^2 residual the rounded radius difference carries", bound, residual)
+}
+
 // TestConeFrustumAreaBracketEnclosesReference is coneFrustumAreaBracket's own
 // soundness check, independent of any build. A = (dth/2)*(R0+R1)*slant is the
 // frustum-sector formula patchAreaOf's Cone arm evaluates; dthAllow claims
@@ -164,23 +225,42 @@ func TestConeFrustumAreaBracketEnclosesReference(t *testing.T) {
 	cases := []struct {
 		name                  string
 		R0, R1, H, dth, allow float64
+		roundedDR             bool
 	}{
-		{"ordinary miter wall", 10, 9.5, 8, 0.3, 1e-9},
-		{"whole-turn cylinder cap", 10, 9.5, 8, 2 * math.Pi, 1e-12},
-		{"tiny apex sweep", 0.5, 0.5, 0.5, 0.001, 1e-6},
-		{"huge radius, tiny setback", 1e12, 1e12 - 1e-3, 10, math.Pi / 2, 1e-15},
-		{"zero allowance (a perfectly known window)", 20, 18, 5, 1.0, 0},
-		{"equal radii, pure axial slant", 15, 15, 6, 0.7, 1e-8},
+		{name: "ordinary miter wall", R0: 10, R1: 9.5, H: 8, dth: 0.3, allow: 1e-9},
+		{name: "whole-turn cylinder cap", R0: 10, R1: 9.5, H: 8, dth: 2 * math.Pi, allow: 1e-12},
+		{name: "tiny apex sweep", R0: 0.5, R1: 0.5, H: 0.5, dth: 0.001, allow: 1e-6},
+		{name: "huge radius, tiny setback", R0: 1e12, R1: 1e12 - 1e-3, H: 10, dth: math.Pi / 2, allow: 1e-15},
+		{name: "zero allowance (a perfectly known window)", R0: 20, R1: 18, H: 5, dth: 1.0, allow: 0},
+		{name: "equal radii, pure axial slant", R0: 15, R1: 15, H: 6, dth: 0.7, allow: 1e-8},
+		// The outward arm of the cap offset, at millimetre scale: a chamfered
+		// circular hole whose cap radius is R+d rather than the inward arm's
+		// Sterbenz-exact R-d. The subtraction R1-R0 rounds here, so a bracket
+		// lifting the CALLER's float difference brackets a frustum nobody
+		// holds and excludes the held area's own residual.
+		{
+			name: "hole offset whose radius difference rounds",
+			R0:   9.011281351443861, R1: 9.011281351443861 + 16.500928618916209,
+			H: 16.500928618916209, dth: 2 * math.Pi, allow: 2.4492935982947064e-16,
+			roundedDR: true,
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			dR := tc.R1 - tc.R0
 			H := tc.H
+			exactDR := new(big.Rat).Sub(ratOfFloat(tc.R1), ratOfFloat(tc.R0))
+			require.Equal(t, tc.roundedDR, ratOfFloat(dR).Cmp(exactDR) != 0,
+				"the case's own premise about whether fl(R1-R0) rounds")
+
 			held := tc.dth / 2 * (tc.R0 + tc.R1) * math.Hypot(dR, H)
-			bound := coneFrustumAreaBracket(tc.R0, tc.R1, dR, H, tc.dth, tc.allow, held)
+			bound := coneFrustumAreaBracket(tc.R0, tc.R1, H, tc.dth, tc.allow, held)
 			require.False(t, math.IsInf(bound, 1), "the bracket must build for well-formed finite inputs")
 
-			rDR, rH := ratOfFloat(dR), ratOfFloat(H)
+			// The reference slant is the EXACT R1-R0, the difference the held
+			// radii denote, never the float subtraction the held area was
+			// evaluated through.
+			rDR, rH := exactDR, ratOfFloat(H)
 			slant := sqrtF(add(mul(bfRat(rDR), bfRat(rDR)), mul(bfRat(rH), bfRat(rH))))
 			radii := bfRat(new(big.Rat).Add(ratOfFloat(tc.R0), ratOfFloat(tc.R1)))
 			dthRat, allowRat := ratOfFloat(tc.dth), ratOfFloat(tc.allow)
