@@ -167,38 +167,82 @@ func circularSegmentBody(t *testing.T, r, chordV, h float64) *decad.Body {
 	return body
 }
 
+// circularSectorBody extrudes a symmetric circular sector — two straight
+// radii from the origin at angle 0 and phi, closed by the arc between their
+// far ends — by h: a single circular wall meeting a straight neighbour at a
+// non-tangential miter corner at BOTH its own ends, generalizing
+// quarterDiskBody to any full angle phi.
+func circularSectorBody(t *testing.T, r, phi, h float64) *decad.Body {
+	t.Helper()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	o := s.CreatePoint(0, 0)
+	s.Fix(o)
+	px := s.CreatePoint(r, 0)
+	py := s.CreatePoint(r*math.Cos(phi), r*math.Sin(phi))
+	s.CreateLine(o, px)
+	s.CreateLine(py, o)
+	s.CreateArc(o, px, py)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	require.Len(t, s.Profiles(), 1)
+
+	doc := decad.New()
+	body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+	require.NoError(t, err)
+	return body
+}
+
 // TestCapBlendErosionFamilyVolumeBoundEncloses is defect-1's own value check
 // (docs/modify-reach-design.md §8.3): the published volume judged against the
 // erosion-family integral A(0)*(H-d) + integral[0,d] of A(t) dt, an
 // INDEPENDENT reference derived from the section alone (never from the
-// evaluator's own construction) for two shapes whose circular wall meets a
+// evaluator's own construction) for shapes whose circular wall meets a
 // straight neighbour at a non-tangential miter on both ends — the quarter
-// disk, and the sharper case of a minor circular segment cut by a chord well
-// off-centre, where the setback consumes a larger fraction of the band's own
-// depth. Both residuals are the gap between the BUILT (straight-ruled-patch)
-// solid and the exact miter-locus solid the erosion family denotes
-// (docs/modify-reach-design.md §8.3's own scope note, capblend_moments.go);
-// the published Bound must enclose it.
+// disk, a minor circular segment cut by a chord well off-centre, and two
+// sectors near the setback's own limit (an audited PR-122 repro: the setback
+// approaching the section's own inradius makes the cap window close hard
+// against the side one — capblend_moments.go's chordLocusResidualAllow judges
+// exactly this residual). Every residual is the gap between the BUILT
+// (straight-ruled-patch) solid and the exact miter-locus solid the erosion
+// family denotes (docs/modify-reach-design.md §8.3's own scope note,
+// capblend_moments.go); the published Bound must enclose it.
 func TestCapBlendErosionFamilyVolumeBoundEncloses(t *testing.T) {
 	for _, tc := range []struct {
 		name    string
 		build   func(t *testing.T) *decad.Body
 		erosion func() float64
+		d       float64
 	}{
 		{
 			name:    `quarter disk`,
 			build:   func(t *testing.T) *decad.Body { return quarterDiskBody(t, 60, 20) },
 			erosion: func() float64 { return sectorErosionVolume(60, math.Pi/2, 20, 4) },
+			d:       4,
 		},
 		{
 			name:    `minor circular segment, chord v=30`,
 			build:   func(t *testing.T) *decad.Body { return circularSegmentBody(t, 60, 30, 20) },
 			erosion: func() float64 { return segmentErosionVolume(60, 30, 20, 4) },
+			d:       4,
+		},
+		{
+			name:    `quarter disk near the setback limit`,
+			build:   func(t *testing.T) *decad.Body { return circularSectorBody(t, 10, math.Pi/2, 4.2) },
+			erosion: func() float64 { return sectorErosionVolume(10, math.Pi/2, 4.2, 4.13) },
+			d:       4.13,
+		},
+		{
+			name:    `wide sector near the setback limit`,
+			build:   func(t *testing.T) *decad.Body { return circularSectorBody(t, 10, 2.7, 4.953329) },
+			erosion: func() float64 { return sectorErosionVolume(10, 2.7, 4.953329, 4.928686) },
+			d:       4.928686,
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			body := tc.build(t)
-			chamfered, err := body.Chamfer(capLoopEdges(body), units.Millimeters(4))
+			chamfered, err := body.Chamfer(capLoopEdges(body), units.Millimeters(tc.d))
 			require.NoError(t, err)
 			vol, err := chamfered.Volume()
 			require.NoError(t, err)
@@ -318,5 +362,46 @@ func TestCapBlendTangentJunctionVolumeUnaffected(t *testing.T) {
 		require.NoError(t, err)
 		want := roundedRectHoleErosionVolume(plateL, side, rho, h, d)
 		require.InDelta(t, want, vol.Value.Mag(), 1e-6)
+	})
+}
+
+// TestCapBlendTangentJunctionAndWholeTurnBoundsStayTight pins the two
+// PR-122 audit reproductions defect-3 fixed: a shape whose every circular
+// wall meets its neighbour tangentially (so the two directrices share one
+// window, `chordLocusResidualAllow` contributes nothing, and the ONLY thing
+// left in play is the arithmetic-rounding envelope itself), and the
+// cornerless whole-turn circle. `patchRawFlux`'s poly/cross terms used to
+// read the absolute plane-local levels z0, z1 rather than the band's own z
+// origin, which left the published Bound scale with those absolute levels
+// instead of the band's own small axial extent — a restructure sound enough
+// to still enclose the residual (Bound only ever WIDENS, never wrongly
+// shrinks) but far looser than it needs to be on a body that never asked for
+// the cap-loop chamfer's own general non-tangent-miter machinery at all. The
+// ceilings below are well above the measured value (so ordinary arithmetic
+// reordering cannot flake this) and well below the values a bound regressed
+// back to reading the absolute levels would publish (audited at
+// 28386.2821001117 and 1.450768679e-08 respectively).
+func TestCapBlendTangentJunctionAndWholeTurnBoundsStayTight(t *testing.T) {
+	t.Run(`tangent-fillet plate`, func(t *testing.T) {
+		const l, w, h, r, d = 100.0, 60.0, 20.0, 15.0, 4.0
+		body := roundedRectBody(t, l, w, h, r)
+		chamfered, err := body.Chamfer(capLoopEdges(body), units.Millimeters(d))
+		require.NoError(t, err)
+		vol, err := chamfered.Volume()
+		require.NoError(t, err)
+		require.Less(t, vol.Bound.Mag(), 20000.0,
+			`the tangent-junction bound (%v mm^3) must stay close to the pre-PR-122 reading (15600.0000000006 mm^3), not the audited regression (28386.2821001117 mm^3)`,
+			vol.Bound.Mag())
+	})
+
+	t.Run(`whole-turn circle`, func(t *testing.T) {
+		body := circleProfile(t, 60, 20)
+		chamfered, err := body.Chamfer(capLoopEdges(body), units.Millimeters(4))
+		require.NoError(t, err)
+		vol, err := chamfered.Volume()
+		require.NoError(t, err)
+		require.Less(t, vol.Bound.Mag(), 5e-9,
+			`the whole-turn bound (%v mm^3) must stay close to the pre-PR-122 reading (2.743387239e-09 mm^3), not the audited regression (1.450768679e-08 mm^3)`,
+			vol.Bound.Mag())
 	})
 }

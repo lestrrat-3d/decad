@@ -232,9 +232,13 @@ type capPatchGeom struct {
 	// (docs/modify-reach-design.md §8.3): th0/th1 above stay the wall's own
 	// full recorded sweep — the SIDE directrix, which the DX7 survey reads
 	// because the patch genuinely attains it there — while capTh0/capTh1 is
-	// the trimmed CAP directrix, and patchRawFlux/patchAreaOf integrate the
+	// the trimmed CAP directrix, and patchRawFlux integrates the
 	// straight-ruled patch BETWEEN the two windows rather than assume a
 	// single rotationally-symmetric cone sector spanning one shared window.
+	// patchAreaOf does not: its own area stays the constant-slant
+	// frustum-sector formula read against the trimmed CAP window alone, with
+	// the two windows genuinely differing widening its BOUND (windowSkew)
+	// rather than its own integral.
 	// A reflex corner's apex patch (side radius zero, so no side angle
 	// matters) and the single cornerless closed circle (no corner trims it
 	// at all, so both windows are the identical full period) set
