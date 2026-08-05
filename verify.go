@@ -1244,12 +1244,22 @@ func (in pairToleranceInputs) lengthReference(value float64) (float64, bool) {
 // Every DiagMeasurementBeyondTolerance such a body's area, bounds, volume or
 // centroid readings raise then carries a nil Required — the one documented
 // reference-less Suspect this design admits.
+//
+// A loftPayload reads its OWN held vertex-set diameter (pointSetDiameterContext),
+// never an envelope: every loft vertex is exact (docs/loft-design.md §5), the
+// boundary is a polyhedron, and a convex-hull diameter is realized at
+// vertices, so this is the TRUE diameter rather than a bound on it — the
+// strongest arm in this function, ahead of the exact carrier model that does
+// not yet cover this payload class.
 func bodyGateDiameter(ctx context.Context, body *Body) (float64, bool, error) {
 	if body == nil {
 		return 0, false, nil
 	}
 	if payload, ok := body.payload.(facetedPayload); ok {
 		return payload.diameter, usableMagnitude(payload.diameter), nil
+	}
+	if payload, ok := body.payload.(loftPayload); ok {
+		return pointSetDiameterContext(ctx, payload.verts)
 	}
 	budget := newWorkBudget(ctx)
 	geom, ok, err := newBodyGeomBudget(budget, body)

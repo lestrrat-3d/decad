@@ -274,9 +274,12 @@ computed:
 
 - a **rung** edge and a **diagonal** edge are decided by
   `orient3d(A, B, C, D)` on the edge's two incident triangles — `A, B` the
-  shared edge, `C` and `D` the two apex vertices — the edge convex exactly
-  when the sign puts `D` outside the half-space `ABC`'s outward normal
-  defines. This is the identical adaptive exact-orientation predicate
+  shared edge, `C` and `D` the two apex vertices, `(A, B, C)` the first
+  triangle's own outward-wound vertex order — the edge convex exactly when
+  the sign is negative, putting `D` on the MATERIAL side of `ABC`'s plane
+  (`orientSign`'s own convention, `boolean_exact.go`, is positive on the
+  outward-normal side, so the material side is negative). This is the
+  identical adaptive exact-orientation predicate
   `boolean_exact.go` already implements for the mesh boolean's contact
   classification — reused here, not reinvented, because both faces are
   already exact `Plane`s, so the sign is always decidable without a
@@ -593,9 +596,14 @@ zero value, so a PR that published `Document.Loft` before §8's derivations
 would answer `Volume()` with a proven-exact zero and `Verify` would call it
 `Sound` — a confidently wrong number, which is the one outcome core §1 exists
 to prevent. §8 derives all four in closed form from the same triangle set the
-construction already builds, so there is nothing to stage: the tolerance gate
-is generic over `Measurement` (verification §4) and needs no per-payload
-wiring once the readings exist.
+construction already builds, so there is nothing to stage on the measurements
+themselves. The tolerance gate does need one piece of per-payload wiring
+beside them, though, landed in the same PR: `bodyGateDiameter` (verification
+§3) reads a `loftPayload`'s own diameter as the exact diameter of its held
+vertex set — every vertex is exact (§5), so a convex-hull diameter realized at
+vertices is the TRUE diameter, not an envelope — because `Area` is always
+`Approximate` (§8) and a body with no reference diameter can never clear the
+gate's relative tolerance.
 
 ## 13. Required tests
 
