@@ -520,7 +520,7 @@ The chamfer's cap contour is a COMPUTED offset (a float line/circle solve),
 not a recorded one, so every reading built from it carries that offset's own
 proven displacement (delta) beside its arithmetic bound, exactly as a
 recorded 2D section carries its own displacement one layer down
-(`docs/prism-boolean-design.md` §7's `sectionDelta` identity). Three readings
+(`docs/prism-boolean-design.md` §7's `sectionDelta` identity). Four readings
 need it, each composing a different existing bound for a different reason:
 
 - the chamfered cap FACE AREA (the offset loop's own enclosed area, feeding
@@ -540,11 +540,19 @@ need it, each composing a different existing bound for a different reason:
   `bandPatchAreaAllow(delta, chordUpper, slantUpper)` — a ruled quad's area is
   its chord length times its slant distance to first order, so the chord's own
   length can move by `sectionDisplacementLength(delta, 1)` and the slant can
-  move by delta, each read against the OTHER factor's own held magnitude.
+  move by delta, each read against the OTHER factor's own held magnitude;
+- the BODY'S FIRST MOMENT (the centroid's own numerator, `Body.Centroid()`)
+  composes `sweptMomentAllow(delta, areaUpper, coordUpper)` exactly ONCE per
+  band, after the flux sum — the same "composed once" rule the band volume
+  follows, and for the same reason: the symmetric difference between the band
+  the build holds and the one the offset denotes has volume at most
+  `sweptVolumeAllow(delta, areaUpper)`, and every point of that difference
+  lies within `coordUpper` of the plane-local origin, so the moment it can
+  carry is at most that volume times `coordUpper`.
 
-All three helpers are zero wherever delta is zero (an axis-aligned section's
-exact miters), which is what keeps an all-Plane cap loop's Exact volume
-unchanged in that case.
+All four helpers are zero wherever delta is zero (an axis-aligned section's
+exact miters), which is what keeps an all-Plane cap loop's Exact volume and
+its exact-rational centroid unchanged in that case.
 
 A band's SIDE level is displaced too, and by a different mechanism, so it is a
 separate term with its own helper. `sideZ` is the single float sum
@@ -560,6 +568,30 @@ bounds only the patch the build HOLDS, not the one the chamfer denotes, and
 the gap is whole square millimetres wherever the sweep is large enough to
 round that sum. The term is zero wherever the sum is exact, which is the
 ordinary sweep and setback.
+
+**First moments and the centroid.** Compute the body's own first moment
+`M = ∫ p dV` in the payload's plane-local `(u, v, z)` coordinates, decomposed
+the same way the volume already is: a signed slab term per loop (that loop's
+own first moments, from a signed sibling of the region-area integral, times
+its straight height, with the z component the elementary
+`A·h·(zLo+zHi)/2`) plus a band term per chamfered cap (the divergence theorem
+with `F = (u²/2, 0, 0)`, `(0, v²/2, 0)`, `(0, 0, z²/2)` over the SAME closed
+band-plus-disks sub-solid the volume integrates — the two flat disks
+contribute to the z component only, since their outward normal is `±ẑ`). A
+flat `Plane` patch's own first moment is exact rational, the same
+`(x_a²+x_b²+x_c²+x_a·x_b+x_b·x_c+x_c·x_a)/24` triangle identity one degree
+higher than the tetrahedron identity the volume uses; a `Cone`/apex/
+whole-turn patch's is a closed-form Fourier sum over a finite set of phases
+`k·θS+m·θC` (`|k|+|m| <= 3`), bounded by the SAME structural-envelope
+discipline (`|cos|`, `|sin|`, `|sincHalf|` never exceed 1) the volume's own
+cross term already uses, with the whole-turn window collapsing to two terms
+computed with no trigonometric call at all — the moment's own analogue of the
+volume's zero-valued eccentric origin term there. The centroid divides the
+summed first moment by the body's own volume and lifts the plane-local
+quotient to world through the same frame/placement lift a prism centroid
+uses, with the geometric safety-net bound (the true centroid lies within the
+body's own `Bounds` box) standing as a `math.Min` ceiling on the formula
+answer, never the whole bound.
 
 ## 9. Shell reach
 

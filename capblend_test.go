@@ -1380,12 +1380,7 @@ func smallSkewSection(t *testing.T, h float64) *decad.Body {
 }
 
 // TestCapBlendCentroidBoundEncloses checks the centroid bound for what a bound
-// IS — an enclosure — rather than for a particular value. The reported bound is
-// the reach of the body's own Bounds box from the estimate, and the true
-// centroid may sit anywhere in that box, so the bound must cover every point of
-// it. p -> |p - estimate| is convex, so its maximum over the box is attained at
-// a CORNER: reading only Min and Max leaves six corners unexamined, and on a box
-// far wider than it is tall the farthest corner is among exactly those six.
+// IS — an enclosure of the TRUE centroid — rather than for a particular value.
 func TestCapBlendCentroidBoundEncloses(t *testing.T) {
 	const h, d = 1e-3, 1e-7
 	body := smallSkewSection(t, h)
@@ -1403,20 +1398,42 @@ func TestCapBlendCentroidBoundEncloses(t *testing.T) {
 
 	require.LessOrEqual(t, centroid.Value.Sub(receiver.Value).Len(), bound,
 		`the bound must enclose the true centroid, not merely be near the estimate`)
+}
 
-	// And the property the bound claims outright: every point the Bounds box
-	// holds is within it, corners included.
+// TestCapBlendCentroidNeverExceedsGeometryNet is docs/modify-reach-design.md
+// §8.4 PR B's required test 10: the published bound is a math.Min against
+// the geometric safety net (the body's own Bounds box reach from the
+// centroid, corners included, plus the box's own Bound), so it can never
+// exceed that net — proving the math.Min really is a CEILING, not merely a
+// tie-breaker. Before PR B the estimate WAS that net exactly (so the two
+// always coincided); this pins the inequality directly now that the
+// closed-form formula bound usually wins it.
+func TestCapBlendCentroidNeverExceedsGeometryNet(t *testing.T) {
+	const R, H, d = 10.0, 8.0, 0.5
+	body := circleProfile(t, R, H)
+	chamfered, err := body.Chamfer(capLoopEdges(body), units.Millimeters(d))
+	require.NoError(t, err)
+
+	centroid, err := chamfered.Centroid()
+	require.NoError(t, err)
 	bounds, err := chamfered.Bounds()
 	require.NoError(t, err)
+
+	net := 0.0
 	for _, x := range []float64{bounds.Min.X, bounds.Max.X} {
 		for _, y := range []float64{bounds.Min.Y, bounds.Max.Y} {
 			for _, z := range []float64{bounds.Min.Z, bounds.Max.Z} {
 				corner := r3.NewVec(x, y, z)
-				require.LessOrEqual(t, corner.Sub(centroid.Value).Len(), bound,
-					`corner %v of the bounds box the true centroid may occupy`, corner)
+				if dd := corner.Sub(centroid.Value).Len(); dd > net {
+					net = dd
+				}
 			}
 		}
 	}
+	net += bounds.Bound.Mag()
+
+	require.LessOrEqual(t, centroid.Bound.Mag(), net,
+		`the published centroid bound must never exceed the geometry-net ceiling`)
 }
 
 // TestCapBlendBandReachRefusalKeepsSX6Degenerate pins §4's stage order for the

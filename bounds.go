@@ -49,6 +49,8 @@ import (
 //     chordLocusVolumeAllow, an erosion-monotonicity sandwich against the
 //     ordinary shared-window cone-sector flux plus a swept-volume term over
 //     the built patch's own closed-form displacement from it;
+//   - the FIRST MOMENT a cap-loop chamfer's contour displacement can move →
+//     sweptMomentAllow, sweptVolumeAllow's own one-dimension-higher sibling;
 //   - a per-coordinate maximum read as a 3D DISTANCE → radius3D.
 
 const (
@@ -384,6 +386,30 @@ func chordLocusVolumeAllow(fluxWide, fluxWideBound, fluxNarrow, fluxNarrowBound,
 	// makes that later division land it back at its true size instead of a
 	// third of it.
 	return absSumUpper(envelopeSlack, productUpper(3, sweptVolumeAllow(patchDeviation, areaUpper)))
+}
+
+// sweptMomentAllow bounds the FIRST MOMENT a cap contour's own displacement
+// can move — sweptVolumeAllow's own sibling one power higher
+// (docs/modify-reach-design.md §8.4's fourth reading, beside the band
+// volume, the chamfered cap face area, and each band patch's own area). The
+// symmetric difference between the band the build holds and the one the
+// offset denotes has volume at most sweptVolumeAllow(delta, areaUpper) — that
+// identity is unchanged here — and every point of that difference lies within
+// coordUpper of the plane-local origin (the fixed point every first-moment
+// integral in this file is taken about), so the moment the difference can
+// carry is at most that volume times coordUpper: a region of proven volume V
+// all of whose points lie within coordUpper of the origin has |∫p dV| <=
+// V·coordUpper for any single coordinate p, since |p| <= coordUpper
+// pointwise. coordUpper must be a PROVEN upper bound on |u|, |v| and |z| over
+// the band's own material (extrude.go's profileCoordinateUpper of the loop,
+// plus max(|z0|, |z1|) — the same envelope prismCentroidGeometryBound already
+// forms).
+func sweptMomentAllow(delta, areaUpper, coordUpper float64) float64 {
+	vol := sweptVolumeAllow(delta, areaUpper)
+	if vol <= 0 || coordUpper <= 0 {
+		return 0
+	}
+	return productUpper(vol, coordUpper)
 }
 
 // rimDelta is the trim-amplified displacement bound of a vertex the boolean

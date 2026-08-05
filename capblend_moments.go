@@ -67,6 +67,12 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref StepRef, cbp capB
 	startLoopObjs := make([]*Loop, len(loops))
 	endLoopObjs := make([]*Loop, len(loops))
 	var startArea, endArea, sideArea, patchArea, slabVolume, bandVolume boundedScalar
+	// muTotal, mvTotal, mzTotal accumulate the body's own plane-local first
+	// moments (docs/modify-reach-design.md §8.4's fourth reading): the SAME
+	// per-loop sign this loop already applies to slabVolume/bandVolume, over
+	// the SAME two-part decomposition (a signed slab term via
+	// loopEnclosedMomentsContext, a band term via capBandMoment).
+	var muTotal, mvTotal, mzTotal boundedScalar
 	// Appended in build order — loop index, then the chamfered cap, then each
 	// band's own patch index — which IS Table BX row BX3's deterministic patch
 	// order, the order the DX7 survey then reports its faces in.
@@ -115,13 +121,26 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref StepRef, cbp capB
 		}
 		_ = loopLen
 
-		loopArea, err := loopEnclosedAreaContext(ctx, loop)
+		loopArea, loopMu, loopMv, err := loopEnclosedMomentsContext(ctx, loop)
 		if err != nil {
 			return nil, err
 		}
 		straightHeight := boundedSub(zHi, zLo)
 		loopSlab := boundedMul(loopArea, straightHeight)
 		slabVolume = boundedAdd(slabVolume, measuredScalar(sign*loopSlab.value, loopSlab.bound))
+
+		// M_slab = (mu·h, mv·h, A·h·(zLo+zHi)/2), docs/modify-reach-design.md
+		// §8.4(a): mu, mv are the loop's own signed first moments (already
+		// canonicalized the same way loopArea is), and A·h is loopSlab itself,
+		// so the z component reuses it rather than recomputing A·h a second
+		// time.
+		zMid := boundedDiv(boundedAdd(zLo, zHi), exactScalar(2))
+		loopMuSlab := boundedMul(loopMu, straightHeight)
+		loopMvSlab := boundedMul(loopMv, straightHeight)
+		loopMzSlab := boundedMul(loopSlab, zMid)
+		muTotal = boundedAdd(muTotal, measuredScalar(sign*loopMuSlab.value, loopMuSlab.bound))
+		mvTotal = boundedAdd(mvTotal, measuredScalar(sign*loopMvSlab.value, loopMvSlab.bound))
+		mzTotal = boundedAdd(mzTotal, measuredScalar(sign*loopMzSlab.value, loopMzSlab.bound))
 
 		startCo, endCo := bottomCo, topCo
 
@@ -149,6 +168,13 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref StepRef, cbp capB
 				pa, pb := patchAreaOf(g)
 				patchArea = boundedAdd(patchArea, measuredScalar(pa, pb))
 			}
+			bmu, bmv, bmz, err := capBandMoment(ctx, loop, cbp, band.geom, cbp.z0, +1, band.delta, work)
+			if err != nil {
+				return nil, err
+			}
+			muTotal = boundedAdd(muTotal, measuredScalar(sign*bmu.value, bmu.bound))
+			mvTotal = boundedAdd(mvTotal, measuredScalar(sign*bmv.value, bmv.bound))
+			mzTotal = boundedAdd(mzTotal, measuredScalar(sign*bmz.value, bmz.bound))
 		}
 		if onEnd {
 			band, err := buildCapBand(ctx, body, ref, cbp, li, loop, cbp.z1, -1, topCo, work)
@@ -168,6 +194,13 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref StepRef, cbp capB
 				pa, pb := patchAreaOf(g)
 				patchArea = boundedAdd(patchArea, measuredScalar(pa, pb))
 			}
+			bmu, bmv, bmz, err := capBandMoment(ctx, loop, cbp, band.geom, cbp.z1, -1, band.delta, work)
+			if err != nil {
+				return nil, err
+			}
+			muTotal = boundedAdd(muTotal, measuredScalar(sign*bmu.value, bmu.bound))
+			mvTotal = boundedAdd(mvTotal, measuredScalar(sign*bmv.value, bmv.bound))
+			mzTotal = boundedAdd(mzTotal, measuredScalar(sign*bmz.value, bmz.bound))
 		}
 
 		startLoopObjs[li] = &Loop{coedges: startCo, outer: li == 0}
@@ -258,17 +291,21 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref StepRef, cbp capB
 		Bound:     units.SquareMillimeters(totalArea.bound),
 	}
 
-	// Centroid: an honest area-weighted estimate over the built faces'
-	// representative points, backed by the geometry safety net every
-	// prism/revolve/cup centroid already falls back to (the true centroid of
-	// a bounded solid lies within its own bounding box, so |estimate-true| is
-	// bounded by the box's own reach from the estimate regardless of how the
-	// estimate was formed) — never a tighter claim than proven.
+	// Centroid: the closed-form first moments divided by the body's own
+	// volume (docs/modify-reach-design.md §8.4), lifted to world through the
+	// SAME frame/placement lift a prism centroid uses, backed by the
+	// geometry safety-net ceiling every analytic centroid falls back to.
 	bounds, err := capBlendBoundsContext(ctx, cbp, work)
 	if err != nil {
 		return nil, err
 	}
-	centroidValue, centroidBound := capBlendCentroidEstimate(faces, bounds)
+	cu := boundedQuotient(muTotal.value, muTotal.bound, volume.value, volume.bound)
+	cv := boundedQuotient(mvTotal.value, mvTotal.bound, volume.value, volume.bound)
+	cz := boundedQuotient(mzTotal.value, mzTotal.bound, volume.value, volume.bound)
+	centroidValue := pl.point(cu.value, cv.value, cz.value)
+	formulaBound := prismPointBound(pl, cu, cv, cz)
+	geometryBound := capBlendCentroidGeometryBound(centroidValue, bounds)
+	centroidBound := math.Min(formulaBound, geometryBound)
 	body.centroid = VecMeasurement{
 		Value:     centroidValue,
 		Exactness: exactnessOf(centroidBound),
@@ -1036,75 +1073,4 @@ func capBlendBoundsContext(ctx context.Context, cbp capBlendPayload, work *freef
 		Exactness: exactnessOf(bound),
 		Bound:     units.Millimeters(bound),
 	}, nil
-}
-
-// capBlendCentroidEstimate is an area-weighted average of every face's own
-// representative point, with the geometric safety-net bound every analytic
-// centroid already falls back to: the true centroid lies within the returned
-// Bounds box, so |estimate-true| is bounded by the box's own reach from the
-// estimate — sound whatever the estimate's own accuracy.
-//
-// The reach is maximized over all EIGHT corners of the box, and that is the
-// whole of the proof rather than a thoroughness flourish. p -> |p - estimate| is
-// convex, so its maximum over the box — a convex hull of its eight corners — is
-// attained AT a corner; taking the max over all eight therefore bounds the
-// distance to every point the box holds, the true centroid among them, wherever
-// the estimate itself sits. Reading only Min and Max leaves six corners
-// unexamined, and a box whose extent along one axis is far larger than along
-// another puts its farthest corner among exactly those six: the reported bound
-// is then smaller than the estimate's own error and encloses nothing.
-//
-// The box's own Bound is added on top for the same reason: the safety net is
-// "the true centroid lies within the box", and where a face of the box is
-// itself known only to a displacement, the box that provably contains the body
-// is the reported one widened by it.
-func capBlendCentroidEstimate(faces []*Face, bounds Box) (r3.Vec, float64) {
-	var sum r3.Vec
-	var totalArea float64
-	for _, f := range faces {
-		p := faceRepresentativePoint(f)
-		sum = sum.Add(p.Scale(f.area))
-		totalArea += f.area
-	}
-	estimate := r3.NewVec(0, 0, 0)
-	if totalArea > 0 {
-		estimate = sum.Scale(1 / totalArea)
-	}
-	xs := [2]float64{bounds.Min.X, bounds.Max.X}
-	ys := [2]float64{bounds.Min.Y, bounds.Max.Y}
-	zs := [2]float64{bounds.Min.Z, bounds.Max.Z}
-	reach := 0.0
-	for _, x := range xs {
-		for _, y := range ys {
-			for _, z := range zs {
-				dd := r3.NewVec(x, y, z).Sub(estimate).Len()
-				if dd > reach {
-					reach = dd
-				}
-			}
-		}
-	}
-	return estimate, absSumUpper(reach, bounds.Bound.Mag())
-}
-
-// faceRepresentativePoint is any point provably on the face, used only to
-// seed the centroid estimate — not a claim of precision; the reported bound
-// is the geometric safety net above, not this point's own accuracy.
-func faceRepresentativePoint(f *Face) r3.Vec {
-	for _, l := range f.loops {
-		for _, ce := range l.coedges {
-			if v := ce.Start(); v != nil {
-				return v.position
-			}
-		}
-	}
-	switch s := f.surface.(type) {
-	case Plane:
-		return s.Frame.Origin()
-	case Cylinder:
-		return s.Origin
-	case Cone:
-		return s.Origin
-	}
-	return r3.NewVec(0, 0, 0)
 }

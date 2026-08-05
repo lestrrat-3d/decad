@@ -453,16 +453,58 @@ func renameCavityRoles(ctx context.Context, faces []*Face, ref StepRef) error {
 // proved the cavity simple and inside the outer region), so the absolute
 // difference is the band's analytic area, with both source bounds carried.
 func loopEnclosedAreaContext(ctx context.Context, l LoopRecord) (boundedScalar, error) {
+	ig, err := loopRegionIntegralsContext(ctx, l)
+	if err != nil {
+		return boundedScalar{}, err
+	}
+	return measuredScalar(math.Abs(ig.area), ig.areaBound), nil
+}
+
+// loopRegionIntegralsContext runs the regionIntegrals accumulator over one
+// loop's own segments about the plane origin — the shared walk
+// loopEnclosedAreaContext and loopEnclosedMomentsContext both read, so the
+// two never disagree about which boundary they integrated.
+func loopRegionIntegralsContext(ctx context.Context, l LoopRecord) (regionIntegrals, error) {
 	var ig regionIntegrals
 	for _, seg := range l.Segments {
 		if err := ctx.Err(); err != nil {
-			return boundedScalar{}, err
+			return regionIntegrals{}, err
 		}
 		// Integrated about the plane origin itself; the band's area is a
 		// difference of two loop areas, so no walk anchor is involved.
 		if err := ig.addAnalytic(seg, Point2{}); err != nil {
-			return boundedScalar{}, err
+			return regionIntegrals{}, err
 		}
 	}
-	return measuredScalar(math.Abs(ig.area), ig.areaBound), nil
+	return ig, nil
+}
+
+// loopEnclosedMomentsContext is a signed first-moment sibling of
+// loopEnclosedAreaContext (docs/modify-reach-design.md §8.4's slab term): the
+// SAME regionIntegrals accumulator over the loop's own segments about the
+// plane origin, returning the loop's own area together with its first
+// moments (∫u dA, ∫v dA) — each canonicalized the SAME way
+// loopEnclosedAreaContext's |area| already is, via orient = sign(the loop's
+// own raw signed area). Reversing a walk's direction negates every one of
+// Green's theorem's contour integrals identically — area and first moments
+// alike, since they are all contour integrals of the same shape — so the
+// SAME orient factor that turns a clockwise hole's negative raw area into
+// loopEnclosedAreaContext's positive reading turns its first moments
+// consistently too, and orient*ig.area equals math.Abs(ig.area) exactly, so
+// this function's own area field always matches loopEnclosedAreaContext's.
+// The caller (evalCapBlendContext) applies its own per-loop sign
+// (outer/hole, by loop index) on top of this canonicalized triple, exactly as
+// it already does to loopEnclosedAreaContext's |area| for the slab volume.
+func loopEnclosedMomentsContext(ctx context.Context, l LoopRecord) (area, mu, mv boundedScalar, err error) {
+	ig, err := loopRegionIntegralsContext(ctx, l)
+	if err != nil {
+		return boundedScalar{}, boundedScalar{}, boundedScalar{}, err
+	}
+	orient := 1.0
+	if ig.area < 0 {
+		orient = -1
+	}
+	return measuredScalar(orient*ig.area, ig.areaBound),
+		measuredScalar(orient*ig.mu, ig.muBound),
+		measuredScalar(orient*ig.mv, ig.mvBound), nil
 }
