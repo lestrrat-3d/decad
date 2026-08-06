@@ -3,6 +3,7 @@ package decad
 import (
 	"context"
 	"math"
+	"math/big"
 	"testing"
 
 	"github.com/lestrrat-3d/r3"
@@ -281,7 +282,94 @@ func TestBoundaryExtremesContextRegression(t *testing.T) {
 	require.Zero(t, box.Bound.Base())
 }
 
-// 10. Cancellation: a cancelled context returns ctx.Err() from the scan.
+// 10. R15's §6.2 sibling: a span whose directional enclosure runs past the
+// float64 range refuses ErrUnsupported — the curve exists and this evaluator
+// cannot state its extreme — rather than saturating to an infinity the fold
+// then reads as an empty region (ErrDegenerate, the opposite existence claim).
+// Every control coordinate here is finite, and the record, the seam and the
+// bracket all admit them; only gu*u + gv*v runs off the range.
+func TestBoundaryExtremesBoundedSaturatedEnclosureRefusesUnsupported(t *testing.T) {
+	control := []Point2{
+		{U: 1e308, V: 1e308},
+		{U: 1.2e308, V: 1e308},
+		{U: 1.4e308, V: 1.2e308},
+		{U: 1.6e308, V: 1.4e308},
+	}
+	profile := splineProfile(control)
+
+	satLo, satHi, satBound, err := boundaryExtremesBoundedContext(t.Context(), profile, 1, 1, newFreeformWork())
+	require.Error(t, err)
+	require.ErrorIs(t, err, ErrUnsupported)
+	require.NotErrorIs(t, err, ErrDegenerate,
+		"a saturated enclosure must never be reported as a region with no boundary")
+	require.Zero(t, satLo, "a refusal reports no interval at all, never a saturated one")
+	require.Zero(t, satHi)
+	require.Zero(t, satBound)
+
+	// The refusing wrappers over the same scan keep that sentinel: each one
+	// answers a free-form section it cannot state exactly with ErrUnsupported.
+	_, _, err = boundaryExtremesContext(t.Context(), profile, 1, 1, newFreeformWork())
+	require.ErrorIs(t, err, ErrUnsupported)
+	require.NotErrorIs(t, err, ErrDegenerate)
+
+	pp := prismPayload{profile: profile, frame: identityFrame(t), z0: 0, z1: 5, xform: r3.Identity()}
+	_, _, err = pp.extentAlongWork(t.Context(), r3.NewVec(1, 1, 0), newFreeformWork())
+	require.ErrorIs(t, err, ErrUnsupported)
+	require.NotErrorIs(t, err, ErrDegenerate)
+
+	// A Box has a bound to widen into, but not an infinite one. A world axis
+	// reads this section through the payload's own frame, so a rotated frame
+	// puts both components of one axis on the section and saturates that
+	// axis's own enclosure: the same refusal reaches prismBoundsContext rather
+	// than publishing a non-finite Min/Max or Bound.
+	rotated, err := r3.NewFrame(r3.NewVec(0, 0, 0), r3.NewVec(0.6, 0.8, 0), r3.NewVec(-0.8, 0.6, 0))
+	require.NoError(t, err)
+	tilted := prismPayload{profile: profile, frame: rotated, z0: 0, z1: 5, xform: r3.Identity()}
+	_, err = prismBoundsContext(t.Context(), tilted, newFreeformWork())
+	require.ErrorIs(t, err, ErrUnsupported)
+
+	// The identical fixture read along a direction whose enclosure IS
+	// representable still answers, so the refusal is the range's and not the
+	// fixture's.
+	lo, hi, bound, err := boundaryExtremesBoundedContext(t.Context(), profile, 1, 0, newFreeformWork())
+	require.NoError(t, err)
+	require.Equal(t, control[0].U, lo, "U is monotone here, so the minimum is the first control point's own U")
+	require.Equal(t, control[len(control)-1].U, hi)
+	require.Zero(t, bound)
+}
+
+// 11. The conversion itself, on the three shapes it decides: an enclosure it
+// can state passes through outward-rounded, one whose END runs past the range
+// refuses, and one whose two ends are both representable while its WIDTH is
+// not refuses too — the fold publishes a midpoint and a half width, so that
+// enclosure has no reading either.
+func TestFreeformExtremeFloatsRefusesUnrepresentableEnclosures(t *testing.T) {
+	lo, hi, err := freeformExtremeFloats(ratIv{lo: mustRatOf(-2.5), hi: mustRatOf(4)})
+	require.NoError(t, err)
+	require.Equal(t, -2.5, lo, "an exactly representable end comes back unchanged")
+	require.Equal(t, 4.0, hi)
+
+	past := new(big.Rat).Mul(mustRatOf(math.MaxFloat64), mustRatOf(4))
+	for _, tc := range []struct {
+		name string
+		iv   ratIv
+	}{
+		{"lower end past the range", ratIv{lo: new(big.Rat).Neg(past), hi: mustRatOf(0)}},
+		{"upper end past the range", ratIv{lo: mustRatOf(0), hi: past}},
+		{"finite ends, width past the range", ratIv{
+			lo: mustRatOf(-math.MaxFloat64), hi: mustRatOf(math.MaxFloat64),
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, _, err := freeformExtremeFloats(tc.iv)
+			require.ErrorIs(t, err, ErrUnsupported)
+			require.NotErrorIs(t, err, ErrNotFinite, "every coordinate reaching the bracket is finite")
+			require.NotErrorIs(t, err, ErrDegenerate)
+		})
+	}
+}
+
+// 12. Cancellation: a cancelled context returns ctx.Err() from the scan.
 func TestBoundaryExtremesBoundedContextCancellation(t *testing.T) {
 	profile := ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{
 		LineSeg{Start: Point2{U: 0, V: 0}, End: Point2{U: 1, V: 0}, TStart: 0, TEnd: 1},

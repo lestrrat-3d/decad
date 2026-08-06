@@ -1440,6 +1440,12 @@ func boundaryExtremesContext(ctx context.Context, profile ProfileRecord, gu, gv 
 // the extremization contributes nothing to the reported bound, and report the
 // midpoint of each composed interval with the larger of the two half widths,
 // rounded up — the same convention freeformArcLength already uses.
+//
+// A span enclosure that convention cannot state in float64 refuses at the
+// conversion rather than entering the fold (spline_extreme.go's
+// freeformExtremeFloats, Table R row R18), so every number these accumulators
+// hold is finite and the only reading left to the empty-region check below is
+// a region that genuinely contributed no candidate.
 func boundaryExtremesBoundedContext(ctx context.Context, profile ProfileRecord, gu, gv float64, work *freeformWork) (float64, float64, float64, error) {
 	guR, ok := ratOf(gu)
 	if !ok {
@@ -1465,14 +1471,15 @@ func boundaryExtremesBoundedContext(ctx context.Context, profile ProfileRecord, 
 		takeLo(g, g)
 		takeHi(g, g)
 	}
-	// ratFloatDown/ratFloatUp, never downRound/upRound: a directional value
-	// can be negative, and downRound/upRound only ever move a POSITIVE bound
-	// toward zero (spline_length.go's arc-length-only convention) — the wrong
-	// direction for a negative candidate, and a spurious one-ulp widening of
-	// an exactly representable value either way.
-	takeIv := func(iv ratIv) (float64, float64) {
-		return ratFloatDown(iv.lo), ratFloatUp(iv.hi)
-	}
+	// Every span enclosure enters the fold through freeformExtremeFloats
+	// (spline_extreme.go), which rounds outward through ratFloatDown/ratFloatUp
+	// — never downRound/upRound: a directional value can be negative, and those
+	// only ever move a POSITIVE bound toward zero (spline_length.go's
+	// arc-length-only convention), the wrong direction for a negative
+	// candidate and a spurious one-ulp widening of an exactly representable
+	// value either way — and refuses ErrUnsupported for an enclosure the
+	// float64 range cannot state, so no infinity ever reaches these
+	// accumulators.
 
 	for _, loop := range append([]LoopRecord{profile.Outer}, profile.Holes...) {
 		for _, seg := range loop.Segments {
@@ -1489,8 +1496,16 @@ func boundaryExtremesBoundedContext(ctx context.Context, profile ProfileRecord, 
 					if err != nil {
 						return 0, 0, 0, err
 					}
-					takeLo(takeIv(minIv))
-					takeHi(takeIv(maxIv))
+					minLo, minHi, err := freeformExtremeFloats(minIv)
+					if err != nil {
+						return 0, 0, 0, err
+					}
+					maxLo, maxHi, err := freeformExtremeFloats(maxIv)
+					if err != nil {
+						return 0, 0, 0, err
+					}
+					takeLo(minLo, minHi)
+					takeHi(maxLo, maxHi)
 				}
 				continue
 			}

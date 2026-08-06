@@ -2,6 +2,7 @@ package decad
 
 import (
 	"context"
+	"fmt"
 	"math"
 	"math/big"
 )
@@ -137,6 +138,12 @@ func freeformExtremeCost(controls int) uint64 {
 // that check fails — an exactly representable q comes back UNCHANGED, which
 // is what keeps a candidate whose true value is exact from picking up a
 // spurious width it never earned.
+//
+// A q past the float64 range has no such rounding: Float64 saturates to an
+// infinity, which each returns unchanged rather than stepping to a finite
+// neighbour it cannot prove. That infinity is a REFUSAL, never a bound, so no
+// caller may fold it — freeformExtremeFloats is the one conversion the fold
+// runs, and it is what turns the saturation into errFreeformExtremeUnrepresentable.
 func ratFloatDown(q *big.Rat) float64 {
 	f, _ := q.Float64()
 	if isNonFinite(f) {
@@ -157,6 +164,42 @@ func ratFloatUp(q *big.Rat) float64 {
 		return f
 	}
 	return math.Nextafter(f, math.Inf(1))
+}
+
+// errFreeformExtremeUnrepresentable is docs/spline-design.md §6.2's own
+// counterpart to §6.1's R15 (spline_length.go's
+// errFreeformLengthUnrepresentable): the enclosure is still PROVEN, but no
+// float64 interval holds it, so there is nothing to fold and nothing to
+// publish. The sentinel is ErrUnsupported — every coordinate reaching the
+// bracket is finite, so the curve EXISTS and only this evaluator's float64
+// reading of its directional extreme does not — never ErrNotFinite, whose
+// subject is a non-finite INPUT, and never ErrDegenerate, which claims no such
+// body exists at all.
+var errFreeformExtremeUnrepresentable = fmt.Errorf(
+	`%w: a free-form segment's directional extreme runs past the representable float64 range`, ErrUnsupported,
+)
+
+// freeformExtremeFloats is the ONE conversion from a span's exact rational
+// enclosure into the float64 interval boundaryExtremesBoundedContext folds,
+// and it is where an enclosure the float64 range cannot state refuses.
+//
+// Rounding outward is not enough on its own: an enclosure past MaxFloat64
+// saturates to an infinity, and an infinity folded into that accumulator is
+// read as a candidate nothing contributed — the scan then reports the empty
+// region's own ErrDegenerate, inverting the existence claim an agent branches
+// on, or publishes an infinite Box bound. The width is checked for the same
+// reason the endpoints are: an interval with two finite ends can still be
+// wider than the range, and the fold reports a midpoint and a half width, so
+// an unrepresentable width has no reading either. Refusing here keeps every
+// caller's own free-form refusal intact — boundaryExtremesContext and
+// prismPayload.extentAlongWork both answer ErrUnsupported, exactly as they do
+// for a bracket carrying an ordinary nonzero bound.
+func freeformExtremeFloats(iv ratIv) (float64, float64, error) {
+	lo, hi := ratFloatDown(iv.lo), ratFloatUp(iv.hi)
+	if isNonFinite(lo) || isNonFinite(hi) || isNonFinite(hi-lo) {
+		return 0, 0, errFreeformExtremeUnrepresentable
+	}
+	return lo, hi, nil
 }
 
 // spanExtremeEnclosureContext is one span's own reading: a proven enclosure
