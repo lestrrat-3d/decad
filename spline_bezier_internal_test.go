@@ -587,6 +587,27 @@ func TestReconstructionChargeSquaresTheRecordTotal(t *testing.T) {
 	require.Zero(t, work.spent, "the reconstruction charge leaves exact-rational work available")
 }
 
+// A circle that a crossing split into two recorded fragments still produces one
+// entity in the scene. Its fragment ranges differ, but each names the same
+// center and radius, so the reconstruction charge must add its chords once.
+func TestReconstructionChargeInternsSharedAnalyticEntity(t *testing.T) {
+	first := CircleSeg{
+		Center: Point2{U: 4, V: 5}, Radius: units.Millimeters(2), CCW: true,
+		TStart: 0, TEnd: 0.5,
+	}
+	second := first
+	second.TStart, second.TEnd = 0.5, 1
+
+	single := reconstructionOf(ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{first}}})
+	shared := reconstructionOf(ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{first, second}}})
+	require.Equal(t, single.chords, shared.chords, "two fragments naming one circle are charged once")
+
+	distinct := second
+	distinct.Center = Point2{U: 9, V: 5}
+	twoEntities := reconstructionOf(ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{first, distinct}}})
+	require.Equal(t, 2*single.chords, twoEntities.chords, "two distinct circles each contribute their chords")
+}
+
 // The charge a conversion levies must grow with the work it actually does. A
 // clamped degree-3 B-spline inserts twice per interior knot and each insertion
 // scans and copies both whole vectors, so the cost is QUADRATIC in the control
