@@ -23,10 +23,14 @@ import (
 // exact rationals would integrate a DIFFERENT curve — and publish its
 // representable area as an Exact claim about the recorded one.
 //
-// The conversion serves the Tier A kinds of Table F: SplineSeg,
-// ClosedSplineSeg, and a NURBSSeg whose weights are all equal. A rational
-// NURBS is Tier C and is refused here — a rational span is not a polynomial
-// Bézier, and pretending otherwise would silently integrate a different curve.
+// This file's own Boehm-insertion machinery converts SplineSeg,
+// ClosedSplineSeg, and a NURBSSeg whose weights are all equal — three of
+// Table F's four Tier A kinds; the fourth, FitSplineSeg, is Tier A too, but
+// its own reduction lives in spline_fit.go, a natural cubic having no knot
+// vector to insert into (freeformBezierSpans's own doc comment below
+// dispatches to it). A rational NURBS is Tier C and is refused here — a
+// rational span is not a polynomial Bézier, and pretending otherwise would
+// silently integrate a different curve.
 //
 // Only a FULL recorded domain is converted, because §2 proves no other
 // free-form range is recordable. The walk direction is not baked in: the

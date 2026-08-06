@@ -1153,9 +1153,11 @@ off `NormalAt`.
 ## 8. Table C — per-capability reach
 
 **Every build reads its section's moments, so a body's tier reach is its
-section's.** A section whose free-form walks are all Tier A builds; a section
-carrying a Tier B or Tier C walk is `ErrUnsupported` at EVERY build until §10's
-P9 supplies that tier's moments (§5.3, §5.4) — Table R R10. "Tier A section"
+section's.** A section whose free-form walks are all Tier A is the one §10's
+P4 builds — Table R R6 refuses every free-form walk at the build today,
+regardless of tier; a section carrying a Tier B or Tier C walk is
+`ErrUnsupported` at EVERY build until §10's P9 supplies that tier's moments
+(§5.3, §5.4) — Table R R10. "Tier A section"
 below names exactly that condition, and now includes a section holding a
 `FitSplineSeg` walk (§5.1.2) — its moments are Tier A today, so once §10's P4
 lands a build it is one of the kinds P4 widens to reach, with no change to P4
