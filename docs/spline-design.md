@@ -954,10 +954,12 @@ floor gates it first, and there `S` is the zero polynomial. That floor is the on
 certificate reading the COUNT itself as its proof, so it owes the extra test §6.3
 states.
 
-**Contract consequence.** `prismBoundsContext` reports `Exactness: Exact` with a
-zero bound today. A free-form interior extreme is an irrational root evaluation,
-so **a free-form prism's `Box` is `Approximate`** with the bracket's bound. State
-it; never paper over it.
+**Contract consequence.** A free-form interior extreme is an irrational root
+evaluation, so **a free-form prism's `Box` is `Approximate`** with the
+bracket's bound; an all-analytic prism's `Box` keeps its zero bound and
+`Exact` unchanged. `prismBoundsContext` reports exactly that split (P4a) —
+reachable only from internal tests while R6 stands, since no free-form prism
+can exist through the public surface yet.
 
 ### 6.2.1 Which distance the sagitta row measures
 
@@ -1107,6 +1109,16 @@ R11 is not permanent: refining the bracket decides every case but an exact
 tangency, and a tangency is a contact the §5 audit refuses anyway. That
 refinement is a measured-target loop, so it carries §6.1's iteration cap.
 
+**Current state (P4a).** The through-all stop's own gate
+(`prismPayload.extentAlongWork`) is live ahead of the straddle test above: it
+refuses on ANY nonzero directional-extreme bracket bound along the stop's own
+direction, not only one that straddles the sketch plane in the travel sense.
+That is a strictly WIDER refusal than this section states — sound, since a
+stop reads its coordinate as exact and a wider refusal only over-refuses,
+never fabricates a dependency — and narrowing it to the straddle test itself
+is deferred to a later step under this same non-permanent row. The §4.1
+analytic-corner slice's audit gate is not implemented yet (P10).
+
 ## 7. `NURBSSurface` and `NURBSCurve`
 
 Core §6.1 reserved both names. This section fixes their shape.
@@ -1240,7 +1252,8 @@ half-silent. These stages do not consume a global evaluator increment number.
 | **P1** | this document + the core/evaluator table updates it resolves | none |
 | **P2** | Bézier conversion, exact Tier A moments, the §5.2 budget | `ProfileRecord.Area`/`Centroid`/`SecondMoments` answer for Tier A, bounded by one rounding. No new types |
 | **P3** | walk-kind discriminant across every `segmentWalk` consumer | none — behaviour preserved |
-| **P4** | `NURBSSurface`/`NURBSCurve`, free-form extrude side faces, §6.1 length brackets, §6.2 extremes, `NormalAt` refusal, §6.4's stop gate | Tier A free-form prisms build, `FitSplineSeg` walks among them since P4 is where R6's build refusal lifts (§5.1.2); `Volume` from the Tier A rational, `Area`/`Box` bounded. A Tier B or C section is R10; an undecidable through-all stop is R11 |
+| **P4a** | §6.2 row 1's directional-extreme bracket, wired into the prism bounds reading behind the existing refusal wrappers | none — R6 still stands, so a free-form prism is reachable only from internal tests; `extentAlongWork`'s R11 gate is live but wider than §6.4's straddle rule (any nonzero bracket bound refuses, not only one that straddles the sketch plane) |
+| **P4b** | `NURBSSurface`/`NURBSCurve`, free-form extrude side faces, §6.1 length brackets, `NormalAt` refusal, §6.4's own straddle-narrowed stop gate | Tier A free-form prisms build, `FitSplineSeg` walks among them since P4b is where R6's build refusal lifts (§5.1.2); `Volume` from the Tier A rational, `Area`/`Box` bounded. A Tier B or C section is R10; an undecidable through-all stop is R11 |
 | **P5** | free-form chording with proven sagitta + area slack | `Tessellate`/`STL`/`OBJ`, booleans, interference proof. Wall reading explicitly `Suspect` |
 | **P6** | §6.3's speed floor and origin-exclusion certificates, hodograph normal cones, bracketed curvature extremes | `Undercuts` and `MinRadius` each answer where the certificates that reading needs close, and read `Suspect` per §6.3's cost table where they do not |
 | **P7** | certified branch-and-bound inscribed-disk interval | `MinWallThickness` answered, with its own convergence evidence |
