@@ -1320,8 +1320,16 @@ func (in pairToleranceInputs) lengthReference(value float64) (float64, bool) {
 // 2*delta before reporting it, understating rather than overstating —
 // tightening the gate can only turn a passing reading into a false Suspect,
 // never a false Sound, the identical reasoning envelopeGateDiameter already
-// carries. A shrink that collapses to non-positive leaves the body with no
-// usable diameter, exactly like any other unusable magnitude here.
+// carries. That direction is the SUBTRACTION's to lose: 2*delta is exact (a
+// power-of-two scaling), so the difference is the one rounding here, and
+// round-to-nearest can land it ABOVE the exact d - 2*delta — a reference
+// larger than the one proven, which loosens the very gate this arm exists to
+// tighten. downRound (spline_length.go, upRound's mirror) steps it back
+// toward zero, so the published reference is at or below the exact shrunken
+// value for every input rather than only for the ones whose subtraction
+// happens to round down. A shrink that collapses to non-positive leaves the
+// body with no usable diameter, exactly like any other unusable magnitude
+// here.
 func bodyGateDiameter(ctx context.Context, body *Body) (float64, bool, error) {
 	if body == nil {
 		return 0, false, nil
@@ -1334,7 +1342,7 @@ func bodyGateDiameter(ctx context.Context, body *Body) (float64, bool, error) {
 		if err != nil || !ok {
 			return d, ok, err
 		}
-		shrunk := d - 2*payload.delta
+		shrunk := downRound(d - 2*payload.delta)
 		if shrunk <= 0 {
 			return 0, false, nil
 		}

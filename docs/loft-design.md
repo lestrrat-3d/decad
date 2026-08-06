@@ -809,7 +809,13 @@ never merely that a call ran (project rule).
   `PlacedContext` returns `ctx.Err()` with the receiver live and the recipe
   unchanged. A placed loft is `Sound` at the default tolerance under `Verify`;
   two lofts placed apart read box-disjoint `Sound`; an internal test asserts
-  `bodyGateDiameter` shrinks by `2*delta`. `perturbedTriangleAreaAllow`
+  `bodyGateDiameter` shrinks by `2*delta`, and a second asserts that shrink is
+  rounded OUTWARD — `2*delta` is exact (a power-of-two scaling), so the
+  difference is the arm's one rounding, and round-to-nearest lands it above the
+  exact `d - 2*delta` at some placement translations and below at others, so the
+  test judges the reported reference against the exact difference over
+  `math/big.Rat` at several translations rather than at one witness.
+  `perturbedTriangleAreaAllow`
   encloses the area change over a brute-force sweep of perturbed vertices at
   `delta`, at aspect ratios 1, 1e-3 and 1e-6. With `delta == 0` every
   published measurement is bit-identical to PR 1's.

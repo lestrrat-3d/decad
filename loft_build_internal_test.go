@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"math/big"
 	"testing"
 
 	"github.com/lestrrat-3d/r3"
@@ -505,6 +506,46 @@ func TestLoftPlacedGateDiameterShrinksByTwiceDelta(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, ok)
 	require.InDelta(t, unplacedD-2*placedPl.delta, placedD, 1e-12)
+}
+
+// TestLoftPlacedGateDiameterRoundsTheShrinkOutward proves the shrink's own
+// DIRECTION, which the InDelta assertion above cannot see. 2*delta is exact (a
+// power-of-two scaling), so `d - 2*delta` is the one rounding in the arm, and
+// round-to-nearest can land it ABOVE the exact difference — a reference larger
+// than the proven one, loosening the gate the shrink exists to tighten. Each
+// translation below is a measured instance of that: the bare subtraction
+// overshoots the exact value by a fraction of an ulp at 2^30, 1e6 and 1e9,
+// while at 2^36 it happens to round down on its own (which is exactly why one
+// witness translation proves nothing). The comparison is over math/big.Rat
+// against the payload's OWN float d and delta taken exactly, so it judges the
+// rounding and nothing else.
+func TestLoftPlacedGateDiameterRoundsTheShrinkOutward(t *testing.T) {
+	for _, dx := range []float64{1 << 30, 1e6, 1e9, 1 << 36} {
+		t.Run(fmt.Sprintf("dx=%g", dx), func(t *testing.T) {
+			move, err := r3.Translation(r3.NewVec(dx, 0, 0))
+			require.NoError(t, err)
+
+			placedBody, err := boxLoftPayloadOn(t, 0, 3).placed(t.Context(), New(), StepRef(1), move)
+			require.NoError(t, err)
+			placedPl := placedBody.payload.(loftPayload)
+			require.Greater(t, placedPl.delta, 0.0)
+
+			held, ok, err := pointSetDiameterContext(t.Context(), placedPl.verts)
+			require.NoError(t, err)
+			require.True(t, ok)
+
+			exact := new(big.Rat).Sub(
+				new(big.Rat).SetFloat64(held),
+				new(big.Rat).Mul(big.NewRat(2, 1), new(big.Rat).SetFloat64(placedPl.delta)),
+			)
+
+			got, ok, err := bodyGateDiameter(t.Context(), placedBody)
+			require.NoError(t, err)
+			require.True(t, ok)
+			require.LessOrEqual(t, new(big.Rat).SetFloat64(got).Cmp(exact), 0,
+				"the reported reference %.20g must not exceed the exact d - 2*delta %s", got, exact.FloatString(20))
+		})
+	}
 }
 
 // TestEvalLoftCancellation proves a context cancelled before the build even
