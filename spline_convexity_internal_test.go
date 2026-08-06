@@ -8,8 +8,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file pins the three load-bearing facts docs/spline-design.md §6.5 rests
-// on. First: a control polygon whose turns all share one sign does NOT bound
+// This file pins the load-bearing facts docs/spline-design.md §6.5 rests on.
+// First: a control polygon whose turns all share one sign does NOT bound
 // the curve's own curvature sign, which is why a wall edge's convexity is
 // certified from the curvature numerator K = u'v" - v'u" in the Bernstein
 // basis and never from the polygon's turns. Second: that coefficient test does
@@ -21,6 +21,13 @@ import (
 // records no control points at all, and the fit points it does record neither
 // are the converted Bezier chain nor contain the curve — so every rule §6.5
 // states must be phrased over §5.1's converted chain.
+//
+// Beyond those three, the tests at the end of this file pin §6.5's Table K —
+// the enumeration that makes the section TOTAL over what §5.1's conversion can
+// produce. Each of them converts a record record.go admits and shows the shape
+// the table names arriving: a degree-1 span, a degree-2 span whose true K sits
+// below its stated degree, a RUN of consecutive collapsed spans, the joint a
+// subdivision creates, and a reversed recorded range over an unreversed chain.
 //
 // The certificate itself is staged (§10 P4b); what is testable today is the
 // exact-rational geometry it will read, which these tests compute through the
@@ -110,6 +117,78 @@ func splitBernsteinAtMidpoint(b []*big.Rat) (left, right []*big.Rat) {
 		}
 	}
 	return left, right
+}
+
+// splitSpanAtMidpoint is the same exact dyadic de Casteljau split applied to
+// the SPAN itself rather than to K's coefficients. §6.5 states the subdivision
+// over the span, so the two routes to a child's coefficients are pinned against
+// each other below.
+func splitSpanAtMidpoint(span bezierSpan) (left, right bezierSpan) {
+	n := len(span)
+	half := big.NewRat(1, 2)
+	work := make([]ratPoint, n)
+	for i, p := range span {
+		work[i] = ratPoint{u: new(big.Rat).Set(p.u), v: new(big.Rat).Set(p.v)}
+	}
+	left = make(bezierSpan, 0, n)
+	right = make(bezierSpan, n)
+	for level := range n {
+		left = append(left, ratPoint{u: new(big.Rat).Set(work[0].u), v: new(big.Rat).Set(work[0].v)})
+		right[n-1-level] = ratPoint{u: new(big.Rat).Set(work[n-1-level].u), v: new(big.Rat).Set(work[n-1-level].v)}
+		for i := 0; i+1 < n-level; i++ {
+			work[i] = ratPoint{
+				u: new(big.Rat).Mul(half, new(big.Rat).Add(work[i].u, work[i+1].u)),
+				v: new(big.Rat).Mul(half, new(big.Rat).Add(work[i].v, work[i+1].v)),
+			}
+		}
+	}
+	return left, right
+}
+
+// controlEdge is one control edge of a span as an exact rational vector: the
+// quantity §6.5's joint rule crosses, and the quantity a collapsed span has
+// none of.
+func controlEdge(from, to ratPoint) (u, v *big.Rat) {
+	return new(big.Rat).Sub(to.u, from.u), new(big.Rat).Sub(to.v, from.v)
+}
+
+// crossOf is the exact cross product §6.5's joint verdict reads.
+func crossOf(au, av, bu, bv *big.Rat) *big.Rat {
+	return new(big.Rat).Sub(new(big.Rat).Mul(au, bv), new(big.Rat).Mul(av, bu))
+}
+
+// dotOf is the exact dot product that tells §6.5's "same way" from its
+// "OPPOSITE ways" once a cross has come back zero.
+func dotOf(au, av, bu, bv *big.Rat) *big.Rat {
+	return new(big.Rat).Add(new(big.Rat).Mul(au, bu), new(big.Rat).Mul(av, bv))
+}
+
+// jointCross is §6.5's joint verdict between two spans of a chain: the incoming
+// span's LAST control edge crossed with the outgoing span's FIRST.
+func jointCross(incoming, outgoing bezierSpan) *big.Rat {
+	inU, inV := controlEdge(incoming[len(incoming)-2], incoming[len(incoming)-1])
+	outU, outV := controlEdge(outgoing[0], outgoing[1])
+	return crossOf(inU, inV, outU, outV)
+}
+
+// spanIsCollapsed is §5.1's collapsed span: every control point of the span the
+// same point, so the span has no nonzero control edge and no direction.
+func spanIsCollapsed(span bezierSpan) bool {
+	for i := 1; i < len(span); i++ {
+		if span[i].u.Cmp(span[0].u) != 0 || span[i].v.Cmp(span[0].v) != 0 {
+			return false
+		}
+	}
+	return true
+}
+
+// ratStrings renders a coefficient set exactly, for pinning without a delta.
+func ratStrings(coeffs []*big.Rat) []string {
+	out := make([]string, len(coeffs))
+	for i, c := range coeffs {
+		out[i] = c.RatString()
+	}
+	return out
 }
 
 // signsOf reads a coefficient set's signs, which is the whole of what §6.5's
@@ -343,4 +422,236 @@ func TestFitPointsAreNeitherTheChainNorItsHull(t *testing.T) {
 	}
 	require.Less(t, minV, floor, "the curve leaves the recorded fit points' hull")
 	require.InDelta(t, -0.0912, minV, 1e-4, "the doc's approximate dip, at the precision it states")
+}
+
+// degreeOneNURBS is §6.5's Table K degree-1 row as a record: three control
+// points at degree 1 over a clamped knot vector with one interior knot, which
+// record.go admits (validateNURBSSegmentSizes refuses only Degree < 1) and
+// which §5.1 converts to TWO degree-1 spans.
+func degreeOneNURBS(tStart, tEnd float64) NURBSSeg {
+	return NURBSSeg{
+		Degree:  1,
+		Control: []Point2{{U: 0, V: 0}, {U: 1, V: 0}, {U: 1, V: 1}},
+		Knots:   []float64{0, 0, 1, 2, 2},
+		Weights: []float64{1, 1, 1},
+		TStart:  tStart,
+		TEnd:    tEnd,
+	}
+}
+
+// TestDegreeOneSpansCarryAZeroCurvatureNumerator is §6.5's degree-1 row: the
+// stated coefficient degree 2p-3 is -1 at p = 1 and names no Bernstein form at
+// all, so the section states the degree-0 all-zero one instead. This pins that
+// the shipped conversion really does hand §6.5 such spans, that their K is the
+// zero polynomial, that the regularity precondition closes on them, and that
+// the chain's whole verdict therefore comes from the JOINT between them.
+func TestDegreeOneSpansCarryAZeroCurvatureNumerator(t *testing.T) {
+	seg := degreeOneNURBS(0, 1)
+	require.NoError(t, validateSegment(seg), "record.go admits a degree-1 NURBS segment")
+
+	spans, reversed, err := freeformBezierSpans(seg, newFreeformWork())
+	require.NoError(t, err)
+	require.False(t, reversed)
+	require.Len(t, spans, 2, "a 3-control degree-1 record converts to two spans")
+
+	// Both spans are degree 1 — two control points — and their coordinates are
+	// exact: a degree-1 conversion inserts no knot and divides by nothing.
+	require.Equal(t, [][]string{{"0", "0"}, {"1", "0"}}, spanStrings(spans[0]))
+	require.Equal(t, [][]string{{"1", "0"}, {"1", "1"}}, spanStrings(spans[1]))
+
+	for i, span := range spans {
+		require.Len(t, span, 2, "span %d must be degree 1", i)
+		require.False(t, spanIsCollapsed(span), "span %d is a real segment, not a collapsed one", i)
+
+		// K is the ZERO polynomial: C" is identically zero on a degree-1 span.
+		k := rpTrim(curvatureNumerator(span))
+		require.Empty(t, k, "span %d must have K identically zero", i)
+
+		// §6.5 carries it as a degree-0 Bernstein form holding one zero
+		// coefficient, which the all-zero rule reads as verdict 0. Asserting the
+		// LENGTH is the point: a degree read off 2p-3 = -1 names no array.
+		bern := bernsteinCoefficients(k, 0)
+		require.Equal(t, []string{"0"}, ratStrings(bern),
+			"span %d must carry exactly one Bernstein coefficient, and it must be zero", i)
+		require.Equal(t, []int{0}, signsOf(bern))
+
+		// The regularity precondition closes: S is the nonzero constant 1 here,
+		// so the half-open count sees no root and the endpoint value is nonzero.
+		s := squaredSpeed(span)
+		require.Equal(t, []string{"1"}, ratStrings(rpTrim(s)), "span %d's S is the constant 1", i)
+		halfOpen, atZero := closedSpanRootCount(s)
+		require.Equal(t, 0, halfOpen, "span %d's speed has no root on (0, 1]", i)
+		require.Equal(t, 1, atZero.Sign(), "span %d's speed is nonzero at its start too", i)
+	}
+
+	// Every span verdict is 0, so the chain's verdict is the joint's own: a
+	// strictly positive turn where the walk leaves the u axis for the v one.
+	cross := jointCross(spans[0], spans[1])
+	require.Equal(t, "1", cross.RatString(), "the joint between the two degree-1 spans turns by exactly +1")
+	require.Equal(t, 1, cross.Sign())
+}
+
+// TestDegreeTwoCurvatureNumeratorIsAConstantAtTheStatedDegree is §6.5's
+// degree-2 row: 2p-3 = 1 is a LOOSE bound, the true K being a constant, and the
+// coefficient array's length is fixed by the stated degree rather than by that
+// true one. The constant is 4*cross(dP0, dP1), which is 4 times the span's lone
+// control-polygon turn.
+func TestDegreeTwoCurvatureNumeratorIsAConstantAtTheStatedDegree(t *testing.T) {
+	seg := NURBSSeg{
+		Degree:  2,
+		Control: []Point2{{U: 0, V: 0}, {U: 1, V: 0}, {U: 1, V: 1}},
+		Knots:   []float64{0, 0, 0, 1, 1, 1},
+		Weights: []float64{1, 1, 1},
+		TStart:  0,
+		TEnd:    1,
+	}
+	require.NoError(t, validateSegment(seg))
+
+	spans, _, err := freeformBezierSpans(seg, newFreeformWork())
+	require.NoError(t, err)
+	require.Len(t, spans, 1)
+
+	k := rpTrim(curvatureNumerator(spans[0]))
+	require.Equal(t, []string{"4"}, ratStrings(k), "K is the constant 4 — one degree BELOW the stated 2p-3 = 1")
+
+	turns := polygonTurns(spans[0])
+	require.Len(t, turns, 1)
+	require.Equal(t, "1", turns[0].RatString())
+	require.Equal(t, "4", new(big.Rat).Mul(big.NewRat(4, 1), turns[0]).RatString(),
+		"K is exactly 4*cross(dP0, dP1) on a degree-2 span")
+
+	// At the STATED degree the array holds two entries, both that constant, and
+	// its signs are the constant's own. A rule sizing the array from K's true
+	// degree would carry one entry instead — the verdict is the same, which is
+	// exactly why no verdict may depend on the true degree.
+	stated := bernsteinCoefficients(k, 1)
+	require.Equal(t, []string{"4", "4"}, ratStrings(stated), "the stated degree 2p-3 = 1 fixes the array's length")
+	require.Equal(t, []int{1, 1}, signsOf(stated))
+	require.Equal(t, []int{1}, signsOf(bernsteinCoefficients(k, 0)), "the true degree reads the same verdict")
+}
+
+// TestConsecutiveCollapsedSpansPairAcrossTheWholeRun is §6.5's collapsed-RUN
+// row. Three coincident controls in a degree-1 net produce two ADJACENT
+// collapsed spans, so a joint rule that skips one span at a time pairs a
+// neighbour with a span that has no direction at all; pairing across the whole
+// run is what leaves a turn to read.
+func TestConsecutiveCollapsedSpansPairAcrossTheWholeRun(t *testing.T) {
+	seg := NURBSSeg{
+		Degree: 1,
+		Control: []Point2{
+			{U: 0, V: 0}, {U: 1, V: 0}, {U: 1, V: 0}, {U: 1, V: 0}, {U: 1, V: 1},
+		},
+		Knots:   []float64{0, 0, 1, 2, 3, 4, 4},
+		Weights: []float64{1, 1, 1, 1, 1},
+		TStart:  0,
+		TEnd:    1,
+	}
+	require.NoError(t, validateSegment(seg), "record.go gates a net's shape nowhere")
+
+	spans, _, err := freeformBezierSpans(seg, newFreeformWork())
+	require.NoError(t, err)
+	require.Len(t, spans, 4)
+
+	require.False(t, spanIsCollapsed(spans[0]))
+	require.True(t, spanIsCollapsed(spans[1]), "the run's first span is collapsed")
+	require.True(t, spanIsCollapsed(spans[2]), "and so is the one immediately after it")
+	require.False(t, spanIsCollapsed(spans[3]))
+
+	// Skipping ONE span pairs span 0 with span 2, whose only control edge is the
+	// zero vector: there is no direction to cross with, and the cross a rule
+	// would read comes back zero for a walk that plainly turns.
+	oneAtATimeU, oneAtATimeV := controlEdge(spans[2][0], spans[2][1])
+	require.Equal(t, 0, oneAtATimeU.Sign(), "the next collapsed span's control edge is the zero vector")
+	require.Equal(t, 0, oneAtATimeV.Sign())
+	require.Equal(t, 0, jointCross(spans[0], spans[2]).Sign(),
+		"so a one-span skip reads a zero cross where the walk turns")
+
+	// Pairing across the WHOLE run reads the turn the walk actually has.
+	cross := jointCross(spans[0], spans[3])
+	require.Equal(t, "1", cross.RatString(), "the neighbours across the run turn by exactly +1")
+	require.Equal(t, 1, cross.Sign())
+}
+
+// TestMidpointSplitCreatesAKnownZeroJoint is §6.5's subdivision row. The joint
+// a split CREATES is not folded: a midpoint de Casteljau leaves the left
+// child's last control edge and the right child's first the IDENTICAL vector,
+// so its cross is exactly zero with the tangents pointing the same way. The
+// same test pins the other half of that row — splitting the SPAN and splitting
+// K's own Bernstein coefficients differ by the positive factor 1/8 per level,
+// so both routes read the same signs.
+func TestMidpointSplitCreatesAKnownZeroJoint(t *testing.T) {
+	seg := unitWeightCubic([]Point2{{U: 0, V: 0}, {U: 1, V: 0}, {U: -4, V: 1}, {U: 0.9, V: 0}})
+	spans, _, err := freeformBezierSpans(seg, newFreeformWork())
+	require.NoError(t, err)
+	require.Len(t, spans, 1)
+
+	left, right := splitSpanAtMidpoint(spans[0])
+	require.Len(t, left, 4)
+	require.Len(t, right, 4)
+
+	inU, inV := controlEdge(left[len(left)-2], left[len(left)-1])
+	outU, outV := controlEdge(right[0], right[1])
+	require.Equal(t, 0, inU.Cmp(outU), "the two meeting control edges are the identical vector")
+	require.Equal(t, 0, inV.Cmp(outV))
+	require.Equal(t, 0, crossOf(inU, inV, outU, outV).Sign(), "so the created joint's cross is exactly zero")
+	require.Equal(t, 1, dotOf(inU, inV, outU, outV).Sign(), "and the two tangents point the same way: verdict 0")
+
+	// Route A: split the parent's Bernstein coefficients. Route B: split the
+	// span and recompute K on each child. They differ by 1/8 per level exactly.
+	parent := bernsteinCoefficients(rpTrim(curvatureNumerator(spans[0])), 3)
+	splitLeft, splitRight := splitBernsteinAtMidpoint(parent)
+	childLeft := bernsteinCoefficients(rpTrim(curvatureNumerator(left)), 3)
+	childRight := bernsteinCoefficients(rpTrim(curvatureNumerator(right)), 3)
+
+	eighth := big.NewRat(1, 8)
+	for i := range parent {
+		require.Equal(t, 0, childLeft[i].Cmp(new(big.Rat).Mul(eighth, splitLeft[i])),
+			"left child coefficient %d must be the split one scaled by 1/8", i)
+		require.Equal(t, 0, childRight[i].Cmp(new(big.Rat).Mul(eighth, splitRight[i])),
+			"right child coefficient %d must be the split one scaled by 1/8", i)
+	}
+	require.Equal(t, signsOf(splitLeft), signsOf(childLeft), "1/8 is positive, so both routes read the same signs")
+	require.Equal(t, signsOf(splitRight), signsOf(childRight))
+}
+
+// TestReversedRangeConvertsToTheIdenticalUnreversedChain is §6.5's reversal
+// row: the negation is ONE operation at the end. The conversion returns the
+// same spans in the same order whatever the recorded range order is, and
+// reports the reversal beside them, so every span verdict and every joint cross
+// is computed on the unreversed chain before the sign is flipped.
+func TestReversedRangeConvertsToTheIdenticalUnreversedChain(t *testing.T) {
+	forward := degreeOneNURBS(0, 1)
+	backward := degreeOneNURBS(1, 0)
+	require.NoError(t, validateSegment(backward), "record.go admits a reversed recorded range")
+
+	forwardSpans, forwardReversed, err := freeformBezierSpans(forward, newFreeformWork())
+	require.NoError(t, err)
+	require.False(t, forwardReversed)
+
+	backwardSpans, backwardReversed, err := freeformBezierSpans(backward, newFreeformWork())
+	require.NoError(t, err)
+	require.True(t, backwardReversed, "the reversal is REPORTED, not applied to the spans")
+
+	require.Len(t, backwardSpans, len(forwardSpans))
+	for i := range forwardSpans {
+		require.Equal(t, spanStrings(forwardSpans[i]), spanStrings(backwardSpans[i]),
+			"span %d must be identical under both range orders", i)
+	}
+
+	// So the joint cross is the same quantity either way, and only the final
+	// sign differs. Negating the straight walk's own 0 leaves 0.
+	require.Equal(t, jointCross(forwardSpans[0], forwardSpans[1]).RatString(),
+		jointCross(backwardSpans[0], backwardSpans[1]).RatString())
+	require.Equal(t, 0, new(big.Rat).Neg(rpEval(rpTrim(curvatureNumerator(backwardSpans[0])), big.NewRat(1, 2))).Sign(),
+		"a degree-1 span's K is zero, and negating zero is zero")
+}
+
+// spanStrings renders a span's control points exactly, so a conversion that
+// rounded anywhere fails the comparison rather than passing within a delta.
+func spanStrings(span bezierSpan) [][]string {
+	out := make([][]string, len(span))
+	for i, p := range span {
+		out[i] = []string{p.u.RatString(), p.v.RatString()}
+	}
+	return out
 }
