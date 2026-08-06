@@ -33,9 +33,20 @@ import (
 // ([ErrInvalidProfile]). The one further rejection is not a validity judgement:
 // an authenticated valid profile whose boundary cannot be recorded exactly —
 // a Partial fragment sketch could not certify
-// (BoundaryEdge.TExact == false), or a certified range the seam's reject-only
-// falsifier disproves — is [ErrUnrecordableProfile]. decad never repairs,
-// projects or fits a point sketch handed over, and it never solves for one.
+// (BoundaryEdge.TExact == false), a certified range the seam's reject-only
+// falsifier disproves, or a loop whose recorded segments do not meet at a
+// junction — is [ErrUnrecordableProfile]. decad never repairs, projects or fits
+// a point sketch handed over, and it never solves for one.
+//
+// That last rejection is the one a caller meets by drawing rather than by
+// hitting an upstream limit. sketch admits a region on its own proximity
+// threshold, so entities whose ends miss by a fraction of a nanometre still
+// arrange into one valid profile; decad records each entity's own points
+// verbatim, and a loop whose recorded coordinates do not meet bounds no region
+// for a measurement to be exact about. Entities that share their end points
+// close exactly and record. Ends merely driven together by a coincidence
+// constraint do not: the solver converges to within its residual, not to the
+// same coordinate.
 func RecordProfile(s *sketch.Sketch, p *sketch.Profile) (ProfileRecord, PlaneRecord, error) {
 	profile, plane, _, err := recordProfile(s, p)
 	return profile, plane, err
@@ -196,17 +207,149 @@ func sameBoundaryEdge(a, b sketch.BoundaryEdge) bool {
 		slices.Equal(a.Polyline, b.Polyline)
 }
 
-// recordLoop converts one named boundary loop, edge by edge, in walk order.
+// recordLoop converts one named boundary loop, edge by edge, in walk order,
+// then disproves a loop whose recorded segments do not join (falsifyLoopJoins).
 func recordLoop(name string, edges []sketch.BoundaryEdge) (LoopRecord, error) {
 	segs := make([]CurveSegment, 0, len(edges))
+	joins := make([]loopJoin, 0, len(edges))
 	for i, e := range edges {
 		seg, err := recordEdge(e)
 		if err != nil {
 			return LoopRecord{}, fmt.Errorf("%s edge %d: %w", name, i, err)
 		}
+		join, err := edgeJoin(e, seg)
+		if err != nil {
+			return LoopRecord{}, fmt.Errorf("%s edge %d: %w", name, i, err)
+		}
 		segs = append(segs, seg)
+		joins = append(joins, join)
+	}
+	if err := falsifyLoopJoins(name, joins); err != nil {
+		return LoopRecord{}, err
 	}
 	return LoopRecord{Segments: segs}, nil
+}
+
+// loopJoin is one recorded edge's junction coordinates: the point the previous
+// segment's walk must end at, and the point the next segment's walk must start
+// from. closed marks a whole closed curve — a circle, an ellipse, a closed
+// spline — which is a LoopRecord on its own (docs/sketch-seam-design.md §2) and
+// so meets no neighbour at all.
+type loopJoin struct {
+	start, end Point2
+	closed     bool
+}
+
+// edgeJoin reads one boundary edge's junction coordinates, taking each side
+// from the party that owns it.
+//
+// A whole edge's junction points are the RECORD's own — the entity's defining
+// points, verbatim, exactly the values the segment carries. That is what makes
+// the check below answerable: the recorded loop either states two neighbours at
+// the same coordinate or it does not, and nothing is evaluated, projected or
+// solved for.
+//
+// A Partial fragment's are sketch's — Polyline[0] and Polyline[len-1], the
+// fragment's own walk endpoints in walk order, which §1's range falsifier has
+// already tested the certified range against. decad does not recompute a cut it
+// is forbidden to re-derive (core §7), so it asks sketch where the fragment
+// begins and ends and compares that answer. They are read to CHECK and never to
+// record (§2), which is what the whole-edge column above preserves: a whole
+// edge's Polyline is never read at all.
+func edgeJoin(e sketch.BoundaryEdge, seg CurveSegment) (loopJoin, error) {
+	if e.Partial {
+		if len(e.Polyline) < 2 {
+			return loopJoin{}, fmt.Errorf(`%w: a %T fragment carries no polyline endpoints to check its junctions against`, ErrUnrecordableProfile, e.Entity)
+		}
+		first, last := e.Polyline[0], e.Polyline[len(e.Polyline)-1]
+		return loopJoin{
+			start: Point2{U: first[0], V: first[1]},
+			end:   Point2{U: last[0], V: last[1]},
+		}, nil
+	}
+	start, end, closed, ok := wholeSegmentEnds(seg)
+	if !ok {
+		return loopJoin{}, fmt.Errorf(`%w: a whole %T edge records as a %T, whose walk endpoints this seam cannot name`, ErrUnrecordableProfile, e.Entity, seg)
+	}
+	if e.Reversed {
+		start, end = end, start
+	}
+	return loopJoin{start: start, end: end, closed: closed}, nil
+}
+
+// wholeSegmentEnds returns a whole edge's endpoints in the curve's NATURAL
+// direction, read straight off the recorded segment. Every open variant states
+// its own ends: the analytic four pin them as fields, a clamped spline or NURBS
+// interpolates its first and last control point exactly, and a fit spline
+// interpolates its first and last fit point. The three closed kinds state no
+// ends — each bounds a region on its own — and report closed instead.
+func wholeSegmentEnds(seg CurveSegment) (start, end Point2, closed, ok bool) {
+	ends := func(points []Point2) (Point2, Point2, bool, bool) {
+		if len(points) == 0 {
+			return Point2{}, Point2{}, false, false
+		}
+		return points[0], points[len(points)-1], false, true
+	}
+	switch seg := seg.(type) {
+	case LineSeg:
+		return seg.Start, seg.End, false, true
+	case ArcSeg:
+		return seg.Start, seg.End, false, true
+	case EllipticalArcSeg:
+		return seg.Start, seg.End, false, true
+	case ConicSeg:
+		return seg.Start, seg.End, false, true
+	case SplineSeg:
+		return ends(seg.Control)
+	case NURBSSeg:
+		return ends(seg.Control)
+	case FitSplineSeg:
+		return ends(seg.Fit)
+	case CircleSeg, EllipseSeg, ClosedSplineSeg:
+		return Point2{}, Point2{}, true, true
+	default:
+		return Point2{}, Point2{}, false, false
+	}
+}
+
+// falsifyLoopJoins disproves a recorded loop that does not close
+// (docs/sketch-seam-design.md §3). LoopRecord's contract is that each segment's
+// walk ends where the next one's starts and the last closes onto the first
+// (§2); every consumer downstream reads a loop as that closed region and
+// publishes an Exact, zero-bound area over it. Where the recorded coordinates
+// do not meet, there is no such region, so the record cannot state one and the
+// profile is ErrUnrecordableProfile.
+//
+// The comparison is exact, and it has to be. sketch admits a region on its own
+// proximity threshold, so two entity endpoints a fraction of a nanometre apart
+// still arrange into one valid profile — and decad records each entity's own
+// points verbatim, which is where that gap becomes visible. A tolerance here
+// would be an admission gate on a residual: it would bless every gap under it
+// as closure decad has not proven, which is the one thing a decad-side check may
+// never do (CLAUDE.md, "A decad-side check may only FALSIFY"). Two coordinates
+// either are the same point or they are not.
+//
+// It only ever rejects. A loop whose recorded coordinates do meet is not
+// thereby admitted — admission is sketch's Valid, its TExact, and §1's range
+// falsifier, exactly as before.
+func falsifyLoopJoins(name string, joins []loopJoin) error {
+	for i, from := range joins {
+		next := (i + 1) % len(joins)
+		to := joins[next]
+		if from.closed || to.closed {
+			// A whole closed curve is a loop on its own (§2): it meets no
+			// neighbour, so this pair states no junction to disprove.
+			continue
+		}
+		if from.end == to.start {
+			continue
+		}
+		return fmt.Errorf(
+			`%w: %s edge %d ends at (%v, %v) but edge %d starts at (%v, %v), so the recorded loop does not close; sketch admitted the region on its own proximity threshold, and decad records no region its own segments do not bound`,
+			ErrUnrecordableProfile, name, i, from.end.U, from.end.V, next, to.start.U, to.start.V,
+		)
+	}
+	return nil
 }
 
 // recordEdge converts one boundary edge into its entity's own variant.
