@@ -580,11 +580,12 @@ func TestReconstructionChargeSquaresTheRecordTotal(t *testing.T) {
 	arrangement, err := chargeReconstruction(
 		ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{one}}},
 		work,
+		false,
 	)
 	require.NoError(t, err)
 	require.Equal(t, single.arrangement, arrangement)
 	require.Equal(t, 2*single.arrangement, work.reconstructionSpent)
-	require.Zero(t, work.spent, "the reconstruction charge leaves exact-rational work available")
+	require.Zero(t, work.spent, "an analytic reconstruction leaves free-form work available")
 }
 
 // A circle that a crossing split into two recorded fragments still produces one

@@ -587,14 +587,14 @@ quadratic `clampedConversionCost`, which pays for repeatedly scanning and
 copying growing control and knot vectors as each of possibly many knots is
 inserted one at a time.
 
-The RECONSTRUCTION carries its own counter. It is not covered by the conversion
-and integration counter: that counter bounds decad's rational arithmetic, and
-the reconstruction is sketch's — it chords each recorded source and ARRANGES the
-result. Both counters span the record's whole operation, but their ceilings are
-separate because their cost models are independent. Without the reconstruction
-counter a kind whose conversion is linear clears the exact-rational ceiling at a
-control count whose reconstruction runs for seconds, uncancellable, inside a
-public measurement method.
+The RECONSTRUCTION has its own cost model: sketch chords each recorded source
+and ARRANGES the result. A free-form record charges that work against its
+existing `freeformWork` counter, alongside conversion and integration. An
+analytic record has no free-form conversion or integration work, so its
+reconstruction uses a separate counter. Without a reconstruction charge, a kind
+whose conversion is linear clears the exact-rational ceiling at a control count
+whose reconstruction runs for seconds, uncancellable, inside a public
+measurement method.
 
 That charge is the RECORD's, not any source's, because the arrangement is
 GLOBAL: sketch chords every source it was given and then tests every PAIR of
@@ -638,7 +638,7 @@ Every arrangement is therefore paid for before it happens, and a record may
 clear the preflight and still be refused inside the pass.
 
 A record naming no free-form source is levied that same once at the
-reconstruction's own entry rather than at the preflight, on the same
+reconstruction's own entry rather than at the preflight, on the analytic
 reconstruction counter and for the same amount. The reason is the exact
 whole-circle certificate, which answers from disk containment alone and runs no
 arrangement whatsoever: it is
@@ -647,28 +647,29 @@ a record no arrangement ever reads. The free-form charge stays at the preflight,
 which no such certificate can be reached from, so it also covers an evaluator
 preflight that never runs the reconstruction at all.
 
-The exact-rational ceiling stands at 2^20 charged units. The reconstruction
-ceiling stands at 2^26 charged units, admitting 5792 chords for validation's
-first two whole-scene arrangements; candidate authentications spend that same
-reconstruction counter. The larger reconstruction ceiling admits ordinary
-analytic plates with several circular holes without widening the conversion and
-integration ceiling. The conversion charges beneath the exact-rational ceiling
-must still move ahead of the chains they precede, because a closed spline converts
-linearly while integrating its chain costs some 270 times more per span, so a
-record whose integration is over budget allocates every span before that ceiling
-can see it.
+The free-form ceiling stands at 2^20 charged units and covers conversion,
+integration and reconstruction. The analytic reconstruction ceiling stands at
+2^26 charged units, admitting 5792 chords for validation's first two whole-scene
+arrangements; candidate authentications spend that same analytic counter. The
+larger analytic ceiling admits ordinary plates with several circular holes
+without widening the free-form ceiling. The conversion charges beneath the
+free-form ceiling must still move ahead of the chains they precede, because a
+closed spline converts linearly while integrating its chain costs some 270 times
+more per span, so a record whose integration is over budget allocates every span
+before that ceiling can see it.
 
 One record-level preflight therefore owns every free-form cost before its first
 expensive step. It owns FOUR things. Every cheap structural refusal is evaluated
 on SIZES — knot count, degree, slice lengths, the recorded range — before any
 array is scanned, so a record that cannot be well formed at any content refuses
 in constant time however large a caller made it. The preflight levies the
-conversion, re-anchoring, integration and, for a free-form record, the first two
-whole-scene reconstruction arrangements. An analytic record levies those same
-reconstruction arrangements at reconstruction entry, after the exact
-whole-circle certificate. The chains the preflight converted are what the moments
-pass integrates, so the conversion the record paid for happens once. And a
-segment's TIER is decided before its CONVERSION charge.
+conversion, re-anchoring, integration and the first two whole-scene
+reconstruction arrangements against the free-form counter. An analytic record
+levies those reconstruction arrangements against its analytic counter at
+reconstruction entry, after the exact whole-circle certificate. The chains the
+preflight converted are what the moments pass integrates, so the conversion the
+record paid for happens once. And a segment's TIER is decided before its
+CONVERSION charge.
 
 That last one is a rule about which ANSWER a caller gets, not about cost. Whether
 a `NURBSSeg` is Tier A at all is a property of its recorded weights, so a

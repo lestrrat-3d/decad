@@ -60,11 +60,12 @@ type bezierSpan []ratPoint
 // Reaching it is Table R row R7: ErrUnsupported, never a widened float path.
 const freeformWorkLimit uint64 = 1 << 20
 
-// reconstructionWorkLimit is the separate fixed ceiling on one record's sketch
-// topology reconstruction. Its cost is a record-wide quadratic in the chord
-// total, not exact-rational conversion or integration work, so it must not
-// consume the much smaller ceiling that bounds those passes. The public moment
-// methods take no context, so this counter is still fixed and record-wide.
+// reconstructionWorkLimit is the separate fixed ceiling on one analytic
+// record's sketch topology reconstruction. Its cost is a record-wide quadratic
+// in the chord total. Free-form records instead charge that reconstruction
+// against freeformWorkLimit, which also bounds their conversion and integration
+// work. The public moment methods take no context, so this counter is fixed and
+// record-wide.
 const reconstructionWorkLimit uint64 = 1 << 26
 
 // freeformCostCeiling is where the conservative cost arithmetic below
@@ -120,9 +121,9 @@ func reconstructionCostMul(a, b uint64) uint64 {
 	return a * b
 }
 
-// freeformWork holds one record's exact-rational and reconstruction counters.
-// They are separate because their cost models and safe ceilings are separate,
-// but each counter spans the whole operation over that record.
+// freeformWork holds one record's exact-rational/free-form reconstruction and
+// analytic reconstruction counters. Each counter spans the whole operation over
+// that record.
 type freeformWork struct {
 	spent               uint64
 	reconstructionSpent uint64
@@ -149,8 +150,8 @@ func (w *freeformWork) step(n uint64) error {
 	return nil
 }
 
-// reconstructionStep spends the record's sketch reconstruction counter before
-// sketch arranges the scene.
+// reconstructionStep spends an analytic record's sketch reconstruction counter
+// before sketch arranges the scene.
 func (w *freeformWork) reconstructionStep(n uint64) error {
 	if w == nil {
 		return nil
@@ -925,10 +926,11 @@ type freeformReconstruction struct {
 	arrangement uint64
 }
 
-// reconstructionChordCeiling is the largest chord total chargeReconstruction
-// can admit for validation's first two whole-scene arrangements. One unit more
-// exceeds reconstructionWorkLimit, so the record refuses however the rest of it
-// reads, and reconstructionOf stops counting there.
+// reconstructionChordCeiling is the largest chord total an analytic record's
+// reconstruction charge can admit for validation's first two whole-scene
+// arrangements. One unit more exceeds reconstructionWorkLimit, so the record
+// refuses however the rest of it reads, and reconstructionOf stops counting
+// there. Free-form records reject at the smaller freeformWorkLimit.
 const reconstructionChordCeiling uint64 = 5792
 
 // reconstructionOf reads that model off a checked record. Every segment counts,
@@ -974,10 +976,19 @@ func reconstructionOf(record ProfileRecord) freeformReconstruction {
 // chargeReconstruction levies the record-level part of that charge — the
 // scene arrangement the validation runs to list its candidate profiles, and the
 // one its rescaled retry runs — and returns the per-arrangement charge the
-// candidate loop then levies for itself.
-func chargeReconstruction(record ProfileRecord, work *freeformWork) (uint64, error) {
+// candidate loop then levies for itself. Free-form records share their existing
+// freeformWorkLimit with conversion and integration. Analytic records use the
+// separate reconstructionWorkLimit.
+func chargeReconstruction(record ProfileRecord, work *freeformWork, freeform bool) (uint64, error) {
 	demand := reconstructionOf(record)
-	if err := work.reconstructionStep(reconstructionCostMul(2, demand.arrangement)); err != nil {
+	charge := reconstructionCostMul(2, demand.arrangement)
+	var err error
+	if freeform {
+		err = work.step(charge)
+	} else {
+		err = work.reconstructionStep(charge)
+	}
+	if err != nil {
 		return 0, err
 	}
 	return demand.arrangement, nil
