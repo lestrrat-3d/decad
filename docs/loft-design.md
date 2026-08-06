@@ -173,6 +173,20 @@ that exists and this evaluator cannot build → `ErrUnsupported`.**
 | **S10** | a nil `*sketch.Sketch` or `*sketch.Profile` argument | no call at all | `ErrDegenerate` | yes, §2 |
 | **S11** | a nil or foreign `LoftOption` value, including a foreign type that embeds the sealed marker | no well-defined decad operation can invoke an unowned callback | `ErrDegenerate` | yes, §2 |
 | **S12** | a placement (`Placed`/`Duplicate`/`PlacedCopy`, §12 PR 2a) whose proven volume allowance is not smaller than the held volume | yes — the placed body itself is sound; only its centroid's proven quotient bound has no positive denominator left to divide by | `ErrUnsupported` | no — a precision ceiling on this evaluator's centroid bound, not a shape rule |
+| **S13** | a build whose lifted-and-placed coordinate, or whose orientation anchor (§5), runs past the representable float64 range | yes — every input is finite (both records' coordinates, the plane origins, and a transform `r3` itself validated), and only decad's own float evaluation of the lift overflows; a placed body is the rigid image of one this evaluator already built | `ErrUnsupported` | no — a range ceiling on this evaluator's float64 vertex table, not a shape rule |
+
+**S13 is `ErrUnsupported`, never `ErrNotFinite`.** Core §12 scopes
+`ErrNotFinite` to a non-finite PARAMETER or a derived non-finite MEASUREMENT
+or BOUND. A vertex coordinate is neither: every input reaching the lift is
+finite and the derived measurement case is already the finiteness gate §8's
+publication runs. The refusal states that this evaluator cannot hold the
+body's vertex table in float64, the same reading spline design's R15 (an arc
+length past `MaxFloat64`) and R16 (a fit interpolant's coefficient past it)
+give a finite input whose derived magnitude runs off float64. **It is decided
+before the first exact-rational lift.** §5's whole-shell orientation sum and
+§8's accumulator both take every coordinate exactly, and the package's one
+float-to-rational lift is defined only on a finite float, so a coordinate that
+overflows must be refused while it is still a float.
 
 **S5 compares geometric planes, not `PlaneRecord` fields.** Its normal is
 `U × V`; it refuses when the two normals are parallel and the displacement
@@ -189,20 +203,24 @@ shape gates that need only the two authenticated records (S1 hole count, S2
 segment count, S4's PAYLOAD-SHAPE half — a wrong-length alignment or an offset
 outside `[0, n)` for its loop — S3 segment kind, S5 geometric-plane
 coincidence — all decidable without building a single triangle), then
-construction (§5), then the per-triangle existence gate S6, then the crossing
-audit (S7/S8, §6) — the most expensive step, run last, over triangles already
-proven individually non-degenerate.
+construction (§5), whose own first act is S13's coordinate-range gate on the
+anchor and on every placed vertex as it is emitted, then the per-triangle
+existence gate S6, then the crossing audit (S7/S8, §6) — the most expensive
+step, run last, over triangles already proven individually non-degenerate.
 
 **A placement (`Placed`/`Duplicate`/`PlacedCopy`, §12 PR 2a) re-runs every
-record-only gate — S1, S2, S3, S4's payload-shape half, S5, S6, S7, S8 —
+record-only gate — S1, S2, S3, S4's payload-shape half, S5, S6, S7, S8, S13 —
 plus S12, never a reduced set of them.** The evaluator re-lifts both records
 under the composed motion and rebuilds from scratch (§7), so S6/S7/S8 are
 reachable from a placement too: the crossing audit re-runs on the rounded
 vertex set every re-evaluation produces, and a placement whose rounding
 closes a previously-clear gap is refused exactly as a first build with the
-same geometry would be. S12 is reachable only from a placement, since an
-unplaced body's `delta` is zero and its centroid's quotient denominator never
-collapses.
+same geometry would be. S13 is judged on every build, placement or first,
+since it reads the coordinate the lift emits rather than the motion that
+produced it; a composed placement is how that coordinate grows past the range
+in practice. S12 is reachable only from
+a placement, since an unplaced body's `delta` is zero and its centroid's
+quotient denominator never collapses.
 
 **S9, S10, S11 and S4's ARITY half belong to the original call alone.** Each
 judges an argument the caller passed to `Document.Loft` — the two live
@@ -648,7 +666,7 @@ global evaluator increment.
 | PR | Lands | Still refused after it |
 |---|---|---|
 | 1 | `OpLoft` wire/recipe plumbing (`LoftOpts` codec, `Op` token, `Step.Profile`/`Plane` reuse), Table P pairing + Table S gates S1–S5/S9–S11, the flat-triangle wall construction (§5), the crossing audit (§6, Table S S6–S8), `Document.Loft` / `LoftContext`, `Volume` / `Centroid` (§8's rational accumulator) / `Area` / `Bounds`, `Verify` (D6: the structural audit and the tolerance gate over all four) | same-kind `CircleSeg`/`ArcSeg` correspondence; N-section/guide-rail/centerline loft; `Placed`/`Duplicate`/`PlacedCopy`; reversed correspondence; surveys, clearance, interference beyond box-disjoint |
-| 2a | `Placed` / `Duplicate` / `PlacedCopy` (D7): the payload's own proven displacement term `delta` (§5), composed into every vertex, edge length, face area, and all four body measurements; Table S gains S12 | D1/D2 (`Tessellate`/`STL`/`OBJ`, mesh-boolean admission); D3/D4's analytic-kernel case; D5 |
+| 2a | `Placed` / `Duplicate` / `PlacedCopy` (D7): the payload's own proven displacement term `delta` (§5), composed into every vertex, edge length, face area, and all four body measurements; Table S gains S12 and S13 | D1/D2 (`Tessellate`/`STL`/`OBJ`, mesh-boolean admission); D3/D4's analytic-kernel case; D5 |
 | 2b | `Tessellate` / `STL` / `OBJ` (D1), mesh-boolean admission (D2) | D3/D4's analytic-kernel case, D5 |
 | 3 (reach, not committed by this document) | same-kind `CircleSeg`/`ArcSeg` correspondence, N-section and guide-rail/centerline lofts, a loft case in `clearance_geom.go`, a non-constant-cross-section wall survey kernel | — |
 
@@ -783,8 +801,11 @@ never merely that a call ran (project rule).
   per-edge `IsConvex` match the source. The sum of `Face.Area()` equals
   `Body.Area().Value` within the summed bounds, catching a per-face bound that
   forgot the perturbation term. `Placed` retires the receiver; `Duplicate`/
-  `PlacedCopy` do not; a refused placement (an invalid transform, and an S12
-  fixture) leaves the recipe and document untouched. A canceled
+  `PlacedCopy` do not; a refused placement (an invalid transform, an S12
+  fixture, and an S13 fixture whose composed translation carries a far-plane
+  section past `MaxFloat64`) leaves the recipe and document untouched, and the
+  S13 fixture returns `ErrUnsupported` rather than panicking inside the exact
+  lift. A canceled
   `PlacedContext` returns `ctx.Err()` with the receiver live and the recipe
   unchanged. A placed loft is `Sound` at the default tolerance under `Verify`;
   two lofts placed apart read box-disjoint `Sound`; an internal test asserts

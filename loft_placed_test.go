@@ -483,6 +483,40 @@ func TestLoftPlacedS12TinyBodyFarTranslation(t *testing.T) {
 	require.Equal(t, stepsBefore, doc.Recipe().Steps, "a refused S12 placement leaves the recipe untouched")
 }
 
+// TestLoftPlacedS13OverflowingCoordinate refuses a placement whose composed
+// motion carries a lifted section coordinate past the representable float64
+// range (Table S, S13). The fixture lofts between the XY plane and a plane
+// offset 1e300 from it — a body decad builds without complaint — then
+// translates it by MaxFloat64 along Z, which overflows the top section's own
+// coordinates.
+//
+// The refusal must be a RETURNED error and never a recovered panic: the loft's
+// orientation sum and mass accumulator lift every coordinate into an exact
+// rational, and that lift is defined only on a finite float, so the gate has
+// to run while the coordinate is still a float. ErrUnsupported, not
+// ErrNotFinite: every input here is finite, and only decad's own float
+// evaluation of the lift runs off the range.
+func TestLoftPlacedS13OverflowingCoordinate(t *testing.T) {
+	s0, p0, s1, p1 := loftSquaresAt(t, r3.NewVec(0, 0, 0), 5, 5, 1e300)
+	doc := decad.New()
+	body, err := doc.Loft(s0, p0, s1, p1)
+	require.NoError(t, err, "the unplaced far-plane loft builds")
+
+	stepsBefore := doc.Recipe().Steps
+	bodiesBefore := doc.Bodies()
+
+	far, err := r3.Translation(r3.NewVec(0, 0, math.MaxFloat64))
+	require.NoError(t, err)
+	placed, err := body.Placed(far)
+	require.Nil(t, placed)
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+	require.NotErrorIs(t, err, decad.ErrNotFinite)
+	require.Contains(t, err.Error(), "representable float64 range")
+
+	require.Equal(t, bodiesBefore, doc.Bodies(), "a refused S13 placement leaves the document untouched")
+	require.Equal(t, stepsBefore, doc.Recipe().Steps, "a refused S13 placement leaves the recipe untouched")
+}
+
 // TestLoftPlacedContextCancellation proves a canceled context returns
 // ctx.Err() with the receiver still live and the recipe unchanged.
 func TestLoftPlacedContextCancellation(t *testing.T) {

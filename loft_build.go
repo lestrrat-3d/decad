@@ -21,8 +21,9 @@ import (
 //
 // loftPayload.placed and its delta field are §12 PR 2a (Table D, D7): a
 // placement re-lifts both records under the composed motion and re-runs
-// §5-§8 from scratch — every record-only Table S gate (S1-S8) plus the
-// placement-only S12, while S9-S11 and S4's arity half judge the original
+// §5-§8 from scratch — every record-only Table S gate (S1-S8) and S13's
+// coordinate-range gate, plus the placement-only S12, while S9-S11 and S4's
+// arity half judge the original
 // call's own arguments and never re-run (§4) — so delta is the ONE new term
 // this PR adds, composed into every vertex, edge length, face area and body
 // measurement §8 already derives.
@@ -234,8 +235,18 @@ type loftAssembly struct {
 // triangulate.go's existing polygon-with-holes triangulator with capStart's
 // triples reversed and capEnd's retained (§5's cap seeding), and orients the
 // complete shell once from the signed tetrahedron sum anchored at the placed
-// p0 origin (§5's whole-shell rule).
+// p0 origin (§5's whole-shell rule). It also owns Table S row S13: every
+// placed coordinate it emits, the anchor among them, is proven finite before
+// any of them is lifted into an exact rational.
 func assembleLoft(ctx context.Context, pairs []loftLoopPair, f0, f1 r3.Frame, plane0 PlaneRecord, xform r3.Transform) (loftAssembly, error) {
+	// S13, decided before the first coordinate is lifted into an exact
+	// rational: the orientation anchor is the first point loftOrientationSign
+	// hands to xptOf, so its own finiteness is the gate's first question.
+	anchor := xform.Apply(plane0.Origin)
+	if !finiteVec(anchor) {
+		return loftAssembly{}, errLoftPointUnrepresentable("placed plane origin")
+	}
+
 	vIdx := make([][]int, len(pairs))
 	wIdx := make([][]int, len(pairs))
 	var verts []r3.Vec
@@ -253,14 +264,22 @@ func assembleLoft(ctx context.Context, pairs []loftLoopPair, f0, f1 r3.Frame, pl
 			vIdx[i][j] = len(verts)
 			lifted := f0.ToWorldUV(pt.U, pt.V)
 			maxInputAbs = max(maxInputAbs, vecMaxAbs(lifted))
-			verts = append(verts, xform.Apply(lifted))
+			placed := xform.Apply(lifted)
+			if !finiteVec(placed) {
+				return loftAssembly{}, errLoftPointUnrepresentable(fmt.Sprintf("placed vertex %d of loop %d on the first profile", j, i))
+			}
+			verts = append(verts, placed)
 		}
 		wIdx[i] = make([]int, len(p.w))
 		for j, pt := range p.w {
 			wIdx[i][j] = len(verts)
 			lifted := f1.ToWorldUV(pt.U, pt.V)
 			maxInputAbs = max(maxInputAbs, vecMaxAbs(lifted))
-			verts = append(verts, xform.Apply(lifted))
+			placed := xform.Apply(lifted)
+			if !finiteVec(placed) {
+				return loftAssembly{}, errLoftPointUnrepresentable(fmt.Sprintf("placed vertex %d of loop %d on the second profile", j, i))
+			}
+			verts = append(verts, placed)
 		}
 	}
 
@@ -329,7 +348,6 @@ func assembleLoft(ctx context.Context, pairs []loftLoopPair, f0, f1 r3.Frame, pl
 		tris = append(tris, [3]int{pts1ToV[t[0]], pts1ToV[t[1]], pts1ToV[t[2]]})
 	}
 
-	anchor := xform.Apply(plane0.Origin)
 	reversed := loftOrientationSign(verts, tris, anchor) < 0
 	if reversed {
 		for i, t := range tris {
@@ -351,6 +369,31 @@ func assembleLoft(ctx context.Context, pairs []loftLoopPair, f0, f1 r3.Frame, pl
 		reversed: reversed, cell: cell, side: side, vIdx: vIdx, wIdx: wIdx,
 		delta: delta,
 	}, nil
+}
+
+// errLoftPointUnrepresentable is docs/loft-design.md Table S row S13: a
+// coordinate this build emits — a recorded section point lifted through its
+// own frame and carried by the composed placement, or the orientation anchor
+// — runs past the representable float64 range.
+//
+// The sentinel is ErrUnsupported and never ErrNotFinite. Every INPUT is
+// finite: both records' coordinates cleared the seam gates, the plane origins
+// are recorded floats, and r3 validates a Transform's own composed
+// translation before it ever reaches this evaluator. What runs off float64 is
+// decad's OWN evaluation of the lift, and the body EXISTS — it is the rigid
+// image of a body this evaluator already built — so modify §1's existence
+// test reads "a body this evaluator cannot build". spline_length.go's R15 and
+// spline_fit.go's R16 draw the identical line for a finite input whose
+// derived magnitude runs off float64; errors.go scopes ErrNotFinite to a
+// non-finite PARAMETER or a derived non-finite MEASUREMENT, and
+// validateLoftBodyMeasurements already owns that second case.
+//
+// The gate runs BEFORE the first exact-rational lift, never after it:
+// loftOrientationSign lifts the anchor and every vertex through xptOf, whose
+// mustRatOf PANICS on a non-finite float, so a check placed any later is a
+// panic out of a public method rather than a returned error.
+func errLoftPointUnrepresentable(what string) error {
+	return fmt.Errorf(`%w: the loft's %s runs past the representable float64 range`, ErrUnsupported, what)
 }
 
 // wrapLoftTriangulationError re-sentinels triangulate.go's cap refusal as

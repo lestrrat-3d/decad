@@ -18,9 +18,11 @@ import (
 // A reflection is still a rigid motion, so the mirrored tooth's volume
 // matches the source's, but every held vertex now carries the payload's own
 // proven displacement delta (docs/loft-design.md §5/§12 PR 2a): a general
-// rigid motion rounds inside its own products and sums, so the mirrored
-// body's measurements are Approximate where the source's Volume/Centroid/
-// Bounds are Exact.
+// rigid motion rounds inside its own products and sums. The placement
+// therefore demotes the source's Exact Centroid and Bounds to Approximate.
+// The source's Volume is already Approximate before any placement — the
+// tooth's true volume is 16000/3 mm^3, which float64 cannot represent — and
+// the placement only widens that bound, from 3.03e-13 to 8.74e-10 mm^3.
 func Example_decad_loft_placed() {
 	w := sketch.NewWorld()
 	s0, err := w.CreateSketch(w.XY())
