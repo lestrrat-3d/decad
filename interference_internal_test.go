@@ -283,6 +283,22 @@ func TestInterferenceExpectedCausesKeepDistinctDiagnostics(t *testing.T) {
 	require.Equal(t, DiagUndecidedPair, partition.Code)
 }
 
+func TestSharesFacePlane(t *testing.T) {
+	doc := New()
+	a := internalBoxBody(t, doc, 0, 0, 10, 10, 5)
+	b := internalBoxBody(t, doc, 0, 0, 10, 10, 5)
+	require.True(t, sharesFacePlane(a, b),
+		`two prisms built on the same sketch plane share every face plane`)
+
+	c := internalBoxBody(t, doc, 0, 0, 10, 10, 5)
+	tr, err := r3.Translation(r3.NewVec(100, 100, 100))
+	require.NoError(t, err)
+	off, err := c.Placed(tr)
+	require.NoError(t, err)
+	require.False(t, sharesFacePlane(a, off),
+		`translating a prism off every one of its planes leaves no shared face plane`)
+}
+
 func internalBoxBody(t *testing.T, doc *Document, x0, y0, x1, y1, h float64) *Body {
 	t.Helper()
 	w := sketch.NewWorld()

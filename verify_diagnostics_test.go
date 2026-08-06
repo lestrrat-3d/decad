@@ -263,9 +263,9 @@ func TestVerifyDiagnosticsUnsupportedPairStagedContact(t *testing.T) {
 	require.Nil(t, d.Body)
 	require.NotNil(t, d.Pair, `an unsupported pair names its pair`)
 	require.Equal(t,
-		`the pair reaches a contact or near-contact that the read-only intersection cannot classify; adjust the geometry to create clear separation or deeper overlap, or wait for contact support`,
+		`the pair reaches a contact or near-contact that the read-only intersection cannot classify, and the operands share a face plane; offset the operands so no face plane is shared, or adjust the geometry to create clear separation or deeper overlap, or wait for contact support`,
 		d.Message,
-		`the contact diagnostic names contact and near-contact cases and gives accurate corrective guidance`)
+		`the contact diagnostic names contact and near-contact cases, names the shared-plane cause, and gives accurate corrective guidance`)
 
 	_, undecided := findDiagnostic(report.Diagnostics, decad.DiagUndecidedPair)
 	require.False(t, undecided, `a staged contact is not an undecided partition`)
@@ -304,6 +304,8 @@ func TestVerifyDiagnosticsProximityRefusalIsContact(t *testing.T) {
 		`the pair reaches a contact or near-contact that the read-only intersection cannot classify; adjust the geometry to create clear separation or deeper overlap, or wait for contact support`,
 		d.Message,
 		`the proximity diagnostic does not describe a near-contact as actual contact`)
+	require.NotContains(t, d.Message, "share a face plane",
+		`the plate and disk share no face plane, so the message must not claim one`)
 
 	_, pipeline := findDiagnostic(report.Diagnostics, decad.DiagUnsupportedPairPipeline)
 	require.False(t, pipeline, `a proximity refusal is not an in-pipeline reach`)

@@ -223,6 +223,8 @@ const (
     DiagUnsupportedPairPayload
     // DiagUnsupportedPairContact — the pair reaches a contact or near-contact
     // the exact boolean policy cannot classify. Reading ReadingNone. Suspect.
+    // Message names a shared face plane between the operands when they have
+    // one, since deepening the overlap cannot resolve that cause.
     DiagUnsupportedPairContact
     // DiagUnsupportedPairPipeline — both operands tessellate, but later
     // boolean geometry exceeds the pipeline's reach. Reading ReadingNone.
