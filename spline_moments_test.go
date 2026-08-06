@@ -1023,10 +1023,12 @@ func TestNonFiniteFreeformRangeIsNotFinite(t *testing.T) {
 // A non-finite range is a non-finite INPUT, so core §12 gives it ErrNotFinite on
 // all seven kinds — reading it inside the Tier A arms alone reports it there and
 // leaves the other four answering with their own kind reason instead. A trimmed
-// range is the opposite: Table R states R2 and R6 and the Tier B rows
-// unconditionally and carries no row for a trimmed range reaching the evaluator,
-// so a kind refused for its own cause keeps reporting that cause whatever its
-// range says.
+// range is the opposite: Table R states R2 and the Tier B rows unconditionally
+// and carries no row for a trimmed range reaching the evaluator, so a kind
+// refused for its own cause keeps reporting that cause whatever its range says.
+// A FitSplineSeg carries no such unconditional refusal for the moments path —
+// it is Tier A (Table F) — so it reaches this same range check instead of
+// skipping it.
 func TestFreeformRecordedRangeRefusals(t *testing.T) {
 	spline := func(tStart, tEnd float64) decad.ProfileRecord {
 		record := recordSplineAndChord(t)

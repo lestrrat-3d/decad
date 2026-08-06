@@ -8,11 +8,11 @@ import (
 	"github.com/lestrrat-3d/sketch/geom"
 )
 
-// This file is docs/spline-design.md §5.1's fit-spline reduction, retiring
-// Table R row R6: a recorded FitSplineSeg becomes Tier A for the moments path
-// by consuming sketch's own EXPORTED interpolant — never by re-running the
-// interpolation solve, which seam §2 and record.go's own FitSplineSeg doc
-// comment forbid.
+// This file is docs/spline-design.md §5.1.2's fit-spline reduction: a
+// recorded FitSplineSeg is Tier A for the moments path (Table F) by consuming
+// sketch's own EXPORTED interpolant — never by re-running the interpolation
+// solve, which seam §2 and record.go's own FitSplineSeg doc comment forbid.
+// Table R row R6 states only the BUILD-path refusal; nothing here retires it.
 //
 // It consumes geom.FitInterpolant's Params/Points/SecondDerivs triple, NEVER
 // its Spans() monomial form. FitSpan's own doc comment states why: its
@@ -81,8 +81,8 @@ func fitSplineBezierSpans(seg FitSplineSeg, work *freeformWork) ([]bezierSpan, e
 			// curve, but its cumulative chord parameter or a span coefficient runs
 			// off float64 — a range limit of this evaluator, not a claim that no such
 			// curve exists, and not a non-finite INPUT (every coordinate reaching the
-			// solve is finite). §9 ask 1's own precedent: R15 refuses an arc-length
-			// enclosure past MaxFloat64 the identical way.
+			// solve is finite). §5.1.2 draws the same distinction R15 does:
+			// R15 refuses an arc-length enclosure past MaxFloat64 the identical way.
 			return nil, fmt.Errorf(
 				`%w: a fit spline's interpolant runs off the float64 range and cannot be described, though the fit points are finite`,
 				ErrUnsupported,

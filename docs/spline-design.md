@@ -171,7 +171,7 @@ exactly → `ErrUnrecordableProfile`.
 | **R3** | free-form walk in a section a `Shell` offsets | `ErrUnsupported` | yes for a curved walk, §4.1 |
 | **R4** | `Fillet` corner with a free-form carrier | `ErrUnsupported` | yes for a curved walk, §4.1 |
 | **R5** | `Chamfer` corner with a free-form carrier | `ErrUnsupported` | yes for a curved walk, §4.1 |
-| **R6** | *(retired — a `FitSplineSeg` reaching a moments integral no longer refuses; §5.1.2 states the reduction that consumes it, and R17 states the one case it still refuses. A `FitSplineSeg` reaching a BUILD still refuses, staged the same way every other Tier A free-form kind's build is, under §10's P4.)* | — | — |
+| **R6** | a Tier A free-form walk, `FitSplineSeg` among them, reaches a BUILD | `ErrUnsupported` | no, §10 P4 |
 | **R7** | exact-rational conversion, length bracketing or integration exceeds its work budget | `ErrUnsupported` | no, §5.2, §6.1 |
 | **R8** | chording a free-form walk needs more than the chord cap | `ErrUnsupported` | no, reuses `errTooManyChords` |
 | **R9** | a `Verify` reading's proof does not close — its bracket cannot separate it from its threshold, or a §6.3 certificate fails | not an error — `Suspect` | no, §8 |
@@ -183,6 +183,28 @@ exactly → `ErrUnrecordableProfile`.
 | **R15** | a free-form arc-length enclosure whose upper bound runs past `MaxFloat64` | `ErrUnsupported` | yes, §6.1 |
 | **R16** | a `FitSplineSeg`'s fit points are finite but the interpolant sketch builds from them — its cumulative chord parameter or a span coefficient — is not | `ErrUnsupported` | no, §5.1.2 — a float64 range limit of sketch's own exported interpolant, not decad's to lift |
 | **R17** | a `FitSplineSeg`'s converted chain does not reach its own record's natural-end fit point — sketch's dedup (`fitChordEps`) collapsed it into its predecessor | `ErrDegenerate` | yes, §5.1.2 |
+
+<!-- R16 was challenged as narrower than the evaluator's actual refusal
+behaviour, on the theory that a stalled (non-increasing) cumulative chord
+parameter could reach ErrUnsupported through a clause R16 does not name.
+Checked against sketch's geom/fitspline.go size(): at i=1 the loop tests
+Params[1] first (finite for the 2-point prefix {0,0},{1e300,0}, which
+succeeds with params=[0 1e+300]) and Points[1] (finite), so the only clause
+that can return prefix 1 is !spanFinite(0) — a non-finite SPAN COEFFICIENT,
+exactly what R16 names. The non-increasing-parameter check further down the
+function is never reached at that prefix. This is structurally forced: a
+stalled span has h=0 between distinct post-dedup points, so the natural-cubic
+solve divides by zero and poisons the second derivatives the published span
+coefficients are built from, which is what makes spanFinite(0) fail first.
+Four stall shapes were tried, including ones with a healthy leading chain
+({0,0},{1,1},{1e300,1},{1e300,1+1e-6}; {0,0},{1,1},{2,0},{1e300,0},
+{1e300,1e-6}; {0,0},{1e300,0},{1e300,1e-6},{1e300,2e-6}), and every one
+reported prefix 1 (the span-coefficient clause). A decad-side probe building
+a ProfileRecord from a FitSplineSeg over {0,0},{1e300,0},{1e300,1e-6} plus a
+closing LineSeg and calling Area() returned "a fit splines interpolant runs
+off the float64 range and cannot be described, though the fit points are
+finite" — errors.Is ErrUnsupported true, ErrNotFinite false, ErrDegenerate
+false, the same sentinel and message R16 already names. -->
 
 R9 is the one row that is not a refusal. An intent the evaluator cannot BUILD is
 `ErrUnsupported` at the call; a `Verify` question it cannot ANSWER is accepted
@@ -203,13 +225,13 @@ chord approximation of the intended part, and any volume or clearance assertion
 it makes has to carry the chording error the caller introduced, on top of the
 `Bound` decad reports.
 
-This is now the standing answer for the BUILD path only. §9 ask 1 delivered the
-fit-spline interpolant (`faabd98`), which is what retired R6 for the moments
-path (§5.1.2): a caller with a `FitSplineSeg` section gets an exact `Area`,
-`Centroid` and `SecondMoments` today, with no chording of their own to account
-for. What they do NOT get is a body — `Extrude` of that same section still
-refuses, and still waits on §10's P4, exactly as every other Tier A free-form
-kind's build does.
+The caller substitute above answers the BUILD path only. §5.1.2 states the
+fit-spline reduction that makes a `FitSplineSeg` section Tier A for the
+moments path: a caller with a `FitSplineSeg` section gets an exact `Area`,
+`Centroid` and `SecondMoments`, with no chording of their own to account for.
+What they do NOT get is a body — `Extrude` of that same section still
+refuses, staged the same way every other Tier A free-form kind's build is,
+under §10's P4.
 
 ### 4.1 Why the modify refusals stand
 
@@ -393,10 +415,12 @@ never `ErrDegenerate`.
 
 `FitSplineSeg` records the points sketch's natural-cubic interpolant passes
 through, never the interpolant itself (`record.go`'s own doc comment); decad
-never runs the interpolation solve. What retires R6 is that sketch now
-EXPORTS the solved result — `geom.FitInterpolant`, via
-`geom.NewFitInterpolant`/`(*sketch.FitSpline).Interpolant` — so decad can
-consume it, still without running the solve itself.
+never runs the interpolation solve. Sketch EXPORTS the solved result —
+`geom.FitInterpolant`, via `geom.NewFitInterpolant`/
+`(*sketch.FitSpline).Interpolant` — in both a defining `Params`/`Points`/
+`SecondDerivs` triple and a `Spans()` monomial restatement, so decad consumes
+the former for the moments path below, still without running the solve
+itself.
 
 **Consume `Params`/`Points`/`SecondDerivs`. NEVER consume `Spans()`.**
 `FitInterpolant`'s own doc comment states the per-span formula the exported
@@ -1136,7 +1160,7 @@ below names exactly that condition, and now includes a section holding a
 `FitSplineSeg` walk (§5.1.2) — its moments are Tier A today, so once §10's P4
 lands a build it is one of the kinds P4 widens to reach, with no change to P4
 itself. A `ProfileRecord` moment reading is not a build and is unaffected —
-that reach `FitSplineSeg` already has, this PR.
+`FitSplineSeg` already has that reach for the moments path (§5.1.2).
 
 **A Tier A section's exactly-rational reach is its free-form walks' alone.**
 Analytic walks join them in the same section freely (§4.1), and a circular one
@@ -1191,18 +1215,6 @@ volume and interference before it can prove wall thickness.
 Ordered by reach per unit of upstream work. None is a prerequisite for §10's
 first four increments.
 
-1. **DELIVERED** (sketch `faabd98`, PR #123 upstream). **Export the fit-spline
-   interpolant's B-spline or piecewise-polynomial coefficients.** Delivered as
-   BOTH forms — `geom.FitInterpolant`'s `Params`/`Points`/`SecondDerivs` triple
-   (the defining data) and `FitInterpolant.Spans()`'s monomial restatement —
-   and decad consumes the former, never the latter: `Spans()` rounds two or
-   three times per coefficient and so is a DIFFERENT polynomial from the one
-   `Params`/`Points`/`SecondDerivs` and `FitSpline.Eval` agree on bit for bit
-   (§5.1.2). This retired R6 for the MOMENTS path (§5.1.2): `ProfileRecord`'s
-   `Area`/`Centroid`/`SecondMoments` now answer for a `FitSplineSeg`. It did
-   not retire R6 for the BUILD path — `Extrude` of a fit-spline section still
-   refuses, staged under §10's P4 with every other Tier A free-form kind's
-   build.
 2. **Pin `EllipticalArc` endpoints onto the parametric ellipse.** Retires R2
    (§2.2): sketch's own coincidence constraint carries each moved endpoint to the
    neighbouring segment, so the loop still closes on a shared join point.
@@ -1226,7 +1238,7 @@ half-silent. These stages do not consume a global evaluator increment number.
 | **P1** | this document + the core/evaluator table updates it resolves | none |
 | **P2** | Bézier conversion, exact Tier A moments, the §5.2 budget | `ProfileRecord.Area`/`Centroid`/`SecondMoments` answer for Tier A, bounded by one rounding. No new types |
 | **P3** | walk-kind discriminant across every `segmentWalk` consumer | none — behaviour preserved |
-| **P4** | `NURBSSurface`/`NURBSCurve`, free-form extrude side faces, §6.1 length brackets, §6.2 extremes, `NormalAt` refusal, §6.4's stop gate | Tier A free-form prisms build, `FitSplineSeg` walks among them since R6 no longer stands in the way (§5.1.2); `Volume` from the Tier A rational, `Area`/`Box` bounded. A Tier B or C section is R10; an undecidable through-all stop is R11 |
+| **P4** | `NURBSSurface`/`NURBSCurve`, free-form extrude side faces, §6.1 length brackets, §6.2 extremes, `NormalAt` refusal, §6.4's stop gate | Tier A free-form prisms build, `FitSplineSeg` walks among them since P4 is where R6's build refusal lifts (§5.1.2); `Volume` from the Tier A rational, `Area`/`Box` bounded. A Tier B or C section is R10; an undecidable through-all stop is R11 |
 | **P5** | free-form chording with proven sagitta + area slack | `Tessellate`/`STL`/`OBJ`, booleans, interference proof. Wall reading explicitly `Suspect` |
 | **P6** | §6.3's speed floor and origin-exclusion certificates, hodograph normal cones, bracketed curvature extremes | `Undercuts` and `MinRadius` each answer where the certificates that reading needs close, and read `Suspect` per §6.3's cost table where they do not |
 | **P7** | certified branch-and-bound inscribed-disk interval | `MinWallThickness` answered, with its own convergence evidence |
@@ -1460,9 +1472,9 @@ rules).
   still turns an `Approximate` into a false `Exact`.
 - Assert recipe replay of every free-form step reproduces body order, provenance
   roles, and measurements within the evaluator's own exactness.
-- **§5.1.2's fit-spline obligations, retiring R6 for the moments path.** A
-  two-point `FitSplineSeg` reports the identical `Area`/`Centroid`/
-  `SecondMoments` a `LineSeg`-recorded triangle does, bit for bit, both `Exact`
+- **§5.1.2's fit-spline obligations.** A two-point `FitSplineSeg` reports the
+  identical `Area`/`Centroid`/`SecondMoments` a `LineSeg`-recorded triangle
+  does, bit for bit, both `Exact`
   with a zero bound on a fixture whose exact area is representable — the
   strongest single assertion, since `naturalSecondDerivs` is exactly zero
   below three points. The same identity holds for equally spaced COLLINEAR fit
@@ -1505,5 +1517,5 @@ rules).
   `Fit` slice rather than on the order of the interpolant
   `geom.NewFitInterpolant` would have solved.
 - Assert that `Extrude` of a `FitSplineSeg` section still refuses
-  `ErrUnsupported` at the side-face build — this PR retires R6 for the moments
-  path only, and P4 (build support) is unimplemented and unaffected.
+  `ErrUnsupported` at the side-face build — R6 states the build refusal, and
+  P4 (build support) is unimplemented and unaffected.

@@ -13,8 +13,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is docs/spline-design.md §1.10's fit-spline test obligations: R6
-// retires and a FitSplineSeg becomes a Tier A kind for the moments path, so
+// This file is docs/spline-design.md §11's fit-spline test obligations: a
+// FitSplineSeg is a Tier A kind for the moments path, so
 // ProfileRecord.Area/Centroid/SecondMoments must answer for it — matching a
 // closed form or a dense sample, never merely "it ran" (CLAUDE.md's hard
 // rules).

@@ -231,11 +231,13 @@ func requireFiniteFreeformRange(tStart, tEnd float64, what string) error {
 // this is a caller-built or decoded record that bypassed the seam — refuse
 // rather than integrate a piece the conversion does not cover.
 //
-// It is the Tier A arms' own gate, and it stays there. Table R states R2 and R6
+// It is the Tier A arms' own gate, and it stays there. Table R states R2
 // unconditionally and carries no row for a trimmed range reaching the evaluator,
 // so a kind refused for its own cause reports that cause whatever its range
-// says. Finiteness is the separate refusal above, already decided for every kind
-// before this runs.
+// says. A FitSplineSeg carries no such unconditional refusal — it is Tier A
+// for the moments path (Table F) — so it reaches this same gate instead of
+// skipping it. Finiteness is the separate refusal above, already decided for
+// every kind before this runs.
 func requireFullFreeformRange(tStart, tEnd float64, what string) error {
 	if (tStart == 0 && tEnd == 1) || (tStart == 1 && tEnd == 0) {
 		return nil
