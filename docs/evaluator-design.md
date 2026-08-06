@@ -38,21 +38,30 @@ same one-sided shape as the seam's range falsifier.
 
 ## 2. What v1 is, and is not
 
-Per core §2: **v1 uses analytic construction for features and tessellation for
-booleans.** Feature bodies carry analytic faces. Every measurement carries its
-own proof: exactly representable results are `Exact`; float/transcendental
-closed forms and tessellated results are `Approximate` with proven bounds.
+Per core §2: **v1 uses analytic construction for features, and tessellation for
+every boolean outside the analytic reduction's admitted class.** Feature bodies
+carry analytic faces, as does a `Union` result that reduction admits (§9).
+Every measurement carries its own proof: exactly representable results are
+`Exact`; float/transcendental closed forms and tessellated results are
+`Approximate` with proven bounds.
 
 `Exactness` on a boolean's measurement is decided by that measurement's own
 proven bound, never by the fact that a boolean produced it (core §5.3: a zero
 bound IS the claim that the value is exactly representable). A nonzero bound
-reads `Approximate`. A **zero** bound reads `Exact`, and exactly one boolean
-measurement can reach it: the **VOLUME** of an all-planar pair whose contact
-points round exactly, which is integrated in exact rational arithmetic over the
-held mesh and whose rounding term is then genuinely zero. Every other boolean
-measurement is Approximate — a length, an area or a centroid is a float sum of
-square roots, and the last ulp is not free, so its bound is never zero (§9,
-`bounds.go`).
+reads `Approximate` and a **zero** bound reads `Exact`, on either path. Which
+measurements can reach zero depends on the path that built the result.
+
+**On the mesh path (§9), exactly one measurement can reach it:** the **VOLUME**
+of an all-planar pair whose contact points round exactly, which is integrated in
+exact rational arithmetic over the held mesh and whose rounding term is then
+genuinely zero. Every other measurement of a mesh-built result is Approximate —
+a length, an area or a centroid is a float sum of square roots, and the last ulp
+is not free, so its bound is never zero (§9, `bounds.go`).
+
+**On the analytic reduction (§9), the result is a swept payload and reads by §4
+like any other one**, so a volume, an area, a centroid and a `Box` can all reach
+a zero bound. `docs/prism-boolean-design.md` §7 owns when each of them does; this
+document does not restate its rule.
 
 **Staging is explicit.** v1 lands in increments (§11), and an intent the
 recipe can record but this evaluator cannot yet build is **rejected at the
@@ -97,8 +106,10 @@ Rules:
   face with two circular-edge loops and no seam edge. v1 counts already match
   the analytic answer, so vN does not churn them (core §3).
 - **Every vertex carries its bound.** Feature-built vertices are exact (bound
-  zero); boolean-built vertices carry the tessellation's chord bound. The
-  verification gate reads these (verification §4).
+  zero); a vertex built on §9's mesh path carries the tessellation's chord
+  bound. A vertex of a boolean result the analytic reduction admits (§9) carries
+  that payload's own bound instead, which `docs/prism-boolean-design.md` §7
+  owns. The verification gate reads these (verification §4).
 - **Every loop exposes its stored direction.** `Loop.CoEdges()` returns copied
   `CoEdge` values in boundary-walk order. Each use's `Start`/`End` follows that
   walk and `IsForward` states whether it matches the shared `Edge` orientation.
