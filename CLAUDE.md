@@ -265,7 +265,11 @@ placement. See `docs/evaluator-design.md` §8.
   characters. NEVER grow a row to record an invariant, a derivation, a sign
   convention or a refusal — that belongs in the owning design doc or the
   function's own doc comment, and a row that restates it drifts from the code.
-  `claude_md_layout_test.go` enforces the cap and the file's byte budget.
+  `claude_md_layout_test.go` enforces every mechanical rule above: the per-row
+  cap, the file's byte budget, and the row shape itself — a backtick-quoted
+  path, a description, and a closing `|`. Only a table header or separator may
+  start with `|` and not be a row; anything else fails rather than being
+  skipped, since a skipped line escapes the cap and the path check both.
 
 ## Verification
 

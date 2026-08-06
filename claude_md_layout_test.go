@@ -1,6 +1,7 @@
 package decad_test
 
 import (
+	"fmt"
 	"os"
 	"regexp"
 	"strings"
@@ -14,9 +15,9 @@ import (
 // "## Layout" section and ~/.claude/docs/agent-instructions.md's "prefer
 // mechanical doc/code checks over exhortations"): each feature PR tends to
 // append prose to a row's description cell instead of pointing elsewhere, so
-// this test fails the moment the file grows past its budget or a row's cell
-// grows past its own. A mechanical comparison that can FAIL beats a comment
-// asking authors to "keep it short".
+// this test fails the moment the file grows past its budget, a row's cell
+// grows past its own, or a row stops parsing as a row at all. A mechanical
+// comparison that can FAIL beats a comment asking authors to "keep it short".
 const (
 	claudeMDPath = "CLAUDE.md"
 	// claudeMDMaxBytes is the whole-file budget. Raising it is a policy
@@ -47,6 +48,17 @@ var layoutRowRe = regexp.MustCompile(`^\|\s*(` + pathCell + `)\s*\|(.*)\|$`)
 
 var backtickPathRe = regexp.MustCompile("`([^`]+)`")
 
+// layoutHeaderRe and layoutSeparatorRe match the only two non-data lines a
+// Layout sub-table may open with: its "| Path | Responsibility |" header and
+// the "|---|---|" alignment row beneath it (optional padding and alignment
+// colons allowed). They exist so that parseLayoutRows can name exactly what it
+// is allowed to skip: every OTHER pipe-prefixed line in the section is a data
+// row, and one that fails layoutRowRe is malformed rather than scaffolding.
+var (
+	layoutHeaderRe    = regexp.MustCompile(`^\|\s*Path\s*\|\s*Responsibility\s*\|$`)
+	layoutSeparatorRe = regexp.MustCompile(`^\|(?:\s*:?-+:?\s*\|)+$`)
+)
+
 // layoutRow is one parsed data row of CLAUDE.md's "## Layout" table.
 type layoutRow struct {
 	line        int      // 1-based source line, for failure messages
@@ -54,13 +66,17 @@ type layoutRow struct {
 	description string   // raw column 2 text
 }
 
-// parseLayoutRows extracts every data row of the "## Layout" markdown
-// table (the header and separator rows don't match layoutRowRe, since
-// neither "Path"/"Responsibility" nor "---" is a backtick-quoted path, so
-// they're skipped rather than misread as data).
-func parseLayoutRows(t *testing.T, content string) []layoutRow {
-	t.Helper()
-
+// parseLayoutRows extracts every data row of the "## Layout" markdown table.
+//
+// The only pipe-prefixed lines it skips are the two it can NAME: each
+// sub-table's "| Path | Responsibility |" header and its "|---|---|"
+// separator. Anything else that starts with "|" and fails layoutRowRe is
+// reported as a malformed row rather than skipped, because a skipped line is
+// invisible to every check the caller then runs — a row missing its closing
+// "|", or whose first column is not a backtick-quoted path, would otherwise
+// carry an unbounded description cell and name a nonexistent path with
+// nothing measuring either.
+func parseLayoutRows(content string) ([]layoutRow, error) {
 	var rows []layoutRow
 	inSection := false
 
@@ -85,19 +101,28 @@ func parseLayoutRows(t *testing.T, content string) []layoutRow {
 			continue // a sub-heading, a blank line, or the section's own lead prose
 		}
 
+		if layoutHeaderRe.MatchString(trimmed) || layoutSeparatorRe.MatchString(trimmed) {
+			continue // a sub-table's own header or separator row
+		}
+
 		m := layoutRowRe.FindStringSubmatch(trimmed)
 		if m == nil {
-			continue // the "| Path | Responsibility |" header or "|---|---|" separator
+			return nil, fmt.Errorf("CLAUDE.md:%d: line starts with %q but is neither a %q header, a %q separator, nor a well-formed data row (%q) — it would be skipped, and a skipped row escapes the cell-length and path-existence checks: %q",
+				i+1, "|", "| Path | Responsibility |", "|---|---|", "| `path.go` | Description. |", trimmed)
 		}
 
 		paths := extractPaths(m[1])
-		require.NotEmptyf(t, paths, "CLAUDE.md:%d: Layout row's first column has no backtick-quoted path: %q", i+1, m[1])
+		if len(paths) == 0 {
+			return nil, fmt.Errorf("CLAUDE.md:%d: Layout row's first column has no backtick-quoted path: %q", i+1, m[1])
+		}
 
 		rows = append(rows, layoutRow{line: i + 1, paths: paths, description: strings.TrimSpace(m[2])})
 	}
 
-	require.NotEmpty(t, rows, "parsed zero rows from CLAUDE.md's Layout table — the table moved or its format changed; fix parseLayoutRows in this test")
-	return rows
+	if len(rows) == 0 {
+		return nil, fmt.Errorf("parsed zero rows from CLAUDE.md's Layout table — the table moved or its format changed; fix parseLayoutRows in this test")
+	}
+	return rows, nil
 }
 
 func extractPaths(col1 string) []string {
@@ -110,16 +135,15 @@ func extractPaths(col1 string) []string {
 }
 
 // TestCLAUDEMDLayoutStaysCompact is the regression guard described above.
-// It is expected to fail today: CLAUDE.md is well over budget and many
-// Layout rows carry paragraphs of prose instead of a pointer. Each failure
-// names the row/file to fix, so this test doubles as the trim campaign's
-// worklist.
+// Each failure names the row or file to fix, so its output doubles as the
+// trim worklist.
 func TestCLAUDEMDLayoutStaysCompact(t *testing.T) {
 	data, err := os.ReadFile(claudeMDPath)
 	require.NoErrorf(t, err, "could not read %s from the test's working directory (expected to be the repository root)", claudeMDPath)
 	content := string(data)
 
-	rows := parseLayoutRows(t, content)
+	rows, err := parseLayoutRows(content)
+	require.NoError(t, err, "CLAUDE.md's Layout table did not parse")
 
 	t.Run("file size budget", func(t *testing.T) {
 		require.LessOrEqualf(t, len(data), claudeMDMaxBytes,
@@ -173,5 +197,64 @@ func TestCLAUDEMDLayoutStaysCompact(t *testing.T) {
 				})
 			}
 		}
+	})
+}
+
+// TestParseLayoutRowsRejectsMalformedRows pins the one thing the budget test
+// above cannot show about itself: a pipe-prefixed Layout line that fails to
+// parse is REFUSED, not skipped. A skipped line is invisible to the
+// cell-length and path-existence checks, so a row missing its closing "|"
+// could carry an arbitrarily long description and name a path that does not
+// exist while the whole test still reported PASS.
+//
+// Every fixture below is invented — none of these lines appears in the real
+// CLAUDE.md, and none should ever be copied into it.
+func TestParseLayoutRowsRejectsMalformedRows(t *testing.T) {
+	// section wraps table body lines in the minimum structure the parser
+	// needs: the "## Layout" heading it starts at, a sub-heading and table
+	// scaffolding, and a following "##" heading it stops at.
+	section := func(body ...string) string {
+		lines := []string{"## Layout", "", "### Invented sub-table", "", "| Path | Responsibility |", "|---|---|"}
+		lines = append(lines, body...)
+		return strings.Join(append(lines, "", "## Conventions", ""), "\n")
+	}
+
+	const wellFormed = "| `doc.go` | An invented short pointer row. |"
+
+	// oversized is one rune past layoutCellMaxChars, so a fixture carrying
+	// it fails the cell budget the moment it is parsed as a row.
+	oversized := strings.Repeat("X", layoutCellMaxChars+1)
+
+	t.Run("accepts the well-formed shape", func(t *testing.T) {
+		rows, err := parseLayoutRows(section(wellFormed))
+		require.NoError(t, err)
+		require.Len(t, rows, 1, "the header and separator must still be skipped, and the data row kept")
+		require.Equal(t, []string{"doc.go"}, rows[0].paths)
+		require.Equal(t, "An invented short pointer row.", rows[0].description)
+	})
+
+	for name, malformed := range map[string]string{
+		// The audited defect: a docs row whose closing "|" is missing, so
+		// layoutRowRe's "\|$" anchor cannot match and the line was skipped.
+		"row missing its closing pipe": "| `docs/invented-design.md` | An invented pointer row with no closing delimiter",
+		// The same shape carrying a cell far past the budget — proof that a
+		// skipped row really did escape the cap.
+		"oversized cell on a row missing its closing pipe": "| `docs/invented-design.md` | " + oversized,
+		"first column is not a backtick-quoted path":       "| docs/invented-design.md | An invented pointer row. |",
+		"first column holds three backtick tokens":         "| `a.go` / `b.go` / `c.go` | An invented pointer row. |",
+		"pipe-prefixed prose with no second column":        "| An invented stray line |",
+	} {
+		t.Run(name, func(t *testing.T) {
+			rows, err := parseLayoutRows(section(wellFormed, malformed))
+			require.Error(t, err, "a malformed Layout line must be refused, never skipped")
+			require.Nil(t, rows)
+			require.Contains(t, err.Error(), malformed, "the failure must quote the offending line so an author can find it")
+		})
+	}
+
+	t.Run("an empty table is still refused", func(t *testing.T) {
+		_, err := parseLayoutRows(section())
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "parsed zero rows")
 	})
 }
