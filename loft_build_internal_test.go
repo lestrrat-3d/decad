@@ -481,6 +481,32 @@ func TestLoftGateDiameterIsTheVertexDiameter(t *testing.T) {
 	require.InDelta(t, 1.7320508075688772, d, 1e-12) // sqrt(3)
 }
 
+// TestLoftPlacedGateDiameterShrinksByTwiceDelta proves docs/loft-design.md
+// §12 PR 2a's bodyGateDiameter arm: a placed loft's own diameter reads the
+// held vertex-set diameter shrunk by 2*delta, never the raw held reading —
+// understating the reference tightens the tolerance gate rather than
+// loosening it.
+func TestLoftPlacedGateDiameterShrinksByTwiceDelta(t *testing.T) {
+	unplaced := evalLoftFixture(t, boxLoftPayload(t))
+	unplacedD, ok, err := bodyGateDiameter(t.Context(), unplaced)
+	require.NoError(t, err)
+	require.True(t, ok)
+
+	pl := unplaced.payload.(loftPayload)
+	rot, err := r3.Rotation(r3.NewVec(1, 1, 1), units.Degrees(29))
+	require.NoError(t, err)
+
+	placedBody, err := pl.placed(t.Context(), New(), StepRef(1), rot)
+	require.NoError(t, err)
+	placedPl := placedBody.payload.(loftPayload)
+	require.Greater(t, placedPl.delta, 0.0)
+
+	placedD, ok, err := bodyGateDiameter(t.Context(), placedBody)
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.InDelta(t, unplacedD-2*placedPl.delta, placedD, 1e-12)
+}
+
 // TestEvalLoftCancellation proves a context cancelled before the build even
 // starts returns ctx.Err() rather than any evaluator sentinel.
 func TestEvalLoftCancellation(t *testing.T) {

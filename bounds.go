@@ -151,6 +151,19 @@ func perturbedAreaUpper(verts []r3.Vec, tris [][3]int, delta float64) float64 {
 	return area
 }
 
+// perturbedTriangleAreaAllow bounds how far ONE triangle's area can move when
+// each of its three vertices sits within delta of the held ones: delta·(|u| +
+// |v|) + 2·delta², u and v the triangle's own edge vectors b-a and c-a — the
+// per-facet correction term perturbedAreaUpper's own doc comment derives,
+// pulled out as its single owner (docs/loft-design.md PR 2a) so a caller that
+// needs one triangle's own allowance, rather than a whole mesh's held area
+// plus the same correction summed over every facet, does not recompute it
+// inline.
+func perturbedTriangleAreaAllow(a, b, c r3.Vec, delta float64) float64 {
+	u, v := b.Sub(a), c.Sub(a)
+	return delta*(u.Len()+v.Len()) + 2*delta*delta
+}
+
 func perturbedAreaUpperContext(
 	ctx context.Context,
 	verts []r3.Vec,
@@ -175,7 +188,7 @@ func perturbedAreaUpperWithBudget(
 		}
 		a, b, c := verts[t[0]], verts[t[1]], verts[t[2]]
 		u, v := b.Sub(a), c.Sub(a)
-		total += u.Cross(v).Len()/2 + delta*(u.Len()+v.Len()) + 2*delta*delta
+		total += u.Cross(v).Len()/2 + perturbedTriangleAreaAllow(a, b, c, delta)
 	}
 	if budget != nil {
 		if err := budget.err(); err != nil {

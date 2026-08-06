@@ -172,6 +172,7 @@ that exists and this evaluator cannot build → `ErrUnsupported`.**
 | **S9** | either profile fails a seam gate (§2): foreign, stale, invalid, or an unrecordable `Partial` fragment | seam design's own answer, per profile | `ErrForeignProfile` / `ErrStaleProfile` / `ErrInvalidProfile` / `ErrUnrecordableProfile` | seam design's own answer, per gate; this document adds no permanence of its own (§2) |
 | **S10** | a nil `*sketch.Sketch` or `*sketch.Profile` argument | no call at all | `ErrDegenerate` | yes, §2 |
 | **S11** | a nil or foreign `LoftOption` value, including a foreign type that embeds the sealed marker | no well-defined decad operation can invoke an unowned callback | `ErrDegenerate` | yes, §2 |
+| **S12** | a placement (`Placed`/`Duplicate`/`PlacedCopy`, §12 PR 2a) whose proven volume allowance is not smaller than the held volume | yes — the placed body itself is sound; only its centroid's proven quotient bound has no positive denominator left to divide by | `ErrUnsupported` | no — a precision ceiling on this evaluator's centroid bound, not a shape rule |
 
 **S5 compares geometric planes, not `PlaneRecord` fields.** Its normal is
 `U × V`; it refuses when the two normals are parallel and the displacement
@@ -191,6 +192,16 @@ coincidence — all decidable without building a single triangle), then
 construction (§5), then the per-triangle existence gate S6, then the crossing
 audit (S7/S8, §6) — the most expensive step, run last, over triangles already
 proven individually non-degenerate.
+
+**A placement (`Placed`/`Duplicate`/`PlacedCopy`, §12 PR 2a) re-runs S1–S9 and
+S12, never a reduced set.** The evaluator re-lifts both records under the
+composed motion and rebuilds from scratch (§7), so S6/S7/S8 are reachable
+from a placement too: the crossing audit re-runs on the rounded vertex set
+every re-evaluation produces, and a placement whose rounding closes a
+previously-clear gap is refused exactly as a first build with the same
+geometry would be. S12 is reachable only from a placement, since an unplaced
+body's `delta` is zero and its centroid's quotient denominator never
+collapses.
 
 ## 5. Construction — flat triangular walls, never a curved ruled surface
 
@@ -248,6 +259,17 @@ feature builds, and `p` here is the recorded section's own point, so a loft
 vertex carries the same standing a cap vertex does — no new rounding risk is
 introduced; it is the same closed-form coordinate lift every other feature
 already treats as truth.
+
+**This claim holds for the identity transform.** A placed, duplicated, or
+placed-copied loft body (§7, §12 PR 2a) carries the payload's own proven
+displacement term `delta`: zero exactly when the accumulated placement is
+`r3.Identity()` (an exact struct comparison, never a tolerance), and
+otherwise `bounds.go`'s `rigidRoundAllow`, read at the pre-transform lifted
+point's own magnitude and the composed translation's magnitude — never at
+the result's, since that is where a general rigid motion's rounding is
+actually committed. A placed body's every vertex, every edge length, every
+face area, and each of the four body measurements carries that same
+`delta`.
 
 **Edges get no new role mechanism.** Selector.go's existing rule already
 covers loft: "`CreatedBy` matches an edge through its adjacent faces'
@@ -403,12 +425,20 @@ row B4).
 **`Body.Origin()`** is the loft step, role `"body"`, the same uniform rule
 every other feature follows (modify §11).
 
-**Placement is staged until PR 2.** It needs no geometry-specific payload
+**Placement is landed (§12 PR 2a).** It needs no geometry-specific payload
 case: every loft surface is a `Plane`, and evaluator §8 already states "every
-v1 surface variant maps to itself under an isometry (plane→plane, …)." Once
-PR 2 lands, a placed, duplicated, or placed-copied loft body re-evaluates from
-the same `Step` record, reproducing the same roles (modify §11's "roles derive
-from the record and the deterministic walk order").
+v1 surface variant maps to itself under an isometry (plane→plane, …)." A
+placed, duplicated, or placed-copied loft body re-evaluates from the same two
+recorded profiles: it re-lifts every vertex from the record and applies the
+composed motion ONCE — never moving an already-built mesh incrementally, so
+`delta` does not accumulate across repeated placements — reproducing the same
+roles (modify §11's "roles derive from the record and the deterministic walk
+order") and the same pairing, and re-running §4's Table S gates and §6's
+crossing audit on the rounded vertex set. §5's whole-shell orientation step
+re-decides the sign from the placed triangle set on its own, so a mirror
+flips `reversed` and needs no separate winding-flip case — unlike
+`facetedPayload.placed`'s `IsReflection()` handling, which moves a held mesh
+rather than re-lifting one.
 
 ## 8. Mass properties — derived, not asserted
 
@@ -449,21 +479,32 @@ sum is that same 2D exact rational, lifted through the cap's own
 `PlaneRecord` — no new 2D integration is written.
 
 **`Volume` is `Exact` exactly when its published rational is representable in
-the `units.Value` magnitude it carries — never unconditionally.** This is
-spline design §3's Tier A rule, verbatim: "the reported bound is a SINGLE
-rounding of that rational into that magnitude, and it is zero — hence `Exact`
-— exactly when the rational is representable in the magnitude the value
-ACTUALLY CARRIES." A loft's volume earns that ceiling for the same reason a
-Tier A free-form region's area does: the integral is exactly rational; only
-its final publication rounds.
+the `units.Value` magnitude it carries, AND the payload's displacement
+`delta` is zero — never unconditionally.** This is spline design §3's Tier A
+rule, verbatim: "the reported bound is a SINGLE rounding of that rational
+into that magnitude, and it is zero — hence `Exact` — exactly when the
+rational is representable in the magnitude the value ACTUALLY CARRIES." A
+loft's volume earns that ceiling for the same reason a Tier A free-form
+region's area does: the integral is exactly rational; only its final
+publication rounds. A placed body's volume (§12 PR 2a) composes
+`bounds.go`'s `sweptVolumeAllow(delta, areaUpper)` on top of that single
+rounding, so `delta` alone is enough to make the reading `Approximate`
+however exactly the placement's own rotation or reflection is representable.
 
 **`Centroid` publishes three exact rational coordinates as a
 `VecMeasurement`, not a `units.Value`.** Round each coordinate once into the
 returned `r3.Vec`. Its `Bound` is the length radius enclosing all three
 coordinate-rounding errors, and it is `Exact` only when every coordinate has
-zero rounding error. This is the existing `moments.go` centroid publication
-pattern, extended from the plane-local two-coordinate result to this 3D
-triangulated boundary.
+zero rounding error AND the payload's displacement `delta` is also zero.
+This is the existing `moments.go` centroid publication pattern, extended
+from the plane-local two-coordinate result to this 3D triangulated boundary.
+A placed body (§12 PR 2a) widens each coordinate's bound by the same quotient
+composition `moments.go`'s `boundedQuotient` states, using `sweptVolumeAllow`
+as the denominator's own allowance and `sweptMomentAllow` as the numerator's:
+a placement whose proven volume allowance is not smaller than the held
+volume leaves that quotient's denominator non-positive, and the centroid is
+unstateable — refused `ErrUnsupported` (Table S, S12) rather than published
+with a bound nobody could use.
 
 **`Area` is never Exact.** A triangle's own area is `(1/2) * |(B-A) x
 (C-A)|` — a square root of a rational, generically irrational — so a wall
@@ -495,10 +536,14 @@ bound) plus the wall triangles' proven-bound sum — so the total is
 `Approximate` with a proven bound whenever at least one wall triangle has
 nonzero area, which increment 1's admitted correspondence always does.
 
-**`Bounds` is Exact.** Every vertex is already treated as exact (§5); the
-axis-aligned box is the componentwise min/max over an already-exact set, the
-same per-vertex-extreme reasoning Extrude's `Bounds` already relies on — no
-new rounding is introduced by comparing exact numbers.
+**`Bounds` is Exact for an unplaced body.** Every vertex is already treated
+as exact (§5); the axis-aligned box is the componentwise min/max over an
+already-exact set, the same per-vertex-extreme reasoning Extrude's `Bounds`
+already relies on — no new rounding is introduced by comparing exact numbers.
+A placed body's box carries the payload's own displacement (§12 PR 2a): the
+box is still the componentwise min/max over the held vertex set, but that
+set is no longer provably exact, so `Bounds.Bound` is `delta` and
+`Bounds.Exactness` is `Exact` only when `delta` is zero.
 
 **Vertex position, edge length, and face area follow the standing rules
 already governing every other analytic payload** — a position is Exact by
@@ -513,13 +558,13 @@ for the body-level quantities.
 
 | D | Consumer | Reads | Increment-1 status |
 |---|---|---|---|
-| **D1** | `Tessellate` / `STL` / `OBJ` | the payload | works from the first PR that wires it in, and the returned `Bound` is **zero**: every wall and cap face is already a flat triangle with exact vertices, so tessellation is restatement, not chording (`triangulate.go`'s existing polygon-with-holes triangulator for the two caps; no chording anywhere) |
+| **D1** | `Tessellate` / `STL` / `OBJ` | the payload | works from the first PR that wires it in (§12 PR 2b), and the returned `Bound` is **the payload's own `delta`** (§12 PR 2a), not unconditionally zero: an unplaced loft's `delta` is zero, so an unplaced body's tessellation is still restatement with a zero bound, but every wall and cap face of a PLACED body is a flat triangle over held vertices that are no longer provably exact, so tessellation restates exactly what the payload holds, `delta` included (`triangulate.go`'s existing polygon-with-holes triangulator for the two caps; no chording anywhere) |
 | **D2** | the mesh boolean (`Union`/`Cut`/`Intersect`, evaluator §9) | the tessellation | a first-class operand once D1 lands, admitted through the existing all-planar zero-bound path (`docs/evaluator-design.md` §2 — "the VOLUME of an all-planar pair whose contact points round exactly") — no new boolean code, a loft body is just another all-planar operand |
-| **D3** | Interference (`docs/interference-design.md`) | box separation (D6-style) reads `Bounds` directly; the read-only mesh-boolean path reads D2's tessellation | box-disjoint pairs prove only their disjoint-interior interference relation (`Bounds` is Exact, §8). `Verify` is `Sound` only when every other required or requested body and pair check is decided and trusted; a pair needing the mesh boolean works once D2 lands; a pair needing the analytic containment/pair kernel stays `Suspect` until a loft case is added to `clearance_geom.go`'s payload switch — identical staging to the cup's own D6 row in `docs/modify-design.md` |
+| **D3** | Interference (`docs/interference-design.md`) | box separation (D6-style) reads `Bounds` directly; the read-only mesh-boolean path reads D2's tessellation | box-disjoint pairs prove only their disjoint-interior interference relation (`Bounds` carries the payload's own displacement, §8). `Verify` is `Sound` only when every other required or requested body and pair check is decided and trusted; a pair needing the mesh boolean works once D2 lands; a pair needing the analytic containment/pair kernel stays `Suspect` until a loft case is added to `clearance_geom.go`'s payload switch — identical staging to the cup's own D6 row in `docs/modify-design.md` |
 | **D4** | Clearance (`WithClearances`, `docs/clearance-design.md`) | the analytic pair kernel's payload switch | `WithClearances` stays `Suspect`, even for a box-disjoint pair: box separation proves disjoint interiors but does not measure the gap. No loft case exists in the kernel yet. |
 | **D5** | `MinWallThickness` / `Undercuts` / `MinRadius` (verification §6, `survey2d.go`) | one constant 2D cross-section (a prism's section, a revolve's meridian) | The corresponding requested survey is `Suspect` until its loft implementation lands. In increment 1, a loft's cross-section varies continuously between the two profiles, so the existing spanning-disk / meridian-walk reduction does not reach it; `docs/modify-reach-design.md` DX9 states the identical cap-blend reason: "not one constant section at one height… the existing 2D spanning-disk proof does not decide them" |
-| **D6** | `Verify` — structural audit + tolerance gate | topology + measurements | valid by construction once §6's audit has passed at build time (modify §1's standard); the tolerance gate judges `Volume`/`Area`/`Centroid`/`Bounds` on the terms §8 derives |
-| **D7** | `Placed` / `Duplicate` / `PlacedCopy` | the payload | staged until PR 2 (§12); until then the evaluator returns `ErrUnsupported`. PR 2 needs no geometry-specific payload case (§7). |
+| **D6** | `Verify` — structural audit + tolerance gate | topology + measurements | valid by construction once §6's audit has passed at build time (modify §1's standard); the tolerance gate judges `Volume`/`Area`/`Centroid`/`Bounds` on the terms §8 derives — for a placed body (§12 PR 2a) all four now carry the payload's own `delta`, so the gate judges four readings that all carry the placement term |
+| **D7** | `Placed` / `Duplicate` / `PlacedCopy` | the payload | landed (§12 PR 2a): `Placed` retires the receiver; `Duplicate`/`PlacedCopy` leave it live. No geometry-specific payload case is needed (§7) — every reading composes the payload's own proven displacement `delta` (§5, §8). |
 
 ## 10. Recipe, provenance, and replay
 
@@ -588,7 +633,8 @@ global evaluator increment.
 | PR | Lands | Still refused after it |
 |---|---|---|
 | 1 | `OpLoft` wire/recipe plumbing (`LoftOpts` codec, `Op` token, `Step.Profile`/`Plane` reuse), Table P pairing + Table S gates S1–S5/S9–S11, the flat-triangle wall construction (§5), the crossing audit (§6, Table S S6–S8), `Document.Loft` / `LoftContext`, `Volume` / `Centroid` (§8's rational accumulator) / `Area` / `Bounds`, `Verify` (D6: the structural audit and the tolerance gate over all four) | same-kind `CircleSeg`/`ArcSeg` correspondence; N-section/guide-rail/centerline loft; `Placed`/`Duplicate`/`PlacedCopy`; reversed correspondence; surveys, clearance, interference beyond box-disjoint |
-| 2 | `Tessellate` / `STL` / `OBJ` (D1), mesh-boolean admission (D2), `Placed` / `Duplicate` / `PlacedCopy` (D7) | D3/D4's analytic-kernel case, D5 |
+| 2a | `Placed` / `Duplicate` / `PlacedCopy` (D7): the payload's own proven displacement term `delta` (§5), composed into every vertex, edge length, face area, and all four body measurements; Table S gains S12 | D1/D2 (`Tessellate`/`STL`/`OBJ`, mesh-boolean admission); D3/D4's analytic-kernel case; D5 |
+| 2b | `Tessellate` / `STL` / `OBJ` (D1), mesh-boolean admission (D2) | D3/D4's analytic-kernel case, D5 |
 | 3 (reach, not committed by this document) | same-kind `CircleSeg`/`ArcSeg` correspondence, N-section and guide-rail/centerline lofts, a loft case in `clearance_geom.go`, a non-constant-cross-section wall survey kernel | — |
 
 **The four measurements land with the operation, never after it.** A `Body`
@@ -693,6 +739,38 @@ never merely that a call ran (project rule).
   envelope before it dispatches `"loft"`; replay reproduces the same triangles,
   roles, and measurements as the immediate call; a failed call leaves the
   document and recipe unchanged.
+- **Placement (§12 PR 2a)**: `r3.Identity().Apply(v)` is bit-identical for a
+  subnormal, `1e308`, `-0.0` and `1/3` — the identity fast path's premise,
+  pinned. `Duplicate` of a fresh loft reproduces bit-identical vertices, Exact
+  16000 mm³ volume, Exact centroid, Exact bounds, leaves the source live, and
+  gives the document two bodies. Rotating the 16000 mm³ square-square loft 37
+  degrees about X is the regression this PR exists for: assert
+  `|Volume.Value - 16000| <= Volume.Bound` (the naive implementation misses by
+  1.819e-12 against a 7.203e-13 bound), the centroid against the closed-form
+  rotated centroid within its bound, every `Vertex.Position().Bound >= 0`, and
+  `Bounds.Exactness == Approximate`. A `PlacedCopy` by `(100,0,0)` moves
+  `Bounds` and `Centroid` by exactly 100 in x, keeps the volume value,
+  publishes a positive bound enclosing 16000, and leaves the source live. A
+  reflection (a herringbone mirror) produces positive volume, outward face
+  normals (spot-checked against `Face.NormalAt` on one wall), unchanged
+  face/edge/vertex counts, and a centroid that mirrors the source's within
+  bound. Ten successive `PlacedCopy` motions keep the volume bound within a
+  small constant factor of one placement's own, proving the re-lift-from-record
+  path charges `delta` once rather than accumulating it. The placed body's
+  faces carry `side(i,j,k)`/`capStart`/`capEnd` under the NEW `StepRef`;
+  `FaceCreatedBy(CapStart(b2))` selects exactly one face; manifoldness and
+  per-edge `IsConvex` match the source. The sum of `Face.Area()` equals
+  `Body.Area().Value` within the summed bounds, catching a per-face bound that
+  forgot the perturbation term. `Placed` retires the receiver; `Duplicate`/
+  `PlacedCopy` do not; a refused placement (an invalid transform, and an S12
+  fixture) leaves the recipe and document untouched. A canceled
+  `PlacedContext` returns `ctx.Err()` with the receiver live and the recipe
+  unchanged. A placed loft is `Sound` at the default tolerance under `Verify`;
+  two lofts placed apart read box-disjoint `Sound`; an internal test asserts
+  `bodyGateDiameter` shrinks by `2*delta`. `perturbedTriangleAreaAllow`
+  encloses the area change over a brute-force sweep of perturbed vertices at
+  `delta`, at aspect ratios 1, 1e-3 and 1e-6. With `delta == 0` every
+  published measurement is bit-identical to PR 1's.
 
 ## 14. Open questions
 

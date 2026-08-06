@@ -1313,7 +1313,15 @@ func (in pairToleranceInputs) lengthReference(value float64) (float64, bool) {
 // boundary is a polyhedron, and a convex-hull diameter is realized at
 // vertices, so this is the TRUE diameter rather than a bound on it — the
 // strongest arm in this function, ahead of the exact carrier model that does
-// not yet cover this payload class.
+// not yet cover this payload class. A PLACED loft's held vertices are no
+// longer provably exact (§12 PR 2a): the true diameter can differ from the
+// held one by up to 2*delta (each of the two farthest points can sit up to
+// delta from its true position), so this arm shrinks the held reading by
+// 2*delta before reporting it, understating rather than overstating —
+// tightening the gate can only turn a passing reading into a false Suspect,
+// never a false Sound, the identical reasoning envelopeGateDiameter already
+// carries. A shrink that collapses to non-positive leaves the body with no
+// usable diameter, exactly like any other unusable magnitude here.
 func bodyGateDiameter(ctx context.Context, body *Body) (float64, bool, error) {
 	if body == nil {
 		return 0, false, nil
@@ -1322,7 +1330,15 @@ func bodyGateDiameter(ctx context.Context, body *Body) (float64, bool, error) {
 		return payload.diameter, usableMagnitude(payload.diameter), nil
 	}
 	if payload, ok := body.payload.(loftPayload); ok {
-		return pointSetDiameterContext(ctx, payload.verts)
+		d, ok, err := pointSetDiameterContext(ctx, payload.verts)
+		if err != nil || !ok {
+			return d, ok, err
+		}
+		shrunk := d - 2*payload.delta
+		if shrunk <= 0 {
+			return 0, false, nil
+		}
+		return shrunk, true, nil
 	}
 	budget := newWorkBudget(ctx)
 	geom, ok, err := newBodyGeomBudget(budget, body)

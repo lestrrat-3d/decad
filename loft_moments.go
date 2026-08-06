@@ -33,7 +33,15 @@ import (
 // cap's own contribution is its 2-D region's exact rational area
 // (moments.go), never the sum of its triangulation's own float areas.
 type loftMassAccumulator struct {
-	anchor xpt
+	anchor  xpt
+	anchorF r3.Vec
+
+	// delta is the placement's own proven displacement of every held vertex
+	// from the exact placed image of the recorded sections (loft_build.go's
+	// loftPayload.delta, docs/loft-design.md §5/§12 PR 2a) — zero for an
+	// unplaced body. Every extra term below is gated on delta > 0, so an
+	// unplaced loft's published measurements stay bit-identical to PR 1's.
+	delta float64
 
 	// vol6 is Σ (A-anchor)·((B-anchor)×(C-anchor)) over every triangle of T:
 	// six times the signed volume (docs/loft-design.md §8).
@@ -44,6 +52,18 @@ type loftMassAccumulator struct {
 
 	haveBounds bool
 	lo, hi     r3.Vec // componentwise extremes over every held vertex
+
+	// coordUpper is a proven upper bound on |u|, |v| and |z| over the body's
+	// own material relative to anchor: the max |v-anchor|_inf over every held
+	// vertex (bounds.go's sweptMomentAllow reads it widened by delta at the
+	// point of use, since the true vertex may sit up to delta further out).
+	coordUpper float64
+
+	// perturbAreaSum is Σ perturbedTriangleAreaAllow(...) over EVERY triangle
+	// of T — walls and caps alike — the extra area a placement's delta can
+	// add on top of the held triangle areas area() already sums. It stays
+	// exactly 0 when delta is 0.
+	perturbAreaSum float64
 
 	// wallAreaSum is the naive float sum of the per-triangle PROVEN LOWER
 	// bounds wallTriangleArea returns; wallAreaAbs is an upper bound on
@@ -64,14 +84,18 @@ type loftMassAccumulator struct {
 }
 
 // newLoftMassAccumulator opens a fresh accumulator anchored at the loft's
-// first profile plane origin (docs/loft-design.md §8).
-func newLoftMassAccumulator(anchor r3.Vec) *loftMassAccumulator {
+// first profile plane origin (docs/loft-design.md §8), carrying the
+// payload's own proven placement displacement delta (§12 PR 2a) — zero for
+// an unplaced body.
+func newLoftMassAccumulator(anchor r3.Vec, delta float64) *loftMassAccumulator {
 	return &loftMassAccumulator{
-		anchor: xptOf(anchor),
-		vol6:   new(big.Rat),
-		momX:   new(big.Rat),
-		momY:   new(big.Rat),
-		momZ:   new(big.Rat),
+		anchor:  xptOf(anchor),
+		anchorF: anchor,
+		delta:   delta,
+		vol6:    new(big.Rat),
+		momX:    new(big.Rat),
+		momY:    new(big.Rat),
+		momZ:    new(big.Rat),
 	}
 }
 
@@ -100,6 +124,13 @@ func (m *loftMassAccumulator) add(a, b, c r3.Vec, wall bool) {
 	m.foldBounds(a)
 	m.foldBounds(b)
 	m.foldBounds(c)
+	m.foldCoordUpper(a)
+	m.foldCoordUpper(b)
+	m.foldCoordUpper(c)
+
+	if m.delta > 0 {
+		m.perturbAreaSum = upRound(m.perturbAreaSum + perturbedTriangleAreaAllow(a, b, c, m.delta))
+	}
 
 	if !wall {
 		return
@@ -148,14 +179,33 @@ func (m *loftMassAccumulator) foldBounds(p r3.Vec) {
 	m.hi = r3.Vec{X: math.Max(m.hi.X, p.X), Y: math.Max(m.hi.Y, p.Y), Z: math.Max(m.hi.Z, p.Z)}
 }
 
+// foldCoordUpper extends coordUpper over one held vertex's own inf-norm
+// distance from anchor.
+func (m *loftMassAccumulator) foldCoordUpper(p r3.Vec) {
+	d := p.Sub(m.anchorF)
+	m.coordUpper = max(m.coordUpper, math.Abs(d.X), math.Abs(d.Y), math.Abs(d.Z))
+}
+
 // volume publishes Σvol6/6, rounded to float64 exactly once. Its Exactness
 // is exactnessOf the single rounding's proven error — Exact exactly when the
 // published rational is representable in cubic millimetres, never
 // unconditionally (docs/loft-design.md §8, spline design §3's Tier A rule).
-func (m *loftMassAccumulator) volume() Measurement {
+//
+// A placement (delta > 0, §12 PR 2a) widens that bound by
+// bounds.go's sweptVolumeAllow(delta, areaUpper), areaUpper the SAME
+// whole-mesh perturbedAreaUpper the identity fast path never reaches — this
+// is the term that closes the measured 1.82e-12 gap a naive re-lift-and-round
+// implementation misses: every held vertex is exact ONLY under the identity
+// transform, and a general rigid motion rounds inside its own products and
+// sums.
+func (m *loftMassAccumulator) volume(verts []r3.Vec, tris [][3]int) Measurement {
 	vol := new(big.Rat).Quo(m.vol6, big.NewRat(6, 1))
 	value, _ := vol.Float64()
 	bound := rationalFloatError(vol, value)
+	if m.delta > 0 {
+		areaUpper := perturbedAreaUpper(verts, tris, m.delta)
+		bound = absSumUpper(bound, sweptVolumeAllow(m.delta, areaUpper))
+	}
 	return Measurement{
 		Value:     units.CubicMillimeters(value),
 		Exactness: exactnessOf(bound),
@@ -166,9 +216,20 @@ func (m *loftMassAccumulator) volume() Measurement {
 // centroid publishes anchor + Σmoment/(4·Σvol6) as a VecMeasurement, each of
 // the three coordinates rounded to float64 exactly once. Bound is radius3D
 // of the largest per-coordinate rounding error, Exact only when all three
-// round exactly (docs/loft-design.md §8). A loft with zero net volume has no
+// round exactly AND the payload carries no placement displacement
+// (docs/loft-design.md §8, §12 PR 2a). A loft with zero net volume has no
 // centroid.
-func (m *loftMassAccumulator) centroid() (VecMeasurement, error) {
+//
+// A placement (delta > 0) widens each coordinate's bound by
+// placedCentroidAllow's own quotient composition — moments.go's
+// boundedQuotient formula, specialized to the proven volume/moment
+// allowances sweptVolumeAllow/sweptMomentAllow already state rather than a
+// fresh division. A non-positive clearance (the volume allowance is not
+// smaller than the held volume) leaves the quotient's denominator with
+// nothing left to divide by, so the centroid is unstateable — refused
+// ErrUnsupported (Table S, S12) rather than published with a bound nobody
+// could use.
+func (m *loftMassAccumulator) centroid(verts []r3.Vec, tris [][3]int) (VecMeasurement, error) {
 	if m.vol6.Sign() == 0 {
 		return VecMeasurement{}, fmt.Errorf(`%w: a loft with zero net volume has no centroid`, ErrDegenerate)
 	}
@@ -183,6 +244,23 @@ func (m *loftMassAccumulator) centroid() (VecMeasurement, error) {
 	bx := rationalFloatError(cx, fx)
 	by := rationalFloatError(cy, fy)
 	bz := rationalFloatError(cz, fz)
+
+	if m.delta > 0 {
+		vol := new(big.Rat).Quo(m.vol6, big.NewRat(6, 1))
+		volValue, _ := vol.Float64()
+		areaUpper := perturbedAreaUpper(verts, tris, m.delta)
+		epsV := sweptVolumeAllow(m.delta, areaUpper)
+		epsM := sweptMomentAllow(m.delta, areaUpper, m.coordUpper+m.delta)
+
+		clearance := math.Nextafter(math.Abs(volValue)-epsV, math.Inf(-1))
+		if clearance <= 0 {
+			return VecMeasurement{}, fmt.Errorf(`%w: the placement's proven volume allowance is not smaller than the held volume; this evaluator cannot state the placed centroid`, ErrUnsupported)
+		}
+		bx = absSumUpper(bx, placedCentroidAllow(fx-m.anchorF.X, epsM, epsV, clearance))
+		by = absSumUpper(by, placedCentroidAllow(fy-m.anchorF.Y, epsM, epsV, clearance))
+		bz = absSumUpper(bz, placedCentroidAllow(fz-m.anchorF.Z, epsM, epsV, clearance))
+	}
+
 	bound := radius3D(math.Max(bx, math.Max(by, bz)))
 
 	return VecMeasurement{
@@ -192,10 +270,27 @@ func (m *loftMassAccumulator) centroid() (VecMeasurement, error) {
 	}, nil
 }
 
-// bounds publishes the componentwise min/max over every held vertex. It is
-// always Exact: every vertex is already exact by construction, so an extreme
-// over an already-exact set introduces no rounding of its own
-// (docs/loft-design.md §8). The second return is false only when add has
+// placedCentroidAllow bounds how far one already-computed centroid
+// coordinate can move under a placement's proven volume and first-moment
+// allowances, mirroring moments.go's boundedQuotient formula (§12 PR 2a):
+// coordRel is the coordinate's own value relative to the accumulator's
+// anchor, epsM the proven first-moment allowance (sweptMomentAllow), epsV
+// the proven volume allowance (sweptVolumeAllow), and clearance the
+// caller's own proven positive gap between the held volume and epsV (S12's
+// own test, checked once by the caller since it does not depend on
+// coordRel).
+func placedCentroidAllow(coordRel, epsM, epsV, clearance float64) float64 {
+	numerator := absSumUpper(epsM, productUpper(math.Abs(coordRel), epsV))
+	return upRound(numerator / clearance)
+}
+
+// bounds publishes the componentwise min/max over every held vertex. For an
+// unplaced body it is always Exact: every vertex is already exact by
+// construction, so an extreme over an already-exact set introduces no
+// rounding of its own (docs/loft-design.md §8). A placed body's box carries
+// the payload's own delta (§12 PR 2a): the held vertex set is no longer
+// provably exact, so the box's Bound is delta and its Exactness is Exact
+// only when delta is zero. The second return is false only when add has
 // never been called.
 func (m *loftMassAccumulator) bounds() (Box, bool) {
 	if !m.haveBounds {
@@ -204,8 +299,8 @@ func (m *loftMassAccumulator) bounds() (Box, bool) {
 	return Box{
 		Min:       m.lo,
 		Max:       m.hi,
-		Exactness: Exact,
-		Bound:     units.Millimeters(0),
+		Exactness: exactnessOf(m.delta),
+		Bound:     units.Millimeters(m.delta),
 	}, true
 }
 
@@ -247,6 +342,14 @@ func (m *loftMassAccumulator) area(capAreas ...*big.Rat) Measurement {
 	value := m.wallAreaSum + capFloat
 	addBound := addRoundError(m.wallAreaSum, capFloat, value)
 	bound := absSumUpper(m.wallBound(), capBound, addBound)
+	// A placement's own per-triangle allowance covers both directions at
+	// once: the wall sum is over held triangles and the cap term is the
+	// denoted region's exact rational, and the two differ by at most this
+	// sum (docs/loft-design.md §12 PR 2a). Gated on delta > 0 so an
+	// unplaced loft's Area stays bit-identical to PR 1's.
+	if m.delta > 0 {
+		bound = absSumUpper(bound, m.perturbAreaSum)
+	}
 
 	return Measurement{
 		Value:     units.SquareMillimeters(value),
