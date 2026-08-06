@@ -202,21 +202,58 @@ func freeformExtremeFloats(iv ratIv) (float64, float64, error) {
 	return lo, hi, nil
 }
 
+// requireFiniteDirection refuses a non-finite direction component, reading the
+// two floats themselves so nothing allocates: it is the ONE owner of both
+// messages, and it is what lets every caller gate a direction ahead of the R7
+// preflight that must precede the work (docs/spline-design.md §5.2).
+func requireFiniteDirection(gu, gv float64) error {
+	if isNonFinite(gu) {
+		return fmt.Errorf(`%w: a directional extreme's gu component must be finite`, ErrNotFinite)
+	}
+	if isNonFinite(gv) {
+		return fmt.Errorf(`%w: a directional extreme's gv component must be finite`, ErrNotFinite)
+	}
+	return nil
+}
+
+// directionRats lifts the two direction components into the exact rationals
+// spanDirectionalValues multiplies by. ratOf allocates, so this runs only from
+// BEHIND a span's own R7 charge; ratOf fails exactly on a non-finite float, so
+// requireFiniteDirection names which component it was.
+func directionRats(gu, gv float64) (*big.Rat, *big.Rat, error) {
+	guR, ok := ratOf(gu)
+	if !ok {
+		return nil, nil, requireFiniteDirection(gu, gv)
+	}
+	gvR, ok := ratOf(gv)
+	if !ok {
+		return nil, nil, requireFiniteDirection(gu, gv)
+	}
+	return guR, gvR, nil
+}
+
 // spanExtremeEnclosureContext is one span's own reading: a proven enclosure
 // of its minimum value and a proven enclosure of its maximum value, over the
 // linear functional gu·u + gv·v. work is the record's free-form work counter
-// (docs/spline-design.md §5.2); the charge is levied first, before the
-// Bernstein coefficients that name P are built, so an unaffordable span
-// refuses (R7) before any rational allocates.
-func spanExtremeEnclosureContext(ctx context.Context, span bezierSpan, gu, gv *big.Rat, work *freeformWork) (ratIv, ratIv, error) {
+// (docs/spline-design.md §5.2); the charge is levied first — before the
+// direction is lifted into rationals and before the Bernstein coefficients
+// that name P are built — so an unaffordable span refuses (R7) before any
+// rational allocates. It therefore takes the direction as the two FLOATS its
+// caller holds, never as rationals a caller would have had to allocate ahead
+// of this charge.
+func spanExtremeEnclosureContext(ctx context.Context, span bezierSpan, gu, gv float64, work *freeformWork) (ratIv, ratIv, error) {
 	if err := work.step(freeformExtremeCost(len(span))); err != nil {
 		return ratIv{}, ratIv{}, err
 	}
 	if err := ctx.Err(); err != nil {
 		return ratIv{}, ratIv{}, err
 	}
+	guR, gvR, err := directionRats(gu, gv)
+	if err != nil {
+		return ratIv{}, ratIv{}, err
+	}
 
-	values := spanDirectionalValues(span, gu, gv)
+	values := spanDirectionalValues(span, guR, gvR)
 	first, last := values[0], values[len(values)-1]
 	minLo, minHi := new(big.Rat).Set(first), new(big.Rat).Set(first)
 	maxLo, maxHi := new(big.Rat).Set(first), new(big.Rat).Set(first)

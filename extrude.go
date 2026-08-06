@@ -1377,11 +1377,17 @@ func prismBoundsContext(ctx context.Context, pp prismPayload, work *freeformWork
 	// A displaced section displaces every extreme it holds, and the frame and
 	// placement are isometries, so the box's own error carries the section
 	// displacement itself — δ outward on every face
-	// (docs/prism-boolean-design.md §7) — summed with a free-form boundary's
-	// own directional-extreme bracket bound (docs/spline-design.md §6.2). Both
-	// are zero for every analytic, caller-drawn payload, which keeps the
-	// ordinary prism's box Exact as before; a Tier A free-form prism's box is
-	// Approximate, per §6.2's own stated contract consequence. The sum only
+	// (docs/prism-boolean-design.md §7) — summed with the boundary's own
+	// directional-extreme bracket bound (docs/spline-design.md §6.2). Both are
+	// zero for every analytic, caller-drawn payload, which keeps the ordinary
+	// prism's box Exact as before. The bracket's own term is what decides the
+	// rest, never the section's kind: a free-form section whose extremes along
+	// these three axes are all held by exactly representable candidate values
+	// reports a zero width and stays Exact too (a span monotone along an axis
+	// contributes its two exactly interpolated endpoints and nothing else),
+	// while an extreme held by an irrational interior root publishes that
+	// bracket's width and is Approximate — §6.2's own stated contract
+	// consequence. The sum only
 	// goes through absSumUpper's own per-term rounding where there are two
 	// genuine terms to compose: bumping a lone sectionDelta a second time for
 	// an always-zero extremeBound term would grow the box's bound past the
@@ -1446,14 +1452,16 @@ func boundaryExtremesContext(ctx context.Context, profile ProfileRecord, gu, gv 
 // freeformExtremeFloats, Table R row R18), so every number these accumulators
 // hold is finite and the only reading left to the empty-region check below is
 // a region that genuinely contributed no candidate.
+//
+// The direction is carried through this scan as the two FLOATS the caller
+// holds, and it is gated by requireFiniteDirection, which reads them and
+// allocates nothing. The rational lift each span's Bernstein coefficients need
+// happens inside spanExtremeEnclosureContext, behind that span's own R7 charge
+// — §5.2's rule is that every charge is levied before the work allocates, and
+// a rational built here would allocate ahead of every charge this scan makes.
 func boundaryExtremesBoundedContext(ctx context.Context, profile ProfileRecord, gu, gv float64, work *freeformWork) (float64, float64, float64, error) {
-	guR, ok := ratOf(gu)
-	if !ok {
-		return 0, 0, 0, fmt.Errorf(`%w: a directional extreme's gu component must be finite`, ErrNotFinite)
-	}
-	gvR, ok := ratOf(gv)
-	if !ok {
-		return 0, 0, 0, fmt.Errorf(`%w: a directional extreme's gv component must be finite`, ErrNotFinite)
+	if err := requireFiniteDirection(gu, gv); err != nil {
+		return 0, 0, 0, err
 	}
 
 	loLower, loUpper := math.Inf(1), math.Inf(1)
@@ -1492,7 +1500,7 @@ func boundaryExtremesBoundedContext(ctx context.Context, profile ProfileRecord, 
 			}
 			if w.kind == walkFreeform {
 				for _, span := range w.spans {
-					minIv, maxIv, err := spanExtremeEnclosureContext(ctx, span, guR, gvR, work)
+					minIv, maxIv, err := spanExtremeEnclosureContext(ctx, span, gu, gv, work)
 					if err != nil {
 						return 0, 0, 0, err
 					}

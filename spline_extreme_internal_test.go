@@ -73,7 +73,7 @@ func TestBoundaryExtremesBoundedInteriorMaximumBeatsEndpointOnly(t *testing.T) {
 
 	lo, hi, bound, err := boundaryExtremesBoundedContext(t.Context(), profile, 0, 1, newFreeformWork())
 	require.NoError(t, err)
-	require.Positive(t, bound, "a free-form directional extreme is never claimed exact")
+	require.Positive(t, bound, "an extreme held by an irrational interior root carries the bracket's own width")
 	require.Less(t, lo, hi)
 
 	spans, err := splineBezierSpans(SplineSeg{Control: control, TStart: 0, TEnd: 1}, newFreeformWork())
@@ -111,10 +111,10 @@ func TestSpanExtremeEnclosureHandlesRootAtOneHalf(t *testing.T) {
 	// P(t) = Bernstein([0, 2, 0]) = 4t(1-t): P'(t) = 4 - 8t has its only root
 	// at the exact rational t = 1/2, where P(1/2) = 1.
 	span := ratSpan([][2]float64{{0, 0}, {2, 0}, {0, 0}})
-	gu, gv := mustRatOf(1), mustRatOf(0)
+	gu, gv := 1.0, 0.0
 
 	half := mustRatOf(0.5)
-	restricted := bernsteinRestrict(spanDirectionalValues(span, gu, gv), half, half)
+	restricted := bernsteinRestrict(spanDirectionalValues(span, mustRatOf(gu), mustRatOf(gv)), half, half)
 	lo, hi := bernsteinHull(restricted)
 	one := mustRatOf(1)
 	require.Zero(t, lo.Cmp(one), "restricting to the zero-width interval [1/2, 1/2] evaluates P there exactly")
@@ -139,7 +139,7 @@ func TestSpanExtremeEnclosureHandlesRootAtOneHalf(t *testing.T) {
 // report the same constant with a zero-width enclosure.
 func TestSpanExtremeEnclosureCollapsedSpanIsExact(t *testing.T) {
 	span := ratSpan([][2]float64{{5, -1}, {5, -1}, {5, -1}, {5, -1}})
-	gu, gv := mustRatOf(1), mustRatOf(1)
+	gu, gv := 1.0, 1.0
 
 	minIv, maxIv, err := spanExtremeEnclosureContext(t.Context(), span, gu, gv, newFreeformWork())
 	require.NoError(t, err)
@@ -193,17 +193,52 @@ func TestBoundaryExtremesBoundedRepeatedInteriorKnot(t *testing.T) {
 // 6. R7: a freeformWork pre-drained to just under the ceiling refuses
 // ErrUnsupported from spanExtremeEnclosureContext itself, before a single
 // Bernstein coefficient is built — the charge is the function's first
-// statement.
+// statement. The NaN case is the ORDER's own witness (§5.2: every charge is
+// levied before the work allocates): the direction's rational lift allocates,
+// so it sits behind that charge, and a drained counter therefore answers the
+// budget's ErrUnsupported rather than the lift's own ErrNotFinite.
 func TestSpanExtremeEnclosureRefusesOverBudget(t *testing.T) {
 	span := ratSpan([][2]float64{{0, 0}, {2, 0}, {0, 0}})
 	cost := freeformExtremeCost(len(span))
 	require.Positive(t, cost, "the fixture span must actually cost something to charge against")
-	work := &freeformWork{spent: freeformWorkLimit - cost/2}
 
-	_, _, err := spanExtremeEnclosureContext(t.Context(), span, mustRatOf(1), mustRatOf(0), work)
-	require.Error(t, err)
-	require.ErrorIs(t, err, ErrUnsupported)
-	require.Contains(t, err.Error(), "work budget")
+	for _, tc := range []struct {
+		name   string
+		gu, gv float64
+	}{
+		{"finite direction", 1, 0},
+		{"non-finite direction", math.NaN(), 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			work := &freeformWork{spent: freeformWorkLimit - cost/2}
+			_, _, err := spanExtremeEnclosureContext(t.Context(), span, tc.gu, tc.gv, work)
+			require.Error(t, err)
+			require.ErrorIs(t, err, ErrUnsupported)
+			require.Contains(t, err.Error(), "work budget")
+		})
+	}
+}
+
+// 6b. The same lift, with the budget out of the way: a non-finite direction
+// reaching one span's enclosure still refuses ErrNotFinite and names the
+// component, so moving the lift behind the charge narrowed nothing.
+func TestSpanExtremeEnclosureNonFiniteDirectionRefuses(t *testing.T) {
+	span := ratSpan([][2]float64{{0, 0}, {2, 0}, {0, 0}})
+	for _, tc := range []struct {
+		name      string
+		gu, gv    float64
+		component string
+	}{
+		{"NaN gu", math.NaN(), 0, "gu"},
+		{"Inf gv", 0, math.Inf(1), "gv"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, _, err := spanExtremeEnclosureContext(t.Context(), span, tc.gu, tc.gv, newFreeformWork())
+			require.Error(t, err)
+			require.ErrorIs(t, err, ErrNotFinite)
+			require.Contains(t, err.Error(), tc.component)
+		})
+	}
 }
 
 // 7. A non-finite gu/gv refuses ErrNotFinite ahead of any rational lift — the
@@ -229,11 +264,25 @@ func TestBoundaryExtremesBoundedNonFiniteDirectionRefuses(t *testing.T) {
 	}
 }
 
-// 8. R11: prismPayload.extentAlongWork over a free-form section refuses
-// ErrUnsupported (a through-all stop reads this coordinate as exact and has
-// no bound to widen), while prismBoundsContext over the identical payload
-// answers with Approximate and a positive Bound instead of refusing — a Box
-// has one to widen into.
+// 7b. The scan's own direction gate reads the two floats and allocates
+// nothing, which is what lets it run ahead of every R7 charge the scan makes
+// (§5.2: a charge is levied before the work allocates, so no rational may be
+// built before one). A gate that lifted the direction into big.Rat to decide
+// finiteness — ratOf allocates even on the float it rejects — would fail this.
+func TestRequireFiniteDirectionAllocatesNothing(t *testing.T) {
+	var gate error
+	allocs := testing.AllocsPerRun(100, func() { gate = requireFiniteDirection(1.5, -2.25) })
+	require.NoError(t, gate)
+	require.Zero(t, allocs, "the accepted direction gate must allocate nothing")
+}
+
+// 8. R11: prismPayload.extentAlongWork over a free-form section whose extreme
+// along the direction read is an interior root refuses ErrUnsupported (a
+// through-all stop reads this coordinate as exact and has no bound to widen),
+// while prismBoundsContext over the identical payload answers with Approximate
+// and a positive Bound instead of refusing — a Box has one to widen into. Both
+// readings key on the BRACKET's width and not on the section being free-form;
+// test 8b is the same two readings on a section whose bracket has none.
 func TestPrismExtentAlongWorkRefusesFreeformBoxAnswersApproximate(t *testing.T) {
 	control := []Point2{{U: 0, V: 0}, {U: 1, V: 2}, {U: 3, V: 2}, {U: 4, V: 0}, {U: 6, V: 1}, {U: 7, V: -2}}
 	pp := prismPayload{
@@ -254,6 +303,38 @@ func TestPrismExtentAlongWorkRefusesFreeformBoxAnswersApproximate(t *testing.T) 
 	require.NoError(t, err)
 	require.Equal(t, Approximate, box.Exactness)
 	require.Positive(t, box.Bound.Base())
+}
+
+// 8b. The other side of §6.2's contract consequence, which the split is stated
+// on: the Box's bound is the BRACKET's width, not a fact about the section's
+// kind. This free-form section is monotone along both plane axes — every
+// control-U and control-V difference is positive, so P′ has no root in [0, 1]
+// along either — leaving the candidate set the two span endpoints a Bézier
+// interpolates exactly, whose functional values are representable here. The
+// Box is Exact with a zero bound, and its Min/Max are the recorded control
+// coordinates themselves.
+func TestPrismBoundsFreeformEndpointHeldExtremesStayExact(t *testing.T) {
+	control := []Point2{{U: 0, V: 0}, {U: 1, V: 1}, {U: 2, V: 2}, {U: 3, V: 3}}
+	pp := prismPayload{
+		profile: splineProfile(control),
+		frame:   identityFrame(t),
+		z0:      0, z1: 5,
+		xform: r3.Identity(),
+	}
+
+	// R11's gate keys on that same width, so this section's extent along X
+	// answers outright where test 8's interior-root fixture refuses.
+	lo, hi, err := pp.extentAlongWork(t.Context(), r3.NewVec(1, 0, 0), newFreeformWork())
+	require.NoError(t, err)
+	require.Equal(t, 0.0, lo)
+	require.Equal(t, 3.0, hi)
+
+	box, err := prismBoundsContext(t.Context(), pp, newFreeformWork())
+	require.NoError(t, err)
+	require.Equal(t, Exact, box.Exactness, "an endpoint-held free-form extreme has no width to report")
+	require.Zero(t, box.Bound.Base())
+	require.Equal(t, r3.NewVec(0, 0, 0), box.Min)
+	require.Equal(t, r3.NewVec(3, 3, 5), box.Max)
 }
 
 // 9. Regression: boundaryExtremesContext still refuses a free-form section —

@@ -955,12 +955,20 @@ floor gates it first, and there `S` is the zero polynomial. That floor is the on
 certificate reading the COUNT itself as its proof, so it owes the extra test §6.3
 states.
 
-**Contract consequence.** A free-form interior extreme is an irrational root
-evaluation, so **a free-form prism's `Box` is `Approximate`** with the
-bracket's bound; an all-analytic prism's `Box` keeps its zero bound and
-`Exact` unchanged. `prismBoundsContext` reports exactly that split (P4a) —
-reachable only from internal tests while R6 stands, since no free-form prism
-can exist through the public surface yet.
+**Contract consequence.** A `Box`'s bound is the directional-extreme bracket's
+own, so the split is between a bracket with a nonzero width and one without —
+never between a free-form section and an analytic one. A free-form interior
+extreme is an irrational root evaluation, so **a `Box` whose extreme is held by
+such a candidate is `Approximate`** with the bracket's bound. A section whose
+extremes are all held by exactly representable candidate values reports a zero
+bound and stays `Exact`, and a free-form section reaches that reading too: a
+Bézier interpolates its endpoints exactly, so a span monotone in the direction
+being read (`P′` with no root in `[0, 1]`) contributes its two endpoint values
+and nothing else, and where every one of them is representable under the
+functional there is no width to report. An all-analytic prism's `Box` keeps its
+zero bound and `Exact` unchanged, as before. `prismBoundsContext` reports
+exactly that split (P4a) — reachable only from internal tests while R6 stands,
+since no free-form prism can exist through the public surface yet.
 
 **The one extreme that has no interval to report is R18**, §6.1's R15 one row
 over. The enclosure is exact and rational, so it is proven whatever its
@@ -1290,8 +1298,14 @@ rules).
   rounding, and a section whose exact area IS representable there reports `Exact`
   with a zero bound. A test that only covers one side cannot tell the rule from a
   constant.
-- Assert `Box` reports `Approximate` with a positive bound for a Tier A prism
-  (§6.2).
+- Assert BOTH sides of §6.2's contract consequence, since the split is the
+  bracket's width and not the section's kind: a Tier A prism whose directional
+  extreme is held by an interior root reports `Approximate` with a positive
+  bound, and one whose extremes along the axis read are all held by exactly
+  representable candidate values — a span monotone in that direction, so the
+  candidate set is its two exactly interpolated endpoints — reports `Exact`
+  with a zero bound. A test that only covers one side cannot tell the rule from
+  a constant.
 - Assert an arc-length bracket strictly narrows with subdivision depth and
   encloses a dense-sample reference at every depth, and that the reported bound
   is the enclosure MEASURED at the fixed depth rather than a width read off a
