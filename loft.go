@@ -3,6 +3,7 @@ package decad
 import (
 	"context"
 	"fmt"
+	"slices"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
@@ -104,7 +105,15 @@ func (d *Document) LoftContext(ctx context.Context, s0 *sketch.Sketch, p0 *sketc
 			if !ok {
 				return nil, fmt.Errorf(`%w: WithLoftAlignment carries no offsets`, ErrDegenerate)
 			}
-			alignment = v
+			// option.Get is a plain type assertion: it hands back the
+			// option's own stored slice header, not a copy. A caller that
+			// retains the LoftOption value and mutates that slice through
+			// option.Get (or Option[[]int].Value()) later would otherwise
+			// reach into this step's recorded Alignment and loftPayload's
+			// alignment (docs/loft-design.md §10) after the fact — clone
+			// here, at ingress, so no caller-owned slice survives into
+			// either.
+			alignment = slices.Clone(v)
 			haveAlignment = true
 		default:
 			return nil, fmt.Errorf(`%w: unknown loft option identifier %T`, ErrDegenerate, ident)

@@ -10,6 +10,7 @@ import (
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
+	"github.com/lestrrat-go/option/v3"
 	"github.com/stretchr/testify/require"
 )
 
@@ -651,6 +652,49 @@ func TestLoftRecipeDoesNotAliasTheDocument(t *testing.T) {
 	seg, ok := opts2.Profile2.Outer.Segments[0].(decad.LineSeg)
 	require.True(t, ok)
 	require.NotEqual(t, decad.Point2{U: 999, V: 999}, seg.Start, "the document's own recorded section must not alias a caller-visible slice")
+}
+
+func TestLoftOptionAliasDoesNotReachTheDocument(t *testing.T) {
+	s0, p0, s1, p1 := loftSquares(t, 20, 20)
+	doc := decad.New()
+	opt := decad.WithLoftAlignment(0)
+	_, err := doc.Loft(s0, p0, s1, p1, opt)
+	require.NoError(t, err)
+
+	// option.Get is a plain type assertion (option/v3's Get: "v, ok :=
+	// opt.value().(T)") — it hands back the option's own stored slice
+	// header, not a copy. A caller who keeps the LoftOption and reads its
+	// payload back this way (or through Option[[]int].Value()) must not be
+	// able to reach the document's own recorded step through it.
+	v, ok := option.Get[[]int](opt)
+	require.True(t, ok)
+	v[0] = 3
+
+	recipe := doc.Recipe()
+	opts := recipe.Steps[0].Opts.(decad.LoftOpts)
+	require.Equal(t, []int{0}, opts.Alignment, "the recorded step must not alias the caller's retained option payload")
+}
+
+func TestLoftSharedOptionAcrossCallsDoesNotAliasSteps(t *testing.T) {
+	s0a, p0a, s1a, p1a := loftSquares(t, 20, 20)
+	s0b, p0b, s1b, p1b := loftSquares(t, 20, 20)
+	doc := decad.New()
+	shared := decad.WithLoftAlignment(0)
+
+	_, err := doc.Loft(s0a, p0a, s1a, p1a, shared)
+	require.NoError(t, err)
+	_, err = doc.Loft(s0b, p0b, s1b, p1b, shared)
+	require.NoError(t, err)
+
+	v, ok := option.Get[[]int](shared)
+	require.True(t, ok)
+	v[0] = 7
+
+	recipe := doc.Recipe()
+	opts0 := recipe.Steps[0].Opts.(decad.LoftOpts)
+	opts1 := recipe.Steps[1].Opts.(decad.LoftOpts)
+	require.Equal(t, []int{0}, opts0.Alignment, "one shared LoftOption's payload must not alias the first recorded step")
+	require.Equal(t, []int{0}, opts1.Alignment, "one shared LoftOption's payload must not alias the second recorded step")
 }
 
 func TestLoftRecipeRoundTrip(t *testing.T) {
