@@ -493,7 +493,7 @@ certificate details enter the public API. `NormalAt` on a `NURBSSurface` is `Err
 derivation per why, at the owning site; every repeat becomes claim + pointer."
 Its never-restate rule bans the pointer-WITH-GLOSS shape, and no clause of spline
 §7's derivation is unpacked here — not the (u, v) root-find, not the other
-variants' Exact zero bound, not the undercut survey reading normals off the
+variants' own closed-form bound, not the undercut survey reading normals off the
 payload walk. Two sentences of the same claim+pointer shape already ship in this
 file: the Faceted.Bound sentence immediately above, and the
 DiagUnsupportedPairContact sentence in §8's boolean-error taxonomy, which even

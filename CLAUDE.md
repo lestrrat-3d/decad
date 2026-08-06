@@ -154,6 +154,7 @@ one.
 | Path | Responsibility |
 |---|---|
 | `topology.go` | The topology model (evaluator §3): `Body`→`Lump`→`Shell`→`Face`→`Loop`→`CoEdge`→`Edge`→`Vertex`, plus sealed `Surface`/`Curve` variant sets. Convexity, exactness rules and immutability are on the types' own doc comments; see `docs/evaluator-design.md` §3. |
+| `normal_bound.go` | The proof behind the bound every `Face.NormalAt` arm publishes: rational-interval enclosures of each arm's own exact unit normal, and the radian sine/cosine enclosure the `Cone` arm needs. See the file's own doc comment. |
 | `document.go` | `Document` (`New`/`Bodies`/`Recipe`), its atomic commit tail, and retire/liveness gates. `Body.Placed`/`Duplicate`/`PlacedCopy` re-evaluate the payload under a composed motion; see their doc comments and `docs/evaluator-design.md` §8. |
 | `extrude.go` | `Document.Extrude` (evaluator §5) plus `segmentWalk`/`walkKind`, the boundary vocabulary every feature reads through, and the analytic prism evaluator `evalPrism`/`prismPayload`. See doc comments; `docs/evaluator-design.md` §5, `docs/prism-boolean-design.md` §7, `docs/spline-design.md` §6.2. |
 | `revolve.go` | `Document.Revolve` (evaluator §6): the sealed `Axis` vocabulary, the axis-contact/incidence gates, angular-extent resolution, and the analytic revolve evaluator `evalRevolve`/`revolvePayload`. See doc comments on each; `docs/evaluator-design.md` §6. |

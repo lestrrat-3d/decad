@@ -1537,10 +1537,11 @@ exports nothing else. A `switch` on `Surface` or `Curve` MUST already carry a
 `default` (core §6.1), so adding these variants breaks no conforming caller.
 
 **`Face.NormalAt(p)` on a `NURBSSurface` is `ErrUnsupported`.** Recovering the
-`(u, v)` of a given point is a root-find, not a closed form, so an `Exact`
-zero-bound answer is unavailable and the other variants all promise one. Nothing
-internal needs it: the undercut survey reads normals off the payload walk, never
-off `NormalAt`.
+`(u, v)` of a given point is a root-find, not a closed form, so no bound covers
+the answer at all, while every other variant evaluates its normal in closed form
+and publishes the bound that evaluation earns — zero only where the arithmetic
+came out exactly right. Nothing internal needs it: the undercut survey reads
+normals off the payload walk, never off `NormalAt`.
 
 ## 8. Table C — per-capability reach
 
