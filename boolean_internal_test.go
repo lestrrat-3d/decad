@@ -2,6 +2,7 @@ package decad
 
 import (
 	"context"
+	"math"
 	"math/big"
 	"runtime"
 	"strings"
@@ -116,6 +117,79 @@ func TestTriTriClassifyNamesTheInPlaneEdge(t *testing.T) {
 	require.True(t, c.p1OnA)
 	require.False(t, c.p0OnB)
 	require.False(t, c.p1OnB)
+}
+
+// singleFacetBoolMesh prepares a one-triangle operand mesh, the smallest input
+// facesNearMiss can be asked about.
+func singleFacetBoolMesh(t *testing.T, tri [3]r3.Vec) *boolMesh {
+	t.Helper()
+	bm, err := prepBoolMeshContext(t.Context(), &Mesh{vertices: tri[:], triangles: [][3]int{{0, 1, 2}}}, []int{0})
+	require.NoError(t, err)
+	return bm
+}
+
+// inscribedFan is the held outline of a circle of radius r centred at (cx, 0)
+// in the plane z = 0: the inscribed n-gon, fan-triangulated. The vertices sit
+// at the half-step angles, so an EDGE — not a vertex — faces the y axis at both
+// ends of the diameter, which is where a rim tangency lands in the test below.
+func inscribedFan(cx, r float64, n int) [][3]r3.Vec {
+	pts := make([]r3.Vec, n)
+	for k := range n {
+		a := 2 * math.Pi * (float64(k) + 0.5) / float64(n)
+		pts[k] = r3.Vec{X: cx + r*math.Cos(a), Y: r * math.Sin(a)}
+	}
+	fan := make([][3]r3.Vec, 0, n-2)
+	for k := 1; k < n-1; k++ {
+		fan = append(fan, [3]r3.Vec{pts[0], pts[k], pts[k+1]})
+	}
+	return fan
+}
+
+// TestCoplanarCarrierPairIsNotSettledByCoplanarityAlone pins the two facts
+// docs/interference-design.md §5.2 records about the hidden-tangency gate and a
+// coplanar carrier pair, which together are why §11's PR4 must settle the
+// near-miss question before it removes the mesh pass's coplanar refusal.
+func TestCoplanarCarrierPairIsNotSettledByCoplanarityAlone(t *testing.T) {
+	t.Run("a positive-area coplanar overlap defers to the mesh pass", func(t *testing.T) {
+		// Two opposed facets sharing the plane z = 0 and overlapping over a
+		// positive area: what a cap-on-cap tangency looks like to the gate.
+		ta := [3]r3.Vec{{X: 0, Y: 0}, {X: 10, Y: 0}, {X: 0, Y: 10}}
+		tb := [3]r3.Vec{{X: 0, Y: 0}, {X: 0, Y: 10}, {X: 10, Y: 0}}
+		require.Equal(t, contactRegion, classify(t, ta, tb).kind)
+
+		near, err := facesNearMiss(t.Context(), singleFacetBoolMesh(t, ta), []int{0}, singleFacetBoolMesh(t, tb), []int{0}, 1)
+		require.NoError(t, err)
+		// The gate answers "no near miss" for the whole face pair without
+		// proving one: the pair is left to the mesh pass's own refusal of an
+		// unclassifiable coplanar contact. Whatever replaces that refusal owes
+		// this pair a near-miss answer of its own.
+		require.False(t, near, `the gate defers the coplanar overlap rather than deciding it`)
+	})
+
+	t.Run("tangent curved rims leave no positive-area cell", func(t *testing.T) {
+		const (
+			n = 16
+			r = 5.0
+		)
+		// Circles of radius r centred at the origin and at (2r, 0) are
+		// externally tangent at (r, 0): the true rims touch, in one exact
+		// shared plane. Their held outlines are inscribed, so they do not.
+		a := inscribedFan(0, r, n)
+		b := inscribedFan(2*r, r, n)
+
+		gap := math.Inf(1)
+		for _, ta := range a {
+			for _, tb := range b {
+				require.Equal(t, contactNone, classify(t, ta, tb).kind, `no held facet pair meets, so the arrangement has no positive-area cell to classify`)
+				gap = math.Min(gap, triTriDistance(ta, tb))
+			}
+		}
+		// The true touch falls in the gap the two chords leave — two sagittas
+		// wide — which is the allowance a coplanar carrier pair does not
+		// dispose of.
+		require.InDelta(t, 2*r*(1-math.Cos(math.Pi/n)), gap, 1e-9)
+		require.Positive(t, gap)
+	})
 }
 
 // tinyOffset is a displacement far below one ulp at the coordinates below, so

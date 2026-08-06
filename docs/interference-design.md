@@ -303,8 +303,8 @@ intersection. That refusal stays correct until this complete replacement
 lands; it must not be weakened one pair at a time. PR1 of
 `docs/prism-boolean-design.md` dispatches only public `Union` pairs from
 `performBoolean`; `Verify` continues through `evaluateBoolean`'s mesh path.
-PR4 separately adds read-only analytic `Intersect`. This section still governs
-every coplanar pair the mesh path receives.
+That document's PR4 separately adds read-only analytic `Intersect`. This section
+still governs every coplanar pair the mesh path receives.
 
 Coplanar breadth support constructs one exact 2D arrangement per coplanar face
 patch in the dominant-axis projection already used by the boolean's rational
@@ -326,22 +326,24 @@ cutting code:
    cell the rational arrangement cannot close is an expected undecided contact
    outcome, never a guessed keep/drop.
 
-This section also settles what the hidden-tangency gate (`facesNearMiss`,
-`boolean.go`; `docs/evaluator-design.md` §9) owes an exactly-coplanar carrier
-pair. That gate exists to catch a touch the held chord facets could be hiding
-on a surface that stands off from its own chord; a planar face's facets lie in
-its analytic plane exactly, so there is no such standoff for a coplanar pair
-to hide behind. The only thing left uncertain is where the patch outline
-itself falls, and the ordinary chord/rim allowance the cells above already
-carry bounds that. An exactly-coplanar carrier pair is therefore a **proven**
-touch, not a hidden one, and `facesNearMiss` MUST exempt it from the gate
-rather than defer it to the mesh pass's own refusal: once the mesh pass
-classifies material sides instead of refusing outright, a deferred pair would
-return `near = false` on the strength of a refusal that no longer happens,
-silently admitting the whole face pair with no near-miss proof behind it. The
-exemption is exact-coplanar only — a carrier pair that merely comes close to
-coplanar without being exactly coplanar keeps the ordinary hidden-tangency
-gate unchanged.
+This section owes the hidden-tangency gate (`facesNearMiss`, `boolean.go`;
+`docs/evaluator-design.md` §9) a **constraint**, not a permission. That gate
+returns `near = false` for the whole face pair on the first facet pair it
+classifies as a positive-area coplanar overlap, deferring the pair to the mesh
+pass's own refusal of a coplanar face-on-face tangency. The deferral is sound
+only while that refusal happens. Once §11's PR4 classifies material sides over a
+patch instead of refusing it, the same `near = false` rests on a refusal that no
+longer runs, and the whole face pair clears the gate with no near-miss proof
+behind it.
+
+§11's PR4 MUST therefore settle the near-miss question for a coplanar carrier
+pair before it removes that refusal, and carrier coplanarity ALONE does not
+settle it. A planar face's carrier plane is exact, but its outline is not: near
+a curved rim the held outline is inscribed, so two operands whose true rims
+touch can leave their held outlines a chord apart, and the arrangement above —
+projected triangle boundaries split into maximal positive-area cells — then has
+no positive-area cell to classify at all. The cells carry no outline allowance
+of their own that would cover that gap.
 
 The patch relation does not decide the whole pair by itself. Opposing cells are
 `pairTouching` only when the analytic/contact pass proves no overlap elsewhere.
@@ -556,7 +558,7 @@ Each row is a PR-sized stage. An unanswered verification question reads
 | 1 | four-way pair relation; read-only `evaluateBoolean`; shared shell audit and rational volume/bound helper; transversal intersections for operands the mesh boolean accepts; stable ordering; context propagation | containment without a measurable mesh intersection; coincident/broad-coplanar arrangements; operands without tessellation |
 | 2 | strict full-containment certificate for shipped single-lump analytic payloads; whole-contained-body volume reuse | all multi-lump containment unless the Boolean measures the complete intersection |
 | 3 | exact structural equality certificate for analytic payloads, reusing the first equal body's volume | harmless alternate record spellings; non-identical broad coplanar overlap |
-| 4 | coplanar breadth in the mesh classifier: classify material sides over every positive-area coplanar patch, keep crossing/overlap patches, and retain pure opposite-side contact as touching | unsupported curved operands and unresolved curved tangencies |
+| 4 | coplanar breadth in the mesh classifier: classify material sides over every positive-area coplanar patch, keep crossing/overlap patches, and retain pure opposite-side contact as touching; settle the near-miss question §5.2 states this increment owes a coplanar carrier pair before removing the refusal that pair is deferred to | unsupported curved operands and unresolved curved tangencies |
 | 5 | curved read-only intersection coverage after revolve tessellation, with chord bounds and the hidden-tangency refusal intact | contact or overlap whose proven interval still admits both zero and positive volume |
 
 ## 12. Decisions
