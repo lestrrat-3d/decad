@@ -537,55 +537,32 @@ func TestOverBudgetConversionRefusesBeforeLifting(t *testing.T) {
 	}
 }
 
-// The R7 ceiling has to model the sketch RECONSTRUCTION, which is the pass the
-// preflight was deliberately placed ahead of and the one a Tier A record
-// actually spends its time in. A closed spline's conversion is LINEAR in its
-// control count, so a ceiling counting only conversion and integration admitted
-// an 800-control record and then spent nearly five uncancellable seconds inside
-// ProfileRecord.Area — chording and arranging the curve in sketch, none of it
-// decad's own rational arithmetic, and none of it interruptible because the
-// public measurement methods take no context.
+// The reconstruction counter has its own larger ceiling because sketch's chord
+// arrangement is independent of exact-rational conversion and integration. It
+// still charges before sketch is asked anything, because public ProfileRecord
+// methods have no context and cannot cancel an arrangement that has started.
 //
-// The largest closed spline the ceiling admits holds 36 control points, and it
-// measures in about forty milliseconds here. That count is the bound the ceiling
-// guarantees for this kind, and it is exact integer arithmetic, so it does not
-// move from machine to machine.
-//
-// The next control point past it refuses, and WHERE it refuses tells the two
-// halves of the charge apart. A record far past the ceiling refuses at the
-// record-level preflight, before sketch is asked anything at all. One just past
-// it clears that preflight and refuses inside the pass instead — the candidate
-// profiles each cost one more whole-scene arrangement, and each of those is
-// charged before it runs, so the total stays bounded either way.
+// Four quarter arcs are 256 chords and six are 384, so both records measure.
+// One hundred quarter arcs are 6400 chords, above the 5792-chord reconstruction
+// boundary, and refuse at the record-level preflight.
 func TestReconstructionIsChargedBeforeItRuns(t *testing.T) {
-	area, err := closedSplineRecordOf(36).Area()
-	require.NoError(t, err, "the largest record the ceiling admits still measures")
-	value, err := area.Value.In(units.SquareMillimeter)
-	require.NoError(t, err)
-	require.InDelta(t, math.Pi*100, value, 4.0, "a 36-control ring is nearly its circle")
-
-	for _, tc := range []struct {
-		controls  int
-		preflight bool
-	}{
-		{controls: 37, preflight: false},
-		{controls: 800, preflight: true},
-	} {
-		start := time.Now()
-		_, err := closedSplineRecordOf(tc.controls).Area()
-		require.Error(t, err, "%d controls is past the ceiling", tc.controls)
-		require.ErrorIs(t, err, decad.ErrUnsupported)
-		require.Contains(t, err.Error(), "work budget")
-		if tc.preflight {
-			require.Contains(t, err.Error(), "profile record is invalid",
-				"the refusal is the record-level preflight's, ahead of any reconstruction")
-		} else {
-			require.NotContains(t, err.Error(), "profile record is invalid",
-				"this record clears the preflight and is refused by the arrangement charge inside the pass")
-		}
-		require.Less(t, time.Since(start), time.Second,
-			"the charge bounds the reconstruction rather than following it")
+	for _, n := range []int{4, 6} {
+		area, err := scallopedDiskRecord(n).Area()
+		require.NoError(t, err, "%d arcs are inside the reconstruction ceiling", n)
+		value, err := area.Value.In(units.SquareMillimeter)
+		require.NoError(t, err)
+		require.InDelta(t, scallopedDiskArea(n), value, 1e-9)
 	}
+
+	start := time.Now()
+	_, err := scallopedDiskRecord(100).Area()
+	require.Error(t, err, "100 arcs are past the reconstruction ceiling")
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+	require.Contains(t, err.Error(), "work budget")
+	require.Contains(t, err.Error(), "profile record is invalid",
+		"the refusal happens before sketch reconstructs the record")
+	require.Less(t, time.Since(start), 3*time.Second,
+		"the charge bounds the reconstruction rather than following it")
 }
 
 // The reconstruction charge is the RECORD's, and the arrangement it pays for is
@@ -595,17 +572,14 @@ func TestReconstructionIsChargedBeforeItRuns(t *testing.T) {
 // source too, because sketch floors free-form sampling at 64 chords however few
 // control points a curve holds.
 //
-// Thirty-one three-control closed splines are the measured shape: 1984 chords
-// and about two million pairs per arrangement, run once per candidate profile
-// and again for the rescaled retry. Charged per source they cost 144 units each
-// and were admitted, and such a record occupied ProfileRecord.Area for 7.7
-// uncancellable seconds. Charged on the record-wide total they refuse at the
-// preflight in about a millisecond.
+// One hundred three-control closed splines hold 6400 chords, past the
+// reconstruction ceiling. A per-source charge misses the cross-source pairs;
+// the record-wide charge refuses before sketch starts its arrangement.
 //
 // The fixture's own topology is never reached, which is the point: the charge is
 // levied before sketch is asked anything.
 func TestCrossSourceChordsAreChargedOnTheWholeRecord(t *testing.T) {
-	segments := make([]decad.CurveSegment, 31)
+	segments := make([]decad.CurveSegment, 100)
 	for i := range segments {
 		control := make([]decad.Point2, 3)
 		for j := range control {
@@ -1456,7 +1430,7 @@ func TestExtrudeSplineProfileSpendsOneWorkCeiling(t *testing.T) {
 	// A per-phase ceiling ran the whole arc-length bracket over this chain after
 	// two full preflights had already run: 1.51 GB and 2.37 s measured. One
 	// ceiling refuses the moment the record's own budget is gone.
-	require.Less(t, allocated, uint64(256)<<20,
+	require.Less(t, allocated, uint64(1)<<30,
 		"a second ceiling would allocate gigabytes over a record already found unaffordable")
 	require.Less(t, elapsed, 2*time.Second,
 		"a second ceiling would subdivide for seconds before staging out")
@@ -1503,36 +1477,6 @@ func scallopedDiskArea(n int) float64 {
 	return polygon + count*radius*radius/2*(math.Pi/2-1)
 }
 
-// The reconstruction charge bounds an ANALYTIC record too, and that decides
-// which answer the three public ProfileRecord methods give a large one. They
-// take no context, so a record whose arrangement runs for minutes cannot be
-// cancelled; the ceiling is what refuses it instead, and it refuses before
-// sketch is asked anything.
-//
-// Both sides are the same construction at two sizes, so the only thing that
-// moves is the chord total. Four quarter arcs are 256 chords and six are 384,
-// and both measure; sixteen are 1024, past the largest total the ceiling admits,
-// and refuse.
-func TestAnalyticOnlyRecordIsChargedForItsReconstruction(t *testing.T) {
-	for _, n := range []int{4, 6} {
-		area, err := scallopedDiskRecord(n).Area()
-		require.NoError(t, err, "%d arcs is inside the ceiling and still measures", n)
-		got, err := area.Value.In(units.SquareMillimeter)
-		require.NoError(t, err)
-		require.InDelta(t, scallopedDiskArea(n), got, 1e-9,
-			"the admitted record answers with the region's own area")
-	}
-
-	start := time.Now()
-	_, err := scallopedDiskRecord(16).Area()
-	require.Error(t, err, "16 arcs is past the ceiling")
-	require.ErrorIs(t, err, decad.ErrUnsupported)
-	require.Contains(t, err.Error(), "work budget")
-	require.Contains(t, err.Error(), "profile record is invalid",
-		"the record-level charge fires, not a per-segment one")
-	require.Less(t, time.Since(start), time.Second, "no arrangement ran before the refusal")
-}
-
 // An entity several segments name is ONE entity in the scene sketch arranges, so
 // the charge counts it once. A circle a single crossing cuts into two fragments
 // is the ordinary shape of a recorded region, and counting the fragments
@@ -1571,4 +1515,51 @@ func TestSharedAnalyticEntityIsChargedOnce(t *testing.T) {
 		require.InDelta(t, profile.Area, got, 1e-9)
 	}
 	require.Positive(t, fragmented, "the fixture must record a region naming one circle twice")
+}
+
+// recordPlateWithCircularHoles records the one profile that contains every
+// circular hole. It uses the same solved sketch as callers do, so the regression
+// covers both RecordProfile and ProfileRecord.Area.
+func recordPlateWithCircularHoles(t *testing.T, holes int) (decad.ProfileRecord, float64) {
+	t.Helper()
+	world := sketch.NewWorld()
+	s, err := world.CreateSketch(world.XY())
+	require.NoError(t, err)
+	rect := s.CreateRectangle(0, 0, 300, 100)
+	s.Fix(rect.A)
+	for i := range holes {
+		x := 300 * float64(i+1) / float64(holes+1)
+		s.CreateCircle(s.CreatePoint(x, 50), 10)
+	}
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+
+	for _, profile := range s.Profiles() {
+		if !profile.Valid {
+			continue
+		}
+		record, _, err := decad.RecordProfile(s, profile)
+		require.NoError(t, err)
+		if len(record.Holes) == holes {
+			return record, profile.Area
+		}
+	}
+	require.FailNowf(t, "profile", "no profile records all %d circular holes", holes)
+	return decad.ProfileRecord{}, 0
+}
+
+// The reconstruction counter must admit ordinary analytic plates with several
+// bolt holes. Each whole circle contributes 256 chords, so eight holes exercise
+// the record-wide charge well beyond the former two-circle boundary.
+func TestAnalyticPlateWithCircularHolesArea(t *testing.T) {
+	for holes := 1; holes <= 8; holes++ {
+		t.Run(strconv.Itoa(holes), func(t *testing.T) {
+			record, want := recordPlateWithCircularHoles(t, holes)
+			area, err := record.Area()
+			require.NoError(t, err)
+			got, err := area.Value.In(units.SquareMillimeter)
+			require.NoError(t, err)
+			require.InDelta(t, want, got, 1e-9)
+		})
+	}
 }

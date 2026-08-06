@@ -577,13 +577,14 @@ func TestReconstructionChargeSquaresTheRecordTotal(t *testing.T) {
 	// arrangements the validation always runs, and reports the per-arrangement
 	// charge each candidate profile then levies for itself.
 	work := &freeformWork{}
-	arrangement, err := chargeFreeformReconstruction(
+	arrangement, err := chargeReconstruction(
 		ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{one}}},
 		work,
 	)
 	require.NoError(t, err)
 	require.Equal(t, single.arrangement, arrangement)
-	require.Equal(t, 2*single.arrangement, work.spent)
+	require.Equal(t, 2*single.arrangement, work.reconstructionSpent)
+	require.Zero(t, work.spent, "the reconstruction charge leaves exact-rational work available")
 }
 
 // The charge a conversion levies must grow with the work it actually does. A
