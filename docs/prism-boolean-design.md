@@ -769,17 +769,26 @@ areas, residuals), never merely "it ran" — CLAUDE.md's own rule.
 
 Every `sectionDelta` consumer below is a no-op at the zero every caller-drawn
 payload carries. `extrude.go`'s `evalPrism` composition and `tessellate.go`'s
-mesh-bound charge are §7's own subject and are not repeated here; every other
-consumer withholds its answer rather than measure the recorded section as the
-one it denotes, each at its own call site: `survey.go`'s `prismWall` and
-`MinRadius` reading (undecided, which `Verify` reads `Suspect`; the undercut
-reading is unaffected), `extrude.go`'s `extentAlong` (a through-all stop's
-`ErrUnsupported`, no bound to widen the recorded endpoint by),
-`clearance_geom.go`'s `addPrismFaces` (no boundary model, pair reads
-`Suspect`), `interference.go`'s `analyticBodiesEqual` (the equal-records
-set-identity shortcut withheld), and `fillet.go`'s `requireExactSection`
-(`Fillet`/`Chamfer`/`Shell` refuse the receiver, `ErrUnsupported` — a section
-rewrite has no proven displacement of its own).
+mesh-bound charge are §7's own subject and are not repeated here.
+
+§12 already rules on three of the remaining consumers, and this section adds
+only the call site each of its rows lands at. What the consumer does at
+`δ > 0` is that row's to state, and is deliberately not restated here:
+`survey.go`'s `prismWall` and `prismMinRadius` are §12's "Surveys
+(wall/undercut/min-radius)" row, `extrude.go`'s `extentAlong` is its
+"`ThroughAll` / `ThroughAllSide`" row, and `clearance_geom.go`'s
+`addPrismFaces` is its "Clearance kernel" row.
+
+No §12 row rules on the two remaining consumers, and this section owns them.
+Each withholds its answer rather than measure the recorded section as the one
+it denotes:
+
+- `interference.go`'s `analyticBodiesEqual` withholds the equal-records
+  set-identity certificate: two records being equal says nothing about two
+  sets each record is only within its own `δ` of.
+- `fillet.go`'s `requireExactSection` refuses the receiver for
+  `Fillet`/`Chamfer`/`Shell` with `ErrUnsupported`, since a rewrite of that
+  section has no proven displacement of its own.
 
 ### boolean.go
 
