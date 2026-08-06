@@ -153,15 +153,18 @@ func TestSingleSignPolygonTurnsProveNoCurvatureSign(t *testing.T) {
 		require.Equal(t, 1, turn.Sign(), "polygon turn %d must be strictly positive", i)
 	}
 	// Both magnitudes are pinned, not just the signs, because §6.5 quotes them
-	// ("1, and about 1/10"). The first is fixed a second time by the K(0)
-	// assertion below — K(0) = 18*turn0 identically for a degree-3 Bezier over
-	// [0, 1] — and the second is free otherwise. NEVER assert an exact 1/10
-	// here: the recorded U = 0.9 lifts to its own binary float64, which is
-	// exactly why the document says ABOUT 1/10.
-	require.Equal(t, "1", turns[0].RatString())
+	// ("1, and ~1/10"). The first is fixed a second time by the K(0) assertion
+	// below — K(0) = 18*turn0 identically for a degree-3 Bezier over [0, 1] —
+	// and the second is free otherwise. The doc marks only the second one
+	// approximate, and each is asserted the way it is quoted: exactly, and at
+	// the precision of the quoted figure with the exact lifted rational beside
+	// it. NEVER assert an exact 1/10 here — the recorded U = 0.9 lifts to its
+	// own binary float64, which is why the document writes that figure as
+	// approximate.
+	require.Equal(t, "1", turns[0].RatString(), "§6.5 quotes the first turn unmarked, so it must be exactly 1")
 	require.Equal(t, "900719925474099/9007199254740992", turns[1].RatString())
 	second, _ := turns[1].Float64()
-	require.InDelta(t, 0.1, second, 1e-12, "the second turn is the doc's 'about 1/10'")
+	require.InDelta(t, 0.1, second, 1e-12, "the second turn is the doc's approximate 1/10")
 
 	k := curvatureNumerator(spans[0])
 	at0 := rpEval(k, big.NewRat(0, 1))
@@ -197,13 +200,24 @@ func TestInteriorCuspFoldsToAStrictSignWithoutRegularity(t *testing.T) {
 	require.False(t, reversed)
 	require.Len(t, spans, 1, "a clamped 4-control SplineSeg converts to exactly one span")
 
-	// K = -3/2*(2t - 1)^2, up to the float64 lift of -1/12.
+	// §6.5 quotes K as approximately -3/2*(2t - 1)^2, and it is approximate for
+	// the reason that section states once: the recorded -1/12 enters as its own
+	// binary float64 a, so the true K is 18*(a - 1/4)*(t - 1/2)^2 and its
+	// leading factor misses -6 by about 8.3e-17. The quoted figure is asserted
+	// at the precision it states; the exact lifted rationals are pinned beside
+	// it, so a conversion that rounded anywhere would fail here.
 	k := rpTrim(curvatureNumerator(spans[0]))
 	require.Len(t, k, 3)
 	for i, want := range []float64{-1.5, 6, -6} {
 		got, _ := k[i].Float64()
-		require.InDelta(t, want, got, 1e-12, "K's monomial coefficient %d", i)
+		require.InDelta(t, want, got, 1e-12, "K's monomial coefficient %d must match the doc's quoted figure", i)
 	}
+	require.Equal(t, []string{
+		"-216172782113783805/144115188075855872",
+		"216172782113783805/36028797018963968",
+		"-216172782113783805/36028797018963968",
+	}, []string{k[0].RatString(), k[1].RatString(), k[2].RatString()},
+		"the exact lifted coefficients: 18*(a - 1/4) with a the float64 lift of -1/12")
 
 	// Top level: MIXED, so §6.5 subdivides rather than publishing.
 	top := bernsteinCoefficients(k, 3)
@@ -305,15 +319,17 @@ func TestFitPointsAreNeitherTheChainNorItsHull(t *testing.T) {
 		control, _ := spans[0][i].v.Float64()
 		require.Less(t, control, floor, "converted control %d must leave the recorded hull", i)
 	}
+	// §6.5 marks these two interior controls approximate and quotes them to four
+	// decimals, so they are asserted at exactly that precision.
 	b1, _ := spans[0][1].v.Float64()
 	b2, _ := spans[0][2].v.Float64()
-	require.InDelta(t, -0.0790, b1, 1e-4)
-	require.InDelta(t, -0.1580, b2, 1e-4)
+	require.InDelta(t, -0.0790, b1, 1e-4, "the doc's approximate -0.0790, at the precision it states")
+	require.InDelta(t, -0.1580, b2, 1e-4, "the doc's approximate -0.1580, at the precision it states")
 
-	// The two ends of that same quoted four-control figure are exact zeros, and
-	// they are pinned exactly rather than through the sampled minimum: the
-	// minimum's own delta has enough slack that an endpoint drift of order 1e-4
-	// would leave every other assertion here true.
+	// The two ends of that same quoted four-control figure carry no such mark,
+	// so they are exact zeros, and they are pinned exactly rather than through
+	// the sampled minimum: the minimum's own delta has enough slack that an
+	// endpoint drift of order 1e-4 would leave every other assertion here true.
 	require.Equal(t, "0", spans[0][0].v.RatString(), "the chain starts at the first fit point's own v")
 	require.Equal(t, "0", spans[0][3].v.RatString(), "the first span's joint control sits at v = 0 too")
 
@@ -326,5 +342,5 @@ func TestFitPointsAreNeitherTheChainNorItsHull(t *testing.T) {
 		minV = math.Min(minV, v)
 	}
 	require.Less(t, minV, floor, "the curve leaves the recorded fit points' hull")
-	require.InDelta(t, -0.0912, minV, 1e-4)
+	require.InDelta(t, -0.0912, minV, 1e-4, "the doc's approximate dip, at the precision it states")
 }

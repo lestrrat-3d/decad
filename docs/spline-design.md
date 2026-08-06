@@ -1238,12 +1238,23 @@ no residual is available to fall back on — a sign is not a quantity to bound
 — so an inconclusive certificate refuses rather than publishing a `convex`
 bool nothing proved, exactly as the core falsify-never-bless rule requires.
 
+**Read `≈` literally: a COMPUTED figure this section quotes without it is
+exact.** Two things round. §5.1 lifts every recorded coordinate into the
+rational its float already is, so a control written below as `0.9` or `−1/12`
+— the literal a record is built from, not the rational the record holds —
+enters as the binary float64 nearest that number, and a quantity computed from
+such a control carries the lift rather than the round value. A figure with
+more digits than are worth writing is quoted to the digits shown. Both are
+marked `≈`. `spline_convexity_internal_test.go` pins each marked figure at the
+precision its own text states and holds the exact rational there; it pins each
+unmarked one exactly.
+
 **NEVER read the control polygon's own turns instead.** A chain whose turns
 all share one sign proves nothing about the curve's curvature: the classical
 theorem needs the CLOSED control polygon convex, and an open single-sign
 chain does not give that. The cubic control chain `(0, 0)`, `(1, 0)`,
-`(−4, 1)`, `(0.9, 0)` has both its turns strictly positive — `1`, and about
-`1/10` — while its own `K` is `18` at `t = 0`, negative at `t = 5/7` and
+`(−4, 1)`, `(0.9, 0)` has both its turns strictly positive — `1`, and
+`≈ 1/10` — while its own `K` is `18` at `t = 0`, negative at `t = 5/7` and
 positive again at `t = 1`: two curvature sign changes under zero polygon-turn
 sign changes. `record.go` admits that net as a degree-3 `NURBSSeg` at unit
 weights and §5.1 converts it to exactly one span, so a polygon-turn rule would
@@ -1299,7 +1310,7 @@ one — the cusp sits at a span END — and §6.3's own interior-cusp net
 shape, with the cusp inside the span. Both are records `record.go` admits
 (§6.3), both reach this certificate, and both refuse R19 where the
 coefficient test alone publishes a bool: the interior-cusp net's
-`K = −3/2·(2t − 1)²` is MIXED at the top level and one-signed with strict
+`K ≈ −3/2·(2t − 1)²` is MIXED at the top level and one-signed with strict
 entries on every dyadic child, so a fold reading the coefficients alone calls
 it strictly `−` and publishes `convex` for an edge that doubles back on itself
 (`spline_convexity_internal_test.go` pins both nets). The refusal is a BUILD
@@ -1331,7 +1342,7 @@ not reach that kind. The recorded fit points are not that chain and do not
 even contain the curve — the `h²·m/18` terms subtract, which is exactly what
 pushes a converted control outside the recorded points' own hull. Fit points
 `(0, 0)`, `(1, 0)`, `(2, 1)`, `(3, 0)` convert to a first span whose `v`
-controls are `0`, `−0.0790`, `−0.1580`, `0`, and that span's curve dips to
+controls are `0`, `≈ −0.0790`, `≈ −0.1580`, `0`, and that span's curve dips to
 `v ≈ −0.0912`, below every recorded point's own `v`
 (`spline_convexity_internal_test.go` pins it; the parameters are sketch's own
 cumulative chord lengths, never a uniform `h`).
@@ -1617,10 +1628,12 @@ rules).
 - Assert §6.5's regularity precondition on both cusp shapes, since a
   coefficient test alone publishes a bool for each. §6.3's own interior-cusp
   net `(−1/8, 1/4)`, `(1/8, −1/12)`, `(−1/8, −1/12)`, `(1/8, 1/4)` is the
-  sharper case and must refuse R19: its `K` is `−3/2·(2t − 1)²`, whose top-level
-  Bernstein coefficients are MIXED while every dyadic child is one-signed with
-  strict entries, so the fold alone reaches a strict `−` and publishes `convex`
-  for an edge that doubles back — assert that the child coefficients really are
+  sharper case and must refuse R19: its `K` is `≈ −3/2·(2t − 1)²` under §6.5's
+  `≈` convention, whose top-level Bernstein coefficients are MIXED while every
+  dyadic child is one-signed with strict entries, so the fold alone reaches a
+  strict `−` and publishes `convex` for an edge that doubles back — assert
+  those coefficients at the precision that figure states and pin the exact
+  lifted ones beside them, and assert that the child coefficients really are
   one-signed, or the fixture cannot tell the precondition from the depth cap.
   The unit-weight cubic `(0, 0)`, `(0, 0)`, `(1/3, 0)`, `(1, 1)` must refuse
   R19 too: its `K` is one-signed with strict entries at the top level, so the
