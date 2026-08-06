@@ -1313,7 +1313,16 @@ func (in pairToleranceInputs) lengthReference(value float64) (float64, bool) {
 // boundary is a polyhedron, and a convex-hull diameter is realized at
 // vertices, so this is the TRUE diameter rather than a bound on it — the
 // strongest arm in this function, ahead of the exact carrier model that does
-// not yet cover this payload class. A PLACED loft's held vertices are no
+// not yet cover this payload class. That holds whenever the payload's delta is
+// zero, which loft_build.go decides by an exact identity-transform comparison
+// and never by a tolerance, and this arm then reports the held reading
+// UNCHANGED: no subtraction, no directed rounding, so an unplaced loft's
+// reference stays bit-identical to the one §12 PR 1 published. Rounding a zero
+// allowance outward would move a proven-exact reading in exchange for nothing,
+// which is why capBlendPayload.extentBoundedAlong's own `outward` helper
+// (capblend.go) keeps a zero-displacement candidate exact too.
+//
+// A PLACED loft's held vertices are no
 // longer provably exact (§12 PR 2a): the true diameter can differ from the
 // held one by up to 2*delta (each of the two farthest points can sit up to
 // delta from its true position), so this arm shrinks the held reading by
@@ -1341,6 +1350,9 @@ func bodyGateDiameter(ctx context.Context, body *Body) (float64, bool, error) {
 		d, ok, err := pointSetDiameterContext(ctx, payload.verts)
 		if err != nil || !ok {
 			return d, ok, err
+		}
+		if payload.delta == 0 {
+			return d, true, nil
 		}
 		shrunk := downRound(d - 2*payload.delta)
 		if shrunk <= 0 {

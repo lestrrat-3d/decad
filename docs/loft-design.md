@@ -818,7 +818,10 @@ never merely that a call ran (project rule).
   `perturbedTriangleAreaAllow`
   encloses the area change over a brute-force sweep of perturbed vertices at
   `delta`, at aspect ratios 1, 1e-3 and 1e-6. With `delta == 0` every
-  published measurement is bit-identical to PR 1's.
+  published measurement is bit-identical to PR 1's, and so is the gate
+  reference: an unplaced loft's `bodyGateDiameter` must equal its held
+  vertex-set diameter under `==`, since neither the subtraction nor the
+  outward rounding above may run on a zero allowance.
 
 ## 14. Open questions
 

@@ -474,12 +474,25 @@ func TestEvalLoftCollinearSplitKeepsTwoFacesPerCell(t *testing.T) {
 // TestLoftGateDiameterIsTheVertexDiameter proves design O1's bodyGateDiameter
 // arm: a loft body's tolerance-gate diameter is the exact diameter of its
 // own held vertex set — for the unit box, the space diagonal sqrt(3).
+//
+// The bit-identity assertion is the one that pins §12 PR 2a's zero-delta fast
+// path. An unplaced loft carries delta 0, so subtracting 2*delta changes
+// nothing while rounding the difference toward zero still costs one ulp, and
+// the InDelta comparison below is far too loose to see that: the reference
+// must equal the held vertex-set diameter EXACTLY, not merely to 1e-12.
 func TestLoftGateDiameterIsTheVertexDiameter(t *testing.T) {
 	body := evalLoftFixture(t, boxLoftPayload(t))
 	d, ok, err := bodyGateDiameter(t.Context(), body)
 	require.NoError(t, err)
 	require.True(t, ok)
 	require.InDelta(t, 1.7320508075688772, d, 1e-12) // sqrt(3)
+
+	pl := body.payload.(loftPayload)
+	require.Zero(t, pl.delta, "an unplaced loft's vertices are exact")
+	held, ok, err := pointSetDiameterContext(t.Context(), pl.verts)
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.Equal(t, held, d, "an unplaced loft's reference must be the held diameter bit-for-bit")
 }
 
 // TestLoftPlacedGateDiameterShrinksByTwiceDelta proves docs/loft-design.md
