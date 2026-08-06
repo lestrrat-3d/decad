@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"math/big"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
+	"github.com/lestrrat-3d/units"
 )
 
 // This file is PR1 of docs/prism-boolean-design.md: the analytic reduction of
@@ -17,7 +19,10 @@ import (
 // before this file existed. A sketch-split boundary also reroutes before
 // resolution accepts a candidate whenever either input carries a section
 // displacement or B's re-expression is nonidentity: either uncertainty can
-// amplify at the cut. Only once §4.2's remaining resolution finds a unique
+// amplify at the cut. A split boundary the reroute admits still charges the cut
+// parameters' OWN rounding into the result's section displacement (§7,
+// prismUnionCutDelta) — a merged section built from fragments is never exact,
+// whatever the operands were. Only once §4.2's remaining resolution finds a unique
 // candidate does a further problem become a genuine, typed refusal (§3.4,
 // §9) rather than a reroute to the mesh path.
 //
@@ -69,7 +74,7 @@ func tryPrismUnion(ctx context.Context, op OpKind, a, b *Body) (prismPayload, bo
 	if err != nil {
 		return prismPayload{}, false, err
 	}
-	merged, resolved, err := resolvePrismUnion(ctx, budget, pa, pb, reexpress)
+	merged, cutDelta, resolved, err := resolvePrismUnion(ctx, budget, pa, pb, reexpress)
 	if err != nil {
 		return prismPayload{}, false, err
 	}
@@ -89,9 +94,15 @@ func tryPrismUnion(ctx context.Context, op OpKind, a, b *Body) (prismPayload, bo
 		xform:   pa.xform,
 		// §7: operand A's coordinates are unchanged, while B's existing
 		// displacement passes through its rigid re-expression and accumulates
-		// the rounding that re-expression commits. A chained union must not
-		// discard either contribution.
-		sectionDelta: max(pa.sectionDelta, absSumUpper(pb.sectionDelta, reexpress.delta)),
+		// the rounding that re-expression commits. On top of both, every
+		// surviving CUT fragment names its endpoints by a freshly rounded
+		// parameter this union did not have before it ran, so cutDelta stands
+		// even where the two operands carried nothing at all. A chained union
+		// must not discard any of the three.
+		sectionDelta: absSumUpper(
+			max(pa.sectionDelta, absSumUpper(pb.sectionDelta, reexpress.delta)),
+			cutDelta,
+		),
 	}
 	return result, true, nil
 }
@@ -208,38 +219,42 @@ func prismUnionZIntervalMatches(pa, pb prismPayload) bool {
 	return pa.z0 == pb.z0+shift && pa.z1 == pb.z1+shift
 }
 
-// resolvePrismUnion is §4.2's hole-free select-all/merge/chain path.
+// resolvePrismUnion is §4.2's hole-free select-all/merge/chain path. It returns
+// the merged section and §7's cut displacement over it — the largest allowance
+// any surviving fragment's own cut parameters owe, zero when every survivor is a
+// whole edge.
+//
 // resolved=false (err always nil in that case) means the pair's topology is
 // unresolved (§4.4), or a split boundary can amplify either input's section
 // displacement or B's nonidentity re-expression (§3.4): the caller falls
 // back to the mesh path with no error. A non-nil error — including ctx
 // cancellation surfacing through budget — is always genuine and must
 // propagate.
-func resolvePrismUnion(ctx context.Context, budget *workBudget, pa, pb prismPayload, reexpress *prismReexpression) (ProfileRecord, bool, error) {
+func resolvePrismUnion(ctx context.Context, budget *workBudget, pa, pb prismPayload, reexpress *prismReexpression) (ProfileRecord, float64, bool, error) {
 	s, err := buildPrismUnionScene(budget, pa, pb, reexpress)
 	if err != nil {
-		return ProfileRecord{}, false, err
+		return ProfileRecord{}, 0, false, err
 	}
 	if err := budget.err(); err != nil {
-		return ProfileRecord{}, false, err
+		return ProfileRecord{}, 0, false, err
 	}
 	profiles, err := prismProfilesContext(ctx, s.Profiles)
 	if err != nil {
-		return ProfileRecord{}, false, err
+		return ProfileRecord{}, 0, false, err
 	}
 	if err := budget.err(); err != nil {
-		return ProfileRecord{}, false, err
+		return ProfileRecord{}, 0, false, err
 	}
 	if err := budget.step(); err != nil {
-		return ProfileRecord{}, false, err
+		return ProfileRecord{}, 0, false, err
 	}
 	if len(profiles) == 0 {
-		return ProfileRecord{}, false, nil // §4.4: the scene holds no bounded cell at all
+		return ProfileRecord{}, 0, false, nil // §4.4: the scene holds no bounded cell at all
 	}
 	if pa.sectionDelta != 0 || pb.sectionDelta != 0 || !reexpress.identity {
 		split, err := prismUnionProfilesHaveSplitBoundary(budget, profiles)
 		if err != nil {
-			return ProfileRecord{}, false, err
+			return ProfileRecord{}, 0, false, err
 		}
 		if split {
 			// A coordinate error in re-expressed B, or either source section's
@@ -247,7 +262,7 @@ func resolvePrismUnion(ctx context.Context, budget *workBudget, pa, pb prismPayl
 			// delta/sin(theta). This increment has no certified lower
 			// crossing-angle bound, so it cannot record the fragment with an
 			// honest displacement bound.
-			return ProfileRecord{}, false, nil
+			return ProfileRecord{}, 0, false, nil
 		}
 	}
 
@@ -266,18 +281,18 @@ func resolvePrismUnion(ctx context.Context, budget *workBudget, pa, pb prismPayl
 	counts := map[edgeKey]int{}
 	for _, p := range profiles {
 		if err := budget.step(); err != nil {
-			return ProfileRecord{}, false, err
+			return ProfileRecord{}, 0, false, err
 		}
 		if !p.Valid {
 			// RB1: a candidate region the merge depends on is invalid. Every
 			// cell in this two-operand scene is selected for Union, so any
 			// invalid cell is a genuine refusal, not an unresolved topology.
-			return ProfileRecord{}, false, fmt.Errorf(`%w: the union scene's arrangement reports an invalid region`, ErrUnsupported)
+			return ProfileRecord{}, 0, false, fmt.Errorf(`%w: the union scene's arrangement reports an invalid region`, ErrUnsupported)
 		}
 		for _, loop := range append([][]sketch.BoundaryEdge{p.Outer}, p.Holes...) {
 			for _, e := range loop {
 				if err := budget.step(); err != nil {
-					return ProfileRecord{}, false, err
+					return ProfileRecord{}, 0, false, err
 				}
 				counts[edgeKey{entity: e.Entity, t0: e.TStart, t1: e.TEnd}]++
 			}
@@ -295,7 +310,7 @@ func resolvePrismUnion(ctx context.Context, budget *workBudget, pa, pb prismPayl
 		for _, loop := range append([][]sketch.BoundaryEdge{p.Outer}, p.Holes...) {
 			for _, e := range loop {
 				if err := budget.step(); err != nil {
-					return ProfileRecord{}, false, err
+					return ProfileRecord{}, 0, false, err
 				}
 				n := counts[edgeKey{entity: e.Entity, t0: e.TStart, t1: e.TEnd}]
 				switch n {
@@ -304,37 +319,109 @@ func resolvePrismUnion(ctx context.Context, budget *workBudget, pa, pb prismPayl
 				case 2:
 					// dropped: an interior wall
 				default:
-					return ProfileRecord{}, false, nil // §4.4: not a shape this increment covers
+					return ProfileRecord{}, 0, false, nil // §4.4: not a shape this increment covers
 				}
 			}
 		}
 	}
 	if len(survivors) == 0 {
-		return ProfileRecord{}, false, nil
+		return ProfileRecord{}, 0, false, nil
 	}
 
 	chain, resolved, err := chainPrismUnionSurvivors(budget, survivors)
 	if err != nil {
-		return ProfileRecord{}, false, err
+		return ProfileRecord{}, 0, false, err
 	}
 	if !resolved {
-		return ProfileRecord{}, false, nil // §4.4: the survivors do not close into one simple loop
+		return ProfileRecord{}, 0, false, nil // §4.4: the survivors do not close into one simple loop
 	}
 
 	// Point of no return crossed within this function's own contract: every
 	// further problem (a rejected TExact fragment, §9's RB8) is genuine.
 	segs := make([]CurveSegment, len(chain))
+	cutDelta := 0.0
 	for i, e := range chain {
 		if err := budget.step(); err != nil {
-			return ProfileRecord{}, false, err
+			return ProfileRecord{}, 0, false, err
 		}
 		seg, err := recordEdge(e)
 		if err != nil {
-			return ProfileRecord{}, false, err
+			return ProfileRecord{}, 0, false, err
 		}
 		segs[i] = seg
+		d, err := prismUnionCutDelta(e, seg)
+		if err != nil {
+			return ProfileRecord{}, 0, false, err
+		}
+		cutDelta = math.Max(cutDelta, d)
 	}
-	return ProfileRecord{Outer: LoopRecord{Segments: segs}}, true, nil
+	return ProfileRecord{Outer: LoopRecord{Segments: segs}}, cutDelta, true, nil
+}
+
+// prismUnionCutDelta is §7's cut charge for one surviving boundary edge: how
+// far the point the recorded range names can sit from the crossing it denotes.
+//
+// A WHOLE edge charges nothing. Its range is the entity's own full domain, so
+// its endpoints are the entity's own recorded endpoints and this union computed
+// no coordinate for it at all.
+//
+// A Partial fragment charges cutDisplacementAllow. Its carrier is the entity's
+// unchanged defining data, but its two ends are named by TStart/TEnd — the
+// parameters sketch's arrangement COMPUTED for this pair, which are freshly
+// rounded whatever the two operands carried, and which the operands' own zero
+// displacement therefore says nothing about. That is the whole of what §7's
+// decidable zero case does not reach.
+func prismUnionCutDelta(e sketch.BoundaryEdge, seg CurveSegment) (float64, error) {
+	if !e.Partial {
+		return 0, nil
+	}
+	speed, err := carrierSpeedUpper(seg)
+	if err != nil {
+		return 0, err
+	}
+	return cutDisplacementAllow(speed), nil
+}
+
+// carrierSpeedUpper is a proven upper bound on |dP/dt| over the WHOLE of a
+// recorded line, circle or arc's own parameterisation — the factor that turns a
+// parameter allowance into a coordinate one. G4 admits only these three kinds,
+// so no other kind can reach it.
+//
+// Each bound is the parameterisation walkOf reads the segment through
+// (extrude.go): a line runs Start → End over [0, 1], so its speed is the chord;
+// a circle runs a full turn over [0, 1], so its speed is 2πR; an arc runs its
+// own sweep, which is at most a full turn, so 2πR bounds it too.
+func carrierSpeedUpper(seg CurveSegment) (float64, error) {
+	seg, err := normalizeSegment(seg)
+	if err != nil {
+		return 0, err
+	}
+	switch seg := seg.(type) {
+	case LineSeg:
+		return point2SeparationUpper(seg.Start, seg.End), nil
+	case CircleSeg:
+		r, err := seg.Radius.In(units.Millimeter)
+		if err != nil {
+			return 0, fmt.Errorf(`decad: a merged circle segment's radius is not a length: %w`, err)
+		}
+		return productUpper(twoPiUpper(), math.Abs(r)), nil
+	case ArcSeg:
+		return productUpper(twoPiUpper(), point2SeparationUpper(seg.Center, seg.Start)), nil
+	default:
+		return 0, fmt.Errorf(`%w: a %T segment has no carrier speed this evaluator states`, ErrUnsupported, seg)
+	}
+}
+
+// point2SeparationUpper bounds |b − a| for two recorded plane points. The two
+// differences are taken EXACTLY over rationals and summed, which bounds the
+// Euclidean norm because the L1 norm never falls below it. A non-finite
+// coordinate has no separation to state and answers +Inf.
+func point2SeparationUpper(a, b Point2) float64 {
+	au, av, bu, bv := floatRat(a.U), floatRat(a.V), floatRat(b.U), floatRat(b.V)
+	if au == nil || av == nil || bu == nil || bv == nil {
+		return math.Inf(1)
+	}
+	return ratL1Upper(new(big.Rat).Sub(bu, au), new(big.Rat).Sub(bv, av))
 }
 
 // prismUnionProfilesHaveSplitBoundary reports whether sketch narrowed any

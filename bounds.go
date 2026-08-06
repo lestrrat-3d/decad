@@ -36,6 +36,9 @@ import (
 //     the same identity one dimension down: the region a recorded section can
 //     move is a tube about its own recorded boundary, with
 //     sectionDisplacementLength reading the same displacement as a perimeter;
+//   - the DISPLACEMENT a recorded CUT PARAMETER puts on the point it names —
+//     the fragment endpoint slides along its own exact carrier by the parameter
+//     rounding times the carrier's speed → cutDisplacementAllow;
 //   - the AREA of ONE RULED QUAD whose cap-level chord alone is displaced (the
 //     cap-loop chamfer's own band patches, docs/modify-reach-design.md §8.4) →
 //     bandPatchAreaAllow, the same two-factor product one patch at a time
@@ -294,6 +297,49 @@ func sectionDisplacementLength(delta float64, walks int) float64 {
 	}
 	perWalk := productUpper(12, math.Nextafter(math.Pi, math.Inf(1)))
 	return productUpper(productUpper(float64(walks), perWalk), delta)
+}
+
+// cutParamUlps is the allowance, in ulps of the parameter domain [0, 1], that
+// a sketch-certified cut parameter is charged against the true parameter of the
+// crossing it names (docs/prism-boolean-design.md §7).
+//
+// It is the ONE number the analytic path's displacement rests on beyond what
+// sketch itself certifies, so it is stated here once rather than derived at a
+// call site. TExact's own claim (docs/sketch-seam-design.md §1) is that the
+// range reproduces the fragment's endpoints "to machine precision", and the
+// range comes from one closed-form crossing solve over the two entities' own
+// defining data — a short expression whose accumulated relative rounding is a
+// handful of ulps. 8 ulps of the WHOLE domain dominates a handful of ulps of any
+// t ≤ 1, and it is not a proof that sketch rounds well: it is the quantitative
+// reading decad gives the seam's precision claim, and a cut that misses it by
+// more is a sketch bug the seam's own falsifier is there to catch.
+const cutParamUlps = 8
+
+// cutDisplacementAllow bounds how far the point a recorded cut parameter names
+// sits from the true crossing point it denotes, given the carrier's own speed
+// |dP/dt| bounded above by tangentUpper.
+//
+// A cut fragment records the entity's UNCHANGED defining data and a narrowed
+// t range (docs/sketch-seam-design.md §1), so the carrier is exactly the
+// carrier the construction denotes and the whole displacement sits in the
+// parameter: the endpoint slides ALONG that carrier by at most |t − t*| ·
+// sup|dP/dt|, which cutParamUlps · ulp(1) · tangentUpper covers. Sliding along
+// a carrier is still a boundary coordinate moving, so the answer feeds the
+// section displacement every other consumer reads, not a private term.
+//
+// A non-finite carrier speed answers +Inf rather than a number: an absent bound
+// must never read as a small one, and a zero would let the displacement vanish
+// silently from every measurement that composes it.
+func cutDisplacementAllow(tangentUpper float64) float64 {
+	if isNonFinite(tangentUpper) {
+		return math.Inf(1)
+	}
+	if tangentUpper <= 0 {
+		// A carrier that does not move cannot put the point anywhere else,
+		// whatever the parameter reads.
+		return 0
+	}
+	return productUpper(cutParamUlps*ulpOf(1), tangentUpper)
 }
 
 // bandPatchAreaAllow bounds how far ONE chamfer band patch's own area

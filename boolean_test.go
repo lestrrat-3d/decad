@@ -234,8 +234,10 @@ func TestUnionDisjointCubes(t *testing.T) {
 // TestUnionCoplanarCapsBuildAnalyticPrismUnion distinguishes a same-height
 // pair's two routes. Disjoint footprints stay on the mesh path because the
 // PR1 analytic result has two lumps. Overlapping and contained analytic prisms
-// reach the analytic union and build one exact prism instead of a coplanar
-// mesh-path refusal (docs/prism-boolean-design.md §4.4).
+// reach the analytic union and build one prism instead of a coplanar mesh-path
+// refusal (docs/prism-boolean-design.md §4.4). Only the CONTAINED pair leaves
+// every boundary whole, so only it reaches §7's Exact arm; a partial overlap
+// merges cut fragments and carries their cut-parameter displacement.
 func TestUnionCoplanarCapsBuildAnalyticPrismUnion(t *testing.T) {
 	t.Run("DisjointFootprints", func(t *testing.T) {
 		doc := decad.New()
@@ -258,8 +260,9 @@ func TestUnionCoplanarCapsBuildAnalyticPrismUnion(t *testing.T) {
 		require.NoError(t, err)
 		vol, err := got.Volume()
 		require.NoError(t, err)
-		require.Equal(t, decad.Exact, vol.Exactness)
-		require.Zero(t, boundMM3(t, vol))
+		require.Equal(t, decad.Approximate, vol.Exactness)
+		require.Positive(t, boundMM3(t, vol))
+		require.Less(t, boundMM3(t, vol), 1e-9)
 		require.Equal(t, 1750.0, volumeMM(t, vol))
 		require.Len(t, got.Lumps(), 1)
 		requireBodyWatertight(t, got)
