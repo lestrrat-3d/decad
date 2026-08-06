@@ -36,6 +36,7 @@ Three tables are normative:
 | what a revolve's area needs beyond length | §6.1.1 |
 | why an undercut or radius reading is `Suspect` | §6.3 |
 | why a build refuses on a bracket it cannot decide | §6.4 |
+| how a free-form wall edge's convexity is decided, or refused | §6.5 |
 | what surface an extruded spline gets | §7 |
 | what each capability answers | Table C §8 |
 | what stays refused forever | Table R §4 |
@@ -184,6 +185,7 @@ exactly → `ErrUnrecordableProfile`.
 | **R16** | a `FitSplineSeg`'s fit points are finite but the interpolant sketch builds from them — its cumulative chord parameter or a span coefficient — is not | `ErrUnsupported` | no, §5.1.2 — a float64 range limit of sketch's own exported interpolant, not decad's to lift |
 | **R17** | a `FitSplineSeg`'s converted chain does not reach its own record's natural-end fit point — sketch's dedup (`fitChordEps`) collapsed it into its predecessor | `ErrDegenerate` | yes, §5.1.2 |
 | **R18** | a free-form directional-extreme enclosure no float64 interval holds — an end past `MaxFloat64`, or a width past it | `ErrUnsupported` | yes, §6.2 |
+| **R19** | a free-form wall edge whose chain proves no single curvature sign — a span whose speed is not proven nonzero, a span's Bernstein certificate still mixed at the depth cap, two spans or a joint in conflict, or a joint the walk reverses at | `ErrUnsupported` | no, §6.5 |
 
 <!-- R16 was challenged as narrower than the evaluator's actual refusal
 behaviour, on the theory that a stalled (non-increasing) cumulative chord
@@ -1101,14 +1103,26 @@ is accepted and reads `Suspect`:
 | origin exclusion on every subdivided hull | the turn is too wide to separate within the subdivision budget | `Undercuts` reads `Suspect` |
 
 **Neither failure refuses a BUILD.** Chording, volume, area, export and the
-boolean path read no direction cone, so a cusped section still extrudes and still
-takes part in an interference proof — the readings that need a direction are the
-only ones that go undecided. A build refusal would also refuse an ordinary spline
-whose first two control points coincide: that is zero speed at a span END, which
-costs the same two readings and nothing else. A collapsed span stands the same
-way — it costs those two readings on a body that still builds, and what refuses
-an ALL-collapsed walk at build time is §5.1's zero-length walk rule, never this
-certificate.
+boolean path read no direction cone, so nothing in this section withholds a
+body — the readings that need a direction are the only ones it leaves
+undecided, and a body it leaves undecided still takes part in an interference
+proof. A collapsed span shows the whole cost: it fails the speed floor, so it
+costs those two readings, on a body that still builds and reports its
+`Volume`. What refuses an ALL-collapsed walk at build time is §5.1's
+zero-length walk rule, never this certificate.
+
+**A zero-speed span does cost a body, under a DIFFERENT certificate.** §6.5
+proves a wall edge's `convex` bool from the curvature numerator's sign, and a
+sign of the SIGNED curvature exists only where the speed is nonzero, so §6.5
+demands the same `S > 0` this section's floor starts from — as a
+precondition, without the floor's bracketing — and refuses R19 where it is
+unproven. That refusal is a build refusal, since evaluator §3 decides `convex`
+at build and a bool has no `Suspect`. So the cusp net above, and equally an
+ordinary spline whose first two control points coincide, reaches a build
+refusal through §6.5. It never reaches one through this section, whose own
+failures still cost `Undercuts` and `MinRadius` and nothing else. The
+collapsed span keeps building because §6.5 skips it entirely: it carries no
+verdict and no joint of its own.
 
 ### 6.4 A build-time comparison a bracket cannot decide
 
@@ -1141,6 +1155,321 @@ stop reads its coordinate as exact and a wider refusal only over-refuses,
 never fabricates a dependency — and narrowing it to the straddle test itself
 is deferred to a later step under this same non-permanent row. The §4.1
 analytic-corner slice's audit gate is not implemented yet (P10).
+
+### 6.5 A wall edge's convexity — proven from the curvature numerator's Bernstein coefficients, or refused
+
+Evaluator §3 decides a wall edge's `convex` bool without ever measuring a 3D
+dihedral: a circular wall reads its own turn (counter-clockwise convex,
+clockwise concave), and a straight wall — having no turn of its own — reads
+its loop's role instead. Neither test reaches a free-form wall. Its curve's
+signed curvature is not fixed the way a circle's or a line's is — it can
+change sign INSIDE one recorded span — so neither `true` nor `false` is a
+fact about the curve in general, and Table F's per-kind tier says nothing
+about it either: a tier decides what a MOMENT may claim, never what a
+boundary sign is.
+
+**This section is TOTAL over what §5.1's conversion produces.** Its subject is
+that conversion's own output and nothing wider: a CHAIN of polynomial Bézier
+spans of degree `p ≥ 1`, each holding `p + 1` exact rational control points,
+beside the reversal flag `freeformBezierSpans` reports. Every span and every
+joint such a chain can hold ends below in a stated verdict or a stated
+refusal. Table K enumerates them, and a shape reaching this section that Table
+K does not name is a gap in this section rather than a licence to read a
+coefficient set no clause defines.
+
+**Table K — every shape §5.1's conversion can hand this section**
+
+| Shape | Where it lands |
+|---|---|
+| a span of degree `p = 1` | `C″ ≡ 0`, so `K ≡ 0` exactly: a degree-`0` Bernstein form holding one coefficient, that coefficient `0` → verdict `0` |
+| a span of degree `p = 2` | `K` is the constant `4·cross(ΔP₀, ΔP₁)`, carried at the STATED degree `2p − 3 = 1` as two equal coefficients |
+| a span of degree `p ≥ 3` | `K` at the stated degree `2p − 3` |
+| a COLLAPSED span | no verdict and no joint of its own; the chain skips it |
+| two or more CONSECUTIVE collapsed spans | skipped as one RUN, whose neighbours pair across the whole run |
+| a collapsed run at an open chain's FIRST or LAST position | no pair to make, so no joint is formed and the run contributes nothing |
+| a chain of exactly ONE span | the joint set is EMPTY and the fold over it is the identity `0`, so the chain's verdict is that span's own |
+| a chain whose every span is collapsed | never reaches this section — the zero-length walk is R14, `ErrDegenerate` (§5.1) |
+| a zero-length control edge at a span's START | `S(t_lo) = 0`: the endpoint value paired with the root count refuses, R19 |
+| a zero-length control edge at a span's END | `S(t_hi) = 0`: the half-open count itself refuses, R19 |
+| a zero-length control edge INTERIOR to a span | admitted: the speed need not vanish anywhere, and only a span's FIRST and LAST control edges are ever read |
+| the joint a SUBDIVISION creates | verdict `0`, known from the split rather than folded |
+| a chain that CLOSES on itself (`ClosedSplineSeg`) | the closing joint is interior to that one wall edge and folds like every other |
+| a walk recorded in the REVERSE sense | the chain folds unreversed and the verdict is negated once at the end |
+| a `FitSplineSeg`'s converted chain | always cubic spans (§5.1.2), so no degenerate degree arrives from that kind |
+| a Tier B or Tier C span | never reaches this section — R10 refuses the build first |
+
+**The certificate is Bernstein positivity on the curvature numerator.** The
+sign of a curve's signed curvature is the sign of `K = u′v″ − v′u″`, the
+curvature NUMERATOR §6.2 already names, and on a polynomial Bézier span of
+degree `p ≥ 2` (Tier A, Table F) `K` is itself a polynomial of degree
+`≤ 2p − 3` with exact rational coefficients. Both factors of each product are
+Bernstein forms of the span's own control points — the hodograph §6.2 names,
+control points `p·ΔP_i` of degree `p−1`, and its own hodograph in turn,
+control points `p(p−1)·Δ²P_i` of degree `p−2` — and the Bernstein
+coefficients of a PRODUCT of two Bernstein forms are a binomial convolution
+of the factors' own, so `K`'s Bernstein form over the span is exact and
+rational with no conversion to the monomial basis and no rounding anywhere.
+
+**The degree the coefficients are carried at is the STATED one, and at `p = 1`
+that degree is `0`.** A degree-1 span holds a 2-point net, which has no second
+difference at all, so the `p(p−1)·Δ²P_i` factor above does not exist and
+`2p − 3` names no degree: `C″ ≡ 0` there, `K` is identically zero, and the
+span IS a straight segment. Carry it as a degree-`0` Bernstein form holding
+one coefficient, that coefficient exactly `0`, which the all-zero rule below
+reads as verdict `0`. That is an ordinary admitted input rather than an edge
+case: `record.go`'s `validateNURBSSegmentSizes` refuses only `Degree < 1`, and
+Table F puts a unit-weight `NURBSSeg` in Tier A whatever its degree, so a
+3-control degree-1 record converts to two degree-1 spans and reaches this
+section. Above `p = 1` the coefficient array's length is fixed by the stated
+degree `2p − 3` regardless of a vanishing leading coefficient, and NO verdict
+depends on `K`'s true degree: a `p = 2` span's `K` is the constant
+`4·cross(ΔP₀, ΔP₁)` — one degree below the stated bound, and exactly `4` times
+that span's lone control-polygon turn — carried as the two equal Bernstein
+coefficients of a degree-1 form, whose signs are that constant's own
+(`spline_convexity_internal_test.go` pins both cases).
+
+**The span's speed must be proven nonzero BEFORE a single coefficient is
+read.** `sign(K)` is the signed curvature's own sign only where the speed is
+nonzero: signed curvature is `K/|C′|³`, so a parameter with `C′(t) = 0`
+carries no curvature sign at all, and the wall extruded through that point
+carries no normal either. `K` stays perfectly well behaved there, so the
+coefficient test cannot see the cusp on its own — it reads a strict sign off
+a span that has none and publishes `convex` for a wall edge the curve doubles
+back on. So run §6.3's own speed polynomial on the span first, and read no
+coefficient until it closes:
+
+- `S(t) = u′² + v′²` is a polynomial with exact rational coefficients (§6.3)
+  and `S ≥ 0` by construction, so `S` with no root on the CLOSED span is
+  `S > 0` on it.
+- `ratPoly`'s Sturm chain (`clearance_poly.go`) counts roots on the HALF-OPEN
+  `(t_lo, t_hi]`, so pair a count of `0` with `S(t_lo) ≠ 0` and the closed
+  span is covered. That pairing is not a formality: a net whose first two
+  control points coincide has its only root exactly at `t_lo`, which a
+  half-open count alone reports as no root at all.
+- a nonzero count, or a zero at `t_lo`, leaves the span's speed unproven.
+  Refuse, R19.
+- `t_hi` needs no clause of its own. The count's interval is half-open at the
+  LOW end and CLOSED at `t_hi`, so a span whose LAST control edge has zero
+  length — `S(t_hi) = p²·|ΔP_{p−1}|²` — is a root the count already sees, while
+  the same edge at the span's START is what the endpoint value catches. Each
+  end is covered by a different half of the same test, which is why both halves
+  are stated.
+- a zero-length control edge INTERIOR to a span makes `S` vanish nowhere in
+  general, and this precondition admits such a span. It is right to: the tangent
+  is defined across the whole closed span. `S(t_lo) = p²·|ΔP₀|²` and
+  `S(t_hi) = p²·|ΔP_{p−1}|²`, so a span that reaches a verdict at all has its
+  FIRST and LAST control edges already proven nonzero, and those are the only
+  two edges any rule below reads.
+
+This is the same machinery §6.3's speed floor runs and a WEAKER demand on it:
+the floor brackets `S`'s minimum to publish a numeric `s_min`, while this
+certificate needs only that `S` never vanishes, so it stops at the root count
+and brackets nothing. It also runs ONCE per span, before any subdivision: a
+dyadic child's curve is a sub-arc of its parent's, so it inherits the
+parent's proven nonzero speed and never retests it.
+
+A COLLAPSED span is the one span the precondition does not refuse, because it
+is the one span whose coefficients are never read: it has no verdict and no
+joint of its own, and the joint rule below is what pairs across it. A chain
+whose spans ALL collapse never arrives here at all — that walk has zero length
+and is refused R14, `ErrDegenerate`, by §5.1's own rule before any wall edge is
+decided — so the fold below is never asked for a verdict over an empty span
+set.
+
+Now read `K`'s coefficients:
+
+- every coefficient `≥ 0` and at least one strictly `> 0` → by the convex-hull
+  property a Bernstein form's values lie inside the convex hull of its own
+  coefficients, so `K ≥ 0` across the WHOLE span and `K` is not the zero
+  polynomial. The span never turns the other way. Verdict `+`.
+- the mirror — every coefficient `≤ 0`, at least one strictly `< 0` →
+  verdict `−`.
+- every coefficient exactly `0` → `K ≡ 0`, which makes `C′` and `C″` parallel
+  across the span — the precondition above has already proven the speed
+  nonzero there — and so confines the span to a single straight LINE.
+  Verdict `0`.
+- MIXED signs → INCONCLUSIVE, and never a disproof: the hull over-estimates
+  the range, so a mixed coefficient set is consistent with a `K` that keeps
+  one sign throughout. Subdivide the span at its midpoint by exact dyadic de
+  Casteljau — the same split `spline_length.go` already runs — and fold the
+  children's verdicts. The cap is a FIXED depth rather than a measured target,
+  and it is `freeformLengthDepth`, the same constant §6.1's own bracket
+  subdivides to (`spline_length.go` owns its value). A child still mixed at
+  that depth refuses: Table R row **R19**, `ErrUnsupported`.
+
+**The joint a SUBDIVISION creates is known `0`, not folded.** A midpoint de
+Casteljau split leaves the left child's last control edge and the right
+child's first control edge the IDENTICAL vector — both are half of
+`b₁^{p−1} − b₀^{p−1}`, the last blend the split makes — so the cross is
+exactly zero and the two tangents point the same way, which is verdict `0`
+under the joint rule below. Splitting the SPAN and splitting `K`'s own
+Bernstein coefficients agree on every sign too: a child's `K` is its parent's
+restricted `K` scaled by `1/8` per level, a POSITIVE factor, since halving the
+parameter halves `C′` and quarters `C″`. So a fold over the children needs no
+joint term of its own, and either route to the children's coefficients reads
+the same verdict (`spline_convexity_internal_test.go` pins both).
+
+This proves a sign; it never measures one. Nothing here samples `C(t)`, and
+no residual is available to fall back on — a sign is not a quantity to bound
+— so an inconclusive certificate refuses rather than publishing a `convex`
+bool nothing proved, exactly as the core falsify-never-bless rule requires.
+
+**Read `≈` literally: a COMPUTED figure this section quotes without it is
+exact.** Two things round. §5.1 lifts every recorded coordinate into the
+rational its float already is, so a control written below as `0.9` or `−1/12`
+— the literal a record is built from, not the rational the record holds —
+enters as the binary float64 nearest that number, and a quantity computed from
+such a control carries the lift rather than the round value. A figure with
+more digits than are worth writing is quoted to the digits shown. Both are
+marked `≈`. `spline_convexity_internal_test.go` pins each marked figure at the
+precision its own text states and holds the exact rational there; it pins each
+unmarked one exactly.
+
+**NEVER read the control polygon's own turns instead.** A chain whose turns
+all share one sign proves nothing about the curve's curvature: the classical
+theorem needs the CLOSED control polygon convex, and an open single-sign
+chain does not give that. The cubic control chain `(0, 0)`, `(1, 0)`,
+`(−4, 1)`, `(0.9, 0)` has both its turns strictly positive — `1`, and
+`≈ 1/10` — while its own `K` is `18` at `t = 0`, negative at `t = 5/7` and
+positive again at `t = 1`: two curvature sign changes under zero polygon-turn
+sign changes. `record.go` admits that net as a degree-3 `NURBSSeg` at unit
+weights and §5.1 converts it to exactly one span, so a polygon-turn rule would
+publish `convex` for a wall whose curvature changes sign twice. The Bernstein
+certificate above refuses it instead, and subsumes the polygon test wherever
+the polygon test would have been right
+(`spline_convexity_internal_test.go` pins both facts).
+
+**The verdicts fold, and `0` is the identity.** The proof runs PER SPAN, so
+fold a subdivided span's children together, then fold every span of the chain
+together with every JOINT between consecutive spans: `0` folds into anything
+and leaves it unchanged, `+` folds with `+` and `−` with `−`, and `+` meeting
+`−` is a curvature sign change the chain genuinely has — refuse, R19, exactly
+as an undecided child does. Folding the joints in is not optional: a chain of
+individually convex spans can still turn the other way where two spans meet,
+so a per-span proof alone would publish a bool the chain does not have.
+
+**What the fold runs over, at both ends of the chain.** A chain of exactly ONE
+span has an EMPTY joint set, and the fold over an empty set is its identity
+`0`, so that chain's verdict is its own span's — no clause treats a single span
+specially. A chain that CLOSES on itself folds one joint MORE than an open one:
+a `ClosedSplineSeg` converts to `n` spans for `n` control points (§5.1) and is
+one wall edge whose curve has no free ends, so the closing joint between the
+last span and the first is INTERIOR to that edge and folds exactly like every
+other. Skipping it would publish a bool the closed walk does not have, the same
+way skipping an interior joint would. An open chain's joint count is one below
+its span count; a closed chain's equals it.
+
+**A joint's own verdict.** At each joint form the cross product of the
+incoming span's last NONZERO control edge with the outgoing span's first
+NONZERO control edge. A Bézier's one-sided tangent DIRECTION is its first
+nonzero control edge, §5.1 makes every control edge exactly rational, and
+consecutive spans share the joint point exactly (§5.1), so the cross product
+is the joint's own turn and its sign is never a tolerance call. A positive or
+negative cross is verdict `+` or `−`. A ZERO cross with the two tangents
+pointing the same way is verdict `0` — parallel tangents through a shared
+point turn off no line. A zero cross with the two tangents pointing OPPOSITE
+ways is a reversal, where the walk doubles back on itself and no curvature
+sign covers the joint at all: refuse, R19. On a span the precondition admitted
+the first and last control edges are already nonzero (above), so the word
+NONZERO here carries the collapsed-span skip below and never a search inside an
+admitted span.
+
+A span with no nonzero control edge is a COLLAPSED span (§5.1) — one point, no
+direction — and supplies no joint of its own: skip it and pair its neighbours
+across it. Two or more CONSECUTIVE collapsed spans are skipped as one RUN, and
+the pairing crosses the WHOLE run: a rule skipping a single span would pair a
+neighbour with the next collapsed span, which has no direction to cross with,
+and a degree-1 net carrying three coincident controls produces exactly that pair
+of adjacent collapsed spans. A run at an open chain's FIRST or LAST position has
+no pair to make, and none is made: the chain's own ends are where this wall edge
+meets a DIFFERENT one, which evaluator §3 decides on its own terms, so such a
+run contributes nothing and refuses nothing. On a chain that closes on itself
+the same run pairs around the closing joint instead.
+
+**Three outcomes, and they are exhaustive.**
+
+- chain verdict `+` or `−` → the wall edge's `convex` bool is set from that
+  sign under the orientation convention below. A STRICT sign is what sets the
+  bool, and only that.
+- chain verdict `0` → every span lies on one line and no joint turns off it,
+  so the chain IS a straight walk and evaluator §3's straight-wall rule
+  decides it by its loop's role (outer convex, hole concave). A net visiting
+  only two distinct positions lands here by the same rule rather than by a
+  case of its own, and so does a collinear net of any length: the degree-2
+  `NURBSSeg` on `(0, 0)`, `(1, 0)`, `(2, 0)` at unit weights — three DISTINCT
+  positions, and `record.go` gates a net's shape nowhere — has `K ≡ 0` and
+  takes the loop-role rule (`spline_convexity_internal_test.go` pins it). A
+  chain of degree-1 spans lands here whenever no joint of it turns, since every
+  such span's `K` is identically zero by the degree rule above; one whose joints
+  DO turn takes its sign from those joints exactly as any other chain does, and
+  is not a straight walk.
+- anything else — a span whose speed the root count does not prove nonzero, a
+  span still mixed at the depth cap, two verdicts in conflict, a reversing
+  joint → R19, `ErrUnsupported`.
+
+**What the precondition costs, plainly.** A section carrying a cusp does not
+build. Two coincident adjacent control points are the cheapest way to record
+one — the cusp sits at a span END — and §6.3's own interior-cusp net
+`(−1/8, 1/4)`, `(1/8, −1/12)`, `(−1/8, −1/12)`, `(1/8, 1/4)` is the other
+shape, with the cusp inside the span. Both are records `record.go` admits
+(§6.3), both reach this certificate, and both refuse R19 where the
+coefficient test alone publishes a bool: the interior-cusp net's
+`K ≈ −3/2·(2t − 1)²` is MIXED at the top level and one-signed with strict
+entries on every dyadic child, so a fold reading the coefficients alone calls
+it strictly `−` and publishes `convex` for an edge that doubles back on itself
+(`spline_convexity_internal_test.go` pins both nets). The refusal is a BUILD
+refusal because evaluator §3 decides `convex` at build and a bool has no
+`Suspect` to fall back on — this is the one place a zero-speed span costs a
+body, and §6.3's own two certificates still cost only their two `Verify`
+readings. Table R marks R19 non-permanent for exactly this kind of case: a
+later increment that splits a wall edge at its cusp gives each piece a
+curvature sign, and nothing here forecloses it.
+
+**The orientation convention, stated explicitly.** The sign that reaches the
+bool is the turn in the LOOP'S OWN WALK direction, never the recorded
+segment's parameter direction. The profile walk carries the material on its
+left — outer loop counter-clockwise, every hole clockwise (evaluator §3, §4)
+— and a counter-clockwise turn is convex, a clockwise one concave, the
+identical convention the circular wall's own-turn test already fixes. Where
+the recorded walk runs against the curve's natural sense — the reversal
+`freeformBezierSpans` already reports beside its spans — NEGATE the chain's
+verdict before reading it: reversing a span's parameter negates `C′` and
+leaves `C″` unchanged, so it negates `K`.
+
+**The negation is ONE operation at the end, over the UNREVERSED chain's own
+fold.** `freeformBezierSpans` returns the same spans in the same order whatever
+the recorded range order is, and reports the reversal beside them, so every span
+verdict and every joint cross product is computed on that natural chain and the
+reversal moves nothing but the sign of the answer
+(`spline_convexity_internal_test.go` pins the identical chain under both range
+orders). Negating `0` is `0`, so a straight walk recorded in either sense takes
+the loop-role rule; and a refusal is not a sign to negate — R19 stands under
+either order.
+
+**Every Tier A kind's chain is the CONVERTED one, `FitSplineSeg` included.**
+The certificate reads §5.1's own exact-rational Bézier control chain and
+never a recorded net, and the difference is not cosmetic: `FitSplineSeg`
+records no control points at all. Its record holds the points sketch's
+interpolant passes THROUGH (§5.1.2), and §5.1.2's closed form is what turns
+them into control points, so a rule phrased over recorded control points does
+not reach that kind. The recorded fit points are not that chain and do not
+even contain the curve — the `h²·m/18` terms subtract, which is exactly what
+pushes a converted control outside the recorded points' own hull. Fit points
+`(0, 0)`, `(1, 0)`, `(2, 1)`, `(3, 0)` convert to a first span whose `v`
+controls are `0`, `≈ −0.0790`, `≈ −0.1580`, `0`, and that span's curve dips to
+`v ≈ −0.0912`, below every recorded point's own `v`
+(`spline_convexity_internal_test.go` pins it; the parameters are sketch's own
+cumulative chord lengths, never a uniform `h`). That closed form emits one
+CUBIC Bézier per interval between consecutive ACTIVE fit points, four control
+points every time, so every span it produces has `p = 3` and no degenerate
+degree reaches this section from that kind.
+
+**Only Tier A spans reach this section.** §5.1's conversion emits polynomial
+Bézier spans and nothing else: a `NURBSSeg` with unequal weights is Tier C
+and a `ConicSeg` or whole `EllipseSeg` is Tier B, and each of those refuses a
+BUILD at R10 before any wall edge is decided. So every chain §6.5 reads is
+polynomial, `K` is a polynomial, and this section needs no rational column of
+its own the way §6.2's rows do.
 
 ## 7. `NURBSSurface` and `NURBSCurve`
 
@@ -1208,7 +1537,7 @@ every walk of the section is itself exactly rational (§3).
 | Capability | Free-form reach | Construction |
 |---|---|---|
 | `ProfileRecord.Area`/`Centroid`/`SecondMoments` | Tier A exactly rational, rounded once; B/C proven interval | §5 |
-| `Extrude` | Tier A section; `Volume` from the Tier A rational, `Area`/`Box` bounded | §6.1 length, §6.2 extremes, §7 surfaces; a through-all stop reading the bracket is §6.4 |
+| `Extrude` | Tier A section; `Volume` from the Tier A rational, `Area`/`Box` bounded | §6.1 length, §6.2 extremes, §7 surfaces; a through-all stop reading the bracket is §6.4; a wall edge's convexity is §6.5 |
 | `Tessellate`, `STL`, `OBJ` | every section `Extrude` builds | §6.2 sagitta; rides the existing prism path, NOT tessellation T5 |
 | `Union`/`Cut`/`Intersect` | every body `Extrude` builds, `Faceted` output as always | free once chording lands — the mesh boolean reads triangles, not kinds |
 | interference proof | every body `Extrude` builds | free once chording lands — read-only mesh intersection already serves faceted pairs |
@@ -1276,7 +1605,7 @@ half-silent. These stages do not consume a global evaluator increment number.
 | **P2** | Bézier conversion, exact Tier A moments, the §5.2 budget | `ProfileRecord.Area`/`Centroid`/`SecondMoments` answer for Tier A, bounded by one rounding. No new types |
 | **P3** | walk-kind discriminant across every `segmentWalk` consumer | none — behaviour preserved |
 | **P4a** | §6.2 row 1's directional-extreme bracket, wired into the prism bounds reading behind the existing refusal wrappers | none — R6 still stands, so a free-form prism is reachable only from internal tests; `extentAlongWork`'s R11 gate is live but wider than §6.4's straddle rule (any nonzero bracket bound refuses, not only one that straddles the sketch plane), and R18 is live on the enclosure-to-float64 conversion the bracket publishes through |
-| **P4b** | `NURBSSurface`/`NURBSCurve`, free-form extrude side faces, §6.1 length brackets, `NormalAt` refusal, §6.4's own straddle-narrowed stop gate | Tier A free-form prisms build, `FitSplineSeg` walks among them since P4b is where R6's build refusal lifts (§5.1.2); `Volume` from the Tier A rational, `Area`/`Box` bounded. A Tier B or C section is R10; an undecidable through-all stop is R11 |
+| **P4b** | `NURBSSurface`/`NURBSCurve`, free-form extrude side faces, `NormalAt` refusal, §6.4's own straddle-narrowed stop gate, §6.5's wall-edge convexity proof and its R19 refusal | Tier A free-form prisms build, `FitSplineSeg` walks among them since P4b is where R6's build refusal lifts (§5.1.2); `Volume` from the Tier A rational, `Area`/`Box` bounded. A Tier B or C section is R10; an undecidable through-all stop is R11; a wall edge whose curvature sign the chain does not prove is R19 |
 | **P5** | free-form chording with proven sagitta + area slack | `Tessellate`/`STL`/`OBJ`, booleans, interference proof. Wall reading explicitly `Suspect` |
 | **P6** | §6.3's speed floor and origin-exclusion certificates, hodograph normal cones, bracketed curvature extremes | `Undercuts` and `MinRadius` each answer where the certificates that reading needs close, and read `Suspect` per §6.3's cost table where they do not |
 | **P7** | certified branch-and-bound inscribed-disk interval | `MinWallThickness` answered, with its own convergence evidence |
@@ -1351,22 +1680,27 @@ rules).
   passes only by sign accident, so assert the clamp directly: the first level's
   lower bound is `0`, and it rises once subdivision lifts every sub-span's
   `r_lo` to non-negative.
-- Assert both §6.3 certificates by the readings they gate. On the cusp net
-  `(−1/8, 1/4)`, `(1/8, −1/12)`, `(−1/8, −1/12)`, `(1/8, 1/4)`: the hodograph
-  hull contains the origin, subdivision never separates it, `Undercuts` and
-  `MinRadius` read `Suspect`, and the same body still reports its `Volume` and
-  tessellates — a survey that instead returns an empty `Undercuts` list on that
-  body is the silent pass §8.1 forbids, and must fail the test. On a cusp-free
-  span whose FIRST hodograph hull still contains the origin (a wide turn),
-  subdivision must reach origin exclusion and report a proper cone. On a span
-  with a coincident first control pair — zero speed at the span END — the same
-  two readings are `Suspect` while the build succeeds. On a walk carrying ONE
-  collapsed span — four coincident controls inside a longer clamped net, so `S`
-  is the zero polynomial there while the walk's own length stays positive — the
-  speed floor must FAIL, those two readings must read `Suspect`, and the body
-  must still build and report its `Volume`. A certificate that reads the isolated
-  root count alone reports a floor on that span and passes silently, so it must
-  fail this test.
+- Assert both §6.3 certificates by the readings they gate, and take the
+  body-level half of that on the ONE-COLLAPSED-SPAN walk below, which is the
+  fixture §6.5 leaves buildable — §6.5 skips a collapsed span rather than
+  refusing it, so that walk builds, while a section carrying a cusp does not
+  build at all. On the cusp net `(−1/8, 1/4)`, `(1/8, −1/12)`,
+  `(−1/8, −1/12)`, `(1/8, 1/4)`: the hodograph hull contains the origin and
+  subdivision never separates it, so both
+  certificates fail. That net has no body to read either reading off — §6.5
+  refuses its wall edge R19 — so assert the certificates themselves there, and
+  assert the same for a coincident first control pair (zero speed at the span
+  END). On a cusp-free span whose FIRST hodograph hull still contains the
+  origin (a wide turn), subdivision must reach origin exclusion and report a
+  proper cone. On a walk carrying ONE collapsed span — four coincident controls
+  inside a longer clamped net, so `S` is the zero polynomial there while the
+  walk's own length stays positive, and §6.5 skips the span rather than
+  refusing the body — the speed floor must FAIL, `Undercuts` and `MinRadius`
+  must read `Suspect`, and the body must still build, report its `Volume` and
+  tessellate. A survey that instead returns an empty `Undercuts` list on that
+  body is the silent pass §8.1 forbids, and must fail the test, and a
+  certificate that reads the isolated root count alone reports a floor on that
+  collapsed span and passes silently, so it must fail this test too.
 - Assert the §6.3 speed floor's `W_max⁴` division on a RATIONAL span whose
   weights are not all equal, since the numerator floor alone errs in the UNSAFE
   direction. The degree-1 controls `(0, 0)` and `(1, 0)` at weights `1, 2` are
@@ -1382,6 +1716,58 @@ rules).
   against one the interval provenly undercuts reads `Violating` at any
   coarseness (§8.1). A test covering only the certificate branch cannot tell the
   straddle rule from a certificate check.
+- Assert §6.5's wall-edge convexity certificate by the bool it publishes and by
+  the refusal it withholds one with, on records `record.go` admits. A chain
+  whose every span closes on one strict sign publishes `convex` from that sign
+  under the loop's own walk orientation, and the same section recorded in the
+  reverse sense publishes the opposite bool. A chain whose control-polygon
+  turns all share one sign while its own curvature does not — the cubic net
+  `(0, 0)`, `(1, 0)`, `(−4, 1)`, `(0.9, 0)` — must refuse R19, so a
+  certificate reading the polygon's turns fails the test. A collinear net —
+  degree 2 on `(0, 0)`, `(1, 0)`, `(2, 0)`, whose `K` is the zero polynomial —
+  must take evaluator §3's loop-role rule and publish a bool rather than
+  refuse. Two individually one-signed spans meeting at a joint that turns the
+  other way must refuse R19, so a per-span proof that skips the joints fails
+  the test. A test covering only the refusal cannot tell the certificate from
+  a blanket free-form refusal.
+- Assert §6.5's Table K on the shapes §5.1's conversion actually produces, since
+  a rule written for the cases its author thought of reads as total until the
+  next admitted record arrives. The DEGREE-1 row is the one a coefficient rule
+  stated for `p ≥ 2` alone cannot serve: the unit-weight `NURBSSeg` on
+  `(0, 0)`, `(1, 0)`, `(1, 1)`, degree 1, knots `[0, 0, 1, 2, 2]`, converts to
+  TWO degree-1 spans, each with `K` the zero polynomial and `S` the nonzero
+  constant `1` — so each span is verdict `0` — while the joint between them
+  crosses `+1` and carries the chain's whole verdict. Assert the span count, the
+  zero `K`, the root count beside its endpoint value, and that cross. Assert the
+  DEGREE-2 constant beside it — `4·cross(ΔP₀, ΔP₁)`, which is `4` on `(0, 0)`,
+  `(1, 0)`, `(1, 1)` — at the STATED degree `2p − 3 = 1` and at the degree its
+  true `K` has, so an array sized from the true degree cannot pass. Assert the
+  CONSECUTIVE collapsed run on the degree-1 net whose three coincident controls
+  produce two adjacent collapsed spans: the surviving neighbours pair across the
+  whole run and cross `+1`, where a rule skipping one span at a time pairs a
+  neighbour with a span that has no direction at all. Assert the SUBDIVISION
+  joint — a midpoint split leaves the left child's last control edge and the
+  right child's first the IDENTICAL vector, and the children's coefficients
+  under a span split and under a Bernstein split differ only by the positive
+  factor `1/8`. Assert the REVERSAL is one negation over an unreversed chain:
+  the same record with `TStart` and `TEnd` exchanged converts to the identical
+  spans in the identical order, with the reversal reported beside them.
+- Assert §6.5's regularity precondition on both cusp shapes, since a
+  coefficient test alone publishes a bool for each. §6.3's own interior-cusp
+  net `(−1/8, 1/4)`, `(1/8, −1/12)`, `(−1/8, −1/12)`, `(1/8, 1/4)` is the
+  sharper case and must refuse R19: its `K` is `≈ −3/2·(2t − 1)²` under §6.5's
+  `≈` convention, whose top-level Bernstein coefficients are MIXED while every
+  dyadic child is one-signed with strict entries, so the fold alone reaches a
+  strict `−` and publishes `convex` for an edge that doubles back — assert
+  those coefficients at the precision that figure states and pin the exact
+  lifted ones beside them, and assert that the child coefficients really are
+  one-signed, or the fixture cannot tell the precondition from the depth cap.
+  The unit-weight cubic `(0, 0)`, `(0, 0)`, `(1/3, 0)`, `(1, 1)` must refuse
+  R19 too: its `K` is one-signed with strict entries at the top level, so the
+  coefficient test publishes `+` outright, and its `S` has its ONLY root at
+  `t = 0`, so a precondition that counts roots on the half-open span alone
+  finds none and admits it — assert that root count and the endpoint value
+  separately.
 - Assert the §5.1 span rules on records `record.go` admits: a `NURBSSeg` with a
   repeated interior knot builds and its area matches a dense-sample reference,
   its empty span carrying no Bézier segment and no division by a zero span

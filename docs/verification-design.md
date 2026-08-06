@@ -317,6 +317,57 @@ bounds, volume or centroid readings raise then carries a nil `Required` — the
 one documented reference-less `Suspect` this design admits
 (`verify_diagnostics_test.go` pins it).
 
+**A free-form-walled `prismPayload` — not reachable through the public
+surface yet (`docs/spline-design.md` §10) — reaches this same gap for the
+same structural reason, and gets its own arm rather than inheriting the nil
+`Required` above.** Its exact carrier model has no arm for a `NURBSSurface`
+side face any more than it has one for the `sectionDelta` case, and
+`envelopePrismFor` has none for a bare `prismPayload` either. What that arm
+reports is a certified LOWER bound on the body's own diameter: the maximum
+distance over a finite set of points KNOWN TO LIE ON the body — every
+analytic section vertex at both cap heights, and every free-form span's own
+two endpoints at both cap heights. A Bézier interpolates its ends exactly, so
+each span endpoint is a point of the recorded curve itself
+(`docs/spline-design.md` §6.2), and every point in the set is a real point of
+the body's own boundary. Every distance the maximum ranges over is therefore
+realized between two real body points, so the reading can only UNDERSTATE the
+body's true diameter and never overstate it — the same construction
+`bodyGateDiameter` already runs over a `loftPayload`'s own held vertex set
+(`verify.go`), differing only in what it earns: a loft body's boundary is a
+polyhedron, so its vertex maximum IS the true diameter, while a curved wall's
+farthest pair can sit between two sampled points, which is exactly why this
+arm claims a bound and not the diameter. The set is never empty for a closed
+section, so this arm always yields a diameter and never falls back to the
+reference-less case above.
+
+Those span endpoints are read off `docs/spline-design.md` §5.1's own
+exact-rational Bézier conversion, for every Tier A kind alike. A
+`FitSplineSeg` is why that has to be said: it records no control points at
+all — only the points sketch's interpolant passes through — its converted
+chain's own ends are not always the raw recorded `Fit` points (§5.1.2's dedup
+keeps `Points`, and a chain that misses its record's natural end is
+`ErrDegenerate`, R17), and the curve does not stay inside the recorded fit
+points' hull in any case (`docs/spline-design.md` §6.5).
+
+Understating is the one direction this arm is free to err in, and it is the
+direction §4's own floor already errs in — a floor too low can only demand
+more of an answer, never admit one — and the one the circular-wall witness
+reading below errs in too: an understated `D` tightens `Ref` and can turn a
+passing reading into a false `Suspect`, never a false `Sound`. Overstating is
+the direction that costs correctness, which is why this arm reads points ON
+the body rather than the diameter of some shape built to CONTAIN it. `D`
+feeds `δ = ε × D` (§4) and every `Ref` built on it, so an overstated `D`
+loosens the gate, and a reading whose `Bound` the body's own diameter would
+have read `Suspect` reads `Sound` instead. That the `Bound` is proven
+independently of `D` does not rescue it: proving the error is at most `Bound`
+says nothing about whether that error meets `rel ×` the body's OWN diameter,
+which is the whole content of the gate. A convex hull of a section's control
+points is exactly the shape to avoid here: it contains the curve, so it
+bounds `D` from ABOVE, and §3 fixes `D` as that body's OWN diameter — the
+distance between its two farthest points — so reading a containing shape's
+diameter instead does not widen a bound, it rewrites the public tolerance
+semantics §3 and §5 state.
+
 A `cupPayload` or `capBlendPayload` reduces to a modify op applied to a
 straight-prism receiver section, and `envelopeGateDiameter`/`envelopePrismFor`
 read their diameter off a containing prism envelope rather than off the
