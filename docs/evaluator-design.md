@@ -117,8 +117,8 @@ Rules:
   outside its cylinder; a straight wall, having no turn, by the role of its loop
   (outer convex, hole concave). A free-form wall's own curvature can turn sign
   inside one span, so it reads neither test — `docs/spline-design.md` §6.5 owns
-  its proof, over the segment's control-polygon turns, and its refusal where
-  they disagree in sign. The on-axis edge shared by both caps of a
+  its proof, its straight-walk case, and its refusal where the curve's own
+  curvature sign is not proven. The on-axis edge shared by both caps of a
   partial revolve is convex when the sweep is under π. Consequence, and it is
   the intended one: a hole's rim edges are concave, and so are the rims of a
   concave round on the outer loop.

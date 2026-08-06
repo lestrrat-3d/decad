@@ -185,7 +185,7 @@ exactly → `ErrUnrecordableProfile`.
 | **R16** | a `FitSplineSeg`'s fit points are finite but the interpolant sketch builds from them — its cumulative chord parameter or a span coefficient — is not | `ErrUnsupported` | no, §5.1.2 — a float64 range limit of sketch's own exported interpolant, not decad's to lift |
 | **R17** | a `FitSplineSeg`'s converted chain does not reach its own record's natural-end fit point — sketch's dedup (`fitChordEps`) collapsed it into its predecessor | `ErrDegenerate` | yes, §5.1.2 |
 | **R18** | a free-form directional-extreme enclosure no float64 interval holds — an end past `MaxFloat64`, or a width past it | `ErrUnsupported` | yes, §6.2 |
-| **R19** | a free-form wall edge's control-polygon turns disagree in sign, so no curvature sign is proven | `ErrUnsupported` | no, §6.5 |
+| **R19** | a free-form wall edge whose chain proves no single curvature sign — a span's Bernstein certificate still mixed at the depth cap, two spans or a joint in conflict, or a joint the walk reverses at | `ErrUnsupported` | no, §6.5 |
 
 <!-- R16 was challenged as narrower than the evaluator's actual refusal
 behaviour, on the theory that a stalled (non-increasing) cumulative chord
@@ -1144,7 +1144,7 @@ never fabricates a dependency — and narrowing it to the straddle test itself
 is deferred to a later step under this same non-permanent row. The §4.1
 analytic-corner slice's audit gate is not implemented yet (P10).
 
-### 6.5 A wall edge's convexity — proven from the control polygon's turns, or refused
+### 6.5 A wall edge's convexity — proven from the curvature numerator's Bernstein coefficients, or refused
 
 Evaluator §3 decides a wall edge's `convex` bool without ever measuring a 3D
 dihedral: a circular wall reads its own turn (counter-clockwise convex,
@@ -1156,48 +1156,126 @@ fact about the curve in general, and Table F's per-kind tier says nothing
 about it either: a tier decides what a MOMENT may claim, never what a
 boundary sign is.
 
-**The control polygon supplies the proof, when it can.** Read it off §5.1's
-own exact-rational Bézier conversion — the SAME control chain the moments and
-length brackets already consume, never the raw recorded net, because that
-chain is the one representation every Tier A kind shares alike, unmoved by a
-rational `NURBSSeg`'s own weights (§5.1, §5.4), and consecutive spans already
-share their boundary point exactly (§5.1). Walk that concatenated chain and,
-at each interior vertex, form the sign of the turn between the incoming and
-outgoing control edge — the identical left-turn test evaluator §3 already
-applies to a junction edge's own walk tangents, over exact rationals, so the
-sign is never a tolerance call.
+**The certificate is Bernstein positivity on the curvature numerator.** The
+sign of a curve's signed curvature is the sign of `K = u′v″ − v′u″`, the
+curvature NUMERATOR §6.2 already names, and on a polynomial Bézier span of
+degree `p` (Tier A, Table F) `K` is itself a polynomial of degree `≤ 2p − 3`
+with exact rational coefficients. Both factors of each product are Bernstein
+forms of the span's own control points — the hodograph §6.2 already names,
+control points `p·ΔP_i` of degree `p−1`, and its own hodograph in turn,
+control points `p(p−1)·Δ²P_i` of degree `p−2` — and the Bernstein
+coefficients of a PRODUCT of two Bernstein forms are a binomial convolution
+of the factors' own, so `K`'s Bernstein form over the span is exact and
+rational with no conversion to the monomial basis and no rounding anywhere.
+Read its coefficients:
 
-A Bézier curve is variation diminishing: its own signed curvature changes
-sign no more often than its control polygon's turn does. So when EVERY turn
-along the chain shares one sign, that sign PROVES the curve's own curvature
-keeps it end to end, and the wall edge's `convex` bool is set from it, on the
-same convention the circular wall's own-turn test already fixes. This is a
-proof, not a measurement of the curve — sign-constancy of the polygon
-IMPLIES the curvature's sign; nothing here ever samples `C(t)` itself.
+- every coefficient `≥ 0` and at least one strictly `> 0` → by the convex-hull
+  property a Bernstein form's values lie inside the convex hull of its own
+  coefficients, so `K ≥ 0` across the WHOLE span and `K` is not the zero
+  polynomial. The span never turns the other way. Verdict `+`.
+- the mirror — every coefficient `≤ 0`, at least one strictly `< 0` →
+  verdict `−`.
+- every coefficient exactly `0` → `K ≡ 0`, which makes `C′` and `C″` parallel
+  wherever the speed is nonzero and so confines the span to a single straight
+  LINE. Verdict `0`.
+- MIXED signs → INCONCLUSIVE, and never a disproof: the hull over-estimates
+  the range, so a mixed coefficient set is consistent with a `K` that keeps
+  one sign throughout. Subdivide the span at its midpoint by exact dyadic de
+  Casteljau — the same split `spline_length.go` already runs — and fold the
+  children's verdicts. A child still mixed at a FIXED subdivision depth, the
+  cap being §6.1's own fixed-depth pattern rather than a measured target,
+  refuses: Table R row **R19**, `ErrUnsupported`.
 
-The implication runs one way only, and that is the whole of what a
-MIXED-sign chain costs. A control polygon whose turns disagree in sign is
-consistent with a curve whose curvature genuinely changes sign, and equally
-consistent with one whose curvature never does — the variation-diminishing
-property bounds the curve's sign-change count from ABOVE, never from below,
-so a mixed-sign chain proves nothing about the curve either way. Setting the
-bool from it anyway would be exactly the unsound admission the core rules
-forbid everywhere else: there is no residual to fall back on here, small or
-large, because this is a sign to prove, not a quantity to bound. So a
-mixed-sign chain refuses the build outright — `ErrUnsupported`, Table R row
-R19 — rather than publish a `convex` bool nothing proved.
+This proves a sign; it never measures one. Nothing here samples `C(t)`, and
+no residual is available to fall back on — a sign is not a quantity to bound
+— so an inconclusive certificate refuses rather than publishing a `convex`
+bool nothing proved, exactly as the core falsify-never-bless rule requires.
 
-**A chain too short to hold a turn is not a mixed-sign chain.** Table F's
-Tier A kinds admit a control net whose recorded points name as few as two
-DISTINCT positions — a degree-1 `NURBSSeg` at its validated floor is the
-plain case (§4.1) — and a net that visits only two distinct positions has no
-interior vertex to read a turn from at all. By the same convex-combination
-argument §6.2.1 already uses, every point such a curve reaches is a convex
-combination of those same two positions, so the curve IS the straight chord
-between them, whatever kind it is recorded as — exactly the case evaluator
-§3's straight-wall rule already answers. A free-form wall this degenerate
-takes that rule, decided by its loop's role, rather than a turn no polygon
-here can supply.
+**NEVER read the control polygon's own turns instead.** A chain whose turns
+all share one sign proves nothing about the curve's curvature: the classical
+theorem needs the CLOSED control polygon convex, and an open single-sign
+chain does not give that. The cubic control chain `(0, 0)`, `(1, 0)`,
+`(−4, 1)`, `(0.9, 0)` has both its turns strictly positive — `1`, and about
+`1/10` — while its own `K` is `18` at `t = 0`, negative at `t = 5/7` and
+positive again at `t = 1`: two curvature sign changes under zero polygon-turn
+sign changes. `record.go` admits that net as a degree-3 `NURBSSeg` at unit
+weights and §5.1 converts it to exactly one span, so a polygon-turn rule would
+publish `convex` for a wall whose curvature changes sign twice. The Bernstein
+certificate above refuses it instead, and subsumes the polygon test wherever
+the polygon test would have been right
+(`spline_convexity_internal_test.go` pins both facts).
+
+**The verdicts fold, and `0` is the identity.** The proof runs PER SPAN, so
+fold a subdivided span's children together, then fold every span of the chain
+together with every JOINT between consecutive spans: `0` folds into anything
+and leaves it unchanged, `+` folds with `+` and `−` with `−`, and `+` meeting
+`−` is a curvature sign change the chain genuinely has — refuse, R19, exactly
+as an undecided child does. Folding the joints in is not optional: a chain of
+individually convex spans can still turn the other way where two spans meet,
+so a per-span proof alone would publish a bool the chain does not have.
+
+**A joint's own verdict.** At each joint form the cross product of the
+incoming span's last NONZERO control edge with the outgoing span's first
+NONZERO control edge. A Bézier's one-sided tangent DIRECTION is its first
+nonzero control edge, §5.1 makes every control edge exactly rational, and
+consecutive spans share the joint point exactly (§5.1), so the cross product
+is the joint's own turn and its sign is never a tolerance call. A positive or
+negative cross is verdict `+` or `−`. A ZERO cross with the two tangents
+pointing the same way is verdict `0` — parallel tangents through a shared
+point turn off no line. A zero cross with the two tangents pointing OPPOSITE
+ways is a reversal, where the walk doubles back on itself and no curvature
+sign covers the joint at all: refuse, R19. A span with no nonzero control
+edge is a COLLAPSED span (§5.1) — one point, no direction — and supplies no
+joint of its own: skip it and pair its neighbours across it.
+
+**Three outcomes, and they are exhaustive.**
+
+- chain verdict `+` or `−` → the wall edge's `convex` bool is set from that
+  sign under the orientation convention below. A STRICT sign is what sets the
+  bool, and only that.
+- chain verdict `0` → every span lies on one line and no joint turns off it,
+  so the chain IS a straight walk and evaluator §3's straight-wall rule
+  decides it by its loop's role (outer convex, hole concave). A net visiting
+  only two distinct positions lands here by the same rule rather than by a
+  case of its own, and so does a collinear net of any length: the degree-2
+  `NURBSSeg` on `(0, 0)`, `(1, 0)`, `(2, 0)` at unit weights — three DISTINCT
+  positions, and `record.go` gates a net's shape nowhere — has `K ≡ 0` and
+  takes the loop-role rule (`spline_convexity_internal_test.go` pins it).
+- anything else — a span still mixed at the depth cap, two verdicts in
+  conflict, a reversing joint → R19, `ErrUnsupported`.
+
+**The orientation convention, stated explicitly.** The sign that reaches the
+bool is the turn in the LOOP'S OWN WALK direction, never the recorded
+segment's parameter direction. The profile walk carries the material on its
+left — outer loop counter-clockwise, every hole clockwise (evaluator §3, §4)
+— and a counter-clockwise turn is convex, a clockwise one concave, the
+identical convention the circular wall's own-turn test already fixes. Where
+the recorded walk runs against the curve's natural sense — the reversal
+`freeformBezierSpans` already reports beside its spans — NEGATE the chain's
+verdict before reading it: reversing a span's parameter negates `C′` and
+leaves `C″` unchanged, so it negates `K`.
+
+**Every Tier A kind's chain is the CONVERTED one, `FitSplineSeg` included.**
+The certificate reads §5.1's own exact-rational Bézier control chain and
+never a recorded net, and the difference is not cosmetic: `FitSplineSeg`
+records no control points at all. Its record holds the points sketch's
+interpolant passes THROUGH (§5.1.2), and §5.1.2's closed form is what turns
+them into control points, so a rule phrased over recorded control points does
+not reach that kind. The recorded fit points are not that chain and do not
+even contain the curve — the `h²·m/18` terms subtract, which is exactly what
+pushes a converted control outside the recorded points' own hull. Fit points
+`(0, 0)`, `(1, 0)`, `(2, 1)`, `(3, 0)` convert to a first span whose `v`
+controls are `0`, `−0.0790`, `−0.1580`, `0`, and that span's curve dips to
+`v ≈ −0.0912`, below every recorded point's own `v`
+(`spline_convexity_internal_test.go` pins it; the parameters are sketch's own
+cumulative chord lengths, never a uniform `h`).
+
+**Only Tier A spans reach this section.** §5.1's conversion emits polynomial
+Bézier spans and nothing else: a `NURBSSeg` with unequal weights is Tier C
+and a `ConicSeg` or whole `EllipseSeg` is Tier B, and each of those refuses a
+BUILD at R10 before any wall edge is decided. So every chain §6.5 reads is
+polynomial, `K` is a polynomial, and this section needs no rational column of
+its own the way §6.2's rows do.
 
 ## 7. `NURBSSurface` and `NURBSCurve`
 
@@ -1333,7 +1411,7 @@ half-silent. These stages do not consume a global evaluator increment number.
 | **P2** | Bézier conversion, exact Tier A moments, the §5.2 budget | `ProfileRecord.Area`/`Centroid`/`SecondMoments` answer for Tier A, bounded by one rounding. No new types |
 | **P3** | walk-kind discriminant across every `segmentWalk` consumer | none — behaviour preserved |
 | **P4a** | §6.2 row 1's directional-extreme bracket, wired into the prism bounds reading behind the existing refusal wrappers | none — R6 still stands, so a free-form prism is reachable only from internal tests; `extentAlongWork`'s R11 gate is live but wider than §6.4's straddle rule (any nonzero bracket bound refuses, not only one that straddles the sketch plane), and R18 is live on the enclosure-to-float64 conversion the bracket publishes through |
-| **P4b** | `NURBSSurface`/`NURBSCurve`, free-form extrude side faces, `NormalAt` refusal, §6.4's own straddle-narrowed stop gate, §6.5's wall-edge convexity proof and its R19 refusal | Tier A free-form prisms build, `FitSplineSeg` walks among them since P4b is where R6's build refusal lifts (§5.1.2); `Volume` from the Tier A rational, `Area`/`Box` bounded. A Tier B or C section is R10; an undecidable through-all stop is R11; a mixed-sign wall edge is R19 |
+| **P4b** | `NURBSSurface`/`NURBSCurve`, free-form extrude side faces, `NormalAt` refusal, §6.4's own straddle-narrowed stop gate, §6.5's wall-edge convexity proof and its R19 refusal | Tier A free-form prisms build, `FitSplineSeg` walks among them since P4b is where R6's build refusal lifts (§5.1.2); `Volume` from the Tier A rational, `Area`/`Box` bounded. A Tier B or C section is R10; an undecidable through-all stop is R11; a wall edge whose curvature sign the chain does not prove is R19 |
 | **P5** | free-form chording with proven sagitta + area slack | `Tessellate`/`STL`/`OBJ`, booleans, interference proof. Wall reading explicitly `Suspect` |
 | **P6** | §6.3's speed floor and origin-exclusion certificates, hodograph normal cones, bracketed curvature extremes | `Undercuts` and `MinRadius` each answer where the certificates that reading needs close, and read `Suspect` per §6.3's cost table where they do not |
 | **P7** | certified branch-and-bound inscribed-disk interval | `MinWallThickness` answered, with its own convergence evidence |
@@ -1439,6 +1517,20 @@ rules).
   against one the interval provenly undercuts reads `Violating` at any
   coarseness (§8.1). A test covering only the certificate branch cannot tell the
   straddle rule from a certificate check.
+- Assert §6.5's wall-edge convexity certificate by the bool it publishes and by
+  the refusal it withholds one with, on records `record.go` admits. A chain
+  whose every span closes on one strict sign publishes `convex` from that sign
+  under the loop's own walk orientation, and the same section recorded in the
+  reverse sense publishes the opposite bool. A chain whose control-polygon
+  turns all share one sign while its own curvature does not — the cubic net
+  `(0, 0)`, `(1, 0)`, `(−4, 1)`, `(0.9, 0)` — must refuse R19, so a
+  certificate reading the polygon's turns fails the test. A collinear net —
+  degree 2 on `(0, 0)`, `(1, 0)`, `(2, 0)`, whose `K` is the zero polynomial —
+  must take evaluator §3's loop-role rule and publish a bool rather than
+  refuse. Two individually one-signed spans meeting at a joint that turns the
+  other way must refuse R19, so a per-span proof that skips the joints fails
+  the test. A test covering only the refusal cannot tell the certificate from
+  a blanket free-form refusal.
 - Assert the §5.1 span rules on records `record.go` admits: a `NURBSSeg` with a
   repeated interior knot builds and its area matches a dense-sample reference,
   its empty span carrying no Bézier segment and no division by a zero span
