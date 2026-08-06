@@ -18,6 +18,13 @@ import (
 // this test fails the moment the file grows past its budget, a row's cell
 // grows past its own, or a row stops parsing as a row at all. A mechanical
 // comparison that can FAIL beats a comment asking authors to "keep it short".
+//
+// The guard is only as strong as the parser's reach, so parseLayoutRows reads
+// the whole file and refuses every structure that would put text beside the
+// rows without being measured as one — a second "## Layout" heading, a Layout
+// table outside that section, prose or a comment among the tables, a row
+// belonging to no table. Its own doc comment states those rules; the byte
+// budget above is what bounds everything else the file may hold.
 const (
 	claudeMDPath = "CLAUDE.md"
 	// claudeMDMaxBytes is the whole-file budget. Raising it is a policy
@@ -59,6 +66,21 @@ var (
 	layoutSeparatorRe = regexp.MustCompile(`^\|(?:\s*:?-+:?\s*\|)+$`)
 )
 
+// layoutHeading is the one "##" heading CLAUDE.md's Layout tables live under.
+// The file may carry exactly one of it: parseLayoutRows binds its whole parse
+// to that heading, so a second copy anywhere in the file — before the real one
+// as a decoy, after it as an annex, fenced off so it renders invisibly — would
+// silently decide which rows are measured and which are never seen.
+const layoutHeading = "## Layout"
+
+// layoutTableHeader and layoutTableSeparator are the two scaffolding lines a
+// Layout table opens with, spelled once so the refusals, the fixtures and
+// layoutHeaderRe/layoutSeparatorRe above cannot drift apart.
+const (
+	layoutTableHeader    = "| Path | Responsibility |"
+	layoutTableSeparator = "|---|---|"
+)
+
 // layoutRow is one parsed data row of CLAUDE.md's "## Layout" table.
 type layoutRow struct {
 	line        int      // 1-based source line, for failure messages
@@ -66,49 +88,102 @@ type layoutRow struct {
 	description string   // raw column 2 text
 }
 
-// parseLayoutRows extracts every data row of the "## Layout" markdown table.
+// parseLayoutRows extracts every data row of every "## Layout" markdown table.
 //
-// The only pipe-prefixed lines it skips are the two it can NAME: each
-// sub-table's "| Path | Responsibility |" header and its "|---|---|"
-// separator. Anything else that starts with "|" and fails layoutRowRe is
-// reported as a malformed row rather than skipped, because a skipped line is
-// invisible to every check the caller then runs — a row missing its closing
-// "|", or whose first column is not a backtick-quoted path, would otherwise
-// carry an unbounded description cell and name a nonexistent path with
-// nothing measuring either.
+// It reads the WHOLE file rather than stopping at the section's end, because
+// the checks its rows feed are only as good as the parser's reach: text the
+// parser never visits carries an unbounded description cell and names whatever
+// path it likes with nothing measuring either. Four structural rules keep that
+// reach total, each refusing rather than skipping:
+//
+//  1. layoutHeading appears exactly once. A second copy — earlier, later, or
+//     inside a code fence — would otherwise capture the parse and leave the
+//     rows it did not capture unmeasured.
+//  2. Every "| Path | Responsibility |" table opens inside that section, and
+//     its separator row follows immediately. A Layout table anywhere else is
+//     refused instead of ignored.
+//  3. Inside the section, the only prose allowed is the section's own lead,
+//     ahead of the first table. Once a table has opened, a line that is not a
+//     row, a blank, or a "###" sub-heading — loose prose, an HTML comment, a
+//     fence marker — is refused, since prose beside the rows reads as row text
+//     while escaping every per-row check.
+//  4. Every pipe-prefixed line belongs to an open table and parses as a row.
+//     A row missing its closing "|", one whose first column is not a
+//     backtick-quoted path, and one stranded outside any table are all
+//     refusals.
 func parseLayoutRows(content string) ([]layoutRow, error) {
 	var rows []layoutRow
-	inSection := false
+	var (
+		headings  int  // "## Layout" headings seen so far
+		inSection bool // inside the Layout section
+		inTable   bool // inside an open Layout table's row block
+		sawTable  bool // a Layout table has opened in this section
+	)
 
-	for i, line := range strings.Split(content, "\n") {
-		trimmed := strings.TrimSpace(line)
+	lines := strings.Split(content, "\n")
+	for i := 0; i < len(lines); i++ {
+		trimmed := strings.TrimSpace(lines[i])
 
-		if !inSection {
-			if trimmed == "## Layout" {
-				inSection = true
+		// The Layout section groups its rows into several tables under "###"
+		// sub-headings, so it ends at the next "##" heading rather than at the
+		// first blank line after a table.
+		if strings.HasPrefix(trimmed, "## ") {
+			inSection = trimmed == layoutHeading
+			inTable, sawTable = false, false
+			if inSection {
+				headings++
+				if headings > 1 {
+					return nil, fmt.Errorf("CLAUDE.md:%d: a second %q heading — the file may carry exactly one, since a duplicate captures the parse and leaves every row of the other section unmeasured: %q",
+						i+1, layoutHeading, trimmed)
+				}
 			}
 			continue
 		}
 
-		// The Layout section groups its rows into several tables under "###"
-		// sub-headings, so the section ends at the next "##" heading rather
-		// than at the first blank line after a table.
-		if strings.HasPrefix(trimmed, "## ") {
-			break
+		if layoutHeaderRe.MatchString(trimmed) {
+			if !inSection {
+				return nil, fmt.Errorf("CLAUDE.md:%d: a %q table opens outside the %q section — every Layout table belongs under that heading, where its rows are measured: %q",
+					i+1, layoutTableHeader, layoutHeading, trimmed)
+			}
+			if i+1 >= len(lines) || !layoutSeparatorRe.MatchString(strings.TrimSpace(lines[i+1])) {
+				return nil, fmt.Errorf("CLAUDE.md:%d: %q header is not followed by its %q separator, so the lines beneath it are not a table at all",
+					i+1, layoutTableHeader, layoutTableSeparator)
+			}
+			i++ // the separator belongs to this header and is not a data row
+			inTable, sawTable = true, true
+			continue
+		}
+
+		if !inSection {
+			continue
+		}
+
+		switch {
+		case trimmed == "":
+			inTable = false // a blank line closes the table it followed
+			continue
+		case strings.HasPrefix(trimmed, "### "):
+			inTable = false
+			continue
 		}
 
 		if !strings.HasPrefix(trimmed, "|") {
-			continue // a sub-heading, a blank line, or the section's own lead prose
+			if sawTable {
+				return nil, fmt.Errorf("CLAUDE.md:%d: prose inside the %q section after a table has opened — only the section's own lead prose, ahead of the first table, may sit here; anything later reads as row text while escaping the cell-length and path-existence checks: %q",
+					i+1, layoutHeading, trimmed)
+			}
+			continue // the section's own lead prose
 		}
 
-		if layoutHeaderRe.MatchString(trimmed) || layoutSeparatorRe.MatchString(trimmed) {
-			continue // a sub-table's own header or separator row
+		if !inTable {
+			return nil, fmt.Errorf("CLAUDE.md:%d: table row outside any %q table — a stranded row is measured by nothing: %q",
+				i+1, layoutTableHeader, trimmed)
 		}
 
 		m := layoutRowRe.FindStringSubmatch(trimmed)
 		if m == nil {
 			return nil, fmt.Errorf("CLAUDE.md:%d: line starts with %q but is neither a %q header, a %q separator, nor a well-formed data row (%q) — it would be skipped, and a skipped row escapes the cell-length and path-existence checks: %q",
-				i+1, "|", "| Path | Responsibility |", "|---|---|", "| `path.go` | Description. |", trimmed)
+				i+1, "|", layoutTableHeader, layoutTableSeparator, "| `path.go` | Description. |", trimmed)
 		}
 
 		paths := extractPaths(m[1])
@@ -119,6 +194,9 @@ func parseLayoutRows(content string) ([]layoutRow, error) {
 		rows = append(rows, layoutRow{line: i + 1, paths: paths, description: strings.TrimSpace(m[2])})
 	}
 
+	if headings == 0 {
+		return nil, fmt.Errorf("no %q heading in CLAUDE.md — the section moved or was renamed; fix parseLayoutRows in this test", layoutHeading)
+	}
 	if len(rows) == 0 {
 		return nil, fmt.Errorf("parsed zero rows from CLAUDE.md's Layout table — the table moved or its format changed; fix parseLayoutRows in this test")
 	}
@@ -214,7 +292,7 @@ func TestParseLayoutRowsRejectsMalformedRows(t *testing.T) {
 	// needs: the "## Layout" heading it starts at, a sub-heading and table
 	// scaffolding, and a following "##" heading it stops at.
 	section := func(body ...string) string {
-		lines := []string{"## Layout", "", "### Invented sub-table", "", "| Path | Responsibility |", "|---|---|"}
+		lines := []string{layoutHeading, "", "### Invented sub-table", "", layoutTableHeader, layoutTableSeparator}
 		lines = append(lines, body...)
 		return strings.Join(append(lines, "", "## Conventions", ""), "\n")
 	}
@@ -256,5 +334,107 @@ func TestParseLayoutRowsRejectsMalformedRows(t *testing.T) {
 		_, err := parseLayoutRows(section())
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "parsed zero rows")
+	})
+}
+
+// TestParseLayoutRowsRefusesTextItWouldNotReach pins the parser's REACH, which
+// the budget test cannot show about itself either: a guard that binds to one
+// heading and stops at the next measures only what it happens to visit, so
+// text placed anywhere else carries an unbounded cell and names whatever path
+// it likes while the whole test still reports PASS. Each fixture below is a
+// placement that would go unvisited by a parser that stopped early, and each
+// must be REFUSED rather than left unread.
+//
+// Every fixture is invented — none of these lines appears in the real
+// CLAUDE.md, and none should ever be copied into it. Each oversized fixture
+// row is doubly out of contract: its cell runs past layoutCellMaxChars AND it
+// names a file that does not exist, so a parse that reached it could not
+// possibly pass.
+func TestParseLayoutRowsRefusesTextItWouldNotReach(t *testing.T) {
+	const wellFormed = "| `doc.go` | An invented short pointer row. |"
+
+	oversized := "| `no_such_invented_file.go` | " + strings.Repeat("X", layoutCellMaxChars+1) + " |"
+
+	// layoutSection renders one whole "## Layout" section — its heading, a
+	// sub-heading, table scaffolding, and the given rows.
+	layoutSection := func(rows ...string) []string {
+		lines := []string{layoutHeading, "", "### Invented sub-table", "", layoutTableHeader, layoutTableSeparator}
+		return append(append(lines, rows...), "")
+	}
+	join := func(blocks ...[]string) string {
+		var lines []string
+		for _, block := range blocks {
+			lines = append(lines, block...)
+		}
+		return strings.Join(lines, "\n")
+	}
+	// other is any following section, so the Layout section really does end.
+	other := []string{"## Conventions", "", "An invented sentence.", ""}
+
+	for name, tc := range map[string]struct {
+		content string
+		want    string // substring the refusal must carry
+	}{
+		// The audited defect: an annex section appended past the real one,
+		// which a parser bound to the FIRST heading never visits.
+		"a second Layout heading after the section": {
+			content: join(layoutSection(wellFormed), other, layoutSection(oversized)),
+			want:    "a second",
+		},
+		// The same defect the other way round, and worse: a decoy placed
+		// FIRST captures the parse, leaving the real table unread.
+		"a decoy Layout heading before the section": {
+			content: join(layoutSection(oversized), other, layoutSection(wellFormed)),
+			want:    "a second",
+		},
+		// The duplicate fenced off, so it feeds the parser a second heading
+		// while rendering as a code block rather than as a section.
+		"a Layout heading hidden in a code fence": {
+			content: join(layoutSection(wellFormed), other, []string{"```markdown"}, layoutSection(oversized), []string{"```", ""}),
+			want:    "a second",
+		},
+		"a Layout table outside the Layout section": {
+			content: join(layoutSection(wellFormed), []string{"## Conventions", "", layoutTableHeader, layoutTableSeparator, oversized, ""}),
+			want:    "outside the",
+		},
+		"prose beside the rows": {
+			content: join(layoutSection(wellFormed, "", "An invented aside, as long as its author likes."), other),
+			want:    "prose inside",
+		},
+		"an HTML comment beside the rows": {
+			content: join(layoutSection(wellFormed, "", "<!-- an invented aside -->"), other),
+			want:    "prose inside",
+		},
+		"a row stranded outside any table": {
+			content: join(layoutSection(wellFormed, "", oversized), other),
+			want:    "outside any",
+		},
+		"a table header with no separator beneath it": {
+			content: join([]string{layoutHeading, "", layoutTableHeader, wellFormed, ""}, other),
+			want:    "separator",
+		},
+		"no Layout heading at all": {
+			content: join(other),
+			want:    `no "## Layout" heading`,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			rows, err := parseLayoutRows(tc.content)
+			require.Error(t, err, "text the parser would not otherwise reach must be refused, never left unread")
+			require.Nil(t, rows)
+			require.Contains(t, err.Error(), tc.want)
+		})
+	}
+
+	t.Run("the section's own lead prose is accepted", func(t *testing.T) {
+		content := join([]string{
+			layoutHeading, "",
+			"An invented lead sentence, ahead of the first table.", "",
+			"### Invented sub-table", "",
+			layoutTableHeader, layoutTableSeparator, wellFormed, "",
+		}, other)
+		rows, err := parseLayoutRows(content)
+		require.NoError(t, err, "prose ahead of the first table is the one prose the section carries")
+		require.Len(t, rows, 1)
 	})
 }

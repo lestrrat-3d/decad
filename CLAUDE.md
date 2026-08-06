@@ -24,12 +24,12 @@ table's Design documents section lists every companion design and what it owns.
 
 | Before writing | Read |
 |---|---|
-| Any public type | `docs/api-design.md` |
+| Any public type | `docs/api-design.md`, and every companion design the Layout table's "Design documents" section lists |
 | Recipe codecs or evaluation entry points | `docs/recipe-replay-design.md` |
 | Evaluator, topology or feature code | `docs/evaluator-design.md` |
 | Tessellation, export or mesh-boolean operand code | `docs/tessellation-design.md` |
 | Free-form geometry or per-segment-kind dispatch | `docs/spline-design.md` |
-| `evaluateBoolean` dispatch, `Union`/`Cut`/`Intersect` | `docs/prism-boolean-design.md` |
+| `evaluateBoolean` dispatch, `Union`/`Cut`/`Intersect`, or any code combining two recorded sections through a private `sketch` scene | `docs/prism-boolean-design.md` |
 | Any modify op, option codec or modify payload | `docs/modify-design.md`, `docs/modify-reach-design.md` |
 | Anything the surrounding `.go` file already documents | that file's own doc comments |
 
@@ -265,11 +265,13 @@ placement. See `docs/evaluator-design.md` §8.
   characters. NEVER grow a row to record an invariant, a derivation, a sign
   convention or a refusal — that belongs in the owning design doc or the
   function's own doc comment, and a row that restates it drifts from the code.
-  `claude_md_layout_test.go` enforces every mechanical rule above: the per-row
-  cap, the file's byte budget, and the row shape itself — a backtick-quoted
-  path, a description, and a closing `|`. Only a table header or separator may
-  start with `|` and not be a row; anything else fails rather than being
-  skipped, since a skipped line escapes the cap and the path check both.
+  `claude_md_layout_test.go` enforces every mechanical rule above — the per-row
+  cap, the file's byte budget, and the row shape itself — and, because a guard
+  measures only the text it reads, the section's structure too: one `## Layout`
+  heading, every Layout table under it, and no prose or stray row among the
+  rows. Its `parseLayoutRows` doc comment states those structural rules. A line
+  failing any of them fails the test rather than being skipped, since a skipped
+  line escapes the cap and the path check both.
 
 ## Verification
 
