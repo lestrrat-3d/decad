@@ -859,7 +859,11 @@ const (
 // candidate profile's own re-arrangement is charged on the same record counter
 // immediately before it runs.
 type freeformReconstruction struct {
-	// chords is the record-wide chord total the arrangement will hold.
+	// chords is the record-wide chord total the arrangement will hold. It
+	// SATURATES at reconstructionChordCeiling: past that total the charge refuses
+	// whatever the rest of the record holds, so counting on is work — and,
+	// through the interning set below, memory — spent on a record already
+	// refused.
 	chords uint64
 	// arrangement is one whole-scene arrangement's charge: the ORDERED pair
 	// count, twice the i<j pairs the intersection loop runs, so the doubling
@@ -868,13 +872,46 @@ type freeformReconstruction struct {
 	arrangement uint64
 }
 
-// reconstructionOf reads that model off a checked record. Every segment is
-// counted, whatever its kind: the chord total is the arrangement's own element
-// count, and the arrangement is global.
+// reconstructionChordCeiling is the largest chord total chargeFreeformReconstruction
+// can admit. One unit more and twice the ordered pair count passes
+// freeformWorkLimit, so the record refuses however the rest of it reads, and
+// reconstructionOf stops counting there.
+const reconstructionChordCeiling uint64 = 724
+
+// reconstructionOf reads that model off a checked record. Every segment counts,
+// whatever its kind: the chord total is the arrangement's own element count, and
+// the arrangement is global.
+//
+// An entity SEVERAL segments name counts once, because momentRecordScene interns
+// the entities it builds and the arrangement therefore holds one set of chords
+// per distinct entity. That is the ordinary shape of a recorded region — one
+// crossing cuts a circle into two fragments, and both name the same circle — so
+// counting per fragment squares a chord total the scene never holds and refuses
+// records whose reconstruction costs milliseconds.
+//
+// Only the kinds momentRecordScene keys on a fixed-size struct are interned
+// here. A free-form key renders every control point into a string
+// (freeformEntityKey), which is a per-element pass and an allocation this charge
+// exists to precede, so free-form segments stay counted per fragment. That is
+// conservative in the safe direction: an over-count of the scene, never an
+// under-count of it.
 func reconstructionOf(record ProfileRecord) freeformReconstruction {
 	var chords uint64
+	var seen map[momentEntityKey]struct{}
 	for _, loop := range append([]LoopRecord{record.Outer}, record.Holes...) {
 		for _, segment := range loop.Segments {
+			if chords > reconstructionChordCeiling {
+				break
+			}
+			if key, keyed := analyticEntityKey(segment); keyed {
+				if _, duplicate := seen[key]; duplicate {
+					continue
+				}
+				if seen == nil {
+					seen = make(map[momentEntityKey]struct{})
+				}
+				seen[key] = struct{}{}
+			}
 			chords = costAdd(chords, reconstructionChords(segment))
 		}
 	}

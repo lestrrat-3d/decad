@@ -1461,3 +1461,114 @@ func TestExtrudeSplineProfileSpendsOneWorkCeiling(t *testing.T) {
 	require.Less(t, elapsed, 2*time.Second,
 		"a second ceiling would subdivide for seconds before staging out")
 }
+
+// scallopedDiskRecord is a closed analytic loop of n quarter-turn arcs: the
+// vertices of a regular n-gon of radius 10, joined by arcs that bulge outward.
+// Each arc sweeps exactly a quarter turn, so sketch chords it 64 times and the
+// record's chord total is 64n whatever the arcs enclose. Nothing in it is
+// free-form.
+func scallopedDiskRecord(n int) decad.ProfileRecord {
+	vertex := func(i int) decad.Point2 {
+		angle := 2 * math.Pi * float64(i) / float64(n)
+		return decad.Point2{U: 10 * math.Cos(angle), V: 10 * math.Sin(angle)}
+	}
+	segments := make([]decad.CurveSegment, n)
+	for i := range segments {
+		start, end := vertex(i), vertex(i+1)
+		middle := decad.Point2{U: (start.U + end.U) / 2, V: (start.V + end.V) / 2}
+		// The centre sits inward of the chord by half the chord's length, which is
+		// what makes the sweep from Start to End a quarter turn.
+		reach := math.Hypot(end.U-start.U, end.V-start.V) / 2
+		outward := math.Hypot(middle.U, middle.V)
+		segments[i] = decad.ArcSeg{
+			Center: decad.Point2{
+				U: middle.U - reach*middle.U/outward,
+				V: middle.V - reach*middle.V/outward,
+			},
+			Start:  start,
+			End:    end,
+			TStart: 0,
+			TEnd:   1,
+		}
+	}
+	return decad.ProfileRecord{Outer: decad.LoopRecord{Segments: segments}}
+}
+
+// scallopedDiskArea is the same shape's area in closed form: the regular n-gon
+// through the vertices, plus one circular segment per outward bulge.
+func scallopedDiskArea(n int) float64 {
+	count := float64(n)
+	radius := math.Sqrt2 * 10 * math.Sin(math.Pi/count)
+	polygon := 0.5 * count * 100 * math.Sin(2*math.Pi/count)
+	return polygon + count*radius*radius/2*(math.Pi/2-1)
+}
+
+// The reconstruction charge bounds an ANALYTIC record too, and that decides
+// which answer the three public ProfileRecord methods give a large one. They
+// take no context, so a record whose arrangement runs for minutes cannot be
+// cancelled; the ceiling is what refuses it instead, and it refuses before
+// sketch is asked anything.
+//
+// Both sides are the same construction at two sizes, so the only thing that
+// moves is the chord total. Four quarter arcs are 256 chords and six are 384,
+// and both measure; sixteen are 1024, past the largest total the ceiling admits,
+// and refuse.
+func TestAnalyticOnlyRecordIsChargedForItsReconstruction(t *testing.T) {
+	for _, n := range []int{4, 6} {
+		area, err := scallopedDiskRecord(n).Area()
+		require.NoError(t, err, "%d arcs is inside the ceiling and still measures", n)
+		got, err := area.Value.In(units.SquareMillimeter)
+		require.NoError(t, err)
+		require.InDelta(t, scallopedDiskArea(n), got, 1e-9,
+			"the admitted record answers with the region's own area")
+	}
+
+	start := time.Now()
+	_, err := scallopedDiskRecord(16).Area()
+	require.Error(t, err, "16 arcs is past the ceiling")
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+	require.Contains(t, err.Error(), "work budget")
+	require.Contains(t, err.Error(), "profile record is invalid",
+		"the record-level charge fires, not a per-segment one")
+	require.Less(t, time.Since(start), time.Second, "no arrangement ran before the refusal")
+}
+
+// An entity several segments name is ONE entity in the scene sketch arranges, so
+// the charge counts it once. A circle a single crossing cuts into two fragments
+// is the ordinary shape of a recorded region, and counting the fragments
+// separately would square a chord total the arrangement never holds.
+func TestSharedAnalyticEntityIsChargedOnce(t *testing.T) {
+	world := sketch.NewWorld()
+	s, err := world.CreateSketch(world.XY())
+	require.NoError(t, err)
+	rect := s.CreateRectangle(0, 0, 100, 60)
+	s.Fix(rect.A)
+	s.CreateCircle(s.CreatePoint(95, 30), 15)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+
+	fragmented := 0
+	for _, profile := range s.Profiles() {
+		if !profile.Valid {
+			continue
+		}
+		record, _, err := decad.RecordProfile(s, profile)
+		require.NoError(t, err)
+		circles := 0
+		for _, segment := range record.Outer.Segments {
+			if _, ok := segment.(decad.CircleSeg); ok {
+				circles++
+			}
+		}
+		if circles < 2 {
+			continue
+		}
+		fragmented++
+		area, err := record.Area()
+		require.NoError(t, err, "the two fragments name one circle, which is charged once")
+		got, err := area.Value.In(units.SquareMillimeter)
+		require.NoError(t, err)
+		require.InDelta(t, profile.Area, got, 1e-9)
+	}
+	require.Positive(t, fragmented, "the fixture must record a region naming one circle twice")
+}

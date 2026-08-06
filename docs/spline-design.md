@@ -603,7 +603,18 @@ holds more than one curve.
 
 Every source counts toward that total, analytic ones included. A chord total
 that skips the lines, arcs and circles beside a spline says nothing about the
-pass they are arranged in.
+pass they are arranged in, and a record naming NO free-form source at all is
+charged on the same terms — its arrangement is the same global quadratic, and
+the public methods that reach it take no context, so nothing else can stop it.
+
+A source SEVERAL segments name is one source. The reconstruction interns the
+entities it builds, so a circle one crossing cut into two fragments is chorded
+once, and a chord total counting the fragments separately squares a total the
+arrangement never holds. The interning is by the entity's own defining data.
+Only the analytic kinds, whose key is a fixed-size record of that data, are
+interned in the charge: a free-form key must read every control point, which is
+a per-element pass this charge exists to precede, so free-form fragments stay
+counted one by one — an over-count of the scene, never an under-count of it.
 
 The chord counts are sketch's own, restated: a free-form source is chorded 16
 times per control point (an OPEN spline per span, so 16 per control point less
@@ -622,6 +633,15 @@ record-level preflight, before sketch is asked anything; each candidate's own
 re-arrangement is charged on the same record counter immediately before it runs.
 Every arrangement is therefore paid for before it happens, and a record may
 clear the preflight and still be refused inside the pass.
+
+A record naming no free-form source is levied that same once at the
+reconstruction's own entry rather than at the preflight, on the same counter and
+for the same amount. The reason is the exact whole-circle certificate, which
+answers from disk containment alone and runs no arrangement whatsoever: it is
+reached only by an analytic record, and a charge levied ahead of it would refuse
+a record no arrangement ever reads. The free-form charge stays at the preflight,
+which no such certificate can be reached from, so it also covers an evaluator
+preflight that never runs the reconstruction at all.
 
 The ceiling stands at 2^20 charged units under that model, which admits far
 fewer sources than the earlier per-source charge did — nine chorded sources, or
