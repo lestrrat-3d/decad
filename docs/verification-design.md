@@ -317,6 +317,38 @@ bounds, volume or centroid readings raise then carries a nil `Required` — the
 one documented reference-less `Suspect` this design admits
 (`verify_diagnostics_test.go` pins it).
 
+**A free-form-walled `prismPayload` — not reachable through the public
+surface yet (`docs/spline-design.md` §10) — reaches this same gap for the
+same structural reason, and gets its own arm rather than inheriting the nil
+`Required` above.** Its exact carrier model has no arm for a `NURBSSurface`
+side face any more than it has one for the `sectionDelta` case, and
+`envelopePrismFor` has none for a bare `prismPayload` either. The arm this
+body needs reads `docs/spline-design.md` §6.2.1's own convex-combination
+argument instead: a free-form wall's curve is, at every point, a convex
+combination of its own recorded control points, so it never leaves their
+convex hull. The convex hull of a section's control points at both cap
+heights, unioned with its analytic wall vertices at the same two heights, is
+therefore a shape that provably CONTAINS the whole prism — the same
+"can only overstate, never understate" standing the cup and cap-blend
+envelopes below already carry. What this arm reports is not a witness sample
+of that shape, though, but its own EXACT diameter: a convex hull's diameter is
+always realized between two of its defining points, so maxing over that same
+finite point set — the same construction `bodyGateDiameter` already uses for
+a `loftPayload`'s own held vertex set (`verify.go`) — reports it with no
+sampling gap of its own, even where the hull itself still sits outside the
+curved body it bounds.
+
+That outside-only gap is the SAFE direction. `D` feeds `δ = ε × D` (§4) and
+every `Ref` below it, so an inflated `D` can only raise the tolerance gate's
+threshold — loosen it — never lower it: it can turn a body the true, smaller
+extent would have read `Suspect` into one that reads `Sound`, but it can
+never do the reverse, and a loosened gate manufactures no false `Sound`
+either, because the `Bound` it is judging is proven independently of `D` —
+the same asymmetry this section draws below for the circular-wall witness
+reading: only an UNDERSTATED `D` can wrongly tighten the gate. The one
+direction that would cost correctness — a hull smaller than the curve it is
+meant to contain — cannot arise: the hull is built to contain it.
+
 A `cupPayload` or `capBlendPayload` reduces to a modify op applied to a
 straight-prism receiver section, and `envelopeGateDiameter`/`envelopePrismFor`
 read their diameter off a containing prism envelope rather than off the

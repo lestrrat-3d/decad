@@ -36,6 +36,7 @@ Three tables are normative:
 | what a revolve's area needs beyond length | §6.1.1 |
 | why an undercut or radius reading is `Suspect` | §6.3 |
 | why a build refuses on a bracket it cannot decide | §6.4 |
+| how a free-form wall edge's convexity is decided, or refused | §6.5 |
 | what surface an extruded spline gets | §7 |
 | what each capability answers | Table C §8 |
 | what stays refused forever | Table R §4 |
@@ -184,6 +185,7 @@ exactly → `ErrUnrecordableProfile`.
 | **R16** | a `FitSplineSeg`'s fit points are finite but the interpolant sketch builds from them — its cumulative chord parameter or a span coefficient — is not | `ErrUnsupported` | no, §5.1.2 — a float64 range limit of sketch's own exported interpolant, not decad's to lift |
 | **R17** | a `FitSplineSeg`'s converted chain does not reach its own record's natural-end fit point — sketch's dedup (`fitChordEps`) collapsed it into its predecessor | `ErrDegenerate` | yes, §5.1.2 |
 | **R18** | a free-form directional-extreme enclosure no float64 interval holds — an end past `MaxFloat64`, or a width past it | `ErrUnsupported` | yes, §6.2 |
+| **R19** | a free-form wall edge's control-polygon turns disagree in sign, so no curvature sign is proven | `ErrUnsupported` | no, §6.5 |
 
 <!-- R16 was challenged as narrower than the evaluator's actual refusal
 behaviour, on the theory that a stalled (non-increasing) cumulative chord
@@ -1142,6 +1144,61 @@ never fabricates a dependency — and narrowing it to the straddle test itself
 is deferred to a later step under this same non-permanent row. The §4.1
 analytic-corner slice's audit gate is not implemented yet (P10).
 
+### 6.5 A wall edge's convexity — proven from the control polygon's turns, or refused
+
+Evaluator §3 decides a wall edge's `convex` bool without ever measuring a 3D
+dihedral: a circular wall reads its own turn (counter-clockwise convex,
+clockwise concave), and a straight wall — having no turn of its own — reads
+its loop's role instead. Neither test reaches a free-form wall. Its curve's
+signed curvature is not fixed the way a circle's or a line's is — it can
+change sign INSIDE one recorded span — so neither `true` nor `false` is a
+fact about the curve in general, and Table F's per-kind tier says nothing
+about it either: a tier decides what a MOMENT may claim, never what a
+boundary sign is.
+
+**The control polygon supplies the proof, when it can.** Read it off §5.1's
+own exact-rational Bézier conversion — the SAME control chain the moments and
+length brackets already consume, never the raw recorded net, because that
+chain is the one representation every Tier A kind shares alike, unmoved by a
+rational `NURBSSeg`'s own weights (§5.1, §5.4), and consecutive spans already
+share their boundary point exactly (§5.1). Walk that concatenated chain and,
+at each interior vertex, form the sign of the turn between the incoming and
+outgoing control edge — the identical left-turn test evaluator §3 already
+applies to a junction edge's own walk tangents, over exact rationals, so the
+sign is never a tolerance call.
+
+A Bézier curve is variation diminishing: its own signed curvature changes
+sign no more often than its control polygon's turn does. So when EVERY turn
+along the chain shares one sign, that sign PROVES the curve's own curvature
+keeps it end to end, and the wall edge's `convex` bool is set from it, on the
+same convention the circular wall's own-turn test already fixes. This is a
+proof, not a measurement of the curve — sign-constancy of the polygon
+IMPLIES the curvature's sign; nothing here ever samples `C(t)` itself.
+
+The implication runs one way only, and that is the whole of what a
+MIXED-sign chain costs. A control polygon whose turns disagree in sign is
+consistent with a curve whose curvature genuinely changes sign, and equally
+consistent with one whose curvature never does — the variation-diminishing
+property bounds the curve's sign-change count from ABOVE, never from below,
+so a mixed-sign chain proves nothing about the curve either way. Setting the
+bool from it anyway would be exactly the unsound admission the core rules
+forbid everywhere else: there is no residual to fall back on here, small or
+large, because this is a sign to prove, not a quantity to bound. So a
+mixed-sign chain refuses the build outright — `ErrUnsupported`, Table R row
+R19 — rather than publish a `convex` bool nothing proved.
+
+**A chain too short to hold a turn is not a mixed-sign chain.** Table F's
+Tier A kinds admit a control net whose recorded points name as few as two
+DISTINCT positions — a degree-1 `NURBSSeg` at its validated floor is the
+plain case (§4.1) — and a net that visits only two distinct positions has no
+interior vertex to read a turn from at all. By the same convex-combination
+argument §6.2.1 already uses, every point such a curve reaches is a convex
+combination of those same two positions, so the curve IS the straight chord
+between them, whatever kind it is recorded as — exactly the case evaluator
+§3's straight-wall rule already answers. A free-form wall this degenerate
+takes that rule, decided by its loop's role, rather than a turn no polygon
+here can supply.
+
 ## 7. `NURBSSurface` and `NURBSCurve`
 
 Core §6.1 reserved both names. This section fixes their shape.
@@ -1208,7 +1265,7 @@ every walk of the section is itself exactly rational (§3).
 | Capability | Free-form reach | Construction |
 |---|---|---|
 | `ProfileRecord.Area`/`Centroid`/`SecondMoments` | Tier A exactly rational, rounded once; B/C proven interval | §5 |
-| `Extrude` | Tier A section; `Volume` from the Tier A rational, `Area`/`Box` bounded | §6.1 length, §6.2 extremes, §7 surfaces; a through-all stop reading the bracket is §6.4 |
+| `Extrude` | Tier A section; `Volume` from the Tier A rational, `Area`/`Box` bounded | §6.1 length, §6.2 extremes, §7 surfaces; a through-all stop reading the bracket is §6.4; a wall edge's convexity is §6.5 |
 | `Tessellate`, `STL`, `OBJ` | every section `Extrude` builds | §6.2 sagitta; rides the existing prism path, NOT tessellation T5 |
 | `Union`/`Cut`/`Intersect` | every body `Extrude` builds, `Faceted` output as always | free once chording lands — the mesh boolean reads triangles, not kinds |
 | interference proof | every body `Extrude` builds | free once chording lands — read-only mesh intersection already serves faceted pairs |
@@ -1276,7 +1333,7 @@ half-silent. These stages do not consume a global evaluator increment number.
 | **P2** | Bézier conversion, exact Tier A moments, the §5.2 budget | `ProfileRecord.Area`/`Centroid`/`SecondMoments` answer for Tier A, bounded by one rounding. No new types |
 | **P3** | walk-kind discriminant across every `segmentWalk` consumer | none — behaviour preserved |
 | **P4a** | §6.2 row 1's directional-extreme bracket, wired into the prism bounds reading behind the existing refusal wrappers | none — R6 still stands, so a free-form prism is reachable only from internal tests; `extentAlongWork`'s R11 gate is live but wider than §6.4's straddle rule (any nonzero bracket bound refuses, not only one that straddles the sketch plane), and R18 is live on the enclosure-to-float64 conversion the bracket publishes through |
-| **P4b** | `NURBSSurface`/`NURBSCurve`, free-form extrude side faces, §6.1 length brackets, `NormalAt` refusal, §6.4's own straddle-narrowed stop gate | Tier A free-form prisms build, `FitSplineSeg` walks among them since P4b is where R6's build refusal lifts (§5.1.2); `Volume` from the Tier A rational, `Area`/`Box` bounded. A Tier B or C section is R10; an undecidable through-all stop is R11 |
+| **P4b** | `NURBSSurface`/`NURBSCurve`, free-form extrude side faces, `NormalAt` refusal, §6.4's own straddle-narrowed stop gate, §6.5's wall-edge convexity proof and its R19 refusal | Tier A free-form prisms build, `FitSplineSeg` walks among them since P4b is where R6's build refusal lifts (§5.1.2); `Volume` from the Tier A rational, `Area`/`Box` bounded. A Tier B or C section is R10; an undecidable through-all stop is R11; a mixed-sign wall edge is R19 |
 | **P5** | free-form chording with proven sagitta + area slack | `Tessellate`/`STL`/`OBJ`, booleans, interference proof. Wall reading explicitly `Suspect` |
 | **P6** | §6.3's speed floor and origin-exclusion certificates, hodograph normal cones, bracketed curvature extremes | `Undercuts` and `MinRadius` each answer where the certificates that reading needs close, and read `Suspect` per §6.3's cost table where they do not |
 | **P7** | certified branch-and-bound inscribed-disk interval | `MinWallThickness` answered, with its own convergence evidence |
