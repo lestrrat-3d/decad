@@ -8,9 +8,16 @@ import (
 )
 
 // This file is the cap-blend payload's DX7/DX8 surveys
-// (docs/modify-reach-design.md Table DX): exact per-patch normal ranges
-// against a pull (undercut) and the minimum concave principal radius over
-// the patch set (Table DX row DX8).
+// (docs/modify-reach-design.md Table DX): per-patch normal ranges against a
+// pull (undercut) and the minimum concave principal radius over the patch set
+// (Table DX row DX8).
+//
+// Both rows turn on one fact about the band: a circular patch at a mitered
+// corner is RULED between two differently-swept directrices, so the Cone it
+// publishes is its surface only to within a proven bound (§8.3). DX7 widens
+// its own reading by that bound and answers only where the widened interval
+// still falls on one side of the rule; DX8 does not answer for such a band at
+// all.
 //
 // DX9 (the wall survey) stays deliberately Suspect: a cap blend is not one
 // constant section at one height, and the existing 2D spanning-disk proof
@@ -27,6 +34,12 @@ import (
 // uses. The ordinary (unchanged) side walls and caps are surveyed by the
 // SAME per-role wallNormalRange logic prismUndercuts already runs, since a
 // cap-blend body's non-patch faces are built exactly like a prism's.
+//
+// That range is the patch's own only where the patch's surface IS the one it
+// publishes. A mitered circular patch's is not, so its reading is widened by
+// its own proven departure (capPatchNormalAllow) and decides the patch only
+// where the widened interval stays on one side of the rule: see the loop
+// below.
 func capBlendUndercuts(b *Body, cbp capBlendPayload, pull r3.Vec) undercutOutcome {
 	p, ok := pull.Normalize()
 	if !ok {
@@ -46,7 +59,11 @@ func capBlendUndercuts(b *Body, cbp capBlendPayload, pull r3.Vec) undercutOutcom
 	if err != nil {
 		return undercutOutcome{}
 	}
-	var faces []*Face
+	// Non-nil from the start: an EMPTY listing is this survey's proven
+	// all-clear and a nil one is the undecided answer (BodyReport.Undercuts,
+	// verify.go), so the two shapes must stay distinguishable — the same
+	// distinction prismUndercuts already keeps.
+	faces := []*Face{}
 	for li, loop := range loops {
 		for _, w := range loop {
 			f := roles[fmt.Sprintf("side(%d,%d)", li, w.segs[0])]
@@ -85,8 +102,34 @@ func capBlendUndercuts(b *Body, cbp capBlendPayload, pull r3.Vec) undercutOutcom
 		if !ok {
 			return undercutOutcome{}
 		}
-		if opposesPull(mn, mx) {
+		allow := capPatchNormalAllow(patch.geom)
+		if allow <= 0 {
+			// The patch's own surface IS the Cone (or Plane) it publishes, so
+			// the range above is exact and decides the patch outright.
+			if opposesPull(mn, mx) {
+				faces = append(faces, f)
+			}
+			continue
+		}
+		// A MITERED circular patch is ruled between two differently-swept
+		// directrices, so the surface it publishes is its own only to within
+		// allow (capblend_geom.go, docs/modify-reach-design.md §8.3): every
+		// point of the patch carries an azimuth inside this window, and its own
+		// normal component sits within allow of the reading at that azimuth. So
+		// the patch is decided only where the WHOLE widened interval falls on
+		// one side of the rule, and undecided otherwise — never passed on the
+		// unwidened reading, which would report a Sound the geometry has not
+		// earned.
+		switch {
+		case mn > allow:
+			// Every point's component is above zero: nothing opposes the pull.
+		case mx+allow < 0 && mx-allow > -1:
+			// Every point's component is below zero, and the patch's own
+			// maximum is proven above -1, so this is a genuine opposition
+			// rather than opposesPull's exactly-antiparallel carve-out.
 			faces = append(faces, f)
+		default:
+			return undercutOutcome{}
 		}
 	}
 	return undercutOutcome{faces: faces, ok: true}
@@ -138,10 +181,23 @@ func capPatchNormalRange(f *Face, pl prismPayload, g capPatchGeom, p r3.Vec) (fl
 }
 
 // capBlendMinRadius is the tightest concave principal radius over a
-// cap-blend body (Table DX, DX8). This slice's patches are Plane and Cone
-// only — a chamfer produces no rolling-ball surface, so there is no Torus or
-// Sphere case here at all — and NEITHER kind ever tightens the answer beyond
-// what the receiver's own unchanged section already gives:
+// cap-blend body (Table DX, DX8).
+//
+// It answers only for a band whose every patch's own surface IS the Plane or
+// Cone it publishes. A MITERED circular patch is not: the build rules it
+// between two differently-swept directrices (docs/modify-reach-design.md
+// §8.3), and a straight-ruled surface between two skewed arcs is not
+// developable at all — it carries curvature in both principal directions,
+// tightening as the corner's own rulings converge, and neither the Cone
+// argument below nor the receiver's own section says anything about it. That
+// band is UNDECIDED here (`Suspect`, through runSurveys' own refusal
+// diagnostic) rather than answered with a proven absence the patch set does
+// not support.
+//
+// For every other band this slice's patches are Plane and Cone only — a
+// chamfer produces no rolling-ball surface, so there is no Torus or Sphere
+// case here at all — and NEITHER kind ever tightens the answer beyond what the
+// receiver's own unchanged section already gives:
 //
 //   - a Plane patch has zero curvature in both principal directions (flat),
 //     so it contributes no radius at all, exactly as a straight prism wall
@@ -162,9 +218,14 @@ func capPatchNormalRange(f *Face, pl prismPayload, g capPatchGeom, p r3.Vec) (fl
 //     single out a reflex corner's un-rounded tip for a reading the SAME
 //     corner, unchamfered, never received either.
 //
-// So the correct answer for THIS payload's patch set is exactly "no new
-// concave principal radius" — never Suspect — and the whole survey reduces
-// to prismMinRadius on the receiver's own untouched profile.
+// So for a band of those patches the correct answer is exactly "no new
+// concave principal radius" and the whole survey reduces to prismMinRadius on
+// the receiver's own untouched profile.
 func capBlendMinRadius(cbp capBlendPayload) (radiusOutcome, bool) {
+	for _, patch := range cbp.patches {
+		if capPatchWindowSkew(patch.geom) > 0 {
+			return radiusOutcome{}, false
+		}
+	}
 	return prismMinRadius(prismPayload{profile: cbp.profile})
 }

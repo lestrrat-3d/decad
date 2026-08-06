@@ -362,7 +362,7 @@ func buildCapBand(ctx context.Context, body *Body, ref StepRef, cbp capBlendPayl
 		dthHeld := gth1 - gth0
 		capThAllow := intervalFloatError(intervalScale(interval(piLower, piUpper), big.NewRat(2, 1)), dthHeld)
 		geom := capPatchGeom{circular: true, cU: w.cU, cV: w.cV, sideRadius: w.radius, capRadius: capRadius, th0: gth0, th1: gth1, capTh0: gth0, capTh1: gth1, sweepCCW: w.th1 > w.th0, wholeTurn: true, sideZ: sideZ, capZ: capZ, contourAllow: bandPatchAreaAllow(delta, chordUpper, slant), levelDelta: levelDelta, capThAllow: capThAllow}
-		setPatchArea(patch, geom)
+		setPatchReadings(patch, geom)
 		capLoop := []coedge{{edge: capEdge, forward: true}}
 		return capBandResult{patches: []*Face{patch}, capCo: capLoop, geom: []capPatchGeom{geom}, delta: delta}, nil
 	}
@@ -538,7 +538,7 @@ func buildCapBand(ctx context.Context, body *Body, ref StepRef, cbp capBlendPayl
 			levelDelta:   levelDelta,
 			capThAllow:   capThAllow,
 		}
-		setPatchArea(face, g)
+		setPatchReadings(face, g)
 		geoms = append(geoms, g)
 	}
 
@@ -699,7 +699,7 @@ func buildCapBand(ctx context.Context, body *Body, ref StepRef, cbp capBlendPayl
 			absSumUpper(trailSlant.length, trailSlant.lengthBound),
 		)
 		g.contourAllow = bandPatchAreaAllow(delta, chordUpper, slant)
-		setPatchArea(face, g)
+		setPatchReadings(face, g)
 		geoms = append(geoms, g)
 		capCo = append(capCo, coedge{edge: capEdge, forward: true})
 		if arc := arcByCorner[nextI]; arc != nil {
@@ -712,17 +712,25 @@ func buildCapBand(ctx context.Context, body *Body, ref StepRef, cbp capBlendPayl
 	return capBandResult{patches: patches, capCo: capCo, geom: geoms, delta: delta}, nil
 }
 
-// setPatchArea gives a constructed chamfer patch the area and bound its OWN
-// geometry already states (patchAreaOf, capblend_moments.go) — the same numbers
-// the body's area sum is built from, so a caller reading `Face.Area()` and a
-// caller reading `Body.Area()` are told the same thing about the same surface.
+// setPatchReadings gives a constructed chamfer patch the two readings its OWN
+// geometry already states: the area and bound patchAreaOf gives
+// (capblend_moments.go) — the same numbers the body's area sum is built from,
+// so a caller reading `Face.Area()` and a caller reading `Body.Area()` are told
+// the same thing about the same surface — and the bound its `Face.NormalAt`
+// owes, which is how far the RULED surface the build assembles can depart from
+// the `Cone` this file tags it with (capPatchNormalAllow).
+//
 // Left unset, a patch Face reports a zero area with a zero bound, which
 // `exactnessOf` publishes as an EXACT zero: not merely a missing reading but a
 // positively wrong one, asserted as a fact about a face that plainly has area.
-// Every patch this file builds passes through here, and each does so with the
-// geometry the moments pass then integrates, so the two can never disagree.
-func setPatchArea(f *Face, g capPatchGeom) {
+// A zero normal bound on a mitered patch is the same kind of wrong answer one
+// reading over — an `Exact` claim for a direction the built surface does not
+// have — and the DX7 undercut survey reads it. Every patch this file builds
+// passes through here, and each does so with the geometry the moments pass then
+// integrates, so the two can never disagree.
+func setPatchReadings(f *Face, g capPatchGeom) {
 	f.area, f.areaBound = patchAreaOf(g)
+	f.normalBound = capPatchNormalAllow(g)
 }
 
 // capSlantEdge is one cap-level contour point's slant edge down to the
@@ -836,6 +844,57 @@ func coneSurface(pl prismPayload, cu, cv, r0, r1, z0, z1 float64) Surface {
 		Radius:    units.Millimeters(0),
 		HalfAngle: units.Radians(math.Atan2(math.Abs(dr), math.Abs(dz))),
 	}
+}
+
+// capPatchWindowSkew is one patch's own widest corner skew: how far the
+// CAP-level directrix's own angular window is trimmed inside the SIDE-level
+// one (docs/modify-reach-design.md §8.3). It is zero exactly for the three
+// configurations whose two windows coincide — a tangent join, a reflex
+// corner's apex patch, and the cornerless whole turn — and for a Plane patch,
+// which reaches the denoted offset family exactly and is not ruled between two
+// arcs at all.
+//
+// The two windows are not guaranteed to share a branch (capWallSweep anchors
+// capTh0 at a raw Atan2 while th0 comes from the recorded arc range), so the
+// cap window is put back on th0's own branch first — the same shift
+// chordLocusResidualAllow takes for the same reason, and the only other site
+// that differences the two pairs against each other rather than within a pair.
+func capPatchWindowSkew(g capPatchGeom) float64 {
+	if !g.circular {
+		return 0
+	}
+	capTh0, capTh1 := capWindowOnBranch(g.capTh0, g.capTh1, g.th0)
+	skew := math.Max(math.Abs(capTh0-g.th0), math.Abs(g.th1-capTh1))
+	if isNonFinite(skew) || skew <= 0 {
+		return 0
+	}
+	return skew
+}
+
+// capPatchNormalAllow gathers one patch's own inputs to bounds.go's
+// ruledPatchNormalAllow: the proven bound on how far the RULED surface the
+// build assembles can carry a normal differing from the `Cone` this file
+// publishes for it. A patch whose two windows already coincide gets zero,
+// which is what keeps the tangent-join, apex and whole-turn readings exactly
+// as they ship.
+//
+// The two windows must also be walked in the SAME sense for that derivation's
+// own convexity step to hold (both a and b non-negative, so the built normal's
+// azimuth stays between the two directrices'). buildCapBand normalizes th0 <
+// th1 and swaps capTh0/capTh1 together with them, so a disagreeing pair is not
+// a configuration this evaluator builds — and where one is seen anyway the
+// answer is the trivial bound, never a number the derivation did not earn.
+func capPatchNormalAllow(g capPatchGeom) float64 {
+	skew := capPatchWindowSkew(g)
+	if skew <= 0 {
+		return 0
+	}
+	// Each window's own WIDTH is branch-independent — capWindowOnBranch shifts
+	// a pair together — so neither needs the shift the skew above took.
+	if g.th1-g.th0 <= 0 || g.capTh1-g.capTh0 <= 0 {
+		return ruledNormalAllowUnbounded
+	}
+	return ruledPatchNormalAllow(g.sideRadius, g.capRadius, g.capZ-g.sideZ, skew)
 }
 
 // buildConePatch builds a full-turn Cone chamfer patch (a whole circular
