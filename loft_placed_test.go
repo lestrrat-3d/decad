@@ -569,6 +569,47 @@ func TestLoftPlacedS13OverflowingCoordinate(t *testing.T) {
 	require.Equal(t, stepsBefore, doc.Recipe().Steps, "a refused S13 placement leaves the recipe untouched")
 }
 
+// TestLoftPlacedNearMaxFloatSectionRefusesUnsupported pins the refusal a
+// placement owes at a coordinate whose DISPLACEMENT SCALE, not its
+// coordinate, leaves the finite float64 range. Both sections sit at
+// 0.75*MaxFloat64, so 2*maxInputAbs overflows inside bounds.go's
+// rigidRoundAllow while every placed coordinate itself stays finite — S13
+// never fires, and the placement is decided by the terms delta feeds.
+//
+// The answer must be ErrUnsupported and never ErrNotFinite: every input is
+// finite and only decad's own evaluation leaves the range, which is the line
+// Table S row S13 draws. A NaN delta is what makes the difference: NaN > 0 is
+// false, so loft_moments.go's placement terms would all be skipped, the
+// volume bound would never be widened, S12's clearance test would never run,
+// and the placement would fail only incidentally on the one reading that
+// publishes delta unconditionally.
+func TestLoftPlacedNearMaxFloatSectionRefusesUnsupported(t *testing.T) {
+	x := 0.75 * math.MaxFloat64
+	s0, p0, s1, p1 := loftSquaresAt(t, r3.NewVec(0, 0, x), 1, 1, 8e292)
+	doc := decad.New()
+	body, err := doc.Loft(s0, p0, s1, p1)
+	require.NoError(t, err, "a finite, in-range, buildable body")
+
+	vol, err := body.Volume()
+	require.NoError(t, err)
+	require.Equal(t, decad.Exact, vol.Exactness, "the unplaced body's volume is still exact")
+	require.Positive(t, vol.Value.Base())
+
+	stepsBefore := doc.Recipe().Steps
+	bodiesBefore := doc.Bodies()
+
+	move, err := r3.Translation(r3.NewVec(0, 1, 0))
+	require.NoError(t, err)
+	placed, err := body.Placed(move)
+	require.Nil(t, placed)
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+	require.NotErrorIs(t, err, decad.ErrNotFinite,
+		"a saturated displacement scale is decad's own evaluation leaving the range, not a non-finite measurement")
+
+	require.Equal(t, bodiesBefore, doc.Bodies(), "a refused placement leaves the document untouched")
+	require.Equal(t, stepsBefore, doc.Recipe().Steps, "a refused placement leaves the recipe untouched")
+}
+
 // TestLoftPlacedContextCancellation proves a canceled context returns
 // ctx.Err() with the receiver still live and the recipe unchanged.
 func TestLoftPlacedContextCancellation(t *testing.T) {

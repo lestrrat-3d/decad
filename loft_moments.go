@@ -24,6 +24,12 @@ import (
 // bound sums those per-triangle widths beside the summation loop's own slop —
 // or is +Inf where either of those two terms has itself saturated, since a
 // saturated term states no scale for the bound to be proven at (wallBound).
+//
+// A PLACEMENT adds one further term to all four readings: the payload's own
+// proven displacement delta and the allowances it feeds (§12 PR 2a), which is
+// why none of the four is Exact on a placed body however exactly its own
+// arithmetic comes out. Every one of those terms is gated on delta > 0, so an
+// unplaced body's published readings are bit-identical to PR 1's.
 
 // loftMassAccumulator is docs/loft-design.md §8's tetrahedron-sum kernel. It
 // streams one outward-oriented triangle of T at a time — a wall or a cap
@@ -167,8 +173,10 @@ func wallTriangleArea(u, v xpt) (float64, float64) {
 }
 
 // foldBounds extends the componentwise extreme box over one held vertex.
-// Every vertex is already exact (docs/loft-design.md §5), so comparing them
-// introduces no rounding of its own.
+// Comparing held coordinates introduces no rounding of its own, so the box is
+// exactly as good as the vertex set it is taken over: exact on an unplaced
+// body (docs/loft-design.md §5) and within delta of the true extreme on a
+// placed one, which is what bounds() publishes.
 func (m *loftMassAccumulator) foldBounds(p r3.Vec) {
 	if !m.haveBounds {
 		m.lo, m.hi = p, p

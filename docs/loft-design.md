@@ -351,10 +351,14 @@ computed:
   `Convex()` / `Concave()` on its rims exactly as a prism does, and `Concave`
   keeps picking a hole's rims (core §9).
 
-**Every wall face is a `Plane`** (its `Frame` computed from its own three
-exact vertices), Exact by construction per core §6.1's surface-parameter
+**Every wall face is a `Plane`** (its `Frame` computed from its own three held
+vertices — exact on an unplaced body, and within the payload's own `delta` on
+a placed one), Exact by construction per core §6.1's surface-parameter
 carve-out — the identical standing Extrude's `LineSeg` side walls already
-have. Cap faces (`capStart`, `capEnd`) are `Plane`s over a polygon-with-holes
+have. That carve-out is what the vertices' own standing does not reach: the
+SURFACE parameters are the exact answer for the vertices handed to them, while
+the face's `Area()` and every vertex `Position()` on it carry `delta` (§8).
+Cap faces (`capStart`, `capEnd`) are `Plane`s over a polygon-with-holes
 region, exactly as an Extrude cap is.
 
 ## 6. The build-time simplicity / crossing audit
@@ -569,6 +573,13 @@ bound) plus the wall triangles' proven-bound sum — so the total is
 `Approximate` with a proven bound whenever at least one wall triangle has
 nonzero area, which increment 1's admitted correspondence always does.
 
+A PLACED body's `Area` (§12 PR 2a) adds one further term to that total: the
+per-triangle area allowance `bounds.go`'s `perturbedTriangleAreaAllow` states,
+summed over every wall AND cap triangle. The caps need it as much as the walls
+do — a cap's contribution is its recorded region's exact rational area, and
+under a placement the built cap triangles are within `delta` of what that
+rational denotes.
+
 **`Bounds` is Exact for an unplaced body.** Every vertex is already treated
 as exact (§5); the axis-aligned box is the componentwise min/max over an
 already-exact set, the same per-vertex-extreme reasoning Extrude's `Bounds`
@@ -598,7 +609,7 @@ for the body-level quantities.
 | D | Consumer | Reads | Increment-1 status |
 |---|---|---|---|
 | **D1** | `Tessellate` / `STL` / `OBJ` | the payload | works from the first PR that wires it in (§12 PR 2b), and the returned `Bound` is **the payload's own `delta`** (§12 PR 2a), not unconditionally zero: an unplaced loft's `delta` is zero, so an unplaced body's tessellation is still restatement with a zero bound, but every wall and cap face of a PLACED body is a flat triangle over held vertices that are no longer provably exact, so tessellation restates exactly what the payload holds, `delta` included (`triangulate.go`'s existing polygon-with-holes triangulator for the two caps; no chording anywhere) |
-| **D2** | the mesh boolean (`Union`/`Cut`/`Intersect`, evaluator §9) | the tessellation | a first-class operand once D1 lands, admitted through the existing all-planar zero-bound path (`docs/evaluator-design.md` §2 — "the VOLUME of an all-planar pair whose contact points round exactly") — no new boolean code, a loft body is just another all-planar operand |
+| **D2** | the mesh boolean (`Union`/`Cut`/`Intersect`, evaluator §9) | the tessellation | a first-class operand once D1 lands — no new boolean code, a loft body is just another all-planar operand. An UNPLACED loft (`delta` zero) is admitted through the existing all-planar zero-bound path (`docs/evaluator-design.md` §2 — "the VOLUME of an all-planar pair whose contact points round exactly"); a PLACED one hands the boolean its `delta` as the operand displacement every other nonzero-bound operand already carries (`bounds.go`'s `rimDelta`), so the result's volume is `Approximate` like any other |
 | **D3** | Interference (`docs/interference-design.md`) | box separation (D6-style) reads `Bounds` directly; the read-only mesh-boolean path reads D2's tessellation | box-disjoint pairs prove only their disjoint-interior interference relation (`Bounds` carries the payload's own displacement, §8). `Verify` is `Sound` only when every other required or requested body and pair check is decided and trusted; a pair needing the mesh boolean works once D2 lands; a pair needing the analytic containment/pair kernel stays `Suspect` until a loft case is added to `clearance_geom.go`'s payload switch — identical staging to the cup's own D6 row in `docs/modify-design.md` |
 | **D4** | Clearance (`WithClearances`, `docs/clearance-design.md`) | the analytic pair kernel's payload switch | `WithClearances` stays `Suspect`, even for a box-disjoint pair: box separation proves disjoint interiors but does not measure the gap. No loft case exists in the kernel yet. |
 | **D5** | `MinWallThickness` / `Undercuts` / `MinRadius` (verification §6, `survey2d.go`) | one constant 2D cross-section (a prism's section, a revolve's meridian) | The corresponding requested survey is `Suspect` until its loft implementation lands. In increment 1, a loft's cross-section varies continuously between the two profiles, so the existing spanning-disk / meridian-walk reduction does not reach it; `docs/modify-reach-design.md` DX9 states the identical cap-blend reason: "not one constant section at one height… the existing 2D spanning-disk proof does not decide them" |
@@ -711,6 +722,13 @@ volume, and S12 refuses that placement before any gate reads it.
 Every test asserts on computed geometry — coordinates, volumes, residuals —
 never merely that a call ran (project rule).
 
+**Every fixture below is an UNPLACED body unless its own bullet says
+otherwise**, so every exactness and zero-bound assertion in this section is
+read at `delta` zero. A placed body's readings are the Placement bullet's own
+subject, and §8 owns the rule each of them follows: `delta` enters every
+vertex, edge length, face area, and all four body measurements, so no fixture
+here may be reused against a placed body without carrying it.
+
 - **Pairing**: hole-count mismatch → S1; segment-count mismatch → S2;
   mixed/curved segment pair (including same-kind circular) → S3; malformed
   `WithLoftAlignment` (wrong length, out-of-range offset, or duplicate
@@ -778,9 +796,13 @@ never merely that a call ran (project rule).
   area exactly 2^968 — and asserts the published bound is `+Inf` and the
   reading `Approximate`, never a zero bound over a value that has swallowed
   whole triangles. `Bounds` matches the exact per-vertex componentwise extreme.
-- **Downstream**: D1's `Bound` is exactly zero for an admitted loft; a D2
-  boolean between a loft and a prism succeeds through the existing
-  all-planar path; a box-disjoint loft/loft pair proves only its
+- **Downstream**: D1's `Bound` is the payload's own `delta` — exactly zero for
+  an admitted UNPLACED loft, and the same positive `delta` its `Bounds` and
+  vertex positions carry for a placed one, asserted on a placed fixture beside
+  the unplaced one; a D2 boolean between an unplaced loft and a prism succeeds
+  through the existing all-planar zero-bound path, and one between a PLACED
+  loft and a prism succeeds with an `Approximate` volume whose bound composes
+  that `delta`; a box-disjoint loft/loft pair proves only its
   disjoint-interior interference relation under D3, and its `Verify` report
   is `Sound` only with no other undecided required or requested check; a
   box-disjoint pair with `WithClearances` reads `Suspect` until the analytic

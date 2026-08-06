@@ -123,6 +123,12 @@ func chainLengthBound(nSegs int, delta, heldLen float64) float64 {
 	return upRound(2*float64(nSegs)*delta + sumSlop(nSegs, heldLen))
 }
 
+// maxFiniteUlp is 2⁹⁷¹, the spacing between the two largest finite float64s
+// and therefore the LARGEST spacing any pair of adjacent finite float64s has.
+// Half of it bounds the rounding a single operation whose result is finite can
+// commit, whatever that result's magnitude.
+const maxFiniteUlp = 0x1p971
+
 // rigidRoundAllow bounds the rounding a rigid motion commits on one point.
 // The rounding happens INSIDE the products and sums — at the magnitude of the
 // INPUT coordinate and of the translation — not at the magnitude of the
@@ -131,9 +137,29 @@ func chainLengthBound(nSegs int, delta, heldLen float64) float64 {
 // under 2·maxInputAbs + maxTransAbs (an orthonormal row's dot product is at
 // most √3·|input|), 16 ulps there cover the products, the two sums and the
 // translation, and the consumers read a 3D distance, so ×√3.
+//
+// That scale is a MAGNITUDE, not a value the motion produces, so it saturates
+// on inputs the motion itself handles perfectly well: 2·maxInputAbs overflows
+// for any coordinate above MaxFloat64/2, and ulpOf answers +Inf at MaxFloat64
+// and NaN past it, since its own math.Nextafter step leaves the finite range.
+// The answer must never be NaN. NaN is not a large bound but the ABSENCE of
+// one, and it is silent: NaN > 0 is false, so every consumer's own `delta > 0`
+// widening is skipped and the term vanishes from the measurements it was
+// supposed to widen. So a saturated scale falls back to maxFiniteUlp, which
+// is a PROVEN charge rather than a substitute for one: this helper answers for
+// a point whose placed coordinates the caller has already proven finite (a
+// non-finite coordinate is that caller's own refusal — docs/loft-design.md
+// Table S row S13 for a loft), an operation with a finite result rounds by at
+// most half the spacing at that result, and 16·maxFiniteUlp dominates the six
+// products and sums one placed coordinate commits (three products, two sums
+// joining them, and the translation's own).
 func rigidRoundAllow(maxInputAbs, maxTransAbs float64) float64 {
 	m := 2*math.Abs(maxInputAbs) + math.Abs(maxTransAbs)
-	return radius3D(16 * ulpOf(m))
+	ulp := ulpOf(m)
+	if isNonFinite(ulp) {
+		ulp = maxFiniteUlp
+	}
+	return radius3D(16 * ulp)
 }
 
 // perturbedAreaUpper bounds the total facet area of a mesh whose vertices may

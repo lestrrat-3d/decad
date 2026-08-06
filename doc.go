@@ -104,6 +104,8 @@
 //	  hole-count or per-loop segment-count mismatch           ErrUnsupported
 //	  a paired segment where either side is not LineSeg       ErrUnsupported
 //	  audit's fixed pair-test budget exhausted                ErrUnsupported
+//	  a lifted or placed vertex past the float64 range        ErrUnsupported
+//	  a placement whose volume allowance swamps the body      ErrUnsupported
 //	  the two profiles lie in the same geometric plane        ErrDegenerate
 //	  a proven self-contact or self-intersection              ErrDegenerate
 //	Placed        any body this evaluator built               builds

@@ -161,7 +161,7 @@ one.
 | `loft.go` | `docs/loft-design.md` PR 1b: `Document.Loft`/`LoftContext`, the public entry point over `loft_build.go`'s evaluator. Owns gates S9–S11 and S4's arity half; the step commits only after `evalLoft` succeeds. See doc comments; `docs/loft-design.md` §2/§4/§10. |
 | `loft_build.go` | `docs/loft-design.md` PR 1a/2a: `loftPayload`, `evalLoft` and `placed` — Table P pairing, the Table S gates it owns (S12 included), the flat-triangle wall/cap construction, the placement re-lift and its `delta`, and the four measurements. See doc comments; `docs/loft-design.md` §5–§8, §12. |
 | `loft_audit.go` | The build-time crossing audit of `docs/loft-design.md` §6: `loftCrossingAudit` proves the assembled triangle set manifold and watertight, reusing `boolean_exact.go` and `boolean_mesh.go`'s `triTriClassify` unchanged. Gate order is S6, S8, S7. |
-| `loft_moments.go` | `docs/loft-design.md` §8's mass-property engine: `loftMassAccumulator`, an exact-rational tetrahedron sum over the assembled triangle set, publishing Volume/Centroid/Bounds with one final rounding. Area is never Exact. |
+| `loft_moments.go` | `docs/loft-design.md` §8's mass-property engine: `loftMassAccumulator`, an exact-rational tetrahedron sum over the assembled triangle set, publishing Volume/Centroid/Bounds/Area under the payload's own placement displacement. See §8, §12. |
 
 ### Modify
 

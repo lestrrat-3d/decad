@@ -13,8 +13,9 @@ import (
 // This file is docs/loft-design.md PR 1b: the public entry point over PR 1a's
 // evaluator (loft_build.go). It owns the LoftOption surface, WithLoftAlignment,
 // gates S9-S11 and S4's arity half (§2/§4), and the atomic record->evaluate->
-// commit tail (§10). Every other gate (S1-S8) is validateLoftRecords' and
-// loftCrossingAudit's, run inside evalLoft in §4's stated order.
+// commit tail (§10). Every other gate — S1-S8 and S13's coordinate-range
+// gate — is validateLoftRecords', assembleLoft's and loftCrossingAudit's, run
+// inside evalLoft in §4's stated order.
 
 // LoftOption configures Loft.
 type LoftOption interface {

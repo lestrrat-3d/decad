@@ -1309,7 +1309,8 @@ func (in pairToleranceInputs) lengthReference(value float64) (float64, bool) {
 // reference-less Suspect this design admits.
 //
 // A loftPayload reads its OWN held vertex-set diameter (pointSetDiameterContext),
-// never an envelope: every loft vertex is exact (docs/loft-design.md §5), the
+// never an envelope: an unplaced loft's every vertex is exact
+// (docs/loft-design.md §5), the
 // boundary is a polyhedron, and a convex-hull diameter is realized at
 // vertices, so this is the TRUE diameter rather than a bound on it — the
 // strongest arm in this function, ahead of the exact carrier model that does

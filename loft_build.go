@@ -11,7 +11,8 @@ import (
 )
 
 // This file is docs/loft-design.md PR 1a: the evaluator half of Loft — the
-// loftPayload, its Table P pairing, Table S gates S1-S5 (S9-S11 are the public
+// loftPayload, its Table P pairing, Table S gates S1-S5 and S13's
+// coordinate-range gate (S9-S11 are the public
 // entry point's job, docs/loft-design.md §2/§4), the flat-triangle wall
 // construction (§5), the wiring of the already-landed §6 audit
 // (loft_audit.go) and §8 mass kernel (loft_moments.go), and the four
@@ -489,8 +490,10 @@ func junctionConvex(verts []r3.Vec, primary, other [3]int, a, b int) bool {
 // V its two edge vectors. r3.NewFrame orthonormalizes them (Gram-Schmidt in
 // effect), and the resulting normal U×V is (B-A)x(C-A) up to positive
 // scaling — the outward normal of an outward-wound triangle, so the face's
-// `reversed` flag stays false (§5's "Exact by construction ... reversed stays
-// false").
+// `reversed` flag stays false (§5's wall-face row: every wall face is a Plane
+// wound outward). The Frame is the exact answer for the three vertices handed
+// to it whatever their own standing — §5's surface-parameter carve-out — while
+// the face's own area and its vertices' positions carry the payload's delta.
 func planeFromTriangle(verts []r3.Vec, tri [3]int) (Plane, error) {
 	a, b, c := verts[tri[0]], verts[tri[1]], verts[tri[2]]
 	f, err := r3.NewFrame(a, b.Sub(a), c.Sub(a))
