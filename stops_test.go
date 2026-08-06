@@ -943,3 +943,52 @@ func TestExtrudeToFaceInheritsCapBlendComputedLevelBound(t *testing.T) {
 	}
 	require.Equal(t, 4, top, `the later stop keeps the cap blend's level bound`)
 }
+
+// TestExtrudeToFaceInheritsPlacedLoftBound keeps a stop against a placed
+// loft's planar cap from treating its held coordinates as exact.
+func TestExtrudeToFaceInheritsPlacedLoftBound(t *testing.T) {
+	s0, p0, s1, p1 := loftSquares(t, 20, 20)
+	doc := decad.New()
+	loft, err := doc.Loft(s0, p0, s1, p1)
+	require.NoError(t, err)
+
+	move, err := r3.Translation(r3.NewVec(0.1, 0.2, 0.3))
+	require.NoError(t, err)
+	placed, err := loft.Placed(move)
+	require.NoError(t, err)
+
+	loftBound := 0.0
+	for _, vertex := range placed.Vertices() {
+		position := vertex.Position()
+		if position.Value.Z != 10.3 {
+			continue
+		}
+		require.Equal(t, decad.Approximate, position.Exactness)
+		bound, err := position.Bound.In(units.Millimeter)
+		require.NoError(t, err)
+		require.Positive(t, bound)
+		loftBound = math.Max(loftBound, bound)
+	}
+	require.Positive(t, loftBound)
+
+	s, _, pinProfile := plateAndPin(t)
+	pin, err := doc.Extrude(s, pinProfile, decad.ToFace{
+		Body: placed,
+		Face: capEndFace(placed),
+	})
+	require.NoError(t, err)
+
+	top := 0
+	for _, vertex := range pin.Vertices() {
+		position := vertex.Position()
+		if position.Value.Z != 10.3 {
+			continue
+		}
+		require.Equal(t, decad.Approximate, position.Exactness)
+		bound, err := position.Bound.In(units.Millimeter)
+		require.NoError(t, err)
+		require.GreaterOrEqual(t, bound, loftBound)
+		top++
+	}
+	require.Equal(t, 4, top, `the stopped pin inherits the loft cap bound`)
+}

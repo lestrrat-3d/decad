@@ -1802,7 +1802,7 @@ func TestCapBlendSideLevelCarriesSetbackRounding(t *testing.T) {
 }
 
 // TestCapBlendInheritsComputedCapLevelBound keeps a cap blend from laundering
-// the stop displacement of its unchanged end cap back into an exact level.
+// the stop displacement of its chamfered end cap back into an exact level.
 func TestCapBlendInheritsComputedCapLevelBound(t *testing.T) {
 	const (
 		plateHeight = 1e12
@@ -1822,7 +1822,7 @@ func TestCapBlendInheritsComputedCapLevelBound(t *testing.T) {
 	require.NoError(t, err)
 
 	chamfered, err := pin.Chamfer(
-		decad.Edges(decad.CreatedBy(decad.CapStart(pin))),
+		decad.Edges(decad.CreatedBy(decad.CapEnd(pin))),
 		units.Millimeters(shortBy),
 	)
 	require.NoError(t, err)
@@ -1839,10 +1839,72 @@ func TestCapBlendInheritsComputedCapLevelBound(t *testing.T) {
 		require.GreaterOrEqual(t, bound, rounding)
 		top++
 	}
-	require.Equal(t, 4, top, `the unchanged end cap keeps its four bounded vertices`)
+	require.Equal(t, 4, top, `the chamfered end cap keeps its four bounded vertices`)
 
 	bounds, err := chamfered.Bounds()
 	require.NoError(t, err)
 	require.Equal(t, decad.Approximate, bounds.Exactness)
 	require.GreaterOrEqual(t, bounds.Bound.Mag(), rounding)
+}
+
+// TestCapBlendWholeCircleInheritsComputedCapLevelBound covers the cap seam
+// vertex that a whole-circle chamfer builds instead of corner vertices.
+func TestCapBlendWholeCircleInheritsComputedCapLevelBound(t *testing.T) {
+	const (
+		plateHeight = 1e12
+		shortBy     = 1e-3
+		heldStop    = 999999999999.9990234375
+		rounding    = 2.34375e-05
+	)
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	plate := s.CreateRectangle(0, 0, 100, 60)
+	s.Fix(plate.A)
+	center := s.CreatePoint(130, 10)
+	s.Fix(center)
+	s.CreateCircle(center, 10)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+
+	var plateProfile, diskProfile *sketch.Profile
+	for _, profile := range s.Profiles() {
+		if profile.Area > 1000 {
+			plateProfile = profile
+		} else {
+			diskProfile = profile
+		}
+	}
+	require.NotNil(t, plateProfile)
+	require.NotNil(t, diskProfile)
+
+	doc := decad.New()
+	plateBody, err := doc.Extrude(s, plateProfile, decad.Distance{D: units.Millimeters(plateHeight), Dir: decad.Along})
+	require.NoError(t, err)
+	disk, err := doc.Extrude(s, diskProfile, decad.ToFace{
+		Body:   plateBody,
+		Face:   capEndFace(plateBody),
+		Offset: units.Millimeters(-shortBy),
+	})
+	require.NoError(t, err)
+
+	chamfered, err := disk.Chamfer(
+		decad.Edges(decad.CreatedBy(decad.CapEnd(disk))),
+		units.Millimeters(shortBy),
+	)
+	require.NoError(t, err)
+
+	top := 0
+	for _, vertex := range chamfered.Vertices() {
+		position := vertex.Position()
+		if position.Value.Z != heldStop {
+			continue
+		}
+		require.Equal(t, decad.Approximate, position.Exactness)
+		bound, err := position.Bound.In(units.Millimeter)
+		require.NoError(t, err)
+		require.GreaterOrEqual(t, bound, rounding)
+		top++
+	}
+	require.Equal(t, 1, top, `the whole-circle cap seam keeps its level bound`)
 }

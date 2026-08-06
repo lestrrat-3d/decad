@@ -362,15 +362,41 @@ func TestTessellateToleranceValidation(t *testing.T) {
 	}
 }
 
-func TestTessellateBoundNeverExceedsTolerance(t *testing.T) {
-	// A threshold tolerance that used to land one chord short: the proven
-	// bound must never exceed what the caller asked for.
+func TestTessellateChordingBoundNeverExceedsTolerance(t *testing.T) {
+	// A threshold tolerance that used to land one chord short: the chording
+	// bound of an exact payload must never exceed what the caller asked for.
 	body := holedPlateBody(t)
 	for _, tol := range []float64{0.489434836999924627, 0.5, 0.1, 1e-3, 3.7e-2} {
 		mesh, err := body.Tessellate(units.Millimeters(tol))
 		require.NoError(t, err)
 		require.LessOrEqual(t, mesh.Bound().Mag(), tol, `tol %v`, tol)
 	}
+}
+
+func TestTessellateBoundIncludesComputedLevelDisplacement(t *testing.T) {
+	const (
+		plateHeight = 1e12
+		shortBy     = 1e-3
+		tol         = 1e-9
+		rounding    = 2.34375e-05
+	)
+	s, plateProfile, pinProfile := plateAndPin(t)
+	doc := decad.New()
+	plate, err := doc.Extrude(s, plateProfile, decad.Distance{D: units.Millimeters(plateHeight), Dir: decad.Along})
+	require.NoError(t, err)
+	pin, err := doc.Extrude(s, pinProfile, decad.ToFace{
+		Body:   plate,
+		Face:   capEndFace(plate),
+		Offset: units.Millimeters(-shortBy),
+	})
+	require.NoError(t, err)
+
+	mesh, err := pin.Tessellate(units.Millimeters(tol))
+	require.NoError(t, err)
+	bound, err := mesh.Bound().In(units.Millimeter)
+	require.NoError(t, err)
+	require.Greater(t, bound, tol)
+	require.GreaterOrEqual(t, bound, rounding)
 }
 
 func TestTessellateRejectsTangentHole(t *testing.T) {

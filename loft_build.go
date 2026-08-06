@@ -61,6 +61,11 @@ type loftPayload struct {
 // transform is the accumulated rigid placement.
 func (pl loftPayload) transform() r3.Transform { return pl.xform }
 
+// axialDelta reports the displacement of every held loft vertex. Its planar
+// caps are built from those vertices, so a ToFace stop against either cap
+// inherits this bound.
+func (pl loftPayload) axialDelta() float64 { return pl.delta }
+
 // placed re-evaluates the same two records under the composed motion
 // (docs/loft-design.md §7, §12 PR 2a): it re-lifts every vertex from the
 // record under the FULL composed transform rather than moving the held mesh

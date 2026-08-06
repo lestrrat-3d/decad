@@ -41,7 +41,7 @@ Every successful mesh MUST satisfy all rows:
 |---|---|
 | **Geometry** | `Triangles` index `Vertices`; every triangle has positive area; every connected boundary component is a closed, consistently outward-oriented 2-manifold |
 | **Deviation** | `Bound` is a two-sided boundary bound: every point of the analytic boundary is within `Bound` of the mesh, and every point of the mesh is within `Bound` of the analytic boundary |
-| **Tolerance** | `Bound <= tol`; `Bound` is the largest proven displacement actually used, not the requested tolerance |
+| **Tolerance** | The chording component is `<= tol`; `Bound` also includes inherited payload displacement, so it can exceed `tol` |
 | **Provenance** | `len(SourceFaces()) == len(Triangles())`; entry `i` is the live body face whose patch triangle `i` approximates |
 | **Sharing** | Two facets meeting along one analytic edge reuse the same vertex indices; coincident coordinates in separately allocated vertices do not satisfy this rule |
 | **Determinism** | Equal payload + equal tolerance → equal vertex order, triangle order, source-face order, and export bytes |
@@ -196,9 +196,10 @@ raises the admitted ceiling. Overflow or a finer request than any cap admits →
 `ErrUnsupported`. No facet allocation or pair predicate starts before its
 corresponding preflight passes.
 
-A requested tolerance is an upper bound, not a density request. The tessellator
-may refine beyond the first admissible `n` to prove topology, non-intersection,
-or a finite private bound. It may NEVER coarsen. Refinement is deterministic:
+A requested tolerance is an upper bound on chording, not on the complete mesh
+bound or a density request. The tessellator may refine beyond the first
+admissible `n` to prove topology, non-intersection, or a finite private bound.
+It may NEVER coarsen. Refinement is deterministic:
 refine the first failing meridian walk in payload order; an angular failure
 increments the one global angular count; rebuild and re-audit.
 
@@ -266,13 +267,14 @@ only when every trim is straight/exact and every held coordinate is proved
 exact; being planar is not enough. `Mesh.Bound()` remains the maximum of these
 complete face bounds.
 
-Reserve the maximum `deltaStore(face)` from `tol`, rounding the subtraction
-downward, before choosing section chord counts; a non-positive remainder
-refuses. If any `deltaStore` is nonzero, certify the affine ideal-to-stored
-vertex homotopy with the positive-area/contact rules of §9. Charge its area per
-triangle with §10.2's `Rarea_triangle(deltaStore)` and its occupied-volume sweep
-with §11's `sweptVolumeAllow` over a perturbed-area upper bound. A source bound
-alone does not discharge either proof.
+`tol` selects the section chord counts. `deltaStore(face)` is inherited payload
+displacement, so it is added to each source bound without reducing the chording
+budget; the complete `Bound` can therefore exceed `tol`. If any `deltaStore` is
+nonzero, certify the affine ideal-to-stored vertex homotopy with the
+positive-area/contact rules of §9. Charge its area per triangle with §10.2's
+`Rarea_triangle(deltaStore)` and its occupied-volume sweep with §11's
+`sweptVolumeAllow` over a perturbed-area upper bound. A source bound alone does
+not discharge either proof.
 
 For a circular subarc `c`, let `S_c` be the planar circular segment between the
 arc and its chord and let `a_c = area(S_c)` (absolute). Then:
@@ -825,9 +827,11 @@ until T4 proves occupied-volume error.
 - Assert directed-edge closure, positive triangle area, outward winding, and
   `len(SourceFaces) == len(Triangles)` on every payload class.
 - Assert byte-identical repeated STL/OBJ output.
-- Assert `Bound <= tol` and the smallest valid count at threshold tolerances on
-  both sides of every chord-count change. Include the radius-1 full-turn
-  `n = 122` threshold and each closed-walk/axis-to-axis minimum. For radius 1,
+- Assert the chording component is `<= tol` and the smallest valid count at
+  threshold tolerances on both sides of every chord-count change. Include a
+  payload-displacement fixture whose complete `Bound` exceeds `tol`, the
+  radius-1 full-turn `n = 122` threshold, and each closed-walk/axis-to-axis
+  minimum. For radius 1,
   cover budgets equal to and above `2r`, including 5 mm: choose the minimum
   count without evaluating an out-of-domain inverse. Exercise inverse
   underflow, unrepresentable ceiling, and cap overflow; each MUST refuse before

@@ -51,15 +51,18 @@ func (m *Mesh) SourceFaces() []*Face { return append([]*Face(nil), m.source...) 
 // Bound returns the proven deviation bound: no point of the body's boundary
 // lies farther than this from the mesh, and vice versa. It is the largest
 // complete displacement the tessellation used, including curve chording and
-// inherited payload coordinate bounds. It is at most the requested tolerance,
-// and zero only when every held boundary coordinate is exact. A scalar quantity
-// is a units.Value (core §5.1): Kind Length, millimetres.
+// inherited payload coordinate bounds. Its chording component is at most the
+// requested tolerance; inherited payload displacement is added on top, so
+// Bound can exceed that tolerance. It is zero only when every held boundary
+// coordinate is exact. A scalar quantity is a units.Value (core §5.1): Kind
+// Length, millimetres.
 func (m *Mesh) Bound() units.Value { return units.Millimeters(m.bound) }
 
-// Tessellate approximates the body's boundary as a triangle mesh whose facets
-// deviate from the analytic faces by no more than tol, the chord tolerance —
-// an OUTPUT, not the representation (core §11). tol is a magnitude: Kind
-// Length ([ErrUnitKind] otherwise), finite ([ErrNotFinite]), non-negative
+// Tessellate approximates the body's boundary as a triangle mesh whose
+// chording deviates from the held analytic faces by no more than tol. Inherited
+// payload displacement is added to the returned Bound. It is an OUTPUT, not
+// the representation (core §11). tol is a magnitude: Kind Length
+// ([ErrUnitKind] otherwise), finite ([ErrNotFinite]), non-negative
 // ([ErrNegativeMagnitude]); a zero tolerance asks for a chord that is the
 // curve and is [ErrDegenerate].
 //
@@ -231,8 +234,8 @@ func tessellateContext(ctx context.Context, b *Body, tol units.Value) (*Mesh, er
 	// sweep levels, and a payload holds each only within its own displacement of
 	// what it denotes — the section's in the plane
 	// (docs/prism-boolean-design.md §7), each end's along the normal — so the mesh
-	// deviates by its own chording plus both. Zero for every payload a caller
-	// draws.
+	// deviates by its own chording plus both. Chording stays within the requested
+	// tolerance; payload displacement can make the complete bound larger.
 	mesh.bound = upRound(mesh.bound + pp.sectionDelta + pp.axialDelta())
 	return &mesh, nil
 }

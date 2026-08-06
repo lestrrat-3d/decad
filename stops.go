@@ -38,19 +38,15 @@ type directionalExtent interface {
 const stopTol = 1e-9
 
 // axialDisplacement is what a body-relative stop reads of a stop body's
-// payload: the proven displacement of the sweep levels that body's own
-// construction recorded (prismPayload.axialDelta). A level derived from such a
-// body's face inherits it, so a stop resolved against a body that was itself
-// stopped at a computed level cannot launder that level back into an exact one.
+// payload: a proven displacement covering its analytic planar stop faces. A
+// level derived from such a face inherits it, so a stop cannot launder a held
+// coordinate back into an exact one.
 type axialDisplacement interface {
 	axialDelta() float64
 }
 
-// payloadAxialDelta is that displacement where the payload tracks one. The
-// figure a linear stop publishes is this resolution's OWN arithmetic composed
-// with what the stop body proved about its levels; it is never a proof that
-// some other evaluator's face sits exactly where its surface says, so a payload
-// that tracks no axial displacement contributes no term here.
+// payloadAxialDelta returns the payload's stop-face displacement. The figure a
+// linear stop publishes composes this term with its own arithmetic.
 func payloadAxialDelta(b *Body) float64 {
 	if b == nil {
 		return 0
