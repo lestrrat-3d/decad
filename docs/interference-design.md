@@ -187,6 +187,14 @@ does not change that set — `cupPayload.thickness`/`sense` and
 represented-set fields in `prismPayload`, `cupPayload`, or `revolvePayload`
 prove identical represented sets.
 
+The certificate additionally requires each operand's record to BE the set it
+denotes. A `prismPayload` carrying a nonzero section displacement
+(`docs/prism-boolean-design.md` §7) denotes a set its record is only within
+that displacement of, so two equal such records say nothing about the two
+sets: the certificate withholds and the pair stays undecided. That document's
+Implementation notes own the per-consumer list this rule belongs to, and this
+section does not restate its derivation.
+
 Broader equality is staged. A future normalizer may prove harmless
 representation choices equivalent:
 
@@ -377,9 +385,9 @@ or a positive held volume alone into a row. Every row carries the bounded
 overlap volume the public contract promises.
 
 The set-identity paths are the only exceptions to `V - E > 0`: strict full
-containment proves `inner ∩ outer = inner`, and analytic equality proves
-`A ∩ B = A`. Each independently proves positive overlap, and the existing body
-volume is the quantity, not the proof of existence.
+containment proves `inner ∩ outer = inner`, and the §4.1 analytic equality
+certificate proves `A ∩ B = A`. Each independently proves positive overlap,
+and the existing body volume is the quantity, not the proof of existence.
 
 ## 7. Errors and cancellation
 
@@ -485,7 +493,12 @@ The proof path is capability-based, not operation-history-based:
 | neither boundary model nor tessellation | undecided → `Suspect` |
 
 A prism, a filleted/chamfered prism, and a tube share `prismPayload` and use the
-same paths. A cup uses box proofs and the read-only boolean once its shipped cup
+same paths where their section displacement is zero. A `prismPayload` carrying a
+nonzero displacement (`docs/prism-boolean-design.md` §7) gets no `bodyGeom`
+model, so no analytic clearance, contact or full-containment path is available
+to it, and §4.1's equality certificate withholds separately. Such a body reaches
+only the read-only intersection its tessellation supports, and otherwise reads
+`Suspect`. A cup uses box proofs and the read-only boolean once its shipped cup
 tessellation is accepted; analytic clearance/full containment remain staged
 until `bodyGeom` supports `cupPayload`. A faceted boolean result uses its held
 mesh and carried bounds. A revolve uses analytic clearance/full containment
