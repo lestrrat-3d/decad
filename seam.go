@@ -43,11 +43,12 @@ import (
 // threshold, so entities whose ends miss by a fraction of a nanometre still
 // arrange into one valid profile. At a whole-to-whole join, decad records each
 // entity's own points verbatim, so a loop whose recorded coordinates do not
-// meet bounds no region. A certified mixed join instead compares the record
-// endpoint with sketch's evaluated node at the range falsifier's relative
-// tolerance. Ends merely driven together by a coincidence constraint remain a
-// whole-to-whole exact check: the solver converges to within its residual, not
-// to the same coordinate.
+// meet bounds no region. A certified mixed join at a genuinely cut bound
+// instead compares the record endpoint with sketch's evaluated node at the
+// range falsifier's relative tolerance. An uncut Partial bound uses the
+// record's own endpoint, so it remains an exact check. Ends merely driven
+// together by a coincidence constraint remain a whole-to-whole exact check:
+// the solver converges to within its residual, not to the same coordinate.
 func RecordProfile(s *sketch.Sketch, p *sketch.Profile) (ProfileRecord, PlaneRecord, error) {
 	profile, plane, _, err := recordProfile(s, p)
 	return profile, plane, err
@@ -266,28 +267,45 @@ const (
 // the same coordinate or it does not, and nothing is evaluated, projected or
 // solved for.
 //
-// A Partial fragment's are sketch's — Polyline[0] and Polyline[len-1], the
-// fragment's own walk endpoints in walk order, which §1's range falsifier has
-// already tested the certified range against. decad does not recompute a cut it
-// is forbidden to re-derive (core §7), so it asks sketch where the fragment
-// begins and ends and compares that answer. They are read to CHECK and never to
-// record (§2), which is what the whole-edge column above preserves: a whole
-// edge's Polyline is never read at all.
+// A Partial fragment supplies sketch's Polyline endpoint only at a genuinely
+// cut bound. At TStart == 0 or TEnd == 1, its natural endpoint is already in
+// the record, so that record coordinate supplies the join instead. The
+// Polyline observations remain checks only: decad does not recompute a cut it
+// is forbidden to re-derive (core §7), and no Polyline point enters the record
+// (§2). A whole edge's Polyline is never read at all.
 func edgeJoin(e sketch.BoundaryEdge, seg CurveSegment) (loopJoin, error) {
 	if e.Partial {
 		if len(e.Polyline) < 2 {
 			return loopJoin{}, fmt.Errorf(`%w: a %T fragment carries no polyline endpoints to check its junctions against`, ErrUnrecordableProfile, e.Entity)
 		}
 		first, last := e.Polyline[0], e.Polyline[len(e.Polyline)-1]
+		atStart := loopJoinPoint{
+			point:  Point2{U: first[0], V: first[1]},
+			source: sketchNodeJoinSource,
+		}
+		atEnd := loopJoinPoint{
+			point:  Point2{U: last[0], V: last[1]},
+			source: sketchNodeJoinSource,
+		}
+
+		// The polyline holds sketch's snapped arrangement node. A bound sketch
+		// never cut already has its exact natural endpoint in the record, so
+		// use that coordinate for closure. The natural-to-walk mapping matches
+		// falsifyRange's observation reorder below.
+		if naturalStart, naturalEnd, closed, ok := wholeSegmentEnds(seg); ok && !closed {
+			if e.Reversed {
+				naturalStart, naturalEnd = naturalEnd, naturalStart
+			}
+			if e.TStart == 0 {
+				atStart = loopJoinPoint{point: naturalStart, source: recordJoinSource}
+			}
+			if e.TEnd == 1 {
+				atEnd = loopJoinPoint{point: naturalEnd, source: recordJoinSource}
+			}
+		}
 		return loopJoin{
-			start: loopJoinPoint{
-				point:  Point2{U: first[0], V: first[1]},
-				source: sketchNodeJoinSource,
-			},
-			end: loopJoinPoint{
-				point:  Point2{U: last[0], V: last[1]},
-				source: sketchNodeJoinSource,
-			},
+			start: atStart,
+			end:   atEnd,
 		}, nil
 	}
 	start, end, closed, ok := wholeSegmentEnds(seg)
@@ -343,16 +361,16 @@ func wholeSegmentEnds(seg CurveSegment) (start, end Point2, closed, ok bool) {
 // (docs/sketch-seam-design.md §3). LoopRecord's contract is that each segment's
 // walk ends where the next one's starts and the last closes onto the first
 // (§2). A same-source mismatch proves the record's own segments do not meet. A
-// mixed-source mismatch beyond the range falsifier's tolerance contradicts the
-// certified fragment node. In either case the profile is ErrUnrecordableProfile.
+// mixed-source mismatch beyond the range falsifier's tolerance contradicts a
+// certified cut node. In either case the profile is ErrUnrecordableProfile.
 //
 // A junction whose points came from the same source compares exactly. That
-// retains the authored-gap check for whole edges and checks sketch's shared
-// nodes consistently for two partial fragments. A mixed junction compares a
-// record endpoint to the fragment's sketch node with the same relative
-// tolerance that falsifyRange applies to that node. A certified curve node is
-// evaluated from its parameter, so it can differ from the defining endpoint by
-// round-off even when both describe the same sketch vertex.
+// retains the authored-gap check for whole edges and checks two partial
+// fragments against their shared source observation. A mixed junction at a cut
+// bound compares a record endpoint to the fragment's sketch node with the same
+// relative tolerance that falsifyRange applies to that node. A certified curve
+// node is evaluated from its parameter, so it can differ from the defining
+// endpoint by round-off even when both describe the same sketch vertex.
 //
 // It only ever rejects. A loop whose recorded coordinates do meet is not
 // thereby admitted — admission is sketch's Valid, its TExact, and §1's range
@@ -378,8 +396,8 @@ func falsifyLoopJoins(name string, joins []loopJoin) error {
 }
 
 // loopJoinPointsAgree compares two points from one source exactly. A mixed
-// source pair compares the record's defining point to the sketch node that a
-// certified fragment already exposed to falsifyRange, so it shares that
+// source pair compares the record's defining point to the sketch cut node that
+// a certified fragment already exposed to falsifyRange, so it shares that
 // check's relative tolerance.
 func loopJoinPointsAgree(a, b loopJoinPoint) bool {
 	if a.source == b.source {

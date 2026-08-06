@@ -160,25 +160,27 @@ and every consumer downstream reads a loop as that closed region. So the seam
 compares the two coordinates at every junction of a recorded loop and returns
 `ErrUnrecordableProfile` where they contradict (§3). Each side is tagged with
 the party that supplied it: a whole edge contributes the record's own endpoint
-— the entity's defining point,
-verbatim — and a `Partial` fragment contributes `sketch`'s `Polyline` endpoint
-in walk order, which is the same observation the range falsifier above tests the
-certified range against. No cut is re-derived here (core §7). A whole closed
-curve is a loop on its own (§2) and meets no neighbour, so it states no junction
-to check.
+— the entity's defining point, verbatim. A `Partial` fragment contributes its
+recorded natural endpoint at an uncut `TStart == 0` or `TEnd == 1` bound, and
+`sketch`'s `Polyline` endpoint in walk order only at a genuinely cut bound. That
+cut observation is the same one the range falsifier above tests against the
+certified range. No cut is re-derived here (core §7). A whole closed curve is a
+loop on its own (§2) and meets no neighbour, so it states no junction to check.
 
 **Two junction coordinates from the same source must be bit-equal.** That keeps
-the authored-gap check exact for a whole-to-whole join, and checks a
-partial-to-partial join against the same shared sketch node. A mixed whole-to-
-partial join compares the record endpoint with the certified fragment's sketch
-node using the range falsifier's relative threshold. Those are two
-floating-point observations of one sketch vertex: evaluating a curve at its
-certified bound can differ by round-off from the curve's defining endpoint. The
-mixed check is reject-only and does not admit a fragment: admission stays
-`Profile.Valid`, `TExact` and the range falsifier. Its reach is what a caller
-authors. A sketch whose distinct whole-edge endpoints are merely driven together
-by a coincidence constraint is still a whole-to-whole exact check, so it is
-rejected rather than measured as though it closed.
+the authored-gap check exact for a whole-to-whole join, and checks two partial
+fragments exactly against their shared source observation. A mixed whole-to-
+partial join at a genuinely cut bound compares the record endpoint with the
+certified fragment's sketch node using the range falsifier's relative threshold.
+Those are two floating-point observations of one sketch vertex: evaluating a
+curve at its certified bound can differ by round-off from the curve's defining
+endpoint. An uncut `TStart == 0` or `TEnd == 1` bound instead contributes its
+recorded endpoint, so that junction is exact. The mixed check is reject-only
+and does not admit a fragment: admission stays `Profile.Valid`, `TExact` and
+the range falsifier. Its reach is what a caller authors. A sketch whose distinct
+whole-edge endpoints are merely driven together by a coincidence constraint is
+still a whole-to-whole exact check, so it is rejected rather than measured as
+though it closed.
 
 **What records reaches exactly as far as `sketch`'s exact kernel does, and no further.**
 For fragments, that is a line, circle or arc fragment in a sketch holding
@@ -459,17 +461,18 @@ flags and no back-reference.
 
 **What decad reads of `BoundaryEdge.Polyline`, and nothing more: `Polyline[0]` and
 `Polyline[len-1]`, on every `Partial` fragment whose `TExact` reads `true`, as
-the observations §1's falsifier tests the certified range against and as that
-fragment's sketch-node coordinates in §1's loop-closure check — read on the
-fragments that record and on the ones the falsifier rejects alike, to check and
-never to record.** They never enter a `Step`: every recorded value is the
-entity's own defining data and the certified range, so no sampled content
-reaches a `Recipe` through them, which is why core §2's "a `Recipe` never names
-a tessellation" holds without qualification. On a fragment the flag already
-rejects — `TExact == false` — the `Polyline` is not read at all; on a whole edge
-the entity's own data is the record and the `Polyline` is never read either. No
-interior point of a `Polyline` is ever read, and no `Polyline` content ever
-enters a `Step`.
+the observations §1's falsifier tests the certified range against. A loop-
+closure check also uses a `Polyline` endpoint only for a genuinely cut bound;
+an uncut `TStart == 0` or `TEnd == 1` bound uses the record's own endpoint.
+They are read on the fragments that record and on the ones the falsifier rejects
+alike, to check and never to record.** They never enter a `Step`: every recorded
+value is the entity's own defining data and the certified range, so no sampled
+content reaches a `Recipe` through them, which is why core §2's "a `Recipe`
+never names a tessellation" holds without qualification. On a fragment the flag
+already rejects — `TExact == false` — the `Polyline` is not read at all; on a
+whole edge the entity's own data is the record and the `Polyline` is never read
+either. No interior point of a `Polyline` is ever read, and no `Polyline`
+content ever enters a `Step`.
 
 `CurveSegment` is one of the closed variant sets decad owns, so decad ships its
 codec under core §6.2's serializability rule: each variant encodes as a tagged
@@ -492,7 +495,7 @@ answers:
 - every partial boundary fragment had `TExact == true`;
 - the reject-only range falsifier found no contradiction;
 - every same-source junction of every recorded loop met exactly, and every
-  mixed record/sketch-node junction agreed within the range falsifier's
+  mixed record/sketch-cut-node junction agreed within the range falsifier's
   relative threshold, so the loops close;
 - whole entities were recorded from their defining data.
 
@@ -543,10 +546,10 @@ three cases:
   as a `sketch` bug;
 - **a recorded loop that does not close** — two consecutive segments whose
   source-aware junction coordinates contradict (§1). Same-source coordinates
-  differ bit-for-bit, or a record endpoint and certified fragment sketch node
-  differ beyond the range falsifier's relative threshold. `sketch` admitted the
-  region on its own proximity threshold; the record decad would write bounds no
-  region, so it writes none. Unlike the two above, this one is not a `sketch`
+  differ bit-for-bit, or a record endpoint and certified fragment sketch cut
+  node differ beyond the range falsifier's relative threshold. `sketch` admitted
+  the region on its own proximity threshold; the record decad would write bounds
+  no region, so it writes none. Unlike the two above, this one is not a `sketch`
   bug to report: it is the caller's own entities missing each other, and closing
   the gap in the sketch is what makes the profile recordable.
 

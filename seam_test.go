@@ -2,6 +2,7 @@ package decad_test
 
 import (
 	"encoding/json"
+	"math"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
@@ -448,6 +449,32 @@ func nearMissTriangle(t *testing.T, du, dv float64) (*sketch.Sketch, *sketch.Pro
 	return s, profiles[0]
 }
 
+// uncutPartialLoop builds a snapped open loop whose final edge is partial only
+// because it crosses the base. Its TStart == 0 bound stays at the vertical
+// line's defining top point, while sketch's arrangement snaps that node to the
+// preceding near-miss line endpoint.
+func uncutPartialLoop(t *testing.T, gap float64) (*sketch.Sketch, *sketch.Profile) {
+	t.Helper()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	origin := s.CreatePoint(0, 0)
+	right := s.CreatePoint(10, 0)
+	topRight := s.CreatePoint(10, 10)
+	missed := s.CreatePoint(gap, 10)
+	top := s.CreatePoint(0, 10)
+	below := s.CreatePoint(0, -5)
+	s.CreateLine(origin, right)
+	s.CreateLine(right, topRight)
+	s.CreateLine(topRight, missed)
+	s.CreateLine(top, below)
+
+	profiles := s.Profiles()
+	require.Len(t, profiles, 1)
+	require.True(t, profiles[0].Valid)
+	return s, profiles[0]
+}
+
 func TestRecordProfileRejectsUnclosedLoop(t *testing.T) {
 	// A loop whose recorded segments do not meet bounds no region at all, so
 	// there is nothing for an Exact, zero-bound area to be exact ABOUT. sketch
@@ -511,6 +538,26 @@ func TestRecordProfileRejectsUnclosedConstrainedLoop(t *testing.T) {
 	require.ErrorIs(t, err, decad.ErrUnrecordableProfile)
 }
 
+func TestRecordProfileRejectsUnclosedLoopAtUncutPartialBound(t *testing.T) {
+	gap := math.Ldexp(1, -40)
+	s, profile := uncutPartialLoop(t, gap)
+	partial := 0
+	for _, edge := range profile.Outer {
+		if !edge.Partial {
+			continue
+		}
+		require.True(t, edge.TExact)
+		require.Equal(t, 0.0, edge.TStart, `the fragment begins at its defining endpoint`)
+		require.Less(t, edge.TEnd, 1.0, `only the base crossing cuts the fragment`)
+		partial++
+	}
+	require.Equal(t, 1, partial)
+
+	_, _, err := decad.RecordProfile(s, profile)
+	require.ErrorIs(t, err, decad.ErrUnrecordableProfile)
+	require.Contains(t, err.Error(), `does not close`)
+}
+
 func TestRecordProfileRecordsSnapThresholdTrim(t *testing.T) {
 	// The same shape one order of magnitude further out: past sketch's snap
 	// threshold it TRIMS the two lines at their crossing instead, so the
@@ -544,9 +591,9 @@ func TestRecordProfileRecordsSnapThresholdTrim(t *testing.T) {
 
 func TestRecordProfileRecordsMixedWholeAndCertifiedPartialJoin(t *testing.T) {
 	// The arc and vertical line share top, but sketch trims the line where it
-	// crosses the base. The partial line's sketch node is the arc evaluated at
-	// its bound, so its U coordinate differs from the arc's pinned endpoint by
-	// round-off. The certified mixed join still records and re-authenticates.
+	// crosses the base. The partial line's uncut top bound records its defining
+	// point, rather than sketch's rounded node, so the shared endpoint stays an
+	// exact join and the record re-authenticates.
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	require.NoError(t, err)
@@ -609,4 +656,17 @@ func TestProfileRecordAreaRejectsUnclosedLoop(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 50.0, value)
 	require.Equal(t, decad.Exact, area.Exactness)
+}
+
+func TestProfileRecordAreaRejectsUnclosedLoopAtUncutPartialBound(t *testing.T) {
+	gap := math.Ldexp(1, -40)
+	record := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
+		decad.LineSeg{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 10, V: 0}, TEnd: 1},
+		decad.LineSeg{Start: decad.Point2{U: 10, V: 0}, End: decad.Point2{U: 10, V: 10}, TEnd: 1},
+		decad.LineSeg{Start: decad.Point2{U: 10, V: 10}, End: decad.Point2{U: gap, V: 10}, TEnd: 1},
+		decad.LineSeg{Start: decad.Point2{U: 0, V: 10}, End: decad.Point2{U: 0, V: -5}, TEnd: 2.0 / 3.0},
+	}}}
+
+	_, err := record.Area()
+	require.ErrorIs(t, err, decad.ErrDegenerate)
 }
