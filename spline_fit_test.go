@@ -419,3 +419,78 @@ func TestOverBudgetFitInterpolantRefusesBeforeSolving(t *testing.T) {
 	require.Contains(t, err.Error(), "work budget")
 	require.Less(t, time.Since(start), 2*time.Second, "the refusal precedes the interpolant solve")
 }
+
+// TestFitSplineTerminalDedupRefusesUnclosedLoop is the review-128-2
+// regression: sketch's fit-point dedup (fitChordEps, geom/fitspline.go)
+// collapses a terminal fit point sitting closer than 1e-12 to its neighbor,
+// so geom.NewFitInterpolant's own interpolant ends at the PREVIOUS surviving
+// point while the record still names the dropped point as the join to the
+// next segment — here p2 = (10, 10) and p3 = (10+3e-13, 10) collapse to one
+// active point, but the closing LineSeg still starts at p3. Before this
+// check existed, the region traced was open by 3e-13 mm and Area() still
+// published a bounded, Approximate number for it (62.5, off by 3244x its
+// own bound against the exact rational integral of the region actually
+// traced) — sketch's own reconstruction cannot catch this, since it rebuilds
+// the SAME entity from the SAME Fit points and round-trips to the same near
+// miss.
+func TestFitSplineTerminalDedupRefusesUnclosedLoop(t *testing.T) {
+	p0 := decad.Point2{U: 0, V: 0}
+	p1 := decad.Point2{U: 10, V: 0}
+	p2 := decad.Point2{U: 10, V: 10}
+	p3 := decad.Point2{U: 10 + 3e-13, V: 10}
+
+	record := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
+		decad.FitSplineSeg{Fit: []decad.Point2{p0, p1, p2, p3}, TStart: 0, TEnd: 1},
+		decad.LineSeg{Start: p3, End: p0, TStart: 0, TEnd: 1},
+	}}}
+
+	_, err := record.Area()
+	require.Error(t, err)
+	require.ErrorIs(t, err, decad.ErrDegenerate)
+	require.Contains(t, err.Error(), "sketch's fit-point dedup collapsed it")
+}
+
+// TestFitSplineNonDegenerateTerminalStillCloses is the companion pass case:
+// the same shape with p3 moved far enough from p2 (1 mm, well past
+// fitChordEps) that sketch's dedup keeps it active, so the converted chain's
+// own end is p3 exactly and the closing LineSeg's start joins it bit for
+// bit. The join check introduced for the finding above must not refuse a
+// record whose free-form segment actually closes.
+func TestFitSplineNonDegenerateTerminalStillCloses(t *testing.T) {
+	p0 := decad.Point2{U: 0, V: 0}
+	p1 := decad.Point2{U: 10, V: 0}
+	p2 := decad.Point2{U: 10, V: 10}
+	p3 := decad.Point2{U: 9, V: 10}
+
+	record := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
+		decad.FitSplineSeg{Fit: []decad.Point2{p0, p1, p2, p3}, TStart: 0, TEnd: 1},
+		decad.LineSeg{Start: p3, End: p0, TStart: 0, TEnd: 1},
+	}}}
+
+	area, err := record.Area()
+	require.NoError(t, err)
+	require.Equal(t, decad.Approximate, area.Exactness)
+}
+
+// TestFitSplineTerminalDedupRefusesUnclosedLoopReversed pins the reversed
+// (TStart=1, TEnd=0) side of requireFitSplineTerminalJoins: the record's own
+// dedup-risky natural-last fit point (p3) then sits at the WALK's start
+// rather than its end, since freeformEndpoints swaps start/end into walk
+// order for a reversed range. The preceding LineSeg still ends at the
+// recorded p3, so the same collapse still leaves the loop open.
+func TestFitSplineTerminalDedupRefusesUnclosedLoopReversed(t *testing.T) {
+	p0 := decad.Point2{U: 0, V: 0}
+	p1 := decad.Point2{U: 10, V: 0}
+	p2 := decad.Point2{U: 10, V: 10}
+	p3 := decad.Point2{U: 10 + 3e-13, V: 10}
+
+	record := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
+		decad.LineSeg{Start: p0, End: p3, TStart: 0, TEnd: 1},
+		decad.FitSplineSeg{Fit: []decad.Point2{p0, p1, p2, p3}, TStart: 1, TEnd: 0},
+	}}}
+
+	_, err := record.Area()
+	require.Error(t, err)
+	require.ErrorIs(t, err, decad.ErrDegenerate)
+	require.Contains(t, err.Error(), "sketch's fit-point dedup collapsed it")
+}

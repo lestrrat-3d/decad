@@ -476,7 +476,7 @@ func validateFreeformMomentSegment(segment CurveSegment, work *freeformWork) (Cu
 	if err := chargeFreeformSpans(spans, work); err != nil {
 		return nil, Point2{}, freeformPlan{}, err
 	}
-	start, _, err := freeformEndpoints(spans, reversed)
+	start, end, err := freeformEndpoints(spans, reversed)
 	if err != nil {
 		return nil, Point2{}, freeformPlan{}, err
 	}
@@ -486,7 +486,56 @@ func validateFreeformMomentSegment(segment CurveSegment, work *freeformWork) (Cu
 	if freeformDegenerate(spans) {
 		return nil, Point2{}, freeformPlan{}, fmt.Errorf(`%w: a free-form segment whose control points all coincide contributes no boundary`, ErrDegenerate)
 	}
+	if err := requireFitSplineTerminalJoins(segment, start, end, reversed); err != nil {
+		return nil, Point2{}, freeformPlan{}, err
+	}
 	return segment, start, freeformPlan{spans: spans, reversed: reversed}, nil
+}
+
+// requireFitSplineTerminalJoins falsifies a FitSplineSeg whose converted chain
+// does not actually reach the fit point its own record names as the walk's
+// natural-end coordinate — the point a following segment's Start (or, for a
+// loop's own last segment, the loop's first segment's Start) is recorded
+// against. sketch's fit-point dedup (fitChordEps, geom/fitspline.go) collapses
+// a run of fit points closer than 1e-12, keeping only the FIRST of each run,
+// so a terminal fit point sitting that close to its predecessor is dropped and
+// geom.NewFitInterpolant's own chain ends one point short of what the record
+// still claims — while the record's own natural-START point (always the first
+// of its own run) can never be dropped this way, so only the natural-end side
+// needs checking. This is the one Tier A kind that can drift here at all
+// (docs/spline-design.md Table F): a clamped SplineSeg/ClosedSplineSeg/
+// NURBSSeg interpolates its own recorded end control point exactly, with no
+// sketch-side collapsing on the way, so a general cross-kind join check would
+// only add unearned cost for those three.
+//
+// sketch's own reconstruction (momentRecordMatchesSketch) cannot catch this on
+// its own: it rebuilds the SAME entity from the SAME recorded fit points, so a
+// collapsed terminal point is dropped identically on both sides and the round
+// trip matches regardless.
+func requireFitSplineTerminalJoins(segment CurveSegment, start, end Point2, reversed bool) error {
+	fit, ok := segment.(FitSplineSeg)
+	if !ok {
+		return nil
+	}
+	// The walk's natural-end coordinate is the recorded chain's own LAST fit
+	// point; freeformEndpoints already swapped start/end into walk order for a
+	// reversed range, so the natural-end side is start there instead of end.
+	want := fit.Fit[len(fit.Fit)-1]
+	got := end
+	if reversed {
+		got = start
+	}
+	if got == want {
+		return nil
+	}
+	return fmt.Errorf(
+		`%w: the converted fit-spline curve's own boundary reaches (%v, %v), not the recorded terminal fit point (%v, %v) — sketch's fit-point dedup collapsed it`,
+		ErrDegenerate,
+		got.U,
+		got.V,
+		want.U,
+		want.V,
+	)
 }
 
 // freeformDegenerate reports whether every control point of the converted chain

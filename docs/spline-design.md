@@ -171,7 +171,7 @@ exactly → `ErrUnrecordableProfile`.
 | **R3** | free-form walk in a section a `Shell` offsets | `ErrUnsupported` | yes for a curved walk, §4.1 |
 | **R4** | `Fillet` corner with a free-form carrier | `ErrUnsupported` | yes for a curved walk, §4.1 |
 | **R5** | `Chamfer` corner with a free-form carrier | `ErrUnsupported` | yes for a curved walk, §4.1 |
-| **R6** | *(retired — a `FitSplineSeg` reaching a moments integral no longer refuses; §5.1.2 states the reduction that consumes it. A `FitSplineSeg` reaching a BUILD still refuses, staged the same way every other Tier A free-form kind's build is, under §10's P4.)* | — | — |
+| **R6** | *(retired — a `FitSplineSeg` reaching a moments integral no longer refuses; §5.1.2 states the reduction that consumes it, and R17 states the one case it still refuses. A `FitSplineSeg` reaching a BUILD still refuses, staged the same way every other Tier A free-form kind's build is, under §10's P4.)* | — | — |
 | **R7** | exact-rational conversion, length bracketing or integration exceeds its work budget | `ErrUnsupported` | no, §5.2, §6.1 |
 | **R8** | chording a free-form walk needs more than the chord cap | `ErrUnsupported` | no, reuses `errTooManyChords` |
 | **R9** | a `Verify` reading's proof does not close — its bracket cannot separate it from its threshold, or a §6.3 certificate fails | not an error — `Suspect` | no, §8 |
@@ -182,6 +182,7 @@ exactly → `ErrUnrecordableProfile`.
 | **R14** | a free-form curve whose control points all coincide reaches a length bracket or an integral | `ErrDegenerate` | yes, §6.1 |
 | **R15** | a free-form arc-length enclosure whose upper bound runs past `MaxFloat64` | `ErrUnsupported` | yes, §6.1 |
 | **R16** | a `FitSplineSeg`'s fit points are finite but the interpolant sketch builds from them — its cumulative chord parameter or a span coefficient — is not | `ErrUnsupported` | no, §5.1.2 — a float64 range limit of sketch's own exported interpolant, not decad's to lift |
+| **R17** | a `FitSplineSeg`'s converted chain does not reach its own record's natural-end fit point — sketch's dedup (`fitChordEps`) collapsed it into its predecessor | `ErrDegenerate` | yes, §5.1.2 |
 
 R9 is the one row that is not a refusal. An intent the evaluator cannot BUILD is
 `ErrUnsupported` at the call; a `Verify` question it cannot ANSWER is accepted
@@ -447,12 +448,24 @@ LAST one is not always `Fit[len(Fit)-1]`: a record whose last two fit points
 coincide within that threshold has a curve whose true end is the
 second-to-last recorded point. decad integrates exactly the curve
 `FitSpline.Eval` walks — `Points`, never the raw `Fit` — which is the correct
-answer; the consequence surfaces wherever a neighbouring segment's own
-recorded coordinate is compared against that walk's end (§2's whole-loop join,
-decided at whatever tolerance the comparing consumer already uses), never as
-a second threshold of decad's own. An all-coincident fit set collapses to one
-active point and zero spans, which reaches R14 with no special-case code: the
-identical shape the length bracket already refuses on its own terms.
+answer for that curve; the consequence is that the curve decad integrates need
+not be the one the record's neighbouring segment still joins to. §2's
+whole-loop join is normally sketch's own claim, never re-derived — but here
+sketch's reconstruction rebuilds the SAME entity from the SAME `Fit` points
+and reports the SAME dedup-collapsed curve every time, so it can never falsify
+this particular mismatch. decad's own moments path therefore runs the one
+self-consistency check that CAN: `requireFitSplineTerminalJoins`
+(`moments_validate.go`) compares the converted chain's own natural-end
+coordinate against `Fit[len(Fit)-1]` by exact identity — not a tolerance,
+since the two floats are bit-identical whenever nothing was collapsed — and
+refuses `ErrDegenerate` on any difference (R17): the record's own boundary
+does not close, so no such body exists. It is a check of the SEGMENT against
+its own record, not a re-derivation of the loop's join — the SplineSeg/
+ClosedSplineSeg/NURBSSeg kinds need no such check, since none of their
+conversions can drop a recorded endpoint this way (Table F). An all-coincident
+fit set collapses to one active point and zero spans, which reaches R14 with
+no special-case code: the identical shape the length bracket already refuses
+on its own terms.
 
 Every recorded free-form range is `[0, 1]` or `[1, 0]` (§2); a `FitSplineSeg`
 trimmed to any other range refuses through `requireFullFreeformRange`, the
@@ -1473,6 +1486,15 @@ rules).
   boundary contributed) and R16 on fit coordinates whose interpolant runs off
   float64 range (`ErrUnsupported`, never `ErrNotFinite` — every fit coordinate
   in the fixture is finite).
+- Assert R17 on a record whose `FitSplineSeg` terminal fit point collapses into
+  its predecessor while a following segment's own recorded `Start` still names
+  the dropped point: `Area`/`Centroid`/`SecondMoments` refuse `ErrDegenerate`
+  rather than publish a bounded measurement for the region the boundary
+  actually fails to close. Assert the pass case beside it — the identical shape
+  with the terminal point moved past the dedup threshold — builds and measures,
+  so the test cannot pass by refusing every fit spline outright; and the
+  reversed-range (`TStart=1, TEnd=0`) case, where the same collapse sits at the
+  walk's own START rather than its end.
 - Assert the `fitInterpolantCost` charge fires, and is measured rather than
   merely read off the formula: a fit-point count whose linear charge alone
   exceeds the ceiling must refuse promptly, allocating on the order of its own
