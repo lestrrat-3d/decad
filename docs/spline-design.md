@@ -533,9 +533,9 @@ evaluation of the same formula: a second evaluation would add its own error to a
 bound that already speaks for the rounding.
 
 Rational coefficient size grows with degree and span count. Charge every span,
-every coefficient product and every integral term against a `workBudget`
-(`budget.go`), and refuse as R7 when it runs out. NEVER widen to a float path to
-stay inside the budget.
+every coefficient product and every integral term against a `freeformWork`
+counter (`spline_bezier.go`), and refuse as R7 when it runs out. NEVER widen to a
+float path to stay inside the budget.
 
 The counter is the RECORD's, not each segment's. One `ProfileRecord` pass opens
 one counter and every segment in it charges that same counter, because the work
