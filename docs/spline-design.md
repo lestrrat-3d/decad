@@ -1552,6 +1552,21 @@ rules).
   passes only by sign accident, so assert the clamp directly: the first level's
   lower bound is `0`, and it rises once subdivision lifts every sub-span's
   `r_lo` to non-negative.
+<!-- Refutation of a review finding that this bullet's "a fixture §6.5 leaves
+     buildable" clause names the cusp net, leaving a claim that a cusped section
+     builds. The clause names no net: it refers forward to the collapsed-span walk
+     later in this same bullet, whose §6.3 readings and whose build, `Volume` and
+     tessellation are all asserted there. §6.5 does leave that fixture buildable —
+     §6.5 states that a collapsed span is the one span the precondition does not
+     refuse, and that it supplies no joint, so it is skipped and its neighbours
+     pair across it. The cusp net two lines below is introduced only to have both
+     certificates fail, and this bullet says so in its own words: that net has no
+     body to read either reading off, because §6.5 refuses its wall edge R19.
+     Checked against the rest of the branch: no site states or implies that a
+     cusped section builds. Table R row R19 lists a span whose speed is not proven
+     nonzero, §6.3 says the cusp net and a coincident first control pair both reach
+     a build refusal through §6.5, and §6.5 says a section carrying a cusp does not
+     build. -->
 - Assert both §6.3 certificates by the readings they gate, and take the
   body-level half of that on a fixture §6.5 leaves buildable. On the cusp net
   `(−1/8, 1/4)`, `(1/8, −1/12)`, `(−1/8, −1/12)`, `(1/8, 1/4)`: the hodograph
