@@ -421,6 +421,58 @@ func TestLoftPlacedFaceAreaSumMatchesBodyArea(t *testing.T) {
 	require.InDelta(t, bodyArea.Value.Base(), sum, bodyArea.Bound.Base()+sumBound+1e-9)
 }
 
+// TestLoftPlacedAccessorExactness pins docs/loft-design.md §8's per-accessor
+// rule on both sides of delta. An unplaced loft's every vertex position is
+// Exact with a zero bound; a placed one's is Approximate carrying the
+// payload's own delta — the SAME bound at every vertex — and its every edge
+// length and face area carry a positive delta term on top of their own
+// square-root bound, so neither can be Exact however exactly its own
+// evaluation comes out. The receiver here is a 40x40x10 box whose edges are
+// 40 and 10, both exactly representable, so an unplaced fixture cannot tell a
+// missing delta term from an exact square root; only the placed body can.
+func TestLoftPlacedAccessorExactness(t *testing.T) {
+	s0, p0, s1, p1 := loftSquares(t, 20, 20)
+	doc := decad.New()
+	body, err := doc.Loft(s0, p0, s1, p1)
+	require.NoError(t, err)
+
+	for _, v := range body.Vertices() {
+		pos := v.Position()
+		require.Equal(t, decad.Exact, pos.Exactness, "an unplaced loft vertex is Exact by construction")
+		require.Zero(t, pos.Bound.Base())
+	}
+
+	move, err := r3.Translation(r3.NewVec(50, -25, 5))
+	require.NoError(t, err)
+	placed, err := body.Placed(move)
+	require.NoError(t, err)
+
+	verts := placed.Vertices()
+	require.NotEmpty(t, verts)
+	delta := verts[0].Position().Bound.Base()
+	require.Positive(t, delta, "a non-identity placement carries a positive delta")
+	for _, v := range verts {
+		pos := v.Position()
+		require.Equal(t, decad.Approximate, pos.Exactness)
+		require.Equal(t, delta, pos.Bound.Base(), "every placed vertex publishes the payload's own delta")
+	}
+
+	for _, e := range placed.Edges() {
+		length, err := e.Length()
+		require.NoError(t, err)
+		require.Equal(t, decad.Approximate, length.Exactness)
+		require.Greater(t, length.Bound.Base(), delta,
+			"a placed edge adds its own delta term on top of the square root's bound")
+	}
+
+	for _, f := range placed.Faces() {
+		area, err := f.Area()
+		require.NoError(t, err)
+		require.Equal(t, decad.Approximate, area.Exactness)
+		require.Positive(t, area.Bound.Base())
+	}
+}
+
 // TestLoftPlacedRetireAndLiveness proves Placed retires the receiver while
 // Duplicate/PlacedCopy leave it live, and a refused placement — an invalid
 // (zero-value) transform, and an S12 fixture whose proven volume allowance

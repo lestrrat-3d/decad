@@ -561,6 +561,55 @@ func TestLoftPlacedGateDiameterRoundsTheShrinkOutward(t *testing.T) {
 	}
 }
 
+// TestLoftCollapsedGateDiameterIsRefusedFirst pins the antecedence
+// docs/loft-design.md §12 states for bodyGateDiameter's shrink: a placement
+// whose delta reaches half the held diameter is the regime where the shrunk
+// reference collapses to zero and the arm answers no diameter at all, and no
+// such placement ever reaches the gate, because S12 refuses it first. The
+// divergence theorem bounds a closed boundary's own volume by d*A/3, so a
+// delta at or above d/2 puts sweptVolumeAllow's delta*A at 3/2 of the held
+// volume or more — exactly S12's non-positive clearance. Each fixture below
+// asserts it sits in the collapse regime BEFORE asserting the refusal, so a
+// fixture that drifted out of that regime fails rather than passing on an
+// unrelated refusal.
+func TestLoftCollapsedGateDiameterIsRefusedFirst(t *testing.T) {
+	for _, tc := range []struct {
+		half, height, dx float64
+	}{
+		{half: 1e-6, height: 1e-6, dx: 1e10},
+		{half: 1e-4, height: 1e-4, dx: 1e12},
+	} {
+		t.Run(fmt.Sprintf("half=%g/dx=%g", tc.half, tc.dx), func(t *testing.T) {
+			p := ProfileRecord{Outer: squareLoop(0, 0, tc.half, true)}
+			pl0, pl1 := planeAt(r3.NewVec(0, 0, 0)), planeAt(r3.NewVec(0, 0, tc.height))
+			pl := loftPayload{
+				profile0: p, profile1: p,
+				plane0: pl0, plane1: pl1,
+				frame0: mustFrame(t, pl0), frame1: mustFrame(t, pl1),
+				xform: r3.Identity(),
+			}
+
+			held := evalLoftFixture(t, pl).payload.(loftPayload)
+			d, ok, err := pointSetDiameterContext(t.Context(), held.verts)
+			require.NoError(t, err)
+			require.True(t, ok)
+
+			maxInputAbs := 0.0
+			for _, v := range held.verts {
+				maxInputAbs = max(maxInputAbs, vecMaxAbs(v))
+			}
+			move, err := r3.Translation(r3.NewVec(tc.dx, 0, 0))
+			require.NoError(t, err)
+			delta := rigidRoundAllow(maxInputAbs, vecMaxAbs(move.Translation()))
+			require.GreaterOrEqual(t, 2*delta, d,
+				"the fixture must sit in the collapse regime the doc's antecedence claim covers")
+
+			_, err = pl.placed(t.Context(), New(), StepRef(1), move)
+			require.ErrorIs(t, err, ErrUnsupported)
+		})
+	}
+}
+
 // TestEvalLoftCancellation proves a context cancelled before the build even
 // starts returns ctx.Err() rather than any evaluator sentinel.
 func TestEvalLoftCancellation(t *testing.T) {

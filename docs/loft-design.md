@@ -579,11 +579,17 @@ set is no longer provably exact, so `Bounds.Bound` is `delta` and
 `Bounds.Exactness` is `Exact` only when `delta` is zero.
 
 **Vertex position, edge length, and face area follow the standing rules
-already governing every other analytic payload** — a position is Exact by
-construction (§5); a straight edge's length and a triangle's own `Area()`
-need a square root and are `Approximate` with a proven bound, Exact only
-when that particular evaluation happens to be exactly representable — the
-same standard Extrude's own `LineSeg` walls and edges already carry. This
+already governing every other analytic payload, each composed with the
+payload's own displacement `delta`.** On an unplaced body (`delta` zero) a
+position is Exact by construction (§5), and a straight edge's length and a
+triangle's own `Area()` need a square root and are `Approximate` with a
+proven bound, Exact only when that particular evaluation happens to be
+exactly representable — the same standard Extrude's own `LineSeg` walls and
+edges already carry. A placed body's `delta` is positive (§5, §12 PR 2a) and
+all three readings carry it: a vertex position publishes `delta` itself as
+its bound, and an edge length and a face area each add a strictly positive
+`delta` term to the bound they would otherwise publish, so none of the three
+is Exact however exactly its own evaluation happens to come out. This
 document introduces no new per-accessor rule beyond what §8 already derives
 for the body-level quantities.
 
@@ -680,11 +686,25 @@ to prevent. §8 derives all four in closed form from the same triangle set the
 construction already builds, so there is nothing to stage on the measurements
 themselves. The tolerance gate does need one piece of per-payload wiring
 beside them, though, landed in the same PR: `bodyGateDiameter` (verification
-§3) reads a `loftPayload`'s own diameter as the exact diameter of its held
-vertex set — every vertex is exact (§5), so a convex-hull diameter realized at
-vertices is the TRUE diameter, not an envelope — because `Area` is always
-`Approximate` (§8) and a body with no reference diameter can never clear the
-gate's relative tolerance.
+§3) reads a `loftPayload`'s reference off its own held vertex set, because
+`Area` is always `Approximate` (§8) and a body with no reference diameter can
+never clear the gate's relative tolerance.
+
+On an unplaced payload (`delta` zero) that reading is the held set's exact
+diameter — every vertex is exact (§5), so a convex-hull diameter realized at
+vertices is the TRUE diameter, not an envelope — and the arm reports it
+unchanged, with no subtraction and no directed rounding. A placed payload (PR
+2a) holds every vertex only within `delta` of its true position, so each of
+the two farthest points can move by `delta` and the reported reference is the
+held diameter minus `2*delta`, rounded down: an understated reference can only
+tighten the gate into a false `Suspect`, never loosen it into a false `Sound`.
+A shrink that collapses to zero or below reports no diameter at all, the same
+answer any other unusable magnitude gets. That last branch is defensive rather
+than a second reference-less `Suspect` beside the one verification §3 admits:
+the divergence theorem bounds a closed boundary's own volume by `d*A/3` for
+`d` the vertex-set diameter and `A` the held surface area, so a `delta` at or
+above `d/2` makes `sweptVolumeAllow`'s `delta*A` at least `3/2` of the held
+volume, and S12 refuses that placement before any gate reads it.
 
 ## 13. Required tests
 
