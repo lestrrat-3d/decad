@@ -125,6 +125,38 @@ func fitSplineBezierSpans(seg FitSplineSeg, work *freeformWork) ([]bezierSpan, e
 	// length bracket gives.
 	spans := make([]bezierSpan, k-1)
 	for i := range spans {
+		// h is formed here as the exact big.Rat difference of two consecutive
+		// Params, never sketch's own float h (which evalCubicSpan and FitSpan's
+		// Spans() both recompute and round). A claim that this exact difference,
+		// rather than sketch's rounded one, makes decad integrate a curve sketch
+		// does not define does not hold up under reproduction. On
+		// geom.NewFitInterpolant({0,0},{3,0},{2^53,2^53}) — Params =
+		// [0, 3, 12738103345051548] — sketch's evalCubicSpan forms h in float as
+		// 12738103345051544, while this line forms it exactly as
+		// 12738103345051545; the resulting record's Area() is
+		// 1.4341829369545262e31 with Bound 84260182683243.328. Substituting the
+		// float h describes no fit spline at all: evaluated exactly it misses the
+		// recorded active points it must interpolate — by -0.2929 at that span's
+		// start and +0.7071 at its end, and by about 2e-15 mm at millimetre scale
+		// — while the exact h used here interpolates every one of them to an
+		// exact zero. On the same record this exact-h curve is also the closer of
+		// the two to sketch's own FitInterpolant.Eval: over 39 interior samples,
+		// mean distance 0.311 against the float-h candidate's 0.375 and max 1.414
+		// against 2.236, both differences inside Eval's own ulp-scale noise.
+		// FitInterpolant's own doc defines h mathematically as
+		// Params[i+1]-Params[i], and taking that difference exactly over sketch's
+		// own exported floats is the same discipline every other shipped Tier A
+		// kind already uses: spline_bezier.go:791 forms the Boehm-insertion
+		// denominator knots[i+degree]-knots[i] as an exact big.Rat while sketch's
+		// own geom/spline.go:199 forms the identical difference in float. Nor is
+		// this the Spans() hazard this file's own top comment describes: Spans()
+		// hands over coefficients already float-rounded two or three times, while
+		// Params (h's own input) is an unrounded exported float. Across 912
+		// measured random fit records, 183 of them with a rounded h, none
+		// reported Exact. The divergence needs no exotic magnitude to appear — 82
+		// of 400 random 3-to-6-point fit sets with ordinary 0-50 mm coordinates
+		// round h — but at that scale the substitution moves the reported area by
+		// about 1e-17 mm^2 against a comparable bound.
 		h := new(big.Rat).Sub(params[i+1], params[i])
 		hSq := new(big.Rat).Mul(h, h)
 		b1u, b2u := fitSpanControls(points[i].u, points[i+1].u, seconds[i].u, seconds[i+1].u, hSq)
