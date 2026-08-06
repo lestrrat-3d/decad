@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"math/big"
 	"slices"
 
 	"github.com/lestrrat-3d/r3"
@@ -36,6 +37,80 @@ type directionalExtent interface {
 // it.
 const stopTol = 1e-9
 
+// axialDisplacement is what a body-relative stop reads of a stop body's
+// payload: the proven displacement of the sweep levels that body's own
+// construction recorded (prismPayload.axialDelta). A level derived from such a
+// body's face inherits it, so a stop resolved against a body that was itself
+// stopped at a computed level cannot launder that level back into an exact one.
+type axialDisplacement interface {
+	axialDelta() float64
+}
+
+// payloadAxialDelta is that displacement where the payload tracks one. The
+// figure a linear stop publishes is this resolution's OWN arithmetic composed
+// with what the stop body proved about its levels; it is never a proof that
+// some other evaluator's face sits exactly where its surface says, so a payload
+// that tracks no axial displacement contributes no term here.
+func payloadAxialDelta(b *Body) float64 {
+	if b == nil {
+		return 0
+	}
+	ad, ok := b.payload.(axialDisplacement)
+	if !ok {
+		return 0
+	}
+	return ad.axialDelta()
+}
+
+// stopLevelRound proves a to-face level's own float rounding: the level the
+// resolution HELD, against the value its expression — (faceOrigin − planeOrigin)
+// · n + travel·offset — takes exactly over the same inputs, every one of them a
+// float64 and so an exact rational. It measures the arithmetic this resolution
+// performs and nothing else: n is the normal the payload itself lifts along, so
+// reading the level in that direction re-derives no coordinate.
+func stopLevelRound(faceOrigin, planeOrigin, n r3.Vec, travel, offset, held float64) float64 {
+	face := [3]float64{faceOrigin.X, faceOrigin.Y, faceOrigin.Z}
+	plane := [3]float64{planeOrigin.X, planeOrigin.Y, planeOrigin.Z}
+	normal := [3]float64{n.X, n.Y, n.Z}
+	terms := make([]*big.Rat, 0, 4)
+	for i := range face {
+		f, p, nn := floatRat(face[i]), floatRat(plane[i]), floatRat(normal[i])
+		if f == nil || p == nil || nn == nil {
+			return math.Inf(1)
+		}
+		terms = append(terms, ratMul(new(big.Rat).Sub(f, p), nn))
+	}
+	t, o := floatRat(travel), floatRat(offset)
+	if t == nil || o == nil {
+		return math.Inf(1)
+	}
+	terms = append(terms, ratMul(t, o))
+	return rationalFloatError(ratAdd(terms...), held)
+}
+
+// throughStopRound is stopLevelRound's through-all analogue: travel·(hi −
+// origin·dir) taken exactly over the far side the winning stop body reported
+// and the frame this sweep lifts through, against the float the resolution
+// held. hi arrives from the body's own extentAlong, which reports an exact
+// endpoint or refuses, so what this term adds is the subtraction and the sign.
+func throughStopRound(origin, dir r3.Vec, hi, travel, held float64) float64 {
+	o := [3]float64{origin.X, origin.Y, origin.Z}
+	g := [3]float64{dir.X, dir.Y, dir.Z}
+	base := new(big.Rat)
+	for i := range o {
+		oi, gi := floatRat(o[i]), floatRat(g[i])
+		if oi == nil || gi == nil {
+			return math.Inf(1)
+		}
+		base.Add(base, ratMul(oi, gi))
+	}
+	h, t := floatRat(hi), floatRat(travel)
+	if h == nil || t == nil {
+		return math.Inf(1)
+	}
+	return rationalFloatError(new(big.Rat).Mul(t, new(big.Rat).Sub(h, base)), held)
+}
+
 // relStopTol is stopTol scaled to the magnitudes in play.
 func relStopTol(scale float64) float64 {
 	return stopTol * math.Max(1, math.Abs(scale))
@@ -46,18 +121,22 @@ func relStopTol(scale float64) float64 {
 // vocabulary, and its sign is legal intent (which side of the target face
 // the sweep stops on), so ErrNegativeMagnitude does not apply (core
 // §8.1/§12). The zero Value means no displacement.
-func displacementIn(v units.Value, kind units.Kind, unit units.Unit, what string) (float64, error) {
+// It returns the displacement beside the rounding its own conversion into unit
+// committed, the same term magnitudeInBounded reports for a magnitude: an offset
+// stated in a non-base unit reaches the level as a rescaled float, and the level
+// carries that rounding.
+func displacementIn(v units.Value, kind units.Kind, unit units.Unit, what string) (float64, float64, error) {
 	if v == (units.Value{}) {
-		return 0, nil
+		return 0, 0, nil
 	}
 	if v.Kind() != kind {
-		return 0, fmt.Errorf(`%w: %s must be a %s, got %s`, ErrUnitKind, what, kind, v.Kind())
+		return 0, 0, fmt.Errorf(`%w: %s must be a %s, got %s`, ErrUnitKind, what, kind, v.Kind())
 	}
 	m, err := v.In(unit)
 	if err != nil {
-		return 0, fmt.Errorf(`%w: %s is not representable: %s`, ErrNotFinite, what, err)
+		return 0, 0, fmt.Errorf(`%w: %s is not representable: %s`, ErrNotFinite, what, err)
 	}
-	return m, nil
+	return m, conversionRound(v, unit, m), nil
 }
 
 // resolveStopBody runs the body gates every body-relative stop shares with
@@ -133,7 +212,12 @@ func selectStopFace(body *Body, sel FaceSelector) (*Face, error) {
 }
 
 // resolveToFace resolves a linear to-face stop into the signed stop
-// coordinate along the sketch plane normal. The resolved face must be usable
+// coordinate along the sketch plane normal, beside that coordinate's own proven
+// axial displacement. The level is COMPUTED — from another body's face, in
+// float — so the displacement is what keeps it from publishing itself as the
+// level it denotes: it composes this resolution's own rounding, the offset's
+// conversion, and whatever the stop body proved about the level its face sits
+// at. The resolved face must be usable
 // as a prism cap — the §5 build table's stop is the closed-form intersection
 // of the sweep direction with the target surface, and the cap it emits is
 // planar and perpendicular to the sweep — so the face must be PLANAR with
@@ -147,18 +231,18 @@ func selectStopFace(body *Body, sel FaceSelector) (*Face, error) {
 // for a TwoSided side, whose face must lie on that side. The signed Offset
 // displaces the stop along the travel: positive overshoots the face,
 // negative stops short of it (core §8.1).
-func (d *Document) resolveToFace(tf ToFace, frame r3.Frame, travel float64, what string) (float64, StepRef, error) {
+func (d *Document) resolveToFace(tf ToFace, frame r3.Frame, travel float64, what string) (float64, float64, StepRef, error) {
 	body, err := d.resolveStopBody(tf.Body, what)
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, 0, err
 	}
-	offset, err := displacementIn(tf.Offset, units.Length, units.Millimeter, "the to-face offset")
+	offset, offsetDelta, err := displacementIn(tf.Offset, units.Length, units.Millimeter, "the to-face offset")
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, 0, err
 	}
 	face, err := selectStopFace(body, tf.Face)
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, 0, err
 	}
 	pl, ok := face.Surface().(Plane)
 	if !ok {
@@ -166,16 +250,16 @@ func (d *Document) resolveToFace(tf ToFace, frame r3.Frame, travel float64, what
 		// cap), not merely a flat face: a boolean-built face can be flat
 		// (isPlanar) yet carry a Faceted surface, and this evaluator cannot use
 		// it as a stop. %T reports the actual surface so the caller sees why.
-		return 0, 0, fmt.Errorf(`%w: ToFace requires a stop face with an analytic Plane surface whose normal is parallel to the sweep direction, not merely a flat face; this face's surface is %T, which this evaluator cannot use as a stop even when flat — choose any analytic planar face with that orientation, or use a Distance (or, inside a TwoSided extent, DistanceSide) extent`, ErrUnsupported, face.Surface())
+		return 0, 0, 0, fmt.Errorf(`%w: ToFace requires a stop face with an analytic Plane surface whose normal is parallel to the sweep direction, not merely a flat face; this face's surface is %T, which this evaluator cannot use as a stop even when flat — choose any analytic planar face with that orientation, or use a Distance (or, inside a TwoSided extent, DistanceSide) extent`, ErrUnsupported, face.Surface())
 	}
 	n := frame.N()
 	if !parallelDirs(pl.Frame.N(), n) {
-		return 0, 0, fmt.Errorf(`%w: ToFace requires the stop face's normal parallel to the sweep direction (the face perpendicular to the sweep); this face is tilted — choose a perpendicular face or use a Distance (or, inside a TwoSided extent, DistanceSide) extent`, ErrUnsupported)
+		return 0, 0, 0, fmt.Errorf(`%w: ToFace requires the stop face's normal parallel to the sweep direction (the face perpendicular to the sweep); this face is tilted — choose a perpendicular face or use a Distance (or, inside a TwoSided extent, DistanceSide) extent`, ErrUnsupported)
 	}
 	zFace := pl.Frame.Origin().Sub(frame.Origin()).Dot(n)
 	tol := relStopTol(math.Max(pl.Frame.Origin().Len(), frame.Origin().Len()))
 	if math.Abs(zFace) <= tol {
-		return 0, 0, fmt.Errorf(`%w: the stop face is coplanar with the sketch plane`, ErrDegenerate)
+		return 0, 0, 0, fmt.Errorf(`%w: the stop face is coplanar with the sketch plane`, ErrDegenerate)
 	}
 	if travel == 0 {
 		travel = 1
@@ -183,13 +267,22 @@ func (d *Document) resolveToFace(tf ToFace, frame r3.Frame, travel float64, what
 			travel = -1
 		}
 	} else if zFace*travel < 0 {
-		return 0, 0, fmt.Errorf(`%w: the stop face lies on the other side of the sketch plane than %s sweeps`, ErrDegenerate, what)
+		return 0, 0, 0, fmt.Errorf(`%w: the stop face lies on the other side of the sketch plane than %s sweeps`, ErrDegenerate, what)
 	}
 	stop := zFace + travel*offset
 	if stop*travel <= tol {
-		return 0, 0, fmt.Errorf(`%w: the to-face offset pulls the stop behind the sketch plane`, ErrDegenerate)
+		return 0, 0, 0, fmt.Errorf(`%w: the to-face offset pulls the stop behind the sketch plane`, ErrDegenerate)
 	}
-	return stop, body.originStep(), nil
+	// The three terms displace the level along the same normal, so they sum:
+	// the whole expression's own rounding (which covers the difference, the dot
+	// product and the offset step alike), the offset's conversion into
+	// millimetres, and the displacement the stop body proved for its own levels.
+	delta := absSumUpper(
+		stopLevelRound(pl.Frame.Origin(), frame.Origin(), n, travel, offset, stop),
+		offsetDelta,
+		payloadAxialDelta(body),
+	)
+	return stop, delta, body.originStep(), nil
 }
 
 // resolveThroughAll resolves a through-all stop: the sweep runs from the
@@ -202,34 +295,36 @@ func (d *Document) resolveToFace(tf ToFace, frame r3.Frame, travel float64, what
 // region-versus-projection overlap is boolean-grade machinery this
 // evaluator does not have, and a conservative guess would fabricate or drop
 // a recorded dependency). It returns the signed stop coordinate along the
-// plane normal and the met bodies' StepRefs in stop order along the sweep —
-// nearest far side first. No live body in the path is ErrDegenerate: the
-// sweep has no stop at all.
-func (d *Document) resolveThroughAll(frame r3.Frame, travel float64) (float64, []StepRef, error) {
+// plane normal, that coordinate's own proven axial displacement, and the met
+// bodies' StepRefs in stop order along the sweep — nearest far side first. No
+// live body in the path is ErrDegenerate: the sweep has no stop at all.
+func (d *Document) resolveThroughAll(frame r3.Frame, travel float64) (float64, float64, []StepRef, error) {
 	dir := frame.N().Scale(travel)
 	base := frame.Origin().Dot(dir)
 	type stopAt struct {
-		far float64
-		ref StepRef
+		far   float64
+		hi    float64
+		delta float64
+		ref   StepRef
 	}
 	var stops []stopAt
 	for _, b := range d.bodies {
 		ext, ok := b.payload.(directionalExtent)
 		if !ok {
-			return 0, nil, fmt.Errorf(`%w: a through-all stop needs every live body's directional extent, and this evaluator did not build one of them`, ErrUnsupported)
+			return 0, 0, nil, fmt.Errorf(`%w: a through-all stop needs every live body's directional extent, and this evaluator did not build one of them`, ErrUnsupported)
 		}
 		_, hi, err := ext.extentAlong(dir)
 		if err != nil {
-			return 0, nil, err
+			return 0, 0, nil, err
 		}
 		far := hi - base
 		if far <= relStopTol(math.Max(math.Abs(hi), math.Abs(base))) {
 			continue
 		}
-		stops = append(stops, stopAt{far: far, ref: b.originStep()})
+		stops = append(stops, stopAt{far: far, hi: hi, delta: payloadAxialDelta(b), ref: b.originStep()})
 	}
 	if len(stops) == 0 {
-		return 0, nil, fmt.Errorf(`%w: a through-all sweep found no live body in its path`, ErrDegenerate)
+		return 0, 0, nil, fmt.Errorf(`%w: a through-all sweep found no live body in its path`, ErrDegenerate)
 	}
 	// Stop order along the sweep: the sweep passes the nearest far side
 	// first. A tie keeps the live-body order, so the record is
@@ -239,7 +334,13 @@ func (d *Document) resolveThroughAll(frame r3.Frame, travel float64) (float64, [
 	for i, s := range stops {
 		refs[i] = s.ref
 	}
-	return travel * stops[len(stops)-1].far, refs, nil
+	// The sweep stops at the FARTHEST far side, so that one body's own level
+	// displacement is the one this level inherits, composed with the rounding
+	// this resolution's own subtraction committed.
+	last := stops[len(stops)-1]
+	stop := travel * last.far
+	delta := absSumUpper(throughStopRound(frame.Origin(), dir, last.hi, travel, stop), last.delta)
+	return stop, delta, refs, nil
 }
 
 // dedupRefs deduplicates recorded stop refs preserving first occurrence

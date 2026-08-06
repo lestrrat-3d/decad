@@ -33,6 +33,16 @@ import (
 // end (the removed cap, where the rim is) is zOpen; the outer prism's floor is
 // at zOuter, the cavity's floor (shellCap) at zCav, which lies between the two
 // so the floor slab is [zOuter, zCav] (docs/modify-design.md §9).
+//
+// zDelta is the axial displacement every one of those three levels is held
+// within — the cup's spelling of prismPayload's z0Delta/z1Delta, one figure
+// rather than a pair because every cup level derives from the receiver's two.
+// It is zero for a receiver whose sweep the caller stated and whose floor the
+// thickness steps to exactly; otherwise it composes the receiver's own
+// displacement with the rounding of the float sum that stepped the pocket floor
+// off it. Every level-derived cup reading takes it — the two heights and the
+// volume, area and centroid built on them, the box, and the wall vertices and
+// vertical edges the shared prism build stamps.
 type cupPayload struct {
 	outer     ProfileRecord
 	cavity    ProfileRecord
@@ -40,6 +50,7 @@ type cupPayload struct {
 	zOpen     float64
 	zOuter    float64
 	zCav      float64
+	zDelta    float64
 	thickness float64
 	sense     ShellSense
 	xform     r3.Transform
@@ -47,6 +58,14 @@ type cupPayload struct {
 
 // transform is the accumulated rigid placement.
 func (cp cupPayload) transform() r3.Transform { return cp.xform }
+
+// axialDelta reports that displacement to a body-relative stop resolved against
+// this cup's faces (stops.go).
+func (cp cupPayload) axialDelta() float64 { return cp.zDelta }
+
+// level is one of the cup's three sweep levels as a bounded reading, the cup's
+// own spelling of prismPayload.z0Scalar.
+func (cp cupPayload) level(z float64) boundedScalar { return measuredScalar(z, cp.zDelta) }
 
 // placed re-evaluates the same cup under the composed motion (evaluator §8).
 func (cp cupPayload) placed(ctx context.Context, d *Document, ref StepRef, composed r3.Transform) (*Body, error) {
@@ -57,7 +76,7 @@ func (cp cupPayload) placed(ctx context.Context, d *Document, ref StepRef, compo
 // prismLike is a prismPayload sharing the cup's frame and placement, so the
 // point/dir/reflected/capFrame machinery serves the cup too.
 func (cp cupPayload) prismLike(z0, z1 float64) prismPayload {
-	return prismPayload{frame: cp.frame, z0: z0, z1: z1, xform: cp.xform}
+	return prismPayload{frame: cp.frame, z0: z0, z1: z1, z0Delta: cp.zDelta, z1Delta: cp.zDelta, xform: cp.xform}
 }
 
 // extentAlong is the cup's exact extent interval along an arbitrary world
@@ -68,7 +87,8 @@ func (cp cupPayload) prismLike(z0, z1 float64) prismPayload {
 // through-all stop consults when a cup is a live body in the sweep's path.
 func (cp cupPayload) extentAlong(g r3.Vec) (float64, float64, error) {
 	oLo, oHi := math.Min(cp.zOuter, cp.zOpen), math.Max(cp.zOuter, cp.zOpen)
-	outer := prismPayload{profile: cp.outer, frame: cp.frame, z0: oLo, z1: oHi, xform: cp.xform}
+	outer := cp.prismLike(oLo, oHi)
+	outer.profile = cp.outer
 	return outer.extentAlong(g)
 }
 
@@ -95,21 +115,34 @@ func cupPayloadFor(pp prismPayload, offset ProfileRecord, s, t float64, removedE
 		sense:     sense,
 		xform:     pp.xform,
 	}
+	// stepped is the level the wall thickness moves off one of the receiver's
+	// own: a float sum, so it carries that sum's rounding beside whatever
+	// displacement the level it started from already had.
+	stepped := 0.0
+	step := func(from, by float64) float64 {
+		to := from + by
+		stepped = math.Max(stepped, addRoundError(from, by, to))
+		return to
+	}
 	if removedEnd { // open at the top
 		cp.zOpen = z1
 		if s > 0 {
-			cp.zOuter, cp.zCav = z0, z0+t
+			cp.zOuter, cp.zCav = z0, step(z0, t)
 		} else {
-			cp.zOuter, cp.zCav = z0-t, z0
+			cp.zOuter, cp.zCav = step(z0, -t), z0
 		}
 	} else { // open at the bottom — the mirror
 		cp.zOpen = z0
 		if s > 0 {
-			cp.zOuter, cp.zCav = z1, z1-t
+			cp.zOuter, cp.zCav = z1, step(z1, -t)
 		} else {
-			cp.zOuter, cp.zCav = z1+t, z1
+			cp.zOuter, cp.zCav = step(z1, t), z1
 		}
 	}
+	// One figure covers all three levels: each is a receiver sweep level, held
+	// within the receiver's wider end displacement, or that level stepped by the
+	// thickness, held within it plus the step's own rounding.
+	cp.zDelta = absSumUpper(pp.axialDelta(), stepped)
 	return cp
 }
 
@@ -152,8 +185,11 @@ func evalCupContext(ctx context.Context, d *Document, ref StepRef, cp cupPayload
 		// before here); a mismatch would leave a rim with no partner loop.
 		return nil, fmt.Errorf(`%w: the cup's outer and cavity regions have different loop counts`, ErrDegenerate)
 	}
-	heightO := boundedAbs(boundedSub(exactScalar(cp.zOpen), exactScalar(cp.zOuter)))
-	heightC := boundedAbs(boundedSub(exactScalar(cp.zOpen), exactScalar(cp.zCav)))
+	// Each height is read from BOUNDED levels, so a cup built on a computed
+	// sweep carries that computation into the volume, area and centroid below
+	// rather than publishing them as the levels they denote.
+	heightO := boundedAbs(boundedSub(cp.level(cp.zOpen), cp.level(cp.zOuter)))
+	heightC := boundedAbs(boundedSub(cp.level(cp.zOpen), cp.level(cp.zCav)))
 	hO, hC := heightO.value, heightC.value
 	if hO <= 0 || hC <= 0 {
 		return nil, fmt.Errorf(`%w: a cup interval is empty`, ErrDegenerate)
@@ -342,8 +378,8 @@ func evalCupContext(ctx context.Context, d *Document, ref StepRef, cp cupPayload
 
 	// Centroid: each region's centroid lifted to its own interval midpoint, the
 	// two combined with the cavity's mass subtracted (§10).
-	zMidO := boundedDiv(boundedAdd(exactScalar(cp.zOuter), exactScalar(cp.zOpen)), exactScalar(2))
-	zMidC := boundedDiv(boundedAdd(exactScalar(cp.zCav), exactScalar(cp.zOpen)), exactScalar(2))
+	zMidO := boundedDiv(boundedAdd(cp.level(cp.zOuter), cp.level(cp.zOpen)), exactScalar(2))
+	zMidC := boundedDiv(boundedAdd(cp.level(cp.zCav), cp.level(cp.zOpen)), exactScalar(2))
 	cuO := boundedQuotient(igO.mu, igO.muBound, igO.area, igO.areaBound)
 	cvO := boundedQuotient(igO.mv, igO.mvBound, igO.area, igO.areaBound)
 	cuC := boundedQuotient(igC.mu, igC.muBound, igC.area, igC.areaBound)
@@ -382,7 +418,9 @@ func evalCupContext(ctx context.Context, d *Document, ref StepRef, cp cupPayload
 	}
 
 	// Bounds: the outer prism's — the cavity lies within it in both senses (§10).
-	bounds, err := prismBoundsContext(ctx, prismPayload{profile: cp.outer, frame: cp.frame, z0: oLo, z1: oHi, xform: cp.xform}, work)
+	outerBox := cp.prismLike(oLo, oHi)
+	outerBox.profile = cp.outer
+	bounds, err := prismBoundsContext(ctx, outerBox, work)
 	if err != nil {
 		return nil, err
 	}

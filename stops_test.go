@@ -771,3 +771,129 @@ func TestExtrudeThroughAllSideCupStop(t *testing.T) {
 	requireBounds(t, pin, 120, 0, -3, 140, 20, 20)
 	require.Contains(t, doc.Bodies(), cup)
 }
+
+// sweepEdges resolves an XY-plane prism's four lateral edges — the ones that
+// span the sweep, and so the ones a computed level reaches.
+func sweepEdges(t *testing.T, b *decad.Body) []*decad.Edge {
+	t.Helper()
+	edges, err := verticalEdges().SelectEdges(b)
+	require.NoError(t, err)
+	return edges
+}
+
+// TestExtrudeToFaceComputedLevelIsBounded pins the rule a computed sweep level
+// obeys: the level a ToFace stop resolves is arithmetic over another body's
+// face, so every reading built from it publishes that arithmetic's own proven
+// displacement instead of claiming the level it denotes.
+//
+// The fixture is the one that makes the displacement visible at millimetre
+// scale: a plate swept 1e12 mm, stopped 0.001 mm short of its far cap. The
+// denoted level is 999999999999.999 and the float sum lands on
+// 999999999999.9990234375, 2.34375e-05 mm away.
+func TestExtrudeToFaceComputedLevelIsBounded(t *testing.T) {
+	const (
+		plateHeight = 1e12
+		shortBy     = 0.001
+		// The stop the float sum holds, and its distance from the level the
+		// extent denotes (1e12 − 0.001).
+		heldStop = 999999999999.9990234375
+		rounding = 2.34375e-05
+	)
+	s, plateProf, pinProf := plateAndPin(t)
+	doc := decad.New()
+	plate, err := doc.Extrude(s, plateProf, decad.Distance{D: units.Millimeters(plateHeight), Dir: decad.Along})
+	require.NoError(t, err)
+
+	pin, err := doc.Extrude(s, pinProf, decad.ToFace{
+		Body:   plate,
+		Face:   capEndFace(plate),
+		Offset: units.Millimeters(-shortBy),
+	})
+	require.NoError(t, err)
+
+	// The stop is the float sum, unchanged: this repair bounds the level, it
+	// does not move it.
+	top := 0
+	for _, v := range pin.Vertices() {
+		p := v.Position()
+		if p.Value.Z == 0 {
+			// The sketch plane is the end the caller did not compute: it stays
+			// exact, which is what proves the bound is per-end and not a blanket
+			// stamp on the body.
+			require.Equal(t, decad.Exact, p.Exactness)
+			require.Zero(t, p.Bound.Mag())
+			continue
+		}
+		require.Equal(t, heldStop, p.Value.Z)
+		require.Equal(t, decad.Approximate, p.Exactness, `a vertex at a computed level is not exact`)
+		bound, err := p.Bound.In(units.Millimeter)
+		require.NoError(t, err)
+		require.InDelta(t, rounding, bound, 1e-12, `the bound covers the level's own rounding`)
+		top++
+	}
+	require.Equal(t, 4, top, `the 20×20 pin has four vertices at the stop level`)
+
+	verticals := sweepEdges(t, pin)
+	require.Len(t, verticals, 4)
+	for _, e := range verticals {
+		length, err := e.Length()
+		require.NoError(t, err)
+		require.Equal(t, decad.Approximate, length.Exactness, `a vertical edge spanning a computed level is not exact`)
+		bound, err := length.Bound.In(units.Millimeter)
+		require.NoError(t, err)
+		require.GreaterOrEqual(t, bound, rounding, `the height carries the level's rounding`)
+	}
+
+	// The measurements the same height feeds report it too.
+	bounds, err := pin.Bounds()
+	require.NoError(t, err)
+	require.Equal(t, decad.Approximate, bounds.Exactness)
+	require.Positive(t, bounds.Bound.Mag())
+	area, err := pin.Area()
+	require.NoError(t, err)
+	require.Equal(t, decad.Approximate, area.Exactness)
+	require.Positive(t, area.Bound.Mag())
+}
+
+// TestExtrudeStatedLevelStaysExact is the other half of the same rule: a level
+// the caller stated denotes itself, so nothing about it is approximate. It
+// covers the plain Distance sweep and the ToFace stop whose arithmetic happens
+// to be exact alike — the bound is MEASURED per level, never charged to every
+// stop.
+func TestExtrudeStatedLevelStaysExact(t *testing.T) {
+	s, plateProf, pinProf := plateAndPin(t)
+	doc := decad.New()
+	plate, err := doc.Extrude(s, plateProf, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	require.NoError(t, err)
+
+	toFace, err := doc.Extrude(s, pinProf, decad.ToFace{
+		Body:   plate,
+		Face:   capEndFace(plate),
+		Offset: units.Millimeters(2),
+	})
+	require.NoError(t, err)
+
+	for name, body := range map[string]*decad.Body{"distance": plate, "toFace": toFace} {
+		t.Run(name, func(t *testing.T) {
+			for _, v := range body.Vertices() {
+				p := v.Position()
+				require.Equal(t, decad.Exact, p.Exactness, `a vertex at a stated level is exact`)
+				require.Zero(t, p.Bound.Mag())
+			}
+			verticals := sweepEdges(t, body)
+			require.Len(t, verticals, 4)
+			for _, e := range verticals {
+				length, err := e.Length()
+				require.NoError(t, err)
+				require.Equal(t, decad.Exact, length.Exactness)
+				require.Zero(t, length.Bound.Mag())
+			}
+			vol, err := body.Volume()
+			require.NoError(t, err)
+			require.Equal(t, decad.Exact, vol.Exactness)
+			bounds, err := body.Bounds()
+			require.NoError(t, err)
+			require.Equal(t, decad.Exact, bounds.Exactness)
+		})
+	}
+}

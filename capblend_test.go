@@ -1752,3 +1752,51 @@ func TestCapBlendWedgeAreaAndVolumeBoundsEncloseTrueError(t *testing.T) {
 	require.LessOrEqual(t, volResidual, vol.Bound.Mag(),
 		`the published volume bound must enclose the true residual against the denoted (homothetic) band`)
 }
+
+// TestCapBlendSideLevelCarriesSetbackRounding pins the cap-blend half of the
+// computed-level rule: a chamfered end pulls its straight side level in by the
+// setback, that float sum rounds, and the side walls built over the level
+// publish the rounding rather than claiming the level the setback denotes. The
+// cap-level feet keep their own, much smaller, offset-solve bound, so the two
+// levels are proven apart rather than by one blanket stamp.
+func TestCapBlendSideLevelCarriesSetbackRounding(t *testing.T) {
+	const (
+		height = 1e12
+		d      = 1e-3
+		// fl(1e12 − 1e-3) against the level it denotes.
+		rounding = 2.34375e-05
+	)
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	rect := s.CreateRectangle(0, 0, 1, 1)
+	s.Fix(rect.A)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+
+	doc := decad.New()
+	box, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(height), Dir: decad.Along})
+	require.NoError(t, err)
+	chamfered, err := box.Chamfer(capLoopEdges(box), units.Millimeters(d))
+	require.NoError(t, err)
+
+	side := 0
+	for _, v := range chamfered.Vertices() {
+		p := v.Position()
+		switch p.Value.Z {
+		case 0:
+			require.Equal(t, decad.Exact, p.Exactness, `the untouched end stays exact`)
+		case height:
+			// A cap-level foot: bounded by its own offset solve, not by the
+			// setback sum.
+			require.Equal(t, decad.Approximate, p.Exactness)
+		default:
+			require.Equal(t, decad.Approximate, p.Exactness, `a vertex at the setback level is not exact`)
+			bound, err := p.Bound.In(units.Millimeter)
+			require.NoError(t, err)
+			require.InDelta(t, rounding, bound, 1e-12)
+			side++
+		}
+	}
+	require.Equal(t, 4, side, `the square section has four side-level vertices`)
+}

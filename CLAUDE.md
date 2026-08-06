@@ -238,6 +238,15 @@ publish; every other consumer that cannot state or bound it withholds its answer
 rather than measure the recorded section as the denoted one. That per-consumer
 list lives in `docs/prism-boolean-design.md`'s Implementation notes.
 
+**Axial level displacement.** `prismPayload.z0Delta`/`z1Delta`
+(`docs/evaluator-design.md` §5) are the per-end proven displacement between a
+payload's recorded sweep level and the level its construction denotes — zero for
+a level the caller stated, nonzero for one a `ToFace`/`ThroughAll` stop
+(`stops.go`), a non-base-unit rescale or a chamfered end computed. It is the
+axial twin of the section displacement, tracked apart from it and never
+standing in for it; every level-derived reading takes it, and
+`cupPayload.zDelta` is the cup's own spelling.
+
 **Cap contour displacement.** The cap-loop chamfer's cap contour is a computed
 offset carrying its own proven displacement, the same idea as `sectionDelta` one
 construction over. The two terms are independent and are never composed

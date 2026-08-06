@@ -110,7 +110,18 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref StepRef, cbp capB
 			v := cbp.z1 - cbp.d
 			zHi = measuredScalar(v, addRoundError(cbp.z1, -cbp.d, v))
 		}
-		ppFor := prismPayload{frame: cbp.frame, z0: zLo.value, z1: zHi.value, xform: cbp.xform}
+		// The side walls are built over those same two bounded levels, so each
+		// end's displacement goes in with it: the wall vertices, the vertical
+		// edge lengths and the side face areas all read a level the setback
+		// computed, never one they can claim was recorded.
+		ppFor := prismPayload{
+			frame:   cbp.frame,
+			z0:      zLo.value,
+			z1:      zHi.value,
+			z0Delta: zLo.bound,
+			z1Delta: zHi.bound,
+			xform:   cbp.xform,
+		}
 		sideFaces, bottomCo, topCo, loopLen, err := buildLoopSidesAs(ctx, body, ref, ppFor, li, li != 0, loop, work)
 		if err != nil {
 			return nil, err

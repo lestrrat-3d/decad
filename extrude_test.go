@@ -760,3 +760,47 @@ func TestCircularRimConvexity(t *testing.T) {
 		requireCircularRims(t, roundedPlateBody(t, true), false)
 	})
 }
+
+// TestExtrudeRescaledDistanceCarriesConversionRounding pins the third way a
+// sweep level is COMPUTED rather than stated: a distance carried in a non-base
+// unit reaches the evaluator rescaled into millimetres, and where that rescale
+// rounds, the level and every reading built on it carry the rounding.
+//
+// The bound is measured per value, not charged to the unit: 1 in is exactly the
+// inch factor, so it rescales without rounding and stays Exact, while 0.1 in
+// and 3 in do not and do not.
+func TestExtrudeRescaledDistanceCarriesConversionRounding(t *testing.T) {
+	s, p := plateSketch(t)
+	for _, tc := range []struct {
+		name  string
+		d     units.Value
+		exact bool
+	}{
+		{name: "millimetres need no rescale", d: units.Millimeters(25.4), exact: true},
+		{name: "one inch rescales exactly", d: units.Inches(1), exact: true},
+		{name: "a tenth of an inch rounds", d: units.Inches(0.1)},
+		{name: "three inches round", d: units.Inches(3)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			doc := decad.New()
+			body, err := doc.Extrude(s, p, decad.Distance{D: tc.d, Dir: decad.Along})
+			require.NoError(t, err)
+			box, err := body.Bounds()
+			require.NoError(t, err)
+			if tc.exact {
+				require.Equal(t, decad.Exact, box.Exactness)
+				require.Zero(t, box.Bound.Mag())
+				return
+			}
+			require.Equal(t, decad.Approximate, box.Exactness, `a rescaled level is not the level it denotes`)
+			require.Positive(t, box.Bound.Mag())
+			// The bound covers the distance from the held level to the one the
+			// caller's quantity denotes.
+			denoted, err := tc.d.In(units.Millimeter)
+			require.NoError(t, err)
+			bound, err := box.Bound.In(units.Millimeter)
+			require.NoError(t, err)
+			require.GreaterOrEqual(t, bound, math.Abs(box.Max.Z-denoted))
+		})
+	}
+}
