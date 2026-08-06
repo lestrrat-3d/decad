@@ -306,7 +306,7 @@ func crossingAuditBudget(budget *workBudget, segs []segEntry) error {
 
 // contactEps is the noise-floor coefficient ε of the boundary-contact test,
 // the SAME ε verification design §4 fixes for its diameter-anchored noise floor
-// δ = ε·D (see gapWithinTolerance, the Clearance.Gap gate). It is not a
+// δ = ε·D (see appendClearance, the Clearance.Gap gate). It is not a
 // distance; contactFloorBudget multiplies it by the section's own scale.
 const contactEps = 1e-9
 
