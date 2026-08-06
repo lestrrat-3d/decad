@@ -5,10 +5,67 @@ import (
 	"math"
 	"testing"
 
+	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
+
+// displacedUnionBody is the far-placed analytic union every section-
+// displacement case here reads: a 10×10 box over the origin unioned with a 6×6
+// box drawn at -shift and placed by +shift, so operand B's re-expression into
+// A's frame is a genuine recomputation at that magnitude and the merged section
+// carries the displacement it rounds to (docs/prism-boolean-design.md §7). B
+// stays strictly inside A, so the merged outline IS A's own 10×10 square.
+func displacedUnionBody(t *testing.T, shift float64) *Body {
+	t.Helper()
+	doc := New()
+	a := internalBoxBody(t, doc, 0, 0, 10, 10, 10)
+	b := internalBoxBody(t, doc, 2-shift, 2, 8-shift, 8, 10)
+	m, err := r3.Translation(r3.NewVec(shift, 0, 0))
+	require.NoError(t, err)
+	moved, err := b.Placed(m)
+	require.NoError(t, err)
+	got, err := Union(a, moved)
+	require.NoError(t, err)
+	return got
+}
+
+// TestTessellateChargesSectionDisplacementToEveryProof is
+// docs/tessellation-design.md §5's section-displacement term read at the two
+// proofs the mesh publishes. The merged section is straight-only, so the
+// chording itself takes no sagitta at all and every millimetre of bound and
+// every square millimetre of slack the mesh reports is the displacement's own.
+func TestTessellateChargesSectionDisplacementToEveryProof(t *testing.T) {
+	got := displacedUnionBody(t, 1e14)
+	pp, ok := got.payload.(prismPayload)
+	require.True(t, ok, `the analytic reduction must own this pair`)
+	require.Positive(t, pp.sectionDelta)
+
+	mesh, err := tessellateContext(t.Context(), got, units.Millimeters(20))
+	require.NoError(t, err)
+
+	// The bound is the displacement, up-rounded once.
+	require.GreaterOrEqual(t, mesh.bound, pp.sectionDelta)
+	require.Equal(t, upRound(pp.sectionDelta), mesh.bound)
+
+	// The slack is the same displacement read as an area, composed exactly as
+	// evalPrism composes it: the section's own tube once per cap — 2·δ·p over
+	// the 40 mm outline plus a δ-disk at each of the four corners — and the
+	// outline's length displacement over the 10 mm sweep.
+	const perimeter, height, walks = 40.0, 10.0, 4.0
+	d := pp.sectionDelta
+	capMove := 2*d*perimeter + walks*math.Pi*d*d
+	wallMove := walks * 12 * math.Pi * d * height
+	require.InEpsilon(t, 2*capMove+wallMove, mesh.areaSlack, 1e-12)
+
+	// An undisplaced straight prism charges neither term.
+	plain := internalBoxBody(t, New(), 0, 0, 10, 10, 10)
+	flat, err := tessellateContext(t.Context(), plain, units.Millimeters(1))
+	require.NoError(t, err)
+	require.Zero(t, flat.bound)
+	require.Zero(t, flat.areaSlack)
+}
 
 func TestRequireLoopClearanceOffersValidRetry(t *testing.T) {
 	pts := []Point2{

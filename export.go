@@ -151,9 +151,14 @@ func (b *Body) exportMesh(opts []option.Interface) (*Mesh, error) {
 // defaultChordTolerance derives the exporter's default from 1/1000 of the
 // body's bounding-box diagonal. A faceted body raises that size-derived value
 // to its retained mesh bound when necessary, because it can restate but not
-// refine the held mesh. A body this evaluator did not build has no payload to
-// tessellate anyway; the staging error is Tessellate's to report, so a zero
-// diagonal only guards the impossible.
+// refine the held mesh. A prism carrying a section displacement
+// (docs/prism-boolean-design.md §7) raises it for the same reason and to twice
+// that displacement: Tessellate reserves the displacement from the tolerance
+// before chording (docs/tessellation-design.md §5), so a size-derived default
+// under it names a mesh no body in that state can produce, and doubling it
+// leaves the chording a budget of its own. A body this evaluator did not build
+// has no payload to tessellate anyway; the staging error is Tessellate's to
+// report, so a zero diagonal only guards the impossible.
 func (b *Body) defaultChordTolerance() (units.Value, error) {
 	if b.payload == nil {
 		return units.Value{}, fmt.Errorf(`%w: this evaluator cannot tessellate a body it did not build`, ErrUnsupported)
@@ -165,6 +170,9 @@ func (b *Body) defaultChordTolerance() (units.Value, error) {
 	tol := diag / 1000
 	if fp, ok := b.payload.(facetedPayload); ok {
 		tol = math.Max(tol, fp.meshBound)
+	}
+	if pp, ok := b.payload.(prismPayload); ok {
+		tol = math.Max(tol, productUpper(2, pp.sectionDelta))
 	}
 	return units.Millimeters(tol), nil
 }

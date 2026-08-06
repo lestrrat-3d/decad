@@ -418,3 +418,37 @@ func TestPrismUnionDisplacedSectionDownstreamReadings(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, decad.Suspect, report.Status)
 }
+
+// TestPrismUnionDisplacedOperandStillReachesTheMeshBoolean pins the mesh path's
+// own reach over a displaced operand. §3.4 routes a scene the analytic path
+// declines back to the mesh boolean precisely when a source carries a
+// displacement, and no mesh of such an operand can go below it
+// (docs/tessellation-design.md §5), so the pair's diameter-derived chord
+// tolerance is raised past it rather than refusing an operand this path exists
+// to serve.
+func TestPrismUnionDisplacedOperandStillReachesTheMeshBoolean(t *testing.T) {
+	const shift = 1e14
+	doc := decad.New()
+	a := boxBody(t, doc, 0, 0, 10, 10, 10)
+	b := placedFar(t, boxBody(t, doc, 2-shift, 2, 8-shift, 8, 10), shift)
+	got, err := decad.Union(a, b)
+	require.NoError(t, err)
+	box, err := got.Bounds()
+	require.NoError(t, err)
+	displacement := box.Bound.Base()
+	require.Positive(t, displacement)
+	// The pair's own diameter buys a chord tolerance orders below the
+	// displacement, which is the tolerance the mesh path would refuse at.
+	require.Greater(t, displacement, 1e-3)
+
+	// A 4×4 pocket cut 2 mm into the 10 mm-tall union's top: 1000 − 4·4·2.
+	tool := translated(t, boxBody(t, doc, 3, 3, 7, 7, 4), 0, 0, 8)
+	cut, err := decad.Cut(got, tool)
+	require.NoError(t, err)
+	vol, err := cut.Volume()
+	require.NoError(t, err)
+	require.Equal(t, 968.0, volumeMM(t, vol))
+	require.Equal(t, decad.Approximate, vol.Exactness)
+	require.Positive(t, vol.Bound.Base())
+	require.False(t, math.IsInf(vol.Bound.Base(), 1))
+}

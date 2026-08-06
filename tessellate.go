@@ -75,10 +75,13 @@ func (m *Mesh) Bound() units.Value { return units.Millimeters(m.bound) }
 // Prism, cup and boolean-built bodies tessellate. A boolean-built body only
 // RESTATES its held mesh, so tol must be at least the body's own Bound: a
 // finer tol is [ErrUnsupported], because the analytic identity is gone and no
-// finer mesh can be proven. A revolve body is [ErrUnsupported] here — Revolve
-// builds and verifies, but its analytic surfaces have no tessellator, so it
-// cannot be meshed or exported. A body this evaluator did not build at all is
-// also [ErrUnsupported].
+// finer mesh can be proven. A prism the analytic prism boolean assembled holds
+// its section within a proven displacement of the section it denotes
+// (docs/prism-boolean-design.md §7); that displacement is reserved from tol
+// before any chord is chosen, so a tol it exhausts is [ErrUnsupported] too. A
+// revolve body is [ErrUnsupported] here — Revolve builds and verifies, but its
+// analytic surfaces have no tessellator, so it cannot be meshed or exported. A
+// body this evaluator did not build at all is also [ErrUnsupported].
 func (b *Body) Tessellate(tol units.Value) (*Mesh, error) {
 	return b.TessellateContext(context.Background(), tol)
 }
@@ -121,6 +124,29 @@ func tessellateContext(ctx context.Context, b *Body, tol units.Value) (*Mesh, er
 		return nil, fmt.Errorf(`%w: tessellation does not support payload %T; supported payload classes are prism, cup, and faceted`, ErrUnsupported, b.payload)
 	}
 
+	// Every mesh vertex lands on the RECORDED section, which a payload carrying a
+	// section displacement holds only within that displacement of the section its
+	// construction DENOTES (docs/prism-boolean-design.md §7). The displacement is
+	// therefore part of the mesh's deviation before a single chord is chosen, and
+	// docs/tessellation-design.md §1's Tolerance row binds the published Bound to
+	// tol — so it is RESERVED from the chord budget here, and a tolerance that
+	// cannot pay for it refuses, the same shape as tessellateFaceted's refusal of
+	// a tolerance below a held mesh bound. Both downward nudges are proven margin:
+	// the subtraction's own rounding is at most half an ulp, which the first
+	// covers, and the second pays for the upward-rounded sum this bound is
+	// published through at the end of the build. Every payload a caller draws
+	// carries a zero displacement and chords against the requested tolerance
+	// unchanged.
+	budget := chord
+	if pp.sectionDelta > 0 {
+		budget = downRound(downRound(chord - pp.sectionDelta))
+		if budget <= 0 {
+			requested := units.Millimeters(chord)
+			displacement := units.Millimeters(pp.sectionDelta)
+			return nil, fmt.Errorf(`%w: requested tolerance %s leaves no chord budget above the body's own section displacement %s; retry with a tolerance greater than %s`, ErrUnsupported, requested, displacement, displacement)
+		}
+	}
+
 	// Facets remember their source face (docs/evaluator-design.md §9); the
 	// provenance roles are how the payload's walks name the faces evalPrism
 	// built from them.
@@ -155,6 +181,10 @@ func tessellateContext(ctx context.Context, b *Body, tol units.Value) (*Mesh, er
 	var pts2 []Point2
 	var loopIdx [][]int
 	var loopSag []float64
+	// The section's own walk count and proven perimeter upper bound, for the
+	// displacement's area charge below.
+	var walks int
+	var perimeterUpper float64
 	// One free-form counter for the whole chorded record (see chordLoop).
 	work := newFreeformWork()
 	loops := append([]LoopRecord{pp.profile.Outer}, pp.profile.Holes...)
@@ -162,32 +192,34 @@ func tessellateContext(ctx context.Context, b *Body, tol units.Value) (*Mesh, er
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		samples, faceOf, maxSag, slack, err := chordLoop(ctx, loop, chord, pp.z1-pp.z0, work, func(w sideWalk) (*Face, error) {
+		cl, err := chordLoop(ctx, loop, budget, pp.z1-pp.z0, work, func(w sideWalk) (*Face, error) {
 			return faceOfRole(fmt.Sprintf("side(%d,%d)", li, w.segs[0]))
 		})
 		if err != nil {
 			return nil, err
 		}
-		mesh.bound = math.Max(mesh.bound, maxSag)
-		mesh.areaSlack += slack
+		mesh.bound = math.Max(mesh.bound, cl.maxSag)
+		mesh.areaSlack += cl.areaSlack
+		walks += cl.walks
+		perimeterUpper = absSumUpper(perimeterUpper, cl.perimeterUpper)
 
 		base := len(pts2)
-		pts2 = append(pts2, samples...)
-		idx := make([]int, len(samples))
-		for j := range samples {
+		pts2 = append(pts2, cl.samples...)
+		idx := make([]int, len(cl.samples))
+		for j := range cl.samples {
 			idx[j] = base + j
 		}
 		loopIdx = append(loopIdx, idx)
-		loopSag = append(loopSag, maxSag)
+		loopSag = append(loopSag, cl.maxSag)
 
 		// Side walls: one quad per chord, split into two triangles wound
 		// outward (tangent × N is the outward side normal for a CCW outer
 		// walk and a CW hole walk alike).
-		for j := range samples {
+		for j := range cl.samples {
 			g0 := base + j
-			g1 := base + (j+1)%len(samples)
-			mesh.addTriangle([3]int{meshBottom(g0), meshBottom(g1), meshTop(g1)}, faceOf[j])
-			mesh.addTriangle([3]int{meshBottom(g0), meshTop(g1), meshTop(g0)}, faceOf[j])
+			g1 := base + (j+1)%len(cl.samples)
+			mesh.addTriangle([3]int{meshBottom(g0), meshBottom(g1), meshTop(g1)}, cl.faceOf[j])
+			mesh.addTriangle([3]int{meshBottom(g0), meshTop(g1), meshTop(g0)}, cl.faceOf[j])
 		}
 	}
 
@@ -234,48 +266,78 @@ func tessellateContext(ctx context.Context, b *Body, tol units.Value) (*Mesh, er
 	// sweep levels, and a payload holds each only within its own displacement of
 	// what it denotes — the section's in the plane
 	// (docs/prism-boolean-design.md §7), each end's along the normal — so the mesh
-	// deviates by its own chording plus both. Chording stays within the requested
-	// tolerance; payload displacement can make the complete bound larger.
+	// deviates by its own chording plus both. The chording above already paid for
+	// the section displacement out of the reserved budget, so chording plus that
+	// term stays within the requested tolerance; the axial displacement carries no
+	// reservation of its own and can make the complete bound larger. The section
+	// displacement moves AREA too: the section can differ from the one it denotes
+	// by a tube about its own boundary, charged once per cap, and the boundary's
+	// own length can differ by that tube's length reading, charged over the sweep
+	// height — evalPrism's own composition (2·regionArea + perimeter·height), one
+	// dimension at a time. Every such term is zero for a payload a caller draws.
 	mesh.bound = upRound(mesh.bound + pp.sectionDelta + pp.axialDelta())
+	if pp.sectionDelta > 0 {
+		capMove := sectionDisplacementArea(pp.sectionDelta, walks, perimeterUpper)
+		wallMove := productUpper(sectionDisplacementLength(pp.sectionDelta, walks), math.Abs(pp.z1-pp.z0))
+		mesh.areaSlack = absSumUpper(mesh.areaSlack, capMove, capMove, wallMove)
+	}
 	return &mesh, nil
+}
+
+// chordedLoop is one boundary loop's chording, as chordLoop returns it: the 2D
+// samples, the wall face of the chord LEAVING each sample, the largest sagitta
+// the chording took, the chord-versus-arc area slack over the sweep height, and
+// the loop's own coalesced walk count with a proven upper bound on its analytic
+// length — the two figures a section displacement's area charge reads
+// (docs/tessellation-design.md §5).
+type chordedLoop struct {
+	samples        []Point2
+	faceOf         []*Face
+	maxSag         float64
+	areaSlack      float64
+	walks          int
+	perimeterUpper float64
 }
 
 // chordLoop chords one boundary loop into 2D samples: sample j is walk j's own
 // start (the junction shared with the previous walk) plus, for a circular walk,
-// its interior chord samples. It returns the samples, the wall face of the
-// chord LEAVING each sample (resolved by wallFace over the coalesced walk it
-// belongs to), the largest sagitta the chording took, and the chord-versus-arc
-// area slack over the given sweep height. The same chording feeds every face
-// that meets the loop — walls and caps alike — so the mesh is watertight by
-// construction.
+// its interior chord samples. The wall face of each sample's outgoing chord is
+// resolved by wallFace over the coalesced walk it belongs to. The same chording
+// feeds every face that meets the loop — walls and caps alike — so the mesh is
+// watertight by construction.
 // work is the free-form counter of the RECORD being chorded, opened once by the
 // caller and shared by every loop of it: chording holds no preflight counter, so
 // the ceiling starts at the tessellation entry rather than at each loop.
-func chordLoop(ctx context.Context, loop LoopRecord, chord, height float64, work *freeformWork, wallFace func(w sideWalk) (*Face, error)) ([]Point2, []*Face, float64, float64, error) {
+func chordLoop(ctx context.Context, loop LoopRecord, chord, height float64, work *freeformWork, wallFace func(w sideWalk) (*Face, error)) (chordedLoop, error) {
 	if len(loop.Segments) == 0 {
-		return nil, nil, 0, 0, fmt.Errorf(`%w: a recorded loop holds no segments`, ErrDegenerate)
+		return chordedLoop{}, fmt.Errorf(`%w: a recorded loop holds no segments`, ErrDegenerate)
 	}
 	// One counter spans the segment walk, the walk loop and the sample emission
 	// nested under it: a single walk emits many samples, and it is the SAMPLES
 	// that are the candidate operations §7.2 counts.
 	budget := newWorkBudget(ctx)
 	raw := make([]sideWalk, len(loop.Segments))
+	// The loop's analytic length, upper bound included: buildLoopSidesAs sums the
+	// same RAW walk lengths for the body's own perimeter, so both readings of one
+	// section speak for the same curve.
+	perimeterUpper := 0.0
 	for i, seg := range loop.Segments {
 		if err := budget.step(); err != nil {
-			return nil, nil, 0, 0, err
+			return chordedLoop{}, err
 		}
 		w, err := walkOf(seg, work)
 		if err != nil {
-			return nil, nil, 0, 0, err
+			return chordedLoop{}, err
 		}
 		if err := requireAnalyticWalk(w, "chording a boundary loop"); err != nil {
-			return nil, nil, 0, 0, err
+			return chordedLoop{}, err
 		}
+		perimeterUpper = absSumUpper(perimeterUpper, w.length, w.lengthBound)
 		raw[i] = sideWalk{segmentWalk: w, segs: []int{i}}
 	}
 	walks, err := coalesceWalksContext(ctx, raw)
 	if err != nil {
-		return nil, nil, 0, 0, err
+		return chordedLoop{}, err
 	}
 
 	var samples []Point2
@@ -283,11 +345,11 @@ func chordLoop(ctx context.Context, loop LoopRecord, chord, height float64, work
 	var maxSag, areaSlack float64
 	for _, w := range walks {
 		if err := budget.step(); err != nil {
-			return nil, nil, 0, 0, err
+			return chordedLoop{}, err
 		}
 		face, err := wallFace(w)
 		if err != nil {
-			return nil, nil, 0, 0, err
+			return chordedLoop{}, err
 		}
 		if !w.isCircular() {
 			samples = append(samples, Point2{U: w.startU, V: w.startV})
@@ -296,14 +358,14 @@ func chordLoop(ctx context.Context, loop LoopRecord, chord, height float64, work
 		}
 		n, sag, err := chordCount(w.segmentWalk, chord)
 		if err != nil {
-			return nil, nil, 0, 0, err
+			return chordedLoop{}, err
 		}
 		maxSag = math.Max(maxSag, sag)
 		areaSlack += walkAreaSlack(w.segmentWalk, n, height)
 		dth := (w.th1 - w.th0) / float64(n)
 		for k := range n {
 			if err := budget.step(); err != nil {
-				return nil, nil, 0, 0, err
+				return chordedLoop{}, err
 			}
 			p := Point2{U: w.startU, V: w.startV}
 			if k > 0 {
@@ -314,7 +376,14 @@ func chordLoop(ctx context.Context, loop LoopRecord, chord, height float64, work
 			faceOf = append(faceOf, face)
 		}
 	}
-	return samples, faceOf, maxSag, areaSlack, nil
+	return chordedLoop{
+		samples:        samples,
+		faceOf:         faceOf,
+		maxSag:         maxSag,
+		areaSlack:      areaSlack,
+		walks:          len(walks),
+		perimeterUpper: perimeterUpper,
+	}, nil
 }
 
 // tessellateCup meshes a cup (docs/modify-design.md §9, D4): the outer region O
@@ -379,15 +448,16 @@ func tessellateCup(ctx context.Context, b *Body, cp cupPayload, chord float64) (
 		sag     float64
 	}
 	chordRing := func(loop LoopRecord, h, lo, hi float64, role string) (ring, error) {
-		samples, faceOf, sag, slack, err := chordLoop(ctx, loop, chord, h, work, func(w sideWalk) (*Face, error) {
+		cl, err := chordLoop(ctx, loop, chord, h, work, func(w sideWalk) (*Face, error) {
 			return faceOfRole(fmt.Sprintf(role, w.segs[0]))
 		})
 		if err != nil {
 			return ring{}, err
 		}
-		mesh.bound = math.Max(mesh.bound, sag)
-		mesh.areaSlack += slack
-		r := ring{samples: samples, faces: faceOf, sag: sag}
+		samples := cl.samples
+		mesh.bound = math.Max(mesh.bound, cl.maxSag)
+		mesh.areaSlack += cl.areaSlack
+		r := ring{samples: samples, faces: cl.faceOf, sag: cl.maxSag}
 		r.loV = make([]int, len(samples))
 		r.hiV = make([]int, len(samples))
 		for i, p := range samples {

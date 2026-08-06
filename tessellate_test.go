@@ -458,3 +458,92 @@ func TestTessellateRejectsImpossiblyFineTolerance(t *testing.T) {
 	_, err = body.Tessellate(units.Millimeters(2.8055335832277702e-12))
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 }
+
+// TestTessellateReservesSectionDisplacementFromTolerance pins
+// docs/tessellation-design.md §1's Tolerance row on an assembled prism. Each
+// case is the far-placed union PR 111's audit measured: a 10×10 box unioned
+// with a 6×6 box drawn at -shift and placed by +shift, whose merged section
+// sits a proven displacement from the section the pair denotes
+// (docs/prism-boolean-design.md §7). That displacement is part of the mesh's
+// deviation, so it is reserved from the requested tolerance before chording,
+// and a tolerance it exhausts refuses instead of publishing a bound above what
+// the caller asked for.
+func TestTessellateReservesSectionDisplacementFromTolerance(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		shift float64
+		delta float64
+	}{
+		{name: "5e13 — the displacement fits under 1 mm", shift: 5e13, delta: 0.8660254037844389},
+		{name: "1e14 — the 1.73 mm reproduction", shift: 1e14, delta: 1.7320508075688783},
+		{name: "3e14 — the 3.46 mm reproduction", shift: 3e14, delta: 3.4641016151377566},
+		{name: "1e15 — the 13.86 mm reproduction", shift: 1e15, delta: 13.856406460551026},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			doc := decad.New()
+			a := boxBody(t, doc, 0, 0, 10, 10, 10)
+			b := placedFar(t, boxBody(t, doc, 2-tc.shift, 2, 8-tc.shift, 8, 10), tc.shift)
+			got, err := decad.Union(a, b)
+			require.NoError(t, err)
+			require.False(t, anyFaceIsFaceted(got), "the analytic reduction must own this pair")
+
+			// Every reading of the merged section carries the same displacement,
+			// so the body's own Box bound names the figure the mesh must pay.
+			box, err := got.Bounds()
+			require.NoError(t, err)
+			require.InDelta(t, tc.delta, box.Bound.Base(), 1e-9)
+
+			// 1 mm is the tolerance the audit measured its 13.86 mm bound at.
+			const tol = 1.0
+			mesh, err := got.Tessellate(units.Millimeters(tol))
+			if tc.delta >= tol {
+				require.ErrorIs(t, err, decad.ErrUnsupported)
+				require.Nil(t, mesh)
+				require.Contains(t, err.Error(), "section displacement")
+				require.Contains(t, err.Error(), units.Millimeters(tc.delta).String())
+			} else {
+				require.NoError(t, err)
+				requireWatertight(t, mesh)
+				require.LessOrEqual(t, mesh.Bound().Mag(), tol)
+				require.GreaterOrEqual(t, mesh.Bound().Mag(), tc.delta,
+					"the published bound must still carry the displacement")
+			}
+
+			// A tolerance above the displacement admits the mesh, and the bound
+			// it publishes stays within that tolerance.
+			const wide = 20.0
+			mesh, err = got.Tessellate(units.Millimeters(wide))
+			require.NoError(t, err)
+			requireWatertight(t, mesh)
+			require.LessOrEqual(t, mesh.Bound().Mag(), wide)
+			require.GreaterOrEqual(t, mesh.Bound().Mag(), tc.delta)
+		})
+	}
+}
+
+// TestTessellateUndisplacedPrismSpendsTheWholeTolerance is the other half of
+// the reservation: a prism a caller drew carries no section displacement, so
+// nothing is withheld from its chord budget and it chords exactly as it always
+// has — the same count, the same bound, all of it within the tolerance asked
+// for.
+func TestTessellateUndisplacedPrismSpendsTheWholeTolerance(t *testing.T) {
+	body := holedPlateBody(t)
+	tol := 0.5
+	mesh, err := body.Tessellate(units.Millimeters(tol))
+	require.NoError(t, err)
+	requireWatertight(t, mesh)
+
+	// r = 10 at tol = 0.5 still buys 10 chords around the hole: a reservation
+	// taken from an undisplaced prism would buy fewer.
+	require.Len(t, mesh.Vertices(), 28)
+	require.InDelta(t, 10*(1-math.Cos(math.Pi/10)), mesh.Bound().Mag(), 1e-12)
+	require.LessOrEqual(t, mesh.Bound().Mag(), tol)
+
+	// A straight-only prism chords exactly, bound and all.
+	doc := decad.New()
+	plain := boxBody(t, doc, 0, 0, 10, 10, 10)
+	flat, err := plain.Tessellate(units.Millimeters(tol))
+	require.NoError(t, err)
+	requireWatertight(t, flat)
+	require.Zero(t, flat.Bound().Mag())
+}

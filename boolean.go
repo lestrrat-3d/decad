@@ -1006,5 +1006,17 @@ func pairChordTolerance(a, b *Body) (float64, float64, error) {
 	if diag <= 0 || isNonFinite(diag) {
 		return 0, 0, fmt.Errorf(`%w: the operand pair has no extent to derive a chord tolerance from`, ErrDegenerate)
 	}
-	return diag * boolChordFactor, diag, nil
+	// An operand holding its section within a displacement of the one it
+	// denotes cannot be meshed within that displacement — tessellation reserves
+	// it from the requested tolerance (docs/tessellation-design.md §5) — and
+	// this mesh path is the designated fallback for exactly those operands
+	// (docs/prism-boolean-design.md §3.4). A diameter-derived tolerance under
+	// the displacement would refuse them, so raise it past both operands' own.
+	// Nothing is lost by the coarser chording: each mesh reports the sagitta it
+	// actually took, and the displacement already dominates the bound it
+	// publishes.
+	tol := diag * boolChordFactor
+	tol = math.Max(tol, productUpper(2, sectionDisplacementOf(a)))
+	tol = math.Max(tol, productUpper(2, sectionDisplacementOf(b)))
+	return tol, diag, nil
 }
