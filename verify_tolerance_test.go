@@ -123,17 +123,21 @@ func TestVerifyCupWithinToleranceIsSound(t *testing.T) {
 	require.True(t, report.Trustworthy())
 }
 
-// TestVerifyCapBlendChamferAreaVolumePassCentroidFails is the cap-blend
+// TestVerifyCapBlendChamferAreaVolumeCentroidAllPass is the cap-blend
 // coverage the tolerance gate was missing, on the exact body
 // docs/modify-reach-design.md's own example builds (a 100x60x20 plate with a
 // complete end-cap chamfer at d=5mm): bodyGateDiameter had no fallback for
 // capBlendPayload either, so its area, volume AND centroid readings all
 // failed the gate closed with no reference, regardless of how each reading's
 // own bound compared to the caller's tolerance. With the envelope-prism
-// fallback in place, area and volume — bounds many decades below any
-// reasonable gate — now pass; the centroid's own bound is a known separate
-// defect (capblend_moments.go, not touched here) and must keep failing.
-func TestVerifyCapBlendChamferAreaVolumePassCentroidFails(t *testing.T) {
+// fallback in place, area and volume pass with bounds many decades below any
+// reasonable gate. The centroid used to be a known separate defect (an
+// area-weighted face-vertex estimate, no real first moment behind it,
+// capblend_moments.go) that kept this same body Suspect; docs/modify-reach-design.md
+// §8.4's closed-form first moments (capblend_centroid.go) fixed it — an
+// all-Plane band's centroid is exact rational end to end here — so all three
+// readings now pass and the body reads Sound.
+func TestVerifyCapBlendChamferAreaVolumeCentroidAllPass(t *testing.T) {
 	doc, box := capBlendBox(t)
 	_, err := box.Chamfer(capLoopEdges(box), units.Millimeters(5))
 	require.NoError(t, err)
@@ -144,28 +148,10 @@ func TestVerifyCapBlendChamferAreaVolumePassCentroidFails(t *testing.T) {
 	requireDiagnosticInvariants(t, report)
 
 	br := report.Bodies[0]
-	require.Equal(t, decad.Suspect, br.Status, `the centroid's own defect still reads beyond tolerance`)
-	require.Equal(t, decad.Suspect, report.Status)
-	require.False(t, report.Trustworthy())
-
-	var centroidBeyond, areaBeyond, volumeBeyond bool
-	for _, d := range report.Diagnostics {
-		if d.Code != decad.DiagMeasurementBeyondTolerance || d.Body == nil {
-			continue
-		}
-		switch d.Reading {
-		case decad.ReadingCentroid:
-			centroidBeyond = true
-			require.NotNil(t, d.Required, `a reference now exists for a cap-blend body`)
-		case decad.ReadingArea:
-			areaBeyond = true
-		case decad.ReadingVolume:
-			volumeBeyond = true
-		}
-	}
-	require.True(t, centroidBeyond, `the centroid's known-bad bound still reads beyond tolerance`)
-	require.False(t, areaBeyond, `the area's tiny bound now passes with a diameter reference`)
-	require.False(t, volumeBeyond, `the volume's tiny bound now passes with a diameter reference`)
+	require.Equal(t, decad.Sound, br.Status)
+	require.Equal(t, decad.Sound, report.Status)
+	require.True(t, report.Trustworthy())
+	require.Empty(t, report.Diagnostics)
 }
 
 func requiredBodyTolerance(t *testing.T, body *decad.Body) float64 {
