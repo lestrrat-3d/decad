@@ -1105,12 +1105,15 @@ an approximation of one — and the report gives four answers this way:
   §9).
 - **An empty `Undercuts`** is the claim *no face is an undercut* — the same
   rule for the same reason, because the claim quantifies over the part, not
-  over the survey. On analytic faces every point's normal is an exact fact
-  with a closed-form range over the face, and the survey of those ranges (the
-  membership rule below) is the proof that no region of any face opposes the
-  pull. A faceted survey proves the same absence only when every true patch's
-  source-normal range clears. A missing or straddling range leaves
-  `Undercuts` empty and the body `Suspect` (payload verification §8).
+  over the survey. On an analytic face whose geometry is its tag, every point's
+  normal is an exact fact with a closed-form range over the face, and the
+  survey of those ranges (the membership rule below) is the proof that no
+  region of any face opposes the pull. A tagged analytic variant that is a
+  bounded stand-in carries its own normal departure
+  (`docs/modify-reach-design.md` §8.3), so its widened range can instead leave
+  the question undecided. A faceted survey proves the same absence only when
+  every true patch's source-normal range clears. A missing or straddling range
+  leaves `Undercuts` empty and the body `Suspect` (payload verification §8).
 - **A pair with no `Interference` row** is the answer *these two bodies do not
   overlap* only inside a `Sound` report. The proof may be bounds separation,
   analytic boundary clearance plus nesting exclusion, or a certified touching
@@ -1467,10 +1470,12 @@ implies a trust-pass, and the rungs compose by precedence alone.
 The other spec of §2 reads the same kind of interval, one dimension over —
 and quantified over the face, because a face does not have *a* normal. What
 core §6.1 defines is the normal **at a point**: `Face.NormalAt(p)`, a
-`VecMeasurement` whose proven bound is zero on an analytic face, where every
-normal is an exact fact of the surface, and the facet's honest tilt error on
-a `Faceted` one, because a facet's normal is exact *for the facet* and
-approximate *for the part the facet stands for*. A curved face sweeps a
+`VecMeasurement` whose proven bound is zero on an analytic face whose geometry
+is its tag, where every normal is an exact fact of the surface. A tagged
+analytic variant that is a bounded stand-in carries its proven departure from
+the surface it represents (`docs/modify-reach-design.md` §8.3). A `Faceted`
+face carries the facet's honest tilt error, because a facet's normal is exact
+*for the facet* and approximate *for the part the facet stands for*. A curved face sweeps a
 **range** of normals — a single cylindrical, spherical or toroidal face
 carries normals both with and against any pull — so membership is decided
 pointwise first. The pointwise comparison reads the point's proven interval
@@ -1504,14 +1509,20 @@ the violation, universally for the all-clear, the proof always on the claim:
   membership) and its body reads `Suspect`, an asked spec with a face the
   evaluator could not decide.
 
+These outcomes compose per face. An undecided face does not remove another
+face's proven listing, so a body with both is `Violating` by the report's
+status precedence.
+
 The quantifier costs nothing core does not expose: `Face.Surface()` (core
-§6.1) is the face's own geometry, and on an analytic variant — a plane,
-cylinder, cone, sphere or torus — the normal over the face's bounded region
-is closed-form, so the survey of its range is exact and the three-way answer
-is decided outright. A `Faceted` face is its held facets, but every facet's
-certificate encloses the normals of the true patch it represents; that whole
-range, not only the held plane normal, is what the pointwise rule reads
-(payload verification §8).
+§6.1) is the surface the face publishes. On an analytic variant — a plane, cylinder,
+cone, sphere or torus — whose geometry is its tag, the normal over the face's
+bounded region is closed-form, so the survey of its range is exact and the
+three-way answer is decided outright. A tagged analytic variant that is a
+bounded stand-in widens that range by its proven departure and can leave the
+three-way answer undecided (`docs/modify-reach-design.md` §8.3). A `Faceted`
+face is its held facets, but every facet's certificate encloses the normals of
+the true patch it represents; that whole range, not only the held plane
+normal, is what the pointwise rule reads (payload verification §8).
 The rule is the claim, not the algorithm — but everything it quantifies over
 is a reading the evaluator holds. The boundary case is the vertical wall — a
 face everywhere exactly perpendicular to the pull, draft angle zero. It

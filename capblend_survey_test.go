@@ -201,7 +201,8 @@ func TestCapBlendUnmiteredPatchNormalStaysExact(t *testing.T) {
 // leans 25 degrees off the Cone's, so a pull tilted just inside the Cone's own
 // clearance opposes the surface the body actually has while the Cone says it
 // does not. The survey used to read the Cone alone and answer the proven
-// all-clear — a wrong Sound, not a coarse reading. It now answers undecided.
+// all-clear — a wrong Sound, not a coarse reading. The Cone patch now stays
+// undecided and unlisted; any independent proven face remains a violation.
 func TestCapBlendMiteredUndercutIsNotPassed(t *testing.T) {
 	const r, h, d = 10.0, 20.0, 4.0
 	m := chamferedQuarterDiskPatch(t, r, h, d)
@@ -220,9 +221,35 @@ func TestCapBlendMiteredUndercutIsNotPassed(t *testing.T) {
 	report, err := m.body.Document().Verify(t.Context(), decad.WithPullDirection(pull))
 	require.NoError(t, err)
 	require.Len(t, report.Bodies, 1)
-	require.Nil(t, report.Bodies[0].Undercuts,
-		"a nil listing is the undecided answer; an empty one would claim the proven all-clear")
+	require.NotContains(t, report.Bodies[0].Undercuts, m.face,
+		"the straddling Cone patch is not itself a proven undercut")
+	require.True(t, hasDiagnostic(report, decad.DiagUndercut))
 	require.True(t, hasDiagnostic(report, decad.DiagUndecidedUndercut))
+	require.Equal(t, decad.Violating, report.Bodies[0].Status)
+}
+
+// TestCapBlendUndecidedPatchKeepsProvenUndercut covers the mixed per-face
+// outcome. The circular patch's bounded range is undecided for a pull along
+// +x, but the final flat chamfer patch provably opposes it. The undecided
+// patch must not erase that listed violation.
+func TestCapBlendUndecidedPatchKeepsProvenUndercut(t *testing.T) {
+	m := chamferedQuarterDiskPatch(t, 100, 20, 0.5)
+	plane := faceWithRole(t, m.body, "chamferCap(end,0,2)")
+	require.Equal(t, decad.KindPlane, plane.Surface().Kind())
+	p := plane.Loops()[0].CoEdges()[0].Start().Position().Value
+	n, err := plane.NormalAt(p)
+	require.NoError(t, err)
+	require.Equal(t, decad.Exact, n.Exactness)
+	require.Equal(t, 0.0, n.Bound.Mag())
+	require.InDelta(t, -math.Sqrt2/2, n.Value.Dot(r3.NewVec(1, 0, 0)), 1e-12)
+
+	report, err := m.body.Document().Verify(t.Context(), decad.WithPullDirection(r3.NewVec(1, 0, 0)))
+	require.NoError(t, err)
+	require.Len(t, report.Bodies, 1)
+	require.Contains(t, report.Bodies[0].Undercuts, plane)
+	require.True(t, hasDiagnostic(report, decad.DiagUndercut))
+	require.True(t, hasDiagnostic(report, decad.DiagUndecidedUndercut))
+	require.Equal(t, decad.Violating, report.Bodies[0].Status)
 }
 
 // TestCapBlendUndercutStillDecidedOnOrdinaryBand keeps the fix reject-only: an

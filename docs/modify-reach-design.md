@@ -473,12 +473,14 @@ term:
   whole difference carries a factor of `1 - cos(skew)`). `ruledPatchNormalAllow`
   owns the derivation. An `Exact` zero there asserts a direction the built
   surface does not have.
-- DX7 widens its own window reading by that bound and decides the patch only
-  where the WHOLE widened interval falls on one side of the rule: above zero
-  CLEARS it, entirely below zero (and proven off the exactly-antiparallel
-  carve-out) LISTS it, and a widened interval straddling zero is undecided.
-  Every point of the patch carries an azimuth inside the window, which is what
-  makes both halves proofs about the patch rather than about the cone.
+- DX7 widens its own window reading by that bound. A point proven to oppose
+  lists the patch; only an all-clear needs every point to clear. For the tagged
+  normal-component range `[mn, mx]` and departure `allow`, it lists when
+  `mn + allow < 0 && mx - allow > -1`, clears when
+  `mn - allow > 0`, and is undecided otherwise. An undecided patch does not
+  remove other patches already proven to oppose. Every point of the patch
+  carries an azimuth inside the window, which is what makes each proof about
+  the patch rather than about the cone.
 - DX8 does not answer for a band holding a mitered patch at all. Its reduction
   to the receiver's own section rests on every patch being flat or a cone
   sector, and the ruled patch is neither.
@@ -854,7 +856,7 @@ reaches only the analytic bodies at the start of a chain.
 | **DX4** | mesh boolean | available once DX3 exists | available once DX3 exists | available once DX3 exists |
 | **DX5** | `ThroughAll` directional extent | existing | analytic patch extrema; a direction whose extreme is held by the COMPUTED cap contour with in-plane weight is `ErrUnsupported`, since a stop reads this coordinate as exact and has no bound to widen (§8.4) | union of slab-region extents |
 | **DX6** | clearance | existing revolve boundary reader | add trimmed patch faces to boundary model; undecidable cells stay `Suspect`; staged for the cap-loop chamfer, whose pairs read `Suspect` unless boxes already decide them | union exposed slab faces; never include cancelled interfaces |
-| **DX7** | undercut | existing revolve survey | exact normal ranges per patch, each widened by that patch's own proven departure from the surface it publishes (§8.3); a widened range straddling zero is undecided | exact normal ranges per exposed face |
+| **DX7** | undercut | existing revolve survey | exact normal ranges per patch, each widened by that patch's own proven departure from the surface it publishes (§8.3); a proven opposing point lists its patch, and a remaining straddle is undecided without removing another proven listing | exact normal ranges per exposed face |
 | **DX8** | minimum radius | existing meridian survey | minimum concave principal radius over sphere/torus/cylinder/cone patches; a band holding a mitered ruled patch (§8.3) is undecided | section arcs + exposed rim geometry |
 | **DX9** | minimum wall thickness | existing revolve rewrite survey | staged: asked reading is `Suspect` | staged: asked reading is `Suspect` |
 

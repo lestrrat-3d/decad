@@ -43,13 +43,16 @@ type wallOutcome struct {
 	reason  surveyReason
 }
 
-// undercutOutcome is one body's undercut listing: ok=false is undecided;
-// reason distinguishes its cause. faces is non-nil when decided, and empty is
-// the proven all-clear.
+// undercutOutcome is one body's undercut listing: ok=false is an unrecoverable
+// undecided survey; reason distinguishes its cause. undecided records a
+// straddling face that coexists with any faces already proven to oppose. faces
+// is non-nil when every face is decided or any face is proven to oppose; an
+// empty listing is the proven all-clear.
 type undercutOutcome struct {
-	faces  []*Face
-	ok     bool
-	reason surveyReason
+	faces     []*Face
+	ok        bool
+	undecided bool
+	reason    surveyReason
 }
 
 // radiusOutcome is one body's tightest concave radius: ok=false is
@@ -996,8 +999,9 @@ func cupMinRadius(cp cupPayload) (radiusOutcome, bool) {
 // outcome: DiagWallTooThin / DiagUndercut (Violating) when a stated spec is
 // proven to fail, and the per-survey DiagUndecided* (Suspect) when an asked
 // question is undecided or a stated spec is straddled (verification §1.1/§6).
-// A Sound survey emits nothing. Every reading this evaluator produces is
-// closed-form — Exact, zero bound.
+// A Sound survey emits nothing. Scalar readings are closed-form Exact with a
+// zero bound; a cap-blend undercut survey can instead use a bounded normal
+// range and leave an individual patch undecided.
 func runSurveys(budget *workBudget, br *BodyReport, cfg verifyConfig) ([]Diagnostic, error) {
 	if err := wallBudgetErr(budget); err != nil {
 		return nil, err
@@ -1083,16 +1087,7 @@ func runSurveys(budget *workBudget, br *BodyReport, cfg verifyConfig) ([]Diagnos
 		case facetedPayload:
 			out.reason = surveyFacetedUnsupported
 		}
-		switch {
-		case !out.ok:
-			diags = append(diags, surveyRefusalDiagnostic(
-				b,
-				out.reason,
-				DiagUndecidedUndercut,
-				"the pull survey could neither prove nor exclude an undercut",
-				"facetedPayload pull survey support is not implemented; use an analytic body or wait for faceted undercut support",
-			))
-		default:
+		if out.ok {
 			br.Undercuts = out.faces
 			if len(out.faces) > 0 {
 				// An undercut is a predicate, not a scalar; the report's
@@ -1106,6 +1101,15 @@ func runSurveys(budget *workBudget, br *BodyReport, cfg verifyConfig) ([]Diagnos
 					Message: "a face is a proven undercut against the pull",
 				})
 			}
+		}
+		if !out.ok || out.undecided {
+			diags = append(diags, surveyRefusalDiagnostic(
+				b,
+				out.reason,
+				DiagUndecidedUndercut,
+				"the pull survey could neither prove nor exclude an undercut",
+				"facetedPayload pull survey support is not implemented; use an analytic body or wait for faceted undercut support",
+			))
 		}
 		if err := wallBudgetErr(budget); err != nil {
 			return nil, err

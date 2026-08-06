@@ -15,16 +15,16 @@ import (
 // Both rows turn on one fact about the band: a circular patch at a mitered
 // corner is RULED between two differently-swept directrices, so the Cone it
 // publishes is its surface only to within a proven bound (§8.3). DX7 widens
-// its own reading by that bound and answers only where the widened interval
-// still falls on one side of the rule; DX8 does not answer for such a band at
-// all.
+// its own reading by that bound. A provenly opposing point lists its patch;
+// only a patch with no such point and a straddling range is undecided. DX8
+// does not answer for such a band at all.
 //
 // DX9 (the wall survey) stays deliberately Suspect: a cap blend is not one
 // constant section at one height, and the existing 2D spanning-disk proof
 // does not decide it (runSurveys, survey.go).
 
 // capBlendUndercuts surveys a cap-blend body's patches against the pull
-// (DX7): each patch's exact normal range is read from its OWN built Face —
+// (DX7): each patch's published normal range is read from its OWN built Face —
 // Face.NormalAt already carries the correct outward sign (the .reversed bit
 // each patch sets at build time, capblend_geom.go) — sampled at enough
 // azimuths to recover the patch's normal as A*cos(theta)+B*sin(theta)+C
@@ -37,9 +37,8 @@ import (
 //
 // That range is the patch's own only where the patch's surface IS the one it
 // publishes. A mitered circular patch's is not, so its reading is widened by
-// its own proven departure (capPatchNormalAllow) and decides the patch only
-// where the widened interval stays on one side of the rule: see the loop
-// below.
+// its own proven departure (capPatchNormalAllow). The existential listing and
+// universal all-clear rules then decide it per point: see the loop below.
 func capBlendUndercuts(b *Body, cbp capBlendPayload, pull r3.Vec) undercutOutcome {
 	p, ok := pull.Normalize()
 	if !ok {
@@ -93,6 +92,7 @@ func capBlendUndercuts(b *Body, cbp capBlendPayload, pull r3.Vec) undercutOutcom
 	// payload's own deterministic patch order (Table BX row BX3), so the faces
 	// this survey reports — public output through Report.Bodies[i].Undercuts —
 	// come back in the same sequence on every call.
+	undecided := false
 	for _, patch := range cbp.patches {
 		f := roles[patch.role]
 		if f == nil {
@@ -115,27 +115,30 @@ func capBlendUndercuts(b *Body, cbp capBlendPayload, pull r3.Vec) undercutOutcom
 		// directrices, so the surface it publishes is its own only to within
 		// allow (capblend_geom.go, docs/modify-reach-design.md §8.3): every
 		// point of the patch carries an azimuth inside this window, and its own
-		// normal component sits within allow of the reading at that azimuth. So
-		// the patch is decided only where the WHOLE widened interval falls on
-		// one side of the rule, and undecided otherwise — never passed on the
-		// unwidened reading, which would report a Sound the geometry has not
-		// earned.
+		// normal component sits within allow of the reading at that azimuth. A
+		// point proven to oppose lists this patch; only an all-clear needs every
+		// point to clear. A remaining straddle makes this patch undecided without
+		// discarding other patches already proven to oppose.
 		switch {
 		case mn > allow:
 			// Every point's component is above zero: nothing opposes the pull.
-		case mx+allow < 0 && mx-allow > -1:
-			// Every point's component is below zero, and the patch's own
-			// maximum is proven above -1, so this is a genuine opposition
-			// rather than opposesPull's exactly-antiparallel carve-out.
+		case mn+allow < 0 && mx-allow > -1:
+			// One point is proven below zero, and a point is proven above -1,
+			// so this is a genuine opposition rather than opposesPull's
+			// exactly-antiparallel carve-out.
 			faces = append(faces, f)
 		default:
-			return undercutOutcome{}
+			undecided = true
 		}
 	}
-	return undercutOutcome{faces: faces, ok: true}
+	if undecided && len(faces) == 0 {
+		// Keep an entirely undecided result distinct from a proven all-clear.
+		faces = nil
+	}
+	return undercutOutcome{faces: faces, ok: true, undecided: undecided}
 }
 
-// capPatchNormalRange is one patch's exact normal-component range against
+// capPatchNormalRange is one patch's published normal-component range against
 // the unit pull p, read off its own Face.NormalAt (which already carries the
 // correct outward sign): a Plane's is a single value; a Cone's (regular or
 // apex) is A*cos(phi)+B*sin(phi)+C in the azimuth phi = theta - th0 measured
