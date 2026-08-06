@@ -280,6 +280,8 @@ func scaleMomentRecordForValidation(record ProfileRecord, anchor Point2) (Profil
 				growAll(segment.Control, grow)
 			case NURBSSeg:
 				growAll(segment.Control, grow)
+			case FitSplineSeg:
+				growAll(segment.Fit, grow)
 			}
 		}
 	}
@@ -324,6 +326,22 @@ func scaleMomentRecordForValidation(record ProfileRecord, anchor Point2) (Profil
 				scaled[loopIndex].Segments[segmentIndex] = segment
 			case NURBSSeg:
 				segment.Control = shiftPoints(segment.Control, transform)
+				scaled[loopIndex].Segments[segmentIndex] = segment
+			case FitSplineSeg:
+				// A chord-length natural cubic is equivariant under a similarity: this
+				// transform is a UNIFORM scale plus a translation, so every chord
+				// scales by the same factor, the parameterization is the same up to
+				// that factor, and the interpolant is the image of the original curve.
+				//
+				// One caveat, a consequence of the 1e-12 fit-point dedup threshold
+				// (spline_fit.go) being ABSOLUTE: a rescale can collapse a fit-point
+				// pair the original record kept, or keep a pair it collapsed. That is
+				// confined to THIS falsifier — decad always integrates the ORIGINAL
+				// record's interpolant, never the rescaled one — so the worst it can
+				// do is weaken this check into a no-match refusal, or into one that
+				// falsifies less than it might have. It can never move a published
+				// number.
+				segment.Fit = shiftPoints(segment.Fit, transform)
 				scaled[loopIndex].Segments[segmentIndex] = segment
 			}
 		}
@@ -804,6 +822,14 @@ func momentRecordScene(record ProfileRecord) (*sketch.Sketch, bool) {
 					}
 					entities[key] = struct{}{}
 				}
+			case FitSplineSeg:
+				key := freeformEntityKey(7, segment.Fit)
+				if _, ok := entities[key]; !ok {
+					if _, err := s.CreateFitSpline(points(segment.Fit)...); err != nil {
+						return nil, false
+					}
+					entities[key] = struct{}{}
+				}
 			default:
 				return nil, false
 			}
@@ -886,6 +912,9 @@ func momentSegmentsEqual(a, b CurveSegment) bool {
 			slices.Equal(a.Knots, b.Knots) &&
 			slices.Equal(a.Weights, b.Weights) &&
 			a.TStart == b.TStart && a.TEnd == b.TEnd
+	case FitSplineSeg:
+		b, ok := b.(FitSplineSeg)
+		return ok && slices.Equal(a.Fit, b.Fit) && a.TStart == b.TStart && a.TEnd == b.TEnd
 	default:
 		return false
 	}

@@ -124,12 +124,14 @@ func isFreeformSegment(seg CurveSegment) bool {
 // polynomial Bézier spans, and reports whether the recorded walk runs against
 // the curve's natural sense.
 //
-// Every kind outside Tier A refuses with its own reason, so a caller never has
-// to infer which table row it hit:
+// FitSplineSeg is Tier A too, converted by spline_fit.go's own reduction over
+// sketch's EXPORTED interpolant (geom.FitInterpolant) rather than by this
+// file's Boehm-insertion machinery — a natural cubic has no knot vector to
+// insert into, so it owns a closed form of its own.
 //
-//   - FitSplineSeg is Table R row R6 — sketch owns the interpolation solve and
-//     decad NEVER re-runs it (seam §2), so the curve's coefficients are not
-//     available to convert.
+// Every other kind outside Tier A refuses with its own reason, so a caller
+// never has to infer which table row it hit:
+//
 //   - EllipticalArcSeg is row R2 — its pinned ends and its parametric ellipse
 //     disagree, and no exact reconciliation exists (spline design §2.2).
 //   - ConicSeg and EllipseSeg are Tier B: exact closed forms carrying
@@ -162,10 +164,8 @@ func freeformBezierSpans(seg CurveSegment, work *freeformWork) ([]bezierSpan, bo
 		spans, err := nurbsBezierSpans(seg, work)
 		return spans, seg.TStart > seg.TEnd, err
 	case FitSplineSeg:
-		return nil, false, fmt.Errorf(
-			`%w: a fit spline's curve is sketch's own interpolation solve, which decad never re-runs; its B-spline form is not available to integrate`,
-			ErrUnsupported,
-		)
+		spans, err := fitSplineBezierSpans(seg, work)
+		return spans, seg.TStart > seg.TEnd, err
 	case EllipticalArcSeg:
 		return nil, false, fmt.Errorf(
 			`%w: an elliptical arc's pinned endpoints and its parametric ellipse disagree, so the record states no single exact curve`,

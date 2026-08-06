@@ -444,6 +444,31 @@ func recordSplineAndChord(t *testing.T) decad.ProfileRecord {
 	return record
 }
 
+// recordFitSplineAndChord records a hump-and-chord region built from a
+// FitSplineSeg instead of a SplineSeg: an open fit spline through three points
+// closed by a straight line, recorded through sketch so the loop carries the
+// arrangement's own segment order and walk direction.
+func recordFitSplineAndChord(t *testing.T) decad.ProfileRecord {
+	t.Helper()
+	world := sketch.NewWorld()
+	s, err := world.CreateSketch(world.XY())
+	require.NoError(t, err)
+	start := s.CreatePoint(0, 0)
+	mid := s.CreatePoint(1, 1)
+	end := s.CreatePoint(2, 0)
+	_, err = s.CreateFitSpline(start, mid, end)
+	require.NoError(t, err)
+	s.CreateLine(end, start)
+
+	profiles := s.Profiles()
+	require.Len(t, profiles, 1)
+	require.True(t, profiles[0].Valid)
+
+	record, _, err := decad.RecordProfile(s, profiles[0])
+	require.NoError(t, err)
+	return record
+}
+
 // allocatedBy reports how many bytes a call allocates in total, which is the
 // only way to tell a charge levied BEFORE an allocation from one levied after
 // it: both refuse, and only the measurement distinguishes them.
@@ -822,11 +847,6 @@ func TestFreeformProfileRefusals(t *testing.T) {
 		message string
 	}{
 		{
-			name:    "fit spline",
-			segment: decad.FitSplineSeg{Fit: []decad.Point2{{}, {U: 4}}, TStart: 0, TEnd: 1},
-			message: "interpolation solve",
-		},
-		{
 			name: "elliptical arc",
 			segment: decad.EllipticalArcSeg{
 				Center:   decad.Point2{},
@@ -1052,12 +1072,25 @@ func TestFreeformRecordedRangeRefusals(t *testing.T) {
 			}}}
 		}
 	}
-	fitSpline := single(func(tStart, tEnd float64) decad.CurveSegment {
-		return decad.FitSplineSeg{
-			Fit:    []decad.Point2{{}, {U: 1, V: 1}, {U: 2}},
-			TStart: tStart, TEnd: tEnd,
+	// A lone open FitSplineSeg does not close on itself the way a closed spline
+	// or the NURBS square do, so — like spline above — it needs the arrangement's
+	// own record of a curve-plus-chord region, with only the range overwritten.
+	fitSpline := func(tStart, tEnd float64) decad.ProfileRecord {
+		record := recordFitSplineAndChord(t)
+		segments := slices.Clone(record.Outer.Segments)
+		for i, segment := range segments {
+			seg, ok := segment.(decad.FitSplineSeg)
+			if !ok {
+				continue
+			}
+			if seg.TStart > seg.TEnd {
+				tStart, tEnd = tEnd, tStart
+			}
+			seg.TStart, seg.TEnd = tStart, tEnd
+			segments[i] = seg
 		}
-	})
+		return decad.ProfileRecord{Outer: decad.LoopRecord{Segments: segments}}
+	}
 	ellipticalArc := single(func(tStart, tEnd float64) decad.CurveSegment {
 		return decad.EllipticalArcSeg{
 			Center: decad.Point2{}, Start: decad.Point2{U: 2}, End: decad.Point2{V: 1},
@@ -1090,11 +1123,7 @@ func TestFreeformRecordedRangeRefusals(t *testing.T) {
 		{name: "spline", of: spline, trimmedMessage: "full domain"},
 		{name: "closed spline", of: closedSpline, trimmedMessage: "full domain"},
 		{name: "NURBS", of: nurbs, trimmedMessage: "full domain"},
-		{
-			name: "fit spline", of: fitSpline,
-			fullSentinel: decad.ErrUnsupported, fullMessage: "interpolation solve",
-			trimmedMessage: "interpolation solve",
-		},
+		{name: "fit spline", of: fitSpline, trimmedMessage: "full domain"},
 		{
 			name: "elliptical arc", of: ellipticalArc,
 			fullSentinel: decad.ErrUnsupported, fullMessage: "pinned endpoints",

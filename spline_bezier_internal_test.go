@@ -258,9 +258,12 @@ func TestFreeformBezierSpansRefusals(t *testing.T) {
 		message string
 	}{
 		{
-			name:    "fit spline",
-			segment: FitSplineSeg{Fit: []Point2{{}, {U: 1}}, TStart: 0, TEnd: 1},
-			message: "interpolation solve",
+			name: "trimmed fit spline",
+			segment: FitSplineSeg{
+				Fit:    []Point2{{}, {U: 1, V: 1}, {U: 2}},
+				TStart: 0.25, TEnd: 0.75,
+			},
+			message: "full domain",
 		},
 		{
 			name: "elliptical arc",
