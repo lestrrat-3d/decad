@@ -13,6 +13,14 @@ import (
 // Line3 × Cone and Circle3 × Cone taken by the coarse enclosure.
 // Candidates are computed on the unbounded carriers and admitted by
 // the edge's parameter range and the face's trim exactly as §3 demands.
+//
+// Every constant-distance family in this file (a line parallel to a plane or
+// axis, a circle whose plane parallels the face's, a coaxial cap edge, a
+// parallel segment pair) is emitted only on the degeneracy oracle's degYes:
+// these objectives are affine along the carrier, so a degNo migrates the
+// minimum to the trim boundary, where the endpoint/vertex tiers hold it
+// exactly, and a degUnknown owes an honest lower bound, a coarse enclosure,
+// or unsure — never a plateau.
 
 // edgeWits returns on-edge sample points.
 func edgeWits(e *cEdge) []r3.Vec {

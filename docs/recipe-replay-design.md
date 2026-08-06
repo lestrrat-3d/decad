@@ -906,3 +906,15 @@ build → EncodeRecipe → DecodeRecipe → Validate → Evaluate → inspect/Ve
 ```
 
 Assert on body count + computed measurement, not only successful return.
+
+## Implementation notes
+
+### recipe_decode.go
+
+Two per-step ceilings sit beside the §7 aggregate limits and are enforced on
+both decode paths — the whole-recipe preflight and a `Step` decoded on its
+own, which never runs the recipe preflight: `Step.Inputs` is capped at 4,096
+elements (every op, including the `0+` unique inputs `OpExtrude`/`OpRevolve`
+allow in §3.2), and `LoftOpts.Alignment` at 4,096 elements. Both ceilings are
+counted before the typed slice is allocated, the same discipline §7's other
+counters use.

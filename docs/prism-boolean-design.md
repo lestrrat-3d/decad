@@ -764,3 +764,35 @@ areas, residuals), never merely "it ran" — CLAUDE.md's own rule.
 - Replay: encode a recipe whose `OpUnion` step is an admitted pair, decode
   and evaluate it fresh, and assert the replayed body's `Exactness`/`Bound`
   match direct construction (recipe-replay-design §10.3's shape).
+
+## Implementation notes
+
+Every `sectionDelta` consumer below is a no-op at the zero every caller-drawn
+payload carries. `extrude.go`'s `evalPrism` composition and `tessellate.go`'s
+mesh-bound charge are §7's own subject and are not repeated here; every other
+consumer withholds its answer rather than measure the recorded section as the
+one it denotes, each at its own call site: `survey.go`'s `prismWall` and
+`MinRadius` reading (undecided, which `Verify` reads `Suspect`; the undercut
+reading is unaffected), `extrude.go`'s `extentAlong` (a through-all stop's
+`ErrUnsupported`, no bound to widen the recorded endpoint by),
+`clearance_geom.go`'s `addPrismFaces` (no boundary model, pair reads
+`Suspect`), `interference.go`'s `analyticBodiesEqual` (the equal-records
+set-identity shortcut withheld), and `fillet.go`'s `requireExactSection`
+(`Fillet`/`Chamfer`/`Shell` refuse the receiver, `ErrUnsupported` — a section
+rewrite has no proven displacement of its own).
+
+### boolean.go
+
+`boolean.go`'s `faceChordDelta` is the one consumer that does NOT withhold:
+it charges a nonzero `sectionDelta` as a planar face's own chording
+displacement, so the mesh path's tangency gate
+(`refuseUndecidableProximity`) cannot read that face as held exactly. See
+`faceChordDelta`'s own doc comment.
+
+### capblend_contour.go (boundary note)
+
+The cap-loop chamfer's cap contour displacement (`docs/modify-reach-design.md`
+§8.4) is a separate term with its own owner, derived by `capblend_contour.go`
+and read by `capblend_geom.go`/`capblend.go`/`capblend_moments.go`. It is not
+`sectionDelta`: nothing in this design's own consumers reads the cap contour
+term, and nothing on the cap-loop chamfer path reads `sectionDelta`.

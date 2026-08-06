@@ -718,6 +718,13 @@ func (w segmentWalk) isLine() bool { return w.kind == walkLine }
 // no free-form construction yet. Reaching it is a staging limit, never a wrong
 // answer — the reason each consumer stages is its own row in
 // docs/spline-design.md Table R.
+//
+// The one call site that reaches walkOf without this gate is
+// moments_validate.go's validateMomentWalk: it runs only after every
+// free-form segment kind has already been diverted to the exact integrator
+// (spline_bezier.go/spline_moments.go), so a free-form segment never reaches
+// it. This is deliberate, not a missed gate — adding one here would be dead
+// code guarding an unreachable case.
 func requireAnalyticWalk(w segmentWalk, what string) error {
 	if w.kind != walkFreeform {
 		return nil

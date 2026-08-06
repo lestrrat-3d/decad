@@ -31,7 +31,8 @@ import (
 const boolChordFactor = 2e-5
 
 // Union returns the body enclosing the volume of a or b, retiring both
-// operands from their document (core §8). The general result is a Faceted body:
+// operands from their document (core §8). A nil operand or a body unioned with
+// itself is ErrDegenerate. The general result is a Faceted body:
 // its faces are grouped by the operands' source faces, so provenance
 // (FaceCreatedBy) survives, and its measurements are Approximate with proven
 // bounds (docs/evaluator-design.md §9) — except that an all-planar pair whose
@@ -202,7 +203,11 @@ func performBoolean(ctx context.Context, op OpKind, a, b *Body) (*Body, error) {
 	// path. ok=false is never an error — the pair falls back to the
 	// unchanged mesh path below exactly as it did before this design
 	// existed. A non-nil err here is a genuine, typed analytic-resolution
-	// refusal (§3.4) and must propagate rather than reroute to the mesh path.
+	// refusal (§3.4) and must propagate rather than reroute to the mesh path:
+	// an ErrUnsupported refusal becomes the public BooleanUnsupportedContact
+	// below, preserving errors.Is(err, ErrUnsupported); ErrDegenerate and
+	// ErrUnrecordableProfile pass through unwrapped, keeping their own
+	// documented sentinels.
 	if pp, ok, err := tryPrismUnion(ctx, op, a, b); err != nil {
 		if errors.Is(err, ErrUnsupported) {
 			return nil, asBooleanError(op, inputs, expectedBoolean(booleanExpectedUnsupported, err))
@@ -813,6 +818,15 @@ func facesOfMesh(budget *workBudget, m *Mesh) ([]faceFacets, error) {
 	return out, nil
 }
 
+// faceChordDelta charges the tangency gate's per-face displacement. An
+// analytic face's own charge is its current chording displacement, currently
+// only nonzero for a prismPayload's section displacement (below). A Faceted
+// operand's own face always returns 0 here rather than reading a per-face
+// certificate: that certificate's Delta propagation has not landed in this
+// evaluator (neither boundaryCert.Delta nor the per-facet sourceBound that
+// would ride beside it exists yet), and the refusal a Faceted operand owes
+// once it does is specified in docs/payload-verification-design.md §5.3/§13,
+// not implemented here.
 func faceChordDelta(budget *workBudget, f *Face, meshBound float64) (float64, error) {
 	switch f.Surface().Kind() {
 	case KindFaceted:
