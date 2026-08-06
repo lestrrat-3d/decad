@@ -181,14 +181,16 @@ records use distinct origins or bases.
 
 **Gate order**, the same "ask what could be asked" discipline modify §4
 states: pre-gates first (S10 nil check, S11 concrete option ownership without
-invoking a callback, S9 seam authentication of both profiles — nothing
-downstream is safe to read before this), then the shape gates that need only
-the two authenticated records (S1 hole count, S2 segment count, S4 malformed
-alignment, S3 segment kind, S5 geometric-plane coincidence —
-all decidable without building a single triangle), then construction (§5),
-then the per-triangle existence gate S6, then the crossing audit (S7/S8,
-§6) — the most expensive step, run last, over triangles already proven
-individually non-degenerate.
+invoking a callback, S4's ARITY half — a repeated `WithLoftAlignment` — decided
+in that same option loop since it needs no record, S9 seam authentication of
+both profiles — nothing downstream is safe to read before this), then the
+shape gates that need only the two authenticated records (S1 hole count, S2
+segment count, S4's PAYLOAD-SHAPE half — a wrong-length alignment or an offset
+outside `[0, n)` for its loop — S3 segment kind, S5 geometric-plane
+coincidence — all decidable without building a single triangle), then
+construction (§5), then the per-triangle existence gate S6, then the crossing
+audit (S7/S8, §6) — the most expensive step, run last, over triangles already
+proven individually non-degenerate.
 
 ## 5. Construction — flat triangular walls, never a curved ruled surface
 

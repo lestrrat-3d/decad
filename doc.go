@@ -100,6 +100,12 @@
 //	  non-prism receiver, or a cap-loop chamfer result        ErrUnsupported
 //	Shell         straight prism (tube or cup)                builds
 //	  both caps removed from a holed section                  ErrUnsupported
+//	Loft          two LineSeg-only profiles, distinct planes  builds
+//	  hole-count or per-loop segment-count mismatch           ErrUnsupported
+//	  a paired segment where either side is not LineSeg       ErrUnsupported
+//	  audit's fixed pair-test budget exhausted                ErrUnsupported
+//	  the two profiles lie in the same geometric plane        ErrDegenerate
+//	  a proven self-contact or self-intersection              ErrDegenerate
 //	Placed        any body this evaluator built               builds
 //	Verify        every body; surveys read prisms/revolves/cups/cap blends
 //	  a question the evaluator cannot decide                  Status Suspect
@@ -113,9 +119,11 @@
 // can be added without a signature change); WithShellSense picks a shell's wall
 // sense, and WithTaper names an extrude taper — but a nonzero taper is
 // [ErrUnsupported], returned before any step is recorded, so the recipe is left
-// unchanged. Separately, Verify's options (WithTolerance, WithMinWallThickness,
-// WithPullDirection, WithMinRadius, WithClearances) and the STL/OBJ
-// WithChordTolerance also take effect.
+// unchanged. WithLoftAlignment picks a loft's per-loop correspondence rotation
+// and is accepted at most once; a repeat is [ErrDegenerate]. Separately,
+// Verify's options (WithTolerance, WithMinWallThickness, WithPullDirection,
+// WithMinRadius, WithClearances) and the STL/OBJ WithChordTolerance also take
+// effect.
 //
 // # Layering
 //
