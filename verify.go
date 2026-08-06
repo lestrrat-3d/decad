@@ -192,6 +192,8 @@ const (
 	DiagUnsupportedPairPayload
 	// DiagUnsupportedPairContact — the pair reaches a contact or near-contact the
 	// exact boolean policy cannot classify. Reading ReadingNone. Contributes Suspect.
+	// Message names a shared face plane between the operands when they have one,
+	// since deepening the overlap cannot resolve that cause.
 	DiagUnsupportedPairContact
 	// DiagUnsupportedPairPipeline — both operands tessellate, but later boolean
 	// geometry exceeds the pipeline's supported reach. Reading ReadingNone.
@@ -771,6 +773,10 @@ func undecidedPairDiag(a, b *Body, verdict pairVerdict, outcome interferenceOutc
 		return pairDiagNone(a, b, DiagUnsupportedPairPayload,
 			fmt.Sprintf("the second operand (step %d) uses a payload the read-only intersection cannot tessellate; use a tessellatable body type or wait for payload support", b.originStep()))
 	case outcome == interferenceUnsupportedContact:
+		if sharesFacePlane(a, b) {
+			return pairDiagNone(a, b, DiagUnsupportedPairContact,
+				"the pair reaches a contact or near-contact that the read-only intersection cannot classify, and the operands share a face plane; offset the operands so no face plane is shared, or adjust the geometry to create clear separation or deeper overlap, or wait for contact support")
+		}
 		return pairDiagNone(a, b, DiagUnsupportedPairContact,
 			"the pair reaches a contact or near-contact that the read-only intersection cannot classify; adjust the geometry to create clear separation or deeper overlap, or wait for contact support")
 	case outcome == interferenceUnsupportedPipeline:
@@ -783,6 +789,63 @@ func undecidedPairDiag(a, b *Body, verdict pairVerdict, outcome interferenceOutc
 		return pairDiagNone(a, b, DiagUndecidedPair,
 			"the disjoint/overlap partition proof resolved neither way")
 	}
+}
+
+// facePlaneKey is a's canonicalized (normal, signed offset) key for one planar
+// face, built so two coplanar faces key equal regardless of which way each
+// one's normal happens to face.
+type facePlaneKey struct {
+	nx, ny, nz, off float64
+}
+
+// canonicalFacePlaneKey builds p's facePlaneKey: the normal's sign is fixed by
+// its first nonzero component being positive (flipping the offset along with
+// it), so a pair of opposite-facing coplanar faces produces the same key, and
+// every component is passed through zeroSign so -0.0 and 0.0 never key
+// differently.
+func canonicalFacePlaneKey(p Plane) facePlaneKey {
+	n := p.Frame.N()
+	off := n.Dot(p.Frame.Origin())
+	flip := n.X < 0 || (n.X == 0 && (n.Y < 0 || (n.Y == 0 && n.Z < 0)))
+	if flip {
+		n = n.Scale(-1)
+		off = -off
+	}
+	return facePlaneKey{zeroSign(n.X), zeroSign(n.Y), zeroSign(n.Z), zeroSign(off)}
+}
+
+// zeroSign normalizes a negative zero to a positive zero so it never keys a
+// map entry differently from 0.0.
+func zeroSign(f float64) float64 {
+	if f == 0 {
+		return 0
+	}
+	return f
+}
+
+// sharesFacePlane reports whether a and b have a planar face whose infinite
+// plane coincides — exact float comparison on the canonicalized normal and
+// offset, reject-only in spirit: it can only fail to name a shared plane it
+// cannot exactly confirm, never invent one that is not there. It is a
+// diagnostic aid, not a proof: it never changes a Diagnostic's Code, Status,
+// Reading, or Pair, only whether its Message names the cause.
+func sharesFacePlane(a, b *Body) bool {
+	keys := make(map[facePlaneKey]struct{})
+	for _, f := range a.Faces() {
+		if p, ok := f.Surface().(Plane); ok {
+			keys[canonicalFacePlaneKey(p)] = struct{}{}
+		}
+	}
+	for _, f := range b.Faces() {
+		p, ok := f.Surface().(Plane)
+		if !ok {
+			continue
+		}
+		if _, found := keys[canonicalFacePlaneKey(p)]; found {
+			return true
+		}
+	}
+	return false
 }
 
 // verifyBody audits one body and assembles its report. A feature-built body
