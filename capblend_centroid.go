@@ -346,8 +346,15 @@ func loopCoordinateUpper(loop LoopRecord, work *freeformWork) (float64, error) {
 // cap-level coordinates and would double the charge (capBandVolume's
 // identical rule for sweptVolumeAllow). areaUpper is the same surface the
 // contour's displacement acted on (this band's patches plus the cap disk
-// they close on); coordUpper is the band's own coordinate envelope
-// (loopCoordinateUpper plus the two axial levels).
+// they close on); coordUpper is the band's own coordinate envelope — the
+// ORIGINAL loop's (loopCoordinateUpper) AND the built cap boundary's
+// (capLoopBoundary, widened by delta since that boundary is itself only
+// known to within delta of the one it denotes), plus the two axial levels.
+// The band's material lies between the two loops, so a bound taken from the
+// original loop alone can fall short wherever the offset moves a coordinate
+// OUTWARD — capArea's own boundary is exactly that displaced coordinate set,
+// and sweptMomentAllow's own contract (bounds.go) requires coordUpper to
+// bound every point the difference volume can hold.
 func capBandMoment(ctx context.Context, loop LoopRecord, cbp capBlendPayload, geom []capPatchGeom, capZ, matSign, delta float64, work *freeformWork) (mu, mv, mz boundedScalar, err error) {
 	sideZ := capZ + matSign*cbp.d
 	sideZBound := addRoundError(capZ, matSign*cbp.d, sideZ)
@@ -400,6 +407,11 @@ func capBandMoment(ctx context.Context, loop LoopRecord, cbp capBlendPayload, ge
 		if cerr != nil {
 			return boundedScalar{}, boundedScalar{}, boundedScalar{}, cerr
 		}
+		capCoordUpper, cerr := loopCoordinateUpper(capBoundary, work)
+		if cerr != nil {
+			return boundedScalar{}, boundedScalar{}, boundedScalar{}, cerr
+		}
+		coordUpper = math.Max(coordUpper, absSumUpper(capCoordUpper, delta))
 		coordUpper = math.Max(coordUpper, math.Max(math.Abs(sideZ), math.Abs(capZ)))
 		allow := sweptMomentAllow(delta, areaUpper, coordUpper)
 		muTotal.bound = absSumUpper(muTotal.bound, allow)

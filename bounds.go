@@ -401,9 +401,11 @@ func chordLocusVolumeAllow(fluxWide, fluxWideBound, fluxNarrow, fluxNarrowBound,
 // all of whose points lie within coordUpper of the origin has |∫p dV| <=
 // V·coordUpper for any single coordinate p, since |p| <= coordUpper
 // pointwise. coordUpper must be a PROVEN upper bound on |u|, |v| and |z| over
-// the band's own material (extrude.go's profileCoordinateUpper of the loop,
-// plus max(|z0|, |z1|) — the same envelope prismCentroidGeometryBound already
-// forms).
+// the band's own material — the band lies BETWEEN the original loop and the
+// offset cap boundary, so both loops' own envelopes (extrude.go's
+// profileCoordinateUpper) are needed, together with max(|z0|, |z1|) — the
+// same envelope prismCentroidGeometryBound already forms for the axial
+// levels.
 func sweptMomentAllow(delta, areaUpper, coordUpper float64) float64 {
 	vol := sweptVolumeAllow(delta, areaUpper)
 	if vol <= 0 || coordUpper <= 0 {
