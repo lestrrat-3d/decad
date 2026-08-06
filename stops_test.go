@@ -897,3 +897,49 @@ func TestExtrudeStatedLevelStaysExact(t *testing.T) {
 		})
 	}
 }
+
+// TestExtrudeToFaceInheritsCapBlendComputedLevelBound keeps a later stop from
+// treating a cap blend's inherited computed cap level as exact.
+func TestExtrudeToFaceInheritsCapBlendComputedLevelBound(t *testing.T) {
+	const (
+		plateHeight = 1e12
+		shortBy     = 1e-3
+		heldStop    = 999999999999.9990234375
+		rounding    = 2.34375e-05
+	)
+	s, plateProfile, pinProfile := plateAndPin(t)
+	doc := decad.New()
+	plate, err := doc.Extrude(s, plateProfile, decad.Distance{D: units.Millimeters(plateHeight), Dir: decad.Along})
+	require.NoError(t, err)
+	pin, err := doc.Extrude(s, pinProfile, decad.ToFace{
+		Body:   plate,
+		Face:   capEndFace(plate),
+		Offset: units.Millimeters(-shortBy),
+	})
+	require.NoError(t, err)
+	chamfered, err := pin.Chamfer(
+		decad.Edges(decad.CreatedBy(decad.CapStart(pin))),
+		units.Millimeters(shortBy),
+	)
+	require.NoError(t, err)
+
+	third, err := doc.Extrude(s, pinProfile, decad.ToFace{
+		Body: chamfered,
+		Face: capEndFace(chamfered),
+	})
+	require.NoError(t, err)
+
+	top := 0
+	for _, vertex := range third.Vertices() {
+		position := vertex.Position()
+		if position.Value.Z != heldStop {
+			continue
+		}
+		require.Equal(t, decad.Approximate, position.Exactness)
+		bound, err := position.Bound.In(units.Millimeter)
+		require.NoError(t, err)
+		require.GreaterOrEqual(t, bound, rounding)
+		top++
+	}
+	require.Equal(t, 4, top, `the later stop keeps the cap blend's level bound`)
+}

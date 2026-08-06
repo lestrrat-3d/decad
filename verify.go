@@ -1465,7 +1465,15 @@ func envelopeGateDiameter(budget *workBudget, body *Body) (float64, bool, error)
 func envelopePrismFor(payload featurePayload) (prismPayload, bool) {
 	switch pl := payload.(type) {
 	case capBlendPayload:
-		return prismPayload{profile: pl.profile, frame: pl.frame, z0: pl.z0, z1: pl.z1, xform: pl.xform}, true
+		return prismPayload{
+			profile: pl.profile,
+			frame:   pl.frame,
+			z0:      pl.z0,
+			z1:      pl.z1,
+			z0Delta: pl.z0Delta,
+			z1Delta: pl.z1Delta,
+			xform:   pl.xform,
+		}, true
 	case cupPayload:
 		lo, hi := math.Min(pl.zOuter, pl.zOpen), math.Max(pl.zOuter, pl.zOpen)
 		envelope := pl.prismLike(lo, hi)

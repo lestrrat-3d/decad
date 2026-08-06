@@ -1800,3 +1800,49 @@ func TestCapBlendSideLevelCarriesSetbackRounding(t *testing.T) {
 	}
 	require.Equal(t, 4, side, `the square section has four side-level vertices`)
 }
+
+// TestCapBlendInheritsComputedCapLevelBound keeps a cap blend from laundering
+// the stop displacement of its unchanged end cap back into an exact level.
+func TestCapBlendInheritsComputedCapLevelBound(t *testing.T) {
+	const (
+		plateHeight = 1e12
+		shortBy     = 1e-3
+		heldStop    = 999999999999.9990234375
+		rounding    = 2.34375e-05
+	)
+	s, plateProfile, pinProfile := plateAndPin(t)
+	doc := decad.New()
+	plate, err := doc.Extrude(s, plateProfile, decad.Distance{D: units.Millimeters(plateHeight), Dir: decad.Along})
+	require.NoError(t, err)
+	pin, err := doc.Extrude(s, pinProfile, decad.ToFace{
+		Body:   plate,
+		Face:   capEndFace(plate),
+		Offset: units.Millimeters(-shortBy),
+	})
+	require.NoError(t, err)
+
+	chamfered, err := pin.Chamfer(
+		decad.Edges(decad.CreatedBy(decad.CapStart(pin))),
+		units.Millimeters(shortBy),
+	)
+	require.NoError(t, err)
+
+	top := 0
+	for _, vertex := range chamfered.Vertices() {
+		position := vertex.Position()
+		if position.Value.Z != heldStop {
+			continue
+		}
+		require.Equal(t, decad.Approximate, position.Exactness)
+		bound, err := position.Bound.In(units.Millimeter)
+		require.NoError(t, err)
+		require.GreaterOrEqual(t, bound, rounding)
+		top++
+	}
+	require.Equal(t, 4, top, `the unchanged end cap keeps its four bounded vertices`)
+
+	bounds, err := chamfered.Bounds()
+	require.NoError(t, err)
+	require.Equal(t, decad.Approximate, bounds.Exactness)
+	require.GreaterOrEqual(t, bounds.Bound.Mag(), rounding)
+}

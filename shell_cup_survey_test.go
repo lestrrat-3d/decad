@@ -660,3 +660,31 @@ func TestShellCupHoledMinRadius(t *testing.T) {
 	require.Equal(t, decad.Sound, br.Status)
 	require.True(t, report.Trustworthy())
 }
+
+// TestShellCupMeshInheritsComputedLevelBound keeps an all-planar cup mesh
+// from claiming zero deviation when its source prism stopped at a computed cap.
+func TestShellCupMeshInheritsComputedLevelBound(t *testing.T) {
+	const (
+		plateHeight = 1e12
+		shortBy     = 1e-3
+		rounding    = 2.34375e-05
+	)
+	s, plateProfile, pinProfile := plateAndPin(t)
+	doc := decad.New()
+	plate, err := doc.Extrude(s, plateProfile, decad.Distance{D: units.Millimeters(plateHeight), Dir: decad.Along})
+	require.NoError(t, err)
+	pin, err := doc.Extrude(s, pinProfile, decad.ToFace{
+		Body:   plate,
+		Face:   capEndFace(plate),
+		Offset: units.Millimeters(-shortBy),
+	})
+	require.NoError(t, err)
+	cup, err := pin.Shell(capEndFace(pin), units.Millimeters(1))
+	require.NoError(t, err)
+
+	mesh, err := cup.Tessellate(units.Millimeters(0.1))
+	require.NoError(t, err)
+	bound, err := mesh.Bound().In(units.Millimeter)
+	require.NoError(t, err)
+	require.GreaterOrEqual(t, bound, rounding)
+}

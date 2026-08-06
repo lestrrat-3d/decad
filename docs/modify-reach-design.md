@@ -539,8 +539,9 @@ The readings that carry it: every cap-level vertex `bound`; every cap-level
 edge length — the corner-to-apex slants, a wall's own cap edge, a reflex
 corner's connector arc, and a whole circle's circumference — beside that edge's
 own evaluation error; and the payload's directional extent, weighted by how much
-of the direction lies in the plane, since the contour sits at the cap's own
-recorded level and a direction along the sweep reads none of its displacement.
+of the direction lies in the plane. The contour's cap level separately retains
+the receiver end's axial displacement, so an axial direction reads that term
+even though it reads none of the contour displacement.
 `Bounds` reports the same figure as the box's own `Bound`, per candidate: a
 contour that loses the extremization contributes nothing, so a plate whose
 world-axis extremes are all recorded coordinates still reports an `Exact` box.
@@ -854,7 +855,7 @@ reaches only the analytic bodies at the start of a chain.
 | **DX2** | topology / structural Verify | existing builder | payload builder | slab-region union builder |
 | **DX3** | `Tessellate` / STL / OBJ | waits on revolve tessellator; feature itself still builds | required patch tessellator; staged for the cap-loop chamfer, whose asked reading is `ErrUnsupported` | required slab-region tessellator |
 | **DX4** | mesh boolean | available once DX3 exists | available once DX3 exists | available once DX3 exists |
-| **DX5** | `ThroughAll` directional extent | existing | analytic patch extrema; a direction whose extreme is held by the COMPUTED cap contour with in-plane weight is `ErrUnsupported`, since a stop reads this coordinate as exact and has no bound to widen (§8.4) | union of slab-region extents |
+| **DX5** | `ThroughAll` directional extent | existing | analytic patch extrema; a direction whose extreme carries computed cap-contour or inherited axial displacement is `ErrUnsupported`, since a stop reads this coordinate as exact and has no bound to widen (§8.4) | union of slab-region extents |
 | **DX6** | clearance | existing revolve boundary reader | add trimmed patch faces to boundary model; undecidable cells stay `Suspect`; staged for the cap-loop chamfer, whose pairs read `Suspect` unless boxes already decide them | union exposed slab faces; never include cancelled interfaces |
 | **DX7** | undercut | existing revolve survey | exact normal ranges per patch, each widened by that patch's own proven departure from the surface it publishes (§8.3); a proven opposing point lists its patch, and a remaining straddle is undecided without removing another proven listing | exact normal ranges per exposed face |
 | **DX8** | minimum radius | existing meridian survey | minimum concave principal radius over sphere/torus/cylinder/cone patches; a band holding a mitered ruled patch (§8.3) is undecided | section arcs + exposed rim geometry |
@@ -1028,4 +1029,5 @@ owners: `capblend_contour.go` derives the cap contour's own displacement, and
 the cap-blend build/measurement code (`capblend_geom.go`, `capblend.go`,
 `capblend_moments.go`) carries it into every reading that needs it. No
 cap-blend reading composes `sectionDelta`, and no `sectionDelta` consumer reads
-the cap contour's displacement.
+the cap contour's displacement. `capBlendPayload` separately preserves its
+receiver's per-end axial displacement and the selected-end setback rounding.

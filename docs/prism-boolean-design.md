@@ -68,9 +68,11 @@ pipeline. An admitted pair combines its two operands' `ProfileRecord`s through
 a private `sketch` scene decad builds. It records the selected result regions
 through the existing seam (`RecordProfile`/`recordEdge`), audits the assembly
 with `modify §5`'s existing closed-form checks, and rebuilds through
-`evalPrism`. Section 7 extends the result with one section-displacement bound
-so the re-expressed operand's rounding, and the cut parameters `sketch`
-computes for the surviving fragments, reach every measurement.
+`evalPrism`. Section 7 extends the result with a section-displacement bound so
+the re-expressed operand's rounding and the cut parameters `sketch` computes
+for surviving fragments reach every measurement. It also preserves each sweep
+end's axial displacement so every measurement keeps the bounds its operands
+already proved.
 `Cut` and `Intersect` remain on the mesh path until later increments. A
 non-admitted `Union` pair — wrong payload class, non-coplanar, a segment kind
 outside the admitted set, an unequal z-interval for `Union`, a nonidentity
@@ -519,6 +521,11 @@ zero case, and neither does a union whose result the caller would call
 "obviously exact": the recorded walk closes only to within `δ_cut`, and a
 zero bound over it would be a claim the evaluator cannot make.
 
+Each sweep endpoint is A's recorded endpoint after G5 proves the two intervals
+coincide, so its axial displacement is the per-end maximum of A and B's
+incoming displacement. The G5 shift is exact after G3's stored-plane equality,
+so it adds no new axial term.
+
 **The evaluator's current measurement path cannot carry `δ`, so this design
 extends it.** `prismPayload` holds the section, the frame, the sweep interval,
 the placement and its blend descriptors, and no coordinate-error term;
@@ -538,6 +545,10 @@ extension is two pieces, each in the existing machinery's own shape:
   own coordinates), and this design's assembly is the first construction that
   sets it to `δ`. Being a payload field, it re-evaluates with the payload,
   so a placement or copy of an analytically-combined body keeps it.
+- **`prismPayload` preserves both axial end bounds** — G5 gives one shared
+  interval, so the result takes the greater `z0Delta` and `z1Delta` from its
+  operands independently. These terms remain separate from `δ`: one displaces
+  the section in its plane and the other displaces its sweep level.
 - **`bounds.go` gains the helpers for the mechanism**, under that file's own
   rule that each error mechanism has exactly one helper and no measurement site
   computes a bound inline. `cutDisplacementAllow` owns the cut-parameter
@@ -564,21 +575,22 @@ extension is two pieces, each in the existing machinery's own shape:
   shifted endpoint, whose G5 rounding is the same rigid-shift mechanism and
   rides in the same `δ`.
 
-The result's `Exactness` is then the existing rule with that displacement as
-its one added term:
+The result's `Exactness` is then the existing rule with these displacement
+terms added:
 
 - **`Exact`, zero bound**, when every surviving segment is a `LineSeg` **and**
-  `δ == 0` — `moments.go`'s region-level exact rational accumulator with its
-  single final rounding, over a section no coordinate of which was recomputed.
+  `δ == 0` and both axial end bounds are zero — `moments.go`'s region-level
+  exact rational accumulator with its single final rounding, over a section and
+  sweep interval no coordinate of which was recomputed.
   `δ == 0` requires every survivor to be a WHOLE edge, so this arm is reached
   by a merge that cut nothing: a contained footprint, or footprints meeting
   along complete shared walls. It is deliberately narrow — the alternative is a
   zero bound over a walk that closes only to within `δ_cut`.
 - **`Approximate` otherwise**, carrying the same per-mechanism proven bounds an
-  ordinary prism already reports plus the displacement term: the accumulator
+  ordinary prism already reports plus the displacement terms: the accumulator
   retires the moment any `CircleSeg`/`ArcSeg` survives (no `π` is ever exact),
-  and the displacement stands whenever `δ > 0`, whatever the segment kinds
-  are. Every partially overlapping pair lands here.
+  and a nonzero section or axial displacement remains approximate, whatever the
+  segment kinds are. Every partially overlapping pair lands here.
 
 Volume, Centroid and `Box` all read that same accumulator and that same
 displacement term (evaluator §4, `moments.go`), so no separate derivation is
@@ -588,7 +600,7 @@ needed for each.
 
 | Consequence (§1) | Admitted class | Outside it |
 |---|---|---|
-| 1. No chaining | Removed. Result is `prismPayload`; no `meshBound` to compose, so no chord tolerance for the next pair to fall below. A chained boolean re-checks §3's gate on the new pair and carries the greater of A's incoming displacement and B's incoming displacement plus its new re-expression allowance, plus its own cut displacement (§7). | Unchanged — general-position or non-analytic pairs still degrade per evaluator §9. |
+| 1. No chaining | Removed. Result is `prismPayload`; no `meshBound` to compose, so no chord tolerance for the next pair to fall below. A chained boolean re-checks §3's gate on the new pair, carries the greater incoming displacement plus its new re-expression and cut displacement, and retains the greater incoming axial displacement at each end (§7). | Unchanged — general-position or non-analytic pairs still degrade per evaluator §9. |
 | 2. Coplanar contact refuses | Removed. Coplanar, co-directional contact is the admitted case's whole premise. | Unchanged — non-coplanar or non-prism coplanar contact (e.g. a prism against a revolve cap) stays on the mesh path. |
 | 3. Analytic identity dies | Removed where `δ == 0` — a merge that cut nothing. Result is `prismPayload`: Fillet/Chamfer/Shell, all three surveys, and the clearance kernel already dispatch on payload class and need zero new code for it. Where `δ > 0` — which every cut-bearing merge is, §7 — §12's own rows stage the readings that have no place to put a displacement, and `Verify` has no gate diameter for the body either, so its readings report Suspect however tight their bounds are. Restoring that reach for a displacement whose CARRIERS are exact is a separate design change, not a consequence this design removes. | Unchanged for mesh-path results — `facetedPayload` still permanently refuses modify ops (modify-reach SX9) and all three surveys. |
 
@@ -664,7 +676,7 @@ origin, exactly as it already must after a Fillet or Chamfer. Flagged in
 
 | Consumer | Effect |
 |---|---|
-| Tessellation | No new code — the result is an ordinary `prismPayload` and `docs/tessellation-design.md` §5's existing prism contract applies. §7's section displacement rides in that contract's own stored-coordinate rounding term (tessellation §5's prism row), so a mesh of an assembled body is `Exact`-trimmed only where `δ == 0`. |
+| Tessellation | No new code — the result is an ordinary `prismPayload` and `docs/tessellation-design.md` §5's existing prism contract applies. Section and per-end axial displacement both ride in that contract's stored-coordinate term, so a mesh of an assembled body is exact only where all three are zero. |
 | `ThroughAll` / `ThroughAllSide` | The stop reads an exact directional extent only where `δ == 0`. At `δ > 0`, it returns `ErrUnsupported`: the recorded endpoint has no bound it can widen. |
 | Clearance kernel | Unchanged where `δ == 0` — dispatches on payload class; `prismPayload` already has full analytic support (`clearance.go`'s coplanar `Plane`×`Plane` certificate, `offsetPair`, etc.). Where `δ > 0` the kernel builds no model for the body and the pair reads `Suspect`: every certificate it emits is an exact statement about the carriers it read, and a carrier the payload holds only within `δ` of the one it denotes cannot support one. Widening the kernel's own candidate intervals by `δ` is a separate piece of work, not this design's. |
 | Interference (`Verify`) | **Still on the mesh path.** `interference.go`'s `measuredInterference` calls `evaluateBoolean(ctx, OpIntersect, ...)` directly after its containment and represented-set-equality certificates. The analytic dispatch is in `performBoolean`, which this PR implements only for `Union`, so an admitted coplanar-prism pair still reaches the existing read-only mesh intersection and may be coarse or `Suspect`. PR4 separately wires a read-only analytic `Intersect` path and its tests. `docs/interference-design.md` §5.2 records this PR1 boundary. |

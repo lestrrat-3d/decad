@@ -91,6 +91,8 @@ func tryPrismUnion(ctx context.Context, op OpKind, a, b *Body) (prismPayload, bo
 		frame:   pa.frame,
 		z0:      pa.z0,
 		z1:      pa.z1,
+		z0Delta: max(pa.z0Delta, pb.z0Delta),
+		z1Delta: max(pa.z1Delta, pb.z1Delta),
 		xform:   pa.xform,
 		// §7: operand A's coordinates are unchanged, while B's existing
 		// displacement passes through its rigid re-expression and accumulates

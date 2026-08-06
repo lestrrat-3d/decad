@@ -101,14 +101,12 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref StepRef, cbp capB
 		// multiplies the whole section area below, so it reaches the volume at
 		// the scale of the band itself and is charged here — the same term
 		// capBandVolume charges for the identical level it reads as sideZ.
-		zLo, zHi := exactScalar(cbp.z0), exactScalar(cbp.z1)
+		zLo, zHi := measuredScalar(cbp.z0, cbp.z0Delta), measuredScalar(cbp.z1, cbp.z1Delta)
 		if onStart {
-			v := cbp.z0 + cbp.d
-			zLo = measuredScalar(v, addRoundError(cbp.z0, cbp.d, v))
+			zLo = boundedAdd(zLo, exactScalar(cbp.d))
 		}
 		if onEnd {
-			v := cbp.z1 - cbp.d
-			zHi = measuredScalar(v, addRoundError(cbp.z1, -cbp.d, v))
+			zHi = boundedSub(zHi, exactScalar(cbp.d))
 		}
 		// The side walls are built over those same two bounded levels, so each
 		// end's displacement goes in with it: the wall vertices, the vertical

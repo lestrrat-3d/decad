@@ -366,6 +366,29 @@ func TestPrismUnionArrangementCapRejectsLargeLineOnlyScene(t *testing.T) {
 	require.False(t, ok)
 }
 
+func TestPrismUnionPreservesEndDisplacements(t *testing.T) {
+	frame := canonicalPrismFrame(t)
+	pa := prismPayload{
+		profile: ProfileRecord{Outer: synthRectLoop(0, 0, 10, 10)},
+		frame:   frame,
+		z0:      0,
+		z1:      10,
+		z0Delta: 0.125,
+		z1Delta: 0.75,
+		xform:   r3.Identity(),
+	}
+	pb := pa
+	pb.profile = ProfileRecord{Outer: synthRectLoop(5, 5, 15, 15)}
+	pb.z0Delta = 0.5
+	pb.z1Delta = 0.25
+
+	result, ok, err := tryPrismUnion(t.Context(), OpUnion, &Body{payload: pa}, &Body{payload: pb})
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.Equal(t, 0.5, result.z0Delta)
+	require.Equal(t, 0.75, result.z1Delta)
+}
+
 func TestPrismProfilesContextWaitsForArrangementAfterCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	started := make(chan struct{})

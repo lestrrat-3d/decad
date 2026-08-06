@@ -48,6 +48,8 @@ type capBlendPayload struct {
 	profile    ProfileRecord
 	frame      r3.Frame
 	z0, z1     float64
+	z0Delta    float64
+	z1Delta    float64
 	xform      r3.Transform
 	d          float64
 	startLoops map[int]bool // loop index -> chamfered on the z0 cap
@@ -87,7 +89,25 @@ func (cbp capBlendPayload) placed(ctx context.Context, d *Document, ref StepRef,
 // placement over [z0, z1], so the point/dir machinery already built for
 // prisms serves the cap-blend build too.
 func (cbp capBlendPayload) prismLike(z0, z1 float64) prismPayload {
-	return prismPayload{frame: cbp.frame, z0: z0, z1: z1, xform: cbp.xform}
+	return prismPayload{
+		frame: cbp.frame, z0: z0, z1: z1,
+		z0Delta: cbp.z0Delta, z1Delta: cbp.z1Delta,
+		xform: cbp.xform,
+	}
+}
+
+// axialDelta is the larger sweep-level displacement a body-relative stop must
+// preserve when it resolves against this cap blend. A chamfered end also
+// carries the rounding of its setback level.
+func (cbp capBlendPayload) axialDelta() float64 {
+	z0Delta, z1Delta := cbp.z0Delta, cbp.z1Delta
+	if len(cbp.startLoops) != 0 {
+		z0Delta = absSumUpper(z0Delta, addRoundError(cbp.z0, cbp.d, cbp.z0+cbp.d))
+	}
+	if len(cbp.endLoops) != 0 {
+		z1Delta = absSumUpper(z1Delta, addRoundError(cbp.z1, -cbp.d, cbp.z1-cbp.d))
+	}
+	return math.Max(z0Delta, z1Delta)
 }
 
 // extentAlong is the cap-blend body's exact extent interval along an
@@ -118,10 +138,10 @@ func (cbp capBlendPayload) prismLike(z0, z1 float64) prismPayload {
 // section, not a recorded one, so an extreme it holds is only known to a
 // proven displacement — and a stop has no bound to widen, exactly as
 // prismPayload's own section displacement leaves ThroughAll/ThroughAllSide
-// ErrUnsupported. Every direction whose extreme is held by a recorded
-// coordinate, and every direction that reads the contour with no in-plane
-// weight at all (the sweep's own axis, where the contour sits at the exact cap
-// level), still answers the exact interval it always did.
+// ErrUnsupported. Every direction whose extreme is held by an exact recorded
+// coordinate still answers the exact interval it always did. A direction along
+// the sweep ignores contour displacement but still reads the cap level's own
+// inherited axial displacement.
 func (cbp capBlendPayload) extentAlong(g r3.Vec) (float64, float64, error) {
 	return cbp.extentAlongContext(context.Background(), g)
 }
@@ -140,7 +160,7 @@ func (cbp capBlendPayload) extentAlongWork(ctx context.Context, g r3.Vec, work *
 		return 0, 0, err
 	}
 	if bound != 0 {
-		return 0, 0, fmt.Errorf(`%w: a cap-loop chamfer's extent along this direction is held by its own computed cap contour, which is known only to a displacement of %v mm; a stop reads this coordinate as exact and has no bound to widen`, ErrUnsupported, bound)
+		return 0, 0, fmt.Errorf(`%w: a cap-loop chamfer's extent along this direction carries a computed contour or sweep-level displacement of %v mm; a stop reads this coordinate as exact and has no bound to widen`, ErrUnsupported, bound)
 	}
 	return lo, hi, nil
 }
@@ -151,10 +171,9 @@ func (cbp capBlendPayload) extentAlongWork(ctx context.Context, g r3.Vec, work *
 // answer exact wherever a recorded coordinate wins: the true minimum lies
 // between the minimum of the candidates' lower ends and the minimum of their
 // upper ends, so a candidate that loses by more than its own displacement
-// contributes nothing to the reported bound. Two mechanisms displace a
-// candidate and no others do — the cap contour's own in-plane displacement,
-// weighted by how much of the direction lies in the plane, and the rounding of
-// a chamfered end's trimmed straight level, weighted by the axial component.
+// contributes nothing to the reported bound. Three mechanisms displace a
+// candidate: an inherited end displacement, the cap contour's own in-plane
+// displacement, and the rounding of a chamfered end's trimmed straight level.
 func (cbp capBlendPayload) extentBoundedAlong(ctx context.Context, g r3.Vec, work *freeformWork) (float64, float64, float64, error) {
 	pl := cbp.prismLike(0, 0)
 	base := cbp.xform.Apply(cbp.frame.Origin()).Dot(g)
@@ -194,14 +213,15 @@ func (cbp capBlendPayload) extentBoundedAlong(ctx context.Context, g r3.Vec, wor
 		}
 		onStart, onEnd := cbp.startLoops[li], cbp.endLoops[li]
 		zLo, zHi := cbp.z0, cbp.z1
-		loAllow, hiAllow := 0.0, 0.0
+		loAllow := productUpper(axial, cbp.z0Delta)
+		hiAllow := productUpper(axial, cbp.z1Delta)
 		if onStart {
 			zLo = cbp.z0 + cbp.d
-			loAllow = productUpper(axial, addRoundError(cbp.z0, cbp.d, zLo))
+			loAllow = absSumUpper(loAllow, productUpper(axial, addRoundError(cbp.z0, cbp.d, zLo)))
 		}
 		if onEnd {
 			zHi = cbp.z1 - cbp.d
-			hiAllow = productUpper(axial, addRoundError(cbp.z1, -cbp.d, zHi))
+			hiAllow = absSumUpper(hiAllow, productUpper(axial, addRoundError(cbp.z1, -cbp.d, zHi)))
 		}
 		l, h, err := boundaryExtremesContext(ctx, ProfileRecord{Outer: loop}, gu, gv, work)
 		if err != nil {
@@ -230,14 +250,14 @@ func (cbp capBlendPayload) extentBoundedAlong(ctx context.Context, g r3.Vec, wor
 		if err != nil {
 			return 0, 0, 0, err
 		}
-		// The contour sits at the cap's own recorded level, so only the
-		// in-plane part of the direction reads its displacement at all.
+		// The contour sits at its cap level, so its in-plane displacement and
+		// that level's inherited axial displacement compose independently.
 		contourAllow := productUpper(inPlane, delta)
 		if onStart {
-			take(cl, ch, cbp.z0, contourAllow)
+			take(cl, ch, cbp.z0, absSumUpper(contourAllow, productUpper(axial, cbp.z0Delta)))
 		}
 		if onEnd {
-			take(cl, ch, cbp.z1, contourAllow)
+			take(cl, ch, cbp.z1, absSumUpper(contourAllow, productUpper(axial, cbp.z1Delta)))
 		}
 	}
 	if math.IsInf(lo, 1) {
@@ -433,6 +453,8 @@ func buildCapBlend(ctx context.Context, doc *Document, ref StepRef, pp prismPayl
 		frame:      pp.frame,
 		z0:         pp.z0,
 		z1:         pp.z1,
+		z0Delta:    pp.z0Delta,
+		z1Delta:    pp.z1Delta,
 		xform:      pp.xform,
 		d:          d,
 		startLoops: startLoops,
