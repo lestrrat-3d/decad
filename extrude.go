@@ -1299,8 +1299,9 @@ func sideOriginsContext(ctx context.Context, ref StepRef, roleLoop int, segs []i
 // + v·(V'·g) + z·(N'·g), primes the placed directions, extremized over the
 // region boundary and the sweep. A through-all stop records its result as an
 // exact endpoint, so it refuses a prism with a proven section displacement.
-// prismBoundsContext reads extentAlongWork directly and carries that
-// displacement as its own outward bound instead.
+// prismBoundsContext reads extentBoundedAlong directly and carries both that
+// displacement and a free-form boundary's own bracket bound as its own
+// outward bound instead.
 // The stop and clearance callers hold no preflight counter for this record, so
 // the interface forms open the record's own — one per extent reading, never one
 // per segment.
@@ -1315,18 +1316,42 @@ func (pp prismPayload) extentAlongContext(ctx context.Context, g r3.Vec) (float6
 	return pp.extentAlongWork(ctx, g, newFreeformWork())
 }
 
+// extentAlongWork is extentBoundedAlong's refusing wrapper (Table R row R11,
+// docs/spline-design.md §6.4), mirroring capBlendPayload.extentAlongWork word
+// for word: a through-all stop reads this extent as an exact endpoint and has
+// no bound to widen, so a direction whose extreme a free-form bracket cannot
+// state exactly refuses rather than fabricate one. This is deliberately WIDER
+// than §6.4's own straddle rule — every nonzero bracket bound refuses here,
+// not only one that straddles the sketch plane in the travel sense — and
+// narrowing it to that test is a later step under the same non-permanent row.
 func (pp prismPayload) extentAlongWork(ctx context.Context, g r3.Vec, work *freeformWork) (float64, float64, error) {
+	lo, hi, bound, err := pp.extentBoundedAlong(ctx, g, work)
+	if err != nil {
+		return 0, 0, err
+	}
+	if bound != 0 {
+		return 0, 0, fmt.Errorf(`%w: a free-form prism's extent along this direction is held by its own directional-extreme bracket, known only to a displacement of %v mm; a stop reads this coordinate as exact and has no bound to widen`, ErrUnsupported, bound)
+	}
+	return lo, hi, nil
+}
+
+// extentBoundedAlong is the bounded reading itself: the interval AND its
+// proven half-width, folded from boundaryExtremesBoundedContext's own
+// per-candidate enclosures (docs/spline-design.md §6.2). An all-analytic
+// section carries only zero-width candidates, so the bound is zero and the
+// interval exact — unchanged from before this bracket existed.
+func (pp prismPayload) extentBoundedAlong(ctx context.Context, g r3.Vec, work *freeformWork) (float64, float64, float64, error) {
 	base := pp.xform.Apply(pp.frame.Origin()).Dot(g)
 	gu := pp.dir(1, 0, 0).Dot(g)
 	gv := pp.dir(0, 1, 0).Dot(g)
 	gz := pp.dir(0, 0, 1).Dot(g)
-	lo, hi, err := boundaryExtremesContext(ctx, pp.profile, gu, gv, work)
+	lo, hi, bound, err := boundaryExtremesBoundedContext(ctx, pp.profile, gu, gv, work)
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, 0, err
 	}
 	zlo := math.Min(pp.z0*gz, pp.z1*gz)
 	zhi := math.Max(pp.z0*gz, pp.z1*gz)
-	return base + lo + zlo, base + hi + zhi, nil
+	return base + lo + zlo, base + hi + zhi, bound, nil
 }
 
 // prismBoundsContext computes the exact axis-aligned bounds of the placed prism:
@@ -1336,56 +1361,161 @@ func (pp prismPayload) extentAlongWork(ctx context.Context, g r3.Vec, work *free
 func prismBoundsContext(ctx context.Context, pp prismPayload, work *freeformWork) (Box, error) {
 	axes := []r3.Vec{r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1)}
 	var minC, maxC [3]float64
+	extremeBound := 0.0
 	for i, axis := range axes {
 		if err := ctx.Err(); err != nil {
 			return Box{}, err
 		}
-		lo, hi, err := pp.extentAlongWork(ctx, axis, work)
+		lo, hi, bound, err := pp.extentBoundedAlong(ctx, axis, work)
 		if err != nil {
 			return Box{}, err
 		}
 		minC[i] = lo
 		maxC[i] = hi
+		extremeBound = math.Max(extremeBound, bound)
 	}
 	// A displaced section displaces every extreme it holds, and the frame and
-	// placement are isometries, so the box's own error is the section
+	// placement are isometries, so the box's own error carries the section
 	// displacement itself — δ outward on every face
-	// (docs/prism-boolean-design.md §7). It is zero for every payload a caller
-	// draws, which keeps the ordinary prism's box Exact as before.
+	// (docs/prism-boolean-design.md §7) — summed with the boundary's own
+	// directional-extreme bracket bound (docs/spline-design.md §6.2). Both are
+	// zero for every analytic, caller-drawn payload, which keeps the ordinary
+	// prism's box Exact as before. The bracket's own term is what decides the
+	// rest, never the section's kind: a free-form section whose extremes along
+	// these three axes are all held by exactly representable candidate values
+	// reports a zero width and stays Exact too (a span monotone along an axis
+	// contributes its two exactly interpolated endpoints and nothing else),
+	// while an extreme held by an irrational interior root publishes that
+	// bracket's width and is Approximate — §6.2's own stated contract
+	// consequence. The sum only
+	// goes through absSumUpper's own per-term rounding where there are two
+	// genuine terms to compose: bumping a lone sectionDelta a second time for
+	// an always-zero extremeBound term would grow the box's bound past the
+	// single upRound tessellate.go's own mesh bound composes it against.
+	bound := pp.sectionDelta
+	if extremeBound != 0 {
+		bound = absSumUpper(pp.sectionDelta, extremeBound)
+	}
 	return Box{
 		Min:       r3.NewVec(minC[0], minC[1], minC[2]),
 		Max:       r3.NewVec(maxC[0], maxC[1], maxC[2]),
-		Exactness: exactnessOf(pp.sectionDelta),
-		Bound:     units.Millimeters(pp.sectionDelta),
+		Exactness: exactnessOf(bound),
+		Bound:     units.Millimeters(bound),
 	}, nil
 }
 
 // boundaryExtremes returns the min and max of the linear functional
 // g(u, v) = gu·u + gv·v over the recorded region's boundary — exact per
-// segment kind: line extremes at endpoints, circular extremes at the
-// functional's own angle when the walk sweeps it.
+// analytic segment kind: line extremes at endpoints, circular extremes at the
+// functional's own angle when the walk sweeps it. It refuses a free-form
+// section rather than report a bounded interval; see boundaryExtremesContext.
 func boundaryExtremes(profile ProfileRecord, gu, gv float64, work *freeformWork) (float64, float64, error) {
 	return boundaryExtremesContext(context.Background(), profile, gu, gv, work)
 }
 
+// boundaryExtremesContext is boundaryExtremesBoundedContext's refusing
+// wrapper: it keeps the exact signature every existing caller holds
+// (revolve.go's resolveAxisSide runs it BEFORE its own requireAnalyticWalk
+// gate, and capblend.go's extentBoundedAlong relies on it the same way, so
+// this refusal is what protects both from a free-form section today), and it
+// refuses ErrUnsupported wherever the bounded scan's bracket carries a
+// nonzero bound. Every analytic candidate reports a zero bound, so this
+// preserves current behaviour exactly for every section this evaluator could
+// already build — only the refusal's message changes.
 func boundaryExtremesContext(ctx context.Context, profile ProfileRecord, gu, gv float64, work *freeformWork) (float64, float64, error) {
-	lo, hi := math.Inf(1), math.Inf(-1)
+	lo, hi, bound, err := boundaryExtremesBoundedContext(ctx, profile, gu, gv, work)
+	if err != nil {
+		return 0, 0, err
+	}
+	if bound != 0 {
+		return 0, 0, fmt.Errorf(`%w: the boundary extreme scan's directional bracket has a nonzero bound of %v mm along this direction, and this caller has no bound to widen`, ErrUnsupported, bound)
+	}
+	return lo, hi, nil
+}
+
+// boundaryExtremesBoundedContext is the one scan, total over walkKind
+// (docs/spline-design.md §6.2): the min and max of g(u, v) = gu·u + gv·v over
+// the recorded region's boundary, AND the proven half-width of that interval.
+// A line or circular candidate is exact — the same closed forms
+// boundaryExtremesContext always ran, contributing a zero-width candidate — and
+// a free-form walk folds each of its converted spans' own proven enclosure
+// (spanExtremeEnclosureContext). The fold is the shipped
+// capBlendPayload.extentBoundedAlong idiom: track the lower and upper ends of
+// every candidate contributing to the region minimum (loLower/loUpper) and to
+// the region maximum (hiLower/hiUpper) separately, so a candidate that loses
+// the extremization contributes nothing to the reported bound, and report the
+// midpoint of each composed interval with the larger of the two half widths,
+// rounded up — the same convention freeformArcLength already uses.
+//
+// A span enclosure that convention cannot state in float64 refuses at the
+// conversion rather than entering the fold (spline_extreme.go's
+// freeformExtremeFloats, Table R row R18), so every number these accumulators
+// hold is finite and the only reading left to the empty-region check below is
+// a region that genuinely contributed no candidate.
+//
+// The direction is carried through this scan as the two FLOATS the caller
+// holds, and it is gated by requireFiniteDirection, which reads them and
+// allocates nothing. The rational lift each span's Bernstein coefficients need
+// happens inside spanExtremeEnclosureContext, behind that span's own R7 charge
+// — §5.2's rule is that every charge is levied before the work allocates, and
+// a rational built here would allocate ahead of every charge this scan makes.
+func boundaryExtremesBoundedContext(ctx context.Context, profile ProfileRecord, gu, gv float64, work *freeformWork) (float64, float64, float64, error) {
+	if err := requireFiniteDirection(gu, gv); err != nil {
+		return 0, 0, 0, err
+	}
+
+	loLower, loUpper := math.Inf(1), math.Inf(1)
+	hiLower, hiUpper := math.Inf(-1), math.Inf(-1)
+	takeLo := func(l, h float64) {
+		loLower = math.Min(loLower, l)
+		loUpper = math.Min(loUpper, h)
+	}
+	takeHi := func(l, h float64) {
+		hiLower = math.Max(hiLower, l)
+		hiUpper = math.Max(hiUpper, h)
+	}
 	take := func(u, v float64) {
 		g := gu*u + gv*v
-		lo = math.Min(lo, g)
-		hi = math.Max(hi, g)
+		takeLo(g, g)
+		takeHi(g, g)
 	}
+	// Every span enclosure enters the fold through freeformExtremeFloats
+	// (spline_extreme.go), which rounds outward through ratFloatDown/ratFloatUp
+	// — never downRound/upRound: a directional value can be negative, and those
+	// only ever move a POSITIVE bound toward zero (spline_length.go's
+	// arc-length-only convention), the wrong direction for a negative
+	// candidate and a spurious one-ulp widening of an exactly representable
+	// value either way — and refuses ErrUnsupported for an enclosure the
+	// float64 range cannot state, so no infinity ever reaches these
+	// accumulators.
+
 	for _, loop := range append([]LoopRecord{profile.Outer}, profile.Holes...) {
 		for _, seg := range loop.Segments {
 			if err := ctx.Err(); err != nil {
-				return 0, 0, err
+				return 0, 0, 0, err
 			}
 			w, err := walkOf(seg, work)
 			if err != nil {
-				return 0, 0, err
+				return 0, 0, 0, err
 			}
-			if err := requireAnalyticWalk(w, "the boundary extreme scan"); err != nil {
-				return 0, 0, err
+			if w.kind == walkFreeform {
+				for _, span := range w.spans {
+					minIv, maxIv, err := spanExtremeEnclosureContext(ctx, span, gu, gv, work)
+					if err != nil {
+						return 0, 0, 0, err
+					}
+					minLo, minHi, err := freeformExtremeFloats(minIv)
+					if err != nil {
+						return 0, 0, 0, err
+					}
+					maxLo, maxHi, err := freeformExtremeFloats(maxIv)
+					if err != nil {
+						return 0, 0, 0, err
+					}
+					takeLo(minLo, minHi)
+					takeHi(maxLo, maxHi)
+				}
+				continue
 			}
 			take(w.startU, w.startV)
 			take(w.endU, w.endV)
@@ -1411,8 +1541,14 @@ func boundaryExtremesContext(ctx context.Context, profile ProfileRecord, gu, gv 
 			}
 		}
 	}
-	if math.IsInf(lo, 1) {
-		return 0, 0, fmt.Errorf(`%w: the recorded region has no boundary`, ErrDegenerate)
+	if math.IsInf(loLower, 1) {
+		return 0, 0, 0, fmt.Errorf(`%w: the recorded region has no boundary`, ErrDegenerate)
 	}
-	return lo, hi, nil
+	loMid := loLower + (loUpper-loLower)/2
+	hiMid := hiLower + (hiUpper-hiLower)/2
+	bound := upRound(math.Max(
+		math.Max(loMid-loLower, loUpper-loMid),
+		math.Max(hiMid-hiLower, hiUpper-hiMid),
+	))
+	return loMid, hiMid, bound, nil
 }

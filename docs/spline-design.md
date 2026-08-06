@@ -183,6 +183,7 @@ exactly → `ErrUnrecordableProfile`.
 | **R15** | a free-form arc-length enclosure whose upper bound runs past `MaxFloat64` | `ErrUnsupported` | yes, §6.1 |
 | **R16** | a `FitSplineSeg`'s fit points are finite but the interpolant sketch builds from them — its cumulative chord parameter or a span coefficient — is not | `ErrUnsupported` | no, §5.1.2 — a float64 range limit of sketch's own exported interpolant, not decad's to lift |
 | **R17** | a `FitSplineSeg`'s converted chain does not reach its own record's natural-end fit point — sketch's dedup (`fitChordEps`) collapsed it into its predecessor | `ErrDegenerate` | yes, §5.1.2 |
+| **R18** | a free-form directional-extreme enclosure no float64 interval holds — an end past `MaxFloat64`, or a width past it | `ErrUnsupported` | yes, §6.2 |
 
 <!-- R16 was challenged as narrower than the evaluator's actual refusal
 behaviour, on the theory that a stalled (non-increasing) cumulative chord
@@ -954,10 +955,34 @@ floor gates it first, and there `S` is the zero polynomial. That floor is the on
 certificate reading the COUNT itself as its proof, so it owes the extra test §6.3
 states.
 
-**Contract consequence.** `prismBoundsContext` reports `Exactness: Exact` with a
-zero bound today. A free-form interior extreme is an irrational root evaluation,
-so **a free-form prism's `Box` is `Approximate`** with the bracket's bound. State
-it; never paper over it.
+**Contract consequence.** A `Box`'s bound is the directional-extreme bracket's
+own, so the split is between a bracket with a nonzero width and one without —
+never between a free-form section and an analytic one. A free-form interior
+extreme is an irrational root evaluation, so **a `Box` whose extreme is held by
+such a candidate is `Approximate`** with the bracket's bound. A section whose
+extremes are all held by exactly representable candidate values reports a zero
+bound and stays `Exact`, and a free-form section reaches that reading too: a
+Bézier interpolates its endpoints exactly, so a span monotone in the direction
+being read (`P′` with no root in `[0, 1]`) contributes its two endpoint values
+and nothing else, and where every one of them is representable under the
+functional there is no width to report. An all-analytic prism's `Box` keeps its
+zero bound and `Exact` unchanged, as before. `prismBoundsContext` reports
+exactly that split (P4a) — reachable only from internal tests while R6 stands,
+since no free-form prism can exist through the public surface yet.
+
+**The one extreme that has no interval to report is R18**, §6.1's R15 one row
+over. The enclosure is exact and rational, so it is proven whatever its
+magnitude, but the reading published from it is a float64 midpoint and a float64
+half width: an end past `MaxFloat64`, and a width past it between two ends that
+are not, each leave nothing to publish. Both refuse `ErrUnsupported` — the curve
+EXISTS and this evaluator cannot state this extreme of it — and never
+`ErrNotFinite`, whose subject is a non-finite INPUT while every coordinate
+reaching the bracket is finite, nor `ErrDegenerate`, which claims no such body
+exists at all. The refusal is on the ENCLOSURE and belongs to the CONVERSION
+that publishes it, so it must fire before the enclosure joins a fold: an
+infinity folded into a running extreme is indistinguishable from a candidate
+nothing contributed, and the reading then reports the empty region's own
+`ErrDegenerate` — the opposite existence claim — or an infinite `Box` bound.
 
 ### 6.2.1 Which distance the sagitta row measures
 
@@ -1107,6 +1132,16 @@ R11 is not permanent: refining the bracket decides every case but an exact
 tangency, and a tangency is a contact the §5 audit refuses anyway. That
 refinement is a measured-target loop, so it carries §6.1's iteration cap.
 
+**Current state (P4a).** The through-all stop's own gate
+(`prismPayload.extentAlongWork`) is live ahead of the straddle test above: it
+refuses on ANY nonzero directional-extreme bracket bound along the stop's own
+direction, not only one that straddles the sketch plane in the travel sense.
+That is a strictly WIDER refusal than this section states — sound, since a
+stop reads its coordinate as exact and a wider refusal only over-refuses,
+never fabricates a dependency — and narrowing it to the straddle test itself
+is deferred to a later step under this same non-permanent row. The §4.1
+analytic-corner slice's audit gate is not implemented yet (P10).
+
 ## 7. `NURBSSurface` and `NURBSCurve`
 
 Core §6.1 reserved both names. This section fixes their shape.
@@ -1240,7 +1275,8 @@ half-silent. These stages do not consume a global evaluator increment number.
 | **P1** | this document + the core/evaluator table updates it resolves | none |
 | **P2** | Bézier conversion, exact Tier A moments, the §5.2 budget | `ProfileRecord.Area`/`Centroid`/`SecondMoments` answer for Tier A, bounded by one rounding. No new types |
 | **P3** | walk-kind discriminant across every `segmentWalk` consumer | none — behaviour preserved |
-| **P4** | `NURBSSurface`/`NURBSCurve`, free-form extrude side faces, §6.1 length brackets, §6.2 extremes, `NormalAt` refusal, §6.4's stop gate | Tier A free-form prisms build, `FitSplineSeg` walks among them since P4 is where R6's build refusal lifts (§5.1.2); `Volume` from the Tier A rational, `Area`/`Box` bounded. A Tier B or C section is R10; an undecidable through-all stop is R11 |
+| **P4a** | §6.2 row 1's directional-extreme bracket, wired into the prism bounds reading behind the existing refusal wrappers | none — R6 still stands, so a free-form prism is reachable only from internal tests; `extentAlongWork`'s R11 gate is live but wider than §6.4's straddle rule (any nonzero bracket bound refuses, not only one that straddles the sketch plane), and R18 is live on the enclosure-to-float64 conversion the bracket publishes through |
+| **P4b** | `NURBSSurface`/`NURBSCurve`, free-form extrude side faces, §6.1 length brackets, `NormalAt` refusal, §6.4's own straddle-narrowed stop gate | Tier A free-form prisms build, `FitSplineSeg` walks among them since P4b is where R6's build refusal lifts (§5.1.2); `Volume` from the Tier A rational, `Area`/`Box` bounded. A Tier B or C section is R10; an undecidable through-all stop is R11 |
 | **P5** | free-form chording with proven sagitta + area slack | `Tessellate`/`STL`/`OBJ`, booleans, interference proof. Wall reading explicitly `Suspect` |
 | **P6** | §6.3's speed floor and origin-exclusion certificates, hodograph normal cones, bracketed curvature extremes | `Undercuts` and `MinRadius` each answer where the certificates that reading needs close, and read `Suspect` per §6.3's cost table where they do not |
 | **P7** | certified branch-and-bound inscribed-disk interval | `MinWallThickness` answered, with its own convergence evidence |
@@ -1262,8 +1298,14 @@ rules).
   rounding, and a section whose exact area IS representable there reports `Exact`
   with a zero bound. A test that only covers one side cannot tell the rule from a
   constant.
-- Assert `Box` reports `Approximate` with a positive bound for a Tier A prism
-  (§6.2).
+- Assert BOTH sides of §6.2's contract consequence, since the split is the
+  bracket's width and not the section's kind: a Tier A prism whose directional
+  extreme is held by an interior root reports `Approximate` with a positive
+  bound, and one whose extremes along the axis read are all held by exactly
+  representable candidate values — a span monotone in that direction, so the
+  candidate set is its two exactly interpolated endpoints — reports `Exact`
+  with a zero bound. A test that only covers one side cannot tell the rule from
+  a constant.
 - Assert an arc-length bracket strictly narrows with subdivision depth and
   encloses a dense-sample reference at every depth, and that the reported bound
   is the enclosure MEASURED at the fixed depth rather than a width read off a
@@ -1399,7 +1441,11 @@ rules).
   one (R7 again), a free-form walk whose chording needs more than the chord cap
   (R8 `ErrUnsupported` through `errTooManyChords`), a curve whose arc-length
   enclosure runs past `MaxFloat64` (R15 `ErrUnsupported`, and NEVER
-  `ErrNotFinite`), and — while R10 stands — an
+  `ErrNotFinite`), a section whose directional-extreme enclosure along one
+  direction runs past that same range while another direction still reads
+  exactly (R18 `ErrUnsupported`, and NEVER `ErrDegenerate` — the sentinel a
+  saturated enclosure folded into the extreme accumulators produces instead),
+  and — while R10 stands — an
   `Extrude` of a section carrying a Tier B or Tier C walk, whose Tier A
   counterpart builds in the same test. Run each of R3–R5 on a DEGREE-1
   `NURBSSeg` walk as well as a curved one and require the same `ErrUnsupported`,
