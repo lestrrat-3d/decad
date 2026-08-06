@@ -542,6 +542,51 @@ func TestRecordProfileRecordsSnapThresholdTrim(t *testing.T) {
 	require.Less(t, bound, 1e-12)
 }
 
+func TestRecordProfileRecordsMixedWholeAndCertifiedPartialJoin(t *testing.T) {
+	// The arc and vertical line share top, but sketch trims the line where it
+	// crosses the base. The partial line's sketch node is the arc evaluated at
+	// its bound, so its U coordinate differs from the arc's pinned endpoint by
+	// round-off. The certified mixed join still records and re-authenticates.
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	center := s.CreatePoint(0, 0)
+	start := s.CreatePoint(10, 0)
+	top := s.CreatePoint(0, 10)
+	below := s.CreatePoint(0, -5)
+	s.CreateArc(center, start, top)
+	s.CreateLine(top, below)
+	s.CreateLine(center, start)
+
+	profiles := s.Profiles()
+	require.Len(t, profiles, 1)
+	profile := profiles[0]
+	wholeArc := false
+	partialLine := false
+	for _, edge := range profile.Outer {
+		switch edge.Entity.(type) {
+		case *sketch.Arc:
+			require.False(t, edge.Partial)
+			wholeArc = true
+		case *sketch.Line:
+			if edge.Partial {
+				require.True(t, edge.TExact)
+				partialLine = true
+			}
+		}
+	}
+	require.True(t, wholeArc)
+	require.True(t, partialLine)
+
+	record, _, err := decad.RecordProfile(s, profile)
+	require.NoError(t, err)
+	area, err := record.Area()
+	require.NoError(t, err, `the record should also pass reconstruction authentication`)
+	value, err := area.Value.In(units.SquareMillimeter)
+	require.NoError(t, err)
+	require.Equal(t, 78.53981633974483, value)
+}
+
 func TestProfileRecordAreaRejectsUnclosedLoop(t *testing.T) {
 	// A decoded or caller-built record reaches the same verdict through the
 	// moments validator: the reconstruction authenticates each candidate region

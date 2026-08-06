@@ -34,19 +34,20 @@ import (
 // an authenticated valid profile whose boundary cannot be recorded exactly —
 // a Partial fragment sketch could not certify
 // (BoundaryEdge.TExact == false), a certified range the seam's reject-only
-// falsifier disproves, or a loop whose recorded segments do not meet at a
-// junction — is [ErrUnrecordableProfile]. decad never repairs, projects or fits
-// a point sketch handed over, and it never solves for one.
+// falsifier disproves, or a loop whose source-aware junction check finds a
+// contradiction — is [ErrUnrecordableProfile]. decad never repairs, projects
+// or fits a point sketch handed over, and it never solves for one.
 //
 // That last rejection is the one a caller meets by drawing rather than by
 // hitting an upstream limit. sketch admits a region on its own proximity
 // threshold, so entities whose ends miss by a fraction of a nanometre still
-// arrange into one valid profile; decad records each entity's own points
-// verbatim, and a loop whose recorded coordinates do not meet bounds no region
-// for a measurement to be exact about. Entities that share their end points
-// close exactly and record. Ends merely driven together by a coincidence
-// constraint do not: the solver converges to within its residual, not to the
-// same coordinate.
+// arrange into one valid profile. At a whole-to-whole join, decad records each
+// entity's own points verbatim, so a loop whose recorded coordinates do not
+// meet bounds no region. A certified mixed join instead compares the record
+// endpoint with sketch's evaluated node at the range falsifier's relative
+// tolerance. Ends merely driven together by a coincidence constraint remain a
+// whole-to-whole exact check: the solver converges to within its residual, not
+// to the same coordinate.
 func RecordProfile(s *sketch.Sketch, p *sketch.Profile) (ProfileRecord, PlaneRecord, error) {
 	profile, plane, _, err := recordProfile(s, p)
 	return profile, plane, err
@@ -236,9 +237,25 @@ func recordLoop(name string, edges []sketch.BoundaryEdge) (LoopRecord, error) {
 // spline — which is a LoopRecord on its own (docs/sketch-seam-design.md §2) and
 // so meets no neighbour at all.
 type loopJoin struct {
-	start, end Point2
+	start, end loopJoinPoint
 	closed     bool
 }
+
+// loopJoinPoint carries both a junction coordinate and the observation that
+// supplied it. A record endpoint and a sketch node can describe the same
+// vertex without sharing every floating-point bit: a curve's node is evaluated
+// from its parameter, while a whole edge records its defining point verbatim.
+type loopJoinPoint struct {
+	point  Point2
+	source loopJoinSource
+}
+
+type loopJoinSource uint8
+
+const (
+	recordJoinSource loopJoinSource = iota
+	sketchNodeJoinSource
+)
 
 // edgeJoin reads one boundary edge's junction coordinates, taking each side
 // from the party that owns it.
@@ -263,8 +280,14 @@ func edgeJoin(e sketch.BoundaryEdge, seg CurveSegment) (loopJoin, error) {
 		}
 		first, last := e.Polyline[0], e.Polyline[len(e.Polyline)-1]
 		return loopJoin{
-			start: Point2{U: first[0], V: first[1]},
-			end:   Point2{U: last[0], V: last[1]},
+			start: loopJoinPoint{
+				point:  Point2{U: first[0], V: first[1]},
+				source: sketchNodeJoinSource,
+			},
+			end: loopJoinPoint{
+				point:  Point2{U: last[0], V: last[1]},
+				source: sketchNodeJoinSource,
+			},
 		}, nil
 	}
 	start, end, closed, ok := wholeSegmentEnds(seg)
@@ -274,7 +297,11 @@ func edgeJoin(e sketch.BoundaryEdge, seg CurveSegment) (loopJoin, error) {
 	if e.Reversed {
 		start, end = end, start
 	}
-	return loopJoin{start: start, end: end, closed: closed}, nil
+	return loopJoin{
+		start:  loopJoinPoint{point: start, source: recordJoinSource},
+		end:    loopJoinPoint{point: end, source: recordJoinSource},
+		closed: closed,
+	}, nil
 }
 
 // wholeSegmentEnds returns a whole edge's endpoints in the curve's NATURAL
@@ -315,19 +342,17 @@ func wholeSegmentEnds(seg CurveSegment) (start, end Point2, closed, ok bool) {
 // falsifyLoopJoins disproves a recorded loop that does not close
 // (docs/sketch-seam-design.md §3). LoopRecord's contract is that each segment's
 // walk ends where the next one's starts and the last closes onto the first
-// (§2); every consumer downstream reads a loop as that closed region and
-// publishes an Exact, zero-bound area over it. Where the recorded coordinates
-// do not meet, there is no such region, so the record cannot state one and the
-// profile is ErrUnrecordableProfile.
+// (§2). A same-source mismatch proves the record's own segments do not meet. A
+// mixed-source mismatch beyond the range falsifier's tolerance contradicts the
+// certified fragment node. In either case the profile is ErrUnrecordableProfile.
 //
-// The comparison is exact, and it has to be. sketch admits a region on its own
-// proximity threshold, so two entity endpoints a fraction of a nanometre apart
-// still arrange into one valid profile — and decad records each entity's own
-// points verbatim, which is where that gap becomes visible. A tolerance here
-// would be an admission gate on a residual: it would bless every gap under it
-// as closure decad has not proven, which is the one thing a decad-side check may
-// never do (CLAUDE.md, "A decad-side check may only FALSIFY"). Two coordinates
-// either are the same point or they are not.
+// A junction whose points came from the same source compares exactly. That
+// retains the authored-gap check for whole edges and checks sketch's shared
+// nodes consistently for two partial fragments. A mixed junction compares a
+// record endpoint to the fragment's sketch node with the same relative
+// tolerance that falsifyRange applies to that node. A certified curve node is
+// evaluated from its parameter, so it can differ from the defining endpoint by
+// round-off even when both describe the same sketch vertex.
 //
 // It only ever rejects. A loop whose recorded coordinates do meet is not
 // thereby admitted — admission is sketch's Valid, its TExact, and §1's range
@@ -341,15 +366,26 @@ func falsifyLoopJoins(name string, joins []loopJoin) error {
 			// neighbour, so this pair states no junction to disprove.
 			continue
 		}
-		if from.end == to.start {
+		if loopJoinPointsAgree(from.end, to.start) {
 			continue
 		}
 		return fmt.Errorf(
 			`%w: %s edge %d ends at (%v, %v) but edge %d starts at (%v, %v), so the recorded loop does not close; sketch admitted the region on its own proximity threshold, and decad records no region its own segments do not bound`,
-			ErrUnrecordableProfile, name, i, from.end.U, from.end.V, next, to.start.U, to.start.V,
+			ErrUnrecordableProfile, name, i, from.end.point.U, from.end.point.V, next, to.start.point.U, to.start.point.V,
 		)
 	}
 	return nil
+}
+
+// loopJoinPointsAgree compares two points from one source exactly. A mixed
+// source pair compares the record's defining point to the sketch node that a
+// certified fragment already exposed to falsifyRange, so it shares that
+// check's relative tolerance.
+func loopJoinPointsAgree(a, b loopJoinPoint) bool {
+	if a.source == b.source {
+		return a.point == b.point
+	}
+	return pointsWithinFalsifyTolerance(a.point, b.point)
 }
 
 // recordEdge converts one boundary edge into its entity's own variant.
@@ -432,13 +468,12 @@ func recordEdge(e sketch.BoundaryEdge) (CurveSegment, error) {
 	}
 }
 
-// falsifyTol is the reject threshold of the falsifier, relative to the
-// fragment's own coordinate scale. TExact's stated meaning is reproduction to
-// machine precision, so an honest flag leaves a residual within round-off
-// (~1e-13 relative); a flag worth disproving misses by the sampling error it
-// hid. 1e-9 sits between the two — far above round-off, far below any
-// sampling-scale miss — so the falsifier can reject a lie without ever
-// false-rejecting an exact cut.
+// falsifyTol is the relative threshold for checking a fragment's sketch node.
+// TExact's stated meaning is reproduction to machine precision, so an honest
+// flag leaves a residual within round-off (~1e-13 relative); a flag worth
+// disproving misses by the sampling error it hid. 1e-9 sits between the two —
+// far above round-off, far below any sampling-scale miss — so the falsifier can
+// reject a lie without ever false-rejecting an exact cut.
 const falsifyTol = 1e-9
 
 // falsifyRange is the seam's one check, and it can only reject
@@ -474,15 +509,21 @@ func falsifyBound(e sketch.BoundaryEdge, t float64, obs [2]float64) error {
 	if err != nil {
 		return fmt.Errorf(`%w: the source %T cannot be evaluated at its certified range: %s`, ErrUnrecordableProfile, e.Entity, err)
 	}
-	scale := 1.0
-	for _, m := range []float64{math.Abs(x), math.Abs(y), math.Abs(obs[0]), math.Abs(obs[1])} {
-		scale = math.Max(scale, m)
-	}
-	if math.Hypot(x-obs[0], y-obs[1]) > falsifyTol*scale {
+	if !pointsWithinFalsifyTolerance(Point2{U: x, V: y}, Point2{U: obs[0], V: obs[1]}) {
 		return fmt.Errorf(`%w: the certified range on a %T is disproven — eval(%v) = (%v, %v) does not reproduce the fragment endpoint (%v, %v); report upstream as a sketch bug`,
 			ErrUnrecordableProfile, e.Entity, t, x, y, obs[0], obs[1])
 	}
 	return nil
+}
+
+// pointsWithinFalsifyTolerance reports whether two observations of a fragment
+// endpoint agree at falsifyTol relative to their coordinate scale.
+func pointsWithinFalsifyTolerance(a, b Point2) bool {
+	scale := 1.0
+	for _, m := range []float64{math.Abs(a.U), math.Abs(a.V), math.Abs(b.U), math.Abs(b.V)} {
+		scale = math.Max(scale, m)
+	}
+	return math.Hypot(a.U-b.U, a.V-b.V) <= falsifyTol*scale
 }
 
 // evalEntityAt evaluates a sketch entity at the arrangement's normalized
