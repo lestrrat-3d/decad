@@ -49,7 +49,8 @@ const (
 	// rule, "Design docs live in `docs/<topic>-design.md`", once. Every file
 	// matching them must carry a Layout row, the mirror of the root-".go"
 	// coverage check: a design doc with no row is a doc CLAUDE.md never
-	// points at.
+	// points at. coverageTargets owns what keeps either check from matching
+	// nothing and covering nothing while reporting PASS.
 	designDocDir    = "docs"
 	designDocSuffix = "-design.md"
 )
@@ -563,17 +564,10 @@ func TestCLAUDEMDLayoutStaysCompact(t *testing.T) {
 	t.Run("every root go file has a layout row", func(t *testing.T) {
 		covered := coveredPaths(rows, ".go")
 
-		entries, err := os.ReadDir(".")
-		require.NoError(t, err, "could not list the repository root")
+		names, err := coverageTargets(".", isRootGoFile, rootGoFileCause)
+		require.NoError(t, err)
 
-		for _, entry := range entries {
-			if entry.IsDir() {
-				continue
-			}
-			name := entry.Name()
-			if !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
-				continue
-			}
+		for _, name := range names {
 			t.Run(name, func(t *testing.T) {
 				_, ok := covered[name]
 				require.Truef(t, ok, "%s has no row in CLAUDE.md's Layout table — add one describing its responsibility", name)
@@ -587,17 +581,14 @@ func TestCLAUDEMDLayoutStaysCompact(t *testing.T) {
 	t.Run("every design doc has a layout row", func(t *testing.T) {
 		covered := coveredPaths(rows, designDocSuffix)
 
-		entries, err := os.ReadDir(designDocDir)
-		require.NoErrorf(t, err, "could not list %s", designDocDir)
+		names, err := coverageTargets(designDocDir, isDesignDoc, designDocCause)
+		require.NoError(t, err)
 
-		for _, entry := range entries {
-			if entry.IsDir() || !strings.HasSuffix(entry.Name(), designDocSuffix) {
-				continue
-			}
-			name := filepath.ToSlash(filepath.Join(designDocDir, entry.Name()))
-			t.Run(name, func(t *testing.T) {
-				_, ok := covered[name]
-				require.Truef(t, ok, "%s has no row in CLAUDE.md's Layout table — add one describing what it owns", name)
+		for _, name := range names {
+			path := filepath.ToSlash(filepath.Join(designDocDir, name))
+			t.Run(path, func(t *testing.T) {
+				_, ok := covered[path]
+				require.Truef(t, ok, "%s has no row in CLAUDE.md's Layout table — add one describing what it owns", path)
 			})
 		}
 	})
@@ -614,6 +605,56 @@ func TestCLAUDEMDLayoutStaysCompact(t *testing.T) {
 	})
 }
 
+// isRootGoFile and isDesignDoc are the two coverage filters, each spelled as a
+// named predicate so the subtest and the emptiness guard below run over the
+// same rule rather than two copies of it.
+func isRootGoFile(name string) bool {
+	return strings.HasSuffix(name, ".go") && !strings.HasSuffix(name, "_test.go")
+}
+
+func isDesignDoc(name string) bool {
+	return strings.HasSuffix(name, designDocSuffix)
+}
+
+// rootGoFileCause and designDocCause name the likely reason each enumeration
+// came back empty, so the refusal points at the edit that emptied it instead of
+// only reporting a count.
+const (
+	rootGoFileCause = "the package's non-test .go files moved out of the repository root, or this test no longer runs from it"
+	designDocCause  = "the design docs moved into a subdirectory of " + designDocDir +
+		", or stopped matching the " + designDocSuffix + " suffix CLAUDE.md's Conventions declare"
+)
+
+// coverageTargets lists the entries of dir that pass keep, and REFUSES an empty
+// result.
+//
+// Both callers assert one Layout row per entry, so an enumeration matching
+// nothing runs zero per-entry assertions and reports PASS while covering
+// nothing — the coverage claim silently lost, and every file added afterwards
+// unguarded. Deleting every subject is the loud way to reach that state; the
+// reachable way is an ordinary reorganisation, because the enumeration is a
+// FLAT, non-recursive read with a literal suffix filter. Moving the design docs
+// into docs/<subdir>/ and repointing their Layout rows, or renaming them to
+// another convention, empties this set while every other subtest stays green.
+// Hence the refusal, and hence a cause string rather than a bare count.
+func coverageTargets(dir string, keep func(string) bool, cause string) ([]string, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, fmt.Errorf("could not list %s: %w", dir, err)
+	}
+	var names []string
+	for _, entry := range entries {
+		if entry.IsDir() || !keep(entry.Name()) {
+			continue
+		}
+		names = append(names, entry.Name())
+	}
+	if len(names) == 0 {
+		return nil, fmt.Errorf("no entry of %s matched this coverage check's filter, so it would assert nothing and pass vacuously — %s", dir, cause)
+	}
+	return names, nil
+}
+
 // coveredPaths collects the paths the Layout rows name that carry the given
 // suffix.
 func coveredPaths(rows []layoutRow, suffix string) map[string]struct{} {
@@ -626,6 +667,76 @@ func coveredPaths(rows []layoutRow, suffix string) map[string]struct{} {
 		}
 	}
 	return covered
+}
+
+// TestCoverageTargetsRefusesAnEmptyEnumeration pins the one thing the two
+// coverage subtests cannot show about themselves: each one asserts a Layout row
+// per enumerated entry, so an enumeration that matches nothing asserts nothing
+// and reports PASS. Every fixture below is a directory an ordinary
+// reorganisation could produce — no file deleted, the subjects merely moved or
+// renamed — and each must be REFUSED, naming the cause.
+//
+// Every fixture is invented and lives in a temporary directory: none of these
+// names appears in the repository.
+func TestCoverageTargetsRefusesAnEmptyEnumeration(t *testing.T) {
+	const inventedCause = "an invented cause this fixture names"
+
+	write := func(t *testing.T, path string) {
+		t.Helper()
+		require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o750))
+		require.NoError(t, os.WriteFile(path, []byte("invented fixture content\n"), 0o600))
+	}
+
+	t.Run("design docs moved into a subdirectory", func(t *testing.T) {
+		dir := t.TempDir()
+		write(t, filepath.Join(dir, "design", "invented"+designDocSuffix))
+		write(t, filepath.Join(dir, "invented-note.md"))
+
+		names, err := coverageTargets(dir, isDesignDoc, inventedCause)
+		require.Error(t, err, "an enumeration matching nothing must be refused, never left to assert nothing and pass")
+		require.Nil(t, names)
+		require.Contains(t, err.Error(), inventedCause, "the refusal must name the likely cause, not only the empty count")
+	})
+
+	t.Run("root go files moved out of the root", func(t *testing.T) {
+		dir := t.TempDir()
+		write(t, filepath.Join(dir, "internal", "invented.go"))
+		write(t, filepath.Join(dir, "invented_test.go"))
+
+		names, err := coverageTargets(dir, isRootGoFile, inventedCause)
+		require.Error(t, err, "a root holding only test files must be refused, since the check would cover nothing")
+		require.Nil(t, names)
+		require.Contains(t, err.Error(), inventedCause)
+	})
+
+	t.Run("a missing directory is refused loudly", func(t *testing.T) {
+		names, err := coverageTargets(filepath.Join(t.TempDir(), "no_such_invented_dir"), isDesignDoc, inventedCause)
+		require.Error(t, err)
+		require.Nil(t, names)
+	})
+
+	t.Run("accepts the matching entries and drops the rest", func(t *testing.T) {
+		dir := t.TempDir()
+		write(t, filepath.Join(dir, "invented-a"+designDocSuffix))
+		write(t, filepath.Join(dir, "invented-b"+designDocSuffix))
+		write(t, filepath.Join(dir, "invented-note.md"))
+		write(t, filepath.Join(dir, "design", "invented-c"+designDocSuffix))
+
+		names, err := coverageTargets(dir, isDesignDoc, inventedCause)
+		require.NoError(t, err)
+		require.Equal(t, []string{"invented-a" + designDocSuffix, "invented-b" + designDocSuffix}, names,
+			"the filter keeps matching files in ReadDir order and drops directories and non-matching names")
+	})
+
+	t.Run("the real enumerations are not empty", func(t *testing.T) {
+		goFiles, err := coverageTargets(".", isRootGoFile, rootGoFileCause)
+		require.NoError(t, err)
+		require.NotEmpty(t, goFiles)
+
+		docs, err := coverageTargets(designDocDir, isDesignDoc, designDocCause)
+		require.NoError(t, err)
+		require.NotEmpty(t, docs)
+	})
 }
 
 // TestParseLayoutRowsRejectsMalformedRows pins the one thing the budget test
