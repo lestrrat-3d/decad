@@ -56,15 +56,33 @@ func fitSplineBezierSpans(seg FitSplineSeg, work *freeformWork) ([]bezierSpan, e
 	if err := chargeFitInterpolant(work, len(seg.Fit)); err != nil {
 		return nil, err
 	}
+	// A non-finite recorded fit coordinate is a non-finite INPUT (core §12), and
+	// this is the ONLY gate that catches it for a caller-built record: record.go's
+	// validateSegmentPoints runs at JSON decode, never for a ProfileRecord a
+	// caller assembles directly in Go and hands straight to Area/Centroid/
+	// SecondMoments. Scanning here — after the size charge, before
+	// geom.NewFitInterpolant reads a single coordinate — keeps R16 below scoped
+	// to what it actually claims: a FINITE fit set whose interpolant itself runs
+	// off float64 range. Every element of seg.Fit is checked, not just the
+	// first, so a non-finite point in an interior or terminal position is
+	// ErrNotFinite too, never sketch's own dedup or naturalSecondDerivs
+	// answering it as an unrelated ErrDegenerate.
+	for i, point := range seg.Fit {
+		if finiteSegmentValue(point.U) && finiteSegmentValue(point.V) {
+			continue
+		}
+		return nil, fmt.Errorf(`%w: fit spline point %d is not finite`, ErrNotFinite, i)
+	}
 	interp, err := geom.NewFitInterpolant(fitCoords(seg.Fit))
 	if err != nil {
 		if errors.Is(err, geom.ErrNonFiniteFitInterpolant) {
-			// Table R row R16: the fit points are finite (record.go's own gate) and
-			// therefore define a curve, but its cumulative chord parameter or a span
-			// coefficient runs off float64 — a range limit of this evaluator, not a
-			// claim that no such curve exists, and not a non-finite INPUT (every
-			// coordinate reaching the solve is finite). §9 ask 1's own precedent:
-			// R15 refuses an arc-length enclosure past MaxFloat64 the identical way.
+			// Table R row R16: the fit points are finite (the scan above, ahead of
+			// record.go's own gate for a JSON-decoded record) and therefore define a
+			// curve, but its cumulative chord parameter or a span coefficient runs
+			// off float64 — a range limit of this evaluator, not a claim that no such
+			// curve exists, and not a non-finite INPUT (every coordinate reaching the
+			// solve is finite). §9 ask 1's own precedent: R15 refuses an arc-length
+			// enclosure past MaxFloat64 the identical way.
 			return nil, fmt.Errorf(
 				`%w: a fit spline's interpolant runs off the float64 range and cannot be described, though the fit points are finite`,
 				ErrUnsupported,

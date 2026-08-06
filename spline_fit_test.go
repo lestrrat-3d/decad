@@ -373,6 +373,53 @@ func TestFitSplineNonFiniteInterpolantIsUnsupported(t *testing.T) {
 	require.Contains(t, err.Error(), "float64 range")
 }
 
+// TestFitSplineNonFiniteFitPointIsErrNotFinite is the review-128-3 regression:
+// a caller-built FitSplineSeg never passes through record.go's
+// validateSegmentPoints (that gate runs only at JSON decode), so a NaN or
+// infinite raw Fit coordinate used to reach geom.NewFitInterpolant unchecked
+// and come back as R16's ErrUnsupported — a row whose own text asserts the
+// fit points are finite, answering the one input that disproves it. Every
+// position is checked, not just the first: a NaN in a non-first slot used to
+// survive sketch's own terminal dedup and take a different, still-wrong path
+// (ErrDegenerate from naturalSecondDerivs). All three shapes must now answer
+// ErrNotFinite, decided ahead of R16's row.
+func TestFitSplineNonFiniteFitPointIsErrNotFinite(t *testing.T) {
+	closeLoop := func(fit []decad.Point2) decad.ProfileRecord {
+		last := fit[len(fit)-1]
+		return decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
+			decad.FitSplineSeg{Fit: fit, TStart: 0, TEnd: 1},
+			decad.LineSeg{Start: last, End: fit[0], TStart: 0, TEnd: 1},
+		}}}
+	}
+
+	testCases := []struct {
+		name string
+		fit  []decad.Point2
+	}{
+		{
+			name: "NaN in first position",
+			fit:  []decad.Point2{{U: math.NaN(), V: 0}, {U: 1, V: 1}},
+		},
+		{
+			name: "NaN in a later position",
+			fit:  []decad.Point2{{U: 0, V: 0}, {U: 1, V: 1}, {U: math.NaN(), V: 2}},
+		},
+		{
+			name: "infinite coordinate",
+			fit:  []decad.Point2{{U: math.Inf(1), V: 0}, {U: 1, V: 1}},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := closeLoop(tc.fit).Area()
+			require.Error(t, err)
+			require.ErrorIs(t, err, decad.ErrNotFinite)
+			require.NotErrorIs(t, err, decad.ErrUnsupported)
+			require.NotErrorIs(t, err, decad.ErrDegenerate)
+		})
+	}
+}
+
 // A fit-spline profile's moments now answer, so Extrude reaches its own
 // side-face build — and must still refuse there (P4 is not this PR's scope).
 func TestExtrudeFitSplineProfileRefusesAtSideFaces(t *testing.T) {

@@ -474,9 +474,13 @@ same "full domain" cause every other Tier A kind reports.
 **R16.** `geom.NewFitInterpolant` returns `ErrNonFiniteFitInterpolant` when
 finite fit coordinates give a cumulative chord parameter or a span coefficient
 that leaves float64 range, or a parameter that stalls. The fit points
-themselves are finite (`record.go`'s own floor), so this is `ErrUnsupported` —
-the curve exists, described by finite fit points, and this evaluator cannot
-state it — never `ErrNotFinite`, whose subject is a non-finite INPUT.
+themselves are finite — checked by `spline_fit.go`'s own scan immediately
+before the call, since `record.go`'s validation runs only at JSON decode and a
+caller-built `ProfileRecord` reaches this reduction without ever passing
+through it — so this is `ErrUnsupported` — the curve exists, described by
+finite fit points, and this evaluator cannot state it — never `ErrNotFinite`,
+whose subject is a non-finite INPUT and is refused by that same scan ahead of
+this row.
 `geom.ErrTooFewFitPoints` is unreachable (record validation floors `Fit` at 2,
 re-checked defensively) and maps to `ErrDegenerate` with no table row of its
 own.
