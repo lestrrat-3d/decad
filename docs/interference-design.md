@@ -326,6 +326,23 @@ cutting code:
    cell the rational arrangement cannot close is an expected undecided contact
    outcome, never a guessed keep/drop.
 
+This section also settles what the hidden-tangency gate (`facesNearMiss`,
+`boolean.go`; `docs/evaluator-design.md` §9) owes an exactly-coplanar carrier
+pair. That gate exists to catch a touch the held chord facets could be hiding
+on a surface that stands off from its own chord; a planar face's facets lie in
+its analytic plane exactly, so there is no such standoff for a coplanar pair
+to hide behind. The only thing left uncertain is where the patch outline
+itself falls, and the ordinary chord/rim allowance the cells above already
+carry bounds that. An exactly-coplanar carrier pair is therefore a **proven**
+touch, not a hidden one, and `facesNearMiss` MUST exempt it from the gate
+rather than defer it to the mesh pass's own refusal: once the mesh pass
+classifies material sides instead of refusing outright, a deferred pair would
+return `near = false` on the strength of a refusal that no longer happens,
+silently admitting the whole face pair with no near-miss proof behind it. The
+exemption is exact-coplanar only — a carrier pair that merely comes close to
+coplanar without being exactly coplanar keeps the ordinary hidden-tangency
+gate unchanged.
+
 The patch relation does not decide the whole pair by itself. Opposing cells are
 `pairTouching` only when the analytic/contact pass proves no overlap elsewhere.
 Matching cells may bound a positive-volume intersection only after the complete

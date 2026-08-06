@@ -352,10 +352,14 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
   sets, so their intersection is empty, a point, a segment, or a 2-D region —
   and the pair pass computes exactly *which*, never "how many of A's vertices
   sit on B's plane, and whose geometry do I look on". A 2-D region is a
-  coplanar face-on-face tangency; a point is carried and
-  refused unless some crossing chain owns it as an endpoint; a segment is a
-  rim. When the operands name valid solids, a 2-D region and an unowned point
-  are contacts past this evaluator's reach, so the boolean surfaces them as
+  coplanar face-on-face tangency: classifying material side over every
+  positive-area coplanar patch is the designed route
+  (`docs/interference-design.md` §5.2), staged as that document's §11 PR4, and
+  this evaluator refuses the case until that increment lands. A point is
+  carried and refused unless some crossing chain owns it as an endpoint; a
+  segment is a rim. When the operands name valid solids, an unlanded 2-D
+  region and an unowned point are contacts this evaluator refuses, so the
+  boolean surfaces them as
   `BooleanUnsupportedContact` (wrapping `ErrUnsupported`; `docs/api-design.md`
   §8 / H2), never `ErrDegenerate` — which stays reserved for a genuinely
   malformed region, a zero-area or self-crossing one. The classifier still
