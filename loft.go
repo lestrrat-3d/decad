@@ -13,8 +13,9 @@ import (
 // This file is docs/loft-design.md PR 1b: the public entry point over PR 1a's
 // evaluator (loft_build.go). It owns the LoftOption surface, WithLoftAlignment,
 // gates S9-S11 and S4's arity half (§2/§4), and the atomic record->evaluate->
-// commit tail (§10). Every other gate (S1-S8) is validateLoftRecords' and
-// loftCrossingAudit's, run inside evalLoft in §4's stated order.
+// commit tail (§10). Every other gate — S1-S8 and S13's coordinate-range
+// gate — is validateLoftRecords', assembleLoft's and loftCrossingAudit's, run
+// inside evalLoft in §4's stated order.
 
 // LoftOption configures Loft.
 type LoftOption interface {
@@ -67,7 +68,9 @@ func (d *Document) Loft(s0 *sketch.Sketch, p0 *sketch.Profile, s1 *sketch.Sketch
 // proves the ruled walls do not cross or self-touch anywhere but their
 // recorded shared edges and vertices (§6); a proven crossing is
 // [ErrDegenerate] (S7), and exhausting the audit's fixed pair-test budget is
-// [ErrUnsupported] (S8).
+// [ErrUnsupported] (S8). A section point whose world coordinate runs past the
+// representable float64 range is [ErrUnsupported] (S13) — the body exists,
+// and this evaluator cannot hold its vertex table.
 //
 // A failed call leaves the recipe and the document untouched.
 func (d *Document) LoftContext(ctx context.Context, s0 *sketch.Sketch, p0 *sketch.Profile, s1 *sketch.Sketch, p1 *sketch.Profile, opts ...LoftOption) (*Body, error) {

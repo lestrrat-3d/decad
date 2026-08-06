@@ -788,7 +788,7 @@ func TestLoftVerifyBoxDisjointPairIsSound(t *testing.T) {
 	require.Equal(t, decad.Suspect, diag.Status)
 }
 
-// --- Staged downstream (D1, D7) ---
+// --- Staged downstream (D1) ---
 
 func TestLoftTessellateStaged(t *testing.T) {
 	s0, p0, s1, p1 := loftSquares(t, 20, 10)
@@ -799,31 +799,6 @@ func TestLoftTessellateStaged(t *testing.T) {
 	mesh, err := body.Tessellate(units.Millimeters(1))
 	require.Nil(t, mesh)
 	require.ErrorIs(t, err, decad.ErrUnsupported)
-}
-
-func TestLoftPlacedStaged(t *testing.T) {
-	s0, p0, s1, p1 := loftSquares(t, 20, 10)
-	doc := decad.New()
-	body, err := doc.Loft(s0, p0, s1, p1)
-	require.NoError(t, err)
-
-	shift, err := r3.Translation(r3.NewVec(5, 0, 0))
-	require.NoError(t, err)
-
-	placed, err := body.Placed(shift)
-	require.Nil(t, placed)
-	require.ErrorIs(t, err, decad.ErrUnsupported)
-
-	dup, err := body.Duplicate()
-	require.Nil(t, dup)
-	require.ErrorIs(t, err, decad.ErrUnsupported)
-
-	pc, err := body.PlacedCopy(shift)
-	require.Nil(t, pc)
-	require.ErrorIs(t, err, decad.ErrUnsupported)
-
-	require.Equal(t, []*decad.Body{body}, doc.Bodies(), "the receiver stays live across every staged refusal")
-	require.Len(t, doc.Recipe().Steps, 1)
 }
 
 // --- Cancellation ---

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"math/big"
 	"testing"
 
 	"github.com/lestrrat-3d/r3"
@@ -473,12 +474,140 @@ func TestEvalLoftCollinearSplitKeepsTwoFacesPerCell(t *testing.T) {
 // TestLoftGateDiameterIsTheVertexDiameter proves design O1's bodyGateDiameter
 // arm: a loft body's tolerance-gate diameter is the exact diameter of its
 // own held vertex set — for the unit box, the space diagonal sqrt(3).
+//
+// The bit-identity assertion is the one that pins §12 PR 2a's zero-delta fast
+// path. An unplaced loft carries delta 0, so subtracting 2*delta changes
+// nothing while rounding the difference toward zero still costs one ulp, and
+// the InDelta comparison below is far too loose to see that: the reference
+// must equal the held vertex-set diameter EXACTLY, not merely to 1e-12.
 func TestLoftGateDiameterIsTheVertexDiameter(t *testing.T) {
 	body := evalLoftFixture(t, boxLoftPayload(t))
 	d, ok, err := bodyGateDiameter(t.Context(), body)
 	require.NoError(t, err)
 	require.True(t, ok)
 	require.InDelta(t, 1.7320508075688772, d, 1e-12) // sqrt(3)
+
+	pl := body.payload.(loftPayload)
+	require.Zero(t, pl.delta, "an unplaced loft's vertices are exact")
+	held, ok, err := pointSetDiameterContext(t.Context(), pl.verts)
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.Equal(t, held, d, "an unplaced loft's reference must be the held diameter bit-for-bit")
+}
+
+// TestLoftPlacedGateDiameterShrinksByTwiceDelta proves docs/loft-design.md
+// §12 PR 2a's bodyGateDiameter arm: a placed loft's own diameter reads the
+// held vertex-set diameter shrunk by 2*delta, never the raw held reading —
+// understating the reference tightens the tolerance gate rather than
+// loosening it.
+func TestLoftPlacedGateDiameterShrinksByTwiceDelta(t *testing.T) {
+	unplaced := evalLoftFixture(t, boxLoftPayload(t))
+	unplacedD, ok, err := bodyGateDiameter(t.Context(), unplaced)
+	require.NoError(t, err)
+	require.True(t, ok)
+
+	pl := unplaced.payload.(loftPayload)
+	rot, err := r3.Rotation(r3.NewVec(1, 1, 1), units.Degrees(29))
+	require.NoError(t, err)
+
+	placedBody, err := pl.placed(t.Context(), New(), StepRef(1), rot)
+	require.NoError(t, err)
+	placedPl := placedBody.payload.(loftPayload)
+	require.Greater(t, placedPl.delta, 0.0)
+
+	placedD, ok, err := bodyGateDiameter(t.Context(), placedBody)
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.InDelta(t, unplacedD-2*placedPl.delta, placedD, 1e-12)
+}
+
+// TestLoftPlacedGateDiameterRoundsTheShrinkOutward proves the shrink's own
+// DIRECTION, which the InDelta assertion above cannot see. 2*delta is exact (a
+// power-of-two scaling), so `d - 2*delta` is the one rounding in the arm, and
+// round-to-nearest can land it ABOVE the exact difference — a reference larger
+// than the proven one, loosening the gate the shrink exists to tighten. Each
+// translation below is a measured instance of that: the bare subtraction
+// overshoots the exact value by a fraction of an ulp at 2^30, 1e6 and 1e9,
+// while at 2^36 it happens to round down on its own (which is exactly why one
+// witness translation proves nothing). The comparison is over math/big.Rat
+// against the payload's OWN float d and delta taken exactly, so it judges the
+// rounding and nothing else.
+func TestLoftPlacedGateDiameterRoundsTheShrinkOutward(t *testing.T) {
+	for _, dx := range []float64{1 << 30, 1e6, 1e9, 1 << 36} {
+		t.Run(fmt.Sprintf("dx=%g", dx), func(t *testing.T) {
+			move, err := r3.Translation(r3.NewVec(dx, 0, 0))
+			require.NoError(t, err)
+
+			placedBody, err := boxLoftPayloadOn(t, 0, 3).placed(t.Context(), New(), StepRef(1), move)
+			require.NoError(t, err)
+			placedPl := placedBody.payload.(loftPayload)
+			require.Greater(t, placedPl.delta, 0.0)
+
+			held, ok, err := pointSetDiameterContext(t.Context(), placedPl.verts)
+			require.NoError(t, err)
+			require.True(t, ok)
+
+			exact := new(big.Rat).Sub(
+				new(big.Rat).SetFloat64(held),
+				new(big.Rat).Mul(big.NewRat(2, 1), new(big.Rat).SetFloat64(placedPl.delta)),
+			)
+
+			got, ok, err := bodyGateDiameter(t.Context(), placedBody)
+			require.NoError(t, err)
+			require.True(t, ok)
+			require.LessOrEqual(t, new(big.Rat).SetFloat64(got).Cmp(exact), 0,
+				"the reported reference %.20g must not exceed the exact d - 2*delta %s", got, exact.FloatString(20))
+		})
+	}
+}
+
+// TestLoftCollapsedGateDiameterIsRefusedFirst pins the antecedence
+// docs/loft-design.md §12 states for bodyGateDiameter's shrink: a placement
+// whose delta reaches half the held diameter is the regime where the shrunk
+// reference collapses to zero and the arm answers no diameter at all, and no
+// such placement ever reaches the gate, because S12 refuses it first. The
+// divergence theorem bounds a closed boundary's own volume by d*A/3, so a
+// delta at or above d/2 puts sweptVolumeAllow's delta*A at 3/2 of the held
+// volume or more — exactly S12's non-positive clearance. Each fixture below
+// asserts it sits in the collapse regime BEFORE asserting the refusal, so a
+// fixture that drifted out of that regime fails rather than passing on an
+// unrelated refusal.
+func TestLoftCollapsedGateDiameterIsRefusedFirst(t *testing.T) {
+	for _, tc := range []struct {
+		half, height, dx float64
+	}{
+		{half: 1e-6, height: 1e-6, dx: 1e10},
+		{half: 1e-4, height: 1e-4, dx: 1e12},
+	} {
+		t.Run(fmt.Sprintf("half=%g/dx=%g", tc.half, tc.dx), func(t *testing.T) {
+			p := ProfileRecord{Outer: squareLoop(0, 0, tc.half, true)}
+			pl0, pl1 := planeAt(r3.NewVec(0, 0, 0)), planeAt(r3.NewVec(0, 0, tc.height))
+			pl := loftPayload{
+				profile0: p, profile1: p,
+				plane0: pl0, plane1: pl1,
+				frame0: mustFrame(t, pl0), frame1: mustFrame(t, pl1),
+				xform: r3.Identity(),
+			}
+
+			held := evalLoftFixture(t, pl).payload.(loftPayload)
+			d, ok, err := pointSetDiameterContext(t.Context(), held.verts)
+			require.NoError(t, err)
+			require.True(t, ok)
+
+			maxInputAbs := 0.0
+			for _, v := range held.verts {
+				maxInputAbs = max(maxInputAbs, vecMaxAbs(v))
+			}
+			move, err := r3.Translation(r3.NewVec(tc.dx, 0, 0))
+			require.NoError(t, err)
+			delta := rigidRoundAllow(maxInputAbs, vecMaxAbs(move.Translation()))
+			require.GreaterOrEqual(t, 2*delta, d,
+				"the fixture must sit in the collapse regime the doc's antecedence claim covers")
+
+			_, err = pl.placed(t.Context(), New(), StepRef(1), move)
+			require.ErrorIs(t, err, ErrUnsupported)
+		})
+	}
 }
 
 // TestEvalLoftCancellation proves a context cancelled before the build even

@@ -1309,11 +1309,37 @@ func (in pairToleranceInputs) lengthReference(value float64) (float64, bool) {
 // reference-less Suspect this design admits.
 //
 // A loftPayload reads its OWN held vertex-set diameter (pointSetDiameterContext),
-// never an envelope: every loft vertex is exact (docs/loft-design.md §5), the
+// never an envelope: an unplaced loft's every vertex is exact
+// (docs/loft-design.md §5), the
 // boundary is a polyhedron, and a convex-hull diameter is realized at
 // vertices, so this is the TRUE diameter rather than a bound on it — the
 // strongest arm in this function, ahead of the exact carrier model that does
-// not yet cover this payload class.
+// not yet cover this payload class. That holds whenever the payload's delta is
+// zero, which loft_build.go decides by an exact identity-transform comparison
+// and never by a tolerance, and this arm then reports the held reading
+// UNCHANGED: no subtraction, no directed rounding, so an unplaced loft's
+// reference stays bit-identical to the one §12 PR 1 published. Rounding a zero
+// allowance outward would move a proven-exact reading in exchange for nothing,
+// which is why capBlendPayload.extentBoundedAlong's own `outward` helper
+// (capblend.go) keeps a zero-displacement candidate exact too.
+//
+// A PLACED loft's held vertices are no
+// longer provably exact (§12 PR 2a): the true diameter can differ from the
+// held one by up to 2*delta (each of the two farthest points can sit up to
+// delta from its true position), so this arm shrinks the held reading by
+// 2*delta before reporting it, understating rather than overstating —
+// tightening the gate can only turn a passing reading into a false Suspect,
+// never a false Sound, the identical reasoning envelopeGateDiameter already
+// carries. That direction is the SUBTRACTION's to lose: 2*delta is exact (a
+// power-of-two scaling), so the difference is the one rounding here, and
+// round-to-nearest can land it ABOVE the exact d - 2*delta — a reference
+// larger than the one proven, which loosens the very gate this arm exists to
+// tighten. downRound (spline_length.go, upRound's mirror) steps it back
+// toward zero, so the published reference is at or below the exact shrunken
+// value for every input rather than only for the ones whose subtraction
+// happens to round down. A shrink that collapses to non-positive leaves the
+// body with no usable diameter, exactly like any other unusable magnitude
+// here.
 func bodyGateDiameter(ctx context.Context, body *Body) (float64, bool, error) {
 	if body == nil {
 		return 0, false, nil
@@ -1322,7 +1348,18 @@ func bodyGateDiameter(ctx context.Context, body *Body) (float64, bool, error) {
 		return payload.diameter, usableMagnitude(payload.diameter), nil
 	}
 	if payload, ok := body.payload.(loftPayload); ok {
-		return pointSetDiameterContext(ctx, payload.verts)
+		d, ok, err := pointSetDiameterContext(ctx, payload.verts)
+		if err != nil || !ok {
+			return d, ok, err
+		}
+		if payload.delta == 0 {
+			return d, true, nil
+		}
+		shrunk := downRound(d - 2*payload.delta)
+		if shrunk <= 0 {
+			return 0, false, nil
+		}
+		return shrunk, true, nil
 	}
 	budget := newWorkBudget(ctx)
 	geom, ok, err := newBodyGeomBudget(budget, body)

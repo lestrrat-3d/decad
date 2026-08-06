@@ -195,9 +195,13 @@ type Vertex struct {
 // coordinate, so it is bounded (core §6). A vertex read from a recorded
 // coordinate is Exact with a zero bound. A vertex at a COMPUTED coordinate
 // carries that computation's own proven displacement wherever the payload
-// tracks one: a boolean-built vertex carries the tessellation's chord bound,
-// and a cap-loop chamfer's cap-level feet, which a float offset solve places
-// (docs/modify-reach-design.md §8.4), carry that solve's own displacement.
+// tracks one: a boolean-built vertex carries the tessellation's chord bound;
+// a cap-loop chamfer's cap-level feet, which a float offset solve places
+// (docs/modify-reach-design.md §8.4), carry that solve's own displacement; and
+// a PLACED loft's vertex, re-lifted from the record under a rigid motion,
+// carries that motion's own rounding (docs/loft-design.md §5) — a recorded
+// coordinate the identity transform leaves alone is the zero-bound case of
+// that same rule, not an exception to it.
 // Not every computed coordinate is tracked yet — a prism side vertex sits at
 // a sweep level a ToFace or ThroughAll extent computed in float (stops.go) and
 // still reports a zero bound, an untracked axial rounding recorded as a

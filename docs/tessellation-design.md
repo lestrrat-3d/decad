@@ -108,25 +108,35 @@ The payload table is normative:
 |---|---|---|---|---|---|
 | `prismPayload` | one chording per recorded section loop, shared by walls + caps | wall sagitta; each cap's maximum curved-trim sagitta; plus proven coordinate/placement rounding for either; zero only for an exact held trim with exact stored coordinates | max per-face source bound | non-cancelling wall error + both cap circular-segment deficits + coordinate-movement allowance | section symmetric-difference allowance × sweep height + coordinate swept allowance (§5) |
 | `cupPayload` | one chording per outer/cavity loop, shared by walls + floors + rims | wall sagitta; each floor/rim patch's maximum curved-trim sagitta; plus proven coordinate/placement rounding for either; zero only for an exact held trim with exact stored coordinates | max per-face source bound | non-cancelling per-wall/per-planar-patch error + coordinate-movement allowance | outer-prism + cavity-prism allowances + coordinate swept allowance (§6) |
-| `loftPayload` | exact wall and cap triangles already held by the payload | zero: every held facet is the payload's exact triangle for its source face | zero | zero | zero; `symDiffOK == true` |
+| `loftPayload` | the wall and cap triangles already held by the payload | the payload's own `delta` (loft §5): every held facet IS the payload's triangle for its source face, so the facet is displaced by exactly what the payload's vertices are — zero for an unplaced loft | max per-face source bound, so `delta` | zero for an unplaced loft; otherwise the payload's own per-triangle perturbation sum (loft §8) | zero for an unplaced loft, otherwise `sweptVolumeAllow(delta, areaUpper)` (loft §8); `symDiffOK == true` either way |
 | `revolvePayload` | one meridian chording + one global angular sequence, then final rigid placement | current meridian + angular displacement for that analytic patch, plus construction rounding `deltaC` and final-placement rounding `deltaR`; `deltaC + deltaR` for otherwise exact planar patches | max per-face source bound (§8) | integral of absolute local true-vs-held area-density error + cap deficits + construction/placement area allowances (§10) | meridian/angular + construction/placement homotopy allowances (§11) |
 | `facetedPayload` | held polygons + inherited boundary certificate | inherited certified face displacement, or global composed `Delta` when no tighter face value exists | max per-face source bound | payload's composed slack | payload's composed symmetric-difference bound |
 
 ### `loftPayload` exact restatement
 
 A `loftPayload` already holds the cap triangles from its polygon-with-holes
-triangulation and the two exact wall triangles for every paired segment. Its
+triangulation and the two wall triangles for every paired segment. Its
 construction normalizes the complete triangle shell to a positive signed
 tetrahedron sum (loft §5), and the crossing audit proves it free of
 non-adjacent contact. `Tessellate` copies that triangle connectivity, vertices,
 and source faces directly. It MUST NOT chord,
 retriangulate, move, round, weld, or otherwise alter a loft facet.
 
-The true boundary is therefore the held triangle boundary. Every
-`sourceBound(face)`, `Bound`, and `areaSlack` is zero, and the identical
-occupied volumes prove `volSymDiff == 0` with `symDiffOK == true`. The normal
-closed-mesh and source-face audits still run. A successful loft mesh is thus
-admitted to the mesh boolean as an all-planar zero-bound operand.
+**The restatement is exact; the BOUNDS are the payload's own.** The mesh is the
+held triangle boundary itself, so the tessellation introduces no displacement
+of its own and every proof term it publishes is the term the payload already
+carries for that same triangle set: `sourceBound(face)` and `Bound` are the
+payload's `delta`, `areaSlack` is the per-triangle perturbation sum loft §8's
+own `Area` bound composes, and `volSymDiff` is `sweptVolumeAllow(delta,
+areaUpper)` — with `symDiffOK == true` throughout, since a held-versus-true
+displacement of `delta` is a proven allowance rather than an unbounded one. For
+an UNPLACED loft `delta` is zero (loft §5's identity fast path), every one of
+those terms is zero, the held boundary IS the true boundary, and the mesh is
+admitted to the mesh boolean as an all-planar zero-bound operand. A PLACED
+loft's mesh is admitted as an ordinary positive-bound all-planar operand
+instead, through the same `rimDelta` composition every other nonzero-bound
+operand already uses. The normal closed-mesh and source-face audits run in
+either case.
 
 ## 3. Shared curve chording
 
@@ -804,7 +814,7 @@ sample to make an analytic mesh close. Refine or refuse.
 | **T3** | circular meridian generators: sphere/torus cells, axis-to-axis minimum, circular meridian nesting/homotopy audit, non-adjacent-intersection refinement, cut-stable circular-cell area proof | revolve booleans |
 | **T4** | meridian first-moment allowance + certified per-cell angular homotopy integral; finite `volSymDiff`; revolve admitted to booleans | density improvements |
 | **T5** | deterministic local meridian refinement and global angular density improvements that preserve every earlier proof | free-form/NURBS generators |
-| **T6** | `loftPayload` exact restatement: source-face-preserving wall/cap triangle copy, zero proof record, and mesh-boolean admission | loft surveys and analytic pair clearance |
+| **T6** | `loftPayload` exact restatement: source-face-preserving wall/cap triangle copy, a proof record carrying the payload's own displacement (zero for an unplaced loft), and mesh-boolean admission | loft surveys and analytic pair clearance |
 
 Each increment ships its computed geometry tests with it. T2/T3 may export a
 revolve because §§8–10 prove the mesh itself; they do not enter the boolean
@@ -855,8 +865,11 @@ until T4 proves occupied-volume error.
   bound the retained error without whole-cell cancellation.
 - Check prism/cup `volSymDiff` against exact circular-segment examples.
 - Cover an admitted `loftPayload`: every wall/cap triangle and source face is
-  copied unchanged, `sourceBound`, `Bound`, `areaSlack`, and `volSymDiff` are
-  zero, and a loft/prism boolean succeeds through the all-planar path.
+  copied unchanged; for an UNPLACED loft `sourceBound`, `Bound`, `areaSlack`,
+  and `volSymDiff` are zero and a loft/prism boolean succeeds through the
+  all-planar zero-bound path; for a PLACED one each of those four equals the
+  term §2's own payload row states over that payload's `delta`, and the same
+  boolean succeeds with a positive-bound result.
 - Prove the T4 interval integrator encloses analytic fixed-sign cells and
   adversarial sign-changing cells; budget exhaustion MUST refuse.
 - Exercise revolve×prism and revolve×revolve booleans after T4, including a

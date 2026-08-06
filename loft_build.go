@@ -11,13 +11,23 @@ import (
 )
 
 // This file is docs/loft-design.md PR 1a: the evaluator half of Loft — the
-// loftPayload, its Table P pairing, Table S gates S1-S5 (S9-S11 are the public
+// loftPayload, its Table P pairing, Table S gates S1-S5 and S13's
+// coordinate-range gate (S9-S11 are the public
 // entry point's job, docs/loft-design.md §2/§4), the flat-triangle wall
 // construction (§5), the wiring of the already-landed §6 audit
 // (loft_audit.go) and §8 mass kernel (loft_moments.go), and the four
 // measurements. Document.Loft/LoftContext are PR 1b; nothing here is called
 // from outside this file's own tests, the same shape #114 (loft_audit.go/
 // loft_moments.go) already shipped.
+//
+// loftPayload.placed and its delta field are §12 PR 2a (Table D, D7): a
+// placement re-lifts both records under the composed motion and re-runs
+// §5-§8 from scratch — every record-only Table S gate (S1-S8) and S13's
+// coordinate-range gate, plus the placement-only S12, while S9-S11 and S4's
+// arity half judge the original
+// call's own arguments and never re-run (§4) — so delta is the ONE new term
+// this PR adds, composed into every vertex, edge length, face area and body
+// measurement §8 already derives.
 
 // loftPayload is the evaluator's own record of a lofted body: the two
 // authenticated sections, their planes and frames, the per-loop alignment,
@@ -34,6 +44,15 @@ type loftPayload struct {
 	alignment          []int
 	xform              r3.Transform
 
+	// delta is the proven displacement of every held vertex from the exact
+	// placed image of the recorded sections (docs/loft-design.md §5, §12 PR
+	// 2a): zero for an unplaced body — pl.xform == r3.Identity(), an exact
+	// struct comparison, never a tolerance — and otherwise
+	// bounds.go's rigidRoundAllow, read at the pre-transform lifted point's
+	// own magnitude and the composed translation's magnitude. Every
+	// measurement this payload publishes composes it.
+	delta float64
+
 	verts []r3.Vec
 	tris  [][3]int
 	walls int
@@ -42,12 +61,23 @@ type loftPayload struct {
 // transform is the accumulated rigid placement.
 func (pl loftPayload) transform() r3.Transform { return pl.xform }
 
-// placed is staged until PR 2 (docs/loft-design.md Table D, D7): every loft
-// surface is a Plane, and evaluator §8 already states that every v1 surface
-// variant maps to itself under an isometry, but re-evaluating the pairing and
-// re-running §6's audit under a new placement is PR 2's own work.
-func (pl loftPayload) placed(_ context.Context, _ *Document, _ StepRef, _ r3.Transform) (*Body, error) {
-	return nil, fmt.Errorf(`%w: this evaluator cannot place a lofted body yet`, ErrUnsupported)
+// placed re-evaluates the same two records under the composed motion
+// (docs/loft-design.md §7, §12 PR 2a): it re-lifts every vertex from the
+// record under the FULL composed transform rather than moving the held mesh
+// incrementally, so delta does not accumulate across repeated placements —
+// one rounding, not one per placement, an advantage over
+// facetedPayload.placed's move-the-held-mesh path (boolean_body.go). It is a
+// re-evaluation path: no moments preflight has run on either record within
+// this call, so the build opens two fresh counters, one per record, exactly
+// as prismPayload.placed opens its own (extrude.go). §5's whole-shell
+// orientation step re-decides the sign from the placed triangle set on its
+// own, so a mirror flips `reversed` with no separate winding-flip case
+// needed here.
+func (pl loftPayload) placed(ctx context.Context, d *Document, ref StepRef, composed r3.Transform) (*Body, error) {
+	next := pl
+	next.xform = composed
+	next.verts, next.tris, next.walls = nil, nil, 0
+	return evalLoft(ctx, d, ref, next, newWorkBudget(ctx), newFreeformWork(), newFreeformWork())
 }
 
 // validateLoftRecords applies docs/loft-design.md Table S rows S1, S2, S4, S3
@@ -195,6 +225,10 @@ type loftAssembly struct {
 	side []uint8
 	// vIdx/wIdx are, per loop, the vertex-table index of V[i][j] and W[i][j].
 	vIdx, wIdx [][]int
+	// delta is the proven displacement every held vertex carries from the
+	// exact placed image of the recorded sections (docs/loft-design.md §5,
+	// §12 PR 2a) — zero exactly when xform is r3.Identity().
+	delta float64
 }
 
 // assembleLoft lifts every recorded point once, emits the 2*sum(n_i) wall
@@ -202,11 +236,26 @@ type loftAssembly struct {
 // triangulate.go's existing polygon-with-holes triangulator with capStart's
 // triples reversed and capEnd's retained (§5's cap seeding), and orients the
 // complete shell once from the signed tetrahedron sum anchored at the placed
-// p0 origin (§5's whole-shell rule).
+// p0 origin (§5's whole-shell rule). It also owns Table S row S13: every
+// placed coordinate it emits, the anchor among them, is proven finite before
+// any of them is lifted into an exact rational.
 func assembleLoft(ctx context.Context, pairs []loftLoopPair, f0, f1 r3.Frame, plane0 PlaneRecord, xform r3.Transform) (loftAssembly, error) {
+	// S13, decided before the first coordinate is lifted into an exact
+	// rational: the orientation anchor is the first point loftOrientationSign
+	// hands to xptOf, so its own finiteness is the gate's first question.
+	anchor := xform.Apply(plane0.Origin)
+	if !finiteVec(anchor) {
+		return loftAssembly{}, errLoftPointUnrepresentable("placed plane origin")
+	}
+
 	vIdx := make([][]int, len(pairs))
 	wIdx := make([][]int, len(pairs))
 	var verts []r3.Vec
+	// maxInputAbs tracks the largest |coordinate| over the frame-lifted,
+	// PRE-transform points — the magnitude bounds.go's rigidRoundAllow reads
+	// the rounding at, never the placed result's (docs/loft-design.md §5,
+	// §12 PR 2a).
+	maxInputAbs := 0.0
 	for i, p := range pairs {
 		if err := ctx.Err(); err != nil {
 			return loftAssembly{}, err
@@ -214,12 +263,24 @@ func assembleLoft(ctx context.Context, pairs []loftLoopPair, f0, f1 r3.Frame, pl
 		vIdx[i] = make([]int, len(p.v))
 		for j, pt := range p.v {
 			vIdx[i][j] = len(verts)
-			verts = append(verts, xform.Apply(f0.ToWorldUV(pt.U, pt.V)))
+			lifted := f0.ToWorldUV(pt.U, pt.V)
+			maxInputAbs = max(maxInputAbs, vecMaxAbs(lifted))
+			placed := xform.Apply(lifted)
+			if !finiteVec(placed) {
+				return loftAssembly{}, errLoftPointUnrepresentable(fmt.Sprintf("placed vertex %d of loop %d on the first profile", j, i))
+			}
+			verts = append(verts, placed)
 		}
 		wIdx[i] = make([]int, len(p.w))
 		for j, pt := range p.w {
 			wIdx[i][j] = len(verts)
-			verts = append(verts, xform.Apply(f1.ToWorldUV(pt.U, pt.V)))
+			lifted := f1.ToWorldUV(pt.U, pt.V)
+			maxInputAbs = max(maxInputAbs, vecMaxAbs(lifted))
+			placed := xform.Apply(lifted)
+			if !finiteVec(placed) {
+				return loftAssembly{}, errLoftPointUnrepresentable(fmt.Sprintf("placed vertex %d of loop %d on the second profile", j, i))
+			}
+			verts = append(verts, placed)
 		}
 	}
 
@@ -288,7 +349,6 @@ func assembleLoft(ctx context.Context, pairs []loftLoopPair, f0, f1 r3.Frame, pl
 		tris = append(tris, [3]int{pts1ToV[t[0]], pts1ToV[t[1]], pts1ToV[t[2]]})
 	}
 
-	anchor := xform.Apply(plane0.Origin)
 	reversed := loftOrientationSign(verts, tris, anchor) < 0
 	if reversed {
 		for i, t := range tris {
@@ -296,15 +356,52 @@ func assembleLoft(ctx context.Context, pairs []loftLoopPair, f0, f1 r3.Frame, pl
 		}
 	}
 
+	// delta is zero exactly when xform is the identity transform — an exact
+	// struct comparison, never a tolerance. This fast path is REQUIRED:
+	// without it, every directly-built (unplaced) loft would lose the Exact
+	// readings §8/§12 PR 1 publishes (docs/loft-design.md §5, §12 PR 2a).
+	delta := 0.0
+	if xform != r3.Identity() {
+		delta = rigidRoundAllow(maxInputAbs, vecMaxAbs(xform.Translation()))
+	}
+
 	return loftAssembly{
 		verts: verts, tris: tris, walls: walls, capStartCount: capStartCount,
 		reversed: reversed, cell: cell, side: side, vIdx: vIdx, wIdx: wIdx,
+		delta: delta,
 	}, nil
+}
+
+// errLoftPointUnrepresentable is docs/loft-design.md Table S row S13: a
+// coordinate this build emits — a recorded section point lifted through its
+// own frame and carried by the composed placement, or the orientation anchor
+// — runs past the representable float64 range.
+//
+// The sentinel is ErrUnsupported and never ErrNotFinite. Every INPUT is
+// finite: both records' coordinates cleared the seam gates, the plane origins
+// are recorded floats, and r3 validates a Transform's own composed
+// translation before it ever reaches this evaluator. What runs off float64 is
+// decad's OWN evaluation of the lift, and the body EXISTS — it is the rigid
+// image of a body this evaluator already built — so modify §1's existence
+// test reads "a body this evaluator cannot build". spline_length.go's R15 and
+// spline_fit.go's R16 draw the identical line for a finite input whose
+// derived magnitude runs off float64; errors.go scopes ErrNotFinite to a
+// non-finite PARAMETER or a derived non-finite MEASUREMENT, and
+// validateLoftBodyMeasurements already owns that second case.
+//
+// The gate runs BEFORE the first exact-rational lift, never after it:
+// loftOrientationSign lifts the anchor and every vertex through xptOf, whose
+// mustRatOf PANICS on a non-finite float, so a check placed any later is a
+// panic out of a public method rather than a returned error.
+func errLoftPointUnrepresentable(what string) error {
+	return fmt.Errorf(`%w: the loft's %s runs past the representable float64 range`, ErrUnsupported, what)
 }
 
 // wrapLoftTriangulationError re-sentinels triangulate.go's cap refusal as
 // ErrUnsupported (design O8): the caller's two profiles are each individually
-// valid per sketch (S9 authenticates them before evalLoft is ever reached),
+// valid per sketch (S9 authenticated them at the original Document.Loft
+// call, before any record reached evalLoft; a placement rebuilds from those
+// same authenticated records and re-runs no seam gate, §4),
 // so a triangulation refusal here is this evaluator's own triangulator
 // failing to state the body, never a claim that no such body exists — modify
 // §1's existence test applied verbatim. Cancellation is never relabeled.
@@ -332,28 +429,37 @@ func loftOrientationSign(verts []r3.Vec, tris [][3]int, anchor r3.Vec) int {
 	return sum.Sign()
 }
 
-// loftVertex builds an Exact vertex at a recorded (or lifted-from-recorded)
+// loftVertex builds a vertex at a recorded (or lifted-from-recorded)
 // coordinate: every loft vertex position comes from Plane.Origin + p.U*Plane.U
 // + p.V*Plane.V, the identical single float64 evaluation Extrude already
-// performs for a cap vertex (§5), so it carries the same zero-bound standing.
-func loftVertex(p r3.Vec) *Vertex {
-	return &Vertex{position: p, bound: units.Millimeters(0)}
+// performs for a cap vertex (§5), so an unplaced vertex (delta 0) carries the
+// same zero-bound standing; a placed vertex carries the payload's own
+// delta (§12 PR 2a).
+func loftVertex(p r3.Vec, delta float64) *Vertex {
+	return &Vertex{position: p, bound: units.Millimeters(delta)}
 }
 
 // loftEdgeLength is the proven bound on a straight loft edge's held length:
 // the square root's own committed error against the exact rational squared
 // length (capblend_contour.go's straightEdgeBound/ratSquaredDistance3), no
-// new mechanism.
-func loftEdgeLength(a, b r3.Vec) (float64, float64) {
+// new mechanism for an unplaced edge. A placed edge (delta > 0, §12 PR 2a)
+// composes that with bounds.go's chainLengthBound(1, delta, held) — both
+// endpoints displaced by delta is exactly that helper's own one-chord case —
+// through absSumUpper.
+func loftEdgeLength(a, b r3.Vec, delta float64) (float64, float64) {
 	held := a.Sub(b).Len()
 	sq := ratSquaredDistance3(a.X, a.Y, a.Z, b.X, b.Y, b.Z)
-	return held, straightEdgeBound(held, sq)
+	bound := straightEdgeBound(held, sq)
+	if delta > 0 {
+		bound = absSumUpper(bound, chainLengthBound(1, delta, held))
+	}
+	return held, bound
 }
 
 // loftEdge builds one straight loft edge between two vertex-table indices,
 // with the given walked-boundary convexity.
-func loftEdge(vertexObjs []*Vertex, positions []r3.Vec, a, b int, convex bool) *Edge {
-	held, bound := loftEdgeLength(positions[a], positions[b])
+func loftEdge(vertexObjs []*Vertex, positions []r3.Vec, a, b int, convex bool, delta float64) *Edge {
+	held, bound := loftEdgeLength(positions[a], positions[b], delta)
 	return &Edge{curve: Line3{}, start: vertexObjs[a], end: vertexObjs[b], convex: convex, length: held, lengthBound: bound}
 }
 
@@ -384,8 +490,10 @@ func junctionConvex(verts []r3.Vec, primary, other [3]int, a, b int) bool {
 // V its two edge vectors. r3.NewFrame orthonormalizes them (Gram-Schmidt in
 // effect), and the resulting normal U×V is (B-A)x(C-A) up to positive
 // scaling — the outward normal of an outward-wound triangle, so the face's
-// `reversed` flag stays false (§5's "Exact by construction ... reversed stays
-// false").
+// `reversed` flag stays false (§5's wall-face row: every wall face is a Plane
+// wound outward). The Frame is the exact answer for the three vertices handed
+// to it whatever their own standing — §5's surface-parameter carve-out — while
+// the face's own area and its vertices' positions carry the payload's delta.
 func planeFromTriangle(verts []r3.Vec, tri [3]int) (Plane, error) {
 	a, b, c := verts[tri[0]], verts[tri[1]], verts[tri[2]]
 	f, err := r3.NewFrame(a, b.Sub(a), c.Sub(a))
@@ -398,21 +506,29 @@ func planeFromTriangle(verts []r3.Vec, tri [3]int) (Plane, error) {
 // buildLoftWallFace builds one wall triangle's Face (§7's lower/upper wall
 // triangle row): its own Plane, its own proven area bracket
 // (loft_moments.go's wallTriangleArea, the identical bracket the mass
-// accumulator sums), and its side(i,j,k) role.
-func buildLoftWallFace(body *Body, ref StepRef, verts []r3.Vec, tri [3]int, i, j, side int) (*Face, error) {
+// accumulator sums), and its side(i,j,k) role. A placed triangle (delta > 0,
+// §12 PR 2a) widens that bracket by bounds.go's perturbedTriangleAreaAllow,
+// the same per-triangle correction the mass accumulator sums into Area's own
+// bound.
+func buildLoftWallFace(body *Body, ref StepRef, verts []r3.Vec, tri [3]int, i, j, side int, delta float64) (*Face, error) {
 	surf, err := planeFromTriangle(verts, tri)
 	if err != nil {
 		return nil, err
 	}
-	u := xsub(xptOf(verts[tri[1]]), xptOf(verts[tri[0]]))
-	v := xsub(xptOf(verts[tri[2]]), xptOf(verts[tri[0]]))
+	a, b, c := verts[tri[0]], verts[tri[1]], verts[tri[2]]
+	u := xsub(xptOf(b), xptOf(a))
+	v := xsub(xptOf(c), xptOf(a))
 	lo, hi := wallTriangleArea(u, v)
+	areaBound := upRound(hi - lo)
+	if delta > 0 {
+		areaBound = absSumUpper(areaBound, perturbedTriangleAreaAllow(a, b, c, delta))
+	}
 	return &Face{
 		surface:   surf,
 		origins:   []FeatureRef{{Step: ref, Role: fmt.Sprintf("side(%d,%d,%d)", i, j, side)}},
 		body:      body,
 		area:      lo,
-		areaBound: upRound(hi - lo),
+		areaBound: areaBound,
 	}, nil
 }
 
@@ -456,7 +572,7 @@ func loftLoopCoedges(co []coedge, reversed bool) []coedge {
 func buildLoftTopology(ctx context.Context, body *Body, ref StepRef, a loftAssembly, cap0Rat, cap1Rat *big.Rat) (*Face, *Face, []*Face, error) {
 	vertexObjs := make([]*Vertex, len(a.verts))
 	for i, p := range a.verts {
-		vertexObjs[i] = loftVertex(p)
+		vertexObjs[i] = loftVertex(p, a.delta)
 	}
 
 	loopCount := len(a.vIdx)
@@ -491,16 +607,16 @@ func buildLoftTopology(ctx context.Context, body *Body, ref StepRef, a loftAssem
 		rungE := make([]*Edge, n)
 		for j := range n {
 			jn := (j + 1) % n
-			rimBottom[j] = loftEdge(vertexObjs, a.verts, vIdx[j], vIdx[jn], isOuter)
-			rimTop[j] = loftEdge(vertexObjs, a.verts, wIdx[j], wIdx[jn], isOuter)
+			rimBottom[j] = loftEdge(vertexObjs, a.verts, vIdx[j], vIdx[jn], isOuter, a.delta)
+			rimTop[j] = loftEdge(vertexObjs, a.verts, wIdx[j], wIdx[jn], isOuter, a.delta)
 		}
 		for j := range n {
 			jn := (j + 1) % n
 			jp := (j - 1 + n) % n
 			rungConvex := junctionConvex(a.verts, lowerTri[i][jp], upperTri[i][j], vIdx[j], wIdx[j])
-			rungE[j] = loftEdge(vertexObjs, a.verts, vIdx[j], wIdx[j], rungConvex)
+			rungE[j] = loftEdge(vertexObjs, a.verts, vIdx[j], wIdx[j], rungConvex, a.delta)
 			diagConvex := junctionConvex(a.verts, lowerTri[i][j], upperTri[i][j], vIdx[j], wIdx[jn])
-			diagE[j] = loftEdge(vertexObjs, a.verts, vIdx[j], wIdx[jn], diagConvex)
+			diagE[j] = loftEdge(vertexObjs, a.verts, vIdx[j], wIdx[jn], diagConvex, a.delta)
 		}
 
 		capStartCo := make([]coedge, n)
@@ -508,7 +624,7 @@ func buildLoftTopology(ctx context.Context, body *Body, ref StepRef, a loftAssem
 		for j := range n {
 			jn := (j + 1) % n
 
-			lowerFace, err := buildLoftWallFace(body, ref, a.verts, lowerTri[i][j], i, j, 0)
+			lowerFace, err := buildLoftWallFace(body, ref, a.verts, lowerTri[i][j], i, j, 0, a.delta)
 			if err != nil {
 				return nil, nil, nil, err
 			}
@@ -519,7 +635,7 @@ func buildLoftTopology(ctx context.Context, body *Body, ref StepRef, a loftAssem
 			}, a.reversed)}}
 			walls = append(walls, lowerFace)
 
-			upperFace, err := buildLoftWallFace(body, ref, a.verts, upperTri[i][j], i, j, 1)
+			upperFace, err := buildLoftWallFace(body, ref, a.verts, upperTri[i][j], i, j, 1, a.delta)
 			if err != nil {
 				return nil, nil, nil, err
 			}
@@ -547,13 +663,21 @@ func buildLoftTopology(ctx context.Context, body *Body, ref StepRef, a loftAssem
 	}
 	cap0Val, _ := cap0Rat.Float64()
 	cap1Val, _ := cap1Rat.Float64()
+	capStartBound := rationalFloatError(cap0Rat, cap0Val)
+	capEndBound := rationalFloatError(cap1Rat, cap1Val)
+	if a.delta > 0 {
+		capStartTris := a.tris[a.walls : a.walls+a.capStartCount]
+		capEndTris := a.tris[a.walls+a.capStartCount:]
+		capStartBound = absSumUpper(capStartBound, capTriangleAreaAllow(a.verts, capStartTris, a.delta))
+		capEndBound = absSumUpper(capEndBound, capTriangleAreaAllow(a.verts, capEndTris, a.delta))
+	}
 	capStart := &Face{
 		surface:   capStartSurf,
 		loops:     capStartLoops,
 		origins:   []FeatureRef{{Step: ref, Role: roleCapStart}},
 		body:      body,
 		area:      cap0Val,
-		areaBound: rationalFloatError(cap0Rat, cap0Val),
+		areaBound: capStartBound,
 	}
 	capEnd := &Face{
 		surface:   capEndSurf,
@@ -561,10 +685,23 @@ func buildLoftTopology(ctx context.Context, body *Body, ref StepRef, a loftAssem
 		origins:   []FeatureRef{{Step: ref, Role: roleCapEnd}},
 		body:      body,
 		area:      cap1Val,
-		areaBound: rationalFloatError(cap1Rat, cap1Val),
+		areaBound: capEndBound,
 	}
 
 	return capStart, capEnd, walls, nil
+}
+
+// capTriangleAreaAllow sums bounds.go's perturbedTriangleAreaAllow over one
+// cap's own triangulation triangles (docs/loft-design.md §12 PR 2a) — the
+// extra area a placement's delta can add to a cap's exact rational area
+// (moments.go), summed the same way loft_moments.go's accumulator sums it
+// for the wall triangles.
+func capTriangleAreaAllow(verts []r3.Vec, tris [][3]int, delta float64) float64 {
+	total := 0.0
+	for _, t := range tris {
+		total = upRound(total + perturbedTriangleAreaAllow(verts[t[0]], verts[t[1]], verts[t[2]], delta))
+	}
+	return total
 }
 
 // exactRegionArea returns a LineSeg-only region's exact rational area — the
@@ -680,12 +817,12 @@ func evalLoft(ctx context.Context, d *Document, ref StepRef, pl loftPayload, bud
 	body.lumps = []*Lump{{shells: []*Shell{{faces: faces}}}}
 
 	anchor := pl.xform.Apply(pl.plane0.Origin)
-	mass := newLoftMassAccumulator(anchor)
+	mass := newLoftMassAccumulator(anchor, a.delta)
 	for k, t := range a.tris {
 		mass.add(a.verts[t[0]], a.verts[t[1]], a.verts[t[2]], k < a.walls)
 	}
-	body.volume = mass.volume()
-	centroid, err := mass.centroid()
+	body.volume = mass.volume(a.verts, a.tris)
+	centroid, err := mass.centroid(a.verts, a.tris)
 	if err != nil {
 		return nil, err
 	}
@@ -702,6 +839,7 @@ func evalLoft(ctx context.Context, d *Document, ref StepRef, pl loftPayload, bud
 	}
 
 	pl.verts, pl.tris, pl.walls = a.verts, a.tris, a.walls
+	pl.delta = a.delta
 	body.payload = pl
 	return body, nil
 }
