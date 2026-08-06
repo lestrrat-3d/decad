@@ -259,19 +259,24 @@ placement. See `docs/evaluator-design.md` §8.
 - User-facing usage → executable Go examples in `examples/` with verified
   `// Output:` blocks. NEVER README-only snippets.
 - Docs state **current state only** — no changelogs, no "was X, now Y".
-- Design docs live in `docs/<topic>-design.md`.
+- Design docs live in `docs/<topic>-design.md`, and every one of them carries a
+  Layout row.
 - **Layout rows are pointers, not summaries.** A row states what the file owns
   in one or two sentences and names where the detail lives, within 300
   characters. NEVER grow a row to record an invariant, a derivation, a sign
   convention or a refusal — that belongs in the owning design doc or the
   function's own doc comment, and a row that restates it drifts from the code.
-  `claude_md_layout_test.go` enforces every mechanical rule above — the per-row
-  cap, the file's byte budget, and the row shape itself — and, because a guard
-  measures only the text it reads, the section's structure too: one `## Layout`
-  heading, every Layout table under it, and no prose or stray row among the
-  rows. Its `parseLayoutRows` doc comment states those structural rules. A line
-  failing any of them fails the test rather than being skipped, since a skipped
-  line escapes the cap and the path check both.
+  `claude_md_layout_test.go` enforces every mechanical rule above, and, because
+  a guard measures only the text it reads, it classifies the WHOLE file rather
+  than the Layout section alone: a line it reads as a heading or as part of a
+  table, without being the one spelling declared for it, fails the test rather
+  than being skipped, since a skipped line escapes the cap and the path check
+  both. So headings here are ATX (`## Heading`), the file carries exactly one
+  `## Layout` heading, and a table outside that section exists only if the
+  guard declares it — adding one to this file means declaring it there first.
+  That guard's `parseCLAUDEMD` doc comment owns the complete rule list, and the
+  file-level comment above it owns the two things the rules deliberately leave
+  to the byte budget.
 
 ## Verification
 
