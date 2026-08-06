@@ -174,6 +174,9 @@ const maxFacetPairTestsPerCall = 8_000_000
 // The counter is shared rather than per-loop on purpose: a nest of loops that
 // each counted to workPollInterval alone would let the innermost scan run the
 // interval's worth of work for every step of the outermost one.
+//
+// workBudget holds closures rather than a context.Context field, so no
+// long-lived geometry state stores a context.
 type workBudget struct {
 	stepFn func() error
 	errFn  func() error

@@ -66,6 +66,16 @@ type pairKernel struct {
 // clearancePair runs the kernel over one pair of proven solids.
 // nestingExcluded is true when box separation has already excluded nesting
 // (a box-proven pair needs the kernel only for its gap — §7).
+//
+// Check order is load-bearing: the coplanar Plane×Plane contact certificate
+// runs first and short-circuits every later check when it certifies a touch,
+// because a separating plane already certifies the whole contact set. Past
+// that, an admitted transversal crossing (sink.overlap) is read before
+// sink.unsure, so a pair that is both overlapping AND touches an unsupported
+// contact elsewhere still reports the overlap it can prove. The proven lower
+// bound lo must then strictly clear the tolerance floor k.tol before the §2
+// nesting cast runs — a lo at or below the floor cannot certify disjointness,
+// so nesting would only spend work on an answer the interval already refuses.
 func clearancePair(ctx context.Context, a, b *Body, nestingExcluded bool) (pairResult, error) {
 	if err := ctx.Err(); err != nil {
 		return pairResult{}, err

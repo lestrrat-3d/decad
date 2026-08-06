@@ -764,3 +764,44 @@ areas, residuals), never merely "it ran" — CLAUDE.md's own rule.
 - Replay: encode a recipe whose `OpUnion` step is an admitted pair, decode
   and evaluate it fresh, and assert the replayed body's `Exactness`/`Bound`
   match direct construction (recipe-replay-design §10.3's shape).
+
+## Implementation notes
+
+Every `sectionDelta` consumer below is a no-op at the zero every caller-drawn
+payload carries. `extrude.go`'s `evalPrism` composition and `tessellate.go`'s
+mesh-bound charge are §7's own subject and are not repeated here.
+
+§12 already rules on three of the remaining consumers, and this section adds
+only the call site each of its rows lands at. What the consumer does at
+`δ > 0` is that row's to state, and is deliberately not restated here:
+`survey.go`'s `prismWall` and `prismMinRadius` are §12's "Surveys
+(wall/undercut/min-radius)" row, `extrude.go`'s `extentAlong` is its
+"`ThroughAll` / `ThroughAllSide`" row, and `clearance_geom.go`'s
+`addPrismFaces` is its "Clearance kernel" row.
+
+No §12 row rules on the two remaining consumers, and this section owns them.
+Each withholds its answer rather than measure the recorded section as the one
+it denotes:
+
+- `interference.go`'s `analyticBodiesEqual` withholds the equal-records
+  set-identity certificate: two records being equal says nothing about two
+  sets each record is only within its own `δ` of.
+- `fillet.go`'s `requireExactSection` refuses the receiver for
+  `Fillet`/`Chamfer`/`Shell` with `ErrUnsupported`, since a rewrite of that
+  section has no proven displacement of its own.
+
+### boolean.go
+
+`boolean.go`'s `faceChordDelta` is the one consumer that does NOT withhold:
+it charges a nonzero `sectionDelta` as a planar face's own chording
+displacement, so the mesh path's tangency gate
+(`refuseUndecidableProximity`) cannot read that face as held exactly. See
+`faceChordDelta`'s own doc comment.
+
+### capblend_contour.go (boundary note)
+
+The cap-loop chamfer's cap contour displacement (`docs/modify-reach-design.md`
+§8.4) is a separate term with its own owner, derived by `capblend_contour.go`
+and read by `capblend_geom.go`/`capblend.go`/`capblend_moments.go`. It is not
+`sectionDelta`: nothing in this design's own consumers reads the cap contour
+term, and nothing on the cap-loop chamfer path reads `sectionDelta`.

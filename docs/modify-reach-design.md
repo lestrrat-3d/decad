@@ -972,3 +972,16 @@ Table DX explicitly says `Suspect` or `ErrUnsupported`.
 
 No implementation PR changes SX9. Supporting boolean receivers requires a
 separate carrier-preserving B-rep design, not another row in this extension.
+
+## Implementation notes
+
+### capblend_contour.go
+
+The cap-loop chamfer's cap contour displacement (§8.4) and
+`docs/prism-boolean-design.md` §7's `sectionDelta` are the same idea applied to
+two different constructions, and they are independent terms with separate
+owners: `capblend_contour.go` derives the cap contour's own displacement, and
+the cap-blend build/measurement code (`capblend_geom.go`, `capblend.go`,
+`capblend_moments.go`) carries it into every reading that needs it. No
+cap-blend reading composes `sectionDelta`, and no `sectionDelta` consumer reads
+the cap contour's displacement.

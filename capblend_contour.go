@@ -419,6 +419,13 @@ func ivNearest(cands []ivPoint, vU, vV float64) (ivPoint, bool) {
 // corner feet, a patch quad holds two, and a survey walking the band reads
 // them in one sequence. Charging each of them the band's worst is honest and
 // leaves no piece under-bounded.
+//
+// The length VALUE a cap-level edge carries must stay the actual held float,
+// never a stand-in such as +Inf for "unknown": selector.go's LongerThan
+// predicate compares the raw e.length field directly, with no reference to
+// Exactness or lengthBound, so an edge whose length field were ever widened
+// to signal uncertainty would silently match every LongerThan query instead.
+// Uncertainty belongs in lengthBound alone.
 func capContourDelta(walks []sideWalk, joins []cornerJoin, d float64) (float64, error) {
 	delta := 0.0
 	for _, w := range walks {

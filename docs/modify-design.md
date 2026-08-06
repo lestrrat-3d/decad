@@ -310,8 +310,8 @@ closed form over decad's own line and arc segments:
    non-adjacent segments are in boundary contact when the minimum distance
    between them is within `δ = ε·D` — `ε = 1e-9`, the **same** constant
    verification §4 fixes for its diameter-anchored noise floor `δ = ε·D` (the one
-   decad already uses elsewhere, as `verify.go`'s clearance-gap tolerance
-   `gapWithinTolerance`), not a new constant; and `D` the rewritten section's
+   decad already uses elsewhere, as `verify.go`'s clearance-gap tolerance gate
+   `appendClearance`), not a new constant; and `D` the rewritten section's
    (u, v) bounding-box diagonal, decad's standard reading of the §3 diameter (it
    is ≥ the true diameter, so the floor overstates `δ` slightly, the conservative
    direction — it refuses a hair more, never a hair less). The test admits in one
