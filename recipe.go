@@ -1368,7 +1368,24 @@ func cloneStep(s Step) Step {
 	if s.Axis != nil {
 		out.Axis = cloneAxis(s.Axis)
 	}
+	out.Opts = cloneStepOpts(s.Opts)
 	return out
+}
+
+// cloneStepOpts deep-copies a step's options variant. ExtrudeOpts and
+// ShellOpts hold only scalars and copy by assignment; LoftOpts carries the
+// second section and the per-loop alignment, both slice-bearing, so a Recipe
+// that copied them by assignment would hand out a value aliasing the
+// document's own record (core §6.2). A nil or unknown variant is returned
+// as-is — the codecs and the feature calls reject it at their own gates.
+func cloneStepOpts(o StepOpts) StepOpts {
+	lo, ok := o.(LoftOpts)
+	if !ok {
+		return o
+	}
+	lo.Profile2 = cloneProfileRecord(lo.Profile2)
+	lo.Alignment = slices.Clone(lo.Alignment)
+	return lo
 }
 
 // cloneProfileRecord deep-copies a recorded region.

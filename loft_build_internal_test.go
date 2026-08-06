@@ -83,7 +83,7 @@ func boxLoftPayload(t *testing.T) loftPayload {
 func evalLoftFixture(t *testing.T, pl loftPayload) *Body {
 	t.Helper()
 	budget := newWorkBudget(t.Context())
-	body, err := evalLoft(t.Context(), New(), StepRef(0), pl, budget)
+	body, err := evalLoft(t.Context(), New(), StepRef(0), pl, budget, newFreeformWork(), newFreeformWork())
 	require.NoError(t, err)
 	return body
 }
@@ -135,7 +135,7 @@ func TestEvalLoftUnitBoxTopology(t *testing.T) {
 func TestEvalLoftRolesUseTheGivenStepRef(t *testing.T) {
 	const ref = StepRef(7)
 	budget := newWorkBudget(t.Context())
-	body, err := evalLoft(t.Context(), New(), ref, boxLoftPayload(t), budget)
+	body, err := evalLoft(t.Context(), New(), ref, boxLoftPayload(t), budget, newFreeformWork(), newFreeformWork())
 	require.NoError(t, err)
 
 	require.Equal(t, ref, body.Origin().Step)
@@ -487,7 +487,7 @@ func TestEvalLoftCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 	budget := newWorkBudget(ctx)
-	_, err := evalLoft(ctx, New(), StepRef(0), boxLoftPayload(t), budget)
+	_, err := evalLoft(ctx, New(), StepRef(0), boxLoftPayload(t), budget, newFreeformWork(), newFreeformWork())
 	require.ErrorIs(t, err, context.Canceled)
 }
 
@@ -583,7 +583,7 @@ func TestEvalLoftCollapsedTriangleIsDegenerate(t *testing.T) {
 		xform: r3.Identity(),
 	}
 	budget := newWorkBudget(t.Context())
-	_, err := evalLoft(t.Context(), New(), StepRef(0), pl, budget)
+	_, err := evalLoft(t.Context(), New(), StepRef(0), pl, budget, newFreeformWork(), newFreeformWork())
 	require.ErrorIs(t, err, ErrDegenerate, "S6: a corner shared by both profiles collapses its incident wall triangles")
 }
 
@@ -603,7 +603,7 @@ func TestEvalLoftOverTwistedCorrespondenceCrosses(t *testing.T) {
 		xform: r3.Identity(),
 	}
 	budget := newWorkBudget(t.Context())
-	_, err := evalLoft(t.Context(), New(), StepRef(0), pl, budget)
+	_, err := evalLoft(t.Context(), New(), StepRef(0), pl, budget, newFreeformWork(), newFreeformWork())
 	require.ErrorIs(t, err, ErrDegenerate, "S7: a mirrored correspondence self-crosses")
 }
 
@@ -637,6 +637,6 @@ func TestEvalLoftAuditRefusesOverBudget(t *testing.T) {
 		xform: r3.Identity(),
 	}
 	budget := newWorkBudget(t.Context())
-	_, err := evalLoft(t.Context(), New(), StepRef(0), pl, budget)
+	_, err := evalLoft(t.Context(), New(), StepRef(0), pl, budget, newFreeformWork(), newFreeformWork())
 	require.ErrorIs(t, err, ErrUnsupported, "S8: the facet-pair ceiling")
 }

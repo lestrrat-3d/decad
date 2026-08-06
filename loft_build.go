@@ -617,17 +617,19 @@ func validateLoftBodyMeasurements(body *Body) error {
 // budget is shared with the rest of the pre-commit cancellation path exactly
 // as modify §5's audits already share one; the caller (LoftContext, PR 1b)
 // mints it once for the whole build.
-func evalLoft(ctx context.Context, d *Document, ref StepRef, pl loftPayload, budget *workBudget) (*Body, error) {
+//
+// work0/work1 are the per-profile free-form work counters (spline design
+// §5.2): the R7 ceiling is one record's across a whole OPERATION, and
+// LoftContext also runs falsifyRecordedArea on both records before evalLoft
+// is called, so those counters — not two fresh ones minted here — must be
+// the ones every walkOf call site in this build spends against. Increment 1
+// admits only LineSeg pairs, so nothing here ever actually charges, but the
+// counters are still threaded through so PR 3's curved correspondence does
+// not silently open a second ceiling per record.
+func evalLoft(ctx context.Context, d *Document, ref StepRef, pl loftPayload, budget *workBudget, work0, work1 *freeformWork) (*Body, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-
-	// One free-form work counter per profile for this whole build (spline
-	// design §5.2): increment 1 admits only LineSeg pairs, so nothing here
-	// ever actually charges against it, but every walkOf call site still
-	// needs one to resolve a segment's kind.
-	work0 := newFreeformWork()
-	work1 := newFreeformWork()
 
 	offsets, err := validateLoftRecords(pl.profile0, pl.profile1, pl.plane0, pl.plane1, pl.alignment, work0, work1)
 	if err != nil {
