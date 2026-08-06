@@ -23,10 +23,14 @@ import (
 // exact rationals would integrate a DIFFERENT curve — and publish its
 // representable area as an Exact claim about the recorded one.
 //
-// The conversion serves the Tier A kinds of Table F: SplineSeg,
-// ClosedSplineSeg, and a NURBSSeg whose weights are all equal. A rational
-// NURBS is Tier C and is refused here — a rational span is not a polynomial
-// Bézier, and pretending otherwise would silently integrate a different curve.
+// This file's own Boehm-insertion machinery converts SplineSeg,
+// ClosedSplineSeg, and a NURBSSeg whose weights are all equal — three of
+// Table F's four Tier A kinds; the fourth, FitSplineSeg, is Tier A too, but
+// its own reduction lives in spline_fit.go, a natural cubic having no knot
+// vector to insert into (freeformBezierSpans's own doc comment below
+// dispatches to it). A rational NURBS is Tier C and is refused here — a
+// rational span is not a polynomial Bézier, and pretending otherwise would
+// silently integrate a different curve.
 //
 // Only a FULL recorded domain is converted, because §2 proves no other
 // free-form range is recordable. The walk direction is not baked in: the
@@ -124,12 +128,14 @@ func isFreeformSegment(seg CurveSegment) bool {
 // polynomial Bézier spans, and reports whether the recorded walk runs against
 // the curve's natural sense.
 //
-// Every kind outside Tier A refuses with its own reason, so a caller never has
-// to infer which table row it hit:
+// FitSplineSeg is Tier A too, converted by spline_fit.go's own reduction over
+// sketch's EXPORTED interpolant (geom.FitInterpolant) rather than by this
+// file's Boehm-insertion machinery — a natural cubic has no knot vector to
+// insert into, so it owns a closed form of its own.
 //
-//   - FitSplineSeg is Table R row R6 — sketch owns the interpolation solve and
-//     decad NEVER re-runs it (seam §2), so the curve's coefficients are not
-//     available to convert.
+// Every other kind outside Tier A refuses with its own reason, so a caller
+// never has to infer which table row it hit:
+//
 //   - EllipticalArcSeg is row R2 — its pinned ends and its parametric ellipse
 //     disagree, and no exact reconciliation exists (spline design §2.2).
 //   - ConicSeg and EllipseSeg are Tier B: exact closed forms carrying
@@ -162,10 +168,8 @@ func freeformBezierSpans(seg CurveSegment, work *freeformWork) ([]bezierSpan, bo
 		spans, err := nurbsBezierSpans(seg, work)
 		return spans, seg.TStart > seg.TEnd, err
 	case FitSplineSeg:
-		return nil, false, fmt.Errorf(
-			`%w: a fit spline's curve is sketch's own interpolation solve, which decad never re-runs; its B-spline form is not available to integrate`,
-			ErrUnsupported,
-		)
+		spans, err := fitSplineBezierSpans(seg, work)
+		return spans, seg.TStart > seg.TEnd, err
 	case EllipticalArcSeg:
 		return nil, false, fmt.Errorf(
 			`%w: an elliptical arc's pinned endpoints and its parametric ellipse disagree, so the record states no single exact curve`,
@@ -231,11 +235,13 @@ func requireFiniteFreeformRange(tStart, tEnd float64, what string) error {
 // this is a caller-built or decoded record that bypassed the seam — refuse
 // rather than integrate a piece the conversion does not cover.
 //
-// It is the Tier A arms' own gate, and it stays there. Table R states R2 and R6
+// It is the Tier A arms' own gate, and it stays there. Table R states R2
 // unconditionally and carries no row for a trimmed range reaching the evaluator,
 // so a kind refused for its own cause reports that cause whatever its range
-// says. Finiteness is the separate refusal above, already decided for every kind
-// before this runs.
+// says. A FitSplineSeg carries no such unconditional refusal — it is Tier A
+// for the moments path (Table F) — so it reaches this same gate instead of
+// skipping it. Finiteness is the separate refusal above, already decided for
+// every kind before this runs.
 func requireFullFreeformRange(tStart, tEnd float64, what string) error {
 	if (tStart == 0 && tEnd == 1) || (tStart == 1 && tEnd == 0) {
 		return nil

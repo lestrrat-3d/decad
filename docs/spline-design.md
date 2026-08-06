@@ -31,6 +31,7 @@ Three tables are normative:
 | how a spline's area is EXACT | §5 |
 | what a repeated knot or a repeated control net does | §5.1 |
 | what a knot multiplicity above the degree does | §5.1.1 |
+| how a fit spline's area is EXACT, without re-running sketch's solve | §5.1.2 |
 | how a length/extreme is bounded | §6 |
 | what a revolve's area needs beyond length | §6.1.1 |
 | why an undercut or radius reading is `Suspect` | §6.3 |
@@ -121,7 +122,7 @@ kind is admitted. Admission is §2 and Table R.
 | `EllipseSeg` (whole) | **B** | `Approximate`, proven interval | §5.3 |
 | `NURBSSeg`, weights unequal | **C** | `Approximate`, proven interval | §5.4 |
 | `EllipticalArcSeg` | — | refused, §2.2 | — |
-| `FitSplineSeg` | — | refused, §4 R6 | — |
+| `FitSplineSeg` | **A** | exactly rational, rounded ONCE | §5.1.2 |
 
 **Tier A means the integral is exact, NOT that the reported measurement is
 `Exact`.** The integral's value is an exact rational, and the `units.Value` the
@@ -170,7 +171,7 @@ exactly → `ErrUnrecordableProfile`.
 | **R3** | free-form walk in a section a `Shell` offsets | `ErrUnsupported` | yes for a curved walk, §4.1 |
 | **R4** | `Fillet` corner with a free-form carrier | `ErrUnsupported` | yes for a curved walk, §4.1 |
 | **R5** | `Chamfer` corner with a free-form carrier | `ErrUnsupported` | yes for a curved walk, §4.1 |
-| **R6** | `FitSplineSeg` reaches a build or an integral | `ErrUnsupported` | pending §9 ask 1 |
+| **R6** | a Tier A free-form walk, `FitSplineSeg` among them, reaches a BUILD | `ErrUnsupported` | no, §10 P4 |
 | **R7** | exact-rational conversion, length bracketing or integration exceeds its work budget | `ErrUnsupported` | no, §5.2, §6.1 |
 | **R8** | chording a free-form walk needs more than the chord cap | `ErrUnsupported` | no, reuses `errTooManyChords` |
 | **R9** | a `Verify` reading's proof does not close — its bracket cannot separate it from its threshold, or a §6.3 certificate fails | not an error — `Suspect` | no, §8 |
@@ -180,6 +181,30 @@ exactly → `ErrUnrecordableProfile`.
 | **R13** | an admitted record whose Bézier extraction this evaluator cannot slice — a C0 join's stride, an over-clamped end knot's dead control | `ErrUnsupported` | no, §5.1.1 |
 | **R14** | a free-form curve whose control points all coincide reaches a length bracket or an integral | `ErrDegenerate` | yes, §6.1 |
 | **R15** | a free-form arc-length enclosure whose upper bound runs past `MaxFloat64` | `ErrUnsupported` | yes, §6.1 |
+| **R16** | a `FitSplineSeg`'s fit points are finite but the interpolant sketch builds from them — its cumulative chord parameter or a span coefficient — is not | `ErrUnsupported` | no, §5.1.2 — a float64 range limit of sketch's own exported interpolant, not decad's to lift |
+| **R17** | a `FitSplineSeg`'s converted chain does not reach its own record's natural-end fit point — sketch's dedup (`fitChordEps`) collapsed it into its predecessor | `ErrDegenerate` | yes, §5.1.2 |
+
+<!-- R16 was challenged as narrower than the evaluator's actual refusal
+behaviour, on the theory that a stalled (non-increasing) cumulative chord
+parameter could reach ErrUnsupported through a clause R16 does not name.
+Checked against sketch's geom/fitspline.go size(): at i=1 the loop tests
+Params[1] first (finite for the 2-point prefix {0,0},{1e300,0}, which
+succeeds with params=[0 1e+300]) and Points[1] (finite), so the only clause
+that can return prefix 1 is !spanFinite(0) — a non-finite SPAN COEFFICIENT,
+exactly what R16 names. The non-increasing-parameter check further down the
+function is never reached at that prefix. This is structurally forced: a
+stalled span has h=0 between distinct post-dedup points, so the natural-cubic
+solve divides by zero and poisons the second derivatives the published span
+coefficients are built from, which is what makes spanFinite(0) fail first.
+Four stall shapes were tried, including ones with a healthy leading chain
+({0,0},{1,1},{1e300,1},{1e300,1+1e-6}; {0,0},{1,1},{2,0},{1e300,0},
+{1e300,1e-6}; {0,0},{1e300,0},{1e300,1e-6},{1e300,2e-6}), and every one
+reported prefix 1 (the span-coefficient clause). A decad-side probe building
+a ProfileRecord from a FitSplineSeg over {0,0},{1e300,0},{1e300,1e-6} plus a
+closing LineSeg and calling Area() returned "a fit splines interpolant runs
+off the float64 range and cannot be described, though the fit points are
+finite" — errors.Is ErrUnsupported true, ErrNotFinite false, ErrDegenerate
+false, the same sentinel and message R16 already names. -->
 
 R9 is the one row that is not a refusal. An intent the evaluator cannot BUILD is
 `ErrUnsupported` at the call; a `Verify` question it cannot ANSWER is accepted
@@ -198,9 +223,15 @@ the exact prism over the polygon rather than an approximation of the intended
 one. What the caller owes is to say so: a proof over a chorded section proves a
 chord approximation of the intended part, and any volume or clearance assertion
 it makes has to carry the chording error the caller introduced, on top of the
-`Bound` decad reports. This is the standing answer for R6 in particular, whose
-retirement waits on §9 ask 1 and, for a section that must then BUILD, on §10's
-P4.
+`Bound` decad reports.
+
+The caller substitute above answers the BUILD path only. §5.1.2 states the
+fit-spline reduction that makes a `FitSplineSeg` section Tier A for the
+moments path: a caller with a `FitSplineSeg` section gets an exact `Area`,
+`Centroid` and `SecondMoments`, with no chording of their own to account for.
+What they do NOT get is a body — `Extrude` of that same section still
+refuses, staged the same way every other Tier A free-form kind's build is,
+under §10's P4.
 
 ### 4.1 Why the modify refusals stand
 
@@ -275,6 +306,7 @@ rational convex combination, so the conversion is exact:
 | `SplineSeg` | clamped uniform cubic → one Bézier per span | `geom.ClampedKnots(n)`'s floats, lifted |
 | `ClosedSplineSeg` | periodic uniform cubic → one Bézier per span, `n` spans for `n` control points | none — the periodic uniform basis is per span |
 | `NURBSSeg` | clamped arbitrary degree → one Bézier per NONEMPTY knot span | the recorded `Knots`, lifted |
+| `FitSplineSeg` | natural cubic interpolant → one Bézier per interval between consecutive ACTIVE fit points | none — the natural cubic is per span, §5.1.2 |
 
 **Repeated knots and repeated control points are admitted, so every construction
 in §5 and §6 runs per NONEMPTY span and must hold on a COLLAPSED one.**
@@ -379,6 +411,113 @@ and no bracket, and the walk is exactly the concatenation of its nonempty spans.
 Admit it; where the extraction cannot slice it, that is R13 `ErrUnsupported`,
 never `ErrDegenerate`.
 
+#### 5.1.2 The fit-spline reduction
+
+`FitSplineSeg` records the points sketch's natural-cubic interpolant passes
+through, never the interpolant itself (`record.go`'s own doc comment); decad
+never runs the interpolation solve. Sketch EXPORTS the solved result —
+`geom.FitInterpolant`, via `geom.NewFitInterpolant`/
+`(*sketch.FitSpline).Interpolant` — in both a defining `Params`/`Points`/
+`SecondDerivs` triple and a `Spans()` monomial restatement, so decad consumes
+the former for the moments path below, still without running the solve
+itself.
+
+**Consume `Params`/`Points`/`SecondDerivs`. NEVER consume `Spans()`.**
+`FitInterpolant`'s own doc comment states the per-span formula the exported
+triple defines the curve by — with `h = Params[i+1]−Params[i]`,
+`a = (Params[i+1]−p)/h`, `b = (p−Params[i])/h`:
+
+```
+v(p) = a·v[i] + b·v[i+1] + ((a³−a)·m[i] + (b³−b)·m[i+1])·h²/6
+```
+
+and states that this is the arrangement `FitInterpolant.Eval` itself computes,
+so a reconstruction using it reproduces `FitSpline.Eval` bit for bit.
+`FitInterpolant.Spans()` restates the SAME curve in monomial form, but its own
+doc comment says the two agree only "to rounding, not bit for bit" — its
+`cubicSpanCoeffs` commits two or three float roundings per coefficient that
+`Params`/`Points`/`SecondDerivs` never do. Integrating `Spans()`'s floats
+exactly would publish a possibly-zero bound, hence a possible `Exact` claim,
+for a curve displaced from the recorded one by an amount nothing bounds —
+exactly the false-`Exact` failure `clampedUniformKnots`'s own doc comment
+(§5.1) forbids for a `SplineSeg`'s re-derived knot vector, and the same
+argument settles it here. `Params`/`Points`/`SecondDerivs` carry the standing
+every other Tier A kind's defining data has: sketch's own computed floats,
+taken exactly, over which the stated arithmetic IS the curve's definition.
+`h` is the one term neither `Eval` nor `Spans` publishes, and both recompute
+it in float64 (not exact in general); decad forms it as an exact rational
+difference of the published `Params`, integrating the definition rather than a
+float re-rounding of it.
+
+**The closed form.** With `A = m_i·h²/6` and `B = m_{i+1}·h²/6`, the span's
+four Bézier control values per coordinate reduce to
+
+```
+b0 = v_i
+b1 = (2·v_i + v_{i+1})/3  −  h²·(2·m_i + m_{i+1})/18
+b2 = (v_i + 2·v_{i+1})/3  −  h²·(m_i + 2·m_{i+1})/18
+b3 = v_{i+1}
+```
+
+Every operand is `Params`/`Points`/`SecondDerivs` taken as an exact `big.Rat`,
+so nothing rounds. `b3` of span `i` and `b0` of span `i+1` are both the
+rational lifted from the same float `Points[i+1][coord]`, so consecutive spans
+share their boundary control point EXACTLY — by identity, not by proximity —
+which is what `bezierSpan`'s own contract requires.
+
+**Deduplication.** `geom.NewFitInterpolant` collapses consecutive fit points
+closer than an absolute `1e-12` (`geom`'s `fitChordEps`), keeping the FIRST of
+each run. So the chain's endpoints are `Points[0]` and `Points[len-1]`, and the
+LAST one is not always `Fit[len(Fit)-1]`: a record whose last two fit points
+coincide within that threshold has a curve whose true end is the
+second-to-last recorded point. decad integrates exactly the curve
+`FitSpline.Eval` walks — `Points`, never the raw `Fit` — which is the correct
+answer for that curve; the consequence is that the curve decad integrates need
+not be the one the record's neighbouring segment still joins to. §2's
+whole-loop join is normally sketch's own claim, never re-derived — but here
+sketch's reconstruction rebuilds the SAME entity from the SAME `Fit` points
+and reports the SAME dedup-collapsed curve every time, so it can never falsify
+this particular mismatch. decad's own moments path therefore runs the one
+self-consistency check that CAN: `requireFitSplineTerminalJoins`
+(`moments_validate.go`) compares the converted chain's own natural-end
+coordinate against `Fit[len(Fit)-1]` by exact identity — not a tolerance,
+since the two floats are bit-identical whenever nothing was collapsed — and
+refuses `ErrDegenerate` on any difference (R17): the record's own boundary
+does not close, so no such body exists. It is a check of the SEGMENT against
+its own record, not a re-derivation of the loop's join — the SplineSeg/
+ClosedSplineSeg/NURBSSeg kinds need no such check, since none of their
+conversions can drop a recorded endpoint this way (Table F). An all-coincident
+fit set collapses to one active point and zero spans, which reaches R14 with
+no special-case code: the identical shape the length bracket already refuses
+on its own terms.
+
+Every recorded free-form range is `[0, 1]` or `[1, 0]` (§2); a `FitSplineSeg`
+trimmed to any other range refuses through `requireFullFreeformRange`, the
+same "full domain" cause every other Tier A kind reports.
+
+**R16.** `geom.NewFitInterpolant` returns `ErrNonFiniteFitInterpolant` when
+finite fit coordinates give a cumulative chord parameter or a span coefficient
+that leaves float64 range, or a parameter that stalls. The fit points
+themselves are finite — checked by `spline_fit.go`'s own scan immediately
+before the call, since `record.go`'s validation runs only at JSON decode and a
+caller-built `ProfileRecord` reaches this reduction without ever passing
+through it — so this is `ErrUnsupported` — the curve exists, described by
+finite fit points, and this evaluator cannot state it — never `ErrNotFinite`,
+whose subject is a non-finite INPUT and is refused by that same scan ahead of
+this row.
+`geom.ErrTooFewFitPoints` is unreachable (record validation floors `Fit` at 2,
+re-checked defensively) and maps to `ErrDegenerate` with no table row of its
+own.
+
+**The exactness tier is A, in full**, on the same terms as every other Tier A
+kind: the span's four Bézier control values are exact rational functions of
+sketch's own published floats, so the Green's-theorem integrals are exact
+rationals and §3's single-rounding rule applies verbatim. Nothing about a fit
+spline may be described as unconditionally `Exact`; the reported bound is the
+single rounding of the region's exact rational into the magnitude the
+returned `units.Value` actually carries, zero exactly when that rational is
+representable there.
+
 ### 5.2 Discipline
 
 The exact rational is the only result. NEVER fall back to quadrature on a Tier A
@@ -435,6 +574,15 @@ Charging after the lift refuses a record that was hopeless from its control
 count alone only once it has allocated two rationals per control point and a
 whole rational knot vector. The open-spline charge is quadratic, so a refused
 record allocates orders of magnitude more than any accepted one ever could.
+
+A `FitSplineSeg`'s charge (`fitInterpolantCost`, §5.1.2) sits beside these,
+levied from its `Fit` slice's own length before `geom.NewFitInterpolant`
+allocates or solves anything. It is LINEAR, carrying no quadratic term at
+all: a natural cubic interpolant gives one span per interval directly, with no
+knot vector and so no insertion pass to charge for — unlike an open spline's
+quadratic `clampedConversionCost`, which pays for repeatedly scanning and
+copying growing control and knot vectors as each of possibly many knots is
+inserted one at a time.
 
 The RECONSTRUCTION carries a charge of its own. It is not covered by the
 conversion and integration charges: those bound decad's rational arithmetic, and
@@ -1005,11 +1153,16 @@ off `NormalAt`.
 ## 8. Table C — per-capability reach
 
 **Every build reads its section's moments, so a body's tier reach is its
-section's.** A section whose free-form walks are all Tier A builds; a section
-carrying a Tier B or Tier C walk is `ErrUnsupported` at EVERY build until §10's
-P9 supplies that tier's moments (§5.3, §5.4) — Table R R10. "Tier A section"
-below names exactly that condition. A `ProfileRecord` moment reading is not a
-build and is unaffected.
+section's.** A section whose free-form walks are all Tier A is the one §10's
+P4 builds — Table R R6 refuses every free-form walk at the build today,
+regardless of tier; a section carrying a Tier B or Tier C walk is
+`ErrUnsupported` at EVERY build until §10's P9 supplies that tier's moments
+(§5.3, §5.4) — Table R R10. "Tier A section"
+below names exactly that condition, and now includes a section holding a
+`FitSplineSeg` walk (§5.1.2) — its moments are Tier A today, so once §10's P4
+lands a build it is one of the kinds P4 widens to reach, with no change to P4
+itself. A `ProfileRecord` moment reading is not a build and is unaffected —
+`FitSplineSeg` already has that reach for the moments path (§5.1.2).
 
 **A Tier A section's exactly-rational reach is its free-form walks' alone.**
 Analytic walks join them in the same section freely (§4.1), and a circular one
@@ -1064,11 +1217,6 @@ volume and interference before it can prove wall thickness.
 Ordered by reach per unit of upstream work. None is a prerequisite for §10's
 first four increments.
 
-1. **Export the fit-spline interpolant's B-spline or piecewise-polynomial
-   coefficients.** `geom/fitspline.go` already computes them internally. This is
-   a signature, not an algorithm. It retires R6, and it is the only way to:
-   decad must NEVER re-run the interpolation solve (seam §2), and consuming
-   `geom.EvalFitSpline` would build geometry from samples.
 2. **Pin `EllipticalArc` endpoints onto the parametric ellipse.** Retires R2
    (§2.2): sketch's own coincidence constraint carries each moved endpoint to the
    neighbouring segment, so the loop still closes on a shared join point.
@@ -1092,7 +1240,7 @@ half-silent. These stages do not consume a global evaluator increment number.
 | **P1** | this document + the core/evaluator table updates it resolves | none |
 | **P2** | Bézier conversion, exact Tier A moments, the §5.2 budget | `ProfileRecord.Area`/`Centroid`/`SecondMoments` answer for Tier A, bounded by one rounding. No new types |
 | **P3** | walk-kind discriminant across every `segmentWalk` consumer | none — behaviour preserved |
-| **P4** | `NURBSSurface`/`NURBSCurve`, free-form extrude side faces, §6.1 length brackets, §6.2 extremes, `NormalAt` refusal, §6.4's stop gate | Tier A free-form prisms build; `Volume` from the Tier A rational, `Area`/`Box` bounded. A Tier B or C section is R10; an undecidable through-all stop is R11 |
+| **P4** | `NURBSSurface`/`NURBSCurve`, free-form extrude side faces, §6.1 length brackets, §6.2 extremes, `NormalAt` refusal, §6.4's stop gate | Tier A free-form prisms build, `FitSplineSeg` walks among them since P4 is where R6's build refusal lifts (§5.1.2); `Volume` from the Tier A rational, `Area`/`Box` bounded. A Tier B or C section is R10; an undecidable through-all stop is R11 |
 | **P5** | free-form chording with proven sagitta + area slack | `Tessellate`/`STL`/`OBJ`, booleans, interference proof. Wall reading explicitly `Suspect` |
 | **P6** | §6.3's speed floor and origin-exclusion certificates, hodograph normal cones, bracketed curvature extremes | `Undercuts` and `MinRadius` each answer where the certificates that reading needs close, and read `Suspect` per §6.3's cost table where they do not |
 | **P7** | certified branch-and-bound inscribed-disk interval | `MinWallThickness` answered, with its own convergence evidence |
@@ -1237,7 +1385,8 @@ rules).
   above `Mesh.Bound` fails, and passing samples never replace the bound's
   derivation.
 - Assert every Table R row by behaviour, each with its own sentinel: a crossed
-  spline, a `FitSplineSeg`, an `EllipticalArcSeg`, a free-form `Shell`, a
+  spline, a `FitSplineSeg` whose interpolant runs off float64 range (R16), an
+  `EllipticalArcSeg`, a free-form `Shell`, a
   free-form fillet carrier, a free-form chamfer carrier, a control net collapsed
   to a single point (R14), an `Extrude` whose through-all stop reads a free-form
   extent bracket straddling the sketch plane (R11), a `NURBSSeg` whose interior
@@ -1325,3 +1474,50 @@ rules).
   still turns an `Approximate` into a false `Exact`.
 - Assert recipe replay of every free-form step reproduces body order, provenance
   roles, and measurements within the evaluator's own exactness.
+- **§5.1.2's fit-spline obligations.** A two-point `FitSplineSeg` reports the
+  identical `Area`/`Centroid`/`SecondMoments` a `LineSeg`-recorded triangle
+  does, bit for bit, both `Exact`
+  with a zero bound on a fixture whose exact area is representable — the
+  strongest single assertion, since `naturalSecondDerivs` is exactly zero
+  below three points. The same identity holds for equally spaced COLLINEAR fit
+  points at three and five points, pinning a multi-span chain's own join. A
+  genuinely curved fixture's exact rational area matches a dense sample over
+  sketch's own `FitSpline` evaluator AND sketch's independent `Profile.Area`
+  (the §5.2 falsifier), and reports `Approximate` with a positive bound; a
+  representable-magnitude fixture reports `Exact` with a zero bound — covering
+  both sides of §3's rounding rule, since a straight-line-equivalent fit
+  spline's area is always representable over integer coordinates and can
+  never exercise the `Approximate` side on its own.
+- Assert decad's exact rational Bézier control values, converted to monomial
+  form and rounded to float64, agree with `FitInterpolant.Spans()`'s `X`/`Y`
+  to a few ulps — the test that would have caught consuming the wrong
+  exported form (§5.1.2), using sketch's own independent conversion as the
+  oracle, internal to the package.
+- Assert deduplication in both directions: a record whose `Fit` holds a
+  consecutive coincident INTERIOR point integrates the identical active curve
+  as the same section recorded without it (pinning that decad reads
+  `Points`, never its own `Fit`), and a record whose fit-spline chain's
+  converted endpoint is `FitInterpolant.Points[len-1]` rather than the raw
+  `Fit[len(Fit)-1]` whenever the last two recorded fit points coincide within
+  the absolute `1e-12` threshold.
+- Assert R14 on an all-coincident `FitSplineSeg` fit set (`ErrDegenerate`, no
+  boundary contributed) and R16 on fit coordinates whose interpolant runs off
+  float64 range (`ErrUnsupported`, never `ErrNotFinite` — every fit coordinate
+  in the fixture is finite).
+- Assert R17 on a record whose `FitSplineSeg` terminal fit point collapses into
+  its predecessor while a following segment's own recorded `Start` still names
+  the dropped point: `Area`/`Centroid`/`SecondMoments` refuse `ErrDegenerate`
+  rather than publish a bounded measurement for the region the boundary
+  actually fails to close. Assert the pass case beside it — the identical shape
+  with the terminal point moved past the dedup threshold — builds and measures,
+  so the test cannot pass by refusing every fit spline outright; and the
+  reversed-range (`TStart=1, TEnd=0`) case, where the same collapse sits at the
+  walk's own START rather than its end.
+- Assert the `fitInterpolantCost` charge fires, and is measured rather than
+  merely read off the formula: a fit-point count whose linear charge alone
+  exceeds the ceiling must refuse promptly, allocating on the order of its own
+  `Fit` slice rather than on the order of the interpolant
+  `geom.NewFitInterpolant` would have solved.
+- Assert that `Extrude` of a `FitSplineSeg` section still refuses
+  `ErrUnsupported` at the side-face build — R6 states the build refusal, and
+  P4 (build support) is unimplemented and unaffected.

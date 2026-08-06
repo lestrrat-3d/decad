@@ -212,7 +212,9 @@ type ClosedSplineSeg struct {
 // FitSplineSeg records the INTENT sketch was given: the points the curve
 // interpolates. sketch's definition — a natural cubic with chord-length
 // parameterisation through exactly these points — is the curve; decad records
-// the points and NEVER runs the interpolation solve itself.
+// the points and NEVER runs the interpolation solve itself. Where a
+// measurement needs the solve's RESULT, decad reads it back from sketch's own
+// exported interpolant (spline_fit.go) rather than recomputing it.
 type FitSplineSeg struct {
 	Fit    []Point2 `json:"fit"`
 	TStart float64  `json:"t_start"`

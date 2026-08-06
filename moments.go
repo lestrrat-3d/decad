@@ -26,9 +26,9 @@ import (
 // contributes its Green's-theorem integral in walk order, so a hole's clockwise
 // walk subtracts without a special case.
 //
-// Line and Tier A free-form contributions — a spline, a closed spline, and a
-// NURBS whose weights are all equal (docs/spline-design.md Table F) — integrate
-// to exact rationals. A region built only from them is reported as the whole
+// Line and Tier A free-form contributions — a spline, a closed spline, a
+// NURBS whose weights are all equal, and a fit spline (docs/spline-design.md
+// Table F) — integrate to exact rationals. A region built only from them is reported as the whole
 // region's rational rounded ONCE, so its bound is that single rounding: zero,
 // hence Exact, exactly when the rational is representable in float64, and never
 // unconditionally. A circular contribution has no exact rational and carries a
@@ -41,8 +41,8 @@ import (
 //
 // The remaining free-form kinds are [ErrUnsupported] (docs/spline-design.md
 // Table R) — never approximated: an ellipse, a conic and a rational NURBS have
-// no exact rational moments yet, an elliptical arc's record is self-inconsistent,
-// and a fit spline's curve is sketch's own interpolation solve. So is a Tier A
+// no exact rational moments yet, and an elliptical arc's record is
+// self-inconsistent. So is a Tier A
 // boundary whose exact integration would exceed this evaluator's fixed work
 // budget (Table R row R7). A malformed or open record is [ErrDegenerate].
 // A circle radius of the wrong kind is [ErrUnitKind], a negative radius is
