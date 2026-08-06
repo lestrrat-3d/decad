@@ -7,6 +7,7 @@ import (
 
 	"github.com/lestrrat-3d/decad"
 	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
@@ -50,17 +51,75 @@ func TestR3IdentityApplyIsBitIdentical(t *testing.T) {
 		})
 	}
 
-	// Negative zero is checked by VALUE, not by sign bit: ApplyDir's linear
-	// combination sums cross terms that are individually +0/-0 (e.g.
-	// ey.Scale(y).X for x=-0), and -0.0+0.0 rounds to +0.0 under IEEE 754 —
-	// so identity's OWN zero-cross terms can wash the sign of zero out even
-	// though the coordinate is otherwise untouched. That is a fact about
-	// float addition, not a rounding the fast path's premise depends on:
-	// -0.0 and 0.0 are the same coordinate, and every equality this package
-	// runs on a float (exactnessOf, the xform == r3.Identity() fast path
-	// itself) reads the same way.
-	v := r3.NewVec(math.Copysign(0, -1), 0, math.Copysign(0, -1))
-	require.Equal(t, v, id.Apply(v))
+	// Negative zero is checked by VALUE and by DISPLACEMENT, never by sign
+	// bit: ApplyDir's linear combination sums cross terms that are
+	// individually +0/-0 (e.g. ey.Scale(y).X for x=-0), and -0.0+0.0 rounds
+	// to +0.0 under IEEE 754 — so identity's OWN zero-cross terms wash the
+	// sign of zero out even though the coordinate is otherwise untouched.
+	// That is a fact about float addition, not a rounding the fast path's
+	// premise depends on: delta == 0 asserts that the held vertex sits at
+	// zero distance from the exact placed image, and -0.0 and 0.0 are the
+	// same coordinate at zero distance from each other. Every equality this
+	// package runs on a float (exactnessOf, the xform == r3.Identity() fast
+	// path itself) reads the same way. docs/loft-design.md §13 states this
+	// case as coordinate equality for exactly that reason.
+	t.Run("negative zero", func(t *testing.T) {
+		v := r3.NewVec(math.Copysign(0, -1), 0, math.Copysign(0, -1))
+		got := id.Apply(v)
+		require.Equal(t, v, got)
+		require.Zero(t, got.Sub(v).Len(), "the identity moves a -0.0 coordinate by exactly zero")
+	})
+}
+
+// TestLoftPlacementDoesNotRerunTheSeamGates pins docs/loft-design.md §4's
+// "S9, S10, S11 and S4's ARITY half belong to the original call alone": a
+// placement rebuilds from the payload's already-authenticated records and
+// never touches a live sketch, so a profile that goes stale AFTER the body
+// is built refuses a fresh Document.Loft (S9) while Duplicate/PlacedCopy/
+// Placed of that body still succeed and reproduce its volume.
+func TestLoftPlacementDoesNotRerunTheSeamGates(t *testing.T) {
+	s0, p0, s1, p1 := loftSquares(t, 20, 20) // two 40x40 squares, h=10 -> 16000 mm3 box
+	doc := decad.New()
+	body, err := doc.Loft(s0, p0, s1, p1)
+	require.NoError(t, err)
+
+	// Both source profiles go stale only after the loft is recorded.
+	s0.AddConstraint(sketch.NewDistance(s0.Points()[0], s0.Points()[1], 55))
+	_, err = s0.Solve(t.Context())
+	require.NoError(t, err)
+	s1.AddConstraint(sketch.NewDistance(s1.Points()[0], s1.Points()[1], 55))
+	_, err = s1.Solve(t.Context())
+	require.NoError(t, err)
+	require.True(t, p0.IsStale())
+	require.True(t, p1.IsStale())
+
+	// S9 still gates the entry point: a fresh Loft on the same profiles refuses.
+	fresh, err := doc.Loft(s0, p0, s1, p1)
+	require.Nil(t, fresh)
+	require.ErrorIs(t, err, decad.ErrStaleProfile)
+
+	move, err := r3.Translation(r3.NewVec(100, 0, 0))
+	require.NoError(t, err)
+
+	dup, err := body.Duplicate()
+	require.NoError(t, err)
+	copied, err := body.PlacedCopy(move)
+	require.NoError(t, err)
+	// Placed retires the receiver, so it runs last.
+	placed, err := body.Placed(move)
+	require.NoError(t, err)
+
+	for _, tc := range []struct {
+		name string
+		b    *decad.Body
+	}{{"duplicate", dup}, {"placed copy", copied}, {"placed", placed}} {
+		t.Run(tc.name, func(t *testing.T) {
+			vol, err := tc.b.Volume()
+			require.NoError(t, err)
+			require.True(t, vol.Value.Equal(units.CubicMillimeters(16000), 1e-9),
+				"a placement rebuilds from the recorded section, not the stale profile; got %s", vol.Value)
+		})
+	}
 }
 
 // TestLoftDuplicateIsMeasurementIdentical proves Duplicate's identity

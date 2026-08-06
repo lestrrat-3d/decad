@@ -21,9 +21,11 @@ import (
 //
 // loftPayload.placed and its delta field are §12 PR 2a (Table D, D7): a
 // placement re-lifts both records under the composed motion and re-runs
-// §5-§8 from scratch, so delta is the ONE new term this PR adds, composed
-// into every vertex, edge length, face area and body measurement §8 already
-// derives.
+// §5-§8 from scratch — every record-only Table S gate (S1-S8) plus the
+// placement-only S12, while S9-S11 and S4's arity half judge the original
+// call's own arguments and never re-run (§4) — so delta is the ONE new term
+// this PR adds, composed into every vertex, edge length, face area and body
+// measurement §8 already derives.
 
 // loftPayload is the evaluator's own record of a lofted body: the two
 // authenticated sections, their planes and frames, the per-loop alignment,
@@ -353,7 +355,9 @@ func assembleLoft(ctx context.Context, pairs []loftLoopPair, f0, f1 r3.Frame, pl
 
 // wrapLoftTriangulationError re-sentinels triangulate.go's cap refusal as
 // ErrUnsupported (design O8): the caller's two profiles are each individually
-// valid per sketch (S9 authenticates them before evalLoft is ever reached),
+// valid per sketch (S9 authenticated them at the original Document.Loft
+// call, before any record reached evalLoft; a placement rebuilds from those
+// same authenticated records and re-runs no seam gate, §4),
 // so a triangulation refusal here is this evaluator's own triangulator
 // failing to state the body, never a claim that no such body exists — modify
 // §1's existence test applied verbatim. Cancellation is never relabeled.

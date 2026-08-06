@@ -193,15 +193,29 @@ construction (§5), then the per-triangle existence gate S6, then the crossing
 audit (S7/S8, §6) — the most expensive step, run last, over triangles already
 proven individually non-degenerate.
 
-**A placement (`Placed`/`Duplicate`/`PlacedCopy`, §12 PR 2a) re-runs S1–S9 and
-S12, never a reduced set.** The evaluator re-lifts both records under the
-composed motion and rebuilds from scratch (§7), so S6/S7/S8 are reachable
-from a placement too: the crossing audit re-runs on the rounded vertex set
-every re-evaluation produces, and a placement whose rounding closes a
-previously-clear gap is refused exactly as a first build with the same
-geometry would be. S12 is reachable only from a placement, since an unplaced
-body's `delta` is zero and its centroid's quotient denominator never
+**A placement (`Placed`/`Duplicate`/`PlacedCopy`, §12 PR 2a) re-runs every
+record-only gate — S1, S2, S3, S4's payload-shape half, S5, S6, S7, S8 —
+plus S12, never a reduced set of them.** The evaluator re-lifts both records
+under the composed motion and rebuilds from scratch (§7), so S6/S7/S8 are
+reachable from a placement too: the crossing audit re-runs on the rounded
+vertex set every re-evaluation produces, and a placement whose rounding
+closes a previously-clear gap is refused exactly as a first build with the
+same geometry would be. S12 is reachable only from a placement, since an
+unplaced body's `delta` is zero and its centroid's quotient denominator never
 collapses.
+
+**S9, S10, S11 and S4's ARITY half belong to the original call alone.** Each
+judges an argument the caller passed to `Document.Loft` — the two live
+`*sketch.Profile`s and their sketches (S9), a nil argument (S10), an option
+value (S11), a repeated `WithLoftAlignment` (S4's arity half) — and a
+placement receives none of them: the payload carries two already-recorded
+`ProfileRecord`s and one normalized alignment slice, with no `*sketch.Sketch`
+and no `*sketch.Profile` left to authenticate. So a profile that goes stale
+after the loft is built refuses a FRESH `Document.Loft` on that profile while
+`Placed`/`Duplicate`/`PlacedCopy` of the already-built body still succeed:
+the record a placement rebuilds from was authenticated when it was recorded,
+which is the same evaluate-from-the-record rule every other feature's
+placement follows (`docs/evaluator-design.md` §1).
 
 ## 5. Construction — flat triangular walls, never a curved ruled surface
 
@@ -433,8 +447,9 @@ recorded profiles: it re-lifts every vertex from the record and applies the
 composed motion ONCE — never moving an already-built mesh incrementally, so
 `delta` does not accumulate across repeated placements — reproducing the same
 roles (modify §11's "roles derive from the record and the deterministic walk
-order") and the same pairing, and re-running §4's Table S gates and §6's
-crossing audit on the rounded vertex set. §5's whole-shell orientation step
+order") and the same pairing, and re-running §4's record-only Table S gates
+and §6's crossing audit on the rounded vertex set — the set §4 names, which
+is every gate but S9/S10/S11 and S4's arity half. §5's whole-shell orientation step
 re-decides the sign from the placed triangle set on its own, so a mirror
 flips `reversed` and needs no separate winding-flip case — unlike
 `facetedPayload.placed`'s `IsReflection()` handling, which moves a held mesh
@@ -740,8 +755,14 @@ never merely that a call ran (project rule).
   roles, and measurements as the immediate call; a failed call leaves the
   document and recipe unchanged.
 - **Placement (§12 PR 2a)**: `r3.Identity().Apply(v)` is bit-identical for a
-  subnormal, `1e308`, `-0.0` and `1/3` — the identity fast path's premise,
-  pinned. `Duplicate` of a fresh loft reproduces bit-identical vertices, Exact
+  subnormal, `1e308` and `1/3`, and moves a `-0.0` coordinate by exactly
+  zero while not preserving its sign bit (identity's own zero-cross terms
+  sum `-0.0 + 0.0`, which IEEE 754 rounds to `+0.0`) — the identity fast
+  path's premise is the zero DISPLACEMENT, not the sign of zero, and both
+  halves are pinned. A test that a stale profile refuses a fresh
+  `Document.Loft` while `Duplicate`/`PlacedCopy`/`Placed` of the
+  already-built body each succeed pins §4's original-call-only S9.
+  `Duplicate` of a fresh loft reproduces bit-identical vertices, Exact
   16000 mm³ volume, Exact centroid, Exact bounds, leaves the source live, and
   gives the document two bodies. Rotating the 16000 mm³ square-square loft 37
   degrees about X is the regression this PR exists for: assert
