@@ -2,6 +2,7 @@ package decad_test
 
 import (
 	"encoding/json"
+	"math"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
@@ -423,4 +424,299 @@ func TestRecordProfileRejectsTypedNilBoundaryEntity(t *testing.T) {
 
 	_, _, err = decad.RecordProfile(s, prof)
 	require.ErrorIs(t, err, decad.ErrInvalidProfile)
+}
+
+// nearMissTriangle builds the triangle (0,0), (10,0), (0,10) whose closing line
+// STARTS at (du, 10+dv) instead of at (0, 10) — the corner the previous line
+// actually ends at. sketch admits the region on its own proximity threshold, so
+// the profile is valid and reads an area of 50 mm2 whatever the offset.
+func nearMissTriangle(t *testing.T, du, dv float64) (*sketch.Sketch, *sketch.Profile) {
+	t.Helper()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	origin := s.CreatePoint(0, 0)
+	right := s.CreatePoint(10, 0)
+	top := s.CreatePoint(0, 10)
+	missed := s.CreatePoint(du, 10+dv)
+	s.CreateLine(origin, right)
+	s.CreateLine(right, top)
+	s.CreateLine(missed, origin)
+
+	profiles := s.Profiles()
+	require.Len(t, profiles, 1)
+	require.True(t, profiles[0].Valid, `sketch should still admit the near-miss region`)
+	return s, profiles[0]
+}
+
+// uncutPartialLoop builds a snapped open loop whose final edge is partial only
+// because it crosses the base. Its TStart == 0 bound stays at the vertical
+// line's defining top point, while sketch's arrangement snaps that node to the
+// preceding near-miss line endpoint.
+func uncutPartialLoop(t *testing.T, gap float64) (*sketch.Sketch, *sketch.Profile) {
+	t.Helper()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	origin := s.CreatePoint(0, 0)
+	right := s.CreatePoint(10, 0)
+	topRight := s.CreatePoint(10, 10)
+	missed := s.CreatePoint(gap, 10)
+	top := s.CreatePoint(0, 10)
+	below := s.CreatePoint(0, -5)
+	s.CreateLine(origin, right)
+	s.CreateLine(right, topRight)
+	s.CreateLine(topRight, missed)
+	s.CreateLine(top, below)
+
+	profiles := s.Profiles()
+	require.Len(t, profiles, 1)
+	require.True(t, profiles[0].Valid)
+	return s, profiles[0]
+}
+
+func TestRecordProfileRejectsUnclosedLoop(t *testing.T) {
+	// A loop whose recorded segments do not meet bounds no region at all, so
+	// there is nothing for an Exact, zero-bound area to be exact ABOUT. sketch
+	// snapped the gap away and reports one valid region; decad records each
+	// entity's own points verbatim, which is where the gap is visible, and
+	// refuses (docs/sketch-seam-design.md §3).
+	for _, tc := range []struct {
+		name   string
+		du, dv float64
+	}{
+		{name: "collinear, 3e-13 mm", dv: 3e-13},
+		{name: "collinear, 1e-8 mm", dv: 1e-8},
+		{name: "off the line, 1e-6 mm", du: 1e-6},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s, p := nearMissTriangle(t, tc.du, tc.dv)
+			require.Equal(t, 50.0, p.Area, `sketch reports the snapped region's area`)
+			for _, e := range p.Outer {
+				require.False(t, e.Partial, `the near miss is snapped, so every edge is whole`)
+			}
+
+			_, _, err := decad.RecordProfile(s, p)
+			require.ErrorIs(t, err, decad.ErrUnrecordableProfile)
+			require.Contains(t, err.Error(), `does not close`)
+
+			// The same refusal reaches the solid evaluator, which used to
+			// publish a 100 mm3 Exact volume over the same open loop.
+			_, err = decad.New().Extrude(s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+			require.ErrorIs(t, err, decad.ErrUnrecordableProfile)
+		})
+	}
+}
+
+func TestRecordProfileRejectsUnclosedConstrainedLoop(t *testing.T) {
+	// The same rule, reached the way a caller most likely reaches it: two
+	// distinct points driven together by a coincidence constraint. The solver
+	// converges to within its own residual, not to the same float, so the
+	// recorded loop does not close and no measurement is published over it.
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	origin := s.CreatePoint(0, 0)
+	right := s.CreatePoint(10, 0)
+	top := s.CreatePoint(0, 10)
+	mate := s.CreatePoint(0.001, 10.002)
+	s.CreateLine(origin, right)
+	s.CreateLine(right, top)
+	s.CreateLine(mate, origin)
+	s.AddConstraint(sketch.NewCoincident(top, mate))
+	s.Fix(origin)
+	s.Fix(right)
+	solved, err := s.Solve(t.Context())
+	require.NoError(t, err)
+	require.True(t, solved.Converged)
+	require.NotEqual(t, [2]float64{top.X(), top.Y()}, [2]float64{mate.X(), mate.Y()},
+		`the solver converges within a residual, so the two points stay distinct`)
+
+	profiles := s.Profiles()
+	require.Len(t, profiles, 1)
+	_, _, err = decad.RecordProfile(s, profiles[0])
+	require.ErrorIs(t, err, decad.ErrUnrecordableProfile)
+}
+
+func TestRecordProfileRejectsUnclosedLoopAtUncutPartialBound(t *testing.T) {
+	gap := math.Ldexp(1, -40)
+	s, profile := uncutPartialLoop(t, gap)
+	partial := 0
+	for _, edge := range profile.Outer {
+		if !edge.Partial {
+			continue
+		}
+		require.True(t, edge.TExact)
+		require.Equal(t, 0.0, edge.TStart, `the fragment begins at its defining endpoint`)
+		require.Less(t, edge.TEnd, 1.0, `only the base crossing cuts the fragment`)
+		partial++
+	}
+	require.Equal(t, 1, partial)
+
+	_, _, err := decad.RecordProfile(s, profile)
+	require.ErrorIs(t, err, decad.ErrUnrecordableProfile)
+	require.Contains(t, err.Error(), `does not close`)
+}
+
+func TestRecordProfileRecordsReversedUncutPartialBound(t *testing.T) {
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	origin := s.CreatePoint(0, 0)
+	right := s.CreatePoint(10, 0)
+	topRight := s.CreatePoint(10, 10)
+	top := s.CreatePoint(0, 10)
+	below := s.CreatePoint(0, -5)
+	s.CreateLine(origin, right)
+	s.CreateLine(right, topRight)
+	s.CreateLine(topRight, top)
+	finalLine := s.CreateLine(below, top)
+
+	profiles := s.Profiles()
+	require.Len(t, profiles, 1)
+	profile := profiles[0]
+	require.True(t, profile.Valid)
+
+	var fragment sketch.BoundaryEdge
+	for _, edge := range profile.Outer {
+		if edge.Entity == finalLine {
+			fragment = edge
+			break
+		}
+	}
+	require.True(t, fragment.Partial)
+	require.True(t, fragment.Reversed)
+	require.True(t, fragment.TExact)
+	require.Equal(t, 1.0/3.0, fragment.TStart)
+	require.Equal(t, 1.0, fragment.TEnd)
+
+	record, _, err := decad.RecordProfile(s, profile)
+	require.NoError(t, err, `the uncut natural end is the reversed walk start`)
+
+	var recorded decad.LineSeg
+	found := false
+	for _, segment := range record.Outer.Segments {
+		line, ok := segment.(decad.LineSeg)
+		if ok && line.Start == (decad.Point2{U: 0, V: -5}) && line.End == (decad.Point2{U: 0, V: 10}) {
+			recorded = line
+			found = true
+			break
+		}
+	}
+	require.True(t, found)
+	require.Equal(t, 1.0, recorded.TStart)
+	require.Equal(t, 1.0/3.0, recorded.TEnd)
+}
+
+func TestRecordProfileRecordsSnapThresholdTrim(t *testing.T) {
+	// The same shape one order of magnitude further out: past sketch's snap
+	// threshold it TRIMS the two lines at their crossing instead, so the
+	// recorded loop closes on sketch's own cut and the region measures. This is
+	// the boundary the refusal above must not overrun.
+	s, p := nearMissTriangle(t, 1e-5, 0)
+	partial := 0
+	for _, e := range p.Outer {
+		if e.Partial {
+			require.True(t, e.TExact, `an analytic line/line cut is certified`)
+			partial++
+		}
+	}
+	require.Equal(t, 2, partial, `the two lines that miss should arrive trimmed`)
+
+	rec, _, err := decad.RecordProfile(s, p)
+	require.NoError(t, err, `a loop closed on sketch's own cut records`)
+	require.Len(t, rec.Outer.Segments, 3)
+
+	area, err := rec.Area()
+	require.NoError(t, err)
+	value, err := area.Value.In(units.SquareMillimeter)
+	require.NoError(t, err)
+	require.InDelta(t, 49.99995, value, 1e-7)
+	require.Equal(t, decad.Approximate, area.Exactness, `a trimmed section is bounded, never Exact`)
+	bound, err := area.Bound.In(units.SquareMillimeter)
+	require.NoError(t, err)
+	require.Positive(t, bound)
+	require.Less(t, bound, 1e-12)
+}
+
+func TestRecordProfileRecordsMixedWholeAndCertifiedPartialJoin(t *testing.T) {
+	// The arc and vertical line share top, but sketch trims the line where it
+	// crosses the base. The partial line's uncut top bound records its defining
+	// point, rather than sketch's rounded node, so the shared endpoint stays an
+	// exact join and the record re-authenticates.
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	center := s.CreatePoint(0, 0)
+	start := s.CreatePoint(10, 0)
+	top := s.CreatePoint(0, 10)
+	below := s.CreatePoint(0, -5)
+	s.CreateArc(center, start, top)
+	s.CreateLine(top, below)
+	s.CreateLine(center, start)
+
+	profiles := s.Profiles()
+	require.Len(t, profiles, 1)
+	profile := profiles[0]
+	wholeArc := false
+	partialLine := false
+	for _, edge := range profile.Outer {
+		switch edge.Entity.(type) {
+		case *sketch.Arc:
+			require.False(t, edge.Partial)
+			wholeArc = true
+		case *sketch.Line:
+			if edge.Partial {
+				require.True(t, edge.TExact)
+				partialLine = true
+			}
+		}
+	}
+	require.True(t, wholeArc)
+	require.True(t, partialLine)
+
+	record, _, err := decad.RecordProfile(s, profile)
+	require.NoError(t, err)
+	area, err := record.Area()
+	require.NoError(t, err, `the record should also pass reconstruction authentication`)
+	value, err := area.Value.In(units.SquareMillimeter)
+	require.NoError(t, err)
+	require.Equal(t, 78.53981633974483, value)
+}
+
+func TestProfileRecordAreaRejectsUnclosedLoop(t *testing.T) {
+	// A decoded or caller-built record reaches the same verdict through the
+	// moments validator: the reconstruction authenticates each candidate region
+	// through RecordProfile, which now refuses an open loop, so no candidate
+	// matches and the record is reported as bounding no closed region.
+	triangle := func(gap float64) decad.ProfileRecord {
+		return decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
+			decad.LineSeg{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 10, V: 0}, TEnd: 1},
+			decad.LineSeg{Start: decad.Point2{U: 10, V: 0}, End: decad.Point2{U: 0, V: 10}, TEnd: 1},
+			decad.LineSeg{Start: decad.Point2{U: 0, V: 10 + gap}, End: decad.Point2{U: 0, V: 0}, TEnd: 1},
+		}}}
+	}
+
+	_, err := triangle(3e-13).Area()
+	require.ErrorIs(t, err, decad.ErrDegenerate)
+
+	area, err := triangle(0).Area()
+	require.NoError(t, err, `the closed record still measures`)
+	value, err := area.Value.In(units.SquareMillimeter)
+	require.NoError(t, err)
+	require.Equal(t, 50.0, value)
+	require.Equal(t, decad.Exact, area.Exactness)
+}
+
+func TestProfileRecordAreaRejectsUnclosedLoopAtUncutPartialBound(t *testing.T) {
+	gap := math.Ldexp(1, -40)
+	record := decad.ProfileRecord{Outer: decad.LoopRecord{Segments: []decad.CurveSegment{
+		decad.LineSeg{Start: decad.Point2{U: 0, V: 0}, End: decad.Point2{U: 10, V: 0}, TEnd: 1},
+		decad.LineSeg{Start: decad.Point2{U: 10, V: 0}, End: decad.Point2{U: 10, V: 10}, TEnd: 1},
+		decad.LineSeg{Start: decad.Point2{U: 10, V: 10}, End: decad.Point2{U: gap, V: 10}, TEnd: 1},
+		decad.LineSeg{Start: decad.Point2{U: 0, V: 10}, End: decad.Point2{U: 0, V: -5}, TEnd: 2.0 / 3.0},
+	}}}
+
+	_, err := record.Area()
+	require.ErrorIs(t, err, decad.ErrDegenerate)
 }
