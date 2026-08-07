@@ -95,8 +95,10 @@ is why kernels ship *tolerant topology* (Fusion exposes `BRepEdge.isTolerant` �
 production kernel admitting in its public API that its geometry does not meet),
 and why every CAD user has seen "cannot perform boolean operation".
 
-decad therefore computes booleans on a tessellated representation, where robust
-algorithms are a solved problem, and **marks what it touched**.
+decad therefore computes a boolean on a tessellated representation, where robust
+algorithms are a solved problem, and **marks what it touched** — unless the pair
+reduces analytically, which needs no intersection math either. §8 names the one
+admitted class, and `docs/prism-boolean-design.md` owns it.
 
 ## 3. Forward-compatibility invariants
 
