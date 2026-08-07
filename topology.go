@@ -202,12 +202,13 @@ type Vertex struct {
 // carries that motion's own rounding (docs/loft-design.md §5) — a recorded
 // coordinate the identity transform leaves alone is the zero-bound case of
 // that same rule, not an exception to it.
-// Not every computed coordinate is tracked yet — a prism side vertex sits at
-// a sweep level a ToFace or ThroughAll extent computed in float (stops.go) and
-// still reports a zero bound, an untracked axial rounding recorded as a
-// follow-up beside the bound stamp in extrude.go's buildLoopSidesAs. Being
-// feature-built is not by itself a claim of exactness: what the coordinate was
-// READ FROM is.
+// A swept vertex is read from two independent coordinates and carries what each
+// was read from: its plane-local pair from the section, and its sweep level from
+// the extent. A level a ToFace or ThroughAll stop resolved in float, a magnitude
+// rescaled from a non-base unit, and a chamfered end's setback are all COMPUTED
+// levels, and each carries its own proven displacement into the vertex
+// (extrude.go's z0Delta/z1Delta). Being feature-built is not by itself a claim
+// of exactness: what the coordinate was READ FROM is.
 func (v *Vertex) Position() VecMeasurement {
 	exactness := Exact
 	if v.bound.Mag() != 0 {
@@ -375,6 +376,12 @@ type Face struct {
 	// areaBound is the proven error bound on area: analytic float evaluation
 	// or the composed chord bound for a boolean-built Faceted face.
 	areaBound float64
+	// axialDelta is the proven displacement of this planar face along its own
+	// normal. A body-relative ToFace stop carries this selected face's bound
+	// into the level it computes; hasAxialDelta distinguishes an exact zero
+	// from a face whose payload does not state an axial bound.
+	axialDelta    float64
+	hasAxialDelta bool
 	// heldPlanar records that a Faceted face descends only from PLANAR source
 	// faces, so the face it stands for in the true result is flat — and a rim
 	// between two such faces is a straight line, whose chord length is honest.

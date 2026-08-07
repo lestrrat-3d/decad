@@ -96,21 +96,32 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref StepRef, cbp capB
 			sign = -1
 		}
 
-		// A chamfered end pulls its own straight level in by the setback, and
-		// that float sum rounds. The rounding is an ulp of the SWEEP, but it
-		// multiplies the whole section area below, so it reaches the volume at
-		// the scale of the band itself and is charged here — the same term
-		// capBandVolume charges for the identical level it reads as sideZ.
-		zLo, zHi := exactScalar(cbp.z0), exactScalar(cbp.z1)
+		// A chamfered end pulls its own straight level in by the setback. Its
+		// unit conversion and float sum both round. The rounding is an ulp of
+		// the SWEEP, but it multiplies the whole section area below, so it
+		// reaches the volume at the scale of the band itself and is charged here
+		// — the same term capBandVolume charges for the identical level it reads
+		// as sideZ.
+		zLo, zHi := measuredScalar(cbp.z0, cbp.z0Delta), measuredScalar(cbp.z1, cbp.z1Delta)
+		setback := measuredScalar(cbp.d, cbp.dDelta)
 		if onStart {
-			v := cbp.z0 + cbp.d
-			zLo = measuredScalar(v, addRoundError(cbp.z0, cbp.d, v))
+			zLo = boundedAdd(zLo, setback)
 		}
 		if onEnd {
-			v := cbp.z1 - cbp.d
-			zHi = measuredScalar(v, addRoundError(cbp.z1, -cbp.d, v))
+			zHi = boundedSub(zHi, setback)
 		}
-		ppFor := prismPayload{frame: cbp.frame, z0: zLo.value, z1: zHi.value, xform: cbp.xform}
+		// The side walls are built over those same two bounded levels, so each
+		// end's displacement goes in with it: the wall vertices, the vertical
+		// edge lengths and the side face areas all read a level the setback
+		// computed, never one they can claim was recorded.
+		ppFor := prismPayload{
+			frame:   cbp.frame,
+			z0:      zLo.value,
+			z1:      zHi.value,
+			z0Delta: zLo.bound,
+			z1Delta: zHi.bound,
+			xform:   cbp.xform,
+		}
 		sideFaces, bottomCo, topCo, loopLen, err := buildLoopSidesAs(ctx, body, ref, ppFor, li, li != 0, loop, work)
 		if err != nil {
 			return nil, err
@@ -256,20 +267,24 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref StepRef, cbp capB
 		return nil, err
 	}
 	capStart := &Face{
-		surface:   Plane{Frame: startFrame},
-		origins:   []FeatureRef{{Step: ref, Role: roleCapStart}},
-		body:      body,
-		loops:     startLoopObjs,
-		area:      startArea.value,
-		areaBound: startArea.bound,
+		surface:       Plane{Frame: startFrame},
+		origins:       []FeatureRef{{Step: ref, Role: roleCapStart}},
+		body:          body,
+		loops:         startLoopObjs,
+		area:          startArea.value,
+		areaBound:     startArea.bound,
+		axialDelta:    cbp.z0Delta,
+		hasAxialDelta: true,
 	}
 	capEnd := &Face{
-		surface:   Plane{Frame: endFrame},
-		origins:   []FeatureRef{{Step: ref, Role: roleCapEnd}},
-		body:      body,
-		loops:     endLoopObjs,
-		area:      endArea.value,
-		areaBound: endArea.bound,
+		surface:       Plane{Frame: endFrame},
+		origins:       []FeatureRef{{Step: ref, Role: roleCapEnd}},
+		body:          body,
+		loops:         endLoopObjs,
+		area:          endArea.value,
+		areaBound:     endArea.bound,
+		axialDelta:    cbp.z1Delta,
+		hasAxialDelta: true,
 	}
 	if err := attachFaceLoopsContext(ctx, []*Face{capStart, capEnd}); err != nil {
 		return nil, err
@@ -391,12 +406,15 @@ func capLoopBoundary(ctx context.Context, loop LoopRecord, d float64) (LoopRecor
 // capArea's own bound, or inside each patchRawFlux term, would count the SAME
 // displaced coordinates twice, since patchRawFlux already reads them.
 func capBandVolume(ctx context.Context, loop LoopRecord, cbp capBlendPayload, geom []capPatchGeom, capZ, matSign, delta float64) (boundedScalar, error) {
-	sideZ := capZ + matSign*cbp.d
+	capZB := cbp.capBandLevel(capZ, matSign)
+	sideZB := boundedAdd(capZB, measuredScalar(matSign*cbp.d, cbp.dDelta))
+	sideZ := sideZB.value
 	// sideZ multiplies a whole disk area below, so its own rounding is a term
 	// of the band and is charged here — an error the size of an ulp of the
 	// sweep height, amplified by the section's area, which is of the order of
-	// the band itself once the disks cancel.
-	sideZBound := addRoundError(capZ, matSign*cbp.d, sideZ)
+	// the band itself once the disks cancel. sideZB also preserves the cap
+	// level's inherited axial displacement: the side level is derived from
+	// that computed cap, not from an exact coordinate.
 	// The two closing disks are loopEnclosedAreaContext's ABSOLUTE areas, so
 	// the sub-solid they close off is the region the loop encloses read as
 	// POSITIVELY oriented — counter-clockwise — whichever way the loop was
@@ -429,11 +447,12 @@ func capBandVolume(ctx context.Context, loop LoopRecord, cbp capBlendPayload, ge
 	// disk) is its constant Z coordinate times its signed normal times its
 	// area — no triangulation needed.
 	// The two sign factors are +1 or -1, so applying them is exact and each
-	// level keeps whatever bound it arrived with: capZ is a payload coordinate
-	// and exact, sideZ carries the rounding of its own sum.
+	// level keeps whatever bound it arrived with: capZ can inherit a body-
+	// relative stop's axial displacement, and sideZ adds its own rounding to
+	// that same displacement.
 	fluxTotal := boundedAdd(
-		boundedMul(exactScalar(capZ*(-matSign)), capArea),
-		boundedMul(measuredScalar(sideZ*matSign, sideZBound), sideArea),
+		boundedMul(measuredScalar(capZB.value*(-matSign), capZB.bound), capArea),
+		boundedMul(measuredScalar(sideZ*matSign, sideZB.bound), sideArea),
 	)
 	// patchRawFlux's own v0..v3 (or triangle-fan) vertex order is FIXED —
 	// side-level vertices first, cap-level second — regardless of which cap

@@ -3,6 +3,8 @@ package decad
 import (
 	"context"
 	"fmt"
+	"math"
+	"math/big"
 	"slices"
 
 	"github.com/lestrrat-3d/r3"
@@ -266,4 +268,34 @@ func magnitudeIn(v units.Value, kind units.Kind, unit units.Unit, what string) (
 		return 0, fmt.Errorf(`%w: %s must be non-negative, got %s`, ErrNegativeMagnitude, what, v)
 	}
 	return m, nil
+}
+
+// magnitudeInBounded is magnitudeIn beside the rounding the conversion itself
+// committed. A magnitude carried in a non-base unit reaches the evaluator as a
+// RESCALED float — units multiplies by the source unit's factor and divides by
+// the target's — so the millimetre figure returned is that rounding away from
+// the quantity the caller stated, and a level built from it is a computed level
+// like any other. A magnitude already in millimetres rescales by a factor of
+// one and reports zero, which is what keeps every millimetre-stated extent
+// exact.
+func magnitudeInBounded(v units.Value, kind units.Kind, unit units.Unit, what string) (float64, float64, error) {
+	m, err := magnitudeIn(v, kind, unit, what)
+	if err != nil {
+		return 0, 0, err
+	}
+	return m, conversionRound(v, unit, m), nil
+}
+
+// conversionRound measures that rounding rather than estimating it: the rescale
+// is redone in exact rationals over the same magnitude and the same two unit
+// factors, and compared with the float that was held. Every input is a float64
+// and so an exact rational, so the comparison is the conversion's true error,
+// whatever sequence of float operations produced the held value.
+func conversionRound(v units.Value, unit units.Unit, held float64) float64 {
+	mag, from, to := floatRat(v.Mag()), floatRat(v.Unit().Factor()), floatRat(unit.Factor())
+	if mag == nil || from == nil || to == nil || to.Sign() == 0 {
+		return math.Inf(1)
+	}
+	exact := new(big.Rat).Quo(new(big.Rat).Mul(mag, from), to)
+	return rationalFloatError(exact, held)
 }

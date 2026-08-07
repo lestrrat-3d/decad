@@ -259,10 +259,11 @@ type capPatchGeom struct {
 	// side level's allowance (levelDelta below) there.
 	contourAllow float64
 
-	// levelDelta is the SIDE level's own rounding: sideZ is the single float
-	// sum capZ + matSign*d, so this patch's whole side directrix sits that far
-	// from the level it denotes — the same term capSlantEdge charges into a
-	// slant edge's length and capBandVolume charges for the identical level.
+	// levelDelta is the SIDE level's conversion and float-sum rounding: sideZ
+	// is the single float sum capZ + matSign*d, so this patch's whole side
+	// directrix sits that far from the level it denotes — the same term
+	// capSlantEdge charges into a slant edge's length and capBandVolume charges
+	// for the identical level.
 	// patchAreaOf reads it as the axial half of its own displacement
 	// allowance (bounds.go's bandLevelAreaAllow), beside contourAllow's
 	// cap-level half; without it both of that function's arms would read the
@@ -306,13 +307,18 @@ func buildCapBand(ctx context.Context, body *Body, ref StepRef, cbp capBlendPayl
 	liftCap := func(p Point2) r3.Vec { return pl.point(p.U, p.V, capZ) }
 	liftSide := func(p Point2) r3.Vec { return pl.point(p.U, p.V, sideZ) }
 
-	// levelDelta is the side level's own rounding: sideZ is a float sum, so the
-	// band's side directrix sits that far from the level it denotes, and every
-	// edge with an endpoint there carries it beside the contour's own
-	// displacement. It is the same term capBandVolume charges for the identical
-	// level, and it rides onto every patch's own capPatchGeom, where
-	// patchAreaOf charges it against the patch's area (capblend_moments.go).
-	levelDelta := addRoundError(capZ, matSign*d, sideZ)
+	// levelDelta is the side level's conversion and float-sum rounding: sideZ
+	// is a float sum, so the band's side directrix sits that far from the level
+	// it denotes, and every edge with an endpoint there carries it beside the
+	// contour's own displacement. It is the same term capBandVolume charges for
+	// the identical level, and it rides onto every patch's own capPatchGeom,
+	// where patchAreaOf charges it against the patch's area
+	// (capblend_moments.go).
+	levelDelta := absSumUpper(cbp.dDelta, addRoundError(capZ, matSign*d, sideZ))
+	// capDelta is the inherited displacement of the cap level itself. The cap
+	// contour moves only in the cap plane, so its delta does not cover this
+	// independent axial term.
+	capDelta := cbp.capBandLevel(capZ, matSign).bound
 
 	// A single closed circle has no corner: one Cone patch, full turn.
 	if n == 1 && walks[0].closed {
@@ -330,7 +336,8 @@ func buildCapBand(ctx context.Context, body *Body, ref StepRef, cbp capBlendPayl
 			return capBandResult{}, errCapContourUnbounded
 		}
 		seam0 := sideCo[0].edge // the side wall's own whole-circle bottom/top edge
-		capEdge := wholeCircleEdge(pl, w.cU, w.cV, capRadius, capZ, w.th1 > w.th0, delta, exactRadius)
+		capLevelDelta := absSumUpper(delta, capDelta)
+		capEdge := wholeCircleEdge(pl, w.cU, w.cV, capRadius, capZ, w.th1 > w.th0, capLevelDelta, exactRadius)
 		patch := buildConePatch(pl, body, ref, li, 0, w.cU, w.cV, w.radius, capRadius, sideZ, capZ, matSign, false, seam0, capEdge)
 		sign := 1.0
 		if w.th1 < w.th0 {
@@ -383,6 +390,7 @@ func buildCapBand(ctx context.Context, body *Body, ref StepRef, cbp capBlendPayl
 	if err != nil {
 		return capBandResult{}, err
 	}
+	capLevelDelta := absSumUpper(delta, capDelta)
 
 	// sideVertexAt(i) is the ORIGINAL corner point before wall i, at sideZ —
 	// buildLoopSidesAs's own shared vertex (sideCo[i].edge.Start() ==
@@ -413,15 +421,15 @@ func buildCapBand(ctx context.Context, body *Body, ref StepRef, cbp capBlendPayl
 		j := joins[i]
 		apex := sideVertexAt(i)
 		if !j.arc {
-			capV := &Vertex{position: liftCap(j.m), bound: units.Millimeters(delta)}
-			e := capSlantEdge(j.m, capV, apex, j.vU, j.vV, capZ, sideZ, delta, levelDelta)
+			capV := &Vertex{position: liftCap(j.m), bound: units.Millimeters(capLevelDelta)}
+			e := capSlantEdge(j.m, capV, apex, j.vU, j.vV, capZ, sideZ, capLevelDelta, levelDelta)
 			slantIn[i], slantOut[i] = e, e
 			continue
 		}
-		pAV := &Vertex{position: liftCap(j.pA), bound: units.Millimeters(delta)}
-		pBV := &Vertex{position: liftCap(j.pB), bound: units.Millimeters(delta)}
-		slantIn[i] = capSlantEdge(j.pA, pAV, apex, j.vU, j.vV, capZ, sideZ, delta, levelDelta)
-		slantOut[i] = capSlantEdge(j.pB, pBV, apex, j.vU, j.vV, capZ, sideZ, delta, levelDelta)
+		pAV := &Vertex{position: liftCap(j.pA), bound: units.Millimeters(capLevelDelta)}
+		pBV := &Vertex{position: liftCap(j.pB), bound: units.Millimeters(capLevelDelta)}
+		slantIn[i] = capSlantEdge(j.pA, pAV, apex, j.vU, j.vV, capZ, sideZ, capLevelDelta, levelDelta)
+		slantOut[i] = capSlantEdge(j.pB, pBV, apex, j.vU, j.vV, capZ, sideZ, capLevelDelta, levelDelta)
 		th0 := math.Atan2(j.pA.V-j.vV, j.pA.U-j.vU)
 		th1 := math.Atan2(j.pB.V-j.vV, j.pB.U-j.vU)
 		// The inward offset's reflex connector walks CLOCKWISE from pA to pB
@@ -915,11 +923,16 @@ func buildConePatch(pl prismPayload, body *Body, ref StepRef, li, patchIdx int, 
 	return face
 }
 
+const (
+	capNameStart = "start"
+	capNameEnd   = "end"
+)
+
 func capNameOf(matSign float64) string {
 	if matSign < 0 {
-		return "end"
+		return capNameEnd
 	}
-	return "start"
+	return capNameStart
 }
 
 // fixPatchOrientation empirically verifies a patch's outward normal sign

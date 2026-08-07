@@ -18,10 +18,9 @@ import (
 
 // Mesh is a triangle mesh: an OUTPUT of [Body.Tessellate], never the body
 // representation (core §3 invariant #1 — the public vocabulary stays
-// Body → Face → Edge → Vertex). Vertices lie exactly on the body's analytic
-// boundary; the facets between them deviate from it by no more than Bound,
-// the proven chord error. A Mesh is immutable: the accessors return copies of
-// its slices.
+// Body → Face → Edge → Vertex). Vertices lie on the evaluator's held boundary;
+// curve chording and inherited payload displacement are bounded by Bound. A Mesh
+// is immutable: the accessors return copies of its slices.
 type Mesh struct {
 	vertices  []r3.Vec
 	triangles [][3]int
@@ -35,8 +34,8 @@ type Mesh struct {
 }
 
 // Vertices returns the mesh vertex positions in millimetres (core §5.2).
-// Every vertex lies exactly on the body's analytic boundary — the chord error
-// lives between the samples, not at them.
+// Every vertex lies on the held boundary. Its deviation from the denoted body,
+// including inherited payload displacement, is covered by Bound.
 func (m *Mesh) Vertices() []r3.Vec { return append([]r3.Vec(nil), m.vertices...) }
 
 // Triangles returns the facets as index triples into Vertices, wound
@@ -51,16 +50,19 @@ func (m *Mesh) SourceFaces() []*Face { return append([]*Face(nil), m.source...) 
 
 // Bound returns the proven deviation bound: no point of the body's boundary
 // lies farther than this from the mesh, and vice versa. It is the largest
-// chord sagitta the tessellation actually took — at most the requested
-// tolerance, and zero for a body whose boundary is all planes and straight
-// edges, which triangulates exactly. A scalar quantity is a units.Value
-// (core §5.1): Kind Length, millimetres.
+// complete displacement the tessellation used, including curve chording and
+// inherited payload coordinate bounds. Its chording component is at most the
+// requested tolerance; inherited payload displacement is added on top, so
+// Bound can exceed that tolerance. It is zero only when every held boundary
+// coordinate is exact. A scalar quantity is a units.Value (core §5.1): Kind
+// Length, millimetres.
 func (m *Mesh) Bound() units.Value { return units.Millimeters(m.bound) }
 
-// Tessellate approximates the body's boundary as a triangle mesh whose facets
-// deviate from the analytic faces by no more than tol, the chord tolerance —
-// an OUTPUT, not the representation (core §11). tol is a magnitude: Kind
-// Length ([ErrUnitKind] otherwise), finite ([ErrNotFinite]), non-negative
+// Tessellate approximates the body's boundary as a triangle mesh whose
+// chording deviates from the held analytic faces by no more than tol. Inherited
+// payload displacement is added to the returned Bound. It is an OUTPUT, not
+// the representation (core §11). tol is a magnitude: Kind Length
+// ([ErrUnitKind] otherwise), finite ([ErrNotFinite]), non-negative
 // ([ErrNegativeMagnitude]); a zero tolerance asks for a chord that is the
 // curve and is [ErrDegenerate].
 //
@@ -68,7 +70,7 @@ func (m *Mesh) Bound() units.Value { return units.Millimeters(m.bound) }
 // parameter samples chosen once per boundary curve and shared by every face
 // that meets it — a cap and the cylinder wall use the same chording of their
 // shared edge — so the mesh is watertight and consistently oriented by
-// construction, and Bound carries the largest sagitta actually taken.
+// construction, and Bound carries the complete displacement actually taken.
 //
 // Prism, cup and boolean-built bodies tessellate. A boolean-built body only
 // RESTATES its held mesh, so tol must be at least the body's own Bound: a
@@ -228,12 +230,13 @@ func tessellateContext(ctx context.Context, b *Body, tol units.Value) (*Mesh, er
 			mesh.triangles[i][1], mesh.triangles[i][2] = mesh.triangles[i][2], mesh.triangles[i][1]
 		}
 	}
-	// Every vertex sits exactly on the RECORDED boundary, which a payload
-	// carrying a section displacement holds only within that displacement of the
-	// boundary it denotes (docs/prism-boolean-design.md §7), so the mesh deviates
-	// by its own chording plus that displacement. Zero for every payload a caller
-	// draws.
-	mesh.bound = upRound(mesh.bound + pp.sectionDelta)
+	// Every vertex sits exactly on the RECORDED boundary at one of the recorded
+	// sweep levels, and a payload holds each only within its own displacement of
+	// what it denotes — the section's in the plane
+	// (docs/prism-boolean-design.md §7), each end's along the normal — so the mesh
+	// deviates by its own chording plus both. Chording stays within the requested
+	// tolerance; payload displacement can make the complete bound larger.
+	mesh.bound = upRound(mesh.bound + pp.sectionDelta + pp.axialDelta())
 	return &mesh, nil
 }
 
@@ -360,7 +363,7 @@ func tessellateCup(ctx context.Context, b *Body, cp cupPayload, chord float64) (
 	cLo, cHi := math.Min(cp.zCav, cp.zOpen), math.Max(cp.zCav, cp.zOpen)
 
 	var mesh Mesh
-	base := cp.prismLike(0, 0)
+	base := cp.basePrism()
 	var verts []r3.Vec
 	add := func(v r3.Vec) int { verts = append(verts, v); return len(verts) - 1 }
 
@@ -603,6 +606,7 @@ func tessellateCup(ctx context.Context, b *Body, cp cupPayload, chord float64) (
 	if err := requireClosedMesh(&mesh); err != nil {
 		return nil, err
 	}
+	mesh.bound = upRound(mesh.bound + cp.axialDelta())
 	return &mesh, nil
 }
 

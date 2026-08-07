@@ -660,3 +660,45 @@ func TestShellCupHoledMinRadius(t *testing.T) {
 	require.Equal(t, decad.Sound, br.Status)
 	require.True(t, report.Trustworthy())
 }
+
+// TestShellCupSeparatesComputedOpenAndExactFloorBounds keeps an all-planar cup
+// from assigning its computed open end's displacement to the exact floor.
+func TestShellCupSeparatesComputedOpenAndExactFloorBounds(t *testing.T) {
+	const (
+		plateHeight = 1e12
+		shortBy     = 1e-3
+		rounding    = 2.34375e-05
+	)
+	s, plateProfile, pinProfile := plateAndPin(t)
+	doc := decad.New()
+	plate, err := doc.Extrude(s, plateProfile, decad.Distance{D: units.Millimeters(plateHeight), Dir: decad.Along})
+	require.NoError(t, err)
+	pin, err := doc.Extrude(s, pinProfile, decad.ToFace{
+		Body:   plate,
+		Face:   capEndFace(plate),
+		Offset: units.Millimeters(-shortBy),
+	})
+	require.NoError(t, err)
+	cup, err := pin.Shell(capEndFace(pin), units.Millimeters(1))
+	require.NoError(t, err)
+
+	floorVertices := 0
+	for _, vertex := range cup.Vertices() {
+		position := vertex.Position()
+		if position.Value.Z != 0 && position.Value.Z != 1 {
+			continue
+		}
+		floorVertices++
+		require.Equal(t, decad.Exact, position.Exactness,
+			`the explicitly stated floor level must remain exact`)
+		require.True(t, position.Bound.Equal(units.Millimeters(0), 1e-12),
+			`the explicitly stated floor level must carry no displacement`)
+	}
+	require.NotZero(t, floorVertices, `the cup has vertices on both floor levels`)
+
+	mesh, err := cup.Tessellate(units.Millimeters(0.1))
+	require.NoError(t, err)
+	bound, err := mesh.Bound().In(units.Millimeter)
+	require.NoError(t, err)
+	require.GreaterOrEqual(t, bound, rounding)
+}

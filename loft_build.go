@@ -61,6 +61,11 @@ type loftPayload struct {
 // transform is the accumulated rigid placement.
 func (pl loftPayload) transform() r3.Transform { return pl.xform }
 
+// axialDelta reports the displacement of every held loft vertex. Its planar
+// caps are built from those vertices, so a ToFace stop against either cap
+// inherits this bound.
+func (pl loftPayload) axialDelta() float64 { return pl.delta }
+
 // placed re-evaluates the same two records under the composed motion
 // (docs/loft-design.md §7, §12 PR 2a): it re-lifts every vertex from the
 // record under the FULL composed transform rather than moving the held mesh
@@ -672,20 +677,24 @@ func buildLoftTopology(ctx context.Context, body *Body, ref StepRef, a loftAssem
 		capEndBound = absSumUpper(capEndBound, capTriangleAreaAllow(a.verts, capEndTris, a.delta))
 	}
 	capStart := &Face{
-		surface:   capStartSurf,
-		loops:     capStartLoops,
-		origins:   []FeatureRef{{Step: ref, Role: roleCapStart}},
-		body:      body,
-		area:      cap0Val,
-		areaBound: capStartBound,
+		surface:       capStartSurf,
+		loops:         capStartLoops,
+		origins:       []FeatureRef{{Step: ref, Role: roleCapStart}},
+		body:          body,
+		area:          cap0Val,
+		areaBound:     capStartBound,
+		axialDelta:    a.delta,
+		hasAxialDelta: true,
 	}
 	capEnd := &Face{
-		surface:   capEndSurf,
-		loops:     capEndLoops,
-		origins:   []FeatureRef{{Step: ref, Role: roleCapEnd}},
-		body:      body,
-		area:      cap1Val,
-		areaBound: capEndBound,
+		surface:       capEndSurf,
+		loops:         capEndLoops,
+		origins:       []FeatureRef{{Step: ref, Role: roleCapEnd}},
+		body:          body,
+		area:          cap1Val,
+		areaBound:     capEndBound,
+		axialDelta:    a.delta,
+		hasAxialDelta: true,
 	}
 
 	return capStart, capEnd, walls, nil

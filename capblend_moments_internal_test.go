@@ -39,6 +39,101 @@ func capBandCircle(t *testing.T, r, d, capZ float64) boundedScalar {
 	return v
 }
 
+// TestCapBandMassBoundsChargeInheritedCapLevel isolates the cap disk that
+// both capBandVolume and capBandMoment use to close a chamfer band. A ToFace
+// cap level is computed, so its inherited axial displacement must remain on
+// that disk and on the derived side level. Otherwise both helpers treat the
+// same computed cap as exact and can publish bounds for a different solid.
+func TestCapBandMassBoundsChargeInheritedCapLevel(t *testing.T) {
+	const capZ, d, capDelta = 1e12, 1e-3, 2.34375e-05
+	loop := synthRectLoop(0, 0, 1, 1)
+	for _, tc := range []struct {
+		name    string
+		matSign float64
+		payload capBlendPayload
+	}{
+		{name: `start cap`, matSign: +1, payload: capBlendPayload{d: d, z0Delta: capDelta}},
+		{name: `end cap`, matSign: -1, payload: capBlendPayload{d: d, z1Delta: capDelta}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sideZ := capZ + tc.matSign*d
+			geom := []capPatchGeom{
+				{sideA: Point2{U: 0, V: 0}, sideB: Point2{U: 1, V: 0}, capA: Point2{U: d, V: d}, capB: Point2{U: 1 - d, V: d}, sideZ: sideZ, capZ: capZ},
+				{sideA: Point2{U: 1, V: 0}, sideB: Point2{U: 1, V: 1}, capA: Point2{U: 1 - d, V: d}, capB: Point2{U: 1 - d, V: 1 - d}, sideZ: sideZ, capZ: capZ},
+				{sideA: Point2{U: 1, V: 1}, sideB: Point2{U: 0, V: 1}, capA: Point2{U: 1 - d, V: 1 - d}, capB: Point2{U: d, V: 1 - d}, sideZ: sideZ, capZ: capZ},
+				{sideA: Point2{U: 0, V: 1}, sideB: Point2{U: 0, V: 0}, capA: Point2{U: d, V: 1 - d}, capB: Point2{U: d, V: d}, sideZ: sideZ, capZ: capZ},
+			}
+			withoutDelta := tc.payload
+			withoutDelta.z0Delta = 0
+			withoutDelta.z1Delta = 0
+
+			volumeWith, err := capBandVolume(t.Context(), loop, tc.payload, geom, capZ, tc.matSign, 0)
+			require.NoError(t, err)
+			volumeWithout, err := capBandVolume(t.Context(), loop, withoutDelta, geom, capZ, tc.matSign, 0)
+			require.NoError(t, err)
+			require.Greater(t, volumeWith.bound, volumeWithout.bound,
+				`the cap disk's inherited axial displacement must reach the band volume bound`)
+
+			_, _, momentWith, err := capBandMoment(t.Context(), loop, tc.payload, geom, capZ, tc.matSign, 0, newFreeformWork())
+			require.NoError(t, err)
+			_, _, momentWithout, err := capBandMoment(t.Context(), loop, withoutDelta, geom, capZ, tc.matSign, 0, newFreeformWork())
+			require.NoError(t, err)
+			require.Greater(t, momentWith.bound, momentWithout.bound,
+				`the cap disk's inherited axial displacement must reach the band first-moment bound`)
+		})
+	}
+}
+
+// TestCapBlendSetbackConversionCarriesAllDerivedSideLevels keeps a cap-loop
+// chamfer from treating a non-millimetre setback as exact after it reaches the
+// payload. Both cap senses derive the side level from that converted setback,
+// and a later ThroughAll stop reads the payload's axialDelta.
+func TestCapBlendSetbackConversionCarriesAllDerivedSideLevels(t *testing.T) {
+	d, dDelta, err := magnitudeInBounded(units.Inches(0.1), units.Length, units.Millimeter, "the chamfer setback")
+	require.NoError(t, err)
+	require.Positive(t, dDelta, "the fixture's inch-to-millimetre conversion rounds")
+
+	for _, tc := range []struct {
+		name  string
+		capZ  float64
+		sideZ float64
+		start map[int]bool
+		end   map[int]bool
+	}{
+		{name: capNameStart, capZ: 0, sideZ: d, start: map[int]bool{0: true}},
+		{name: capNameEnd, capZ: 10, sideZ: 10 - d, end: map[int]bool{0: true}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cbp := capBlendPayload{
+				profile:    ProfileRecord{Outer: synthRectLoop(0, 0, 10, 10)},
+				frame:      canonicalPrismFrame(t),
+				z0:         0,
+				z1:         10,
+				xform:      r3.Identity(),
+				d:          d,
+				dDelta:     dDelta,
+				startLoops: tc.start,
+				endLoops:   tc.end,
+			}
+			body, err := evalCapBlendContext(t.Context(), New(), 0, cbp)
+			require.NoError(t, err)
+			require.GreaterOrEqual(t, cbp.axialDelta(), dDelta)
+
+			side := 0
+			for _, vertex := range body.Vertices() {
+				position := vertex.Position()
+				if position.Value.Z != tc.sideZ {
+					continue
+				}
+				require.Equal(t, Approximate, position.Exactness)
+				require.GreaterOrEqual(t, position.Bound.Mag(), dDelta)
+				side++
+			}
+			require.Equal(t, 4, side, "the square has four derived side-level vertices")
+		})
+	}
+}
+
 // TestCapBandVolumeBoundTracksTheFluxNotTheCancelledBand is the regression
 // check for the mechanism that made the published volume bound stop
 // enclosing, and it needs no platform to disagree with another to show it.

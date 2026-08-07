@@ -6,6 +6,7 @@ import (
 
 	"github.com/lestrrat-3d/decad"
 	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
@@ -91,6 +92,132 @@ func TestVerifyExactBodyPassesZeroTolerance(t *testing.T) {
 	require.Equal(t, decad.Exact, report.Bodies[0].Exactness)
 	require.Equal(t, decad.Sound, report.Status)
 	require.True(t, report.Trustworthy())
+}
+
+// computedToFacePin builds a short, offset-plane fixture where resolving a
+// ToFace level loses precision relative to the body's own diameter. The large
+// world coordinates make the inherited axial displacement visible at this
+// scale without making the body itself large.
+func computedToFacePin(t *testing.T) (*decad.Document, *decad.Body, float64) {
+	t.Helper()
+	w := sketch.NewWorld()
+	frame, err := r3.NewFrame(
+		r3.NewVec(1e12, 1e12, 0),
+		r3.NewVec(0, 0, 1),
+		r3.NewVec(0.6, 0.8, 0),
+	)
+	require.NoError(t, err)
+	plane, err := w.CreatePlaneFromFrame(frame)
+	require.NoError(t, err)
+	s, err := w.CreateSketch(plane)
+	require.NoError(t, err)
+	plateRect := s.CreateRectangle(0, 0, 100, 60)
+	s.Fix(plateRect.A)
+	s.CreateRectangle(120, 0, 140, 20)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+
+	var plateProfile, pinProfile *sketch.Profile
+	for _, profile := range s.Profiles() {
+		if profile.Area > 1000 {
+			plateProfile = profile
+			continue
+		}
+		pinProfile = profile
+	}
+	require.NotNil(t, plateProfile)
+	require.NotNil(t, pinProfile)
+
+	doc := decad.New()
+	plate, err := doc.Extrude(s, plateProfile, decad.Distance{D: units.Millimeters(1e6), Dir: decad.Along})
+	require.NoError(t, err)
+	pin, err := doc.Extrude(s, pinProfile, decad.ToFace{
+		Body:   plate,
+		Face:   capEndFace(plate),
+		Offset: units.Millimeters(-0.001),
+	})
+	require.NoError(t, err)
+
+	points := make([]r3.Vec, 0, len(pin.Vertices()))
+	for _, vertex := range pin.Vertices() {
+		points = append(points, vertex.Position().Value)
+	}
+	diameter := diameterOf(points)
+	require.Positive(t, diameter)
+	return doc, pin, diameter
+}
+
+// requireComputedToFaceDiameterGate fixes a reading's threshold to the held
+// prism diameter. A computed axial level means that value can overstate the
+// true body's diameter, so Verify must reject the reading.
+func requireComputedToFaceDiameterGate(t *testing.T, doc *decad.Document, body *decad.Body, heldDiameter float64, reading decad.ReadingKind, bound float64) {
+	t.Helper()
+	require.Positive(t, bound)
+	rel := bound / heldDiameter
+	require.Positive(t, rel)
+	report, err := doc.Verify(t.Context(), decad.WithTolerance(units.Scalar(rel)))
+	require.NoError(t, err)
+
+	var bodyReport *decad.BodyReport
+	for _, candidate := range report.Bodies {
+		if candidate.Body == body {
+			bodyReport = candidate
+			break
+		}
+	}
+	require.NotNil(t, bodyReport)
+	require.Equal(t, decad.Suspect, bodyReport.Status)
+	require.False(t, report.Trustworthy())
+
+	for _, diagnostic := range report.Diagnostics {
+		if diagnostic.Body == body && diagnostic.Reading == reading {
+			require.NotNil(t, diagnostic.Required)
+			require.Less(t, diagnostic.Required.Base(), bound)
+			return
+		}
+	}
+	t.Fatalf("Verify did not report the computed ToFace %s threshold", reading)
+}
+
+func requireComputedToFaceDiameterThresholds(t *testing.T, doc *decad.Document, body *decad.Body, heldDiameter float64) {
+	t.Helper()
+	bounds, err := body.Bounds()
+	require.NoError(t, err)
+	centroid, err := body.Centroid()
+	require.NoError(t, err)
+
+	for _, tc := range []struct {
+		reading decad.ReadingKind
+		bound   float64
+	}{
+		{reading: decad.ReadingBounds, bound: bounds.Bound.Base()},
+		{reading: decad.ReadingCentroid, bound: centroid.Bound.Base()},
+	} {
+		t.Run(tc.reading.String(), func(t *testing.T) {
+			requireComputedToFaceDiameterGate(t, doc, body, heldDiameter, tc.reading, tc.bound)
+		})
+	}
+}
+
+func TestVerifyComputedToFaceDiameterThreshold(t *testing.T) {
+	t.Run("prism", func(t *testing.T) {
+		doc, pin, heldDiameter := computedToFacePin(t)
+		requireComputedToFaceDiameterThresholds(t, doc, pin, heldDiameter)
+	})
+
+	t.Run("cup", func(t *testing.T) {
+		doc, pin, heldDiameter := computedToFacePin(t)
+		cup, err := pin.Shell(topCap(pin), units.Millimeters(1))
+		require.NoError(t, err)
+		requireComputedToFaceDiameterThresholds(t, doc, cup, heldDiameter)
+	})
+
+	t.Run("cap blend", func(t *testing.T) {
+		doc, pin, heldDiameter := computedToFacePin(t)
+		chamfered, err := pin.Chamfer(capLoopEdges(pin), units.Millimeters(1))
+		require.NoError(t, err)
+		requireComputedToFaceDiameterThresholds(t, doc, chamfered, heldDiameter)
+	})
 }
 
 // TestVerifyCupWithinToleranceIsSound is the cup coverage the tolerance gate

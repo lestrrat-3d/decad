@@ -106,14 +106,14 @@ func (d *Document) Extrude(s *sketch.Sketch, p *sketch.Profile, e Extent, opts .
 	if err != nil {
 		return nil, err
 	}
-	z0, z1, inputs, err := d.resolveLinearExtent(e, frame)
+	sweep, err := d.resolveLinearExtent(e, frame)
 	if err != nil {
 		return nil, err
 	}
 
 	step := Step{
 		Op:      OpExtrude,
-		Inputs:  inputs,
+		Inputs:  sweep.inputs,
 		Profile: profile,
 		Plane:   plane,
 		Extent:  recordExtent(e),
@@ -123,8 +123,10 @@ func (d *Document) Extrude(s *sketch.Sketch, p *sketch.Profile, e Extent, opts .
 	body, err := evalPrism(d, ref, prismPayload{
 		profile: profile,
 		frame:   frame,
-		z0:      z0,
-		z1:      z1,
+		z0:      sweep.z0,
+		z1:      sweep.z1,
+		z0Delta: sweep.z0Delta,
+		z1Delta: sweep.z1Delta,
 		xform:   r3.Identity(),
 	}, work)
 	if err != nil {
@@ -153,59 +155,76 @@ func falsifyRecordedArea(profile ProfileRecord, sketchArea float64, work *freefo
 	return nil
 }
 
-// resolveLinearExtent turns a linear extent into the signed sweep interval
-// [z0, z1] along the plane normal (docs/evaluator-design.md §5), plus the
-// StepRefs of the bodies the extent's stops resolved against — named-extent
-// refs in extent order first, through-all stop bodies after them in stop
-// order along the sweep, deduplicated (core §6.2). Magnitudes are validated
-// per core §8.1/§12; a zero-thickness sweep is ErrDegenerate.
-func (d *Document) resolveLinearExtent(e Extent, frame r3.Frame) (float64, float64, []StepRef, error) {
+// linearSweep is a resolved linear extent: the signed sweep interval [z0, z1]
+// along the plane normal, each end's own proven axial displacement, and the
+// StepRefs of the bodies the extent's stops resolved against. A level the
+// caller stated denotes itself and reports a zero displacement; a level the
+// resolution COMPUTED reports the rounding that computation committed, which is
+// what the prism payload carries into every level-derived reading.
+type linearSweep struct {
+	z0, z1  float64
+	z0Delta float64
+	z1Delta float64
+	inputs  []StepRef
+}
+
+// resolveLinearExtent turns a linear extent into that sweep
+// (docs/evaluator-design.md §5). The refs are ordered named-extent refs in
+// extent order first, through-all stop bodies after them in stop order along
+// the sweep, deduplicated (core §6.2). Magnitudes are validated per core
+// §8.1/§12; a zero-thickness sweep is ErrDegenerate.
+func (d *Document) resolveLinearExtent(e Extent, frame r3.Frame) (linearSweep, error) {
 	switch e := e.(type) {
 	case Distance:
-		m, err := magnitudeIn(e.D, units.Length, units.Millimeter, "the extent distance")
+		m, delta, err := magnitudeInBounded(e.D, units.Length, units.Millimeter, "the extent distance")
 		if err != nil {
-			return 0, 0, nil, err
+			return linearSweep{}, err
 		}
 		if m == 0 {
-			return 0, 0, nil, fmt.Errorf(`%w: a zero-distance extent sweeps no solid`, ErrDegenerate)
+			return linearSweep{}, fmt.Errorf(`%w: a zero-distance extent sweeps no solid`, ErrDegenerate)
 		}
-		// An unknown Direction is malformed input, never silently Along.
+		// An unknown Direction is malformed input, never silently Along. The
+		// sketch plane is the end the caller did NOT state, so it stays exact
+		// and the swept end takes the distance's own displacement.
 		switch e.Dir {
 		case Along:
-			return 0, m, nil, nil
+			return linearSweep{z1: m, z1Delta: delta}, nil
 		case Against:
-			return -m, 0, nil, nil
+			return linearSweep{z0: -m, z0Delta: delta}, nil
 		default:
-			return 0, 0, nil, fmt.Errorf(`%w: unknown direction %d`, ErrDegenerate, int(e.Dir))
+			return linearSweep{}, fmt.Errorf(`%w: unknown direction %d`, ErrDegenerate, int(e.Dir))
 		}
 	case Symmetric:
-		m, err := magnitudeIn(e.D, units.Length, units.Millimeter, "the symmetric distance")
+		m, delta, err := magnitudeInBounded(e.D, units.Length, units.Millimeter, "the symmetric distance")
 		if err != nil {
-			return 0, 0, nil, err
+			return linearSweep{}, err
 		}
 		if m == 0 {
-			return 0, 0, nil, fmt.Errorf(`%w: a zero-distance extent sweeps no solid`, ErrDegenerate)
+			return linearSweep{}, fmt.Errorf(`%w: a zero-distance extent sweeps no solid`, ErrDegenerate)
 		}
 		half := m
 		if e.FullLength {
 			half = m / 2
 		}
-		return -half, half, nil, nil
+		// Halving is exact in binary, so each end sits within the distance's own
+		// displacement of the level it denotes; charging the whole displacement
+		// to each end rather than half of it is the conservative reading.
+		return linearSweep{z0: -half, z1: half, z0Delta: delta, z1Delta: delta}, nil
 	case TwoSided:
 		one, err := d.resolveLinearSide(e.One, frame, 1, "the along side")
 		if err != nil {
-			return 0, 0, nil, err
+			return linearSweep{}, err
 		}
 		two, err := d.resolveLinearSide(e.Two, frame, -1, "the against side")
 		if err != nil {
-			return 0, 0, nil, err
+			return linearSweep{}, err
 		}
 		if one.z == 0 && two.z == 0 {
-			return 0, 0, nil, fmt.Errorf(`%w: a zero-distance extent sweeps no solid`, ErrDegenerate)
+			return linearSweep{}, fmt.Errorf(`%w: a zero-distance extent sweeps no solid`, ErrDegenerate)
 		}
 		named := append(append([]StepRef(nil), one.named...), two.named...)
 		refs := dedupRefs(append(append(named, one.through...), two.through...))
-		return two.z, one.z, refs, nil
+		return linearSweep{z0: two.z, z1: one.z, z0Delta: two.delta, z1Delta: one.delta, inputs: refs}, nil
 	case ThroughAll:
 		// An unknown Direction is malformed input, never silently Along.
 		var travel float64
@@ -215,38 +234,39 @@ func (d *Document) resolveLinearExtent(e Extent, frame r3.Frame) (float64, float
 		case Against:
 			travel = -1
 		default:
-			return 0, 0, nil, fmt.Errorf(`%w: unknown direction %d`, ErrDegenerate, int(e.Dir))
+			return linearSweep{}, fmt.Errorf(`%w: unknown direction %d`, ErrDegenerate, int(e.Dir))
 		}
-		stop, refs, err := d.resolveThroughAll(frame, travel)
+		stop, delta, refs, err := d.resolveThroughAll(frame, travel)
 		if err != nil {
-			return 0, 0, nil, err
+			return linearSweep{}, err
 		}
 		if travel > 0 {
-			return 0, stop, refs, nil
+			return linearSweep{z1: stop, z1Delta: delta, inputs: refs}, nil
 		}
-		return stop, 0, refs, nil
+		return linearSweep{z0: stop, z0Delta: delta, inputs: refs}, nil
 	case ToFace:
-		stop, ref, err := d.resolveToFace(e, frame, 0, "a to-face extent")
+		stop, delta, ref, err := d.resolveToFace(e, frame, 0, "a to-face extent")
 		if err != nil {
-			return 0, 0, nil, err
+			return linearSweep{}, err
 		}
 		if stop > 0 {
-			return 0, stop, []StepRef{ref}, nil
+			return linearSweep{z1: stop, z1Delta: delta, inputs: []StepRef{ref}}, nil
 		}
-		return stop, 0, []StepRef{ref}, nil
+		return linearSweep{z0: stop, z0Delta: delta, inputs: []StepRef{ref}}, nil
 	case nil:
-		return 0, 0, nil, fmt.Errorf(`%w: a nil extent sweeps nothing`, ErrDegenerate)
+		return linearSweep{}, fmt.Errorf(`%w: a nil extent sweeps nothing`, ErrDegenerate)
 	default:
-		return 0, 0, nil, fmt.Errorf(`%w: extent %T is not supported by this evaluator`, ErrUnsupported, e)
+		return linearSweep{}, fmt.Errorf(`%w: extent %T is not supported by this evaluator`, ErrUnsupported, e)
 	}
 }
 
 // linearSide is one resolved side of a TwoSided: its signed boundary
-// coordinate along the plane normal, and the stop refs it resolved —
-// named-extent and through-all kept apart so the enclosing extent can order
-// them per core §6.2.
+// coordinate along the plane normal, that coordinate's own axial displacement,
+// and the stop refs it resolved — named-extent and through-all kept apart so
+// the enclosing extent can order them per core §6.2.
 type linearSide struct {
 	z       float64
+	delta   float64
 	named   []StepRef
 	through []StepRef
 }
@@ -260,23 +280,25 @@ func (d *Document) resolveLinearSide(s SideExtent, frame r3.Frame, travel float6
 	}
 	switch s := s.(type) {
 	case DistanceSide:
-		m, err := magnitudeIn(s.D, units.Length, units.Millimeter, what)
+		m, delta, err := magnitudeInBounded(s.D, units.Length, units.Millimeter, what)
 		if err != nil {
 			return linearSide{}, err
 		}
-		return linearSide{z: travel * m}, nil
+		// travel is ±1, so the signed level is the magnitude itself and its
+		// displacement carries across unchanged.
+		return linearSide{z: travel * m, delta: delta}, nil
 	case ThroughAllSide:
-		stop, refs, err := d.resolveThroughAll(frame, travel)
+		stop, delta, refs, err := d.resolveThroughAll(frame, travel)
 		if err != nil {
 			return linearSide{}, err
 		}
-		return linearSide{z: stop, through: refs}, nil
+		return linearSide{z: stop, delta: delta, through: refs}, nil
 	case ToFace:
-		stop, ref, err := d.resolveToFace(s, frame, travel, what)
+		stop, delta, ref, err := d.resolveToFace(s, frame, travel, what)
 		if err != nil {
 			return linearSide{}, err
 		}
-		return linearSide{z: stop, named: []StepRef{ref}}, nil
+		return linearSide{z: stop, delta: delta, named: []StepRef{ref}}, nil
 	case nil:
 		return linearSide{}, fmt.Errorf(`%w: a two-sided extent requires both sides`, ErrDegenerate)
 	default:
@@ -306,15 +328,46 @@ func (d *Document) resolveLinearSide(s SideExtent, frame r3.Frame, travel float6
 // displacement its coordinate re-expression commits. Being a payload field it
 // re-evaluates with the payload, so a placement or copy keeps it, and every
 // measurement evalPrism publishes composes it (never Exact while it is nonzero).
+//
+// z0Delta and z1Delta are the AXIAL twin of that displacement, one per end: each
+// bounds how far the sweep level recorded beside it sits from the level this
+// payload's construction denotes. A level the caller stated is its own denotation
+// and carries zero — a Distance in millimetres records the number it was given —
+// while a COMPUTED level carries the computation's own proven rounding: a ToFace
+// or ThroughAll stop resolves its level by float arithmetic over another body's
+// face (stops.go), a magnitude in a non-base unit rounds in its rescale to
+// millimetres (magnitudeInBounded), and a chamfered end pulls its level in by the
+// setback (capblend_moments.go). The two displacements are tracked apart and
+// neither ever stands in for the other — sectionDelta moves a boundary coordinate
+// IN the plane, these move a level ALONG the normal — while a reading both of them
+// displace, a side vertex or the box, sums the two into its own bound. Every
+// level-derived reading takes these: the sweep
+// height and the volume, wall area and centroid built on it, the box, the side
+// vertices and the vertical edge lengths. Being payload fields they re-evaluate
+// with the payload, so a placement or copy keeps them.
 type prismPayload struct {
 	profile      ProfileRecord
 	frame        r3.Frame
 	z0, z1       float64
+	z0Delta      float64
+	z1Delta      float64
 	xform        r3.Transform
 	blendSegs    []map[int]struct{}
 	blendKind    string
 	sectionDelta float64
 }
+
+// z0Scalar and z1Scalar are the sweep levels as bounded readings — the recorded
+// float beside its own axial displacement. Every measurement derived from a
+// level integrates these rather than the bare float, so a level the evaluator
+// computed can never publish itself as the level it denotes.
+func (pp prismPayload) z0Scalar() boundedScalar { return measuredScalar(pp.z0, pp.z0Delta) }
+
+func (pp prismPayload) z1Scalar() boundedScalar { return measuredScalar(pp.z1, pp.z1Delta) }
+
+// axialDelta is the larger of the two ends' displacements: the figure a reading
+// that cannot attribute its error to one particular end takes.
+func (pp prismPayload) axialDelta() float64 { return math.Max(pp.z0Delta, pp.z1Delta) }
 
 // point lifts a plane-local (u, v) at height z into placed world space.
 func (pp prismPayload) point(u, v, z float64) r3.Vec {
@@ -473,7 +526,7 @@ func evalPrismContext(ctx context.Context, d *Document, ref StepRef, pp prismPay
 	if ig.area <= 0 {
 		return nil, fmt.Errorf(`%w: the recorded region encloses no area`, ErrDegenerate)
 	}
-	height := boundedSub(exactScalar(pp.z1), exactScalar(pp.z0))
+	height := boundedSub(pp.z1Scalar(), pp.z0Scalar())
 	h := height.value
 	if h <= 0 {
 		return nil, fmt.Errorf(`%w: the sweep interval is empty`, ErrDegenerate)
@@ -494,18 +547,22 @@ func evalPrismContext(ctx context.Context, d *Document, ref StepRef, pp prismPay
 		return nil, err
 	}
 	capStart := &Face{
-		surface:   Plane{Frame: startFrame},
-		origins:   []FeatureRef{{Step: ref, Role: roleCapStart}},
-		body:      body,
-		area:      ig.area,
-		areaBound: ig.areaBound,
+		surface:       Plane{Frame: startFrame},
+		origins:       []FeatureRef{{Step: ref, Role: roleCapStart}},
+		body:          body,
+		area:          ig.area,
+		areaBound:     ig.areaBound,
+		axialDelta:    pp.z0Delta,
+		hasAxialDelta: true,
 	}
 	capEnd := &Face{
-		surface:   Plane{Frame: endFrame},
-		origins:   []FeatureRef{{Step: ref, Role: roleCapEnd}},
-		body:      body,
-		area:      ig.area,
-		areaBound: ig.areaBound,
+		surface:       Plane{Frame: endFrame},
+		origins:       []FeatureRef{{Step: ref, Role: roleCapEnd}},
+		body:          body,
+		area:          ig.area,
+		areaBound:     ig.areaBound,
+		axialDelta:    pp.z1Delta,
+		hasAxialDelta: true,
 	}
 
 	perimeter := boundedScalar{}
@@ -566,7 +623,7 @@ func evalPrismContext(ctx context.Context, d *Document, ref StepRef, pp prismPay
 	}
 	cu := boundedQuotient(ig.mu, ig.muBound, ig.area, ig.areaBound)
 	cv := boundedQuotient(ig.mv, ig.mvBound, ig.area, ig.areaBound)
-	zc := boundedDiv(boundedAdd(exactScalar(pp.z0), exactScalar(pp.z1)), exactScalar(2))
+	zc := boundedDiv(boundedAdd(pp.z0Scalar(), pp.z1Scalar()), exactScalar(2))
 	centroidValue := pp.point(cu.value, cv.value, zc.value)
 	// A displaced section moves its own centroid, so the displacement enters the
 	// plane-local source term prismPointBound already carries through the frame
@@ -1111,29 +1168,21 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref StepRef, pp prismPayl
 	// Junction vertices, shared between neighbors: junction i sits at walk
 	// i's start (== walk i−1's end). A single whole closed curve has none.
 	singleClosed := n == 1 && walks[0].closed
-	// exactScalar declares both sweep levels exact, so the vertical edges below
-	// report Edge.Length() Exact with a zero bound even where a level was
-	// COMPUTED — the same discarded axial provenance the vertex bound a few
-	// lines down states in full, reached by the same plain extrude and deferred
-	// for the same reason.
-	height := boundedSub(exactScalar(pp.z1), exactScalar(pp.z0))
-	// The bound stamped below is sectionDelta, which is zero for every
-	// caller-drawn payload — including one whose z level was COMPUTED rather
-	// than recorded. stops.go derives a ToFace level as `zFace + travel*offset`
-	// and a ThroughAll level as `hi - base`, both in float: extrude a plate
-	// `Distance 1e12 mm`, then extrude to `ToFace{Face: capEnd, Offset: -0.001
-	// mm}`, and the stop is fl(1e12 - 0.001) = 999999999999.9990234375, which is
-	// 2.34375e-05 mm (0.192 ulp) from the exact level, while the four side
-	// vertices at that level still report Exact with a zero bound, and their four
-	// vertical edges report that same length Exact. No blend is involved — a
-	// plain extrude reaches it, so this is shared prism behaviour and not any
-	// one feature's. sectionDelta cannot absorb it: it is an IN-PLANE displacement,
-	// consumed by sectionDisplacementArea/sectionDisplacementLength, evalPrism's
-	// Exactness gate and requireExactSection. Repairing it needs a separate
-	// per-end axial bound read here, by the vertical edge lengths and by the
-	// side face areas alike, plus stops.go's own rounding — that reaches
-	// prism, cup and tube, so it is tracked as its own follow-up change.
+	// The sweep height is read from the two BOUNDED levels, so a level the
+	// evaluator computed carries its own displacement into the vertical edge
+	// lengths and the side face areas built from it below — a ToFace or
+	// ThroughAll stop's float arithmetic (stops.go), a non-base unit's rescale,
+	// and a chamfered end's setback alike.
+	height := boundedSub(pp.z1Scalar(), pp.z0Scalar())
+	// A side vertex sits at one recorded boundary coordinate and one sweep level,
+	// so it carries both displacements: the section's, which moves it in the
+	// plane, and its own end's, which moves it along the normal. Each is zero for
+	// a coordinate the payload recorded from what the caller stated, which is what
+	// keeps an ordinary extrude's vertices Exact; neither is a claim about the
+	// other's axis, so they compose rather than one standing in for the other.
 	var bottomV, topV []*Vertex
+	bottomBound := units.Millimeters(absSumUpper(delta, pp.z0Delta))
+	topBound := units.Millimeters(absSumUpper(delta, pp.z1Delta))
 	if !singleClosed {
 		bottomV = make([]*Vertex, n)
 		topV = make([]*Vertex, n)
@@ -1141,8 +1190,8 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref StepRef, pp prismPayl
 			if err := ctx.Err(); err != nil {
 				return nil, nil, nil, boundedScalar{}, err
 			}
-			bottomV[i] = &Vertex{position: pp.point(w.startU, w.startV, pp.z0), bound: units.Millimeters(delta)}
-			topV[i] = &Vertex{position: pp.point(w.startU, w.startV, pp.z1), bound: units.Millimeters(delta)}
+			bottomV[i] = &Vertex{position: pp.point(w.startU, w.startV, pp.z0), bound: bottomBound}
+			topV[i] = &Vertex{position: pp.point(w.startU, w.startV, pp.z1), bound: topBound}
 		}
 	}
 
@@ -1218,8 +1267,8 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref StepRef, pp prismPayl
 			if singleClosed {
 				// A full circle's edge closes on itself: one vertex per cap
 				// edge, start == end (topology.go's Circle3 contract).
-				seam0 := &Vertex{position: pp.point(w.startU, w.startV, pp.z0), bound: units.Millimeters(delta)}
-				seam1 := &Vertex{position: pp.point(w.startU, w.startV, pp.z1), bound: units.Millimeters(delta)}
+				seam0 := &Vertex{position: pp.point(w.startU, w.startV, pp.z0), bound: bottomBound}
+				seam1 := &Vertex{position: pp.point(w.startU, w.startV, pp.z1), bound: topBound}
 				bStart, bEnd = seam0, seam0
 				tStart, tEnd = seam1, seam1
 				curve0, curve1 = Circle3{Center: center0, Axis: edgeAxis, Radius: radius}, Circle3{Center: center1, Axis: edgeAxis, Radius: radius}
@@ -1413,9 +1462,30 @@ func prismBoundsContext(ctx context.Context, pp prismPayload, work *freeformWork
 	// genuine terms to compose: bumping a lone sectionDelta a second time for
 	// an always-zero extremeBound term would grow the box's bound past the
 	// single upRound tessellate.go's own mesh bound composes it against.
-	bound := pp.sectionDelta
+	//
+	// The sweep's own ends enter the same way. Each axis reading takes the
+	// levels through zlo/zhi scaled by |gz| ≤ 1 (a unit axis against a placed
+	// unit normal), so the larger end displacement bounds the box face either
+	// level can move, and it composes with the section's term because the two
+	// displace along different axes.
+	axial := pp.axialDelta()
+	terms := make([]float64, 0, 3)
+	if pp.sectionDelta != 0 {
+		terms = append(terms, pp.sectionDelta)
+	}
 	if extremeBound != 0 {
-		bound = absSumUpper(pp.sectionDelta, extremeBound)
+		terms = append(terms, extremeBound)
+	}
+	if axial != 0 {
+		terms = append(terms, axial)
+	}
+	bound := 0.0
+	switch len(terms) {
+	case 0:
+	case 1:
+		bound = terms[0]
+	default:
+		bound = absSumUpper(terms...)
 	}
 	return Box{
 		Min:       r3.NewVec(minC[0], minC[1], minC[2]),

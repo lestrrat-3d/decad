@@ -119,7 +119,7 @@ one.
 | `docs/spline-design.md` | The free-form kinds: per-kind exactness tiers, refusals and their sentinels, exact rational Tier A moments and their work budget, proven brackets, and reach per capability. |
 | `docs/modify-reach-design.md` | The approved modify extension: tangent-chain expansion, asymmetric chamfers, cap-loop blends, allowed shells, proof gates, payload topology and staging. |
 | `docs/loft-design.md` | The count-free `Loft` design in four normative tables (pairing, refusals, result, consumers), its exact-rational mass properties, and the wall-crossing audit. |
-| `docs/prism-boolean-design.md` | The analytic reduction for `Union`/`Cut`/`Intersect` over co-directional coplanar prisms: the reject-only entry gate, the private `sketch` scene, and the section-displacement bound. |
+| `docs/prism-boolean-design.md` | The analytic reduction for `Union`/`Cut`/`Intersect` over co-directional coplanar prisms: the reject-only entry gate, the private `sketch` scene, and section/axial displacement bounds. |
 
 ### Seam, records and recipes
 
@@ -237,6 +237,16 @@ and `tessellate.go` compose it into every measurement and mesh bound they
 publish; every other consumer that cannot state or bound it withholds its answer
 rather than measure the recorded section as the denoted one. That per-consumer
 list lives in `docs/prism-boolean-design.md`'s Implementation notes.
+
+**Axial level displacement.** `prismPayload.z0Delta`/`z1Delta`
+(`docs/evaluator-design.md` §5) are the per-end proven displacement between a
+payload's recorded sweep level and the level its construction denotes — zero for
+a level the caller stated, nonzero for one a `ToFace`/`ThroughAll` stop
+(`stops.go`), a non-base-unit rescale or a chamfered end computed. It is the
+axial twin of the section displacement, tracked apart from it and never
+standing in for it; every level-derived reading takes it, and
+`cupPayload.zDelta` is the cup's own spelling. `capBlendPayload` preserves the
+pair and composes a selected end's setback rounding.
 
 **Cap contour displacement.** The cap-loop chamfer's cap contour is a computed
 offset carrying its own proven displacement, the same idea as `sectionDelta` one

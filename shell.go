@@ -147,7 +147,7 @@ func (b *Body) ShellContext(ctx context.Context, sel FaceSelector, t units.Value
 			return nil, fmt.Errorf(`%w: unknown shell option identifier %T`, ErrDegenerate, ident)
 		}
 	}
-	tmm, err := magnitudeIn(t, units.Length, units.Millimeter, "the shell thickness")
+	tmm, tDelta, err := magnitudeInBounded(t, units.Length, units.Millimeter, "the shell thickness")
 	if err != nil {
 		return nil, err
 	}
@@ -301,7 +301,7 @@ func (b *Body) ShellContext(ctx context.Context, sel FaceSelector, t units.Value
 		// evalCup wraps a wall around each post, all hanging off the one floor slab
 		// (one lump). The holed BOTH-caps case keeps no floor and is 1 + k lumps
 		// (B4, S12), refused above.
-		body, err = evalCupContext(ctx, d, ref, cupPayloadFor(pp, offset, s, tmm, removedEnd))
+		body, err = evalCupContext(ctx, d, ref, cupPayloadFor(pp, offset, s, tmm, tDelta, removedEnd))
 	}
 	if err != nil {
 		return nil, err
@@ -454,11 +454,15 @@ func evalTubeContext(ctx context.Context, d *Document, ref StepRef, pp prismPayl
 	section := ProfileRecord{Outer: outer, Holes: []LoopRecord{holeLoop}}
 	// The annular section is a NEW record no preflight has seen, so the build
 	// opens its one counter here (docs/spline-design.md §5.2).
+	// A tube keeps the receiver's sweep, so each end keeps its own axial
+	// displacement too.
 	return evalPrismContext(ctx, d, ref, prismPayload{
 		profile: section,
 		frame:   pp.frame,
 		z0:      pp.z0,
 		z1:      pp.z1,
+		z0Delta: pp.z0Delta,
+		z1Delta: pp.z1Delta,
 		xform:   pp.xform,
 	}, newFreeformWork())
 }

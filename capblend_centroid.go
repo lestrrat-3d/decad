@@ -356,8 +356,9 @@ func loopCoordinateUpper(loop LoopRecord, work *freeformWork) (float64, error) {
 // and sweptMomentAllow's own contract (bounds.go) requires coordUpper to
 // bound every point the difference volume can hold.
 func capBandMoment(ctx context.Context, loop LoopRecord, cbp capBlendPayload, geom []capPatchGeom, capZ, matSign, delta float64, work *freeformWork) (mu, mv, mz boundedScalar, err error) {
-	sideZ := capZ + matSign*cbp.d
-	sideZBound := addRoundError(capZ, matSign*cbp.d, sideZ)
+	capZB := cbp.capBandLevel(capZ, matSign)
+	sideZB := boundedAdd(capZB, measuredScalar(matSign*cbp.d, cbp.dDelta))
+	sideZ := sideZB.value
 
 	signedArea, err := loopSignedAreaBudget(newWorkBudget(ctx), loop)
 	if err != nil {
@@ -381,8 +382,6 @@ func capBandMoment(ctx context.Context, loop LoopRecord, cbp capBlendPayload, ge
 		return boundedScalar{}, boundedScalar{}, boundedScalar{}, err
 	}
 
-	capZB := exactScalar(capZ)
-	sideZB := measuredScalar(sideZ, sideZBound)
 	half := exactScalar(0.5)
 	capZTerm := boundedMul(boundedMul(boundedMul(capZB, capZB), half), boundedMul(exactScalar(-matSign), capArea))
 	sideZTerm := boundedMul(boundedMul(boundedMul(sideZB, sideZB), half), boundedMul(exactScalar(matSign), sideArea))
@@ -412,7 +411,8 @@ func capBandMoment(ctx context.Context, loop LoopRecord, cbp capBlendPayload, ge
 			return boundedScalar{}, boundedScalar{}, boundedScalar{}, cerr
 		}
 		coordUpper = math.Max(coordUpper, absSumUpper(capCoordUpper, delta))
-		coordUpper = math.Max(coordUpper, math.Max(math.Abs(sideZ), math.Abs(capZ)))
+		coordUpper = math.Max(coordUpper, absSumUpper(math.Abs(sideZ), sideZB.bound))
+		coordUpper = math.Max(coordUpper, absSumUpper(math.Abs(capZ), capZB.bound))
 		allow := sweptMomentAllow(delta, areaUpper, coordUpper)
 		muTotal.bound = absSumUpper(muTotal.bound, allow)
 		mvTotal.bound = absSumUpper(mvTotal.bound, allow)

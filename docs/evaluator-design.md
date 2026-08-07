@@ -105,11 +105,21 @@ Rules:
   cross-cell rung between coplanar Loft triangles. A full cylinder is one
   face with two circular-edge loops and no seam edge. v1 counts already match
   the analytic answer, so vN does not churn them (core §3).
-- **Every vertex carries its bound.** Feature-built vertices are exact (bound
-  zero); a vertex built on §9's mesh path carries the tessellation's chord
-  bound. A vertex of a boolean result the analytic reduction admits (§9) carries
-  that payload's own bound instead, which `docs/prism-boolean-design.md` §7
-  owns. The verification gate reads these (verification §4).
+- **Every vertex carries its bound.** Exactness is decided by what the
+  coordinate was READ FROM, never by which builder placed it. A coordinate the
+  record states is exact (bound zero); every computed one carries its own
+  computation's proven displacement. A swept vertex is read from two
+  independent coordinates and carries both: its plane-local pair from the
+  section — displaced where the payload carries a section displacement (§9,
+  prism-boolean §7) — and its sweep level from the extent, displaced where the
+  level was computed rather than stated (a `ToFace`/`ThroughAll` stop resolved
+  in float, a magnitude rescaled from a non-base unit, a chamfered end's
+  setback). A Boolean result that takes §9's mesh path carries the tessellation
+  chord bound. A Boolean result that analytic reduction admits carries its
+  payload's own bound instead, as `docs/prism-boolean-design.md` §7 owns. A
+  cap-loop chamfer's cap-level feet the offset solve's displacement
+  (modify-reach §8.4), and a placed loft's re-lifted vertices the motion's own
+  rounding (loft §5). The verification gate reads these (verification §4).
 - **Every loop exposes its stored direction.** `Loop.CoEdges()` returns copied
   `CoEdge` values in boundary-walk order. Each use's `Start`/`End` follows that
   walk and `IsForward` states whether it matches the shared `Edge` orientation.
@@ -195,7 +205,19 @@ magnitudes, so an `Against` sweep never reads negative), `Centroid` the
 region centroid lifted `(z0+z1)/2` along the normal — the SIGNED midpoint,
 `h/2` only in the one-sided `Along` case — `Bounds` from per-segment analytic
 extremes swept over the signed `[z0, z1]`, `Area` from cap areas + side areas
-(`segment length · h`; arc length `rθ` carries its evaluation bound). Extents: `Distance`,
+(`segment length · h`; arc length `rθ` carries its evaluation bound). Each END
+of the interval carries its own proven **axial displacement** — how far the
+level recorded there sits from the level the extent denotes. A level the caller
+stated denotes itself and carries zero; a level the resolution computed carries
+that computation's own rounding (a `ToFace`/`ThroughAll` stop resolved in float
+against another body's face, a magnitude rescaled from a non-base unit, a
+chamfered end's setback). It is the axial twin of the section displacement:
+the two are tracked apart and neither stands in for the other — one moves a
+coordinate IN the plane, the other moves a level ALONG the normal — while a
+reading both displace, a side vertex or `Bounds`, sums them. Every
+level-derived reading takes it: `h` and the
+volume, wall area and centroid built on it, `Bounds`, the mesh bound, the side
+vertices and the vertical edge lengths. Extents: `Distance`,
 `Symmetric`, and `TwoSided` of distance sides land in increment 1 — the three
 whose interval the step's own quantities determine. `ThroughAll` and
 `ThroughAllSide` have no finite stop geometry of their own (they stop at the
