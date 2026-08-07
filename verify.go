@@ -1309,6 +1309,13 @@ func (in pairToleranceInputs) lengthReference(value float64) (float64, bool) {
 // centroid readings raise then carries a nil Required — the one documented
 // reference-less Suspect this design admits.
 //
+// A prism with nonzero z0Delta or z1Delta keeps the same carrier model, but
+// each held witness can move by axialDelta. The maximum held pair distance can
+// therefore overstate the denoted body's diameter by twice that displacement.
+// This function shrinks it toward zero before using it as a reference, so the
+// result can only tighten the gate. envelopeGateDiameter applies the same
+// correction to its prism envelopes.
+//
 // A loftPayload reads its OWN held vertex-set diameter (pointSetDiameterContext),
 // never an envelope: an unplaced loft's every vertex is exact
 // (docs/loft-design.md §5), the
@@ -1356,11 +1363,8 @@ func bodyGateDiameter(ctx context.Context, body *Body) (float64, bool, error) {
 		if payload.delta == 0 {
 			return d, true, nil
 		}
-		shrunk := downRound(d - 2*payload.delta)
-		if shrunk <= 0 {
-			return 0, false, nil
-		}
-		return shrunk, true, nil
+		d, ok = lowerDiameterForDisplacement(d, payload.delta)
+		return d, ok, nil
 	}
 	budget := newWorkBudget(ctx)
 	geom, ok, err := newBodyGeomBudget(budget, body)
@@ -1369,9 +1373,31 @@ func bodyGateDiameter(ctx context.Context, body *Body) (float64, bool, error) {
 	}
 	if ok {
 		d, ok := pointSetDiameter(geom.supports)
+		if !ok {
+			return d, false, nil
+		}
+		if payload, isPrism := body.payload.(prismPayload); isPrism {
+			d, ok = lowerDiameterForDisplacement(d, payload.axialDelta())
+		}
 		return d, ok, nil
 	}
 	return envelopeGateDiameter(budget, body)
+}
+
+// lowerDiameterForDisplacement turns a held witness diameter into a lower
+// bound on the denoted body's diameter. Every witness can move by at most the
+// supplied displacement, so their pair distance can shrink by twice that
+// amount. The subtraction rounds toward zero because this value only tightens
+// the tolerance gate when it remains a lower bound.
+func lowerDiameterForDisplacement(d, displacement float64) (float64, bool) {
+	if displacement == 0 {
+		return d, true
+	}
+	if !usableMagnitude(d) || !usableMagnitude(displacement) {
+		return 0, false
+	}
+	d = downRound(d - 2*displacement)
+	return d, d > 0 && usableMagnitude(d)
 }
 
 // envelopeGateDiameter is bodyGateDiameter's fallback for a payload whose true
@@ -1420,6 +1446,12 @@ func bodyGateDiameter(ctx context.Context, body *Body) (float64, bool, error) {
 // same map a shipped prism's diameter is read through — so it carries none
 // of the pose-dependence verification design §4 excludes an axis-aligned box
 // for.
+//
+// An envelope with nonzero axial displacement has the same held-witness issue
+// as the exact prism path. Its full-height shape still contains the denoted
+// payload, but each witness can move along its axial direction by axialDelta.
+// The fallback shrinks the held witness maximum by twice that amount before it
+// becomes a lower-bound reference.
 func envelopeGateDiameter(budget *workBudget, body *Body) (float64, bool, error) {
 	env, ok := envelopePrismFor(body.payload)
 	if !ok {
@@ -1437,7 +1469,12 @@ func envelopeGateDiameter(budget *workBudget, body *Body) (float64, bool, error)
 		}
 		pts = append(pts, f.wit...)
 	}
-	return pointSetDiameterWithBudget(budget, pts)
+	d, ok, err := pointSetDiameterWithBudget(budget, pts)
+	if err != nil || !ok {
+		return d, ok, err
+	}
+	d, ok = lowerDiameterForDisplacement(d, env.axialDelta())
+	return d, ok, nil
 }
 
 // envelopePrismFor builds the containing straight-prism envelope for a

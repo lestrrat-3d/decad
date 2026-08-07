@@ -305,17 +305,22 @@ usable reference — its `payload.diameter` is guaranteed at build
 (`boolean_body.go:300-304`) and an edge length is a finite chord sum
 (`boolean_body.go:757-778`). For most other shipped payloads `bodyGateDiameter`
 (`verify.go`) forms a body diameter too, through one of two carrier models. A
-`prismPayload` or `revolvePayload` reads it exactly, off the same analytic
-carrier the clearance kernel proves against
-(`newBodyGeomBudget`/`clearance_geom.go`) — **except a `prismPayload` whose own
-`sectionDelta` is nonzero** (`docs/prism-boolean-design.md` §7's re-expressed
-section, e.g. the analytic `Union` of a placed prism pair): that carrier model
-refuses it (`clearance_geom.go`'s `addPrismFaces`), `envelopePrismFor` below has
-no arm for a bare `prismPayload` either, and `bodyGateDiameter` returns no
-diameter at all. Every `DiagMeasurementBeyondTolerance` such a body's area,
-bounds, volume or centroid readings raise then carries a nil `Required` — the
-one documented reference-less `Suspect` this design admits
-(`verify_diagnostics_test.go` pins it).
+`revolvePayload`, or a `prismPayload` whose two axial displacements are zero,
+reads it exactly off the same analytic carrier the clearance kernel proves
+against (`newBodyGeomBudget`/`clearance_geom.go`). A `prismPayload` with a
+nonzero `z0Delta` or `z1Delta` uses those held carrier witnesses too, but each
+witness can move by `axialDelta`; `bodyGateDiameter` returns the witness maximum
+minus `2*axialDelta`, rounded toward zero. That is a certified LOWER bound on
+the denoted body's diameter, so it can only tighten the gate. **A
+`prismPayload` whose own `sectionDelta` is nonzero**
+(`docs/prism-boolean-design.md` §7's re-expressed section, e.g. the analytic
+`Union` of a placed prism pair) is different: that carrier model refuses it
+(`clearance_geom.go`'s `addPrismFaces`), `envelopePrismFor` below has no arm for
+a bare `prismPayload` either, and `bodyGateDiameter` returns no diameter at all.
+Every `DiagMeasurementBeyondTolerance` such a body's area, bounds, volume or
+centroid readings raise then carries a nil `Required` — the one documented
+reference-less `Suspect` this design admits (`verify_diagnostics_test.go` pins
+it).
 
 **A free-form-walled `prismPayload` — not reachable through the public
 surface yet (`docs/spline-design.md` §10) — reaches this same gap for the
@@ -388,6 +393,14 @@ envelope: the cavity never reaches farther than the outer region, the same
 containment `cupPayload.extentAlong` already relies on. As a **shape**, each
 arm's envelope therefore can only OVERSTATE the body's true diameter, never
 understate it — the reduction itself is sound.
+
+When either envelope end has nonzero axial displacement, its witnesses sit on
+the held levels rather than the levels the payload denotes. Each witness can
+move by the envelope's `axialDelta`, so their maximum pair distance can
+overstate the denoted body's diameter by `2*axialDelta`. The fallback subtracts
+that amount, rounded toward zero, before publishing the reference. It then
+reports a conservative lower bound even when the envelope's held shape is
+larger than the body it contains.
 
 What `envelopeGateDiameter` reports is not that shape's true diameter, though,
 but a *reading* of it, taken through the identical witness maximum a shipped
