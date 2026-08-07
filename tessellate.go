@@ -363,7 +363,7 @@ func tessellateCup(ctx context.Context, b *Body, cp cupPayload, chord float64) (
 	cLo, cHi := math.Min(cp.zCav, cp.zOpen), math.Max(cp.zCav, cp.zOpen)
 
 	var mesh Mesh
-	base := cp.prismLike(0, 0)
+	base := cp.basePrism()
 	var verts []r3.Vec
 	add := func(v r3.Vec) int { verts = append(verts, v); return len(verts) - 1 }
 
@@ -606,7 +606,7 @@ func tessellateCup(ctx context.Context, b *Body, cp cupPayload, chord float64) (
 	if err := requireClosedMesh(&mesh); err != nil {
 		return nil, err
 	}
-	mesh.bound = upRound(mesh.bound + cp.zDelta)
+	mesh.bound = upRound(mesh.bound + cp.axialDelta())
 	return &mesh, nil
 }
 

@@ -661,9 +661,9 @@ func TestShellCupHoledMinRadius(t *testing.T) {
 	require.True(t, report.Trustworthy())
 }
 
-// TestShellCupMeshInheritsComputedLevelBound keeps an all-planar cup mesh
-// from claiming zero deviation when its source prism stopped at a computed cap.
-func TestShellCupMeshInheritsComputedLevelBound(t *testing.T) {
+// TestShellCupSeparatesComputedOpenAndExactFloorBounds keeps an all-planar cup
+// from assigning its computed open end's displacement to the exact floor.
+func TestShellCupSeparatesComputedOpenAndExactFloorBounds(t *testing.T) {
 	const (
 		plateHeight = 1e12
 		shortBy     = 1e-3
@@ -681,6 +681,20 @@ func TestShellCupMeshInheritsComputedLevelBound(t *testing.T) {
 	require.NoError(t, err)
 	cup, err := pin.Shell(capEndFace(pin), units.Millimeters(1))
 	require.NoError(t, err)
+
+	floorVertices := 0
+	for _, vertex := range cup.Vertices() {
+		position := vertex.Position()
+		if position.Value.Z != 0 && position.Value.Z != 1 {
+			continue
+		}
+		floorVertices++
+		require.Equal(t, decad.Exact, position.Exactness,
+			`the explicitly stated floor level must remain exact`)
+		require.True(t, position.Bound.Equal(units.Millimeters(0), 1e-12),
+			`the explicitly stated floor level must carry no displacement`)
+	}
+	require.NotZero(t, floorVertices, `the cup has vertices on both floor levels`)
 
 	mesh, err := cup.Tessellate(units.Millimeters(0.1))
 	require.NoError(t, err)

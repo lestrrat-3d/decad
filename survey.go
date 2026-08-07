@@ -896,7 +896,7 @@ func cupUndercuts(b *Body, cp cupPayload, pull r3.Vec) undercutOutcome {
 	if !ok {
 		return undercutOutcome{}
 	}
-	base := cp.prismLike(0, 0)
+	base := cp.basePrism()
 	du := base.dir(1, 0, 0).Dot(p)
 	dv := base.dir(0, 1, 0).Dot(p)
 	dn := base.dir(0, 0, 1).Dot(p)

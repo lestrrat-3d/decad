@@ -1512,8 +1512,7 @@ func envelopePrismFor(payload featurePayload) (prismPayload, bool) {
 			xform:   pl.xform,
 		}, true
 	case cupPayload:
-		lo, hi := math.Min(pl.zOuter, pl.zOpen), math.Max(pl.zOuter, pl.zOpen)
-		envelope := pl.prismLike(lo, hi)
+		envelope := pl.outerPrism()
 		envelope.profile = pl.outer
 		return envelope, true
 	default:
