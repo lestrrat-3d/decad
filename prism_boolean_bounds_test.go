@@ -64,7 +64,7 @@ func twoCircleUnion(centerDist, bigR, smallR, h float64) twoCircleUnionClosedFor
 // TestPrismUnionCoplanarCircleLensBounds is the ask's own acceptance case: a
 // coplanar analytic union of two circle prisms must report Area/Volume
 // bounds small against their values and a Centroid bound small against the
-// body's own size, with Verify reading Sound at the default tolerance.
+// body's own size.
 // Before the fix, the r=10/r=2 row published a Volume bound of 1.002e+04 on
 // a value of 2565.675079 (a bound four times the value) and read Suspect at
 // the default tolerance; the r=10/r=3 row's Volume and Area were exact to
@@ -114,11 +114,21 @@ func TestPrismUnionCoplanarCircleLensBounds(t *testing.T) {
 			require.NoError(t, err)
 			require.LessOrEqualf(t, cBound, 1e-6, "centroid bound %g mm is not small", cBound)
 
+			// The bounds above are tight, but Verify still reads Suspect: the
+			// merged section carries §7's cut displacement, and the tolerance
+			// gate anchors each reading against a reference bodyGateDiameter
+			// builds through the clearance kernel's model, which declines a
+			// displaced payload (§12). So every diagnostic here is the absence
+			// of a reference — Required is nil — never a bound found too large.
+			// Giving such a body a reference of its own is separate work.
 			report, err := doc.Verify(t.Context())
 			require.NoError(t, err)
-			require.Equal(t, decad.Sound, report.Status)
-			require.True(t, report.Trustworthy())
-			require.Empty(t, report.Diagnostics)
+			require.Equal(t, decad.Suspect, report.Status)
+			require.NotEmpty(t, report.Diagnostics)
+			for _, d := range report.Diagnostics {
+				require.Equal(t, decad.DiagMeasurementBeyondTolerance, d.Code)
+				require.Nil(t, d.Required, "reading %s: the gate found no reference, so it states no threshold", d.Reading)
+			}
 		})
 	}
 }

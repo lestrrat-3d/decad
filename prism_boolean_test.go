@@ -89,12 +89,16 @@ func anyFaceIsFaceted(b *decad.Body) bool {
 
 // --- Core PR1 capability tests (§14) ---
 
-// TestPrismUnionTwoBoxesSharingCapPlaneBuildsAnalyticExact is the "control"
+// TestPrismUnionTwoBoxesSharingCapPlaneBuildsAnalyticPrism is the "control"
 // case from the consumer's report (§14): two overlapping straight prisms
 // sharing a cap plane combine through the analytic reduction, reporting a
-// line-only Exact volume with a zero bound (§7) rather than the mesh
-// boolean's Approximate faceted result.
-func TestPrismUnionTwoBoxesSharingCapPlaneBuildsAnalyticExact(t *testing.T) {
+// line-only volume at the moments engine's own scale rather than the mesh
+// boolean's much coarser faceted result.
+//
+// The bound is not zero. The merge splits four walls, and §7 charges the cut
+// parameters sketch computed for the surviving fragments; only a merge that
+// cuts nothing reaches the Exact arm.
+func TestPrismUnionTwoBoxesSharingCapPlaneBuildsAnalyticPrism(t *testing.T) {
 	doc := decad.New()
 	a := boxBody(t, doc, 0, 0, 10, 10, 10)
 	b := boxBody(t, doc, 5, 5, 15, 15, 10)
@@ -103,8 +107,9 @@ func TestPrismUnionTwoBoxesSharingCapPlaneBuildsAnalyticExact(t *testing.T) {
 
 	vol, err := got.Volume()
 	require.NoError(t, err)
-	require.Equal(t, decad.Exact, vol.Exactness)
-	require.Equal(t, units.CubicMillimeters(0), vol.Bound)
+	require.Equal(t, decad.Approximate, vol.Exactness)
+	require.Positive(t, vol.Bound.Base())
+	require.Less(t, vol.Bound.Base(), 1e-9)
 	require.InDelta(t, 1750.0, volumeMM(t, vol), 1e-9) // 100 + 100 - 25 (the 5x5 overlap), times h=10
 
 	// The result is a first-class prismPayload: every face is analytic
@@ -114,7 +119,8 @@ func TestPrismUnionTwoBoxesSharingCapPlaneBuildsAnalyticExact(t *testing.T) {
 	}
 	area, err := got.Area()
 	require.NoError(t, err)
-	require.Equal(t, decad.Exact, area.Exactness)
+	require.Equal(t, decad.Approximate, area.Exactness)
+	require.Less(t, area.Bound.Base(), 1e-9)
 	start, err := decad.Faces(decad.FaceCreatedBy(decad.CapStart(got))).Exactly(1).SelectFaces(got)
 	require.NoError(t, err)
 	require.Contains(t, start[0].Origins(), decad.CapStart(got))
@@ -338,47 +344,67 @@ func TestPrismUnionCancellationLeavesDocumentUnchanged(t *testing.T) {
 // §7's rule — never by an accumulated tessellation meshBound, which does not
 // exist on this lineage at all.
 //
-// c's boundary genuinely CUTS one of first's own walls partway (rather than
-// meeting it at a shared whole edge or missing it entirely), so the merged
+// The first union CUTS NOTHING (b sits strictly inside a), so first carries no
+// section displacement and the chain stays inside §3.4's analytic path. c's
+// boundary then genuinely CUTS one of first's own walls partway, so the merged
 // section carries a Partial LineSeg whose walked fraction is an ordinary
-// (non-Pythagorean-exact) float — the moments engine's own, pre-existing
-// rule for ANY such record, chained or not (moments.go, unmodified by this
-// design): that segment's own length carries a proven, ordinary
-// floating-point bound. The volume is still exactly correct (2540 mm^3, the
-// closed-form area 254 mm^2 times the 10 mm height); what §7/§8 promise is
-// that its Bound stays at this ordinary per-mechanism scale, never the large,
-// accumulating meshBound a chained mesh boolean would compose.
+// (non-Pythagorean-exact) float and whose cut parameters §7 charges. The volume
+// is still exactly correct (1880 mm^3, the closed-form area 188 mm^2 times the
+// 10 mm height); what §7/§8 promise is that its Bound stays at this ordinary
+// per-mechanism scale, never the large, accumulating meshBound a chained mesh
+// boolean would compose.
+//
+// A chain whose FIRST result already cut is a different story, and the second
+// arm pins it: §3.4 reroutes a split scene whose source carries a displacement,
+// because a cut can amplify that displacement by an unbounded 1/sin θ, and the
+// mesh path it reroutes to refuses the shared cap plane (§8's consequence 2,
+// outside the admitted class). Reaching such a chain analytically needs a
+// displacement the cut can be proven not to amplify, which is separate work.
 func TestPrismUnionChainedBooleanCarriesNoAccumulatedBound(t *testing.T) {
 	doc := decad.New()
 	a := boxBody(t, doc, 0, 0, 10, 10, 10)
-	b := boxBody(t, doc, 5, 5, 15, 15, 10)
+	b := boxBody(t, doc, 2, 2, 8, 8, 10)
 	first, err := decad.Union(a, b)
 	require.NoError(t, err)
 	firstVol, err := first.Volume()
 	require.NoError(t, err)
 	require.Equal(t, decad.Exact, firstVol.Exactness)
 
-	c := boxBody(t, doc, 12, 8, 22, 18, 10)
+	c := boxBody(t, doc, 8, 4, 18, 14, 10)
 	second, err := decad.Union(first, c)
 	require.NoError(t, err)
+	require.False(t, anyFaceIsFaceted(second), "the chained union must stay analytic")
 	secondVol, err := second.Volume()
 	require.NoError(t, err)
-	require.InDelta(t, 2540.0, volumeMM(t, secondVol), 1e-9)
+	require.InDelta(t, 1880.0, volumeMM(t, secondVol), 1e-9)
 	// An ordinary moments-engine bound is many orders of magnitude below the
 	// coarsest meshBound a chained mesh boolean could ever report (the
 	// boolean chord tolerance floor alone is diameter * 2e-5).
 	require.Less(t, boundMM3(t, secondVol), 1e-9)
+
+	cutDoc := decad.New()
+	cutA := boxBody(t, cutDoc, 0, 0, 10, 10, 10)
+	cutB := boxBody(t, cutDoc, 5, 5, 15, 15, 10)
+	cutFirst, err := decad.Union(cutA, cutB)
+	require.NoError(t, err)
+	cutC := boxBody(t, cutDoc, 8, 4, 18, 14, 10)
+	_, err = decad.Union(cutFirst, cutC)
+	require.ErrorIs(t, err, decad.ErrUnsupported)
 }
 
 // TestPrismUnionDownstreamFilletAndWallSurvey is §8's "analytic identity
-// dies" consequence, removed for the admitted class: Fillet and
-// MinWallThickness both succeed on the analytic union's own prismPayload,
-// where a mesh-path union's facetedPayload permanently refuses both
-// (modify-reach SX9, payload-verification's survey wiring).
+// dies" consequence and the boundary §7's displacement draws through it. A
+// merge that CUTS NOTHING carries no displacement, and Fillet and
+// MinWallThickness both succeed on its prismPayload, where a mesh-path union's
+// facetedPayload permanently refuses both (modify-reach SX9,
+// payload-verification's survey wiring). A merge that cuts is a different
+// receiver: its section is the section it denotes only within §7's cut
+// displacement, so every reading that rewrites or measures that section
+// withholds rather than answer for the wrong one (§12).
 func TestPrismUnionDownstreamFilletAndWallSurvey(t *testing.T) {
 	doc := decad.New()
 	a := boxBody(t, doc, 0, 0, 10, 10, 10)
-	b := boxBody(t, doc, 5, 5, 15, 15, 10)
+	b := boxBody(t, doc, 2, 2, 8, 8, 10)
 	got, err := decad.Union(a, b)
 	require.NoError(t, err)
 
@@ -386,12 +412,31 @@ func TestPrismUnionDownstreamFilletAndWallSurvey(t *testing.T) {
 	require.NoError(t, err)
 	filletVol, err := filleted.Volume()
 	require.NoError(t, err)
-	require.Less(t, volumeMM(t, filletVol), 1750.0) // the fillet removed material
+	require.Less(t, volumeMM(t, filletVol), 1000.0) // the fillet removed material
 
 	report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(1)))
 	require.NoError(t, err)
 	require.Len(t, report.Bodies, 1)
 	require.NotNil(t, report.Bodies[0].MinWallThickness)
+
+	// A cut-bearing merge of the same two shapes carries §7's displacement, and
+	// both readings withhold. The refusal names the displacement rather than
+	// the payload class, so it is the section's own state being reported.
+	cutDoc := decad.New()
+	cutA := boxBody(t, cutDoc, 0, 0, 10, 10, 10)
+	cutB := boxBody(t, cutDoc, 5, 5, 15, 15, 10)
+	cutGot, err := decad.Union(cutA, cutB)
+	require.NoError(t, err)
+	require.False(t, anyFaceIsFaceted(cutGot), "the analytic reduction must still own this pair")
+
+	_, err = cutGot.Fillet(verticalConvexEdge(), units.Millimeters(1))
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+	require.Contains(t, err.Error(), "proven displacement")
+
+	cutReport, err := cutDoc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(1)))
+	require.NoError(t, err)
+	require.Len(t, cutReport.Bodies, 1)
+	require.Nil(t, cutReport.Bodies[0].MinWallThickness)
 
 	// Contrast: a mesh-path union — two boxes with disjoint z ranges, so the
 	// boolean itself succeeds as a 2-lump facetedPayload — refuses both

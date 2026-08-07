@@ -56,8 +56,9 @@ one sub-case (general-position holed union, PR3) where the honest answer is
 no accumulated tessellation bound; a shared or crossing extrusion plane is the
 ordinary case, not a refusal; the result is a first-class `prismPayload` that
 Fillet/Chamfer/Shell, all three surveys, and the clearance kernel already
-handle. §8 states exactly which of the three consequences above disappear for
-the admitted class and which stand outside it.
+handle wherever its section displacement is zero (§7). §8 states exactly which
+of the three consequences above disappear for the admitted class, which stand
+outside it, and what a nonzero displacement costs.
 
 ## 2. Approach
 
@@ -68,7 +69,8 @@ a private `sketch` scene decad builds. It records the selected result regions
 through the existing seam (`RecordProfile`/`recordEdge`), audits the assembly
 with `modify §5`'s existing closed-form checks, and rebuilds through
 `evalPrism`. Section 7 extends the result with one section-displacement bound
-so the re-expressed operand's rounding reaches every measurement.
+so the re-expressed operand's rounding, and the cut parameters `sketch`
+computes for the surviving fragments, reach every measurement.
 `Cut` and `Intersect` remain on the mesh path until later increments. A
 non-admitted `Union` pair — wrong payload class, non-coplanar, a segment kind
 outside the admitted set, an unequal z-interval for `Union`, a nonidentity
@@ -249,12 +251,15 @@ For an admitted pair, decad builds one private `sketch.Sketch` (the same
   translation the two operands share and that cannot move them relative to each
   other at all. Composing proves nothing, though; it narrows the rounding
   without removing it, which is why §7 carries the displacement regardless. This
-  is the **one and only** new rounding this design introduces: an ordinary
-  rigid-transform coordinate computation, rounded once per coordinate, on
-  operand B's segments only — and where B's frame and placement ARE A's own in
-  the stored floats (component-wise `==`, G3's own comparison) the composed map
-  is the identity, B's `Point2` fields are copied verbatim, and nothing is
-  computed at all (§7's decidable zero case).
+  is the only new rounding this design commits on an operand's own INPUT
+  coordinates: an ordinary rigid-transform coordinate computation, rounded once
+  per coordinate, on operand B's segments only — and where B's frame and
+  placement ARE A's own in the stored floats (component-wise `==`, G3's own
+  comparison) the composed map is the identity, B's `Point2` fields are copied
+  verbatim, and nothing is computed at all. It is **not** the only new rounding
+  the design introduces: the cut parameters `sketch` computes for the surviving
+  fragments are new rounded coordinates of their own, whatever the inputs
+  carried, and §7 charges them separately.
   Non-`Point2` fields (a `CircleSeg`'s `Radius`, every `CCW`, every `TStart`/
   `TEnd`) are magnitudes or parameters under a rigid, non-reflected
   (G2) map and carry over unchanged.
@@ -452,27 +457,67 @@ Every recorded field, after §4.1's re-expression, is one of:
   segment the arrangement actually split (recorded as a narrowed
   `TStart`/`TEnd` range on the entity's *own, unchanged* defining data —
   record.go's existing contract: a cut fragment never gets new `Center`/
-  `Start`/`End` fields, only a narrower range over the same ones).
+  `Start`/`End` fields, only a narrower range over the same ones). It is a
+  coordinate this union COMPUTED, so it is charged, as `δ_cut` below.
 
-When the re-expression is the identity, operand A's fields and every
-`sketch`-cut range carry no new rounding from this union, but a pre-existing
-source displacement can still amplify at a cut. Section 3.4 therefore routes
-any scene with a `Partial` boundary edge to the mesh path before it records a
-fragment whenever either source carries a nonzero displacement or the
-re-expression is nonidentity. An analytic result has no newly cut range whose
-position could amplify an input uncertainty.
-Operand B's re-expressed coordinates carry the new allowance `δ_reexpress`.
-Either input can already carry a section displacement from an earlier analytic
-union, `δ_A` or `δ_B`. The rebuilt section therefore carries
-`δ = max(δ_A, up(δ_B + δ_reexpress))`: A's coordinates are unchanged, while
-B's prior displacement passes through the rigid map and accumulates the new
-coordinate-rounding allowance. `up` rounds the positive sum outward.
-It is **exactly zero in one decidable case**: both inputs carry zero displacement
-and operand B's composed map into A's frame is the identity in the stored floats
-(`frameB == frameA` and `xformB == xformA`, component-wise `==` — G3's own
-comparison), where §4.1 copies B's `Point2` fields verbatim and computes nothing
-at all. Two caller-drawn profiles on one sketch plane with no placement between
-them are that case.
+Three separate things can displace the rebuilt section, and the result carries
+all three.
+
+**The re-expression, `δ_reexpress`.** Operand B's re-expressed coordinates carry
+it; operand A's are unchanged and carry nothing.
+
+**An input's own prior displacement, `δ_A` or `δ_B`.** Either input can already
+carry one from an earlier analytic union. A's passes through unchanged; B's
+passes through the rigid map and accumulates `δ_reexpress` on top.
+
+**The cut parameters, `δ_cut`.** A surviving `Partial` fragment records the
+entity's own unchanged defining data and the narrowed `TStart`/`TEnd` range
+`sketch` computed for THIS pair. That range is a **freshly rounded coordinate**:
+it names a crossing whose true parameter `t*` is a real number `sketch` had to
+round to a float, and every consumer that reads the fragment's endpoint
+evaluates the carrier at the rounded `t`, not at `t*`. Nothing the two operands
+carried says anything about it — a pair of exactly-drawn, unplaced boxes commits
+this rounding as surely as any other pair does. So `δ_cut` stands on its own,
+and an identity re-expression over two zero-displacement operands does **not**
+send it to zero.
+
+Its size is the parameter allowance times how fast the carrier moves under it.
+The carrier is exact, so the endpoint can only slide ALONG it:
+`|P(t) − P(t*)| ≤ |t − t*| · sup|dP/dt|`. `bounds.go`'s `cutParamUlps` states
+the parameter allowance once — the quantitative reading decad gives `TExact`'s
+"to machine precision" claim (`docs/sketch-seam-design.md` §1) — and
+`cutDisplacementAllow` multiplies it by the carrier's own speed over its full
+parameterisation: the chord for a line, `2πR` for a circle or an arc.
+`δ_cut` is the largest such allowance over the surviving fragments, and zero
+when every survivor is a whole edge.
+
+A pre-existing source displacement can additionally AMPLIFY at a cut, by
+`δ/sin θ` for a crossing angle `θ` this design cannot bound below. Section 3.4
+therefore routes any scene with a `Partial` boundary edge to the mesh path
+before it records a fragment whenever either source carries a nonzero
+displacement or the re-expression is nonidentity. That reroute is about
+amplifying an INPUT uncertainty; it does nothing about the cut's own rounding,
+which is why `δ_cut` is charged on the fragments the reroute admits.
+
+The rebuilt section therefore carries
+
+```
+δ = up( max(δ_A, up(δ_B + δ_reexpress)) + δ_cut )
+```
+
+where `up` rounds each positive sum outward.
+
+It is **exactly zero in one decidable case**: both inputs carry zero
+displacement, operand B's composed map into A's frame is the identity in the
+stored floats (`frameB == frameA` and `xformB == xformA`, component-wise `==` —
+G3's own comparison), **and every surviving edge is whole**. Two caller-drawn
+profiles on one sketch plane with no placement between them meet the first two
+conditions; they meet the third only where the merge cut nothing — one profile
+strictly containing the other, or two footprints meeting along complete shared
+walls. A partial overlap, which splits at least two walls, never reaches the
+zero case, and neither does a union whose result the caller would call
+"obviously exact": the recorded walk closes only to within `δ_cut`, and a
+zero bound over it would be a claim the evaluator cannot make.
 
 **The evaluator's current measurement path cannot carry `δ`, so this design
 extends it.** `prismPayload` holds the section, the frame, the sweep interval,
@@ -495,7 +540,10 @@ extension is two pieces, each in the existing machinery's own shape:
   so a placement or copy of an analytically-combined body keeps it.
 - **`bounds.go` gains the helpers for the mechanism**, under that file's own
   rule that each error mechanism has exactly one helper and no measurement site
-  computes a bound inline. The mechanism's own reading is an AREA: the area a
+  computes a bound inline. `cutDisplacementAllow` owns the cut-parameter
+  mechanism above, turning `cutParamUlps` and a carrier's own speed into the
+  coordinate displacement `δ_cut` reads. The section displacement's own reading
+  is an AREA: the area a
   boundary displacement `δ` can move is covered by a tube of half-width `δ`
   about the recorded boundary — `2·δ·p + n·π·δ²` up-rounded, for a boundary of
   `n` walks whose proven length upper bound is `p` (a rectangle per walk and a
@@ -522,11 +570,15 @@ its one added term:
 - **`Exact`, zero bound**, when every surviving segment is a `LineSeg` **and**
   `δ == 0` — `moments.go`'s region-level exact rational accumulator with its
   single final rounding, over a section no coordinate of which was recomputed.
+  `δ == 0` requires every survivor to be a WHOLE edge, so this arm is reached
+  by a merge that cut nothing: a contained footprint, or footprints meeting
+  along complete shared walls. It is deliberately narrow — the alternative is a
+  zero bound over a walk that closes only to within `δ_cut`.
 - **`Approximate` otherwise**, carrying the same per-mechanism proven bounds an
   ordinary prism already reports plus the displacement term: the accumulator
   retires the moment any `CircleSeg`/`ArcSeg` survives (no `π` is ever exact),
   and the displacement stands whenever `δ > 0`, whatever the segment kinds
-  are.
+  are. Every partially overlapping pair lands here.
 
 Volume, Centroid and `Box` all read that same accumulator and that same
 displacement term (evaluator §4, `moments.go`), so no separate derivation is
@@ -536,9 +588,9 @@ needed for each.
 
 | Consequence (§1) | Admitted class | Outside it |
 |---|---|---|
-| 1. No chaining | Removed. Result is `prismPayload`; no `meshBound` to compose, so no chord tolerance for the next pair to fall below. A chained boolean re-checks §3's gate on the new pair and carries the greater of A's incoming displacement and B's incoming displacement plus its new re-expression allowance (§7). | Unchanged — general-position or non-analytic pairs still degrade per evaluator §9. |
+| 1. No chaining | Removed. Result is `prismPayload`; no `meshBound` to compose, so no chord tolerance for the next pair to fall below. A chained boolean re-checks §3's gate on the new pair and carries the greater of A's incoming displacement and B's incoming displacement plus its new re-expression allowance, plus its own cut displacement (§7). | Unchanged — general-position or non-analytic pairs still degrade per evaluator §9. |
 | 2. Coplanar contact refuses | Removed. Coplanar, co-directional contact is the admitted case's whole premise. | Unchanged — non-coplanar or non-prism coplanar contact (e.g. a prism against a revolve cap) stays on the mesh path. |
-| 3. Analytic identity dies | Removed where `δ == 0`. Result is `prismPayload`: Fillet/Chamfer/Shell, all three surveys, and the clearance kernel already dispatch on payload class and need zero new code for it. Where `δ > 0`, §12's own rows stage the readings that have no place to put a displacement. | Unchanged for mesh-path results — `facetedPayload` still permanently refuses modify ops (modify-reach SX9) and all three surveys. |
+| 3. Analytic identity dies | Removed where `δ == 0` — a merge that cut nothing. Result is `prismPayload`: Fillet/Chamfer/Shell, all three surveys, and the clearance kernel already dispatch on payload class and need zero new code for it. Where `δ > 0` — which every cut-bearing merge is, §7 — §12's own rows stage the readings that have no place to put a displacement, and `Verify` has no gate diameter for the body either, so its readings report Suspect however tight their bounds are. Restoring that reach for a displacement whose CARRIERS are exact is a separate design change, not a consequence this design removes. | Unchanged for mesh-path results — `facetedPayload` still permanently refuses modify ops (modify-reach SX9) and all three surveys. |
 
 ## 9. Refusals
 
@@ -617,7 +669,7 @@ origin, exactly as it already must after a Fillet or Chamfer. Flagged in
 | Clearance kernel | Unchanged where `δ == 0` — dispatches on payload class; `prismPayload` already has full analytic support (`clearance.go`'s coplanar `Plane`×`Plane` certificate, `offsetPair`, etc.). Where `δ > 0` the kernel builds no model for the body and the pair reads `Suspect`: every certificate it emits is an exact statement about the carriers it read, and a carrier the payload holds only within `δ` of the one it denotes cannot support one. Widening the kernel's own candidate intervals by `δ` is a separate piece of work, not this design's. |
 | Interference (`Verify`) | **Still on the mesh path.** `interference.go`'s `measuredInterference` calls `evaluateBoolean(ctx, OpIntersect, ...)` directly after its containment and represented-set-equality certificates. The analytic dispatch is in `performBoolean`, which this PR implements only for `Union`, so an admitted coplanar-prism pair still reaches the existing read-only mesh intersection and may be coarse or `Suspect`. PR4 separately wires a read-only analytic `Intersect` path and its tests. `docs/interference-design.md` §5.2 records this PR1 boundary. |
 | Surveys (wall/undercut/min-radius) | No new code — they dispatch on payload class, and support is immediate where `δ == 0`. The undercut reading is a normal-direction membership and is unaffected at any `δ`. The wall and min-radius readings are staged at `δ > 0` and answer undecided (`Suspect`, never a silent pass): each publishes a bare reading with no bound beside it, and the wall reading is not a quantity a displacement widens by a fixed amount anyway — its allowance-angle contact families (verification §6) can change membership under a boundary perturbation, so a proven displaced reading needs the survey's own theory extended, not a term added to a bound. |
-| `Verify`'s structural/tolerance gates | Unchanged — `prismPayload` is valid by construction as always. |
+| `Verify`'s structural/tolerance gates | Structurally unchanged — `prismPayload` is valid by construction as always. The TOLERANCE gate is not: it anchors each reading against a reference the body's own geometry supplies, and `bodyGateDiameter` reads that geometry through the clearance kernel's model, which the row above declines to build at `δ > 0`. So every reading of an assembled body with a nonzero displacement reports `Suspect` with no `Required` threshold beside it, however tight its bound is. That is a conservative verdict rather than a wrong one, and giving such a body a reference of its own is the same separate piece of work the clearance row names. |
 | Export (STL/OBJ) | Unchanged — reads `Tessellate`'s output. |
 | Recipe/replay | **No wire change.** The step still records the existing `OpUnion`/`OpCut`/`OpIntersect` + `Inputs` (`[a, b]` or `[target, tool]`), unmodified — recipe-replay-design §8's own contract already allows this: "A later evaluator MUST reproduce ... one produced body per step ... measurements valid under its own `Exactness`/`Bound`. It need not reproduce v1's internal payload." A replayed recipe simply builds via the analytic path wherever it now qualifies; nothing in §2 (wire envelope), §3 (validation), or §4 (references/liveness) changes. |
 
@@ -734,7 +786,12 @@ areas, residuals), never merely "it ran" — CLAUDE.md's own rule.
   and the new hole's fields are byte-identical to the tool's own pre-cut
   outer loop (verbatim reproduction, §4.2's structural-match claim).
 - Exactness, one test per §7 arm: a line-only merged section over operands
-  that share a frame reports `Exact` volume with a zero bound; the same
+  that share a frame AND whose merge cut nothing (a contained footprint)
+  reports `Exact` volume with a zero bound; a partially overlapping pair of
+  the same two operands reports `Approximate`, and the test computes the
+  merged region's TRUE volume over `math/big.Rat` from the operands' own float
+  coordinates and asserts the published bound contains the residual — the arm
+  that proves `δ_cut` is charged rather than assumed away; the same
   section over an operand B with a nonidentity re-expression but no split
   boundary reports `Approximate` with a bound the §7 displacement term alone
   explains (assert it scales with the placement's own magnitude, so a payload

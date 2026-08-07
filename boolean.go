@@ -853,8 +853,8 @@ func faceChordDelta(budget *workBudget, f *Face, meshBound float64) (float64, er
 
 // sectionDisplacementOf is the proven displacement between a body's recorded
 // boundary and the boundary its construction denotes: the analytic prism
-// boolean's re-expression rounding, and zero for every other body
-// (docs/prism-boolean-design.md §7).
+// boolean's re-expression rounding and its surviving fragments' own cut
+// parameters, and zero for every other body (docs/prism-boolean-design.md §7).
 func sectionDisplacementOf(b *Body) float64 {
 	if b == nil {
 		return 0

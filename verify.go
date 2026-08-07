@@ -1300,8 +1300,8 @@ func (in pairToleranceInputs) lengthReference(value float64) (float64, bool) {
 // diameter: envelopeGateDiameter covers the payloads it does not (cup,
 // cap-loop chamfer) with a bound that is sound for THIS gate without being
 // eligible for that stronger trust. One miss stays uncovered: a prismPayload
-// whose own sectionDelta is nonzero (docs/prism-boolean-design.md §7, e.g.
-// the analytic Union of a placed prism pair) fails newBodyGeomBudget's exact
+// whose own sectionDelta is nonzero (docs/prism-boolean-design.md §7 — every
+// analytic Union whose merge cut a wall, plus any placed prism pair) fails newBodyGeomBudget's exact
 // path (clearance_geom.go's addPrismFaces refuses it) and has no
 // envelopePrismFor arm either, so this function answers (0, false) for it.
 // Every DiagMeasurementBeyondTolerance such a body's area, bounds, volume or
@@ -1444,7 +1444,7 @@ func envelopeGateDiameter(budget *workBudget, body *Body) (float64, bool, error)
 // including prismPayload and revolvePayload themselves (those are already
 // exact through newBodyGeomBudget and never reach this fallback) and
 // including a prismPayload whose own sectionDelta is nonzero (a
-// docs/prism-boolean-design.md §7 re-expressed section): that payload has no
+// docs/prism-boolean-design.md §7 re-expressed or cut section): that payload has no
 // arm here either, so bodyGateDiameter answers no diameter at all for it
 // rather than a fallback one (verify_diagnostics_test.go pins that case).
 //

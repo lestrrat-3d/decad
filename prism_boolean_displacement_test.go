@@ -65,6 +65,21 @@ func ratFloat(r *big.Rat) float64 {
 	return f
 }
 
+// exactResidual is |reported − truth| taken entirely over rationals and rounded
+// UP into a float64. Differencing against ratFloat instead would fold half an
+// ulp of the reported magnitude into the answer — at 1750 mm³ that is 1.1e-13,
+// the very scale the bounds under test live at — so a bound that failed to
+// contain its error could be flattered into passing.
+func exactResidual(reported float64, truth *big.Rat) float64 {
+	d := new(big.Rat).Sub(ratOf(reported), truth)
+	d.Abs(d)
+	f, exact := d.Float64()
+	if !exact {
+		f = math.Nextafter(f, math.Inf(1))
+	}
+	return f
+}
+
 // placedFar translates b by shift along +X, keeping the receiver retired
 // exactly as Placed always does.
 func placedFar(t *testing.T, b *decad.Body, shift float64) *decad.Body {
@@ -115,11 +130,15 @@ func TestPrismUnionFarPlacementReturnsTheTrueUnion(t *testing.T) {
 			require.Equal(t, 1750.0, volumeMM(t, vol))
 			require.LessOrEqual(t, residual, vol.Bound.Base())
 
-			// Both operands share one frame and one placement, so §7's decidable
-			// zero case holds: B's fields are copied verbatim and the merged
-			// section carries no displacement at all.
-			require.Equal(t, decad.Exact, vol.Exactness)
-			require.Equal(t, units.CubicMillimeters(0), vol.Bound)
+			// Both operands share one frame and one placement, so the
+			// re-expression contributes nothing. The merge still SPLITS four
+			// walls, and each fragment's endpoints are named by a cut parameter
+			// sketch rounded for this pair, so §7's δ_cut stands: the reading is
+			// Approximate, and its bound is the cut displacement's alone —
+			// far below anything a placement could add.
+			require.Equal(t, decad.Approximate, vol.Exactness)
+			require.Positive(t, vol.Bound.Base())
+			require.Less(t, vol.Bound.Base(), 1e-9)
 
 			// The union of two solids reaches exactly as far as the further of
 			// them: a box running past operand B's own is a wrong SOLID, not a
@@ -127,9 +146,102 @@ func TestPrismUnionFarPlacementReturnsTheTrueUnion(t *testing.T) {
 			box, err := got.Bounds()
 			require.NoError(t, err)
 			require.Equal(t, bBox.Max.X, box.Max.X)
-			require.Equal(t, decad.Exact, box.Exactness)
+			require.Equal(t, decad.Approximate, box.Exactness)
 		})
 	}
+}
+
+// TestPrismUnionCutDisplacementBoundEnclosesTheError is §7's δ_cut arm, on the
+// fixture that found it: two boxes over [0,10]² and [5.1,15.1]², each swept
+// 10 mm, drawn on one plane with no placement at all. The re-expression is the
+// identity and neither operand carries a displacement, so every term §7 charged
+// before δ_cut is zero — and the merge still splits four walls, whose surviving
+// fragments name their endpoints by parameters sketch rounded for this pair.
+//
+// The corner at u = 5.1 is where it shows. sketch's cut parameter on the
+// 10 mm wall reads 0.51000000000000000888, whose exact lerp lands at
+// 5.1000000000000000888 while the operand's own corner is
+// 5.0999999999999996447 — a walk that does not close, 4.4e-16 out. Over the
+// whole octagon that displaces the region area by 2.2e-15 mm², and the volume
+// by 2.2e-14 mm³, against a moments-engine bound of 1.0e-13 mm³ that speaks
+// only for its own arithmetic. Charging nothing for the cut published
+// 1.0e-13 mm³ for a true error of 1.26e-13 mm³ — a bound 17% SHORT of the
+// error it claimed to cover, which is the one thing a bound may never be.
+//
+// The truth here is computed over math/big.Rat from the operands' own float
+// coordinates, so it is the volume the two records denote and not a second
+// float answer.
+func TestPrismUnionCutDisplacementBoundEnclosesTheError(t *testing.T) {
+	// The sweep height only scales the reading, so containment must hold at
+	// every one of them: 10 mm is the investigation's own fixture, 25 mm proves
+	// the charge is not a constant tuned to it.
+	for _, h := range []float64{10, 25} {
+		t.Run(units.Millimeters(h).String(), func(t *testing.T) {
+			doc := decad.New()
+			a := boxBody(t, doc, 0, 0, 10, 10, h)
+			b := boxBody(t, doc, 5.1, 5.1, 15.1, 15.1, h)
+
+			got, err := decad.Union(a, b)
+			require.NoError(t, err)
+			require.False(t, anyFaceIsFaceted(got), "the analytic reduction must own this pair")
+
+			vol, err := got.Volume()
+			require.NoError(t, err)
+			truth := trueBoxUnionVolume(
+				[4]float64{0, 0, 10, 10},
+				[4]float64{5.1, 5.1, 15.1, 15.1},
+				h,
+			)
+			residual := exactResidual(volumeMM(t, vol), truth)
+			require.Positive(t, residual, "the fixture is chosen so the reported value is NOT the denoted one")
+			require.Equal(t, decad.Approximate, vol.Exactness)
+			require.LessOrEqualf(t, residual, vol.Bound.Base(),
+				"the published volume bound %g mm³ must contain the true error %g mm³",
+				vol.Bound.Base(), residual)
+
+			// The bound is still a per-mechanism one and not a blanket
+			// widening: an ordinary prism of this size reports an arithmetic
+			// bound near 1e-13 mm³, and the cut displacement is charged at the
+			// section's own 10 mm scale.
+			require.Less(t, vol.Bound.Base(), 1e-9)
+
+			// Every other reading of the same section carries the displacement.
+			area, err := got.Area()
+			require.NoError(t, err)
+			require.Equal(t, decad.Approximate, area.Exactness)
+			require.Positive(t, area.Bound.Base())
+
+			centroid, err := got.Centroid()
+			require.NoError(t, err)
+			require.Equal(t, decad.Approximate, centroid.Exactness)
+			require.Positive(t, centroid.Bound.Base())
+
+			box, err := got.Bounds()
+			require.NoError(t, err)
+			require.Equal(t, decad.Approximate, box.Exactness)
+			require.Positive(t, box.Bound.Base())
+		})
+	}
+}
+
+// TestPrismUnionWholeEdgeMergeStaysExact is the other side of the same arm: the
+// zero case §7 keeps. Operand B sits strictly inside operand A, so the
+// arrangement splits nothing, every survivor is a whole edge carrying the
+// entity's own recorded endpoints, and no cut parameter exists to charge.
+func TestPrismUnionWholeEdgeMergeStaysExact(t *testing.T) {
+	doc := decad.New()
+	a := boxBody(t, doc, 0, 0, 10, 10, 10)
+	b := boxBody(t, doc, 2, 2, 8, 8, 10)
+
+	got, err := decad.Union(a, b)
+	require.NoError(t, err)
+	require.False(t, anyFaceIsFaceted(got), "the analytic reduction must own this pair")
+
+	vol, err := got.Volume()
+	require.NoError(t, err)
+	require.Equal(t, 1000.0, volumeMM(t, vol))
+	require.Equal(t, decad.Exact, vol.Exactness)
+	require.Equal(t, units.CubicMillimeters(0), vol.Bound)
 }
 
 // TestPrismUnionReExpressionDisplacementBoundEnclosesTheError is §7's
