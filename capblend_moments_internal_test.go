@@ -84,6 +84,56 @@ func TestCapBandMassBoundsChargeInheritedCapLevel(t *testing.T) {
 	}
 }
 
+// TestCapBlendSetbackConversionCarriesAllDerivedSideLevels keeps a cap-loop
+// chamfer from treating a non-millimetre setback as exact after it reaches the
+// payload. Both cap senses derive the side level from that converted setback,
+// and a later ThroughAll stop reads the payload's axialDelta.
+func TestCapBlendSetbackConversionCarriesAllDerivedSideLevels(t *testing.T) {
+	d, dDelta, err := magnitudeInBounded(units.Inches(0.1), units.Length, units.Millimeter, "the chamfer setback")
+	require.NoError(t, err)
+	require.Positive(t, dDelta, "the fixture's inch-to-millimetre conversion rounds")
+
+	for _, tc := range []struct {
+		name  string
+		capZ  float64
+		sideZ float64
+		start map[int]bool
+		end   map[int]bool
+	}{
+		{name: "start", capZ: 0, sideZ: d, start: map[int]bool{0: true}},
+		{name: "end", capZ: 10, sideZ: 10 - d, end: map[int]bool{0: true}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cbp := capBlendPayload{
+				profile:    ProfileRecord{Outer: synthRectLoop(0, 0, 10, 10)},
+				frame:      canonicalPrismFrame(t),
+				z0:         0,
+				z1:         10,
+				xform:      r3.Identity(),
+				d:          d,
+				dDelta:     dDelta,
+				startLoops: tc.start,
+				endLoops:   tc.end,
+			}
+			body, err := evalCapBlendContext(t.Context(), New(), 0, cbp)
+			require.NoError(t, err)
+			require.GreaterOrEqual(t, cbp.axialDelta(), dDelta)
+
+			side := 0
+			for _, vertex := range body.Vertices() {
+				position := vertex.Position()
+				if position.Value.Z != tc.sideZ {
+					continue
+				}
+				require.Equal(t, Approximate, position.Exactness)
+				require.GreaterOrEqual(t, position.Bound.Mag(), dDelta)
+				side++
+			}
+			require.Equal(t, 4, side, "the square has four derived side-level vertices")
+		})
+	}
+}
+
 // TestCapBandVolumeBoundTracksTheFluxNotTheCancelledBand is the regression
 // check for the mechanism that made the published volume bound stop
 // enclosing, and it needs no platform to disagree with another to show it.

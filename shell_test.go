@@ -456,6 +456,30 @@ func TestShellCupInwardBox(t *testing.T) {
 	}
 }
 
+// TestShellCupFloorCarriesThicknessConversion keeps a cup floor derived from
+// a non-millimetre thickness from claiming the rescaled level was recorded.
+func TestShellCupFloorCarriesThicknessConversion(t *testing.T) {
+	thickness := units.Inches(0.1)
+	floor, err := thickness.In(units.Millimeter)
+	require.NoError(t, err)
+
+	_, box := shellBox(t)
+	cup, err := box.Shell(topCap(box), thickness)
+	require.NoError(t, err)
+
+	floorVertices := 0
+	for _, vertex := range cup.Vertices() {
+		position := vertex.Position()
+		if position.Value.Z != floor {
+			continue
+		}
+		require.Equal(t, decad.Approximate, position.Exactness)
+		require.Positive(t, position.Bound.Mag())
+		floorVertices++
+	}
+	require.Equal(t, 4, floorVertices, "the rectangular cavity floor has four vertices")
+}
+
 func TestShellCupOutwardBox(t *testing.T) {
 	const th = 5.0
 	h := shellBoxHeight

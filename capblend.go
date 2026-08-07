@@ -52,6 +52,7 @@ type capBlendPayload struct {
 	z1Delta    float64
 	xform      r3.Transform
 	d          float64
+	dDelta     float64
 	startLoops map[int]bool // loop index -> chamfered on the z0 cap
 	endLoops   map[int]bool // loop index -> chamfered on the z1 cap
 	// patches carries every chamferCap(...) role beside its plane-local
@@ -109,14 +110,14 @@ func (cbp capBlendPayload) capBandLevel(capZ, matSign float64) boundedScalar {
 
 // axialDelta is the larger sweep-level displacement a body-relative stop must
 // preserve when it resolves against this cap blend. A chamfered end also
-// carries the rounding of its setback level.
+// carries the setback conversion and float-sum rounding of its level.
 func (cbp capBlendPayload) axialDelta() float64 {
 	z0Delta, z1Delta := cbp.z0Delta, cbp.z1Delta
 	if len(cbp.startLoops) != 0 {
-		z0Delta = absSumUpper(z0Delta, addRoundError(cbp.z0, cbp.d, cbp.z0+cbp.d))
+		z0Delta = absSumUpper(z0Delta, cbp.dDelta, addRoundError(cbp.z0, cbp.d, cbp.z0+cbp.d))
 	}
 	if len(cbp.endLoops) != 0 {
-		z1Delta = absSumUpper(z1Delta, addRoundError(cbp.z1, -cbp.d, cbp.z1-cbp.d))
+		z1Delta = absSumUpper(z1Delta, cbp.dDelta, addRoundError(cbp.z1, -cbp.d, cbp.z1-cbp.d))
 	}
 	return math.Max(z0Delta, z1Delta)
 }
@@ -228,11 +229,11 @@ func (cbp capBlendPayload) extentBoundedAlong(ctx context.Context, g r3.Vec, wor
 		hiAllow := productUpper(axial, cbp.z1Delta)
 		if onStart {
 			zLo = cbp.z0 + cbp.d
-			loAllow = absSumUpper(loAllow, productUpper(axial, addRoundError(cbp.z0, cbp.d, zLo)))
+			loAllow = absSumUpper(loAllow, productUpper(axial, absSumUpper(cbp.dDelta, addRoundError(cbp.z0, cbp.d, zLo))))
 		}
 		if onEnd {
 			zHi = cbp.z1 - cbp.d
-			hiAllow = absSumUpper(hiAllow, productUpper(axial, addRoundError(cbp.z1, -cbp.d, zHi)))
+			hiAllow = absSumUpper(hiAllow, productUpper(axial, absSumUpper(cbp.dDelta, addRoundError(cbp.z1, -cbp.d, zHi))))
 		}
 		l, h, err := boundaryExtremesContext(ctx, ProfileRecord{Outer: loop}, gu, gv, work)
 		if err != nil {
@@ -399,7 +400,7 @@ func classifyChamferSelection(ctx context.Context, pp prismPayload, b *Body, sel
 // is the shared entry ChamferContext calls once a clean cap-loop selection is
 // classified. SX13's radial half is decided per circular wall as the band is
 // constructed, in capblend_geom.go's capBandRadius.
-func buildCapBlend(ctx context.Context, doc *Document, ref StepRef, pp prismPayload, d float64, startLoops, endLoops map[int]bool) (*Body, error) {
+func buildCapBlend(ctx context.Context, doc *Document, ref StepRef, pp prismPayload, d, dDelta float64, startLoops, endLoops map[int]bool) (*Body, error) {
 	height := pp.z1 - pp.z0
 	loops := append([]LoopRecord{pp.profile.Outer}, pp.profile.Holes...)
 
@@ -468,6 +469,7 @@ func buildCapBlend(ctx context.Context, doc *Document, ref StepRef, pp prismPayl
 		z1Delta:    pp.z1Delta,
 		xform:      pp.xform,
 		d:          d,
+		dDelta:     dDelta,
 		startLoops: startLoops,
 		endLoops:   endLoops,
 	}

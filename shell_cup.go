@@ -36,11 +36,11 @@ import (
 //
 // zOpenDelta, zOuterDelta and zCavDelta are the axial displacement of their
 // matching levels. zOpen and the unstepped floor level retain the displacement
-// of the receiver end they came from. The one derived floor level additionally
-// carries only its own float-sum rounding. Every level-derived cup reading uses
-// its matching displacement — the two heights and the volume, area and centroid
-// built on them, the box, and the wall vertices and vertical edges the shared
-// prism build stamps.
+// of the receiver end they came from. A derived floor level additionally carries
+// the thickness conversion and float-sum rounding. Every level-derived cup
+// reading uses its matching displacement — the two heights and the volume, area
+// and centroid built on them, the box, and the wall vertices and vertical edges
+// the shared prism build stamps.
 type cupPayload struct {
 	outer       ProfileRecord
 	cavity      ProfileRecord
@@ -131,7 +131,7 @@ func (cp cupPayload) extentAlong(g r3.Vec) (float64, float64, error) {
 // opens the cup at the top (z1); a removed start opens it at the bottom (z0),
 // its mirror. Inward, O is the original section P and C the erosion Q; outward,
 // O is the dilation Q and C the original P.
-func cupPayloadFor(pp prismPayload, offset ProfileRecord, s, t float64, removedEnd bool) cupPayload {
+func cupPayloadFor(pp prismPayload, offset ProfileRecord, s, t, tDelta float64, removedEnd bool) cupPayload {
 	z0, z1 := pp.z0, pp.z1
 	o, c := pp.profile, offset
 	if s < 0 {
@@ -150,10 +150,10 @@ func cupPayloadFor(pp prismPayload, offset ProfileRecord, s, t float64, removedE
 		xform:     pp.xform,
 	}
 	// step is the one derived floor level. It carries the source end's own
-	// displacement and only this float sum's rounding.
+	// displacement, the thickness conversion, and this float sum's rounding.
 	step := func(from, delta, by float64) (float64, float64) {
 		to := from + by
-		return to, absSumUpper(delta, addRoundError(from, by, to))
+		return to, absSumUpper(delta, tDelta, addRoundError(from, by, to))
 	}
 	if removedEnd { // open at the top
 		cp.zOpen = z1

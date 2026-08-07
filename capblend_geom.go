@@ -259,10 +259,11 @@ type capPatchGeom struct {
 	// side level's allowance (levelDelta below) there.
 	contourAllow float64
 
-	// levelDelta is the SIDE level's own rounding: sideZ is the single float
-	// sum capZ + matSign*d, so this patch's whole side directrix sits that far
-	// from the level it denotes — the same term capSlantEdge charges into a
-	// slant edge's length and capBandVolume charges for the identical level.
+	// levelDelta is the SIDE level's conversion and float-sum rounding: sideZ
+	// is the single float sum capZ + matSign*d, so this patch's whole side
+	// directrix sits that far from the level it denotes — the same term
+	// capSlantEdge charges into a slant edge's length and capBandVolume charges
+	// for the identical level.
 	// patchAreaOf reads it as the axial half of its own displacement
 	// allowance (bounds.go's bandLevelAreaAllow), beside contourAllow's
 	// cap-level half; without it both of that function's arms would read the
@@ -306,13 +307,14 @@ func buildCapBand(ctx context.Context, body *Body, ref StepRef, cbp capBlendPayl
 	liftCap := func(p Point2) r3.Vec { return pl.point(p.U, p.V, capZ) }
 	liftSide := func(p Point2) r3.Vec { return pl.point(p.U, p.V, sideZ) }
 
-	// levelDelta is the side level's own rounding: sideZ is a float sum, so the
-	// band's side directrix sits that far from the level it denotes, and every
-	// edge with an endpoint there carries it beside the contour's own
-	// displacement. It is the same term capBandVolume charges for the identical
-	// level, and it rides onto every patch's own capPatchGeom, where
-	// patchAreaOf charges it against the patch's area (capblend_moments.go).
-	levelDelta := addRoundError(capZ, matSign*d, sideZ)
+	// levelDelta is the side level's conversion and float-sum rounding: sideZ
+	// is a float sum, so the band's side directrix sits that far from the level
+	// it denotes, and every edge with an endpoint there carries it beside the
+	// contour's own displacement. It is the same term capBandVolume charges for
+	// the identical level, and it rides onto every patch's own capPatchGeom,
+	// where patchAreaOf charges it against the patch's area
+	// (capblend_moments.go).
+	levelDelta := absSumUpper(cbp.dDelta, addRoundError(capZ, matSign*d, sideZ))
 	// capDelta is the inherited displacement of the cap level itself. The cap
 	// contour moves only in the cap plane, so its delta does not cover this
 	// independent axial term.

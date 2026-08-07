@@ -87,7 +87,7 @@ func (b *Body) ChamferContext(ctx context.Context, sel EdgeSelector, d units.Val
 			return nil, fmt.Errorf(`%w: a nil option names nothing to apply`, ErrDegenerate)
 		}
 	}
-	dmm, err := magnitudeIn(d, units.Length, units.Millimeter, "the chamfer setback")
+	dmm, dDelta, err := magnitudeInBounded(d, units.Length, units.Millimeter, "the chamfer setback")
 	if err != nil {
 		return nil, err
 	}
@@ -136,7 +136,7 @@ func (b *Body) ChamferContext(ctx context.Context, sel EdgeSelector, d units.Val
 	}
 	if !lateral {
 		ref := doc.nextStepRef()
-		body, err := buildCapBlend(ctx, doc, ref, pp, dmm, startLoops, endLoops)
+		body, err := buildCapBlend(ctx, doc, ref, pp, dmm, dDelta, startLoops, endLoops)
 		if err != nil {
 			return nil, err
 		}

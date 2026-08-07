@@ -147,7 +147,7 @@ func (b *Body) ShellContext(ctx context.Context, sel FaceSelector, t units.Value
 			return nil, fmt.Errorf(`%w: unknown shell option identifier %T`, ErrDegenerate, ident)
 		}
 	}
-	tmm, err := magnitudeIn(t, units.Length, units.Millimeter, "the shell thickness")
+	tmm, tDelta, err := magnitudeInBounded(t, units.Length, units.Millimeter, "the shell thickness")
 	if err != nil {
 		return nil, err
 	}
@@ -301,7 +301,7 @@ func (b *Body) ShellContext(ctx context.Context, sel FaceSelector, t units.Value
 		// evalCup wraps a wall around each post, all hanging off the one floor slab
 		// (one lump). The holed BOTH-caps case keeps no floor and is 1 + k lumps
 		// (B4, S12), refused above.
-		body, err = evalCupContext(ctx, d, ref, cupPayloadFor(pp, offset, s, tmm, removedEnd))
+		body, err = evalCupContext(ctx, d, ref, cupPayloadFor(pp, offset, s, tmm, tDelta, removedEnd))
 	}
 	if err != nil {
 		return nil, err

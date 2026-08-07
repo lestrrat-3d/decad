@@ -357,7 +357,7 @@ func loopCoordinateUpper(loop LoopRecord, work *freeformWork) (float64, error) {
 // bound every point the difference volume can hold.
 func capBandMoment(ctx context.Context, loop LoopRecord, cbp capBlendPayload, geom []capPatchGeom, capZ, matSign, delta float64, work *freeformWork) (mu, mv, mz boundedScalar, err error) {
 	capZB := cbp.capBandLevel(capZ, matSign)
-	sideZB := boundedAdd(capZB, exactScalar(matSign*cbp.d))
+	sideZB := boundedAdd(capZB, measuredScalar(matSign*cbp.d, cbp.dDelta))
 	sideZ := sideZB.value
 
 	signedArea, err := loopSignedAreaBudget(newWorkBudget(ctx), loop)

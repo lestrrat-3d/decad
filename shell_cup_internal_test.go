@@ -10,7 +10,10 @@ import (
 // shell senses. The top end is computed while the bottom is stated exactly, so
 // a floor derived from the latter must not inherit the former's displacement.
 func TestCupPayloadForTracksEachSourceEndDisplacement(t *testing.T) {
-	const thickness = 0.1
+	const (
+		thickness      = 0.1
+		thicknessDelta = 0.03125
+	)
 	pp := prismPayload{
 		z0:      0,
 		z1:      1e12,
@@ -18,7 +21,7 @@ func TestCupPayloadForTracksEachSourceEndDisplacement(t *testing.T) {
 	}
 	floorDelta := func(from, sourceDelta, by float64) float64 {
 		to := from + by
-		return absSumUpper(sourceDelta, addRoundError(from, by, to))
+		return absSumUpper(sourceDelta, thicknessDelta, addRoundError(from, by, to))
 	}
 	topFloorDelta := floorDelta(pp.z0, pp.z0Delta, thickness)
 	bottomInFloorDelta := floorDelta(pp.z1, pp.z1Delta, -thickness)
@@ -49,7 +52,7 @@ func TestCupPayloadForTracksEachSourceEndDisplacement(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cp := cupPayloadFor(pp, ProfileRecord{}, tt.sense, thickness, tt.removedEnd)
+			cp := cupPayloadFor(pp, ProfileRecord{}, tt.sense, thickness, thicknessDelta, tt.removedEnd)
 			require.Equal(t, tt.openDelta, cp.openScalar().bound)
 			require.Equal(t, tt.outerDelta, cp.outerScalar().bound)
 			require.Equal(t, tt.cavDelta, cp.cavityScalar().bound)

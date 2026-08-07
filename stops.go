@@ -330,12 +330,30 @@ func (d *Document) resolveThroughAll(frame r3.Frame, travel float64) (float64, f
 	for i, s := range stops {
 		refs[i] = s.ref
 	}
-	// The sweep stops at the FARTHEST far side, so that one body's own level
-	// displacement is the one this level inherits, composed with the rounding
-	// this resolution's own subtraction committed.
+	// The sweep still stops at the FARTHEST held far side, preserving the stop
+	// order and endpoint the feature records. Its bound must nevertheless cover
+	// every candidate's far-end interval: a lower held far side can be farther
+	// in the denoted geometry. Refuse only when that competing interval cannot
+	// be represented as a finite bound.
 	last := stops[len(stops)-1]
+	farDelta := last.delta
+	for _, candidate := range stops {
+		if isNonFinite(candidate.far) || isNonFinite(candidate.delta) {
+			return 0, 0, nil, fmt.Errorf(`%w: a through-all far-end uncertainty is not finite`, ErrUnsupported)
+		}
+		upper := candidate.far
+		if candidate.delta != 0 {
+			upper = upRound(candidate.far + candidate.delta)
+		}
+		if isNonFinite(upper) {
+			return 0, 0, nil, fmt.Errorf(`%w: a through-all far-end uncertainty cannot be represented`, ErrUnsupported)
+		}
+		if upper > last.far {
+			farDelta = math.Max(farDelta, upRound(upper-last.far))
+		}
+	}
 	stop := travel * last.far
-	delta := absSumUpper(throughStopRound(frame.Origin(), dir, last.hi, travel, stop), last.delta)
+	delta := absSumUpper(throughStopRound(frame.Origin(), dir, last.hi, travel, stop), farDelta)
 	return stop, delta, refs, nil
 }
 
