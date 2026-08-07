@@ -96,6 +96,17 @@ func (cbp capBlendPayload) prismLike(z0, z1 float64) prismPayload {
 	}
 }
 
+// capBandLevel preserves the selected end's axial displacement while a
+// chamfer band derives its cap and side levels. The start band has positive
+// material sense; the end band has negative material sense.
+func (cbp capBlendPayload) capBandLevel(capZ, matSign float64) boundedScalar {
+	capDelta := cbp.z1Delta
+	if matSign > 0 {
+		capDelta = cbp.z0Delta
+	}
+	return measuredScalar(capZ, capDelta)
+}
+
 // axialDelta is the larger sweep-level displacement a body-relative stop must
 // preserve when it resolves against this cap blend. A chamfered end also
 // carries the rounding of its setback level.

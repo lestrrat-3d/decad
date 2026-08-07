@@ -39,6 +39,51 @@ func capBandCircle(t *testing.T, r, d, capZ float64) boundedScalar {
 	return v
 }
 
+// TestCapBandMassBoundsChargeInheritedCapLevel isolates the cap disk that
+// both capBandVolume and capBandMoment use to close a chamfer band. A ToFace
+// cap level is computed, so its inherited axial displacement must remain on
+// that disk and on the derived side level. Otherwise both helpers treat the
+// same computed cap as exact and can publish bounds for a different solid.
+func TestCapBandMassBoundsChargeInheritedCapLevel(t *testing.T) {
+	const capZ, d, capDelta = 1e12, 1e-3, 2.34375e-05
+	loop := synthRectLoop(0, 0, 1, 1)
+	for _, tc := range []struct {
+		name    string
+		matSign float64
+		payload capBlendPayload
+	}{
+		{name: `start cap`, matSign: +1, payload: capBlendPayload{d: d, z0Delta: capDelta}},
+		{name: `end cap`, matSign: -1, payload: capBlendPayload{d: d, z1Delta: capDelta}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sideZ := capZ + tc.matSign*d
+			geom := []capPatchGeom{
+				{sideA: Point2{U: 0, V: 0}, sideB: Point2{U: 1, V: 0}, capA: Point2{U: d, V: d}, capB: Point2{U: 1 - d, V: d}, sideZ: sideZ, capZ: capZ},
+				{sideA: Point2{U: 1, V: 0}, sideB: Point2{U: 1, V: 1}, capA: Point2{U: 1 - d, V: d}, capB: Point2{U: 1 - d, V: 1 - d}, sideZ: sideZ, capZ: capZ},
+				{sideA: Point2{U: 1, V: 1}, sideB: Point2{U: 0, V: 1}, capA: Point2{U: 1 - d, V: 1 - d}, capB: Point2{U: d, V: 1 - d}, sideZ: sideZ, capZ: capZ},
+				{sideA: Point2{U: 0, V: 1}, sideB: Point2{U: 0, V: 0}, capA: Point2{U: d, V: 1 - d}, capB: Point2{U: d, V: d}, sideZ: sideZ, capZ: capZ},
+			}
+			withoutDelta := tc.payload
+			withoutDelta.z0Delta = 0
+			withoutDelta.z1Delta = 0
+
+			volumeWith, err := capBandVolume(t.Context(), loop, tc.payload, geom, capZ, tc.matSign, 0)
+			require.NoError(t, err)
+			volumeWithout, err := capBandVolume(t.Context(), loop, withoutDelta, geom, capZ, tc.matSign, 0)
+			require.NoError(t, err)
+			require.Greater(t, volumeWith.bound, volumeWithout.bound,
+				`the cap disk's inherited axial displacement must reach the band volume bound`)
+
+			_, _, momentWith, err := capBandMoment(t.Context(), loop, tc.payload, geom, capZ, tc.matSign, 0, newFreeformWork())
+			require.NoError(t, err)
+			_, _, momentWithout, err := capBandMoment(t.Context(), loop, withoutDelta, geom, capZ, tc.matSign, 0, newFreeformWork())
+			require.NoError(t, err)
+			require.Greater(t, momentWith.bound, momentWithout.bound,
+				`the cap disk's inherited axial displacement must reach the band first-moment bound`)
+		})
+	}
+}
+
 // TestCapBandVolumeBoundTracksTheFluxNotTheCancelledBand is the regression
 // check for the mechanism that made the published volume bound stop
 // enclosing, and it needs no platform to disagree with another to show it.

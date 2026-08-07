@@ -316,10 +316,7 @@ func buildCapBand(ctx context.Context, body *Body, ref StepRef, cbp capBlendPayl
 	// capDelta is the inherited displacement of the cap level itself. The cap
 	// contour moves only in the cap plane, so its delta does not cover this
 	// independent axial term.
-	capDelta := cbp.z1Delta
-	if matSign > 0 {
-		capDelta = cbp.z0Delta
-	}
+	capDelta := cbp.capBandLevel(capZ, matSign).bound
 
 	// A single closed circle has no corner: one Cone patch, full turn.
 	if n == 1 && walks[0].closed {
