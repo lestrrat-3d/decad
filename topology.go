@@ -400,8 +400,9 @@ type Face struct {
 	// directrices that a mitered corner leaves sweeping different angular
 	// windows, so its surface departs from the `Cone` it publishes by a bound
 	// derived from that skew alone (capblend_geom.go's capPatchNormalAllow,
-	// docs/modify-reach-design.md §8.3). A zero there would publish an Exact
-	// direction the built surface does not have.
+	// docs/modify-reach-design.md §8.3). A zero term there would omit a
+	// direction difference the built surface has. NormalAt separately composes
+	// its arithmetic proof (normal_bound.go).
 	normalBound float64
 }
 

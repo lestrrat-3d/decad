@@ -160,12 +160,14 @@ func TestCapBlendMiteredPatchNormalCarriesItsOwnBound(t *testing.T) {
 	}
 }
 
-// TestCapBlendUnmiteredPatchNormalStaysExact pins the other side of the same
-// rule: where a band patch's two directrices sweep ONE window there is no
-// departure to bound, and the normal stays Exact with a zero bound. A whole
-// turn (no corner trims it at all) and a rectangular loop's flat patches are
-// the shipped cases, and neither may pay for the mitered one's bound.
-func TestCapBlendUnmiteredPatchNormalStaysExact(t *testing.T) {
+// TestCapBlendUnmiteredPatchNormalHasNoSurfaceDepartureBound pins the other
+// side of the same rule: where a band patch's two directrices sweep ONE window
+// there is no surface departure to bound. Face.NormalAt is Exact only when
+// its own arithmetic is exact; otherwise it publishes only a small arithmetic
+// bound. A whole turn (no corner trims it at all) and a rectangular loop's flat
+// patches are the shipped cases, and neither may pay for the mitered one's
+// surface-departure bound.
+func TestCapBlendUnmiteredPatchNormalHasNoSurfaceDepartureBound(t *testing.T) {
 	for _, tc := range []struct {
 		name  string
 		build func(t *testing.T) *decad.Body
@@ -187,8 +189,7 @@ func TestCapBlendUnmiteredPatchNormalStaysExact(t *testing.T) {
 				p := f.Loops()[0].CoEdges()[0].Start().Position().Value
 				n, err := f.NormalAt(p)
 				require.NoError(t, err)
-				require.Equal(t, decad.Exact, n.Exactness)
-				require.Equal(t, 0.0, n.Bound.Mag())
+				requireNoSurfaceDepartureNormalBound(t, n)
 				checked++
 			}
 			require.Positive(t, checked)
@@ -239,8 +240,7 @@ func TestCapBlendUndecidedPatchKeepsProvenUndercut(t *testing.T) {
 	p := plane.Loops()[0].CoEdges()[0].Start().Position().Value
 	n, err := plane.NormalAt(p)
 	require.NoError(t, err)
-	require.Equal(t, decad.Exact, n.Exactness)
-	require.Equal(t, 0.0, n.Bound.Mag())
+	requireArithmeticNormalBound(t, n)
 	require.InDelta(t, -math.Sqrt2/2, n.Value.Dot(r3.NewVec(1, 0, 0)), 1e-12)
 
 	report, err := m.body.Document().Verify(t.Context(), decad.WithPullDirection(r3.NewVec(1, 0, 0)))
@@ -250,6 +250,35 @@ func TestCapBlendUndecidedPatchKeepsProvenUndercut(t *testing.T) {
 	require.True(t, hasDiagnostic(report, decad.DiagUndercut))
 	require.True(t, hasDiagnostic(report, decad.DiagUndecidedUndercut))
 	require.Equal(t, decad.Violating, report.Bodies[0].Status)
+}
+
+// requireArithmeticNormalBound checks a computed normal that must carry
+// Face.NormalAt's own documented arithmetic proof.
+func requireArithmeticNormalBound(t *testing.T, n decad.VecMeasurement) {
+	t.Helper()
+	require.Equal(t, decad.Approximate, n.Exactness)
+	bound, err := n.Bound.In(units.One)
+	require.NoError(t, err)
+	require.Positive(t, bound)
+	require.Less(t, bound, 1e-14)
+}
+
+// requireNoSurfaceDepartureNormalBound keeps zero cap-blend surface-departure
+// cases distinct from mitered patches. An axis-aligned normal can be Exact;
+// every other normal carries only Face.NormalAt's small arithmetic bound.
+func requireNoSurfaceDepartureNormalBound(t *testing.T, n decad.VecMeasurement) {
+	t.Helper()
+	bound, err := n.Bound.In(units.One)
+	require.NoError(t, err)
+	require.Less(t, bound, 1e-14)
+	switch n.Exactness {
+	case decad.Exact:
+		require.Zero(t, bound)
+	case decad.Approximate:
+		require.Positive(t, bound)
+	default:
+		require.Fail(t, `unknown normal exactness`, `%v`, n.Exactness)
+	}
 }
 
 // TestCapBlendUndercutStillDecidedOnOrdinaryBand keeps the fix reject-only: an

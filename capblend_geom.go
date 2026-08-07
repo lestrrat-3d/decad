@@ -731,11 +731,12 @@ func buildCapBand(ctx context.Context, body *Body, ref StepRef, cbp capBlendPayl
 // Left unset, a patch Face reports a zero area with a zero bound, which
 // `exactnessOf` publishes as an EXACT zero: not merely a missing reading but a
 // positively wrong one, asserted as a fact about a face that plainly has area.
-// A zero normal bound on a mitered patch is the same kind of wrong answer one
-// reading over — an `Exact` claim for a direction the built surface does not
-// have — and the DX7 undercut survey reads it. Every patch this file builds
-// passes through here, and each does so with the geometry the moments pass then
-// integrates, so the two can never disagree.
+// A zero surface-departure term on a mitered patch is the same kind of wrong
+// answer one reading over: it omits a direction difference the built surface
+// has, and the DX7 undercut survey reads it. Face.NormalAt separately composes
+// its own arithmetic bound. Every patch this file builds passes through here,
+// and each does so with the geometry the moments pass then integrates, so the
+// two can never disagree.
 func setPatchReadings(f *Face, g capPatchGeom) {
 	f.area, f.areaBound = patchAreaOf(g)
 	f.normalBound = capPatchNormalAllow(g)
@@ -883,8 +884,9 @@ func capPatchWindowSkew(g capPatchGeom) float64 {
 // ruledPatchNormalAllow: the proven bound on how far the RULED surface the
 // build assembles can carry a normal differing from the `Cone` this file
 // publishes for it. A patch whose two windows already coincide gets zero,
-// which is what keeps the tangent-join, apex and whole-turn readings exactly
-// as they ship.
+// which keeps the tangent-join, apex and whole-turn cases free of a
+// cap-blend surface-departure term. Face.NormalAt separately composes its own
+// arithmetic bound.
 //
 // The two windows must also be walked in the SAME sense for that derivation's
 // own convexity step to hold (both a and b non-negative, so the built normal's

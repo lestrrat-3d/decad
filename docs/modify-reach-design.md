@@ -466,13 +466,14 @@ the measurement, and every reading taken off it owes the departure its own
 term:
 
 - `Face.NormalAt` on a mitered band patch reports the Cone's own normal with a
-  proven bound derived from the two windows' skew alone — an azimuth part (the
+  proven surface-departure bound derived from the two windows' skew alone — an azimuth part (the
   built normal and the query point both sit angularly between the two
   directrices, so a rotation of at most the skew separates them) and a tilt
   part (the built patch's own radial/axial ratio against the cone's, whose
   whole difference carries a factor of `1 - cos(skew)`). `ruledPatchNormalAllow`
-  owns the derivation. An `Exact` zero there asserts a direction the built
-  surface does not have.
+  owns the derivation. `Face.NormalAt` separately composes its arithmetic
+  proof (`normal_bound.go`). A zero surface-departure term on a mitered patch
+  omits a direction difference the built surface has.
 - DX7 widens its own window reading by that bound. A point proven to oppose
   lists the patch; only an all-clear needs every point to clear. For the tagged
   normal-component range `[mn, mx]` and departure `allow`, it lists when
@@ -485,9 +486,10 @@ term:
   to the receiver's own section rests on every patch being flat or a cone
   sector, and the ruled patch is neither.
 
-All three are unchanged — zero bound, exact reading, section reduction —
-wherever the two windows coincide, which is every tangent join, apex patch and
-whole turn.
+All three retain their zero surface-departure allowance, un-widened DX7 range,
+and section reduction wherever the two windows coincide: every tangent join,
+apex patch and whole turn. `Face.NormalAt` still reports its independent
+arithmetic bound (`normal_bound.go`).
 
 SX12 audits the exact offset family, not the ruled patch the body builds. It
 runs the existing line/arc offset audit on the section offset by the full
