@@ -290,17 +290,25 @@ func edgeJoin(e sketch.BoundaryEdge, seg CurveSegment) (loopJoin, error) {
 
 		// The polyline holds sketch's snapped arrangement node. A bound sketch
 		// never cut already has its exact natural endpoint in the record, so
-		// use that coordinate for closure. The natural-to-walk mapping matches
-		// falsifyRange's observation reorder below.
+		// use that coordinate for closure. The range is natural while the
+		// polyline is in walk order, so Reversed maps the natural endpoints to
+		// the opposite walk endpoints.
 		if naturalStart, naturalEnd, closed, ok := wholeSegmentEnds(seg); ok && !closed {
-			if e.Reversed {
-				naturalStart, naturalEnd = naturalEnd, naturalStart
-			}
 			if e.TStart == 0 {
-				atStart = loopJoinPoint{point: naturalStart, source: recordJoinSource}
+				join := loopJoinPoint{point: naturalStart, source: recordJoinSource}
+				if e.Reversed {
+					atEnd = join
+				} else {
+					atStart = join
+				}
 			}
 			if e.TEnd == 1 {
-				atEnd = loopJoinPoint{point: naturalEnd, source: recordJoinSource}
+				join := loopJoinPoint{point: naturalEnd, source: recordJoinSource}
+				if e.Reversed {
+					atStart = join
+				} else {
+					atEnd = join
+				}
 			}
 		}
 		return loopJoin{

@@ -558,6 +558,56 @@ func TestRecordProfileRejectsUnclosedLoopAtUncutPartialBound(t *testing.T) {
 	require.Contains(t, err.Error(), `does not close`)
 }
 
+func TestRecordProfileRecordsReversedUncutPartialBound(t *testing.T) {
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	origin := s.CreatePoint(0, 0)
+	right := s.CreatePoint(10, 0)
+	topRight := s.CreatePoint(10, 10)
+	top := s.CreatePoint(0, 10)
+	below := s.CreatePoint(0, -5)
+	s.CreateLine(origin, right)
+	s.CreateLine(right, topRight)
+	s.CreateLine(topRight, top)
+	finalLine := s.CreateLine(below, top)
+
+	profiles := s.Profiles()
+	require.Len(t, profiles, 1)
+	profile := profiles[0]
+	require.True(t, profile.Valid)
+
+	var fragment sketch.BoundaryEdge
+	for _, edge := range profile.Outer {
+		if edge.Entity == finalLine {
+			fragment = edge
+			break
+		}
+	}
+	require.True(t, fragment.Partial)
+	require.True(t, fragment.Reversed)
+	require.True(t, fragment.TExact)
+	require.Equal(t, 1.0/3.0, fragment.TStart)
+	require.Equal(t, 1.0, fragment.TEnd)
+
+	record, _, err := decad.RecordProfile(s, profile)
+	require.NoError(t, err, `the uncut natural end is the reversed walk start`)
+
+	var recorded decad.LineSeg
+	found := false
+	for _, segment := range record.Outer.Segments {
+		line, ok := segment.(decad.LineSeg)
+		if ok && line.Start == (decad.Point2{U: 0, V: -5}) && line.End == (decad.Point2{U: 0, V: 10}) {
+			recorded = line
+			found = true
+			break
+		}
+	}
+	require.True(t, found)
+	require.Equal(t, 1.0, recorded.TStart)
+	require.Equal(t, 1.0/3.0, recorded.TEnd)
+}
+
 func TestRecordProfileRecordsSnapThresholdTrim(t *testing.T) {
 	// The same shape one order of magnitude further out: past sketch's snap
 	// threshold it TRIMS the two lines at their crossing instead, so the
