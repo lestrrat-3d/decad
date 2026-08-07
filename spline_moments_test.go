@@ -537,7 +537,7 @@ func TestOverBudgetConversionRefusesBeforeLifting(t *testing.T) {
 	}
 }
 
-// Analytic reconstruction has its own larger ceiling because sketch's chord
+// The reconstruction counter has its own larger ceiling because sketch's chord
 // arrangement is independent of exact-rational conversion and integration. It
 // still charges before sketch is asked anything, because public ProfileRecord
 // methods have no context and cannot cancel an arrangement that has started.
@@ -572,15 +572,14 @@ func TestReconstructionIsChargedBeforeItRuns(t *testing.T) {
 // source too, because sketch floors free-form sampling at 64 chords however few
 // control points a curve holds.
 //
-// Twenty three-control closed splines hold 1280 chords. Their two required
-// arrangements cost 3,276,800 units, which is above freeformWorkLimit but below
-// reconstructionWorkLimit. A per-source charge misses the cross-source pairs;
-// the record-wide free-form charge refuses before sketch starts its arrangement.
+// One hundred three-control closed splines hold 6400 chords, past the
+// reconstruction ceiling. A per-source charge misses the cross-source pairs;
+// the record-wide charge refuses before sketch starts its arrangement.
 //
 // The fixture's own topology is never reached, which is the point: the charge is
 // levied before sketch is asked anything.
 func TestCrossSourceChordsAreChargedOnTheWholeRecord(t *testing.T) {
-	segments := make([]decad.CurveSegment, 20)
+	segments := make([]decad.CurveSegment, 100)
 	for i := range segments {
 		control := make([]decad.Point2, 3)
 		for j := range control {
@@ -596,7 +595,6 @@ func TestCrossSourceChordsAreChargedOnTheWholeRecord(t *testing.T) {
 	require.Error(t, err)
 	require.ErrorIs(t, err, decad.ErrUnsupported)
 	require.Contains(t, err.Error(), "work budget")
-	require.Contains(t, err.Error(), "1048576", "free-form reconstruction uses freeformWorkLimit")
 	require.Contains(t, err.Error(), "profile record is invalid",
 		"the record-level charge fires, not a per-segment one")
 	require.Less(t, time.Since(start), time.Second, "no arrangement ran before the refusal")
@@ -1550,7 +1548,7 @@ func recordPlateWithCircularHoles(t *testing.T, holes int) (decad.ProfileRecord,
 	return decad.ProfileRecord{}, 0
 }
 
-// The analytic reconstruction counter must admit ordinary analytic plates with several
+// The reconstruction counter must admit ordinary analytic plates with several
 // bolt holes. Each whole circle contributes 256 chords, so eight holes exercise
 // the record-wide charge well beyond the former two-circle boundary.
 func TestAnalyticPlateWithCircularHolesArea(t *testing.T) {
