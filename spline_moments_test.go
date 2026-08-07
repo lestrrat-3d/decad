@@ -1384,14 +1384,12 @@ func TestExtrudeSplineProfileRefusesAtSideFaces(t *testing.T) {
 // One public operation over one record spends ONE R7 work ceiling
 // (docs/spline-design.md §5.2). Extrude runs the record-wide moments preflight
 // for its area falsifier, the same preflight again inside the prism build, and
-// then resolves every boundary segment into a walk before staging out on the
-// free-form side face. Those are phases of one operation over one record, so
-// they share the record's counter; a counter per phase gave the same record a
-// fresh full ceiling each time, and the last of them subdivided for seconds over
-// a chain the first phase had already proved unaffordable.
+// then reaches the staged free-form side face. The two preflights are phases of
+// one operation over one record, so they share the record's counter; the
+// internal evaluator test keeps that counter propagation covered directly.
 //
-// The assertion is a MEASUREMENT: every counter reads under the limit either
-// way, so only the cost of the extra ceiling tells them apart.
+// The allocation and timing assertions prove the staged side-face refusal does
+// not spend a free-form length bracket it cannot consume.
 func TestExtrudeSplineProfileSpendsOneWorkCeiling(t *testing.T) {
 	world := sketch.NewWorld()
 	s, err := world.CreateSketch(world.XY())
@@ -1448,7 +1446,7 @@ func scallopedDiskRecord(n int) decad.ProfileRecord {
 	}
 	segments := make([]decad.CurveSegment, n)
 	for i := range segments {
-		start, end := vertex(i), vertex(i+1)
+		start, end := vertex(i), vertex((i+1)%n)
 		middle := decad.Point2{U: (start.U + end.U) / 2, V: (start.V + end.V) / 2}
 		// The centre sits inward of the chord by half the chord's length, which is
 		// what makes the sweep from Start to End a quarter turn.
