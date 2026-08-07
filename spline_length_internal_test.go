@@ -435,18 +435,19 @@ func equalWeightNURBS(control []Point2) NURBSSeg {
 	return NURBSSeg{Degree: n - 1, Control: control, Knots: knots, Weights: weights, TStart: 0, TEnd: 1}
 }
 
-// The R7 ceiling belongs to the RECORD, across every phase of one operation
-// (docs/spline-design.md §5.2), and the length bracket is bound to that rule
-// (§6.1). A moments preflight and the walk resolution that follows it are two
-// phases over the same record, so the walk spends what the preflight left; a
-// counter minted inside the walk hands the same record a second full ceiling and
-// subdivides for seconds over work the first phase already proved unaffordable.
+// The exact-rational R7 counter belongs to the RECORD across every phase of one
+// operation (docs/spline-design.md §5.2), and the length bracket is bound to
+// that rule (§6.1). A moments preflight and the walk resolution that follows it
+// are two phases over the same record, so the walk spends what the preflight
+// left; a counter minted inside the walk hands the same record a second full
+// ceiling and subdivides for seconds over work the first phase already proved
+// unaffordable.
 //
 // The assertion MEASURES the second phase, because a second counter is invisible
 // to any unit count: both counters read well under the limit, and only the cost
 // tells them apart.
 func TestWalkSpendsTheRecordsRemainingCeiling(t *testing.T) {
-	seg := ringSplineSeg(45)
+	seg := ringSplineSeg(120)
 	record := ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{seg}}}
 
 	pre, err := validateMomentFields(record)

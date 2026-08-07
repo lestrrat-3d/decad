@@ -661,9 +661,10 @@ func capFrame(pp prismPayload, z float64, flip bool) (r3.Frame, error) {
 // a spline, which is exactly the confidently-wrong answer decad exists to
 // prevent (docs/spline-design.md §6.2).
 //
-// A switch on walkKind MUST be total. Where a consumer cannot yet handle
-// walkFreeform, it refuses through requireAnalyticWalk rather than falling
-// through to the line branch.
+// A switch on walkKind MUST be total. A consumer that cannot yet handle
+// walkFreeform refuses before building an analytic face: where it needs a walk
+// it uses requireAnalyticWalk, and where no resolution can contribute it gates
+// the recorded free-form kind before walkOf.
 type walkKind uint8
 
 const (
@@ -1076,6 +1077,19 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref StepRef, pp prismPayl
 	for i, seg := range loop.Segments {
 		if err := ctx.Err(); err != nil {
 			return nil, nil, nil, boundedScalar{}, err
+		}
+		seg, err := normalizeSegment(seg)
+		if err != nil {
+			return nil, nil, nil, boundedScalar{}, err
+		}
+		// The prism evaluator stages every free-form side face. Refuse by the
+		// recorded kind before resolving its length bracket: that bracket is
+		// expensive and cannot contribute to a body this build will reject.
+		if isFreeformSegment(seg) {
+			return nil, nil, nil, boundedScalar{}, fmt.Errorf(
+				`%w: the prism side-face build does not support a free-form boundary segment`,
+				ErrUnsupported,
+			)
 		}
 		w, err := walkOf(seg, work)
 		if err != nil {

@@ -60,11 +60,24 @@ type bezierSpan []ratPoint
 // Reaching it is Table R row R7: ErrUnsupported, never a widened float path.
 const freeformWorkLimit uint64 = 1 << 20
 
+// reconstructionWorkLimit is the separate fixed ceiling on one record's sketch
+// topology reconstruction. Its cost is a record-wide quadratic in the chord
+// total, not exact-rational conversion or integration work, so it must not
+// consume the much smaller ceiling that bounds those passes. The public moment
+// methods take no context, so this counter is still fixed and record-wide.
+const reconstructionWorkLimit uint64 = 1 << 26
+
 // freeformCostCeiling is where the conservative cost arithmetic below
 // saturates. Any estimate that reaches it is already over budget on its own —
 // step refuses at freeformWorkLimit and this sits one unit above it — so the
 // helpers never need to represent a larger number and can never wrap.
 const freeformCostCeiling = freeformWorkLimit + 1
+
+// reconstructionCostCeiling is the corresponding saturation point for the
+// sketch reconstruction charge. It is independent of freeformCostCeiling so
+// an ordinary analytic arrangement can use its own budget without widening the
+// exact-rational conversion and integration budget.
+const reconstructionCostCeiling = reconstructionWorkLimit + 1
 
 // costAdd and costMul are the saturating arithmetic every preflight estimate is
 // built from. A preflight is charged BEFORE the work it pays for is allocated,
@@ -87,14 +100,38 @@ func costMul(a, b uint64) uint64 {
 	return a * b
 }
 
-// freeformWork is the charged counter behind freeformWorkLimit.
-type freeformWork struct{ spent uint64 }
+// reconstructionCostAdd and reconstructionCostMul are the saturating arithmetic
+// for the sketch reconstruction charge. They use its own ceiling for the same
+// reason costAdd and costMul use freeformCostCeiling for exact-rational work.
+func reconstructionCostAdd(a, b uint64) uint64 {
+	if a >= reconstructionCostCeiling || b >= reconstructionCostCeiling || a > reconstructionCostCeiling-b {
+		return reconstructionCostCeiling
+	}
+	return a + b
+}
 
-// newFreeformWork opens ONE record's counter. Minting is deliberately explicit
-// and rare: the ceiling bounds a record's total free-form work across the whole
-// operation, so every new counter is a new full ceiling. Mint one where a record
-// walk begins with no preflight counter in hand; everywhere else, pass the
-// counter the record already has.
+func reconstructionCostMul(a, b uint64) uint64 {
+	if a == 0 || b == 0 {
+		return 0
+	}
+	if a >= reconstructionCostCeiling || b >= reconstructionCostCeiling || a > reconstructionCostCeiling/b {
+		return reconstructionCostCeiling
+	}
+	return a * b
+}
+
+// freeformWork holds one record's exact-rational and reconstruction counters.
+// They are separate because their cost models and safe ceilings are separate,
+// but each counter spans the whole operation over that record.
+type freeformWork struct {
+	spent               uint64
+	reconstructionSpent uint64
+}
+
+// newFreeformWork opens ONE record's work state. Minting is deliberately
+// explicit and rare: each ceiling bounds that record's total work across the
+// whole operation. Mint one where a record walk begins with no preflight state
+// in hand; everywhere else, pass the state the record already has.
 func newFreeformWork() *freeformWork { return &freeformWork{} }
 
 func (w *freeformWork) step(n uint64) error {
@@ -109,6 +146,23 @@ func (w *freeformWork) step(n uint64) error {
 		)
 	}
 	w.spent += n
+	return nil
+}
+
+// reconstructionStep spends the record's sketch reconstruction counter before
+// sketch arranges the scene.
+func (w *freeformWork) reconstructionStep(n uint64) error {
+	if w == nil {
+		return nil
+	}
+	if n > reconstructionWorkLimit-w.reconstructionSpent {
+		w.reconstructionSpent = reconstructionWorkLimit
+		return fmt.Errorf(
+			`%w: sketch reconstruction needs more than the fixed work budget of %d`,
+			ErrUnsupported, reconstructionWorkLimit,
+		)
+	}
+	w.reconstructionSpent += n
 	return nil
 }
 
@@ -859,7 +913,10 @@ const (
 // candidate profile's own re-arrangement is charged on the same record counter
 // immediately before it runs.
 type freeformReconstruction struct {
-	// chords is the record-wide chord total the arrangement will hold.
+	// chords is the record-wide chord total the arrangement will hold. Once it
+	// crosses reconstructionChordCeiling the charge refuses whatever the rest of
+	// the record holds, so reconstructionOf stops counting rather than spending
+	// more work — or interning memory — on a record already refused.
 	chords uint64
 	// arrangement is one whole-scene arrangement's charge: the ORDERED pair
 	// count, twice the i<j pairs the intersection loop runs, so the doubling
@@ -868,26 +925,59 @@ type freeformReconstruction struct {
 	arrangement uint64
 }
 
-// reconstructionOf reads that model off a checked record. Every segment is
-// counted, whatever its kind: the chord total is the arrangement's own element
-// count, and the arrangement is global.
+// reconstructionChordCeiling is the largest chord total chargeReconstruction
+// can admit for validation's first two whole-scene arrangements. One unit more
+// exceeds reconstructionWorkLimit, so the record refuses however the rest of it
+// reads, and reconstructionOf stops counting there.
+const reconstructionChordCeiling uint64 = 5792
+
+// reconstructionOf reads that model off a checked record. Every segment counts,
+// whatever its kind: the chord total is the arrangement's own element count, and
+// the arrangement is global.
+//
+// An entity SEVERAL segments name counts once, because momentRecordScene interns
+// the entities it builds and the arrangement therefore holds one set of chords
+// per distinct entity. That is the ordinary shape of a recorded region — one
+// crossing cuts a circle into two fragments, and both name the same circle — so
+// counting per fragment squares a chord total the scene never holds and refuses
+// records whose reconstruction costs milliseconds.
+//
+// Only the kinds momentRecordScene keys on a fixed-size struct are interned
+// here. A free-form key renders every control point into a string
+// (freeformEntityKey), which is a per-element pass and an allocation this charge
+// exists to precede, so free-form segments stay counted per fragment. That is
+// conservative in the safe direction: an over-count of the scene, never an
+// under-count of it.
 func reconstructionOf(record ProfileRecord) freeformReconstruction {
 	var chords uint64
+	var seen map[momentEntityKey]struct{}
 	for _, loop := range append([]LoopRecord{record.Outer}, record.Holes...) {
 		for _, segment := range loop.Segments {
-			chords = costAdd(chords, reconstructionChords(segment))
+			if chords > reconstructionChordCeiling {
+				break
+			}
+			if key, keyed := analyticEntityKey(segment); keyed {
+				if _, duplicate := seen[key]; duplicate {
+					continue
+				}
+				if seen == nil {
+					seen = make(map[momentEntityKey]struct{})
+				}
+				seen[key] = struct{}{}
+			}
+			chords = reconstructionCostAdd(chords, reconstructionChords(segment))
 		}
 	}
-	return freeformReconstruction{chords: chords, arrangement: costMul(chords, chords)}
+	return freeformReconstruction{chords: chords, arrangement: reconstructionCostMul(chords, chords)}
 }
 
-// chargeFreeformReconstruction levies the record-level part of that charge — the
+// chargeReconstruction levies the record-level part of that charge — the
 // scene arrangement the validation runs to list its candidate profiles, and the
 // one its rescaled retry runs — and returns the per-arrangement charge the
 // candidate loop then levies for itself.
-func chargeFreeformReconstruction(record ProfileRecord, work *freeformWork) (uint64, error) {
+func chargeReconstruction(record ProfileRecord, work *freeformWork) (uint64, error) {
 	demand := reconstructionOf(record)
-	if err := work.step(costMul(2, demand.arrangement)); err != nil {
+	if err := work.reconstructionStep(reconstructionCostMul(2, demand.arrangement)); err != nil {
 		return 0, err
 	}
 	return demand.arrangement, nil

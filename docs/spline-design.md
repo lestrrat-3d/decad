@@ -173,7 +173,7 @@ exactly → `ErrUnrecordableProfile`.
 | **R4** | `Fillet` corner with a free-form carrier | `ErrUnsupported` | yes for a curved walk, §4.1 |
 | **R5** | `Chamfer` corner with a free-form carrier | `ErrUnsupported` | yes for a curved walk, §4.1 |
 | **R6** | a Tier A free-form walk, `FitSplineSeg` among them, reaches a BUILD | `ErrUnsupported` | no, §10 P4 |
-| **R7** | exact-rational conversion, length bracketing or integration exceeds its work budget | `ErrUnsupported` | no, §5.2, §6.1 |
+| **R7** | exact-rational conversion, length bracketing, integration or topology reconstruction exceeds its work budget | `ErrUnsupported` | no, §5.2, §6.1 |
 | **R8** | chording a free-form walk needs more than the chord cap | `ErrUnsupported` | no, reuses `errTooManyChords` |
 | **R9** | a `Verify` reading's proof does not close — its bracket cannot separate it from its threshold, or a §6.3 certificate fails | not an error — `Suspect` | no, §8 |
 | **R10** | a Tier B or Tier C walk reaches a BUILD before its moments land | `ErrUnsupported` | no, §8 |
@@ -537,27 +537,27 @@ every coefficient product and every integral term against a `freeformWork`
 counter (`spline_bezier.go`), and refuse as R7 when it runs out. NEVER widen to a
 float path to stay inside the budget.
 
-The counter is the RECORD's, not each segment's. One `ProfileRecord` pass opens
-one counter and every segment in it charges that same counter, because the work
-that actually runs is the aggregate: a counter opened per segment reads a record
-of individually cheap curves as cheap however many of them it holds, and bounds
-nothing.
+The exact-rational counter is the RECORD's, not each segment's. One
+`ProfileRecord` pass opens one counter and every segment in it charges that same
+counter, because the work that actually runs is the aggregate: a counter opened
+per segment reads a record of individually cheap curves as cheap however many of
+them it holds, and bounds nothing.
 
-That counter spans the whole OPERATION, not one pass through the record. A
-feature call reads the same record several times — the moments preflight behind
-its area falsifier, the preflight the build runs again, and the walk resolution
-that reads every segment after it — and each of those phases charges work over
-the same curves. So the counter is opened where the operation first touches the
-record, and every later phase spends what is left of it. A counter minted per
-phase hands one record a fresh full ceiling each time, and a later phase then
-runs work an earlier one already proved unaffordable; the arc-length bracket
-(§6.1) is where that bites hardest, being the most expensive of the three passes.
-A pass that legitimately holds no counter — a re-evaluation under a rigid
-placement, a modify op's rewritten section, a survey, an extent reading or a
-tessellation reading a body already built — opens exactly one counter for the
-record walk it is about to make. Never one per segment, never one per loop, and
-never one inside the walk resolution itself: a resolution handed no counter has
-no ceiling at all and refuses.
+That exact-rational counter spans the whole OPERATION, not one pass through the
+record. A feature call reads the same record several times — the moments
+preflight behind its area falsifier, the preflight the build runs again, and the
+walk resolution that reads every segment after it — and each of those phases
+charges work over the same curves. So the counter is opened where the operation
+first touches the record, and every later phase spends what is left of it. A
+counter minted per phase hands one record a fresh full ceiling each time, and a
+later phase then runs work an earlier one already proved unaffordable; the
+arc-length bracket (§6.1) is where that bites hardest, being the most expensive
+of the three passes. A pass that legitimately holds no counter — a
+re-evaluation under a rigid placement, a modify op's rewritten section, a
+survey, an extent reading or a tessellation reading a body already built — opens
+exactly one exact-rational counter for the record walk it is about to make. Never
+one per segment, never one per loop, and never one inside the walk resolution
+itself: a resolution handed no counter has no ceiling at all and refuses.
 
 Charge EARLY as well as conservatively. The ceiling is fixed because the public
 `ProfileRecord` methods take no context and so cannot be cancelled, so every
@@ -587,10 +587,12 @@ quadratic `clampedConversionCost`, which pays for repeatedly scanning and
 copying growing control and knot vectors as each of possibly many knots is
 inserted one at a time.
 
-The RECONSTRUCTION carries a charge of its own. It is not covered by the
-conversion and integration charges: those bound decad's rational arithmetic, and
+The RECONSTRUCTION carries its own counter. It is not covered by the conversion
+and integration counter: that counter bounds decad's rational arithmetic, and
 the reconstruction is sketch's — it chords each recorded source and ARRANGES the
-result. Without it a kind whose conversion is linear clears the ceiling at a
+result. Both counters span the record's whole operation, but their ceilings are
+separate because their cost models are independent. Without the reconstruction
+counter a kind whose conversion is linear clears the exact-rational ceiling at a
 control count whose reconstruction runs for seconds, uncancellable, inside a
 public measurement method.
 
@@ -603,7 +605,18 @@ holds more than one curve.
 
 Every source counts toward that total, analytic ones included. A chord total
 that skips the lines, arcs and circles beside a spline says nothing about the
-pass they are arranged in.
+pass they are arranged in, and a record naming NO free-form source at all is
+charged on the same terms — its arrangement is the same global quadratic, and
+the public methods that reach it take no context, so nothing else can stop it.
+
+A source SEVERAL segments name is one source. The reconstruction interns the
+entities it builds, so a circle one crossing cut into two fragments is chorded
+once, and a chord total counting the fragments separately squares a total the
+arrangement never holds. The interning is by the entity's own defining data.
+Only the analytic kinds, whose key is a fixed-size record of that data, are
+interned in the charge: a free-form key must read every control point, which is
+a per-element pass this charge exists to precede, so free-form fragments stay
+counted one by one — an over-count of the scene, never an under-count of it.
 
 The chord counts are sketch's own, restated: a free-form source is chorded 16
 times per control point (an OPEN spline per span, so 16 per control point less
@@ -619,30 +632,46 @@ again for each candidate it authenticates (`Sketch.Profiles` rebuilds the
 arrangement on every call), and the whole pass repeats on the rescaled record.
 The two whole-scene arrangements validation always runs are levied ONCE, at the
 record-level preflight, before sketch is asked anything; each candidate's own
-re-arrangement is charged on the same record counter immediately before it runs.
+re-arrangement is charged on the same record's reconstruction counter immediately
+before it runs.
 Every arrangement is therefore paid for before it happens, and a record may
 clear the preflight and still be refused inside the pass.
 
-The ceiling stands at 2^20 charged units under that model, which admits far
-fewer sources than the earlier per-source charge did — nine chorded sources, or
-a lone closed spline of 36 control points — and the largest record it admits
-measures in tens of milliseconds rather than the hundreds the earlier charge
-allowed. Raising it is a separate change from levying the charge honestly: the
-conversion charges beneath it must first move ahead of the chains they precede,
-because a closed spline converts linearly while integrating its chain costs some
-270 times more per span, so a record whose integration is over budget allocates
-every span before the ceiling can see it.
+A record naming no free-form source is levied that same once at the
+reconstruction's own entry rather than at the preflight, on the same
+reconstruction counter and for the same amount. The reason is the exact
+whole-circle certificate, which answers from disk containment alone and runs no
+arrangement whatsoever: it is
+reached only by an analytic record, and a charge levied ahead of it would refuse
+a record no arrangement ever reads. The free-form charge stays at the preflight,
+which no such certificate can be reached from, so it also covers an evaluator
+preflight that never runs the reconstruction at all.
 
-One record-level preflight therefore owns everything before the first expensive
-step, and it owns FOUR things. Every cheap structural refusal is evaluated on
-SIZES — knot count, degree, slice lengths, the recorded range — before any array
-is scanned, so a record that cannot be well formed at any content refuses in
-constant time however large a caller made it. Every charge is levied THERE: the
-conversion, the re-anchoring of each converted chain, the integration that runs
-only in the later moments pass, and the reconstruction's whole-scene
-arrangements. The chains the preflight converted are what that pass integrates,
-so the conversion the record paid for happens once. And a segment's TIER is
-decided before its CONVERSION charge.
+The exact-rational ceiling stands at 2^20 charged units. The reconstruction
+ceiling stands at 2^26 charged units, admitting 5792 chords for validation's
+first two whole-scene arrangements; candidate authentications spend that same
+reconstruction counter. The larger reconstruction ceiling admits ordinary
+analytic plates with several circular holes without widening the conversion and
+integration ceiling. The conversion charges beneath the exact-rational ceiling
+must still move ahead of the chains they precede, because a closed spline converts
+linearly while integrating its chain costs some 270 times more per span, so a
+record whose integration is over budget allocates every span before that ceiling
+can see it.
+
+One record-level preflight therefore owns every free-form cost before its first
+expensive step. It owns FOUR things. Every cheap structural refusal is evaluated
+on SIZES — knot count, degree, slice lengths, the recorded range — before any
+array is scanned, so a record that cannot be well formed at any content refuses
+in constant time however large a caller made it. The preflight levies the
+conversion, re-anchoring, integration and, for a free-form record, the first two
+whole-scene reconstruction arrangements. An analytic record levies those same
+reconstruction arrangements at reconstruction entry, after the exact
+whole-circle certificate. An analytic record whose known arrangement charge
+already exceeds its ceiling refuses before per-segment interval validation; that
+validation cannot make the reconstruction reachable. The chains the preflight
+converted are what the moments pass integrates, so the conversion the record
+paid for happens once. And a segment's TIER is decided before its CONVERSION
+charge.
 
 That last one is a rule about which ANSWER a caller gets, not about cost. Whether
 a `NURBSSeg` is Tier A at all is a property of its recorded weights, so a
@@ -676,8 +705,7 @@ Counting every walked array is what sets the admission boundary: a degree-1
 `NURBSSeg` holds `n` controls, `n+2` knots and `n` weights, so it charges `4n+2`
 units and the ceiling admits a few hundred thousand control points on size alone.
 That is three orders of magnitude above anything that can produce a measurement,
-because the reconstruction charge above already caps a lone free-form source at a
-few dozen control points.
+because the conversion and integration charges cap a lone free-form source first.
 
 What that costs is stated exactly: a record whose SIZE alone cannot fit the
 ceiling reports R7 rather than its kind's reason. Every record within the
