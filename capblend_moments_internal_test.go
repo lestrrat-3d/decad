@@ -100,8 +100,8 @@ func TestCapBlendSetbackConversionCarriesAllDerivedSideLevels(t *testing.T) {
 		start map[int]bool
 		end   map[int]bool
 	}{
-		{name: "start", capZ: 0, sideZ: d, start: map[int]bool{0: true}},
-		{name: "end", capZ: 10, sideZ: 10 - d, end: map[int]bool{0: true}},
+		{name: capNameStart, capZ: 0, sideZ: d, start: map[int]bool{0: true}},
+		{name: capNameEnd, capZ: 10, sideZ: 10 - d, end: map[int]bool{0: true}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			cbp := capBlendPayload{

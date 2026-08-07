@@ -923,11 +923,16 @@ func buildConePatch(pl prismPayload, body *Body, ref StepRef, li, patchIdx int, 
 	return face
 }
 
+const (
+	capNameStart = "start"
+	capNameEnd   = "end"
+)
+
 func capNameOf(matSign float64) string {
 	if matSign < 0 {
-		return "end"
+		return capNameEnd
 	}
-	return "start"
+	return capNameStart
 }
 
 // fixPatchOrientation empirically verifies a patch's outward normal sign

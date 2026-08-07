@@ -265,6 +265,8 @@ const (
 	segKindClosedSpline  = "closed_spline"
 	segKindFitSpline     = "fit_spline"
 	segKindConic         = "conic"
+	segmentFieldStart    = "start"
+	segmentFieldEnd      = "end"
 )
 
 // segmentKind returns the tag a variant encodes under. The switch is total
@@ -437,7 +439,7 @@ func validateSegmentWire(kind string, wire segmentWire) error {
 	switch kind {
 	case segKindLine:
 		required = []namedSegmentWireField{
-			f("start", wire.Start), f("end", wire.End), f("t_start", wire.TStart), f("t_end", wire.TEnd),
+			f(segmentFieldStart, wire.Start), f(segmentFieldEnd, wire.End), f("t_start", wire.TStart), f("t_end", wire.TEnd),
 		}
 		points = required[:2]
 	case segKindCircle:
@@ -448,7 +450,7 @@ func validateSegmentWire(kind string, wire segmentWire) error {
 		points = required[:1]
 	case segKindArc:
 		required = []namedSegmentWireField{
-			f("center", wire.Center), f("start", wire.Start), f("end", wire.End),
+			f("center", wire.Center), f(segmentFieldStart, wire.Start), f(segmentFieldEnd, wire.End),
 			f("t_start", wire.TStart), f("t_end", wire.TEnd),
 		}
 		points = required[:3]
@@ -460,7 +462,7 @@ func validateSegmentWire(kind string, wire segmentWire) error {
 		points = required[:1]
 	case segKindEllipticalArc:
 		required = []namedSegmentWireField{
-			f("center", wire.Center), f("start", wire.Start), f("end", wire.End),
+			f("center", wire.Center), f(segmentFieldStart, wire.Start), f(segmentFieldEnd, wire.End),
 			f("rx", wire.Rx), f("ry", wire.Ry), f("rotation", wire.Rotation),
 			f("t_start", wire.TStart), f("t_end", wire.TEnd),
 		}
@@ -489,7 +491,7 @@ func validateSegmentWire(kind string, wire segmentWire) error {
 		pointArrays = required[:1]
 	case segKindConic:
 		required = []namedSegmentWireField{
-			f("start", wire.Start), f("apex", wire.Apex), f("end", wire.End), f("rho", wire.Rho),
+			f(segmentFieldStart, wire.Start), f("apex", wire.Apex), f(segmentFieldEnd, wire.End), f("rho", wire.Rho),
 			f("t_start", wire.TStart), f("t_end", wire.TEnd),
 		}
 		points = required[:3]
@@ -850,10 +852,10 @@ func validateSegment(segment CurveSegment) error {
 	switch seg := segment.(type) {
 	case LineSeg:
 		if err := validateSegmentPoint(seg.Start, "line segment start"); err != nil {
-			return prependCodecPath(err, "start")
+			return prependCodecPath(err, segmentFieldStart)
 		}
 		if err := validateSegmentPoint(seg.End, "line segment end"); err != nil {
-			return prependCodecPath(err, "end")
+			return prependCodecPath(err, segmentFieldEnd)
 		}
 		return validateRange(segKindLine, seg.TStart, seg.TEnd)
 	case CircleSeg:
@@ -871,7 +873,7 @@ func validateSegment(segment CurveSegment) error {
 		for _, point := range []struct {
 			value Point2
 			name  string
-		}{{seg.Center, "center"}, {seg.Start, "start"}, {seg.End, "end"}} {
+		}{{seg.Center, "center"}, {seg.Start, segmentFieldStart}, {seg.End, segmentFieldEnd}} {
 			if err := validateSegmentPoint(point.value, "arc segment "+point.name); err != nil {
 				return prependCodecPath(err, point.name)
 			}
@@ -898,7 +900,7 @@ func validateSegment(segment CurveSegment) error {
 		for _, point := range []struct {
 			value Point2
 			name  string
-		}{{seg.Center, "center"}, {seg.Start, "start"}, {seg.End, "end"}} {
+		}{{seg.Center, "center"}, {seg.Start, segmentFieldStart}, {seg.End, segmentFieldEnd}} {
 			if err := validateSegmentPoint(point.value, "elliptical arc segment "+point.name); err != nil {
 				return prependCodecPath(err, point.name)
 			}
@@ -940,7 +942,7 @@ func validateSegment(segment CurveSegment) error {
 		for _, point := range []struct {
 			value Point2
 			name  string
-		}{{seg.Start, "start"}, {seg.Apex, "apex"}, {seg.End, "end"}} {
+		}{{seg.Start, segmentFieldStart}, {seg.Apex, "apex"}, {seg.End, segmentFieldEnd}} {
 			if err := validateSegmentPoint(point.value, "conic segment "+point.name); err != nil {
 				return prependCodecPath(err, point.name)
 			}
