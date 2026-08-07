@@ -376,6 +376,12 @@ type Face struct {
 	// areaBound is the proven error bound on area: analytic float evaluation
 	// or the composed chord bound for a boolean-built Faceted face.
 	areaBound float64
+	// axialDelta is the proven displacement of this planar face along its own
+	// normal. A body-relative ToFace stop carries this selected face's bound
+	// into the level it computes; hasAxialDelta distinguishes an exact zero
+	// from a face whose payload does not state an axial bound.
+	axialDelta    float64
+	hasAxialDelta bool
 	// heldPlanar records that a Faceted face descends only from PLANAR source
 	// faces, so the face it stands for in the true result is flat — and a rim
 	// between two such faces is a straight line, whose chord length is honest.

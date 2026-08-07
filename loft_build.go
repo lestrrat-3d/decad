@@ -677,20 +677,24 @@ func buildLoftTopology(ctx context.Context, body *Body, ref StepRef, a loftAssem
 		capEndBound = absSumUpper(capEndBound, capTriangleAreaAllow(a.verts, capEndTris, a.delta))
 	}
 	capStart := &Face{
-		surface:   capStartSurf,
-		loops:     capStartLoops,
-		origins:   []FeatureRef{{Step: ref, Role: roleCapStart}},
-		body:      body,
-		area:      cap0Val,
-		areaBound: capStartBound,
+		surface:       capStartSurf,
+		loops:         capStartLoops,
+		origins:       []FeatureRef{{Step: ref, Role: roleCapStart}},
+		body:          body,
+		area:          cap0Val,
+		areaBound:     capStartBound,
+		axialDelta:    a.delta,
+		hasAxialDelta: true,
 	}
 	capEnd := &Face{
-		surface:   capEndSurf,
-		loops:     capEndLoops,
-		origins:   []FeatureRef{{Step: ref, Role: roleCapEnd}},
-		body:      body,
-		area:      cap1Val,
-		areaBound: capEndBound,
+		surface:       capEndSurf,
+		loops:         capEndLoops,
+		origins:       []FeatureRef{{Step: ref, Role: roleCapEnd}},
+		body:          body,
+		area:          cap1Val,
+		areaBound:     capEndBound,
+		axialDelta:    a.delta,
+		hasAxialDelta: true,
 	}
 
 	return capStart, capEnd, walls, nil

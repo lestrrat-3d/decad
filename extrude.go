@@ -547,18 +547,22 @@ func evalPrismContext(ctx context.Context, d *Document, ref StepRef, pp prismPay
 		return nil, err
 	}
 	capStart := &Face{
-		surface:   Plane{Frame: startFrame},
-		origins:   []FeatureRef{{Step: ref, Role: roleCapStart}},
-		body:      body,
-		area:      ig.area,
-		areaBound: ig.areaBound,
+		surface:       Plane{Frame: startFrame},
+		origins:       []FeatureRef{{Step: ref, Role: roleCapStart}},
+		body:          body,
+		area:          ig.area,
+		areaBound:     ig.areaBound,
+		axialDelta:    pp.z0Delta,
+		hasAxialDelta: true,
 	}
 	capEnd := &Face{
-		surface:   Plane{Frame: endFrame},
-		origins:   []FeatureRef{{Step: ref, Role: roleCapEnd}},
-		body:      body,
-		area:      ig.area,
-		areaBound: ig.areaBound,
+		surface:       Plane{Frame: endFrame},
+		origins:       []FeatureRef{{Step: ref, Role: roleCapEnd}},
+		body:          body,
+		area:          ig.area,
+		areaBound:     ig.areaBound,
+		axialDelta:    pp.z1Delta,
+		hasAxialDelta: true,
 	}
 
 	perimeter := boundedScalar{}

@@ -58,6 +58,17 @@ func payloadAxialDelta(b *Body) float64 {
 	return ad.axialDelta()
 }
 
+// selectedFaceAxialDelta returns the selected planar stop face's own
+// displacement. Payload-wide axialDelta remains for callers that need a bound
+// over every face, such as ThroughAll; a ToFace stop names one face and must
+// not charge an unrelated cap's bound to it.
+func selectedFaceAxialDelta(b *Body, face *Face) float64 {
+	if face != nil && face.hasAxialDelta {
+		return face.axialDelta
+	}
+	return payloadAxialDelta(b)
+}
+
 // stopLevelRound proves a to-face level's own float rounding: the level the
 // resolution HELD, against the value its expression — (faceOrigin − planeOrigin)
 // · n + travel·offset — takes exactly over the same inputs, every one of them a
@@ -276,7 +287,7 @@ func (d *Document) resolveToFace(tf ToFace, frame r3.Frame, travel float64, what
 	delta := absSumUpper(
 		stopLevelRound(pl.Frame.Origin(), frame.Origin(), n, travel, offset, stop),
 		offsetDelta,
-		payloadAxialDelta(body),
+		selectedFaceAxialDelta(body, face),
 	)
 	return stop, delta, body.originStep(), nil
 }

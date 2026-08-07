@@ -315,18 +315,22 @@ func evalCupContext(ctx context.Context, d *Document, ref StepRef, cp cupPayload
 	// outer boundary (outer true) and each hole (a tunnel through the kept cap, a
 	// post through the pocket floor).
 	capStart := &Face{
-		surface:   Plane{Frame: capStartFrame},
-		origins:   []FeatureRef{{Step: ref, Role: roleCapStart}},
-		body:      body,
-		area:      igO.area,
-		areaBound: igO.areaBound,
+		surface:       Plane{Frame: capStartFrame},
+		origins:       []FeatureRef{{Step: ref, Role: roleCapStart}},
+		body:          body,
+		area:          igO.area,
+		areaBound:     igO.areaBound,
+		axialDelta:    cp.zOuterDelta,
+		hasAxialDelta: true,
 	}
 	shellCap := &Face{
-		surface:   Plane{Frame: shellCapFrame},
-		origins:   []FeatureRef{{Step: ref, Role: "shellCap"}},
-		body:      body,
-		area:      igC.area,
-		areaBound: igC.areaBound,
+		surface:       Plane{Frame: shellCapFrame},
+		origins:       []FeatureRef{{Step: ref, Role: "shellCap"}},
+		body:          body,
+		area:          igC.area,
+		areaBound:     igC.areaBound,
+		axialDelta:    cp.zCavDelta,
+		hasAxialDelta: true,
 	}
 	for i := range oLoops {
 		if err := ctx.Err(); err != nil {
@@ -364,12 +368,14 @@ func evalCupContext(ctx context.Context, d *Document, ref StepRef, cp cupPayload
 		}
 		rimArea := boundedAbs(boundedSub(aO, aC))
 		rims[i] = &Face{
-			surface:   Plane{Frame: rimFrame},
-			origins:   []FeatureRef{{Step: ref, Role: fmt.Sprintf("rim(%d)", i)}},
-			body:      body,
-			area:      rimArea.value,
-			areaBound: rimArea.bound,
-			loops:     []*Loop{outerLoop, holeLoop},
+			surface:       Plane{Frame: rimFrame},
+			origins:       []FeatureRef{{Step: ref, Role: fmt.Sprintf("rim(%d)", i)}},
+			body:          body,
+			area:          rimArea.value,
+			areaBound:     rimArea.bound,
+			loops:         []*Loop{outerLoop, holeLoop},
+			axialDelta:    cp.zOpenDelta,
+			hasAxialDelta: true,
 		}
 	}
 

@@ -267,20 +267,24 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref StepRef, cbp capB
 		return nil, err
 	}
 	capStart := &Face{
-		surface:   Plane{Frame: startFrame},
-		origins:   []FeatureRef{{Step: ref, Role: roleCapStart}},
-		body:      body,
-		loops:     startLoopObjs,
-		area:      startArea.value,
-		areaBound: startArea.bound,
+		surface:       Plane{Frame: startFrame},
+		origins:       []FeatureRef{{Step: ref, Role: roleCapStart}},
+		body:          body,
+		loops:         startLoopObjs,
+		area:          startArea.value,
+		areaBound:     startArea.bound,
+		axialDelta:    cbp.z0Delta,
+		hasAxialDelta: true,
 	}
 	capEnd := &Face{
-		surface:   Plane{Frame: endFrame},
-		origins:   []FeatureRef{{Step: ref, Role: roleCapEnd}},
-		body:      body,
-		loops:     endLoopObjs,
-		area:      endArea.value,
-		areaBound: endArea.bound,
+		surface:       Plane{Frame: endFrame},
+		origins:       []FeatureRef{{Step: ref, Role: roleCapEnd}},
+		body:          body,
+		loops:         endLoopObjs,
+		area:          endArea.value,
+		areaBound:     endArea.bound,
+		axialDelta:    cbp.z1Delta,
+		hasAxialDelta: true,
 	}
 	if err := attachFaceLoopsContext(ctx, []*Face{capStart, capEnd}); err != nil {
 		return nil, err
