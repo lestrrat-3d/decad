@@ -474,15 +474,18 @@ type Faceted struct{ /* ... */ }
 ```
 
 **Surface parameters carry no `Exactness`, and this is not an exception to
-invariant #2.** An analytic `Surface` variant is `Exact` by construction: a face
-whose geometry is not exact is `Faceted`, and `Faceted` is the flag. So a
-`Cylinder.Axis` or a `Sphere.Center` is an exact parameter of an exact surface,
-while `Face.NormalAt(p)` — a quantity the evaluator *computes*, on a face that may
-be `Faceted` — is a measurement and reports its `Exactness` like every other.
-For a faceted face, the evaluator's internal source certificate bounds the true
-patch normals; a positional `Faceted.Bound` alone does not imply a normal bound
-(`docs/payload-verification-design.md` §5/§8). No certificate details enter the
-public API. `NormalAt` on a `NURBSSurface` is `ErrUnsupported`
+invariant #2.** An analytic `Surface` variant's parameters are exact for the
+surface it names. A face whose built geometry is that surface is exact; a tagged
+analytic variant may instead be a bounded stand-in and carry its departure in
+computed measurements (`docs/modify-reach-design.md` §8.3). A face whose held
+geometry is faceted is `Faceted`, and `Faceted` is the flag. So a `Cylinder.Axis`
+or a `Sphere.Center` is an exact parameter of its named surface, while
+`Face.NormalAt(p)` — a quantity the evaluator *computes*, on a face that may be
+`Faceted` or a bounded analytic stand-in — is a measurement and reports its
+`Exactness` like every other. For a faceted face, the evaluator's internal source
+certificate bounds the true patch normals; a positional `Faceted.Bound` alone
+does not imply a normal bound (`docs/payload-verification-design.md` §5/§8). No
+certificate details enter the public API. `NormalAt` on a `NURBSSurface` is `ErrUnsupported`
 (`docs/spline-design.md` §7).
 
 <!-- The NormalAt sentence is claim + pointer, which the authoring rule in

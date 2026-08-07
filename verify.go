@@ -429,9 +429,10 @@ func WithDraftAllowance(a units.Value) WallOption {
 
 // WithPullDirection states the direction the part must pull along; every
 // reported undercut is a proven violation of it (verification §2), decided
-// per face from the exact normal range an analytic face sweeps: a face with
-// a provenly opposing point is listed, exactly perpendicular is not opposed
-// (the vertical wall clears), and a non-empty listing is Violating.
+// per face from its normal range: a face with a provenly opposing point is
+// listed, exactly perpendicular is not opposed (the vertical wall clears),
+// and a non-empty listing is Violating. A bounded analytic stand-in widens
+// its range by its own proven departure before this comparison.
 func WithPullDirection(v r3.Vec) VerifyOption {
 	return verifyOption{option.New(identPullDirection{}, v)}
 }

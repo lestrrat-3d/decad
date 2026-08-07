@@ -179,11 +179,11 @@ one.
 | Path | Responsibility |
 |---|---|
 | `capblend.go` | Builds the complete-cap-loop chamfer: `capBlendPayload` plus the selection classification and build gates in `buildCapBlend`. Gate order and sentinels are documented per function; see `docs/modify-reach-design.md` §8.3/§4. |
-| `capblend_geom.go` | Builds the `capBlendPayload` topology in `buildCapBand`: trimmed side walls, cap faces, and Plane/Cone chamfer band patches. Patch orientation and area bookkeeping are documented per function; see `docs/modify-reach-design.md` §8.3. |
+| `capblend_geom.go` | Builds the `capBlendPayload` topology in `buildCapBand`: trimmed side walls, cap faces, and Plane/Cone chamfer band patches, each stamped with the readings its own geometry states. Orientation, area and normal bookkeeping are documented per function; see `docs/modify-reach-design.md` §8.3. |
 | `capblend_contour.go` | Proves the cap contour's displacement bound used by every cap-level reading, via interval arithmetic over the same offset-intersection cases `shell_offset.go` and `fillet.go` use. See `docs/modify-reach-design.md` §8.4. |
 | `capblend_centroid.go` | Computes closed-form first moments for the cap-blend payload's centroid: exact-rational Plane patch moments, a Fourier sum for Cone patches, and a bounding-box ceiling on the result. See `docs/modify-reach-design.md` §8.4. |
 | `capblend_moments.go` | `evalCapBlendContext` builds the cap-blend body and its bounded area/volume/centroid via closed-form divergence-theorem integrals per patch, exact where representable. See `docs/modify-reach-design.md` §8.4. |
-| `capblend_survey.go` | The cap-blend payload's undercut and minimum-radius surveys: exact per-patch normal ranges, and reuse of the receiver's own unchanged-profile survey for radius. See `docs/modify-reach-design.md` §12 Table DX (DX7/DX8). |
+| `capblend_survey.go` | The cap-blend payload's undercut and minimum-radius surveys: per-patch normal ranges under a mitered patch's own bound, and reuse of the receiver's unchanged-profile survey for radius. See `docs/modify-reach-design.md` §12 Table DX (DX7/DX8). |
 
 ### Verification and surveys
 

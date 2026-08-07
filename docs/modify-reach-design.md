@@ -455,6 +455,40 @@ angular skew; `chordLocusVolumeAllow` composes both terms into one proven
 volume bound. The residual, and its bound, are exactly zero wherever the two
 windows already coincide: a tangent join, an apex patch, and a whole turn.
 
+That residual is not only a quantity: it is a difference of KIND. A straight
+ruled surface between two arcs sweeping different windows has negative
+Gaussian curvature everywhere between them, so no cone is it, and its own
+normal TURNS along a single ruling — which a cone's, constant along every
+ruling, never does. The patch keeps the `Cone` tag, because the offset family
+the feature denotes really is that cone sector and the taper is what DX7 asks
+about, but the tag is then a bounded STAND-IN for the surface as well as for
+the measurement, and every reading taken off it owes the departure its own
+term:
+
+- `Face.NormalAt` on a mitered band patch reports the Cone's own normal with a
+  proven bound derived from the two windows' skew alone — an azimuth part (the
+  built normal and the query point both sit angularly between the two
+  directrices, so a rotation of at most the skew separates them) and a tilt
+  part (the built patch's own radial/axial ratio against the cone's, whose
+  whole difference carries a factor of `1 - cos(skew)`). `ruledPatchNormalAllow`
+  owns the derivation. An `Exact` zero there asserts a direction the built
+  surface does not have.
+- DX7 widens its own window reading by that bound. A point proven to oppose
+  lists the patch; only an all-clear needs every point to clear. For the tagged
+  normal-component range `[mn, mx]` and departure `allow`, it lists when
+  `mn + allow < 0 && mx - allow > -1`, clears when
+  `mn - allow > 0`, and is undecided otherwise. An undecided patch does not
+  remove other patches already proven to oppose. Every point of the patch
+  carries an azimuth inside the window, which is what makes each proof about
+  the patch rather than about the cone.
+- DX8 does not answer for a band holding a mitered patch at all. Its reduction
+  to the receiver's own section rests on every patch being flat or a cone
+  sector, and the ruled patch is neither.
+
+All three are unchanged — zero bound, exact reading, section reduction —
+wherever the two windows coincide, which is every tangent join, apex patch and
+whole turn.
+
 SX12 audits the exact offset family, not the ruled patch the body builds. It
 runs the existing line/arc offset audit on the section offset by the full
 setback `d` — the family's own `s=1` member — and certifies every
@@ -465,9 +499,9 @@ throughout. Auditing one surface while measuring another is sound because
 the two ask different questions of the same family: SX12 proves the swept
 region the offset family denotes is well-formed — a fact about that family
 alone, independent of which surface later reports its volume — while the
-ruled `Cone` patch is a separate, proven-bounded stand-in used only for
-area/volume/moment measurement. A sample or residual never admits
-disjointness.
+ruled `Cone` patch is a separate, proven-bounded stand-in, for the surface
+readings above as much as for area/volume/moment measurement. A sample or
+residual never admits disjointness.
 
 ### 8.4 Measurements + tessellation
 
@@ -822,8 +856,8 @@ reaches only the analytic bodies at the start of a chain.
 | **DX4** | mesh boolean | available once DX3 exists | available once DX3 exists | available once DX3 exists |
 | **DX5** | `ThroughAll` directional extent | existing | analytic patch extrema; a direction whose extreme is held by the COMPUTED cap contour with in-plane weight is `ErrUnsupported`, since a stop reads this coordinate as exact and has no bound to widen (§8.4) | union of slab-region extents |
 | **DX6** | clearance | existing revolve boundary reader | add trimmed patch faces to boundary model; undecidable cells stay `Suspect`; staged for the cap-loop chamfer, whose pairs read `Suspect` unless boxes already decide them | union exposed slab faces; never include cancelled interfaces |
-| **DX7** | undercut | existing revolve survey | exact normal ranges per patch | exact normal ranges per exposed face |
-| **DX8** | minimum radius | existing meridian survey | minimum concave principal radius over sphere/torus/cylinder/cone patches | section arcs + exposed rim geometry |
+| **DX7** | undercut | existing revolve survey | exact normal ranges per patch, each widened by that patch's own proven departure from the surface it publishes (§8.3); a proven opposing point lists its patch, and a remaining straddle is undecided without removing another proven listing | exact normal ranges per exposed face |
+| **DX8** | minimum radius | existing meridian survey | minimum concave principal radius over sphere/torus/cylinder/cone patches; a band holding a mitered ruled patch (§8.3) is undecided | section arcs + exposed rim geometry |
 | **DX9** | minimum wall thickness | existing revolve rewrite survey | staged: asked reading is `Suspect` | staged: asked reading is `Suspect` |
 
 DX9 is a deliberate evaluator limit. A cap blend and a stacked shell are not
@@ -916,6 +950,16 @@ Every implementation PR MUST add geometry assertions, not run-only coverage.
 - a chamfer band over a circular wall whose radius dwarfs `d` still carries a
   `Cone`, its taper still reaches DX7, and volume and area are unmoved by the
   kind decision; an offset radius identical to the wall's → SX13;
+- a mitered patch's own `NormalAt` bound ENCLOSES its distance to the ruled
+  surface's own normal, sampled across the whole patch and over a family of
+  setbacks up to the widest the offset admits, while a whole turn's and a
+  straight wall's stay `Exact` at a zero bound;
+- a body whose ruled patch opposes a pull its published `Cone` does not is NOT
+  passed by DX7 — the answer is undecided, never the proven all-clear — while
+  an ordinary setback's band is still cleared outright under one pull and
+  still listed as a proven undercut under the opposite one;
+- a band holding a mitered patch leaves DX8 undecided, and an unmitered one
+  still reports the proven absence of a concave feature;
 - a chamfer band under a sweep whose height dwarfs `d` still separates its two
   levels; a side level identical to its own cap level → SX13, and the receiver
   and recipe stay untouched;
