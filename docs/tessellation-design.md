@@ -291,8 +291,12 @@ sourceBound(face) = upRound(deltaTrim(face) + deltaStore(face) + deltaSection)
 Reserve `deltaSection` from `tol` the same way and at the same point, and refuse
 a non-positive remainder — a tolerance at or below the displacement admits no
 mesh at all, exactly as §7's faceted restatement refuses a tolerance below the
-bound it holds. `Bound` therefore stays within `tol` for every prism, displaced
-or not. `areaSlack` charges the same displacement as an area: the tube about the
+bound it holds. Chording plus `deltaSection` therefore stays within `tol` for
+every prism, displaced or not. The reservation covers those two terms and no
+others: `deltaStore` and the per-end axial displacement are still added on top
+without reducing the chording budget, so a prism carrying either can publish a
+complete `Bound` above `tol`, exactly as §1's Tolerance row states.
+`areaSlack` charges the same displacement as an area: the tube about the
 recorded boundary once per cap, plus that boundary's own length displacement over
 the sweep height — the composition evaluator §5's own area reading makes, one
 dimension at a time. The occupied-volume allowance a boolean composes from the
@@ -861,10 +865,15 @@ until T4 proves occupied-volume error.
   underflow, unrepresentable ceiling, and cap overflow; each MUST refuse before
   conversion or allocation.
 - Tessellate a prism carrying a nonzero section displacement: assert the
-  displacement is charged to `Bound` and to `areaSlack`, that `Bound <= tol`,
-  and that a tolerance at or below the displacement refuses. Assert an
-  undisplaced prism at the same tolerance chords against the whole of it — the
-  same count and the same bound a reservation would have cost it.
+  displacement is charged to `Bound` and to `areaSlack`, that `Bound <= tol`
+  where no unreserved displacement rides beside it, and that a tolerance at or
+  below the displacement refuses. Assert an undisplaced prism at the same
+  tolerance chords against the whole of it — the same count and the same bound
+  a reservation would have cost it.
+- Tessellate a prism carrying an unreserved axial displacement at a tolerance
+  below it and assert the published `Bound` exceeds that tolerance, both with
+  no section displacement beside it and with a nonzero one the reservation does
+  pay for.
 - At large coordinate magnitudes under identity placement, assert `deltaC` is
   nonzero when required and is charged to each source bound, `Bound`,
   `areaSlack`, and `volSymDiff`. Repeat under a nonidentity transform and charge

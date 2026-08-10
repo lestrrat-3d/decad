@@ -127,11 +127,14 @@ func tessellateContext(ctx context.Context, b *Body, tol units.Value) (*Mesh, er
 	// Every mesh vertex lands on the RECORDED section, which a payload carrying a
 	// section displacement holds only within that displacement of the section its
 	// construction DENOTES (docs/prism-boolean-design.md §7). The displacement is
-	// therefore part of the mesh's deviation before a single chord is chosen, and
-	// docs/tessellation-design.md §1's Tolerance row binds the published Bound to
-	// tol — so it is RESERVED from the chord budget here, and a tolerance that
-	// cannot pay for it refuses, the same shape as tessellateFaceted's refusal of
-	// a tolerance below a held mesh bound. Both downward nudges are proven margin:
+	// therefore part of the mesh's deviation before a single chord is chosen, so
+	// docs/tessellation-design.md §5 RESERVES it from the chord budget here, and a
+	// tolerance that cannot pay for it refuses, the same shape as
+	// tessellateFaceted's refusal of a tolerance below a held mesh bound. The
+	// reservation keeps chording plus this displacement within tol; it covers no
+	// other term, so the per-end axial displacement added at the end of the build
+	// can still lift the complete Bound above tol, which §1's Tolerance row
+	// allows. Both downward nudges are proven margin:
 	// the subtraction's own rounding is at most half an ulp, which the first
 	// covers, and the second pays for the upward-rounded sum this bound is
 	// published through at the end of the build. Every payload a caller draws

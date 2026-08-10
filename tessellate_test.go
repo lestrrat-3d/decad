@@ -460,14 +460,18 @@ func TestTessellateRejectsImpossiblyFineTolerance(t *testing.T) {
 }
 
 // TestTessellateReservesSectionDisplacementFromTolerance pins
-// docs/tessellation-design.md §1's Tolerance row on an assembled prism. Each
+// docs/tessellation-design.md §5's reservation on an assembled prism. Each
 // case is the far-placed union PR 111's audit measured: a 10×10 box unioned
 // with a 6×6 box drawn at -shift and placed by +shift, whose merged section
 // sits a proven displacement from the section the pair denotes
 // (docs/prism-boolean-design.md §7). That displacement is part of the mesh's
 // deviation, so it is reserved from the requested tolerance before chording,
-// and a tolerance it exhausts refuses instead of publishing a bound above what
-// the caller asked for.
+// and a tolerance it exhausts refuses rather than chording against a budget it
+// has not got. Both operands are swept by a stated millimetre distance, so
+// these bodies carry no axial displacement and the reserved terms are their
+// whole deviation — that is why every bound below stays within its tolerance.
+// TestTessellateUnreservedAxialDisplacementCanExceedTolerance covers the prism
+// that does carry one.
 func TestTessellateReservesSectionDisplacementFromTolerance(t *testing.T) {
 	for _, tc := range []struct {
 		name  string
@@ -546,4 +550,73 @@ func TestTessellateUndisplacedPrismSpendsTheWholeTolerance(t *testing.T) {
 	require.NoError(t, err)
 	requireWatertight(t, flat)
 	require.Zero(t, flat.Bound().Mag())
+}
+
+// inchPrismBody extrudes an axis-aligned rectangle by a distance stated in
+// inches. The millimetre level that distance denotes is one the conversion
+// COMPUTED, so the swept end carries that conversion's rounding as its own
+// axial displacement (docs/evaluator-design.md §5).
+func inchPrismBody(t *testing.T, doc *decad.Document, x0, y0, x1, y1, inches float64) *decad.Body {
+	t.Helper()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	rect := s.CreateRectangle(x0, y0, x1, y1)
+	s.Fix(rect.A)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Inches(inches), Dir: decad.Along})
+	require.NoError(t, err)
+	return body
+}
+
+// TestTessellateUnreservedAxialDisplacementCanExceedTolerance pins the other
+// side of docs/tessellation-design.md §1's Tolerance row. The reservation of §5
+// covers chording and the section displacement and nothing else, so a prism
+// whose sweep level a non-base-unit conversion computed still publishes a Bound
+// above the tolerance the caller asked for. Every section here is straight, so
+// the chording takes no sagitta at all and the whole published bound is
+// displacement — which is why widening the tolerance does not change it.
+// TestTessellateBoundIncludesComputedLevelDisplacement reads the same excess on
+// a level a ToFace stop computed; the second case below is the one no other
+// test reaches, carrying both displacements at once, one reserved and one not.
+func TestTessellateUnreservedAxialDisplacementCanExceedTolerance(t *testing.T) {
+	t.Run("axial displacement with no section displacement beside it", func(t *testing.T) {
+		body := inchPrismBody(t, decad.New(), 0, 0, 10, 10, 0.1)
+
+		// 0.1 in is 2.54 mm, which binary cannot hold exactly.
+		const tol = 1e-18
+		mesh, err := body.Tessellate(units.Millimeters(tol))
+		require.NoError(t, err)
+		requireWatertight(t, mesh)
+		require.InEpsilon(t, 3.6637359812630174e-17, mesh.Bound().Mag(), 1e-12)
+		require.Greater(t, mesh.Bound().Mag(), tol,
+			"an unreserved axial displacement lifts Bound above the requested tolerance")
+	})
+
+	t.Run("axial displacement beside a section displacement the reservation pays for", func(t *testing.T) {
+		const shift = 1e3
+		doc := decad.New()
+		a := inchPrismBody(t, doc, 0, 0, 10, 10, 1e6)
+		b := placedFar(t, inchPrismBody(t, doc, 2-shift, 2, 8-shift, 8, 1e6), shift)
+		got, err := decad.Union(a, b)
+		require.NoError(t, err)
+		require.False(t, anyFaceIsFaceted(got), "the analytic reduction must own this pair")
+
+		// The tolerance clears the merged section's displacement, so the mesh
+		// builds instead of refusing, and it is the axial term riding on top
+		// unreserved that carries the published bound past what was asked for.
+		const tol = 1e-10
+		mesh, err := got.Tessellate(units.Millimeters(tol))
+		require.NoError(t, err)
+		requireWatertight(t, mesh)
+		require.InEpsilon(t, 1.4336877997816838e-09, mesh.Bound().Mag(), 1e-12)
+		require.Greater(t, mesh.Bound().Mag(), tol)
+
+		// The same bound at a tolerance 10000× wider: it is displacement, not
+		// chording, and no budget buys it down.
+		wide, err := got.Tessellate(units.Millimeters(1e-6))
+		require.NoError(t, err)
+		require.Equal(t, mesh.Bound().Mag(), wide.Bound().Mag())
+	})
 }
