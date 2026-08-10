@@ -483,9 +483,20 @@ term:
   carries an azimuth inside the window, which is what makes each proof about
   the patch rather than about the cone. `allow` is TWO terms, and the departure
   is only one of them: DX7 reads each patch's normal through `Face.NormalAt`,
-  whose answer carries the bound its own arm earned (`normal_bound.go`), and
-  that bound enters both the range and the allowance. Dropping it would decide
-  against a direction the face never claimed — a pull the reading cannot
+  and a reading so taken departs from the patch's own exact normal model three
+  ways — the arm's own arithmetic (`normal_bound.go`), the displacement of the
+  point the survey computed to sample at from the azimuth that reading is then
+  used as, and the rounded spacing between those azimuths, neither of the last
+  two being anything a reading's own bound speaks about. So a circular patch
+  charges the WHOLE distance from its recovered coefficients to the model
+  enclosed exactly from the tag's and the placed frame's own held numbers
+  (`capblend_normal.go`), which covers all three at once and estimates no
+  mechanism separately, beside that model's own proven departure from a single
+  harmonic. Its window is then read through a proven enclosure of the recovered
+  form's own extremes rather than a float evaluation of them, and each
+  extreme's remaining enclosure width is charged as well. A flat patch is one
+  reading under the bound that reading publishes. Dropping any of it would
+  decide against a direction the face never claimed — a pull the reading cannot
   separate from the patch's own tangent would be answered with the proven
   all-clear or a listed violation, and be right only by rounding luck. So an
   outright decision needs BOTH terms proven zero, and neither a whole turn nor a
@@ -869,7 +880,7 @@ reaches only the analytic bodies at the start of a chain.
 | **DX4** | mesh boolean | available once DX3 exists | available once DX3 exists | available once DX3 exists |
 | **DX5** | `ThroughAll` directional extent | existing | analytic patch extrema; a direction whose extreme carries computed cap-contour or inherited axial displacement is `ErrUnsupported`, since a stop reads this coordinate as exact and has no bound to widen (§8.4) | union of slab-region extents |
 | **DX6** | clearance | existing revolve boundary reader | add trimmed patch faces to boundary model; undecidable cells stay `Suspect`; staged for the cap-loop chamfer, whose pairs read `Suspect` unless boxes already decide them | union exposed slab faces; never include cancelled interfaces |
-| **DX7** | undercut | existing revolve survey | bounded normal ranges per patch, each widened by the bound its own sampled `Face.NormalAt` readings publish and by that patch's own proven departure from the surface it publishes (§8.3); a proven opposing point lists its patch, and a remaining straddle is undecided without removing another proven listing | exact normal ranges per exposed face |
+| **DX7** | undercut | existing revolve survey | bounded normal ranges per patch, each widened by the whole distance its own `Face.NormalAt` readings can sit from the patch's exactly enclosed normal model and by that patch's own proven departure from the surface it publishes (§8.3), a circular patch's window read through a proven enclosure rather than a float evaluation; a proven opposing point lists its patch, and a remaining straddle is undecided without removing another proven listing | exact normal ranges per exposed face |
 | **DX8** | minimum radius | existing meridian survey | minimum concave principal radius over sphere/torus/cylinder/cone patches; a band holding a mitered ruled patch (§8.3) is undecided | section arcs + exposed rim geometry |
 | **DX9** | minimum wall thickness | existing revolve rewrite survey | staged: asked reading is `Suspect` | staged: asked reading is `Suspect` |
 
@@ -978,6 +989,16 @@ Every implementation PR MUST add geometry assertions, not run-only coverage.
   the held half angle leave the minimum component inside the bound the patch
   publishes, and on a flat patch read from one sample, against a pull
   perpendicular to the direction that reading names;
+- a circular patch's reported range holds every component the patch takes, read
+  independently across its whole window, on a band about the frame origin and on
+  a small band placed far from it — where each sampled point's own azimuth
+  displacement runs orders past the readings' own bounds, and the allowance is
+  proportionately larger for it while the band about the origin pays nothing
+  extra;
+- the window enclosure brackets the form's own peak and trough wherever the
+  window reaches them, and no azimuth of the window takes a value that
+  enclosure excludes — the stationary point included, which is where a float
+  evaluation of the same range escapes;
 - a band holding a mitered patch leaves DX8 undecided, and an unmitered one
   still reports the proven absence of a concave feature;
 - a chamfer band under a sweep whose height dwarfs `d` still separates its two

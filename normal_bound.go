@@ -79,6 +79,10 @@ func ivVec3Of(v r3.Vec) (ivVec3, bool) {
 	return ivVec3{pointInterval(x), pointInterval(y), pointInterval(z)}, true
 }
 
+func ivVec3Add(a, b ivVec3) ivVec3 {
+	return ivVec3{intervalAdd(a[0], b[0]), intervalAdd(a[1], b[1]), intervalAdd(a[2], b[2])}
+}
+
 func ivVec3Sub(a, b ivVec3) ivVec3 {
 	return ivVec3{intervalSub(a[0], b[0]), intervalSub(a[1], b[1]), intervalSub(a[2], b[2])}
 }

@@ -197,7 +197,7 @@ type capPatchGeom struct {
 	// (side = original wall radius, cap = offset radius) and the angular
 	// EXTENT — always normalized to th0 < th1, never the walk's own sense,
 	// since patchRawFlux carries the material side in its own sign
-	// corrections and trigRange reads an increasing window.
+	// corrections and the DX7 survey reads an increasing window.
 	cU, cV                float64
 	sideRadius, capRadius float64
 	th0, th1              float64
@@ -512,7 +512,7 @@ func buildCapBand(ctx context.Context, body *Body, ref StepRef, cbp capBlendPayl
 		patches = append(patches, face)
 		// th0, th1 record the patch's ANGULAR EXTENT, not the connector's own
 		// clockwise walk — the same normalization every other patch's geometry
-		// takes, since trigRange reads an increasing window. The connector
+		// takes, since the DX7 survey reads an increasing window. The connector
 		// arc is walked CLOCKWISE (arcTh1 below arcTh0 by construction), and
 		// sweepCCW is what carries that fact to patchRawFlux.
 		gth0, gth1 := arcTh0[i], arcTh1[i]
