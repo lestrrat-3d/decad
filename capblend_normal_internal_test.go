@@ -79,6 +79,14 @@ func diskSection(cx, cy, r float64) func(*sketch.Sketch) {
 // survey tests: one circular wall meeting a straight neighbour at a
 // non-tangential miter at BOTH ends, so its band patch reads a quarter-turn
 // window rather than a whole period.
+//
+// Unlike diskSection, this one is drawn at the sketch's own origin and carried
+// out into the world by its PLACEMENT. The arc has to weld to a line at each
+// end, and sketch judges such a weld against the section's own extent
+// (geom.weldIdentEps times the source's extent), so a half-millimetre section
+// drawn a metre out leaves that weld a handful of ulps of the coordinates it
+// is welding — a margin each platform's own arithmetic can land either side
+// of. A closed circle welds to nothing and so has no such corner.
 func quarterDiskSection(cx, cy, r float64) func(*sketch.Sketch) {
 	return func(s *sketch.Sketch) {
 		o := s.CreatePoint(cx, cy)
@@ -114,14 +122,23 @@ func (b bandUnderTest) componentAt(t *testing.T, theta float64, pull r3.Vec) (fl
 // azimuth, then two rounded maps into world space — and the azimuth those
 // points really carry is not the one the recovery reads them as. That
 // displacement scales like the frame origin's own rounding divided by the
-// patch's radius, so a small band far from the origin, placed under a rotation,
-// makes it hundreds of times what any reading's own bound covers.
+// patch's radius, so a small band whose placement carries it far from the
+// world origin makes it hundreds of times what any reading's own bound covers.
+// A case that means to charge that displacement says how far out its patch has
+// to sit, and the run checks that its centre really got there.
 //
 // Whatever it is, the range the survey reports must still hold every value the
 // patch takes: each independently read component, widened by its own published
 // bound, must sit inside [lo-allow, hi+allow].
 func TestCapPatchNormalRangeCoversWhatThePatchTakes(t *testing.T) {
 	spin, err := r3.Rotation(r3.NewVec(1, 2, 3), units.Degrees(37))
+	require.NoError(t, err)
+	shift, err := r3.Translation(r3.NewVec(1000, 1000, 0))
+	require.NoError(t, err)
+	// The same motion a metre out: what the reading pays for is the rounding of
+	// the placed frame's own origin, so a section drawn at the sketch origin and
+	// carried out here is displaced exactly as one drawn out there would be.
+	spun, err := spin.Then(shift)
 	require.NoError(t, err)
 	pull, ok := r3.NewVec(1, 0.3, 0.2).Normalize()
 	require.True(t, ok)
@@ -134,8 +151,12 @@ func TestCapPatchNormalRangeCoversWhatThePatchTakes(t *testing.T) {
 		// where the point handed to the arm sits.
 		overArmBounds  float64
 		underArmBounds float64
-		section        func(*sketch.Sketch)
-		motion         *r3.Transform
+		// centreFar is how far from the world origin the patch's own centre must
+		// end up. A case charging the frame origin's rounding has to be placed
+		// out there for the charge to mean anything.
+		centreFar float64
+		section   func(*sketch.Sketch)
+		motion    *r3.Transform
 	}{
 		{
 			// An axis-aligned band about the origin: the sample points land where
@@ -149,14 +170,18 @@ func TestCapPatchNormalRangeCoversWhatThePatchTakes(t *testing.T) {
 			// by some 2e-13 of azimuth, which is two orders more than the
 			// readings' own bounds cover.
 			name: `whole turn far from the origin, placed`, section: diskSection(1000, 1000, 0.55), motion: &spin,
-			overArmBounds: 50,
+			overArmBounds: 50, centreFar: 1000,
 		},
 		{
 			// A genuine window rather than a whole period, so the reported ends are
 			// the window's own rather than the form's amplitude. No ratio is
 			// claimed here: this patch is mitered, and the surface-departure bound
 			// its readings carry dwarfs every arithmetic term on a band this small.
-			name: `quarter window far from the origin, placed`, section: quarterDiskSection(1000, 1000, 0.55), motion: &spin,
+			// The section is drawn at the sketch origin and placed out here
+			// (quarterDiskSection), which displaces the sample points exactly as
+			// drawing it out here would.
+			name: `quarter window far from the origin, placed`, section: quarterDiskSection(0, 0, 0.55), motion: &spun,
+			centreFar: 1000,
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -165,6 +190,10 @@ func TestCapPatchNormalRangeCoversWhatThePatchTakes(t *testing.T) {
 			require.True(t, ok)
 
 			g := band.geom
+			if tc.centreFar > 0 {
+				require.Greater(t, band.pl.point(g.cU, g.cV, g.capZ).Len(), tc.centreFar,
+					"this case charges the frame origin's rounding, so its patch must sit that far out")
+			}
 			arms := 0.0
 			for _, off := range []float64{0, math.Pi / 2, math.Pi} {
 				_, bound := band.componentAt(t, g.th0+off, pull)
