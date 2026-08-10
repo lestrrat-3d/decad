@@ -476,20 +476,30 @@ term:
   omits a direction difference the built surface has.
 - DX7 widens its own window reading by that bound. A point proven to oppose
   lists the patch; only an all-clear needs every point to clear. For the tagged
-  normal-component range `[mn, mx]` and departure `allow`, it lists when
+  normal-component range `[mn, mx]` and allowance `allow`, it lists when
   `mn + allow < 0 && mx - allow > -1`, clears when
   `mn - allow > 0`, and is undecided otherwise. An undecided patch does not
   remove other patches already proven to oppose. Every point of the patch
   carries an azimuth inside the window, which is what makes each proof about
-  the patch rather than about the cone.
+  the patch rather than about the cone. `allow` is TWO terms, and the departure
+  is only one of them: DX7 reads each patch's normal through `Face.NormalAt`,
+  whose answer carries the bound its own arm earned (`normal_bound.go`), and
+  that bound enters both the range and the allowance. Dropping it would decide
+  against a direction the face never claimed — a pull the reading cannot
+  separate from the patch's own tangent would be answered with the proven
+  all-clear or a listed violation, and be right only by rounding luck. So an
+  outright decision needs BOTH terms proven zero, and neither a whole turn nor a
+  flat patch is exempt.
 - DX8 does not answer for a band holding a mitered patch at all. Its reduction
   to the receiver's own section rests on every patch being flat or a cone
   sector, and the ruled patch is neither.
 
-All three retain their zero surface-departure allowance, un-widened DX7 range,
-and section reduction wherever the two windows coincide: every tangent join,
-apex patch and whole turn. `Face.NormalAt` still reports its independent
-arithmetic bound (`normal_bound.go`).
+All three retain their zero surface-departure term and their section reduction
+wherever the two windows coincide: every tangent join, apex patch and whole
+turn. `Face.NormalAt` still reports its independent arithmetic bound
+(`normal_bound.go`), and DX7's range and allowance still carry it there, so a
+coinciding window buys back the departure term alone and never the reading's
+own.
 
 SX12 audits the exact offset family, not the ruled patch the body builds. It
 runs the existing line/arc offset audit on the section offset by the full
@@ -859,7 +869,7 @@ reaches only the analytic bodies at the start of a chain.
 | **DX4** | mesh boolean | available once DX3 exists | available once DX3 exists | available once DX3 exists |
 | **DX5** | `ThroughAll` directional extent | existing | analytic patch extrema; a direction whose extreme carries computed cap-contour or inherited axial displacement is `ErrUnsupported`, since a stop reads this coordinate as exact and has no bound to widen (§8.4) | union of slab-region extents |
 | **DX6** | clearance | existing revolve boundary reader | add trimmed patch faces to boundary model; undecidable cells stay `Suspect`; staged for the cap-loop chamfer, whose pairs read `Suspect` unless boxes already decide them | union exposed slab faces; never include cancelled interfaces |
-| **DX7** | undercut | existing revolve survey | exact normal ranges per patch, each widened by that patch's own proven departure from the surface it publishes (§8.3); a proven opposing point lists its patch, and a remaining straddle is undecided without removing another proven listing | exact normal ranges per exposed face |
+| **DX7** | undercut | existing revolve survey | bounded normal ranges per patch, each widened by the bound its own sampled `Face.NormalAt` readings publish and by that patch's own proven departure from the surface it publishes (§8.3); a proven opposing point lists its patch, and a remaining straddle is undecided without removing another proven listing | exact normal ranges per exposed face |
 | **DX8** | minimum radius | existing meridian survey | minimum concave principal radius over sphere/torus/cylinder/cone patches; a band holding a mitered ruled patch (§8.3) is undecided | section arcs + exposed rim geometry |
 | **DX9** | minimum wall thickness | existing revolve rewrite survey | staged: asked reading is `Suspect` | staged: asked reading is `Suspect` |
 
@@ -956,11 +966,18 @@ Every implementation PR MUST add geometry assertions, not run-only coverage.
 - a mitered patch's own `NormalAt` bound ENCLOSES its distance to the ruled
   surface's own normal, sampled across the whole patch and over a family of
   setbacks up to the widest the offset admits, while a whole turn's and a
-  straight wall's stay `Exact` at a zero bound;
+  straight wall's carry no surface-departure term at all and report only the
+  arithmetic bound their own evaluation earned;
 - a body whose ruled patch opposes a pull its published `Cone` does not is NOT
   passed by DX7 — the answer is undecided, never the proven all-clear — while
   an ordinary setback's band is still cleared outright under one pull and
   still listed as a proven undercut under the opposite one;
+- a pull that DX7's own reading cannot separate from a patch's tangent, on a
+  band with no surface departure at all, is undecided rather than answered:
+  covered on the whole-turn `Cone` patch, whose arm's float cosine and sine of
+  the held half angle leave the minimum component inside the bound the patch
+  publishes, and on a flat patch read from one sample, against a pull
+  perpendicular to the direction that reading names;
 - a band holding a mitered patch leaves DX8 undecided, and an unmitered one
   still reports the proven absence of a concave feature;
 - a chamfer band under a sweep whose height dwarfs `d` still separates its two

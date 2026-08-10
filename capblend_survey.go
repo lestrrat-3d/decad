@@ -3,8 +3,10 @@ package decad
 import (
 	"fmt"
 	"math"
+	"math/big"
 
 	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-3d/units"
 )
 
 // This file is the cap-blend payload's DX7/DX8 surveys
@@ -18,6 +20,18 @@ import (
 // its own reading by that bound. A provenly opposing point lists its patch;
 // only a patch with no such point and a straddling range is undecided. DX8
 // does not answer for such a band at all.
+//
+// DX7's reading owes a SECOND term, on every band and not only a mitered one:
+// it reads each patch's normal through Face.NormalAt, whose answer is a
+// direction the arm computed rather than the surface's own — a Cone's arm
+// takes a float cosine and sine of the held half angle, which no held pair
+// satisfies exactly — and which therefore publishes its own proven bound
+// (normal_bound.go). A decision that keeps the sampled value and drops that
+// bound answers for a direction the face never claimed, so DX7 carries it
+// into the component range and into the allowance the decision reads. It is
+// what keeps a pull the reading cannot separate from the patch's own tangent
+// undecided rather than cleared, and no all-clear is proven outright unless
+// BOTH terms are proven zero.
 //
 // DX9 (the wall survey) stays deliberately Suspect: a cap blend is not one
 // constant section at one height, and the existing 2D spanning-disk proof
@@ -37,8 +51,10 @@ import (
 //
 // That range is the patch's own only where the patch's surface IS the one it
 // publishes. A mitered circular patch's is not, so its reading is widened by
-// its own proven departure (capPatchNormalAllow). The existential listing and
-// universal all-clear rules then decide it per point: see the loop below.
+// its own proven departure (capPatchNormalAllow), and every patch's is widened
+// by the bound its own sampled readings publish (capPatchNormalRange). The
+// existential listing and universal all-clear rules then decide it per point:
+// see the loop below.
 func capBlendUndercuts(b *Body, cbp capBlendPayload, pull r3.Vec) undercutOutcome {
 	p, ok := pull.Normalize()
 	if !ok {
@@ -98,27 +114,40 @@ func capBlendUndercuts(b *Body, cbp capBlendPayload, pull r3.Vec) undercutOutcom
 		if f == nil {
 			return undercutOutcome{}
 		}
-		mn, mx, ok := capPatchNormalRange(f, pl, patch.geom, p)
+		mn, mx, reading, ok := capPatchNormalRange(f, pl, patch.geom, p)
 		if !ok {
 			return undercutOutcome{}
 		}
-		allow := capPatchNormalAllow(patch.geom)
+		// The two terms answer different questions, and the patch's own
+		// departure answers only the second. reading covers how far each
+		// SAMPLED component can sit from the component of the face's own
+		// normal at the point sampled — the arithmetic the arm ran, which
+		// Face.NormalAt publishes and this survey may not drop. The departure
+		// covers the built surface at every OTHER azimuth of the window, which
+		// no sample reaches at all. Face.NormalAt composes the departure into
+		// each sample's own bound too, so it is charged twice at the sampled
+		// azimuths; that only widens the reading, and paying it once would mean
+		// reaching past the public measurement into the arm bound it
+		// deliberately does not break out.
+		allow := absSumUpper(capPatchNormalAllow(patch.geom), reading)
 		if allow <= 0 {
-			// The patch's own surface IS the Cone (or Plane) it publishes, so
-			// the range above is exact and decides the patch outright.
+			// The patch's own surface IS the Cone (or Plane) it publishes AND
+			// every reading it was assembled from is exact, so the range above
+			// is exact and decides the patch outright.
 			if opposesPull(mn, mx) {
 				faces = append(faces, f)
 			}
 			continue
 		}
-		// A MITERED circular patch is ruled between two differently-swept
-		// directrices, so the surface it publishes is its own only to within
-		// allow (capblend_geom.go, docs/modify-reach-design.md §8.3): every
-		// point of the patch carries an azimuth inside this window, and its own
-		// normal component sits within allow of the reading at that azimuth. A
-		// point proven to oppose lists this patch; only an all-clear needs every
-		// point to clear. A remaining straddle makes this patch undecided without
-		// discarding other patches already proven to oppose.
+		// Every point of the patch carries an azimuth inside this window, and
+		// its own normal component sits within allow of the reading at that
+		// azimuth: a MITERED circular patch because the surface it publishes is
+		// its own only to within its departure (capblend_geom.go,
+		// docs/modify-reach-design.md §8.3), and any patch at all because the
+		// reading was assembled from bounded samples. A point proven to oppose
+		// lists this patch; only an all-clear needs every point to clear. A
+		// remaining straddle makes this patch undecided without discarding
+		// other patches already proven to oppose.
 		switch {
 		case mn > allow:
 			// Every point's component is above zero: nothing opposes the pull.
@@ -140,47 +169,160 @@ func capBlendUndercuts(b *Body, cbp capBlendPayload, pull r3.Vec) undercutOutcom
 
 // capPatchNormalRange is one patch's published normal-component range against
 // the unit pull p, read off its own Face.NormalAt (which already carries the
-// correct outward sign): a Plane's is a single value; a Cone's (regular or
-// apex) is A*cos(phi)+B*sin(phi)+C in the azimuth phi = theta - th0 measured
-// from the window's own start, recovered EXACTLY from three NormalAt
-// evaluations at phi = 0, pi/2, pi — f(0)=A+C, f(pi/2)=B+C, f(pi)=-A+C solves
-// uniquely for A, B, C — then read with the closed-form trigRange over
-// [0, th1-th0], the window IN THAT SAME azimuth. Reading the recovered local
-// coefficients over the global [th0, th1] instead scans the wrong arc of the
-// circle whenever th0 is not zero, and reports a range the patch never takes.
-func capPatchNormalRange(f *Face, pl prismPayload, g capPatchGeom, p r3.Vec) (float64, float64, bool) {
-	if !g.circular {
-		n, err := f.NormalAt(pl.point(g.sideA.U, g.sideA.V, g.sideZ))
+// correct outward sign), beside a proven allowance on that range: a Plane's is
+// a single value; a Cone's (regular or apex) is A*cos(phi)+B*sin(phi)+C in the
+// azimuth phi = theta - th0 measured from the window's own start, recovered
+// from three NormalAt evaluations at phi = 0, pi/2, pi — f(0)=A+C, f(pi/2)=B+C,
+// f(pi)=-A+C solves uniquely for A, B, C — then read with the closed-form
+// trigRange over [0, th1-th0], the window IN THAT SAME azimuth. Reading the
+// recovered local coefficients over the global [th0, th1] instead scans the
+// wrong arc of the circle whenever th0 is not zero, and reports a range the
+// patch never takes.
+//
+// The recovery is exact in the coefficients, never in the samples: each
+// NormalAt hands back a direction its own arm computed, under the bound that
+// arm proved (normal_bound.go), so the returned allowance carries those bounds
+// through the solve. Writing e0, e90, e180 for the three sampled components'
+// own allowances (pullComponent), the exact coefficients A, B, C sit within
+// e0 + (e0+e180)/2, e90 + (e0+e180)/2 and (e0+e180)/2 of the recovered a, b, c
+// — the halved pair is the mean's own share — and a difference of two
+// A*cos+B*sin+C forms is bounded everywhere by the sum of its three
+// coefficient differences, which is 2.5*e0 + e90 + 1.5*e180. The recovery's own
+// float rounding is charged beside it, measured against the exact rational
+// solve rather than estimated (recoveryRound), as is each end's final addition.
+func capPatchNormalRange(f *Face, pl prismPayload, g capPatchGeom, p r3.Vec) (float64, float64, float64, bool) {
+	pLen, okLen := pullLengthUpper(p)
+	if !okLen {
+		return 0, 0, 0, false
+	}
+	sampleAt := func(pt r3.Vec) (float64, float64, bool) {
+		n, err := f.NormalAt(pt)
 		if err != nil {
 			return 0, 0, false
 		}
-		v := n.Value.Dot(p)
-		return v, v, true
+		return pullComponent(n, p, pLen)
+	}
+	if !g.circular {
+		v, allow, ok := sampleAt(pl.point(g.sideA.U, g.sideA.V, g.sideZ))
+		if !ok {
+			return 0, 0, 0, false
+		}
+		return v, v, allow, true
 	}
 	// A regular Cone patch's normal is independent of position along its own
 	// ruling (azimuth alone determines it), so sampling at the cap radius —
 	// which an apex patch's own zero side radius forces anyway — serves both.
 	r := g.capRadius
-	sampleAt := func(theta float64) (float64, bool) {
+	atAzimuth := func(theta float64) (float64, float64, bool) {
 		sin, cos := math.Sincos(theta)
-		pt := pl.point(g.cU+r*cos, g.cV+r*sin, g.capZ)
-		n, err := f.NormalAt(pt)
-		if err != nil {
-			return 0, false
-		}
-		return n.Value.Dot(p), true
+		return sampleAt(pl.point(g.cU+r*cos, g.cV+r*sin, g.capZ))
 	}
-	f0, ok0 := sampleAt(g.th0)
-	f90, ok90 := sampleAt(g.th0 + math.Pi/2)
-	f180, ok180 := sampleAt(g.th0 + math.Pi)
+	f0, e0, ok0 := atAzimuth(g.th0)
+	f90, e90, ok90 := atAzimuth(g.th0 + math.Pi/2)
+	f180, e180, ok180 := atAzimuth(g.th0 + math.Pi)
 	if !ok0 || !ok90 || !ok180 {
-		return 0, 0, false
+		return 0, 0, 0, false
 	}
 	c := (f0 + f180) / 2
 	a := f0 - c
 	b := f90 - c
+	solve, okSolve := recoveryRound(f0, f90, f180, a, b, c)
+	if !okSolve {
+		return 0, 0, 0, false
+	}
 	mn, mx := trigRange(a, b, 0, g.th1-g.th0)
-	return mn + c, mx + c, true
+	lo, hi := mn+c, mx+c
+	allow := absSumUpper(
+		productUpper(2.5, e0), e90, productUpper(1.5, e180),
+		solve, sumRound(mn, c), sumRound(mx, c),
+	)
+	if isNonFinite(allow) {
+		return 0, 0, 0, false
+	}
+	return lo, hi, allow, true
+}
+
+// pullComponent is one sampled normal's component against the pull, beside a
+// proven allowance on it. Face.NormalAt publishes a bound on the direction it
+// hands back, so the component of the face's own exact normal sits within that
+// bound — carried through the pull's own length, since |dn·p| <= |dn|*|p| and
+// a normalized pull is only near-unit — of the component returned here. The
+// dot product's own rounding is charged beside it, measured against the exact
+// rational product rather than estimated: every coordinate is a held float, so
+// that product is an exact rational.
+//
+// A survey that kept only n.Value.Dot(p) would decide against a direction the
+// face never claimed, which is the whole reason this returns a pair.
+func pullComponent(n VecMeasurement, p r3.Vec, pLen float64) (float64, float64, bool) {
+	v := n.Value.Dot(p)
+	bound, err := magnitudeIn(n.Bound, units.Dimensionless, units.One, "a normal's own bound")
+	if err != nil || isNonFinite(bound) || isNonFinite(v) {
+		return 0, 0, false
+	}
+	nv, okN := ivVec3Of(n.Value)
+	pv, okP := ivVec3Of(p)
+	if !okN || !okP {
+		return 0, 0, false
+	}
+	allow := absSumUpper(productUpper(bound, pLen), intervalFloatError(ivVec3Dot(nv, pv), v))
+	if isNonFinite(allow) {
+		return 0, 0, false
+	}
+	return v, allow, true
+}
+
+// pullLengthUpper is an upper bound on the normalized pull's own length. It is
+// one ulp either side of one, and stating it beats assuming it: a bound scaled
+// by a length that is 1+e is a bound, and one scaled by an assumed 1 is not.
+func pullLengthUpper(p r3.Vec) (float64, bool) {
+	pv, ok := ivVec3Of(p)
+	if !ok {
+		return 0, false
+	}
+	length, okSqrt := intervalSqrt(ivVec3NormSq(pv))
+	if !okSqrt {
+		return 0, false
+	}
+	up := ratFloatUp(length.hi)
+	if isNonFinite(up) || up <= 0 {
+		return 0, false
+	}
+	return up, true
+}
+
+// recoveryRound charges the three-sample coefficient solve its OWN float
+// rounding: the same solve is redone over exact rationals from the same held
+// samples, and each held coefficient is compared against it. That measures the
+// rounding rather than estimating it, so a caller composing it with the
+// samples' own allowances (capPatchNormalRange) is charging both mechanisms
+// exactly once.
+func recoveryRound(f0, f90, f180, a, b, c float64) (float64, bool) {
+	rf0, rf90, rf180 := floatRat(f0), floatRat(f90), floatRat(f180)
+	if rf0 == nil || rf90 == nil || rf180 == nil {
+		return 0, false
+	}
+	rc := new(big.Rat).Quo(new(big.Rat).Add(rf0, rf180), big.NewRat(2, 1))
+	ra := new(big.Rat).Sub(rf0, rc)
+	rb := new(big.Rat).Sub(rf90, rc)
+	round := absSumUpper(
+		intervalFloatError(pointInterval(ra), a),
+		intervalFloatError(pointInterval(rb), b),
+		intervalFloatError(pointInterval(rc), c),
+	)
+	if isNonFinite(round) {
+		return 0, false
+	}
+	return round, true
+}
+
+// sumRound is one float addition's own rounding, against the exact rational
+// sum of its two held operands.
+func sumRound(x, y float64) float64 {
+	rx, ry := floatRat(x), floatRat(y)
+	if rx == nil || ry == nil {
+		return math.Inf(1)
+	}
+	return intervalFloatError(pointInterval(new(big.Rat).Add(rx, ry)), x+y)
 }
 
 // capBlendMinRadius is the tightest concave principal radius over a

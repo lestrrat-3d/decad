@@ -1121,10 +1121,13 @@ an approximation of one — and the report gives four answers this way:
   over the survey. On an analytic face whose geometry is its tag, every point's
   normal is an exact fact with a closed-form range over the face, and the
   survey of those ranges (the membership rule below) is the proof that no
-  region of any face opposes the pull. A tagged analytic variant that is a
-  bounded stand-in carries its own normal departure
-  (`docs/modify-reach-design.md` §8.3), so its widened range can instead leave
-  the question undecided. A faceted survey proves the same absence only when
+  region of any face opposes the pull. The range a survey READS is that fact
+  only to within the bound of whatever computed it: a range read through
+  `Face.NormalAt` carries that evaluation's own proven bound (§2), so a pull
+  the reading cannot separate from a face's own tangent leaves the question
+  undecided even where the geometry is its tag. A tagged analytic variant that
+  is a bounded stand-in carries its own normal departure
+  (`docs/modify-reach-design.md` §8.3) on top of that. A faceted survey proves the same absence only when
   every true patch's source-normal range clears. A missing or straddling range
   leaves `Undercuts` empty and the body `Suspect` (payload verification §8).
 - **A pair with no `Interference` row** is the answer *these two bodies do not

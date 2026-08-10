@@ -184,7 +184,7 @@ one.
 | `capblend_contour.go` | Proves the cap contour's displacement bound used by every cap-level reading, via interval arithmetic over the same offset-intersection cases `shell_offset.go` and `fillet.go` use. See `docs/modify-reach-design.md` §8.4. |
 | `capblend_centroid.go` | Computes closed-form first moments for the cap-blend payload's centroid: exact-rational Plane patch moments, a Fourier sum for Cone patches, and a bounding-box ceiling on the result. See `docs/modify-reach-design.md` §8.4. |
 | `capblend_moments.go` | `evalCapBlendContext` builds the cap-blend body and its bounded area/volume/centroid via closed-form divergence-theorem integrals per patch, exact where representable. See `docs/modify-reach-design.md` §8.4. |
-| `capblend_survey.go` | The cap-blend payload's undercut and minimum-radius surveys: per-patch normal ranges under a mitered patch's own bound, and reuse of the receiver's unchanged-profile survey for radius. See `docs/modify-reach-design.md` §12 Table DX (DX7/DX8). |
+| `capblend_survey.go` | The cap-blend payload's undercut and minimum-radius surveys: per-patch normal ranges under each sampled reading's and a mitered patch's own bounds, and reuse of the receiver's unchanged-profile survey for radius. See `docs/modify-reach-design.md` §12 Table DX (DX7/DX8). |
 
 ### Verification and surveys
 

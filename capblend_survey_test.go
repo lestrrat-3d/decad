@@ -252,6 +252,93 @@ func TestCapBlendUndecidedPatchKeepsProvenUndercut(t *testing.T) {
 	require.Equal(t, decad.Violating, report.Bodies[0].Status)
 }
 
+// TestCapBlendWholeTurnUndercutRespectsNormalBound covers the OTHER reading a
+// band patch's published bound governs, on the band that carries no
+// surface-departure term at all. A whole-turn Cone patch publishes its normal
+// with the arithmetic bound its own arm earned (normal_bound.go), and a caller
+// may pull along a direction the patch's own tangent cannot be separated from
+// within that bound: the exact taper and the float cosine and sine the arm
+// took of the held half angle disagree by less than the bound, so which side
+// of zero the patch's minimum component falls on is not decided by the
+// reading. A survey that kept only the sampled value would answer that pull
+// with a positive claim — the proven all-clear or a listed violation — and be
+// right only by luck. It must be undecided instead.
+func TestCapBlendWholeTurnUndercutRespectsNormalBound(t *testing.T) {
+	body := circleProfile(t, 20, 10)
+	chamfered, err := body.Chamfer(capLoopEdges(body), units.Millimeters(2))
+	require.NoError(t, err)
+
+	var cone *decad.Face
+	for _, f := range chamfered.Faces() {
+		if f.Surface().Kind() == decad.KindCone {
+			require.Nil(t, cone, "a whole-turn band builds one Cone patch")
+			cone = f
+		}
+	}
+	require.NotNil(t, cone)
+
+	// The patch's own published normal at one azimuth, which fixes the whole
+	// band: a Cone's normal keeps one axial component and turns its radial
+	// part with the azimuth, so the band's minimum component against a pull p
+	// is p.Z*n.Z - hypot(p.X, p.Y)*hypot(n.X, n.Y).
+	n, err := cone.NormalAt(cone.Loops()[0].CoEdges()[0].Start().Position().Value)
+	require.NoError(t, err)
+	bound, err := n.Bound.In(units.One)
+	require.NoError(t, err)
+	require.Positive(t, bound, "a Cone arm's own cosine and sine are not exact")
+
+	// A pull whose lateral share matches that same ratio makes the band's
+	// minimum component zero — the tangent the reading cannot resolve.
+	radial := math.Hypot(n.Value.X, n.Value.Y)
+	axial := math.Abs(n.Value.Z)
+	pull := r3.NewVec(axial/radial, 0, math.Copysign(1, n.Value.Z))
+	unit, ok := pull.Normalize()
+	require.True(t, ok)
+	minimum := unit.Z*n.Value.Z - math.Hypot(unit.X, unit.Y)*radial
+	require.Less(t, math.Abs(minimum), bound,
+		"the pull must sit inside the patch's own bound of its tangent, not merely near it")
+
+	report, err := chamfered.Document().Verify(t.Context(), decad.WithPullDirection(pull))
+	require.NoError(t, err)
+	require.Len(t, report.Bodies, 1)
+	require.NotContains(t, report.Bodies[0].Undercuts, cone,
+		"a tangent the reading cannot resolve is not a proven violation")
+	require.True(t, hasDiagnostic(report, decad.DiagUndecidedUndercut),
+		"nor is it a proven all-clear")
+}
+
+// TestCapBlendFlatPatchUndercutRespectsNormalBound is the same claim on the
+// single-sample arm. A flat band patch is read from ONE Face.NormalAt, whose
+// bound is just as real, and a pull perpendicular to the direction that
+// reading names leaves the patch's true component on neither proven side of
+// zero.
+func TestCapBlendFlatPatchUndercutRespectsNormalBound(t *testing.T) {
+	_, box := capBlendBox(t)
+	chamfered, err := box.Chamfer(capLoopEdges(box), units.Millimeters(5))
+	require.NoError(t, err)
+
+	patch := faceWithRole(t, chamfered, "chamferCap(end,0,0)")
+	require.Equal(t, decad.KindPlane, patch.Surface().Kind())
+	n, err := patch.NormalAt(patch.Loops()[0].CoEdges()[0].Start().Position().Value)
+	require.NoError(t, err)
+	requireArithmeticNormalBound(t, n)
+
+	// Perpendicular to the published normal, so the patch's own component is
+	// zero to within the bound that normal carries.
+	pull := r3.NewVec(n.Value.Y, -n.Value.X, 0)
+	unit, ok := pull.Normalize()
+	require.True(t, ok)
+	bound, err := n.Bound.In(units.One)
+	require.NoError(t, err)
+	require.Less(t, math.Abs(n.Value.Dot(unit)), bound)
+
+	report, err := chamfered.Document().Verify(t.Context(), decad.WithPullDirection(pull))
+	require.NoError(t, err)
+	require.Len(t, report.Bodies, 1)
+	require.NotContains(t, report.Bodies[0].Undercuts, patch)
+	require.True(t, hasDiagnostic(report, decad.DiagUndecidedUndercut))
+}
+
 // requireArithmeticNormalBound checks a computed normal that must carry
 // Face.NormalAt's own documented arithmetic proof.
 func requireArithmeticNormalBound(t *testing.T, n decad.VecMeasurement) {
