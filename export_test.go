@@ -121,6 +121,36 @@ func TestSTLDefaultChordTolerance(t *testing.T) {
 		require.NoError(t, faceted.STL(&automatic))
 		require.Equal(t, explicit.String(), automatic.String())
 	})
+
+	// An assembled prism holds its section within a proven displacement of the
+	// one it denotes, and Tessellate reserves that displacement from the
+	// tolerance, so the size-derived default names a mesh this body cannot
+	// produce. The exporter raises its default past the displacement rather
+	// than refusing a body it can perfectly well write.
+	t.Run("displaced prism honors its section displacement", func(t *testing.T) {
+		const shift = 1e14
+		doc := decad.New()
+		a := boxBody(t, doc, 0, 0, 10, 10, 10)
+		b := placedFar(t, boxBody(t, doc, 2-shift, 2, 8-shift, 8, 10), shift)
+		got, err := decad.Union(a, b)
+		require.NoError(t, err)
+		require.False(t, anyFaceIsFaceted(got), "the analytic reduction must own this pair")
+
+		box, err := got.Bounds()
+		require.NoError(t, err)
+		delta := box.Bound.Base()
+		tol := sizeDefault(t, got)
+		require.Greater(t, delta, tol.Mag(), "the fixture's displacement must outrun the size default")
+		_, err = got.Tessellate(tol)
+		require.ErrorIs(t, err, decad.ErrUnsupported)
+
+		var explicit bytes.Buffer
+		require.NoError(t, got.STL(&explicit, decad.WithChordTolerance(units.Millimeters(2*delta))))
+		var automatic bytes.Buffer
+		require.NoError(t, got.STL(&automatic))
+		require.Equal(t, explicit.String(), automatic.String())
+		require.Contains(t, automatic.String(), "facet normal")
+	})
 }
 
 func TestOBJPlate(t *testing.T) {

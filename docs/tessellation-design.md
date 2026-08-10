@@ -106,7 +106,7 @@ The payload table is normative:
 
 | Payload | Geometry source | `sourceBound(face)` | `Bound` | `areaSlack` | `volSymDiff` |
 |---|---|---|---|---|---|
-| `prismPayload` | one chording per recorded section loop, shared by walls + caps | wall sagitta; each cap's maximum curved-trim sagitta; plus `sectionDelta`, per-end axial displacement, and proven coordinate/placement rounding; zero only for an exact held trim with exact stored coordinates | max per-face source bound | non-cancelling wall error + both cap circular-segment deficits + coordinate-movement allowance | section symmetric-difference allowance × sweep height + coordinate swept allowance (§5) |
+| `prismPayload` | one chording per recorded section loop, shared by walls + caps | wall sagitta; each cap's maximum curved-trim sagitta; plus `sectionDelta`, per-end axial displacement, and proven coordinate/placement rounding; zero only for an exact held trim with exact stored coordinates and no section displacement | max per-face source bound | non-cancelling wall error + both cap circular-segment deficits + coordinate-movement allowance + section-displacement area (§5) | section symmetric-difference allowance × sweep height + coordinate swept allowance (§5) |
 | `cupPayload` | one chording per outer/cavity loop, shared by walls + floors + rims | wall sagitta; each floor/rim patch's maximum curved-trim sagitta; plus `zDelta` and proven coordinate/placement rounding; zero only for an exact held trim with exact stored coordinates | max per-face source bound | non-cancelling per-wall/per-planar-patch error + coordinate-movement allowance | outer-prism + cavity-prism allowances + coordinate swept allowance (§6) |
 | `loftPayload` | the wall and cap triangles already held by the payload | the payload's own `delta` (loft §5): every held facet IS the payload's triangle for its source face, so the facet is displaced by exactly what the payload's vertices are — zero for an unplaced loft | max per-face source bound, so `delta` | zero for an unplaced loft; otherwise the payload's own per-triangle perturbation sum (loft §8) | zero for an unplaced loft, otherwise `sweptVolumeAllow(delta, areaUpper)` (loft §8); `symDiffOK == true` either way |
 | `revolvePayload` | one meridian chording + one global angular sequence, then final rigid placement | current meridian + angular displacement for that analytic patch, plus construction rounding `deltaC` and final-placement rounding `deltaR`; `deltaC + deltaR` for otherwise exact planar patches | max per-face source bound (§8) | integral of absolute local true-vs-held area-density error + cap deficits + construction/placement area allowances (§10) | meridian/angular + construction/placement homotopy allowances (§11) |
@@ -276,6 +276,32 @@ positive-area/contact rules of §9. Charge its area per triangle with §10.2's
 `sweptVolumeAllow` over a perturbed-area upper bound. A source bound alone does
 not discharge either proof.
 
+A prism the analytic prism boolean assembled carries a third term, the **section
+displacement** `deltaSection` (`docs/prism-boolean-design.md` §7): the proven
+bound on how far every recorded boundary coordinate sits from the section the
+payload's construction denotes. It displaces the analytic boundary the mesh
+approximates, not a coordinate the tessellation stored, so it is its own term
+and never rides in `deltaStore`. It is zero for every payload a caller draws.
+Every face bound takes it beside the two terms above:
+
+```text
+sourceBound(face) = upRound(deltaTrim(face) + deltaStore(face) + deltaSection)
+```
+
+Reserve `deltaSection` from `tol` the same way and at the same point, and refuse
+a non-positive remainder — a tolerance at or below the displacement admits no
+mesh at all, exactly as §7's faceted restatement refuses a tolerance below the
+bound it holds. Chording plus `deltaSection` therefore stays within `tol` for
+every prism, displaced or not. The reservation covers those two terms and no
+others: `deltaStore` and the per-end axial displacement are still added on top
+without reducing the chording budget, so a prism carrying either can publish a
+complete `Bound` above `tol`, exactly as §1's Tolerance row states.
+`areaSlack` charges the same displacement as an area: the tube about the
+recorded boundary once per cap, plus that boundary's own length displacement over
+the sweep height — the composition evaluator §5's own area reading makes, one
+dimension at a time. The occupied-volume allowance a boolean composes from the
+operand reads `Bound`, which carries the displacement already.
+
 For a circular subarc `c`, let `S_c` be the planar circular segment between the
 arc and its chord and let `a_c = area(S_c)` (absolute). Then:
 
@@ -296,9 +322,10 @@ terms. With upward-rounded coordinate swept allowance `Mstore`, use
 `volSymDiff_prism = upRound(Mprism_analytic + Mstore + arithmeticSlack)`;
 signed volume cancellation is not admissible.
 
-Straight-only prisms with exact held coordinates therefore have zero boundary
-bound, zero area slack, and zero analytic symmetric-difference allowance.
-Otherwise the relevant coordinate-construction/placement allowances remain.
+Straight-only prisms with exact held coordinates and no section displacement
+therefore have zero boundary bound, zero area slack, and zero analytic
+symmetric-difference allowance. Otherwise the relevant coordinate-construction,
+placement and section-displacement allowances remain.
 
 ## 6. Cup
 
@@ -793,6 +820,7 @@ Refuse before returning any partial mesh:
 | canceled `TessellateContext` | `ctx.Err()` unchanged; no partial mesh |
 | payload class not implemented | `ErrUnsupported` |
 | faceted request finer than the certified maximum face bound | `ErrUnsupported` |
+| prism request whose tolerance the payload's section displacement exhausts | `ErrUnsupported` |
 | meridian/angular, per-mesh facet, cumulative facet-work, cumulative pair-test, or certified-interval proof budget exceeded; integer size overflow | `ErrUnsupported`, before the refused allocation/audit starts |
 | non-finite `rhoMax`, `deltaC`, `deltaR`, sagitta, area slack, source bound, construction/placement allowance, or symmetric-difference allowance | `ErrUnsupported` unless it proves an impossible payload invariant |
 | positive chording budget whose inverse underflows, cannot produce a represented checked count, or exceeds the owning chord cap | `ErrUnsupported` before integer conversion or allocation |
@@ -836,6 +864,16 @@ until T4 proves occupied-volume error.
   count without evaluating an out-of-domain inverse. Exercise inverse
   underflow, unrepresentable ceiling, and cap overflow; each MUST refuse before
   conversion or allocation.
+- Tessellate a prism carrying a nonzero section displacement: assert the
+  displacement is charged to `Bound` and to `areaSlack`, that `Bound <= tol`
+  where no unreserved displacement rides beside it, and that a tolerance at or
+  below the displacement refuses. Assert an undisplaced prism at the same
+  tolerance chords against the whole of it — the same count and the same bound
+  a reservation would have cost it.
+- Tessellate a prism carrying an unreserved axial displacement at a tolerance
+  below it and assert the published `Bound` exceeds that tolerance, both with
+  no section displacement beside it and with a nonzero one the reservation does
+  pay for.
 - At large coordinate magnitudes under identity placement, assert `deltaC` is
   nonzero when required and is charged to each source bound, `Bound`,
   `areaSlack`, and `volSymDiff`. Repeat under a nonidentity transform and charge

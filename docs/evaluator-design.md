@@ -365,8 +365,10 @@ or exact classification remains an error from `Verify`; it is never hidden as
 work intervals inside quadratic/refinement loops, as interference §7 specifies.
 
 - **Tessellate both operands** with an evaluator-internal chord tolerance —
-  a documented default derived from the pair's own diameter (the booleans of
-  core §8 expose no tolerance parameter, on purpose). What IS caller-visible
+  a documented default derived from the pair's own diameter, raised past either
+  operand's own section displacement, which no mesh of that operand can go
+  below (`docs/prism-boolean-design.md` §7, tessellation §5). The booleans of
+  core §8 expose no tolerance parameter, on purpose. What IS caller-visible
   is the proven bound the output carries: the tolerance's whole effect
   surfaces as `Bound`/`Exactness`, judged by the caller's `WithTolerance` at
   Verify. The machinery and its payload staging are
