@@ -351,21 +351,39 @@ func pullLengthUpper(p r3.Vec) (float64, bool) {
 // capBlendMinRadius is the tightest concave principal radius over a
 // cap-blend body (Table DX, DX8).
 //
-// It answers only for a band whose every patch really is the flat or
-// cone-sector surface it publishes — a question about the patch's own KIND,
-// which its two plane-local windows decide outright (capPatchWindowSkew), not
-// about the rounding-scale distance to the tag DX7's own reading charges
-// (capblend_departure.go). A MITERED circular patch is not: the build rules it
-// between two differently-swept directrices (docs/modify-reach-design.md
-// §8.3), and a straight-ruled surface between two skewed arcs is not
-// developable at all — it carries curvature in both principal directions,
-// tightening as the corner's own rulings converge, and neither the Cone
-// argument below nor the receiver's own section says anything about it. That
-// band is UNDECIDED here (`Suspect`, through runSurveys' own refusal
-// diagnostic) rather than answered with a proven absence the patch set does
-// not support.
+// The reduction below is a claim about the patch the BUILD assembled, not
+// merely about the tag it publishes: a Plane or Cone argument about "the
+// patch's radius" is only a fact about the built surface where the built
+// surface really is that Plane or Cone. The build already proves and stamps
+// how far a patch's ruled surface can point away from the surface it
+// publishes (`f.normalBound`, `capblend_geom.go`'s `setPatchReadings`, derived
+// in `capblend_departure.go`), and this survey answers only where that stamp
+// is an EXACT zero — a zero there means the built normal agrees with the
+// tag's everywhere on the patch, so the two surfaces share every tangent plane
+// and a boundary point, hence are the same surface, and the Plane/Cone
+// argument below is a statement about the built patch rather than an
+// assumption about it.
 //
-// For every other band this slice's patches are Plane and Cone only — a
+// `capPatchWindowSkew` decides only the SKEW half of that departure — a
+// question about the patch's own kind, whether the build rules it between two
+// congruent windows at all. A MITERED circular patch fails even that: the
+// build rules it between two differently-swept directrices
+// (docs/modify-reach-design.md §8.3), and a straight-ruled surface between two
+// skewed arcs is not developable at all — it carries curvature in both
+// principal directions, tightening as the corner's own rulings converge, and
+// neither the Cone argument below nor the receiver's own section says
+// anything about it. But a coinciding window buys back only that half; the
+// placement's own independent rounding of every emitted coordinate is the
+// other half, and it is nonzero on every placed band, and a whole-turn Cone
+// patch owes a further term even unplaced, since its own held half-angle only
+// encloses a cosine and sine rather than fixing them exactly. So the skew
+// check stays (it still rules out a mitered patch outright), but it is no
+// longer sufficient on its own: a band is UNDECIDED here (`Suspect`, through
+// runSurveys' own refusal diagnostic) unless every patch's own stamped
+// departure is an exact zero, rather than answered with a proven absence the
+// patch set does not support.
+//
+// For a band that passes, this slice's patches are Plane and Cone only — a
 // chamfer produces no rolling-ball surface, so there is no Torus or Sphere
 // case here at all — and NEITHER kind ever tightens the answer beyond what the
 // receiver's own unchanged section already gives:
@@ -392,9 +410,14 @@ func pullLengthUpper(p r3.Vec) (float64, bool) {
 // So for a band of those patches the correct answer is exactly "no new
 // concave principal radius" and the whole survey reduces to prismMinRadius on
 // the receiver's own untouched profile.
-func capBlendMinRadius(cbp capBlendPayload) (radiusOutcome, bool) {
+func capBlendMinRadius(b *Body, cbp capBlendPayload) (radiusOutcome, bool) {
+	roles := facesByRole(b)
 	for _, patch := range cbp.patches {
-		if capPatchWindowSkew(patch.geom) > 0 {
+		f := roles[patch.role]
+		if f == nil {
+			return radiusOutcome{}, false
+		}
+		if capPatchWindowSkew(patch.geom) > 0 || f.normalBound != 0 {
 			return radiusOutcome{}, false
 		}
 	}

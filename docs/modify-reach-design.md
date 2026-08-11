@@ -527,15 +527,29 @@ term:
   flat patch is exempt.
 - DX8 does not answer for a band holding a mitered patch at all. Its reduction
   to the receiver's own section rests on every patch being flat or a cone
-  sector, and the ruled patch is neither.
+  sector, and the ruled patch is neither. DX8 also does not answer for a band
+  holding any patch whose proven departure from the surface it publishes is not
+  exactly zero — the mitered patch is one case of that; a whole-turn `Cone`
+  patch is another, since its own held half-angle only encloses a cosine and
+  sine rather than fixing them exactly; and every patch of a band built under a
+  placement is a third, since the placement's own independent rounding of every
+  emitted coordinate is never zero.
 
 A coinciding window — every tangent join, apex patch and whole turn — buys back
-the SKEW half of the departure and nothing else. DX8's section reduction turns
-on that half alone, since what its reduction needs is that every patch really is
-a developable cone sector, and it still answers there. `Face.NormalAt` and DX7
-keep a departure term of the placement's own size, and both still carry their
-own reading bounds beside it (`normal_bound.go`), so a coinciding window buys
-back neither the placement's half nor the reading's.
+the SKEW half of the departure and nothing else. DX8's reduction is a claim
+about the patch the build ASSEMBLED, not merely about its tag, so it needs BOTH
+halves of the departure proven exactly zero: the coinciding window buys back
+only the skew half, and the placement's own independent rounding of every
+emitted coordinate leaves the other half in place on any placed band. So a
+coinciding window alone no longer answers DX8. Only a patch whose own stamped
+departure (`capblend_geom.go`'s `f.normalBound`, derived in
+`capblend_departure.go`) is an exact zero does — an axis-aligned `Plane` patch
+of an unplaced band reaches that, and nothing else does. `Face.NormalAt` and DX7
+already read that same stamp; DX8 now reads it too, rather than assuming a
+coinciding window buys back what only a zero stamp proves. A later PR could win
+the answer back for a placed or whole-turn band through a proven curvature
+bound over the built ruled patch's own held numbers, rather than through its
+tag; this PR does not implement that route.
 
 SX12 audits the exact offset family, not the ruled patch the body builds. It
 runs the existing line/arc offset audit on the section offset by the full
@@ -906,7 +920,7 @@ reaches only the analytic bodies at the start of a chain.
 | **DX5** | `ThroughAll` directional extent | existing | analytic patch extrema; a direction whose extreme carries computed cap-contour or inherited axial displacement is `ErrUnsupported`, since a stop reads this coordinate as exact and has no bound to widen (§8.4) | union of slab-region extents |
 | **DX6** | clearance | existing revolve boundary reader | add trimmed patch faces to boundary model; undecidable cells stay `Suspect`; staged for the cap-loop chamfer, whose pairs read `Suspect` unless boxes already decide them | union exposed slab faces; never include cancelled interfaces |
 | **DX7** | undercut | existing revolve survey | bounded normal ranges per patch, each widened by the whole distance its own `Face.NormalAt` readings can sit from the patch's exactly enclosed normal model and by that patch's own proven departure from the surface it publishes (§8.3), a circular patch's window read through a proven enclosure rather than a float evaluation; a proven opposing point lists its patch, and a remaining straddle is undecided without removing another proven listing | exact normal ranges per exposed face |
-| **DX8** | minimum radius | existing meridian survey | minimum concave principal radius over sphere/torus/cylinder/cone patches; a band holding a mitered ruled patch (§8.3) is undecided | section arcs + exposed rim geometry |
+| **DX8** | minimum radius | existing meridian survey | minimum concave principal radius over sphere/torus/cylinder/cone patches; undecided unless every patch is proven to be exactly the surface it publishes (zero departure, §8.3) — a mitered ruled patch is one case of that | section arcs + exposed rim geometry |
 | **DX9** | minimum wall thickness | existing revolve rewrite survey | staged: asked reading is `Suspect` | staged: asked reading is `Suspect` |
 
 DX9 is a deliberate evaluator limit. A cap blend and a stacked shell are not
@@ -1036,8 +1050,9 @@ Every implementation PR MUST add geometry assertions, not run-only coverage.
   window reaches them, and no azimuth of the window takes a value that
   enclosure excludes — the stationary point included, which is where a float
   evaluation of the same range escapes;
-- a band holding a mitered patch leaves DX8 undecided, and an unmitered one
-  still reports the proven absence of a concave feature;
+- an unmitered band whose patches carry an exactly zero departure still reports
+  the proven absence of a concave feature, and the same band placed away from
+  the origin is undecided;
 - a chamfer band under a sweep whose height dwarfs `d` still separates its two
   levels; a side level identical to its own cap level → SX13, and the receiver
   and recipe stay untouched;
