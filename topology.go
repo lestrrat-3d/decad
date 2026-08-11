@@ -430,7 +430,7 @@ func (f *Face) NormalAt(p r3.Vec) (VecMeasurement, error) {
 	switch s := f.surface.(type) {
 	case Plane:
 		n := s.Frame.N()
-		allow, st := planeNormalAllow(n)
+		allow, st := planeNormalAllow(s.Frame, n)
 		return f.normalMeasurement(n, sign, allow, st, "the frame of this plane names no direction")
 	case Cylinder:
 		rel := p.Sub(s.Origin)

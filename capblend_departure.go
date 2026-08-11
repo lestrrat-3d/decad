@@ -203,22 +203,29 @@ func capPatchNormalAllow(f *Face, g capPatchGeom, b capPatchBuilt) float64 {
 
 // capPlaneDeparture is the flat half of this file's derivation, evaluated over
 // exact rational arithmetic on the patch's own four held corners and the tag's
-// own held frame normal. It reports ok false wherever an enclosure fails to
-// prove what a step needs — a directrix the body does not publish as a straight
-// pair of ends, a built normal not proven away from zero, a tag frame normal not
-// proven away from zero, or a sine not proven below one — and the caller
-// publishes the trivial bound there.
+// own two held frame axes. Those axes, crossed exactly, are the same reference
+// direction normal_bound.go's Plane arm is judged against — an r3.Frame stores
+// no normal and rounds one out of that cross on every call — so the two bounds
+// this face publishes meet at one model and compose by the triangle inequality
+// rather than leaving that rounding uncharged between them. It reports ok false
+// wherever an enclosure fails to prove what a step needs — a directrix the body
+// does not publish as a straight pair of ends, a built normal not proven away
+// from zero, a tag frame whose axes do not cross to a direction proven away
+// from zero, or a sine not proven below one — and the caller publishes the
+// trivial bound there.
 func capPlaneDeparture(f *Face, b capPatchBuilt) (float64, bool) {
 	tag, okTag := f.surface.(Plane)
 	if !okTag {
 		return 0, false
 	}
-	n, okN := ivVec3Of(tag.Frame.N())
+	tagU, okU := ivVec3Of(tag.Frame.U())
+	tagV, okV := ivVec3Of(tag.Frame.V())
 	a0, a1, okS := capStraightEnds(b.sideDir)
 	b0, b1, okC := capStraightEnds(b.capDir)
-	if !okN || !okS || !okC {
+	if !okU || !okV || !okS || !okC {
 		return 0, false
 	}
+	n := ivVec3Cross(tagU, tagV)
 
 	// The bilinear patch's own normal N(u, v) = C0 + u·Cu + v·Cv, exactly.
 	p0 := ivVec3Sub(a1, a0)
@@ -551,14 +558,6 @@ func capAxesParallel(a, b r3.Vec) bool {
 		}
 	}
 	return true
-}
-
-func ivVec3Cross(a, b ivVec3) ivVec3 {
-	return ivVec3{
-		intervalSub(intervalMul(a[1], b[2]), intervalMul(a[2], b[1])),
-		intervalSub(intervalMul(a[2], b[0]), intervalMul(a[0], b[2])),
-		intervalSub(intervalMul(a[0], b[1]), intervalMul(a[1], b[0])),
-	}
 }
 
 // coneTagRadius is the radius a circular patch's own tag carries at its origin

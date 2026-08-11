@@ -1,6 +1,7 @@
 package decad_test
 
 import (
+	"fmt"
 	"math"
 	"math/big"
 	"testing"
@@ -16,10 +17,10 @@ import (
 // normal_bound.go). The reading is a DIRECTION, so it is Exact only where the
 // float triple handed back really is the exact unit normal of the surface the
 // face is tagged with — and two ordinary constructions leave it not being one:
-// a rotated placement, whose cap frame normal is the rounded image of a
-// rotation and so is no longer of unit length, and any cone at all, whose
-// normal is assembled from a float cosine and sine that do not satisfy
-// cos² + sin² = 1.
+// a rotated placement, whose cap frame normal is the rounded cross product of
+// two rounded axes and so is neither of unit length nor exactly perpendicular
+// to the plane those axes span, and any cone at all, whose normal is assembled
+// from a float cosine and sine that do not satisfy cos² + sin² = 1.
 
 // normalFaceByRole finds the one face carrying the named feature role.
 func normalFaceByRole(t *testing.T, b *decad.Body, role string) *decad.Face {
@@ -116,6 +117,11 @@ func alongDefectSq(n r3.Vec, w ratVec) *big.Rat {
 func armDefectSq(t *testing.T, f *decad.Face, p r3.Vec, n r3.Vec) *big.Rat {
 	t.Helper()
 	switch s := f.Surface().(type) {
+	case decad.Plane:
+		// r3.Frame holds its two in-plane axes and derives the normal as their
+		// cross product on every call, so the exact direction is that cross
+		// taken over rationals and the arm's reading is its rounded image.
+		return perpDefectSq(n, ratVecCross(ratVecOf(s.Frame.U()), ratVecOf(s.Frame.V())))
 	case decad.Cylinder:
 		return perpDefectSq(n, axialRadialOf(p, s.Origin, s.Axis))
 	case decad.Sphere:
@@ -254,6 +260,75 @@ func TestNormalAtExactnessIsProven(t *testing.T) {
 	})
 }
 
+// TestNormalAtPlaneArmCoversItsFrameCross is the Plane arm's own contract, and
+// it needs its own test because the plate's six faces are all Plane and the
+// one-of-a-kind lookup below can name none of them. r3.Frame holds only its
+// origin and its two in-plane axes and derives the normal as their cross
+// product on EVERY call, so what the arm hands back is six products and three
+// differences, each rounded — not a stored fact. A bound covering only the
+// triple's unit-length defect understates that, and this rotation is one an
+// ordinary caller reaches: it leaves two of the plate's six faces reading a
+// direction measurably off the exact cross of their own frame axes.
+func TestNormalAtPlaneArmCoversItsFrameCross(t *testing.T) {
+	s, p := plateSketch(t)
+	body, err := decad.New().Extrude(s, p, decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
+	require.NoError(t, err)
+	placed, err := body.Placed(planeArmSpin(t))
+	require.NoError(t, err)
+
+	faces := placed.Faces()
+	require.Len(t, faces, 6, `the plate is bounded by six planes`)
+	departed := 0
+	for i, f := range faces {
+		at := f.Surface().(decad.Plane).Frame.Origin()
+		n, err := f.NormalAt(at)
+		require.NoError(t, err)
+		bound, err := n.Bound.In(units.One)
+		require.NoError(t, err)
+
+		defectSq := armDefectSq(t, f, at, n.Value)
+		requireBoundCoversDefect(t, bound, defectSq, fmt.Sprintf(`face %d`, i))
+		length := unitDefect(n.Value)
+		lengthDefect, _ := length.Float64()
+		require.GreaterOrEqual(t, bound, lengthDefect, `face %d: the bound must cover the unit-length defect too`, i)
+		if defectSq.Sign() > 0 {
+			departed++
+		}
+	}
+	// Without this the loop would pass against a bound that charged the
+	// direction nothing: what makes it a proof is that the cross product really
+	// did leave the exact answer on this placement.
+	require.Positive(t, departed, `the placement must genuinely tilt a frame's own cross product`)
+}
+
+// planeArmSpin is the rotation the Plane arm's contract is read under: the
+// plate is drawn at the sketch origin and carried away from the world origin by
+// the placement alone, so no platform's arrangement of the section is left
+// deciding a weld band.
+func planeArmSpin(t *testing.T) r3.Transform {
+	t.Helper()
+	spin, err := r3.Rotation(
+		r3.NewVec(-1.0356782981096022, 0.5660898094817096, 0.19792151244355746),
+		units.Degrees(129.7127487549914),
+	)
+	require.NoError(t, err)
+	return spin
+}
+
+// plateCapFace extrudes the plate drawn at the sketch origin and returns the
+// face carrying the named cap role, under motion when one is given.
+func plateCapFace(t *testing.T, role string, motion *r3.Transform) *decad.Face {
+	t.Helper()
+	s, p := plateSketch(t)
+	body, err := decad.New().Extrude(s, p, decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
+	require.NoError(t, err)
+	if motion != nil {
+		body, err = body.Placed(*motion)
+		require.NoError(t, err)
+	}
+	return normalFaceByRole(t, body, role)
+}
+
 // placedFace evaluates build, optionally under motion, and returns the one
 // face carrying kind. Reading the surface's own published parameters back off
 // that face is what lets every fixture below name its sample point in the
@@ -331,14 +406,15 @@ func holeWallBody(t *testing.T) *decad.Body {
 	return body
 }
 
-// TestNormalAtArmBoundCoversItsOwnDefect is the same contract on the three
-// arms whose exact normal is a projection rather than a stored vector:
-// Cylinder, Sphere and Torus. Each row reads one face's own published surface
-// parameters, samples the reading at a point named in that surface's own
-// frame, and measures — over exact rationals, never a float residual — how far
-// the float triple the arm handed back sits from the exact unit normal those
-// parameters give. A bound below that distance is an understatement, whatever
-// exactness it publishes beside it.
+// TestNormalAtArmBoundCoversItsOwnDefect is the same contract on the arms
+// whose exact normal is a computation off the tag's own held numbers, which is
+// every one of them: Plane — whose frame derives its normal as a cross product
+// on every call — along with Cylinder, Sphere and Torus. Each row reads one
+// face's own published surface parameters, samples the reading at a point named
+// in that surface's own frame, and measures — over exact rationals, never a
+// float residual — how far the float triple the arm handed back sits from the
+// exact unit normal those parameters give. A bound below that distance is an
+// understatement, whatever exactness it publishes beside it.
 func TestNormalAtArmBoundCoversItsOwnDefect(t *testing.T) {
 	spin, err := r3.Rotation(r3.NewVec(1, 2, 3), units.Degrees(37))
 	require.NoError(t, err)
@@ -384,6 +460,22 @@ func TestNormalAtArmBoundCoversItsOwnDefect(t *testing.T) {
 		at    func(t *testing.T) (*decad.Face, r3.Vec, r3.Vec)
 		exact bool
 	}{
+		{
+			name: `a plate cap on a world axis is exact`,
+			at: func(t *testing.T) (*decad.Face, r3.Vec, r3.Vec) {
+				f := plateCapFace(t, roleCapEnd, nil)
+				return f, f.Surface().(decad.Plane).Frame.Origin(), r3.NewVec(0, 0, 1)
+			},
+			exact: true,
+		},
+		{
+			name: `a placed plate cap carries its frame cross product's own rounding`,
+			at: func(t *testing.T) (*decad.Face, r3.Vec, r3.Vec) {
+				motion := planeArmSpin(t)
+				f := plateCapFace(t, roleCapEnd, &motion)
+				return f, f.Surface().(decad.Plane).Frame.Origin(), motion.ApplyDir(r3.NewVec(0, 0, 1))
+			},
+		},
 		{
 			name: `a cylinder wall on a world axis is exact`,
 			at: func(t *testing.T) (*decad.Face, r3.Vec, r3.Vec) {

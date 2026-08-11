@@ -22,9 +22,10 @@ import (
 // an arm hands back, and the bound below covers both:
 //
 //   - The ARITHMETIC the arm runs. A difference of two points, a projection
-//     onto the axis, a normalization, and — for a Cone — a cosine and a sine
-//     of the held half angle are each rounded, and none of them is charged
-//     anywhere else.
+//     onto the axis, a normalization, the cross product an r3.Frame derives a
+//     Plane's normal from on every call — it stores its two in-plane axes and
+//     no normal at all — and, for a Cone, a cosine and a sine of the held half
+//     angle are each rounded, and none of them is charged anywhere else.
 //   - The held tag's own departure from the UNIT length a direction must
 //     have. A placed cap's frame normal is the rounded image of a rotation,
 //     so its length is not exactly one; a vector of length 1+e is not the
@@ -89,6 +90,14 @@ func ivVec3Sub(a, b ivVec3) ivVec3 {
 
 func ivVec3Mul(a ivVec3, s ratInterval) ivVec3 {
 	return ivVec3{intervalMul(a[0], s), intervalMul(a[1], s), intervalMul(a[2], s)}
+}
+
+func ivVec3Cross(a, b ivVec3) ivVec3 {
+	return ivVec3{
+		intervalSub(intervalMul(a[1], b[2]), intervalMul(a[2], b[1])),
+		intervalSub(intervalMul(a[2], b[0]), intervalMul(a[0], b[2])),
+		intervalSub(intervalMul(a[0], b[1]), intervalMul(a[1], b[0])),
+	}
 }
 
 func ivVec3Dot(a, b ivVec3) ratInterval {
@@ -181,16 +190,22 @@ func axialRadialExact(p, origin, axis r3.Vec) (ivVec3, bool) {
 	return ivVec3Sub(rel, ivVec3Mul(ai, share)), true
 }
 
-// planeNormalAllow bounds the Plane arm's own reading. The arm computes
-// nothing — it hands back the tag's stored frame normal — so the whole bound
-// is that vector's distance from the unit direction it names, which is zero
-// exactly when the held normal is already of length one.
-func planeNormalAllow(n r3.Vec) (float64, normalStatus) {
-	exact, ok := ivVec3Of(n)
-	if !ok {
+// planeNormalAllow bounds the Plane arm's own reading. An r3.Frame stores no
+// normal — it holds its origin and its two in-plane axes, and derives the
+// normal as their cross product on every call — so the arm computes six
+// products and three differences, each rounded, and the exact answer is the
+// unit vector of the EXACT cross of those two held axes. The bound covers both
+// halves of the distance to it: the cross product's own rounding and the
+// resulting triple's departure from unit length. It is zero exactly where the
+// held axes cross exactly and give a unit result, which is every axis-aligned
+// frame.
+func planeNormalAllow(fr r3.Frame, held r3.Vec) (float64, normalStatus) {
+	u, okU := ivVec3Of(fr.U())
+	v, okV := ivVec3Of(fr.V())
+	if !okU || !okV {
 		return 0, normalUnproven
 	}
-	return unitDirAllow(exact, n)
+	return unitDirAllow(ivVec3Cross(u, v), held)
 }
 
 // axialNormalAllow bounds the Cylinder arm's reading: its exact normal is the
