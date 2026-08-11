@@ -182,8 +182,9 @@ type triContact struct {
 // lifts and exact normals, all read-only fields of ma/mb, so a stored answer
 // for (i, j) stays correct for as long as ma and mb do — which is exactly one
 // evaluateBoolean call, the memo's whole lifetime. Binding ma/mb into the
-// memo itself, rather than taking them per call, makes it impossible to key
-// an answer for one operand pair and read it back for another.
+// memo itself, rather than taking them per call, means no ask names an
+// operand, so a caller cannot key an answer for one operand pair and read it
+// back for another.
 //
 // A returned triContact is shared: its p0/p1 endpoints and its sin2 are
 // *big.Rat values a second caller reads, never a fresh copy. Every consumer
