@@ -13,22 +13,33 @@ import (
 
 // This file is docs/prism-boolean-design.md PR2's black-box test suite
 // (§14, §15): the clean-nesting structural match for Cut and Intersect.
-// discBody (prism_boolean_displacement_test.go), boxBody (clearance_test.go)
-// and anyFaceIsFaceted (prism_boolean_test.go) are the shared helpers.
+// discBody (prism_boolean_bounds_test.go), boxBody (clearance_test.go) and
+// anyFaceIsFaceted (prism_boolean_test.go) are the shared helpers.
+//
+// The two tests of the resolved analytic path draw circular sections, because
+// what they assert is that the tool's own recorded CircleSeg carries through
+// byte-identical. Every fallback test instead draws a rectangular section: it
+// asserts which gate the pair misses and that the mesh path's own result is
+// unchanged, and neither depends on the section's curve kinds. The choice is a
+// cost one. The mesh path tessellates both operands at a chord tolerance
+// derived from the pair's own diameter (boolean.go's boolChordFactor), so a
+// circular loop's facet count is scale-invariant at a few hundred segments,
+// and the facet-pair classification that follows is quadratic in exactly that
+// count; a rectangular loop costs four segments at any size. Curved operands
+// through the mesh path are covered by boolean_test.go's own suite.
 
-// discBodySymmetric extrudes a radius-r circle at (cx, cy) symmetrically
-// about its own sketch plane, spanning [-half, +half] — used to keep a
-// fallback fixture's tool clear of the target's own cap planes (a cap
+// boxBodySymmetric extrudes the axis-aligned rectangle (x0, y0)-(x1, y1)
+// symmetrically about its own sketch plane, spanning [-half, +half] — used to
+// keep a fallback fixture's tool clear of the target's own cap planes (a cap
 // coincidence is a coplanar contact the mesh path refuses on its own,
 // independent of this design, and is not what these fallback tests probe).
-func discBodySymmetric(t *testing.T, doc *decad.Document, cx, cy, r, half float64) *decad.Body {
+func boxBodySymmetric(t *testing.T, doc *decad.Document, x0, y0, x1, y1, half float64) *decad.Body {
 	t.Helper()
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	require.NoError(t, err)
-	center := s.CreatePoint(cx, cy)
-	s.Fix(center)
-	s.CreateCircle(center, r)
+	rect := s.CreateRectangle(x0, y0, x1, y1)
+	s.Fix(rect.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	body, err := doc.Extrude(s, s.Profiles()[0], decad.Symmetric{D: units.Millimeters(half)})
@@ -36,18 +47,17 @@ func discBodySymmetric(t *testing.T, doc *decad.Document, cx, cy, r, half float6
 	return body
 }
 
-// washerBodySymmetric extrudes an annulus (outer radius rOuter, inner hole
-// rInner) at (cx, cy) symmetrically about its own sketch plane — G6's holed
-// Cut-tool fixture (§15).
-func washerBodySymmetric(t *testing.T, doc *decad.Document, cx, cy, rOuter, rInner, half float64) *decad.Body {
+// holedBoxSymmetric extrudes a square annulus (outer half-width outer, inner
+// square hole of half-width inner, both centered on the origin) symmetrically
+// about its own sketch plane — G6's holed Cut-tool fixture (§15).
+func holedBoxSymmetric(t *testing.T, doc *decad.Document, outer, inner, half float64) *decad.Body {
 	t.Helper()
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	require.NoError(t, err)
-	center := s.CreatePoint(cx, cy)
-	s.Fix(center)
-	s.CreateCircle(center, rOuter)
-	s.CreateCircle(center, rInner)
+	rect := s.CreateRectangle(-outer, -outer, outer, outer)
+	s.Fix(rect.A)
+	s.CreateRectangle(-inner, -inner, inner, inner)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	var prof *sketch.Profile
@@ -56,14 +66,14 @@ func washerBodySymmetric(t *testing.T, doc *decad.Document, cx, cy, rOuter, rInn
 			prof = p
 		}
 	}
-	require.NotNil(t, prof, `the washer's holed region should exist`)
+	require.NotNil(t, prof, `the annulus's holed region should exist`)
 	body, err := doc.Extrude(s, prof, decad.Symmetric{D: units.Millimeters(half)})
 	require.NoError(t, err)
 	return body
 }
 
-// cylinderWall returns the one Cylinder-surfaced face of b — every fixture
-// in this file is a plain disc or washer, so exactly one exists.
+// cylinderWall returns the one Cylinder-surfaced face of b — every circular
+// fixture in this file is a plain disc, so exactly one exists.
 func cylinderWall(t *testing.T, b *decad.Body) decad.Cylinder {
 	t.Helper()
 	faces, err := decad.Faces(decad.Cylindrical()).Exactly(1).SelectFaces(b)
@@ -206,16 +216,17 @@ func TestPrismCutDisjointFootprintFallsBack(t *testing.T) {
 }
 
 // TestPrismCutG5FallsBackWhenToolDoesNotSpanTarget is §15's G5 fallback for
-// Cut: a bore shorter than the target's own height falls back to the mesh
-// path's own blind-hole result, unchanged. The tool is built symmetrically
+// Cut: a pocketing tool shorter than the target's own height falls back to the
+// mesh path's own blind-hole result, unchanged. The tool is built symmetrically
 // about the shared sketch plane so its own caps land clear of the target's —
 // a coincident cap plane is the mesh path's own separate, pre-existing
 // coplanar-contact limitation (§1), not what G5 is under test for here.
 func TestPrismCutG5FallsBackWhenToolDoesNotSpanTarget(t *testing.T) {
-	const R, r, h = 10.0, 3.0, 10.0
+	// half and toolHalf are the two footprints' own half-widths.
+	const half, toolHalf, h, reach = 10.0, 3.0, 10.0, 2.0
 	doc := decad.New()
-	target := discBody(t, doc, 0, R, h)
-	tool := discBodySymmetric(t, doc, 0, 0, r, 2) // z: -2..2, short of target's z1 = 10
+	target := boxBody(t, doc, -half, -half, half, half, h)                            // z: 0..10
+	tool := boxBodySymmetric(t, doc, -toolHalf, -toolHalf, toolHalf, toolHalf, reach) // z: -2..2, short of target's z1 = 10
 
 	got, err := decad.Cut(target, tool)
 	require.NoError(t, err)
@@ -225,7 +236,7 @@ func TestPrismCutG5FallsBackWhenToolDoesNotSpanTarget(t *testing.T) {
 	require.NoError(t, err)
 	// Only the tool's positive half (z 0..2) actually removes material; its
 	// negative half sticks out below the target's own bottom cap.
-	want := R*R*math.Pi*h - r*r*math.Pi*2
+	want := 4*half*half*h - 4*toolHalf*toolHalf*reach
 	require.LessOrEqual(t, math.Abs(volumeMM(t, vol)-want), boundMM3(t, vol))
 }
 
@@ -237,13 +248,12 @@ func TestPrismCutG5FallsBackWhenToolDoesNotSpanTarget(t *testing.T) {
 // pre-existing coplanar-cap contact limitation, unaffected by this design.
 func TestPrismIntersectG5FallsBackOnDisjointZIntervals(t *testing.T) {
 	doc := decad.New()
-	a := discBody(t, doc, 0, 5, 10) // z: 0..10
+	a := boxBody(t, doc, -5, -5, 5, 5, 10) // z: 0..10
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	require.NoError(t, err)
-	center := s.CreatePoint(0, 0)
-	s.Fix(center)
-	s.CreateCircle(center, 5)
+	rect := s.CreateRectangle(-5, -5, 5, 5)
+	s.Fix(rect.A)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	b, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(3), Dir: decad.Against}) // z: -3..0
@@ -263,45 +273,48 @@ func TestPrismIntersectG5FallsBackOnDisjointZIntervals(t *testing.T) {
 // would have dropped, since its clean-nesting match describes the removed
 // tool as ONE new hole, sound only while the tool is hole-free (G6).
 func TestPrismCutG6HoledToolFallsBackKeepingTheStandingPost(t *testing.T) {
-	const R, rOuter, rInner, h = 15.0, 8.0, 3.0, 10.0
+	// half, outer and inner are the three footprints' own half-widths.
+	const half, outer, inner, h = 15.0, 8.0, 3.0, 10.0
 	doc := decad.New()
-	target := discBody(t, doc, 0, R, h)
-	tool := washerBodySymmetric(t, doc, 0, 0, rOuter, rInner, 11) // spans target fully, caps clear of it
+	target := boxBody(t, doc, -half, -half, half, half, h)
+	tool := holedBoxSymmetric(t, doc, outer, inner, 11) // spans target fully, caps clear of it
 
 	got, err := decad.Cut(target, tool)
 	require.NoError(t, err)
 	require.True(t, anyFaceIsFaceted(got), `a holed tool is not the clean-nesting shape (G6)`)
 
-	// The washer's own hole leaves a standing post: a second, disconnected
+	// The annulus's own hole leaves a standing post: a second, disconnected
 	// lump inside the cavity the annulus cut.
 	require.Len(t, got.Lumps(), 2, `the post the tool's hole spares stands as its own lump`)
 
 	vol, err := got.Volume()
 	require.NoError(t, err)
-	want := math.Pi * (R*R - rOuter*rOuter + rInner*rInner) * h
+	want := 4 * (half*half - outer*outer + inner*inner) * h
 	require.LessOrEqual(t, math.Abs(volumeMM(t, vol)-want), boundMM3(t, vol),
 		`the standing post's volume must not be dropped from the result`)
 }
 
-// TestPrismCutCrossingBoreFallsBackWithNoAnalyticError is §15's crossing-pair
-// case: a bore that pokes outside the hub cuts the hub's own boundary, so
-// its edges are Partial and the structural match fails — the pair reaches
-// the mesh path with no error surfaced from the analytic attempt itself.
-func TestPrismCutCrossingBoreFallsBackWithNoAnalyticError(t *testing.T) {
-	const R, r, h = 10.0, 3.0, 10.0
-	const cx, d = 9.0, 9.0 // the bore's own center distance from the hub's
+// TestPrismCutCrossingToolFallsBackWithNoAnalyticError is §15's crossing-pair
+// case: a tool that pokes outside the target cuts the target's own boundary, so
+// its edges are Partial and the structural match fails — the pair reaches the
+// mesh path with no error surfaced from the analytic attempt itself.
+func TestPrismCutCrossingToolFallsBackWithNoAnalyticError(t *testing.T) {
+	// half is the target's own footprint half-width.
+	const half, h = 10.0, 10.0
+	// The tool's own footprint straddles the target's wall at x = half: it
+	// enters at x = 7 and its far wall stands outside at x = 13, so two of its
+	// four edges are cut by the arrangement.
+	const x0, x1, y = 7.0, 13.0, 3.0
 	doc := decad.New()
-	target := discBody(t, doc, 0, R, h)
-	tool := discBodySymmetric(t, doc, cx, 0, r, 20) // pokes outside the hub's own rim at x = R
+	target := boxBody(t, doc, -half, -half, half, half, h)
+	tool := boxBodySymmetric(t, doc, x0, -y, x1, y, 20) // spans the target's full height
 
 	got, err := decad.Cut(target, tool)
 	require.NoError(t, err, `the crossing pair must reach the mesh path cleanly, no analytic-resolution error`)
 	require.True(t, anyFaceIsFaceted(got))
 
-	alpha := math.Acos((d*d + R*R - r*r) / (2 * d * R))
-	beta := math.Acos((d*d + r*r - R*R) / (2 * d * r))
-	lens := R*R*alpha + r*r*beta - 0.5*math.Sqrt((-d+R+r)*(d+R-r)*(d-R+r)*(d+R+r))
-	want := R*R*math.Pi*h - lens*h
+	overlap := (half - x0) * 2 * y // only the part of the tool inside the target removes material
+	want := 4*half*half*h - overlap*h
 
 	vol, err := got.Volume()
 	require.NoError(t, err)
