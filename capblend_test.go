@@ -672,10 +672,13 @@ func TestCapBlendUndercutSurvey(t *testing.T) {
 	}
 }
 
-// TestCapBlendMinRadiusMatchesUnchamferedSection checks DX8: the receiver's
-// own MinRadius survey (an unchamfered plate with a hole) must equal the
-// chamfered body's own MinRadius reading exactly — the new patches never
-// tighten it, per capBlendMinRadius's own proof.
+// TestCapBlendMinRadiusMatchesUnchamferedSection checks DX8: chamfering this
+// plate's cap loop also chamfers its hole rim into a whole-turn Cone patch,
+// whose own held half-angle only encloses a cosine and sine rather than
+// fixing them exactly — so the patch is not proven to be the surface it
+// publishes even unplaced, and the survey now refuses instead of publishing
+// an answer the patch set does not support, while the receiver's own reading
+// is unaffected.
 func TestCapBlendMinRadiusMatchesUnchamferedSection(t *testing.T) {
 	_, box := plateWithDiskHole(t, 50, 50, 10)
 	doc := box.Document()
@@ -689,8 +692,33 @@ func TestCapBlendMinRadiusMatchesUnchamferedSection(t *testing.T) {
 	after, err := chamfered.Document().Verify(t.Context(), decad.WithMinRadius())
 	require.NoError(t, err)
 	require.Len(t, after.Bodies, 1)
-	require.NotNil(t, after.Bodies[0].MinRadius)
-	require.InDelta(t, before.Bodies[0].MinRadius.Value.Mag(), after.Bodies[0].MinRadius.Value.Mag(), 1e-9)
+	require.Nil(t, after.Bodies[0].MinRadius)
+	require.True(t, hasDiagnostic(after, decad.DiagUndecidedMinRadius))
+	require.Equal(t, decad.Suspect, after.Bodies[0].Status)
+}
+
+// TestCapBlendMinRadiusStillAnsweredOnPlaneOnlyBand keeps a case where DX8
+// still answers: a rectangle's sharp cap-loop corners meet two straight
+// walls directly, with no separate vertex patch at all, so every patch of
+// the band is an axis-aligned `Plane` whose own stamped departure is an
+// exact zero unplaced — the survey still returns the receiver's own proven
+// absence of a concave feature with no refusal diagnostic.
+func TestCapBlendMinRadiusStillAnsweredOnPlaneOnlyBand(t *testing.T) {
+	_, box := capBlendBox(t)
+	doc := box.Document()
+	before, err := doc.Verify(t.Context(), decad.WithMinRadius())
+	require.NoError(t, err)
+	require.Len(t, before.Bodies, 1)
+	require.Nil(t, before.Bodies[0].MinRadius, "a plain rectangle has no concave feature")
+
+	chamfered, err := box.Chamfer(capLoopEdges(box), units.Millimeters(5))
+	require.NoError(t, err)
+	after, err := chamfered.Document().Verify(t.Context(), decad.WithMinRadius())
+	require.NoError(t, err)
+	require.Len(t, after.Bodies, 1)
+	require.Nil(t, after.Bodies[0].MinRadius, "a proven absence, not a refusal")
+	require.False(t, hasDiagnostic(after, decad.DiagUndecidedMinRadius))
+	require.Equal(t, decad.Sound, after.Bodies[0].Status)
 }
 
 // TestCapBlendStartCapVolumeMatchesEndCap is a regression check for the

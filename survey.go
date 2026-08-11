@@ -1127,7 +1127,7 @@ func runSurveys(budget *workBudget, br *BodyReport, cfg verifyConfig) ([]Diagnos
 		case cupPayload:
 			out, ok = cupMinRadius(pl)
 		case capBlendPayload:
-			out, ok = capBlendMinRadius(pl)
+			out, ok = capBlendMinRadius(b, pl)
 		case facetedPayload:
 			out.reason = surveyFacetedUnsupported
 		}

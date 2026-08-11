@@ -2,6 +2,7 @@ package decad_test
 
 import (
 	"math"
+	"strings"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
@@ -434,20 +435,73 @@ func TestCapBlendMinRadiusUndecidedOnMiteredBand(t *testing.T) {
 	require.True(t, hasDiagnostic(report, decad.DiagUndecidedMinRadius))
 }
 
-// TestCapBlendMinRadiusStillAnsweredOnUnmiteredBand keeps DX8's shipped answer
-// where the patches really are the surfaces they publish: a whole-turn band
-// has one window, no ruling leaves its cone, and the survey still returns the
-// proven all-convex reading with no refusal diagnostic at all.
-func TestCapBlendMinRadiusStillAnsweredOnUnmiteredBand(t *testing.T) {
+// TestCapBlendMinRadiusUndecidedOnCircularBand covers DX8: a whole-turn band
+// has one window, so capPatchWindowSkew never rules it out, but its single
+// Cone patch's own tag is only enclosed — the held half-angle's cosine and
+// sine are never exact — so the patch is not proven to be the surface it
+// publishes even unplaced, and the survey refuses rather than answering.
+func TestCapBlendMinRadiusUndecidedOnCircularBand(t *testing.T) {
 	body := circleProfile(t, 20, 10)
 	chamfered, err := body.Chamfer(capLoopEdges(body), units.Millimeters(2))
 	require.NoError(t, err)
 	report, err := chamfered.Document().Verify(t.Context(), decad.WithMinRadius())
 	require.NoError(t, err)
 	require.Len(t, report.Bodies, 1)
-	require.Nil(t, report.Bodies[0].MinRadius, "a proven absence, not a refusal")
-	require.False(t, hasDiagnostic(report, decad.DiagUndecidedMinRadius))
-	require.Equal(t, decad.Sound, report.Bodies[0].Status)
+	require.Nil(t, report.Bodies[0].MinRadius)
+	require.True(t, hasDiagnostic(report, decad.DiagUndecidedMinRadius))
+	require.Equal(t, decad.Suspect, report.Bodies[0].Status)
+}
+
+// TestCapBlendMinRadiusUndecidedOnPlacedBand covers DX8's placement gate
+// (docs/modify-reach-design.md §8.3): the same band that answers unplaced
+// (TestCapBlendMinRadiusMatchesUnchamferedSection's receiver-matching case)
+// is undecided once placed away from the world origin, because the
+// placement's own independent rounding of every emitted coordinate leaves
+// the built patch off its published tag by a proven, nonzero amount.
+func TestCapBlendMinRadiusUndecidedOnPlacedBand(t *testing.T) {
+	_, box := plateWithDiskHole(t, 50, 50, 10)
+	chamfered, err := box.Chamfer(decad.Edges(decad.CreatedBy(decad.CapEnd(box)), decad.LongerThan(units.Millimeters(50))), units.Millimeters(3))
+	require.NoError(t, err)
+
+	rot, err := r3.Rotation(r3.NewVec(1, 2, 3), units.Degrees(37))
+	require.NoError(t, err)
+	trans, err := r3.Translation(r3.NewVec(1e6, -2.5e5, 8e4))
+	require.NoError(t, err)
+	motion, err := rot.Then(trans)
+	require.NoError(t, err)
+	placed, err := chamfered.Placed(motion)
+	require.NoError(t, err)
+
+	report, err := placed.Document().Verify(t.Context(), decad.WithMinRadius())
+	require.NoError(t, err)
+	require.Len(t, report.Bodies, 1)
+	require.Nil(t, report.Bodies[0].MinRadius)
+	require.True(t, hasDiagnostic(report, decad.DiagUndecidedMinRadius))
+	require.Equal(t, decad.Suspect, report.Bodies[0].Status)
+
+	// The geometry that forces the refusal: a placed band patch's own
+	// NormalAt bound at one of its own boundary vertices is not zero — the
+	// built patch's own published numbers do not put it on its tag.
+	var patch *decad.Face
+	for _, f := range placed.Faces() {
+		for _, o := range f.Origins() {
+			if strings.HasPrefix(o.Role, "chamferCap(") {
+				patch = f
+				break
+			}
+		}
+		if patch != nil {
+			break
+		}
+	}
+	require.NotNil(t, patch, "the placed body still carries its chamfer patches")
+	v := patch.Loops()[0].CoEdges()[0].Start().Position().Value
+	n, err := patch.NormalAt(v)
+	require.NoError(t, err)
+	bound, err := n.Bound.In(units.One)
+	require.NoError(t, err)
+	require.Greater(t, bound, 1e-12,
+		"a placed patch's own published normal does not sit exactly on its tag")
 }
 
 func hasDiagnostic(report *decad.Report, code decad.DiagnosticCode) bool {
