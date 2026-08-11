@@ -2,6 +2,7 @@ package decad_test
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"math/big"
@@ -1995,4 +1996,101 @@ func TestCapBlendWholeCircleInheritsComputedCapLevelBound(t *testing.T) {
 		top++
 	}
 	require.Equal(t, 1, top, `the whole-circle cap seam keeps its level bound`)
+}
+
+// concentricDiskWithHole extrudes an annulus — a disk of radius R holding a
+// concentric hole of radius r, both centred at the origin — by h. Both loops
+// are whole circles, so chamfering the end cap mints exactly two whole-turn
+// Cone patches, one per loop.
+func concentricDiskWithHole(t *testing.T, R, r, h float64) *decad.Body {
+	t.Helper()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	c := s.CreatePoint(0, 0)
+	s.Fix(c)
+	s.CreateCircle(c, R)
+	s.CreateCircle(c, r)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+
+	var prof *sketch.Profile
+	for _, p := range s.Profiles() {
+		if len(p.Outer) == 1 && len(p.Holes) == 1 {
+			prof = p
+			break
+		}
+	}
+	require.NotNil(t, prof, `the annulus region should exist`)
+
+	doc := decad.New()
+	body, err := doc.Extrude(s, prof, decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+	require.NoError(t, err)
+	return body
+}
+
+// TestCapBlendFarPlacementOrientationRefusal pins fu153: fixPatchOrientation
+// used to drop Face.NormalAt's own error and leave a patch's outward
+// orientation whatever it was constructed with. A holed disk's end-cap
+// chamfer placed 2^60 mm along one plane axis rounds the build's own
+// orientation sample onto the cone axis, so NormalAt refuses there and the
+// build must refuse too (SX15, docs/modify-reach-design.md §4) rather than
+// publish a hole patch whose outward side was never checked.
+func TestCapBlendFarPlacementOrientationRefusal(t *testing.T) {
+	const R, r, h, d = 4.0, 1.5, 6.0, 0.5
+	body := concentricDiskWithHole(t, R, r, h)
+	chamfered, err := body.Chamfer(capLoopEdgesOn(body, true), units.Millimeters(d))
+	require.NoError(t, err)
+
+	far, err := r3.Translation(r3.NewVec(math.Ldexp(1, 60), 0, 0))
+	require.NoError(t, err)
+	_, err = chamfered.Placed(far)
+	require.Error(t, err)
+	require.ErrorIs(t, err, decad.ErrUnsupported)
+	require.False(t, errors.Is(err, decad.ErrDegenerate),
+		`ErrDegenerate and ErrUnsupported are opposite existence claims; only one may ride along`)
+
+	// The near placement is unaffected: the build's orientation sample stays
+	// far from the cone axis, so this is the hole patch's outward normal as
+	// fixPatchOrientation decides it when NormalAt succeeds.
+	near, err := r3.Translation(r3.NewVec(1000, 0, 0))
+	require.NoError(t, err)
+	nearBody, err := chamfered.Placed(near)
+	require.NoError(t, err)
+
+	// The hole's cap-level radius grows from r to r+d (a countersink widens a
+	// hole), while the outer wall's cap-level radius shrinks from R to R-d —
+	// the hole patch is the smaller of the two chamferCap(end,...) Cone
+	// patches.
+	var holePatch *decad.Face
+	holeRadius := math.Inf(1)
+	for _, f := range nearBody.Faces() {
+		isBand := false
+		for _, o := range f.Origins() {
+			if strings.HasPrefix(o.Role, "chamferCap(end,") {
+				isBand = true
+			}
+		}
+		if !isBand || f.Surface().Kind() != decad.KindCone {
+			continue
+		}
+		p := f.Loops()[0].CoEdges()[0].Start().Position().Value
+		radius := math.Hypot(p.X-1000, p.Y)
+		if radius < holeRadius {
+			holeRadius = radius
+			holePatch = f
+		}
+	}
+	require.NotNil(t, holePatch)
+	require.Less(t, holeRadius, R-d, `the hole patch's cap radius stays under the outer wall's`)
+
+	capRadius := r + d
+	n, err := holePatch.NormalAt(r3.NewVec(1000, capRadius, h))
+	require.NoError(t, err)
+	require.InDelta(t, 0.0, n.Value.X, 1e-12)
+	require.InDelta(t, -0.7071067811865476, n.Value.Y, 1e-12)
+	require.InDelta(t, 0.7071067811865475, n.Value.Z, 1e-12)
+	bound, err := n.Bound.In(units.One)
+	require.NoError(t, err)
+	require.Less(t, bound, 1e-12)
 }
