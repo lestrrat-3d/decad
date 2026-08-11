@@ -1,6 +1,7 @@
 package decad
 
 import (
+	"fmt"
 	"math"
 	"math/big"
 	"testing"
@@ -99,6 +100,130 @@ func quarterDiskSection(cx, cy, r float64) func(*sketch.Sketch) {
 	}
 }
 
+// chamferedRectFlatPatches chamfers a 100x60 rectangular plate's end cap loop
+// and places it under motion, returning its four FLAT (Plane-tagged,
+// non-circular) band patches read back as the survey reads them. A polygon's
+// corners chamfer to Plane patches only — there is no circular wall to
+// contribute a Cone — so every patch this returns exercises the flat arm.
+func chamferedRectFlatPatches(t *testing.T, motion r3.Transform) []bandUnderTest {
+	t.Helper()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	rect := s.CreateRectangle(0, 0, 100, 60)
+	s.Fix(rect.A)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	require.Len(t, s.Profiles(), 1)
+
+	doc := New()
+	body, err := doc.Extrude(s, s.Profiles()[0], Distance{D: units.Millimeters(20), Dir: Along})
+	require.NoError(t, err)
+	chamfered, err := body.Chamfer(Edges(CreatedBy(CapEnd(body))), units.Millimeters(3))
+	require.NoError(t, err)
+	placed, err := chamfered.Placed(motion)
+	require.NoError(t, err)
+
+	cbp, ok := placed.payload.(capBlendPayload)
+	require.True(t, ok)
+	roles := facesByRole(placed)
+	pl := cbp.prismLike(cbp.z0, cbp.z1)
+	var out []bandUnderTest
+	for _, patch := range cbp.patches {
+		if patch.geom.circular {
+			continue
+		}
+		face := roles[patch.role]
+		require.NotNil(t, face)
+		require.Equal(t, KindPlane, face.Surface().Kind())
+		out = append(out, bandUnderTest{face: face, pl: pl, geom: patch.geom})
+	}
+	require.Len(t, out, 4, "a rectangle's four corners each chamfer to one flat patch")
+	return out
+}
+
+// placedFarMotion is the placement chamferedRectFlatPatches' callers use to
+// make a flat patch's own f.normalBound nonzero: a spin composed with a shift
+// far from the world origin, the same motion
+// TestCapPatchNormalRangeCoversWhatThePatchTakes uses to charge the circular
+// arm's own displacement term.
+func placedFarMotion(t *testing.T) r3.Transform {
+	t.Helper()
+	spin, err := r3.Rotation(r3.NewVec(1, 2, 3), units.Degrees(37))
+	require.NoError(t, err)
+	shift, err := r3.Translation(r3.NewVec(1000, 1000, 0))
+	require.NoError(t, err)
+	motion, err := spin.Then(shift)
+	require.NoError(t, err)
+	return motion
+}
+
+// TestCapPatchNormalRangeChargesAFlatPatchsDepartureOnce is the flat arm's own
+// half of fu154: a placed flat patch's Face.NormalAt already composes the
+// patch's departure from the Plane it publishes (normalMeasurement,
+// topology.go), so capPatchNormalRange's flat branch must take that bound
+// AS the allowance rather than add its own copy of it on top. An allowance
+// charging the departure twice covers the patch just as soundly, but chases
+// away the ~2x margin this test pins.
+func TestCapPatchNormalRangeChargesAFlatPatchsDepartureOnce(t *testing.T) {
+	motion := placedFarMotion(t)
+	pull, ok := r3.NewVec(1, 0.3, 0.2).Normalize()
+	require.True(t, ok)
+
+	for i, band := range chamferedRectFlatPatches(t, motion) {
+		t.Run(fmt.Sprintf("patch %d", i), func(t *testing.T) {
+			require.Positive(t, band.face.normalBound,
+				"a placed flat patch has a real departure from the plane it publishes")
+			lo, hi, allow, ok := capPatchNormalRange(band.face, band.pl, band.geom, pull)
+			require.True(t, ok)
+			require.Equal(t, lo, hi, "a flat patch's own normal component does not vary with position")
+			require.GreaterOrEqual(t, allow, band.face.normalBound, "the departure is still covered")
+			require.Less(t, allow, 1.2*band.face.normalBound, "the departure is covered only once")
+		})
+	}
+}
+
+// TestCapPatchNormalRangeCoversWhatAFlatPatchTakes is the correctness half:
+// the single allowance capPatchNormalRange reports for a flat patch, read at
+// its one sampled corner, must still bound Face.NormalAt's own published
+// bound everywhere else on the patch's quad — not only where it was sampled.
+func TestCapPatchNormalRangeCoversWhatAFlatPatchTakes(t *testing.T) {
+	motion := placedFarMotion(t)
+	pull, ok := r3.NewVec(1, 0.3, 0.2).Normalize()
+	require.True(t, ok)
+
+	for i, band := range chamferedRectFlatPatches(t, motion) {
+		t.Run(fmt.Sprintf("patch %d", i), func(t *testing.T) {
+			_, _, allow, ok := capPatchNormalRange(band.face, band.pl, band.geom, pull)
+			require.True(t, ok)
+
+			// The quad's own walk order (capblend_geom.go): sideA -> sideB
+			// along the original wall, sideB -> capB up the trailing slant,
+			// capB -> capA along the cap contour, capA -> sideA down the
+			// leading slant.
+			g := band.geom
+			corners := []r3.Vec{
+				band.pl.point(g.sideA.U, g.sideA.V, g.sideZ),
+				band.pl.point(g.sideB.U, g.sideB.V, g.sideZ),
+				band.pl.point(g.capB.U, g.capB.V, g.capZ),
+				band.pl.point(g.capA.U, g.capA.V, g.capZ),
+			}
+			points := append([]r3.Vec(nil), corners...)
+			for i, c := range corners {
+				points = append(points, c.Add(corners[(i+1)%len(corners)]).Scale(0.5))
+			}
+			for _, pt := range points {
+				n, err := band.face.NormalAt(pt)
+				require.NoError(t, err)
+				bound, err := n.Bound.In(units.One)
+				require.NoError(t, err)
+				require.LessOrEqual(t, bound*pull.Len(), allow,
+					"the reported allowance must cover every point of the patch, not only the one sampled")
+			}
+		})
+	}
+}
+
 // componentAt reads the band's own published normal component against the pull
 // at one azimuth of its window, beside the bound that reading publishes. It is
 // the survey's own sampling arm, used here as an INDEPENDENT witness: the
@@ -194,6 +319,8 @@ func TestCapPatchNormalRangeCoversWhatThePatchTakes(t *testing.T) {
 			band := chamferedCircularBand(t, tc.section, 10, 0.2, tc.motion)
 			lo, hi, allow, ok := capPatchNormalRange(band.face, band.pl, band.geom, pull)
 			require.True(t, ok)
+			require.GreaterOrEqual(t, allow, band.face.normalBound,
+				"the circular arm composes the patch's own departure inside capPatchNormalRange")
 
 			g := band.geom
 			if tc.centreFar > 0 {

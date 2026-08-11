@@ -35,11 +35,11 @@ import (
 // satisfies exactly — and it reads it at a POINT the survey itself computed,
 // which is not the azimuth the reading is then treated as. A decision that
 // keeps the sampled value and drops either gap answers for a direction the face
-// never claimed, so DX7 charges the whole distance from its sampled reading to
-// the patch's own exactly enclosed one (capblend_normal.go) and carries it into
-// the allowance the decision reads. It is what keeps a pull the reading cannot
-// separate from the patch's own tangent undecided rather than cleared, and no
-// all-clear is proven outright unless BOTH terms are proven zero.
+// never claimed, so capPatchNormalRange charges the whole distance from its
+// sampled reading to the patch's own exactly enclosed one (capblend_normal.go)
+// as part of the allowance it returns. It is what keeps a pull the reading
+// cannot separate from the patch's own tangent undecided rather than cleared,
+// and no all-clear is proven outright unless BOTH terms are proven zero.
 //
 // DX9 (the wall survey) stays deliberately Suspect: a cap blend is not one
 // constant section at one height, and the existing 2D spanning-disk proof
@@ -59,10 +59,13 @@ import (
 //
 // That range is the patch's own only where the patch's surface IS the one it
 // publishes. A circular patch's is not, so its reading is widened by the
-// departure the build already stamped on the face (capblend_departure.go), and
-// every patch's is widened by the whole distance its own readings can sit from
-// the surface it publishes (capPatchNormalRange). The existential listing and
-// universal all-clear rules then decide it per point: see the loop below.
+// departure the build already stamped on the face (capblend_departure.go);
+// every patch's reading is also widened by the whole distance its own readings
+// can sit from the surface it publishes. Both widenings are composed inside
+// capPatchNormalRange, so the reading it returns is already the complete
+// allowance — this survey reads it rather than composing it further. The
+// existential listing and universal all-clear rules then decide it per point:
+// see the loop below.
 func capBlendUndercuts(b *Body, cbp capBlendPayload, pull r3.Vec) undercutOutcome {
 	p, ok := pull.Normalize()
 	if !ok {
@@ -126,18 +129,14 @@ func capBlendUndercuts(b *Body, cbp capBlendPayload, pull r3.Vec) undercutOutcom
 		if !ok {
 			return undercutOutcome{}
 		}
-		// The two terms answer different questions, and the patch's own
-		// departure answers only the second. reading covers how far the range
-		// just read can sit from the range of the PUBLISHED surface's own
-		// normal component over this window — every way the survey's readings
-		// depart from that surface's exact model, which this survey may not
-		// drop. The departure covers the BUILT surface's distance from the
-		// published one, which no reading of the published one reaches at all.
-		// It is read off the face the build already stamped it on
-		// (capblend_geom.go's setPatchReadings) rather than computed a second
-		// time here, so this survey and `Face.NormalAt` can never widen by
-		// different amounts.
-		allow := absSumUpper(f.normalBound, reading)
+		// reading already arrives complete: capPatchNormalRange's circular arm
+		// composes the patch's own departure from the surface it publishes
+		// (capblend_departure.go) into it directly, and its flat arm takes
+		// that same departure already composed into Face.NormalAt's own
+		// published bound (topology.go), since a flat patch has only the one
+		// reading to widen. Composing f.normalBound again here would charge a
+		// flat patch's departure twice.
+		allow := reading
 		if allow <= 0 {
 			// The patch's own surface IS the Cone (or Plane) it publishes AND
 			// every reading it was assembled from is exact, so the range above
@@ -178,6 +177,15 @@ func capBlendUndercuts(b *Body, cbp capBlendPayload, pull r3.Vec) undercutOutcom
 // capPatchNormalRange is one patch's published normal-component range against
 // the unit pull p, read off its own Face.NormalAt (which already carries the
 // correct outward sign), beside a proven allowance on that range.
+//
+// The two arms compose the patch's own departure from the surface it
+// publishes (capblend_departure.go) differently, because they widen a
+// different number of readings. A flat (non-circular) patch has exactly one
+// reading, so its allowance IS that reading's own published bound —
+// Face.NormalAt already composes the departure into it (normalMeasurement,
+// topology.go) before this function ever sees it. A circular patch has three
+// readings assembled into a recovered form, so its allowance is assembled
+// here, and it composes the departure itself as one of its own terms.
 //
 // A Plane patch's is a single value under that one reading's own bound. A
 // Cone's (regular or apex) is A*cos(phi)+B*sin(phi)+C in the azimuth
@@ -266,6 +274,12 @@ func capPatchNormalRange(f *Face, pl prismPayload, g capPatchGeom, p r3.Vec) (fl
 		return 0, 0, 0, false
 	}
 	allow := absSumUpper(
+		// The BUILT surface's departure from the published one, which no
+		// reading of the published surface reaches. The flat branch above
+		// takes this same term through Face.NormalAt's own published bound
+		// instead (topology.go), so it is composed once here and once there,
+		// never both.
+		f.normalBound,
 		// How far the recovered form can sit from the patch's own exact one,
 		// everywhere on the window at once.
 		intervalFloatError(model.a, a),
