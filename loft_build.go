@@ -166,7 +166,7 @@ func loftPlanesCoincide(a, b PlaneRecord) bool {
 		return false
 	}
 	d := xsub(xptOf(b.Origin), xptOf(a.Origin))
-	return xdot(na, d).Sign() == 0
+	return xdotSign(na, d) == 0
 }
 
 // loftLoopPair is Table P's correspondence for one loop: the two walk-ordered
@@ -429,7 +429,7 @@ func loftOrientationSign(verts []r3.Vec, tris [][3]int, anchor r3.Vec) int {
 		a := xsub(xptOf(verts[t[0]]), xa)
 		b := xsub(xptOf(verts[t[1]]), xa)
 		c := xsub(xptOf(verts[t[2]]), xa)
-		sum.Add(sum, xdot(a, xcross(b, c)))
+		sum.Add(sum, xdotRat(a, xcross(b, c)))
 	}
 	return sum.Sign()
 }

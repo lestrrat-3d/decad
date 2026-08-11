@@ -171,8 +171,7 @@ func TestSegFilterNeverRejectsAnExactHit(t *testing.T) {
 		xa, xb := xptOf(a), xptOf(b)
 		// An exact interior point of the exact segment, at a rational parameter
 		// no float64 can represent, so its rounding is a genuine approximation.
-		tt := big.NewRat(int64(rng.IntN(9999)+1), 10000)
-		xp := xlerp(xa, xb, tt)
+		xp := xlerp(xa, xb, big.NewInt(int64(rng.IntN(9999)+1)), big.NewInt(10000))
 		p := xp.vec()
 		require.True(t, onSegmentInterior3(xa, xb, xp),
 			`the constructed point must be exactly interior to the exact segment`)
@@ -227,8 +226,7 @@ func TestSegFilterNeverRejectsAnExactHitAtEveryScale(t *testing.T) {
 			a := r3.NewVec(coord(s), coord(s), coord(s))
 			b := r3.NewVec(coord(s), coord(s), coord(s))
 			xa, xb := xptOf(a), xptOf(b)
-			tt := big.NewRat(int64(rng.IntN(9999)+1), 10000)
-			xp := xlerp(xa, xb, tt)
+			xp := xlerp(xa, xb, big.NewInt(int64(rng.IntN(9999)+1)), big.NewInt(10000))
 			p := xp.vec()
 			require.True(t, onSegmentInterior3(xa, xb, xp),
 				`the constructed point must be exactly interior to the exact segment at 2^%d`, e)
@@ -365,16 +363,59 @@ func xhpBenchTriangle() (a, b, c xhp) {
 // xhpGrid is the 8×8×8 probe grid every xhp differential test sweeps.
 var xhpGrid = [8]float64{-2.5, -1, -0.125, 0, 0.1, 0.3, 1, 2.75}
 
+// refPoint is an exact rational 3D point built with math/big.Rat directly —
+// the same shape this package's exact kernel carried before this change.
+// It is kept entirely apart from production's xpt/xhp kernel, private to this
+// test file, so the differential tests below stay a genuine independent
+// check rather than becoming circular once the production sign path is
+// itself built on xhp.
+type refPoint struct{ x, y, z *big.Rat }
+
+func refPointOf(v r3.Vec) refPoint {
+	return refPoint{mustRatOf(v.X), mustRatOf(v.Y), mustRatOf(v.Z)}
+}
+
+func refSub(a, b refPoint) refPoint {
+	return refPoint{new(big.Rat).Sub(a.x, b.x), new(big.Rat).Sub(a.y, b.y), new(big.Rat).Sub(a.z, b.z)}
+}
+
+func refCross(a, b refPoint) refPoint {
+	return refPoint{
+		new(big.Rat).Sub(new(big.Rat).Mul(a.y, b.z), new(big.Rat).Mul(a.z, b.y)),
+		new(big.Rat).Sub(new(big.Rat).Mul(a.z, b.x), new(big.Rat).Mul(a.x, b.z)),
+		new(big.Rat).Sub(new(big.Rat).Mul(a.x, b.y), new(big.Rat).Mul(a.y, b.x)),
+	}
+}
+
+func refDot(a, b refPoint) *big.Rat {
+	s := new(big.Rat).Mul(a.x, b.x)
+	s.Add(s, new(big.Rat).Mul(a.y, b.y))
+	return s.Add(s, new(big.Rat).Mul(a.z, b.z))
+}
+
+func refOrientSign(a, b, c, d refPoint) int {
+	return refDot(refCross(refSub(b, a), refSub(c, a)), refSub(d, a)).Sign()
+}
+
+func refLerp(a, b refPoint, t *big.Rat) refPoint {
+	d := refSub(b, a)
+	return refPoint{
+		new(big.Rat).Add(a.x, new(big.Rat).Mul(t, d.x)),
+		new(big.Rat).Add(a.y, new(big.Rat).Mul(t, d.y)),
+		new(big.Rat).Add(a.z, new(big.Rat).Mul(t, d.z)),
+	}
+}
+
 // TestXHPAgreesWithTheRationalOrientSign is the direct differential proof
-// behind this change (fu163 §1): the homogeneous-integer sign and the
-// existing math/big.Rat sign must never disagree, because both decide the
-// same determinant and disagreement would mean a topology decision could
+// behind this change (fu163 §1): the homogeneous-integer sign must never
+// disagree with an independent math/big.Rat computation of the same
+// determinant, because disagreement would mean a topology decision could
 // flip. It sweeps 512 float-derived probes and, separately, 512
-// xhpLerp-derived probes at t = 37/91 — the investigation's own check, which
+// refLerp-derived probes at t = 37/91 — the investigation's own check, which
 // passed on all 1024.
 func TestXHPAgreesWithTheRationalOrientSign(t *testing.T) {
 	a, b, c := r3.NewVec(0.1, 0.2, 0.3), r3.NewVec(1.7, 0.35, -0.9), r3.NewVec(-0.55, 2.25, 0.125)
-	xa, xb, xc := xptOf(a), xptOf(b), xptOf(c)
+	ra, rb, rc := refPointOf(a), refPointOf(b), refPointOf(c)
 	ha, hb, hc := xhpOf(a), xhpOf(b), xhpOf(c)
 	tRat := big.NewRat(37, 91)
 	tn, td := big.NewInt(37), big.NewInt(91)
@@ -383,14 +424,15 @@ func TestXHPAgreesWithTheRationalOrientSign(t *testing.T) {
 		for _, py := range xhpGrid {
 			for _, pz := range xhpGrid {
 				p := r3.NewVec(px, py, pz)
+				rp := refPointOf(p)
 
-				want := orientVal(xa, xb, xc, xptOf(p)).Sign()
+				want := refOrientSign(ra, rb, rc, rp)
 				got := xhpOrientSign(ha, hb, hc, xhpOf(p))
-				require.Equalf(t, want, got, `direct probe (%v,%v,%v): the homogeneous and rational signs must agree`, px, py, pz)
+				require.Equalf(t, want, got, `direct probe (%v,%v,%v): the homogeneous and independent rational signs must agree`, px, py, pz)
 
-				wantLerp := orientVal(xa, xb, xc, xlerp(xa, xptOf(p), tRat)).Sign()
+				wantLerp := refOrientSign(ra, rb, rc, refLerp(ra, rp, tRat))
 				gotLerp := xhpOrientSign(ha, hb, hc, xhpLerp(ha, xhpOf(p), tn, td))
-				require.Equalf(t, wantLerp, gotLerp, `lerped probe (%v,%v,%v): the homogeneous and rational signs must agree`, px, py, pz)
+				require.Equalf(t, wantLerp, gotLerp, `lerped probe (%v,%v,%v): the homogeneous and independent rational signs must agree`, px, py, pz)
 			}
 		}
 	}
@@ -398,12 +440,11 @@ func TestXHPAgreesWithTheRationalOrientSign(t *testing.T) {
 
 // TestXHPLerpDenotesTheSameCoordinate pins the positivity invariant the sign
 // argument rests on: for every lerped probe xhpLerp produces, the exact
-// rational it denotes (x/w, y/w, z/w) equals the coordinate the existing
-// math/big.Rat xlerp computes for the identical t, and w is strictly
-// positive.
+// rational it denotes (x/w, y/w, z/w) equals the coordinate an independent
+// math/big.Rat lerp computes for the identical t, and w is strictly positive.
 func TestXHPLerpDenotesTheSameCoordinate(t *testing.T) {
 	a := r3.NewVec(0.1, 0.2, 0.3)
-	xa, ha := xptOf(a), xhpOf(a)
+	ra, ha := refPointOf(a), xhpOf(a)
 	tRat := big.NewRat(37, 91)
 	tn, td := big.NewInt(37), big.NewInt(91)
 
@@ -411,22 +452,44 @@ func TestXHPLerpDenotesTheSameCoordinate(t *testing.T) {
 		for _, py := range xhpGrid {
 			for _, pz := range xhpGrid {
 				p := r3.NewVec(px, py, pz)
-				want := xlerp(xa, xptOf(p), tRat)
+				want := refLerp(ra, refPointOf(p), tRat)
 				got := xhpLerp(ha, xhpOf(p), tn, td)
 				require.Positive(t, got.w.Sign(), `the homogeneous denominator must stay positive`)
 				gx, gy, gz := xhpRat(got)
 				require.Zerof(t, gx.Cmp(want.x), `x at probe (%v,%v,%v)`, px, py, pz)
 				require.Zerof(t, gy.Cmp(want.y), `y at probe (%v,%v,%v)`, px, py, pz)
 				require.Zerof(t, gz.Cmp(want.z), `z at probe (%v,%v,%v)`, px, py, pz)
-				require.Equalf(t, want.vec(), xhpVec(got), `float rounding at probe (%v,%v,%v)`, px, py, pz)
+				wx, _ := want.x.Float64()
+				wy, _ := want.y.Float64()
+				wz, _ := want.z.Float64()
+				require.Equalf(t, r3.Vec{X: wx, Y: wy, Z: wz}, xhpVec(got), `float rounding at probe (%v,%v,%v)`, px, py, pz)
 			}
 		}
 	}
 }
 
-// xhpKeyOf is the four canonical integers joined the same way xpt.key will
-// join them once stage C routes the exact identity through xhpCanon — kept
-// local to this test file since production has nothing to key on yet.
+// TestOrientRatAgreesWithOrientSignExact checks the split orientVal was cut
+// into: orientRat's materialised value and orientSignExact's plain integer
+// sign must agree over the same probes, sign consumer and value consumer
+// alike.
+func TestOrientRatAgreesWithOrientSignExact(t *testing.T) {
+	a, b, c := r3.NewVec(0.1, 0.2, 0.3), r3.NewVec(1.7, 0.35, -0.9), r3.NewVec(-0.55, 2.25, 0.125)
+	xa, xb, xc := xptOf(a), xptOf(b), xptOf(c)
+	for _, px := range xhpGrid {
+		for _, py := range xhpGrid {
+			for _, pz := range xhpGrid {
+				p := xptOf(r3.NewVec(px, py, pz))
+				require.Equalf(t, orientSignExact(xa, xb, xc, p), orientRat(xa, xb, xc, p).Sign(),
+					`probe (%v,%v,%v): the sign and the materialised value must agree`, px, py, pz)
+			}
+		}
+	}
+}
+
+// xhpKeyOf is the four canonical integers joined the same way xpt.key joins
+// them (both route the exact welding identity through xhpCanon) — kept local
+// to this test file so the xhp differential tests need nothing from
+// production's own key().
 func xhpKeyOf(p xhp) string {
 	return p.x.String() + `|` + p.y.String() + `|` + p.z.String() + `|` + p.w.String()
 }

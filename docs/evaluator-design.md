@@ -382,10 +382,17 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
 - **Robust mesh boolean in-repo, stdlib-only.** The curated-dependency rule
   stands: no third-party mesh kernel. The algorithm is the exact-predicate
   route: triangle/triangle intersection and point classification decided by
-  adaptive-precision sign tests that fall back to `math/big.Rat` exactly at
-  the boundary cases — a sign decided exactly is a topology decision that
-  cannot flip (core §2.1's whole fear), so the output is watertight **by
-  construction** on the tessellated geometry. Retriangulation along
+  adaptive-precision sign tests that fall back to exact rational arithmetic
+  exactly at the boundary cases — a sign decided exactly is a topology
+  decision that cannot flip (core §2.1's whole fear), so the output is
+  watertight **by construction** on the tessellated geometry. The exact
+  fallback is carried as homogeneous integer coordinates — an integer
+  numerator triple over one shared positive denominator — rather than
+  `math/big.Rat`: every predicate is a homogeneous form of fixed degree in the
+  differences, so its sign is invariant under scaling by a positive
+  denominator, and the exactness guarantee is unchanged. A point is reduced to
+  its canonical form only at vertex emission, because welding is by exact
+  identity and a homogeneous point has many spellings. Retriangulation along
   intersection curves, classification by exact winding tests, stitching by
   shared exact vertices.
 - **One symmetric classifier per facet pair.** Two closed triangles are convex

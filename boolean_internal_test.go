@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
 
@@ -273,19 +274,33 @@ func tinyOffset() *big.Rat {
 	return new(big.Rat).SetFrac(big.NewInt(1), new(big.Int).Exp(big.NewInt(10), big.NewInt(20), nil))
 }
 
+// xptFromRat builds an exact point directly from three big.Rat coordinates —
+// used only where a test needs sub-ulp control production's float-only entry
+// point (xptOf) cannot express, over one shared homogeneous denominator the
+// same way xhpOf lifts a float vertex.
+func xptFromRat(x, y, z *big.Rat) xpt {
+	dx, dy, dz := x.Denom(), y.Denom(), z.Denom()
+	return xpt{
+		x: new(big.Int).Mul(x.Num(), new(big.Int).Mul(dy, dz)),
+		y: new(big.Int).Mul(y.Num(), new(big.Int).Mul(dx, dz)),
+		z: new(big.Int).Mul(z.Num(), new(big.Int).Mul(dx, dy)),
+		w: new(big.Int).Mul(dx, new(big.Int).Mul(dy, dz)),
+	}
+}
+
 // xat is an exact point from whole millimetres, optionally nudged by a
 // sub-ulp offset on one axis.
 func xat(x, y, z float64, nudge int) xpt {
-	p := xpt{mustRatOf(x), mustRatOf(y), mustRatOf(z)}
+	rx, ry, rz := mustRatOf(x), mustRatOf(y), mustRatOf(z)
 	switch nudge {
 	case 0:
-		p.x = new(big.Rat).Add(p.x, tinyOffset())
+		rx = new(big.Rat).Add(rx, tinyOffset())
 	case 1:
-		p.y = new(big.Rat).Add(p.y, tinyOffset())
+		ry = new(big.Rat).Add(ry, tinyOffset())
 	case 2:
-		p.z = new(big.Rat).Add(p.z, tinyOffset())
+		rz = new(big.Rat).Add(rz, tinyOffset())
 	}
-	return p
+	return xptFromRat(rx, ry, rz)
 }
 
 // splitApexTetra is a closed tetra A,B,C,D whose apex D is split into the edge
@@ -294,8 +309,8 @@ func xat(x, y, z float64, nudge int) xpt {
 // survives as the tetra. Every directed edge pairs with its reverse, so the
 // exact closure audit passes before the rounding ever runs.
 func splitApexTetra() []keptFacet {
-	a, b, c := xpt{mustRatOf(0), mustRatOf(0), mustRatOf(0)}, xpt{mustRatOf(10), mustRatOf(0), mustRatOf(0)}, xpt{mustRatOf(0), mustRatOf(10), mustRatOf(0)}
-	d1 := xpt{mustRatOf(2), mustRatOf(2), mustRatOf(9)}
+	a, b, c := xptOf(r3.NewVec(0, 0, 0)), xptOf(r3.NewVec(10, 0, 0)), xptOf(r3.NewVec(0, 10, 0))
+	d1 := xptOf(r3.NewVec(2, 2, 9))
 	d2 := xat(2, 2, 9, 0)
 	return []keptFacet{
 		{v: [3]xpt{a, c, b}},
@@ -311,7 +326,7 @@ func splitApexTetra() []keptFacet {
 // float64 vertex: every one of its facets collapses under the weld, so the
 // whole component is welded out of existence.
 func subUlpTetra() []keptFacet {
-	p := xpt{mustRatOf(40), mustRatOf(40), mustRatOf(40)}
+	p := xptOf(r3.NewVec(40, 40, 40))
 	q, r, s := xat(40, 40, 40, 0), xat(40, 40, 40, 1), xat(40, 40, 40, 2)
 	return []keptFacet{
 		{v: [3]xpt{p, r, q}},
@@ -355,6 +370,67 @@ func TestStitchChargesTheFacetsTheWeldDrops(t *testing.T) {
 	// The volume the weld can have moved is bounded by the displacement times
 	// the pre-round area — a strictly larger charge than the held mesh's own.
 	require.Greater(t, sweptVolumeAllow(got.round, got.preArea), sweptVolumeAllow(got.round, held))
+}
+
+// TestBooleanVolumesAreUnchangedByTheKernelRewrite is fu163's end-to-end
+// proof: the mesh boolean's reported volume, centroid and bounds must be
+// bit-identical to what the math/big.Rat kernel this change replaces
+// reported — a tolerance would hide a real change, since the whole claim is
+// that the signs, and therefore the topology and the exact integrals built on
+// them, are unchanged. Two boxes translated off every shared face plane
+// (5, 5, 5) force the mesh path rather than the analytic prism-boolean
+// reduction (TestBooleanContextCancelsFacetedBodyFinishing above cancels
+// inside buildFacetedBody on the identical fixture, which is mesh-path-only).
+// The expected numbers were captured from this same fixture on the
+// pre-rewrite math/big.Rat kernel before this change landed.
+func TestBooleanVolumesAreUnchangedByTheKernelRewrite(t *testing.T) {
+	type want struct {
+		volume           float64
+		cx, cy, cz       float64
+		minX, minY, minZ float64
+		maxX, maxY, maxZ float64
+	}
+	testcases := []struct {
+		name string
+		op   func(a, b *Body) (*Body, error)
+		want want
+	}{
+		{"Union", Union, want{1875, 7.5, 7.5, 7.5, 0, 0, 0, 15, 15, 15}},
+		{"Cut", Cut, want{875, 4.642857142857143, 4.642857142857143, 4.642857142857143, 0, 0, 0, 10, 10, 10}},
+		{"Intersect", Intersect, want{125, 7.5, 7.5, 7.5, 5, 5, 5, 10, 10, 10}},
+	}
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			doc := New()
+			a := internalBoxBody(t, doc, 0, 0, 10, 10, 10)
+			b := internalBoxBody(t, doc, 0, 0, 10, 10, 10)
+			tr, err := r3.Translation(r3.Vec{X: 5, Y: 5, Z: 5})
+			require.NoError(t, err)
+			b, err = b.Placed(tr)
+			require.NoError(t, err)
+
+			result, err := tc.op(a, b)
+			require.NoError(t, err)
+
+			volM, err := result.Volume()
+			require.NoError(t, err)
+			vol, err := volM.Value.In(units.CubicMillimeter)
+			require.NoError(t, err)
+			require.Equal(t, tc.want.volume, vol, `volume must be bit-identical to the pre-rewrite kernel`)
+
+			cen, err := result.Centroid()
+			require.NoError(t, err)
+			require.Equal(t, r3.Vec{X: tc.want.cx, Y: tc.want.cy, Z: tc.want.cz}, cen.Value,
+				`centroid must be bit-identical to the pre-rewrite kernel`)
+
+			bounds, err := result.Bounds()
+			require.NoError(t, err)
+			require.Equal(t, r3.Vec{X: tc.want.minX, Y: tc.want.minY, Z: tc.want.minZ}, bounds.Min,
+				`bounds.Min must be bit-identical to the pre-rewrite kernel`)
+			require.Equal(t, r3.Vec{X: tc.want.maxX, Y: tc.want.maxY, Z: tc.want.maxZ}, bounds.Max,
+				`bounds.Max must be bit-identical to the pre-rewrite kernel`)
+		})
+	}
 }
 
 func TestPrepRefusesACollapsedOperandFacet(t *testing.T) {

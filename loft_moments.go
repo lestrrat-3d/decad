@@ -117,12 +117,15 @@ func (m *loftMassAccumulator) add(a, b, c r3.Vec, wall bool) {
 	sb := xsub(xptOf(b), m.anchor)
 	sc := xsub(xptOf(c), m.anchor)
 
-	triVol6 := xdot(sa, xcross(sb, sc))
+	triVol6 := xdotRat(sa, xcross(sb, sc))
 	m.vol6.Add(m.vol6, triVol6)
 
-	sumX := ratAdd(sa.x, sb.x, sc.x)
-	sumY := ratAdd(sa.y, sb.y, sc.y)
-	sumZ := ratAdd(sa.z, sb.z, sc.z)
+	saX, saY, saZ := xhpRat(xhp(sa))
+	sbX, sbY, sbZ := xhpRat(xhp(sb))
+	scX, scY, scZ := xhpRat(xhp(sc))
+	sumX := ratAdd(saX, sbX, scX)
+	sumY := ratAdd(saY, sbY, scY)
+	sumZ := ratAdd(saZ, sbZ, scZ)
 	m.momX.Add(m.momX, new(big.Rat).Mul(triVol6, sumX))
 	m.momY.Add(m.momY, new(big.Rat).Mul(triVol6, sumY))
 	m.momZ.Add(m.momZ, new(big.Rat).Mul(triVol6, sumZ))
@@ -167,7 +170,7 @@ func (m *loftMassAccumulator) add(a, b, c r3.Vec, wall bool) {
 // wall quad along a diagonal), so this is the ordinary case, not an edge one.
 func wallTriangleArea(u, v xpt) (float64, float64) {
 	w := xcross(u, v)
-	q := xdot(w, w)
+	q := xdotRat(w, w)
 	q.Quo(q, big.NewRat(4, 1))
 	return ratSqrtDown(q), ratSqrtUp(q)
 }
@@ -242,9 +245,10 @@ func (m *loftMassAccumulator) centroid(verts []r3.Vec, tris [][3]int) (VecMeasur
 		return VecMeasurement{}, fmt.Errorf(`%w: a loft with zero net volume has no centroid`, ErrDegenerate)
 	}
 	denom := new(big.Rat).Mul(big.NewRat(4, 1), m.vol6)
-	cx := new(big.Rat).Add(m.anchor.x, new(big.Rat).Quo(m.momX, denom))
-	cy := new(big.Rat).Add(m.anchor.y, new(big.Rat).Quo(m.momY, denom))
-	cz := new(big.Rat).Add(m.anchor.z, new(big.Rat).Quo(m.momZ, denom))
+	anchorX, anchorY, anchorZ := xhpRat(xhp(m.anchor))
+	cx := new(big.Rat).Add(anchorX, new(big.Rat).Quo(m.momX, denom))
+	cy := new(big.Rat).Add(anchorY, new(big.Rat).Quo(m.momY, denom))
+	cz := new(big.Rat).Add(anchorZ, new(big.Rat).Quo(m.momZ, denom))
 
 	fx, _ := cx.Float64()
 	fy, _ := cy.Float64()

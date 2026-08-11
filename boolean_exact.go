@@ -11,84 +11,110 @@ import (
 
 // This file is the exact-arithmetic kernel behind the mesh boolean
 // (docs/evaluator-design.md §9): sign tests decided by an adaptive float
-// filter that falls back to math/big.Rat exactly at the boundary cases, plus
-// the rational point, segment and parity predicates the subdivision and
-// classification passes run on. A sign decided exactly is a topology decision
+// filter that falls back to exact rational arithmetic exactly at the
+// boundary cases, plus the rational point, segment and parity predicates the
+// subdivision and classification passes run on. The exact fallback is
+// carried as homogeneous integer coordinates — an integer numerator triple
+// over one shared positive denominator, xhp/xpt below — never as
+// math/big.Rat: every predicate is a homogeneous form of fixed degree in the
+// differences, so its sign is invariant under scaling by a positive
+// denominator, and the exactness guarantee is unchanged. A point is reduced
+// to its canonical form only at vertex emission (xpt.key), because welding is
+// by exact identity (boolean_mesh.go's stitchFacetsContext) and a homogeneous
+// point has many spellings. A sign decided exactly is a topology decision
 // that cannot flip (core §2.1), which is what makes the stitched output
 // watertight by construction on the tessellated geometry.
 
-// xpt is an exact 3D point: rational coordinates, exact until the final
-// rounding back to float64. The zero value is unusable; construct through
-// xptOf or the arithmetic helpers.
-type xpt struct{ x, y, z *big.Rat }
+// xpt is an exact 3D point carried in homogeneous integer form: the same
+// representation xhp documents below, and structurally identical to it — the
+// two convert for free — so xpt keeps its own name and every call site
+// survives, rather than xhp replacing it outright. The zero value is
+// unusable; construct through xptOf or the arithmetic helpers, every one of
+// which strips the common power of two before returning (the growth control;
+// see xhpStripTwos). Two spellings of one point exist (any positive common
+// factor of x, y, z and w denotes the same coordinate), so exact identity for
+// welding goes through the canonical form (key), never the raw fields.
+type xpt struct{ x, y, z, w *big.Int }
 
-// xptOf lifts a finite float vertex into exact coordinates. A float64 is an
-// exact rational, so no information is lost.
-func xptOf(v r3.Vec) xpt {
-	return xpt{mustRatOf(v.X), mustRatOf(v.Y), mustRatOf(v.Z)}
-}
+// xptOf lifts a finite float vertex into exact homogeneous coordinates. A
+// float64 is an exact rational, so no information is lost.
+func xptOf(v r3.Vec) xpt { return xpt(xhpStripTwos(xhpOf(v))) }
 
-// The float-to-rational lift this file runs on is mustRatOf (clearance_poly.go),
-// the package's one exact-rational helper: a float64 IS a rational, so the
-// conversion is exact and lossless, and the two exact kernels — this one and
-// the clearance brackets — share the checked converter rather than keep two
-// conversions that could drift apart. Every mustRatOf call here is on a float
-// already proven finite: prepBoolMesh rejects a non-finite vertex outright, so
-// the operands this file sees hold none.
-//
 // vec rounds the exact point to the nearest float64 coordinates.
-func (p xpt) vec() r3.Vec {
-	x, _ := p.x.Float64()
-	y, _ := p.y.Float64()
-	z, _ := p.z.Float64()
-	return r3.Vec{X: x, Y: y, Z: z}
-}
+func (p xpt) vec() r3.Vec { return xhpVec(xhp(p)) }
 
 // key is the exact identity of the point: two points weld exactly when their
-// rational coordinates are identical — stitching by shared exact vertices,
-// never by distance (docs/evaluator-design.md §9).
+// CANONICAL homogeneous coordinates are identical — stitching by shared exact
+// vertices, never by distance (docs/evaluator-design.md §9). A homogeneous
+// point has many spellings, so the raw fields are never compared directly;
+// xhpCanon collapses every spelling of one coordinate to one four-tuple
+// before the key is built.
 func (p xpt) key() string {
-	return p.x.RatString() + "|" + p.y.RatString() + "|" + p.z.RatString()
+	c := xhpCanon(xhp(p))
+	return c.x.String() + "|" + c.y.String() + "|" + c.z.String() + "|" + c.w.String()
 }
 
-func xsub(a, b xpt) xpt {
-	return xpt{new(big.Rat).Sub(a.x, b.x), new(big.Rat).Sub(a.y, b.y), new(big.Rat).Sub(a.z, b.z)}
+// xsub is a − b, exact, with the common power of two stripped on return (the
+// growth control every construction pays — see xhpStripTwos).
+func xsub(a, b xpt) xpt { return xpt(xhpStripTwos(xhpSub(xhp(a), xhp(b)))) }
+
+// xcross is a × b, exact, stripped the same way as xsub.
+func xcross(a, b xpt) xpt { return xpt(xhpStripTwos(xhpCross(xhp(a), xhp(b)))) }
+
+// xdotNum is the raw numerator of a·b over the positive denominator a.w·b.w —
+// the value a sign-only consumer reads directly, and the value a
+// cross-multiplied comparison reads without ever dividing.
+func xdotNum(a, b xpt) *big.Int { return xhpDotNum(xhp(a), xhp(b)) }
+
+// xdotSign is the sign of a·b, decided as a plain integer sign: the shared
+// denominator a.w·b.w is always positive, so the numerator's sign IS the
+// dot product's sign.
+func xdotSign(a, b xpt) int { return xdotNum(a, b).Sign() }
+
+// xdotRat materialises a·b as a big.Rat — the one place this dot product pays
+// a normalisation, and only when a caller genuinely needs the rational VALUE
+// rather than a sign.
+func xdotRat(a, b xpt) *big.Rat {
+	den := new(big.Int).Mul(a.w, b.w)
+	return new(big.Rat).SetFrac(xdotNum(a, b), den)
 }
 
-func xcross(a, b xpt) xpt {
-	return xpt{
-		new(big.Rat).Sub(new(big.Rat).Mul(a.y, b.z), new(big.Rat).Mul(a.z, b.y)),
-		new(big.Rat).Sub(new(big.Rat).Mul(a.z, b.x), new(big.Rat).Mul(a.x, b.z)),
-		new(big.Rat).Sub(new(big.Rat).Mul(a.x, b.y), new(big.Rat).Mul(a.y, b.x)),
-	}
+// xlerp is a + t·(b − a) for t = tn/td, exact, with the common power of two
+// stripped on return — the growth control that keeps a chain of lerps from
+// growing its denominator multiplicatively at every link (measured: 14113
+// bits unreduced at lerp depth 6, 462 bits stripped after every step).
+func xlerp(a, b xpt, tn, td *big.Int) xpt { return xpt(xhpStripTwos(xhpLerp(xhp(a), xhp(b), tn, td))) }
+
+// orientNum is the exact value of det[b−a, c−a, d−a] as an integer numerator
+// over a positive denominator, formed without ever materialising a big.Rat:
+// positive when d lies on the side the counter-clockwise normal of (a, b, c)
+// points to.
+func orientNum(a, b, c, d xpt) (num, den *big.Int) {
+	ha, hb, hc, hd := xhp(a), xhp(b), xhp(c), xhp(d)
+	ba, ca, da := xhpSub(hb, ha), xhpSub(hc, ha), xhpSub(hd, ha)
+	cr := xhpCross(ba, ca)
+	return xhpDotNum(cr, da), new(big.Int).Mul(cr.w, da.w)
 }
 
-func xdot(a, b xpt) *big.Rat {
-	s := new(big.Rat).Mul(a.x, b.x)
-	s.Add(s, new(big.Rat).Mul(a.y, b.y))
-	return s.Add(s, new(big.Rat).Mul(a.z, b.z))
+// orientSignExact is the exact sign of det[b−a, c−a, d−a], decided as a plain
+// integer sign with no big.Rat and no normalisation anywhere in the chain —
+// xhpOrientSign's own guarantee, carried through xpt.
+func orientSignExact(a, b, c, d xpt) int {
+	return xhpOrientSign(xhp(a), xhp(b), xhp(c), xhp(d))
 }
 
-// xlerp is a + t·(b − a), exact.
-func xlerp(a, b xpt, t *big.Rat) xpt {
-	d := xsub(b, a)
-	return xpt{
-		new(big.Rat).Add(a.x, new(big.Rat).Mul(t, d.x)),
-		new(big.Rat).Add(a.y, new(big.Rat).Mul(t, d.y)),
-		new(big.Rat).Add(a.z, new(big.Rat).Mul(t, d.z)),
-	}
-}
-
-// orientVal is the exact value of det[b−a, c−a, d−a]: positive when d lies on
-// the side the counter-clockwise normal of (a, b, c) points to.
-func orientVal(a, b, c, d xpt) *big.Rat {
-	return xdot(xcross(xsub(b, a), xsub(c, a)), xsub(d, a))
+// orientRat materialises det[b−a, c−a, d−a] as a big.Rat — the one place this
+// value pays a normalisation, for the rare caller that needs the value rather
+// than the sign.
+func orientRat(a, b, c, d xpt) *big.Rat {
+	num, den := orientNum(a, b, c, d)
+	return new(big.Rat).SetFrac(num, den)
 }
 
 // orientSign is the adaptive-precision sign of det[b−a, c−a, d−a] for float
 // inputs: a float evaluation whose forward error provably cannot cross zero
 // decides the generic case; anything inside the error bound falls back to the
-// exact rational value — the §9 discipline, so a sign is never wrong.
+// exact value — the §9 discipline, so a sign is never wrong.
 func orientSign(a, b, c, d r3.Vec) int {
 	bax, bay, baz := b.X-a.X, b.Y-a.Y, b.Z-a.Z
 	cax, cay, caz := c.X-a.X, c.Y-a.Y, c.Z-a.Z
@@ -105,13 +131,13 @@ func orientSign(a, b, c, d r3.Vec) int {
 		}
 		return -1
 	}
-	return orientVal(xptOf(a), xptOf(b), xptOf(c), xptOf(d)).Sign()
+	return orientSignExact(xptOf(a), xptOf(b), xptOf(c), xptOf(d))
 }
 
-// orientSignMixed is the exact plane-side sign of a rational probe against a
-// float triangle: positive on the triangle's counter-clockwise-normal side.
+// orientSignMixed is the exact plane-side sign of a homogeneous probe against
+// a float triangle: positive on the triangle's counter-clockwise-normal side.
 func orientSignMixed(a, b, c r3.Vec, d xpt) int {
-	return orientVal(xptOf(a), xptOf(b), xptOf(c), d).Sign()
+	return orientSignExact(xptOf(a), xptOf(b), xptOf(c), d)
 }
 
 // xhp is an exact 3D point in homogeneous integer form: (x, y, z) is an
@@ -806,8 +832,26 @@ func coordOf(v r3.Vec, axis int) float64 {
 	}
 }
 
-// ratCoordOf reads one exact coordinate by axis index.
+// ratCoordOf materialises one exact coordinate of p as a big.Rat, by axis
+// index — the projection into xp2's own (untouched) rational domain. This is
+// the one place a homogeneous coordinate pays a normalisation to become a
+// value; a sign-only reader wants xIntCoordOf instead.
 func ratCoordOf(p xpt, axis int) *big.Rat {
+	switch axis {
+	case 0:
+		return new(big.Rat).SetFrac(p.x, p.w)
+	case 1:
+		return new(big.Rat).SetFrac(p.y, p.w)
+	default:
+		return new(big.Rat).SetFrac(p.z, p.w)
+	}
+}
+
+// xIntCoordOf reads one coordinate's raw homogeneous numerator by axis index,
+// with no normalisation at all: since the denominator (p.w) is always
+// positive, this integer's sign already IS the coordinate's sign, which is
+// what every sign-only reader in this file actually wants.
+func xIntCoordOf(p xpt, axis int) *big.Int {
 	switch axis {
 	case 0:
 		return p.x
@@ -858,18 +902,19 @@ func meshParityContext(ctx context.Context, p xpt, verts []r3.Vec, tris [][3]int
 			// so the plane normal's swept component cannot vanish.
 			xa, xb, xc := xptOf(a), xptOf(b), xptOf(c)
 			n := xcross(xsub(xb, xa), xsub(xc, xa))
-			nAxis := ratCoordOf(n, ray.axis)
+			nAxis := xIntCoordOf(n, ray.axis)
 			if nAxis.Sign() == 0 {
 				ambiguous = true
 				break
 			}
 			// t = tNum/nAxis decides the crossing; nAxis is already proven
 			// nonzero above, so its sign alone tells the division's sign
-			// without ever forming the quotient — only t's sign is read
-			// (docs/evaluator-design.md §9's reject-only discipline extends to
-			// never paying a big.Rat normalisation for a value nothing but
-			// Sign() consumes).
-			tNum := xdot(xsub(xa, p), n)
+			// without ever forming the quotient — only t's sign is read, and
+			// xdotNum's raw numerator carries that sign with no normalisation
+			// anywhere in the chain (docs/evaluator-design.md §9's
+			// reject-only discipline extends to never paying for a value
+			// nothing but Sign() consumes).
+			tNum := xdotNum(xsub(xa, p), n)
 			switch s := tNum.Sign() * nAxis.Sign() * ray.dir; {
 			case s > 0:
 				crossings++

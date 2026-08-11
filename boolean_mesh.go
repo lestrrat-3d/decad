@@ -337,8 +337,14 @@ func orderOnLine(pts []xpt, dir xpt) (xpt, xpt) {
 	return pts[0], pts[1]
 }
 
-// cmpOnLine orders two points of the planes' common line along it.
-func cmpOnLine(a, b, dir xpt) int { return xdot(a, dir).Cmp(xdot(b, dir)) }
+// cmpOnLine orders two points of the planes' common line along it: a·dir and
+// b·dir share dir's own denominator, which cancels, so the two remaining
+// positive denominators (a.w, b.w) are cross-multiplied rather than divided.
+func cmpOnLine(a, b, dir xpt) int {
+	left := new(big.Int).Mul(xdotNum(a, dir), b.w)
+	right := new(big.Int).Mul(xdotNum(b, dir), a.w)
+	return left.Cmp(right)
+}
 
 // onTriBoundary reports whether the exact point p — already on the triangle's
 // plane — lies on one of its three CLOSED edges. The projection is invertible
@@ -382,8 +388,8 @@ func segAlongEdge(p0, p1 xpt, xt [3]xpt, n xpt) int {
 // |na × nb|² / (|na|²·|nb|²).
 func sinSquared(na, nb xpt) *big.Rat {
 	c := xcross(na, nb)
-	num := xdot(c, c)
-	den := new(big.Rat).Mul(xdot(na, na), xdot(nb, nb))
+	num := xdotRat(c, c)
+	den := new(big.Rat).Mul(xdotRat(na, na), xdotRat(nb, nb))
 	if den.Sign() == 0 {
 		return new(big.Rat)
 	}
@@ -406,15 +412,21 @@ func sinLowerBound(sin2 *big.Rat) float64 {
 
 // planeCrossings collects the exact points where triangle t crosses the
 // other triangle's plane, given the per-vertex signs and the exact
-// plane-side values (computed lazily, only for crossing edges).
+// plane-side values (computed lazily, only for crossing edges) — as integer
+// numerator/denominator pairs, never as a materialised big.Rat: the crossing
+// parameter t = vi/(vi − vj) is formed directly as tn/td from the two orient
+// values' own numerators and positive denominators (vi = ni/di, vj = nj/dj
+// gives t = ni·dj / (ni·dj − nj·di)) and handed straight to xlerp, which
+// renormalises td's sign itself.
 func planeCrossings(xt [3]xpt, xo [3]xpt, signs [3]int) []xpt {
 	var out []xpt
-	vals := [3]*big.Rat{}
-	val := func(i int) *big.Rat {
-		if vals[i] == nil {
-			vals[i] = orientVal(xo[0], xo[1], xo[2], xt[i])
+	nums := [3]*big.Int{}
+	dens := [3]*big.Int{}
+	val := func(i int) (*big.Int, *big.Int) {
+		if nums[i] == nil {
+			nums[i], dens[i] = orientNum(xo[0], xo[1], xo[2], xt[i])
 		}
-		return vals[i]
+		return nums[i], dens[i]
 	}
 	for i := range 3 {
 		if signs[i] == 0 {
@@ -423,8 +435,11 @@ func planeCrossings(xt [3]xpt, xo [3]xpt, signs [3]int) []xpt {
 		j := (i + 1) % 3
 		if signs[i]*signs[j] < 0 {
 			// t = vi/(vi − vj) is in (0, 1): the edge crosses the plane.
-			t := new(big.Rat).Quo(val(i), new(big.Rat).Sub(val(i), val(j)))
-			out = append(out, xlerp(xt[i], xt[j], t))
+			ni, di := val(i)
+			nj, dj := val(j)
+			tn := new(big.Int).Mul(ni, dj)
+			td := new(big.Int).Sub(tn, new(big.Int).Mul(nj, di))
+			out = append(out, xlerp(xt[i], xt[j], tn, td))
 		}
 	}
 	return out
@@ -457,11 +472,13 @@ func dedupePoints(pts []xpt) []xpt {
 
 // projAxes picks the two projection coordinates for a plane with exact
 // normal n: the dominant-magnitude axis is dropped, so the projection is
-// invertible on the plane.
+// invertible on the plane. n's three coordinates share one positive
+// denominator, so their magnitudes compare directly as integers — no
+// cross-multiplication needed.
 func projAxes(n xpt) (int, int) {
-	ax := new(big.Rat).Abs(n.x)
-	ay := new(big.Rat).Abs(n.y)
-	az := new(big.Rat).Abs(n.z)
+	ax := new(big.Int).Abs(n.x)
+	ay := new(big.Int).Abs(n.y)
+	az := new(big.Int).Abs(n.z)
 	if az.Cmp(ax) >= 0 && az.Cmp(ay) >= 0 {
 		return 0, 1
 	}
@@ -471,17 +488,10 @@ func projAxes(n xpt) (int, int) {
 	return 1, 2
 }
 
-// xcoordOf returns p's exact coordinate along axis i (0=x, 1=y, 2=z).
-func xcoordOf(p xpt, i int) *big.Rat {
-	switch i {
-	case 0:
-		return p.x
-	case 1:
-		return p.y
-	default:
-		return p.z
-	}
-}
+// xcoordOf materialises p's exact coordinate along axis i (0=x, 1=y, 2=z) as
+// a big.Rat — the same projection ratCoordOf performs, kept as its own name
+// for this file's own call sites into the xp2 domain.
+func xcoordOf(p xpt, i int) *big.Rat { return ratCoordOf(p, i) }
 
 // pointOnTri reports whether the exact point p — already on the triangle's
 // plane — lies inside or on the closed triangle, via the exact projection.
@@ -988,18 +998,28 @@ func facetAdjacencyContext(ctx context.Context, tris [][3]int) ([][]int, error) 
 	return adj, nil
 }
 
+// xCentroid is (a+b+c)/3, exact. Dividing by 3 multiplies the shared
+// denominator by 3 rather than dividing the numerators by it, since a
+// numerator need not be a multiple of 3 — the same "multiply w, never divide
+// the numerator" rule every homogeneous construction here follows.
 func xCentroid(a, b, c xpt) xpt {
-	third := big.NewRat(1, 3)
-	s := xpt{
-		new(big.Rat).Add(new(big.Rat).Add(a.x, b.x), c.x),
-		new(big.Rat).Add(new(big.Rat).Add(a.y, b.y), c.y),
-		new(big.Rat).Add(new(big.Rat).Add(a.z, b.z), c.z),
+	bwcw := new(big.Int).Mul(b.w, c.w)
+	awcw := new(big.Int).Mul(a.w, c.w)
+	awbw := new(big.Int).Mul(a.w, b.w)
+	axis := func(ax, bx, cx *big.Int) *big.Int {
+		s := new(big.Int).Mul(ax, bwcw)
+		s.Add(s, new(big.Int).Mul(bx, awcw))
+		s.Add(s, new(big.Int).Mul(cx, awbw))
+		return s
 	}
-	return xpt{
-		new(big.Rat).Mul(s.x, third),
-		new(big.Rat).Mul(s.y, third),
-		new(big.Rat).Mul(s.z, third),
-	}
+	w := new(big.Int).Mul(awbw, c.w)
+	w.Mul(w, big.NewInt(3))
+	return xpt(xhpStripTwos(xhp{
+		x: axis(a.x, b.x, c.x),
+		y: axis(a.y, b.y, c.y),
+		z: axis(a.z, b.z, c.z),
+		w: w,
+	}))
 }
 
 // stitchedMesh is the boolean output after welding, conforming and rounding:
@@ -1123,9 +1143,10 @@ func stitchFacetsContext(ctx context.Context, kept []keptFacet) (*stitchedMesh, 
 			out.verts = append(out.verts, v)
 		}
 		remap[i] = fi
-		d := new(big.Rat).Sub(p.x, mustRatOf(v.X))
+		px, py, pz := xhpRat(xhp(p))
+		d := new(big.Rat).Sub(px, mustRatOf(v.X))
 		d.Abs(d)
-		for _, pair := range [][2]*big.Rat{{p.y, mustRatOf(v.Y)}, {p.z, mustRatOf(v.Z)}} {
+		for _, pair := range [][2]*big.Rat{{py, mustRatOf(v.Y)}, {pz, mustRatOf(v.Z)}} {
 			dd := new(big.Rat).Sub(pair[0], pair[1])
 			dd.Abs(dd)
 			if dd.Cmp(d) > 0 {
@@ -1313,10 +1334,13 @@ func conformOnce(ctx context.Context, xverts *[]xpt, tris *[][3]int, src *[]int)
 // segment (a, b).
 //
 // The parameter t = ap[axis]/d[axis] is compared only against 0 and 1, which
-// is decided without ever forming the quotient: t > 0 and t < 1 become two
-// comparisons of ap[axis] against 0 and against d[axis], with the inequality
-// direction flipped when d[axis] is negative — multiplying an inequality by a
-// negative divisor reverses it.
+// is decided with no division and no big.Rat: ap[axis] and d[axis] are raw
+// homogeneous numerators over their own (possibly different) positive
+// denominators ap.w and d.w, so "t < 1" cross-multiplies them
+// (ap[axis]·d.w vs d[axis]·ap.w — never a sign flip, since both denominators
+// are positive) and "t > 0" reads ap[axis]'s sign directly (ap.w is
+// positive). Only the FINAL combination branches on d[axis]'s sign, the same
+// rule stage A's version of this function established.
 func onSegmentInterior3(a, b, p xpt) bool {
 	d := xsub(b, a)
 	ap := xsub(p, a)
@@ -1325,22 +1349,26 @@ func onSegmentInterior3(a, b, p xpt) bool {
 		return false
 	}
 	axis := dominantAxis(d)
-	da := ratCoordOf(d, axis)
-	apAxis := ratCoordOf(ap, axis)
-	switch da.Sign() {
-	case 0:
+	dAxis := xIntCoordOf(d, axis)
+	dSign := dAxis.Sign()
+	if dSign == 0 {
 		return false
-	case 1:
-		return apAxis.Sign() > 0 && apAxis.Cmp(da) < 0
-	default:
-		return apAxis.Sign() < 0 && apAxis.Cmp(da) > 0
 	}
+	apAxis := xIntCoordOf(ap, axis)
+	cmp := new(big.Int).Mul(apAxis, d.w).Cmp(new(big.Int).Mul(dAxis, ap.w))
+	if dSign > 0 {
+		return apAxis.Sign() > 0 && cmp < 0
+	}
+	return apAxis.Sign() < 0 && cmp > 0
 }
 
+// dominantAxis picks the coordinate of d with the largest magnitude. d's
+// three coordinates share one positive denominator, so their magnitudes
+// compare directly as integers — no cross-multiplication needed.
 func dominantAxis(d xpt) int {
-	ax := new(big.Rat).Abs(d.x)
-	ay := new(big.Rat).Abs(d.y)
-	az := new(big.Rat).Abs(d.z)
+	ax := new(big.Int).Abs(d.x)
+	ay := new(big.Int).Abs(d.y)
+	az := new(big.Int).Abs(d.z)
 	if ax.Cmp(ay) >= 0 && ax.Cmp(az) >= 0 {
 		return 0
 	}
@@ -1470,19 +1498,45 @@ func (s *conformScan) edgeInteriorHits(budget *workBudget, a, b int, tri [3]int)
 // comparison is a leaf exact predicate, so recomputing an exact division inside
 // it would make the pass quadratic in rational arithmetic rather than in
 // comparisons, with the same ordering.
+// sortAlongEdge-scoped param is one hit's own parameter numerator over its
+// own positive denominator (ap[axis]/ap.w) — never divided by the shared
+// dominant-axis component d[axis]/d.w, which is constant across every hit and
+// so only decides whether the comparison below runs forward or reversed.
+type edgeParam struct{ num, den *big.Int }
+
+// sortAlongEdge orders the inserted vertices by their exact parameter along
+// (a, b). Each comparison cross-multiplies two hits' own (numerator,
+// positive-denominator) pairs rather than dividing — recomputing a division
+// inside the comparator would make the pass quadratic in rational arithmetic
+// rather than in comparisons; cross-multiplying keeps every intermediate an
+// integer product with no normalisation at all.
 func sortAlongEdge(budget *workBudget, verts []xpt, a, b int, hits []int) error {
 	d := xsub(verts[b], verts[a])
 	axis := dominantAxis(d)
-	da := ratCoordOf(d, axis)
-	params := make([]*big.Rat, len(hits))
+	daSign := xIntCoordOf(d, axis).Sign()
+	params := make([]edgeParam, len(hits))
 	for i, vi := range hits {
 		if err := budget.step(); err != nil {
 			return err
 		}
-		params[i] = new(big.Rat).Quo(ratCoordOf(xsub(verts[vi], verts[a]), axis), da)
+		ap := xsub(verts[vi], verts[a])
+		params[i] = edgeParam{num: xIntCoordOf(ap, axis), den: ap.w}
+	}
+	less := func(i, j int) bool {
+		// Both denominators are positive, so this cross-multiplication never
+		// needs a sign flip on its own; the shared divisor d[axis]/d.w this
+		// parameter is implicitly measured against is what can be negative,
+		// and it is constant across every hit, so it flips the WHOLE
+		// ordering once rather than each comparison individually.
+		lhs := new(big.Int).Mul(params[i].num, params[j].den)
+		rhs := new(big.Int).Mul(params[j].num, params[i].den)
+		if daSign < 0 {
+			return lhs.Cmp(rhs) > 0
+		}
+		return lhs.Cmp(rhs) < 0
 	}
 	for i := 1; i < len(hits); i++ {
-		for j := i; j > 0 && params[j].Cmp(params[j-1]) < 0; j-- {
+		for j := i; j > 0 && less(j, j-1); j-- {
 			if err := budget.step(); err != nil {
 				return err
 			}
@@ -1506,7 +1560,7 @@ func triangulatePlanarPolygon(ctx context.Context, verts []xpt, poly []int) ([][
 	}
 	// The polygon is a triangle with edge insertions: its normal is the
 	// original facet's, recoverable from any strict corner.
-	n := xpt{new(big.Rat), new(big.Rat), new(big.Rat)}
+	n := xpt{x: new(big.Int), y: new(big.Int), z: new(big.Int), w: big.NewInt(1)}
 	found := false
 	for i := 1; i+1 < len(poly); i++ {
 		if err := budget.step(); err != nil {
