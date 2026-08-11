@@ -423,7 +423,16 @@ not the caller's sketch — it is one decad built. Authentication here is
    audit `shell_offset.go` already runs on ITS OWN constructed section with
    an empty blend map): §6 runs the closed-form crossing/orientation/nesting
    checks the same way, on the merged record, as the second, independent
-   proof.
+   proof. Neither of those checks proves the merged loop's own **closure**.
+   `chainPrismUnionSurvivors` resolves which survivor follows which in
+   `sketch`'s own arranged polyline order — a fact about the arrangement, not
+   about what the record states — and §6's crossing check skips adjacent
+   segment pairs by construction, since an adjacent pair sharing a junction
+   is expected to touch there. The merged loop's closure is instead proven on
+   the RECORDED coordinates themselves, the same way `recordLoop` proves it
+   for any caller-supplied loop: the seam's existing junction falsifier
+   (seam §3, `edgeJoin`/`falsifyLoopJoins`) runs on the merged chain before
+   the assembled `ProfileRecord` is returned.
 
 Nothing here computes a *new* geometric fact `sketch` has not already
 certified; it re-checks decad's own combinatorial bookkeeping the same way
@@ -441,6 +450,7 @@ the shared audit"). Order matches modify §4's:
 | Step | Check | Sentinel |
 |---|---|---|
 | assembly | surviving edges chain into exactly one closed loop | not resolved (§4.4), mesh path — not a refusal |
+| closure | the merged loop's own RECORDED coordinates join at every junction (seam §3's `edgeJoin`/`falsifyLoopJoins`, unmodified), run after the chain resolves — past §3.4's point of no return | `ErrUnrecordableProfile` (RB9), a refusal, not a reroute — the same treatment RB8 already gives a `recordEdge` rejection at this stage |
 | S8-equiv | assembled loop's signed area does not flip/collapse | `ErrDegenerate` |
 | S7-equiv | no non-adjacent segment pair crosses or contacts within the diameter-anchored `contactFloor` band (verification §4's noise floor, reused unchanged) | `ErrUnsupported` |
 | S9-equiv | outer loop provably contains every hole (both operands' original holes survive into the result unchanged, since `Union`'s admitted class is hole-free per G6 — this step is a no-op until §9 PR3 relaxes G6's union arm) | `ErrDegenerate` (decidably broken) / `ErrUnsupported` (undecidable) |
@@ -519,7 +529,12 @@ strictly containing the other, or two footprints meeting along complete shared
 walls. A partial overlap, which splits at least two walls, never reaches the
 zero case, and neither does a union whose result the caller would call
 "obviously exact": the recorded walk closes only to within `δ_cut`, and a
-zero bound over it would be a claim the evaluator cannot make.
+zero bound over it would be a claim the evaluator cannot make. That `δ_cut`
+bound is about a genuinely cut junction's own rounding along an exact
+carrier; it says nothing about a whole-to-whole junction the record states
+**twice, differently** (RB9, §6, §9) — that is not a rounding this design
+charges, it is a claim the assembly disproves, so the merge refuses instead
+of publishing a section with a displacement no term here bounds.
 
 Each sweep endpoint is A's recorded endpoint after G5 proves the two intervals
 coincide, so its axial displacement is the per-end maximum of A and B's
@@ -623,6 +638,7 @@ whether it is permanent.
 | RB6 | §6's S9-equivalent, undecidable | `ErrUnsupported` | No |
 | RB7 | The bounded work budget (§10) exhausts, or the private scene exceeds `prismUnionMaxArrangementSegments`, before resolution or the audit completes | `ErrUnsupported` | No — a coarser/simpler input may clear it |
 | RB8 | `recordEdge`/`falsifyRange` rejects a surviving segment (`TExact` disproven on a merged edge — an internal `sketch` inconsistency, reported upstream per seam §3) | `ErrUnrecordableProfile` | No, but should not occur on a certified arrangement; a defensive check |
+| RB9 | The merged loop's recorded segments do not join (`falsifyLoopJoins`, seam §3) — a whole-to-whole junction the assembly restates as two segments' own defining coordinates, which the merge did not compute and so did not round to agreement. Not RB8's class: the mismatch is inherited from an operand's own record (typically one carrying `Partial` cut fragments), not an internal `sketch` inconsistency | `ErrUnrecordableProfile` | No — a differently-drawn operand may close |
 
 None of these rows is permanent in the modify-reach SX9 sense: every one is a
 property of the specific pair's geometry, not a structural class exclusion —

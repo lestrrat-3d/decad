@@ -399,8 +399,10 @@ func resolvePrismUnion(ctx context.Context, budget *workBudget, pa, pb prismPayl
 	}
 
 	// Point of no return crossed within this function's own contract: every
-	// further problem (a rejected TExact fragment, §9's RB8) is genuine.
+	// further problem (a rejected TExact fragment, §9's RB8; a non-closing
+	// merged loop, §9's RB9) is genuine.
 	segs := make([]CurveSegment, len(chain))
+	joins := make([]loopJoin, len(chain))
 	cutDelta := 0.0
 	for i, e := range chain {
 		if err := budget.step(); err != nil {
@@ -411,11 +413,23 @@ func resolvePrismUnion(ctx context.Context, budget *workBudget, pa, pb prismPayl
 			return ProfileRecord{}, 0, false, err
 		}
 		segs[i] = seg
+		join, err := edgeJoin(e, seg)
+		if err != nil {
+			return ProfileRecord{}, 0, false, err
+		}
+		joins[i] = join
 		d, err := prismUnionCutDelta(e, seg)
 		if err != nil {
 			return ProfileRecord{}, 0, false, err
 		}
 		cutDelta = math.Max(cutDelta, d)
+	}
+	// §6's closure row (RB9): the seam's own junction falsifier, run on the
+	// merged chain's recorded coordinates. recordLoop is not called here — it
+	// takes no budget.step() charge and would drop cutDelta's per-edge
+	// pairing — so this calls edgeJoin/falsifyLoopJoins directly, unchanged.
+	if err := falsifyLoopJoins("merged union loop", joins); err != nil {
+		return ProfileRecord{}, 0, false, err
 	}
 	return ProfileRecord{Outer: LoopRecord{Segments: segs}}, cutDelta, true, nil
 }
