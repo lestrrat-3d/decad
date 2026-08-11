@@ -693,12 +693,17 @@ func meshParityContext(ctx context.Context, p xpt, verts []r3.Vec, tris [][3]int
 				ambiguous = true
 				break
 			}
+			// t = tNum/nAxis decides the crossing; nAxis is already proven
+			// nonzero above, so its sign alone tells the division's sign
+			// without ever forming the quotient — only t's sign is read
+			// (docs/evaluator-design.md §9's reject-only discipline extends to
+			// never paying a big.Rat normalisation for a value nothing but
+			// Sign() consumes).
 			tNum := xdot(xsub(xa, p), n)
-			t := new(big.Rat).Quo(tNum, nAxis)
-			switch s := t.Sign() * ray.dir; {
+			switch s := tNum.Sign() * nAxis.Sign() * ray.dir; {
 			case s > 0:
 				crossings++
-			case t.Sign() == 0:
+			case tNum.Sign() == 0:
 				onBoundary = true
 			}
 			if onBoundary {

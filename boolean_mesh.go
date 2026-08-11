@@ -1311,6 +1311,12 @@ func conformOnce(ctx context.Context, xverts *[]xpt, tris *[][3]int, src *[]int)
 
 // onSegmentInterior3 reports, exactly, whether p lies strictly inside the 3D
 // segment (a, b).
+//
+// The parameter t = ap[axis]/d[axis] is compared only against 0 and 1, which
+// is decided without ever forming the quotient: t > 0 and t < 1 become two
+// comparisons of ap[axis] against 0 and against d[axis], with the inequality
+// direction flipped when d[axis] is negative — multiplying an inequality by a
+// negative divisor reverses it.
 func onSegmentInterior3(a, b, p xpt) bool {
 	d := xsub(b, a)
 	ap := xsub(p, a)
@@ -1320,11 +1326,15 @@ func onSegmentInterior3(a, b, p xpt) bool {
 	}
 	axis := dominantAxis(d)
 	da := ratCoordOf(d, axis)
-	if da.Sign() == 0 {
+	apAxis := ratCoordOf(ap, axis)
+	switch da.Sign() {
+	case 0:
 		return false
+	case 1:
+		return apAxis.Sign() > 0 && apAxis.Cmp(da) < 0
+	default:
+		return apAxis.Sign() < 0 && apAxis.Cmp(da) > 0
 	}
-	t := new(big.Rat).Quo(ratCoordOf(ap, axis), da)
-	return t.Sign() > 0 && t.Cmp(big.NewRat(1, 1)) < 0
 }
 
 func dominantAxis(d xpt) int {
