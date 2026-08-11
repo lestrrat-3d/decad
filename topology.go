@@ -397,12 +397,14 @@ type Face struct {
 	// tagged variant the normal is computed from. It is zero for every face
 	// whose own geometry IS its tag, which is every analytic face but one: a
 	// cap-loop chamfer's band patch over a circular wall is RULED between two
-	// directrices that a mitered corner leaves sweeping different angular
-	// windows, so its surface departs from the `Cone` it publishes by a bound
-	// derived from that skew alone (capblend_geom.go's capPatchNormalAllow,
-	// docs/modify-reach-design.md §8.3). A zero term there would omit a
-	// direction difference the built surface has. NormalAt separately composes
-	// its arithmetic proof (normal_bound.go).
+	// directrices, and the `Cone` it publishes is that ruled surface only to
+	// within a bound measured from the numbers the body publishes for it
+	// (capblend_departure.go, docs/modify-reach-design.md §8.3). The bound is a
+	// world-space one, so it covers both a mitered corner's own angular skew and
+	// the placement's independent rounding of every coordinate the build emits —
+	// which leaves the tag even where the two windows coincide exactly. A zero
+	// term there would omit a direction difference the built surface has.
+	// NormalAt separately composes its arithmetic proof (normal_bound.go).
 	normalBound float64
 }
 

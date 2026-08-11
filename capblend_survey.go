@@ -14,12 +14,19 @@ import (
 // pull (undercut) and the minimum concave principal radius over the patch set
 // (Table DX row DX8).
 //
-// Both rows turn on one fact about the band: a circular patch at a mitered
-// corner is RULED between two differently-swept directrices, so the Cone it
-// publishes is its surface only to within a proven bound (§8.3). DX7 widens
-// its own reading by that bound. A provenly opposing point lists its patch;
-// only a patch with no such point and a straddling range is undecided. DX8
-// does not answer for such a band at all.
+// Both rows turn on one fact about the band: a circular patch is RULED between
+// two directrices, so the Cone it publishes is its surface only to within a
+// proven bound (§8.3, capblend_departure.go). DX7 widens its own reading by
+// that bound. A provenly opposing point lists its patch; only a patch with no
+// such point and a straddling range is undecided.
+//
+// The two rows read that fact through different halves of it. DX7's bound is a
+// WORLD-space one and never reaches zero on a placed band: a mitered corner's
+// angular skew is one half of it, and the placement's own independent rounding
+// of every coordinate the build emits is the other, which leaves the tag even
+// where the two windows coincide exactly. DX8 asks only whether the patch is a
+// developable cone sector at all — a plane-local question the windows decide
+// outright — and refuses for a band holding a mitered patch.
 //
 // DX7's reading owes a SECOND term, on every band and not only a mitered one:
 // it reads each patch's normal through Face.NormalAt, whose answer is a
@@ -51,11 +58,11 @@ import (
 // non-patch faces are built exactly like a prism's.
 //
 // That range is the patch's own only where the patch's surface IS the one it
-// publishes. A mitered circular patch's is not, so its reading is widened by
-// its own proven departure (capPatchNormalAllow), and every patch's is widened
-// by the whole distance its own readings can sit from the surface it
-// publishes (capPatchNormalRange). The existential listing and universal
-// all-clear rules then decide it per point: see the loop below.
+// publishes. A circular patch's is not, so its reading is widened by the
+// departure the build already stamped on the face (capblend_departure.go), and
+// every patch's is widened by the whole distance its own readings can sit from
+// the surface it publishes (capPatchNormalRange). The existential listing and
+// universal all-clear rules then decide it per point: see the loop below.
 func capBlendUndercuts(b *Body, cbp capBlendPayload, pull r3.Vec) undercutOutcome {
 	p, ok := pull.Normalize()
 	if !ok {
@@ -126,7 +133,11 @@ func capBlendUndercuts(b *Body, cbp capBlendPayload, pull r3.Vec) undercutOutcom
 		// depart from that surface's exact model, which this survey may not
 		// drop. The departure covers the BUILT surface's distance from the
 		// published one, which no reading of the published one reaches at all.
-		allow := absSumUpper(capPatchNormalAllow(patch.geom), reading)
+		// It is read off the face the build already stamped it on
+		// (capblend_geom.go's setPatchReadings) rather than computed a second
+		// time here, so this survey and `Face.NormalAt` can never widen by
+		// different amounts.
+		allow := absSumUpper(f.normalBound, reading)
 		if allow <= 0 {
 			// The patch's own surface IS the Cone (or Plane) it publishes AND
 			// every reading it was assembled from is exact, so the range above
@@ -138,8 +149,8 @@ func capBlendUndercuts(b *Body, cbp capBlendPayload, pull r3.Vec) undercutOutcom
 		}
 		// Every point of the patch carries an azimuth inside this window, and
 		// its own normal component sits within allow of the reading at that
-		// azimuth: a MITERED circular patch because the surface it publishes is
-		// its own only to within its departure (capblend_geom.go,
+		// azimuth: a CIRCULAR patch because the surface it publishes is its own
+		// only to within its departure (capblend_departure.go,
 		// docs/modify-reach-design.md §8.3), and any patch at all because the
 		// reading was assembled from bounded readings. A point proven to oppose
 		// lists this patch; only an all-clear needs every point to clear. A
@@ -326,8 +337,11 @@ func pullLengthUpper(p r3.Vec) (float64, bool) {
 // capBlendMinRadius is the tightest concave principal radius over a
 // cap-blend body (Table DX, DX8).
 //
-// It answers only for a band whose every patch's own surface IS the Plane or
-// Cone it publishes. A MITERED circular patch is not: the build rules it
+// It answers only for a band whose every patch really is the flat or
+// cone-sector surface it publishes — a question about the patch's own KIND,
+// which its two plane-local windows decide outright (capPatchWindowSkew), not
+// about the rounding-scale distance to the tag DX7's own reading charges
+// (capblend_departure.go). A MITERED circular patch is not: the build rules it
 // between two differently-swept directrices (docs/modify-reach-design.md
 // §8.3), and a straight-ruled surface between two skewed arcs is not
 // developable at all — it carries curvature in both principal directions,

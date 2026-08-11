@@ -465,15 +465,28 @@ about, but the tag is then a bounded STAND-IN for the surface as well as for
 the measurement, and every reading taken off it owes the departure its own
 term:
 
-- `Face.NormalAt` on a mitered band patch reports the Cone's own normal with a
-  proven surface-departure bound derived from the two windows' skew alone — an azimuth part (the
-  built normal and the query point both sit angularly between the two
-  directrices, so a rotation of at most the skew separates them) and a tilt
-  part (the built patch's own radial/axial ratio against the cone's, whose
-  whole difference carries a factor of `1 - cos(skew)`). `ruledPatchNormalAllow`
-  owns the derivation. `Face.NormalAt` separately composes its arithmetic
-  proof (`normal_bound.go`). A zero surface-departure term on a mitered patch
-  omits a direction difference the built surface has.
+- `Face.NormalAt` on a circular band patch reports the Cone's own normal with a
+  proven surface-departure bound. The bound is measured in WORLD space from the
+  numbers the body itself publishes — the two directrices' own `Arc3` centres,
+  axes and radii, the rulings' own endpoint vertices, and the tag's own origin,
+  axis, radius and half angle — in exact rational interval arithmetic, and
+  `capblend_departure.go` owns the derivation. Two independent things separate
+  the built surface from the tag and the one bound covers both. The two windows'
+  SKEW is the first: a non-tangential corner trims the cap directrix narrower
+  than the side one sweeps, and the two directrices then differ in azimuth along
+  every ruling. The PLACEMENT's own rounding is the second, and it is not a
+  plane-local quantity at all: every world coordinate the build emits is a
+  rounded image of what it denotes, and the roundings are independent, so the
+  built rulings stop being generators of the published cone and the directrices'
+  centres leave its axis. That second part is nonzero on a band whose windows
+  coincide exactly, and it grows with the distance from the world origin to the
+  patch and shrinks with the patch's own size — so a small band placed far out
+  shows it orders past any reading's own arithmetic bound. A bound derived from
+  the plane-local windows alone is identical placed or not, so its zero on a
+  tangent join, an apex patch or a whole turn is an ASSERTION rather than a
+  measurement, and it omits a direction difference the built surface has.
+  `Face.NormalAt` separately composes its arithmetic proof
+  (`normal_bound.go`).
 - DX7 widens its own window reading by that bound. A point proven to oppose
   lists the patch; only an all-clear needs every point to clear. For the tagged
   normal-component range `[mn, mx]` and allowance `allow`, it lists when
@@ -505,12 +518,13 @@ term:
   to the receiver's own section rests on every patch being flat or a cone
   sector, and the ruled patch is neither.
 
-All three retain their zero surface-departure term and their section reduction
-wherever the two windows coincide: every tangent join, apex patch and whole
-turn. `Face.NormalAt` still reports its independent arithmetic bound
-(`normal_bound.go`), and DX7's range and allowance still carry it there, so a
-coinciding window buys back the departure term alone and never the reading's
-own.
+A coinciding window — every tangent join, apex patch and whole turn — buys back
+the SKEW half of the departure and nothing else. DX8's section reduction turns
+on that half alone, since what its reduction needs is that every patch really is
+a developable cone sector, and it still answers there. `Face.NormalAt` and DX7
+keep a departure term of the placement's own size, and both still carry their
+own reading bounds beside it (`normal_bound.go`), so a coinciding window buys
+back neither the placement's half nor the reading's.
 
 SX12 audits the exact offset family, not the ruled patch the body builds. It
 runs the existing line/arc offset audit on the section offset by the full
@@ -976,15 +990,26 @@ Every implementation PR MUST add geometry assertions, not run-only coverage.
   kind decision; an offset radius identical to the wall's → SX13;
 - a mitered patch's own `NormalAt` bound ENCLOSES its distance to the ruled
   surface's own normal, sampled across the whole patch and over a family of
-  setbacks up to the widest the offset admits, while a whole turn's and a
-  straight wall's carry no surface-departure term at all and report only the
-  arithmetic bound their own evaluation earned;
+  setbacks up to the widest the offset admits, while a straight wall's carries
+  no surface-departure term at all and reports only the arithmetic bound its own
+  evaluation earned;
+- a TANGENT-join band, whose two windows coincide, still carries a departure
+  bound that ENCLOSES its own built ruled surface's distance from the `Cone` it
+  publishes, read at every corner of every patch from held coordinates alone —
+  the built tangent plane's own normal, and the published ruling against the
+  published cone's generator through the same corner. The same band is read
+  unplaced, rotated about the world origin, and rotated far out, and both the
+  measured departure and the published bound grow by orders across those rows: a
+  bound derived from the plane-local windows would be unmoved and zero in all
+  three. The section is drawn at the sketch origin and carried out by the
+  PLACEMENT, never drawn at large sketch coordinates, so no arrangement weld is
+  left a handful of ulps of margin for a platform to land either side of;
 - a body whose ruled patch opposes a pull its published `Cone` does not is NOT
   passed by DX7 — the answer is undecided, never the proven all-clear — while
   an ordinary setback's band is still cleared outright under one pull and
   still listed as a proven undercut under the opposite one;
 - a pull that DX7's own reading cannot separate from a patch's tangent, on a
-  band with no surface departure at all, is undecided rather than answered:
+  band with no window skew at all, is undecided rather than answered:
   covered on the whole-turn `Cone` patch, whose arm's float cosine and sine of
   the held half angle leave the minimum component inside the bound the patch
   publishes, and on a flat patch read from one sample, against a pull

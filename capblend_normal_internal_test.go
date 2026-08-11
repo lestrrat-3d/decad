@@ -105,7 +105,13 @@ func quarterDiskSection(cx, cy, r float64) func(*sketch.Sketch) {
 // component of the patch's exact normal at that point lies within the returned
 // bound of the returned value, so a range that excludes the whole bracket is
 // excluding a value the patch really takes.
-func (b bandUnderTest) componentAt(t *testing.T, theta float64, pull r3.Vec) (float64, float64) {
+//
+// The second bound is the ARM's own half of the same reading. Face.NormalAt
+// publishes the arm's arithmetic proof composed with the face's own departure
+// from its tag (capblend_departure.go), and only the first is what a reading
+// that charged its arithmetic alone would have had — which is the figure the
+// sample-displacement ratios below are measured against.
+func (b bandUnderTest) componentAt(t *testing.T, theta float64, pull r3.Vec) (float64, float64, float64) {
 	t.Helper()
 	sin, cos := math.Sincos(theta)
 	g := b.geom
@@ -113,7 +119,7 @@ func (b bandUnderTest) componentAt(t *testing.T, theta float64, pull r3.Vec) (fl
 	require.NoError(t, err)
 	bound, err := n.Bound.In(units.One)
 	require.NoError(t, err)
-	return n.Value.Dot(pull), bound * pull.Len()
+	return n.Value.Dot(pull), bound * pull.Len(), math.Max(0, bound-b.face.normalBound) * pull.Len()
 }
 
 // TestCapPatchNormalRangeCoversWhatThePatchTakes is the sampled half of the
@@ -196,8 +202,8 @@ func TestCapPatchNormalRangeCoversWhatThePatchTakes(t *testing.T) {
 			}
 			arms := 0.0
 			for _, off := range []float64{0, math.Pi / 2, math.Pi} {
-				_, bound := band.componentAt(t, g.th0+off, pull)
-				arms += bound
+				_, _, arm := band.componentAt(t, g.th0+off, pull)
+				arms += arm
 			}
 			require.Positive(t, arms, "a Cone arm's own cosine and sine are not exact")
 			if tc.overArmBounds > 0 {
@@ -212,7 +218,7 @@ func TestCapPatchNormalRangeCoversWhatThePatchTakes(t *testing.T) {
 			low, high := math.Inf(1), math.Inf(-1)
 			for k := range samples + 1 {
 				theta := g.th0 + (g.th1-g.th0)*float64(k)/samples
-				v, bound := band.componentAt(t, theta, pull)
+				v, bound, _ := band.componentAt(t, theta, pull)
 				require.GreaterOrEqual(t, v+bound, lo-allow,
 					"azimuth %v takes a component below the reported range", theta)
 				require.LessOrEqual(t, v-bound, hi+allow,

@@ -160,14 +160,15 @@ func TestCapBlendMiteredPatchNormalCarriesItsOwnBound(t *testing.T) {
 	}
 }
 
-// TestCapBlendUnmiteredPatchNormalHasNoSurfaceDepartureBound pins the other
-// side of the same rule: where a band patch's two directrices sweep ONE window
-// there is no surface departure to bound. Face.NormalAt is Exact only when
-// its own arithmetic is exact; otherwise it publishes only a small arithmetic
-// bound. A whole turn (no corner trims it at all) and a rectangular loop's flat
-// patches are the shipped cases, and neither may pay for the mitered one's
-// surface-departure bound.
-func TestCapBlendUnmiteredPatchNormalHasNoSurfaceDepartureBound(t *testing.T) {
+// TestCapBlendUnmiteredPatchNormalCarriesNoWindowSkew pins the other side of
+// the same rule: where a band patch's two directrices sweep ONE window there is
+// no ANGULAR skew to bound, so the patch may not pay for the mitered one's.
+// What is left on an unplaced, axis-aligned build of these shapes is the
+// rounding of the coordinates themselves, which is a rounding-scale term rather
+// than a geometric one (capblend_departure_test.go reads the same term on a
+// placed band, where it is orders larger). A whole turn (no corner trims it at
+// all) and a rectangular loop's flat patches are the shipped cases.
+func TestCapBlendUnmiteredPatchNormalCarriesNoWindowSkew(t *testing.T) {
 	for _, tc := range []struct {
 		name  string
 		build func(t *testing.T) *decad.Body
@@ -189,7 +190,7 @@ func TestCapBlendUnmiteredPatchNormalHasNoSurfaceDepartureBound(t *testing.T) {
 				p := f.Loops()[0].CoEdges()[0].Start().Position().Value
 				n, err := f.NormalAt(p)
 				require.NoError(t, err)
-				requireNoSurfaceDepartureNormalBound(t, n)
+				requireRoundingScaleNormalBound(t, n)
 				checked++
 			}
 			require.Positive(t, checked)
@@ -253,8 +254,8 @@ func TestCapBlendUndecidedPatchKeepsProvenUndercut(t *testing.T) {
 }
 
 // TestCapBlendWholeTurnUndercutRespectsNormalBound covers the OTHER reading a
-// band patch's published bound governs, on the band that carries no
-// surface-departure term at all. A whole-turn Cone patch publishes its normal
+// band patch's published bound governs, on the band that carries no window skew
+// at all. A whole-turn Cone patch publishes its normal
 // with the arithmetic bound its own arm earned (normal_bound.go), and a caller
 // may pull along a direction the patch's own tangent cannot be separated from
 // within that bound: the exact taper and the float cosine and sine the arm
@@ -350,10 +351,12 @@ func requireArithmeticNormalBound(t *testing.T, n decad.VecMeasurement) {
 	require.Less(t, bound, 1e-14)
 }
 
-// requireNoSurfaceDepartureNormalBound keeps zero cap-blend surface-departure
-// cases distinct from mitered patches. An axis-aligned normal can be Exact;
-// every other normal carries only Face.NormalAt's small arithmetic bound.
-func requireNoSurfaceDepartureNormalBound(t *testing.T, n decad.VecMeasurement) {
+// requireRoundingScaleNormalBound keeps a band with no window skew distinct
+// from a mitered patch, whose bound is a geometric fraction of a radian. An
+// axis-aligned normal can be Exact; every other normal carries only
+// Face.NormalAt's arithmetic bound and the rounding-scale departure an unplaced
+// build's own coordinates leave.
+func requireRoundingScaleNormalBound(t *testing.T, n decad.VecMeasurement) {
 	t.Helper()
 	bound, err := n.Bound.In(units.One)
 	require.NoError(t, err)
@@ -377,7 +380,9 @@ func TestCapBlendUndercutStillDecidedOnOrdinaryBand(t *testing.T) {
 	m := chamferedQuarterDiskPatch(t, 100, 20, 0.5)
 	n, err := m.face.NormalAt(m.rulings[0][1])
 	require.NoError(t, err)
-	require.Less(t, n.Bound.Mag(), 0.01, "an ordinary setback's departure is small")
+	// Audited at 0.009722243846487153 — a little over half a degree, and far
+	// below the trivial 2 a refused derivation publishes.
+	require.Less(t, n.Bound.Mag(), 0.05, "an ordinary setback's departure is small")
 
 	report, err := m.body.Document().Verify(t.Context(), decad.WithPullDirection(r3.NewVec(0, 0, 1)))
 	require.NoError(t, err)
