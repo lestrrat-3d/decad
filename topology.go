@@ -415,6 +415,13 @@ type Face struct {
 // from that tag (normalBound). It is Exact only when both are zero. A point
 // that gives the surface no direction is ErrDegenerate. A reading whose own
 // enclosure cannot separate the direction from zero is ErrUnsupported.
+//
+// The five analytic variants — Plane, Cylinder, Cone, Sphere and Torus — are
+// the whole set this answers for. Any other tagged surface is ErrUnsupported:
+// a NURBSSurface for the reason docs/spline-design.md §7 owns, and a Faceted
+// face — the tag every boolean-produced face carries — because its answer
+// waits on the faceted certificate stage
+// (docs/payload-verification-design.md §5.4, §13).
 func (f *Face) NormalAt(p r3.Vec) (VecMeasurement, error) {
 	sign := 1.0
 	if f.reversed {
