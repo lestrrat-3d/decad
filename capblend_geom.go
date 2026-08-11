@@ -714,8 +714,10 @@ func buildCapBand(ctx context.Context, body *Body, ref StepRef, cbp capBlendPayl
 		g.contourAllow = bandPatchAreaAllow(delta, chordUpper, slant)
 		// The two rulings this wall patch is bounded by, paired end for end:
 		// leadSlant joins the side wall's own start vertex to capA, trailSlant
-		// its end vertex to capB. A Plane patch's own built surface is its tag,
-		// so the pair goes unread there (capPatchNormalAllow).
+		// its end vertex to capB. Both patch kinds read the pair: a Plane
+		// patch's tag is fixed through three of its four built corners, so the
+		// fourth's own departure from it is what capPatchNormalAllow measures
+		// there.
 		setPatchReadings(face, g, capBuiltPatch(side, capEdge,
 			[]*Vertex{side.Start(), side.End()}, []*Vertex{capA, capB}))
 		geoms = append(geoms, g)

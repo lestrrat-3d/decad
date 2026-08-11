@@ -465,25 +465,28 @@ about, but the tag is then a bounded STAND-IN for the surface as well as for
 the measurement, and every reading taken off it owes the departure its own
 term:
 
-- `Face.NormalAt` on a circular band patch reports the Cone's own normal with a
+- `Face.NormalAt` on a band patch reports the tagged surface's own normal with a
   proven surface-departure bound. The bound is measured in WORLD space from the
-  numbers the body itself publishes — the two directrices' own `Arc3` centres,
-  axes and radii, the rulings' own endpoint vertices, and the tag's own origin,
-  axis, radius and half angle — in exact rational interval arithmetic, and
-  `capblend_departure.go` owns the derivation. Two independent things separate
-  the built surface from the tag and the one bound covers both. The two windows'
-  SKEW is the first: a non-tangential corner trims the cap directrix narrower
-  than the side one sweeps, and the two directrices then differ in azimuth along
-  every ruling. The PLACEMENT's own rounding is the second, and it is not a
-  plane-local quantity at all: every world coordinate the build emits is a
-  rounded image of what it denotes, and the roundings are independent, so the
-  built rulings stop being generators of the published cone and the directrices'
-  centres leave its axis. That second part is nonzero on a band whose windows
-  coincide exactly, and it grows with the distance from the world origin to the
-  patch and shrinks with the patch's own size — so a small band placed far out
-  shows it orders past any reading's own arithmetic bound. A bound derived from
-  the plane-local windows alone is identical placed or not, so its zero on a
-  tangent join, an apex patch or a whole turn is an ASSERTION rather than a
+  numbers the body itself publishes — the directrices' own `Arc3` centres, axes
+  and radii or their own straight endpoints, the rulings' own endpoint vertices,
+  and the tag's own frame, origin, axis, radius and half angle — in exact
+  rational arithmetic, and `capblend_departure.go` owns the derivation. Two
+  independent things separate the built surface from the tag and the one bound
+  covers both. The two windows' SKEW is the first, and it is the CIRCULAR
+  patch's alone: a non-tangential corner trims the cap directrix narrower than
+  the side one sweeps, and the two directrices then differ in azimuth along every
+  ruling. The PLACEMENT's own rounding is the second, it belongs to both patch
+  kinds, and it is not a plane-local quantity at all: every world coordinate the
+  build emits is a rounded image of what it denotes, and the roundings are
+  independent, so the built rulings stop being generators of the published cone,
+  the directrices' centres leave its axis, and the fourth corner of a flat
+  patch's quad leaves the `Plane` fixed through the other three. That second part
+  is nonzero on a band whose windows coincide exactly and on every flat patch,
+  and it grows with the distance from the world origin to the patch and shrinks
+  with the patch's own size — so a small band placed far out shows it orders past
+  any reading's own arithmetic bound. A bound derived from the plane-local
+  windows alone is identical placed or not, so its zero on a tangent join, an
+  apex patch, a whole turn or a straight wall is an ASSERTION rather than a
   measurement, and it omits a direction difference the built surface has.
   `Face.NormalAt` separately composes its arithmetic proof
   (`normal_bound.go`).
@@ -508,7 +511,8 @@ term:
   harmonic. Its window is then read through a proven enclosure of the recovered
   form's own extremes rather than a float evaluation of them, and each
   extreme's remaining enclosure width is charged as well. A flat patch is one
-  reading under the bound that reading publishes. Dropping any of it would
+  reading under the bound that reading publishes, and that bound carries its
+  own departure term the same way. Dropping any of it would
   decide against a direction the face never claimed — a pull the reading cannot
   separate from the patch's own tangent would be answered with the proven
   all-clear or a listed violation, and be right only by rounding luck. So an
@@ -990,20 +994,21 @@ Every implementation PR MUST add geometry assertions, not run-only coverage.
   kind decision; an offset radius identical to the wall's → SX13;
 - a mitered patch's own `NormalAt` bound ENCLOSES its distance to the ruled
   surface's own normal, sampled across the whole patch and over a family of
-  setbacks up to the widest the offset admits, while a straight wall's carries
-  no surface-departure term at all and reports only the arithmetic bound its own
-  evaluation earned;
+  setbacks up to the widest the offset admits;
 - a TANGENT-join band, whose two windows coincide, still carries a departure
-  bound that ENCLOSES its own built ruled surface's distance from the `Cone` it
-  publishes, read at every corner of every patch from held coordinates alone —
-  the built tangent plane's own normal, and the published ruling against the
-  published cone's generator through the same corner. The same band is read
-  unplaced, rotated about the world origin, and rotated far out, and both the
-  measured departure and the published bound grow by orders across those rows: a
-  bound derived from the plane-local windows would be unmoved and zero in all
-  three. The section is drawn at the sketch origin and carried out by the
-  PLACEMENT, never drawn at large sketch coordinates, so no arrangement weld is
-  left a handful of ulps of margin for a platform to land either side of;
+  bound that ENCLOSES its own built ruled surface's distance from the surface it
+  publishes, read at every corner of every patch from held coordinates alone.
+  For a `Cone` patch that is the built tangent plane's own normal, and the
+  published ruling against the published cone's generator through the same
+  corner; for a straight wall's `Plane` patch it is the built quad's own four
+  corner normals, taken over exact rationals against the tag the build fixed
+  through three of those corners. The same band is read unplaced, rotated about
+  the world origin, and rotated far out, and both the measured departure and the
+  published bound grow by orders across those rows for either patch kind: a bound
+  derived from the plane-local windows would be unmoved and zero in all three.
+  The section is drawn at the sketch origin and carried out by the PLACEMENT,
+  never drawn at large sketch coordinates, so no arrangement weld is left a
+  handful of ulps of margin for a platform to land either side of;
 - a body whose ruled patch opposes a pull its published `Cone` does not is NOT
   passed by DX7 — the answer is undecided, never the proven all-clear — while
   an ordinary setback's band is still cleared outright under one pull and

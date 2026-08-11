@@ -241,7 +241,7 @@ func TestCapBlendUndecidedPatchKeepsProvenUndercut(t *testing.T) {
 	p := plane.Loops()[0].CoEdges()[0].Start().Position().Value
 	n, err := plane.NormalAt(p)
 	require.NoError(t, err)
-	requireArithmeticNormalBound(t, n)
+	requireRoundingScaleFlatBound(t, n)
 	require.InDelta(t, -math.Sqrt2/2, n.Value.Dot(r3.NewVec(1, 0, 0)), 1e-12)
 
 	report, err := m.body.Document().Verify(t.Context(), decad.WithPullDirection(r3.NewVec(1, 0, 0)))
@@ -310,7 +310,7 @@ func TestCapBlendWholeTurnUndercutRespectsNormalBound(t *testing.T) {
 
 // TestCapBlendFlatPatchUndercutRespectsNormalBound is the same claim on the
 // single-sample arm. A flat band patch is read from ONE Face.NormalAt, whose
-// bound is just as real, and a pull perpendicular to the direction that
+// bound is just as real and carries its own departure term the same way, and a pull perpendicular to the direction that
 // reading names leaves the patch's true component on neither proven side of
 // zero.
 func TestCapBlendFlatPatchUndercutRespectsNormalBound(t *testing.T) {
@@ -322,7 +322,7 @@ func TestCapBlendFlatPatchUndercutRespectsNormalBound(t *testing.T) {
 	require.Equal(t, decad.KindPlane, patch.Surface().Kind())
 	n, err := patch.NormalAt(patch.Loops()[0].CoEdges()[0].Start().Position().Value)
 	require.NoError(t, err)
-	requireArithmeticNormalBound(t, n)
+	requireRoundingScaleFlatBound(t, n)
 
 	// Perpendicular to the published normal, so the patch's own component is
 	// zero to within the bound that normal carries.
@@ -340,9 +340,13 @@ func TestCapBlendFlatPatchUndercutRespectsNormalBound(t *testing.T) {
 	require.True(t, hasDiagnostic(report, decad.DiagUndecidedUndercut))
 }
 
-// requireArithmeticNormalBound checks a computed normal that must carry
-// Face.NormalAt's own documented arithmetic proof.
-func requireArithmeticNormalBound(t *testing.T, n decad.VecMeasurement) {
+// requireRoundingScaleFlatBound checks a flat band patch's computed normal,
+// which carries Face.NormalAt's own arithmetic proof composed with the
+// rounding-scale departure the patch's four independently rounded corners
+// leave (capblend_departure.go). Both terms are rounding-scale on the unplaced
+// builds this file reads; capblend_departure_test.go reads the same patch
+// placed, where the second is orders larger.
+func requireRoundingScaleFlatBound(t *testing.T, n decad.VecMeasurement) {
 	t.Helper()
 	require.Equal(t, decad.Approximate, n.Exactness)
 	bound, err := n.Bound.In(units.One)

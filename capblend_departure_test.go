@@ -2,6 +2,8 @@ package decad_test
 
 import (
 	"math"
+	"math/big"
+	"strings"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
@@ -119,6 +121,47 @@ func bandRulingEnds(t *testing.T, f *decad.Face) []bandRulingEnd {
 	return out
 }
 
+// bandQuadCorners reads one FLAT band patch's four built corners off its own
+// public boundary, in walk order: the wall's side-level segment, one ruling,
+// the cap-level segment the offset denotes, and the other ruling. Consecutive
+// triples give the four corner normals of the surface the build rules between
+// them, which are also the normals of the four triangles either diagonal
+// splits the quad into — so nothing here picks a triangulation, and nothing
+// re-derives a production formula.
+func bandQuadCorners(t *testing.T, f *decad.Face) []r3.Vec {
+	t.Helper()
+	require.Len(t, f.Loops(), 1)
+	co := f.Loops()[0].CoEdges()
+	require.Len(t, co, 4, "a flat band patch is a quad")
+	out := make([]r3.Vec, 0, 4)
+	for _, ce := range co {
+		require.IsType(t, decad.Line3{}, ce.Edge().Curve(), "every edge of a flat band patch is straight")
+		out = append(out, ce.Start().Position().Value)
+	}
+	return out
+}
+
+// bandFlatPatches is every FLAT chamfer band patch of a chamfered body — the
+// role prefix is what separates them from the body's other planar faces, which
+// the chamfer only trimmed.
+func bandFlatPatches(t *testing.T, b *decad.Body) []*decad.Face {
+	t.Helper()
+	var out []*decad.Face
+	for _, f := range b.Faces() {
+		if f.Surface().Kind() != decad.KindPlane {
+			continue
+		}
+		for _, o := range f.Origins() {
+			if strings.HasPrefix(o.Role, "chamferCap(") {
+				out = append(out, f)
+				break
+			}
+		}
+	}
+	require.NotEmpty(t, out)
+	return out
+}
+
 // bandConePatches is every circular chamfer band patch of a chamfered body.
 func bandConePatches(t *testing.T, b *decad.Body) []*decad.Face {
 	t.Helper()
@@ -223,6 +266,93 @@ func TestCapBlendPlacedTangentBandNormalCarriesItsOwnBound(t *testing.T) {
 			require.Equal(t, 16, checked, "four tangent fillets, two rulings each, two ends per ruling")
 		})
 	}
+}
+
+// flatCornerDefectSq is one corner of a flat band patch's own built surface,
+// measured against the `Plane` the patch publishes: the exact squared sine
+// between the two directions, taken over rationals from the three held corners
+// that meet there and the tag's own held frame normal. The build fixes that
+// plane through THREE of the four corners, so the corner normals are the one
+// reading that can see the fourth leave it.
+func flatCornerDefectSq(corners []r3.Vec, i int, published r3.Vec) *big.Rat {
+	at := ratVecOf(corners[i])
+	next := ratVecSub(ratVecOf(corners[(i+1)%len(corners)]), at)
+	prev := ratVecSub(ratVecOf(corners[(i+len(corners)-1)%len(corners)]), at)
+	return perpDefectSq(published, ratVecCross(next, prev))
+}
+
+// TestCapBlendPlacedFlatPatchNormalCarriesItsOwnBound is the tangent band's
+// claim on the band's OTHER patch kind. A straight wall's offset stays parallel
+// to it in exact arithmetic, so the surface a flat patch DENOTES really is its
+// tag's plane — and the four corners the build emits are each rounded once
+// more, while the tag is fixed through only three of them, so the quad the
+// build actually rules still leaves that plane. The published `Face.NormalAt`
+// bound must enclose the departure at every corner of every patch, under every
+// placement.
+func TestCapBlendPlacedFlatPatchNormalCarriesItsOwnBound(t *testing.T) {
+	spin, far := tangentBandMotions(t)
+	for _, tc := range []struct {
+		name   string
+		motion *r3.Transform
+	}{
+		{name: `unplaced`},
+		{name: `rotated about the origin`, motion: &spin},
+		{name: `rotated and placed far out`, motion: &far},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			body := tangentFilletChamfer(t, tc.motion)
+			checked := 0
+			for _, f := range bandFlatPatches(t, body) {
+				corners := bandQuadCorners(t, f)
+				for i, corner := range corners {
+					published, err := f.NormalAt(corner)
+					require.NoError(t, err)
+					requireBoundCoversDefect(t, published.Bound.Mag(),
+						flatCornerDefectSq(corners, i, published.Value), tc.name)
+					checked++
+				}
+			}
+			require.Equal(t, 16, checked, "four straight walls, four corners each")
+		})
+	}
+}
+
+// TestCapBlendPlacedFlatPatchDepartureGrowsWithPlacement is the flat patch's
+// half of the causal path below: the SAME wall, whose plane-local offset is
+// byte for byte the same under every placement, rules a quad that leaves its
+// own `Plane` tag by orders more once the placement carries it far out. A bound
+// asserted from the plane-local offset alone would be zero in all three rows.
+func TestCapBlendPlacedFlatPatchDepartureGrowsWithPlacement(t *testing.T) {
+	spin, far := tangentBandMotions(t)
+	worst := func(motion *r3.Transform) (float64, float64) {
+		body := tangentFilletChamfer(t, motion)
+		gap, bound := 0.0, 0.0
+		for _, f := range bandFlatPatches(t, body) {
+			corners := bandQuadCorners(t, f)
+			for i, corner := range corners {
+				published, err := f.NormalAt(corner)
+				require.NoError(t, err)
+				sq, _ := flatCornerDefectSq(corners, i, published.Value).Float64()
+				gap = math.Max(gap, math.Sqrt(sq))
+				bound = math.Max(bound, published.Bound.Mag())
+			}
+		}
+		return gap, bound
+	}
+
+	flatGap, flatBound := worst(nil)
+	spunGap, spunBound := worst(&spin)
+	farGap, farBound := worst(&far)
+
+	// Audited: unplaced a gap of 0 under a bound of 1.1e-16; rotated at the
+	// origin 1.8e-15 under 4.0e-15; rotated and far out 1.0e-10 under 2.1e-10.
+	require.Less(t, flatGap, 1e-15,
+		"an unplaced build's quad is planar to within its own arithmetic")
+	require.Greater(t, farGap, 1e-13, "a placed build's leaves its own tag")
+	require.Greater(t, farGap, 1e3*spunGap, "by orders more once the placement carries it far out")
+	require.GreaterOrEqual(t, spunBound, flatBound)
+	require.Greater(t, farBound, 1e3*spunBound)
+	require.Greater(t, farBound, farGap)
 }
 
 // TestCapBlendPlacedTangentBandDepartureGrowsWithPlacement pins the causal path

@@ -395,16 +395,17 @@ type Face struct {
 	// normalBound is the proven DIMENSIONLESS bound on NormalAt's own answer:
 	// how far the surface this face really carries can tilt away from the
 	// tagged variant the normal is computed from. It is zero for every face
-	// whose own geometry IS its tag, which is every analytic face but one: a
-	// cap-loop chamfer's band patch over a circular wall is RULED between two
-	// directrices, and the `Cone` it publishes is that ruled surface only to
-	// within a bound measured from the numbers the body publishes for it
+	// whose own geometry IS its tag, which is every analytic face but a
+	// cap-loop chamfer's band patch: the patch is RULED between two built
+	// directrices, and the `Cone` or `Plane` it publishes is that ruled surface
+	// only to within a bound measured from the numbers the body publishes for it
 	// (capblend_departure.go, docs/modify-reach-design.md §8.3). The bound is a
 	// world-space one, so it covers both a mitered corner's own angular skew and
 	// the placement's independent rounding of every coordinate the build emits —
-	// which leaves the tag even where the two windows coincide exactly. A zero
-	// term there would omit a direction difference the built surface has.
-	// NormalAt separately composes its arithmetic proof (normal_bound.go).
+	// which leaves the tag even on a flat patch, and on a circular one whose two
+	// windows coincide exactly. A zero term there would omit a direction
+	// difference the built surface has. NormalAt separately composes its
+	// arithmetic proof (normal_bound.go).
 	normalBound float64
 }
 

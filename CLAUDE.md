@@ -186,7 +186,7 @@ one.
 | `capblend_moments.go` | `evalCapBlendContext` builds the cap-blend body and its bounded area/volume/centroid via closed-form divergence-theorem integrals per patch, exact where representable. See `docs/modify-reach-design.md` §8.4. |
 | `capblend_survey.go` | The cap-blend payload's undercut and minimum-radius surveys: per-patch normal ranges under each reading's own distance from the patch's model and the patch's published departure, plus the receiver's unchanged-profile radius survey. See `docs/modify-reach-design.md` §12 Table DX (DX7/DX8). |
 | `capblend_normal.go` | The certified half of DX7's circular-patch reading: the rational-interval enclosure of a band patch's own exact normal-component model, and the proven enclosure of a harmonic form's extremes over one window. See the file's own doc comment. |
-| `capblend_departure.go` | The proven bound on how far a band patch's BUILT ruled surface points away from the surface it publishes, measured in world space from the published circles, rulings and tag. See the file's own doc comment. |
+| `capblend_departure.go` | The proven bound on how far a band patch's BUILT ruled surface points away from the surface it publishes, measured in world space from the published corners, curves and tag. See the file's own doc comment. |
 
 ### Verification and surveys
 

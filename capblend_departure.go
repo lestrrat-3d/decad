@@ -8,20 +8,21 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// This file owns ONE bound: how far the surface a cap-loop chamfer's circular
-// band patch actually carries can point away from the `Cone` the build tags it
-// with (docs/modify-reach-design.md §8.3). `Face.NormalAt` publishes it beside
-// its own arithmetic proof (normal_bound.go) and DX7 composes it into the
-// allowance its decision reads (capblend_survey.go).
+// This file owns ONE bound: how far the surface a cap-loop chamfer's band patch
+// actually carries can point away from the surface the build tags it with
+// (docs/modify-reach-design.md §8.3) — the `Cone` of a circular patch and the
+// `Plane` of a flat one alike. `Face.NormalAt` publishes it beside its own
+// arithmetic proof (normal_bound.go) and DX7 composes it into the allowance its
+// decision reads (capblend_survey.go).
 //
 // The surface the build assembles is not the tag, and it is not the tag for two
 // independent reasons that no bound may separate:
 //
-//   - The GEOMETRY. The build rules the patch with straight `Line3` rulings
-//     between a side-level directrix and a cap-level one, and a non-tangential
-//     miter corner trims the cap directrix to a narrower angular window than the
-//     side one sweeps. A straight-ruled surface between two arcs sweeping
-//     different windows is not a cone at all.
+//   - The GEOMETRY, which is the circular patch's alone. The build rules the
+//     patch with straight `Line3` rulings between a side-level directrix and a
+//     cap-level one, and a non-tangential miter corner trims the cap directrix
+//     to a narrower angular window than the side one sweeps. A straight-ruled
+//     surface between two arcs sweeping different windows is not a cone at all.
 //   - The ARITHMETIC OF PLACEMENT. Every world coordinate the build emits — each
 //     directrix centre, each ruling endpoint, the tag's own origin and its half
 //     angle — is a ROUNDED image of the plane-local number it denotes, and the
@@ -31,20 +32,23 @@ import (
 //     still carries a built surface that leaves its tag. The gap grows with the
 //     distance from the world origin to the patch and shrinks with the patch's
 //     own size, so a small band placed far away shows it at a scale orders past
-//     any reading's own arithmetic bound.
+//     any reading's own arithmetic bound. A FLAT patch is exempt from the first
+//     reason and not from this one: its four corners round independently too,
+//     and the `Plane` the build tags it with is fixed from three of them.
 //
 // A bound derived from plane-local angles alone is blind to the second, and a
 // zero it publishes on a placed band is an ASSERTION rather than a measurement.
 // So this file states the whole thing once, in WORLD space, from the held
-// numbers the body actually publishes — the two directrices' own `Arc3` centres,
-// axes and radii, the rulings' own endpoints, and the tag's own origin, axis,
-// radius and half angle — and in exact rational interval arithmetic, so a zero
-// width here records that two computations agree EXACTLY. Nothing is sampled and
-// no small residual admits anything: the enclosure IS the exact answer.
+// numbers the body actually publishes — the directrices' own `Arc3` centres,
+// axes and radii or their own straight endpoints, the rulings' own endpoints,
+// and the tag's own frame, origin, axis, radius and half angle — and in exact
+// rational interval arithmetic, so a zero width here records that two
+// computations agree EXACTLY. Nothing is sampled and no small residual admits
+// anything: the enclosure IS the exact answer.
 //
-// THE DERIVATION. Write â for the tag's unit axis, O for its origin, h for its
-// held half angle and R for its held radius at O, and take any point P of the
-// patch. The tag's own unit normal there is
+// THE CIRCULAR DERIVATION. Write â for the tag's unit axis, O for its origin, h
+// for its held half angle and R for its held radius at O, and take any point P
+// of the patch. The tag's own unit normal there is
 //
 //	n = σ·(r̂_P·cos h - â·sin h),  r̂_P the unit radial direction from the axis,
 //
@@ -92,6 +96,46 @@ import (
 // vertex and the tag's origin are proven to be the same held point, which this
 // file checks rather than assumes.
 //
+// THE FLAT DERIVATION. A straight wall's patch is bounded by four straight
+// edges — the wall's own side-level segment, the two slant rulings, and the
+// cap-level segment the offset denotes — so the surface the build assembles
+// between them is the bilinear patch those four held corners rule:
+//
+//	S(u, v) = (1-v)·((1-u)·A₀ + u·A₁) + v·((1-u)·B₀ + u·B₁),
+//
+// A the side-level pair and B the cap-level one, paired end for end by the
+// rulings themselves. The `Plane` the build tags it with is fixed from THREE of
+// those corners (capblend_geom.go's planeFromThree), so the fourth is free to
+// leave it — and on a placed body it does. A straight wall's own offset is
+// parallel to it in exact arithmetic and not in float, and that freedom is
+// exactly what this bound measures rather than asserts away.
+//
+// The built normal is N = S_u × S_v, and both factors are affine in the SAME
+// difference:
+//
+//	S_u = P₀ + v·ΔP,  S_v = R₀ + u·ΔP,
+//	P₀ = A₁-A₀,  ΔP = (B₁-B₀) - P₀,  R₀ = B₀-A₀,
+//
+// so the product's own uv term is ΔP × ΔP and vanishes exactly, leaving
+//
+//	N(u, v) = P₀×R₀ + u·(P₀×ΔP) + v·(ΔP×R₀).
+//
+// Crossing that with the tag's own held normal n is linear, so n × N is again
+// affine in (u, v) and its three coefficients are exact rationals in which the
+// cancellation has ALREADY happened — nothing is enclosed before it does, which
+// is what keeps the bound at the scale of the departure rather than at the
+// scale of the patch. Over u, v ∈ [0, 1] each coefficient contributes at most
+// its own magnitude, so with C₀ = P₀×R₀, C_u = P₀×ΔP and C_v = ΔP×R₀,
+//
+//	sin∠(n, N) = |n×N| / (|n|·|N|)
+//	          <= (|n×C₀| + |n×C_u| + |n×C_v|) / (|n| · (|C₀| - |C_u| - |C_v|)),
+//
+// refused wherever the denominator is not proven positive. The four corner
+// values N(0,0), N(1,0), N(0,1), N(1,1) are the normals of the four triangles
+// the quad's two diagonals split it into, so this one bound covers every
+// triangulation a reader takes of the patch as well as the ruled surface
+// itself.
+//
 // The angle itself is recovered from its sine, which needs the two normals to be
 // closer than a right angle. That is exactly the condition the bound is refused
 // under: where the enclosure cannot put the sine below one, the answer is the
@@ -113,11 +157,18 @@ const ruledNormalAllowUnbounded = 2.0
 // its own boundary vertices sit at. A reflex corner's apex patch has a
 // degenerate side directrix — radius zero, every ruling endpoint the same apex
 // vertex — which capPatchDeparture admits only against the tag's own origin.
+//
+// straight records a directrix the body publishes as a `Line3` instead: a
+// straight wall patch's own side and cap edges. It carries no circle at all, so
+// only its two ruling endpoints are read and the circular derivation refuses it
+// outright rather than reading its unset centre and radius as a point
+// directrix.
 type capDirectrixRef struct {
-	center r3.Vec
-	axis   r3.Vec
-	radius float64
-	ends   []r3.Vec
+	center   r3.Vec
+	axis     r3.Vec
+	radius   float64
+	ends     []r3.Vec
+	straight bool
 }
 
 // capPatchBuilt is one band patch's built ruled surface, named by the two
@@ -132,20 +183,103 @@ type capPatchBuilt struct {
 // how far the RULED surface the build assembles can carry a normal differing
 // from the surface the patch publishes.
 //
-// A `Plane` patch is exempt and answers an exact zero: a straight wall's own
-// offset family is affine in the offset amount, so ruling the patch between the
-// wall's side-level segment and its cap-level one reproduces the denoted offset
-// at every level, and the build tags the patch with the plane through its own
-// built corners.
+// Both patch kinds answer from their own held corners, and neither is exempt.
+// A straight wall's offset family is affine in the offset amount, so the exact
+// surface a flat patch denotes IS its tag's plane — but the corners the build
+// emits are each rounded once more, and the tag is fixed through three of the
+// four, so the built quad still leaves the plane by an amount only a world-space
+// reading of those four corners states.
 func capPatchNormalAllow(f *Face, g capPatchGeom, b capPatchBuilt) float64 {
-	if !g.circular {
-		return 0
+	departure := capPlaneDeparture
+	if g.circular {
+		departure = capPatchDeparture
 	}
-	allow, ok := capPatchDeparture(f, b)
+	allow, ok := departure(f, b)
 	if !ok || isNonFinite(allow) || allow < 0 {
 		return ruledNormalAllowUnbounded
 	}
 	return math.Min(ruledNormalAllowUnbounded, allow)
+}
+
+// capPlaneDeparture is the flat half of this file's derivation, evaluated over
+// exact rational arithmetic on the patch's own four held corners and the tag's
+// own held frame normal. It reports ok false wherever an enclosure fails to
+// prove what a step needs — a directrix the body does not publish as a straight
+// pair of ends, a built normal not proven away from zero, a tag frame normal not
+// proven away from zero, or a sine not proven below one — and the caller
+// publishes the trivial bound there.
+func capPlaneDeparture(f *Face, b capPatchBuilt) (float64, bool) {
+	tag, okTag := f.surface.(Plane)
+	if !okTag {
+		return 0, false
+	}
+	n, okN := ivVec3Of(tag.Frame.N())
+	a0, a1, okS := capStraightEnds(b.sideDir)
+	b0, b1, okC := capStraightEnds(b.capDir)
+	if !okN || !okS || !okC {
+		return 0, false
+	}
+
+	// The bilinear patch's own normal N(u, v) = C0 + u·Cu + v·Cv, exactly.
+	p0 := ivVec3Sub(a1, a0)
+	dp := ivVec3Sub(ivVec3Sub(b1, b0), p0)
+	r0 := ivVec3Sub(b0, a0)
+	c0, cu, cv := ivVec3Cross(p0, r0), ivVec3Cross(p0, dp), ivVec3Cross(dp, r0)
+
+	// |N| from below: the constant term's own length, less what the two affine
+	// terms can take from it anywhere in the unit square.
+	baseLen, okB := intervalSqrt(ivVec3NormSq(c0))
+	uLen, okU := intervalSqrt(ivVec3NormSq(cu))
+	vLen, okV := intervalSqrt(ivVec3NormSq(cv))
+	tagLen, okL := intervalSqrt(ivVec3NormSq(n))
+	if !okB || !okU || !okV || !okL {
+		return 0, false
+	}
+	builtLo := new(big.Rat).Sub(baseLen.lo, ratAdd(uLen.hi, vLen.hi))
+	if builtLo.Sign() <= 0 || tagLen.lo.Sign() <= 0 {
+		return 0, false
+	}
+
+	// |n × N| from above, coefficient by coefficient: the cross with the held
+	// normal is taken on each exact coefficient BEFORE anything is bounded, so
+	// the cancellation the near-planar quad carries survives into the answer.
+	crossSq := new(big.Rat)
+	k0, ku, kv := ivVec3Cross(n, c0), ivVec3Cross(n, cu), ivVec3Cross(n, cv)
+	for i := range 3 {
+		comp := ratAdd(intervalAbsUpper(k0[i]), intervalAbsUpper(ku[i]), intervalAbsUpper(kv[i]))
+		crossSq.Add(crossSq, new(big.Rat).Mul(comp, comp))
+	}
+	crossLen, okX := intervalSqrt(pointInterval(crossSq))
+	if !okX {
+		return 0, false
+	}
+
+	sine := new(big.Rat).Quo(crossLen.hi, new(big.Rat).Mul(tagLen.lo, builtLo))
+	if sine.Cmp(big.NewRat(1, 1)) >= 0 {
+		return 0, false
+	}
+	held := ratFloatUp(sine)
+	if isNonFinite(held) || held >= 1 {
+		return 0, false
+	}
+	// A chord never exceeds its own arc, so the angle bounds the distance
+	// between the two unit directions as well as their separation.
+	return upRound(math.Asin(held)), true
+}
+
+// capStraightEnds encloses one straight directrix's two held ruling endpoints,
+// which is everything the flat derivation reads off it. A directrix the body
+// publishes as anything but a `Line3` carrying exactly two ends is refused.
+func capStraightEnds(ref capDirectrixRef) (ivVec3, ivVec3, bool) {
+	if !ref.straight || len(ref.ends) != 2 {
+		return ivVec3{}, ivVec3{}, false
+	}
+	first, okF := ivVec3Of(ref.ends[0])
+	second, okS := ivVec3Of(ref.ends[1])
+	if !okF || !okS {
+		return ivVec3{}, ivVec3{}, false
+	}
+	return first, second, true
 }
 
 // capPatchDeparture is the derivation stated in this file's own comment,
@@ -290,7 +424,7 @@ type capDirectrix struct {
 // parallelism, and nothing else here would notice its loss.
 func capDirectrixEnclose(ref capDirectrixRef, tagOrigin, tagAxis r3.Vec, ahat, origin ivVec3) (capDirectrix, bool) {
 	radius := floatRat(ref.radius)
-	if radius == nil || radius.Sign() < 0 {
+	if ref.straight || radius == nil || radius.Sign() < 0 {
 		return capDirectrix{}, false
 	}
 	centerIv, okC := ivVec3Of(ref.center)
@@ -455,8 +589,8 @@ func coneTagRadius(f *Face) (*big.Rat, bool) {
 // capBuiltPatch names one band patch's built ruled surface from the two
 // published directrix edges and the boundary vertices that pair them: ruling k
 // joins sideEnds[k] to capEnds[k]. A directrix this evaluator cannot read
-// leaves its own reference empty, which capPatchDeparture refuses and the
-// caller publishes the trivial bound for, rather than a number no reading
+// leaves its own reference empty, which either departure derivation refuses and
+// the caller publishes the trivial bound for, rather than a number no reading
 // supports.
 func capBuiltPatch(sideEdge, capEdge *Edge, sideEnds, capEnds []*Vertex) capPatchBuilt {
 	return capPatchBuilt{
@@ -484,10 +618,12 @@ func capBuiltApexPatch(apex *Vertex, capEdge *Edge, capEnds []*Vertex) capPatchB
 	}
 }
 
-// capDirectrixFromEdge reads one published directrix edge's own circle. Only
-// the two circular curve kinds a band's directrix is ever built as are
-// admitted; anything else leaves the patch without a stated built surface and
-// the caller publishes the trivial bound.
+// capDirectrixFromEdge reads one published directrix edge. Only the three curve
+// kinds a band's directrix is ever built as are admitted — the two circular ones
+// a wall over an arc gives, and the `Line3` a straight wall gives, which carries
+// no circle and is read through its ruling endpoints alone; anything else leaves
+// the patch without a stated built surface and the caller publishes the trivial
+// bound.
 func capDirectrixFromEdge(e *Edge, ends ...*Vertex) capDirectrixRef {
 	var out capDirectrixRef
 	var radius units.Value
@@ -496,14 +632,18 @@ func capDirectrixFromEdge(e *Edge, ends ...*Vertex) capDirectrixRef {
 		out.center, out.axis, radius = c.Center, c.Axis, c.Radius
 	case Circle3:
 		out.center, out.axis, radius = c.Center, c.Axis, c.Radius
+	case Line3:
+		out.straight = true
 	default:
 		return capDirectrixRef{}
 	}
-	mm, err := radius.In(units.Millimeter)
-	if err != nil {
-		return capDirectrixRef{}
+	if !out.straight {
+		mm, err := radius.In(units.Millimeter)
+		if err != nil {
+			return capDirectrixRef{}
+		}
+		out.radius = mm
 	}
-	out.radius = mm
 	for _, v := range ends {
 		if v == nil {
 			return capDirectrixRef{}
