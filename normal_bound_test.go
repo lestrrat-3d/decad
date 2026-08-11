@@ -20,7 +20,12 @@ import (
 // a rotated placement, whose cap frame normal is the rounded cross product of
 // two rounded axes and so is neither of unit length nor exactly perpendicular
 // to the plane those axes span, and any cone at all, whose normal is assembled
-// from a float cosine and sine that do not satisfy cos² + sin² = 1.
+// from a float cosine and sine that do not satisfy cos² + sin² = 1. The cone's
+// own direction defect is MEASURED here, not merely asserted: its rows check
+// the held reading against a reference this file proves independently, in
+// exact rational interval arithmetic over its own square-root and sine/cosine
+// series (ratSqrtIv, ratSinCosIv), never by asking normal_bound.go for its own
+// answer.
 
 // normalFaceByRole finds the one face carrying the named feature role.
 func normalFaceByRole(t *testing.T, b *decad.Body, role string) *decad.Face {
@@ -110,10 +115,16 @@ func alongDefectSq(n r3.Vec, w ratVec) *big.Rat {
 	return new(big.Rat).Quo(new(big.Rat).Mul(along, along), ratVecDot(w, w))
 }
 
-// armDefectSq is the exactly computed lower bound on how far one NormalAt
-// reading sits from the exact unit normal of the surface its face is tagged
-// with, one spelling per analytic arm. The reading's own outward sign is a
-// float negation and every reading here is squared, so the sign never enters.
+// armDefectSq is a lower bound on how far one NormalAt reading sits from the
+// exact unit normal of the surface its face is tagged with, one spelling per
+// analytic arm. For Plane, Cylinder, Sphere and Torus that lower bound is
+// computed exactly, over rationals with no rounding step anywhere. The Cone
+// arm's exact normal needs a transcendental — a sine and cosine of the held
+// half angle — so its spelling is instead the LOW end of a proven rational
+// interval enclosure, built from this file's own square-root and sine/cosine
+// series (ratSqrtIv, ratSinCosIv), never from normal_bound.go's. The reading's
+// own outward sign is a float negation and every reading here is squared, so
+// the sign never enters.
 func armDefectSq(t *testing.T, f *decad.Face, p r3.Vec, n r3.Vec) *big.Rat {
 	t.Helper()
 	switch s := f.Surface().(type) {
@@ -124,6 +135,8 @@ func armDefectSq(t *testing.T, f *decad.Face, p r3.Vec, n r3.Vec) *big.Rat {
 		return perpDefectSq(n, ratVecCross(ratVecOf(s.Frame.U()), ratVecOf(s.Frame.V())))
 	case decad.Cylinder:
 		return perpDefectSq(n, axialRadialOf(p, s.Origin, s.Axis))
+	case decad.Cone:
+		return coneDefectSq(t, s, p, n)
 	case decad.Sphere:
 		return perpDefectSq(n, ratVecSub(ratVecOf(p), ratVecOf(s.Center)))
 	case decad.Torus:
@@ -170,6 +183,234 @@ func unitDefect(n r3.Vec) *big.Rat {
 	defect := new(big.Rat).Sub(sum, big.NewRat(1, 1))
 	defect.Abs(defect)
 	return defect.Quo(defect, big.NewRat(2, 1))
+}
+
+// ratIv is an exact rational interval [lo, hi], this file's own — kept apart
+// from normal_bound.go's ratInterval so the Cone reference below is an
+// independent witness, never the code under test agreeing with itself. Every
+// operation is exact: a *big.Rat never rounds, so an enclosure widens only
+// where a square root or a series remainder puts slack in.
+type ratIv struct {
+	lo, hi *big.Rat
+}
+
+// ratIvPoint encloses a single exact rational exactly, lo == hi.
+func ratIvPoint(x *big.Rat) ratIv {
+	return ratIv{lo: x, hi: x}
+}
+
+func ratIvAdd(a, b ratIv) ratIv {
+	return ratIv{new(big.Rat).Add(a.lo, b.lo), new(big.Rat).Add(a.hi, b.hi)}
+}
+
+func ratIvSub(a, b ratIv) ratIv {
+	return ratIv{new(big.Rat).Sub(a.lo, b.hi), new(big.Rat).Sub(a.hi, b.lo)}
+}
+
+// ratIvMul is the general product: the min and max of the four corner
+// products, sound whatever signs a and b straddle.
+func ratIvMul(a, b ratIv) ratIv {
+	corners := [4]*big.Rat{
+		new(big.Rat).Mul(a.lo, b.lo),
+		new(big.Rat).Mul(a.lo, b.hi),
+		new(big.Rat).Mul(a.hi, b.lo),
+		new(big.Rat).Mul(a.hi, b.hi),
+	}
+	lo, hi := corners[0], corners[0]
+	for _, c := range corners[1:] {
+		if c.Cmp(lo) < 0 {
+			lo = c
+		}
+		if c.Cmp(hi) > 0 {
+			hi = c
+		}
+	}
+	return ratIv{lo, hi}
+}
+
+// ratIvSquare is a·a, computed from the endpoints directly rather than via
+// ratIvMul(a, a): an interval that straddles zero must report a zero low end,
+// never a negative one, since no real square is negative.
+func ratIvSquare(a ratIv) ratIv {
+	lo2 := new(big.Rat).Mul(a.lo, a.lo)
+	hi2 := new(big.Rat).Mul(a.hi, a.hi)
+	lo, hi := lo2, hi2
+	if hi.Cmp(lo) < 0 {
+		lo, hi = hi, lo
+	}
+	if a.lo.Sign() < 0 && a.hi.Sign() > 0 {
+		lo = new(big.Rat)
+	}
+	return ratIv{lo, hi}
+}
+
+// ratIvInv is 1/b for an interval whose low end is strictly positive, so b is
+// positive throughout and the reciprocal is monotonic decreasing.
+func ratIvInv(b ratIv) ratIv {
+	return ratIv{new(big.Rat).Inv(b.hi), new(big.Rat).Inv(b.lo)}
+}
+
+// ratIvQuo is a/b for an interval b whose low end is strictly positive.
+func ratIvQuo(a, b ratIv) ratIv {
+	return ratIvMul(a, ratIvInv(b))
+}
+
+// ratSqrtIv is a verified rational enclosure of √x for x >= 0: lo² <= x <=
+// hi², proven by exact comparison over big.Rat rather than trusted from the
+// float seed. The seed comes from a 200-bit big.Float square root and is
+// widened by a RELATIVE 2⁻¹⁵⁰ until both comparisons hold.
+//
+// The slack width is load-bearing: at a relative 2⁻⁴⁰ the enclosure is about
+// 1e-12 wide, which swamps a Cone direction defect of about 5e-17 and would
+// make a row's own lower bound exactly zero — a row that asserts nothing
+// while passing. 2⁻¹⁵⁰ gives an enclosure about 1e-45 wide, far inside the
+// 200-bit seed's own accuracy.
+func ratSqrtIv(t *testing.T, x *big.Rat) ratIv {
+	t.Helper()
+	require.GreaterOrEqual(t, x.Sign(), 0, `ratSqrtIv: the input must be non-negative`)
+	if x.Sign() == 0 {
+		zero := new(big.Rat)
+		return ratIv{zero, zero}
+	}
+	const prec = 200
+	xf := new(big.Float).SetPrec(prec).SetRat(x)
+	seed := new(big.Float).SetPrec(prec).Sqrt(xf)
+	seedRat, _ := seed.Rat(nil)
+	rel := new(big.Rat).SetFrac(big.NewInt(1), new(big.Int).Lsh(big.NewInt(1), 150))
+	for range 4 {
+		widen := new(big.Rat).Mul(seedRat, rel)
+		widen.Abs(widen)
+		lo := new(big.Rat).Sub(seedRat, widen)
+		if lo.Sign() < 0 {
+			lo = new(big.Rat)
+		}
+		hi := new(big.Rat).Add(seedRat, widen)
+		loSq := new(big.Rat).Mul(lo, lo)
+		hiSq := new(big.Rat).Mul(hi, hi)
+		if loSq.Cmp(x) <= 0 && hiSq.Cmp(x) >= 0 {
+			return ratIv{lo, hi}
+		}
+		rel = new(big.Rat).Mul(rel, big.NewRat(2, 1))
+	}
+	require.FailNow(t, `ratSqrtIv: the enclosure did not converge`)
+	return ratIv{}
+}
+
+// ratSinCosIv encloses sin(x) and cos(x) for an exact rational RADIAN x in
+// [0, π/2), by summing the Maclaurin series over big.Rat through x^37/37! and
+// charging the last included term's own magnitude as the remainder on both
+// series. Both series are alternating with terms decreasing from the first
+// for |x| < 1.57, so the first omitted term already bounds the tail and
+// charging the last included one instead is more conservative still.
+//
+// No π enters anywhere, so nothing here depends on a platform's libm, and
+// this must never call normal_bound.go's radSinCosInterval: the point of this
+// reference is an independent witness, not the code under test agreeing with
+// itself. Every cone half angle this file feeds it lands in range: it is an
+// angle between an axis and a wall, read out in radians.
+func ratSinCosIv(x *big.Rat) (sin, cos ratIv) {
+	const maxPower = 37
+	pow := make([]*big.Rat, maxPower+1)
+	pow[0] = big.NewRat(1, 1)
+	for i := 1; i <= maxPower; i++ {
+		pow[i] = new(big.Rat).Mul(pow[i-1], x)
+	}
+	fact := make([]*big.Rat, maxPower+1)
+	fact[0] = big.NewRat(1, 1)
+	for i := 1; i <= maxPower; i++ {
+		fact[i] = new(big.Rat).Mul(fact[i-1], big.NewRat(int64(i), 1))
+	}
+	term := func(n int) *big.Rat { return new(big.Rat).Quo(pow[n], fact[n]) }
+
+	sinSum, sinLast := new(big.Rat), new(big.Rat)
+	positive := true
+	for n := 1; n <= maxPower; n += 2 {
+		sinLast = term(n)
+		if positive {
+			sinSum.Add(sinSum, sinLast)
+		} else {
+			sinSum.Sub(sinSum, sinLast)
+		}
+		positive = !positive
+	}
+
+	cosSum, cosLast := big.NewRat(1, 1), big.NewRat(1, 1)
+	positive = false
+	for n := 2; n <= maxPower; n += 2 {
+		cosLast = term(n)
+		if positive {
+			cosSum.Add(cosSum, cosLast)
+		} else {
+			cosSum.Sub(cosSum, cosLast)
+		}
+		positive = !positive
+	}
+
+	sin = ratIv{new(big.Rat).Sub(sinSum, sinLast), new(big.Rat).Add(sinSum, sinLast)}
+	cos = ratIv{new(big.Rat).Sub(cosSum, cosLast), new(big.Rat).Add(cosSum, cosLast)}
+	return sin, cos
+}
+
+// ratIvVec is a 3D vector of exact rational intervals, the interval sibling
+// of ratVec above.
+type ratIvVec [3]ratIv
+
+// ratIvUnit encloses the exact unit vector of v: v scaled by a verified
+// reciprocal-square-root enclosure of its own squared length. Fails loudly
+// through require rather than dividing by a degenerate length silently.
+func ratIvUnit(t *testing.T, v ratVec) ratIvVec {
+	t.Helper()
+	normSq := ratVecDot(v, v)
+	require.Positive(t, normSq.Sign(), `ratIvUnit: a unit direction needs a nonzero vector`)
+	length := ratSqrtIv(t, normSq)
+	var out ratIvVec
+	for i := range out {
+		out[i] = ratIvQuo(ratIvPoint(v[i]), length)
+	}
+	return out
+}
+
+func ratIvVecScale(v ratIvVec, s ratIv) ratIvVec {
+	var out ratIvVec
+	for i := range out {
+		out[i] = ratIvMul(v[i], s)
+	}
+	return out
+}
+
+func ratIvVecSub(a, b ratIvVec) ratIvVec {
+	var out ratIvVec
+	for i := range out {
+		out[i] = ratIvSub(a[i], b[i])
+	}
+	return out
+}
+
+// coneDefectSq is armDefectSq's Cone arm: a proven LOWER bound on the squared
+// distance between a held reading n and the tagged cone's exact unit normal
+// r̂·cos(h) − â·sin(h), the closed form normal_bound.go's coneNormalAllow
+// states. r̂ and â are this file's own proven unit enclosures of the radial
+// and axis directions, h's sine and cosine are this file's own series, and
+// nothing here reads normal_bound.go's radSinCosInterval or ivVec3Unit.
+func coneDefectSq(t *testing.T, s decad.Cone, p, n r3.Vec) *big.Rat {
+	t.Helper()
+	radial := axialRadialOf(p, s.Origin, s.Axis)
+	rhat := ratIvUnit(t, radial)
+	ahat := ratIvUnit(t, ratVecOf(s.Axis))
+
+	half, err := s.HalfAngle.In(units.Radian)
+	require.NoError(t, err, `a cone's half angle is an angle`)
+	halfRat := new(big.Rat).SetFloat64(half)
+	require.NotNil(t, halfRat, `the half angle is a finite float and so an exact rational`)
+	sin, cos := ratSinCosIv(halfRat)
+
+	m := ratIvVecSub(ratIvVecScale(rhat, cos), ratIvVecScale(ahat, sin))
+	nv := ratVecOf(n)
+	sum := ratIvPoint(new(big.Rat))
+	for i := range m {
+		sum = ratIvAdd(sum, ratIvSquare(ratIvSub(ratIvPoint(nv[i]), m[i])))
+	}
+	return sum.lo
 }
 
 func TestNormalAtExactnessIsProven(t *testing.T) {
@@ -409,12 +650,16 @@ func holeWallBody(t *testing.T) *decad.Body {
 // TestNormalAtArmBoundCoversItsOwnDefect is the same contract on the arms
 // whose exact normal is a computation off the tag's own held numbers, which is
 // every one of them: Plane — whose frame derives its normal as a cross product
-// on every call — along with Cylinder, Sphere and Torus. Each row reads one
-// face's own published surface parameters, samples the reading at a point named
-// in that surface's own frame, and measures — over exact rationals, never a
-// float residual — how far the float triple the arm handed back sits from the
-// exact unit normal those parameters give. A bound below that distance is an
-// understatement, whatever exactness it publishes beside it.
+// on every call — along with Cylinder, Sphere, Torus and Cone. Each row reads
+// one face's own published surface parameters, samples the reading at a point
+// named in that surface's own frame, and measures how far the float triple the
+// arm handed back sits from the exact unit normal those parameters give. For
+// Plane, Cylinder, Sphere and Torus that exact normal is itself rational, so
+// the measure is exact; the Cone's is not, since its normal needs a sine and
+// cosine of the held half angle, so its rows measure against a proven
+// rational-interval enclosure instead (armDefectSq's Cone case). A bound below
+// that distance is an understatement, whatever exactness it publishes beside
+// it.
 func TestNormalAtArmBoundCoversItsOwnDefect(t *testing.T) {
 	spin, err := r3.Rotation(r3.NewVec(1, 2, 3), units.Degrees(37))
 	require.NoError(t, err)
@@ -452,6 +697,26 @@ func TestNormalAtArmBoundCoversItsOwnDefect(t *testing.T) {
 		center := s.Center.Add(radial.Scale(s.Major.Mag()))
 		return center.Add(dir.Scale(s.Minor.Mag())), dir
 	}
+	// conePoint samples at a point off the axis by radius and along the axis
+	// by along — a point the Cone arm's own formula answers for whether or not
+	// it sits on the actual wall, since the projection it computes depends on
+	// no radius at all. A radius small beside along is where that projection
+	// cancels: the arm subtracts two nearly equal vectors and keeps only the
+	// low digits of the difference, so the direction it hands back departs by
+	// far more than its own length does.
+	conePoint := func(t *testing.T, f *decad.Face, deg, radius, along float64) (r3.Vec, r3.Vec) {
+		t.Helper()
+		s := f.Surface().(decad.Cone)
+		w := perpTo(t, s.Axis)
+		axis, ok := s.Axis.Normalize()
+		require.True(t, ok)
+		dir := tilt(w, axis.Cross(w), deg)
+		p := s.Origin.Add(dir.Scale(radius)).Add(axis.Scale(along))
+		half, err := s.HalfAngle.In(units.Radian)
+		require.NoError(t, err)
+		n := dir.Scale(math.Cos(half)).Sub(axis.Scale(math.Sin(half)))
+		return p, n
+	}
 
 	for _, tc := range []struct {
 		name string
@@ -459,6 +724,11 @@ func TestNormalAtArmBoundCoversItsOwnDefect(t *testing.T) {
 		// the outward normal takes there, both in the face's OWN frame.
 		at    func(t *testing.T) (*decad.Face, r3.Vec, r3.Vec)
 		exact bool
+		// directionDominates marks the one row whose direction defect is too
+		// large for any allowance built from the reading's unit length alone
+		// to cover, so the coverage check every row runs is what catches a
+		// Cone allowance that stops charging the direction term.
+		directionDominates bool
 	}{
 		{
 			name: `a plate cap on a world axis is exact`,
@@ -561,6 +831,50 @@ func TestNormalAtArmBoundCoversItsOwnDefect(t *testing.T) {
 				return f, p, dir
 			},
 		},
+		{
+			name: `a cone wall on a world axis carries its own cosine and sine`,
+			at: func(t *testing.T) (*decad.Face, r3.Vec, r3.Vec) {
+				f := placedFace(t, func(t *testing.T) *decad.Body { return coneBody(t, 10) }, decad.KindCone, nil)
+				p, dir := conePoint(t, f, 0, 5, 5)
+				return f, p, dir
+			},
+		},
+		{
+			name: `a cone wall off the world axes carries more of it`,
+			at: func(t *testing.T) (*decad.Face, r3.Vec, r3.Vec) {
+				f := placedFace(t, func(t *testing.T) *decad.Body { return coneBody(t, 10) }, decad.KindCone, nil)
+				p, dir := conePoint(t, f, 37, 5, 5)
+				return f, p, dir
+			},
+		},
+		{
+			name: `a placed cone carries the rotation's own rounding`,
+			at: func(t *testing.T) (*decad.Face, r3.Vec, r3.Vec) {
+				f := placedFace(t, func(t *testing.T) *decad.Body { return coneBody(t, 10) }, decad.KindCone, &spin)
+				p, dir := conePoint(t, f, 37, 5, 5)
+				return f, p, dir
+			},
+		},
+		{
+			name: `a cone whose half angle is not 45 degrees`,
+			at: func(t *testing.T) (*decad.Face, r3.Vec, r3.Vec) {
+				f := placedFace(t, func(t *testing.T) *decad.Body { return coneBody(t, 5) }, decad.KindCone, nil)
+				p, dir := conePoint(t, f, 0, 5, 5)
+				return f, p, dir
+			},
+		},
+		{
+			// Sampled 0.2mm off the axis and 5mm along it, where the arm's own
+			// radial projection cancels away most of its digits, this row is
+			// the one whose direction defect no length-only allowance reaches.
+			name: `a cone sampled near its axis charges the projection's lost digits`,
+			at: func(t *testing.T) (*decad.Face, r3.Vec, r3.Vec) {
+				f := placedFace(t, func(t *testing.T) *decad.Body { return coneBody(t, 3) }, decad.KindCone, &spin)
+				p, dir := conePoint(t, f, 37, 0.2, 5)
+				return f, p, dir
+			},
+			directionDominates: true,
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			f, at, want := tc.at(t)
@@ -593,6 +907,24 @@ func TestNormalAtArmBoundCoversItsOwnDefect(t *testing.T) {
 			// did leave the exact answer here.
 			require.Positive(t, defectSq.Sign()+length.Sign(),
 				`the arm's own arithmetic must genuinely depart, or the row proves nothing`)
+			if tc.directionDominates {
+				// requireBoundCoversDefect above is what fails when the Cone
+				// allowance charges the direction nothing and the reading's
+				// unit length everything — but only while this row's fixture
+				// keeps the property that makes it that witness, which is what
+				// is pinned here. A length-only allowance is that unit-length
+				// defect plus the rounding its own enclosure adds: an
+				// outward-rounded square root and a round-up at the end, a
+				// couple of ulps of a unit coordinate. Four ulps, 2⁻⁵¹, is the
+				// deliberate over-estimate of that rounding. Measured on this
+				// fixture the direction defect is 1.720e-15 against a
+				// unit-length defect of 2.071e-16, clearing the sum by 2.6x
+				// and the length-only bound itself by 7.7x.
+				floor := new(big.Rat).Add(length, big.NewRat(1, 1<<51))
+				require.GreaterOrEqual(t, defectSq.Cmp(new(big.Rat).Mul(floor, floor)), 0,
+					`%s: the direction defect must clear the unit-length defect by more than a length-only allowance's own rounding`,
+					tc.name)
+			}
 		})
 	}
 }
@@ -673,29 +1005,38 @@ func TestNormalAtArmDegeneraciesRefuse(t *testing.T) {
 	}
 }
 
-// coneWall revolves a 45° right triangle about the u axis, giving one Cone
-// wall whose half angle is a whole number of degrees and whose body no
-// placement ever touched.
-func coneWall(t *testing.T) (*decad.Face, decad.Cone) {
+// coneBody revolves the right triangle (0,0)-(10,0)-(10,top) about the u
+// axis, giving one Cone wall whose body no placement ever touched. top = 10
+// is the 45° cone; a smaller top gives a half angle away from 45° so a row
+// built on it cannot lean on cos(h) == sin(h).
+func coneBody(t *testing.T, top float64) *decad.Body {
 	t.Helper()
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	require.NoError(t, err)
 	o := s.CreatePoint(0, 0)
 	base := s.CreatePoint(10, 0)
-	top := s.CreatePoint(10, 10)
+	tip := s.CreatePoint(10, top)
 	s.Fix(o)
 	s.Fix(base)
-	s.Fix(top)
+	s.Fix(tip)
 	s.CreateLine(o, base)
-	s.CreateLine(base, top)
-	s.CreateLine(top, o)
+	s.CreateLine(base, tip)
+	s.CreateLine(tip, o)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 
 	doc := decad.New()
 	body, err := doc.Revolve(s, s.Profiles()[0], uAxis, decad.FullRevolution{})
 	require.NoError(t, err)
+	return body
+}
+
+// coneWall picks out coneBody(t, 10)'s one Cone wall, whose half angle is a
+// whole number of degrees.
+func coneWall(t *testing.T) (*decad.Face, decad.Cone) {
+	t.Helper()
+	body := coneBody(t, 10)
 	for _, f := range body.Faces() {
 		if c, ok := f.Surface().(decad.Cone); ok {
 			return f, c
