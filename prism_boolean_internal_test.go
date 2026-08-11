@@ -421,3 +421,122 @@ func TestPrismProfilesContextWaitsForArrangementAfterCancellation(t *testing.T) 
 	<-finished
 	require.ErrorIs(t, <-result, context.Canceled)
 }
+
+// --- fu141 (docs/prism-boolean-design.md §9's RB9): the merged union loop's
+// own recorded coordinates must join at every junction.
+
+// requireMergedLoopSegmentsJoin is T1's own invariant, reused by T3: whenever
+// a merge resolves (tryPrismBoolean's ok == true), every consecutive pair of
+// WHOLE LineSeg segments in the merged Outer loop joins bit-exactly — the
+// same property falsifyLoopJoins now proves before resolvePrismUnion returns.
+// It reads the recorded coordinates directly (segs[i].End == segs[i+1].Start,
+// wrap included), the same comparison loopJoinPointsAgree makes for a
+// same-source pair.
+func requireMergedLoopSegmentsJoin(t *testing.T, segs []CurveSegment) {
+	t.Helper()
+	n := len(segs)
+	for i := range n {
+		j := (i + 1) % n
+		li, oki := segs[i].(LineSeg)
+		lj, okj := segs[j].(LineSeg)
+		if !oki || !okj || li.TStart != 0 || li.TEnd != 1 || lj.TStart != 0 || lj.TEnd != 1 {
+			continue
+		}
+		require.Equal(t, li.End, lj.Start, "merged segment %d end must bit-exactly equal segment %d start", i, j)
+	}
+}
+
+// synthGapRectLoop is synthRectLoop with one deliberate defect: seg 0's End
+// and seg 1's Start name the SAME corner but differ by gap — a mismatch
+// authored directly on the record, never computed by any merge. sketch's own
+// arrangement still accepts the shape as one region on its proximity
+// threshold (docs/sketch-seam-design.md), so the defect survives all the way
+// to resolvePrismUnion's own recorded chain.
+func synthGapRectLoop(u0, v0, u1, v1, gap float64) LoopRecord {
+	return LoopRecord{Segments: []CurveSegment{
+		LineSeg{Start: Point2{U: u0, V: v0}, End: Point2{U: u1, V: v0}, TStart: 0, TEnd: 1},
+		LineSeg{Start: Point2{U: u1 + gap, V: v0}, End: Point2{U: u1, V: v1}, TStart: 0, TEnd: 1},
+		LineSeg{Start: Point2{U: u1, V: v1}, End: Point2{U: u0, V: v1}, TStart: 0, TEnd: 1},
+		LineSeg{Start: Point2{U: u0, V: v1}, End: Point2{U: u0, V: v0}, TStart: 0, TEnd: 1},
+	}}
+}
+
+// TestPrismUnionMergedLoopJunctionsClose is RB9's own guard, pinned directly
+// against resolvePrismUnion's wiring rather than against a live cut-fragment
+// fixture.
+//
+// The one LIVE-reachable way to produce this defect is an operand recorded as
+// Partial cut fragments (drawn as overshooting lines sketch trims at both
+// ends): buildPrismScene's walkOf interpolates each surviving fragment's
+// walked endpoint independently, from its own entity's Start/End and T, so
+// two fragments naming the same corner can round to bit-different floats
+// before the merge ever sees them. That is fu157's class (#158): welding the
+// private scene's own recorded junctions closes exactly that fixture's loop,
+// so a test keyed on it would silently start asserting the wrong thing once
+// that PR lands (prism_boolean_test.go's
+// TestPrismUnionCutFragmentOperandRefusesNonClosingMerge is that fixture, and
+// carries the same risk explicitly).
+//
+// This test instead authors the defect directly on a synthetic operand
+// (bypassing RecordProfile's own seam checks, the same way the G1-G6 gate
+// tests above do) — a corner sketch's own proximity threshold still accepts
+// as one region, but whose recorded coordinates no merge computed and so
+// never rounds into agreement. Nothing here depends on how any operand's
+// Partial fragments get built, so the refusal half stays correct whichever
+// PR lands first.
+func TestPrismUnionMergedLoopJunctionsClose(t *testing.T) {
+	frame := canonicalPrismFrame(t)
+	const gap = 1e-9
+	pa := prismPayload{
+		profile: ProfileRecord{Outer: synthGapRectLoop(0, 0, 10, 10, gap)},
+		frame:   frame, z0: 0, z1: 10, xform: r3.Identity(),
+	}
+	pb := prismPayload{
+		profile: ProfileRecord{Outer: synthRectLoop(2, 2, 4, 4)},
+		frame:   frame, z0: 0, z1: 10, xform: r3.Identity(),
+	}
+	a := &Body{payload: pa}
+	b := &Body{payload: pb}
+
+	_, ok, err := tryPrismBoolean(t.Context(), OpUnion, a, b)
+	require.False(t, ok)
+	require.ErrorIs(t, err, ErrUnrecordableProfile)
+	require.Contains(t, err.Error(), "does not close")
+	require.Contains(t, err.Error(), "10.000000001")
+
+	// The invariant half, which must survive fu157's weld regardless of
+	// landing order: a pair with no authored defect resolves, and its merged
+	// loop DOES join bit-exactly at every whole junction.
+	clean := pa
+	clean.profile = ProfileRecord{Outer: synthRectLoop(0, 0, 10, 10)}
+	res, ok, err := tryPrismBoolean(t.Context(), OpUnion, &Body{payload: clean}, b)
+	require.NoError(t, err)
+	require.True(t, ok)
+	requireMergedLoopSegmentsJoin(t, res.profile.Outer.Segments)
+}
+
+// TestPrismUnionCleanOperandsMergedLoopClosesExactly is the control: the
+// ordinary class this guard must never fire on. Two operands whose own
+// records carry no Partial fragment (drawn as four shared-point lines each,
+// the live-reachable whole-edge shape) merge into a loop that closes
+// bit-exactly, with no error and no displacement.
+func TestPrismUnionCleanOperandsMergedLoopClosesExactly(t *testing.T) {
+	doc := New()
+	a := internalBoxBody(t, doc, 0, 0, 10, 10, 5)
+	b := internalBoxBody(t, doc, 5, 5, 15, 15, 5)
+	res, ok, err := tryPrismBoolean(t.Context(), OpUnion, a, b)
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.Len(t, res.profile.Outer.Segments, 8)
+	requireMergedLoopSegmentsJoin(t, res.profile.Outer.Segments)
+
+	doc2 := New()
+	c := internalBoxBody(t, doc2, 0, 0, 10, 10, 5)
+	d := internalBoxBody(t, doc2, 2, 2, 4, 4, 5)
+	res2, ok, err := tryPrismBoolean(t.Context(), OpUnion, c, d)
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.Len(t, res2.profile.Outer.Segments, 4)
+	requireMergedLoopSegmentsJoin(t, res2.profile.Outer.Segments)
+	require.Zero(t, res2.sectionDelta)
+}

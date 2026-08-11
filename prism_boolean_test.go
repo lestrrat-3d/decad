@@ -87,6 +87,81 @@ func anyFaceIsFaceted(b *decad.Body) bool {
 	return false
 }
 
+// overshootQuadBody draws a quadrilateral as four OVERSHOOTING lines, so
+// sketch cuts every corner and every recorded boundary segment is a Partial
+// fragment. This is fu141's own reproduction shape
+// (TestPrismUnionCutFragmentOperandRefusesNonClosingMerge's fixture): it is
+// the one construction known to reach RB9's guard through the live, public
+// API rather than through a synthetic record.
+func overshootQuadBody(t *testing.T, doc *decad.Document, corners [][2]float64, over, h float64) *decad.Body {
+	t.Helper()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	n := len(corners)
+	for i := range n {
+		a := corners[i]
+		b := corners[(i+1)%n]
+		dx, dy := b[0]-a[0], b[1]-a[1]
+		p := s.CreatePoint(a[0]-over*dx, a[1]-over*dy)
+		q := s.CreatePoint(b[0]+over*dx, b[1]+over*dy)
+		s.Fix(p)
+		s.Fix(q)
+		s.CreateLine(p, q)
+	}
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	profs := s.Profiles()
+	best := 0
+	for i, p := range profs {
+		if p.Area > profs[best].Area {
+			best = i
+		}
+	}
+	body, err := doc.Extrude(s, profs[best], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+	require.NoError(t, err)
+	return body
+}
+
+// TestPrismUnionCutFragmentOperandRefusesNonClosingMerge is fu141's own
+// reproduction (docs/prism-boolean-design.md §9's RB9), through the public
+// API: a quadrilateral prism drawn as four overshooting lines — so every
+// recorded boundary segment is a Partial fragment — unioned with a box
+// strictly inside it. The merge cuts nothing, so every surviving segment is
+// WHOLE and the section displacement is zero, yet the private scene's own
+// reconstruction restates one corner as two whole segments' own defining
+// coordinates that do not bit-match (buildPrismScene's walkOf interpolates
+// each fragment's walked endpoint independently). The seam's junction
+// falsifier now catches it: Union refuses instead of publishing a body whose
+// own segments do not bound it, and both operands are left untouched.
+//
+// This fixture is fu157's own class (#158): welding the private scene's
+// recorded junctions closes exactly this loop, so once that PR lands this
+// test's refusal must be re-measured — TestPrismUnionMergedLoopJunctionsClose
+// (prism_boolean_internal_test.go) pins RB9's guard directly, on a synthetic
+// non-closing loop, for exactly that reason, and stays correct either way.
+func TestPrismUnionCutFragmentOperandRefusesNonClosingMerge(t *testing.T) {
+	corners := [][2]float64{{-9.317, -5.731}, {10.29, -6.113}, {8.877, 7.219}, {-7.331, 6.407}}
+	doc := decad.New()
+	a := overshootQuadBody(t, doc, corners, 0.13, 5)
+	b := boxBody(t, doc, -1, -1, 1, 1, 5)
+	beforeRecipe := doc.Recipe()
+	beforeBodies := doc.Bodies()
+
+	_, err := decad.Union(a, b)
+	require.Error(t, err)
+	require.ErrorIs(t, err, decad.ErrUnrecordableProfile)
+	require.Equal(t, beforeRecipe, doc.Recipe())
+	require.Equal(t, beforeBodies, doc.Bodies())
+
+	av, err := a.Volume()
+	require.NoError(t, err)
+	require.InDelta(t, 1139.952075, volumeMM(t, av), 1e-9)
+	bv, err := b.Volume()
+	require.NoError(t, err)
+	require.InDelta(t, 20.0, volumeMM(t, bv), 1e-9)
+}
+
 // --- Core PR1 capability tests (§14) ---
 
 // TestPrismUnionTwoBoxesSharingCapPlaneBuildsAnalyticPrism is the "control"
