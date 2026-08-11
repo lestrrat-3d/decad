@@ -160,12 +160,15 @@ func TestCapBlendMiteredPatchNormalCarriesItsOwnBound(t *testing.T) {
 	}
 }
 
-// TestCapBlendUnmiteredPatchNormalStaysExact pins the other side of the same
-// rule: where a band patch's two directrices sweep ONE window there is no
-// departure to bound, and the normal stays Exact with a zero bound. A whole
-// turn (no corner trims it at all) and a rectangular loop's flat patches are
-// the shipped cases, and neither may pay for the mitered one's bound.
-func TestCapBlendUnmiteredPatchNormalStaysExact(t *testing.T) {
+// TestCapBlendUnmiteredPatchNormalCarriesNoWindowSkew pins the other side of
+// the same rule: where a band patch's two directrices sweep ONE window there is
+// no ANGULAR skew to bound, so the patch may not pay for the mitered one's.
+// What is left on an unplaced, axis-aligned build of these shapes is the
+// rounding of the coordinates themselves, which is a rounding-scale term rather
+// than a geometric one (capblend_departure_test.go reads the same term on a
+// placed band, where it is orders larger). A whole turn (no corner trims it at
+// all) and a rectangular loop's flat patches are the shipped cases.
+func TestCapBlendUnmiteredPatchNormalCarriesNoWindowSkew(t *testing.T) {
 	for _, tc := range []struct {
 		name  string
 		build func(t *testing.T) *decad.Body
@@ -187,8 +190,7 @@ func TestCapBlendUnmiteredPatchNormalStaysExact(t *testing.T) {
 				p := f.Loops()[0].CoEdges()[0].Start().Position().Value
 				n, err := f.NormalAt(p)
 				require.NoError(t, err)
-				require.Equal(t, decad.Exact, n.Exactness)
-				require.Equal(t, 0.0, n.Bound.Mag())
+				requireRoundingScaleNormalBound(t, n)
 				checked++
 			}
 			require.Positive(t, checked)
@@ -239,8 +241,7 @@ func TestCapBlendUndecidedPatchKeepsProvenUndercut(t *testing.T) {
 	p := plane.Loops()[0].CoEdges()[0].Start().Position().Value
 	n, err := plane.NormalAt(p)
 	require.NoError(t, err)
-	require.Equal(t, decad.Exact, n.Exactness)
-	require.Equal(t, 0.0, n.Bound.Mag())
+	requireRoundingScaleFlatBound(t, n)
 	require.InDelta(t, -math.Sqrt2/2, n.Value.Dot(r3.NewVec(1, 0, 0)), 1e-12)
 
 	report, err := m.body.Document().Verify(t.Context(), decad.WithPullDirection(r3.NewVec(1, 0, 0)))
@@ -252,6 +253,128 @@ func TestCapBlendUndecidedPatchKeepsProvenUndercut(t *testing.T) {
 	require.Equal(t, decad.Violating, report.Bodies[0].Status)
 }
 
+// TestCapBlendWholeTurnUndercutRespectsNormalBound covers the OTHER reading a
+// band patch's published bound governs, on the band that carries no window skew
+// at all. A whole-turn Cone patch publishes its normal
+// with the arithmetic bound its own arm earned (normal_bound.go), and a caller
+// may pull along a direction the patch's own tangent cannot be separated from
+// within that bound: the exact taper and the float cosine and sine the arm
+// took of the held half angle disagree by less than the bound, so which side
+// of zero the patch's minimum component falls on is not decided by the
+// reading. A survey that kept only the sampled value would answer that pull
+// with a positive claim — the proven all-clear or a listed violation — and be
+// right only by luck. It must be undecided instead.
+func TestCapBlendWholeTurnUndercutRespectsNormalBound(t *testing.T) {
+	body := circleProfile(t, 20, 10)
+	chamfered, err := body.Chamfer(capLoopEdges(body), units.Millimeters(2))
+	require.NoError(t, err)
+
+	var cone *decad.Face
+	for _, f := range chamfered.Faces() {
+		if f.Surface().Kind() == decad.KindCone {
+			require.Nil(t, cone, "a whole-turn band builds one Cone patch")
+			cone = f
+		}
+	}
+	require.NotNil(t, cone)
+
+	// The patch's own published normal at one azimuth, which fixes the whole
+	// band: a Cone's normal keeps one axial component and turns its radial
+	// part with the azimuth, so the band's minimum component against a pull p
+	// is p.Z*n.Z - hypot(p.X, p.Y)*hypot(n.X, n.Y).
+	n, err := cone.NormalAt(cone.Loops()[0].CoEdges()[0].Start().Position().Value)
+	require.NoError(t, err)
+	bound, err := n.Bound.In(units.One)
+	require.NoError(t, err)
+	require.Positive(t, bound, "a Cone arm's own cosine and sine are not exact")
+
+	// A pull whose lateral share matches that same ratio makes the band's
+	// minimum component zero — the tangent the reading cannot resolve.
+	radial := math.Hypot(n.Value.X, n.Value.Y)
+	axial := math.Abs(n.Value.Z)
+	pull := r3.NewVec(axial/radial, 0, math.Copysign(1, n.Value.Z))
+	unit, ok := pull.Normalize()
+	require.True(t, ok)
+	minimum := unit.Z*n.Value.Z - math.Hypot(unit.X, unit.Y)*radial
+	require.Less(t, math.Abs(minimum), bound,
+		"the pull must sit inside the patch's own bound of its tangent, not merely near it")
+
+	report, err := chamfered.Document().Verify(t.Context(), decad.WithPullDirection(pull))
+	require.NoError(t, err)
+	require.Len(t, report.Bodies, 1)
+	require.NotContains(t, report.Bodies[0].Undercuts, cone,
+		"a tangent the reading cannot resolve is not a proven violation")
+	require.True(t, hasDiagnostic(report, decad.DiagUndecidedUndercut),
+		"nor is it a proven all-clear")
+}
+
+// TestCapBlendFlatPatchUndercutRespectsNormalBound is the same claim on the
+// single-sample arm. A flat band patch is read from ONE Face.NormalAt, whose
+// bound is just as real and carries its own departure term the same way, and a pull perpendicular to the direction that
+// reading names leaves the patch's true component on neither proven side of
+// zero.
+func TestCapBlendFlatPatchUndercutRespectsNormalBound(t *testing.T) {
+	_, box := capBlendBox(t)
+	chamfered, err := box.Chamfer(capLoopEdges(box), units.Millimeters(5))
+	require.NoError(t, err)
+
+	patch := faceWithRole(t, chamfered, "chamferCap(end,0,0)")
+	require.Equal(t, decad.KindPlane, patch.Surface().Kind())
+	n, err := patch.NormalAt(patch.Loops()[0].CoEdges()[0].Start().Position().Value)
+	require.NoError(t, err)
+	requireRoundingScaleFlatBound(t, n)
+
+	// Perpendicular to the published normal, so the patch's own component is
+	// zero to within the bound that normal carries.
+	pull := r3.NewVec(n.Value.Y, -n.Value.X, 0)
+	unit, ok := pull.Normalize()
+	require.True(t, ok)
+	bound, err := n.Bound.In(units.One)
+	require.NoError(t, err)
+	require.Less(t, math.Abs(n.Value.Dot(unit)), bound)
+
+	report, err := chamfered.Document().Verify(t.Context(), decad.WithPullDirection(pull))
+	require.NoError(t, err)
+	require.Len(t, report.Bodies, 1)
+	require.NotContains(t, report.Bodies[0].Undercuts, patch)
+	require.True(t, hasDiagnostic(report, decad.DiagUndecidedUndercut))
+}
+
+// requireRoundingScaleFlatBound checks a flat band patch's computed normal,
+// which carries Face.NormalAt's own arithmetic proof composed with the
+// rounding-scale departure the patch's four independently rounded corners
+// leave (capblend_departure.go). Both terms are rounding-scale on the unplaced
+// builds this file reads; capblend_departure_test.go reads the same patch
+// placed, where the second is orders larger.
+func requireRoundingScaleFlatBound(t *testing.T, n decad.VecMeasurement) {
+	t.Helper()
+	require.Equal(t, decad.Approximate, n.Exactness)
+	bound, err := n.Bound.In(units.One)
+	require.NoError(t, err)
+	require.Positive(t, bound)
+	require.Less(t, bound, 1e-14)
+}
+
+// requireRoundingScaleNormalBound keeps a band with no window skew distinct
+// from a mitered patch, whose bound is a geometric fraction of a radian. An
+// axis-aligned normal can be Exact; every other normal carries only
+// Face.NormalAt's arithmetic bound and the rounding-scale departure an unplaced
+// build's own coordinates leave.
+func requireRoundingScaleNormalBound(t *testing.T, n decad.VecMeasurement) {
+	t.Helper()
+	bound, err := n.Bound.In(units.One)
+	require.NoError(t, err)
+	require.Less(t, bound, 1e-14)
+	switch n.Exactness {
+	case decad.Exact:
+		require.Zero(t, bound)
+	case decad.Approximate:
+		require.Positive(t, bound)
+	default:
+		require.Fail(t, `unknown normal exactness`, `%v`, n.Exactness)
+	}
+}
+
 // TestCapBlendUndercutStillDecidedOnOrdinaryBand keeps the fix reject-only: an
 // ordinary chamfer's band is mitered too, and its patches must still be
 // CLEARED outright rather than swept into the undecided answer above. Its own
@@ -261,7 +384,9 @@ func TestCapBlendUndercutStillDecidedOnOrdinaryBand(t *testing.T) {
 	m := chamferedQuarterDiskPatch(t, 100, 20, 0.5)
 	n, err := m.face.NormalAt(m.rulings[0][1])
 	require.NoError(t, err)
-	require.Less(t, n.Bound.Mag(), 0.01, "an ordinary setback's departure is small")
+	// Audited at 0.009722243846487153 — a little over half a degree, and far
+	// below the trivial 2 a refused derivation publishes.
+	require.Less(t, n.Bound.Mag(), 0.05, "an ordinary setback's departure is small")
 
 	report, err := m.body.Document().Verify(t.Context(), decad.WithPullDirection(r3.NewVec(0, 0, 1)))
 	require.NoError(t, err)

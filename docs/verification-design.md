@@ -1121,10 +1121,13 @@ an approximation of one — and the report gives four answers this way:
   over the survey. On an analytic face whose geometry is its tag, every point's
   normal is an exact fact with a closed-form range over the face, and the
   survey of those ranges (the membership rule below) is the proof that no
-  region of any face opposes the pull. A tagged analytic variant that is a
-  bounded stand-in carries its own normal departure
-  (`docs/modify-reach-design.md` §8.3), so its widened range can instead leave
-  the question undecided. A faceted survey proves the same absence only when
+  region of any face opposes the pull. The range a survey READS is that fact
+  only to within the bound of whatever computed it: a range read through
+  `Face.NormalAt` carries that evaluation's own proven bound (§2), so a pull
+  the reading cannot separate from a face's own tangent leaves the question
+  undecided even where the geometry is its tag. A tagged analytic variant that
+  is a bounded stand-in carries its own normal departure
+  (`docs/modify-reach-design.md` §8.3) on top of that. A faceted survey proves the same absence only when
   every true patch's source-normal range clears. A missing or straddling range
   leaves `Undercuts` empty and the body `Suspect` (payload verification §8).
 - **A pair with no `Interference` row** is the answer *these two bodies do not
@@ -1483,12 +1486,13 @@ implies a trust-pass, and the rungs compose by precedence alone.
 The other spec of §2 reads the same kind of interval, one dimension over —
 and quantified over the face, because a face does not have *a* normal. What
 core §6.1 defines is the normal **at a point**: `Face.NormalAt(p)`, a
-`VecMeasurement` whose proven bound is zero on an analytic face whose geometry
-is its tag, where every normal is an exact fact of the surface. A tagged
-analytic variant that is a bounded stand-in carries its proven departure from
-the surface it represents (`docs/modify-reach-design.md` §8.3). A `Faceted`
-face carries the facet's honest tilt error, because a facet's normal is exact
-*for the facet* and approximate *for the part the facet stands for*. A curved face sweeps a
+`VecMeasurement` whose proven bound on an analytic face combines what that
+face's closed form earns — zero where the evaluation lands on the exact unit
+normal and the rounding it committed where it does not — with any proven
+departure of the published tag from the surface it represents
+(`docs/modify-reach-design.md` §8.3). A `Faceted` face carries the facet's
+honest tilt error, because a facet's normal is exact *for the facet* and
+approximate *for the part the facet stands for*. A curved face sweeps a
 **range** of normals — a single cylindrical, spherical or toroidal face
 carries normals both with and against any pull — so membership is decided
 pointwise first. The pointwise comparison reads the point's proven interval

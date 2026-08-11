@@ -1537,10 +1537,16 @@ exports nothing else. A `switch` on `Surface` or `Curve` MUST already carry a
 `default` (core §6.1), so adding these variants breaks no conforming caller.
 
 **`Face.NormalAt(p)` on a `NURBSSurface` is `ErrUnsupported`.** Recovering the
-`(u, v)` of a given point is a root-find, not a closed form, so an `Exact`
-zero-bound answer is unavailable and the other variants all promise one. Nothing
-internal needs it: the undercut survey reads normals off the payload walk, never
-off `NormalAt`.
+`(u, v)` of a given point is a root-find, not a closed form, so no bound covers
+the answer at all. The arm answers for the five analytic variants — `Plane`,
+`Cylinder`, `Cone`, `Sphere` and `Torus` — each of which evaluates its normal in
+closed form and publishes the bound that evaluation earns, zero only where the
+arithmetic came out exactly right. `Faceted` is `ErrUnsupported` beside
+`NURBSSurface` and for its own reason: its answer is a union of the held facets'
+certificates rather than a closed form, and it lands with the faceted
+certificate stage (`docs/payload-verification-design.md` §5.4, §13). Nothing
+internal needs any of them: the undercut survey reads normals off the payload
+walk, never off `NormalAt`.
 
 ## 8. Table C — per-capability reach
 

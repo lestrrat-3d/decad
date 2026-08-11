@@ -481,20 +481,23 @@ computed measurements (`docs/modify-reach-design.md` §8.3). A face whose held
 geometry is faceted is `Faceted`, and `Faceted` is the flag. So a `Cylinder.Axis`
 or a `Sphere.Center` is an exact parameter of its named surface, while
 `Face.NormalAt(p)` — a quantity the evaluator *computes*, on a face that may be
-`Faceted` or a bounded analytic stand-in — is a measurement and reports its
-`Exactness` like every other. For a faceted face, the evaluator's internal source
-certificate bounds the true patch normals; a positional `Faceted.Bound` alone
-does not imply a normal bound (`docs/payload-verification-design.md` §5/§8). No
-certificate details enter the public API. `NormalAt` on a `NURBSSurface` is `ErrUnsupported`
-(`docs/spline-design.md` §7).
+a bounded analytic stand-in — is a measurement and reports its `Exactness` like
+every other. It answers for the five analytic variants, and `NormalAt` on a
+`NURBSSurface` or on a `Faceted` face is `ErrUnsupported` (`docs/spline-design.md`
+§7); the faceted reading lands with the faceted certificate stage, whose internal
+source certificate is what bounds the true patch normals
+(`docs/payload-verification-design.md` §5.4, §13). A positional `Faceted.Bound`
+alone does not imply a normal bound (`docs/payload-verification-design.md`
+§5/§8), and no certificate details enter the public API.
 
 <!-- The NormalAt sentence is claim + pointer, which the authoring rule in
 ~/.claude/docs/agent-instructions.md sanctions for a non-owning site: "One full
 derivation per why, at the owning site; every repeat becomes claim + pointer."
 Its never-restate rule bans the pointer-WITH-GLOSS shape, and no clause of spline
-§7's derivation is unpacked here — not the (u, v) root-find, not the other
-variants' Exact zero bound, not the undercut survey reading normals off the
-payload walk. Two sentences of the same claim+pointer shape already ship in this
+§7's derivation is unpacked here — not the (u, v) root-find, not the faceted
+answer's union of held-facet certificates, not the other variants' own
+closed-form bound, not the undercut survey reading normals off the payload
+walk. Two sentences of the same claim+pointer shape already ship in this
 file: the Faceted.Bound sentence immediately above, and the
 DiagUnsupportedPairContact sentence in §8's boolean-error taxonomy, which even
 names the owner's constant. This reading of the authoring rule is the project's

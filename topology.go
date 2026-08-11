@@ -395,22 +395,33 @@ type Face struct {
 	// normalBound is the proven DIMENSIONLESS bound on NormalAt's own answer:
 	// how far the surface this face really carries can tilt away from the
 	// tagged variant the normal is computed from. It is zero for every face
-	// whose own geometry IS its tag, which is every analytic face but one: a
-	// cap-loop chamfer's band patch over a circular wall is RULED between two
-	// directrices that a mitered corner leaves sweeping different angular
-	// windows, so its surface departs from the `Cone` it publishes by a bound
-	// derived from that skew alone (capblend_geom.go's capPatchNormalAllow,
-	// docs/modify-reach-design.md §8.3). A zero there would publish an Exact
-	// direction the built surface does not have.
+	// whose own geometry IS its tag, which is every analytic face but a
+	// cap-loop chamfer's band patch: the patch is RULED between two built
+	// directrices, and the `Cone` or `Plane` it publishes is that ruled surface
+	// only to within a bound measured from the numbers the body publishes for it
+	// (capblend_departure.go, docs/modify-reach-design.md §8.3). The bound is a
+	// world-space one, so it covers both a mitered corner's own angular skew and
+	// the placement's independent rounding of every coordinate the build emits —
+	// which leaves the tag even on a flat patch, and on a circular one whose two
+	// windows coincide exactly. A zero term there would omit a direction
+	// difference the built surface has. NormalAt separately composes its
+	// arithmetic proof (normal_bound.go).
 	normalBound float64
 }
 
-// NormalAt returns the face's outward normal at p — a computed direction, so
-// it is a measurement (core §6.1): Exact with a zero dimensionless bound for
-// an analytic v1 face whose own geometry is the variant it is tagged with, and
-// Approximate with that face's own proven bound where the two differ (see
-// normalBound). A point that gives the surface no direction — a cylinder's own
-// axis — is ErrDegenerate.
+// NormalAt returns the face's outward normal at p. Its bound combines the
+// arithmetic proof for the normal of the face's tagged surface
+// (normal_bound.go) and any proven departure of the surface actually carried
+// from that tag (normalBound). It is Exact only when both are zero. A point
+// that gives the surface no direction is ErrDegenerate. A reading whose own
+// enclosure cannot separate the direction from zero is ErrUnsupported.
+//
+// The five analytic variants — Plane, Cylinder, Cone, Sphere and Torus — are
+// the whole set this answers for. Any other tagged surface is ErrUnsupported:
+// a NURBSSurface for the reason docs/spline-design.md §7 owns, and a Faceted
+// face — the tag every boolean-produced face carries — because its answer
+// waits on the faceted certificate stage
+// (docs/payload-verification-design.md §5.4, §13).
 func (f *Face) NormalAt(p r3.Vec) (VecMeasurement, error) {
 	sign := 1.0
 	if f.reversed {
@@ -418,7 +429,9 @@ func (f *Face) NormalAt(p r3.Vec) (VecMeasurement, error) {
 	}
 	switch s := f.surface.(type) {
 	case Plane:
-		return f.normalMeasurement(s.Frame.N(), sign), nil
+		n := s.Frame.N()
+		allow, st := planeNormalAllow(s.Frame, n)
+		return f.normalMeasurement(n, sign, allow, st, "the frame of this plane names no direction")
 	case Cylinder:
 		rel := p.Sub(s.Origin)
 		radial := rel.Sub(s.Axis.Scale(rel.Dot(s.Axis)))
@@ -426,7 +439,8 @@ func (f *Face) NormalAt(p r3.Vec) (VecMeasurement, error) {
 		if !ok {
 			return VecMeasurement{}, fmt.Errorf(`%w: a point on the cylinder axis has no normal`, ErrDegenerate)
 		}
-		return f.normalMeasurement(dir, sign), nil
+		allow, st := axialNormalAllow(p, s.Origin, s.Axis, dir)
+		return f.normalMeasurement(dir, sign, allow, st, "a point on the cylinder axis has no normal")
 	case Cone:
 		rel := p.Sub(s.Origin)
 		radial := rel.Sub(s.Axis.Scale(rel.Dot(s.Axis)))
@@ -441,13 +455,15 @@ func (f *Face) NormalAt(p r3.Vec) (VecMeasurement, error) {
 		// The wall leans outward by the half angle along the growth axis, so
 		// the geometric normal tilts against it by the same angle.
 		n := dir.Scale(math.Cos(half)).Sub(s.Axis.Scale(math.Sin(half)))
-		return f.normalMeasurement(n, sign), nil
+		allow, st := coneNormalAllow(p, s, half, n)
+		return f.normalMeasurement(n, sign, allow, st, "the cone apex has no normal")
 	case Sphere:
 		dir, ok := p.Sub(s.Center).Normalize()
 		if !ok {
 			return VecMeasurement{}, fmt.Errorf(`%w: the sphere center has no normal`, ErrDegenerate)
 		}
-		return f.normalMeasurement(dir, sign), nil
+		allow, st := radialNormalAllow(p, s.Center, dir)
+		return f.normalMeasurement(dir, sign, allow, st, "the sphere center has no normal")
 	case Torus:
 		major, err := s.Major.In(units.Millimeter)
 		if err != nil {
@@ -464,21 +480,32 @@ func (f *Face) NormalAt(p r3.Vec) (VecMeasurement, error) {
 		if !ok {
 			return VecMeasurement{}, fmt.Errorf(`%w: the tube center has no normal`, ErrDegenerate)
 		}
-		return f.normalMeasurement(dir, sign), nil
+		allow, st := torusNormalAllow(p, s, major, dir)
+		return f.normalMeasurement(dir, sign, allow, st, "the tube center has no normal")
 	default:
 		return VecMeasurement{}, fmt.Errorf(`%w: this evaluator computes normals for its own analytic faces only`, ErrUnsupported)
 	}
 }
 
 // normalMeasurement publishes one arm's computed direction under the face's
-// own outward sign and its own proven normal bound, so no arm can hand back a
-// zero-bound Exact for a face whose surface is only bounded-close to its tag.
-func (f *Face) normalMeasurement(dir r3.Vec, sign float64) VecMeasurement {
+// own outward sign. It combines the arm's proof against its tagged surface and
+// the face's own departure from that tag by triangle inequality. The sign is
+// exact, so it never changes the bound.
+func (f *Face) normalMeasurement(dir r3.Vec, sign, allow float64, st normalStatus, degenerate string) (VecMeasurement, error) {
+	switch st {
+	case normalZero:
+		return VecMeasurement{}, fmt.Errorf(`%w: %s`, ErrDegenerate, degenerate)
+	case normalUnproven:
+		return VecMeasurement{}, fmt.Errorf(`%w: this normal's own direction is not proven away from zero, so no bound covers it`, ErrUnsupported)
+	}
+	if allow != 0 || f.normalBound != 0 {
+		allow = math.Nextafter(allow+f.normalBound, math.Inf(1))
+	}
 	return VecMeasurement{
 		Value:     dir.Scale(sign),
-		Exactness: exactnessOf(f.normalBound),
-		Bound:     units.Scalar(f.normalBound),
-	}
+		Exactness: exactnessOf(allow),
+		Bound:     units.Scalar(allow),
+	}, nil
 }
 
 // Surface returns the face's tagged geometry.

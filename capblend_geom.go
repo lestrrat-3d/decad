@@ -197,7 +197,7 @@ type capPatchGeom struct {
 	// (side = original wall radius, cap = offset radius) and the angular
 	// EXTENT — always normalized to th0 < th1, never the walk's own sense,
 	// since patchRawFlux carries the material side in its own sign
-	// corrections and trigRange reads an increasing window.
+	// corrections and the DX7 survey reads an increasing window.
 	cU, cV                float64
 	sideRadius, capRadius float64
 	th0, th1              float64
@@ -369,7 +369,10 @@ func buildCapBand(ctx context.Context, body *Body, ref StepRef, cbp capBlendPayl
 		dthHeld := gth1 - gth0
 		capThAllow := intervalFloatError(intervalScale(interval(piLower, piUpper), big.NewRat(2, 1)), dthHeld)
 		geom := capPatchGeom{circular: true, cU: w.cU, cV: w.cV, sideRadius: w.radius, capRadius: capRadius, th0: gth0, th1: gth1, capTh0: gth0, capTh1: gth1, sweepCCW: w.th1 > w.th0, wholeTurn: true, sideZ: sideZ, capZ: capZ, contourAllow: bandPatchAreaAllow(delta, chordUpper, slant), levelDelta: levelDelta, capThAllow: capThAllow}
-		setPatchReadings(patch, geom)
+		// A cornerless band has no corner to pair its two directrices at, so
+		// the one ruling its azimuth spread is measured on is the pair of SEAM
+		// vertices — the one place either circle names a parameter origin.
+		setPatchReadings(patch, geom, capBuiltPatch(seam0, capEdge, []*Vertex{seam0.Start()}, []*Vertex{capEdge.Start()}))
 		capLoop := []coedge{{edge: capEdge, forward: true}}
 		return capBandResult{patches: []*Face{patch}, capCo: capLoop, geom: []capPatchGeom{geom}, delta: delta}, nil
 	}
@@ -512,7 +515,7 @@ func buildCapBand(ctx context.Context, body *Body, ref StepRef, cbp capBlendPayl
 		patches = append(patches, face)
 		// th0, th1 record the patch's ANGULAR EXTENT, not the connector's own
 		// clockwise walk — the same normalization every other patch's geometry
-		// takes, since trigRange reads an increasing window. The connector
+		// takes, since the DX7 survey reads an increasing window. The connector
 		// arc is walked CLOCKWISE (arcTh1 below arcTh0 by construction), and
 		// sweepCCW is what carries that fact to patchRawFlux.
 		gth0, gth1 := arcTh0[i], arcTh1[i]
@@ -546,7 +549,9 @@ func buildCapBand(ctx context.Context, body *Body, ref StepRef, cbp capBlendPayl
 			levelDelta:   levelDelta,
 			capThAllow:   capThAllow,
 		}
-		setPatchReadings(face, g)
+		// The apex patch's rulings all leave the ORIGINAL corner vertex, which
+		// is the cone tag's own apex: a point side directrix.
+		setPatchReadings(face, g, capBuiltApexPatch(sideVertexAt(i), arc, []*Vertex{arc.Start(), arc.End()}))
 		geoms = append(geoms, g)
 	}
 
@@ -707,7 +712,14 @@ func buildCapBand(ctx context.Context, body *Body, ref StepRef, cbp capBlendPayl
 			absSumUpper(trailSlant.length, trailSlant.lengthBound),
 		)
 		g.contourAllow = bandPatchAreaAllow(delta, chordUpper, slant)
-		setPatchReadings(face, g)
+		// The two rulings this wall patch is bounded by, paired end for end:
+		// leadSlant joins the side wall's own start vertex to capA, trailSlant
+		// its end vertex to capB. Both patch kinds read the pair: a Plane
+		// patch's tag is fixed through three of its four built corners, so the
+		// fourth's own departure from it is what capPatchNormalAllow measures
+		// there.
+		setPatchReadings(face, g, capBuiltPatch(side, capEdge,
+			[]*Vertex{side.Start(), side.End()}, []*Vertex{capA, capB}))
 		geoms = append(geoms, g)
 		capCo = append(capCo, coedge{edge: capEdge, forward: true})
 		if arc := arcByCorner[nextI]; arc != nil {
@@ -726,19 +738,28 @@ func buildCapBand(ctx context.Context, body *Body, ref StepRef, cbp capBlendPayl
 // so a caller reading `Face.Area()` and a caller reading `Body.Area()` are told
 // the same thing about the same surface — and the bound its `Face.NormalAt`
 // owes, which is how far the RULED surface the build assembles can depart from
-// the `Cone` this file tags it with (capPatchNormalAllow).
+// the surface this file tags it with (capblend_departure.go).
+//
+// built names that ruled surface through the numbers the body PUBLISHES for it:
+// the two directrices' own circles and the rulings' own endpoints. It is passed
+// rather than re-derived because the departure is a WORLD-space quantity — the
+// placement rounds every one of those coordinates independently — and a
+// plane-local description states none of it.
 //
 // Left unset, a patch Face reports a zero area with a zero bound, which
 // `exactnessOf` publishes as an EXACT zero: not merely a missing reading but a
 // positively wrong one, asserted as a fact about a face that plainly has area.
-// A zero normal bound on a mitered patch is the same kind of wrong answer one
-// reading over — an `Exact` claim for a direction the built surface does not
-// have — and the DX7 undercut survey reads it. Every patch this file builds
-// passes through here, and each does so with the geometry the moments pass then
-// integrates, so the two can never disagree.
-func setPatchReadings(f *Face, g capPatchGeom) {
+// A zero surface-departure term is the same kind of wrong answer one reading
+// over: it omits a direction difference the built surface has, and the DX7
+// undercut survey reads it. Face.NormalAt separately composes its own
+// arithmetic bound, and the survey reads the value stored here rather than a
+// second computation of it, so no two readers can be told different stories.
+// Every patch this file builds passes through here, and each does so with the
+// geometry the moments pass then integrates, so those two can never disagree
+// either.
+func setPatchReadings(f *Face, g capPatchGeom, built capPatchBuilt) {
 	f.area, f.areaBound = patchAreaOf(g)
-	f.normalBound = capPatchNormalAllow(g)
+	f.normalBound = capPatchNormalAllow(f, g, built)
 }
 
 // capSlantEdge is one cap-level contour point's slant edge down to the
@@ -862,6 +883,15 @@ func coneSurface(pl prismPayload, cu, cv, r0, r1, z0, z1 float64) Surface {
 // which reaches the denoted offset family exactly and is not ruled between two
 // arcs at all.
 //
+// It is a question about the patch's own plane-local GEOMETRY — whether the
+// build ruled a developable cone sector or a doubly-curved surface between two
+// differently-swept arcs — and that is what DX8 asks of it (capBlendMinRadius),
+// its one reader. The DX7 normal reading asks a different question: how far the
+// BUILT surface points away from the tag, which the placement's own rounding
+// moves whether or not the windows coincide. That one is measured in world
+// space from the published numbers (capblend_departure.go), never from these
+// two windows.
+//
 // The two windows are not guaranteed to share a branch (capWallSweep anchors
 // capTh0 at a raw Atan2 while th0 comes from the recorded arc range), so the
 // cap window is put back on th0's own branch first — the same shift
@@ -877,32 +907,6 @@ func capPatchWindowSkew(g capPatchGeom) float64 {
 		return 0
 	}
 	return skew
-}
-
-// capPatchNormalAllow gathers one patch's own inputs to bounds.go's
-// ruledPatchNormalAllow: the proven bound on how far the RULED surface the
-// build assembles can carry a normal differing from the `Cone` this file
-// publishes for it. A patch whose two windows already coincide gets zero,
-// which is what keeps the tangent-join, apex and whole-turn readings exactly
-// as they ship.
-//
-// The two windows must also be walked in the SAME sense for that derivation's
-// own convexity step to hold (both a and b non-negative, so the built normal's
-// azimuth stays between the two directrices'). buildCapBand normalizes th0 <
-// th1 and swaps capTh0/capTh1 together with them, so a disagreeing pair is not
-// a configuration this evaluator builds — and where one is seen anyway the
-// answer is the trivial bound, never a number the derivation did not earn.
-func capPatchNormalAllow(g capPatchGeom) float64 {
-	skew := capPatchWindowSkew(g)
-	if skew <= 0 {
-		return 0
-	}
-	// Each window's own WIDTH is branch-independent — capWindowOnBranch shifts
-	// a pair together — so neither needs the shift the skew above took.
-	if g.th1-g.th0 <= 0 || g.capTh1-g.capTh0 <= 0 {
-		return ruledNormalAllowUnbounded
-	}
-	return ruledPatchNormalAllow(g.sideRadius, g.capRadius, g.capZ-g.sideZ, skew)
 }
 
 // buildConePatch builds a full-turn Cone chamfer patch (a whole circular
