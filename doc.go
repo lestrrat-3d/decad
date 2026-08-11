@@ -89,7 +89,7 @@
 //	  revolve operand (no tessellator; booleans mesh)         ErrUnsupported
 //	  curved-surface tangent, facets never meet               ErrUnsupported
 //	  exact coplanar / face-on-face / point contact outside
-//	    admitted analytic prism Union                         ErrUnsupported
+//	    the admitted analytic prism reduction                 ErrUnsupported
 //	  empty result (disjoint intersect, emptied cut)          ErrBooleanFailed
 //	Fillet/Chamfer  straight prism, lateral edges             builds
 //	Chamfer       complete prism cap loop(s)                  builds

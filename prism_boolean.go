@@ -11,40 +11,47 @@ import (
 	"github.com/lestrrat-3d/units"
 )
 
-// This file is PR1 of docs/prism-boolean-design.md: the analytic reduction of
-// Union over two co-directional coplanar straight prisms, routed entirely
-// through sketch (§4) rather than through the mesh boolean (evaluator-design
-// §9). The entry gate (§3) is reject-only and never surfaces an error on a
-// miss — the caller falls back to the unchanged mesh path exactly as it did
-// before this file existed. A sketch-split boundary also reroutes before
-// resolution accepts a candidate whenever either input carries a section
-// displacement or B's re-expression is nonidentity: either uncertainty can
-// amplify at the cut. A split boundary the reroute admits still charges the cut
-// parameters' OWN rounding into the result's section displacement (§7,
-// prismUnionCutDelta) — a merged section built from fragments is never exact,
-// whatever the operands were. Only once §4.2's remaining resolution finds a unique
-// candidate does a further problem become a genuine, typed refusal (§3.4,
-// §9) rather than a reroute to the mesh path.
+// This file is docs/prism-boolean-design.md's analytic reduction of
+// Union/Cut/Intersect over two co-directional coplanar straight prisms,
+// routed entirely through sketch (§4) rather than through the mesh boolean
+// (evaluator-design §9). The entry gate (§3) is reject-only and never
+// surfaces an error on a miss — the caller falls back to the unchanged mesh
+// path exactly as it did before this file existed. A sketch-split boundary
+// also reroutes before resolution accepts a candidate whenever either input
+// carries a section displacement or B's re-expression is nonidentity: either
+// uncertainty can amplify at the cut. A split boundary the reroute admits
+// still charges the cut parameters' OWN rounding into the result's section
+// displacement (§7, prismUnionCutDelta) — a merged section built from
+// fragments is never exact, whatever the operands were. Only once §4.2's
+// remaining resolution finds a unique candidate does a further problem become
+// a genuine, typed refusal (§3.4, §9) rather than a reroute to the mesh path.
 //
-// PR1 implements Union's hole-free select-all/merge/chain path only (§4.2);
-// Cut/Intersect's clean-nesting structural match (PR2) and the general
-// per-cell edge-orientation classification (PR3) are not implemented, so
-// those ops — and any Union topology this increment's chain-closure cannot
-// resolve — fall through to tryPrismUnion returning ok=false, err=nil.
+// Union's resolution (§4.2) is the hole-free select-all/merge/chain path: the
+// candidate is assembled from every returned cell, and §6's audit re-proves
+// the assembly the same way every modify op re-checks its own rewrite. It
+// lives entirely in this file. Cut/Intersect's clean-nesting structural match
+// (§4.2's "clean" sub-case) is prism_boolean_nesting.go — see that file's own
+// header for why it needs no assembly and no §6 audit. This file owns what
+// both paths share: G1-G4 admission, the work-budget cap, the private scene
+// construction (buildPrismScene) and the operand coordinate re-expression
+// (prismReexpression). The general per-cell edge-orientation classification
+// for Cut/Intersect's crossing sub-case (PR3) is not implemented, so a pair
+// whose operands' boundaries genuinely cross falls through to tryPrismBoolean
+// returning ok=false, err=nil, exactly like any other unresolved topology
+// (§4.4).
 
-// tryPrismUnion attempts the PR1 analytic reduction for op. ok=false (err
+// tryPrismBoolean attempts the analytic reduction for op. ok=false (err
 // always nil in that case) means "not admitted" per §3.1/§3.4: the caller
 // MUST fall back to the unchanged mesh path with no error surfaced. That
 // includes a split arranged boundary when either input carries a section
 // displacement or B's re-expression is nonidentity. A non-nil err means the
 // bounded analytic resolution reached a genuine refusal (§3.4) — the caller
 // MUST propagate it rather than reroute to the mesh path.
-func tryPrismUnion(ctx context.Context, op OpKind, a, b *Body) (prismPayload, bool, error) {
-	// §4.2 implements resolution for Union only; every other op falls
-	// through even where G1-G5 would pass (§4.4).
-	if op != OpUnion {
-		return prismPayload{}, false, nil
-	}
+//
+// G1-G4 (admitPrismPairBudget) and the work cap are shared, unchanged, by
+// every op; G5 and G6 (§3.1) and the resolution path (§4.2) are op-specific,
+// per §3.2's table.
+func tryPrismBoolean(ctx context.Context, op OpKind, a, b *Body) (prismPayload, bool, error) {
 	budget := newWorkBudget(ctx) // §10: one counter for the whole attempt
 	if err := budget.err(); err != nil {
 		return prismPayload{}, false, err
@@ -56,24 +63,62 @@ func tryPrismUnion(ctx context.Context, op OpKind, a, b *Body) (prismPayload, bo
 	if !ok {
 		return prismPayload{}, false, nil
 	}
-	if len(pa.profile.Holes) != 0 || len(pb.profile.Holes) != 0 { // G6
+
+	switch op {
+	case OpUnion:
+		if len(pa.profile.Holes) != 0 || len(pb.profile.Holes) != 0 { // G6: both hole-free
+			return prismPayload{}, false, nil
+		}
+		if !prismUnionZIntervalMatches(pa, pb) { // G5, §3.2's Union row
+			return prismPayload{}, false, nil
+		}
+	case OpCut:
+		if len(pb.profile.Holes) != 0 { // G6: the TOOL must be hole-free; the target's own holes carry through
+			return prismPayload{}, false, nil
+		}
+		if !prismCutZIntervalSpans(pa, pb) { // G5, §3.2's Cut row: the tool spans the target
+			return prismPayload{}, false, nil
+		}
+	case OpIntersect:
+		if len(pa.profile.Holes) != 0 || len(pb.profile.Holes) != 0 { // G6: both hole-free (§4.4's multi-lump row is why)
+			return prismPayload{}, false, nil
+		}
+		if !prismIntersectZIntervalOverlaps(pa, pb) { // G5, §3.2's Intersect row
+			return prismPayload{}, false, nil
+		}
+	default:
+		// No other op reaches this evaluator through performBoolean's dispatch.
 		return prismPayload{}, false, nil
 	}
-	if !prismUnionZIntervalMatches(pa, pb) { // G5, §3.2's Union row
-		return prismPayload{}, false, nil
-	}
-	withinCap, err := prismUnionSceneWithinWorkCap(budget, pa, pb)
+
+	withinCap, err := prismSceneWithinWorkCap(budget, pa, pb)
 	if err != nil {
 		return prismPayload{}, false, err
 	}
 	if !withinCap {
-		return prismPayload{}, false, fmt.Errorf(`%w: the analytic union scene exceeds this evaluator's arrangement work cap`, ErrUnsupported)
+		return prismPayload{}, false, fmt.Errorf(`%w: the analytic %s scene exceeds this evaluator's arrangement work cap`, ErrUnsupported, opKindNames[op])
 	}
 
 	reexpress, err := newPrismReexpression(pa, pb)
 	if err != nil {
 		return prismPayload{}, false, err
 	}
+
+	switch op {
+	case OpUnion:
+		return resolveAndBuildPrismUnion(ctx, budget, pa, pb, reexpress)
+	case OpCut:
+		return resolveAndBuildPrismCut(ctx, budget, pa, pb, reexpress)
+	default: // OpIntersect
+		return resolveAndBuildPrismIntersect(ctx, budget, pa, pb, reexpress)
+	}
+}
+
+// resolveAndBuildPrismUnion runs Union's hole-free select-all/merge/chain
+// resolution (§4.2) and, once it commits, §6's build-time audit and §7's
+// exactness. Split out of tryPrismBoolean only so each op's own resolve+build
+// sequence reads as one unit.
+func resolveAndBuildPrismUnion(ctx context.Context, budget *workBudget, pa, pb prismPayload, reexpress *prismReexpression) (prismPayload, bool, error) {
 	merged, cutDelta, resolved, err := resolvePrismUnion(ctx, budget, pa, pb, reexpress)
 	if err != nil {
 		return prismPayload{}, false, err
@@ -177,14 +222,14 @@ func prismProfileIsAnalytic(budget *workBudget, p ProfileRecord) (bool, error) {
 	return true, nil
 }
 
-// prismUnionMaxArrangementSegments bounds the private sketch arrangement before
+// prismMaxArrangementSegments bounds the private sketch arrangement before
 // s.Profiles starts. The pinned sketch arranger densifies each line to one tiny
 // segment and each admitted circle or arc to no more than 256, then compares
 // every tiny-segment pair. Capping this upper bound keeps a canceled caller from
 // leaving an unbounded private arrangement behind.
-const prismUnionMaxArrangementSegments = 1024
+const prismMaxArrangementSegments = 1024
 
-func prismUnionSceneWithinWorkCap(budget *workBudget, pa, pb prismPayload) (bool, error) {
+func prismSceneWithinWorkCap(budget *workBudget, pa, pb prismPayload) (bool, error) {
 	segments := 0
 	for _, profile := range []ProfileRecord{pa.profile, pb.profile} {
 		for _, loop := range append([]LoopRecord{profile.Outer}, profile.Holes...) {
@@ -200,7 +245,7 @@ func prismUnionSceneWithinWorkCap(budget *workBudget, pa, pb prismPayload) (bool
 				default:
 					return false, nil // G4 already excluded this case.
 				}
-				if segments > prismUnionMaxArrangementSegments {
+				if segments > prismMaxArrangementSegments {
 					return false, nil
 				}
 			}
@@ -209,15 +254,30 @@ func prismUnionSceneWithinWorkCap(budget *workBudget, pa, pb prismPayload) (bool
 	return true, nil
 }
 
-// prismUnionZIntervalMatches is G5 for Union (§3.2): operand B's [z0, z1] is
-// re-expressed onto operand A's normal axis by the exact origin shift G3
-// already certified lies on a shared axis, and Union requires the two
-// intervals to match exactly.
-func prismUnionZIntervalMatches(pa, pb prismPayload) bool {
+// prismZShift is G5's re-expression of operand B's [z0, z1] onto operand A's
+// normal axis (§3.1): an origin shift along the axis G3 already proved
+// identical — ordinary float arithmetic, no rotation. Every op's G5 check,
+// and Intersect's result interval, read this SAME shift.
+//
+// G3 already tests (worldOriginB - worldOriginA)·worldNormalA != 0.0 and
+// refuses on anything but the literal zero, so this shift is 0.0, exactly,
+// for every pair that reaches it — computed rather than assumed only because
+// that is the design's own stated shape for G5 (§3.1's own row). §7's
+// "Intersect's shifted interval endpoint" term is therefore zero for every
+// pair this design admits, and no pair reaching this shift commits a new
+// axial displacement by computing it.
+func prismZShift(pa, pb prismPayload) float64 {
 	worldNormalA := pa.xform.ApplyDir(pa.frame.N())
 	worldOriginA := pa.xform.Apply(pa.frame.Origin())
 	worldOriginB := pb.xform.Apply(pb.frame.Origin())
-	shift := worldOriginB.Sub(worldOriginA).Dot(worldNormalA)
+	return worldOriginB.Sub(worldOriginA).Dot(worldNormalA)
+}
+
+// prismUnionZIntervalMatches is G5 for Union (§3.2): operand B's [z0, z1] is
+// re-expressed onto operand A's normal axis by prismZShift, and Union
+// requires the two intervals to match exactly.
+func prismUnionZIntervalMatches(pa, pb prismPayload) bool {
+	shift := prismZShift(pa, pb)
 	return pa.z0 == pb.z0+shift && pa.z1 == pb.z1+shift
 }
 
@@ -233,7 +293,7 @@ func prismUnionZIntervalMatches(pa, pb prismPayload) bool {
 // cancellation surfacing through budget — is always genuine and must
 // propagate.
 func resolvePrismUnion(ctx context.Context, budget *workBudget, pa, pb prismPayload, reexpress *prismReexpression) (ProfileRecord, float64, bool, error) {
-	s, err := buildPrismUnionScene(budget, pa, pb, reexpress)
+	s, _, err := buildPrismScene(budget, pa, pb, reexpress)
 	if err != nil {
 		return ProfileRecord{}, 0, false, err
 	}
@@ -254,7 +314,7 @@ func resolvePrismUnion(ctx context.Context, budget *workBudget, pa, pb prismPayl
 		return ProfileRecord{}, 0, false, nil // §4.4: the scene holds no bounded cell at all
 	}
 	if pa.sectionDelta != 0 || pb.sectionDelta != 0 || !reexpress.identity {
-		split, err := prismUnionProfilesHaveSplitBoundary(budget, profiles)
+		split, err := prismProfilesHaveSplitBoundary(budget, profiles)
 		if err != nil {
 			return ProfileRecord{}, 0, false, err
 		}
@@ -426,12 +486,12 @@ func point2SeparationUpper(a, b Point2) float64 {
 	return ratL1Upper(new(big.Rat).Sub(bu, au), new(big.Rat).Sub(bv, av))
 }
 
-// prismUnionProfilesHaveSplitBoundary reports whether sketch narrowed any
+// prismProfilesHaveSplitBoundary reports whether sketch narrowed any
 // arranged boundary edge. Such a cut falls back before recordEdge can publish
 // a trim when either source carries a section displacement or B's re-expression
 // is nonidentity, because that uncertainty may be amplified by the crossing
 // angle (prism-boolean-design §3.4, §7).
-func prismUnionProfilesHaveSplitBoundary(budget *workBudget, profiles []*sketch.Profile) (bool, error) {
+func prismProfilesHaveSplitBoundary(budget *workBudget, profiles []*sketch.Profile) (bool, error) {
 	for _, profile := range profiles {
 		if err := budget.step(); err != nil {
 			return false, err
@@ -530,12 +590,13 @@ func chainPrismUnionSurvivors(budget *workBudget, survivors []sketch.BoundaryEdg
 
 // auditPrismUnionSection runs the modify §5 audit (fillet_audit.go,
 // §6 of this design) on the merged section, reused verbatim with an empty
-// blend map — shell_offset.go's own precedent for auditing a
-// decad-constructed section with no cutback data. orig supplies the S8 sign
-// reference: operand A's own outer loop, whose CCW orientation and
-// non-degenerate area the merged Outer loop must match — the merge is
-// correct only when it keeps that same convention. S9 (nesting) is a no-op
-// here: G6 keeps every operand, and so the merged result, hole-free.
+// blend map — shell_offset.go's own precedent for "no cutback data, still run
+// the shared audit". orig supplies the S8 sign reference: operand A's own
+// outer loop, whose CCW orientation and non-degenerate area the merged Outer
+// loop must match — the merge is correct only when it keeps that same
+// convention. S9 (nesting) is a no-op here: G6 keeps every operand, and so
+// the merged result, hole-free. This audit is Union's own — see this file's
+// header comment for why Cut/Intersect's clean-nesting match needs none.
 func auditPrismUnionSection(budget *workBudget, pa prismPayload, merged ProfileRecord) error {
 	loops, err := prismCornerLoopsBudget(budget, prismPayload{profile: merged})
 	if err != nil {
@@ -549,15 +610,26 @@ func auditPrismUnionSection(budget *workBudget, pa prismPayload, merged ProfileR
 	return auditRewriteBudget(budget, orig, merged, loops, blendAt)
 }
 
-// buildPrismUnionScene is §4.1's scene construction: one private sketch.Sketch
-// holding both operands' recorded entities. Operand A's segments are created
-// verbatim (A's frame is the reference); operand B's are re-expressed into
-// A's frame first (reexpressPrismPoint) — the one new rounding this design
-// introduces. Entities are deduplicated WITHIN each operand (the same
-// dedup key discipline moments_validate.go's momentRecordScene already uses
-// for one record) but NEVER across operands: a coincident carrier is handed
-// to sketch as two separate, numerically matching entities, and sketch's own
-// coincident-carrier resolution decides whether they merge.
+// buildPrismScene is §4.1's scene construction: one private sketch.Sketch
+// holding both operands' recorded entities — Outer AND every Holes[i] loop of
+// each, so a Cut target's own carried-through holes and a nested Intersect
+// operand's own boundary both reach the arrangement (Union's own admitted
+// pairs are hole-free by G6, so this is a no-op widening for that path).
+// Operand A's segments are created verbatim (A's frame is the reference);
+// operand B's are re-expressed into A's frame first (reexpressPrismPoint) —
+// the one new rounding this design introduces. Entities are deduplicated
+// WITHIN each operand (the same dedup key discipline moments_validate.go's
+// momentRecordScene already uses for one record) but NEVER across operands: a
+// coincident carrier is handed to sketch as two separate, numerically
+// matching entities, and sketch's own coincident-carrier resolution decides
+// whether they merge.
+//
+// The second return value is §4.1's tag map: which operand and which loop
+// each created entity traces to (record.go's own "outer loops CCW, holes CW"
+// convention is unaffected — this is provenance, not orientation). Union's
+// resolution ignores it; Cut/Intersect's clean-nesting match
+// (prism_boolean_nesting.go, §4.2) reads it to prove the nesting relation
+// structurally.
 //
 // Every entity is built from the segment's own WALKED geometry (walkOf),
 // never from a Partial segment's recorded Center/Start/End as if it named a
@@ -577,11 +649,11 @@ func auditPrismUnionSection(budget *workBudget, pa prismPayload, merged ProfileR
 // region in whatever new arrangement it enters. Every segment's OWN walked
 // portion, and nothing more, is what this operand's boundary IS, whole or
 // partial alike — so that is what gets built.
-func buildPrismUnionScene(budget *workBudget, pa, pb prismPayload, reexpress *prismReexpression) (*sketch.Sketch, error) {
+func buildPrismScene(budget *workBudget, pa, pb prismPayload, reexpress *prismReexpression) (*sketch.Sketch, map[sketch.Entity]prismEntityOrigin, error) {
 	world := sketch.NewWorld()
 	s, err := world.CreateSketch(world.XY())
 	if err != nil {
-		return nil, fmt.Errorf(`decad: failed to build the private union scene: %w`, err)
+		return nil, nil, fmt.Errorf(`decad: failed to build the private prism-boolean scene: %w`, err)
 	}
 
 	points := map[Point2]*sketch.Point{}
@@ -593,6 +665,8 @@ func buildPrismUnionScene(budget *workBudget, pa, pb prismPayload, reexpress *pr
 		points[p] = created
 		return created
 	}
+
+	tags := map[sketch.Entity]prismEntityOrigin{}
 
 	addOperand := func(profile ProfileRecord, isB bool) error {
 		type entityKey struct {
@@ -609,64 +683,69 @@ func buildPrismUnionScene(budget *workBudget, pa, pb prismPayload, reexpress *pr
 			}
 			return reexpress.point(p)
 		}
-		for _, seg := range profile.Outer.Segments {
-			if err := budget.step(); err != nil {
-				return err
-			}
-			w, err := walkOf(seg, nil) // G4 admits only Line/Circle/Arc: no free-form work counter needed
-			if err != nil {
-				return err
-			}
-			switch {
-			case w.isLine():
-				start := reexpressPt(Point2{U: w.startU, V: w.startV})
-				end := reexpressPt(Point2{U: w.endU, V: w.endV})
-				key := entityKey{kind: 1, a: start, b: end}
-				if _, ok := entities[key]; !ok {
-					s.CreateLine(point(start), point(end))
-					entities[key] = struct{}{}
+		loops := append([]LoopRecord{profile.Outer}, profile.Holes...)
+		for li, loop := range loops {
+			hole := li - 1 // -1 names Outer; 0.. names Holes[hole]
+			tag := func(ent sketch.Entity) { tags[ent] = prismEntityOrigin{isB: isB, hole: hole} }
+			for _, seg := range loop.Segments {
+				if err := budget.step(); err != nil {
+					return err
 				}
-			case w.isCircular() && w.closed:
-				center := reexpressPt(Point2{U: w.cU, V: w.cV})
-				key := entityKey{kind: 2, a: center, radius: w.radius}
-				if _, ok := entities[key]; !ok {
-					s.CreateCircle(point(center), w.radius)
-					entities[key] = struct{}{}
+				w, err := walkOf(seg, nil) // G4 admits only Line/Circle/Arc: no free-form work counter needed
+				if err != nil {
+					return err
 				}
-			case w.isCircular():
-				// sketch.CreateArc sweeps CCW from its second point to its
-				// third; the walk's own OWN direction may run either way, so
-				// the two candidate endpoints are passed in ascending-angle
-				// order — the physical set of points between th0 and th1 is
-				// the same set either way, since a walked arc never spans a
-				// full turn.
-				loU, loV, hiU, hiV := w.startU, w.startV, w.endU, w.endV
-				if w.th1 < w.th0 {
-					loU, loV, hiU, hiV = hiU, hiV, loU, loV
+				switch {
+				case w.isLine():
+					start := reexpressPt(Point2{U: w.startU, V: w.startV})
+					end := reexpressPt(Point2{U: w.endU, V: w.endV})
+					key := entityKey{kind: 1, a: start, b: end}
+					if _, ok := entities[key]; !ok {
+						tag(s.CreateLine(point(start), point(end)))
+						entities[key] = struct{}{}
+					}
+				case w.isCircular() && w.closed:
+					center := reexpressPt(Point2{U: w.cU, V: w.cV})
+					key := entityKey{kind: 2, a: center, radius: w.radius}
+					if _, ok := entities[key]; !ok {
+						tag(s.CreateCircle(point(center), w.radius))
+						entities[key] = struct{}{}
+					}
+				case w.isCircular():
+					// sketch.CreateArc sweeps CCW from its second point to its
+					// third; the walk's own OWN direction may run either way, so
+					// the two candidate endpoints are passed in ascending-angle
+					// order — the physical set of points between th0 and th1 is
+					// the same set either way, since a walked arc never spans a
+					// full turn.
+					loU, loV, hiU, hiV := w.startU, w.startV, w.endU, w.endV
+					if w.th1 < w.th0 {
+						loU, loV, hiU, hiV = hiU, hiV, loU, loV
+					}
+					center := reexpressPt(Point2{U: w.cU, V: w.cV})
+					lo := reexpressPt(Point2{U: loU, V: loV})
+					hi := reexpressPt(Point2{U: hiU, V: hiV})
+					key := entityKey{kind: 3, a: center, b: lo, c: hi}
+					if _, ok := entities[key]; !ok {
+						tag(s.CreateArc(point(center), point(lo), point(hi)))
+						entities[key] = struct{}{}
+					}
+				default:
+					// G4 already excludes every other kind before this runs.
+					return fmt.Errorf(`%w: a %T segment is not part of the admitted class`, ErrUnsupported, seg)
 				}
-				center := reexpressPt(Point2{U: w.cU, V: w.cV})
-				lo := reexpressPt(Point2{U: loU, V: loV})
-				hi := reexpressPt(Point2{U: hiU, V: hiV})
-				key := entityKey{kind: 3, a: center, b: lo, c: hi}
-				if _, ok := entities[key]; !ok {
-					s.CreateArc(point(center), point(lo), point(hi))
-					entities[key] = struct{}{}
-				}
-			default:
-				// G4 already excludes every other kind before this runs.
-				return fmt.Errorf(`%w: a %T segment is not part of the admitted class`, ErrUnsupported, seg)
 			}
 		}
 		return nil
 	}
 
 	if err := addOperand(pa.profile, false); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if err := addOperand(pb.profile, true); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return s, nil
+	return s, tags, nil
 }
 
 // prismReexpression is §4.1's coordinate re-expression of operand B into
@@ -704,7 +783,7 @@ func newPrismReexpression(pa, pb prismPayload) (*prismReexpression, error) {
 		return &prismReexpression{identity: true}, nil
 	}
 	fail := func(err error) (*prismReexpression, error) {
-		return nil, fmt.Errorf(`decad: the union operands' relative placement has no rigid composition: %w`, err)
+		return nil, fmt.Errorf(`decad: the operands' relative placement has no rigid composition: %w`, err)
 	}
 	m, err := r3.FromFrame(pb.frame)
 	if err != nil {
