@@ -1,6 +1,7 @@
 package decad_test
 
 import (
+	"fmt"
 	"math"
 	"testing"
 
@@ -159,6 +160,65 @@ func TestExtrudeArcSegPrismBoundsTighten(t *testing.T) {
 		"the arc length bound does not enclose the true error")
 	require.LessOrEqual(t, length.Bound.Base(), 1e-9*length.Value.Base(),
 		"the arc length bound is not tight against its value")
+}
+
+// TestExtrudeArcSegPrismReadingsBitIdenticalAcrossAtanCarrier pins fu159's
+// central claim: routing atanSmallInterval through the fixed-point grid
+// instead of exact big.Rat must not change a single published bit. Every
+// golden string below was captured from this same quarter-disk-prism
+// scenario on the pre-port commit (exact-rational atanSmallInterval) via
+// fmt.Sprintf("%b", ...) — the exact binary float64 representation, not a
+// rounded decimal — so a mismatch here means the carrier swap moved a
+// published value or bound, not merely that a tolerance loosened.
+func TestExtrudeArcSegPrismReadingsBitIdenticalAcrossAtanCarrier(t *testing.T) {
+	const r = 20.0
+	const h = 5.0
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	o := s.CreatePoint(0, 0)
+	s.Fix(o)
+	px := s.CreatePoint(r, 0)
+	py := s.CreatePoint(0, r)
+	s.CreateLine(o, px)
+	s.CreateLine(py, o)
+	s.CreateArc(o, px, py)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+
+	doc := decad.New()
+	body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+	require.NoError(t, err)
+
+	area, err := body.Area()
+	require.NoError(t, err)
+	require.Equal(t, "8667653909156874p-43", fmt.Sprintf("%b", area.Value.Base()))
+	require.Equal(t, "7222303692821024p-97", fmt.Sprintf("%b", area.Bound.Base()))
+
+	vol, err := body.Volume()
+	require.NoError(t, err)
+	require.Equal(t, "6908435304715274p-42", fmt.Sprintf("%b", vol.Value.Base()))
+	require.Equal(t, "5281773380312612p-96", fmt.Sprintf("%b", vol.Bound.Base()))
+
+	c, err := body.Centroid()
+	require.NoError(t, err)
+	require.Equal(t, "4778467616018883p-49", fmt.Sprintf("%b", c.Value.X))
+	require.Equal(t, "4778467616018881p-49", fmt.Sprintf("%b", c.Value.Y))
+	require.Equal(t, "5629499534213120p-51", fmt.Sprintf("%b", c.Value.Z))
+	require.Equal(t, "4698155632678034p-98", fmt.Sprintf("%b", c.Bound.Base()))
+
+	var arcEdge *decad.Edge
+	for _, e := range body.Edges() {
+		if _, ok := e.Curve().(decad.Arc3); ok {
+			arcEdge = e
+			break
+		}
+	}
+	require.NotNil(t, arcEdge, "the quarter disk has one Arc3 edge")
+	length, err := arcEdge.Length()
+	require.NoError(t, err)
+	require.Equal(t, "8842797190035550p-48", fmt.Sprintf("%b", length.Value.Base()))
+	require.Equal(t, "6209697000026892p-102", fmt.Sprintf("%b", length.Bound.Base()))
 }
 
 // TestExtrudeCircularReadingsStayApproximate is the negative guard: a

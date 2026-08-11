@@ -369,7 +369,7 @@ func buildCapBand(ctx context.Context, body *Body, ref StepRef, cbp capBlendPayl
 		// bracket capCircleLengthBound already takes for this circle's
 		// circumference.
 		dthHeld := gth1 - gth0
-		capThAllow := intervalFloatError(intervalScale(interval(piLower, piUpper), big.NewRat(2, 1)), dthHeld)
+		capThAllow := intervalFloatError(twoPiInterval(), dthHeld)
 		geom := capPatchGeom{circular: true, cU: w.cU, cV: w.cV, sideRadius: w.radius, capRadius: capRadius, th0: gth0, th1: gth1, capTh0: gth0, capTh1: gth1, sweepCCW: w.th1 > w.th0, wholeTurn: true, sideZ: sideZ, capZ: capZ, contourAllow: bandPatchAreaAllow(delta, chordUpper, slant), levelDelta: levelDelta, capThAllow: capThAllow}
 		// A cornerless band has no corner to pair its two directrices at, so
 		// the one ruling its azimuth spread is measured on is the pair of SEAM

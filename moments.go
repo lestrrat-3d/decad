@@ -353,9 +353,10 @@ func radius2D(x, y float64) float64 {
 // conservativeValueError's magnitude envelope is what stands; where one does
 // (circularAreaInterval, circularLengthInterval, circularFirstMomentInterval —
 // each reducing the trig terms to exact rationals, or to a proven
-// atan2Interval/ratSqrtDown/ratSqrtUp/turnSinCosInterval bracket, so no libm
-// accuracy is assumed either), the caller takes math.Min of the two, which can
-// only shrink the published bound.
+// atan2Interval/ratSqrtDown/ratSqrtUp/turnSinCosInterval bracket over exact
+// rationals or the shared fixed-point grid, so no libm accuracy is assumed
+// either), the caller takes math.Min of the two, which can only shrink the
+// published bound.
 func analyticRoundBound(scale float64) float64 {
 	if scale <= 0 {
 		return 0
@@ -421,6 +422,26 @@ var (
 	piLower = mustRatDecimal("3.141592653589793238462643383279502884197169399375105820974944592307816406286")
 	piUpper = mustRatDecimal("3.141592653589793238462643383279502884197169399375105820974944592307816406287")
 )
+
+// quarterPiIv, halfPiIv and twoPiIv cache the pi-interval scalings every
+// atan2Interval/atanPositiveInterval call and several circular brackets
+// rebuild, each of which otherwise pays a GCD normalization on piLower/
+// piUpper's ~250-bit operands per call. They are declared from intervalScale
+// directly, never from their own accessor — that would be an initialization
+// cycle.
+var (
+	quarterPiIv = intervalScale(interval(piLower, piUpper), big.NewRat(1, 4))
+	halfPiIv    = intervalScale(interval(piLower, piUpper), big.NewRat(1, 2))
+	twoPiIv     = intervalScale(interval(piLower, piUpper), big.NewRat(2, 1))
+)
+
+// quarterPiInterval, halfPiInterval and twoPiInterval hand out copies of the
+// cached pi-multiple intervals above. They MUST go through interval, which
+// copies both endpoints: ratInterval holds pointers, so returning the cached
+// value directly would let a caller mutate a package-level constant.
+func quarterPiInterval() ratInterval { return interval(quarterPiIv.lo, quarterPiIv.hi) }
+func halfPiInterval() ratInterval    { return interval(halfPiIv.lo, halfPiIv.hi) }
+func twoPiInterval() ratInterval     { return interval(twoPiIv.lo, twoPiIv.hi) }
 
 func mustRatDecimal(value string) *big.Rat {
 	out, ok := new(big.Rat).SetString(value)
@@ -493,29 +514,91 @@ func intervalFloatError(a ratInterval, held float64) float64 {
 	)
 }
 
-// atanSmallInterval bounds atan(x) for |x| <= 1/2 with an exact rational
-// alternating series. Sixty-four terms leave a remainder below 2^-128, far
-// below float64 resolution; the first omitted term is the rigorous remainder.
+// fixedMulDown multiplies two non-negative fixed-point values and rounds the
+// 2*trigFixedBits-wide product down to trigFixedBits, an inward (floor)
+// rescale.
+func fixedMulDown(a, b *big.Int) *big.Int {
+	p := new(big.Int).Mul(a, b)
+	return p.Rsh(p, trigFixedBits)
+}
+
+// fixedMulUp multiplies two non-negative fixed-point values and rounds the
+// product up, fixedMulDown's outward (ceiling) mirror.
+func fixedMulUp(a, b *big.Int) *big.Int {
+	p := new(big.Int).Mul(a, b)
+	p.Add(p, new(big.Int).Sub(trigFixedOne, big.NewInt(1)))
+	return p.Rsh(p, trigFixedBits)
+}
+
+// fixedDivDown divides a non-negative fixed-point value by a positive
+// integer, rounding down (Quo truncates toward zero, which is floor for a
+// non-negative dividend).
+func fixedDivDown(a *big.Int, d int64) *big.Int { return new(big.Int).Quo(a, big.NewInt(d)) }
+
+// fixedDivUp is fixedDivDown's outward (ceiling) mirror.
+func fixedDivUp(a *big.Int, d int64) *big.Int {
+	q := new(big.Int).Add(a, big.NewInt(d-1))
+	return q.Quo(q, big.NewInt(d))
+}
+
+// atanSmallInterval bounds atan(x) for |x| <= 1/2, evaluating the same
+// 64-term alternating Maclaurin series moments_trig.go's trigFixedSeries
+// uses for sin/cos, on the same fixed-point 2^-trigFixedBits grid, rather
+// than over big.Rat: a big.Rat pays a GCD normalization per operation, which
+// dominates cost at this series' 10^4-bit numerators.
+//
+// The negative case folds to the positive one first (intervalNeg), so every
+// operand below is non-negative and Rsh/Quo's toward-zero rounding is floor.
+// x is enclosed by xLo <= x*2^P <= xHi (fixedFloor/fixedCeil). By induction,
+// carrying a lower chain (powerLo, rounded down at every step) and an upper
+// chain (powerHi, rounded up at every step): powerLo_n <= x^(2n+1)*2^P <=
+// powerHi_n for every n, so termLo_n <= (x^(2n+1)/(2n+1))*2^P <= termHi_n.
+// The lower accumulator adds termLo on even n and subtracts termHi on odd n;
+// the upper accumulator mirrors it (adds termHi, subtracts termLo) — each
+// choice is the one that can only push its own side outward, never inward —
+// so after all 64 terms, lo <= S_64(x)*2^P <= hi where S_64 is the 64-term
+// partial sum.
+//
+// On [0, 1/2] the terms strictly decrease in magnitude, and the last summed
+// term (n = 63) is subtracted, so the alternating-series remainder theorem
+// gives S_64(x) <= atan(x) <= S_64(x) + x^129/129. The loop's final powerHi
+// is the outward enclosure of x^129*2^P, and fixedDivUp(powerHi, 129) charges
+// that remainder without narrowing it.
+//
+// Each power step's outward rescale (fixedMulUp against x2Hi, whose own
+// factor has magnitude <=1) and each term's outward division together add at
+// most 3 grid units of extra width per step (1 from the multiply's ceiling,
+// 1 from the shared x2Hi rounding carried through a <=1-magnitude factor, 1
+// from the divide's ceiling) — the same accounting trigFixedSeries's own
+// comment uses. Over 64 terms that is under 64*3 = 192 < 2^8 units, i.e.
+// under 2^-(trigFixedBits-8) = 2^-192, well inside the 2^-187 budget this
+// function publishes and far below the 2^-136 series remainder already
+// dominating the bound at x = 1/2.
 func atanSmallInterval(x *big.Rat) ratInterval {
 	if x.Sign() < 0 {
 		return intervalNeg(atanSmallInterval(new(big.Rat).Neg(x)))
 	}
-	x2 := new(big.Rat).Mul(x, x)
-	power := new(big.Rat).Set(x)
-	sum := new(big.Rat)
+	xLo, xHi := fixedFloor(x), fixedCeil(x)
+	x2Lo := fixedMulDown(xLo, xLo)
+	x2Hi := fixedMulUp(xHi, xHi)
+	powerLo, powerHi := new(big.Int).Set(xLo), new(big.Int).Set(xHi)
+	lo, hi := new(big.Int), new(big.Int)
 	for n := range 64 {
-		term := new(big.Rat).Quo(power, big.NewRat(int64(2*n+1), 1))
+		d := int64(2*n + 1)
+		tLo := fixedDivDown(powerLo, d)
+		tHi := fixedDivUp(powerHi, d)
 		if n%2 == 0 {
-			sum.Add(sum, term)
+			lo.Add(lo, tLo)
+			hi.Add(hi, tHi)
 		} else {
-			sum.Sub(sum, term)
+			lo.Sub(lo, tHi)
+			hi.Sub(hi, tLo)
 		}
-		power.Mul(power, x2)
+		powerLo = fixedMulDown(powerLo, x2Lo)
+		powerHi = fixedMulUp(powerHi, x2Hi)
 	}
-	remainder := new(big.Rat).Quo(power, big.NewRat(129, 1))
-	// The last included term is negative, so the next positive term bounds
-	// the exact value above the partial sum.
-	return interval(sum, new(big.Rat).Add(sum, remainder))
+	hi.Add(hi, fixedDivUp(powerHi, 129))
+	return interval(fixedToRat(lo), fixedToRat(hi))
 }
 
 func atanPositiveInterval(x *big.Rat) ratInterval {
@@ -528,14 +611,13 @@ func atanPositiveInterval(x *big.Rat) ratInterval {
 		new(big.Rat).Sub(x, big.NewRat(1, 1)),
 		new(big.Rat).Add(x, big.NewRat(1, 1)),
 	)
-	quarterPi := intervalScale(interval(piLower, piUpper), big.NewRat(1, 4))
-	return intervalAdd(quarterPi, atanSmallInterval(q))
+	return intervalAdd(quarterPiInterval(), atanSmallInterval(q))
 }
 
 func atan2Interval(y, x *big.Rat, negativeZeroY bool) ratInterval {
 	zero := new(big.Rat)
 	if x.Sign() == 0 {
-		halfPi := intervalScale(interval(piLower, piUpper), big.NewRat(1, 2))
+		halfPi := halfPiInterval()
 		if y.Sign() < 0 {
 			return intervalNeg(halfPi)
 		}
@@ -555,8 +637,7 @@ func atan2Interval(y, x *big.Rat, negativeZeroY bool) ratInterval {
 	if ay.Cmp(ax) <= 0 {
 		base = atanPositiveInterval(new(big.Rat).Quo(ay, ax))
 	} else {
-		halfPi := intervalScale(interval(piLower, piUpper), big.NewRat(1, 2))
-		base = intervalSub(halfPi, atanPositiveInterval(new(big.Rat).Quo(ax, ay)))
+		base = intervalSub(halfPiInterval(), atanPositiveInterval(new(big.Rat).Quo(ax, ay)))
 	}
 	switch {
 	case x.Sign() > 0 && y.Sign() > 0:
@@ -662,7 +743,7 @@ func circularAreaInterval(seg CurveSegment, anchor Point2) (ratInterval, bool) {
 		heldA0 := math.Atan2(heldStart.V-heldCenter.V, heldStart.U-heldCenter.U)
 		heldA1 := math.Atan2(heldEnd.V-heldCenter.V, heldEnd.U-heldCenter.U)
 		if heldA1-heldA0 <= 0 {
-			sweep = intervalAdd(sweep, intervalScale(interval(piLower, piUpper), big.NewRat(2, 1)))
+			sweep = intervalAdd(sweep, twoPiInterval())
 		}
 		sign := big.NewRat(1, 1)
 		dx, dy := new(big.Rat).Sub(dx1, dx0), new(big.Rat).Sub(dy1, dy0)
@@ -771,7 +852,7 @@ func circularLengthInterval(seg CurveSegment) (ratInterval, bool) {
 		heldA0 := math.Atan2(heldDY0, seg.Start.U-seg.Center.U)
 		heldA1 := math.Atan2(heldDY1, seg.End.U-seg.Center.U)
 		if heldA1-heldA0 <= 0 {
-			sweep = intervalAdd(sweep, intervalScale(interval(piLower, piUpper), big.NewRat(2, 1)))
+			sweep = intervalAdd(sweep, twoPiInterval())
 		}
 		dt := exactCoordinateDelta(seg.TEnd, seg.TStart)
 		dt.Abs(dt)
@@ -907,7 +988,7 @@ func circularFirstMomentInterval(seg CurveSegment, anchor Point2) (ratInterval, 
 		heldA0 := math.Atan2(heldStart.V-heldCenter.V, heldStart.U-heldCenter.U)
 		heldA1 := math.Atan2(heldEnd.V-heldCenter.V, heldEnd.U-heldCenter.U)
 		if heldA1-heldA0 <= 0 {
-			sweep = intervalAdd(sweep, intervalScale(interval(piLower, piUpper), big.NewRat(2, 1)))
+			sweep = intervalAdd(sweep, twoPiInterval())
 		}
 		p0x, p0y, p1x, p1y, dth := dx0, dy0, dx1, dy1, sweep
 		if reverse {

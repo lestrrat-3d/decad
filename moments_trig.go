@@ -47,8 +47,10 @@ import "math/big"
 // the cost bottleneck of the bracket it serves regardless of the exact
 // figure.
 
-// trigFixedBits is the fixed-point scale exponent P: every fixed-point value
-// in this file represents a rational as an integer count of 2^-trigFixedBits.
+// trigFixedBits is the fixed-point scale exponent P: the package's shared
+// fixed-point grid, every value on it an integer count of 2^-trigFixedBits.
+// This file's trigFixedSeries and moments.go's atanSmallInterval both
+// evaluate their series on it.
 const trigFixedBits = 200
 
 // trigSeriesTerms is the number of alternating Maclaurin terms evaluated per
