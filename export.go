@@ -42,9 +42,12 @@ type identChordTolerance struct{}
 
 // WithChordTolerance sets the chord tolerance the exporter tessellates at —
 // the tol of [Body.Tessellate], validated identically. Without it the
-// exporter uses 1/1000 of an analytic body's bounding-box diagonal. For a
-// faceted body it uses the larger of that size-derived tolerance and the
-// retained mesh bound, so the held mesh can always be restated.
+// exporter derives its default from 1/1000 of the body's bounding-box
+// diagonal, raised whenever the body cannot be meshed that finely: a faceted
+// body raises it to the retained mesh bound, so the held mesh can always be
+// restated, and a prism carrying a section displacement raises it to twice
+// that displacement, which tessellation reserves from the tolerance before
+// chording.
 func WithChordTolerance(tol units.Value) STLOBJOption {
 	return stlObjOption{option.New(identChordTolerance{}, tol)}
 }
