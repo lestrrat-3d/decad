@@ -227,16 +227,25 @@ func rpQuo(a, b ratPoly) ratPoly {
 	return rpTrim(out)
 }
 
-// sturmChain builds the Sturm sequence of a square-free polynomial.
-func sturmChain(p ratPoly) []ratPoly {
+// sturmChainContext builds the Sturm sequence of a square-free polynomial,
+// polling ctx once per chain member. One remainder step divides big.Rat
+// polynomials whose coefficient height grows along the chain, so the build of
+// a high-degree stationarity polynomial's chain is milliseconds of work; a
+// caller that polled only around the whole build would keep running that long
+// after its context was cancelled. Polling per member bounds the wait by a
+// single remainder step instead.
+func sturmChainContext(ctx context.Context, p ratPoly) ([]ratPoly, error) {
 	chain := []ratPoly{rpTrim(p), rpTrim(rpDeriv(p))}
 	for {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		last := chain[len(chain)-1]
 		if len(last) == 0 {
-			return chain[:len(chain)-1]
+			return chain[:len(chain)-1], nil
 		}
 		if rpDeg(last) == 0 {
-			return chain
+			return chain, nil
 		}
 		rem := rpRem(chain[len(chain)-2], last)
 		chain = append(chain, rpNormalize(rpNeg(rem)))
@@ -250,8 +259,8 @@ func sturmChain(p ratPoly) []ratPoly {
 // normalisation a big.Rat Mul/Add performs.
 type intPoly []*big.Int
 
-// sturmChainInt is a Sturm chain (sturmChain's return) converted member by
-// member through clearDenoms; it is read only for sign.
+// sturmChainInt is a Sturm chain (sturmChainContext's return) converted member
+// by member through clearDenoms; it is read only for sign.
 type sturmChainInt []intPoly
 
 // clearDenoms rescales p by the least common denominator D of its
@@ -271,7 +280,7 @@ func clearDenoms(p ratPoly) intPoly {
 	return out
 }
 
-// newSturmChainInt converts every member of a sturmChain through
+// newSturmChainInt converts every member of a built Sturm chain through
 // clearDenoms.
 func newSturmChainInt(chain []ratPoly) sturmChainInt {
 	out := make(sturmChainInt, len(chain))
@@ -279,6 +288,20 @@ func newSturmChainInt(chain []ratPoly) sturmChainInt {
 		out[i] = clearDenoms(p)
 	}
 	return out
+}
+
+// sturmChainIntContext builds a square-free polynomial's Sturm chain and
+// converts it for sign queries. Every caller that hands a chain to
+// rpIsolateRootsContext builds it here, so the build carries the same
+// cancellation the isolation and refinement loops already have; the
+// conversion itself is a rescaling per coefficient, orders of magnitude
+// cheaper than the build it follows.
+func sturmChainIntContext(ctx context.Context, p ratPoly) (sturmChainInt, error) {
+	chain, err := sturmChainContext(ctx, p)
+	if err != nil {
+		return nil, err
+	}
+	return newSturmChainInt(chain), nil
 }
 
 // ipSign is the sign of p(num/den) for den > 0, by homogenised integer
@@ -348,9 +371,8 @@ func rpRootBound(p ratPoly) *big.Rat {
 
 // rpIsolateRoots isolates every real root of a square-free polynomial into
 // disjoint rational intervals, each holding exactly one root. chain is p's
-// own Sturm chain (sturmChain(p), converted through newSturmChainInt) —
-// callers that also refine the isolated intervals build it once and pass it
-// to both.
+// own Sturm chain (sturmChainIntContext(ctx, p)) — callers that also refine
+// the isolated intervals build it once and pass it to both.
 func rpIsolateRootsContext(ctx context.Context, p ratPoly, chain sturmChainInt) ([]ratIv, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -590,7 +612,10 @@ func trigStationaryBracketsContext(ctx context.Context, f csPoly, g func(float64
 		if rpDeg(p) < 1 {
 			continue
 		}
-		chain := newSturmChainInt(sturmChain(p))
+		chain, err := sturmChainIntContext(ctx, p)
+		if err != nil {
+			return nil, false, err
+		}
 		ivs, err := rpIsolateRootsContext(ctx, p, chain)
 		if err != nil {
 			return nil, false, err

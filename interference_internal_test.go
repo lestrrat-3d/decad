@@ -114,7 +114,7 @@ func TestPointInBodyCancellationReachesTorusRootPath(t *testing.T) {
 
 func TestCertifiedRootRefinementCancellation(t *testing.T) {
 	p := ratPoly{big.NewRat(-2, 1), new(big.Rat), big.NewRat(1, 1)}
-	chain := newSturmChainInt(sturmChain(p))
+	chain := mustSturmChainInt(t, p)
 	ivs, err := rpIsolateRootsContext(t.Context(), p, chain)
 	require.NoError(t, err)
 	require.NotEmpty(t, ivs)

@@ -153,11 +153,30 @@ func TestP8SpineFixturesAreCircles(t *testing.T) {
 	}
 }
 
-// p8SpineChain rebuilds circleCircleBracketsContext's own degree-8 spine
-// polynomial and its Sturm chain, by the same csPoly steps that function
-// runs internally, so the exactness proof below runs against the actual
-// production P8 chain rather than a stand-in.
-func p8SpineChain(t *testing.T) []ratPoly {
+// mustSturmChain and mustSturmChainInt build a Sturm chain under the test's
+// own context, which is never cancelled. The production builders take a
+// context because the build is where a cancelled clearance run would
+// otherwise keep working (sturmChainContext); a test that only wants the
+// chain treats that error as a failure.
+func mustSturmChain(t *testing.T, p ratPoly) []ratPoly {
+	t.Helper()
+	chain, err := sturmChainContext(t.Context(), p)
+	require.NoError(t, err)
+	return chain
+}
+
+func mustSturmChainInt(t *testing.T, p ratPoly) sturmChainInt {
+	t.Helper()
+	chain, err := sturmChainIntContext(t.Context(), p)
+	require.NoError(t, err)
+	return chain
+}
+
+// p8SpinePoly rebuilds circleCircleBracketsContext's own degree-8 spine
+// polynomial, by the same csPoly steps that function runs internally, so the
+// proofs below run against the actual production P8 input rather than a
+// stand-in.
+func p8SpinePoly(t *testing.T) ratPoly {
 	t.Helper()
 	requireP8SpineFixtures(t)
 	c1, c2, n2 := p8SpineFixture, p8SpineFixture2, p8SpineNormal2
@@ -179,7 +198,54 @@ func p8SpineChain(t *testing.T) []ratPoly {
 
 	p := rpSquareFree(rpTrim(csToT(f)))
 	require.Equal(t, 8, rpDeg(p), "the P8 fixture must isolate the degree-8 spine polynomial")
-	return sturmChain(p)
+	return p
+}
+
+// p8SpineChain is that polynomial's Sturm chain, so the exactness proof below
+// runs against the actual production P8 chain.
+func p8SpineChain(t *testing.T) []ratPoly {
+	t.Helper()
+	return mustSturmChain(t, p8SpinePoly(t))
+}
+
+// TestSturmChainBuildPollsPerMember proves the chain build observes
+// cancellation inside its own remainder loop rather than only on entry. Each
+// remainder step divides big.Rat polynomials whose coefficients grow along
+// the chain, so on the degree-8 spine polynomial the whole build is
+// milliseconds of work: a build that polled once would keep running that long
+// after Verify's caller gave up. The fixture chain outlasts the poll budget
+// here, so the third poll lands mid-build, and the converted chain reports
+// the same refusal.
+func TestSturmChainBuildPollsPerMember(t *testing.T) {
+	p := p8SpinePoly(t)
+	require.Greater(t, len(mustSturmChain(t, p)), 3, "the fixture chain must outlast the poll budget below")
+
+	ctx := &internalCancelContext{Context: t.Context(), limit: 3}
+	chain, err := sturmChainContext(ctx, p)
+	require.ErrorIs(t, err, context.Canceled)
+	require.Nil(t, chain)
+	require.Equal(t, 3, ctx.calls, "one poll per member, refusing at the third")
+
+	intCtx := &internalCancelContext{Context: t.Context(), limit: 2}
+	intChain, err := sturmChainIntContext(intCtx, p)
+	require.ErrorIs(t, err, context.Canceled)
+	require.Nil(t, intChain)
+}
+
+// TestTorusCrossingsCancellationReachesTheChainBuild proves the ray-cast
+// Sturm site (clearance_geom.go) refuses inside the chain build itself: the
+// context reports cancellation only while sturmChainContext is on the stack,
+// so an error here cannot have come from an earlier phase boundary.
+func TestTorusCrossingsCancellationReachesTheChainBuild(t *testing.T) {
+	face := torFace(r3.Vec{}, r3.NewVec(0, 0, 1), 5, 1)
+	ctx := &internalFrameCancelContext{Context: t.Context(), target: "sturmChainContext"}
+
+	count, decided, err := face.torusCrossings(ctx, r3.NewVec(0.31, 0.73, 0.19), r3.NewVec(1, 0, 0), 1e-9)
+
+	require.ErrorIs(t, err, context.Canceled)
+	require.False(t, decided)
+	require.Zero(t, count)
+	require.True(t, ctx.entered, "the torus quartic must reach the Sturm chain build")
 }
 
 // TestSturmVarAtMatchesRationalHornerSigns is the exactness proof behind the
@@ -201,10 +267,10 @@ func TestSturmVarAtMatchesRationalHornerSigns(t *testing.T) {
 		chain []ratPoly
 	}{
 		{"p8", p8SpineChain(t)},
-		{"rationalRoots", sturmChain(rationalRoots)},
-		{"zeroCoeff", sturmChain(zeroCoeff)},
-		{"constLastMember", sturmChain(constLastMember)},
-		{"empty", sturmChain(ratPoly{})},
+		{"rationalRoots", mustSturmChain(t, rationalRoots)},
+		{"zeroCoeff", mustSturmChain(t, zeroCoeff)},
+		{"constLastMember", mustSturmChain(t, constLastMember)},
+		{"empty", mustSturmChain(t, ratPoly{})},
 	}
 
 	points := []*big.Rat{
@@ -289,7 +355,7 @@ func TestClearDenomsIsAPositiveRescaling(t *testing.T) {
 // and the numeric answer (√2) the branch history must have produced.
 func TestRefineRootCachedVariationMatchesRecount(t *testing.T) {
 	p := ratPoly{big.NewRat(-2, 1), new(big.Rat), big.NewRat(1, 1)}
-	chain := newSturmChainInt(sturmChain(p))
+	chain := mustSturmChainInt(t, p)
 	ivs, err := rpIsolateRootsContext(t.Context(), p, chain)
 	require.NoError(t, err)
 	require.NotEmpty(t, ivs)

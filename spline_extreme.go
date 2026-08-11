@@ -274,7 +274,11 @@ func spanExtremeEnclosureContext(ctx context.Context, span bezierSpan, gu, gv fl
 	fold(last, last)
 
 	stationary := rpSquareFree(rpDeriv(rpFromBernstein(values)))
-	ivs, err := rpIsolateRootsContext(ctx, stationary, newSturmChainInt(sturmChain(rpTrim(stationary))))
+	chain, err := sturmChainIntContext(ctx, rpTrim(stationary))
+	if err != nil {
+		return ratIv{}, ratIv{}, err
+	}
+	ivs, err := rpIsolateRootsContext(ctx, stationary, chain)
 	if err != nil {
 		return ratIv{}, ratIv{}, err
 	}

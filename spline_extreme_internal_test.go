@@ -132,6 +132,21 @@ func TestSpanExtremeEnclosureHandlesRootAtOneHalf(t *testing.T) {
 	require.GreaterOrEqual(t, minHi, 0.0)
 }
 
+// 3b. Cancellation during the span's own Sturm chain build: the context
+// reports cancellation only while sturmChainContext is on the stack, so the
+// refusal here cannot have come from the entry poll this function already
+// ran. A free-form span's stationarity chain is built before any root is
+// isolated, and the caller must not wait it out.
+func TestSpanExtremeEnclosureCancelsInsideTheChainBuild(t *testing.T) {
+	span := ratSpan([][2]float64{{0, 0}, {1, 3}, {3, 1}, {4, 0}})
+	ctx := &internalFrameCancelContext{Context: t.Context(), target: "sturmChainContext"}
+
+	_, _, err := spanExtremeEnclosureContext(ctx, span, 0, 1, newFreeformWork())
+
+	require.ErrorIs(t, err, context.Canceled)
+	require.True(t, ctx.entered, "the stationarity polynomial must reach the Sturm chain build")
+}
+
 // 4. A collapsed span (every control point coincident): the stationarity
 // polynomial is identically zero, rpIsolateRootsContext returns no interval
 // (§6.2: a zero root count is never on its own the proof of anything, but the
