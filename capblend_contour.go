@@ -578,7 +578,7 @@ func capApexArcBound(j cornerJoin, d, held float64, wraps int, delta float64) fl
 	sweep := intervalSub(atan2Interval(aV, aU, false), atan2Interval(bV, bU, false))
 	if wraps != 0 {
 		sweep = intervalAdd(sweep, intervalScale(
-			intervalScale(interval(piLower, piUpper), big.NewRat(2, 1)),
+			twoPiInterval(),
 			big.NewRat(int64(wraps), 1),
 		))
 	}
@@ -606,10 +606,7 @@ func capCircleLengthBound(exactRadius *big.Rat, held float64) float64 {
 	if exactRadius == nil {
 		return math.Inf(1)
 	}
-	circumference := intervalScale(
-		intervalScale(interval(piLower, piUpper), big.NewRat(2, 1)),
-		exactRadius,
-	)
+	circumference := intervalScale(twoPiInterval(), exactRadius)
 	return intervalFloatError(circumference, held)
 }
 
@@ -632,7 +629,7 @@ func capSweepBracket(cU, cV float64, start, end Point2, wraps int, delta float64
 	sweep := intervalSub(atan2Interval(bV, bU, false), atan2Interval(aV, aU, false))
 	if wraps != 0 {
 		sweep = intervalAdd(sweep, intervalScale(
-			intervalScale(interval(piLower, piUpper), big.NewRat(2, 1)),
+			twoPiInterval(),
 			big.NewRat(int64(wraps), 1),
 		))
 	}
