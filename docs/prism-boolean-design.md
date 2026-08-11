@@ -847,9 +847,14 @@ areas, residuals), never merely "it ran" — CLAUDE.md's own rule.
   analytically with the correct volume, for both the Cut and Intersect
   clean-nesting arms; a whole-segment control built from shared-Point corners
   publishes the same bound it did before this term existed, since the weld
-  never touches it; `buildPrismScene` called directly reports the exact
-  per-operand gap it welded, and the built payload's own `sectionDelta`
-  composes at least `weldDisplacementAllow` of it; and the SAME cut-fragment
+  never touches it; `buildPrismScene` called directly welds every disagreeing
+  junction to ONE scene coordinate and publishes a per-operand charge that
+  covers the disagreement the fixture's own walks show, measured on the host
+  the test runs on rather than pinned as a literal — the gap's own magnitude
+  is that host's rounding of the fixture's arithmetic and differs between
+  architectures, while the weld and its charge do not — and the built
+  payload's own `sectionDelta` composes at least
+  `weldDisplacementAllow` of it; and the SAME cut-fragment
   target, routed to the mesh path by a tool off the shared plane, agrees with
   the analytic answer within the mesh result's own bound — the round-trip
   this term exists for is pinned by a fixture built to need it, not left to

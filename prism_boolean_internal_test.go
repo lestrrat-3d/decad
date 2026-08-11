@@ -451,14 +451,21 @@ func discBodyInternal(t *testing.T, doc *Document, cx, r, h float64) *Body {
 
 // TestPrismSceneWeldsRecordedJunctions is T3
 // (docs/prism-boolean-design.md §15): buildPrismScene, called directly on
-// the same cut-fragment target T1's own black-box test cuts, reports the
-// weld gap fu157's own failing message names — the exact distance between
-// segment 0's walked end at TEnd = 0.8968253968253966 and segment 1's walked
-// start at TStart = 0.10317460317460321, both evaluations of ONE recorded
-// vertex — and a whole-segment control section, welding nothing, reports
-// exactly 0. The build-and-charge path composes at least that much into the
-// result's own sectionDelta, so a build that silently drops the charge
-// fails this test rather than merely under-reporting a bound nobody checks.
+// the same cut-fragment target T1's own black-box test cuts, welds a
+// recorded junction whose two independent walkOf evaluations disagree — one
+// recorded vertex, two roundings of it — to a single coordinate, and charges
+// at least that disagreement as its own weld displacement. A whole-segment
+// control section, welding nothing, reports exactly 0. The build-and-charge
+// path composes at least the charge into the result's own sectionDelta, so a
+// build that silently drops it fails this test rather than merely
+// under-reporting a bound nobody checks.
+//
+// The disagreement's own magnitude is a property of the host's floating-point
+// rounding of this fixture's arithmetic — a few ulps of the corner
+// coordinates, differing between amd64 and arm64 — so this test measures it
+// on the host it runs on and asserts what the weld guarantees ABOUT it: that
+// it is nonzero and of rounding scale, that the scene the weld returns holds
+// exactly one point per junction, and that the published charge covers it.
 func TestPrismSceneWeldsRecordedJunctions(t *testing.T) {
 	corners := [][2]float64{{-9.317, -5.731}, {10.29, -6.113}, {8.877, 7.219}, {-7.331, 6.407}}
 	const h, toolR = 5.0, 1.7
@@ -473,12 +480,62 @@ func TestPrismSceneWeldsRecordedJunctions(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, reexpress.identity, `both sections are drawn on one plane with no placement`)
 
+	// What the weld has to close, measured on this host from the target's own
+	// recorded loop: each segment's walked start against its predecessor's
+	// walked end, both evaluations of ONE recorded vertex.
+	segments := pa.profile.Outer.Segments
+	require.Len(t, segments, len(corners), `every quad corner is a sketch cut, so every segment is a Partial fragment`)
+	starts := make([]Point2, len(segments))
+	ends := make([]Point2, len(segments))
+	for si, seg := range segments {
+		w, err := walkOf(seg, nil)
+		require.NoError(t, err)
+		starts[si] = Point2{U: w.startU, V: w.startV}
+		ends[si] = Point2{U: w.endU, V: w.endV}
+	}
+	var maxGap float64
+	var disagreed int
+	for si := range segments {
+		prev := (si - 1 + len(segments)) % len(segments)
+		gap := math.Hypot(starts[si].U-ends[prev].U, starts[si].V-ends[prev].V)
+		if gap > 0 {
+			disagreed++
+		}
+		maxGap = math.Max(maxGap, gap)
+	}
+	require.Positive(t, disagreed, `the cut fixture must produce at least one junction whose two walks disagree`)
+	require.Positive(t, maxGap)
+	require.Less(t, maxGap, 1e-9,
+		`the disagreement must be host rounding of one recorded vertex, never two genuinely different vertices`)
+
 	budget := newWorkBudget(t.Context())
-	_, _, weldA, weldB, err := buildPrismScene(budget, pa, pb, reexpress)
+	scene, tags, weldA, weldB, err := buildPrismScene(budget, pa, pb, reexpress)
 	require.NoError(t, err)
-	require.Equal(t, 3.552713678800501e-15, weldA,
-		`the exact gap the failing message's two coordinates differ by`)
+	require.GreaterOrEqual(t, weldA, maxGap, `the charge must cover the largest gap the weld closed`)
+	require.Positive(t, weldA, `a fixture with a disagreeing junction must charge a weld`)
 	require.Zero(t, weldB, `the tool's own whole circle has no junction to weld`)
+
+	// The scene itself: each of the target's junctions is ONE coordinate, so
+	// its four lines carry four distinct endpoint coordinates, each shared by
+	// exactly two lines. Welding nothing would leave eight, each used once.
+	require.NotNil(t, scene)
+	shared := map[Point2]int{}
+	lines := 0
+	for ent, origin := range tags {
+		if origin.isB || origin.hole != -1 {
+			continue
+		}
+		line, ok := ent.(*sketch.Line)
+		require.True(t, ok, `the target's own quad is built from lines`)
+		lines++
+		shared[Point2{U: line.Start.X(), V: line.Start.Y()}]++
+		shared[Point2{U: line.End.X(), V: line.End.Y()}]++
+	}
+	require.Equal(t, len(segments), lines)
+	require.Len(t, shared, lines, `a welded junction is one coordinate, not two`)
+	for coord, uses := range shared {
+		require.Equal(t, 2, uses, `each welded junction coordinate joins exactly two lines: %v`, coord)
+	}
 
 	// The whole-segment control: a rectangle whose corners are shared
 	// Points, never two independently-walked floats.
