@@ -338,12 +338,35 @@ func BenchmarkAtan2Interval(b *testing.B) {
 	}
 }
 
-// BenchmarkPiIntervalRebuild pins task fu159's caching of the pi multiples:
-// one intervalScale rebuild against the raw piLower/piUpper constants, the
-// operation quarterPiInterval/halfPiInterval/twoPiInterval now avoid.
-func BenchmarkPiIntervalRebuild(b *testing.B) {
-	b.ReportAllocs()
-	for b.Loop() {
-		intervalScale(interval(piLower, piUpper), big.NewRat(1, 4))
-	}
+// BenchmarkPiInterval pins task fu159's caching of the pi multiples. The
+// cached arm measures the three accessors callers now reach the multiples
+// through; the rebuild arm measures the intervalScale-over-piLower/piUpper
+// work those accessors avoid. Both arms produce the same three multiples per
+// iteration, so their ns/op are directly comparable.
+func BenchmarkPiInterval(b *testing.B) {
+	// Both arms park their results in piIntervalSink rather than discarding
+	// them: the accessors are thin enough to inline, and a dead result could
+	// otherwise let the compiler drop the work being measured. Each multiple
+	// gets its own slot, so no assignment overwrites a live one.
+	b.Run("cached", func(b *testing.B) {
+		b.ReportAllocs()
+		for b.Loop() {
+			piIntervalSink[0] = quarterPiInterval()
+			piIntervalSink[1] = halfPiInterval()
+			piIntervalSink[2] = twoPiInterval()
+		}
+	})
+
+	b.Run("rebuild", func(b *testing.B) {
+		b.ReportAllocs()
+		for b.Loop() {
+			piIntervalSink[0] = intervalScale(interval(piLower, piUpper), big.NewRat(1, 4))
+			piIntervalSink[1] = intervalScale(interval(piLower, piUpper), big.NewRat(1, 2))
+			piIntervalSink[2] = intervalScale(interval(piLower, piUpper), big.NewRat(2, 1))
+		}
+	})
 }
+
+// piIntervalSink holds BenchmarkPiInterval's three pi multiples, one slot per
+// multiple, so neither arm's measured work is dead on arrival.
+var piIntervalSink [3]ratInterval
