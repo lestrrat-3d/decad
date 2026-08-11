@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
+	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
@@ -132,6 +133,137 @@ func TestPrismCutCleanNestingBoreThroughHub(t *testing.T) {
 		`the reported volume must lie within the published bound of the closed form`)
 	require.Positive(t, bound)
 	require.Less(t, bound, want*1e-9, `the bound sits many decades below the value`)
+}
+
+// TestPrismCutCleanNestingKeepsAToolVertexTheFormulaMisses cuts with a tool
+// whose section has a vertex the line parameterization's own float formula does
+// not reproduce: for the pair 4/7 → 10/3, start + 1·(end − start) lands one ulp
+// short of 10/3. buildPrismScene creates one sketch point per walked endpoint,
+// so a walk that answered the formula rather than the record would hand sketch
+// two points where the tool's record states one shared vertex; sketch would
+// admit that region on its own proximity threshold and RecordProfile would then
+// refuse it as ErrUnrecordableProfile, past §3.4's point of no return, for a
+// pair §4.2 resolves correctly. The vertex must instead reach the result
+// unchanged, as §4.2's verbatim structural match states.
+func TestPrismCutCleanNestingKeepsAToolVertexTheFormulaMisses(t *testing.T) {
+	u0, u1 := 4.0/7.0, 10.0/3.0
+	require.NotEqual(t, u1, u0+1.0*(u1-u0),
+		`premise: evaluating the formula at t = 1 misses this tool vertex`)
+
+	const plateSide, plateHeight = 20.0, 10.0
+	doc := decad.New()
+	w := sketch.NewWorld()
+	plate := boxBody(t, doc, 0, 0, plateSide, plateSide, plateHeight)
+	// A quadrilateral strictly inside the plate, swept clear through it: the
+	// clean-nesting sub-case, with the awkward vertex on its own boundary.
+	pts := [][2]float64{{u0, 2}, {u1, 2}, {3, 8}, {1, 8}}
+	tool := polyPrism(t, doc, w, w.XY(), pts, 2*plateHeight)
+
+	got, err := decad.Cut(plate, tool)
+	require.NoError(t, err)
+	require.False(t, anyFaceIsFaceted(got), `the clean-nesting cut must build analytically`)
+
+	// The result states the tool's own recorded coordinate at both cap levels,
+	// bit for bit — not a coordinate re-derived from its parameterization.
+	corners := bodyVertexPositions(got)
+	require.Contains(t, corners, r3.NewVec(u1, 2, 0),
+		`the tool's own vertex carries through byte-identical at the lower cap`)
+	require.Contains(t, corners, r3.NewVec(u1, 2, plateHeight),
+		`the tool's own vertex carries through byte-identical at the upper cap`)
+
+	// Shoelace: the quadrilateral's own area, which the plate loses over its
+	// full height.
+	quad := 0.0
+	for i, p := range pts {
+		q := pts[(i+1)%len(pts)]
+		quad += p[0]*q[1] - q[0]*p[1]
+	}
+	quad = math.Abs(quad) / 2
+
+	vol, err := got.Volume()
+	require.NoError(t, err)
+	want := (plateSide*plateSide - quad) * plateHeight
+	require.LessOrEqual(t, math.Abs(volumeMM(t, vol)-want), boundMM3(t, vol),
+		`the reported volume must lie within the published bound of the closed form`)
+}
+
+// TestPrismCutCleanNestingKeepsAToolArcEndTheAnglesMiss is the arc's own half of
+// the case above, and it needs no platform luck: an arc walk reaches its far end
+// through atan2 plus the sweep, so the end angle it evaluates is already rounded
+// and the point it lands on can sit an ulp off the arc's recorded End. Where the
+// next segment states that same vertex from its own record, the scene would hold
+// two points for it and the resolved cut would refuse at RecordProfile.
+func TestPrismCutCleanNestingKeepsAToolArcEndTheAnglesMiss(t *testing.T) {
+	const plateSide, plateHeight = 30.0, 10.0
+	const cu, cv, r, rOuter = 10.3, 9.7, 4.7, 8.0
+	th0, th1 := 0.05, 0.75
+
+	doc := decad.New()
+	plate := boxBody(t, doc, 0, 0, plateSide, plateSide, plateHeight)
+
+	// A wedge strictly inside the plate: an inner arc of radius r about
+	// (cu, cv), two radial sides, and a straight outer chord. Its arc meets a
+	// line at each end, which is the junction the scene must not split.
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	center := s.CreatePoint(cu, cv)
+	s.Fix(center)
+	arcStart := s.CreatePoint(cu+r*math.Cos(th0), cv+r*math.Sin(th0))
+	arcEnd := s.CreatePoint(cu+r*math.Cos(th1), cv+r*math.Sin(th1))
+	outerEnd := s.CreatePoint(cu+rOuter*math.Cos(th1), cv+rOuter*math.Sin(th1))
+	outerStart := s.CreatePoint(cu+rOuter*math.Cos(th0), cv+rOuter*math.Sin(th0))
+	s.Fix(arcStart)
+	s.CreateArc(center, arcStart, arcEnd)
+	s.CreateLine(arcEnd, outerEnd)
+	s.CreateLine(outerEnd, outerStart)
+	s.CreateLine(outerStart, arcStart)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	profiles := s.Profiles()
+	require.Len(t, profiles, 1)
+	tool, err := doc.Extrude(s, profiles[0], decad.Symmetric{D: units.Millimeters(2 * plateHeight)})
+	require.NoError(t, err)
+
+	// Both operands' own answers, read before the cut retires them.
+	plateVol, err := plate.Volume()
+	require.NoError(t, err)
+	toolVol, err := tool.Volume()
+	require.NoError(t, err)
+
+	got, err := decad.Cut(plate, tool)
+	require.NoError(t, err)
+	require.False(t, anyFaceIsFaceted(got), `the clean-nesting cut must build analytically`)
+
+	corners := bodyVertexPositions(got)
+	require.Contains(t, corners, r3.NewVec(cu+r*math.Cos(th1), cv+r*math.Sin(th1), plateHeight),
+		`the tool's own arc end carries through byte-identical at the upper cap`)
+	require.Contains(t, corners, r3.NewVec(cu+r*math.Cos(th1), cv+r*math.Sin(th1), 0),
+		`the tool's own arc end carries through byte-identical at the lower cap`)
+
+	// The cut removes the tool's own footprint over the plate's height, and the
+	// tool spans four times that height: no closed form for the wedge's area is
+	// needed, only both operands' own published volumes and bounds.
+	vol, err := got.Volume()
+	require.NoError(t, err)
+	want := volumeMM(t, plateVol) - volumeMM(t, toolVol)/4
+	slack := boundMM3(t, vol) + boundMM3(t, plateVol) + boundMM3(t, toolVol)/4
+	require.LessOrEqual(t, math.Abs(volumeMM(t, vol)-want), slack,
+		`the plate loses exactly the tool's own footprint over its own height`)
+}
+
+// bodyVertexPositions collects every vertex position b's faces reach, for a
+// byte-identical comparison against a coordinate an operand recorded.
+func bodyVertexPositions(b *decad.Body) []r3.Vec {
+	var out []r3.Vec
+	for _, f := range b.Faces() {
+		for _, l := range f.Loops() {
+			for _, e := range l.Edges() {
+				out = append(out, e.Start().Position().Value, e.End().Position().Value)
+			}
+		}
+	}
+	return out
 }
 
 // TestPrismIntersectFullyNestedPairReturnsInnerOperand is §15's own required
