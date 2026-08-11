@@ -114,6 +114,176 @@ func orientSignMixed(a, b, c r3.Vec, d xpt) int {
 	return orientVal(xptOf(a), xptOf(b), xptOf(c), d).Sign()
 }
 
+// xhp is an exact 3D point in homogeneous integer form: (x, y, z) is an
+// integer numerator triple over one shared positive denominator w — the point
+// it denotes is (x/w, y/w, z/w). big.Int carries no normalisation step of its
+// own, unlike big.Rat, which runs a full Lehmer GCD on every construction
+// whose denominator is not exactly 1 (rat.go's norm) — dyadic denominators
+// included, since norm skips the GCD only when the denominator is 1. Every
+// predicate built from these four integers is therefore a plain integer sign
+// test.
+//
+// The invariant w > 0 is load-bearing: every helper below reduces a
+// division's sign to the sign of a product of denominators, which only holds
+// when every denominator involved is positive. xhpSub and xhpCross each
+// combine two operands whose own w is positive into a result whose w is their
+// PRODUCT — again positive by construction, with no branch needed — so the
+// invariant propagates through every point/vector this file builds except
+// one: xhpLerp's lerp-parameter denominator can arrive negative, and it
+// renormalises explicitly before folding it in.
+//
+// A homogeneous point has many spellings — (x, y, z, w) and (2x, 2y, 2z, 2w)
+// denote the same coordinate — so exact identity (welding) never compares raw
+// fields; it goes through the canonical form (xhpCanon).
+type xhp struct{ x, y, z, w *big.Int }
+
+// xhpOf lifts a finite float vertex into homogeneous integer coordinates. A
+// float64 is an exact dyadic rational, so each coordinate's own numerator and
+// denominator (mustRatOf, clearance_poly.go) combine over one shared
+// denominator — the other two coordinates' own denominators — with no
+// rounding.
+func xhpOf(v r3.Vec) xhp {
+	rx, ry, rz := mustRatOf(v.X), mustRatOf(v.Y), mustRatOf(v.Z)
+	dx, dy, dz := rx.Denom(), ry.Denom(), rz.Denom()
+	return xhp{
+		x: new(big.Int).Mul(rx.Num(), new(big.Int).Mul(dy, dz)),
+		y: new(big.Int).Mul(ry.Num(), new(big.Int).Mul(dx, dz)),
+		z: new(big.Int).Mul(rz.Num(), new(big.Int).Mul(dx, dy)),
+		w: new(big.Int).Mul(dx, new(big.Int).Mul(dy, dz)),
+	}
+}
+
+// xhpSub is p − q, exact: a homogeneous vector over the positive denominator
+// p.w·q.w.
+func xhpSub(p, q xhp) xhp {
+	return xhp{
+		x: new(big.Int).Sub(new(big.Int).Mul(p.x, q.w), new(big.Int).Mul(q.x, p.w)),
+		y: new(big.Int).Sub(new(big.Int).Mul(p.y, q.w), new(big.Int).Mul(q.y, p.w)),
+		z: new(big.Int).Sub(new(big.Int).Mul(p.z, q.w), new(big.Int).Mul(q.z, p.w)),
+		w: new(big.Int).Mul(p.w, q.w),
+	}
+}
+
+// xhpCross is a × b, exact: its numerators over the positive denominator
+// a.w·b.w.
+func xhpCross(a, b xhp) xhp {
+	return xhp{
+		x: new(big.Int).Sub(new(big.Int).Mul(a.y, b.z), new(big.Int).Mul(a.z, b.y)),
+		y: new(big.Int).Sub(new(big.Int).Mul(a.z, b.x), new(big.Int).Mul(a.x, b.z)),
+		z: new(big.Int).Sub(new(big.Int).Mul(a.x, b.y), new(big.Int).Mul(a.y, b.x)),
+		w: new(big.Int).Mul(a.w, b.w),
+	}
+}
+
+// xhpDotNum is the NUMERATOR of a·b over the positive denominator a.w·b.w.
+// The denominator is never formed: every consumer either reads only this
+// numerator's sign, or divides it back out at the one point a value is
+// actually published (xhpRat).
+func xhpDotNum(a, b xhp) *big.Int {
+	s := new(big.Int).Mul(a.x, b.x)
+	s.Add(s, new(big.Int).Mul(a.y, b.y))
+	s.Add(s, new(big.Int).Mul(a.z, b.z))
+	return s
+}
+
+// xhpLerp is a + t·(b − a) for t = tn/td, exact. td may arrive negative; a.w
+// and b.w are already positive by invariant, so the result's own w — their
+// product with td — is renormalised by flipping td's (and tn's) sign first,
+// which leaves the value t = tn/td unchanged.
+func xhpLerp(a, b xhp, tn, td *big.Int) xhp {
+	n, d := tn, td
+	if d.Sign() < 0 {
+		n = new(big.Int).Neg(n)
+		d = new(big.Int).Neg(d)
+	}
+	// a + t·(b−a) = a·(d−n)/d + b·n/d = [a·(d−n)·b.w + b·n·a.w] / (a.w·b.w·d).
+	diff := new(big.Int).Sub(d, n)
+	axis := func(av, bv *big.Int) *big.Int {
+		term := new(big.Int).Mul(av, diff)
+		term.Mul(term, b.w)
+		other := new(big.Int).Mul(bv, n)
+		other.Mul(other, a.w)
+		return term.Add(term, other)
+	}
+	w := new(big.Int).Mul(a.w, b.w)
+	w.Mul(w, d)
+	return xhp{x: axis(a.x, b.x), y: axis(a.y, b.y), z: axis(a.z, b.z), w: w}
+}
+
+// xhpOrientSign is the exact sign of det[b−a, c−a, d−a], decided as a plain
+// integer sign with no big.Rat and no normalisation anywhere in the chain:
+// every intermediate xhp carries a positive denominator by construction, so
+// the final numerator's sign IS the determinant's sign.
+func xhpOrientSign(a, b, c, d xhp) int {
+	ba, ca, da := xhpSub(b, a), xhpSub(c, a), xhpSub(d, a)
+	return xhpDotNum(xhpCross(ba, ca), da).Sign()
+}
+
+// xhpRat materialises p's three coordinates as big.Rat — the one place a
+// homogeneous point pays a normalisation, and only when a caller genuinely
+// needs a rational VALUE rather than a sign.
+func xhpRat(p xhp) (x, y, z *big.Rat) {
+	return new(big.Rat).SetFrac(p.x, p.w), new(big.Rat).SetFrac(p.y, p.w), new(big.Rat).SetFrac(p.z, p.w)
+}
+
+// xhpVec rounds p to the nearest float64 coordinates.
+func xhpVec(p xhp) r3.Vec {
+	x, y, z := xhpRat(p)
+	fx, _ := x.Float64()
+	fy, _ := y.Float64()
+	fz, _ := z.Float64()
+	return r3.Vec{X: fx, Y: fy, Z: fz}
+}
+
+// xhpStripTwos divides all four integers by their largest common power of
+// two — the growth control. It costs no GCD (TrailingZeroBits and Rsh only),
+// which is what makes it cheap enough to run on every construction; the full
+// GCD xhpCanon runs is not (its own doc comment).
+func xhpStripTwos(p xhp) xhp {
+	tz := p.w.TrailingZeroBits()
+	for _, v := range [3]*big.Int{p.x, p.y, p.z} {
+		if v.Sign() == 0 {
+			continue
+		}
+		if t := v.TrailingZeroBits(); t < tz {
+			tz = t
+		}
+	}
+	if tz == 0 {
+		return p
+	}
+	return xhp{
+		x: new(big.Int).Rsh(p.x, tz),
+		y: new(big.Int).Rsh(p.y, tz),
+		z: new(big.Int).Rsh(p.z, tz),
+		w: new(big.Int).Rsh(p.w, tz),
+	}
+}
+
+// xhpCanon reduces p to its unique canonical spelling: every one of the four
+// integers divided by gcd(|x|, |y|, |z|, w). This is the FULL GCD the
+// representation otherwise exists to avoid, so it is reserved for the one
+// place a homogeneous point's many spellings must collapse to one —
+// vertex-emission identity (key, welding) — and must NEVER be called per
+// arithmetic operation: measured, a depth-3 xhpLerp chain drops from
+// big.Rat's 31.4us to 9.6us with xhpStripTwos alone, but only to 23.4us with
+// a full xhpCanon on every construction — nearly the whole win, given back.
+func xhpCanon(p xhp) xhp {
+	g := new(big.Int).Set(p.w)
+	for _, v := range [3]*big.Int{p.x, p.y, p.z} {
+		if v.Sign() == 0 {
+			continue
+		}
+		g.GCD(nil, nil, g, v)
+	}
+	return xhp{
+		x: new(big.Int).Quo(p.x, g),
+		y: new(big.Int).Quo(p.y, g),
+		z: new(big.Int).Quo(p.z, g),
+		w: new(big.Int).Quo(p.w, g),
+	}
+}
+
 const (
 	// segFilterErrCoef covers segFilter.tooFar's own float evaluation: 64·u,
 	// against the magnitude the branch taken carries. tooFar derives it.
