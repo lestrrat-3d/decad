@@ -1498,7 +1498,25 @@ func ratScale(value *big.Rat, num, den int64) *big.Rat {
 	return new(big.Rat).Mul(value, big.NewRat(num, den))
 }
 
+// ratLerp returns the exact rational value of P(t) = start + t·(end − start).
+// At the two natural bounds the answer is the record's own coordinate —
+// P(0) is start and P(1) is end, exactly — the same identity lerp2 already
+// applies on the float side; this is that twin lerp2's doc comment already
+// names. The non-finite check on the case's own operand keeps the nil
+// contract callers read as "no bound available": a caller widening an
+// infinite bound to a finite one because of a missed non-finite operand
+// would be an inadmissible repair.
 func ratLerp(start, end, t float64) *big.Rat {
+	if t == 0 || t == 1 {
+		near, far := start, end
+		if t == 1 {
+			near, far = end, start
+		}
+		if math.IsNaN(far) || math.IsInf(far, 0) {
+			return nil
+		}
+		return floatRat(near)
+	}
 	rs, re, rt := floatRat(start), floatRat(end), floatRat(t)
 	if rs == nil || re == nil || rt == nil {
 		return nil
