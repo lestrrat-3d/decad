@@ -13,15 +13,15 @@ import (
 )
 
 // plateSketch builds a solved 100×60 rectangle on the XY plane.
-func plateSketch(t *testing.T) (*sketch.Sketch, *sketch.Profile) {
-	t.Helper()
+func plateSketch(tb testing.TB) (*sketch.Sketch, *sketch.Profile) {
+	tb.Helper()
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
-	require.NoError(t, err)
+	require.NoError(tb, err)
 	rect := s.CreateRectangle(0, 0, 100, 60)
 	s.Fix(rect.A)
-	_, err = s.Solve(t.Context())
-	require.NoError(t, err)
+	_, err = s.Solve(tb.Context())
+	require.NoError(tb, err)
 	return s, s.Profiles()[0]
 }
 
@@ -802,5 +802,22 @@ func TestExtrudeRescaledDistanceCarriesConversionRounding(t *testing.T) {
 			require.NoError(t, err)
 			require.GreaterOrEqual(t, bound, math.Abs(box.Max.Z-denoted))
 		})
+	}
+}
+
+// BenchmarkExtrudePlate measures the public end-to-end cost of extruding
+// plateSketch's four-line rectangle, the call shape ratLerp's endpoint fast
+// path (moments.go) targets: every whole LineSeg's TStart/TEnd is exactly 0
+// and 1 (seam.go carries sketch's range through unchanged), so
+// exactLineMoments and lineWalkBounds each take the fast path twice per
+// segment.
+func BenchmarkExtrudePlate(b *testing.B) {
+	s, p := plateSketch(b)
+	d := decad.Distance{D: units.Millimeters(10), Dir: decad.Along}
+	for b.Loop() {
+		doc := decad.New()
+		if _, err := doc.Extrude(s, p, d); err != nil {
+			b.Fatal(err)
+		}
 	}
 }
