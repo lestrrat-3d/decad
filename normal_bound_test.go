@@ -697,18 +697,21 @@ func TestNormalAtArmBoundCoversItsOwnDefect(t *testing.T) {
 		center := s.Center.Add(radial.Scale(s.Major.Mag()))
 		return center.Add(dir.Scale(s.Minor.Mag())), dir
 	}
-	// conePoint samples at a point off the axis by radius 5 and along the axis
-	// by 5mm — a point the Cone arm's own formula answers for whether or not
+	// conePoint samples at a point off the axis by radius and along the axis
+	// by along — a point the Cone arm's own formula answers for whether or not
 	// it sits on the actual wall, since the projection it computes depends on
-	// no radius at all.
-	conePoint := func(t *testing.T, f *decad.Face, deg float64) (r3.Vec, r3.Vec) {
+	// no radius at all. A radius small beside along is where that projection
+	// cancels: the arm subtracts two nearly equal vectors and keeps only the
+	// low digits of the difference, so the direction it hands back departs by
+	// far more than its own length does.
+	conePoint := func(t *testing.T, f *decad.Face, deg, radius, along float64) (r3.Vec, r3.Vec) {
 		t.Helper()
 		s := f.Surface().(decad.Cone)
 		w := perpTo(t, s.Axis)
 		axis, ok := s.Axis.Normalize()
 		require.True(t, ok)
 		dir := tilt(w, axis.Cross(w), deg)
-		p := s.Origin.Add(dir.Scale(5)).Add(axis.Scale(5))
+		p := s.Origin.Add(dir.Scale(radius)).Add(axis.Scale(along))
 		half, err := s.HalfAngle.In(units.Radian)
 		require.NoError(t, err)
 		n := dir.Scale(math.Cos(half)).Sub(axis.Scale(math.Sin(half)))
@@ -721,9 +724,10 @@ func TestNormalAtArmBoundCoversItsOwnDefect(t *testing.T) {
 		// the outward normal takes there, both in the face's OWN frame.
 		at    func(t *testing.T) (*decad.Face, r3.Vec, r3.Vec)
 		exact bool
-		// directionDominates marks the one row that also asserts the direction
-		// defect swamps the unit-length one, rather than merely being covered
-		// by the same bound as it.
+		// directionDominates marks the one row whose direction defect is too
+		// large for any allowance built from the reading's unit length alone
+		// to cover, so the coverage check every row runs is what catches a
+		// Cone allowance that stops charging the direction term.
 		directionDominates bool
 	}{
 		{
@@ -831,16 +835,15 @@ func TestNormalAtArmBoundCoversItsOwnDefect(t *testing.T) {
 			name: `a cone wall on a world axis carries its own cosine and sine`,
 			at: func(t *testing.T) (*decad.Face, r3.Vec, r3.Vec) {
 				f := placedFace(t, func(t *testing.T) *decad.Body { return coneBody(t, 10) }, decad.KindCone, nil)
-				p, dir := conePoint(t, f, 0)
+				p, dir := conePoint(t, f, 0, 5, 5)
 				return f, p, dir
 			},
-			directionDominates: true,
 		},
 		{
 			name: `a cone wall off the world axes carries more of it`,
 			at: func(t *testing.T) (*decad.Face, r3.Vec, r3.Vec) {
 				f := placedFace(t, func(t *testing.T) *decad.Body { return coneBody(t, 10) }, decad.KindCone, nil)
-				p, dir := conePoint(t, f, 37)
+				p, dir := conePoint(t, f, 37, 5, 5)
 				return f, p, dir
 			},
 		},
@@ -848,7 +851,7 @@ func TestNormalAtArmBoundCoversItsOwnDefect(t *testing.T) {
 			name: `a placed cone carries the rotation's own rounding`,
 			at: func(t *testing.T) (*decad.Face, r3.Vec, r3.Vec) {
 				f := placedFace(t, func(t *testing.T) *decad.Body { return coneBody(t, 10) }, decad.KindCone, &spin)
-				p, dir := conePoint(t, f, 37)
+				p, dir := conePoint(t, f, 37, 5, 5)
 				return f, p, dir
 			},
 		},
@@ -856,9 +859,21 @@ func TestNormalAtArmBoundCoversItsOwnDefect(t *testing.T) {
 			name: `a cone whose half angle is not 45 degrees`,
 			at: func(t *testing.T) (*decad.Face, r3.Vec, r3.Vec) {
 				f := placedFace(t, func(t *testing.T) *decad.Body { return coneBody(t, 5) }, decad.KindCone, nil)
-				p, dir := conePoint(t, f, 0)
+				p, dir := conePoint(t, f, 0, 5, 5)
 				return f, p, dir
 			},
+		},
+		{
+			// Sampled 0.2mm off the axis and 5mm along it, where the arm's own
+			// radial projection cancels away most of its digits, this row is
+			// the one whose direction defect no length-only allowance reaches.
+			name: `a cone sampled near its axis charges the projection's lost digits`,
+			at: func(t *testing.T) (*decad.Face, r3.Vec, r3.Vec) {
+				f := placedFace(t, func(t *testing.T) *decad.Body { return coneBody(t, 3) }, decad.KindCone, &spin)
+				p, dir := conePoint(t, f, 37, 0.2, 5)
+				return f, p, dir
+			},
+			directionDominates: true,
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -893,15 +908,22 @@ func TestNormalAtArmBoundCoversItsOwnDefect(t *testing.T) {
 			require.Positive(t, defectSq.Sign()+length.Sign(),
 				`the arm's own arithmetic must genuinely depart, or the row proves nothing`)
 			if tc.directionDominates {
-				// Without this the row would still pass against a bound that
-				// charged the direction nothing but the length — exactly the
-				// state the Cone arm's coverage was in before this test
-				// measured it. Measured ratio on this fixture is 4.824
-				// (4.895157e-17 against 1.014654e-17), so the factor 2 here
-				// leaves 2.4x of margin.
-				fourLengthSq := new(big.Rat).Mul(new(big.Rat).Mul(length, length), big.NewRat(4, 1))
-				require.GreaterOrEqual(t, defectSq.Cmp(fourLengthSq), 0,
-					`%s: the direction defect must be at least twice the unit-length defect`, tc.name)
+				// requireBoundCoversDefect above is what fails when the Cone
+				// allowance charges the direction nothing and the reading's
+				// unit length everything — but only while this row's fixture
+				// keeps the property that makes it that witness, which is what
+				// is pinned here. A length-only allowance is that unit-length
+				// defect plus the rounding its own enclosure adds: an
+				// outward-rounded square root and a round-up at the end, a
+				// couple of ulps of a unit coordinate. Four ulps, 2⁻⁵¹, is the
+				// deliberate over-estimate of that rounding. Measured on this
+				// fixture the direction defect is 1.720e-15 against a
+				// unit-length defect of 2.071e-16, clearing the sum by 2.6x
+				// and the length-only bound itself by 7.7x.
+				floor := new(big.Rat).Add(length, big.NewRat(1, 1<<51))
+				require.GreaterOrEqual(t, defectSq.Cmp(new(big.Rat).Mul(floor, floor)), 0,
+					`%s: the direction defect must clear the unit-length defect by more than a length-only allowance's own rounding`,
+					tc.name)
 			}
 		})
 	}
