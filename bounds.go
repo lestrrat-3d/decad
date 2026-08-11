@@ -66,7 +66,15 @@ import (
 //     corner adjacent to a circular wall → chordLocusLengthAllow, the
 //     range's own width times a proven upper bound on the locus's own speed,
 //     minus the held chord;
-//   - a per-coordinate maximum read as a 3D DISTANCE → radius3D.
+//   - a per-coordinate maximum read as a 3D DISTANCE → radius3D;
+//   - propagating a proven interval through a SQUARE ROOT (a candidate disk's
+//     own centre distance, an Apollonius radius) → boundedSqrt, which reads
+//     the operand's own interval ends through the same rational sqrt brackets
+//     (ratSqrtDown/ratSqrtUp) a free-form arc's radius already does, rather
+//     than trusting math.Sqrt's accuracy on either end;
+//   - a linear functional's own extreme over a bounded region moving when its
+//     DIRECTION is perturbed (a revolve box face, whose swept direction
+//     carries the sweep angle's own trig enclosure) → directionalPerturbationAllow.
 
 const (
 	// unitRoundoff is float64's u = 2⁻⁵³: the relative error a single
@@ -610,6 +618,50 @@ func sweptMomentAllow(delta, areaUpper, coordUpper float64) float64 {
 		return 0
 	}
 	return productUpper(vol, coordUpper)
+}
+
+// boundedSqrt propagates a proven bound through a square root: x.bound must
+// already prove the true operand lies in [x.value−x.bound, x.value+x.bound]
+// (clamped at zero, since every caller's operand is a sum of squares or a
+// disk radius). The result brackets the square root of that whole interval
+// through ratSqrtDown/ratSqrtUp — the same rational sqrt brackets
+// circularLengthInterval reads an ArcSeg's own radius through — evaluated at
+// the interval's two safely outward-rounded ends, never through math.Sqrt's
+// own accuracy on either. A non-finite operand bound answers +Inf: an absent
+// bound must never read as a small one.
+func boundedSqrt(x boundedScalar) boundedScalar {
+	value := math.Sqrt(math.Max(x.value, 0))
+	if isNonFinite(x.bound) {
+		return measuredScalar(value, math.Inf(1))
+	}
+	lo := math.Max(0, x.value-x.bound)
+	lo = math.Nextafter(lo, math.Inf(-1))
+	if lo < 0 {
+		lo = 0
+	}
+	hi := math.Nextafter(x.value+x.bound, math.Inf(1))
+	loR, hiR := floatRat(lo), floatRat(hi)
+	if loR == nil || hiR == nil {
+		return measuredScalar(value, math.Inf(1))
+	}
+	sqrtLo := ratSqrtDown(loR)
+	sqrtHi := ratSqrtUp(hiR)
+	if isNonFinite(sqrtLo) || isNonFinite(sqrtHi) {
+		return measuredScalar(value, math.Inf(1))
+	}
+	bound := upRound(math.Max(value-sqrtLo, sqrtHi-value))
+	return measuredScalar(value, bound)
+}
+
+// directionalPerturbationAllow bounds how far a linear functional's own
+// extreme over a bounded region can move when the functional's direction is
+// perturbed by dirBound: an extreme of gu·u + gv·v over a boundary is
+// 1-Lipschitz in (gu, gv) against the boundary's own coordinate envelope,
+// since |Δgu·u + Δgv·v| <= |(Δgu, Δgv)| · coordUpper by Cauchy-Schwarz.
+// coordUpper must be a PROVEN upper bound on sqrt(u²+v²) over the region's
+// own boundary (profileCoordinateUpper).
+func directionalPerturbationAllow(dirBound, coordUpper float64) float64 {
+	return productUpper(dirBound, coordUpper)
 }
 
 // rimDelta is the trim-amplified displacement bound of a vertex the boolean

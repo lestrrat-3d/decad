@@ -3,6 +3,7 @@ package examples_test
 import (
 	"context"
 	"fmt"
+	"math"
 
 	"github.com/lestrrat-3d/decad"
 	"github.com/lestrrat-3d/r3"
@@ -80,9 +81,62 @@ func Example_decad_verify_surveys() {
 		return
 	}
 	fmt.Printf("pull tilted: %s, undercuts %d\n", report.Status, len(report.Bodies[0].Undercuts))
+
+	// A 100×60×20 mm plate with two r=1 mm holes close enough together that
+	// the web between them — hypot(3,3) − 2 = 3√2 − 2 mm — is the tightest
+	// wall. No float64 holds that value exactly, so the reading is
+	// Approximate with a proven bound instead of the Exact readings above; a
+	// boolean that the proven interval contains the truth is what the
+	// Output block checks, never the value's own raw digits, so a
+	// tighter-but-still-sound future bound leaves this example unchanged.
+	holed := decad.New()
+	hws := sketch.NewWorld()
+	hs, err := hws.CreateSketch(hws.XY())
+	if err != nil {
+		fmt.Printf("failed to build: %s\n", err)
+		return
+	}
+	hrect := hs.CreateRectangle(0, 0, 100, 60)
+	hs.Fix(hrect.A)
+	hs.CreateCircle(hs.CreatePoint(48.5, 28.5), 1)
+	hs.CreateCircle(hs.CreatePoint(51.5, 31.5), 1)
+	if _, err := hs.Solve(context.Background()); err != nil {
+		fmt.Printf("failed to build: %s\n", err)
+		return
+	}
+	var holedProfile *sketch.Profile
+	for _, p := range hs.Profiles() {
+		if len(p.Holes) == 2 {
+			holedProfile = p
+		}
+	}
+	if _, err := holed.Extrude(hs, holedProfile, decad.Distance{D: units.Millimeters(20), Dir: decad.Along}); err != nil {
+		fmt.Printf("failed to build: %s\n", err)
+		return
+	}
+	report, err = holed.Verify(context.Background(), decad.WithMinWallThickness(units.Millimeters(1)))
+	if err != nil {
+		fmt.Printf("failed to verify: %s\n", err)
+		return
+	}
+	web := report.Bodies[0]
+	value, err := web.MinWallThickness.Value.In(units.Millimeter)
+	if err != nil {
+		fmt.Printf("failed to read the wall value: %s\n", err)
+		return
+	}
+	bound, err := web.MinWallThickness.Bound.In(units.Millimeter)
+	if err != nil {
+		fmt.Printf("failed to read the wall bound: %s\n", err)
+		return
+	}
+	truth := 3*math.Sqrt(2) - 2
+	encloses := value-bound <= truth && truth <= value+bound
+	fmt.Printf("web: %s, exactness %s, interval encloses the truth %v\n", web.Status, web.MinWallThickness.Exactness, encloses)
 	// Output:
 	// plate: Violating, wall 0.5 mm (Exact)
 	// cube: Sound, wall 100 mm, trustworthy true
 	// pull +z: Sound, undercuts 0
 	// pull tilted: Violating, undercuts 2
+	// web: Sound, exactness Approximate, interval encloses the truth true
 }

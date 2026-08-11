@@ -54,11 +54,13 @@ func polygonSketch(t *testing.T, pts [][2]float64) (*sketch.Sketch, *sketch.Prof
 	return s, profiles[0]
 }
 
-// requireWall asserts an Exact MinWallThickness reading in millimetres.
-func requireWall(t *testing.T, br *decad.BodyReport, want float64) {
+// requireWall asserts a MinWallThickness reading in millimetres and the
+// PROVEN exactness its own arm computed: each call site states the
+// exactness its own geometry proves, never a blanket assumption.
+func requireWall(t *testing.T, br *decad.BodyReport, wantExact decad.Exactness, want float64) {
 	t.Helper()
 	require.NotNil(t, br.MinWallThickness)
-	require.Equal(t, decad.Exact, br.MinWallThickness.Exactness)
+	require.Equal(t, wantExact, br.MinWallThickness.Exactness)
 	require.True(t, br.MinWallThickness.Value.Equal(units.Millimeters(want), 1e-9),
 		`want %v mm, got %s`, want, br.MinWallThickness.Value)
 }
@@ -72,7 +74,7 @@ func TestWallThinPlateViolating(t *testing.T) {
 	require.NoError(t, err)
 
 	br := report.Bodies[0]
-	requireWall(t, br, 0.5)
+	requireWall(t, br, decad.Exact, 0.5)
 	require.Equal(t, decad.Violating, br.Status)
 	require.Equal(t, decad.Violating, report.Status)
 	require.False(t, report.Trustworthy())
@@ -87,7 +89,7 @@ func TestWallCubeSound(t *testing.T) {
 	require.NoError(t, err)
 
 	br := report.Bodies[0]
-	requireWall(t, br, 100)
+	requireWall(t, br, decad.Exact, 100)
 	require.Equal(t, decad.Sound, br.Status)
 	require.True(t, report.Trustworthy())
 }
@@ -155,12 +157,12 @@ func TestWallAnnularPrism(t *testing.T) {
 
 	report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(1)))
 	require.NoError(t, err)
-	requireWall(t, report.Bodies[0], 5)
+	requireWall(t, report.Bodies[0], decad.Exact, 5)
 	require.Equal(t, decad.Sound, report.Status)
 
 	report, err = doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(6)))
 	require.NoError(t, err)
-	requireWall(t, report.Bodies[0], 5)
+	requireWall(t, report.Bodies[0], decad.Exact, 5)
 	require.Equal(t, decad.Violating, report.Status)
 }
 
@@ -182,7 +184,7 @@ func TestWallDraftAllowanceBoundary(t *testing.T) {
 
 	report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(1.2)))
 	require.NoError(t, err)
-	requireWall(t, report.Bodies[0], math.Cos(beta)/(1-math.Sin(beta)))
+	requireWall(t, report.Bodies[0], decad.Approximate, math.Cos(beta)/(1-math.Sin(beta)))
 	require.Equal(t, decad.Violating, report.Status)
 
 	report, err = doc.Verify(t.Context(),
@@ -221,7 +223,7 @@ func TestWallKnifeEdgeExactZero(t *testing.T) {
 	report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(0.001)))
 	require.NoError(t, err)
 	br := report.Bodies[0]
-	requireWall(t, br, 0)
+	requireWall(t, br, decad.Exact, 0)
 	require.Equal(t, decad.Violating, br.Status)
 	require.False(t, report.Trustworthy())
 }
@@ -235,7 +237,7 @@ func TestWallPartialRevolve(t *testing.T) {
 	require.NoError(t, err)
 	report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(1)))
 	require.NoError(t, err)
-	requireWall(t, report.Bodies[0], 10)
+	requireWall(t, report.Bodies[0], decad.Exact, 10)
 	require.Equal(t, decad.Suspect, report.Status)
 }
 
@@ -409,7 +411,7 @@ func TestWallReflexSweep(t *testing.T) {
 	require.NoError(t, err)
 	report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(1)))
 	require.NoError(t, err)
-	requireWall(t, report.Bodies[0], 7)
+	requireWall(t, report.Bodies[0], decad.Exact, 7)
 	require.Equal(t, decad.Suspect, report.Status)
 }
 
@@ -439,7 +441,7 @@ func TestWallThinPieWedge(t *testing.T) {
 	require.NoError(t, err)
 	report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(1)))
 	require.NoError(t, err)
-	requireWall(t, report.Bodies[0], 0)
+	requireWall(t, report.Bodies[0], decad.Exact, 0)
 	require.Equal(t, decad.Violating, report.Status)
 }
 
@@ -585,7 +587,7 @@ func TestWallHolePlateReadsThickness(t *testing.T) {
 	doc := holePlate(t)
 	report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(1)))
 	require.NoError(t, err)
-	requireWall(t, report.Bodies[0], 8)
+	requireWall(t, report.Bodies[0], decad.Exact, 8)
 	require.Equal(t, decad.Sound, report.Status)
 }
 
@@ -601,7 +603,7 @@ func TestSurveysAnsweredTogether(t *testing.T) {
 	require.NoError(t, err)
 
 	br := report.Bodies[0]
-	requireWall(t, br, 10)
+	requireWall(t, br, decad.Exact, 10)
 	require.NotNil(t, br.Undercuts)
 	require.Empty(t, br.Undercuts)
 	require.Nil(t, br.MinRadius)
@@ -621,7 +623,7 @@ func TestWallSolidCylinder(t *testing.T) {
 	require.NoError(t, err)
 	report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(1)))
 	require.NoError(t, err)
-	requireWall(t, report.Bodies[0], 10)
+	requireWall(t, report.Bodies[0], decad.Exact, 10)
 	require.Equal(t, decad.Suspect, report.Status)
 }
 
@@ -636,7 +638,7 @@ func TestWallNarrowConeTaperZero(t *testing.T) {
 	require.NoError(t, err)
 	report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(1)))
 	require.NoError(t, err)
-	requireWall(t, report.Bodies[0], 0)
+	requireWall(t, report.Bodies[0], decad.Exact, 0)
 	require.Equal(t, decad.Violating, report.Status)
 }
 
@@ -656,7 +658,7 @@ func TestWallPlacedBodyReadsThePart(t *testing.T) {
 
 	report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(1)))
 	require.NoError(t, err)
-	requireWall(t, report.Bodies[0], 0.5)
+	requireWall(t, report.Bodies[0], decad.Exact, 0.5)
 	require.Equal(t, decad.Violating, report.Status)
 }
 
@@ -670,4 +672,153 @@ func TestSurveysSkippedOnUnaskedOptions(t *testing.T) {
 	require.Nil(t, br.Undercuts)
 	require.Nil(t, br.MinRadius)
 	require.Equal(t, decad.Sound, report.Status)
+}
+
+func TestWallReadingBoundEnclosesCurvedWeb(t *testing.T) {
+	// The 100×60×20 mm plate with two r=1 holes at (48.5, 28.5) and
+	// (51.5, 31.5): the web between them is hypot(3,3) − 2 = 3√2 − 2, which no
+	// float64 holds exactly. The reading carries the arcArcCands centerline
+	// candidate's own proven bound instead of asserting Exact.
+	ws := sketch.NewWorld()
+	s, err := ws.CreateSketch(ws.XY())
+	require.NoError(t, err)
+	rect := s.CreateRectangle(0, 0, 100, 60)
+	s.Fix(rect.A)
+	s.CreateCircle(s.CreatePoint(48.5, 28.5), 1)
+	s.CreateCircle(s.CreatePoint(51.5, 31.5), 1)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	var prof *sketch.Profile
+	for _, p := range s.Profiles() {
+		if len(p.Holes) == 2 {
+			prof = p
+		}
+	}
+	require.NotNil(t, prof)
+
+	doc := decad.New()
+	_, err = doc.Extrude(s, prof, decad.Distance{D: units.Millimeters(20), Dir: decad.Along})
+	require.NoError(t, err)
+
+	report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(1)))
+	require.NoError(t, err)
+	br := report.Bodies[0]
+	require.NotNil(t, br.MinWallThickness)
+	require.Equal(t, decad.Approximate, br.MinWallThickness.Exactness)
+	value, err := br.MinWallThickness.Value.In(units.Millimeter)
+	require.NoError(t, err)
+	bound, err := br.MinWallThickness.Bound.In(units.Millimeter)
+	require.NoError(t, err)
+	require.Greater(t, bound, 0.0)
+	require.LessOrEqual(t, bound, 1e-9)
+	const truth = 2.2426406871192851464 // 3√2 − 2
+	require.LessOrEqual(t, value-bound, truth)
+	require.GreaterOrEqual(t, value+bound, truth)
+	require.True(t, report.Trustworthy())
+}
+
+func TestWallReadingExactHeightArm(t *testing.T) {
+	// The 10×10×0.5 mm plate: the height arm's two axial displacements are
+	// both zero (a caller-stated sweep) and 0.5 is exactly representable, so
+	// the reading stays Exact with Bound exactly zero — the test that stops a
+	// blanket Approximate.
+	doc := rectPrism(t, 10, 10, 0.5)
+	report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(1)))
+	require.NoError(t, err)
+	br := report.Bodies[0]
+	require.NotNil(t, br.MinWallThickness)
+	require.Equal(t, decad.Exact, br.MinWallThickness.Exactness)
+	boundMM, err := br.MinWallThickness.Bound.In(units.Millimeter)
+	require.NoError(t, err)
+	require.Equal(t, 0.0, boundMM)
+	value, err := br.MinWallThickness.Value.In(units.Millimeter)
+	require.NoError(t, err)
+	require.Equal(t, 0.5, value)
+	require.Equal(t, decad.Violating, br.Status)
+}
+
+func TestWallHeightCarriesAxialDelta(t *testing.T) {
+	// A 10×10 mm plate extruded units.Inches(0.1): the sweep level's own unit
+	// conversion carries a nonzero displacement (docs/evaluator-design.md §5),
+	// which prismWall's height arm composes into the reading instead of
+	// dropping. Without that composition the reported height with an
+	// ulp-scale bound fails this by construction.
+	ws := sketch.NewWorld()
+	s, err := ws.CreateSketch(ws.XY())
+	require.NoError(t, err)
+	rect := s.CreateRectangle(0, 0, 10, 10)
+	s.Fix(rect.A)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	doc := decad.New()
+	_, err = doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Inches(0.1), Dir: decad.Along})
+	require.NoError(t, err)
+
+	report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(1)))
+	require.NoError(t, err)
+	br := report.Bodies[0]
+	require.NotNil(t, br.MinWallThickness)
+	require.Equal(t, decad.Approximate, br.MinWallThickness.Exactness)
+	value, err := br.MinWallThickness.Value.In(units.Millimeter)
+	require.NoError(t, err)
+	bound, err := br.MinWallThickness.Bound.In(units.Millimeter)
+	require.NoError(t, err)
+	require.GreaterOrEqual(t, value+bound, 2.5400000000000001410)
+}
+
+func TestMinRadiusArcRadiusBound(t *testing.T) {
+	// A prism whose one concave feature is a D-shaped ArcSeg hole (a chord
+	// plus one arc, the same "circular segment" construction
+	// TestWallKnifeEdgeExactZero's outer boundary uses, here cut as a hole so
+	// the material-outside convention makes its arc concave): the arc's
+	// centre (10, 9) sits one unit apart from its start point (9, 10) in each
+	// of u and v, so its true radius is √2 — a math.Hypot evaluation
+	// (extrude.go's ArcSeg arm), never the record's own number. The published
+	// interval must contain the truth; a millimetre CircleSeg hole on the
+	// same fixture family (holePlate) stays Exact with Bound zero.
+	ws := sketch.NewWorld()
+	s, err := ws.CreateSketch(ws.XY())
+	require.NoError(t, err)
+	rect := s.CreateRectangle(0, 0, 20, 20)
+	s.Fix(rect.A)
+	x := s.CreatePoint(9, 10)
+	y := s.CreatePoint(11, 10)
+	o := s.CreatePoint(10, 9)
+	s.CreateLine(x, y)
+	s.CreateArc(o, y, x)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	var prof *sketch.Profile
+	for _, p := range s.Profiles() {
+		if len(p.Holes) == 1 {
+			prof = p
+		}
+	}
+	require.NotNil(t, prof)
+
+	doc := decad.New()
+	_, err = doc.Extrude(s, prof, decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+	require.NoError(t, err)
+
+	report, err := doc.Verify(t.Context(), decad.WithMinRadius())
+	require.NoError(t, err)
+	br := report.Bodies[0]
+	require.NotNil(t, br.MinRadius)
+	require.Equal(t, decad.Approximate, br.MinRadius.Exactness)
+	value, err := br.MinRadius.Value.In(units.Millimeter)
+	require.NoError(t, err)
+	bound, err := br.MinRadius.Bound.In(units.Millimeter)
+	require.NoError(t, err)
+	const truth = 1.4142135623730950488 // √2
+	require.LessOrEqual(t, value-bound, truth)
+	require.GreaterOrEqual(t, value+bound, truth)
+
+	holeReport, err := holePlate(t).Verify(t.Context(), decad.WithMinRadius())
+	require.NoError(t, err)
+	holeBR := holeReport.Bodies[0]
+	require.NotNil(t, holeBR.MinRadius)
+	require.Equal(t, decad.Exact, holeBR.MinRadius.Exactness)
+	holeBoundMM, err := holeBR.MinRadius.Bound.In(units.Millimeter)
+	require.NoError(t, err)
+	require.Equal(t, 0.0, holeBoundMM)
 }

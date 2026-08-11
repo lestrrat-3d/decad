@@ -41,19 +41,29 @@ import (
 // reading uses its matching displacement — the two heights and the volume, area
 // and centroid built on them, the box, and the wall vertices and vertical edges
 // the shared prism build stamps.
+//
+// thicknessDelta is the shell thickness's OWN conversion displacement — the
+// bound magnitudeInBounded proved when it converted the recipe's stated
+// thickness into millimetres (shell.go). It is distinct from zOuterDelta and
+// zCavDelta: those cover the derived FLOOR LEVEL's own float-sum rounding
+// (which already folds thicknessDelta in — cupPayloadFor's step closure), and
+// this one is the reading cupWall publishes when the shell-wall theorem holds
+// exactly on the payload's own morphology — the number the theorem's t is
+// held in, not the theorem itself (docs/payload-verification-design.md §4.1).
 type cupPayload struct {
-	outer       ProfileRecord
-	cavity      ProfileRecord
-	frame       r3.Frame
-	zOpen       float64
-	zOuter      float64
-	zCav        float64
-	zOpenDelta  float64
-	zOuterDelta float64
-	zCavDelta   float64
-	thickness   float64
-	sense       ShellSense
-	xform       r3.Transform
+	outer          ProfileRecord
+	cavity         ProfileRecord
+	frame          r3.Frame
+	zOpen          float64
+	zOuter         float64
+	zCav           float64
+	zOpenDelta     float64
+	zOuterDelta    float64
+	zCavDelta      float64
+	thickness      float64
+	thicknessDelta float64
+	sense          ShellSense
+	xform          r3.Transform
 }
 
 // transform is the accumulated rigid placement.
@@ -142,12 +152,13 @@ func cupPayloadFor(pp prismPayload, offset ProfileRecord, s, t, tDelta float64, 
 		sense = Outward
 	}
 	cp := cupPayload{
-		outer:     o,
-		cavity:    c,
-		frame:     pp.frame,
-		thickness: t,
-		sense:     sense,
-		xform:     pp.xform,
+		outer:          o,
+		cavity:         c,
+		frame:          pp.frame,
+		thickness:      t,
+		thicknessDelta: tDelta,
+		sense:          sense,
+		xform:          pp.xform,
 	}
 	// step is the one derived floor level. It carries the source end's own
 	// displacement, the thickness conversion, and this float sum's rounding.

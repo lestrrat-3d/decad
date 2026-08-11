@@ -60,7 +60,7 @@ func TestExtrudeThroughAll(t *testing.T) {
 	pin, err := doc.Extrude(s, pinProf, decad.ThroughAll{Dir: decad.Along})
 	require.NoError(t, err)
 	requireVolume(t, pin, 4000)
-	requireBounds(t, pin, 120, 0, 0, 140, 20, 10)
+	requireBounds(t, pin, decad.Exact, 120, 0, 0, 140, 20, 10)
 	requireManifold(t, pin)
 
 	// The stop body is a dependency, not an operand: it stays live, and its
@@ -145,7 +145,7 @@ func TestExtrudeThroughAllStacked(t *testing.T) {
 	pin, err := doc.Extrude(s, pinProf, decad.ThroughAll{Dir: decad.Along})
 	require.NoError(t, err)
 	requireVolume(t, pin, 400*35)
-	requireBounds(t, pin, 120, 0, 0, 140, 20, 35)
+	requireBounds(t, pin, decad.Exact, 120, 0, 0, 140, 20, 35)
 	steps := doc.Recipe().Steps
 	require.Equal(t, []decad.StepRef{lower.Origin().Step, upper.Origin().Step}, steps[len(steps)-1].Inputs)
 
@@ -173,7 +173,7 @@ func TestExtrudeThroughAllSides(t *testing.T) {
 	})
 	require.NoError(t, err)
 	requireVolume(t, pin, 400*13)
-	requireBounds(t, pin, 120, 0, -3, 140, 20, 10)
+	requireBounds(t, pin, decad.Exact, 120, 0, -3, 140, 20, 10)
 	steps := doc.Recipe().Steps
 	require.Equal(t, []decad.StepRef{above.Origin().Step}, steps[len(steps)-1].Inputs)
 
@@ -189,7 +189,7 @@ func TestExtrudeThroughAllSides(t *testing.T) {
 		Two: decad.ThroughAllSide{},
 	})
 	require.NoError(t, err)
-	requireBounds(t, pin2, 120, 0, -6, 140, 20, 10)
+	requireBounds(t, pin2, decad.Exact, 120, 0, -6, 140, 20, 10)
 	steps = doc2.Recipe().Steps
 	last := steps[len(steps)-1]
 	require.Equal(t, []decad.StepRef{above2.Origin().Step, below2.Origin().Step}, last.Inputs)
@@ -214,7 +214,7 @@ func TestExtrudeToFace(t *testing.T) {
 	pin, err := doc.Extrude(s, pinProf, decad.ToFace{Body: plate, Face: q})
 	require.NoError(t, err)
 	requireVolume(t, pin, 4000)
-	requireBounds(t, pin, 120, 0, 0, 140, 20, 10)
+	requireBounds(t, pin, decad.Exact, 120, 0, 0, 140, 20, 10)
 	requireManifold(t, pin)
 	require.Contains(t, doc.Bodies(), plate, `a stop body is depended on, never retired`)
 
@@ -239,10 +239,10 @@ func TestExtrudeToFace(t *testing.T) {
 	// it (core §8.1).
 	over, err := doc.Extrude(s, pinProf, decad.ToFace{Body: plate, Face: capEndFace(plate), Offset: units.Millimeters(2)})
 	require.NoError(t, err)
-	requireBounds(t, over, 120, 0, 0, 140, 20, 12)
+	requireBounds(t, over, decad.Exact, 120, 0, 0, 140, 20, 12)
 	short, err := doc.Extrude(s, pinProf, decad.ToFace{Body: plate, Face: capEndFace(plate), Offset: units.Millimeters(-3)})
 	require.NoError(t, err)
-	requireBounds(t, short, 120, 0, 0, 140, 20, 7)
+	requireBounds(t, short, decad.Exact, 120, 0, 0, 140, 20, 7)
 }
 
 func TestExtrudeToFaceAgainst(t *testing.T) {
@@ -256,7 +256,7 @@ func TestExtrudeToFaceAgainst(t *testing.T) {
 	pin, err := doc.Extrude(s, pinProf, decad.ToFace{Body: below, Face: capStartFace(below)})
 	require.NoError(t, err)
 	requireVolume(t, pin, 400*6)
-	requireBounds(t, pin, 120, 0, -6, 140, 20, 0)
+	requireBounds(t, pin, decad.Exact, 120, 0, -6, 140, 20, 0)
 }
 
 func TestExtrudeToFaceSides(t *testing.T) {
@@ -275,7 +275,7 @@ func TestExtrudeToFaceSides(t *testing.T) {
 	})
 	require.NoError(t, err)
 	requireVolume(t, pin, 400*16)
-	requireBounds(t, pin, 120, 0, -6, 140, 20, 10)
+	requireBounds(t, pin, decad.Exact, 120, 0, -6, 140, 20, 10)
 	steps := doc.Recipe().Steps
 	last := steps[len(steps)-1]
 	require.Equal(t, []decad.StepRef{above.Origin().Step, below.Origin().Step}, last.Inputs)
@@ -414,7 +414,7 @@ func TestRevolveToFaceAngular(t *testing.T) {
 	body, err := doc.Revolve(s, p, uAxis, decad.ToFaceAngular{Body: host, Face: capEndFace(host)})
 	require.NoError(t, err)
 	requireVolume(t, body, 500*math.Pi)
-	requireBounds(t, body, 0, 0, 0, 10, 15, 15)
+	requireBounds(t, body, decad.Approximate, 0, 0, 0, 10, 15, 15)
 	require.Contains(t, doc.Bodies(), host, `a stop body is depended on, never retired`)
 
 	// The step depends on the host, and the recorded extent carries the
@@ -447,7 +447,7 @@ func TestRevolveToFaceAngularNearerWay(t *testing.T) {
 	body, err := doc.Revolve(s, p, uAxis, decad.ToFaceAngular{Body: host, Face: capEndFace(host)})
 	require.NoError(t, err)
 	requireVolume(t, body, 500*math.Pi)
-	requireBounds(t, body, 0, 0, -15, 10, 15, 0)
+	requireBounds(t, body, decad.Approximate, 0, 0, -15, 10, 15, 0)
 }
 
 func TestRevolveToFaceAngularSides(t *testing.T) {
@@ -737,7 +737,7 @@ func TestExtrudeThroughAllCupStop(t *testing.T) {
 	// The sweep read the cup's outer extent (20): the 20×20 pin swept [0, 20]
 	// is 8000 mm³, bounded z ∈ [0, 20]. The cavity did not lower the stop.
 	requireVolume(t, pin, 400*20)
-	requireBounds(t, pin, 120, 0, 0, 140, 20, 20)
+	requireBounds(t, pin, decad.Exact, 120, 0, 0, 140, 20, 20)
 	requireManifold(t, pin)
 
 	// The cup is a recorded dependency of the stop step, not an operand: it
@@ -768,7 +768,7 @@ func TestExtrudeThroughAllSideCupStop(t *testing.T) {
 	// side (Two) at 3: the pin spans z ∈ [-3, 20], a 20×20 footprint →
 	// 23·400 = 9200 mm³.
 	requireVolume(t, pin, 400*23)
-	requireBounds(t, pin, 120, 0, -3, 140, 20, 20)
+	requireBounds(t, pin, decad.Exact, 120, 0, -3, 140, 20, 20)
 	require.Contains(t, doc.Bodies(), cup)
 }
 

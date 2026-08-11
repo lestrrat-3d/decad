@@ -166,10 +166,14 @@ Cup/cup, cup/prism, and cup/revolve pairs run normal analytic enumeration.
 For accepted cup shell thickness `t` and draft allowance `alpha`:
 
 - any material junction with dihedral `<= alpha` → `MinWallThickness = Exact 0`;
-- otherwise → `MinWallThickness = Exact t`.
+- otherwise → `MinWallThickness = t`, `Exact` only when converting the shell
+  thickness to millimetres was itself exact, and otherwise carrying that
+  conversion's own proven displacement as its bound.
 
 A cup always has a wall. `MinWallThickness` is never nil for a cup whose exact
-morphology recheck succeeds.
+morphology recheck succeeds. The theorem itself — which value the wall reading
+takes — is unchanged; only the number `t`'s own exactness depends on the unit
+conversion that produced it.
 
 ### 4.2 Proof
 

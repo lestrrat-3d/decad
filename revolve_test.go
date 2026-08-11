@@ -95,11 +95,14 @@ func requireVolume(t *testing.T, b *decad.Body, want float64) {
 	require.InDelta(t, want, got, 1e-9*math.Max(1, want))
 }
 
-func requireBounds(t *testing.T, b *decad.Body, minX, minY, minZ, maxX, maxY, maxZ float64) {
+// requireBounds asserts a body's Bounds() against the caller's expected
+// values and its PROVEN exactness: each call site states the
+// exactness its own geometry proves, never a blanket assumption.
+func requireBounds(t *testing.T, b *decad.Body, wantExact decad.Exactness, minX, minY, minZ, maxX, maxY, maxZ float64) {
 	t.Helper()
 	bounds, err := b.Bounds()
 	require.NoError(t, err)
-	require.Equal(t, decad.Exact, bounds.Exactness)
+	require.Equal(t, wantExact, bounds.Exactness)
 	require.InDelta(t, minX, bounds.Min.X, 1e-9)
 	require.InDelta(t, minY, bounds.Min.Y, 1e-9)
 	require.InDelta(t, minZ, bounds.Min.Z, 1e-9)
@@ -128,7 +131,7 @@ func TestRevolveFullAnnularCylinder(t *testing.T) {
 	require.InDelta(t, 0.0, c.Value.Y, 1e-9)
 	require.InDelta(t, 0.0, c.Value.Z, 1e-9)
 
-	requireBounds(t, body, 0, -15, -15, 10, 15, 15)
+	requireBounds(t, body, decad.Exact, 0, -15, -15, 10, 15, 15)
 
 	// Topology: two cylinder walls + two planar annuli, no caps and no seam
 	// edges — every junction sweeps to a whole latitude circle with a seam
@@ -200,7 +203,7 @@ func TestRevolveSolidCylinderHasNoInnerFace(t *testing.T) {
 			require.Len(t, f.Loops(), 1, `a disk reaching the axis has no inner loop`)
 		}
 	}
-	requireBounds(t, body, 0, -8, -8, 10, 8, 8)
+	requireBounds(t, body, decad.Exact, 0, -8, -8, 10, 8, 8)
 }
 
 func TestRevolvePartialSweeps(t *testing.T) {
@@ -213,7 +216,7 @@ func TestRevolvePartialSweeps(t *testing.T) {
 	requireVolume(t, quarter, 500*math.Pi)
 	require.Len(t, quarter.Faces(), 6, `four side faces and two caps`)
 	requireManifold(t, quarter)
-	requireBounds(t, quarter, 0, 0, 0, 10, 15, 15)
+	requireBounds(t, quarter, decad.Approximate, 0, 0, 0, 10, 15, 15)
 
 	area, err := quarter.Area()
 	require.NoError(t, err)
@@ -315,7 +318,7 @@ func TestRevolveSphere(t *testing.T) {
 	require.InDelta(t, 5.0, c.Value.X, 1e-9)
 	require.InDelta(t, 0.0, c.Value.Y, 1e-9)
 	require.InDelta(t, 0.0, c.Value.Z, 1e-9)
-	requireBounds(t, body, 0, -5, -5, 10, 5, 5)
+	requireBounds(t, body, decad.Exact, 0, -5, -5, 10, 5, 5)
 
 	n, err := body.Faces()[0].NormalAt(r3.NewVec(5, 5, 0))
 	require.NoError(t, err)
@@ -366,7 +369,7 @@ func TestRevolveTorus(t *testing.T) {
 	require.InDelta(t, 0.0, c.Value.X, 1e-9)
 	require.InDelta(t, 0.0, c.Value.Y, 1e-9)
 	require.InDelta(t, 0.0, c.Value.Z, 1e-9)
-	requireBounds(t, body, -3, -13, -13, 3, 13, 13)
+	requireBounds(t, body, decad.Exact, -3, -13, -13, 3, 13, 13)
 
 	// Outward normals on the outer and inner equators.
 	f := body.Faces()[0]
@@ -470,7 +473,7 @@ func TestRevolveCone(t *testing.T) {
 	_, err = wall.NormalAt(r3.NewVec(10, 0, 0))
 	require.ErrorIs(t, err, decad.ErrDegenerate, `the apex has no normal`)
 
-	requireBounds(t, body, 0, -5, -5, 10, 5, 5)
+	requireBounds(t, body, decad.Exact, 0, -5, -5, 10, 5, 5)
 }
 
 func TestRevolveNegativeSideRegion(t *testing.T) {
@@ -490,7 +493,7 @@ func TestRevolveNegativeSideRegion(t *testing.T) {
 	full, err := doc.Revolve(s, s.Profiles()[0], uAxis, decad.FullRevolution{})
 	require.NoError(t, err)
 	requireVolume(t, full, 2000*math.Pi)
-	requireBounds(t, full, 0, -15, -15, 10, 15, 15)
+	requireBounds(t, full, decad.Exact, 0, -15, -15, 10, 15, 15)
 	requireManifold(t, full)
 
 	s2, err := w.CreateSketch(w.XY())
@@ -502,7 +505,7 @@ func TestRevolveNegativeSideRegion(t *testing.T) {
 	quarter, err := decad.New().Revolve(s2, s2.Profiles()[0], uAxis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
 	require.NoError(t, err)
 	requireVolume(t, quarter, 500*math.Pi)
-	requireBounds(t, quarter, 0, -15, -15, 10, 0, 0)
+	requireBounds(t, quarter, decad.Approximate, 0, -15, -15, 10, 0, 0)
 	requireManifold(t, quarter)
 }
 
@@ -517,13 +520,13 @@ func TestRevolveExtents(t *testing.T) {
 		body, err := revolve(t, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Against})
 		require.NoError(t, err)
 		requireVolume(t, body, 500*math.Pi)
-		requireBounds(t, body, 0, 0, -15, 10, 15, 0)
+		requireBounds(t, body, decad.Approximate, 0, 0, -15, 10, 15, 0)
 	})
 	t.Run("Symmetric", func(t *testing.T) {
 		body, err := revolve(t, decad.SymmetricAngle{A: units.Degrees(90)})
 		require.NoError(t, err)
 		requireVolume(t, body, 1000*math.Pi)
-		requireBounds(t, body, 0, 0, -15, 10, 15, 15)
+		requireBounds(t, body, decad.Approximate, 0, 0, -15, 10, 15, 15)
 	})
 	t.Run("SymmetricFullLength", func(t *testing.T) {
 		body, err := revolve(t, decad.SymmetricAngle{A: units.Degrees(90), FullLength: true})
@@ -537,7 +540,7 @@ func TestRevolveExtents(t *testing.T) {
 		// The sweep spans φ ∈ [−60°, +30°]: the y minimum is the INNER
 		// wall at the −60° cap (cos never reaches zero on the interval),
 		// the z extremes the outer wall at each cap.
-		requireBounds(t, body, 0, 5*math.Cos(math.Pi/3), -15*math.Sin(math.Pi/3), 10, 15, 15*math.Sin(math.Pi/6))
+		requireBounds(t, body, decad.Approximate, 0, 5*math.Cos(math.Pi/3), -15*math.Sin(math.Pi/3), 10, 15, 15*math.Sin(math.Pi/6))
 	})
 	t.Run("FullTurnAsAngle", func(t *testing.T) {
 		// 360° stated as an angle IS a full revolution: the caps would
@@ -896,7 +899,7 @@ func TestRevolveAboutEdgeAxis(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, body.IsSolid())
 	requireVolume(t, body, 2000*math.Pi)
-	requireBounds(t, body, 0, -15, -15, 10, 15, 15)
+	requireBounds(t, body, decad.Exact, 0, -15, -15, 10, 15, 15)
 
 	// The host is a dependency, not an operand: it stays live.
 	require.Contains(t, doc.Bodies(), host)
@@ -1346,4 +1349,37 @@ func TestRevolveConcaveGrooveCapEdges(t *testing.T) {
 	}
 	require.Equal(t, 1, tori)
 	require.Equal(t, 2, caps, `one cap edge in each cap plane`)
+}
+
+func TestRevolveBoundsBoundEnclosesSweptExtreme(t *testing.T) {
+	// The 10×8 rectangle (one edge on the axis) revolved 1 radian about the
+	// sketch u axis: the extreme normal to the plane is 8·sin(1), which no
+	// float64 holds exactly — the box carries the proven bound its own
+	// certified sine bracket derives, never math.Sin's own
+	// undocumented accuracy.
+	s, p := solidSketch(t)
+	doc := decad.New()
+	body, err := doc.Revolve(s, p, uAxis, decad.AngleExtent{A: units.Radians(1), Dir: decad.Along})
+	require.NoError(t, err)
+	bounds, err := body.Bounds()
+	require.NoError(t, err)
+	require.Equal(t, decad.Approximate, bounds.Exactness)
+	boundMM, err := bounds.Bound.In(units.Millimeter)
+	require.NoError(t, err)
+	require.Greater(t, boundMM, 0.0)
+	require.LessOrEqual(t, boundMM, 1e-9)
+	const truth = 6.7317678784631720532
+	require.GreaterOrEqual(t, bounds.Max.Z+boundMM, truth)
+	require.LessOrEqual(t, bounds.Max.Z-boundMM, truth)
+}
+
+func TestRevolveBoundsExactFullTurn(t *testing.T) {
+	// The same rectangle under a full revolution: every world axis's swept
+	// extreme is the exact ±8 amplitude of an axis-aligned frame, so the box
+	// is Exact — the test that stops a blanket Approximate.
+	s, p := solidSketch(t)
+	doc := decad.New()
+	body, err := doc.Revolve(s, p, uAxis, decad.FullRevolution{})
+	require.NoError(t, err)
+	requireBounds(t, body, decad.Exact, 0, -8, -8, 10, 8, 8)
 }

@@ -947,7 +947,7 @@ func TestShellCupDownstream(t *testing.T) {
 		report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(1)))
 		require.NoError(t, err)
 		br := report.Bodies[0]
-		requireWall(t, br, th)
+		requireWall(t, br, decad.Exact, th)
 		require.Equal(t, decad.Sound, br.Status)
 		require.True(t, report.Trustworthy())
 	})

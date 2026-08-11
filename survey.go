@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"math/big"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -40,9 +41,13 @@ const (
 
 // wallOutcome is one body's wall reading: ok=false is an undecided survey;
 // reason distinguishes its cause. reading == nil (with ok) is the proven
-// determination that no wall exists.
+// determination that no wall exists. bound is the PROVEN error bound beside
+// reading (millimetres), zero only where the arm that produced reading is
+// itself exactly representable — never asserted, always the arm's own
+// computed figure.
 type wallOutcome struct {
 	reading *float64 // millimetres
+	bound   float64  // millimetres; meaningful only when reading != nil
 	ok      bool
 	reason  surveyReason
 }
@@ -61,9 +66,13 @@ type undercutOutcome struct {
 
 // radiusOutcome is one body's tightest concave radius: ok=false is
 // undecided and reason distinguishes its cause; reading == nil (with ok) is
-// the proven all-convex answer.
+// the proven all-convex answer. bound is the PROVEN error bound beside
+// reading (millimetres), zero only where the winning walk's own radius is
+// exactly representable — a recorded CircleSeg's millimetre number, never a
+// math.Hypot evaluation.
 type radiusOutcome struct {
 	reading *float64 // millimetres
+	bound   float64  // millimetres; meaningful only when reading != nil
 	ok      bool
 	reason  surveyReason
 }
@@ -250,8 +259,9 @@ func prismWall(budget *workBudget, pp prismPayload, alpha float64) (wallOutcome,
 		return wallOutcome{}, nil
 	}
 	best := math.Inf(1)
+	bestBound := 0.0
 	if pinch {
-		best = 0
+		best, bestBound = 0, 0
 	}
 	if out.subTolFar && best != 0 {
 		// Same rule as the revolve path: a dropped off-junction
@@ -261,14 +271,40 @@ func prismWall(budget *workBudget, pp prismPayload, alpha float64) (wallOutcome,
 	}
 	if out.hasSpan && out.span < best {
 		best = out.span
+		bestBound = math.Max(out.spanBound, out.maxCandBound)
 	}
 	if out.inradius >= h/2-k.tol && h < best {
 		best = h
+		bestBound = heightArmBound(pp)
 	}
 	if math.IsInf(best, 1) {
 		return wallOutcome{ok: true}, nil
 	}
-	return wallOutcome{reading: &best, ok: true}, nil
+	if isNonFinite(bestBound) {
+		// A candidate this arm relied on could not be bounded: the reading
+		// is not one this evaluator can stand behind (see runBudget's own
+		// doc comment), so it is undecided rather than published with an
+		// unusable bound.
+		return wallOutcome{}, nil
+	}
+	return wallOutcome{reading: &best, bound: bestBound, ok: true}, nil
+}
+
+// heightArmBound is prismWall's height-arm bound: the payload's own two axial
+// displacements (docs/evaluator-design.md §5), one per end, SUMMED rather
+// than maxed — the two ends move independently and in opposite senses for a
+// height reading (CLAUDE.md's "every level-derived reading takes it") — plus
+// the float subtraction z1 − z0's own rounding, measured exactly against the
+// rational difference the same way boolean_body.go's own volume/centroid
+// readings measure a held float against its exact rational.
+func heightArmBound(pp prismPayload) float64 {
+	z0R, z1R := floatRat(pp.z0), floatRat(pp.z1)
+	if z0R == nil || z1R == nil {
+		return math.Inf(1)
+	}
+	h := pp.z1 - pp.z0
+	subErr := ratAbsDiff(new(big.Rat).Sub(z1R, z0R), h)
+	return absSumUpper(pp.z0Delta, pp.z1Delta, subErr)
 }
 
 // revolveWall is the spanning-ball reading of a revolved body, computed in
@@ -383,13 +419,14 @@ func revolveWall(budget *workBudget, rp revolvePayload, alpha float64) (wallOutc
 		return wallOutcome{}, nil
 	}
 	best := math.Inf(1)
+	bestBound := 0.0
 	if pinch {
-		best = 0
+		best, bestBound = 0, 0
 	}
 	if wedgeSpans && axisTouch {
 		// The partial sweep's caps meet along the axis at the sweep angle
 		// itself: a dihedral within the allowance, ground to zero.
-		best = 0
+		best, bestBound = 0, 0
 	}
 	if out.subTolFar && best != 0 {
 		// A dropped off-junction sub-tolerance disk could be a real web
@@ -400,11 +437,15 @@ func revolveWall(budget *workBudget, rp revolvePayload, alpha float64) (wallOutc
 	}
 	if out.hasSpan && out.span < best {
 		best = out.span
+		bestBound = math.Max(out.spanBound, out.maxCandBound)
 	}
 	if math.IsInf(best, 1) {
 		return wallOutcome{ok: true}, nil
 	}
-	return wallOutcome{reading: &best, ok: true}, nil
+	if isNonFinite(bestBound) {
+		return wallOutcome{}, nil
+	}
+	return wallOutcome{reading: &best, bound: bestBound, ok: true}, nil
 }
 
 // facesByRole indexes a body's faces by their own-step feature role.
@@ -618,18 +659,61 @@ func prismMinRadius(pp prismPayload) (radiusOutcome, bool) {
 	if err != nil {
 		return radiusOutcome{}, false
 	}
+	recLoops := append([]LoopRecord{pp.profile.Outer}, pp.profile.Holes...)
 	best := math.Inf(1)
-	for _, loop := range loops {
+	bestBound := 0.0
+	for li, loop := range loops {
 		for _, w := range loop {
 			if w.isCircular() && w.th1 < w.th0 && w.radius < best {
 				best = w.radius
+				bestBound = concaveWalkRadiusBound(recLoops[li], w)
 			}
 		}
 	}
 	if math.IsInf(best, 1) {
 		return radiusOutcome{ok: true}, true
 	}
-	return radiusOutcome{reading: &best, ok: true}, true
+	if isNonFinite(bestBound) {
+		return radiusOutcome{}, false
+	}
+	return radiusOutcome{reading: &best, bound: bestBound, ok: true}, true
+}
+
+// concaveWalkRadiusBound is the proven bound on one concave walk's own
+// radius: a CircleSeg's radius is the record's own millimetre number
+// (extrude.go's walkOf, CircleSeg arm), so it is exact; an ArcSeg's is
+// math.Hypot(Start−Center) (extrude.go's ArcSeg arm), so it carries the same
+// rational sqrt bracket circularLengthInterval already reads that segment
+// kind's radius through — computed here directly rather than through that
+// function's length-scaled result. A coalesced walk's own several original
+// segments share one center and radius by construction, so its first
+// original segment speaks for the whole walk.
+func concaveWalkRadiusBound(loop LoopRecord, w sideWalk) float64 {
+	if len(w.segs) == 0 {
+		return math.Inf(1)
+	}
+	idx := w.segs[0]
+	if idx < 0 || idx >= len(loop.Segments) {
+		return math.Inf(1)
+	}
+	seg, err := normalizeSegment(loop.Segments[idx])
+	if err != nil {
+		return math.Inf(1)
+	}
+	arc, ok := seg.(ArcSeg)
+	if !ok {
+		// A CircleSeg (or anything else this survey ever admits as a
+		// concave walk): the record's own millimetre radius, exact.
+		return 0
+	}
+	dx := exactCoordinateDelta(arc.Start.U, arc.Center.U)
+	dy := exactCoordinateDelta(arc.Start.V, arc.Center.V)
+	r2 := new(big.Rat).Add(new(big.Rat).Mul(dx, dx), new(big.Rat).Mul(dy, dy))
+	rLo, rHi := ratSqrtDown(r2), ratSqrtUp(r2)
+	if isNonFinite(rLo) || isNonFinite(rHi) {
+		return math.Inf(1)
+	}
+	return math.Max(upRound(w.radius-rLo), upRound(rHi-w.radius))
 }
 
 // revolveMinRadius is the tightest concave radius over a revolved body's
@@ -644,11 +728,13 @@ func revolveMinRadius(rp revolvePayload) (radiusOutcome, bool) {
 		return radiusOutcome{}, false
 	}
 	best := math.Inf(1)
+	bestBound := 0.0
 	found := false
-	take := func(v float64) {
+	take := func(v, vBound float64) {
 		found = true
 		if v < best {
 			best = v
+			bestBound = vBound
 		}
 	}
 	for _, loop := range loops {
@@ -657,10 +743,17 @@ func revolveMinRadius(rp revolvePayload) (radiusOutcome, bool) {
 				continue
 			}
 			if !w.isCircular() {
-				l := math.Hypot(w.tanInU, w.tanInV)
-				nr := -w.tanInU / l
-				if nr < -survAngTol {
-					take(math.Min(w.startV, w.endV) / -nr)
+				// Neither w.tanInU/V nor w.startV/endV carries its own bound
+				// (they are the walk's own recorded coordinates, read as
+				// exact leaves throughout this survey); the composition
+				// below — a Hypot and two quotients — is what this arm's
+				// own arithmetic contributes.
+				lBS := boundedHypot(w.tanInU, w.tanInV)
+				nrBS := boundedQuotient(-w.tanInU, 0, lBS.value, lBS.bound)
+				if nrBS.value < -survAngTol {
+					minSV := math.Min(w.startV, w.endV)
+					vBS := boundedQuotient(minSV, 0, -nrBS.value, nrBS.bound)
+					take(vBS.value, vBS.bound)
 				}
 				continue
 			}
@@ -669,7 +762,7 @@ func revolveMinRadius(rp revolvePayload) (radiusOutcome, bool) {
 				sigma = -1
 			}
 			if sigma < 0 {
-				take(w.radius) // the meridian itself curves away from material
+				take(w.radius, 0) // the meridian's own recorded radius, exact
 			}
 			lo, hi := math.Min(w.th0, w.th1), math.Max(w.th0, w.th1)
 			cands := []float64{lo, hi}
@@ -681,19 +774,28 @@ func revolveMinRadius(rp revolvePayload) (radiusOutcome, bool) {
 				}
 			}
 			for _, th := range cands {
-				nr := sigma * math.Sin(th)
-				if nr >= -survAngTol {
+				// The sine's own certified enclosure (radianTrigBounds), not
+				// math.Sin's undocumented accuracy — the same rule
+				// revolveBoundsContext's own sweep extremes take.
+				sinBS, _ := radianTrigBounds(th)
+				nrBS := boundedMul(exactScalar(sigma), sinBS)
+				if nrBS.value >= -survAngTol {
 					continue
 				}
-				rho := w.cV + w.radius*math.Sin(th)
-				take(rho / -nr)
+				rhoBS := boundedAdd(exactScalar(w.cV), boundedMul(exactScalar(w.radius), sinBS))
+				negNrBS := measuredScalar(-nrBS.value, nrBS.bound)
+				resultBS := boundedQuotient(rhoBS.value, rhoBS.bound, negNrBS.value, negNrBS.bound)
+				take(resultBS.value, resultBS.bound)
 			}
 		}
 	}
 	if !found {
 		return radiusOutcome{ok: true}, true
 	}
-	return radiusOutcome{reading: &best, ok: true}, true
+	if isNonFinite(bestBound) {
+		return radiusOutcome{}, false
+	}
+	return radiusOutcome{reading: &best, bound: bestBound, ok: true}, true
 }
 
 // cupWalks resolves one cup region loop into its coalesced walks — the same
@@ -874,7 +976,7 @@ func cupWall(budget *workBudget, cp cupPayload, alpha float64) (wallOutcome, err
 		return wallOutcome{reading: &zero, ok: true}, nil
 	}
 
-	return wallOutcome{reading: &t, ok: true}, nil
+	return wallOutcome{reading: &t, bound: cp.thicknessDelta, ok: true}, nil
 }
 
 // cupUndercuts surveys a cup's faces against the pull (docs/modify-design.md
@@ -1000,9 +1102,11 @@ func cupMinRadius(cp cupPayload) (radiusOutcome, bool) {
 // outcome: DiagWallTooThin / DiagUndercut (Violating) when a stated spec is
 // proven to fail, and the per-survey DiagUndecided* (Suspect) when an asked
 // question is undecided or a stated spec is straddled (verification §1.1/§6).
-// A Sound survey emits nothing. Scalar readings are closed-form Exact with a
-// zero bound; a cap-blend undercut survey can instead use a bounded normal
-// range and leave an individual patch undecided.
+// A Sound survey emits nothing. Scalar readings are closed-form, each Exact
+// only where its own arm proved a zero bound — a pinch reading or a sweep
+// height with no axial displacement — and Approximate with the bound its own
+// arithmetic derived otherwise; a cap-blend undercut survey can instead use a
+// bounded normal range and leave an individual patch undecided.
 func runSurveys(budget *workBudget, br *BodyReport, cfg verifyConfig) ([]Diagnostic, error) {
 	if err := wallBudgetErr(budget); err != nil {
 		return nil, err
@@ -1041,10 +1145,10 @@ func runSurveys(budget *workBudget, br *BodyReport, cfg verifyConfig) ([]Diagnos
 				"facetedPayload wall survey support is not implemented; use an analytic body or wait for faceted wall support",
 			))
 		case out.reading != nil:
-			m := exactLengthMeasurement(*out.reading)
+			m := lengthMeasurement(*out.reading, out.bound)
 			br.MinWallThickness = &m
 			tool := cfg.wall.tool
-			switch intervalVerdict(*out.reading, 0, cfg.toolMM) {
+			switch intervalVerdict(*out.reading, out.bound, cfg.toolMM) {
 			case -1:
 				obs := m
 				diags = append(diags, Diagnostic{
@@ -1142,7 +1246,7 @@ func runSurveys(budget *workBudget, br *BodyReport, cfg verifyConfig) ([]Diagnos
 				"facetedPayload concave-radius survey support is not implemented; use an analytic body or wait for faceted radius support",
 			))
 		case out.reading != nil:
-			m := exactLengthMeasurement(*out.reading)
+			m := lengthMeasurement(*out.reading, out.bound)
 			br.MinRadius = &m
 		}
 		if err := wallBudgetErr(budget); err != nil {
@@ -1173,9 +1277,11 @@ func surveyRefusalDiagnostic(
 	}
 }
 
-// exactLengthMeasurement wraps a closed-form millimetre reading.
-func exactLengthMeasurement(mm float64) Measurement {
-	return Measurement{Value: units.Millimeters(mm), Exactness: Exact, Bound: units.Millimeters(0)}
+// lengthMeasurement wraps a survey reading with the PROVEN bound its own arm
+// computed: Exact only where that arm's own arithmetic proved bound zero,
+// Approximate otherwise — never asserted (docs/verification-design.md §6).
+func lengthMeasurement(mm, bound float64) Measurement {
+	return Measurement{Value: units.Millimeters(mm), Exactness: exactnessOf(bound), Bound: units.Millimeters(bound)}
 }
 
 // intervalVerdict decides a stated spec on the proven interval
