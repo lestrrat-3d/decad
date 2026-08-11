@@ -128,6 +128,79 @@ func singleFacetBoolMesh(t *testing.T, tri [3]r3.Vec) *boolMesh {
 	return bm
 }
 
+// TestContactMemoRepeatsTheClassifier pins that contactMemo.classify serves a
+// repeat ask for the same facet pair from its store rather than recomputing
+// it, and that the served answer is coordinate-identical to a direct
+// triTriClassify call — for a genuine contact and for a miss alike.
+//
+// A repeat ask that recomputes returns the same answer as one served from the
+// store, so no comparison of the two answers can tell them apart, and neither
+// can the store's own size: a recompute writes back the same key. What
+// separates them is WHICH facets the second ask reads. So each half below
+// rebinds the memo's operand mesh between the two asks, to one whose facet 0
+// classifies DIFFERENTLY against the same facet of ma — proven by a direct
+// triTriClassify on the swapped pair. A second ask that recomputed would have
+// to report that different answer; reporting the first one is only possible
+// from the store. Rebinding a live memo is a probe this test alone performs:
+// production binds ma/mb once per evaluateBoolean call precisely so a stored
+// answer can never be read back for another operand pair.
+func TestContactMemoRepeatsTheClassifier(t *testing.T) {
+	// A facet held in the plane z = 0 and one held in the plane x = 0: the
+	// planes meet along the y axis, and each triangle's own chord along that
+	// axis overlaps the other's, so the pair meets in a positive-length
+	// segment running along neither facet's own edge.
+	a := [3]r3.Vec{{X: -5, Y: -5, Z: 0}, {X: 5, Y: -5, Z: 0}, {X: 0, Y: 5, Z: 0}}
+	b := [3]r3.Vec{{X: 0, Y: -3, Z: -3}, {X: 0, Y: -3, Z: 3}, {X: 0, Y: 3, Z: 0}}
+	// Far enough from a that the pair cannot meet at all.
+	miss := [3]r3.Vec{{X: 100, Y: 0, Z: 0}, {X: 101, Y: 0, Z: 0}, {X: 100, Y: 1, Z: 0}}
+
+	direct := classify(t, a, b)
+	require.Equal(t, contactSegment, direct.kind)
+	require.Equal(t, contactNone, classify(t, a, miss).kind, `the two operands below give the same facet of A opposite answers`)
+
+	bmA, bmB, bmMiss := singleFacetBoolMesh(t, a), singleFacetBoolMesh(t, b), singleFacetBoolMesh(t, miss)
+
+	requireSameContact := func(want, got triContact) {
+		t.Helper()
+		require.Equal(t, want.kind, got.kind)
+		require.Equal(t, want.edgeA, got.edgeA)
+		require.Equal(t, want.edgeB, got.edgeB)
+		require.Zero(t, want.p0.x.Cmp(got.p0.x))
+		require.Zero(t, want.p0.y.Cmp(got.p0.y))
+		require.Zero(t, want.p0.z.Cmp(got.p0.z))
+		require.Zero(t, want.p1.x.Cmp(got.p1.x))
+		require.Zero(t, want.p1.y.Cmp(got.p1.y))
+		require.Zero(t, want.p1.z.Cmp(got.p1.z))
+		require.Zero(t, want.sin2.Cmp(got.sin2))
+	}
+
+	memo := newContactMemo(bmA, bmB)
+	first, err := memo.classify(0, 0)
+	require.NoError(t, err)
+	requireSameContact(direct, first)
+
+	memo.mb = bmMiss
+	second, err := memo.classify(0, 0)
+	require.NoError(t, err)
+	require.Equal(t, contactSegment, second.kind, `the second ask was served from the store: a recompute would report the swapped operand's miss`)
+	requireSameContact(first, second)
+	require.Len(t, memo.m, 1, `the pair keeps one entry, under the one key`)
+
+	// A pair that misses is stored too, so a repeat of a non-contact does not
+	// reclassify either. The swap runs the other way round here: the second ask
+	// would report the contact if it recomputed.
+	missMemo := newContactMemo(bmA, bmMiss)
+	first, err = missMemo.classify(0, 0)
+	require.NoError(t, err)
+	require.Equal(t, contactNone, first.kind)
+
+	missMemo.mb = bmB
+	second, err = missMemo.classify(0, 0)
+	require.NoError(t, err)
+	require.Equal(t, contactNone, second.kind, `the stored miss was served: a recompute would report the swapped operand's segment`)
+	require.Len(t, missMemo.m, 1, `the pair keeps one entry, under the one key`)
+}
+
 // inscribedFan is the held outline of a circle of radius r centred at (cx, 0)
 // in the plane z = 0: the inscribed n-gon, fan-triangulated. The vertices sit
 // at the half-step angles, so an EDGE — not a vertex — faces the y axis at both
@@ -157,7 +230,8 @@ func TestCoplanarCarrierPairIsNotSettledByCoplanarityAlone(t *testing.T) {
 		tb := [3]r3.Vec{{X: 0, Y: 0}, {X: 0, Y: 10}, {X: 10, Y: 0}}
 		require.Equal(t, contactRegion, classify(t, ta, tb).kind)
 
-		near, err := facesNearMiss(t.Context(), singleFacetBoolMesh(t, ta), []int{0}, singleFacetBoolMesh(t, tb), []int{0}, 1)
+		bmA, bmB := singleFacetBoolMesh(t, ta), singleFacetBoolMesh(t, tb)
+		near, err := facesNearMiss(t.Context(), bmA, []int{0}, bmB, []int{0}, 1, newContactMemo(bmA, bmB))
 		require.NoError(t, err)
 		// The gate answers "no near miss" for the whole face pair without
 		// proving one: the pair is left to the mesh pass's own refusal of an

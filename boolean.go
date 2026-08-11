@@ -390,7 +390,11 @@ func evaluateBoolean(ctx context.Context, op OpKind, a, b *Body) (booleanEvaluat
 	if err := ctx.Err(); err != nil {
 		return booleanEvaluation{}, err
 	}
-	if err := refuseUndecidableProximity(ctx, ma, mb, bmA, bmB); err != nil {
+	// One memo per call, over exactly the two prepared operand tessellations
+	// the gate and the mesh pass both walk; it is dropped when the call
+	// returns (boolean_mesh.go, contactMemo).
+	memo := newContactMemo(bmA, bmB)
+	if err := refuseUndecidableProximity(ctx, ma, mb, bmA, bmB, memo); err != nil {
 		if errors.Is(err, ErrUnsupported) {
 			err = expectedBoolean(booleanExpectedContact, err)
 		}
@@ -399,7 +403,7 @@ func evaluateBoolean(ctx context.Context, op OpKind, a, b *Body) (booleanEvaluat
 	if err := ctx.Err(); err != nil {
 		return booleanEvaluation{}, err
 	}
-	kept, sinMin, err := meshBoolean(ctx, op, bmA, bmB)
+	kept, sinMin, err := meshBoolean(ctx, op, bmA, bmB, memo)
 	if err != nil {
 		return booleanEvaluation{}, err
 	}
@@ -538,7 +542,7 @@ func operandSymDiff(b *Body, m *Mesh) float64 {
 // It may refuse a valid model whose operands genuinely pass within a chord
 // tolerance of each other. That is the accepted price; the alternative is a
 // verdict decided by chord placement.
-func refuseUndecidableProximity(ctx context.Context, ma, mb *Mesh, bmA, bmB *boolMesh) error {
+func refuseUndecidableProximity(ctx context.Context, ma, mb *Mesh, bmA, bmB *boolMesh, memo *contactMemo) error {
 	// One counter spans the grouping and the pair scan it feeds: the grouping
 	// walks every facet and every new source face's edges, which is work the
 	// §7.2 interval covers just as the pair scan is.
@@ -568,7 +572,7 @@ func refuseUndecidableProximity(ctx context.Context, ma, mb *Mesh, bmA, bmB *boo
 			// both sides of that comparison are float-computed: pad the
 			// threshold so the rounding can only ever ADD a refusal, never
 			// drop one. A relative 1e-9 is nothing against any real clearance.
-			near, err := facesNearMiss(ctx, bmA, ga.facets, bmB, gb.facets, slack*(1+1e-9))
+			near, err := facesNearMiss(ctx, bmA, ga.facets, bmB, gb.facets, slack*(1+1e-9), memo)
 			if err != nil {
 				return err
 			}
@@ -592,7 +596,7 @@ func refuseUndecidableProximity(ctx context.Context, ma, mb *Mesh, bmA, bmB *boo
 // left to that verdict rather than pre-empted here. That deferral is sound only
 // while that refusal happens: docs/interference-design.md §5.2 states what must
 // settle such a pair before the refusal is removed.
-func facesNearMiss(ctx context.Context, bmA *boolMesh, fis []int, bmB *boolMesh, fjs []int, slack float64) (bool, error) {
+func facesNearMiss(ctx context.Context, bmA *boolMesh, fis []int, bmB *boolMesh, fjs []int, slack float64, memo *contactMemo) (bool, error) {
 	var closeA, closeB []int
 	seenA := map[int]bool{}
 	seenB := map[int]bool{}
@@ -610,7 +614,7 @@ func facesNearMiss(ctx context.Context, bmA *boolMesh, fis []int, bmB *boolMesh,
 			}
 			ta := triCorners(bmA, i)
 			tb := triCorners(bmB, j)
-			c, err := triTriClassify(ta, tb, xtriCorners(bmA, i), xtriCorners(bmB, j), bmA.norms[i], bmB.norms[j])
+			c, err := memo.classify(i, j)
 			if err != nil {
 				return false, err
 			}

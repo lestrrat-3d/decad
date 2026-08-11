@@ -453,6 +453,34 @@ func TestCutDrillsHole(t *testing.T) {
 	require.Equal(t, []decad.StepRef{0, 2}, last.Inputs)
 }
 
+// TestBooleanUnionRodThroughPlateGeometryUnchanged is the memo's pinning
+// test: the plate cap and rod wall facets are exactly the pair
+// contactMemo (boolean_mesh.go) now serves twice — once to the proximity
+// gate, once to the mesh pass — from one stored classification. It asserts
+// on computed geometry rather than on the memo directly: a memo that
+// returned a stale or mis-keyed contact for the second ask would change this
+// volume or break watertightness.
+func TestBooleanUnionRodThroughPlateGeometryUnchanged(t *testing.T) {
+	doc := decad.New()
+	plate := boxBody(t, doc, 0, 0, 20, 20, 8)
+	rod := translated(t, diskBody(t, doc, 12, 10, 6), 0, 0, -6)
+
+	got, err := decad.Union(plate, rod)
+	require.NoError(t, err)
+	require.Len(t, got.Lumps(), 1)
+	requireBodyWatertight(t, got)
+
+	// Plate 20×20×8 plus the rod's full 20 mm height, minus its 8 mm-tall
+	// overlap with the plate counted twice.
+	analytic := 3200.0 + math.Pi*36*20 - math.Pi*36*8
+	vol, err := got.Volume()
+	require.NoError(t, err)
+	bound := boundMM3(t, vol)
+	require.Positive(t, bound)
+	require.LessOrEqual(t, math.Abs(volumeMM(t, vol)-analytic), bound,
+		`the analytic volume lies within the proven bound`)
+}
+
 func TestCutEmbeddedToolMakesVoid(t *testing.T) {
 	doc := decad.New()
 	plate := boxBody(t, doc, 0, 0, 20, 20, 8)
