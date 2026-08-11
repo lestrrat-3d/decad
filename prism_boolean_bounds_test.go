@@ -20,14 +20,16 @@ import (
 // body rather than to the actual error); the closed forms below are the
 // test oracle, so nothing here is sampled.
 
-// discBody extrudes a radius-r circle centered at (cx, cy) into an h mm
-// prism, on the shared plane every fixture in this file draws from.
-func discBody(t *testing.T, doc *decad.Document, cx, cy, r, h float64) *decad.Body {
+// discBody extrudes a radius-r circle centered at (cx, 0) into an h mm
+// prism, on the shared plane every fixture using it draws from. Every caller
+// centers its own y at 0 — the pair geometry these fixtures need only ever
+// varies along one axis — so this helper takes no separate cy.
+func discBody(t *testing.T, doc *decad.Document, cx, r, h float64) *decad.Body {
 	t.Helper()
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	require.NoError(t, err)
-	center := s.CreatePoint(cx, cy)
+	center := s.CreatePoint(cx, 0)
 	s.Fix(center)
 	s.CreateCircle(center, r)
 	_, err = s.Solve(t.Context())
@@ -87,8 +89,8 @@ func TestPrismUnionCoplanarCircleLensBounds(t *testing.T) {
 			want := twoCircleUnion(tc.centerDist, tc.bigR, tc.smallR, tc.h)
 
 			doc := decad.New()
-			a := discBody(t, doc, 0, 0, tc.bigR, tc.h)
-			b := discBody(t, doc, tc.centerDist, 0, tc.smallR, tc.h)
+			a := discBody(t, doc, 0, tc.bigR, tc.h)
+			b := discBody(t, doc, tc.centerDist, tc.smallR, tc.h)
 			got, err := decad.Union(a, b)
 			require.NoError(t, err)
 

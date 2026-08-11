@@ -1649,6 +1649,30 @@ func (ig *regionIntegrals) addCircular(
 }
 
 // lerp2 returns the point at parameter t on the segment start→end.
+//
+// At the two natural bounds the answer is the record's own coordinate: the
+// parameterization is P(t) = start + t·(end − start), so P(0) is start and P(1)
+// is end, exactly. Those two cases therefore return the endpoint verbatim
+// instead of evaluating the formula, whose float rounding need not land back on
+// it — start + (end − start) can miss end by an ulp whenever the difference
+// itself rounds. That is not a repair of the input: it is the same value the
+// exact-rational twin ratLerp already returns at both bounds, and the same rule
+// seam.go's edgeJoin already applies when it reads an uncut bound
+// (TStart == 0 or TEnd == 1) off the record rather than off sketch's node.
+//
+// Reproducing the endpoint matters to every consumer that rebuilds geometry
+// from a walk and then compares it against the record: buildPrismScene
+// (prism_boolean.go) creates one sketch point per walked endpoint, so a walk
+// that missed a whole segment's own vertex by an ulp would hand sketch two
+// distinct points where the record states one, and the region sketch then
+// admits on its proximity threshold would fail the seam's loop-closure
+// falsifier at RecordProfile.
 func lerp2(start, end Point2, t float64) (float64, float64) {
+	switch t {
+	case 0:
+		return start.U, start.V
+	case 1:
+		return end.U, end.V
+	}
 	return start.U + t*(end.U-start.U), start.V + t*(end.V-start.V)
 }

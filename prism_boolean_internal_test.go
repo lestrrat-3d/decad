@@ -12,9 +12,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// This file is docs/prism-boolean-design.md PR1's per-gate (G1-G6, §3.1)
+// This file is docs/prism-boolean-design.md's per-gate (G1-G6, §3.1)
 // white-box test suite: each gate is isolated directly against
-// admitPrismPair/tryPrismUnion so a miss is confirmed precisely, without
+// admitPrismPair/tryPrismBoolean so a miss is confirmed precisely, without
 // depending on whichever refusal the mesh path's own fallback happens to
 // produce for a given geometry (prism_boolean_test.go covers that richer,
 // public-API shape separately). A synthetic prismPayload is used where no
@@ -43,7 +43,7 @@ func synthLineLoop() LoopRecord {
 }
 
 // synthRectLoop is a proper closed, CCW rectangular loop — the shape G5/G6's
-// full tryPrismUnion tests need, since (unlike admitPrismPair's own gates)
+// full tryPrismBoolean tests need, since (unlike admitPrismPair's own gates)
 // resolution actually arranges the operands' geometry through sketch.
 func synthRectLoop(u0, v0, u1, v1 float64) LoopRecord {
 	return LoopRecord{Segments: []CurveSegment{
@@ -221,12 +221,12 @@ func TestPrismBooleanGateG6RestrictsUnionToHoleFreeOperands(t *testing.T) {
 
 	a := &Body{payload: holeFree}
 	b := &Body{payload: holed}
-	_, ok, err := tryPrismUnion(t.Context(), OpUnion, a, b)
+	_, ok, err := tryPrismBoolean(t.Context(), OpUnion, a, b)
 	require.NoError(t, err)
 	require.False(t, ok, "G6: a holed operand must never admit a Union")
 
 	c := &Body{payload: overlapping}
-	_, ok, err = tryPrismUnion(t.Context(), OpUnion, a, c)
+	_, ok, err = tryPrismBoolean(t.Context(), OpUnion, a, c)
 	require.NoError(t, err)
 	require.True(t, ok, "a hole-free pair otherwise identical clears G6")
 }
@@ -262,7 +262,7 @@ func TestPrismUnionReexpressedSplitFallsBack(t *testing.T) {
 	reexpression, err := newPrismReexpression(pa, pb)
 	require.NoError(t, err)
 	require.False(t, reexpression.identity)
-	scene, err := buildPrismUnionScene(newWorkBudget(t.Context()), pa, pb, reexpression)
+	scene, _, err := buildPrismScene(newWorkBudget(t.Context()), pa, pb, reexpression)
 	require.NoError(t, err)
 	profiles, err := prismProfilesContext(t.Context(), scene.Profiles)
 	require.NoError(t, err)
@@ -278,7 +278,7 @@ func TestPrismUnionReexpressedSplitFallsBack(t *testing.T) {
 	}
 	require.True(t, split, "the overlapping rectangles must produce a split boundary")
 
-	_, ok, err := tryPrismUnion(t.Context(), OpUnion, &Body{payload: pa}, &Body{payload: pb})
+	_, ok, err := tryPrismBoolean(t.Context(), OpUnion, &Body{payload: pa}, &Body{payload: pb})
 	require.NoError(t, err)
 	require.False(t, ok, "a re-expressed arrangement with a split boundary must fall back")
 }
@@ -301,7 +301,7 @@ func TestPrismUnionDisplacedSourceSplitFallsBack(t *testing.T) {
 		profile: ProfileRecord{Outer: synthRectLoop(-shift, 0, 10-shift, 10)},
 		frame:   frame, z0: 0, z1: 10, xform: translation,
 	}
-	first, ok, err := tryPrismUnion(t.Context(), OpUnion, &Body{payload: inner}, &Body{payload: containing})
+	first, ok, err := tryPrismBoolean(t.Context(), OpUnion, &Body{payload: inner}, &Body{payload: containing})
 	require.NoError(t, err)
 	require.True(t, ok, "the containing first union must resolve analytically")
 	require.Positive(t, first.sectionDelta, "the nonidentity first union must carry its re-expression displacement")
@@ -319,24 +319,27 @@ func TestPrismUnionDisplacedSourceSplitFallsBack(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, reexpression.identity, "the second union must take the identity re-expression path")
 
-	scene, err := buildPrismUnionScene(newWorkBudget(t.Context()), first, shallow, reexpression)
+	scene, _, err := buildPrismScene(newWorkBudget(t.Context()), first, shallow, reexpression)
 	require.NoError(t, err)
 	profiles, err := prismProfilesContext(t.Context(), scene.Profiles)
 	require.NoError(t, err)
-	split, err := prismUnionProfilesHaveSplitBoundary(newWorkBudget(t.Context()), profiles)
+	split, err := prismProfilesHaveSplitBoundary(newWorkBudget(t.Context()), profiles)
 	require.NoError(t, err)
 	require.True(t, split, "the shallow crossing must create a trimmed edge")
 
-	_, ok, err = tryPrismUnion(t.Context(), OpUnion, &Body{payload: first}, &Body{payload: shallow})
+	_, ok, err = tryPrismBoolean(t.Context(), OpUnion, &Body{payload: first}, &Body{payload: shallow})
 	require.NoError(t, err)
 	require.False(t, ok, "a split boundary with an uncertain source must fall back before recordEdge")
 }
 
-// TestTryPrismUnionOnlyImplementsUnion confirms §4.2's stated PR1 scope: Cut
-// and Intersect fall through unconditionally even where G1-G5 would pass,
-// since PR1 implements region resolution for Union's select-all path only
-// (Cut/Intersect's clean-nesting match is PR2).
-func TestTryPrismUnionOnlyImplementsUnion(t *testing.T) {
+// TestTryPrismBooleanSingleOpenSegmentIsUnresolvedForCutAndIntersect covers
+// Cut and Intersect against a pair whose G1-G5 all pass but whose "loop" is a
+// single open LineSeg (synthLineLoop's own shape — a placeholder G1-G4 never
+// looks past the segment kind for): the private scene bounds no closed region
+// at all, so §4.2's clean-nesting search finds no candidate profile and both
+// ops fall through unresolved (§4.4), not admitted, exactly like any other
+// topology this increment's resolution does not cover.
+func TestTryPrismBooleanSingleOpenSegmentIsUnresolvedForCutAndIntersect(t *testing.T) {
 	frame := canonicalPrismFrame(t)
 	pp := prismPayload{
 		profile: ProfileRecord{Outer: synthLineLoop()},
@@ -346,7 +349,7 @@ func TestTryPrismUnionOnlyImplementsUnion(t *testing.T) {
 	b := &Body{payload: pp}
 
 	for _, op := range []OpKind{OpCut, OpIntersect} {
-		_, ok, err := tryPrismUnion(t.Context(), op, a, b)
+		_, ok, err := tryPrismBoolean(t.Context(), op, a, b)
 		require.NoError(t, err)
 		require.False(t, ok)
 	}
@@ -355,13 +358,13 @@ func TestTryPrismUnionOnlyImplementsUnion(t *testing.T) {
 func TestPrismUnionArrangementCapRejectsLargeLineOnlyScene(t *testing.T) {
 	frame := canonicalPrismFrame(t)
 	pp := prismPayload{
-		profile: ProfileRecord{Outer: synthDenseRectLoop(prismUnionMaxArrangementSegments/8 + 1)},
+		profile: ProfileRecord{Outer: synthDenseRectLoop(prismMaxArrangementSegments/8 + 1)},
 		frame:   frame, z0: 0, z1: 10, xform: r3.Identity(),
 	}
 	a := &Body{payload: pp}
 	b := &Body{payload: pp}
 
-	_, ok, err := tryPrismUnion(t.Context(), OpUnion, a, b)
+	_, ok, err := tryPrismBoolean(t.Context(), OpUnion, a, b)
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.False(t, ok)
 }
@@ -382,7 +385,7 @@ func TestPrismUnionPreservesEndDisplacements(t *testing.T) {
 	pb.z0Delta = 0.5
 	pb.z1Delta = 0.25
 
-	result, ok, err := tryPrismUnion(t.Context(), OpUnion, &Body{payload: pa}, &Body{payload: pb})
+	result, ok, err := tryPrismBoolean(t.Context(), OpUnion, &Body{payload: pa}, &Body{payload: pb})
 	require.NoError(t, err)
 	require.True(t, ok)
 	require.Equal(t, 0.5, result.z0Delta)

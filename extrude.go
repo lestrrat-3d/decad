@@ -861,6 +861,7 @@ func walkOf(seg CurveSegment, work *freeformWork) (segmentWalk, error) {
 			arcRadiusUpper(seg),
 			circularSweepUpper(seg.TStart, seg.TEnd),
 		)
+		pinArcWalkEnds(&w, seg)
 		if iv, ok := circularLengthInterval(seg); ok {
 			w.lengthBound = math.Min(w.lengthBound, intervalFloatError(iv, w.length))
 		}
@@ -942,6 +943,43 @@ func freeformWalk(seg CurveSegment, work *freeformWork) (segmentWalk, error) {
 var errFreeformWalkUncounted = fmt.Errorf(
 	`%w: a free-form segment's walk needs its record's free-form work counter`, ErrUnsupported,
 )
+
+// pinArcWalkEnds states an arc walk's natural bounds as the record's own
+// endpoints. A recorded arc runs Start → End over [0, 1] about Center
+// (record.go), so its value at t = 0 is Start and at t = 1 is End, exactly,
+// while circularWalk reaches those same two points through atan2 and cos/sin —
+// a route that need not land back on them, because the angle it evaluates at
+// the far bound is itself the rounded a0 + sweep. Only the two endpoints are
+// restated; the walk's centre, radius, angles and tangents keep circularWalk's
+// own values, and every reading derived from them keeps its own bound.
+//
+// This is the rule lerp2 (moments.go) applies at a line's own bounds, and the
+// rule seam.go's edgeJoin applies when it reads an uncut bound off the record
+// rather than off sketch's node. It matters for the same reason: buildPrismScene
+// (prism_boolean.go) creates one sketch point per walked endpoint, so a walk
+// that missed the vertex two segments share would offer sketch two points where
+// the record states one, and RecordProfile would then refuse the region the
+// arrangement admits on its own proximity threshold.
+//
+// A trimmed bound is left alone: it has no recorded coordinate of its own, and
+// inventing one is what this seam never does.
+func pinArcWalkEnds(w *segmentWalk, seg ArcSeg) {
+	recorded := func(t float64) (Point2, bool) {
+		switch t {
+		case 0:
+			return seg.Start, true
+		case 1:
+			return seg.End, true
+		}
+		return Point2{}, false
+	}
+	if p, ok := recorded(seg.TStart); ok {
+		w.startU, w.startV = p.U, p.V
+	}
+	if p, ok := recorded(seg.TEnd); ok {
+		w.endU, w.endV = p.U, p.V
+	}
+}
 
 // circularWalk builds the walk geometry of a circular path about (cu, cv).
 func circularWalk(cu, cv, r, th0, th1, radiusUpper, sweepUpper float64) segmentWalk {

@@ -40,7 +40,7 @@ same one-sided shape as the seam's range falsifier.
 
 Per core §2: **v1 uses analytic construction for features, and tessellation for
 every boolean outside the analytic reduction's admitted class.** Feature bodies
-carry analytic faces, as does a `Union` result that reduction admits (§9).
+carry analytic faces, as does a `Union`/`Cut`/`Intersect` result that reduction admits (§9).
 Every measurement carries its own proof: exactly representable results are
 `Exact`; float/transcendental closed forms and tessellated results are
 `Approximate` with proven bounds.
@@ -335,12 +335,14 @@ different topology split but MUST preserve role/query meaning.
 
 Increment 4, the deep end. Strategy:
 
-`docs/prism-boolean-design.md` is the approved analytic reduction PR1
-dispatches from `performBoolean`, ahead of the tessellation path below, for
-co-directional coplanar prism `Union` pairs. `evaluateBoolean` remains this
-section's mesh path; a rejected PR1 candidate and every other operation falls
-back to it unchanged. PR4 separately adds the read-only analytic `Intersect`
-path.
+`docs/prism-boolean-design.md` is the approved analytic reduction
+`performBoolean` dispatches, ahead of the tessellation path below, for
+co-directional coplanar prism pairs: `Union`'s select-all/merge/chain path and
+`Cut`/`Intersect`'s clean-nesting structural match. `evaluateBoolean` remains
+this section's mesh path; a rejected analytic candidate and every other
+operation falls back to it unchanged. PR4 separately adds a read-only analytic
+`Intersect` path for `Verify`'s own interference evaluation (below), which
+still calls `evaluateBoolean` directly.
 
 **Interference evaluation MUST be read-only; committing a public boolean stays
 a wrapper.** Interference PR 1 (`docs/interference-design.md` §11) factors one

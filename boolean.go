@@ -198,17 +198,18 @@ func performBoolean(ctx context.Context, op OpKind, a, b *Body) (*Body, error) {
 	}
 	inputs := []StepRef{a.originStep(), b.originStep()}
 
-	// docs/prism-boolean-design.md PR1: a reject-only analytic reduction for
-	// a co-directional coplanar prism pair, dispatched ahead of the mesh
-	// path. ok=false is never an error — the pair falls back to the
-	// unchanged mesh path below exactly as it did before this design
-	// existed. A non-nil err here is a genuine, typed analytic-resolution
-	// refusal (§3.4) and must propagate rather than reroute to the mesh path:
-	// an ErrUnsupported refusal becomes the public BooleanUnsupportedContact
-	// below, preserving errors.Is(err, ErrUnsupported); ErrDegenerate and
-	// ErrUnrecordableProfile pass through unwrapped, keeping their own
-	// documented sentinels.
-	if pp, ok, err := tryPrismUnion(ctx, op, a, b); err != nil {
+	// docs/prism-boolean-design.md: a reject-only analytic reduction for a
+	// co-directional coplanar prism pair, dispatched ahead of the mesh path
+	// for Union's select-all/merge/chain path (§4.2) and Cut/Intersect's
+	// clean-nesting structural match (§4.2). ok=false is never an error —
+	// the pair falls back to the unchanged mesh path below exactly as it did
+	// before this design existed. A non-nil err here is a genuine, typed
+	// analytic-resolution refusal (§3.4) and must propagate rather than
+	// reroute to the mesh path: an ErrUnsupported refusal becomes the public
+	// BooleanUnsupportedContact below, preserving errors.Is(err,
+	// ErrUnsupported); ErrDegenerate and ErrUnrecordableProfile pass through
+	// unwrapped, keeping their own documented sentinels.
+	if pp, ok, err := tryPrismBoolean(ctx, op, a, b); err != nil {
 		if errors.Is(err, ErrUnsupported) {
 			return nil, asBooleanError(op, inputs, expectedBoolean(booleanExpectedUnsupported, err))
 		}
