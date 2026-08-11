@@ -74,7 +74,7 @@ func squaredSpeed(span bezierSpan) ratPoly {
 // so the value at 0 is reported beside it and the closed span is covered only
 // by reading both.
 func closedSpanRootCount(s ratPoly) (halfOpen int, atZero *big.Rat) {
-	chain := sturmChain(rpSquareFree(rpTrim(s)))
+	chain := newSturmChainInt(sturmChain(rpSquareFree(rpTrim(s))))
 	return sturmCount(chain, big.NewRat(0, 1), big.NewRat(1, 1)), rpEval(s, big.NewRat(0, 1))
 }
 

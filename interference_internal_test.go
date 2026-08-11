@@ -114,12 +114,13 @@ func TestPointInBodyCancellationReachesTorusRootPath(t *testing.T) {
 
 func TestCertifiedRootRefinementCancellation(t *testing.T) {
 	p := ratPoly{big.NewRat(-2, 1), new(big.Rat), big.NewRat(1, 1)}
-	ivs, err := rpIsolateRootsContext(t.Context(), p)
+	chain := newSturmChainInt(sturmChain(p))
+	ivs, err := rpIsolateRootsContext(t.Context(), p, chain)
 	require.NoError(t, err)
 	require.NotEmpty(t, ivs)
 	ctx := &internalCancelContext{Context: t.Context(), limit: 1}
 
-	_, err = rpRefineRootContext(ctx, sturmChain(p), ivs[0], func(float64, float64) bool { return false })
+	_, err = rpRefineRootContext(ctx, chain, ivs[0], func(float64, float64) bool { return false })
 	require.ErrorIs(t, err, context.Canceled)
 }
 
