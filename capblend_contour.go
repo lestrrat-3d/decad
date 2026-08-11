@@ -481,6 +481,347 @@ func capContourDelta(walks []sideWalk, joins []cornerJoin, d float64) (float64, 
 	return delta, nil
 }
 
+// ivOffsetFootRange generalises ivOffsetFoot to an OFFSET INTERVAL rather
+// than one float: the enclosure of v + t·rot90(unit(t)) for every offset
+// amount t in tRange, the point family a line carrier's own anchor sweeps as
+// the offset amount varies. ivOffsetFoot is this at one degenerate point.
+func ivOffsetFootRange(vU, vV, tu, tv float64, tRange ratInterval) (ivPoint, bool) {
+	n, ok := ivUnitVec(tu, tv)
+	if !ok {
+		return ivPoint{}, false
+	}
+	v, okV := ivExactPoint(vU, vV)
+	if !okV {
+		return ivPoint{}, false
+	}
+	return ivPoint{
+		u: intervalAdd(v.u, intervalMul(intervalNeg(n.v), tRange)),
+		v: intervalAdd(v.v, intervalMul(n.u, tRange)),
+	}, true
+}
+
+// ivCarrierOverRange generalises ivCarrierOf to an OFFSET INTERVAL [t0, t1]
+// rather than one float, enclosing every carrier the wall's own offset
+// construction occupies as the offset amount ranges over it — the same
+// closed forms ivCarrierOf evaluates at one point, evaluated over the whole
+// range instead. A line's carrier stays a single line: only its anchor point
+// moves, along the line's own FIXED unit normal, so the direction needs no
+// widening at all. A circle's carrier stays a single concentric circle whose
+// radius now encloses the offset radius's own range rather than one value.
+// At t0 == t1 == d it reduces to ivCarrierOf(w, d)'s own enclosure, since
+// both build the offset amount from the identical closed form.
+func ivCarrierOverRange(w sideWalk, t0, t1 float64) (ivCarrier, bool) {
+	rt0, rt1 := floatRat(t0), floatRat(t1)
+	if rt0 == nil || rt1 == nil {
+		return ivCarrier{}, false
+	}
+	tRange := interval(rt0, rt1)
+	if !w.isCircular() {
+		p, okP := ivOffsetFootRange(w.startU, w.startV, w.tanInU, w.tanInV, tRange)
+		dir, okD := ivUnitVec(w.tanInU, w.tanInV)
+		if !okP || !okD {
+			return ivCarrier{}, false
+		}
+		return ivCarrier{isLine: true, p: p, dir: dir}, true
+	}
+	rr := floatRat(w.radius)
+	if rr == nil {
+		return ivCarrier{}, false
+	}
+	inside := big.NewRat(1, 1)
+	if w.th1 < w.th0 { // a clockwise walk has its material outside the circle
+		inside = big.NewRat(-1, 1)
+	}
+	r := intervalSub(pointInterval(rr), intervalMul(tRange, pointInterval(inside)))
+	if r.lo.Sign() <= 0 {
+		return ivCarrier{}, false
+	}
+	c, okC := ivExactPoint(w.cU, w.cV)
+	if !okC {
+		return ivCarrier{}, false
+	}
+	return ivCarrier{c: c, r: r}, true
+}
+
+// miterConstraintRow is one carrier's own linear constraint on the miter
+// locus's velocity P'(t), read at a foot enclosed within the box the
+// intersection of the corner's two carriers over the offset range proves
+// (ivCarrierOverRange, ivIntersect, ivNearest).
+//
+// A line carrier's offset satisfies n·X = n·v0 + t for its own fixed unit
+// normal n (the construction's own p0(t) = v0 + t·n, and every point of the
+// offset LINE shares n's component since the line runs perpendicular to it),
+// so differentiating in t gives n·P'(t) = 1 — a row that needs no widening at
+// all, since n does not depend on t.
+//
+// A circle carrier's offset satisfies |X-c| = R - inside·t (offsetRadius's
+// own closed form), so differentiating gives û·P'(t) = -inside, with
+// û = (X-c)/|X-c| the unit radial direction AT THE FOOT — which does depend
+// on t, so it is enclosed from the box foot proves rather than read at one
+// point.
+func miterConstraintRow(w sideWalk, c ivCarrier, foot ivPoint) (ivPoint, *big.Rat, bool) {
+	if c.isLine {
+		n := ivPoint{u: intervalNeg(c.dir.v), v: c.dir.u}
+		return n, big.NewRat(1, 1), true
+	}
+	dx := intervalSub(foot.u, c.c.u)
+	dy := intervalSub(foot.v, c.c.v)
+	distSq := intervalAdd(intervalSquare(dx), intervalSquare(dy))
+	dist, ok := intervalSqrt(distSq)
+	if !ok || dist.lo.Sign() <= 0 {
+		return ivPoint{}, nil, false
+	}
+	ux, okU := intervalQuo(dx, dist)
+	uy, okV := intervalQuo(dy, dist)
+	if !okU || !okV {
+		return ivPoint{}, nil, false
+	}
+	rhs := big.NewRat(-1, 1)
+	if w.th1 < w.th0 { // a clockwise walk has its material outside the circle
+		rhs = big.NewRat(1, 1)
+	}
+	return ivPoint{u: ux, v: uy}, rhs, true
+}
+
+// circleCircleLocusSpeedUpper bounds |dP/dt| for a corner where TWO circular
+// walls' own offset carriers meet, by enclosing the corner foot over the
+// whole offset range at once (ivCarrierOverRange, ivIntersect, ivNearest)
+// and solving the 2x2 linear system miterConstraintRow builds from each
+// carrier — Cramer's rule, carried out in interval arithmetic. ok is false
+// whenever the determinant's own enclosure straddles zero (the two carriers'
+// rows are nearly parallel there) or any enclosure along the way fails.
+//
+// This decorrelates the two carriers' own offset amount — each is enclosed
+// over [t0, t1] independently, rather than tracked as the SAME shared
+// parameter through both — which is sound (the true trajectory is always
+// inside the resulting box) but loose exactly where a corner is TANGENT: two
+// circles tangent at the corner stay tangent under a consistent offset (the
+// same identity lineCircleLocusSpeedUpper's own doc comment derives for a
+// line and a circle), so the true velocity is finite there, but this
+// decorrelated enclosure cannot tell that persistent tangency from a
+// momentary one and refuses on both. lineCircleLocusSpeedUpper below carries
+// the exact closed form that tells them apart for a line meeting a circle —
+// the common case, reached at every tangent-filleted corner in this
+// codebase's own test fixtures — and this generic solve is kept for the
+// circle-circle miter it does not cover, on the same reject-only footing
+// every other refusal here stands on: never a wrong bound, only a
+// conservative one at a tangent circle-circle corner.
+func circleCircleLocusSpeedUpper(prev, cur sideWalk, t0, t1, vU, vV float64) (float64, bool) {
+	ca, okA := ivCarrierOverRange(prev, t0, t1)
+	cb, okB := ivCarrierOverRange(cur, t0, t1)
+	if !okA || !okB {
+		return 0, false
+	}
+	cands, okI := ivIntersect(ca, cb)
+	if !okI {
+		return 0, false
+	}
+	foot, okN := ivNearest(cands, vU, vV)
+	if !okN {
+		return 0, false
+	}
+	rowA, rhsA, okRA := miterConstraintRow(prev, ca, foot)
+	rowB, rhsB, okRB := miterConstraintRow(cur, cb, foot)
+	if !okRA || !okRB {
+		return 0, false
+	}
+	det := intervalSub(intervalMul(rowA.u, rowB.v), intervalMul(rowB.u, rowA.v))
+	if det.lo.Sign() <= 0 && det.hi.Sign() >= 0 {
+		return 0, false
+	}
+	pu, okU := intervalQuo(intervalSub(intervalScale(rowB.v, rhsA), intervalScale(rowA.v, rhsB)), det)
+	pv, okV := intervalQuo(intervalSub(intervalScale(rowA.u, rhsB), intervalScale(rowB.u, rhsA)), det)
+	if !okU || !okV {
+		return 0, false
+	}
+	mag, ok := intervalSqrt(intervalAdd(intervalSquare(pu), intervalSquare(pv)))
+	if !ok {
+		return 0, false
+	}
+	upper, exact := mag.hi.Float64()
+	if !exact {
+		upper = math.Nextafter(upper, math.Inf(1))
+	}
+	if isNonFinite(upper) || upper < 0 {
+		return 0, false
+	}
+	return upper, true
+}
+
+// lineWallFrame is a straight wall's own EXACT local frame: n is the
+// enclosed unit MATERIAL-SIDE normal (rot90 of the enclosed unit tangent)
+// and e is the enclosed unit tangent itself, both read once, since a line's
+// own direction never moves as its offset amount varies — only its anchor
+// point does, along n.
+type lineWallFrame struct {
+	anchorU, anchorV float64
+	n, e             ivPoint
+}
+
+func lineWallFrameOf(w sideWalk) (lineWallFrame, bool) {
+	e, ok := ivUnitVec(w.tanInU, w.tanInV)
+	if !ok {
+		return lineWallFrame{}, false
+	}
+	n := ivPoint{u: intervalNeg(e.v), v: e.u}
+	return lineWallFrame{anchorU: w.startU, anchorV: w.startV, n: n, e: e}, true
+}
+
+// insideSignOf is the exact ±1 rational offsetRadius's own sign convention
+// reads off a circular wall's walked sense: +1 when the wall's material
+// lies inside the circle (th1 >= th0), −1 when it lies outside.
+func insideSignOf(w sideWalk) *big.Rat {
+	if w.th1 < w.th0 {
+		return big.NewRat(-1, 1)
+	}
+	return big.NewRat(1, 1)
+}
+
+// lineCircleLocusSpeedUpper bounds |dP/dt| for the corner foot where a
+// STRAIGHT wall's own offset carrier meets a CIRCULAR wall's, over the
+// offset range [t0, t1], by an EXACT closed form rather than
+// circleCircleLocusSpeedUpper's decorrelated enclosure — which matters
+// because this is the common case, reached at every straight-to-arc
+// tangent-filleted corner this codebase builds (a rounded rectangle's own
+// corners among them), and that decorrelated method refuses on every one of
+// them (see circleCircleLocusSpeedUpper's own doc comment).
+//
+// Parametrise a point on the offset line as anchor + t·n + s·e (n, e the
+// line's own fixed unit normal and tangent — offsetCarrier's own
+// construction), and substitute into the offset circle's own
+// |X−c| = R − inside·t. Writing w(t) = (anchor + t·n) − c, the quadratic in
+// s is s² + 2(w(t)·e)s + (w(t)·w(t) − (R−inside·t)²) = 0, whose
+// discriminant is Δ(t) = (w(t)·e)² − w(t)·w(t) + (R−inside·t)². Because
+// n·e = 0 and |n| = 1, w(t)·e is CONSTANT (call it β) and w(t)·w(t) is
+// R² − α² + ... — expanding fully, Δ(t)'s own t² coefficient is exactly
+// 1 − inside² = 0 (inside is ±1), so Δ is EXACTLY AFFINE in t:
+// Δ(t) = (R² − α²) − 2(α + inside·R)·t, α = w0·n, w0 = anchor − c.
+//
+// That affine form is what tells a TANGENT join's own PERSISTENT tangency
+// (Δ(t) ≡ 0, both coefficients zero) from a momentary one (Δ0 = 0 but
+// Δ1 ≠ 0, a true fold where the speed is genuinely unbounded right at the
+// corner): both of s's two roots collapse to the SAME value −β for every t
+// when Δ1 = 0, so X(t) = anchor + t·n − β·e is itself affine in t and
+// X'(t) = n exactly, a closed-form, finite velocity that never needed a
+// square root at all. Where Δ1 ≠ 0, |s'(t)| = |Δ1| / (2·sqrt(Δ(t))), whose
+// magnitude does not depend on which of the two roots s(t) actually is — so
+// this never needs to pick the branch nearest the corner the way
+// intersectOffsets' own POSITION solve does; both roots move at the same
+// speed. Δ affine means its minimum over [t0, t1] is at one of the two
+// ends, so bounding it needs no search.
+//
+// ok is false whenever Δ's own enclosure reaches or crosses zero somewhere
+// in [t0, t1], WITHOUT Δ1's own enclosure being exactly zero (a momentary
+// fold within this range), or any enclosure fails.
+//
+// A TANGENT join this evaluator itself built — Fillet's own corner rewrite
+// (fillet.go), which is exactly what a rounded-rectangle wall's corner is —
+// lands Δ1 at EXACTLY zero, bit for bit: the tangent condition
+// α = −inside·R the construction holds by is stated in the SAME floats this
+// derivation reads, with no residual from a numerical solve to round away.
+// A corner recorded through sketch's own solver need not be so exact, and
+// Δ1's enclosure straddling (rather than sitting AT) zero there still falls
+// through to the general bound below, which is sound but can refuse on a
+// near-tangent corner no public fixture reaches today — the PR body for
+// this change names that as a known limitation.
+func lineCircleLocusSpeedUpper(line, circle sideWalk, t0, t1 float64) (float64, bool) {
+	frame, ok := lineWallFrameOf(line)
+	if !ok {
+		return 0, false
+	}
+	cx, cy := floatRat(circle.cU), floatRat(circle.cV)
+	radius := floatRat(circle.radius)
+	anchorU, anchorV := floatRat(frame.anchorU), floatRat(frame.anchorV)
+	if cx == nil || cy == nil || radius == nil || anchorU == nil || anchorV == nil {
+		return 0, false
+	}
+	w0u := new(big.Rat).Sub(anchorU, cx)
+	w0v := new(big.Rat).Sub(anchorV, cy)
+	alpha := intervalAdd(intervalMul(pointInterval(w0u), frame.n.u), intervalMul(pointInterval(w0v), frame.n.v))
+	inside := insideSignOf(circle)
+
+	// Delta(t) = (R^2 - alpha^2) - 2*(alpha + inside*R)*t = delta0 + delta1*t.
+	delta0 := intervalSub(intervalSquare(pointInterval(radius)), intervalSquare(alpha))
+	delta1 := intervalScale(intervalAdd(alpha, intervalScale(pointInterval(radius), inside)), big.NewRat(-2, 1))
+
+	// Delta1 == 0 EXACTLY (both ends of its own enclosure) is the persistent-
+	// tangency closed form this function's own doc comment derives: s(t) is
+	// then constant, so X'(t) = n exactly and no square root — nor Delta0's
+	// own sign, which this branch never even reads — enters the answer. The
+	// bound is |n|'s own enclosed magnitude (n is unit by construction, so
+	// this is 1 up to ivUnitVec's own tiny sqrt rounding) rather than
+	// radius2D's √2-scaled one, since this specific case is common enough —
+	// every tangent-filleted corner in this codebase's own test fixtures —
+	// to be worth the tighter bound.
+	if delta1.lo.Sign() == 0 && delta1.hi.Sign() == 0 {
+		nMagUpper := ratSqrtUp(intervalAbsUpper(intervalAdd(intervalSquare(frame.n.u), intervalSquare(frame.n.v))))
+		if isNonFinite(nMagUpper) {
+			return 0, false
+		}
+		return nMagUpper, true
+	}
+
+	rt0, rt1 := floatRat(t0), floatRat(t1)
+	if rt0 == nil || rt1 == nil {
+		return 0, false
+	}
+	deltaAt := func(t *big.Rat) ratInterval {
+		return intervalAdd(delta0, intervalMul(delta1, pointInterval(t)))
+	}
+	d0, d1 := deltaAt(rt0), deltaAt(rt1)
+	// Delta is affine, so its minimum over [t0, t1] is at one of the two
+	// ends — no interior point needs checking.
+	deltaMinLo := d0.lo
+	if d1.lo.Cmp(deltaMinLo) < 0 {
+		deltaMinLo = d1.lo
+	}
+	if deltaMinLo.Sign() <= 0 {
+		// The discriminant reaches or crosses zero somewhere this enclosure
+		// cannot rule out: a genuine fold inside this range, where the
+		// position solve's own branch can turn without bound.
+		return 0, false
+	}
+	sqrtLower := ratSqrtDown(deltaMinLo)
+	if sqrtLower <= 0 || isNonFinite(sqrtLower) {
+		return 0, false
+	}
+	delta1Upper := intervalAbsUpper(delta1)
+	delta1UpperF, exact := delta1Upper.Float64()
+	if !exact {
+		delta1UpperF = math.Nextafter(delta1UpperF, math.Inf(1))
+	}
+	sPrimeUpper := upRound(delta1UpperF / (2 * sqrtLower))
+	if isNonFinite(sPrimeUpper) {
+		return 0, false
+	}
+	// |dP/dt| = sqrt(1 + s'(t)^2), since n and e are orthonormal.
+	upper := radius2D(1, sPrimeUpper)
+	if isNonFinite(upper) {
+		return 0, false
+	}
+	return upper, true
+}
+
+// miterLocusSpeedUpper bounds |dP/dt| — the in-plane speed of the corner
+// foot's own denoted locus (docs/modify-reach-design.md §8.3's exact offset
+// family) — over the offset range [t0, t1], for the corner where prev's own
+// offset carrier meets cur's, dispatching to the exact closed form
+// (lineCircleLocusSpeedUpper) where one carrier is straight and the other
+// circular, or the generic interval solve (circleCircleLocusSpeedUpper)
+// where both are circular. At least one of prev, cur must be circular — the
+// caller (capSlantEdge) never reaches here for a line-line miter, whose
+// locus is already exact.
+func miterLocusSpeedUpper(prev, cur sideWalk, t0, t1, vU, vV float64) (float64, bool) {
+	switch {
+	case !prev.isCircular() && cur.isCircular():
+		return lineCircleLocusSpeedUpper(prev, cur, t0, t1)
+	case prev.isCircular() && !cur.isCircular():
+		return lineCircleLocusSpeedUpper(cur, prev, t0, t1)
+	default:
+		return circleCircleLocusSpeedUpper(prev, cur, t0, t1, vU, vV)
+	}
+}
+
 // capWholeCircleDelta is the cornerless closed circle's own contour
 // displacement — the one shape with no corner join at all, whose whole contour
 // is the concentric circle at the offset radius.

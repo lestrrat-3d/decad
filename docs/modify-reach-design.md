@@ -536,6 +536,25 @@ term:
   sine rather than fixing them exactly; and every patch of a band built under a
   placement is a third, since the placement's own independent rounding of every
   emitted coordinate is never zero.
+- A band patch's corner RULING owes its own boundary the same accounting. The
+  build tags every corner ruling `Line3`, and that tag is the same kind of
+  bounded stand-in the `Cone` tag is: the denoted corner-foot locus of the
+  exact offset family is straight only where BOTH carriers meeting at the
+  corner are lines, and is a conic wherever either one is circular — a line's
+  offset moves affinely in the offset amount, so two lines' offsets cross
+  along a path affine in it too, while a circle's offset FOOT does not move
+  affinely along the circle even though its offset radius shrinks linearly.
+  `Edge.Length()` on such a ruling reports the built chord, and its `Bound`
+  covers the chord-versus-locus excess beside its own arithmetic. The excess
+  is ONE-SIDED — a chord never exceeds the curve it subtends — so the term
+  only ever widens the bound upward, never the reported value, and it is
+  exactly zero at a line-line miter and at every reflex foot, because both
+  loci are affine in the offset amount there (a reflex foot rides one wall's
+  own offset carrier alone, whatever that wall's kind). A corner whose locus
+  enclosure this evaluator cannot build refuses through `ErrUnsupported`
+  rather than publish an understated bound — the same rule `Edge.Length`'s own
+  doc comment (`topology.go`) already states for a boolean rim on a curved
+  source.
 
 A coinciding window — every tangent join, apex patch and whole turn — buys back
 the SKEW half of the departure and nothing else. DX8's reduction is a claim
@@ -1005,6 +1024,9 @@ Every implementation PR MUST add geometry assertions, not run-only coverage.
 - non-adjacent patch crossing/touch → SX7/SX12;
 - every cap-level edge reports a finite length and a finite bound, and a
   `LongerThan` query no longer matches a slant edge on an infinity;
+- a miter ruling adjacent to a CIRCULAR wall publishes a length bound that
+  ENCLOSES its own denoted locus length, read over a family of setbacks, while
+  a ruling between two straight walls keeps its arithmetic-only bound;
 - a cap-level vertex's bound ENCLOSES its distance to the denoted contour
   point, taken over exact rationals from a section whose offset has a closed
   form (the 12-9-15 right triangle, whose feet are `(t, t)`, `(12 - 3t, t)` and

@@ -2122,3 +2122,160 @@ func TestCapBlendFarPlacementOrientationRefusal(t *testing.T) {
 	require.NoError(t, err)
 	require.Less(t, bound, 1e-12)
 }
+
+// capBlendConePatchSlantEdges returns every straight (Line3) ruling of a
+// cap-loop chamfer's own CIRCULAR ("Cone") band patch(es) — the miter
+// rulings fu144 traced, adjacent to a circular wall.
+func capBlendConePatchSlantEdges(chamfered *decad.Body) []*decad.Edge {
+	var out []*decad.Edge
+	for _, f := range chamfered.Faces() {
+		if f.Surface().Kind() != decad.KindCone {
+			continue
+		}
+		for _, ce := range f.Loops()[0].CoEdges() {
+			e := ce.Edge()
+			if _, ok := e.Curve().(decad.Line3); ok {
+				out = append(out, e)
+			}
+		}
+	}
+	return out
+}
+
+// quarterDiskMiterLocusLength is quarterDiskBody's own denoted miter locus
+// length, independent of the evaluator: the exact offset family
+// (docs/modify-reach-design.md §8.3) puts the corner-foot's cap-level
+// endpoint at axial fraction s at (sqrt(r²-2·r·d·s), s·d, h-d+s·d) — the
+// closed form fu144's investigation derived for the corner at (r, 0), a line
+// (the radius) meeting the wall's own circular arc. Summing the polyline
+// through n samples of that curve UNDERESTIMATES the true arc length (a
+// chord never exceeds the arc it subtends), so the sum CONVERGES FROM BELOW
+// as n grows — an independent lower-bound witness the built edge's own
+// published Bound must still enclose.
+func quarterDiskMiterLocusLength(r, h, d float64) float64 {
+	const n = 1 << 16
+	point := func(s float64) (u, v, z float64) {
+		return math.Sqrt(r*r - 2*r*d*s), s * d, h - d + s*d
+	}
+	total := 0.0
+	pu, pv, pz := point(0)
+	for k := 1; k <= n; k++ {
+		u, v, z := point(float64(k) / n)
+		du, dv, dz := u-pu, v-pv, z-pz
+		total += math.Sqrt(du*du + dv*dv + dz*dz)
+		pu, pv, pz = u, v, z
+	}
+	return total
+}
+
+// TestCapBlendMiterSlantEdgeEnclosesItsLocus pins fu144: a cap-blend miter
+// ruling adjacent to a circular wall is tagged Line3, but the exact offset
+// family's own corner-foot locus there is a conic the chord only chords, so
+// the published Bound must ENCLOSE the true locus length rather than the
+// arithmetic-only bound the ruling's own square root committed. The gaps
+// beaten per setback are the ones fu144's investigation measured against the
+// PRE-fix bound (2.66e-15 mm at d=3): a fix that merely widens the bound by
+// a small margin would still fail the case it was written for.
+func TestCapBlendMiterSlantEdgeEnclosesItsLocus(t *testing.T) {
+	const r, h = 10.0, 20.0
+	cases := []struct {
+		d       float64
+		wantGap float64
+	}{
+		{0.1, 1.645e-07},
+		{0.5, 2.282e-05},
+		{1, 2.101e-04},
+		{2, 2.317e-03},
+		{3, 1.171e-02},
+		{4, 4.888e-02},
+	}
+	for _, tc := range cases {
+		t.Run(fmt.Sprintf("d=%g", tc.d), func(t *testing.T) {
+			body := quarterDiskBody(t, r, h)
+			chamfered, err := body.Chamfer(capLoopEdges(body), units.Millimeters(tc.d))
+			require.NoError(t, err)
+
+			edges := capBlendConePatchSlantEdges(chamfered)
+			require.Len(t, edges, 2, "the mitered Cone patch's own two rulings")
+
+			locus := quarterDiskMiterLocusLength(r, h, tc.d)
+			for _, e := range edges {
+				m, err := e.Length()
+				require.NoError(t, err)
+				chord, bound := m.Value.Mag(), m.Bound.Mag()
+				require.LessOrEqual(t, chord-bound, locus, "the bound must not sit above the locus")
+				require.GreaterOrEqual(t, chord+bound, locus, "the bound must enclose the locus")
+				require.GreaterOrEqual(t, bound, tc.wantGap, "the bound must beat the measured understatement")
+				require.LessOrEqual(t, bound, chord, "the bound must not swamp the edge's own held chord")
+			}
+		})
+	}
+
+	// The exact numbers fu144's investigation measured on the d=3 fixture:
+	// the reported VALUE is unchanged, and the pre-fix bound (2.66e-15) is
+	// nowhere near the 1.17e-2 mm gap the fix must now cover.
+	body := quarterDiskBody(t, r, h)
+	chamfered, err := body.Chamfer(capLoopEdges(body), units.Millimeters(3))
+	require.NoError(t, err)
+	edges := capBlendConePatchSlantEdges(chamfered)
+	require.Len(t, edges, 2)
+	for _, e := range edges {
+		m, err := e.Length()
+		require.NoError(t, err)
+		require.InDelta(t, 5.6132783285050847, m.Value.Mag(), 1e-9)
+		require.GreaterOrEqual(t, m.Bound.Mag(), 1.17e-2)
+	}
+}
+
+// TestCapBlendStraightMiterSlantEdgeChargesNothingExtra pins the fix's own
+// negative case: a miter corner between two STRAIGHT walls has a locus
+// affine in the offset amount (two lines' offsets cross along a path affine
+// in it too), so the excess term must stay exactly zero there — this is what
+// stops the fix from being a blanket widening of every slant edge's bound.
+func TestCapBlendStraightMiterSlantEdgeChargesNothingExtra(t *testing.T) {
+	const d = 5.0
+	_, box := capBlendBox(t)
+	chamfered, err := box.Chamfer(capLoopEdges(box), units.Millimeters(d))
+	require.NoError(t, err)
+
+	slants := 0
+	for _, e := range chamfered.Edges() {
+		if _, ok := e.Curve().(decad.Line3); !ok {
+			continue
+		}
+		m, err := e.Length()
+		require.NoError(t, err)
+		if math.Abs(m.Value.Mag()-d*math.Sqrt(3)) > 1e-9 {
+			continue
+		}
+		slants++
+		require.Less(t, m.Bound.Mag(), 1e-12)
+	}
+	require.Equal(t, 4, slants, `one slant edge per corner of the rectangular cap loop`)
+}
+
+// TestCapBlendReflexSlantEdgeChargesNothingExtra pins the fix's other
+// negative case: a reflex corner's two edges each ride ONE wall's own offset
+// carrier alone (pA rides prev's, pB rides cur's), so they are affine in the
+// offset amount regardless of that wall's kind and must keep the bound they
+// published before this fix, whatever kind of wall meets the reflex corner.
+func TestCapBlendReflexSlantEdgeChargesNothingExtra(t *testing.T) {
+	const d = 3.0
+	body := reflexLBody(t)
+	chamfered, err := body.Chamfer(capLoopEdges(body), units.Millimeters(d))
+	require.NoError(t, err)
+
+	apex := apexPatchOf(t, chamfered, "chamferCap(end,")
+	lines := 0
+	for _, ce := range apex.Loops()[0].CoEdges() {
+		e := ce.Edge()
+		if _, ok := e.Curve().(decad.Line3); !ok {
+			continue
+		}
+		lines++
+		m, err := e.Length()
+		require.NoError(t, err)
+		require.Less(t, m.Bound.Mag(), 1e-12)
+	}
+	require.Equal(t, 2, lines, "the apex patch's own two slant rulings")
+}

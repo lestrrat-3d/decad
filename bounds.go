@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"math/big"
 
 	"github.com/lestrrat-3d/r3"
 )
@@ -60,6 +61,11 @@ import (
 //     the built patch's own closed-form displacement from it;
 //   - the FIRST MOMENT a cap-loop chamfer's contour displacement can move →
 //     sweptMomentAllow, sweptVolumeAllow's own one-dimension-higher sibling;
+//   - the LENGTH gap between a cap-loop chamfer's straight-ruled corner
+//     miter ruling and the curved locus it denotes at a non-tangential
+//     corner adjacent to a circular wall → chordLocusLengthAllow, the
+//     range's own width times a proven upper bound on the locus's own speed,
+//     minus the held chord;
 //   - a per-coordinate maximum read as a 3D DISTANCE → radius3D.
 
 const (
@@ -538,6 +544,46 @@ func chordLocusVolumeAllow(fluxWide, fluxWideBound, fluxNarrow, fluxNarrowBound,
 	// makes that later division land it back at its true size instead of a
 	// third of it.
 	return absSumUpper(envelopeSlack, productUpper(3, sweptVolumeAllow(patchDeviation, areaUpper)))
+}
+
+// chordLocusLengthAllow bounds a cap-blend miter ruling's own chord-versus-
+// locus excess (docs/modify-reach-design.md §8.3's boundary bullet): how far
+// the denoted corner-foot locus's true length can exceed the built chord it
+// is tagged `Line3` as, given a proven upper bound speedUpper on the locus's
+// own in-plane speed |dP/dt| over the offset range [0, dc] and the locus's
+// own EXACT axial speed |axialSpan|/dc — z is affine in the offset amount by
+// construction (a fixed side level and a fixed cap level, ruled linearly),
+// so that ratio needs no enclosure, only a division rounded up.
+//
+// The locus length is at most dc·sqrt(speedUpper² + (axialSpan/dc)²) — the
+// range's own width times an upper bound on the 3D speed, radius2D's own
+// √2-scaled bound on the two independently-bounded components — and a chord
+// never exceeds the curve it subtends, so chordUpper (a PROVEN upper bound on
+// the patch's own held chord) is itself a lower bound on the true locus
+// length. The excess is that product minus chordUpper, clamped at zero (a
+// negative reading proves nothing — the bound is loose there, not the locus
+// short) and rounded up.
+func chordLocusLengthAllow(speedUpper, dc, axialSpan, chordUpper float64) float64 {
+	if speedUpper < 0 || dc <= 0 || isNonFinite(speedUpper) || isNonFinite(chordUpper) {
+		return math.Inf(1)
+	}
+	rdc, raxial := floatRat(dc), floatRat(axialSpan)
+	if rdc == nil || raxial == nil {
+		return math.Inf(1)
+	}
+	zSpeed, exact := new(big.Rat).Quo(new(big.Rat).Abs(raxial), rdc).Float64()
+	if !exact {
+		zSpeed = math.Nextafter(zSpeed, math.Inf(1))
+	}
+	if isNonFinite(zSpeed) {
+		return math.Inf(1)
+	}
+	locusUpper := productUpper(dc, radius2D(speedUpper, zSpeed))
+	excess := locusUpper - chordUpper
+	if excess <= 0 {
+		return 0
+	}
+	return upRound(excess)
 }
 
 // sweptMomentAllow bounds the FIRST MOMENT a cap contour's own displacement
