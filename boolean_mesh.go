@@ -174,6 +174,48 @@ type triContact struct {
 	sin2 *big.Rat
 }
 
+// contactMemo caches triTriClassify's answer per facet-index pair for ONE
+// operand pair, so the second ask a call reaches — the tangency gate
+// (facesNearMiss) and the mesh pass (meshBoolean) walk the same two prepared
+// tessellations — is served from the store instead of recomputed.
+// triTriClassify is a pure function of the two facets' float corners, exact
+// lifts and exact normals, all read-only fields of ma/mb, so a stored answer
+// for (i, j) stays correct for as long as ma and mb do — which is exactly one
+// evaluateBoolean call, the memo's whole lifetime. Binding ma/mb into the
+// memo itself, rather than taking them per call, makes it impossible to key
+// an answer for one operand pair and read it back for another.
+//
+// A returned triContact is shared: its p0/p1 endpoints and its sin2 are
+// *big.Rat values a second caller reads, never a fresh copy. Every consumer
+// today only reads them, so this is safe, but no consumer may mutate one in
+// place. contactMemo is not safe for concurrent use; nothing today shares one
+// across goroutines.
+type contactMemo struct {
+	ma, mb *boolMesh
+	m      map[[2]int32]triContact
+}
+
+// newContactMemo builds a memo scoped to one evaluateBoolean call over ma/mb.
+func newContactMemo(ma, mb *boolMesh) *contactMemo {
+	return &contactMemo{ma: ma, mb: mb, m: map[[2]int32]triContact{}}
+}
+
+// classify returns the exact classification of facet i of ma against facet j
+// of mb, computing it on the first ask and replaying the stored answer on
+// every later one. An error is never stored, so a later ask still retries.
+func (c *contactMemo) classify(i, j int) (triContact, error) {
+	key := [2]int32{int32(i), int32(j)}
+	if v, ok := c.m[key]; ok {
+		return v, nil
+	}
+	v, err := triTriClassify(triCorners(c.ma, i), triCorners(c.mb, j), xtriCorners(c.ma, i), xtriCorners(c.mb, j), c.ma.norms[i], c.mb.norms[j])
+	if err != nil {
+		return triContact{}, err
+	}
+	c.m[key] = v
+	return v, nil
+}
+
 // triTriClassify computes the exact intersection of two CLOSED triangles: the
 // single symmetric entry point every contact question goes through. ta/tb are
 // float corners (the adaptive orient filter reads them), xta/xtb their exact
@@ -544,7 +586,7 @@ type pairContact struct {
 // tessellations. It returns the kept, still-exact facets and a proven LOWER
 // bound on the sine of the crossing angle of every contact it used — the
 // number the rim's displacement bound divides by (bounds.go, rimDelta).
-func meshBoolean(ctx context.Context, op OpKind, ma, mb *boolMesh) ([]keptFacet, float64, error) {
+func meshBoolean(ctx context.Context, op OpKind, ma, mb *boolMesh, memo *contactMemo) ([]keptFacet, float64, error) {
 	wantA, wantB, flipB, err := booleanKeep(op)
 	if err != nil {
 		return nil, 0, err
@@ -571,7 +613,7 @@ func meshBoolean(ctx context.Context, op OpKind, ma, mb *boolMesh) ([]keptFacet,
 			}
 			ta := triCorners(ma, i)
 			tb := triCorners(mb, j)
-			c, err := triTriClassify(ta, tb, xtriCorners(ma, i), xtriCorners(mb, j), ma.norms[i], mb.norms[j])
+			c, err := memo.classify(i, j)
 			if err != nil {
 				return nil, 0, err
 			}

@@ -128,6 +128,59 @@ func singleFacetBoolMesh(t *testing.T, tri [3]r3.Vec) *boolMesh {
 	return bm
 }
 
+// TestContactMemoRepeatsTheClassifier pins that contactMemo.classify serves a
+// repeat ask for the same facet pair from its store rather than recomputing
+// it, and that the served answer is coordinate-identical to a direct
+// triTriClassify call — for a genuine contact and for a miss alike.
+func TestContactMemoRepeatsTheClassifier(t *testing.T) {
+	// A facet held in the plane z = 0 and one held in the plane x = 0: the
+	// planes meet along the y axis, and each triangle's own chord along that
+	// axis overlaps the other's, so the pair meets in a positive-length
+	// segment running along neither facet's own edge.
+	a := [3]r3.Vec{{X: -5, Y: -5, Z: 0}, {X: 5, Y: -5, Z: 0}, {X: 0, Y: 5, Z: 0}}
+	b := [3]r3.Vec{{X: 0, Y: -3, Z: -3}, {X: 0, Y: -3, Z: 3}, {X: 0, Y: 3, Z: 0}}
+
+	direct := classify(t, a, b)
+	require.Equal(t, contactSegment, direct.kind)
+
+	bmA, bmB := singleFacetBoolMesh(t, a), singleFacetBoolMesh(t, b)
+	memo := newContactMemo(bmA, bmB)
+
+	requireSameContact := func(want, got triContact) {
+		t.Helper()
+		require.Equal(t, want.kind, got.kind)
+		require.Equal(t, want.edgeA, got.edgeA)
+		require.Equal(t, want.edgeB, got.edgeB)
+		require.Zero(t, want.p0.x.Cmp(got.p0.x))
+		require.Zero(t, want.p0.y.Cmp(got.p0.y))
+		require.Zero(t, want.p0.z.Cmp(got.p0.z))
+		require.Zero(t, want.p1.x.Cmp(got.p1.x))
+		require.Zero(t, want.p1.y.Cmp(got.p1.y))
+		require.Zero(t, want.p1.z.Cmp(got.p1.z))
+		require.Zero(t, want.sin2.Cmp(got.sin2))
+	}
+
+	first, err := memo.classify(0, 0)
+	require.NoError(t, err)
+	requireSameContact(direct, first)
+
+	second, err := memo.classify(0, 0)
+	require.NoError(t, err)
+	requireSameContact(first, second)
+	require.Len(t, memo.m, 1, `the second ask was served from the store, not recomputed`)
+
+	// A pair that misses is stored too, so a repeat of a non-contact does not
+	// reclassify either.
+	miss := [3]r3.Vec{{X: 100, Y: 0, Z: 0}, {X: 101, Y: 0, Z: 0}, {X: 100, Y: 1, Z: 0}}
+	missMemo := newContactMemo(bmA, singleFacetBoolMesh(t, miss))
+	first, err = missMemo.classify(0, 0)
+	require.NoError(t, err)
+	require.Equal(t, contactNone, first.kind)
+	_, err = missMemo.classify(0, 0)
+	require.NoError(t, err)
+	require.Len(t, missMemo.m, 1)
+}
+
 // inscribedFan is the held outline of a circle of radius r centred at (cx, 0)
 // in the plane z = 0: the inscribed n-gon, fan-triangulated. The vertices sit
 // at the half-step angles, so an EDGE — not a vertex — faces the y axis at both
@@ -157,7 +210,8 @@ func TestCoplanarCarrierPairIsNotSettledByCoplanarityAlone(t *testing.T) {
 		tb := [3]r3.Vec{{X: 0, Y: 0}, {X: 0, Y: 10}, {X: 10, Y: 0}}
 		require.Equal(t, contactRegion, classify(t, ta, tb).kind)
 
-		near, err := facesNearMiss(t.Context(), singleFacetBoolMesh(t, ta), []int{0}, singleFacetBoolMesh(t, tb), []int{0}, 1)
+		bmA, bmB := singleFacetBoolMesh(t, ta), singleFacetBoolMesh(t, tb)
+		near, err := facesNearMiss(t.Context(), bmA, []int{0}, bmB, []int{0}, 1, newContactMemo(bmA, bmB))
 		require.NoError(t, err)
 		// The gate answers "no near miss" for the whole face pair without
 		// proving one: the pair is left to the mesh pass's own refusal of an
