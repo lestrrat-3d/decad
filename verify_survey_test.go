@@ -273,6 +273,121 @@ func TestUndercutNearAntiparallelPull(t *testing.T) {
 	require.Equal(t, decad.Violating, br.Status)
 }
 
+// TestUndercutExactlyPerpendicularWallIsNotOpposed is fu155's own repro
+// (docs/verification-design.md §6): a square whose edge tangents are exactly
+// (3,9), (-9,3), (-3,-9), (9,-3), extruded and pulled along (3,9,0), carries
+// one wall EXACTLY perpendicular to the pull (its outward normal dotted with
+// the unit pull is exactly 0) and one wall EXACTLY antiparallel to it
+// (dot exactly -1). Before the fix both were listed as proven undercuts, read
+// off the raw float components -4.6811112914356013e-17 and
+// -0.99999999999999989 — neither of which is 0 or -1, but both fell inside
+// opposesPull's open interval. The exact answer is the empty proven all-clear.
+func TestUndercutExactlyPerpendicularWallIsNotOpposed(t *testing.T) {
+	s, p := polygonSketch(t, [][2]float64{{0, 0}, {3, 9}, {-6, 12}, {-9, 3}})
+	doc := decad.New()
+	_, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	require.NoError(t, err)
+	report, err := doc.Verify(t.Context(), decad.WithPullDirection(r3.NewVec(3, 9, 0)))
+	require.NoError(t, err)
+	br := report.Bodies[0]
+	require.NotNil(t, br.Undercuts)
+	require.Empty(t, br.Undercuts)
+	require.Equal(t, decad.Sound, br.Status)
+
+	unit, ok := r3.NewVec(3, 9, 0).Normalize()
+	require.True(t, ok)
+	var sawPerp, sawAnti bool
+	for _, f := range br.Body.Faces() {
+		if f.Surface().Kind() != decad.KindPlane {
+			continue
+		}
+		n, err := f.NormalAt(f.Loops()[0].CoEdges()[0].Start().Position().Value)
+		require.NoError(t, err)
+		dot := n.Value.Dot(unit)
+		switch {
+		case math.Abs(dot) < 1e-9:
+			sawPerp = true
+			require.InDelta(t, 0, dot, 1e-15)
+		case math.Abs(dot+1) < 1e-9:
+			sawAnti = true
+			require.InDelta(t, -1, dot, 1e-15)
+		}
+	}
+	require.True(t, sawPerp, "the square must carry a wall exactly perpendicular to the pull")
+	require.True(t, sawAnti, "the square must carry a wall exactly antiparallel to the pull")
+}
+
+// TestUndercutUnseparablePullIsUndecided proves the new reader answers
+// undecided instead of guessing on a receiver's own circular wall, when the
+// wall's outward-normal component against the pull genuinely straddles zero
+// within the reader's own trig enclosure (survey_undercut.go's
+// circularNormalRange) rather than merely landing near it in float64.
+//
+// The body is a narrow circular-arc wall (radius 10 mm, a 0.1-radian sweep at
+// a generic — not a "nice" fraction of π — start angle) closed by one straight
+// chord. The pull's in-plane components are chosen as a large rational
+// continued-fraction convergent of the arc's own exact cosine and sine at its
+// start angle: the residual between the pull and the arc's tangent there is
+// many orders of magnitude below the width radSinCosInterval's own certified
+// enclosure carries at that angle, so the enclosure cannot separate the
+// wall's true (exactly zero) component from a genuine straddle. Reproduced
+// through a small continued-fraction search (recorded as this test's own
+// derivation, not asserted): du, dv below satisfy
+// |dv*cos(th0) - du*sin(th0)| ~ 1e-16 while the wall's own trig enclosure at
+// th0 is only accurate to ~1e-13 — an enclosure width larger than the true
+// value it is asked to separate from zero.
+//
+// Isolating this to the WHOLE body (an empty Undercuts and a Suspect status)
+// is not reachable with any two-wall closed profile: the same boundary that
+// carries the near-zero-component arc must close on the far side too, and
+// straight walls are decided EXACTLY, with no undecided outcome available to
+// them (decideRationalComponent, survey_undercut.go) — so the chord is a
+// second, independently and correctly proven undercut. That is not a defect;
+// it is the same reject-only rule applied to a wall the reader CAN decide.
+// The assertions below are what the fix actually proves: the ARC's own
+// verdict is undecided — neither listed nor cleared — not the coarser claim
+// that nothing else in the body opposes.
+func TestUndercutUnseparablePullIsUndecided(t *testing.T) {
+	const r, th0, delta = 10.0, 0.91, 0.1
+	th1 := th0 + delta
+	ws := sketch.NewWorld()
+	s, err := ws.CreateSketch(ws.XY())
+	require.NoError(t, err)
+	pA := s.CreatePoint(r*math.Cos(th0), r*math.Sin(th0))
+	pB := s.CreatePoint(r*math.Cos(th1), r*math.Sin(th1))
+	pC := s.CreatePoint(0, 0)
+	s.CreateArc(pC, pA, pB)
+	s.CreateLine(pB, pA)
+	s.Fix(pA)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	require.Len(t, s.Profiles(), 1)
+
+	doc := decad.New()
+	body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	require.NoError(t, err)
+
+	var arc *decad.Face
+	for _, f := range body.Faces() {
+		if f.Surface().Kind() == decad.KindCylinder {
+			arc = f
+		}
+	}
+	require.NotNil(t, arc, "the profile must build one circular wall")
+
+	// du, dv: a continued-fraction convergent of (cos(th0), sin(th0)) large
+	// enough that dv*cos(th0) - du*sin(th0) sits far inside the reader's own
+	// trig enclosure width at th0.
+	const du, dv = -2559100094135641.0, 1989397549793721.0
+	report, err := doc.Verify(t.Context(), decad.WithPullDirection(r3.NewVec(du, dv, 0)))
+	require.NoError(t, err)
+	require.Len(t, report.Bodies, 1)
+	br := report.Bodies[0]
+
+	require.NotContains(t, br.Undercuts, arc, "the arc's own component is genuinely undecided, not a proven undercut")
+	require.True(t, hasDiagnostic(report, decad.DiagUndecidedUndercut))
+}
+
 func TestWallReflexSweep(t *testing.T) {
 	// A 270° sector of a length-7, radius-8 solid cylinder. The sweep is
 	// reflex, so a mid-sweep ball's clearance to each cap HALF-plane is its

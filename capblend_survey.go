@@ -53,9 +53,12 @@ import (
 // Cone's normal is that form in its own local azimuth; a Plane's is the
 // degenerate A=B=0 case) and then read over the window [th0, th1] through a
 // proven enclosure of that form's own extremes (capblend_normal.go). The
-// ordinary (unchanged) side walls and caps are surveyed by the SAME per-role
-// wallNormalRange logic prismUndercuts already runs, since a cap-blend body's
-// non-patch faces are built exactly like a prism's.
+// ordinary (unchanged) side walls and caps are surveyed by the SAME exact
+// three-valued reader prismUndercuts runs (survey_undercut.go), since a
+// cap-blend body's non-patch faces are built exactly like a prism's — and, as
+// with a prism's own faces, an undecided receiver face sets the SAME
+// undecided flag the patch loop below sets, so one body's two halves compose
+// into one verdict.
 //
 // That range is the patch's own only where the patch's surface IS the one it
 // publishes. A circular patch's is not, so its reading is widened by the
@@ -73,14 +76,15 @@ func capBlendUndercuts(b *Body, cbp capBlendPayload, pull r3.Vec) undercutOutcom
 	}
 	roles := facesByRole(b)
 
-	// The ordinary side walls and caps: the same per-role normal-range read
+	// The ordinary side walls and caps: the same exact three-valued read
 	// prismUndercuts runs, over the RECEIVER's own recorded profile — a
 	// chamfered loop's unchanged (non-band) portion has the same wall role
 	// and the same normal as an untouched one.
 	pl := cbp.prismLike(0, 0)
-	du := pl.dir(1, 0, 0).Dot(p)
-	dv := pl.dir(0, 1, 0).Dot(p)
-	dn := pl.dir(0, 0, 1).Dot(p)
+	m, okM := newPlacedFrameMap(pl)
+	if !okM {
+		return undercutOutcome{}
+	}
 	loops, err := recordLoops(nil, cbp.profile)
 	if err != nil {
 		return undercutOutcome{}
@@ -90,28 +94,30 @@ func capBlendUndercuts(b *Body, cbp capBlendPayload, pull r3.Vec) undercutOutcom
 	// verify.go), so the two shapes must stay distinguishable — the same
 	// distinction prismUndercuts already keeps.
 	faces := []*Face{}
+	undecided := false
 	for li, loop := range loops {
 		for _, w := range loop {
 			f := roles[fmt.Sprintf("side(%d,%d)", li, w.segs[0])]
 			if f == nil {
 				return undercutOutcome{}
 			}
-			mn, mx := wallNormalRange(w, du, dv)
-			if opposesPull(mn, mx) {
-				faces = append(faces, f)
+			verdict, ok := wallNormalDecision(w, m, pull)
+			if !listVerdict(&faces, &undecided, f, verdict, ok) {
+				return undercutOutcome{}
 			}
 		}
 	}
 	for _, cap := range []struct {
 		role string
-		v    float64
-	}{{role: roleCapStart, v: -dn}, {role: roleCapEnd, v: dn}} {
+		sign float64
+	}{{role: roleCapStart, sign: -1}, {role: roleCapEnd, sign: 1}} {
 		f := roles[cap.role]
 		if f == nil {
 			return undercutOutcome{}
 		}
-		if opposesPull(cap.v, cap.v) {
-			faces = append(faces, f)
+		verdict, ok := capNormalDecision(m, pull, cap.sign)
+		if !listVerdict(&faces, &undecided, f, verdict, ok) {
+			return undercutOutcome{}
 		}
 	}
 
@@ -119,7 +125,6 @@ func capBlendUndercuts(b *Body, cbp capBlendPayload, pull r3.Vec) undercutOutcom
 	// payload's own deterministic patch order (Table BX row BX3), so the faces
 	// this survey reports — public output through Report.Bodies[i].Undercuts —
 	// come back in the same sequence on every call.
-	undecided := false
 	for _, patch := range cbp.patches {
 		f := roles[patch.role]
 		if f == nil {
@@ -154,16 +159,13 @@ func capBlendUndercuts(b *Body, cbp capBlendPayload, pull r3.Vec) undercutOutcom
 		// reading was assembled from bounded readings. A point proven to oppose
 		// lists this patch; only an all-clear needs every point to clear. A
 		// remaining straddle makes this patch undecided without discarding
-		// other patches already proven to oppose.
-		switch {
-		case mn > allow:
-			// Every point's component is above zero: nothing opposes the pull.
-		case mn+allow < 0 && mx-allow > -1:
-			// One point is proven below zero, and a point is proven above -1,
-			// so this is a genuine opposition rather than opposesPull's
-			// exactly-antiparallel carve-out.
+		// other patches, receiver or patch, already proven to oppose —
+		// decidePull's own three-valued rule (survey_undercut.go), read at this
+		// patch's own allowance rather than the receiver faces' proven zero.
+		switch decidePull(mn, mx, allow) {
+		case pullOpposes:
 			faces = append(faces, f)
-		default:
+		case pullUndecided:
 			undecided = true
 		}
 	}
