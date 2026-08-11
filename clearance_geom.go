@@ -1571,9 +1571,12 @@ func (f *cFace) torusCrossings(ctx context.Context, p, dir r3.Vec, tol float64) 
 		// A repeated root is a tangency somewhere on the line: ambiguous.
 		return 0, false, nil
 	}
-	chain := sturmChain(sf)
+	chain, err := sturmChainIntContext(ctx, sf)
+	if err != nil {
+		return 0, false, err
+	}
 	n := 0
-	ivs, err := rpIsolateRootsContext(ctx, sf)
+	ivs, err := rpIsolateRootsContext(ctx, sf, chain)
 	if err != nil {
 		return 0, false, err
 	}

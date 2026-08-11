@@ -73,8 +73,9 @@ func squaredSpeed(span bezierSpan) ratPoly {
 // §6.5 states it: ratPoly's Sturm chain counts roots on the HALF-OPEN (0, 1],
 // so the value at 0 is reported beside it and the closed span is covered only
 // by reading both.
-func closedSpanRootCount(s ratPoly) (halfOpen int, atZero *big.Rat) {
-	chain := sturmChain(rpSquareFree(rpTrim(s)))
+func closedSpanRootCount(t *testing.T, s ratPoly) (halfOpen int, atZero *big.Rat) {
+	t.Helper()
+	chain := mustSturmChainInt(t, rpSquareFree(rpTrim(s)))
 	return sturmCount(chain, big.NewRat(0, 1), big.NewRat(1, 1)), rpEval(s, big.NewRat(0, 1))
 }
 
@@ -312,7 +313,7 @@ func TestInteriorCuspFoldsToAStrictSignWithoutRegularity(t *testing.T) {
 	// the span, so the root count alone already refuses R19.
 	s := squaredSpeed(spans[0])
 	require.Equal(t, 0, rpEval(s, big.NewRat(1, 2)).Sign(), "the speed vanishes at t = 1/2 — an ordinary cusp")
-	halfOpen, atZero := closedSpanRootCount(s)
+	halfOpen, atZero := closedSpanRootCount(t, s)
 	require.Equal(t, 1, halfOpen, "the Sturm chain must see that root on (0, 1]")
 	require.Equal(t, 1, atZero.Sign(), "and the span's own start is regular, so only the count refuses it")
 }
@@ -337,7 +338,7 @@ func TestEndpointCuspEscapesAHalfOpenRootCount(t *testing.T) {
 		"every coefficient >= 0 with strict entries: the coefficient test alone publishes a strict '+'")
 
 	s := squaredSpeed(spans[0])
-	halfOpen, atZero := closedSpanRootCount(s)
+	halfOpen, atZero := closedSpanRootCount(t, s)
 	require.Equal(t, 0, halfOpen, "the half-open count finds NO root — on its own it admits this span")
 	require.Equal(t, 0, atZero.Sign(), "yet S(0) is zero: C'(0) = 3(P1 - P0) = (0, 0), so the span has no direction there")
 }
@@ -479,7 +480,7 @@ func TestDegreeOneSpansCarryAZeroCurvatureNumerator(t *testing.T) {
 		// so the half-open count sees no root and the endpoint value is nonzero.
 		s := squaredSpeed(span)
 		require.Equal(t, []string{"1"}, ratStrings(rpTrim(s)), "span %d's S is the constant 1", i)
-		halfOpen, atZero := closedSpanRootCount(s)
+		halfOpen, atZero := closedSpanRootCount(t, s)
 		require.Equal(t, 0, halfOpen, "span %d's speed has no root on (0, 1]", i)
 		require.Equal(t, 1, atZero.Sign(), "span %d's speed is nonzero at its start too", i)
 	}
