@@ -344,7 +344,9 @@ func buildCapBand(ctx context.Context, body *Body, ref StepRef, cbp capBlendPayl
 			sign = -1
 		}
 		samplePoint := pl.point(w.cU+w.radius, w.cV, sideZ)
-		fixPatchOrientation(patch, pl, samplePoint, sign, 0, -matSign)
+		if err := fixPatchOrientation(patch, pl, samplePoint, sign, 0, -matSign); err != nil {
+			return capBandResult{}, err
+		}
 		// th0, th1 record the patch's ANGULAR EXTENT, not the wall's own
 		// walked sense: the DX7 survey reads the window as an increasing
 		// pair. The sense itself is not discarded — sweepCCW keeps it, and
@@ -508,7 +510,9 @@ func buildCapBand(ctx context.Context, body *Body, ref StepRef, cbp capBlendPayl
 		// decides nothing at all. Verified empirically (never hand-trusted):
 		// fixPatchOrientation checks the actual built surface's own NormalAt
 		// against this reference and reverses only if they disagree.
-		fixPatchOrientation(face, pl, pl.point(j.vU+d*math.Cos(arcTh0[i]), j.vV+d*math.Sin(arcTh0[i]), capZ), -math.Cos(arcTh0[i]), -math.Sin(arcTh0[i]), -matSign)
+		if err := fixPatchOrientation(face, pl, pl.point(j.vU+d*math.Cos(arcTh0[i]), j.vV+d*math.Sin(arcTh0[i]), capZ), -math.Cos(arcTh0[i]), -math.Sin(arcTh0[i]), -matSign); err != nil {
+			return capBandResult{}, err
+		}
 		slantIn[i].faces = append(slantIn[i].faces, face)
 		arc.faces = append(arc.faces, face)
 		slantOut[i].faces = append(slantOut[i].faces, face)
@@ -669,7 +673,9 @@ func buildCapBand(ctx context.Context, body *Body, ref StepRef, cbp capBlendPayl
 			refU, refV = sign*math.Cos(w.th0), sign*math.Sin(w.th0)
 			samplePoint = pl.point(w.cU+w.radius*math.Cos(w.th0), w.cV+w.radius*math.Sin(w.th0), sideZ)
 		}
-		fixPatchOrientation(face, pl, samplePoint, refU, refV, -matSign)
+		if err := fixPatchOrientation(face, pl, samplePoint, refU, refV, -matSign); err != nil {
+			return capBandResult{}, err
+		}
 		side.faces = append(side.faces, face)
 		trailSlant.faces = append(trailSlant.faces, face)
 		capEdge.faces = append(capEdge.faces, face)
@@ -949,13 +955,23 @@ func capNameOf(matSign float64) string {
 // Cone's radially-outward formula both flip with which cap a band is on
 // (docs/modify-reach-design.md §8.3), so this call is the ONE place that
 // decides the sign, from the analytic geometry itself.
-func fixPatchOrientation(f *Face, pl prismPayload, samplePoint r3.Vec, refU, refV, refZ float64) {
+//
+// When NormalAt itself refuses at samplePoint, the sign is a build-time
+// question this evaluator cannot finish, so §11 gives it no undecided state:
+// fixPatchOrientation returns SX15 (docs/modify-reach-design.md §4) as
+// ErrUnsupported rather than leaving face.reversed at whatever the caller
+// constructed it with. NormalAt's own refusal there is ErrDegenerate, but
+// that sentinel and ErrUnsupported are opposite existence claims a caller
+// branches on (capblend.go's wrapCapBlendAuditError), so the underlying error
+// is folded in with %v, never %w.
+func fixPatchOrientation(f *Face, pl prismPayload, samplePoint r3.Vec, refU, refV, refZ float64) error {
 	n, err := f.NormalAt(samplePoint)
 	if err != nil {
-		return
+		return fmt.Errorf(`%w: a cap-loop chamfer band patch's outward orientation cannot be certified; its own normal reading refuses at the build's orientation sample point (%v)`, ErrUnsupported, err)
 	}
 	ref := pl.dir(refU, refV, refZ)
 	if n.Value.Dot(ref) < 0 {
 		f.reversed = !f.reversed
 	}
+	return nil
 }
