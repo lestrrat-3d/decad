@@ -297,13 +297,13 @@ region quantity to gate.
 For a staged pair cause, the slice carries both the deprecated broad
 `DiagUnsupportedPair` compatibility entry and the cause-specific entry.
 
-A proven solid almost always forms its tolerance reference, so the tolerance
-gate almost never yields a reference-less `Suspect`: an analytic reading
-carries a zero `Bound` and short-circuits the gate before any reference is
-consulted (`verify.go:607-609,:624-626`), and a faceted body always forms a
-usable reference — its `payload.diameter` is guaranteed at build
+Every shipped payload class forms its tolerance reference, so a reference-less
+`Suspect` is a degenerate reading rather than a payload the gate cannot judge:
+an analytic reading carries a zero `Bound` and short-circuits the gate before
+any reference is consulted (`verify.go:607-609,:624-626`), and a faceted body
+always forms a usable reference — its `payload.diameter` is guaranteed at build
 (`boolean_body.go:300-304`) and an edge length is a finite chord sum
-(`boolean_body.go:757-778`). For most other shipped payloads `bodyGateDiameter`
+(`boolean_body.go:757-778`). For the other shipped payloads `bodyGateDiameter`
 (`verify.go`) forms a body diameter too, through one of two carrier models. A
 `revolvePayload`, or a `prismPayload` whose two axial displacements are zero,
 reads it exactly off the same analytic carrier the clearance kernel proves
@@ -311,24 +311,36 @@ against (`newBodyGeomBudget`/`clearance_geom.go`). A `prismPayload` with a
 nonzero `z0Delta` or `z1Delta` uses those held carrier witnesses too, but each
 witness can move by `axialDelta`; `bodyGateDiameter` returns the witness maximum
 minus `2*axialDelta`, rounded toward zero. That is a certified LOWER bound on
-the denoted body's diameter, so it can only tighten the gate. **A
-`prismPayload` whose own `sectionDelta` is nonzero**
-(`docs/prism-boolean-design.md` §7's re-expressed section, e.g. the analytic
-`Union` of a placed prism pair) is different: that carrier model refuses it
-(`clearance_geom.go`'s `addPrismFaces`), `envelopePrismFor` below has no arm for
-a bare `prismPayload` either, and `bodyGateDiameter` returns no diameter at all.
-Every `DiagMeasurementBeyondTolerance` such a body's area, bounds, volume or
-centroid readings raise then carries a nil `Required` — the one documented
-reference-less `Suspect` this design admits (`verify_diagnostics_test.go` pins
-it).
+the denoted body's diameter, so it can only tighten the gate.
+
+**A `prismPayload` whose own `sectionDelta` is nonzero**
+(`docs/prism-boolean-design.md` §7's re-expressed or cut section, e.g. the
+analytic `Union` of a placed prism pair, or of any pair whose merge cut a wall)
+reaches neither model: the clearance kernel's carrier model refuses it
+(`clearance_geom.go`'s `addPrismFaces`), because a certificate has to be an
+exact statement about a boundary and that payload holds its own only within
+`sectionDelta`. A diameter is not a certificate, so `gateWitnessPrism` below
+gives it the third arm of `fallbackGateDiameter`: the body's OWN recorded
+section, read through the same witness maximum every other prism is read
+through. §7 proves each recorded boundary point sits within `sectionDelta` of
+the section the payload denotes, and each recorded level within `axialDelta` of
+the level it denotes; the two are perpendicular — one moves a coordinate IN the
+plane, the other moves a level ALONG the normal — so their sum bounds how far a
+lifted witness sits from the body point below it, and the witness maximum minus
+twice that sum is again a certified LOWER bound. This arm is not a containing
+shape and does not need to be: the recorded section may sit either side of the
+denoted one, and only the subtraction decides the direction the reference errs
+in. `verify_diagnostics_test.go` pins the recovered reference against the
+fixture's own true diameter.
 
 **A free-form-walled `prismPayload` — not reachable through the public
-surface yet (`docs/spline-design.md` §10) — reaches this same gap for the
-same structural reason, and gets its own arm rather than inheriting the nil
-`Required` above.** Its exact carrier model has no arm for a `NURBSSurface`
+surface yet (`docs/spline-design.md` §10) — misses the exact carrier model for
+the same structural reason, and gets an arm of its own rather than a
+reference-less `Suspect`.** That model has no arm for a `NURBSSurface`
 side face any more than it has one for the `sectionDelta` case, and
-`envelopePrismFor` has none for a bare `prismPayload` either. What that arm
-reports is a certified LOWER bound on the body's own diameter: the maximum
+`gateWitnessPrism`'s own displaced-section arm answers only for a section a
+displacement separates from its denotation, not for a wall shape the reader
+cannot sample. What this arm reports is a certified LOWER bound on the body's own diameter: the maximum
 distance over a finite set of points KNOWN TO LIE ON the body — every
 analytic section vertex at both cap heights, and every free-form span's own
 two endpoints at both cap heights. A Bézier interpolates its ends exactly, so
@@ -342,8 +354,7 @@ body's true diameter and never overstate it — the same construction
 polyhedron, so its vertex maximum IS the true diameter, while a curved wall's
 farthest pair can sit between two sampled points, which is exactly why this
 arm claims a bound and not the diameter. The set is never empty for a closed
-section, so this arm always yields a diameter and never falls back to the
-reference-less case above.
+section, so this arm always yields a diameter.
 
 Those span endpoints are read off `docs/spline-design.md` §5.1's own
 exact-rational Bézier conversion, for every Tier A kind alike. A
@@ -374,10 +385,14 @@ diameter instead does not widen a bound, it rewrites the public tolerance
 semantics §3 and §5 state.
 
 A `cupPayload` or `capBlendPayload` reduces to a modify op applied to a
-straight-prism receiver section, and `envelopeGateDiameter`/`envelopePrismFor`
+straight-prism receiver section, and `fallbackGateDiameter`/`gateWitnessPrism`
 read their diameter off a containing prism envelope rather than off the
 kernel's exact model, which does not cover them — the two arms read different
-geometry and contain the body for different reasons. `capBlendPayload` reads
+geometry and contain the body for different reasons. Both read a section that
+is its own denotation, because every modify op refuses a receiver carrying a
+section displacement (`fillet.go`'s `requireExactSection`), so the axial
+displacement below is the only one their witnesses carry.
+`capBlendPayload` reads
 the receiver's own unrewritten section on its unchanged interval: a cap-loop
 chamfer only ever cuts along a chord whose feet sit on the receiver's own
 recorded walls, and fills a concave corner strictly within the convex hull of
@@ -402,7 +417,7 @@ that amount, rounded toward zero, before publishing the reference. It then
 reports a conservative lower bound even when the envelope's held shape is
 larger than the body it contains.
 
-What `envelopeGateDiameter` reports is not that shape's true diameter, though,
+What `fallbackGateDiameter` reports is not that shape's true diameter, though,
 but a *reading* of it, taken through the identical witness maximum a shipped
 `prismPayload` already reads its own diameter through: `addPrismFaces` emits
 only two witnesses per circular wall — the mid-angle point at mid-height, and
@@ -425,7 +440,7 @@ the only sampled points are `th0`, the mid-angle, and `th1`, mutually
 defect the fallback introduces: the same reader already understates the
 identical way for an ordinary shipped `prismPayload` built from the same
 curved section, through `newBodyGeomBudget`'s own carrier model, so
-`envelopeGateDiameter` is no weaker than the exact path it stands in for. The
+`fallbackGateDiameter` is no weaker than the exact path it stands in for. The
 repair belongs to that shared reader — every consumer of `addPrismFaces`'s and
 `region2.samples`'s witnesses gains it at once — and is tracked as a
 follow-up rather than fixed here. The understatement stays inside the one

@@ -114,21 +114,17 @@ func TestPrismUnionCoplanarCircleLensBounds(t *testing.T) {
 			require.NoError(t, err)
 			require.LessOrEqualf(t, cBound, 1e-6, "centroid bound %g mm is not small", cBound)
 
-			// The bounds above are tight, but Verify still reads Suspect: the
-			// merged section carries §7's cut displacement, and the tolerance
-			// gate anchors each reading against a reference bodyGateDiameter
-			// builds through the clearance kernel's model, which declines a
-			// displaced payload (§12). So every diagnostic here is the absence
-			// of a reference — Required is nil — never a bound found too large.
-			// Giving such a body a reference of its own is separate work.
+			// Verify reads the same tightness the assertions above do. The
+			// merged section carries §7's cut displacement, so the clearance
+			// kernel's exact carrier model declines it (§12) and the tolerance
+			// gate falls back to the body's own recorded section for the
+			// reference it anchors each reading against (verification design
+			// §3). Bounds this far below their own values then pass that gate.
 			report, err := doc.Verify(t.Context())
 			require.NoError(t, err)
-			require.Equal(t, decad.Suspect, report.Status)
-			require.NotEmpty(t, report.Diagnostics)
-			for _, d := range report.Diagnostics {
-				require.Equal(t, decad.DiagMeasurementBeyondTolerance, d.Code)
-				require.Nil(t, d.Required, "reading %s: the gate found no reference, so it states no threshold", d.Reading)
-			}
+			require.Equal(t, decad.Sound, report.Status)
+			require.True(t, report.Trustworthy())
+			require.Empty(t, report.Diagnostics)
 		})
 	}
 }
