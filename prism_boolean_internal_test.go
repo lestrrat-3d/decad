@@ -548,14 +548,28 @@ func TestPrismUnionCleanOperandsMergedLoopClosesExactly(t *testing.T) {
 // its entity's own natural domain.
 
 // prismSplitLeftCellBody builds the rectangle [1,11]×[0,10] split by a fixed
-// line through (5,-1)-(5,11) and extrudes the LEFT cell h mm — task fu143's
+// line through (5,-2)-(5,14) and extrudes the LEFT cell h mm — task fu143's
 // own fixture (its investigation section 1). The left cell's bottom and top
 // walls are Partial fragments of the rectangle's own bottom/top lines,
 // recorded with the entity's full [1,11] Start/End and a narrowed
 // TStart/TEnd denoting the split at u≈5, so the corner where they meet the
-// right wall (the split line itself, whole at u=5 exactly) is a coordinate
-// this evaluator's own scene construction computes, not one either wall's
-// record states outright.
+// right wall is a coordinate this evaluator's own scene construction
+// computes, not one either wall's record states outright.
+//
+// Every one of those corners must come out the SAME coordinate on every host,
+// or the loop buildPrismScene hands back no longer closes and RecordProfile
+// refuses it before the charge under test is ever reached. Each corner is
+// reached twice by separate arithmetic — once along each of the two walls that
+// meet there, through lerp2's start + t·(end − start) — and a host that
+// contracts that expression into a fused multiply-add rounds it once where a
+// host without the fusion rounds it twice. So this fixture states the split
+// line's own endpoints as (5,-2)-(5,14): its span is 16 and the rectangle's
+// walls cut it at v = 0 and v = 10, making the recorded parameters 1/8 and
+// 3/4 exactly. Every product and sum lerp2 then forms is representable, so
+// both spellings return the identical corner and neither rounds at all. The
+// bottom and top walls' own parameters, 0.4 and 0.6, are not exact binary
+// fractions, but the value 1 + 0.4·10 sits a quarter of an ulp above 5 under
+// either spelling, well inside the half ulp that rounds it back to 5.
 //
 // prismFixtureHeight is every fixture below's own sweep height: every test in
 // this suite compares two operands and needs no other value.
@@ -568,8 +582,8 @@ func prismSplitLeftCellBody(t *testing.T, doc *Document) *Body {
 	require.NoError(t, err)
 	r := s.CreateRectangle(1, 0, 11, 10)
 	s.Fix(r.A)
-	lo := s.CreatePoint(5, -1)
-	hi := s.CreatePoint(5, 11)
+	lo := s.CreatePoint(5, -2)
+	hi := s.CreatePoint(5, 14)
 	s.Fix(lo)
 	s.Fix(hi)
 	s.CreateLine(lo, hi)
@@ -593,7 +607,28 @@ func prismSplitLeftCellBody(t *testing.T, doc *Document) *Body {
 
 	body, err := doc.Extrude(s, left, Distance{D: units.Millimeters(prismFixtureHeight), Dir: Along})
 	require.NoError(t, err)
+	prismRequireSplitWallRange(t, body.payload.(prismPayload).profile)
 	return body
+}
+
+// prismRequireSplitWallRange pins the recorded range of the split-left-cell
+// fixture's own right wall to the two exact binary fractions its doc comment
+// derives every corner's host independence from. A host whose sketch reports
+// any other parameter must fail here, naming the fixture, rather than at
+// whichever consumer first walks that parameter to a corner its neighbour
+// does not share.
+func prismRequireSplitWallRange(t *testing.T, p ProfileRecord) {
+	t.Helper()
+	for _, seg := range p.Outer.Segments {
+		ls, ok := seg.(LineSeg)
+		if !ok || ls.Start != (Point2{U: 5, V: -2}) || ls.End != (Point2{U: 5, V: 14}) {
+			continue
+		}
+		require.Equal(t, 0.125, ls.TStart)
+		require.Equal(t, 0.75, ls.TEnd)
+		return
+	}
+	t.Fatal("the split-left-cell fixture's own right wall was not found")
 }
 
 // prismRectBody extrudes the axis-aligned rectangle (x0, y0)-(x1, y1)
@@ -678,6 +713,48 @@ func prismBottomWallTEnd(t *testing.T, p ProfileRecord) float64 {
 	}
 	t.Fatal("the split-left-cell fixture's own bottom wall was not found")
 	return 0
+}
+
+// TestPrismSplitLeftCellFixtureWalksHostIndependently proves on THIS host the
+// property the fixture's own doc comment derives, and which only another host
+// could otherwise disprove: every corner the fixture's walls walk to is the
+// same coordinate whether or not the host fuses lerp2's multiply and add.
+// Each segment's endpoints are computed both ways and compared exactly, so a
+// future edit that reintroduces a parameter needing a rounding decision fails
+// here rather than on whichever host makes that decision differently.
+func TestPrismSplitLeftCellFixtureWalksHostIndependently(t *testing.T) {
+	// plainEnd and fusedEnd are lerp2's own two readings: its natural-bound
+	// arms return the recorded point verbatim, and its general arm is the one
+	// expression a fusing compiler contracts.
+	plainEnd := func(start, end Point2, at float64) Point2 {
+		switch at {
+		case 0:
+			return start
+		case 1:
+			return end
+		}
+		return Point2{U: start.U + at*(end.U-start.U), V: start.V + at*(end.V-start.V)}
+	}
+	fusedEnd := func(start, end Point2, at float64) Point2 {
+		switch at {
+		case 0:
+			return start
+		case 1:
+			return end
+		}
+		return Point2{U: math.FMA(at, end.U-start.U, start.U), V: math.FMA(at, end.V-start.V, start.V)}
+	}
+
+	doc := New()
+	p := prismSplitLeftCellBody(t, doc).payload.(prismPayload).profile
+	for i, seg := range p.Outer.Segments {
+		ls, ok := seg.(LineSeg)
+		require.Truef(t, ok, "the fixture is line-only: segment %d is a %T", i, seg)
+		for _, at := range []float64{ls.TStart, ls.TEnd} {
+			require.Equalf(t, plainEnd(ls.Start, ls.End, at), fusedEnd(ls.Start, ls.End, at),
+				"segment %d walks to a different endpoint at t=%v when the host fuses the multiply-add", i, at)
+		}
+	}
 }
 
 // TestPrismUnionTrimmedSourceSegmentChargesItsWalkedEndpoint is fu143's own
