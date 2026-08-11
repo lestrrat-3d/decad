@@ -135,6 +135,38 @@ func TestPrismCutCleanNestingBoreThroughHub(t *testing.T) {
 	require.Less(t, bound, want*1e-9, `the bound sits many decades below the value`)
 }
 
+// TestPrismCutCleanNestingRectangleBoreControlStaysExact is T4: the
+// whole-segment control for fu157's own fix. A rectangle drawn as four
+// SHARED-point lines (boxBody's own sketch.CreateRectangle, whose corners
+// are ONE Point each, never two independently-walked floats) has no
+// junction gap for buildPrismScene's weld to close, so sectionDelta stays
+// exactly 0 and the clean-nesting cut must keep publishing the same tiny,
+// circle-rounding-only bound it did before this fix existed — the weld's own
+// charge is a no-op on a section it never touches. The bore itself keeps the
+// result out of §7's Exact arm regardless (a surviving CircleSeg retires the
+// moment accumulator's own exactness, BoreThroughHub's own precedent above),
+// so the published bound, not the Exactness tag, is what pins the regression.
+func TestPrismCutCleanNestingRectangleBoreControlStaysExact(t *testing.T) {
+	const w, ht, r, h = 20.0, 12.0, 2.0, 5.0
+	doc := decad.New()
+	target := boxBody(t, doc, 0, -ht/2, w, ht/2, h) // y centered at 0, matching discBody's own cy
+	tool := discBody(t, doc, w/2, r, 3*h)
+
+	got, err := decad.Cut(target, tool)
+	require.NoError(t, err)
+	require.False(t, anyFaceIsFaceted(got), `the clean-nesting cut must build analytically`)
+
+	vol, err := got.Volume()
+	require.NoError(t, err)
+	want := w*ht*h - math.Pi*r*r*h
+	bound := boundMM3(t, vol)
+	require.LessOrEqual(t, math.Abs(volumeMM(t, vol)-want), bound)
+	require.Positive(t, bound)
+	require.Less(t, bound, want*1e-9,
+		`sectionDelta stays 0 for a control the weld never touches, so the bound stays circle-rounding-only`)
+	require.InDelta(t, 1137.168146928, volumeMM(t, vol), 1e-6)
+}
+
 // TestPrismCutCleanNestingKeepsAToolVertexTheFormulaMisses cuts with a tool
 // whose section has a vertex the line parameterization's own float formula does
 // not reproduce: for the pair 4/7 → 10/3, start + 1·(end − start) lands one ulp
@@ -471,4 +503,264 @@ func TestPrismCutCancellationLeavesDocumentUnchanged(t *testing.T) {
 	require.ErrorIs(t, err, context.Canceled)
 	require.Equal(t, beforeRecipe, doc.Recipe())
 	require.Equal(t, beforeBodies, doc.Bodies())
+}
+
+// overshootQuadHeight and overshootQuadOver are every T1/T2/T5 fixture's own
+// extrusion height and overshoot fraction — pulled out as constants, not
+// parameters, since every caller wants the same 5 mm sweep past the same 13%
+// overshoot.
+const (
+	overshootQuadHeight = 5.0
+	overshootQuadOver   = 0.13
+)
+
+// overshootQuadBody draws a quadrilateral through corners as four SEPARATE
+// lines, each one drawn past both of its own corners by overshootQuadOver (a
+// fraction of its own length) and Fix-ed at its own overshot ends, so sketch
+// cuts every one of the four into a Partial fragment sharing a junction with
+// its neighbours — fu157's own reproduction shape
+// (docs/prism-boolean-design.md §15): the recorded section carries a corner
+// sketch cut, not one the caller drew, so its junctions are the ones
+// buildPrismScene's own weld (§4.1) must close rather than a corner two
+// segments already agree on bit for bit.
+func overshootQuadBody(t *testing.T, doc *decad.Document, corners [][2]float64) *decad.Body {
+	t.Helper()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	n := len(corners)
+	for i := range n {
+		a, b := corners[i], corners[(i+1)%n]
+		dx, dy := b[0]-a[0], b[1]-a[1]
+		p := s.CreatePoint(a[0]-overshootQuadOver*dx, a[1]-overshootQuadOver*dy)
+		q := s.CreatePoint(b[0]+overshootQuadOver*dx, b[1]+overshootQuadOver*dy)
+		s.Fix(p)
+		s.Fix(q)
+		s.CreateLine(p, q)
+	}
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	profiles := s.Profiles()
+	best := 0
+	for i, p := range profiles {
+		if p.Area > profiles[best].Area {
+			best = i
+		}
+	}
+	body, err := doc.Extrude(s, profiles[best], decad.Distance{D: units.Millimeters(overshootQuadHeight), Dir: decad.Along})
+	require.NoError(t, err)
+	return body
+}
+
+// quadShoelaceArea is the independent-of-decad oracle for a simple polygon's
+// own area, used to compute the closed-form volume the fixtures below check
+// against — decad's OWN answer must never be the thing that proves itself.
+func quadShoelaceArea(corners [][2]float64) float64 {
+	area := 0.0
+	n := len(corners)
+	for i := range n {
+		x1, y1 := corners[i][0], corners[i][1]
+		x2, y2 := corners[(i+1)%n][0], corners[(i+1)%n][1]
+		area += x1*y2 - x2*y1
+	}
+	return math.Abs(area) / 2
+}
+
+// capOuterLoopEdges returns the outer loop's own edges of the ONE Plane cap
+// face that carries a hole (len(Loops()) == 2 — the bore's own new hole
+// distinguishes a cap from a Plane-surfaced SIDE wall, which never carries
+// one) — the loop fu157's own weld is under test for.
+func capOuterLoopEdges(t *testing.T, b *decad.Body) []*decad.Edge {
+	t.Helper()
+	var capFace *decad.Face
+	for _, f := range b.Faces() {
+		if _, ok := f.Surface().(decad.Plane); ok && len(f.Loops()) == 2 {
+			capFace = f
+			break
+		}
+	}
+	require.NotNil(t, capFace, `a cap face carrying the tool's new hole must exist`)
+	return capFace.Loops()[0].Edges() // Loops: "the outer loop first"
+}
+
+// TestPrismCutCleanNestingTargetWithCutFragments is fu157's own reproduction
+// (docs/prism-boolean-design.md §15): a target whose recorded section carries
+// four Partial fragments — a corner sketch cut, not a corner the caller drew
+// — cut by a nested tool. Before buildPrismScene welded each loop's own
+// junctions (§4.1), the two independently-walked floats at each shared
+// vertex differed, sketch's arrangement still admitted the loop on its own
+// proximity threshold, and RecordProfile's exact whole-edge comparison then
+// rejected the surviving fragment (ErrUnrecordableProfile) past §3.4's point
+// of no return, even though the fragment itself was never wrong.
+func TestPrismCutCleanNestingTargetWithCutFragments(t *testing.T) {
+	corners := [][2]float64{{-9.317, -5.731}, {10.29, -6.113}, {8.877, 7.219}, {-7.331, 6.407}}
+	const h, toolR = 5.0, 1.7
+	doc := decad.New()
+	target := overshootQuadBody(t, doc, corners)
+	tool := discBody(t, doc, 0, toolR, 15)
+	toolCyl := cylinderWall(t, tool)
+
+	got, err := decad.Cut(target, tool)
+	require.NoError(t, err, `the welded scene must resolve analytically, not refuse ErrUnrecordableProfile`)
+	require.False(t, anyFaceIsFaceted(got), `the analytic path must have built the result`)
+
+	vol, err := got.Volume()
+	require.NoError(t, err)
+	bound := boundMM3(t, vol)
+	require.LessOrEqual(t, bound, 1e-9,
+		`a mesh result's own bound for this pair is 0.0989 mm3 — the analytic bound must sit far below it`)
+	want := quadShoelaceArea(corners)*h - math.Pi*toolR*toolR*h
+	require.LessOrEqual(t, math.Abs(volumeMM(t, vol)-want), bound)
+
+	edges := capOuterLoopEdges(t, got)
+	require.Len(t, edges, 4, `the outer loop reproduces the target's own four recorded segments`)
+	for _, e := range edges {
+		_, ok := e.Curve().(decad.Line3)
+		require.True(t, ok, `every recorded segment is a line`)
+	}
+	for i, e := range edges {
+		next := edges[(i+1)%len(edges)]
+		require.Equal(t, e.End().Position().Value, next.Start().Position().Value,
+			`the recorded loop closes bit-exactly at every junction, wrap included`)
+	}
+
+	holes, err := decad.Faces(decad.Cylindrical()).Exactly(1).SelectFaces(got)
+	require.NoError(t, err)
+	require.Equal(t, toolCyl, holes[0].Surface().(decad.Cylinder),
+		`the new hole is byte-identical to the tool's own pre-cut record`)
+}
+
+// TestPrismIntersectNestedOperandWithCutFragments is T2, Intersect's own arm
+// of the same reproduction: the NESTED operand — not the target of a Cut —
+// carries the Partial fragments this time, and §7/Task 4.4 requires only
+// THAT operand's own weld to reach the result.
+func TestPrismIntersectNestedOperandWithCutFragments(t *testing.T) {
+	corners := [][2]float64{{-3.317, -2.731}, {3.29, -2.113}, {2.877, 3.219}, {-2.331, 2.407}}
+	const h, bigR = 5.0, 12.0
+	doc := decad.New()
+	small := overshootQuadBody(t, doc, corners)
+	big := discBody(t, doc, 0, bigR, h)
+
+	got, err := decad.Intersect(big, small)
+	require.NoError(t, err, `the welded scene must resolve analytically`)
+	require.False(t, anyFaceIsFaceted(got), `the analytic path must have built the result`)
+
+	vol, err := got.Volume()
+	require.NoError(t, err)
+	want := quadShoelaceArea(corners) * h
+	require.LessOrEqual(t, math.Abs(volumeMM(t, vol)-want), boundMM3(t, vol))
+
+	edges := capOuterLoopEdgesNoHole(t, got)
+	require.Len(t, edges, 4, `the result reproduces the nested operand's own four recorded segments`)
+	for i, e := range edges {
+		next := edges[(i+1)%len(edges)]
+		require.Equal(t, e.End().Position().Value, next.Start().Position().Value,
+			`the recorded outer loop closes bit-exactly, wrap included`)
+	}
+}
+
+// capOuterLoopEdgesNoHole is capOuterLoopEdges's companion for a hole-free
+// result (Intersect's nested operand carries no hole of its own, G6), where
+// every face — cap or side wall alike — has exactly one loop, so a
+// Plane-surfaced SIDE wall (a straight prism's own flat wall is planar too)
+// is not distinguishable from a cap by loop count alone. A cap's own Plane
+// normal is the sweep axis; a side wall's lies in the swept plane, so
+// |N.Z| == 1 (the fixtures below all sweep straight up the world Z axis)
+// singles the cap out.
+func capOuterLoopEdgesNoHole(t *testing.T, b *decad.Body) []*decad.Edge {
+	t.Helper()
+	for _, f := range b.Faces() {
+		pl, ok := f.Surface().(decad.Plane)
+		if !ok {
+			continue
+		}
+		if n := pl.Frame.N(); math.Abs(n.Z) == 1 {
+			return f.Loops()[0].Edges()
+		}
+	}
+	t.Fatal(`no cap face found`)
+	return nil
+}
+
+// TestPrismCutFragmentTargetAgreesWithTheMeshPath is T5: the same
+// cut-fragment target as TestPrismCutCleanNestingTargetWithCutFragments, cut
+// by a tool one mm below the shared plane so G3 misses and the mesh path
+// runs — the independent-path cross-check that the analytic answer §4.1's
+// weld now reaches is actually right, not merely well-formed.
+func TestPrismCutFragmentTargetAgreesWithTheMeshPath(t *testing.T) {
+	corners := [][2]float64{{-9.317, -5.731}, {10.29, -6.113}, {8.877, 7.219}, {-7.331, 6.407}}
+	const h, toolR = 5.0, 1.7
+	const meshBound = 0.0989
+
+	doc := decad.New()
+	analyticTarget := overshootQuadBody(t, doc, corners)
+	analyticTool := discBody(t, doc, 0, toolR, 15)
+	analyticGot, err := decad.Cut(analyticTarget, analyticTool)
+	require.NoError(t, err)
+	require.False(t, anyFaceIsFaceted(analyticGot))
+	analyticVol, err := analyticGot.Volume()
+	require.NoError(t, err)
+
+	meshTarget := overshootQuadBody(t, doc, corners)
+	meshTool := discBody(t, doc, 0, toolR, 15)
+	lowered, err := r3.Translation(r3.Vec{Z: -1})
+	require.NoError(t, err)
+	meshTool, err = meshTool.Placed(lowered)
+	require.NoError(t, err)
+	meshGot, err := decad.Cut(meshTarget, meshTool)
+	require.NoError(t, err)
+	require.True(t, anyFaceIsFaceted(meshGot), `G3 misses a tool translated off the shared plane`)
+	meshVol, err := meshGot.Volume()
+	require.NoError(t, err)
+	require.LessOrEqual(t, boundMM3(t, meshVol), meshBound*1.001, `premise: the mesh path's own bound for this pair`)
+
+	require.LessOrEqual(t, math.Abs(volumeMM(t, analyticVol)-volumeMM(t, meshVol)), meshBound,
+		`the analytic and mesh answers must agree within the mesh result's own bound`)
+}
+
+// TestPrismCutDShapeNestedBoreFallsBackWithNoAnalyticError is T6: the
+// circular-carrier limit (§7's own "sharp edge"). A target of one WHOLE
+// circle cut by a chord line — a D-shape, whose larger region is bounded by
+// one Partial arc and one Partial line, each sharing a junction with the
+// other — cut by a nested bore. This pair already falls back to the mesh
+// path today, for a reason independent of fu157's own fix (its junction
+// gap, whatever it is, never reaches a resolved candidate before the
+// clean-nesting search itself comes up empty), so this pins that the weld
+// does not by itself widen the analytic path's reach onto a circular
+// carrier's own junction: the error stays ErrUnsupported, never
+// ErrUnrecordableProfile.
+func TestPrismCutDShapeNestedBoreFallsBackWithNoAnalyticError(t *testing.T) {
+	const R, chordV, h = 10.0, 3.0, 5.0
+	doc := decad.New()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	o := s.CreatePoint(0, 0)
+	c := s.CreateCircle(o, R)
+	s.AddConstraint(sketch.NewDiameter(c, 2*R))
+	s.Fix(o)
+	a := s.CreatePoint(-2*R, chordV)
+	b := s.CreatePoint(2*R, chordV)
+	s.CreateLine(a, b)
+	s.Fix(a)
+	s.Fix(b)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	profiles := s.Profiles()
+	best := 0
+	for i, p := range profiles {
+		if p.Area > profiles[best].Area {
+			best = i
+		}
+	}
+	target, err := doc.Extrude(s, profiles[best], decad.Distance{D: units.Millimeters(h), Dir: decad.Along})
+	require.NoError(t, err)
+	tool := discBody(t, doc, 0, 2.0, 15)
+
+	_, err = decad.Cut(target, tool)
+	require.Error(t, err)
+	require.ErrorIs(t, err, decad.ErrUnsupported,
+		`the D-shape/bore pair still falls back to the mesh path's own refusal`)
+	require.NotErrorIs(t, err, decad.ErrUnrecordableProfile,
+		`the fix's reach is pinned, not assumed, onto a circular carrier's own junction`)
 }

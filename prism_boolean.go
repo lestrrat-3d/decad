@@ -114,12 +114,28 @@ func tryPrismBoolean(ctx context.Context, op OpKind, a, b *Body) (prismPayload, 
 	}
 }
 
+// weldedSectionDelta folds a weld displacement (§4.1's delta_weld) into an
+// existing section-displacement bound without perturbing the case that never
+// welds anything. absSumUpper (moments.go) up-rounds its running total once
+// PER TERM, so even a literal 0 term nudges an already-positive base up by
+// an extra ulp — a weld that closed nothing must be OMITTED from the sum
+// entirely, not summed as zero, or every caller-drawn payload this design
+// never touches would still see its own sectionDelta move by a spurious ulp
+// or two. weld is never negative (weldDisplacementAllow's own contract), so
+// <= 0 is exactly "nothing to charge."
+func weldedSectionDelta(base, weld float64) float64 {
+	if weld <= 0 {
+		return base
+	}
+	return absSumUpper(base, weld)
+}
+
 // resolveAndBuildPrismUnion runs Union's hole-free select-all/merge/chain
 // resolution (§4.2) and, once it commits, §6's build-time audit and §7's
 // exactness. Split out of tryPrismBoolean only so each op's own resolve+build
 // sequence reads as one unit.
 func resolveAndBuildPrismUnion(ctx context.Context, budget *workBudget, pa, pb prismPayload, reexpress *prismReexpression) (prismPayload, bool, error) {
-	merged, cutDelta, resolved, err := resolvePrismUnion(ctx, budget, pa, pb, reexpress)
+	merged, cutDelta, weldA, weldB, resolved, err := resolvePrismUnion(ctx, budget, pa, pb, reexpress)
 	if err != nil {
 		return prismPayload{}, false, err
 	}
@@ -144,12 +160,15 @@ func resolveAndBuildPrismUnion(ctx context.Context, budget *workBudget, pa, pb p
 		// the rounding that re-expression commits. On top of both, every
 		// surviving CUT fragment names its endpoints by a freshly rounded
 		// parameter this union did not have before it ran, so cutDelta stands
-		// even where the two operands carried nothing at all. A chained union
-		// must not discard any of the three.
-		sectionDelta: absSumUpper(
+		// even where the two operands carried nothing at all — and so does
+		// weldA/weldB, buildPrismScene's own charge for the junction it had
+		// to weld while ASSEMBLING the two operands' own segments into this
+		// scene in the first place, before any cut ever ran. A chained union
+		// must not discard any of the four.
+		sectionDelta: weldedSectionDelta(weldedSectionDelta(absSumUpper(
 			max(pa.sectionDelta, absSumUpper(pb.sectionDelta, reexpress.delta)),
 			cutDelta,
-		),
+		), weldA), weldB),
 	}
 	return result, true, nil
 }
@@ -281,10 +300,11 @@ func prismUnionZIntervalMatches(pa, pb prismPayload) bool {
 	return pa.z0 == pb.z0+shift && pa.z1 == pb.z1+shift
 }
 
-// resolvePrismUnion is §4.2's hole-free select-all/merge/chain path. It returns
-// the merged section and §7's cut displacement over it — the largest allowance
-// any surviving fragment's own cut parameters owe, zero when every survivor is a
-// whole edge.
+// resolvePrismUnion is §4.2's hole-free select-all/merge/chain path. It
+// returns the merged section, §7's cut displacement over it — the largest
+// allowance any surviving fragment's own cut parameters owe, zero when every
+// survivor is a whole edge — and buildPrismScene's own per-operand weld
+// displacement (weldA, weldB).
 //
 // resolved=false (err always nil in that case) means the pair's topology is
 // unresolved (§4.4), or a split boundary can amplify either input's section
@@ -292,31 +312,31 @@ func prismUnionZIntervalMatches(pa, pb prismPayload) bool {
 // back to the mesh path with no error. A non-nil error — including ctx
 // cancellation surfacing through budget — is always genuine and must
 // propagate.
-func resolvePrismUnion(ctx context.Context, budget *workBudget, pa, pb prismPayload, reexpress *prismReexpression) (ProfileRecord, float64, bool, error) {
-	s, _, err := buildPrismScene(budget, pa, pb, reexpress)
+func resolvePrismUnion(ctx context.Context, budget *workBudget, pa, pb prismPayload, reexpress *prismReexpression) (ProfileRecord, float64, float64, float64, bool, error) {
+	s, _, weldA, weldB, err := buildPrismScene(budget, pa, pb, reexpress)
 	if err != nil {
-		return ProfileRecord{}, 0, false, err
+		return ProfileRecord{}, 0, 0, 0, false, err
 	}
 	if err := budget.err(); err != nil {
-		return ProfileRecord{}, 0, false, err
+		return ProfileRecord{}, 0, 0, 0, false, err
 	}
 	profiles, err := prismProfilesContext(ctx, s.Profiles)
 	if err != nil {
-		return ProfileRecord{}, 0, false, err
+		return ProfileRecord{}, 0, 0, 0, false, err
 	}
 	if err := budget.err(); err != nil {
-		return ProfileRecord{}, 0, false, err
+		return ProfileRecord{}, 0, 0, 0, false, err
 	}
 	if err := budget.step(); err != nil {
-		return ProfileRecord{}, 0, false, err
+		return ProfileRecord{}, 0, 0, 0, false, err
 	}
 	if len(profiles) == 0 {
-		return ProfileRecord{}, 0, false, nil // §4.4: the scene holds no bounded cell at all
+		return ProfileRecord{}, 0, 0, 0, false, nil // §4.4: the scene holds no bounded cell at all
 	}
 	if pa.sectionDelta != 0 || pb.sectionDelta != 0 || !reexpress.identity {
 		split, err := prismProfilesHaveSplitBoundary(budget, profiles)
 		if err != nil {
-			return ProfileRecord{}, 0, false, err
+			return ProfileRecord{}, 0, 0, 0, false, err
 		}
 		if split {
 			// A coordinate error in re-expressed B, or either source section's
@@ -324,7 +344,7 @@ func resolvePrismUnion(ctx context.Context, budget *workBudget, pa, pb prismPayl
 			// delta/sin(theta). This increment has no certified lower
 			// crossing-angle bound, so it cannot record the fragment with an
 			// honest displacement bound.
-			return ProfileRecord{}, 0, false, nil
+			return ProfileRecord{}, 0, 0, 0, false, nil
 		}
 	}
 
@@ -343,18 +363,18 @@ func resolvePrismUnion(ctx context.Context, budget *workBudget, pa, pb prismPayl
 	counts := map[edgeKey]int{}
 	for _, p := range profiles {
 		if err := budget.step(); err != nil {
-			return ProfileRecord{}, 0, false, err
+			return ProfileRecord{}, 0, 0, 0, false, err
 		}
 		if !p.Valid {
 			// RB1: a candidate region the merge depends on is invalid. Every
 			// cell in this two-operand scene is selected for Union, so any
 			// invalid cell is a genuine refusal, not an unresolved topology.
-			return ProfileRecord{}, 0, false, fmt.Errorf(`%w: the union scene's arrangement reports an invalid region`, ErrUnsupported)
+			return ProfileRecord{}, 0, 0, 0, false, fmt.Errorf(`%w: the union scene's arrangement reports an invalid region`, ErrUnsupported)
 		}
 		for _, loop := range append([][]sketch.BoundaryEdge{p.Outer}, p.Holes...) {
 			for _, e := range loop {
 				if err := budget.step(); err != nil {
-					return ProfileRecord{}, 0, false, err
+					return ProfileRecord{}, 0, 0, 0, false, err
 				}
 				counts[edgeKey{entity: e.Entity, t0: e.TStart, t1: e.TEnd}]++
 			}
@@ -372,7 +392,7 @@ func resolvePrismUnion(ctx context.Context, budget *workBudget, pa, pb prismPayl
 		for _, loop := range append([][]sketch.BoundaryEdge{p.Outer}, p.Holes...) {
 			for _, e := range loop {
 				if err := budget.step(); err != nil {
-					return ProfileRecord{}, 0, false, err
+					return ProfileRecord{}, 0, 0, 0, false, err
 				}
 				n := counts[edgeKey{entity: e.Entity, t0: e.TStart, t1: e.TEnd}]
 				switch n {
@@ -381,21 +401,21 @@ func resolvePrismUnion(ctx context.Context, budget *workBudget, pa, pb prismPayl
 				case 2:
 					// dropped: an interior wall
 				default:
-					return ProfileRecord{}, 0, false, nil // §4.4: not a shape this increment covers
+					return ProfileRecord{}, 0, 0, 0, false, nil // §4.4: not a shape this increment covers
 				}
 			}
 		}
 	}
 	if len(survivors) == 0 {
-		return ProfileRecord{}, 0, false, nil
+		return ProfileRecord{}, 0, 0, 0, false, nil
 	}
 
-	chain, resolved, err := chainPrismUnionSurvivors(budget, survivors)
+	chain, resolvedChain, err := chainPrismUnionSurvivors(budget, survivors)
 	if err != nil {
-		return ProfileRecord{}, 0, false, err
+		return ProfileRecord{}, 0, 0, 0, false, err
 	}
-	if !resolved {
-		return ProfileRecord{}, 0, false, nil // §4.4: the survivors do not close into one simple loop
+	if !resolvedChain {
+		return ProfileRecord{}, 0, 0, 0, false, nil // §4.4: the survivors do not close into one simple loop
 	}
 
 	// Point of no return crossed within this function's own contract: every
@@ -404,20 +424,20 @@ func resolvePrismUnion(ctx context.Context, budget *workBudget, pa, pb prismPayl
 	cutDelta := 0.0
 	for i, e := range chain {
 		if err := budget.step(); err != nil {
-			return ProfileRecord{}, 0, false, err
+			return ProfileRecord{}, 0, 0, 0, false, err
 		}
 		seg, err := recordEdge(e)
 		if err != nil {
-			return ProfileRecord{}, 0, false, err
+			return ProfileRecord{}, 0, 0, 0, false, err
 		}
 		segs[i] = seg
 		d, err := prismUnionCutDelta(e, seg)
 		if err != nil {
-			return ProfileRecord{}, 0, false, err
+			return ProfileRecord{}, 0, 0, 0, false, err
 		}
 		cutDelta = math.Max(cutDelta, d)
 	}
-	return ProfileRecord{Outer: LoopRecord{Segments: segs}}, cutDelta, true, nil
+	return ProfileRecord{Outer: LoopRecord{Segments: segs}}, cutDelta, weldA, weldB, true, nil
 }
 
 // prismUnionCutDelta is §7's cut charge for one surviving boundary edge: how
@@ -624,6 +644,25 @@ func auditPrismUnionSection(budget *workBudget, pa prismPayload, merged ProfileR
 // matching entities, and sketch's own coincident-carrier resolution decides
 // whether they merge.
 //
+// Within one loop, buildPrismScene welds every junction to a SINGLE
+// coordinate before any entity is created (§4.1): LoopRecord's own contract
+// (seam §2) is that one segment's walk ends exactly where the next one's
+// starts, so the two floats walkOf independently evaluates there are two
+// roundings of ONE recorded vertex, not two vertices — rebuilding both
+// separately (as this file did before this weld existed) hands sketch a loop
+// that does not close in its own arrangement's terms, which surfaces
+// downstream as RecordProfile rejecting a surviving segment (§9 RB8) even
+// though nothing about the fragment itself was wrong. The weld sets each
+// segment's start coordinate to its predecessor's own end (wrap included),
+// never the reverse, so it is decad's own construction choice on decad's own
+// numbers: no threshold decides whether to weld, and the third and fourth
+// return values are weldDisplacementAllow's own coordinate-displacement
+// bound on the largest junction gap the weld closed per operand, charged
+// (never blessed) into the result's section displacement by every resolver
+// in this file and prism_boolean_nesting.go. A loop that is a single whole
+// closed curve (one CircleSeg spanning the full turn) has no junction and
+// is left alone.
+//
 // The second return value is §4.1's tag map: which operand and which loop
 // each created entity traces to (record.go's own "outer loops CCW, holes CW"
 // convention is unaffected — this is provenance, not orientation). Union's
@@ -649,11 +688,11 @@ func auditPrismUnionSection(budget *workBudget, pa prismPayload, merged ProfileR
 // region in whatever new arrangement it enters. Every segment's OWN walked
 // portion, and nothing more, is what this operand's boundary IS, whole or
 // partial alike — so that is what gets built.
-func buildPrismScene(budget *workBudget, pa, pb prismPayload, reexpress *prismReexpression) (*sketch.Sketch, map[sketch.Entity]prismEntityOrigin, error) {
+func buildPrismScene(budget *workBudget, pa, pb prismPayload, reexpress *prismReexpression) (*sketch.Sketch, map[sketch.Entity]prismEntityOrigin, float64, float64, error) {
 	world := sketch.NewWorld()
 	s, err := world.CreateSketch(world.XY())
 	if err != nil {
-		return nil, nil, fmt.Errorf(`decad: failed to build the private prism-boolean scene: %w`, err)
+		return nil, nil, 0, 0, fmt.Errorf(`decad: failed to build the private prism-boolean scene: %w`, err)
 	}
 
 	points := map[Point2]*sketch.Point{}
@@ -667,6 +706,7 @@ func buildPrismScene(budget *workBudget, pa, pb prismPayload, reexpress *prismRe
 	}
 
 	tags := map[sketch.Entity]prismEntityOrigin{}
+	var weldA, weldB float64
 
 	addOperand := func(profile ProfileRecord, isB bool) error {
 		type entityKey struct {
@@ -687,7 +727,13 @@ func buildPrismScene(budget *workBudget, pa, pb prismPayload, reexpress *prismRe
 		for li, loop := range loops {
 			hole := li - 1 // -1 names Outer; 0.. names Holes[hole]
 			tag := func(ent sketch.Entity) { tags[ent] = prismEntityOrigin{isB: isB, hole: hole} }
-			for _, seg := range loop.Segments {
+
+			// Resolve every segment's walk first, and re-express both of its
+			// endpoints (operand B only), before welding or building anything.
+			walks := make([]segmentWalk, len(loop.Segments))
+			starts := make([]Point2, len(loop.Segments))
+			ends := make([]Point2, len(loop.Segments))
+			for si, seg := range loop.Segments {
 				if err := budget.step(); err != nil {
 					return err
 				}
@@ -695,10 +741,45 @@ func buildPrismScene(budget *workBudget, pa, pb prismPayload, reexpress *prismRe
 				if err != nil {
 					return err
 				}
+				walks[si] = w
+				starts[si] = reexpressPt(Point2{U: w.startU, V: w.startV})
+				ends[si] = reexpressPt(Point2{U: w.endU, V: w.endV})
+			}
+
+			// The weld: when this loop is not a single whole closed curve,
+			// every segment's start becomes its predecessor's own end (wrap
+			// included), and the largest gap it closed is charged, per
+			// operand, as this scene's own delta_weld.
+			whole := len(walks) == 1 && walks[0].isCircular() && walks[0].closed
+			if !whole {
+				for si := range walks {
+					prev := (si - 1 + len(walks)) % len(walks)
+					if starts[si] == ends[prev] {
+						continue
+					}
+					gap := point2SeparationUpper(starts[si], ends[prev])
+					radiusUpper := math.Inf(1)
+					if walks[si].isCircular() {
+						radiusUpper = walks[si].radius
+					}
+					d := weldDisplacementAllow(gap, radiusUpper)
+					if isB {
+						weldB = math.Max(weldB, d)
+					} else {
+						weldA = math.Max(weldA, d)
+					}
+					starts[si] = ends[prev]
+				}
+			}
+
+			for si, seg := range loop.Segments {
+				if err := budget.step(); err != nil {
+					return err
+				}
+				w := walks[si]
 				switch {
 				case w.isLine():
-					start := reexpressPt(Point2{U: w.startU, V: w.startV})
-					end := reexpressPt(Point2{U: w.endU, V: w.endV})
+					start, end := starts[si], ends[si]
 					key := entityKey{kind: 1, a: start, b: end}
 					if _, ok := entities[key]; !ok {
 						tag(s.CreateLine(point(start), point(end)))
@@ -718,13 +799,11 @@ func buildPrismScene(budget *workBudget, pa, pb prismPayload, reexpress *prismRe
 					// order — the physical set of points between th0 and th1 is
 					// the same set either way, since a walked arc never spans a
 					// full turn.
-					loU, loV, hiU, hiV := w.startU, w.startV, w.endU, w.endV
+					lo, hi := starts[si], ends[si]
 					if w.th1 < w.th0 {
-						loU, loV, hiU, hiV = hiU, hiV, loU, loV
+						lo, hi = hi, lo
 					}
 					center := reexpressPt(Point2{U: w.cU, V: w.cV})
-					lo := reexpressPt(Point2{U: loU, V: loV})
-					hi := reexpressPt(Point2{U: hiU, V: hiV})
 					key := entityKey{kind: 3, a: center, b: lo, c: hi}
 					if _, ok := entities[key]; !ok {
 						tag(s.CreateArc(point(center), point(lo), point(hi)))
@@ -740,12 +819,12 @@ func buildPrismScene(budget *workBudget, pa, pb prismPayload, reexpress *prismRe
 	}
 
 	if err := addOperand(pa.profile, false); err != nil {
-		return nil, nil, err
+		return nil, nil, 0, 0, err
 	}
 	if err := addOperand(pb.profile, true); err != nil {
-		return nil, nil, err
+		return nil, nil, 0, 0, err
 	}
-	return s, tags, nil
+	return s, tags, weldA, weldB, nil
 }
 
 // prismReexpression is §4.1's coordinate re-expression of operand B into

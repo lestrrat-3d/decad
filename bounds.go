@@ -39,6 +39,10 @@ import (
 //   - the DISPLACEMENT a recorded CUT PARAMETER puts on the point it names —
 //     the fragment endpoint slides along its own exact carrier by the parameter
 //     rounding times the carrier's speed → cutDisplacementAllow;
+//   - the DISPLACEMENT buildPrismScene's own junction WELD puts on the carrier
+//     it builds from a moved endpoint — a line moves by the weld's own gap, a
+//     circular carrier's radius and sweep-end both move with it →
+//     weldDisplacementAllow;
 //   - the AREA of ONE RULED QUAD whose cap-level chord alone is displaced (the
 //     cap-loop chamfer's own band patches, docs/modify-reach-design.md §8.4) →
 //     bandPatchAreaAllow, the same two-factor product one patch at a time
@@ -340,6 +344,64 @@ func cutDisplacementAllow(tangentUpper float64) float64 {
 		return 0
 	}
 	return productUpper(cutParamUlps*ulpOf(1), tangentUpper)
+}
+
+// weldDisplacementAllow bounds the coordinate displacement
+// buildPrismScene's own junction weld (docs/prism-boolean-design.md §4.1,
+// §7's delta_weld) commits on the carrier it builds from a segment whose
+// walked endpoint the weld moved: buildPrismScene sets a segment's start
+// coordinate to its predecessor's own walked end whenever the two
+// candidates disagree, closing the gap this call charges. radiusUpper is
+// the carrier's own recorded radius for a circular carrier — callers pass
+// +Inf for a LineSeg, under which the arc-specific guard below never fires
+// and the answer is the tight line reading alone.
+//
+// A LINE carrier interpolates between its two endpoints, so an endpoint
+// that moves by at most gap moves every point of the built line by at most
+// gap too: a convex combination of a moved and an unmoved endpoint never
+// exceeds the larger of the two moves. gap is already a proven upper bound
+// on the junction's own separation (point2SeparationUpper), so the line
+// reading is that same value, unrounded further.
+//
+// A CIRCULAR carrier built through sketch.CreateArc is the sharper case
+// (docs/prism-boolean-design.md §15's own "circular-carrier limit"): its
+// radius is read from ONE of its two defining points and its sweep end from
+// the OTHER's angle alone, and the weld may move either one. The centre
+// never moves — the weld only ever replaces a loop's own walked endpoint,
+// never a segment's recorded Center — so:
+//
+//   - if the moved point is the radius reference, the new radius R' obeys
+//     |R'-R| <= gap by the reverse triangle inequality (the centre is fixed
+//     and the point itself moves by at most gap), so every point that keeps
+//     its own angle moves radially by at most gap;
+//   - if the moved point is the sweep-end reference, it names an angle only,
+//     read off a point Q sitting at exactly radius R from the centre
+//     (walkOf's own construction, before the weld moves it to
+//     Q' = Q + e, |e| <= gap). For unit vectors u = (Q-centre)/R and
+//     v = (Q'-centre)/|Q'-centre|, the identity
+//     |u||v|(u-v) = |v|(Q-Q') + (Q'-centre)(|Q'-centre|-R) bounds
+//     |u-v| <= 2*gap/R (each term on the right is at most |v|*gap by the
+//     reverse triangle inequality again), so the projected endpoint — at
+//     the SAME radius R — moves by at most R*|u-v| <= 2*gap.
+//
+// One uniform 2*gap charge covers both circular readings, so the caller
+// need not track which of the two defining points the weld actually
+// touched. The sweep-end reading's own derivation needs a strictly
+// positive, gap-clear radius (R > gap keeps Q' off the centre and the bound
+// above finite), so radiusUpper <= gap answers +Inf rather than a bound the
+// derivation does not cover — the arc arm refusing sooner than publish an
+// unproven number.
+func weldDisplacementAllow(gap, radiusUpper float64) float64 {
+	if gap <= 0 {
+		return 0
+	}
+	if isNonFinite(radiusUpper) {
+		return gap
+	}
+	if radiusUpper <= gap {
+		return math.Inf(1)
+	}
+	return upRound(productUpper(2, gap))
 }
 
 // bandPatchAreaAllow bounds how far ONE chamfer band patch's own area

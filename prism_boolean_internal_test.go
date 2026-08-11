@@ -262,7 +262,10 @@ func TestPrismUnionReexpressedSplitFallsBack(t *testing.T) {
 	reexpression, err := newPrismReexpression(pa, pb)
 	require.NoError(t, err)
 	require.False(t, reexpression.identity)
-	scene, _, err := buildPrismScene(newWorkBudget(t.Context()), pa, pb, reexpression)
+	scene, tags, weldA, weldB, err := buildPrismScene(newWorkBudget(t.Context()), pa, pb, reexpression)
+	_ = tags  // unread here: this fixture's own weld is not under test
+	_ = weldA // unread here: this fixture's own weld is not under test
+	_ = weldB // unread here: this fixture's own weld is not under test
 	require.NoError(t, err)
 	profiles, err := prismProfilesContext(t.Context(), scene.Profiles)
 	require.NoError(t, err)
@@ -319,7 +322,10 @@ func TestPrismUnionDisplacedSourceSplitFallsBack(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, reexpression.identity, "the second union must take the identity re-expression path")
 
-	scene, _, err := buildPrismScene(newWorkBudget(t.Context()), first, shallow, reexpression)
+	scene, tags, weldA, weldB, err := buildPrismScene(newWorkBudget(t.Context()), first, shallow, reexpression)
+	_ = tags  // unread here: this fixture's own weld is not under test
+	_ = weldA // unread here: this fixture's own weld is not under test
+	_ = weldB // unread here: this fixture's own weld is not under test
 	require.NoError(t, err)
 	profiles, err := prismProfilesContext(t.Context(), scene.Profiles)
 	require.NoError(t, err)
@@ -390,6 +396,127 @@ func TestPrismUnionPreservesEndDisplacements(t *testing.T) {
 	require.True(t, ok)
 	require.Equal(t, 0.5, result.z0Delta)
 	require.Equal(t, 0.75, result.z1Delta)
+}
+
+// overshootQuadBodyInternal is prism_boolean_nesting_test.go's
+// overshootQuadBody, reproduced here because that helper lives in the
+// external decad_test package: draws corners as four SEPARATE overshooting
+// lines, each Fix-ed past both of its own ends, so sketch cuts every one
+// into a Partial fragment sharing a junction with its neighbours.
+func overshootQuadBodyInternal(t *testing.T, doc *Document, h float64, corners [][2]float64, over float64) *Body {
+	t.Helper()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	n := len(corners)
+	for i := range n {
+		a, b := corners[i], corners[(i+1)%n]
+		dx, dy := b[0]-a[0], b[1]-a[1]
+		p := s.CreatePoint(a[0]-over*dx, a[1]-over*dy)
+		q := s.CreatePoint(b[0]+over*dx, b[1]+over*dy)
+		s.Fix(p)
+		s.Fix(q)
+		s.CreateLine(p, q)
+	}
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	profiles := s.Profiles()
+	best := 0
+	for i, p := range profiles {
+		if p.Area > profiles[best].Area {
+			best = i
+		}
+	}
+	body, err := doc.Extrude(s, profiles[best], Distance{D: units.Millimeters(h), Dir: Along})
+	require.NoError(t, err)
+	return body
+}
+
+// discBodyInternal is prism_boolean_bounds_test.go's discBody, reproduced
+// here for the same reason: that helper lives in decad_test.
+func discBodyInternal(t *testing.T, doc *Document, cx, r, h float64) *Body {
+	t.Helper()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	center := s.CreatePoint(cx, 0)
+	s.Fix(center)
+	s.CreateCircle(center, r)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	body, err := doc.Extrude(s, s.Profiles()[0], Distance{D: units.Millimeters(h), Dir: Along})
+	require.NoError(t, err)
+	return body
+}
+
+// TestPrismSceneWeldsRecordedJunctions is T3
+// (docs/prism-boolean-design.md §15): buildPrismScene, called directly on
+// the same cut-fragment target T1's own black-box test cuts, reports the
+// weld gap fu157's own failing message names — the exact distance between
+// segment 0's walked end at TEnd = 0.8968253968253966 and segment 1's walked
+// start at TStart = 0.10317460317460321, both evaluations of ONE recorded
+// vertex — and a whole-segment control section, welding nothing, reports
+// exactly 0. The build-and-charge path composes at least that much into the
+// result's own sectionDelta, so a build that silently drops the charge
+// fails this test rather than merely under-reporting a bound nobody checks.
+func TestPrismSceneWeldsRecordedJunctions(t *testing.T) {
+	corners := [][2]float64{{-9.317, -5.731}, {10.29, -6.113}, {8.877, 7.219}, {-7.331, 6.407}}
+	const h, toolR = 5.0, 1.7
+
+	doc := New()
+	target := overshootQuadBodyInternal(t, doc, h, corners, 0.13)
+	tool := discBodyInternal(t, doc, 0, toolR, 15)
+	pa := target.payload.(prismPayload)
+	pb := tool.payload.(prismPayload)
+
+	reexpress, err := newPrismReexpression(pa, pb)
+	require.NoError(t, err)
+	require.True(t, reexpress.identity, `both sections are drawn on one plane with no placement`)
+
+	budget := newWorkBudget(t.Context())
+	_, _, weldA, weldB, err := buildPrismScene(budget, pa, pb, reexpress)
+	require.NoError(t, err)
+	require.Equal(t, 3.552713678800501e-15, weldA,
+		`the exact gap the failing message's two coordinates differ by`)
+	require.Zero(t, weldB, `the tool's own whole circle has no junction to weld`)
+
+	// The whole-segment control: a rectangle whose corners are shared
+	// Points, never two independently-walked floats.
+	controlDoc := New()
+	control := boxBodyInternal(t, controlDoc, 0, 0, 20, 12, h)
+	controlTool := discBodyInternal(t, controlDoc, 10, 2, 3*h)
+	cpa := control.payload.(prismPayload)
+	cpb := controlTool.payload.(prismPayload)
+	controlReexpress, err := newPrismReexpression(cpa, cpb)
+	require.NoError(t, err)
+	_, _, controlWeldA, controlWeldB, err := buildPrismScene(newWorkBudget(t.Context()), cpa, cpb, controlReexpress)
+	require.NoError(t, err)
+	require.Zero(t, controlWeldA, `a shared-point rectangle has no junction gap to weld`)
+	require.Zero(t, controlWeldB)
+
+	// The build-and-charge path: a dropped charge would publish a
+	// sectionDelta smaller than the bound helper's own answer for weldA.
+	result, ok, err := resolveAndBuildPrismCut(t.Context(), newWorkBudget(t.Context()), pa, pb, reexpress)
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.GreaterOrEqual(t, result.sectionDelta, weldDisplacementAllow(weldA, math.Inf(1)))
+	require.Positive(t, result.sectionDelta)
+}
+
+// boxBodyInternal is clearance_test.go's boxBody, reproduced here for the
+// same reason: that helper lives in decad_test.
+func boxBodyInternal(t *testing.T, doc *Document, x0, y0, x1, y1, h float64) *Body {
+	t.Helper()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	rect := s.CreateRectangle(x0, y0, x1, y1)
+	s.Fix(rect.A)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	body, err := doc.Extrude(s, s.Profiles()[0], Distance{D: units.Millimeters(h), Dir: Along})
+	require.NoError(t, err)
+	return body
 }
 
 func TestPrismProfilesContextWaitsForArrangementAfterCancellation(t *testing.T) {

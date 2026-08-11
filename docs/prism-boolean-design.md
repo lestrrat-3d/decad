@@ -265,6 +265,21 @@ For an admitted pair, decad builds one private `sketch.Sketch` (the same
   Non-`Point2` fields (a `CircleSeg`'s `Radius`, every `CCW`, every `TStart`/
   `TEnd`) are magnitudes or parameters under a rigid, non-reflected
   (G2) map and carry over unchanged.
+- **The scene is built with one point per recorded junction.** Within one
+  loop, every segment's walk is resolved and (operand B only) re-expressed
+  first; then, unless the loop is a single whole closed curve (one `CircleSeg`
+  spanning the full turn, no junction at all), each segment's start coordinate
+  is set to its predecessor's own end — wrap included — before any entity is
+  created. `LoopRecord`'s own contract (seam §2) is that one segment's walk
+  ends exactly where the next one's starts, so the two floats `walkOf`
+  independently evaluates there are two roundings of ONE recorded vertex, not
+  two vertices; welding them is what keeps the scene's own arrangement
+  reporting the loop closed. This is decad's own construction choice on
+  decad's own numbers, so it is **charged, never blessed**: no threshold
+  decides whether to weld, and the largest junction gap the weld closes, per
+  operand, becomes `δ_weld` (§7) — a proven bound on the coordinate
+  displacement the welded carrier owes, never a residual admitted because it
+  happens to be small.
 - Every created `sketch.Entity` is tagged, in a side map, with its origin:
   which operand (A or B) and which loop (`Outer` or `Holes[i]`) it came from,
   and the **authored orientation** decad recorded it with (`CCW`/`Reversed`
@@ -462,8 +477,8 @@ Every recorded field, after §4.1's re-expression, is one of:
   `Start`/`End` fields, only a narrower range over the same ones). It is a
   coordinate this union COMPUTED, so it is charged, as `δ_cut` below.
 
-Three separate things can displace the rebuilt section, and the result carries
-all three.
+Four separate things can displace the rebuilt section, and the result carries
+all four.
 
 **The re-expression, `δ_reexpress`.** Operand B's re-expressed coordinates carry
 it; operand A's are unchanged and carry nothing.
@@ -501,10 +516,30 @@ displacement or the re-expression is nonidentity. That reroute is about
 amplifying an INPUT uncertainty; it does nothing about the cut's own rounding,
 which is why `δ_cut` is charged on the fragments the reroute admits.
 
+**The scene's own weld, `δ_weld`.** §4.1's scene construction builds one point
+per recorded junction: every segment's start coordinate is set to its
+predecessor's own end (wrap included) whenever the two independent `walkOf`
+evaluations at that junction disagree. That disagreement is not a defect in
+either segment — `LoopRecord`'s own contract states one segment's walk ends
+exactly where the next one's starts, so the two floats are two roundings of
+ONE recorded vertex — but resolving it is still a coordinate CHOICE this
+scene's own construction makes, on decad's own numbers, so it is charged like
+every other one. `δ_weld` is the largest such junction gap the weld closed,
+per operand, up-rounded through the carrier the weld moves: a line moves by
+at most the gap itself, and a circular carrier built through `sketch.CreateArc`
+moves by at most twice the gap, since one of its two defining points may be
+the one the weld touched and `CreateArc` reads that point's radius as well as
+its angle (`bounds.go`'s `weldDisplacementAllow` derives both readings, and
+answers unbounded rather than a bound the derivation does not cover when the
+carrier's own radius does not clear the gap). `δ_weld` is zero exactly when
+every junction's two evaluations already agree bit for bit — the same
+whole-edge case the zero arm below already requires — so charging it never
+WIDENS that zero case, only prices the merges that were never in it.
+
 The rebuilt section therefore carries
 
 ```
-δ = up( max(δ_A, up(δ_B + δ_reexpress)) + δ_cut )
+δ = up( max(δ_A, up(δ_B + δ_reexpress)) + δ_cut + δ_weld )
 ```
 
 where `up` rounds each positive sum outward.
@@ -519,7 +554,9 @@ strictly containing the other, or two footprints meeting along complete shared
 walls. A partial overlap, which splits at least two walls, never reaches the
 zero case, and neither does a union whose result the caller would call
 "obviously exact": the recorded walk closes only to within `δ_cut`, and a
-zero bound over it would be a claim the evaluator cannot make.
+zero bound over it would be a claim the evaluator cannot make. Every surviving
+edge whole is also exactly the condition under which `δ_weld` is itself zero,
+so the decidable zero case is unchanged by its addition.
 
 Each sweep endpoint is A's recorded endpoint after G5 proves the two intervals
 coincide, so its axial displacement is the per-end maximum of A and B's
@@ -553,7 +590,13 @@ extension is two pieces, each in the existing machinery's own shape:
   rule that each error mechanism has exactly one helper and no measurement site
   computes a bound inline. `cutDisplacementAllow` owns the cut-parameter
   mechanism above, turning `cutParamUlps` and a carrier's own speed into the
-  coordinate displacement `δ_cut` reads. The section displacement's own reading
+  coordinate displacement `δ_cut` reads. `weldDisplacementAllow` owns
+  `δ_weld`'s own mechanism, turning one junction gap into the coordinate
+  displacement the welded carrier owes — a line's own bound is the gap itself,
+  a circular carrier's is twice it, and `buildPrismScene` calls it once per
+  weld, at the point it has the moved segment's own kind and radius in hand,
+  rather than threading that per-segment context out to a caller that no
+  longer has it. The section displacement's own reading
   is an AREA: the area a
   boundary displacement `δ` can move is covered by a tube of half-width `δ`
   about the recorded boundary — `2·δ·p + n·π·δ²` up-rounded, for a boundary of
@@ -622,7 +665,7 @@ whether it is permanent.
 | RB5 | §6's S9-equivalent, decidably broken (a hole proven outside the outer loop or nested wrong) | `ErrDegenerate` | No |
 | RB6 | §6's S9-equivalent, undecidable | `ErrUnsupported` | No |
 | RB7 | The bounded work budget (§10) exhausts, or the private scene exceeds `prismUnionMaxArrangementSegments`, before resolution or the audit completes | `ErrUnsupported` | No — a coarser/simpler input may clear it |
-| RB8 | `recordEdge`/`falsifyRange` rejects a surviving segment (`TExact` disproven on a merged edge — an internal `sketch` inconsistency, reported upstream per seam §3) | `ErrUnrecordableProfile` | No, but should not occur on a certified arrangement; a defensive check |
+| RB8 | `recordEdge`/`falsifyRange` rejects a surviving segment (`TExact` disproven on a merged edge) | `ErrUnrecordableProfile` | No — `RecordProfile`/`recordEdge` rejecting a surviving segment the scene's own weld (§4.1) had already welded before it was recorded; a defensive check for whatever this increment's resolution does not yet cover |
 
 None of these rows is permanent in the modify-reach SX9 sense: every one is a
 property of the specific pair's geometry, not a structural class exclusion —
@@ -797,6 +840,20 @@ areas, residuals), never merely "it ran" — CLAUDE.md's own rule.
   (`Point2` fields, not just area) to the target's own pre-cut outer loop,
   and the new hole's fields are byte-identical to the tool's own pre-cut
   outer loop (verbatim reproduction, §4.2's structural-match claim).
+- The scene weld (§4.1, §7's `δ_weld`): a target whose recorded section
+  carries `Partial` fragments — a corner `sketch` cut, not a corner the
+  caller drew, so consecutive segments' walked endpoints disagree by a few
+  ulps at each shared vertex — cut and intersected by a nested tool resolves
+  analytically with the correct volume, for both the Cut and Intersect
+  clean-nesting arms; a whole-segment control built from shared-Point corners
+  publishes the same bound it did before this term existed, since the weld
+  never touches it; `buildPrismScene` called directly reports the exact
+  per-operand gap it welded, and the built payload's own `sectionDelta`
+  composes at least `weldDisplacementAllow` of it; and the SAME cut-fragment
+  target, routed to the mesh path by a tool off the shared plane, agrees with
+  the analytic answer within the mesh result's own bound — the round-trip
+  this term exists for is pinned by a fixture built to need it, not left to
+  the gear's accidental all-whole record.
 - Exactness, one test per §7 arm: a line-only merged section over operands
   that share a frame AND whose merge cut nothing (a contained footprint)
   reports `Exact` volume with a zero bound; a partially overlapping pair of

@@ -26,7 +26,7 @@ import (
 // candidate is one s.Profiles() result taken verbatim, so §5's authentication
 // claim 1 already covers claim 2 entirely).
 func resolveAndBuildPrismCut(ctx context.Context, budget *workBudget, target, tool prismPayload, reexpress *prismReexpression) (prismPayload, bool, error) {
-	s, match, resolved, err := resolvePrismCut(ctx, budget, target, tool, reexpress)
+	s, match, weldA, weldB, resolved, err := resolvePrismCut(ctx, budget, target, tool, reexpress)
 	if err != nil {
 		return prismPayload{}, false, err
 	}
@@ -61,8 +61,15 @@ func resolveAndBuildPrismCut(ctx context.Context, budget *workBudget, target, to
 		// zero — there is no fresh cut parameter to charge at all. What
 		// remains is the same formula PR1's Union path uses for its own
 		// re-expression and prior-displacement terms, with the (already
-		// zero) cut term omitted rather than added back in.
-		sectionDelta: max(target.sectionDelta, absSumUpper(tool.sectionDelta, reexpress.delta)),
+		// zero) cut term omitted rather than added back in — plus each
+		// operand's OWN weld charge (§4.1): the TARGET's own junctions join
+		// target.sectionDelta's own arm, and the TOOL's join the tool arm
+		// alongside reexpress.delta, since that is the operand the weld's
+		// own scene construction actually touched.
+		sectionDelta: max(
+			weldedSectionDelta(target.sectionDelta, weldA),
+			weldedSectionDelta(absSumUpper(tool.sectionDelta, reexpress.delta), weldB),
+		),
 	}
 	return result, true, nil
 }
@@ -72,7 +79,7 @@ func resolveAndBuildPrismCut(ctx context.Context, budget *workBudget, target, to
 // operand, authenticates its own disk verbatim and builds §7's exactness.
 // There is no §6 audit on this path, for the same reason as Cut's.
 func resolveAndBuildPrismIntersect(ctx context.Context, budget *workBudget, pa, pb prismPayload, reexpress *prismReexpression) (prismPayload, bool, error) {
-	s, match, nestedIsB, resolved, err := resolvePrismIntersect(ctx, budget, pa, pb, reexpress)
+	s, match, weldA, weldB, nestedIsB, resolved, err := resolvePrismIntersect(ctx, budget, pa, pb, reexpress)
 	if err != nil {
 		return prismPayload{}, false, err
 	}
@@ -98,10 +105,13 @@ func resolveAndBuildPrismIntersect(ctx context.Context, budget *workBudget, pa, 
 	// §7/Task 4.4: the record traces to the NESTED operand alone, so only
 	// that operand's own displacement term reaches the result — never the
 	// max of both, which would be conservative where the code already knows
-	// which operand's coordinates it took.
-	sectionDelta := pa.sectionDelta
+	// which operand's coordinates it took. weldA/weldB — buildPrismScene's
+	// own charge for the junctions ITS scene had to weld — follow the same
+	// selection: only the nested operand's own weld ever touched the loop
+	// that survives into the result.
+	sectionDelta := weldedSectionDelta(pa.sectionDelta, weldA)
 	if nestedIsB {
-		sectionDelta = absSumUpper(pb.sectionDelta, reexpress.delta)
+		sectionDelta = weldedSectionDelta(absSumUpper(pb.sectionDelta, reexpress.delta), weldB)
 	}
 
 	result := prismPayload{
@@ -314,68 +324,69 @@ func prismFindLoopMatch(budget *workBudget, profiles []*sketch.Profile, wantOute
 // unresolved (§4.4) — the caller falls back to the mesh path with no error.
 // A non-nil error is always genuine and must propagate. The returned
 // *sketch.Sketch is the private scene the match was found in, needed to
-// authenticate it through RecordProfile.
-func resolvePrismCut(ctx context.Context, budget *workBudget, target, tool prismPayload, reexpress *prismReexpression) (*sketch.Sketch, *sketch.Profile, bool, error) {
-	s, tags, err := buildPrismScene(budget, target, tool, reexpress)
+// authenticate it through RecordProfile. weldA and weldB are
+// buildPrismScene's own per-operand weld displacement, for §7's charge.
+func resolvePrismCut(ctx context.Context, budget *workBudget, target, tool prismPayload, reexpress *prismReexpression) (*sketch.Sketch, *sketch.Profile, float64, float64, bool, error) {
+	s, tags, weldA, weldB, err := buildPrismScene(budget, target, tool, reexpress)
 	if err != nil {
-		return nil, nil, false, err
+		return nil, nil, 0, 0, false, err
 	}
 	if err := budget.err(); err != nil {
-		return nil, nil, false, err
+		return nil, nil, 0, 0, false, err
 	}
 	profiles, err := prismProfilesContext(ctx, s.Profiles)
 	if err != nil {
-		return nil, nil, false, err
+		return nil, nil, 0, 0, false, err
 	}
 	if err := budget.err(); err != nil {
-		return nil, nil, false, err
+		return nil, nil, 0, 0, false, err
 	}
 	if len(profiles) == 0 {
-		return nil, nil, false, nil // §4.4: the scene holds no bounded cell at all
+		return nil, nil, 0, 0, false, nil // §4.4: the scene holds no bounded cell at all
 	}
 	if target.sectionDelta != 0 || tool.sectionDelta != 0 || !reexpress.identity {
 		split, err := prismProfilesHaveSplitBoundary(budget, profiles)
 		if err != nil {
-			return nil, nil, false, err
+			return nil, nil, 0, 0, false, err
 		}
 		if split {
-			return nil, nil, false, nil // §3.4, mirroring Union's own reroute
+			return nil, nil, 0, 0, false, nil // §3.4, mirroring Union's own reroute
 		}
 	}
 
 	targetOuter, err := prismLoopEntitySet(budget, tags, false, -1)
 	if err != nil {
-		return nil, nil, false, err
+		return nil, nil, 0, 0, false, err
 	}
 	wantHoles := make([]map[sketch.Entity]struct{}, 0, len(target.profile.Holes)+1)
 	for i := range target.profile.Holes {
 		hs, err := prismLoopEntitySet(budget, tags, false, i)
 		if err != nil {
-			return nil, nil, false, err
+			return nil, nil, 0, 0, false, err
 		}
 		wantHoles = append(wantHoles, hs)
 	}
 	toolOuter, err := prismLoopEntitySet(budget, tags, true, -1)
 	if err != nil {
-		return nil, nil, false, err
+		return nil, nil, 0, 0, false, err
 	}
 	wantHoles = append(wantHoles, toolOuter) // the tool's own solid, as one new hole
 
-	match, resolved, err := prismFindLoopMatch(budget, profiles, targetOuter, wantHoles)
+	found, foundResolved, err := prismFindLoopMatch(budget, profiles, targetOuter, wantHoles)
 	if err != nil {
-		return nil, nil, false, err
+		return nil, nil, 0, 0, false, err
 	}
-	if !resolved {
-		return nil, nil, false, nil
+	if !foundResolved {
+		return nil, nil, 0, 0, false, nil
 	}
-	if !match.Valid {
+	if !found.Valid {
 		// RB1, matching the Union path's own behaviour: a candidate region
 		// the result depends on reports an invalid arrangement. Cut's matched
 		// profile is both its nesting proof and its result, so this one check
 		// covers both claims.
-		return nil, nil, false, prismInvalidRegionErr("cut")
+		return nil, nil, 0, 0, false, prismInvalidRegionErr("cut")
 	}
-	return s, match, true, nil
+	return s, found, weldA, weldB, true, nil
 }
 
 // resolvePrismIntersect is §4.2's clean-nesting match for Intersect(a, b):
@@ -391,43 +402,44 @@ func resolvePrismCut(ctx context.Context, budget *workBudget, target, tool prism
 //
 // resolved=false (err always nil in that case) means the pair's topology is
 // unresolved. nestedIsB reports which operand the result traces to, for
-// §7's displacement selection. The returned *sketch.Sketch is the private
-// scene the match was found in.
-func resolvePrismIntersect(ctx context.Context, budget *workBudget, pa, pb prismPayload, reexpress *prismReexpression) (s *sketch.Sketch, match *sketch.Profile, nestedIsB, resolved bool, err error) {
-	s, tags, err := buildPrismScene(budget, pa, pb, reexpress)
+// §7's displacement selection, which also reads weldA/weldB —
+// buildPrismScene's own per-operand weld displacement — the same way. The
+// returned *sketch.Sketch is the private scene the match was found in.
+func resolvePrismIntersect(ctx context.Context, budget *workBudget, pa, pb prismPayload, reexpress *prismReexpression) (s *sketch.Sketch, match *sketch.Profile, weldA, weldB float64, nestedIsB, resolved bool, err error) {
+	s, tags, weldA, weldB, err := buildPrismScene(budget, pa, pb, reexpress)
 	if err != nil {
-		return nil, nil, false, false, err
+		return nil, nil, 0, 0, false, false, err
 	}
 	if err := budget.err(); err != nil {
-		return nil, nil, false, false, err
+		return nil, nil, 0, 0, false, false, err
 	}
 	profiles, err := prismProfilesContext(ctx, s.Profiles)
 	if err != nil {
-		return nil, nil, false, false, err
+		return nil, nil, 0, 0, false, false, err
 	}
 	if err := budget.err(); err != nil {
-		return nil, nil, false, false, err
+		return nil, nil, 0, 0, false, false, err
 	}
 	if len(profiles) == 0 {
-		return nil, nil, false, false, nil
+		return nil, nil, 0, 0, false, false, nil
 	}
 	if pa.sectionDelta != 0 || pb.sectionDelta != 0 || !reexpress.identity {
 		split, err := prismProfilesHaveSplitBoundary(budget, profiles)
 		if err != nil {
-			return nil, nil, false, false, err
+			return nil, nil, 0, 0, false, false, err
 		}
 		if split {
-			return nil, nil, false, false, nil
+			return nil, nil, 0, 0, false, false, nil
 		}
 	}
 
 	aOuter, err := prismLoopEntitySet(budget, tags, false, -1)
 	if err != nil {
-		return nil, nil, false, false, err
+		return nil, nil, 0, 0, false, false, err
 	}
 	bOuter, err := prismLoopEntitySet(budget, tags, true, -1)
 	if err != nil {
-		return nil, nil, false, false, err
+		return nil, nil, 0, 0, false, false, err
 	}
 
 	// G6 keeps both operands hole-free for Intersect, so neither direction's
@@ -441,23 +453,23 @@ func resolvePrismIntersect(ctx context.Context, budget *workBudget, pa, pb prism
 	// on", and this path depends on two.
 	proofBNested, bNested, err := prismFindLoopMatch(budget, profiles, aOuter, []map[sketch.Entity]struct{}{bOuter})
 	if err != nil {
-		return nil, nil, false, false, err
+		return nil, nil, 0, 0, false, false, err
 	}
 	if bNested && !proofBNested.Valid {
-		return nil, nil, false, false, prismInvalidRegionErr("intersect")
+		return nil, nil, 0, 0, false, false, prismInvalidRegionErr("intersect")
 	}
 	proofANested, aNested, err := prismFindLoopMatch(budget, profiles, bOuter, []map[sketch.Entity]struct{}{aOuter})
 	if err != nil {
-		return nil, nil, false, false, err
+		return nil, nil, 0, 0, false, false, err
 	}
 	if aNested && !proofANested.Valid {
-		return nil, nil, false, false, prismInvalidRegionErr("intersect")
+		return nil, nil, 0, 0, false, false, prismInvalidRegionErr("intersect")
 	}
 	if bNested == aNested {
 		// Both directions match (should not occur for a genuine pair) or
 		// neither does (a disjoint or crossing pair, or any other topology
 		// this increment does not cover): unresolved, §4.4.
-		return nil, nil, false, false, nil
+		return nil, nil, 0, 0, false, false, nil
 	}
 
 	// The nested operand's own disk: its Outer reproduced verbatim, no holes
@@ -469,16 +481,16 @@ func resolvePrismIntersect(ctx context.Context, budget *workBudget, pa, pb prism
 	}
 	result, resultResolved, err := prismFindLoopMatch(budget, profiles, wantOuter, nil)
 	if err != nil {
-		return nil, nil, false, false, err
+		return nil, nil, 0, 0, false, false, err
 	}
 	if !resultResolved {
-		return nil, nil, false, false, nil
+		return nil, nil, 0, 0, false, false, nil
 	}
 	if !result.Valid {
 		// RB1, matching the Union/Cut paths' own behaviour.
-		return nil, nil, false, false, prismInvalidRegionErr("intersect")
+		return nil, nil, 0, 0, false, false, prismInvalidRegionErr("intersect")
 	}
-	return s, result, nested, true, nil
+	return s, result, weldA, weldB, nested, true, nil
 }
 
 // prismInvalidRegionErr is §9's RB1: a candidate region this op's result
