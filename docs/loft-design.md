@@ -711,7 +711,7 @@ held diameter minus `2*delta`, rounded down: an understated reference can only
 tighten the gate into a false `Suspect`, never loosen it into a false `Sound`.
 A shrink that collapses to zero or below reports no diameter at all, the same
 answer any other unusable magnitude gets. That last branch is defensive rather
-than a second reference-less `Suspect` beside the one verification §3 admits:
+than a reachable reference-less `Suspect`:
 the divergence theorem bounds a closed boundary's own volume by `d*A/3` for
 `d` the vertex-set diameter and `A` the held surface area, so a `delta` at or
 above `d/2` makes `sweptVolumeAllow`'s `delta*A` at least `3/2` of the held

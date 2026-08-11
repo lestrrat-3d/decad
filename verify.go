@@ -1298,23 +1298,17 @@ func (in pairToleranceInputs) lengthReference(value float64) (float64, bool) {
 // an exact restatement of the shipped boundary, because clearance.go and
 // interference.go trust that model for containment and contact proofs, not
 // only for a diameter. A miss there is not necessarily a body with no usable
-// diameter: envelopeGateDiameter covers the payloads it does not (cup,
-// cap-loop chamfer) with a bound that is sound for THIS gate without being
-// eligible for that stronger trust. One miss stays uncovered: a prismPayload
-// whose own sectionDelta is nonzero (docs/prism-boolean-design.md §7 — every
-// analytic Union whose merge cut a wall, plus any placed prism pair) fails newBodyGeomBudget's exact
-// path (clearance_geom.go's addPrismFaces refuses it) and has no
-// envelopePrismFor arm either, so this function answers (0, false) for it.
-// Every DiagMeasurementBeyondTolerance such a body's area, bounds, volume or
-// centroid readings raise then carries a nil Required — the one documented
-// reference-less Suspect this design admits.
+// diameter: fallbackGateDiameter covers the payloads it does not (cup,
+// cap-loop chamfer, and a prismPayload whose own sectionDelta is nonzero) with
+// a bound that is sound for THIS gate without being eligible for that stronger
+// trust.
 //
 // A prism with nonzero z0Delta or z1Delta keeps the same carrier model, but
 // each held witness can move by axialDelta. The maximum held pair distance can
 // therefore overstate the denoted body's diameter by twice that displacement.
 // This function shrinks it toward zero before using it as a reference, so the
-// result can only tighten the gate. envelopeGateDiameter applies the same
-// correction to its prism envelopes.
+// result can only tighten the gate. fallbackGateDiameter applies the same
+// correction to the prisms it reads, over each one's own displacement.
 //
 // A loftPayload reads its OWN held vertex-set diameter (pointSetDiameterContext),
 // never an envelope: an unplaced loft's every vertex is exact
@@ -1337,7 +1331,7 @@ func (in pairToleranceInputs) lengthReference(value float64) (float64, bool) {
 // delta from its true position), so this arm shrinks the held reading by
 // 2*delta before reporting it, understating rather than overstating —
 // tightening the gate can only turn a passing reading into a false Suspect,
-// never a false Sound, the identical reasoning envelopeGateDiameter already
+// never a false Sound, the identical reasoning fallbackGateDiameter already
 // carries. That direction is the SUBTRACTION's to lose: 2*delta is exact (a
 // power-of-two scaling), so the difference is the one rounding here, and
 // round-to-nearest can land it ABOVE the exact d - 2*delta — a reference
@@ -1381,7 +1375,7 @@ func bodyGateDiameter(ctx context.Context, body *Body) (float64, bool, error) {
 		}
 		return d, ok, nil
 	}
-	return envelopeGateDiameter(budget, body)
+	return fallbackGateDiameter(budget, body)
 }
 
 // lowerDiameterForDisplacement turns a held witness diameter into a lower
@@ -1400,22 +1394,26 @@ func lowerDiameterForDisplacement(d, displacement float64) (float64, bool) {
 	return d, d > 0 && usableMagnitude(d)
 }
 
-// envelopeGateDiameter is bodyGateDiameter's fallback for a payload whose true
+// fallbackGateDiameter is bodyGateDiameter's fallback for a payload whose true
 // boundary the clearance kernel's exact carrier model does not cover
-// (cupPayload, capBlendPayload — verification design §3's "usable finite,
-// non-negative body diameter", never a box diagonal, document scale or zero).
+// (cupPayload, capBlendPayload, and a prismPayload carrying a section
+// displacement — verification design §3's "usable finite, non-negative body
+// diameter", never a box diagonal, document scale or zero).
 //
-// The two payloads reach containment for different reasons, and
-// envelopePrismFor's doc comment states each arm separately rather than
-// pooling them behind one justification: a cap-loop chamfer never cuts past
-// the receiver's own recorded walls, while a cup's shell can ADD material
-// (an outward shell), so what "never places a point beyond X" proves has to
-// be checked against the shape each arm actually returns, not against "the
-// receiver" as a stand-in for both. In both cases, though, the returned
-// prism is a SHAPE that provably contains the true body, so the reduction
-// itself can only overstate the true diameter, never understate it.
+// Each payload earns a witness prism for its own reason, and gateWitnessPrism's
+// doc comment states each arm separately rather than pooling them behind one
+// justification: a cap-loop chamfer never cuts past the receiver's own recorded
+// walls, a cup's shell can ADD material (an outward shell), and a displaced
+// section is no containing shape at all — it is the body's own recorded
+// boundary, read within a proven displacement of the one it denotes. So what
+// each arm proves has to be checked against the geometry it actually returns,
+// not against "the receiver" as a stand-in for all three. For the two envelope
+// arms the returned prism is a SHAPE that provably contains the true body, so
+// the reduction itself can only overstate the true diameter, never understate
+// it; the displacement subtracted below is what turns any of the three into the
+// lower bound §3 requires.
 //
-// What this function actually reports, though, is a reading of that shape,
+// What this function actually reports, though, is a reading of that geometry,
 // taken through the identical witness maximum a shipped prismPayload already
 // reads its own diameter through above (addPrismFaces gives two witnesses
 // per circular wall — the mid-angle point at mid-height and th0 at z0 —
@@ -1447,18 +1445,20 @@ func lowerDiameterForDisplacement(d, displacement float64) (float64, bool) {
 // of the pose-dependence verification design §4 excludes an axis-aligned box
 // for.
 //
-// An envelope with nonzero axial displacement has the same held-witness issue
-// as the exact prism path. Its full-height shape still contains the denoted
-// payload, but each witness can move along its axial direction by axialDelta.
-// The fallback shrinks the held witness maximum by twice that amount before it
-// becomes a lower-bound reference.
-func envelopeGateDiameter(budget *workBudget, body *Body) (float64, bool, error) {
-	env, ok := envelopePrismFor(body.payload)
+// A witness prism whose payload carries a displacement has the same
+// held-witness issue as the exact prism path: each witness sits within that
+// displacement of the point the payload denotes, so the held maximum can
+// overstate the denoted body's diameter by twice it. The fallback shrinks the
+// held witness maximum by that amount before it becomes a lower-bound
+// reference, which is why gateWitnessPrism hands back a displacement beside
+// the prism to read.
+func fallbackGateDiameter(budget *workBudget, body *Body) (float64, bool, error) {
+	witness, displacement, ok := gateWitnessPrism(body.payload)
 	if !ok {
 		return 0, false, nil
 	}
 	g := &bodyGeom{body: body}
-	ok, err := g.addPrismFaces(budget, env)
+	ok, err := g.addPrismFaces(budget, witness)
 	if err != nil || !ok {
 		return 0, false, err
 	}
@@ -1473,36 +1473,57 @@ func envelopeGateDiameter(budget *workBudget, body *Body) (float64, bool, error)
 	if err != nil || !ok {
 		return d, ok, err
 	}
-	d, ok = lowerDiameterForDisplacement(d, env.axialDelta())
+	d, ok = lowerDiameterForDisplacement(d, displacement)
 	return d, ok, nil
 }
 
-// envelopePrismFor builds the containing straight-prism envelope for a
-// payload envelopeGateDiameter covers. ok is false for every other payload,
-// including prismPayload and revolvePayload themselves (those are already
-// exact through newBodyGeomBudget and never reach this fallback) and
-// including a prismPayload whose own sectionDelta is nonzero (a
-// docs/prism-boolean-design.md §7 re-expressed or cut section): that payload has no
-// arm here either, so bodyGateDiameter answers no diameter at all for it
-// rather than a fallback one (verify_diagnostics_test.go pins that case).
+// gateWitnessPrism builds the straight prism fallbackGateDiameter reads its
+// witnesses off, beside the displacement each of those witnesses can carry
+// from the point of the denoted body it stands for. ok is false for every
+// payload with no arm here, including a revolvePayload and a prismPayload
+// whose section is its own denotation (both already exact through
+// newBodyGeomBudget, which is why they never reach this fallback).
 //
-// The two arms below read different geometry and contain the body for
-// different reasons. capBlendPayload reads pl.profile, the receiver's own
-// unrewritten section on its unchanged interval: a cap-loop chamfer only
-// ever cuts along a chord whose feet sit on the receiver's own recorded
-// walls, so it can never place a point beyond the receiver's own extruded
-// envelope. cupPayload reads pl.outer, the cup's own outer region — the
-// receiver's unmodified section for an INWARD shell, but the wider OFFSET
-// (expanded) region for an OUTWARD one, since an outward shell adds
-// material and cupPayloadFor (shell_cup.go) always assigns the wider of the
-// two profiles to outer regardless of sense. Either way the whole cup
-// body — walls, floor and cavity alike — sits inside pl.outer's own
-// full-height prism: the cavity never reaches farther than the outer
-// region, the same containment cupPayload.extentAlong already relies on.
-func envelopePrismFor(payload featurePayload) (prismPayload, bool) {
+// The three arms read different geometry and earn a witness for different
+// reasons.
+//
+// capBlendPayload reads pl.profile, the receiver's own unrewritten section on
+// its unchanged interval: a cap-loop chamfer only ever cuts along a chord
+// whose feet sit on the receiver's own recorded walls, so it can never place
+// a point beyond the receiver's own extruded envelope. cupPayload reads
+// pl.outer, the cup's own outer region — the receiver's unmodified section
+// for an INWARD shell, but the wider OFFSET (expanded) region for an OUTWARD
+// one, since an outward shell adds material and cupPayloadFor
+// (shell_cup.go) always assigns the wider of the two profiles to outer
+// regardless of sense. Either way the whole cup body — walls, floor and
+// cavity alike — sits inside pl.outer's own full-height prism: the cavity
+// never reaches farther than the outer region, the same containment
+// cupPayload.extentAlong already relies on. Both are CONTAINING shapes, so
+// each can only overstate the true diameter as a shape; both read a section
+// that is its own denotation, because every modify op refuses a receiver
+// carrying a section displacement (fillet.go's requireExactSection), so the
+// only displacement their witnesses carry is the axial one.
+//
+// A prismPayload whose own sectionDelta is nonzero (docs/prism-boolean-design.md
+// §7's re-expressed or cut section — every analytic Union whose merge cut a
+// wall, plus any placed prism pair) reads its OWN recorded section, and is not
+// a containing shape at all: the denoted section may sit either side of the
+// recorded one. It does not need to be. What this gate needs is a lower bound
+// on the body's own diameter, and §7 proves every recorded boundary point sits
+// within sectionDelta of the section the payload denotes, while each recorded
+// level sits within axialDelta of the level it denotes. Those two displacements
+// are perpendicular — one moves a coordinate IN the plane, the other moves a
+// level ALONG the normal — so their sum is an upper bound on how far a lifted
+// witness sits from the denoted body point below it, and lowerDiameterForDisplacement
+// turns the held maximum into the lower bound the gate wants. The copy zeroes
+// sectionDelta because addPrismFaces (clearance_geom.go) refuses a displaced
+// section outright: it builds the clearance kernel's certificate carriers,
+// which have to be exact statements about a boundary, and a witness set for a
+// diameter is neither a certificate nor a carrier.
+func gateWitnessPrism(payload featurePayload) (prismPayload, float64, bool) {
 	switch pl := payload.(type) {
 	case capBlendPayload:
-		return prismPayload{
+		witness := prismPayload{
 			profile: pl.profile,
 			frame:   pl.frame,
 			z0:      pl.z0,
@@ -1510,13 +1531,22 @@ func envelopePrismFor(payload featurePayload) (prismPayload, bool) {
 			z0Delta: pl.z0Delta,
 			z1Delta: pl.z1Delta,
 			xform:   pl.xform,
-		}, true
+		}
+		return witness, witness.axialDelta(), true
 	case cupPayload:
-		envelope := pl.outerPrism()
-		envelope.profile = pl.outer
-		return envelope, true
+		witness := pl.outerPrism()
+		witness.profile = pl.outer
+		return witness, witness.axialDelta(), true
+	case prismPayload:
+		if pl.sectionDelta == 0 {
+			return prismPayload{}, 0, false
+		}
+		displacement := absSumUpper(pl.sectionDelta, pl.axialDelta())
+		witness := pl
+		witness.sectionDelta = 0
+		return witness, displacement, true
 	default:
-		return prismPayload{}, false
+		return prismPayload{}, 0, false
 	}
 }
 

@@ -681,7 +681,7 @@ origin, exactly as it already must after a Fillet or Chamfer. Flagged in
 | Clearance kernel | Unchanged where `δ == 0` — dispatches on payload class; `prismPayload` already has full analytic support (`clearance.go`'s coplanar `Plane`×`Plane` certificate, `offsetPair`, etc.). Where `δ > 0` the kernel builds no model for the body and the pair reads `Suspect`: every certificate it emits is an exact statement about the carriers it read, and a carrier the payload holds only within `δ` of the one it denotes cannot support one. Widening the kernel's own candidate intervals by `δ` is a separate piece of work, not this design's. |
 | Interference (`Verify`) | **Still on the mesh path.** `interference.go`'s `measuredInterference` calls `evaluateBoolean(ctx, OpIntersect, ...)` directly after its containment and represented-set-equality certificates. The analytic dispatch is in `performBoolean`, which this PR implements only for `Union`, so an admitted coplanar-prism pair still reaches the existing read-only mesh intersection and may be coarse or `Suspect`. PR4 separately wires a read-only analytic `Intersect` path and its tests. `docs/interference-design.md` §5.2 records this PR1 boundary. |
 | Surveys (wall/undercut/min-radius) | No new code — they dispatch on payload class, and support is immediate where `δ == 0`. The undercut reading is a normal-direction membership and is unaffected at any `δ`. The wall and min-radius readings are staged at `δ > 0` and answer undecided (`Suspect`, never a silent pass): each publishes a bare reading with no bound beside it, and the wall reading is not a quantity a displacement widens by a fixed amount anyway — its allowance-angle contact families (verification §6) can change membership under a boundary perturbation, so a proven displaced reading needs the survey's own theory extended, not a term added to a bound. |
-| `Verify`'s structural/tolerance gates | Structurally unchanged — `prismPayload` is valid by construction as always. The TOLERANCE gate is not: it anchors each reading against a reference the body's own geometry supplies, and `bodyGateDiameter` reads that geometry through the clearance kernel's model, which the row above declines to build at `δ > 0`. So every reading of an assembled body with a nonzero displacement reports `Suspect` with no `Required` threshold beside it, however tight its bound is. That is a conservative verdict rather than a wrong one, and giving such a body a reference of its own is the same separate piece of work the clearance row names. |
+| `Verify`'s structural/tolerance gates | Structurally unchanged — `prismPayload` is valid by construction as always. The TOLERANCE gate anchors each reading against a reference the body's own geometry supplies, and at `δ > 0` it cannot read that geometry through the clearance kernel's model, which the row above declines to build. It reads the body's OWN recorded section instead (`gateWitnessPrism`), shrinking the witness maximum by twice `δ` plus the axial displacement, which verification design §3 proves a lower bound on the denoted body's own diameter. A displaced body is therefore judged on the same terms as any other: a reading passes when its bound meets the tolerance and reports `Suspect` with a stated `Required` threshold when it does not. |
 | Export (STL/OBJ) | Reads `Tessellate`'s output. Its size-derived default tolerance is raised past `δ`, which tessellation reserves from the tolerance before chording, so a default export of an assembled body still writes its mesh rather than refusing. |
 | Recipe/replay | **No wire change.** The step still records the existing `OpUnion`/`OpCut`/`OpIntersect` + `Inputs` (`[a, b]` or `[target, tool]`), unmodified — recipe-replay-design §8's own contract already allows this: "A later evaluator MUST reproduce ... one produced body per step ... measurements valid under its own `Exactness`/`Bound`. It need not reproduce v1's internal payload." A replayed recipe simply builds via the analytic path wherever it now qualifies; nothing in §2 (wire envelope), §3 (validation), or §4 (references/liveness) changes. |
 
@@ -841,13 +841,14 @@ payload carries. `extrude.go`'s `evalPrism` composition and `tessellate.go`'s
 tolerance reservation, mesh-bound charge and area-slack charge are §7's own
 subject and are not repeated here.
 
-§12 already rules on three of the remaining consumers, and this section adds
+§12 already rules on four of the remaining consumers, and this section adds
 only the call site each of its rows lands at. What the consumer does at
 `δ > 0` is that row's to state, and is deliberately not restated here:
 `survey.go`'s `prismWall` and `prismMinRadius` are §12's "Surveys
 (wall/undercut/min-radius)" row, `extrude.go`'s `extentAlong` is its
-"`ThroughAll` / `ThroughAllSide`" row, and `clearance_geom.go`'s
-`addPrismFaces` is its "Clearance kernel" row.
+"`ThroughAll` / `ThroughAllSide`" row, `clearance_geom.go`'s
+`addPrismFaces` is its "Clearance kernel" row, and `verify.go`'s
+`gateWitnessPrism` is its "`Verify`'s structural/tolerance gates" row.
 
 No §12 row rules on the two remaining consumers, and this section owns them.
 Each withholds its answer rather than measure the recorded section as the one
@@ -862,11 +863,13 @@ it denotes:
 
 ### boolean.go
 
-`boolean.go`'s `faceChordDelta` is the one consumer that does NOT withhold:
-it charges a nonzero `sectionDelta` as a planar face's own chording
+`boolean.go`'s `faceChordDelta` is one of the two consumers that do NOT
+withhold: it charges a nonzero `sectionDelta` as a planar face's own chording
 displacement, so the mesh path's tangency gate
 (`refuseUndecidableProximity`) cannot read that face as held exactly. See
-`faceChordDelta`'s own doc comment.
+`faceChordDelta`'s own doc comment. The other is `verify.go`'s
+`gateWitnessPrism` above, which charges `δ` as a shrink on the tolerance
+gate's reference diameter.
 
 ### capblend_contour.go (boundary note)
 
