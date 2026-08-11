@@ -198,7 +198,7 @@ func referenceTriangleArea(a, b, c r3.Vec, prec uint) *big.Float {
 	u := xsub(xptOf(b), xptOf(a))
 	v := xsub(xptOf(c), xptOf(a))
 	w := xcross(u, v)
-	q := xdot(w, w)
+	q := xdotRat(w, w)
 	q.Quo(q, big.NewRat(4, 1))
 	return new(big.Float).SetPrec(prec).Sqrt(new(big.Float).SetPrec(prec).SetRat(q))
 }

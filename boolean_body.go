@@ -239,7 +239,7 @@ func auditFacetedMesh(ctx context.Context, verts []r3.Vec, tris [][3]int) (*face
 				}
 			}
 			t := tris[fi]
-			v.Add(v, xdot(audit.xverts[t[0]], xcross(audit.xverts[t[1]], audit.xverts[t[2]])))
+			v.Add(v, xdotRat(audit.xverts[t[0]], xcross(audit.xverts[t[1]], audit.xverts[t[2]])))
 		}
 		audit.compVol[ci] = v.Mul(v, sixth)
 		if audit.compVol[ci].Sign() == 0 {
@@ -532,10 +532,13 @@ func buildFacetedBody(ctx context.Context, d *Document, ref StepRef, pp facetedP
 			return nil, err
 		}
 		a, b, c := xverts[t[0]], xverts[t[1]], xverts[t[2]]
-		det := xdot(a, xcross(b, c))
-		mx.Add(mx, new(big.Rat).Mul(det, new(big.Rat).Add(new(big.Rat).Add(a.x, b.x), c.x)))
-		my.Add(my, new(big.Rat).Mul(det, new(big.Rat).Add(new(big.Rat).Add(a.y, b.y), c.y)))
-		mz.Add(mz, new(big.Rat).Mul(det, new(big.Rat).Add(new(big.Rat).Add(a.z, b.z), c.z)))
+		det := xdotRat(a, xcross(b, c))
+		ax, ay, az := xhpRat(xhp(a))
+		bx, by, bz := xhpRat(xhp(b))
+		cx, cy, cz := xhpRat(xhp(c))
+		mx.Add(mx, new(big.Rat).Mul(det, new(big.Rat).Add(new(big.Rat).Add(ax, bx), cx)))
+		my.Add(my, new(big.Rat).Mul(det, new(big.Rat).Add(new(big.Rat).Add(ay, by), cy)))
+		mz.Add(mz, new(big.Rat).Mul(det, new(big.Rat).Add(new(big.Rat).Add(az, bz), cz)))
 	}
 
 	areaF := 0.0
@@ -668,7 +671,7 @@ func meshVolumeMeasurement(ctx context.Context, verts []r3.Vec, tris [][3]int, v
 			}
 		}
 		a, b, c := xverts[t[0]], xverts[t[1]], xverts[t[2]]
-		total.Add(total, xdot(a, xcross(b, c)))
+		total.Add(total, xdotRat(a, xcross(b, c)))
 	}
 	volRat := new(big.Rat).Mul(total, big.NewRat(1, 6))
 	if volRat.Sign() <= 0 {

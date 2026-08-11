@@ -171,8 +171,7 @@ func TestSegFilterNeverRejectsAnExactHit(t *testing.T) {
 		xa, xb := xptOf(a), xptOf(b)
 		// An exact interior point of the exact segment, at a rational parameter
 		// no float64 can represent, so its rounding is a genuine approximation.
-		tt := big.NewRat(int64(rng.IntN(9999)+1), 10000)
-		xp := xlerp(xa, xb, tt)
+		xp := xlerp(xa, xb, big.NewInt(int64(rng.IntN(9999)+1)), big.NewInt(10000))
 		p := xp.vec()
 		require.True(t, onSegmentInterior3(xa, xb, xp),
 			`the constructed point must be exactly interior to the exact segment`)
@@ -227,8 +226,7 @@ func TestSegFilterNeverRejectsAnExactHitAtEveryScale(t *testing.T) {
 			a := r3.NewVec(coord(s), coord(s), coord(s))
 			b := r3.NewVec(coord(s), coord(s), coord(s))
 			xa, xb := xptOf(a), xptOf(b)
-			tt := big.NewRat(int64(rng.IntN(9999)+1), 10000)
-			xp := xlerp(xa, xb, tt)
+			xp := xlerp(xa, xb, big.NewInt(int64(rng.IntN(9999)+1)), big.NewInt(10000))
 			p := xp.vec()
 			require.True(t, onSegmentInterior3(xa, xb, xp),
 				`the constructed point must be exactly interior to the exact segment at 2^%d`, e)
@@ -351,4 +349,282 @@ func TestSegAdmissionRadiusCoversTheRoundingItMustCover(t *testing.T) {
 			})
 		}
 	})
+}
+
+// xhpBenchTriangle is the fixed triangle every xhp differential test and
+// benchmark below sweeps against: a=(0.1,0.2,0.3), b=(1.7,0.35,-0.9),
+// c=(-0.55,2.25,0.125).
+func xhpBenchTriangle() (a, b, c xhp) {
+	return xhpOf(r3.NewVec(0.1, 0.2, 0.3)),
+		xhpOf(r3.NewVec(1.7, 0.35, -0.9)),
+		xhpOf(r3.NewVec(-0.55, 2.25, 0.125))
+}
+
+// xhpGrid is the 8×8×8 probe grid every xhp differential test sweeps.
+var xhpGrid = [8]float64{-2.5, -1, -0.125, 0, 0.1, 0.3, 1, 2.75}
+
+// refPoint is an exact rational 3D point built with math/big.Rat directly —
+// the same shape this package's exact kernel carried before this change.
+// It is kept entirely apart from production's xpt/xhp kernel, private to this
+// test file, so the differential tests below stay a genuine independent
+// check rather than becoming circular once the production sign path is
+// itself built on xhp.
+type refPoint struct{ x, y, z *big.Rat }
+
+func refPointOf(v r3.Vec) refPoint {
+	return refPoint{mustRatOf(v.X), mustRatOf(v.Y), mustRatOf(v.Z)}
+}
+
+func refSub(a, b refPoint) refPoint {
+	return refPoint{new(big.Rat).Sub(a.x, b.x), new(big.Rat).Sub(a.y, b.y), new(big.Rat).Sub(a.z, b.z)}
+}
+
+func refCross(a, b refPoint) refPoint {
+	return refPoint{
+		new(big.Rat).Sub(new(big.Rat).Mul(a.y, b.z), new(big.Rat).Mul(a.z, b.y)),
+		new(big.Rat).Sub(new(big.Rat).Mul(a.z, b.x), new(big.Rat).Mul(a.x, b.z)),
+		new(big.Rat).Sub(new(big.Rat).Mul(a.x, b.y), new(big.Rat).Mul(a.y, b.x)),
+	}
+}
+
+func refDot(a, b refPoint) *big.Rat {
+	s := new(big.Rat).Mul(a.x, b.x)
+	s.Add(s, new(big.Rat).Mul(a.y, b.y))
+	return s.Add(s, new(big.Rat).Mul(a.z, b.z))
+}
+
+func refOrientSign(a, b, c, d refPoint) int {
+	return refDot(refCross(refSub(b, a), refSub(c, a)), refSub(d, a)).Sign()
+}
+
+func refLerp(a, b refPoint, t *big.Rat) refPoint {
+	d := refSub(b, a)
+	return refPoint{
+		new(big.Rat).Add(a.x, new(big.Rat).Mul(t, d.x)),
+		new(big.Rat).Add(a.y, new(big.Rat).Mul(t, d.y)),
+		new(big.Rat).Add(a.z, new(big.Rat).Mul(t, d.z)),
+	}
+}
+
+// TestXHPAgreesWithTheRationalOrientSign is the direct differential proof
+// behind this change (fu163 §1): the homogeneous-integer sign must never
+// disagree with an independent math/big.Rat computation of the same
+// determinant, because disagreement would mean a topology decision could
+// flip. It sweeps 512 float-derived probes and, separately, 512
+// refLerp-derived probes at t = 37/91 — the investigation's own check, which
+// passed on all 1024.
+func TestXHPAgreesWithTheRationalOrientSign(t *testing.T) {
+	a, b, c := r3.NewVec(0.1, 0.2, 0.3), r3.NewVec(1.7, 0.35, -0.9), r3.NewVec(-0.55, 2.25, 0.125)
+	ra, rb, rc := refPointOf(a), refPointOf(b), refPointOf(c)
+	ha, hb, hc := xhpOf(a), xhpOf(b), xhpOf(c)
+	tRat := big.NewRat(37, 91)
+	tn, td := big.NewInt(37), big.NewInt(91)
+
+	for _, px := range xhpGrid {
+		for _, py := range xhpGrid {
+			for _, pz := range xhpGrid {
+				p := r3.NewVec(px, py, pz)
+				rp := refPointOf(p)
+
+				want := refOrientSign(ra, rb, rc, rp)
+				got := xhpOrientSign(ha, hb, hc, xhpOf(p))
+				require.Equalf(t, want, got, `direct probe (%v,%v,%v): the homogeneous and independent rational signs must agree`, px, py, pz)
+
+				wantLerp := refOrientSign(ra, rb, rc, refLerp(ra, rp, tRat))
+				gotLerp := xhpOrientSign(ha, hb, hc, xhpLerp(ha, xhpOf(p), tn, td))
+				require.Equalf(t, wantLerp, gotLerp, `lerped probe (%v,%v,%v): the homogeneous and independent rational signs must agree`, px, py, pz)
+			}
+		}
+	}
+}
+
+// TestXHPLerpDenotesTheSameCoordinate pins the positivity invariant the sign
+// argument rests on: for every lerped probe xhpLerp produces, the exact
+// rational it denotes (x/w, y/w, z/w) equals the coordinate an independent
+// math/big.Rat lerp computes for the identical t, and w is strictly positive.
+func TestXHPLerpDenotesTheSameCoordinate(t *testing.T) {
+	a := r3.NewVec(0.1, 0.2, 0.3)
+	ra, ha := refPointOf(a), xhpOf(a)
+	tRat := big.NewRat(37, 91)
+	tn, td := big.NewInt(37), big.NewInt(91)
+
+	for _, px := range xhpGrid {
+		for _, py := range xhpGrid {
+			for _, pz := range xhpGrid {
+				p := r3.NewVec(px, py, pz)
+				want := refLerp(ra, refPointOf(p), tRat)
+				got := xhpLerp(ha, xhpOf(p), tn, td)
+				require.Positive(t, got.w.Sign(), `the homogeneous denominator must stay positive`)
+				gx, gy, gz := xhpRat(got)
+				require.Zerof(t, gx.Cmp(want.x), `x at probe (%v,%v,%v)`, px, py, pz)
+				require.Zerof(t, gy.Cmp(want.y), `y at probe (%v,%v,%v)`, px, py, pz)
+				require.Zerof(t, gz.Cmp(want.z), `z at probe (%v,%v,%v)`, px, py, pz)
+				wx, _ := want.x.Float64()
+				wy, _ := want.y.Float64()
+				wz, _ := want.z.Float64()
+				require.Equalf(t, r3.Vec{X: wx, Y: wy, Z: wz}, xhpVec(got), `float rounding at probe (%v,%v,%v)`, px, py, pz)
+			}
+		}
+	}
+}
+
+// TestOrientRatAgreesWithOrientSignExact checks the split orientVal was cut
+// into: orientRat's materialised value and orientSignExact's plain integer
+// sign must agree over the same probes, sign consumer and value consumer
+// alike.
+func TestOrientRatAgreesWithOrientSignExact(t *testing.T) {
+	a, b, c := r3.NewVec(0.1, 0.2, 0.3), r3.NewVec(1.7, 0.35, -0.9), r3.NewVec(-0.55, 2.25, 0.125)
+	xa, xb, xc := xptOf(a), xptOf(b), xptOf(c)
+	for _, px := range xhpGrid {
+		for _, py := range xhpGrid {
+			for _, pz := range xhpGrid {
+				p := xptOf(r3.NewVec(px, py, pz))
+				require.Equalf(t, orientSignExact(xa, xb, xc, p), orientRat(xa, xb, xc, p).Sign(),
+					`probe (%v,%v,%v): the sign and the materialised value must agree`, px, py, pz)
+			}
+		}
+	}
+}
+
+// xhpKeyOf is the four canonical integers joined the same way xpt.key joins
+// them (both route the exact welding identity through xhpCanon) — kept local
+// to this test file so the xhp differential tests need nothing from
+// production's own key().
+func xhpKeyOf(p xhp) string {
+	return p.x.String() + `|` + p.y.String() + `|` + p.z.String() + `|` + p.w.String()
+}
+
+// TestXHPCanonIsAUniqueIdentity is what stands between this change and a
+// silently cracked mesh: a homogeneous point has infinitely many spellings,
+// and welding (boolean_mesh.go:998) is by exact identity, so two spellings of
+// one point MUST canonicalise to one key. It takes a depth-2 lerped point,
+// scales all four integers by 6 — a second, non-reduced spelling of the same
+// coordinate — and asserts both canonicalise to the same key, the same
+// four-tuple, and the same rational coordinate.
+func TestXHPCanonIsAUniqueIdentity(t *testing.T) {
+	a, b, c := xhpBenchTriangle()
+	tn, td := big.NewInt(37), big.NewInt(91)
+	depth1 := xhpLerp(a, b, tn, td)
+	depth2 := xhpLerp(depth1, c, tn, td)
+
+	six := big.NewInt(6)
+	scaled := xhp{
+		x: new(big.Int).Mul(depth2.x, six),
+		y: new(big.Int).Mul(depth2.y, six),
+		z: new(big.Int).Mul(depth2.z, six),
+		w: new(big.Int).Mul(depth2.w, six),
+	}
+
+	canonA, canonB := xhpCanon(depth2), xhpCanon(scaled)
+	require.Equal(t, xhpKeyOf(canonA), xhpKeyOf(canonB),
+		`two spellings of one point must canonicalise to the same key`)
+	require.Equal(t, canonA.x.String(), canonB.x.String())
+	require.Equal(t, canonA.y.String(), canonB.y.String())
+	require.Equal(t, canonA.z.String(), canonB.z.String())
+	require.Equal(t, canonA.w.String(), canonB.w.String())
+
+	rx, ry, rz := xhpRat(depth2)
+	crx, cry, crz := xhpRat(canonA)
+	require.Zero(t, rx.Cmp(crx), `canonicalising must not change the denoted x`)
+	require.Zero(t, ry.Cmp(cry), `canonicalising must not change the denoted y`)
+	require.Zero(t, rz.Cmp(crz), `canonicalising must not change the denoted z`)
+}
+
+// TestXHPDenominatorStaysBounded is the guard against the one way this
+// change can make the kernel SLOWER than the math/big.Rat it replaces:
+// unreduced, a chain of xhpLerps grows multiplicatively (measured 380 bits at
+// depth 1, 823 at depth 2, 14113 at depth 6, against 59-92 bits for the
+// reduced big.Rat over the same chain). Stripping the common power of two
+// after every lerp is what keeps it bounded — measured 462 bits at depth 6 —
+// without paying xhpCanon's full GCD.
+func TestXHPDenominatorStaysBounded(t *testing.T) {
+	p := xhpOf(r3.NewVec(0.1, 0.2, 0.3))
+	targets := []r3.Vec{
+		r3.NewVec(1.7, 0.35, -0.9),
+		r3.NewVec(-0.55, 2.25, 0.125),
+		r3.NewVec(3.3, -1.1, 0.7),
+		r3.NewVec(-2.2, 0.05, 5.5),
+		r3.NewVec(0.9, -3.3, 1.1),
+		r3.NewVec(2.05, 1.9, -0.45),
+	}
+	tn, td := big.NewInt(37), big.NewInt(91)
+	for _, target := range targets {
+		p = xhpStripTwos(xhpLerp(p, xhpOf(target), tn, td))
+	}
+	require.Less(t, p.w.BitLen(), 4096,
+		`the stripped denominator must stay far below the unreduced 14113-bit growth at the same depth`)
+}
+
+// BenchmarkOrientSignExact measures one exact orient sign over the
+// homogeneous-integer representation on float-derived points (fu163 §9's
+// cost guard: the math/big.Rat baseline this replaces was 14.6us/206
+// allocs/op).
+func BenchmarkOrientSignExact(b *testing.B) {
+	ta, tb, tc := xhpBenchTriangle()
+	p := xhpOf(r3.NewVec(0.3, -1, 2.75))
+	b.ResetTimer()
+	for b.Loop() {
+		xhpOrientSign(ta, tb, tc, p)
+	}
+}
+
+// BenchmarkOrientSignExactLerped is BenchmarkOrientSignExact with an
+// xhpLerp-derived probe in place of a float-derived one (baseline:
+// 15.0us/199 allocs/op — indistinguishable from the dyadic case, which is
+// what disproves the "non-dyadic denominators" half of the original claim).
+func BenchmarkOrientSignExactLerped(b *testing.B) {
+	ta, tb, tc := xhpBenchTriangle()
+	tn, td := big.NewInt(37), big.NewInt(91)
+	p := xhpLerp(tb, tc, tn, td)
+	b.ResetTimer()
+	for b.Loop() {
+		xhpOrientSign(ta, tb, tc, p)
+	}
+}
+
+// BenchmarkPlaneCrossingChain measures the planeCrossings → predicate path:
+// two lerps feeding one orient sign (baseline: 26.1us/348 allocs/op).
+func BenchmarkPlaneCrossingChain(b *testing.B) {
+	ta, tb, tc := xhpBenchTriangle()
+	tn, td := big.NewInt(37), big.NewInt(91)
+	b.ResetTimer()
+	for b.Loop() {
+		p1 := xhpStripTwos(xhpLerp(ta, tb, tn, td))
+		p2 := xhpStripTwos(xhpLerp(tb, tc, tn, td))
+		xhpOrientSign(ta, p1, p2, tc)
+	}
+}
+
+// BenchmarkLerpDepth3Orient is the growth-control benchmark: three nested
+// lerps, each stripped of its common power of two before feeding the next,
+// then one orient sign (baseline: 31.4us/432 allocs/op; the arrangement to
+// avoid — a full xhpCanon on every construction instead of xhpStripTwos —
+// measured 23.4us, only 1.3x, per this file's xhpCanon doc comment).
+func BenchmarkLerpDepth3Orient(b *testing.B) {
+	ta, tb, tc := xhpBenchTriangle()
+	tn, td := big.NewInt(37), big.NewInt(91)
+	b.ResetTimer()
+	for b.Loop() {
+		p := xhpStripTwos(xhpLerp(ta, tb, tn, td))
+		p = xhpStripTwos(xhpLerp(p, tc, tn, td))
+		p = xhpStripTwos(xhpLerp(p, ta, tn, td))
+		xhpOrientSign(ta, tb, tc, p)
+	}
+}
+
+// BenchmarkExactVertexKey measures the canonicalise-and-key cost paid once
+// per welded vertex, on a depth-2 lerped point (baseline: math/big.Rat's
+// RatString with no canonicalisation step at all, 1.5us/20 allocs/op — the
+// canonical key legitimately costs more per vertex than the old spelling
+// did, because welding correctness, not speed, is what the canonical form
+// buys).
+func BenchmarkExactVertexKey(b *testing.B) {
+	ta, tb, tc := xhpBenchTriangle()
+	tn, td := big.NewInt(37), big.NewInt(91)
+	p1 := xhpStripTwos(xhpLerp(ta, tb, tn, td))
+	p2 := xhpStripTwos(xhpLerp(p1, tc, tn, td))
+	b.ResetTimer()
+	for b.Loop() {
+		_ = xhpKeyOf(xhpCanon(p2))
+	}
 }

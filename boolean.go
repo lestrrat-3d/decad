@@ -737,8 +737,8 @@ func deepWitnessInside(ctx context.Context, m *boolMesh, closeFacets []int, othe
 // is an exact rational, so the parity test that reads it decides strict
 // containment without rounding.
 func facetSamplePoints(a, b, c xpt) []xpt {
-	half := big.NewRat(1, 2)
-	mid := func(p, q xpt) xpt { return xlerp(p, q, half) }
+	one, two := big.NewInt(1), big.NewInt(2)
+	mid := func(p, q xpt) xpt { return xlerp(p, q, one, two) }
 	return []xpt{a, b, c, mid(a, b), mid(b, c), mid(c, a), xCentroid(a, b, c)}
 }
 
@@ -777,8 +777,9 @@ func certifiedInteriorDepth(p xpt, other *boolMesh) float64 {
 // its float rounding pf: the largest per-coordinate rational gap, up-rounded and
 // read as a 3D distance (bounds.go, radius3D).
 func pointRoundBound(p xpt, pf r3.Vec) float64 {
+	px, py, pz := xhpRat(xhp(p))
 	worst := new(big.Rat)
-	for _, pair := range [][2]*big.Rat{{p.x, mustRatOf(pf.X)}, {p.y, mustRatOf(pf.Y)}, {p.z, mustRatOf(pf.Z)}} {
+	for _, pair := range [][2]*big.Rat{{px, mustRatOf(pf.X)}, {py, mustRatOf(pf.Y)}, {pz, mustRatOf(pf.Z)}} {
 		d := new(big.Rat).Sub(pair[0], pair[1])
 		d.Abs(d)
 		if d.Cmp(worst) > 0 {
