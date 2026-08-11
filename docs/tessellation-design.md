@@ -256,7 +256,9 @@ all non-adjacent trims, so every point gained or lost by the planar patch lies
 within `deltaTrim(P)` of the other patch. Let `deltaStore(face)` be the proven
 three-dimensional displacement from coordinate construction and any placement
 write for that face, evaluated with directed-rounding intervals over the same
-coordinate pipeline. An unproved or non-finite allowance refuses. Each cap has:
+coordinate pipeline. An unproved or non-finite allowance refuses. Each cap has,
+before the section-displacement and axial terms below extend it into the
+complete `sourceBound(face)`:
 
 ```text
 sourceBound(cap) = upRound(deltaTrim(cap) + deltaStore(cap))
@@ -282,10 +284,17 @@ bound on how far every recorded boundary coordinate sits from the section the
 payload's construction denotes. It displaces the analytic boundary the mesh
 approximates, not a coordinate the tessellation stored, so it is its own term
 and never rides in `deltaStore`. It is zero for every payload a caller draws.
-Every face bound takes it beside the two terms above:
+
+A fourth term, the **per-face axial displacement** `deltaAxial(face)`
+(`docs/evaluator-design.md` §5), is the payload's own per-end `z0Delta`/
+`z1Delta`: the start cap takes `z0Delta`, the end cap takes `z1Delta`, and a
+wall, which meets both levels, takes the larger of the two. It moves the
+analytic boundary along the normal rather than in the plane, so like
+`deltaSection` it is its own term and never rides in `deltaStore`. Every face
+bound takes it beside the three terms above:
 
 ```text
-sourceBound(face) = upRound(deltaTrim(face) + deltaStore(face) + deltaSection)
+sourceBound(face) = upRound(deltaTrim(face) + deltaStore(face) + deltaSection + deltaAxial(face))
 ```
 
 Reserve `deltaSection` from `tol` the same way and at the same point, and refuse
@@ -293,9 +302,20 @@ a non-positive remainder — a tolerance at or below the displacement admits no
 mesh at all, exactly as §7's faceted restatement refuses a tolerance below the
 bound it holds. Chording plus `deltaSection` therefore stays within `tol` for
 every prism, displaced or not. The reservation covers those two terms and no
-others: `deltaStore` and the per-end axial displacement are still added on top
-without reducing the chording budget, so a prism carrying either can publish a
-complete `Bound` above `tol`, exactly as §1's Tolerance row states.
+others: `deltaStore` and `deltaAxial(face)` are still added on top without
+reducing the chording budget, so a prism carrying either can publish a complete
+`Bound` above `tol`, exactly as §1's Tolerance row states.
+
+The published `Bound` is a proven upper bound of the maximum of these face
+bounds, not always their exact maximum: rather than pairing each face with its
+own end, the tessellation adds the payload-wide axial maximum
+`max(z0Delta, z1Delta)` to the largest chording sagitta, which can only
+overstate a face's own `deltaAxial(face)`, never understate it — a conservative
+composition in the same spirit as §11's fallback to a global maximum in place
+of a tighter per-face figure. This keeps §2's statement that `Mesh.Bound()` is
+the maximum `sourceBound` over the body from reading as an equality the
+published `Bound` contradicts.
+
 `areaSlack` charges the same displacement as an area: the tube about the
 recorded boundary once per cap, plus that boundary's own length displacement over
 the sweep height — the composition evaluator §5's own area reading makes, one
