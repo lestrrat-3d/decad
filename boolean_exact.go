@@ -582,6 +582,268 @@ func (f segFilter) tooFar(p r3.Vec) bool {
 	return d2-(segFilterErrCoef*mag+segFilterFloor) > f.tau2
 }
 
+// floatInterval is a proven float64 enclosure [lo, hi] of an exact rational
+// value: the reject-only pre-filter in front of triTriClassify's non-coplanar
+// arm (triTriMissesFilter, below) is built entirely on this type, the same
+// "outward-rounded float arithmetic, exact fallback for anything it cannot
+// prove" shape segFilter uses for the conforming pass's own segment test. It
+// is float64's own enclosure, deliberately apart from ratInterval
+// (moments.go) and capblend_contour.go's ivPoint/ivCarrier, which enclose in
+// big.Rat and serve a different proof (a rational bound, not a float filter).
+//
+// Every method below returns EITHER a proper enclosure — lo and hi both
+// finite, lo ≤ hi, and the true value proven to lie in [lo, hi] — OR the
+// sentinel fivAbstain ({-Inf, +Inf}), which encloses every value trivially
+// and is this type's uniform "cannot prove anything here" answer. No method
+// ever returns a half-finite interval, so a caller need only test one
+// sentinel to know whether an answer was reached.
+//
+// ROUNDING. Each arithmetic method computes its result with plain float64
+// operations (round-to-nearest) and then widens the low end down and the high
+// end up by exactly one ulp with math.Nextafter. Round-to-nearest error is at
+// most half an ulp of the computed value, so a full ulp of outward widening
+// covers it with room to spare — the same margin segAdmissionRadius2's
+// derivation leans on. A binary operation with two interval operands has up
+// to four sign combinations at its corners (mul, div); the result takes the
+// min/max of all of them before the same one-ulp widening, which is the
+// textbook outward-rounded interval evaluation.
+//
+// NON-FINITE INPUTS AND OUTPUTS ABSTAIN, NEVER PROPAGATE. Every method checks
+// every intermediate it forms for finiteness before trusting it, and returns
+// fivAbstain the moment one fails — mirroring segFilter.tooFar's own
+// "saturation is tested, not argued" discipline. A saturated intermediate
+// does not merely widen an answer, it can flip which branch a later decision
+// takes (Inf compares false against everything finite), so nothing downstream
+// may read a value this type has not first proven finite.
+type floatInterval struct{ lo, hi float64 }
+
+// fivAbstain is the everywhere-abstaining interval.
+var fivAbstain = floatInterval{lo: math.Inf(-1), hi: math.Inf(1)}
+
+// abstains reports whether iv is the abstain sentinel.
+func (a floatInterval) abstains() bool { return a == fivAbstain }
+
+// contains reports whether x lies within the closed interval.
+func (a floatInterval) contains(x float64) bool { return a.lo <= x && x <= a.hi }
+
+// disjoint reports whether a and b, as closed intervals, share no point.
+func (a floatInterval) disjoint(b floatInterval) bool { return a.hi < b.lo || b.hi < a.lo }
+
+// fivPoint lifts a float64 that is itself an EXACT value (never itself the
+// product of a rounding) into a degenerate interval: lo = hi = x needs no
+// widening, because there is no rounding error to cover. Every triangle
+// vertex coordinate triTriMissesFilter reads is such a value — a float64 IS
+// an exact rational (boolean_exact.go's own opening comment) — so this is the
+// leaf constructor for every vertex coordinate the filter touches.
+func fivPoint(x float64) floatInterval {
+	if isNonFinite(x) {
+		return fivAbstain
+	}
+	return floatInterval{lo: x, hi: x}
+}
+
+// fivRounded lifts a float64 that is itself a CORRECTLY-ROUNDED conversion of
+// some exact value — at most half an ulp off truth, the guarantee
+// big.Rat.Float64 makes — into an interval with one full ulp of margin on
+// each side, which covers that half-ulp with the same spare-half-ulp margin
+// every other widening in this type carries. triTriMissesFilter's na/nb
+// arguments are xpt.vec() results, so they are exactly this case.
+func fivRounded(x float64) floatInterval {
+	if isNonFinite(x) {
+		return fivAbstain
+	}
+	return floatInterval{lo: math.Nextafter(x, math.Inf(-1)), hi: math.Nextafter(x, math.Inf(1))}
+}
+
+func (a floatInterval) add(b floatInterval) floatInterval {
+	lo, hi := a.lo+b.lo, a.hi+b.hi
+	if isNonFinite(lo) || isNonFinite(hi) {
+		return fivAbstain
+	}
+	return floatInterval{lo: math.Nextafter(lo, math.Inf(-1)), hi: math.Nextafter(hi, math.Inf(1))}
+}
+
+func (a floatInterval) sub(b floatInterval) floatInterval {
+	lo, hi := a.lo-b.hi, a.hi-b.lo
+	if isNonFinite(lo) || isNonFinite(hi) {
+		return fivAbstain
+	}
+	return floatInterval{lo: math.Nextafter(lo, math.Inf(-1)), hi: math.Nextafter(hi, math.Inf(1))}
+}
+
+func (a floatInterval) mul(b floatInterval) floatInterval {
+	p0, p1, p2, p3 := a.lo*b.lo, a.lo*b.hi, a.hi*b.lo, a.hi*b.hi
+	if isNonFinite(p0) || isNonFinite(p1) || isNonFinite(p2) || isNonFinite(p3) {
+		return fivAbstain
+	}
+	lo := math.Min(math.Min(p0, p1), math.Min(p2, p3))
+	hi := math.Max(math.Max(p0, p1), math.Max(p2, p3))
+	return floatInterval{lo: math.Nextafter(lo, math.Inf(-1)), hi: math.Nextafter(hi, math.Inf(1))}
+}
+
+// div guards the one case the other three operations do not have: a
+// denominator interval containing zero makes the quotient unbounded (or
+// undefined, at zero itself), so it returns fivAbstain outright rather than
+// forming a division that could saturate or, worse, land on a finite value
+// that means nothing.
+func (a floatInterval) div(b floatInterval) floatInterval {
+	if isNonFinite(a.lo) || isNonFinite(a.hi) || isNonFinite(b.lo) || isNonFinite(b.hi) {
+		return fivAbstain
+	}
+	if b.lo <= 0 && b.hi >= 0 {
+		return fivAbstain
+	}
+	q0, q1, q2, q3 := a.lo/b.lo, a.lo/b.hi, a.hi/b.lo, a.hi/b.hi
+	if isNonFinite(q0) || isNonFinite(q1) || isNonFinite(q2) || isNonFinite(q3) {
+		return fivAbstain
+	}
+	lo := math.Min(math.Min(q0, q1), math.Min(q2, q3))
+	hi := math.Max(math.Max(q0, q1), math.Max(q2, q3))
+	return floatInterval{lo: math.Nextafter(lo, math.Inf(-1)), hi: math.Nextafter(hi, math.Inf(1))}
+}
+
+// fivVec is a 3-vector of floatIntervals: the interval mirror of xpt, over
+// float64 rather than big.Rat.
+type fivVec struct{ x, y, z floatInterval }
+
+func fivVecOf(v r3.Vec) fivVec { return fivVec{fivPoint(v.X), fivPoint(v.Y), fivPoint(v.Z)} }
+
+func fivSub(a, b fivVec) fivVec { return fivVec{a.x.sub(b.x), a.y.sub(b.y), a.z.sub(b.z)} }
+
+func fivDot(a, b fivVec) floatInterval { return a.x.mul(b.x).add(a.y.mul(b.y)).add(a.z.mul(b.z)) }
+
+func fivCross(a, b fivVec) fivVec {
+	return fivVec{
+		a.y.mul(b.z).sub(a.z.mul(b.y)),
+		a.z.mul(b.x).sub(a.x.mul(b.z)),
+		a.x.mul(b.y).sub(a.y.mul(b.x)),
+	}
+}
+
+// fivOrient is orientVal's interval mirror: the proven enclosure of
+// det[b−a, c−a, d−a], the same expression planeCrossings' val(i) evaluates
+// exactly for the crossing parameter t = vi/(vi − vj).
+func fivOrient(a, b, c, d fivVec) floatInterval {
+	return fivDot(fivCross(fivSub(b, a), fivSub(c, a)), fivSub(d, a))
+}
+
+// triSpanOnLine is triTriMissesFilter's per-triangle half: a proven [lo, hi]
+// enclosure of the range triangle t occupies when its plane crossings against
+// the OTHER triangle o are projected onto dir — the float mirror of
+// orderOnLine over planeCrossings' own two cases (a zero-sign vertex sits
+// exactly on the crossing; a sign-changing edge crosses it at t). signs is
+// the caller's own already-decided sign triple (orientSign, possibly via its
+// exact fallback) for t's vertices against o's plane — this filter never
+// re-derives a sign, only asks which of planeCrossings' branches it selects,
+// exactly as the exact code does.
+//
+// The bound is deliberately a SUPERSET of the true occupied range: it takes
+// every candidate planeCrossings would have considered — including one a
+// wide interval later drops from contention exactly the way dedupePoints or
+// the ≤2-points invariant would — and folds in its own projected interval, so
+// the returned span can only be wider than the truth, never narrower. A
+// wider span makes the filter LESS likely to prove disjointness, never more:
+// the reject-only direction is unaffected by the extra slack. ok is false —
+// the uniform abstain signal — the moment any step could not be bounded, or
+// no candidate was found at all (which allOneSide's own gate, run before this
+// filter is ever called, has already ruled out for a real non-coplanar pair).
+func triSpanOnLine(t, o [3]fivVec, signs [3]int, dir fivVec) (floatInterval, bool) {
+	lo, hi := math.Inf(1), math.Inf(-1)
+	found := false
+	widen := func(p fivVec) bool {
+		proj := fivDot(p, dir)
+		if proj.abstains() {
+			return false
+		}
+		lo = math.Min(lo, proj.lo)
+		hi = math.Max(hi, proj.hi)
+		found = true
+		return true
+	}
+	for i := range 3 {
+		j := (i + 1) % 3
+		if signs[i] == 0 && !widen(t[i]) {
+			return floatInterval{}, false
+		}
+		if signs[i]*signs[j] >= 0 {
+			continue
+		}
+		vi := fivOrient(o[0], o[1], o[2], t[i])
+		vj := fivOrient(o[0], o[1], o[2], t[j])
+		frac := vi.div(vi.sub(vj))
+		if frac.abstains() {
+			return floatInterval{}, false
+		}
+		p := fivVec{
+			x: t[i].x.add(frac.mul(t[j].x.sub(t[i].x))),
+			y: t[i].y.add(frac.mul(t[j].y.sub(t[i].y))),
+			z: t[i].z.add(frac.mul(t[j].z.sub(t[i].z))),
+		}
+		if !widen(p) {
+			return floatInterval{}, false
+		}
+	}
+	if !found {
+		return floatInterval{}, false
+	}
+	return floatInterval{lo: lo, hi: hi}, true
+}
+
+// triTriMissesFilter is the reject-only float pre-filter in front of
+// triTriClassify's non-coplanar rational arm (docs/evaluator-design.md §9),
+// dispatched ahead of planeCrossings for exactly the reason segFilter sits
+// ahead of onSegmentInterior3: the circular fixture that motivated it enumerates
+// 66,008 facet pairs into that arm, and only 1,860 of them (fu158) have any
+// real contact, so almost every call pays a full math/big.Rat cross product to
+// establish what a dozen float operations already establish — the pair's
+// planes cross too far outside both triangles to meet at all.
+//
+// It reproduces triTriClassify's own non-coplanar computation — planeCrossings
+// per triangle, then the projection onto dir = na × nb that orderOnLine
+// compares — entirely in interval arithmetic (triSpanOnLine, above), and
+// returns true — PROVEN no contact — only when the two triangles' projected
+// spans are proven disjoint. Every other outcome, abstention included,
+// returns false: the pair still goes to the exact predicate, which decides it
+// with no help from this filter. That asymmetry is the whole soundness
+// argument, in segFilter's own words: a filter that could ADMIT would be an
+// admission gate on a residual, which this package forbids outright, and a
+// filter that could reject a true contact would hand back a non-conforming
+// subdivision — a WRONG boolean, not a slow one.
+//
+// ta, tb are the operands' own float corners, read as exact point intervals
+// (fivPoint — a float64 vertex coordinate is exact, never itself a
+// rounding). na, nb are xpt.vec() — the correctly-rounded float64 conversion
+// of the pair's exact rational normals — read with fivRounded's extra ulp of
+// margin for that rounding. sa, sb are the vertex-against-the-other-plane
+// sign triples orientSign already decided; see triSpanOnLine for how they
+// steer the reconstruction.
+//
+// THE SHALLOW-ANGLE CASE is where this filter is expected to abstain most
+// often, and correctly so: when na and nb are nearly parallel, dir = na × nb
+// is near zero, so every fivDot projection carries an interval wide relative
+// to its own magnitude, and frac's denominator interval is far more likely to
+// straddle zero. Both drive triSpanOnLine to its abstain return, sending the
+// pair to the exact predicate — costing one rational classification, never a
+// wrong answer.
+func triTriMissesFilter(ta, tb [3]r3.Vec, na, nb r3.Vec, sa, sb [3]int) bool {
+	a := [3]fivVec{fivVecOf(ta[0]), fivVecOf(ta[1]), fivVecOf(ta[2])}
+	b := [3]fivVec{fivVecOf(tb[0]), fivVecOf(tb[1]), fivVecOf(tb[2])}
+	dir := fivCross(
+		fivVec{fivRounded(na.X), fivRounded(na.Y), fivRounded(na.Z)},
+		fivVec{fivRounded(nb.X), fivRounded(nb.Y), fivRounded(nb.Z)},
+	)
+
+	spanA, ok := triSpanOnLine(a, b, sa, dir)
+	if !ok {
+		return false
+	}
+	spanB, ok := triSpanOnLine(b, a, sb, dir)
+	if !ok {
+		return false
+	}
+	return spanA.disjoint(spanB)
+}
+
 // xp2 is an exact 2D point (a plane projection of an xpt).
 type xp2 struct{ u, v *big.Rat }
 

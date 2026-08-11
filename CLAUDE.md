@@ -213,7 +213,7 @@ one.
 | `prism_boolean_nesting.go` | Cut/Intersect's clean-nesting structural match (§4.2's "clean" sub-case): the whole-loop tag-map search that resolves a clean bore/nested pair with no assembly and no build-time audit. See the file's own doc comment and `docs/prism-boolean-design.md`. |
 | `boolean_mesh.go` | The exact-predicate mesh-boolean pipeline: contact classification, subdivision, stitching, and the closed-mesh audit. See the file's own doc comment and `docs/evaluator-design.md` §9. |
 | `boolean_cut.go` | Per-facet exact subdivision along contact segments into classified regions, in rational 2D on the facet's own plane. See the file's own doc comment. |
-| `boolean_exact.go` | The exact-arithmetic kernel behind the mesh boolean: adaptive orient3d, rational predicates, and the reject-only segment pre-filter. The filter's admission-radius derivation lives in `segAdmissionRadius2`'s and `tooFar`'s own doc comments. |
+| `boolean_exact.go` | The exact-arithmetic kernel behind the mesh boolean: adaptive orient3d, rational predicates, and the reject-only segment and facet-pair pre-filters. Their admission derivations live in `segAdmissionRadius2`'s, `tooFar`'s and `triTriMissesFilter`'s own doc comments. |
 | `boolean_body.go` | Builds a `facetedPayload` into a `Body`: face/loop/edge topology from the stitched mesh, and measurements integrated exactly with composed proven bounds. See the file's own doc comment and `docs/evaluator-design.md` §9. |
 | `bounds.go` | The single owner of every proven error bound a faceted measurement reports, one helper per mechanism, including `docs/prism-boolean-design.md` §7's section-displacement terms. See the file's own doc comment. |
 

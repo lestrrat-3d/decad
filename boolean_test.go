@@ -85,6 +85,52 @@ func translated(t *testing.T, b *decad.Body, x, y, z float64) *decad.Body {
 	return moved
 }
 
+// discBodySymmetric extrudes a radius-r circle centered at (cx, 0)
+// symmetrically about its own sketch plane, spanning [-half, +half]. It
+// takes testing.TB so a benchmark can build the same fixture as a test.
+func discBodySymmetric(t testing.TB, doc *decad.Document, cx, r, half float64) *decad.Body {
+	t.Helper()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	center := s.CreatePoint(cx, 0)
+	s.Fix(center)
+	s.CreateCircle(center, r)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	body, err := doc.Extrude(s, s.Profiles()[0], decad.Symmetric{D: units.Millimeters(half)})
+	require.NoError(t, err)
+	return body
+}
+
+// washerBodySymmetric extrudes a circular annulus (outer radius outer, inner
+// hole radius inner, centered on the origin) symmetrically about its own
+// sketch plane, spanning [-half, +half] — fu158's own washer-tool fixture
+// (.tmp/followup-tasks/fu158-tasks.md §9): a Cut against a disc whose own
+// extent does not share either cap plane forces the pair onto the mesh path.
+func washerBodySymmetric(t testing.TB, doc *decad.Document, outer, inner, half float64) *decad.Body {
+	t.Helper()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	center := s.CreatePoint(0, 0)
+	s.Fix(center)
+	s.CreateCircle(center, outer)
+	s.CreateCircle(center, inner)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	var prof *sketch.Profile
+	for _, p := range s.Profiles() {
+		if len(p.Holes) == 1 {
+			prof = p
+		}
+	}
+	require.NotNil(t, prof, `the washer's holed region should exist`)
+	body, err := doc.Extrude(s, prof, decad.Symmetric{D: units.Millimeters(half)})
+	require.NoError(t, err)
+	return body
+}
+
 // volumeMM reads a volume measurement in mm³.
 func volumeMM(t *testing.T, m decad.Measurement) float64 {
 	t.Helper()
@@ -1496,4 +1542,80 @@ func TestCutStarHoleOuterLoopIsNotTheLongest(t *testing.T) {
 
 	requireOneOuterLoopPerFace(t, got)
 	requireBodyWatertight(t, got)
+}
+
+// TestBooleanCutWasherThroughDiscKeepsStandingPost is fu158's own restored
+// circular end-to-end fixture, added only because the fix measured under
+// task 6's own gate: with the facet-pair filter in place, Cutting a disc
+// target (r = 15, h = 10) with a washer tool (outer 8, inner 3, swept
+// symmetrically ±11) lands at about 14 s under -race, under the 15 s ceiling
+// that keeps this test inside the -race CI budget
+// (.tmp/followup-tasks/fu158-tasks.md §4 task 6). It is the circular twin of
+// prism_boolean_nesting_test.go's
+// TestPrismCutG6HoledToolFallsBackKeepingTheStandingPost.
+func TestBooleanCutWasherThroughDiscKeepsStandingPost(t *testing.T) {
+	const outerTarget, outerTool, innerTool, h, half = 15.0, 8.0, 3.0, 10.0, 11.0
+	doc := decad.New()
+	target := discBody(t, doc, 0, outerTarget, h)
+	tool := washerBodySymmetric(t, doc, outerTool, innerTool, half)
+
+	got, err := decad.Cut(target, tool)
+	require.NoError(t, err)
+	require.True(t, anyFaceIsFaceted(got), `mismatched cap planes force the pair onto the mesh path`)
+
+	// The tool's own hole leaves a standing post: a second, disconnected lump
+	// inside the cavity the ring cut.
+	require.Len(t, got.Lumps(), 2, `the post the tool's hole spares stands as its own lump`)
+
+	vol, err := got.Volume()
+	require.NoError(t, err)
+	want := math.Pi * (outerTarget*outerTarget - outerTool*outerTool + innerTool*innerTool) * h
+	require.LessOrEqual(t, math.Abs(volumeMM(t, vol)-want), boundMM3(t, vol),
+		`the standing post's volume must not be dropped from the result`)
+}
+
+// BenchmarkCutCircularWasher is fu158's own headline cost fixture
+// (.tmp/followup-tasks/fu158-tasks.md §9): a disc target (r = 15, h = 10) cut
+// by a washer tool (outer 8, inner 3, swept symmetrically ±11 so its caps
+// clear the target's own) forces the pair through the mesh boolean's full
+// circular facet-pair classification. Operands are retired by Cut, so the
+// fixture is rebuilt every iteration, outside the timed portion.
+func BenchmarkCutCircularWasher(b *testing.B) {
+	for b.Loop() {
+		b.StopTimer()
+		doc := decad.New()
+		target := discBody(b, doc, 0, 15, 10)
+		tool := washerBodySymmetric(b, doc, 8, 3, 11)
+		b.StartTimer()
+
+		if _, err := decad.Cut(target, tool); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+// BenchmarkUnionCircularMeshPath is the benchmark the naive circular Union
+// does NOT exercise: two co-directional coplanar discs resolve through the
+// analytic prism reduction (docs/prism-boolean-design.md) in milliseconds and
+// never reach the mesh path at all. Here the tool disc is swept symmetrically
+// about z = 0 while the base disc spans z = 0..20, so neither cap plane
+// matches and the analytic reduction refuses the pair — forcing the same
+// circular facet-pair cost a Union can hit. The KindFaceted assertion guards
+// against a future analytic extension silently turning this into a no-op.
+func BenchmarkUnionCircularMeshPath(b *testing.B) {
+	for b.Loop() {
+		b.StopTimer()
+		doc := decad.New()
+		base := discBody(b, doc, 0, 10, 20)
+		tool := discBodySymmetric(b, doc, 10, 7, 11)
+		b.StartTimer()
+
+		got, err := decad.Union(base, tool)
+		if err != nil {
+			b.Fatal(err)
+		}
+		if !anyFaceIsFaceted(got) {
+			b.Fatal(`the fixture must reach the mesh path, not the analytic reduction`)
+		}
+	}
 }

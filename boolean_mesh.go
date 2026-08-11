@@ -217,6 +217,13 @@ func (c *contactMemo) classify(i, j int) (triContact, error) {
 	return v, nil
 }
 
+// triTriFilterEnabled gates triTriMissesFilter inside triTriClassify's
+// non-coplanar arm. It exists solely so
+// TestTriTriClassifyFilterAgreesWithTheExactPath can run the classifier both
+// ways over the same corpus and compare; production code never assigns to
+// it, and no exported surface can reach it.
+var triTriFilterEnabled = true
+
 // triTriClassify computes the exact intersection of two CLOSED triangles: the
 // single symmetric entry point every contact question goes through. ta/tb are
 // float corners (the adaptive orient filter reads them), xta/xtb their exact
@@ -262,6 +269,9 @@ func triTriClassify(ta, tb [3]r3.Vec, xta, xtb [3]xpt, na, nb xpt) (triContact, 
 	// Non-coplanar: the planes are distinct and non-parallel (a parallel pair
 	// would leave every vertex strictly on one side, already returned), so they
 	// meet in exactly one line, and every point of the intersection lies on it.
+	if triTriFilterEnabled && triTriMissesFilter(ta, tb, na.vec(), nb.vec(), sa, sb) {
+		return out, nil
+	}
 	ptsA := dedupePoints(planeCrossings(xta, xtb, sa))
 	ptsB := dedupePoints(planeCrossings(xtb, xta, sb))
 	if len(ptsA) == 0 || len(ptsB) == 0 {

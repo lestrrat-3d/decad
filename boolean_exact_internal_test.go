@@ -628,3 +628,82 @@ func BenchmarkExactVertexKey(b *testing.B) {
 		_ = xhpKeyOf(xhpCanon(p2))
 	}
 }
+
+// This section is fu158 task 1's own proof obligation
+// (.tmp/followup-tasks/fu158-tasks.md §4/§5): floatInterval's five operations
+// and its contains/disjoint tests, first on hand-picked values, then a
+// randomized proof that its arithmetic really does enclose the exact
+// (big.Rat) value of the same expression — the same "reject-only, never
+// argued" discipline segFilter's own tests above pin for the conforming
+// pass's segment filter.
+
+// TestFloatIntervalArithmeticSanity exercises floatInterval's own five
+// operations and its contains/disjoint tests directly, on hand-picked values,
+// ahead of the randomized enclosure proof below.
+func TestFloatIntervalArithmeticSanity(t *testing.T) {
+	a := floatInterval{lo: 1, hi: 2}
+	b := floatInterval{lo: 3, hi: 4}
+
+	require.True(t, a.disjoint(b))
+	require.False(t, a.disjoint(floatInterval{lo: 1.5, hi: 5}))
+	require.True(t, a.contains(1.5))
+	require.False(t, a.contains(2.5))
+
+	sum := a.add(b)
+	require.LessOrEqual(t, sum.lo, 4.0)
+	require.GreaterOrEqual(t, sum.hi, 6.0)
+
+	diff := b.sub(a)
+	require.LessOrEqual(t, diff.lo, 1.0)
+	require.GreaterOrEqual(t, diff.hi, 3.0)
+
+	prod := a.mul(b)
+	require.LessOrEqual(t, prod.lo, 3.0)
+	require.GreaterOrEqual(t, prod.hi, 8.0)
+
+	quot := b.div(a)
+	require.LessOrEqual(t, quot.lo, 1.5)
+	require.GreaterOrEqual(t, quot.hi, 4.0)
+
+	straddling := floatInterval{lo: -1, hi: 1}
+	require.True(t, a.div(straddling).abstains(),
+		`a denominator interval containing zero must abstain, never resolve`)
+
+	require.True(t, fivPoint(math.NaN()).abstains())
+	require.True(t, fivPoint(math.Inf(1)).abstains())
+	require.True(t, floatInterval{lo: math.Inf(1), hi: math.Inf(1)}.add(a).abstains())
+}
+
+// TestTriTriIntervalEnclosesExact is fu158 task 1's proof obligation: for a
+// few thousand pseudo-random float64 triples, the interval evaluation of
+// a*b - c*d and of a/(a-b) must enclose the big.Rat value of the very same
+// expression — checked as a big.Rat comparison, never a float one, so the
+// test cannot pass by the same rounding the filter has to survive.
+func TestTriTriIntervalEnclosesExact(t *testing.T) {
+	rng := rand.New(rand.NewPCG(1, 2))
+	sample := func() float64 { return (rng.Float64()*2 - 1) * 1000 }
+
+	for range 5000 {
+		a, b, c, d := sample(), sample(), sample(), sample()
+
+		got := fivPoint(a).mul(fivPoint(b)).sub(fivPoint(c).mul(fivPoint(d)))
+		exact := new(big.Rat).Sub(
+			new(big.Rat).Mul(mustRatOf(a), mustRatOf(b)),
+			new(big.Rat).Mul(mustRatOf(c), mustRatOf(d)),
+		)
+		require.False(t, got.abstains(), `a finite product/difference must never abstain`)
+		require.LessOrEqual(t, mustRatOf(got.lo).Cmp(exact), 0)
+		require.GreaterOrEqual(t, mustRatOf(got.hi).Cmp(exact), 0)
+
+		if a == b {
+			continue // a/(a-b) is undefined; the filter's own div guard covers it
+		}
+		gotDiv := fivPoint(a).div(fivPoint(a).sub(fivPoint(b)))
+		if gotDiv.abstains() {
+			continue // an abstained bound trivially encloses every value
+		}
+		exactDiv := new(big.Rat).Quo(mustRatOf(a), new(big.Rat).Sub(mustRatOf(a), mustRatOf(b)))
+		require.LessOrEqual(t, mustRatOf(gotDiv.lo).Cmp(exactDiv), 0)
+		require.GreaterOrEqual(t, mustRatOf(gotDiv.hi).Cmp(exactDiv), 0)
+	}
+}
