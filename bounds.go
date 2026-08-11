@@ -39,6 +39,10 @@ import (
 //   - the DISPLACEMENT a recorded CUT PARAMETER puts on the point it names —
 //     the fragment endpoint slides along its own exact carrier by the parameter
 //     rounding times the carrier's speed → cutDisplacementAllow;
+//   - the DISPLACEMENT a consumed source segment's own WALKED endpoint puts on
+//     the point the private scene builds from it, when the segment's recorded
+//     range is narrower than its own natural domain →
+//     walkEndpointAllow;
 //   - the AREA of ONE RULED QUAD whose cap-level chord alone is displaced (the
 //     cap-loop chamfer's own band patches, docs/modify-reach-design.md §8.4) →
 //     bandPatchAreaAllow, the same two-factor product one patch at a time
@@ -340,6 +344,38 @@ func cutDisplacementAllow(tangentUpper float64) float64 {
 		return 0
 	}
 	return productUpper(cutParamUlps*ulpOf(1), tangentUpper)
+}
+
+// walkEndpointAllow bounds the rounding a source segment's own WALKED
+// endpoint commits when the record's parameterisation is evaluated at a
+// narrowed t rather than read off the segment's own natural bound
+// (docs/prism-boolean-design.md §7's δ_walk — the analytic boolean's private
+// scene is built from walkOf's own walked geometry, prism_boolean.go's
+// buildPrismScene). For a line the computed endpoint is
+// fl(a + fl(t·fl(b−a))): each product and sum rounds once, so the
+// per-coordinate error is at most about 3 ulps of the operand magnitudes —
+// bounded here by the SAME shape rigidRoundAllow already states for a rigid
+// map's own rounding (16 ulps of a doubled coordinate envelope, read as a 3D
+// radius), which dominates the smaller figure with ample margin and keeps
+// every displacement mechanism in this file stated the same way.
+//
+// coordUpper must be a PROVEN upper bound on the walked endpoint's own
+// magnitude — segmentWalk.coordUpper (lineWalkBounds/circularWalk's own L1
+// envelope) is exactly that. A non-finite envelope answers +Inf, never 0: an
+// absent bound must never read as a small one (cutDisplacementAllow's own
+// rule, restated here because this helper sits right beside it).
+func walkEndpointAllow(coordUpper float64) float64 {
+	if isNonFinite(coordUpper) {
+		return math.Inf(1)
+	}
+	if coordUpper <= 0 {
+		return 0
+	}
+	ulp := ulpOf(2 * coordUpper)
+	if isNonFinite(ulp) {
+		return math.Inf(1)
+	}
+	return radius3D(16 * ulp)
 }
 
 // bandPatchAreaAllow bounds how far ONE chamfer band patch's own area

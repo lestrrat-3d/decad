@@ -3,6 +3,7 @@ package decad
 import (
 	"context"
 	"math"
+	"math/big"
 	"testing"
 	"time"
 
@@ -262,7 +263,7 @@ func TestPrismUnionReexpressedSplitFallsBack(t *testing.T) {
 	reexpression, err := newPrismReexpression(pa, pb)
 	require.NoError(t, err)
 	require.False(t, reexpression.identity)
-	scene, _, err := buildPrismScene(newWorkBudget(t.Context()), pa, pb, reexpression)
+	scene, _, _, err := buildPrismScene(newWorkBudget(t.Context()), pa, pb, reexpression)
 	require.NoError(t, err)
 	profiles, err := prismProfilesContext(t.Context(), scene.Profiles)
 	require.NoError(t, err)
@@ -319,7 +320,7 @@ func TestPrismUnionDisplacedSourceSplitFallsBack(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, reexpression.identity, "the second union must take the identity re-expression path")
 
-	scene, _, err := buildPrismScene(newWorkBudget(t.Context()), first, shallow, reexpression)
+	scene, _, _, err := buildPrismScene(newWorkBudget(t.Context()), first, shallow, reexpression)
 	require.NoError(t, err)
 	profiles, err := prismProfilesContext(t.Context(), scene.Profiles)
 	require.NoError(t, err)
@@ -539,4 +540,411 @@ func TestPrismUnionCleanOperandsMergedLoopClosesExactly(t *testing.T) {
 	require.Len(t, res2.profile.Outer.Segments, 4)
 	requireMergedLoopSegmentsJoin(t, res2.profile.Outer.Segments)
 	require.Zero(t, res2.sectionDelta)
+}
+
+// This is task fu143's own test suite: §7's fourth displacement source,
+// δ_walk — a consumed source segment's own walked endpoint, computed rather
+// than read off the record whenever that segment's recorded range narrows
+// its entity's own natural domain.
+
+// prismSplitLeftCellBody builds the rectangle [1,11]×[0,10] split by a fixed
+// line through (5,-1)-(5,11) and extrudes the LEFT cell h mm — task fu143's
+// own fixture (its investigation section 1). The left cell's bottom and top
+// walls are Partial fragments of the rectangle's own bottom/top lines,
+// recorded with the entity's full [1,11] Start/End and a narrowed
+// TStart/TEnd denoting the split at u≈5, so the corner where they meet the
+// right wall (the split line itself, whole at u=5 exactly) is a coordinate
+// this evaluator's own scene construction computes, not one either wall's
+// record states outright.
+//
+// prismFixtureHeight is every fixture below's own sweep height: every test in
+// this suite compares two operands and needs no other value.
+const prismFixtureHeight = 10.0
+
+func prismSplitLeftCellBody(t *testing.T, doc *Document) *Body {
+	t.Helper()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	r := s.CreateRectangle(1, 0, 11, 10)
+	s.Fix(r.A)
+	lo := s.CreatePoint(5, -1)
+	hi := s.CreatePoint(5, 11)
+	s.Fix(lo)
+	s.Fix(hi)
+	s.CreateLine(lo, hi)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+
+	var left *sketch.Profile
+	for _, p := range s.Profiles() {
+		minU, maxU := math.Inf(1), math.Inf(-1)
+		for _, e := range p.Outer {
+			for _, pt := range e.Polyline {
+				minU = math.Min(minU, pt[0])
+				maxU = math.Max(maxU, pt[0])
+			}
+		}
+		if minU == 1 && maxU <= 5.0000001 {
+			left = p
+		}
+	}
+	require.NotNil(t, left, "the split rectangle's left cell must exist")
+
+	body, err := doc.Extrude(s, left, Distance{D: units.Millimeters(prismFixtureHeight), Dir: Along})
+	require.NoError(t, err)
+	return body
+}
+
+// prismRectBody extrudes the axis-aligned rectangle (x0, y0)-(x1, y1)
+// prismFixtureHeight mm — every segment WHOLE, TStart=0, TEnd=1, the
+// every-caller-drawn-body shape.
+func prismRectBody(t *testing.T, doc *Document, x0, y0, x1, y1 float64) *Body {
+	t.Helper()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	r := s.CreateRectangle(x0, y0, x1, y1)
+	s.Fix(r.A)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	body, err := doc.Extrude(s, s.Profiles()[0], Distance{D: units.Millimeters(prismFixtureHeight), Dir: Along})
+	require.NoError(t, err)
+	return body
+}
+
+// prismRatOf lifts a float64 to the exact rational it is; a test fixture
+// coordinate is always finite, so a non-finite input is a fixture bug.
+func prismRatOf(t *testing.T, f float64) *big.Rat {
+	t.Helper()
+	r := new(big.Rat)
+	require.NotNil(t, r.SetFloat64(f), "fixture coordinate must be finite")
+	return r
+}
+
+// prismExactLineOnlyArea is the exact signed area of a line-only recorded
+// outer loop (no holes), integrated over each segment's own RECORDED range
+// via ratLerp — the same Green's-theorem boundary term moments.go
+// accumulates, with no rounding at all. Every fixture below is a plain
+// rectangle or a footprint difference of rectangles, so the outer loop alone
+// is always line-only.
+func prismExactLineOnlyArea(t *testing.T, p ProfileRecord) *big.Rat {
+	t.Helper()
+	total := new(big.Rat)
+	for _, seg := range p.Outer.Segments {
+		ls, ok := seg.(LineSeg)
+		require.True(t, ok, "fixture must be line-only: %T", seg)
+		u0 := ratLerp(ls.Start.U, ls.End.U, ls.TStart)
+		v0 := ratLerp(ls.Start.V, ls.End.V, ls.TStart)
+		u1 := ratLerp(ls.Start.U, ls.End.U, ls.TEnd)
+		v1 := ratLerp(ls.Start.V, ls.End.V, ls.TEnd)
+		term := new(big.Rat).Sub(new(big.Rat).Mul(u0, v1), new(big.Rat).Mul(u1, v0))
+		total.Add(total, new(big.Rat).Mul(term, big.NewRat(1, 2)))
+	}
+	return total
+}
+
+// prismExactResidual is |reported − truth| taken entirely over rationals and
+// rounded UP into a float64 — differencing against a float64 conversion of
+// truth would fold half an ulp of the reported magnitude into the answer,
+// which could flatter a bound that failed to contain the true error
+// (prism_boolean_displacement_test.go's exactResidual documents the same
+// point for the external test suite; this is its internal-package twin).
+func prismExactResidual(t *testing.T, reported float64, truth *big.Rat) float64 {
+	t.Helper()
+	d := new(big.Rat).Sub(prismRatOf(t, reported), truth)
+	d.Abs(d)
+	f, exact := d.Float64()
+	if !exact {
+		f = math.Nextafter(f, math.Inf(1))
+	}
+	return f
+}
+
+// prismBottomWallTEnd locates the split-left-cell fixture's own bottom wall
+// (the full rectangle's [1,11] bottom line, Start=(1,0), End=(11,0)) and
+// returns its recorded TEnd — the fraction §7's δ_walk charges a walked
+// endpoint against.
+func prismBottomWallTEnd(t *testing.T, p ProfileRecord) float64 {
+	t.Helper()
+	for _, seg := range p.Outer.Segments {
+		ls, ok := seg.(LineSeg)
+		if !ok {
+			continue
+		}
+		if ls.Start == (Point2{U: 1, V: 0}) && ls.End == (Point2{U: 11, V: 0}) {
+			return ls.TEnd
+		}
+	}
+	t.Fatal("the split-left-cell fixture's own bottom wall was not found")
+	return 0
+}
+
+// TestPrismUnionTrimmedSourceSegmentChargesItsWalkedEndpoint is fu143's own
+// Union reproduction: operand A carries a Partial bottom-wall fragment of a
+// wider rectangle line, operand B sits strictly inside A's own footprint, and
+// the union must charge A's own walk displacement into its published
+// sectionDelta and volume bound rather than publish Exact/zero over a section
+// this union's own scene construction moved.
+func TestPrismUnionTrimmedSourceSegmentChargesItsWalkedEndpoint(t *testing.T) {
+	const h = 10.0
+	doc := New()
+	a := prismSplitLeftCellBody(t, doc)
+	pa := a.payload.(prismPayload)
+
+	// Pin the fixture: if sketch's own cut parameter for this split ever
+	// changes, this fixture must fail loudly rather than silently stop
+	// testing anything.
+	require.Equal(t, 0.4000000000000000222, prismBottomWallTEnd(t, pa.profile))
+
+	b := prismRectBody(t, doc, 2, 2, 4, 8)
+
+	u, err := Union(a, b)
+	require.NoError(t, err)
+	pu, ok := u.payload.(prismPayload)
+	require.True(t, ok, "the analytic reduction must own this pair")
+
+	// The exact distance between the recorded corner (the right wall's own
+	// u = 5, exactly) and the denoted corner the bottom wall's own TEnd
+	// names (1 + TEnd·10), computed over math/big.Rat rather than typed as a
+	// literal.
+	tEnd := prismBottomWallTEnd(t, pa.profile)
+	denotedCorner := new(big.Rat).Add(big.NewRat(1, 1), new(big.Rat).Mul(prismRatOf(t, tEnd), big.NewRat(10, 1)))
+	minDelta := prismExactResidual(t, 5, denotedCorner)
+	require.Positive(t, minDelta, "the fixture must actually disagree with itself, or it proves nothing")
+	require.GreaterOrEqual(t, pu.sectionDelta, minDelta,
+		"the union's own sectionDelta must charge at least the corner disagreement its own operand carries")
+
+	// B sits strictly inside A's own footprint, so the union the two records
+	// DENOTE is A's own recorded section swept h mm.
+	truth := new(big.Rat).Mul(prismExactLineOnlyArea(t, pa.profile), prismRatOf(t, h))
+	uv, err := u.Volume()
+	require.NoError(t, err)
+	residual := prismExactResidual(t, uv.Value.Base(), truth)
+	require.Equal(t, Approximate, uv.Exactness)
+	require.LessOrEqualf(t, residual, uv.Bound.Base(),
+		"the published volume bound %g must contain the true error %g", uv.Bound.Base(), residual)
+}
+
+// TestPrismCutTrimmedTargetChargesItsWalkedEndpoint is fu143's Cut
+// reproduction: the clean-nesting path's own target carries the same Partial
+// bottom-wall fragment, and the tool is fully nested inside it.
+func TestPrismCutTrimmedTargetChargesItsWalkedEndpoint(t *testing.T) {
+	const h = 10.0
+	doc := New()
+	target := prismSplitLeftCellBody(t, doc)
+	ptarget := target.payload.(prismPayload)
+	tool := prismRectBody(t, doc, 2, 2, 4, 8)
+
+	got, err := Cut(target, tool)
+	require.NoError(t, err)
+	pg, ok := got.payload.(prismPayload)
+	require.True(t, ok, "the clean-nesting cut must build analytically")
+	require.Positive(t, pg.sectionDelta, "the target's own walk charge must reach the cut's result")
+
+	// Truth: the target's own denoted section, minus the tool's own 2×6
+	// footprint (fully inside it), swept h mm.
+	truthArea := new(big.Rat).Sub(prismExactLineOnlyArea(t, ptarget.profile), big.NewRat(12, 1))
+	truth := new(big.Rat).Mul(truthArea, prismRatOf(t, h))
+	gv, err := got.Volume()
+	require.NoError(t, err)
+	residual := prismExactResidual(t, gv.Value.Base(), truth)
+	require.Equal(t, Approximate, gv.Exactness)
+	require.LessOrEqualf(t, residual, gv.Bound.Base(),
+		"the published volume bound %g must contain the true error %g", gv.Bound.Base(), residual)
+}
+
+// TestPrismIntersectTrimmedOperandChargesItsWalkedEndpoint is fu143's
+// Intersect reproduction: a big outer box fully contains the split-left-cell
+// fixture, so the nested operand's own walk charge must reach the result.
+func TestPrismIntersectTrimmedOperandChargesItsWalkedEndpoint(t *testing.T) {
+	const h = 10.0
+	doc := New()
+	outer := prismRectBody(t, doc, 0, -1, 12, 11)
+	a := prismSplitLeftCellBody(t, doc)
+	pa := a.payload.(prismPayload)
+
+	got, err := Intersect(outer, a)
+	require.NoError(t, err)
+	pg, ok := got.payload.(prismPayload)
+	require.True(t, ok, "the clean-nesting intersect must build analytically")
+	require.Positive(t, pg.sectionDelta, "the nested operand's own walk charge must reach the result")
+
+	truth := new(big.Rat).Mul(prismExactLineOnlyArea(t, pa.profile), prismRatOf(t, h))
+	gv, err := got.Volume()
+	require.NoError(t, err)
+	residual := prismExactResidual(t, gv.Value.Base(), truth)
+	require.Equal(t, Approximate, gv.Exactness)
+	require.LessOrEqualf(t, residual, gv.Bound.Base(),
+		"the published volume bound %g must contain the true error %g", gv.Bound.Base(), residual)
+}
+
+// TestPrismBooleanWholeSourceSegmentsChargeNothing is the guard that §7's new
+// term does not quietly retire the decidable zero case: two whole-segment
+// boxes, the same pair TestPrismUnionWholeEdgeMergeStaysExact already covers
+// from the outside, must publish a sectionDelta of exactly 0.0 on all three
+// ops.
+func TestPrismBooleanWholeSourceSegmentsChargeNothing(t *testing.T) {
+	t.Run("Union", func(t *testing.T) {
+		doc := New()
+		a := prismRectBody(t, doc, 0, 0, 10, 10)
+		b := prismRectBody(t, doc, 2, 2, 8, 8)
+		u, err := Union(a, b)
+		require.NoError(t, err)
+		pu, ok := u.payload.(prismPayload)
+		require.True(t, ok)
+		require.Equal(t, 0.0, pu.sectionDelta)
+	})
+
+	t.Run("Cut", func(t *testing.T) {
+		doc := New()
+		target := prismRectBody(t, doc, 0, 0, 10, 10)
+		tool := prismRectBody(t, doc, 2, 2, 8, 8)
+		got, err := Cut(target, tool)
+		require.NoError(t, err)
+		pg, ok := got.payload.(prismPayload)
+		require.True(t, ok)
+		require.Equal(t, 0.0, pg.sectionDelta)
+	})
+
+	t.Run("Intersect", func(t *testing.T) {
+		doc := New()
+		outer := prismRectBody(t, doc, 0, 0, 10, 10)
+		inner := prismRectBody(t, doc, 2, 2, 8, 8)
+		got, err := Intersect(outer, inner)
+		require.NoError(t, err)
+		pg, ok := got.payload.(prismPayload)
+		require.True(t, ok)
+		require.Equal(t, 0.0, pg.sectionDelta)
+	})
+}
+
+// TestWalkChargeOf is a table test over walkChargeOf itself: 0 for a whole
+// segment of every admitted kind, a positive finite value for a trimmed one,
+// and +Inf for a non-finite coordinate — never 0 for an unknown or uncertain
+// case (this task's own risk: an absent bound must never read as a small
+// one).
+func TestWalkChargeOf(t *testing.T) {
+	line := LineSeg{Start: Point2{U: 0, V: 0}, End: Point2{U: 10, V: 0}}
+	arc := ArcSeg{
+		Center: Point2{U: 0, V: 0},
+		Start:  Point2{U: 5, V: 0},
+		End:    Point2{U: 0, V: 5},
+	}
+	circle := CircleSeg{Center: Point2{U: 0, V: 0}, Radius: units.Millimeters(5), CCW: true}
+
+	for _, tc := range []struct {
+		name string
+		seg  CurveSegment
+	}{
+		{"whole LineSeg", func() CurveSegment { s := line; s.TStart, s.TEnd = 0, 1; return s }()},
+		{"whole reversed LineSeg", func() CurveSegment { s := line; s.TStart, s.TEnd = 1, 0; return s }()},
+		{"whole ArcSeg", func() CurveSegment { s := arc; s.TStart, s.TEnd = 0, 1; return s }()},
+		{"whole reversed ArcSeg", func() CurveSegment { s := arc; s.TStart, s.TEnd = 1, 0; return s }()},
+		{"whole CircleSeg", func() CurveSegment { s := circle; s.TStart, s.TEnd = 0, 1; return s }()},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			w, err := walkOf(tc.seg, nil)
+			require.NoError(t, err)
+			got, err := walkChargeOf(tc.seg, w)
+			require.NoError(t, err)
+			require.Equal(t, 0.0, got)
+		})
+	}
+
+	for _, tc := range []struct {
+		name string
+		seg  CurveSegment
+	}{
+		{"trimmed LineSeg", func() CurveSegment { s := line; s.TStart, s.TEnd = 0, 0.4; return s }()},
+		{"trimmed ArcSeg", func() CurveSegment { s := arc; s.TStart, s.TEnd = 0, 0.4; return s }()},
+		{"trimmed CircleSeg", func() CurveSegment { s := circle; s.TStart, s.TEnd = 0, 0.4; return s }()},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			w, err := walkOf(tc.seg, nil)
+			require.NoError(t, err)
+			got, err := walkChargeOf(tc.seg, w)
+			require.NoError(t, err)
+			require.Positive(t, got)
+			require.False(t, math.IsInf(got, 0))
+		})
+	}
+
+	t.Run("non-finite coordinate answers +Inf", func(t *testing.T) {
+		bad := LineSeg{Start: Point2{U: math.NaN(), V: 0}, End: Point2{U: 10, V: 0}, TStart: 0, TEnd: 0.4}
+		w, err := walkOf(bad, nil)
+		require.NoError(t, err)
+		got, err := walkChargeOf(bad, w)
+		require.NoError(t, err)
+		require.True(t, math.IsInf(got, 1), "an absent bound must never read as a small one")
+	})
+}
+
+// TestPrismBooleanTrimmedCircularSourceFallsBack is task fu143's own circular
+// carrier row: a trimmed ArcSeg source segment (the arrangement's own arc
+// through two cos/sin-computed points would move by more than a coordinate
+// displacement can state, §4.1) refuses the analytic reduction before the
+// scene is even built — ok=false, err=nil, the same silent §3.4 fallback
+// every other entry-gate miss uses — rather than publish an under-charged
+// bound for it.
+func TestPrismBooleanTrimmedCircularSourceFallsBack(t *testing.T) {
+	frame := canonicalPrismFrame(t)
+	trimmedArc := prismPayload{
+		profile: ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{
+			ArcSeg{
+				Center: Point2{U: 5, V: 5},
+				Start:  Point2{U: 8, V: 5},
+				End:    Point2{U: 5, V: 8},
+				TStart: 0, TEnd: 0.4,
+			},
+			LineSeg{Start: Point2{U: 5, V: 8}, End: Point2{U: 2, V: 8}, TStart: 0, TEnd: 1},
+			LineSeg{Start: Point2{U: 2, V: 8}, End: Point2{U: 2, V: 2}, TStart: 0, TEnd: 1},
+			LineSeg{Start: Point2{U: 2, V: 2}, End: Point2{U: 8, V: 5}, TStart: 0, TEnd: 1},
+		}}},
+		frame: frame, z0: 0, z1: 10, xform: r3.Identity(),
+	}
+	whole := prismPayload{
+		profile: ProfileRecord{Outer: synthRectLoop(0, 0, 20, 20)},
+		frame:   frame, z0: 0, z1: 10, xform: r3.Identity(),
+	}
+
+	for _, op := range []OpKind{OpUnion, OpCut, OpIntersect} {
+		_, ok, err := tryPrismBoolean(t.Context(), op, &Body{payload: trimmedArc}, &Body{payload: whole})
+		require.NoError(t, err)
+		require.False(t, ok, "%s over a trimmed circular source segment must fall back, never publish zero", op)
+	}
+}
+
+// TestPrismUnionTrimmedSourceSplitBoundaryFallsBack is task fu143's own
+// split-boundary reroute test (task 5's condition change), mirroring the
+// existing TestPrismUnionDisplacedSourceSplitFallsBack: the trimmed-source
+// operand A from prismSplitLeftCellBody, unioned with a box that genuinely
+// overlaps its right wall (the split line itself), must fall back to the
+// mesh path with no error rather than record a fragment whose crossing
+// A's own walk charge could amplify.
+func TestPrismUnionTrimmedSourceSplitBoundaryFallsBack(t *testing.T) {
+	doc := New()
+	a := prismSplitLeftCellBody(t, doc)
+	pa := a.payload.(prismPayload)
+	require.Zero(t, pa.sectionDelta, "the fixture's own displacement must come from the walk charge alone")
+
+	b := prismRectBody(t, doc, 4, 3, 6, 7) // straddles A's right wall at u=5
+	pb := b.payload.(prismPayload)
+
+	reexpression, err := newPrismReexpression(pa, pb)
+	require.NoError(t, err)
+	require.True(t, reexpression.identity, "both operands share one frame with no placement between them")
+
+	scene, _, sceneDelta, err := buildPrismScene(newWorkBudget(t.Context()), pa, pb, reexpression)
+	require.NoError(t, err)
+	require.Positive(t, sceneDelta.a, "operand A's own trimmed bottom/top walls must carry a walk charge")
+	profiles, err := prismProfilesContext(t.Context(), scene.Profiles)
+	require.NoError(t, err)
+	split, err := prismProfilesHaveSplitBoundary(newWorkBudget(t.Context()), profiles)
+	require.NoError(t, err)
+	require.True(t, split, "the overlapping box must genuinely split A's own right wall")
+
+	_, ok, err := tryPrismBoolean(t.Context(), OpUnion, &Body{payload: pa}, &Body{payload: pb})
+	require.NoError(t, err)
+	require.False(t, ok, "a split boundary with a nonzero walk charge must fall back")
 }

@@ -18,13 +18,22 @@ import (
 // surfaces an error on a miss — the caller falls back to the unchanged mesh
 // path exactly as it did before this file existed. A sketch-split boundary
 // also reroutes before resolution accepts a candidate whenever either input
-// carries a section displacement or B's re-expression is nonidentity: either
-// uncertainty can amplify at the cut. A split boundary the reroute admits
-// still charges the cut parameters' OWN rounding into the result's section
-// displacement (§7, prismUnionCutDelta) — a merged section built from
-// fragments is never exact, whatever the operands were. Only once §4.2's
-// remaining resolution finds a unique candidate does a further problem become
-// a genuine, typed refusal (§3.4, §9) rather than a reroute to the mesh path.
+// carries a section displacement, a consumed source segment's own walk
+// computed a coordinate (§7's δ_walk, walkChargeOf), or B's re-expression is
+// nonidentity: any of the three can amplify at the cut. A split boundary the
+// reroute admits still charges the cut parameters' OWN rounding into the
+// result's section displacement (§7, prismUnionCutDelta) — a merged section
+// built from fragments is never exact, whatever the operands were. A
+// consumed source segment whose own recorded range is narrower than its
+// natural domain enters the private scene at a WALKED endpoint the boolean
+// itself computed (buildPrismScene's own doc comment) rather than at the
+// record's own coordinate, and that computed endpoint is charged too — a
+// trimmed circular carrier (ArcSeg/CircleSeg) moves by more than a
+// coordinate displacement can state, so this file refuses that pair before
+// building the scene at all rather than under-charge it
+// (prismProfileHasTrimmedCircularSource). Only once §4.2's remaining
+// resolution finds a unique candidate does a further problem become a
+// genuine, typed refusal (§3.4, §9) rather than a reroute to the mesh path.
 //
 // Union's resolution (§4.2) is the hole-free select-all/merge/chain path: the
 // candidate is assembled from every returned cell, and §6's audit re-proves
@@ -61,6 +70,26 @@ func tryPrismBoolean(ctx context.Context, op OpKind, a, b *Body) (prismPayload, 
 		return prismPayload{}, false, err
 	}
 	if !ok {
+		return prismPayload{}, false, nil
+	}
+
+	// A trimmed circular carrier (ArcSeg/CircleSeg) enters the private scene
+	// through two cos/sin-COMPUTED points, so its rebuilt carrier's radius and
+	// sweep both move, not merely its endpoints — a displacement
+	// walkEndpointAllow's plain coordinate charge does not state. Rather than
+	// publish an under-charged bound for it, the pair is refused before the
+	// scene is even built, the same silent-fallback shape the entry gate
+	// above already uses (§3.4).
+	trimmedCircular, err := prismProfileHasTrimmedCircularSource(budget, pa.profile)
+	if err != nil {
+		return prismPayload{}, false, err
+	}
+	if !trimmedCircular {
+		if trimmedCircular, err = prismProfileHasTrimmedCircularSource(budget, pb.profile); err != nil {
+			return prismPayload{}, false, err
+		}
+	}
+	if trimmedCircular {
 		return prismPayload{}, false, nil
 	}
 
@@ -119,7 +148,7 @@ func tryPrismBoolean(ctx context.Context, op OpKind, a, b *Body) (prismPayload, 
 // exactness. Split out of tryPrismBoolean only so each op's own resolve+build
 // sequence reads as one unit.
 func resolveAndBuildPrismUnion(ctx context.Context, budget *workBudget, pa, pb prismPayload, reexpress *prismReexpression) (prismPayload, bool, error) {
-	merged, cutDelta, resolved, err := resolvePrismUnion(ctx, budget, pa, pb, reexpress)
+	merged, sceneDelta, cutDelta, resolved, err := resolvePrismUnion(ctx, budget, pa, pb, reexpress)
 	if err != nil {
 		return prismPayload{}, false, err
 	}
@@ -139,15 +168,20 @@ func resolveAndBuildPrismUnion(ctx context.Context, budget *workBudget, pa, pb p
 		z0Delta: max(pa.z0Delta, pb.z0Delta),
 		z1Delta: max(pa.z1Delta, pb.z1Delta),
 		xform:   pa.xform,
-		// §7: operand A's coordinates are unchanged, while B's existing
-		// displacement passes through its rigid re-expression and accumulates
-		// the rounding that re-expression commits. On top of both, every
-		// surviving CUT fragment names its endpoints by a freshly rounded
-		// parameter this union did not have before it ran, so cutDelta stands
-		// even where the two operands carried nothing at all. A chained union
-		// must not discard any of the three.
+		// §7: operand A's coordinates are unchanged except for its own
+		// consumed segments' walk charge (sceneDelta.a), while B's existing
+		// displacement passes through its rigid re-expression, accumulates
+		// the rounding that re-expression commits, and its own walk charge
+		// (sceneDelta.b) besides. On top of both, every surviving CUT
+		// fragment names its endpoints by a freshly rounded parameter this
+		// union did not have before it ran, so cutDelta stands even where the
+		// two operands carried nothing at all. A chained union must not
+		// discard any of the four.
 		sectionDelta: absSumUpper(
-			max(pa.sectionDelta, absSumUpper(pb.sectionDelta, reexpress.delta)),
+			max(
+				absSumUpper(pa.sectionDelta, sceneDelta.a),
+				absSumUpper(pb.sectionDelta, sceneDelta.b, reexpress.delta),
+			),
 			cutDelta,
 		),
 	}
@@ -281,50 +315,51 @@ func prismUnionZIntervalMatches(pa, pb prismPayload) bool {
 	return pa.z0 == pb.z0+shift && pa.z1 == pb.z1+shift
 }
 
-// resolvePrismUnion is §4.2's hole-free select-all/merge/chain path. It returns
-// the merged section and §7's cut displacement over it — the largest allowance
-// any surviving fragment's own cut parameters owe, zero when every survivor is a
-// whole edge.
+// resolvePrismUnion is §4.2's hole-free select-all/merge/chain path. It
+// returns the merged section, buildPrismScene's own per-operand §7 walk
+// charge (sceneDelta), and §7's cut displacement over the merge — the largest
+// allowance any surviving fragment's own cut parameters owe, zero when every
+// survivor is a whole edge.
 //
 // resolved=false (err always nil in that case) means the pair's topology is
 // unresolved (§4.4), or a split boundary can amplify either input's section
-// displacement or B's nonidentity re-expression (§3.4): the caller falls
-// back to the mesh path with no error. A non-nil error — including ctx
-// cancellation surfacing through budget — is always genuine and must
-// propagate.
-func resolvePrismUnion(ctx context.Context, budget *workBudget, pa, pb prismPayload, reexpress *prismReexpression) (ProfileRecord, float64, bool, error) {
-	s, _, err := buildPrismScene(budget, pa, pb, reexpress)
+// displacement, either operand's own walk charge, or B's nonidentity
+// re-expression (§3.4): the caller falls back to the mesh path with no
+// error. A non-nil error — including ctx cancellation surfacing through
+// budget — is always genuine and must propagate.
+func resolvePrismUnion(ctx context.Context, budget *workBudget, pa, pb prismPayload, reexpress *prismReexpression) (ProfileRecord, prismSceneDelta, float64, bool, error) {
+	s, _, sceneDelta, err := buildPrismScene(budget, pa, pb, reexpress)
 	if err != nil {
-		return ProfileRecord{}, 0, false, err
+		return ProfileRecord{}, prismSceneDelta{}, 0, false, err
 	}
 	if err := budget.err(); err != nil {
-		return ProfileRecord{}, 0, false, err
+		return ProfileRecord{}, prismSceneDelta{}, 0, false, err
 	}
 	profiles, err := prismProfilesContext(ctx, s.Profiles)
 	if err != nil {
-		return ProfileRecord{}, 0, false, err
+		return ProfileRecord{}, prismSceneDelta{}, 0, false, err
 	}
 	if err := budget.err(); err != nil {
-		return ProfileRecord{}, 0, false, err
+		return ProfileRecord{}, prismSceneDelta{}, 0, false, err
 	}
 	if err := budget.step(); err != nil {
-		return ProfileRecord{}, 0, false, err
+		return ProfileRecord{}, prismSceneDelta{}, 0, false, err
 	}
 	if len(profiles) == 0 {
-		return ProfileRecord{}, 0, false, nil // §4.4: the scene holds no bounded cell at all
+		return ProfileRecord{}, prismSceneDelta{}, 0, false, nil // §4.4: the scene holds no bounded cell at all
 	}
-	if pa.sectionDelta != 0 || pb.sectionDelta != 0 || !reexpress.identity {
+	if pa.sectionDelta != 0 || pb.sectionDelta != 0 || !reexpress.identity || sceneDelta.a != 0 || sceneDelta.b != 0 {
 		split, err := prismProfilesHaveSplitBoundary(budget, profiles)
 		if err != nil {
-			return ProfileRecord{}, 0, false, err
+			return ProfileRecord{}, prismSceneDelta{}, 0, false, err
 		}
 		if split {
-			// A coordinate error in re-expressed B, or either source section's
-			// existing displacement, can move an intersection by
-			// delta/sin(theta). This increment has no certified lower
-			// crossing-angle bound, so it cannot record the fragment with an
-			// honest displacement bound.
-			return ProfileRecord{}, 0, false, nil
+			// A coordinate error in re-expressed B, either source section's
+			// existing displacement, or either operand's own walk charge can
+			// move an intersection by delta/sin(theta). This increment has no
+			// certified lower crossing-angle bound, so it cannot record the
+			// fragment with an honest displacement bound.
+			return ProfileRecord{}, prismSceneDelta{}, 0, false, nil
 		}
 	}
 
@@ -343,18 +378,18 @@ func resolvePrismUnion(ctx context.Context, budget *workBudget, pa, pb prismPayl
 	counts := map[edgeKey]int{}
 	for _, p := range profiles {
 		if err := budget.step(); err != nil {
-			return ProfileRecord{}, 0, false, err
+			return ProfileRecord{}, prismSceneDelta{}, 0, false, err
 		}
 		if !p.Valid {
 			// RB1: a candidate region the merge depends on is invalid. Every
 			// cell in this two-operand scene is selected for Union, so any
 			// invalid cell is a genuine refusal, not an unresolved topology.
-			return ProfileRecord{}, 0, false, fmt.Errorf(`%w: the union scene's arrangement reports an invalid region`, ErrUnsupported)
+			return ProfileRecord{}, prismSceneDelta{}, 0, false, fmt.Errorf(`%w: the union scene's arrangement reports an invalid region`, ErrUnsupported)
 		}
 		for _, loop := range append([][]sketch.BoundaryEdge{p.Outer}, p.Holes...) {
 			for _, e := range loop {
 				if err := budget.step(); err != nil {
-					return ProfileRecord{}, 0, false, err
+					return ProfileRecord{}, prismSceneDelta{}, 0, false, err
 				}
 				counts[edgeKey{entity: e.Entity, t0: e.TStart, t1: e.TEnd}]++
 			}
@@ -372,7 +407,7 @@ func resolvePrismUnion(ctx context.Context, budget *workBudget, pa, pb prismPayl
 		for _, loop := range append([][]sketch.BoundaryEdge{p.Outer}, p.Holes...) {
 			for _, e := range loop {
 				if err := budget.step(); err != nil {
-					return ProfileRecord{}, 0, false, err
+					return ProfileRecord{}, prismSceneDelta{}, 0, false, err
 				}
 				n := counts[edgeKey{entity: e.Entity, t0: e.TStart, t1: e.TEnd}]
 				switch n {
@@ -381,21 +416,21 @@ func resolvePrismUnion(ctx context.Context, budget *workBudget, pa, pb prismPayl
 				case 2:
 					// dropped: an interior wall
 				default:
-					return ProfileRecord{}, 0, false, nil // §4.4: not a shape this increment covers
+					return ProfileRecord{}, prismSceneDelta{}, 0, false, nil // §4.4: not a shape this increment covers
 				}
 			}
 		}
 	}
 	if len(survivors) == 0 {
-		return ProfileRecord{}, 0, false, nil
+		return ProfileRecord{}, prismSceneDelta{}, 0, false, nil
 	}
 
 	chain, resolved, err := chainPrismUnionSurvivors(budget, survivors)
 	if err != nil {
-		return ProfileRecord{}, 0, false, err
+		return ProfileRecord{}, prismSceneDelta{}, 0, false, err
 	}
 	if !resolved {
-		return ProfileRecord{}, 0, false, nil // §4.4: the survivors do not close into one simple loop
+		return ProfileRecord{}, prismSceneDelta{}, 0, false, nil // §4.4: the survivors do not close into one simple loop
 	}
 
 	// Point of no return crossed within this function's own contract: every
@@ -406,21 +441,21 @@ func resolvePrismUnion(ctx context.Context, budget *workBudget, pa, pb prismPayl
 	cutDelta := 0.0
 	for i, e := range chain {
 		if err := budget.step(); err != nil {
-			return ProfileRecord{}, 0, false, err
+			return ProfileRecord{}, prismSceneDelta{}, 0, false, err
 		}
 		seg, err := recordEdge(e)
 		if err != nil {
-			return ProfileRecord{}, 0, false, err
+			return ProfileRecord{}, prismSceneDelta{}, 0, false, err
 		}
 		segs[i] = seg
 		join, err := edgeJoin(e, seg)
 		if err != nil {
-			return ProfileRecord{}, 0, false, err
+			return ProfileRecord{}, prismSceneDelta{}, 0, false, err
 		}
 		joins[i] = join
 		d, err := prismUnionCutDelta(e, seg)
 		if err != nil {
-			return ProfileRecord{}, 0, false, err
+			return ProfileRecord{}, prismSceneDelta{}, 0, false, err
 		}
 		cutDelta = math.Max(cutDelta, d)
 	}
@@ -429,9 +464,9 @@ func resolvePrismUnion(ctx context.Context, budget *workBudget, pa, pb prismPayl
 	// takes no budget.step() charge and would drop cutDelta's per-edge
 	// pairing — so this calls edgeJoin/falsifyLoopJoins directly, unchanged.
 	if err := falsifyLoopJoins("merged union loop", joins); err != nil {
-		return ProfileRecord{}, 0, false, err
+		return ProfileRecord{}, prismSceneDelta{}, 0, false, err
 	}
-	return ProfileRecord{Outer: LoopRecord{Segments: segs}}, cutDelta, true, nil
+	return ProfileRecord{Outer: LoopRecord{Segments: segs}}, sceneDelta, cutDelta, true, nil
 }
 
 // prismUnionCutDelta is §7's cut charge for one surviving boundary edge: how
@@ -624,6 +659,95 @@ func auditPrismUnionSection(budget *workBudget, pa prismPayload, merged ProfileR
 	return auditRewriteBudget(budget, orig, merged, loops, blendAt)
 }
 
+// prismProfileHasTrimmedCircularSource reports whether p carries an ArcSeg or
+// CircleSeg whose recorded range is narrower than its own natural domain
+// (task fu143, §3.4's obligations). Such a segment enters buildPrismScene's
+// private scene through entities built from TWO cos/sin-computed points, so
+// its rebuilt carrier's radius and sweep both move, not merely its
+// endpoints — the mechanism walkChargeOf's plain coordinate charge does not
+// state. This evaluator refuses the pair rather than under-charge it.
+//
+// "Whole" is decided the same way walkChargeOf decides it: exact float
+// equality against 0 and 1, never a tolerance. A CircleSeg needs its walk to
+// answer (circularWalk's own closed-ness test), so this reads it directly
+// rather than duplicating that computation.
+func prismProfileHasTrimmedCircularSource(budget *workBudget, p ProfileRecord) (bool, error) {
+	for _, loop := range append([]LoopRecord{p.Outer}, p.Holes...) {
+		for _, seg := range loop.Segments {
+			if err := budget.step(); err != nil {
+				return false, err
+			}
+			switch s := seg.(type) {
+			case ArcSeg:
+				if !((s.TStart == 0 || s.TStart == 1) && (s.TEnd == 0 || s.TEnd == 1)) {
+					return true, nil
+				}
+			case CircleSeg:
+				w, err := walkOf(seg, nil)
+				if err != nil {
+					return false, err
+				}
+				if !w.closed {
+					return true, nil
+				}
+			}
+		}
+	}
+	return false, nil
+}
+
+// walkChargeOf is §7's δ_walk mechanism (task fu143): the charge ONE consumed
+// source segment owes for entering buildPrismScene's private scene at its own
+// WALKED endpoint(s) rather than at the coordinates its record states
+// verbatim.
+//
+// A WHOLE segment's walk restates the entity's own defining data exactly —
+// lerp2 (moments.go) and pinArcWalkEnds (extrude.go) both special-case the
+// natural bounds t=0/t=1 to return the record's own Point2 verbatim
+// regardless of which field holds which (a Reversed whole edge records
+// TStart=1, TEnd=0 — recordEdge's own "TStart and TEnd swapped" comment —
+// and both still name a natural bound), and a closed CircleSeg's walk takes
+// the recorded centre and radius directly (circularWalk never touches
+// Center/Radius) — so a whole segment charges nothing. A narrowed range
+// evaluates the carrier at a COMPUTED parameter instead (lerp2's else arm, or
+// circularWalk's cos/sin at the walk's own angle), which walkEndpointAllow
+// charges at the walk's own coordinate envelope (segmentWalk.coordUpper).
+//
+// "Whole" is decided by exact float equality against 0 and 1 — never a
+// tolerance: a near-zero range is a trimmed segment and must be charged.
+func walkChargeOf(seg CurveSegment, w segmentWalk) (float64, error) {
+	seg, err := normalizeSegment(seg)
+	if err != nil {
+		return 0, err
+	}
+	switch s := seg.(type) {
+	case LineSeg:
+		if (s.TStart == 0 || s.TStart == 1) && (s.TEnd == 0 || s.TEnd == 1) {
+			return 0, nil
+		}
+	case ArcSeg:
+		if (s.TStart == 0 || s.TStart == 1) && (s.TEnd == 0 || s.TEnd == 1) {
+			return 0, nil
+		}
+	case CircleSeg:
+		if w.closed {
+			return 0, nil
+		}
+	default:
+		return 0, fmt.Errorf(`%w: a %T segment has no walk charge this evaluator states`, ErrUnsupported, seg)
+	}
+	return walkEndpointAllow(w.coordUpper), nil
+}
+
+// prismSceneDelta is buildPrismScene's own per-operand δ_walk accumulator
+// (§7): the largest walkChargeOf allowance among the segments buildPrismScene
+// actually consumed from operand A and from operand B, tracked separately
+// because B's own charge composes BEFORE the re-expression's rounding
+// (prismReexpression.delta), matching every other §7 term's own ordering.
+type prismSceneDelta struct {
+	a, b float64
+}
+
 // buildPrismScene is §4.1's scene construction: one private sketch.Sketch
 // holding both operands' recorded entities — Outer AND every Holes[i] loop of
 // each, so a Cut target's own carried-through holes and a nested Intersect
@@ -663,11 +787,17 @@ func auditPrismUnionSection(budget *workBudget, pa prismPayload, merged ProfileR
 // region in whatever new arrangement it enters. Every segment's OWN walked
 // portion, and nothing more, is what this operand's boundary IS, whole or
 // partial alike — so that is what gets built.
-func buildPrismScene(budget *workBudget, pa, pb prismPayload, reexpress *prismReexpression) (*sketch.Sketch, map[sketch.Entity]prismEntityOrigin, error) {
+//
+// A segment whose recorded range narrows its own natural domain enters the
+// scene at that WALKED endpoint — a coordinate this evaluator computed, not
+// one the record states verbatim — and walkChargeOf's allowance for it is
+// accumulated into the returned prismSceneDelta, the largest such charge over
+// each operand's own consumed segments (§7's δ_walk).
+func buildPrismScene(budget *workBudget, pa, pb prismPayload, reexpress *prismReexpression) (*sketch.Sketch, map[sketch.Entity]prismEntityOrigin, prismSceneDelta, error) {
 	world := sketch.NewWorld()
 	s, err := world.CreateSketch(world.XY())
 	if err != nil {
-		return nil, nil, fmt.Errorf(`decad: failed to build the private prism-boolean scene: %w`, err)
+		return nil, nil, prismSceneDelta{}, fmt.Errorf(`decad: failed to build the private prism-boolean scene: %w`, err)
 	}
 
 	points := map[Point2]*sketch.Point{}
@@ -681,6 +811,7 @@ func buildPrismScene(budget *workBudget, pa, pb prismPayload, reexpress *prismRe
 	}
 
 	tags := map[sketch.Entity]prismEntityOrigin{}
+	sceneDelta := prismSceneDelta{}
 
 	addOperand := func(profile ProfileRecord, isB bool) error {
 		type entityKey struct {
@@ -708,6 +839,15 @@ func buildPrismScene(budget *workBudget, pa, pb prismPayload, reexpress *prismRe
 				w, err := walkOf(seg, nil) // G4 admits only Line/Circle/Arc: no free-form work counter needed
 				if err != nil {
 					return err
+				}
+				charge, err := walkChargeOf(seg, w)
+				if err != nil {
+					return err
+				}
+				if isB {
+					sceneDelta.b = math.Max(sceneDelta.b, charge)
+				} else {
+					sceneDelta.a = math.Max(sceneDelta.a, charge)
 				}
 				switch {
 				case w.isLine():
@@ -754,12 +894,12 @@ func buildPrismScene(budget *workBudget, pa, pb prismPayload, reexpress *prismRe
 	}
 
 	if err := addOperand(pa.profile, false); err != nil {
-		return nil, nil, err
+		return nil, nil, prismSceneDelta{}, err
 	}
 	if err := addOperand(pb.profile, true); err != nil {
-		return nil, nil, err
+		return nil, nil, prismSceneDelta{}, err
 	}
-	return s, tags, nil
+	return s, tags, sceneDelta, nil
 }
 
 // prismReexpression is §4.1's coordinate re-expression of operand B into
