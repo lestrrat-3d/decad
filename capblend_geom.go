@@ -414,6 +414,15 @@ func buildCapBand(ctx context.Context, body *Body, ref StepRef, cbp capBlendPayl
 	// SAME side-level apex vertex, sideVertexAt(i).
 	slantIn := make([]*Edge, n)
 	slantOut := make([]*Edge, n)
+	// slantInHeld/slantOutHeld are slantIn[i]/slantOut[i]'s own ARITHMETIC-ONLY
+	// length bound (capSlantEdge's second return) — the same value the edge's
+	// own lengthBound carries everywhere except a miter ruling adjacent to a
+	// circular wall, where lengthBound also carries the chord-versus-locus
+	// excess (docs/modify-reach-design.md §8.3) that bandPatchAreaAllow's
+	// slantUpper must NOT read (task-file rule: the area term stays on the
+	// held chord alone).
+	slantInHeld := make([]float64, n)
+	slantOutHeld := make([]float64, n)
 	arcByCorner := make([]*Edge, n) // non-nil for a reflex corner's cap-level arc
 	arcTh0 := make([]float64, n)
 	arcTh1 := make([]float64, n)
@@ -425,16 +434,28 @@ func buildCapBand(ctx context.Context, body *Body, ref StepRef, cbp capBlendPayl
 	for i := range n {
 		j := joins[i]
 		apex := sideVertexAt(i)
+		prev, cur := walks[(i+n-1)%n], walks[i]
 		if !j.arc {
 			capV := &Vertex{position: liftCap(j.m), bound: units.Millimeters(capLevelDelta)}
-			e := capSlantEdge(j.m, capV, apex, j.vU, j.vV, capZ, sideZ, capLevelDelta, levelDelta)
+			e, held, err := capSlantEdge(budget, j.m, capV, apex, j.vU, j.vV, capZ, sideZ, capLevelDelta, levelDelta, prev, cur, d, false)
+			if err != nil {
+				return capBandResult{}, err
+			}
 			slantIn[i], slantOut[i] = e, e
+			slantInHeld[i], slantOutHeld[i] = held, held
 			continue
 		}
 		pAV := &Vertex{position: liftCap(j.pA), bound: units.Millimeters(capLevelDelta)}
 		pBV := &Vertex{position: liftCap(j.pB), bound: units.Millimeters(capLevelDelta)}
-		slantIn[i] = capSlantEdge(j.pA, pAV, apex, j.vU, j.vV, capZ, sideZ, capLevelDelta, levelDelta)
-		slantOut[i] = capSlantEdge(j.pB, pBV, apex, j.vU, j.vV, capZ, sideZ, capLevelDelta, levelDelta)
+		var errA, errB error
+		slantIn[i], slantInHeld[i], errA = capSlantEdge(budget, j.pA, pAV, apex, j.vU, j.vV, capZ, sideZ, capLevelDelta, levelDelta, sideWalk{}, sideWalk{}, 0, true)
+		if errA != nil {
+			return capBandResult{}, errA
+		}
+		slantOut[i], slantOutHeld[i], errB = capSlantEdge(budget, j.pB, pBV, apex, j.vU, j.vV, capZ, sideZ, capLevelDelta, levelDelta, sideWalk{}, sideWalk{}, 0, true)
+		if errB != nil {
+			return capBandResult{}, errB
+		}
 		th0 := math.Atan2(j.pA.V-j.vV, j.pA.U-j.vU)
 		th1 := math.Atan2(j.pB.V-j.vV, j.pB.U-j.vU)
 		// The inward offset's reflex connector walks CLOCKWISE from pA to pB
@@ -533,8 +554,8 @@ func buildCapBand(ctx context.Context, body *Body, ref StepRef, cbp capBlendPayl
 		// is the sound upper bound).
 		chordUpper := absSumUpper(arc.length, arc.lengthBound)
 		slant := math.Max(
-			absSumUpper(slantOut[i].length, slantOut[i].lengthBound),
-			absSumUpper(slantIn[i].length, slantIn[i].lengthBound),
+			absSumUpper(slantOut[i].length, slantOutHeld[i]),
+			absSumUpper(slantIn[i].length, slantInHeld[i]),
 		)
 		// capThAllow: this apex patch's own connector runs pA -> pB (the same
 		// capApexArcBound bracket capApexArcBound already builds for the
@@ -714,8 +735,8 @@ func buildCapBand(ctx context.Context, body *Body, ref StepRef, cbp capBlendPayl
 		// upper bound).
 		chordUpper := absSumUpper(capEdge.length, capEdge.lengthBound)
 		slant := math.Max(
-			absSumUpper(leadSlant.length, leadSlant.lengthBound),
-			absSumUpper(trailSlant.length, trailSlant.lengthBound),
+			absSumUpper(leadSlant.length, slantOutHeld[i]),
+			absSumUpper(trailSlant.length, slantInHeld[nextI]),
 		)
 		g.contourAllow = bandPatchAreaAllow(delta, chordUpper, slant)
 		// The two rulings this wall patch is bounded by, paired end for end:
@@ -774,15 +795,88 @@ func setPatchReadings(f *Face, g capPatchGeom, built capPatchBuilt) {
 // the level's rounding at the other — and the held length is the float square
 // root's, charged what it committed against the exact rational squared length
 // rather than an ulp contract math.Hypot does not offer.
-func capSlantEdge(capP Point2, capV, apex *Vertex, apexU, apexV, capZ, sideZ, delta, levelDelta float64) *Edge {
+//
+// A MITER corner's ruling (reflex false) is tagged Line3 but is the true
+// denoted locus only where BOTH prev and cur are straight walls: the exact
+// offset family's corner foot is otherwise a conic, and the chord this Edge
+// holds understates its length (docs/modify-reach-design.md §8.3's boundary
+// bullet). Where either wall is circular, dc's own offset range [0, dc] is
+// split into capMiterLocusSubdivisions sub-ranges, each enclosed through
+// miterLocusSpeedUpper and turned into that sub-range's own locus-length
+// upper bound via chordLocusLengthAllow (called with a zero chordUpper, which
+// reduces it to the raw product); the sub-range bounds sum to the whole
+// locus's own upper bound, and the excess over the held chord is charged
+// once, at the end. Splitting matters most for miterLocusSpeedUpper's own
+// circle-circle case, whose enclosure of the two carriers' own offset ranges
+// is decorrelated (circleCircleLocusSpeedUpper's own doc comment) and can
+// inflate the published bound past the held chord itself on a sizeable
+// setback over one wide range, where the narrower per-sub-range boxes stay
+// tight enough not to; the line-circle case (lineCircleLocusSpeedUpper) has
+// no such looseness but still subdivides the same way, harmlessly. Where any
+// sub-range's enclosure cannot be built, the edge refuses through
+// lengthUnbounded rather than publish an understated bound. A REFLEX corner's
+// own two edges (reflex true) ride one wall's own offset carrier alone and
+// are affine in the offset amount regardless of that wall's kind, so
+// prev/cur/dc go unused and the term stays zero — the same zero a line-line
+// miter gets.
+//
+// The second return is the edge's own ARITHMETIC-ONLY bound — heldBound,
+// before any locus excess is folded in — which bandPatchAreaAllow's
+// slantUpper must keep reading (docs/modify-reach-design.md §8.4): the area
+// term bounds the built quad against the ruled surface it denotes, a question
+// the locus excess (a boundary-only reading) does not answer, so widening
+// slantUpper by it would loosen the area bound for a residual it never
+// measured.
+//
+// budget is the same counter buildCapBand already threads through this
+// band's build; each sub-range's own enclosure charges one step, so a band
+// with many mitered circular corners cannot spend unbounded work here any
+// more than it can building the contour displacement itself.
+func capSlantEdge(budget *workBudget, capP Point2, capV, apex *Vertex, apexU, apexV, capZ, sideZ, delta, levelDelta float64, prev, cur sideWalk, dc float64, reflex bool) (*Edge, float64, error) {
 	held := math.Hypot(math.Hypot(capP.U-apexU, capP.V-apexV), capZ-sideZ)
 	squared := ratSquaredDistance3(capP.U, capP.V, capZ, apexU, apexV, sideZ)
-	return &Edge{
+	heldBound := straightEdgeBound(held, squared, delta, levelDelta)
+	e := &Edge{
 		curve: Line3{}, start: capV, end: apex, convex: true,
 		length:      held,
-		lengthBound: straightEdgeBound(held, squared, delta, levelDelta),
+		lengthBound: heldBound,
 	}
+	if reflex || dc <= 0 || (!prev.isCircular() && !cur.isCircular()) {
+		return e, heldBound, nil
+	}
+	chordUpper := absSumUpper(held, heldBound)
+	axialSpan := sideZ - capZ
+	step := dc / capMiterLocusSubdivisions
+	total := 0.0
+	for k := range capMiterLocusSubdivisions {
+		if err := wallBudgetStep(budget); err != nil {
+			return nil, 0, err
+		}
+		t0 := float64(k) * step
+		t1 := t0 + step
+		if k == capMiterLocusSubdivisions-1 {
+			t1 = dc
+		}
+		speed, ok := miterLocusSpeedUpper(prev, cur, t0, t1, apexU, apexV)
+		if !ok {
+			e.lengthBound = 0
+			e.lengthUnbounded = true
+			return e, heldBound, nil
+		}
+		total = absSumUpper(total, chordLocusLengthAllow(speed, t1-t0, axialSpan*(t1-t0)/dc, 0))
+	}
+	if excess := total - chordUpper; excess > 0 {
+		e.lengthBound = absSumUpper(heldBound, upRound(excess))
+	}
+	return e, heldBound, nil
 }
+
+// capMiterLocusSubdivisions is the fixed number of offset sub-ranges
+// capSlantEdge splits a miter corner's own [0, dc] into (its doc comment
+// above states why one range is too loose). A quarter disk of radius 10
+// chamfered up to 4mm — approaching its own line/circle tangency at
+// offset 5mm — stays comfortably under its own held chord at this count.
+const capMiterLocusSubdivisions = 32
 
 // wholeCircleEdge builds a full-circle Edge (Circle3) in the cap plane at z,
 // the same seam-vertex convention extrude.go's singleClosed branch uses. delta

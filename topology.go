@@ -273,9 +273,12 @@ type Edge struct {
 	// analytic curve's held result is exact, otherwise its evaluation bound;
 	// boolean-built chains carry their proven chord bound.
 	lengthBound float64
-	// lengthUnbounded marks a boolean rim on a curved source: the chord
-	// chain understates the true curve's length by an amount no chord
-	// bound can cover, so Length refuses rather than understate.
+	// lengthUnbounded marks an edge whose true length this evaluator cannot
+	// bound, so Length refuses rather than understate: a boolean rim on a
+	// curved source, whose chord chain understates the true curve's length
+	// by an amount no chord bound can cover, or a cap-blend miter ruling
+	// adjacent to a circular wall whose corner-foot locus this evaluator
+	// cannot enclose (docs/modify-reach-design.md §8.3).
 	lengthUnbounded bool
 }
 
@@ -325,13 +328,18 @@ func (e *Edge) IsConvex() bool { return e.convex }
 // Length returns the edge's length: Exact only when the analytic result is
 // proved exactly representable, otherwise Approximate with its evaluation
 // bound. A boolean-built straight rim (two planar sources) carries its proven
-// chord bound. A boolean rim on a
-// curved source has a true length the chord chain provably understates by
-// an amount this evaluator cannot bound, so it is ErrUnsupported — an
-// honest refusal, never an understated Bound.
+// chord bound. A boolean rim on a curved source has a true length the chord
+// chain provably understates by an amount this evaluator cannot bound, so it
+// is ErrUnsupported — an honest refusal, never an understated Bound. A
+// cap-loop chamfer's miter ruling is the same refusal one construction over:
+// where either carrier meeting at the corner is circular, the ruling's tagged
+// chord understates the curved locus the exact offset family denotes
+// (docs/modify-reach-design.md §8.3), and a corner whose locus enclosure this
+// evaluator cannot build refuses the same way rather than publish an
+// understated Bound.
 func (e *Edge) Length() (Measurement, error) {
 	if e.lengthUnbounded {
-		return Measurement{}, fmt.Errorf(`%w: a boolean rim on a curved source has no proven length bound`, ErrUnsupported)
+		return Measurement{}, fmt.Errorf(`%w: this edge's true length has no proven bound this evaluator can publish`, ErrUnsupported)
 	}
 	return Measurement{
 		Value:     units.Millimeters(e.length),
