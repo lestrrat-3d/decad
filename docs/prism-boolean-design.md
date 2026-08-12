@@ -216,9 +216,11 @@ silent fallback stops being available:
    candidate result. **A pair whose topology this increment's resolution logic
    does not cover (§4.4) is treated exactly like a stage-1 gate miss: silent
    fallback, no error.** The same routing rule applies before a candidate is
-   accepted when `sketch` returns any `Partial` boundary edge and either source
-   carries a nonzero section displacement or B's re-expression is nonidentity:
-   either uncertainty can move a transverse cut by its displacement divided by
+   accepted when `sketch` returns any `Partial` boundary edge and either
+   source carries a nonzero section displacement, either source carries a
+   nonzero walk charge (§7's `δ_walk` — a consumed segment whose own recorded
+   range narrows its natural domain), or B's re-expression is nonidentity:
+   any of the three can move a transverse cut by its displacement divided by
    the crossing sine, and this increment carries no certified
    crossing-sensitivity bound. Every other capacity, arrangement,
    candidate-validity, or assembly-audit problem is a genuine refusal (§9's
@@ -236,9 +238,29 @@ For an admitted pair, decad builds one private `sketch.Sketch` (the same
 `sketch.NewWorld().CreateSketch(...)` pattern `moments_validate.go`'s
 `momentRecordScene` already uses for authentication):
 
-- Operand A's frame is the reference (`target`'s, for `Cut`). Operand A's
-  `ProfileRecord` entities are created verbatim — same `Point2` floats, zero
-  new rounding.
+- Operand A's frame is the reference (`target`'s, for `Cut`). Every entity —
+  A's and B's alike — is created from its own segment's **walked** geometry
+  (`walkOf`, extrude.go), never from the record's `Point2` fields directly:
+  this is the same reduction `momentRecordScene` uses for a single record's
+  own self-consistency check, and it is why a `Partial` fragment is recreated
+  over its own WALKED portion rather than its source curve's whole extent
+  (buildPrismScene's own doc comment). A segment whose recorded range is the
+  entity's own full domain walks to the record's own coordinates verbatim —
+  `lerp2` and `pinArcWalkEnds` both special-case the natural bounds `t=0`/
+  `t=1` to return the record's own `Point2`, and a `CircleSeg` recorded over
+  those same bounds walks the recorded centre and radius directly — so
+  operand A's segments
+  reach the scene with zero new rounding wherever every one of them is
+  WHOLE. A segment recorded over a **narrowed** range instead evaluates the
+  carrier at a **computed** parameter, so it enters the scene at an endpoint
+  this boolean computed, not one the record states — charged as §7's
+  `δ_walk`. A trimmed circular carrier (`ArcSeg`/`CircleSeg`) moves by more
+  than its two endpoints — its rebuilt radius and sweep move too, since the
+  scene's arc is built through cos/sin-computed points — so this increment
+  refuses a pair carrying one before the scene is even built
+  (`prismProfileHasTrimmedCircularSource`) rather than publish an
+  under-charged bound for it; the routing is the same silent §3.4
+  fallback as every other entry-gate miss.
 - Operand B's `ProfileRecord` is **re-expressed into A's frame** before its
   entities are created, through the **composed relative map**: B's frame to
   world, B's placement, A's placement inverted and A's frame inverted are folded
@@ -320,19 +342,33 @@ operand A's anywhere (`Cut`'s bore-through-a-solid-hub shape; a fully nested
 completely unmodified** — every one of their edges reports `Whole = true`,
 because nothing cut them. decad scans `s.Profiles()`'s results for the one
 profile whose `Outer` structurally reproduces target/A's original `Outer`
-verbatim (same entities, same order, every edge `Whole`) — for `Cut`, whose
-`Holes` additionally reproduce target's original holes plus **one new hole**
-that structurally reproduces tool/B's own `Outer` verbatim (also every edge
-`Whole`; G6 keeps the tool hole-free, so that one hole is the tool's whole
-solid and no material inside a tool hole is dropped); for `Intersect` with B
-fully inside A, the match is simply B's own
-disk cell, `Outer` reproducing B's original loop verbatim. A structural
-match — entity identity, order, and `Whole`-ness, nothing geometric — is a
-pure data comparison against decad's own tag map. **When a unique such
-profile exists, it is not assembled at all: it is one of `s.Profiles()`'s own
-results, verbatim, and is authenticated by handing it directly to the
-existing public `RecordProfile(s, profile)` — the full seam (§5) applies
+(same entities, same order, every edge `Whole`) — for `Cut`, whose `Holes`
+additionally reproduce target's original holes plus **one new hole** that
+structurally reproduces tool/B's own `Outer` (also every edge `Whole`; G6
+keeps the tool hole-free, so that one hole is the tool's whole solid and no
+material inside a tool hole is dropped); for `Intersect` with B fully inside
+A, the match is simply B's own disk cell, `Outer` reproducing B's original
+loop. A structural match — entity identity, order, and `Whole`-ness, nothing
+geometric — is a pure data comparison against decad's own tag map. **When a
+unique such profile exists, it is not assembled at all: it is one of
+`s.Profiles()`'s own results, and is authenticated by handing it directly to
+the existing public `RecordProfile(s, profile)` — the full seam (§5) applies
 unmodified, no new authentication code.**
+This reproduction is **byte-identical to the matched operand's own pre-cut
+record — same `Point2` floats — only where every one of that operand's own
+consumed segments is itself WHOLE.** `Whole = true` in THIS arrangement says
+only that nothing in THIS cut trimmed the scene's own entity further; it says
+nothing about whether the segment ENTERED the scene at the record's own
+coordinates or at a walked endpoint an EARLIER construction already computed
+(§4.1, §7's `δ_walk`). A target whose own record already carries a
+narrowed-range `LineSeg` — the recorded segment of a body that is itself a
+prior analytic result — is walked to that narrowed endpoint before its
+scene entity is even built, so this cut's own "verbatim" match reproduces
+the SCENE entity's endpoint, not the target's original, wider one: a
+`LineSeg{(1,0)→(11,0), t=[0,0.4]}` denoting corner `u = 5.0000000000000002`
+returns from a clean-nesting cut as `LineSeg{(1,0)→(5,0), t=[0,1]}` — a
+different, computed corner recorded as though it were exact. §7's `δ_walk`
+is what charges that gap into the result's own `sectionDelta`.
 
 **`Cut`/`Intersect`, crossing sub-case (boundary contact, not clean nesting):
 staged (§4.4, §9 PR3).** When operand B's boundary genuinely crosses
@@ -459,12 +495,18 @@ the shared audit"). Order matches modify §4's:
 
 Every recorded field, after §4.1's re-expression, is one of:
 
-- **Unchanged from operand A's own record** (A's segments are created
-  verbatim into the scene — zero new rounding), or
+- **Unchanged from operand A's own record where every one of A's consumed
+  segments is WHOLE** (a whole segment's walk restates the entity's own
+  defining data exactly, §4.1 — zero new rounding), or
+- **One of A's own segments' WALKED endpoint**, where that segment's own
+  recorded range narrows the entity's own natural domain — a coordinate this
+  boolean COMPUTED rather than one the record states, charged as `δ_walk`
+  below, or
 - **A single rigid-transform recomputation of operand B's own recorded
   field** (§4.1 — one rounding per coordinate; `Intersect`'s shifted interval
   endpoint (G5) is the one other place this design rounds, and it rounds by the
-  same rigid-shift mechanism), or
+  same rigid-shift mechanism), composed with B's own walk charge the same way
+  operand A's is, or
 - **`sketch`'s own single-rounded, `TExact`-certified cut coordinate**, for a
   segment the arrangement actually split (recorded as a narrowed
   `TStart`/`TEnd` range on the entity's *own, unchanged* defining data —
@@ -472,8 +514,8 @@ Every recorded field, after §4.1's re-expression, is one of:
   `Start`/`End` fields, only a narrower range over the same ones). It is a
   coordinate this union COMPUTED, so it is charged, as `δ_cut` below.
 
-Three separate things can displace the rebuilt section, and the result carries
-all three.
+Four separate things can displace the rebuilt section, and the result carries
+all four.
 
 **The re-expression, `δ_reexpress`.** Operand B's re-expressed coordinates carry
 it; operand A's are unchanged and carry nothing.
@@ -503,35 +545,107 @@ parameterisation: the chord for a line, `2πR` for a circle or an arc.
 `δ_cut` is the largest such allowance over the surviving fragments, and zero
 when every survivor is a whole edge.
 
+**The walk charge, `δ_walk`.** `buildPrismScene` builds every entity from its
+segment's own WALKED geometry (`walkOf`, §4.1), never from the record's
+`Point2` fields directly. For a segment whose recorded range is the entity's
+own full domain that walk restates the record's own coordinates exactly —
+`lerp2`'s and `pinArcWalkEnds`' own natural-bound special cases, and a
+`CircleSeg` recorded over those bounds walking the recorded centre and radius
+directly — so a WHOLE segment charges nothing, whatever its kind. A `LineSeg`
+recorded over a range NARROWER than that domain instead evaluates the carrier
+at a computed parameter (`lerp2`'s general arm), so it enters the scene at an
+endpoint this boolean itself computed, whatever the two operands' own prior
+displacement was. It is the only kind that reaches this charge: a trimmed
+circular carrier would enter through two `cos`/`sin`-computed points, moving
+its rebuilt radius and sweep as well as its endpoints, and §4.1 refuses such a
+pair before the scene is built rather than charge it (below). `bounds.go`'s
+`walkEndpointAllow` states the allowance, at the magnitude of the operands
+that walk's OWN arithmetic touches and never at the endpoint it produced:
+`lerp2` computes
+`fl(a + fl(t·fl(b−a)))` from the carrier's own recorded `Start` and `End` — at
+most that, since a target free to fuse the multiply and the add commits one
+rounding fewer — and that difference CANCELS, so a fragment near the plane
+origin on a far-reaching carrier rounds by ulps of the CARRIER while its own
+endpoint magnitude stays tiny. A trimmed `LineSeg` therefore charges the
+envelope of its recorded `Start`/`End` coordinates (`walkChargeOf`'s
+`lineWalkOperandUpper`), folded together with the walked endpoint so the
+envelope stands whatever the recorded parameter is. `walkChargeOf` still
+states a circular answer — `segmentWalk.coordUpper`, whose `|cu|+|cv|+r+r` L1
+form already bounds the centre and radius a `cos`/`sin` walk works on — but
+the §4.1 refusal means no boolean reaches that arm; it stands so a charge,
+never a silent zero, is what any future widening of that refusal would meet.
+Each operand owes the largest such allowance over its OWN
+consumed segments — `δ_walkA` and `δ_walkB`, the `a` and `b` fields of
+`prismSceneDelta`, each holding that operand's walk charge ALONE — and the
+charge stands even when both operands carry zero displacement and the
+re-expression is the identity — the same
+independence `δ_cut` already has, one construction earlier: `δ_cut` charges
+the crossing `sketch` computes for THIS pair, `δ_walk` charges an INPUT
+segment's own narrowed range entering the scene at all, before any crossing
+is asked about. A trimmed circular carrier (`ArcSeg`/`CircleSeg`) is refused
+rather than charged (§4.1) — its rebuilt radius and sweep move too, which a
+coordinate-envelope charge does not state — so a positive `δ_walk` is only
+ever computed over a trimmed `LineSeg`. Every circular carrier that survives
+§4.1 is WHOLE and therefore charges zero, whichever field holds which bound
+(Reversed swaps them, so a WHOLE arc's `TStart`/`TEnd` are `{0, 1}` in either
+order — see `walkChargeOf`'s own doc comment). WHOLE is read off the RECORDED
+range for every kind, a `CircleSeg`
+included, and never off the walk's own closed-ness: that flag is
+decided within a tolerance of a full turn, and a decad-side tolerance that
+can ACCEPT is the admission gate the reject-only rule forbids.
+
 A pre-existing source displacement can additionally AMPLIFY at a cut, by
 `δ/sin θ` for a crossing angle `θ` this design cannot bound below. Section 3.4
 therefore routes any scene with a `Partial` boundary edge to the mesh path
 before it records a fragment whenever either source carries a nonzero
-displacement or the re-expression is nonidentity. That reroute is about
-amplifying an INPUT uncertainty; it does nothing about the cut's own rounding,
-which is why `δ_cut` is charged on the fragments the reroute admits.
+section displacement, either source carries a nonzero `δ_walk`, or the
+re-expression is nonidentity. That reroute is about amplifying an INPUT
+uncertainty; it does nothing about the cut's own rounding, which is why
+`δ_cut` is charged on the fragments the reroute admits.
 
 The rebuilt section therefore carries
 
 ```
-δ = up( max(δ_A, up(δ_B + δ_reexpress)) + δ_cut )
+δ = up( max( up(δ_A + δ_walkA), up(δ_B + δ_walkB + δ_reexpress) ) + δ_cut )
 ```
 
-where `up` rounds each positive sum outward.
+where `up` rounds each positive sum outward. Each operand's own walk charge
+enters on that operand's OWN side of the `max`, folded there with the prior
+displacement it accompanies, and it appears nowhere else in the formula: it is
+charged exactly once, and no term outside the `max` repeats it. The fold is
+what the per-operand split buys — every other term in this formula already
+keeps the two operands apart the same way, so a heavier walk charge on the
+operand that does NOT win the `max` never silently drops out.
 
 It is **exactly zero in one decidable case**: both inputs carry zero
 displacement, operand B's composed map into A's frame is the identity in the
 stored floats (`frameB == frameA` and `xformB == xformA`, component-wise `==` —
-G3's own comparison), **and every surviving edge is whole**. Two caller-drawn
-profiles on one sketch plane with no placement between them meet the first two
-conditions; they meet the third only where the merge cut nothing — one profile
-strictly containing the other, or two footprints meeting along complete shared
-walls. A partial overlap, which splits at least two walls, never reaches the
-zero case, and neither does a union whose result the caller would call
-"obviously exact": the recorded walk closes only to within `δ_cut`, and a
-zero bound over it would be a claim the evaluator cannot make. That `δ_cut`
-bound is about a genuinely cut junction's own rounding along an exact
-carrier; it says nothing about a whole-to-whole junction the record states
+G3's own comparison), **every surviving edge is whole, AND every consumed
+source segment is whole**. Two caller-drawn profiles on one sketch plane with
+no placement between them meet the first two conditions; they meet the third
+and fourth only where the merge cut nothing — one profile strictly containing
+the other, or two footprints meeting along complete shared walls, drawn (not
+inherited from an earlier trim) so every one of their own segments spans its
+entity's full domain. A partial overlap, which splits at least two walls,
+never reaches the zero case, and neither does a union whose result the caller
+would call "obviously exact": the recorded walk closes only to within
+`δ_cut`, and a zero bound over it would be a claim the evaluator cannot make.
+Narrowing the zero case to require every CONSUMED segment whole, not only
+every SURVIVING edge, is what closes the gap this task found: an OPERAND can
+carry a segment recorded over a range narrower than its own entity's full
+domain — the entity's own `sketch` arrangement trimmed it there, at THAT
+segment's own recording, whether from an ordinary sketch cut (`RecordProfile`
+on a caller's profile) or an earlier analytic merge — while this NEW cut's
+own arrangement leaves that wall untouched (`Whole = true` here, an
+arrangement-LOCAL fact about THIS scene alone). Recording that survivor
+without `δ_walk` would re-express the operand's own narrowed range as though
+it were the new scene entity's full, exact extent: `Whole` in the result
+record says nothing about whether the coordinate it names is the operand's
+own recorded one or one this boolean computed walking a narrower range to
+reach it.
+
+That `δ_cut` bound is about a genuinely cut junction's own rounding along an
+exact carrier; it says nothing about a whole-to-whole junction the record states
 **twice, differently** (RB9, §6, §9) — that is not a rounding this design
 charges, it is a claim the assembly disproves, so the merge refuses instead
 of publishing a section with a displacement no term here bounds.
@@ -568,7 +682,12 @@ extension is two pieces, each in the existing machinery's own shape:
   rule that each error mechanism has exactly one helper and no measurement site
   computes a bound inline. `cutDisplacementAllow` owns the cut-parameter
   mechanism above, turning `cutParamUlps` and a carrier's own speed into the
-  coordinate displacement `δ_cut` reads. The section displacement's own reading
+  coordinate displacement `δ_cut` reads. `walkEndpointAllow` owns `δ_walk`'s
+  own mechanism the same way, turning the envelope of the SOURCE operands a
+  walk's own arithmetic touches into the coordinate displacement its computed
+  endpoint owes; the caller supplies that envelope (above), and the
+  helper never reads it off the answer the walk produced. The section
+  displacement's own reading
   is an AREA: the area a
   boundary displacement `δ` can move is covered by a tube of half-width `δ`
   about the recorded boundary — `2·δ·p + n·π·δ²` up-rounded, for a boundary of
@@ -812,7 +931,39 @@ areas, residuals), never merely "it ran" — CLAUDE.md's own rule.
 - Clean-nesting cut: assert the result's outer loop is byte-identical
   (`Point2` fields, not just area) to the target's own pre-cut outer loop,
   and the new hole's fields are byte-identical to the tool's own pre-cut
-  outer loop (verbatim reproduction, §4.2's structural-match claim).
+  outer loop (verbatim reproduction, §4.2's structural-match claim) — for a
+  target and tool whose own consumed segments are whole, the only case this
+  claim holds for (§4.2's own qualification).
+- A trimmed source segment's walked endpoint is charged (task fu143): an
+  operand whose OWN recorded profile carries a segment ranged narrower than
+  its entity's full domain (a `LineSeg` fragment of a larger sketch-cut line,
+  the ordinary shape a `sketch` arrangement produces for a rectangle split by
+  another entity) reports a positive `sectionDelta` from `Union`, `Cut`'s
+  clean-nesting match, and `Intersect`'s clean-nesting match alike, and each
+  op's published volume bound contains the residual against the exactly
+  computed union of the two operands' own DENOTED sections (`math/big.Rat`
+  over the operands' own recorded floats, never a second float answer). The
+  same fixture with every consumed segment whole publishes a `sectionDelta`
+  of exactly `0.0` on all three ops, pinning that the new charge does not
+  fire on the case §7 already kept exact.
+- The walk charge survives `lerp2`'s CANCELLATION: over a table of trimmed
+  `LineSeg` carriers whose `End − Start` cancels — the extreme one reaching
+  `±1e12`, and a plain 200 mm carrier whose fragment sits on the sketch origin,
+  which needs no extreme coordinate at all — `walkChargeOf`'s answer contains
+  the EXACT rational residual of the endpoint `lerp2` walked to, at both
+  recorded bounds, compared squared over `math/big.Rat` so no square root or
+  float difference can flatter it. Each row also asserts its own premise: that
+  charging the walked endpoint's own envelope (`segmentWalk.coordUpper`)
+  instead of the carrier's would under-charge exactly on the rows that cancel
+  and NOT on an ordinary uncancelling fragment, so a row that stops
+  reproducing the shape fails rather than passing quietly.
+- The trimmed-circular refusal reads the RECORDED range, not the walk's
+  closed-ness: a `CircleSeg` whose `TEnd` is one ulp short of `1` — a range
+  the walk's own tolerance still calls a closed turn, which the fixture must
+  assert directly so the case cannot silently stop being the one under test —
+  refuses all three ops (`ok == false`, no error), while the same pair with
+  the bound recorded exactly resolves analytically, so the fallback is the
+  trim's own doing.
 - Exactness, one test per §7 arm: a line-only merged section over operands
   that share a frame AND whose merge cut nothing (a contained footprint)
   reports `Exact` volume with a zero bound; a partially overlapping pair of
@@ -829,9 +980,10 @@ areas, residuals), never merely "it ran" — CLAUDE.md's own rule.
   against the closed-form answer.
 - An arranged profile containing a `Partial` boundary edge falls back before a
   fragment is recorded when either source carries a nonzero section
-  displacement or B's re-expression is nonidentity. The focused fixtures must
-  prove the arrangement splits, including an identity second re-expression
-  after a displaced first result, then assert that `tryPrismUnion` returns
+  displacement, either source carries a nonzero walk charge (`δ_walk`), or
+  B's re-expression is nonidentity. The focused fixtures must prove the
+  arrangement splits, including an identity second re-expression after a
+  displaced first result, then assert that `tryPrismUnion` returns
   `ok == false` without an analytic-resolution error.
 - Downstream chaining: fillet a corner of an analytically-unioned body and
   read `MinWallThickness` on the result — both refuse today (SX9, all three

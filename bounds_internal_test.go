@@ -116,6 +116,55 @@ func exactApply(move r3.Transform, p r3.Vec) [3]*big.Float {
 	}
 }
 
+// TestWalkEndpointAllow pins docs/prism-boolean-design.md §7's δ_walk
+// mechanism (task fu143): a positive OPERAND envelope — the magnitude of the
+// values the walk's own arithmetic touches, which is what this helper's
+// contract requires and never the endpoint that arithmetic produced — answers
+// a bound at least the worst-case lerp2 rounding its own doc comment derives
+// at that magnitude, a zero envelope answers zero, and a non-finite envelope
+// answers +Inf rather than a number a caller's own `> 0` widening could skip.
+//
+// That the CALLER hands over the right envelope is walkChargeOf's own claim,
+// proven against exact rational residuals over cancelling carriers in
+// prism_boolean_internal_test.go's TestWalkChargeOfCoversLerpCancellation.
+func TestWalkEndpointAllow(t *testing.T) {
+	t.Run("zero envelope gives zero", func(t *testing.T) {
+		require.Equal(t, 0.0, walkEndpointAllow(0))
+	})
+
+	t.Run("positive envelope exceeds the derived lerp2 rounding at that magnitude", func(t *testing.T) {
+		for _, envelope := range []float64{12, 1, 1e-3, 1e6, 1e12} {
+			got := walkEndpointAllow(envelope)
+			require.Positive(t, got)
+			require.False(t, math.IsInf(got, 0))
+			// The helper's own derivation: lerp2's general arm rounds three
+			// times — the difference, the product, the sum — for at most
+			// 5·u·E per coordinate at operand magnitude E. The published
+			// bound is a 3D radius over 16 ulps of 2E and must clear it.
+			require.Greaterf(t, got, 5*unitRoundoff*envelope,
+				"the bound at envelope %g must contain the derived per-coordinate worst case", envelope)
+			require.Greaterf(t, got, ulpOf(envelope), "the bound at envelope %g must exceed one ulp there", envelope)
+		}
+	})
+
+	t.Run("larger envelope gives a larger bound", func(t *testing.T) {
+		require.Greater(t, walkEndpointAllow(1e6), walkEndpointAllow(12))
+	})
+
+	for _, tc := range []struct {
+		name  string
+		input float64
+	}{
+		{"+Inf", math.Inf(1)},
+		{"NaN", math.NaN()},
+	} {
+		t.Run(tc.name+" envelope gives +Inf, never 0", func(t *testing.T) {
+			got := walkEndpointAllow(tc.input)
+			require.True(t, math.IsInf(got, 1), "an absent bound must never read as a small one")
+		})
+	}
+}
+
 // TestPerturbedTriangleAreaAllowEnclosesBruteForceSweep proves the
 // extracted helper against a brute-force sweep of perturbed vertices
 // (required test, §13): for every one of many random perturbations of up
