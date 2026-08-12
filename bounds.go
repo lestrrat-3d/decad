@@ -72,6 +72,13 @@ import (
 //     the operand's own interval ends through the same rational sqrt brackets
 //     (ratSqrtDown/ratSqrtUp) a free-form arc's radius already does, rather
 //     than trusting math.Sqrt's accuracy on either end;
+//   - a linear functional's own extreme over a bounded region moving when its
+//     DIRECTION is perturbed (a revolve box face, whose swept direction
+//     carries the sweep angle's own trig enclosure) →
+//     directionalPerturbationAllow, charged against the envelope of the very
+//     coordinate that direction multiplies — which is the caller's to name,
+//     since a revolve's swept radial coefficient multiplies a distance from
+//     the axis and not from the profile's own frame origin;
 //   - a HELD float measured against a bounded scalar's own proven enclosure of
 //     the quantity that float stands for → boundedFloatError, the bridge every
 //     candidate producer crosses when it evaluates a value one way and proves
@@ -686,6 +693,27 @@ func boundedNorm2(x, y boundedScalar) boundedScalar {
 // boundedNorm2 instead.
 func boundedHypot(dx, dy float64) boundedScalar {
 	return boundedNorm2(exactScalar(dx), exactScalar(dy))
+}
+
+// directionalPerturbationAllow bounds how far a linear functional's own
+// extreme over a bounded region can move when the functional's direction is
+// perturbed by dirBound: an extreme of gu·u + gv·v over a boundary is
+// 1-Lipschitz in (gu, gv) against the boundary's own coordinate envelope,
+// since |Δgu·u + Δgv·v| <= |(Δgu, Δgv)| · envelopeUpper by Cauchy-Schwarz.
+//
+// envelopeUpper must be a PROVEN upper bound on the norm of the very
+// coordinate the perturbed direction multiplies, measured about the SAME
+// origin the functional is written about. Which envelope that is belongs to
+// the caller's own geometry, and the two are NOT interchangeable: a section
+// read about its plane frame charges the profile's plane-local envelope
+// (profileCoordinateUpper), while a revolve's swept radial coefficient
+// multiplies the distance from the RESOLVED AXIS and so charges the axis's
+// own radial envelope (axisFrame.radialUpper, which folds in the axis
+// anchor). Handing this the frame-origin envelope for an axis-referred
+// coordinate understates the result without limit as the two origins
+// separate.
+func directionalPerturbationAllow(dirBound, envelopeUpper float64) float64 {
+	return productUpper(dirBound, envelopeUpper)
 }
 
 // boundedFloatError is the proven error bound of a HELD float64 against a

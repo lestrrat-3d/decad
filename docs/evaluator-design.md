@@ -275,7 +275,10 @@ extreme about the axis (a cylinder's radius, a cone's two end radii, a
 torus/sphere's center distance ± minor/radius) and axial range, with a
 partial sweep's angular interval deciding which cardinal directions are
 reached — the same extreme analysis extrude uses, in cylindrical coordinates.
-All mass results carry the §4 numerical bounds. Increment 2.
+`Bounds` is `Exact` only where every one of those extremes is proven exactly
+representable; a sweep amplitude no `float64` holds, or a boundary extreme a
+computed arc radius carries, publishes the proven bound its own arithmetic
+derives instead. All mass results carry the §4 numerical bounds. Increment 2.
 
 ## 7. Selectors
 

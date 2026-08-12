@@ -715,6 +715,36 @@ func (ax axisFrame) toAxis(u, v float64) (float64, float64) {
 	return du*ax.dU + dv*ax.dV, dv*ax.dU - du*ax.dV
 }
 
+// radialUpper is the single owner of the ρ envelope: a proven upper bound on
+// the radial distance ρ = |cross(d, p−a)| from THIS resolved axis to any
+// boundary point p the caller's own coordUpper covers. coordUpper is a proven
+// upper bound on p's plane-local coordinates about the FRAME origin
+// (profileCoordinateUpper for a whole profile, segmentWalk.coordUpper for one
+// walk), and ρ is measured from the AXIS, so the anchor a's own offset is the
+// whole difference between the two: |p−a| ≤ |p| + |a|, with the anchor read
+// through its own recorded bounds. Every reading whose error scales with ρ —
+// a walk's swept radius and moment envelopes, and revolveBoundsContext's
+// sweep-extreme perturbation — takes its envelope from here, because a
+// caller that charges the frame-origin envelope instead understates the
+// reading without limit as the axis moves away from the frame origin.
+func (ax axisFrame) radialUpper(coordUpper float64) float64 {
+	return absSumUpper(
+		coordUpper,
+		ax.aU, ax.aUBound,
+		ax.aV, ax.aVBound,
+	)
+}
+
+// planeDirection is the PLANE-LOCAL direction whose extreme over the recorded
+// boundary is the extreme of the axis-coordinate functional wg·z + k·ρ. It is
+// the rotation that carries (z, ρ) back to (u, v), so the two readings that
+// need it — axisExtremeContext, which evaluates the extreme, and
+// revolveBoundsContext, which charges that extreme's own error terms — cannot
+// drift apart by spelling it twice.
+func (ax axisFrame) planeDirection(wg, k float64) (float64, float64) {
+	return wg*ax.dU - k*ax.dV, wg*ax.dV + k*ax.dU
+}
+
 // walk re-expresses one boundary walk in axis coordinates (the U fields
 // carry z, the V fields ρ), snapping an endpoint within snapTol onto the
 // axis so contact classification and vertex placement agree exactly.
@@ -748,11 +778,7 @@ func (ax axisFrame) walk(w segmentWalk) segmentWalk {
 		out.th0 = w.th0 - beta
 		out.th1 = w.th1 - beta
 	}
-	anchorUpper := absSumUpper(
-		ax.aU, ax.aUBound,
-		ax.aV, ax.aVBound,
-	)
-	rhoUpper := absSumUpper(w.coordUpper, anchorUpper)
+	rhoUpper := ax.radialUpper(w.coordUpper)
 	out.axisRadiusUpper = rhoUpper
 	out.axisMomentUpper = productUpper(w.lengthUpper, rhoUpper)
 	return out
@@ -806,15 +832,27 @@ func (ax axisFrame) classify(w segmentWalk) wallKind {
 // tangent to the axis at an interior point (a circle kissing the axis would
 // sweep a self-touching horn torus). It returns the oriented frame and the
 // side sign the sweep interval must be remapped by.
+//
+// The two radial extremes are read through the boundary scan's bounded form,
+// so a section whose extreme rides a computed arc radius arrives with a proven
+// interval rather than a held float claiming to be exact. Each of the three
+// decisions below is taken on that interval and must be DECIDED by it: the
+// side sign is a structural fact about the region, not a measurement, so a
+// radial extreme whose own interval straddles the ±tol band names no side and
+// is refused rather than guessed. The band is 1e-9 of the section's own scale
+// and the bound is the scan's own last-ulp figure, so an ordinary section is
+// decided with eight orders of magnitude to spare; reaching the refusal means
+// the region genuinely sits on the axis to within its own arithmetic.
 func resolveAxisSide(profile ProfileRecord, line axisLine2, work *freeformWork) (axisFrame, float64, error) {
+	ctx := context.Background()
 	nU, nV := -line.dV, line.dU
-	rlo, rhi, err := boundaryExtremes(profile, nU, nV, work)
+	rlo, rhi, rBound, err := boundaryExtremesBoundedContext(ctx, profile, nU, nV, work)
 	if err != nil {
 		return axisFrame{}, 0, err
 	}
 	roff := nU*line.aU + nV*line.aV
 	rlo, rhi = rlo-roff, rhi-roff
-	zlo, zhi, err := boundaryExtremes(profile, line.dU, line.dV, work)
+	zlo, zhi, _, err := boundaryExtremesBoundedContext(ctx, profile, line.dU, line.dV, work)
 	if err != nil {
 		return axisFrame{}, 0, err
 	}
@@ -823,14 +861,22 @@ func resolveAxisSide(profile ProfileRecord, line axisLine2, work *freeformWork) 
 
 	scale := math.Max(math.Max(math.Abs(rlo), math.Abs(rhi)), math.Max(math.Abs(zlo), math.Abs(zhi)))
 	tol := 1e-9 * math.Max(1, scale)
+	// Each side test is decided on the extreme's own proven interval: above
+	// names "clear of the axis on the + side", below "clear on the − side",
+	// and an interval spanning the threshold decides neither.
+	hiAbove := admitAbove(measuredScalar(rhi, rBound), tol)
+	loBelow := admitBelow(measuredScalar(rlo, rBound), -tol)
+	if hiAbove == survStraddle || loBelow == survStraddle {
+		return axisFrame{}, 0, fmt.Errorf(`%w: the recorded region's radial extreme about this axis is known only to ±%v mm, which does not decide which side of the axis the region lies on`, ErrDegenerate, rBound)
+	}
 	switch {
-	case rhi > tol && rlo < -tol:
+	case hiAbove == survAdmit && loBelow == survAdmit:
 		return axisFrame{}, 0, fmt.Errorf(`%w: the revolve axis passes through the region`, ErrDegenerate)
-	case rhi <= tol && rlo >= -tol:
+	case hiAbove == survReject && loBelow == survReject:
 		return axisFrame{}, 0, fmt.Errorf(`%w: the region collapses onto the revolve axis`, ErrDegenerate)
 	}
 	side := 1.0
-	if rhi <= tol {
+	if hiAbove == survReject {
 		side = -1
 	}
 	ax := axisFrame{
@@ -1669,50 +1715,118 @@ func (rp revolvePayload) extentAlongContext(ctx context.Context, g r3.Vec) (floa
 	return rp.extentAlongWork(ctx, g, newFreeformWork())
 }
 
+// extentAlongWork is extentBoundedAlong's refusing wrapper, the same shape
+// prismPayload.extentAlongWork and capBlendPayload.extentAlongWork already
+// take: a through-all stop reads this extent as an exact endpoint and has no
+// bound to widen, so a direction whose extreme the boundary scan can only
+// bracket refuses rather than fabricate one.
 func (rp revolvePayload) extentAlongWork(ctx context.Context, g r3.Vec, work *freeformWork) (float64, float64, error) {
+	lo, hi, bound, err := rp.extentBoundedAlong(ctx, g, work)
+	if err != nil {
+		return 0, 0, err
+	}
+	if bound != 0 {
+		return 0, 0, fmt.Errorf(`%w: the revolved solid's extent along this direction is held by its own boundary-extreme bracket, known only to a displacement of %v mm; a stop reads this coordinate as exact and has no bound to widen`, ErrUnsupported, bound)
+	}
+	return lo, hi, nil
+}
+
+// extentBoundedAlong is the reading itself: the interval AND the proven
+// half-width the boundary-extreme scan derived for its two ends. A section
+// whose every candidate is exactly representable carries a zero bound, so an
+// all-straight or recorded-circle meridian reads exactly as before.
+func (rp revolvePayload) extentBoundedAlong(ctx context.Context, g r3.Vec, work *freeformWork) (float64, float64, float64, error) {
 	b := rp.basis()
 	base := rp.xform.Apply(b.a3).Dot(g)
 	wg := rp.xform.ApplyDir(b.w).Dot(g)
 	mlo, mhi := sweepExtremes(rp.xform.ApplyDir(b.e0).Dot(g), rp.xform.ApplyDir(b.e1).Dot(g), rp.phi0, rp.phi1, rp.full)
-	hi, err := axisExtremeContext(ctx, rp, wg, mhi, true, work)
+	hi, hiBound, err := axisExtremeContext(ctx, rp, wg, mhi, true, work)
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, 0, err
 	}
-	lo, err := axisExtremeContext(ctx, rp, wg, mlo, false, work)
+	lo, loBound, err := axisExtremeContext(ctx, rp, wg, mlo, false, work)
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, 0, err
 	}
-	return base + lo, base + hi, nil
+	return base + lo, base + hi, math.Max(loBound, hiBound), nil
 }
 
-// revolveBoundsContext computes the exact axis-aligned bounds of the placed
+// revolveBoundsContext computes the axis-aligned bounds of the placed
 // revolved solid — the same directional-extreme analysis the prism uses, in
-// cylindrical coordinates (docs/evaluator-design.md §6).
+// cylindrical coordinates (docs/evaluator-design.md §6). Bounds is Exact only
+// where every axis's sweep extreme is proven exactly representable — a full
+// revolution about an axis-aligned frame; every other reading (a partial
+// sweep, or an amplitude no float64 holds exactly) is Approximate with the
+// PROVEN bound sweepExtremeBounds derives, composed through the same
+// directional-perturbation Lipschitz bound (bounds.go) that turns a bound on
+// the swept radial DIRECTION into a bound on the boundary extreme it feeds.
+//
+// The envelope that Lipschitz step charges is the RADIAL one: the extreme's
+// own functional is wg·z + m·ρ, so a perturbation of the swept radial
+// coefficient m multiplies ρ, the distance from the RESOLVED AXIS, and not
+// the profile's coordinates about the frame origin. axisFrame.radialUpper
+// owns that envelope and folds in the axis anchor, which is the whole term an
+// offset axis adds; a box whose radial envelope cannot be proven finite is
+// refused rather than published against a bound that omits it.
+//
+// The boundary extreme axisExtremeContext returns carries an error of its own,
+// and this reading composes that one too: an arc states its Start and Center,
+// never its radius, so a circular candidate sits at a math.Hypot radius and can
+// miss the apex the sweep actually reaches. That term belongs to the scan that
+// produces the candidate (extrude.go's circularExtremeInterval) and arrives
+// here already folded into the interval's own half-width, so the box simply
+// maxes it in beside the sweep term. Without it a box over an arc section can
+// publish Exact while excluding the surface it bounds.
 func revolveBoundsContext(ctx context.Context, rp revolvePayload, work *freeformWork) (Box, error) {
 	axes := []r3.Vec{r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1)}
+	b := rp.basis()
+	coordUpper, err := profileCoordinateUpper(rp.profile, work)
+	if err != nil {
+		return Box{}, err
+	}
+	rhoUpper := rp.ax.radialUpper(coordUpper)
+	if isNonFinite(rhoUpper) {
+		return Box{}, fmt.Errorf(`%w: the revolved region's radial distance from its own axis has no finite proven bound, so no sweep-extreme bound can be composed`, ErrNotFinite)
+	}
 	var minC, maxC [3]float64
+	bound := 0.0
 	for i, g := range axes {
 		if err := ctx.Err(); err != nil {
 			return Box{}, err
 		}
-		lo, hi, err := rp.extentAlongWork(ctx, g, work)
+		lo, hi, extremeBound, err := rp.extentBoundedAlong(ctx, g, work)
 		if err != nil {
 			return Box{}, err
 		}
 		minC[i] = lo
 		maxC[i] = hi
+		if extremeBound > bound {
+			bound = extremeBound
+		}
+		c0 := rp.xform.ApplyDir(b.e0).Dot(g)
+		c1 := rp.xform.ApplyDir(b.e1).Dot(g)
+		mlo, mhi := sweepExtremes(c0, c1, rp.phi0, rp.phi1, rp.full)
+		loBound, hiBound := sweepExtremeBounds(c0, c1, rp.phi0, rp.phi1, mlo, mhi, rp.full)
+		if term := directionalPerturbationAllow(loBound, rhoUpper); term > bound {
+			bound = term
+		}
+		if term := directionalPerturbationAllow(hiBound, rhoUpper); term > bound {
+			bound = term
+		}
 	}
 	return Box{
 		Min:       r3.NewVec(minC[0], minC[1], minC[2]),
 		Max:       r3.NewVec(maxC[0], maxC[1], maxC[2]),
-		Exactness: Exact,
-		Bound:     units.Millimeters(0),
+		Exactness: exactnessOf(bound),
+		Bound:     units.Millimeters(bound),
 	}, nil
 }
 
 // sweepExtremes returns the range of m(φ) = c0·cos φ + c1·sin φ over the
 // sweep interval: endpoints plus the interior critical angles, or the full
-// ±amplitude for a whole turn.
+// ±amplitude for a whole turn. The held values it returns are what
+// revolveBoundsContext and extentAlongWork both publish; sweepExtremeBounds
+// proves how far each can sit from the truth without touching either.
 func sweepExtremes(c0, c1, phi0, phi1 float64, full bool) (float64, float64) {
 	amp := math.Hypot(c0, c1)
 	if full {
@@ -1738,19 +1852,119 @@ func sweepExtremes(c0, c1, phi0, phi1 float64, full bool) (float64, float64) {
 	return lo, hi
 }
 
+// sweepExtremeBounds proves how far sweepExtremes' held (heldLo, heldHi) can
+// sit from the TRUE min/max of m(φ) = c0·cos φ + c1·sin φ over [phi0, phi1],
+// without ever trusting math.Sin/Cos/Atan2/Hypot's accuracy: c0, c1,
+// phi0 and phi1 are read as exact rationals (their own float64 bit patterns —
+// the same convention sweepExtremes' own callers already take for a sweep
+// angle), sin/cos of the endpoints are enclosed by radSinCosInterval
+// (normal_bound.go, the Cone normal's own bracket), and the amplitude
+// √(c0²+c1²) by the rational square-root brackets circularLengthInterval
+// reads an ArcSeg's radius through (ratSqrtDown/ratSqrtUp).
+//
+// The true extreme over [phi0, phi1] always sits at phi0, at phi1, or at an
+// interior critical angle where m′(φ) = −c0·sin φ + c1·cos φ = 0. m′ is
+// itself a sinusoid whose zeros are spaced exactly π apart, so an interval
+// shorter than π contains AT MOST one: if m′ is proven the same sign at both
+// endpoints (a certified sign, from the same enclosures — never a float
+// comparison) and the interval's own width is proven under π, no interior
+// critical angle can exist and the extreme is provably an endpoint. Where
+// that cannot be certified, the enclosure is widened to the global amplitude
+// bound (valid for ANY φ, critical or not — a stationary point's own
+// contribution is at most second-order past the endpoint reading, so the
+// widening this admits stays small whenever an interior critical angle truly
+// is close by).
+func sweepExtremeBounds(c0, c1, phi0, phi1, heldLo, heldHi float64, full bool) (float64, float64) {
+	c0R, c1R := floatRat(c0), floatRat(c1)
+	if c0R == nil || c1R == nil {
+		return math.Inf(1), math.Inf(1)
+	}
+	sq := new(big.Rat).Add(new(big.Rat).Mul(c0R, c0R), new(big.Rat).Mul(c1R, c1R))
+	ampLoF, ampHiF := ratSqrtDown(sq), ratSqrtUp(sq)
+	if isNonFinite(ampLoF) || isNonFinite(ampHiF) {
+		return math.Inf(1), math.Inf(1)
+	}
+	ampLoR, ampHiR := floatRat(ampLoF), floatRat(ampHiF)
+	if ampLoR == nil || ampHiR == nil {
+		return math.Inf(1), math.Inf(1)
+	}
+	if full {
+		hiIv := interval(ampLoR, ampHiR)
+		loIv := interval(new(big.Rat).Neg(ampHiR), new(big.Rat).Neg(ampLoR))
+		return intervalFloatError(loIv, heldLo), intervalFloatError(hiIv, heldHi)
+	}
+	p0R, p1R := floatRat(phi0), floatRat(phi1)
+	if p0R == nil || p1R == nil {
+		return math.Inf(1), math.Inf(1)
+	}
+	sin0, cos0, ok0 := radSinCosInterval(p0R)
+	sin1, cos1, ok1 := radSinCosInterval(p1R)
+	if !ok0 || !ok1 {
+		return math.Inf(1), math.Inf(1)
+	}
+	m0 := intervalAdd(intervalScale(cos0, c0R), intervalScale(sin0, c1R))
+	m1 := intervalAdd(intervalScale(cos1, c0R), intervalScale(sin1, c1R))
+	maxRat := func(a, b *big.Rat) *big.Rat {
+		if a.Cmp(b) >= 0 {
+			return a
+		}
+		return b
+	}
+	minRat := func(a, b *big.Rat) *big.Rat {
+		if a.Cmp(b) <= 0 {
+			return a
+		}
+		return b
+	}
+	// The true max is always >= both endpoints' true values (an endpoint is
+	// always a candidate), so the lower end of its enclosure never needs
+	// widening; likewise the true min's upper end. Only the "far" end of
+	// each — where an unexcluded interior critical angle could push it —
+	// widens, and only in the non-monotonic branch below.
+	hiLo := maxRat(m0.lo, m1.lo)
+	hiHi := maxRat(m0.hi, m1.hi)
+	loHi := minRat(m0.hi, m1.hi)
+	loLo := minRat(m0.lo, m1.lo)
+
+	// m′(φ) = −c0·sin φ + c1·cos φ shares m's own zeros, spaced exactly π
+	// apart, so a closed interval narrower than π contains AT MOST one — and
+	// if both endpoints proved the SAME sign (equality admitted, since a
+	// critical point sitting exactly at an endpoint is that one zero and
+	// changes nothing about the OPEN interval between them), that single
+	// zero cannot be interior: m′ cannot cross to the opposite sign and back
+	// without a second zero, so it holds that one sign throughout and m is
+	// monotone on the whole closed interval.
+	negC0R := new(big.Rat).Neg(c0R)
+	mp0 := intervalAdd(intervalScale(sin0, negC0R), intervalScale(cos0, c1R))
+	mp1 := intervalAdd(intervalScale(sin1, negC0R), intervalScale(cos1, c1R))
+	width := new(big.Rat).Sub(p1R, p0R)
+	widthLessThanPi := width.Cmp(piLower) < 0
+	sameNonPos := mp0.hi.Sign() <= 0 && mp1.hi.Sign() <= 0
+	sameNonNeg := mp0.lo.Sign() >= 0 && mp1.lo.Sign() >= 0
+	monotonic := widthLessThanPi && (sameNonPos || sameNonNeg)
+	if !monotonic {
+		hiHi = maxRat(hiHi, ampHiR)
+		loLo = minRat(loLo, new(big.Rat).Neg(ampHiR))
+	}
+	hiIv := interval(hiLo, hiHi)
+	loIv := interval(loLo, loHi)
+	return intervalFloatError(loIv, heldLo), intervalFloatError(hiIv, heldHi)
+}
+
 // axisExtremeContext is one extreme of the linear functional wg·z + k·ρ over the
 // recorded boundary, evaluated in axis coordinates through the plane-local
-// boundary extremes.
-func axisExtremeContext(ctx context.Context, rp revolvePayload, wg, k float64, wantMax bool, work *freeformWork) (float64, error) {
-	gu := wg*rp.ax.dU - k*rp.ax.dV
-	gv := wg*rp.ax.dV + k*rp.ax.dU
-	lo, hi, err := boundaryExtremesContext(ctx, rp.profile, gu, gv, work)
+// boundary extremes, beside that extreme's own proven bound — the scan's, which
+// is nonzero exactly where a circular candidate's own radius or apex is not
+// exactly representable (extrude.go's circularExtremeInterval).
+func axisExtremeContext(ctx context.Context, rp revolvePayload, wg, k float64, wantMax bool, work *freeformWork) (float64, float64, error) {
+	gu, gv := rp.ax.planeDirection(wg, k)
+	lo, hi, bound, err := boundaryExtremesBoundedContext(ctx, rp.profile, gu, gv, work)
 	if err != nil {
-		return 0, err
+		return 0, 0, err
 	}
 	off := gu*rp.ax.aU + gv*rp.ax.aV
 	if wantMax {
-		return hi - off, nil
+		return hi - off, bound, nil
 	}
-	return lo - off, nil
+	return lo - off, bound, nil
 }

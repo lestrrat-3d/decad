@@ -352,16 +352,21 @@ func TestPrismBoundsFreeformEndpointHeldExtremesStayExact(t *testing.T) {
 	require.Equal(t, r3.NewVec(3, 3, 5), box.Max)
 }
 
-// 9. Regression: boundaryExtremesContext still refuses a free-form section —
-// the exact protection revolve.go's resolveAxisSide and capblend.go's
-// extentBoundedAlong both rely on running BEFORE their own free-form gates —
-// and every existing analytic prism's Box still reports Exact with a zero
-// bound.
+// 9. Regression: a section whose extreme only a bracket holds still refuses at
+// every consumer that reads the coordinate as EXACT — the through-all stop
+// wrapper prismPayload.extentAlongWork owns that refusal now that the scan
+// itself answers with a bound — and every existing analytic prism's Box still
+// reports Exact with a zero bound.
 func TestBoundaryExtremesContextRegression(t *testing.T) {
 	control := []Point2{{U: 0, V: 0}, {U: 1, V: 2}, {U: 3, V: 2}, {U: 4, V: 0}, {U: 6, V: 1}, {U: 7, V: -2}}
 	// V (not U) has an interior extreme on this fixture (see the comment on
 	// TestPrismExtentAlongWorkRefusesFreeformBoxAnswersApproximate).
-	_, _, err := boundaryExtremesContext(t.Context(), splineProfile(control), 0, 1, newFreeformWork())
+	_, _, bound, err := boundaryExtremesBoundedContext(t.Context(), splineProfile(control), 0, 1, newFreeformWork())
+	require.NoError(t, err)
+	require.Greater(t, bound, 0.0, "an interior free-form extreme is held by a bracket, never exactly")
+
+	free := prismPayload{profile: splineProfile(control), frame: identityFrame(t), z0: 0, z1: 5, xform: r3.Identity()}
+	_, _, err = free.extentAlongWork(t.Context(), r3.NewVec(0, 1, 0), newFreeformWork())
 	require.Error(t, err)
 	require.ErrorIs(t, err, ErrUnsupported)
 
@@ -402,12 +407,8 @@ func TestBoundaryExtremesBoundedSaturatedEnclosureRefusesUnsupported(t *testing.
 	require.Zero(t, satHi)
 	require.Zero(t, satBound)
 
-	// The refusing wrappers over the same scan keep that sentinel: each one
-	// answers a free-form section it cannot state exactly with ErrUnsupported.
-	_, _, err = boundaryExtremesContext(t.Context(), profile, 1, 1, newFreeformWork())
-	require.ErrorIs(t, err, ErrUnsupported)
-	require.NotErrorIs(t, err, ErrDegenerate)
-
+	// The refusing wrapper over the same scan keeps that sentinel: it answers a
+	// free-form section it cannot state exactly with ErrUnsupported.
 	pp := prismPayload{profile: profile, frame: identityFrame(t), z0: 0, z1: 5, xform: r3.Identity()}
 	_, _, err = pp.extentAlongWork(t.Context(), r3.NewVec(1, 1, 0), newFreeformWork())
 	require.ErrorIs(t, err, ErrUnsupported)

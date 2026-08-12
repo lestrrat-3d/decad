@@ -1620,48 +1620,61 @@ func prismBoundsContext(ctx context.Context, pp prismPayload, work *freeformWork
 	}, nil
 }
 
-// boundaryExtremes returns the min and max of the linear functional
-// g(u, v) = gu·u + gv·v over the recorded region's boundary — exact per
-// analytic segment kind: line extremes at endpoints, circular extremes at the
-// functional's own angle when the walk sweeps it. It refuses a free-form
-// section rather than report a bounded interval; see boundaryExtremesContext.
-func boundaryExtremes(profile ProfileRecord, gu, gv float64, work *freeformWork) (float64, float64, error) {
-	return boundaryExtremesContext(context.Background(), profile, gu, gv, work)
-}
-
-// boundaryExtremesContext is boundaryExtremesBoundedContext's refusing
-// wrapper: it keeps the exact signature every existing caller holds
-// (revolve.go's resolveAxisSide runs it BEFORE its own requireAnalyticWalk
-// gate, and capblend.go's extentBoundedAlong relies on it the same way, so
-// this refusal is what protects both from a free-form section today), and it
-// refuses ErrUnsupported wherever the bounded scan's bracket carries a
-// nonzero bound. Every analytic candidate reports a zero bound, so this
-// preserves current behaviour exactly for every section this evaluator could
-// already build — only the refusal's message changes.
-func boundaryExtremesContext(ctx context.Context, profile ProfileRecord, gu, gv float64, work *freeformWork) (float64, float64, error) {
-	lo, hi, bound, err := boundaryExtremesBoundedContext(ctx, profile, gu, gv, work)
-	if err != nil {
-		return 0, 0, err
-	}
-	if bound != 0 {
-		return 0, 0, fmt.Errorf(`%w: the boundary extreme scan's directional bracket has a nonzero bound of %v mm along this direction, and this caller has no bound to widen`, ErrUnsupported, bound)
-	}
-	return lo, hi, nil
+// circularExtremeInterval encloses the two EXACT extremes of the functional
+// g(u, v) = gu·u + gv·v over the whole circle a circular walk lies on. Writing
+// the walk as c + r·(cos θ, sin θ) gives g(θ) = (gu·cU + gv·cV) + r·|(gu, gv)|·
+// cos(θ − θ*), so the circle's own minimum and maximum are P ∓ r·|(gu, gv)| —
+// an identity in which the angle does not appear at all.
+//
+// That is why the scan's circular candidate is bounded from here rather than
+// from a certified sine and cosine at the candidate's own angle: the angle is a
+// SELECTION (does the walk sweep the apex?), while the VALUE the fold publishes
+// is this closed form, and reading it this way charges no π-rounding guard for
+// an angle that never enters the answer. The three inputs that are not exact
+// leaves each enter through the bounded arithmetic: the walk's radius under its
+// own proven bound (segmentWalk.radiusBound — an ArcSeg states Start and Center,
+// so its radius is a math.Hypot), the direction's magnitude through
+// boundedNorm2's certified square-root brackets, and every product and sum
+// through boundedMul/boundedAdd's own exact rounding terms. An exactly
+// representable apex therefore still reports a zero bound, which is what keeps
+// a recorded circle's box Exact.
+func circularExtremeInterval(w segmentWalk, gu, gv float64) (boundedScalar, boundedScalar) {
+	gmag := boundedNorm2(exactScalar(gu), exactScalar(gv))
+	centre := boundedAdd(
+		boundedMul(exactScalar(gu), exactScalar(w.cU)),
+		boundedMul(exactScalar(gv), exactScalar(w.cV)),
+	)
+	amplitude := boundedMul(measuredScalar(w.radius, w.radiusBound), gmag)
+	return boundedSub(centre, amplitude), boundedAdd(centre, amplitude)
 }
 
 // boundaryExtremesBoundedContext is the one scan, total over walkKind
 // (docs/spline-design.md §6.2): the min and max of g(u, v) = gu·u + gv·v over
 // the recorded region's boundary, AND the proven half-width of that interval.
-// A line or circular candidate is exact — the same closed forms
-// boundaryExtremesContext always ran, contributing a zero-width candidate — and
-// a free-form walk folds each of its converted spans' own proven enclosure
-// (spanExtremeEnclosureContext). The fold is the shipped
-// capBlendPayload.extentBoundedAlong idiom: track the lower and upper ends of
-// every candidate contributing to the region minimum (loLower/loUpper) and to
-// the region maximum (hiLower/hiUpper) separately, so a candidate that loses
-// the extremization contributes nothing to the reported bound, and report the
-// midpoint of each composed interval with the larger of the two half widths,
-// rounded up — the same convention freeformArcLength already uses.
+//
+// A line candidate is a recorded coordinate read through the direction the
+// caller holds, which this evaluator reads as an exact leaf throughout (the
+// convention survey2d.go's own file comment states), so it contributes a
+// zero-width candidate and an all-straight section's reading stays exact. A
+// CIRCULAR candidate is NOT one: its position is the walk's radius times a
+// cosine and a sine, and the radius itself is a math.Hypot for every ArcSeg,
+// so it enters the fold under the proven enclosure circularExtremeInterval
+// derives — the single owner of that term, charged where the candidate is
+// produced rather than beside the fold by whichever consumer noticed. A
+// free-form walk folds each of its converted spans' own proven enclosure
+// (spanExtremeEnclosureContext).
+//
+// The fold is the shipped capBlendPayload.extentBoundedAlong idiom: track the
+// lower and upper ends of every candidate contributing to the region minimum
+// (loLower/loUpper) and to the region maximum (hiLower/hiUpper) separately, so
+// a candidate that loses the extremization contributes nothing to the reported
+// bound, and report the midpoint of each composed interval with the larger of
+// the two half widths, rounded up — the same convention freeformArcLength
+// already uses. The fold is sound because every candidate interval encloses a
+// value the true boundary actually attains: the reported minimum's lower end is
+// the least of the candidates' lower ends and so never exceeds the truth, and
+// its upper end is the least of their upper ends, which the candidate attaining
+// the true minimum keeps at or above it.
 //
 // A span enclosure that convention cannot state in float64 refuses at the
 // conversion rather than entering the fold (spline_extreme.go's
@@ -1690,11 +1703,24 @@ func boundaryExtremesBoundedContext(ctx context.Context, profile ProfileRecord, 
 		hiLower = math.Max(hiLower, l)
 		hiUpper = math.Max(hiUpper, h)
 	}
-	take := func(u, v float64) {
-		g := gu*u + gv*v
-		takeLo(g, g)
-		takeHi(g, g)
+	// take folds one candidate's held value under the proven bound its own
+	// generator derived. A zero bound enters as the held value twice: widening
+	// an exact candidate by a directed rounding would mint an error the
+	// arithmetic provably did not commit. A nonzero one is stepped outward with
+	// math.Nextafter rather than upRound/downRound, since a directional value
+	// can be negative and those two only move a POSITIVE bound toward zero.
+	take := func(g, allow float64) {
+		if allow == 0 {
+			takeLo(g, g)
+			takeHi(g, g)
+			return
+		}
+		lo := math.Nextafter(g-allow, math.Inf(-1))
+		hi := math.Nextafter(g+allow, math.Inf(1))
+		takeLo(lo, hi)
+		takeHi(lo, hi)
 	}
+	takeVertex := func(u, v float64) { take(gu*u+gv*v, 0) }
 	// Every span enclosure enters the fold through freeformExtremeFloats
 	// (spline_extreme.go), which rounds outward through ratFloatDown/ratFloatUp
 	// — never downRound/upRound: a directional value can be negative, and those
@@ -1733,26 +1759,34 @@ func boundaryExtremesBoundedContext(ctx context.Context, profile ProfileRecord, 
 				}
 				continue
 			}
-			take(w.startU, w.startV)
-			take(w.endU, w.endV)
+			takeVertex(w.startU, w.startV)
+			takeVertex(w.endU, w.endV)
 			if !w.isCircular() {
 				continue
 			}
 			// Interior extremes at θ* where the functional's gradient
-			// aligns with the radius: θ* = atan2(gv, gu) (+π).
+			// aligns with the radius: θ* = atan2(gv, gu) (+π). The angle
+			// SELECTS which of the circle's two extremes the walk sweeps;
+			// circularExtremeInterval states what that extreme is worth.
 			gmag := math.Hypot(gu, gv)
 			if gmag == 0 {
 				continue
 			}
+			minIv, maxIv := circularExtremeInterval(w, gu, gv)
 			star := math.Atan2(gv, gu)
 			tlo, thi := math.Min(w.th0, w.th1), math.Max(w.th0, w.th1)
-			for _, cand := range []float64{star, star + math.Pi} {
+			for ci, cand := range [2]float64{star, star + math.Pi} {
+				apex := maxIv
+				if ci == 1 {
+					apex = minIv
+				}
 				for k := math.Floor((tlo-cand)/(2*math.Pi)) * 2 * math.Pi; cand+k <= thi+1e-12; k += 2 * math.Pi {
 					th := cand + k
 					if th < tlo-1e-12 {
 						continue
 					}
-					take(w.cU+w.radius*math.Cos(th), w.cV+w.radius*math.Sin(th))
+					held := gu*(w.cU+w.radius*math.Cos(th)) + gv*(w.cV+w.radius*math.Sin(th))
+					take(held, boundedFloatError(apex, held))
 				}
 			}
 		}
