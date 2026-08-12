@@ -374,6 +374,12 @@ func cutDisplacementAllow(tangentUpper float64) float64 {
 // that through and rounds once more, at the magnitude of t·(b−a), which is the
 // walked endpoint less a and so at most 2E, for another 2uE; the outer sum
 // rounds at |a + t(b−a)| ≤ E, for uE. That totals 5uE + O(u²) per coordinate.
+// A target that FUSES the multiply and the add — the gc arm64 backend
+// compiles lerp2's general arm to a single FMADDD — drops the middle rounding
+// and keeps the other two, so it stays under the same total: fusion only ever
+// removes a rounding from that sequence, and fl(b−a), the term this
+// mechanism's own cancellation makes large, is committed before any fusion
+// and survives it unchanged.
 // The answer charges 16·ulp(2E) ≥ 16·ulp(1)·E = 32uE per coordinate, better
 // than six times that, read as a 3D radius (radius3D) — the SAME shape
 // rigidRoundAllow states for a rigid map's own rounding, which keeps every

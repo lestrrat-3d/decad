@@ -558,13 +558,14 @@ enters the scene at an endpoint this boolean itself computed, whatever the
 two operands' own prior displacement was. `bounds.go`'s `walkEndpointAllow`
 states the allowance, at the magnitude of the operands that walk's OWN
 arithmetic touches and never at the endpoint it produced: `lerp2` computes
-`fl(a + fl(t·fl(b−a)))` from the carrier's own recorded `Start` and `End`, and
-that difference CANCELS, so a fragment near the plane origin on a far-reaching
-carrier rounds by ulps of the CARRIER while its own endpoint magnitude stays
-tiny. A trimmed `LineSeg` therefore charges the envelope of its recorded
-`Start`/`End` coordinates (`walkChargeOf`'s `lineWalkOperandUpper`), folded
-together with the walked endpoint so the envelope stands whatever the recorded
-parameter is; a circular walk charges `segmentWalk.coordUpper`, whose
+`fl(a + fl(t·fl(b−a)))` from the carrier's own recorded `Start` and `End` — at
+most that, since a target free to fuse the multiply and the add commits one
+rounding fewer — and that difference CANCELS, so a fragment near the plane
+origin on a far-reaching carrier rounds by ulps of the CARRIER while its own
+endpoint magnitude stays tiny. A trimmed `LineSeg` therefore charges the
+envelope of its recorded `Start`/`End` coordinates (`walkChargeOf`'s
+`lineWalkOperandUpper`), folded together with the walked endpoint so the
+envelope stands whatever the recorded parameter is; a circular walk charges `segmentWalk.coordUpper`, whose
 `|cu|+|cv|+r+r` L1 form already bounds the centre and radius its `cos`/`sin`
 arithmetic works on. `δ_walk` is the largest such allowance over
 EITHER operand's own consumed segments, and it stands even when both operands

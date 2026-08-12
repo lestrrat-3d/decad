@@ -719,39 +719,19 @@ func prismBottomWallTEnd(t *testing.T, p ProfileRecord) float64 {
 // property the fixture's own doc comment derives, and which only another host
 // could otherwise disprove: every corner the fixture's walls walk to is the
 // same coordinate whether or not the host fuses lerp2's multiply and add.
-// Each segment's endpoints are computed both ways and compared exactly, so a
-// future edit that reintroduces a parameter needing a rounding decision fails
-// here rather than on whichever host makes that decision differently.
+// Each segment's endpoints are computed both ways — prismLerpSplit and
+// prismLerpFused, this file's owner of lerp2's two readings — and compared
+// exactly, so a future edit that reintroduces a parameter needing a rounding
+// decision fails here rather than on whichever host makes that decision
+// differently.
 func TestPrismSplitLeftCellFixtureWalksHostIndependently(t *testing.T) {
-	// plainEnd and fusedEnd are lerp2's own two readings: its natural-bound
-	// arms return the recorded point verbatim, and its general arm is the one
-	// expression a fusing compiler contracts.
-	plainEnd := func(start, end Point2, at float64) Point2 {
-		switch at {
-		case 0:
-			return start
-		case 1:
-			return end
-		}
-		return Point2{U: start.U + at*(end.U-start.U), V: start.V + at*(end.V-start.V)}
-	}
-	fusedEnd := func(start, end Point2, at float64) Point2 {
-		switch at {
-		case 0:
-			return start
-		case 1:
-			return end
-		}
-		return Point2{U: math.FMA(at, end.U-start.U, start.U), V: math.FMA(at, end.V-start.V, start.V)}
-	}
-
 	doc := New()
 	p := prismSplitLeftCellBody(t, doc).payload.(prismPayload).profile
 	for i, seg := range p.Outer.Segments {
 		ls, ok := seg.(LineSeg)
 		require.Truef(t, ok, "the fixture is line-only: segment %d is a %T", i, seg)
 		for _, at := range []float64{ls.TStart, ls.TEnd} {
-			require.Equalf(t, plainEnd(ls.Start, ls.End, at), fusedEnd(ls.Start, ls.End, at),
+			require.Equalf(t, prismLerpSplit(ls.Start, ls.End, at), prismLerpFused(ls.Start, ls.End, at),
 				"segment %d walks to a different endpoint at t=%v when the host fuses the multiply-add", i, at)
 		}
 	}
@@ -982,6 +962,49 @@ func prismWalkEndpointResidualSq(t *testing.T, s LineSeg, walkedU, walkedV, at f
 	return new(big.Rat).Add(new(big.Rat).Mul(du, du), new(big.Rat).Mul(dv, dv))
 }
 
+// prismLerpFused and prismLerpSplit are this file's single owner of the two
+// answers a conforming Go implementation may produce for lerp2's general arm
+// start + t·(end − start), and every test here that needs either reading calls
+// them rather than spelling the expression again.
+//
+// The spec (Floating-point operators) lets a target fuse the multiply and the
+// add into one rounding, and the gc arm64 backend does exactly that: lerp2's
+// general arm compiles to FSUBD followed by FMADDD there, while amd64 rounds
+// the product and then the sum. Both helpers reproduce lerp2's natural-bound
+// arms verbatim, so they differ from it only where it computes.
+//
+// prismLerpSplit's explicit float64 conversion is the barrier the spec names —
+// it rounds the product to float64 precision and so forbids the fusion that
+// would discard that rounding. Writing the sum without it does not state the
+// unfused reading at all: the compiler is free to contract that spelling too,
+// and on arm64 it does, which would leave a test comparing the fused answer
+// against itself.
+func prismLerpFused(start, end Point2, at float64) Point2 {
+	if p, ok := prismLerpNaturalBound(start, end, at); ok {
+		return p
+	}
+	return Point2{U: math.FMA(at, end.U-start.U, start.U), V: math.FMA(at, end.V-start.V, start.V)}
+}
+
+func prismLerpSplit(start, end Point2, at float64) Point2 {
+	if p, ok := prismLerpNaturalBound(start, end, at); ok {
+		return p
+	}
+	return Point2{U: start.U + float64(at*(end.U-start.U)), V: start.V + float64(at*(end.V-start.V))}
+}
+
+// prismLerpNaturalBound is lerp2's own t=0/t=1 arms, which return the record's
+// coordinate verbatim and so round the same way on every target.
+func prismLerpNaturalBound(start, end Point2, at float64) (Point2, bool) {
+	switch at {
+	case 0:
+		return start, true
+	case 1:
+		return end, true
+	}
+	return Point2{}, false
+}
+
 // TestWalkChargeOfCoversLerpCancellation is the cancellation regression for
 // §7's δ_walk: the charge a trimmed LineSeg owes must contain the EXACT
 // rational residual of the endpoint lerp2 actually walked to, including when
@@ -997,6 +1020,17 @@ func prismWalkEndpointResidualSq(t *testing.T, s LineSeg, walkedU, walkedV, at f
 // stops holding is a row that has stopped testing this defect, and it fails
 // here rather than passing quietly.
 //
+// Every row's carrier is deliberately built so its own End − Start is NOT
+// exactly representable (oneUlpDown below), because that subtraction is the
+// only part of lerp2 whose rounding no target can fuse away. A symmetric
+// carrier such as ±1e12 subtracts to an exactly representable difference, and
+// a target that fuses the remaining multiply-add — the gc arm64 backend does;
+// see prismLerpFused — then walks such a row to its exact endpoint, which
+// leaves the row with nothing to discriminate. Every row is therefore also checked at both evaluations
+// lerp2 is allowed to produce, not only at the one this target chose, so a
+// row's discriminating power is proven here rather than assumed from the
+// machine running the test.
+//
 // Every comparison is exact and squared, so no square root of the residual is
 // ever taken and no float rounding can flatter a bound that failed to contain
 // the true error.
@@ -1005,6 +1039,10 @@ func TestWalkChargeOfCoversLerpCancellation(t *testing.T) {
 	// endpoints all but coincide with the plane origin while the carrier
 	// reaches ±1e12.
 	const nearHalf = 0.4999999999999999
+
+	// oneUlpDown moves a carrier's End one ulp down, which is what stops the
+	// carrier's own End − Start landing on a representable float.
+	oneUlpDown := func(x float64) float64 { return math.Nextafter(x, math.Inf(-1)) }
 
 	for _, tc := range []struct {
 		name string
@@ -1018,7 +1056,7 @@ func TestWalkChargeOfCoversLerpCancellation(t *testing.T) {
 			name: "cancelling carrier reaching a million kilometres",
 			seg: LineSeg{
 				Start:  Point2{U: 1e12, V: 0},
-				End:    Point2{U: -1e12, V: 0},
+				End:    Point2{U: oneUlpDown(-1e12), V: 0},
 				TStart: nearHalf,
 				TEnd:   math.Nextafter(nearHalf, 1),
 			},
@@ -1031,7 +1069,7 @@ func TestWalkChargeOfCoversLerpCancellation(t *testing.T) {
 			name: "200 mm carrier, 0.4 mm fragment on the origin",
 			seg: LineSeg{
 				Start:  Point2{U: -100, V: 0},
-				End:    Point2{U: 100, V: 0},
+				End:    Point2{U: oneUlpDown(100), V: 0},
 				TStart: 0.499,
 				TEnd:   0.501,
 			},
@@ -1041,7 +1079,7 @@ func TestWalkChargeOfCoversLerpCancellation(t *testing.T) {
 			name: "200 mm carrier, 0.02 mm fragment on the origin",
 			seg: LineSeg{
 				Start:  Point2{U: -100, V: 0},
-				End:    Point2{U: 100, V: 0},
+				End:    Point2{U: oneUlpDown(100), V: 0},
 				TStart: 0.49995,
 				TEnd:   0.50005,
 			},
@@ -1051,7 +1089,7 @@ func TestWalkChargeOfCoversLerpCancellation(t *testing.T) {
 			name: "diagonal cancelling carrier moves both coordinates",
 			seg: LineSeg{
 				Start:  Point2{U: -1e6, V: -1e6},
-				End:    Point2{U: 1e6, V: 1e6},
+				End:    Point2{U: oneUlpDown(1e6), V: oneUlpDown(1e6)},
 				TStart: 0.4999999999,
 				TEnd:   0.5000000001,
 			},
@@ -1083,7 +1121,17 @@ func TestWalkChargeOfCoversLerpCancellation(t *testing.T) {
 			endpointOnly := walkEndpointAllow(w.coordUpper)
 			endpointOnlySq := new(big.Rat).Mul(prismRatOf(t, endpointOnly), prismRatOf(t, endpointOnly))
 
-			premiseSeen := false
+			// The three evaluations every row is judged at: the walk this
+			// target actually performed, plus both answers lerp2's general arm
+			// is allowed to produce. Judging all three is what keeps the row's
+			// verdict — coverage AND premise — the same on a fused target as
+			// on an unfused one.
+			evaluations := [...]string{
+				"as this target's own lerp2 evaluated it",
+				"fused into one rounding, as the gc arm64 backend compiles it",
+				"with the product rounded before the sum, as amd64 compiles it",
+			}
+			var premiseSeen [len(evaluations)]bool
 			for _, end := range []struct {
 				what string
 				u, v float64
@@ -1092,16 +1140,34 @@ func TestWalkChargeOfCoversLerpCancellation(t *testing.T) {
 				{"start", w.startU, w.startV, tc.seg.TStart},
 				{"end", w.endU, w.endV, tc.seg.TEnd},
 			} {
-				residualSq := prismWalkEndpointResidualSq(t, tc.seg, end.u, end.v, end.at)
-				require.GreaterOrEqualf(t, chargeSq.Cmp(residualSq), 0,
-					"the %s endpoint's charge %g must contain its exact residual (squared residual %s)",
-					end.what, charge, residualSq.FloatString(40))
-				if endpointOnlySq.Cmp(residualSq) < 0 {
-					premiseSeen = true
+				fused := prismLerpFused(tc.seg.Start, tc.seg.End, end.at)
+				split := prismLerpSplit(tc.seg.Start, tc.seg.End, end.at)
+				require.Truef(t, end.u == fused.U || end.u == split.U,
+					"the %s endpoint's u (%g) must be one of the two answers lerp2 may give (fused %g, split %g) — an unmodelled evaluation is a row this table no longer judges",
+					end.what, end.u, fused.U, split.U)
+				require.Truef(t, end.v == fused.V || end.v == split.V,
+					"the %s endpoint's v (%g) must be one of the two answers lerp2 may give (fused %g, split %g) — an unmodelled evaluation is a row this table no longer judges",
+					end.what, end.v, fused.V, split.V)
+
+				for i, walked := range [len(evaluations)]Point2{
+					{U: end.u, V: end.v},
+					fused,
+					split,
+				} {
+					residualSq := prismWalkEndpointResidualSq(t, tc.seg, walked.U, walked.V, end.at)
+					require.GreaterOrEqualf(t, chargeSq.Cmp(residualSq), 0,
+						"the %s endpoint %s: the charge %g must contain its exact residual (squared residual %s)",
+						end.what, evaluations[i], charge, residualSq.FloatString(40))
+					if endpointOnlySq.Cmp(residualSq) < 0 {
+						premiseSeen[i] = true
+					}
 				}
 			}
-			require.Equalf(t, tc.endpointOnlyUnderCharges, premiseSeen,
-				"the premise: charging the walked endpoint's own envelope (%g) instead of the carrier's must under-charge exactly on the rows this table says it does", endpointOnly)
+			for i, seen := range premiseSeen {
+				require.Equalf(t, tc.endpointOnlyUnderCharges, seen,
+					"the premise, with the endpoint taken %s: charging the walked endpoint's own envelope (%g) instead of the carrier's must under-charge exactly on the rows this table says it does",
+					evaluations[i], endpointOnly)
+			}
 		})
 	}
 }
