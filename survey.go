@@ -66,10 +66,12 @@ type undercutOutcome struct {
 
 // radiusOutcome is one body's tightest concave radius: ok=false is
 // undecided and reason distinguishes its cause; reading == nil (with ok) is
-// the proven all-convex answer. bound is the PROVEN error bound beside
-// reading (millimetres), zero only where the winning walk's own radius is
-// exactly representable — a recorded CircleSeg's millimetre number, never a
-// math.Hypot evaluation.
+// the proven all-convex answer. reading and bound (millimetres) are the
+// midpoint and half-width of the interval radiusAggregate proves over EVERY
+// candidate the survey admitted, never one winning walk's own figures; the
+// bound is zero, and the reading therefore Exact, only where every one of
+// those candidates was itself exactly representable — a recorded CircleSeg's
+// millimetre number, never a math.Hypot evaluation.
 type radiusOutcome struct {
 	reading *float64 // millimetres
 	bound   float64  // millimetres; meaningful only when reading != nil
@@ -672,10 +674,83 @@ func revolveUndercuts(b *Body, rp revolvePayload, pull r3.Vec) undercutOutcome {
 	return undercutOutcome{faces: faces, ok: true}
 }
 
+// radiusAggregate reduces one body's concave-radius candidates to the single
+// interval docs/payload-verification-design.md §9.2 specifies for the faceted
+// twin of this survey: lo is the least of the candidates' own lower endpoints
+// (value − bound), hi the least of their upper endpoints (value + bound), and
+// the published reading is that interval's midpoint under its half-width.
+//
+// Both endpoints are needed because each candidate's bound is its own. Every
+// true radius is at least its own candidate's lo, so it is at least the least
+// of them; and the candidate achieving the least hi has a true radius no
+// greater than that hi. The body's true minimum therefore lies in [lo, hi].
+// Reducing winner-only instead — keeping the smallest held value together with
+// that one candidate's bound — publishes an interval a RIVAL candidate's truth
+// can sit below whenever the rival carries the wider bound, and nothing the
+// winner's own arithmetic knows can detect it.
+//
+// The reduction never widens an exact reading: when every candidate has a zero
+// bound, lo and hi are both the least held value, so the midpoint is that value
+// and the half-width is zero.
+//
+// Every arm feeds this one sink — the prism's concave-arc arm and the
+// revolve's meridian, non-circular parallel and circular parallel arms alike —
+// so the refusal on an underivable bound lives here rather than on a winner: a
+// candidate the arithmetic could not bound leaves the whole survey undecided
+// however its held value ranks.
+type radiusAggregate struct {
+	lo, hi    *big.Rat
+	unbounded bool
+}
+
+// take admits one candidate radius under its own proven bound, read as the
+// magnitude it is. A candidate whose value or bound is not finite has no
+// enclosure at all, so it refuses the aggregate rather than dropping silently
+// out of the comparison.
+func (ra *radiusAggregate) take(value, bound float64) {
+	v, b := floatRat(value), floatRat(math.Abs(bound))
+	if v == nil || b == nil {
+		ra.unbounded = true
+		return
+	}
+	lo, hi := new(big.Rat).Sub(v, b), new(big.Rat).Add(v, b)
+	if ra.lo == nil || lo.Cmp(ra.lo) < 0 {
+		ra.lo = lo
+	}
+	if ra.hi == nil || hi.Cmp(ra.hi) < 0 {
+		ra.hi = hi
+	}
+}
+
+// outcome publishes the aggregate: the proven all-convex answer when no
+// candidate was admitted, an undecided survey when one could not be bounded,
+// and otherwise the midpoint of [lo, hi] under a half-width measured from the
+// RATIONAL endpoints, so the float midpoint's own rounding is already inside
+// the bound it publishes.
+func (ra radiusAggregate) outcome() (radiusOutcome, bool) {
+	if ra.unbounded {
+		return radiusOutcome{}, false
+	}
+	if ra.lo == nil {
+		return radiusOutcome{ok: true}, true
+	}
+	sum := new(big.Rat).Add(ra.lo, ra.hi)
+	mid, _ := new(big.Rat).Mul(sum, big.NewRat(1, 2)).Float64()
+	if isNonFinite(mid) {
+		return radiusOutcome{}, false
+	}
+	bound := math.Max(ratAbsDiff(ra.lo, mid), ratAbsDiff(ra.hi, mid))
+	if isNonFinite(bound) {
+		return radiusOutcome{}, false
+	}
+	return radiusOutcome{reading: &mid, bound: bound, ok: true}, true
+}
+
 // prismMinRadius is the tightest concave radius over a prism's faces: only
 // a side swept from an arc walked against the section's orientation — a
 // hole wall, a notch — curves away from the material, and its radius is the
-// walk's own.
+// walk's own. Every such walk is a candidate radiusAggregate reduces; the
+// reading is that aggregate's interval, never one walk's own figures.
 func prismMinRadius(pp prismPayload) (radiusOutcome, bool) {
 	if pp.sectionDelta != 0 {
 		// The reading is a radius READ OFF the recorded section, and a payload
@@ -690,23 +765,18 @@ func prismMinRadius(pp prismPayload) (radiusOutcome, bool) {
 	if err != nil {
 		return radiusOutcome{}, false
 	}
-	best := math.Inf(1)
-	bestBound := 0.0
+	agg := radiusAggregate{}
 	for _, loop := range loops {
 		for _, w := range loop {
-			if w.isCircular() && w.th1 < w.th0 && w.radius < best {
-				best = w.radius
-				bestBound = w.radiusBound
+			if w.isCircular() && w.th1 < w.th0 {
+				// Each concave arc enters under its OWN proven radius bound
+				// (extrude.go's arcWalkRadiusBound), and the aggregate — not
+				// this loop — decides what the reading says.
+				agg.take(w.radius, w.radiusBound)
 			}
 		}
 	}
-	if math.IsInf(best, 1) {
-		return radiusOutcome{ok: true}, true
-	}
-	if isNonFinite(bestBound) {
-		return radiusOutcome{}, false
-	}
-	return radiusOutcome{reading: &best, bound: bestBound, ok: true}, true
+	return agg.outcome()
 }
 
 // revolveMinRadius is the tightest concave radius over a revolved body's
@@ -714,22 +784,15 @@ func prismMinRadius(pp prismPayload) (radiusOutcome, bool) {
 // meridian's own curvature (an arc walked against the orientation — a
 // groove's tube), and the parallel circle's, whose radius is ρ/|n_ρ|
 // wherever the meridian normal points toward the axis (a hole wall, a
-// waist). Both are closed-form over each walk's extent.
+// waist). Both are closed-form over each walk's extent, and both arms feed the
+// same radiusAggregate: the reading is the interval it proves over every
+// candidate, never the figures of whichever arm held the smallest value.
 func revolveMinRadius(rp revolvePayload) (radiusOutcome, bool) {
 	loops, err := revolveLoops(nil, rp)
 	if err != nil {
 		return radiusOutcome{}, false
 	}
-	best := math.Inf(1)
-	bestBound := 0.0
-	found := false
-	take := func(v, vBound float64) {
-		found = true
-		if v < best {
-			best = v
-			bestBound = vBound
-		}
-	}
+	agg := radiusAggregate{}
 	for _, loop := range loops {
 		for _, w := range loop {
 			if rp.ax.classify(w.segmentWalk) == wallAxis {
@@ -746,7 +809,7 @@ func revolveMinRadius(rp revolvePayload) (radiusOutcome, bool) {
 				if nrBS.value < -survAngTol {
 					minSV := math.Min(w.startV, w.endV)
 					vBS := boundedQuotient(minSV, 0, -nrBS.value, nrBS.bound)
-					take(vBS.value, vBS.bound)
+					agg.take(vBS.value, vBS.bound)
 				}
 				continue
 			}
@@ -758,7 +821,7 @@ func revolveMinRadius(rp revolvePayload) (radiusOutcome, bool) {
 				// The meridian's own radius, with the walk's own proven bound
 				// on it (extrude.go's arcWalkRadiusBound): zero for a recorded
 				// CircleSeg radius, positive for an ArcSeg's math.Hypot.
-				take(w.radius, w.radiusBound)
+				agg.take(w.radius, w.radiusBound)
 			}
 			lo, hi := math.Min(w.th0, w.th1), math.Max(w.th0, w.th1)
 			cands := []float64{lo, hi}
@@ -781,17 +844,11 @@ func revolveMinRadius(rp revolvePayload) (radiusOutcome, bool) {
 				rhoBS := boundedAdd(exactScalar(w.cV), boundedMul(measuredScalar(w.radius, w.radiusBound), sinBS))
 				negNrBS := measuredScalar(-nrBS.value, nrBS.bound)
 				resultBS := boundedQuotient(rhoBS.value, rhoBS.bound, negNrBS.value, negNrBS.bound)
-				take(resultBS.value, resultBS.bound)
+				agg.take(resultBS.value, resultBS.bound)
 			}
 		}
 	}
-	if !found {
-		return radiusOutcome{ok: true}, true
-	}
-	if isNonFinite(bestBound) {
-		return radiusOutcome{}, false
-	}
-	return radiusOutcome{reading: &best, bound: bestBound, ok: true}, true
+	return agg.outcome()
 }
 
 // cupWalks resolves one cup region loop into its coalesced walks — the same

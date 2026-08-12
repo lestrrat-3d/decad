@@ -1049,3 +1049,206 @@ func TestRevolveMinRadiusArcRadiusBound(t *testing.T) {
 	truth, _ := sqrt2.Rat(nil)
 	requireContains(t, truth, value, bound)
 }
+
+// The rival-candidate fixtures below pin docs/payload-verification-design.md
+// §9.2's aggregate: an arc whose TRUE radius is rivalArcU/rivalArcV's
+// hypotenuse, beside a circle whose radius is a recorded millimetre number one
+// ulp below the arc's held math.Hypot. The circle holds the smaller value, so a
+// winner-only reduction publishes the circle's Exact zero bound — and the arc's
+// truth lies BELOW that reading, outside the published interval.
+const (
+	rivalArcU    = 5.5507050921376759334
+	rivalArcV    = 0.24258038266405496097
+	rivalCircleR = 5.5560032633122675705
+)
+
+// rivalRadiusTruth is √(rivalArcU² + rivalArcV²) to 200 bits: the arc's own
+// true radius, computed from the recorded coordinates rather than hardcoded,
+// and far finer than any interval under test here.
+func rivalRadiusTruth() *big.Rat {
+	const prec = 200
+	u := new(big.Float).SetPrec(prec).SetFloat64(rivalArcU)
+	v := new(big.Float).SetPrec(prec).SetFloat64(rivalArcV)
+	sum := new(big.Float).SetPrec(prec).Add(
+		new(big.Float).SetPrec(prec).Mul(u, u),
+		new(big.Float).SetPrec(prec).Mul(v, v),
+	)
+	truth, _ := new(big.Float).SetPrec(prec).Sqrt(sum).Rat(nil)
+	return truth
+}
+
+// rivalRadiusPlate is the 40×40 mm plate holding the two rival concave
+// candidates: a half-disc hole whose arc is centred exactly on the sketch
+// origin with endpoints ±(rivalArcU, rivalArcV), and a plain circular hole of
+// radius rivalCircleR clear of it.
+func rivalRadiusPlate(t *testing.T) (*sketch.Sketch, *sketch.Profile) {
+	t.Helper()
+	ws := sketch.NewWorld()
+	s, err := ws.CreateSketch(ws.XY())
+	require.NoError(t, err)
+	rect := s.CreateRectangle(-20, -20, 20, 20)
+	s.Fix(rect.A)
+	o := s.CreatePoint(0, 0)
+	p := s.CreatePoint(rivalArcU, rivalArcV)
+	q := s.CreatePoint(-rivalArcU, -rivalArcV)
+	s.CreateArc(o, p, q)
+	s.CreateLine(q, p)
+	s.CreateCircle(s.CreatePoint(12, 12), rivalCircleR)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	var prof *sketch.Profile
+	for _, cand := range s.Profiles() {
+		if len(cand.Holes) == 2 {
+			prof = cand
+		}
+	}
+	require.NotNil(t, prof, `the plate profile carries both holes`)
+	return s, prof
+}
+
+// TestMinRadiusAggregatesLosingCandidate pins the prism site of the aggregate:
+// the circle hole wins the comparison of held values, but the arc hole's own
+// interval reaches lower, so the published interval must reach down past the
+// arc's true radius. A winner-only reduction publishes the circle's Exact zero
+// bound and excludes that truth.
+func TestMinRadiusAggregatesLosingCandidate(t *testing.T) {
+	s, prof := rivalRadiusPlate(t)
+	doc := decad.New()
+	_, err := doc.Extrude(s, prof, decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+	require.NoError(t, err)
+
+	report, err := doc.Verify(t.Context(), decad.WithMinRadius())
+	require.NoError(t, err)
+	br := report.Bodies[0]
+	require.NotNil(t, br.MinRadius)
+	value, err := br.MinRadius.Value.In(units.Millimeter)
+	require.NoError(t, err)
+	bound, err := br.MinRadius.Bound.In(units.Millimeter)
+	require.NoError(t, err)
+	truth := rivalRadiusTruth()
+	t.Logf("min radius %.20g ± %.20g (%s); truth %s",
+		value, bound, br.MinRadius.Exactness, new(big.Float).SetPrec(200).SetRat(truth).Text('g', 21))
+	require.Less(t, new(big.Float).SetPrec(200).SetRat(truth).Cmp(big.NewFloat(rivalCircleR)), 0,
+		`the arc's truth must sit below the circle's recorded radius, or this fixture proves nothing`)
+	requireContains(t, truth, value, bound)
+	require.Equal(t, decad.Approximate, br.MinRadius.Exactness,
+		`an interval reaching past an inexact rival is not an exact reading`)
+}
+
+// TestMinRadiusExactCandidatesStayExact holds the other side of the aggregate
+// at the prism site: two recorded CircleSeg holes are both exactly
+// representable, so the interval collapses onto the smaller radius and the
+// reading stays Exact with a zero bound.
+func TestMinRadiusExactCandidatesStayExact(t *testing.T) {
+	ws := sketch.NewWorld()
+	s, err := ws.CreateSketch(ws.XY())
+	require.NoError(t, err)
+	rect := s.CreateRectangle(0, 0, 100, 60)
+	s.Fix(rect.A)
+	s.CreateCircle(s.CreatePoint(30, 30), 10)
+	s.CreateCircle(s.CreatePoint(70, 30), 7)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	var prof *sketch.Profile
+	for _, cand := range s.Profiles() {
+		if len(cand.Holes) == 2 {
+			prof = cand
+		}
+	}
+	require.NotNil(t, prof)
+
+	doc := decad.New()
+	_, err = doc.Extrude(s, prof, decad.Distance{D: units.Millimeters(8), Dir: decad.Along})
+	require.NoError(t, err)
+	report, err := doc.Verify(t.Context(), decad.WithMinRadius())
+	require.NoError(t, err)
+	br := report.Bodies[0]
+	require.NotNil(t, br.MinRadius)
+	value, err := br.MinRadius.Value.In(units.Millimeter)
+	require.NoError(t, err)
+	bound, err := br.MinRadius.Bound.In(units.Millimeter)
+	require.NoError(t, err)
+	t.Logf("min radius %.20g ± %.20g (%s)", value, bound, br.MinRadius.Exactness)
+	require.Equal(t, 7.0, value, `the tighter hole is the reading`)
+	require.Equal(t, 0.0, bound)
+	require.Equal(t, decad.Exact, br.MinRadius.Exactness)
+}
+
+// rivalRadiusMeridian is the revolve twin of rivalRadiusPlate: a meridian
+// rectangle whose inner wall sits at exactly rivalCircleR from the axis — an
+// exact parallel-circle candidate — around a half-disc meridian hole whose arc
+// carries the same ±(rivalArcU, rivalArcV) endpoints, and so the same true
+// radius one ulp below that wall.
+func rivalRadiusMeridian(t *testing.T) (*sketch.Sketch, *sketch.Profile) {
+	t.Helper()
+	ws := sketch.NewWorld()
+	s, err := ws.CreateSketch(ws.XY())
+	require.NoError(t, err)
+	rect := s.CreateRectangle(0, rivalCircleR, 30, 20)
+	s.Fix(rect.A)
+	o := s.CreatePoint(15, 12)
+	p := s.CreatePoint(15+rivalArcU, 12+rivalArcV)
+	q := s.CreatePoint(15-rivalArcU, 12-rivalArcV)
+	s.CreateArc(o, p, q)
+	s.CreateLine(q, p)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	var prof *sketch.Profile
+	for _, cand := range s.Profiles() {
+		if len(cand.Holes) == 1 {
+			prof = cand
+		}
+	}
+	require.NotNil(t, prof, `the meridian profile carries the half-disc hole`)
+	return s, prof
+}
+
+// TestRevolveMinRadiusAggregatesLosingCandidate is the revolve site of the same
+// rule: the bore wall's parallel circle wins on held value with an exact zero
+// bound, while the meridian arc's own interval reaches below it. Both arms feed
+// one aggregate, so the reading must reach down past the arc's true radius.
+func TestRevolveMinRadiusAggregatesLosingCandidate(t *testing.T) {
+	s, prof := rivalRadiusMeridian(t)
+	doc := decad.New()
+	_, err := doc.Revolve(s, prof, uAxis, decad.FullRevolution{})
+	require.NoError(t, err)
+
+	report, err := doc.Verify(t.Context(), decad.WithMinRadius())
+	require.NoError(t, err)
+	br := report.Bodies[0]
+	require.NotNil(t, br.MinRadius)
+	value, err := br.MinRadius.Value.In(units.Millimeter)
+	require.NoError(t, err)
+	bound, err := br.MinRadius.Bound.In(units.Millimeter)
+	require.NoError(t, err)
+	truth := rivalRadiusTruth()
+	t.Logf("min radius %.20g ± %.20g (%s); truth %s",
+		value, bound, br.MinRadius.Exactness, new(big.Float).SetPrec(200).SetRat(truth).Text('g', 21))
+	requireContains(t, truth, value, bound)
+	require.Equal(t, decad.Approximate, br.MinRadius.Exactness,
+		`an interval reaching past an inexact rival is not an exact reading`)
+}
+
+// TestRevolveMinRadiusExactCandidatesStayExact is the revolve twin of
+// TestMinRadiusExactCandidatesStayExact: a stepped bore offers two
+// parallel-circle candidates, both read off recorded coordinates through an
+// exact unit tangent, so the aggregate publishes the tighter one Exact.
+func TestRevolveMinRadiusExactCandidatesStayExact(t *testing.T) {
+	s, p := polygonSketch(t, [][2]float64{{0, 5}, {10, 5}, {10, 8}, {20, 8}, {20, 20}, {0, 20}})
+	doc := decad.New()
+	_, err := doc.Revolve(s, p, uAxis, decad.FullRevolution{})
+	require.NoError(t, err)
+
+	report, err := doc.Verify(t.Context(), decad.WithMinRadius())
+	require.NoError(t, err)
+	br := report.Bodies[0]
+	require.NotNil(t, br.MinRadius)
+	value, err := br.MinRadius.Value.In(units.Millimeter)
+	require.NoError(t, err)
+	bound, err := br.MinRadius.Bound.In(units.Millimeter)
+	require.NoError(t, err)
+	t.Logf("min radius %.20g ± %.20g (%s)", value, bound, br.MinRadius.Exactness)
+	require.Equal(t, 5.0, value, `the tighter bore step is the reading`)
+	require.Equal(t, 0.0, bound)
+	require.Equal(t, decad.Exact, br.MinRadius.Exactness)
+}
