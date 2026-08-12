@@ -783,6 +783,54 @@ func TestPrismUnionTrimmedSourceSegmentChargesItsWalkedEndpoint(t *testing.T) {
 		"the published volume bound %g must contain the true error %g", uv.Bound.Base(), residual)
 }
 
+// TestPrismUnionChargesEachWalkExactlyOnce pins §7's composition
+// δ = up(max(up(δ_A + δ_walkA), up(δ_B + δ_walkB + δ_reexpress)) + δ_cut) on
+// the fixture where every term but one is zero: operand A owes a walk charge,
+// operand B is drawn whole, the re-expression is the identity, and B sits
+// strictly inside A so the merge cuts nothing. The published displacement must
+// therefore be A's own walk charge and nothing more — charged ONCE, on A's own
+// side of the max. A composition that also added a separate walk term outside
+// the max would publish about twice this value and fail here.
+func TestPrismUnionChargesEachWalkExactlyOnce(t *testing.T) {
+	doc := New()
+	a := prismSplitLeftCellBody(t, doc)
+	pa := a.payload.(prismPayload)
+	require.Zero(t, pa.sectionDelta, "δ_A must be zero, or the fixture cannot isolate the walk charge")
+
+	b := prismRectBody(t, doc, 2, 2, 4, 8) // strictly inside A's own footprint
+	pb := b.payload.(prismPayload)
+	require.Zero(t, pb.sectionDelta, "δ_B must be zero")
+
+	reexpression, err := newPrismReexpression(pa, pb)
+	require.NoError(t, err)
+	require.True(t, reexpression.identity, "both operands share one frame with no placement between them")
+	require.Zero(t, reexpression.delta, "δ_reexpress must be zero")
+
+	_, _, sceneDelta, err := buildPrismScene(newWorkBudget(t.Context()), pa, pb, reexpression)
+	require.NoError(t, err)
+	require.Positive(t, sceneDelta.a, "operand A's own trimmed walls must carry a walk charge")
+	require.Zero(t, sceneDelta.b, "operand B is drawn whole, so δ_walkB is zero")
+
+	u, err := Union(a, b)
+	require.NoError(t, err)
+	pu, ok := u.payload.(prismPayload)
+	require.True(t, ok, "the analytic reduction must own this pair")
+	// §7's formula, term by term, with δ_cut = 0 because the merge cuts
+	// nothing: every walk charge sits inside its own operand's fold.
+	const cutDelta = 0.0
+	want := absSumUpper(
+		max(
+			absSumUpper(pa.sectionDelta, sceneDelta.a),
+			absSumUpper(pb.sectionDelta, sceneDelta.b, reexpression.delta),
+		),
+		cutDelta,
+	)
+	require.Equal(t, want, pu.sectionDelta,
+		"with every other term zero the published displacement is A's own walk charge, folded in once")
+	require.Less(t, pu.sectionDelta, absSumUpper(want, sceneDelta.a),
+		"a second, separate walk charge outside the max would roughly double the published displacement")
+}
+
 // TestPrismCutTrimmedTargetChargesItsWalkedEndpoint is fu143's Cut
 // reproduction: the clean-nesting path's own target carries the same Partial
 // bottom-wall fragment, and the tool is fully nested inside it.

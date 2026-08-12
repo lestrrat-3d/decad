@@ -567,9 +567,11 @@ envelope of its recorded `Start`/`End` coordinates (`walkChargeOf`'s
 `lineWalkOperandUpper`), folded together with the walked endpoint so the
 envelope stands whatever the recorded parameter is; a circular walk charges `segmentWalk.coordUpper`, whose
 `|cu|+|cv|+r+r` L1 form already bounds the centre and radius its `cos`/`sin`
-arithmetic works on. `δ_walk` is the largest such allowance over
-EITHER operand's own consumed segments, and it stands even when both operands
-carry zero displacement and the re-expression is the identity — the same
+arithmetic works on. Each operand owes the largest such allowance over its
+OWN consumed segments — `δ_walkA` and `δ_walkB`, the `a` and `b` fields of
+`prismSceneDelta`, each holding that operand's walk charge ALONE — and the
+charge stands even when both operands carry zero displacement and the
+re-expression is the identity — the same
 independence `δ_cut` already has, one construction earlier: `δ_cut` charges
 the crossing `sketch` computes for THIS pair, `δ_walk` charges an INPUT
 segment's own narrowed range entering the scene at all, before any crossing
@@ -596,15 +598,16 @@ uncertainty; it does nothing about the cut's own rounding, which is why
 The rebuilt section therefore carries
 
 ```
-δ = up( max(δ_A, up(δ_B + δ_reexpress)) + δ_cut + δ_walk )
+δ = up( max( up(δ_A + δ_walkA), up(δ_B + δ_walkB + δ_reexpress) ) + δ_cut )
 ```
 
-where `up` rounds each positive sum outward and `δ_A`/`δ_B` are each read
-INCLUSIVE of that operand's own walk charge (`up(δ_A + δ_walkA)` and
-`up(δ_B + δ_walkB)`, `prismSceneDelta`'s `a`/`b` fields) before the `max` —
-the same per-operand split every other term in this formula already keeps,
-so a heavier walk charge on the operand that does NOT win the `max` never
-silently drops out.
+where `up` rounds each positive sum outward. Each operand's own walk charge
+enters on that operand's OWN side of the `max`, folded there with the prior
+displacement it accompanies, and it appears nowhere else in the formula: it is
+charged exactly once, and no term outside the `max` repeats it. The fold is
+what the per-operand split buys — every other term in this formula already
+keeps the two operands apart the same way, so a heavier walk charge on the
+operand that does NOT win the `max` never silently drops out.
 
 It is **exactly zero in one decidable case**: both inputs carry zero
 displacement, operand B's composed map into A's frame is the identity in the
