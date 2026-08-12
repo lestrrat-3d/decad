@@ -936,6 +936,14 @@ func TestWalkChargeOf(t *testing.T) {
 		{"trimmed LineSeg", func() CurveSegment { s := line; s.TStart, s.TEnd = 0, 0.4; return s }()},
 		{"trimmed ArcSeg", func() CurveSegment { s := arc; s.TStart, s.TEnd = 0, 0.4; return s }()},
 		{"trimmed CircleSeg", func() CurveSegment { s := circle; s.TStart, s.TEnd = 0, 0.4; return s }()},
+		// One ulp short of the natural bound: the walk's own closed-ness
+		// tolerance calls this circle closed, and the charge must still be
+		// positive — wholeness is the recorded range, never that tolerance.
+		{"CircleSeg one ulp short of whole", func() CurveSegment {
+			s := circle
+			s.TStart, s.TEnd = 0, math.Nextafter(1, 0)
+			return s
+		}()},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			w, err := walkOf(tc.seg, nil)
@@ -990,6 +998,105 @@ func TestPrismBooleanTrimmedCircularSourceFallsBack(t *testing.T) {
 		require.NoError(t, err)
 		require.False(t, ok, "%s over a trimmed circular source segment must fall back, never publish zero", op)
 	}
+}
+
+// TestPrismProfileHasTrimmedCircularSourceReadsTheRecordedRange pins the
+// refusal's own criterion on both circular kinds: wholeness is the recorded
+// range compared exactly against 0 and 1, never the walk's closed-ness, which
+// circularWalk decides within a tolerance of a full turn. A CircleSeg one ulp
+// short of its natural bound walks as closed and is a trimmed carrier all the
+// same, so the refusal must fire for it.
+func TestPrismProfileHasTrimmedCircularSourceReadsTheRecordedRange(t *testing.T) {
+	circle := func(tStart, tEnd float64) CircleSeg {
+		return CircleSeg{
+			Center: Point2{U: 5, V: 5},
+			Radius: units.Millimeters(10),
+			CCW:    tStart < tEnd,
+			TStart: tStart, TEnd: tEnd,
+		}
+	}
+	arc := func(tStart, tEnd float64) ArcSeg {
+		return ArcSeg{
+			Center: Point2{U: 5, V: 5},
+			Start:  Point2{U: 8, V: 5},
+			End:    Point2{U: 5, V: 8},
+			TStart: tStart, TEnd: tEnd,
+		}
+	}
+
+	// The two near-whole circles below are the whole point of this test: both
+	// are ranges the walk's own tolerance reads as a closed turn, so a refusal
+	// that consulted the walk would let them through.
+	for _, seg := range []CircleSeg{circle(0, math.Nextafter(1, 0)), circle(math.Nextafter(0, 1), 1)} {
+		w, err := walkOf(seg, nil)
+		require.NoError(t, err)
+		require.True(t, w.closed,
+			"fixture [%v, %v] must be one circularWalk's own tolerance calls closed", seg.TStart, seg.TEnd)
+	}
+
+	for _, tc := range []struct {
+		name    string
+		seg     CurveSegment
+		trimmed bool
+	}{
+		{"whole CircleSeg", circle(0, 1), false},
+		{"whole reversed CircleSeg", circle(1, 0), false},
+		{"CircleSeg one ulp short of 1", circle(0, math.Nextafter(1, 0)), true},
+		{"CircleSeg one ulp past 0", circle(math.Nextafter(0, 1), 1), true},
+		{"plainly trimmed CircleSeg", circle(0, 0.4), true},
+		{"whole ArcSeg", arc(0, 1), false},
+		{"whole reversed ArcSeg", arc(1, 0), false},
+		{"trimmed ArcSeg", arc(0, 0.4), true},
+		{"trimmed LineSeg carries no circular carrier", LineSeg{
+			Start: Point2{U: 0, V: 0}, End: Point2{U: 10, V: 0}, TStart: 0, TEnd: 0.4,
+		}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			profile := ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{tc.seg}}}
+			got, err := prismProfileHasTrimmedCircularSource(newWorkBudget(t.Context()), profile)
+			require.NoError(t, err)
+			require.Equal(t, tc.trimmed, got)
+		})
+	}
+}
+
+// TestPrismBooleanNearWholeCircleSourceFallsBack is the end-to-end half of the
+// same row: a CircleSeg one ulp short of its natural bound must reroute every
+// op to the mesh path, while the SAME pair with the bound recorded exactly is
+// admitted analytically — so the fallback is caused by the trim itself and not
+// by some unrelated miss elsewhere in the gate chain.
+func TestPrismBooleanNearWholeCircleSourceFallsBack(t *testing.T) {
+	frame := canonicalPrismFrame(t)
+	circleOperand := func(tEnd float64) prismPayload {
+		return prismPayload{
+			profile: ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{CircleSeg{
+				Center: Point2{U: 10, V: 10},
+				Radius: units.Millimeters(4),
+				CCW:    true,
+				TStart: 0, TEnd: tEnd,
+			}}}},
+			frame: frame, z0: 0, z1: 10, xform: r3.Identity(),
+		}
+	}
+	box := prismPayload{
+		profile: ProfileRecord{Outer: synthRectLoop(0, 0, 20, 20)},
+		frame:   frame, z0: 0, z1: 10, xform: r3.Identity(),
+	}
+
+	for _, op := range []OpKind{OpUnion, OpCut, OpIntersect} {
+		t.Run(op.String(), func(t *testing.T) {
+			nearWhole := circleOperand(math.Nextafter(1, 0))
+			_, ok, err := tryPrismBoolean(t.Context(), op, &Body{payload: box}, &Body{payload: nearWhole})
+			require.NoError(t, err)
+			require.False(t, ok, "a circle recorded one ulp short of whole must fall back, never publish zero")
+		})
+	}
+
+	t.Run("the whole-circle control is admitted", func(t *testing.T) {
+		_, ok, err := tryPrismBoolean(t.Context(), OpCut, &Body{payload: box}, &Body{payload: circleOperand(1)})
+		require.NoError(t, err)
+		require.True(t, ok, "the same pair with an exactly whole circle must reach the analytic result")
+	})
 }
 
 // TestPrismUnionTrimmedSourceSplitBoundaryFallsBack is task fu143's own

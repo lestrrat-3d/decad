@@ -667,10 +667,14 @@ func auditPrismUnionSection(budget *workBudget, pa prismPayload, merged ProfileR
 // endpoints — the mechanism walkChargeOf's plain coordinate charge does not
 // state. This evaluator refuses the pair rather than under-charge it.
 //
-// "Whole" is decided the same way walkChargeOf decides it: exact float
-// equality against 0 and 1, never a tolerance. A CircleSeg needs its walk to
-// answer (circularWalk's own closed-ness test), so this reads it directly
-// rather than duplicating that computation.
+// "Whole" is decided the same way walkChargeOf decides it, through the same
+// wholeSegmentRange test: exact float equality against 0 and 1, never a
+// tolerance. A CircleSeg is read from its OWN recorded range, never from its
+// walk's closed-ness: circularWalk (extrude.go) calls a walk closed whenever
+// its swept angle lands within a fixed tolerance of a full turn, so a range
+// short of 1 by an ulp walks as closed while still being a trimmed segment
+// this refusal owes an answer for — and a decad-side tolerance that can
+// ACCEPT is the admission gate CLAUDE.md's reject-only rule forbids.
 func prismProfileHasTrimmedCircularSource(budget *workBudget, p ProfileRecord) (bool, error) {
 	for _, loop := range append([]LoopRecord{p.Outer}, p.Holes...) {
 		for _, seg := range loop.Segments {
@@ -679,21 +683,36 @@ func prismProfileHasTrimmedCircularSource(budget *workBudget, p ProfileRecord) (
 			}
 			switch s := seg.(type) {
 			case ArcSeg:
-				if !((s.TStart == 0 || s.TStart == 1) && (s.TEnd == 0 || s.TEnd == 1)) {
+				if !wholeSegmentRange(s.TStart, s.TEnd) {
 					return true, nil
 				}
 			case CircleSeg:
-				w, err := walkOf(seg, nil)
-				if err != nil {
-					return false, err
-				}
-				if !w.closed {
+				if !wholeSegmentRange(s.TStart, s.TEnd) {
 					return true, nil
 				}
 			}
 		}
 	}
 	return false, nil
+}
+
+// wholeSegmentRange reports whether a recorded parameter range names the two
+// natural bounds of the segment's own domain, so that the segment's walk
+// restates the entity's own defining data rather than a coordinate this
+// evaluator computed. It is the single owner of that test for this file:
+// prismProfileHasTrimmedCircularSource's refusal and walkChargeOf's zero
+// charge are the same question asked twice, and they must not drift apart.
+//
+// The comparison is exact float equality against 0 and 1, never a tolerance
+// in either direction — a range one ulp short of a bound is a trimmed
+// segment, and admitting it on nearness would be a decad-side check that
+// ACCEPTS, which CLAUDE.md's reject-only rule forbids. Which bound sits in
+// which field does not matter: a Reversed whole edge records TStart=1,
+// TEnd=0 (recordEdge's own "TStart and TEnd swapped" comment) and both
+// values still name a natural bound, while validateSegmentRange (record.go)
+// already rejects an empty TStart == TEnd range.
+func wholeSegmentRange(tStart, tEnd float64) bool {
+	return (tStart == 0 || tStart == 1) && (tEnd == 0 || tEnd == 1)
 }
 
 // walkChargeOf is §7's δ_walk mechanism (task fu143): the charge ONE consumed
@@ -706,15 +725,20 @@ func prismProfileHasTrimmedCircularSource(budget *workBudget, p ProfileRecord) (
 // natural bounds t=0/t=1 to return the record's own Point2 verbatim
 // regardless of which field holds which (a Reversed whole edge records
 // TStart=1, TEnd=0 — recordEdge's own "TStart and TEnd swapped" comment —
-// and both still name a natural bound), and a closed CircleSeg's walk takes
-// the recorded centre and radius directly (circularWalk never touches
-// Center/Radius) — so a whole segment charges nothing. A narrowed range
+// and both still name a natural bound), and a CircleSeg recorded over those
+// bounds walks the recorded centre and radius directly (circularWalk never
+// touches Center/Radius) — so a whole segment charges nothing. A narrowed range
 // evaluates the carrier at a COMPUTED parameter instead (lerp2's else arm, or
 // circularWalk's cos/sin at the walk's own angle), which walkEndpointAllow
 // charges at the walk's own coordinate envelope (segmentWalk.coordUpper).
 //
-// "Whole" is decided by exact float equality against 0 and 1 — never a
-// tolerance: a near-zero range is a trimmed segment and must be charged.
+// "Whole" is decided by wholeSegmentRange for every kind — exact float
+// equality against 0 and 1, never a tolerance: a range short of a natural
+// bound is a trimmed segment and must be charged, however near that bound it
+// lies. A CircleSeg is decided from its recorded range too, not from its
+// walk's tolerance-decided closed-ness, so that this charge and
+// prismProfileHasTrimmedCircularSource's refusal answer one question the same
+// way.
 func walkChargeOf(seg CurveSegment, w segmentWalk) (float64, error) {
 	seg, err := normalizeSegment(seg)
 	if err != nil {
@@ -722,15 +746,15 @@ func walkChargeOf(seg CurveSegment, w segmentWalk) (float64, error) {
 	}
 	switch s := seg.(type) {
 	case LineSeg:
-		if (s.TStart == 0 || s.TStart == 1) && (s.TEnd == 0 || s.TEnd == 1) {
+		if wholeSegmentRange(s.TStart, s.TEnd) {
 			return 0, nil
 		}
 	case ArcSeg:
-		if (s.TStart == 0 || s.TStart == 1) && (s.TEnd == 0 || s.TEnd == 1) {
+		if wholeSegmentRange(s.TStart, s.TEnd) {
 			return 0, nil
 		}
 	case CircleSeg:
-		if w.closed {
+		if wholeSegmentRange(s.TStart, s.TEnd) {
 			return 0, nil
 		}
 	default:

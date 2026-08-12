@@ -247,8 +247,9 @@ For an admitted pair, decad builds one private `sketch.Sketch` (the same
   (buildPrismScene's own doc comment). A segment whose recorded range is the
   entity's own full domain walks to the record's own coordinates verbatim —
   `lerp2` and `pinArcWalkEnds` both special-case the natural bounds `t=0`/
-  `t=1` to return the record's own `Point2`, and a closed `CircleSeg`'s walk
-  takes the recorded centre and radius directly — so operand A's segments
+  `t=1` to return the record's own `Point2`, and a `CircleSeg` recorded over
+  those same bounds walks the recorded centre and radius directly — so
+  operand A's segments
   reach the scene with zero new rounding wherever every one of them is
   WHOLE. A segment recorded over a **narrowed** range instead evaluates the
   carrier at a **computed** parameter, so it enters the scene at an endpoint
@@ -548,9 +549,9 @@ when every survivor is a whole edge.
 segment's own WALKED geometry (`walkOf`, §4.1), never from the record's
 `Point2` fields directly. For a segment whose recorded range is the entity's
 own full domain that walk restates the record's own coordinates exactly —
-`lerp2`'s and `pinArcWalkEnds`' own natural-bound special cases, and a closed
-`CircleSeg`'s walk taking the recorded centre and radius directly — so a
-WHOLE segment charges nothing. A segment recorded over a range NARROWER than
+`lerp2`'s and `pinArcWalkEnds`' own natural-bound special cases, and a
+`CircleSeg` recorded over those bounds walking the recorded centre and radius
+directly — so a WHOLE segment charges nothing. A segment recorded over a range NARROWER than
 that domain instead evaluates the carrier at a computed parameter (`lerp2`'s
 general arm, or a circular walk's `cos`/`sin` at a computed angle), so it
 enters the scene at an endpoint this boolean itself computed, whatever the
@@ -568,7 +569,10 @@ coordinate-envelope charge does not state — so `δ_walk` is only ever computed
 over a trimmed `LineSeg` or a trimmed `ArcSeg` whose two bounds are the
 entity's own domain ends (Reversed swaps which field holds which, so a WHOLE
 arc's `TStart`/`TEnd` are `{0, 1}` in either order — see `walkChargeOf`'s own
-doc comment).
+doc comment). WHOLE is read off the RECORDED range for every kind, a
+`CircleSeg` included, and never off the walk's own closed-ness: that flag is
+decided within a tolerance of a full turn, and a decad-side tolerance that
+can ACCEPT is the admission gate the reject-only rule forbids.
 
 A pre-existing source displacement can additionally AMPLIFY at a cut, by
 `δ/sin θ` for a crossing angle `θ` this design cannot bound below. Section 3.4
@@ -919,6 +923,13 @@ areas, residuals), never merely "it ran" — CLAUDE.md's own rule.
   same fixture with every consumed segment whole publishes a `sectionDelta`
   of exactly `0.0` on all three ops, pinning that the new charge does not
   fire on the case §7 already kept exact.
+- The trimmed-circular refusal reads the RECORDED range, not the walk's
+  closed-ness: a `CircleSeg` whose `TEnd` is one ulp short of `1` — a range
+  the walk's own tolerance still calls a closed turn, which the fixture must
+  assert directly so the case cannot silently stop being the one under test —
+  refuses all three ops (`ok == false`, no error), while the same pair with
+  the bound recorded exactly resolves analytically, so the fallback is the
+  trim's own doing.
 - Exactness, one test per §7 arm: a line-only merged section over operands
   that share a frame AND whose merge cut nothing (a contained footprint)
   reports `Exact` volume with a zero bound; a partially overlapping pair of
