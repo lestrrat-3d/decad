@@ -599,7 +599,9 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
   canceled context therefore aborts the survey and returns its error from
   `Verify`. Undercuts are per-face exact normal-range membership, and the min
   radius is the tightest concave principal radius. A cup uses its exact morphology theorem:
-  zero for an allowance-qualified pinch, otherwise its exact shell thickness.
+  exact zero for an allowance-qualified pinch, otherwise its shell thickness
+  carrying that thickness's own millimetre-conversion displacement as the
+  reading's bound (payload verification §4.1).
   A faceted body uses certified source-normal/curvature patches and bounded
   medial candidates. A payload or certificate the surveys cannot decide leaves
   the asked question undecided → `Suspect`, never a silent pass (payload

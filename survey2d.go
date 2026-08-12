@@ -19,6 +19,43 @@ import (
 // §6), or a whole-arc contact (a concentric disk). Corner pinches — dihedrals
 // within the allowance, which span at every size a ball is starved to — are
 // the caller's to report; they read zero and need no disk.
+//
+// Every candidate carries a PROVEN bound beside its radius (diskCand.rBound):
+// each family derives it from its own closed form over the bounded-scalar
+// arithmetic moments.go already owns (boundedAdd/boundedSub/boundedMul/
+// boundedQuotient/boundedSqrt), reading every element COORDINATE (line
+// endpoints and normals, arc centers, junction vertices) as an EXACT leaf —
+// the same convention prismPayload's own directional readings use — so for
+// those the bound speaks only for the arithmetic THIS file performs, never for
+// the record's own numbers or for the draft allowance angle itself. Every step
+// of that arithmetic is charged, coefficient construction and Cramer
+// determinants included: reading a coordinate as exact never licenses reading
+// a PRODUCT of two of them as exact. A division's bound comes from
+// boundedQuotient's own denominator-and-numerator composition, so a small
+// denominator amplifies it without a separate case; nothing here loosens a
+// candidate SET, a containment scan, or a tolerance — the bound only ever
+// widens the interval the winning candidate publishes.
+//
+// The kernel takes exactly TWO inputs that are not exact leaves, and both
+// arrive already bounded rather than being trusted:
+//
+//   - surveyElem.rrBound, an arc element's own radius error. A caller that
+//     states a radius outright, and a recorded CircleSeg, both give zero; a
+//     walk built from a recorded ArcSeg holds a math.Hypot radius and gives
+//     extrude.go's arcWalkRadiusBound. Every candidate radius derived from an
+//     element radius reads it through surveyElem.rrBS, never as a leaf.
+//   - wallKernel's wedgeS, the partial-revolve cap half-angle's SINE, which
+//     its caller proves from a certified trig interval.
+//
+// Every candidate derived from either composes its bound like any other, so an
+// input the caller could not enclose never reaches a published reading.
+//
+// A candidate's own bound is on its RADIUS, while the kernel's answer is a
+// spanning DIAMETER (wallSurveyOut.span = 2r), so the bound is doubled with
+// the value it accompanies. runBudget performs that conversion at the single
+// point where a candidate enters the answer, so every field of
+// wallSurveyOut that carries a bound already speaks in the answer's own
+// units and no consumer restates the factor.
 
 // survTiny is the relative floor for degeneracy checks inside the kernel.
 const survTiny = 1e-12
@@ -27,6 +64,77 @@ const survTiny = 1e-12
 // allowance spans (verification §6 — within is inclusive), so every angular
 // comparison concedes this much in the spanning direction only.
 const survAngTol = 1e-9
+
+// piRoundGuard bounds how far a held radian value built by composing Go's
+// float64 math.Pi constant (the draft allowance's own aStar = π − α, or a
+// literal ±π/2 wedge-tangent angle) can sit from the same expression
+// evaluated at the TRUE mathematical π: at most the constant's own half-ulp
+// rounding (docs/verification-design.md §6 never assumes better), well under
+// a nanometre once composed through any reading this file publishes. It is
+// folded once into radianTrigBounds rather than re-derived at every call
+// site that composes an angle through math.Pi.
+const piRoundGuard = 1e-15
+
+// radianTrigBounds proves sin(x) and cos(x) for a held RADIAN value x built
+// from Go's math.Pi constant, via the same rational bracket
+// (radSinCosInterval, normal_bound.go) a Cone's half-angle normal reads,
+// widened by piRoundGuard. It never trusts math.Sin/math.Cos's own accuracy —
+// only that the enclosure it returns contains the true sine/cosine of x.
+func radianTrigBounds(x float64) (boundedScalar, boundedScalar) {
+	heldSin, heldCos := math.Sin(x), math.Cos(x)
+	xR := floatRat(x)
+	if xR == nil {
+		return measuredScalar(heldSin, math.Inf(1)), measuredScalar(heldCos, math.Inf(1))
+	}
+	sinIv, cosIv, ok := radSinCosInterval(xR)
+	if !ok {
+		return measuredScalar(heldSin, math.Inf(1)), measuredScalar(heldCos, math.Inf(1))
+	}
+	guard := floatRat(piRoundGuard)
+	sinIv, cosIv = intervalWiden(sinIv, guard), intervalWiden(cosIv, guard)
+	return measuredScalar(heldSin, intervalFloatError(sinIv, heldSin)),
+		measuredScalar(heldCos, intervalFloatError(cosIv, heldCos))
+}
+
+// quadRootsBounded is quadRoots' bound-carrying twin, over the same
+// A·x²+B·x+C=0 closed form (both the degenerate linear branch and the full
+// quadratic), each returned root's bound derived from ITS OWN denominator —
+// 2A, or B in the linear branch — and discriminant via boundedQuotient's own
+// clearance gate, never a global relative constant: a denominator near zero
+// amplifies a fixed numerator error without limit, and boundedQuotient
+// answers +Inf exactly where that amplification can no longer be bounded.
+//
+// Every branch here is taken on the coefficient's own PROVEN interval
+// (admitMagnitudeAbove/admitBelow), never on its held value, and every
+// three-valued answer resolves the same way: toward emitting the root. The
+// linear branch is taken only for a leading coefficient PROVEN degenerate, so
+// a straddling A goes to the quadratic form, which still recovers the linear
+// root — under a wide bound its own cancelling numerator earns. The
+// discriminant likewise discards the pair only when its whole interval is
+// proven negative; an interval crossing zero has real roots this kernel may not
+// throw away, so it goes to boundedSqrt, which clamps the held operand at zero
+// for the evaluation while keeping the interval's own upper end.
+func quadRootsBounded(A, B, C boundedScalar) []boundedScalar {
+	if admitMagnitudeAbove(A, survTiny) == survReject {
+		if admitMagnitudeAbove(B, survTiny) == survReject {
+			return nil
+		}
+		return []boundedScalar{boundedQuotient(-C.value, C.bound, B.value, B.bound)}
+	}
+	disc := boundedSub(boundedMul(B, B), boundedMul(exactScalar(4), boundedMul(A, C)))
+	if admitBelow(disc, 0) == survAdmit {
+		return nil
+	}
+	s := boundedSqrt(disc)
+	twoA := boundedMul(exactScalar(2), A)
+	negB := measuredScalar(-B.value, B.bound)
+	num1 := boundedSub(negB, s)
+	num2 := boundedAdd(negB, s)
+	return []boundedScalar{
+		boundedQuotient(num1.value, num1.bound, twoA.value, twoA.bound),
+		boundedQuotient(num2.value, num2.bound, twoA.value, twoA.bound),
+	}
+}
 
 // dirArc is a closed set of unit directions {(cos t, sin t) : t ∈ [lo, hi]},
 // lo ≤ hi ≤ lo + 2π. A single direction has lo == hi. Contact directions are
@@ -99,11 +207,25 @@ type surveyElem struct {
 	// arc: center (qx, qy), radius rr, walked from th0 to th1. th1 > th0 is a
 	// counter-clockwise walk, which puts the material inside the circle
 	// (matInside); a clockwise walk puts it outside (a hole wall, a notch).
+	//
+	// rrBound is the PROVEN error bound on rr. Unlike the coordinates around
+	// it, rr is NOT always an exact leaf: a walk built from a recorded ArcSeg
+	// carries a math.Hypot radius (extrude.go's arcWalkRadiusBound). It is
+	// zero for a caller that states the radius outright and for a recorded
+	// CircleSeg. Every candidate radius the WALL kernel below derives from rr
+	// composes this bound through its own arithmetic rather than reading rr as
+	// exact; the held rr alone still serves the positions, ray casts and
+	// tolerances that publish no interval of their own.
 	qx, qy, rr float64
+	rrBound    float64
 	th0, th1   float64
 	closed     bool
 	matInside  bool
 }
+
+// rrBS is the element's radius with its own proven bound — the one spelling
+// every candidate derivation reads the radius through.
+func (e surveyElem) rrBS() boundedScalar { return measuredScalar(e.rr, e.rrBound) }
 
 // lineElem builds a line element from a walk-ordered segment.
 func lineElem(ax, ay, bx, by float64) (surveyElem, bool) {
@@ -219,21 +341,32 @@ func (e surveyElem) nearest(px, py, tiny float64) (float64, dirArc, bool) {
 	}
 }
 
-// diskCand is a candidate inscribed disk.
-type diskCand struct{ x, y, r float64 }
+// diskCand is a candidate inscribed disk. rBound is the PROVEN bound its own
+// generator derived — zero only where that generator's arithmetic is exact
+// (a literal coordinate difference, never a division or a square root of a
+// non-perfect value).
+type diskCand struct{ x, y, r, rBound float64 }
 
 // wallKernel is one 2D section survey: elements (material on the left),
 // junction vertices, the draft allowance, and — for a partial revolve — the
 // wedge the sweep caps cut, encoded by wedgeS = sin(min(Δφ/2, π/2)): a ball
 // of radius r centered at height y fits the wedge iff y·wedgeS ≥ r.
+//
+// wedgeS is one of the two kernel inputs that are NOT exact leaves (the file
+// comment names both; the other is an element's own radius): it is a sine, so
+// its caller (survey.go's revolveWall) proves it from a certified trig
+// interval and hands it over as a boundedScalar. Every wedge-derived radius
+// composes that bound through the same bounded arithmetic the rest of the file
+// uses, so a candidate the wedge produced publishes an interval that contains
+// the sine's own error.
 type wallKernel struct {
 	elems       []surveyElem
 	containOnly []surveyElem // boundary for containment only (on-axis chords)
 	verts       [][2]float64
 	alpha       float64
-	wedgeS      float64 // 0 = no wedge
-	wedgeSpans  bool    // two wedge-cap contacts count as a spanning pair
-	fitMax      float64 // spanning disks wider than this cannot lift to 3D
+	wedgeS      boundedScalar // value 0 = no wedge
+	wedgeSpans  bool          // two wedge-cap contacts count as a spanning pair
+	fitMax      float64       // spanning disks wider than this cannot lift to 3D
 	scale, tol  float64
 	subTolFar   bool         // a sub-tolerance candidate away from every junction was dropped
 	boundary    []surveyElem // elems + containOnly, built lazily for contains
@@ -241,13 +374,13 @@ type wallKernel struct {
 
 // newWallKernel sizes the tolerances from the geometry with the default draft allowance.
 func newWallKernel(elems []surveyElem, verts [][2]float64, fitMax float64) *wallKernel {
-	k, _ := newWallKernelBudget(nil, elems, nil, verts, 15*math.Pi/180, 0, false, fitMax)
+	k, _ := newWallKernelBudget(nil, elems, nil, verts, 15*math.Pi/180, exactScalar(0), false, fitMax)
 	return k
 }
 
 // newWallKernelBudget sizes the tolerances from the geometry while charging
 // the boundary scan to the caller's shared budget.
-func newWallKernelBudget(budget *workBudget, elems, containOnly []surveyElem, verts [][2]float64, alpha, wedgeS float64, wedgeSpans bool, fitMax float64) (*wallKernel, error) {
+func newWallKernelBudget(budget *workBudget, elems, containOnly []surveyElem, verts [][2]float64, alpha float64, wedgeS boundedScalar, wedgeSpans bool, fitMax float64) (*wallKernel, error) {
 	if err := wallBudgetErr(budget); err != nil {
 		return nil, err
 	}
@@ -284,13 +417,27 @@ func newWallKernelBudget(budget *workBudget, elems, containOnly []surveyElem, ve
 	}, nil
 }
 
-// wallSurveyOut is the kernel's answer over its candidate set.
+// wallSurveyOut is the kernel's answer over its candidate set. Both of its
+// numbers are extrema over a population of candidates that each carry their
+// OWN bound, so each is published as survey.go's §9.2 extremeAggregate proves
+// it — the aggregate interval's midpoint beside its half-width — and never as
+// the figures of whichever candidate won a comparison of held values. Two
+// candidates whose held values order one way can have true values that order
+// the other, and the aggregate is what stops the reading from following the
+// held order off the truth.
+//
+// span and spanBound speak in the spanning DIAMETER, not in the candidate
+// radius each generator actually bounded: runBudget doubles a candidate's
+// value and its bound together as it feeds the aggregate, at the single point
+// where a candidate enters the answer, so no consumer restates the factor.
 type wallSurveyOut struct {
-	ok        bool    // false: the survey could not decide (never a silent pass)
-	hasSpan   bool    // some empty spanning disk exists
-	span      float64 // the smallest spanning diameter found
-	inradius  float64 // the largest empty disk radius found (the 2D inradius)
-	subTolFar bool    // an off-junction sub-tolerance candidate was dropped
+	ok            bool    // false: the survey could not decide (never a silent pass)
+	hasSpan       bool    // some empty spanning disk exists
+	span          float64 // the smallest spanning DIAMETER, as the aggregate proves it
+	spanBound     float64 // that aggregate interval's half-width, also on the DIAMETER
+	inradius      float64 // the largest empty disk radius found (the 2D inradius)
+	inradiusBound float64 // that aggregate interval's half-width
+	subTolFar     bool    // an off-junction sub-tolerance candidate was dropped
 }
 
 var errWallSurveyUndecided = errors.New("wall survey undecided")
@@ -317,9 +464,27 @@ func (k *wallKernel) run() wallSurveyOut {
 	return out
 }
 
-// runBudget streams and validates candidates under one shared Verify budget.
+// runBudget streams and validates candidates under one shared Verify budget,
+// folding each admitted candidate into the two §9.2 aggregates the kernel
+// publishes — the least spanning diameter and the greatest empty radius.
+// Neither extremum is taken by comparing held values: a candidate's own bound
+// is its own, so the candidate that holds the smaller number need not be the
+// one whose truth is smaller, and reducing by held order publishes an interval
+// a rival's truth can sit outside of. The aggregates reach to whichever
+// candidate's interval reaches furthest, which is also what keeps an exact
+// reading exact: an inexact rival that does not reach the extremum moves
+// neither end.
+//
+// A candidate whose own generator could not derive a finite bound never
+// widens the published interval silently: it makes the whole survey
+// undecided instead (the same refusal prismWall already takes for a
+// displaced section), since a reading with no proven bound is not one this
+// evaluator may stand behind. The aggregate itself carries that refusal, so a
+// candidate that loses the extremum cannot smuggle an unbounded figure past
+// it either.
 func (k *wallKernel) runBudget(budget *workBudget) (wallSurveyOut, error) {
 	out := wallSurveyOut{ok: true, span: math.Inf(1)}
+	spans, radii := minAggregate(), maxAggregate()
 	err := k.generate(budget, func(c diskCand) error {
 		spanning, empty, ok, err := k.validate(c, budget)
 		if err != nil {
@@ -331,15 +496,30 @@ func (k *wallKernel) runBudget(budget *workBudget) (wallSurveyOut, error) {
 		if !empty {
 			return nil
 		}
-		if c.r > out.inradius {
-			out.inradius = c.r
+		radii.take(c.r, c.rBound)
+		if !spanning {
+			return nil
 		}
-		if spanning && 2*c.r <= k.fitMax+k.tol {
-			out.hasSpan = true
-			if 2*c.r < out.span {
-				out.span = 2 * c.r
-			}
+		// The candidate's generator bounded its RADIUS; the answer is the
+		// DIAMETER 2r, so the bound doubles with the value. Multiplying a
+		// float64 by two only scales the exponent, so the doubled bound is
+		// exact and needs no outward rounding — the sole failure is an
+		// overflow to +Inf, which the aggregate's own finiteness refusal
+		// catches with every other underivable bound.
+		//
+		// The fit gate is read on the candidate's own proven interval, not on
+		// its held diameter, and it is reject-only like validate's own guards:
+		// a disk PROVEN wider than the sweep cannot lift to 3D and is dropped,
+		// while one whose interval still reaches under the height is kept and
+		// carries its doubt into the reading. Deciding a straddle the other way
+		// would drop a wall the body may really have, which is the one error a
+		// wall reading must never make.
+		diam := boundedMul(exactScalar(2), measuredScalar(c.r, c.rBound))
+		if admitAbove(diam, k.fitMax+k.tol) == survAdmit {
+			return nil
 		}
+		out.hasSpan = true
+		spans.take(diam.value, diam.bound)
 		return nil
 	})
 	if errors.Is(err, errWallSurveyUndecided) {
@@ -347,6 +527,22 @@ func (k *wallKernel) runBudget(budget *workBudget) (wallSurveyOut, error) {
 	}
 	if err != nil {
 		return wallSurveyOut{}, err
+	}
+	if out.hasSpan {
+		span, bound, ok := spans.resolve()
+		if !ok {
+			return wallSurveyOut{}, nil
+		}
+		out.span, out.spanBound = span, bound
+	}
+	if !radii.empty() {
+		inradius, bound, ok := radii.resolve()
+		if !ok {
+			return wallSurveyOut{}, nil
+		}
+		out.inradius, out.inradiusBound = inradius, bound
+	} else if radii.unbounded {
+		return wallSurveyOut{}, nil
 	}
 	out.subTolFar = k.subTolFar
 	return out, nil
@@ -357,6 +553,36 @@ func (k *wallKernel) runBudget(budget *workBudget) (wallSurveyOut, error) {
 // contact set decides whether it spans — two contact directions within the
 // allowance of antipodal (inclusive), a single whole-arc contact wide
 // enough, or (when the wedge's two cap contacts span) an active wedge.
+//
+// Every one of those readings is taken on the candidate's OWN proven interval
+// rather than on its held radius, and each REJECTS only what that interval
+// proves: an element proven to cut into the disk blocks it, an element proven
+// clear of the rim is not a contact, a contact pair proven short of the
+// allowance does not span. A straddle resolves the same way every generator's
+// does — toward keeping the candidate and counting the contact — and the
+// candidate's own interval carries the doubt into the reading.
+//
+// Resolving that way, rather than into the undecided channel, is a decision
+// the numbers force and it is worth stating why. These guards compare against
+// slacks the survey DECLARES — k.tol and contactTol() are 1e-9 and 8e-9 of the
+// section's own scale — but the intervals read against them are NOT ulp-scale:
+// a T3 angle-limit candidate composes the draft allowance's certified trig
+// enclosure through a division, and on a 100 mm section its radius bound comes
+// out near 1e-6 mm, two decades ABOVE k.tol. Straddles here are the ordinary
+// case, not an exotic one, so an undecided cell would read Suspect on
+// commonplace bodies — the wrong answer, since the doubt is a micron of
+// arithmetic and the reading already has an interval to put it in.
+//
+// Keeping a straddling candidate is sound because the straddle bounds how far
+// the true geometry can be from it. Where an element cannot be proven to cut
+// into the disk, its distance d satisfies d >= r − b − k.tol, so an empty disk
+// of radius min_j d_j really does sit at this centre, within the candidate's
+// own published interval up to the declared slack — the same slack the held
+// comparison already conceded. Where an element cannot be proven clear of the
+// rim, a disk inside that interval really does touch it. What the interval
+// cannot absorb is a bound that is not a number at all: runBudget's aggregate
+// refuses a candidate whose generator could derive no finite bound, and that
+// is the reading's undecided channel.
 func (k *wallKernel) validate(c diskCand, budget *workBudget) (bool, bool, bool, error) {
 	if err := wallBudgetStep(budget); err != nil {
 		return false, false, false, err
@@ -390,12 +616,23 @@ func (k *wallKernel) validate(c diskCand, budget *workBudget) (bool, bool, bool,
 		return false, false, true, nil
 	}
 	wedgeActive := false
-	if k.wedgeS > 0 {
-		room := c.y * k.wedgeS
-		if room < c.r-k.tol {
+	if k.hasWedge() {
+		// A fit/contact test against k.tol, not a published reading: the sine's
+		// own bound reaches the answer through the candidate radii the wedge
+		// generates. The FIT half still refuses only what the sine's own
+		// interval proves does not fit, so a disk the wedge might admit is
+		// never discarded on a held product. The CONTACT half below stays a
+		// held comparison: its slack is 8·k.tol = 8e-9 of the section's own
+		// scale while the product's bound is that scale times the sine's
+		// last-ulp figure, so the interval cannot reach across the slack and
+		// the straddle is unreachable.
+		room := boundedMul(exactScalar(c.y), k.wedgeS)
+		if admitBelow(boundedSub(room, k.clearRadius(c)), 0) == survAdmit {
 			return false, false, true, nil
 		}
-		wedgeActive = room <= c.r+k.contactTol()
+		// The contact half reads the same two intervals: the wedge counts as a
+		// contact unless the room it leaves is PROVEN past the slack.
+		wedgeActive = admitAbove(boundedSub(room, k.contactRadius(c)), 0) != survAdmit
 	}
 	var contacts []dirArc
 	for _, e := range k.elems {
@@ -403,17 +640,21 @@ func (k *wallKernel) validate(c diskCand, budget *workBudget) (bool, bool, bool,
 			return false, false, false, err
 		}
 		d, dir, dirOK := e.nearest(c.x, c.y, survTiny*k.scale)
-		if d < c.r-k.tol {
+		// Emptiness: drop the candidate only where the element is PROVEN to cut
+		// into the disk.
+		if admitBelow(boundedSub(exactScalar(d), k.clearRadius(c)), 0) == survAdmit {
 			return false, false, true, nil
 		}
-		if d <= c.r+k.contactTol() {
-			if !dirOK {
-				// A contact whose direction is undefined: the disk is
-				// degenerate against this element; do not decide on it.
-				return false, false, true, nil
-			}
-			contacts = append(contacts, dir)
+		// Contact: count the element unless it is PROVEN clear of the rim.
+		if admitAbove(boundedSub(exactScalar(d), k.contactRadius(c)), 0) == survAdmit {
+			continue
 		}
+		if !dirOK {
+			// A contact whose direction is undefined: the disk is
+			// degenerate against this element; do not decide on it.
+			return false, false, true, nil
+		}
+		contacts = append(contacts, dir)
 	}
 	inside, ok, err := k.contains(c.x, c.y, budget)
 	if err != nil {
@@ -426,13 +667,27 @@ func (k *wallKernel) validate(c diskCand, budget *workBudget) (bool, bool, bool,
 		return false, false, true, nil
 	}
 	spanning := k.wedgeSpans && wedgeActive
-	need := math.Pi - k.alpha - survAngTol
+	// The spanning threshold composes Go's float64 math.Pi, so it is not the
+	// exact π − α − survAngTol it denotes and carries piRoundGuard; the angle
+	// beside it is this file's own atan2 composition and carries
+	// angleReadGuard. Both are decades under survAngTol, the inclusive slack
+	// the survey DECLARES for a wall drafted at exactly the allowance, so the
+	// declared line — not the arithmetic — is what decides that wall, and a
+	// straddle needs a dihedral within a femtoradian of the declared line.
+	need := boundedSub(
+		boundedSub(measuredScalar(math.Pi, piRoundGuard), exactScalar(k.alpha)),
+		exactScalar(survAngTol),
+	)
 	for i := 0; i < len(contacts) && !spanning; i++ {
 		for j := i; j < len(contacts); j++ {
 			if err := wallBudgetStep(budget); err != nil {
 				return false, false, false, err
 			}
-			if maxAngleBetween(contacts[i], contacts[j]) >= need {
+			ang := measuredScalar(maxAngleBetween(contacts[i], contacts[j]), angleReadGuard)
+			// A pair spans unless its own interval is PROVEN short of the
+			// threshold, the same reject-only posture the two guards above
+			// take.
+			if admitBelow(boundedSub(ang, need), 0) != survAdmit {
 				spanning = true
 				break
 			}
@@ -441,8 +696,41 @@ func (k *wallKernel) validate(c diskCand, budget *workBudget) (bool, bool, bool,
 	return spanning, true, true, nil
 }
 
+// clearRadius and contactRadius are the two bands validate reads an element's
+// distance against, each carrying the candidate's own proven radius bound: an
+// element nearer than clearRadius cuts into the disk, one no further than
+// contactRadius touches it. The slacks themselves are the survey's declared
+// lines, not measurements, so they enter as exact leaves.
+func (k *wallKernel) clearRadius(c diskCand) boundedScalar {
+	return boundedSub(measuredScalar(c.r, c.rBound), exactScalar(k.tol))
+}
+
+func (k *wallKernel) contactRadius(c diskCand) boundedScalar {
+	return boundedAdd(measuredScalar(c.r, c.rBound), exactScalar(k.contactTol()))
+}
+
 // contactTol is the slack for counting an element as a contact.
 func (k *wallKernel) contactTol() float64 { return 8 * k.tol }
+
+// angleReadGuard is the survey's DECLARED conservative allowance on one
+// contact-angle reading: maxAngleBetween composes a handful of math.Atan2
+// evaluations, differences and reductions over values no larger than 2π, and
+// this file assumes no ulp contract from any of them (the same posture
+// radianTrigBounds takes toward math.Sin). Ten femtoradians is decades above
+// the last ulp of 2π and five decades below survAngTol, the inclusive slack
+// the spanning comparison is actually about, so declaring it costs the
+// comparison nothing while keeping the reading from asserting an accuracy the
+// library never promised.
+const angleReadGuard = 1e-14
+
+// hasWedge reports whether this kernel carries a partial revolve's cap wedge at
+// all. It is a STRUCTURAL question, not a numeric one: a full turn's caller
+// states exactScalar(0), a proven zero, and a partial sweep's caller
+// (survey.go's revolveWall) proves its own half-angle sine positive before
+// handing it over — so the reading is never taken on a sine that cannot be
+// told from zero, and the survAdmit answer below is the only one a built
+// kernel reaches.
+func (k *wallKernel) hasWedge() bool { return admitAbove(k.wedgeS, 0) == survAdmit }
 
 // contains is the material-membership test: crossing parity of a ray against
 // every boundary element, retried across directions when a crossing is
@@ -573,19 +861,21 @@ func rayCrossings(e surveyElem, px, py, dx, dy, tol float64) (int, bool) {
 // directly to visit so the cubic triple set is never materialized.
 func (k *wallKernel) generate(budget *workBudget, visit func(diskCand) error) error {
 	var visitErr error
-	add := func(x, y, r float64) {
+	add := func(x, y, r, rBound float64) {
 		if visitErr == nil {
-			visitErr = visit(diskCand{x: x, y: y, r: r})
+			visitErr = visit(diskCand{x: x, y: y, r: r, rBound: rBound})
 		}
 	}
 
-	// Concentric whole-arc disks.
+	// Concentric whole-arc disks: the element's own radius, under the
+	// element's own bound on it — zero for a stated or recorded radius, the
+	// hypot bracket for an ArcSeg-derived one.
 	for _, e := range k.elems {
 		if err := wallBudgetStep(budget); err != nil {
 			return err
 		}
 		if e.kind == surveyArc && e.matInside {
-			add(e.qx, e.qy, e.rr)
+			add(e.qx, e.qy, e.rr, e.rrBound)
 			if visitErr != nil {
 				return visitErr
 			}
@@ -628,7 +918,7 @@ func (k *wallKernel) generate(budget *workBudget, visit func(diskCand) error) er
 	}
 
 	// Wedge-tangent minima (partial revolve only).
-	if k.wedgeS > 0 {
+	if k.hasWedge() {
 		if err := k.wedgeCands(budget, visit); err != nil {
 			return err
 		}
@@ -657,7 +947,7 @@ func (k *wallKernel) generate(budget *workBudget, visit func(diskCand) error) er
 
 // pairCands emits the antipodal pair criticals (T2) and the angle-limit
 // disks (T3) for one element pair.
-func (k *wallKernel) pairCands(a, b surveyElem, add func(x, y, r float64)) {
+func (k *wallKernel) pairCands(a, b surveyElem, add func(x, y, r, rBound float64)) {
 	switch {
 	case a.kind == surveyLine && b.kind == surveyLine:
 		k.lineLineCands(a, b, add)
@@ -674,7 +964,12 @@ func (k *wallKernel) pairCands(a, b surveyElem, add func(x, y, r float64)) {
 // the overlap midpoint is its representative (blocked positions surface via
 // the triples). Non-parallel lines have no interior critical: their corners
 // are junctions, their extent limits vertices, their blockers triples.
-func (k *wallKernel) lineLineCands(a, b surveyElem, add func(x, y, r float64)) {
+//
+// The parallel and facing tests read the two elements' own unit normals under
+// a 1e-9 slack. Those normals are element coordinates, exact leaves by this
+// file's stated convention, and the slack is seven orders above their last
+// ulp, so neither test can be straddled by the arithmetic it performs.
+func (k *wallKernel) lineLineCands(a, b surveyElem, add func(x, y, r, rBound float64)) {
 	cross := a.nx*b.ny - a.ny*b.nx
 	if math.Abs(cross) > 1e-9 {
 		return
@@ -682,9 +977,13 @@ func (k *wallKernel) lineLineCands(a, b surveyElem, add func(x, y, r float64)) {
 	if a.nx*b.nx+a.ny*b.ny > -1+1e-9 {
 		return // same-facing parallels never oppose across material
 	}
-	d := a.nx*(b.ax-a.ax) + a.ny*(b.ay-a.ay)
-	if d <= 0 {
-		return // b is not on a's material side
+	dBS := boundedAdd(
+		boundedMul(exactScalar(a.nx), boundedSub(exactScalar(b.ax), exactScalar(a.ax))),
+		boundedMul(exactScalar(a.ny), boundedSub(exactScalar(b.ay), exactScalar(a.ay))),
+	)
+	d := dBS.value
+	if admitAbove(dBS, 0) == survReject {
+		return // b is PROVEN not on a's material side
 	}
 	// Overlap of the two segments along a's tangent.
 	tx, ty := -a.ny, a.nx
@@ -700,63 +999,98 @@ func (k *wallKernel) lineLineCands(a, b surveyElem, add func(x, y, r float64)) {
 	base := tx*a.ax + ty*a.ay
 	px := a.ax + (m-base)*tx + a.nx*d/2
 	py := a.ay + (m-base)*ty + a.ny*d/2
-	add(px, py, d/2)
+	rBS := boundedQuotient(d, dBS.bound, 2, 0)
+	add(px, py, d/2, rBS.bound)
 }
 
 // lineArcCands: the critical disks sit on the perpendicular from the arc's
 // center to the line; the angle-limit disks sit where the contact pair
 // reaches exactly the allowance boundary.
-func (k *wallKernel) lineArcCands(l, a surveyElem, add func(x, y, r float64)) {
+//
+// The T2 denominator sgn·s − 1 is built from two SIGNS, so it takes one of the
+// exactly representable values {0, −2, 2} and its degeneracy reading can never
+// straddle. The T3 denominator is 1 + cos α for the caller's own draft
+// allowance α, and reaches zero only at α = π; a straddle there needs an
+// allowance within a micro-radian of a half turn, which is no draft angle.
+func (k *wallKernel) lineArcCands(l, a surveyElem, add func(x, y, r, rBound float64)) {
 	s := a.matSign()
 	e := l.nx*(a.qx-l.ax) + l.ny*(a.qy-l.ay) // signed height of q, material side positive
+	eBS := boundedAdd(
+		boundedMul(exactScalar(l.nx), boundedSub(exactScalar(a.qx), exactScalar(l.ax))),
+		boundedMul(exactScalar(l.ny), boundedSub(exactScalar(a.qy), exactScalar(l.ay))),
+	)
 	fx := a.qx - e*l.nx
 	fy := a.qy - e*l.ny
 	// T2 on the perpendicular from q to the line, t = r, center at f + t·n̂:
 	// |e − t| = R − s·t, enumerated as e − t = sgn·(R − s·t).
 	for _, sgn := range []float64{1, -1} {
 		den := sgn*s - 1
-		if math.Abs(den) < survTiny {
+		if admitMagnitudeAbove(exactScalar(den), survTiny) == survReject {
 			continue
 		}
 		t := (sgn*a.rr - e) / den
-		if t > 0 {
-			add(fx+t*l.nx, fy+t*l.ny, t)
+		numBS := boundedSub(boundedMul(exactScalar(sgn), a.rrBS()), eBS)
+		tBS := boundedQuotient(numBS.value, numBS.bound, den, 0)
+		if admitAbove(tBS, 0) != survReject {
+			add(fx+t*l.nx, fy+t*l.ny, t, tBS.bound)
 		}
 	}
 	// T3: contact directions exactly π − α apart. The line contact direction
 	// is −n̂; the arc contact direction is s·(ĉ−q̂); c = q + (s·R − r)·u2.
 	aStar := math.Pi - k.alpha
 	for _, rot := range []float64{aStar, -aStar} {
-		cs, sn := math.Cos(rot), math.Sin(rot)
+		snBS, csBS := radianTrigBounds(rot)
+		cs, sn := csBS.value, snBS.value
 		// u2 = rotate(−n̂, rot)
 		ux := -(l.nx*cs - l.ny*sn)
 		uy := -(l.nx*sn + l.ny*cs)
+		uxBS := boundedMul(exactScalar(-1), boundedSub(boundedMul(exactScalar(l.nx), csBS), boundedMul(exactScalar(l.ny), snBS)))
+		uyBS := boundedMul(exactScalar(-1), boundedAdd(boundedMul(exactScalar(l.nx), snBS), boundedMul(exactScalar(l.ny), csBS)))
 		ndot := l.nx*ux + l.ny*uy // = −cos(aStar)
-		den := 1 + ndot
-		if math.Abs(den) < survTiny {
+		ndotBS := boundedAdd(boundedMul(exactScalar(l.nx), uxBS), boundedMul(exactScalar(l.ny), uyBS))
+		denBS := boundedAdd(exactScalar(1), ndotBS)
+		if admitMagnitudeAbove(denBS, survTiny) == survReject {
 			continue
 		}
+		den := denBS.value
 		r := (l.nx*(a.qx-l.ax) + l.ny*(a.qy-l.ay) + s*a.rr*ndot) / den
-		if r > 0 {
-			add(a.qx+(s*a.rr-r)*ux, a.qy+(s*a.rr-r)*uy, r)
+		numBS := boundedAdd(eBS, boundedMul(boundedMul(exactScalar(s), a.rrBS()), ndotBS))
+		rBS := boundedQuotient(numBS.value, numBS.bound, denBS.value, denBS.bound)
+		if admitAbove(rBS, 0) != survReject {
+			add(a.qx+(s*a.rr-r)*ux, a.qy+(s*a.rr-r)*uy, r, rBS.bound)
 		}
 	}
 }
 
 // arcArcCands: centerline criticals (T2, the concentric family included) and
 // the law-of-cosines angle-limit disks (T3).
-func (k *wallKernel) arcArcCands(a, b surveyElem, add func(x, y, r float64)) {
+//
+// The concentric test is the one branch here that is NOT resolved toward
+// generating both sides: a centre separation the interval cannot prove positive
+// leaves the centreline direction dx/d undefined, so the general branch has no
+// candidate to build and the concentric family is the only reading of that
+// pair. The T2 denominator −εa·sa − εb·sb is built from four SIGNS and so takes
+// one of {0, ±2} exactly, which no interval can straddle.
+func (k *wallKernel) arcArcCands(a, b surveyElem, add func(x, y, r, rBound float64)) {
 	dx, dy := b.qx-a.qx, b.qy-a.qy
-	d := math.Hypot(dx, dy)
+	dBS := boundedHypot(dx, dy)
+	d := dBS.value
 	sa, sb := a.matSign(), b.matSign()
-	if d <= survTiny*k.scale {
-		// Concentric: the family disk at each arc's own angular midpoint.
-		r := math.Abs(a.rr-b.rr) / 2
+	if admitAbove(dBS, survTiny*k.scale) != survAdmit {
+		// Concentric: the family disk at each arc's own angular midpoint. The
+		// annulus half-width is |Ra − Rb|/2, and NEITHER step is exact — the
+		// difference of two radii rounds outside the Sterbenz range, and each
+		// radius carries whatever bound its own element states — so the whole
+		// chain runs through the bounded arithmetic. The halving is exact, but
+		// boundedQuotient carries the difference's bound through it.
+		diffBS := boundedAbs(boundedSub(a.rrBS(), b.rrBS()))
+		rBS := boundedQuotient(diffBS.value, diffBS.bound, 2, 0)
+		r := rBS.value
 		m := (a.rr + b.rr) / 2
 		for _, e := range []surveyElem{a, b} {
 			lo, hi := e.arcRange()
 			th := (lo + hi) / 2
-			add(a.qx+m*math.Cos(th), a.qy+m*math.Sin(th), r)
+			add(a.qx+m*math.Cos(th), a.qy+m*math.Sin(th), r, rBS.bound)
 		}
 		return
 	}
@@ -765,64 +1099,101 @@ func (k *wallKernel) arcArcCands(a, b surveyElem, add func(x, y, r float64)) {
 	for _, ea := range []float64{1, -1} {
 		for _, eb := range []float64{1, -1} {
 			den := -ea*sa - eb*sb
-			if math.Abs(den) < survTiny {
+			if admitMagnitudeAbove(exactScalar(den), survTiny) == survReject {
 				continue
 			}
 			r := (d - ea*a.rr - eb*b.rr) / den
-			if r <= 0 {
+			numBS := boundedSub(dBS, boundedAdd(
+				boundedMul(exactScalar(ea), a.rrBS()),
+				boundedMul(exactScalar(eb), b.rrBS()),
+			))
+			rBS := boundedQuotient(numBS.value, numBS.bound, den, 0)
+			if admitAbove(rBS, 0) == survReject {
 				continue
 			}
 			t := ea * (a.rr - sa*r)
-			add(a.qx+t*ux, a.qy+t*uy, r)
+			add(a.qx+t*ux, a.qy+t*uy, r, rBS.bound)
 		}
 	}
 	// T3: angle at the center between (c−qa) and (c−qb) fixed by the
 	// allowance boundary; law of cosines in r, then the two mirror centers.
-	cosTh := sa * sb * math.Cos(math.Pi-k.alpha)
+	_, cosAStarBS := radianTrigBounds(math.Pi - k.alpha)
+	cosThBS := boundedMul(exactScalar(sa*sb), cosAStarBS)
 	// d² = Da² + Db² − 2·Da·Db·cosθ with Da = Ra − sa·r, Db = Rb − sb·r.
-	A := 2 - 2*cosTh*sa*sb
-	B := -2*a.rr*sa - 2*b.rr*sb + 2*cosTh*(a.rr*sb+b.rr*sa)
-	C := a.rr*a.rr + b.rr*b.rr - 2*a.rr*b.rr*cosTh - d*d
-	for _, r := range quadRoots(A, B, C) {
-		if r <= 0 {
+	raBS, rbBS := a.rrBS(), b.rrBS()
+	ABS := boundedSub(exactScalar(2), boundedMul(exactScalar(2*sa*sb), cosThBS))
+	BBS := boundedAdd(
+		boundedAdd(boundedMul(exactScalar(-2*sa), raBS), boundedMul(exactScalar(-2*sb), rbBS)),
+		boundedMul(boundedMul(exactScalar(2), boundedAdd(
+			boundedMul(exactScalar(sb), raBS),
+			boundedMul(exactScalar(sa), rbBS),
+		)), cosThBS),
+	)
+	CBS := boundedSub(
+		boundedAdd(
+			boundedAdd(boundedMul(raBS, raBS), boundedMul(rbBS, rbBS)),
+			boundedMul(boundedMul(exactScalar(-2), boundedMul(raBS, rbBS)), cosThBS),
+		),
+		boundedMul(dBS, dBS),
+	)
+	for _, rBS := range quadRootsBounded(ABS, BBS, CBS) {
+		if admitAbove(rBS, 0) == survReject {
 			continue
 		}
+		r := rBS.value
 		da := a.rr - sa*r
 		db := b.rr - sb*r
-		placeCircleCircle(a.qx, a.qy, da, b.qx, b.qy, db, add, r)
+		placeCircleCircle(a.qx, a.qy, da, b.qx, b.qy, db, add, r, rBS.bound)
 	}
 }
 
 // vertexElemCands: the vertex-line foot and vertex-arc centerline criticals
 // (T2) plus their angle-limit disks (T3).
-func (k *wallKernel) vertexElemCands(v [2]float64, e surveyElem, add func(x, y, r float64)) {
+//
+// A vertex sitting ON the element it is read against — the ordinary case, since
+// a junction vertex IS an endpoint of its own two walks — gives an exactly zero
+// height or separation with an exactly zero bound, so the side and degeneracy
+// readings below decide it outright. The arc T2 denominator sgn·s − ev is built
+// from three SIGNS and takes one of {0, ±2} exactly.
+func (k *wallKernel) vertexElemCands(v [2]float64, e surveyElem, add func(x, y, r, rBound float64)) {
 	aStar := math.Pi - k.alpha
 	if e.kind == surveyLine {
 		// T2: the foot midpoint.
 		h := e.nx*(v[0]-e.ax) + e.ny*(v[1]-e.ay)
-		if h > 0 {
-			add(v[0]-h/2*e.nx, v[1]-h/2*e.ny, h/2)
+		hBS := boundedAdd(
+			boundedMul(exactScalar(e.nx), boundedSub(exactScalar(v[0]), exactScalar(e.ax))),
+			boundedMul(exactScalar(e.ny), boundedSub(exactScalar(v[1]), exactScalar(e.ay))),
+		)
+		if admitAbove(hBS, 0) != survReject {
+			rBS := boundedQuotient(hBS.value, hBS.bound, 2, 0)
+			add(v[0]-h/2*e.nx, v[1]-h/2*e.ny, h/2, rBS.bound)
 		}
 		// T3: u_v = rotate(−n̂, ±A*), c = v − r·u_v, tangency fixes r.
 		for _, rot := range []float64{aStar, -aStar} {
-			cs, sn := math.Cos(rot), math.Sin(rot)
+			snBS, csBS := radianTrigBounds(rot)
+			cs, sn := csBS.value, snBS.value
 			ux := -(e.nx*cs - e.ny*sn)
 			uy := -(e.nx*sn + e.ny*cs)
+			uxBS := boundedMul(exactScalar(-1), boundedSub(boundedMul(exactScalar(e.nx), csBS), boundedMul(exactScalar(e.ny), snBS)))
+			uyBS := boundedMul(exactScalar(-1), boundedAdd(boundedMul(exactScalar(e.nx), snBS), boundedMul(exactScalar(e.ny), csBS)))
 			den := 1 + (e.nx*ux + e.ny*uy)
-			if math.Abs(den) < survTiny {
+			denBS := boundedAdd(exactScalar(1), boundedAdd(boundedMul(exactScalar(e.nx), uxBS), boundedMul(exactScalar(e.ny), uyBS)))
+			if admitMagnitudeAbove(denBS, survTiny) == survReject {
 				continue
 			}
 			r := (e.nx*(v[0]-e.ax) + e.ny*(v[1]-e.ay)) / den
-			if r > 0 {
-				add(v[0]-r*ux, v[1]-r*uy, r)
+			rBS := boundedQuotient(hBS.value, hBS.bound, denBS.value, denBS.bound)
+			if admitAbove(rBS, 0) != survReject {
+				add(v[0]-r*ux, v[1]-r*uy, r, rBS.bound)
 			}
 		}
 		return
 	}
 	s := e.matSign()
 	dx, dy := e.qx-v[0], e.qy-v[1]
-	d := math.Hypot(dx, dy)
-	if d <= survTiny*k.scale {
+	dBS := boundedHypot(dx, dy)
+	d := dBS.value
+	if admitAbove(dBS, survTiny*k.scale) != survAdmit {
 		return
 	}
 	ux, uy := dx/d, dy/d
@@ -832,49 +1203,75 @@ func (k *wallKernel) vertexElemCands(v [2]float64, e surveyElem, add func(x, y, 
 		// c = v + ev·r·û: |c − q| = |d − ev·r| = R − s·r.
 		for _, sgn := range []float64{1, -1} {
 			den := sgn*s - ev
-			if math.Abs(den) < survTiny {
+			if admitMagnitudeAbove(exactScalar(den), survTiny) == survReject {
 				continue
 			}
 			r := (sgn*e.rr - d) / den
-			if r > 0 {
-				add(v[0]+ev*r*ux, v[1]+ev*r*uy, r)
+			numBS := boundedSub(boundedMul(exactScalar(sgn), e.rrBS()), dBS)
+			rBS := boundedQuotient(numBS.value, numBS.bound, den, 0)
+			if admitAbove(rBS, 0) != survReject {
+				add(v[0]+ev*r*ux, v[1]+ev*r*uy, r, rBS.bound)
 			}
 		}
 	}
 	// T3: law of cosines with sides r and R − s·r.
-	cosTh := -s * math.Cos(aStar)
-	A := 2 + 2*s*cosTh
-	B := -2 * e.rr * (s + cosTh)
-	C := e.rr*e.rr - d*d
-	for _, r := range quadRoots(A, B, C) {
-		if r <= 0 {
+	_, cosAStarBS := radianTrigBounds(aStar)
+	cosThBS := boundedMul(exactScalar(-s), cosAStarBS)
+	ABS := boundedAdd(exactScalar(2), boundedMul(exactScalar(2*s), cosThBS))
+	reBS := e.rrBS()
+	BBS := boundedMul(boundedMul(exactScalar(-2), reBS), boundedAdd(exactScalar(s), cosThBS))
+	CBS := boundedSub(boundedMul(reBS, reBS), boundedMul(dBS, dBS))
+	for _, rBS := range quadRootsBounded(ABS, BBS, CBS) {
+		if admitAbove(rBS, 0) == survReject {
 			continue
 		}
-		placeCircleCircle(v[0], v[1], r, e.qx, e.qy, e.rr-s*r, add, r)
+		r := rBS.value
+		placeCircleCircle(v[0], v[1], r, e.qx, e.qy, e.rr-s*r, add, r, rBS.bound)
 	}
 }
 
 // vertexVertexCands: the midpoint disk (T2) and the isoceles angle-limit
 // disks (T3).
-func (k *wallKernel) vertexVertexCands(a, b [2]float64, add func(x, y, r float64)) {
+//
+// Two coincident vertices give an exactly zero separation with an exactly zero
+// bound, so the degeneracy reading decides them. The T3 denominator is
+// 2·(1 − cos(π − α)) = 2·(1 + cos α) for the caller's own draft allowance, and
+// vanishes only at α = π — an allowance of a half turn, which is no draft.
+func (k *wallKernel) vertexVertexCands(a, b [2]float64, add func(x, y, r, rBound float64)) {
 	dx, dy := b[0]-a[0], b[1]-a[1]
-	d := math.Hypot(dx, dy)
-	if d <= survTiny*k.scale {
+	dBS := boundedHypot(dx, dy)
+	d := dBS.value
+	if admitAbove(dBS, survTiny*k.scale) != survAdmit {
 		return
 	}
-	add((a[0]+b[0])/2, (a[1]+b[1])/2, d/2)
-	den := 2 * (1 - math.Cos(math.Pi-k.alpha))
-	if den > survTiny {
-		r := d / math.Sqrt(den)
-		placeCircleCircle(a[0], a[1], r, b[0], b[1], r, add, r)
+	rBS := boundedQuotient(dBS.value, dBS.bound, 2, 0)
+	add((a[0]+b[0])/2, (a[1]+b[1])/2, d/2, rBS.bound)
+	_, cosAStarBS := radianTrigBounds(math.Pi - k.alpha)
+	denBS := boundedMul(exactScalar(2), boundedSub(exactScalar(1), cosAStarBS))
+	if admitAbove(denBS, survTiny) != survReject {
+		sqrtDenBS := boundedSqrt(denBS)
+		rr := boundedQuotient(dBS.value, dBS.bound, sqrtDenBS.value, sqrtDenBS.bound)
+		placeCircleCircle(a[0], a[1], rr.value, b[0], b[1], rr.value, add, rr.value, rr.bound)
 	}
 }
 
 // wedgeCands: the wedge-tangent minima for a partial revolve's cap-cap
 // reading — the disk tangent to one element with the wedge constraint
-// active (r = wedgeS·y), at its own closed-form ρ-critical.
+// active (r = wedgeS·y), at its own closed-form ρ-critical. wedgeS carries its
+// own bound (a sine its caller proved from a certified trig interval), so BOTH
+// quotient paths below compose that bound through their numerator and
+// denominator rather than reading the sine as an exact leaf, and the arc path
+// reads the element's radius through rrBS for the same reason.
+//
+// A vertex at or below the axis (v[1] <= 0) is an exact recorded coordinate
+// against an exact zero, so that test needs no interval. Every other reading
+// here is taken on the proven interval and resolved toward emitting: the wedge
+// denominators 1 ∓ sin(Δφ/2) reach zero only for a half sweep at exactly a
+// right angle, where the sine is proven 1 and the reading is a proven reject,
+// never a straddle.
 func (k *wallKernel) wedgeCands(budget *workBudget, visit func(diskCand) error) error {
-	s := k.wedgeS
+	sBS := k.wedgeS
+	s := sBS.value
 	for _, v := range k.verts {
 		if err := wallBudgetStep(budget); err != nil {
 			return err
@@ -883,13 +1280,15 @@ func (k *wallKernel) wedgeCands(budget *workBudget, visit func(diskCand) error) 
 			continue
 		}
 		for _, sgn := range []float64{1, -1} {
-			den := 1 - sgn*s
-			if den < survTiny {
+			denBS := boundedSub(exactScalar(1), boundedMul(exactScalar(sgn), sBS))
+			if admitAbove(denBS, survTiny) == survReject {
 				continue
 			}
-			r := s * v[1] / den
-			if r > 0 {
-				if err := visit(diskCand{x: v[0], y: r / s, r: r}); err != nil {
+			numBS := boundedMul(sBS, exactScalar(v[1]))
+			rBS := boundedQuotient(numBS.value, numBS.bound, denBS.value, denBS.bound)
+			r := rBS.value
+			if admitAbove(rBS, 0) != survReject {
+				if err := visit(diskCand{x: v[0], y: r / s, r: r, rBound: rBS.bound}); err != nil {
 					return err
 				}
 			}
@@ -907,17 +1306,19 @@ func (k *wallKernel) wedgeCands(budget *workBudget, visit func(diskCand) error) 
 			if !e.arcContains(th) {
 				continue
 			}
-			sin := math.Sin(th)
-			den := 1 + s*se*sin
-			if math.Abs(den) < survTiny {
+			sinBS, _ := radianTrigBounds(th)
+			numBS := boundedMul(sBS, boundedAdd(exactScalar(e.qy), boundedMul(e.rrBS(), sinBS)))
+			denBS := boundedAdd(exactScalar(1), boundedMul(boundedMul(sBS, exactScalar(se)), sinBS))
+			if admitMagnitudeAbove(denBS, survTiny) == survReject {
 				continue
 			}
-			r := s * (e.qy + e.rr*sin) / den
-			if r <= 0 {
+			rBS := boundedQuotient(numBS.value, numBS.bound, denBS.value, denBS.bound)
+			if admitAbove(rBS, 0) == survReject {
 				continue
 			}
+			r := rBS.value
 			d := e.rr - se*r
-			if err := visit(diskCand{x: e.qx + d*math.Cos(th), y: e.qy + d*math.Sin(th), r: r}); err != nil {
+			if err := visit(diskCand{x: e.qx + d*math.Cos(th), y: e.qy + d*math.Sin(th), r: r, rBound: rBS.bound}); err != nil {
 				return err
 			}
 		}
@@ -927,11 +1328,21 @@ func (k *wallKernel) wedgeCands(budget *workBudget, visit func(diskCand) error) 
 
 // circEq is one tangency equation for the Apollonius triples: either linear
 // (a·cx + b·cy + e·r + f = 0) or quadratic
-// (cx² + cy² − r² + g·cx + h·cy + kk·r + m = 0).
+// (cx² + cy² − r² + g·cx + h·cy + kk·r + m = 0). Every coefficient is a
+// boundedScalar, not a bare float: the element, vertex and wedge coordinates
+// the equations are built from are exact leaves, but forming a coefficient
+// from them rounds (a product of two coordinates, a sum of three such
+// products); an arc element's radius is not even a leaf, since it arrives with
+// its own bound (surveyElem.rrBound); and the wedge's own coefficient is a
+// sine that arrives already bounded.
+// solveTriple/solve3Linear/solveParallelPair compose those bounds through
+// every determinant, numerator and division they perform, so a triple's
+// published radius interval speaks for the WHOLE chain from coefficient
+// construction down to the final quotient.
 type circEq struct {
 	quad        bool
-	g, h, kk, m float64
-	a, b, e, f  float64
+	g, h, kk, m boundedScalar
+	a, b, e, f  boundedScalar
 }
 
 // tripleEquations builds the material-side-pinned tangency equation of every
@@ -943,34 +1354,48 @@ func (k *wallKernel) tripleEquations(budget *workBudget) ([]circEq, error) {
 			return nil, err
 		}
 		if el.kind == surveyLine {
+			nx, ny := exactScalar(el.nx), exactScalar(el.ny)
 			eqs = append(eqs, circEq{
-				a: el.nx, b: el.ny, e: -1, f: -(el.nx*el.ax + el.ny*el.ay),
+				a: nx, b: ny, e: exactScalar(-1),
+				f: boundedNeg(boundedAdd(
+					boundedMul(nx, exactScalar(el.ax)),
+					boundedMul(ny, exactScalar(el.ay)),
+				)),
 			})
 			continue
 		}
 		s := el.matSign()
+		qx, qy, rr := exactScalar(el.qx), exactScalar(el.qy), el.rrBS()
 		eqs = append(eqs, circEq{
 			quad: true,
-			g:    -2 * el.qx, h: -2 * el.qy,
-			kk: 2 * s * el.rr,
-			m:  el.qx*el.qx + el.qy*el.qy - el.rr*el.rr,
+			g:    boundedMul(exactScalar(-2), qx),
+			h:    boundedMul(exactScalar(-2), qy),
+			kk:   boundedMul(exactScalar(2*s), rr),
+			m: boundedSub(
+				boundedAdd(boundedMul(qx, qx), boundedMul(qy, qy)),
+				boundedMul(rr, rr),
+			),
 		})
 	}
 	for _, v := range k.verts {
 		if err := wallBudgetStep(budget); err != nil {
 			return nil, err
 		}
+		vx, vy := exactScalar(v[0]), exactScalar(v[1])
 		eqs = append(eqs, circEq{
 			quad: true,
-			g:    -2 * v[0], h: -2 * v[1],
-			m: v[0]*v[0] + v[1]*v[1],
+			g:    boundedMul(exactScalar(-2), vx),
+			h:    boundedMul(exactScalar(-2), vy),
+			m:    boundedAdd(boundedMul(vx, vx), boundedMul(vy, vy)),
 		})
 	}
-	if k.wedgeS > 0 {
+	if k.hasWedge() {
 		if err := wallBudgetStep(budget); err != nil {
 			return nil, err
 		}
-		eqs = append(eqs, circEq{b: k.wedgeS, e: -1})
+		// The wedge's coefficient is the caller's already-bounded sine, so a
+		// triple that includes the wedge inherits the sine's own error.
+		eqs = append(eqs, circEq{b: k.wedgeS, e: exactScalar(-1)})
 	}
 	return eqs, nil
 }
@@ -980,7 +1405,14 @@ func (k *wallKernel) tripleEquations(budget *workBudget) ([]circEq, error) {
 // independent linears express the center affinely in r, and substitution
 // yields a quadratic in r. Parallel linear pairs pin r instead and leave the
 // position as the unknown.
-func solveTriple(eqs [3]circEq, scale float64, add func(x, y, r float64)) {
+//
+// The parallel/independent split is the one reading here that decides between
+// two GENERATORS rather than between a candidate and nothing, so an interval
+// that cannot separate the pair's determinant from zero runs both: a
+// superfluous candidate costs a validate pass and can never reach a reading
+// it does not genuinely satisfy, while a missing one is a wall this survey
+// would not see.
+func solveTriple(eqs [3]circEq, scale float64, add func(x, y, r, rBound float64)) {
 	var lins []circEq
 	var quad *circEq
 	for i, e := range eqs {
@@ -995,7 +1427,8 @@ func solveTriple(eqs [3]circEq, scale float64, add func(x, y, r float64)) {
 		}
 		// Subtract: the c·c − r² terms cancel.
 		lins = append(lins, circEq{
-			a: e.g - quad.g, b: e.h - quad.h, e: e.kk - quad.kk, f: e.m - quad.m,
+			a: boundedSub(e.g, quad.g), b: boundedSub(e.h, quad.h),
+			e: boundedSub(e.kk, quad.kk), f: boundedSub(e.m, quad.m),
 		})
 	}
 	if len(lins) == 3 {
@@ -1006,90 +1439,151 @@ func solveTriple(eqs [3]circEq, scale float64, add func(x, y, r float64)) {
 		return
 	}
 	l1, l2 := lins[0], lins[1]
-	det := l1.a*l2.b - l2.a*l1.b
-	if math.Abs(det) <= 1e-12*math.Max(1, scale) {
+	detBS := boundedSub(boundedMul(l1.a, l2.b), boundedMul(l2.a, l1.b))
+	parallel := admitMagnitudeAbove(detBS, 1e-12*math.Max(1, scale))
+	if parallel != survAdmit {
 		solveParallelPair(l1, l2, *quad, add)
-		return
+		if parallel == survReject {
+			return
+		}
 	}
-	// (cx, cy) = P + r·Q from the two linears.
-	px := (-l1.f*l2.b + l2.f*l1.b) / det
-	py := (-l1.a*l2.f + l2.a*l1.f) / det
-	qx := (-l1.e*l2.b + l2.e*l1.b) / det
-	qy := (-l1.a*l2.e + l2.a*l1.e) / det
-	A := qx*qx + qy*qy - 1
-	B := 2*(px*qx+py*qy) + quad.g*qx + quad.h*qy + quad.kk
-	C := px*px + py*py + quad.g*px + quad.h*py + quad.m
-	for _, r := range quadRoots(A, B, C) {
-		if r > 0 {
-			add(px+r*qx, py+r*qy, r)
+	// (cx, cy) = P + r·Q from the two linears. The triple's OWN division (by
+	// det) composes through boundedQuotient like every other division here, so
+	// P and Q reach the quadratic below carrying their own error rather than
+	// as exact leaves.
+	pxBS := boundedDiv(boundedAdd(boundedMul(boundedNeg(l1.f), l2.b), boundedMul(l2.f, l1.b)), detBS)
+	pyBS := boundedDiv(boundedAdd(boundedMul(boundedNeg(l1.a), l2.f), boundedMul(l2.a, l1.f)), detBS)
+	qxBS := boundedDiv(boundedAdd(boundedMul(boundedNeg(l1.e), l2.b), boundedMul(l2.e, l1.b)), detBS)
+	qyBS := boundedDiv(boundedAdd(boundedMul(boundedNeg(l1.a), l2.e), boundedMul(l2.a, l1.e)), detBS)
+	ABS := boundedSub(boundedAdd(boundedMul(qxBS, qxBS), boundedMul(qyBS, qyBS)), exactScalar(1))
+	BBS := boundedAdd(
+		boundedMul(exactScalar(2), boundedAdd(boundedMul(pxBS, qxBS), boundedMul(pyBS, qyBS))),
+		boundedAdd(boundedAdd(boundedMul(quad.g, qxBS), boundedMul(quad.h, qyBS)), quad.kk),
+	)
+	CBS := boundedAdd(
+		boundedAdd(boundedMul(pxBS, pxBS), boundedMul(pyBS, pyBS)),
+		boundedAdd(boundedAdd(boundedMul(quad.g, pxBS), boundedMul(quad.h, pyBS)), quad.m),
+	)
+	for _, rBS := range quadRootsBounded(ABS, BBS, CBS) {
+		r := rBS.value
+		if admitAbove(rBS, 0) != survReject {
+			add(pxBS.value+r*qxBS.value, pyBS.value+r*qyBS.value, r, rBS.bound)
 		}
 	}
 }
 
-// solve3Linear solves three linear tangency equations by Cramer's rule.
-func solve3Linear(l []circEq, add func(x, y, r float64)) {
-	det := l[0].a*(l[1].b*l[2].e-l[2].b*l[1].e) -
-		l[0].b*(l[1].a*l[2].e-l[2].a*l[1].e) +
-		l[0].e*(l[1].a*l[2].b-l[2].a*l[1].b)
-	if math.Abs(det) < survTiny {
+// solve3Linear solves three linear tangency equations by Cramer's rule. Every
+// 2×2 minor, every expansion of it, and the final division compose through the
+// bounded arithmetic, so the radius the candidate publishes carries the error
+// of the WHOLE rule and not just its last division: a well-conditioned triple
+// still rounds six products and three sums into each numerator before the
+// quotient ever runs.
+//
+// A determinant this rule cannot separate from zero is the one reading here
+// that stops rather than emits, and it drops no attained extremum: three
+// tangency equations whose determinant the arithmetic cannot prove nonzero are
+// dependent to within their own error, so they name no ISOLATED disk at all —
+// the family they describe reaches the sink through the pair criticals and
+// solveParallelPair, which is what those generators are for. Emitting instead
+// would publish a position and radius Cramer's rule divides out of a vanishing
+// denominator, whose own +Inf bound would then leave every survey containing
+// such a triple undecided — which for a rotated or placed section is most of
+// them.
+func solve3Linear(l []circEq, add func(x, y, r, rBound float64)) {
+	// The 2×2 minors of rows 1 and 2 over each column pair, named for the
+	// columns they keep.
+	minor := func(p, q, s, t boundedScalar) boundedScalar {
+		return boundedSub(boundedMul(p, t), boundedMul(s, q))
+	}
+	be := minor(l[1].b, l[1].e, l[2].b, l[2].e)
+	ae := minor(l[1].a, l[1].e, l[2].a, l[2].e)
+	ab := minor(l[1].a, l[1].b, l[2].a, l[2].b)
+	fe := minor(l[1].f, l[1].e, l[2].f, l[2].e)
+	fb := minor(l[1].f, l[1].b, l[2].f, l[2].b)
+	af := minor(l[1].a, l[1].f, l[2].a, l[2].f)
+	bf := minor(l[1].b, l[1].f, l[2].b, l[2].f)
+	detBS := boundedAdd(
+		boundedSub(boundedMul(l[0].a, be), boundedMul(l[0].b, ae)),
+		boundedMul(l[0].e, ab),
+	)
+	if admitMagnitudeAbove(detBS, survTiny) != survAdmit {
 		return
 	}
-	dx := -l[0].f*(l[1].b*l[2].e-l[2].b*l[1].e) +
-		l[0].b*(l[1].f*l[2].e-l[2].f*l[1].e) -
-		l[0].e*(l[1].f*l[2].b-l[2].f*l[1].b)
-	dy := -l[0].a*(l[1].f*l[2].e-l[2].f*l[1].e) +
-		l[0].f*(l[1].a*l[2].e-l[2].a*l[1].e) -
-		l[0].e*(l[1].a*l[2].f-l[2].a*l[1].f)
-	dr := -l[0].a*(l[1].b*l[2].f-l[2].b*l[1].f) +
-		l[0].b*(l[1].a*l[2].f-l[2].a*l[1].f) -
-		l[0].f*(l[1].a*l[2].b-l[2].a*l[1].b)
-	r := dr / det
-	if r > 0 {
-		add(dx/det, dy/det, r)
+	drBS := boundedSub(
+		boundedAdd(boundedMul(boundedNeg(l[0].a), bf), boundedMul(l[0].b, af)),
+		boundedMul(l[0].f, ab),
+	)
+	rBS := boundedDiv(drBS, detBS)
+	if admitAbove(rBS, 0) == survReject {
+		return
 	}
+	// The center is a position, never a published reading (see
+	// placeCircleCircle), so it stays a plain quotient.
+	dx := boundedSub(
+		boundedAdd(boundedMul(boundedNeg(l[0].f), be), boundedMul(l[0].b, fe)),
+		boundedMul(l[0].e, fb),
+	).value
+	dy := boundedSub(
+		boundedAdd(boundedMul(boundedNeg(l[0].a), fe), boundedMul(l[0].f, ae)),
+		boundedMul(l[0].e, af),
+	).value
+	add(dx/detBS.value, dy/detBS.value, rBS.value, rBS.bound)
 }
 
 // solveParallelPair handles two parallel linear tangency equations plus a
 // quadratic: the pair fixes r and a line of centers; the quadratic picks the
-// positions along it.
-func solveParallelPair(l1, l2, q circEq, add func(x, y, r float64)) {
-	n := math.Hypot(l1.a, l1.b)
-	if n < survTiny {
+// positions along it. The normalization, the 2×2 determinant and the final
+// division all compose their bounds, so the radius every emitted position
+// shares carries the error of the whole reduction; the positions themselves
+// never feed a published reading and stay plain floats.
+//
+// A normal this rule cannot separate from zero is not a line: the equation
+// carries no direction to normalize by, so there is nothing to solve and the
+// reading stops, the same way solve3Linear's dependent triple does. The
+// orientation sign σ is the one reading here whose straddle is unreachable
+// from its own algebra — the two normals are already unit vectors and the
+// caller only reaches this function for a pair whose cross product is at or
+// below its own parallelism threshold, so their dot product sits within a few
+// ulps of ±1 and no interval this arithmetic produces spans zero.
+func solveParallelPair(l1, l2, q circEq, add func(x, y, r, rBound float64)) {
+	nBS := boundedNorm2(l1.a, l1.b)
+	if admitAbove(nBS, survTiny) != survAdmit {
 		return
 	}
 	// Normalize both to unit normals; solve the 2×2 system in (h, r) where
 	// h = n̂·c along l1's normal.
-	a1, b1, e1, f1 := l1.a/n, l1.b/n, l1.e/n, l1.f/n
-	n2 := math.Hypot(l2.a, l2.b)
-	if n2 < survTiny {
+	a1, b1 := boundedDiv(l1.a, nBS), boundedDiv(l1.b, nBS)
+	e1, f1 := boundedDiv(l1.e, nBS), boundedDiv(l1.f, nBS)
+	n2BS := boundedNorm2(l2.a, l2.b)
+	if admitAbove(n2BS, survTiny) != survAdmit {
 		return
 	}
-	a2, b2, e2, f2 := l2.a/n2, l2.b/n2, l2.e/n2, l2.f/n2
+	a2, b2 := boundedDiv(l2.a, n2BS), boundedDiv(l2.b, n2BS)
+	e2, f2 := boundedDiv(l2.e, n2BS), boundedDiv(l2.f, n2BS)
 	// n̂2 = ±n̂1: sign σ.
-	sigma := a1*a2 + b1*b2
-	if sigma > 0 {
+	sigma := -1.0
+	if admitAbove(boundedAdd(boundedMul(a1, a2), boundedMul(b1, b2)), 0) == survAdmit {
 		sigma = 1
-	} else {
-		sigma = -1
 	}
 	// eq1: h + e1·r + f1 = 0; eq2: σ·h + e2·r + f2 = 0.
-	det := e2 - sigma*e1
-	if math.Abs(det) < survTiny {
+	detBS := boundedSub(e2, boundedMul(exactScalar(sigma), e1))
+	if admitMagnitudeAbove(detBS, survTiny) == survReject {
 		return
 	}
-	r := (sigma*f1 - f2) / det
-	if r <= 0 {
+	rBS := boundedDiv(boundedSub(boundedMul(exactScalar(sigma), f1), f2), detBS)
+	r := rBS.value
+	if admitAbove(rBS, 0) == survReject {
 		return
 	}
-	h := -e1*r - f1
+	h := -e1.value*r - f1.value
 	// Centers: c = h·n̂1 + t·t̂1. Substitute into the quadratic.
-	tx, ty := -b1, a1
-	bx, by := h*a1, h*b1
+	tx, ty := -b1.value, a1.value
+	bx, by := h*a1.value, h*b1.value
 	A := 1.0
-	B := 2*(bx*tx+by*ty) + q.g*tx + q.h*ty
-	C := bx*bx + by*by - r*r + q.g*bx + q.h*by + q.kk*r + q.m
+	B := 2*(bx*tx+by*ty) + q.g.value*tx + q.h.value*ty
+	C := bx*bx + by*by - r*r + q.g.value*bx + q.h.value*by + q.kk.value*r + q.m.value
 	for _, t := range quadRoots(A, B, C) {
-		add(bx+t*tx, by+t*ty, r)
+		add(bx+t*tx, by+t*ty, r, rBS.bound)
 	}
 }
 
@@ -1111,8 +1605,10 @@ func quadRoots(A, B, C float64) []float64 {
 }
 
 // placeCircleCircle emits the (up to two) points at distance da from
-// (ax, ay) and db from (bx, by), as candidate centers of radius r.
-func placeCircleCircle(ax, ay, da, bx, by, db float64, add func(x, y, r float64), r float64) {
+// (ax, ay) and db from (bx, by), as candidate centers of radius r (with its
+// own proven bound rBound, unaffected by the position solve below — the
+// position never feeds a published reading).
+func placeCircleCircle(ax, ay, da, bx, by, db float64, add func(x, y, r, rBound float64), r, rBound float64) {
 	dx, dy := bx-ax, by-ay
 	d := math.Hypot(dx, dy)
 	if d < survTiny || da < 0 || db < 0 {
@@ -1126,8 +1622,8 @@ func placeCircleCircle(ax, ay, da, bx, by, db float64, add func(x, y, r float64)
 	h := math.Sqrt(h2)
 	mx, my := ax+a*dx/d, ay+a*dy/d
 	px, py := -dy/d, dx/d
-	add(mx+h*px, my+h*py, r)
+	add(mx+h*px, my+h*py, r, rBound)
 	if h > 0 {
-		add(mx-h*px, my-h*py, r)
+		add(mx-h*px, my-h*py, r, rBound)
 	}
 }
