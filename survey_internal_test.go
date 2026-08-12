@@ -3,6 +3,7 @@ package decad
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math"
 	"math/big"
 	"runtime"
@@ -971,5 +972,53 @@ func TestSolveTripleStraddledDeterminantDropsOnlyItsOwnCandidate(t *testing.T) {
 		`the parallel generator's own reading of this triple must survive the refusal`)
 	for _, r := range radii {
 		require.InDelta(t, 5.0, r, 1e-9, `the pair fixes the disk at half its own separation`)
+	}
+}
+
+// TestArcWalkRadiusBoundStaysUnderTheKernelSlack pins the headroom the
+// surveyElem.rrBound doc comment's derivation rests on, so that derivation
+// cannot silently rot. An ArcSeg records Start and Center, never the radius, so
+// the walk's radius is a math.Hypot of coordinate differences and
+// arcWalkRadiusBound brackets its error; the kernel's positions, ray casts and
+// tolerance comparisons read that HELD radius rather than the bracket, and what
+// makes them sound is that the bracket sits decades below every slack they
+// concede. The two claims below are that chain, over a range of arc geometries
+// and scales: the bracket is at most 2^-50 of the radius — a few ulp of it —
+// and, since the kernel's scale is never smaller than an element's radius, that
+// leaves it over six decades under k.tol, the weakest slack any of those
+// readings declares.
+func TestArcWalkRadiusBoundStaysUnderTheKernelSlack(t *testing.T) {
+	for _, scale := range []float64{1e-3, 1, 7.5, 1e3, 1e6} {
+		for _, d := range [][2]float64{
+			{1, 1}, {3, 4}, {0.5, 0.125}, {2, 9}, {1, 1e-3}, {6.7, 0.29}, {1e-2, 1},
+		} {
+			du, dv := d[0]*scale, d[1]*scale
+			cu, cv := 0.375*scale, -1.25*scale
+			t.Run(fmt.Sprintf("scale=%g/d=%g,%g", scale, d[0], d[1]), func(t *testing.T) {
+				// The whole production chain, so the bound under test is the
+				// one an element really carries: the held radius is the walk's
+				// own math.Hypot of recorded differences, not an ideal radius.
+				w, err := walkOf(ArcSeg{
+					Center: Point2{U: cu, V: cv},
+					Start:  Point2{U: cu + du, V: cv + dv},
+					End:    Point2{U: cu - du, V: cv - dv},
+					TStart: 0,
+					TEnd:   1,
+				}, newFreeformWork())
+				require.NoError(t, err)
+				e, ok := walkElem(w)
+				require.True(t, ok)
+				require.Equal(t, w.radiusBound, e.rrBound)
+
+				require.LessOrEqual(t, e.rrBound, math.Ldexp(e.rr, -50),
+					`the hypot bracket must stay within a few ulp of the radius it brackets`)
+
+				k := newWallKernel([]surveyElem{e}, nil, math.Inf(1))
+				require.GreaterOrEqual(t, k.scale, e.rr,
+					`the kernel's scale reaches every element radius, which is what carries the bound over`)
+				require.Less(t, e.rrBound*1e6, k.tol,
+					`the bound must stay decades under the slack every predicate concedes`)
+			})
+		}
 	}
 }

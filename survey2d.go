@@ -235,8 +235,30 @@ type surveyElem struct {
 	// zero for a caller that states the radius outright and for a recorded
 	// CircleSeg. Every candidate radius the WALL kernel below derives from rr
 	// composes this bound through its own arithmetic rather than reading rr as
-	// exact; the held rr alone still serves the positions, ray casts and
-	// tolerances that publish no interval of their own.
+	// exact.
+	//
+	// The readings that publish no interval of their own read the HELD rr
+	// instead — nearest's distance and contact direction, and the tolerance
+	// comparisons validate comes to make against them — and the headroom is the
+	// argument for that, not convenience. arcWalkRadiusBound brackets a hypot of
+	// recorded coordinate differences, so rrBound is at most 2^-50 of the
+	// radius, a few ulp of it; the kernel's own scale is never smaller than an
+	// element radius, so rrBound is at most 2^-50·scale ≈ 8.9e-16·scale, while
+	// the weakest slack any of those readings concedes is k.tol = 1e-9·scale.
+	// That is six decades of headroom, seven against contactTol's 8·k.tol, so
+	// widening the readings by rrBound would move nothing any of them decides.
+	// TestArcWalkRadiusBoundStaysUnderTheKernelSlack pins both halves of that
+	// chain so the argument cannot rot unnoticed.
+	//
+	// contains/rayCrossings is a different kind of reading again: a held-float
+	// PARITY predicate, whose soundness rests on its own ambiguity guards and
+	// the 16-direction retry — a crossing too close to an endpoint, a tangency
+	// or the ray start is refused outright and the next direction tried, never
+	// counted — and not on any operand bound. The arc radius is neither the
+	// weakest term there nor a distinguishable one: the same predicate rounds
+	// fx*fx + fy*fy − rr*rr on its own account, by more than a radius shift of
+	// this size moves it, so an interval carrying rrBound alone could not prove
+	// the count either.
 	qx, qy, rr float64
 	rrBound    float64
 	th0, th1   float64
