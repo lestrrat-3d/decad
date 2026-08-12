@@ -338,11 +338,12 @@ Increment 4, the deep end. Strategy:
 `docs/prism-boolean-design.md` is the approved analytic reduction
 `performBoolean` dispatches, ahead of the tessellation path below, for
 co-directional coplanar prism pairs: `Union`'s select-all/merge/chain path and
-`Cut`/`Intersect`'s clean-nesting structural match. `evaluateBoolean` remains
-this section's mesh path; a rejected analytic candidate and every other
-operation falls back to it unchanged. PR4 separately adds a read-only analytic
-`Intersect` path for `Verify`'s own interference evaluation (below), which
-still calls `evaluateBoolean` directly.
+`Cut`/`Intersect`'s clean-nesting structural match. `Verify`'s own interference
+evaluation (below) dispatches that same reduction for `OpIntersect` through
+`evaluateAnalyticIntersect`, a read-only twin that builds the admitted payload
+and never commits, so it consumes neither operand. `evaluateBoolean` remains
+this section's mesh path: a pair neither dispatch admits falls back to it
+unchanged, as does every other operation.
 
 **Interference evaluation MUST be read-only; committing a public boolean stays
 a wrapper.** Interference PR 1 (`docs/interference-design.md` §11) factors one
@@ -353,10 +354,12 @@ mints a recipe reference. `UnionContext` / `CutContext` / `IntersectContext`
 gate their operands, pass the caller context through evaluation and faceted-body
 construction, then commit the step atomically. `Union` / `Cut` / `Intersect`
 call those variants with `context.Background()` for compatibility. `Verify`
-calls the same evaluator with its own context and consumes only a bounded
-intersection volume; it never calls public `Intersect` and never builds a
-transient document body (`docs/interference-design.md` §5). This split is
-implemented; public consuming behavior is unchanged.
+passes its own context to the read-only analytic `OpIntersect` twin first, and
+to this same mesh evaluator for a pair that twin does not admit; it consumes
+only a bounded intersection volume from whichever path answers, never calls
+public `Intersect`, and never builds a transient document body
+(`docs/interference-design.md` §5, §5.2). This split is implemented; public
+consuming behavior is unchanged.
 
 Expected geometric non-results — empty held intersection, an undecidable
 contact arrangement, and `ErrUnsupported` staging — are private typed outcomes:

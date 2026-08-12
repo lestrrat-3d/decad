@@ -210,7 +210,7 @@ one.
 
 | Path | Responsibility |
 |---|---|
-| `boolean.go` | Public `Union`/`Cut`/`Intersect` surface over the mesh-boolean evaluator and the typed `BooleanError` mapping; tries the prism-boolean analytic reduction first. See `Union`'s doc comment and `docs/evaluator-design.md` §9. |
+| `boolean.go` | Public `Union`/`Cut`/`Intersect` surface over the mesh-boolean evaluator and the typed `BooleanError` mapping; tries the prism-boolean analytic reduction first, and owns `Verify`'s read-only `OpIntersect` twin of it. See `Union`'s doc comment and `docs/evaluator-design.md` §9. |
 | `prism_boolean.go` | The analytic Union/Cut/Intersect reduction over co-directional coplanar prisms: shared G1-G4 admission, work-budget cap, scene construction, and Union's own select-all/merge/chain path, dispatched ahead of the mesh path. See the file's own doc comment and `docs/prism-boolean-design.md`. |
 | `prism_boolean_nesting.go` | Cut/Intersect's clean-nesting structural match (§4.2's "clean" sub-case): the whole-loop tag-map search that resolves a clean bore/nested pair with no assembly and no build-time audit. See the file's own doc comment and `docs/prism-boolean-design.md`. |
 | `boolean_mesh.go` | The exact-predicate mesh-boolean pipeline: contact classification, subdivision, stitching, and the closed-mesh audit. See the file's own doc comment and `docs/evaluator-design.md` §9. |

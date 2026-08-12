@@ -554,8 +554,10 @@ computed when `WithClearances()` (§2) asks for it.
 
 How that partition is proved is specified once in
 `docs/interference-design.md`: pairs have four internal outcomes — disjoint,
-touching, overlapping, undecided — and `Verify` may use the analytic clearance
-kernel, a strict full-containment certificate, or a read-only mesh intersection.
+touching, overlapping, undecided — and `Verify` may settle one through any proof
+path that document specifies: the analytic clearance kernel, a strict
+full-containment or analytic equality certificate, the read-only analytic
+`OpIntersect` dispatch, or the read-only mesh intersection.
 `Verify` NEVER calls the consuming public `Intersect`; report construction does
 not append a recipe step, retire an operand, or register a transient body.
 
@@ -564,9 +566,10 @@ not append a recipe step, retire an operand, or register a transient body.
 **Give large-model verification a caller-owned deadline.** `Verify` computes
 interference even when no options are passed because the `Interfering` status
 depends on it. After body checks, it considers every unordered pair of proven
-solids. Box separation, the analytic pair kernel, containment, or equality can
-settle a pair cheaply. A pair they do not settle reaches the read-only mesh
-intersection.
+solids. Box separation, the analytic pair kernel, containment, equality, or the
+read-only analytic `OpIntersect` dispatch over an admitted coplanar prism pair
+can settle a pair cheaply. A pair none of them settles reaches the read-only
+mesh intersection.
 
 For that mesh fallback, facet boxes prune exact intersection predicates, but
 the evaluator still checks the box of every facet in one operand against the
