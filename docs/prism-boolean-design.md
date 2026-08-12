@@ -371,37 +371,48 @@ different, computed corner recorded as though it were exact. §7's `δ_walk`
 is what charges that gap into the result's own `sectionDelta`.
 
 **`Cut`/`Intersect`, crossing sub-case (boundary contact, not clean nesting):
-staged (§4.4, §9 PR3).** When operand B's boundary genuinely crosses
-operand A's (a bore that pokes outside the hub, or a general-position
-overlap), neither `Union`'s select-all rule (only sound because `Union`
-wants *every* cell) nor the clean-nesting structural match (which requires
-every edge `Whole`) applies. The general mechanism — stated here for
-completeness, since the design must answer how region selection works in
-general, even though increment 1/2 does not build it — is **edge-orientation
-propagation**: for a cell touching a boundary edge sourced from operand X,
-compare that edge's `Reversed` flag (in this cell's own walk) against X's
-recorded authored orientation for the loop that entity came from
+implemented for the direct-edge case (`prism_boolean_crossing.go`); the
+coincident-carrier extension below stays staged (§4.4).** When operand B's
+boundary genuinely crosses operand A's (a bore that pokes outside the hub, or
+a general-position overlap), neither `Union`'s select-all rule (only sound
+because `Union` wants *every* cell) nor the clean-nesting structural match
+(which requires every edge `Whole`) applies. The mechanism is
+**edge-orientation propagation**: for a cell touching a boundary edge sourced
+from operand X, compare that edge's `Reversed` flag (in this cell's own walk)
+against X's recorded authored orientation for the loop that entity came from
 (record.go's "outer CCW, holes CW"); a match means the cell sits on X's
 material side at that edge (X's authored convention already puts material on
 the walk's left), a mismatch means X's void side. This is a **flag
 comparison**, not a geometric test — the classification `sketch` already
 encodes in which direction it walked a shared entity for this specific cell.
-For a cell with a direct edge from both operands, both readings are
-available and the four combinations (`A-only`, `B-only`, `both`, impossible-
-for-two-simple-curves-`neither`) select `Union`'s "either", `Cut`'s "A and
-not B", `Intersect`'s "both". For a cell touching only one operand directly
-but adjoining a **coincident carrier** (the tooth-only cell of the gear's
-shared-arc case, which the merged edge names under only one operand's entity)
-— decad additionally identifies, from its **own** recorded segment data
-(comparing `Point2`/radius fields for exact equality after §4.1's
-re-expression — the same discipline `momentRecordScene`'s dedup key already
-applies, an algebraic comparison of decad's own numbers, never a geometric
-one), which of its own segments across the two operands describe the same
-carrier, and derives the fixed relative orientation between the two operands'
-authored senses for that shared carrier once, structurally, from their own
-recorded windings — never from evaluating a point against either curve. A
-cell this propagation cannot reach at all (isolated from every operand
-boundary by an unclassified path) is unresolved and falls to §4.4.
+`prismEntityOrigin.authoredReversed` (`prism_boolean.go`'s `buildPrismScene`)
+records, once per created entity at scene-build time, whether that operand's
+own recorded walk runs backwards relative to the entity's own natural
+parameterization, so the comparison above is bookkeeping on a fact already
+captured, never a fact `classifyPrismCells` derives from geometry. For a cell
+with a direct edge from both operands, both readings are available and the
+four combinations (`A-only`, `B-only`, `both`, impossible-for-two-simple-
+curves-`neither`) select `Union`'s "either", `Cut`'s "A and not B",
+`Intersect`'s "both". A cell with no direct edge from an operand takes that
+operand's own classification from a neighboring cell reached by crossing an
+edge that does NOT belong to that operand — crossing a non-operand edge
+cannot move across that operand's own boundary, so membership carries over
+unchanged; `classifyPrismCells` floods this from every directly-classified
+cell.
+For a cell touching only one operand directly but adjoining a **coincident
+carrier** (the tooth-only cell of the gear's shared-arc case, which the
+merged edge names under only one operand's entity) — decad would additionally
+need to identify, from its **own** recorded segment data (comparing
+`Point2`/radius fields for exact equality after §4.1's re-expression — the
+same discipline `momentRecordScene`'s dedup key already applies, an algebraic
+comparison of decad's own numbers, never a geometric one), which of its own
+segments across the two operands describe the same carrier, and derive the
+fixed relative orientation between the two operands' authored senses for that
+shared carrier once, structurally, from their own recorded windings — never
+from evaluating a point against either curve. This extension is not yet
+built: a cell reachable only through a coincident carrier is unresolved today
+(§4.4), the same outcome as any other cell the propagation above cannot
+reach at all (isolated from every operand boundary by an unclassified path).
 
 ### 4.3 Assembly output
 
@@ -427,7 +438,8 @@ regardless of who authored the input curves it was cut from.
 | `Union` with a holed operand | G6, mesh path; §9 PR3 |
 | A split arranged boundary with a nonzero source displacement or a nonidentity re-expression | §3.4 safety routing, mesh path; a future crossing-sensitivity proof may admit it |
 | `Cut` with a holed tool | G6, mesh path; the surviving material inside each tool hole is a separate lump, so it waits on the multi-lump prism payload of the row below, not on PR3 |
-| `Cut`/`Intersect` crossing sub-case (§4.2) | resolution unresolved (§3.4), mesh path; §9 PR3 |
+| `Cut`/`Intersect` crossing sub-case reachable only through a coincident carrier named under one operand's own entity (§4.2's own further extension) | not yet built (`prism_boolean_crossing.go`), mesh path |
+| A holed `Cut` target whose tool does not clear it via clean nesting (the crossing classifier is scoped to hole-free operands on both sides, §4.2) | mesh path; the clean-nesting path above still covers a holed target whose tool does not touch it |
 | A disjoint-footprint `Union` (two separate lumps) | resolution fails to close one loop (§4.2), mesh path; a future multi-lump prism payload, not currently planned |
 | A free-form (Tier A spline) segment that never touches the other operand | excluded by G4 today (whole-scene `TExact` gate, §3.1); worth revisiting once the two-operand scene construction is proven, since the segment itself would ride through untouched |
 
@@ -814,7 +826,7 @@ origin, exactly as it already must after a Fillet or Chamfer. Flagged in
 | Tessellation | The result is an ordinary `prismPayload` and `docs/tessellation-design.md` §5's prism contract applies, with §7's section displacement as a term of its own there: it displaces the analytic boundary a mesh approximates, so it does not ride in that contract's stored-coordinate rounding term, while the per-end axial displacement still does. Tessellation §5 reserves the section displacement from the requested tolerance before chording, refuses a tolerance it exhausts, and charges it to every face bound and to `areaSlack`, so chording plus that displacement stays within `tol`. The reservation covers no other term: the per-end axial displacement rides on top of it and can lift the published `Bound` above `tol`, which tessellation §1's Tolerance row allows. A mesh of an assembled body is `Exact`-trimmed only where every one of those displacements is zero. |
 | `ThroughAll` / `ThroughAllSide` | The stop reads an exact directional extent only where `δ == 0`. At `δ > 0`, it returns `ErrUnsupported`: the recorded endpoint has no bound it can widen. |
 | Clearance kernel | Unchanged where `δ == 0` — dispatches on payload class; `prismPayload` already has full analytic support (`clearance.go`'s coplanar `Plane`×`Plane` certificate, `offsetPair`, etc.). Where `δ > 0` the kernel builds no model for the body and the pair reads `Suspect`: every certificate it emits is an exact statement about the carriers it read, and a carrier the payload holds only within `δ` of the one it denotes cannot support one. Widening the kernel's own candidate intervals by `δ` is a separate piece of work, not this design's. |
-| Interference (`Verify`) | **Wired to the analytic path (PR4).** After its containment and represented-set-equality certificates, `interference.go`'s `measuredInterference` calls `evaluateAnalyticIntersect` (`boolean.go`) — a read-only twin of `performBoolean`'s analytic dispatch that runs `tryPrismBoolean`/`evalPrismContext` under a self-minted `StepRef` and never commits, so it consumes neither operand. An admitted pair's volume is measured directly from the built payload, still subject to §6's positive-volume gate (`docs/interference-design.md` §6); a pair the analytic path does not admit (`ok == false`) falls back unchanged to `evaluateBoolean`'s read-only mesh intersection, exactly as before this design existed. `docs/interference-design.md` §5.2 records the boundary this closes. |
+| Interference (`Verify`) | **Wired to the analytic path (PR4).** After its containment and represented-set-equality certificates, `interference.go`'s `measuredInterference` calls `evaluateAnalyticIntersect` (`boolean.go`) — a read-only twin of `performBoolean`'s analytic dispatch that runs `tryPrismBoolean`/`evalPrismContext` under a self-minted `StepRef` and never commits, so it consumes neither operand. An admitted pair's volume is measured directly from the built payload, still subject to §6's positive-volume gate (`docs/interference-design.md` §6); a pair the analytic path does not admit (`ok == false`) falls back unchanged to `evaluateBoolean`'s read-only mesh intersection, exactly as before this design existed. Since PR3, "admitted" includes a genuinely crossing coplanar pair resolved through `prism_boolean_crossing.go`, so `Verify` now proves a coplanar pair's overlap volume there too, not only for `Union`'s select-all path or `Cut`/`Intersect`'s clean-nesting sub-case. `docs/interference-design.md` §5.2 records the boundary this closes. |
 | Surveys (wall/undercut/min-radius) | No new code — they dispatch on payload class, and support is immediate where `δ == 0`. The undercut reading is a normal-direction membership and is unaffected at any `δ`. The wall and min-radius readings are staged at `δ > 0` and answer undecided (`Suspect`, never a silent pass): each publishes a bare reading with no bound beside it, and the wall reading is not a quantity a displacement widens by a fixed amount anyway — its allowance-angle contact families (verification §6) can change membership under a boundary perturbation, so a proven displaced reading needs the survey's own theory extended, not a term added to a bound. |
 | `Verify`'s structural/tolerance gates | Structurally unchanged — `prismPayload` is valid by construction as always. The TOLERANCE gate anchors each reading against a reference the body's own geometry supplies, and at `δ > 0` it cannot read that geometry through the clearance kernel's model, which the row above declines to build. It reads the body's OWN recorded section instead (`gateWitnessPrism`), shrinking the witness maximum by twice `δ` plus the axial displacement, which verification design §3 proves a lower bound on the denoted body's own diameter. A displaced body is therefore judged on the same terms as any other: a reading passes when its bound meets the tolerance and reports `Suspect` with a stated `Required` threshold when it does not. |
 | Export (STL/OBJ) | Reads `Tessellate`'s output. Its size-derived default tolerance is raised past `δ`, which tessellation reserves from the tolerance before chording, so a default export of an assembled body still writes its mesh rather than refusing. |
@@ -881,14 +893,17 @@ origin, exactly as it already must after a Fillet or Chamfer. Flagged in
    with the correct hole added and the target's original outer loop
    byte-identical to its pre-cut record; an `Intersect` of a fully-nested pair
    returns the inner operand's own geometry.
-3. **PR3 — general per-cell classification.** §4.2's edge-orientation
-   propagation and coincident-carrier detection, relaxing G6's union arm
-   (holed unions; its `Cut` tool arm stands, §13) and admitting the crossing
-   sub-case for `Cut`/`Intersect`. Tests: two overlapping (not
-   coincident-carrier) prisms union/cut/intersect correctly
-   against the mesh path's own answer on the same pair (property test,
-   volumes agree within the analytic path's tighter bound); a holed hub
-   unions with a tooth correctly, holes preserved.
+3. **PR3 — crossing sub-case for `Cut`/`Intersect`.** §4.2's edge-orientation
+   propagation over hole-free operands (`prism_boolean_crossing.go`), reusing
+   PR1's `mergePrismCells` chain/merge tail and §6's audit over its own
+   per-op cell selection. Tests: two overlapping (not coincident-carrier)
+   prisms cut/intersect correctly against the mesh path's own answer on the
+   same pair (property test, volumes agree within the analytic path's
+   tighter bound). Two pieces of the general mechanism (§4.2) remain: a cell
+   reachable only through a coincident carrier is still unresolved (silent
+   mesh-path fallback, not a refusal), and G6's `Union` arm still excludes a
+   holed operand (its `Cut` tool arm stands regardless, §13) — a holed hub
+   unions with a tooth correctly once that lands.
 4. **PR4 — replay/interference wiring + docs.** A stored
    `OpUnion`/`OpCut`/`OpIntersect` step builds via the analytic path
    post-upgrade with no wire change (recipe-replay-design §8's contract,

@@ -38,14 +38,26 @@ import (
 // Union's resolution (§4.2) is the hole-free select-all/merge/chain path: the
 // candidate is assembled from every returned cell, and §6's audit re-proves
 // the assembly the same way every modify op re-checks its own rewrite. It
-// lives entirely in this file. Cut/Intersect's clean-nesting structural match
-// (§4.2's "clean" sub-case) is prism_boolean_nesting.go — see that file's own
-// header for why it needs no assembly and no §6 audit. This file owns what
-// both paths share: G1-G4 admission, the work-budget cap, the private scene
+// lives entirely in this file, over mergePrismCells — the same chain/merge
+// tail the crossing sub-case below reuses over its own, narrower cell
+// selection. Cut/Intersect's clean-nesting structural match (§4.2's "clean"
+// sub-case) is prism_boolean_nesting.go — see that file's own header for why
+// it needs no assembly and no §6 audit. This file owns what every path
+// shares: G1-G4 admission, the work-budget cap, the private scene
 // construction (buildPrismScene) and the operand coordinate re-expression
-// (prismReexpression). The general per-cell edge-orientation classification
-// for Cut/Intersect's crossing sub-case (PR3) is not implemented, so a pair
-// whose operands' boundaries genuinely cross falls through to tryPrismBoolean
+// (prismReexpression).
+//
+// Cut/Intersect's crossing sub-case — genuine boundary contact, not clean
+// nesting — is prism_boolean_crossing.go: §4.2's edge-orientation
+// propagation over hole-free operands, dispatched by
+// prism_boolean_nesting.go's resolveAndBuildPrismCut/Intersect once the
+// clean-nesting search comes back unresolved. It does not yet identify a
+// coincident carrier shared under only one operand's entity (§4.2's own
+// further extension) or admit a holed operand past what G6 already allows
+// for Cut's target; either miss is silent fallback, never a refusal, so a
+// pair needing them still reaches the mesh path exactly as before this
+// increment. A pair whose operands' boundaries genuinely cross and whose
+// membership this propagation cannot reach falls through to tryPrismBoolean
 // returning ok=false, err=nil, exactly like any other unresolved topology
 // (§4.4).
 
@@ -157,7 +169,7 @@ func resolveAndBuildPrismUnion(ctx context.Context, budget *workBudget, pa, pb p
 	}
 
 	// Point of no return (§3.4): every further problem is a genuine refusal.
-	if err := auditPrismUnionSection(budget, pa, merged); err != nil {
+	if err := auditPrismMergeSection(budget, pa, merged); err != nil {
 		return prismPayload{}, false, err
 	}
 	result := prismPayload{
@@ -365,49 +377,70 @@ func resolvePrismUnion(ctx context.Context, budget *workBudget, pa, pb prismPayl
 
 	// Union, hole-free operands (G6): select every returned cell — by
 	// construction there is no bounded cell that is material of neither
-	// operand (§4.2). Count every boundary edge (Outer and every Hole loop
-	// of every selected cell) by (Entity, TStart, TEnd): a shared wall
-	// between two adjacent cells is walked in opposite senses by each but
-	// reports the SAME natural-direction TStart < TEnd range (Reversed, not
-	// the order, states the walk direction — sketch-seam-design's own
-	// contract), so this key alone matches it on both sides.
+	// operand (§4.2). mergePrismCells is the shared merge/chain tail the
+	// crossing sub-case (prism_boolean_crossing.go) reuses over its OWN,
+	// narrower selected cell set.
+	merged, cutDelta, resolved, err := mergePrismCells(budget, profiles, "union")
+	if err != nil {
+		return ProfileRecord{}, prismSceneDelta{}, 0, false, err
+	}
+	if !resolved {
+		return ProfileRecord{}, prismSceneDelta{}, 0, false, nil // §4.4: not a shape this increment covers
+	}
+	return merged, sceneDelta, cutDelta, true, nil
+}
+
+// mergePrismCells is §4.2's/§4.3's shared cell-merge machinery, common to
+// Union's own select-all path (selected is every returned cell) and the
+// crossing sub-case's per-op selection (prism_boolean_crossing.go): count
+// every boundary edge (Outer and every Hole loop) of every selected cell by
+// (Entity, TStart, TEnd) — a shared wall between two adjacent selected cells
+// is walked in opposite senses by each but reports the SAME natural-direction
+// TStart < TEnd range (Reversed, not the order, states the walk direction —
+// sketch-seam-design's own contract), so this key alone matches it on both
+// sides. Drop every edge counted exactly twice (an interior wall between two
+// selected cells); keep every edge counted exactly once (a wall against the
+// unbounded exterior, an unselected neighbor, or a coincident-carrier wall
+// reported under only one operand's entity). A count outside {1, 2} is
+// topology this increment does not cover.
+//
+// resolved=false (err always nil in that case) means the selected set's own
+// topology is unresolved (§4.4): a disjoint footprint, an internal void, an
+// edge count outside {1, 2}, or a chain that does not close into one simple
+// loop. opName names the op for RB1's message alone.
+func mergePrismCells(budget *workBudget, selected []*sketch.Profile, opName string) (ProfileRecord, float64, bool, error) {
 	type edgeKey struct {
 		entity sketch.Entity
 		t0, t1 float64
 	}
 	counts := map[edgeKey]int{}
-	for _, p := range profiles {
+	for _, p := range selected {
 		if err := budget.step(); err != nil {
-			return ProfileRecord{}, prismSceneDelta{}, 0, false, err
+			return ProfileRecord{}, 0, false, err
 		}
 		if !p.Valid {
 			// RB1: a candidate region the merge depends on is invalid. Every
-			// cell in this two-operand scene is selected for Union, so any
-			// invalid cell is a genuine refusal, not an unresolved topology.
-			return ProfileRecord{}, prismSceneDelta{}, 0, false, fmt.Errorf(`%w: the union scene's arrangement reports an invalid region`, ErrUnsupported)
+			// cell in `selected` is part of this op's result, so any invalid
+			// cell among them is a genuine refusal, not an unresolved topology.
+			return ProfileRecord{}, 0, false, prismInvalidRegionErr(opName)
 		}
 		for _, loop := range append([][]sketch.BoundaryEdge{p.Outer}, p.Holes...) {
 			for _, e := range loop {
 				if err := budget.step(); err != nil {
-					return ProfileRecord{}, prismSceneDelta{}, 0, false, err
+					return ProfileRecord{}, 0, false, err
 				}
 				counts[edgeKey{entity: e.Entity, t0: e.TStart, t1: e.TEnd}]++
 			}
 		}
 	}
 
-	// Second pass, in the arrangement's own deterministic profile/edge
-	// order: keep every edge counted exactly once (a wall against the
-	// unbounded exterior, or a coincident-carrier wall reported under only
-	// one operand's entity); drop every edge counted exactly twice (an
-	// interior wall between two selected cells). A count outside {1, 2} is
-	// topology this increment does not cover.
+	// Second pass, in the arrangement's own deterministic profile/edge order.
 	var survivors []sketch.BoundaryEdge
-	for _, p := range profiles {
+	for _, p := range selected {
 		for _, loop := range append([][]sketch.BoundaryEdge{p.Outer}, p.Holes...) {
 			for _, e := range loop {
 				if err := budget.step(); err != nil {
-					return ProfileRecord{}, prismSceneDelta{}, 0, false, err
+					return ProfileRecord{}, 0, false, err
 				}
 				n := counts[edgeKey{entity: e.Entity, t0: e.TStart, t1: e.TEnd}]
 				switch n {
@@ -416,21 +449,21 @@ func resolvePrismUnion(ctx context.Context, budget *workBudget, pa, pb prismPayl
 				case 2:
 					// dropped: an interior wall
 				default:
-					return ProfileRecord{}, prismSceneDelta{}, 0, false, nil // §4.4: not a shape this increment covers
+					return ProfileRecord{}, 0, false, nil // §4.4: not a shape this increment covers
 				}
 			}
 		}
 	}
 	if len(survivors) == 0 {
-		return ProfileRecord{}, prismSceneDelta{}, 0, false, nil
+		return ProfileRecord{}, 0, false, nil
 	}
 
 	chain, resolved, err := chainPrismUnionSurvivors(budget, survivors)
 	if err != nil {
-		return ProfileRecord{}, prismSceneDelta{}, 0, false, err
+		return ProfileRecord{}, 0, false, err
 	}
 	if !resolved {
-		return ProfileRecord{}, prismSceneDelta{}, 0, false, nil // §4.4: the survivors do not close into one simple loop
+		return ProfileRecord{}, 0, false, nil // §4.4: the survivors do not close into one simple loop
 	}
 
 	// Point of no return crossed within this function's own contract: every
@@ -441,21 +474,21 @@ func resolvePrismUnion(ctx context.Context, budget *workBudget, pa, pb prismPayl
 	cutDelta := 0.0
 	for i, e := range chain {
 		if err := budget.step(); err != nil {
-			return ProfileRecord{}, prismSceneDelta{}, 0, false, err
+			return ProfileRecord{}, 0, false, err
 		}
 		seg, err := recordEdge(e)
 		if err != nil {
-			return ProfileRecord{}, prismSceneDelta{}, 0, false, err
+			return ProfileRecord{}, 0, false, err
 		}
 		segs[i] = seg
 		join, err := edgeJoin(e, seg)
 		if err != nil {
-			return ProfileRecord{}, prismSceneDelta{}, 0, false, err
+			return ProfileRecord{}, 0, false, err
 		}
 		joins[i] = join
 		d, err := prismUnionCutDelta(e, seg)
 		if err != nil {
-			return ProfileRecord{}, prismSceneDelta{}, 0, false, err
+			return ProfileRecord{}, 0, false, err
 		}
 		cutDelta = math.Max(cutDelta, d)
 	}
@@ -463,10 +496,10 @@ func resolvePrismUnion(ctx context.Context, budget *workBudget, pa, pb prismPayl
 	// merged chain's recorded coordinates. recordLoop is not called here — it
 	// takes no budget.step() charge and would drop cutDelta's per-edge
 	// pairing — so this calls edgeJoin/falsifyLoopJoins directly, unchanged.
-	if err := falsifyLoopJoins("merged union loop", joins); err != nil {
-		return ProfileRecord{}, prismSceneDelta{}, 0, false, err
+	if err := falsifyLoopJoins("merged loop", joins); err != nil {
+		return ProfileRecord{}, 0, false, err
 	}
-	return ProfileRecord{Outer: LoopRecord{Segments: segs}}, sceneDelta, cutDelta, true, nil
+	return ProfileRecord{Outer: LoopRecord{Segments: segs}}, cutDelta, true, nil
 }
 
 // prismUnionCutDelta is §7's cut charge for one surviving boundary edge: how
@@ -637,16 +670,20 @@ func chainPrismUnionSurvivors(budget *workBudget, survivors []sketch.BoundaryEdg
 	return chain, true, nil
 }
 
-// auditPrismUnionSection runs the modify §5 audit (fillet_audit.go,
-// §6 of this design) on the merged section, reused verbatim with an empty
+// auditPrismMergeSection runs the modify §5 audit (fillet_audit.go,
+// §6 of this design) on a merged section, reused verbatim with an empty
 // blend map — shell_offset.go's own precedent for "no cutback data, still run
 // the shared audit". orig supplies the S8 sign reference: operand A's own
 // outer loop, whose CCW orientation and non-degenerate area the merged Outer
 // loop must match — the merge is correct only when it keeps that same
-// convention. S9 (nesting) is a no-op here: G6 keeps every operand, and so
-// the merged result, hole-free. This audit is Union's own — see this file's
-// header comment for why Cut/Intersect's clean-nesting match needs none.
-func auditPrismUnionSection(budget *workBudget, pa prismPayload, merged ProfileRecord) error {
+// convention. S9 (nesting) is a no-op here: G6 keeps every operand hole-free
+// for Union, and the crossing sub-case's own scoping
+// (prism_boolean_crossing.go) does the same, so the merged result is always
+// hole-free. This audit runs on every assembled (chained-and-merged) section —
+// Union's own select-all path and the crossing sub-case for Cut/Intersect
+// alike; see this file's header comment for why Cut/Intersect's clean-nesting
+// match needs none.
+func auditPrismMergeSection(budget *workBudget, pa prismPayload, merged ProfileRecord) error {
 	loops, err := prismCornerLoopsBudget(budget, prismPayload{profile: merged})
 	if err != nil {
 		return err
@@ -900,7 +937,9 @@ func buildPrismScene(budget *workBudget, pa, pb prismPayload, reexpress *prismRe
 		loops := append([]LoopRecord{profile.Outer}, profile.Holes...)
 		for li, loop := range loops {
 			hole := li - 1 // -1 names Outer; 0.. names Holes[hole]
-			tag := func(ent sketch.Entity) { tags[ent] = prismEntityOrigin{isB: isB, hole: hole} }
+			tag := func(ent sketch.Entity, authoredReversed bool) {
+				tags[ent] = prismEntityOrigin{isB: isB, hole: hole, authoredReversed: authoredReversed}
+			}
 			for _, seg := range loop.Segments {
 				if err := budget.step(); err != nil {
 					return err
@@ -918,20 +957,32 @@ func buildPrismScene(budget *workBudget, pa, pb prismPayload, reexpress *prismRe
 				} else {
 					sceneDelta.a = math.Max(sceneDelta.a, charge)
 				}
+				// authoredReversed is §4.2's crossing-sub-case bookkeeping
+				// (prism_boolean_crossing.go): whether this operand's own
+				// recorded walk of this entity runs backwards relative to the
+				// entity's own natural parameterization, as sketch will later
+				// report it through a returned BoundaryEdge.Reversed. A line's
+				// creation order always matches the walk (never reversed); a
+				// circle or arc's does whenever the walk's own angle runs from
+				// high to low — the SAME th1<th0 test the arc branch below
+				// already computes for its own lo/hi ordering, read once here
+				// for any circular kind, whole or arc alike, since w.th0/w.th1
+				// are populated either way.
+				authoredReversed := w.isCircular() && w.th1 < w.th0
 				switch {
 				case w.isLine():
 					start := reexpressPt(Point2{U: w.startU, V: w.startV})
 					end := reexpressPt(Point2{U: w.endU, V: w.endV})
 					key := entityKey{kind: 1, a: start, b: end}
 					if _, ok := entities[key]; !ok {
-						tag(s.CreateLine(point(start), point(end)))
+						tag(s.CreateLine(point(start), point(end)), authoredReversed)
 						entities[key] = struct{}{}
 					}
 				case w.isCircular() && w.closed:
 					center := reexpressPt(Point2{U: w.cU, V: w.cV})
 					key := entityKey{kind: 2, a: center, radius: w.radius}
 					if _, ok := entities[key]; !ok {
-						tag(s.CreateCircle(point(center), w.radius))
+						tag(s.CreateCircle(point(center), w.radius), authoredReversed)
 						entities[key] = struct{}{}
 					}
 				case w.isCircular():
@@ -950,7 +1001,7 @@ func buildPrismScene(budget *workBudget, pa, pb prismPayload, reexpress *prismRe
 					hi := reexpressPt(Point2{U: hiU, V: hiV})
 					key := entityKey{kind: 3, a: center, b: lo, c: hi}
 					if _, ok := entities[key]; !ok {
-						tag(s.CreateArc(point(center), point(lo), point(hi)))
+						tag(s.CreateArc(point(center), point(lo), point(hi)), authoredReversed)
 						entities[key] = struct{}{}
 					}
 				default:
