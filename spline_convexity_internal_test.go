@@ -33,17 +33,10 @@ import (
 // exact-rational geometry it will read, which these tests compute through the
 // shipped conversion and the shipped ratPoly engine.
 
-// curvatureNumerator is §6.2's K = u'v" - v'u" for one polynomial span: the
-// quantity whose sign IS the curve's signed-curvature sign. It reads the
-// shipped exact Bernstein-to-monomial restatement spline_moments.go already
-// integrates through, so nothing here rounds and nothing forks a second basis
-// conversion.
-func curvatureNumerator(span bezierSpan) ratPoly {
-	u, v := spanCoordinatePolys(span)
-	du, dv := rpDeriv(u), rpDeriv(v)
-	ddu, ddv := rpDeriv(du), rpDeriv(dv)
-	return rpSub(rpMul(du, ddv), rpMul(dv, ddu))
-}
+// curvatureNumerator is now spline_convexity.go's own production function;
+// this file no longer defines a duplicate. Every test below calls it exactly
+// as before — the production version reproduces it verbatim (§6.2's
+// K = u'v" - v'u").
 
 // polygonTurns is the retired rule's own quantity: the cross product at each
 // interior vertex of the control polygon, exactly.
@@ -256,6 +249,43 @@ func TestSingleSignPolygonTurnsProveNoCurvatureSign(t *testing.T) {
 
 	at1 := rpEval(k, big.NewRat(1, 1))
 	require.Equal(t, 1, at1.Sign(), "K(1) must be positive: two curvature sign changes, zero polygon-turn sign changes")
+
+	// The production certificate must refuse this net rather than publish the
+	// polygon rule's wrong "convex": K genuinely changes sign twice inside the
+	// span, so no depth of subdivision resolves it to one strict sign.
+	_, err = freeformWallConvexityContext(t.Context(), spans, false, reversed)
+	require.ErrorIs(t, err, ErrUnsupported,
+		"the certificate must refuse R19 rather than read the single-signed polygon turns")
+}
+
+// TestMixedCurvatureAtTheSubdivisionDepthCapRefusesR19 is the fixture bank's
+// missing case: a span whose curvature numerator genuinely changes sign
+// inside the span — not merely a hull over-estimate a deeper split would
+// clear — never resolves its Bernstein form to one strict sign at any depth,
+// so it must refuse Table R row R19 once the fixed depth cap
+// (freeformLengthDepth, spline_length.go) is reached, rather than loop
+// forever or publish a bool nothing proved.
+//
+// It reuses TestSingleSignPolygonTurnsProveNoCurvatureSign's own net, whose
+// K is positive at t=0, negative at t=5/7 and positive again at t=1 — two
+// genuine sign changes — and separately pins that this span's SPEED is
+// regular, so the refusal below is provably the depth cap and not the
+// regularity precondition.
+func TestMixedCurvatureAtTheSubdivisionDepthCapRefusesR19(t *testing.T) {
+	seg := unitWeightCubic([]Point2{{U: 0, V: 0}, {U: 1, V: 0}, {U: -4, V: 1}, {U: 0.9, V: 0}})
+	spans, reversed, err := freeformBezierSpans(seg, newFreeformWork())
+	require.NoError(t, err)
+	require.False(t, reversed)
+	require.Len(t, spans, 1)
+
+	s := squaredSpeed(spans[0])
+	halfOpen, atZero := closedSpanRootCount(t, s)
+	require.Equal(t, 0, halfOpen, "this span's speed has no interior or end root")
+	require.Equal(t, 1, atZero.Sign(), "and its speed is nonzero at its own start too — regularity holds")
+
+	_, err = freeformWallConvexityContext(t.Context(), spans, false, reversed)
+	require.ErrorIs(t, err, ErrUnsupported,
+		"a genuine curvature sign change never resolves to one strict sign, so the depth cap must refuse R19")
 }
 
 // TestInteriorCuspFoldsToAStrictSignWithoutRegularity is §6.5's sharpest
@@ -316,6 +346,12 @@ func TestInteriorCuspFoldsToAStrictSignWithoutRegularity(t *testing.T) {
 	halfOpen, atZero := closedSpanRootCount(t, s)
 	require.Equal(t, 1, halfOpen, "the Sturm chain must see that root on (0, 1]")
 	require.Equal(t, 1, atZero.Sign(), "and the span's own start is regular, so only the count refuses it")
+
+	// The production certificate must refuse this net too: the regularity
+	// precondition, not the coefficient fold, is what stops it.
+	_, err = freeformWallConvexityContext(t.Context(), spans, false, reversed)
+	require.ErrorIs(t, err, ErrUnsupported,
+		"the speed precondition must refuse R19 before the mixed-then-strict coefficient fold ever runs")
 }
 
 // TestEndpointCuspEscapesAHalfOpenRootCount is the precondition's other cusp
@@ -341,6 +377,12 @@ func TestEndpointCuspEscapesAHalfOpenRootCount(t *testing.T) {
 	halfOpen, atZero := closedSpanRootCount(t, s)
 	require.Equal(t, 0, halfOpen, "the half-open count finds NO root — on its own it admits this span")
 	require.Equal(t, 0, atZero.Sign(), "yet S(0) is zero: C'(0) = 3(P1 - P0) = (0, 0), so the span has no direction there")
+
+	// The production certificate must still refuse: the CLOSED-span endpoint
+	// check is what catches what the half-open root count alone would admit.
+	_, err = freeformWallConvexityContext(t.Context(), spans, false, reversed)
+	require.ErrorIs(t, err, ErrUnsupported,
+		"the endpoint value must refuse R19 even though the half-open root count alone would admit this span")
 }
 
 // TestCollinearNetProvesTheZeroCurvatureNumerator is §6.5's straight-walk
@@ -372,6 +414,11 @@ func TestCollinearNetProvesTheZeroCurvatureNumerator(t *testing.T) {
 
 	k := curvatureNumerator(spans[0])
 	require.Empty(t, rpTrim(k), "K must be the zero polynomial: the span lies on one straight line")
+
+	verdict, err := freeformWallConvexityContext(t.Context(), spans, false, reversed)
+	require.NoError(t, err)
+	require.Equal(t, freeformConvexityStraight, verdict,
+		"K is identically zero and the chain is a single span, so the chain's verdict is the straight-walk one")
 }
 
 // TestFitPointsAreNeitherTheChainNorItsHull is §6.5's FitSplineSeg clause: the
@@ -423,6 +470,16 @@ func TestFitPointsAreNeitherTheChainNorItsHull(t *testing.T) {
 	}
 	require.Less(t, minV, floor, "the curve leaves the recorded fit points' hull")
 	require.InDelta(t, -0.0912, minV, 1e-4, "the doc's approximate dip, at the precision it states")
+
+	// §6.5's own clause: every rule it states, including the certificate
+	// itself, reads §5.1.2's converted chain and never the recorded fit
+	// points. This hump-then-dip curve's curvature genuinely changes sign
+	// more than once, so the certificate refuses R19 rather than publish a
+	// bool for it — the same outcome a hand count of the curve's inflections
+	// would predict, not a certificate defect.
+	_, err = freeformWallConvexityContext(t.Context(), spans, false, false)
+	require.ErrorIs(t, err, ErrUnsupported,
+		"a hump-then-dip fit curve's curvature changes sign more than once, so the certificate must refuse R19")
 }
 
 // degreeOneNURBS is §6.5's Table K degree-1 row as a record: three control
@@ -490,6 +547,11 @@ func TestDegreeOneSpansCarryAZeroCurvatureNumerator(t *testing.T) {
 	cross := jointCross(spans[0], spans[1])
 	require.Equal(t, "1", cross.RatString(), "the joint between the two degree-1 spans turns by exactly +1")
 	require.Equal(t, 1, cross.Sign())
+
+	verdict, err := freeformWallConvexityContext(t.Context(), spans, false, reversed)
+	require.NoError(t, err)
+	require.Equal(t, freeformConvexityPositive, verdict,
+		"both span verdicts are 0, so the chain's verdict is the joint's own strictly positive turn")
 }
 
 // TestDegreeTwoCurvatureNumeratorIsAConstantAtTheStatedDegree is §6.5's
@@ -508,7 +570,7 @@ func TestDegreeTwoCurvatureNumeratorIsAConstantAtTheStatedDegree(t *testing.T) {
 	}
 	require.NoError(t, validateSegment(seg))
 
-	spans, _, err := freeformBezierSpans(seg, newFreeformWork())
+	spans, reversed, err := freeformBezierSpans(seg, newFreeformWork())
 	require.NoError(t, err)
 	require.Len(t, spans, 1)
 
@@ -529,6 +591,11 @@ func TestDegreeTwoCurvatureNumeratorIsAConstantAtTheStatedDegree(t *testing.T) {
 	require.Equal(t, []string{"4", "4"}, ratStrings(stated), "the stated degree 2p-3 = 1 fixes the array's length")
 	require.Equal(t, []int{1, 1}, signsOf(stated))
 	require.Equal(t, []int{1}, signsOf(bernsteinCoefficients(k, 0)), "the true degree reads the same verdict")
+
+	verdict, err := freeformWallConvexityContext(t.Context(), spans, false, reversed)
+	require.NoError(t, err)
+	require.Equal(t, freeformConvexityPositive, verdict,
+		"K is the positive constant 4 across the whole span, and the chain is one span with an empty joint set")
 }
 
 // TestConsecutiveCollapsedSpansPairAcrossTheWholeRun is §6.5's collapsed-RUN
@@ -549,7 +616,7 @@ func TestConsecutiveCollapsedSpansPairAcrossTheWholeRun(t *testing.T) {
 	}
 	require.NoError(t, validateSegment(seg), "record.go gates a net's shape nowhere")
 
-	spans, _, err := freeformBezierSpans(seg, newFreeformWork())
+	spans, reversed, err := freeformBezierSpans(seg, newFreeformWork())
 	require.NoError(t, err)
 	require.Len(t, spans, 4)
 
@@ -571,6 +638,11 @@ func TestConsecutiveCollapsedSpansPairAcrossTheWholeRun(t *testing.T) {
 	cross := jointCross(spans[0], spans[3])
 	require.Equal(t, "1", cross.RatString(), "the neighbours across the run turn by exactly +1")
 	require.Equal(t, 1, cross.Sign())
+
+	verdict, err := freeformWallConvexityContext(t.Context(), spans, false, reversed)
+	require.NoError(t, err)
+	require.Equal(t, freeformConvexityPositive, verdict,
+		"both live spans are degree-1 (verdict 0), so the chain's verdict is the joint that pairs across the whole run")
 }
 
 // TestMidpointSplitCreatesAKnownZeroJoint is §6.5's subdivision row. The joint
@@ -582,7 +654,7 @@ func TestConsecutiveCollapsedSpansPairAcrossTheWholeRun(t *testing.T) {
 // so both routes read the same signs.
 func TestMidpointSplitCreatesAKnownZeroJoint(t *testing.T) {
 	seg := unitWeightCubic([]Point2{{U: 0, V: 0}, {U: 1, V: 0}, {U: -4, V: 1}, {U: 0.9, V: 0}})
-	spans, _, err := freeformBezierSpans(seg, newFreeformWork())
+	spans, reversed, err := freeformBezierSpans(seg, newFreeformWork())
 	require.NoError(t, err)
 	require.Len(t, spans, 1)
 
@@ -613,6 +685,13 @@ func TestMidpointSplitCreatesAKnownZeroJoint(t *testing.T) {
 	}
 	require.Equal(t, signsOf(splitLeft), signsOf(childLeft), "1/8 is positive, so both routes read the same signs")
 	require.Equal(t, signsOf(splitRight), signsOf(childRight))
+
+	// The production certificate subdivides at this same Bernstein level
+	// (bernsteinCurvatureSignContext), so it must reach the identical
+	// refusal this net's genuine sign change forces on both routes above.
+	_, err = freeformWallConvexityContext(t.Context(), spans, false, reversed)
+	require.ErrorIs(t, err, ErrUnsupported,
+		"the same genuinely mixed curvature must refuse R19 through the production entry point too")
 }
 
 // TestReversedRangeConvertsToTheIdenticalUnreversedChain is §6.5's reversal
@@ -645,6 +724,51 @@ func TestReversedRangeConvertsToTheIdenticalUnreversedChain(t *testing.T) {
 		jointCross(backwardSpans[0], backwardSpans[1]).RatString())
 	require.Equal(t, 0, new(big.Rat).Neg(rpEval(rpTrim(curvatureNumerator(backwardSpans[0])), big.NewRat(1, 2))).Sign(),
 		"a degree-1 span's K is zero, and negating zero is zero")
+
+	// The production certificate's own reversal negation: the forward chain's
+	// positive joint (TestDegreeOneSpansCarryAZeroCurvatureNumerator) must
+	// negate to negative under the identical unreversed spans, reported
+	// reversed.
+	forwardVerdict, err := freeformWallConvexityContext(t.Context(), forwardSpans, false, forwardReversed)
+	require.NoError(t, err)
+	require.Equal(t, freeformConvexityPositive, forwardVerdict)
+
+	backwardVerdict, err := freeformWallConvexityContext(t.Context(), backwardSpans, false, backwardReversed)
+	require.NoError(t, err)
+	require.Equal(t, freeformConvexityNegative, backwardVerdict,
+		"the identical unreversed chain's positive verdict negates once, at the end, under the reported reversal")
+}
+
+// TestClosedChainAddsTheWrapJointAnOpenChainNeverReads is §6.5's closed-chain
+// row: on a chain that closes on itself, the joint between the last live span
+// and the first is INTERIOR to that one wall edge and folds like every
+// other, so a closed chain can refuse R19 on a joint an OPEN chain over the
+// identical spans never even reads.
+//
+// Two synthetic degree-1 spans — degreeOneNURBS's own converted shape, built
+// directly via ratSpan rather than through a record — pin this: the one
+// INTERNAL joint between them turns +1 (TestDegreeOneSpansCarryAZeroCurvatureNumerator's
+// own turn), so the open chain's verdict is that turn's own sign. The joint
+// that would CLOSE the loop, from the second span back to the first, turns
+// -1 the other way — a conflict an open fold never reads and a closed fold
+// must.
+func TestClosedChainAddsTheWrapJointAnOpenChainNeverReads(t *testing.T) {
+	spanA := ratSpan([][2]float64{{0, 0}, {1, 0}})
+	spanB := ratSpan([][2]float64{{1, 0}, {1, 1}})
+	spans := []bezierSpan{spanA, spanB}
+
+	require.Equal(t, "1", jointCross(spanA, spanB).RatString(),
+		"the internal joint turns by exactly +1, the identical shape and figure degreeOneNURBS's own conversion carries")
+	require.Equal(t, "-1", jointCross(spanB, spanA).RatString(),
+		"the joint that would close the loop turns the other way")
+
+	openVerdict, err := freeformWallConvexityContext(t.Context(), spans, false, false)
+	require.NoError(t, err, "an open chain never reads the closing joint")
+	require.Equal(t, freeformConvexityPositive, openVerdict)
+
+	_, err = freeformWallConvexityContext(t.Context(), spans, true, false)
+	require.ErrorIs(t, err, ErrUnsupported,
+		"a closed chain folds the closing joint in too, and it conflicts with the internal turn — refuse R19")
 }
 
 // spanStrings renders a span's control points exactly, so a conversion that
