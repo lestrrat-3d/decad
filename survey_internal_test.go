@@ -336,6 +336,61 @@ func TestWedgeCandidateCarriesCapSineBound(t *testing.T) {
 		`the published radius interval must contain the exact s·y/(1−s) = 10`)
 }
 
+// TestWallCandidateExactChainsStayExact pins the kernel's other two
+// boundedHypot readings — the arc-arc centre separation and the vertex-arc
+// one — at a separation a float64 holds exactly, where the whole chain into
+// the candidate's radius is exact and the candidate must publish a zero
+// bound. Neither can be pinned through a published READING: each family also
+// emits its angle-limit siblings, whose radii come from the draft
+// allowance's own certified trig enclosure, and the reading's bound is the
+// largest over every spanning candidate (wallSurveyOut.maxCandBound), so an
+// arc anywhere in the section keeps the reading Approximate.
+func TestWallCandidateExactChainsStayExact(t *testing.T) {
+	// Two r=1 hole walls whose centres sit a 3-4-5 distance apart: the web
+	// between them is 5 − 1 − 1 = 3, so the centreline candidate's radius is
+	// exactly 1.5. Reversed angle order keeps the material on each hole's left.
+	holeA, ok := arcElem(48.5, 28.5, 1, 2*math.Pi, 0, true)
+	require.True(t, ok)
+	holeB, ok := arcElem(51.5, 32.5, 1, 2*math.Pi, 0, true)
+	require.True(t, ok)
+	k := newWallKernel([]surveyElem{holeA, holeB}, nil, math.Inf(1))
+
+	collect := func(gen func(add func(x, y, r, rBound float64))) map[float64]float64 {
+		out := map[float64]float64{}
+		gen(func(_, _, r, rBound float64) {
+			if prev, seen := out[r]; !seen || rBound > prev {
+				out[r] = rBound
+			}
+		})
+		return out
+	}
+
+	arcArc := collect(func(add func(x, y, r, rBound float64)) {
+		k.arcArcCands(holeA, holeB, add)
+	})
+	arcArcBound, found := arcArc[1.5]
+	require.True(t, found, `the 3-4-5 web must produce the r = 1.5 centreline candidate`)
+	require.Equal(t, 0.0, arcArcBound, `an exactly representable web chain is exact`)
+
+	// The same separation from a junction vertex to a hole centre: the neck is
+	// 5 − 1 = 4, so the vertex-arc centreline candidate's radius is exactly 2.
+	vertexArc := collect(func(add func(x, y, r, rBound float64)) {
+		k.vertexElemCands([2]float64{40, 30}, holeAt(t, 37, 26), add)
+	})
+	vertexArcBound, found := vertexArc[2]
+	require.True(t, found, `the 3-4-5 neck must produce the r = 2 centreline candidate`)
+	require.Equal(t, 0.0, vertexArcBound, `an exactly representable neck chain is exact`)
+}
+
+// holeAt is a unit-radius hole wall centred at (qx, qy), walked so the
+// material stays on its left.
+func holeAt(t *testing.T, qx, qy float64) surveyElem {
+	t.Helper()
+	e, ok := arcElem(qx, qy, 1, 2*math.Pi, 0, true)
+	require.True(t, ok)
+	return e
+}
+
 // TestSolve3LinearBoundCoversCramerArithmetic pins that a three-linear
 // Apollonius triple bounds the WHOLE of Cramer's rule and not just its final
 // division. Each numerator rounds six products and three sums before the

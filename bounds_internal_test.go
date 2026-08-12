@@ -13,9 +13,11 @@ import (
 
 // This file tests bounds.go's perturbedTriangleAreaAllow, the one new
 // helper docs/loft-design.md §12 PR 2a extracts from
-// perturbedAreaUpperWithBudget's own per-facet term, and rigidRoundAllow's
+// perturbedAreaUpperWithBudget's own per-facet term, rigidRoundAllow's
 // own saturated-scale answer, which that PR's placement path is the first
-// consumer to reach at an extreme coordinate.
+// consumer to reach at an extreme coordinate, and boundedSqrt's own two
+// arms: the exact answer a zero-bound operand keeps, and the outward step a
+// genuinely bounded one still receives.
 
 // TestRigidRoundAllowIsAlwaysAFiniteBound pins bounds.go's rigidRoundAllow
 // answering a finite, positive bound at every magnitude, including the ones
@@ -227,4 +229,87 @@ func TestPerturbedTriangleAreaAllowEnclosesBruteForceSweep(t *testing.T) {
 			}
 		})
 	}
+}
+
+// requireEnclosesSqrt proves a boundedSqrt answer's own interval contains the
+// TRUE square root of q, by comparing the interval's exactly squared ends
+// against q over the rationals — never against another float64 square root of
+// the same operand, which would only compare one evaluation with itself.
+func requireEnclosesSqrt(t *testing.T, q *big.Rat, got boundedScalar) {
+	t.Helper()
+	v, b := floatRat(got.value), floatRat(got.bound)
+	require.NotNil(t, v)
+	require.NotNil(t, b)
+	lo := new(big.Rat).Sub(v, b)
+	hi := new(big.Rat).Add(v, b)
+	if lo.Sign() > 0 {
+		require.LessOrEqual(t, new(big.Rat).Mul(lo, lo).Cmp(q), 0,
+			`the interval's lower end sits above the true root`)
+	}
+	require.GreaterOrEqual(t, new(big.Rat).Mul(hi, hi).Cmp(q), 0,
+		`the interval's upper end sits below the true root`)
+}
+
+// TestBoundedSqrtKeepsAZeroBoundOperandExact pins the arm the analytic surveys
+// publish their exact readings through. A zero-bound operand's interval ends
+// are its own held value — adding or subtracting exactly zero rounds nothing —
+// so the rational brackets answer a zero bound precisely when that value is a
+// perfect square of a float64, and a genuine directed-rounding bound when it is
+// not.
+func TestBoundedSqrtKeepsAZeroBoundOperandExact(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		in   float64
+		want float64
+	}{
+		{"a perfect square", 25, 5},
+		{"zero", 0, 0},
+		{"a power of four", 1024, 32},
+		{"a fractional perfect square", 0.0625, 0.25},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := boundedSqrt(exactScalar(tc.in))
+			require.Equal(t, tc.want, got.value)
+			require.Equal(t, 0.0, got.bound)
+		})
+	}
+
+	// boundedHypot (survey2d.go) reads two exact leaves through this same arm,
+	// which is how a straight meridian's own tangent reaches it in
+	// revolveMinRadius.
+	h := boundedHypot(10, 0)
+	require.Equal(t, 10.0, h.value)
+	require.Equal(t, 0.0, h.bound)
+
+	// An exact operand that is not a perfect square still reads bounded: no
+	// float64 holds √2, so the brackets straddle it and the interval encloses
+	// the truth.
+	two := boundedSqrt(exactScalar(2))
+	require.Greater(t, two.bound, 0.0)
+	requireEnclosesSqrt(t, big.NewRat(2, 1), two)
+}
+
+// TestBoundedSqrtWidensABoundedOperand pins the other half: an operand that
+// carries a bound keeps the outward step on both interval ends, because
+// x.value ± x.bound is itself a rounded float operation. 1 ± 1e-17 is the case
+// that proves the step load-bearing — both sums round straight back to 1.0, so
+// without it the operand's own uncertainty would vanish and a perfect square
+// would read exact while the true operand is not one.
+func TestBoundedSqrtWidensABoundedOperand(t *testing.T) {
+	got := boundedSqrt(measuredScalar(1, 1e-17))
+	require.Equal(t, 1.0, got.value)
+	require.Greater(t, got.bound, 0.0)
+
+	one := big.NewRat(1, 1)
+	tiny := floatRat(1e-17)
+	requireEnclosesSqrt(t, new(big.Rat).Add(one, tiny), got)
+	requireEnclosesSqrt(t, new(big.Rat).Sub(one, tiny), got)
+
+	// A bound wide enough to survive the sum is enclosed on the same terms.
+	wide := boundedSqrt(measuredScalar(4, 1e-6))
+	require.Greater(t, wide.bound, 0.0)
+	four := big.NewRat(4, 1)
+	micro := floatRat(1e-6)
+	requireEnclosesSqrt(t, new(big.Rat).Add(four, micro), wide)
+	requireEnclosesSqrt(t, new(big.Rat).Sub(four, micro), wide)
 }

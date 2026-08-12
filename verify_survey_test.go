@@ -642,19 +642,47 @@ func TestWallSolidCylinder(t *testing.T) {
 	// A solid cylinder R8 × 10 long (full revolve): the caps span across
 	// the axis at 10 mm; the 16 mm diametral ball is starved by them.
 	//
-	// The reading is Approximate: the spanning candidate set includes
-	// Apollonius triples, and Cramer's rule rounds six products and three sums
-	// into each numerator before its own division, all of which the published
-	// interval now carries. The interval still contains the true 10 mm.
+	// The winning candidate's whole chain is exactly representable, so the
+	// reading is Exact: nothing along it rounds, and a zero-bound operand
+	// keeps its exactness through boundedSqrt.
 	s, p := solidSketch(t)
 	doc := decad.New()
 	_, err := doc.Revolve(s, p, uAxis, decad.FullRevolution{})
 	require.NoError(t, err)
 	report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(1)))
 	require.NoError(t, err)
-	requireWall(t, report.Bodies[0], decad.Approximate, 10)
-	requireWallBoundContains(t, report.Bodies[0], 10, 1e-9)
+	br := report.Bodies[0]
+	requireWall(t, br, decad.Exact, 10)
+	bound, err := br.MinWallThickness.Bound.In(units.Millimeter)
+	require.NoError(t, err)
+	require.Equal(t, 0.0, bound)
+	// The report still reads Suspect, and not for the wall: the full
+	// revolve's own volume and area bounds are beyond the relative
+	// tolerance, which is a separate reading from this one.
 	require.Equal(t, decad.Suspect, report.Status)
+}
+
+// TestMinRadiusAnnularRevolveStaysExact pins the other public reading whose
+// whole chain is exactly representable: the annular cylinder's bore. Its
+// meridian is a straight wall whose tangent reaches boundedSqrt through
+// boundedHypot as two exact leaves, and the parallel circle's radius is the
+// recorded 5 mm, so the survey publishes it Exact with a zero bound.
+func TestMinRadiusAnnularRevolveStaysExact(t *testing.T) {
+	s, p := annularSketch(t)
+	doc := decad.New()
+	_, err := doc.Revolve(s, p, uAxis, decad.FullRevolution{})
+	require.NoError(t, err)
+
+	report, err := doc.Verify(t.Context(), decad.WithMinRadius())
+	require.NoError(t, err)
+	br := report.Bodies[0]
+	require.NotNil(t, br.MinRadius)
+	require.Equal(t, decad.Exact, br.MinRadius.Exactness)
+	require.True(t, br.MinRadius.Value.Equal(units.Millimeters(5), 1e-9),
+		`want 5 mm, got %s`, br.MinRadius.Value)
+	bound, err := br.MinRadius.Bound.In(units.Millimeter)
+	require.NoError(t, err)
+	require.Equal(t, 0.0, bound)
 }
 
 func TestWallNarrowConeTaperZero(t *testing.T) {

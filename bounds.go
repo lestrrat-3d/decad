@@ -630,20 +630,34 @@ func sweptMomentAllow(delta, areaUpper, coordUpper float64) float64 {
 // disk radius). The result brackets the square root of that whole interval
 // through ratSqrtDown/ratSqrtUp — the same rational sqrt brackets
 // circularLengthInterval reads an ArcSeg's own radius through — evaluated at
-// the interval's two safely outward-rounded ends, never through math.Sqrt's
-// own accuracy on either. A non-finite operand bound answers +Inf: an absent
-// bound must never read as a small one.
+// the interval's two ends, never through math.Sqrt's own accuracy on either.
+// A non-finite operand bound answers +Inf: an absent bound must never read as
+// a small one.
+//
+// The outward math.Nextafter step on each end is charged only where there is
+// rounding for it to cover: x.value ± x.bound is itself a rounded float
+// operation, so a genuinely bounded operand's computed ends can each sit an
+// ulp inside the interval they stand for and MUST be stepped out. Adding or
+// subtracting exactly zero rounds nothing, so a zero-bound operand's ends are
+// already the exact interval — the held value twice — and stepping them out
+// would invent a rounding error that provably did not occur. The rational
+// brackets then decide the answer by exact comparison: a zero bound precisely
+// when the held value is a perfect square of a float64, and a genuine
+// directed-rounding bound whenever it is not.
 func boundedSqrt(x boundedScalar) boundedScalar {
 	value := math.Sqrt(math.Max(x.value, 0))
 	if isNonFinite(x.bound) {
 		return measuredScalar(value, math.Inf(1))
 	}
 	lo := math.Max(0, x.value-x.bound)
-	lo = math.Nextafter(lo, math.Inf(-1))
-	if lo < 0 {
-		lo = 0
+	hi := x.value + x.bound
+	if x.bound != 0 {
+		lo = math.Nextafter(lo, math.Inf(-1))
+		if lo < 0 {
+			lo = 0
+		}
+		hi = math.Nextafter(hi, math.Inf(1))
 	}
-	hi := math.Nextafter(x.value+x.bound, math.Inf(1))
 	loR, hiR := floatRat(lo), floatRat(hi)
 	if loR == nil || hiR == nil {
 		return measuredScalar(value, math.Inf(1))
