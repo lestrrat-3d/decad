@@ -152,9 +152,23 @@ func TestVerifyAdmittedDisplacedPrismPairCarriesItsOwnBound(t *testing.T) {
 	row := report.Interferences[0]
 	require.Same(t, merged, row.A)
 	require.Same(t, outer, row.B)
-	require.Equal(t, own, row.Volume, "the row is the resolved payload's own measurement")
+	// The row is the resolved intersection payload's own measurement
+	// (docs/interference-design.md §6: "Copy the measurement unchanged into
+	// the row"), not a republication of an operand's — only §4 containment
+	// and §4.1 equality reuse an operand's measurement verbatim, and §4.1
+	// withholds for a record carrying exactly this displacement. Here the
+	// intersection is the nested operand A itself, so the two measurements
+	// state the same value and exactness; the bound is A's own displacement
+	// plus this resolution's own charge under an outward-rounded sum
+	// (prism_boolean_nesting.go's sectionDelta), so it can only be at least
+	// as wide as A's. A row that dropped the displacement charge would fall
+	// below it.
+	require.Equal(t, own.Value, row.Volume.Value, "the intersection of A with a body containing A is A's own volume")
+	require.GreaterOrEqual(t, row.Volume.Bound.Base(), own.Bound.Base(),
+		"the row's own bound composes A's displacement and cannot be tighter than A's")
+	require.Equal(t, own.Exactness, row.Volume.Exactness)
+	require.Equal(t, decad.Approximate, row.Volume.Exactness, "a displaced section cannot publish an Exact row")
 	require.InDelta(t, 1000.0, row.Volume.Value.Base(), 1e-9)
-	require.Equal(t, decad.Approximate, row.Volume.Exactness)
 
 	// The truth the interval must contain: the merged region is the union the
 	// two recorded sections denote under their own exact placements, and the
