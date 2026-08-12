@@ -109,6 +109,19 @@ type Torus struct {
 	Minor  units.Value
 }
 
+// NURBSSurface is a free-form face's geometry — the exact extruded or
+// revolved surface of a recorded free-form curve (docs/spline-design.md §7):
+// extruded, the control net is the curve's control points against the two
+// sweep ends, degree (p, 1), weights carried through; revolved, the standard
+// rational quadratic circle representation, degree (p, 2), weights
+// multiplied. A NURBSSurface built from a recorded control net IS the
+// surface, not an approximation of it — core §6.1's Exact-by-construction
+// promise for an analytic variant holds unstrained. Its control net stays
+// private in v1: this is a tagged, opaque marker carrying no exported
+// geometry. Widening it later is compatible; narrowing an exposed net would
+// not be.
+type NURBSSurface struct{}
+
 // Faceted is the honest v1 boolean-output variant (core §6.1): a face a
 // boolean produced, whose analytic identity is gone. A Faceted face IS
 // exactly its polygons — what it approximates is which surface it stands
@@ -142,11 +155,15 @@ func (Sphere) Kind() SurfaceKind { return KindSphere }
 // Kind reports KindTorus.
 func (Torus) Kind() SurfaceKind { return KindTorus }
 
-func (Plane) surface()    {}
-func (Cylinder) surface() {}
-func (Cone) surface()     {}
-func (Sphere) surface()   {}
-func (Torus) surface()    {}
+// Kind reports KindNURBS.
+func (NURBSSurface) Kind() SurfaceKind { return KindNURBS }
+
+func (Plane) surface()        {}
+func (Cylinder) surface()     {}
+func (Cone) surface()         {}
+func (Sphere) surface()       {}
+func (Torus) surface()        {}
+func (NURBSSurface) surface() {}
 
 // Curve is the sealed edge-geometry set, Surface's one-dimensional analog.
 // A switch on Curve MUST carry a default — vN adds variants.
@@ -172,6 +189,13 @@ type Arc3 struct {
 	Radius units.Value
 }
 
+// NURBSCurve is a free-form edge's geometry, NURBSSurface's 1-D analog
+// (docs/spline-design.md §7). It reports no Kind at all: Curve is sealed by
+// its marker method alone and declares no Kind method, so this variant seals
+// in with that method and exports nothing else. Its control points stay
+// private in v1, the same opaque-marker treatment as NURBSSurface.
+type NURBSCurve struct{}
+
 // FacetedCurve is Faceted's one-dimensional analog: a boolean-built edge —
 // a chain of straight chords along the contact of two faceted faces, whose
 // analytic identity is gone. Bound is the proven chord bound the chain
@@ -183,6 +207,7 @@ type FacetedCurve struct {
 func (Line3) curve()        {}
 func (Circle3) curve()      {}
 func (Arc3) curve()         {}
+func (NURBSCurve) curve()   {}
 func (FacetedCurve) curve() {}
 
 // Vertex is a topological point.
