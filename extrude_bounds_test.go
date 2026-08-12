@@ -349,22 +349,42 @@ func TestExtrudeSquarePrismStaysExact(t *testing.T) {
 	require.Zero(t, c.Bound.Base())
 }
 
-// TestExtrudeArcSectionBoxKeepsItsOwnExactness marks the boundary the revolve
-// box's arc-radius term (bounds.go's arcRadiusExtremeAllow) must not cross. The
-// section is the very one whose apex radius √37 no float64 holds — the case
-// that moved the revolve box off Exact — and the prism box reads the SAME
-// boundary-extreme scan. The prism is a separate consumer with its own bound to
-// state, so the term is carried beside that shared scan rather than inside it,
-// and this box's reading stays exactly where it was: fold the term into the
-// scan instead and this test fails first.
-func TestExtrudeArcSectionBoxKeepsItsOwnExactness(t *testing.T) {
+// TestExtrudeArcSectionBoxEnclosesArcApex is the prism site of the shared
+// boundary-extreme scan's own arc term. The section is the one whose apex
+// radius √37 no float64 holds, and the prism box reads the SAME scan the
+// revolve box does, so the term belongs to the scan and the prism publishes it
+// like any other consumer: the box is Approximate and its interval contains the
+// apex the section actually reaches.
+func TestExtrudeArcSectionBoxEnclosesArcApex(t *testing.T) {
 	s, p := arcApexSketch(t, 1, 6)
 	body, err := decad.New().Extrude(s, p, decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
 	require.NoError(t, err)
 
 	box, err := body.Bounds()
 	require.NoError(t, err)
-	require.Equal(t, decad.Exact, box.Exactness)
-	require.Zero(t, box.Bound.Base())
+	require.Equal(t, decad.Approximate, box.Exactness)
+	require.Greater(t, box.Bound.Base(), 0.0)
 	require.Equal(t, math.Hypot(1, 6), box.Max.Y)
+	requireEnclosesApex(t, box, 1, 6)
+}
+
+// TestExtrudeBoundsSweepEnclosesArcApex is the prism half of the acceptance
+// sweep: 144 ordinary circular-segment sections, each extruded and each asked
+// whether the box's own published interval contains the apex radius the section
+// truly reaches. A single fixture cannot show this — the sign and size of the
+// hypot rounding change with the coordinates — so the grid is the test.
+func TestExtrudeBoundsSweepEnclosesArcApex(t *testing.T) {
+	for i := 1; i <= 12; i++ {
+		for j := 1; j <= 12; j++ {
+			u, v := 0.7*float64(i), 1.3*float64(j)
+			t.Run(fmt.Sprintf("u=%g/v=%g", u, v), func(t *testing.T) {
+				s, p := arcApexSketch(t, u, v)
+				body, err := decad.New().Extrude(s, p, decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+				require.NoError(t, err)
+				box, err := body.Bounds()
+				require.NoError(t, err)
+				requireEnclosesApex(t, box, u, v)
+			})
+		}
+	}
 }

@@ -79,11 +79,12 @@ import (
 //     coordinate that direction multiplies — which is the caller's to name,
 //     since a revolve's swept radial coefficient multiplies a distance from
 //     the axis and not from the profile's own frame origin;
-//   - that same extreme moving when the POINT attaining it is displaced by the
-//     error in a recorded CIRCULAR segment's own radius (an arc states Start
-//     and Center, so its walk's radius is a math.Hypot evaluation) →
-//     arcRadiusExtremeAllow, the mirror of the term above: the direction is
-//     held and the candidate moves.
+//   - a HELD float measured against a bounded scalar's own proven enclosure of
+//     the quantity that float stands for → boundedFloatError, the bridge every
+//     candidate producer crosses when it evaluates a value one way and proves
+//     it another (extrude.go's circular boundary-extreme candidate, whose held
+//     position runs through math.Cos/math.Sin while its enclosure comes from
+//     the angle-free apex identity).
 
 const (
 	// unitRoundoff is float64's u = 2⁻⁵³: the relative error a single
@@ -697,62 +698,26 @@ func directionalPerturbationAllow(dirBound, envelopeUpper float64) float64 {
 	return productUpper(dirBound, envelopeUpper)
 }
 
-// arcRadiusExtremeAllow bounds how far a linear functional's own extreme over a
-// recorded region's boundary can move under the error in a CIRCULAR segment's
-// radius. It is directionalPerturbationAllow's mirror: there the direction is
-// perturbed and every candidate point is exact, here the direction is held and
-// the candidate MOVES. An interior circular candidate is the point
-// c + r·(cos θ, sin θ), so a radius wrong by δr places it within δr of where it
-// belongs — the displacement is radial, of magnitude at most δr — and the
-// functional gu·u + gv·v it feeds is therefore within δr·|(gu, gv)| of the value
-// the true point takes, by Cauchy-Schwarz.
+// boundedFloatError is the proven error bound of a HELD float64 against a
+// bounded scalar that already encloses the quantity the float stands for:
+// |held − true| ≤ |held − value| + bound, the first term measured exactly over
+// the rationals (rationalFloatError) and the two summed outward.
 //
-// The δr a walk owes is segmentWalk.radiusBound (extrude.go): zero for a
-// CircleSeg, which states its radius outright, and arcWalkRadiusBound's
-// rational bracket for an ArcSeg, whose radius is the math.Hypot of two
-// recorded coordinate differences and so is NOT an exact leaf. The maximum over
-// the profile's circular segments is the bound, because the extreme is attained
-// on one segment and any one of them could be it.
+// It exists because a producer may evaluate a quantity one way and PROVE it
+// another, and the two spellings are then different floats. The circular
+// boundary-extreme candidate is that shape: its held position runs through
+// math.Cos/math.Sin at the candidate's own angle, while its enclosure comes
+// from the angle-free apex identity circularExtremeInterval states. Composing
+// the gap this way keeps the held reading exactly where it was — no consumer's
+// value moves — while the published bound speaks for the truth.
 //
-// Which segments those are is asked of walkOf rather than re-read off the
-// recorded kinds, so the classification keeps its single owner. That costs a
-// second walk of the section, and a free-form segment's conversion is charged
-// work — but a caller reaches this helper only after taking the extreme itself,
-// and that scan refuses a free-form section (boundaryExtremesContext) before
-// any bound is composed.
-//
-// This term is deliberately carried BESIDE boundaryExtremesBoundedContext's own
-// lo/hi fold rather than inside it. That fold's half-width is what
-// boundaryExtremesContext refuses on, and it is read by callers — the prism box
-// through extentBoundedAlong, revolve's own axis-side resolution before any
-// payload exists — that state no bound of their own; folding a nonzero radius
-// term into it would turn every arc profile's reading into a refusal or a
-// widened box, rather than fixing the one consumer that under-reports. A
-// consumer composes this term into its published bound when it can state it.
-func arcRadiusExtremeAllow(ctx context.Context, profile ProfileRecord, gu, gv float64, work *freeformWork) (float64, error) {
-	if err := requireFiniteDirection(gu, gv); err != nil {
-		return 0, err
+// A non-finite operand answers +Inf, never 0: an absent bound must never read
+// as a small one (cutDisplacementAllow's own rule).
+func boundedFloatError(bs boundedScalar, held float64) float64 {
+	if isNonFinite(bs.value) || isNonFinite(bs.bound) || isNonFinite(held) {
+		return math.Inf(1)
 	}
-	gmag := upRound(math.Hypot(gu, gv))
-	allow := 0.0
-	for _, loop := range append([]LoopRecord{profile.Outer}, profile.Holes...) {
-		for _, seg := range loop.Segments {
-			if err := ctx.Err(); err != nil {
-				return 0, err
-			}
-			w, err := walkOf(seg, work)
-			if err != nil {
-				return 0, err
-			}
-			if !w.isCircular() {
-				continue
-			}
-			if term := productUpper(w.radiusBound, gmag); term > allow {
-				allow = term
-			}
-		}
-	}
-	return allow, nil
+	return absSumUpper(rationalFloatError(floatRat(bs.value), held), bs.bound)
 }
 
 // rimDelta is the trim-amplified displacement bound of a vertex the boolean

@@ -822,15 +822,27 @@ func (ax axisFrame) classify(w segmentWalk) wallKind {
 // tangent to the axis at an interior point (a circle kissing the axis would
 // sweep a self-touching horn torus). It returns the oriented frame and the
 // side sign the sweep interval must be remapped by.
+//
+// The two radial extremes are read through the boundary scan's bounded form,
+// so a section whose extreme rides a computed arc radius arrives with a proven
+// interval rather than a held float claiming to be exact. Each of the three
+// decisions below is taken on that interval and must be DECIDED by it: the
+// side sign is a structural fact about the region, not a measurement, so a
+// radial extreme whose own interval straddles the ±tol band names no side and
+// is refused rather than guessed. The band is 1e-9 of the section's own scale
+// and the bound is the scan's own last-ulp figure, so an ordinary section is
+// decided with eight orders of magnitude to spare; reaching the refusal means
+// the region genuinely sits on the axis to within its own arithmetic.
 func resolveAxisSide(profile ProfileRecord, line axisLine2, work *freeformWork) (axisFrame, float64, error) {
+	ctx := context.Background()
 	nU, nV := -line.dV, line.dU
-	rlo, rhi, err := boundaryExtremes(profile, nU, nV, work)
+	rlo, rhi, rBound, err := boundaryExtremesBoundedContext(ctx, profile, nU, nV, work)
 	if err != nil {
 		return axisFrame{}, 0, err
 	}
 	roff := nU*line.aU + nV*line.aV
 	rlo, rhi = rlo-roff, rhi-roff
-	zlo, zhi, err := boundaryExtremes(profile, line.dU, line.dV, work)
+	zlo, zhi, _, err := boundaryExtremesBoundedContext(ctx, profile, line.dU, line.dV, work)
 	if err != nil {
 		return axisFrame{}, 0, err
 	}
@@ -839,14 +851,22 @@ func resolveAxisSide(profile ProfileRecord, line axisLine2, work *freeformWork) 
 
 	scale := math.Max(math.Max(math.Abs(rlo), math.Abs(rhi)), math.Max(math.Abs(zlo), math.Abs(zhi)))
 	tol := 1e-9 * math.Max(1, scale)
+	// Each side test is decided on the extreme's own proven interval: above
+	// names "clear of the axis on the + side", below "clear on the − side",
+	// and an interval spanning the threshold decides neither.
+	hiAbove := admitAbove(measuredScalar(rhi, rBound), tol)
+	loBelow := admitBelow(measuredScalar(rlo, rBound), -tol)
+	if hiAbove == survStraddle || loBelow == survStraddle {
+		return axisFrame{}, 0, fmt.Errorf(`%w: the recorded region's radial extreme about this axis is known only to ±%v mm, which does not decide which side of the axis the region lies on`, ErrDegenerate, rBound)
+	}
 	switch {
-	case rhi > tol && rlo < -tol:
+	case hiAbove == survAdmit && loBelow == survAdmit:
 		return axisFrame{}, 0, fmt.Errorf(`%w: the revolve axis passes through the region`, ErrDegenerate)
-	case rhi <= tol && rlo >= -tol:
+	case hiAbove == survReject && loBelow == survReject:
 		return axisFrame{}, 0, fmt.Errorf(`%w: the region collapses onto the revolve axis`, ErrDegenerate)
 	}
 	side := 1.0
-	if rhi <= tol {
+	if hiAbove == survReject {
 		side = -1
 	}
 	ax := axisFrame{
@@ -1685,20 +1705,40 @@ func (rp revolvePayload) extentAlongContext(ctx context.Context, g r3.Vec) (floa
 	return rp.extentAlongWork(ctx, g, newFreeformWork())
 }
 
+// extentAlongWork is extentBoundedAlong's refusing wrapper, the same shape
+// prismPayload.extentAlongWork and capBlendPayload.extentAlongWork already
+// take: a through-all stop reads this extent as an exact endpoint and has no
+// bound to widen, so a direction whose extreme the boundary scan can only
+// bracket refuses rather than fabricate one.
 func (rp revolvePayload) extentAlongWork(ctx context.Context, g r3.Vec, work *freeformWork) (float64, float64, error) {
+	lo, hi, bound, err := rp.extentBoundedAlong(ctx, g, work)
+	if err != nil {
+		return 0, 0, err
+	}
+	if bound != 0 {
+		return 0, 0, fmt.Errorf(`%w: the revolved solid's extent along this direction is held by its own boundary-extreme bracket, known only to a displacement of %v mm; a stop reads this coordinate as exact and has no bound to widen`, ErrUnsupported, bound)
+	}
+	return lo, hi, nil
+}
+
+// extentBoundedAlong is the reading itself: the interval AND the proven
+// half-width the boundary-extreme scan derived for its two ends. A section
+// whose every candidate is exactly representable carries a zero bound, so an
+// all-straight or recorded-circle meridian reads exactly as before.
+func (rp revolvePayload) extentBoundedAlong(ctx context.Context, g r3.Vec, work *freeformWork) (float64, float64, float64, error) {
 	b := rp.basis()
 	base := rp.xform.Apply(b.a3).Dot(g)
 	wg := rp.xform.ApplyDir(b.w).Dot(g)
 	mlo, mhi := sweepExtremes(rp.xform.ApplyDir(b.e0).Dot(g), rp.xform.ApplyDir(b.e1).Dot(g), rp.phi0, rp.phi1, rp.full)
-	hi, err := axisExtremeContext(ctx, rp, wg, mhi, true, work)
+	hi, hiBound, err := axisExtremeContext(ctx, rp, wg, mhi, true, work)
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, 0, err
 	}
-	lo, err := axisExtremeContext(ctx, rp, wg, mlo, false, work)
+	lo, loBound, err := axisExtremeContext(ctx, rp, wg, mlo, false, work)
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, 0, err
 	}
-	return base + lo, base + hi, nil
+	return base + lo, base + hi, math.Max(loBound, hiBound), nil
 }
 
 // revolveBoundsContext computes the axis-aligned bounds of the placed
@@ -1722,11 +1762,11 @@ func (rp revolvePayload) extentAlongWork(ctx context.Context, g r3.Vec, work *fr
 // The boundary extreme axisExtremeContext returns carries an error of its own,
 // and this reading composes that one too: an arc states its Start and Center,
 // never its radius, so a circular candidate sits at a math.Hypot radius and can
-// miss the apex the sweep actually reaches. arcRadiusExtremeAllow (bounds.go)
-// owns that term, charged at the very plane-local direction each extreme is
-// taken along, and the box maxes it into the same bound the sweep term feeds.
-// Without it a box over an arc section can publish Exact while excluding the
-// surface it bounds.
+// miss the apex the sweep actually reaches. That term belongs to the scan that
+// produces the candidate (extrude.go's circularExtremeInterval) and arrives
+// here already folded into the interval's own half-width, so the box simply
+// maxes it in beside the sweep term. Without it a box over an arc section can
+// publish Exact while excluding the surface it bounds.
 func revolveBoundsContext(ctx context.Context, rp revolvePayload, work *freeformWork) (Box, error) {
 	axes := []r3.Vec{r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1)}
 	b := rp.basis()
@@ -1744,12 +1784,15 @@ func revolveBoundsContext(ctx context.Context, rp revolvePayload, work *freeform
 		if err := ctx.Err(); err != nil {
 			return Box{}, err
 		}
-		lo, hi, err := rp.extentAlongWork(ctx, g, work)
+		lo, hi, extremeBound, err := rp.extentBoundedAlong(ctx, g, work)
 		if err != nil {
 			return Box{}, err
 		}
 		minC[i] = lo
 		maxC[i] = hi
+		if extremeBound > bound {
+			bound = extremeBound
+		}
 		c0 := rp.xform.ApplyDir(b.e0).Dot(g)
 		c1 := rp.xform.ApplyDir(b.e1).Dot(g)
 		mlo, mhi := sweepExtremes(c0, c1, rp.phi0, rp.phi1, rp.full)
@@ -1759,20 +1802,6 @@ func revolveBoundsContext(ctx context.Context, rp revolvePayload, work *freeform
 		}
 		if term := directionalPerturbationAllow(hiBound, rhoUpper); term > bound {
 			bound = term
-		}
-		// The two extremes this axis publishes are taken along the plane-local
-		// directions axisExtremeContext builds from mlo and mhi, so each one
-		// charges the arc-radius term at its OWN direction.
-		wg := rp.xform.ApplyDir(b.w).Dot(g)
-		for _, k := range [2]float64{mlo, mhi} {
-			gu, gv := rp.ax.planeDirection(wg, k)
-			term, err := arcRadiusExtremeAllow(ctx, rp.profile, gu, gv, work)
-			if err != nil {
-				return Box{}, err
-			}
-			if term > bound {
-				bound = term
-			}
 		}
 	}
 	return Box{
@@ -1914,16 +1943,18 @@ func sweepExtremeBounds(c0, c1, phi0, phi1, heldLo, heldHi float64, full bool) (
 
 // axisExtremeContext is one extreme of the linear functional wg·z + k·ρ over the
 // recorded boundary, evaluated in axis coordinates through the plane-local
-// boundary extremes.
-func axisExtremeContext(ctx context.Context, rp revolvePayload, wg, k float64, wantMax bool, work *freeformWork) (float64, error) {
+// boundary extremes, beside that extreme's own proven bound — the scan's, which
+// is nonzero exactly where a circular candidate's own radius or apex is not
+// exactly representable (extrude.go's circularExtremeInterval).
+func axisExtremeContext(ctx context.Context, rp revolvePayload, wg, k float64, wantMax bool, work *freeformWork) (float64, float64, error) {
 	gu, gv := rp.ax.planeDirection(wg, k)
-	lo, hi, err := boundaryExtremesContext(ctx, rp.profile, gu, gv, work)
+	lo, hi, bound, err := boundaryExtremesBoundedContext(ctx, rp.profile, gu, gv, work)
 	if err != nil {
-		return 0, err
+		return 0, 0, err
 	}
 	off := gu*rp.ax.aU + gv*rp.ax.aV
 	if wantMax {
-		return hi - off, nil
+		return hi - off, bound, nil
 	}
-	return lo - off, nil
+	return lo - off, bound, nil
 }

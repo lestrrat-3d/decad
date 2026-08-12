@@ -191,9 +191,9 @@ var errFreeformExtremeUnrepresentable = fmt.Errorf(
 // reason the endpoints are: an interval with two finite ends can still be
 // wider than the range, and the fold reports a midpoint and a half width, so
 // an unrepresentable width has no reading either. Refusing here keeps every
-// caller's own free-form refusal intact — boundaryExtremesContext and
-// prismPayload.extentAlongWork both answer ErrUnsupported, exactly as they do
-// for a bracket carrying an ordinary nonzero bound.
+// caller's own free-form refusal intact — prismPayload.extentAlongWork and its
+// revolve and cap-blend twins all answer ErrUnsupported, exactly as they do for
+// a bracket carrying an ordinary nonzero bound.
 func freeformExtremeFloats(iv ratIv) (float64, float64, error) {
 	lo, hi := ratFloatDown(iv.lo), ratFloatUp(iv.hi)
 	if isNonFinite(lo) || isNonFinite(hi) || isNonFinite(hi-lo) {

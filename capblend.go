@@ -235,15 +235,20 @@ func (cbp capBlendPayload) extentBoundedAlong(ctx context.Context, g r3.Vec, wor
 			zHi = cbp.z1 - cbp.d
 			hiAllow = absSumUpper(hiAllow, productUpper(axial, absSumUpper(cbp.dDelta, addRoundError(cbp.z1, -cbp.d, zHi))))
 		}
-		l, h, err := boundaryExtremesContext(ctx, ProfileRecord{Outer: loop}, gu, gv, work)
+		// The boundary scan states its own displacement per candidate — nonzero
+		// wherever a circular candidate's apex is not exactly representable
+		// (extrude.go's circularExtremeInterval) — and it displaces the reading
+		// IN PLANE, so it composes with the axial terms above rather than
+		// replacing either.
+		l, h, planeAllow, err := boundaryExtremesBoundedContext(ctx, ProfileRecord{Outer: loop}, gu, gv, work)
 		if err != nil {
 			return 0, 0, 0, err
 		}
 		// The original loop bounds the straight slab at both its own levels;
 		// a chamfered end's level is also that band's side-level directrix, and
 		// that level is a float sum whose rounding moves the candidate.
-		take(l, h, zLo, loAllow)
-		take(l, h, zHi, hiAllow)
+		take(l, h, zLo, absSumUpper(loAllow, planeAllow))
+		take(l, h, zHi, absSumUpper(hiAllow, planeAllow))
 		if !onStart && !onEnd {
 			continue
 		}
@@ -258,13 +263,14 @@ func (cbp capBlendPayload) extentBoundedAlong(ctx context.Context, g r3.Vec, wor
 		if err != nil {
 			return 0, 0, 0, err
 		}
-		cl, ch, err := boundaryExtremesContext(ctx, ProfileRecord{Outer: contour}, gu, gv, work)
+		cl, ch, contourPlaneAllow, err := boundaryExtremesBoundedContext(ctx, ProfileRecord{Outer: contour}, gu, gv, work)
 		if err != nil {
 			return 0, 0, 0, err
 		}
 		// The contour sits at its cap level, so its in-plane displacement and
-		// that level's inherited axial displacement compose independently.
-		contourAllow := productUpper(inPlane, delta)
+		// that level's inherited axial displacement compose independently. The
+		// scan's own candidate displacement is a third in-plane term.
+		contourAllow := absSumUpper(productUpper(inPlane, delta), contourPlaneAllow)
 		if onStart {
 			take(cl, ch, cbp.z0, absSumUpper(contourAllow, productUpper(axial, cbp.z0Delta)))
 		}

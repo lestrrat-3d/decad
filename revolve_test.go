@@ -2,6 +2,7 @@ package decad_test
 
 import (
 	"encoding/json"
+	"fmt"
 	"math"
 	"math/big"
 	"testing"
@@ -1530,5 +1531,28 @@ func TestRevolveBoundsBoundEnclosesArcRadius(t *testing.T) {
 			require.LessOrEqual(t, boundMM, 1e-12, `the bound must stay tight enough to be useful`)
 			requireEnclosesApex(t, box, u, v)
 		})
+	}
+}
+
+// TestRevolveBoundsSweepEnclosesArcApex is the revolve half of the acceptance
+// sweep: 144 ordinary circular-segment sections, each revolved a full turn and
+// each asked whether the box's own published interval contains the apex radius
+// the swept surface truly reaches. One hand-picked fixture proves nothing here —
+// the hypot rounding changes sign and size with the coordinates, so a bound that
+// covers one section can miss the next — which is why the grid, not a case, is
+// the test.
+func TestRevolveBoundsSweepEnclosesArcApex(t *testing.T) {
+	for i := 1; i <= 12; i++ {
+		for j := 1; j <= 12; j++ {
+			u, v := 0.7*float64(i), 1.3*float64(j)
+			t.Run(fmt.Sprintf("u=%g/v=%g", u, v), func(t *testing.T) {
+				s, p := arcApexSketch(t, u, v)
+				body, err := decad.New().Revolve(s, p, uAxis, decad.FullRevolution{})
+				require.NoError(t, err)
+				box, err := body.Bounds()
+				require.NoError(t, err)
+				requireEnclosesApex(t, box, u, v)
+			})
+		}
 	}
 }
