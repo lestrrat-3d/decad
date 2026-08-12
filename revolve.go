@@ -723,8 +723,8 @@ func (ax axisFrame) toAxis(u, v float64) (float64, float64) {
 // walk), and ρ is measured from the AXIS, so the anchor a's own offset is the
 // whole difference between the two: |p−a| ≤ |p| + |a|, with the anchor read
 // through its own recorded bounds. Every reading whose error scales with ρ —
-// a walk's swept radius and moment envelopes, and revolveBoundsContext's
-// sweep-extreme perturbation — takes its envelope from here, because a
+// a walk's swept radius and moment envelopes, and the sweep-extreme
+// perturbation sweepBoundAlong charges — takes its envelope from here, because a
 // caller that charges the frame-origin envelope instead understates the
 // reading without limit as the axis moves away from the frame origin.
 func (ax axisFrame) radialUpper(coordUpper float64) float64 {
@@ -737,10 +737,9 @@ func (ax axisFrame) radialUpper(coordUpper float64) float64 {
 
 // planeDirection is the PLANE-LOCAL direction whose extreme over the recorded
 // boundary is the extreme of the axis-coordinate functional wg·z + k·ρ. It is
-// the rotation that carries (z, ρ) back to (u, v), so the two readings that
-// need it — axisExtremeContext, which evaluates the extreme, and
-// revolveBoundsContext, which charges that extreme's own error terms — cannot
-// drift apart by spelling it twice.
+// the rotation that carries (z, ρ) back to (u, v), spelled once here so the
+// reading that evaluates the extreme (axisExtremeContext) and any later reading
+// over the same functional cannot drift apart by spelling it twice.
 func (ax axisFrame) planeDirection(wg, k float64) (float64, float64) {
 	return wg*ax.dU - k*ax.dV, wg*ax.dV + k*ax.dU
 }
@@ -1718,28 +1717,42 @@ func (rp revolvePayload) extentAlongContext(ctx context.Context, g r3.Vec) (floa
 // extentAlongWork is extentBoundedAlong's refusing wrapper, the same shape
 // prismPayload.extentAlongWork and capBlendPayload.extentAlongWork already
 // take: a through-all stop reads this extent as an exact endpoint and has no
-// bound to widen, so a direction whose extreme the boundary scan can only
-// bracket refuses rather than fabricate one.
+// bound to widen, so a direction whose extreme is held to a bracket rather
+// than proven exactly — by the boundary scan, or by the sweep extreme a
+// partial revolution reaches through math.Sin/Cos — refuses rather than
+// fabricate one.
 func (rp revolvePayload) extentAlongWork(ctx context.Context, g r3.Vec, work *freeformWork) (float64, float64, error) {
 	lo, hi, bound, err := rp.extentBoundedAlong(ctx, g, work)
 	if err != nil {
 		return 0, 0, err
 	}
 	if bound != 0 {
-		return 0, 0, fmt.Errorf(`%w: the revolved solid's extent along this direction is held by its own boundary-extreme bracket, known only to a displacement of %v mm; a stop reads this coordinate as exact and has no bound to widen`, ErrUnsupported, bound)
+		return 0, 0, fmt.Errorf(`%w: the revolved solid's extent along this direction is held to a bracket by its own boundary-extreme and sweep-extreme proofs, known only to a displacement of %v mm; a stop reads this coordinate as exact and has no bound to widen`, ErrUnsupported, bound)
 	}
 	return lo, hi, nil
 }
 
 // extentBoundedAlong is the reading itself: the interval AND the proven
-// half-width the boundary-extreme scan derived for its two ends. A section
-// whose every candidate is exactly representable carries a zero bound, so an
-// all-straight or recorded-circle meridian reads exactly as before.
+// half-width its two ends carry. Both mechanisms that can move an end are
+// charged here, because this is the ONE reading every consumer takes — the box
+// and the through-all stop alike — and a term charged in only one of them lets
+// the same coordinate publish as bounded on one path and exact on the other.
+//
+// The first mechanism is the boundary-extreme scan's own bound, which
+// axisExtremeContext returns: a circular candidate sits at a math.Hypot radius
+// and can miss the apex the sweep actually reaches. The second is the swept
+// radial coefficient's, sweepBoundAlong below. A section whose every candidate
+// is exactly representable, swept through an extreme this direction's own
+// amplitude holds exactly, carries a zero bound — an all-straight or
+// recorded-circle meridian under a full revolution about an axis-aligned frame
+// reads exactly.
 func (rp revolvePayload) extentBoundedAlong(ctx context.Context, g r3.Vec, work *freeformWork) (float64, float64, float64, error) {
 	b := rp.basis()
 	base := rp.xform.Apply(b.a3).Dot(g)
 	wg := rp.xform.ApplyDir(b.w).Dot(g)
-	mlo, mhi := sweepExtremes(rp.xform.ApplyDir(b.e0).Dot(g), rp.xform.ApplyDir(b.e1).Dot(g), rp.phi0, rp.phi1, rp.full)
+	c0 := rp.xform.ApplyDir(b.e0).Dot(g)
+	c1 := rp.xform.ApplyDir(b.e1).Dot(g)
+	mlo, mhi := sweepExtremes(c0, c1, rp.phi0, rp.phi1, rp.full)
 	hi, hiBound, err := axisExtremeContext(ctx, rp, wg, mhi, true, work)
 	if err != nil {
 		return 0, 0, 0, err
@@ -1748,70 +1761,73 @@ func (rp revolvePayload) extentBoundedAlong(ctx context.Context, g r3.Vec, work 
 	if err != nil {
 		return 0, 0, 0, err
 	}
-	return base + lo, base + hi, math.Max(loBound, hiBound), nil
+	sweepBound, err := rp.sweepBoundAlong(c0, c1, mlo, mhi, work)
+	if err != nil {
+		return 0, 0, 0, err
+	}
+	return base + lo, base + hi, math.Max(math.Max(loBound, hiBound), sweepBound), nil
+}
+
+// sweepBoundAlong is the swept radial coefficient's own contribution to the
+// extent's half-width along one direction: sweepExtremeBounds proves how far
+// the held sweep extreme (mlo, mhi) can sit from the true one, and that
+// direction error turns into a position error through the same
+// directional-perturbation Lipschitz bound (bounds.go) every directional
+// extreme charges.
+//
+// The envelope that Lipschitz step charges is the RADIAL one: the extreme's
+// own functional is wg·z + m·ρ, so a perturbation of the swept radial
+// coefficient m multiplies ρ, the distance from the RESOLVED AXIS, and not the
+// profile's coordinates about the frame origin. axisFrame.radialUpper owns that
+// envelope and folds in the axis anchor, which is the whole term an offset axis
+// adds; an extent whose radial envelope cannot be proven finite is refused
+// rather than published against a bound that omits it.
+func (rp revolvePayload) sweepBoundAlong(c0, c1, mlo, mhi float64, work *freeformWork) (float64, error) {
+	coordUpper, err := profileCoordinateUpper(rp.profile, work)
+	if err != nil {
+		return 0, err
+	}
+	rhoUpper := rp.ax.radialUpper(coordUpper)
+	if isNonFinite(rhoUpper) {
+		return 0, fmt.Errorf(`%w: the revolved region's radial distance from its own axis has no finite proven bound, so no sweep-extreme bound can be composed`, ErrNotFinite)
+	}
+	loBound, hiBound := sweepExtremeBounds(c0, c1, rp.phi0, rp.phi1, mlo, mhi, rp.full)
+	return math.Max(
+		directionalPerturbationAllow(loBound, rhoUpper),
+		directionalPerturbationAllow(hiBound, rhoUpper),
+	), nil
 }
 
 // revolveBoundsContext computes the axis-aligned bounds of the placed
 // revolved solid — the same directional-extreme analysis the prism uses, in
 // cylindrical coordinates (docs/evaluator-design.md §6). Bounds is Exact only
-// where every axis's sweep extreme is proven exactly representable — a full
-// revolution about an axis-aligned frame; every other reading (a partial
-// sweep, or an amplitude no float64 holds exactly) is Approximate with the
-// PROVEN bound sweepExtremeBounds derives, composed through the same
-// directional-perturbation Lipschitz bound (bounds.go) that turns a bound on
-// the swept radial DIRECTION into a bound on the boundary extreme it feeds.
+// where every axis's extent reads with a zero bound; every other reading (a
+// partial sweep, an amplitude no float64 holds exactly, or a boundary extreme
+// a computed arc radius carries) is Approximate with the PROVEN bound its own
+// arithmetic derives.
 //
-// The envelope that Lipschitz step charges is the RADIAL one: the extreme's
-// own functional is wg·z + m·ρ, so a perturbation of the swept radial
-// coefficient m multiplies ρ, the distance from the RESOLVED AXIS, and not
-// the profile's coordinates about the frame origin. axisFrame.radialUpper
-// owns that envelope and folds in the axis anchor, which is the whole term an
-// offset axis adds; a box whose radial envelope cannot be proven finite is
-// refused rather than published against a bound that omits it.
-//
-// The boundary extreme axisExtremeContext returns carries an error of its own,
-// and this reading composes that one too: an arc states its Start and Center,
-// never its radius, so a circular candidate sits at a math.Hypot radius and can
-// miss the apex the sweep actually reaches. That term belongs to the scan that
-// produces the candidate (extrude.go's circularExtremeInterval) and arrives
-// here already folded into the interval's own half-width, so the box simply
-// maxes it in beside the sweep term. Without it a box over an arc section can
-// publish Exact while excluding the surface it bounds.
+// The box states no error term of its own. Both mechanisms that can move an
+// end — the sweep extreme's and the boundary scan's — belong to the extent
+// reading itself (extentBoundedAlong), which every consumer takes, so the box
+// simply maxes the three axes' half-widths. Charging one of them here instead
+// would leave the same coordinate bounded on this path and exact on the
+// through-all stop path.
 func revolveBoundsContext(ctx context.Context, rp revolvePayload, work *freeformWork) (Box, error) {
 	axes := []r3.Vec{r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1)}
-	b := rp.basis()
-	coordUpper, err := profileCoordinateUpper(rp.profile, work)
-	if err != nil {
-		return Box{}, err
-	}
-	rhoUpper := rp.ax.radialUpper(coordUpper)
-	if isNonFinite(rhoUpper) {
-		return Box{}, fmt.Errorf(`%w: the revolved region's radial distance from its own axis has no finite proven bound, so no sweep-extreme bound can be composed`, ErrNotFinite)
-	}
 	var minC, maxC [3]float64
 	bound := 0.0
 	for i, g := range axes {
 		if err := ctx.Err(); err != nil {
 			return Box{}, err
 		}
-		lo, hi, extremeBound, err := rp.extentBoundedAlong(ctx, g, work)
+		lo, hi, extentBound, err := rp.extentBoundedAlong(ctx, g, work)
 		if err != nil {
 			return Box{}, err
 		}
 		minC[i] = lo
 		maxC[i] = hi
-		if extremeBound > bound {
-			bound = extremeBound
-		}
-		c0 := rp.xform.ApplyDir(b.e0).Dot(g)
-		c1 := rp.xform.ApplyDir(b.e1).Dot(g)
-		mlo, mhi := sweepExtremes(c0, c1, rp.phi0, rp.phi1, rp.full)
-		loBound, hiBound := sweepExtremeBounds(c0, c1, rp.phi0, rp.phi1, mlo, mhi, rp.full)
-		if term := directionalPerturbationAllow(loBound, rhoUpper); term > bound {
-			bound = term
-		}
-		if term := directionalPerturbationAllow(hiBound, rhoUpper); term > bound {
-			bound = term
+		if extentBound > bound {
+			bound = extentBound
 		}
 	}
 	return Box{
@@ -1825,8 +1841,9 @@ func revolveBoundsContext(ctx context.Context, rp revolvePayload, work *freeform
 // sweepExtremes returns the range of m(φ) = c0·cos φ + c1·sin φ over the
 // sweep interval: endpoints plus the interior critical angles, or the full
 // ±amplitude for a whole turn. The held values it returns are what
-// revolveBoundsContext and extentAlongWork both publish; sweepExtremeBounds
-// proves how far each can sit from the truth without touching either.
+// extentBoundedAlong evaluates its interval from, and so what the box and the
+// through-all stop both publish; sweepExtremeBounds proves how far each can sit
+// from the truth without touching either.
 func sweepExtremes(c0, c1, phi0, phi1 float64, full bool) (float64, float64) {
 	amp := math.Hypot(c0, c1)
 	if full {

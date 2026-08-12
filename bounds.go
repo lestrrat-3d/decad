@@ -73,7 +73,7 @@ import (
 //     (ratSqrtDown/ratSqrtUp) a free-form arc's radius already does, rather
 //     than trusting math.Sqrt's accuracy on either end;
 //   - a linear functional's own extreme over a bounded region moving when its
-//     DIRECTION is perturbed (a revolve box face, whose swept direction
+//     DIRECTION is perturbed (a revolved solid's directional extent, whose swept direction
 //     carries the sweep angle's own trig enclosure) →
 //     directionalPerturbationAllow, charged against the envelope of the very
 //     coordinate that direction multiplies — which is the caller's to name,

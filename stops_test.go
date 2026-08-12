@@ -402,6 +402,72 @@ func TestExtrudeToFaceGates(t *testing.T) {
 	require.Len(t, doc.Recipe().Steps, liveSteps)
 }
 
+// pinFootprint builds a solved 4×4 sketch square beside the revolve profiles
+// above. A through-all sweep never consults its lateral footprint, so the
+// square only has to be a legal profile on the XY plane.
+func pinFootprint(t *testing.T) (*sketch.Sketch, *sketch.Profile) {
+	t.Helper()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	rect := s.CreateRectangle(20, 0, 24, 4)
+	s.Fix(rect.A)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	return s, s.Profiles()[0]
+}
+
+// TestExtrudeThroughAllRevolveStopChargesSweepExtreme proves the revolved
+// solid's directional extent charges BOTH mechanisms that can move its ends
+// before a stop reads it (docs/evaluator-design.md §6). A partial sweep's own
+// extreme is reached through math.Sin/Cos and is held only to the bracket the
+// payload's sweep-extreme proof derives, so a through-all stop — which records
+// the coordinate as exact and has no bound to widen — refuses. A full
+// revolution about an axis-aligned frame reaches its ±8 amplitude exactly and
+// still resolves.
+func TestExtrudeThroughAllRevolveStopChargesSweepExtreme(t *testing.T) {
+	t.Run("partial sweep", func(t *testing.T) {
+		s, p := solidSketch(t)
+		doc := decad.New()
+		// The 10×8 rectangle swept 1 radian about the sketch u axis reaches
+		// z = 8·sin(1) ≈ 6.7317678784631720, which no float64 holds: the box
+		// says so itself, and the stop path must say the same.
+		host, err := doc.Revolve(s, p, uAxis, decad.AngleExtent{A: units.Radians(1), Dir: decad.Along})
+		require.NoError(t, err)
+		box, err := host.Bounds()
+		require.NoError(t, err)
+		require.Equal(t, decad.Approximate, box.Exactness)
+		require.InDelta(t, 8*math.Sin(1), box.Max.Z, 1e-9)
+		require.Positive(t, box.Bound.Base())
+
+		before := snapshotDocument(t, doc)
+		ps, pp := pinFootprint(t)
+		_, err = doc.Extrude(ps, pp, decad.ThroughAll{Dir: decad.Along})
+		require.ErrorIs(t, err, decad.ErrUnsupported)
+		require.ErrorContains(t, err, "sweep-extreme")
+		requireDocumentUnchanged(t, doc, before)
+	})
+
+	t.Run("full revolution", func(t *testing.T) {
+		s, p := solidSketch(t)
+		doc := decad.New()
+		host, err := doc.Revolve(s, p, uAxis, decad.FullRevolution{})
+		require.NoError(t, err)
+
+		ps, pp := pinFootprint(t)
+		pin, err := doc.Extrude(ps, pp, decad.ThroughAll{Dir: decad.Along})
+		require.NoError(t, err)
+
+		// The revolved solid spans z ∈ [−8, 8] exactly, so the stop is 8 and
+		// the 4×4 footprint swept [0, 8] is 128 mm³.
+		requireVolume(t, pin, 128)
+		requireBounds(t, pin, decad.Exact, 20, 0, 0, 24, 4, 8)
+		require.Contains(t, doc.Bodies(), host)
+		steps := doc.Recipe().Steps
+		require.Equal(t, []decad.StepRef{host.Origin().Step}, steps[len(steps)-1].Inputs)
+	})
+}
+
 func TestRevolveToFaceAngular(t *testing.T) {
 	s, p := annularSketch(t)
 	doc := decad.New()

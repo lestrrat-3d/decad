@@ -226,7 +226,10 @@ like `ToFace`: all three land in increment 2 with selectors (§7), the stop an
 intersection of the sweep direction with analytic target surfaces — closed
 form — and `ErrUnsupported` until then. A through-all payload must provide an
 exact directional extent. A prism with a nonzero section displacement returns
-`ErrUnsupported`: the recorded stop has no bound to widen. A through-all
+`ErrUnsupported`: the recorded stop has no bound to widen. So does a revolved
+solid whose extent along the sweep its own proofs hold only to a bracket — a
+partial sweep's extreme, or a boundary extreme riding a computed arc radius
+(§6) — for the same reason. A through-all
 dependency is ambient at the CALL but never in the RECORD: core §6.2's depends-on rule covers this
 case explicitly — the feature call resolves which live bodies actually bound
 the stops and records each one's `StepRef` in the step's `Inputs`, in stop
@@ -278,7 +281,10 @@ reached — the same extreme analysis extrude uses, in cylindrical coordinates.
 `Bounds` is `Exact` only where every one of those extremes is proven exactly
 representable; a sweep amplitude no `float64` holds, or a boundary extreme a
 computed arc radius carries, publishes the proven bound its own arithmetic
-derives instead. All mass results carry the §4 numerical bounds. Increment 2.
+derives instead. That bound belongs to the directional extent reading itself,
+not to the box, because a body-relative stop reads the same extent (§5) and
+must see the same uncertainty rather than an exact coordinate. All mass results
+carry the §4 numerical bounds. Increment 2.
 
 ## 7. Selectors
 
