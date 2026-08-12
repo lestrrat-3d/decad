@@ -13,11 +13,12 @@ import (
 // admission and work-budget/cancellation machinery. There is no assembly and no
 // §6 build-time audit on this path — the candidate is one s.Profiles() result
 // taken verbatim, so §5's authentication claim 1 (every individual segment is
-// authentic) already covers claim 2 (the assembly is correct) entirely. The
-// general per-cell edge-orientation classification for the crossing sub-case
-// (PR3) is not implemented; a pair whose operands' boundaries genuinely cross
-// falls through unresolved (§4.4), exactly like any other topology this
-// increment's resolution does not cover.
+// authentic) already covers claim 2 (the assembly is correct) entirely. When
+// this search comes back unresolved, resolveAndBuildPrismCut/Intersect fall
+// through to prism_boolean_crossing.go's edge-orientation classifier before
+// giving up — a pair whose operands' boundaries genuinely cross reaches that
+// classifier, not straight to the mesh path; only what NEITHER path resolves
+// falls through unresolved (§4.4).
 //
 // A structurally-matched loop's every edge is Whole (§4.2's own match
 // condition), so the matched profile carries no cut charge (§7's δ_cut) —
@@ -29,18 +30,24 @@ import (
 // Union's own merge path.
 
 // resolveAndBuildPrismCut runs Cut's clean-nesting structural match (§4.2)
-// and, once it finds a unique candidate, authenticates it and builds §7's
-// exactness. There is no §6 audit on this path (§6 is titled "Union's merge
-// only"; §5 states the clean-nesting claim needs no second proof — the
+// first and, once it finds a unique candidate, authenticates it and builds
+// §7's exactness. There is no §6 audit on this path (§6 is titled "Union's
+// merge only" no longer describes this file alone — see prism_boolean.go's
+// own header; §5 states the clean-nesting claim needs no second proof — the
 // candidate is one s.Profiles() result taken verbatim, so §5's authentication
-// claim 1 already covers claim 2 entirely).
+// claim 1 already covers claim 2 entirely). When the clean-nesting search
+// comes back unresolved, this tries prism_boolean_crossing.go's
+// edge-orientation classifier before giving up.
 func resolveAndBuildPrismCut(ctx context.Context, budget *workBudget, target, tool prismPayload, reexpress *prismReexpression) (prismPayload, bool, error) {
 	s, match, sceneDelta, resolved, err := resolvePrismCut(ctx, budget, target, tool, reexpress)
 	if err != nil {
 		return prismPayload{}, false, err
 	}
 	if !resolved {
-		return prismPayload{}, false, nil // §4.4: this topology is unresolved
+		// §4.2's crossing sub-case (prism_boolean_crossing.go): the tool's
+		// boundary genuinely crosses the target's, rather than leaving both
+		// operands' loops untouched.
+		return resolveAndBuildPrismCutCrossing(ctx, budget, target, tool, reexpress)
 	}
 
 	// Point of no return (§3.4): every further problem is a genuine refusal
@@ -81,16 +88,21 @@ func resolveAndBuildPrismCut(ctx context.Context, budget *workBudget, target, to
 }
 
 // resolveAndBuildPrismIntersect runs Intersect's clean-nesting structural
-// match (§4.2) in both directions and, once it finds the unique nested
+// match (§4.2) in both directions first and, once it finds the unique nested
 // operand, authenticates its own disk verbatim and builds §7's exactness.
-// There is no §6 audit on this path, for the same reason as Cut's.
+// There is no §6 audit on this path, for the same reason as Cut's. When
+// neither direction matches, this tries prism_boolean_crossing.go's
+// edge-orientation classifier before giving up.
 func resolveAndBuildPrismIntersect(ctx context.Context, budget *workBudget, pa, pb prismPayload, reexpress *prismReexpression) (prismPayload, bool, error) {
 	s, match, sceneDelta, nestedIsB, resolved, err := resolvePrismIntersect(ctx, budget, pa, pb, reexpress)
 	if err != nil {
 		return prismPayload{}, false, err
 	}
 	if !resolved {
-		return prismPayload{}, false, nil // §4.4: this topology is unresolved
+		// §4.2's crossing sub-case (prism_boolean_crossing.go): a
+		// general-position overlap, rather than one operand's boundary
+		// leaving the other's fully untouched.
+		return resolveAndBuildPrismIntersectCrossing(ctx, budget, pa, pb, reexpress)
 	}
 
 	profile, err := prismRecordProfileContext(ctx, s, match)
@@ -177,10 +189,16 @@ func prismIntersectEnd(aVal, aDelta, bVal, bDelta float64, better func(x, y floa
 // operand it admits is hole-free (G6), so only "which operand" would ever
 // vary. Cut/Intersect's clean-nesting match (§4.2) is what needs the loop half
 // too: proving §4.2's nesting relation is a pure data comparison against this
-// map, never a geometric test.
+// map, never a geometric test. authoredReversed is the crossing sub-case's own
+// addition (prism_boolean_crossing.go): whether this operand's own recorded
+// walk of the entity runs backwards relative to the entity's own natural
+// parameterization — the fixed fact buildPrismScene computes once at creation
+// time that classifyPrismCells later compares against a returned edge's own
+// Reversed flag, never a geometric test.
 type prismEntityOrigin struct {
-	isB  bool
-	hole int
+	isB              bool
+	hole             int
+	authoredReversed bool
 }
 
 // prismLoopEntitySet is the tag map's per-loop view: the set of entities

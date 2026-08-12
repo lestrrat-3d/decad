@@ -426,11 +426,13 @@ func TestPrismCutG6HoledToolFallsBackKeepingTheStandingPost(t *testing.T) {
 		`the standing post's volume must not be dropped from the result`)
 }
 
-// TestPrismCutCrossingToolFallsBackWithNoAnalyticError is §15's crossing-pair
-// case: a tool that pokes outside the target cuts the target's own boundary, so
-// its edges are Partial and the structural match fails — the pair reaches the
-// mesh path with no error surfaced from the analytic attempt itself.
-func TestPrismCutCrossingToolFallsBackWithNoAnalyticError(t *testing.T) {
+// TestPrismCutCrossingToolResolvesAnalytically is docs/prism-boolean-design.md
+// §4.2's crossing sub-case: a tool that pokes outside the target cuts the
+// target's own boundary, so the clean-nesting structural match fails — but
+// prism_boolean_crossing.go's edge-orientation propagation resolves it
+// anyway, with a bound many decades tighter than the mesh path's own chord
+// tolerance would report.
+func TestPrismCutCrossingToolResolvesAnalytically(t *testing.T) {
 	// half is the target's own footprint half-width.
 	const half, h = 10.0, 10.0
 	// The tool's own footprint straddles the target's wall at x = half: it
@@ -442,8 +444,8 @@ func TestPrismCutCrossingToolFallsBackWithNoAnalyticError(t *testing.T) {
 	tool := boxBodySymmetric(t, doc, x0, -y, x1, y, 20) // spans the target's full height
 
 	got, err := decad.Cut(target, tool)
-	require.NoError(t, err, `the crossing pair must reach the mesh path cleanly, no analytic-resolution error`)
-	require.True(t, anyFaceIsFaceted(got))
+	require.NoError(t, err)
+	require.False(t, anyFaceIsFaceted(got), `the crossing sub-case must build analytically`)
 
 	overlap := (half - x0) * 2 * y // only the part of the tool inside the target removes material
 	want := 4*half*half*h - overlap*h
@@ -451,6 +453,8 @@ func TestPrismCutCrossingToolFallsBackWithNoAnalyticError(t *testing.T) {
 	vol, err := got.Volume()
 	require.NoError(t, err)
 	require.LessOrEqual(t, math.Abs(volumeMM(t, vol)-want), boundMM3(t, vol))
+	require.Less(t, boundMM3(t, vol), 1e-9,
+		`the analytic path's bound sits many decades below the mesh chord tolerance floor`)
 }
 
 // TestPrismCutCancellationLeavesDocumentUnchanged is §15's cancellation
