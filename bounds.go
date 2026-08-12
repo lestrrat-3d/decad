@@ -66,7 +66,18 @@ import (
 //     corner adjacent to a circular wall → chordLocusLengthAllow, the
 //     range's own width times a proven upper bound on the locus's own speed,
 //     minus the held chord;
-//   - a per-coordinate maximum read as a 3D DISTANCE → radius3D.
+//   - a per-coordinate maximum read as a 3D DISTANCE → radius3D;
+//   - propagating a proven interval through a SQUARE ROOT (a candidate disk's
+//     own centre distance, an Apollonius radius) → boundedSqrt, which reads
+//     the operand's own interval ends through the same rational sqrt brackets
+//     (ratSqrtDown/ratSqrtUp) a free-form arc's radius already does, rather
+//     than trusting math.Sqrt's accuracy on either end;
+//   - a HELD float measured against a bounded scalar's own proven enclosure of
+//     the quantity that float stands for → boundedFloatError, the bridge every
+//     candidate producer crosses when it evaluates a value one way and proves
+//     it another (extrude.go's circular boundary-extreme candidate, whose held
+//     position runs through math.Cos/math.Sin while its enclosure comes from
+//     the angle-free apex identity).
 
 const (
 	// unitRoundoff is float64's u = 2⁻⁵³: the relative error a single
@@ -610,6 +621,93 @@ func sweptMomentAllow(delta, areaUpper, coordUpper float64) float64 {
 		return 0
 	}
 	return productUpper(vol, coordUpper)
+}
+
+// boundedSqrt propagates a proven bound through a square root: x.bound must
+// already prove the true operand lies in [x.value−x.bound, x.value+x.bound]
+// (clamped at zero, since every caller's operand is a sum of squares or a
+// disk radius). The result brackets the square root of that whole interval
+// through ratSqrtDown/ratSqrtUp — the same rational sqrt brackets
+// circularLengthInterval reads an ArcSeg's own radius through — evaluated at
+// the interval's two ends, never through math.Sqrt's own accuracy on either.
+// A non-finite operand bound answers +Inf: an absent bound must never read as
+// a small one.
+//
+// The outward math.Nextafter step on each end is charged only where there is
+// rounding for it to cover: x.value ± x.bound is itself a rounded float
+// operation, so a genuinely bounded operand's computed ends can each sit an
+// ulp inside the interval they stand for and MUST be stepped out. Adding or
+// subtracting exactly zero rounds nothing, so a zero-bound operand's ends are
+// already the exact interval — the held value twice — and stepping them out
+// would invent a rounding error that provably did not occur. The rational
+// brackets then decide the answer by exact comparison: a zero bound precisely
+// when the held value is a perfect square of a float64, and a genuine
+// directed-rounding bound whenever it is not.
+func boundedSqrt(x boundedScalar) boundedScalar {
+	value := math.Sqrt(math.Max(x.value, 0))
+	if isNonFinite(x.bound) {
+		return measuredScalar(value, math.Inf(1))
+	}
+	lo := math.Max(0, x.value-x.bound)
+	hi := x.value + x.bound
+	if x.bound != 0 {
+		lo = math.Nextafter(lo, math.Inf(-1))
+		if lo < 0 {
+			lo = 0
+		}
+		hi = math.Nextafter(hi, math.Inf(1))
+	}
+	loR, hiR := floatRat(lo), floatRat(hi)
+	if loR == nil || hiR == nil {
+		return measuredScalar(value, math.Inf(1))
+	}
+	sqrtLo := ratSqrtDown(loR)
+	sqrtHi := ratSqrtUp(hiR)
+	if isNonFinite(sqrtLo) || isNonFinite(sqrtHi) {
+		return measuredScalar(value, math.Inf(1))
+	}
+	bound := upRound(math.Max(value-sqrtLo, sqrtHi-value))
+	return measuredScalar(value, bound)
+}
+
+// boundedNorm2 is boundedSqrt's own reduction of a 2D length, over two
+// components that already carry their own proven bounds. It never routes
+// through math.Hypot's undocumented accuracy: the sum of squares composes
+// through the bounded arithmetic, and the square root's own rounding comes
+// from boundedSqrt.
+func boundedNorm2(x, y boundedScalar) boundedScalar {
+	return boundedSqrt(boundedAdd(boundedMul(x, x), boundedMul(y, y)))
+}
+
+// boundedHypot is boundedNorm2 over two EXACT leaves — the convention a
+// recorded coordinate takes throughout this package (line endpoints and
+// normals, arc centres, junction vertices). A radius this evaluator COMPUTED
+// is not one of them: it carries its own bound and must be passed through
+// boundedNorm2 instead.
+func boundedHypot(dx, dy float64) boundedScalar {
+	return boundedNorm2(exactScalar(dx), exactScalar(dy))
+}
+
+// boundedFloatError is the proven error bound of a HELD float64 against a
+// bounded scalar that already encloses the quantity the float stands for:
+// |held − true| ≤ |held − value| + bound, the first term measured exactly over
+// the rationals (rationalFloatError) and the two summed outward.
+//
+// It exists because a producer may evaluate a quantity one way and PROVE it
+// another, and the two spellings are then different floats. The circular
+// boundary-extreme candidate is that shape: its held position runs through
+// math.Cos/math.Sin at the candidate's own angle, while its enclosure comes
+// from the angle-free apex identity circularExtremeInterval states. Composing
+// the gap this way keeps the held reading exactly where it was — no consumer's
+// value moves — while the published bound speaks for the truth.
+//
+// A non-finite operand answers +Inf, never 0: an absent bound must never read
+// as a small one (cutDisplacementAllow's own rule).
+func boundedFloatError(bs boundedScalar, held float64) float64 {
+	if isNonFinite(bs.value) || isNonFinite(bs.bound) || isNonFinite(held) {
+		return math.Inf(1)
+	}
+	return absSumUpper(rationalFloatError(floatRat(bs.value), held), bs.bound)
 }
 
 // rimDelta is the trim-amplified displacement bound of a vertex the boolean
