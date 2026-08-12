@@ -1443,10 +1443,92 @@ func TestRevolveBoundsBoundEnclosesOffsetAxisExtreme(t *testing.T) {
 func TestRevolveBoundsExactFullTurn(t *testing.T) {
 	// The same rectangle under a full revolution: every world axis's swept
 	// extreme is the exact ±8 amplitude of an axis-aligned frame, so the box
-	// is Exact — the test that stops a blanket Approximate.
+	// is Exact — the test that stops a blanket Approximate. The section is all
+	// straight segments, so no arc-radius term enters either.
 	s, p := solidSketch(t)
 	doc := decad.New()
 	body, err := doc.Revolve(s, p, uAxis, decad.FullRevolution{})
 	require.NoError(t, err)
 	requireBounds(t, body, decad.Exact, 0, -8, -8, 10, 8, 8)
+}
+
+// arcApexSketch builds a solved circular-segment region: the arc is centred on
+// the sketch origin and runs from (u, v) to (−u, v), closed by the chord
+// between them. Its apex therefore sits on the +v axis at radius √(u²+v²),
+// which the record never states — an ArcSeg carries Start and Center only, so
+// every consumer's radius is the math.Hypot of the two, a rounded float that
+// can land on either side of the truth.
+func arcApexSketch(t *testing.T, u, v float64) (*sketch.Sketch, *sketch.Profile) {
+	t.Helper()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	c := s.CreatePoint(0, 0)
+	s.Fix(c)
+	start := s.CreatePoint(u, v)
+	end := s.CreatePoint(-u, v)
+	s.CreateLine(end, start)
+	s.CreateArc(c, start, end)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	require.Len(t, s.Profiles(), 1)
+	return s, s.Profiles()[0]
+}
+
+// requireEnclosesApex asserts that the box's own published interval about
+// Max.Y covers the exact apex radius √(u²+v²), carried through big.Float
+// rather than a rounded literal — the whole error being measured is smaller
+// than a decimal literal's own representation error.
+func requireEnclosesApex(t *testing.T, box decad.Box, u, v float64) {
+	t.Helper()
+	const prec = 200
+	boundMM, err := box.Bound.In(units.Millimeter)
+	require.NoError(t, err)
+	sq := new(big.Float).SetPrec(prec).SetFloat64(u * u)
+	sq.Add(sq, new(big.Float).SetPrec(prec).SetFloat64(v*v))
+	truth := new(big.Float).SetPrec(prec).Sqrt(sq)
+	residual := new(big.Float).SetPrec(prec).Sub(
+		new(big.Float).SetPrec(prec).SetFloat64(box.Max.Y),
+		truth,
+	)
+	residual.Abs(residual)
+	require.LessOrEqual(t,
+		residual.Cmp(new(big.Float).SetPrec(prec).SetFloat64(boundMM)), 0,
+		`the box's published interval must contain the swept arc's apex (residual %s, bound %g)`,
+		residual.Text('g', 6), boundMM,
+	)
+}
+
+func TestRevolveBoundsBoundEnclosesArcRadius(t *testing.T) {
+	// A circular-segment section revolved about the sketch u axis. The swept
+	// solid reaches the arc's apex at radius √37, which math.Hypot(1, 6) rounds
+	// BELOW: a box that reads the walk's radius as an exact leaf publishes a
+	// Max.Y short of the surface it bounds. The published interval has to cover
+	// the apex under every extent — a full turn, whose swept coefficient is
+	// exactly ±1 and contributes nothing, and a partial sweep, whose own
+	// trig-derived term is far smaller than the radius error it must not stand
+	// in for.
+	const u, v = 1.0, 6.0
+	for _, tc := range []struct {
+		name   string
+		extent decad.AngularExtent
+	}{
+		{name: "full turn", extent: decad.FullRevolution{}},
+		{name: "quarter turn", extent: decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s, p := arcApexSketch(t, u, v)
+			body, err := decad.New().Revolve(s, p, uAxis, tc.extent)
+			require.NoError(t, err)
+			box, err := body.Bounds()
+			require.NoError(t, err)
+			require.Equal(t, decad.Approximate, box.Exactness,
+				`a box whose extreme rides a computed arc radius is never Exact`)
+			boundMM, err := box.Bound.In(units.Millimeter)
+			require.NoError(t, err)
+			require.Greater(t, boundMM, 0.0)
+			require.LessOrEqual(t, boundMM, 1e-12, `the bound must stay tight enough to be useful`)
+			requireEnclosesApex(t, box, u, v)
+		})
+	}
 }

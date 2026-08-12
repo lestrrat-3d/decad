@@ -348,3 +348,23 @@ func TestExtrudeSquarePrismStaysExact(t *testing.T) {
 	require.Equal(t, decad.Exact, c.Exactness)
 	require.Zero(t, c.Bound.Base())
 }
+
+// TestExtrudeArcSectionBoxKeepsItsOwnExactness marks the boundary the revolve
+// box's arc-radius term (bounds.go's arcRadiusExtremeAllow) must not cross. The
+// section is the very one whose apex radius √37 no float64 holds — the case
+// that moved the revolve box off Exact — and the prism box reads the SAME
+// boundary-extreme scan. The prism is a separate consumer with its own bound to
+// state, so the term is carried beside that shared scan rather than inside it,
+// and this box's reading stays exactly where it was: fold the term into the
+// scan instead and this test fails first.
+func TestExtrudeArcSectionBoxKeepsItsOwnExactness(t *testing.T) {
+	s, p := arcApexSketch(t, 1, 6)
+	body, err := decad.New().Extrude(s, p, decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+	require.NoError(t, err)
+
+	box, err := body.Bounds()
+	require.NoError(t, err)
+	require.Equal(t, decad.Exact, box.Exactness)
+	require.Zero(t, box.Bound.Base())
+	require.Equal(t, math.Hypot(1, 6), box.Max.Y)
+}

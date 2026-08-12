@@ -735,6 +735,16 @@ func (ax axisFrame) radialUpper(coordUpper float64) float64 {
 	)
 }
 
+// planeDirection is the PLANE-LOCAL direction whose extreme over the recorded
+// boundary is the extreme of the axis-coordinate functional wg·z + k·ρ. It is
+// the rotation that carries (z, ρ) back to (u, v), so the two readings that
+// need it — axisExtremeContext, which evaluates the extreme, and
+// revolveBoundsContext, which charges that extreme's own error terms — cannot
+// drift apart by spelling it twice.
+func (ax axisFrame) planeDirection(wg, k float64) (float64, float64) {
+	return wg*ax.dU - k*ax.dV, wg*ax.dV + k*ax.dU
+}
+
 // walk re-expresses one boundary walk in axis coordinates (the U fields
 // carry z, the V fields ρ), snapping an endpoint within snapTol onto the
 // axis so contact classification and vertex placement agree exactly.
@@ -1708,6 +1718,15 @@ func (rp revolvePayload) extentAlongWork(ctx context.Context, g r3.Vec, work *fr
 // owns that envelope and folds in the axis anchor, which is the whole term an
 // offset axis adds; a box whose radial envelope cannot be proven finite is
 // refused rather than published against a bound that omits it.
+//
+// The boundary extreme axisExtremeContext returns carries an error of its own,
+// and this reading composes that one too: an arc states its Start and Center,
+// never its radius, so a circular candidate sits at a math.Hypot radius and can
+// miss the apex the sweep actually reaches. arcRadiusExtremeAllow (bounds.go)
+// owns that term, charged at the very plane-local direction each extreme is
+// taken along, and the box maxes it into the same bound the sweep term feeds.
+// Without it a box over an arc section can publish Exact while excluding the
+// surface it bounds.
 func revolveBoundsContext(ctx context.Context, rp revolvePayload, work *freeformWork) (Box, error) {
 	axes := []r3.Vec{r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1)}
 	b := rp.basis()
@@ -1740,6 +1759,20 @@ func revolveBoundsContext(ctx context.Context, rp revolvePayload, work *freeform
 		}
 		if term := directionalPerturbationAllow(hiBound, rhoUpper); term > bound {
 			bound = term
+		}
+		// The two extremes this axis publishes are taken along the plane-local
+		// directions axisExtremeContext builds from mlo and mhi, so each one
+		// charges the arc-radius term at its OWN direction.
+		wg := rp.xform.ApplyDir(b.w).Dot(g)
+		for _, k := range [2]float64{mlo, mhi} {
+			gu, gv := rp.ax.planeDirection(wg, k)
+			term, err := arcRadiusExtremeAllow(ctx, rp.profile, gu, gv, work)
+			if err != nil {
+				return Box{}, err
+			}
+			if term > bound {
+				bound = term
+			}
 		}
 	}
 	return Box{
@@ -1883,8 +1916,7 @@ func sweepExtremeBounds(c0, c1, phi0, phi1, heldLo, heldHi float64, full bool) (
 // recorded boundary, evaluated in axis coordinates through the plane-local
 // boundary extremes.
 func axisExtremeContext(ctx context.Context, rp revolvePayload, wg, k float64, wantMax bool, work *freeformWork) (float64, error) {
-	gu := wg*rp.ax.dU - k*rp.ax.dV
-	gv := wg*rp.ax.dV + k*rp.ax.dU
+	gu, gv := rp.ax.planeDirection(wg, k)
 	lo, hi, err := boundaryExtremesContext(ctx, rp.profile, gu, gv, work)
 	if err != nil {
 		return 0, err

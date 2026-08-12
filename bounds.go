@@ -78,7 +78,12 @@ import (
 //     directionalPerturbationAllow, charged against the envelope of the very
 //     coordinate that direction multiplies — which is the caller's to name,
 //     since a revolve's swept radial coefficient multiplies a distance from
-//     the axis and not from the profile's own frame origin.
+//     the axis and not from the profile's own frame origin;
+//   - that same extreme moving when the POINT attaining it is displaced by the
+//     error in a recorded CIRCULAR segment's own radius (an arc states Start
+//     and Center, so its walk's radius is a math.Hypot evaluation) →
+//     arcRadiusExtremeAllow, the mirror of the term above: the direction is
+//     held and the candidate moves.
 
 const (
 	// unitRoundoff is float64's u = 2⁻⁵³: the relative error a single
@@ -690,6 +695,64 @@ func boundedSqrt(x boundedScalar) boundedScalar {
 // separate.
 func directionalPerturbationAllow(dirBound, envelopeUpper float64) float64 {
 	return productUpper(dirBound, envelopeUpper)
+}
+
+// arcRadiusExtremeAllow bounds how far a linear functional's own extreme over a
+// recorded region's boundary can move under the error in a CIRCULAR segment's
+// radius. It is directionalPerturbationAllow's mirror: there the direction is
+// perturbed and every candidate point is exact, here the direction is held and
+// the candidate MOVES. An interior circular candidate is the point
+// c + r·(cos θ, sin θ), so a radius wrong by δr places it within δr of where it
+// belongs — the displacement is radial, of magnitude at most δr — and the
+// functional gu·u + gv·v it feeds is therefore within δr·|(gu, gv)| of the value
+// the true point takes, by Cauchy-Schwarz.
+//
+// The δr a walk owes is segmentWalk.radiusBound (extrude.go): zero for a
+// CircleSeg, which states its radius outright, and arcWalkRadiusBound's
+// rational bracket for an ArcSeg, whose radius is the math.Hypot of two
+// recorded coordinate differences and so is NOT an exact leaf. The maximum over
+// the profile's circular segments is the bound, because the extreme is attained
+// on one segment and any one of them could be it.
+//
+// Which segments those are is asked of walkOf rather than re-read off the
+// recorded kinds, so the classification keeps its single owner. That costs a
+// second walk of the section, and a free-form segment's conversion is charged
+// work — but a caller reaches this helper only after taking the extreme itself,
+// and that scan refuses a free-form section (boundaryExtremesContext) before
+// any bound is composed.
+//
+// This term is deliberately carried BESIDE boundaryExtremesBoundedContext's own
+// lo/hi fold rather than inside it. That fold's half-width is what
+// boundaryExtremesContext refuses on, and it is read by callers — the prism box
+// through extentBoundedAlong, revolve's own axis-side resolution before any
+// payload exists — that state no bound of their own; folding a nonzero radius
+// term into it would turn every arc profile's reading into a refusal or a
+// widened box, rather than fixing the one consumer that under-reports. A
+// consumer composes this term into its published bound when it can state it.
+func arcRadiusExtremeAllow(ctx context.Context, profile ProfileRecord, gu, gv float64, work *freeformWork) (float64, error) {
+	if err := requireFiniteDirection(gu, gv); err != nil {
+		return 0, err
+	}
+	gmag := upRound(math.Hypot(gu, gv))
+	allow := 0.0
+	for _, loop := range append([]LoopRecord{profile.Outer}, profile.Holes...) {
+		for _, seg := range loop.Segments {
+			if err := ctx.Err(); err != nil {
+				return 0, err
+			}
+			w, err := walkOf(seg, work)
+			if err != nil {
+				return 0, err
+			}
+			if !w.isCircular() {
+				continue
+			}
+			if term := productUpper(w.radiusBound, gmag); term > allow {
+				allow = term
+			}
+		}
+	}
+	return allow, nil
 }
 
 // rimDelta is the trim-amplified displacement bound of a vertex the boolean
