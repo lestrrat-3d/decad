@@ -753,10 +753,21 @@ type segmentWalk struct {
 	axisMomentUpper  float64
 	// kind says which geometry the walk carries; the fields below it are
 	// meaningful only for walkCircular.
-	kind     walkKind
-	cU, cV   float64
-	radius   float64
-	th0, th1 float64
+	kind   walkKind
+	cU, cV float64
+	radius float64
+	// radiusBound is the PROVEN error bound on radius (millimetres). A
+	// CircleSeg states its radius, so its walk holds that number and the bound
+	// is zero; an ArcSeg states Start and Center only, so its walk's radius is
+	// a math.Hypot evaluation and the bound is arcWalkRadiusBound's rational
+	// bracket. It exists because radius is NOT an exact leaf the way a
+	// recorded coordinate is, and a reading that treats it as one can publish
+	// an interval its own truth sits outside of. The analytic surveys
+	// (survey.go's minimum-radius arms, and survey2d.go through
+	// surveyElem.rrBound) take it; a consumer that reads radius as a leaf
+	// still owes its own account of the error, from its own envelope.
+	radiusBound float64
+	th0, th1    float64
 	// spans is the converted Bézier chain of a walkFreeform walk, in the
 	// curve's natural direction; reversed says the walk runs against it. Both
 	// are zero for every other kind.
@@ -861,6 +872,7 @@ func walkOf(seg CurveSegment, work *freeformWork) (segmentWalk, error) {
 			arcRadiusUpper(seg),
 			circularSweepUpper(seg.TStart, seg.TEnd),
 		)
+		w.radiusBound = arcWalkRadiusBound(seg, radius)
 		pinArcWalkEnds(&w, seg)
 		if iv, ok := circularLengthInterval(seg); ok {
 			w.lengthBound = math.Min(w.lengthBound, intervalFloatError(iv, w.length))
@@ -872,6 +884,26 @@ func walkOf(seg CurveSegment, work *freeformWork) (segmentWalk, error) {
 		}
 		return freeformWalk(seg, work)
 	}
+}
+
+// arcWalkRadiusBound is the single owner of the proven bound on an ArcSeg
+// walk's radius, and the reason segmentWalk carries radiusBound at all: the
+// record states Start and Center, never the radius, so the walk's held radius
+// is the float math.Hypot of their difference. The exact radius is
+// √((Su−Cu)² + (Sv−Cv)²) over the recorded coordinates, which ratSqrtDown and
+// ratSqrtUp bracket without rounding, and the bound is the wider side of that
+// bracket about the held float, rounded outward. A bracket that overflows
+// yields +Inf — an underivable bound, which every consumer refuses on rather
+// than publishes.
+func arcWalkRadiusBound(seg ArcSeg, held float64) float64 {
+	dx := exactCoordinateDelta(seg.Start.U, seg.Center.U)
+	dy := exactCoordinateDelta(seg.Start.V, seg.Center.V)
+	r2 := new(big.Rat).Add(new(big.Rat).Mul(dx, dx), new(big.Rat).Mul(dy, dy))
+	rLo, rHi := ratSqrtDown(r2), ratSqrtUp(r2)
+	if isNonFinite(rLo) || isNonFinite(rHi) {
+		return math.Inf(1)
+	}
+	return math.Max(upRound(held-rLo), upRound(rHi-held))
 }
 
 // freeformWalk resolves a Tier A free-form segment into its walk geometry
