@@ -658,6 +658,18 @@ type lineWallFrame struct {
 	n, e             ivPoint
 }
 
+// The interval e below deliberately EXCLUDES normalize2(w.tanInU, w.tanInV).
+// That is not a hole in the enclosure, and widening e to cover normalize2's
+// output would be wrong. ivUnitVec encloses the EXACT unit vector of the float
+// pair — the value normalize2 rounds — and §8.4 requires this frame to hold the
+// direction the construction DENOTES "whatever the platform's sqrt and hypot
+// did", so anchoring it on a rounded float would replace the denoted direction
+// with one particular platform's approximation of it. A tangent of (3, 4) is
+// the clearest case: e is the exact [3/5, 3/5] × [4/5, 4/5], 3/5 is not a
+// float, and normalize2 lands 2.22e-17 below the interval it is not supposed
+// to be in. To falsify this claim, exhibit an admitted corner whose published
+// Edge.Length interval fails to enclose the true locus length — not merely one
+// where normalize2's output falls outside e, which is every rotated wall.
 func lineWallFrameOf(w sideWalk) (lineWallFrame, bool) {
 	e, ok := ivUnitVec(w.tanInU, w.tanInV)
 	if !ok {
