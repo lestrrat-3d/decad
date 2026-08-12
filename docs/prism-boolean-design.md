@@ -551,13 +551,17 @@ segment's own WALKED geometry (`walkOf`, §4.1), never from the record's
 own full domain that walk restates the record's own coordinates exactly —
 `lerp2`'s and `pinArcWalkEnds`' own natural-bound special cases, and a
 `CircleSeg` recorded over those bounds walking the recorded centre and radius
-directly — so a WHOLE segment charges nothing. A segment recorded over a range NARROWER than
-that domain instead evaluates the carrier at a computed parameter (`lerp2`'s
-general arm, or a circular walk's `cos`/`sin` at a computed angle), so it
-enters the scene at an endpoint this boolean itself computed, whatever the
-two operands' own prior displacement was. `bounds.go`'s `walkEndpointAllow`
-states the allowance, at the magnitude of the operands that walk's OWN
-arithmetic touches and never at the endpoint it produced: `lerp2` computes
+directly — so a WHOLE segment charges nothing, whatever its kind. A `LineSeg`
+recorded over a range NARROWER than that domain instead evaluates the carrier
+at a computed parameter (`lerp2`'s general arm), so it enters the scene at an
+endpoint this boolean itself computed, whatever the two operands' own prior
+displacement was. It is the only kind that reaches this charge: a trimmed
+circular carrier would enter through two `cos`/`sin`-computed points, moving
+its rebuilt radius and sweep as well as its endpoints, and §4.1 refuses such a
+pair before the scene is built rather than charge it (below). `bounds.go`'s
+`walkEndpointAllow` states the allowance, at the magnitude of the operands
+that walk's OWN arithmetic touches and never at the endpoint it produced:
+`lerp2` computes
 `fl(a + fl(t·fl(b−a)))` from the carrier's own recorded `Start` and `End` — at
 most that, since a target free to fuse the multiply and the add commits one
 rounding fewer — and that difference CANCELS, so a fragment near the plane
@@ -565,10 +569,13 @@ origin on a far-reaching carrier rounds by ulps of the CARRIER while its own
 endpoint magnitude stays tiny. A trimmed `LineSeg` therefore charges the
 envelope of its recorded `Start`/`End` coordinates (`walkChargeOf`'s
 `lineWalkOperandUpper`), folded together with the walked endpoint so the
-envelope stands whatever the recorded parameter is; a circular walk charges `segmentWalk.coordUpper`, whose
-`|cu|+|cv|+r+r` L1 form already bounds the centre and radius its `cos`/`sin`
-arithmetic works on. Each operand owes the largest such allowance over its
-OWN consumed segments — `δ_walkA` and `δ_walkB`, the `a` and `b` fields of
+envelope stands whatever the recorded parameter is. `walkChargeOf` still
+states a circular answer — `segmentWalk.coordUpper`, whose `|cu|+|cv|+r+r` L1
+form already bounds the centre and radius a `cos`/`sin` walk works on — but
+the §4.1 refusal means no boolean reaches that arm; it stands so a charge,
+never a silent zero, is what any future widening of that refusal would meet.
+Each operand owes the largest such allowance over its OWN
+consumed segments — `δ_walkA` and `δ_walkB`, the `a` and `b` fields of
 `prismSceneDelta`, each holding that operand's walk charge ALONE — and the
 charge stands even when both operands carry zero displacement and the
 re-expression is the identity — the same
@@ -577,12 +584,13 @@ the crossing `sketch` computes for THIS pair, `δ_walk` charges an INPUT
 segment's own narrowed range entering the scene at all, before any crossing
 is asked about. A trimmed circular carrier (`ArcSeg`/`CircleSeg`) is refused
 rather than charged (§4.1) — its rebuilt radius and sweep move too, which a
-coordinate-envelope charge does not state — so `δ_walk` is only ever computed
-over a trimmed `LineSeg` or a trimmed `ArcSeg` whose two bounds are the
-entity's own domain ends (Reversed swaps which field holds which, so a WHOLE
-arc's `TStart`/`TEnd` are `{0, 1}` in either order — see `walkChargeOf`'s own
-doc comment). WHOLE is read off the RECORDED range for every kind, a
-`CircleSeg` included, and never off the walk's own closed-ness: that flag is
+coordinate-envelope charge does not state — so a positive `δ_walk` is only
+ever computed over a trimmed `LineSeg`. Every circular carrier that survives
+§4.1 is WHOLE and therefore charges zero, whichever field holds which bound
+(Reversed swaps them, so a WHOLE arc's `TStart`/`TEnd` are `{0, 1}` in either
+order — see `walkChargeOf`'s own doc comment). WHOLE is read off the RECORDED
+range for every kind, a `CircleSeg`
+included, and never off the walk's own closed-ness: that flag is
 decided within a tolerance of a full turn, and a decad-side tolerance that
 can ACCEPT is the admission gate the reject-only rule forbids.
 
@@ -677,7 +685,7 @@ extension is two pieces, each in the existing machinery's own shape:
   coordinate displacement `δ_cut` reads. `walkEndpointAllow` owns `δ_walk`'s
   own mechanism the same way, turning the envelope of the SOURCE operands a
   walk's own arithmetic touches into the coordinate displacement its computed
-  endpoint owes; each kind's caller supplies that envelope (above), and the
+  endpoint owes; the caller supplies that envelope (above), and the
   helper never reads it off the answer the walk produced. The section
   displacement's own reading
   is an AREA: the area a

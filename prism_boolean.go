@@ -741,6 +741,16 @@ func wholeSegmentRange(tStart, tEnd float64) bool {
 // bounds the centre and radius its cos/sin arithmetic works on, so it IS the
 // source envelope for that kind rather than an answer standing in for one.
 //
+// Only the line arm is reachable through tryPrismBoolean: a trimmed circular
+// carrier is refused before the scene is built
+// (prismProfileHasTrimmedCircularSource), because a coordinate envelope does
+// not state the movement of its rebuilt radius and sweep, so every ArcSeg or
+// CircleSeg that reaches this function through the boolean is WHOLE and
+// charges zero. The narrowed circular arm stands anyway, so that a widening
+// of that refusal meets a charge rather than a silent zero, and it is
+// exercised directly by this file's own unit test rather than through a
+// boolean.
+//
 // "Whole" is decided by wholeSegmentRange for every kind — exact float
 // equality against 0 and 1, never a tolerance: a range short of a natural
 // bound is a trimmed segment and must be charged, however near that bound it

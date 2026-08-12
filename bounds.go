@@ -365,9 +365,16 @@ func cutDisplacementAllow(tangentUpper float64) float64 {
 // magnitude would under-charge that walk without limit, so callers pass the
 // SOURCE envelope: prism_boolean.go's lineWalkOperandUpper for a line (the
 // recorded Start/End coordinates, folded together with the walked endpoint so
-// the envelope stands whatever the recorded parameter is), and
-// segmentWalk.coordUpper for a circular walk, whose |c|+|c|+r+r L1 form
-// already bounds the centre and radius its cos/sin arithmetic works on.
+// the envelope stands whatever the recorded parameter is).
+//
+// A trimmed line is the only carrier the analytic boolean charges here. A
+// trimmed circular one is refused before its scene is built
+// (prismProfileHasTrimmedCircularSource), since its rebuilt radius and sweep
+// move as well as its endpoints, so walkChargeOf's circular arm — which
+// passes segmentWalk.coordUpper, whose |c|+|c|+r+r L1 form bounds the centre
+// and radius a cos/sin walk works on — is unreachable through that path. It
+// stands so a widening of that refusal meets a charge rather than a silent
+// zero.
 //
 // The proof, per coordinate, with E = operandUpper and u = 2⁻⁵³ the unit
 // roundoff. fl(b−a) is off by at most u·|b−a| ≤ 2uE; multiplying by t carries

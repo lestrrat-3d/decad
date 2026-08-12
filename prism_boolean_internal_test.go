@@ -928,7 +928,9 @@ func TestPrismBooleanWholeSourceSegmentsChargeNothing(t *testing.T) {
 // segment of every admitted kind, a positive finite value for a trimmed one,
 // and +Inf for a non-finite coordinate — never 0 for an unknown or uncertain
 // case (this task's own risk: an absent bound must never read as a small
-// one).
+// one). The trimmed circular rows exercise the function directly; through the
+// boolean they are unreachable, which
+// TestPrismCircularWalkChargeImpliesRefusal pins.
 func TestWalkChargeOf(t *testing.T) {
 	line := LineSeg{Start: Point2{U: 0, V: 0}, End: Point2{U: 10, V: 0}}
 	arc := ArcSeg{
@@ -991,6 +993,74 @@ func TestWalkChargeOf(t *testing.T) {
 		require.NoError(t, err)
 		require.True(t, math.IsInf(got, 1), "an absent bound must never read as a small one")
 	})
+}
+
+// TestPrismCircularWalkChargeImpliesRefusal mechanises the reach §7 states for
+// δ_walk: a positive charge is only ever computed over a trimmed LineSeg,
+// because every circular carrier walkChargeOf could charge is one
+// prismProfileHasTrimmedCircularSource refuses before buildPrismScene runs
+// (§4.1). Over the circular ranges either side of that boundary, the charge
+// being positive and the refusal firing must be the SAME condition — so a
+// circular carrier admitted into a scene always charges zero, and the two
+// answers cannot drift apart into a silently under-charged bound.
+func TestPrismCircularWalkChargeImpliesRefusal(t *testing.T) {
+	arc := ArcSeg{
+		Center: Point2{U: 0, V: 0},
+		Start:  Point2{U: 5, V: 0},
+		End:    Point2{U: 0, V: 5},
+	}
+	circle := CircleSeg{Center: Point2{U: 0, V: 0}, Radius: units.Millimeters(5), CCW: true}
+	withRange := func(seg CurveSegment, tStart, tEnd float64) CurveSegment {
+		switch s := seg.(type) {
+		case ArcSeg:
+			s.TStart, s.TEnd = tStart, tEnd
+			return s
+		case CircleSeg:
+			// A CircleSeg's CCW flag must agree with its range order
+			// (validateSegmentRange), so a reversed range is a CW circle.
+			s.TStart, s.TEnd, s.CCW = tStart, tEnd, tStart < tEnd
+			return s
+		}
+		t.Fatalf("unexpected segment kind %T", seg)
+		return nil
+	}
+
+	for _, base := range []struct {
+		kind string
+		seg  CurveSegment
+	}{{"ArcSeg", arc}, {"CircleSeg", circle}} {
+		for _, rng := range []struct {
+			name         string
+			tStart, tEnd float64
+			wantRefusal  bool
+		}{
+			{name: "whole", tStart: 0, tEnd: 1, wantRefusal: false},
+			{name: "whole reversed", tStart: 1, tEnd: 0, wantRefusal: false},
+			{name: "trimmed", tStart: 0, tEnd: 0.4, wantRefusal: true},
+			{name: "one ulp short of whole", tStart: 0, tEnd: math.Nextafter(1, 0), wantRefusal: true},
+		} {
+			t.Run(base.kind+"/"+rng.name, func(t *testing.T) {
+				seg := withRange(base.seg, rng.tStart, rng.tEnd)
+				w, err := walkOf(seg, nil)
+				require.NoError(t, err)
+				charge, err := walkChargeOf(seg, w)
+				require.NoError(t, err)
+
+				profile := ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{seg}}}
+				refused, err := prismProfileHasTrimmedCircularSource(newWorkBudget(t.Context()), profile)
+				require.NoError(t, err)
+
+				require.Equal(t, rng.wantRefusal, refused,
+					"the fixture's own premise: this range must be the refusal case it names")
+				require.Equal(t, refused, charge > 0,
+					"a circular carrier charges exactly when it is refused, so an admitted one charges zero")
+				if !refused {
+					require.Equal(t, 0.0, charge,
+						"a circular carrier that reaches a scene contributes nothing to δ_walk")
+				}
+			})
+		}
+	}
 }
 
 // prismWalkEndpointResidualSq is the EXACT squared distance between one walked
