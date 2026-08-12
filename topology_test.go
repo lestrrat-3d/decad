@@ -83,3 +83,20 @@ func TestLoopCoEdgesReturnImmutableView(t *testing.T) {
 	require.Equal(t, wantForward, got.IsForward())
 	require.Same(t, wantEdge, loop.Edges()[0])
 }
+
+// TestNURBSSurfaceReportsKindNURBS pins docs/spline-design.md §7: a
+// NURBSSurface is a tagged, opaque Surface variant reporting the existing
+// KindNURBS discriminant, carrying no exported geometry of its own.
+func TestNURBSSurfaceReportsKindNURBS(t *testing.T) {
+	var s decad.Surface = decad.NURBSSurface{}
+	require.Equal(t, decad.KindNURBS, s.Kind())
+}
+
+// TestNURBSCurveSealsIntoCurve pins docs/spline-design.md §7: a NURBSCurve is
+// NURBSSurface's one-dimensional analog. Curve is sealed by its marker method
+// alone and declares no Kind, so assigning a NURBSCurve to a Curve variable
+// is the whole of what the variant publishes.
+func TestNURBSCurveSealsIntoCurve(t *testing.T) {
+	var c decad.Curve = decad.NURBSCurve{}
+	require.NotNil(t, c)
+}
