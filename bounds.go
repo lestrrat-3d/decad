@@ -42,7 +42,9 @@ import (
 //   - the DISPLACEMENT a consumed source segment's own WALKED endpoint puts on
 //     the point the private scene builds from it, when the segment's recorded
 //     range is narrower than its own natural domain →
-//     walkEndpointAllow;
+//     walkEndpointAllow, charged at the SOURCE operand magnitudes the walk's
+//     arithmetic touches — never at the endpoint that arithmetic produced,
+//     which a cancelling difference can leave arbitrarily small;
 //   - the AREA of ONE RULED QUAD whose cap-level chord alone is displaced (the
 //     cap-loop chamfer's own band patches, docs/modify-reach-design.md §8.4) →
 //     bandPatchAreaAllow, the same two-factor product one patch at a time
@@ -351,27 +353,43 @@ func cutDisplacementAllow(tangentUpper float64) float64 {
 // narrowed t rather than read off the segment's own natural bound
 // (docs/prism-boolean-design.md §7's δ_walk — the analytic boolean's private
 // scene is built from walkOf's own walked geometry, prism_boolean.go's
-// buildPrismScene). For a line the computed endpoint is
-// fl(a + fl(t·fl(b−a))): each product and sum rounds once, so the
-// per-coordinate error is at most about 3 ulps of the operand magnitudes —
-// bounded here by the SAME shape rigidRoundAllow already states for a rigid
-// map's own rounding (16 ulps of a doubled coordinate envelope, read as a 3D
-// radius), which dominates the smaller figure with ample margin and keeps
-// every displacement mechanism in this file stated the same way.
+// buildPrismScene).
 //
-// coordUpper must be a PROVEN upper bound on the walked endpoint's own
-// magnitude — segmentWalk.coordUpper (lineWalkBounds/circularWalk's own L1
-// envelope) is exactly that. A non-finite envelope answers +Inf, never 0: an
-// absent bound must never read as a small one (cutDisplacementAllow's own
-// rule, restated here because this helper sits right beside it).
-func walkEndpointAllow(coordUpper float64) float64 {
-	if isNonFinite(coordUpper) {
+// operandUpper must be a PROVEN upper bound on the magnitude of every operand
+// the walk's OWN arithmetic touches — not on the answer that arithmetic
+// produces. The two are different quantities and the difference is the whole
+// point: a line's walked endpoint is fl(a + fl(t·fl(b−a))) for the carrier's
+// own recorded a and b, and the difference b−a CANCELS, so a fragment sitting
+// near the plane origin on a far-reaching carrier rounds by ulps of the
+// CARRIER while its own endpoint magnitude is tiny. Charging the endpoint's
+// magnitude would under-charge that walk without limit, so callers pass the
+// SOURCE envelope: prism_boolean.go's lineWalkOperandUpper for a line (the
+// recorded Start/End coordinates, folded together with the walked endpoint so
+// the envelope stands whatever the recorded parameter is), and
+// segmentWalk.coordUpper for a circular walk, whose |c|+|c|+r+r L1 form
+// already bounds the centre and radius its cos/sin arithmetic works on.
+//
+// The proof, per coordinate, with E = operandUpper and u = 2⁻⁵³ the unit
+// roundoff. fl(b−a) is off by at most u·|b−a| ≤ 2uE; multiplying by t carries
+// that through and rounds once more, at the magnitude of t·(b−a), which is the
+// walked endpoint less a and so at most 2E, for another 2uE; the outer sum
+// rounds at |a + t(b−a)| ≤ E, for uE. That totals 5uE + O(u²) per coordinate.
+// The answer charges 16·ulp(2E) ≥ 16·ulp(1)·E = 32uE per coordinate, better
+// than six times that, read as a 3D radius (radius3D) — the SAME shape
+// rigidRoundAllow states for a rigid map's own rounding, which keeps every
+// displacement mechanism in this file stated the same way.
+//
+// A non-finite envelope answers +Inf, never 0: an absent bound must never read
+// as a small one (cutDisplacementAllow's own rule, restated here because this
+// helper sits right beside it).
+func walkEndpointAllow(operandUpper float64) float64 {
+	if isNonFinite(operandUpper) {
 		return math.Inf(1)
 	}
-	if coordUpper <= 0 {
+	if operandUpper <= 0 {
 		return 0
 	}
-	ulp := ulpOf(2 * coordUpper)
+	ulp := ulpOf(2 * operandUpper)
 	if isNonFinite(ulp) {
 		return math.Inf(1)
 	}

@@ -556,8 +556,17 @@ that domain instead evaluates the carrier at a computed parameter (`lerp2`'s
 general arm, or a circular walk's `cos`/`sin` at a computed angle), so it
 enters the scene at an endpoint this boolean itself computed, whatever the
 two operands' own prior displacement was. `bounds.go`'s `walkEndpointAllow`
-states the allowance, at the walk's own coordinate envelope
-(`segmentWalk.coordUpper`); `δ_walk` is the largest such allowance over
+states the allowance, at the magnitude of the operands that walk's OWN
+arithmetic touches and never at the endpoint it produced: `lerp2` computes
+`fl(a + fl(t·fl(b−a)))` from the carrier's own recorded `Start` and `End`, and
+that difference CANCELS, so a fragment near the plane origin on a far-reaching
+carrier rounds by ulps of the CARRIER while its own endpoint magnitude stays
+tiny. A trimmed `LineSeg` therefore charges the envelope of its recorded
+`Start`/`End` coordinates (`walkChargeOf`'s `lineWalkOperandUpper`), folded
+together with the walked endpoint so the envelope stands whatever the recorded
+parameter is; a circular walk charges `segmentWalk.coordUpper`, whose
+`|cu|+|cv|+r+r` L1 form already bounds the centre and radius its `cos`/`sin`
+arithmetic works on. `δ_walk` is the largest such allowance over
 EITHER operand's own consumed segments, and it stands even when both operands
 carry zero displacement and the re-expression is the identity — the same
 independence `δ_cut` already has, one construction earlier: `δ_cut` charges
@@ -662,9 +671,11 @@ extension is two pieces, each in the existing machinery's own shape:
   computes a bound inline. `cutDisplacementAllow` owns the cut-parameter
   mechanism above, turning `cutParamUlps` and a carrier's own speed into the
   coordinate displacement `δ_cut` reads. `walkEndpointAllow` owns `δ_walk`'s
-  own mechanism the same way, turning a walked segment's own coordinate
-  envelope (`segmentWalk.coordUpper`) into the coordinate displacement its
-  computed endpoint owes. The section displacement's own reading
+  own mechanism the same way, turning the envelope of the SOURCE operands a
+  walk's own arithmetic touches into the coordinate displacement its computed
+  endpoint owes; each kind's caller supplies that envelope (above), and the
+  helper never reads it off the answer the walk produced. The section
+  displacement's own reading
   is an AREA: the area a
   boundary displacement `δ` can move is covered by a tube of half-width `δ`
   about the recorded boundary — `2·δ·p + n·π·δ²` up-rounded, for a boundary of
@@ -923,6 +934,17 @@ areas, residuals), never merely "it ran" — CLAUDE.md's own rule.
   same fixture with every consumed segment whole publishes a `sectionDelta`
   of exactly `0.0` on all three ops, pinning that the new charge does not
   fire on the case §7 already kept exact.
+- The walk charge survives `lerp2`'s CANCELLATION: over a table of trimmed
+  `LineSeg` carriers whose `End − Start` cancels — the extreme one reaching
+  `±1e12`, and a plain 200 mm carrier whose fragment sits on the sketch origin,
+  which needs no extreme coordinate at all — `walkChargeOf`'s answer contains
+  the EXACT rational residual of the endpoint `lerp2` walked to, at both
+  recorded bounds, compared squared over `math/big.Rat` so no square root or
+  float difference can flatter it. Each row also asserts its own premise: that
+  charging the walked endpoint's own envelope (`segmentWalk.coordUpper`)
+  instead of the carrier's would under-charge exactly on the rows that cancel
+  and NOT on an ordinary uncancelling fragment, so a row that stops
+  reproducing the shape fails rather than passing quietly.
 - The trimmed-circular refusal reads the RECORDED range, not the walk's
   closed-ness: a `CircleSeg` whose `TEnd` is one ulp short of `1` — a range
   the walk's own tolerance still calls a closed turn, which the fixture must

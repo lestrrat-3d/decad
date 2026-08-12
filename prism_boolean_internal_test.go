@@ -965,6 +965,147 @@ func TestWalkChargeOf(t *testing.T) {
 	})
 }
 
+// prismWalkEndpointResidualSq is the EXACT squared distance between one walked
+// endpoint of a LineSeg and the endpoint its record denotes, taken entirely
+// over math/big.Rat: lerp2's own float answer against ratLerp's exact one, per
+// coordinate, squared and summed. Nothing here rounds, so a charge compared
+// against it is compared against the true error and not against a second float
+// estimate of it.
+func prismWalkEndpointResidualSq(t *testing.T, s LineSeg, walkedU, walkedV, at float64) *big.Rat {
+	t.Helper()
+	exactU := ratLerp(s.Start.U, s.End.U, at)
+	exactV := ratLerp(s.Start.V, s.End.V, at)
+	require.NotNil(t, exactU)
+	require.NotNil(t, exactV)
+	du := new(big.Rat).Sub(prismRatOf(t, walkedU), exactU)
+	dv := new(big.Rat).Sub(prismRatOf(t, walkedV), exactV)
+	return new(big.Rat).Add(new(big.Rat).Mul(du, du), new(big.Rat).Mul(dv, dv))
+}
+
+// TestWalkChargeOfCoversLerpCancellation is the cancellation regression for
+// §7's δ_walk: the charge a trimmed LineSeg owes must contain the EXACT
+// rational residual of the endpoint lerp2 actually walked to, including when
+// the carrier's own End − Start cancels and leaves the walked endpoint far
+// smaller than the coordinates the rounding happened at.
+//
+// A Partial line fragment records its source line's full Start/End with a
+// narrowed range (recordEdge, seam.go), so this shape is what an extruded
+// profile carries whenever a sketch entity is cut near the sketch origin: the
+// walked endpoint sits at ~0 while lerp2 rounds at the carrier's magnitude.
+// Charging the walked endpoint's own envelope therefore under-charges without
+// limit, which the premise assertion below pins per row — a row whose premise
+// stops holding is a row that has stopped testing this defect, and it fails
+// here rather than passing quietly.
+//
+// Every comparison is exact and squared, so no square root of the residual is
+// ever taken and no float rounding can flatter a bound that failed to contain
+// the true error.
+func TestWalkChargeOfCoversLerpCancellation(t *testing.T) {
+	// A parameter one ulp wide about the carrier's midpoint: the walked
+	// endpoints all but coincide with the plane origin while the carrier
+	// reaches ±1e12.
+	const nearHalf = 0.4999999999999999
+
+	for _, tc := range []struct {
+		name string
+		seg  LineSeg
+		// endpointOnlyUnderCharges says the walked-endpoint envelope alone
+		// (segmentWalk.coordUpper, which is what the answer must NOT be
+		// charged at) fails to contain this row's own residual.
+		endpointOnlyUnderCharges bool
+	}{
+		{
+			name: "cancelling carrier reaching a million kilometres",
+			seg: LineSeg{
+				Start:  Point2{U: 1e12, V: 0},
+				End:    Point2{U: -1e12, V: 0},
+				TStart: nearHalf,
+				TEnd:   math.Nextafter(nearHalf, 1),
+			},
+			endpointOnlyUnderCharges: true,
+		},
+		{
+			// No extreme coordinate is needed: a plain 200 mm carrier with a
+			// 0.4 mm fragment centred on the sketch origin already escapes a
+			// charge read off the fragment's own magnitude.
+			name: "200 mm carrier, 0.4 mm fragment on the origin",
+			seg: LineSeg{
+				Start:  Point2{U: -100, V: 0},
+				End:    Point2{U: 100, V: 0},
+				TStart: 0.499,
+				TEnd:   0.501,
+			},
+			endpointOnlyUnderCharges: true,
+		},
+		{
+			name: "200 mm carrier, 0.02 mm fragment on the origin",
+			seg: LineSeg{
+				Start:  Point2{U: -100, V: 0},
+				End:    Point2{U: 100, V: 0},
+				TStart: 0.49995,
+				TEnd:   0.50005,
+			},
+			endpointOnlyUnderCharges: true,
+		},
+		{
+			name: "diagonal cancelling carrier moves both coordinates",
+			seg: LineSeg{
+				Start:  Point2{U: -1e6, V: -1e6},
+				End:    Point2{U: 1e6, V: 1e6},
+				TStart: 0.4999999999,
+				TEnd:   0.5000000001,
+			},
+			endpointOnlyUnderCharges: true,
+		},
+		{
+			// The ordinary shape the split-left-cell fixture carries: no
+			// cancellation, the fragment sits on its own carrier's scale.
+			// It must still be covered, and its premise must NOT hold — the
+			// answer may not have become a blanket inflation of every row.
+			name: "ordinary fragment of a 1..11 carrier",
+			seg: LineSeg{
+				Start:  Point2{U: 1, V: 0},
+				End:    Point2{U: 11, V: 0},
+				TStart: 0,
+				TEnd:   0.4000000000000000222,
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			w, err := walkOf(tc.seg, nil)
+			require.NoError(t, err)
+			charge, err := walkChargeOf(tc.seg, w)
+			require.NoError(t, err)
+			require.Positive(t, charge)
+			require.False(t, math.IsInf(charge, 0))
+
+			chargeSq := new(big.Rat).Mul(prismRatOf(t, charge), prismRatOf(t, charge))
+			endpointOnly := walkEndpointAllow(w.coordUpper)
+			endpointOnlySq := new(big.Rat).Mul(prismRatOf(t, endpointOnly), prismRatOf(t, endpointOnly))
+
+			premiseSeen := false
+			for _, end := range []struct {
+				what string
+				u, v float64
+				at   float64
+			}{
+				{"start", w.startU, w.startV, tc.seg.TStart},
+				{"end", w.endU, w.endV, tc.seg.TEnd},
+			} {
+				residualSq := prismWalkEndpointResidualSq(t, tc.seg, end.u, end.v, end.at)
+				require.GreaterOrEqualf(t, chargeSq.Cmp(residualSq), 0,
+					"the %s endpoint's charge %g must contain its exact residual (squared residual %s)",
+					end.what, charge, residualSq.FloatString(40))
+				if endpointOnlySq.Cmp(residualSq) < 0 {
+					premiseSeen = true
+				}
+			}
+			require.Equalf(t, tc.endpointOnlyUnderCharges, premiseSeen,
+				"the premise: charging the walked endpoint's own envelope (%g) instead of the carrier's must under-charge exactly on the rows this table says it does", endpointOnly)
+		})
+	}
+}
+
 // TestPrismBooleanTrimmedCircularSourceFallsBack is task fu143's own circular
 // carrier row: a trimmed ArcSeg source segment (the arrangement's own arc
 // through two cos/sin-computed points would move by more than a coordinate

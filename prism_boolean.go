@@ -730,7 +730,16 @@ func wholeSegmentRange(tStart, tEnd float64) bool {
 // touches Center/Radius) — so a whole segment charges nothing. A narrowed range
 // evaluates the carrier at a COMPUTED parameter instead (lerp2's else arm, or
 // circularWalk's cos/sin at the walk's own angle), which walkEndpointAllow
-// charges at the walk's own coordinate envelope (segmentWalk.coordUpper).
+// charges.
+//
+// walkEndpointAllow is charged at the SOURCE operands the walk's own
+// arithmetic touches, never at the endpoint it produced, and the envelope each
+// kind passes is the kind's own: a line passes lineWalkOperandUpper, because
+// lerp2's b−a cancels and leaves the walked endpoint no witness at all to the
+// carrier magnitude that rounding happened at; a circular walk passes
+// segmentWalk.coordUpper, whose |cu|+|cv|+r+r L1 form (circularWalk) already
+// bounds the centre and radius its cos/sin arithmetic works on, so it IS the
+// source envelope for that kind rather than an answer standing in for one.
 //
 // "Whole" is decided by wholeSegmentRange for every kind — exact float
 // equality against 0 and 1, never a tolerance: a range short of a natural
@@ -749,6 +758,7 @@ func walkChargeOf(seg CurveSegment, w segmentWalk) (float64, error) {
 		if wholeSegmentRange(s.TStart, s.TEnd) {
 			return 0, nil
 		}
+		return walkEndpointAllow(lineWalkOperandUpper(s, w)), nil
 	case ArcSeg:
 		if wholeSegmentRange(s.TStart, s.TEnd) {
 			return 0, nil
@@ -761,6 +771,31 @@ func walkChargeOf(seg CurveSegment, w segmentWalk) (float64, error) {
 		return 0, fmt.Errorf(`%w: a %T segment has no walk charge this evaluator states`, ErrUnsupported, seg)
 	}
 	return walkEndpointAllow(w.coordUpper), nil
+}
+
+// lineWalkOperandUpper is the envelope walkEndpointAllow requires for a
+// trimmed LineSeg: an upper bound on every operand lerp2's general arm
+// touches when it computes fl(a + fl(t·fl(b−a))) for that segment.
+//
+// Those operands are the carrier's own RECORDED Start and End coordinates —
+// a Partial line fragment records its source sketch.Line's full Start/End
+// with a narrowed range (recordEdge, seam.go), so the carrier can reach far
+// past the fragment — together with the walked endpoint the outer sum
+// produces. Folding the walk's own coordinate envelope in beside the recorded
+// four costs nothing when the recorded range lies in [0, 1] (the lerp is then
+// inside the carrier's own hull, which the recorded coordinates already
+// bound) and keeps the envelope proven for any parameter at all, so this
+// helper never leans on a range check it does not perform.
+//
+// A NaN coordinate propagates through math.Max, and an infinite one arrives as
+// +Inf, so an absent envelope reaches walkEndpointAllow as the non-finite it
+// is rather than as a small number.
+func lineWalkOperandUpper(s LineSeg, w segmentWalk) float64 {
+	upper := w.coordUpper
+	for _, c := range [...]float64{s.Start.U, s.Start.V, s.End.U, s.End.V} {
+		upper = math.Max(upper, math.Abs(c))
+	}
+	return upper
 }
 
 // prismSceneDelta is buildPrismScene's own per-operand δ_walk accumulator
