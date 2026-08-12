@@ -120,7 +120,7 @@ type Torus struct {
 // private in v1: this is a tagged, opaque marker carrying no exported
 // geometry. Widening it later is compatible; narrowing an exposed net would
 // not be.
-type NURBSSurface struct{ /* private */ }
+type NURBSSurface struct{}
 
 // Faceted is the honest v1 boolean-output variant (core §6.1): a face a
 // boolean produced, whose analytic identity is gone. A Faceted face IS
@@ -194,7 +194,7 @@ type Arc3 struct {
 // its marker method alone and declares no Kind method, so this variant seals
 // in with that method and exports nothing else. Its control points stay
 // private in v1, the same opaque-marker treatment as NURBSSurface.
-type NURBSCurve struct{ /* private */ }
+type NURBSCurve struct{}
 
 // FacetedCurve is Faceted's one-dimensional analog: a boolean-built edge —
 // a chain of straight chords along the contact of two faceted faces, whose
