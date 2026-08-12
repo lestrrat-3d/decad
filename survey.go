@@ -19,10 +19,14 @@ import (
 // a prism's inscribed balls are its profile's inscribed disks with the height
 // as the vertical fit, and a solid of revolution's are the disks of its
 // meridian section (mirrored across the axis for a full turn, wedge-bounded
-// by the caps for a partial one). Undercuts are decided per face from the
-// exact normal range each walk sweeps. A body this file cannot decide — a
-// payload no shipped feature builds — leaves every asked question undecided,
-// which reads Suspect, never a silent pass.
+// by the caps for a partial one). A prism, cup and cap-blend body's undercut
+// survey reads each face's normal-component range enclosed over the rationals
+// and decides it three-valued — clear, opposing, or undecided
+// (survey_undercut.go) — rather than taking a float range at face value;
+// revolveUndercuts is not yet converted to it, a deliberate scope line rather
+// than an oversight. A body this file cannot decide — a payload no shipped
+// feature builds — leaves every asked question undecided, which reads
+// Suspect, never a silent pass.
 
 // surveyReason retains why a survey was not decided. The zero reason is a
 // numerical or geometric undecided result; surveyFacetedUnsupported records
@@ -418,14 +422,21 @@ func facesByRole(b *Body) map[string]*Face {
 }
 
 // opposesPull decides the pointwise membership rule of verification §6 over
-// a face's exact normal-component range [m, M] against the unit pull: a
-// point opposes when its normal has a component against the pull — exactly
-// perpendicular is not opposed — and a face whose normals are EXACTLY
-// antiparallel everywhere separates under the pull rather than hooking it
-// (the flat base a straight prism pulls off of). The carve-out is exact,
-// never a tolerance band: a pull tilted by any real angle hooks under the
-// base, however slightly, and §6 lists it. The clamp below absorbs only
-// float overshoot past −1 in a unit dot; it never widens the exception.
+// a face's normal-component range [m, M] against the unit pull, read as a
+// bare float with no allowance: a point opposes when its normal has a
+// component against the pull — exactly perpendicular is not opposed — and a
+// face whose normals are EXACTLY antiparallel everywhere separates under the
+// pull rather than hooking it (the flat base a straight prism pulls off of).
+// The carve-out is exact, never a tolerance band: a pull tilted by any real
+// angle hooks under the base, however slightly, and §6 lists it. The clamp
+// below absorbs only float overshoot past −1 in a unit dot; it never widens
+// the exception.
+//
+// revolveUndercuts is this function's only remaining caller: prismUndercuts,
+// cupUndercuts and capBlendUndercuts's receiver-wall loop instead read
+// through decidePull's exact-rational sibling (survey_undercut.go), which
+// this function's own zero-allowance behaviour matches exactly
+// (TestDecidePullMatchesOpposesPullAtZeroAllowance).
 func opposesPull(m, M float64) bool {
 	if M < -1 {
 		M = -1
@@ -455,73 +466,57 @@ func trigRange(a, b, lo, hi float64) (float64, float64) {
 	return mn, mx
 }
 
-// wallNormalRange is the exact range of a side wall's outward-normal component
-// against the pull, given the pull's in-plane components (du, dv): a planar
-// wall carries one normal (its walk tangent rotated), a cylindrical wall sweeps
-// its walk's exact angular range. The walk's own sense decides the material
-// side, so it serves an outer wall (counter-clockwise) and a cavity wall
-// (clockwise, the reversed loop) alike.
-func wallNormalRange(w sideWalk, du, dv float64) (float64, float64) {
-	if !w.isCircular() {
-		l := math.Hypot(w.tanInU, w.tanInV)
-		v := (w.tanInV*du - w.tanInU*dv) / l
-		return v, v
-	}
-	sigma := 1.0
-	if w.th1 < w.th0 {
-		sigma = -1
-	}
-	lo, hi := math.Min(w.th0, w.th1), math.Max(w.th0, w.th1)
-	mn, mx := trigRange(du, dv, lo, hi)
-	mn, mx = sigma*mn, sigma*mx
-	if mn > mx {
-		mn, mx = mx, mn
-	}
-	return mn, mx
-}
-
-// prismUndercuts surveys a prism's faces against the pull: planar sides and
-// caps carry one normal each, cylindrical sides sweep their walk's exact
-// angular range.
+// prismUndercuts surveys a prism's faces against the pull, through the exact
+// three-valued reader survey_undercut.go shares with cupUndercuts and
+// capBlendUndercuts's receiver-wall loop: planar sides and caps carry one
+// normal each, cylindrical sides sweep their walk's exact angular range. A
+// straddling face sets undecided without discarding a face already proven to
+// oppose (docs/verification-design.md §6).
 func prismUndercuts(b *Body, pp prismPayload, pull r3.Vec) undercutOutcome {
-	p, ok := pull.Normalize()
-	if !ok {
+	if _, ok := pull.Normalize(); !ok {
 		return undercutOutcome{}
 	}
-	du := pp.dir(1, 0, 0).Dot(p)
-	dv := pp.dir(0, 1, 0).Dot(p)
-	dn := pp.dir(0, 0, 1).Dot(p)
+	m, okM := newPlacedFrameMap(pp)
+	if !okM {
+		return undercutOutcome{}
+	}
 	roles := facesByRole(b)
 	loops, err := recordLoops(nil, pp.profile)
 	if err != nil {
 		return undercutOutcome{}
 	}
 	faces := []*Face{}
+	undecided := false
 	for li, loop := range loops {
 		for _, w := range loop {
 			f := roles[fmt.Sprintf("side(%d,%d)", li, w.segs[0])]
 			if f == nil {
 				return undercutOutcome{}
 			}
-			mn, mx := wallNormalRange(w, du, dv)
-			if opposesPull(mn, mx) {
-				faces = append(faces, f)
+			verdict, ok := wallNormalDecision(w, m, pull)
+			if !listVerdict(&faces, &undecided, f, verdict, ok) {
+				return undercutOutcome{}
 			}
 		}
 	}
 	for _, cap := range []struct {
 		role string
-		v    float64
-	}{{role: roleCapStart, v: -dn}, {role: roleCapEnd, v: dn}} {
+		sign float64
+	}{{role: roleCapStart, sign: -1}, {role: roleCapEnd, sign: 1}} {
 		f := roles[cap.role]
 		if f == nil {
 			return undercutOutcome{}
 		}
-		if opposesPull(cap.v, cap.v) {
-			faces = append(faces, f)
+		verdict, ok := capNormalDecision(m, pull, cap.sign)
+		if !listVerdict(&faces, &undecided, f, verdict, ok) {
+			return undercutOutcome{}
 		}
 	}
-	return undercutOutcome{faces: faces, ok: true}
+	if undecided && len(faces) == 0 {
+		// Keep an entirely undecided result distinct from a proven all-clear.
+		faces = nil
+	}
+	return undercutOutcome{faces: faces, ok: true, undecided: undecided}
 }
 
 // revolveUndercuts surveys a revolved body's faces against the pull: each
@@ -885,24 +880,25 @@ func cupWall(budget *workBudget, cp cupPayload, alpha float64) (wallOutcome, err
 // cupUndercuts surveys a cup's faces against the pull (docs/modify-design.md
 // D2): the outer walls over EVERY loop of region O (role side(i,j)), the cavity
 // walls over every loop of the reversed region C (role shellSide(i,j)) — each
-// read by the same exact normal ranges the prism uses, so a post wall is
-// surveyed like any other — and the planar faces (the kept cap, the pocket
-// floor, one rim per loop). The cavity being a pocket, the pocket floor
-// (shellCap) and the rims face the open end and the kept cap (capStart) faces
-// away from it, so their outward normals are ±N by which side of the outer
-// floor the open end lies on.
+// read by the same exact three-valued reader the prism uses
+// (survey_undercut.go), so a post wall is surveyed like any other — and the
+// planar faces (the kept cap, the pocket floor, one rim per loop). The cavity
+// being a pocket, the pocket floor (shellCap) and the rims face the open end
+// and the kept cap (capStart) faces away from it, so their outward normals
+// are ±N by which side of the outer floor the open end lies on.
 func cupUndercuts(b *Body, cp cupPayload, pull r3.Vec) undercutOutcome {
-	p, ok := pull.Normalize()
-	if !ok {
+	if _, ok := pull.Normalize(); !ok {
 		return undercutOutcome{}
 	}
 	base := cp.basePrism()
-	du := base.dir(1, 0, 0).Dot(p)
-	dv := base.dir(0, 1, 0).Dot(p)
-	dn := base.dir(0, 0, 1).Dot(p)
+	m, okM := newPlacedFrameMap(base)
+	if !okM {
+		return undercutOutcome{}
+	}
 	roles := facesByRole(b)
 
 	faces := []*Face{}
+	undecided := false
 	survey := func(loop LoopRecord, role string) bool {
 		walks, err := cupWalks(loop)
 		if err != nil {
@@ -913,9 +909,9 @@ func cupUndercuts(b *Body, cp cupPayload, pull r3.Vec) undercutOutcome {
 			if f == nil {
 				return false
 			}
-			mn, mx := wallNormalRange(w, du, dv)
-			if opposesPull(mn, mx) {
-				faces = append(faces, f)
+			verdict, ok := wallNormalDecision(w, m, pull)
+			if !listVerdict(&faces, &undecided, f, verdict, ok) {
+				return false
 			}
 		}
 		return true
@@ -946,27 +942,32 @@ func cupUndercuts(b *Body, cp cupPayload, pull r3.Vec) undercutOutcome {
 	}
 	caps := []struct {
 		role string
-		v    float64
+		sign float64
 	}{
-		{role: roleCapStart, v: -sOpen * dn},
-		{role: "shellCap", v: sOpen * dn},
+		{role: roleCapStart, sign: -sOpen},
+		{role: "shellCap", sign: sOpen},
 	}
 	for i := range oLoops {
 		caps = append(caps, struct {
 			role string
-			v    float64
-		}{role: fmt.Sprintf("rim(%d)", i), v: sOpen * dn})
+			sign float64
+		}{role: fmt.Sprintf("rim(%d)", i), sign: sOpen})
 	}
 	for _, c := range caps {
 		f := roles[c.role]
 		if f == nil {
 			return undercutOutcome{}
 		}
-		if opposesPull(c.v, c.v) {
-			faces = append(faces, f)
+		verdict, ok := capNormalDecision(m, pull, c.sign)
+		if !listVerdict(&faces, &undecided, f, verdict, ok) {
+			return undercutOutcome{}
 		}
 	}
-	return undercutOutcome{faces: faces, ok: true}
+	if undecided && len(faces) == 0 {
+		// Keep an entirely undecided result distinct from a proven all-clear.
+		faces = nil
+	}
+	return undercutOutcome{faces: faces, ok: true, undecided: undecided}
 }
 
 // cupMinRadius is the tightest concave radius over a cup's faces (D3): the same

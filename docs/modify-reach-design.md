@@ -501,8 +501,10 @@ term:
   lists the patch; only an all-clear needs every point to clear. For the tagged
   normal-component range `[mn, mx]` and allowance `allow`, it lists when
   `mn + allow < 0 && mx - allow > -1`, clears when
-  `mn - allow > 0`, and is undecided otherwise. An undecided patch does not
-  remove other patches already proven to oppose. Every point of the patch
+  `mn - allow >= 0` (perpendicular included) or `mx + allow <= -1`
+  (antiparallel included), and is undecided otherwise — the same rule
+  `docs/verification-design.md` §6 states, at both ends. An undecided patch
+  does not remove other patches already proven to oppose. Every point of the patch
   carries an azimuth inside the window, which is what makes each proof about
   the patch rather than about the cone. `allow` is TWO terms, and the departure
   is only one of them: DX7 reads each patch's normal through `Face.NormalAt`,
@@ -919,7 +921,7 @@ reaches only the analytic bodies at the start of a chain.
 | **DX4** | mesh boolean | available once DX3 exists | available once DX3 exists | available once DX3 exists |
 | **DX5** | `ThroughAll` directional extent | existing | analytic patch extrema; a direction whose extreme carries computed cap-contour or inherited axial displacement is `ErrUnsupported`, since a stop reads this coordinate as exact and has no bound to widen (§8.4) | union of slab-region extents |
 | **DX6** | clearance | existing revolve boundary reader | add trimmed patch faces to boundary model; undecidable cells stay `Suspect`; staged for the cap-loop chamfer, whose pairs read `Suspect` unless boxes already decide them | union exposed slab faces; never include cancelled interfaces |
-| **DX7** | undercut | existing revolve survey | bounded normal ranges per patch, each widened by the whole distance its own `Face.NormalAt` readings can sit from the patch's exactly enclosed normal model and by that patch's own proven departure from the surface it publishes (§8.3), a circular patch's window read through a proven enclosure rather than a float evaluation; a proven opposing point lists its patch, and a remaining straddle is undecided without removing another proven listing | exact normal ranges per exposed face |
+| **DX7** | undercut | existing revolve survey | bounded normal ranges per patch, each widened by the whole distance its own `Face.NormalAt` readings can sit from the patch's exactly enclosed normal model and by that patch's own proven departure from the surface it publishes (§8.3), a circular patch's window read through a proven enclosure rather than a float evaluation; a proven opposing point lists its patch, and a remaining straddle is undecided without removing another proven listing. The receiver's own unchanged walls and caps are not patches, and are read through the SAME three-valued rule, with the same undecided outcome — no reader may treat the receiver half as exempt | exact normal ranges per exposed face |
 | **DX8** | minimum radius | existing meridian survey | minimum concave principal radius over sphere/torus/cylinder/cone patches; undecided unless every patch is proven to be exactly the surface it publishes (zero departure, §8.3) — a mitered ruled patch is one case of that | section arcs + exposed rim geometry |
 | **DX9** | minimum wall thickness | existing revolve rewrite survey | staged: asked reading is `Suspect` | staged: asked reading is `Suspect` |
 

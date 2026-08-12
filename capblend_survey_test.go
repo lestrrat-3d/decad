@@ -206,6 +206,46 @@ func TestCapBlendUnmiteredPatchNormalCarriesNoWindowSkew(t *testing.T) {
 // does not. The survey used to read the Cone alone and answer the proven
 // all-clear — a wrong Sound, not a coarse reading. The Cone patch now stays
 // undecided and unlisted; any independent proven face remains a violation.
+// TestUndercutCapBlendReceiverWallsBoundedLikePatches proves DX7's extended
+// §12 cell (docs/modify-reach-design.md): a cap-blend body's receiver walls
+// read through the SAME bounded three-valued rule as a chamfer patch, rather
+// than a raw float range. The receiver here is fu155's own square (edge
+// tangents exactly (3,9), (-9,3), (-3,-9), (9,-3),
+// TestUndercutExactlyPerpendicularWallIsNotOpposed): before the fix,
+// chamfering its cap loop listed 3 faces — the genuine patch plus the two
+// mismeasured receiver walls exactly perpendicular and exactly antiparallel
+// to the pull.
+func TestUndercutCapBlendReceiverWallsBoundedLikePatches(t *testing.T) {
+	s, p := polygonSketch(t, [][2]float64{{0, 0}, {3, 9}, {-6, 12}, {-9, 3}})
+	doc := decad.New()
+	body, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+	require.NoError(t, err)
+	chamfered, err := body.Chamfer(capLoopEdges(body), units.Millimeters(1))
+	require.NoError(t, err)
+
+	report, err := chamfered.Document().Verify(t.Context(), decad.WithPullDirection(r3.NewVec(3, 9, 0)))
+	require.NoError(t, err)
+	require.Len(t, report.Bodies, 1)
+	br := report.Bodies[0]
+	require.Len(t, br.Undercuts, 1, "only the chamfer patch, not either receiver wall")
+
+	f := br.Undercuts[0]
+	n, err := f.NormalAt(f.Loops()[0].CoEdges()[0].Start().Position().Value)
+	require.NoError(t, err)
+	require.InDelta(t, math.Sqrt2/2, n.Value.Z, 1e-12, "the listed face is the 45-degree chamfer patch")
+	unit, ok := r3.NewVec(3, 9, 0).Normalize()
+	require.True(t, ok)
+	require.InDelta(t, -math.Sqrt2/2, n.Value.Dot(unit), 1e-12)
+
+	undercutDiags := 0
+	for _, d := range report.Diagnostics {
+		if d.Code == decad.DiagUndercut {
+			undercutDiags++
+		}
+	}
+	require.Equal(t, 1, undercutDiags, "one DiagUndercut for the one proven listing, no diagnostic for a receiver wall")
+}
+
 func TestCapBlendMiteredUndercutIsNotPassed(t *testing.T) {
 	const r, h, d = 10.0, 20.0, 4.0
 	m := chamferedQuarterDiskPatch(t, r, h, d)
