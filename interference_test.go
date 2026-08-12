@@ -77,19 +77,126 @@ func TestVerifyOffsetBoxesReportBoundedInterference(t *testing.T) {
 	requireDocumentUnchanged(t, doc, before)
 }
 
-// TestVerifyCoplanarPrismOverlapStaysOnMeshPath confirms the PR1 boundary:
-// the public Union path may use the analytic reduction, but Verify still
-// runs its read-only intersection through the coplanar-contact mesh path.
-func TestVerifyCoplanarPrismOverlapStaysOnMeshPath(t *testing.T) {
+// TestVerifyAdmittedCoplanarPrismPairResolvesAnalytically confirms
+// docs/prism-boolean-design.md §14 PR4: an admitted coplanar, co-directional
+// prism pair now resolves its interference volume through the same
+// read-only analytic OpIntersect dispatch performBoolean uses
+// (evaluateAnalyticIntersect), rather than always falling to the read-only
+// mesh path. The container (0,0)-(20,20) height 10 and the nested prism
+// (5,5)-(9,10) height 15 share the container's own coplanar base plane, so
+// their overlap is exactly the nested prism's footprint (4x5 = 20 mm^2)
+// over the z-interval the two heights share ([0,10], since the nested prism
+// is taller and pokes through the container's cap): 20 * 10 = 200 mm^3. The
+// nested prism's cap coincides with the container's own boundary, so the
+// pair is not a strict full containment (clearance §4's strictly-positive
+// clearance requirement fails) and previously reached the mesh path's
+// coplanar-tangent refusal (unsupported_pair / unsupported_pair_contact;
+// verify_diagnostics_test.go pins the diagnostic side of this same
+// fixture).
+func TestVerifyAdmittedCoplanarPrismPairResolvesAnalytically(t *testing.T) {
 	doc := decad.New()
-	boxBody(t, doc, 0, 0, 10, 10, 10)
-	boxBody(t, doc, 5, 5, 15, 15, 10)
+	container := boxBody(t, doc, 0, 0, 20, 20, 10)
+	nested := boxBody(t, doc, 5, 5, 9, 10, 15)
 	before := snapshotDocument(t, doc)
 
 	report, err := doc.Verify(t.Context())
 	require.NoError(t, err)
-	require.Equal(t, decad.Suspect, report.Status)
-	require.Empty(t, report.Interferences)
+	require.Equal(t, decad.Interfering, report.Status)
+	require.Len(t, report.Interferences, 1)
+	row := report.Interferences[0]
+	require.Same(t, container, row.A)
+	require.Same(t, nested, row.B)
+	require.InDelta(t, 200.0, row.Volume.Value.Base(), 1e-9)
+	require.Equal(t, decad.Exact, row.Volume.Exactness)
+	require.Zero(t, row.Volume.Bound.Base())
+	requireDocumentUnchanged(t, doc, before)
+}
+
+// TestVerifyAdmittedDisplacedPrismPairCarriesItsOwnBound pins the analytic
+// row's other arm: the row publishes the resolved intersection payload's own
+// measurement, so an operand whose section carries a displacement
+// (docs/prism-boolean-design.md §7) makes the row Approximate rather than
+// Exact, and docs/interference-design.md §8's composed displacement is the
+// bound it reports.
+//
+// Operand A is the analytic Union of a [0,10]² prism with a [2,8]² prism
+// drawn 1e12 mm away and placed back over it: B lies strictly inside A, so
+// the merged region is exactly the [0,10]² prism (1000 mm³), but the
+// re-expression at that magnitude leaves the section a displacement of its
+// own. Operand B is a [-1,11]² prism of height 15 sharing the same base
+// plane, so the true overlap is the whole of the merged body. That shared
+// plane is the coplanar contact the mesh classifier refuses (§5.2), so a
+// published row can only have come from the analytic dispatch.
+func TestVerifyAdmittedDisplacedPrismPairCarriesItsOwnBound(t *testing.T) {
+	doc := decad.New()
+	const shift = 1e12
+	lo, hi := 2-shift, 8-shift
+	merged, err := decad.Union(
+		boxBody(t, doc, 0, 0, 10, 10, 10),
+		placedFar(t, boxBody(t, doc, lo, 2, hi, 8, 10), shift),
+	)
+	require.NoError(t, err)
+	require.False(t, anyFaceIsFaceted(merged), "the analytic reduction must own the union")
+	own, err := merged.Volume()
+	require.NoError(t, err)
+	require.Equal(t, decad.Approximate, own.Exactness)
+	require.Positive(t, own.Bound.Base(), "the displaced section must publish a bound of its own")
+
+	outer := boxBody(t, doc, -1, -1, 11, 11, 15)
+	before := snapshotDocument(t, doc)
+
+	report, err := doc.Verify(t.Context())
+	require.NoError(t, err)
+	require.Equal(t, decad.Interfering, report.Status)
+	require.Len(t, report.Interferences, 1)
+	row := report.Interferences[0]
+	require.Same(t, merged, row.A)
+	require.Same(t, outer, row.B)
+	// The row is the resolved intersection payload's own measurement
+	// (docs/interference-design.md §6: "Copy the measurement unchanged into
+	// the row"), not a republication of an operand's — only §4 containment
+	// and §4.1 equality reuse an operand's measurement verbatim, and §4.1
+	// withholds for a record carrying exactly this displacement. Here the
+	// intersection is the nested operand A itself, so the two measurements
+	// state the same value and exactness; the bound is A's own displacement
+	// plus this resolution's own charge under an outward-rounded sum
+	// (prism_boolean_nesting.go's sectionDelta), so it can only be at least
+	// as wide as A's. A row that dropped the displacement charge would fall
+	// below it.
+	require.Equal(t, own.Value, row.Volume.Value, "the intersection of A with a body containing A is A's own volume")
+	require.GreaterOrEqual(t, row.Volume.Bound.Base(), own.Bound.Base(),
+		"the row's own bound composes A's displacement and cannot be tighter than A's")
+	require.Equal(t, own.Exactness, row.Volume.Exactness)
+	require.Equal(t, decad.Approximate, row.Volume.Exactness, "a displaced section cannot publish an Exact row")
+	require.InDelta(t, 1000.0, row.Volume.Value.Base(), 1e-9)
+
+	// The truth the interval must contain: the merged region is the union the
+	// two recorded sections denote under their own exact placements, and the
+	// taller [-1,11]² prism contains all of it.
+	truth := ratFloat(trueBoxUnionVolume(
+		[4]float64{0, 0, 10, 10},
+		[4]float64{lo + shift, 2, hi + shift, 8},
+		10,
+	))
+	value, bound := row.Volume.Value.Base(), row.Volume.Bound.Base()
+	require.LessOrEqual(t, value-bound, truth, "the proven interval must contain the true overlap")
+	require.GreaterOrEqual(t, value+bound, truth)
+	require.Positive(t, value-bound, "§6's positive-volume gate still holds")
+
+	// A bound this coarse cannot pass the tolerance gate, so the report says
+	// so rather than presenting the row as trustworthy.
+	require.False(t, report.Trustworthy())
+	var overlap *decad.Diagnostic
+	for i, d := range report.Diagnostics {
+		if d.Code == decad.DiagMeasurementBeyondTolerance && d.Reading == decad.ReadingOverlapVolume {
+			overlap = &report.Diagnostics[i]
+		}
+	}
+	require.NotNil(t, overlap, "the overlap reading is judged against the tolerance like any other")
+	require.Equal(t, decad.Suspect, overlap.Status)
+	require.NotNil(t, overlap.Pair)
+	require.NotNil(t, overlap.Observed)
+	require.Equal(t, row.Volume, *overlap.Observed, "the diagnostic reports the row it judged")
 	requireDocumentUnchanged(t, doc, before)
 }
 

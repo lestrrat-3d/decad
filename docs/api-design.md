@@ -1064,10 +1064,13 @@ unsupported-contact outcome leaves that pair `Suspect` with a
 `DiagUnsupportedPairContact` diagnostic (`docs/verification-design.md` §1.1), so it
 reads the same way whether a caller ran the boolean directly or reached it
 through interference. A pair `Verify` resolves EARLIER never reaches that
-outcome: the coplanar `Plane`×`Plane` contact certificate
-(`docs/clearance-design.md`) runs before the read-only boolean, so a certified
-coplanar touch reads as a touching/clearance result — an `Exact`-zero gap, no
-interference — and emits no `DiagUnsupportedPairContact`.
+outcome, and two resolvers run before the mesh boolean does. The coplanar
+`Plane`×`Plane` contact certificate (`docs/clearance-design.md`) makes a
+certified coplanar touch read as a touching/clearance result — an `Exact`-zero
+gap, no interference. The read-only analytic `OpIntersect` dispatch
+(`docs/prism-boolean-design.md`; `docs/interference-design.md` §3.4) measures an
+admitted coplanar prism pair's overlap outright. Neither emits a
+`DiagUnsupportedPairContact`.
 
 **What each boolean refusal leaves the caller.**
 "Choose a construction that does not lean on a tangent contact" names a move

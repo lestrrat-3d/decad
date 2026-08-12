@@ -126,9 +126,20 @@ const (
 )
 
 // measuredInterference returns the pair's bounded overlap volume. Strict
-// containment and exact analytic equality prove the set identity directly;
-// every other pair uses the read-only mesh intersection and its positive
-// lower-volume gate. The outcome names why an unmeasured result is unmeasured.
+// containment and exact analytic equality prove the set identity directly.
+// An admitted coplanar, co-directional prism pair next resolves through the
+// same read-only analytic OpIntersect dispatch performBoolean uses
+// (evaluateAnalyticIntersect, docs/prism-boolean-design.md §14 PR4;
+// docs/interference-design.md §5.2) — never consuming either operand. That
+// path publishes the resolved intersection payload's OWN volume measurement,
+// so the row reads Exact with a zero bound only where neither operand's
+// section carries a displacement; an operand whose section does
+// (docs/prism-boolean-design.md §7) makes the row Approximate over the
+// composed displacement the payload publishes (§8), which the report's
+// tolerance gate then judges like any other reading. Every other pair falls
+// back to the read-only mesh intersection unchanged. Both
+// paths share §6's positive lower-volume gate (positiveVolume). The outcome
+// names why an unmeasured result is unmeasured.
 func measuredInterference(ctx context.Context, a, b *Body, res pairResult) (Measurement, interferenceOutcome, error) {
 	if res.contained != nil {
 		return res.contained.volume, interferenceMeasured, nil
@@ -141,6 +152,21 @@ func measuredInterference(ctx context.Context, a, b *Body, res pairResult) (Meas
 		// Stable pair order chooses A when the represented sets are equal.
 		return a.volume, interferenceMeasured, nil
 	}
+
+	analytic, ok, err := evaluateAnalyticIntersect(ctx, a, b)
+	if err != nil {
+		if expected, ok := asExpectedBoolean(err); ok {
+			return Measurement{}, interferenceOutcomeForExpected(expected), nil
+		}
+		return Measurement{}, interferenceUndecided, err
+	}
+	if ok {
+		if !positiveVolume(analytic.volume) {
+			return Measurement{}, interferenceUndecided, nil
+		}
+		return analytic.volume, interferenceMeasured, nil
+	}
+
 	eval, err := evaluateBoolean(ctx, OpIntersect, a, b)
 	if err != nil {
 		if expected, ok := asExpectedBoolean(err); ok {
@@ -148,11 +174,20 @@ func measuredInterference(ctx context.Context, a, b *Body, res pairResult) (Meas
 		}
 		return Measurement{}, interferenceUndecided, err
 	}
-	value := math.Abs(eval.volume.Value.Base())
-	if value-eval.volume.Bound.Base() <= 0 {
+	if !positiveVolume(eval.volume) {
 		return Measurement{}, interferenceUndecided, nil
 	}
 	return eval.volume, interferenceMeasured, nil
+}
+
+// positiveVolume is interference design §6's positive-volume gate: the true
+// overlap volume proves positive only when the measurement's own proven
+// interval [value-bound, value+bound] excludes zero. Both the analytic and
+// mesh OpIntersect paths apply it to their own result before
+// measuredInterference reports it as measured.
+func positiveVolume(v Measurement) bool {
+	value := math.Abs(v.Value.Base())
+	return value-v.Bound.Base() > 0
 }
 
 // interferenceOutcomeForExpected preserves the read-only boolean's private

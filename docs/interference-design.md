@@ -115,9 +115,13 @@ volume without a boolean. §4 defines it.
 
 ### 3.4 Read-only intersection
 
-The exact-predicate mesh boolean computes the held intersection. Its exact
-rational volume integral and symmetric-difference bound yield a proven interval
-for the true overlap. §5–§6 define when that interval proves a row.
+Two evaluators answer here, tried in that order. The read-only analytic
+`OpIntersect` dispatch of `docs/prism-boolean-design.md` resolves an admitted
+co-directional coplanar prism pair from the recorded sections (§5.2). Every
+pair it does not admit reaches the exact-predicate mesh boolean, which computes
+the held intersection; its exact rational volume integral and
+symmetric-difference bound yield a proven interval for the true overlap. §5–§6
+define when either interval proves a row.
 
 ## 4. Full-containment certificate
 
@@ -273,8 +277,16 @@ The public context variants keep consuming behavior:
 `context.Background()` for compatibility. Cancellation before step 4 returns
 `ctx.Err()` unchanged and leaves the document and operands unchanged.
 
-`Verify` calls `evaluateBoolean(ctx, OpIntersect, a, b)` and consumes only the
-volume result. It does not build or register a transient `Body`.
+`Verify` calls `evaluateAnalyticIntersect(ctx, a, b)` — §5.2's read-only
+analytic twin of the same `OpIntersect` dispatch `performBoolean` runs — and
+calls `evaluateBoolean(ctx, OpIntersect, a, b)` for a pair that twin does not
+admit. It consumes only the volume result from whichever path answers.
+
+The twin reaches its own answer by building the admitted analytic payload, so
+it reads `nextStepRef` to name that body, but it never commits: no `Step` is
+appended, no operand retired, no body registered, and the built body never
+leaves the evaluator. Neither path builds or registers a transient `Body` in
+the document.
 
 ### 5.1 One volume integrator
 
@@ -309,14 +321,14 @@ and bound helpers. A verification-only approximate volume formula is forbidden.
 The current symmetric triangle classifier refuses a two-dimensional coplanar
 intersection. That refusal stays correct until this complete replacement
 lands; it must not be weakened one pair at a time.
-`docs/prism-boolean-design.md`'s analytic dispatch reaches `performBoolean`
-only, over `Union`'s select-all path and `Cut`/`Intersect`'s clean-nesting
-sub-case; `measuredInterference` calls `evaluateBoolean` directly and so never
-reaches it, and `Verify` continues through that mesh path regardless of which
-op an admitted coplanar-prism pair could otherwise resolve through. That
-document's PR4 separately adds a read-only analytic `Intersect` path for
-`measuredInterference` itself. This section still governs every coplanar pair
-the mesh path receives.
+`docs/prism-boolean-design.md` §14 PR4 wires `measuredInterference` to the
+same read-only analytic `OpIntersect` dispatch `performBoolean` uses
+(`evaluateAnalyticIntersect`, `boolean.go`), so an admitted coplanar,
+co-directional prism pair — `Union`'s select-all path or `Cut`/`Intersect`'s
+clean-nesting sub-case, §4.2 — is superseded here and no longer reaches the
+mesh path at all. A pair the analytic path does not admit still falls back to
+`evaluateBoolean`'s read-only mesh intersection unchanged, so this section
+still governs every coplanar pair the mesh path receives.
 
 Coplanar breadth support constructs one exact 2D arrangement per coplanar face
 patch in the dominant-axis projection already used by the boolean's rational
@@ -451,8 +463,9 @@ The mesh fallback has no constant-work promise. `meshBoolean` checks every
 pair of operand facets, using the facet boxes to skip exact predicates only
 after each pair-box check. Its pair-box work is therefore the number of facets
 in A multiplied by the number in B. `Verify` can pay that cost for every
-proven-solid pair that box, analytic, containment, and equality proofs leave
-unresolved. Verification §1.2 owns the public deadline guidance. The existing
+proven-solid pair that box, analytic clearance, containment, equality, and the
+§3.4 analytic `OpIntersect` dispatch leave unresolved. Verification §1.2 owns
+the public deadline guidance. The existing
 context is the public control for this work; do not add a separate work-limit
 or progress API.
 
@@ -496,17 +509,25 @@ The proof path is capability-based, not operation-history-based:
 | tessellation accepted by mesh boolean | read-only intersection volume |
 | neither boundary model nor tessellation | undecided → `Suspect` |
 
+Each row is a capability of one operand. The §3.4 analytic `OpIntersect`
+dispatch sits on top of them as a pair-level path: an admitted co-directional
+coplanar prism pair measures its overlap from the two recorded sections and
+needs no tessellation row at all.
+
 A prism, a filleted/chamfered prism, and a tube share `prismPayload` and use the
 same paths where their section displacement is zero. A `prismPayload` carrying a
 nonzero displacement (`docs/prism-boolean-design.md` §7) gets no `bodyGeom`
 model, so no analytic clearance, contact or full-containment path is available
-to it, and §4.1's equality certificate withholds separately. Such a body reaches
-only the read-only intersection its tessellation supports, and otherwise reads
-`Suspect`. A cup uses box proofs and the read-only boolean once its shipped cup
-tessellation is accepted; analytic clearance/full containment remain staged
-until `bodyGeom` supports `cupPayload`. A faceted boolean result uses its held
-mesh and carried bounds. A revolve uses analytic clearance/full containment
-where supported; read-only intersection stays staged until revolve
+to it, and §4.1's equality certificate withholds separately. Such a body still
+reaches a read-only intersection path: the §3.4 analytic `OpIntersect` dispatch
+where the pair admits it — that path reads the recorded sections rather than a
+`bodyGeom` model, and composes the displacement into the bound it publishes —
+and otherwise the intersection its tessellation supports. A pair neither
+measures reads `Suspect`. A cup uses box proofs and the read-only boolean once
+its shipped cup tessellation is accepted; analytic clearance/full containment
+remain staged until `bodyGeom` supports `cupPayload`. A faceted boolean result
+uses its held mesh and carried bounds. A revolve uses analytic clearance/full
+containment where supported; read-only intersection stays staged until revolve
 tessellation lands.
 
 Do not claim curved coverage from planar facets alone. The hidden-tangency gate
@@ -582,7 +603,9 @@ Each row is a PR-sized stage. An unanswered verification question reads
 
 - Keep the existing public `Interference{A, B, Volume}` shape. Add no option,
   witness, selector, or recipe step.
-- Keep public booleans consuming. Share only their read-only geometry evaluator.
+- Keep public booleans consuming. Share only their read-only geometry
+  evaluation — the mesh `evaluateBoolean` and the analytic `OpIntersect` twin
+  `evaluateAnalyticIntersect` (§5, §5.2) — never their commit.
 - Reuse the boolean's exact rational volume and symmetric-difference bounds.
 - Require strict positive lower overlap volume except under a certified
   containment or equality set identity.
