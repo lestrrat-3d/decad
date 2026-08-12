@@ -249,6 +249,41 @@ func performBoolean(ctx context.Context, op OpKind, a, b *Body) (*Body, error) {
 	return body, nil
 }
 
+// evaluateAnalyticIntersect is measuredInterference's read-only twin of
+// performBoolean's analytic dispatch (docs/prism-boolean-design.md §14 PR4;
+// docs/interference-design.md §5.2, §12): it runs the same admission and
+// resolution an OpIntersect performBoolean call would — tryPrismBoolean, then
+// evalPrismContext over the admitted payload — under a StepRef it mints for
+// itself, but it never calls Document.commit, so it writes nothing to the
+// document and consumes neither operand (docs/interference-design.md §5:
+// "MUST NOT call nextStepRef, append a Step, retire an operand, register a
+// body, or expose a transient result through the document" governs
+// evaluateBoolean's mesh path; this analytic twin keeps the same promise by
+// simply never reaching a commit). ok=false (err always nil in that case)
+// means the pair is not admitted by the analytic path (§3.1/§3.4): the
+// caller MUST fall back to evaluateBoolean unchanged, exactly as
+// tryPrismBoolean's own contract requires. A non-nil err is a genuine
+// analytic-resolution refusal, returned as a *booleanExpectedError so the
+// caller can share evaluateBoolean's own expected-outcome classification.
+func evaluateAnalyticIntersect(ctx context.Context, a, b *Body) (*Body, bool, error) {
+	pp, ok, err := tryPrismBoolean(ctx, OpIntersect, a, b)
+	if err != nil {
+		if errors.Is(err, ErrUnsupported) {
+			return nil, false, expectedBoolean(booleanExpectedUnsupported, err)
+		}
+		return nil, false, err
+	}
+	if !ok {
+		return nil, false, nil
+	}
+	d := a.doc
+	body, err := evalPrismContext(ctx, d, d.nextStepRef(), pp, newFreeformWork())
+	if err != nil {
+		return nil, false, err
+	}
+	return body, true, nil
+}
+
 // asBooleanError maps an evaluateBoolean or buildFacetedBody error to the
 // public typed BooleanError (docs/api-design.md §8 / H2). The private
 // expected-outcome kinds decide the Code and the wrapped sentinel: an empty

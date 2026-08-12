@@ -814,7 +814,7 @@ origin, exactly as it already must after a Fillet or Chamfer. Flagged in
 | Tessellation | The result is an ordinary `prismPayload` and `docs/tessellation-design.md` §5's prism contract applies, with §7's section displacement as a term of its own there: it displaces the analytic boundary a mesh approximates, so it does not ride in that contract's stored-coordinate rounding term, while the per-end axial displacement still does. Tessellation §5 reserves the section displacement from the requested tolerance before chording, refuses a tolerance it exhausts, and charges it to every face bound and to `areaSlack`, so chording plus that displacement stays within `tol`. The reservation covers no other term: the per-end axial displacement rides on top of it and can lift the published `Bound` above `tol`, which tessellation §1's Tolerance row allows. A mesh of an assembled body is `Exact`-trimmed only where every one of those displacements is zero. |
 | `ThroughAll` / `ThroughAllSide` | The stop reads an exact directional extent only where `δ == 0`. At `δ > 0`, it returns `ErrUnsupported`: the recorded endpoint has no bound it can widen. |
 | Clearance kernel | Unchanged where `δ == 0` — dispatches on payload class; `prismPayload` already has full analytic support (`clearance.go`'s coplanar `Plane`×`Plane` certificate, `offsetPair`, etc.). Where `δ > 0` the kernel builds no model for the body and the pair reads `Suspect`: every certificate it emits is an exact statement about the carriers it read, and a carrier the payload holds only within `δ` of the one it denotes cannot support one. Widening the kernel's own candidate intervals by `δ` is a separate piece of work, not this design's. |
-| Interference (`Verify`) | **Still on the mesh path.** `interference.go`'s `measuredInterference` calls `evaluateBoolean(ctx, OpIntersect, ...)` directly after its containment and represented-set-equality certificates — never `performBoolean`, so it never reaches the analytic dispatch regardless of which ops that dispatch now covers. `performBoolean` dispatches `Union`'s select-all path and `Cut`/`Intersect`'s clean-nesting sub-case (§4.2), but `measuredInterference`'s own call site bypasses it entirely, so an admitted coplanar-prism pair still reaches the existing read-only mesh intersection and may be coarse or `Suspect`. PR4 separately wires a read-only analytic `Intersect` path into `measuredInterference` itself and its tests. `docs/interference-design.md` §5.2 records this boundary. |
+| Interference (`Verify`) | **Wired to the analytic path (PR4).** After its containment and represented-set-equality certificates, `interference.go`'s `measuredInterference` calls `evaluateAnalyticIntersect` (`boolean.go`) — a read-only twin of `performBoolean`'s analytic dispatch that runs `tryPrismBoolean`/`evalPrismContext` under a self-minted `StepRef` and never commits, so it consumes neither operand. An admitted pair's volume is measured directly from the built payload, still subject to §6's positive-volume gate (`docs/interference-design.md` §6); a pair the analytic path does not admit (`ok == false`) falls back unchanged to `evaluateBoolean`'s read-only mesh intersection, exactly as before this design existed. `docs/interference-design.md` §5.2 records the boundary this closes. |
 | Surveys (wall/undercut/min-radius) | No new code — they dispatch on payload class, and support is immediate where `δ == 0`. The undercut reading is a normal-direction membership and is unaffected at any `δ`. The wall and min-radius readings are staged at `δ > 0` and answer undecided (`Suspect`, never a silent pass): each publishes a bare reading with no bound beside it, and the wall reading is not a quantity a displacement widens by a fixed amount anyway — its allowance-angle contact families (verification §6) can change membership under a boundary perturbation, so a proven displaced reading needs the survey's own theory extended, not a term added to a bound. |
 | `Verify`'s structural/tolerance gates | Structurally unchanged — `prismPayload` is valid by construction as always. The TOLERANCE gate anchors each reading against a reference the body's own geometry supplies, and at `δ > 0` it cannot read that geometry through the clearance kernel's model, which the row above declines to build. It reads the body's OWN recorded section instead (`gateWitnessPrism`), shrinking the witness maximum by twice `δ` plus the axial displacement, which verification design §3 proves a lower bound on the denoted body's own diameter. A displaced body is therefore judged on the same terms as any other: a reading passes when its bound meets the tolerance and reports `Suspect` with a stated `Required` threshold when it does not. |
 | Export (STL/OBJ) | Reads `Tessellate`'s output. Its size-derived default tolerance is raised past `δ`, which tessellation reserves from the tolerance before chording, so a default export of an assembled body still writes its mesh rather than refusing. |
@@ -889,17 +889,20 @@ origin, exactly as it already must after a Fillet or Chamfer. Flagged in
    against the mesh path's own answer on the same pair (property test,
    volumes agree within the analytic path's tighter bound); a holed hub
    unions with a tooth correctly, holes preserved.
-4. **PR4 — replay/interference wiring + docs.** Confirm recipe replay against
-   a stored `OpUnion`/`OpCut`/`OpIntersect` step builds via the analytic path
+4. **PR4 — replay/interference wiring + docs.** A stored
+   `OpUnion`/`OpCut`/`OpIntersect` step builds via the analytic path
    post-upgrade with no wire change (recipe-replay-design §8's contract,
-   §12 above); wire `interference.go` to the read-only analytic `OpIntersect`
-   path with a test
-   asserting an exact overlap volume on an admitted coplanar-prism pair that
-   meets §7's exactness conditions;
-   `docs/interference-design.md` §5.2 gets a one-line pointer noting the
-   prism case is superseded here. `docs/evaluator-design.md` §9 gets a
-   pointer to this document (§ done alongside this design, see the CLAUDE.md
-   diff).
+   §12 above), pinned by a round-trip/replay test on an admitted coplanar
+   `Union` step. `interference.go`'s `measuredInterference` reaches the same
+   read-only analytic `OpIntersect` dispatch `performBoolean` uses
+   (`evaluateAnalyticIntersect`, `boolean.go`) after its containment and
+   represented-set-equality certificates, falling back unchanged to the mesh
+   path when the analytic path does not admit the pair; a test asserts an
+   exact overlap volume on an admitted coplanar-prism pair that meets §7's
+   exactness conditions. `docs/interference-design.md` §5.2 carries a pointer
+   noting the prism case is superseded here. `docs/evaluator-design.md` §9
+   gets a pointer to this document (§ done alongside this design, see the
+   CLAUDE.md diff).
 
 ## 15. Required tests
 

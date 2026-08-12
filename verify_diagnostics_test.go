@@ -280,6 +280,40 @@ func TestVerifyDiagnosticsUnsupportedPairStagedContact(t *testing.T) {
 	require.False(t, pipeline, `a contact refusal is not an in-pipeline reach`)
 }
 
+// TestVerifyDiagnosticsAdmittedCoplanarPrismPairHasNoContactDiagnostic is the
+// diagnostic-side pin for
+// TestVerifyAdmittedCoplanarPrismPairResolvesAnalytically's fixture
+// (interference_test.go): a container box and a taller, footprint-nested box
+// sharing the container's own coplanar base plane. Before
+// docs/prism-boolean-design.md §14 PR4 this exact pair staged a boolean
+// contact (DiagUnsupportedPairContact / DiagUnsupportedPair, Suspect) because
+// measuredInterference never reached the analytic OpIntersect dispatch. Now
+// it resolves analytically, so neither contact diagnostic fires and the
+// report reads Interfering with a DiagInterference row instead.
+func TestVerifyDiagnosticsAdmittedCoplanarPrismPairHasNoContactDiagnostic(t *testing.T) {
+	doc := decad.New()
+	boxBody(t, doc, 0, 0, 20, 20, 10)
+	boxBody(t, doc, 5, 5, 9, 10, 15)
+
+	report, err := doc.Verify(t.Context())
+	require.NoError(t, err)
+
+	require.Equal(t, decad.Interfering, report.Status)
+	requireDiagnosticInvariants(t, report)
+
+	_, contact := findDiagnostic(report.Diagnostics, decad.DiagUnsupportedPairContact)
+	require.False(t, contact, `an admitted coplanar pair no longer stages a boolean contact`)
+	_, broad := findDiagnostic(report.Diagnostics, decad.DiagUnsupportedPair)
+	require.False(t, broad, `an admitted coplanar pair no longer trips the broad compatibility code either`)
+
+	d, ok := findDiagnostic(report.Diagnostics, decad.DiagInterference)
+	require.True(t, ok, `the analytic path proves a positive overlap`)
+	require.Equal(t, decad.Interfering, d.Status)
+	require.Equal(t, decad.ReadingOverlapVolume, d.Reading)
+	require.NotNil(t, d.Observed)
+	require.InDelta(t, 200.0, d.Observed.Value.Base(), 1e-9)
+}
+
 func TestVerifyDiagnosticsProximityRefusalIsContact(t *testing.T) {
 	// The cylinder's analytic surface overlaps the plate's x = 20 face by only
 	// 0.0005 mm. The pre-tessellation proximity gate refuses the undecidable

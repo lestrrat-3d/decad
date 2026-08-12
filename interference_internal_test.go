@@ -284,6 +284,39 @@ func TestInterferenceExpectedCausesKeepDistinctDiagnostics(t *testing.T) {
 	require.Equal(t, DiagUndecidedPair, partition.Code)
 }
 
+// TestMeasuredInterferenceFallsBackToMeshWhenAnalyticNotAdmitted proves the
+// mesh fallback docs/prism-boolean-design.md §14 PR4 requires is not lost:
+// a pair evaluateAnalyticIntersect does not admit still reaches
+// evaluateBoolean's read-only mesh path through measuredInterference, with
+// the identical measured result a direct evaluateBoolean call produces. The
+// operand translated by (5,5,5) no longer shares a's carrier plane (G3,
+// docs/prism-boolean-design.md §3.1), so the analytic dispatch declines the
+// pair and the diagonal cube overlap — a genuine, classifiable transversal
+// crossing, not a coplanar tangency — resolves through the mesh path exactly
+// as it did before this design existed.
+func TestMeasuredInterferenceFallsBackToMeshWhenAnalyticNotAdmitted(t *testing.T) {
+	doc := New()
+	a := internalBoxBody(t, doc, 0, 0, 10, 10, 10)
+	b := internalBoxBody(t, doc, 0, 0, 10, 10, 10)
+	shift, err := r3.Translation(r3.NewVec(5, 5, 5))
+	require.NoError(t, err)
+	b, err = b.Placed(shift)
+	require.NoError(t, err)
+
+	_, ok, err := evaluateAnalyticIntersect(t.Context(), a, b)
+	require.NoError(t, err)
+	require.False(t, ok, `an out-of-plane pair must not be admitted by the analytic dispatch`)
+
+	want, err := evaluateBoolean(t.Context(), OpIntersect, a, b)
+	require.NoError(t, err)
+
+	volume, outcome, err := measuredInterference(t.Context(), a, b, pairResult{})
+	require.NoError(t, err)
+	require.Equal(t, interferenceMeasured, outcome, `the mesh fallback must still measure a genuine overlap`)
+	require.Equal(t, want.volume, volume, `measuredInterference must report the same read-only mesh result evaluateBoolean itself would`)
+	require.InDelta(t, 125.0, volume.Value.Base(), 1e-6)
+}
+
 func TestSharesFacePlane(t *testing.T) {
 	doc := New()
 	a := internalBoxBody(t, doc, 0, 0, 10, 10, 5)

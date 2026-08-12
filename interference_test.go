@@ -77,19 +77,38 @@ func TestVerifyOffsetBoxesReportBoundedInterference(t *testing.T) {
 	requireDocumentUnchanged(t, doc, before)
 }
 
-// TestVerifyCoplanarPrismOverlapStaysOnMeshPath confirms the PR1 boundary:
-// the public Union path may use the analytic reduction, but Verify still
-// runs its read-only intersection through the coplanar-contact mesh path.
-func TestVerifyCoplanarPrismOverlapStaysOnMeshPath(t *testing.T) {
+// TestVerifyAdmittedCoplanarPrismPairResolvesAnalytically confirms
+// docs/prism-boolean-design.md §14 PR4: an admitted coplanar, co-directional
+// prism pair now resolves its interference volume through the same
+// read-only analytic OpIntersect dispatch performBoolean uses
+// (evaluateAnalyticIntersect), rather than always falling to the read-only
+// mesh path. The container (0,0)-(20,20) height 10 and the nested prism
+// (5,5)-(9,10) height 15 share the container's own coplanar base plane, so
+// their overlap is exactly the nested prism's footprint (4x5 = 20 mm^2)
+// over the z-interval the two heights share ([0,10], since the nested prism
+// is taller and pokes through the container's cap): 20 * 10 = 200 mm^3. The
+// nested prism's cap coincides with the container's own boundary, so the
+// pair is not a strict full containment (clearance §4's strictly-positive
+// clearance requirement fails) and previously reached the mesh path's
+// coplanar-tangent refusal (unsupported_pair / unsupported_pair_contact;
+// verify_diagnostics_test.go pins the diagnostic side of this same
+// fixture).
+func TestVerifyAdmittedCoplanarPrismPairResolvesAnalytically(t *testing.T) {
 	doc := decad.New()
-	boxBody(t, doc, 0, 0, 10, 10, 10)
-	boxBody(t, doc, 5, 5, 15, 15, 10)
+	container := boxBody(t, doc, 0, 0, 20, 20, 10)
+	nested := boxBody(t, doc, 5, 5, 9, 10, 15)
 	before := snapshotDocument(t, doc)
 
 	report, err := doc.Verify(t.Context())
 	require.NoError(t, err)
-	require.Equal(t, decad.Suspect, report.Status)
-	require.Empty(t, report.Interferences)
+	require.Equal(t, decad.Interfering, report.Status)
+	require.Len(t, report.Interferences, 1)
+	row := report.Interferences[0]
+	require.Same(t, container, row.A)
+	require.Same(t, nested, row.B)
+	require.InDelta(t, 200.0, row.Volume.Value.Base(), 1e-9)
+	require.Equal(t, decad.Exact, row.Volume.Exactness)
+	require.Zero(t, row.Volume.Bound.Base())
 	requireDocumentUnchanged(t, doc, before)
 }
 
