@@ -3,6 +3,7 @@ package decad_test
 import (
 	"context"
 	"math"
+	"math/big"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
@@ -715,6 +716,79 @@ func TestWallReadingBoundEnclosesCurvedWeb(t *testing.T) {
 	require.LessOrEqual(t, value-bound, truth)
 	require.GreaterOrEqual(t, value+bound, truth)
 	require.True(t, report.Trustworthy())
+}
+
+func TestWallReadingBoundIsOnTheSpanningDiameter(t *testing.T) {
+	// The same curved-web reading as above, on a fixture whose candidate bound
+	// is large enough to tell a radius bound from a diameter one. The plate is
+	// 100 mm thick with two equal holes of radius 132665.06800135397 mm whose
+	// centres sit (264148.72380984796, 25043.885926669256) apart, so the web
+	// between them is ~3.1346451310243 mm while the coordinates feeding
+	// arcArcCands' own division are ~1e5 — the bound comes out near 3e-11,
+	// five orders of magnitude past the reading's own float64 rounding.
+	//
+	// survey2d's candidates bound their RADIUS and the reading is the spanning
+	// DIAMETER, so a bound published undoubled misses the truth here by a
+	// factor of about 1.48: the interval below is the whole point of the test.
+	const (
+		cx = 264148.72380984796
+		cy = 25043.885926669256
+		r  = 132665.06800135397
+	)
+	ws := sketch.NewWorld()
+	s, err := ws.CreateSketch(ws.XY())
+	require.NoError(t, err)
+	rect := s.CreateRectangle(-4e5, -4e5, 12e5, 12e5)
+	s.Fix(rect.A)
+	s.CreateCircle(s.CreatePoint(0, 0), r)
+	s.CreateCircle(s.CreatePoint(cx, cy), r)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	var prof *sketch.Profile
+	for _, p := range s.Profiles() {
+		if len(p.Holes) == 2 {
+			prof = p
+		}
+	}
+	require.NotNil(t, prof)
+
+	doc := decad.New()
+	_, err = doc.Extrude(s, prof, decad.Distance{D: units.Millimeters(100), Dir: decad.Along})
+	require.NoError(t, err)
+
+	report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(1)))
+	require.NoError(t, err)
+	br := report.Bodies[0]
+	require.NotNil(t, br.MinWallThickness)
+	require.Equal(t, decad.Approximate, br.MinWallThickness.Exactness)
+	value, err := br.MinWallThickness.Value.In(units.Millimeter)
+	require.NoError(t, err)
+	bound, err := br.MinWallThickness.Bound.In(units.Millimeter)
+	require.NoError(t, err)
+	require.Greater(t, bound, 0.0)
+
+	// hypot(cx, cy) − 2r, evaluated at 300 bits: every input is an exact
+	// float64, so the only rounding is the final one, far below the bound.
+	truth := webGapTruth(cx, cy, r)
+	require.LessOrEqual(t, value-bound, truth)
+	require.GreaterOrEqual(t, value+bound, truth)
+}
+
+// webGapTruth is the exact centre-distance-minus-two-radii gap between two
+// equal circles, evaluated at 300 bits so the comparison above is against the
+// geometry rather than against another float64 evaluation of it.
+func webGapTruth(cx, cy, r float64) float64 {
+	const prec = 300
+	f := func(v float64) *big.Float { return new(big.Float).SetPrec(prec).SetFloat64(v) }
+	x, y, rr := f(cx), f(cy), f(r)
+	d2 := new(big.Float).SetPrec(prec).Add(
+		new(big.Float).SetPrec(prec).Mul(x, x),
+		new(big.Float).SetPrec(prec).Mul(y, y))
+	gap := new(big.Float).SetPrec(prec).Sub(
+		new(big.Float).SetPrec(prec).Sqrt(d2),
+		new(big.Float).SetPrec(prec).Add(rr, rr))
+	out, _ := gap.Float64()
+	return out
 }
 
 func TestWallReadingExactHeightArm(t *testing.T) {

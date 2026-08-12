@@ -32,6 +32,13 @@ import (
 // composition, so a small denominator amplifies it without a separate case;
 // nothing here loosens a candidate SET, a containment scan, or a tolerance —
 // the bound only ever widens the interval the winning candidate publishes.
+//
+// A candidate's own bound is on its RADIUS, while the kernel's answer is a
+// spanning DIAMETER (wallSurveyOut.span = 2r), so the bound is doubled with
+// the value it accompanies. runBudget performs that conversion at the single
+// point where a candidate enters the answer, so every field of
+// wallSurveyOut that carries a bound already speaks in the answer's own
+// units and no consumer restates the factor.
 
 // survTiny is the relative floor for degeneracy checks inside the kernel.
 const survTiny = 1e-12
@@ -374,7 +381,10 @@ func newWallKernelBudget(budget *workBudget, elems, containOnly []surveyElem, ve
 // wallSurveyOut is the kernel's answer over its candidate set. spanBound is
 // the winning span candidate's own bound and maxCandBound the largest bound
 // over every spanning, empty candidate the search admitted (the same
-// population out.span's own minimum is taken over). With m̂ = min v̂ᵢ and
+// population out.span's own minimum is taken over). Both are bounds on the
+// spanning DIAMETER, the same quantity span reports, because runBudget
+// doubles each candidate's radius bound as it doubles the radius itself.
+// With m̂ = min v̂ᵢ and
 // each true vᵢ ∈ [v̂ᵢ − bᵢ, v̂ᵢ + bᵢ], the true minimum is at most m̂ + b_winner
 // (it is at most the winning candidate's own true value) and at least
 // m̂ − maxᵢ bᵢ (every candidate's true value, the winner included, is at
@@ -384,8 +394,8 @@ type wallSurveyOut struct {
 	ok           bool    // false: the survey could not decide (never a silent pass)
 	hasSpan      bool    // some empty spanning disk exists
 	span         float64 // the smallest spanning diameter found
-	spanBound    float64 // the winning span candidate's own bound (on its RADIUS)
-	maxCandBound float64 // the largest bound over every spanning, empty candidate
+	spanBound    float64 // the winning span candidate's own bound, on that DIAMETER
+	maxCandBound float64 // the largest such DIAMETER bound over every spanning, empty candidate
 	inradius     float64 // the largest empty disk radius found (the 2D inradius)
 	subTolFar    bool    // an off-junction sub-tolerance candidate was dropped
 }
@@ -438,17 +448,24 @@ func (k *wallKernel) runBudget(budget *workBudget) (wallSurveyOut, error) {
 			out.inradius = c.r
 		}
 		if spanning && 2*c.r <= k.fitMax+k.tol {
-			if isNonFinite(c.rBound) {
+			// The candidate's generator bounded its RADIUS; the answer is the
+			// DIAMETER 2r, so the bound doubles with the value. Multiplying a
+			// float64 by two only scales the exponent, so the doubled bound is
+			// exact and needs no outward rounding — the sole failure is an
+			// overflow to +Inf, which the finiteness gate below catches with
+			// every other underivable bound.
+			dBound := 2 * c.rBound
+			if isNonFinite(dBound) {
 				undecided = true
 				return nil
 			}
 			out.hasSpan = true
-			if c.rBound > out.maxCandBound {
-				out.maxCandBound = c.rBound
+			if dBound > out.maxCandBound {
+				out.maxCandBound = dBound
 			}
 			if 2*c.r < out.span {
 				out.span = 2 * c.r
-				out.spanBound = c.rBound
+				out.spanBound = dBound
 			}
 		}
 		return nil

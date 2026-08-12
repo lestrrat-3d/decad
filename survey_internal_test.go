@@ -156,6 +156,65 @@ func TestWallKernelBudgetedRunKeepsNormalResult(t *testing.T) {
 	require.InDelta(t, 60.0, out.span, 1e-9)
 }
 
+// TestWallKernelPublishesDiameterBounds pins the unit relation both wall-survey
+// consumers inherit: prismWall and revolveWall each publish out.span, a
+// DIAMETER, beside max(out.spanBound, out.maxCandBound), so those two fields
+// must be bounds on that diameter and not on the candidate radius each
+// generator actually bounded. The re-derivation below reads the generators
+// directly and asserts the exact factor of two, which no consumer restates.
+func TestWallKernelPublishesDiameterBounds(t *testing.T) {
+	// A 100×60 outline with two r=1 circular holes 3√2 apart: the web between
+	// them is the arcArcCands centreline candidate, whose division carries a
+	// nonzero radius bound.
+	elems := func() []surveyElem {
+		pts := [][2]float64{{0, 0}, {100, 0}, {100, 60}, {0, 60}}
+		out := make([]surveyElem, 0, len(pts)+2)
+		for i := range pts {
+			e, ok := lineElem(pts[i][0], pts[i][1], pts[(i+1)%len(pts)][0], pts[(i+1)%len(pts)][1])
+			require.True(t, ok)
+			out = append(out, e)
+		}
+		for _, c := range [][2]float64{{48.5, 28.5}, {51.5, 31.5}} {
+			// Reversed angle order: a hole keeps the material on its left.
+			e, ok := arcElem(c[0], c[1], 1, 2*math.Pi, 0, true)
+			require.True(t, ok)
+			out = append(out, e)
+		}
+		return out
+	}
+
+	out := newWallKernel(elems(), nil, math.Inf(1)).run()
+	require.True(t, out.ok)
+	require.True(t, out.hasSpan)
+	require.Greater(t, out.spanBound, 0.0)
+
+	// Re-derive the same population from the generators, whose diskCand.rBound
+	// speaks for the RADIUS. A fresh kernel keeps the streamed run above from
+	// colouring this pass.
+	k := newWallKernel(elems(), nil, math.Inf(1))
+	bestR, winnerRBound, maxRBound := math.Inf(1), 0.0, 0.0
+	require.NoError(t, k.generate(nil, func(c diskCand) error {
+		spanning, empty, ok, err := k.validate(c, nil)
+		require.NoError(t, err)
+		require.True(t, ok)
+		if !spanning || !empty {
+			return nil
+		}
+		if c.rBound > maxRBound {
+			maxRBound = c.rBound
+		}
+		if c.r < bestR {
+			bestR, winnerRBound = c.r, c.rBound
+		}
+		return nil
+	}))
+	require.Greater(t, winnerRBound, 0.0)
+
+	require.Equal(t, 2*bestR, out.span)
+	require.Equal(t, 2*winnerRBound, out.spanBound)
+	require.Equal(t, 2*maxRBound, out.maxCandBound)
+}
+
 func TestPrismWallSubToleranceWebIsUndecided(t *testing.T) {
 	// The prism path must apply the same rule as the revolve path: a
 	// near-concentric annular profile whose 2e-8 web sits under the kernel
