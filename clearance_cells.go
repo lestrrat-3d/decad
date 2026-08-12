@@ -859,6 +859,9 @@ func transformElem(e surveyElem, from, to *cFace) surveyElem {
 		th0, th1 = delta-e.th1, delta-e.th0
 	}
 	out, _ := arcElem(cx, cy, e.rr, math.Min(th0, th1), math.Max(th0, th1), e.closed)
+	// A rigid motion moves no radius, so the mapped element keeps the source
+	// element's radius under the source's own bound on it.
+	out.rrBound = e.rrBound
 	return out
 }
 

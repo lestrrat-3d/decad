@@ -870,37 +870,13 @@ func TestWallHeightCarriesAxialDelta(t *testing.T) {
 }
 
 func TestMinRadiusArcRadiusBound(t *testing.T) {
-	// A prism whose one concave feature is a D-shaped ArcSeg hole (a chord
-	// plus one arc, the same "circular segment" construction
-	// TestWallKnifeEdgeExactZero's outer boundary uses, here cut as a hole so
-	// the material-outside convention makes its arc concave): the arc's
-	// centre (10, 9) sits one unit apart from its start point (9, 10) in each
-	// of u and v, so its true radius is √2 — a math.Hypot evaluation
-	// (extrude.go's ArcSeg arm), never the record's own number. The published
-	// interval must contain the truth; a millimetre CircleSeg hole on the
-	// same fixture family (holePlate) stays Exact with Bound zero.
-	ws := sketch.NewWorld()
-	s, err := ws.CreateSketch(ws.XY())
-	require.NoError(t, err)
-	rect := s.CreateRectangle(0, 0, 20, 20)
-	s.Fix(rect.A)
-	x := s.CreatePoint(9, 10)
-	y := s.CreatePoint(11, 10)
-	o := s.CreatePoint(10, 9)
-	s.CreateLine(x, y)
-	s.CreateArc(o, y, x)
-	_, err = s.Solve(t.Context())
-	require.NoError(t, err)
-	var prof *sketch.Profile
-	for _, p := range s.Profiles() {
-		if len(p.Holes) == 1 {
-			prof = p
-		}
-	}
-	require.NotNil(t, prof)
-
+	// A prism whose one concave feature is dSectionProfile's √2 ArcSeg hole,
+	// cut as a hole so the material-outside convention makes its arc concave.
+	// The published interval must contain the truth; a millimetre CircleSeg
+	// hole on the same fixture family (holePlate) stays Exact with Bound zero.
+	s, prof := dSectionProfile(t)
 	doc := decad.New()
-	_, err = doc.Extrude(s, prof, decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+	_, err := doc.Extrude(s, prof, decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
 	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context(), decad.WithMinRadius())
@@ -924,4 +900,124 @@ func TestMinRadiusArcRadiusBound(t *testing.T) {
 	holeBoundMM, err := holeBR.MinRadius.Bound.In(units.Millimeter)
 	require.NoError(t, err)
 	require.Equal(t, 0.0, holeBoundMM)
+}
+
+// dSectionProfile is the D-shaped ArcSeg fixture both radius-bound tests
+// share: a 20×20 outline holding a chord-plus-arc hole whose centre (10, 9) is
+// one unit from its start (9, 10) in each of u and v, so the arc's TRUE radius
+// is √2 while the walk holds the math.Hypot evaluation of it.
+func dSectionProfile(t *testing.T) (*sketch.Sketch, *sketch.Profile) {
+	t.Helper()
+	ws := sketch.NewWorld()
+	s, err := ws.CreateSketch(ws.XY())
+	require.NoError(t, err)
+	rect := s.CreateRectangle(0, 0, 20, 20)
+	s.Fix(rect.A)
+	x := s.CreatePoint(9, 10)
+	y := s.CreatePoint(11, 10)
+	o := s.CreatePoint(10, 9)
+	s.CreateLine(x, y)
+	s.CreateArc(o, y, x)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	var prof *sketch.Profile
+	for _, p := range s.Profiles() {
+		if len(p.Holes) == 1 {
+			prof = p
+		}
+	}
+	require.NotNil(t, prof)
+	return s, prof
+}
+
+// requireContains asserts that truth lies in [value − bound, value + bound],
+// comparing over big.Rat so neither endpoint is formed by a float subtraction
+// whose own rounding could swamp the bound under test.
+func requireContains(t *testing.T, truth *big.Rat, value, bound float64) {
+	t.Helper()
+	v := new(big.Rat).SetFloat64(value)
+	b := new(big.Rat).SetFloat64(bound)
+	require.NotNil(t, v)
+	require.NotNil(t, b)
+	require.LessOrEqual(t, new(big.Rat).Sub(v, b).Cmp(truth), 0,
+		`the published interval must reach down to the truth`)
+	require.GreaterOrEqual(t, new(big.Rat).Add(v, b).Cmp(truth), 0,
+		`the published interval must reach up to the truth`)
+}
+
+// TestWallConcentricRingCarriesRadiusDifferenceBound pins the concentric
+// annulus candidate: its half-width is |Ra − Rb|/2, and that difference rounds
+// whenever the two radii are far apart in magnitude, so the reading is never
+// Exact merely because both radii are recorded numbers. R20 with an r0.03 bore
+// is the ordinary-numbers case — 20 − 0.03 is not representable, and a zero
+// bound publishes an interval that excludes the true ring thickness.
+func TestWallConcentricRingCarriesRadiusDifferenceBound(t *testing.T) {
+	ws := sketch.NewWorld()
+	s, err := ws.CreateSketch(ws.XY())
+	require.NoError(t, err)
+	c := s.CreatePoint(0, 0)
+	s.Fix(c)
+	s.CreateCircle(c, 20)
+	s.CreateCircle(c, 0.03)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	var prof *sketch.Profile
+	for _, p := range s.Profiles() {
+		if len(p.Holes) == 1 {
+			prof = p
+		}
+	}
+	require.NotNil(t, prof)
+
+	doc := decad.New()
+	_, err = doc.Extrude(s, prof, decad.Distance{D: units.Millimeters(500), Dir: decad.Along})
+	require.NoError(t, err)
+
+	report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(1)))
+	require.NoError(t, err)
+	br := report.Bodies[0]
+	require.NotNil(t, br.MinWallThickness)
+	value, err := br.MinWallThickness.Value.In(units.Millimeter)
+	require.NoError(t, err)
+	bound, err := br.MinWallThickness.Bound.In(units.Millimeter)
+	require.NoError(t, err)
+
+	// The truth is the exact difference of the two RECORDED radii, formed over
+	// big.Rat: the float 20 − 0.03 the kernel holds is a hair below it.
+	truth := new(big.Rat).Sub(new(big.Rat).SetFloat64(20), new(big.Rat).SetFloat64(0.03))
+	require.NotEqual(t, 0, new(big.Rat).SetFloat64(value).Cmp(truth),
+		`the held difference must miss the truth, or this fixture proves nothing`)
+	require.Equal(t, decad.Approximate, br.MinWallThickness.Exactness)
+	require.Greater(t, bound, 0.0)
+	requireContains(t, truth, value, bound)
+}
+
+// TestRevolveMinRadiusArcRadiusBound is TestMinRadiusArcRadiusBound's revolve
+// twin: the same √2 ArcSeg meridian, revolved rather than extruded. The
+// concave-meridian arm reads the walk's own radius, which for an ArcSeg is a
+// math.Hypot evaluation, so it publishes the walk's bound on that radius
+// rather than claiming the record stated it.
+func TestRevolveMinRadiusArcRadiusBound(t *testing.T) {
+	s, prof := dSectionProfile(t)
+	doc := decad.New()
+	_, err := doc.Revolve(s, prof, uAxis, decad.FullRevolution{})
+	require.NoError(t, err)
+
+	report, err := doc.Verify(t.Context(), decad.WithMinRadius())
+	require.NoError(t, err)
+	br := report.Bodies[0]
+	require.NotNil(t, br.MinRadius)
+	require.Equal(t, decad.Approximate, br.MinRadius.Exactness)
+	value, err := br.MinRadius.Value.In(units.Millimeter)
+	require.NoError(t, err)
+	bound, err := br.MinRadius.Bound.In(units.Millimeter)
+	require.NoError(t, err)
+	require.Greater(t, bound, 0.0)
+
+	// √2 to 200 bits, so the comparison is against the truth and not against
+	// another float64 evaluation of the same square root.
+	const prec = 200
+	sqrt2 := new(big.Float).SetPrec(prec).Sqrt(new(big.Float).SetPrec(prec).SetInt64(2))
+	truth, _ := sqrt2.Rat(nil)
+	requireContains(t, truth, value, bound)
 }

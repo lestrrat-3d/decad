@@ -216,8 +216,92 @@ func TestWallKernelPublishesDiameterBounds(t *testing.T) {
 	require.Equal(t, 2*maxRBound, out.maxCandBound)
 }
 
-// TestWedgeCandidateCarriesCapSineBound pins the one kernel input that is not
-// an exact leaf. A 60° sweep's cap half-angle is 30°, whose TRUE sine is
+// TestWallKernelConcentricSpanBoundsRadiusDifference pins the concentric
+// annulus candidate at the kernel's own door, with the two radii handed
+// straight in. R = 1e16 and r = 1 are both held exactly, yet their difference
+// 9999999999999999 is not a float64 at all: the kernel's held span rounds up
+// to 1e16, a full millimetre above the truth. A candidate that reported bound
+// zero there published a zero-width interval that excluded its own answer.
+func TestWallKernelConcentricSpanBoundsRadiusDifference(t *testing.T) {
+	outer, ok := arcElem(0, 0, 1e16, 0, 2*math.Pi, true)
+	require.True(t, ok)
+	inner, ok := arcElem(0, 0, 1, 2*math.Pi, 0, true)
+	require.True(t, ok)
+
+	out := newWallKernel([]surveyElem{outer, inner}, nil, math.Inf(1)).run()
+
+	require.True(t, out.ok)
+	require.True(t, out.hasSpan)
+	truth := new(big.Rat).SetInt64(9999999999999999)
+	require.NotEqual(t, 0, new(big.Rat).SetFloat64(out.span).Cmp(truth),
+		`the held span must miss the truth, or this fixture proves nothing`)
+	requireRatInInterval(t, truth, out.span, math.Max(out.spanBound, out.maxCandBound))
+}
+
+// requireRatInInterval asserts that truth lies in [value − bound,
+// value + bound], compared over big.Rat so neither endpoint is formed by a
+// float subtraction whose own rounding could swamp the bound under test.
+func requireRatInInterval(t *testing.T, truth *big.Rat, value, bound float64) {
+	t.Helper()
+	v := new(big.Rat).SetFloat64(value)
+	b := new(big.Rat).SetFloat64(bound)
+	require.NotNil(t, v)
+	require.NotNil(t, b)
+	require.LessOrEqual(t, new(big.Rat).Sub(v, b).Cmp(truth), 0,
+		`the published interval must reach down to the truth`)
+	require.GreaterOrEqual(t, new(big.Rat).Add(v, b).Cmp(truth), 0,
+		`the published interval must reach up to the truth`)
+}
+
+// TestWholeArcCandidateCarriesArcRadiusBound pins the concentric whole-arc
+// disk, the one candidate whose radius IS the element's radius with no
+// arithmetic between them. An ArcSeg states its Start and Center, never its
+// radius, so the walk's radius is a math.Hypot evaluation and the candidate
+// must publish the walk's bound on it rather than zero.
+func TestWholeArcCandidateCarriesArcRadiusBound(t *testing.T) {
+	// Centre (10, 9) one unit from start (9, 10) in each of u and v: the true
+	// radius is √2, which no float64 holds.
+	seg := ArcSeg{
+		Center: Point2{U: 10, V: 9},
+		Start:  Point2{U: 9, V: 10},
+		End:    Point2{U: 11, V: 10},
+		TStart: 0,
+		TEnd:   1,
+	}
+	w, err := walkOf(seg, newFreeformWork())
+	require.NoError(t, err)
+	require.Greater(t, w.radiusBound, 0.0, `a hypot radius is never exact`)
+	e, ok := walkElem(w)
+	require.True(t, ok)
+	require.Equal(t, w.radiusBound, e.rrBound, `the element must take the walk's own bound`)
+	require.True(t, e.matInside, `the fixture must walk counter-clockwise, or no whole-arc disk is emitted`)
+
+	// generate opens with the whole-arc disks, so the first candidate is the
+	// one under test (TestWallKernelGenerateStreamsCandidates pins the order).
+	k := newWallKernel([]surveyElem{e}, nil, math.Inf(1))
+	var first *diskCand
+	require.NoError(t, k.generate(nil, func(c diskCand) error {
+		if first == nil {
+			cand := c
+			first = &cand
+		}
+		return nil
+	}))
+	require.NotNil(t, first)
+	require.Equal(t, e.rr, first.r)
+	require.Equal(t, e.rrBound, first.rBound)
+
+	// √2 to 200 bits: the published interval must reach it.
+	const prec = 200
+	sqrt2 := new(big.Float).SetPrec(prec).Sqrt(new(big.Float).SetPrec(prec).SetInt64(2))
+	truth, _ := sqrt2.Rat(nil)
+	requireRatInInterval(t, truth, first.r, first.rBound)
+}
+
+// TestWedgeCandidateCarriesCapSineBound pins the cap sine, one of the two
+// kernel inputs that are not exact leaves (an element's own radius is the
+// other, pinned by TestWholeArcCandidateCarriesArcRadiusBound). A 60° sweep's
+// cap half-angle is 30°, whose TRUE sine is
 // exactly 1/2, but the held float64 sine is a hair under it — so the wedge
 // candidate at a meridian vertex y = 10 holds a radius a hair under the exact
 // s·y/(1−s) = 10. A candidate that read the sine as an exact leaf published

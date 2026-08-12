@@ -23,12 +23,12 @@ import (
 // Every candidate carries a PROVEN bound beside its radius (diskCand.rBound):
 // each family derives it from its own closed form over the bounded-scalar
 // arithmetic moments.go already owns (boundedAdd/boundedSub/boundedMul/
-// boundedQuotient/boundedSqrt), reading every element coordinate (line
-// endpoints and normals, arc centers and radii, junction vertices) as an
-// EXACT leaf — the same convention prismPayload's own directional readings
-// use — so the bound speaks only for the arithmetic THIS file performs, never
-// for the record's own numbers or for the draft allowance angle itself. Every
-// step of that arithmetic is charged, coefficient construction and Cramer
+// boundedQuotient/boundedSqrt), reading every element COORDINATE (line
+// endpoints and normals, arc centers, junction vertices) as an EXACT leaf —
+// the same convention prismPayload's own directional readings use — so for
+// those the bound speaks only for the arithmetic THIS file performs, never for
+// the record's own numbers or for the draft allowance angle itself. Every step
+// of that arithmetic is charged, coefficient construction and Cramer
 // determinants included: reading a coordinate as exact never licenses reading
 // a PRODUCT of two of them as exact. A division's bound comes from
 // boundedQuotient's own denominator-and-numerator composition, so a small
@@ -36,11 +36,19 @@ import (
 // candidate SET, a containment scan, or a tolerance — the bound only ever
 // widens the interval the winning candidate publishes.
 //
-// The kernel takes exactly ONE input that is not an exact leaf: wallKernel's
-// wedgeS, the partial-revolve cap half-angle's SINE, which its caller proves
-// from a certified trig interval and hands over as a boundedScalar. Every
-// wedge-derived candidate composes that bound like any other, so a sine the
-// caller could not enclose never reaches a published reading.
+// The kernel takes exactly TWO inputs that are not exact leaves, and both
+// arrive already bounded rather than being trusted:
+//
+//   - surveyElem.rrBound, an arc element's own radius error. A caller that
+//     states a radius outright, and a recorded CircleSeg, both give zero; a
+//     walk built from a recorded ArcSeg holds a math.Hypot radius and gives
+//     extrude.go's arcWalkRadiusBound. Every candidate radius derived from an
+//     element radius reads it through surveyElem.rrBS, never as a leaf.
+//   - wallKernel's wedgeS, the partial-revolve cap half-angle's SINE, which
+//     its caller proves from a certified trig interval.
+//
+// Every candidate derived from either composes its bound like any other, so an
+// input the caller could not enclose never reaches a published reading.
 //
 // A candidate's own bound is on its RADIUS, while the kernel's answer is a
 // spanning DIAMETER (wallSurveyOut.span = 2r), so the bound is doubled with
@@ -99,7 +107,8 @@ func boundedNorm2(x, y boundedScalar) boundedScalar {
 
 // boundedHypot is boundedNorm2 over two EXACT leaves — the same convention
 // every element coordinate in this file takes (line endpoints and normals, arc
-// centers and radii, junction vertices).
+// centers, junction vertices). An element's radius is not one of them: it
+// carries its own bound and is read through surveyElem.rrBS.
 func boundedHypot(dx, dy float64) boundedScalar {
 	return boundedNorm2(exactScalar(dx), exactScalar(dy))
 }
@@ -204,11 +213,25 @@ type surveyElem struct {
 	// arc: center (qx, qy), radius rr, walked from th0 to th1. th1 > th0 is a
 	// counter-clockwise walk, which puts the material inside the circle
 	// (matInside); a clockwise walk puts it outside (a hole wall, a notch).
+	//
+	// rrBound is the PROVEN error bound on rr. Unlike the coordinates around
+	// it, rr is NOT always an exact leaf: a walk built from a recorded ArcSeg
+	// carries a math.Hypot radius (extrude.go's arcWalkRadiusBound). It is
+	// zero for a caller that states the radius outright and for a recorded
+	// CircleSeg. Every candidate radius the WALL kernel below derives from rr
+	// composes this bound through its own arithmetic rather than reading rr as
+	// exact; the held rr alone still serves the positions, ray casts and
+	// tolerances that publish no interval of their own.
 	qx, qy, rr float64
+	rrBound    float64
 	th0, th1   float64
 	closed     bool
 	matInside  bool
 }
+
+// rrBS is the element's radius with its own proven bound — the one spelling
+// every candidate derivation reads the radius through.
+func (e surveyElem) rrBS() boundedScalar { return measuredScalar(e.rr, e.rrBound) }
 
 // lineElem builds a line element from a walk-ordered segment.
 func lineElem(ax, ay, bx, by float64) (surveyElem, bool) {
@@ -335,7 +358,8 @@ type diskCand struct{ x, y, r, rBound float64 }
 // wedge the sweep caps cut, encoded by wedgeS = sin(min(Δφ/2, π/2)): a ball
 // of radius r centered at height y fits the wedge iff y·wedgeS ≥ r.
 //
-// wedgeS is the one kernel input that is NOT an exact leaf: it is a sine, so
+// wedgeS is one of the two kernel inputs that are NOT exact leaves (the file
+// comment names both; the other is an element's own radius): it is a sine, so
 // its caller (survey.go's revolveWall) proves it from a certified trig
 // interval and hands it over as a boundedScalar. Every wedge-derived radius
 // composes that bound through the same bounded arithmetic the rest of the file
@@ -734,13 +758,15 @@ func (k *wallKernel) generate(budget *workBudget, visit func(diskCand) error) er
 		}
 	}
 
-	// Concentric whole-arc disks: the element's own recorded radius, exact.
+	// Concentric whole-arc disks: the element's own radius, under the
+	// element's own bound on it — zero for a stated or recorded radius, the
+	// hypot bracket for an ArcSeg-derived one.
 	for _, e := range k.elems {
 		if err := wallBudgetStep(budget); err != nil {
 			return err
 		}
 		if e.kind == surveyArc && e.matInside {
-			add(e.qx, e.qy, e.rr, 0)
+			add(e.qx, e.qy, e.rr, e.rrBound)
 			if visitErr != nil {
 				return visitErr
 			}
@@ -884,7 +910,7 @@ func (k *wallKernel) lineArcCands(l, a surveyElem, add func(x, y, r, rBound floa
 		}
 		t := (sgn*a.rr - e) / den
 		if t > 0 {
-			numBS := boundedSub(exactScalar(sgn*a.rr), eBS)
+			numBS := boundedSub(boundedMul(exactScalar(sgn), a.rrBS()), eBS)
 			tBS := boundedQuotient(numBS.value, numBS.bound, den, 0)
 			add(fx+t*l.nx, fy+t*l.ny, t, tBS.bound)
 		}
@@ -909,7 +935,7 @@ func (k *wallKernel) lineArcCands(l, a surveyElem, add func(x, y, r, rBound floa
 		denBS := boundedAdd(exactScalar(1), ndotBS)
 		r := (l.nx*(a.qx-l.ax) + l.ny*(a.qy-l.ay) + s*a.rr*ndot) / den
 		if r > 0 {
-			numBS := boundedAdd(eBS, boundedMul(exactScalar(s*a.rr), ndotBS))
+			numBS := boundedAdd(eBS, boundedMul(boundedMul(exactScalar(s), a.rrBS()), ndotBS))
 			rBS := boundedQuotient(numBS.value, numBS.bound, denBS.value, denBS.bound)
 			add(a.qx+(s*a.rr-r)*ux, a.qy+(s*a.rr-r)*uy, r, rBS.bound)
 		}
@@ -924,14 +950,20 @@ func (k *wallKernel) arcArcCands(a, b surveyElem, add func(x, y, r, rBound float
 	d := dBS.value
 	sa, sb := a.matSign(), b.matSign()
 	if d <= survTiny*k.scale {
-		// Concentric: the family disk at each arc's own angular midpoint —
-		// both terms the element's own recorded radii, exact.
-		r := math.Abs(a.rr-b.rr) / 2
+		// Concentric: the family disk at each arc's own angular midpoint. The
+		// annulus half-width is |Ra − Rb|/2, and NEITHER step is exact — the
+		// difference of two radii rounds outside the Sterbenz range, and each
+		// radius carries whatever bound its own element states — so the whole
+		// chain runs through the bounded arithmetic. The halving is exact, but
+		// boundedQuotient carries the difference's bound through it.
+		diffBS := boundedAbs(boundedSub(a.rrBS(), b.rrBS()))
+		rBS := boundedQuotient(diffBS.value, diffBS.bound, 2, 0)
+		r := rBS.value
 		m := (a.rr + b.rr) / 2
 		for _, e := range []surveyElem{a, b} {
 			lo, hi := e.arcRange()
 			th := (lo + hi) / 2
-			add(a.qx+m*math.Cos(th), a.qy+m*math.Sin(th), r, 0)
+			add(a.qx+m*math.Cos(th), a.qy+m*math.Sin(th), r, rBS.bound)
 		}
 		return
 	}
@@ -948,7 +980,10 @@ func (k *wallKernel) arcArcCands(a, b surveyElem, add func(x, y, r, rBound float
 				continue
 			}
 			t := ea * (a.rr - sa*r)
-			numBS := boundedSub(dBS, exactScalar(ea*a.rr+eb*b.rr))
+			numBS := boundedSub(dBS, boundedAdd(
+				boundedMul(exactScalar(ea), a.rrBS()),
+				boundedMul(exactScalar(eb), b.rrBS()),
+			))
 			rBS := boundedQuotient(numBS.value, numBS.bound, den, 0)
 			add(a.qx+t*ux, a.qy+t*uy, r, rBS.bound)
 		}
@@ -958,13 +993,20 @@ func (k *wallKernel) arcArcCands(a, b surveyElem, add func(x, y, r, rBound float
 	_, cosAStarBS := radianTrigBounds(math.Pi - k.alpha)
 	cosThBS := boundedMul(exactScalar(sa*sb), cosAStarBS)
 	// d² = Da² + Db² − 2·Da·Db·cosθ with Da = Ra − sa·r, Db = Rb − sb·r.
+	raBS, rbBS := a.rrBS(), b.rrBS()
 	ABS := boundedSub(exactScalar(2), boundedMul(exactScalar(2*sa*sb), cosThBS))
 	BBS := boundedAdd(
-		boundedAdd(exactScalar(-2*a.rr*sa), exactScalar(-2*b.rr*sb)),
-		boundedMul(exactScalar(2*(a.rr*sb+b.rr*sa)), cosThBS),
+		boundedAdd(boundedMul(exactScalar(-2*sa), raBS), boundedMul(exactScalar(-2*sb), rbBS)),
+		boundedMul(boundedMul(exactScalar(2), boundedAdd(
+			boundedMul(exactScalar(sb), raBS),
+			boundedMul(exactScalar(sa), rbBS),
+		)), cosThBS),
 	)
 	CBS := boundedSub(
-		boundedAdd(exactScalar(a.rr*a.rr+b.rr*b.rr), boundedMul(exactScalar(-2*a.rr*b.rr), cosThBS)),
+		boundedAdd(
+			boundedAdd(boundedMul(raBS, raBS), boundedMul(rbBS, rbBS)),
+			boundedMul(boundedMul(exactScalar(-2), boundedMul(raBS, rbBS)), cosThBS),
+		),
 		boundedMul(dBS, dBS),
 	)
 	for _, rBS := range quadRootsBounded(ABS, BBS, CBS) {
@@ -1033,7 +1075,7 @@ func (k *wallKernel) vertexElemCands(v [2]float64, e surveyElem, add func(x, y, 
 			}
 			r := (sgn*e.rr - d) / den
 			if r > 0 {
-				numBS := boundedSub(exactScalar(sgn*e.rr), dBS)
+				numBS := boundedSub(boundedMul(exactScalar(sgn), e.rrBS()), dBS)
 				rBS := boundedQuotient(numBS.value, numBS.bound, den, 0)
 				add(v[0]+ev*r*ux, v[1]+ev*r*uy, r, rBS.bound)
 			}
@@ -1043,8 +1085,9 @@ func (k *wallKernel) vertexElemCands(v [2]float64, e surveyElem, add func(x, y, 
 	_, cosAStarBS := radianTrigBounds(aStar)
 	cosThBS := boundedMul(exactScalar(-s), cosAStarBS)
 	ABS := boundedAdd(exactScalar(2), boundedMul(exactScalar(2*s), cosThBS))
-	BBS := boundedMul(exactScalar(-2*e.rr), boundedAdd(exactScalar(s), cosThBS))
-	CBS := boundedSub(exactScalar(e.rr*e.rr), boundedMul(dBS, dBS))
+	reBS := e.rrBS()
+	BBS := boundedMul(boundedMul(exactScalar(-2), reBS), boundedAdd(exactScalar(s), cosThBS))
+	CBS := boundedSub(boundedMul(reBS, reBS), boundedMul(dBS, dBS))
 	for _, rBS := range quadRootsBounded(ABS, BBS, CBS) {
 		r := rBS.value
 		if r <= 0 {
@@ -1077,11 +1120,11 @@ func (k *wallKernel) vertexVertexCands(a, b [2]float64, add func(x, y, r, rBound
 
 // wedgeCands: the wedge-tangent minima for a partial revolve's cap-cap
 // reading — the disk tangent to one element with the wedge constraint
-// active (r = wedgeS·y), at its own closed-form ρ-critical. wedgeS is the one
-// kernel input that carries its own bound (a sine its caller proved from a
-// certified trig interval), so BOTH quotient paths below compose that bound
-// through their numerator and denominator rather than reading the sine as an
-// exact leaf.
+// active (r = wedgeS·y), at its own closed-form ρ-critical. wedgeS carries its
+// own bound (a sine its caller proved from a certified trig interval), so BOTH
+// quotient paths below compose that bound through their numerator and
+// denominator rather than reading the sine as an exact leaf, and the arc path
+// reads the element's radius through rrBS for the same reason.
 func (k *wallKernel) wedgeCands(budget *workBudget, visit func(diskCand) error) error {
 	sBS := k.wedgeS
 	s := sBS.value
@@ -1120,7 +1163,7 @@ func (k *wallKernel) wedgeCands(budget *workBudget, visit func(diskCand) error) 
 				continue
 			}
 			sinBS, _ := radianTrigBounds(th)
-			numBS := boundedMul(sBS, boundedAdd(exactScalar(e.qy), boundedMul(exactScalar(e.rr), sinBS)))
+			numBS := boundedMul(sBS, boundedAdd(exactScalar(e.qy), boundedMul(e.rrBS(), sinBS)))
 			denBS := boundedAdd(exactScalar(1), boundedMul(boundedMul(sBS, exactScalar(se)), sinBS))
 			if math.Abs(denBS.value) < survTiny {
 				continue
@@ -1145,11 +1188,13 @@ func (k *wallKernel) wedgeCands(budget *workBudget, visit func(diskCand) error) 
 // boundedScalar, not a bare float: the element, vertex and wedge coordinates
 // the equations are built from are exact leaves, but forming a coefficient
 // from them rounds (a product of two coordinates, a sum of three such
-// products), and the wedge's own coefficient is a sine that arrives already
-// bounded. solveTriple/solve3Linear/solveParallelPair compose those bounds
-// through every determinant, numerator and division they perform, so a
-// triple's published radius interval speaks for the WHOLE chain from
-// coefficient construction down to the final quotient.
+// products); an arc element's radius is not even a leaf, since it arrives with
+// its own bound (surveyElem.rrBound); and the wedge's own coefficient is a
+// sine that arrives already bounded.
+// solveTriple/solve3Linear/solveParallelPair compose those bounds through
+// every determinant, numerator and division they perform, so a triple's
+// published radius interval speaks for the WHOLE chain from coefficient
+// construction down to the final quotient.
 type circEq struct {
 	quad        bool
 	g, h, kk, m boundedScalar
@@ -1176,7 +1221,7 @@ func (k *wallKernel) tripleEquations(budget *workBudget) ([]circEq, error) {
 			continue
 		}
 		s := el.matSign()
-		qx, qy, rr := exactScalar(el.qx), exactScalar(el.qy), exactScalar(el.rr)
+		qx, qy, rr := exactScalar(el.qx), exactScalar(el.qy), el.rrBS()
 		eqs = append(eqs, circEq{
 			quad: true,
 			g:    boundedMul(exactScalar(-2), qx),

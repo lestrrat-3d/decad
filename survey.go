@@ -168,7 +168,15 @@ func revolveLoops(budget *workBudget, rp revolvePayload) ([][]sideWalk, error) {
 func walkElem(w segmentWalk) (surveyElem, bool) {
 	switch w.kind {
 	case walkCircular:
-		return arcElem(w.cU, w.cV, w.radius, w.th0, w.th1, w.closed)
+		e, ok := arcElem(w.cU, w.cV, w.radius, w.th0, w.th1, w.closed)
+		if !ok {
+			return e, false
+		}
+		// The walk's radius is not always a recorded number, so the element
+		// takes the walk's own proven bound on it rather than reading it as an
+		// exact leaf (extrude.go's arcWalkRadiusBound).
+		e.rrBound = w.radiusBound
+		return e, true
 	case walkLine:
 		return lineElem(w.startU, w.startV, w.endU, w.endV)
 	default:
@@ -184,6 +192,9 @@ func mirrorElem(e surveyElem) surveyElem {
 		return m
 	}
 	m, _ := arcElem(e.qx, -e.qy, e.rr, -e.th1, -e.th0, e.closed)
+	// A reflection moves no radius, so the mirrored element states the same
+	// radius under the same proven bound.
+	m.rrBound = e.rrBound
 	return m
 }
 
@@ -679,14 +690,13 @@ func prismMinRadius(pp prismPayload) (radiusOutcome, bool) {
 	if err != nil {
 		return radiusOutcome{}, false
 	}
-	recLoops := append([]LoopRecord{pp.profile.Outer}, pp.profile.Holes...)
 	best := math.Inf(1)
 	bestBound := 0.0
-	for li, loop := range loops {
+	for _, loop := range loops {
 		for _, w := range loop {
 			if w.isCircular() && w.th1 < w.th0 && w.radius < best {
 				best = w.radius
-				bestBound = concaveWalkRadiusBound(recLoops[li], w)
+				bestBound = w.radiusBound
 			}
 		}
 	}
@@ -697,43 +707,6 @@ func prismMinRadius(pp prismPayload) (radiusOutcome, bool) {
 		return radiusOutcome{}, false
 	}
 	return radiusOutcome{reading: &best, bound: bestBound, ok: true}, true
-}
-
-// concaveWalkRadiusBound is the proven bound on one concave walk's own
-// radius: a CircleSeg's radius is the record's own millimetre number
-// (extrude.go's walkOf, CircleSeg arm), so it is exact; an ArcSeg's is
-// math.Hypot(Start−Center) (extrude.go's ArcSeg arm), so it carries the same
-// rational sqrt bracket circularLengthInterval already reads that segment
-// kind's radius through — computed here directly rather than through that
-// function's length-scaled result. A coalesced walk's own several original
-// segments share one center and radius by construction, so its first
-// original segment speaks for the whole walk.
-func concaveWalkRadiusBound(loop LoopRecord, w sideWalk) float64 {
-	if len(w.segs) == 0 {
-		return math.Inf(1)
-	}
-	idx := w.segs[0]
-	if idx < 0 || idx >= len(loop.Segments) {
-		return math.Inf(1)
-	}
-	seg, err := normalizeSegment(loop.Segments[idx])
-	if err != nil {
-		return math.Inf(1)
-	}
-	arc, ok := seg.(ArcSeg)
-	if !ok {
-		// A CircleSeg (or anything else this survey ever admits as a
-		// concave walk): the record's own millimetre radius, exact.
-		return 0
-	}
-	dx := exactCoordinateDelta(arc.Start.U, arc.Center.U)
-	dy := exactCoordinateDelta(arc.Start.V, arc.Center.V)
-	r2 := new(big.Rat).Add(new(big.Rat).Mul(dx, dx), new(big.Rat).Mul(dy, dy))
-	rLo, rHi := ratSqrtDown(r2), ratSqrtUp(r2)
-	if isNonFinite(rLo) || isNonFinite(rHi) {
-		return math.Inf(1)
-	}
-	return math.Max(upRound(w.radius-rLo), upRound(rHi-w.radius))
 }
 
 // revolveMinRadius is the tightest concave radius over a revolved body's
@@ -782,7 +755,10 @@ func revolveMinRadius(rp revolvePayload) (radiusOutcome, bool) {
 				sigma = -1
 			}
 			if sigma < 0 {
-				take(w.radius, 0) // the meridian's own recorded radius, exact
+				// The meridian's own radius, with the walk's own proven bound
+				// on it (extrude.go's arcWalkRadiusBound): zero for a recorded
+				// CircleSeg radius, positive for an ArcSeg's math.Hypot.
+				take(w.radius, w.radiusBound)
 			}
 			lo, hi := math.Min(w.th0, w.th1), math.Max(w.th0, w.th1)
 			cands := []float64{lo, hi}
@@ -802,7 +778,7 @@ func revolveMinRadius(rp revolvePayload) (radiusOutcome, bool) {
 				if nrBS.value >= -survAngTol {
 					continue
 				}
-				rhoBS := boundedAdd(exactScalar(w.cV), boundedMul(exactScalar(w.radius), sinBS))
+				rhoBS := boundedAdd(exactScalar(w.cV), boundedMul(measuredScalar(w.radius, w.radiusBound), sinBS))
 				negNrBS := measuredScalar(-nrBS.value, nrBS.bound)
 				resultBS := boundedQuotient(rhoBS.value, rhoBS.bound, negNrBS.value, negNrBS.bound)
 				take(resultBS.value, resultBS.bound)
