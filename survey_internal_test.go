@@ -858,3 +858,118 @@ func TestWallKernelFitGateReadsTheCandidateInterval(t *testing.T) {
 	require.Less(t, out.span-out.spanBound, fitMax,
 		`the interval must reach under the sweep, or the gate has nothing to straddle`)
 }
+
+// TestWallKernelStraddledLeadingCoefficientStaysDecided pins the one denominator
+// that can silence a whole survey: an Apollonius triple whose 2A the arithmetic
+// cannot separate from zero. boundedQuotient answers +Inf there, the aggregate
+// refuses an unbounded candidate, and the survey that would have published a
+// number reads undecided instead. quadRootsBounded answers such a triple with
+// the degenerate linear root −C/B, whose own denominator is well separated, so
+// the root a straddling A is meant to recover arrives bounded.
+//
+// The fixture is at KERNEL level deliberately. The family needs a determinant
+// near enough to singular to throw the affine centre out to 1e19–1e21, and a
+// centre that far away is outside every closed section a body can be built
+// from, so the containment scan drops the candidate before it reaches the
+// aggregate: the defect is unreachable through the public API and only the
+// kernel's own door exposes it. Three material-inside circles with
+// near-collinear centres put the triple's leading coefficient at
+// 3.4e+24 ± 4.8e+24 while the pair determinant is still admitted, which is
+// exactly that state.
+func TestWallKernelStraddledLeadingCoefficientStaysDecided(t *testing.T) {
+	elems := func() []surveyElem {
+		out := make([]surveyElem, 0, 3)
+		for _, c := range [][3]float64{
+			{8255.0884454771622, 4195.7682375914947, 149.98644153683318},
+			{2475.9000902096891, -11681.738286473166, 131.34705082306061},
+			{-959.14779827151824, -21119.048840666175, 104.09453452133486},
+		} {
+			e, ok := arcElem(c[0], c[1], c[2], 0, 2*math.Pi, true)
+			require.True(t, ok)
+			out = append(out, e)
+		}
+		return out
+	}
+
+	k, err := newWallKernelBudget(nil, elems(), nil, nil,
+		15*math.Pi/180, exactScalar(0), false, math.Inf(1))
+	require.NoError(t, err)
+	out, err := k.runBudget(nil)
+	require.NoError(t, err)
+
+	require.True(t, out.ok, `a straddling leading coefficient must not silence the survey`)
+	require.True(t, out.hasSpan)
+	// Each circle's own concentric disk is the reading: the smallest circle's
+	// diameter is the least spanning one, the largest circle's radius the
+	// greatest empty one. Both are stated radii, so both readings are exact.
+	require.Equal(t, 2*104.09453452133486, out.span)
+	require.Equal(t, 0.0, out.spanBound)
+	require.Equal(t, 149.98644153683318, out.inradius)
+	require.Equal(t, 0.0, out.inradiusBound)
+
+	// The discriminating half: the defect is an admitted candidate carrying no
+	// finite bound, which is what the aggregate refuses. Every candidate this
+	// boundary admits must now arrive with one.
+	k2, err := newWallKernelBudget(nil, elems(), nil, nil,
+		15*math.Pi/180, exactScalar(0), false, math.Inf(1))
+	require.NoError(t, err)
+	require.NoError(t, k2.generate(nil, func(c diskCand) error {
+		_, empty, ok, err := k2.validate(c, nil)
+		require.NoError(t, err)
+		require.True(t, ok)
+		if !empty {
+			return nil
+		}
+		require.False(t, math.IsInf(c.rBound, 1),
+			`an admitted candidate with no finite bound leaves the whole survey undecided`)
+		return nil
+	}))
+}
+
+// TestSolveTripleStraddledDeterminantDropsOnlyItsOwnCandidate pins the second
+// place a vanishing denominator can silence a survey: the Apollonius triple
+// whose two linear equations the arithmetic cannot separate from parallel. The
+// straddle runs BOTH generators, which is the sound posture — the pair may
+// really be parallel, and it may really not be — but the independent branch
+// divides the affine centre by that same determinant, so boundedQuotient hands
+// it +Inf and the candidate it builds would refuse the whole survey through
+// runBudget's aggregate. That one candidate is dropped, and only it.
+//
+// The fixture is two facing lines 10 mm apart, the second a hair off parallel
+// under a bound its own arithmetic cannot resolve, plus a circular hole between
+// them. solveParallelPair's reading of the same triple — the 5 mm disk — must
+// still arrive, which is what makes this a local refusal rather than a missing
+// wall.
+func TestSolveTripleStraddledDeterminantDropsOnlyItsOwnCandidate(t *testing.T) {
+	l1 := circEq{a: exactScalar(1), b: exactScalar(0), e: exactScalar(-1), f: exactScalar(0)}
+	l2 := circEq{
+		a: exactScalar(-1),
+		b: measuredScalar(1e-13, 1e-9),
+		e: exactScalar(-1),
+		f: exactScalar(10),
+	}
+	// A hole of radius 2 centred at (5, 5): cx² + cy² − r² − 10cx − 10cy − 4r + 46 = 0.
+	hole := circEq{
+		quad: true,
+		g:    exactScalar(-10),
+		h:    exactScalar(-10),
+		kk:   exactScalar(-4),
+		m:    exactScalar(46),
+	}
+
+	require.Equal(t, survStraddle,
+		admitMagnitudeAbove(boundedSub(boundedMul(l1.a, l2.b), boundedMul(l2.a, l1.b)), 1e-12),
+		`the pair's determinant must straddle, or the fall-through is untested`)
+
+	var radii []float64
+	solveTriple([3]circEq{l1, l2, hole}, 1, func(_, _, r, rBound float64) {
+		require.False(t, math.IsInf(rBound, 1),
+			`a candidate divided out of a straddled determinant carries no bound and must not be emitted`)
+		radii = append(radii, r)
+	})
+	require.NotEmpty(t, radii,
+		`the parallel generator's own reading of this triple must survive the refusal`)
+	for _, r := range radii {
+		require.InDelta(t, 5.0, r, 1e-9, `the pair fixes the disk at half its own separation`)
+	}
+}

@@ -105,28 +105,49 @@ func radianTrigBounds(x float64) (boundedScalar, boundedScalar) {
 // answers +Inf exactly where that amplification can no longer be bounded.
 //
 // Every branch here is taken on the coefficient's own PROVEN interval
-// (admitMagnitudeAbove/admitBelow), never on its held value, and every
-// three-valued answer resolves the same way: toward emitting the root. The
-// linear branch is taken only for a leading coefficient PROVEN degenerate, so
-// a straddling A goes to the quadratic form, which still recovers the linear
-// root — under a wide bound its own cancelling numerator earns. The
-// discriminant likewise discards the pair only when its whole interval is
-// proven negative; an interval crossing zero has real roots this kernel may not
-// throw away, so it goes to boundedSqrt, which clamps the held operand at zero
-// for the evaluation while keeping the interval's own upper end.
+// (admitMagnitudeAbove/admitBelow), never on its held value. A DISCRIMINANT
+// that straddles resolves toward emitting the root: it discards the pair only
+// when its whole interval is proven negative, and an interval crossing zero has
+// real roots this kernel may not throw away, so it goes to boundedSqrt, which
+// clamps the held operand at zero for the evaluation while keeping the
+// interval's own upper end.
+//
+// A DENOMINATOR that straddles resolves the other way, and it has to. The
+// quadratic form divides by 2A, so an A whose interval spans zero leaves
+// boundedQuotient no positive clearance and it answers +Inf — not a wide bound
+// but no bound at all, and a candidate carrying one silences the whole survey
+// through runBudget's aggregate. What a straddling A really says is that the
+// equation is linear to within its own error, so the root this kernel wants is
+// the degenerate one, −C/B, whose own denominator is generally well separated:
+// that root is emitted here instead of the pair the vanishing denominator would
+// have produced. Where neither 2A nor B can be separated from zero the triple is
+// dropped, on the dependency argument solve3Linear's doc comment already writes
+// down — coefficients whose arithmetic cannot separate a denominator from zero
+// name no isolated disk, and the family they describe reaches the sink through
+// the pair criticals and solveParallelPair. The refusal stays local to the
+// triple: runBudget's aggregate still refuses any unbounded candidate it is
+// handed, which is what stops a survey publishing an interval it cannot prove.
 func quadRootsBounded(A, B, C boundedScalar) []boundedScalar {
-	if admitMagnitudeAbove(A, survTiny) == survReject {
-		if admitMagnitudeAbove(B, survTiny) == survReject {
+	// The degenerate linear root, emitted wherever the quadratic form's own
+	// denominator cannot be separated from zero.
+	linearRoot := func() []boundedScalar {
+		if admitMagnitudeAbove(B, survTiny) != survAdmit {
 			return nil
 		}
 		return []boundedScalar{boundedQuotient(-C.value, C.bound, B.value, B.bound)}
+	}
+	if admitMagnitudeAbove(A, survTiny) == survReject {
+		return linearRoot()
 	}
 	disc := boundedSub(boundedMul(B, B), boundedMul(exactScalar(4), boundedMul(A, C)))
 	if admitBelow(disc, 0) == survAdmit {
 		return nil
 	}
-	s := boundedSqrt(disc)
 	twoA := boundedMul(exactScalar(2), A)
+	if admitMagnitudeAbove(twoA, survTiny) != survAdmit {
+		return linearRoot()
+	}
+	s := boundedSqrt(disc)
 	negB := measuredScalar(-B.value, B.bound)
 	num1 := boundedSub(negB, s)
 	num2 := boundedAdd(negB, s)
@@ -1455,6 +1476,19 @@ func solveTriple(eqs [3]circEq, scale float64, add func(x, y, r, rBound float64)
 	pyBS := boundedDiv(boundedAdd(boundedMul(boundedNeg(l1.a), l2.f), boundedMul(l2.a, l1.f)), detBS)
 	qxBS := boundedDiv(boundedAdd(boundedMul(boundedNeg(l1.e), l2.b), boundedMul(l2.e, l1.b)), detBS)
 	qyBS := boundedDiv(boundedAdd(boundedMul(boundedNeg(l1.a), l2.e), boundedMul(l2.a, l1.e)), detBS)
+	// The same denominator guard quadRootsBounded takes, read off the four
+	// divisions themselves: boundedQuotient answers +Inf exactly where the
+	// determinant's own interval left it no positive clearance, so a P or Q with
+	// no finite bound says this pair is not separated from parallel and the
+	// affine centre it would carry into the quadratic is not a disk anyone can
+	// state. Dropping THIS generator's candidate here is local — the pair's own
+	// reading came from solveParallelPair a few lines above, which is why the
+	// straddle runs both — and it is what keeps one straddled triple from
+	// handing runBudget's aggregate an unbounded candidate and leaving the whole
+	// survey undecided.
+	if isNonFinite(pxBS.bound) || isNonFinite(pyBS.bound) || isNonFinite(qxBS.bound) || isNonFinite(qyBS.bound) {
+		return
+	}
 	ABS := boundedSub(boundedAdd(boundedMul(qxBS, qxBS), boundedMul(qyBS, qyBS)), exactScalar(1))
 	BBS := boundedAdd(
 		boundedMul(exactScalar(2), boundedAdd(boundedMul(pxBS, qxBS), boundedMul(pyBS, qyBS))),
