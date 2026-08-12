@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"math/rand/v2"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
@@ -665,9 +666,10 @@ func TestWallSolidCylinder(t *testing.T) {
 
 // TestMinRadiusAnnularRevolveStaysExact pins the other public reading whose
 // whole chain is exactly representable: the annular cylinder's bore. Its
-// meridian is a straight wall whose tangent reaches boundedSqrt through
-// boundedHypot as two exact leaves, and the parallel circle's radius is the
-// recorded 5 mm, so the survey publishes it Exact with a zero bound.
+// meridian is an axis-parallel wall between recorded coordinates whose
+// difference is itself representable, so the tangent's own bound is zero, and
+// the parallel circle's radius is the recorded 5 mm: the survey publishes it
+// Exact with a zero bound.
 func TestMinRadiusAnnularRevolveStaysExact(t *testing.T) {
 	s, p := annularSketch(t)
 	doc := decad.New()
@@ -1140,6 +1142,155 @@ func TestRevolveMinRadiusArcRadiusBound(t *testing.T) {
 	sqrt2 := new(big.Float).SetPrec(prec).Sqrt(new(big.Float).SetPrec(prec).SetInt64(2))
 	truth, _ := sqrt2.Rat(nil)
 	requireContains(t, truth, value, bound)
+}
+
+// coneBore is the meridian of a conical bore: an inclined inner wall from
+// (u0, v0) to (u1, v1), closed into a trapezoid against the outer wall at
+// vTop. Revolved about the u axis it is a hollow body whose one concave face
+// is that inclined wall, so MinRadius reads the wall's parallel circle and
+// nothing else.
+func coneBore(t *testing.T, u0, v0, u1, v1, vTop float64) *decad.Document {
+	t.Helper()
+	s, p := polygonSketch(t, [][2]float64{{u0, v0}, {u1, v1}, {u1, vTop}, {u0, vTop}})
+	doc := decad.New()
+	_, err := doc.Revolve(s, p, uAxis, decad.FullRevolution{})
+	require.NoError(t, err)
+	return doc
+}
+
+// coneBoreTruth is the parallel-circle radius a conical bore denotes, at 300
+// bits: ρ·|t| / |t_z| for the meridian tangent t, with ρ the wall's smaller
+// recorded radius. Every difference is formed over the EXACT recorded
+// endpoints, which is the whole point — the evaluator's own tangent is the
+// float difference of the same two numbers, and the gap between the two is
+// what the published bound has to cover.
+func coneBoreTruth(u0, v0, u1, v1 float64) *big.Rat {
+	const prec = 300
+	at := func(x float64) *big.Float { return new(big.Float).SetPrec(prec).SetFloat64(x) }
+	du := new(big.Float).SetPrec(prec).Sub(at(u1), at(u0))
+	dv := new(big.Float).SetPrec(prec).Sub(at(v1), at(v0))
+	norm := new(big.Float).SetPrec(prec).Sqrt(new(big.Float).SetPrec(prec).Add(
+		new(big.Float).SetPrec(prec).Mul(du, du),
+		new(big.Float).SetPrec(prec).Mul(dv, dv),
+	))
+	radius := new(big.Float).SetPrec(prec).Quo(
+		new(big.Float).SetPrec(prec).Mul(at(math.Min(v0, v1)), norm),
+		du,
+	)
+	truth, _ := radius.Abs(radius).Rat(nil)
+	return truth
+}
+
+// requireRoundedDifference asserts that the float difference b − a is NOT the
+// exact difference of the two recorded numbers. A fixture whose subtraction
+// lands exactly proves nothing about a tangent's bound, because there is no
+// error there to charge.
+func requireRoundedDifference(t *testing.T, a, b float64) {
+	t.Helper()
+	exact := new(big.Rat).Sub(new(big.Rat).SetFloat64(b), new(big.Rat).SetFloat64(a))
+	require.NotEqual(t, 0, new(big.Rat).SetFloat64(b-a).Cmp(exact),
+		`the endpoint subtraction must round, or this fixture proves nothing`)
+}
+
+// requireMinRadius reads a body report's MinRadius in millimetres.
+func requireMinRadius(t *testing.T, br *decad.BodyReport) (float64, float64) {
+	t.Helper()
+	require.NotNil(t, br.MinRadius)
+	value, err := br.MinRadius.Value.In(units.Millimeter)
+	require.NoError(t, err)
+	bound, err := br.MinRadius.Bound.In(units.Millimeter)
+	require.NoError(t, err)
+	return value, bound
+}
+
+// TestRevolveMinRadiusChargesTheWalkTangent pins the parallel-circle arm's
+// other computed input. The arm divides the meridian tangent by its own
+// length, and that tangent is NOT a recorded coordinate: extrude.go's walkOf
+// forms it as u1−u0, v1−v0, a float subtraction of two recorded coordinates
+// that rounds whenever the two sit at different exponents. Reading it as an
+// exact leaf — a bare Hypot over the components, and a zero numerator bound on
+// the quotient — leaves that rounding uncharged, and the published interval
+// then sits entirely above the radius the record denotes.
+//
+// The axis is the sketch u axis through the origin, so the frame's own
+// re-expression multiplies by 1 and 0 only and contributes nothing: every
+// millimetre of the gap belongs to the tangent.
+func TestRevolveMinRadiusChargesTheWalkTangent(t *testing.T) {
+	const (
+		u0   = 2.680472546443363
+		v0   = 14.702102074947762
+		u1   = 7.9019486609898166
+		v1   = 42.961922322861071
+		vTop = 80
+	)
+	requireRoundedDifference(t, u0, u1)
+	requireRoundedDifference(t, v0, v1)
+
+	report, err := coneBore(t, u0, v0, u1, v1, vTop).Verify(t.Context(), decad.WithMinRadius())
+	require.NoError(t, err)
+	br := report.Bodies[0]
+	value, bound := requireMinRadius(t, br)
+
+	truth := coneBoreTruth(u0, v0, u1, v1)
+	t.Logf("min radius %.20g ± %.20g (%s); truth %s",
+		value, bound, br.MinRadius.Exactness,
+		new(big.Float).SetPrec(300).SetRat(truth).Text('g', 21))
+	require.Equal(t, decad.Approximate, br.MinRadius.Exactness)
+	requireContains(t, truth, value, bound)
+}
+
+// coneTangentSlack is the relative displacement a conical bore's parallel-circle
+// radius inherits from its walk tangent alone: (dv²/|t|²)·(δ_v − δ_u), where
+// each δ is the signed relative gap between the exact difference of two
+// recorded endpoints and the float subtraction the walk holds instead. It is
+// the derivative of ρ·|t|/|t_z| in the two tangent components, so it says how
+// much of the reading rides on the one input under test — and nothing about
+// how much of it the survey charges.
+func coneTangentSlack(u0, v0, u1, v1 float64) float64 {
+	delta := func(a, b float64) float64 {
+		held := new(big.Rat).SetFloat64(b - a)
+		exact := new(big.Rat).Sub(new(big.Rat).SetFloat64(b), new(big.Rat).SetFloat64(a))
+		gap, _ := new(big.Rat).Quo(new(big.Rat).Sub(exact, held), held).Float64()
+		return gap
+	}
+	du, dv := u1-u0, v1-v0
+	return dv * dv / (du*du + dv*dv) * (delta(v0, v1) - delta(u0, u1))
+}
+
+// TestRevolveMinRadiusSweepEnclosesConeBoreTruths is the same rule over a
+// population rather than one witness. A subtraction rounds by at most half an
+// ulp, so a bore drawn at random leaves the uncharged tangent well under the
+// survey's other roundings and decides nothing either way; the draw is
+// therefore filtered to the bores that carry most of the displacement the two
+// components can produce together, which is where the reading stands or falls.
+// No published interval may exclude the radius its own recorded meridian
+// denotes.
+func TestRevolveMinRadiusSweepEnclosesConeBoreTruths(t *testing.T) {
+	// Half of what the two half-ulp roundings reach together (2·2⁻⁵³), so the
+	// population is the near-worst tail rather than the average draw.
+	const worstSlack = 1.0e-16
+	rng := rand.New(rand.NewPCG(0x5eed, 0x717))
+	kept, drawn := 0, 0
+	for kept < 128 {
+		drawn++
+		require.Less(t, drawn, 1<<20, `the filtered population must be reachable`)
+		u0 := 0.5 + 2.5*rng.Float64()
+		u1 := 9 + 21*rng.Float64()
+		v0 := 5 + 15*rng.Float64()
+		v1 := 40 + 50*rng.Float64()
+		vTop := v1 + 5 + 25*rng.Float64()
+		if math.Abs(coneTangentSlack(u0, v0, u1, v1)) < worstSlack {
+			continue
+		}
+		kept++
+		t.Run(fmt.Sprintf("case=%d", kept), func(t *testing.T) {
+			report, err := coneBore(t, u0, v0, u1, v1, vTop).Verify(t.Context(), decad.WithMinRadius())
+			require.NoError(t, err)
+			br := report.Bodies[0]
+			value, bound := requireMinRadius(t, br)
+			requireContains(t, coneBoreTruth(u0, v0, u1, v1), value, bound)
+		})
+	}
 }
 
 // The rival-candidate fixtures below pin docs/payload-verification-design.md

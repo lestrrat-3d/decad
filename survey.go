@@ -870,13 +870,18 @@ func revolveMinRadius(rp revolvePayload) (radiusOutcome, bool) {
 				continue
 			}
 			if !w.isCircular() {
-				// Neither w.tanInU/V nor w.startV/endV carries its own bound
-				// (they are the walk's own recorded coordinates, read as
-				// exact leaves throughout this survey); the composition
-				// below — a Hypot and two quotients — is what this arm's
-				// own arithmetic contributes.
-				lBS := boundedHypot(w.tanInU, w.tanInV)
-				nrBS := boundedQuotient(-w.tanInU, 0, lBS.value, lBS.bound)
+				// The walk tangent is NOT a recorded coordinate: it is the
+				// difference of two of them, which the evaluator computed and
+				// which extrude.go's lineWalkTangentBound proved a bound on.
+				// Both the length below and the normal component it divides
+				// take that bound — the numerator as much as the denominator,
+				// since the same rounded difference stands in both. Only
+				// w.startV/endV are read as exact leaves here, being recorded
+				// coordinates the axis frame re-expressed.
+				tanU := measuredScalar(w.tanInU, w.tanInBound)
+				tanV := measuredScalar(w.tanInV, w.tanInBound)
+				lBS := boundedNorm2(tanU, tanV)
+				nrBS := boundedQuotient(-w.tanInU, w.tanInBound, lBS.value, lBS.bound)
 				// survAngTol is the line this survey DECLARES, not a
 				// measurement: a wall within 1e-9 radians of parallel to the
 				// axis has a parallel-circle radius of at least 1e9·ρ, which is

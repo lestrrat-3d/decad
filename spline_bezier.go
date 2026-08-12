@@ -1123,41 +1123,66 @@ func point2Of(p ratPoint) (Point2, bool) {
 	return Point2{U: u, V: v}, true
 }
 
+// endTangents is a walk's pair of end tangent directions, each with the proven
+// error bound it carries on EITHER of its two components — the pair a
+// segmentWalk copies into tanIn/tanInBound and tanOut/tanOutBound.
+type endTangents struct {
+	inU, inV   float64
+	inBound    float64
+	outU, outV float64
+	outBound   float64
+}
+
 // freeformEndTangents returns the walk's tangent directions at its start and
 // end. A Bézier's derivative at an end is degree·(the adjacent control leg), so
-// these are exact directions read off the control net — no sampling, and no
+// the DIRECTION is an exact fact of the control net — no sampling, and no
 // normalization (a segmentWalk tangent is a direction, not a unit vector).
 //
+// The float64 the walk holds is not that exact fact, though: the leg is formed
+// over big.Rat and then rounded once on the way out, and a control point of an
+// ordinary rational curve is a ratio no float64 lands on. So each tangent
+// STATES its bound — the gap from the exact rational leg to the float that
+// stands for it, the wider component of the two — rather than passing the
+// rounding off as exactness.
+//
 // A reversed walk enters where the curve leaves, so both the order and the sign
-// of the two legs flip.
-func freeformEndTangents(spans []bezierSpan, reversed bool) (float64, float64, float64, float64, error) {
+// of the two legs flip. IEEE negation is exact, so each bound rides along with
+// the leg it belongs to.
+func freeformEndTangents(spans []bezierSpan, reversed bool) (endTangents, error) {
 	if len(spans) == 0 {
-		return 0, 0, 0, 0, fmt.Errorf(`%w: a converted free-form curve holds no span`, ErrDegenerate)
+		return endTangents{}, fmt.Errorf(`%w: a converted free-form curve holds no span`, ErrDegenerate)
 	}
 	first, last := spans[0], spans[len(spans)-1]
 	if len(first) < 2 || len(last) < 2 {
-		return 0, 0, 0, 0, fmt.Errorf(`%w: a converted free-form span holds fewer than two control points`, ErrDegenerate)
+		return endTangents{}, fmt.Errorf(`%w: a converted free-form span holds fewer than two control points`, ErrDegenerate)
 	}
-	leg := func(from, to ratPoint, degree int) (float64, float64, bool) {
+	leg := func(from, to ratPoint, degree int) (float64, float64, float64, bool) {
 		scale := big.NewRat(int64(degree), 1)
 		du := new(big.Rat).Mul(scale, new(big.Rat).Sub(to.u, from.u))
 		dv := new(big.Rat).Mul(scale, new(big.Rat).Sub(to.v, from.v))
 		u, _ := du.Float64()
 		v, _ := dv.Float64()
 		if isNonFinite(u) || isNonFinite(v) {
-			return 0, 0, false
+			return 0, 0, 0, false
 		}
-		return u, v, true
+		bound := math.Max(rationalFloatError(du, u), rationalFloatError(dv, v))
+		return u, v, bound, true
 	}
-	inU, inV, okIn := leg(first[0], first[1], len(first)-1)
-	outU, outV, okOut := leg(last[len(last)-2], last[len(last)-1], len(last)-1)
+	inU, inV, inBound, okIn := leg(first[0], first[1], len(first)-1)
+	outU, outV, outBound, okOut := leg(last[len(last)-2], last[len(last)-1], len(last)-1)
 	if !okIn || !okOut {
-		return 0, 0, 0, 0, fmt.Errorf(`%w: a free-form end tangent is not representable`, ErrNotFinite)
+		return endTangents{}, fmt.Errorf(`%w: a free-form end tangent is not representable`, ErrNotFinite)
 	}
 	if reversed {
-		return -outU, -outV, -inU, -inV, nil
+		return endTangents{
+			inU: -outU, inV: -outV, inBound: outBound,
+			outU: -inU, outV: -inV, outBound: inBound,
+		}, nil
 	}
-	return inU, inV, outU, outV, nil
+	return endTangents{
+		inU: inU, inV: inV, inBound: inBound,
+		outU: outU, outV: outV, outBound: outBound,
+	}, nil
 }
 
 // freeformControlExtent is an upper envelope on |u|+|v| over the curve, read

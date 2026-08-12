@@ -718,6 +718,16 @@ func (ax axisFrame) toAxis(u, v float64) (float64, float64) {
 // walk re-expresses one boundary walk in axis coordinates (the U fields
 // carry z, the V fields ρ), snapping an endpoint within snapTol onto the
 // axis so contact classification and vertex placement agree exactly.
+//
+// The re-expressed tangent keeps the bound the plane-local tangent proved
+// (tanInBound/tanOutBound): the rotation itself contributes error of its own,
+// through the frame's direction and its two rounded products, and that error is
+// the frame's rather than the walk's. It is charged nowhere here — the same
+// place the re-expressed endpoints leave it, since startV and endV come out of
+// toAxis carrying no bound at all — so a reading composed from these fields
+// speaks for the walk's own arithmetic under an exactly-stated frame. An axis
+// along a coordinate direction through the origin is that frame exactly: every
+// product is by 1 or 0 and nothing rounds.
 func (ax axisFrame) walk(w segmentWalk) segmentWalk {
 	out := w
 	out.startU, out.startV = ax.toAxis(w.startU, w.startV)
