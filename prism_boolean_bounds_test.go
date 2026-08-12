@@ -23,8 +23,10 @@ import (
 // discBody extrudes a radius-r circle centered at (cx, 0) into an h mm
 // prism, on the shared plane every fixture using it draws from. Every caller
 // centers its own y at 0 — the pair geometry these fixtures need only ever
-// varies along one axis — so this helper takes no separate cy.
-func discBody(t *testing.T, doc *decad.Document, cx, r, h float64) *decad.Body {
+// varies along one axis — so this helper takes no separate cy. It takes
+// testing.TB rather than *testing.T so a benchmark can build the same
+// fixture (boolean_test.go's BenchmarkCutCircularWasher).
+func discBody(t testing.TB, doc *decad.Document, cx, r, h float64) *decad.Body {
 	t.Helper()
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())

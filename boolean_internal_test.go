@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/lestrrat-3d/r3"
+	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
@@ -444,4 +445,198 @@ func TestPrepRefusesACollapsedOperandFacet(t *testing.T) {
 	}
 	_, err := prepBoolMeshContext(t.Context(), m, []int{0})
 	require.ErrorIs(t, err, ErrUnsupported, `three collinear corners span no plane`)
+}
+
+// internalDiscBody extrudes a radius-r circle centered on the origin into an
+// h mm prism — the internal-package twin of prism_boolean_bounds_test.go's
+// discBody, needed here because boolMesh and its prep helpers are unexported
+// and so this fixture cannot be built from the decad_test package. It takes
+// testing.TB so a benchmark can build the same fixture as a test.
+func internalDiscBody(t testing.TB, doc *Document, r, h float64) *Body {
+	t.Helper()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	center := s.CreatePoint(0, 0)
+	s.Fix(center)
+	s.CreateCircle(center, r)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	body, err := doc.Extrude(s, s.Profiles()[0], Distance{D: units.Millimeters(h), Dir: Along})
+	require.NoError(t, err)
+	return body
+}
+
+// internalWasherBodySymmetric extrudes a circular annulus (outer radius
+// outer, inner hole radius inner, centered on the origin) symmetrically about
+// its own sketch plane, spanning [-half, +half] — the internal-package twin
+// of boolean_test.go's washerBodySymmetric.
+func internalWasherBodySymmetric(t testing.TB, doc *Document, outer, inner, half float64) *Body {
+	t.Helper()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	center := s.CreatePoint(0, 0)
+	s.Fix(center)
+	s.CreateCircle(center, outer)
+	s.CreateCircle(center, inner)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	var prof *sketch.Profile
+	for _, p := range s.Profiles() {
+		if len(p.Holes) == 1 {
+			prof = p
+		}
+	}
+	require.NotNil(t, prof, `the washer's holed region should exist`)
+	body, err := doc.Extrude(s, prof, Symmetric{D: units.Millimeters(half)})
+	require.NoError(t, err)
+	return body
+}
+
+// buildCircularWasherMeshes tessellates fu158's disc/washer fixture into the
+// two boolMeshes the mesh boolean itself would build for the pair's own Cut —
+// the same chord tolerance pairChordTolerance derives — so the corpus below
+// is the one the real evaluator classifies, not an approximation of it.
+func buildCircularWasherMeshes(t testing.TB) (*boolMesh, *boolMesh) {
+	t.Helper()
+	doc := New()
+	target := internalDiscBody(t, doc, 15, 10)
+	tool := internalWasherBodySymmetric(t, doc, 8, 3, 11)
+	tolMM, _, err := pairChordTolerance(target, tool)
+	require.NoError(t, err)
+	ma, err := tessellateContext(t.Context(), target, units.Millimeters(tolMM))
+	require.NoError(t, err)
+	mb, err := tessellateContext(t.Context(), tool, units.Millimeters(tolMM))
+	require.NoError(t, err)
+	bmA, err := prepBoolMeshContext(t.Context(), ma, make([]int, len(ma.triangles)))
+	require.NoError(t, err)
+	bmB, err := prepBoolMeshContext(t.Context(), mb, make([]int, len(mb.triangles)))
+	require.NoError(t, err)
+	return bmA, bmB
+}
+
+// requireSameTriContact asserts two triContacts are identical field for
+// field, comparing every exact rational by big.Rat.Cmp — never by float
+// equality — which is the "the fast path returns what the slow path
+// returned" proof over an exact corpus (fu158, .tmp/followup-tasks/fu158-tasks.md §5).
+func requireSameTriContact(t *testing.T, exact, filtered triContact) {
+	t.Helper()
+	require.Equal(t, exact.kind, filtered.kind)
+	if exact.kind == contactNone {
+		return
+	}
+	require.Zero(t, exact.p0.x.Cmp(filtered.p0.x))
+	require.Zero(t, exact.p0.y.Cmp(filtered.p0.y))
+	require.Zero(t, exact.p0.z.Cmp(filtered.p0.z))
+	require.Zero(t, exact.p1.x.Cmp(filtered.p1.x))
+	require.Zero(t, exact.p1.y.Cmp(filtered.p1.y))
+	require.Zero(t, exact.p1.z.Cmp(filtered.p1.z))
+	require.Equal(t, exact.p0OnA, filtered.p0OnA)
+	require.Equal(t, exact.p1OnA, filtered.p1OnA)
+	require.Equal(t, exact.p0OnB, filtered.p0OnB)
+	require.Equal(t, exact.p1OnB, filtered.p1OnB)
+	require.Equal(t, exact.edgeA, filtered.edgeA)
+	require.Equal(t, exact.edgeB, filtered.edgeB)
+	if exact.sin2 == nil {
+		require.Nil(t, filtered.sin2)
+		return
+	}
+	require.NotNil(t, filtered.sin2)
+	require.Zero(t, exact.sin2.Cmp(filtered.sin2))
+}
+
+// TestTriTriClassifyFilterAgreesWithTheExactPath is fu158's own pin: every
+// AABB-surviving facet pair of the disc/washer fixture must classify
+// identically with triTriMissesFilter on and off. The filter changes no
+// verdict, so this is what stands between "faster" and "a different answer"
+// (.tmp/followup-tasks/fu158-tasks.md §6).
+func TestTriTriClassifyFilterAgreesWithTheExactPath(t *testing.T) {
+	t.Cleanup(func() { triTriFilterEnabled = true })
+
+	ma, mb := buildCircularWasherMeshes(t)
+	pairs, nonNone := 0, 0
+	for i := range ma.tris {
+		for j := range mb.tris {
+			if !boxesOverlap(ma.boxes[i], mb.boxes[j]) {
+				continue
+			}
+			pairs++
+			ta, tb := triCorners(ma, i), triCorners(mb, j)
+			xta, xtb := xtriCorners(ma, i), xtriCorners(mb, j)
+			na, nb := ma.norms[i], mb.norms[j]
+
+			triTriFilterEnabled = true
+			filtered, err := triTriClassify(ta, tb, xta, xtb, na, nb)
+			require.NoError(t, err)
+			triTriFilterEnabled = false
+			exact, err := triTriClassify(ta, tb, xta, xtb, na, nb)
+			require.NoError(t, err)
+
+			requireSameTriContact(t, exact, filtered)
+			if exact.kind != contactNone {
+				nonNone++
+			}
+		}
+	}
+	require.Positive(t, pairs, `the AABB-surviving corpus must be non-empty`)
+	require.NotZero(t, nonNone, `a filter that rejected every real contact must not pass`)
+}
+
+// TestTriTriClassifyFilterAgreesAtAShallowDihedralAngle is the risk section's
+// own named case (.tmp/followup-tasks/fu158-tasks.md §7): two facets sharing
+// an edge but meeting at a dihedral angle of about 1e-6 rad. dir = na × nb is
+// nearly zero there, and the crossing-point projections carry wide
+// intervals — exactly where triSpanOnLine's own doc comment says it must
+// abstain rather than resolve. Sharing an edge keeps the contact itself
+// unambiguous (a positive-length segment along it), so the pair exercises the
+// near-parallel path while still landing on a real answer.
+func TestTriTriClassifyFilterAgreesAtAShallowDihedralAngle(t *testing.T) {
+	t.Cleanup(func() { triTriFilterEnabled = true })
+
+	a := [3]r3.Vec{{X: 0, Y: 0, Z: 0}, {X: 10, Y: 0, Z: 0}, {X: 5, Y: 10, Z: 0}}
+	b := [3]r3.Vec{{X: 0, Y: 0, Z: 0}, {X: 10, Y: 0, Z: 0}, {X: 5, Y: -10, Z: 1e-6}}
+	xta := [3]xpt{xptOf(a[0]), xptOf(a[1]), xptOf(a[2])}
+	xtb := [3]xpt{xptOf(b[0]), xptOf(b[1]), xptOf(b[2])}
+	na := xcross(xsub(xta[1], xta[0]), xsub(xta[2], xta[0]))
+	nb := xcross(xsub(xtb[1], xtb[0]), xsub(xtb[2], xtb[0]))
+
+	triTriFilterEnabled = true
+	filtered, err := triTriClassify(a, b, xta, xtb, na, nb)
+	require.NoError(t, err)
+	triTriFilterEnabled = false
+	exact, err := triTriClassify(a, b, xta, xtb, na, nb)
+	require.NoError(t, err)
+
+	require.Equal(t, contactSegment, exact.kind, `the shared edge is a real, unambiguous contact`)
+	requireSameTriContact(t, exact, filtered)
+}
+
+// BenchmarkTriTriClassifyCircularPairs isolates fu158's fix from the rest of
+// the mesh-boolean pipeline: it builds the disc/washer fixture's two
+// boolMeshes once, harvests every AABB-surviving facet-pair index once, then
+// classifies the whole corpus per iteration — the cost triTriMissesFilter
+// exists to cut (docs/evaluator-design.md §9).
+func BenchmarkTriTriClassifyCircularPairs(b *testing.B) {
+	ma, mb := buildCircularWasherMeshes(b)
+	type facetPair struct{ i, j int }
+	var pairs []facetPair
+	for i := range ma.tris {
+		for j := range mb.tris {
+			if boxesOverlap(ma.boxes[i], mb.boxes[j]) {
+				pairs = append(pairs, facetPair{i: i, j: j})
+			}
+		}
+	}
+	require.NotEmpty(b, pairs, `the AABB-surviving corpus must be non-empty`)
+
+	for b.Loop() {
+		for _, p := range pairs {
+			ta, tb := triCorners(ma, p.i), triCorners(mb, p.j)
+			_, err := triTriClassify(ta, tb, xtriCorners(ma, p.i), xtriCorners(mb, p.j), ma.norms[p.i], mb.norms[p.j])
+			if err != nil {
+				b.Fatal(err)
+			}
+		}
+	}
 }
