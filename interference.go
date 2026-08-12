@@ -130,8 +130,14 @@ const (
 // An admitted coplanar, co-directional prism pair next resolves through the
 // same read-only analytic OpIntersect dispatch performBoolean uses
 // (evaluateAnalyticIntersect, docs/prism-boolean-design.md §14 PR4;
-// docs/interference-design.md §5.2) — never consuming either operand. Every
-// other pair falls back to the read-only mesh intersection unchanged. Both
+// docs/interference-design.md §5.2) — never consuming either operand. That
+// path publishes the resolved intersection payload's OWN volume measurement,
+// so the row reads Exact with a zero bound only where neither operand's
+// section carries a displacement; an operand whose section does
+// (docs/prism-boolean-design.md §7) makes the row Approximate over the
+// composed displacement the payload publishes (§8), which the report's
+// tolerance gate then judges like any other reading. Every other pair falls
+// back to the read-only mesh intersection unchanged. Both
 // paths share §6's positive lower-volume gate (positiveVolume). The outcome
 // names why an unmeasured result is unmeasured.
 func measuredInterference(ctx context.Context, a, b *Body, res pairResult) (Measurement, interferenceOutcome, error) {
