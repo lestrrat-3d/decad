@@ -745,18 +745,43 @@ type segmentWalk struct {
 	// required), for junction convexity.
 	tanInU, tanInV   float64
 	tanOutU, tanOutV float64
-	length           float64
-	lengthBound      float64
-	lengthUpper      float64
-	coordUpper       float64
-	axisRadiusUpper  float64
-	axisMomentUpper  float64
+	// tanInBound/tanOutBound are the PROVEN error bound on EITHER component
+	// of the tangent beside them, in the coordinates' own millimetres. A
+	// tangent is NOT an exact leaf the way a recorded coordinate is: a line
+	// walk's is the float difference of two endpoints, a circular walk's runs
+	// through math.Sincos at a computed angle, and a free-form walk's is an
+	// exact rational leg rounded once into float64. Each kind therefore
+	// STATES its bound or REFUSES with +Inf — never leaves it silently zero —
+	// so a reading composed from a tangent can charge the error the evaluator
+	// actually committed. The refusal is the circular kind's: its held
+	// components come from a trig evaluation at an angle that is itself
+	// computed, and this walk states no enclosure of either, so +Inf is the
+	// underivable bound every consumer refuses on rather than publishes
+	// (arcWalkRadiusBound's own convention).
+	tanInBound, tanOutBound float64
+	length                  float64
+	lengthBound             float64
+	lengthUpper             float64
+	coordUpper              float64
+	axisRadiusUpper         float64
+	axisMomentUpper         float64
 	// kind says which geometry the walk carries; the fields below it are
 	// meaningful only for walkCircular.
-	kind     walkKind
-	cU, cV   float64
-	radius   float64
-	th0, th1 float64
+	kind   walkKind
+	cU, cV float64
+	radius float64
+	// radiusBound is the PROVEN error bound on radius (millimetres). A
+	// CircleSeg states its radius, so its walk holds that number and the bound
+	// is zero; an ArcSeg states Start and Center only, so its walk's radius is
+	// a math.Hypot evaluation and the bound is arcWalkRadiusBound's rational
+	// bracket. It exists because radius is NOT an exact leaf the way a
+	// recorded coordinate is, and a reading that treats it as one can publish
+	// an interval its own truth sits outside of. The analytic surveys
+	// (survey.go's minimum-radius arms, and survey2d.go through
+	// surveyElem.rrBound) take it; a consumer that reads radius as a leaf
+	// still owes its own account of the error, from its own envelope.
+	radiusBound float64
+	th0, th1    float64
 	// spans is the converted Bézier chain of a walkFreeform walk, in the
 	// curve's natural direction; reversed says the walk runs against it. Both
 	// are zero for every other kind.
@@ -813,9 +838,12 @@ func walkOf(seg CurveSegment, work *freeformWork) (segmentWalk, error) {
 		du, dv := u1-u0, v1-v0
 		length := math.Hypot(du, dv)
 		lengthBound, lengthUpper, coordUpper := lineWalkBounds(seg, length)
+		tangentBound := lineWalkTangentBound(seg, du, dv)
 		return segmentWalk{
 			startU: u0, startV: v0, endU: u1, endV: v1,
 			tanInU: du, tanInV: dv, tanOutU: du, tanOutV: dv,
+			tanInBound:  tangentBound,
+			tanOutBound: tangentBound,
 			length:      length,
 			lengthBound: lengthBound,
 			lengthUpper: lengthUpper,
@@ -861,6 +889,7 @@ func walkOf(seg CurveSegment, work *freeformWork) (segmentWalk, error) {
 			arcRadiusUpper(seg),
 			circularSweepUpper(seg.TStart, seg.TEnd),
 		)
+		w.radiusBound = arcWalkRadiusBound(seg, radius)
 		pinArcWalkEnds(&w, seg)
 		if iv, ok := circularLengthInterval(seg); ok {
 			w.lengthBound = math.Min(w.lengthBound, intervalFloatError(iv, w.length))
@@ -872,6 +901,49 @@ func walkOf(seg CurveSegment, work *freeformWork) (segmentWalk, error) {
 		}
 		return freeformWalk(seg, work)
 	}
+}
+
+// lineWalkTangentBound is the single owner of the proven bound on a line
+// walk's tangent, and arcWalkRadiusBound's twin one field over: the record
+// states the segment's endpoints and its parameter range, never the tangent,
+// so the walk's held tangent is the float difference u1−u0, v1−v0 of two
+// endpoints the float lerp already rounded. The tangent the record DENOTES is
+// the difference of the exact rational lerps (ratLerp), which carries no
+// rounding at either step, and the bound is the wider of the two components'
+// gaps from it, rounded outward. A lerp that is not representable as a
+// rational yields +Inf — the underivable bound consumers refuse on.
+func lineWalkTangentBound(seg LineSeg, heldU, heldV float64) float64 {
+	u0 := ratLerp(seg.Start.U, seg.End.U, seg.TStart)
+	v0 := ratLerp(seg.Start.V, seg.End.V, seg.TStart)
+	u1 := ratLerp(seg.Start.U, seg.End.U, seg.TEnd)
+	v1 := ratLerp(seg.Start.V, seg.End.V, seg.TEnd)
+	if u0 == nil || v0 == nil || u1 == nil || v1 == nil {
+		return math.Inf(1)
+	}
+	return math.Max(
+		rationalFloatError(new(big.Rat).Sub(u1, u0), heldU),
+		rationalFloatError(new(big.Rat).Sub(v1, v0), heldV),
+	)
+}
+
+// arcWalkRadiusBound is the single owner of the proven bound on an ArcSeg
+// walk's radius, and the reason segmentWalk carries radiusBound at all: the
+// record states Start and Center, never the radius, so the walk's held radius
+// is the float math.Hypot of their difference. The exact radius is
+// √((Su−Cu)² + (Sv−Cv)²) over the recorded coordinates, which ratSqrtDown and
+// ratSqrtUp bracket without rounding, and the bound is the wider side of that
+// bracket about the held float, rounded outward. A bracket that overflows
+// yields +Inf — an underivable bound, which every consumer refuses on rather
+// than publishes.
+func arcWalkRadiusBound(seg ArcSeg, held float64) float64 {
+	dx := exactCoordinateDelta(seg.Start.U, seg.Center.U)
+	dy := exactCoordinateDelta(seg.Start.V, seg.Center.V)
+	r2 := new(big.Rat).Add(new(big.Rat).Mul(dx, dx), new(big.Rat).Mul(dy, dy))
+	rLo, rHi := ratSqrtDown(r2), ratSqrtUp(r2)
+	if isNonFinite(rLo) || isNonFinite(rHi) {
+		return math.Inf(1)
+	}
+	return math.Max(upRound(held-rLo), upRound(rHi-held))
 }
 
 // freeformWalk resolves a Tier A free-form segment into its walk geometry
@@ -912,7 +984,7 @@ func freeformWalk(seg CurveSegment, work *freeformWork) (segmentWalk, error) {
 	if err != nil {
 		return segmentWalk{}, err
 	}
-	tanInU, tanInV, tanOutU, tanOutV, err := freeformEndTangents(spans, reversed)
+	tangents, err := freeformEndTangents(spans, reversed)
 	if err != nil {
 		return segmentWalk{}, err
 	}
@@ -922,10 +994,12 @@ func freeformWalk(seg CurveSegment, work *freeformWork) (segmentWalk, error) {
 		// A closed free-form curve returns to its start, so it carries no
 		// junction vertex — the same fact CircleSeg's closed walk states.
 		closed:      start == end,
-		tanInU:      tanInU,
-		tanInV:      tanInV,
-		tanOutU:     tanOutU,
-		tanOutV:     tanOutV,
+		tanInU:      tangents.inU,
+		tanInV:      tangents.inV,
+		tanInBound:  tangents.inBound,
+		tanOutU:     tangents.outU,
+		tanOutV:     tangents.outV,
+		tanOutBound: tangents.outBound,
 		length:      length,
 		lengthBound: bound,
 		lengthUpper: upRound(length + bound),
@@ -982,6 +1056,14 @@ func pinArcWalkEnds(w *segmentWalk, seg ArcSeg) {
 }
 
 // circularWalk builds the walk geometry of a circular path about (cu, cv).
+//
+// Its tangents REFUSE a bound (+Inf): the held components are math.Sincos
+// evaluations at th0/th1, and those angles are themselves computed — a
+// CircleSeg's from a float multiply by 2π, an ArcSeg's from math.Atan2 of the
+// recorded differences — so neither the trig nor its argument is a quantity
+// this walk can enclose from the record alone. Stating zero there would hand a
+// consumer an exactness the evaluator never proved; +Inf makes the absence
+// visible, which is what every consumer refuses on.
 func circularWalk(cu, cv, r, th0, th1, radiusUpper, sweepUpper float64) segmentWalk {
 	sin0, cos0 := math.Sincos(th0)
 	sin1, cos1 := math.Sincos(th1)
@@ -997,6 +1079,8 @@ func circularWalk(cu, cv, r, th0, th1, radiusUpper, sweepUpper float64) segmentW
 		endU: cu + r*cos1, endV: cv + r*sin1,
 		tanInU: -sign * sin0, tanInV: sign * cos0,
 		tanOutU: -sign * sin1, tanOutV: sign * cos1,
+		tanInBound:  math.Inf(1),
+		tanOutBound: math.Inf(1),
 		length:      length,
 		lengthBound: conservativeValueError(length, lengthUpper),
 		lengthUpper: lengthUpper,
@@ -1101,7 +1185,10 @@ func coalesceWalksWithPoll(poll func() error, walks []sideWalk) ([]sideWalk, err
 	}
 	merge := func(a, b sideWalk) sideWalk {
 		a.endU, a.endV = b.endU, b.endV
+		// The merged walk leaves where b leaves, so it inherits b's leaving
+		// tangent AND the bound b proved on it — never a's, and never zero.
 		a.tanOutU, a.tanOutV = b.tanOutU, b.tanOutV
+		a.tanOutBound = b.tanOutBound
 		length := boundedAdd(measuredScalar(a.length, a.lengthBound), measuredScalar(b.length, b.lengthBound))
 		a.length, a.lengthBound = length.value, length.bound
 		a.lengthUpper = absSumUpper(a.lengthUpper, b.lengthUpper)

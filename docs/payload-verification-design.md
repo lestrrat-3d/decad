@@ -166,10 +166,14 @@ Cup/cup, cup/prism, and cup/revolve pairs run normal analytic enumeration.
 For accepted cup shell thickness `t` and draft allowance `alpha`:
 
 - any material junction with dihedral `<= alpha` → `MinWallThickness = Exact 0`;
-- otherwise → `MinWallThickness = Exact t`.
+- otherwise → `MinWallThickness = t`, `Exact` only when converting the shell
+  thickness to millimetres was itself exact, and otherwise carrying that
+  conversion's own proven displacement as its bound.
 
 A cup always has a wall. `MinWallThickness` is never nil for a cup whose exact
-morphology recheck succeeds.
+morphology recheck succeeds. The theorem itself — which value the wall reading
+takes — is unchanged; only the number `t`'s own exactness depends on the unit
+conversion that produced it.
 
 ### 4.2 Proof
 
@@ -216,7 +220,9 @@ alone.
 3. Walk every loop of `O` in natural material-left sense.
 4. Walk every loop of `C` reversed, matching cavity material-left sense.
 5. Run existing `junctionPinch` on each non-smooth junction.
-6. Return exact zero on any qualifying pinch; else exact `t`.
+6. Return exact zero on any qualifying pinch; else `t` carrying the shell
+   thickness's own millimetre-conversion displacement as its bound, `Exact`
+   only when that displacement is zero (§4.1).
 
 Do not count:
 
@@ -548,6 +554,20 @@ Rules:
   `[min(all lo), min(all hi)]`.
 - Emit midpoint/half-width; run tolerance gate.
 
+Both endpoints are taken over the whole population, never over whichever
+candidate won a comparison of held values: each candidate's bound is its own, so
+a rival's truth can sit below a winner's interval and no arithmetic the winner
+performed can see it.
+
+That reduction is not specific to the faceted radius. It is the rule for **any**
+survey reading that is an extremum over candidates carrying independent bounds —
+the analytic concave-radius arms, the analytic wall reading's arms, and the 2D
+kernel's own least spanning diameter and greatest inscribed radius. A MAXIMUM
+runs the same argument the other way, `[max(all lo), max(all hi)]`. The
+reduction never widens an exact reading: when the candidates deciding both ends
+are exact the interval collapses, and an inexact rival that does not reach the
+extremum moves neither end.
+
 Do not infer radius from faceted hinge angle or fit circles to vertices. Boolean
 rim edges add no radius: `MinRadius` reads face principal curvature.
 
@@ -684,12 +704,12 @@ numbers.
 |---|---|
 | boundary adapter | inward/outward; top/bottom opening; reflected/placed; holes/posts; face count + roles |
 | clearance | cup/cup, cup/prism, cup/revolve; box-disjoint requested gap; nested; non-box-disjoint but clear; coplanar touch |
-| wall | box/cylinder exact `t`; outward rounded cup; holed cup; top/bottom mirror; qualifying section pinch exact zero |
+| wall | box/cylinder `t` — `Exact` from an exactly converted thickness, `Approximate` with the conversion's own bound otherwise; outward rounded cup; holed cup; top/bottom mirror; qualifying section pinch exact zero |
 | wall spec | tool below/equal/above `t`; zero pinch violates every legal tool |
 | refusals | malformed internal offset relation → `Suspect`, never fabricated `t` |
 
-Every clearance test asserts gap value/bound. Every wall test asserts exact value,
-not only status.
+Every clearance test asserts gap value/bound. Every wall test asserts the
+reading's own value and bound, not only status.
 
 ### 14.3 Faceted certificate + validity
 

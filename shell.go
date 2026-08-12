@@ -358,12 +358,18 @@ func classifyRemovedCaps(b *Body, removed []*Face) (start, end bool, err error) 
 }
 
 // sectionInradius is the largest inscribed disk of a recorded section — the
-// exact 2D inradius survey2d.go computes as part of the wall survey
+// 2D inradius survey2d.go computes as part of the wall survey
 // (docs/modify-design.md §8, the reading that answers MinWallThickness). S18
 // checks the candidate-family count before entering the kernel and shares one
 // fixed work budget across its streamed generation and validation. An
 // undecided or over-budget build-time gate is ErrUnsupported: it has no
 // Suspect result to fall back on.
+//
+// The kernel publishes that inradius as an interval (wallSurveyOut), and this
+// gate reads its midpoint: the caller's own accept boundary already sits a
+// scale-relative shellTol below the limit — 1e-9 of the section's own size,
+// decades above the aggregate's own half-width — so the interval cannot reach
+// across a decision the margin has not already made.
 func sectionInradius(budget *workBudget, profile ProfileRecord) (float64, error) {
 	if err := wallBudgetErr(budget); err != nil {
 		return 0, err
@@ -410,7 +416,7 @@ func sectionInradius(budget *workBudget, profile ProfileRecord) (float64, error)
 	// fitMax is +Inf: the inradius is a property of the section alone, with no
 	// height constraint (that constraint only bears on spanning, not the
 	// largest inscribed disk).
-	k, err := newWallKernelBudget(budget, elems, nil, verts, 0, 0, false, math.Inf(1))
+	k, err := newWallKernelBudget(budget, elems, nil, verts, 0, exactScalar(0), false, math.Inf(1))
 	if err != nil {
 		return 0, err
 	}
