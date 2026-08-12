@@ -438,6 +438,14 @@ func revolveWall(budget *workBudget, rp revolvePayload, alpha float64) (wallOutc
 			// the survey is undecided rather than silently exact.
 			return wallOutcome{}, nil
 		}
+		if admitAbove(wedgeS, 0) != survAdmit {
+			// The kernel reads a positive wedge sine as "this body has caps",
+			// so the sine must be PROVEN positive before it is handed over: a
+			// sweep whose half-angle cannot be told from zero would otherwise
+			// either erase the caps or starve every candidate against them.
+			// Undecided, which reads Suspect — never a silent pass.
+			return wallOutcome{}, nil
+		}
 		wedgeSpans = dphi <= alpha+survAngTol
 	}
 	k, err := newWallKernelBudget(budget, elems, containOnly, verts, alpha, wedgeS, wedgeSpans, math.Inf(1))
@@ -806,7 +814,17 @@ func revolveMinRadius(rp revolvePayload) (radiusOutcome, bool) {
 				// own arithmetic contributes.
 				lBS := boundedHypot(w.tanInU, w.tanInV)
 				nrBS := boundedQuotient(-w.tanInU, 0, lBS.value, lBS.bound)
-				if nrBS.value < -survAngTol {
+				// survAngTol is the line this survey DECLARES, not a
+				// measurement: a wall within 1e-9 radians of parallel to the
+				// axis has a parallel-circle radius of at least 1e9·ρ, which is
+				// no concave feature. The reading is taken on the component's
+				// own proven interval, and a straddle admits, because the
+				// candidate it lets through is that same 1e9·ρ — its interval's
+				// lower end stays within a relative 1e-7 of it, so it cannot
+				// become the aggregate's minimum beside a candidate of ordinary
+				// size, and its denominator's clearance at the threshold keeps
+				// its bound finite rather than leaving the survey undecided.
+				if admitBelow(nrBS, -survAngTol) != survReject {
 					minSV := math.Min(w.startV, w.endV)
 					vBS := boundedQuotient(minSV, 0, -nrBS.value, nrBS.bound)
 					agg.take(vBS.value, vBS.bound)
@@ -838,7 +856,10 @@ func revolveMinRadius(rp revolvePayload) (radiusOutcome, bool) {
 				// revolveBoundsContext's own sweep extremes take.
 				sinBS, _ := radianTrigBounds(th)
 				nrBS := boundedMul(exactScalar(sigma), sinBS)
-				if nrBS.value >= -survAngTol {
+				// The same declared line, read the same way: a straddling
+				// meridian normal admits its candidate rather than dropping it,
+				// and that candidate's own size keeps it out of the minimum.
+				if admitBelow(nrBS, -survAngTol) == survReject {
 					continue
 				}
 				rhoBS := boundedAdd(exactScalar(w.cV), boundedMul(measuredScalar(w.radius, w.radiusBound), sinBS))

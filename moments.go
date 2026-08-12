@@ -327,6 +327,91 @@ func boundedDiv(a, b boundedScalar) boundedScalar {
 	return boundedQuotient(a.value, a.bound, b.value, b.bound)
 }
 
+// survAdmission is the three-valued reading of a bounded quantity against a
+// threshold: the answer a HELD float cannot give, because the held float is not
+// the quantity. It is the single owner of that reading — the survey kernel, the
+// revolve's own axis-side resolution and the candidate generators all ask it
+// rather than comparing a `.value` field against a constant — so a cell that
+// cannot decide is visible as a state instead of silently taking one branch.
+type survAdmission int
+
+const (
+	// survReject: the whole proven interval fails the test.
+	survReject survAdmission = iota
+	// survAdmit: the whole proven interval passes it.
+	survAdmit
+	// survStraddle: the interval contains the threshold, so the held value
+	// decides nothing. What a cell does with this is the cell's own business
+	// and is documented where it asks — generate the candidate anyway (a
+	// superfluous candidate is re-checked against the whole boundary before it
+	// can reach a reading), or refuse.
+	survStraddle
+)
+
+// boundedEnds is the proven interval of a bounded scalar, stepped outward so
+// the two ends' own rounding can never pull them inside the interval they
+// stand for. A non-finite bound answers the whole line, which every reading
+// below turns into survStraddle.
+func boundedEnds(q boundedScalar) (float64, float64) {
+	if isNonFinite(q.value) || isNonFinite(q.bound) {
+		return math.Inf(-1), math.Inf(1)
+	}
+	if q.bound == 0 {
+		return q.value, q.value
+	}
+	return math.Nextafter(q.value-q.bound, math.Inf(-1)),
+		math.Nextafter(q.value+q.bound, math.Inf(1))
+}
+
+// admitAbove reads `q > t`.
+func admitAbove(q boundedScalar, t float64) survAdmission {
+	lo, hi := boundedEnds(q)
+	switch {
+	case lo > t:
+		return survAdmit
+	case hi <= t:
+		return survReject
+	default:
+		return survStraddle
+	}
+}
+
+// admitBelow reads `q < t`.
+func admitBelow(q boundedScalar, t float64) survAdmission {
+	lo, hi := boundedEnds(q)
+	switch {
+	case hi < t:
+		return survAdmit
+	case lo >= t:
+		return survReject
+	default:
+		return survStraddle
+	}
+}
+
+// admitMagnitudeAbove reads `|q| > t` for a non-negative t: the degeneracy
+// question every closed-form solve asks of its own denominator. The magnitude's
+// own range over the interval is what decides it — an interval spanning zero
+// reaches magnitude zero, whatever its ends read.
+func admitMagnitudeAbove(q boundedScalar, t float64) survAdmission {
+	lo, hi := boundedEnds(q)
+	upper := math.Max(math.Abs(lo), math.Abs(hi))
+	lower := 0.0
+	if lo > 0 {
+		lower = lo
+	} else if hi < 0 {
+		lower = -hi
+	}
+	switch {
+	case lower > t:
+		return survAdmit
+	case upper <= t:
+		return survReject
+	default:
+		return survStraddle
+	}
+}
+
 func boundedSin(x boundedScalar) boundedScalar {
 	value := math.Sin(x.value)
 	return measuredScalar(value, conservativeValueError(value, 1))

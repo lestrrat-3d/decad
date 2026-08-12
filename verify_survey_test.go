@@ -2,6 +2,7 @@ package decad_test
 
 import (
 	"context"
+	"fmt"
 	"math"
 	"math/big"
 	"testing"
@@ -971,6 +972,97 @@ func requireContains(t *testing.T, truth *big.Rat, value, bound float64) {
 		`the published interval must reach down to the truth`)
 	require.GreaterOrEqual(t, new(big.Rat).Add(v, b).Cmp(truth), 0,
 		`the published interval must reach up to the truth`)
+}
+
+// halfDiscPlate is the sweep fixture behind both survey acceptance grids: a
+// square plate of half-size half, holding one half-disc hole whose arc is
+// centred on the plate centre with endpoints ±(au, av). The hole's radius is
+// therefore never recorded — an ArcSeg states Start and Center only — so both
+// readings the plate publishes ride a math.Hypot the record does not hold:
+// the tightest concave radius is that radius itself, and the tightest wall is
+// the plate's own half-size minus it.
+func halfDiscPlate(t *testing.T, half, au, av float64) (*sketch.Sketch, *sketch.Profile) {
+	t.Helper()
+	ws := sketch.NewWorld()
+	s, err := ws.CreateSketch(ws.XY())
+	require.NoError(t, err)
+	rect := s.CreateRectangle(-half, -half, half, half)
+	s.Fix(rect.A)
+	o := s.CreatePoint(0, 0)
+	p := s.CreatePoint(au, av)
+	q := s.CreatePoint(-au, -av)
+	s.CreateArc(o, p, q)
+	s.CreateLine(q, p)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	var prof *sketch.Profile
+	for _, cand := range s.Profiles() {
+		if len(cand.Holes) == 1 {
+			prof = cand
+		}
+	}
+	require.NotNil(t, prof, `the plate profile carries the half-disc hole`)
+	return s, prof
+}
+
+// hypotTruth is √(a² + b²) at 200 bits — the exact radius the recorded
+// coordinates denote, which is what every reading derived from a math.Hypot
+// must be measured against.
+func hypotTruth(a, b float64) *big.Rat {
+	const prec = 200
+	x := new(big.Float).SetPrec(prec).SetFloat64(a)
+	y := new(big.Float).SetPrec(prec).SetFloat64(b)
+	sum := new(big.Float).SetPrec(prec).Add(
+		new(big.Float).SetPrec(prec).Mul(x, x),
+		new(big.Float).SetPrec(prec).Mul(y, y),
+	)
+	truth, _ := new(big.Float).SetPrec(prec).Sqrt(sum).Rat(nil)
+	return truth
+}
+
+// TestSurveySweepEnclosesHalfDiscTruths is the survey half of the acceptance
+// sweep: 144 ordinary half-disc plates, each asked for both scalar readings the
+// analytic survey publishes, and each checked against the truth those readings
+// denote — the arc's exact radius for MinRadius, and the plate's half-size minus
+// that same radius for MinWallThickness. Both truths are carried at 200 bits,
+// because the whole error under test is far below a decimal literal's own.
+func TestSurveySweepEnclosesHalfDiscTruths(t *testing.T) {
+	const half = 20.0
+	for i := 1; i <= 12; i++ {
+		for j := 1; j <= 12; j++ {
+			au, av := 0.31*float64(i), 0.17*float64(j)
+			t.Run(fmt.Sprintf("au=%g/av=%g", au, av), func(t *testing.T) {
+				s, prof := halfDiscPlate(t, half, au, av)
+				doc := decad.New()
+				// A tall prism keeps the sweep height out of the wall
+				// comparison, so the reading is the section's own.
+				_, err := doc.Extrude(s, prof, decad.Distance{D: units.Millimeters(200), Dir: decad.Along})
+				require.NoError(t, err)
+				report, err := doc.Verify(t.Context(),
+					decad.WithMinWallThickness(units.Millimeters(0.001)),
+					decad.WithMinRadius(),
+				)
+				require.NoError(t, err)
+				br := report.Bodies[0]
+
+				radius := hypotTruth(au, av)
+				require.NotNil(t, br.MinRadius, `the half-disc hole is a concave feature`)
+				value, err := br.MinRadius.Value.In(units.Millimeter)
+				require.NoError(t, err)
+				bound, err := br.MinRadius.Bound.In(units.Millimeter)
+				require.NoError(t, err)
+				requireContains(t, radius, value, bound)
+
+				wall := new(big.Rat).Sub(new(big.Rat).SetFloat64(half), radius)
+				require.NotNil(t, br.MinWallThickness, `the plate has a proven wall`)
+				value, err = br.MinWallThickness.Value.In(units.Millimeter)
+				require.NoError(t, err)
+				bound, err = br.MinWallThickness.Bound.In(units.Millimeter)
+				require.NoError(t, err)
+				requireContains(t, wall, value, bound)
+			})
+		}
+	}
 }
 
 // TestWallConcentricRingCarriesRadiusDifferenceBound pins the concentric

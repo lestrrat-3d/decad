@@ -120,15 +120,26 @@ func boundedHypot(dx, dy float64) boundedScalar {
 // clearance gate, never a global relative constant: a denominator near zero
 // amplifies a fixed numerator error without limit, and boundedQuotient
 // answers +Inf exactly where that amplification can no longer be bounded.
+//
+// Every branch here is taken on the coefficient's own PROVEN interval
+// (admitMagnitudeAbove/admitBelow), never on its held value, and every
+// three-valued answer resolves the same way: toward emitting the root. The
+// linear branch is taken only for a leading coefficient PROVEN degenerate, so
+// a straddling A goes to the quadratic form, which still recovers the linear
+// root — under a wide bound its own cancelling numerator earns. The
+// discriminant likewise discards the pair only when its whole interval is
+// proven negative; an interval crossing zero has real roots this kernel may not
+// throw away, so it goes to boundedSqrt, which clamps the held operand at zero
+// for the evaluation while keeping the interval's own upper end.
 func quadRootsBounded(A, B, C boundedScalar) []boundedScalar {
-	if math.Abs(A.value) < survTiny {
-		if math.Abs(B.value) < survTiny {
+	if admitMagnitudeAbove(A, survTiny) == survReject {
+		if admitMagnitudeAbove(B, survTiny) == survReject {
 			return nil
 		}
 		return []boundedScalar{boundedQuotient(-C.value, C.bound, B.value, B.bound)}
 	}
 	disc := boundedSub(boundedMul(B, B), boundedMul(exactScalar(4), boundedMul(A, C)))
-	if disc.value < 0 {
+	if admitBelow(disc, 0) == survAdmit {
 		return nil
 	}
 	s := boundedSqrt(disc)
@@ -566,15 +577,21 @@ func (k *wallKernel) validate(c diskCand, budget *workBudget) (bool, bool, bool,
 		return false, false, true, nil
 	}
 	wedgeActive := false
-	if k.wedgeS.value > 0 {
-		// A fit/contact test against k.tol, not a published reading: it reads
-		// the held sine, and the sine's own bound reaches the answer through
-		// the candidate radii the wedge generates.
-		room := c.y * k.wedgeS.value
-		if room < c.r-k.tol {
+	if k.hasWedge() {
+		// A fit/contact test against k.tol, not a published reading: the sine's
+		// own bound reaches the answer through the candidate radii the wedge
+		// generates. The FIT half still refuses only what the sine's own
+		// interval proves does not fit, so a disk the wedge might admit is
+		// never discarded on a held product. The CONTACT half below stays a
+		// held comparison: its slack is 8·k.tol = 8e-9 of the section's own
+		// scale while the product's bound is that scale times the sine's
+		// last-ulp figure, so the interval cannot reach across the slack and
+		// the straddle is unreachable.
+		room := boundedMul(exactScalar(c.y), k.wedgeS)
+		if admitBelow(room, c.r-k.tol) == survAdmit {
 			return false, false, true, nil
 		}
-		wedgeActive = room <= c.r+k.contactTol()
+		wedgeActive = room.value <= c.r+k.contactTol()
 	}
 	var contacts []dirArc
 	for _, e := range k.elems {
@@ -622,6 +639,15 @@ func (k *wallKernel) validate(c diskCand, budget *workBudget) (bool, bool, bool,
 
 // contactTol is the slack for counting an element as a contact.
 func (k *wallKernel) contactTol() float64 { return 8 * k.tol }
+
+// hasWedge reports whether this kernel carries a partial revolve's cap wedge at
+// all. It is a STRUCTURAL question, not a numeric one: a full turn's caller
+// states exactScalar(0), a proven zero, and a partial sweep's caller
+// (survey.go's revolveWall) proves its own half-angle sine positive before
+// handing it over — so the reading is never taken on a sine that cannot be
+// told from zero, and the survAdmit answer below is the only one a built
+// kernel reaches.
+func (k *wallKernel) hasWedge() bool { return admitAbove(k.wedgeS, 0) == survAdmit }
 
 // contains is the material-membership test: crossing parity of a ray against
 // every boundary element, retried across directions when a crossing is
@@ -809,7 +835,7 @@ func (k *wallKernel) generate(budget *workBudget, visit func(diskCand) error) er
 	}
 
 	// Wedge-tangent minima (partial revolve only).
-	if k.wedgeS.value > 0 {
+	if k.hasWedge() {
 		if err := k.wedgeCands(budget, visit); err != nil {
 			return err
 		}
@@ -855,6 +881,11 @@ func (k *wallKernel) pairCands(a, b surveyElem, add func(x, y, r, rBound float64
 // the overlap midpoint is its representative (blocked positions surface via
 // the triples). Non-parallel lines have no interior critical: their corners
 // are junctions, their extent limits vertices, their blockers triples.
+//
+// The parallel and facing tests read the two elements' own unit normals under
+// a 1e-9 slack. Those normals are element coordinates, exact leaves by this
+// file's stated convention, and the slack is seven orders above their last
+// ulp, so neither test can be straddled by the arithmetic it performs.
 func (k *wallKernel) lineLineCands(a, b surveyElem, add func(x, y, r, rBound float64)) {
 	cross := a.nx*b.ny - a.ny*b.nx
 	if math.Abs(cross) > 1e-9 {
@@ -868,8 +899,8 @@ func (k *wallKernel) lineLineCands(a, b surveyElem, add func(x, y, r, rBound flo
 		boundedMul(exactScalar(a.ny), boundedSub(exactScalar(b.ay), exactScalar(a.ay))),
 	)
 	d := dBS.value
-	if d <= 0 {
-		return // b is not on a's material side
+	if admitAbove(dBS, 0) == survReject {
+		return // b is PROVEN not on a's material side
 	}
 	// Overlap of the two segments along a's tangent.
 	tx, ty := -a.ny, a.nx
@@ -892,6 +923,12 @@ func (k *wallKernel) lineLineCands(a, b surveyElem, add func(x, y, r, rBound flo
 // lineArcCands: the critical disks sit on the perpendicular from the arc's
 // center to the line; the angle-limit disks sit where the contact pair
 // reaches exactly the allowance boundary.
+//
+// The T2 denominator sgn·s − 1 is built from two SIGNS, so it takes one of the
+// exactly representable values {0, −2, 2} and its degeneracy reading can never
+// straddle. The T3 denominator is 1 + cos α for the caller's own draft
+// allowance α, and reaches zero only at α = π; a straddle there needs an
+// allowance within a micro-radian of a half turn, which is no draft angle.
 func (k *wallKernel) lineArcCands(l, a surveyElem, add func(x, y, r, rBound float64)) {
 	s := a.matSign()
 	e := l.nx*(a.qx-l.ax) + l.ny*(a.qy-l.ay) // signed height of q, material side positive
@@ -905,13 +942,13 @@ func (k *wallKernel) lineArcCands(l, a surveyElem, add func(x, y, r, rBound floa
 	// |e − t| = R − s·t, enumerated as e − t = sgn·(R − s·t).
 	for _, sgn := range []float64{1, -1} {
 		den := sgn*s - 1
-		if math.Abs(den) < survTiny {
+		if admitMagnitudeAbove(exactScalar(den), survTiny) == survReject {
 			continue
 		}
 		t := (sgn*a.rr - e) / den
-		if t > 0 {
-			numBS := boundedSub(boundedMul(exactScalar(sgn), a.rrBS()), eBS)
-			tBS := boundedQuotient(numBS.value, numBS.bound, den, 0)
+		numBS := boundedSub(boundedMul(exactScalar(sgn), a.rrBS()), eBS)
+		tBS := boundedQuotient(numBS.value, numBS.bound, den, 0)
+		if admitAbove(tBS, 0) != survReject {
 			add(fx+t*l.nx, fy+t*l.ny, t, tBS.bound)
 		}
 	}
@@ -928,15 +965,15 @@ func (k *wallKernel) lineArcCands(l, a surveyElem, add func(x, y, r, rBound floa
 		uyBS := boundedMul(exactScalar(-1), boundedAdd(boundedMul(exactScalar(l.nx), snBS), boundedMul(exactScalar(l.ny), csBS)))
 		ndot := l.nx*ux + l.ny*uy // = −cos(aStar)
 		ndotBS := boundedAdd(boundedMul(exactScalar(l.nx), uxBS), boundedMul(exactScalar(l.ny), uyBS))
-		den := 1 + ndot
-		if math.Abs(den) < survTiny {
+		denBS := boundedAdd(exactScalar(1), ndotBS)
+		if admitMagnitudeAbove(denBS, survTiny) == survReject {
 			continue
 		}
-		denBS := boundedAdd(exactScalar(1), ndotBS)
+		den := denBS.value
 		r := (l.nx*(a.qx-l.ax) + l.ny*(a.qy-l.ay) + s*a.rr*ndot) / den
-		if r > 0 {
-			numBS := boundedAdd(eBS, boundedMul(boundedMul(exactScalar(s), a.rrBS()), ndotBS))
-			rBS := boundedQuotient(numBS.value, numBS.bound, denBS.value, denBS.bound)
+		numBS := boundedAdd(eBS, boundedMul(boundedMul(exactScalar(s), a.rrBS()), ndotBS))
+		rBS := boundedQuotient(numBS.value, numBS.bound, denBS.value, denBS.bound)
+		if admitAbove(rBS, 0) != survReject {
 			add(a.qx+(s*a.rr-r)*ux, a.qy+(s*a.rr-r)*uy, r, rBS.bound)
 		}
 	}
@@ -944,12 +981,19 @@ func (k *wallKernel) lineArcCands(l, a surveyElem, add func(x, y, r, rBound floa
 
 // arcArcCands: centerline criticals (T2, the concentric family included) and
 // the law-of-cosines angle-limit disks (T3).
+//
+// The concentric test is the one branch here that is NOT resolved toward
+// generating both sides: a centre separation the interval cannot prove positive
+// leaves the centreline direction dx/d undefined, so the general branch has no
+// candidate to build and the concentric family is the only reading of that
+// pair. The T2 denominator −εa·sa − εb·sb is built from four SIGNS and so takes
+// one of {0, ±2} exactly, which no interval can straddle.
 func (k *wallKernel) arcArcCands(a, b surveyElem, add func(x, y, r, rBound float64)) {
 	dx, dy := b.qx-a.qx, b.qy-a.qy
 	dBS := boundedHypot(dx, dy)
 	d := dBS.value
 	sa, sb := a.matSign(), b.matSign()
-	if d <= survTiny*k.scale {
+	if admitAbove(dBS, survTiny*k.scale) != survAdmit {
 		// Concentric: the family disk at each arc's own angular midpoint. The
 		// annulus half-width is |Ra − Rb|/2, and NEITHER step is exact — the
 		// difference of two radii rounds outside the Sterbenz range, and each
@@ -972,19 +1016,19 @@ func (k *wallKernel) arcArcCands(a, b surveyElem, add func(x, y, r, rBound float
 	for _, ea := range []float64{1, -1} {
 		for _, eb := range []float64{1, -1} {
 			den := -ea*sa - eb*sb
-			if math.Abs(den) < survTiny {
+			if admitMagnitudeAbove(exactScalar(den), survTiny) == survReject {
 				continue
 			}
 			r := (d - ea*a.rr - eb*b.rr) / den
-			if r <= 0 {
-				continue
-			}
-			t := ea * (a.rr - sa*r)
 			numBS := boundedSub(dBS, boundedAdd(
 				boundedMul(exactScalar(ea), a.rrBS()),
 				boundedMul(exactScalar(eb), b.rrBS()),
 			))
 			rBS := boundedQuotient(numBS.value, numBS.bound, den, 0)
+			if admitAbove(rBS, 0) == survReject {
+				continue
+			}
+			t := ea * (a.rr - sa*r)
 			add(a.qx+t*ux, a.qy+t*uy, r, rBS.bound)
 		}
 	}
@@ -1010,10 +1054,10 @@ func (k *wallKernel) arcArcCands(a, b surveyElem, add func(x, y, r, rBound float
 		boundedMul(dBS, dBS),
 	)
 	for _, rBS := range quadRootsBounded(ABS, BBS, CBS) {
-		r := rBS.value
-		if r <= 0 {
+		if admitAbove(rBS, 0) == survReject {
 			continue
 		}
+		r := rBS.value
 		da := a.rr - sa*r
 		db := b.rr - sb*r
 		placeCircleCircle(a.qx, a.qy, da, b.qx, b.qy, db, add, r, rBS.bound)
@@ -1022,6 +1066,12 @@ func (k *wallKernel) arcArcCands(a, b surveyElem, add func(x, y, r, rBound float
 
 // vertexElemCands: the vertex-line foot and vertex-arc centerline criticals
 // (T2) plus their angle-limit disks (T3).
+//
+// A vertex sitting ON the element it is read against — the ordinary case, since
+// a junction vertex IS an endpoint of its own two walks — gives an exactly zero
+// height or separation with an exactly zero bound, so the side and degeneracy
+// readings below decide it outright. The arc T2 denominator sgn·s − ev is built
+// from three SIGNS and takes one of {0, ±2} exactly.
 func (k *wallKernel) vertexElemCands(v [2]float64, e surveyElem, add func(x, y, r, rBound float64)) {
 	aStar := math.Pi - k.alpha
 	if e.kind == surveyLine {
@@ -1031,7 +1081,7 @@ func (k *wallKernel) vertexElemCands(v [2]float64, e surveyElem, add func(x, y, 
 			boundedMul(exactScalar(e.nx), boundedSub(exactScalar(v[0]), exactScalar(e.ax))),
 			boundedMul(exactScalar(e.ny), boundedSub(exactScalar(v[1]), exactScalar(e.ay))),
 		)
-		if h > 0 {
+		if admitAbove(hBS, 0) != survReject {
 			rBS := boundedQuotient(hBS.value, hBS.bound, 2, 0)
 			add(v[0]-h/2*e.nx, v[1]-h/2*e.ny, h/2, rBS.bound)
 		}
@@ -1045,12 +1095,12 @@ func (k *wallKernel) vertexElemCands(v [2]float64, e surveyElem, add func(x, y, 
 			uyBS := boundedMul(exactScalar(-1), boundedAdd(boundedMul(exactScalar(e.nx), snBS), boundedMul(exactScalar(e.ny), csBS)))
 			den := 1 + (e.nx*ux + e.ny*uy)
 			denBS := boundedAdd(exactScalar(1), boundedAdd(boundedMul(exactScalar(e.nx), uxBS), boundedMul(exactScalar(e.ny), uyBS)))
-			if math.Abs(den) < survTiny {
+			if admitMagnitudeAbove(denBS, survTiny) == survReject {
 				continue
 			}
 			r := (e.nx*(v[0]-e.ax) + e.ny*(v[1]-e.ay)) / den
-			if r > 0 {
-				rBS := boundedQuotient(hBS.value, hBS.bound, denBS.value, denBS.bound)
+			rBS := boundedQuotient(hBS.value, hBS.bound, denBS.value, denBS.bound)
+			if admitAbove(rBS, 0) != survReject {
 				add(v[0]-r*ux, v[1]-r*uy, r, rBS.bound)
 			}
 		}
@@ -1060,7 +1110,7 @@ func (k *wallKernel) vertexElemCands(v [2]float64, e surveyElem, add func(x, y, 
 	dx, dy := e.qx-v[0], e.qy-v[1]
 	dBS := boundedHypot(dx, dy)
 	d := dBS.value
-	if d <= survTiny*k.scale {
+	if admitAbove(dBS, survTiny*k.scale) != survAdmit {
 		return
 	}
 	ux, uy := dx/d, dy/d
@@ -1070,13 +1120,13 @@ func (k *wallKernel) vertexElemCands(v [2]float64, e surveyElem, add func(x, y, 
 		// c = v + ev·r·û: |c − q| = |d − ev·r| = R − s·r.
 		for _, sgn := range []float64{1, -1} {
 			den := sgn*s - ev
-			if math.Abs(den) < survTiny {
+			if admitMagnitudeAbove(exactScalar(den), survTiny) == survReject {
 				continue
 			}
 			r := (sgn*e.rr - d) / den
-			if r > 0 {
-				numBS := boundedSub(boundedMul(exactScalar(sgn), e.rrBS()), dBS)
-				rBS := boundedQuotient(numBS.value, numBS.bound, den, 0)
+			numBS := boundedSub(boundedMul(exactScalar(sgn), e.rrBS()), dBS)
+			rBS := boundedQuotient(numBS.value, numBS.bound, den, 0)
+			if admitAbove(rBS, 0) != survReject {
 				add(v[0]+ev*r*ux, v[1]+ev*r*uy, r, rBS.bound)
 			}
 		}
@@ -1089,29 +1139,33 @@ func (k *wallKernel) vertexElemCands(v [2]float64, e surveyElem, add func(x, y, 
 	BBS := boundedMul(boundedMul(exactScalar(-2), reBS), boundedAdd(exactScalar(s), cosThBS))
 	CBS := boundedSub(boundedMul(reBS, reBS), boundedMul(dBS, dBS))
 	for _, rBS := range quadRootsBounded(ABS, BBS, CBS) {
-		r := rBS.value
-		if r <= 0 {
+		if admitAbove(rBS, 0) == survReject {
 			continue
 		}
+		r := rBS.value
 		placeCircleCircle(v[0], v[1], r, e.qx, e.qy, e.rr-s*r, add, r, rBS.bound)
 	}
 }
 
 // vertexVertexCands: the midpoint disk (T2) and the isoceles angle-limit
 // disks (T3).
+//
+// Two coincident vertices give an exactly zero separation with an exactly zero
+// bound, so the degeneracy reading decides them. The T3 denominator is
+// 2·(1 − cos(π − α)) = 2·(1 + cos α) for the caller's own draft allowance, and
+// vanishes only at α = π — an allowance of a half turn, which is no draft.
 func (k *wallKernel) vertexVertexCands(a, b [2]float64, add func(x, y, r, rBound float64)) {
 	dx, dy := b[0]-a[0], b[1]-a[1]
 	dBS := boundedHypot(dx, dy)
 	d := dBS.value
-	if d <= survTiny*k.scale {
+	if admitAbove(dBS, survTiny*k.scale) != survAdmit {
 		return
 	}
 	rBS := boundedQuotient(dBS.value, dBS.bound, 2, 0)
 	add((a[0]+b[0])/2, (a[1]+b[1])/2, d/2, rBS.bound)
 	_, cosAStarBS := radianTrigBounds(math.Pi - k.alpha)
 	denBS := boundedMul(exactScalar(2), boundedSub(exactScalar(1), cosAStarBS))
-	den := denBS.value
-	if den > survTiny {
+	if admitAbove(denBS, survTiny) != survReject {
 		sqrtDenBS := boundedSqrt(denBS)
 		rr := boundedQuotient(dBS.value, dBS.bound, sqrtDenBS.value, sqrtDenBS.bound)
 		placeCircleCircle(a[0], a[1], rr.value, b[0], b[1], rr.value, add, rr.value, rr.bound)
@@ -1125,6 +1179,13 @@ func (k *wallKernel) vertexVertexCands(a, b [2]float64, add func(x, y, r, rBound
 // quotient paths below compose that bound through their numerator and
 // denominator rather than reading the sine as an exact leaf, and the arc path
 // reads the element's radius through rrBS for the same reason.
+//
+// A vertex at or below the axis (v[1] <= 0) is an exact recorded coordinate
+// against an exact zero, so that test needs no interval. Every other reading
+// here is taken on the proven interval and resolved toward emitting: the wedge
+// denominators 1 ∓ sin(Δφ/2) reach zero only for a half sweep at exactly a
+// right angle, where the sine is proven 1 and the reading is a proven reject,
+// never a straddle.
 func (k *wallKernel) wedgeCands(budget *workBudget, visit func(diskCand) error) error {
 	sBS := k.wedgeS
 	s := sBS.value
@@ -1137,13 +1198,13 @@ func (k *wallKernel) wedgeCands(budget *workBudget, visit func(diskCand) error) 
 		}
 		for _, sgn := range []float64{1, -1} {
 			denBS := boundedSub(exactScalar(1), boundedMul(exactScalar(sgn), sBS))
-			if denBS.value < survTiny {
+			if admitAbove(denBS, survTiny) == survReject {
 				continue
 			}
 			numBS := boundedMul(sBS, exactScalar(v[1]))
 			rBS := boundedQuotient(numBS.value, numBS.bound, denBS.value, denBS.bound)
 			r := rBS.value
-			if r > 0 {
+			if admitAbove(rBS, 0) != survReject {
 				if err := visit(diskCand{x: v[0], y: r / s, r: r, rBound: rBS.bound}); err != nil {
 					return err
 				}
@@ -1165,14 +1226,14 @@ func (k *wallKernel) wedgeCands(budget *workBudget, visit func(diskCand) error) 
 			sinBS, _ := radianTrigBounds(th)
 			numBS := boundedMul(sBS, boundedAdd(exactScalar(e.qy), boundedMul(e.rrBS(), sinBS)))
 			denBS := boundedAdd(exactScalar(1), boundedMul(boundedMul(sBS, exactScalar(se)), sinBS))
-			if math.Abs(denBS.value) < survTiny {
+			if admitMagnitudeAbove(denBS, survTiny) == survReject {
 				continue
 			}
 			rBS := boundedQuotient(numBS.value, numBS.bound, denBS.value, denBS.bound)
-			r := rBS.value
-			if r <= 0 {
+			if admitAbove(rBS, 0) == survReject {
 				continue
 			}
+			r := rBS.value
 			d := e.rr - se*r
 			if err := visit(diskCand{x: e.qx + d*math.Cos(th), y: e.qy + d*math.Sin(th), r: r, rBound: rBS.bound}); err != nil {
 				return err
@@ -1245,7 +1306,7 @@ func (k *wallKernel) tripleEquations(budget *workBudget) ([]circEq, error) {
 			m:    boundedAdd(boundedMul(vx, vx), boundedMul(vy, vy)),
 		})
 	}
-	if k.wedgeS.value > 0 {
+	if k.hasWedge() {
 		if err := wallBudgetStep(budget); err != nil {
 			return nil, err
 		}
@@ -1261,6 +1322,13 @@ func (k *wallKernel) tripleEquations(budget *workBudget) ([]circEq, error) {
 // independent linears express the center affinely in r, and substitution
 // yields a quadratic in r. Parallel linear pairs pin r instead and leave the
 // position as the unknown.
+//
+// The parallel/independent split is the one reading here that decides between
+// two GENERATORS rather than between a candidate and nothing, so an interval
+// that cannot separate the pair's determinant from zero runs both: a
+// superfluous candidate costs a validate pass and can never reach a reading
+// it does not genuinely satisfy, while a missing one is a wall this survey
+// would not see.
 func solveTriple(eqs [3]circEq, scale float64, add func(x, y, r, rBound float64)) {
 	var lins []circEq
 	var quad *circEq
@@ -1289,9 +1357,12 @@ func solveTriple(eqs [3]circEq, scale float64, add func(x, y, r, rBound float64)
 	}
 	l1, l2 := lins[0], lins[1]
 	detBS := boundedSub(boundedMul(l1.a, l2.b), boundedMul(l2.a, l1.b))
-	if math.Abs(detBS.value) <= 1e-12*math.Max(1, scale) {
+	parallel := admitMagnitudeAbove(detBS, 1e-12*math.Max(1, scale))
+	if parallel != survAdmit {
 		solveParallelPair(l1, l2, *quad, add)
-		return
+		if parallel == survReject {
+			return
+		}
 	}
 	// (cx, cy) = P + r·Q from the two linears. The triple's OWN division (by
 	// det) composes through boundedQuotient like every other division here, so
@@ -1312,7 +1383,7 @@ func solveTriple(eqs [3]circEq, scale float64, add func(x, y, r, rBound float64)
 	)
 	for _, rBS := range quadRootsBounded(ABS, BBS, CBS) {
 		r := rBS.value
-		if r > 0 {
+		if admitAbove(rBS, 0) != survReject {
 			add(pxBS.value+r*qxBS.value, pyBS.value+r*qyBS.value, r, rBS.bound)
 		}
 	}
@@ -1324,6 +1395,17 @@ func solveTriple(eqs [3]circEq, scale float64, add func(x, y, r, rBound float64)
 // of the WHOLE rule and not just its last division: a well-conditioned triple
 // still rounds six products and three sums into each numerator before the
 // quotient ever runs.
+//
+// A determinant this rule cannot separate from zero is the one reading here
+// that stops rather than emits, and it drops no attained extremum: three
+// tangency equations whose determinant the arithmetic cannot prove nonzero are
+// dependent to within their own error, so they name no ISOLATED disk at all —
+// the family they describe reaches the sink through the pair criticals and
+// solveParallelPair, which is what those generators are for. Emitting instead
+// would publish a position and radius Cramer's rule divides out of a vanishing
+// denominator, whose own +Inf bound would then leave every survey containing
+// such a triple undecided — which for a rotated or placed section is most of
+// them.
 func solve3Linear(l []circEq, add func(x, y, r, rBound float64)) {
 	// The 2×2 minors of rows 1 and 2 over each column pair, named for the
 	// columns they keep.
@@ -1341,7 +1423,7 @@ func solve3Linear(l []circEq, add func(x, y, r, rBound float64)) {
 		boundedSub(boundedMul(l[0].a, be), boundedMul(l[0].b, ae)),
 		boundedMul(l[0].e, ab),
 	)
-	if math.Abs(detBS.value) < survTiny {
+	if admitMagnitudeAbove(detBS, survTiny) != survAdmit {
 		return
 	}
 	drBS := boundedSub(
@@ -1349,7 +1431,7 @@ func solve3Linear(l []circEq, add func(x, y, r, rBound float64)) {
 		boundedMul(l[0].f, ab),
 	)
 	rBS := boundedDiv(drBS, detBS)
-	if rBS.value <= 0 {
+	if admitAbove(rBS, 0) == survReject {
 		return
 	}
 	// The center is a position, never a published reading (see
@@ -1371,9 +1453,18 @@ func solve3Linear(l []circEq, add func(x, y, r, rBound float64)) {
 // division all compose their bounds, so the radius every emitted position
 // shares carries the error of the whole reduction; the positions themselves
 // never feed a published reading and stay plain floats.
+//
+// A normal this rule cannot separate from zero is not a line: the equation
+// carries no direction to normalize by, so there is nothing to solve and the
+// reading stops, the same way solve3Linear's dependent triple does. The
+// orientation sign σ is the one reading here whose straddle is unreachable
+// from its own algebra — the two normals are already unit vectors and the
+// caller only reaches this function for a pair whose cross product is at or
+// below its own parallelism threshold, so their dot product sits within a few
+// ulps of ±1 and no interval this arithmetic produces spans zero.
 func solveParallelPair(l1, l2, q circEq, add func(x, y, r, rBound float64)) {
 	nBS := boundedNorm2(l1.a, l1.b)
-	if nBS.value < survTiny {
+	if admitAbove(nBS, survTiny) != survAdmit {
 		return
 	}
 	// Normalize both to unit normals; solve the 2×2 system in (h, r) where
@@ -1381,24 +1472,24 @@ func solveParallelPair(l1, l2, q circEq, add func(x, y, r, rBound float64)) {
 	a1, b1 := boundedDiv(l1.a, nBS), boundedDiv(l1.b, nBS)
 	e1, f1 := boundedDiv(l1.e, nBS), boundedDiv(l1.f, nBS)
 	n2BS := boundedNorm2(l2.a, l2.b)
-	if n2BS.value < survTiny {
+	if admitAbove(n2BS, survTiny) != survAdmit {
 		return
 	}
 	a2, b2 := boundedDiv(l2.a, n2BS), boundedDiv(l2.b, n2BS)
 	e2, f2 := boundedDiv(l2.e, n2BS), boundedDiv(l2.f, n2BS)
 	// n̂2 = ±n̂1: sign σ.
 	sigma := -1.0
-	if a1.value*a2.value+b1.value*b2.value > 0 {
+	if admitAbove(boundedAdd(boundedMul(a1, a2), boundedMul(b1, b2)), 0) == survAdmit {
 		sigma = 1
 	}
 	// eq1: h + e1·r + f1 = 0; eq2: σ·h + e2·r + f2 = 0.
 	detBS := boundedSub(e2, boundedMul(exactScalar(sigma), e1))
-	if math.Abs(detBS.value) < survTiny {
+	if admitMagnitudeAbove(detBS, survTiny) == survReject {
 		return
 	}
 	rBS := boundedDiv(boundedSub(boundedMul(exactScalar(sigma), f1), f2), detBS)
 	r := rBS.value
-	if r <= 0 {
+	if admitAbove(rBS, 0) == survReject {
 		return
 	}
 	h := -e1.value*r - f1.value
