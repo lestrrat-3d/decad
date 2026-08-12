@@ -43,7 +43,7 @@ func requireCupWall(t *testing.T, doc *decad.Document, tool, want float64, statu
 	report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(tool)))
 	require.NoError(t, err)
 	require.Len(t, report.Bodies, 1)
-	requireWall(t, report.Bodies[0], want)
+	requireWall(t, report.Bodies[0], decad.Exact, want)
 	require.Equal(t, status, report.Bodies[0].Status)
 	require.Equal(t, status, report.Status)
 }
@@ -166,7 +166,7 @@ func TestShellCupWallQualifyingPinch(t *testing.T) {
 		decad.WithDraftAllowance(units.Degrees(5)),
 	))
 	require.NoError(t, err)
-	requireWall(t, report.Bodies[0], 1)
+	requireWall(t, report.Bodies[0], decad.Exact, 1)
 	require.Equal(t, decad.Sound, report.Status)
 }
 
@@ -701,4 +701,39 @@ func TestShellCupSeparatesComputedOpenAndExactFloorBounds(t *testing.T) {
 	bound, err := mesh.Bound().In(units.Millimeter)
 	require.NoError(t, err)
 	require.GreaterOrEqual(t, bound, rounding)
+}
+
+func TestShellCupWallThicknessCarriesConversionDelta(t *testing.T) {
+	// A cup whose shell thickness is stated in a non-millimetre unit: the
+	// wall reading is exactly the shell theorem's own t, but that t's own
+	// unit conversion (magnitudeInBounded, shell.go) carries a displacement
+	// cupWall now composes (docs/payload-verification-design.md §4.1)
+	// instead of asserting Exact. A millimetre thickness stays Exact — see
+	// TestShellCupWallThickness and this file's other cylinderCup cases, all
+	// stated in millimetres.
+	ws := sketch.NewWorld()
+	s, err := ws.CreateSketch(ws.XY())
+	require.NoError(t, err)
+	s.CreateCircle(s.CreatePoint(0, 0), 20)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	doc := decad.New()
+	disk, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(12), Dir: decad.Along})
+	require.NoError(t, err)
+	_, err = disk.Shell(topCap(disk), units.Inches(0.2))
+	require.NoError(t, err)
+
+	report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(1)))
+	require.NoError(t, err)
+	br := report.Bodies[0]
+	require.NotNil(t, br.MinWallThickness)
+	require.Equal(t, decad.Approximate, br.MinWallThickness.Exactness)
+	value, err := br.MinWallThickness.Value.In(units.Millimeter)
+	require.NoError(t, err)
+	bound, err := br.MinWallThickness.Bound.In(units.Millimeter)
+	require.NoError(t, err)
+	require.Greater(t, bound, 0.0)
+	const denoted = 0.2 * 25.4 // 0.2 inch in millimetres
+	require.LessOrEqual(t, value-bound, denoted)
+	require.GreaterOrEqual(t, value+bound, denoted)
 }
