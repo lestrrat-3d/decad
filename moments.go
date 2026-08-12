@@ -293,6 +293,12 @@ func boundedAbs(a boundedScalar) boundedScalar {
 	return a
 }
 
+// boundedNeg flips a held value's sign. IEEE negation is exact, so the proven
+// bound rides along unchanged.
+func boundedNeg(a boundedScalar) boundedScalar {
+	return measuredScalar(-a.value, a.bound)
+}
+
 func boundedMul(a, b boundedScalar) boundedScalar {
 	value := a.value * b.value
 	bound := absSumUpper(

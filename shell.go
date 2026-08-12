@@ -410,7 +410,7 @@ func sectionInradius(budget *workBudget, profile ProfileRecord) (float64, error)
 	// fitMax is +Inf: the inradius is a property of the section alone, with no
 	// height constraint (that constraint only bears on spanning, not the
 	// largest inscribed disk).
-	k, err := newWallKernelBudget(budget, elems, nil, verts, 0, 0, false, math.Inf(1))
+	k, err := newWallKernelBudget(budget, elems, nil, verts, 0, exactScalar(0), false, math.Inf(1))
 	if err != nil {
 		return 0, err
 	}

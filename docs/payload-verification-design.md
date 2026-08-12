@@ -220,7 +220,9 @@ alone.
 3. Walk every loop of `O` in natural material-left sense.
 4. Walk every loop of `C` reversed, matching cavity material-left sense.
 5. Run existing `junctionPinch` on each non-smooth junction.
-6. Return exact zero on any qualifying pinch; else exact `t`.
+6. Return exact zero on any qualifying pinch; else `t` carrying the shell
+   thickness's own millimetre-conversion displacement as its bound, `Exact`
+   only when that displacement is zero (§4.1).
 
 Do not count:
 
@@ -688,12 +690,12 @@ numbers.
 |---|---|
 | boundary adapter | inward/outward; top/bottom opening; reflected/placed; holes/posts; face count + roles |
 | clearance | cup/cup, cup/prism, cup/revolve; box-disjoint requested gap; nested; non-box-disjoint but clear; coplanar touch |
-| wall | box/cylinder exact `t`; outward rounded cup; holed cup; top/bottom mirror; qualifying section pinch exact zero |
+| wall | box/cylinder `t` — `Exact` from an exactly converted thickness, `Approximate` with the conversion's own bound otherwise; outward rounded cup; holed cup; top/bottom mirror; qualifying section pinch exact zero |
 | wall spec | tool below/equal/above `t`; zero pinch violates every legal tool |
 | refusals | malformed internal offset relation → `Suspect`, never fabricated `t` |
 
-Every clearance test asserts gap value/bound. Every wall test asserts exact value,
-not only status.
+Every clearance test asserts gap value/bound. Every wall test asserts the
+reading's own value and bound, not only status.
 
 ### 14.3 Faceted certificate + validity
 

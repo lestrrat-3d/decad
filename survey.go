@@ -247,7 +247,7 @@ func prismWall(budget *workBudget, pp prismPayload, alpha float64) (wallOutcome,
 		}
 	}
 	h := pp.z1 - pp.z0
-	k, err := newWallKernelBudget(budget, elems, nil, verts, alpha, 0, false, h)
+	k, err := newWallKernelBudget(budget, elems, nil, verts, alpha, exactScalar(0), false, h)
 	if err != nil {
 		return wallOutcome{}, err
 	}
@@ -325,7 +325,12 @@ func revolveWall(budget *workBudget, rp revolvePayload, alpha float64) (wallOutc
 	if err := wallBudgetErr(budget); err != nil {
 		return wallOutcome{}, err
 	}
-	dphi := rp.phi1 - rp.phi0
+	// The sweep, with the subtraction's OWN rounding as its bound. This is not
+	// boundedRevolveSweep: that one deliberately floors its bound at a whole
+	// turn because its consumers only need a magnitude ceiling, and a bound
+	// wider than the value would refuse every wedge candidate below.
+	dphiBS := boundedSub(exactScalar(rp.phi1), exactScalar(rp.phi0))
+	dphi := dphiBS.value
 	var elems, containOnly []surveyElem
 	var verts [][2]float64
 	pinch := false
@@ -394,7 +399,7 @@ func revolveWall(budget *workBudget, rp revolvePayload, alpha float64) (wallOutc
 			}
 		}
 	}
-	wedgeS := 0.0
+	wedgeS := exactScalar(0)
 	wedgeSpans := false
 	if !rp.full {
 		// A mid-sweep ball at meridian radius ρ clears each cap HALF-plane
@@ -404,7 +409,22 @@ func revolveWall(budget *workBudget, rp revolvePayload, alpha float64) (wallOutc
 		// So the factor saturates at sin(π/2) and never shrinks again;
 		// shrinking it past 90° would erase real walls
 		// (TestWallReflexSweep pins the hand-checked case).
-		wedgeS = math.Sin(math.Min(dphi/2, math.Pi/2))
+		//
+		// The factor is a SINE, the one kernel input that is not an exact
+		// leaf, so it is proven rather than trusted: radianTrigBounds encloses
+		// sin of the held half-angle from the same rational bracket a Cone's
+		// normal reads (never math.Sin's own accuracy), and the sweep's own
+		// subtraction rounding rides in on top because θ ↦ sin(min(θ, π/2)) is
+		// 1-Lipschitz — halving is exact, so half the subtraction's bound is
+		// the whole displacement the half-angle can carry.
+		sinBS, _ := radianTrigBounds(math.Min(dphi/2, math.Pi/2))
+		wedgeS = measuredScalar(sinBS.value, absSumUpper(sinBS.bound, dphiBS.bound/2))
+		if isNonFinite(wedgeS.bound) {
+			// No proven enclosure of the cap half-angle's sine: every
+			// wedge-derived candidate would publish an unusable interval, so
+			// the survey is undecided rather than silently exact.
+			return wallOutcome{}, nil
+		}
 		wedgeSpans = dphi <= alpha+survAngTol
 	}
 	k, err := newWallKernelBudget(budget, elems, containOnly, verts, alpha, wedgeS, wedgeSpans, math.Inf(1))
@@ -812,12 +832,15 @@ func cupWalksBudget(budget *workBudget, loop LoopRecord) ([]sideWalk, error) {
 	return loops[0], nil
 }
 
-// cupWall returns the exact shell-wall theorem of
-// docs/payload-verification-design.md §4: an accepted cup is exactly its
-// shell thickness unless one of its material junctions is within the caller's
-// draft allowance, in which case the closure-under-limits rule makes the
-// reading exactly zero. The theorem consumes the payload's morphology, not the
-// recipe value: it rebuilds and audits the offset relation before trusting it.
+// cupWall returns the shell-wall theorem of
+// docs/payload-verification-design.md §4: an accepted cup reads its shell
+// thickness unless one of its material junctions is within the caller's draft
+// allowance, in which case the closure-under-limits rule makes the reading
+// exactly zero. The thickness reading carries the payload's own
+// millimetre-conversion displacement as its bound and is Exact only when that
+// displacement is zero; the pinch reading is always Exact zero. The theorem
+// consumes the payload's morphology, not the recipe value: it rebuilds and
+// audits the offset relation before trusting it.
 func cupWall(budget *workBudget, cp cupPayload, alpha float64) (wallOutcome, error) {
 	finite := func(v float64) bool { return !math.IsNaN(v) && !math.IsInf(v, 0) }
 	isCancellation := func(err error) bool {

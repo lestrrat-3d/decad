@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"math"
+	"math/big"
 	"runtime"
 	"strings"
 	"testing"
@@ -97,7 +98,7 @@ func TestWallKernelSetupCancellationIsBounded(t *testing.T) {
 	}
 	ctx := &internalFrameCancelContext{Context: t.Context(), target: "newWallKernelBudget"}
 
-	_, err := newWallKernelBudget(newWorkBudget(ctx), elems, nil, nil, 15*math.Pi/180, 0, false, math.Inf(1))
+	_, err := newWallKernelBudget(newWorkBudget(ctx), elems, nil, nil, 15*math.Pi/180, exactScalar(0), false, math.Inf(1))
 
 	require.ErrorIs(t, err, context.Canceled)
 	require.True(t, ctx.entered, `wall-kernel boundary sizing must poll inside its scan`)
@@ -213,6 +214,147 @@ func TestWallKernelPublishesDiameterBounds(t *testing.T) {
 	require.Equal(t, 2*bestR, out.span)
 	require.Equal(t, 2*winnerRBound, out.spanBound)
 	require.Equal(t, 2*maxRBound, out.maxCandBound)
+}
+
+// TestWedgeCandidateCarriesCapSineBound pins the one kernel input that is not
+// an exact leaf. A 60° sweep's cap half-angle is 30°, whose TRUE sine is
+// exactly 1/2, but the held float64 sine is a hair under it — so the wedge
+// candidate at a meridian vertex y = 10 holds a radius a hair under the exact
+// s·y/(1−s) = 10. A candidate that read the sine as an exact leaf published
+// bound zero over three rounded operations and so published an interval that
+// missed its own value.
+func TestWedgeCandidateCarriesCapSineBound(t *testing.T) {
+	sweep, err := units.Degrees(60).In(units.Radian)
+	require.NoError(t, err)
+	sinBS, _ := radianTrigBounds(sweep / 2)
+	require.NotEqual(t, 0.5, sinBS.value, `the held sine is not the true sin(30°)`)
+	require.Greater(t, sinBS.bound, 0.0)
+	require.LessOrEqual(t, math.Abs(sinBS.value-0.5), sinBS.bound,
+		`the certified trig interval must contain the true sine`)
+
+	el, ok := lineElem(0, 10, 1, 10)
+	require.True(t, ok)
+	k, kerr := newWallKernelBudget(nil, []surveyElem{el}, nil, [][2]float64{{0, 10}},
+		15*math.Pi/180, sinBS, false, math.Inf(1))
+	require.NoError(t, kerr)
+
+	var near *diskCand
+	require.NoError(t, k.wedgeCands(nil, func(c diskCand) error {
+		if math.Abs(c.r-10) < 1e-6 {
+			cand := c
+			near = &cand
+		}
+		return nil
+	}))
+	require.NotNil(t, near, `the y = 10 vertex must produce the r ≈ 10 wedge candidate`)
+	require.Greater(t, near.rBound, 0.0, `a sine-derived radius is never exact`)
+	require.LessOrEqual(t, math.Abs(near.r-10), near.rBound,
+		`the published radius interval must contain the exact s·y/(1−s) = 10`)
+}
+
+// TestSolve3LinearBoundCoversCramerArithmetic pins that a three-linear
+// Apollonius triple bounds the WHOLE of Cramer's rule and not just its final
+// division. Each numerator rounds six products and three sums before the
+// quotient runs, so a bound taken from the division alone can be an order of
+// magnitude short of the error it must cover.
+func TestSolve3LinearBoundCoversCramerArithmetic(t *testing.T) {
+	// A non-axis-aligned trapezoid: four line elements, so every triple of
+	// their tangency equations is three linears and lands in solve3Linear.
+	pts := [][2]float64{{0, 0}, {20.3, 1.7}, {16.1, 9.4}, {3.7, 7.9}}
+	elems := make([]surveyElem, 0, len(pts))
+	for i := range pts {
+		e, ok := lineElem(pts[i][0], pts[i][1], pts[(i+1)%len(pts)][0], pts[(i+1)%len(pts)][1])
+		require.True(t, ok)
+		elems = append(elems, e)
+	}
+	k := newWallKernel(elems, pts, math.Inf(1))
+	eqs, err := k.tripleEquations(nil)
+	require.NoError(t, err)
+	lins := make([]circEq, 0, len(elems))
+	for _, e := range eqs {
+		if !e.quad {
+			lins = append(lins, e)
+		}
+	}
+	require.Len(t, lins, len(elems))
+
+	seen, shortUnderOldRule := 0, 0
+	for i := range lins {
+		for j := i + 1; j < len(lins); j++ {
+			for l := j + 1; l < len(lins); l++ {
+				triple := []circEq{lins[i], lins[j], lins[l]}
+				solve3Linear(triple, func(_, _, r, rBound float64) {
+					seen++
+					exact := exactCramerRadius(triple)
+					require.NotNil(t, exact)
+					gap := ratAbsDiff(exact, r)
+					require.LessOrEqual(t, gap, rBound,
+						`the published radius interval must contain the exact Cramer answer`)
+					if gap > divisionOnlyRadiusBound(triple) {
+						shortUnderOldRule++
+					}
+				})
+			}
+		}
+	}
+	require.Positive(t, seen, `the trapezoid must produce three-linear roots`)
+	require.Positive(t, shortUnderOldRule,
+		`at least one root's error must exceed what its final division alone accounts for`)
+}
+
+// exactCramerRadius evaluates dr/det over big.Rat from the SAME held
+// coefficients solve3Linear reads, so the comparison is against the exact
+// answer to the very system the kernel solved, never against another float64
+// evaluation of it.
+func exactCramerRadius(l []circEq) *big.Rat {
+	r := func(v boundedScalar) *big.Rat { return floatRat(v.value) }
+	minor := func(p, q, s, t *big.Rat) *big.Rat {
+		return new(big.Rat).Sub(new(big.Rat).Mul(p, t), new(big.Rat).Mul(s, q))
+	}
+	a := [3]*big.Rat{r(l[0].a), r(l[1].a), r(l[2].a)}
+	b := [3]*big.Rat{r(l[0].b), r(l[1].b), r(l[2].b)}
+	e := [3]*big.Rat{r(l[0].e), r(l[1].e), r(l[2].e)}
+	f := [3]*big.Rat{r(l[0].f), r(l[1].f), r(l[2].f)}
+	for _, col := range [][3]*big.Rat{a, b, e, f} {
+		for _, v := range col {
+			if v == nil {
+				return nil
+			}
+		}
+	}
+	be := minor(b[1], e[1], b[2], e[2])
+	ae := minor(a[1], e[1], a[2], e[2])
+	ab := minor(a[1], b[1], a[2], b[2])
+	af := minor(a[1], f[1], a[2], f[2])
+	bf := minor(b[1], f[1], b[2], f[2])
+	det := new(big.Rat).Add(
+		new(big.Rat).Sub(new(big.Rat).Mul(a[0], be), new(big.Rat).Mul(b[0], ae)),
+		new(big.Rat).Mul(e[0], ab))
+	if det.Sign() == 0 {
+		return nil
+	}
+	dr := new(big.Rat).Sub(
+		new(big.Rat).Add(
+			new(big.Rat).Mul(new(big.Rat).Neg(a[0]), bf),
+			new(big.Rat).Mul(b[0], af)),
+		new(big.Rat).Mul(f[0], ab))
+	return new(big.Rat).Quo(dr, det)
+}
+
+// divisionOnlyRadiusBound is the bound a rule that read every Cramer
+// determinant as an exact leaf would publish: the final division's own
+// rounding and nothing above it. The test uses it only to prove the fixture
+// discriminates — never as an assertion about the shipped rule.
+func divisionOnlyRadiusBound(l []circEq) float64 {
+	minor := func(p, q, s, t float64) float64 { return p*t - s*q }
+	be := minor(l[1].b.value, l[1].e.value, l[2].b.value, l[2].e.value)
+	ae := minor(l[1].a.value, l[1].e.value, l[2].a.value, l[2].e.value)
+	ab := minor(l[1].a.value, l[1].b.value, l[2].a.value, l[2].b.value)
+	af := minor(l[1].a.value, l[1].f.value, l[2].a.value, l[2].f.value)
+	bf := minor(l[1].b.value, l[1].f.value, l[2].b.value, l[2].f.value)
+	det := l[0].a.value*be - l[0].b.value*ae + l[0].e.value*ab
+	dr := -l[0].a.value*bf + l[0].b.value*af - l[0].f.value*ab
+	return boundedQuotient(dr, 0, det, 0).bound
 }
 
 func TestPrismWallSubToleranceWebIsUndecided(t *testing.T) {

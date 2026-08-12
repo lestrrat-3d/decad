@@ -400,6 +400,11 @@ func TestWallReflexSweep(t *testing.T) {
 	// footprint [74°, 196°] sits inside the sweep — and the flats' 7 mm is
 	// a real wall. A rule that kept shrinking the clearance past 90°
 	// (ρ·sin(Δφ/2) ≈ 2.83 < 3.5) would erase it.
+	//
+	// The reading is Approximate, not Exact: a partial sweep's wedge factor is
+	// a SINE, and the spanning candidates the wedge and the Apollonius triples
+	// produce carry that sine's proven error plus their own Cramer arithmetic.
+	// The interval still contains the true 7 mm, which is what the test pins.
 	ws := sketch.NewWorld()
 	s, err := ws.CreateSketch(ws.XY())
 	require.NoError(t, err)
@@ -412,8 +417,26 @@ func TestWallReflexSweep(t *testing.T) {
 	require.NoError(t, err)
 	report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(1)))
 	require.NoError(t, err)
-	requireWall(t, report.Bodies[0], decad.Exact, 7)
+	requireWall(t, report.Bodies[0], decad.Approximate, 7)
+	requireWallBoundContains(t, report.Bodies[0], 7, 1e-9)
 	require.Equal(t, decad.Suspect, report.Status)
+}
+
+// requireWallBoundContains asserts that a wall reading's published interval is
+// strictly positive, no wider than maxBound, and actually contains the truth
+// the fixture's own geometry states. A bound that failed to contain its own
+// value is exactly the defect this guard exists for.
+func requireWallBoundContains(t *testing.T, br *decad.BodyReport, truth, maxBound float64) {
+	t.Helper()
+	require.NotNil(t, br.MinWallThickness)
+	value, err := br.MinWallThickness.Value.In(units.Millimeter)
+	require.NoError(t, err)
+	bound, err := br.MinWallThickness.Bound.In(units.Millimeter)
+	require.NoError(t, err)
+	require.Greater(t, bound, 0.0)
+	require.LessOrEqual(t, bound, maxBound)
+	require.LessOrEqual(t, value-bound, truth)
+	require.GreaterOrEqual(t, value+bound, truth)
 }
 
 func TestWallSectorTooTightForItsFlats(t *testing.T) {
@@ -618,13 +641,19 @@ func TestSurveysAnsweredTogether(t *testing.T) {
 func TestWallSolidCylinder(t *testing.T) {
 	// A solid cylinder R8 × 10 long (full revolve): the caps span across
 	// the axis at 10 mm; the 16 mm diametral ball is starved by them.
+	//
+	// The reading is Approximate: the spanning candidate set includes
+	// Apollonius triples, and Cramer's rule rounds six products and three sums
+	// into each numerator before its own division, all of which the published
+	// interval now carries. The interval still contains the true 10 mm.
 	s, p := solidSketch(t)
 	doc := decad.New()
 	_, err := doc.Revolve(s, p, uAxis, decad.FullRevolution{})
 	require.NoError(t, err)
 	report, err := doc.Verify(t.Context(), decad.WithMinWallThickness(units.Millimeters(1)))
 	require.NoError(t, err)
-	requireWall(t, report.Bodies[0], decad.Exact, 10)
+	requireWall(t, report.Bodies[0], decad.Approximate, 10)
+	requireWallBoundContains(t, report.Bodies[0], 10, 1e-9)
 	require.Equal(t, decad.Suspect, report.Status)
 }
 
