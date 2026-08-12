@@ -715,6 +715,26 @@ func (ax axisFrame) toAxis(u, v float64) (float64, float64) {
 	return du*ax.dU + dv*ax.dV, dv*ax.dU - du*ax.dV
 }
 
+// radialUpper is the single owner of the ρ envelope: a proven upper bound on
+// the radial distance ρ = |cross(d, p−a)| from THIS resolved axis to any
+// boundary point p the caller's own coordUpper covers. coordUpper is a proven
+// upper bound on p's plane-local coordinates about the FRAME origin
+// (profileCoordinateUpper for a whole profile, segmentWalk.coordUpper for one
+// walk), and ρ is measured from the AXIS, so the anchor a's own offset is the
+// whole difference between the two: |p−a| ≤ |p| + |a|, with the anchor read
+// through its own recorded bounds. Every reading whose error scales with ρ —
+// a walk's swept radius and moment envelopes, and revolveBoundsContext's
+// sweep-extreme perturbation — takes its envelope from here, because a
+// caller that charges the frame-origin envelope instead understates the
+// reading without limit as the axis moves away from the frame origin.
+func (ax axisFrame) radialUpper(coordUpper float64) float64 {
+	return absSumUpper(
+		coordUpper,
+		ax.aU, ax.aUBound,
+		ax.aV, ax.aVBound,
+	)
+}
+
 // walk re-expresses one boundary walk in axis coordinates (the U fields
 // carry z, the V fields ρ), snapping an endpoint within snapTol onto the
 // axis so contact classification and vertex placement agree exactly.
@@ -738,11 +758,7 @@ func (ax axisFrame) walk(w segmentWalk) segmentWalk {
 		out.th0 = w.th0 - beta
 		out.th1 = w.th1 - beta
 	}
-	anchorUpper := absSumUpper(
-		ax.aU, ax.aUBound,
-		ax.aV, ax.aVBound,
-	)
-	rhoUpper := absSumUpper(w.coordUpper, anchorUpper)
+	rhoUpper := ax.radialUpper(w.coordUpper)
 	out.axisRadiusUpper = rhoUpper
 	out.axisMomentUpper = productUpper(w.lengthUpper, rhoUpper)
 	return out
@@ -1684,12 +1700,24 @@ func (rp revolvePayload) extentAlongWork(ctx context.Context, g r3.Vec, work *fr
 // PROVEN bound sweepExtremeBounds derives, composed through the same
 // directional-perturbation Lipschitz bound (bounds.go) that turns a bound on
 // the swept radial DIRECTION into a bound on the boundary extreme it feeds.
+//
+// The envelope that Lipschitz step charges is the RADIAL one: the extreme's
+// own functional is wg·z + m·ρ, so a perturbation of the swept radial
+// coefficient m multiplies ρ, the distance from the RESOLVED AXIS, and not
+// the profile's coordinates about the frame origin. axisFrame.radialUpper
+// owns that envelope and folds in the axis anchor, which is the whole term an
+// offset axis adds; a box whose radial envelope cannot be proven finite is
+// refused rather than published against a bound that omits it.
 func revolveBoundsContext(ctx context.Context, rp revolvePayload, work *freeformWork) (Box, error) {
 	axes := []r3.Vec{r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1)}
 	b := rp.basis()
 	coordUpper, err := profileCoordinateUpper(rp.profile, work)
 	if err != nil {
 		return Box{}, err
+	}
+	rhoUpper := rp.ax.radialUpper(coordUpper)
+	if isNonFinite(rhoUpper) {
+		return Box{}, fmt.Errorf(`%w: the revolved region's radial distance from its own axis has no finite proven bound, so no sweep-extreme bound can be composed`, ErrNotFinite)
 	}
 	var minC, maxC [3]float64
 	bound := 0.0
@@ -1707,10 +1735,10 @@ func revolveBoundsContext(ctx context.Context, rp revolvePayload, work *freeform
 		c1 := rp.xform.ApplyDir(b.e1).Dot(g)
 		mlo, mhi := sweepExtremes(c0, c1, rp.phi0, rp.phi1, rp.full)
 		loBound, hiBound := sweepExtremeBounds(c0, c1, rp.phi0, rp.phi1, mlo, mhi, rp.full)
-		if term := directionalPerturbationAllow(loBound, coordUpper); term > bound {
+		if term := directionalPerturbationAllow(loBound, rhoUpper); term > bound {
 			bound = term
 		}
-		if term := directionalPerturbationAllow(hiBound, coordUpper); term > bound {
+		if term := directionalPerturbationAllow(hiBound, rhoUpper); term > bound {
 			bound = term
 		}
 	}

@@ -74,7 +74,11 @@ import (
 //     than trusting math.Sqrt's accuracy on either end;
 //   - a linear functional's own extreme over a bounded region moving when its
 //     DIRECTION is perturbed (a revolve box face, whose swept direction
-//     carries the sweep angle's own trig enclosure) → directionalPerturbationAllow.
+//     carries the sweep angle's own trig enclosure) →
+//     directionalPerturbationAllow, charged against the envelope of the very
+//     coordinate that direction multiplies — which is the caller's to name,
+//     since a revolve's swept radial coefficient multiplies a distance from
+//     the axis and not from the profile's own frame origin.
 
 const (
 	// unitRoundoff is float64's u = 2⁻⁵³: the relative error a single
@@ -657,11 +661,21 @@ func boundedSqrt(x boundedScalar) boundedScalar {
 // extreme over a bounded region can move when the functional's direction is
 // perturbed by dirBound: an extreme of gu·u + gv·v over a boundary is
 // 1-Lipschitz in (gu, gv) against the boundary's own coordinate envelope,
-// since |Δgu·u + Δgv·v| <= |(Δgu, Δgv)| · coordUpper by Cauchy-Schwarz.
-// coordUpper must be a PROVEN upper bound on sqrt(u²+v²) over the region's
-// own boundary (profileCoordinateUpper).
-func directionalPerturbationAllow(dirBound, coordUpper float64) float64 {
-	return productUpper(dirBound, coordUpper)
+// since |Δgu·u + Δgv·v| <= |(Δgu, Δgv)| · envelopeUpper by Cauchy-Schwarz.
+//
+// envelopeUpper must be a PROVEN upper bound on the norm of the very
+// coordinate the perturbed direction multiplies, measured about the SAME
+// origin the functional is written about. Which envelope that is belongs to
+// the caller's own geometry, and the two are NOT interchangeable: a section
+// read about its plane frame charges the profile's plane-local envelope
+// (profileCoordinateUpper), while a revolve's swept radial coefficient
+// multiplies the distance from the RESOLVED AXIS and so charges the axis's
+// own radial envelope (axisFrame.radialUpper, which folds in the axis
+// anchor). Handing this the frame-origin envelope for an axis-referred
+// coordinate understates the result without limit as the two origins
+// separate.
+func directionalPerturbationAllow(dirBound, envelopeUpper float64) float64 {
+	return productUpper(dirBound, envelopeUpper)
 }
 
 // rimDelta is the trim-amplified displacement bound of a vertex the boolean

@@ -3,6 +3,7 @@ package decad_test
 import (
 	"encoding/json"
 	"math"
+	"math/big"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
@@ -1371,6 +1372,72 @@ func TestRevolveBoundsBoundEnclosesSweptExtreme(t *testing.T) {
 	const truth = 6.7317678784631720532
 	require.GreaterOrEqual(t, bounds.Max.Z+boundMM, truth)
 	require.LessOrEqual(t, bounds.Max.Z-boundMM, truth)
+}
+
+// sinOneDigits is sin(1) to 60 significant digits. The offset-axis extreme
+// below is (8+offset)·sin(1), which no float64 holds, so the reference is
+// carried through big.Float rather than through a second rounded literal
+// whose own representation error would eat the margin being measured.
+const sinOneDigits = "0.841470984807896506652502321630298999622563060798371065672749"
+
+func TestRevolveBoundsBoundEnclosesOffsetAxisExtreme(t *testing.T) {
+	// The same 10×8 rectangle swept 1 radian, but about an axis PARALLEL to
+	// the sketch u axis and offset below the region. The swept radial
+	// coefficient multiplies the radial distance from the RESOLVED AXIS, so
+	// the box's proven bound has to be charged against the axis's own radial
+	// envelope: the profile's plane-local envelope about the frame origin
+	// omits the offset entirely, and an interval built on it stops containing
+	// the truth as soon as the axis moves away from that origin.
+	//
+	// The far wall sits at radius 8+offset, so the z extreme is exactly
+	// (8+offset)·sin(1) and the published interval must cover it at every
+	// offset — and the bound must grow with the offset, since that is the
+	// term the envelope contributes.
+	const prec = 200
+	sinOne, _, err := big.ParseFloat(sinOneDigits, 10, prec, big.ToNearestEven)
+	require.NoError(t, err)
+
+	prev := 0.0
+	for _, offset := range []float64{1, 1e3, 1e6, 1e9} {
+		w := sketch.NewWorld()
+		s, err := w.CreateSketch(w.XY())
+		require.NoError(t, err)
+		rect := s.CreateRectangle(0, 0, 10, 8)
+		s.Fix(rect.A)
+		_, err = s.Solve(t.Context())
+		require.NoError(t, err)
+
+		axis := decad.ConstructionAxis{
+			Origin: r3.NewVec(0, -offset, 0),
+			Dir:    r3.NewVec(1, 0, 0),
+		}
+		body, err := decad.New().Revolve(s, s.Profiles()[0], axis,
+			decad.AngleExtent{A: units.Radians(1), Dir: decad.Along})
+		require.NoError(t, err)
+		bounds, err := body.Bounds()
+		require.NoError(t, err)
+		require.Equal(t, decad.Approximate, bounds.Exactness)
+		boundMM, err := bounds.Bound.In(units.Millimeter)
+		require.NoError(t, err)
+
+		truth := new(big.Float).SetPrec(prec).Mul(
+			new(big.Float).SetPrec(prec).SetFloat64(8+offset),
+			sinOne,
+		)
+		residual := new(big.Float).SetPrec(prec).Sub(
+			new(big.Float).SetPrec(prec).SetFloat64(bounds.Max.Z),
+			truth,
+		)
+		residual.Abs(residual)
+		require.LessOrEqual(t,
+			residual.Cmp(new(big.Float).SetPrec(prec).SetFloat64(boundMM)), 0,
+			`the box's published interval must contain the true swept extreme at axis offset %g (residual %s, bound %g)`,
+			offset, residual.Text('g', 6), boundMM,
+		)
+		require.Greater(t, boundMM, prev,
+			`the proven bound must grow with the axis offset it is charged against`)
+		prev = boundMM
+	}
 }
 
 func TestRevolveBoundsExactFullTurn(t *testing.T) {
