@@ -1794,6 +1794,26 @@ func prismDecompositionRoundAllow(gu, gv, gz, base, coordUpper, zUpper float64) 
 	if trivial(gu) && trivial(gv) && trivial(gz) {
 		return 0
 	}
+	// The non-trivial arm is loose, and it is loose in the safe direction: one
+	// fixture measures both halves of that. A 5x5 mm section swept 1 mm on the
+	// UNPLACED frame U=(0.6,0.8,0), V=(-0.8,0.6,0) reports Min=(-4,0,0),
+	// Max=(3,7,1), Approximate, bound 3.9790393202565666e-13. That whole figure
+	// is this term: divide it by analyticRoundBound's own 256*unitRoundoff and
+	// it comes to 14 up to that helper's outward rounding, which is the scale
+	// below — |gu|*coordUpper + |gv|*coordUpper = 0.6*10 + 0.8*10, the walk's
+	// coordUpper being 10 for that section — while every sibling term answers
+	// zero: exactIsometryDotRound on base/gu/gv/gz under the identity xform,
+	// exactSumRound on base 0 with levels 0 and 1, and both displacement terms
+	// prismBoundsContext composes. A zero bound on that fixture would be
+	// unsound rather than tighter, because the extremes it would call exact are
+	// not: summing this frame's OWN held entries over the rationals against the
+	// section corners {0,5}^2 gives X-min = -5*float64(0.8), X-max =
+	// 5*float64(0.6) and Y-max = 5*float64(0.6) + 5*float64(0.8), none of them
+	// representable, since float64(0.8) sits above 4/5 and 5*float64(0.8) needs
+	// 55 significand bits — it lands on the midpoint between 4 and the next
+	// float, which ties-to-even carries back to 4. Three of the box's six faces
+	// therefore sit half an ulp INSIDE the true extreme (2.22e-16 in X-min,
+	// 1.11e-16 in X-max and Y-max), a miss this term covers with wide margin.
 	scale := absSumUpper(
 		productUpper(math.Abs(gu), coordUpper),
 		productUpper(math.Abs(gv), coordUpper),

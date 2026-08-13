@@ -633,8 +633,11 @@ charges the frame and placement's own rounding of the coefficients it
 decomposes the direction into, and the rounding of its own summation of those
 terms with the extremized candidate (`docs/evaluator-design.md` §5), so a
 PLACED plate is `Exact` only where both of those terms are zero as well —
-which a translation by an exactly representable offset satisfies and a rotation
-does not.
+which a translation satisfies only where its own endpoint recombinations are
+representable too, not merely where the offset is. Translating a 10 mm extreme
+by 2 keeps `10 + 2` representable and reads `Exact`, while the equally
+representable offset `0.1` makes `10 + 0.1` unrepresentable and reads
+`Approximate`. A rotation fails the coefficient term outright.
 
 Tessellation chords each shared boundary once. For a two-parameter tube patch,
 choose parameter counts so the sum of path sagitta and minor-circle sagitta is
