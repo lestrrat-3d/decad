@@ -253,7 +253,7 @@ func TestSingleSignPolygonTurnsProveNoCurvatureSign(t *testing.T) {
 	// The production certificate must refuse this net rather than publish the
 	// polygon rule's wrong "convex": K genuinely changes sign twice inside the
 	// span, so no depth of subdivision resolves it to one strict sign.
-	_, err = freeformWallConvexityContext(t.Context(), spans, false, reversed)
+	_, err = freeformWallConvexityContext(t.Context(), spans, false, reversed, newFreeformWork())
 	require.ErrorIs(t, err, ErrUnsupported,
 		"the certificate must refuse R19 rather than read the single-signed polygon turns")
 }
@@ -283,7 +283,7 @@ func TestMixedCurvatureAtTheSubdivisionDepthCapRefusesR19(t *testing.T) {
 	require.Equal(t, 0, halfOpen, "this span's speed has no interior or end root")
 	require.Equal(t, 1, atZero.Sign(), "and its speed is nonzero at its own start too — regularity holds")
 
-	_, err = freeformWallConvexityContext(t.Context(), spans, false, reversed)
+	_, err = freeformWallConvexityContext(t.Context(), spans, false, reversed, newFreeformWork())
 	require.ErrorIs(t, err, ErrUnsupported,
 		"a genuine curvature sign change never resolves to one strict sign, so the depth cap must refuse R19")
 }
@@ -349,7 +349,7 @@ func TestInteriorCuspFoldsToAStrictSignWithoutRegularity(t *testing.T) {
 
 	// The production certificate must refuse this net too: the regularity
 	// precondition, not the coefficient fold, is what stops it.
-	_, err = freeformWallConvexityContext(t.Context(), spans, false, reversed)
+	_, err = freeformWallConvexityContext(t.Context(), spans, false, reversed, newFreeformWork())
 	require.ErrorIs(t, err, ErrUnsupported,
 		"the speed precondition must refuse R19 before the mixed-then-strict coefficient fold ever runs")
 }
@@ -380,7 +380,7 @@ func TestEndpointCuspEscapesAHalfOpenRootCount(t *testing.T) {
 
 	// The production certificate must still refuse: the CLOSED-span endpoint
 	// check is what catches what the half-open root count alone would admit.
-	_, err = freeformWallConvexityContext(t.Context(), spans, false, reversed)
+	_, err = freeformWallConvexityContext(t.Context(), spans, false, reversed, newFreeformWork())
 	require.ErrorIs(t, err, ErrUnsupported,
 		"the endpoint value must refuse R19 even though the half-open root count alone would admit this span")
 }
@@ -415,7 +415,7 @@ func TestCollinearNetProvesTheZeroCurvatureNumerator(t *testing.T) {
 	k := curvatureNumerator(spans[0])
 	require.Empty(t, rpTrim(k), "K must be the zero polynomial: the span lies on one straight line")
 
-	verdict, err := freeformWallConvexityContext(t.Context(), spans, false, reversed)
+	verdict, err := freeformWallConvexityContext(t.Context(), spans, false, reversed, newFreeformWork())
 	require.NoError(t, err)
 	require.Equal(t, freeformConvexityStraight, verdict,
 		"K is identically zero and the chain is a single span, so the chain's verdict is the straight-walk one")
@@ -477,7 +477,7 @@ func TestFitPointsAreNeitherTheChainNorItsHull(t *testing.T) {
 	// more than once, so the certificate refuses R19 rather than publish a
 	// bool for it — the same outcome a hand count of the curve's inflections
 	// would predict, not a certificate defect.
-	_, err = freeformWallConvexityContext(t.Context(), spans, false, false)
+	_, err = freeformWallConvexityContext(t.Context(), spans, false, false, newFreeformWork())
 	require.ErrorIs(t, err, ErrUnsupported,
 		"a hump-then-dip fit curve's curvature changes sign more than once, so the certificate must refuse R19")
 }
@@ -548,7 +548,7 @@ func TestDegreeOneSpansCarryAZeroCurvatureNumerator(t *testing.T) {
 	require.Equal(t, "1", cross.RatString(), "the joint between the two degree-1 spans turns by exactly +1")
 	require.Equal(t, 1, cross.Sign())
 
-	verdict, err := freeformWallConvexityContext(t.Context(), spans, false, reversed)
+	verdict, err := freeformWallConvexityContext(t.Context(), spans, false, reversed, newFreeformWork())
 	require.NoError(t, err)
 	require.Equal(t, freeformConvexityPositive, verdict,
 		"both span verdicts are 0, so the chain's verdict is the joint's own strictly positive turn")
@@ -592,7 +592,7 @@ func TestDegreeTwoCurvatureNumeratorIsAConstantAtTheStatedDegree(t *testing.T) {
 	require.Equal(t, []int{1, 1}, signsOf(stated))
 	require.Equal(t, []int{1}, signsOf(bernsteinCoefficients(k, 0)), "the true degree reads the same verdict")
 
-	verdict, err := freeformWallConvexityContext(t.Context(), spans, false, reversed)
+	verdict, err := freeformWallConvexityContext(t.Context(), spans, false, reversed, newFreeformWork())
 	require.NoError(t, err)
 	require.Equal(t, freeformConvexityPositive, verdict,
 		"K is the positive constant 4 across the whole span, and the chain is one span with an empty joint set")
@@ -639,7 +639,7 @@ func TestConsecutiveCollapsedSpansPairAcrossTheWholeRun(t *testing.T) {
 	require.Equal(t, "1", cross.RatString(), "the neighbours across the run turn by exactly +1")
 	require.Equal(t, 1, cross.Sign())
 
-	verdict, err := freeformWallConvexityContext(t.Context(), spans, false, reversed)
+	verdict, err := freeformWallConvexityContext(t.Context(), spans, false, reversed, newFreeformWork())
 	require.NoError(t, err)
 	require.Equal(t, freeformConvexityPositive, verdict,
 		"both live spans are degree-1 (verdict 0), so the chain's verdict is the joint that pairs across the whole run")
@@ -689,7 +689,7 @@ func TestMidpointSplitCreatesAKnownZeroJoint(t *testing.T) {
 	// The production certificate subdivides at this same Bernstein level
 	// (bernsteinCurvatureSignContext), so it must reach the identical
 	// refusal this net's genuine sign change forces on both routes above.
-	_, err = freeformWallConvexityContext(t.Context(), spans, false, reversed)
+	_, err = freeformWallConvexityContext(t.Context(), spans, false, reversed, newFreeformWork())
 	require.ErrorIs(t, err, ErrUnsupported,
 		"the same genuinely mixed curvature must refuse R19 through the production entry point too")
 }
@@ -729,11 +729,11 @@ func TestReversedRangeConvertsToTheIdenticalUnreversedChain(t *testing.T) {
 	// positive joint (TestDegreeOneSpansCarryAZeroCurvatureNumerator) must
 	// negate to negative under the identical unreversed spans, reported
 	// reversed.
-	forwardVerdict, err := freeformWallConvexityContext(t.Context(), forwardSpans, false, forwardReversed)
+	forwardVerdict, err := freeformWallConvexityContext(t.Context(), forwardSpans, false, forwardReversed, newFreeformWork())
 	require.NoError(t, err)
 	require.Equal(t, freeformConvexityPositive, forwardVerdict)
 
-	backwardVerdict, err := freeformWallConvexityContext(t.Context(), backwardSpans, false, backwardReversed)
+	backwardVerdict, err := freeformWallConvexityContext(t.Context(), backwardSpans, false, backwardReversed, newFreeformWork())
 	require.NoError(t, err)
 	require.Equal(t, freeformConvexityNegative, backwardVerdict,
 		"the identical unreversed chain's positive verdict negates once, at the end, under the reported reversal")
@@ -762,13 +762,71 @@ func TestClosedChainAddsTheWrapJointAnOpenChainNeverReads(t *testing.T) {
 	require.Equal(t, "-1", jointCross(spanB, spanA).RatString(),
 		"the joint that would close the loop turns the other way")
 
-	openVerdict, err := freeformWallConvexityContext(t.Context(), spans, false, false)
+	openVerdict, err := freeformWallConvexityContext(t.Context(), spans, false, false, newFreeformWork())
 	require.NoError(t, err, "an open chain never reads the closing joint")
 	require.Equal(t, freeformConvexityPositive, openVerdict)
 
-	_, err = freeformWallConvexityContext(t.Context(), spans, true, false)
+	_, err = freeformWallConvexityContext(t.Context(), spans, true, false, newFreeformWork())
 	require.ErrorIs(t, err, ErrUnsupported,
 		"a closed chain folds the closing joint in too, and it conflicts with the internal turn — refuse R19")
+}
+
+// degreeTwoConvexityFixture is TestDegreeTwoCurvatureNumeratorIsAConstantAtTheStatedDegree's
+// own net: one degree-2 span whose K is the positive constant 4, reused here
+// because it is cheap enough to certify well inside the record work ceiling —
+// the point of the two tests below is the counter, not the geometry.
+func degreeTwoConvexityFixture(t *testing.T) ([]bezierSpan, bool) {
+	seg := NURBSSeg{
+		Degree:  2,
+		Control: []Point2{{U: 0, V: 0}, {U: 1, V: 0}, {U: 1, V: 1}},
+		Knots:   []float64{0, 0, 0, 1, 1, 1},
+		Weights: []float64{1, 1, 1},
+		TStart:  0,
+		TEnd:    1,
+	}
+	spans, reversed, err := freeformBezierSpans(seg, newFreeformWork())
+	require.NoError(t, err)
+	require.Len(t, spans, 1)
+	return spans, reversed
+}
+
+// TestConvexityCertificateChargesTheRecordWorkCounter is PR 2
+// (docs/spline-design.md §5.2, Table R R7): the certificate's cost must sit
+// behind the record's ONE free-form work counter, charged before
+// requireSpanSpeedRegularContext's Sturm chain or the Bernstein subdivision
+// allocates anything. A counter a prior pass in the same record has nearly
+// exhausted must refuse R7 on this certificate rather than run it anyway; the
+// identical spans under a fresh counter must still certify, so the charge is
+// provably a budget gate and not a blanket refusal.
+func TestConvexityCertificateChargesTheRecordWorkCounter(t *testing.T) {
+	spans, reversed := degreeTwoConvexityFixture(t)
+
+	spent := newFreeformWork()
+	require.NoError(t, spent.step(freeformWorkLimit-100),
+		"pre-spend all but 100 units of the record's counter — far below the certificate's own cost")
+	_, err := freeformWallConvexityContext(t.Context(), spans, false, reversed, spent)
+	require.ErrorIs(t, err, ErrUnsupported)
+	require.ErrorContains(t, err, "free-form")
+	require.ErrorContains(t, err, "work budget")
+
+	fresh := newFreeformWork()
+	verdict, err := freeformWallConvexityContext(t.Context(), spans, false, reversed, fresh)
+	require.NoError(t, err, "the identical spans must certify under a fresh counter")
+	require.Equal(t, freeformConvexityPositive, verdict)
+}
+
+// TestConvexityCertificateSpendIncreases pins that the certificate actually
+// spends the counter it is handed rather than merely accepting one: a silent
+// no-op charge would still pass every verdict assertion above, so the work
+// counter's own delta is the only thing that catches it.
+func TestConvexityCertificateSpendIncreases(t *testing.T) {
+	spans, reversed := degreeTwoConvexityFixture(t)
+
+	work := newFreeformWork()
+	before := work.spent
+	_, err := freeformWallConvexityContext(t.Context(), spans, false, reversed, work)
+	require.NoError(t, err)
+	require.Greater(t, work.spent, before, "the certificate must charge the record's work counter")
 }
 
 // spanStrings renders a span's control points exactly, so a conversion that
