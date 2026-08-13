@@ -1812,10 +1812,12 @@ func prismDecompositionRoundAllow(gu, gv, gz, base, coordUpper, zUpper float64) 
 	// section corners {0,5}^2 gives X-min = -5*float64(0.8), X-max =
 	// 5*float64(0.6) and Y-max = 5*float64(0.6) + 5*float64(0.8), none of them
 	// representable, since float64(0.8) sits above 4/5 and 5*float64(0.8) needs
-	// 55 significand bits — it lands on the midpoint between 4 and the next
-	// float, which ties-to-even carries back to 4. Three of the box's six faces
-	// therefore sit half an ulp INSIDE the true extreme (2.22e-16 in X-min,
-	// 1.11e-16 in X-max and Y-max), a miss this term covers with wide margin.
+	// 55 significand bits — it is exactly 4 + 2^-52, a QUARTER of the 2^-50 ulp
+	// above 4, which ordinary round-to-nearest returns as 4 with no tie. Each of
+	// the three published coordinates therefore misses its true extreme by a
+	// representable amount (2.22e-16 in X-min, 1.11e-16 in X-max and Y-max),
+	// X-min and Y-max landing INSIDE the true extreme and X-max landing outward
+	// of it, a miss this term covers with wide margin.
 	scale := absSumUpper(
 		productUpper(math.Abs(gu), coordUpper),
 		productUpper(math.Abs(gv), coordUpper),
