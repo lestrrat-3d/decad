@@ -72,6 +72,13 @@ import (
 //     the operand's own interval ends through the same rational sqrt brackets
 //     (ratSqrtDown/ratSqrtUp) a free-form arc's radius already does, rather
 //     than trusting math.Sqrt's accuracy on either end;
+//   - a linear functional's own extreme over a bounded region moving when its
+//     DIRECTION is perturbed (a revolved solid's directional extent, whose swept direction
+//     carries the sweep angle's own trig enclosure) →
+//     directionalPerturbationAllow, charged against the envelope of the very
+//     coordinate that direction multiplies — which is the caller's to name,
+//     since a revolve's swept radial coefficient multiplies a distance from
+//     the axis and not from the profile's own frame origin;
 //   - a HELD float measured against a bounded scalar's own proven enclosure of
 //     the quantity that float stands for → boundedFloatError, the bridge every
 //     candidate producer crosses when it evaluates a value one way and proves
@@ -686,6 +693,58 @@ func boundedNorm2(x, y boundedScalar) boundedScalar {
 // boundedNorm2 instead.
 func boundedHypot(dx, dy float64) boundedScalar {
 	return boundedNorm2(exactScalar(dx), exactScalar(dy))
+}
+
+// directionalPerturbationAllow bounds how far a linear functional's own
+// extreme over a bounded region can move when the functional's direction is
+// perturbed by dirBound: an extreme of gu·u + gv·v over a boundary is
+// 1-Lipschitz in (gu, gv) against the boundary's own coordinate envelope,
+// since |Δgu·u + Δgv·v| <= |(Δgu, Δgv)| · envelopeUpper by Cauchy-Schwarz.
+//
+// envelopeUpper must be a PROVEN upper bound on the norm of the very
+// coordinate the perturbed direction multiplies, measured about the SAME
+// origin the functional is written about. Which envelope that is belongs to
+// the caller's own geometry, and the two are NOT interchangeable: a section
+// read about its plane frame charges the profile's plane-local envelope
+// (profileCoordinateUpper), while a revolve's swept radial coefficient
+// multiplies the distance from the RESOLVED AXIS and so charges the axis's
+// own radial envelope (axisFrame.radialUpper, which folds in the axis
+// anchor). Handing this the frame-origin envelope for an axis-referred
+// coordinate understates the result without limit as the two origins
+// separate.
+func directionalPerturbationAllow(dirBound, envelopeUpper float64) float64 {
+	return productUpper(dirBound, envelopeUpper)
+}
+
+// pointPerturbationAllow is directionalPerturbationAllow's transpose: how far
+// the value of the linear functional gu·u + gv·v can move when the POINT it
+// reads carries a proven bound on each of its own components, rather than the
+// direction carrying one. |gu·Δu + gv·Δv| ≤ |gu|·boundU + |gv|·boundV, summed
+// outward.
+//
+// The two components enter SEPARATELY, each against the direction coefficient
+// that actually multiplies it: a direction reading one axis alone charges
+// nothing for the other axis's error, which is what keeps a whole circle's
+// reading along u exact even though its own held endpoint misses in v
+// (walkEndBound's own comment). boundU and boundV must be PROVEN bounds on the
+// point's displacement from the one the record denotes — segmentWalk's
+// startBound/endBound, the only producer of those numbers for a walked
+// endpoint.
+//
+// A charged component answers zero exactly where its bound is zero or its
+// coefficient is: a coordinate the record states verbatim, read through a
+// direction this evaluator reads as an exact leaf, has no width for a directed
+// rounding to invent (boundaryExtremesBoundedContext's own convention). A
+// non-finite bound answers +Inf, never 0, so an absent bound never reads as a
+// small one.
+func pointPerturbationAllow(bound walkEndBound, gu, gv float64) float64 {
+	if isNonFinite(bound.u) || isNonFinite(bound.v) {
+		return math.Inf(1)
+	}
+	return absSumUpper(
+		productUpper(math.Abs(gu), bound.u),
+		productUpper(math.Abs(gv), bound.v),
+	)
 }
 
 // boundedFloatError is the proven error bound of a HELD float64 against a

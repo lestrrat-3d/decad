@@ -2,7 +2,9 @@ package decad_test
 
 import (
 	"encoding/json"
+	"fmt"
 	"math"
+	"math/big"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
@@ -95,11 +97,14 @@ func requireVolume(t *testing.T, b *decad.Body, want float64) {
 	require.InDelta(t, want, got, 1e-9*math.Max(1, want))
 }
 
-func requireBounds(t *testing.T, b *decad.Body, minX, minY, minZ, maxX, maxY, maxZ float64) {
+// requireBounds asserts a body's Bounds() against the caller's expected
+// values and its PROVEN exactness: each call site states the
+// exactness its own geometry proves, never a blanket assumption.
+func requireBounds(t *testing.T, b *decad.Body, wantExact decad.Exactness, minX, minY, minZ, maxX, maxY, maxZ float64) {
 	t.Helper()
 	bounds, err := b.Bounds()
 	require.NoError(t, err)
-	require.Equal(t, decad.Exact, bounds.Exactness)
+	require.Equal(t, wantExact, bounds.Exactness)
 	require.InDelta(t, minX, bounds.Min.X, 1e-9)
 	require.InDelta(t, minY, bounds.Min.Y, 1e-9)
 	require.InDelta(t, minZ, bounds.Min.Z, 1e-9)
@@ -128,7 +133,7 @@ func TestRevolveFullAnnularCylinder(t *testing.T) {
 	require.InDelta(t, 0.0, c.Value.Y, 1e-9)
 	require.InDelta(t, 0.0, c.Value.Z, 1e-9)
 
-	requireBounds(t, body, 0, -15, -15, 10, 15, 15)
+	requireBounds(t, body, decad.Exact, 0, -15, -15, 10, 15, 15)
 
 	// Topology: two cylinder walls + two planar annuli, no caps and no seam
 	// edges — every junction sweeps to a whole latitude circle with a seam
@@ -200,7 +205,7 @@ func TestRevolveSolidCylinderHasNoInnerFace(t *testing.T) {
 			require.Len(t, f.Loops(), 1, `a disk reaching the axis has no inner loop`)
 		}
 	}
-	requireBounds(t, body, 0, -8, -8, 10, 8, 8)
+	requireBounds(t, body, decad.Exact, 0, -8, -8, 10, 8, 8)
 }
 
 func TestRevolvePartialSweeps(t *testing.T) {
@@ -213,7 +218,7 @@ func TestRevolvePartialSweeps(t *testing.T) {
 	requireVolume(t, quarter, 500*math.Pi)
 	require.Len(t, quarter.Faces(), 6, `four side faces and two caps`)
 	requireManifold(t, quarter)
-	requireBounds(t, quarter, 0, 0, 0, 10, 15, 15)
+	requireBounds(t, quarter, decad.Approximate, 0, 0, 0, 10, 15, 15)
 
 	area, err := quarter.Area()
 	require.NoError(t, err)
@@ -315,7 +320,7 @@ func TestRevolveSphere(t *testing.T) {
 	require.InDelta(t, 5.0, c.Value.X, 1e-9)
 	require.InDelta(t, 0.0, c.Value.Y, 1e-9)
 	require.InDelta(t, 0.0, c.Value.Z, 1e-9)
-	requireBounds(t, body, 0, -5, -5, 10, 5, 5)
+	requireBounds(t, body, decad.Exact, 0, -5, -5, 10, 5, 5)
 
 	n, err := body.Faces()[0].NormalAt(r3.NewVec(5, 5, 0))
 	require.NoError(t, err)
@@ -366,7 +371,7 @@ func TestRevolveTorus(t *testing.T) {
 	require.InDelta(t, 0.0, c.Value.X, 1e-9)
 	require.InDelta(t, 0.0, c.Value.Y, 1e-9)
 	require.InDelta(t, 0.0, c.Value.Z, 1e-9)
-	requireBounds(t, body, -3, -13, -13, 3, 13, 13)
+	requireBounds(t, body, decad.Exact, -3, -13, -13, 3, 13, 13)
 
 	// Outward normals on the outer and inner equators.
 	f := body.Faces()[0]
@@ -470,7 +475,7 @@ func TestRevolveCone(t *testing.T) {
 	_, err = wall.NormalAt(r3.NewVec(10, 0, 0))
 	require.ErrorIs(t, err, decad.ErrDegenerate, `the apex has no normal`)
 
-	requireBounds(t, body, 0, -5, -5, 10, 5, 5)
+	requireBounds(t, body, decad.Exact, 0, -5, -5, 10, 5, 5)
 }
 
 func TestRevolveNegativeSideRegion(t *testing.T) {
@@ -490,7 +495,7 @@ func TestRevolveNegativeSideRegion(t *testing.T) {
 	full, err := doc.Revolve(s, s.Profiles()[0], uAxis, decad.FullRevolution{})
 	require.NoError(t, err)
 	requireVolume(t, full, 2000*math.Pi)
-	requireBounds(t, full, 0, -15, -15, 10, 15, 15)
+	requireBounds(t, full, decad.Exact, 0, -15, -15, 10, 15, 15)
 	requireManifold(t, full)
 
 	s2, err := w.CreateSketch(w.XY())
@@ -502,7 +507,7 @@ func TestRevolveNegativeSideRegion(t *testing.T) {
 	quarter, err := decad.New().Revolve(s2, s2.Profiles()[0], uAxis, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along})
 	require.NoError(t, err)
 	requireVolume(t, quarter, 500*math.Pi)
-	requireBounds(t, quarter, 0, -15, -15, 10, 0, 0)
+	requireBounds(t, quarter, decad.Approximate, 0, -15, -15, 10, 0, 0)
 	requireManifold(t, quarter)
 }
 
@@ -517,13 +522,13 @@ func TestRevolveExtents(t *testing.T) {
 		body, err := revolve(t, decad.AngleExtent{A: units.Degrees(90), Dir: decad.Against})
 		require.NoError(t, err)
 		requireVolume(t, body, 500*math.Pi)
-		requireBounds(t, body, 0, 0, -15, 10, 15, 0)
+		requireBounds(t, body, decad.Approximate, 0, 0, -15, 10, 15, 0)
 	})
 	t.Run("Symmetric", func(t *testing.T) {
 		body, err := revolve(t, decad.SymmetricAngle{A: units.Degrees(90)})
 		require.NoError(t, err)
 		requireVolume(t, body, 1000*math.Pi)
-		requireBounds(t, body, 0, 0, -15, 10, 15, 15)
+		requireBounds(t, body, decad.Approximate, 0, 0, -15, 10, 15, 15)
 	})
 	t.Run("SymmetricFullLength", func(t *testing.T) {
 		body, err := revolve(t, decad.SymmetricAngle{A: units.Degrees(90), FullLength: true})
@@ -537,7 +542,7 @@ func TestRevolveExtents(t *testing.T) {
 		// The sweep spans φ ∈ [−60°, +30°]: the y minimum is the INNER
 		// wall at the −60° cap (cos never reaches zero on the interval),
 		// the z extremes the outer wall at each cap.
-		requireBounds(t, body, 0, 5*math.Cos(math.Pi/3), -15*math.Sin(math.Pi/3), 10, 15, 15*math.Sin(math.Pi/6))
+		requireBounds(t, body, decad.Approximate, 0, 5*math.Cos(math.Pi/3), -15*math.Sin(math.Pi/3), 10, 15, 15*math.Sin(math.Pi/6))
 	})
 	t.Run("FullTurnAsAngle", func(t *testing.T) {
 		// 360° stated as an angle IS a full revolution: the caps would
@@ -896,7 +901,7 @@ func TestRevolveAboutEdgeAxis(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, body.IsSolid())
 	requireVolume(t, body, 2000*math.Pi)
-	requireBounds(t, body, 0, -15, -15, 10, 15, 15)
+	requireBounds(t, body, decad.Exact, 0, -15, -15, 10, 15, 15)
 
 	// The host is a dependency, not an operand: it stays live.
 	require.Contains(t, doc.Bodies(), host)
@@ -1346,4 +1351,309 @@ func TestRevolveConcaveGrooveCapEdges(t *testing.T) {
 	}
 	require.Equal(t, 1, tori)
 	require.Equal(t, 2, caps, `one cap edge in each cap plane`)
+}
+
+func TestRevolveBoundsBoundEnclosesSweptExtreme(t *testing.T) {
+	// The 10×8 rectangle (one edge on the axis) revolved 1 radian about the
+	// sketch u axis: the extreme normal to the plane is 8·sin(1), which no
+	// float64 holds exactly — the box carries the proven bound its own
+	// certified sine bracket derives, never math.Sin's own
+	// undocumented accuracy.
+	s, p := solidSketch(t)
+	doc := decad.New()
+	body, err := doc.Revolve(s, p, uAxis, decad.AngleExtent{A: units.Radians(1), Dir: decad.Along})
+	require.NoError(t, err)
+	bounds, err := body.Bounds()
+	require.NoError(t, err)
+	require.Equal(t, decad.Approximate, bounds.Exactness)
+	boundMM, err := bounds.Bound.In(units.Millimeter)
+	require.NoError(t, err)
+	require.Greater(t, boundMM, 0.0)
+	require.LessOrEqual(t, boundMM, 1e-9)
+	const truth = 6.7317678784631720532
+	require.GreaterOrEqual(t, bounds.Max.Z+boundMM, truth)
+	require.LessOrEqual(t, bounds.Max.Z-boundMM, truth)
+}
+
+// sinOneDigits is sin(1) to 60 significant digits. The offset-axis extreme
+// below is (8+offset)·sin(1), which no float64 holds, so the reference is
+// carried through big.Float rather than through a second rounded literal
+// whose own representation error would eat the margin being measured.
+const sinOneDigits = "0.841470984807896506652502321630298999622563060798371065672749"
+
+func TestRevolveBoundsBoundEnclosesOffsetAxisExtreme(t *testing.T) {
+	// The same 10×8 rectangle swept 1 radian, but about an axis PARALLEL to
+	// the sketch u axis and offset below the region. The swept radial
+	// coefficient multiplies the radial distance from the RESOLVED AXIS, so
+	// the box's proven bound has to be charged against the axis's own radial
+	// envelope: the profile's plane-local envelope about the frame origin
+	// omits the offset entirely, and an interval built on it stops containing
+	// the truth as soon as the axis moves away from that origin.
+	//
+	// The far wall sits at radius 8+offset, so the z extreme is exactly
+	// (8+offset)·sin(1) and the published interval must cover it at every
+	// offset — and the bound must grow with the offset, since that is the
+	// term the envelope contributes.
+	const prec = 200
+	sinOne, _, err := big.ParseFloat(sinOneDigits, 10, prec, big.ToNearestEven)
+	require.NoError(t, err)
+
+	prev := 0.0
+	for _, offset := range []float64{1, 1e3, 1e6, 1e9} {
+		w := sketch.NewWorld()
+		s, err := w.CreateSketch(w.XY())
+		require.NoError(t, err)
+		rect := s.CreateRectangle(0, 0, 10, 8)
+		s.Fix(rect.A)
+		_, err = s.Solve(t.Context())
+		require.NoError(t, err)
+
+		axis := decad.ConstructionAxis{
+			Origin: r3.NewVec(0, -offset, 0),
+			Dir:    r3.NewVec(1, 0, 0),
+		}
+		body, err := decad.New().Revolve(s, s.Profiles()[0], axis,
+			decad.AngleExtent{A: units.Radians(1), Dir: decad.Along})
+		require.NoError(t, err)
+		bounds, err := body.Bounds()
+		require.NoError(t, err)
+		require.Equal(t, decad.Approximate, bounds.Exactness)
+		boundMM, err := bounds.Bound.In(units.Millimeter)
+		require.NoError(t, err)
+
+		truth := new(big.Float).SetPrec(prec).Mul(
+			new(big.Float).SetPrec(prec).SetFloat64(8+offset),
+			sinOne,
+		)
+		residual := new(big.Float).SetPrec(prec).Sub(
+			new(big.Float).SetPrec(prec).SetFloat64(bounds.Max.Z),
+			truth,
+		)
+		residual.Abs(residual)
+		require.LessOrEqual(t,
+			residual.Cmp(new(big.Float).SetPrec(prec).SetFloat64(boundMM)), 0,
+			`the box's published interval must contain the true swept extreme at axis offset %g (residual %s, bound %g)`,
+			offset, residual.Text('g', 6), boundMM,
+		)
+		require.Greater(t, boundMM, prev,
+			`the proven bound must grow with the axis offset it is charged against`)
+		prev = boundMM
+	}
+}
+
+func TestRevolveBoundsExactFullTurn(t *testing.T) {
+	// The same rectangle under a full revolution: every world axis's swept
+	// extreme is the exact ±8 amplitude of an axis-aligned frame, so the box
+	// is Exact — the test that stops a blanket Approximate. The section is all
+	// straight segments, so no arc-radius term enters either.
+	s, p := solidSketch(t)
+	doc := decad.New()
+	body, err := doc.Revolve(s, p, uAxis, decad.FullRevolution{})
+	require.NoError(t, err)
+	requireBounds(t, body, decad.Exact, 0, -8, -8, 10, 8, 8)
+}
+
+// arcApexSketch builds a solved circular-segment region: the arc is centred on
+// the sketch origin and runs from (u, v) to (−u, v), closed by the chord
+// between them. Its apex therefore sits on the +v axis at radius √(u²+v²),
+// which the record never states — an ArcSeg carries Start and Center only, so
+// every consumer's radius is the math.Hypot of the two, a rounded float that
+// can land on either side of the truth.
+func arcApexSketch(t *testing.T, u, v float64) (*sketch.Sketch, *sketch.Profile) {
+	t.Helper()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	c := s.CreatePoint(0, 0)
+	s.Fix(c)
+	start := s.CreatePoint(u, v)
+	end := s.CreatePoint(-u, v)
+	s.CreateLine(end, start)
+	s.CreateArc(c, start, end)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	require.Len(t, s.Profiles(), 1)
+	return s, s.Profiles()[0]
+}
+
+// requireEnclosesApex asserts that the box's own published interval about
+// Max.Y covers the exact apex radius √(u²+v²), carried through big.Float
+// rather than a rounded literal — the whole error being measured is smaller
+// than a decimal literal's own representation error.
+func requireEnclosesApex(t *testing.T, box decad.Box, u, v float64) {
+	t.Helper()
+	const prec = 200
+	boundMM, err := box.Bound.In(units.Millimeter)
+	require.NoError(t, err)
+	sq := new(big.Float).SetPrec(prec).SetFloat64(u * u)
+	sq.Add(sq, new(big.Float).SetPrec(prec).SetFloat64(v*v))
+	truth := new(big.Float).SetPrec(prec).Sqrt(sq)
+	residual := new(big.Float).SetPrec(prec).Sub(
+		new(big.Float).SetPrec(prec).SetFloat64(box.Max.Y),
+		truth,
+	)
+	residual.Abs(residual)
+	require.LessOrEqual(t,
+		residual.Cmp(new(big.Float).SetPrec(prec).SetFloat64(boundMM)), 0,
+		`the box's published interval must contain the swept arc's apex (residual %s, bound %g)`,
+		residual.Text('g', 6), boundMM,
+	)
+}
+
+func TestRevolveBoundsBoundEnclosesArcRadius(t *testing.T) {
+	// A circular-segment section revolved about the sketch u axis. The swept
+	// solid reaches the arc's apex at radius √37, which math.Hypot(1, 6) rounds
+	// BELOW: a box that reads the walk's radius as an exact leaf publishes a
+	// Max.Y short of the surface it bounds. The published interval has to cover
+	// the apex under every extent — a full turn, whose swept coefficient is
+	// exactly ±1 and contributes nothing, and a partial sweep, whose own
+	// trig-derived term is far smaller than the radius error it must not stand
+	// in for.
+	const u, v = 1.0, 6.0
+	for _, tc := range []struct {
+		name   string
+		extent decad.AngularExtent
+	}{
+		{name: "full turn", extent: decad.FullRevolution{}},
+		{name: "quarter turn", extent: decad.AngleExtent{A: units.Degrees(90), Dir: decad.Along}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s, p := arcApexSketch(t, u, v)
+			body, err := decad.New().Revolve(s, p, uAxis, tc.extent)
+			require.NoError(t, err)
+			box, err := body.Bounds()
+			require.NoError(t, err)
+			require.Equal(t, decad.Approximate, box.Exactness,
+				`a box whose extreme rides a computed arc radius is never Exact`)
+			boundMM, err := box.Bound.In(units.Millimeter)
+			require.NoError(t, err)
+			require.Greater(t, boundMM, 0.0)
+			require.LessOrEqual(t, boundMM, 1e-12, `the bound must stay tight enough to be useful`)
+			requireEnclosesApex(t, box, u, v)
+		})
+	}
+}
+
+// TestRevolveBoundsSweepEnclosesArcApex is the revolve half of the acceptance
+// sweep: 144 ordinary circular-segment sections, each revolved a full turn and
+// each asked whether the box's own published interval contains the apex radius
+// the swept surface truly reaches. One hand-picked fixture proves nothing here —
+// the hypot rounding changes sign and size with the coordinates, so a bound that
+// covers one section can miss the next — which is why the grid, not a case, is
+// the test.
+func TestRevolveBoundsSweepEnclosesArcApex(t *testing.T) {
+	for i := 1; i <= 12; i++ {
+		for j := 1; j <= 12; j++ {
+			u, v := 0.7*float64(i), 1.3*float64(j)
+			t.Run(fmt.Sprintf("u=%g/v=%g", u, v), func(t *testing.T) {
+				s, p := arcApexSketch(t, u, v)
+				body, err := decad.New().Revolve(s, p, uAxis, decad.FullRevolution{})
+				require.NoError(t, err)
+				box, err := body.Bounds()
+				require.NoError(t, err)
+				requireEnclosesApex(t, box, u, v)
+			})
+		}
+	}
+}
+
+// The partial sweep below turns through this angle, whose sine is carried to
+// 60 significant digits for the same reason sinOneDigits is: the whole error
+// under test is smaller than a rounded literal's own representation error.
+const (
+	mixedSweepAngle  = 0.82914845766024614
+	mixedSweepSine   = "0.737356418349652412501490864607254313074191178423597186716131"
+	mixedTorusCentre = 21281011.537541769
+	mixedTorusRadius = 14734.036267944795
+)
+
+// requireEnclosesSweptApex asserts that the box's published interval about
+// Max.Z covers apex·sin, the exact extreme a section whose farthest point sits
+// at radius apex reaches when it is swept through the angle whose sine is sin.
+// Both factors are carried through big.Float: the apex radius is a sum this
+// test states exactly and the sine a 60-digit reference, so the comparison is
+// against the truth rather than against a second rounded evaluation of it.
+func requireEnclosesSweptApex(t *testing.T, box decad.Box, apex, sin *big.Float) {
+	t.Helper()
+	const prec = 200
+	boundMM, err := box.Bound.In(units.Millimeter)
+	require.NoError(t, err)
+	truth := new(big.Float).SetPrec(prec).Mul(apex, sin)
+	residual := new(big.Float).SetPrec(prec).Sub(
+		new(big.Float).SetPrec(prec).SetFloat64(box.Max.Z),
+		truth,
+	)
+	residual.Abs(residual)
+	require.LessOrEqual(t,
+		residual.Cmp(new(big.Float).SetPrec(prec).SetFloat64(boundMM)), 0,
+		`the box's published interval must contain the swept extreme (Max.Z %.17g, truth %s, residual %s, bound %g)`,
+		box.Max.Z, truth.Text('g', 25), residual.Text('g', 6), boundMM,
+	)
+}
+
+// TestRevolveBoundsComposesBoundaryAndSweepDisplacement is the containment
+// proof for a section whose extreme rides a computed circular radius AND a
+// partial sweep whose own amplitude no float64 holds. The two displacements
+// are of DIFFERENT quantities at the SAME endpoint — how far the computed
+// extreme sits from the true extreme at the held sweep coefficient, and how far
+// that held coefficient sits from the true one — so nothing keeps their signs
+// apart and the published half-width has to cover their sum. The larger of the
+// two is not that cover: both cases below carry two nonzero terms, and the
+// first is a worked case where they genuinely add, its residual against the
+// truth exceeding either term on its own.
+func TestRevolveBoundsComposesBoundaryAndSweepDisplacement(t *testing.T) {
+	const prec = 200
+	t.Run("circle section", func(t *testing.T) {
+		// A thin torus section far from the axis, swept through a partial
+		// angle: the swept solid's z maximum is exactly (centre + radius)·sin,
+		// reached by the section's own farthest point at the far cap.
+		w := sketch.NewWorld()
+		s, err := w.CreateSketch(w.XY())
+		require.NoError(t, err)
+		c := s.CreatePoint(0, mixedTorusCentre)
+		s.Fix(c)
+		s.CreateCircle(c, mixedTorusRadius)
+		_, err = s.Solve(t.Context())
+		require.NoError(t, err)
+		require.Len(t, s.Profiles(), 1)
+
+		body, err := decad.New().Revolve(s, s.Profiles()[0], uAxis,
+			decad.AngleExtent{A: units.Radians(mixedSweepAngle), Dir: decad.Along})
+		require.NoError(t, err)
+		box, err := body.Bounds()
+		require.NoError(t, err)
+		require.Equal(t, decad.Approximate, box.Exactness)
+
+		sin, _, err := big.ParseFloat(mixedSweepSine, 10, prec, big.ToNearestEven)
+		require.NoError(t, err)
+		apex := new(big.Float).SetPrec(prec).Add(
+			new(big.Float).SetPrec(prec).SetFloat64(mixedTorusCentre),
+			new(big.Float).SetPrec(prec).SetFloat64(mixedTorusRadius),
+		)
+		requireEnclosesSweptApex(t, box, apex, sin)
+	})
+
+	t.Run("arc and chord section", func(t *testing.T) {
+		// The same composition over a MIXED section — an arc closed by its own
+		// chord — swept 1 radian. The arc's apex sits at radius √(u²+v²), which
+		// the record never states, so the boundary term is live alongside the
+		// sweep's.
+		const u, v = 1.0, 6.0
+		s, p := arcApexSketch(t, u, v)
+		body, err := decad.New().Revolve(s, p, uAxis,
+			decad.AngleExtent{A: units.Radians(1), Dir: decad.Along})
+		require.NoError(t, err)
+		box, err := body.Bounds()
+		require.NoError(t, err)
+		require.Equal(t, decad.Approximate, box.Exactness)
+
+		sin, _, err := big.ParseFloat(sinOneDigits, 10, prec, big.ToNearestEven)
+		require.NoError(t, err)
+		sq := new(big.Float).SetPrec(prec).SetFloat64(u * u)
+		sq.Add(sq, new(big.Float).SetPrec(prec).SetFloat64(v*v))
+		requireEnclosesSweptApex(t, box, new(big.Float).SetPrec(prec).Sqrt(sq), sin)
+		// The apex is still reached at the sweep's own start, so the same box
+		// has to enclose the undisplaced radius too.
+		requireEnclosesApex(t, box, u, v)
+	})
 }

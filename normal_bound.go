@@ -324,6 +324,27 @@ func radSinCosInterval(x *big.Rat) (ratInterval, ratInterval, bool) {
 	return intervalWiden(sin, slop), intervalWiden(cos, slop), true
 }
 
+// radSinCosSpan is radSinCosInterval over a whole radian INTERVAL rather than
+// one exact radian value — what a caller holds when the angle itself is only
+// enclosed, as an arc's own a0 + t·sweep is (both terms come from
+// atan2Interval).
+//
+// It evaluates the point enclosure at the span's lower end and widens both
+// readings by the span's own width. That is sound because sine and cosine are
+// 1-Lipschitz, so no monotonicity over the span need be argued — the same
+// argument radSinCosInterval makes for its own grid gap, one level up.
+func radSinCosSpan(x ratInterval) (ratInterval, ratInterval, bool) {
+	width := new(big.Rat).Sub(x.hi, x.lo)
+	if width.Sign() < 0 {
+		return ratInterval{}, ratInterval{}, false
+	}
+	sin, cos, ok := radSinCosInterval(x.lo)
+	if !ok {
+		return ratInterval{}, ratInterval{}, false
+	}
+	return intervalWiden(sin, width), intervalWiden(cos, width), true
+}
+
 // intervalWiden grows an enclosure by a non-negative rational on both ends.
 func intervalWiden(a ratInterval, w *big.Rat) ratInterval {
 	return interval(new(big.Rat).Sub(a.lo, w), new(big.Rat).Add(a.hi, w))

@@ -1098,13 +1098,9 @@ func shiftFreeformSpans(spans []bezierSpan, anchor Point2) error {
 // walk order — the first and last Bézier control point, which a Bézier
 // interpolates exactly, so these are the curve's endpoints and not samples.
 func freeformEndpoints(spans []bezierSpan, reversed bool) (Point2, Point2, error) {
-	if len(spans) == 0 || len(spans[0]) == 0 || len(spans[len(spans)-1]) == 0 {
+	first, last, ok := freeformEndControls(spans, reversed)
+	if !ok {
 		return Point2{}, Point2{}, fmt.Errorf(`%w: a converted free-form curve holds no span`, ErrDegenerate)
-	}
-	first := spans[0][0]
-	last := spans[len(spans)-1][len(spans[len(spans)-1])-1]
-	if reversed {
-		first, last = last, first
 	}
 	start, okStart := point2Of(first)
 	end, okEnd := point2Of(last)
@@ -1112,6 +1108,45 @@ func freeformEndpoints(spans []bezierSpan, reversed bool) (Point2, Point2, error
 		return Point2{}, Point2{}, fmt.Errorf(`%w: a converted free-form endpoint is not representable`, ErrNotFinite)
 	}
 	return start, end, nil
+}
+
+// freeformEndControls picks the converted chain's first and last CONTROL points
+// in the recorded walk order. It is the single owner of that selection —
+// freeformEndpoints rounds the pair it returns and freeformEndpointBounds
+// measures that rounding, and the two readings must never disagree about which
+// control point an end is.
+func freeformEndControls(spans []bezierSpan, reversed bool) (ratPoint, ratPoint, bool) {
+	if len(spans) == 0 || len(spans[0]) == 0 || len(spans[len(spans)-1]) == 0 {
+		return ratPoint{}, ratPoint{}, false
+	}
+	first := spans[0][0]
+	last := spans[len(spans)-1][len(spans[len(spans)-1])-1]
+	if reversed {
+		first, last = last, first
+	}
+	return first, last, true
+}
+
+// freeformEndpointBounds is the proven per-component bound on each endpoint
+// freeformEndpoints published — segmentWalk's startBound/endBound for this
+// kind. A Bézier interpolates its end control points exactly, so the only error
+// an endpoint carries is the ONE rounding point2Of commits taking the exact
+// rational control point into float64, and that is measured here against the
+// rational itself. A chain with no span answers +Inf, the underivable bound
+// every consumer refuses on.
+func freeformEndpointBounds(spans []bezierSpan, reversed bool, start, end Point2) (walkEndBound, walkEndBound) {
+	first, last, ok := freeformEndControls(spans, reversed)
+	if !ok {
+		unbounded := walkEndBound{u: math.Inf(1), v: math.Inf(1)}
+		return unbounded, unbounded
+	}
+	bound := func(p ratPoint, held Point2) walkEndBound {
+		return walkEndBound{
+			u: rationalFloatError(p.u, held.U),
+			v: rationalFloatError(p.v, held.V),
+		}
+	}
+	return bound(first, start), bound(last, end)
 }
 
 func point2Of(p ratPoint) (Point2, bool) {

@@ -740,7 +740,22 @@ type segmentWalk struct {
 	// whole closed curve (no junction vertices at all).
 	startU, startV float64
 	endU, endV     float64
-	closed         bool
+	// startBound/endBound are the PROVEN error bounds on the endpoint beside
+	// them, in the coordinates' own millimetres — radiusBound's twin two fields
+	// up, and stated for the same reason. An endpoint is an exact leaf only
+	// where the record STATES it: a line's own bounds and an arc's own bounds
+	// are recorded coordinates the walk reads verbatim (lerp2, pinArcWalkEnds),
+	// and those read zero. Every other endpoint is computed — a trimmed line's
+	// is a float lerp, a trimmed arc's and EVERY circle's is a
+	// math.Cos/math.Sin at an angle this package itself computed — so each kind
+	// STATES what its own endpoint is worth (lineWalkEndBound,
+	// circularWalkEndBound, freeformEndpointBounds) or REFUSES with +Inf, never
+	// leaves it silently zero. A reading that folds an endpoint into an answer
+	// charges it through pointPerturbationAllow; one that cannot state the
+	// charge refuses on the +Inf rather than publishing an exactness the
+	// evaluator never proved.
+	startBound, endBound walkEndBound
+	closed               bool
 	// tanIn/tanOut are the walk tangents at start and end (unit not
 	// required), for junction convexity.
 	tanInU, tanInV   float64
@@ -788,6 +803,24 @@ type segmentWalk struct {
 	spans    []bezierSpan
 	reversed bool
 }
+
+// walkEndBound is the proven error bound on a walk endpoint's two components,
+// stated PER COMPONENT and never merged into one number. The two are
+// independent readings and an endpoint routinely proves one exactly while the
+// other carries error: a whole circle's own end is exactly that shape, since
+// math.Cos returns 1 at the end angle while math.Sin does not return 0 there.
+// Merging them would spend the exact axis's zero on the other axis's error, and
+// a reading along the exact axis alone would then publish a width its own
+// arithmetic never committed.
+//
+// A component the recorded data cannot enclose reads +Inf, the underivable
+// bound every consumer refuses on, and never zero.
+type walkEndBound struct {
+	u, v float64
+}
+
+// derivable reports whether both components state a bound at all.
+func (b walkEndBound) derivable() bool { return !isNonFinite(b.u) && !isNonFinite(b.v) }
 
 // isCircular reports whether the walk is a circle or arc — the question the
 // closed-form circular branches ask.
@@ -841,7 +874,9 @@ func walkOf(seg CurveSegment, work *freeformWork) (segmentWalk, error) {
 		tangentBound := lineWalkTangentBound(seg, du, dv)
 		return segmentWalk{
 			startU: u0, startV: v0, endU: u1, endV: v1,
-			tanInU: du, tanInV: dv, tanOutU: du, tanOutV: dv,
+			startBound: lineWalkEndBound(seg, seg.TStart, u0, v0),
+			endBound:   lineWalkEndBound(seg, seg.TEnd, u1, v1),
+			tanInU:     du, tanInV: dv, tanOutU: du, tanOutV: dv,
 			tanInBound:  tangentBound,
 			tanOutBound: tangentBound,
 			length:      length,
@@ -868,6 +903,8 @@ func walkOf(seg CurveSegment, work *freeformWork) (segmentWalk, error) {
 			circularSweepUpper(seg.TStart, seg.TEnd),
 		)
 		w.closed = math.Abs(math.Abs(th1-th0)-2*math.Pi) < 1e-12
+		w.startBound = circularWalkEndBound(seg, seg.TStart, w.startU, w.startV)
+		w.endBound = circularWalkEndBound(seg, seg.TEnd, w.endU, w.endV)
 		if iv, ok := circularLengthInterval(seg); ok {
 			w.lengthBound = math.Min(w.lengthBound, intervalFloatError(iv, w.length))
 		}
@@ -926,6 +963,47 @@ func lineWalkTangentBound(seg LineSeg, heldU, heldV float64) float64 {
 	)
 }
 
+// lineWalkEndBound is the single owner of the proven bound on a LINE walk's
+// endpoint, and lineWalkTangentBound's twin one field over: the record states
+// the segment's endpoints and its parameter range, never the point at a trimmed
+// parameter, so the walk's held endpoint is lerp2's float evaluation. The point
+// the record DENOTES is the exact rational lerp (ratLerp), which carries no
+// rounding at either step, and the bound is the wider of the two components'
+// gaps from it, rounded outward. A natural bound needs no argument of its own:
+// lerp2 and ratLerp both special-case t = 0 and t = 1 to the recorded Point2
+// verbatim, so the two agree exactly and this answers zero. A lerp that is not
+// representable as a rational yields +Inf — the underivable bound consumers
+// refuse on.
+func lineWalkEndBound(seg LineSeg, t, heldU, heldV float64) walkEndBound {
+	return walkEndBound{
+		u: rationalFloatError(ratLerp(seg.Start.U, seg.End.U, t), heldU),
+		v: rationalFloatError(ratLerp(seg.Start.V, seg.End.V, t), heldV),
+	}
+}
+
+// circularWalkEndBound is the single owner of the proven bound on a CIRCULAR
+// walk's endpoint: circularWalk reaches every endpoint through math.Sincos at
+// an angle this package computed — a CircleSeg's from a float multiply by 2π,
+// an ArcSeg's from math.Atan2 of the recorded differences — and neither the
+// trig nor its argument is a quantity that walk can enclose from the record
+// alone (circularWalk's own comment). circularEndpointInterval encloses the
+// point the record DENOTES at that parameter instead, from the recorded data
+// and certified trigonometry, and each component's bound is its own gap from
+// that enclosure.
+//
+// An enclosure the recorded data cannot state yields +Inf — an underivable
+// bound, which every consumer refuses on rather than publishes.
+func circularWalkEndBound(seg CurveSegment, t, heldU, heldV float64) walkEndBound {
+	uIv, vIv, ok := circularEndpointInterval(seg, t)
+	if !ok {
+		return walkEndBound{u: math.Inf(1), v: math.Inf(1)}
+	}
+	return walkEndBound{
+		u: intervalFloatError(uIv, heldU),
+		v: intervalFloatError(vIv, heldV),
+	}
+}
+
 // arcWalkRadiusBound is the single owner of the proven bound on an ArcSeg
 // walk's radius, and the reason segmentWalk carries radiusBound at all: the
 // record states Start and Center, never the radius, so the walk's held radius
@@ -950,7 +1028,8 @@ func arcWalkRadiusBound(seg ArcSeg, held float64) float64 {
 // (docs/spline-design.md Table F). Every field it fills is a proof:
 //
 //   - the endpoints are the converted chain's own first and last control
-//     points, which a Bézier interpolates exactly;
+//     points, which a Bézier interpolates exactly, each under the bound of the
+//     one rounding that conversion committed (freeformEndpointBounds);
 //   - the tangents are the hodograph at those ends, exact directions;
 //   - the length is §6.1's proven two-sided bracket, so lengthBound is
 //     positive and the walk NEVER claims an exact length — a control net
@@ -988,9 +1067,12 @@ func freeformWalk(seg CurveSegment, work *freeformWork) (segmentWalk, error) {
 	if err != nil {
 		return segmentWalk{}, err
 	}
+	startBound, endBound := freeformEndpointBounds(spans, reversed, start, end)
 	return segmentWalk{
 		startU: start.U, startV: start.V,
 		endU: end.U, endV: end.V,
+		startBound: startBound,
+		endBound:   endBound,
 		// A closed free-form curve returns to its start, so it carries no
 		// junction vertex — the same fact CircleSeg's closed walk states.
 		closed:      start == end,
@@ -1035,24 +1117,30 @@ var errFreeformWalkUncounted = fmt.Errorf(
 // the record states one, and RecordProfile would then refuse the region the
 // arrangement admits on its own proximity threshold.
 //
-// A trimmed bound is left alone: it has no recorded coordinate of its own, and
-// inventing one is what this seam never does.
+// A trimmed bound's POSITION is left alone: it has no recorded coordinate of
+// its own, and inventing one is what this seam never does. What it does get is
+// the bound circularWalk's route actually owes — see arcWalkEnd, which owns the
+// natural-bound test for both readings so the pinned position and the zero
+// bound can never drift apart.
 func pinArcWalkEnds(w *segmentWalk, seg ArcSeg) {
-	recorded := func(t float64) (Point2, bool) {
-		switch t {
-		case 0:
-			return seg.Start, true
-		case 1:
-			return seg.End, true
-		}
-		return Point2{}, false
+	w.startU, w.startV, w.startBound = arcWalkEnd(seg, seg.TStart, w.startU, w.startV)
+	w.endU, w.endV, w.endBound = arcWalkEnd(seg, seg.TEnd, w.endU, w.endV)
+}
+
+// arcWalkEnd states one arc walk end: its position and the proven bound on each
+// of its components. At a natural bound the record states the point verbatim,
+// so the walk reads Start or End and the bound is zero — the pin and the zero
+// are one decision, taken here once. At any other parameter the walk keeps
+// circularWalk's own held pair under the bound circularWalkEndBound proves for
+// it.
+func arcWalkEnd(seg ArcSeg, t, heldU, heldV float64) (float64, float64, walkEndBound) {
+	switch t {
+	case 0:
+		return seg.Start.U, seg.Start.V, walkEndBound{}
+	case 1:
+		return seg.End.U, seg.End.V, walkEndBound{}
 	}
-	if p, ok := recorded(seg.TStart); ok {
-		w.startU, w.startV = p.U, p.V
-	}
-	if p, ok := recorded(seg.TEnd); ok {
-		w.endU, w.endV = p.U, p.V
-	}
+	return heldU, heldV, circularWalkEndBound(seg, t, heldU, heldV)
 }
 
 // circularWalk builds the walk geometry of a circular path about (cu, cv).
@@ -1061,9 +1149,15 @@ func pinArcWalkEnds(w *segmentWalk, seg ArcSeg) {
 // evaluations at th0/th1, and those angles are themselves computed — a
 // CircleSeg's from a float multiply by 2π, an ArcSeg's from math.Atan2 of the
 // recorded differences — so neither the trig nor its argument is a quantity
-// this walk can enclose from the record alone. Stating zero there would hand a
-// consumer an exactness the evaluator never proved; +Inf makes the absence
-// visible, which is what every consumer refuses on.
+// THIS function can enclose, holding floats alone. Stating zero there would
+// hand a consumer an exactness the evaluator never proved; +Inf makes the
+// absence visible, which is what every consumer refuses on.
+//
+// The endpoints are the same floats and carry the same absence, but they are
+// not left at it: each caller holds the recorded segment those floats came
+// from, and stamps the enclosure that record proves for its own endpoints
+// (circularWalkEndBound) over the zero this function leaves behind. What has no
+// enclosure is the tangent, not the point.
 func circularWalk(cu, cv, r, th0, th1, radiusUpper, sweepUpper float64) segmentWalk {
 	sin0, cos0 := math.Sincos(th0)
 	sin1, cos1 := math.Sincos(th1)
@@ -1489,52 +1583,68 @@ func sideOriginsContext(ctx context.Context, ref StepRef, roleLoop int, segs []i
 	return origins, nil
 }
 
-// extentAlong is the prism's exact extent interval along an arbitrary world
-// direction g — the lifted linear functional point·g = origin·g + u·(U'·g)
-// + v·(V'·g) + z·(N'·g), primes the placed directions, extremized over the
-// region boundary and the sweep. A through-all stop records its result as an
-// exact endpoint, so it refuses a prism with a proven section displacement.
-// prismBoundsContext reads extentBoundedAlong directly and carries both that
-// displacement and a free-form boundary's own bracket bound as its own
-// outward bound instead.
+// extentAlong is the through-all stop's reading of the prism (stops.go): the
+// extent interval along an arbitrary world direction g — the lifted linear
+// functional point·g = origin·g + u·(U'·g) + v·(V'·g) + z·(N'·g), primes the
+// placed directions, extremized over the region boundary and the sweep —
+// beside the proven displacement extentBoundedAlong states for its two ends.
+// The stop charges that displacement to the level it resolves and decides its
+// own in-path test outside it, so a boundary extreme held by a bracket
+// (docs/spline-design.md §6.2) still answers rather than refusing.
+//
+// The section displacement is NOT one of the terms this reading carries — it
+// moves a coordinate IN the plane, and the interval is stated over the
+// recorded section — so a prism holding one refuses instead
+// (docs/prism-boolean-design.md §12). prismBoundsContext reads
+// extentBoundedAlong directly and composes both terms into its own outward
+// bound.
 // The stop and clearance callers hold no preflight counter for this record, so
 // the interface forms open the record's own — one per extent reading, never one
 // per segment.
-func (pp prismPayload) extentAlong(g r3.Vec) (float64, float64, error) {
+func (pp prismPayload) extentAlong(g r3.Vec) (float64, float64, float64, error) {
 	if pp.sectionDelta != 0 {
-		return 0, 0, fmt.Errorf(`%w: a through-all stop cannot use a prism with a proven section displacement`, ErrUnsupported)
+		return 0, 0, 0, fmt.Errorf(`%w: a through-all stop cannot use a prism with a proven section displacement`, ErrUnsupported)
 	}
-	return pp.extentAlongContext(context.Background(), g)
+	return pp.extentBoundedAlong(context.Background(), g, newFreeformWork())
 }
 
 func (pp prismPayload) extentAlongContext(ctx context.Context, g r3.Vec) (float64, float64, error) {
 	return pp.extentAlongWork(ctx, g, newFreeformWork())
 }
 
-// extentAlongWork is extentBoundedAlong's refusing wrapper (Table R row R11,
-// docs/spline-design.md §6.4), mirroring capBlendPayload.extentAlongWork word
-// for word: a through-all stop reads this extent as an exact endpoint and has
-// no bound to widen, so a direction whose extreme a free-form bracket cannot
-// state exactly refuses rather than fabricate one. This is deliberately WIDER
-// than §6.4's own straddle rule — every nonzero bracket bound refuses here,
-// not only one that straddles the sketch plane in the travel sense — and
-// narrowing it to that test is a later step under the same non-permanent row.
+// extentAlongWork is extentBoundedAlong's refusing wrapper, mirroring
+// revolvePayload.extentAlongWork word for word: the reading for a consumer that
+// takes the interval as an exact one and has nowhere to put a displacement.
+// clearance.go's payloadExtent is that consumer — its separating-plane
+// short-circuit compares two bodies' intervals and simply loses the
+// short-circuit where it cannot get an exact one — so a direction whose extreme
+// only a bracket holds refuses here rather than publish a held coordinate as the
+// one it denotes. Which candidate holds it does not matter and the refusal never
+// names a kind: a free-form span's enclosure, a computed arc radius and a walked
+// endpoint the record does not state all reach this wrapper the same way,
+// through one nonzero bound. A through-all stop does not read through this wrapper:
+// it consumes the bounded reading and charges the displacement to its own level
+// (stops.go, docs/spline-design.md §6.4).
 func (pp prismPayload) extentAlongWork(ctx context.Context, g r3.Vec, work *freeformWork) (float64, float64, error) {
 	lo, hi, bound, err := pp.extentBoundedAlong(ctx, g, work)
 	if err != nil {
 		return 0, 0, err
 	}
 	if bound != 0 {
-		return 0, 0, fmt.Errorf(`%w: a free-form prism's extent along this direction is held by its own directional-extreme bracket, known only to a displacement of %v mm; a stop reads this coordinate as exact and has no bound to widen`, ErrUnsupported, bound)
+		return 0, 0, fmt.Errorf(`%w: this prism's extent along this direction is held by its own boundary-extreme bracket, known only to a displacement of %v mm; this reading has no bound to widen`, ErrUnsupported, bound)
 	}
 	return lo, hi, nil
 }
 
 // extentBoundedAlong is the bounded reading itself: the interval AND its
 // proven half-width, folded from boundaryExtremesBoundedContext's own
-// per-candidate enclosures (docs/spline-design.md §6.2). An all-analytic
-// section carries only zero-width candidates, so the bound is zero and the
-// interval exact — unchanged from before this bracket existed.
+// per-candidate enclosures (docs/spline-design.md §6.2). The bound follows the
+// CANDIDATES the extremes are held by, never the section's kind: a section whose
+// extremes are all values the record states — straight walls, and an arc or
+// circle read where its own recorded endpoint or its exactly representable apex
+// wins — carries only zero-width candidates and reports an exact interval, while
+// a trimmed circular endpoint, a computed arc radius or a free-form span's
+// enclosure each publish the width their own construction owes.
 func (pp prismPayload) extentBoundedAlong(ctx context.Context, g r3.Vec, work *freeformWork) (float64, float64, float64, error) {
 	base := pp.xform.Apply(pp.frame.Origin()).Dot(g)
 	gu := pp.dir(1, 0, 0).Dot(g)
@@ -1574,9 +1684,12 @@ func prismBoundsContext(ctx context.Context, pp prismPayload, work *freeformWork
 	// displacement itself — δ outward on every face
 	// (docs/prism-boolean-design.md §7) — summed with the boundary's own
 	// directional-extreme bracket bound (docs/spline-design.md §6.2). Both are
-	// zero for every analytic, caller-drawn payload, which keeps the ordinary
-	// prism's box Exact as before. The bracket's own term is what decides the
-	// rest, never the section's kind: a free-form section whose extremes along
+	// zero for a caller-drawn payload whose extremes are all values its record
+	// states, which keeps the ordinary prism's box Exact as before. The
+	// bracket's own term is what decides the rest, never the section's kind: a
+	// straight-walled section reports zero, an analytic one whose extreme is
+	// held by a trimmed circular endpoint or a computed arc radius reports that
+	// candidate's own width, and a free-form section whose extremes along
 	// these three axes are all held by exactly representable candidate values
 	// reports a zero width and stays Exact too (a span monotone along an axis
 	// contributes its two exactly interpolated endpoints and nothing else),
@@ -1620,48 +1733,73 @@ func prismBoundsContext(ctx context.Context, pp prismPayload, work *freeformWork
 	}, nil
 }
 
-// boundaryExtremes returns the min and max of the linear functional
-// g(u, v) = gu·u + gv·v over the recorded region's boundary — exact per
-// analytic segment kind: line extremes at endpoints, circular extremes at the
-// functional's own angle when the walk sweeps it. It refuses a free-form
-// section rather than report a bounded interval; see boundaryExtremesContext.
-func boundaryExtremes(profile ProfileRecord, gu, gv float64, work *freeformWork) (float64, float64, error) {
-	return boundaryExtremesContext(context.Background(), profile, gu, gv, work)
-}
-
-// boundaryExtremesContext is boundaryExtremesBoundedContext's refusing
-// wrapper: it keeps the exact signature every existing caller holds
-// (revolve.go's resolveAxisSide runs it BEFORE its own requireAnalyticWalk
-// gate, and capblend.go's extentBoundedAlong relies on it the same way, so
-// this refusal is what protects both from a free-form section today), and it
-// refuses ErrUnsupported wherever the bounded scan's bracket carries a
-// nonzero bound. Every analytic candidate reports a zero bound, so this
-// preserves current behaviour exactly for every section this evaluator could
-// already build — only the refusal's message changes.
-func boundaryExtremesContext(ctx context.Context, profile ProfileRecord, gu, gv float64, work *freeformWork) (float64, float64, error) {
-	lo, hi, bound, err := boundaryExtremesBoundedContext(ctx, profile, gu, gv, work)
-	if err != nil {
-		return 0, 0, err
-	}
-	if bound != 0 {
-		return 0, 0, fmt.Errorf(`%w: the boundary extreme scan's directional bracket has a nonzero bound of %v mm along this direction, and this caller has no bound to widen`, ErrUnsupported, bound)
-	}
-	return lo, hi, nil
+// circularExtremeInterval encloses the two EXACT extremes of the functional
+// g(u, v) = gu·u + gv·v over the whole circle a circular walk lies on. Writing
+// the walk as c + r·(cos θ, sin θ) gives g(θ) = (gu·cU + gv·cV) + r·|(gu, gv)|·
+// cos(θ − θ*), so the circle's own minimum and maximum are P ∓ r·|(gu, gv)| —
+// an identity in which the angle does not appear at all.
+//
+// That is why the scan's circular candidate is bounded from here rather than
+// from a certified sine and cosine at the candidate's own angle: the angle is a
+// SELECTION (does the walk sweep the apex?), while the VALUE the fold publishes
+// is this closed form, and reading it this way charges no π-rounding guard for
+// an angle that never enters the answer. The three inputs that are not exact
+// leaves each enter through the bounded arithmetic: the walk's radius under its
+// own proven bound (segmentWalk.radiusBound — an ArcSeg states Start and Center,
+// so its radius is a math.Hypot), the direction's magnitude through
+// boundedNorm2's certified square-root brackets, and every product and sum
+// through boundedMul/boundedAdd's own exact rounding terms. An exactly
+// representable apex therefore still reports a zero bound, which is what lets a
+// recorded circle's box stay Exact along an axis whose reading the apex holds —
+// the walk's own endpoints answer for themselves there
+// (segmentWalk.startBound/endBound).
+func circularExtremeInterval(w segmentWalk, gu, gv float64) (boundedScalar, boundedScalar) {
+	gmag := boundedNorm2(exactScalar(gu), exactScalar(gv))
+	centre := boundedAdd(
+		boundedMul(exactScalar(gu), exactScalar(w.cU)),
+		boundedMul(exactScalar(gv), exactScalar(w.cV)),
+	)
+	amplitude := boundedMul(measuredScalar(w.radius, w.radiusBound), gmag)
+	return boundedSub(centre, amplitude), boundedAdd(centre, amplitude)
 }
 
 // boundaryExtremesBoundedContext is the one scan, total over walkKind
 // (docs/spline-design.md §6.2): the min and max of g(u, v) = gu·u + gv·v over
 // the recorded region's boundary, AND the proven half-width of that interval.
-// A line or circular candidate is exact — the same closed forms
-// boundaryExtremesContext always ran, contributing a zero-width candidate — and
-// a free-form walk folds each of its converted spans' own proven enclosure
-// (spanExtremeEnclosureContext). The fold is the shipped
-// capBlendPayload.extentBoundedAlong idiom: track the lower and upper ends of
-// every candidate contributing to the region minimum (loLower/loUpper) and to
-// the region maximum (hiLower/hiUpper) separately, so a candidate that loses
-// the extremization contributes nothing to the reported bound, and report the
-// midpoint of each composed interval with the larger of the two half widths,
-// rounded up — the same convention freeformArcLength already uses.
+//
+// An ENDPOINT candidate is the walk's own endpoint read through the direction
+// the caller holds, which this evaluator reads as an exact leaf throughout (the
+// convention survey2d.go's own file comment states). The endpoint itself is an
+// exact leaf only where the record STATES it — a line's or an arc's natural
+// bounds — and there the candidate has zero width, so an all-straight section's
+// reading stays exact. Every other endpoint is one this evaluator computed, and
+// the walk states what it is worth (segmentWalk.startBound/endBound);
+// pointPerturbationAllow carries that displacement through the functional so
+// the candidate enters at the width its own construction owes, never at zero.
+// An endpoint whose bound no arithmetic could state refuses the whole scan
+// rather than folding an infinity into the accumulators.
+//
+// An interior CIRCULAR candidate is a second computed reading: its position is
+// the walk's radius times a cosine and a sine, and the radius itself is a
+// math.Hypot for every ArcSeg, so it enters the fold under the proven enclosure
+// circularExtremeInterval derives — the single owner of that term, charged where
+// the candidate is produced rather than beside the fold by whichever consumer
+// noticed. A free-form walk folds each of its converted spans' own proven
+// enclosure (spanExtremeEnclosureContext) and takes no endpoint candidate of its
+// own: a span enclosure already covers the span's whole parameter range,
+// endpoints included.
+//
+// The fold is the shipped capBlendPayload.extentBoundedAlong idiom: track the
+// lower and upper ends of every candidate contributing to the region minimum
+// (loLower/loUpper) and to the region maximum (hiLower/hiUpper) separately, so
+// a candidate that loses the extremization contributes nothing to the reported
+// bound, and report the midpoint of each composed interval with the larger of
+// the two half widths, rounded up — the same convention freeformArcLength
+// already uses. The fold is sound because every candidate interval encloses a
+// value the true boundary actually attains: the reported minimum's lower end is
+// the least of the candidates' lower ends and so never exceeds the truth, and
+// its upper end is the least of their upper ends, which the candidate attaining
+// the true minimum keeps at or above it.
 //
 // A span enclosure that convention cannot state in float64 refuses at the
 // conversion rather than entering the fold (spline_extreme.go's
@@ -1690,10 +1828,25 @@ func boundaryExtremesBoundedContext(ctx context.Context, profile ProfileRecord, 
 		hiLower = math.Max(hiLower, l)
 		hiUpper = math.Max(hiUpper, h)
 	}
-	take := func(u, v float64) {
-		g := gu*u + gv*v
-		takeLo(g, g)
-		takeHi(g, g)
+	// take folds one candidate's held value under the proven bound its own
+	// generator derived. A zero bound enters as the held value twice: widening
+	// an exact candidate by a directed rounding would mint an error the
+	// arithmetic provably did not commit. A nonzero one is stepped outward with
+	// math.Nextafter rather than upRound/downRound, since a directional value
+	// can be negative and those two only move a POSITIVE bound toward zero.
+	take := func(g, allow float64) {
+		if allow == 0 {
+			takeLo(g, g)
+			takeHi(g, g)
+			return
+		}
+		lo := math.Nextafter(g-allow, math.Inf(-1))
+		hi := math.Nextafter(g+allow, math.Inf(1))
+		takeLo(lo, hi)
+		takeHi(lo, hi)
+	}
+	takeVertex := func(u, v float64, bound walkEndBound) {
+		take(gu*u+gv*v, pointPerturbationAllow(bound, gu, gv))
 	}
 	// Every span enclosure enters the fold through freeformExtremeFloats
 	// (spline_extreme.go), which rounds outward through ratFloatDown/ratFloatUp
@@ -1733,26 +1886,37 @@ func boundaryExtremesBoundedContext(ctx context.Context, profile ProfileRecord, 
 				}
 				continue
 			}
-			take(w.startU, w.startV)
-			take(w.endU, w.endV)
+			if !w.startBound.derivable() || !w.endBound.derivable() {
+				return 0, 0, 0, fmt.Errorf(`%w: a boundary segment's walked endpoint states no proven displacement, so this scan cannot bound the region's extremes`, ErrUnsupported)
+			}
+			takeVertex(w.startU, w.startV, w.startBound)
+			takeVertex(w.endU, w.endV, w.endBound)
 			if !w.isCircular() {
 				continue
 			}
 			// Interior extremes at θ* where the functional's gradient
-			// aligns with the radius: θ* = atan2(gv, gu) (+π).
+			// aligns with the radius: θ* = atan2(gv, gu) (+π). The angle
+			// SELECTS which of the circle's two extremes the walk sweeps;
+			// circularExtremeInterval states what that extreme is worth.
 			gmag := math.Hypot(gu, gv)
 			if gmag == 0 {
 				continue
 			}
+			minIv, maxIv := circularExtremeInterval(w, gu, gv)
 			star := math.Atan2(gv, gu)
 			tlo, thi := math.Min(w.th0, w.th1), math.Max(w.th0, w.th1)
-			for _, cand := range []float64{star, star + math.Pi} {
+			for ci, cand := range [2]float64{star, star + math.Pi} {
+				apex := maxIv
+				if ci == 1 {
+					apex = minIv
+				}
 				for k := math.Floor((tlo-cand)/(2*math.Pi)) * 2 * math.Pi; cand+k <= thi+1e-12; k += 2 * math.Pi {
 					th := cand + k
 					if th < tlo-1e-12 {
 						continue
 					}
-					take(w.cU+w.radius*math.Cos(th), w.cV+w.radius*math.Sin(th))
+					held := gu*(w.cU+w.radius*math.Cos(th)) + gv*(w.cV+w.radius*math.Sin(th))
+					take(held, boundedFloatError(apex, held))
 				}
 			}
 		}

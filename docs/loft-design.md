@@ -582,8 +582,11 @@ rational denotes.
 
 **`Bounds` is Exact for an unplaced body.** Every vertex is already treated
 as exact (§5); the axis-aligned box is the componentwise min/max over an
-already-exact set, the same per-vertex-extreme reasoning Extrude's `Bounds`
-already relies on — no new rounding is introduced by comparing exact numbers.
+already-exact set, the same componentwise-extreme reasoning Extrude's `Bounds`
+applies to its own candidate set — no new rounding is introduced by comparing
+exact numbers. Extrude's candidates are not all exact (a computed walk endpoint
+or arc radius carries a bound there), and the reasoning shared is the min/max
+step, never a claim about the other feature's inputs.
 A placed body's box carries the payload's own displacement (§12 PR 2a): the
 box is still the componentwise min/max over the held vertex set, but that
 set is no longer provably exact, so `Bounds.Bound` is `delta` and
