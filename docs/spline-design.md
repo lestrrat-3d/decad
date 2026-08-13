@@ -1433,6 +1433,22 @@ multiplicity equal to the degree is a genuine C⁰ corner and folds by the cross
 product exactly as stated above, exactly as Table K's degree-1 `NURBSSeg`
 example does.
 
+<!-- Refutation of a review finding against the paragraph above, which claimed the rule is stated
+     unconditionally and so also covers a fit point where the interpolant's tangent vanishes — a case
+     §6.5's regularity precondition must refuse as R19. The mechanism cannot occur, because the
+     precondition is a PER-SPAN gate that runs before any joint verdict exists.
+     `freeformWallConvexityContext` (`spline_convexity.go`) calls `spanConvexitySignContext` for each
+     span — whose first statement is `requireSpanSpeedRegularContext` — before it forms any joint's
+     verdict, so both spans adjacent to a joint have already been admitted or the walk has already
+     refused. §6.4's own statement of the ordering says the same ("The span's speed must be proven
+     nonzero BEFORE a single coefficient is read"), and the joint paragraph above opens by relying on
+     it. Checked against the finding's own example: for `FitSplineSeg` fit points (0,0), (1,0), (0,0)
+     the conversion yields spans (0,0),(1/2,0),(1,0),(1,0) and (1,0),(1,0),(1/2,0),(0,0), so the
+     derivative at the middle fit point is exactly zero as the finding says — and
+     `requireSpanSpeedRegularContext` refuses both spans with R19, publishing no joint verdict at all.
+     The paragraph above therefore governs only joints on spans the precondition already admitted. -->
+
+
 A span with no nonzero control edge is a COLLAPSED span (§5.1) — one point, no
 direction — and supplies no joint of its own: skip it and pair its neighbours
 across it. Two or more CONSECUTIVE collapsed spans are skipped as one RUN, and
