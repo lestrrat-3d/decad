@@ -63,7 +63,14 @@ const (
 // report: spans is always the UNREVERSED chain in the UNREVERSED order, so
 // every span verdict and every joint below is computed on it before the one
 // negation at the end.
-func freeformWallConvexityContext(ctx context.Context, spans []bezierSpan, closed, reversed bool) (freeformConvexitySign, error) {
+//
+// work is the RECORD's free-form work counter (docs/spline-design.md §5.2),
+// threaded to spanConvexitySignContext, which charges it — never minted here,
+// for the same reason walkOf never mints one: the R7 ceiling bounds one
+// record's total free-form work, so a counter minted per certificate would
+// hand this pass a fresh full ceiling instead of spending down what the
+// record's other free-form passes already charged.
+func freeformWallConvexityContext(ctx context.Context, spans []bezierSpan, closed, reversed bool, work *freeformWork) (freeformConvexitySign, error) {
 	verdict := freeformConvexityStraight
 	firstLive, prevLive := -1, -1
 	for i, span := range spans {
@@ -76,7 +83,7 @@ func freeformWallConvexityContext(ctx context.Context, spans []bezierSpan, close
 			// next live span's joint against prevLive below.
 			continue
 		}
-		sign, err := spanConvexitySignContext(ctx, span)
+		sign, err := spanConvexitySignContext(ctx, span, work)
 		if err != nil {
 			return 0, err
 		}
@@ -129,7 +136,15 @@ func freeformWallConvexityContext(ctx context.Context, spans []bezierSpan, close
 // §6.5's speed precondition, then its Bernstein-coefficient certificate at
 // the span's STATED curvature degree, subdivided on a mixed sign down to the
 // fixed depth cap.
-func spanConvexitySignContext(ctx context.Context, span bezierSpan) (freeformConvexitySign, error) {
+//
+// The whole certificate's cost is charged FIRST, before requireSpanSpeedRegularContext
+// builds its Sturm chain — §5.2's charge-early rule — so a record whose
+// certificate cannot fit the remaining budget refuses before any of that
+// chain, or the subdivision below it, allocates.
+func spanConvexitySignContext(ctx context.Context, span bezierSpan, work *freeformWork) (freeformConvexitySign, error) {
+	if err := work.step(freeformConvexityCost(len(span))); err != nil {
+		return 0, err
+	}
 	if err := requireSpanSpeedRegularContext(ctx, span); err != nil {
 		return 0, err
 	}
@@ -171,6 +186,41 @@ func statedCurvatureDegree(span bezierSpan) int {
 		return d
 	}
 	return 0
+}
+
+// freeformConvexityCost is the conservative preflight of one span's §6.5
+// certificate, charged before requireSpanSpeedRegularContext's Sturm chain or
+// bernsteinCurvatureSignContext's subdivision allocates anything.
+//
+// The certificate is two passes over the span, and the charge sums their own
+// conservative shapes rather than inventing a third: the speed precondition
+// isolates roots of a degree-O(p) polynomial by the SAME Sturm-chain engine
+// §6.2's directional extreme reduces to, so it is charged at that bracket's
+// own preflight, freeformExtremeCost; and the Bernstein sign check, when
+// mixed, subdivides by exact midpoint de Casteljau down to freeformLengthDepth
+// levels over the curvature numerator K's OWN coefficient count — the stated
+// degree plus one, never the span's control count — in the exact shape
+// freeformBracketCost's own arc-length subdivision already charges.
+func freeformConvexityCost(controls int) uint64 {
+	if controls < 2 {
+		return 0
+	}
+	speed := freeformExtremeCost(controls)
+	// statedCurvatureDegree's own formula, off the control count directly:
+	// 2p-3 for p >= 2 (p = controls-1), and the degree-0 all-zero form below it.
+	degree := 0
+	if d := 2*(controls-1) - 3; d > 0 {
+		degree = d
+	}
+	kControls := uint64(degree + 1)
+	if kControls < 2 {
+		return speed
+	}
+	leaves := uint64(1) << freeformLengthDepth
+	perSplit := costMul(kControls, kControls-1)
+	perLeaf := kControls
+	subdivide := costAdd(costMul(leaves-1, perSplit), costMul(leaves, perLeaf))
+	return costAdd(speed, subdivide)
 }
 
 // rpToBernstein restates a monomial ratPoly of degree at most `degree` as the
