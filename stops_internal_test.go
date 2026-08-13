@@ -152,6 +152,15 @@ func TestRejectAxisCrossingRefusesUnprobableCurve(t *testing.T) {
 // face is built directly, the pattern prism_boolean_internal_test.go already
 // uses for a shape nothing else can build.
 func TestFaceHalfPlaneRefusesFreeformRim(t *testing.T) {
+	// This frame's plane is the xz-plane, which contains the revolve axis, so
+	// the fixture is a valid radial stop face and both endpoints lie on it.
+	// r3.NewFrame(origin, u, v) takes u as the FIRST axis and derives
+	// N = U×V, so U=(0,0,1), V=(1,0,0) gives N=(0,1,0) — not (0,0,1). Both
+	// gates resolveToFaceAngular applies before faceHalfPlane pass here:
+	// |N·w| = 0 and the plane's offset from a3 is 0. Loop closure is not part
+	// of what this test drives: faceHalfPlane walks face.Edges(), a flat
+	// concat over loops, and neither it nor boundaryProbes nor
+	// rejectAxisCrossing reads a loop's closure.
 	planeFrame, err := r3.NewFrame(r3.Vec{}, r3.NewVec(0, 0, 1), r3.NewVec(1, 0, 0))
 	require.NoError(t, err)
 	st := angularStops{
