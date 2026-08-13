@@ -626,8 +626,15 @@ of the direction lies in the plane. The contour's cap level separately retains
 the receiver end's axial displacement, so an axial direction reads that term
 even though it reads none of the contour displacement.
 `Bounds` reports the same figure as the box's own `Bound`, per candidate: a
-contour that loses the extremization contributes nothing, so a plate whose
-world-axis extremes are all recorded coordinates still reports an `Exact` box.
+contour that loses the extremization contributes nothing, so an UNPLACED plate
+whose world-axis extremes are all recorded coordinates still reports an `Exact`
+box. That contour term is not the whole exactness test. The same reading also
+charges the frame and placement's own rounding of the coefficients it
+decomposes the direction into, and the rounding of its own summation of those
+terms with the extremized candidate (`docs/evaluator-design.md` §5), so a
+PLACED plate is `Exact` only where both of those terms are zero as well —
+which a translation by an exactly representable offset satisfies and a rotation
+does not.
 
 Tessellation chords each shared boundary once. For a two-parameter tube patch,
 choose parameter counts so the sum of path sagitta and minor-circle sagitta is
@@ -1034,6 +1041,11 @@ Every implementation PR MUST add geometry assertions, not run-only coverage.
 - a body whose world-axis extremes are recorded coordinates reports an `Exact`
   `Bounds` box, and one tilted so an axis reads both plane and sweep reports the
   contour's own displacement instead;
+- a PLACED cap blend whose world-axis extremes are all images of recorded
+  coordinates reports an `Approximate` `Bounds` box with a positive bound, and
+  that box widened by its own bound still encloses the exact rational image of
+  the receiver's base loop, the band's side-level directrix and the inset cap
+  contour;
 - a chamfer band over a circular wall whose radius dwarfs `d` still carries a
   `Cone`, its taper still reaches DX7, and volume and area are unmoved by the
   kind decision; an offset radius identical to the wall's → SX13;
