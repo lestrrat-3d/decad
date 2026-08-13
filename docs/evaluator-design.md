@@ -301,10 +301,18 @@ partial sweep's angular interval deciding which cardinal directions are
 reached — the same extreme analysis extrude uses, in cylindrical coordinates.
 `Bounds` is `Exact` only where every one of those extremes is proven exactly
 representable; a sweep amplitude no `float64` holds, a boundary extreme a
-computed arc radius or a computed walk endpoint carries, the axis frame or
+computed arc radius or a computed walk endpoint carries, the boundary scan's own
+`gu·u + gv·v` arithmetic, the axis frame or
 the placement's own rounding, or the reading's own summation of those terms
 into a published endpoint, publishes the proven bound its own arithmetic
-derives instead. The axis frame contributes three terms. The first is its
+derives instead. The scan's arithmetic is charged apart from the extremes it
+reads, at the SECTION's own coordinate envelope: a placement makes both
+coefficients non-trivial, so multiplying them by a section coordinate rounds
+even where every candidate position is a value the record states verbatim and
+the extremes' own term is zero. No other term in the reading scales with that
+magnitude, and it is zero wherever one coefficient is zero and the other is `0`
+or `±1`, which is the axis-aligned unplaced case. The axis frame contributes
+three terms. The first is its
 resolved direction and anchor's own proven displacement (`axisInPlane`'s
 `dUBound`/`dVBound`/`aUBound`/`aVBound`, already folded into the region's
 moments by `axisMoments`, and now into `Bounds` and the meridian

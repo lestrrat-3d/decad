@@ -1937,7 +1937,18 @@ func circularExtremeInterval(w segmentWalk, gu, gv float64) (boundedScalar, boun
 
 // boundaryExtremesBoundedContext is the one scan, total over walkKind
 // (docs/spline-design.md §6.2): the min and max of g(u, v) = gu·u + gv·v over
-// the recorded region's boundary, AND the proven half-width of that interval.
+// the recorded region's boundary, AND the proven half-width every CANDIDATE's
+// own position contributes to that interval.
+//
+// That half-width is the candidates' POSITIONAL displacement alone. The scan
+// evaluates each candidate as the float gu·u + gv·v, and the rounding of that
+// multiply-and-sum is the CALLER's to charge, at the coordinate envelope the
+// caller's own geometry states: a prism reads it through
+// prismDecompositionRoundAllow, a revolve through
+// planeDotDecompositionRoundAllow (bounds.go), and a caller that charges
+// neither publishes a candidate the record states verbatim — a zero-width one,
+// on which this scan reports zero — as if the arithmetic reading it had
+// committed nothing.
 //
 // An ENDPOINT candidate is the walk's own endpoint read through the direction
 // the caller holds, which this evaluator reads as an exact leaf throughout (the

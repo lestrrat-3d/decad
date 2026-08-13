@@ -1789,14 +1789,16 @@ func (rp revolvePayload) extentAlongWork(ctx context.Context, g r3.Vec, work *fr
 //
 // The first mechanism is everything axisExtremeContext returns a bound for: the
 // boundary-extreme scan's own — a circular candidate sits at a math.Hypot radius
-// and can miss the apex the sweep actually reaches — and, beside it, that
-// reading's own anchor-shift arithmetic (its doc comment). The second is the
-// swept radial coefficient's, sweepBoundAlong below. A section whose every
-// candidate is exactly representable, swept through an extreme this direction's
-// own amplitude holds exactly and shifted by an anchor its own products and
-// subtraction hold exactly, carries a zero bound — an all-straight or
-// recorded-circle meridian under a full revolution about an axis-aligned frame
-// reads exactly.
+// and can miss the apex the sweep actually reaches — the rounding that scan's
+// own gu·u + gv·v arithmetic commits at the section's coordinate magnitude, and
+// that reading's own anchor-shift arithmetic (its doc comment states all three).
+// The second is the swept radial coefficient's, sweepBoundAlong below. A section
+// whose every candidate is exactly representable, read through a direction whose
+// own two products and their sum are exact, swept through an extreme this
+// direction's own amplitude holds exactly and shifted by an anchor its own
+// products and subtraction hold exactly, carries a zero bound — an all-straight
+// or recorded-circle meridian under a full revolution about an axis-aligned
+// frame reads exactly.
 //
 // The two mechanisms displace the SAME end and they COMPOSE, so this reading
 // sums them; taking the larger would be sound only if they could not both move
@@ -1983,12 +1985,14 @@ func (rp revolvePayload) sweepBoundAlong(c0, c1, mlo, mhi float64, work *freefor
 // cylindrical coordinates (docs/evaluator-design.md §6). Bounds is Exact only
 // where every axis's extent reads with a zero bound; every other reading (a
 // partial sweep, an amplitude no float64 holds exactly, a boundary extreme a
-// computed arc radius carries, the axis frame/placement's own rounding, or the
+// computed arc radius carries, the boundary scan's own gu·u + gv·v arithmetic
+// under a non-trivial direction, the axis frame/placement's own rounding, or the
 // reading's own summation of those terms into a published endpoint)
 // is Approximate with the PROVEN bound its own arithmetic derives.
 //
 // The box states no error term of its own. Every mechanism that can move an
-// end — the sweep extreme's, the boundary scan's, the axis frame and
+// end — the sweep extreme's, the boundary scan's candidate positions and its own
+// arithmetic (planeDotDecompositionRoundAllow), the axis frame and
 // placement's own rounding (frameRoundAllow), and the endpoint summation's
 // (exactSumRound) — belongs to the extent reading
 // itself (extentBoundedAlong), which every consumer takes, so the box simply
@@ -2155,10 +2159,23 @@ func sweepExtremeBounds(c0, c1, phi0, phi1, heldLo, heldHi float64, full bool) (
 // recorded boundary, evaluated in axis coordinates through the plane-local
 // boundary extremes, beside that extreme's own proven bound.
 //
-// Two mechanisms compose into that bound. The scan's own is nonzero exactly
-// where a circular candidate's own radius or apex is not exactly representable
-// (extrude.go's circularExtremeInterval), and it is proven over the SECTION's
-// coordinates. The anchor shift below is this reading's own arithmetic — two
+// Three mechanisms compose into that bound. The scan's own is nonzero exactly
+// where a candidate's own POSITION is not exactly representable — a circular
+// candidate's radius or apex (extrude.go's circularExtremeInterval), a computed
+// walk endpoint, a free-form span's enclosure — and it is proven over the
+// SECTION's coordinates.
+//
+// The scan's own ARITHMETIC is the second, and it is independent of the first:
+// the scan holds each candidate as the float gu·u + gv·v, and that
+// multiply-and-sum rounds at the section's coordinate magnitude even where the
+// candidate's position is a value the record states verbatim and the first term
+// is therefore zero. planeDotDecompositionRoundAllow (bounds.go) charges it at
+// the section's own coordinate envelope, which is the only magnitude in this
+// reading it scales with — the prism reading's prismDecompositionRoundAllow is
+// the same mechanism one sweep coordinate wider, and neither reading ever reads
+// the other's term.
+//
+// The anchor shift below is the third: this reading's own arithmetic — two
 // products, their sum, and the subtraction that carries the scan's extreme into
 // axis coordinates — and every one of those rounds at the ANCHOR's magnitude
 // rather than the section's, so an axis far from the frame origin rounds here
@@ -2172,6 +2189,11 @@ func axisExtremeContext(ctx context.Context, rp revolvePayload, wg, k float64, w
 	if err != nil {
 		return 0, 0, err
 	}
+	coordUpper, err := profileCoordinateEnvelope(rp.profile, work)
+	if err != nil {
+		return 0, 0, err
+	}
+	scanAllow := planeDotDecompositionRoundAllow(gu, gv, coordUpper)
 	off := gu*rp.ax.aU + gv*rp.ax.aV
 	shiftAllow := absSumUpper(
 		exactPlaneDotRound(gu, gv, rp.ax.aU, rp.ax.aV, off),
@@ -2183,5 +2205,5 @@ func axisExtremeContext(ctx context.Context, rp revolvePayload, wg, k float64, w
 		scan = lo
 	}
 	extreme := scan - off
-	return extreme, absSumUpper(bound, shiftAllow, exactSumRound(extreme, scan, -off)), nil
+	return extreme, absSumUpper(bound, scanAllow, shiftAllow, exactSumRound(extreme, scan, -off)), nil
 }

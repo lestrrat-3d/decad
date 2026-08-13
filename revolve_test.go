@@ -1781,3 +1781,99 @@ func TestRevolveBoundsExactOffsetAnchor(t *testing.T) {
 		})
 	}
 }
+
+// requireEnclosesExactDot asserts that a published box coordinate's own proven
+// interval contains the EXACT value of a dot product the placement's own held
+// floats denote: Σ coefficient·coordinate, summed over the rationals from end
+// to end. The rational comparison is the whole point at this scale — the miss
+// this pins is a quarter of an ulp of the coordinate, so rounding the truth to
+// a float64 first lands it straight back on the held coordinate and the
+// assertion could never fail. It is an independent check: it never calls
+// decad's own bound helpers, so a test built on it cannot pass merely because
+// the production code agrees with itself.
+func requireEnclosesExactDot(t *testing.T, coord, bound float64, terms ...[2]float64) {
+	t.Helper()
+	toRat := func(x float64) *big.Rat {
+		r := new(big.Rat)
+		require.NotNil(t, r.SetFloat64(x), "float64 %v must be finite to convert exactly", x)
+		return r
+	}
+	truth := new(big.Rat)
+	for _, term := range terms {
+		truth.Add(truth, new(big.Rat).Mul(toRat(term[0]), toRat(term[1])))
+	}
+	gap := new(big.Rat).Abs(new(big.Rat).Sub(truth, toRat(coord)))
+	require.LessOrEqualf(t, gap.Cmp(toRat(bound)), 0,
+		"the published coordinate %v misses the exact dot product %s by %s, which its own bound %v mm does not cover",
+		coord, truth.FloatString(20), gap.FloatString(20), bound)
+}
+
+// TestRevolveBoundsEnclosesPlacedScanArithmetic pins the boundary scan's own
+// arithmetic: the scan holds each candidate as the float gu·u + gv·v, and that
+// multiply-and-sum rounds at the SECTION's coordinate magnitude even where the
+// candidate itself is a value the record states verbatim and every other term
+// the reading composes is proven zero or tiny.
+//
+// The section is the rectangle u∈[0, 1e6], v∈[0, 1] revolved a full turn about
+// the sketch line v = -1, so every candidate is a stated line endpoint with a
+// zero positional displacement. Placed by Rotation(Z, 30°) the reading's
+// direction becomes (gu, gv) ≈ (0.866, 0.5), and the held Max.X misses the
+// exact rational image of the extreme material point (1e6, -3, 0) under the
+// placement's OWN held basis by 2.7e-11 — six times what the axis-frame,
+// anchor-shift and endpoint-summation terms together publish. The extreme is
+// that point because the placement's Z row is exactly zero and its Y column
+// entry is negative, so the box's X extreme sits at the far end of the section
+// on the outer sweep circle.
+//
+// The unplaced case is the control, and it is the same section: every
+// coefficient is 0 or ±1 there, so nothing in the reading rounds and the box
+// stays Exact with a zero bound however far the section reaches.
+func TestRevolveBoundsEnclosesPlacedScanArithmetic(t *testing.T) {
+	revolved := func(t *testing.T) *decad.Body {
+		t.Helper()
+		w := sketch.NewWorld()
+		s, err := w.CreateSketch(w.XY())
+		require.NoError(t, err)
+		rect := s.CreateRectangle(0, 0, 1e6, 1)
+		s.Fix(rect.A)
+		_, err = s.Solve(t.Context())
+		require.NoError(t, err)
+		axis := decad.SketchLine{Start: decad.Point2{U: 0, V: -1}, End: decad.Point2{U: 1, V: -1}}
+		body, err := decad.New().Revolve(s, s.Profiles()[0], axis, decad.FullRevolution{})
+		require.NoError(t, err)
+		return body
+	}
+
+	t.Run("placed rotation", func(t *testing.T) {
+		rot, err := r3.Rotation(r3.NewVec(0, 0, 1), units.Degrees(30))
+		require.NoError(t, err)
+		basis := rot.Basis()
+		require.Equal(t, 0.0, basis.EZ.X, "the extreme material point below assumes a rotation about Z")
+		require.Equal(t, r3.NewVec(0, 0, 0), rot.Translation())
+
+		placed, err := revolved(t).Placed(rot)
+		require.NoError(t, err)
+		bounds, err := placed.Bounds()
+		require.NoError(t, err)
+		require.Equal(t, decad.Approximate, bounds.Exactness)
+		boundMM, err := bounds.Bound.In(units.Millimeter)
+		require.NoError(t, err)
+		require.Greater(t, boundMM, 0.0)
+
+		requireEnclosesExactDot(t, bounds.Max.X, boundMM,
+			[2]float64{basis.EX.X, 1e6},
+			[2]float64{basis.EY.X, -3},
+		)
+	})
+
+	t.Run("unplaced", func(t *testing.T) {
+		body := revolved(t)
+		bounds, err := body.Bounds()
+		require.NoError(t, err)
+		require.Equal(t, decad.Exact, bounds.Exactness)
+		boundMM, err := bounds.Bound.In(units.Millimeter)
+		require.NoError(t, err)
+		require.Equal(t, 0.0, boundMM)
+		requireBounds(t, body, decad.Exact, 0, -3, -2, 1e6, 1, 2)
+	})
+}

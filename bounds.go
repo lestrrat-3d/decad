@@ -110,6 +110,15 @@ import (
 //     same two products and their sum → exactPlaneDotRound. Its two products
 //     round at the ANCHOR's own magnitude, so the term grows with the anchor
 //     while staying the rounding it is.
+//   - the same plane-local dot product gu·u + gv·v evaluated at every CANDIDATE
+//     the boundary-extreme scan folds (extrude.go's
+//     boundaryExtremesBoundedContext), where no single u and v is available to
+//     measure against → planeDotDecompositionRoundAllow, exactPlaneDotRound's
+//     envelope-scaled sibling: the anchor helper answers for ONE stated point,
+//     this one for a whole scan, at the SECTION's own coordinate envelope
+//     rather than the anchor's magnitude. A reading that charges only the
+//     anchor's dot publishes a section extreme whose own multiply-and-sum
+//     rounded at a magnitude nothing else in the reading scales with.
 //   - the FINAL SUMMATION a directional extent reading commits when it
 //     recombines its own already-held terms into ONE published endpoint — a
 //     prism's base + boundary extreme + sweep level, a revolve's or a cap-loop
@@ -928,6 +937,50 @@ func exactPlaneDotRound(gu, gv, u, v, held float64) float64 {
 		return math.Inf(1)
 	}
 	return rationalFloatError(ratAdd(ratMul(guR, uR), ratMul(gvR, vR)), held)
+}
+
+// planeDotDecompositionRoundAllow bounds the rounding the boundary-extreme
+// scan's OWN evaluation of gu·u + gv·v commits over every candidate it folds
+// (extrude.go's boundaryExtremesBoundedContext), given gu and gv themselves
+// already proven against the frame, axis and placement chain that produced them
+// — the caller's own coefficient terms. It is exactPlaneDotRound scaled to a
+// whole scan: that helper measures ONE stated (u, v) exactly, and the scan
+// states none, because the candidate that wins the extremization is not a value
+// the scan reports.
+//
+// The rounding it charges is the SECTION's, and no other term in a revolve's
+// extent reading scales with that magnitude: the scan's own published bound
+// speaks for each candidate's POSITIONAL displacement (pointPerturbationAllow,
+// a circular candidate's enclosure, a free-form span's), which is zero for a
+// coordinate the record states verbatim, while the anchor shift's dot rounds at
+// the ANCHOR's magnitude alone. A section a million millimetres long under a
+// placement-derived direction therefore rounds here and nowhere else.
+//
+// IEEE 754 multiplies exactly by 0, 1 and -1 for any operand, so a coefficient
+// pair drawn from those three values WITH one of the two zero evaluates one
+// exact product and adds it to zero: nothing rounds, whatever the coordinates,
+// and the term is zero — which is what keeps an unplaced revolve about an
+// axis-aligned frame reading its box exactly, however far its section reaches.
+// Every other pair can round in each product and again in their sum, and the
+// term is analyticRoundBound's own budget (two multiplies and one addition, far
+// under its 128-operation contract) at the envelope of the very coordinates
+// those products multiply.
+//
+// coordUpper must be a PROVEN upper bound on |u| and |v| over every candidate
+// the scan folds — profileCoordinateEnvelope, which reads each walk's own
+// coordUpper — measured about the SAME frame origin the scan's candidates are
+// written about. extrude.go's prismDecompositionRoundAllow is the prism's own
+// spelling of this mechanism, one sweep coordinate wider, and the two are never
+// composed: each reading charges its own decomposition exactly once.
+func planeDotDecompositionRoundAllow(gu, gv, coordUpper float64) float64 {
+	trivial := func(c float64) bool { return c == 0 || c == 1 || c == -1 }
+	if (gu == 0 || gv == 0) && trivial(gu) && trivial(gv) {
+		return 0
+	}
+	return analyticRoundBound(absSumUpper(
+		productUpper(math.Abs(gu), coordUpper),
+		productUpper(math.Abs(gv), coordUpper),
+	))
 }
 
 // exactSumRound proves, over the rationals, the rounding the FINAL float64
