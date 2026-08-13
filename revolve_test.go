@@ -1657,3 +1657,38 @@ func TestRevolveBoundsComposesBoundaryAndSweepDisplacement(t *testing.T) {
 		requireEnclosesApex(t, box, u, v)
 	})
 }
+
+// TestRevolveBoundsEnclosesTiltedAxisFullTurn pins fu203: a full-turn revolve
+// about ConstructionAxis{Dir: (1, 2, 0)} — a direction 1/sqrt(5), 2/sqrt(5)
+// no float64 holds exactly — over an all-straight rectangle u in [0, 10], v
+// in [100, 108] published Exact with a zero bound while missing the true
+// Ymax by one ulp of 108, because the box read the axis frame's own
+// direction and anchor (axisInPlane's dUBound/dVBound/aUBound/aVBound,
+// already folded into the region's moments by axisMoments) as an exact leaf.
+// The section is entirely straight, so the boundary-extreme scan's own
+// bracket contributes nothing; the whole displacement is the axis frame's.
+func TestRevolveBoundsEnclosesTiltedAxisFullTurn(t *testing.T) {
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	rect := s.CreateRectangle(0, 100, 10, 108)
+	s.Fix(rect.A)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+
+	axis := decad.ConstructionAxis{Origin: r3.NewVec(0, 0, 0), Dir: r3.NewVec(1, 2, 0)}
+	body, err := decad.New().Revolve(s, s.Profiles()[0], axis, decad.FullRevolution{})
+	require.NoError(t, err)
+
+	bounds, err := body.Bounds()
+	require.NoError(t, err)
+	require.Equal(t, decad.Approximate, bounds.Exactness)
+	boundMM, err := bounds.Bound.In(units.Millimeter)
+	require.NoError(t, err)
+	require.Greater(t, boundMM, 0.0)
+
+	const truth = 108.0
+	require.LessOrEqual(t, math.Abs(bounds.Max.Y-truth), boundMM,
+		`the box's published interval must contain the true Ymax %g (got %g +/- %g)`,
+		truth, bounds.Max.Y, boundMM)
+}

@@ -168,6 +168,9 @@ func (cbp capBlendPayload) extentAlong(g r3.Vec) (float64, float64, float64, err
 // contributes nothing to the reported bound. Three mechanisms displace a
 // candidate: an inherited end displacement, the cap contour's own in-plane
 // displacement, and the rounding of a chamfered end's trimmed straight level.
+// A fourth, prismPlacementCoeffAllow, displaces every candidate the SAME way
+// — the frame and placement's own rounding of base/gu/gv/gz — and so composes
+// outward with the per-candidate maximum rather than folding into it.
 func (cbp capBlendPayload) extentBoundedAlong(ctx context.Context, g r3.Vec, work *freeformWork) (float64, float64, float64, error) {
 	pl := cbp.prismLike(0, 0)
 	base := cbp.xform.Apply(cbp.frame.Origin()).Dot(g)
@@ -267,6 +270,13 @@ func (cbp capBlendPayload) extentBoundedAlong(ctx context.Context, g r3.Vec, wor
 		math.Max(loUpper-lo, lo-loLower),
 		math.Max(hiUpper-hi, hi-hiLower),
 	))
+	coordUpper, err := profileCoordinateEnvelope(cbp.profile, work)
+	if err != nil {
+		return 0, 0, 0, err
+	}
+	zUpper := math.Max(math.Abs(cbp.z0), math.Abs(cbp.z1))
+	placeAllow := prismPlacementCoeffAllow(pl, g, base, gu, gv, gz, coordUpper, zUpper)
+	bound = absSumUpper(bound, placeAllow)
 	return base + lo, base + hi, bound, nil
 }
 

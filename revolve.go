@@ -709,10 +709,32 @@ type axisFrame struct {
 	snapTol          float64
 }
 
-// toAxis maps a plane-local point into (z, ρ) axis coordinates.
+// toAxis maps a plane-local point into (z, ρ) axis coordinates. It reads
+// aU/aV/dU/dV as exact leaves and states no bound of its own: axisMoments
+// (below) folds their proven dUBound/dVBound/aUBound/aVBound into the
+// region's moments through bounded arithmetic instead, and a reading built
+// from ONE point's re-expressed ρ takes toAxisRhoBound beside it.
 func (ax axisFrame) toAxis(u, v float64) (float64, float64) {
 	du, dv := u-ax.aU, v-ax.aV
 	return du*ax.dU + dv*ax.dV, dv*ax.dU - du*ax.dV
+}
+
+// toAxisRhoBound bounds how far the ρ toAxis computes for plane-local point
+// (u, v) can sit from the ρ the axis's own TRUE (unrounded) direction and
+// anchor would give, folding in dUBound/dVBound/aUBound/aVBound
+// (axisInPlane) the same way axisMoments already folds them into the
+// region's moments — read here for one point through the same bounded
+// arithmetic (moments.go) rather than a whole integral. u and v are exact
+// recorded coordinates (a walk's own startU/startV/cU/cV before axisFrame.walk
+// re-expresses them); a caller whose (u, v) is itself only bounded folds that
+// in separately.
+func (ax axisFrame) toAxisRhoBound(u, v float64) float64 {
+	du := boundedSub(exactScalar(u), measuredScalar(ax.aU, ax.aUBound))
+	dv := boundedSub(exactScalar(v), measuredScalar(ax.aV, ax.aVBound))
+	dU := measuredScalar(ax.dU, ax.dUBound)
+	dV := measuredScalar(ax.dV, ax.dVBound)
+	rho := boundedSub(boundedMul(dv, dU), boundedMul(du, dV))
+	return rho.bound
 }
 
 // radialUpper is the single owner of the ρ envelope: a proven upper bound on
@@ -751,16 +773,23 @@ func (ax axisFrame) planeDirection(wg, k float64) (float64, float64) {
 // The re-expressed tangent keeps the bound the plane-local tangent proved
 // (tanInBound/tanOutBound): the rotation itself contributes error of its own,
 // through the frame's direction and its two rounded products, and that error is
-// the frame's rather than the walk's. It is charged nowhere here — the same
-// place the re-expressed endpoints leave it, since startV and endV come out of
-// toAxis carrying no bound at all — so a reading composed from these fields
-// speaks for the walk's own arithmetic under an exactly-stated frame. An axis
-// along a coordinate direction through the origin is that frame exactly: every
-// product is by 1 or 0 and nothing rounds.
+// the frame's rather than the walk's. It is charged nowhere here for the
+// TANGENT — the same place the re-expressed endpoints leave it for
+// CONTACT CLASSIFICATION and vertex placement, both decided against snapTol's
+// own generous margin — so those uses speak for the walk's own arithmetic
+// under an exactly-stated frame. An axis along a coordinate direction through
+// the origin is that frame exactly: every product is by 1 or 0 and nothing
+// rounds. The ρ (V) component's OWN proven bound is stated separately, in
+// startVBound/endVBound/cVBound, through toAxisRhoBound: a reading that folds
+// the re-expressed ρ into a published measurement (survey.go's
+// revolveMinRadius) takes it rather than treating startV/endV/cV as an exact
+// leaf the way contact classification does.
 func (ax axisFrame) walk(w segmentWalk) segmentWalk {
 	out := w
 	out.startU, out.startV = ax.toAxis(w.startU, w.startV)
 	out.endU, out.endV = ax.toAxis(w.endU, w.endV)
+	out.startVBound = ax.toAxisRhoBound(w.startU, w.startV)
+	out.endVBound = ax.toAxisRhoBound(w.endU, w.endV)
 	out.tanInU = w.tanInU*ax.dU + w.tanInV*ax.dV
 	out.tanInV = w.tanInV*ax.dU - w.tanInU*ax.dV
 	out.tanOutU = w.tanOutU*ax.dU + w.tanOutV*ax.dV
@@ -774,6 +803,7 @@ func (ax axisFrame) walk(w segmentWalk) segmentWalk {
 	if w.isCircular() {
 		beta := math.Atan2(ax.dV, ax.dU)
 		out.cU, out.cV = ax.toAxis(w.cU, w.cV)
+		out.cVBound = ax.toAxisRhoBound(w.cU, w.cV)
 		out.th0 = w.th0 - beta
 		out.th1 = w.th1 - beta
 	}
@@ -1766,6 +1796,16 @@ func (rp revolvePayload) extentAlongWork(ctx context.Context, g r3.Vec, work *fr
 // separately and the reading publishes the larger total — it states ONE
 // half-width covering both ends, and the larger of two per-end totals covers
 // each end's own displacement.
+//
+// A THIRD mechanism displaces both ends the same way and so composes outward
+// with that per-end maximum rather than folding into it:
+// revolvePayload.frameRoundAllow, base/wg/c0/c1's own displacement from the
+// axis frame's proven direction/anchor uncertainty (axisInPlane's
+// dUBound/dVBound/aUBound/aVBound — the fields axisMoments already folds into
+// the region's moments) and from the placement's own rounding
+// (exactIsometryDotRound, bounds.go). It is zero for an axis-aligned frame
+// under an identity placement, which is what keeps an ordinary, unplaced
+// revolve's box Exact as before.
 func (rp revolvePayload) extentBoundedAlong(ctx context.Context, g r3.Vec, work *freeformWork) (float64, float64, float64, error) {
 	b := rp.basis()
 	base := rp.xform.Apply(b.a3).Dot(g)
@@ -1797,7 +1837,72 @@ func (rp revolvePayload) extentBoundedAlong(ctx context.Context, g r3.Vec, work 
 		return absSumUpper(boundary, sweep)
 	}
 	bound := math.Max(outward(loBound, sweepLo), outward(hiBound, sweepHi))
+	frameAllow, err := rp.frameRoundAllow(g, b, base, wg, c0, c1, work)
+	if err != nil {
+		return 0, 0, 0, err
+	}
+	bound = absSumUpper(bound, frameAllow)
 	return base + lo, base + hi, bound, nil
+}
+
+// frameRoundAllow bounds how far base/wg/c0/c1 — the four scalar coefficients
+// extentBoundedAlong lifts the boundary and sweep extremes through — can sit
+// from the values the axis's TRUE (unrounded) direction/anchor and the
+// placement's own EXACT arithmetic would give. Two independent mechanisms
+// compose outward:
+//
+//   - axisAllow: the axis frame's own direction/anchor uncertainty
+//     (dUBound/dVBound/aUBound/aVBound, axisInPlane). Every material point of
+//     the swept solid is xform.Apply(a3 + w·z + ρ·(e0·cos φ + e1·sin φ)) for
+//     some (z, ρ, φ) the recorded boundary and sweep interval admit, with
+//     |z|, |ρ| both bounded by envUpper = ax.radialUpper(coordUpper) — the
+//     SAME envelope axisFrame.radialUpper already states for ρ, since
+//     z = (p−a)·d and ρ = |cross(d, p−a)| are both bounded by |p−a| for a
+//     unit d. Perturbing the anchor by its own proven bound moves a3 by at
+//     most anchorAllow (through the frame's own unit U/V); perturbing the
+//     direction by its own proven bound moves w and e0 by at most dirAllow
+//     each (the same construction), and e1 = w×e0 by at most e1Allow (the
+//     cross product's own two-term expansion, worst-cased at unit |w|, |e0|).
+//     g is always a unit world axis, so a bound on the pre-transform point's
+//     own displacement bounds its g-projection too (Cauchy-Schwarz) — the
+//     isometry carries a magnitude bound through unchanged, in exact
+//     arithmetic.
+//   - placeAllow: the placement's own rounding, through
+//     exactIsometryDotRound's exact rational check (bounds.go) on each of
+//     base/wg/c0/c1 against the SAME frame+placement chain applied to the
+//     ALREADY-HELD a3/w/e0/e1 — zero exactly where the placement's own float
+//     arithmetic is exact for this input (an identity placement) regardless
+//     of how tilted the axis frame itself is. wg's displacement moves the
+//     extreme at the rate of |z| ≤ envUpper; c0's and c1's at the rate of
+//     |ρ| ≤ envUpper (the swept radial coefficient multiplies ρ); base's
+//     displaces the extreme directly, at both ends alike.
+func (rp revolvePayload) frameRoundAllow(g r3.Vec, b revolveBasis, base, wg, c0, c1 float64, work *freeformWork) (float64, error) {
+	coordUpper, err := profileCoordinateUpper(rp.profile, work)
+	if err != nil {
+		return 0, err
+	}
+	ax := rp.ax
+	envUpper := ax.radialUpper(coordUpper)
+	dirAllow := absSumUpper(ax.dUBound, ax.dVBound)
+	e1Allow := absSumUpper(productUpper(2, dirAllow), productUpper(dirAllow, dirAllow))
+	anchorAllow := absSumUpper(ax.aUBound, ax.aVBound)
+	axisAllow := absSumUpper(
+		anchorAllow,
+		productUpper(dirAllow, envUpper),
+		productUpper(envUpper, absSumUpper(dirAllow, e1Allow)),
+	)
+
+	baseRound := exactIsometryDotRound(rp.xform, b.a3, g, true, base)
+	wgRound := exactIsometryDotRound(rp.xform, b.w, g, false, wg)
+	c0Round := exactIsometryDotRound(rp.xform, b.e0, g, false, c0)
+	c1Round := exactIsometryDotRound(rp.xform, b.e1, g, false, c1)
+	placeAllow := absSumUpper(
+		baseRound,
+		productUpper(wgRound, envUpper),
+		productUpper(envUpper, absSumUpper(c0Round, c1Round)),
+	)
+
+	return absSumUpper(axisAllow, placeAllow), nil
 }
 
 // sweepBoundAlong is the swept radial coefficient's own contribution to the
@@ -1840,15 +1945,16 @@ func (rp revolvePayload) sweepBoundAlong(c0, c1, mlo, mhi float64, work *freefor
 // revolved solid — the same directional-extreme analysis the prism uses, in
 // cylindrical coordinates (docs/evaluator-design.md §6). Bounds is Exact only
 // where every axis's extent reads with a zero bound; every other reading (a
-// partial sweep, an amplitude no float64 holds exactly, or a boundary extreme
-// a computed arc radius carries) is Approximate with the PROVEN bound its own
-// arithmetic derives.
+// partial sweep, an amplitude no float64 holds exactly, a boundary extreme a
+// computed arc radius carries, or the axis frame/placement's own rounding)
+// is Approximate with the PROVEN bound its own arithmetic derives.
 //
-// The box states no error term of its own. Both mechanisms that can move an
-// end — the sweep extreme's and the boundary scan's — belong to the extent
-// reading itself (extentBoundedAlong), which every consumer takes, so the box
-// simply maxes the three axes' half-widths. Charging one of them here instead
-// would leave the same coordinate bounded on this path and exact on the
+// The box states no error term of its own. Every mechanism that can move an
+// end — the sweep extreme's, the boundary scan's, and the axis frame and
+// placement's own rounding (frameRoundAllow) — belongs to the extent reading
+// itself (extentBoundedAlong), which every consumer takes, so the box simply
+// maxes the three axes' half-widths. Charging one of them here instead would
+// leave the same coordinate bounded on this path and exact on the
 // through-all stop path.
 func revolveBoundsContext(ctx context.Context, rp revolvePayload, work *freeformWork) (Box, error) {
 	axes := []r3.Vec{r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1)}

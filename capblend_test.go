@@ -2279,3 +2279,66 @@ func TestCapBlendReflexSlantEdgeChargesNothingExtra(t *testing.T) {
 	}
 	require.Equal(t, 2, lines, "the apex patch's own two slant rulings")
 }
+
+// TestCapBlendBoundsEnclosesPlacedVertices pins fu203: a 10x8x5 box with its
+// end cap chamfered d=2, then placed by Rotation(X, 37 degrees), published
+// Exact with a zero bound while missing the exact rational image of its own
+// vertex set — the base loop, the chamfer band's side-level directrix, and
+// the inset cap contour — by 3.3306690738754696e-16 in Zmax, because
+// capBlendPayload.extentBoundedAlong takes cbp.xform.Apply and the payload's
+// own dir the same exact-leaf way the plain prism box did.
+func TestCapBlendBoundsEnclosesPlacedVertices(t *testing.T) {
+	const L, W, H, d = 10.0, 8.0, 5.0, 2.0
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	rect := s.CreateRectangle(0, 0, L, W)
+	s.Fix(rect.A)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+
+	doc := decad.New()
+	box, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(H), Dir: decad.Along})
+	require.NoError(t, err)
+
+	chamfered, err := box.Chamfer(capLoopEdges(box), units.Millimeters(d))
+	require.NoError(t, err)
+
+	rot, err := r3.Rotation(r3.NewVec(1, 0, 0), units.Degrees(37))
+	require.NoError(t, err)
+	placed, err := chamfered.Placed(rot)
+	require.NoError(t, err)
+
+	bounds, err := placed.Bounds()
+	require.NoError(t, err)
+	require.Equal(t, decad.Approximate, bounds.Exactness)
+	boundMM, err := bounds.Bound.In(units.Millimeter)
+	require.NoError(t, err)
+	require.Greater(t, boundMM, 0.0)
+
+	verts := []r3.Vec{
+		// the receiver's own base loop, untouched by the chamfer, at z = 0
+		r3.NewVec(0, 0, 0), r3.NewVec(L, 0, 0), r3.NewVec(L, W, 0), r3.NewVec(0, W, 0),
+		// the chamfer band's side-level directrix: the original loop's own
+		// (u, v), moved axially d into the material
+		r3.NewVec(0, 0, H-d), r3.NewVec(L, 0, H-d), r3.NewVec(L, W, H-d), r3.NewVec(0, W, H-d),
+		// the cap-level directrix: the end loop offset d into the material,
+		// still at the cap level
+		r3.NewVec(d, d, H), r3.NewVec(L-d, d, H), r3.NewVec(L-d, W-d, H), r3.NewVec(d, W-d, H),
+	}
+	minC := r3.NewVec(math.Inf(1), math.Inf(1), math.Inf(1))
+	maxC := r3.NewVec(math.Inf(-1), math.Inf(-1), math.Inf(-1))
+	for _, v := range verts {
+		exact := exactApply(t, rot, v)
+		minC = r3.NewVec(math.Min(minC.X, exact.X), math.Min(minC.Y, exact.Y), math.Min(minC.Z, exact.Z))
+		maxC = r3.NewVec(math.Max(maxC.X, exact.X), math.Max(maxC.Y, exact.Y), math.Max(maxC.Z, exact.Z))
+	}
+	require.LessOrEqual(t, math.Abs(bounds.Min.X-minC.X), boundMM)
+	require.LessOrEqual(t, math.Abs(bounds.Min.Y-minC.Y), boundMM)
+	require.LessOrEqual(t, math.Abs(bounds.Min.Z-minC.Z), boundMM)
+	require.LessOrEqual(t, math.Abs(bounds.Max.X-maxC.X), boundMM)
+	require.LessOrEqual(t, math.Abs(bounds.Max.Y-maxC.Y), boundMM)
+	require.LessOrEqual(t, math.Abs(bounds.Max.Z-maxC.Z), boundMM,
+		`the box's published interval must contain the true Zmax %g (got %g +/- %g)`,
+		maxC.Z, bounds.Max.Z, boundMM)
+}

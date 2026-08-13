@@ -85,6 +85,15 @@ import (
 //     it another (extrude.go's circular boundary-extreme candidate, whose held
 //     position runs through math.Cos/math.Sin while its enclosure comes from
 //     the angle-free apex identity).
+//   - a HELD scalar coefficient a directional reading lifts a boundary or
+//     sweep extreme through — a prism or cap-blend box's base/gu/gv/gz, a
+//     revolve box's base/wg/c0/c1 — measured against the EXACT rational image
+//     of the same frame-and-placement chain the coefficient's own float
+//     evaluation ran → exactIsometryDotRound, rigidRoundAllow's tight
+//     companion: zero exactly where that chain's arithmetic commits no
+//     rounding for the input at hand (an identity placement, an axis-aligned
+//     frame direction), never a worst-case ulp estimate where an exact
+//     rational comparison is available instead.
 
 const (
 	// unitRoundoff is float64's u = 2⁻⁵³: the relative error a single
@@ -798,4 +807,52 @@ func rimDelta(deltaA, deltaB, sinMin, dPair float64) (float64, error) {
 		return 0, fmt.Errorf(`%w: the operands cross too shallowly — the rim's proven displacement bound reaches the pair's own diameter, so no measurement of the result would be trustworthy`, ErrUnsupported)
 	}
 	return rim, nil
+}
+
+// exactIsometryDotRound is the tight companion to rigidRoundAllow: instead of
+// a worst-case ulp estimate from an input MAGNITUDE, it proves |held − true|
+// exactly, over the rationals, for one scalar coefficient of the form
+// xform.Apply(pt).Dot(g) (translate true) or xform.ApplyDir(pt).Dot(g)
+// (translate false) — the shape extrude.go's prism box and revolve.go's
+// revolve box each lift a boundary or sweep extreme through, reading the
+// frame and placement as an exact leaf. It is exactPrismPointRound's own
+// rational chain (extrude.go), reduced to the single coefficient a
+// directional reading needs rather than a whole placed point, and read
+// through a caller-supplied g rather than fixed to a Vec's three components.
+//
+// held must be the SAME float the caller's own arithmetic produced —
+// xform.Apply(pt).Dot(g) or xform.ApplyDir(pt).Dot(g), computed the ordinary
+// way — so the comparison measures the rounding that arithmetic actually
+// committed, never a different evaluation order's own. Every basis vector,
+// pt and g component must itself be an exactly representable float64 (they
+// always are here: a Transform's basis and translation, a payload's own
+// frame vectors, and g one of the three world unit axes), or the answer is
+// +Inf — an absent bound must never read as a small one
+// (cutDisplacementAllow's own rule).
+func exactIsometryDotRound(xform r3.Transform, pt, g r3.Vec, translate bool, held float64) float64 {
+	ratOfVec := func(v r3.Vec) [3]*big.Rat {
+		return [3]*big.Rat{floatRat(v.X), floatRat(v.Y), floatRat(v.Z)}
+	}
+	anyNil := func(r [3]*big.Rat) bool { return r[0] == nil || r[1] == nil || r[2] == nil }
+	ptR, gR := ratOfVec(pt), ratOfVec(g)
+	basis := xform.Basis()
+	exR, eyR, ezR := ratOfVec(basis.EX), ratOfVec(basis.EY), ratOfVec(basis.EZ)
+	if anyNil(ptR) || anyNil(gR) || anyNil(exR) || anyNil(eyR) || anyNil(ezR) {
+		return math.Inf(1)
+	}
+	placed := [3]*big.Rat{}
+	for i := range placed {
+		placed[i] = ratAdd(ratMul(exR[i], ptR[0]), ratMul(eyR[i], ptR[1]), ratMul(ezR[i], ptR[2]))
+	}
+	if translate {
+		trR := ratOfVec(xform.Translation())
+		if anyNil(trR) {
+			return math.Inf(1)
+		}
+		for i := range placed {
+			placed[i] = ratAdd(placed[i], trR[i])
+		}
+	}
+	exact := ratAdd(ratMul(placed[0], gR[0]), ratMul(placed[1], gR[1]), ratMul(placed[2], gR[2]))
+	return rationalFloatError(exact, held)
 }

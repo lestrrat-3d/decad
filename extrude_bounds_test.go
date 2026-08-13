@@ -3,9 +3,11 @@ package decad_test
 import (
 	"fmt"
 	"math"
+	"math/big"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
+	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
@@ -387,4 +389,88 @@ func TestExtrudeBoundsSweepEnclosesArcApex(t *testing.T) {
 			})
 		}
 	}
+}
+
+// exactApply computes the EXACT rational image of p under xform's OWN held
+// basis and translation entries — the same isometry a placed body's box
+// reads through xform.Apply as an exact leaf — rounded to float64 only once,
+// at the end, rather than through xform.Apply's own float arithmetic. It is
+// an independent check: it never calls decad's own exactIsometryDotRound, so
+// a test built on it cannot pass merely because the production code agrees
+// with itself.
+func exactApply(t *testing.T, xform r3.Transform, p r3.Vec) r3.Vec {
+	t.Helper()
+	toRat := func(x float64) *big.Rat {
+		r := new(big.Rat)
+		require.NotNil(t, r.SetFloat64(x), "float64 %v must be finite to convert exactly", x)
+		return r
+	}
+	basis := xform.Basis()
+	tr := xform.Translation()
+	px, py, pz := toRat(p.X), toRat(p.Y), toRat(p.Z)
+	component := func(exC, eyC, ezC, trC float64) float64 {
+		sum := new(big.Rat)
+		sum.Add(sum, new(big.Rat).Mul(toRat(exC), px))
+		sum.Add(sum, new(big.Rat).Mul(toRat(eyC), py))
+		sum.Add(sum, new(big.Rat).Mul(toRat(ezC), pz))
+		sum.Add(sum, toRat(trC))
+		f, _ := sum.Float64()
+		return f
+	}
+	return r3.NewVec(
+		component(basis.EX.X, basis.EY.X, basis.EZ.X, tr.X),
+		component(basis.EX.Y, basis.EY.Y, basis.EZ.Y, tr.Y),
+		component(basis.EX.Z, basis.EY.Z, basis.EZ.Z, tr.Z),
+	)
+}
+
+// TestExtrudeBoxBoundsEnclosesPlacedCorners pins fu203: a 10x8x5 box placed
+// by Rotation(X, 37 degrees) published Exact with a zero bound while missing
+// the exact rational image of its own corners by 7.7715611723760958e-16 in
+// Z, because the box read the placement's own xform.Apply as an exact leaf.
+// The frame and placement ARE isometries in exact arithmetic, but their FLOAT
+// evaluation rounds for a non-axis-aligned rotation, and the box's own
+// published interval must contain the true corner it misses.
+func TestExtrudeBoxBoundsEnclosesPlacedCorners(t *testing.T) {
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	rect := s.CreateRectangle(0, 0, 10, 8)
+	s.Fix(rect.A)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+
+	doc := decad.New()
+	body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+	require.NoError(t, err)
+
+	rot, err := r3.Rotation(r3.NewVec(1, 0, 0), units.Degrees(37))
+	require.NoError(t, err)
+	placed, err := body.Placed(rot)
+	require.NoError(t, err)
+
+	bounds, err := placed.Bounds()
+	require.NoError(t, err)
+	require.Equal(t, decad.Approximate, bounds.Exactness)
+	boundMM, err := bounds.Bound.In(units.Millimeter)
+	require.NoError(t, err)
+	require.Greater(t, boundMM, 0.0)
+
+	minC := r3.NewVec(math.Inf(1), math.Inf(1), math.Inf(1))
+	maxC := r3.NewVec(math.Inf(-1), math.Inf(-1), math.Inf(-1))
+	for _, x := range []float64{0, 10} {
+		for _, y := range []float64{0, 8} {
+			for _, z := range []float64{0, 5} {
+				exact := exactApply(t, rot, r3.NewVec(x, y, z))
+				minC = r3.NewVec(math.Min(minC.X, exact.X), math.Min(minC.Y, exact.Y), math.Min(minC.Z, exact.Z))
+				maxC = r3.NewVec(math.Max(maxC.X, exact.X), math.Max(maxC.Y, exact.Y), math.Max(maxC.Z, exact.Z))
+			}
+		}
+	}
+	require.LessOrEqual(t, math.Abs(bounds.Min.X-minC.X), boundMM)
+	require.LessOrEqual(t, math.Abs(bounds.Min.Y-minC.Y), boundMM)
+	require.LessOrEqual(t, math.Abs(bounds.Min.Z-minC.Z), boundMM)
+	require.LessOrEqual(t, math.Abs(bounds.Max.X-maxC.X), boundMM)
+	require.LessOrEqual(t, math.Abs(bounds.Max.Y-maxC.Y), boundMM)
+	require.LessOrEqual(t, math.Abs(bounds.Max.Z-maxC.Z), boundMM)
 }

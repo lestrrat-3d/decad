@@ -875,9 +875,13 @@ func revolveMinRadius(rp revolvePayload) (radiusOutcome, bool) {
 				// which extrude.go's lineWalkTangentBound proved a bound on.
 				// Both the length below and the normal component it divides
 				// take that bound — the numerator as much as the denominator,
-				// since the same rounded difference stands in both. Only
-				// w.startV/endV are read as exact leaves here, being recorded
-				// coordinates the axis frame re-expressed.
+				// since the same rounded difference stands in both. w.startV/
+				// endV are the axis frame's own re-expression of a recorded
+				// coordinate, not a recorded one themselves, so they take
+				// axisFrame.walk's own startVBound/endVBound rather than reading
+				// as exact leaves — zero for an axis-aligned frame, and nonzero
+				// wherever the axis direction or anchor is not exactly
+				// representable (axisInPlane's dUBound/dVBound/aUBound/aVBound).
 				tanU := measuredScalar(w.tanInU, w.tanInBound)
 				tanV := measuredScalar(w.tanInV, w.tanInBound)
 				lBS := boundedNorm2(tanU, tanV)
@@ -893,8 +897,11 @@ func revolveMinRadius(rp revolvePayload) (radiusOutcome, bool) {
 				// size, and its denominator's clearance at the threshold keeps
 				// its bound finite rather than leaving the survey undecided.
 				if admitBelow(nrBS, -survAngTol) != survReject {
-					minSV := math.Min(w.startV, w.endV)
-					vBS := boundedQuotient(minSV, 0, -nrBS.value, nrBS.bound)
+					minSV, minSVBound := w.startV, w.startVBound
+					if w.endV < minSV {
+						minSV, minSVBound = w.endV, w.endVBound
+					}
+					vBS := boundedQuotient(minSV, minSVBound, -nrBS.value, nrBS.bound)
 					agg.take(vBS.value, vBS.bound)
 				}
 				continue
@@ -930,7 +937,11 @@ func revolveMinRadius(rp revolvePayload) (radiusOutcome, bool) {
 				if admitBelow(nrBS, -survAngTol) == survReject {
 					continue
 				}
-				rhoBS := boundedAdd(exactScalar(w.cV), boundedMul(measuredScalar(w.radius, w.radiusBound), sinBS))
+				// w.cV is the axis frame's own re-expression of the circular
+				// walk's recorded center, so it takes cVBound beside it rather
+				// than reading as an exact leaf — the same account startV/endV
+				// take above.
+				rhoBS := boundedAdd(measuredScalar(w.cV, w.cVBound), boundedMul(measuredScalar(w.radius, w.radiusBound), sinBS))
 				negNrBS := measuredScalar(-nrBS.value, nrBS.bound)
 				resultBS := boundedQuotient(rhoBS.value, rhoBS.bound, negNrBS.value, negNrBS.bound)
 				agg.take(resultBS.value, resultBS.bound)

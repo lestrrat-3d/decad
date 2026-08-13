@@ -204,7 +204,13 @@ with `h = |z1−z0|` (`A` the recorded region's area per §4 — measures are
 magnitudes, so an `Against` sweep never reads negative), `Centroid` the
 region centroid lifted `(z0+z1)/2` along the normal — the SIGNED midpoint,
 `h/2` only in the one-sided `Along` case — `Bounds` from per-segment analytic
-extremes swept over the signed `[z0, z1]`, `Area` from cap areas + side areas
+extremes swept over the signed `[z0, z1]`, beside the frame and placement's own
+rounding: `xform.Apply`/`xform.ApplyDir` are isometries only in EXACT
+arithmetic, so a frame that is not axis-aligned or a placement that is not the
+identity rounds, and `Bounds` (a `capBlendPayload` result's included) charges
+that rounding rather than reading the placed extreme as an exact leaf — zero
+for an axis-aligned, unplaced payload, which keeps the ordinary prism's box
+Exact as before. `Area` from cap areas + side areas
 (`segment length · h`; arc length `rθ` carries its evaluation bound). Each END
 of the interval carries its own proven **axial displacement** — how far the
 level recorded there sits from the level the extent denotes. A level the caller
@@ -287,9 +293,18 @@ torus/sphere's center distance ± minor/radius) and axial range, with a
 partial sweep's angular interval deciding which cardinal directions are
 reached — the same extreme analysis extrude uses, in cylindrical coordinates.
 `Bounds` is `Exact` only where every one of those extremes is proven exactly
-representable; a sweep amplitude no `float64` holds, or a boundary extreme a
-computed arc radius or a computed walk endpoint carries, publishes the proven
-bound its own arithmetic derives instead. A walk endpoint is a computed one
+representable; a sweep amplitude no `float64` holds, a boundary extreme a
+computed arc radius or a computed walk endpoint carries, or the axis frame or
+the placement's own rounding, publishes the proven bound its own arithmetic
+derives instead. The axis frame contributes two terms: its resolved
+direction/anchor's own proven displacement (`axisInPlane`'s
+`dUBound`/`dVBound`/`aUBound`/`aVBound`, already folded into the region's
+moments by `axisMoments`, and now into `Bounds` and the meridian
+minimum-radius survey the same way) and, like the placement, the rounding
+`xform.Apply`/`xform.ApplyDir` commit whenever the frame is not axis-aligned
+or the placement is not the identity — zero for an axis-aligned, unplaced
+revolve, which keeps the ordinary revolve's box Exact as before.
+A walk endpoint is a computed one
 wherever the record does not state it: a trimmed line's or arc's own bound, and
 every circle's, is evaluated rather than read, and the bound it carries is the
 per-component gap from a certified enclosure of the point the record denotes. That bound belongs to the directional extent reading itself,
@@ -342,9 +357,16 @@ as `ThroughAll` are recomputed against replayed live bodies and MUST equal
 recorded `Inputs`. Failure returns no document.
 `docs/recipe-replay-design.md` §§4–7 is normative.
 
-`Body.Placed` transforms analytic geometry exactly — every v1 surface variant
-maps to itself under an isometry (plane→plane, cylinder→cylinder, …), with
-`IsReflection` flipping face orientation handling.
+`Body.Placed` transforms analytic geometry exactly in EXACT arithmetic — every
+v1 surface variant maps to itself under an isometry (plane→plane,
+cylinder→cylinder, …), with `IsReflection` flipping face orientation handling
+— but the isometry's FLOAT evaluation rounds wherever the frame is not
+axis-aligned or the placement is not the identity. Every reading built from
+`xform.Apply`/`xform.ApplyDir` therefore carries that rounding as its own
+proven displacement rather than reading the placed coordinate as an exact
+leaf: `prismPayload`/`capBlendPayload`'s `Bounds` (§5) and
+`revolvePayload`'s (§6) each charge it, composed outward with whatever other
+displacement the same reading already carries.
 
 Replay tests cover every example model + every current `OpKind`. Same-evaluator
 replay reproduces live-body order and provenance roles. Measurements reproduce
