@@ -674,13 +674,18 @@ func boundaryProbes(e *Edge) []r3.Vec {
 	return probes
 }
 
-// rejectAxisCrossing rejects a circular boundary edge that reaches across
-// the revolve axis into the opposite half-plane: the face would name two
-// stops at once. m is the half-plane direction the face's vertices agreed
-// on; the edge's circle lies in the face plane (which contains the axis), so
-// the edge crosses exactly when its deepest point against m — the circle
-// point at −m from the center, when the walk actually passes it — sits
-// strictly across the axis. Closed-form: no sampling.
+// rejectAxisCrossing rejects a boundary edge that reaches across the revolve
+// axis into the opposite half-plane: the face would name two stops at once.
+// m is the half-plane direction the face's vertices agreed on. A circular
+// edge's crossing is decided in closed form — the edge's circle lies in the
+// face plane (which contains the axis), so it crosses exactly when its
+// deepest point against m — the circle point at −m from the center, when the
+// walk actually passes it — sits strictly across the axis. A Line3 edge
+// between agreeing vertices stays between them, so it needs no such probe. No
+// other curve kind has one: a NURBSCurve or FacetedCurve rim can bulge across
+// the axis between two agreeing vertices with nothing here to witness it, and
+// the falsify-never-bless rule (repo CLAUDE.md) forbids reading that silence
+// as "no crossing." Closed-form or refuse: never sampling.
 func (st angularStops) rejectAxisCrossing(e *Edge, m r3.Vec) error {
 	var center r3.Vec
 	var radius units.Value
@@ -691,9 +696,11 @@ func (st angularStops) rejectAxisCrossing(e *Edge, m r3.Vec) error {
 		center, radius, axis, closed = c.Center, c.Radius, c.Axis, true
 	case Arc3:
 		center, radius, axis = c.Center, c.Radius, c.Axis
-	default:
+	case Line3:
 		// A linear edge between agreeing vertices stays between them.
 		return nil
+	default:
+		return fmt.Errorf(`%w: the angular stop audit has no closed-form axis-crossing probe for a %T boundary edge`, ErrUnsupported, c)
 	}
 	r, err := radius.In(units.Millimeter)
 	if err != nil {

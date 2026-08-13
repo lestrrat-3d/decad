@@ -106,6 +106,107 @@ func TestResolveThroughAllComposesEveryFarEndInterval(t *testing.T) {
 	})
 }
 
+// TestRejectAxisCrossingRefusesUnprobableCurve pins the split at the heart of
+// this task: rejectAxisCrossing keeps its Line3 shortcut — a straight edge
+// between two agreeing vertices never leaves the half-plane they agree on —
+// but any OTHER curve kind now refuses rather than reading its own silence as
+// "no crossing." A NURBSCurve rim (a free-form prism's own side-face
+// boundary, once one is buildable) and a FacetedCurve rim (a boolean-built
+// edge) both have no closed-form deepest-point test the way Circle3/Arc3 do,
+// so admitting them through the same default arm as Line3 would bless a claim
+// this audit never examined — the falsify-never-bless rule (repo CLAUDE.md).
+func TestRejectAxisCrossingRefusesUnprobableCurve(t *testing.T) {
+	st := angularStops{
+		a3: r3.NewVec(0, 0, 0),
+		w:  r3.NewVec(0, 0, 1),
+		r0: r3.NewVec(1, 0, 0),
+		e1: r3.NewVec(0, 1, 0),
+	}
+	m := st.r0
+
+	t.Run("Line3 stays permitted", func(t *testing.T) {
+		require.NoError(t, st.rejectAxisCrossing(&Edge{curve: Line3{}}, m))
+	})
+	for _, tc := range []struct {
+		name  string
+		curve Curve
+	}{
+		{name: "NURBSCurve", curve: NURBSCurve{}},
+		{name: "FacetedCurve", curve: FacetedCurve{}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := st.rejectAxisCrossing(&Edge{curve: tc.curve}, m)
+			require.ErrorIs(t, err, ErrUnsupported)
+			require.ErrorContains(t, err, tc.name, "the refusal names the curve type it cannot probe")
+		})
+	}
+}
+
+// TestFaceHalfPlaneRefusesFreeformRim proves the refusal reaches a stop face
+// used as a whole, not merely the isolated helper: a planar face whose loop
+// carries a NURBSCurve edge — exactly the rim a free-form prism's planar cap
+// would carry once one is buildable (docs/spline-design.md §10 row P4b) —
+// refuses through faceHalfPlane, the function resolveToFaceAngular calls
+// right after selecting the stop face. No evaluator path builds such a face
+// publicly yet (the free-form side-face build is a later increment), so the
+// face is built directly, the pattern prism_boolean_internal_test.go already
+// uses for a shape nothing else can build.
+func TestFaceHalfPlaneRefusesFreeformRim(t *testing.T) {
+	planeFrame, err := r3.NewFrame(r3.Vec{}, r3.NewVec(0, 0, 1), r3.NewVec(1, 0, 0))
+	require.NoError(t, err)
+	st := angularStops{
+		a3: r3.NewVec(0, 0, 0),
+		w:  r3.NewVec(0, 0, 1),
+		r0: r3.NewVec(1, 0, 0),
+		e1: r3.NewVec(0, 1, 0),
+	}
+
+	t.Run("NURBSCurve rim", func(t *testing.T) {
+		edge := &Edge{
+			curve: NURBSCurve{},
+			start: &Vertex{position: r3.NewVec(1, 0, 0)},
+			end:   &Vertex{position: r3.NewVec(1, 0, 5)},
+		}
+		loop := &Loop{coedges: []coedge{{edge: edge, forward: true}}, outer: true}
+		face := &Face{surface: Plane{Frame: planeFrame}, loops: []*Loop{loop}}
+
+		_, err := st.faceHalfPlane(face)
+		require.ErrorIs(t, err, ErrUnsupported)
+		require.ErrorContains(t, err, "NURBSCurve")
+	})
+
+	t.Run("FacetedCurve rim", func(t *testing.T) {
+		edge := &Edge{
+			curve: FacetedCurve{},
+			start: &Vertex{position: r3.NewVec(1, 0, 0)},
+			end:   &Vertex{position: r3.NewVec(1, 0, 5)},
+		}
+		loop := &Loop{coedges: []coedge{{edge: edge, forward: true}}, outer: true}
+		face := &Face{surface: Plane{Frame: planeFrame}, loops: []*Loop{loop}}
+
+		_, err := st.faceHalfPlane(face)
+		require.ErrorIs(t, err, ErrUnsupported)
+		require.ErrorContains(t, err, "FacetedCurve")
+	})
+
+	t.Run("Line3 rim resolves as before", func(t *testing.T) {
+		// Regression: the vertex-only edge kind this audit has always
+		// permitted keeps returning its agreed half-plane angle, never a
+		// refusal, once the vertices themselves agree.
+		edge := &Edge{
+			curve: Line3{},
+			start: &Vertex{position: r3.NewVec(1, 0, 0)},
+			end:   &Vertex{position: r3.NewVec(1, 0, 5)},
+		}
+		loop := &Loop{coedges: []coedge{{edge: edge, forward: true}}, outer: true}
+		face := &Face{surface: Plane{Frame: planeFrame}, loops: []*Loop{loop}}
+
+		phi, err := st.faceHalfPlane(face)
+		require.NoError(t, err)
+		require.InDelta(t, 0, phi, 1e-12, "the vertices sit exactly on r0, phi = 0")
+	})
+}
+
 // TestResolveToFaceUsesSelectedCapAxialDelta keeps a computed end's bound on
 // that cap only. A later ToFace against the exact opposite cap must remain
 // exact, while selecting the computed cap must retain its bound.
