@@ -256,6 +256,17 @@ func prismWall(budget *workBudget, pp prismPayload, alpha float64) (wallOutcome,
 			// cannot decompose — a degenerate segment, a radius that is not a
 			// length, and a free-form span the evaluator's own work or range
 			// ceiling refuses are failures, and reach the caller as themselves.
+			//
+			// A review read this nil return as swallowing a cancellation that
+			// arrives after the poll above, so that the caller never learns of
+			// it. The caller does learn: runSurveys is prismWall's only
+			// production call site, and it polls wallBudgetErr again on the
+			// next unconditional line after the diagnostics, with no return
+			// between; that budget's errFn is the Verify context's own Err,
+			// which Verify then propagates. Checked in an isolated copy with a
+			// context that returns nil for the first polls and then
+			// context.Canceled: prismWall alone returns (undecided, nil), and
+			// runSurveys on the same context returns context.Canceled.
 			return wallOutcome{}, nil
 		}
 		return wallOutcome{}, err
