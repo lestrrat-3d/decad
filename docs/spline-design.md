@@ -468,6 +468,14 @@ rational lifted from the same float `Points[i+1][coord]`, so consecutive spans
 share their boundary control point EXACTLY — by identity, not by proximity —
 which is what `bezierSpan`'s own contract requires.
 
+That guarantee covers only the shared boundary POINT, not the shared tangent
+DIRECTION: `SecondDerivs` is sketch's own float solve of the natural-cubic
+tridiagonal system, taken exactly as published, so an interior joint's cross
+product (§6.5) carries the residual of that rounded solve rather than a turn
+of the curve the record names. §6.5 states the consequence: every joint
+interior to one `FitSplineSeg`'s converted chain is verdict `0` by
+construction, never by that cross product.
+
 **Deduplication.** `geom.NewFitInterpolant` collapses consecutive fit points
 closer than an absolute `1e-12` (`geom`'s `fitChordEps`), keeping the FIRST of
 each run. So the chain's endpoints are `Points[0]` and `Points[len-1]`, and the
@@ -1230,7 +1238,7 @@ coefficient set no clause defines.
 | the joint a SUBDIVISION creates | verdict `0`, known from the split rather than folded |
 | a chain that CLOSES on itself (`ClosedSplineSeg`) | the closing joint is interior to that one wall edge and folds like every other |
 | a walk recorded in the REVERSE sense | the chain folds unreversed and the verdict is negated once at the end |
-| a `FitSplineSeg`'s converted chain | always cubic spans (§5.1.2), so no degenerate degree arrives from that kind |
+| a `FitSplineSeg`'s converted chain | always cubic spans (§5.1.2), so no degenerate degree arrives from that kind; every joint INTERIOR to the chain is verdict `0` by construction, never by the cross product below |
 | a Tier B or Tier C span | never reaches this section — R10 refuses the build first |
 
 **The certificate is Bernstein positivity on the curvature numerator.** The
@@ -1408,6 +1416,22 @@ sign covers the joint at all: refuse, R19. On a span the precondition admitted
 the first and last control edges are already nonzero (above), so the word
 NONZERO here carries the collapsed-span skip below and never a search inside an
 admitted span.
+
+**A joint interior to one `FitSplineSeg`'s converted chain is verdict `0` by
+construction, not by this cross product.** §5.1.2's natural-cubic interpolant
+is C¹ at every active fit point by its own definition: the joint POINT is
+shared exactly (§5.1.2), and the joint is produced by §5.1.2's conversion
+rather than stated by the record. The cross product a fit-spline joint carries
+is decad's exact rational lift of sketch's own rounded solve for
+`SecondDerivs`, not a turn of the curve the record names, so folding its sign
+in would read rounding noise as geometry. This is a second instance of the
+rule already stated below for the joint a SUBDIVISION creates: a joint known
+`0` by where it comes from is not put through the cross-product fold. The rule
+reaches no further than `FitSplineSeg`'s own interior joints — it does not
+generalise to every conversion joint. A joint at an interior knot of
+multiplicity equal to the degree is a genuine C⁰ corner and folds by the cross
+product exactly as stated above, exactly as Table K's degree-1 `NURBSSeg`
+example does.
 
 A span with no nonzero control edge is a COLLAPSED span (§5.1) — one point, no
 direction — and supplies no joint of its own: skip it and pair its neighbours
