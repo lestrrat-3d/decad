@@ -1489,43 +1489,52 @@ func sideOriginsContext(ctx context.Context, ref StepRef, roleLoop int, segs []i
 	return origins, nil
 }
 
-// extentAlong is the prism's exact extent interval along an arbitrary world
-// direction g — the lifted linear functional point·g = origin·g + u·(U'·g)
-// + v·(V'·g) + z·(N'·g), primes the placed directions, extremized over the
-// region boundary and the sweep. A through-all stop records its result as an
-// exact endpoint, so it refuses a prism with a proven section displacement.
-// prismBoundsContext reads extentBoundedAlong directly and carries both that
-// displacement and a free-form boundary's own bracket bound as its own
-// outward bound instead.
+// extentAlong is the through-all stop's reading of the prism (stops.go): the
+// extent interval along an arbitrary world direction g — the lifted linear
+// functional point·g = origin·g + u·(U'·g) + v·(V'·g) + z·(N'·g), primes the
+// placed directions, extremized over the region boundary and the sweep —
+// beside the proven displacement extentBoundedAlong states for its two ends.
+// The stop charges that displacement to the level it resolves and decides its
+// own in-path test outside it, so a boundary extreme held by a bracket
+// (docs/spline-design.md §6.2) still answers rather than refusing.
+//
+// The section displacement is NOT one of the terms this reading carries — it
+// moves a coordinate IN the plane, and the interval is stated over the
+// recorded section — so a prism holding one refuses instead
+// (docs/prism-boolean-design.md §12). prismBoundsContext reads
+// extentBoundedAlong directly and composes both terms into its own outward
+// bound.
 // The stop and clearance callers hold no preflight counter for this record, so
 // the interface forms open the record's own — one per extent reading, never one
 // per segment.
-func (pp prismPayload) extentAlong(g r3.Vec) (float64, float64, error) {
+func (pp prismPayload) extentAlong(g r3.Vec) (float64, float64, float64, error) {
 	if pp.sectionDelta != 0 {
-		return 0, 0, fmt.Errorf(`%w: a through-all stop cannot use a prism with a proven section displacement`, ErrUnsupported)
+		return 0, 0, 0, fmt.Errorf(`%w: a through-all stop cannot use a prism with a proven section displacement`, ErrUnsupported)
 	}
-	return pp.extentAlongContext(context.Background(), g)
+	return pp.extentBoundedAlong(context.Background(), g, newFreeformWork())
 }
 
 func (pp prismPayload) extentAlongContext(ctx context.Context, g r3.Vec) (float64, float64, error) {
 	return pp.extentAlongWork(ctx, g, newFreeformWork())
 }
 
-// extentAlongWork is extentBoundedAlong's refusing wrapper (Table R row R11,
-// docs/spline-design.md §6.4), mirroring capBlendPayload.extentAlongWork word
-// for word: a through-all stop reads this extent as an exact endpoint and has
-// no bound to widen, so a direction whose extreme a free-form bracket cannot
-// state exactly refuses rather than fabricate one. This is deliberately WIDER
-// than §6.4's own straddle rule — every nonzero bracket bound refuses here,
-// not only one that straddles the sketch plane in the travel sense — and
-// narrowing it to that test is a later step under the same non-permanent row.
+// extentAlongWork is extentBoundedAlong's refusing wrapper, mirroring
+// revolvePayload.extentAlongWork word for word: the reading for a consumer that
+// takes the interval as an exact one and has nowhere to put a displacement.
+// clearance.go's payloadExtent is that consumer — its separating-plane
+// short-circuit compares two bodies' intervals and simply loses the
+// short-circuit where it cannot get an exact one — so a direction whose extreme
+// a free-form bracket holds refuses here rather than publish a held coordinate
+// as the one it denotes. A through-all stop does not read through this wrapper:
+// it consumes the bounded reading and charges the displacement to its own level
+// (stops.go, docs/spline-design.md §6.4).
 func (pp prismPayload) extentAlongWork(ctx context.Context, g r3.Vec, work *freeformWork) (float64, float64, error) {
 	lo, hi, bound, err := pp.extentBoundedAlong(ctx, g, work)
 	if err != nil {
 		return 0, 0, err
 	}
 	if bound != 0 {
-		return 0, 0, fmt.Errorf(`%w: a free-form prism's extent along this direction is held by its own directional-extreme bracket, known only to a displacement of %v mm; a stop reads this coordinate as exact and has no bound to widen`, ErrUnsupported, bound)
+		return 0, 0, fmt.Errorf(`%w: a free-form prism's extent along this direction is held by its own directional-extreme bracket, known only to a displacement of %v mm; this reading has no bound to widen`, ErrUnsupported, bound)
 	}
 	return lo, hi, nil
 }

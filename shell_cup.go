@@ -124,13 +124,14 @@ func (cp cupPayload) cavityPrism() prismPayload {
 	return cp.prismBetween(cp.cavityScalar(), cp.openScalar())
 }
 
-// extentAlong is the cup's exact extent interval along an arbitrary world
-// direction g — the OUTER prism's extent (docs/modify-design.md §10, Table D,
-// D5). The cavity is interior and reaches no farther than the outer region, so
-// the outward extent is the solid outer prism's, read by the same
-// prismPayload.extentAlong the outer prism's bounds already use. This is what a
-// through-all stop consults when a cup is a live body in the sweep's path.
-func (cp cupPayload) extentAlong(g r3.Vec) (float64, float64, error) {
+// extentAlong is the cup's extent interval along an arbitrary world direction
+// g, beside the displacement its ends carry — the OUTER prism's reading
+// (docs/modify-design.md §10, Table D, D5). The cavity is interior and reaches
+// no farther than the outer region, so the outward extent is the solid outer
+// prism's, read by the same prismPayload.extentAlong the outer prism's bounds
+// already use. This is what a through-all stop consults when a cup is a live
+// body in the sweep's path.
+func (cp cupPayload) extentAlong(g r3.Vec) (float64, float64, float64, error) {
 	outer := cp.outerPrism()
 	outer.profile = cp.outer
 	return outer.extentAlong(g)

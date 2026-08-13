@@ -417,14 +417,75 @@ func pinFootprint(t *testing.T) (*sketch.Sketch, *sketch.Profile) {
 	return s, s.Profiles()[0]
 }
 
+// arcSegmentPlate builds a circular-segment prism on the YZ plane: the region
+// between the chord at v = 6 and the arc of radius √37 about the plane origin,
+// swept 5 mm along the plane's own normal. √37 is no float64, so the section's
+// arc radius — and with it the body's extent along world Z, which the arc's
+// own apex holds — is known to a proven displacement rather than stated
+// exactly (extrude.go's arcWalkRadiusBound).
+func arcSegmentPlate(t *testing.T, doc *decad.Document) *decad.Body {
+	t.Helper()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.YZ())
+	require.NoError(t, err)
+	center := s.CreatePoint(0, 0)
+	s.Fix(center)
+	start := s.CreatePoint(1, 6)
+	end := s.CreatePoint(-1, 6)
+	s.Fix(start)
+	s.CreateArc(center, start, end)
+	s.CreateLine(end, start)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	profiles := s.Profiles()
+	require.Len(t, profiles, 1)
+	body, err := doc.Extrude(s, profiles[0], decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+	require.NoError(t, err)
+	return body
+}
+
+// TestExtrudeThroughAllArcSectionCarriesRadiusBound is the arc twin of the
+// revolve case below: a through-all sweep whose only stop body is an ordinary
+// analytic arc-section prism still resolves, and the level it resolves carries
+// the arc apex's own proven displacement instead of claiming to be exact.
+func TestExtrudeThroughAllArcSectionCarriesRadiusBound(t *testing.T) {
+	doc := decad.New()
+	host := arcSegmentPlate(t, doc)
+	hostBox, err := host.Bounds()
+	require.NoError(t, err)
+	require.InDelta(t, math.Sqrt(37), hostBox.Max.Z, 1e-12, `the arc apex is the body's far side along the sweep`)
+	require.Equal(t, decad.Approximate, hostBox.Exactness)
+	require.Positive(t, hostBox.Bound.Base())
+
+	ps, pp := pinFootprint(t)
+	pin, err := doc.Extrude(ps, pp, decad.ThroughAll{Dir: decad.Along})
+	require.NoError(t, err)
+
+	// The sweep runs from the sketch plane to the apex the host HOLDS, so the
+	// 4×4 footprint's volume is that height's, and the level's own bracket is
+	// what the pin's box publishes.
+	requireVolume(t, pin, 16*math.Sqrt(37))
+	requireBounds(t, pin, decad.Approximate, 20, 0, 0, 24, 4, math.Sqrt(37))
+	pinBox, err := pin.Bounds()
+	require.NoError(t, err)
+	require.Positive(t, pinBox.Bound.Base(),
+		`a stop level held by an arc's radius publishes that radius's displacement`)
+	require.Less(t, pinBox.Bound.Base(), 1e-9,
+		`that displacement is the radius bracket's own width, not a blunder`)
+
+	steps := doc.Recipe().Steps
+	require.Equal(t, []decad.StepRef{host.Origin().Step}, steps[len(steps)-1].Inputs)
+	require.Contains(t, doc.Bodies(), host, `a stop body is depended on, never retired`)
+}
+
 // TestExtrudeThroughAllRevolveStopChargesSweepExtreme proves the revolved
 // solid's directional extent charges BOTH mechanisms that can move its ends
 // before a stop reads it (docs/evaluator-design.md §6). A partial sweep's own
 // extreme is reached through math.Sin/Cos and is held only to the bracket the
-// payload's sweep-extreme proof derives, so a through-all stop — which records
-// the coordinate as exact and has no bound to widen — refuses. A full
-// revolution about an axis-aligned frame reaches its ±8 amplitude exactly and
-// still resolves.
+// payload's sweep-extreme proof derives, so the stop that reads it sweeps to
+// the level the host HOLDS and publishes that bracket as the level's own axial
+// displacement — never as an exact coordinate. A full revolution about an
+// axis-aligned frame reaches its ±8 amplitude exactly and stays Exact.
 func TestExtrudeThroughAllRevolveStopChargesSweepExtreme(t *testing.T) {
 	t.Run("partial sweep", func(t *testing.T) {
 		s, p := solidSketch(t)
@@ -440,12 +501,25 @@ func TestExtrudeThroughAllRevolveStopChargesSweepExtreme(t *testing.T) {
 		require.InDelta(t, 8*math.Sin(1), box.Max.Z, 1e-9)
 		require.Positive(t, box.Bound.Base())
 
-		before := snapshotDocument(t, doc)
 		ps, pp := pinFootprint(t)
-		_, err = doc.Extrude(ps, pp, decad.ThroughAll{Dir: decad.Along})
-		require.ErrorIs(t, err, decad.ErrUnsupported)
-		require.ErrorContains(t, err, "sweep-extreme")
-		requireDocumentUnchanged(t, doc, before)
+		pin, err := doc.Extrude(ps, pp, decad.ThroughAll{Dir: decad.Along})
+		require.NoError(t, err)
+
+		// The sweep stops at the host's own held far side, and the 4×4
+		// footprint swept [0, 8·sin(1)] has that height's volume.
+		requireVolume(t, pin, 16*8*math.Sin(1))
+		requireBounds(t, pin, decad.Approximate, 20, 0, 0, 24, 4, 8*math.Sin(1))
+
+		// The level is held, not denoted: the pin's own box carries a
+		// displacement at least as wide as the host's extent bracket.
+		pinBox, err := pin.Bounds()
+		require.NoError(t, err)
+		require.Positive(t, pinBox.Bound.Base(),
+			`a stop level held by a bracket publishes that bracket as its own displacement`)
+		require.Less(t, pinBox.Bound.Base(), 1e-9,
+			`that displacement is the sweep extreme's own bracket, not a blunder`)
+		steps := doc.Recipe().Steps
+		require.Equal(t, []decad.StepRef{host.Origin().Step}, steps[len(steps)-1].Inputs)
 	})
 
 	t.Run("full revolution", func(t *testing.T) {

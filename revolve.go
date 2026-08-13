@@ -1698,16 +1698,18 @@ func walkAxisMoment(w segmentWalk, kind wallKind) boundedScalar {
 	return result
 }
 
-// extentAlong is the revolved solid's exact extent interval along an
-// arbitrary world direction g: the swept radial factor's range over the
-// angular interval turns the extreme into a linear functional over the
-// recorded boundary in (z, ρ) — ρ ≥ 0 over the region, so the solid's
-// extreme along g is the extreme of wg·z + m·ρ with m at its own extreme,
-// and a linear functional's extreme sits on the boundary. Shared by
-// revolveBounds and the through-all stop resolution
-// (docs/evaluator-design.md §5/§6).
-func (rp revolvePayload) extentAlong(g r3.Vec) (float64, float64, error) {
-	return rp.extentAlongContext(context.Background(), g)
+// extentAlong is the through-all stop's reading of the revolved solid
+// (stops.go): its extent interval along an arbitrary world direction g, beside
+// the proven displacement extentBoundedAlong states for its two ends. The
+// swept radial factor's range over the angular interval turns the extreme into
+// a linear functional over the recorded boundary in (z, ρ) — ρ ≥ 0 over the
+// region, so the solid's extreme along g is the extreme of wg·z + m·ρ with m at
+// its own extreme, and a linear functional's extreme sits on the boundary. An
+// end a sweep extreme or a computed arc radius holds only to a bracket
+// publishes that bracket's width, and the stop charges it to the level it
+// resolves (docs/evaluator-design.md §5/§6).
+func (rp revolvePayload) extentAlong(g r3.Vec) (float64, float64, float64, error) {
+	return rp.extentBoundedAlong(context.Background(), g, newFreeformWork())
 }
 
 func (rp revolvePayload) extentAlongContext(ctx context.Context, g r3.Vec) (float64, float64, error) {
@@ -1715,19 +1717,21 @@ func (rp revolvePayload) extentAlongContext(ctx context.Context, g r3.Vec) (floa
 }
 
 // extentAlongWork is extentBoundedAlong's refusing wrapper, the same shape
-// prismPayload.extentAlongWork and capBlendPayload.extentAlongWork already
-// take: a through-all stop reads this extent as an exact endpoint and has no
-// bound to widen, so a direction whose extreme is held to a bracket rather
-// than proven exactly — by the boundary scan, or by the sweep extreme a
-// partial revolution reaches through math.Sin/Cos — refuses rather than
-// fabricate one.
+// prismPayload.extentAlongWork already takes: the reading for a consumer that
+// takes the interval as an exact one and has nowhere to put a displacement —
+// clearance.go's separating-plane short-circuit, which falls back rather than
+// fails. A direction whose extreme is held to a bracket rather than proven
+// exactly — by the boundary scan, or by the sweep extreme a partial revolution
+// reaches through math.Sin/Cos — refuses here rather than publish a held
+// coordinate as the one it denotes. A through-all stop instead consumes the
+// bounded reading and charges the displacement to its own level (stops.go).
 func (rp revolvePayload) extentAlongWork(ctx context.Context, g r3.Vec, work *freeformWork) (float64, float64, error) {
 	lo, hi, bound, err := rp.extentBoundedAlong(ctx, g, work)
 	if err != nil {
 		return 0, 0, err
 	}
 	if bound != 0 {
-		return 0, 0, fmt.Errorf(`%w: the revolved solid's extent along this direction is held to a bracket by its own boundary-extreme and sweep-extreme proofs, known only to a displacement of %v mm; a stop reads this coordinate as exact and has no bound to widen`, ErrUnsupported, bound)
+		return 0, 0, fmt.Errorf(`%w: the revolved solid's extent along this direction is held to a bracket by its own boundary-extreme and sweep-extreme proofs, known only to a displacement of %v mm; this reading has no bound to widen`, ErrUnsupported, bound)
 	}
 	return lo, hi, nil
 }

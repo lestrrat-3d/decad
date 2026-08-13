@@ -224,12 +224,19 @@ whose interval the step's own quantities determine. `ThroughAll` and
 far side of every body the sweep meets), so they are body-relative exactly
 like `ToFace`: all three land in increment 2 with selectors (§7), the stop an
 intersection of the sweep direction with analytic target surfaces — closed
-form — and `ErrUnsupported` until then. A through-all payload must provide an
-exact directional extent. A prism with a nonzero section displacement returns
-`ErrUnsupported`: the recorded stop has no bound to widen. So does a revolved
-solid whose extent along the sweep its own proofs hold only to a bracket — a
-partial sweep's extreme, or a boundary extreme riding a computed arc radius
-(§6) — for the same reason. A through-all
+form — and `ErrUnsupported` until then. A through-all payload must provide a
+directional extent BESIDE the proven displacement that reading's own ends
+carry, and the stop consumes both: the level it resolves takes that
+displacement as its own axial displacement, so a far side a bracket holds — a
+revolved solid's partial-sweep extreme, or a boundary extreme riding a computed
+arc radius (§6) — never publishes itself as the level it denotes. The in-path
+test is decided OUTSIDE that displacement: material beyond the sketch plane by
+more than it is met, material short of the plane by more than it is not, and an
+interval the displacement straddles the plane with is `ErrUnsupported` rather
+than a guessed dependency (`docs/spline-design.md` §6.4). A prism with a nonzero
+section displacement still returns `ErrUnsupported`: that term moves a
+coordinate IN the plane and the extent reading does not carry it, so the stop
+has no stated displacement to charge. A through-all
 dependency is ambient at the CALL but never in the RECORD: core §6.2's depends-on rule covers this
 case explicitly — the feature call resolves which live bodies actually bound
 the stops and records each one's `StepRef` in the step's `Inputs`, in stop

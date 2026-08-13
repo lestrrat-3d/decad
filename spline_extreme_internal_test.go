@@ -14,9 +14,9 @@ import (
 // bracket must ENCLOSE a dense-sample reference (never understate a Box), it
 // must recognize the exact cases a free-form section shares with an analytic
 // one (a zero-width enclosure at an endpoint, a collapsed span), it must
-// respect the §5.2 work ceiling, and R11's build-time gate must refuse
-// exactly where the bracket carries a nonzero bound while leaving every
-// analytic reading untouched.
+// respect the §5.2 work ceiling, and the refusing wrapper an exact-only
+// consumer reads through must refuse exactly where the bracket carries a
+// nonzero bound while leaving every analytic reading untouched.
 
 // ratSpan builds a bezierSpan directly from plane-local coordinates, for
 // tests that exercise the bracket machinery itself rather than the record
@@ -291,10 +291,10 @@ func TestRequireFiniteDirectionAllocatesNothing(t *testing.T) {
 	require.Zero(t, allocs, "the accepted direction gate must allocate nothing")
 }
 
-// 8. R11: prismPayload.extentAlongWork over a free-form section whose extreme
-// along the direction read is an interior root refuses ErrUnsupported (a
-// through-all stop reads this coordinate as exact and has no bound to widen),
-// while prismBoundsContext over the identical payload answers with Approximate
+// 8. prismPayload.extentAlongWork over a free-form section whose extreme
+// along the direction read is an interior root refuses ErrUnsupported (the
+// clearance short-circuit reads this coordinate as exact and has no bound to
+// widen), while prismBoundsContext over the identical payload answers with Approximate
 // and a positive Bound instead of refusing — a Box has one to widen into. Both
 // readings key on the BRACKET's width and not on the section being free-form;
 // test 8b is the same two readings on a section whose bracket has none.
@@ -337,8 +337,8 @@ func TestPrismBoundsFreeformEndpointHeldExtremesStayExact(t *testing.T) {
 		xform: r3.Identity(),
 	}
 
-	// R11's gate keys on that same width, so this section's extent along X
-	// answers outright where test 8's interior-root fixture refuses.
+	// The refusing wrapper keys on that same width, so this section's extent
+	// along X answers outright where test 8's interior-root fixture refuses.
 	lo, hi, err := pp.extentAlongWork(t.Context(), r3.NewVec(1, 0, 0), newFreeformWork())
 	require.NoError(t, err)
 	require.Equal(t, 0.0, lo)
@@ -353,10 +353,10 @@ func TestPrismBoundsFreeformEndpointHeldExtremesStayExact(t *testing.T) {
 }
 
 // 9. Regression: a section whose extreme only a bracket holds still refuses at
-// every consumer that reads the coordinate as EXACT — the through-all stop
-// wrapper prismPayload.extentAlongWork owns that refusal now that the scan
-// itself answers with a bound — and every existing analytic prism's Box still
-// reports Exact with a zero bound.
+// every consumer that reads the coordinate as EXACT — prismPayload's own
+// refusing wrapper, which the clearance short-circuit reads through, owns that
+// refusal now that the scan itself answers with a bound — and every existing
+// analytic prism's Box still reports Exact with a zero bound.
 func TestBoundaryExtremesContextRegression(t *testing.T) {
 	control := []Point2{{U: 0, V: 0}, {U: 1, V: 2}, {U: 3, V: 2}, {U: 4, V: 0}, {U: 6, V: 1}, {U: 7, V: -2}}
 	// V (not U) has an interior extreme on this fixture (see the comment on

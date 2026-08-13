@@ -24,12 +24,17 @@ import (
 // depended on, never consumed and never retired.
 
 // directionalExtent is what a through-all stop needs from a body's payload:
-// the body's exact extent interval along an arbitrary world direction — the
+// the body's extent interval along an arbitrary world direction — the
 // closed-form intersection of the sweep direction with the body's analytic
-// surfaces (docs/evaluator-design.md §5). A payload that cannot provide an
-// exact recorded stop returns ErrUnsupported.
+// surfaces (docs/evaluator-design.md §5) — BESIDE the proven displacement its
+// two endpoints carry. An all-analytic body whose every extreme is exactly
+// representable publishes a zero displacement and reads exactly, as it always
+// did; a body whose own construction holds an extreme only to a bracket
+// publishes that bracket's width and the stop charges it (docs/spline-design.md
+// §6.2/§6.4). A payload that cannot state the interval at all, or that holds a
+// displacement this reading does not carry, returns ErrUnsupported.
 type directionalExtent interface {
-	extentAlong(g r3.Vec) (float64, float64, error)
+	extentAlong(g r3.Vec) (float64, float64, float64, error)
 }
 
 // stopTol is the scale-relative tolerance the stop resolutions classify
@@ -98,8 +103,9 @@ func stopLevelRound(faceOrigin, planeOrigin, n r3.Vec, travel, offset, held floa
 // throughStopRound is stopLevelRound's through-all analogue: travel·(hi −
 // origin·dir) taken exactly over the far side the winning stop body reported
 // and the frame this sweep lifts through, against the float the resolution
-// held. hi arrives from the body's own extentAlong, which reports an exact
-// endpoint or refuses, so what this term adds is the subtraction and the sign.
+// held. hi arrives from the body's own extentAlong, whose own displacement the
+// resolution charges beside this term, so what this term adds is the
+// subtraction and the sign.
 func throughStopRound(origin, dir r3.Vec, hi, travel, held float64) float64 {
 	o := [3]float64{origin.X, origin.Y, origin.Z}
 	g := [3]float64{dir.X, dir.Y, dir.Z}
@@ -296,15 +302,21 @@ func (d *Document) resolveToFace(tf ToFace, frame r3.Frame, travel float64, what
 // sketch plane in the travel sense through the far side of every live body
 // it meets, so the stop is the farthest far side among them
 // (docs/evaluator-design.md §5). A body is met when it has material strictly
-// beyond the sketch plane in the travel sense, judged EXACTLY on the body's
-// own recorded payload — its closed-form directional extent along the sweep
-// direction; the sweep's lateral footprint is not consulted (an exact
-// region-versus-projection overlap is boolean-grade machinery this
-// evaluator does not have, and a conservative guess would fabricate or drop
-// a recorded dependency). It returns the signed stop coordinate along the
-// plane normal, that coordinate's own proven axial displacement, and the met
-// bodies' StepRefs in stop order along the sweep — nearest far side first. No
-// live body in the path is ErrDegenerate: the sweep has no stop at all.
+// beyond the sketch plane in the travel sense, judged on the body's own
+// recorded payload — its directional extent along the sweep direction, beside
+// the displacement that reading publishes; the sweep's lateral footprint is
+// not consulted (an exact region-versus-projection overlap is boolean-grade
+// machinery this evaluator does not have, and a conservative guess would
+// fabricate or drop a recorded dependency). The in-path test is decided
+// OUTSIDE that displacement — beyond the plane by more than it, or short of
+// the plane by more than it — and an interval that straddles the plane in the
+// travel sense refuses ErrUnsupported (docs/spline-design.md §6.4) rather than
+// guess a dependency. It returns the signed stop coordinate along the plane
+// normal, that coordinate's own proven axial displacement — which carries the
+// winning body's extent displacement, so a level held to a bracket never
+// publishes itself as the level it denotes — and the met bodies' StepRefs in
+// stop order along the sweep, nearest far side first. No live body in the path
+// is ErrDegenerate: the sweep has no stop at all.
 func (d *Document) resolveThroughAll(frame r3.Frame, travel float64) (float64, float64, []StepRef, error) {
 	dir := frame.N().Scale(travel)
 	base := frame.Origin().Dot(dir)
@@ -320,15 +332,36 @@ func (d *Document) resolveThroughAll(frame r3.Frame, travel float64) (float64, f
 		if !ok {
 			return 0, 0, nil, fmt.Errorf(`%w: a through-all stop needs every live body's directional extent, and this evaluator did not build one of them`, ErrUnsupported)
 		}
-		_, hi, err := ext.extentAlong(dir)
+		_, hi, bound, err := ext.extentAlong(dir)
 		if err != nil {
 			return 0, 0, nil, err
 		}
-		far := hi - base
-		if far <= relStopTol(math.Max(math.Abs(hi), math.Abs(base))) {
-			continue
+		// Two mechanisms move this far side along this direction: the extent
+		// reading's own bracket and the payload's stop-face displacement. They
+		// displace the same coordinate, so they sum — and a zero term is left
+		// out rather than rounded, so an all-analytic body keeps the exact
+		// endpoint it has always published.
+		delta := bound
+		if axial := payloadAxialDelta(b); axial != 0 {
+			delta = axial
+			if bound != 0 {
+				delta = absSumUpper(bound, axial)
+			}
 		}
-		stops = append(stops, stopAt{far: far, hi: hi, delta: payloadAxialDelta(b), ref: b.originStep()})
+		far := hi - base
+		tol := relStopTol(math.Max(math.Abs(hi), math.Abs(base)))
+		switch {
+		case downRound(far-delta) > tol:
+			// Material beyond the plane whatever the displacement hides.
+		case upRound(far+delta) <= tol:
+			// No material beyond the plane, whatever it hides.
+			continue
+		default:
+			// The displacement straddles the plane, and a non-finite one
+			// decides neither test above, so both land here.
+			return 0, 0, nil, fmt.Errorf(`%w: a through-all sweep cannot decide whether a body is in its path: its far side sits %v mm beyond the sketch plane, known only to a displacement of %v mm`, ErrUnsupported, far, delta)
+		}
+		stops = append(stops, stopAt{far: far, hi: hi, delta: delta, ref: b.originStep()})
 	}
 	if len(stops) == 0 {
 		return 0, 0, nil, fmt.Errorf(`%w: a through-all sweep found no live body in its path`, ErrDegenerate)

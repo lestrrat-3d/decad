@@ -1159,10 +1159,14 @@ or refuses, exactly as the modify audit's undecidable nesting does (modify §5
 S9). So a gate that compares a free-form bracket against a threshold at build
 time refuses as R11 when the bracket straddles it. Two gates do:
 
-- **a through-all stop's in-path test.** `stops.go` decides EXACTLY, on each
-  body's closed-form `extentAlong`, whether the sweep meets that body. A
-  free-form body's extent is a bracket (§6.2), so a stop whose bracket straddles
-  the sketch plane in the travel sense is R11 — never a guessed dependency.
+- **a through-all stop's in-path test.** `stops.go` decides, on each body's own
+  `extentAlong` interval and the displacement that reading publishes, whether
+  the sweep meets that body. A free-form body's extent is a bracket (§6.2), and
+  the decision is made OUTSIDE it — beyond the sketch plane by more than the
+  displacement, or short of it by more — so a bracket that straddles the sketch
+  plane in the travel sense is R11, never a guessed dependency. The far side the
+  stop then records charges the same displacement to the level's own axial
+  displacement (evaluator §5), so a met body's bracket refuses nothing.
 - **the §4.1 analytic-corner slice's audit.** The modify §5 crossing and
   boundary-contact audit must run over the section's free-form walks. A crossing
   is a root problem for §6.2's engine, exactly; the contact floor `δ = ε·D` needs
@@ -1174,14 +1178,13 @@ R11 is not permanent: refining the bracket decides every case but an exact
 tangency, and a tangency is a contact the §5 audit refuses anyway. That
 refinement is a measured-target loop, so it carries §6.1's iteration cap.
 
-**Current state (P4a).** The through-all stop's own gate
-(`prismPayload.extentAlongWork`) is live ahead of the straddle test above: it
-refuses on ANY nonzero directional-extreme bracket bound along the stop's own
-direction, not only one that straddles the sketch plane in the travel sense.
-That is a strictly WIDER refusal than this section states — sound, since a
-stop reads its coordinate as exact and a wider refusal only over-refuses,
-never fabricates a dependency — and narrowing it to the straddle test itself
-is deferred to a later step under this same non-permanent row. The §4.1
+**Current state.** The through-all stop's gate IS the straddle test above:
+`stops.go` reads each payload's `extentAlong` interval beside its displacement,
+charges that displacement to the level it resolves, and refuses only where it
+straddles the sketch plane in the travel sense. The wider refusal — ANY nonzero
+bracket bound — survives in `prismPayload.extentAlongWork` and its revolve twin,
+which serve the one consumer that has no bound to widen and falls back rather
+than fails: `clearance.go`'s separating-plane short-circuit. The §4.1
 analytic-corner slice's audit gate is not implemented yet (P10).
 
 ### 6.5 A wall edge's convexity — proven from the curvature numerator's Bernstein coefficients, or refused
@@ -1638,8 +1641,8 @@ half-silent. These stages do not consume a global evaluator increment number.
 | **P1** | this document + the core/evaluator table updates it resolves | none |
 | **P2** | Bézier conversion, exact Tier A moments, the §5.2 budget | `ProfileRecord.Area`/`Centroid`/`SecondMoments` answer for Tier A, bounded by one rounding. No new types |
 | **P3** | walk-kind discriminant across every `segmentWalk` consumer | none — behaviour preserved |
-| **P4a** | §6.2 row 1's directional-extreme bracket, wired into the prism bounds reading behind the existing refusal wrappers | none — R6 still stands, so a free-form prism is reachable only from internal tests; `extentAlongWork`'s R11 gate is live but wider than §6.4's straddle rule (any nonzero bracket bound refuses, not only one that straddles the sketch plane), and R18 is live on the enclosure-to-float64 conversion the bracket publishes through |
-| **P4b** | `NURBSSurface`/`NURBSCurve`, free-form extrude side faces, `NormalAt` refusal, §6.4's own straddle-narrowed stop gate, §6.5's wall-edge convexity proof and its R19 refusal | Tier A free-form prisms build, `FitSplineSeg` walks among them since P4b is where R6's build refusal lifts (§5.1.2); `Volume` from the Tier A rational, `Area`/`Box` bounded. A Tier B or C section is R10; an undecidable through-all stop is R11; a wall edge whose curvature sign the chain does not prove is R19 |
+| **P4a** | §6.2 row 1's directional-extreme bracket, wired into the prism bounds reading and into §6.4's straddle-narrowed through-all stop gate | none — R6 still stands, so a free-form prism is reachable only from internal tests; the stop charges a met body's bracket to the level it resolves and R11 refuses only a straddling one, `extentAlongWork`'s wider refusal serving the clearance short-circuit alone, and R18 is live on the enclosure-to-float64 conversion the bracket publishes through |
+| **P4b** | `NURBSSurface`/`NURBSCurve`, free-form extrude side faces, `NormalAt` refusal, §6.5's wall-edge convexity proof and its R19 refusal | Tier A free-form prisms build, `FitSplineSeg` walks among them since P4b is where R6's build refusal lifts (§5.1.2); `Volume` from the Tier A rational, `Area`/`Box` bounded. A Tier B or C section is R10; an undecidable through-all stop is R11; a wall edge whose curvature sign the chain does not prove is R19 |
 | **P5** | free-form chording with proven sagitta + area slack | `Tessellate`/`STL`/`OBJ`, booleans, interference proof. Wall reading explicitly `Suspect` |
 | **P6** | §6.3's speed floor and origin-exclusion certificates, hodograph normal cones, bracketed curvature extremes | `Undercuts` and `MinRadius` each answer where the certificates that reading needs close, and read `Suspect` per §6.3's cost table where they do not |
 | **P7** | certified branch-and-bound inscribed-disk interval | `MinWallThickness` answered, with its own convergence evidence |
