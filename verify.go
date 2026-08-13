@@ -1298,10 +1298,15 @@ func (in pairToleranceInputs) lengthReference(value float64) (float64, bool) {
 // an exact restatement of the shipped boundary, because clearance.go and
 // interference.go trust that model for containment and contact proofs, not
 // only for a diameter. A miss there is not necessarily a body with no usable
-// diameter: fallbackGateDiameter covers the payloads it does not (cup,
-// cap-loop chamfer, and a prismPayload whose own sectionDelta is nonzero) with
-// a bound that is sound for THIS gate without being eligible for that stronger
-// trust.
+// diameter: a free-form-walled prismPayload — the one shipped payload whose
+// side face the clearance kernel's exact model has no arm for at all — reads
+// its diameter through freeformSectionGateDiameter's own witness set of
+// analytic vertices and free-form span endpoints instead, tried first because
+// its zero sectionDelta would otherwise read as "no arm" below. Every other
+// miss falls to fallbackGateDiameter, which covers the payloads it does not
+// (cup, cap-loop chamfer, and a prismPayload whose own sectionDelta is
+// nonzero) with a bound that is sound for THIS gate without being eligible
+// for that stronger trust.
 //
 // A prism with nonzero z0Delta or z1Delta keeps the same carrier model, but
 // each held witness can move by axialDelta. The maximum held pair distance can
@@ -1375,6 +1380,11 @@ func bodyGateDiameter(ctx context.Context, body *Body) (float64, bool, error) {
 		}
 		return d, ok, nil
 	}
+	if payload, isPrism := body.payload.(prismPayload); isPrism {
+		if d, ok, err := freeformSectionGateDiameter(ctx, payload); ok || err != nil {
+			return d, ok, err
+		}
+	}
 	return fallbackGateDiameter(budget, body)
 }
 
@@ -1394,11 +1404,131 @@ func lowerDiameterForDisplacement(d, displacement float64) (float64, bool) {
 	return d, d > 0 && usableMagnitude(d)
 }
 
+// freeformSectionGateDiameter is bodyGateDiameter's arm for a free-form-walled
+// prismPayload (docs/verification-design.md §3): the clearance kernel's exact
+// carrier model has no arm for a NURBSSurface side face any more than it has
+// one for a displaced section, and gateWitnessPrism gives this payload none
+// either, because its own sectionDelta reads zero — the one value that arm
+// treats as "the section is already its own denotation, read newBodyGeomBudget
+// instead". A free-form wall is not read through either model, so this
+// function builds its own reference.
+//
+// It reports a certified LOWER bound on the body's own diameter: the maximum
+// distance over a finite set of points KNOWN TO LIE ON the body — every
+// analytic walk's own two endpoints, and every free-form span's own two
+// endpoints (docs/spline-design.md §5.1's exact-rational Bézier conversion,
+// never the recorded control net, and for a FitSplineSeg never the raw
+// recorded Fit points, which are neither the converted chain's own ends nor a
+// hull the curve stays inside) — at both cap heights. A Bézier interpolates
+// its end control points exactly, so every span endpoint is a real point of
+// the curve itself, and every distance the maximum ranges over is therefore
+// realized between two real body points: the reading can only UNDERSTATE the
+// true diameter, never overstate it, exactly the direction §3 requires.
+//
+// The displacement subtracted from that maximum composes three terms, none of
+// them a certificate claim: the section's own sectionDelta (zero for a
+// free-form wall in practice, since the analytic prism-boolean reduction
+// never admits one — docs/prism-boolean-design.md's G4 — but read here rather
+// than assumed), the payload's own axialDelta, and the widest per-witness
+// endpoint bound walkEndBoundAllow reads off whichever walk produced it — an
+// analytic walk's recorded-coordinate bound (zero for a whole segment,
+// nonzero for a trimmed one) or a free-form span's own conversion rounding.
+// Composing the widest witness bound as one uniform displacement, rather than
+// a bound per point, is the same convention lowerDiameterForDisplacement's
+// other callers already use: every witness pair is presumed to move by up to
+// that much, so the subtracted amount is twice the WORST one, never a mix.
+//
+// ok is false when the profile carries no free-form segment at all — an
+// ordinary prism reaches its diameter through the exact carrier model, or
+// through gateWitnessPrism's own displaced-section arm, instead — or when a
+// witness's own endpoint bound cannot be derived (walkEndBoundAllow's +Inf),
+// since an absent bound must never read as a small one.
+func freeformSectionGateDiameter(ctx context.Context, pp prismPayload) (float64, bool, error) {
+	work := newFreeformWork()
+	sawFreeform := false
+	ownBound := 0.0
+	var pts []r3.Vec
+
+	addWitness := func(u, v float64, bound walkEndBound) bool {
+		allow := walkEndBoundAllow(bound)
+		if isNonFinite(allow) {
+			return false
+		}
+		ownBound = math.Max(ownBound, allow)
+		pts = append(pts, pp.point(u, v, pp.z0), pp.point(u, v, pp.z1))
+		return true
+	}
+
+	for _, loop := range append([]LoopRecord{pp.profile.Outer}, pp.profile.Holes...) {
+		for _, seg := range loop.Segments {
+			if err := ctx.Err(); err != nil {
+				return 0, false, err
+			}
+			seg, err := normalizeSegment(seg)
+			if err != nil {
+				// normalizeSegment reads no ctx and so never observes
+				// cancellation; every error it can return is a structural
+				// refusal of the recorded segment itself, read here as "no
+				// arm" rather than a hard failure.
+				return 0, false, nil //nolint:nilerr // structural refusal, not cancellation — see comment above
+			}
+			w, err := walkOf(seg, work)
+			if err != nil {
+				// Likewise walkOf: it reads the record's own freeformWork
+				// counter, never ctx, so its error is always a build-time
+				// refusal (an R-table sentinel) this arm reads as "no arm"
+				// rather than propagates.
+				return 0, false, nil //nolint:nilerr // structural refusal, not cancellation — see comment above
+			}
+			if w.kind != walkFreeform {
+				if !addWitness(w.startU, w.startV, w.startBound) || !addWitness(w.endU, w.endV, w.endBound) {
+					return 0, false, nil
+				}
+				continue
+			}
+			sawFreeform = true
+			for _, span := range w.spans {
+				if len(span) == 0 {
+					return 0, false, nil
+				}
+				for _, cp := range [2]ratPoint{span[0], span[len(span)-1]} {
+					held, ok := point2Of(cp)
+					if !ok {
+						return 0, false, nil
+					}
+					bound := walkEndBound{
+						u: rationalFloatError(cp.u, held.U),
+						v: rationalFloatError(cp.v, held.V),
+					}
+					if !addWitness(held.U, held.V, bound) {
+						return 0, false, nil
+					}
+				}
+			}
+		}
+	}
+	if !sawFreeform {
+		return 0, false, nil
+	}
+
+	d, ok := pointSetDiameter(pts)
+	if !ok {
+		return 0, false, nil
+	}
+	displacement := absSumUpper(pp.sectionDelta, pp.axialDelta(), ownBound)
+	d, ok = lowerDiameterForDisplacement(d, displacement)
+	return d, ok, nil
+}
+
 // fallbackGateDiameter is bodyGateDiameter's fallback for a payload whose true
 // boundary the clearance kernel's exact carrier model does not cover
 // (cupPayload, capBlendPayload, and a prismPayload carrying a section
 // displacement — verification design §3's "usable finite, non-negative body
-// diameter", never a box diagonal, document scale or zero).
+// diameter", never a box diagonal, document scale or zero). A free-form-walled
+// prismPayload misses that same exact carrier too, but never reaches here:
+// bodyGateDiameter tries freeformSectionGateDiameter for it first, because its
+// own sectionDelta is zero — the one value gateWitnessPrism below reads as "no
+// arm at all" for a prismPayload.
 //
 // Each payload earns a witness prism for its own reason, and gateWitnessPrism's
 // doc comment states each arm separately rather than pooling them behind one
@@ -1480,9 +1610,15 @@ func fallbackGateDiameter(budget *workBudget, body *Body) (float64, bool, error)
 // gateWitnessPrism builds the straight prism fallbackGateDiameter reads its
 // witnesses off, beside the displacement each of those witnesses can carry
 // from the point of the denoted body it stands for. ok is false for every
-// payload with no arm here, including a revolvePayload and a prismPayload
-// whose section is its own denotation (both already exact through
-// newBodyGeomBudget, which is why they never reach this fallback).
+// payload with no arm here, including a revolvePayload (already exact through
+// newBodyGeomBudget, which is why it never reaches this fallback) and an
+// analytic-walled prismPayload whose section is its own denotation (the same
+// reason). A free-form-walled prismPayload's own section is its denotation
+// too, so this switch answers false for it exactly as it does for the
+// analytic case — but that answer is never read: bodyGateDiameter routes a
+// free-form-walled prismPayload through freeformSectionGateDiameter before
+// fallbackGateDiameter, and calls this function only when that arm has
+// already declined.
 //
 // The three arms read different geometry and earn a witness for different
 // reasons.

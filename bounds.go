@@ -46,6 +46,13 @@ import (
 //     walkEndpointAllow, charged at the SOURCE operand magnitudes the walk's
 //     arithmetic touches — never at the endpoint that arithmetic produced,
 //     which a cancelling difference can leave arbitrarily small;
+//   - a free-form WALK ENDPOINT's own per-component bound (walkEndBound,
+//     segmentWalk's startBound/endBound and the identical reading over an
+//     interior span joint), read as a 3D world-space DISTANCE the point can
+//     sit from the curve it denotes → walkEndBoundAllow, named for the
+//     endpoint rather than for its one caller today (verify.go's free-form
+//     tolerance-gate diameter arm) so a later reading over the same bound can
+//     share it;
 //   - the AREA of ONE RULED QUAD whose cap-level chord alone is displaced (the
 //     cap-loop chamfer's own band patches, docs/modify-reach-design.md §8.4) →
 //     bandPatchAreaAllow, the same two-factor product one patch at a time
@@ -479,6 +486,27 @@ func walkEndpointAllow(operandUpper float64) float64 {
 		return math.Inf(1)
 	}
 	return radius3D(16 * ulp)
+}
+
+// walkEndBoundAllow turns a free-form walk endpoint's own PROVEN
+// per-component bound (walkEndBound — segmentWalk's startBound/endBound, or
+// the identical reading a caller takes over one interior span joint) into a
+// 3D world-space displacement bound. The wider of the two plane-local
+// components is read as a per-coordinate bound and carried through the
+// payload's orthonormal frame by radius3D, exactly as any other coordinate
+// error is (core §5.2 — a coordinate's error bound is a radius, not an axis
+// extent): a frame's U/V/N are pairwise orthogonal unit directions, so a
+// bound on each in-plane component is itself a bound on the corresponding
+// world-space one, and folding the wider of the two through radius3D's own
+// three-axis shape can only widen the true two-axis figure, never narrow it.
+//
+// An underivable component answers +Inf, never a small number silently spent
+// in its place (cutDisplacementAllow's own rule).
+func walkEndBoundAllow(bound walkEndBound) float64 {
+	if !bound.derivable() {
+		return math.Inf(1)
+	}
+	return radius3D(math.Max(math.Abs(bound.u), math.Abs(bound.v)))
 }
 
 // bandPatchAreaAllow bounds how far ONE chamfer band patch's own area

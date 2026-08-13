@@ -305,9 +305,12 @@ always forms a usable reference — its `payload.diameter` is guaranteed at buil
 (`boolean_body.go:300-304`) and an edge length is a finite chord sum
 (`boolean_body.go:757-778`). For the other shipped payloads `bodyGateDiameter`
 (`verify.go`) forms a body diameter too, through one of two carrier models. A
-`revolvePayload`, or a `prismPayload` whose two axial displacements are zero,
-reads it exactly off the same analytic carrier the clearance kernel proves
-against (`newBodyGeomBudget`/`clearance_geom.go`). A `prismPayload` with a
+`revolvePayload`, or an analytic-walled `prismPayload` whose two axial
+displacements are zero, reads it exactly off the same analytic carrier the
+clearance kernel proves against (`newBodyGeomBudget`/`clearance_geom.go`) — a
+free-form-walled `prismPayload` has no arm there at all, whatever its axial
+displacements, and reads its diameter through the arm below instead. A
+`prismPayload` with a
 nonzero `z0Delta` or `z1Delta` uses those held carrier witnesses too, but each
 witness can move by `axialDelta`; `bodyGateDiameter` returns the witness maximum
 minus `2*axialDelta`, rounded toward zero. That is a certified LOWER bound on
