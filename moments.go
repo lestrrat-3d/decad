@@ -953,6 +953,106 @@ func circularLengthInterval(seg CurveSegment) (ratInterval, bool) {
 	}
 }
 
+// circularEndpointInterval encloses the (u, v) position a recorded circular
+// segment DENOTES at parameter t, as a pair of exact rational intervals. It is
+// circularLengthInterval's endpoint twin — the same recorded data and, for an
+// arc, the same swept-angle branch — read AT one parameter instead of over the
+// whole range, and it exists because a walk's endpoint at a trimmed parameter
+// is a math.Cos/math.Sin evaluation at an angle this package computed, never a
+// coordinate the record states.
+//
+// A CircleSeg's point at t is Center + r·(cos 2πt, sin 2πt) for the recorded
+// centre and radius, so the turn is exactly rational and moments_trig.go's
+// turnSinCosInterval encloses the pair with no π-comparison anywhere. A whole
+// multiple of a quarter turn does not even need the series: its sine and cosine
+// are 0 or ±1 exactly (quarterTurnSinCos), which is what keeps a whole circle's
+// own endpoint a zero-width reading.
+//
+// An ArcSeg states no angle at all — three pinned points, swept
+// counter-clockwise from Start to End about Center (record.go) — so its point
+// at t is Center + r·(cos θ, sin θ) with r the exact Start-to-Center distance
+// (ratSqrtDown/ratSqrtUp) and θ = a0 + t·sweep, both angles enclosed by
+// atan2Interval under the same +2π branch correction circularLengthInterval
+// applies, and the sine and cosine of that enclosed angle taken by
+// radSinCosSpan.
+func circularEndpointInterval(seg CurveSegment, t float64) (ratInterval, ratInterval, bool) {
+	rt := floatRat(t)
+	if rt == nil {
+		return ratInterval{}, ratInterval{}, false
+	}
+	switch seg := seg.(type) {
+	case CircleSeg:
+		radius, err := seg.Radius.In(units.Millimeter)
+		if err != nil {
+			return ratInterval{}, ratInterval{}, false
+		}
+		r := floatRat(radius)
+		cu, cv := floatRat(seg.Center.U), floatRat(seg.Center.V)
+		if r == nil || cu == nil || cv == nil {
+			return ratInterval{}, ratInterval{}, false
+		}
+		sin, cos := quarterTurnSinCos(rt)
+		return intervalAdd(pointInterval(cu), intervalScale(cos, r)),
+			intervalAdd(pointInterval(cv), intervalScale(sin, r)), true
+	case ArcSeg:
+		cu, cv := floatRat(seg.Center.U), floatRat(seg.Center.V)
+		if cu == nil || cv == nil {
+			return ratInterval{}, ratInterval{}, false
+		}
+		dx0 := exactCoordinateDelta(seg.Start.U, seg.Center.U)
+		dy0 := exactCoordinateDelta(seg.Start.V, seg.Center.V)
+		dx1 := exactCoordinateDelta(seg.End.U, seg.Center.U)
+		dy1 := exactCoordinateDelta(seg.End.V, seg.Center.V)
+		r2 := new(big.Rat).Add(new(big.Rat).Mul(dx0, dx0), new(big.Rat).Mul(dy0, dy0))
+		rLo, rHi := floatRat(ratSqrtDown(r2)), floatRat(ratSqrtUp(r2))
+		if rLo == nil || rHi == nil {
+			return ratInterval{}, ratInterval{}, false
+		}
+		heldDY0 := seg.Start.V - seg.Center.V
+		heldDY1 := seg.End.V - seg.Center.V
+		a0 := atan2Interval(dy0, dx0, heldDY0 == 0 && math.Signbit(heldDY0))
+		a1 := atan2Interval(dy1, dx1, heldDY1 == 0 && math.Signbit(heldDY1))
+		sweep := intervalSub(a1, a0)
+		heldA0 := math.Atan2(heldDY0, seg.Start.U-seg.Center.U)
+		heldA1 := math.Atan2(heldDY1, seg.End.U-seg.Center.U)
+		if heldA1-heldA0 <= 0 {
+			sweep = intervalAdd(sweep, twoPiInterval())
+		}
+		sin, cos, ok := radSinCosSpan(intervalAdd(a0, intervalScale(sweep, rt)))
+		if !ok {
+			return ratInterval{}, ratInterval{}, false
+		}
+		r := interval(rLo, rHi)
+		return intervalAdd(pointInterval(cu), intervalMul(r, cos)),
+			intervalAdd(pointInterval(cv), intervalMul(r, sin)), true
+	default:
+		return ratInterval{}, ratInterval{}, false
+	}
+}
+
+// quarterTurnSinCos encloses sin(2πt) and cos(2πt) for an exact rational turn,
+// answering with a POINT interval whenever 4t is an integer: the quadrant turns
+// have sine and cosine 0 or ±1 exactly, which no series can improve on and a
+// series would only widen. Every other turn goes to turnSinCosInterval.
+func quarterTurnSinCos(t *big.Rat) (ratInterval, ratInterval) {
+	quadrants := new(big.Rat).Mul(t, big.NewRat(4, 1))
+	if !quadrants.IsInt() {
+		return turnSinCosInterval(t)
+	}
+	zero, one := new(big.Rat), big.NewRat(1, 1)
+	minusOne := big.NewRat(-1, 1)
+	switch new(big.Int).Mod(quadrants.Num(), big.NewInt(4)).Int64() {
+	case 0:
+		return pointInterval(zero), pointInterval(one)
+	case 1:
+		return pointInterval(one), pointInterval(zero)
+	case 2:
+		return pointInterval(zero), pointInterval(minusOne)
+	default: // 3
+		return pointInterval(minusOne), pointInterval(zero)
+	}
+}
+
 // circularFirstMomentInterval brackets one circular walk's exact first-moment
 // contributions (∫u dA, ∫v dA) about the walk anchor: a CircleSeg over any
 // recorded range, whole or fractional, and — under a narrower admission,

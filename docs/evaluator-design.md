@@ -229,7 +229,8 @@ directional extent BESIDE the proven displacement that reading's own ends
 carry, and the stop consumes both: the level it resolves takes that
 displacement as its own axial displacement, so a far side a bracket holds — a
 revolved solid's partial-sweep extreme, or a boundary extreme riding a computed
-arc radius (§6) — never publishes itself as the level it denotes. The in-path
+arc radius or a walked endpoint the record does not state (§6) — never publishes
+itself as the level it denotes. The in-path
 test is decided OUTSIDE that displacement: material beyond the sketch plane by
 more than it is met, material short of the plane by more than it is not, and an
 interval the displacement straddles the plane with is `ErrUnsupported` rather
@@ -287,8 +288,11 @@ partial sweep's angular interval deciding which cardinal directions are
 reached — the same extreme analysis extrude uses, in cylindrical coordinates.
 `Bounds` is `Exact` only where every one of those extremes is proven exactly
 representable; a sweep amplitude no `float64` holds, or a boundary extreme a
-computed arc radius carries, publishes the proven bound its own arithmetic
-derives instead. That bound belongs to the directional extent reading itself,
+computed arc radius or a computed walk endpoint carries, publishes the proven
+bound its own arithmetic derives instead. A walk endpoint is a computed one
+wherever the record does not state it: a trimmed line's or arc's own bound, and
+every circle's, is evaluated rather than read, and the bound it carries is the
+per-component gap from a certified enclosure of the point the record denotes. That bound belongs to the directional extent reading itself,
 not to the box, because a body-relative stop reads the same extent (§5) and
 must see the same uncertainty rather than an exact coordinate. All mass results
 carry the §4 numerical bounds. Increment 2.

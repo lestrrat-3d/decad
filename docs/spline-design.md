@@ -995,8 +995,12 @@ bound and stays `Exact`, and a free-form section reaches that reading too: a
 Bézier interpolates its endpoints exactly, so a span monotone in the direction
 being read (`P′` with no root in `[0, 1]`) contributes its two endpoint values
 and nothing else, and where every one of them is representable under the
-functional there is no width to report. An all-analytic prism's `Box` keeps its
-zero bound and `Exact` unchanged, as before. `prismBoundsContext` reports
+functional there is no width to report. An all-analytic prism's `Box` reads the
+same split rather than a kind-based exemption: it keeps its zero bound and
+`Exact` where every extreme is a value its record states — a straight wall's
+endpoint, an arc's own recorded endpoint, an exactly representable circular apex
+— and publishes a width where one is held by a candidate this evaluator computed,
+a trimmed circular endpoint or a computed arc radius among them. `prismBoundsContext` reports
 exactly that split (P4a) — reachable only from internal tests while R6 stands,
 since no free-form prism can exist through the public surface yet.
 

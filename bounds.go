@@ -716,6 +716,37 @@ func directionalPerturbationAllow(dirBound, envelopeUpper float64) float64 {
 	return productUpper(dirBound, envelopeUpper)
 }
 
+// pointPerturbationAllow is directionalPerturbationAllow's transpose: how far
+// the value of the linear functional gu·u + gv·v can move when the POINT it
+// reads carries a proven bound on each of its own components, rather than the
+// direction carrying one. |gu·Δu + gv·Δv| ≤ |gu|·boundU + |gv|·boundV, summed
+// outward.
+//
+// The two components enter SEPARATELY, each against the direction coefficient
+// that actually multiplies it: a direction reading one axis alone charges
+// nothing for the other axis's error, which is what keeps a whole circle's
+// reading along u exact even though its own held endpoint misses in v
+// (walkEndBound's own comment). boundU and boundV must be PROVEN bounds on the
+// point's displacement from the one the record denotes — segmentWalk's
+// startBound/endBound, the only producer of those numbers for a walked
+// endpoint.
+//
+// A charged component answers zero exactly where its bound is zero or its
+// coefficient is: a coordinate the record states verbatim, read through a
+// direction this evaluator reads as an exact leaf, has no width for a directed
+// rounding to invent (boundaryExtremesBoundedContext's own convention). A
+// non-finite bound answers +Inf, never 0, so an absent bound never reads as a
+// small one.
+func pointPerturbationAllow(bound walkEndBound, gu, gv float64) float64 {
+	if isNonFinite(bound.u) || isNonFinite(bound.v) {
+		return math.Inf(1)
+	}
+	return absSumUpper(
+		productUpper(math.Abs(gu), bound.u),
+		productUpper(math.Abs(gv), bound.v),
+	)
+}
+
 // boundedFloatError is the proven error bound of a HELD float64 against a
 // bounded scalar that already encloses the quantity the float stands for:
 // |held − true| ≤ |held − value| + bound, the first term measured exactly over
