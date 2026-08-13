@@ -85,6 +85,54 @@ import (
 //     it another (extrude.go's circular boundary-extreme candidate, whose held
 //     position runs through math.Cos/math.Sin while its enclosure comes from
 //     the angle-free apex identity).
+//   - a HELD scalar coefficient a directional reading lifts a boundary or
+//     sweep extreme through — a prism or cap-blend box's base/gu/gv/gz, a
+//     revolve box's base/wg/c0/c1 — measured against the EXACT rational image
+//     of the same frame-and-placement chain the coefficient's own float
+//     evaluation ran → exactIsometryDotRound, rigidRoundAllow's tight
+//     companion: zero exactly where that chain's arithmetic commits no
+//     rounding for the input at hand (an identity placement, an axis-aligned
+//     frame direction), never a worst-case ulp estimate where an exact
+//     rational comparison is available instead.
+//   - a HELD PLANE-LOCAL COORDINATE a world point projects to under a frame —
+//     a revolve axis's own anchor (revolve.go's axisInPlane) — measured against
+//     the EXACT rational image of the same (p − origin)·axis chain the
+//     coordinate's own float evaluation ran → exactFrameLocalRound,
+//     exactIsometryDotRound's sibling one transform earlier. It charges the
+//     ROUNDING that projection commits and nothing else, so a magnitude
+//     envelope over the point's own distance from the frame origin — a term
+//     that grows with that distance while the projection's true error stays
+//     zero — never stands in for it.
+//   - a HELD PLANE-LOCAL DOT PRODUCT of a direction against a frame's own axis
+//     anchor — the anchor shift a revolve's extreme reading subtracts to move a
+//     plane-local extreme into axis coordinates (revolve.go's
+//     axisExtremeContext) — measured against the EXACT rational value of the
+//     same two products and their sum → exactPlaneDotRound. Its two products
+//     round at the ANCHOR's own magnitude, so the term grows with the anchor
+//     while staying the rounding it is.
+//   - the same plane-local dot product gu·u + gv·v evaluated at every CANDIDATE
+//     the boundary-extreme scan folds (extrude.go's
+//     boundaryExtremesBoundedContext), where no single u and v is available to
+//     measure against → planeDotDecompositionRoundAllow, exactPlaneDotRound's
+//     envelope-scaled sibling: the anchor helper answers for ONE stated point,
+//     this one for a whole scan, at the SECTION's own coordinate envelope
+//     rather than the anchor's magnitude. A reading that charges only the
+//     anchor's dot publishes a section extreme whose own multiply-and-sum
+//     rounded at a magnitude nothing else in the reading scales with.
+//   - the FINAL SUMMATION a directional extent reading commits when it
+//     recombines its own already-held terms into ONE published endpoint — a
+//     prism's base + boundary extreme + sweep level, a revolve's or a cap-loop
+//     chamfer's base + boundary extreme → exactSumRound, exactIsometryDotRound's
+//     own companion one step later: that helper proves each COEFFICIENT right,
+//     this one charges what ADDING the terms commits, and a placement can leave
+//     every coefficient exactly right while the sum still rounds.
+//   - the DISPLACEMENT a deliberate SNAP-TO-ZERO puts on the coordinate it
+//     overwrites — a revolve walk endpoint's radial coordinate assigned exactly
+//     0 within the axis's own contact tolerance (revolve.go's axisFrame.walk) →
+//     snapToZeroAllow, which charges the discarded magnitude itself, because
+//     that magnitude IS the error the assignment introduces. A reading that
+//     charges only the pre-snap arithmetic's own rounding publishes the assigned
+//     zero as Exact and excludes the positive radius it stands for.
 
 const (
 	// unitRoundoff is float64's u = 2⁻⁵³: the relative error a single
@@ -798,4 +846,218 @@ func rimDelta(deltaA, deltaB, sinMin, dPair float64) (float64, error) {
 		return 0, fmt.Errorf(`%w: the operands cross too shallowly — the rim's proven displacement bound reaches the pair's own diameter, so no measurement of the result would be trustworthy`, ErrUnsupported)
 	}
 	return rim, nil
+}
+
+// exactIsometryDotRound is the tight companion to rigidRoundAllow: instead of
+// a worst-case ulp estimate from an input MAGNITUDE, it proves |held − true|
+// exactly, over the rationals, for one scalar coefficient of the form
+// xform.Apply(pt).Dot(g) (translate true) or xform.ApplyDir(pt).Dot(g)
+// (translate false) — the shape extrude.go's prism box and revolve.go's
+// revolve box each lift a boundary or sweep extreme through, reading the
+// frame and placement as an exact leaf. It is exactPrismPointRound's own
+// rational chain (extrude.go), reduced to the single coefficient a
+// directional reading needs rather than a whole placed point, and read
+// through a caller-supplied g rather than fixed to a Vec's three components.
+//
+// held must be the SAME float the caller's own arithmetic produced —
+// xform.Apply(pt).Dot(g) or xform.ApplyDir(pt).Dot(g), computed the ordinary
+// way — so the comparison measures the rounding that arithmetic actually
+// committed, never a different evaluation order's own. Every basis vector,
+// pt and g component must itself be an exactly representable float64 (they
+// always are here: a Transform's basis and translation, a payload's own
+// frame vectors, and g one of the three world unit axes), or the answer is
+// +Inf — an absent bound must never read as a small one
+// (cutDisplacementAllow's own rule).
+func exactIsometryDotRound(xform r3.Transform, pt, g r3.Vec, translate bool, held float64) float64 {
+	ratOfVec := func(v r3.Vec) [3]*big.Rat {
+		return [3]*big.Rat{floatRat(v.X), floatRat(v.Y), floatRat(v.Z)}
+	}
+	anyNil := func(r [3]*big.Rat) bool { return r[0] == nil || r[1] == nil || r[2] == nil }
+	ptR, gR := ratOfVec(pt), ratOfVec(g)
+	basis := xform.Basis()
+	exR, eyR, ezR := ratOfVec(basis.EX), ratOfVec(basis.EY), ratOfVec(basis.EZ)
+	if anyNil(ptR) || anyNil(gR) || anyNil(exR) || anyNil(eyR) || anyNil(ezR) {
+		return math.Inf(1)
+	}
+	placed := [3]*big.Rat{}
+	for i := range placed {
+		placed[i] = ratAdd(ratMul(exR[i], ptR[0]), ratMul(eyR[i], ptR[1]), ratMul(ezR[i], ptR[2]))
+	}
+	if translate {
+		trR := ratOfVec(xform.Translation())
+		if anyNil(trR) {
+			return math.Inf(1)
+		}
+		for i := range placed {
+			placed[i] = ratAdd(placed[i], trR[i])
+		}
+	}
+	exact := ratAdd(ratMul(placed[0], gR[0]), ratMul(placed[1], gR[1]), ratMul(placed[2], gR[2]))
+	return rationalFloatError(exact, held)
+}
+
+// exactFrameLocalRound proves, over the rationals, the rounding ONE plane-local
+// coordinate of frame.ToLocal(p) commits: |held − (p − frame.Origin())·axis|
+// measured exactly, with axis the frame's OWN u or v. It is
+// exactIsometryDotRound one transform earlier — that helper reads a placement's
+// basis, this one a frame's — and it is what a plane-local anchor's proven
+// bound is: the frame and the world point are exact leaves, so the projection's
+// only error is what its own float arithmetic rounded away.
+//
+// held must be the SAME float the caller's own arithmetic produced —
+// frame.ToLocal(p).X against frame.U(), .Y against frame.V() — so the
+// comparison measures the rounding that call actually committed. The answer is
+// zero exactly where that arithmetic is exact for the input at hand (an
+// axis-aligned frame and an exactly representable anchor), and a component no
+// rational holds answers +Inf, never 0 (cutDisplacementAllow's own rule).
+func exactFrameLocalRound(frame r3.Frame, p, axis r3.Vec, held float64) float64 {
+	ratOfVec := func(v r3.Vec) [3]*big.Rat {
+		return [3]*big.Rat{floatRat(v.X), floatRat(v.Y), floatRat(v.Z)}
+	}
+	anyNil := func(r [3]*big.Rat) bool { return r[0] == nil || r[1] == nil || r[2] == nil }
+	pR, axR, oR := ratOfVec(p), ratOfVec(axis), ratOfVec(frame.Origin())
+	if anyNil(pR) || anyNil(axR) || anyNil(oR) {
+		return math.Inf(1)
+	}
+	terms := [3]*big.Rat{}
+	for i := range terms {
+		terms[i] = ratMul(new(big.Rat).Sub(pR[i], oR[i]), axR[i])
+	}
+	return rationalFloatError(ratAdd(terms[0], terms[1], terms[2]), held)
+}
+
+// exactPlaneDotRound proves, over the rationals, the rounding the float64
+// evaluation of a plane-local dot product gu·u + gv·v commits: the anchor shift
+// a revolve's extreme reading subtracts to carry a plane-local extreme into
+// axis coordinates (revolve.go's axisExtremeContext). Both products round at
+// the ANCHOR's own magnitude, which the boundary scan's own bound — proven over
+// the SECTION's coordinates — says nothing about.
+//
+// held must be the SAME float the caller's own arithmetic produced, so the
+// answer covers however that arithmetic grouped its two products and their sum.
+// It speaks for the ROUNDING alone: the u/v operands' own proven uncertainty is
+// a different mechanism the caller composes beside it. A component no rational
+// holds answers +Inf, never 0 (cutDisplacementAllow's own rule).
+func exactPlaneDotRound(gu, gv, u, v, held float64) float64 {
+	guR, gvR, uR, vR := floatRat(gu), floatRat(gv), floatRat(u), floatRat(v)
+	if guR == nil || gvR == nil || uR == nil || vR == nil {
+		return math.Inf(1)
+	}
+	return rationalFloatError(ratAdd(ratMul(guR, uR), ratMul(gvR, vR)), held)
+}
+
+// planeDotDecompositionRoundAllow bounds the rounding the boundary-extreme
+// scan's OWN evaluation of gu·u + gv·v commits over every candidate it folds
+// (extrude.go's boundaryExtremesBoundedContext), given gu and gv themselves
+// already proven against the frame, axis and placement chain that produced them
+// — the caller's own coefficient terms. It is exactPlaneDotRound scaled to a
+// whole scan: that helper measures ONE stated (u, v) exactly, and the scan
+// states none, because the candidate that wins the extremization is not a value
+// the scan reports.
+//
+// The rounding it charges is the SECTION's, and no other term in a revolve's
+// extent reading scales with that magnitude: the scan's own published bound
+// speaks for each candidate's POSITIONAL displacement (pointPerturbationAllow,
+// a circular candidate's enclosure, a free-form span's), which is zero for a
+// coordinate the record states verbatim, while the anchor shift's dot rounds at
+// the ANCHOR's magnitude alone. A section a million millimetres long under a
+// placement-derived direction therefore rounds here and nowhere else.
+//
+// IEEE 754 multiplies exactly by 0, 1 and -1 for any operand, so a coefficient
+// pair drawn from those three values WITH one of the two zero evaluates one
+// exact product and adds it to zero: nothing rounds, whatever the coordinates,
+// and the term is zero — which is what keeps an unplaced revolve about an
+// axis-aligned frame reading its box exactly, however far its section reaches.
+// Every other pair can round in each product and again in their sum, and the
+// term is analyticRoundBound's own budget (two multiplies and one addition, far
+// under its 128-operation contract) at the envelope of the very coordinates
+// those products multiply.
+//
+// coordUpper must be a PROVEN upper bound on |u| and |v| over every candidate
+// the scan folds — profileCoordinateEnvelope, which reads each walk's own
+// coordUpper — measured about the SAME frame origin the scan's candidates are
+// written about. extrude.go's prismDecompositionRoundAllow is the prism's own
+// spelling of this mechanism, one sweep coordinate wider, and the two are never
+// composed: each reading charges its own decomposition exactly once.
+func planeDotDecompositionRoundAllow(gu, gv, coordUpper float64) float64 {
+	trivial := func(c float64) bool { return c == 0 || c == 1 || c == -1 }
+	if (gu == 0 || gv == 0) && trivial(gu) && trivial(gv) {
+		return 0
+	}
+	return analyticRoundBound(absSumUpper(
+		productUpper(math.Abs(gu), coordUpper),
+		productUpper(math.Abs(gv), coordUpper),
+	))
+}
+
+// exactSumRound proves, over the rationals, the rounding the FINAL float64
+// summation of already-held terms commits: the recombination every directional
+// extent reading publishes each of its two endpoints through — a prism's
+// base + boundary extreme + sweep level, a revolve's or a cap-loop chamfer's
+// base + boundary extreme (extrude.go, revolve.go and capblend.go's
+// extentBoundedAlong).
+//
+// It is exactIsometryDotRound's companion one step later. That helper proves
+// each COEFFICIENT the reading lifts an extreme through exactly right; this one
+// charges what ADDING the resulting terms commits, and the two are independent:
+// IEEE 754 multiplies exactly by 0, 1 and -1, so an axis-permuting frame under
+// an axis-permuting placement leaves every coefficient exactly right and still
+// rounds here, because a translation component added to a section coordinate is
+// an ordinary float64 addition (10 + 0 is exact, 10 + 0.1 is not). A reading
+// that charges only the coefficients therefore publishes a translated body's
+// box as Exact with a zero bound while its own endpoint misses the truth.
+//
+// held must be the SAME float the caller's own arithmetic produced and terms
+// the SAME summands it produced it from, in any order: the answer is
+// |Σterms − held| measured exactly, so it covers every rounding that summation
+// committed however the caller grouped it. It speaks for the summation ALONE —
+// each term's own displacement is a different mechanism with its own helper
+// above, and the caller composes the two outward, per endpoint.
+//
+// The answer is zero exactly where the summation is exactly representable, so a
+// proven-exact reading — an unplaced body, or a placement whose translation
+// lands on a float64 sum — keeps its zero bound and stays Exact. A term no
+// rational holds answers +Inf, never 0 (cutDisplacementAllow's own rule).
+func exactSumRound(held float64, terms ...float64) float64 {
+	sum := new(big.Rat)
+	for _, term := range terms {
+		r := floatRat(term)
+		if r == nil {
+			return math.Inf(1)
+		}
+		sum.Add(sum, r)
+	}
+	return rationalFloatError(sum, held)
+}
+
+// snapToZeroAllow composes the bound a coordinate carries once a deliberate
+// snap has overwritten it with exactly 0. bound is what the caller had already
+// proven about the pre-snap coordinate and discarded is that coordinate's own
+// magnitude, so bound + discarded encloses the same truth about the assigned
+// zero: the truth sits within bound of the pre-snap value, which sits exactly
+// discarded from 0.
+//
+// The composition is the whole point of routing through here rather than
+// dropping the term. A snap is a decision the caller makes for its own reasons
+// — revolve.go's axisFrame.walk snaps so contact classification and vertex
+// placement agree exactly — and the assignment is no less an error for being
+// deliberate. Charging it leaves the snap's own behaviour untouched while every
+// reading that folds the snapped coordinate into a published measurement
+// (survey.go's revolveMinRadius) stops claiming an exactness the assignment
+// took away.
+//
+// It answers the caller's own bound unchanged for a discarded magnitude of
+// zero, so a coordinate the arithmetic already put exactly on zero keeps
+// whatever exactness it arrived with. A discarded magnitude no float can state
+// answers +Inf rather than that unchanged bound: a NaN would be the ABSENCE of
+// a charge and would silently vanish from every reading it was meant to widen
+// (rigidRoundAllow's own rule).
+func snapToZeroAllow(bound, discarded float64) float64 {
+	if isNonFinite(discarded) {
+		return math.Inf(1)
+	}
+	if discarded <= 0 {
+		return bound
+	}
+	return upRound(bound + discarded)
 }

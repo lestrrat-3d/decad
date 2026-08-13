@@ -875,9 +875,17 @@ func revolveMinRadius(rp revolvePayload) (radiusOutcome, bool) {
 				// which extrude.go's lineWalkTangentBound proved a bound on.
 				// Both the length below and the normal component it divides
 				// take that bound — the numerator as much as the denominator,
-				// since the same rounded difference stands in both. Only
-				// w.startV/endV are read as exact leaves here, being recorded
-				// coordinates the axis frame re-expressed.
+				// since the same rounded difference stands in both. w.startV/
+				// endV are the axis frame's own re-expression of a recorded
+				// coordinate, not a recorded one themselves, so they take
+				// axisFrame.walk's own startVBound/endVBound rather than reading
+				// as exact leaves. Those bounds carry every mechanism that walk
+				// names: the axis direction and anchor's own representation
+				// error (axisInPlane's dUBound/dVBound/aUBound/aVBound), and the
+				// magnitude the axis snap discarded when it assigned an endpoint
+				// exactly zero. Both are zero only where the walk's own
+				// arithmetic committed neither, which is what leaves an
+				// axis-aligned frame's untouched end reading Exact.
 				tanU := measuredScalar(w.tanInU, w.tanInBound)
 				tanV := measuredScalar(w.tanInV, w.tanInBound)
 				lBS := boundedNorm2(tanU, tanV)
@@ -893,8 +901,16 @@ func revolveMinRadius(rp revolvePayload) (radiusOutcome, bool) {
 				// size, and its denominator's clearance at the threshold keeps
 				// its bound finite rather than leaving the survey undecided.
 				if admitBelow(nrBS, -survAngTol) != survReject {
-					minSV := math.Min(w.startV, w.endV)
-					vBS := boundedQuotient(minSV, 0, -nrBS.value, nrBS.bound)
+					// The nearer end of the wall is the INTERVAL minimum of the
+					// two ends' proven radial coordinates (boundedMin), never
+					// the interval of whichever held value compared smaller:
+					// the two ends carry their own independent bounds, so the
+					// end that holds larger can still be the truly nearer one.
+					minSV := boundedMin(
+						measuredScalar(w.startV, w.startVBound),
+						measuredScalar(w.endV, w.endVBound),
+					)
+					vBS := boundedQuotient(minSV.value, minSV.bound, -nrBS.value, nrBS.bound)
 					agg.take(vBS.value, vBS.bound)
 				}
 				continue
@@ -930,7 +946,11 @@ func revolveMinRadius(rp revolvePayload) (radiusOutcome, bool) {
 				if admitBelow(nrBS, -survAngTol) == survReject {
 					continue
 				}
-				rhoBS := boundedAdd(exactScalar(w.cV), boundedMul(measuredScalar(w.radius, w.radiusBound), sinBS))
+				// w.cV is the axis frame's own re-expression of the circular
+				// walk's recorded center, so it takes cVBound beside it rather
+				// than reading as an exact leaf — the same account startV/endV
+				// take above.
+				rhoBS := boundedAdd(measuredScalar(w.cV, w.cVBound), boundedMul(measuredScalar(w.radius, w.radiusBound), sinBS))
 				negNrBS := measuredScalar(-nrBS.value, nrBS.bound)
 				resultBS := boundedQuotient(rhoBS.value, rhoBS.bound, negNrBS.value, negNrBS.bound)
 				agg.take(resultBS.value, resultBS.bound)

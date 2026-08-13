@@ -299,6 +299,28 @@ func boundedNeg(a boundedScalar) boundedScalar {
 	return measuredScalar(-a.value, a.bound)
 }
 
+// boundedMin encloses min(a, b), which is [min(a.lo, b.lo), min(a.hi, b.hi)]
+// and NEVER the interval of whichever HELD value compared smaller. Two held
+// floats cannot decide which QUANTITY is smaller while their proven intervals
+// overlap, so publishing the selected endpoint's own bound throws away the case
+// where the discarded one was the smaller — the enclosure then excludes a
+// minimum it was supposed to contain, however narrowly.
+//
+// The published held value is the smaller of the two, which always lies inside
+// that enclosure, and the bound reaches whichever end sits further from it.
+// Both ends come from boundedEnds, so a zero-bound pair keeps a zero bound and
+// stays exact.
+func boundedMin(a, b boundedScalar) boundedScalar {
+	value := math.Min(a.value, b.value)
+	aLo, aHi := boundedEnds(a)
+	bLo, bHi := boundedEnds(b)
+	lo, hi := math.Min(aLo, bLo), math.Min(aHi, bHi)
+	if isNonFinite(value) || isNonFinite(lo) || isNonFinite(hi) {
+		return measuredScalar(value, math.Inf(1))
+	}
+	return measuredScalar(value, math.Max(upRound(value-lo), upRound(hi-value)))
+}
+
 func boundedMul(a, b boundedScalar) boundedScalar {
 	value := a.value * b.value
 	bound := absSumUpper(

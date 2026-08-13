@@ -626,8 +626,18 @@ of the direction lies in the plane. The contour's cap level separately retains
 the receiver end's axial displacement, so an axial direction reads that term
 even though it reads none of the contour displacement.
 `Bounds` reports the same figure as the box's own `Bound`, per candidate: a
-contour that loses the extremization contributes nothing, so a plate whose
-world-axis extremes are all recorded coordinates still reports an `Exact` box.
+contour that loses the extremization contributes nothing, so an UNPLACED plate
+whose world-axis extremes are all recorded coordinates still reports an `Exact`
+box. That contour term is not the whole exactness test. The same reading also
+charges the frame and placement's own rounding of the coefficients it
+decomposes the direction into, and the rounding of its own summation of those
+terms with the extremized candidate (`docs/evaluator-design.md` §5), so a
+PLACED plate is `Exact` only where both of those terms are zero as well —
+which a translation satisfies only where its own endpoint recombinations are
+representable too, not merely where the offset is. Translating a 10 mm extreme
+by 2 keeps `10 + 2` representable and reads `Exact`, while the equally
+representable offset `0.1` makes `10 + 0.1` unrepresentable and reads
+`Approximate`. A rotation fails the coefficient term outright.
 
 Tessellation chords each shared boundary once. For a two-parameter tube patch,
 choose parameter counts so the sum of path sagitta and minor-circle sagitta is
@@ -938,7 +948,7 @@ reaches only the analytic bodies at the start of a chain.
 | **DX2** | topology / structural Verify | existing builder | payload builder | slab-region union builder |
 | **DX3** | `Tessellate` / STL / OBJ | waits on revolve tessellator; feature itself still builds | required patch tessellator; staged for the cap-loop chamfer, whose asked reading is `ErrUnsupported` | required slab-region tessellator |
 | **DX4** | mesh boolean | available once DX3 exists | available once DX3 exists | available once DX3 exists |
-| **DX5** | `ThroughAll` directional extent | existing | analytic patch extrema, published beside the displacement a computed cap contour and the inherited axial levels give them (§8.4); the stop charges that displacement to the level it resolves and refuses only where it straddles the sketch plane (evaluator §5) | union of slab-region extents |
+| **DX5** | `ThroughAll` directional extent | existing | analytic patch extrema, published beside the displacement a computed cap contour and the inherited axial levels give them (§8.4), and beside the frame, placement and endpoint-summation rounding every extent reading of this payload carries (evaluator §5); the stop charges that displacement to the level it resolves and refuses only where it straddles the sketch plane (evaluator §5) | union of slab-region extents |
 | **DX6** | clearance | existing revolve boundary reader | add trimmed patch faces to boundary model; undecidable cells stay `Suspect`; staged for the cap-loop chamfer, whose pairs read `Suspect` unless boxes already decide them | union exposed slab faces; never include cancelled interfaces |
 | **DX7** | undercut | existing revolve survey | bounded normal ranges per patch, each widened by the whole distance its own `Face.NormalAt` readings can sit from the patch's exactly enclosed normal model and by that patch's own proven departure from the surface it publishes (§8.3), a circular patch's window read through a proven enclosure rather than a float evaluation; a proven opposing point lists its patch, and a remaining straddle is undecided without removing another proven listing. The receiver's own unchanged walls and caps are not patches, and are read through the SAME three-valued rule, with the same undecided outcome — no reader may treat the receiver half as exempt | exact normal ranges per exposed face |
 | **DX8** | minimum radius | existing meridian survey | minimum concave principal radius over sphere/torus/cylinder/cone patches; undecided unless every patch is proven to be exactly the surface it publishes (zero departure, §8.3) — a mitered ruled patch is one case of that | section arcs + exposed rim geometry |
@@ -1034,6 +1044,11 @@ Every implementation PR MUST add geometry assertions, not run-only coverage.
 - a body whose world-axis extremes are recorded coordinates reports an `Exact`
   `Bounds` box, and one tilted so an axis reads both plane and sweep reports the
   contour's own displacement instead;
+- a PLACED cap blend whose world-axis extremes are all images of recorded
+  coordinates reports an `Approximate` `Bounds` box with a positive bound, and
+  that box widened by its own bound still encloses the exact rational image of
+  the receiver's base loop, the band's side-level directrix and the inset cap
+  contour;
 - a chamfer band over a circular wall whose radius dwarfs `d` still carries a
   `Cone`, its taper still reaches DX7, and volume and area are unmoved by the
   kind decision; an offset radius identical to the wall's → SX13;
