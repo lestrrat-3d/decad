@@ -1556,3 +1556,104 @@ func TestRevolveBoundsSweepEnclosesArcApex(t *testing.T) {
 		}
 	}
 }
+
+// The partial sweep below turns through this angle, whose sine is carried to
+// 60 significant digits for the same reason sinOneDigits is: the whole error
+// under test is smaller than a rounded literal's own representation error.
+const (
+	mixedSweepAngle  = 0.82914845766024614
+	mixedSweepSine   = "0.737356418349652412501490864607254313074191178423597186716131"
+	mixedTorusCentre = 21281011.537541769
+	mixedTorusRadius = 14734.036267944795
+)
+
+// requireEnclosesSweptApex asserts that the box's published interval about
+// Max.Z covers apex·sin, the exact extreme a section whose farthest point sits
+// at radius apex reaches when it is swept through the angle whose sine is sin.
+// Both factors are carried through big.Float: the apex radius is a sum this
+// test states exactly and the sine a 60-digit reference, so the comparison is
+// against the truth rather than against a second rounded evaluation of it.
+func requireEnclosesSweptApex(t *testing.T, box decad.Box, apex, sin *big.Float) {
+	t.Helper()
+	const prec = 200
+	boundMM, err := box.Bound.In(units.Millimeter)
+	require.NoError(t, err)
+	truth := new(big.Float).SetPrec(prec).Mul(apex, sin)
+	residual := new(big.Float).SetPrec(prec).Sub(
+		new(big.Float).SetPrec(prec).SetFloat64(box.Max.Z),
+		truth,
+	)
+	residual.Abs(residual)
+	require.LessOrEqual(t,
+		residual.Cmp(new(big.Float).SetPrec(prec).SetFloat64(boundMM)), 0,
+		`the box's published interval must contain the swept extreme (Max.Z %.17g, truth %s, residual %s, bound %g)`,
+		box.Max.Z, truth.Text('g', 25), residual.Text('g', 6), boundMM,
+	)
+}
+
+// TestRevolveBoundsComposesBoundaryAndSweepDisplacement is the containment
+// proof for a section whose extreme rides a computed circular radius AND a
+// partial sweep whose own amplitude no float64 holds. The two displacements
+// are of DIFFERENT quantities at the SAME endpoint — how far the computed
+// extreme sits from the true extreme at the held sweep coefficient, and how far
+// that held coefficient sits from the true one — so nothing keeps their signs
+// apart and the published half-width has to cover their sum. The larger of the
+// two is not that cover: both cases below carry two nonzero terms, and the
+// first is a worked case where they genuinely add, its residual against the
+// truth exceeding either term on its own.
+func TestRevolveBoundsComposesBoundaryAndSweepDisplacement(t *testing.T) {
+	const prec = 200
+	t.Run("circle section", func(t *testing.T) {
+		// A thin torus section far from the axis, swept through a partial
+		// angle: the swept solid's z maximum is exactly (centre + radius)·sin,
+		// reached by the section's own farthest point at the far cap.
+		w := sketch.NewWorld()
+		s, err := w.CreateSketch(w.XY())
+		require.NoError(t, err)
+		c := s.CreatePoint(0, mixedTorusCentre)
+		s.Fix(c)
+		s.CreateCircle(c, mixedTorusRadius)
+		_, err = s.Solve(t.Context())
+		require.NoError(t, err)
+		require.Len(t, s.Profiles(), 1)
+
+		body, err := decad.New().Revolve(s, s.Profiles()[0], uAxis,
+			decad.AngleExtent{A: units.Radians(mixedSweepAngle), Dir: decad.Along})
+		require.NoError(t, err)
+		box, err := body.Bounds()
+		require.NoError(t, err)
+		require.Equal(t, decad.Approximate, box.Exactness)
+
+		sin, _, err := big.ParseFloat(mixedSweepSine, 10, prec, big.ToNearestEven)
+		require.NoError(t, err)
+		apex := new(big.Float).SetPrec(prec).Add(
+			new(big.Float).SetPrec(prec).SetFloat64(mixedTorusCentre),
+			new(big.Float).SetPrec(prec).SetFloat64(mixedTorusRadius),
+		)
+		requireEnclosesSweptApex(t, box, apex, sin)
+	})
+
+	t.Run("arc and chord section", func(t *testing.T) {
+		// The same composition over a MIXED section — an arc closed by its own
+		// chord — swept 1 radian. The arc's apex sits at radius √(u²+v²), which
+		// the record never states, so the boundary term is live alongside the
+		// sweep's.
+		const u, v = 1.0, 6.0
+		s, p := arcApexSketch(t, u, v)
+		body, err := decad.New().Revolve(s, p, uAxis,
+			decad.AngleExtent{A: units.Radians(1), Dir: decad.Along})
+		require.NoError(t, err)
+		box, err := body.Bounds()
+		require.NoError(t, err)
+		require.Equal(t, decad.Approximate, box.Exactness)
+
+		sin, _, err := big.ParseFloat(sinOneDigits, 10, prec, big.ToNearestEven)
+		require.NoError(t, err)
+		sq := new(big.Float).SetPrec(prec).SetFloat64(u * u)
+		sq.Add(sq, new(big.Float).SetPrec(prec).SetFloat64(v*v))
+		requireEnclosesSweptApex(t, box, new(big.Float).SetPrec(prec).Sqrt(sq), sin)
+		// The apex is still reached at the sweep's own start, so the same box
+		// has to enclose the undisplaced radius too.
+		requireEnclosesApex(t, box, u, v)
+	})
+}

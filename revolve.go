@@ -1750,6 +1750,22 @@ func (rp revolvePayload) extentAlongWork(ctx context.Context, g r3.Vec, work *fr
 // amplitude holds exactly, carries a zero bound — an all-straight or
 // recorded-circle meridian under a full revolution about an axis-aligned frame
 // reads exactly.
+//
+// The two mechanisms displace the SAME end and they COMPOSE, so this reading
+// sums them; taking the larger would be sound only if they could not both move
+// the end the same way, and nothing makes them exclusive. They are displacements
+// of different quantities — the scan bounds how far the computed extreme of
+// wg·z + m·ρ sits from the true extreme at the HELD coefficient m, while
+// sweepBoundAlong bounds how far that held extreme sits from the extreme at the
+// TRUE coefficient — so the triangle inequality is the only composition
+// available, and the sum is what the end's total displacement obeys.
+//
+// The sum is per END. The scan's own bound belongs to the end that scan
+// produced, and the sweep term belongs to the end whose coefficient it charges
+// (mlo for the low end, mhi for the high end), so the two pairs are composed
+// separately and the reading publishes the larger total — it states ONE
+// half-width covering both ends, and the larger of two per-end totals covers
+// each end's own displacement.
 func (rp revolvePayload) extentBoundedAlong(ctx context.Context, g r3.Vec, work *freeformWork) (float64, float64, float64, error) {
 	b := rp.basis()
 	base := rp.xform.Apply(b.a3).Dot(g)
@@ -1765,11 +1781,23 @@ func (rp revolvePayload) extentBoundedAlong(ctx context.Context, g r3.Vec, work 
 	if err != nil {
 		return 0, 0, 0, err
 	}
-	sweepBound, err := rp.sweepBoundAlong(c0, c1, mlo, mhi, work)
+	sweepLo, sweepHi, err := rp.sweepBoundAlong(c0, c1, mlo, mhi, work)
 	if err != nil {
 		return 0, 0, 0, err
 	}
-	return base + lo, base + hi, math.Max(math.Max(loBound, hiBound), sweepBound), nil
+	// outward is the per-end composition: the outward sum of the two terms,
+	// through the same absSumUpper every other composed bound in this package
+	// takes. A non-finite term answers +Inf rather than folding into a small
+	// bound (bounds.go's own rule), since absSumUpper is an arithmetic on
+	// magnitudes and states nothing about an absent one.
+	outward := func(boundary, sweep float64) float64 {
+		if isNonFinite(boundary) || isNonFinite(sweep) {
+			return math.Inf(1)
+		}
+		return absSumUpper(boundary, sweep)
+	}
+	bound := math.Max(outward(loBound, sweepLo), outward(hiBound, sweepHi))
+	return base + lo, base + hi, bound, nil
 }
 
 // sweepBoundAlong is the swept radial coefficient's own contribution to the
@@ -1779,6 +1807,13 @@ func (rp revolvePayload) extentBoundedAlong(ctx context.Context, g r3.Vec, work 
 // directional-perturbation Lipschitz bound (bounds.go) every directional
 // extreme charges.
 //
+// It returns the LOW end's term and the HIGH end's term separately, never their
+// larger. Each end's extreme is evaluated at its own held coefficient — the low
+// end at mlo, the high end at mhi — so each carries only its own coefficient's
+// displacement, and the caller composes it with that same end's boundary-scan
+// bound. Folding the two ends together here would hand the caller one number it
+// could no longer attribute to an end, and the composition it owes is per end.
+//
 // The envelope that Lipschitz step charges is the RADIAL one: the extreme's
 // own functional is wg·z + m·ρ, so a perturbation of the swept radial
 // coefficient m multiplies ρ, the distance from the RESOLVED AXIS, and not the
@@ -1786,20 +1821,19 @@ func (rp revolvePayload) extentBoundedAlong(ctx context.Context, g r3.Vec, work 
 // envelope and folds in the axis anchor, which is the whole term an offset axis
 // adds; an extent whose radial envelope cannot be proven finite is refused
 // rather than published against a bound that omits it.
-func (rp revolvePayload) sweepBoundAlong(c0, c1, mlo, mhi float64, work *freeformWork) (float64, error) {
+func (rp revolvePayload) sweepBoundAlong(c0, c1, mlo, mhi float64, work *freeformWork) (float64, float64, error) {
 	coordUpper, err := profileCoordinateUpper(rp.profile, work)
 	if err != nil {
-		return 0, err
+		return 0, 0, err
 	}
 	rhoUpper := rp.ax.radialUpper(coordUpper)
 	if isNonFinite(rhoUpper) {
-		return 0, fmt.Errorf(`%w: the revolved region's radial distance from its own axis has no finite proven bound, so no sweep-extreme bound can be composed`, ErrNotFinite)
+		return 0, 0, fmt.Errorf(`%w: the revolved region's radial distance from its own axis has no finite proven bound, so no sweep-extreme bound can be composed`, ErrNotFinite)
 	}
 	loBound, hiBound := sweepExtremeBounds(c0, c1, rp.phi0, rp.phi1, mlo, mhi, rp.full)
-	return math.Max(
-		directionalPerturbationAllow(loBound, rhoUpper),
+	return directionalPerturbationAllow(loBound, rhoUpper),
 		directionalPerturbationAllow(hiBound, rhoUpper),
-	), nil
+		nil
 }
 
 // revolveBoundsContext computes the axis-aligned bounds of the placed
