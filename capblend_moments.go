@@ -1065,8 +1065,9 @@ func coneFrustumAreaBracket(R0, R1, H, dth, dthAllow, held float64) float64 {
 // states why padding the receiver prism by d proves nothing about attainment.
 //
 // The Bound is the reading's own, never a fixed zero. An extreme held by a
-// recorded coordinate really does have none, which is the ordinary case on a
-// body whose plane is axis aligned; an extreme held by the COMPUTED cap
+// recorded coordinate really does have none, which is the ordinary case on an
+// unplaced body whose plane is axis aligned — a placement's own arithmetic can
+// round it even so, and the reading charges that; an extreme held by the COMPUTED cap
 // contour is known only to that contour's proven displacement, and publishing
 // it as an Exact position would assert an accuracy the offset solve never had.
 // extentBoundedAlong keeps the two apart per candidate, so a contour that loses

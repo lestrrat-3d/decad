@@ -1666,7 +1666,7 @@ func (pp prismPayload) extentAlongWork(ctx context.Context, g r3.Vec, work *free
 		return 0, 0, err
 	}
 	if bound != 0 {
-		return 0, 0, fmt.Errorf(`%w: this prism's extent along this direction is held by its own boundary-extreme bracket, known only to a displacement of %v mm; this reading has no bound to widen`, ErrUnsupported, bound)
+		return 0, 0, fmt.Errorf(`%w: this prism's extent along this direction is known only to a proven displacement of %v mm; this reading has no bound to widen`, ErrUnsupported, bound)
 	}
 	return lo, hi, nil
 }
@@ -1685,6 +1685,14 @@ func (pp prismPayload) extentAlongWork(ctx context.Context, g r3.Vec, work *free
 // section under a tilted placement still widens, and an unplaced or
 // axis-aligned section still reports zero for this term, which is what keeps
 // an ordinary prism's box Exact.
+//
+// A THIRD term composes outward with both: the reading's own final summation
+// base + lo + zlo, charged exactly against the same terms by exactSumRound
+// (bounds.go). It is not covered by either of the other two — a pure
+// translation leaves every coefficient exactly right and every multiply exact,
+// and the addition that follows still rounds — and it is zero exactly where
+// that addition is exactly representable, so an unplaced prism's box stays
+// Exact.
 func (pp prismPayload) extentBoundedAlong(ctx context.Context, g r3.Vec, work *freeformWork) (float64, float64, float64, error) {
 	base := pp.xform.Apply(pp.frame.Origin()).Dot(g)
 	gu := pp.dir(1, 0, 0).Dot(g)
@@ -1702,8 +1710,18 @@ func (pp prismPayload) extentBoundedAlong(ctx context.Context, g r3.Vec, work *f
 	}
 	zUpper := math.Max(math.Abs(pp.z0), math.Abs(pp.z1))
 	placeAllow := prismPlacementCoeffAllow(pp, g, base, gu, gv, gz, coordUpper, zUpper)
-	bound = absSumUpper(bound, placeAllow)
-	return base + lo + zlo, base + hi + zhi, bound, nil
+	// The recombination is charged per ENDPOINT and composed outward: the two
+	// ends are summed from different terms and round by different amounts, while
+	// the scan's and the placement's terms speak for both ends alike, so the
+	// reading publishes the larger of the two per-end totals — the same shape
+	// revolvePayload.extentBoundedAlong states for its own per-end composition.
+	loEnd, hiEnd := base+lo+zlo, base+hi+zhi
+	sumAllow := math.Max(
+		exactSumRound(loEnd, base, lo, zlo),
+		exactSumRound(hiEnd, base, hi, zhi),
+	)
+	bound = absSumUpper(bound, placeAllow, sumAllow)
+	return loEnd, hiEnd, bound, nil
 }
 
 // prismPlacementCoeffAllow bounds how far base/gu/gv/gz — the four scalar
@@ -1720,12 +1738,15 @@ func (pp prismPayload) extentBoundedAlong(ctx context.Context, g r3.Vec, work *f
 // capBlendPayload.extentBoundedAlong reuses this unchanged through
 // prismLike's shared frame and placement. A second, independent term
 // (prismDecompositionRoundAllow) covers the rounding this reading's own
-// left-to-right combination base + gu*u + gv*v + gz*z commits even when every
-// coefficient is itself exactly right: multiplying an EXACT but non-trivial
-// coefficient by a recorded coordinate still rounds, and grouping the sum
-// this way (the boundary scan's own gu*u+gv*v first) is a DIFFERENT float
-// computation than applying the frame and placement to the point directly,
-// even though the two are equal in exact arithmetic.
+// DECOMPOSITION gu*u + gv*v + gz*z commits even when every coefficient is
+// itself exactly right: multiplying an EXACT but non-trivial coefficient by a
+// recorded coordinate still rounds, and grouping the sum this way (the
+// boundary scan's own gu*u+gv*v first) is a DIFFERENT float computation than
+// applying the frame and placement to the point directly, even though the two
+// are equal in exact arithmetic. The recombination with base that FOLLOWS is a
+// third term, charged exactly at the call site rather than here
+// (exactSumRound), because it rounds for placements this function's own check
+// proves exact — a translation is committed there and nowhere else.
 func prismPlacementCoeffAllow(pp prismPayload, g r3.Vec, base, gu, gv, gz, coordUpper, zUpper float64) float64 {
 	baseRound := exactIsometryDotRound(pp.xform, pp.frame.Origin(), g, true, base)
 	guRound := exactIsometryDotRound(pp.xform, pp.frame.U(), g, false, gu)
@@ -1751,12 +1772,23 @@ func prismPlacementCoeffAllow(pp prismPayload, g r3.Vec, base, gu, gv, gz, coord
 // gu*u+gv*v first, then +base, then +gz*z — a DIFFERENT grouping than
 // applying the frame and placement to the point directly) can round again on
 // top of that even where every individual multiply happens not to. Both are
-// genuinely new roundings a non-axis-permuting frame or placement commits, so
-// the term is zero exactly where every coefficient is trivial — an
-// axis-permuting frame under an axis-permuting placement, the shape every
-// currently-Exact fixture takes — and otherwise reuses analyticRoundBound's
-// own established "a bounded number of basic ops at a magnitude" contract: at
-// most 3 multiplies and 3 additions here, far under its 128-operation budget.
+// genuinely new roundings a non-axis-permuting frame commits, so the term is
+// zero where every coefficient is trivial — and otherwise reuses
+// analyticRoundBound's own established "a bounded number of basic ops at a
+// magnitude" contract: at most 3 multiplies and 3 additions here, far under
+// its 128-operation budget. |base| stays in that envelope because the same
+// left-to-right evaluation folds base in, and charging it in both arms is only
+// ever wider than the non-trivial arm owes.
+//
+// The trivial arm's zero speaks for the DECOMPOSITION alone, never for the
+// whole endpoint. g is a unit world axis and the frame orthonormal, so
+// gu²+gv²+gz² = 1 and an all-trivial reading has exactly one coefficient at
+// ±1 with the other two at 0: every multiply is exact and so is the scan's own
+// gu*u+gv*v, whatever the coordinates are. What that argument does NOT reach
+// is the recombination with base and the sweep level, which rounds for a
+// coefficient set this arm calls trivial — a pure translation is exactly that
+// case — so extentBoundedAlong charges it separately and exactly through
+// exactSumRound (bounds.go), and this term must never be read as covering it.
 func prismDecompositionRoundAllow(gu, gv, gz, base, coordUpper, zUpper float64) float64 {
 	trivial := func(c float64) bool { return c == 0 || c == 1 || c == -1 }
 	if trivial(gu) && trivial(gv) && trivial(gz) {
@@ -1795,11 +1827,14 @@ func prismBoundsContext(ctx context.Context, pp prismPayload, work *freeformWork
 	// error carries the section displacement itself — δ outward on every face
 	// (docs/prism-boolean-design.md §7) — summed with the boundary's own
 	// directional-extreme bracket bound (docs/spline-design.md §6.2) and with
-	// the frame and placement's own rounding (prismPlacementCoeffAllow, folded
-	// into extentBoundedAlong's own returned bound above): the frame and
+	// the frame and placement's own rounding (prismPlacementCoeffAllow) and the
+	// endpoint summation's (exactSumRound), both folded into
+	// extentBoundedAlong's own returned bound above: the frame and
 	// placement ARE isometries in exact arithmetic, but their FLOAT evaluation
 	// rounds wherever the frame is not axis-aligned or the placement is not the
-	// identity, and a box that reads that evaluation as an exact leaf can miss
+	// identity, and adding the resulting terms into one published coordinate
+	// rounds again — for a pure translation it is the ONLY rounding there is —
+	// so a box that reads either as an exact leaf can miss
 	// the true extreme by a representable amount. All three terms are zero for
 	// a caller-drawn, unplaced, axis-aligned payload whose extremes are all
 	// values its record states, which keeps the ordinary prism's box Exact as

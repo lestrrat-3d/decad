@@ -1761,7 +1761,7 @@ func (rp revolvePayload) extentAlongWork(ctx context.Context, g r3.Vec, work *fr
 		return 0, 0, err
 	}
 	if bound != 0 {
-		return 0, 0, fmt.Errorf(`%w: the revolved solid's extent along this direction is held to a bracket by its own boundary-extreme and sweep-extreme proofs, known only to a displacement of %v mm; this reading has no bound to widen`, ErrUnsupported, bound)
+		return 0, 0, fmt.Errorf(`%w: the revolved solid's extent along this direction is known only to a proven displacement of %v mm; this reading has no bound to widen`, ErrUnsupported, bound)
 	}
 	return lo, hi, nil
 }
@@ -1806,6 +1806,13 @@ func (rp revolvePayload) extentAlongWork(ctx context.Context, g r3.Vec, work *fr
 // (exactIsometryDotRound, bounds.go). It is zero for an axis-aligned frame
 // under an identity placement, which is what keeps an ordinary, unplaced
 // revolve's box Exact as before.
+//
+// A FOURTH is this reading's own recombination of those terms into a published
+// endpoint — the base + lo and base + hi below, charged exactly by
+// exactSumRound. It covers what none of the other three does: a placement whose
+// coefficients are every one of them exactly right, whose sum nonetheless
+// rounds. It is zero wherever that addition is exactly representable, so an
+// unplaced revolve's box keeps its zero bound.
 func (rp revolvePayload) extentBoundedAlong(ctx context.Context, g r3.Vec, work *freeformWork) (float64, float64, float64, error) {
 	b := rp.basis()
 	base := rp.xform.Apply(b.a3).Dot(g)
@@ -1841,8 +1848,21 @@ func (rp revolvePayload) extentBoundedAlong(ctx context.Context, g r3.Vec, work 
 	if err != nil {
 		return 0, 0, 0, err
 	}
-	bound = absSumUpper(bound, frameAllow)
-	return base + lo, base + hi, bound, nil
+	// A FOURTH mechanism is the reading's own final summation base + lo (and
+	// base + hi), charged exactly against the same two terms by exactSumRound
+	// (bounds.go). frameRoundAllow proves base/wg/c0/c1 each right and says
+	// nothing about adding them: a pure translation of an axis-aligned revolve
+	// leaves all four exactly right and still rounds here. It is charged per END
+	// — the two ends are summed from different terms — and composed outward with
+	// the per-end maximum above, through the same triangle inequality every
+	// other composition in this reading takes.
+	loEnd, hiEnd := base+lo, base+hi
+	sumAllow := math.Max(
+		exactSumRound(loEnd, base, lo),
+		exactSumRound(hiEnd, base, hi),
+	)
+	bound = absSumUpper(bound, frameAllow, sumAllow)
+	return loEnd, hiEnd, bound, nil
 }
 
 // frameRoundAllow bounds how far base/wg/c0/c1 — the four scalar coefficients
@@ -1946,12 +1966,14 @@ func (rp revolvePayload) sweepBoundAlong(c0, c1, mlo, mhi float64, work *freefor
 // cylindrical coordinates (docs/evaluator-design.md §6). Bounds is Exact only
 // where every axis's extent reads with a zero bound; every other reading (a
 // partial sweep, an amplitude no float64 holds exactly, a boundary extreme a
-// computed arc radius carries, or the axis frame/placement's own rounding)
+// computed arc radius carries, the axis frame/placement's own rounding, or the
+// reading's own summation of those terms into a published endpoint)
 // is Approximate with the PROVEN bound its own arithmetic derives.
 //
 // The box states no error term of its own. Every mechanism that can move an
-// end — the sweep extreme's, the boundary scan's, and the axis frame and
-// placement's own rounding (frameRoundAllow) — belongs to the extent reading
+// end — the sweep extreme's, the boundary scan's, the axis frame and
+// placement's own rounding (frameRoundAllow), and the endpoint summation's
+// (exactSumRound) — belongs to the extent reading
 // itself (extentBoundedAlong), which every consumer takes, so the box simply
 // maxes the three axes' half-widths. Charging one of them here instead would
 // leave the same coordinate bounded on this path and exact on the

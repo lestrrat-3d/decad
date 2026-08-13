@@ -1692,3 +1692,37 @@ func TestRevolveBoundsEnclosesTiltedAxisFullTurn(t *testing.T) {
 		`the box's published interval must contain the true Ymax %g (got %g +/- %g)`,
 		truth, bounds.Max.Y, boundMM)
 }
+
+// TestRevolveBoundsEnclosesTranslatedExtreme is the revolve half of the
+// recombination proof extrude_bounds_test.go's translated box states: an
+// axis-aligned full turn of u in [0, 10], v in [2, 6] about the sketch u axis,
+// moved by Translation(0.1, 0, 0). The axis frame is untouched and the
+// placement rounds none of base/wg/c0/c1, so frameRoundAllow answers zero —
+// and the box's own base + hi summation that produces Max.X still rounds,
+// missing the true 0.1 + 10 by 3.6e-16.
+func TestRevolveBoundsEnclosesTranslatedExtreme(t *testing.T) {
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	rect := s.CreateRectangle(0, 2, 10, 6)
+	s.Fix(rect.A)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+
+	body, err := decad.New().Revolve(s, s.Profiles()[0], uAxis, decad.FullRevolution{})
+	require.NoError(t, err)
+
+	shift, err := r3.Translation(r3.NewVec(0.1, 0, 0))
+	require.NoError(t, err)
+	placed, err := body.Placed(shift)
+	require.NoError(t, err)
+
+	bounds, err := placed.Bounds()
+	require.NoError(t, err)
+	require.Equal(t, decad.Approximate, bounds.Exactness)
+	boundMM, err := bounds.Bound.In(units.Millimeter)
+	require.NoError(t, err)
+	require.Greater(t, boundMM, 0.0)
+
+	requireEnclosesExactSum(t, bounds.Max.X, boundMM, 10, 0.1)
+}

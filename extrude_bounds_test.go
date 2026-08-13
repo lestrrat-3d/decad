@@ -474,3 +474,62 @@ func TestExtrudeBoxBoundsEnclosesPlacedCorners(t *testing.T) {
 	require.LessOrEqual(t, math.Abs(bounds.Max.Y-maxC.Y), boundMM)
 	require.LessOrEqual(t, math.Abs(bounds.Max.Z-maxC.Z), boundMM)
 }
+
+// requireEnclosesExactSum asserts that a published box coordinate's own proven
+// interval contains the EXACT sum of the terms that coordinate is the float
+// sum of. The comparison runs over the rationals from end to end: rounding the
+// true sum to a float64 first would round it straight back onto the held
+// coordinate and the assertion could never fail. It is an independent check —
+// it never calls decad's own exactSumRound — so a test built on it cannot pass
+// merely because the production code agrees with itself.
+func requireEnclosesExactSum(t *testing.T, coord, bound float64, terms ...float64) {
+	t.Helper()
+	toRat := func(x float64) *big.Rat {
+		r := new(big.Rat)
+		require.NotNil(t, r.SetFloat64(x), "float64 %v must be finite to convert exactly", x)
+		return r
+	}
+	truth := new(big.Rat)
+	for _, term := range terms {
+		truth.Add(truth, toRat(term))
+	}
+	gap := new(big.Rat).Abs(new(big.Rat).Sub(truth, toRat(coord)))
+	require.LessOrEqualf(t, gap.Cmp(toRat(bound)), 0,
+		"the published coordinate %v misses the exact sum of %v by %v, which its own bound %v mm does not cover",
+		coord, terms, gap.FloatString(20), bound)
+}
+
+// TestExtrudeBoxBoundsEnclosesTranslatedCorner pins the recombination the box
+// commits after every coefficient is proven exact: a 10x8x5 box moved by
+// Translation(0.1, 0, 0) has base 0.1, gu 1, gv 0 and gz 0, so the placement
+// rounds nothing and every multiply is exact — and the addition base + 10 that
+// produces Max.X is still not representable, missing the true 0.1 + 10 by
+// 3.6e-16. A box that charges only the coefficients publishes that miss as
+// Exact with a zero bound.
+func TestExtrudeBoxBoundsEnclosesTranslatedCorner(t *testing.T) {
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	rect := s.CreateRectangle(0, 0, 10, 8)
+	s.Fix(rect.A)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+
+	doc := decad.New()
+	body, err := doc.Extrude(s, s.Profiles()[0], decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+	require.NoError(t, err)
+
+	shift, err := r3.Translation(r3.NewVec(0.1, 0, 0))
+	require.NoError(t, err)
+	placed, err := body.Placed(shift)
+	require.NoError(t, err)
+
+	bounds, err := placed.Bounds()
+	require.NoError(t, err)
+	require.Equal(t, decad.Approximate, bounds.Exactness)
+	boundMM, err := bounds.Bound.In(units.Millimeter)
+	require.NoError(t, err)
+	require.Greater(t, boundMM, 0.0)
+
+	requireEnclosesExactSum(t, bounds.Max.X, boundMM, 10, 0.1)
+}

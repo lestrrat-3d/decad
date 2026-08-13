@@ -94,6 +94,13 @@ import (
 //     rounding for the input at hand (an identity placement, an axis-aligned
 //     frame direction), never a worst-case ulp estimate where an exact
 //     rational comparison is available instead.
+//   - the FINAL SUMMATION a directional extent reading commits when it
+//     recombines its own already-held terms into ONE published endpoint — a
+//     prism's base + boundary extreme + sweep level, a revolve's or a cap-loop
+//     chamfer's base + boundary extreme → exactSumRound, exactIsometryDotRound's
+//     own companion one step later: that helper proves each COEFFICIENT right,
+//     this one charges what ADDING the terms commits, and a placement can leave
+//     every coefficient exactly right while the sum still rounds.
 
 const (
 	// unitRoundoff is float64's u = 2⁻⁵³: the relative error a single
@@ -855,4 +862,44 @@ func exactIsometryDotRound(xform r3.Transform, pt, g r3.Vec, translate bool, hel
 	}
 	exact := ratAdd(ratMul(placed[0], gR[0]), ratMul(placed[1], gR[1]), ratMul(placed[2], gR[2]))
 	return rationalFloatError(exact, held)
+}
+
+// exactSumRound proves, over the rationals, the rounding the FINAL float64
+// summation of already-held terms commits: the recombination every directional
+// extent reading publishes each of its two endpoints through — a prism's
+// base + boundary extreme + sweep level, a revolve's or a cap-loop chamfer's
+// base + boundary extreme (extrude.go, revolve.go and capblend.go's
+// extentBoundedAlong).
+//
+// It is exactIsometryDotRound's companion one step later. That helper proves
+// each COEFFICIENT the reading lifts an extreme through exactly right; this one
+// charges what ADDING the resulting terms commits, and the two are independent:
+// IEEE 754 multiplies exactly by 0, 1 and -1, so an axis-permuting frame under
+// an axis-permuting placement leaves every coefficient exactly right and still
+// rounds here, because a translation component added to a section coordinate is
+// an ordinary float64 addition (10 + 0 is exact, 10 + 0.1 is not). A reading
+// that charges only the coefficients therefore publishes a translated body's
+// box as Exact with a zero bound while its own endpoint misses the truth.
+//
+// held must be the SAME float the caller's own arithmetic produced and terms
+// the SAME summands it produced it from, in any order: the answer is
+// |Σterms − held| measured exactly, so it covers every rounding that summation
+// committed however the caller grouped it. It speaks for the summation ALONE —
+// each term's own displacement is a different mechanism with its own helper
+// above, and the caller composes the two outward, per endpoint.
+//
+// The answer is zero exactly where the summation is exactly representable, so a
+// proven-exact reading — an unplaced body, or a placement whose translation
+// lands on a float64 sum — keeps its zero bound and stays Exact. A term no
+// rational holds answers +Inf, never 0 (cutDisplacementAllow's own rule).
+func exactSumRound(held float64, terms ...float64) float64 {
+	sum := new(big.Rat)
+	for _, term := range terms {
+		r := floatRat(term)
+		if r == nil {
+			return math.Inf(1)
+		}
+		sum.Add(sum, r)
+	}
+	return rationalFloatError(sum, held)
 }

@@ -151,9 +151,11 @@ func (cbp capBlendPayload) axialDelta() float64 {
 // cap contour is a computed section, not a recorded one (capblend_contour.go),
 // so an extreme it holds is known only to a proven displacement — which the
 // stop charges to the level it resolves, and outside which it decides its own
-// in-path test. Every direction whose extreme is held by an exact recorded
-// coordinate still answers the exact interval it always did, with a zero
-// displacement. A direction along the sweep ignores contour displacement but
+// in-path test. On an unplaced body every direction whose extreme is held by an
+// exact recorded coordinate still answers the exact interval it always did,
+// with a zero displacement; under a placement the reading's own arithmetic can
+// round even there, and charges what it commits.
+// A direction along the sweep ignores contour displacement but
 // still reads the cap level's own inherited axial displacement.
 func (cbp capBlendPayload) extentAlong(g r3.Vec) (float64, float64, float64, error) {
 	return cbp.extentBoundedAlong(context.Background(), g, newFreeformWork())
@@ -170,7 +172,11 @@ func (cbp capBlendPayload) extentAlong(g r3.Vec) (float64, float64, float64, err
 // displacement, and the rounding of a chamfered end's trimmed straight level.
 // A fourth, prismPlacementCoeffAllow, displaces every candidate the SAME way
 // — the frame and placement's own rounding of base/gu/gv/gz — and so composes
-// outward with the per-candidate maximum rather than folding into it.
+// outward with the per-candidate maximum rather than folding into it. A fifth
+// does the same one step later: the reading's own summation of base with the
+// extremized candidate, charged exactly by exactSumRound (bounds.go), since a
+// placement can leave every coefficient exactly right and still round when the
+// terms are added.
 func (cbp capBlendPayload) extentBoundedAlong(ctx context.Context, g r3.Vec, work *freeformWork) (float64, float64, float64, error) {
 	pl := cbp.prismLike(0, 0)
 	base := cbp.xform.Apply(cbp.frame.Origin()).Dot(g)
@@ -276,8 +282,20 @@ func (cbp capBlendPayload) extentBoundedAlong(ctx context.Context, g r3.Vec, wor
 	}
 	zUpper := math.Max(math.Abs(cbp.z0), math.Abs(cbp.z1))
 	placeAllow := prismPlacementCoeffAllow(pl, g, base, gu, gv, gz, coordUpper, zUpper)
-	bound = absSumUpper(bound, placeAllow)
-	return base + lo, base + hi, bound, nil
+	// A FIFTH mechanism displaces both ends and composes outward with the rest:
+	// the reading's own recombination base + lo (and base + hi), charged exactly
+	// against those two terms by exactSumRound (bounds.go). It is the one term
+	// prismPlacementCoeffAllow's coefficient check cannot reach — a pure
+	// translation leaves base/gu/gv/gz each exactly right and the addition that
+	// follows still rounds — and it is charged per END, since the two ends are
+	// summed from different terms.
+	loEnd, hiEnd := base+lo, base+hi
+	sumAllow := math.Max(
+		exactSumRound(loEnd, base, lo),
+		exactSumRound(hiEnd, base, hi),
+	)
+	bound = absSumUpper(bound, placeAllow, sumAllow)
+	return loEnd, hiEnd, bound, nil
 }
 
 // requireNotCapBlendReceiver is SX10 (docs/modify-reach-design.md Table SX):
