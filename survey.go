@@ -79,6 +79,20 @@ type radiusOutcome struct {
 	reason  surveyReason
 }
 
+// errFreeformSection is recordLoops' OWN name for requireAnalyticWalk's
+// free-form refusal (docs/spline-design.md §8.1, Table R row R9), and the one
+// error prismWall reads as an undecided wall reading rather than a failed
+// survey. It wraps ErrUnsupported exactly as the refusal it renames does, so
+// every other recordLoops consumer branches on it as before.
+//
+// It exists because "the section did not decompose" is not one cause: walkOf
+// refuses a nil segment and a self-contradicting circle as ErrDegenerate,
+// refuses a radius that is not a length on the unit conversion, and refuses a
+// free-form span whose §5.2 work ceiling or §6.1 length bracket runs out as its
+// OWN ErrUnsupported. Naming this one cause is what keeps a consumer's
+// undecided reading from swallowing the rest.
+var errFreeformSection = fmt.Errorf(`%w: the wall survey does not support a free-form boundary segment`, ErrUnsupported)
+
 // recordLoops resolves the recorded profile into coalesced walk loops,
 // exactly as the prism evaluator builds its side faces — the surveys must
 // see the same face decomposition the topology carries.
@@ -101,8 +115,12 @@ func recordLoops(budget *workBudget, profile ProfileRecord) ([][]sideWalk, error
 			if err != nil {
 				return nil, err
 			}
+			// requireAnalyticWalk refuses exactly one thing — a free-form walk
+			// (extrude.go) — so its refusal returns under this file's own
+			// sentinel, carrying the same message and the same ErrUnsupported.
+			// Every other error above keeps its own identity.
 			if err := requireAnalyticWalk(w, "the wall survey"); err != nil {
-				return nil, err
+				return nil, errFreeformSection
 			}
 			raw[i] = sideWalk{segmentWalk: w, segs: []int{i}}
 		}
@@ -230,14 +248,17 @@ func prismWall(budget *workBudget, pp prismPayload, alpha float64) (wallOutcome,
 	}
 	loops, err := recordLoops(budget, pp.profile)
 	if err != nil {
-		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-			return wallOutcome{}, err
+		if errors.Is(err, errFreeformSection) {
+			// A free-form boundary segment (docs/spline-design.md §8.1) is an
+			// undecided wall reading, not a failed survey: Suspect, never a
+			// silent pass and never a hard error out of Verify. This ONE
+			// refusal is the whole of the reading's tolerance for a section it
+			// cannot decompose — a degenerate segment, a radius that is not a
+			// length, and a free-form span the evaluator's own work or range
+			// ceiling refuses are failures, and reach the caller as themselves.
+			return wallOutcome{}, nil
 		}
-		// A section recordLoops cannot decompose — a free-form boundary segment,
-		// docs/spline-design.md §8.1 — is an undecided wall reading, not a
-		// failed survey: Suspect, never a silent pass and never a hard error
-		// out of Verify. The error return stays reserved for cancellation.
-		return wallOutcome{}, nil
+		return wallOutcome{}, err
 	}
 	if err := wallBudgetErr(budget); err != nil {
 		return wallOutcome{}, err
