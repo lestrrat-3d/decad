@@ -230,7 +230,14 @@ func prismWall(budget *workBudget, pp prismPayload, alpha float64) (wallOutcome,
 	}
 	loops, err := recordLoops(budget, pp.profile)
 	if err != nil {
-		return wallOutcome{}, err
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return wallOutcome{}, err
+		}
+		// A section recordLoops cannot decompose — a free-form boundary segment,
+		// docs/spline-design.md §8.1 — is an undecided wall reading, not a
+		// failed survey: Suspect, never a silent pass and never a hard error
+		// out of Verify. The error return stays reserved for cancellation.
+		return wallOutcome{}, nil
 	}
 	if err := wallBudgetErr(budget); err != nil {
 		return wallOutcome{}, err

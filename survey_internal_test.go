@@ -1094,3 +1094,68 @@ func TestRevolveMinRadiusNumeratorIsIntervalMinimum(t *testing.T) {
 		`the interval minimum must contain the nearer end's true radial coordinate %s (got %v +/- %v)`,
 		truth.FloatString(20), boundedMin(start, end).value, boundedMin(start, end).bound)
 }
+
+// freeformWallSection is a fit-spline arc closed by a chord — the same shape
+// docs/spline-design.md §10 P4b's own fixture uses — built as a raw record
+// rather than through sketch, mirroring TestPrismWallSubToleranceWebIsUndecided
+// above. prismWall never validates profile closure itself (§8.1), so a raw
+// record is enough to exercise the wall kernel's free-form arm.
+func freeformWallSection() ProfileRecord {
+	return ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{
+		FitSplineSeg{
+			Fit:    []Point2{{U: 0, V: 0}, {U: 5, V: 4}, {U: 10, V: 0}},
+			TStart: 0, TEnd: 1,
+		},
+		LineSeg{Start: Point2{U: 10, V: 0}, End: Point2{U: 0, V: 0}, TStart: 0, TEnd: 1},
+	}}}
+}
+
+// TestPrismWallFreeformSectionReadsUndecided pins PR 1
+// (docs/spline-design.md §8.1, Table R R9): a free-form boundary segment must
+// leave the wall survey undecided — Suspect through Verify — never return an
+// error out of prismWall. Reaching this through the public surface needs PR 3
+// (Extrude still refuses R6 on a free-form section today), so the fixture is
+// built and called directly, as the sub-tolerance-web test above already does.
+func TestPrismWallFreeformSectionReadsUndecided(t *testing.T) {
+	pp := prismPayload{profile: freeformWallSection(), z0: 0, z1: 10}
+	out, err := prismWall(newWorkBudget(t.Context()), pp, 15*math.Pi/180)
+	require.NoError(t, err, `a free-form section must not error out of Verify`)
+	require.False(t, out.ok, `undecided, never a silent pass`)
+	require.Equal(t, surveyUndecided, out.reason)
+}
+
+// TestPrismWallFreeformSectionPropagatesCancellation pins that swallowing the
+// free-form refusal does not also swallow genuine cancellation: a context
+// cancelled ahead of the call must still surface as the context's own error,
+// not as an undecided reading.
+func TestPrismWallFreeformSectionPropagatesCancellation(t *testing.T) {
+	pp := prismPayload{profile: freeformWallSection(), z0: 0, z1: 10}
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	_, err := prismWall(newWorkBudget(ctx), pp, 15*math.Pi/180)
+	require.ErrorIs(t, err, context.Canceled)
+}
+
+// TestPrismWallAnalyticSectionRegression pins that an all-analytic section's
+// wall reading is unchanged by PR 1's swallow: a 10x10x10 box still reports
+// its exact spanning diameter.
+func TestPrismWallAnalyticSectionRegression(t *testing.T) {
+	line := func(u0, v0, u1, v1 float64) CurveSegment {
+		return LineSeg{Start: Point2{U: u0, V: v0}, End: Point2{U: u1, V: v1}, TStart: 0, TEnd: 1}
+	}
+	pp := prismPayload{
+		profile: ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{
+			line(0, 0, 10, 0),
+			line(10, 0, 10, 10),
+			line(10, 10, 0, 10),
+			line(0, 10, 0, 0),
+		}}},
+		z0: 0, z1: 10,
+	}
+	out, err := prismWall(newWorkBudget(t.Context()), pp, 15*math.Pi/180)
+	require.NoError(t, err)
+	require.True(t, out.ok)
+	require.NotNil(t, out.reading)
+	require.InDelta(t, 10.0, *out.reading, 1e-9, `a 10mm square's spanning diameter is 10mm`)
+	require.Equal(t, 0.0, out.bound, `an all-analytic square's spanning diameter is Exact`)
+}
