@@ -897,11 +897,16 @@ func revolveMinRadius(rp revolvePayload) (radiusOutcome, bool) {
 				// size, and its denominator's clearance at the threshold keeps
 				// its bound finite rather than leaving the survey undecided.
 				if admitBelow(nrBS, -survAngTol) != survReject {
-					minSV, minSVBound := w.startV, w.startVBound
-					if w.endV < minSV {
-						minSV, minSVBound = w.endV, w.endVBound
-					}
-					vBS := boundedQuotient(minSV, minSVBound, -nrBS.value, nrBS.bound)
+					// The nearer end of the wall is the INTERVAL minimum of the
+					// two ends' proven radial coordinates (boundedMin), never
+					// the interval of whichever held value compared smaller:
+					// the two ends carry their own independent bounds, so the
+					// end that holds larger can still be the truly nearer one.
+					minSV := boundedMin(
+						measuredScalar(w.startV, w.startVBound),
+						measuredScalar(w.endV, w.endVBound),
+					)
+					vBS := boundedQuotient(minSV.value, minSV.bound, -nrBS.value, nrBS.bound)
 					agg.take(vBS.value, vBS.bound)
 				}
 				continue

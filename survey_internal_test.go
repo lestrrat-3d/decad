@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
@@ -1021,4 +1022,75 @@ func TestArcWalkRadiusBoundStaysUnderTheKernelSlack(t *testing.T) {
 			})
 		}
 	}
+}
+
+// TestRevolveMinRadiusNumeratorIsIntervalMinimum pins the numerator the
+// non-circular arm of revolveMinRadius hands its quotient: the enclosure of
+// the NEARER wall end's radial coordinate, which is the interval minimum of
+// the two ends and never the interval of whichever HELD value compared
+// smaller. The two ends carry independent proven bounds (axisFrame.walk's
+// startVBound/endVBound), so a comparison of the held floats decides nothing
+// while those intervals overlap.
+//
+// The wall below is that overlap made concrete. Its two v coordinates are
+// adjacent float64s, so about the axis v = −1000 both ends hold the same
+// radial coordinate 1000.5 — the start exactly, the end only after its own
+// subtraction rounded up to it. The end is therefore the truly nearer one, by
+// less than the ulp that hides it, and the interval a held comparison
+// publishes excludes it.
+func TestRevolveMinRadiusNumeratorIsIntervalMinimum(t *testing.T) {
+	frame, err := r3.NewFrame(r3.NewVec(0, 0, 0), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
+	require.NoError(t, err)
+	line, err := axisInPlane(SketchLine{
+		Start: Point2{U: 0, V: -1000},
+		End:   Point2{U: 1, V: -1000},
+	}, frame)
+	require.NoError(t, err)
+	ax := axisFrame{
+		aU: line.aU, aV: line.aV,
+		aUBound: line.aUBound, aVBound: line.aVBound,
+		dU: line.dU, dV: line.dV,
+		dUBound: line.dUBound, dVBound: line.dVBound,
+		snapTol: 1e-9,
+	}
+
+	// 0.49999999999999994 is the float64 immediately below 0.5.
+	const nearV = 0.49999999999999994
+	require.Equal(t, nearV, math.Nextafter(0.5, 0))
+	w, err := walkOf(LineSeg{
+		Start:  Point2{U: 0, V: 0.5},
+		End:    Point2{U: 10, V: nearV},
+		TStart: 0,
+		TEnd:   1,
+	}, nil)
+	require.NoError(t, err)
+	aw := ax.walk(w)
+	require.Equal(t, aw.startV, aw.endV, `the two ends must hold the SAME radial coordinate for the tie to bite`)
+	require.Equal(t, 0.0, aw.startVBound)
+	require.Greater(t, aw.endVBound, 0.0)
+
+	// The truth is the exact radial coordinate of the nearer end, computed
+	// over the rationals: rounding it to a float64 would round it straight
+	// back onto the held value and no assertion here could fail.
+	toRat := func(x float64) *big.Rat {
+		r := new(big.Rat)
+		require.NotNil(t, r.SetFloat64(x), `float64 %v must be finite to convert exactly`, x)
+		return r
+	}
+	truth := new(big.Rat).Sub(toRat(nearV), toRat(ax.aV))
+	require.Equal(t, -1, truth.Cmp(new(big.Rat).Sub(toRat(0.5), toRat(ax.aV))),
+		`the end the held comparison discards must be the truly nearer one`)
+
+	encloses := func(q boundedScalar) bool {
+		lo := new(big.Rat).Sub(toRat(q.value), toRat(q.bound))
+		hi := new(big.Rat).Add(toRat(q.value), toRat(q.bound))
+		return lo.Cmp(truth) <= 0 && hi.Cmp(truth) >= 0
+	}
+	start := measuredScalar(aw.startV, aw.startVBound)
+	end := measuredScalar(aw.endV, aw.endVBound)
+	require.False(t, encloses(start),
+		`the assertion below is vacuous unless the held-selected end's own interval misses the truth`)
+	require.True(t, encloses(boundedMin(start, end)),
+		`the interval minimum must contain the nearer end's true radial coordinate %s (got %v +/- %v)`,
+		truth.FloatString(20), boundedMin(start, end).value, boundedMin(start, end).bound)
 }

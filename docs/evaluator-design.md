@@ -304,17 +304,25 @@ representable; a sweep amplitude no `float64` holds, a boundary extreme a
 computed arc radius or a computed walk endpoint carries, the axis frame or
 the placement's own rounding, or the reading's own summation of those terms
 into a published endpoint, publishes the proven bound its own arithmetic
-derives instead. The axis frame contributes two terms: its resolved
-direction/anchor's own proven displacement (`axisInPlane`'s
+derives instead. The axis frame contributes three terms. The first is its
+resolved direction and anchor's own proven displacement (`axisInPlane`'s
 `dUBound`/`dVBound`/`aUBound`/`aVBound`, already folded into the region's
 moments by `axisMoments`, and now into `Bounds` and the meridian
-minimum-radius survey the same way) and, like the placement, the rounding
-`xform.Apply`/`xform.ApplyDir` commit whenever the frame is not axis-aligned
-or the placement is not the identity. The endpoint summation is charged
-separately from both, since a pure translation leaves all four coefficients
-exactly right and rounds only when they are added. Every one of these terms is
-zero for an axis-aligned, unplaced revolve, which keeps the ordinary revolve's
-box Exact as before.
+minimum-radius survey the same way), and each of those four is the ROUNDING
+its own evaluation committed, proven over the rationals — never a magnitude
+envelope over the value it bounds, which for an anchor would grow with the
+axis's distance from the frame origin while the projection's own error stayed
+zero. The second is, like the placement, the rounding `xform.Apply`/
+`xform.ApplyDir` commit whenever the frame is not axis-aligned or the
+placement is not the identity. The third is the extreme reading's OWN anchor
+shift — the products and the subtraction that carry a plane-local extreme into
+axis coordinates — which rounds at the anchor's magnitude rather than the
+section's, so a far-offset axis rounds here even where the boundary scan
+reports zero. The endpoint summation is charged separately from all three,
+since a pure translation leaves all four coefficients exactly right and rounds
+only when they are added. Every one of these terms is zero for an axis-aligned,
+unplaced revolve whose anchor projects and shifts exactly, which keeps the
+ordinary revolve's box Exact as before.
 A walk endpoint is a computed one
 wherever the record does not state it: a trimmed line's or arc's own bound, and
 every circle's, is evaluated rather than read, and the bound it carries is the

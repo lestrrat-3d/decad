@@ -644,9 +644,24 @@ func axisInPlane(a Axis, frame r3.Frame) (axisLine2, error) {
 		if !finiteAxisValues(dU, dV) {
 			return axisLine2{}, fmt.Errorf(`%w: a normalized construction axis plane-local direction is not finite`, ErrNotFinite)
 		}
+		// The anchor's plane-local coordinates take the ROUNDING their own
+		// projection committed (bounds.go's exactFrameLocalRound), measured
+		// exactly against the frame and the world origin as the exact leaves
+		// they are — zero for an exactly representable projection, and never
+		// the anchor's own distance from the frame origin, which bounds the
+		// coordinate's magnitude and not its error. The magnitude envelope
+		// survives only as the fallback for a component no rational holds.
 		anchorUpper := absSumUpper(
 			a.Origin.X, a.Origin.Y, a.Origin.Z,
 			frame.Origin().X, frame.Origin().Y, frame.Origin().Z,
+		)
+		aUBound := math.Min(
+			exactFrameLocalRound(frame, a.Origin, frame.U(), local.X),
+			conservativeValueError(local.X, anchorUpper),
+		)
+		aVBound := math.Min(
+			exactFrameLocalRound(frame, a.Origin, frame.V(), local.Y),
+			conservativeValueError(local.Y, anchorUpper),
 		)
 		dUBound, dVBound := conservativeValueError(dU, 1), conservativeValueError(dV, 1)
 		if (dU == 0 || math.Abs(dU) == 1) &&
@@ -656,8 +671,8 @@ func axisInPlane(a Axis, frame r3.Frame) (axisLine2, error) {
 		}
 		return axisLine2{
 			aU: local.X, aV: local.Y,
-			aUBound: conservativeValueError(local.X, anchorUpper),
-			aVBound: conservativeValueError(local.Y, anchorUpper),
+			aUBound: aUBound,
+			aVBound: aVBound,
 			dU:      dU, dV: dV,
 			dUBound: dUBound,
 			dVBound: dVBound,
@@ -1772,12 +1787,14 @@ func (rp revolvePayload) extentAlongWork(ctx context.Context, g r3.Vec, work *fr
 // and the through-all stop alike — and a term charged in only one of them lets
 // the same coordinate publish as bounded on one path and exact on the other.
 //
-// The first mechanism is the boundary-extreme scan's own bound, which
-// axisExtremeContext returns: a circular candidate sits at a math.Hypot radius
-// and can miss the apex the sweep actually reaches. The second is the swept
-// radial coefficient's, sweepBoundAlong below. A section whose every candidate
-// is exactly representable, swept through an extreme this direction's own
-// amplitude holds exactly, carries a zero bound — an all-straight or
+// The first mechanism is everything axisExtremeContext returns a bound for: the
+// boundary-extreme scan's own — a circular candidate sits at a math.Hypot radius
+// and can miss the apex the sweep actually reaches — and, beside it, that
+// reading's own anchor-shift arithmetic (its doc comment). The second is the
+// swept radial coefficient's, sweepBoundAlong below. A section whose every
+// candidate is exactly representable, swept through an extreme this direction's
+// own amplitude holds exactly and shifted by an anchor its own products and
+// subtraction hold exactly, carries a zero bound — an all-straight or
 // recorded-circle meridian under a full revolution about an axis-aligned frame
 // reads exactly.
 //
@@ -2136,9 +2153,19 @@ func sweepExtremeBounds(c0, c1, phi0, phi1, heldLo, heldHi float64, full bool) (
 
 // axisExtremeContext is one extreme of the linear functional wg·z + k·ρ over the
 // recorded boundary, evaluated in axis coordinates through the plane-local
-// boundary extremes, beside that extreme's own proven bound — the scan's, which
-// is nonzero exactly where a circular candidate's own radius or apex is not
-// exactly representable (extrude.go's circularExtremeInterval).
+// boundary extremes, beside that extreme's own proven bound.
+//
+// Two mechanisms compose into that bound. The scan's own is nonzero exactly
+// where a circular candidate's own radius or apex is not exactly representable
+// (extrude.go's circularExtremeInterval), and it is proven over the SECTION's
+// coordinates. The anchor shift below is this reading's own arithmetic — two
+// products, their sum, and the subtraction that carries the scan's extreme into
+// axis coordinates — and every one of those rounds at the ANCHOR's magnitude
+// rather than the section's, so an axis far from the frame origin rounds here
+// while the scan reports zero. exactPlaneDotRound and exactSumRound (bounds.go)
+// charge exactly what that arithmetic committed, and the anchor's own proven
+// uncertainty (axisInPlane's aUBound/aVBound) rides in beside them through the
+// direction it is read against.
 func axisExtremeContext(ctx context.Context, rp revolvePayload, wg, k float64, wantMax bool, work *freeformWork) (float64, float64, error) {
 	gu, gv := rp.ax.planeDirection(wg, k)
 	lo, hi, bound, err := boundaryExtremesBoundedContext(ctx, rp.profile, gu, gv, work)
@@ -2146,8 +2173,15 @@ func axisExtremeContext(ctx context.Context, rp revolvePayload, wg, k float64, w
 		return 0, 0, err
 	}
 	off := gu*rp.ax.aU + gv*rp.ax.aV
-	if wantMax {
-		return hi - off, bound, nil
+	shiftAllow := absSumUpper(
+		exactPlaneDotRound(gu, gv, rp.ax.aU, rp.ax.aV, off),
+		productUpper(math.Abs(gu), rp.ax.aUBound),
+		productUpper(math.Abs(gv), rp.ax.aVBound),
+	)
+	scan := hi
+	if !wantMax {
+		scan = lo
 	}
-	return lo - off, bound, nil
+	extreme := scan - off
+	return extreme, absSumUpper(bound, shiftAllow, exactSumRound(extreme, scan, -off)), nil
 }

@@ -1726,3 +1726,58 @@ func TestRevolveBoundsEnclosesTranslatedExtreme(t *testing.T) {
 
 	requireEnclosesExactSum(t, bounds.Max.X, boundMM, 10, 0.1)
 }
+
+// TestRevolveBoundsExactOffsetAnchor pins the anchor half of the axis frame's
+// own uncertainty: a full turn of u in [0, 10], v in [5, 10] about an axis
+// along +x through (3, 0, 0) is unplaced and axis-aligned, and its anchor's
+// plane-local projection is exactly representable, so nothing in the reading
+// rounds and the box is Exact with a zero bound. The anchor's DISTANCE from
+// the frame origin is not an error term: charging it as one publishes a 9 mm
+// bound on this proven-exact box and grows without limit as the axis moves
+// away. The two controls carry no anchor projection at all — a sketch-line
+// axis states its plane-local anchor directly, and a construction axis at the
+// frame origin projects to zero — so they hold the same reading either way.
+func TestRevolveBoundsExactOffsetAnchor(t *testing.T) {
+	revolved := func(t *testing.T, axis decad.Axis) *decad.Body {
+		t.Helper()
+		w := sketch.NewWorld()
+		s, err := w.CreateSketch(w.XY())
+		require.NoError(t, err)
+		rect := s.CreateRectangle(0, 5, 10, 10)
+		s.Fix(rect.A)
+		_, err = s.Solve(t.Context())
+		require.NoError(t, err)
+		body, err := decad.New().Revolve(s, s.Profiles()[0], axis, decad.FullRevolution{})
+		require.NoError(t, err)
+		return body
+	}
+
+	for _, tc := range []struct {
+		name string
+		axis decad.Axis
+	}{
+		{
+			name: "offset construction axis",
+			axis: decad.ConstructionAxis{Origin: r3.NewVec(3, 0, 0), Dir: r3.NewVec(1, 0, 0)},
+		},
+		{
+			name: "sketch line",
+			axis: uAxis,
+		},
+		{
+			name: "construction axis at the frame origin",
+			axis: decad.ConstructionAxis{Origin: r3.NewVec(0, 0, 0), Dir: r3.NewVec(1, 0, 0)},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			body := revolved(t, tc.axis)
+			bounds, err := body.Bounds()
+			require.NoError(t, err)
+			require.Equal(t, decad.Exact, bounds.Exactness)
+			boundMM, err := bounds.Bound.In(units.Millimeter)
+			require.NoError(t, err)
+			require.Equal(t, 0.0, boundMM)
+			requireBounds(t, body, decad.Exact, 0, -10, -10, 10, 10, 10)
+		})
+	}
+}

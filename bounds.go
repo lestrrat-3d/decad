@@ -94,6 +94,22 @@ import (
 //     rounding for the input at hand (an identity placement, an axis-aligned
 //     frame direction), never a worst-case ulp estimate where an exact
 //     rational comparison is available instead.
+//   - a HELD PLANE-LOCAL COORDINATE a world point projects to under a frame —
+//     a revolve axis's own anchor (revolve.go's axisInPlane) — measured against
+//     the EXACT rational image of the same (p − origin)·axis chain the
+//     coordinate's own float evaluation ran → exactFrameLocalRound,
+//     exactIsometryDotRound's sibling one transform earlier. It charges the
+//     ROUNDING that projection commits and nothing else, so a magnitude
+//     envelope over the point's own distance from the frame origin — a term
+//     that grows with that distance while the projection's true error stays
+//     zero — never stands in for it.
+//   - a HELD PLANE-LOCAL DOT PRODUCT of a direction against a frame's own axis
+//     anchor — the anchor shift a revolve's extreme reading subtracts to move a
+//     plane-local extreme into axis coordinates (revolve.go's
+//     axisExtremeContext) — measured against the EXACT rational value of the
+//     same two products and their sum → exactPlaneDotRound. Its two products
+//     round at the ANCHOR's own magnitude, so the term grows with the anchor
+//     while staying the rounding it is.
 //   - the FINAL SUMMATION a directional extent reading commits when it
 //     recombines its own already-held terms into ONE published endpoint — a
 //     prism's base + boundary extreme + sweep level, a revolve's or a cap-loop
@@ -862,6 +878,56 @@ func exactIsometryDotRound(xform r3.Transform, pt, g r3.Vec, translate bool, hel
 	}
 	exact := ratAdd(ratMul(placed[0], gR[0]), ratMul(placed[1], gR[1]), ratMul(placed[2], gR[2]))
 	return rationalFloatError(exact, held)
+}
+
+// exactFrameLocalRound proves, over the rationals, the rounding ONE plane-local
+// coordinate of frame.ToLocal(p) commits: |held − (p − frame.Origin())·axis|
+// measured exactly, with axis the frame's OWN u or v. It is
+// exactIsometryDotRound one transform earlier — that helper reads a placement's
+// basis, this one a frame's — and it is what a plane-local anchor's proven
+// bound is: the frame and the world point are exact leaves, so the projection's
+// only error is what its own float arithmetic rounded away.
+//
+// held must be the SAME float the caller's own arithmetic produced —
+// frame.ToLocal(p).X against frame.U(), .Y against frame.V() — so the
+// comparison measures the rounding that call actually committed. The answer is
+// zero exactly where that arithmetic is exact for the input at hand (an
+// axis-aligned frame and an exactly representable anchor), and a component no
+// rational holds answers +Inf, never 0 (cutDisplacementAllow's own rule).
+func exactFrameLocalRound(frame r3.Frame, p, axis r3.Vec, held float64) float64 {
+	ratOfVec := func(v r3.Vec) [3]*big.Rat {
+		return [3]*big.Rat{floatRat(v.X), floatRat(v.Y), floatRat(v.Z)}
+	}
+	anyNil := func(r [3]*big.Rat) bool { return r[0] == nil || r[1] == nil || r[2] == nil }
+	pR, axR, oR := ratOfVec(p), ratOfVec(axis), ratOfVec(frame.Origin())
+	if anyNil(pR) || anyNil(axR) || anyNil(oR) {
+		return math.Inf(1)
+	}
+	terms := [3]*big.Rat{}
+	for i := range terms {
+		terms[i] = ratMul(new(big.Rat).Sub(pR[i], oR[i]), axR[i])
+	}
+	return rationalFloatError(ratAdd(terms[0], terms[1], terms[2]), held)
+}
+
+// exactPlaneDotRound proves, over the rationals, the rounding the float64
+// evaluation of a plane-local dot product gu·u + gv·v commits: the anchor shift
+// a revolve's extreme reading subtracts to carry a plane-local extreme into
+// axis coordinates (revolve.go's axisExtremeContext). Both products round at
+// the ANCHOR's own magnitude, which the boundary scan's own bound — proven over
+// the SECTION's coordinates — says nothing about.
+//
+// held must be the SAME float the caller's own arithmetic produced, so the
+// answer covers however that arithmetic grouped its two products and their sum.
+// It speaks for the ROUNDING alone: the u/v operands' own proven uncertainty is
+// a different mechanism the caller composes beside it. A component no rational
+// holds answers +Inf, never 0 (cutDisplacementAllow's own rule).
+func exactPlaneDotRound(gu, gv, u, v, held float64) float64 {
+	guR, gvR, uR, vR := floatRat(gu), floatRat(gv), floatRat(u), floatRat(v)
+	if guR == nil || gvR == nil || uR == nil || vR == nil {
+		return math.Inf(1)
+	}
+	return rationalFloatError(ratAdd(ratMul(guR, uR), ratMul(gvR, vR)), held)
 }
 
 // exactSumRound proves, over the rationals, the rounding the FINAL float64
