@@ -81,6 +81,21 @@ func freeformWallConvexityContext(ctx context.Context, spans []bezierSpan, close
 			// Table K: a collapsed span has no verdict and no joint of its
 			// own — skip it, and the run it belongs to is bridged by the
 			// next live span's joint against prevLive below.
+			//
+			// This scan runs BEFORE the per-span charge below, which a review
+			// read as unbounded work outside the budget. It is not: spans
+			// reach here only from freeformBezierSpans, whose every arm
+			// charges this same record counter per span as it converts —
+			// closedSplineBezierSpans a rationalLift plus 4n, splineBezierSpans
+			// its quadratic clampedConversionCost, a fit spline 64 per point —
+			// so a chain long enough to make this scan cost anything has
+			// already paid more for its own conversion. Measured on the real
+			// path: a ClosedSplineSeg of 174000 identical controls is the
+			// longest chain freeformWorkLimit admits at all, its conversion
+			// charges 1044000 units and takes 1.80s, and this scan over its
+			// spans adds 194ms; 175000 controls refuses at conversion (R7)
+			// before reaching here. The loop also polls ctx.Err() per span, so
+			// a cancelled context leaves it immediately.
 			continue
 		}
 		sign, err := spanConvexitySignContext(ctx, span, work)
