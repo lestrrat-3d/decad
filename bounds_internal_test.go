@@ -376,3 +376,38 @@ func TestBoundedFloatErrorRefusesANonFiniteOperand(t *testing.T) {
 	require.True(t, math.IsInf(boundedFloatError(measuredScalar(1, 1), inf), 1))
 	require.True(t, math.IsInf(boundedFloatError(measuredScalar(math.NaN(), 1), 1), 1))
 }
+
+// TestSnapToZeroAllowEnclosesTheOverwrittenCoordinate pins the composition a
+// deliberate snap needs: the assigned zero's own interval must still reach the
+// coordinate the assignment overwrote, wherever that coordinate's pre-snap
+// bound had already put it.
+func TestSnapToZeroAllowEnclosesTheOverwrittenCoordinate(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		bound      float64
+		coordinate float64
+	}{
+		{"an exact pre-snap coordinate", 0, 5e-10},
+		{"a bounded pre-snap coordinate", 1e-12, 5e-10},
+		{"a coordinate under its own bound", 3e-12, 1e-12},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := snapToZeroAllow(tc.bound, math.Abs(tc.coordinate))
+			// The truth is anywhere within the pre-snap bound of the
+			// coordinate; the farthest it can sit from the assigned zero is
+			// the sum of the two.
+			require.GreaterOrEqual(t, got, tc.coordinate+tc.bound,
+				`the assigned zero's interval must reach the coordinate it replaced`)
+		})
+	}
+
+	// A coordinate the arithmetic already put exactly on zero discards
+	// nothing, so its own exactness survives the assignment.
+	require.Equal(t, 0.0, snapToZeroAllow(0, 0))
+	require.Equal(t, 1e-12, snapToZeroAllow(1e-12, 0))
+
+	// A magnitude no float states is the ABSENCE of a charge, never a zero
+	// one: answering the caller's own bound would let the assignment vanish.
+	require.True(t, math.IsInf(snapToZeroAllow(0, math.NaN()), 1))
+	require.True(t, math.IsInf(snapToZeroAllow(0, math.Inf(1)), 1))
+}

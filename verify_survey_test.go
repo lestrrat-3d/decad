@@ -1239,6 +1239,78 @@ func TestRevolveMinRadiusChargesTheWalkTangent(t *testing.T) {
 	requireContains(t, truth, value, bound)
 }
 
+// TestRevolveMinRadiusChargesTheAxisSnap pins the parallel-circle arm's third
+// computed input: the axis snap. axisFrame.walk assigns exactly 0 to a walk
+// endpoint whose re-expressed radial coordinate lands within the axis's own
+// contact tolerance, so contact classification and vertex placement agree
+// exactly. That assignment displaces the endpoint by the whole magnitude it
+// discards, and the discarded magnitude belongs in the endpoint's own bound:
+// left uncharged, the survey publishes the assigned zero as the body's tightest
+// concave radius, Exact and with a zero bound — the reading a caller treats as
+// a hard failure, in an interval that excludes the positive radius the record
+// denotes and that no tolerance can ever question.
+//
+// The axis is the sketch u axis through the origin, so the frame's own
+// re-expression multiplies by 1 and 0 only and contributes nothing: the snap is
+// the whole of the gap under test. Each case revolves the same triangle, whose
+// near wall runs from (0, v0) to (10, 1) and whose far wall closes it at
+// u = 0; only v0 moves.
+func TestRevolveMinRadiusChargesTheAxisSnap(t *testing.T) {
+	axis := decad.ConstructionAxis{Origin: r3.NewVec(0, 0, 0), Dir: r3.NewVec(1, 0, 0)}
+	radiusOf := func(t *testing.T, v0 float64) (*decad.BodyReport, float64, float64) {
+		t.Helper()
+		s, p := polygonSketch(t, [][2]float64{{0, v0}, {10, 1}, {0, 2}})
+		doc := decad.New()
+		_, err := doc.Revolve(s, p, axis, decad.FullRevolution{})
+		require.NoError(t, err)
+		report, err := doc.Verify(t.Context(), decad.WithMinRadius())
+		require.NoError(t, err)
+		br := report.Bodies[0]
+		value, bound := requireMinRadius(t, br)
+		return br, value, bound
+	}
+
+	t.Run("snapped end", func(t *testing.T) {
+		// The section's own scale is 10 mm, so its snap tolerance is 1e-8 mm
+		// and this near end is snapped onto the axis. The wall it belongs to
+		// is still a cone, and the parallel circle it sweeps there has radius
+		// ρ·|t|/|t_z| — about 5.0249e-10 mm, positive and nowhere near zero
+		// relative to itself.
+		const v0 = 5e-10
+		br, value, bound := radiusOf(t, v0)
+		require.Equal(t, 0.0, value,
+			`the snap itself must be unmoved: the held reading is still the assigned zero`)
+		require.NotEqual(t, decad.Exact, br.MinRadius.Exactness,
+			`an assigned zero states no exact radius`)
+		requireContains(t, coneBoreTruth(0, v0, 10, 1), value, bound)
+		require.Less(t, bound, 1e-9,
+			`the charge is the discarded magnitude, not a blanket widening`)
+	})
+
+	t.Run("end on the axis", func(t *testing.T) {
+		// The same triangle with the wall genuinely reaching the axis: the
+		// snap discards nothing, so the cone apex's own zero radius stays the
+		// exact zero it is.
+		br, value, bound := radiusOf(t, 0)
+		require.Equal(t, decad.Exact, br.MinRadius.Exactness)
+		require.Equal(t, 0.0, value)
+		require.Equal(t, 0.0, bound)
+	})
+
+	t.Run("ordinary radius", func(t *testing.T) {
+		// The same triangle with its near end eight orders of magnitude
+		// outside the snap tolerance: nothing is snapped, and the reading is
+		// the ordinary parallel-circle radius it was.
+		const v0 = 0.5
+		br, value, bound := radiusOf(t, v0)
+		truth := coneBoreTruth(0, v0, 10, 1)
+		require.Equal(t, decad.Approximate, br.MinRadius.Exactness)
+		require.InEpsilon(t, 0.5006246098625197, value, 1e-15)
+		require.Less(t, bound, 1e-15)
+		requireContains(t, truth, value, bound)
+	})
+}
+
 // coneTangentSlack is the relative displacement a conical bore's parallel-circle
 // radius inherits from its walk tangent alone: (dv²/|t|²)·(δ_v − δ_u), where
 // each δ is the signed relative gap between the exact difference of two

@@ -126,6 +126,13 @@ import (
 //     own companion one step later: that helper proves each COEFFICIENT right,
 //     this one charges what ADDING the terms commits, and a placement can leave
 //     every coefficient exactly right while the sum still rounds.
+//   - the DISPLACEMENT a deliberate SNAP-TO-ZERO puts on the coordinate it
+//     overwrites — a revolve walk endpoint's radial coordinate assigned exactly
+//     0 within the axis's own contact tolerance (revolve.go's axisFrame.walk) →
+//     snapToZeroAllow, which charges the discarded magnitude itself, because
+//     that magnitude IS the error the assignment introduces. A reading that
+//     charges only the pre-snap arithmetic's own rounding publishes the assigned
+//     zero as Exact and excludes the positive radius it stands for.
 
 const (
 	// unitRoundoff is float64's u = 2⁻⁵³: the relative error a single
@@ -1021,4 +1028,36 @@ func exactSumRound(held float64, terms ...float64) float64 {
 		sum.Add(sum, r)
 	}
 	return rationalFloatError(sum, held)
+}
+
+// snapToZeroAllow composes the bound a coordinate carries once a deliberate
+// snap has overwritten it with exactly 0. bound is what the caller had already
+// proven about the pre-snap coordinate and discarded is that coordinate's own
+// magnitude, so bound + discarded encloses the same truth about the assigned
+// zero: the truth sits within bound of the pre-snap value, which sits exactly
+// discarded from 0.
+//
+// The composition is the whole point of routing through here rather than
+// dropping the term. A snap is a decision the caller makes for its own reasons
+// — revolve.go's axisFrame.walk snaps so contact classification and vertex
+// placement agree exactly — and the assignment is no less an error for being
+// deliberate. Charging it leaves the snap's own behaviour untouched while every
+// reading that folds the snapped coordinate into a published measurement
+// (survey.go's revolveMinRadius) stops claiming an exactness the assignment
+// took away.
+//
+// It answers the caller's own bound unchanged for a discarded magnitude of
+// zero, so a coordinate the arithmetic already put exactly on zero keeps
+// whatever exactness it arrived with. A discarded magnitude no float can state
+// answers +Inf rather than that unchanged bound: a NaN would be the ABSENCE of
+// a charge and would silently vanish from every reading it was meant to widen
+// (rigidRoundAllow's own rule).
+func snapToZeroAllow(bound, discarded float64) float64 {
+	if isNonFinite(discarded) {
+		return math.Inf(1)
+	}
+	if discarded <= 0 {
+		return bound
+	}
+	return upRound(bound + discarded)
 }

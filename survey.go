@@ -879,9 +879,13 @@ func revolveMinRadius(rp revolvePayload) (radiusOutcome, bool) {
 				// endV are the axis frame's own re-expression of a recorded
 				// coordinate, not a recorded one themselves, so they take
 				// axisFrame.walk's own startVBound/endVBound rather than reading
-				// as exact leaves — zero for an axis-aligned frame, and nonzero
-				// wherever the axis direction or anchor is not exactly
-				// representable (axisInPlane's dUBound/dVBound/aUBound/aVBound).
+				// as exact leaves. Those bounds carry every mechanism that walk
+				// names: the axis direction and anchor's own representation
+				// error (axisInPlane's dUBound/dVBound/aUBound/aVBound), and the
+				// magnitude the axis snap discarded when it assigned an endpoint
+				// exactly zero. Both are zero only where the walk's own
+				// arithmetic committed neither, which is what leaves an
+				// axis-aligned frame's untouched end reading Exact.
 				tanU := measuredScalar(w.tanInU, w.tanInBound)
 				tanV := measuredScalar(w.tanInV, w.tanInBound)
 				lBS := boundedNorm2(tanU, tanV)

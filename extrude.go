@@ -804,7 +804,9 @@ type segmentWalk struct {
 	// startVBound/endVBound/cVBound are the PROVEN error bounds on the radial
 	// (V) axis-coordinate beside them — startV/endV/cV's own displacement from
 	// the value the axis's TRUE (unrounded) direction and anchor would give,
-	// through axisFrame.toAxisRhoBound. They are set ONLY by axisFrame.walk,
+	// through axisFrame.toAxisRhoBound, composed for startV/endV with whatever
+	// magnitude that walk's own axis snap discarded to assign an endpoint
+	// exactly zero. They are set ONLY by axisFrame.walk,
 	// which re-expresses a plane-local walk into axis coordinates: a walk that
 	// has not been through it (every use before revolve resolves an axis)
 	// leaves them at their zero value, meaningless there. axisFrame.toAxis

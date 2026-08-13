@@ -799,6 +799,16 @@ func (ax axisFrame) planeDirection(wg, k float64) (float64, float64) {
 // the re-expressed ρ into a published measurement (survey.go's
 // revolveMinRadius) takes it rather than treating startV/endV/cV as an exact
 // leaf the way contact classification does.
+//
+// The SNAP is charged into that same bound, through bounds.go's
+// snapToZeroAllow: assigning exactly 0 to an endpoint the arithmetic put a
+// positive distance from the axis displaces it by that whole discarded
+// magnitude, which is error the walk commits here and nowhere else. So a
+// snapped endpoint's startVBound/endVBound covers the assigned zero rather than
+// the coordinate it replaced, and only an endpoint the arithmetic already put
+// exactly ON the axis keeps a zero bound. Charging it leaves the snap itself
+// untouched: the assigned value, and with it every classification and vertex
+// placement decided on snapTol's margin, is exactly what it was.
 func (ax axisFrame) walk(w segmentWalk) segmentWalk {
 	out := w
 	out.startU, out.startV = ax.toAxis(w.startU, w.startV)
@@ -809,10 +819,12 @@ func (ax axisFrame) walk(w segmentWalk) segmentWalk {
 	out.tanInV = w.tanInV*ax.dU - w.tanInU*ax.dV
 	out.tanOutU = w.tanOutU*ax.dU + w.tanOutV*ax.dV
 	out.tanOutV = w.tanOutV*ax.dU - w.tanOutU*ax.dV
-	if math.Abs(out.startV) <= ax.snapTol {
+	if m := math.Abs(out.startV); m <= ax.snapTol {
+		out.startVBound = snapToZeroAllow(out.startVBound, m)
 		out.startV = 0
 	}
-	if math.Abs(out.endV) <= ax.snapTol {
+	if m := math.Abs(out.endV); m <= ax.snapTol {
+		out.endVBound = snapToZeroAllow(out.endVBound, m)
 		out.endV = 0
 	}
 	if w.isCircular() {
