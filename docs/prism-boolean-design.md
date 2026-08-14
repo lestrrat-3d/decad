@@ -501,6 +501,17 @@ terms, the same `Exactness` rule. No bound mechanism is restated at a second
 site, which is what `bounds.go`'s one-helper-per-mechanism rule requires, and
 no new helper is introduced.
 
+<!-- "a volume, never a body" is scoped to ASSEMBLY and DELIVERY, not to
+     allocation: this section's own wording is "a limit on ASSEMBLING one",
+     "without assembling anything", "nothing is assembled from them", and "it
+     assembles nothing". The paragraph above names `evalPrism` as the per-cell
+     volume path outright, and `evalPrismContext` (extrude.go) does allocate a
+     `Body` and read `body.volume` from it — that is the specified path, not a
+     contradiction of it. What the reading never does is commit a `Step`,
+     retire an operand, register a body in the `Document`, or return one to a
+     caller; `docs/interference-design.md` §5 states that promise for this
+     reading beside the existing analytic twin's. -->
+
 **The sum.** The reading publishes the charged sum of the cells' volumes: the
 value is their float sum, whose own accumulated rounding `bounds.go`'s
 `exactSumRound` charges against the exact rational sum, and the bound is
