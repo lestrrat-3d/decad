@@ -81,7 +81,11 @@ func (m *Mesh) Bound() units.Value { return units.Millimeters(m.bound) }
 // before any chord is chosen, so a tol it exhausts is [ErrUnsupported] too. A
 // revolve body is [ErrUnsupported] here — Revolve builds and verifies, but its
 // analytic surfaces have no tessellator, so it cannot be meshed or exported. A
-// body this evaluator did not build at all is also [ErrUnsupported].
+// prism whose section carries a free-form (NURBS) wall builds and reports its
+// Volume (docs/spline-design.md §10 P4b) but is [ErrUnsupported] here too:
+// free-form chording is its own later increment (§10 P5), and chordLoop
+// refuses it the same way it refuses every other staged walk kind. A body
+// this evaluator did not build at all is also [ErrUnsupported].
 func (b *Body) Tessellate(tol units.Value) (*Mesh, error) {
 	return b.TessellateContext(context.Background(), tol)
 }

@@ -451,9 +451,11 @@ func growAll(points []Point2, grow func(Point2)) {
 // validateMomentSegment normalizes one recorded segment and returns it beside
 // the walk's own start point — the anchor the integrator re-references its
 // moments to. A free-form segment resolves that point from its converted Bézier
-// chain rather than through walkOf, which still refuses free-form kinds: the
-// walk vocabulary carries no free-form state yet, and a free-form walk that
-// merely read as non-circular would be built as a straight line.
+// chain rather than through walkOf: the moments path needs that point before
+// any tier is decided, ahead of where walkOf's own free-form arm would even
+// run (validateFreeformMomentSegment), so it is read directly from the same
+// conversion the build's own walkKind == walkFreeform arm reads
+// (extrude.go's buildLoopSidesAs).
 func validateMomentSegment(segment CurveSegment, work *freeformWork) (CurveSegment, Point2, freeformPlan, error) {
 	segment, err := normalizeSegment(segment)
 	if err != nil {

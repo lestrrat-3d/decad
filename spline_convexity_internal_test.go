@@ -29,9 +29,11 @@ import (
 // below its stated degree, a RUN of consecutive collapsed spans, the joint a
 // subdivision creates, and a reversed recorded range over an unreversed chain.
 //
-// The certificate itself is staged (§10 P4b); what is testable today is the
-// exact-rational geometry it will read, which these tests compute through the
-// shipped conversion and the shipped ratPoly engine.
+// The certificate is wired into the build by extrude.go's buildLoopSidesAs
+// (§10 P4b); extrude_freeform_test.go's TestExtrudeFreeformR19RefusesTheBuild
+// pins two of these same nets as BUILD refusals through the public Extrude.
+// What these tests pin is the exact-rational geometry underneath it, computed
+// through the shipped conversion and the shipped ratPoly engine.
 
 // curvatureNumerator is now spline_convexity.go's own production function;
 // this file no longer defines a duplicate. Every test below calls it exactly

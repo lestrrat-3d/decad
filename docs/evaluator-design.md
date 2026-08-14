@@ -730,8 +730,8 @@ numbers.
 - **Free-form reach is decided.** `docs/spline-design.md` owns it: the
   whole-entities-only scope, the exactness tiers, the refusals, and the upstream
   ask that retires `EllipticalArcSeg` (§9 there). `FitSplineSeg` is Tier A
-  (Table F) and its own build-path refusal (R6) retires at §10 P4, not through
-  any upstream ask.
+  (Table F), and its own build-path refusal (R6) is retired (§10 P4b), not
+  through any upstream ask.
 - **Tapered extrude** (§5) needs an offset formulation that rejects
   self-intersecting offsets rather than producing them.
 - **Modify reach is decided.** `docs/modify-reach-design.md` extends increment

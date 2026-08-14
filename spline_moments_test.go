@@ -1355,10 +1355,13 @@ func TestDegenerateSplineRecordRefuses(t *testing.T) {
 	require.ErrorIs(t, err, decad.ErrDegenerate)
 }
 
-// A spline profile's moments now answer, so Extrude reaches its own side-face
-// build. It must refuse there rather than sweep the spline as a straight line —
-// the walk-kind discriminant exists to make that refusal explicit.
-func TestExtrudeSplineProfileRefusesAtSideFaces(t *testing.T) {
+// A closed-spline profile's moments now answer AND its side face now builds
+// (docs/spline-design.md §10 P4b, Table R row R6 retired): Extrude reaches the
+// walk-kind discriminant's free-form arm instead of refusing there, and the
+// resulting solid's Volume is the Tier A rational times the sweep height —
+// the same exact area TestClosedSplineExactArea proves, composed through the
+// unchanged height arithmetic every straight-walled prism already uses.
+func TestExtrudeClosedSplineProfileBuilds(t *testing.T) {
 	world := sketch.NewWorld()
 	s, err := world.CreateSketch(world.XY())
 	require.NoError(t, err)
@@ -1371,14 +1374,25 @@ func TestExtrudeSplineProfileRefusesAtSideFaces(t *testing.T) {
 	profiles := s.Profiles()
 	require.Len(t, profiles, 1)
 
+	record, _, err := decad.RecordProfile(s, profiles[0])
+	require.NoError(t, err)
+	area, err := record.Area()
+	require.NoError(t, err)
+
 	d := decad.New()
 	body, err := d.Extrude(s, profiles[0], &decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
-	require.Error(t, err)
-	require.Nil(t, body)
-	require.ErrorIs(t, err, decad.ErrUnsupported)
-	require.Contains(t, err.Error(), "free-form")
-	require.Empty(t, d.Bodies(), "a refused extrude registers no body")
-	require.Empty(t, d.Recipe().Steps, "a refused extrude records no step")
+	require.NoError(t, err)
+	require.NotNil(t, body)
+	require.NotEmpty(t, d.Bodies(), "a built extrude registers a body")
+	require.NotEmpty(t, d.Recipe().Steps, "a built extrude records a step")
+
+	volume, err := body.Volume()
+	require.NoError(t, err)
+	require.InDelta(t, area.Value.Mag()*10, volume.Value.Mag(), 1e-9)
+	// 293/18 is not representable in float64 (spline design §3), so the region
+	// area itself is Approximate — the volume it feeds inherits that bound
+	// even though the height (10 mm) is exact.
+	require.Greater(t, volume.Bound.Mag(), 0.0, "the region area's own rounding is never zero here")
 }
 
 // One public operation over one record spends ONE R7 work ceiling

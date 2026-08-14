@@ -15,8 +15,8 @@ import (
 // bound otherwise (§3). decad never re-runs sketch's interpolation solve; it
 // consumes the solved interpolant sketch already computed.
 //
-// A fit-spline section still cannot EXTRUDE — that build-time capability
-// (increment P4) remains staged and unaffected by this.
+// A fit-spline section can also EXTRUDE now (docs/spline-design.md §10 P4b);
+// this example stays scoped to the moments-only capability above.
 func Example_decad_fitSplineMoments() {
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())

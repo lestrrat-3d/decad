@@ -1113,9 +1113,9 @@ func freeformWallSection() ProfileRecord {
 // TestPrismWallFreeformSectionReadsUndecided pins PR 1
 // (docs/spline-design.md §8.1, Table R R9): a free-form boundary segment must
 // leave the wall survey undecided — Suspect through Verify — never return an
-// error out of prismWall. Reaching this through the public surface needs PR 3
-// (Extrude still refuses R6 on a free-form section today), so the fixture is
-// built and called directly, as the sub-tolerance-web test above already does.
+// error out of prismWall. Reaching this through the public surface now runs
+// through Extrude (§10 P4b); this test still calls prismWall directly, as the
+// sub-tolerance-web test above does, to isolate the survey from the build.
 func TestPrismWallFreeformSectionReadsUndecided(t *testing.T) {
 	pp := prismPayload{profile: freeformWallSection(), z0: 0, z1: 10}
 	out, err := prismWall(newWorkBudget(t.Context()), pp, 15*math.Pi/180)

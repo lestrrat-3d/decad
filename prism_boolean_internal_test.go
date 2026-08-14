@@ -18,11 +18,13 @@ import (
 // admitPrismPair/tryPrismBoolean so a miss is confirmed precisely, without
 // depending on whichever refusal the mesh path's own fallback happens to
 // produce for a given geometry (prism_boolean_test.go covers that richer,
-// public-API shape separately). A synthetic prismPayload is used where no
-// live body can carry the shape under test (G1, G4): no evaluator path
-// today builds a live prismPayload holding a free-form segment or lets an
-// operand answer with a non-prismPayload payload while still resembling
-// one, so the gate is exercised against a value built directly.
+// public-API shape separately). A synthetic prismPayload is used where a gate
+// is easiest isolated from one built directly (G1, G4): a live prismPayload
+// can hold a free-form segment via Extrude since §10 P4b, but G4's own
+// analytic-profile gate still refuses it (this file's own G4 tests cover
+// that), and no evaluator path lets an operand answer with a
+// non-prismPayload payload while still resembling one, so both gates are
+// exercised against a value built directly.
 
 // canonicalPrismFrame is the plane-local frame every synthetic payload below
 // starts from: literal-zero U/V/origin, so its own N() is exactly (0,0,1)
