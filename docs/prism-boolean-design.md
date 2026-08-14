@@ -440,8 +440,92 @@ regardless of who authored the input curves it was cut from.
 | `Cut` with a holed tool | G6, mesh path; the surviving material inside each tool hole is a separate lump, so it waits on the multi-lump prism payload of the row below, not on PR3 |
 | `Cut`/`Intersect` crossing sub-case reachable only through a coincident carrier named under one operand's own entity (§4.2's own further extension) | not yet built (`prism_boolean_crossing.go`), mesh path |
 | A holed `Cut` target whose tool does not clear it via clean nesting (the crossing classifier is scoped to hole-free operands on both sides, §4.2) | mesh path; the clean-nesting path above still covers a holed target whose tool does not touch it |
-| A disjoint-footprint `Union` (two separate lumps) | resolution fails to close one loop (§4.2), mesh path; a future multi-lump prism payload, not currently planned |
+| A selection covering two or more disjoint regions — a multi-region `Cut`/`Intersect` overlap, or a disjoint-footprint `Union` | no BODY is built: a `ProfileRecord` carries one outer loop, so resolution fails to close one (§4.2) and the pair takes the mesh path, waiting on a multi-lump prism payload that is not currently planned. `Verify`'s interference reading answers such a pair anyway, without a body, through §4.5's overlap-area reading |
 | A free-form (Tier A spline) segment that never touches the other operand | excluded by G4 today (whole-scene `TExact` gate, §3.1); worth revisiting once the two-operand scene construction is proven, since the segment itself would ride through untouched |
+
+### 4.5 The overlap-area reading: a volume, never a body
+
+`Verify`'s interference reading needs exactly two things from a pair: the
+verdict that the two solids provably overlap, and a bounded volume for that
+overlap (`docs/interference-design.md` §1, §6). It does not need a `Body`.
+Every limit §4.4 states for a multi-region `Cut`/`Intersect` is a limit on
+ASSEMBLING one — a `ProfileRecord` carries a single outer loop, so a selection
+covering two or more disjoint regions cannot become a section at all, and
+`chainPrismUnionSurvivors` correctly reports it unresolved. This reading
+answers the volume without assembling anything, so a pair whose 2D outlines
+overlap in several disjoint regions — a pair of meshing gears, which always
+engages several teeth at once — is measured rather than left undecided.
+
+The reading runs only from the read-only interference path, never from
+`performBoolean`. `Union`, `Cut` and `Intersect` keep the behaviour §4.4
+states, multi-region results included: a public boolean owes its caller a body,
+and this reading builds none. §13 records that asymmetry as a deliberate
+decision.
+
+**Entry.** Identical to `Intersect`'s own, and shared with it unchanged: G1–G4
+(`admitPrismPairBudget`), the trimmed-circular refusal
+(`prismProfileHasTrimmedCircularSource`), G6's hole-free arms, G5's Intersect
+z-relation (§3.2), the arrangement cap, the re-expression, `buildPrismScene`,
+§3.4's split-boundary reroute, `classifyPrismCells`, and `selectPrismCells`
+under `Intersect`'s own `keep`. The reading begins where `mergePrismCells`
+would have been called, and replaces only that tail.
+
+**Selection.** The measured set is the arrangement's own bounded cells that
+`classifyPrismCells` puts on BOTH operands' material sides. `sketch` returns
+the arrangement's full planar decomposition (§4.2), whose cells have disjoint
+interiors, so the selected set's total area is the sum of its cells' areas and
+no cell is counted twice. That disjointness is `sketch`'s own answer about its
+own arrangement, consumed as CLAUDE.md's carve-out allows — decad computes no
+containment, no crossing and no membership of its own. The existing
+reject-only structural checks inside `classifyPrismCells` are what falsify it:
+a cell reporting `Valid == false`, a cell carrying its own hole, an edge
+occurring on more than two cells, or an entity the scene did not create each
+leave the whole reading unresolved.
+
+**Per-cell measurement.** Each selected cell is already a closed directed walk
+in `sketch`'s own order, so it is recorded through the existing
+`recordEdge`/`edgeJoin`/`falsifyLoopJoins` sequence `mergePrismCells` already
+uses — minus the count, drop and chain steps, which exist only to build one
+loop out of many. §5's authentication applies with its claim 2 discharged for
+free, exactly as it is for the clean-nesting match: every recorded edge is one
+of `s.Profiles()`'s own results and nothing is assembled from them, so §6's
+build-time audit has no assembly to re-prove and does not run.
+
+The recorded cell becomes a `prismPayload` carrying the pair's own frame,
+placement and §3.2 Intersect z-interval, that cell's own §7 section
+displacement, and the pair's per-end axial displacement. Its volume is then
+`evalPrism`'s, unchanged — the same region integrals, the same
+`sectionDisplacementArea` charge over the cell's own perimeter, the same axial
+terms, the same `Exactness` rule. No bound mechanism is restated at a second
+site, which is what `bounds.go`'s one-helper-per-mechanism rule requires, and
+no new helper is introduced.
+
+**The sum.** The reading publishes the charged sum of the cells' volumes: the
+value is their float sum, whose own accumulated rounding `bounds.go`'s
+`exactSumRound` charges against the exact rational sum, and the bound is
+`absSumUpper` over the cells' own bounds and that rounding. `exactnessOf` then
+reads the summed bound, so the reading is `Exact` only where every cell is —
+which a crossing selection never is, since a genuine crossing splits at least
+one edge and §7's `δ_cut` is positive on every split fragment. A multi-region
+overlap therefore reads `Approximate` over a bound whose whole content is the
+cut parameters' own rounding.
+
+**What the reading declines.** An empty selection — the exactly-tangent pair,
+whose arrangement puts no cell on both operands' material sides — is
+unresolved: the reading answers nothing and the pair falls back to the mesh
+path, whose coplanar refusal leaves it undecided, unchanged. So is a selected
+cell whose own section the region integrals refuse as degenerate or
+unsupported. The reading never publishes a zero-volume overlap and never turns
+a contact into a row; `docs/interference-design.md` §6's positive-volume gate
+judges what it does publish, unchanged.
+
+**Refusals.** The reading crosses no point of no return: it assembles nothing,
+so §9's RB2–RB6 cannot arise, and every shape it does not cover is the silent
+fallback above. It returns only the errors every path already shares — the
+arrangement cap (RB7, `ErrUnsupported`) and the caller's own cancellation —
+plus RB8/RB9 on a cell `recordEdge` rejects or a cell loop that does not join,
+surfaced exactly as they are on the body path so a broken arrangement is never
+hidden as an undecided pair.
 
 ## 5. Authentication
 
@@ -629,6 +713,12 @@ what the per-operand split buys — every other term in this formula already
 keeps the two operands apart the same way, so a heavier walk charge on the
 operand that does NOT win the `max` never silently drops out.
 
+§4.5's overlap-area reading carries this same `δ` once per measured cell, with
+`δ_cut` taken over that cell's OWN surviving fragments rather than over a
+merged loop's. Nothing else in the formula changes for it, and the reading's
+charged sum of the cells' volumes adds only that sum's own accumulated
+rounding (`bounds.go`'s `exactSumRound`).
+
 It is **exactly zero in one decidable case**: both inputs carry zero
 displacement, operand B's composed map into A's frame is the identity in the
 stored floats (`frameB == frameA` and `xformB == xformA`, component-wise `==` —
@@ -757,7 +847,9 @@ Entry-gate misses (§3.1's G1–G6) and unresolved region-topology (§4.4) are
 the stage-2 refusals (§3.4), each stated once with its
 sentinel, decided by the existence test (modify §1: no such body exists is
 `ErrDegenerate`; a body this evaluator cannot build is `ErrUnsupported`) and
-whether it is permanent.
+whether it is permanent. §4.5's overlap-area reading assembles nothing, so only
+RB1, RB7, RB8 and RB9 can arise on it; RB2–RB6 are properties of an assembly it
+never performs.
 
 | Row | Condition | Sentinel | Permanent? |
 |---|---|---|---|
@@ -826,7 +918,7 @@ origin, exactly as it already must after a Fillet or Chamfer. Flagged in
 | Tessellation | The result is an ordinary `prismPayload` and `docs/tessellation-design.md` §5's prism contract applies, with §7's section displacement as a term of its own there: it displaces the analytic boundary a mesh approximates, so it does not ride in that contract's stored-coordinate rounding term, while the per-end axial displacement still does. Tessellation §5 reserves the section displacement from the requested tolerance before chording, refuses a tolerance it exhausts, and charges it to every face bound and to `areaSlack`, so chording plus that displacement stays within `tol`. The reservation covers no other term: the per-end axial displacement rides on top of it and can lift the published `Bound` above `tol`, which tessellation §1's Tolerance row allows. A mesh of an assembled body is `Exact`-trimmed only where every one of those displacements is zero. |
 | `ThroughAll` / `ThroughAllSide` | The extent reading states its interval over the RECORDED section and does not carry §7's section displacement, so at `δ > 0` the stop returns `ErrUnsupported`: it has no stated displacement to charge to the level it resolves. At `δ == 0` it reads the extent as before, beside whatever displacement that reading publishes on its own account. |
 | Clearance kernel | Unchanged where `δ == 0` — dispatches on payload class; `prismPayload` already has full analytic support (`clearance.go`'s coplanar `Plane`×`Plane` certificate, `offsetPair`, etc.). Where `δ > 0` the kernel builds no model for the body and the pair reads `Suspect`: every certificate it emits is an exact statement about the carriers it read, and a carrier the payload holds only within `δ` of the one it denotes cannot support one. Widening the kernel's own candidate intervals by `δ` is a separate piece of work, not this design's. |
-| Interference (`Verify`) | **Wired to the analytic path (PR4).** After its containment and represented-set-equality certificates, `interference.go`'s `measuredInterference` calls `evaluateAnalyticIntersect` (`boolean.go`) — a read-only twin of `performBoolean`'s analytic dispatch that runs `tryPrismBoolean`/`evalPrismContext` under a self-minted `StepRef` and never commits, so it consumes neither operand. An admitted pair's volume is measured directly from the built payload, still subject to §6's positive-volume gate (`docs/interference-design.md` §6); a pair the analytic path does not admit (`ok == false`) falls back unchanged to `evaluateBoolean`'s read-only mesh intersection, exactly as before this design existed. Since PR3, "admitted" includes a genuinely crossing coplanar pair resolved through `prism_boolean_crossing.go`, so `Verify` now proves a coplanar pair's overlap volume there too, not only for `Union`'s select-all path or `Cut`/`Intersect`'s clean-nesting sub-case. `docs/interference-design.md` §5.2 records the boundary this closes. |
+| Interference (`Verify`) | **Wired to the analytic path (PR4), over two read-only entry points tried in order.** After its containment and represented-set-equality certificates, `interference.go`'s `measuredInterference` calls `evaluateAnalyticIntersect` (`boolean.go`) — a read-only twin of `performBoolean`'s analytic dispatch that runs `tryPrismBoolean`/`evalPrismContext` under a self-minted `StepRef` and never commits, so it consumes neither operand — and publishes the built payload's own volume. A pair that twin does not admit (`ok == false`) next reaches §4.5's overlap-area reading (PR5), which measures a selection covering any number of disjoint regions and publishes a volume with no body at all; the two-step order is what keeps every pair the twin already answers byte-identical. A pair neither admits falls back unchanged to `evaluateBoolean`'s read-only mesh intersection, exactly as before this design existed. Both analytic answers are still subject to §6's positive-volume gate (`docs/interference-design.md` §6). "Admitted" covers `Union`'s select-all path, `Cut`/`Intersect`'s clean-nesting sub-case, the crossing sub-case (PR3), and since PR5 a multi-region coplanar overlap. `docs/interference-design.md` §5.2 records the boundary this closes. |
 | Surveys (wall/undercut/min-radius) | No new code — they dispatch on payload class, and support is immediate where `δ == 0`. The undercut reading is a normal-direction membership and is unaffected at any `δ`. The wall and min-radius readings publish the bound their own arithmetic proves at `δ == 0` — a candidate's own division or square root, never the section displacement — and are staged at `δ > 0`, answering undecided (`Suspect`, never a silent pass): `δ` is not a term either reading may absorb into that bound, because the wall reading is not a quantity a displacement widens by a fixed amount — its allowance-angle contact families (verification §6) can change membership under a boundary perturbation, so a proven displaced reading needs the survey's own theory extended, not a term added to a bound. |
 | `Verify`'s structural/tolerance gates | Structurally unchanged — `prismPayload` is valid by construction as always. The TOLERANCE gate anchors each reading against a reference the body's own geometry supplies, and at `δ > 0` it cannot read that geometry through the clearance kernel's model, which the row above declines to build. It reads the body's OWN recorded section instead (`gateWitnessPrism`), whose witnesses go to the same shared reader every arm publishes through: `pointSetDiameterWithBudget` states the winning pair's own distance computed over exact rationals and rounded toward zero, never the float scan's norm. The gate then shrinks that witness maximum by twice the SUM of `δ` and the axial displacement, rounding the shrunken value toward zero as well (`lowerDiameterForDisplacement`), which verification design §3 proves a lower bound on the denoted body's own diameter. A displaced body is therefore judged on the same terms as any other: a reading passes when its bound meets the tolerance and reports `Suspect` with a stated `Required` threshold when it does not. |
 | Export (STL/OBJ) | Reads `Tessellate`'s output. Its size-derived default tolerance is raised past `δ`, which tessellation reserves from the tolerance before chording, so a default export of an assembled body still writes its mesh rather than refusing. |
@@ -858,6 +950,21 @@ origin, exactly as it already must after a Fillet or Chamfer. Flagged in
   whose bounds speak only for the record. Every one of these stagings is
   invisible at `δ == 0`, which covers every body a caller draws and every
   union whose sources and re-expression carry zero displacement.
+- **§4.5's overlap-area reading answers a multi-region pair for `Verify`
+  alone; the public booleans keep refusing it.** `Union`/`Cut`/`Intersect` owe
+  their caller a `Body`, and a body covering several disjoint lumps needs the
+  multi-lump prism payload §4.4 still stages — changing `prismPayload`'s own
+  contract would ripple through topology, tessellation, every survey, the
+  clearance kernel, the modify ops and §4.1's equality certificate, which is
+  the opposite of the smallest sound extension. `Verify` needs no body, so it
+  is given the volume alone. The cost is a visible asymmetry: a pair `Verify`
+  reports an `Interference` for is a pair `Intersect` still routes to the mesh
+  path. Two alternatives were rejected. Extending `mergePrismCells` to emit
+  several loops cannot work at all — a `ProfileRecord` has one `Outer`.
+  Restating the volume composition inside the reading, rather than building one
+  `prismPayload` per cell and reusing `evalPrism`, would put a second owner on
+  `bounds.go`'s section-displacement and axial mechanisms, which that file's
+  own rule forbids.
 - **§3.1 G6 restricts `Union` to hole-free operands and `Cut` to a hole-free
   tool.** The union restriction is increment 1/2's, deferring the general
   per-cell classification (§4.2's crossing sub-case) to PR3 even though it is
@@ -918,6 +1025,12 @@ origin, exactly as it already must after a Fillet or Chamfer. Flagged in
    noting the prism case is superseded here. `docs/evaluator-design.md` §9
    gets a pointer to this document (§ done alongside this design, see the
    CLAUDE.md diff).
+5. **PR5 — §4.5's multi-region overlap-area reading.** The per-cell record,
+   per-cell `prismPayload`, `evalPrism` volume and charged sum, entered after
+   `evaluateAnalyticIntersect` returns `ok == false`, over the shared
+   admission/scene/classification of PR1–PR3. Nothing in the public
+   `Union`/`Cut`/`Intersect` surface changes, and no bound helper is added.
+   Tests: §15's multi-region rows.
 
 ## 15. Required tests
 
@@ -1019,6 +1132,34 @@ areas, residuals), never merely "it ran" — CLAUDE.md's own rule.
 - Replay: encode a recipe whose `OpUnion` step is an admitted pair, decode
   and evaluate it fresh, and assert the replayed body's `Exactness`/`Bound`
   match direct construction (recipe-replay-design §10.3's shape).
+- §4.5's multi-region reading, on a U-shaped prism crossed by a bar whose two
+  operands' outlines overlap in exactly two disjoint 12 mm² regions over a
+  5 mm sweep: `Verify` reports one `Interference` row whose volume is
+  120 mm³, `Approximate`, with a bound below 1e-9 mm³ — the cut parameters'
+  own rounding and nothing else. The same fixture asserts the report carries
+  no `unsupported_pair` diagnostic, which is what the mesh path emits for a
+  coplanar pair, so a regression back to the mesh path fails rather than
+  passing with a different number.
+- The single-region reading is untouched: two coplanar boxes overlapping in
+  one 25 mm² region over a 5 mm sweep still report 125 mm³ through
+  `evaluateAnalyticIntersect`, with the same bound they report before §4.5
+  exists — the assertion is on the volume and on the reading remaining
+  `Approximate` at the same magnitude, pinning the two-step order.
+- The exactly-tangent pair stays undecided: two coplanar prisms whose sections
+  meet along a shared wall but enclose no common area report no
+  `Interference` row and leave the report `Suspect`, with §4.5's reading
+  answering nothing rather than a zero-volume row.
+- A bored (faceted) pair stays undecided: G1 excludes a `facetedPayload`
+  operand, so the reading is never entered and the pair reports exactly what
+  it does today.
+- Cell-sum soundness against an independent answer: for a multi-region fixture
+  whose true overlap area is computable in closed form, assert the published
+  volume interval contains the exact rational answer taken over the operands'
+  own recorded floats (`math/big.Rat`), never a second float computation.
+- Cancellation and the cap: a context cancelled during the reading returns
+  `ctx.Err()` and leaves the document and both operands unchanged; a pair
+  whose scene exceeds `prismMaxArrangementSegments` reports `Suspect` through
+  the existing `ErrUnsupported` mapping, with no report-level error.
 
 ## Implementation notes
 
