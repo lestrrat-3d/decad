@@ -58,7 +58,7 @@ ordinary case, not a refusal; the result is a first-class `prismPayload` that
 Fillet/Chamfer/Shell, all three surveys, and the clearance kernel already
 handle wherever its section displacement is zero (§7). §8 states exactly which
 of the three consequences above disappear for the admitted class, which stand
-outside it, and what a nonzero displacement costs.
+outside it, and where a nonzero displacement's cost per consumer is decided.
 
 ## 2. Approach
 
@@ -748,7 +748,7 @@ needed for each.
 |---|---|---|
 | 1. No chaining | Removed. Result is `prismPayload`; no `meshBound` to compose, so no chord tolerance for the next pair to fall below. A chained boolean re-checks §3's gate on the new pair, carries the greater incoming displacement plus its new re-expression and cut displacement, and retains the greater incoming axial displacement at each end (§7). | Unchanged — general-position or non-analytic pairs still degrade per evaluator §9. |
 | 2. Coplanar contact refuses | Removed. Coplanar, co-directional contact is the admitted case's whole premise. | Unchanged — non-coplanar or non-prism coplanar contact (e.g. a prism against a revolve cap) stays on the mesh path. |
-| 3. Analytic identity dies | Removed where `δ == 0` — a merge that cut nothing. Result is `prismPayload`: Fillet/Chamfer/Shell, all three surveys, and the clearance kernel already dispatch on payload class and need zero new code for it. Where `δ > 0` — which every cut-bearing merge is, §7 — §12's own rows stage the readings that have no place to put a displacement, and those staged readings are the only ones that report `Suspect`. `Verify` DOES form a tolerance-gate reference for a displaced body: `gateWitnessPrism`/`fallbackGateDiameter` read the body's OWN recorded section, so every other reading is judged on its own bound like any body's. §12's "`Verify`'s structural/tolerance gates" row and the Implementation notes' §7 entry own that reading. Restoring the staged readings' reach for a displacement whose CARRIERS are exact is a separate design change, not a consequence this design removes. | Unchanged for mesh-path results — `facetedPayload` still permanently refuses modify ops (modify-reach SX9) and all three surveys. |
+| 3. Analytic identity dies | Removed where `δ == 0` — a merge that cut nothing. Result is `prismPayload`: Fillet/Chamfer/Shell, all three surveys, and the clearance kernel already dispatch on payload class and need zero new code for it. Where `δ > 0` — which every cut-bearing merge is, §7 — the result is a `prismPayload` still, and every consumer's reach there is §12's own rows to state, `Verify`'s tolerance gate included; the reference that gate anchors against is verification design §3's to define. Restoring the reach §12 stages, for a displacement whose CARRIERS are exact, is a separate design change, not a consequence this design removes. | Unchanged for mesh-path results — `facetedPayload` still permanently refuses modify ops (modify-reach SX9) and all three surveys. |
 
 ## 9. Refusals
 
