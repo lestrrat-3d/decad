@@ -344,7 +344,12 @@ disjoint regions, through that document's §4.5 overlap-area reading: the
 reading measures the arrangement cells both operands claim and sums their
 volumes, so it needs no single assembled section and no body, and a pair of
 meshing gears — whose overlap is always multi-region — is measured rather
-than deferred to a mesh refusal. A pair neither analytic path admits still
+than deferred to a mesh refusal, but only while both gears' sections are
+drawn already seated in their sketch: that document's §3.4 reroutes a
+genuinely crossing pair to the mesh path whenever one operand's re-expression
+into the other's frame is nonidentity, which is exactly what moving a mating
+body with `Body.Placed` produces, so a placed gear stays undecided here even
+though its outlines overlap. A pair neither analytic path admits still
 falls back to `evaluateBoolean`'s read-only mesh intersection unchanged, so
 this section still governs every coplanar pair the mesh path receives:
 non-prism payloads, non-coplanar or non-co-directional prisms, and every pair

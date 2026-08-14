@@ -222,7 +222,14 @@ silent fallback stops being available:
    range narrows its natural domain), or B's re-expression is nonidentity:
    any of the three can move a transverse cut by its displacement divided by
    the crossing sine, and this increment carries no certified
-   crossing-sensitivity bound. Every other capacity, arrangement,
+   crossing-sensitivity bound. **A `Body.Placed` operand is the ordinary way a
+   pair reaches this case**: `Placed`'s rotation, translation, or both leaves
+   `pa.xform != pb.xform`, so `newPrismReexpression` reports a nonidentity map
+   the moment one operand moved and the other did not — a caller who draws the
+   mating section already seated in its final position, rather than building
+   it elsewhere and moving it into place, keeps the re-expression the identity
+   and lets §4.2's crossing sub-case and §4.5's overlap-area reading answer.
+   Every other capacity, arrangement,
    candidate-validity, or assembly-audit problem is a genuine refusal (§9's
    table), **never** a reroute to the mesh path. An admitted-then-failed pair
    does not silently become an `Approximate` mesh result whose exactness claim
@@ -527,9 +534,19 @@ whose arrangement puts no cell on both operands' material sides — is
 unresolved: the reading answers nothing and the pair falls back to the mesh
 path, whose coplanar refusal leaves it undecided, unchanged. So is a selected
 cell whose own section the region integrals refuse as degenerate or
-unsupported. The reading never publishes a zero-volume overlap and never turns
-a contact into a row; `docs/interference-design.md` §6's positive-volume gate
-judges what it does publish, unchanged.
+unsupported. So, sharing the crossing sub-case's own selection
+(`resolvePrismCrossingCells`, `prism_boolean_crossing.go`), is any pair §3.4's
+split-boundary reroute catches: a genuinely overlapping pair whose arrangement
+would split at least one boundary, where either operand carries a prior
+section displacement or walk charge, or where B's re-expression into A's
+frame is nonidentity. A pair built entirely from bodies drawn already seated
+in their sketch clears this every time; a pair where one operand reached its
+overlapping position through `Body.Placed` — the ordinary way a caller moves
+a mating part into position — does not, and falls back to the mesh path's own
+coplanar refusal exactly like the exactly-tangent case above, undecided
+rather than measured. The reading never publishes a zero-volume overlap and
+never turns a contact into a row; `docs/interference-design.md` §6's
+positive-volume gate judges what it does publish, unchanged.
 
 **Refusals.** The reading crosses no point of no return: it assembles nothing,
 so §9's RB2–RB6 cannot arise, and every shape it does not cover is the silent

@@ -120,7 +120,11 @@ func (b *Body) Placed(t r3.Transform) (*Body, error) {
 // rigid motion t, retiring the receiver (core §8). The zero transform is
 // invalid and is ErrDegenerate; the step records the motion as a
 // TransformRecord. A canceled context stops the rebuild before the document
-// changes.
+// changes. A nonidentity t leaves this body's re-expression relative to an
+// untouched coplanar partner nonidentity too, which reroutes an otherwise
+// admitted crossing overlap away from the analytic interference reading
+// (docs/prism-boolean-design.md §3.4); a mating section drawn already seated
+// in its sketch keeps that reading available where a placed one does not.
 func (b *Body) PlacedContext(ctx context.Context, t r3.Transform) (*Body, error) {
 	if b == nil || b.doc == nil {
 		return nil, fmt.Errorf(`%w: the body belongs to no document`, ErrDegenerate)
