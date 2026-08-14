@@ -308,8 +308,10 @@ always forms a usable reference — its `payload.diameter` is guaranteed at buil
 `revolvePayload`, or an analytic-walled `prismPayload` whose two axial
 displacements are zero, reads it off the same analytic carrier the
 clearance kernel proves against (`newBodyGeomBudget`/`clearance_geom.go`) — a
-free-form-walled `prismPayload` has no arm there at all, whatever its axial
-displacements, and reads its diameter through the arm below instead. A
+free-form-walled `prismPayload`, which no public construction reaches yet and so
+is not one of those shipped bodies, has no arm there at all, whatever its axial
+displacements, and reads its diameter through the arm below when that arm can
+publish one, holding no reference at all when it withholds. A
 `prismPayload` with a
 nonzero `z0Delta` or `z1Delta` uses those held carrier witnesses too, but each
 witness can move by `axialDelta`; `bodyGateDiameter` returns the witness maximum
@@ -356,8 +358,8 @@ fixture's own true diameter.
 
 **A free-form-walled `prismPayload` — not reachable through the public
 surface yet (`docs/spline-design.md` §10) — misses the exact carrier model for
-the same structural reason, and gets an arm of its own rather than a
-reference-less `Suspect`.** That model has no arm for a `NURBSSurface`
+the same structural reason, and gets an arm of its own to try rather than an
+automatic reference-less `Suspect`.** That model has no arm for a `NURBSSurface`
 side face any more than it has one for the `sectionDelta` case, and
 `gateWitnessPrism`'s own displaced-section arm answers only for a section a
 displacement separates from its denotation, not for a wall shape the reader
@@ -375,8 +377,20 @@ body's true diameter and never overstate it — the same construction
 (`verify.go`), differing only in what it earns: a loft body's boundary is a
 polyhedron, so its vertex maximum IS the true diameter, while a curved wall's
 farthest pair can sit between two sampled points, which is exactly why this
-arm claims a bound and not the diameter. The set is never empty for a closed
-section, so this arm always yields a diameter.
+arm claims a bound and not the diameter.
+
+**Publishing is conditional, and withholding is the only alternative.** This
+arm yields a diameter only when its own witness conversion and the shared
+reader both succeed. On any other path it withholds one outright — it never
+substitutes a weaker reference, and it never rounds a partial witness set into
+an answer. A withheld diameter is not rescued below either: `gateWitnessPrism`
+has no arm for a `prismPayload` whose own `sectionDelta` is zero, so the body
+ends with no tolerance reference at all and its bounded readings read
+`Suspect`. That is the sound direction to fail in — an absent reference
+tightens nothing and admits nothing — but it is a real outcome, not one this
+arm's existence rules out. `freeformSectionGateDiameter`'s own doc comment
+(`verify.go`) owns the complete list of the paths it withholds on; it is
+deliberately not restated here.
 
 Those span endpoints are read off `docs/spline-design.md` §5.1's own
 exact-rational Bézier conversion, for every Tier A kind alike. A

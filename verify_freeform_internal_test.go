@@ -11,7 +11,7 @@ import (
 )
 
 // This file pins docs/verification-design.md's free-form tolerance-gate
-// diameter arm (:339-360): freeformSectionGateDiameter, tried by
+// diameter arm: freeformSectionGateDiameter, tried by
 // bodyGateDiameter ahead of fallbackGateDiameter whenever the exact carrier
 // model refuses a prismPayload. Every fixture is a synthetic prismPayload
 // built directly — the pattern prism_boolean_internal_test.go already uses —
@@ -228,6 +228,50 @@ func TestBodyGateDiameterFreeformArmDeclinesOnCollapsedSpan(t *testing.T) {
 	_, ok, err := bodyGateDiameter(t.Context(), &Body{payload: pp})
 	require.NoError(t, err)
 	require.False(t, ok, "a curve this arm cannot certify must never publish a diameter")
+}
+
+// Refusal: a withheld answer is NOT rescued downstream. Both refusal shapes —
+// a free-form section the arm cannot certify (R14's collapsed control net) and
+// a displacement shrink that collapses the reading to non-positive — reach
+// fallbackGateDiameter, which has no arm for a prismPayload whose sectionDelta
+// is zero, so the body ends with no gate diameter at all.
+func TestBodyGateDiameterFreeformArmDeclineReachesFallbackWithNoArm(t *testing.T) {
+	collapsedSpan := prismPayload{
+		profile: ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{
+			SplineSeg{
+				Control: []Point2{{U: 5, V: 5}, {U: 5, V: 5}, {U: 5, V: 5}, {U: 5, V: 5}},
+				TStart:  0, TEnd: 1,
+			},
+		}}},
+		frame: identityFrame(t), z0: 0, z1: 5, xform: r3.Identity(),
+	}
+
+	collapsedShrink := freeformTrianglePayload(t, 0, 10)
+	baseD, ok, err := bodyGateDiameter(t.Context(), &Body{payload: collapsedShrink})
+	require.NoError(t, err)
+	require.True(t, ok)
+	collapsedShrink.z0Delta = baseD
+
+	for name, pp := range map[string]prismPayload{
+		"uncertifiable curve": collapsedSpan,
+		"collapsed shrink":    collapsedShrink,
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, armOK, err := freeformSectionGateDiameter(t.Context(), pp)
+			require.NoError(t, err)
+			require.False(t, armOK, "the arm must withhold on this path")
+
+			body := &Body{payload: pp}
+			_, fallbackOK, err := fallbackGateDiameter(newWorkBudget(t.Context()), body)
+			require.NoError(t, err)
+			require.False(t, fallbackOK,
+				"the fallback a withheld answer falls through to has no arm for a zero-sectionDelta prism")
+
+			_, ok, err := bodyGateDiameter(t.Context(), body)
+			require.NoError(t, err)
+			require.False(t, ok, "the body ends with no gate diameter at all")
+		})
+	}
 }
 
 // Refusal: walkEndBoundAllow (bounds.go) is the mechanism behind every

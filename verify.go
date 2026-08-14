@@ -1303,14 +1303,17 @@ func (in pairToleranceInputs) lengthReference(value float64) (float64, bool) {
 // interference.go trust that model for containment and contact proofs, not
 // only for a diameter. A miss there is not necessarily a body with no usable
 // diameter: a free-form-walled prismPayload — the one shipped payload whose
-// side face the clearance kernel's exact model has no arm for at all — reads
+// side face the clearance kernel's exact model has no arm for at all — can read
 // its diameter through freeformSectionGateDiameter's own witness set of
 // analytic vertices and free-form span endpoints instead, tried first because
-// its zero sectionDelta would otherwise read as "no arm" below. Every other
-// miss falls to fallbackGateDiameter, which covers the payloads it does not
-// (cup, cap-loop chamfer, and a prismPayload whose own sectionDelta is
+// its zero sectionDelta would otherwise read as "no arm" below. That arm
+// WITHHOLDS its answer on each of the paths its own doc comment lists, and a
+// body it withholds from falls through exactly like any other miss. Every miss
+// reaches fallbackGateDiameter, which covers the payloads the exact model does
+// not (cup, cap-loop chamfer, and a prismPayload whose own sectionDelta is
 // nonzero) with a bound that is sound for THIS gate without being eligible
-// for that stronger trust.
+// for that stronger trust, and answers for nothing else — so a free-form-walled
+// prismPayload whose own arm declined ends with no gate diameter at all.
 //
 // A prism with nonzero z0Delta or z1Delta keeps the same carrier model, but
 // each held witness can move by axialDelta. The maximum held pair distance can
@@ -1455,11 +1458,34 @@ func lowerDiameterForDisplacement(d, displacement float64) (float64, bool) {
 // other callers already use: every witness pair is presumed to move by up to
 // that much, so the subtracted amount is twice the WORST one, never a mix.
 //
-// ok is false when the profile carries no free-form segment at all — an
-// ordinary prism reaches its diameter through the exact carrier model, or
-// through gateWitnessPrism's own displaced-section arm, instead — or when a
-// witness's own endpoint bound cannot be derived (walkEndBoundAllow's +Inf),
-// since an absent bound must never read as a small one.
+// This arm PUBLISHES only when its own witness conversion and the shared reader
+// both succeed; otherwise it withholds the diameter outright and never
+// substitutes a weaker one. This comment owns the complete list of the paths it
+// withholds on — docs/verification-design.md §3 states the contract and points
+// here rather than keeping a second copy:
+//
+//   - the profile carries no free-form segment at all, so this arm has nothing
+//     to read the exact carrier model or gateWitnessPrism's own
+//     displaced-section arm does not already read;
+//   - a recorded segment normalizeSegment refuses, or walkOf refuses (an
+//     R-table sentinel), so the section never becomes a walk at all;
+//   - a free-form walk holds an empty Bézier span, or a span endpoint with no
+//     finite float form (point2Of), so no witness can be placed on that curve;
+//   - a witness's own endpoint bound cannot be derived (walkEndBoundAllow's
+//     +Inf), since an absent bound must never read as a small one — this covers
+//     an analytic walk's own two endpoints and a free-form span's alike;
+//   - the shared reader declines the witness maximum (pointSetDiameterWithBudget
+//     answering ok=false: an empty set, a pair distance that is not a usable
+//     magnitude, or a winning pair with no exact rational form);
+//   - the displacement subtraction collapses the reading to non-positive
+//     (lowerDiameterForDisplacement).
+//
+// A withheld answer is not rescued downstream. bodyGateDiameter falls through to
+// fallbackGateDiameter, whose gateWitnessPrism has no arm for a prismPayload
+// whose sectionDelta is zero, so the body ends with NO gate diameter and its
+// bounded readings read Suspect. That is the sound direction to fail in — an
+// absent reference admits nothing — but it is a real outcome of this arm, not
+// one the arm's existence rules out.
 //
 // Every phase of this arm is cancellable, because neither of its two phases is
 // bounded by a work counter of its own: the segment loop polls ctx before each
@@ -1557,10 +1583,12 @@ func freeformSectionGateDiameter(ctx context.Context, pp prismPayload) (float64,
 // (cupPayload, capBlendPayload, and a prismPayload carrying a section
 // displacement — verification design §3's "usable finite, non-negative body
 // diameter", never a box diagonal, document scale or zero). A free-form-walled
-// prismPayload misses that same exact carrier too, but never reaches here:
-// bodyGateDiameter tries freeformSectionGateDiameter for it first, because its
-// own sectionDelta is zero — the one value gateWitnessPrism below reads as "no
-// arm at all" for a prismPayload.
+// prismPayload misses that same exact carrier too, and bodyGateDiameter tries
+// freeformSectionGateDiameter for it ahead of this function — but when that arm
+// withholds its diameter the body DOES reach here, and this function has no arm
+// for it either: its own sectionDelta is zero, the one value gateWitnessPrism
+// below reads as "no arm at all" for a prismPayload. Such a body ends with no
+// gate diameter and its bounded readings read Suspect.
 //
 // Each payload earns a witness prism for its own reason, and gateWitnessPrism's
 // doc comment states each arm separately rather than pooling them behind one
@@ -1649,11 +1677,11 @@ func fallbackGateDiameter(budget *workBudget, body *Body) (float64, bool, error)
 // newBodyGeomBudget, which is why it never reaches this fallback) and an
 // analytic-walled prismPayload whose section is its own denotation (the same
 // reason). A free-form-walled prismPayload's own section is its denotation
-// too, so this switch answers false for it exactly as it does for the
-// analytic case — but that answer is never read: bodyGateDiameter routes a
-// free-form-walled prismPayload through freeformSectionGateDiameter before
-// fallbackGateDiameter, and calls this function only when that arm has
-// already declined.
+// too, so this switch answers false for it exactly as it does for the analytic
+// case: bodyGateDiameter routes a free-form-walled prismPayload through
+// freeformSectionGateDiameter before fallbackGateDiameter, and calls this
+// function only when that arm has already declined — at which point this false
+// answer is what leaves the body with no gate diameter at all.
 //
 // The three arms read different geometry and earn a witness for different
 // reasons.
