@@ -1443,6 +1443,18 @@ func lowerDiameterForDisplacement(d, displacement float64) (float64, bool) {
 // through gateWitnessPrism's own displaced-section arm, instead — or when a
 // witness's own endpoint bound cannot be derived (walkEndBoundAllow's +Inf),
 // since an absent bound must never read as a small one.
+//
+// Every phase of this arm is cancellable, because neither of its two phases is
+// bounded by a work counter of its own: the segment loop polls ctx before each
+// segment, and the witness maximum polls it through pointSetDiameterContext,
+// the same reader the loftPayload arm above uses. That second poll is the one
+// that matters for cost — the witness count grows with the profile's segment
+// count (four points per segment, bounded only by recipe_decode.go's own
+// MaxSegments ceiling), and the maximum is quadratic in it, so an unpolled scan is by
+// far the longest thing a cancelled Verify could be left waiting on here. The
+// resulting error is returned AS an error: cancellation is never folded into
+// this arm's structural (0, false, nil) answer, which states only that the
+// recorded section gives this arm nothing to read.
 func freeformSectionGateDiameter(ctx context.Context, pp prismPayload) (float64, bool, error) {
 	work := newFreeformWork()
 	sawFreeform := false
@@ -1511,7 +1523,10 @@ func freeformSectionGateDiameter(ctx context.Context, pp prismPayload) (float64,
 		return 0, false, nil
 	}
 
-	d, ok := pointSetDiameter(pts)
+	d, ok, err := pointSetDiameterContext(ctx, pts)
+	if err != nil {
+		return 0, false, err
+	}
 	if !ok {
 		return 0, false, nil
 	}

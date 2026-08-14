@@ -1,6 +1,7 @@
 package decad
 
 import (
+	"context"
 	"math"
 	"testing"
 
@@ -276,4 +277,93 @@ func TestBodyGateDiameterFreeformArmSkipsSectionDisplacedPrism(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, ok)
 	require.Equal(t, want, got, "a section-displaced analytic prism's reading must be unchanged, bit for bit")
+}
+
+// freeformLargeProfile is the same free-form NURBS bump the triangle fixture
+// records — so the arm answers — closed by a polyline of `lines` chords around
+// the lower half of the circle of radius 5 centred at (5,0). It exists to make
+// the arm's two phases differ in cost by orders of magnitude: the segment walk
+// is linear in the segment count, while the witness maximum it feeds is
+// quadratic in it (four witness points per segment), which is why the maximum
+// has to poll the caller's context on its own account.
+func freeformLargeProfile(lines int) ProfileRecord {
+	segs := []CurveSegment{
+		NURBSSeg{
+			Degree:  1,
+			Control: []Point2{{U: 0, V: 0}, {U: 5, V: 4}, {U: 10, V: 0}},
+			Weights: []float64{1, 1, 1},
+			Knots:   []float64{0, 0, 0.5, 1, 1},
+			TStart:  0, TEnd: 1,
+		},
+	}
+	at := func(i int) Point2 {
+		if i == lines {
+			return Point2{U: 0, V: 0}
+		}
+		th := math.Pi * float64(i) / float64(lines)
+		return Point2{U: 5 + 5*math.Cos(th), V: -5 * math.Sin(th)}
+	}
+	for i := range lines {
+		segs = append(segs, LineSeg{Start: at(i), End: at(i + 1), TStart: 0, TEnd: 1})
+	}
+	return ProfileRecord{Outer: LoopRecord{Segments: segs}}
+}
+
+// cancelAfterPolls is a context whose cancellation lands at a CHOSEN poll: the
+// first `pass` calls to Err report a live context, every later one reports
+// cancellation. It makes "which phase observed the cancellation" a
+// deterministic assertion instead of a race against a wall clock.
+type cancelAfterPolls struct {
+	//nolint:containedctx // a test double standing in for a context, not a struct carrying one through an API.
+	context.Context
+
+	pass  int
+	polls int
+}
+
+func (c *cancelAfterPolls) Err() error {
+	c.polls++
+	if c.polls <= c.pass {
+		return nil
+	}
+	return context.Canceled
+}
+
+// 7. Cancellation: the witness maximum is the arm's quadratic phase, and it
+// polls the caller's context on its own account. Cancellation landing after
+// the segment walk has finished — the one moment an unpolled maximum would sit
+// through a multi-million-pair scan — is reported AS an error, never folded
+// into the arm's structural "no arm" answer.
+func TestBodyGateDiameterFreeformArmCancelsDuringWitnessMaximum(t *testing.T) {
+	pp := prismPayload{
+		profile: freeformLargeProfile(800),
+		frame:   identityFrame(t),
+		z0:      0, z1: 10,
+		xform: r3.Identity(),
+	}
+	segments := len(pp.profile.Outer.Segments)
+
+	// The fixture really does answer, so the cancelled run below cannot pass
+	// by declining: its witnesses span (0,0,0) to (10,0,10), sqrt(200) apart.
+	d, ok, err := freeformSectionGateDiameter(t.Context(), pp)
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.InDelta(t, math.Sqrt(200), d, 1e-9)
+
+	// One poll per segment, then the maximum's own first budget poll.
+	ctx := &cancelAfterPolls{Context: t.Context(), pass: segments}
+	d, ok, err = freeformSectionGateDiameter(ctx, pp)
+	require.ErrorIs(t, err, context.Canceled, "cancellation must propagate as an error, not as (0, false, nil)")
+	require.False(t, ok)
+	require.Zero(t, d)
+	require.Equal(t, segments+1, ctx.polls,
+		"the witness maximum must abort at its first poll, not run its full pairwise scan")
+
+	// The same answer reaches bodyGateDiameter's caller: a cancelled Verify
+	// never reads this arm's cancellation as a body with no usable diameter.
+	cancelled, stop := context.WithCancel(t.Context())
+	stop()
+	_, ok, err = bodyGateDiameter(cancelled, &Body{payload: pp})
+	require.ErrorIs(t, err, context.Canceled)
+	require.False(t, ok)
 }
