@@ -306,7 +306,7 @@ always forms a usable reference — its `payload.diameter` is guaranteed at buil
 (`boolean_body.go:757-778`). For the other shipped payloads `bodyGateDiameter`
 (`verify.go`) forms a body diameter too, through one of two carrier models. A
 `revolvePayload`, or an analytic-walled `prismPayload` whose two axial
-displacements are zero, reads it exactly off the same analytic carrier the
+displacements are zero, reads it off the same analytic carrier the
 clearance kernel proves against (`newBodyGeomBudget`/`clearance_geom.go`) — a
 free-form-walled `prismPayload` has no arm there at all, whatever its axial
 displacements, and reads its diameter through the arm below instead. A
@@ -315,6 +315,24 @@ nonzero `z0Delta` or `z1Delta` uses those held carrier witnesses too, but each
 witness can move by `axialDelta`; `bodyGateDiameter` returns the witness maximum
 minus `2*axialDelta`, rounded toward zero. That is a certified LOWER bound on
 the denoted body's diameter, so it can only tighten the gate.
+
+**Every arm publishes through one witness-maximum reader, and that reader
+rounds toward zero.** `pointSetDiameterWithBudget` (`verify.go`) is the single
+site each arm below — the exact carrier model, the `loftPayload` arm, the
+free-form arm, `fallbackGateDiameter`, and the cached `payload.diameter` a
+faceted build stores — hands its witness set to, and what it publishes is the
+winning pair's distance computed over exact rationals and rounded toward zero,
+never the float scan's own norm. The scan selects the pair; it does not state
+the value. That split is what makes "certified LOWER bound" true of the number
+a caller sees rather than only of the witness set behind it: a float
+`Sub`/`Len` rounds outward as easily as inward — a 6×6×7 box's corner pair
+reads `11.000000000000002` against an exact `√121 = 11` — and a reading one ulp
+ABOVE the body's own diameter loosens the gate in exactly the direction §3
+forbids. The charge cannot be carried as an outward allowance either, because
+this reading is one number and not an interval, so it lands inside the value.
+Whichever pair the scan picks, the published number is a real pair distance
+rounded down and so is at or below the exact maximum; a near-tie the float
+rounding mis-orders costs tightness, never soundness.
 
 **A `prismPayload` whose own `sectionDelta` is nonzero**
 (`docs/prism-boolean-design.md` §7's re-expressed or cut section, e.g. the
@@ -350,7 +368,8 @@ two endpoints at both cap heights. A Bézier interpolates its ends exactly, so
 each span endpoint is a point of the recorded curve itself
 (`docs/spline-design.md` §6.2), and every point in the set is a real point of
 the body's own boundary. Every distance the maximum ranges over is therefore
-realized between two real body points, so the reading can only UNDERSTATE the
+realized between two real body points, and the shared reader publishes that
+maximum rounded toward zero, so the reading can only UNDERSTATE the
 body's true diameter and never overstate it — the same construction
 `bodyGateDiameter` already runs over a `loftPayload`'s own held vertex set
 (`verify.go`), differing only in what it earns: a loft body's boundary is a
@@ -425,9 +444,10 @@ but a *reading* of it, taken through the identical witness maximum a shipped
 `prismPayload` already reads its own diameter through: `addPrismFaces` emits
 only two witnesses per circular wall — the mid-angle point at mid-height, and
 `th0` at `z0` — `region2.samples` adds each cap arc's own `th0` and
-mid-angle, and `pointSetDiameter` maxes over that sparse set. The reading is
-exact exactly when the body's farthest pair lands on one of those three
-sampled angles (`th0`, mid-angle, `th1`) of each circular wall — guaranteed
+mid-angle, and `pointSetDiameter` maxes over that sparse set. The reading
+ranges over the body's own farthest pair — and then publishes it rounded
+toward zero, the shared reader's rule above — exactly when that pair lands on
+one of those three sampled angles (`th0`, mid-angle, `th1`) of each circular wall — guaranteed
 for an all-line section (the diameter is realized at vertices, all sampled),
 for a full circle (the two samples are antipodal), and for the arc-plus-chord
 family at or below **180°** of sweep (the diameter is realized at the arc
@@ -917,8 +937,9 @@ topological boundary-loop vertices and can omit the pair that realizes the held
 mesh's diameter. Compute the max pair directly or through an exact convex-hull
 reduction, cache it with the immutable faceted payload, and recompute it from the
 transformed payload vertices when a placement rebuilds the body, polling the
-placement context through the scan. This is the held polyhedron's exact diameter
-and may understate a curved body's true diameter by at most the chord error. A
+placement context through the scan. This is the held polyhedron's own diameter,
+published rounded toward zero by §3's shared reader, and it may understate a
+curved body's true diameter by the chord error on top of that step. A
 floor is a magnitude, not an answer, and a per-mille
 error in it moves no verdict. A
 surface with no edges at all — a sphere — gives its area a `Quantum` of zero,

@@ -62,7 +62,9 @@ type facetedPayload struct {
 	// diameter is the held Faceted body's own diameter for Verify's
 	// tolerance gate. It is computed from every payload vertex, including
 	// interior tessellation vertices that have no B-rep Vertex, and rebuilt
-	// after every placement.
+	// after every placement. It is read through the one witness-maximum reader
+	// every gate diameter is published through (pointSetDiameterWithBudget,
+	// verify.go), so it sits at or below the held boundary's own diameter.
 	diameter float64
 
 	xform r3.Transform

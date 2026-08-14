@@ -3,6 +3,7 @@ package decad
 import (
 	"context"
 	"math"
+	"math/big"
 	"testing"
 
 	"github.com/lestrrat-3d/r3"
@@ -102,6 +103,13 @@ func TestBodyGateDiameterFreeformArmAnswersHandComputedMaximum(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, ok, "a free-form-walled prismPayload must read a diameter through its own arm")
 	require.InDelta(t, math.Sqrt(200), d, 1e-9)
+
+	// sqrt(200) is not representable, so the arm's own certification is
+	// decided against the exact 200 in math/big: the published value squares
+	// to at most 200, and the next float up squares past it.
+	requireCertifiedDiameter(t, d, big.NewRat(200, 1))
+	require.Greater(t, math.Sqrt(200), d,
+		`the nearest float64 to sqrt(200) sits above it, so the certified reading is the one below`)
 }
 
 // 2. The arm can only understate the true diameter, never overstate it: the
