@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"math/big"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -1289,7 +1290,10 @@ func (in pairToleranceInputs) lengthReference(value float64) (float64, bool) {
 }
 
 // bodyGateDiameter returns the body's own diameter, never a document scale or
-// a bounds-box diagonal. A Faceted body's cached value covers every held
+// a bounds-box diagonal — and returns it as a value proven to be at or below
+// that diameter, since every arm below publishes through
+// pointSetDiameterWithBudget, whose own doc comment owns that rule.
+// A Faceted body's cached value covers every held
 // payload vertex, including vertices absent from the B-rep boundary loops. The
 // analytic carrier model is built through the shared work budget (§7.2), so a
 // cancelled Verify observes cancellation during the build instead of waiting for
@@ -1298,10 +1302,18 @@ func (in pairToleranceInputs) lengthReference(value float64) (float64, bool) {
 // an exact restatement of the shipped boundary, because clearance.go and
 // interference.go trust that model for containment and contact proofs, not
 // only for a diameter. A miss there is not necessarily a body with no usable
-// diameter: fallbackGateDiameter covers the payloads it does not (cup,
-// cap-loop chamfer, and a prismPayload whose own sectionDelta is nonzero) with
-// a bound that is sound for THIS gate without being eligible for that stronger
-// trust.
+// diameter: a free-form-walled prismPayload — the one shipped payload whose
+// side face the clearance kernel's exact model has no arm for at all — can read
+// its diameter through freeformSectionGateDiameter's own witness set of
+// analytic vertices and free-form span endpoints instead, tried first because
+// its zero sectionDelta would otherwise read as "no arm" below. That arm
+// WITHHOLDS its answer on each of the paths its own doc comment lists, and a
+// body it withholds from falls through exactly like any other miss. Every miss
+// reaches fallbackGateDiameter, which covers the payloads the exact model does
+// not (cup, cap-loop chamfer, and a prismPayload whose own sectionDelta is
+// nonzero) with a bound that is sound for THIS gate without being eligible
+// for that stronger trust, and answers for nothing else — so a free-form-walled
+// prismPayload whose own arm declined ends with no gate diameter at all.
 //
 // A prism with nonzero z0Delta or z1Delta keeps the same carrier model, but
 // each held witness can move by axialDelta. The maximum held pair distance can
@@ -1314,16 +1326,20 @@ func (in pairToleranceInputs) lengthReference(value float64) (float64, bool) {
 // never an envelope: an unplaced loft's every vertex is exact
 // (docs/loft-design.md §5), the
 // boundary is a polyhedron, and a convex-hull diameter is realized at
-// vertices, so this is the TRUE diameter rather than a bound on it — the
-// strongest arm in this function, ahead of the exact carrier model that does
-// not yet cover this payload class. That holds whenever the payload's delta is
-// zero, which loft_build.go decides by an exact identity-transform comparison
-// and never by a tolerance, and this arm then reports the held reading
-// UNCHANGED: no subtraction, no directed rounding, so an unplaced loft's
-// reference stays bit-identical to the one §12 PR 1 published. Rounding a zero
-// allowance outward would move a proven-exact reading in exchange for nothing,
-// which is why capBlendPayload.extentBoundedAlong's own `outward` helper
-// (capblend.go) keeps a zero-displacement candidate exact too.
+// vertices, so the vertex set's own maximum IS the body's true diameter rather
+// than a bound on it — the strongest arm in this function, ahead of the exact
+// carrier model that does not yet cover this payload class. That holds whenever
+// the payload's delta is zero, which loft_build.go decides by an exact
+// identity-transform comparison and never by a tolerance, and this arm then
+// reports the shared reader's answer UNCHANGED: no subtraction and no rounding
+// of its own. What that answer is, is the reader's to state — the largest
+// float64 at or below that true diameter, since the reader publishes every
+// witness maximum rounded toward zero (pointSetDiameterWithBudget) — so this
+// arm publishes the tightest lower bound a float64 can carry on a diameter
+// that is exact as a quantity. Subtracting a zero allowance on top of it would
+// move that reading in exchange for nothing, which is why
+// capBlendPayload.extentBoundedAlong's own `outward` helper (capblend.go)
+// keeps a zero-displacement candidate untouched too.
 //
 // A PLACED loft's held vertices are no
 // longer provably exact (§12 PR 2a): the true diameter can differ from the
@@ -1375,6 +1391,11 @@ func bodyGateDiameter(ctx context.Context, body *Body) (float64, bool, error) {
 		}
 		return d, ok, nil
 	}
+	if payload, isPrism := body.payload.(prismPayload); isPrism {
+		if d, ok, err := freeformSectionGateDiameter(ctx, payload); ok || err != nil {
+			return d, ok, err
+		}
+	}
 	return fallbackGateDiameter(budget, body)
 }
 
@@ -1394,11 +1415,180 @@ func lowerDiameterForDisplacement(d, displacement float64) (float64, bool) {
 	return d, d > 0 && usableMagnitude(d)
 }
 
+// freeformSectionGateDiameter is bodyGateDiameter's arm for a free-form-walled
+// prismPayload (docs/verification-design.md §3): the clearance kernel's exact
+// carrier model has no arm for a NURBSSurface side face any more than it has
+// one for a displaced section, and gateWitnessPrism gives this payload none
+// either, because its own sectionDelta reads zero — the one value that arm
+// treats as "the section is already its own denotation, read newBodyGeomBudget
+// instead". A free-form wall is not read through either model, so this
+// function builds its own reference.
+//
+// It reports a certified LOWER bound on the body's own diameter: the maximum
+// distance over a finite set of points KNOWN TO LIE ON the body — every
+// analytic walk's own two endpoints, and every free-form span's own two
+// endpoints (docs/spline-design.md §5.1's exact-rational Bézier conversion,
+// never the recorded control net, and for a FitSplineSeg never the raw
+// recorded Fit points, which are neither the converted chain's own ends nor a
+// hull the curve stays inside) — at both cap heights. A Bézier interpolates
+// its end control points exactly, so every span endpoint is a real point of
+// the curve itself, and every distance the maximum ranges over is therefore
+// realized between two real body points.
+//
+// That is the witness set's own half of the claim, and it is only half: a
+// maximum over real body points is at or below the true diameter as a
+// QUANTITY, while what this arm publishes is a float64. The other half belongs
+// to the shared reader — pointSetDiameterWithBudget computes the winning pair's
+// distance over exact rationals and rounds it toward zero — so the published
+// number is at or below that maximum too. Composed, the reading can only
+// UNDERSTATE the true diameter and never overstate it, exactly the direction
+// §3 requires; the displacement subtracted below only widens the
+// understatement further.
+//
+// The displacement subtracted from that maximum composes three terms, none of
+// them a certificate claim: the section's own sectionDelta (zero for a
+// free-form wall in practice, since the analytic prism-boolean reduction
+// never admits one — docs/prism-boolean-design.md's G4 — but read here rather
+// than assumed), the payload's own axialDelta, and the widest per-witness
+// endpoint bound walkEndBoundAllow reads off whichever walk produced it — an
+// analytic walk's recorded-coordinate bound (zero for a whole segment,
+// nonzero for a trimmed one) or a free-form span's own conversion rounding.
+// Composing the widest witness bound as one uniform displacement, rather than
+// a bound per point, is the same convention lowerDiameterForDisplacement's
+// other callers already use: every witness pair is presumed to move by up to
+// that much, so the subtracted amount is twice the WORST one, never a mix.
+//
+// This arm PUBLISHES only when its own witness conversion and the shared reader
+// both succeed; otherwise it withholds the diameter outright and never
+// substitutes a weaker one. This comment owns the complete list of the paths it
+// withholds on — docs/verification-design.md §3 states the contract and points
+// here rather than keeping a second copy:
+//
+//   - the profile carries no free-form segment at all, so this arm has nothing
+//     to read the exact carrier model or gateWitnessPrism's own
+//     displaced-section arm does not already read;
+//   - a recorded segment normalizeSegment refuses, or walkOf refuses (an
+//     R-table sentinel), so the section never becomes a walk at all;
+//   - a free-form walk holds an empty Bézier span, or a span endpoint with no
+//     finite float form (point2Of), so no witness can be placed on that curve;
+//   - a witness's own endpoint bound cannot be derived (walkEndBoundAllow's
+//     +Inf), since an absent bound must never read as a small one — this covers
+//     an analytic walk's own two endpoints and a free-form span's alike;
+//   - the shared reader declines the witness maximum (pointSetDiameterWithBudget
+//     answering ok=false: an empty set, a pair distance that is not a usable
+//     magnitude, or a winning pair with no exact rational form);
+//   - the displacement subtraction collapses the reading to non-positive
+//     (lowerDiameterForDisplacement).
+//
+// A withheld answer is not rescued downstream. bodyGateDiameter falls through to
+// fallbackGateDiameter, whose gateWitnessPrism has no arm for a prismPayload
+// whose sectionDelta is zero, so the body ends with NO gate diameter and its
+// bounded readings read Suspect. That is the sound direction to fail in — an
+// absent reference admits nothing — but it is a real outcome of this arm, not
+// one the arm's existence rules out.
+//
+// Every phase of this arm is cancellable, because neither of its two phases is
+// bounded by a work counter of its own: the segment loop polls ctx before each
+// segment, and the witness maximum polls it through pointSetDiameterContext,
+// the same reader the loftPayload arm above uses. That second poll is the one
+// that matters for cost — the witness count grows with the profile's segment
+// count (four points per segment, bounded only by recipe_decode.go's own
+// MaxSegments ceiling), and the maximum is quadratic in it, so an unpolled scan is by
+// far the longest thing a cancelled Verify could be left waiting on here. The
+// resulting error is returned AS an error: cancellation is never folded into
+// this arm's structural (0, false, nil) answer, which states only that the
+// recorded section gives this arm nothing to read.
+func freeformSectionGateDiameter(ctx context.Context, pp prismPayload) (float64, bool, error) {
+	work := newFreeformWork()
+	sawFreeform := false
+	ownBound := 0.0
+	var pts []r3.Vec
+
+	addWitness := func(u, v float64, bound walkEndBound) bool {
+		allow := walkEndBoundAllow(bound)
+		if isNonFinite(allow) {
+			return false
+		}
+		ownBound = math.Max(ownBound, allow)
+		pts = append(pts, pp.point(u, v, pp.z0), pp.point(u, v, pp.z1))
+		return true
+	}
+
+	for _, loop := range append([]LoopRecord{pp.profile.Outer}, pp.profile.Holes...) {
+		for _, seg := range loop.Segments {
+			if err := ctx.Err(); err != nil {
+				return 0, false, err
+			}
+			seg, err := normalizeSegment(seg)
+			if err != nil {
+				// normalizeSegment reads no ctx and so never observes
+				// cancellation; every error it can return is a structural
+				// refusal of the recorded segment itself, read here as "no
+				// arm" rather than a hard failure.
+				return 0, false, nil //nolint:nilerr // structural refusal, not cancellation — see comment above
+			}
+			w, err := walkOf(seg, work)
+			if err != nil {
+				// Likewise walkOf: it reads the record's own freeformWork
+				// counter, never ctx, so its error is always a build-time
+				// refusal (an R-table sentinel) this arm reads as "no arm"
+				// rather than propagates.
+				return 0, false, nil //nolint:nilerr // structural refusal, not cancellation — see comment above
+			}
+			if w.kind != walkFreeform {
+				if !addWitness(w.startU, w.startV, w.startBound) || !addWitness(w.endU, w.endV, w.endBound) {
+					return 0, false, nil
+				}
+				continue
+			}
+			sawFreeform = true
+			for _, span := range w.spans {
+				if len(span) == 0 {
+					return 0, false, nil
+				}
+				for _, cp := range [2]ratPoint{span[0], span[len(span)-1]} {
+					held, ok := point2Of(cp)
+					if !ok {
+						return 0, false, nil
+					}
+					bound := walkEndBound{
+						u: rationalFloatError(cp.u, held.U),
+						v: rationalFloatError(cp.v, held.V),
+					}
+					if !addWitness(held.U, held.V, bound) {
+						return 0, false, nil
+					}
+				}
+			}
+		}
+	}
+	if !sawFreeform {
+		return 0, false, nil
+	}
+
+	d, ok, err := pointSetDiameterContext(ctx, pts)
+	if err != nil {
+		return 0, false, err
+	}
+	if !ok {
+		return 0, false, nil
+	}
+	displacement := absSumUpper(pp.sectionDelta, pp.axialDelta(), ownBound)
+	d, ok = lowerDiameterForDisplacement(d, displacement)
+	return d, ok, nil
+}
+
 // fallbackGateDiameter is bodyGateDiameter's fallback for a payload whose true
 // boundary the clearance kernel's exact carrier model does not cover
 // (cupPayload, capBlendPayload, and a prismPayload carrying a section
 // displacement — verification design §3's "usable finite, non-negative body
-// diameter", never a box diagonal, document scale or zero).
+// diameter", never a box diagonal, document scale or zero). A free-form-walled
+// prismPayload misses that same exact carrier too, and bodyGateDiameter tries
+// freeformSectionGateDiameter for it ahead of this function — but when that arm
+// withholds its diameter the body DOES reach here, and this function has no arm
+// for it either: its own sectionDelta is zero, the one value gateWitnessPrism
+// below reads as "no arm at all" for a prismPayload. Such a body ends with no
+// gate diameter and its bounded readings read Suspect.
 //
 // Each payload earns a witness prism for its own reason, and gateWitnessPrism's
 // doc comment states each arm separately rather than pooling them behind one
@@ -1418,7 +1608,10 @@ func lowerDiameterForDisplacement(d, displacement float64) (float64, bool) {
 // reads its own diameter through above (addPrismFaces gives two witnesses
 // per circular wall — the mid-angle point at mid-height and th0 at z0 —
 // which pointSetDiameterWithBudget maxes pairwise, and region2.samples adds
-// each cap arc's own th0 and mid-angle). That reader is exact exactly when a
+// each cap arc's own th0 and mid-angle). That reader ranges over the body's
+// own farthest pair — whose exact distance it then publishes rounded toward
+// zero, so even the best case here is the largest float at or below the
+// witness maximum — exactly when a
 // circular wall's farthest pair lands on one of those three sampled angles
 // (th0, mid-angle, th1) — guaranteed for an all-line section (the diameter
 // is realized at vertices, all sampled), for a full circle (the two samples
@@ -1480,9 +1673,15 @@ func fallbackGateDiameter(budget *workBudget, body *Body) (float64, bool, error)
 // gateWitnessPrism builds the straight prism fallbackGateDiameter reads its
 // witnesses off, beside the displacement each of those witnesses can carry
 // from the point of the denoted body it stands for. ok is false for every
-// payload with no arm here, including a revolvePayload and a prismPayload
-// whose section is its own denotation (both already exact through
-// newBodyGeomBudget, which is why they never reach this fallback).
+// payload with no arm here, including a revolvePayload (already exact through
+// newBodyGeomBudget, which is why it never reaches this fallback) and an
+// analytic-walled prismPayload whose section is its own denotation (the same
+// reason). A free-form-walled prismPayload's own section is its denotation
+// too, so this switch answers false for it exactly as it does for the analytic
+// case: bodyGateDiameter routes a free-form-walled prismPayload through
+// freeformSectionGateDiameter before fallbackGateDiameter, and calls this
+// function only when that arm has already declined — at which point this false
+// answer is what leaves the body with no gate diameter at all.
 //
 // The three arms read different geometry and earn a witness for different
 // reasons.
@@ -1559,11 +1758,42 @@ func pointSetDiameterContext(ctx context.Context, points []r3.Vec) (float64, boo
 	return pointSetDiameterWithBudget(newWorkBudget(ctx), points)
 }
 
+// pointSetDiameterWithBudget is the ONE witness-maximum reader every gate
+// diameter is published through — bodyGateDiameter's exact carrier arm and its
+// loft arm, freeformSectionGateDiameter, fallbackGateDiameter, and the cached
+// facetedPayload.diameter buildFacetedBody stores (boolean_body.go). What it
+// returns is a CERTIFIED value at or below the exact greatest distance between
+// two of the supplied points: the float scan only SELECTS a pair, and the
+// published number is that pair's own distance computed over exact rationals
+// and rounded toward zero (exactPairDistanceDown).
+//
+// The float scan cannot publish that number itself. Sub rounds each component
+// and Len rounds the norm, so points[i].Sub(points[j]).Len() can land ABOVE
+// the pair's exact distance — a 6x6x7 box's corner pair reads
+// 11.000000000000002 against an exact sqrt(121) = 11 — while every consumer
+// here reads the answer as a LOWER bound on the body's own diameter
+// (docs/verification-design.md §3: an understated D tightens the gate into a
+// false Suspect at worst, an overstated one loosens it into a false Sound).
+// Charging that roundoff as an outward allowance is not open to this function
+// either: it publishes one number, not an interval, so the charge has to land
+// inside the value, which means rounding the value itself toward zero.
+//
+// Selecting the pair in floats costs nothing here. Whatever pair the scan
+// picks, the published number is a REAL pair distance rounded toward zero and
+// is therefore at or below the exact maximum; a near-tie the float rounding
+// mis-orders changes how TIGHT the answer is, never whether it is a lower
+// bound. So the certification rests on the exact arithmetic alone, and the
+// scan is left free to cost what it always did.
+//
+// ok is false for an empty set, for a pair distance that is not a usable
+// magnitude, and for a winning pair whose coordinates have no exact rational
+// form — an absent answer, never a substitute one.
 func pointSetDiameterWithBudget(budget *workBudget, points []r3.Vec) (float64, bool, error) {
 	if len(points) == 0 {
 		return 0, false, nil
 	}
 	best := 0.0
+	bestI, bestJ := 0, 0
 	for i := range points {
 		for j := i + 1; j < len(points); j++ {
 			if budget != nil {
@@ -1575,7 +1805,9 @@ func pointSetDiameterWithBudget(budget *workBudget, points []r3.Vec) (float64, b
 			if !usableMagnitude(distance) {
 				return 0, false, nil
 			}
-			best = math.Max(best, distance)
+			if distance > best {
+				best, bestI, bestJ = distance, i, j
+			}
 		}
 	}
 	if budget != nil {
@@ -1583,7 +1815,39 @@ func pointSetDiameterWithBudget(budget *workBudget, points []r3.Vec) (float64, b
 			return 0, false, err
 		}
 	}
-	return best, true, nil
+	if best == 0 {
+		// A single point, or a set whose every pair is coincident: zero is
+		// already exact and needs no rounding step.
+		return 0, true, nil
+	}
+	d, ok := exactPairDistanceDown(points[bestI], points[bestJ])
+	if !ok {
+		return 0, false, nil
+	}
+	return d, true, nil
+}
+
+// exactPairDistanceDown returns the largest float64 at or below the EXACT
+// distance between two points. Both coordinates of each axis are float64s and
+// so are exact rationals; the difference and its square are exact in that
+// arithmetic, and ratSqrtDown (spline_length.go) decides the last step by
+// comparing a candidate's exact square against the exact sum rather than by
+// trusting the platform's own square root. Nothing in the chain rounds outward,
+// so the answer is proven to be at or below the pair's true distance.
+//
+// ok is false when a coordinate has no rational form (a non-finite one), which
+// its callers read as no answer at all.
+func exactPairDistanceDown(a, b r3.Vec) (float64, bool) {
+	total := new(big.Rat)
+	for _, axis := range [3][2]float64{{a.X, b.X}, {a.Y, b.Y}, {a.Z, b.Z}} {
+		ra, rb := floatRat(axis[0]), floatRat(axis[1])
+		if ra == nil || rb == nil {
+			return 0, false
+		}
+		d := ra.Sub(ra, rb)
+		total.Add(total, d.Mul(d, d))
+	}
+	return ratSqrtDown(total), true
 }
 
 // boxesDisjoint reports whether the two bounds-inflated boxes have disjoint

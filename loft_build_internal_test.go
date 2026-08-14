@@ -472,8 +472,10 @@ func TestEvalLoftCollinearSplitKeepsTwoFacesPerCell(t *testing.T) {
 }
 
 // TestLoftGateDiameterIsTheVertexDiameter proves design O1's bodyGateDiameter
-// arm: a loft body's tolerance-gate diameter is the exact diameter of its
-// own held vertex set — for the unit box, the space diagonal sqrt(3).
+// arm: a loft body's tolerance-gate diameter is its own held vertex set's
+// diameter, as the shared reader publishes it — for the unit box, the space
+// diagonal sqrt(3), rounded toward zero like every other witness maximum
+// (verification §3).
 //
 // The bit-identity assertion is the one that pins §12 PR 2a's zero-delta fast
 // path. An unplaced loft carries delta 0, so subtracting 2*delta changes

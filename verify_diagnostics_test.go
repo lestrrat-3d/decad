@@ -421,8 +421,9 @@ func TestVerifyDiagnosticsUndecidedClearance(t *testing.T) {
 //
 // Operand B sits strictly inside operand A, so the union is operand A itself —
 // a 10 mm cube whose true diameter is sqrt(300). The recovered reference is
-// that diameter less twice the section displacement, which is the direction
-// §3 requires: understating tightens the gate, overstating loosens it.
+// that diameter, rounded toward zero by the shared reader and then shrunk by
+// twice the section displacement, which is the direction §3 requires:
+// understating tightens the gate, overstating loosens it.
 func TestVerifyDiagnosticsSectionDeltaPrismReadsItsOwnGateDiameter(t *testing.T) {
 	doc := decad.New()
 	a := boxBody(t, doc, 0, 0, 10, 10, 10)

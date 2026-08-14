@@ -643,7 +643,8 @@ work intervals inside quadratic/refinement loops, as interference §7 specifies.
   carries; `Approximate` alone never assigns `Suspect`. The body's gate
   diameter is cached from the greatest distance between any two vertices in
   the complete held faceted payload, not from the smaller set exposed as B-rep
-  boundary-loop vertices. A placement rebuild recomputes the diameter after
+  boundary-loop vertices, and is published through verification §3's shared
+  reader, which rounds that distance toward zero. A placement rebuild recomputes the diameter after
   transforming the payload vertices and polls its context through the
   quadratic scan. The area floor sums each unique topological edge's held
   length once, never its two coedge uses.

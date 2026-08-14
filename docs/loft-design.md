@@ -704,10 +704,14 @@ beside them, though, landed in the same PR: `bodyGateDiameter` (verification
 `Area` is always `Approximate` (§8) and a body with no reference diameter can
 never clear the gate's relative tolerance.
 
-On an unplaced payload (`delta` zero) that reading is the held set's exact
-diameter — every vertex is exact (§5), so a convex-hull diameter realized at
-vertices is the TRUE diameter, not an envelope — and the arm reports it
-unchanged, with no subtraction and no directed rounding. A placed payload (PR
+On an unplaced payload (`delta` zero) the vertex set's own maximum IS the
+body's true diameter — every vertex is exact (§5), so a convex-hull diameter
+realized at vertices is that diameter, not an envelope — and the arm reports
+the shared reader's answer unchanged, with no subtraction and no rounding of
+its own. That answer is the largest `float64` at or below the true diameter,
+because the reader publishes every witness maximum rounded toward zero
+(verification §3), so the arm carries the tightest lower bound a `float64` can
+state on a quantity that is exact. A placed payload (PR
 2a) holds every vertex only within `delta` of its true position, so each of
 the two farthest points can move by `delta` and the reported reference is the
 held diameter minus `2*delta`, rounded down: an understated reference can only
@@ -864,9 +868,9 @@ here may be reused against a placed body without carrying it.
   encloses the area change over a brute-force sweep of perturbed vertices at
   `delta`, at aspect ratios 1, 1e-3 and 1e-6. With `delta == 0` every
   published measurement is bit-identical to PR 1's, and so is the gate
-  reference: an unplaced loft's `bodyGateDiameter` must equal its held
-  vertex-set diameter under `==`, since neither the subtraction nor the
-  outward rounding above may run on a zero allowance.
+  reference: an unplaced loft's `bodyGateDiameter` must equal the shared
+  reader's own answer over its vertex set under `==`, since neither the
+  subtraction nor the outward rounding above may run on a zero allowance.
 
 ## 14. Open questions
 

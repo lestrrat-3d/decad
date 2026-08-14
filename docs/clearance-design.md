@@ -429,8 +429,9 @@ the caller is owed unasked; no rung needs a gap the caller never asked for.
   distance between two points drawn from either body. The evaluator READS
   that `D` from exact vertex pairs and per-face analytic support points, and
   the reading may understate the true diameter; verification §4 already
-  admits exactly this (its diameter reading understates a curved body "by at
-  most the chord error") because a floor's ingredients are magnitudes, not
+  admits exactly this for its own body-diameter reading, which understates a
+  curved body by the chord error and by its own rounding step, because a
+  floor's ingredients are magnitudes, not
   answers, and understating `D` lowers the floor — the only safe direction:
   it can demand more of an answer, never admit one. The definition is the
   parent's, untouched; only the reading is the evaluator's. A `Gap` beyond
