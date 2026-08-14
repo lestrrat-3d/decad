@@ -1398,12 +1398,25 @@ func TestExtrudeClosedSplineProfileBuilds(t *testing.T) {
 // One public operation over one record spends ONE R7 work ceiling
 // (docs/spline-design.md §5.2). Extrude runs the record-wide moments preflight
 // for its area falsifier, the same preflight again inside the prism build, and
-// then reaches the staged free-form side face. The two preflights are phases of
-// one operation over one record, so they share the record's counter; the
-// internal evaluator test keeps that counter propagation covered directly.
+// then reaches the free-form side face's own build machinery — the length
+// bracket, the directional-extreme bracket and the convexity certificate all
+// draw on the SAME counter the two preflights already spent from. This
+// 45-control fixture (the widest single Tier A segment the record preflight
+// still admits) now runs real subdivision work inside the length bracket
+// before refusing on the R7 ceiling, rather than refusing at a pre-gate —
+// that pre-gate is gone (§10 P4b retires Table R row R6). The two preflights
+// are phases of one operation over one record, so they share the record's
+// counter; the internal evaluator test keeps that counter propagation covered
+// directly.
 //
-// The allocation and timing assertions prove the staged side-face refusal does
-// not spend a free-form length bracket it cannot consume.
+// The allocation assertion is what still proves "one ceiling, not two": a
+// SECOND ceiling minted for the side-face build would let the length bracket
+// spend a full budget of its own on top of what the two preflights already
+// spent, which measured 1.51 GB on this same fixture. Wall-clock time is
+// NOT asserted here any more — this test does real subdivision work before
+// refusing, so its elapsed time is real and scales with the machine running
+// it, never a signal a second ceiling was minted; the allocation bound is
+// the measure that still discriminates the two cases.
 func TestExtrudeSplineProfileSpendsOneWorkCeiling(t *testing.T) {
 	world := sketch.NewWorld()
 	s, err := world.CreateSketch(world.XY())
@@ -1426,11 +1439,9 @@ func TestExtrudeSplineProfileSpendsOneWorkCeiling(t *testing.T) {
 
 	d := decad.New()
 	var body *decad.Body
-	start := time.Now()
 	allocated := allocatedBy(func() {
 		body, err = d.Extrude(s, profiles[0], &decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
 	})
-	elapsed := time.Since(start)
 
 	require.Error(t, err)
 	require.Nil(t, body)
@@ -1440,12 +1451,11 @@ func TestExtrudeSplineProfileSpendsOneWorkCeiling(t *testing.T) {
 	require.Empty(t, d.Recipe().Steps, "a refused extrude records no step")
 
 	// A per-phase ceiling ran the whole arc-length bracket over this chain after
-	// two full preflights had already run: 1.51 GB and 2.37 s measured. One
-	// ceiling refuses the moment the record's own budget is gone.
+	// two full preflights had already run: 1.51 GB measured. One ceiling
+	// refuses the moment the record's own budget is gone; a second one would
+	// let this same bracket allocate gigabytes more.
 	require.Less(t, allocated, uint64(1)<<30,
 		"a second ceiling would allocate gigabytes over a record already found unaffordable")
-	require.Less(t, elapsed, 2*time.Second,
-		"a second ceiling would subdivide for seconds before staging out")
 }
 
 // scallopedDiskRecord is a closed analytic loop of n quarter-turn arcs: the
