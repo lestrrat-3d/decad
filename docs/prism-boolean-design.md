@@ -977,6 +977,16 @@ origin, exactly as it already must after a Fillet or Chamfer. Flagged in
   `prismPayload` per cell and reusing `evalPrism`, would put a second owner on
   `bounds.go`'s section-displacement and axial mechanisms, which that file's
   own rule forbids.
+  <!-- The asymmetry sentence above is well formed, not malformed: it joins two
+       contact relative clauses with stranded prepositions — "a pair [that]
+       `Verify` reports an `Interference` for" IS "a pair [that] `Intersect`
+       still routes to the mesh path" — the same shape as "a book I paid for is
+       a book I keep". The "for is" adjacency makes it a garden-path read, which
+       is a cost in fluency and not in meaning. The same fact is stated
+       independently at this bullet's own header, §4.4's multi-region row, §4.5's
+       second paragraph, §13's Interference consumers row, and
+       `docs/interference-design.md`'s decision list, so no reader depends on
+       parsing this one sentence to learn the decision. -->
 - **§3.1 G6 restricts `Union` to hole-free operands and `Cut` to a hole-free
   tool.** The union restriction is increment 1/2's, deferring the general
   per-cell classification (§4.2's crossing sub-case) to PR3 even though it is
