@@ -136,10 +136,16 @@ const (
 // section carries a displacement; an operand whose section does
 // (docs/prism-boolean-design.md §7) makes the row Approximate over the
 // composed displacement the payload publishes (§8), which the report's
-// tolerance gate then judges like any other reading. Every other pair falls
-// back to the read-only mesh intersection unchanged. Both
-// paths share §6's positive lower-volume gate (positiveVolume). The outcome
-// names why an unmeasured result is unmeasured.
+// tolerance gate then judges like any other reading. A pair that twin does
+// not admit next reaches §4.5's overlap-area reading (prismOverlapVolume,
+// prism_overlap.go), which measures a selection covering any number of
+// disjoint regions and publishes a volume with no body at all — the
+// two-step order is what keeps every pair the twin already answers
+// byte-identical (docs/prism-boolean-design.md §12's Interference row).
+// Every pair neither analytic path admits falls back to the read-only mesh
+// intersection unchanged. All three paths share §6's positive lower-volume
+// gate (positiveVolume). The outcome names why an unmeasured result is
+// unmeasured.
 func measuredInterference(ctx context.Context, a, b *Body, res pairResult) (Measurement, interferenceOutcome, error) {
 	if res.contained != nil {
 		return res.contained.volume, interferenceMeasured, nil
@@ -165,6 +171,20 @@ func measuredInterference(ctx context.Context, a, b *Body, res pairResult) (Meas
 			return Measurement{}, interferenceUndecided, nil
 		}
 		return analytic.volume, interferenceMeasured, nil
+	}
+
+	overlap, ok, err := prismOverlapVolume(ctx, a, b)
+	if err != nil {
+		if expected, ok := asExpectedBoolean(err); ok {
+			return Measurement{}, interferenceOutcomeForExpected(expected), nil
+		}
+		return Measurement{}, interferenceUndecided, err
+	}
+	if ok {
+		if !positiveVolume(overlap) {
+			return Measurement{}, interferenceUndecided, nil
+		}
+		return overlap, interferenceMeasured, nil
 	}
 
 	eval, err := evaluateBoolean(ctx, OpIntersect, a, b)
