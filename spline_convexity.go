@@ -25,12 +25,11 @@ import (
 // spline_extreme.go's own bernsteinSplit for the fixed-depth subdivision —
 // reused rather than forked, per §6.5's own instruction.
 //
-// What is deliberately NOT built here: the wall edge's `convex` bool. §6.5's
-// own orientation convention still has to fold this certificate's sign
-// against the loop's own walk role (outer counter-clockwise, hole
-// clockwise), which is a topology-level decision belonging to the evaluator
-// that reads Table R row R6's build refusal — the one this file does not
-// lift.
+// What this file does NOT build: the wall edge's `convex` bool itself. §6.5's
+// own orientation convention folds this certificate's sign against the loop's
+// own walk role (outer counter-clockwise, hole clockwise) — a topology-level
+// decision — which is wired in extrude.go's buildLoopSidesAs (§10 P4b, Table R
+// row R6 retired), the one evaluator that owns Table R row R6's build path.
 
 // freeformConvexitySign is one wall edge's fold verdict: whether the chain's
 // own curvature keeps one strict sign, or the chain is a straight walk. It is

@@ -157,7 +157,7 @@ one.
 | `topology.go` | The topology model (evaluator §3): `Body`→`Lump`→`Shell`→`Face`→`Loop`→`CoEdge`→`Edge`→`Vertex`, plus sealed `Surface`/`Curve` variant sets. Convexity, exactness rules and immutability are on the types' own doc comments; see `docs/evaluator-design.md` §3. |
 | `normal_bound.go` | The proof behind the bound every `Face.NormalAt` arm publishes: rational-interval enclosures of each arm's own exact unit normal, and the radian sine/cosine enclosure the `Cone` arm needs. See the file's own doc comment. |
 | `document.go` | `Document` (`New`/`Bodies`/`Recipe`), its atomic commit tail, and retire/liveness gates. `Body.Placed`/`Duplicate`/`PlacedCopy` re-evaluate the payload under a composed motion; see their doc comments and `docs/evaluator-design.md` §8. |
-| `extrude.go` | `Document.Extrude` (evaluator §5) plus `segmentWalk`/`walkKind`, the boundary vocabulary every feature reads through, and the analytic prism evaluator `evalPrism`/`prismPayload`. See doc comments; `docs/evaluator-design.md` §5, `docs/prism-boolean-design.md` §7, `docs/spline-design.md` §6.2. |
+| `extrude.go` | `Document.Extrude` (evaluator §5): `segmentWalk`/`walkKind` boundary walk, the analytic and Tier A free-form prism evaluator `evalPrism`/`prismPayload`. See doc comments; `docs/evaluator-design.md` §5, `docs/prism-boolean-design.md` §7, `docs/spline-design.md` §6.2, §6.5. |
 | `revolve.go` | `Document.Revolve` (evaluator §6): the sealed `Axis` vocabulary, the axis-contact/incidence gates, angular-extent resolution, and the analytic revolve evaluator `evalRevolve`/`revolvePayload`. See doc comments on each; `docs/evaluator-design.md` §6. |
 | `stops.go` | Body-relative stop resolution for `ToFace`/`ToFaceAngular`/`ThroughAll`/`ThroughAllSide` (evaluator §5/§6/§11, core §8.1/§6.2): each stop body resolves at the call and records as a `StepRef`, never consumed. See doc comments on `resolveToFace`/`resolveThroughAll`/`resolveToFaceAngular`. |
 | `loft.go` | `docs/loft-design.md` PR 1b: `Document.Loft`/`LoftContext`, the public entry point over `loft_build.go`'s evaluator. Owns gates S9–S11 and S4's arity half; the step commits only after `evalLoft` succeeds. See doc comments; `docs/loft-design.md` §2/§4/§10. |
@@ -224,7 +224,7 @@ one.
 
 | Path | Responsibility |
 |---|---|
-| `tessellate.go` | `Mesh` and `Body.Tessellate`: prism, cup, and faceted payloads build; revolve stays `ErrUnsupported`. See the file's own doc comment and `docs/tessellation-design.md`. |
+| `tessellate.go` | `Mesh` and `Body.Tessellate`: analytic-walled prism, cup, and faceted payloads build; a free-form wall and revolve stay `ErrUnsupported`. See the file's own doc comment and `docs/tessellation-design.md`. |
 | `triangulate.go` | The cap triangulator behind `Tessellate`: hole bridging plus reflex-blocked ear clipping, correct for non-convex outlines with holes. See the file's own doc comment. |
 | `export.go` | `Body.STL`/`Body.OBJ`: deterministic writers over `Tessellate`, with `WithChordTolerance`'s documented default. See the file's own doc comment. |
 

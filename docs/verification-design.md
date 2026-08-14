@@ -308,10 +308,11 @@ always forms a usable reference — its `payload.diameter` is guaranteed at buil
 `revolvePayload`, or an analytic-walled `prismPayload` whose two axial
 displacements are zero, reads it off the same analytic carrier the
 clearance kernel proves against (`newBodyGeomBudget`/`clearance_geom.go`) — a
-free-form-walled `prismPayload`, which no public construction reaches yet and so
-is not one of those shipped bodies, has no arm there at all, whatever its axial
-displacements, and reads its diameter through the arm below when that arm can
-publish one, holding no reference at all when it withholds. A
+free-form-walled `prismPayload` has no arm there at all, whatever its axial
+displacements — a `NURBSSurface` side face is not a boundary the clearance
+kernel's exact carrier model can build a certificate over — and reads its
+diameter through the arm below when that arm can publish one, holding no
+reference at all when it withholds. A
 `prismPayload` with a
 nonzero `z0Delta` or `z1Delta` uses those held carrier witnesses too, but each
 witness can move by `axialDelta`; `bodyGateDiameter` returns the witness maximum
@@ -356,10 +357,10 @@ denoted one, and only the subtraction decides the direction the reference errs
 in. `verify_diagnostics_test.go` pins the recovered reference against the
 fixture's own true diameter.
 
-**A free-form-walled `prismPayload` — not reachable through the public
-surface yet (`docs/spline-design.md` §10) — misses the exact carrier model for
-the same structural reason, and gets an arm of its own to try rather than an
-automatic reference-less `Suspect`.** That model has no arm for a `NURBSSurface`
+**A free-form-walled `prismPayload`, reachable through `Extrude` since
+`docs/spline-design.md` §10 P4b, misses the exact carrier model for the same
+structural reason, and gets an arm of its own to try rather than an automatic
+reference-less `Suspect`.** That model has no arm for a `NURBSSurface`
 side face any more than it has one for the `sectionDelta` case, and
 `gateWitnessPrism`'s own displaced-section arm answers only for a section a
 displacement separates from its denotation, not for a wall shape the reader

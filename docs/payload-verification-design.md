@@ -26,6 +26,13 @@ case into nil, an empty list, or `Sound`.
 | `loftPayload` | exact construction audit | bounds-disjoint shortcut over each body's own `Bounds` and the bound it carries; `WithClearances` stays `Suspect` until an analytic adapter lands; mesh path staged | `Suspect` | `Suspect` | `Suspect` |
 | `facetedPayload` | bounded boundary proof (§6) | bounded triangle adapter (§7) | bounded medial survey (§10) | certified normal patches (§8) | certified curvature patches (§9) |
 
+The `prismPayload` row's own four right-hand columns are the ANALYTIC-walled
+case. A free-form (Tier A NURBS) wall answers `Suspect` in all four instead —
+`docs/spline-design.md` Table C already decides this per capability — while
+`Validity` stays the exact construction proof: `Verify`'s own diameter-gate
+arm and loop-less-face audit already cover a free-form-walled body
+(`docs/verification-design.md` §3, `docs/spline-design.md` §10 P4b).
+
 Three payload classes require different treatment:
 
 - `cupPayload` is exact analytic data. Adapt its two recorded regions and three

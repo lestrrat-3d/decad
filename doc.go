@@ -80,13 +80,15 @@
 // subset of it and refuses the rest explicitly (never a wrong-but-confident
 // result). The current map, and the sentinel a refused combination returns:
 //
-//	Extrude       line/circle/arc profile segments            builds
-//	  free-form profile segment (spline, ellipse)             ErrUnsupported
+//	Extrude       line/circle/arc/Tier A free-form segments   builds
+//	  Tier B/C free-form segment (conic, ellipse, unequal-
+//	    weight NURBS)                                         ErrUnsupported
 //	  WithTaper   nonzero taper angle                         ErrUnsupported
 //	Revolve       cylinder / cone / sphere / torus / annulus  builds
 //	Union/Cut/Intersect  prism/faceted operands, crossings    builds
 //	  faceted operand coarser than the pair tolerance         ErrUnsupported
 //	  revolve operand (no tessellator; booleans mesh)         ErrUnsupported
+//	  free-form-walled operand (no tessellator yet)           ErrUnsupported
 //	  curved-surface tangent, facets never meet               ErrUnsupported
 //	  exact coplanar / face-on-face / point contact outside
 //	    the admitted analytic prism reduction                 ErrUnsupported
@@ -115,6 +117,7 @@
 //	  revolve payload                                         ErrUnsupported
 //	  cap-loop chamfer result                                 ErrUnsupported
 //	  boolean body at a tolerance finer than its bound        ErrUnsupported
+//	  free-form-walled prism (chording waits on §10 P5)       ErrUnsupported
 //
 // Options: among the MODEL-CONSTRUCTION verbs, New, Revolve, Fillet and
 // Chamfer expose option groups that carry nothing today (they exist so options

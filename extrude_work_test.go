@@ -23,12 +23,13 @@ func TestEvalPrismContinuesCallerFreeformWork(t *testing.T) {
 	frame, err := r3.NewFrame(r3.Vec{}, r3.Vec{X: 1}, r3.Vec{Y: 1})
 	require.NoError(t, err)
 
-	_, err = evalPrism(New(), 0, prismPayload{
+	body, err := evalPrism(New(), 0, prismPayload{
 		profile: profile,
 		frame:   frame,
 		z1:      1,
 		xform:   r3.Identity(),
 	}, work)
-	require.ErrorIs(t, err, ErrUnsupported)
+	require.NoError(t, err, "a Tier A free-form side face now builds (§10 P4b)")
+	require.NotNil(t, body)
 	require.Greater(t, work.spent, spent)
 }

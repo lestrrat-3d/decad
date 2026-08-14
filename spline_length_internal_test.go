@@ -381,8 +381,8 @@ func TestFreeformBracketCostGrowsWithDegree(t *testing.T) {
 // The measured defect: a validator-accepted single-span NURBS of high degree
 // subdivided 1023 times, each split blending half a million rational pairs,
 // with no charge past the leaf count. The preflight must refuse it before the
-// first split — and public Extrude reaches this through walkOf, so the walk must
-// refuse it too rather than run the bracket on the way to its staging refusal.
+// first split — and public Extrude reaches this through walkOf, so the walk
+// must refuse it too rather than run the bracket at all.
 func TestWideSpanBracketRefusesBeforeSubdividing(t *testing.T) {
 	const degree = 1024
 	seg := oneSpanNURBS(degree)

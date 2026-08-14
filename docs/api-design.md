@@ -473,6 +473,22 @@ type NURBSSurface struct { /* private */ }
 type Faceted struct{ /* ... */ }
 ```
 
+`Curve` is `Surface`'s 1-D analog, sealed the same way, `Edge.Curve()`'s return
+type:
+
+```go
+type Curve interface{ curve() } // sealed
+
+type Line3 struct   { /* ... */ }
+type Circle3 struct { /* ... */ }
+type Arc3 struct    { /* ... */ }
+// NURBSCurve is a free-form edge's geometry, NURBSSurface's 1-D analog
+// (docs/spline-design.md §7).
+type NURBSCurve struct{ /* private */ }
+// FacetedCurve is a boolean-built edge's chord chain, Faceted's 1-D analog.
+type FacetedCurve struct{ Bound units.Value }
+```
+
 **Surface parameters carry no `Exactness`, and this is not an exception to
 invariant #2.** An analytic `Surface` variant's parameters are exact for the
 surface it names. A face whose built geometry is that surface is exact; a tagged
@@ -806,8 +822,6 @@ The rest are deferred:
 ```go
 type FeatureRef struct{ /* ... */ }    // an opaque handle to the feature that created a body or face
 type Mesh struct{ /* ... */ }          // a triangle mesh; an OUTPUT of Tessellate, never the representation
-type Curve interface{ curve() }        // sealed, like Surface: Line / Circle / Arc / Ellipse / NURBSCurve / FacetedCurve
-type NURBSCurve struct{ /* private */ }// a free-form edge, NURBSSurface's 1-D analog (spline design §7)
 type EdgePredicate struct{ /* ... */ } // one clause of an EdgeQuery; the §9 constructors return these
 type FacePredicate struct{ /* ... */ } // one clause of a FaceQuery
 ```

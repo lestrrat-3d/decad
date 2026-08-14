@@ -76,6 +76,25 @@ type Box struct {
 	Bound     units.Value
 }
 
+// validateAnalyticBodyMeasurements is evalPrismContext's last gate before a
+// prism commits: every one of the four checks below is finiteness only, so a
+// +Inf bound reads the same ErrNotFinite as a NaN value would, even though
+// +Inf is this codebase's own stated UNDERIVABLE-bound convention
+// (walkEndBound's doc comment) rather than a non-finite input.
+//
+// That mismatch cannot actually reach a free-form prism's build. Every
+// mechanism capable of publishing +Inf into one of these four measurements
+// already refuses earlier, with its own Table R sentinel, before this runs: a
+// length bracket that cannot be enclosed is R15 inside freeformArcLength, a
+// directional extreme past float64 range is R18 inside
+// boundaryExtremesBoundedContext (both consumed building Area/Bounds), and a
+// walk endpoint bound that cannot be derived is the "no span" case
+// freeformEndpointBounds already turned into ErrDegenerate before a
+// segmentWalk exists to fold into a Vertex at all (freeformVertexAllow,
+// extrude.go). So a body that reaches this call has already had every
+// free-form-derived bound proven finite; a +Inf or NaN reaching here names a
+// genuinely non-finite INPUT elsewhere, which is exactly what ErrNotFinite is
+// for.
 func validateAnalyticBodyMeasurements(body *Body) error {
 	finiteMeasurement := func(m Measurement) bool {
 		return finiteMeasurementValues(m.Value.Base(), m.Bound.Base())

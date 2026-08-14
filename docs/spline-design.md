@@ -172,7 +172,7 @@ exactly → `ErrUnrecordableProfile`.
 | **R3** | free-form walk in a section a `Shell` offsets | `ErrUnsupported` | yes for a curved walk, §4.1 |
 | **R4** | `Fillet` corner with a free-form carrier | `ErrUnsupported` | yes for a curved walk, §4.1 |
 | **R5** | `Chamfer` corner with a free-form carrier | `ErrUnsupported` | yes for a curved walk, §4.1 |
-| **R6** | a Tier A free-form walk, `FitSplineSeg` among them, reaches a BUILD | `ErrUnsupported` | no, §10 P4 |
+| **R6** | *retired at §10 P4b* — a Tier A free-form walk, `FitSplineSeg` among them, now builds | — | retired |
 | **R7** | exact-rational conversion, length bracketing, integration or topology reconstruction exceeds its work budget | `ErrUnsupported` | no, §5.2, §6.1 |
 | **R8** | chording a free-form walk needs more than the chord cap | `ErrUnsupported` | no, reuses `errTooManyChords` |
 | **R9** | a `Verify` reading's proof does not close — its bracket cannot separate it from its threshold, or a §6.3 certificate fails | not an error — `Suspect` | no, §8 |
@@ -228,13 +228,14 @@ chord approximation of the intended part, and any volume or clearance assertion
 it makes has to carry the chording error the caller introduced, on top of the
 `Bound` decad reports.
 
-The caller substitute above answers the BUILD path only. §5.1.2 states the
-fit-spline reduction that makes a `FitSplineSeg` section Tier A for the
-moments path: a caller with a `FitSplineSeg` section gets an exact `Area`,
-`Centroid` and `SecondMoments`, with no chording of their own to account for.
-What they do NOT get is a body — `Extrude` of that same section still
-refuses, staged the same way every other Tier A free-form kind's build is,
-under §10's P4.
+The caller substitute above answers the modify ops' BUILD path only — R3–R5,
+which stand for a curved free-form carrier regardless of tier. A Tier A
+section's own `Extrude` no longer needs it: §5.1.2 states the fit-spline
+reduction that makes a `FitSplineSeg` section Tier A for the moments path, and
+§10's P4b is where that reach extends to the build — a caller with a
+`FitSplineSeg` section gets an exact `Area`, `Centroid` and `SecondMoments`
+AND a body, with no chording of their own to account for either way. A Tier B
+or Tier C section (R10) still gets neither until its own moments land (§10 P9).
 
 ### 4.1 Why the modify refusals stand
 
@@ -1009,8 +1010,8 @@ same split rather than a kind-based exemption: it keeps its zero bound and
 endpoint, an arc's own recorded endpoint, an exactly representable circular apex
 — and publishes a width where one is held by a candidate this evaluator computed,
 a trimmed circular endpoint or a computed arc radius among them. `prismBoundsContext` reports
-exactly that split (P4a) — reachable only from internal tests while R6 stands,
-since no free-form prism can exist through the public surface yet.
+exactly that split (P4a) — reachable through the public surface now that §10
+P4b retires R6.
 
 **The one extreme that has no interval to report is R18**, §6.1's R15 one row
 over. The enclosure is exact and rational, so it is proven whatever its
@@ -1142,14 +1143,16 @@ is accepted and reads `Suspect`:
 | speed floor `s_min > 0` | the tested polynomial — `S`, or a rational span's `S_num` — is identically zero (the collapsed span), or has a root on the span, or its bracketed minimum reaches `0` | `Undercuts` AND `MinRadius` read `Suspect` for that body |
 | origin exclusion on every subdivided hull | the turn is too wide to separate within the subdivision budget | `Undercuts` reads `Suspect` |
 
-**Neither failure refuses a BUILD.** Chording, volume, area, export and the
-boolean path read no direction cone, so nothing in this section withholds a
-body — the readings that need a direction are the only ones it leaves
-undecided, and a body it leaves undecided still takes part in an interference
-proof. A collapsed span shows the whole cost: it fails the speed floor, so it
-costs those two readings, on a body that still builds and reports its
-`Volume`. What refuses an ALL-collapsed walk at build time is §5.1's
-zero-length walk rule, never this certificate.
+**Neither failure refuses a BUILD.** Volume and area read no direction cone,
+so nothing in this section withholds a body — the readings that need a
+direction are the only ones it leaves undecided. Chording, export, the
+boolean path and interference proof read no direction cone either, but they
+wait on their own later increment regardless (§10 P5) — a free-form-walled
+body reaches none of them yet, for a reason unrelated to this section. A
+collapsed span shows the whole cost: it fails the speed floor, so it costs
+those two readings, on a body that still builds and reports its `Volume`.
+What refuses an ALL-collapsed walk at build time is §5.1's zero-length walk
+rule, never this certificate.
 
 **A zero-speed span does cost a body, under a DIFFERENT certificate.** §6.5
 proves a wall edge's `convex` bool from the curvature numerator's sign, and a
@@ -1599,15 +1602,15 @@ walk, never off `NormalAt`.
 
 **Every build reads its section's moments, so a body's tier reach is its
 section's.** A section whose free-form walks are all Tier A is the one §10's
-P4 builds — Table R R6 refuses every free-form walk at the build today,
-regardless of tier; a section carrying a Tier B or Tier C walk is
-`ErrUnsupported` at EVERY build until §10's P9 supplies that tier's moments
-(§5.3, §5.4) — Table R R10. "Tier A section"
-below names exactly that condition, and now includes a section holding a
-`FitSplineSeg` walk (§5.1.2) — its moments are Tier A today, so once §10's P4
-lands a build it is one of the kinds P4 widens to reach, with no change to P4
-itself. A `ProfileRecord` moment reading is not a build and is unaffected —
-`FitSplineSeg` already has that reach for the moments path (§5.1.2).
+P4b builds — Table R R6, which refused every free-form walk at the build
+regardless of tier, is retired; a section carrying a Tier B or Tier C walk is
+still `ErrUnsupported` at EVERY build until §10's P9 supplies that tier's
+moments (§5.3, §5.4) — Table R R10. "Tier A section"
+below names exactly that condition, and includes a section holding a
+`FitSplineSeg` walk (§5.1.2) — its moments are Tier A, and P4b is the
+increment that extends that reach to the build. A `ProfileRecord` moment
+reading is not a build and is unaffected — `FitSplineSeg` already had that
+reach for the moments path (§5.1.2) before P4b.
 
 **A Tier A section's exactly-rational reach is its free-form walks' alone.**
 Analytic walks join them in the same section freely (§4.1), and a circular one
@@ -1619,9 +1622,9 @@ every walk of the section is itself exactly rational (§3).
 |---|---|---|
 | `ProfileRecord.Area`/`Centroid`/`SecondMoments` | Tier A exactly rational, rounded once; B/C proven interval | §5 |
 | `Extrude` | Tier A section; `Volume` from the Tier A rational, `Area`/`Box` bounded | §6.1 length, §6.2 extremes, §7 surfaces; a through-all stop reading the bracket is §6.4; a wall edge's convexity is §6.5 |
-| `Tessellate`, `STL`, `OBJ` | every section `Extrude` builds | §6.2 sagitta; rides the existing prism path, NOT tessellation T5 |
-| `Union`/`Cut`/`Intersect` | every body `Extrude` builds, `Faceted` output as always | free once chording lands — the mesh boolean reads triangles, not kinds |
-| interference proof | every body `Extrude` builds | free once chording lands — read-only mesh intersection already serves faceted pairs |
+| `Tessellate`, `STL`, `OBJ` | `ErrUnsupported` for a free-form-walled body until §10 P5 chords it; every OTHER body `Extrude` builds | §6.2 sagitta; rides the existing prism path, NOT tessellation T5 |
+| `Union`/`Cut`/`Intersect` | `ErrUnsupported` for a free-form-walled operand until §10 P5, `Faceted` output as always thereafter | free once chording lands — the mesh boolean reads triangles, not kinds |
+| interference proof | `ErrUnsupported` for a free-form-walled body until §10 P5 | free once chording lands — read-only mesh intersection already serves faceted pairs |
 | `Undercuts` | proven where §6.3's certificates close, else `Suspect` | §6.2 normal cones; an enclosure decides a face only while it is a proper cone (§6.3) |
 | `MinRadius` | proven interval under §6.3's speed floor, else `Suspect` | §6.2 curvature extremes; a measurement, never a verdict |
 | `MinWallThickness` | proven interval, else `Suspect` | §8.1 |
@@ -1685,7 +1688,7 @@ half-silent. These stages do not consume a global evaluator increment number.
 | **P1** | this document + the core/evaluator table updates it resolves | none |
 | **P2** | Bézier conversion, exact Tier A moments, the §5.2 budget | `ProfileRecord.Area`/`Centroid`/`SecondMoments` answer for Tier A, bounded by one rounding. No new types |
 | **P3** | walk-kind discriminant across every `segmentWalk` consumer | none — behaviour preserved |
-| **P4a** | §6.2 row 1's directional-extreme bracket, wired into the prism bounds reading and into §6.4's straddle-narrowed through-all stop gate | none — R6 still stands, so a free-form prism is reachable only from internal tests; the stop charges a met body's bracket to the level it resolves and R11 refuses only a straddling one, `extentAlongWork`'s wider refusal serving the clearance short-circuit alone, and R18 is live on the enclosure-to-float64 conversion the bracket publishes through |
+| **P4a** | §6.2 row 1's directional-extreme bracket, wired into the prism bounds reading and into §6.4's straddle-narrowed through-all stop gate | none on its own — the bracket's reach through the public surface waits on P4b, below; the stop charges a met body's bracket to the level it resolves and R11 refuses only a straddling one, `extentAlongWork`'s wider refusal serving the clearance short-circuit alone, and R18 is live on the enclosure-to-float64 conversion the bracket publishes through |
 | **P4b** | `NURBSSurface`/`NURBSCurve`, free-form extrude side faces, `NormalAt` refusal, §6.5's wall-edge convexity proof and its R19 refusal | Tier A free-form prisms build, `FitSplineSeg` walks among them since P4b is where R6's build refusal lifts (§5.1.2); `Volume` from the Tier A rational, `Area`/`Box` bounded. A Tier B or C section is R10; an undecidable through-all stop is R11; a wall edge whose curvature sign the chain does not prove is R19 |
 | **P5** | free-form chording with proven sagitta + area slack | `Tessellate`/`STL`/`OBJ`, booleans, interference proof. Wall reading explicitly `Suspect` |
 | **P6** | §6.3's speed floor and origin-exclusion certificates, hodograph normal cones, bracketed curvature extremes | `Undercuts` and `MinRadius` each answer where the certificates that reading needs close, and read `Suspect` per §6.3's cost table where they do not |
@@ -1777,8 +1780,9 @@ rules).
   inside a longer clamped net, so `S` is the zero polynomial there while the
   walk's own length stays positive, and §6.5 skips the span rather than
   refusing the body — the speed floor must FAIL, `Undercuts` and `MinRadius`
-  must read `Suspect`, and the body must still build, report its `Volume` and
-  tessellate. A survey that instead returns an empty `Undercuts` list on that
+  must read `Suspect`, and the body must still build and report its `Volume`
+  — tessellating it is §10 P5, out of P4b's scope. A survey that instead
+  returns an empty `Undercuts` list on that
   body is the silent pass §8.1 forbids, and must fail the test, and a
   certificate that reads the isolated root count alone reports a floor on that
   collapsed span and passes silently, so it must fail this test too.
@@ -1885,12 +1889,12 @@ rules).
 - Assert `Undercuts` on a free-form face whose certified cone is proper: a face
   whose cone puts every point provenly opposing the pull is listed, and a face
   whose cone clears at every point is not.
-- Assert directed-edge closure, positive triangle area, outward winding, and
-  `len(SourceFaces) == len(Triangles)` on a free-form prism mesh.
-- Assert byte-identical repeated STL/OBJ output.
-- Assert a boolean of a free-form prism against a box carries a composed bound
-  and breaks no invariant.
-- Sample the true surface densely only as a FALSIFIER: any observed distance
+- §10 P5 (blocked on chording, not on this section): assert directed-edge
+  closure, positive triangle area, outward winding, and
+  `len(SourceFaces) == len(Triangles)` on a free-form prism mesh; assert
+  byte-identical repeated STL/OBJ output; assert a boolean of a free-form
+  prism against a box carries a composed bound and breaks no invariant; and
+  sample the true surface densely only as a FALSIFIER — any observed distance
   above `Mesh.Bound` fails, and passing samples never replace the bound's
   derivation.
 - Assert every Table R row by behaviour, each with its own sentinel: a crossed
@@ -2031,6 +2035,7 @@ rules).
   exceeds the ceiling must refuse promptly, allocating on the order of its own
   `Fit` slice rather than on the order of the interpolant
   `geom.NewFitInterpolant` would have solved.
-- Assert that `Extrude` of a `FitSplineSeg` section still refuses
-  `ErrUnsupported` at the side-face build — R6 states the build refusal, and
-  P4 (build support) is unimplemented and unaffected.
+- Assert that `Extrude` of a `FitSplineSeg` section BUILDS — R6 is retired
+  (§10 P4b) — with `Volume` equal to height times the section's own exact
+  rational `Area` (spline_fit_test.go's `TestExtrudeFitSplineProfileBuilds`
+  is this obligation's own test).

@@ -14,9 +14,11 @@ import (
 
 // This file is the extrude of docs/evaluator-design.md §5: the feature call
 // gates its live inputs, records the step, evaluates FROM the record, and
-// commits atomically. The prism it builds is fully analytic — Plane and
-// Cylinder faces, with bounded mass measurements. Exactly representable
-// results retain zero bounds. The body-relative
+// commits atomically. The prism it builds is analytic — Plane and Cylinder
+// faces — for every line/circle/arc boundary segment, and a NURBSSurface
+// (docs/spline-design.md §7) for a Tier A free-form one, with bounded mass
+// measurements throughout. Exactly representable results retain zero bounds.
+// The body-relative
 // stops (ThroughAll/ThroughAllSide/ToFace) resolve through stops.go: the
 // stop bodies are resolved at the call and recorded as StepRefs in the
 // step's Inputs (core §6.2).
@@ -48,11 +50,17 @@ func WithTaper(a units.Value) ExtrudeOption {
 // (ErrForeignProfile) and a current, unaltered snapshot (ErrStaleProfile or
 // ErrInvalidProfile); an invalid profile is also ErrInvalidProfile, and a
 // boundary decad cannot record exactly is ErrUnrecordableProfile (core §7).
-// This evaluator builds a straight prism from a profile of line, circle and arc
-// segments; a free-form segment (a spline or ellipse, say) is [ErrUnsupported].
-// The step records the profile, the plane, the extent and the options;
-// evaluation runs from that record, and a failed evaluation leaves the recipe
-// and the document untouched.
+// This evaluator builds a straight prism from a profile of line, circle, arc
+// and Tier A free-form segments (a spline, a closed spline, a fit spline, or a
+// unit-weight NURBS curve — docs/spline-design.md Table F); a Tier B or Tier C
+// free-form segment (a conic, a whole ellipse, or a NURBS curve with unequal
+// weights) is [ErrUnsupported], as is a nonzero WithTaper. A free-form curve
+// must meet its neighbours at shared endpoints, never by crossing
+// (docs/spline-design.md §2.1) — join the endpoints in the sketch, or the
+// profile is rejected as ErrUnrecordableProfile before this ever runs. The
+// step records the profile, the plane, the extent and the options; evaluation
+// runs from that record, and a failed evaluation leaves the recipe and the
+// document untouched.
 func (d *Document) Extrude(s *sketch.Sketch, p *sketch.Profile, e Extent, opts ...ExtrudeOption) (*Body, error) {
 	if d == nil {
 		return nil, fmt.Errorf(`%w: a nil document owns no model`, ErrDegenerate)
@@ -464,7 +472,9 @@ func profileCoordinateUpper(profile ProfileRecord, work *freeformWork) (float64,
 // span), so a caller that only needs a coordinate MAGNITUDE envelope — never a
 // placed cap frame, which genuinely cannot represent a free-form wall — reads
 // it directly rather than refusing on a section the caller's own reading
-// (extentBoundedAlong's boundary-extreme scan) already handles.
+// already handles: extentBoundedAlong's boundary-extreme scan, and
+// prismCentroidGeometryBound's convex-combination proof, each state their own
+// account of a free-form span and need only the envelope beside it.
 func profileCoordinateEnvelope(profile ProfileRecord, work *freeformWork) (float64, error) {
 	upper := 0.0
 	for _, loop := range append([]LoopRecord{profile.Outer}, profile.Holes...) {
@@ -483,8 +493,16 @@ func profileCoordinateEnvelope(profile ProfileRecord, work *freeformWork) (float
 // centroid is a convex combination of its material points, so it lies within
 // the outer prism. The L1 envelope below bounds every such point through the
 // frame and rigid placement, and therefore bounds the distance from held.
+//
+// It reads coordUpper through profileCoordinateEnvelope, never
+// profileCoordinateUpper: this proof needs a coordinate MAGNITUDE envelope,
+// never a placed cap frame, and every walk kind states one — a free-form
+// span's own convex-hull envelope (freeformControlExtent) included — so the
+// analytic-only refusal profileCoordinateUpper carries for its OTHER callers
+// (capblend_centroid.go, revolve.go) would refuse a centroid this build must
+// publish for a section this same build just proved buildable.
 func prismCentroidGeometryBound(pp prismPayload, profile ProfileRecord, held r3.Vec, work *freeformWork) (float64, error) {
-	coordUpper, err := profileCoordinateUpper(profile, work)
+	coordUpper, err := profileCoordinateEnvelope(profile, work)
 	if err != nil {
 		return 0, err
 	}
@@ -870,7 +888,13 @@ func (w segmentWalk) isLine() bool { return w.kind == walkLine }
 // requireAnalyticWalk refuses a free-form walk on behalf of a consumer that has
 // no free-form construction yet. Reaching it is a staging limit, never a wrong
 // answer — the reason each consumer stages is its own row in
-// docs/spline-design.md Table R.
+// docs/spline-design.md Table R. The prism side-face build itself no longer
+// calls this: buildLoopSidesAs switches on walkKind instead (§10 P4b), with its
+// own free-form arm. Every remaining call site is a capability P4b does not
+// reach — chording (tessellate.go's chordLoop), the modify ops (fillet.go,
+// shell_offset.go, capblend_geom.go), revolve (revolve.go), and
+// profileCoordinateUpper's own callers (capblend_centroid.go, revolve.go),
+// which need a placed cap frame a free-form wall genuinely cannot represent.
 //
 // The one call site that reaches walkOf without this gate is
 // moments_validate.go's validateMomentWalk: it runs only after every
@@ -1355,6 +1379,21 @@ func coalesceWalksWithPoll(poll func() error, walks []sideWalk) ([]sideWalk, err
 	return out, nil
 }
 
+// freeformVertexAllow folds a junction vertex's bound with a FREE-FORM walk's
+// own endpoint bound (bounds.go's walkEndBoundAllow), and answers zero for
+// every other kind. A vertex the payload recorded is exact only where every
+// coordinate feeding it is; a free-form walk's endpoint is the converted
+// chain's own control point (§5.1), read into float64 by the one rounding
+// walkEndBoundAllow measures, so a vertex it touches must carry that rounding
+// too (topology.go's Vertex.Position contract). An analytic walk's own
+// endpoint bound is a separate question buildLoopSidesAs does not answer here.
+func freeformVertexAllow(w segmentWalk, bound walkEndBound) float64 {
+	if w.kind != walkFreeform {
+		return 0
+	}
+	return walkEndBoundAllow(bound)
+}
+
 // buildLoopSides builds one loop's side faces with shared vertices and
 // edges, returning the faces, the bottom and top cap coedges in walk order,
 // and the loop's perimeter length. A loop's index is both its role index and,
@@ -1395,20 +1434,12 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref StepRef, pp prismPayl
 		if err != nil {
 			return nil, nil, nil, boundedScalar{}, err
 		}
-		// The prism evaluator stages every free-form side face. Refuse by the
-		// recorded kind before resolving its length bracket: that bracket is
-		// expensive and cannot contribute to a body this build will reject.
-		if isFreeformSegment(seg) {
-			return nil, nil, nil, boundedScalar{}, fmt.Errorf(
-				`%w: the prism side-face build does not support a free-form boundary segment`,
-				ErrUnsupported,
-			)
-		}
+		// A Tier B or Tier C free-form kind (a conic, a whole ellipse, an
+		// unequal-weight NURBS, or an elliptical arc) refuses inside walkOf
+		// itself (freeformBezierSpans, Table R R2/R10) — this build stages no
+		// gate of its own ahead of it any more (§10 P4b retires R6).
 		w, err := walkOf(seg, work)
 		if err != nil {
-			return nil, nil, nil, boundedScalar{}, err
-		}
-		if err := requireAnalyticWalk(w, "the prism side-face build"); err != nil {
 			return nil, nil, nil, boundedScalar{}, err
 		}
 		w.lengthBound = absSumUpper(w.lengthBound, walkLenAllow)
@@ -1436,18 +1467,40 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref StepRef, pp prismPayl
 	// a coordinate the payload recorded from what the caller stated, which is what
 	// keeps an ordinary extrude's vertices Exact; neither is a claim about the
 	// other's axis, so they compose rather than one standing in for the other.
+	// A junction touching a FREE-FORM walk's own end also folds in that walk's
+	// own endpoint bound (freeformVertexAllow, bounds.go's walkEndBoundAllow) —
+	// the one rounding §5.1's exact-rational Bézier conversion committed taking
+	// the endpoint into float64 (topology.go's Vertex.Position contract: a
+	// COMPUTED coordinate carries its own computation's proven displacement).
+	// An analytic walk contributes nothing here: widening a trimmed circular
+	// walk's vertex is a separate question this build does not answer by
+	// accident.
+	bottomBoundBase := absSumUpper(delta, pp.z0Delta)
+	topBoundBase := absSumUpper(delta, pp.z1Delta)
 	var bottomV, topV []*Vertex
-	bottomBound := units.Millimeters(absSumUpper(delta, pp.z0Delta))
-	topBound := units.Millimeters(absSumUpper(delta, pp.z1Delta))
-	if !singleClosed {
+	// seamBottom/seamTop are the SINGLE seam vertex a lone closed walk's rim
+	// edges share at each cap — one per cap, no junction vertex at all — the
+	// free-form twin of a whole CircleSeg's own seam vertex. Hoisted out of the
+	// per-kind switch below (§10 P4b): a closed free-form walk reaches
+	// singleClosed on the same terms a whole circle does, and the switch's
+	// walkFreeform arm needs the SAME seam pair the walkCircular arm builds.
+	var seamBottom, seamTop *Vertex
+	if singleClosed {
+		w := walks[0]
+		extra := math.Max(freeformVertexAllow(w.segmentWalk, w.startBound), freeformVertexAllow(w.segmentWalk, w.endBound))
+		seamBottom = &Vertex{position: pp.point(w.startU, w.startV, pp.z0), bound: units.Millimeters(absSumUpper(bottomBoundBase, extra))}
+		seamTop = &Vertex{position: pp.point(w.startU, w.startV, pp.z1), bound: units.Millimeters(absSumUpper(topBoundBase, extra))}
+	} else {
 		bottomV = make([]*Vertex, n)
 		topV = make([]*Vertex, n)
 		for i, w := range walks {
 			if err := ctx.Err(); err != nil {
 				return nil, nil, nil, boundedScalar{}, err
 			}
-			bottomV[i] = &Vertex{position: pp.point(w.startU, w.startV, pp.z0), bound: bottomBound}
-			topV[i] = &Vertex{position: pp.point(w.startU, w.startV, pp.z1), bound: topBound}
+			prev := walks[(i+n-1)%n]
+			extra := math.Max(freeformVertexAllow(w.segmentWalk, w.startBound), freeformVertexAllow(prev.segmentWalk, prev.endBound))
+			bottomV[i] = &Vertex{position: pp.point(w.startU, w.startV, pp.z0), bound: units.Millimeters(absSumUpper(bottomBoundBase, extra))}
+			topV[i] = &Vertex{position: pp.point(w.startU, w.startV, pp.z1), bound: units.Millimeters(absSumUpper(topBoundBase, extra))}
 		}
 	}
 
@@ -1455,7 +1508,12 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref StepRef, pp prismPayl
 	// Convexity from the 2D turn: a positive cross of the incoming and
 	// outgoing tangents is a left turn — interior angle < π — which is a
 	// convex edge on the outer loop and works out identically for hole
-	// loops walked clockwise.
+	// loops walked clockwise. A free-form walk's end tangent is the
+	// hodograph's own exact-rational leg (§5.1), rounded once into float64
+	// with its own stated bound (tanInBound/tanOutBound) — at least as well
+	// founded as the circular walk's own tangent, whose bound is +Inf by
+	// segmentWalk's convention because it comes from trig at a computed
+	// angle. This cross needs no change for either kind.
 	var vertical []*Edge
 	if !singleClosed {
 		vertical = make([]*Edge, n)
@@ -1485,14 +1543,18 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref StepRef, pp prismPayl
 			return nil, nil, nil, boundedScalar{}, err
 		}
 		var bStart, bEnd, tStart, tEnd *Vertex
-		if !singleClosed {
+		if singleClosed {
+			bStart, bEnd = seamBottom, seamBottom
+			tStart, tEnd = seamTop, seamTop
+		} else {
 			bStart, tStart = bottomV[i], topV[i]
 			bEnd, tEnd = bottomV[(i+1)%n], topV[(i+1)%n]
 		}
 		var bottomEdge, topEdge *Edge
 		var surf Surface
 		faceReversed := false
-		if w.isCircular() {
+		switch w.kind {
+		case walkCircular:
 			axis := pp.dir(0, 0, 1)
 			// The material's side of a circular wall is decided by the WALK,
 			// not by the loop's role: the outward normal is the walk tangent
@@ -1522,11 +1584,8 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref StepRef, pp prismPayl
 			var curve0, curve1 Curve
 			if singleClosed {
 				// A full circle's edge closes on itself: one vertex per cap
-				// edge, start == end (topology.go's Circle3 contract).
-				seam0 := &Vertex{position: pp.point(w.startU, w.startV, pp.z0), bound: bottomBound}
-				seam1 := &Vertex{position: pp.point(w.startU, w.startV, pp.z1), bound: topBound}
-				bStart, bEnd = seam0, seam0
-				tStart, tEnd = seam1, seam1
+				// edge, start == end (topology.go's Circle3 contract) — the
+				// seamBottom/seamTop pair the switch's caller already built.
 				curve0, curve1 = Circle3{Center: center0, Axis: edgeAxis, Radius: radius}, Circle3{Center: center1, Axis: edgeAxis, Radius: radius}
 			} else {
 				curve0, curve1 = Arc3{Center: center0, Axis: edgeAxis, Radius: radius}, Arc3{Center: center1, Axis: edgeAxis, Radius: radius}
@@ -1544,7 +1603,42 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref StepRef, pp prismPayl
 			// A clockwise-walked wall has its material OUTSIDE the cylinder,
 			// so its outward normal is the radial direction negated.
 			faceReversed = clockwise
-		} else {
+		case walkFreeform:
+			// §6.5's wall-edge convexity certificate, wired here for the first
+			// time (docs/spline-design.md §6.5, Table R R19). It applies the
+			// one reversal negation internally and states its verdict in the
+			// LOOP'S OWN WALK direction, so the mapping below reads it
+			// verbatim — a counter-clockwise turn convex, clockwise concave,
+			// the identical convention the circular wall's own turn test
+			// fixes above. NEVER negate again for a hole loop: a hole rim's
+			// concavity falls out of the clockwise walk itself, exactly as it
+			// does for a circular hole wall. An error is R19: propagate it so
+			// the build refuses and no step commits.
+			verdict, err := freeformWallConvexityContext(ctx, w.spans, w.closed, w.reversed, work)
+			if err != nil {
+				return nil, nil, nil, boundedScalar{}, err
+			}
+			var convex bool
+			switch verdict {
+			case freeformConvexityPositive:
+				convex = true
+			case freeformConvexityNegative:
+				convex = false
+			case freeformConvexityStraight:
+				// Every live span lies on one line and no joint turns off it
+				// (§6.5's Table K): the chain has no turn of its own, so
+				// evaluator §3's straight-wall rule decides it by its loop's
+				// role — the same expression the walkLine arm below uses.
+				convex = !holeLoop
+			}
+			bottomEdge = &Edge{curve: NURBSCurve{}, start: bStart, end: bEnd, convex: convex, length: w.length, lengthBound: w.lengthBound}
+			topEdge = &Edge{curve: NURBSCurve{}, start: tStart, end: tEnd, convex: convex, length: w.length, lengthBound: w.lengthBound}
+			surf = NURBSSurface{}
+			// faceReversed stays false: an opaque NURBSSurface publishes no
+			// normal at all (§7's NormalAt refusal, topology.go), so
+			// Face.reversed — "the outward normal is the surface's geometric
+			// normal negated" — names nothing for this variant.
+		default:
 			// A straight wall has no turn of its own to disagree with the
 			// loop's: which side its material lies on is decided by the sense
 			// the whole loop is walked, and that sense IS the loop's role —

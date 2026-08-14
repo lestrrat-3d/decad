@@ -420,9 +420,14 @@ func TestFitSplineNonFiniteFitPointIsErrNotFinite(t *testing.T) {
 	}
 }
 
-// A fit-spline profile's moments now answer, so Extrude reaches its own
-// side-face build — and must still refuse there (P4 is not this PR's scope).
-func TestExtrudeFitSplineProfileRefusesAtSideFaces(t *testing.T) {
+// A fit-spline profile's moments now answer AND its side face now builds
+// (docs/spline-design.md §10 P4b, Table R row R6 retired): Extrude reaches the
+// walk-kind discriminant's free-form arm instead of refusing there. This is
+// the headline case the increment exists for: the resulting solid's Volume is
+// exactly the height times the Tier A rational ProfileRecord.Area already
+// proves, measured today as 15.000000000 mm² with bound 1.1102e-16 — so the
+// published Volume bound must stay under 1e-12 too.
+func TestExtrudeFitSplineProfileBuilds(t *testing.T) {
 	world := sketch.NewWorld()
 	s, err := world.CreateSketch(world.XY())
 	require.NoError(t, err)
@@ -435,14 +440,24 @@ func TestExtrudeFitSplineProfileRefusesAtSideFaces(t *testing.T) {
 	profiles := s.Profiles()
 	require.Len(t, profiles, 1)
 
+	record, _, err := decad.RecordProfile(s, profiles[0])
+	require.NoError(t, err)
+	area, err := record.Area()
+	require.NoError(t, err)
+	require.InDelta(t, 15.0, area.Value.Mag(), 1e-9, "the fit-spline region's own exact area")
+
 	d := decad.New()
 	body, err := d.Extrude(s, profiles[0], &decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
-	require.Error(t, err)
-	require.Nil(t, body)
-	require.ErrorIs(t, err, decad.ErrUnsupported)
-	require.Contains(t, err.Error(), "free-form")
-	require.Empty(t, d.Bodies(), "a refused extrude registers no body")
-	require.Empty(t, d.Recipe().Steps, "a refused extrude records no step")
+	require.NoError(t, err)
+	require.NotNil(t, body)
+	require.NotEmpty(t, d.Bodies(), "a built extrude registers a body")
+	require.NotEmpty(t, d.Recipe().Steps, "a built extrude records a step")
+
+	volume, err := body.Volume()
+	require.NoError(t, err)
+	require.InDelta(t, area.Value.Mag()*10, volume.Value.Mag(), 1e-9,
+		"Volume is the Tier A rational times the sweep height")
+	require.Less(t, volume.Bound.Mag(), 1e-12, "the published bound the increment promises")
 }
 
 // The R7 ceiling has to be levied BEFORE geom.NewFitInterpolant allocates or

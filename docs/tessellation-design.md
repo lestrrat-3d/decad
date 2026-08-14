@@ -102,7 +102,11 @@ boolean can retain only one sign.
 right signed volume while losing material outside one wall and gaining the same
 amount inside a hole. Cancellation is forbidden.
 
-The payload table is normative:
+The payload table is normative. The `prismPayload` row below is the
+ANALYTIC-walled case only: a section carrying a free-form (Tier A NURBS)
+wall builds through `Extrude` (`docs/spline-design.md` §10 P4b) but has no
+chording of its own yet, so it refuses at Tessellate — §12's refusal table
+carries its own row for it.
 
 | Payload | Geometry source | `sourceBound(face)` | `Bound` | `areaSlack` | `volSymDiff` |
 |---|---|---|---|---|---|
@@ -839,6 +843,7 @@ Refuse before returning any partial mesh:
 | invalid tolerance | core §12's kind/finite/sign sentinel; zero is `ErrDegenerate` |
 | canceled `TessellateContext` | `ctx.Err()` unchanged; no partial mesh |
 | payload class not implemented | `ErrUnsupported` |
+| `prismPayload` whose section carries a free-form (NURBS) wall | `ErrUnsupported`; chording lands at `docs/spline-design.md` §10 P5, not this document |
 | faceted request finer than the certified maximum face bound | `ErrUnsupported` |
 | prism request whose tolerance the payload's section displacement exhausts | `ErrUnsupported` |
 | meridian/angular, per-mesh facet, cumulative facet-work, cumulative pair-test, or certified-interval proof budget exceeded; integer size overflow | `ErrUnsupported`, before the refused allocation/audit starts |
@@ -863,7 +868,7 @@ sample to make an analytic mesh close. Refine or refuse.
 | **T2** | revolve line generators: cylinder/cone/plane cells, smallest-count correction, global angular sequence, partial caps, full-turn cycles, poles/apexes, axis-incidence + vertex-link manifold audits, meridian nesting/homotopy audit, construction/placement rounding proofs, two-sided bound, cut-stable area slack, STL/OBJ | circular generators; revolve booleans |
 | **T3** | circular meridian generators: sphere/torus cells, axis-to-axis minimum, circular meridian nesting/homotopy audit, non-adjacent-intersection refinement, cut-stable circular-cell area proof | revolve booleans |
 | **T4** | meridian first-moment allowance + certified per-cell angular homotopy integral; finite `volSymDiff`; revolve admitted to booleans | density improvements |
-| **T5** | deterministic local meridian refinement and global angular density improvements that preserve every earlier proof | free-form/NURBS generators |
+| **T5** | deterministic local meridian refinement and global angular density improvements that preserve every earlier proof | free-form/NURBS REVOLVE generators. An extruded free-form prism's own chording is a DIFFERENT increment — it rides the existing prism tessellation path (`docs/spline-design.md` §10 P5, Table C), not this row |
 | **T6** | `loftPayload` exact restatement: source-face-preserving wall/cap triangle copy, a proof record carrying the payload's own displacement (zero for an unplaced loft), and mesh-boolean admission | loft surveys and analytic pair clearance |
 
 Each increment ships its computed geometry tests with it. T2/T3 may export a
