@@ -73,6 +73,22 @@ import (
 // every op; G5 and G6 (§3.1) and the resolution path (§4.2) are op-specific,
 // per §3.2's table.
 func tryPrismBoolean(ctx context.Context, op OpKind, a, b *Body) (prismPayload, bool, error) {
+	if op == OpIntersect {
+		// admitPrismIntersectPair is Intersect's own preamble (G1-G4, the
+		// trimmed-circular refusal, G6, G5, the arrangement cap, the
+		// re-expression) factored out so §4.5's overlap-area reading
+		// (prism_overlap.go) can share it unchanged; see that helper's own
+		// doc comment.
+		budget, pa, pb, reexpress, ok, err := admitPrismIntersectPair(ctx, a, b)
+		if err != nil {
+			return prismPayload{}, false, err
+		}
+		if !ok {
+			return prismPayload{}, false, nil
+		}
+		return resolveAndBuildPrismIntersect(ctx, budget, pa, pb, reexpress)
+	}
+
 	budget := newWorkBudget(ctx) // §10: one counter for the whole attempt
 	if err := budget.err(); err != nil {
 		return prismPayload{}, false, err
@@ -120,15 +136,9 @@ func tryPrismBoolean(ctx context.Context, op OpKind, a, b *Body) (prismPayload, 
 		if !prismCutZIntervalSpans(pa, pb) { // G5, §3.2's Cut row: the tool spans the target
 			return prismPayload{}, false, nil
 		}
-	case OpIntersect:
-		if len(pa.profile.Holes) != 0 || len(pb.profile.Holes) != 0 { // G6: both hole-free (§4.4's multi-lump row is why)
-			return prismPayload{}, false, nil
-		}
-		if !prismIntersectZIntervalOverlaps(pa, pb) { // G5, §3.2's Intersect row
-			return prismPayload{}, false, nil
-		}
 	default:
-		// No other op reaches this evaluator through performBoolean's dispatch.
+		// No other op reaches this evaluator through performBoolean's dispatch
+		// (OpIntersect is handled above, before this shared preamble runs).
 		return prismPayload{}, false, nil
 	}
 
@@ -148,11 +158,76 @@ func tryPrismBoolean(ctx context.Context, op OpKind, a, b *Body) (prismPayload, 
 	switch op {
 	case OpUnion:
 		return resolveAndBuildPrismUnion(ctx, budget, pa, pb, reexpress)
-	case OpCut:
+	default: // OpCut
 		return resolveAndBuildPrismCut(ctx, budget, pa, pb, reexpress)
-	default: // OpIntersect
-		return resolveAndBuildPrismIntersect(ctx, budget, pa, pb, reexpress)
 	}
+}
+
+// admitPrismIntersectPair runs Intersect's own per-op preamble from
+// tryPrismBoolean — G1-G4 (admitPrismPairBudget), the trimmed-circular
+// refusal (prismProfileHasTrimmedCircularSource) on both operands, G6's
+// hole-free arms, G5's Intersect z-interval overlap
+// (prismIntersectZIntervalOverlaps), the arrangement work cap
+// (prismSceneWithinWorkCap), and the operand re-expression
+// (newPrismReexpression) — factored out of tryPrismBoolean's OpIntersect arm
+// (docs/prism-boolean-design.md §4.5's "Entry" paragraph) so a second caller
+// can share it unchanged rather than duplicate it: tryPrismBoolean's own
+// OpIntersect case above, and §4.5's overlap-area reading
+// (prismOverlapVolume, prism_overlap.go). This task adds no capability and
+// changes no behaviour — every gate below runs in the exact order and shape
+// it always has.
+//
+// ok=false (err always nil in that case) means "not admitted" (§3.1/§3.4):
+// every miss above is silent fallback, exactly as tryPrismBoolean's own
+// contract states. A non-nil err is RB7 (§9, the arrangement work cap — the
+// one preamble refusal that is a genuine error, not a silent miss) or ctx
+// cancellation.
+func admitPrismIntersectPair(ctx context.Context, a, b *Body) (budget *workBudget, pa, pb prismPayload, reexpress *prismReexpression, ok bool, err error) {
+	budget = newWorkBudget(ctx) // §10: one counter for the whole attempt
+	if err := budget.err(); err != nil {
+		return nil, prismPayload{}, prismPayload{}, nil, false, err
+	}
+	pa, pb, ok, err = admitPrismPairBudget(budget, a, b) // G1-G4
+	if err != nil {
+		return nil, prismPayload{}, prismPayload{}, nil, false, err
+	}
+	if !ok {
+		return nil, prismPayload{}, prismPayload{}, nil, false, nil
+	}
+
+	trimmedCircular, err := prismProfileHasTrimmedCircularSource(budget, pa.profile)
+	if err != nil {
+		return nil, prismPayload{}, prismPayload{}, nil, false, err
+	}
+	if !trimmedCircular {
+		if trimmedCircular, err = prismProfileHasTrimmedCircularSource(budget, pb.profile); err != nil {
+			return nil, prismPayload{}, prismPayload{}, nil, false, err
+		}
+	}
+	if trimmedCircular {
+		return nil, prismPayload{}, prismPayload{}, nil, false, nil
+	}
+
+	if len(pa.profile.Holes) != 0 || len(pb.profile.Holes) != 0 { // G6: both hole-free (§4.4's multi-lump row is why)
+		return nil, prismPayload{}, prismPayload{}, nil, false, nil
+	}
+	if !prismIntersectZIntervalOverlaps(pa, pb) { // G5, §3.2's Intersect row
+		return nil, prismPayload{}, prismPayload{}, nil, false, nil
+	}
+
+	withinCap, err := prismSceneWithinWorkCap(budget, pa, pb)
+	if err != nil {
+		return nil, prismPayload{}, prismPayload{}, nil, false, err
+	}
+	if !withinCap {
+		return nil, prismPayload{}, prismPayload{}, nil, false, fmt.Errorf(`%w: the analytic %s scene exceeds this evaluator's arrangement work cap`, ErrUnsupported, opKindNames[OpIntersect])
+	}
+
+	reexpress, err = newPrismReexpression(pa, pb)
+	if err != nil {
+		return nil, prismPayload{}, prismPayload{}, nil, false, err
+	}
+	return budget, pa, pb, reexpress, true, nil
 }
 
 // resolveAndBuildPrismUnion runs Union's hole-free select-all/merge/chain
