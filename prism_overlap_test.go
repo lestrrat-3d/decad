@@ -2,8 +2,10 @@ package decad_test
 
 import (
 	"errors"
+	"math"
 	"math/big"
 	"testing"
+	"time"
 
 	"github.com/lestrrat-3d/decad"
 	"github.com/lestrrat-3d/sketch"
@@ -335,4 +337,221 @@ func TestPublicBooleansUnchangedOnMultiRegionPair(t *testing.T) {
 		require.NoError(t, err)
 		require.Positive(t, vol.Value.Base())
 	})
+}
+
+// The rest of this file is the MULTIREGION-TASKS.md Task 3 fixture: a pair of
+// interleaved comb prisms sized to sit past the consumer's own real-scale
+// gear pair (gearScaleConsumerSegments), proving §4.5's reading answers
+// at that scale and recording what prismMaxArrangementSegments (1024,
+// prism_boolean.go) does to a pair that crosses it. Task 1 and Task 2 already
+// shipped the production code this exercises; this file adds no new
+// capability, tests and measurement only.
+//
+// combUpPts builds a comb polygon with its base at the bottom (y in
+// [0, yBase]) and n teeth of width tw rising from it at pitch p (left edge of
+// tooth k at x0+mL+k*p) up to tip height yTop, with base margins mL/mR beyond
+// the end teeth. Point order generalizes combTeethPts's own hand-authored
+// 3-tooth comb (prism_overlap_test.go's TestVerifyThreeRegionOverlapReports
+// SummedVolume fixture) to any tooth count, right-to-left per tooth.
+func combUpPts(n int, x0, tw, p, mL, mR, yBase, yTop float64) [][2]float64 {
+	total := mL + float64(n-1)*p + tw + mR
+	pts := [][2]float64{{x0, 0}, {x0 + total, 0}, {x0 + total, yBase}}
+	for k := n - 1; k >= 0; k-- {
+		left := x0 + mL + float64(k)*p
+		right := left + tw
+		pts = append(pts,
+			[2]float64{right, yBase}, [2]float64{right, yTop},
+			[2]float64{left, yTop}, [2]float64{left, yBase})
+	}
+	return append(pts, [2]float64{x0, yBase})
+}
+
+// combDownPts is combUpPts's vertical mirror about baseTop: base at the top
+// (y in [baseTop-baseThk, baseTop]), n teeth hanging down to teethBottom.
+func combDownPts(n int, x0, tw, p, mL, mR, baseThk, teethBottom, baseTop float64) [][2]float64 {
+	up := combUpPts(n, x0, tw, p, mL, mR, baseThk, baseTop-teethBottom)
+	down := make([][2]float64, len(up))
+	for i, pt := range up {
+		down[i] = [2]float64{pt[0], baseTop - pt[1]}
+	}
+	return down
+}
+
+// subdividePolygon replaces each of pts's edges with m collinear
+// sub-segments, multiplying the polygon's own segment count by m without
+// moving a single one of its vertices or changing its area at all — the same
+// way a real gear tooth flank arrives as many short polyline points rather
+// than one long straight one, which is what pushes the consumer's own pair to
+// gearScaleConsumerSegments in the first place.
+func subdividePolygon(pts [][2]float64, m int) [][2]float64 {
+	n := len(pts)
+	out := make([][2]float64, 0, n*m)
+	for i := range n {
+		p0, p1 := pts[i], pts[(i+1)%n]
+		for k := range m {
+			t := float64(k) / float64(m)
+			out = append(out, [2]float64{
+				p0[0] + (p1[0]-p0[0])*t,
+				p0[1] + (p1[1]-p0[1])*t,
+			})
+		}
+	}
+	return out
+}
+
+// gearScale* fixes the interleaved-comb fixture's own geometry: comb A points
+// n teeth up from a base at the bottom, comb B points n teeth down from a
+// base at the top, and B's teeth are shifted gearScaleXOffset to the right of
+// A's own — less than the shared tooth width, so tooth k of each comb
+// overlaps the OTHER comb's tooth k in exactly one small rectangle, and never
+// its neighbours (mirroring a gear pair pressed slightly past nominal centre
+// distance, engaging several tooth pairs by a sliver each). Every edge is
+// then subdivided gearScaleSubdiv-fold (subdividePolygon), so the combined
+// segment count scales with n at a fixed, known rate.
+const (
+	gearScaleToothWidth   = 2.0
+	gearScalePitch        = 4.0
+	gearScaleXOffset      = 1.0
+	gearScaleMarginL      = 1.0
+	gearScaleMarginR      = 1.0
+	gearScaleABase        = 2.0  // comb A: base thickness, and its teeth's own bottom y
+	gearScaleATeethTop    = 12.0 // comb A: teeth tip y
+	gearScaleBBaseThk     = 2.0  // comb B: base thickness
+	gearScaleBTeethBottom = 6.0  // comb B: teeth tip y (teeth point down)
+	gearScaleBTopY        = 16.0 // comb B: base top y
+	gearScaleSweepH       = 4.0
+	gearScaleSubdiv       = 13
+)
+
+// gearScaleXOverlap and gearScaleYOverlap are each interleaved region's own
+// known width and height, derived from the gearScale* geometry constants
+// above rather than restated as independent numbers.
+var (
+	gearScaleXOverlap = gearScaleToothWidth - gearScaleXOffset
+	gearScaleYOverlap = math.Min(gearScaleATeethTop, gearScaleBTopY-gearScaleBBaseThk) -
+		math.Max(gearScaleABase, gearScaleBTeethBottom)
+)
+
+// gearScaleSegmentCount is the combined LineSeg count prismSceneWithinWorkCap
+// (prism_boolean.go) charges an n-tooth interleavedCombBodies pair: 2 combs,
+// each with combUpPts's own 4+4n raw points-and-edges, each edge subdivided
+// gearScaleSubdiv-fold.
+func gearScaleSegmentCount(n int) int {
+	return 2 * (4 + 4*n) * gearScaleSubdiv
+}
+
+// gearScaleConsumerSegments is the consumer's own real-scale gear pair's
+// measured combined polyline segment count: 312 segments on one gear and 520
+// on the other (MULTIREGION-TASKS.md's "already measured" note). This is the
+// only site in the tree that spells those numbers out; every other mention
+// names this constant, so the pair's measured size has one owner.
+const gearScaleConsumerSegments = 312 + 520
+
+// gearScaleEightToothSegments is the combined segment count the 8-tooth
+// headline fixture is claimed to stand at, i.e. what gearScaleSegmentCount(8)
+// must come to: 2 combs, each with 4+4*8 raw edges, each subdivided
+// gearScaleSubdiv-fold. Pinning it keeps that fixture at the scale the test's
+// own claim rests on — without the pin, lowering gearScaleSubdiv would drop
+// the pair below gearScaleConsumerSegments while every geometric assertion
+// still passed, since subdividePolygon moves no vertex and changes no area.
+const gearScaleEightToothSegments = 936
+
+// interleavedCombBodies builds the gearScale* fixture's two comb prisms into
+// doc, both swept gearScaleSweepH, overlapping in exactly n disjoint regions
+// of gearScaleXOverlap*gearScaleYOverlap mm² each.
+func interleavedCombBodies(t *testing.T, doc *decad.Document, n int) (a, b *decad.Body) {
+	t.Helper()
+	aPts := combUpPts(n, 0, gearScaleToothWidth, gearScalePitch,
+		gearScaleMarginL, gearScaleMarginR, gearScaleABase, gearScaleATeethTop)
+	bPts := combDownPts(n, 0, gearScaleToothWidth, gearScalePitch,
+		gearScaleMarginL+gearScaleXOffset, gearScaleMarginR,
+		gearScaleBBaseThk, gearScaleBTeethBottom, gearScaleBTopY)
+	a = polyPrismBody(t, doc, subdividePolygon(aPts, gearScaleSubdiv), gearScaleSweepH)
+	b = polyPrismBody(t, doc, subdividePolygon(bPts, gearScaleSubdiv), gearScaleSweepH)
+	return a, b
+}
+
+// TestVerifyGearScaleEightRegionOverlapReportsSummedVolume is Task 3's own
+// headline (MULTIREGION-TASKS.md Task 3, observable test 1): an 8-tooth
+// interleaved-comb pair at gearScaleEightToothSegments combined segments —
+// above the consumer's own gearScaleConsumerSegments, and safely below
+// prismMaxArrangementSegments' 1024 cap — still reports one summed
+// Interference row within a tiny bound. The wall-clock cost is logged for
+// comparison against the real gear pair's own measured ~16s Suspect
+// (MULTIREGION-TASKS.md's "already measured" note).
+func TestVerifyGearScaleEightRegionOverlapReportsSummedVolume(t *testing.T) {
+	const n = 8
+	segs := gearScaleSegmentCount(n)
+	require.Greater(t, segs, gearScaleConsumerSegments,
+		"premise: case 1's combined segment count (%d) must exceed the consumer's own measured gear pair (%d segments)",
+		segs, gearScaleConsumerSegments)
+	require.Equal(t, gearScaleEightToothSegments, segs,
+		"premise: case 1 must stand at its stated combined segment count; gearScaleSubdiv or the comb's own point count moved the fixture off that scale")
+	require.LessOrEqual(t, segs, 1024, "premise: case 1's combined segment count stays at or under the 1024 arrangement cap")
+
+	doc := decad.New()
+	a, b := interleavedCombBodies(t, doc, n)
+	before := snapshotDocument(t, doc)
+
+	start := time.Now()
+	report, err := doc.Verify(t.Context())
+	elapsed := time.Since(start)
+	t.Logf("gear-scale Verify: %d teeth, %d combined line segments, %s wall clock", n, segs, elapsed)
+
+	require.NoError(t, err)
+	require.Equal(t, decad.Interfering, report.Status)
+	require.Len(t, report.Interferences, 1)
+	row := report.Interferences[0]
+	require.Same(t, a, row.A)
+	require.Same(t, b, row.B)
+
+	want := float64(n) * gearScaleXOverlap * gearScaleYOverlap * gearScaleSweepH
+	require.InDelta(t, want, row.Volume.Value.Base(), row.Volume.Bound.Base())
+	require.Less(t, row.Volume.Bound.Base(), 1e-9)
+	require.Equal(t, decad.Approximate, row.Volume.Exactness)
+
+	for _, d := range report.Diagnostics {
+		require.NotEqual(t, decad.DiagUnsupportedPairContact, d.Code,
+			"a published row on a coplanar pair can only have come from the analytic reading")
+		require.NotEqual(t, decad.DiagUnsupportedPair, d.Code)
+		require.NotEqual(t, decad.DiagUnsupportedPairPipeline, d.Code)
+	}
+	requireDocumentUnchanged(t, doc, before)
+}
+
+// TestVerifyGearScaleOverArrangementCapStaysSuspect is Task 3's observable
+// test 2: the same interleaved-comb fixture built one tooth larger — 9 teeth,
+// 1040 combined segments, over the 1024 arrangement cap — reports Suspect
+// through the pipeline-unsupported diagnostic rather than an error or a
+// crash, pinning that the cap degrades §4.5's reading rather than breaking
+// it. Raising prismMaxArrangementSegments itself is out of scope for this PR
+// (MULTIREGION-TASKS.md Task 3's own authorisation note); this test only
+// measures what the cap already does.
+func TestVerifyGearScaleOverArrangementCapStaysSuspect(t *testing.T) {
+	const n = 9
+	segs := gearScaleSegmentCount(n)
+	require.Greater(t, segs, 1024, "premise: case 2's combined segment count crosses the 1024 arrangement cap")
+
+	doc := decad.New()
+	a, b := interleavedCombBodies(t, doc, n)
+
+	report, err := doc.Verify(t.Context())
+	require.NoError(t, err, "the cap must report Suspect, never fail Verify itself")
+	require.Equal(t, decad.Suspect, report.Status)
+	require.Empty(t, report.Interferences)
+
+	var sawPipeline, sawLegacy bool
+	for _, d := range report.Diagnostics {
+		if d.Pair == nil || d.Pair.A != a || d.Pair.B != b {
+			continue
+		}
+		switch d.Code {
+		case decad.DiagUnsupportedPairPipeline:
+			sawPipeline = true
+		case decad.DiagUnsupportedPair:
+			sawLegacy = true
+		}
+	}
+	require.True(t, sawPipeline, "the arrangement cap must report the pipeline-unsupported cause code")
+	require.True(t, sawLegacy, "the deprecated broad unsupported-pair code must still accompany it")
 }
