@@ -65,7 +65,8 @@ import (
 // always nil in that case) means "not admitted" per §3.1/§3.4: the caller
 // MUST fall back to the unchanged mesh path with no error surfaced. That
 // includes a split arranged boundary when either input carries a section
-// displacement or B's re-expression is nonidentity. A non-nil err means the
+// displacement, either input carries a walk charge, or B's re-expression is
+// nonidentity — any one of the three alone. A non-nil err means the
 // bounded analytic resolution reached a genuine refusal (§3.4) — the caller
 // MUST propagate it rather than reroute to the mesh path.
 //
@@ -645,8 +646,9 @@ func point2SeparationUpper(a, b Point2) float64 {
 
 // prismProfilesHaveSplitBoundary reports whether sketch narrowed any
 // arranged boundary edge. Such a cut falls back before recordEdge can publish
-// a trim when either source carries a section displacement or B's re-expression
-// is nonidentity, because that uncertainty may be amplified by the crossing
+// a trim when either source carries a section displacement, either source
+// carries a walk charge, or B's re-expression is nonidentity — any one of the
+// three alone — because that uncertainty may be amplified by the crossing
 // angle (prism-boolean-design §3.4, §7).
 func prismProfilesHaveSplitBoundary(budget *workBudget, profiles []*sketch.Profile) (bool, error) {
 	for _, profile := range profiles {

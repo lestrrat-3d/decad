@@ -344,9 +344,18 @@ disjoint regions, through that document's §4.5 overlap-area reading: the
 reading measures the arrangement cells both operands claim and sums their
 volumes, so it needs no single assembled section and no body, and a pair of
 meshing gears — whose overlap is always multi-region — is measured rather
-than deferred to a mesh refusal. A pair neither analytic path admits still
-falls back to `evaluateBoolean`'s read-only mesh intersection unchanged, so
-this section still governs every coplanar pair the mesh path receives:
+than deferred to a mesh refusal, so long as nothing in that document's §3.4
+reroutes the pair. That reroute sends a genuinely crossing pair to the mesh
+path on any one of three independent causes: a section displacement on either
+operand, a walk charge on either operand (that document's §7 `δ_walk`), or a
+nonidentity re-expression of one operand's coordinates into the other's frame.
+Drawing both gears already seated in their sketch clears the third cause and
+only that one, and a gear moved with `Body.Placed` raises it whenever the move
+leaves its accumulated transform different from its partner's, so such a pair
+stays undecided here even though its outlines overlap. A pair neither analytic
+path admits still falls back to `evaluateBoolean`'s read-only mesh
+intersection unchanged, so this section still governs every coplanar pair the
+mesh path receives:
 non-prism payloads, non-coplanar or non-co-directional prisms, and every pair
 the entry gate or the region resolution declines.
 

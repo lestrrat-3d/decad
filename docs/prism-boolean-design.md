@@ -75,9 +75,9 @@ end's axial displacement so every measurement keeps the bounds its operands
 already proved.
 `Cut` and `Intersect` remain on the mesh path until later increments. A
 non-admitted `Union` pair — wrong payload class, non-coplanar, a segment kind
-outside the admitted set, an unequal z-interval for `Union`, a nonidentity
-re-expression or prior source displacement whose arranged boundary is split,
-or a topology this increment's region resolution does not cover — takes the
+outside the admitted set, an unequal z-interval for `Union`, an arranged
+boundary §3.4's split-boundary reroute catches, or a topology this
+increment's region resolution does not cover — takes the
 unchanged mesh path, with **zero
 behavior change**: no new error, no new refusal text, nothing a caller not
 making booleans this shape will ever observe.
@@ -222,9 +222,24 @@ silent fallback stops being available:
    range narrows its natural domain), or B's re-expression is nonidentity:
    any of the three can move a transverse cut by its displacement divided by
    the crossing sine, and this increment carries no certified
-   crossing-sensitivity bound. Every other capacity, arrangement,
-   candidate-validity, or assembly-audit problem is a genuine refusal (§9's
-   table), **never** a reroute to the mesh path. An admitted-then-failed pair
+   crossing-sensitivity bound. **The three causes are independent, and any one
+   of them reroutes the pair on its own.** `Body.Placed` is the ordinary way a
+   pair reaches the re-expression cause, and it reaches it through the
+   ACCUMULATED placement rather than through the motion any one call received:
+   `newPrismReexpression` reports the identity exactly when
+   `pa.frame == pb.frame && pa.xform == pb.xform`, and `Placed` composes its
+   motion onto the transform its receiver already carries instead of replacing
+   it. A placement therefore reroutes the pair when it leaves a nonidentity map
+   RELATIVE to an untouched partner — one operand moved and the other left
+   alone, the ordinary case — while a sequence of motions composing back to the
+   partner's own accumulated placement leaves that map the identity again.
+   Drawing the mating section already seated in its final position keeps the
+   re-expression the identity, and keeps that cause alone: a seated pair still
+   reroutes on either source's own section displacement and on either operand's
+   own walk charge, so seating is no general escape from this routing.
+   Every other capacity, arrangement, candidate-validity, or assembly-audit
+   problem is a genuine refusal (§9's table), **never** a reroute to the mesh
+   path. An admitted-then-failed pair
    does not silently become an `Approximate` mesh result whose exactness claim
    the caller never asked to downgrade to; it becomes an explicit
    `ErrUnsupported`/`ErrDegenerate` the caller can branch on, matching every
@@ -436,7 +451,7 @@ regardless of who authored the input curves it was cut from.
 | `Cut` whose tool does not span the target | G5, mesh path; future `cupPayload`-shaped pocket |
 | `Intersect` with disjoint intervals | G5, mesh path (result is empty; unchanged `BooleanEmpty`) |
 | `Union` with a holed operand | G6, mesh path; §9 PR3 |
-| A split arranged boundary with a nonzero source displacement or a nonidentity re-expression | §3.4 safety routing, mesh path; a future crossing-sensitivity proof may admit it |
+| A split arranged boundary with a nonzero source displacement, a nonzero walk charge, or a nonidentity re-expression — any one of the three alone | §3.4 safety routing, mesh path; a future crossing-sensitivity proof may admit it |
 | `Cut` with a holed tool | G6, mesh path; the surviving material inside each tool hole is a separate lump, so it waits on the multi-lump prism payload of the row below, not on PR3 |
 | `Cut`/`Intersect` crossing sub-case reachable only through a coincident carrier named under one operand's own entity (§4.2's own further extension) | not yet built (`prism_boolean_crossing.go`), mesh path |
 | A holed `Cut` target whose tool does not clear it via clean nesting (the crossing classifier is scoped to hole-free operands on both sides, §4.2) | mesh path; the clean-nesting path above still covers a holed target whose tool does not touch it |
@@ -527,9 +542,26 @@ whose arrangement puts no cell on both operands' material sides — is
 unresolved: the reading answers nothing and the pair falls back to the mesh
 path, whose coplanar refusal leaves it undecided, unchanged. So is a selected
 cell whose own section the region integrals refuse as degenerate or
-unsupported. The reading never publishes a zero-volume overlap and never turns
-a contact into a row; `docs/interference-design.md` §6's positive-volume gate
-judges what it does publish, unchanged.
+unsupported. So, sharing the crossing sub-case's own selection
+(`resolvePrismCrossingCells`, `prism_boolean_crossing.go`), is any pair §3.4's
+split-boundary reroute catches: a genuinely overlapping pair whose arrangement
+would split at least one boundary, where either operand carries a prior
+section displacement or walk charge, or where B's re-expression into A's
+frame is nonidentity. Those causes are independent, and any one of them is
+enough on its own. Drawing both sections already seated in their sketch clears
+the re-expression cause and only that one: a seated pair whose own section
+carries a displacement, or whose consumed segments carry a walk charge —
+`buildPrismScene` charges one for every consumed segment whose recorded range
+narrows its natural domain — reroutes exactly as a placed pair does. A pair
+where one operand reached its overlapping position through `Body.Placed` — the
+ordinary way a caller moves a mating part into position — raises the
+re-expression cause whenever that placement leaves its accumulated transform
+different from the partner's. Whichever cause fires, the pair falls back to
+the mesh path's own coplanar refusal exactly like the exactly-tangent case
+above, undecided rather than measured. The reading never publishes a
+zero-volume overlap and never turns a contact into a row;
+`docs/interference-design.md` §6's positive-volume gate judges what it does
+publish, unchanged.
 
 **Refusals.** The reading crosses no point of no return: it assembles nothing,
 so §9's RB2–RB6 cannot arise, and every shape it does not cover is the silent
@@ -1006,8 +1038,9 @@ origin, exactly as it already must after a Fillet or Chamfer. Flagged in
    `evalPrism`'s composition of it), and `performBoolean`'s branch before
    `evaluateBoolean` to build via `evalPrism` instead of `buildFacetedBody`
    on admission. A split boundary routes to the mesh path before recording
-   when either source carries a section displacement or B's re-expression is
-   nonidentity.
+   when either source carries a section displacement, either source carries a
+   nonzero walk charge (§7's `δ_walk`), or B's re-expression is nonidentity —
+   any one of the three alone (§3.4).
    Tests: a two-box union sharing a cap plane (the "control" case from the
    consumer's report) builds analytically, with `Exact` volume where both boxes
    sit on one frame (§7's `δ == 0` case); the gear's tooth-on-hub

@@ -120,7 +120,14 @@ func (b *Body) Placed(t r3.Transform) (*Body, error) {
 // rigid motion t, retiring the receiver (core §8). The zero transform is
 // invalid and is ErrDegenerate; the step records the motion as a
 // TransformRecord. A canceled context stops the rebuild before the document
-// changes.
+// changes. The motion composes onto the placement this body already carries,
+// and it is that ACCUMULATED placement, never t alone, that the analytic
+// interference reading compares against a coplanar partner's: where the two
+// differ, an otherwise admitted crossing overlap reroutes away from that
+// reading (docs/prism-boolean-design.md §3.4), while motions composing back to
+// the partner's own placement leave it available. Seating both sections in one
+// sketch clears that cause alone — a section displacement or a walk charge on
+// either operand reroutes the pair however it was placed.
 func (b *Body) PlacedContext(ctx context.Context, t r3.Transform) (*Body, error) {
 	if b == nil || b.doc == nil {
 		return nil, fmt.Errorf(`%w: the body belongs to no document`, ErrDegenerate)
