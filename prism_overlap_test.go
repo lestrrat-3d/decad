@@ -340,8 +340,8 @@ func TestPublicBooleansUnchangedOnMultiRegionPair(t *testing.T) {
 }
 
 // The rest of this file is the MULTIREGION-TASKS.md Task 3 fixture: a pair of
-// interleaved comb prisms sized to sit near the consumer's own real-scale
-// gear pair (312+520=832 polyline segments), proving §4.5's reading answers
+// interleaved comb prisms sized to sit past the consumer's own real-scale
+// gear pair (gearScaleConsumerSegments), proving §4.5's reading answers
 // at that scale and recording what prismMaxArrangementSegments (1024,
 // prism_boolean.go) does to a pair that crosses it. Task 1 and Task 2 already
 // shipped the production code this exercises; this file adds no new
@@ -382,7 +382,7 @@ func combDownPts(n int, x0, tw, p, mL, mR, baseThk, teethBottom, baseTop float64
 // moving a single one of its vertices or changing its area at all — the same
 // way a real gear tooth flank arrives as many short polyline points rather
 // than one long straight one, which is what pushes the consumer's own pair to
-// 312+520 segments in the first place.
+// gearScaleConsumerSegments in the first place.
 func subdividePolygon(pts [][2]float64, m int) [][2]float64 {
 	n := len(pts)
 	out := make([][2]float64, 0, n*m)
@@ -440,6 +440,22 @@ func gearScaleSegmentCount(n int) int {
 	return 2 * (4 + 4*n) * gearScaleSubdiv
 }
 
+// gearScaleConsumerSegments is the consumer's own real-scale gear pair's
+// measured combined polyline segment count: 312 segments on one gear and 520
+// on the other (MULTIREGION-TASKS.md's "already measured" note). This is the
+// only site in the tree that spells those numbers out; every other mention
+// names this constant, so the pair's measured size has one owner.
+const gearScaleConsumerSegments = 312 + 520
+
+// gearScaleEightToothSegments is the combined segment count the 8-tooth
+// headline fixture is claimed to stand at, i.e. what gearScaleSegmentCount(8)
+// must come to: 2 combs, each with 4+4*8 raw edges, each subdivided
+// gearScaleSubdiv-fold. Pinning it keeps that fixture at the scale the test's
+// own claim rests on — without the pin, lowering gearScaleSubdiv would drop
+// the pair below gearScaleConsumerSegments while every geometric assertion
+// still passed, since subdividePolygon moves no vertex and changes no area.
+const gearScaleEightToothSegments = 936
+
 // interleavedCombBodies builds the gearScale* fixture's two comb prisms into
 // doc, both swept gearScaleSweepH, overlapping in exactly n disjoint regions
 // of gearScaleXOverlap*gearScaleYOverlap mm² each.
@@ -457,16 +473,20 @@ func interleavedCombBodies(t *testing.T, doc *decad.Document, n int) (a, b *deca
 
 // TestVerifyGearScaleEightRegionOverlapReportsSummedVolume is Task 3's own
 // headline (MULTIREGION-TASKS.md Task 3, observable test 1): an 8-tooth
-// interleaved-comb pair at 936 combined segments — above 700, and safely
-// below prismMaxArrangementSegments' 1024 cap, and above the consumer's own
-// 312+520=832 — still reports one summed Interference row within a tiny
-// bound. The wall-clock cost is logged for comparison against the real gear
-// pair's own measured ~16s Suspect (MULTIREGION-TASKS.md's "already
-// measured" note).
+// interleaved-comb pair at gearScaleEightToothSegments combined segments —
+// above the consumer's own gearScaleConsumerSegments, and safely below
+// prismMaxArrangementSegments' 1024 cap — still reports one summed
+// Interference row within a tiny bound. The wall-clock cost is logged for
+// comparison against the real gear pair's own measured ~16s Suspect
+// (MULTIREGION-TASKS.md's "already measured" note).
 func TestVerifyGearScaleEightRegionOverlapReportsSummedVolume(t *testing.T) {
 	const n = 8
 	segs := gearScaleSegmentCount(n)
-	require.Greater(t, segs, 700, "premise: case 1's combined segment count sits above 700")
+	require.Greater(t, segs, gearScaleConsumerSegments,
+		"premise: case 1's combined segment count (%d) must exceed the consumer's own measured gear pair (%d segments)",
+		segs, gearScaleConsumerSegments)
+	require.Equal(t, gearScaleEightToothSegments, segs,
+		"premise: case 1 must stand at its stated combined segment count; gearScaleSubdiv or the comb's own point count moved the fixture off that scale")
 	require.LessOrEqual(t, segs, 1024, "premise: case 1's combined segment count stays at or under the 1024 arrangement cap")
 
 	doc := decad.New()
