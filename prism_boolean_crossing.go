@@ -147,56 +147,18 @@ func resolveAndBuildPrismIntersectCrossing(ctx context.Context, budget *workBudg
 }
 
 // resolvePrismCrossing is the shared resolution shape behind both builders
-// above: build the private scene, apply §3.4's split-boundary reroute
-// (identical to Union's and the clean-nesting path's own), classify every
-// cell (classifyPrismCells), select the op's own subset (keep), and merge it
-// (mergePrismCells, prism_boolean.go). resolved=false (err always nil in
-// that case) is silent fallback throughout — every check here runs before
-// §3.4's point of no return. opName feeds mergePrismCells's own RB1 message.
+// above: resolvePrismCrossingCells's selection (scene, split-boundary reroute,
+// classification, per-op keep), then mergePrismCells's assembly
+// (prism_boolean.go). resolved=false (err always nil in that case) is silent
+// fallback throughout — every check here runs before §3.4's point of no
+// return. opName feeds mergePrismCells's own RB1 message.
 func resolvePrismCrossing(ctx context.Context, budget *workBudget, pa, pb prismPayload, reexpress *prismReexpression, keep func(a, b bool) bool, opName string) (ProfileRecord, prismSceneDelta, float64, bool, error) {
-	s, tags, sceneDelta, err := buildPrismScene(budget, pa, pb, reexpress)
-	if err != nil {
-		return ProfileRecord{}, prismSceneDelta{}, 0, false, err
-	}
-	if err := budget.err(); err != nil {
-		return ProfileRecord{}, prismSceneDelta{}, 0, false, err
-	}
-	profiles, err := prismProfilesContext(ctx, s.Profiles)
-	if err != nil {
-		return ProfileRecord{}, prismSceneDelta{}, 0, false, err
-	}
-	if err := budget.err(); err != nil {
-		return ProfileRecord{}, prismSceneDelta{}, 0, false, err
-	}
-	if len(profiles) == 0 {
-		return ProfileRecord{}, prismSceneDelta{}, 0, false, nil // §4.4: the scene holds no bounded cell at all
-	}
-	if pa.sectionDelta != 0 || pb.sectionDelta != 0 || !reexpress.identity || sceneDelta.a != 0 || sceneDelta.b != 0 {
-		split, err := prismProfilesHaveSplitBoundary(budget, profiles)
-		if err != nil {
-			return ProfileRecord{}, prismSceneDelta{}, 0, false, err
-		}
-		if split {
-			// Mirrors Union's and the clean-nesting path's own reroute
-			// (§3.4): a coordinate error in re-expressed B, either source
-			// section's existing displacement, or either operand's own walk
-			// charge can move a crossing by delta/sin(theta), which this
-			// increment has no certified lower bound for.
-			return ProfileRecord{}, prismSceneDelta{}, 0, false, nil
-		}
-	}
-
-	matterA, matterB, resolved, err := classifyPrismCells(budget, tags, profiles)
+	selected, sceneDelta, resolved, err := resolvePrismCrossingCells(ctx, budget, pa, pb, reexpress, keep)
 	if err != nil {
 		return ProfileRecord{}, prismSceneDelta{}, 0, false, err
 	}
 	if !resolved {
 		return ProfileRecord{}, prismSceneDelta{}, 0, false, nil
-	}
-
-	selected, err := selectPrismCells(budget, profiles, matterA, matterB, keep)
-	if err != nil {
-		return ProfileRecord{}, prismSceneDelta{}, 0, false, err
 	}
 
 	merged, cutDelta, mergedResolved, err := mergePrismCells(budget, selected, opName)
@@ -207,6 +169,68 @@ func resolvePrismCrossing(ctx context.Context, budget *workBudget, pa, pb prismP
 		return ProfileRecord{}, prismSceneDelta{}, 0, false, nil
 	}
 	return merged, sceneDelta, cutDelta, true, nil
+}
+
+// resolvePrismCrossingCells is §4.2's crossing sub-case selection alone, the
+// first half of resolvePrismCrossing's own shape: build the private scene,
+// apply §3.4's split-boundary reroute (identical to Union's and the
+// clean-nesting path's own), classify every cell (classifyPrismCells), and
+// select the op's own subset (keep) — stopping short of mergePrismCells's
+// assembly tail, which requires the selected cells to chain into one closed
+// loop and so cannot answer a multi-region selection at all
+// (docs/prism-boolean-design.md §4.4). resolvePrismCrossing above is this
+// task's own caller; §4.5's overlap-area reading
+// (prismOverlapVolume, prism_overlap.go) is the second, sharing this exact
+// selection so it never re-derives §4.2's classification.
+//
+// resolved=false (err always nil in that case) is silent fallback throughout
+// (§4.4) — every check here runs before §3.4's point of no return.
+func resolvePrismCrossingCells(ctx context.Context, budget *workBudget, pa, pb prismPayload, reexpress *prismReexpression, keep func(a, b bool) bool) (selected []*sketch.Profile, sceneDelta prismSceneDelta, resolved bool, err error) {
+	s, tags, sceneDelta, err := buildPrismScene(budget, pa, pb, reexpress)
+	if err != nil {
+		return nil, prismSceneDelta{}, false, err
+	}
+	if err := budget.err(); err != nil {
+		return nil, prismSceneDelta{}, false, err
+	}
+	profiles, err := prismProfilesContext(ctx, s.Profiles)
+	if err != nil {
+		return nil, prismSceneDelta{}, false, err
+	}
+	if err := budget.err(); err != nil {
+		return nil, prismSceneDelta{}, false, err
+	}
+	if len(profiles) == 0 {
+		return nil, prismSceneDelta{}, false, nil // §4.4: the scene holds no bounded cell at all
+	}
+	if pa.sectionDelta != 0 || pb.sectionDelta != 0 || !reexpress.identity || sceneDelta.a != 0 || sceneDelta.b != 0 {
+		split, err := prismProfilesHaveSplitBoundary(budget, profiles)
+		if err != nil {
+			return nil, prismSceneDelta{}, false, err
+		}
+		if split {
+			// Mirrors Union's and the clean-nesting path's own reroute
+			// (§3.4): a coordinate error in re-expressed B, either source
+			// section's existing displacement, or either operand's own walk
+			// charge can move a crossing by delta/sin(theta), which this
+			// increment has no certified lower bound for.
+			return nil, prismSceneDelta{}, false, nil
+		}
+	}
+
+	matterA, matterB, resolved, err := classifyPrismCells(budget, tags, profiles)
+	if err != nil {
+		return nil, prismSceneDelta{}, false, err
+	}
+	if !resolved {
+		return nil, prismSceneDelta{}, false, nil
+	}
+
+	selected, err = selectPrismCells(budget, profiles, matterA, matterB, keep)
+	if err != nil {
+		return nil, prismSceneDelta{}, false, err
+	}
+	return selected, sceneDelta, true, nil
 }
 
 // selectPrismCells filters profiles to the cells keep admits, given each

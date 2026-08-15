@@ -115,13 +115,17 @@ volume without a boolean. §4 defines it.
 
 ### 3.4 Read-only intersection
 
-Two evaluators answer here, tried in that order. The read-only analytic
+Three evaluators answer here, tried in that order. The read-only analytic
 `OpIntersect` dispatch of `docs/prism-boolean-design.md` resolves an admitted
-co-directional coplanar prism pair from the recorded sections (§5.2). Every
-pair it does not admit reaches the exact-predicate mesh boolean, which computes
-the held intersection; its exact rational volume integral and
-symmetric-difference bound yield a proven interval for the true overlap. §5–§6
-define when either interval proves a row.
+co-directional coplanar prism pair from the recorded sections and publishes
+the resolved payload's own volume (§5.2). A pair it does not admit next
+reaches that document's §4.5 overlap-area reading, which measures the same
+recorded sections without building a body and so answers an overlap covering
+any number of disjoint regions. Every pair neither admits reaches the
+exact-predicate mesh boolean, which computes the held intersection; its exact
+rational volume integral and symmetric-difference bound yield a proven
+interval for the true overlap. §5–§6 define when any of the three intervals
+proves a row.
 
 ## 4. Full-containment certificate
 
@@ -278,15 +282,23 @@ The public context variants keep consuming behavior:
 `ctx.Err()` unchanged and leaves the document and operands unchanged.
 
 `Verify` calls `evaluateAnalyticIntersect(ctx, a, b)` — §5.2's read-only
-analytic twin of the same `OpIntersect` dispatch `performBoolean` runs — and
-calls `evaluateBoolean(ctx, OpIntersect, a, b)` for a pair that twin does not
-admit. It consumes only the volume result from whichever path answers.
+analytic twin of the same `OpIntersect` dispatch `performBoolean` runs — then
+`docs/prism-boolean-design.md` §4.5's overlap-area reading for a pair that
+twin does not admit, then `evaluateBoolean(ctx, OpIntersect, a, b)` for a pair
+neither admits. It consumes only the volume result from whichever path
+answers.
 
 The twin reaches its own answer by building the admitted analytic payload, so
 it reads `nextStepRef` to name that body, but it never commits: no `Step` is
 appended, no operand retired, no body registered, and the built body never
-leaves the evaluator. Neither path builds or registers a transient `Body` in
-the document.
+leaves the evaluator. The overlap-area reading builds one such payload per
+measured arrangement cell and keeps the same promise for every one of them.
+None of the three paths builds or registers a transient `Body` in the
+document.
+
+The order is normative. The twin runs first so that every pair it already
+answers keeps its existing measurement unchanged; the overlap-area reading
+picks up only pairs that previously reached the mesh path or no path at all.
 
 ### 5.1 One volume integrator
 
@@ -326,10 +338,17 @@ same read-only analytic `OpIntersect` dispatch `performBoolean` uses
 (`evaluateAnalyticIntersect`, `boolean.go`), so an admitted coplanar,
 co-directional prism pair — `Union`'s select-all path, `Cut`/`Intersect`'s
 clean-nesting sub-case, or (since PR3) `Cut`/`Intersect`'s crossing sub-case,
-§4.2 — is superseded here and no longer reaches the mesh path at all. A pair
-the analytic path does not admit still falls back to `evaluateBoolean`'s
-read-only mesh intersection unchanged, so this section still governs every
-coplanar pair the mesh path receives.
+§4.2 — is superseded here and no longer reaches the mesh path at all. PR5
+extends that supersession to a coplanar pair whose overlap covers two or more
+disjoint regions, through that document's §4.5 overlap-area reading: the
+reading measures the arrangement cells both operands claim and sums their
+volumes, so it needs no single assembled section and no body, and a pair of
+meshing gears — whose overlap is always multi-region — is measured rather
+than deferred to a mesh refusal. A pair neither analytic path admits still
+falls back to `evaluateBoolean`'s read-only mesh intersection unchanged, so
+this section still governs every coplanar pair the mesh path receives:
+non-prism payloads, non-coplanar or non-co-directional prisms, and every pair
+the entry gate or the region resolution declines.
 
 Coplanar breadth support constructs one exact 2D arrangement per coplanar face
 patch in the dominant-axis projection already used by the boolean's rational
@@ -511,9 +530,10 @@ The proof path is capability-based, not operation-history-based:
 | neither boundary model nor tessellation | undecided → `Suspect` |
 
 Each row is a capability of one operand. The §3.4 analytic `OpIntersect`
-dispatch sits on top of them as a pair-level path: an admitted co-directional
-coplanar prism pair measures its overlap from the two recorded sections and
-needs no tessellation row at all.
+dispatch and the overlap-area reading behind it sit on top of them as
+pair-level paths: an admitted co-directional coplanar prism pair measures its
+overlap from the two recorded sections and needs no tessellation row at all,
+whether that overlap is one region or several.
 
 A prism, a filleted/chamfered prism, and a tube share `prismPayload` and use the
 same paths where their section displacement is zero. A `prismPayload` carrying a
@@ -565,7 +585,14 @@ Every increment asserts geometry and report state, not only successful return.
   stays `Suspect`;
 - held overlap at or below its bound → no fabricated row, `Suspect`;
 - identical/coincident and broad coplanar pairs stay `Suspect` until their
-  stated increments land, then report the proved volume.
+  stated increments land, then report the proved volume;
+- a coplanar prism pair whose 2D outlines overlap in two or more disjoint
+  regions reports one row whose volume is the summed overlap, proving the
+  overlap-area reading answered rather than the mesh path — which refuses a
+  coplanar pair outright, so any row at all on such a pair is the proof;
+- a coplanar prism pair whose sections meet only along a shared wall reports
+  no row and stays `Suspect`, so the reading never turns contact into a
+  zero-volume interference.
 
 ### 10.3 Bounds and errors
 
@@ -599,6 +626,7 @@ Each row is a PR-sized stage. An unanswered verification question reads
 | 3 | exact structural equality certificate for analytic payloads, reusing the first equal body's volume | harmless alternate record spellings; non-identical broad coplanar overlap |
 | 4 | coplanar breadth in the mesh classifier: classify material sides over every positive-area coplanar patch, keep crossing/overlap patches, and retain pure opposite-side contact as touching; settle the near-miss question §5.2 states this increment owes a coplanar carrier pair before removing the refusal that pair is deferred to | unsupported curved operands and unresolved curved tangencies |
 | 5 | curved read-only intersection coverage after revolve tessellation, with chord bounds and the hidden-tangency refusal intact | contact or overlap whose proven interval still admits both zero and positive volume |
+| 6 | multi-region analytic overlap: `docs/prism-boolean-design.md` §4.5's overlap-area reading, entered after the §5 twin declines, measuring an admitted coplanar prism pair whose overlap covers any number of disjoint regions | a coplanar pair the prism entry gate or the region classification declines, an exactly-tangent pair, and every faceted or non-coplanar operand |
 
 ## 12. Decisions
 
@@ -607,6 +635,11 @@ Each row is a PR-sized stage. An unanswered verification question reads
 - Keep public booleans consuming. Share only their read-only geometry
   evaluation — the mesh `evaluateBoolean` and the analytic `OpIntersect` twin
   `evaluateAnalyticIntersect` (§5, §5.2) — never their commit.
+- Let a proof path answer with a volume alone where a body is not needed.
+  `docs/prism-boolean-design.md` §4.5's overlap-area reading measures a
+  multi-region overlap `Intersect` itself still cannot build, and that
+  asymmetry between what `Verify` proves and what a public boolean returns is
+  accepted rather than resolved by widening `prismPayload`.
 - Reuse the boolean's exact rational volume and symmetric-difference bounds.
 - Require strict positive lower overlap volume except under a certified
   containment or equality set identity.
