@@ -75,9 +75,9 @@ end's axial displacement so every measurement keeps the bounds its operands
 already proved.
 `Cut` and `Intersect` remain on the mesh path until later increments. A
 non-admitted `Union` pair — wrong payload class, non-coplanar, a segment kind
-outside the admitted set, an unequal z-interval for `Union`, a nonidentity
-re-expression or prior source displacement whose arranged boundary is split,
-or a topology this increment's region resolution does not cover — takes the
+outside the admitted set, an unequal z-interval for `Union`, an arranged
+boundary §3.4's split-boundary reroute catches, or a topology this
+increment's region resolution does not cover — takes the
 unchanged mesh path, with **zero
 behavior change**: no new error, no new refusal text, nothing a caller not
 making booleans this shape will ever observe.
@@ -1038,8 +1038,9 @@ origin, exactly as it already must after a Fillet or Chamfer. Flagged in
    `evalPrism`'s composition of it), and `performBoolean`'s branch before
    `evaluateBoolean` to build via `evalPrism` instead of `buildFacetedBody`
    on admission. A split boundary routes to the mesh path before recording
-   when either source carries a section displacement or B's re-expression is
-   nonidentity.
+   when either source carries a section displacement, either source carries a
+   nonzero walk charge (§7's `δ_walk`), or B's re-expression is nonidentity —
+   any one of the three alone (§3.4).
    Tests: a two-box union sharing a cap plane (the "control" case from the
    consumer's report) builds analytically, with `Exact` volume where both boxes
    sit on one frame (§7's `δ == 0` case); the gear's tooth-on-hub
