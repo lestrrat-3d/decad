@@ -455,11 +455,18 @@ func vecL1(v r3.Vec) float64 {
 	return absSumUpper(v.X, v.Y, v.Z)
 }
 
-func profileCoordinateUpper(profile ProfileRecord, work *freeformWork) (float64, error) {
+// walks is the profile's pre-resolved segment walks (docs/spline-design.md
+// §5.2, this file's profileWalks doc comment), or nil to resolve each segment
+// through walkOf as before. A non-nil walks that does not match profile's
+// shape is a plumbing bug and refuses rather than silently resolving anyway.
+func profileCoordinateUpper(profile ProfileRecord, work *freeformWork, walks *profileWalks) (float64, error) {
+	if walks != nil && !walks.matches(profile) {
+		return 0, errResolvedWalksMismatch
+	}
 	upper := 0.0
-	for _, loop := range append([]LoopRecord{profile.Outer}, profile.Holes...) {
-		for _, seg := range loop.Segments {
-			w, err := walkOf(seg, work)
+	for li, loop := range append([]LoopRecord{profile.Outer}, profile.Holes...) {
+		for si, seg := range loop.Segments {
+			w, err := resolveOrRead(seg, work, walks, li, si)
 			if err != nil {
 				return 0, err
 			}
@@ -481,11 +488,17 @@ func profileCoordinateUpper(profile ProfileRecord, work *freeformWork) (float64,
 // already handles: extentBoundedAlong's boundary-extreme scan, and
 // prismCentroidGeometryBound's convex-combination proof, each state their own
 // account of a free-form span and need only the envelope beside it.
-func profileCoordinateEnvelope(profile ProfileRecord, work *freeformWork) (float64, error) {
+//
+// walks is profileCoordinateUpper's own optional pre-resolved set, same
+// contract: nil resolves as before, a non-matching non-nil set refuses.
+func profileCoordinateEnvelope(profile ProfileRecord, work *freeformWork, walks *profileWalks) (float64, error) {
+	if walks != nil && !walks.matches(profile) {
+		return 0, errResolvedWalksMismatch
+	}
 	upper := 0.0
-	for _, loop := range append([]LoopRecord{profile.Outer}, profile.Holes...) {
-		for _, seg := range loop.Segments {
-			w, err := walkOf(seg, work)
+	for li, loop := range append([]LoopRecord{profile.Outer}, profile.Holes...) {
+		for si, seg := range loop.Segments {
+			w, err := resolveOrRead(seg, work, walks, li, si)
 			if err != nil {
 				return 0, err
 			}
@@ -493,6 +506,18 @@ func profileCoordinateEnvelope(profile ProfileRecord, work *freeformWork) (float
 		}
 	}
 	return upper, nil
+}
+
+// resolveOrRead is the shared "read the pre-resolved walk, or resolve one"
+// step every profileWalks-aware consumer in this file uses: walks non-nil
+// (and already checked against the profile by the caller) reads
+// walks.at(loopIndex, segIndex); walks nil calls walkOf, exactly as every
+// consumer did before profileWalks existed.
+func resolveOrRead(seg CurveSegment, work *freeformWork, walks *profileWalks, loopIndex, segIndex int) (segmentWalk, error) {
+	if walks != nil {
+		return walks.at(loopIndex, segIndex), nil
+	}
+	return walkOf(seg, work)
 }
 
 // prismCentroidGeometryBound is a second, formula-independent proof. A solid's
@@ -507,8 +532,11 @@ func profileCoordinateEnvelope(profile ProfileRecord, work *freeformWork) (float
 // analytic-only refusal profileCoordinateUpper carries for its OTHER callers
 // (capblend_centroid.go, revolve.go) would refuse a centroid this build must
 // publish for a section this same build just proved buildable.
-func prismCentroidGeometryBound(pp prismPayload, profile ProfileRecord, held r3.Vec, work *freeformWork) (float64, error) {
-	coordUpper, err := profileCoordinateEnvelope(profile, work)
+//
+// walks is the profile's pre-resolved segment walks, or nil; same contract as
+// profileCoordinateEnvelope's own.
+func prismCentroidGeometryBound(pp prismPayload, profile ProfileRecord, held r3.Vec, work *freeformWork, walks *profileWalks) (float64, error) {
+	coordUpper, err := profileCoordinateEnvelope(profile, work, walks)
 	if err != nil {
 		return 0, err
 	}
@@ -616,11 +644,21 @@ func evalPrismContext(ctx context.Context, d *Document, ref StepRef, pp prismPay
 	for _, loop := range loops {
 		walks += len(loop.Segments)
 	}
+	// pw resolves every boundary segment's walk exactly ONCE for this whole
+	// build (this file's profileWalks doc comment): buildLoopSides below,
+	// prismCentroidGeometryBound and prismBoundsContext's three per-axis
+	// extentBoundedAlong calls all read it back instead of each calling
+	// walkOf itself, which is what let one free-form segment's §5.2 charge be
+	// spent eight times over in a single evalPrismContext call.
+	pw, err := resolveProfileWalks(pp.profile, work)
+	if err != nil {
+		return nil, err
+	}
 	for li, loop := range loops {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		sideFaces, bottom, top, loopLen, err := buildLoopSides(ctx, body, ref, pp, li, loop, work)
+		sideFaces, bottom, top, loopLen, err := buildLoopSides(ctx, body, ref, pp, li, loop, work, pw)
 		if err != nil {
 			return nil, err
 		}
@@ -679,7 +717,7 @@ func evalPrismContext(ctx context.Context, d *Document, ref StepRef, pp prismPay
 	cu.bound = absSumUpper(cu.bound, delta)
 	cv.bound = absSumUpper(cv.bound, delta)
 	centroidBound := prismPointBound(pp, cu, cv, zc)
-	geometryBound, err := prismCentroidGeometryBound(pp, pp.profile, centroidValue, work)
+	geometryBound, err := prismCentroidGeometryBound(pp, pp.profile, centroidValue, work, pw)
 	if err != nil {
 		return nil, err
 	}
@@ -689,7 +727,7 @@ func evalPrismContext(ctx context.Context, d *Document, ref StepRef, pp prismPay
 		Exactness: exactnessOf(centroidBound),
 		Bound:     units.Millimeters(centroidBound),
 	}
-	bounds, err := prismBoundsContext(ctx, pp, work)
+	bounds, err := prismBoundsContext(ctx, pp, work, pw)
 	if err != nil {
 		return nil, err
 	}
@@ -927,6 +965,127 @@ func requireAnalyticWalk(w segmentWalk, what string) error {
 	}
 	return fmt.Errorf(`%w: %s does not support a free-form boundary segment`, ErrUnsupported, what)
 }
+
+// profileWalks is one profile's segment walks resolved ONCE, so that every
+// consumer within a single prism evaluation reads the same resolution back
+// instead of paying walkOf's own §5.2 charge again for it. Within one
+// evalPrismContext call, buildLoopSidesAs, profileCoordinateEnvelope (called
+// from prismCentroidGeometryBound and, four times over, from
+// prismBoundsContext's per-axis extentBoundedAlong) and
+// boundaryExtremesBoundedContext (three times, also from extentBoundedAlong)
+// each used to call walkOf on the SAME recorded segment — eight resolutions of
+// one segment, each recharging §5.2's exact-rational counter in full. On a
+// 15-point involute fit spline that alone charged 230,168 units eight times
+// over, tripping the R7 ceiling on a record whose deduplicated charge fits
+// comfortably inside it. profileWalks is the fix: resolve every segment's walk
+// once and let each consumer read it back.
+//
+// A nil *profileWalks means "resolve as before" everywhere below: revolve, the
+// cap-loop chamfer, the shell cup, Verify, and every re-evaluation path
+// (Placed/Duplicate/PlacedCopy) that has no preflight in hand pass nil and are
+// unaffected, since they run over a DIFFERENT profile (a cap contour, an
+// offset loop) or hold no single-evaluation resolution worth sharing.
+type profileWalks struct {
+	// outer holds loop index 0's resolved walks, one per pp.profile.Outer
+	// segment, in recorded order.
+	outer []segmentWalk
+	// holes holds loop index i>0's resolved walks as holes[i-1], one slice
+	// per pp.profile.Holes entry, each in recorded order — the same
+	// append([]LoopRecord{profile.Outer}, profile.Holes...) indexing every
+	// consumer below already walks.
+	holes [][]segmentWalk
+}
+
+// resolveProfileWalks resolves every segment of profile's outer loop and each
+// hole loop through walkOf exactly once, charging work the same single time
+// each segment's own conversion and length bracket cost (docs/spline-design.md
+// §5.2), rather than once per consumer.
+func resolveProfileWalks(profile ProfileRecord, work *freeformWork) (*profileWalks, error) {
+	outer := make([]segmentWalk, len(profile.Outer.Segments))
+	for i, seg := range profile.Outer.Segments {
+		w, err := walkOf(seg, work)
+		if err != nil {
+			return nil, err
+		}
+		outer[i] = w
+	}
+	holes := make([][]segmentWalk, len(profile.Holes))
+	for hi, hole := range profile.Holes {
+		hw := make([]segmentWalk, len(hole.Segments))
+		for i, seg := range hole.Segments {
+			w, err := walkOf(seg, work)
+			if err != nil {
+				return nil, err
+			}
+			hw[i] = w
+		}
+		holes[hi] = hw
+	}
+	return &profileWalks{outer: outer, holes: holes}, nil
+}
+
+// at returns the resolved walk for loop index loopIndex (0 the outer loop,
+// i>0 profile.Holes[i-1]) and segment index segIndex within that loop, in
+// the same indexing every consumer's
+// append([]LoopRecord{profile.Outer}, profile.Holes...) walk already uses.
+// Callers check matches first; at itself trusts the index it is given.
+func (pw *profileWalks) at(loopIndex, segIndex int) segmentWalk {
+	if loopIndex == 0 {
+		return pw.outer[segIndex]
+	}
+	return pw.holes[loopIndex-1][segIndex]
+}
+
+// loopWalks returns the resolved walk slice for loop index loopIndex (the
+// same convention as at), or nil if loopIndex is out of range for pw. A
+// single-loop consumer (buildLoopSidesAs) uses this instead of at plus its
+// own per-segment loop, since it already owns the per-segment index into the
+// slice it gets back.
+func (pw *profileWalks) loopWalks(loopIndex int) []segmentWalk {
+	if loopIndex == 0 {
+		return pw.outer
+	}
+	hi := loopIndex - 1
+	if hi < 0 || hi >= len(pw.holes) {
+		return nil
+	}
+	return pw.holes[hi]
+}
+
+// matches reports whether pw was resolved from a profile with the same shape
+// as profile: the same outer segment count, the same hole count, and the same
+// per-hole segment count. Every consumer that reads a non-nil *profileWalks
+// checks this FIRST and refuses rather than reading it — constraint from
+// docs/spline-design.md §5.2's own discipline extended to this cache: a
+// pre-resolved set applied to the wrong profile would silently read another
+// section's geometry as this one's, so a shape mismatch is rejected outright
+// rather than falling back to resolving, which would hide the plumbing bug
+// behind a correct-looking answer.
+func (pw *profileWalks) matches(profile ProfileRecord) bool {
+	if pw == nil {
+		return false
+	}
+	if len(pw.outer) != len(profile.Outer.Segments) {
+		return false
+	}
+	if len(pw.holes) != len(profile.Holes) {
+		return false
+	}
+	for i, hole := range profile.Holes {
+		if len(pw.holes[i]) != len(hole.Segments) {
+			return false
+		}
+	}
+	return true
+}
+
+// errResolvedWalksMismatch reports a *profileWalks handed to a consumer that
+// does not match the profile it is read against — an evaluator plumbing
+// invariant break, never a caller-reachable refusal: every call site in this
+// package resolves walks from the exact profile it later reads them against,
+// so reaching this error means a future edit broke that pairing, not that the
+// recorded geometry is at fault.
+var errResolvedWalksMismatch = fmt.Errorf(`%w: resolved walks do not match the profile they are read against`, ErrUnsupported)
 
 // walkOf resolves one recorded segment into its walk geometry.
 //
@@ -1419,8 +1578,15 @@ func freeformVertexAllow(w segmentWalk, bound walkEndBound) float64 {
 // and the loop's perimeter length. A loop's index is both its role index and,
 // via li != 0, its orientation: loop 0 is an outer loop (material inside),
 // every other a hole (material outside).
-func buildLoopSides(ctx context.Context, body *Body, ref StepRef, pp prismPayload, li int, loop LoopRecord, work *freeformWork) ([]*Face, []coedge, []coedge, boundedScalar, error) {
-	return buildLoopSidesAs(ctx, body, ref, pp, li, li != 0, loop, work)
+//
+// resolved is pp.profile's pre-resolved segment walks, or nil to resolve each
+// segment through walkOf as before (this file's profileWalks doc comment).
+// buildLoopSides's own li IS resolved's loop index here — li walks the same
+// append([]LoopRecord{pp.profile.Outer}, pp.profile.Holes...) order a
+// *profileWalks was resolved from — so it is passed straight through as
+// buildLoopSidesAs's roleLoop, which resolved is read against.
+func buildLoopSides(ctx context.Context, body *Body, ref StepRef, pp prismPayload, li int, loop LoopRecord, work *freeformWork, resolved *profileWalks) ([]*Face, []coedge, []coedge, boundedScalar, error) {
+	return buildLoopSidesAs(ctx, body, ref, pp, li, li != 0, loop, work, resolved)
 }
 
 // buildLoopSidesAs is buildLoopSides with the role index and the orientation
@@ -1430,12 +1596,27 @@ func buildLoopSides(ctx context.Context, body *Body, ref StepRef, pp prismPayloa
 // hole in the solid (holeLoop true), each of the void's own holes a solid post
 // (holeLoop false) — a pairing the natural li != 0 rule cannot express
 // (docs/modify-design.md §9).
-func buildLoopSidesAs(ctx context.Context, body *Body, ref StepRef, pp prismPayload, roleLoop int, holeLoop bool, loop LoopRecord, work *freeformWork) ([]*Face, []coedge, []coedge, boundedScalar, error) {
+//
+// resolved is a *profileWalks whose loop index roleLoop holds this loop's
+// pre-resolved walks, or nil to resolve each segment through walkOf as
+// before. A non-nil resolved whose loop at roleLoop does not have exactly
+// len(loop.Segments) walks is a plumbing bug and refuses rather than
+// silently resolving anyway — the only caller that ever passes non-nil is
+// buildLoopSides from evalPrismContext, where roleLoop already IS the loop
+// index the *profileWalks was resolved at.
+func buildLoopSidesAs(ctx context.Context, body *Body, ref StepRef, pp prismPayload, roleLoop int, holeLoop bool, loop LoopRecord, work *freeformWork, resolved *profileWalks) ([]*Face, []coedge, []coedge, boundedScalar, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, nil, nil, boundedScalar{}, err
 	}
 	if len(loop.Segments) == 0 {
 		return nil, nil, nil, boundedScalar{}, fmt.Errorf(`%w: a recorded loop holds no segments`, ErrDegenerate)
+	}
+	var loopWalks []segmentWalk
+	if resolved != nil {
+		loopWalks = resolved.loopWalks(roleLoop)
+		if len(loopWalks) != len(loop.Segments) {
+			return nil, nil, nil, boundedScalar{}, errResolvedWalksMismatch
+		}
 	}
 	// Every coordinate this loop's walks read sits within the payload's own
 	// section displacement of the section it denotes, so each walk's length, each
@@ -1457,10 +1638,17 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref StepRef, pp prismPayl
 		// A Tier B or Tier C free-form kind (a conic, a whole ellipse, an
 		// unequal-weight NURBS, or an elliptical arc) refuses inside walkOf
 		// itself (freeformBezierSpans, Table R R2/R10) — this build stages no
-		// gate of its own ahead of it any more (§10 P4b retires R6).
-		w, err := walkOf(seg, work)
-		if err != nil {
-			return nil, nil, nil, boundedScalar{}, err
+		// gate of its own ahead of it any more (§10 P4b retires R6). A
+		// resolved walk was already through walkOf once (resolveProfileWalks),
+		// so it carries the same refusal already surfaced there.
+		var w segmentWalk
+		if loopWalks != nil {
+			w = loopWalks[i]
+		} else {
+			w, err = walkOf(seg, work)
+			if err != nil {
+				return nil, nil, nil, boundedScalar{}, err
+			}
 		}
 		w.lengthBound = absSumUpper(w.lengthBound, walkLenAllow)
 		raw[i] = sideWalk{segmentWalk: w, segs: []int{i}}
@@ -1756,7 +1944,7 @@ func (pp prismPayload) extentAlong(g r3.Vec) (float64, float64, float64, error) 
 	if pp.sectionDelta != 0 {
 		return 0, 0, 0, fmt.Errorf(`%w: a through-all stop cannot use a prism with a proven section displacement`, ErrUnsupported)
 	}
-	return pp.extentBoundedAlong(context.Background(), g, newFreeformWork())
+	return pp.extentBoundedAlong(context.Background(), g, newFreeformWork(), nil)
 }
 
 func (pp prismPayload) extentAlongContext(ctx context.Context, g r3.Vec) (float64, float64, error) {
@@ -1777,7 +1965,7 @@ func (pp prismPayload) extentAlongContext(ctx context.Context, g r3.Vec) (float6
 // it consumes the bounded reading and charges the displacement to its own level
 // (stops.go, docs/spline-design.md §6.4).
 func (pp prismPayload) extentAlongWork(ctx context.Context, g r3.Vec, work *freeformWork) (float64, float64, error) {
-	lo, hi, bound, err := pp.extentBoundedAlong(ctx, g, work)
+	lo, hi, bound, err := pp.extentBoundedAlong(ctx, g, work, nil)
 	if err != nil {
 		return 0, 0, err
 	}
@@ -1809,18 +1997,25 @@ func (pp prismPayload) extentAlongWork(ctx context.Context, g r3.Vec, work *free
 // and the addition that follows still rounds — and it is zero exactly where
 // that addition is exactly representable, so an unplaced prism's box stays
 // Exact.
-func (pp prismPayload) extentBoundedAlong(ctx context.Context, g r3.Vec, work *freeformWork) (float64, float64, float64, error) {
+//
+// walks is pp.profile's pre-resolved segment walks, or nil to resolve as
+// before through boundaryExtremesBoundedContext and profileCoordinateEnvelope's
+// own walkOf calls. prismBoundsContext passes the same *profileWalks to every
+// one of its three per-axis calls, so the record's boundary walks resolve
+// once for the whole box rather than once per axis (this file's profileWalks
+// doc comment).
+func (pp prismPayload) extentBoundedAlong(ctx context.Context, g r3.Vec, work *freeformWork, walks *profileWalks) (float64, float64, float64, error) {
 	base := pp.xform.Apply(pp.frame.Origin()).Dot(g)
 	gu := pp.dir(1, 0, 0).Dot(g)
 	gv := pp.dir(0, 1, 0).Dot(g)
 	gz := pp.dir(0, 0, 1).Dot(g)
-	lo, hi, bound, err := boundaryExtremesBoundedContext(ctx, pp.profile, gu, gv, work)
+	lo, hi, bound, err := boundaryExtremesBoundedContext(ctx, pp.profile, gu, gv, work, walks)
 	if err != nil {
 		return 0, 0, 0, err
 	}
 	zlo := math.Min(pp.z0*gz, pp.z1*gz)
 	zhi := math.Max(pp.z0*gz, pp.z1*gz)
-	coordUpper, err := profileCoordinateEnvelope(pp.profile, work)
+	coordUpper, err := profileCoordinateEnvelope(pp.profile, work, walks)
 	if err != nil {
 		return 0, 0, 0, err
 	}
@@ -1945,7 +2140,13 @@ func prismDecompositionRoundAllow(gu, gv, gz, base, coordUpper, zUpper float64) 
 // for each world axis, the directional extreme of the region boundary under
 // the lifted linear functional, plus the sweep's own extreme
 // (docs/evaluator-design.md §5).
-func prismBoundsContext(ctx context.Context, pp prismPayload, work *freeformWork) (Box, error) {
+//
+// walks is pp.profile's pre-resolved segment walks, or nil to resolve each
+// segment through walkOf as before. Passed straight to all three per-axis
+// extentBoundedAlong calls below (this file's profileWalks doc comment), so a
+// non-nil walks resolves the record's boundary once for the whole box instead
+// of once per axis.
+func prismBoundsContext(ctx context.Context, pp prismPayload, work *freeformWork, walks *profileWalks) (Box, error) {
 	axes := []r3.Vec{r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1)}
 	var minC, maxC [3]float64
 	extremeBound := 0.0
@@ -1953,7 +2154,7 @@ func prismBoundsContext(ctx context.Context, pp prismPayload, work *freeformWork
 		if err := ctx.Err(); err != nil {
 			return Box{}, err
 		}
-		lo, hi, bound, err := pp.extentBoundedAlong(ctx, axis, work)
+		lo, hi, bound, err := pp.extentBoundedAlong(ctx, axis, work, walks)
 		if err != nil {
 			return Box{}, err
 		}
@@ -2114,9 +2315,16 @@ func circularExtremeInterval(w segmentWalk, gu, gv float64) (boundedScalar, boun
 // happens inside spanExtremeEnclosureContext, behind that span's own R7 charge
 // — §5.2's rule is that every charge is levied before the work allocates, and
 // a rational built here would allocate ahead of every charge this scan makes.
-func boundaryExtremesBoundedContext(ctx context.Context, profile ProfileRecord, gu, gv float64, work *freeformWork) (float64, float64, float64, error) {
+//
+// walks is profile's pre-resolved segment walks, or nil to resolve each
+// segment through walkOf as before (this file's profileWalks doc comment). A
+// non-nil walks that does not match profile's shape refuses.
+func boundaryExtremesBoundedContext(ctx context.Context, profile ProfileRecord, gu, gv float64, work *freeformWork, walks *profileWalks) (float64, float64, float64, error) {
 	if err := requireFiniteDirection(gu, gv); err != nil {
 		return 0, 0, 0, err
+	}
+	if walks != nil && !walks.matches(profile) {
+		return 0, 0, 0, errResolvedWalksMismatch
 	}
 
 	loLower, loUpper := math.Inf(1), math.Inf(1)
@@ -2159,12 +2367,12 @@ func boundaryExtremesBoundedContext(ctx context.Context, profile ProfileRecord, 
 	// float64 range cannot state, so no infinity ever reaches these
 	// accumulators.
 
-	for _, loop := range append([]LoopRecord{profile.Outer}, profile.Holes...) {
-		for _, seg := range loop.Segments {
+	for li, loop := range append([]LoopRecord{profile.Outer}, profile.Holes...) {
+		for si, seg := range loop.Segments {
 			if err := ctx.Err(); err != nil {
 				return 0, 0, 0, err
 			}
-			w, err := walkOf(seg, work)
+			w, err := resolveOrRead(seg, work, walks, li, si)
 			if err != nil {
 				return 0, 0, 0, err
 			}
