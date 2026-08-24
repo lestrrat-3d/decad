@@ -33,6 +33,16 @@ import (
 //   - the VOLUME a vertex displacement sweeps out → sweptVolumeAllow, charged
 //     against perturbedAreaUpper — the area of the surface the displacement
 //     acted ON, which is NOT the area of the mesh that survived it;
+//   - the VOLUME between a loft's HELD CHORDED polyhedron and the curved
+//     solid its paired curved sections denote → chordedBoundaryVolumeAllow,
+//     the SAME closed form sweptVolumeAllow states but for a DIFFERENT
+//     mechanism — a boundary REPLACED by a nearby non-mesh surface, rather
+//     than a mesh whose vertices moved — so it is its own helper with its
+//     own derivation rather than an extension of that one;
+//   - the AREA one chorded wall cell's intermediate RULED surface can exceed
+//     its own held chord facet's area by, on that same chord-to-curve
+//     homotopy → cellRuledExcessUpper, the term chordedBoundaryVolumeAllow's
+//     own areaUpper obligation composes beside perturbedAreaUpper;
 //   - the AREA a 2D boundary displacement sweeps out → sectionDisplacementArea,
 //     the same identity one dimension down: the region a recorded section can
 //     move is a tube about its own recorded boundary, with
@@ -68,6 +78,11 @@ import (
 //     the built patch's own closed-form displacement from it;
 //   - the FIRST MOMENT a cap-loop chamfer's contour displacement can move →
 //     sweptMomentAllow, sweptVolumeAllow's own one-dimension-higher sibling;
+//   - the FIRST MOMENT a loft's chorded boundary can move under the same
+//     chord-to-curve homotopy → chordedBoundaryMomentAllow,
+//     chordedBoundaryVolumeAllow's own one-dimension-higher sibling, NOT
+//     sweptMomentAllow reused, since that helper calls sweptVolumeAllow
+//     internally and so speaks for the wrong mechanism here;
 //   - the LENGTH gap between a cap-loop chamfer's straight-ruled corner
 //     miter ruling and the curved locus it denotes at a non-tangential
 //     corner adjacent to a circular wall → chordLocusLengthAllow, the
@@ -241,6 +256,13 @@ const maxFiniteUlp = 0x1p971
 // most half the spacing at that result, and 16·maxFiniteUlp dominates the six
 // products and sums one placed coordinate commits (three products, two sums
 // joining them, and the translation's own).
+//
+// A second call site is the plane-frame lift of a COMPUTED chord station (a
+// loft's own curved-pairing reach, docs/loft-design.md §5.2): the mechanism
+// is identical, an orthonormal map (Plane.ToWorldUV, in effect r3's own
+// Frame) composed with a translation, so the rounding it commits is bounded
+// the same way — at the pre-lift plane-local coordinate's own magnitude and
+// the frame origin's, never at the lifted world point's.
 func rigidRoundAllow(maxInputAbs, maxTransAbs float64) float64 {
 	m := 2*math.Abs(maxInputAbs) + math.Abs(maxTransAbs)
 	ulp := ulpOf(m)
@@ -330,6 +352,75 @@ func sweptVolumeAllow(delta, areaUpper float64) float64 {
 		return 0
 	}
 	return upRound(delta * areaUpper)
+}
+
+// cellRuledExcessUpper bounds the AREA one loft wall cell's intermediate
+// ruled surface can exceed its own held chord facet's area by, on the
+// chord-to-curve homotopy chordedBoundaryVolumeAllow integrates over
+// (docs/loft-design.md §5.2, the A10 plan's Part 4 R1 fallback).
+//
+// One intermediate surface is itself a RULED surface X(s, r) = (1−r)·a(s) +
+// r·b(s) between an interpolated curve a on section 0 and b on section 1, so
+// X_r = b(s) − a(s) and X_s = (1−r)·a'(s) + r·b'(s), giving |X_s × X_r| <=
+// (|a'(s)| + |b'(s)|) · |b(s) − a(s)| — the rule's own length times the
+// interpolated boundary's own speed — and therefore Area <= ruleLengthUpper ·
+// (length(a) + length(b)). Curve length is a convex functional
+// (|(1−t)·P' + t·Q'| <= (1−t)·|P'| + t·|Q'|), so the interpolated curve a (or
+// b) never runs longer than the LARGER of its own chord chain and the true
+// curve it interpolates toward — which is the true curve. The excess over
+// the chord facet's own held area is therefore at most ruleLengthUpper ·
+// ((arcLen0 − chordLen0) + (arcLen1 − chordLen1)), an unconditional and
+// closed form.
+//
+// ruleLengthUpper must be a PROVEN upper bound on the cell's own rule length
+// (the diagonal or rung spanning the two sections). excess0 and excess1 must
+// each be a PROVEN upper bound on that section's own arc-minus-chord length
+// excess over the cell — never negative, since a chord never exceeds the
+// length of the curve it subtends; a negative reading is the caller's own
+// error and this helper answers 0 for it rather than let a negative excess
+// shrink the term it is meant to widen.
+func cellRuledExcessUpper(ruleLengthUpper, excess0, excess1 float64) float64 {
+	if ruleLengthUpper <= 0 || excess0 < 0 || excess1 < 0 {
+		return 0
+	}
+	return productUpper(ruleLengthUpper, absSumUpper(excess0, excess1))
+}
+
+// chordedBoundaryVolumeAllow bounds the VOLUME between a loft's HELD chorded
+// polyhedron and the TRUE solid its paired curved sections denote
+// (docs/loft-design.md §5.2, §8; the A10 plan's Part 1/Part 2 Q4). It carries
+// the SAME closed form sweptVolumeAllow states — sectionDelta · sup A(t) —
+// but for a DIFFERENT mechanism, so it is its OWN helper with its OWN
+// derivation rather than an extension of that one:
+//
+// (a) The homotopy. Each chord point moves along the STRAIGHT path to the
+// curve point at its own parameter, a motion of at most sectionDelta — the
+// in-section-plane displacement of a built chord from the recorded curve it
+// chords (docs/loft-design.md §5.2). The signed volume is a polynomial in the
+// boundary, so along that path |dV/dt| <= sectionDelta · A(t) — the flux of
+// that velocity through the moving boundary — and |V_true − V_chord| <=
+// sectionDelta · sup_t A(t).
+//
+// (b) What areaUpper must bound: the area of EVERY intermediate surface on
+// that path, not merely the held chord mesh's own area. An intermediate
+// surface is NOT a mesh whose vertices moved — it is a family of RULED
+// surfaces, one per wall cell (cellRuledExcessUpper's own derivation) —
+// so perturbedAreaUpper's per-facet argument (three held vertices, each
+// individually displaced by at most delta) does not reach it on its own:
+// mere containment in a sectionDelta-thick neighbourhood of the chord mesh
+// does NOT bound a surface's area, since a surface can carry unbounded area
+// inside an arbitrarily thin slab, and a containment argument alone is
+// therefore not a proof. The caller must supply areaUpper as
+// perturbedAreaUpper(verts, tris, sectionDelta) PLUS, summed over every wall
+// cell, cellRuledExcessUpper(ruleLengthUpper, excess0, excess1) for that
+// cell's own two sides — the sum this file's own chord-versus-curve fallback
+// takes, which proves the bound unconditionally rather than resting on
+// containment.
+func chordedBoundaryVolumeAllow(sectionDelta, areaUpper float64) float64 {
+	if sectionDelta <= 0 || areaUpper <= 0 {
+		return 0
+	}
+	return upRound(sectionDelta * areaUpper)
 }
 
 // sectionDisplacementArea bounds the AREA a recorded 2D section can differ from
@@ -700,6 +791,25 @@ func chordLocusLengthAllow(speedUpper, dc, axialSpan, chordUpper float64) float6
 // levels.
 func sweptMomentAllow(delta, areaUpper, coordUpper float64) float64 {
 	vol := sweptVolumeAllow(delta, areaUpper)
+	if vol <= 0 || coordUpper <= 0 {
+		return 0
+	}
+	return productUpper(vol, coordUpper)
+}
+
+// chordedBoundaryMomentAllow is chordedBoundaryVolumeAllow's own one-
+// dimension-higher sibling, the SAME relation sweptMomentAllow states for the
+// vertex-displacement mechanism: a region of proven volume V all of whose
+// points lie within coordUpper of the plane-local origin has |∫p dV| <=
+// V·coordUpper for any single coordinate p, since |p| <= coordUpper
+// pointwise. It is NOT sweptMomentAllow reused unchanged — that helper calls
+// sweptVolumeAllow internally, which speaks for the vertex-displacement
+// mechanism rather than this one — so this is its own three-line twin over
+// the chorded volume term. coordUpper carries sweptMomentAllow's own
+// obligation: a PROVEN upper bound on |u|, |v| and |z| over the boundary's
+// own material.
+func chordedBoundaryMomentAllow(sectionDelta, areaUpper, coordUpper float64) float64 {
+	vol := chordedBoundaryVolumeAllow(sectionDelta, areaUpper)
 	if vol <= 0 || coordUpper <= 0 {
 		return 0
 	}
