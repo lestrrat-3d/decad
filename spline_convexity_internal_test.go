@@ -969,11 +969,60 @@ func TestBoehmSplineJointsStayExactlyZeroOnTheSamePoints(t *testing.T) {
 	require.NotEqual(t, freeformConvexityStraight, verdict, "the curve genuinely turns; only the joints are zero, not the spans")
 }
 
-// TestFitSplineGenuineSpanConflictStillRefuses is T-3: the carve-out masks no
-// real sign change. An S-shaped fit set — up, over, down, under — converts to
-// 4 spans whose own verdicts genuinely split negative/negative/positive/
-// positive, a conflict the flag cannot touch because it only ever suppresses
-// a JOINT term, never a span's own certificate.
+// TestFitInterpolatedFlagNeverMasksASpanConflict is T-3's exact half: the
+// carve-out suppresses a JOINT term only, never a span's own certificate, so
+// two spans whose curvature genuinely takes opposite signs must still refuse
+// R19 with fitInterpolated SET.
+//
+// It is built from exact rational control points rather than through a fit
+// record, so no float interpolation solve stands between the fixture and the
+// verdict and the refusal is identical on every platform. A quadratic span's
+// K is the constant 2*cross(P1-P0, P2-P1): +1 for the first net below and -1
+// for the second. The joint between them is verdict 0 on its own merits —
+// both control edges are (1,1), so their cross is exactly zero and their dot
+// is positive — which leaves the two spans' own opposite verdicts as the only
+// thing the fold has to reconcile, and it cannot.
+func TestFitInterpolatedFlagNeverMasksASpanConflict(t *testing.T) {
+	spanPos := ratSpan([][2]float64{{0, 0}, {1, 0}, {2, 1}})
+	spanNeg := ratSpan([][2]float64{{2, 1}, {3, 2}, {4, 2}})
+	spans := []bezierSpan{spanPos, spanNeg}
+
+	posSign, err := spanConvexitySignContext(t.Context(), spanPos, newFreeformWork())
+	require.NoError(t, err)
+	require.Equal(t, freeformConvexityPositive, posSign, "the first net's K is the positive constant")
+
+	negSign, err := spanConvexitySignContext(t.Context(), spanNeg, newFreeformWork())
+	require.NoError(t, err)
+	require.Equal(t, freeformConvexityNegative, negSign, "the second net's K is the negative constant")
+
+	require.Equal(t, 0, jointCross(spanPos, spanNeg).Sign(),
+		"the joint itself turns off no line, so it contributes no sign of its own")
+
+	_, err = freeformWallConvexityContext(t.Context(), spans, false, false, true, newFreeformWork())
+	require.ErrorIs(t, err, errFreeformConvexityConflict,
+		"the carve-out suppresses joints only; the spans' own genuine conflict must still refuse R19")
+}
+
+// TestFitSplineGenuineSpanConflictStillRefuses is T-3 on a real fit record:
+// an S-shaped fit set — up, over, down, under — whose curvature genuinely
+// changes sign, so the chain must still refuse R19 (Table R) with
+// fitInterpolated SET.
+//
+// The refusal is asserted at ErrUnsupported rather than at one sentinel on
+// purpose. This chain's inflection sits at the middle fit point, a span
+// BOUNDARY, and which side of that boundary it lands on is decided by
+// sketch's float natural-cubic solve: Go may contract a*b+c into a fused
+// multiply-add on arm64 and not on amd64, so the inflection moves by an ulp
+// between platforms. Where it lands exactly on the node every span certifies
+// cleanly and the fold refuses errFreeformConvexityConflict; where it creeps
+// an ulp inside the third span, that span is genuinely mixed and refuses at
+// the subdivision depth cap instead. BOTH are Table R row R19 refusals of the
+// same real sign change, and pinning either sentinel would pin an artifact of
+// the host's FMA contraction rather than the geometry. What the fixture is
+// for — that the carve-out masks no real sign change — is exactly what the
+// ErrUnsupported assertion states. TestFitInterpolatedFlagNeverMasksASpanConflict
+// above pins the conflict sentinel itself, over exact rationals that no
+// solve can move.
 func TestFitSplineGenuineSpanConflictStillRefuses(t *testing.T) {
 	fit := []Point2{{U: 0, V: 0}, {U: 2, V: 3}, {U: 4, V: 0}, {U: 6, V: -3}, {U: 8, V: 0}}
 	seg := FitSplineSeg{Fit: fit, TStart: 0, TEnd: 1}
@@ -983,19 +1032,31 @@ func TestFitSplineGenuineSpanConflictStillRefuses(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, spans, 4)
 
-	want := []freeformConvexitySign{
-		freeformConvexityNegative, freeformConvexityNegative,
-		freeformConvexityPositive, freeformConvexityPositive,
-	}
+	// The curve genuinely takes both curvature signs: whatever the inflection
+	// span does, a strictly negative span and a strictly positive one both
+	// certify cleanly on either platform.
+	sawPositive, sawNegative := false, false
 	for i, span := range spans {
 		sign, err := spanConvexitySignContext(t.Context(), span, newFreeformWork())
-		require.NoError(t, err, "span %d must certify cleanly, not hit the depth cap", i)
-		require.Equal(t, want[i], sign, "span %d", i)
+		if err != nil {
+			// Only the inflection-carrying span may refuse, and only at the
+			// depth cap — never for want of regularity.
+			require.ErrorIs(t, err, errFreeformConvexityDepthCap, "span %d", i)
+			continue
+		}
+		switch sign {
+		case freeformConvexityPositive:
+			sawPositive = true
+		case freeformConvexityNegative:
+			sawNegative = true
+		}
 	}
+	require.True(t, sawNegative, "the first half of the S must prove curvature negative")
+	require.True(t, sawPositive, "the second half of the S must prove curvature positive")
 
 	_, err = freeformWallConvexityContext(t.Context(), spans, false, reversed, true, newFreeformWork())
-	require.ErrorIs(t, err, errFreeformConvexityConflict,
-		"the carve-out suppresses joints only; the spans' own genuine conflict must still refuse R19")
+	require.ErrorIs(t, err, ErrUnsupported,
+		"the carve-out suppresses joints only; the spans' own genuine sign change must still refuse R19")
 }
 
 // TestFitSplineVanishingSpeedStillRefusesRegularity is T-4: the falsifying
