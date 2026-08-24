@@ -83,6 +83,9 @@
 //	Extrude       line/circle/arc/Tier A free-form segments   builds
 //	  Tier B/C free-form segment (conic, ellipse, unequal-
 //	    weight NURBS)                                         ErrUnsupported
+//	  Tier A chain proving no single curvature sign across
+//	    its spans and joints (spline design §6.5, R19)        ErrUnsupported
+//	  free-form work past the fixed budget (R7)               ErrUnsupported
 //	  WithTaper   nonzero taper angle                         ErrUnsupported
 //	Revolve       cylinder / cone / sphere / torus / annulus  builds
 //	Union/Cut/Intersect  prism/faceted operands, crossings    builds
