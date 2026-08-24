@@ -2,6 +2,7 @@ package decad
 
 import (
 	"math"
+	"os"
 	"testing"
 	"time"
 
@@ -363,6 +364,7 @@ type wedgeMeasurement struct {
 	sectionDelta float64
 	f            int
 	elapsed      time.Duration
+	body         *Body // the already-built loft, reused so callers never rebuild it
 
 	volume, area, bounds, centroid widenedGateRow
 }
@@ -444,6 +446,7 @@ func measureWedgeReadings(t *testing.T, pts [][2]float64, sectionDelta, areaExce
 		sectionDelta: sectionDelta,
 		f:            len(body.Faces()),
 		elapsed:      elapsed,
+		body:         body,
 		volume:       row("Volume", widenedVol.Bound.Base(), volRef, volHaveRef, volPass),
 		area:         row("Area", widenedArea.Bound.Base(), areaRef, areaHaveRef, areaPass),
 		bounds:       row("Bounds", widenedBoundsBound, boundsRef, boundsHaveRef, boundsPass),
@@ -469,17 +472,29 @@ func logWedgeMeasurement(t *testing.T, label string, m wedgeMeasurement) {
 	)
 }
 
-// --- the sweep: TestLoftChordCalibrationSweep, testing.Short()-gated ---
+// --- the sweep: TestLoftChordCalibrationSweep, opt-in only ---
+
+// decadLoftCalibrationEnv is the explicit opt-in TestLoftChordCalibrationSweep
+// requires. testing.Short() alone does not gate anything in the package's default
+// `go test ./...` run — that flag is false unless a caller passes -short — so the
+// sweep needs its own default-off switch to keep Q3's "at most three [2s] fixtures"
+// budget out of the normal suite. Set it to any non-empty value to run the sweep.
+const decadLoftCalibrationEnv = "DECAD_LOFT_CALIBRATION"
 
 // TestLoftChordCalibrationSweep is a10-plan.md PR 1's calibration procedure (Part 2
 // Q2, Part 3 PR 1 tasks 2-3): both wedges, hand-chorded at m = 4, 8, 16, 32, 64, 128,
-// each row logging the four widened-bound gate readings, F, and wall-clock. It is
-// expensive (m=128 drives F past 500, and loftCrossingAudit is O(F^2) — Q3), so it
-// stays behind testing.Short() and is not part of the package's normal `go test ./...`
-// run; TestLoftChordCalibrationPinsFraction below is the fast, always-run pin.
+// each row logging the four widened-bound gate readings, F, and wall-clock. It is a
+// one-time measurement harness, not a regression fixture, and it is expensive (m=128
+// drives F past 500, and loftCrossingAudit is O(F^2) — Q3: ~13s and 12 loft builds
+// measured), so it costs the default `go test ./...` run nothing: it skips unless
+// DECAD_LOFT_CALIBRATION is set (and still honors -short on top of that).
+// TestLoftChordCalibrationPinsFraction below is the fast, always-run pin.
 func TestLoftChordCalibrationSweep(t *testing.T) {
 	if testing.Short() {
 		t.Skip("the calibration sweep builds loft fixtures up to m=128 stations (F>500, O(F^2) audit); run without -short to measure it")
+	}
+	if os.Getenv(decadLoftCalibrationEnv) == "" {
+		t.Skipf("the calibration sweep is a one-time measurement harness, not a regression fixture; set %s=1 to re-run it", decadLoftCalibrationEnv)
 	}
 
 	ms := []int{4, 8, 16, 32, 64, 128}
@@ -555,8 +570,10 @@ func TestLoftChordCalibrationPinsFraction(t *testing.T) {
 	arcElapsed := time.Since(arcStart)
 	require.Less(t, arcElapsed, 2*time.Second, "PR 1's acceptance line: the arc wedge must build in under 2s")
 
-	body, _ := buildChordedWedgeLoft(t, arcPts)
-	vol, err := body.Volume()
+	// Reuse the body measureWedgeReadings already built above rather than lofting
+	// the same arc wedge a second time — Q3's "at most three [2s] fixtures" budget
+	// counts loft builds, not assertions, so this pin stays at two builds total.
+	vol, err := arcMeas.body.Volume()
 	require.NoError(t, err)
 	// The plan's acceptance line: |Volume.Value - (pi*25/4)*10| <= Volume.Bound +
 	// sectionDeltaTerm. Volume.Base() is already in cubic millimetres (units'
@@ -601,8 +618,9 @@ func TestLoftChordCalibrationPinsFraction(t *testing.T) {
 	denseArea, _, _ := wedgeShoelaceRegion(denseVerts)
 	denseVolume := denseArea * wedgeHeight
 
-	splineBody, _ := buildChordedWedgeLoft(t, splinePts)
-	splineVol, err := splineBody.Volume()
+	// Reuse the body measureWedgeReadings already built above — the same
+	// second-build avoidance as the arc wedge.
+	splineVol, err := splineMeas.body.Volume()
 	require.NoError(t, err)
 	gotSplineVolume := splineVol.Value.Base()
 	require.LessOrEqual(t, math.Abs(gotSplineVolume-denseVolume), splineMeas.volume.widened,
