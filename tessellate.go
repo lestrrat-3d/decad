@@ -801,22 +801,28 @@ func chordCount(w segmentWalk, tol float64) (int, float64, error) {
 	// asked tolerance: float rounding in the asin/ceil path can land one
 	// chord short at a threshold value. Each increment strictly shrinks the
 	// sagitta toward zero, so the walk-up terminates.
-	// 2r·sin²(Δθ/4) is the same sagitta as r·(1 − cos(Δθ/2)) but stays
-	// accurate where 1 − cos rounds a tiny positive sagitta to zero — the
-	// bound is PROVEN, so it may be conservative but never understated.
-	sagitta := func(n int) float64 {
-		s := math.Sin(sweep / float64(n) / 4)
-		return 2 * w.radius * s * s
-	}
-	s := sagitta(n)
+	s := chordSagitta(w.radius, sweep, n)
 	for s > tol && sweep > 0 {
 		if n == maxChordsPerWalk {
 			return 0, 0, errTooManyChords
 		}
 		n++
-		s = sagitta(n)
+		s = chordSagitta(w.radius, sweep, n)
 	}
 	return n, s, nil
+}
+
+// chordSagitta is the proven sagitta 2r·sin²(Δθ/4) a chord subtends when a
+// circular walk of the given sweep is split into n equal chords —
+// chordCount's own walk-up step, pulled out as its single owner (docs/loft-
+// design.md PR 3) so a later caller measuring the SAME quantity for a hand-
+// chorded fixture reads the identical closed form rather than a second copy
+// of it. It is the same sagitta as r·(1 − cos(Δθ/2)) but stays accurate
+// where 1 − cos rounds a tiny positive sagitta to zero — the bound is
+// PROVEN, so it may be conservative but never understated.
+func chordSagitta(radius, sweep float64, n int) float64 {
+	s := math.Sin(sweep / float64(n) / 4)
+	return 2 * radius * s * s
 }
 
 // errTooManyChords refuses a chord tolerance finer than the mesh cap.

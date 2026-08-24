@@ -53,6 +53,24 @@ type loftPayload struct {
 	// measurement this payload publishes composes it.
 	delta float64
 
+	// sectionDelta is the proven upper bound on how far any BUILT CHORD point
+	// of a wall cell sits from the recorded curve it chords, taken as a
+	// MAXIMUM over cells rather than a sum (docs/loft-design.md §5.2). It is
+	// zero for every pairing this evaluator admits today — S3 admits only
+	// same-kind LineSeg pairs, and a straight wall's own chord IS the
+	// recorded segment, so there is no curve for it to depart from. A
+	// same-kind curved pairing (reach, not yet admitted) is the construction
+	// that will set it, to the sagitta its station chording commits.
+	//
+	// It is NEVER delta and never stands in for it, the identical
+	// independence prismPayload's own sectionDelta/z0Delta pair states one
+	// mechanism over (extrude.go): delta bounds a HELD VERTEX's own
+	// displacement from the exact point the record denotes for it, while
+	// sectionDelta bounds a BUILT CHORD's own displacement, in the section
+	// plane, from the curve it chords. A reading that needs both sums them
+	// into its own bound; neither is ever substituted for the other.
+	sectionDelta float64
+
 	verts []r3.Vec
 	tris  [][3]int
 	walls int
@@ -868,6 +886,10 @@ func evalLoft(ctx context.Context, d *Document, ref StepRef, pl loftPayload, bud
 
 	pl.verts, pl.tris, pl.walls = a.verts, a.tris, a.walls
 	pl.delta = a.delta
+	// sectionDelta is left at its zero value: S3 admits only same-kind
+	// LineSeg pairs, so every wall cell's chord IS the recorded segment and
+	// there is no curve for it to depart from (loftPayload's own doc
+	// comment).
 	body.payload = pl
 	return body, nil
 }

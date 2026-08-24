@@ -582,6 +582,7 @@ func TestLoftGateDiameterIsTheVertexDiameter(t *testing.T) {
 
 	pl := body.payload.(loftPayload)
 	require.Zero(t, pl.delta, "an unplaced loft's vertices are exact")
+	require.Zero(t, pl.sectionDelta, "S3 admits only LineSeg pairs, so every wall cell's chord IS the recorded segment")
 	held, ok, err := pointSetDiameterContext(t.Context(), pl.verts)
 	require.NoError(t, err)
 	require.True(t, ok)
