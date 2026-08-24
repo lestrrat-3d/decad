@@ -88,10 +88,28 @@ func (pl loftPayload) placed(ctx context.Context, d *Document, ref StepRef, comp
 // validateLoftRecords applies docs/loft-design.md Table S rows S1, S2, S4, S3
 // and S5, in §4's stated gate order, from the two authenticated records
 // alone — no triangle is built. It returns the normalized per-loop alignment
-// offsets: a nil alignment becomes every offset 0 (§2).
-func validateLoftRecords(p0, p1 ProfileRecord, pl0, pl1 PlaneRecord, alignment []int, work0, work1 *freeformWork) ([]int, error) {
+// offsets (a nil alignment becomes every offset 0, §2) alongside every
+// segment's own resolved walk, one slice per loop, in that loop's own
+// recorded segment order — NOT rotated by the alignment offset, which stays
+// applied at loftPairings' own point of use, exactly as it is here for S3's
+// own check.
+//
+// Each segment is walked exactly ONCE, at the SAME point in the SAME
+// interleaved per-segment order this gate has always used — walk p0's
+// segment j, test S3, walk p1's segment k=(j+off)%n, test S3, then move to
+// j+1 — never batched a whole loop ahead of that order. walkOf is neither
+// memoized nor free to call twice (it charges the free-form work budget on
+// every call, extrude.go's own doc comment), so resolving here and never
+// again (loftPairings reads this function's own output) is what Task 1
+// exists for; keeping the interleaving is what keeps S3's own refusal
+// PRECEDENCE unchanged — a record whose p0 fails S3 at an early segment
+// must still report that refusal even when p1 carries a later segment
+// walkOf itself cannot resolve at all (a malformed CircleSeg, say), a
+// combination sketch's own authentication never produces but a decoded
+// recipe can (docs/recipe-replay-design.md).
+func validateLoftRecords(p0, p1 ProfileRecord, pl0, pl1 PlaneRecord, alignment []int, work0, work1 *freeformWork) ([]int, [][]segmentWalk, [][]segmentWalk, error) {
 	if len(p0.Holes) != len(p1.Holes) {
-		return nil, fmt.Errorf(`%w: the two profiles have %d and %d holes; a loft has no positional pairing for a hole-count mismatch`,
+		return nil, nil, nil, fmt.Errorf(`%w: the two profiles have %d and %d holes; a loft has no positional pairing for a hole-count mismatch`,
 			ErrUnsupported, len(p0.Holes), len(p1.Holes))
 	}
 	loops0 := append([]LoopRecord{p0.Outer}, p0.Holes...)
@@ -100,7 +118,7 @@ func validateLoftRecords(p0, p1 ProfileRecord, pl0, pl1 PlaneRecord, alignment [
 
 	for i := range loops0 {
 		if len(loops0[i].Segments) != len(loops1[i].Segments) {
-			return nil, fmt.Errorf(`%w: loop %d has %d segments on the first profile and %d on the second; a loft has no one-to-one pairing for a segment-count mismatch`,
+			return nil, nil, nil, fmt.Errorf(`%w: loop %d has %d segments on the first profile and %d on the second; a loft has no one-to-one pairing for a segment-count mismatch`,
 				ErrUnsupported, i, len(loops0[i].Segments), len(loops1[i].Segments))
 		}
 	}
@@ -108,48 +126,55 @@ func validateLoftRecords(p0, p1 ProfileRecord, pl0, pl1 PlaneRecord, alignment [
 	offsets := make([]int, loopCount)
 	if alignment != nil {
 		if len(alignment) != loopCount {
-			return nil, fmt.Errorf(`%w: WithLoftAlignment carries %d offsets for %d loops`,
+			return nil, nil, nil, fmt.Errorf(`%w: WithLoftAlignment carries %d offsets for %d loops`,
 				ErrDegenerate, len(alignment), loopCount)
 		}
 		for i, off := range alignment {
 			n := len(loops0[i].Segments)
 			if off < 0 || off >= n {
-				return nil, fmt.Errorf(`%w: loop %d's alignment offset %d is outside [0, %d)`,
+				return nil, nil, nil, fmt.Errorf(`%w: loop %d's alignment offset %d is outside [0, %d)`,
 					ErrDegenerate, i, off, n)
 			}
 			offsets[i] = off
 		}
 	}
 
+	walks0 := make([][]segmentWalk, loopCount)
+	walks1 := make([][]segmentWalk, loopCount)
 	for i := range loops0 {
 		n := len(loops0[i].Segments)
 		off := offsets[i]
+		walks0[i] = make([]segmentWalk, n)
+		walks1[i] = make([]segmentWalk, n)
 		for j := range n {
 			w0, err := walkOf(loops0[i].Segments[j], work0)
 			if err != nil {
-				return nil, err
+				return nil, nil, nil, err
 			}
 			if !w0.isLine() {
-				return nil, fmt.Errorf(`%w: loop %d segment %d of the first profile is not a LineSeg; this evaluator rules straight lines only`,
+				return nil, nil, nil, fmt.Errorf(`%w: loop %d segment %d of the first profile is not a LineSeg; this evaluator rules straight lines only`,
 					ErrUnsupported, i, j)
 			}
+			walks0[i][j] = w0
+
 			k := (j + off) % n
 			w1, err := walkOf(loops1[i].Segments[k], work1)
 			if err != nil {
-				return nil, err
+				return nil, nil, nil, err
 			}
 			if !w1.isLine() {
-				return nil, fmt.Errorf(`%w: loop %d segment %d of the second profile is not a LineSeg; this evaluator rules straight lines only`,
+				return nil, nil, nil, fmt.Errorf(`%w: loop %d segment %d of the second profile is not a LineSeg; this evaluator rules straight lines only`,
 					ErrUnsupported, i, k)
 			}
+			walks1[i][k] = w1
 		}
 	}
 
 	if loftPlanesCoincide(pl0, pl1) {
-		return nil, fmt.Errorf(`%w: the two profiles lie in the same geometric plane; the loft has zero volume by construction`, ErrDegenerate)
+		return nil, nil, nil, fmt.Errorf(`%w: the two profiles lie in the same geometric plane; the loft has zero volume by construction`, ErrDegenerate)
 	}
 
-	return offsets, nil
+	return offsets, walks0, walks1, nil
 }
 
 // loftPlanesCoincide decides S5 over exact rationals on the recorded U/V/
@@ -176,13 +201,16 @@ type loftLoopPair struct {
 	v, w []Point2
 }
 
-// loftPairings resolves Table P into one flat correspondence per loop. P1
-// pairs by position in Holes, never by area or proximity; P6 is satisfied by
+// loftPairings resolves Table P into one flat correspondence per loop, from
+// validateLoftRecords' own already-resolved walks — it spends no further
+// walkOf call, and so no further free-form work (A10 plan Task 1). P1 pairs
+// by position in Holes, never by area or proximity; P6 is satisfied by
 // construction because each list is read in its own loop's own recorded walk
-// order and nothing reinterprets it.
-func loftPairings(p0, p1 ProfileRecord, offsets []int, work0, work1 *freeformWork) ([]loftLoopPair, error) {
+// order and nothing reinterprets it. The alignment offset rotates walks1's
+// own natural order into correspondence here, at the point of use, exactly
+// as validateLoftRecords' own S3 check already does.
+func loftPairings(p0 ProfileRecord, offsets []int, walks0, walks1 [][]segmentWalk) []loftLoopPair {
 	loops0 := append([]LoopRecord{p0.Outer}, p0.Holes...)
-	loops1 := append([]LoopRecord{p1.Outer}, p1.Holes...)
 	pairs := make([]loftLoopPair, len(loops0))
 	for i := range loops0 {
 		n := len(loops0[i].Segments)
@@ -190,21 +218,15 @@ func loftPairings(p0, p1 ProfileRecord, offsets []int, work0, work1 *freeformWor
 		v := make([]Point2, n)
 		w := make([]Point2, n)
 		for j := range n {
-			w0, err := walkOf(loops0[i].Segments[j], work0)
-			if err != nil {
-				return nil, err
-			}
+			w0 := walks0[i][j]
 			v[j] = Point2{U: w0.startU, V: w0.startV}
 			k := (j + off) % n
-			w1, err := walkOf(loops1[i].Segments[k], work1)
-			if err != nil {
-				return nil, err
-			}
+			w1 := walks1[i][k]
 			w[j] = Point2{U: w1.startU, V: w1.startV}
 		}
 		pairs[i] = loftLoopPair{v: v, w: w}
 	}
-	return pairs, nil
+	return pairs
 }
 
 // loftAssembly is the built triangle set plus the index bookkeeping the
@@ -777,15 +799,12 @@ func evalLoft(ctx context.Context, d *Document, ref StepRef, pl loftPayload, bud
 		return nil, err
 	}
 
-	offsets, err := validateLoftRecords(pl.profile0, pl.profile1, pl.plane0, pl.plane1, pl.alignment, work0, work1)
+	offsets, walks0, walks1, err := validateLoftRecords(pl.profile0, pl.profile1, pl.plane0, pl.plane1, pl.alignment, work0, work1)
 	if err != nil {
 		return nil, err
 	}
 
-	pairs, err := loftPairings(pl.profile0, pl.profile1, offsets, work0, work1)
-	if err != nil {
-		return nil, err
-	}
+	pairs := loftPairings(pl.profile0, offsets, walks0, walks1)
 
 	a, err := assembleLoft(ctx, pairs, pl.frame0, pl.frame1, pl.plane0, pl.xform)
 	if err != nil {
