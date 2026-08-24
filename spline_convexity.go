@@ -63,13 +63,50 @@ const (
 // every span verdict and every joint below is computed on it before the one
 // negation at the end.
 //
+// fitInterpolated names whether spans came from FitSplineSeg's §5.1.2
+// conversion (extrude.go's segmentWalk.fitInterpolated, itself set from
+// spline_fit.go's isFitSplineSeg read on the segment walkOf resolved — the
+// normalized value form, since walkOf normalizes before freeformWalk ever
+// sees it). Every joint INTERIOR to that conversion's chain is verdict 0 BY
+// WHERE IT COMES FROM — the same clause that already covers the joint a
+// SUBDIVISION creates
+// (bernsteinCurvatureSignContext's own comment) — never by this file's cross
+// product: §5.1.2's natural-cubic interpolant is C¹ at every active fit point
+// by its own definition, so the joint POINT is shared exactly but the cross
+// that would fold its sign carries decad's exact rational lift of sketch's own
+// ROUNDED float solve for SecondDerivs, not a turn of the curve the record
+// names (docs/spline-design.md §6.5, §5.1.2). Reading that rounding noise as
+// geometry is exactly what a real fixture measures: an involute gear flank's
+// 13 interior joints alternate sign under the cross product though every one
+// of its 14 spans independently proves the SAME curvature sign. So when
+// fitInterpolated is set, the loop below never calls jointConvexitySign for an
+// interior joint — it folds each live span's own verdict directly against the
+// running one, with no joint term between them.
+//
+// The rule is stated over FitSplineSeg's INTERIOR joints alone (§6.5's own
+// words: "The rule reaches no further ... it does not generalise to every
+// conversion joint"), and the closing joint below is NOT one of those. closed
+// and fitInterpolated CAN both hold: freeformWalk's closed is start == end on
+// the CONVERTED chain's own endpoints, decided purely by coordinate identity
+// and blind to which kind produced the chain, and record.go's own
+// FitSplineSeg validation never forbids Fit[0] == Fit[last] — nothing stops a
+// caller-built record from closing a fit-spline chain on itself. Where it
+// does, that closing joint meets sketch's interpolant at its own two NATURAL
+// ends (SecondDerivs is zero at Points[0] and Points[k-1] by the natural
+// boundary condition §5.1.2 takes as given), which are solved independently
+// of one another and carry no C¹ relationship at all — unlike an interior
+// joint, where the SAME tridiagonal solve ties the two adjoining spans'
+// tangents together and only its OWN rounding shows up in the cross product.
+// So the closing joint is a genuine corner exactly as any other chain's is,
+// and folds by the cross product below regardless of fitInterpolated.
+//
 // work is the RECORD's free-form work counter (docs/spline-design.md §5.2),
 // threaded to spanConvexitySignContext, which charges it — never minted here,
 // for the same reason walkOf never mints one: the R7 ceiling bounds one
 // record's total free-form work, so a counter minted per certificate would
 // hand this pass a fresh full ceiling instead of spending down what the
 // record's other free-form passes already charged.
-func freeformWallConvexityContext(ctx context.Context, spans []bezierSpan, closed, reversed bool, work *freeformWork) (freeformConvexitySign, error) {
+func freeformWallConvexityContext(ctx context.Context, spans []bezierSpan, closed, reversed, fitInterpolated bool, work *freeformWork) (freeformConvexitySign, error) {
 	verdict := freeformConvexityStraight
 	firstLive, prevLive := -1, -1
 	for i, span := range spans {
@@ -103,7 +140,11 @@ func freeformWallConvexityContext(ctx context.Context, spans []bezierSpan, close
 		}
 		if firstLive < 0 {
 			firstLive = i
-		} else {
+		} else if !fitInterpolated {
+			// A genuine C0 joint (or one whose provenance this caller has not
+			// marked otherwise): fold its own cross-product verdict in before
+			// the span's. fitInterpolated skips this term entirely — the
+			// joint above is verdict 0 by construction, not by measurement.
 			joint, err := jointConvexitySign(spans[prevLive], span)
 			if err != nil {
 				return 0, err

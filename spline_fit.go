@@ -173,6 +173,25 @@ func fitSplineBezierSpans(seg FitSplineSeg, work *freeformWork) ([]bezierSpan, e
 	return spans, nil
 }
 
+// isFitSplineSeg reports whether seg converts through THIS file's §5.1.2
+// reduction — the fact §6.5's joint rule needs to apply its FitSplineSeg
+// carve-out (docs/spline-design.md §6.5: "A joint interior to one
+// FitSplineSeg's converted chain is verdict 0 by construction, not by this
+// cross product"). It handles both the value form FitSplineSeg and the
+// pointer form *FitSplineSeg, because normalizeSegment (record.go) accepts
+// both from a caller-built record; a nil *FitSplineSeg reports false rather
+// than panicking.
+func isFitSplineSeg(seg CurveSegment) bool {
+	switch s := seg.(type) {
+	case FitSplineSeg:
+		return true
+	case *FitSplineSeg:
+		return s != nil
+	default:
+		return false
+	}
+}
+
 // fitInterpolantCostPerPoint is the conservative per-fit-point charge behind
 // fitInterpolantCost. Linear, with NO quadratic term — unlike a knot
 // insertion's clampedConversionCost, a natural cubic interpolant gives one

@@ -54,7 +54,13 @@ func WithTaper(a units.Value) ExtrudeOption {
 // and Tier A free-form segments (a spline, a closed spline, a fit spline, or a
 // unit-weight NURBS curve — docs/spline-design.md Table F); a Tier B or Tier C
 // free-form segment (a conic, a whole ellipse, or a NURBS curve with unequal
-// weights) is [ErrUnsupported], as is a nonzero WithTaper. A free-form curve
+// weights) is [ErrUnsupported], as is a nonzero WithTaper. A Tier A kind is
+// admitted but not thereby built: each free-form wall edge must also prove ONE
+// curvature sign across every span and joint of its chain
+// (docs/spline-design.md §6.5), and the whole profile's free-form work must fit
+// the fixed budget. A chain whose curvature genuinely changes sign, or whose
+// certificate the fixed subdivision depth does not close, is [ErrUnsupported]
+// (Table R row R19), as is a profile past the budget (row R7). A free-form curve
 // must meet its neighbours at shared endpoints, never by crossing
 // (docs/spline-design.md §2.1) — join the endpoints in the sketch, or the
 // profile is rejected as ErrUnrecordableProfile before this ever runs. The
@@ -857,6 +863,19 @@ type segmentWalk struct {
 	// are zero for every other kind.
 	spans    []bezierSpan
 	reversed bool
+	// fitInterpolated is set only for a walkFreeform walk whose chain came
+	// from FitSplineSeg's §5.1.2 conversion (spline_fit.go's isFitSplineSeg,
+	// read on the segment walkOf resolved — walkOf normalizes as its first
+	// statement, so freeformWalk's own seg, and every isFitSplineSeg check
+	// downstream of it, always sees the normalized value form). §6.5's
+	// convexity certificate needs it to apply the FitSplineSeg carve-out: a
+	// joint interior to that conversion's chain is verdict 0 BY CONSTRUCTION,
+	// never by jointConvexitySign's cross product, because that cross carries
+	// sketch's own rounded SecondDerivs solve rather than a turn of the
+	// recorded curve (docs/spline-design.md §6.5, §5.1.2). It is false for
+	// every other Tier A kind, whose joints are genuine C⁰ corners the cross
+	// product must still fold.
+	fitInterpolated bool
 }
 
 // walkEndBound is the proven error bound on a walk endpoint's two components,
@@ -1136,20 +1155,21 @@ func freeformWalk(seg CurveSegment, work *freeformWork) (segmentWalk, error) {
 		endBound:   endBound,
 		// A closed free-form curve returns to its start, so it carries no
 		// junction vertex — the same fact CircleSeg's closed walk states.
-		closed:      start == end,
-		tanInU:      tangents.inU,
-		tanInV:      tangents.inV,
-		tanInBound:  tangents.inBound,
-		tanOutU:     tangents.outU,
-		tanOutV:     tangents.outV,
-		tanOutBound: tangents.outBound,
-		length:      length,
-		lengthBound: bound,
-		lengthUpper: upRound(length + bound),
-		coordUpper:  freeformControlExtent(spans),
-		kind:        walkFreeform,
-		spans:       spans,
-		reversed:    reversed,
+		closed:          start == end,
+		tanInU:          tangents.inU,
+		tanInV:          tangents.inV,
+		tanInBound:      tangents.inBound,
+		tanOutU:         tangents.outU,
+		tanOutV:         tangents.outV,
+		tanOutBound:     tangents.outBound,
+		length:          length,
+		lengthBound:     bound,
+		lengthUpper:     upRound(length + bound),
+		coordUpper:      freeformControlExtent(spans),
+		kind:            walkFreeform,
+		spans:           spans,
+		reversed:        reversed,
+		fitInterpolated: isFitSplineSeg(seg),
 	}, nil
 }
 
@@ -1614,7 +1634,7 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref StepRef, pp prismPayl
 			// concavity falls out of the clockwise walk itself, exactly as it
 			// does for a circular hole wall. An error is R19: propagate it so
 			// the build refuses and no step commits.
-			verdict, err := freeformWallConvexityContext(ctx, w.spans, w.closed, w.reversed, work)
+			verdict, err := freeformWallConvexityContext(ctx, w.spans, w.closed, w.reversed, w.fitInterpolated, work)
 			if err != nil {
 				return nil, nil, nil, boundedScalar{}, err
 			}
