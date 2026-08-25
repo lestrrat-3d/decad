@@ -758,6 +758,30 @@ func cellTwistOffsetUpper(vLo, vHi, wLo, wHi r3.Vec) float64 {
 // the composition regardless — removing a mechanism on a case analysis
 // nobody had written down is how earlier rounds of this bound broke.
 //
+// "No proof for the twisted case" above scopes REDUNDANCY, never
+// DOMINATION, and the two questions have opposite consequences. Redundancy
+// asks whether this leg could be DELETED given the other three; leaving it
+// unproven keeps a leg that may be unnecessary, which can only make the
+// published total LARGER. Domination asks whether the total bounds the true
+// gap, and that IS proven, by the telescoping identity immediately below
+// plus each leg's own derivation: leg (a) the flux identity over
+// cellChordCurveAreaUpper's ABSOLUTE sup_t A(t), leg (b)
+// cellTwistVolumeAllow's parts (a)/(b)/(c), leg (c) the exact planar
+// identity |h|·|ΔArea|/3, leg (d) Cauchy-Schwarz on the by-parts residue.
+// So no unproven step can shrink the number this function returns; the
+// open question can only cost precision.
+//
+// The four-leg composition is also why this helper does NOT carry the
+// two-argument (sectionDelta, areaUpper) shape the A10 plan's Q4 names.
+// That shape charges the wall leg alone, and the wall leg alone does not
+// bound a twisted pairing: TestChordedBoundaryVolumeAllowTwistLegIsLoadBearing
+// measures full ratio 4.24308 against without-twist ratio 1.84662e-05 on the
+// same twisted section pair, so the two-argument form understates the true
+// gap there by about five orders of magnitude. The plan's own Part 4 R1
+// anticipated that its Q4 derivation might not close and named charging the
+// per-cell ruled excess separately as the first fallback; these four legs are
+// that fallback carried through, with each leg proven rather than assumed.
+//
 // Composing all four by absSumUpper is sound because V_true − V_held
 // factors exactly into three differences that telescope to it: writing
 // W_true for the wall's true volume contribution, W_ruled for the SAME
