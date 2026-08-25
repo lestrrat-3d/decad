@@ -1032,11 +1032,16 @@ func circularLengthInterval(seg CurveSegment) (ratInterval, bool) {
 // atan2Interval under the same +2π branch correction circularLengthInterval
 // applies, and the sine and cosine of that enclosed angle taken by
 // radSinCosSpan.
-func circularEndpointInterval(seg CurveSegment, t float64) (ratInterval, ratInterval, bool) {
-	rt := floatRat(t)
-	if rt == nil {
-		return ratInterval{}, ratInterval{}, false
-	}
+//
+// The parameter is taken as an EXACT RATIONAL, never a float. A caller reading
+// a walk's own endpoint converts its held float parameter (floatRat) at the
+// call; one generating a point at a parameter the record's own arithmetic
+// states — a uniform station division t_k = TStart + (k/m)·(TEnd − TStart)
+// (loft_build.go's circularStationChain) — hands that value in unrounded,
+// because rounding it to a float first would enclose the curve at a
+// NEIGHBOURING parameter and prove a bound about a point no construction
+// named.
+func circularEndpointInterval(seg CurveSegment, rt *big.Rat) (ratInterval, ratInterval, bool) {
 	switch seg := seg.(type) {
 	case CircleSeg:
 		radius, err := seg.Radius.In(units.Millimeter)

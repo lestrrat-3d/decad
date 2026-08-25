@@ -21,12 +21,17 @@ import (
 // names for measuring it anyway: a hand-chorded LineSeg-only profile builds through
 // today's public Loft with no code change and publishes Exact readings and a zero
 // Bound (a straight polygon has no curve to fall short of). Only sectionDelta itself
-// — the per-cell chord-vs-curve displacement the future evaluator will publish — is
-// absent, and this file computes it (closed form for the circular arm, a dense
-// numeric measurement for the free-form arm, since a fit spline has no closed-form
-// sagitta) and adds it arithmetically to each reading's Bound before re-running
-// verify.go's own tolerance gate (scalarToleranceRef/boundedToleranceRef) on the
-// widened value by hand.
+// — the per-cell chord-vs-curve displacement the evaluator publishes — is absent
+// from such a build, and this file supplies it and adds it arithmetically to each
+// reading's Bound before re-running verify.go's own tolerance gate
+// (scalarToleranceRef/boundedToleranceRef) on the widened value by hand.
+//
+// The two arms supply it differently, and deliberately so. The A10a (circular) arm
+// takes BOTH its chord vertices and its sectionDelta from the SHIPPED generator
+// (wedgeArcChords), so every margin below is a reading of the geometry decad
+// actually builds and moves when that generator moves. The A10b (fit-spline) arm
+// stays a local stand-in — dense numeric sampling for its sagitta, since a fit
+// spline has no closed form and no free-form pairing arm ships to ask.
 
 // --- shared wedge geometry ---
 
@@ -40,15 +45,34 @@ const (
 	toleranceRel = 1e-3
 )
 
-// wedgeCirclePoints returns the m+1 chord vertices for the A10a arm: exact points on
-// the radius-5 quarter circle from (5,0) to (0,5), k = 0..m at k*sweep/m.
-func wedgeCirclePoints(m int) [][2]float64 {
-	pts := make([][2]float64, m+1)
-	for k := 0; k <= m; k++ {
-		theta := wedgeSweep * float64(k) / float64(m)
-		pts[k] = [2]float64{wedgeRadius * math.Cos(theta), wedgeRadius * math.Sin(theta)}
+// wedgeArcChords returns the m+1 chord vertices for the A10a arm, and the
+// sectionDelta a real build publishes for them — both read off the SHIPPED
+// production generator, never off a local cos/sin loop.
+//
+// This is what makes every A10a reading in this file a measurement of the
+// geometry decad actually builds. The vertices are circularStationChain's own
+// output for the recorded quarter-arc and the walk walkOf resolves for it
+// (loft_build.go), closed by that walk's own end point — the station the NEXT
+// segment of a real loop would contribute, which is the arc's recorded End.
+// The delta is chordCellDeltaUpper over that same generator's two terms: the
+// certified per-cell sagitta and the generated stations' own displacement. A
+// local reimplementation of either would leave the fixture measuring itself:
+// it would keep reporting the same margins however far production's own
+// stations drifted from the curve they chord.
+func wedgeArcChords(t *testing.T, m int) ([][2]float64, float64) {
+	t.Helper()
+	seg, w := wedgeArcRecord(t)
+	stations, stationDelta := circularStationChain(w, seg, m)
+	require.False(t, isNonFinite(stationDelta), "the shipped generator must state its stations' own displacement at m=%d", m)
+	pts := make([][2]float64, 0, m+1)
+	for _, p := range stations {
+		pts = append(pts, [2]float64{p.U, p.V})
 	}
-	return pts
+	pts = append(pts, [2]float64{w.endU, w.endV})
+
+	sd := chordCellDeltaUpper(loftCertifiedSagittaUpper(seg, m), stationDelta)
+	require.False(t, isNonFinite(sd), "the shipped generator must state a chord bound at m=%d", m)
+	return pts, sd
 }
 
 // wedgeFitSpline builds the A10b reference curve once: a 5-point fit spline through
@@ -311,7 +335,8 @@ func TestLoftChordCalibrationTrueOutlineIsTheChordedTwin(t *testing.T) {
 		}
 		require.Equal(t, 1, curved, "the curved side is the arc itself, never a chord")
 
-		requireFeetMatchChordEnds(t, radialFeet(t, rec), wedgeCirclePoints(wedgePinStations(t)))
+		chords, _ := wedgeArcChords(t, wedgePinStations(t))
+		requireFeetMatchChordEnds(t, radialFeet(t, rec), chords)
 	})
 
 	t.Run("A10b: the spline outline is the chorded spline wedge's twin", func(t *testing.T) {
@@ -356,33 +381,41 @@ type wedgeAreaExcess struct {
 // the area-along-the-path ceiling adds to the held chord surface.
 func (e wedgeAreaExcess) total() float64 { return e.wall + e.cap }
 
-// arcSagitta is the TRUE closed-form sagitta 2r*sin^2(sweep/m/4) — the max per-cell
-// displacement between an m-chord polygon and the true radius-r arc it approximates
-// — evaluated at a FORCED station count m rather than walked up to a tolerance. It
-// is deliberately NOT chordSagitta: this harness calibrates a constant against the
-// displacement a chording actually takes, where tessellate.go publishes the proven
-// upper bound on it (docs/tessellation-design.md Sec 3). Like wedgeCirclePoints it
-// takes m alone and reads the fixture's own wedgeRadius/wedgeSweep, which are the
-// only r and sweep the A10a arm ever has.
+// arcSagitta is the EXACT closed-form per-cell sagitta of the reference quarter
+// arc at a forced station count m: 2r*sin^2(sweep/m/4) over the fixture's own
+// wedgeRadius/wedgeSweep. It is NOT this file's sectionDelta stand-in — that is
+// wedgeArcChords' own production reading — and has exactly one caller left:
+// wedgePinStations' seed-straddle assertion, which contrasts chordCount's
+// deliberately conservative r*sweep^2/(8n^2) against this exact value to show
+// WHY the joint walk-up seeds one station above the grid point.
+// tessellate.go publishes the proven upper bound on that displacement
+// (docs/tessellation-design.md Sec 3); this value is the displacement itself.
 func arcSagitta(m int) float64 {
 	s := math.Sin(wedgeSweep / float64(m) / 4)
 	return 2 * wedgeRadius * s * s
 }
 
-// arcChordExcess is the A10a arm's wedgeAreaExcess in closed form, over the same
-// fixture constants arcSagitta reads. The wall term is how much longer the true arc
-// is than its m-chord polygon, times the extrusion height. The cap term is the true
-// circular sector (r^2*sweep/2) minus the m-chord polygon's own area
-// (m*r^2*sin(sweep/m)/2), doubled for the two caps.
-func arcChordExcess(m int) wedgeAreaExcess {
+// arcChordExcess is the A10a arm's wedgeAreaExcess: how much more surface the
+// TRUE quarter-arc wedge carries than the chorded stand-in this file builds.
+//
+// The true half of each term is closed form over the fixture's own constants —
+// the arc's length r*sweep and the sector's area r^2*sweep/2. The chorded half
+// is measured on the SHIPPED chord vertices (wedgeArcChords), never on the
+// closed-form m-chord polygon, so a production generator whose stations drift
+// off the circle moves this excess rather than leaving it untouched.
+func arcChordExcess(t *testing.T, m int) wedgeAreaExcess {
+	t.Helper()
 	const r, sweep = wedgeRadius, wedgeSweep
-	arcLen := r * sweep
-	chordLen := float64(m) * 2 * r * math.Sin(sweep/(2*float64(m)))
-	sector := r * r * sweep / 2
-	polygon := float64(m) * r * r * math.Sin(sweep/float64(m)) / 2
+	pts, _ := wedgeArcChords(t, m)
+
+	chordLen := 0.0
+	for i := 1; i < len(pts); i++ {
+		chordLen += math.Hypot(pts[i][0]-pts[i-1][0], pts[i][1]-pts[i-1][1])
+	}
+	polygon := wedgeShoelaceArea(append([][2]float64{{0, 0}}, pts...))
 	return wedgeAreaExcess{
-		wall: (arcLen - chordLen) * wedgeHeight,
-		cap:  2 * (sector - polygon),
+		wall: (r*sweep - chordLen) * wedgeHeight,
+		cap:  2 * (r*r*sweep/2 - math.Abs(polygon)),
 	}
 }
 
@@ -447,7 +480,7 @@ func splineDenseLength(fs *sketch.FitSpline, n int) float64 {
 // stand-in for the true curved cap, which the fit spline has no closed form for.
 func splineRegionArea(fs *sketch.FitSpline, n int) float64 {
 	verts := append([][2]float64{{0, 0}}, wedgeSplinePoints(fs, n)...)
-	area, _, _ := wedgeShoelaceRegion(verts)
+	area := wedgeShoelaceArea(verts)
 	return math.Abs(area)
 }
 
@@ -469,27 +502,21 @@ func splineChordExcess(fs *sketch.FitSpline, m int, height float64, denseN int) 
 	}
 }
 
-// wedgeShoelaceRegion computes a closed polygon's area and centroid by the standard
-// shoelace sums over vertices in order (the last implicitly reconnects to the
-// first). Its only caller is splineRegionArea, through which it builds the A10b
-// arm's own cap areas: the "dense-sample reference" the pinned acceptance test
-// compares against, and the chorded cap the cap excess measures against it. decad's
-// own Area/Centroid always come from the actual built body, never from this helper.
-func wedgeShoelaceRegion(verts [][2]float64) (area, cx, cy float64) {
-	var a, mx, my float64
+// wedgeShoelaceArea is a closed polygon's SIGNED area by the standard shoelace sum
+// over its vertices in order (the last implicitly reconnects to the first). Both
+// arms' cap regions are measured through it: the A10b arm's dense-sample reference
+// and its chorded cap (splineRegionArea), and the A10a arm's own chorded cap over
+// the SHIPPED station vertices (arcChordExcess). decad's own Area/Centroid always
+// come from the actual built body, never from this helper.
+func wedgeShoelaceArea(verts [][2]float64) float64 {
+	var a float64
 	n := len(verts)
 	for i := range n {
 		x0, y0 := verts[i][0], verts[i][1]
 		x1, y1 := verts[(i+1)%n][0], verts[(i+1)%n][1]
-		cross := x0*y1 - x1*y0
-		a += cross
-		mx += (x0 + x1) * cross
-		my += (y0 + y1) * cross
+		a += x0*y1 - x1*y0
 	}
-	a /= 2
-	mx /= 6 * a
-	my /= 6 * a
-	return a, mx, my
+	return a / 2
 }
 
 // --- the gate reproduction: verify.go's own scalarToleranceRef/boundedToleranceRef,
@@ -747,10 +774,8 @@ func TestLoftChordCalibrationRowRecordsValueAndVerdict(t *testing.T) {
 
 	t.Run("every reading records the value the built body published", func(t *testing.T) {
 		const m = 8
-		pts := wedgeCirclePoints(m)
-		meas := measureWedgeReadings(t, pts,
-			arcSagitta(m),
-			arcChordExcess(m))
+		pts, sd := wedgeArcChords(t, m)
+		meas := measureWedgeReadings(t, pts, sd, arcChordExcess(t, m))
 
 		vol, err := meas.body.Volume()
 		require.NoError(t, err)
@@ -803,9 +828,9 @@ func TestLoftChordCalibrationRowRecordsValueAndVerdict(t *testing.T) {
 // always runs, since the sweep it protects is opt-in.
 func TestLoftChordCalibrationCeilingCoversRuledExcess(t *testing.T) {
 	const m = 8
-	excess := arcChordExcess(m)
-	meas := measureWedgeReadings(t, wedgeCirclePoints(m),
-		arcSagitta(m), excess)
+	excess := arcChordExcess(t, m)
+	pts, sd := wedgeArcChords(t, m)
+	meas := measureWedgeReadings(t, pts, sd, excess)
 
 	// The per-cell ruled-wall excess, summed independently of arcChordExcess's own
 	// whole-arc-minus-whole-polygon form: each of the m cells spans sweep/m of the
@@ -895,9 +920,8 @@ func TestLoftChordCalibrationSweep(t *testing.T) {
 	t.Logf("A10a envelope (profileCoordinateUpper) = %.10g mm; A10b envelope (profileCoordinateEnvelope) = %.10g mm", arcEnvelope, splineEnvelope)
 
 	for _, m := range ms {
-		pts := wedgeCirclePoints(m)
-		sd := arcSagitta(m)
-		ex := arcChordExcess(m)
+		pts, sd := wedgeArcChords(t, m)
+		ex := arcChordExcess(t, m)
 		meas := measureWedgeReadings(t, pts, sd, ex)
 		logWedgeMeasurement(t, "A10a(arc)", meas)
 		t.Logf("  A10a m=%d implied loftChordFraction = sagitta/envelope = %.6g", m, sd/arcEnvelope)
@@ -983,6 +1007,13 @@ const loftChordFractionPinM = 65
 // answer to be loftChordFractionPinM. Every fixture in this file is chorded at
 // THIS returned count, so no reading here can belong to a chording production
 // never produces.
+//
+// It also ties wedgeArcChords to that same call: the vertices and the
+// sectionDelta every A10a reading below is measured on must be the ones
+// loftCircularCellStations itself hands a real build at the settled count. The
+// count alone would not do it — a fixture that took the count from production
+// and its geometry from a local generator would keep reporting these margins
+// however far the shipped stations drifted.
 func wedgePinStations(t *testing.T) int {
 	t.Helper()
 	target := loftChordFraction * wedgeArcEnvelope(t)
@@ -991,7 +1022,19 @@ func wedgePinStations(t *testing.T) int {
 	require.NoError(t, err)
 	m := len(stations)
 	require.LessOrEqual(t, sagitta, target, "the generator's own published bound must meet the target it was asked for")
-	require.Equal(t, loftCertifiedSagittaUpper(seg, m), sagitta, "the published bound is the certified reading at the settled count")
+
+	// The published bound is the certified sagitta composed with the generated
+	// stations' own displacement — both halves, since the certified sagitta
+	// alone bounds a chord between the EXACT recorded points, not the chord
+	// this build actually draws between two rounded stations.
+	certified := loftCertifiedSagittaUpper(seg, m)
+	chordPts, chordDelta := wedgeArcChords(t, m)
+	require.Equal(t, chordDelta, sagitta, "the published bound is the certified reading composed with the station displacement, at the settled count")
+	require.Greater(t, sagitta, certified, "the station displacement is a real term on this fixture, not a rounding that vanishes")
+	require.Len(t, chordPts, m+1, "the fixture's vertex list is the m stations plus the walk's own end point")
+	for k, p := range stations {
+		require.Equal(t, [2]float64{p.U, p.V}, chordPts[k], "every A10a vertex must BE the station the shipped generator produced")
+	}
 
 	// The seed that decides this count, asserted rather than described: the
 	// held chooser's conservative bound at one station BELOW the pin still
@@ -1003,8 +1046,8 @@ func wedgePinStations(t *testing.T) int {
 	require.Less(t, arcSagitta(m-1), target,
 		"the exact sagitta at m=%d is already under target, which is why the sweep's own grid row sits one station coarser", m-1)
 
-	t.Logf("the shipped generator on the reference arc wedge: m=%d target=%.10g certified=%.10g; chordSagitta at m=%d is %.10g against an exact sagitta of %.10g",
-		m, target, sagitta, m-1, chordSagitta(wedgeRadius, wedgeSweep, m-1), arcSagitta(m-1))
+	t.Logf("the shipped generator on the reference arc wedge: m=%d target=%.10g published=%.17g (certified=%.17g + stations=%.4g); chordSagitta at m=%d is %.10g against an exact sagitta of %.10g",
+		m, target, sagitta, certified, sagitta-certified, m-1, chordSagitta(wedgeRadius, wedgeSweep, m-1), arcSagitta(m-1))
 	require.Equal(t, loftChordFractionPinM, m, "the pinned station count must be the one the shipped generator produces at the shipped constant")
 	return m
 }
@@ -1042,9 +1085,8 @@ func TestLoftChordCalibrationPinsFraction(t *testing.T) {
 	m := wedgePinStations(t)
 
 	arcStart := time.Now()
-	arcPts := wedgeCirclePoints(m)
-	arcSD := arcSagitta(m)
-	arcExcess := arcChordExcess(m)
+	arcPts, arcSD := wedgeArcChords(t, m)
+	arcExcess := arcChordExcess(t, m)
 	arcMeas := measureWedgeReadings(t, arcPts, arcSD, arcExcess)
 	arcElapsed := time.Since(arcStart)
 	t.Logf("A10a pin build wall-clock: %s (a10-plan.md Q3 budget is 2s on the reference host)", arcElapsed)

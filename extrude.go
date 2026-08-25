@@ -1325,6 +1325,27 @@ func lineWalkEndBound(seg LineSeg, t, heldU, heldV float64) walkEndBound {
 // An enclosure the recorded data cannot state yields +Inf — an underivable
 // bound, which every consumer refuses on rather than publishes.
 func circularWalkEndBound(seg CurveSegment, t, heldU, heldV float64) walkEndBound {
+	rt := floatRat(t)
+	if rt == nil {
+		return walkEndBound{u: math.Inf(1), v: math.Inf(1)}
+	}
+	return circularPointBound(seg, rt, heldU, heldV)
+}
+
+// circularPointBound is circularWalkEndBound read at an EXACT RATIONAL
+// parameter rather than a held float, and owns the derivation both spellings
+// share. It exists for a caller that generates a point at a parameter the
+// record's own arithmetic states exactly — a uniform station division
+// t_k = TStart + (k/m)·(TEnd − TStart) (loft_build.go's circularStationChain)
+// is the one such caller today. Rounding that parameter to a float first would
+// enclose the recorded curve at a NEIGHBOURING parameter, and the bound would
+// then be a proof about a point the construction never named: the cells either
+// side of it would no longer divide the sweep uniformly, which is the one
+// property the per-cell sagitta over that division is derived from.
+//
+// An enclosure the recorded data cannot state yields +Inf on both components,
+// the underivable bound every consumer refuses on.
+func circularPointBound(seg CurveSegment, t *big.Rat, heldU, heldV float64) walkEndBound {
 	uIv, vIv, ok := circularEndpointInterval(seg, t)
 	if !ok {
 		return walkEndBound{u: math.Inf(1), v: math.Inf(1)}

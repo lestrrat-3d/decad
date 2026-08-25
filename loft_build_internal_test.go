@@ -505,7 +505,7 @@ func TestLoftPairingsConsumesTheGateResolvedWalks(t *testing.T) {
 	require.Len(t, walks0, 1)
 	require.Len(t, walks1, 1)
 
-	pairs, _, err := loftPairings(p0, offsets, walks0, walks1, 0, nil, nil)
+	pairs, _, err := loftPairings(p0, p1, offsets, walks0, walks1, 0, nil, nil)
 	require.NoError(t, err)
 	require.Len(t, pairs, 1)
 

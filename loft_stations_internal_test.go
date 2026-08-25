@@ -22,10 +22,12 @@ import (
 // arcFixture builds one RECORDED ArcSeg about the origin — radius r, running
 // sweep radians from base angle base, trimmed to [tStart, tEnd] — together
 // with the walk walkOf resolves for it. The circular arm reads BOTH: the
-// stations come off the walk, while the certified per-cell sagitta comes off
-// the record's own radius and swept-angle enclosures (loft_build.go's
-// loftCertifiedSagittaUpper). A fixture that stated only a hand-built walk
-// could not exercise the arm at all, since no record stands behind it.
+// stations come off the walk, while both halves of the published chord bound —
+// the certified per-cell sagitta (loft_build.go's loftCertifiedSagittaUpper)
+// and the generated stations' own displacement (circularStationChain) — are
+// read off the record's own enclosures. A fixture that stated only a
+// hand-built walk could not exercise the arm at all, since no record stands
+// behind it.
 func arcFixture(t *testing.T, r, base, sweep, tStart, tEnd float64) (ArcSeg, segmentWalk) {
 	t.Helper()
 	seg := ArcSeg{
@@ -198,9 +200,25 @@ func TestLoftCircularCellStationsJointWalkUpSharesOneCount(t *testing.T) {
 		require.LessOrEqual(t, s, target, "side %d must meet the target at the settled m=%d", i, m)
 		require.LessOrEqual(t, s, sagittaUpper, "the cell publishes the larger of its two sides' certified sagittae")
 	}
+	sagittaHalf := math.Max(loftCertifiedSagittaUpper(seg0, m), loftCertifiedSagittaUpper(seg1, m))
 	require.True(t,
-		loftCertifiedSagittaUpper(seg0, m) == sagittaUpper || loftCertifiedSagittaUpper(seg1, m) == sagittaUpper,
-		"the published bound must BE one of the two sides' own certified readings, never a blend of them")
+		loftCertifiedSagittaUpper(seg0, m) == sagittaHalf || loftCertifiedSagittaUpper(seg1, m) == sagittaHalf,
+		"the published bound's sagitta half must BE one of the two sides' own certified readings, never a blend of them")
+	require.Equal(t, chordCellDeltaUpper(sagittaHalf, requireStationDelta(t, w0, w1, seg0, seg1, m)), sagittaUpper,
+		"the published bound is that sagitta composed with the two sides' own station displacement")
+}
+
+// requireStationDelta is the station-displacement half of every composition
+// assertion below: the larger of the two sides' own generated-station
+// displacements at count m, read from the SAME production generator the arm
+// itself reads it from.
+func requireStationDelta(t *testing.T, w0, w1 segmentWalk, seg0, seg1 CurveSegment, m int) float64 {
+	t.Helper()
+	_, d0 := circularStationChain(w0, seg0, m)
+	_, d1 := circularStationChain(w1, seg1, m)
+	require.False(t, isNonFinite(d0), "side 0's station displacement must be derivable at m=%d", m)
+	require.False(t, isNonFinite(d1), "side 1's station displacement must be derivable at m=%d", m)
+	return math.Max(d0, d1)
 }
 
 // TestLoftCircularCellStationsJointWalkUpOutrunsTheSeed is the joint walk-up's
@@ -229,7 +247,8 @@ func TestLoftCircularCellStationsJointWalkUpOutrunsTheSeed(t *testing.T) {
 	require.Len(t, stations1, len(stations0))
 	require.Greater(t, len(stations0), seed, "the joint walk-up must commit at least one station past the seed")
 	require.LessOrEqual(t, sagittaUpper, held)
-	require.Equal(t, loftCertifiedSagittaUpper(seg, len(stations0)), sagittaUpper)
+	m2 := len(stations0)
+	require.Equal(t, chordCellDeltaUpper(loftCertifiedSagittaUpper(seg, m2), requireStationDelta(t, w, w, seg, seg, m2)), sagittaUpper)
 }
 
 // --- the published sagitta is certified, never the held chooser's ---
@@ -255,9 +274,10 @@ func TestLoftCircularSagittaIsCertifiedNotHeld(t *testing.T) {
 
 // TestLoftCircularCellStationsPublishesTheCertifiedReading pins WHICH value the
 // arm publishes, on an ordinary quarter arc rather than a cancellation fixture:
-// the cell's bound is loftCertifiedSagittaUpper at the settled count, exactly,
-// never chordSagitta's held float for the same walk and count. The two are
-// distinct values, so substituting the held one fails the equality.
+// the cell's bound is loftCertifiedSagittaUpper at the settled count composed
+// with the generated stations' own displacement, exactly, never chordSagitta's
+// held float for the same walk and count. The two are distinct values, so
+// substituting the held one fails the equality.
 func TestLoftCircularCellStationsPublishesTheCertifiedReading(t *testing.T) {
 	const target = 1e-3
 	seg, w := arcFixture(t, 5, 0, math.Pi/2, 0, 1)
@@ -265,7 +285,10 @@ func TestLoftCircularCellStationsPublishesTheCertifiedReading(t *testing.T) {
 	stations, _, sagittaUpper, err := loftCircularCellStations(w, w, seg, seg, target)
 	require.NoError(t, err)
 	m := len(stations)
-	require.Equal(t, loftCertifiedSagittaUpper(seg, m), sagittaUpper)
+	certified := loftCertifiedSagittaUpper(seg, m)
+	require.Equal(t, chordCellDeltaUpper(certified, requireStationDelta(t, w, w, seg, seg, m)), sagittaUpper)
+	require.Greater(t, sagittaUpper, certified,
+		"the trimmed stations of this fixture carry a real displacement, so the published bound sits strictly above the certified sagitta alone")
 	require.NotEqual(t, chordSagitta(w.radius, math.Abs(w.th1-w.th0), m), sagittaUpper,
 		"the held chooser's own float and the certified enclosure are different readings; the arm publishes the certified one")
 }
@@ -415,8 +438,9 @@ func TestLoftCircularCellStationsRefusesOneSidedCollapse(t *testing.T) {
 
 // TestLoftCircularCellStationsSymmetricCollapseIsFine proves S16's own
 // boundary: a cell collapsed on BOTH sides is sound (loftPayload's own doc
-// comment, docs/loft-design.md §12), never refused, and its certified sagitta
-// is exactly zero because the record encloses the radius at exactly zero.
+// comment, docs/loft-design.md §12), never refused, and its published chord
+// bound is exactly zero: the record encloses the radius at exactly zero, which
+// zeroes the certified sagitta and every station's own displacement alike.
 func TestLoftCircularCellStationsSymmetricCollapseIsFine(t *testing.T) {
 	seg, w := degenerateArcFixture(t)
 	stations0, stations1, sagitta, err := loftCircularCellStations(w, w, seg, seg, 1e-3)
@@ -444,7 +468,7 @@ func TestCircularStationChainStartsAtThePinnedEnd(t *testing.T) {
 	require.Equal(t, seg.Start.V, w.startV)
 	require.Equal(t, walkEndBound{}, w.startBound, "the pinned end carries a zero displacement reading")
 
-	stations := circularStationChain(w, 8)
+	stations, _ := circularStationChain(w, seg, 8)
 	require.Equal(t, Point2{U: seg.Start.U, V: seg.Start.V}, stations[0],
 		"station 0 IS the recorded coordinate the walk pinned, never a recomputed cos/sin at th0")
 
@@ -474,10 +498,74 @@ func TestCircularStationChainJunctionsMeetOnOneCoordinate(t *testing.T) {
 	second, wSecond := arcFixture(t, 5, math.Pi/2, math.Pi/2, 0, 1)
 	require.Equal(t, first.End, second.Start, "the fixture's two arcs must share one recorded junction coordinate")
 
-	stations := append(circularStationChain(wFirst, 6), circularStationChain(wSecond, 6)...)
+	firstChain, _ := circularStationChain(wFirst, first, 6)
+	secondChain, _ := circularStationChain(wSecond, second, 6)
+	stations := append(append([]Point2{}, firstChain...), secondChain...)
 	require.Len(t, stations, 12, "neither segment contributes its own end point")
 	require.Equal(t, Point2{U: second.Start.U, V: second.Start.V}, stations[6],
 		"the junction station is the second segment's pinned start, which is the recorded coordinate")
+}
+
+// --- the chain's own station displacement ---
+
+// TestCircularStationChainDeltaBoundsEveryGeneratedStation is the regression
+// for the chain's second return, and the assertion with power over the SHIPPED
+// station geometry: every station the chain produces must sit within the
+// returned delta of the point the RECORD denotes at that station's own exact
+// parameter t_k = TStart + (k/m)·(TEnd − TStart), measured here against a
+// fresh enclosure rather than against the chain's own bookkeeping.
+//
+// It is deliberately two-sided. The upper half proves the published delta
+// covers the built geometry, so a generator that drifts off the recorded curve
+// — by a scale factor on the radius, a wrong angle, a dropped pin — either
+// moves the delta with it or fails outright. The lower half proves the delta is
+// ATTAINED, so it is a measurement of this build's own stations rather than a
+// constant large enough to cover anything.
+func TestCircularStationChainDeltaBoundsEveryGeneratedStation(t *testing.T) {
+	const m = 65
+	seg, w := arcFixture(t, 5, 0, math.Pi/2, 0, 1)
+
+	stations, delta := circularStationChain(w, seg, m)
+	require.Len(t, stations, m)
+	require.False(t, isNonFinite(delta), "the reference arc's stations must state a displacement")
+	require.Positive(t, delta, "the interior stations are computed trigonometry, so their displacement is real, never zero")
+	require.Less(t, delta, 1e-13,
+		"a station displacement this far above rounding means the generator is no longer walking the recorded curve")
+
+	tStart, dt, ok := circularSegmentRange(seg)
+	require.True(t, ok)
+
+	worst := math.Max(walkEndPlaneDelta(w.startBound), walkEndPlaneDelta(w.endBound))
+	for k := 1; k < m; k++ {
+		tk := new(big.Rat).Add(tStart, new(big.Rat).Mul(big.NewRat(int64(k), int64(m)), dt))
+		uIv, vIv, ok := circularEndpointInterval(seg, tk)
+		require.True(t, ok, "the record must enclose its own point at station %d's parameter", k)
+
+		// The enclosure is a bracket, so the station's own worst-case gap from
+		// the point inside it is the wider of its two ends' gaps — the same
+		// reading intervalFloatError takes, spelled out here so this assertion
+		// does not borrow the production helper it is checking.
+		gapU := math.Max(rationalFloatError(uIv.lo, stations[k].U), rationalFloatError(uIv.hi, stations[k].U))
+		gapV := math.Max(rationalFloatError(vIv.lo, stations[k].V), rationalFloatError(vIv.hi, stations[k].V))
+		require.LessOrEqual(t, math.Hypot(gapU, gapV), delta,
+			"station %d sits %g from the point the record denotes at its own parameter, past the published delta of %g", k, math.Hypot(gapU, gapV), delta)
+		worst = math.Max(worst, radius2D(gapU, gapV))
+	}
+	require.Equal(t, worst, delta, "the published delta is the worst station's own reading, never a padded constant")
+	t.Logf("the reference arc's %d stations sit within %.4g mm of the curve the record states", m, delta)
+}
+
+// TestCircularStationChainRefusesAnUnenclosableRecord pins the chain's own
+// refusal: a segment kind the circular enclosures cannot state a parameter
+// range for has no proven station displacement, so the chain answers +Inf and
+// loftCircularCellStations refuses on it rather than publishing the certified
+// sagitta as if it were the whole chord bound.
+func TestCircularStationChainRefusesAnUnenclosableRecord(t *testing.T) {
+	_, w := arcFixture(t, 5, 0, math.Pi/2, 0, 1)
+
+	_, delta := circularStationChain(w, LineSeg{Start: pt(0, 0), End: pt(1, 0), TStart: 0, TEnd: 1}, 4)
+	require.True(t, math.IsInf(delta, 1), "a record with no circular parameter range states no station displacement")
+	require.True(t, math.IsInf(chordCellDeltaUpper(1e-3, delta), 1), "an underivable half makes the whole chord bound underivable")
 }
 
 // --- loftPairings: station-chain expansion and sectionDelta ---
