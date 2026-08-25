@@ -375,10 +375,11 @@ realized between two real body points, and the shared reader publishes that
 maximum rounded toward zero, so the reading can only UNDERSTATE the
 body's true diameter and never overstate it — the same construction
 `bodyGateDiameter` already runs over a `loftPayload`'s own held vertex set
-(`verify.go`), differing only in what it earns: a loft body's boundary is a
-polyhedron, so its vertex maximum IS the true diameter, while a curved wall's
-farthest pair can sit between two sampled points, which is exactly why this
-arm claims a bound and not the diameter.
+(`verify.go`), differing only in what it earns: a `LineSeg`-only loft body's
+boundary is a polyhedron, so its vertex maximum IS the true diameter, while a
+chorded loft's own maximum is at or below the true one exactly as this arm's
+is (loft §12), since a curved wall's farthest pair can sit between two sampled
+points — which is why both claim a bound rather than the diameter.
 
 **Publishing is conditional, and withholding is the only alternative.** This
 arm yields a diameter only when its own witness conversion and the shared

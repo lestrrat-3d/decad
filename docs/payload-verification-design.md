@@ -40,9 +40,11 @@ Three payload classes require different treatment:
 - `facetedPayload` is an approximate boundary backed by a proof certificate.
   Read held polygons exactly, then widen every claim by that certificate.
 - `loftPayload` is a closed triangle boundary whose held vertices carry the
-  payload's own proven displacement `delta` — zero for an unplaced body, so
-  that boundary is then exact, and positive for a placed one (loft §5). Its
-  construction audit proves validity, and it re-runs on every placement. Its
+  payload's own proven displacement `delta` and whose chorded wall facets carry
+  its section displacement `sectionDelta` — both zero for an unplaced
+  `LineSeg`-only body, so that boundary is then exact, and at least one of them
+  positive for a placed or chorded one (loft §5, §5.2). Its construction audit
+  proves validity, and it re-runs on every placement. Its
   `Bounds`, inflated by the bound they carry, settle bounds-disjoint pairs; a
   requested clearance remains `Suspect` until an analytic adapter lands; a pair
   requiring the mesh path remains `Suspect` until that path lands, and every

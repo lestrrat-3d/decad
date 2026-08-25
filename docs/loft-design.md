@@ -403,16 +403,25 @@ region, exactly as an Extrude cap is.
 
 **A same-kind `ArcSeg` or `CircleSeg` pair walls with a chain of chord
 cells, never with the single quad §5's table shows for a `LineSeg` pair.**
-Each side of the pair is sampled at a shared station count into a chord
-chain; the chain's consecutive stations pair into cells exactly the way two
-recorded endpoints pair into §5's quad, and each cell still splits into the
-same lower/upper triangle pair Table B (§7) already defines — the topology
-above is unchanged, only the number of cells a paired segment contributes
-grows from one to the station count. **A chord cell is its own Table B
-cell, so `side(i,j,k)`'s grammar (§5) is unchanged**: for a chorded pair,
-`j` ranges over that loop's flattened chord-cell sequence rather than over
-one entry per recorded segment, and each cell still resolves to exactly the
-`side(i,j,0)` / `side(i,j,1)` pair §5's table states.
+Each side of the pair is sampled into `m` chord cells; the chain's
+consecutive stations pair into cells exactly the way two recorded endpoints
+pair into §5's quad, and each cell still splits into the same lower/upper
+triangle pair Table B (§7) already defines — the topology above is
+unchanged, only the number of cells a paired segment contributes grows from
+one to `m`. **A chord cell is its own Table B cell, so `side(i,j,k)`'s
+grammar (§5) is unchanged**: for a chorded pair, `j` ranges over that loop's
+flattened chord-cell sequence rather than over one entry per recorded
+segment, and each cell still resolves to exactly the `side(i,j,0)` /
+`side(i,j,1)` pair §5's table states.
+
+**`m` counts CHORD CELLS, and the station points are one more.** `m` is
+`chordCount`'s own CHORD count, so a pair chorded at `m` contributes exactly
+`m` chord cells to its loop and holds `m + 1` station POINTS on each side of
+the pair — that side's two recorded endpoints plus `m - 1` interior stations.
+A pair at `m = 1` therefore has no interior station at all and walls with a
+single cell, which is the case §8 and §12 both single out. Wherever this
+document calls `m` a station count it names that same chord-cell count, never
+the count of station points.
 
 **Station generation reuses the existing circular-walk primitives, never new
 trigonometry.** Each side's own station count and achieved sagitta come from
@@ -890,8 +899,8 @@ for the body-level quantities.
 
 | D | Consumer | Reads | Increment-1 status |
 |---|---|---|---|
-| **D1** | `Tessellate` / `STL` / `OBJ` | the payload | works from the first PR that wires it in (§12 PR 2b), and the returned `Bound` is **the payload's own `delta`** (§12 PR 2a), not unconditionally zero: an unplaced loft's `delta` is zero, so an unplaced body's tessellation is still restatement with a zero bound, but every wall and cap face of a PLACED body is a flat triangle over held vertices that are no longer provably exact, so tessellation restates exactly what the payload holds, `delta` included (`triangulate.go`'s existing polygon-with-holes triangulator for the two caps; no chording anywhere) |
-| **D2** | the mesh boolean (`Union`/`Cut`/`Intersect`, evaluator §9) | the tessellation | a first-class operand once D1 lands — no new boolean code, a loft body is just another all-planar operand. An UNPLACED loft (`delta` zero) is admitted through the existing all-planar zero-bound path (`docs/evaluator-design.md` §2 — "the VOLUME of an all-planar pair whose contact points round exactly"); a PLACED one hands the boolean its `delta` as the operand displacement every other nonzero-bound operand already carries (`bounds.go`'s `rimDelta`), so the result's volume is `Approximate` like any other |
+| **D1** | `Tessellate` / `STL` / `OBJ` | the payload | works from the first PR that wires it in (§12 PR 2b), and the returned `Bound` is **the payload's own combined displacement `absSumUpper(delta, sectionDelta)`** (§5.2, §8, §12 PR 2a), not unconditionally zero and never `delta` alone: that sum is zero only for an unplaced `LineSeg`-only loft, whose tessellation is still restatement with a zero bound. Every wall and cap face of a PLACED body is a flat triangle over held vertices that are no longer provably exact, and every wall facet of a CHORDED body chords a recorded curve it departs from by `sectionDelta` (§5.2) whatever the placement, so tessellation restates exactly what the payload holds, both terms included (`triangulate.go`'s existing polygon-with-holes triangulator for the two caps; no chording anywhere) |
+| **D2** | the mesh boolean (`Union`/`Cut`/`Intersect`, evaluator §9) | the tessellation | a first-class operand once D1 lands — no new boolean code, a loft body is just another all-planar operand. An unplaced `LineSeg`-only loft — the one case where `delta` and `sectionDelta` are BOTH zero — is admitted through the existing all-planar zero-bound path (`docs/evaluator-design.md` §2 — "the VOLUME of an all-planar pair whose contact points round exactly"); every other loft, placed or chorded or both, hands the boolean its combined displacement `absSumUpper(delta, sectionDelta)` as the operand displacement every other nonzero-bound operand already carries (`bounds.go`'s `rimDelta`), so the result's volume is `Approximate` like any other. **A chorded loft is not a zero-bound operand however it is placed**: at `m = 1` its `delta` is exactly zero while its `sectionDelta` is positive (§5.2, §8), so admitting it on `delta` alone would hand the boolean a zero bound for a boundary §8 states departs by `sectionDelta` |
 | **D3** | Interference (`docs/interference-design.md`) | box separation (D6-style) reads `Bounds` directly; the read-only mesh-boolean path reads D2's tessellation | box-disjoint pairs prove only their disjoint-interior interference relation (`Bounds` carries the payload's own displacement, §8). `Verify` is `Sound` only when every other required or requested body and pair check is decided and trusted; a pair needing the mesh boolean works once D2 lands; a pair needing the analytic containment/pair kernel stays `Suspect` until a loft case is added to `clearance_geom.go`'s payload switch — identical staging to the cup's own D6 row in `docs/modify-design.md` |
 | **D4** | Clearance (`WithClearances`, `docs/clearance-design.md`) | the analytic pair kernel's payload switch | `WithClearances` stays `Suspect`, even for a box-disjoint pair: box separation proves disjoint interiors but does not measure the gap. No loft case exists in the kernel yet. |
 | **D5** | `MinWallThickness` / `Undercuts` / `MinRadius` (verification §6, `survey2d.go`) | one constant 2D cross-section (a prism's section, a revolve's meridian) | The corresponding requested survey is `Suspect` until its loft implementation lands. In increment 1, a loft's cross-section varies continuously between the two profiles, so the existing spanning-disk / meridian-walk reduction does not reach it; `docs/modify-reach-design.md` DX9 states the identical cap-blend reason: "not one constant section at one height… the existing 2D spanning-disk proof does not decide them" |
@@ -1161,18 +1170,20 @@ against this budget.
   mixed line-to-arc pair, and an arc-to-fit-spline pair, still refuse S3.
   Replay of a recorded circular-pair step reproduces the same station count,
   the same triangle set, and bit-identical measurements.
-- **Downstream**: D1's `Bound` is the payload's own `delta` — exactly zero for
-  an admitted UNPLACED loft, and the same positive `delta` its `Bounds` and
-  vertex positions carry for a placed one, asserted on a placed fixture beside
-  the unplaced one; a D2 boolean between an unplaced loft and a prism succeeds
-  through the existing all-planar zero-bound path, and one between a PLACED
-  loft and a prism succeeds with an `Approximate` volume whose bound composes
-  that `delta`; a box-disjoint loft/loft pair proves only its
-  disjoint-interior interference relation under D3, and its `Verify` report
-  is `Sound` only with no other undecided required or requested check; a
-  box-disjoint pair with `WithClearances` reads `Suspect` until the analytic
-  kernel adds loft; each requested D5 survey reads `Suspect`, never absent or
-  a silently wrong number.
+- **Downstream**: D1's `Bound` is the payload's own combined displacement
+  `absSumUpper(delta, sectionDelta)` — exactly zero for an admitted unplaced
+  `LineSeg`-only loft, positive for a placed one, and positive for an
+  UNPLACED CHORDED one, asserted on a placed fixture and on an unplaced
+  chorded fixture beside the `LineSeg`-only one; a D2 boolean between an
+  unplaced `LineSeg`-only loft and a prism succeeds through the existing
+  all-planar zero-bound path, while one between a prism and either a PLACED
+  loft or an unplaced CHORDED one succeeds with an `Approximate` volume whose
+  bound composes that combined displacement; a box-disjoint loft/loft pair
+  proves only its disjoint-interior interference relation under D3, and its
+  `Verify` report is `Sound` only with no other undecided required or
+  requested check; a box-disjoint pair with `WithClearances` reads `Suspect`
+  until the analytic kernel adds loft; each requested D5 survey reads
+  `Suspect`, never absent or a silently wrong number.
 - **Recipe/replay**: round-trip a `LoftOpts` payload including a non-zero
   `Alignment` through a version-2 envelope; a missing `Profile2`/`Plane2` on
   the wire rejects; a version-1-only decoder rejects that complete version-2
@@ -1234,12 +1245,25 @@ against this budget.
 
 **The chord-target constant.** `loftChordFraction = 3.76491e-05` (§5.1),
 used as `chordTarget = loftChordFraction * max(profileCoordinateUpper(p0),
-profileCoordinateUpper(p1))`. On the reference fixture — a 90° radius-5
-quarter-arc wedge lofted between `z=0` and `z=10` — that constant yields 64
-chord stations. The binding reading at that constant is `Volume`, not
-`Centroid`: `Verify` at the default `1e-3` tolerance clears with a 2.39x
-margin on the arc wedge (a gate ratio of 4.18e-4) and a 1.90x margin on the
-matching fit-spline wedge.
+profileCoordinateUpper(p1))`. The number comes from two calibration fixtures
+measured at a FORCED `m = 64`, each with its own implied fraction at that
+count: the arc wedge, this document's reference fixture — a 90° radius-5
+quarter-arc lofted between `z=0` and `z=10` — reaches a `sectionDelta` of
+3.76491e-4 there, an implied fraction of 3.76491e-05, and the matching
+fit-spline wedge reaches a `sectionDelta` of
+4.73591e-4, an implied fraction of 6.69759e-05. **The shipped constant is the
+finer of those two implied fractions**, the arc wedge's 3.76491e-05, so one
+constant serves both fixtures rather than each kind carrying its own.
+
+**The binding reading is `Volume`, not `Centroid`, and the two measured
+margins belong to that forced `m = 64` run.** There, `Verify` at the default
+`1e-3` tolerance clears with a 2.39x margin on the arc wedge (a gate ratio of
+4.18e-4) and with a 1.90x margin on the fit-spline wedge. The arc wedge's
+`m = 64` is the count the shipped constant itself yields on that fixture, so
+its 2.39x is a margin at the shipped constant. The fit-spline wedge's 1.90x
+is NOT: 6.69759e-05 is a coarser target than the shipped constant, so a
+fit-spline wedge chorded to meet 3.76491e-05 takes more than 64 chord cells,
+and the margin it reaches there is a reading this document does not state.
 
 **The constant does not clear a 4x margin inside the wall-clock budget, and
 this design accepts that rather than widen either.** A 4x margin needs 128
@@ -1308,3 +1332,22 @@ landing this file:
   section's `ProfileRecord`, its `PlaneRecord`, and the `Alignment` offsets
   (§10) — beside `ShellOpts`. `StepOpts` is a closed variant set decad owns
   (core §6.2), so a variant this document requires belongs in that block.
+
+§5.1's chord chain also gives an unplaced loft a positive boundary
+displacement (§5.2, §8). Four companion documents state a zero bound or an
+exact boundary for an unplaced loft, so each is corrected to condition that
+on BOTH `delta` and `sectionDelta` being zero — an unplaced `LineSeg`-only
+loft — rather than on `delta` alone, and to name the combined displacement
+everywhere else:
+
+- **`docs/tessellation-design.md`**: the `loftPayload` row of §2's proof-term
+  table and the exact-restatement text under it, §13's T6 row, and §14's
+  `loftPayload` test obligation. A chorded loft is not an all-planar
+  zero-bound mesh-boolean operand however it is placed.
+- **`docs/clearance-design.md`**: §2's `loftPayload` sentence, whose bounds
+  inflate by that combined displacement.
+- **`docs/payload-verification-design.md`**: §2's `loftPayload` bullet, which
+  calls the held boundary exact only where both displacements are zero.
+- **`docs/verification-design.md`**: §3's `bodyGateDiameter` prose, which
+  earns the vertex maximum as the true diameter for a `LineSeg`-only loft and
+  as a lower bound on it for a chorded one (§12).

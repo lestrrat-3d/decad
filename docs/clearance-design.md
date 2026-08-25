@@ -104,9 +104,10 @@ held triangle to a trimmed plane and carries one body-level displacement
 once by the two payload deltas. A nonzero widened interval that reaches zero is
 undecided unless a separate exact contact certificate settles it. A
 `loftPayload` has no analytic adapter: its own bounds, inflated by the bound
-they carry (zero for an unplaced loft, the payload's `delta` for a placed one —
-loft §5), may decide a box-disjoint partition, but a requested
-`WithClearances` gap remains `Suspect` until its analytic adapter lands.
+they carry (the payload's combined `delta` and `sectionDelta`, zero only for an
+unplaced `LineSeg`-only loft — loft §5, §5.2), may decide a box-disjoint
+partition, but a requested `WithClearances` gap remains `Suspect` until its
+analytic adapter lands.
 Payload verification §3/§7 owns the cup/faceted
 adapters and their tests; §13/§14.1 own the loft staging and tests.
 
