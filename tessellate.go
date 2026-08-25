@@ -52,7 +52,10 @@ func (m *Mesh) SourceFaces() []*Face { return append([]*Face(nil), m.source...) 
 // lies farther than this from the mesh, and vice versa. It is the largest
 // complete displacement the tessellation used, including curve chording and
 // inherited payload coordinate bounds. Its chording component is at most the
-// requested tolerance; inherited payload displacement is added on top, so
+// requested tolerance — it is a PROVEN upper bound on the chord-to-arc
+// deviation rather than that deviation itself, so it can read above the
+// deviation a chord actually takes by the factor [Body.Tessellate] states;
+// inherited payload displacement is added on top, so
 // Bound can exceed that tolerance. It is zero only when every held boundary
 // coordinate is exact. A scalar quantity is a units.Value (core §5.1): Kind
 // Length, millimetres.
@@ -71,6 +74,19 @@ func (m *Mesh) Bound() units.Value { return units.Millimeters(m.bound) }
 // that meets it — a cap and the cylinder wall use the same chording of their
 // shared edge — so the mesh is watertight and consistently oriented by
 // construction, and Bound carries the complete displacement actually taken.
+//
+// Two things follow from the chording sagitta being PROVEN rather than tight
+// (docs/tessellation-design.md §3 derives it; chordSagitta implements it).
+// First, the chording component of [Mesh.Bound] sits above the deviation the
+// chords take by the factor (x/sin x)² at x = a chord's own quarter angle —
+// at most π²/9, about 9.66% high, at the coarsest chording a closed walk
+// reaches (three chords over a full circle), and 0.83% at ten. Second, the
+// chord count is chosen against that same proven figure, so the finest tol
+// this mesh admits is set by it and not by the tighter true sagitta: a tol
+// within about 3.06e-9 relative of the finest chording the per-curve cap
+// allows leaves no admissible count and is [ErrUnsupported]. Both point the
+// same way — a finer mesh, or a refusal, never a coarser mesh under a claim
+// this package cannot prove.
 //
 // Prism, cup and boolean-built bodies tessellate. A boolean-built body only
 // RESTATES its held mesh, so tol must be at least the body's own Bound: a
@@ -446,7 +462,7 @@ func tessellateCup(ctx context.Context, b *Body, cp cupPayload, chord float64) (
 	// One chorded ring per region loop: the walls hang off it and the caps and
 	// rims share it, so every vertex is shared and the mesh closes by
 	// construction. A ring holds its samples, the lo/hi mesh vertices of each,
-	// its wall faces and the sagitta the chording took.
+	// its wall faces and the sagitta bound the chording proved.
 	type ring struct {
 		samples []Point2
 		loV     []int
@@ -769,18 +785,21 @@ func (m *Mesh) addTriangle(tri [3]int, src *Face) {
 	m.source = append(m.source, src)
 }
 
-// chordCount picks the number of chords for a circular walk so each chord's
-// sagitta r·(1 − cos(Δθ/2)) stays within tol, and returns the sagitta the
-// choice proves. A closed walk needs at least three chords to bound a
-// polygon; the per-chord angle never exceeds π, so consecutive samples are
-// always distinct.
+// chordCount picks the number of chords for a circular walk so chordSagitta's
+// PROVEN bound on each chord's sagitta stays within tol, and returns that
+// bound. Every accept/reject below reads chordSagitta, never the true
+// sagitta r·(1 − cos(Δθ/2)) it encloses. A closed walk needs at least three
+// chords to bound a polygon; the per-chord angle never exceeds π, so
+// consecutive samples are always distinct.
 func chordCount(w segmentWalk, tol float64) (int, float64, error) {
 	sweep := math.Abs(w.th1 - w.th0)
 	maxD := math.Pi
 	if tol < w.radius {
-		// sagitta(Δθ) = 2r·sin²(Δθ/4), so Δθ_max = 4·asin(√(tol/2r)) — the
-		// stable inverse: acos(1 − tol/r) rounds to zero for tiny tol and
-		// would seed an unbounded walk-up.
+		// The TRUE sagitta 2r·sin²(Δθ/4) inverts to Δθ_max = 4·asin(√(tol/2r))
+		// — the stable inverse: acos(1 − tol/r) rounds to zero for tiny tol
+		// and would seed an unbounded walk-up. It seeds the search only; the
+		// walk-up below decides on chordSagitta's larger proven figure, so
+		// this seed can land one chord short and is corrected there.
 		maxD = 4 * math.Asin(math.Sqrt(tol/(2*w.radius)))
 	}
 	// A tolerance this fine asks for more chords than any mesh can hold;
@@ -814,10 +833,10 @@ func chordCount(w segmentWalk, tol float64) (int, float64, error) {
 
 // chordSagitta is a PROVEN upper bound on the sagitta 2r·sin²(Δθ/4) a chord
 // subtends when a circular walk of the given sweep is split into n equal
-// chords — chordCount's own walk-up step, pulled out as its single owner
-// (docs/loft-design.md PR 3) so a later caller measuring the SAME quantity
-// for a hand-chorded fixture reads the identical closed form rather than a
-// second copy of it.
+// chords — docs/tessellation-design.md §3's published sagitta, and the
+// single owner of chordCount's walk-up step, so a later caller measuring the
+// SAME quantity for a hand-chorded fixture reads the identical closed form
+// rather than a second copy of it.
 //
 // It never calls math.Sin. sin(x) <= x for every x >= 0 — the tangent line
 // to sin at the origin lies above the curve on the whole nonnegative axis,
@@ -839,28 +858,20 @@ func chordCount(w segmentWalk, tol float64) (int, float64, error) {
 // one division is outward-rounded by a final upRound, exactly the
 // single-operation margin productUpper already applies to a multiply.
 //
-// The bound is conservative by the factor (x/sin x)² — about 1.0000126 at a
-// typical fine chording (90 degrees over 64 stations) and about 1.098 in
-// the coarsest case a closed walk can reach (n=3 on a full circle,
-// TestChordSagittaCoarsestClosedWalkStaysProven pins it). So chordCount's
-// own walk-up may settle on a slightly larger n than the tightest possible
-// sagitta would allow — the safe direction: a finer mesh over a tighter
-// proven bound, never a coarser one over a looser claim.
-//
-// A known consequence: because the bound is conservative, a tol chordCount
-// used to satisfy at the mesh cap (n=maxChordsPerWalk) can now land in the
-// narrow window between the old sin-based sagitta and this one — the walk-up
-// hits the cap before reaching a sagitta this bound proves is under tol, so
-// chordCount now returns errTooManyChords where it previously succeeded. The
-// window's relative width is the same (x/sin x)²−1 factor, about 3.064e-9 at
-// n=maxChordsPerWalk, so it only bites a tol chosen within a few parts in a
-// billion of the cap. A full circle of radius 10 mm at tol =
-// 1.8383570706191657495e-07 mm previously chose n=16384 and now refuses with
-// errTooManyChords; at radius 0.5 mm the same happens at tol =
-// 9.1917853530958284169e-09 mm. Refusing is the conservative direction (a
-// coarser mesh is never built silently) and the error is typed
-// (ErrUnsupported), so this is a narrowing of what succeeds, never a
-// correctness gap.
+// The bound sits above the true sagitta by the factor (x/sin x)² — about
+// 1.0000126 at a typical fine chording (90 degrees over 64 stations) and
+// π²/9 in the coarsest case a closed walk can reach (n=3 on a full circle;
+// TestChordSagittaCoarsestClosedWalkStaysProven pins that ratio). Two
+// consequences reach a caller, and [Body.Tessellate]'s doc comment owns
+// both in the caller's own terms: [Mesh.Bound] reads by that factor above
+// the deviation the chords take, and chordCount's walk-up settles on a
+// slightly larger n than the true sagitta alone would need — up to and
+// including hitting maxChordsPerWalk and returning errTooManyChords for a
+// tol within (x/sin x)²−1 of the finest chording the cap admits. Both are
+// the safe direction: a finer mesh, or a typed refusal, never a coarser
+// mesh under a claim this package cannot prove.
+// TestChordCountRefusesTheToleranceWindowAtTheMeshCap pins that refusal at
+// its exact boundary.
 func chordSagitta(radius, sweep float64, n int) float64 {
 	if n <= 0 || sweep < 0 {
 		// A non-positive n or a negative sweep would otherwise read as

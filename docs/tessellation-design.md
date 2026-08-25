@@ -154,27 +154,47 @@ sketch input. They use the same recorded-walk normalization:
 4. Reuse those samples at every incident face.
 
 A line contributes its start point; its end is the next walk's start. A circular
-walk of radius `r` and parameter span `theta` uses `n` equal subarcs. The proven
-sagitta is:
+walk of radius `r` and parameter span `theta` uses `n` equal subarcs. A subarc's
+TRUE sagitta is `2 r sin²(abs(theta) / (4 n))`, and the sagitta the tessellation
+publishes and decides on is the proven upper bound:
 
 ```text
-s(r, theta, n) = 2 r sin²(abs(theta) / (4 n))
+s(r, theta, n) = r theta² / (8 n²)
 ```
 
-Choose the smallest `n` whose upward-rounded direct sagitta fits its positive
-budget `b`. Let `nMin` be the walk minimum. First evaluate
-`upRound(s(r, theta, nMin))`; when it is at most `b`, choose `nMin` without
-evaluating an inverse. Otherwise clamp `q = b/(2r)` to `[0, 1]`, compute
-`dTheta = 4 asin(sqrt(q))`, and seed the checked search with
-`ceil(abs(theta)/dTheta)`, clamped to `nMin`. Decrement while `n-1` remains at
-least `nMin` and its upward-rounded direct sagitta fits, then increment while
-`n` does not fit. This downward-then-upward correction applies to every section,
-meridian, and global angular inverse. If a positive `b` makes `q` or `dTheta`
-underflow to zero, the quotient is non-finite, the checked ceiling cannot be
-represented, or the resulting count exceeds its fixed cap, refuse with
-`ErrUnsupported` before integer conversion or allocation. A whole closed circle
-uses at least three chords. A circular revolve generator whose two ends are on
-the axis uses at least two meridian chords (§9).
+That bound follows from `sin x <= x` at `x = abs(theta) / (4 n)`: the inequality
+holds on the whole nonnegative axis and is elementary, so `s` needs no trig call
+and rests on no accuracy contract for one. That is why the true closed form is
+not the published sagitta — Go states no ulp bound for `math.Sin`, so a formula
+that calls it cannot carry the word PROVEN, and its result also moves with
+FMA contraction between architectures. `s` is evaluated with its numerator
+outward-rounded, its denominator `8 n²` left exact (every admitted `n` keeps
+`8 n²` inside float64's exact-integer range, and outward-rounding a DIVISOR
+would tighten the quotient — the wrong direction for an upper bound), and the
+single quotient outward-rounded once. `s` exceeds the true sagitta by the factor
+`(x / sin x)²`, which is `pi²/9` at the coarsest chording a closed walk reaches
+(`n = 3` over a full circle) and falls toward 1 as the chording refines.
+
+Choose the smallest `n` whose `s` fits its positive budget `b`. Let `nMin` be
+the walk minimum. First evaluate `s(r, theta, nMin)`; when it is at most `b`,
+choose `nMin` without evaluating an inverse. Otherwise clamp `q = b/(2r)` to
+`[0, 1]`, compute `dTheta = 4 asin(sqrt(q))`, and seed the checked search with
+`ceil(abs(theta)/dTheta)`, clamped to `nMin`. That inverse solves the TRUE
+sagitta, so it is a seed only and never a decision: every accept/reject below it
+compares `s` itself against `b`. Decrement while `n-1` remains at least `nMin`
+and its `s` fits, then increment while `n` does not fit. This downward-then-upward
+correction applies to every section, meridian, and global angular inverse. If a
+positive `b` makes `q` or `dTheta` underflow to zero, the quotient is
+non-finite, the checked ceiling cannot be represented, or the resulting count
+exceeds its fixed cap, refuse with `ErrUnsupported` before integer conversion or
+allocation. Deciding on `s` rather than on the true sagitta is what makes that
+last refusal reachable at a budget the true sagitta would have met: the walk-up
+runs out of chords by the same `(x / sin x)² - 1` margin, evaluated at the cap.
+Refusing there is the conservative direction — a coarser mesh is never built
+silently, and the refusal is typed. `Body.Tessellate`'s own doc comment states
+both consequences in the caller's terms. A whole closed circle uses at least
+three chords. A circular revolve generator whose two ends are on the axis uses
+at least two meridian chords (§9).
 
 One curve may use at most `maxChordsPerWalk` chords. The global revolve angular
 sequence has the same cap. The complete call also has these fixed ceilings:
@@ -468,16 +488,18 @@ Split the tolerance in this order:
 1. Compute `available = tol - deltaC - deltaR`, rounding downward;
    non-positive `available` refuses with `ErrUnsupported`.
 2. Give meridian curves `available/2` as their initial budget.
-3. Chord every coalesced meridian walk and record the largest actual sagitta
-   `deltaM`.
+3. Chord every coalesced meridian walk and record the largest sagitta those
+   choices prove, `deltaM` — §3's `s`, not the tight closed form under it.
 4. Give angular chording `available - deltaM`; this is positive because
    `deltaM <= available/2`.
 5. Choose one global angular count from `rhoMax` and that remaining budget.
 
-For maximum angular step `dphi`, the angular displacement is:
+For maximum angular step `dphi`, a point at radius `rhoMax` moves by
+`2 * rhoMax * sin²(dphi / 4)`, and the published angular displacement is §3's
+proven bound on it, the same `s` with `theta / n` at `dphi`:
 
 ```text
-deltaPhi = 2 * rhoMax * sin²(dphi / 4)
+deltaPhi = rhoMax * dphi² / 8
 ```
 
 Apply §3's downward-then-upward correction to the angular inverse until the

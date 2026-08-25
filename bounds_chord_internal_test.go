@@ -1104,12 +1104,12 @@ func TestCellChordCurveAreaUpperRefusesTheSagittaZigzag(t *testing.T) {
 // numerically-stable identity) — confirmed here by direct numerical
 // maximisation over s rather than trusted algebraically. That TRUE
 // closed-form value, trueSagitta below, is computed independently of
-// chordSagitta: chordSagitta itself now publishes a PROVEN UPPER bound
-// (sin(x)<=x, this file's own item 2) rather than the tight closed form,
-// so it is no longer the arc's exact matched-parameter deviation — it
-// still bounds it, which the second assertion below pins, but the
-// coincidence this test's own name refers to is a fact about the TRUE
-// mathematical quantities, not about chordSagitta's own numeric output.
+// chordSagitta: chordSagitta publishes a PROVEN UPPER bound (sin(x)<=x,
+// docs/tessellation-design.md Sec 3) rather than the tight closed form, so
+// it is not the arc's exact matched-parameter deviation — it bounds it,
+// which the second assertion below pins, but the coincidence this test's
+// own name refers to is a fact about the TRUE mathematical quantities, not
+// about chordSagitta's own numeric output.
 func TestArcMatchedDeltaEqualsSagitta(t *testing.T) {
 	const radius = 7.0
 	for _, sweepDeg := range []float64{5, 10, 30, 60, 90, 120, 150, 170} {
@@ -1138,10 +1138,11 @@ func TestArcMatchedDeltaEqualsSagitta(t *testing.T) {
 			require.InDeltaf(t, trueSagitta, maxSep, trueSagitta*1e-4+1e-9,
 				"sweep=%g: the arc-vs-chord max separation %.10g must match the true sagitta %.10g under the matched parametrization", sweepDeg, maxSep, trueSagitta)
 
-			// chordSagitta's own PROVEN bound (sin(x)<=x, no longer the tight
-			// closed form) must still enclose the true parameter-matched
-			// deviation, so it remains valid to pass as matchedDeltaUpper for
-			// an arc pairing even though it is no longer exactly equal to it.
+			// chordSagitta's own PROVEN bound (sin(x)<=x, not the tight
+			// closed form) must enclose the true parameter-matched
+			// deviation, which is what makes it valid to pass as
+			// matchedDeltaUpper for an arc pairing without being exactly
+			// equal to it.
 			bound := chordSagitta(radius, theta, 1)
 			require.GreaterOrEqualf(t, bound, trueSagitta,
 				"sweep=%g: chordSagitta's own proven bound %.10g must enclose the true sagitta %.10g", sweepDeg, bound, trueSagitta)

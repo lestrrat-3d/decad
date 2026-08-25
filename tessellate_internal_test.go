@@ -157,10 +157,10 @@ func bigSinTaylor(x float64, prec uint) *big.Float {
 
 // bigSagittaReference computes the TRUE closed-form sagitta,
 // 2*radius*sin(sweep/n/4)^2 — a chord's own exact deviation from its arc,
-// NOT chordSagitta's own (now deliberately looser) proven-upper-bound
-// formula — entirely in big.Float at prec bits, so the comparisons this
-// file's chordSagitta tests draw never lean on any accuracy claim about
-// float64 arithmetic or Go's Sin.
+// NOT chordSagitta's own deliberately looser proven-upper-bound formula —
+// entirely in big.Float at prec bits, so the comparisons this file's
+// chordSagitta tests draw never lean on any accuracy claim about float64
+// arithmetic or Go's Sin.
 func bigSagittaReference(radius, sweep float64, n int, prec uint) *big.Float {
 	s := bigSinTaylor(sweep/float64(n)/4, prec)
 	s2 := new(big.Float).SetPrec(prec).Mul(s, s)
@@ -172,10 +172,10 @@ func bigSagittaReference(radius, sweep float64, n int, prec uint) *big.Float {
 // chordSagitta's own doc-comment claim — PROVEN, so it may be conservative
 // but must never be understated — true rather than merely stated: it checks
 // the published sagitta against a from-scratch 300-bit-precision reference
-// (bigSagittaReference, which never calls Go's math.Sin either) over one row
-// an earlier, Sin-based formula used to understate (radius=15.42,
-// sweep=4.1657, n=57) plus a further spread of radii, sweeps and chord
-// counts.
+// (bigSagittaReference, which never calls Go's math.Sin either) over a
+// spread of radii, sweeps and chord counts, plus one deliberately
+// off-the-grid row (radius=15.42, sweep=4.1657, n=57) whose radius, sweep
+// and count share no factor with the round table below it.
 func TestChordSagittaNeverUnderstatesTheHighPrecisionReference(t *testing.T) {
 	const prec = 300
 	type row struct {
@@ -210,14 +210,28 @@ func TestChordSagittaNeverUnderstatesTheHighPrecisionReference(t *testing.T) {
 // walk, and a full 2*pi sweep split 3 ways is the widest single-chord angle
 // this package ever asks the bound to cover. The sin(x)<=x reduction is
 // loosest exactly where x is largest, so this is where the (x/sin x)^2
-// slack the doc comment states is at its worst — still enclosing the
-// high-precision reference, and still doing so by a bounded, checked
-// margin rather than an unbounded one.
+// slack is at its worst — still enclosing the true sagitta, and still doing
+// so by a bounded, checked margin rather than an unbounded one.
+//
+// This row is the one place the true sagitta is known EXACTLY with no trig
+// call and no accuracy contract at all: the chord's quarter angle is
+// 2*pi/(4*3) = pi/6, sin(pi/6) is exactly 1/2, so the true sagitta is
+// 2*radius*(1/2)^2 = radius/2 as a rational number. A bound below that is
+// disproven outright — which is what rules out evaluating the tight closed
+// form in float64 and calling the result PROVEN.
+//
+// The measured ratio is pinned against pi^2/9, the same exact figure
+// docs/tessellation-design.md Sec 3, [Body.Tessellate] and chordSagitta
+// itself state for this worst case.
 func TestChordSagittaCoarsestClosedWalkStaysProven(t *testing.T) {
 	const prec = 300
 	const radius, sweep, n = 7.0, 2 * math.Pi, 3
 
 	got := chordSagitta(radius, sweep, n)
+	require.GreaterOrEqualf(t, got, radius/2,
+		"chordSagitta(radius=%g, sweep=%g, n=%d) = %.20g must be at or above the EXACT true sagitta radius/2 = %g",
+		radius, sweep, n, got, radius/2)
+
 	want := bigSagittaReference(radius, sweep, n, prec)
 	gotBig := new(big.Float).SetPrec(prec).SetFloat64(got)
 	diff := new(big.Float).SetPrec(prec).Sub(gotBig, want)
@@ -226,8 +240,60 @@ func TestChordSagittaCoarsestClosedWalkStaysProven(t *testing.T) {
 		radius, sweep, n, got, want.Text('g', 40))
 
 	ratio, _ := new(big.Float).SetPrec(prec).Quo(gotBig, want).Float64()
-	require.InDeltaf(t, 1.098, ratio, 0.01,
-		"the sin(x)<=x slack at the coarsest closed-walk chording (n=3, full circle) should sit close to the doc comment's own stated (x/sin x)^2 figure, got ratio=%.6g", ratio)
+	require.InDeltaf(t, math.Pi*math.Pi/9, ratio, 1e-9,
+		"the sin(x)<=x slack at the coarsest closed-walk chording (n=3, full circle) must sit at the stated pi^2/9, got ratio=%.12g", ratio)
+}
+
+// TestChordCountRefusesTheToleranceWindowAtTheMeshCap pins the caller-facing
+// half of that same conservatism, at its exact boundary. chordCount decides
+// on the PROVEN bound, so the finest tolerance a full circle can be chorded
+// to is that bound's value at maxChordsPerWalk — not the smaller true
+// sagitta there. Every tolerance in between, a window whose relative width
+// is the (x/sin x)^2 - 1 factor [Body.Tessellate] states, leaves no
+// admissible count and refuses with errTooManyChords, which is an
+// ErrUnsupported. The refusal is the whole point: the alternative is a mesh
+// whose published bound is not one this package can prove.
+func TestChordCountRefusesTheToleranceWindowAtTheMeshCap(t *testing.T) {
+	const prec = 300
+	const sweep = 2 * math.Pi
+
+	rows := []struct {
+		radius float64
+		// inside is a tolerance strictly within the window: at or above the
+		// true sagitta at the cap, and below the proven bound there.
+		inside float64
+	}{
+		{radius: 10, inside: 1.8383570706191657e-07},
+		{radius: 0.5, inside: 9.1917853530958284169e-09},
+	}
+	for _, row := range rows {
+		w := segmentWalk{radius: row.radius, th0: 0, th1: sweep, closed: true}
+		atCap := chordSagitta(row.radius, sweep, maxChordsPerWalk)
+
+		// The window has real width: the true sagitta at the cap sits
+		// strictly below the proven bound the walk-up must satisfy.
+		trueAtCap, _ := bigSagittaReference(row.radius, sweep, maxChordsPerWalk, prec).Float64()
+		require.Lessf(t, trueAtCap, atCap,
+			"radius=%g: the proven bound at the cap must exceed the true sagitta there", row.radius)
+		require.Greaterf(t, row.inside, trueAtCap,
+			"radius=%g: the sampled tolerance %.20g must sit at or above the true sagitta %.20g", row.radius, row.inside, trueAtCap)
+		require.Lessf(t, row.inside, atCap,
+			"radius=%g: the sampled tolerance %.20g must sit below the proven bound %.20g", row.radius, row.inside, atCap)
+
+		// The proven bound itself is chordable, at exactly the cap count.
+		n, s, err := chordCount(w, atCap)
+		require.NoErrorf(t, err, "radius=%g: the proven sagitta at the cap must itself be admissible", row.radius)
+		require.Equalf(t, maxChordsPerWalk, n, "radius=%g: that tolerance must spend the whole cap", row.radius)
+		require.Equalf(t, atCap, s, "radius=%g: the returned sagitta is the proven bound itself", row.radius)
+
+		for _, tol := range []float64{math.Nextafter(atCap, 0), row.inside, trueAtCap} {
+			_, _, err := chordCount(w, tol)
+			require.ErrorIsf(t, err, errTooManyChords,
+				"radius=%g: tol=%.20g lies in the window and must refuse", row.radius, tol)
+			require.ErrorIsf(t, err, ErrUnsupported,
+				"radius=%g: tol=%.20g must refuse with a typed ErrUnsupported", row.radius, tol)
+		}
+	}
 }
 
 // TestChordSagittaRefusesRatherThanUnderstatesOnBrokenClaims pins

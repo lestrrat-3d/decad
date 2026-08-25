@@ -356,12 +356,14 @@ type wedgeAreaExcess struct {
 // the area-along-the-path ceiling adds to the held chord surface.
 func (e wedgeAreaExcess) total() float64 { return e.wall + e.cap }
 
-// arcSagitta is tessellate.go's chordCount sagitta (tessellate.go:807-810) in closed
-// form, evaluated at a FORCED station count m rather than walked up to a tolerance:
-// 2r*sin^2(sweep/m/4), the max per-cell displacement between an m-chord polygon and
-// the true radius-r arc it approximates. Like wedgeCirclePoints it takes m alone and
-// reads the fixture's own wedgeRadius/wedgeSweep, which are the only r and sweep the
-// A10a arm ever has.
+// arcSagitta is the TRUE closed-form sagitta 2r*sin^2(sweep/m/4) — the max per-cell
+// displacement between an m-chord polygon and the true radius-r arc it approximates
+// — evaluated at a FORCED station count m rather than walked up to a tolerance. It
+// is deliberately NOT chordSagitta: this harness calibrates a constant against the
+// displacement a chording actually takes, where tessellate.go publishes the proven
+// upper bound on it (docs/tessellation-design.md Sec 3). Like wedgeCirclePoints it
+// takes m alone and reads the fixture's own wedgeRadius/wedgeSweep, which are the
+// only r and sweep the A10a arm ever has.
 func arcSagitta(m int) float64 {
 	s := math.Sin(wedgeSweep / float64(m) / 4)
 	return 2 * wedgeRadius * s * s
