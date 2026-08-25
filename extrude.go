@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"reflect"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
@@ -457,8 +458,9 @@ func vecL1(v r3.Vec) float64 {
 
 // walks is the profile's pre-resolved segment walks (docs/spline-design.md
 // §5.2, this file's profileWalks doc comment), or nil to resolve each segment
-// through walkOf as before. A non-nil walks that does not match profile's
-// shape is a plumbing bug and refuses rather than silently resolving anyway.
+// through walkOf as before. A non-nil walks that was not resolved from THIS
+// profile — the recorded segments compared, not their count — is a plumbing
+// bug and refuses rather than silently resolving anyway.
 func profileCoordinateUpper(profile ProfileRecord, work *freeformWork, walks *profileWalks) (float64, error) {
 	if walks != nil && !walks.matches(profile) {
 		return 0, errResolvedWalksMismatch
@@ -986,6 +988,10 @@ func requireAnalyticWalk(w segmentWalk, what string) error {
 // unaffected, since they run over a DIFFERENT profile (a cap contour, an
 // offset loop) or hold no single-evaluation resolution worth sharing.
 type profileWalks struct {
+	// profile is the record every walk below was resolved FROM, kept whole so
+	// that a read against another profile is caught by comparing the recorded
+	// segments themselves rather than their shape (matches).
+	profile ProfileRecord
 	// outer holds loop index 0's resolved walks, one per pp.profile.Outer
 	// segment, in recorded order.
 	outer []segmentWalk
@@ -1021,7 +1027,7 @@ func resolveProfileWalks(profile ProfileRecord, work *freeformWork) (*profileWal
 		}
 		holes[hi] = hw
 	}
-	return &profileWalks{outer: outer, holes: holes}, nil
+	return &profileWalks{profile: profile, outer: outer, holes: holes}, nil
 }
 
 // at returns the resolved walk for loop index loopIndex (0 the outer loop,
@@ -1052,31 +1058,117 @@ func (pw *profileWalks) loopWalks(loopIndex int) []segmentWalk {
 	return pw.holes[hi]
 }
 
-// matches reports whether pw was resolved from a profile with the same shape
-// as profile: the same outer segment count, the same hole count, and the same
-// per-hole segment count. Every consumer that reads a non-nil *profileWalks
-// checks this FIRST and refuses rather than reading it — constraint from
-// docs/spline-design.md §5.2's own discipline extended to this cache: a
-// pre-resolved set applied to the wrong profile would silently read another
-// section's geometry as this one's, so a shape mismatch is rejected outright
-// rather than falling back to resolving, which would hide the plumbing bug
-// behind a correct-looking answer.
+// matches reports whether pw was resolved from THIS profile: the same loops
+// in the same order, each holding the same recorded segments — the same
+// variant with the same field values, compared exactly (identicalRecord).
+// Shape alone is not enough, and never was: two profiles can carry the same
+// outer, hole and per-hole segment counts while every coordinate differs, and
+// a set resolved from one read against the other would report the first
+// section's geometry as the second's, silently.
+//
+// Every consumer that reads a non-nil *profileWalks checks this FIRST and
+// refuses rather than reading it — docs/spline-design.md §5.2's own discipline
+// extended to this cache. The refusal is one-directional, like every other
+// decad-side check: only an exact agreement between the two records reads the
+// cache, and anything else — a differing value, a differing variant, a shape
+// the comparison does not know how to traverse — refuses. There is no
+// tolerance and no "close enough" arm, so a near-miss profile is rejected on
+// the same terms as an unrelated one, and a plumbing bug never hides behind a
+// correct-looking answer.
 func (pw *profileWalks) matches(profile ProfileRecord) bool {
 	if pw == nil {
 		return false
 	}
-	if len(pw.outer) != len(profile.Outer.Segments) {
+	return identicalRecord(pw.profile, profile)
+}
+
+// loopMatches reports whether pw holds, at loop index loopIndex (the same
+// convention as at), the walks resolved from exactly this loop's recorded
+// segments. It is matches for the single-loop consumer buildLoopSidesAs,
+// which is handed one LoopRecord and a role index rather than the whole
+// profile, and it refuses on the same exact-comparison terms.
+func (pw *profileWalks) loopMatches(loopIndex int, loop LoopRecord) bool {
+	if pw == nil {
 		return false
 	}
-	if len(pw.holes) != len(profile.Holes) {
+	loops := append([]LoopRecord{pw.profile.Outer}, pw.profile.Holes...)
+	if loopIndex < 0 || loopIndex >= len(loops) {
 		return false
 	}
-	for i, hole := range profile.Holes {
-		if len(pw.holes[i]) != len(hole.Segments) {
+	return identicalRecord(loops[loopIndex], loop)
+}
+
+// identicalRecord reports whether two recorded values are the same record:
+// the same dynamic type throughout, and every field, element and float bit
+// equal. It is the exact structural comparison profileWalks' own guard rests
+// on, and it is deliberately stricter than a numeric comparison — floats are
+// compared by their BITS (math.Float64bits), so a value that merely rounds to
+// the same number, or a zero of the other sign, is a mismatch rather than a
+// match.
+//
+// The traversal is reflective rather than a per-variant type switch on the
+// sealed CurveSegment set, and that is the point: a hand-written comparator
+// that forgets a field a variant gains later would go on reporting two
+// different records as the same one, which is exactly the failure this guard
+// exists to prevent. Reflection covers a new field the moment it is declared.
+//
+// A shape the traversal does not know — a map, a channel, a function — is
+// reported as a mismatch, never as a match. Every refusal here is safe: it
+// costs the caller a cached read, which it can always resolve itself, whereas
+// a wrong match publishes another section's geometry as this one's.
+func identicalRecord(a, b any) bool {
+	return identicalRecordValue(reflect.ValueOf(a), reflect.ValueOf(b))
+}
+
+// identicalRecordValue is identicalRecord's traversal. The zero reflect.Value
+// (a nil interface handed to reflect.ValueOf) matches only another zero one.
+func identicalRecordValue(a, b reflect.Value) bool {
+	if !a.IsValid() || !b.IsValid() {
+		return a.IsValid() == b.IsValid()
+	}
+	if a.Type() != b.Type() {
+		return false
+	}
+	switch a.Kind() { //nolint:exhaustive // an unhandled kind is a mismatch, by the doc comment above.
+	case reflect.Bool:
+		return a.Bool() == b.Bool()
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return a.Int() == b.Int()
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
+		return a.Uint() == b.Uint()
+	case reflect.Float32, reflect.Float64:
+		// Float() widens a float32 exactly, so one comparison serves both.
+		return math.Float64bits(a.Float()) == math.Float64bits(b.Float())
+	case reflect.String:
+		return a.String() == b.String()
+	case reflect.Struct:
+		for i := range a.NumField() {
+			// Field reads an unexported field read-only, which is all this
+			// traversal ever does — units.Value's own magnitude and unit are
+			// unexported and are compared here like any other field.
+			if !identicalRecordValue(a.Field(i), b.Field(i)) {
+				return false
+			}
+		}
+		return true
+	case reflect.Slice, reflect.Array:
+		if a.Len() != b.Len() {
 			return false
 		}
+		for i := range a.Len() {
+			if !identicalRecordValue(a.Index(i), b.Index(i)) {
+				return false
+			}
+		}
+		return true
+	case reflect.Interface, reflect.Pointer:
+		if a.IsNil() || b.IsNil() {
+			return a.IsNil() && b.IsNil()
+		}
+		return identicalRecordValue(a.Elem(), b.Elem())
+	default:
+		return false
 	}
-	return true
 }
 
 // errResolvedWalksMismatch reports a *profileWalks handed to a consumer that
@@ -1599,8 +1691,9 @@ func buildLoopSides(ctx context.Context, body *Body, ref StepRef, pp prismPayloa
 //
 // resolved is a *profileWalks whose loop index roleLoop holds this loop's
 // pre-resolved walks, or nil to resolve each segment through walkOf as
-// before. A non-nil resolved whose loop at roleLoop does not have exactly
-// len(loop.Segments) walks is a plumbing bug and refuses rather than
+// before. A non-nil resolved whose loop at roleLoop was not resolved from
+// exactly this loop's recorded segments (loopMatches — the segments
+// themselves, not their count) is a plumbing bug and refuses rather than
 // silently resolving anyway — the only caller that ever passes non-nil is
 // buildLoopSides from evalPrismContext, where roleLoop already IS the loop
 // index the *profileWalks was resolved at.
@@ -1613,10 +1706,10 @@ func buildLoopSidesAs(ctx context.Context, body *Body, ref StepRef, pp prismPayl
 	}
 	var loopWalks []segmentWalk
 	if resolved != nil {
-		loopWalks = resolved.loopWalks(roleLoop)
-		if len(loopWalks) != len(loop.Segments) {
+		if !resolved.loopMatches(roleLoop, loop) {
 			return nil, nil, nil, boundedScalar{}, errResolvedWalksMismatch
 		}
+		loopWalks = resolved.loopWalks(roleLoop)
 	}
 	// Every coordinate this loop's walks read sits within the payload's own
 	// section displacement of the section it denotes, so each walk's length, each
@@ -2318,7 +2411,8 @@ func circularExtremeInterval(w segmentWalk, gu, gv float64) (boundedScalar, boun
 //
 // walks is profile's pre-resolved segment walks, or nil to resolve each
 // segment through walkOf as before (this file's profileWalks doc comment). A
-// non-nil walks that does not match profile's shape refuses.
+// non-nil walks that was not resolved from THIS profile's own recorded
+// segments refuses.
 func boundaryExtremesBoundedContext(ctx context.Context, profile ProfileRecord, gu, gv float64, work *freeformWork, walks *profileWalks) (float64, float64, float64, error) {
 	if err := requireFiniteDirection(gu, gv); err != nil {
 		return 0, 0, 0, err

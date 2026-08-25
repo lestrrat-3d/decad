@@ -115,6 +115,18 @@ func TestExtrudeInvoluteFlankBuildsAndVerifies(t *testing.T) {
 	require.InDelta(t, 5.939041425788393, c.Value.X, involuteCompareTolerance)
 	require.InDelta(t, -0.22965573060319747, c.Value.Y, involuteCompareTolerance)
 	require.InDelta(t, 5.0, c.Value.Z, involuteCompareTolerance)
+	// The centroid publishes a bound of its own, and it is asserted on the
+	// same terms as the volume's: a free-form section's centroid is not an
+	// exactly representable reading, so the bound is positive — a zero here
+	// would claim an exactness this evaluator never proved — and it stays
+	// vanishingly small against the body's own ~9.5 mm extent. The figure
+	// moves with the host for the same FMA reason the value does (measured
+	// 1.70e-15 on amd64), so the assertion pins the tier, not the digits.
+	require.Equal(t, decad.Approximate, c.Exactness)
+	require.Positive(t, c.Bound.Mag(),
+		"a free-form centroid's proven error is never zero: this reading is computed, not exact")
+	require.Less(t, c.Bound.Mag(), 1e-12,
+		"the centroid's proven error must stay negligible against the body's own extent")
 
 	box, err := body.Bounds()
 	require.NoError(t, err)
