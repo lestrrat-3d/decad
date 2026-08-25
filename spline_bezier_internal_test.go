@@ -57,11 +57,21 @@ func evalSpans(t *testing.T, spans []bezierSpan, at float64) (float64, float64) 
 
 type floatBezierSpan [][2]float64
 
+type floatBezierSpans []floatBezierSpan
+
 func floatBezierSpanOf(span bezierSpan) floatBezierSpan {
 	got := make(floatBezierSpan, len(span))
 	for i, point := range span {
 		got[i][0], _ = point.u.Float64()
 		got[i][1], _ = point.v.Float64()
+	}
+	return got
+}
+
+func floatBezierSpansOf(spans []bezierSpan) floatBezierSpans {
+	got := make(floatBezierSpans, len(spans))
+	for i, span := range spans {
+		got[i] = floatBezierSpanOf(span)
 	}
 	return got
 }
@@ -83,6 +93,15 @@ func evalFloatBezierSpan(span floatBezierSpan, at float64) (float64, float64) {
 		}
 	}
 	return u[0], v[0]
+}
+
+func evalFloatBezierSpans(spans floatBezierSpans, at float64) (float64, float64) {
+	scaled := at * float64(len(spans))
+	index := int(math.Floor(scaled))
+	if index >= len(spans) {
+		index = len(spans) - 1
+	}
+	return evalFloatBezierSpan(spans[index], scaled-float64(index))
 }
 
 func TestSplineBezierMatchesGeomEvaluator(t *testing.T) {

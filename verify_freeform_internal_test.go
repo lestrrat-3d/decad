@@ -80,9 +80,10 @@ func denseFreeformCapPoints(t *testing.T, pp prismPayload, samples int) []r3.Vec
 				)
 				continue
 			}
+			floatSpans := floatBezierSpansOf(w.spans)
 			for i := 0; i <= samples; i++ {
 				at := float64(i) / float64(samples)
-				u, v := evalSpans(t, w.spans, at)
+				u, v := evalFloatBezierSpans(floatSpans, at)
 				pts = append(pts, pp.point(u, v, pp.z0), pp.point(u, v, pp.z1))
 			}
 		}
