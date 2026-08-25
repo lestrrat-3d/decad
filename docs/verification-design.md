@@ -376,10 +376,13 @@ maximum rounded toward zero, so the reading can only UNDERSTATE the
 body's true diameter and never overstate it — the same construction
 `bodyGateDiameter` already runs over a `loftPayload`'s own held vertex set
 (`verify.go`), differing only in what it earns: a `LineSeg`-only loft body's
-boundary is a polyhedron, so its vertex maximum IS the true diameter, while a
-chorded loft's own maximum is at or below the true one exactly as this arm's
-is (loft §12), since a curved wall's farthest pair can sit between two sampled
-points — which is why both claim a bound rather than the diameter.
+boundary is a polyhedron, so where that body's own displacement `delta` is
+zero its vertex maximum IS the true diameter, while a chorded loft's own
+maximum is at or below the true one exactly as this arm's is (loft §12),
+since a curved wall's farthest pair can sit between two sampled points —
+which is why both claim a bound rather than the diameter. Wherever `delta`
+is positive, the loft arm shrinks its reading by `2*delta` first (loft §12),
+and it reads `delta` rather than asking whether the body was placed.
 
 **Publishing is conditional, and withholding is the only alternative.** This
 arm yields a diameter only when its own witness conversion and the shared
