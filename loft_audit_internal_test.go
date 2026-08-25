@@ -2,8 +2,8 @@ package decad
 
 import (
 	"context"
+	"sync"
 	"testing"
-	"time"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/stretchr/testify/require"
@@ -282,7 +282,7 @@ func TestLoftCrossingAuditPollsAfterFinalPair(t *testing.T) {
 	require.ErrorIs(t, ctx.Err(), context.Canceled)
 }
 
-// --- the broad-phase (loft_audit.go's loftBroadPhaseEnabled path) ---
+// --- the broad-phase (loft_audit.go's loftCrossingAuditWork short-circuit) ---
 //
 // FALSIFICATION LOG (docs/loft-design.md's own "prove the mechanism can
 // fail" discipline). Each leg below was actually broken in loft_audit.go,
@@ -311,7 +311,7 @@ func TestLoftCrossingAuditPollsAfterFinalPair(t *testing.T) {
 //     in the source anyway: it is defense in depth against a FUTURE tier
 //     that does not share this structural property, and Table
 //     TestLoftCrossingAuditBroadPhaseNeverSkipsARequiredContactPair still
-//     pins loftBroadPhaseSkips at 0 for both required-contact fixtures.
+//     pins the call's own skip count at 0 for both required-contact fixtures.
 //   - Leg 2, "round the bounding box INWARD instead of outward": boxesOverlap
 //     compares with <=; a local copy using < (strict) was substituted in the
 //     S7 loop, and boundaryTouchingFixture (below) — two triangles sharing NO
@@ -364,13 +364,9 @@ func boundaryTouchingFixture() ([]r3.Vec, [][3]int) {
 // (or its absence) decides.
 func requireLoftCrossingAuditVerdictsMatch(t *testing.T, verts []r3.Vec, tris [][3]int) {
 	t.Helper()
-	t.Cleanup(func() { loftBroadPhaseEnabled = true })
 
-	loftBroadPhaseEnabled = false
-	offErr := loftCrossingAudit(newWorkBudget(t.Context()), verts, tris)
-
-	loftBroadPhaseEnabled = true
-	onErr := loftCrossingAudit(newWorkBudget(t.Context()), verts, tris)
+	_, offErr := loftCrossingAuditWork(newWorkBudget(t.Context()), verts, tris, false)
+	_, onErr := loftCrossingAuditWork(newWorkBudget(t.Context()), verts, tris, true)
 
 	if offErr == nil {
 		require.NoError(t, onErr, "the broad-phase must not turn a passing audit into a failing one")
@@ -416,56 +412,83 @@ func TestLoftCrossingAuditBroadPhaseAgreesWithTheFullAudit(t *testing.T) {
 
 // TestLoftCrossingAuditBroadPhaseSkipsFarApartPairs proves the broad-phase is
 // not a no-op: over syntheticLoftTriangles' far-apart, zero-shared-vertex
-// triangles it actually skips pairs (loftBroadPhaseSkips counts them), so the
+// triangles it actually skips pairs (the call's own work counts them), so the
 // equivalence test above is exercising the short-circuit and not vacuously
 // agreeing because it never ran.
 func TestLoftCrossingAuditBroadPhaseSkipsFarApartPairs(t *testing.T) {
-	t.Cleanup(func() { loftBroadPhaseEnabled = true })
 	verts, tris := syntheticLoftTriangles(40)
 
-	loftBroadPhaseEnabled = true
-	loftBroadPhaseSkips = 0
-	err := loftCrossingAudit(newWorkBudget(t.Context()), verts, tris)
+	work, err := loftCrossingAuditWork(newWorkBudget(t.Context()), verts, tris, true)
 	require.NoError(t, err)
-	require.Positive(t, loftBroadPhaseSkips,
+	require.Positive(t, work.skips,
 		"40 mutually far-apart triangles must exercise the short-circuit at least once")
+}
+
+// TestLoftCrossingAuditWorkCountsAreIndependentPerCall proves the audit's work
+// counts are per-call state rather than a shared package counter: two audits
+// run concurrently over the same triangle set each report the SAME totals they
+// would report alone, and `go test -race` sees no write shared between them.
+// A package-level counter fails this test twice over — the race detector flags
+// the increments, and either goroutine's total absorbs the other's pairs.
+func TestLoftCrossingAuditWorkCountsAreIndependentPerCall(t *testing.T) {
+	verts, tris := syntheticLoftTriangles(40)
+
+	alone, err := loftCrossingAuditWork(newWorkBudget(t.Context()), verts, tris, true)
+	require.NoError(t, err)
+	require.Positive(t, alone.skips)
+	require.Equal(t, 40*39/2, alone.skips+alone.classifications,
+		"every admitted pair is either skipped by a broad-phase tier or classified")
+
+	var wg sync.WaitGroup
+	got := make([]loftBroadPhaseWork, 2)
+	errs := make([]error, 2)
+	for k := range got {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			got[k], errs[k] = loftCrossingAuditWork(newWorkBudget(t.Context()), verts, tris, true)
+		}()
+	}
+	wg.Wait()
+
+	for k := range got {
+		require.NoError(t, errs[k])
+		require.Equal(t, alone, got[k],
+			"a concurrent audit must count only its own pairs")
+	}
 }
 
 // TestLoftCrossingAuditBroadPhaseNeverSkipsARequiredContactPair proves the
 // short-circuit is unreachable for a pair required to touch: both
 // vertexCrossesAwayFixture (one shared vertex) and sameSideApexesFixture (two
-// shared vertices) hold exactly one pair each, so if loftBroadPhaseSkips
+// shared vertices) hold exactly one pair each, so if the call's own skip count
 // stays 0 after the audit runs, that one pair was decided by auditLoftPair
 // and not by the broad-phase — by construction, since the S7 loop's guard
 // gates both tiers behind len(shared) == 0 and neither fixture's pair has
 // zero shared vertices.
 func TestLoftCrossingAuditBroadPhaseNeverSkipsARequiredContactPair(t *testing.T) {
-	t.Cleanup(func() { loftBroadPhaseEnabled = true })
-	loftBroadPhaseEnabled = true
-
 	t.Run("one shared vertex", func(t *testing.T) {
 		verts, tris := vertexCrossesAwayFixture()
-		loftBroadPhaseSkips = 0
-		err := loftCrossingAudit(newWorkBudget(t.Context()), verts, tris)
+		work, err := loftCrossingAuditWork(newWorkBudget(t.Context()), verts, tris, true)
 		require.ErrorIs(t, err, ErrDegenerate)
-		require.Zero(t, loftBroadPhaseSkips,
+		require.Zero(t, work.skips,
 			"a pair sharing one recorded vertex is required to touch there; the broad-phase must never decide it")
 	})
 
 	t.Run("two shared vertices", func(t *testing.T) {
 		verts, tris := sameSideApexesFixture()
-		loftBroadPhaseSkips = 0
-		err := loftCrossingAudit(newWorkBudget(t.Context()), verts, tris)
+		work, err := loftCrossingAuditWork(newWorkBudget(t.Context()), verts, tris, true)
 		require.ErrorIs(t, err, ErrDegenerate)
-		require.Zero(t, loftBroadPhaseSkips,
+		require.Zero(t, work.skips,
 			"a pair sharing two recorded vertices is required to touch along that edge; the broad-phase must never decide it")
 	})
 }
 
 // TestLoftCrossingAuditBroadPhaseStillCatchesACrossing re-runs
 // sameSideApexesFixture — the same-side-apexes crossing docs/loft-design.md
-// §13 names — with the broad-phase at its default (on) setting, and asserts
-// the refusal names the same triangle pair auditLoftPair itself finds.
+// §13 names — through loftCrossingAudit, the production entry point where the
+// broad-phase always runs, and asserts the refusal names the same triangle
+// pair auditLoftPair itself finds.
 func TestLoftCrossingAuditBroadPhaseStillCatchesACrossing(t *testing.T) {
 	verts, tris := sameSideApexesFixture()
 
@@ -477,29 +500,87 @@ func TestLoftCrossingAuditBroadPhaseStillCatchesACrossing(t *testing.T) {
 	require.Equal(t, want.Error(), got.Error())
 }
 
-// loftBroadPhaseWallClockCeiling is a RUNAWAY guard on the F~230 shape below,
-// deliberately far above the 2s per-fixture budget docs/loft-design.md's own
-// calibration work (loft_chord_calibration_internal_test.go) measures
-// against: wall-clock varies by host (that file's own loftChordBuildCeiling
-// comment measures about 1.4s-9.7s across three hosts for a similar-sized
-// loft), so this only catches an orders-of-magnitude regression in the
-// broad-phase itself, never a host's own slowness.
-const loftBroadPhaseWallClockCeiling = 30 * time.Second
+// chordedWedgeTriangles assembles the F~230 hand-chorded spline wedge's own
+// wall-and-cap triangle set — the very verts/tris loftCrossingAudit is handed
+// inside a Document.Loft of that shape — by running the same pipeline evalLoft
+// runs ahead of the audit (recordProfile, validateLoftRecords, loftPairings,
+// assembleLoft) and stopping at its output. It reuses
+// loft_chord_calibration_internal_test.go's wedgePlanes/chordedWedgeProfile
+// harness, so the geometry is that file's own m=112-station wedge.
+//
+// Assembling the set once and auditing it twice is what makes the comparison
+// below a comparison: both runs see byte-identical geometry, so the only
+// difference between their work counts is the broad-phase itself.
+func chordedWedgeTriangles(t *testing.T, pts [][2]float64) ([]r3.Vec, [][3]int) {
+	t.Helper()
+	w, base, top := wedgePlanes(t)
+	s0, p0 := chordedWedgeProfile(t, w, base, pts)
+	s1, p1 := chordedWedgeProfile(t, w, top, pts)
 
-// TestLoftCrossingAuditBroadPhaseWallClockRegressionGuard builds the F~230
-// hand-chorded spline wedge (loft_chord_calibration_internal_test.go's own
-// wedgeFitSpline/wedgeSplinePoints/buildChordedWedgeLoft harness, m=112
-// stations) and asserts the build finishes well inside
-// loftBroadPhaseWallClockCeiling — a loose bound whose only job is to catch a
-// future regression that undoes the broad-phase, not to pin a number.
-func TestLoftCrossingAuditBroadPhaseWallClockRegressionGuard(t *testing.T) {
+	profile0, plane0, _, err := recordProfile(s0, p0)
+	require.NoError(t, err)
+	profile1, plane1, _, err := recordProfile(s1, p1)
+	require.NoError(t, err)
+
+	work0, work1 := newFreeformWork(), newFreeformWork()
+	offsets, err := validateLoftRecords(profile0, profile1, plane0, plane1, nil, work0, work1)
+	require.NoError(t, err)
+	pairs, err := loftPairings(profile0, profile1, offsets, work0, work1)
+	require.NoError(t, err)
+
+	frame0, err := r3.NewFrame(plane0.Origin, plane0.U, plane0.V)
+	require.NoError(t, err)
+	frame1, err := r3.NewFrame(plane1.Origin, plane1.U, plane1.V)
+	require.NoError(t, err)
+
+	a, err := assembleLoft(t.Context(), pairs, frame0, frame1, plane0, r3.Identity())
+	require.NoError(t, err)
+	return a.verts, a.tris
+}
+
+// loftBroadPhaseWorkDivisor is how much of the S7 pair loop's exact
+// classification work the broad-phase must still be removing on the F~230
+// wedge below for the filter to count as doing its job: the broad-phase-on run
+// may reach auditLoftPair on at most one QUARTER of the pairs the
+// broad-phase-off run reaches it on. It is a floor with room under it, not a
+// measured residual — the wedge's real reduction is far larger, and this
+// divisor exists so an ordinary future change to the triangle set does not
+// have to re-pin a number.
+const loftBroadPhaseWorkDivisor = 4
+
+// TestLoftCrossingAuditBroadPhaseCutsClassificationWork is the evidence that
+// the broad-phase actually removes work: it assembles the F~230 hand-chorded
+// spline wedge's triangle set once (m=112 stations) and audits that ONE set
+// twice, with the short-circuit off and then on, comparing how many pairs each
+// run pushed through auditLoftPair's exact classification.
+//
+// The instrument is a COUNT, not a wall clock. Both counts depend only on the
+// geometry, so they are identical on every host and across repeats, and the
+// test fails outright if the broad-phase is disabled, mis-gated, or made
+// ineffective — the case where the two runs classify the same pairs. A timing
+// assertion could not do that here: the two runs' wall clocks differ by a
+// margin smaller than the per-host spread
+// loft_chord_calibration_internal_test.go's own loftChordBuildCeiling comment
+// records for a loft this size.
+func TestLoftCrossingAuditBroadPhaseCutsClassificationWork(t *testing.T) {
 	const stations = 112
 	fs := wedgeFitSpline(t)
-	pts := wedgeSplinePoints(fs, stations)
+	verts, tris := chordedWedgeTriangles(t, wedgeSplinePoints(fs, stations))
 
-	body, elapsed := buildChordedWedgeLoft(t, pts)
-	t.Logf("F~230 broad-phase regression guard: stations=%d F=%d elapsed=%s (ceiling %s)",
-		stations, len(body.Faces()), elapsed, loftBroadPhaseWallClockCeiling)
-	require.Less(t, elapsed, loftBroadPhaseWallClockCeiling,
-		"the F~230 loft build has regressed by orders of magnitude")
+	off, err := loftCrossingAuditWork(newWorkBudget(t.Context()), verts, tris, false)
+	require.NoError(t, err)
+	on, err := loftCrossingAuditWork(newWorkBudget(t.Context()), verts, tris, true)
+	require.NoError(t, err)
+
+	t.Logf("F~230 wedge: stations=%d triangles=%d classifications off=%d on=%d skips=%d",
+		stations, len(tris), off.classifications, on.classifications, on.skips)
+
+	require.Zero(t, off.skips,
+		"with the short-circuit off, no pair may be skipped")
+	require.Equal(t, off.classifications, on.classifications+on.skips,
+		"the broad-phase only moves a pair from classified to skipped; the pair count is the same either way")
+	require.Positive(t, on.classifications,
+		"the wedge's own adjacent and nearby pairs must still reach the exact classification")
+	require.Less(t, on.classifications, off.classifications/loftBroadPhaseWorkDivisor,
+		"the broad-phase must still remove the bulk of the exact classification work")
 }

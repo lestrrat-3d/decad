@@ -131,21 +131,23 @@ func segMatchesRecordedEdge(c triContact, edgeA, edgeB xpt) bool {
 	return (k0 == ka && k1 == kb) || (k0 == kb && k1 == ka)
 }
 
-// loftBroadPhaseEnabled gates loftCrossingAudit's bounding-box short-circuit
-// (below) for a pair that shares no recorded vertex. It exists solely so
-// tests can run the S7 pair loop both ways over the same fixture and compare
-// verdicts — TestLoftCrossingAuditBroadPhaseAgreesWithTheFullAudit in
-// loft_audit_internal_test.go — the same pattern triTriFilterEnabled uses in
-// boolean_mesh.go for its own reject-only pre-filter. Production code never
-// assigns to it, and no exported surface can reach it.
-var loftBroadPhaseEnabled = true
-
-// loftBroadPhaseSkips counts how many pairs the S7 loop's broad-phase
-// short-circuit actually skipped (either tier), reset and read by tests
-// only — in particular to prove the skip is unreachable for a pair required
-// to touch (len(shared) 1 or 2; see auditLoftPair's switch and the loop
-// below). Production code never reads it.
-var loftBroadPhaseSkips int
+// loftBroadPhaseWork records what ONE loftCrossingAudit call's S7 pair loop
+// did: skips counts the zero-shared-vertex pairs a broad-phase tier proved
+// apart, and classifications counts the pairs that reached auditLoftPair's
+// exact classification. The two always sum to the pair count S8 admitted.
+//
+// It is per-call state, held in loftCrossingAuditWork's own frame and
+// returned by value — never a package-level counter. The audit runs on the
+// production path of every exported entry point that builds or re-lifts a
+// loft (Document.Loft/LoftContext, and Body.Placed/PlacedContext/Duplicate/
+// PlacedCopy through loftPayload.placed), and two goroutines holding two
+// independent Documents may each be inside it at once, so a counter shared
+// across calls would both race and mis-count. Nothing outside the call frame
+// is written anywhere on this path.
+type loftBroadPhaseWork struct {
+	skips           int
+	classifications int
+}
 
 // loftPlaneSeparated is the S7 broad-phase's second, still-float-only tier
 // for a zero-shared-vertex pair whose bounding boxes DO overlap: it
@@ -238,22 +240,40 @@ func auditLoftPair(verts []r3.Vec, tris [][3]int, i, j int) error {
 // docs/modify-design.md §5's audits already share one (fillet_audit.go);
 // step is called once per candidate (each triangle in S6, each pair in S7)
 // and err at every phase boundary, the end of S7 among them.
+//
+// This is the production entry point: the broad-phase always runs. Tests that
+// need the same audit with the short-circuit switched off, or need the pair
+// loop's own work counts, call loftCrossingAuditWork below directly.
 func loftCrossingAudit(budget *workBudget, verts []r3.Vec, tris [][3]int) error {
+	_, err := loftCrossingAuditWork(budget, verts, tris, true)
+	return err
+}
+
+// loftCrossingAuditWork is loftCrossingAudit's body, with the S7 broad-phase
+// short-circuit under an explicit per-call switch and the pair loop's own
+// work counts returned to the caller. broadPhase false runs every admitted
+// pair through auditLoftPair's exact classification, which is the verdict the
+// broad-phase may only ever reach sooner, never change.
+//
+// The returned counts are meaningful only when the audit completes: an early
+// return carries whatever the loop had reached when it stopped.
+func loftCrossingAuditWork(budget *workBudget, verts []r3.Vec, tris [][3]int, broadPhase bool) (loftBroadPhaseWork, error) {
+	var work loftBroadPhaseWork
 	if err := budget.err(); err != nil {
-		return err
+		return work, err
 	}
 
 	// S6: per-triangle existence, before the pair audit runs at all.
 	for i, tri := range tris {
 		if err := budget.step(); err != nil {
-			return err
+			return work, err
 		}
 		if triangleCollapsed(verts, tri) {
-			return fmt.Errorf(`%w: loft triangle %d has collapsed to zero area`, ErrDegenerate, i)
+			return work, fmt.Errorf(`%w: loft triangle %d has collapsed to zero area`, ErrDegenerate, i)
 		}
 	}
 	if err := budget.err(); err != nil {
-		return err
+		return work, err
 	}
 
 	// S8: the facet-pair ceiling, computed under checked arithmetic and
@@ -261,7 +281,7 @@ func loftCrossingAudit(budget *workBudget, verts []r3.Vec, tris [][3]int) error 
 	f := len(tris)
 	pairs, ok := wallChoose2(uint64(f))
 	if !ok || pairs > maxFacetPairTestsPerCall {
-		return fmt.Errorf(`%w: the loft crossing audit's facet-pair count exceeds the fixed work ceiling`, ErrUnsupported)
+		return work, fmt.Errorf(`%w: the loft crossing audit's facet-pair count exceeds the fixed work ceiling`, ErrUnsupported)
 	}
 
 	// A broad-phase per-triangle bounding box (boolean_mesh.go's triBox, the
@@ -303,21 +323,22 @@ func loftCrossingAudit(budget *workBudget, verts []r3.Vec, tris [][3]int) error 
 	for i := range f {
 		for j := i + 1; j < f; j++ {
 			if err := budget.step(); err != nil {
-				return err
+				return work, err
 			}
 			shared := sharedVertexIndices(tris[i], tris[j])
-			if loftBroadPhaseEnabled && len(shared) == 0 {
+			if broadPhase && len(shared) == 0 {
 				if !boxesOverlap(boxes[i], boxes[j]) {
-					loftBroadPhaseSkips++
+					work.skips++
 					continue
 				}
 				if loftPlaneSeparated(loftTriCorners(verts, tris[i]), loftTriCorners(verts, tris[j])) {
-					loftBroadPhaseSkips++
+					work.skips++
 					continue
 				}
 			}
+			work.classifications++
 			if err := auditLoftPair(verts, tris, i, j); err != nil {
-				return err
+				return work, err
 			}
 		}
 	}
@@ -336,5 +357,5 @@ func loftCrossingAudit(budget *workBudget, verts []r3.Vec, tris [][3]int) error 
 	// fillet.go, chamfer.go and shell.go each check ctx.Err() immediately
 	// before Document.commit. Loft's own commit-edge check belongs to
 	// LoftContext.
-	return budget.err()
+	return work, budget.err()
 }
