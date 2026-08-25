@@ -378,15 +378,18 @@ func TestLoftPairingsDefaultOffsetIsZero(t *testing.T) {
 	p := unitSquareProfile()
 	offsets := []int{0}
 	walks := resolveLoftLoopWalks(t, p)
-	pairs := loftPairings(p, offsets, walks, walks)
+	pairs, sectionDelta, err := loftPairings(p, offsets, walks, walks, 0, nil, nil)
+	require.NoError(t, err)
 	require.Equal(t, pt(0, 0), pairs[0].w[0])
+	require.Zero(t, sectionDelta, "a LineSeg-only pairing carries no curve to depart from")
 }
 
 func TestLoftPairingsAlignmentRotatesCorrespondence(t *testing.T) {
 	p := unitSquareProfile()
 	offsets := []int{1}
 	walks := resolveLoftLoopWalks(t, p)
-	pairs := loftPairings(p, offsets, walks, walks)
+	pairs, _, err := loftPairings(p, offsets, walks, walks, 0, nil, nil)
+	require.NoError(t, err)
 	// loop0 segment 0 (V_0, at local (0,0)) now pairs with loop1 segment 1,
 	// whose own recorded start is local (1,0) — the far endpoint of rung R_0
 	// moves from W[0]=(0,0) to W[1]=(1,0).
@@ -408,7 +411,8 @@ func TestLoftPairingsTwoHolesPairByPosition(t *testing.T) {
 	p1 := ProfileRecord{Outer: squareLoop(0.5, 0.5, 0.5, true), Holes: []LoopRecord{largeHole, smallHole}}
 
 	offsets := []int{0, 0, 0}
-	pairs := loftPairings(p0, offsets, resolveLoftLoopWalks(t, p0), resolveLoftLoopWalks(t, p1))
+	pairs, _, err := loftPairings(p0, offsets, resolveLoftLoopWalks(t, p0), resolveLoftLoopWalks(t, p1), 0, nil, nil)
+	require.NoError(t, err)
 
 	require.Len(t, pairs, 3) // outer + 2 holes
 	// Hole loop 1 (index 1+0): p0's own small hole (v) pairs with p1's
@@ -454,8 +458,11 @@ func TestLoftWalkResolutionChargesOncePerSegment(t *testing.T) {
 		loop.Segments[i] = fit
 	}
 	profile := ProfileRecord{Outer: loop}
-	pairs := loftPairings(profile, []int{0}, [][]segmentWalk{walks}, [][]segmentWalk{walks})
-	require.Len(t, pairs, 1)
+	// A free-form pairing has no station rule yet (loftCellStations' own
+	// default case, unreached from any real build since S3 refuses it
+	// first) — this is asserted below for the charge, not the correspondence.
+	_, _, err = loftPairings(profile, []int{0}, [][]segmentWalk{walks}, [][]segmentWalk{walks}, 0, loopWork, loopWork)
+	require.Error(t, err)
 	require.Equal(t, before, loopWork.spent, "loftPairings must spend no further free-form work")
 }
 
@@ -886,7 +893,10 @@ func assembleLoftFixture(t *testing.T, pl loftPayload) loftAssembly {
 	t.Helper()
 	offsets, walks0, walks1, err := validateLoftRecords(pl.profile0, pl.profile1, pl.plane0, pl.plane1, pl.alignment, newFreeformWork(), newFreeformWork())
 	require.NoError(t, err)
-	pairs := loftPairings(pl.profile0, offsets, walks0, walks1)
+	target, err := loftChordTarget(pl.profile0, pl.profile1, walks0, walks1)
+	require.NoError(t, err)
+	pairs, _, err := loftPairings(pl.profile0, offsets, walks0, walks1, target, newFreeformWork(), newFreeformWork())
+	require.NoError(t, err)
 	a, err := assembleLoft(t.Context(), pairs, pl.frame0, pl.frame1, pl.plane0, pl.xform)
 	require.NoError(t, err)
 	return a
