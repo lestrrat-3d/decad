@@ -434,8 +434,10 @@ func sweptVolumeAllow(delta, areaUpper float64) float64 {
 //     term is linear in s (b_chord(s)−a_chord(s) = (1−s)·(wLo−vLo) +
 //     s·(wHi−vHi)), so it is itself bounded by eBBase :=
 //     max(|wLo−vLo|,|wHi−vHi|) via the SAME convexity cellTwistVolumeAllow's
-//     part (b) uses. The curve term is within matchedDeltaUpper of the
-//     matching chord term AT THE SAME s — never merely somewhere on the
+//     part (b) uses — and read through the SAME cellSpanUpper that part uses,
+//     never r3.Vec.Len, for the reason cellSpanUpper's own doc comment gives.
+//     The curve term is within matchedDeltaUpper of the matching chord term
+//     AT THE SAME s — never merely somewhere on the
 //     chord, which is all a SAGITTA (a SET-distance from the curve to its
 //     nearest chord point, decad's own sectionDelta) proves — so triangle
 //     inequality gives |b_curve(s)−a_curve(s)| <= eBBase +
@@ -475,8 +477,15 @@ func sweptVolumeAllow(delta, areaUpper float64) float64 {
 // arcLenUpperA and arcLenUpperB must each be a PROVEN upper bound on that
 // side's own arc length over the cell — never smaller than the corresponding
 // chord length, which the derivation's first bullet depends on (a chord
-// never exceeds the arc it subtends). Any of the three non-finite, either
-// arc length claim negative or smaller than its own chord, matchedDeltaUpper
+// never exceeds the arc it subtends). That premise is falsified against
+// cellSpanUpper of the side's own chord rather than r3.Vec.Len: a raw norm
+// on the REFUSING side of the comparison rounds DOWN, so it admits a claim
+// that provably sits below the true chord, while the certified upper endpoint
+// can only over-refuse by an ulp — the reject-only-safe direction. Even a
+// caller whose side is a straight LINE must therefore state its chord through
+// cellSpanUpper, since r3.Vec.Len of that same chord is not itself a proven
+// upper bound on it. Any of the three non-finite, either arc length claim
+// negative or smaller than its own chord, matchedDeltaUpper
 // negative, or any of the four corners carrying a non-finite coordinate, is
 // a BROKEN caller claim and this helper answers +Inf for it, never 0
 // (cutDisplacementAllow's own rule): a claim this derivation's own premises
@@ -493,14 +502,14 @@ func cellChordCurveAreaUpper(vLo, vHi, wLo, wHi r3.Vec, arcLenUpperA, arcLenUppe
 	if arcLenUpperA < 0 || arcLenUpperB < 0 || matchedDeltaUpper < 0 {
 		return math.Inf(1)
 	}
-	if arcLenUpperA < vHi.Sub(vLo).Len() || arcLenUpperB < wHi.Sub(wLo).Len() {
+	if arcLenUpperA < cellSpanUpper(vHi, vLo) || arcLenUpperB < cellSpanUpper(wHi, wLo) {
 		return math.Inf(1)
 	}
 	eA := math.Max(arcLenUpperA, arcLenUpperB)
 	if eA <= 0 {
 		return 0
 	}
-	eBBase := math.Max(wLo.Sub(vLo).Len(), wHi.Sub(vHi).Len())
+	eBBase := math.Max(cellSpanUpper(wLo, vLo), cellSpanUpper(wHi, vHi))
 	eB := absSumUpper(eBBase, productUpper(2, matchedDeltaUpper))
 	return productUpper(eA, eB)
 }
@@ -655,12 +664,17 @@ func cellTwistQuarterUpper(vLo, vHi, wLo, wHi r3.Vec) float64 {
 
 // cellSpanUpper is the CERTIFIED upper endpoint of |a − b| for two of a wall
 // cell's own corners — the eA and eB edge lengths cellTwistVolumeAllow's
-// derivation part (b) bounds the homotopy's facet area by. It exists for the
-// same reason cellTwistQuarterUpper does: r3.Vec.Len is nested math.Hypot,
-// which is not correctly rounded and can sit several ulp below the exact norm,
-// and a trailing one-ulp upRound cannot recover a multi-ulp shortfall. The
+// derivation part (b) bounds the homotopy's facet area by, and the same
+// endpoint cellChordCurveAreaUpper reads for its own eBBase and for the chord
+// its arc-length premise is falsified against. It exists for the same reason
+// cellTwistQuarterUpper does: r3.Vec.Len is nested math.Hypot, which is not
+// correctly rounded and can sit several ulp below the exact norm, and a
+// trailing one-ulp upRound cannot recover a multi-ulp shortfall. The
 // corners are float64 and hence exact rationals, so the difference and its
 // squared norm are exact and ratSqrtUp decides the root by exact comparison.
+//
+// It reads its corners as exact rationals, so a caller must have already
+// refused a non-finite one before calling: both callers run finiteVec first.
 func cellSpanUpper(a, b r3.Vec) float64 {
 	d := rvSub(ratVec(a), ratVec(b))
 	return ratSqrtUp(rvDot(d, d))

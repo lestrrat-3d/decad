@@ -245,8 +245,9 @@ type chordedAllowBreakdown struct {
 //     takes as a parameter, reading the cell's own corners directly
 //     instead; and the 2 radial cells, each side's own arc length equal to
 //     its own chord length exactly, since a radial wall is a straight
-//     LineSeg) — multiplied by sectionDelta only once, inside
-//     chordedBoundaryVolumeAllow itself;
+//     LineSeg, and claimed through cellSpanUpper because r3.Vec.Len of that
+//     chord is not itself a proven upper bound on it) — multiplied by
+//     sectionDelta only once, inside chordedBoundaryVolumeAllow itself;
 //   - ruled-to-triangle (twist): cellTwistVolumeAllow summed over every one
 //     of the n+2 wall cells, since a twisted top section gives every wall
 //     cell — including the two radial ones, whose "outer" corners rotate by
@@ -300,8 +301,12 @@ func chordedBoundaryAllowForTwistedPieSlice(radius, sweepRad, twistRad, h float6
 	}
 	for _, c := range radialCells {
 		vLo, vHi, wLo, wHi := c[0], c[1], c[2], c[3]
-		arcLenA := vHi.Sub(vLo).Len()
-		arcLenB := wHi.Sub(wLo).Len()
+		// A radial wall is a straight LineSeg, so each side's own arc length
+		// IS its chord length — but the CLAIM must be a proven UPPER bound on
+		// that chord, and r3.Vec.Len is not one (cellSpanUpper's own doc
+		// comment). The certified endpoint is what this caller states.
+		arcLenA := cellSpanUpper(vHi, vLo)
+		arcLenB := cellSpanUpper(wHi, wLo)
 		b.wallAreaApex = absSumUpper(b.wallAreaApex, cellChordCurveAreaUpper(vLo, vHi, wLo, wHi, arcLenA, arcLenB, sectionDelta))
 		b.twistVolumeApex = absSumUpper(b.twistVolumeApex, cellTwistVolumeAllow(vLo, vHi, wLo, wHi))
 		b.maxTwistOffsetUpper = math.Max(b.maxTwistOffsetUpper, cellTwistOffsetUpper(vLo, vHi, wLo, wHi))
@@ -915,9 +920,11 @@ func TestCellChordCurveAreaUpperEnclosesTheFlatTriangleCounterexample(t *testing
 			wHi := r3.NewVec(0, 0, h)
 
 			// Both sides are straight LineSegs (sectionDelta=0): each
-			// side's own arc length equals its own chord length exactly.
-			arcLenA := vHi.Sub(vLo).Len()
-			arcLenB := wHi.Sub(wLo).Len()
+			// side's own arc length equals its own chord length exactly,
+			// claimed through cellSpanUpper because r3.Vec.Len of that same
+			// chord is not itself a proven upper bound on it.
+			arcLenA := cellSpanUpper(vHi, vLo)
+			arcLenB := cellSpanUpper(wHi, wLo)
 
 			patchArea := bilinearPatchAreaNumeric(vLo, vHi, wLo, wHi)
 			heldTriangleArea := h / 2 // the two flat triangles' own combined area, degenerating toward 0 with h
@@ -946,8 +953,8 @@ func TestCellChordCurveAreaUpperEnclosesTheCrossedCellCounterexample(t *testing.
 	wLo := r3.NewVec(0, -1, h)
 	wHi := r3.NewVec(0, 1, h)
 
-	arcLenA := vHi.Sub(vLo).Len()
-	arcLenB := wHi.Sub(wLo).Len()
+	arcLenA := cellSpanUpper(vHi, vLo)
+	arcLenB := cellSpanUpper(wHi, wLo)
 
 	patchArea := bilinearPatchAreaNumeric(vLo, vHi, wLo, wHi)
 	allow := cellChordCurveAreaUpper(vLo, vHi, wLo, wHi, arcLenA, arcLenB, 0)
@@ -964,8 +971,8 @@ func TestCellChordCurveAreaUpperEnclosesTheCrossedCellCounterexample(t *testing.
 // separation) are EXACTLY the same eA, eB cellTwistVolumeAllow's own already
 // -proven derivation uses for the SAME bilinear patch, so the two speak for
 // the same eA*eB product on the same four corners. The check is against that
-// product itself, not against cellTwistVolumeAllow's own float: that helper
-// certifies both norms over the rationals (cellSpanUpper), so the two answers
+// product itself, not against cellTwistVolumeAllow's own float: both helpers
+// certify their norms over the rationals (cellSpanUpper), so the two answers
 // agree on the quantity while each rounds outward on its own.
 func TestCellChordCurveAreaUpperReducesToTheTwistBoundAtZeroSectionDelta(t *testing.T) {
 	vLo := r3.NewVec(0, 0, 0)
@@ -973,10 +980,10 @@ func TestCellChordCurveAreaUpperReducesToTheTwistBoundAtZeroSectionDelta(t *test
 	wLo := r3.NewVec(0, 0, 1)
 	wHi := r3.NewVec(0, 1, 1)
 
-	arcLenA := vHi.Sub(vLo).Len()
-	arcLenB := wHi.Sub(wLo).Len()
+	arcLenA := cellSpanUpper(vHi, vLo)
+	arcLenB := cellSpanUpper(wHi, wLo)
 	eA := math.Max(arcLenA, arcLenB)
-	eB := math.Max(wLo.Sub(vLo).Len(), wHi.Sub(vHi).Len())
+	eB := math.Max(cellSpanUpper(wLo, vLo), cellSpanUpper(wHi, vHi))
 	want := eA * eB
 
 	// Not an exact match: cellChordCurveAreaUpper's own eB folds a
@@ -1003,8 +1010,8 @@ func TestCellChordCurveAreaUpperRefusesOnBrokenClaims(t *testing.T) {
 	vHi := r3.NewVec(1, 0, 0)
 	wLo := r3.NewVec(0, 0, 1)
 	wHi := r3.NewVec(0, 1, 1)
-	chordA := vHi.Sub(vLo).Len()
-	chordB := wHi.Sub(wLo).Len()
+	chordA := cellSpanUpper(vHi, vLo)
+	chordB := cellSpanUpper(wHi, wLo)
 
 	require.True(t, math.IsInf(cellChordCurveAreaUpper(vLo, vHi, wLo, wHi, math.NaN(), chordB, 0), 1), "NaN arcLenA")
 	require.True(t, math.IsInf(cellChordCurveAreaUpper(vLo, vHi, wLo, wHi, chordA, math.NaN(), 0), 1), "NaN arcLenB")
@@ -1022,12 +1029,12 @@ func TestCellChordCurveAreaUpperRefusesOnBrokenClaims(t *testing.T) {
 
 // TestCellChordCurveAreaUpperRefusesNonFiniteCorners pins F5: an earlier
 // version validated only the three scalar operands, so a NaN corner sailed
-// straight through `arcLenUpperA < vHi.Sub(vLo).Len()` (NaN compares false
-// against everything, so the range gate never refuses) and propagated
-// through eBBase's own math.Max into a silently-NaN answer for a cell whose
-// own geometry is unstateable, rather than a refusing +Inf — an unchecked
-// caller that widens its own bound by `answer > 0` treats NaN exactly like
-// 0, since `NaN > 0` is false either way. Every one of the four corners, in
+// straight through the range gate `arcLenUpperA < cellSpanUpper(vHi, vLo)`
+// (NaN compares false against everything, so the gate never refuses) and
+// propagated through eBBase's own math.Max into a silently-NaN answer for a
+// cell whose own geometry is unstateable, rather than a refusing +Inf — an
+// unchecked caller that widens its own bound by `answer > 0` treats NaN
+// exactly like 0, since `NaN > 0` is false either way. Every one of the four corners, in
 // isolation, must now trigger a genuine +Inf refusal.
 func TestCellChordCurveAreaUpperRefusesNonFiniteCorners(t *testing.T) {
 	vLo := r3.NewVec(0, 0, 0)
@@ -1035,13 +1042,99 @@ func TestCellChordCurveAreaUpperRefusesNonFiniteCorners(t *testing.T) {
 	wLo := r3.NewVec(0, 0, 1)
 	wHi := r3.NewVec(0, 1, 1)
 	nan := r3.NewVec(math.NaN(), 0, 0)
-	chordA := vHi.Sub(vLo).Len()
-	chordB := wHi.Sub(wLo).Len()
+	chordA := cellSpanUpper(vHi, vLo)
+	chordB := cellSpanUpper(wHi, wLo)
 
 	require.True(t, math.IsInf(cellChordCurveAreaUpper(nan, vHi, wLo, wHi, chordA, chordB, 0), 1), "NaN vLo")
 	require.True(t, math.IsInf(cellChordCurveAreaUpper(vLo, nan, wLo, wHi, chordA, chordB, 0), 1), "NaN vHi")
 	require.True(t, math.IsInf(cellChordCurveAreaUpper(vLo, vHi, nan, wHi, chordA, chordB, 0), 1), "NaN wLo")
 	require.True(t, math.IsInf(cellChordCurveAreaUpper(vLo, vHi, wLo, nan, chordA, chordB, 0), 1), "NaN wHi")
+}
+
+// rawNormIsBelowExact reports whether r3.Vec.Len of a−b lands STRICTLY below
+// the exact |a−b|, decided by exact rational comparison of the raw reading's
+// own square against the exactly-rational squared norm (both operands are
+// float64 corners, hence exact rationals, so the lift introduces no rounding
+// of its own). It is what the two raw-norm regressions below use to prove
+// their fixture actually exercises the channel they pin, rather than
+// asserting it from a measured literal.
+func rawNormIsBelowExact(a, b r3.Vec) bool {
+	raw := ratOfFloat(a.Sub(b).Len())
+	d := rvSub(ratVec(a), ratVec(b))
+	return new(big.Rat).Mul(raw, raw).Cmp(rvDot(d, d)) < 0
+}
+
+// TestCellChordCurveAreaUpperEnclosesTheExactEdgeProduct pins the RAW-NORM
+// channel on this helper's own eB term, the same channel
+// TestCellTwistBoundsEncloseTheExactTwistTerm pins one helper over: r3.Vec.Len
+// is nested math.Hypot, which carries no accuracy contract and sits several
+// ulp BELOW the exact norm for a large share of vectors, and neither
+// absSumUpper's nor productUpper's one-ulp outward nudge can recover a
+// multi-ulp shortfall. At matchedDeltaUpper=0 the eB term is eBBase alone, so
+// the published answer's own obligation is exactly eA·max(|wLo−vLo|,|wHi−vHi|)
+// and an understated eBBase puts the answer BELOW it — the unsound direction,
+// since chordedBoundaryVolumeAllow sums this reading over every wall cell for
+// its wallAreaUpper. The comparison is over exact rationals in SQUARED form
+// (the norms are irrational, their squares exactly rational), never against a
+// float reference that shares the defect.
+func TestCellChordCurveAreaUpperEnclosesTheExactEdgeProduct(t *testing.T) {
+	vLo := r3.NewVec(-0.18407194718000197, -0.9670493813481006, 0.11756527611707068)
+	vHi := r3.NewVec(-0.2543362139571195, 0.17121027904800257, 0.6486272299368296)
+	wLo := r3.NewVec(-0.329681753490781, 0.20068938566549477, 0.2784442506567102)
+	wHi := r3.NewVec(-0.7983173553857771, 0.456370350439145, 0.09559367959010823)
+
+	// eBBase maximises over these two corner separations, and BOTH of them
+	// read low under a raw norm, so no choice of maximum escapes the channel.
+	require.True(t, rawNormIsBelowExact(wLo, vLo), "the fixture must exercise the raw-norm channel on |wLo−vLo|")
+	require.True(t, rawNormIsBelowExact(wHi, vHi), "the fixture must exercise the raw-norm channel on |wHi−vHi|")
+
+	// An exactly-representable arc-length claim above either side's own
+	// certified chord, so the premise gate admits and eA is exactly this
+	// value with no rounding of its own.
+	const arcLenUpper = 1.5
+	require.GreaterOrEqual(t, arcLenUpper, cellSpanUpper(vHi, vLo), "the fixture's arc-length claim must dominate side A's chord")
+	require.GreaterOrEqual(t, arcLenUpper, cellSpanUpper(wHi, wLo), "the fixture's arc-length claim must dominate side B's chord")
+
+	got := cellChordCurveAreaUpper(vLo, vHi, wLo, wHi, arcLenUpper, arcLenUpper, 0)
+	require.False(t, math.IsInf(got, 1), "the fixture must be admitted, not refused")
+
+	// exactCellTwistFactors' own third return IS eBBase's definition squared,
+	// max(|wLo−vLo|², |wHi−vHi|²), taken from the float corners with no
+	// rounding. got >= eA·eBBase holds iff got² >= eA²·eBBase².
+	_, _, eB2 := exactCellTwistFactors(vLo, vHi, wLo, wHi)
+	lhs := new(big.Rat).Mul(ratOfFloat(got), ratOfFloat(got))
+	rhs := new(big.Rat).Mul(new(big.Rat).Mul(ratOfFloat(arcLenUpper), ratOfFloat(arcLenUpper)), eB2)
+	require.GreaterOrEqual(t, lhs.Cmp(rhs), 0,
+		"cellChordCurveAreaUpper = %.20g sits BELOW the exact eA·eBBase it claims to dominate", got)
+}
+
+// TestCellChordCurveAreaUpperRefusesARawNormArcLengthClaim pins the same
+// raw-norm channel on the PREMISE gate rather than on the published product.
+// The derivation's first bullet needs arcLenUpper to dominate its own side's
+// chord, and a raw norm on the REFUSING side of that comparison rounds DOWN:
+// it admits an arc-length claim that exact rational arithmetic proves sits
+// below the true chord, and the helper then publishes a finite bound resting
+// on a falsified premise. The certified endpoint can only over-refuse by an
+// ulp, the reject-only-safe direction — pinned here by the certified pair
+// still being admitted, so the gate is not simply refusing everything.
+func TestCellChordCurveAreaUpperRefusesARawNormArcLengthClaim(t *testing.T) {
+	vLo := r3.NewVec(-0.18407194718000197, -0.9670493813481006, 0.11756527611707068)
+	vHi := r3.NewVec(-0.2543362139571195, 0.17121027904800257, 0.6486272299368296)
+	wLo := r3.NewVec(-0.329681753490781, 0.20068938566549477, 0.2784442506567102)
+	wHi := r3.NewVec(-0.7983173553857771, 0.456370350439145, 0.09559367959010823)
+
+	require.True(t, rawNormIsBelowExact(vHi, vLo), "side A's raw norm must be provably below its own chord")
+	require.True(t, rawNormIsBelowExact(wHi, wLo), "side B's raw norm must be provably below its own chord")
+
+	rawA, rawB := vHi.Sub(vLo).Len(), wHi.Sub(wLo).Len()
+	certA, certB := cellSpanUpper(vHi, vLo), cellSpanUpper(wHi, wLo)
+
+	require.True(t, math.IsInf(cellChordCurveAreaUpper(vLo, vHi, wLo, wHi, rawA, certB, 0), 1),
+		"a raw-norm arcLenUpperA is provably below side A's own chord and must be refused")
+	require.True(t, math.IsInf(cellChordCurveAreaUpper(vLo, vHi, wLo, wHi, certA, rawB, 0), 1),
+		"a raw-norm arcLenUpperB is provably below side B's own chord and must be refused")
+	require.False(t, math.IsInf(cellChordCurveAreaUpper(vLo, vHi, wLo, wHi, certA, certB, 0), 1),
+		"the certified chord endpoints are a sound claim and must still be admitted")
 }
 
 // TestCellChordCurveAreaUpperRefusesTheSagittaZigzag pins F1's own
