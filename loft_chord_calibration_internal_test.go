@@ -234,23 +234,54 @@ func wedgeSplineEnvelope(t *testing.T) float64 {
 	return math.Max(u0, u1)
 }
 
-// --- sectionDelta and the wall Area excess, per arm ---
+// --- sectionDelta and the Area excesses, per arm ---
+
+// wedgeAreaExcess is how much more surface the curved wedge carries than the
+// hand-chorded stand-in this file actually builds, split by where it lives: wall is
+// the lateral ruled-surface-versus-chord excess summed over the m cells, and cap is
+// the curved-region-versus-chorded-polygon excess over BOTH caps. Each arm's own
+// helper (arcChordExcess, splineChordExcess) is the single owner of its two values.
+//
+// The split matters because the two terms are consumed differently: the Area reading
+// is widened by the wall term alone (a10-plan.md Part 2 Q4: "the Area bound gains one
+// wall term and no cap term"), while the area-along-the-path ceiling measureWedgeReadings
+// hands the Volume and Centroid widenings takes both, since it must bound a whole
+// closed intermediate surface rather than its walls.
+type wedgeAreaExcess struct {
+	wall float64
+	cap  float64
+}
+
+// total is the excess over the WHOLE boundary — walls and both caps — which is what
+// the area-along-the-path ceiling adds to the held chord surface.
+func (e wedgeAreaExcess) total() float64 { return e.wall + e.cap }
 
 // arcSagitta is tessellate.go's chordCount sagitta (tessellate.go:807-810) in closed
 // form, evaluated at a FORCED station count m rather than walked up to a tolerance:
 // 2r*sin^2(sweep/m/4), the max per-cell displacement between an m-chord polygon and
-// the true radius-r arc it approximates.
-func arcSagitta(r, sweep float64, m int) float64 {
-	s := math.Sin(sweep / float64(m) / 4)
-	return 2 * r * s * s
+// the true radius-r arc it approximates. Like wedgeCirclePoints it takes m alone and
+// reads the fixture's own wedgeRadius/wedgeSweep, which are the only r and sweep the
+// A10a arm ever has.
+func arcSagitta(m int) float64 {
+	s := math.Sin(wedgeSweep / float64(m) / 4)
+	return 2 * wedgeRadius * s * s
 }
 
-// arcChordExcess is the wall Area term: how much longer the true arc is than its
-// m-chord polygon, times the extrusion height.
-func arcChordExcess(r, sweep float64, m int, height float64) float64 {
+// arcChordExcess is the A10a arm's wedgeAreaExcess in closed form, over the same
+// fixture constants arcSagitta reads. The wall term is how much longer the true arc
+// is than its m-chord polygon, times the extrusion height. The cap term is the true
+// circular sector (r^2*sweep/2) minus the m-chord polygon's own area
+// (m*r^2*sin(sweep/m)/2), doubled for the two caps.
+func arcChordExcess(m int) wedgeAreaExcess {
+	const r, sweep = wedgeRadius, wedgeSweep
 	arcLen := r * sweep
 	chordLen := float64(m) * 2 * r * math.Sin(sweep/(2*float64(m)))
-	return (arcLen - chordLen) * height
+	sector := r * r * sweep / 2
+	polygon := float64(m) * r * r * math.Sin(sweep/float64(m)) / 2
+	return wedgeAreaExcess{
+		wall: (arcLen - chordLen) * wedgeHeight,
+		cap:  2 * (sector - polygon),
+	}
 }
 
 // splineCellSagitta measures the maximum perpendicular distance from the chord
@@ -308,23 +339,40 @@ func splineDenseLength(fs *sketch.FitSpline, n int) float64 {
 	return total
 }
 
-// splineChordExcess is arcChordExcess's free-form twin: the densely measured true
-// curve length minus the m-chord polygon's own length, times the extrusion height.
-func splineChordExcess(fs *sketch.FitSpline, m int, height float64, denseN int) float64 {
+// splineRegionArea is the area of the wedge region the n-chord stand-in encloses:
+// the closed polygon origin -> fs.Eval(0) -> ... -> fs.Eval(1) -> origin. At the
+// fixture's own m it is the built cap's area; at a dense n it is this file's
+// stand-in for the true curved cap, which the fit spline has no closed form for.
+func splineRegionArea(fs *sketch.FitSpline, n int) float64 {
+	verts := append([][2]float64{{0, 0}}, wedgeSplinePoints(fs, n)...)
+	area, _, _ := wedgeShoelaceRegion(verts)
+	return math.Abs(area)
+}
+
+// splineChordExcess is arcChordExcess's free-form twin, measured densely rather than
+// in closed form. The wall term is the densely measured true curve length minus the
+// m-chord polygon's own length, times the extrusion height. The cap term is the
+// densely measured true region area minus the m-chord region's own area, doubled for
+// the two caps.
+func splineChordExcess(fs *sketch.FitSpline, m int, height float64, denseN int) wedgeAreaExcess {
 	trueLen := splineDenseLength(fs, denseN)
 	pts := wedgeSplinePoints(fs, m)
 	chordLen := 0.0
 	for i := 1; i < len(pts); i++ {
 		chordLen += math.Hypot(pts[i][0]-pts[i-1][0], pts[i][1]-pts[i-1][1])
 	}
-	return (trueLen - chordLen) * height
+	return wedgeAreaExcess{
+		wall: (trueLen - chordLen) * height,
+		cap:  2 * (splineRegionArea(fs, denseN) - splineRegionArea(fs, m)),
+	}
 }
 
 // wedgeShoelaceRegion computes a closed polygon's area and centroid by the standard
 // shoelace sums over vertices in order (the last implicitly reconnects to the
-// first). It is used only to build the A10b "dense-sample reference" the pinned
-// acceptance test compares against — decad's own Area/Centroid always come from the
-// actual built body, never from this helper.
+// first). Its only caller is splineRegionArea, through which it builds the A10b
+// arm's own cap areas: the "dense-sample reference" the pinned acceptance test
+// compares against, and the chorded cap the cap excess measures against it. decad's
+// own Area/Centroid always come from the actual built body, never from this helper.
 func wedgeShoelaceRegion(verts [][2]float64) (area, cx, cy float64) {
 	var a, mx, my float64
 	n := len(verts)
@@ -390,11 +438,13 @@ func (r widenedGateRow) verdict() string {
 }
 
 // wedgeMeasurement is one m's full row: the closed-form/measured sectionDelta this
-// file added to every Bound, the built body's own face count and wall-clock, and the
-// four widened-bound gate rows.
+// file added to every Bound, the area-along-the-path ceiling the Volume and Centroid
+// widenings multiplied it by, the built body's own face count and wall-clock, and
+// the four widened-bound gate rows.
 type wedgeMeasurement struct {
 	m            int
 	sectionDelta float64
+	areaUpper    float64 // the ceiling measureWedgeReadings' own doc comment derives
 	f            int
 	elapsed      time.Duration
 	body         *Body // the already-built loft, reused so callers never rebuild it
@@ -448,17 +498,31 @@ func (m wedgeMeasurement) marginText() string {
 // four readings' Bound by the term Part 2 Q2 states for it and re-runs verify.go's
 // own tolerance gate on the widened value:
 //   - Volume:   + sectionDelta * areaUpper                  (chordedBoundaryVolumeAllow)
-//   - Area:     + areaExcess                                (ruled-vs-chord wall excess)
+//   - Area:     + excess.wall                               (ruled-vs-chord wall excess)
 //   - Bounds:   + sectionDelta
 //   - Centroid: + sectionDelta*(diameter/2+|centroid|)*areaUpper/volume (a calibration
 //     ESTIMATE of chordedBoundaryMomentAllow's quotient-rule composition, not the
 //     shipped bound — stated in the plan prompt as such)
 //
-// areaUpper is the body's own Area().Value widened by its own Area().Bound: the
-// simplest sound-shaped ceiling on "surface area along the chord-to-curve path"
-// available without a per-face area survey this calibration harness has no need to
-// build.
-func measureWedgeReadings(t *testing.T, pts [][2]float64, sectionDelta, areaExcess float64) wedgeMeasurement {
+// areaUpper is the area-along-the-path ceiling a10-plan.md Part 2 Q4 states the
+// obligation for: it must bound the area of EVERY intermediate surface on the
+// chord-to-curve homotopy, "the held chord area plus each cell's own ruled-area
+// excess". It is therefore the sum of three terms:
+//
+//   - the built body's own Area().Value — the held chord surface, walls and both
+//     caps;
+//   - that reading's own Area().Bound, so a rounding-level error in the held term
+//     cannot make the ceiling fall under the surface it holds; and
+//   - excess.total() — the wall excess each cell's ruled surface carries over its
+//     chord, plus the cap excess each curved cap region carries over its chorded
+//     polygon.
+//
+// Every intermediate surface replaces some cells' chords by curves lying inside the
+// sectionDelta-neighbourhood of those chords and leaves the rest held, so its wall
+// and cap areas are each at most the fully curved arm's, and the sum above covers
+// it. The Area reading's own widening takes excess.wall alone, per Q4's "the Area
+// bound gains one wall term and no cap term".
+func measureWedgeReadings(t *testing.T, pts [][2]float64, sectionDelta float64, excess wedgeAreaExcess) wedgeMeasurement {
 	t.Helper()
 	body, elapsed := buildChordedWedgeLoft(t, pts)
 
@@ -474,12 +538,12 @@ func measureWedgeReadings(t *testing.T, pts [][2]float64, sectionDelta, areaExce
 	br := &BodyReport{Body: body, Area: area}
 	in := &bodyToleranceInputs{ctx: t.Context(), report: br}
 
-	areaUpper := math.Abs(area.Value.Base()) + area.Bound.Base()
+	areaUpper := math.Abs(area.Value.Base()) + area.Bound.Base() + excess.total()
 
 	widenedVol := Measurement{Value: vol.Value, Exactness: vol.Exactness, Bound: units.CubicMillimeters(vol.Bound.Base() + sectionDelta*areaUpper)}
 	volPass, volRef, volHaveRef := scalarToleranceRef(widenedVol, toleranceRel, in.volumeReference)
 
-	widenedArea := Measurement{Value: area.Value, Exactness: area.Exactness, Bound: units.SquareMillimeters(area.Bound.Base() + areaExcess)}
+	widenedArea := Measurement{Value: area.Value, Exactness: area.Exactness, Bound: units.SquareMillimeters(area.Bound.Base() + excess.wall)}
 	areaPass, areaRef, areaHaveRef := scalarToleranceRef(widenedArea, toleranceRel, in.areaReference)
 
 	widenedBoundsBound := bounds.Bound.Base() + sectionDelta
@@ -515,6 +579,7 @@ func measureWedgeReadings(t *testing.T, pts [][2]float64, sectionDelta, areaExce
 	return wedgeMeasurement{
 		m:            len(pts) - 1,
 		sectionDelta: sectionDelta,
+		areaUpper:    areaUpper,
 		f:            len(body.Faces()),
 		elapsed:      elapsed,
 		body:         body,
@@ -529,10 +594,11 @@ func measureWedgeReadings(t *testing.T, pts [][2]float64, sectionDelta, areaExce
 // a10-plan.md Part 2 Q2 step 2 requires each swept m to record — the four
 // measurements with their VALUES and their widened bounds, the gate reference each
 // was compared against, each one's Verify verdict at the default 1e-3, the
-// sectionDelta this file added, the face count F and the loft's wall-clock.
+// sectionDelta this file added and the areaUpper ceiling it multiplied that by, the
+// face count F and the loft's wall-clock.
 func formatWedgeMeasurement(label string, m wedgeMeasurement) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "%-14s m=%-4d sectionDelta=%.6g F=%-4d elapsed=%-12s", label, m.m, m.sectionDelta, m.f, m.elapsed)
+	fmt.Fprintf(&b, "%-14s m=%-4d sectionDelta=%.6g areaUpper=%.6g F=%-4d elapsed=%-12s", label, m.m, m.sectionDelta, m.areaUpper, m.f, m.elapsed)
 	for _, c := range []struct {
 		tag string
 		row widenedGateRow
@@ -552,7 +618,7 @@ func logWedgeMeasurement(t *testing.T, label string, m wedgeMeasurement) {
 // TestLoftChordCalibrationRowRecordsValueAndVerdict pins the recording contract
 // a10-plan.md Part 2 Q2 step 2 states for the sweep: every row carries each of the
 // four measurements' own VALUE and its Verify verdict, on top of the widened bound,
-// the reference and the ratio. It is fast (one m=8 loft, F=18) and always runs, so
+// the reference and the ratio. It is fast (one m=8 loft, F=22) and always runs, so
 // the contract holds even though the sweep itself is opt-in behind
 // DECAD_LOFT_CALIBRATION.
 func TestLoftChordCalibrationRowRecordsValueAndVerdict(t *testing.T) {
@@ -581,8 +647,8 @@ func TestLoftChordCalibrationRowRecordsValueAndVerdict(t *testing.T) {
 		const m = 8
 		pts := wedgeCirclePoints(m)
 		meas := measureWedgeReadings(t, pts,
-			arcSagitta(wedgeRadius, wedgeSweep, m),
-			arcChordExcess(wedgeRadius, wedgeSweep, m, wedgeHeight))
+			arcSagitta(m),
+			arcChordExcess(m))
 
 		vol, err := meas.body.Volume()
 		require.NoError(t, err)
@@ -625,6 +691,73 @@ func TestLoftChordCalibrationRowRecordsValueAndVerdict(t *testing.T) {
 	})
 }
 
+// TestLoftChordCalibrationCeilingCoversRuledExcess discharges the obligation
+// a10-plan.md Part 2 Q4 places on the areaUpper argument of a chord-to-curve
+// homotopy: the area-along-the-path ceiling must bound "the held chord area plus
+// each cell's own ruled-area excess", so the Volume and Centroid widenings built on
+// it cannot understate the chord-to-curve gap. It asserts the COMPUTED ceiling
+// against an independently summed per-cell excess, and asserts that the two
+// widenings actually consumed that ceiling. It is fast (one m=8 loft, F=22) and
+// always runs, since the sweep it protects is opt-in.
+func TestLoftChordCalibrationCeilingCoversRuledExcess(t *testing.T) {
+	const m = 8
+	excess := arcChordExcess(m)
+	meas := measureWedgeReadings(t, wedgeCirclePoints(m),
+		arcSagitta(m), excess)
+
+	// The per-cell ruled-wall excess, summed independently of arcChordExcess's own
+	// whole-arc-minus-whole-polygon form: each of the m cells spans sweep/m of the
+	// true arc, so the ruled wall over that cell carries
+	// (r*sweep/m - 2r*sin(sweep/2m)) * height more area than its chord's flat wall.
+	cellArc := wedgeRadius * wedgeSweep / float64(m)
+	cellChord := 2 * wedgeRadius * math.Sin(wedgeSweep/(2*float64(m)))
+	perCellWall := float64(m) * (cellArc - cellChord) * wedgeHeight
+	require.Positive(t, perCellWall, "the m=8 chord polygon is strictly shorter than the arc it stands in for")
+	require.InDelta(t, perCellWall, excess.wall, 1e-12)
+
+	// The cap excess, likewise summed independently: the true circular sector minus
+	// the m-chord polygon it is chorded by, over both caps.
+	perCap := 0.5*wedgeRadius*wedgeRadius*wedgeSweep - 0.5*float64(m)*wedgeRadius*wedgeRadius*math.Sin(wedgeSweep/float64(m))
+	require.Positive(t, perCap, "the m=8 chord polygon encloses strictly less than the sector it stands in for")
+	require.InDelta(t, 2*perCap, excess.cap, 1e-12)
+
+	area, err := meas.body.Area()
+	require.NoError(t, err)
+	held := math.Abs(area.Value.Base())
+
+	// The ceiling COVERS the held surface plus the per-cell ruled-wall excess — the
+	// obligation itself — and also the cap excess, so it bounds a whole intermediate
+	// surface rather than its walls alone.
+	require.GreaterOrEqual(t, meas.areaUpper, held+perCellWall,
+		"the area-along-the-path ceiling must cover the held chord surface plus each cell's own ruled-wall excess")
+	require.GreaterOrEqual(t, meas.areaUpper, held+perCellWall+2*perCap,
+		"the ceiling must also cover the curved caps' excess over their chorded polygons")
+
+	// Both widenings consume that ceiling: Volume multiplies it by sectionDelta, and
+	// Centroid divides the same product by the body's own volume after scaling it by
+	// the coordinate reach.
+	vol, err := meas.body.Volume()
+	require.NoError(t, err)
+	require.InDelta(t, vol.Bound.Base()+meas.sectionDelta*meas.areaUpper, meas.volume.widened, 1e-15)
+	require.Greater(t, meas.volume.widened, vol.Bound.Base()+meas.sectionDelta*(held+area.Bound.Base()),
+		"a ceiling that omitted the excess would widen Volume by strictly less")
+
+	centroid, err := meas.body.Centroid()
+	require.NoError(t, err)
+	diameter, diamOK, err := bodyGateDiameter(t.Context(), meas.body)
+	require.NoError(t, err)
+	require.True(t, diamOK)
+	centroidMag := math.Sqrt(centroid.Value.X*centroid.Value.X + centroid.Value.Y*centroid.Value.Y + centroid.Value.Z*centroid.Value.Z)
+	wantCentroid := centroid.Bound.Base() + meas.sectionDelta*(diameter/2+centroidMag)*meas.areaUpper/math.Abs(vol.Value.Base())
+	require.InDelta(t, wantCentroid, meas.centroid.widened, 1e-15)
+
+	// The Area reading keeps the wall term alone, per Q4's "the Area bound gains one
+	// wall term and no cap term".
+	require.InDelta(t, area.Bound.Base()+excess.wall, meas.area.widened, 1e-15)
+
+	t.Log(formatWedgeMeasurement("A10a(arc)", meas))
+}
+
 // --- the sweep: TestLoftChordCalibrationSweep, opt-in only ---
 
 // decadLoftCalibrationEnv is the explicit opt-in TestLoftChordCalibrationSweep
@@ -661,9 +794,9 @@ func TestLoftChordCalibrationSweep(t *testing.T) {
 
 	for _, m := range ms {
 		pts := wedgeCirclePoints(m)
-		sd := arcSagitta(wedgeRadius, wedgeSweep, m)
-		ae := arcChordExcess(wedgeRadius, wedgeSweep, m, wedgeHeight)
-		meas := measureWedgeReadings(t, pts, sd, ae)
+		sd := arcSagitta(m)
+		ex := arcChordExcess(m)
+		meas := measureWedgeReadings(t, pts, sd, ex)
 		logWedgeMeasurement(t, "A10a(arc)", meas)
 		t.Logf("  A10a m=%d implied loftChordFraction = sagitta/envelope = %.6g", m, sd/arcEnvelope)
 	}
@@ -671,8 +804,8 @@ func TestLoftChordCalibrationSweep(t *testing.T) {
 	for _, m := range ms {
 		pts := wedgeSplinePoints(fs, m)
 		sd := splineSagitta(fs, m, splineSamplesPerCell)
-		ae := splineChordExcess(fs, m, wedgeHeight, splineDenseN)
-		meas := measureWedgeReadings(t, pts, sd, ae)
+		ex := splineChordExcess(fs, m, wedgeHeight, splineDenseN)
+		meas := measureWedgeReadings(t, pts, sd, ex)
 		logWedgeMeasurement(t, "A10b(spline)", meas)
 		t.Logf("  A10b m=%d implied loftChordFraction = sagitta/envelope = %.6g", m, sd/splineEnvelope)
 	}
@@ -688,9 +821,9 @@ func TestLoftChordCalibrationSweep(t *testing.T) {
 // NOT hold simultaneously (a10-plan.md's risk R2, confirmed by measurement rather
 // than assumed):
 //
-//   - Volume is the binding reading throughout (not Centroid — this file's
-//     deliberately generous areaUpper choice, the body's own total Area rather
-//     than just the curved wall, makes the volume term dominate).
+//   - Volume is the binding reading throughout (not Centroid — the areaUpper
+//     ceiling covers the body's whole boundary, walls and both caps, rather than
+//     the curved wall alone, which makes the volume term dominate).
 //   - The coarsest grid m at which BOTH fixtures clear 4x margin is m=128
 //     (arc ratio=1.04e-4, margin=9.58x; spline ratio=1.32e-4, margin=7.55x) —
 //     but F=262 there and the measured build is ~4.3s, more than double the 2s
@@ -731,9 +864,9 @@ func TestLoftChordCalibrationPinsFraction(t *testing.T) {
 
 	arcStart := time.Now()
 	arcPts := wedgeCirclePoints(loftChordFractionPinM)
-	arcSD := arcSagitta(wedgeRadius, wedgeSweep, loftChordFractionPinM)
-	arcAE := arcChordExcess(wedgeRadius, wedgeSweep, loftChordFractionPinM, wedgeHeight)
-	arcMeas := measureWedgeReadings(t, arcPts, arcSD, arcAE)
+	arcSD := arcSagitta(loftChordFractionPinM)
+	arcExcess := arcChordExcess(loftChordFractionPinM)
+	arcMeas := measureWedgeReadings(t, arcPts, arcSD, arcExcess)
 	arcElapsed := time.Since(arcStart)
 	t.Logf("A10a pin build wall-clock: %s (a10-plan.md Q3 budget is 2s on the reference host)", arcElapsed)
 	require.Less(t, arcElapsed, loftChordBuildCeiling, "the arc wedge build has regressed by orders of magnitude")
@@ -777,15 +910,13 @@ func TestLoftChordCalibrationPinsFraction(t *testing.T) {
 	splineStart := time.Now()
 	splinePts := wedgeSplinePoints(fs, loftChordFractionPinM)
 	splineSD := splineSagitta(fs, loftChordFractionPinM, splineSamplesPerCell)
-	splineAE := splineChordExcess(fs, loftChordFractionPinM, wedgeHeight, splineDenseN)
-	splineMeas := measureWedgeReadings(t, splinePts, splineSD, splineAE)
+	splineExcess := splineChordExcess(fs, loftChordFractionPinM, wedgeHeight, splineDenseN)
+	splineMeas := measureWedgeReadings(t, splinePts, splineSD, splineExcess)
 	splineElapsed := time.Since(splineStart)
 	t.Logf("A10b pin build wall-clock: %s (a10-plan.md Q3 budget is 2s on the reference host)", splineElapsed)
 	require.Less(t, splineElapsed, loftChordBuildCeiling, "the spline wedge build has regressed by orders of magnitude")
 
-	denseVerts := append([][2]float64{{0, 0}}, wedgeSplinePoints(fs, splineDenseN)...)
-	denseArea, _, _ := wedgeShoelaceRegion(denseVerts)
-	denseVolume := denseArea * wedgeHeight
+	denseVolume := splineRegionArea(fs, splineDenseN) * wedgeHeight
 
 	// Reuse the body measureWedgeReadings already built above — the same
 	// second-build avoidance as the arc wedge.
