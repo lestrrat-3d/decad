@@ -158,20 +158,95 @@ func (s dyadicSpan) bezierSpan() bezierSpan {
 	return span
 }
 
-// sagittaMeasureCostPerPoint is the constant per-control-point charge behind
-// sagittaMeasureCost: chordSegmentSquaredDistance's own clamped projection
-// runs a handful of big.Rat multiplications and additions per point (two to
-// form p−a, two more for the dot product, one division, two for the clamped
-// point, two for the final squared distance) once the chord's own vector and
-// squared length are shared across the whole span — the same "small constant
-// times the size term" shape freeformBracketCost (spline_length.go) already
-// charges for its own per-leaf work.
-const sagittaMeasureCostPerPoint = 8
+// This block is the file's cost model. Every charge below is built from ONE
+// named per-operation term, and each term is derived by COUNTING the exact
+// operations the code it names actually performs — never estimated as "a
+// handful". A term is deliberately a slight OVER-count where an operation's
+// own cost is not uniform (a normalising big.Rat.SetFrac is charged for its
+// GCD and both divisions, not as one unit), because a charge is spent BEFORE
+// the work it pays for and only an over-count keeps freeformWork a real upper
+// bound.
+//
+// The two measurements this file charges are separate readings over separate
+// code, so they carry separate per-point terms rather than one shared
+// constant: the sagitta reading runs chordSegmentSquaredDistance, the
+// matched-delta reading runs spanHodographGapUpper, and the two counts differ.
 
-// sagittaMeasureCost is one dyadic cell's own sagitta-measurement charge,
-// linear in its control count.
+// ratPointReconstructCost is dyadicSpan.ratPointAt's own per-point charge: one
+// big.Int.Lsh for the shared scale, then two big.Rat.SetFrac. SetFrac
+// NORMALISES — a GCD plus a division of each of numerator and denominator —
+// so it is charged 3, making it the heaviest single operation on the per-point
+// path, and it is charged here rather than left free as the reconstruction it
+// is. 1 + 3 + 3 = 7.
+const ratPointReconstructCost = 7
+
+// chordProjectionCost is chordSegmentSquaredDistance's own per-point charge
+// plus the caller's running-maximum comparison: 2 Sub for p−a, 2 Mul + 1 Add
+// for the dot product, 1 Quo for t, 1 Cmp + 1 SetInt64 for the clamp, 2 Mul +
+// 2 Add for the clamped point, 2 Sub for the difference, 2 Mul + 1 Add for the
+// squared distance = 17, then 1 Cmp against dyadicSpanSagittaUpper's own
+// running maximum. The d == 0 branch runs strictly fewer operations (2 Sub +
+// 2 Mul + 1 Add), so this same term bounds a collapsed chord too.
+const chordProjectionCost = 18
+
+// hodographGapCost is spanHodographGapUpper's own per-index charge: 3 for hu
+// (Sub, Mul, Sub), 3 for hv, 2 Mul + 1 Add for the squared norm, and 1 Cmp
+// against its running maximum. It is charged per POINT rather than per index,
+// which over-covers the loop's own n−1 indices and absorbs spanChordVector's
+// once-per-call 2 Sub inside that slack.
+const hodographGapCost = 10
+
+// ratSqrtUpCost is the per-CALL charge for the single outward rounding each
+// measurement commits (ratSqrtUp, spline_length.go). It is bounded, not
+// open-ended: ratSqrtSeed costs at most 4 (a big.Float SetRat, MantExp and
+// Float64), and the directed walk runs at most sqrtAdjustLimit iterations of
+// two ratSquare probes (1 floatRat + 1 Mul + 1 Cmp each) plus one Nextafter.
+// 4 + 8·7 = 60, charged as 64. It is a per-call term because one ratSqrtUp
+// rounds the whole span's selected maximum, never one per point.
+const ratSqrtUpCost = 64
+
+// dyadicConversionCostPerPoint is dyadicSpanOf's own per-point charge
+// (spline_length.go): two ratLCM folds over the running denominator (a GCD, a
+// Quo and a Mul each = 3) and two scaledNumerator scalings (a Quo and a Mul
+// each = 2). 6 + 4 = 10. pairStations charges it before converting each input
+// span, so the conversion that opens the walk is paid for like every step
+// inside it.
+const dyadicConversionCostPerPoint = 10
+
+// sagittaMeasureCostPerPoint is one control point's whole sagitta-measurement
+// charge: dyadicSpanSagittaUpper reconstructs the point (ratPointReconstructCost)
+// and then projects it onto the shared chord (chordProjectionCost). The chord's
+// own vector and squared length are computed once per span and shared across
+// every point, which is what keeps this charge linear rather than quadratic.
+const sagittaMeasureCostPerPoint = ratPointReconstructCost + chordProjectionCost
+
+// matchedDeltaMeasureCostPerPoint is one control point's whole matched-delta
+// charge, derived on its OWN code path rather than borrowed from the sagitta's:
+// dyadicSpan.bezierSpan reconstructs the point (ratPointReconstructCost) and
+// spanHodographGapUpper then reads it (hodographGapCost). spanMatchedDeltaUpper's
+// own halving is one exact division by a power of two, absorbed in the same
+// slack hodographGapCost's per-point over-count already carries.
+const matchedDeltaMeasureCostPerPoint = ratPointReconstructCost + hodographGapCost
+
+// sagittaMeasureCost is one dyadic cell's own sagitta-measurement charge:
+// linear in its control count, plus the one outward rounding the reading ends
+// with.
 func sagittaMeasureCost(n int) uint64 {
-	return costMul(uint64(n), sagittaMeasureCostPerPoint)
+	return costAdd(costMul(uint64(n), sagittaMeasureCostPerPoint), ratSqrtUpCost)
+}
+
+// matchedDeltaMeasureCost is one dyadic cell's own matched-delta charge, the
+// same shape sagittaMeasureCost carries over its own per-point term. The two
+// are separate functions because they pay for separate work; neither may stand
+// in for the other.
+func matchedDeltaMeasureCost(n int) uint64 {
+	return costAdd(costMul(uint64(n), matchedDeltaMeasureCostPerPoint), ratSqrtUpCost)
+}
+
+// dyadicConversionCost is one input span's own dyadicSpanOf charge, linear in
+// its control count.
+func dyadicConversionCost(n int) uint64 {
+	return costMul(uint64(n), dyadicConversionCostPerPoint)
 }
 
 // sagittaSplitCost is one dyadic cell's own de Casteljau bisection charge:
@@ -276,16 +351,15 @@ func sagittaSplitCost(n int) uint64 {
 // (docs/spline-design.md §5.2) — this function mints no counter of its own.
 // Side 0's cost charges work0 and side 1's charges work1, independently,
 // because the two sides' spans can carry different control counts even on a
-// same-kind pairing. Each cell's own sagitta measurement cost
-// (sagittaMeasureCost), its matched-delta measurement cost (charged again at
-// ACCEPT time only, through the same sagittaMeasureCost function, since
-// spanHodographGapUpper's own per-point work is the same order of big.Rat
-// arithmetic chordSegmentSquaredDistance's is), and, where the cell is
-// bisected instead, its split cost (sagittaSplitCost), are charged before the
-// work runs, through the same saturating costMul/costAdd arithmetic every
-// other free-form charge in this package uses; an exhausted budget returns
-// freeformWork.step's own Table R row R7 refusal unchanged, and a nil counter
-// is tolerated exactly as freeformWork.step already tolerates one.
+// same-kind pairing. Four charges are spent, each BEFORE the work it pays for
+// and each derived on its own code path by this file's own cost model: the
+// input conversion (dyadicConversionCost), every cell's sagitta measurement
+// (sagittaMeasureCost), an accepted cell's matched-delta measurement
+// (matchedDeltaMeasureCost, at ACCEPT time only), and a bisected cell's split
+// (sagittaSplitCost). They use the same saturating costMul/costAdd arithmetic
+// every other free-form charge in this package uses; an exhausted budget
+// returns freeformWork.step's own Table R row R7 refusal unchanged, and a nil
+// counter is tolerated exactly as freeformWork.step already tolerates one.
 //
 // DETERMINISM: the recursion below is a fixed left-to-right, depth-first walk
 // over an ordered slice of spans, with no map anywhere on the path from the
@@ -330,6 +404,17 @@ func pairStations(spans0, spans1 []bezierSpan, target float64, work0, work1 *fre
 
 	gen := &sagittaStationWalk{target: target, work0: work0, work1: work1, frontier: len(spans0)}
 	for i := range spans0 {
+		// The dyadicSpanOf conversion that opens the walk is charged like
+		// every step inside it: it runs its own exact big.Int arithmetic per
+		// control point (dyadicConversionCost), and leaving it free would let
+		// a chain of very wide spans do unbounded work before the first cell
+		// is ever measured.
+		if err := work0.step(dyadicConversionCost(len(spans0[i]))); err != nil {
+			return nil, nil, nil, 0, err
+		}
+		if err := work1.step(dyadicConversionCost(len(spans1[i]))); err != nil {
+			return nil, nil, nil, 0, err
+		}
 		if err := gen.walkCell(dyadicSpanOf(spans0[i]), dyadicSpanOf(spans1[i])); err != nil {
 			return nil, nil, nil, 0, err
 		}
@@ -411,15 +496,16 @@ func (g *sagittaStationWalk) walkCell(c0, c1 dyadicSpan) error {
 	sag0 := dyadicSpanSagittaUpper(c0)
 	sag1 := dyadicSpanSagittaUpper(c1)
 	if math.Max(sag0, sag1) <= g.target {
-		// The matched-delta charge is the same per-point order of big.Rat
-		// arithmetic sagittaMeasureCost already charges for this cell's own
-		// sagitta reading (spanHodographGapUpper's hull scan is the same
-		// shape as chordSegmentSquaredDistance's projection), so it reuses
-		// that same cost function rather than mint a second one.
-		if err := g.work0.step(sagittaMeasureCost(n0)); err != nil {
+		// The matched-delta charge is its OWN derived cost, never the
+		// sagitta's reused: c0.bezierSpan() reconstructs every control point
+		// again and spanHodographGapUpper reads a different set of exact
+		// operations from chordSegmentSquaredDistance's projection, so the two
+		// per-point terms differ and each is counted on its own code path
+		// (this file's own cost model).
+		if err := g.work0.step(matchedDeltaMeasureCost(n0)); err != nil {
 			return err
 		}
-		if err := g.work1.step(sagittaMeasureCost(n1)); err != nil {
+		if err := g.work1.step(matchedDeltaMeasureCost(n1)); err != nil {
 			return err
 		}
 		md0 := spanMatchedDeltaUpper(c0.bezierSpan())

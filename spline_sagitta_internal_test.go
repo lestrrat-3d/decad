@@ -123,12 +123,21 @@ import (
 //     TestPairStationsFirstAndLastStationAreTheChainEndpointsExactly went red
 //     — stations[0] no longer equaled the chain's own start control point,
 //     exactly.
-//   - A6: sagittaMeasureCostPerPoint narrowed from 8 to 1:
-//     TestSagittaMeasureCostMatchesDocumentedFormula went red, while
-//     TestPairStationsChargesBothCountersSeparately — which pins only the
-//     RATIO between two differently-sized sides' own charges — stayed green,
-//     confirming the audit's own finding that a uniform rescaling of the cost
-//     constant is invisible to a ratio-only fixture.
+//   - A6: the cost model charged one flat 8 units per control point for both
+//     readings, left ratPointAt's reconstruction, dyadicSpanOf's conversion
+//     and the per-call ratSqrtUp entirely free, and so was not the upper
+//     bound its own doc comment claimed. Each charge is now counted on its own
+//     code path. Five mutations were each run red against the new fixtures:
+//     deleting the conversion charge (TestPairStationsChargesEveryPhaseOfA
+//     WalkThatNeverSplits and TestPairStationsBudgetBindsAtTheWholeCharged
+//     Total), paying the matched delta at the sagitta's rate (the same phase
+//     fixture), zeroing ratPointReconstructCost, dropping the per-call
+//     ratSqrtUpCost, and narrowing chordProjectionCost back to 8
+//     (TestSagittaCostTermsMatchTheOperationsTheyName and
+//     TestSagittaAndMatchedDeltaCostsAreDerivedSeparately). Note what stays
+//     GREEN under all five: TestPairStationsChargesBothCountersSeparately,
+//     which pins only the RATIO between two differently-sized sides' charges
+//     — a ratio-only fixture cannot see a rescaled or missing cost at all.
 //   - B1: dyadicSpanSagittaUpper's own n==0 guard was already dead-ended —
 //     nothing in pairStations prevented a zero-control-point span from
 //     reaching walkCell, whose accept branch then panicked on
@@ -859,23 +868,118 @@ func TestPairStationsFirstAndLastStationAreTheChainEndpointsExactly(t *testing.T
 
 // --- A6: charged work MAGNITUDE, not merely its cross-side ratio ---
 
-// TestSagittaMeasureCostMatchesDocumentedFormula pins sagittaMeasureCost's
-// own closed form directly: sagittaMeasureCostPerPoint (8) units per control
-// point, per its own doc comment. TestPairStationsChargesBothCountersSeparately
-// only pins the RATIO between two differently-sized sides' own charges, which
-// any uniform rescaling of sagittaMeasureCostPerPoint preserves; this pins the
-// constant's own value.
-func TestSagittaMeasureCostMatchesDocumentedFormula(t *testing.T) {
-	// The expected multiplier is the LITERAL 8 the doc comment states, never
-	// sagittaMeasureCostPerPoint itself — comparing against that constant would
-	// be circular (it would still pass after the constant were mutated to 1),
-	// which is exactly the vulnerability this fixture exists to close.
-	const perPointCost = 8
-	require.Equal(t, perPointCost, sagittaMeasureCostPerPoint,
-		"this test's own literal must match the constant it pins; update both together on a deliberate cost-model change")
+// TestSagittaCostTermsMatchTheOperationsTheyName re-derives every named term
+// of this file's cost model from the operation count its own doc comment
+// enumerates, written here as an explicit sum rather than borrowed from the
+// constant. A term narrowed below the work it pays for turns freeformWork from
+// an upper bound into an under-report, so each term is pinned against its own
+// derivation and not against itself.
+func TestSagittaCostTermsMatchTheOperationsTheyName(t *testing.T) {
+	// ratPointAt: 1 big.Int.Lsh, then 2 big.Rat.SetFrac, each NORMALISING (a
+	// GCD plus a division of numerator and of denominator).
+	const ratPointAtOps = 1 + 3 + 3
+	require.Equal(t, ratPointAtOps, ratPointReconstructCost,
+		"ratPointAt's reconstruction must be charged, and charged for SetFrac's own normalisation")
+
+	// chordSegmentSquaredDistance's non-degenerate branch, then
+	// dyadicSpanSagittaUpper's own running-maximum comparison.
+	const chordProjectionOps = 2 + (2 + 1) + 1 + (1 + 1) + (2 + 2) + 2 + (2 + 1) + 1
+	require.Equal(t, chordProjectionOps, chordProjectionCost,
+		"every exact operation the clamped projection performs must be charged")
+
+	// spanHodographGapUpper per index: hu, hv, the squared norm, the compare.
+	const hodographOps = 3 + 3 + (2 + 1) + 1
+	require.Equal(t, hodographOps, hodographGapCost,
+		"every exact operation the hodograph hull scan performs must be charged")
+
+	// ratSqrtUp: the seed, then at most sqrtAdjustLimit walks of two ratSquare
+	// probes (floatRat, Mul, Cmp) plus one Nextafter.
+	const ratSqrtUpOps = 4 + sqrtAdjustLimit*(2*3+1)
+	require.GreaterOrEqual(t, ratSqrtUpCost, ratSqrtUpOps,
+		"the per-call outward rounding must be charged, and charged for its whole bounded walk")
+
+	// dyadicSpanOf per point: two ratLCM folds (GCD, Quo, Mul) and two
+	// scaledNumerator scalings (Quo, Mul).
+	const dyadicConversionOps = 2*3 + 2*2
+	require.Equal(t, dyadicConversionOps, dyadicConversionCostPerPoint,
+		"dyadicSpanOf's own conversion arithmetic must be charged")
+
+	require.Equal(t, ratPointAtOps+chordProjectionOps, sagittaMeasureCostPerPoint,
+		"the sagitta's per-point charge is its reconstruction plus its projection, both counted")
+	require.Equal(t, ratPointAtOps+hodographOps, matchedDeltaMeasureCostPerPoint,
+		"the matched delta's per-point charge is its reconstruction plus its hull scan, both counted")
+}
+
+// TestSagittaAndMatchedDeltaCostsAreDerivedSeparately pins the two readings'
+// closed forms and, decisively, that they are NOT the same number: the
+// matched-delta reading runs spanHodographGapUpper where the sagitta runs
+// chordSegmentSquaredDistance, so charging one at the other's rate is charging
+// for work that is not the work being done.
+func TestSagittaAndMatchedDeltaCostsAreDerivedSeparately(t *testing.T) {
+	const sagittaPerPoint, matchedPerPoint, perCall = 25, 17, 64
 	for _, n := range []int{1, 2, 4, 8} {
-		require.Equal(t, uint64(perPointCost*n), sagittaMeasureCost(n), "n=%d", n)
+		require.Equal(t, uint64(sagittaPerPoint*n+perCall), sagittaMeasureCost(n), "sagitta n=%d", n)
+		require.Equal(t, uint64(matchedPerPoint*n+perCall), matchedDeltaMeasureCost(n), "matched delta n=%d", n)
+		require.NotEqual(t, sagittaMeasureCost(n), matchedDeltaMeasureCost(n),
+			"n=%d: the two readings must carry their own separately derived charge, never one reused for the other", n)
 	}
+	for _, n := range []int{1, 2, 4, 8} {
+		require.Equal(t, uint64(10*n), dyadicConversionCost(n), "conversion n=%d", n)
+	}
+}
+
+// TestPairStationsChargesEveryPhaseOfAWalkThatNeverSplits pins the whole
+// charged total against an independently written closed form, on the one walk
+// shape whose charges are fully determined: a target no cell can miss, so every
+// span is converted once, measured once, and accepted once, with no split
+// anywhere. The total is conversion + sagitta + matched delta per span on each
+// side's OWN control count. Dropping the conversion charge, or paying the
+// matched delta at the sagitta's rate, changes this number.
+func TestPairStationsChargesEveryPhaseOfAWalkThatNeverSplits(t *testing.T) {
+	// Two sides of deliberately different control counts, so a charge reading
+	// the wrong side's count is visible as well.
+	side0 := []bezierSpan{
+		ratSpan([][2]float64{{0, 0}, {1, 1}, {2, 0}}),
+		ratSpan([][2]float64{{2, 0}, {3, -1}, {4, 0}}),
+	}
+	side1 := []bezierSpan{
+		ratSpan([][2]float64{{0, 0}, {1, 2}, {2, 2}, {3, 0}}),
+		ratSpan([][2]float64{{3, 0}, {4, -2}, {5, -2}, {6, 0}}),
+	}
+
+	work0, work1 := newFreeformWork(), newFreeformWork()
+	_, _, _, _, err := pairStations(side0, side1, math.Inf(1), work0, work1) //nolint:dogsled // only the charged totals are under test
+	require.NoError(t, err)
+
+	// Written from the literals, never from the constants under test.
+	perSpan := func(n int) uint64 { return uint64(10*n) + uint64(25*n+64) + uint64(17*n+64) }
+	require.Equal(t, 2*perSpan(3), work0.spent,
+		"side 0's total must be conversion + sagitta + matched delta on its own 3 control points, per span")
+	require.Equal(t, 2*perSpan(4), work1.spent,
+		"side 1's total must be conversion + sagitta + matched delta on its own 4 control points, per span")
+}
+
+// TestPairStationsBudgetBindsAtTheWholeChargedTotal pins that the budget
+// actually BINDS at the total the charges sum to, on the same never-splitting
+// walk: a counter holding exactly that total finishes, and one unit short
+// refuses. A charge that is dropped or narrowed lowers the binding point, so a
+// walk this fixture expects to refuse would instead succeed.
+func TestPairStationsBudgetBindsAtTheWholeChargedTotal(t *testing.T) {
+	span := ratSpan([][2]float64{{0, 0}, {1, 1}, {2, 0}})
+	// One span of 3 control points: 30 to convert, 25*3+64 to measure the
+	// sagitta, 17*3+64 to measure the matched delta. Written from the
+	// literals, never from the constants under test.
+	const total = 30 + (25*3 + 64) + (17*3 + 64)
+
+	exact := &freeformWork{spent: freeformWorkLimit - total}
+	_, _, _, _, err := pairStations([]bezierSpan{span}, []bezierSpan{span}, math.Inf(1), exact, newFreeformWork()) //nolint:dogsled // only the budget boundary is under test
+	require.NoError(t, err, "a counter holding exactly the charged total must finish")
+	require.Equal(t, freeformWorkLimit, exact.spent)
+
+	short := &freeformWork{spent: freeformWorkLimit - total + 1}
+	_, _, _, _, err = pairStations([]bezierSpan{span}, []bezierSpan{span}, math.Inf(1), short, newFreeformWork()) //nolint:dogsled // only the budget boundary is under test
+	require.Error(t, err, "one unit short of the charged total must refuse")
+	require.ErrorIs(t, err, ErrUnsupported)
 }
 
 // TestSagittaSplitCostMatchesDocumentedFormula pins sagittaSplitCost's own
