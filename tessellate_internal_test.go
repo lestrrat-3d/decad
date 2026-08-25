@@ -229,3 +229,18 @@ func TestChordSagittaCoarsestClosedWalkStaysProven(t *testing.T) {
 	require.InDeltaf(t, 1.098, ratio, 0.01,
 		"the sin(x)<=x slack at the coarsest closed-walk chording (n=3, full circle) should sit close to the doc comment's own stated (x/sin x)^2 figure, got ratio=%.6g", ratio)
 }
+
+// TestChordSagittaRefusesRatherThanUnderstatesOnBrokenClaims pins
+// chordSagitta's own three failure arms (its doc comment): a negative sweep
+// and a non-positive n each answer +Inf rather than a silently-understated
+// 0, since productUpper's own a<=0 guard would otherwise read a negative
+// sweep as a zero sagitta when the true sagitta is positive. A negative
+// radius is different — the true sagitta r·(1−cos) is itself non-positive
+// there, so 0 remains a genuine (if unattained) upper bound and needs no
+// refusal.
+func TestChordSagittaRefusesRatherThanUnderstatesOnBrokenClaims(t *testing.T) {
+	require.True(t, math.IsInf(chordSagitta(5, -1, 8), 1), "negative sweep must refuse, not understate")
+	require.True(t, math.IsInf(chordSagitta(5, 1, -3), 1), "non-positive n must refuse, not understate")
+	require.True(t, math.IsInf(chordSagitta(5, 1, 0), 1), "n=0 must refuse, not understate")
+	require.Zero(t, chordSagitta(-5, 1, 8), "a negative radius has a genuine 0 upper bound and needs no refusal")
+}
