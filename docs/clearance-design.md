@@ -108,9 +108,10 @@ two-term `absSumUpper(delta, sectionDelta)` those boxes carry (zero only for an
 unplaced `LineSeg`-only loft — loft §5, §5.2), may decide a box-disjoint
 partition. A distance measured against a held FACET carries the payload's
 wider facet departure `absSumUpper(delta, sectionDelta, maxTwistOffsetUpper)`
-instead (loft §5.2), since a twisted cell's held triangle pair is not the
-ruled patch through its own four corners; a requested `WithClearances` gap
-remains `Suspect` until its analytic adapter lands and reads that term.
+instead (loft §5.2), since a twisted CHORDED cell's held triangle pair is
+not the ruled patch through its own four corners; a requested
+`WithClearances` gap remains `Suspect` until its analytic adapter lands and
+reads that term.
 Payload verification §3/§7 owns the cup/faceted
 adapters and their tests; §13/§14.1 own the loft staging and tests.
 

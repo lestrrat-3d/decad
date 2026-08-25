@@ -41,10 +41,11 @@ Three payload classes require different treatment:
   Read held polygons exactly, then widen every claim by that certificate.
 - `loftPayload` is a closed triangle boundary whose held vertices carry the
   payload's own proven displacement `delta`, whose chorded wall facets carry
-  its section displacement `sectionDelta`, and whose twisted cells carry a
-  further `maxTwistOffsetUpper` because the held triangle pair is not the
-  bilinear ruled patch through its own four corners — the three composing into
-  the payload's facet departure
+  its section displacement `sectionDelta`, and whose twisted CHORDED cells
+  carry a further `maxTwistOffsetUpper` because there the held triangle pair
+  is not the bilinear ruled patch through its own four corners, a term a
+  `LineSeg`-only build charges nothing to — the three composing into the
+  payload's facet departure
   `absSumUpper(delta, sectionDelta, maxTwistOffsetUpper)` (loft §5.2). All
   three are zero for an unplaced `LineSeg`-only body, so that boundary is then
   exact, and at least one is positive for a placed or chorded one (loft §5,
