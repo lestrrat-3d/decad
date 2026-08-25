@@ -203,9 +203,9 @@ func wedgeArcEnvelope(t *testing.T) float64 {
 	rec1, _, err := RecordProfile(s1, p1)
 	require.NoError(t, err)
 	work := newFreeformWork()
-	u0, err := profileCoordinateUpper(rec0, work)
+	u0, err := profileCoordinateUpper(rec0, work, nil)
 	require.NoError(t, err)
-	u1, err := profileCoordinateUpper(rec1, work)
+	u1, err := profileCoordinateUpper(rec1, work, nil)
 	require.NoError(t, err)
 	return math.Max(u0, u1)
 }
@@ -227,9 +227,9 @@ func wedgeSplineEnvelope(t *testing.T) float64 {
 	rec1, _, err := RecordProfile(s1, p1)
 	require.NoError(t, err)
 	work := newFreeformWork()
-	u0, err := profileCoordinateEnvelope(rec0, work)
+	u0, err := profileCoordinateEnvelope(rec0, work, nil)
 	require.NoError(t, err)
-	u1, err := profileCoordinateEnvelope(rec1, work)
+	u1, err := profileCoordinateEnvelope(rec1, work, nil)
 	require.NoError(t, err)
 	return math.Max(u0, u1)
 }
