@@ -55,7 +55,8 @@ type loftPayload struct {
 
 	// sectionDelta is the proven upper bound on how far any BUILT CHORD point
 	// of a wall cell sits from the recorded curve it chords, taken as a
-	// MAXIMUM over cells rather than a sum (docs/loft-design.md §5.2). It is
+	// MAXIMUM over cells rather than a sum (docs/loft-design.md §5 — the
+	// chord-chain subsection lands with the arc design change). It is
 	// zero for every pairing this evaluator admits today — S3 admits only
 	// same-kind LineSeg pairs, and a straight wall's own chord IS the
 	// recorded segment, so there is no curve for it to depart from. A
