@@ -131,6 +131,62 @@ func segMatchesRecordedEdge(c triContact, edgeA, edgeB xpt) bool {
 	return (k0 == ka && k1 == kb) || (k0 == kb && k1 == ka)
 }
 
+// loftBroadPhaseEnabled gates loftCrossingAudit's bounding-box short-circuit
+// (below) for a pair that shares no recorded vertex. It exists solely so
+// tests can run the S7 pair loop both ways over the same fixture and compare
+// verdicts — TestLoftCrossingAuditBroadPhaseAgreesWithTheFullAudit in
+// loft_audit_internal_test.go — the same pattern triTriFilterEnabled uses in
+// boolean_mesh.go for its own reject-only pre-filter. Production code never
+// assigns to it, and no exported surface can reach it.
+var loftBroadPhaseEnabled = true
+
+// loftBroadPhaseSkips counts how many pairs the S7 loop's broad-phase
+// short-circuit actually skipped (either tier), reset and read by tests
+// only — in particular to prove the skip is unreachable for a pair required
+// to touch (len(shared) 1 or 2; see auditLoftPair's switch and the loop
+// below). Production code never reads it.
+var loftBroadPhaseSkips int
+
+// loftPlaneSeparated is the S7 broad-phase's second, still-float-only tier
+// for a zero-shared-vertex pair whose bounding boxes DO overlap: it
+// reproduces triTriClassify's OWN opening move (boolean_mesh.go) —
+// allOneSide(orientSign(...)) against each triangle's plane — over nothing
+// but the two triangles' float corners, so it can prove "one triangle sits
+// strictly on one side of the other's plane, and so the pair cannot touch at
+// all" without ever building the exact-rational lift auditLoftPair pays for
+// on every call. It calls the IDENTICAL orientSign and allOneSide functions
+// triTriClassify itself calls first, on the IDENTICAL float corners, so it
+// cannot disagree with triTriClassify's own verdict for the cases it
+// decides — a proof here is the same proof there, just reached before the
+// exact lift is built. orientSign is itself adaptive (its own doc comment:
+// a float evaluation whose forward error provably cannot cross zero decides
+// the generic case, and only a genuinely ambiguous determinant pays the
+// exact fallback), so the common case — the two triangles' planes are not
+// near-tangent to one another — never touches big.Rat at all.
+//
+// This is deliberately NOT triTriMissesFilter (boolean_exact.go): that
+// filter's own doc comment requires na/nb to be xpt.vec() — the
+// correctly-rounded float64 conversion of the pair's EXACT rational
+// normal — with fivRounded's extra ulp of margin calibrated for exactly
+// that rounding step, so using it here would still force building the exact
+// cross product it is supposed to help avoid. loftPlaneSeparated needs no
+// normal at all, exact or float, so it pays nothing this pair does not
+// already have in hand.
+func loftPlaneSeparated(ta, tb [3]r3.Vec) bool {
+	var sb [3]int
+	for i := range 3 {
+		sb[i] = orientSign(ta[0], ta[1], ta[2], tb[i])
+	}
+	if allOneSide(sb) {
+		return true
+	}
+	var sa [3]int
+	for i := range 3 {
+		sa[i] = orientSign(tb[0], tb[1], tb[2], ta[i])
+	}
+	return allOneSide(sa)
+}
+
 // auditLoftPair classifies one triangle pair against its recorded adjacency
 // (docs/loft-design.md §6) and returns S7 (ErrDegenerate) when the exact
 // contact is not the one that adjacency expects.
@@ -208,11 +264,57 @@ func loftCrossingAudit(budget *workBudget, verts []r3.Vec, tris [][3]int) error 
 		return fmt.Errorf(`%w: the loft crossing audit's facet-pair count exceeds the fixed work ceiling`, ErrUnsupported)
 	}
 
-	// S7: every pair, classified against its recorded adjacency.
+	// A broad-phase per-triangle bounding box (boolean_mesh.go's triBox, the
+	// same helper prepBoolMesh builds for the mesh boolean's own facet-pair
+	// pruning) lets S7 below skip the expensive exact classification for a
+	// pair PROVEN apart. triBox's own doc comment already establishes the
+	// box is exact — "float min/max are exact, so the box is a true
+	// bound" — built from float64 vertex coordinates that are themselves
+	// exact inputs to xptOf (no rounding occurs converting a float64 to its
+	// rational value), so no epsilon widening is needed or added: every
+	// point of the closed triangle, in exact arithmetic, is a convex
+	// combination of its three vertices, and a convex combination of values
+	// bounded by [lo, hi] on one axis is itself bounded by [lo, hi] on that
+	// axis. boxesOverlap's own comparisons (<=, not <) are exact float64
+	// comparisons, so two boxes it reports as NOT overlapping are proven, in
+	// exact real arithmetic, to share no point on some axis — the two closed
+	// triangles cannot touch at all. Building f boxes is O(f) trivial float
+	// comparisons, not O(f^2) exact-rational work, so it needs no budget
+	// step of its own; the S8 gate above already bounds f to a few thousand.
+	boxes := make([][2]r3.Vec, f)
+	for i, tri := range tris {
+		boxes[i] = triBox(verts, tri)
+	}
+
+	// S7: every pair, classified against its recorded adjacency. The
+	// broad-phase short-circuit runs ONLY for a pair sharing no recorded
+	// vertex (len(shared) == 0): that is the one case (auditLoftPair's
+	// switch) where the audit's own passing verdict is "no contact at all",
+	// so a proof of no contact reaches the identical verdict auditLoftPair
+	// would reach. A pair sharing one or two vertices is REQUIRED to touch —
+	// at that vertex, or along that edge — so the guard below never lets the
+	// short-circuit run for it; auditLoftPair always decides those pairs.
+	//
+	// Two tiers run, cheapest first, either one sufficient to skip: the
+	// bounding-box test above, then loftPlaneSeparated for a pair whose boxes
+	// do overlap but whose planes still prove separation. Both are float-only
+	// and reject-only; neither ever answers "touching", so a pair either tier
+	// cannot decide always falls through to the full auditLoftPair.
 	for i := range f {
 		for j := i + 1; j < f; j++ {
 			if err := budget.step(); err != nil {
 				return err
+			}
+			shared := sharedVertexIndices(tris[i], tris[j])
+			if loftBroadPhaseEnabled && len(shared) == 0 {
+				if !boxesOverlap(boxes[i], boxes[j]) {
+					loftBroadPhaseSkips++
+					continue
+				}
+				if loftPlaneSeparated(loftTriCorners(verts, tris[i]), loftTriCorners(verts, tris[j])) {
+					loftBroadPhaseSkips++
+					continue
+				}
 			}
 			if err := auditLoftPair(verts, tris, i, j); err != nil {
 				return err
