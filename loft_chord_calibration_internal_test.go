@@ -1,8 +1,10 @@
 package decad
 
 import (
+	"fmt"
 	"math"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -343,17 +345,48 @@ func wedgeShoelaceRegion(verts [][2]float64) (area, cx, cy float64) {
 // --- the gate reproduction: verify.go's own scalarToleranceRef/boundedToleranceRef,
 // run on the WIDENED bound each reading would carry once sectionDelta exists ---
 
-// widenedGateRow is one reading's widened-bound gate comparison: widened is the
-// production Bound plus this file's own sectionDelta term, ref is the
-// diameter-anchored reference verify.go's own gate built, ratio = widened/ref is
-// what the default 1e-3 tolerance compares against 1, and sound reports whether that
-// comparison passes.
+// widenedGateRow is one reading's widened-bound gate comparison: value is the
+// measurement the built body published, widened is the production Bound plus this
+// file's own sectionDelta term, ref is the diameter-anchored reference verify.go's
+// own gate built, ratio = widened/ref is what the default 1e-3 tolerance compares
+// against 1, haveRef reports whether the gate formed that reference at all, and
+// sound reports whether the comparison passes.
+//
+// value is carried as already-rendered text because the four readings are not one
+// shape: Volume and Area are scalars, Centroid is a position and Bounds is a box.
+// a10-plan.md Part 2 Q2 step 2 requires each swept m to record the four
+// measurements themselves and not only their bounds, and no other column carries
+// them: Volume and Area are readable off ref only because volumeReference and
+// areaReference return max(value, tiny) (verify.go:1152-1174), while Centroid and
+// Bounds are compared against the body diameter instead.
 type widenedGateRow struct {
 	reading string
+	value   string
 	widened float64
 	ref     float64
 	ratio   float64
+	haveRef bool
 	sound   bool
+}
+
+// verdict is the row's Sound/Suspect word at the default tolerance, and it never
+// reads the same for a pass and a fail. Both scalarToleranceRef and
+// boundedToleranceRef (verify.go:1046-1080) can decline to form a reference, for two
+// opposite reasons: a bound of exactly zero passes with no reference needed, while
+// an unusable magnitude or a reference the body cannot supply fails. Both leave ref
+// and ratio at 0, so the verdict word is the only column that separates them, and it
+// names which of the two happened.
+func (r widenedGateRow) verdict() string {
+	switch {
+	case r.haveRef && r.sound:
+		return "Sound"
+	case r.haveRef:
+		return "Suspect"
+	case r.sound:
+		return "Sound(zero-bound,no-ref)"
+	default:
+		return "Suspect(no-ref)"
+	}
 }
 
 // wedgeMeasurement is one m's full row: the closed-form/measured sectionDelta this
@@ -369,17 +402,46 @@ type wedgeMeasurement struct {
 	volume, area, bounds, centroid widenedGateRow
 }
 
+// rows returns the four gate rows in the order every logged sweep row prints them.
+func (m wedgeMeasurement) rows() []widenedGateRow {
+	return []widenedGateRow{m.volume, m.area, m.bounds, m.centroid}
+}
+
 // binding returns the reading with the largest ratio — the one that decides whether
 // this m reads Sound at the default tolerance, per the plan's "the BINDING reading is
 // the one with the largest ratio".
 func (m wedgeMeasurement) binding() widenedGateRow {
 	worst := m.volume
-	for _, r := range []widenedGateRow{m.area, m.bounds, m.centroid} {
+	for _, r := range m.rows()[1:] {
 		if r.ratio > worst.ratio {
 			worst = r
 		}
 	}
 	return worst
+}
+
+// verdict is the whole measurement's Sound/Suspect word: this m reads Sound only
+// when all four widened readings clear the default tolerance. It is computed over
+// every row rather than read off binding(), because a reading the gate could form no
+// reference for carries ratio 0 and so is never the binding row even when it fails.
+func (m wedgeMeasurement) verdict() string {
+	for _, r := range m.rows() {
+		if !r.sound {
+			return "Suspect"
+		}
+	}
+	return "Sound"
+}
+
+// marginText renders the achieved margin on the binding reading, or names the reason
+// there is none. A binding ratio of 0 means the gate formed no usable reference, and
+// then toleranceRel/ratio would print +Inf for a pass and for a fail alike.
+func (m wedgeMeasurement) marginText() string {
+	binding := m.binding()
+	if binding.ratio <= 0 {
+		return "n/a(no-ref)"
+	}
+	return fmt.Sprintf("%.3gx", toleranceRel/binding.ratio)
 }
 
 // measureWedgeReadings builds the chorded loft over pts, then widens each of the
@@ -433,13 +495,22 @@ func measureWedgeReadings(t *testing.T, pts [][2]float64, sectionDelta, areaExce
 	widenedCentroidBound := centroid.Bound.Base() + centroidTerm
 	centroidPass, centroidRef, centroidHaveRef := boundedToleranceRef(widenedCentroidBound, toleranceRel, in.diameterReference)
 
-	row := func(name string, widened, ref float64, haveRef, pass bool) widenedGateRow {
-		r := widenedGateRow{reading: name, widened: widened, ref: ref, sound: pass}
+	row := func(name, value string, widened, ref float64, haveRef, pass bool) widenedGateRow {
+		r := widenedGateRow{reading: name, value: value, widened: widened, ref: ref, haveRef: haveRef, sound: pass}
 		if haveRef && ref != 0 {
 			r.ratio = widened / ref
 		}
 		return r
 	}
+
+	// The four VALUES, each in units' own documented base unit for its Kind
+	// (mm^3, mm^2, mm), so a recorded row states the measurement itself and not
+	// only how far it can be trusted.
+	volText := fmt.Sprintf("%.10g", vol.Value.Base())
+	areaText := fmt.Sprintf("%.10g", area.Value.Base())
+	boundsText := fmt.Sprintf("min(%.6g,%.6g,%.6g)max(%.6g,%.6g,%.6g)",
+		bounds.Min.X, bounds.Min.Y, bounds.Min.Z, bounds.Max.X, bounds.Max.Y, bounds.Max.Z)
+	centroidText := fmt.Sprintf("(%.6g,%.6g,%.6g)", centroid.Value.X, centroid.Value.Y, centroid.Value.Z)
 
 	return wedgeMeasurement{
 		m:            len(pts) - 1,
@@ -447,29 +518,111 @@ func measureWedgeReadings(t *testing.T, pts [][2]float64, sectionDelta, areaExce
 		f:            len(body.Faces()),
 		elapsed:      elapsed,
 		body:         body,
-		volume:       row("Volume", widenedVol.Bound.Base(), volRef, volHaveRef, volPass),
-		area:         row("Area", widenedArea.Bound.Base(), areaRef, areaHaveRef, areaPass),
-		bounds:       row("Bounds", widenedBoundsBound, boundsRef, boundsHaveRef, boundsPass),
-		centroid:     row("Centroid", widenedCentroidBound, centroidRef, centroidHaveRef, centroidPass),
+		volume:       row("Volume", volText, widenedVol.Bound.Base(), volRef, volHaveRef, volPass),
+		area:         row("Area", areaText, widenedArea.Bound.Base(), areaRef, areaHaveRef, areaPass),
+		bounds:       row("Bounds", boundsText, widenedBoundsBound, boundsRef, boundsHaveRef, boundsPass),
+		centroid:     row("Centroid", centroidText, widenedCentroidBound, centroidRef, centroidHaveRef, centroidPass),
 	}
+}
+
+// formatWedgeMeasurement renders one row of the calibration table: everything
+// a10-plan.md Part 2 Q2 step 2 requires each swept m to record — the four
+// measurements with their VALUES and their widened bounds, the gate reference each
+// was compared against, each one's Verify verdict at the default 1e-3, the
+// sectionDelta this file added, the face count F and the loft's wall-clock.
+func formatWedgeMeasurement(label string, m wedgeMeasurement) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "%-14s m=%-4d sectionDelta=%.6g F=%-4d elapsed=%-12s", label, m.m, m.sectionDelta, m.f, m.elapsed)
+	for _, c := range []struct {
+		tag string
+		row widenedGateRow
+	}{{"vol", m.volume}, {"area", m.area}, {"bounds", m.bounds}, {"centroid", m.centroid}} {
+		fmt.Fprintf(&b, " %s[v=%s w=%.4e ref=%.4e ratio=%.4e %s]",
+			c.tag, c.row.value, c.row.widened, c.row.ref, c.row.ratio, c.row.verdict())
+	}
+	fmt.Fprintf(&b, " verdict=%s binding=%s margin=%s", m.verdict(), m.binding().reading, m.marginText())
+	return b.String()
 }
 
 func logWedgeMeasurement(t *testing.T, label string, m wedgeMeasurement) {
 	t.Helper()
-	binding := m.binding()
-	margin := math.Inf(1)
-	if binding.ratio > 0 {
-		margin = toleranceRel / binding.ratio
-	}
-	t.Logf(
-		"%-14s m=%-4d sectionDelta=%.6g F=%-4d elapsed=%-12s vol[w=%.4e ref=%.4e ratio=%.4e] area[w=%.4e ref=%.4e ratio=%.4e] bounds[w=%.4e ref=%.4e ratio=%.4e] centroid[w=%.4e ref=%.4e ratio=%.4e] binding=%s margin=%.3gx",
-		label, m.m, m.sectionDelta, m.f, m.elapsed,
-		m.volume.widened, m.volume.ref, m.volume.ratio,
-		m.area.widened, m.area.ref, m.area.ratio,
-		m.bounds.widened, m.bounds.ref, m.bounds.ratio,
-		m.centroid.widened, m.centroid.ref, m.centroid.ratio,
-		binding.reading, margin,
-	)
+	t.Log(formatWedgeMeasurement(label, m))
+}
+
+// TestLoftChordCalibrationRowRecordsValueAndVerdict pins the recording contract
+// a10-plan.md Part 2 Q2 step 2 states for the sweep: every row carries each of the
+// four measurements' own VALUE and its Verify verdict, on top of the widened bound,
+// the reference and the ratio. It is fast (one m=8 loft, F=18) and always runs, so
+// the contract holds even though the sweep itself is opt-in behind
+// DECAD_LOFT_CALIBRATION.
+func TestLoftChordCalibrationRowRecordsValueAndVerdict(t *testing.T) {
+	t.Run("a no-reference row reads differently for a pass and a fail", func(t *testing.T) {
+		require.Equal(t, "Sound", widenedGateRow{haveRef: true, sound: true}.verdict())
+		require.Equal(t, "Suspect", widenedGateRow{haveRef: true, sound: false}.verdict())
+		require.Equal(t, "Sound(zero-bound,no-ref)", widenedGateRow{sound: true}.verdict())
+		require.Equal(t, "Suspect(no-ref)", widenedGateRow{}.verdict())
+
+		// A row the gate formed no reference for carries ratio 0 either way, so it is
+		// never the binding row and the margin column cannot separate the two. The
+		// measurement's own verdict is what makes the failure visible.
+		ok := widenedGateRow{reading: "Volume", sound: true}
+		bad := widenedGateRow{reading: "Centroid"}
+		passing := wedgeMeasurement{volume: ok, area: ok, bounds: ok, centroid: ok}
+		failing := wedgeMeasurement{volume: ok, area: ok, bounds: ok, centroid: bad}
+		require.Equal(t, "Sound", passing.verdict())
+		require.Equal(t, "Suspect", failing.verdict())
+		require.Equal(t, passing.binding().reading, failing.binding().reading)
+		require.Equal(t, "n/a(no-ref)", passing.marginText())
+		require.Equal(t, "n/a(no-ref)", failing.marginText())
+		require.NotEqual(t, formatWedgeMeasurement("A10a(arc)", passing), formatWedgeMeasurement("A10a(arc)", failing))
+	})
+
+	t.Run("every reading records the value the built body published", func(t *testing.T) {
+		const m = 8
+		pts := wedgeCirclePoints(m)
+		meas := measureWedgeReadings(t, pts,
+			arcSagitta(wedgeRadius, wedgeSweep, m),
+			arcChordExcess(wedgeRadius, wedgeSweep, m, wedgeHeight))
+
+		vol, err := meas.body.Volume()
+		require.NoError(t, err)
+		area, err := meas.body.Area()
+		require.NoError(t, err)
+		centroid, err := meas.body.Centroid()
+		require.NoError(t, err)
+		bounds, err := meas.body.Bounds()
+		require.NoError(t, err)
+
+		// The recorded values are the geometry, not placeholders: the m-chord wedge is
+		// m isosceles triangles of area (1/2)r^2*sin(sweep/m) extruded wedgeHeight, its
+		// centroid sits at mid-height, and its box spans the full extrusion in Z.
+		wantVolume := 0.5 * float64(m) * wedgeRadius * wedgeRadius * math.Sin(wedgeSweep/float64(m)) * wedgeHeight
+		require.InDelta(t, wantVolume, vol.Value.Base(), 1e-9)
+		require.InDelta(t, wedgeHeight/2, centroid.Value.Z, 1e-9)
+		require.InDelta(t, 0.0, bounds.Min.Z, 1e-12)
+		require.InDelta(t, wedgeHeight, bounds.Max.Z, 1e-12)
+
+		require.Equal(t, fmt.Sprintf("%.10g", vol.Value.Base()), meas.volume.value)
+		require.Equal(t, fmt.Sprintf("%.10g", area.Value.Base()), meas.area.value)
+		require.Equal(t, fmt.Sprintf("(%.6g,%.6g,%.6g)", centroid.Value.X, centroid.Value.Y, centroid.Value.Z), meas.centroid.value)
+		require.Equal(t, fmt.Sprintf("min(%.6g,%.6g,%.6g)max(%.6g,%.6g,%.6g)",
+			bounds.Min.X, bounds.Min.Y, bounds.Min.Z, bounds.Max.X, bounds.Max.Y, bounds.Max.Z), meas.bounds.value)
+
+		// Centroid is the reading no other column can recover: it is compared against
+		// the body diameter, so its value reaches the table only through v=.
+		line := formatWedgeMeasurement("A10a(arc)", meas)
+		for _, c := range []struct {
+			tag string
+			row widenedGateRow
+		}{{"vol", meas.volume}, {"area", meas.area}, {"bounds", meas.bounds}, {"centroid", meas.centroid}} {
+			require.Contains(t, line, fmt.Sprintf("%s[v=%s ", c.tag, c.row.value))
+			require.Contains(t, line, fmt.Sprintf("ratio=%.4e %s]", c.row.ratio, c.row.verdict()))
+			require.True(t, c.row.haveRef, "the m=8 wedge forms a reference for every reading, so no verdict here is the degenerate one")
+		}
+		require.Contains(t, line, " verdict="+meas.verdict()+" ")
+		require.Contains(t, line, " margin="+meas.marginText())
+		t.Log(line)
+	})
 }
 
 // --- the sweep: TestLoftChordCalibrationSweep, opt-in only ---
@@ -483,7 +636,7 @@ const decadLoftCalibrationEnv = "DECAD_LOFT_CALIBRATION"
 
 // TestLoftChordCalibrationSweep is a10-plan.md PR 1's calibration procedure (Part 2
 // Q2, Part 3 PR 1 tasks 2-3): both wedges, hand-chorded at m = 4, 8, 16, 32, 64, 128,
-// each row logging the four widened-bound gate readings, F, and wall-clock. It is a
+// each row logging the column set formatWedgeMeasurement owns. It is a
 // one-time measurement harness, not a regression fixture, and it is expensive (m=128
 // drives F past 500, and loftCrossingAudit is O(F^2) — Q3: ~13s and 12 loft builds
 // measured), so it costs the default `go test ./...` run nothing: it skips unless
