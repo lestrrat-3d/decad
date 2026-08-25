@@ -648,8 +648,9 @@ type loftChordedAllow struct {
 //     the cell's own bilinear ruled patch can carry the held triangle pair's
 //     area from the planar reading, T = vLo−vHi−wLo+wHi the SAME twist
 //     vector cellTwistVolumeAllow already names, zero EXACTLY when the cell
-//     is planar (the shipped wedge's own T ≡ 0 — TestArcMatchedDeltaEqualsSagitta's
-//     family) so this leg contributes nothing extra there and the shipped
+//     is planar (the shipped wedge's own T ≡ 0 —
+//     loft_chord_calibration_internal_test.go's own wedge fixtures) so this
+//     leg contributes nothing extra there and the shipped
 //     margin is unaffected; positive whenever the two sections genuinely
 //     twist against each other.
 //

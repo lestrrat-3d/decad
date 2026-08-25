@@ -184,12 +184,18 @@ func TestLoftCircularCellStationsSharedMTakesMax(t *testing.T) {
 
 // --- loftCircularCellStations: the parameter-matched discharge ---
 
-// TestLoftCircularArcSagittaIsTheUniformParameterMatchedBound pins the claim
-// loftCircularCellStations' own doc comment makes: under uniform-angle
-// parametrization (t_k = th0 + (k/m)*(th1-th0)), sup_s |arc(s) - chord(s)|
-// over one chord EQUALS the sagitta 2r*sin^2(dtheta/4) exactly, the maximum
-// always landing at s = 1/2 — proven here by dense sampling across a spread
-// of sweeps from 0.5 to 359.5 degrees, never merely one case.
+// TestLoftCircularArcSagittaIsTheUniformParameterMatchedBound corroborates
+// the claim loftCircularCellStations' own doc comment makes: under
+// uniform-angle parametrization (t_k = th0 + (k/m)*(th1-th0)),
+// sup_s |arc(s) - chord(s)| over one chord EQUALS the sagitta
+// 2r*sin^2(dtheta/4) exactly, the maximum always landing at s = 1/2. The
+// PROOF of that claim is TestArcMatchedDeltaEqualsSagitta
+// (bounds_chord_internal_test.go): an analytic derivation whose steps are
+// checked over exact rationals, covering every cell angle up to 4 radians
+// and so every cell angle chordCount can produce. What this test adds is
+// numerical corroboration across a wider spread than the derivation covers —
+// sweeps from 0.5 to 359.5 degrees, past the half turn no chord split ever
+// hands one cell — sampled, and so evidence rather than proof.
 func TestLoftCircularArcSagittaIsTheUniformParameterMatchedBound(t *testing.T) {
 	const r = 5.0
 	const samples = 20_000
@@ -213,6 +219,63 @@ func TestLoftCircularArcSagittaIsTheUniformParameterMatchedBound(t *testing.T) {
 			"sweep=%v degrees: dense-sample departure must equal the sagitta", degSweep)
 		require.InDelta(t, 0.5, argMax, 1.0/samples*2,
 			"sweep=%v degrees: the maximum departure must land at the chord's own midpoint", degSweep)
+	}
+}
+
+// TestLoftCircularCellStationsMatchedDeltaIsItsSagitta pins the coupling the
+// derivation above exists to license, on the production path itself: the
+// per-cell matchedDelta loftCircularCellStations publishes IS that pairing's
+// own sagittaUpper, for EVERY cell of the shared chain, never a separate or
+// smaller reading. Every consumer of a circular cell's matched-delta
+// obligation (bounds.go's cellChordCurveAreaUpper through
+// loft_moments.go's computeLoftChordedAllow) reads that equality straight
+// off this arm, and loftPayload's own doc comment states it as fact, so it
+// is asserted here rather than left to the assignment that implements it.
+//
+// The rows exercise every shape the arm can settle on: two identical sides,
+// two sides whose own station counts differ (the shared max, where the
+// coarser side's sagitta is re-derived at m), a single-cell pairing, and a
+// degenerate radius-0 pair whose sagitta is exactly zero.
+func TestLoftCircularCellStationsMatchedDeltaIsItsSagitta(t *testing.T) {
+	for _, row := range []struct {
+		name           string
+		r0, sweep0     float64
+		r1, sweep1     float64
+		target         float64
+		wantSharedOnly bool
+	}{
+		{name: "identical sides", r0: 5, sweep0: math.Pi / 2, r1: 5, sweep1: math.Pi / 2, target: 1e-3},
+		{name: "different station counts", r0: 5, sweep0: math.Pi / 2, r1: 2, sweep1: math.Pi / 6, target: 1e-3, wantSharedOnly: true},
+		{name: "single cell", r0: 5, sweep0: math.Pi / 2, r1: 4, sweep1: math.Pi / 2, target: 10},
+		{name: "degenerate radius", r0: 0, sweep0: math.Pi / 2, r1: 0, sweep1: math.Pi / 2, target: 1e-3},
+	} {
+		t.Run(row.name, func(t *testing.T) {
+			w0 := circularWalk(0, 0, row.r0, 0, row.sweep0, row.r0, row.sweep0)
+			w1 := circularWalk(0, 0, row.r1, 0, row.sweep1, row.r1, row.sweep1)
+			seg0 := mkCircleSeg(0, 0, row.r0, 0, row.sweep0)
+			seg1 := mkCircleSeg(0, 0, row.r1, 0, row.sweep1)
+
+			if row.wantSharedOnly {
+				m0, _, err := chordCount(w0, row.target)
+				require.NoError(t, err)
+				m1, _, err := chordCount(w1, row.target)
+				require.NoError(t, err)
+				require.NotEqual(t, m0, m1, "this row must need different station counts on its two sides")
+			}
+
+			stations0, stations1, sagitta, matchedDelta, _, err := loftCircularCellStations(seg0, seg1, w0, w1, row.target)
+			require.NoError(t, err)
+			require.Len(t, stations1, len(stations0))
+			require.Len(t, matchedDelta, len(stations0),
+				"one matched-delta entry per cell, the count loftCellStations' own doc comment fixes")
+
+			want := make([]float64, len(stations0))
+			for i := range want {
+				want[i] = sagitta
+			}
+			require.Equal(t, want, matchedDelta,
+				"every circular cell's matchedDelta must equal the pairing's own sagitta %v exactly", sagitta)
+		})
 	}
 }
 

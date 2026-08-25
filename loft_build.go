@@ -522,11 +522,13 @@ func loftLineCellStations(w0, w1 segmentWalk) ([]Point2, []Point2, float64, []fl
 // (k/m)*(TEnd-TStart), which for a circular walk is uniform in ANGLE because
 // t is the walk's own sweep fraction — and under that uniform-angle
 // parametrization, sup_s |arc(s) - chord(s)| over one chord EQUALS the
-// sagitta exactly (an audit verified this across sweeps from 0.5 to 359.5
-// degrees, the maximum departure always landing at s = 1/2 of the chord),
-// never merely bounding it. A SET distance from an arbitrary chord point to
-// the curve would not carry that guarantee; the uniform-angle station rule
-// is what buys it.
+// sagitta exactly, never merely bounding it: TestArcMatchedDeltaEqualsSagitta
+// derives that from the two points themselves, checks every step of the
+// derivation over exact rationals, and covers every cell angle chordCount can
+// produce; the maximum departure lands at s = 1/2 of the chord, where the
+// derivation's own reduction is an equality. A SET distance from an arbitrary
+// chord point to the curve would not carry that guarantee; the uniform-angle
+// station rule is what buys it.
 //
 // matchedDelta is loftCellStations' own per-cell obligation: this arm's
 // sagitta discharges it EXACTLY (the paragraph above), and every cell of one

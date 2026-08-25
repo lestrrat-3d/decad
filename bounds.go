@@ -473,9 +473,10 @@ func sweptVolumeAllow(delta, areaUpper float64) float64 {
 // natural traversal already matches the parametrization the caller chose: a
 // straight LINE (trivially, chord(s)=curve(s) identically, both zero) or a
 // circular ARC under its own uniform-angle parametrization
-// (TestArcMatchedDeltaEqualsSagitta pins the equality over a 5-170 degree
-// sweep range). For any other curve kind under an ARC-LENGTH parametrization
-// the two provably DIFFER, by an amount that can reach the CHORD LENGTH
+// (TestArcMatchedDeltaEqualsSagitta derives that equality analytically and
+// checks every step of the derivation over exact rationals, covering every
+// cell angle chordCount can produce). For any other curve kind under an
+// ARC-LENGTH parametrization the two provably DIFFER, by an amount that can reach the CHORD LENGTH
 // itself rather than the sagitta: a curve can hug its chord within an
 // arbitrarily small sagitta while packing almost all of its arc length into
 // one short span, so its arc-length-matched point sits far from the chord
@@ -673,7 +674,8 @@ func cellTwistOffsetUpper(vLo, vHi, wLo, wHi r3.Vec) float64 {
 // cellTwistVolumeAllow's part (a)/(b) already builds, T = vLo−vHi−wLo+wHi
 // its own twist vector, zero exactly when the cell is planar (the shipped
 // A10a wedge's own case: two circles offset along their shared normal alone
-// give T = 0 identically, TestArcMatchedDeltaEqualsSagitta's own family).
+// give T = 0 identically — loft_chord_calibration_internal_test.go's own
+// wedge fixtures).
 //
 // Part (a) already gives the explicit form of the deviation: on triangle 1
 // (0<=r<=s<=1), X−X_tri1 = r(s−1)·T; on triangle 2, X−X_tri2 = s(r−1)·T. Both
