@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"math/rand/v2"
+	"sync"
 	"testing"
 
 	"github.com/lestrrat-3d/r3"
@@ -12,7 +14,8 @@ import (
 
 // This file tests bounds.go's chordedBoundaryVolumeAllow,
 // chordedBoundaryMomentAllow, chordedBoundarySeamAllow, cellChordCurveAreaUpper,
-// capAreaVolumeAllow, cellTwistOffsetUpper and cellTwistVolumeAllow
+// capAreaVolumeAllow, cellTwistOffsetUpper, cellTwistVolumeAllow and the
+// shared per-cell reader cellAllowsOf
 // (docs/loft-design.md §5 — the chord-chain subsection lands with the arc
 // design change; the A10 plan's Part 2 Q4 and Part 4 R1 fallback): the
 // enclosure chordedBoundaryVolumeAllow proves between the HELD FLAT-TRIANGLE
@@ -236,7 +239,11 @@ type chordedAllowBreakdown struct {
 }
 
 // chordedBoundaryAllowForTwistedPieSlice computes chordedBoundaryVolumeAllow's
-// own three composed legs for one twisted-pie-slice row, split by cell kind:
+// own three composed legs for one twisted-pie-slice row, split by cell kind.
+// Every per-cell reading below is taken from cellAllowsOf, which publishes
+// exactly what the three named helpers publish for that cell
+// (TestCellAllowsOfMatchesThePerBoundHelpers) from one certification of the
+// cell's own spans and twist vector:
 //
 //   - wall chord-to-curve: cellChordCurveAreaUpper summed over every wall
 //     cell (the n arc cells, each side's own TRUE arc length radius*dtheta
@@ -285,9 +292,14 @@ func chordedBoundaryAllowForTwistedPieSlice(radius, sweepRad, twistRad, h float6
 
 	for i := range n {
 		vLo, vHi, wLo, wHi := arcB(i), arcB(i+1), arcT(i), arcT(i+1)
-		b.wallAreaArc = absSumUpper(b.wallAreaArc, cellChordCurveAreaUpper(vLo, vHi, wLo, wHi, arcLenPerArcCell, arcLenPerArcCell, sectionDelta))
-		b.twistVolumeArc = absSumUpper(b.twistVolumeArc, cellTwistVolumeAllow(vLo, vHi, wLo, wHi))
-		b.maxTwistOffsetUpper = math.Max(b.maxTwistOffsetUpper, cellTwistOffsetUpper(vLo, vHi, wLo, wHi))
+		// One reading of all three of this cell's bounds: cellAllowsOf
+		// publishes exactly what the three helpers publish
+		// (TestCellAllowsOfMatchesThePerBoundHelpers), from one certification
+		// of the cell's own spans and twist vector.
+		cell := cellAllowsOf(vLo, vHi, wLo, wHi, arcLenPerArcCell, arcLenPerArcCell, sectionDelta)
+		b.wallAreaArc = absSumUpper(b.wallAreaArc, cell.chordCurveAreaUpper)
+		b.twistVolumeArc = absSumUpper(b.twistVolumeArc, cell.twistVolumeAllow)
+		b.maxTwistOffsetUpper = math.Max(b.maxTwistOffsetUpper, cell.twistOffsetUpper)
 		// arcLenPerArcCell is BOTH sides' own arc-length upper bound for an
 		// arc cell (an untwisted or twisted rotation does not change either
 		// arc's own length), so this cell's own contribution to BOTH the
@@ -307,9 +319,10 @@ func chordedBoundaryAllowForTwistedPieSlice(radius, sweepRad, twistRad, h float6
 		// comment). The certified endpoint is what this caller states.
 		arcLenA := cellSpanUpper(vHi, vLo)
 		arcLenB := cellSpanUpper(wHi, wLo)
-		b.wallAreaApex = absSumUpper(b.wallAreaApex, cellChordCurveAreaUpper(vLo, vHi, wLo, wHi, arcLenA, arcLenB, sectionDelta))
-		b.twistVolumeApex = absSumUpper(b.twistVolumeApex, cellTwistVolumeAllow(vLo, vHi, wLo, wHi))
-		b.maxTwistOffsetUpper = math.Max(b.maxTwistOffsetUpper, cellTwistOffsetUpper(vLo, vHi, wLo, wHi))
+		cell := cellAllowsOf(vLo, vHi, wLo, wHi, arcLenA, arcLenB, sectionDelta)
+		b.wallAreaApex = absSumUpper(b.wallAreaApex, cell.chordCurveAreaUpper)
+		b.twistVolumeApex = absSumUpper(b.twistVolumeApex, cell.twistVolumeAllow)
+		b.maxTwistOffsetUpper = math.Max(b.maxTwistOffsetUpper, cell.twistOffsetUpper)
 		b.seamPerimeterUpper = absSumUpper(b.seamPerimeterUpper, arcLenA, arcLenB)
 	}
 
@@ -334,6 +347,64 @@ func chordedBoundaryAllowForTwistedPieSlice(radius, sweepRad, twistRad, h float6
 	return b
 }
 
+// chordSweepRow is ONE row of the shared pie-slice sweep: the fixture's own
+// parameters, the volume gap its HELD mesh actually shows against the true
+// solid, and the breakdown chordedBoundaryVolumeAllow's own legs compose for
+// it.
+type chordSweepRow struct {
+	radius, sweepDeg, h, twistDeg float64
+	n                             int
+	measuredGap                   float64
+	breakdown                     chordedAllowBreakdown
+}
+
+// label renders the row the way every assertion over the table names it.
+func (r chordSweepRow) label() string {
+	return fmt.Sprintf("r=%g sweep=%g h=%g twist=%g n=%d", r.radius, r.sweepDeg, r.h, r.twistDeg, r.n)
+}
+
+// chordSweepTable is the 900-row pie-slice sweep — radii, sweeps, heights,
+// twists and chord counts — that the enclosure test and both leg-deletion
+// searches read. The three ask DIFFERENT questions of the SAME rows, and
+// building one row is exact-rational work (the mesh's own held volume over
+// big.Rat, and the per-cell certified spans behind its composed allow) that
+// dominates this file's cost, so every row is built ONCE per test binary and
+// all three tests read it.
+//
+// Nothing but the fixture is shared: each test still applies its own filter and
+// its own assertion to every row, and a row carries only what a test reads —
+// its parameters, its measured gap, and its own breakdown — never a verdict one
+// test could leak into another.
+var chordSweepTable = sync.OnceValue(func() []chordSweepRow {
+	radii := []float64{1, 5, 50}
+	sweepsDeg := []float64{30, 90, 180, 270}
+	heights := []float64{0.1, 10, 100}
+	chordCounts := []int{8, 32, 64, 128, 256}
+	twistsDeg := []float64{0, 5, 20, 45, 90}
+
+	rows := make([]chordSweepRow, 0, len(radii)*len(sweepsDeg)*len(heights)*len(chordCounts)*len(twistsDeg))
+	for _, r := range radii {
+		for _, sweepDeg := range sweepsDeg {
+			sweepRad := sweepDeg * math.Pi / 180
+			for _, h := range heights {
+				for _, twistDeg := range twistsDeg {
+					twistRad := twistDeg * math.Pi / 180
+					for _, n := range chordCounts {
+						verts, tris := twistedPieSliceMesh(r, sweepRad, twistRad, h, n)
+						trueVolume := twistedPieSliceTrueVolume(r, sweepRad, twistRad, h)
+						rows = append(rows, chordSweepRow{
+							radius: r, sweepDeg: sweepDeg, h: h, twistDeg: twistDeg, n: n,
+							measuredGap: math.Abs(trueVolume - heldVolumeExact(verts, tris)),
+							breakdown:   chordedBoundaryAllowForTwistedPieSlice(r, sweepRad, twistRad, h, n),
+						})
+					}
+				}
+			}
+		}
+	}
+	return rows
+})
+
 // TestChordedBoundaryVolumeAllowEnclosesTheMeasuredGap is the A10 plan's
 // required enclosure test, extended past a pure curvature sweep to carry a
 // TWIST between the two paired sections in every row: an earlier version of
@@ -350,46 +421,24 @@ func chordedBoundaryAllowForTwistedPieSlice(radius, sweepRad, twistRad, h float6
 // and merely re-covers the untwisted enclosure an earlier, narrower fixture
 // already pinned.
 func TestChordedBoundaryVolumeAllowEnclosesTheMeasuredGap(t *testing.T) {
-	radii := []float64{1, 5, 50}
-	sweepsDeg := []float64{30, 90, 180, 270}
-	heights := []float64{0.1, 10, 100}
-	chordCounts := []int{8, 32, 64, 128, 256}
-	twistsDeg := []float64{0, 5, 20, 45, 90}
-
 	minRatio := math.Inf(1)
 	var minRow string
 	var minTwistDeg float64
 	rows := 0
 
-	for _, r := range radii {
-		for _, sweepDeg := range sweepsDeg {
-			sweepRad := sweepDeg * math.Pi / 180
-			for _, h := range heights {
-				for _, twistDeg := range twistsDeg {
-					twistRad := twistDeg * math.Pi / 180
-					for _, n := range chordCounts {
-						rows++
+	for _, row := range chordSweepTable() {
+		rows++
 
-						trueVolume := twistedPieSliceTrueVolume(r, sweepRad, twistRad, h)
-						verts, tris := twistedPieSliceMesh(r, sweepRad, twistRad, h, n)
-						heldVolume := heldVolumeExact(verts, tris)
-						measuredGap := math.Abs(trueVolume - heldVolume)
+		allow := row.breakdown.allow
+		require.GreaterOrEqualf(t, allow, row.measuredGap,
+			"%s: allow must enclose the measured volume gap", row.label())
 
-						allow := chordedBoundaryAllowForTwistedPieSlice(r, sweepRad, twistRad, h, n).allow
-						require.GreaterOrEqualf(t, allow, measuredGap,
-							"r=%g sweep=%g h=%g twist=%g n=%d: allow must enclose the measured volume gap",
-							r, sweepDeg, h, twistDeg, n)
-
-						if measuredGap > 0 {
-							ratio := allow / measuredGap
-							if ratio < minRatio {
-								minRatio = ratio
-								minTwistDeg = twistDeg
-								minRow = fmt.Sprintf("r=%g sweep=%g h=%g twist=%g n=%d", r, sweepDeg, h, twistDeg, n)
-							}
-						}
-					}
-				}
+		if row.measuredGap > 0 {
+			ratio := allow / row.measuredGap
+			if ratio < minRatio {
+				minRatio = ratio
+				minTwistDeg = row.twistDeg
+				minRow = row.label()
 			}
 		}
 	}
@@ -648,8 +697,9 @@ func ringAllow(radius, twistRad, h float64, n int) (matchedDelta, wallAreaUpper,
 		jn := (i + 1) % n
 		vLo, vHi := arcPoint(i, 0, 0), arcPoint(jn, 0, 0)
 		wLo, wHi := arcPoint(i, twistRad, h), arcPoint(jn, twistRad, h)
-		wallAreaUpper = absSumUpper(wallAreaUpper, cellChordCurveAreaUpper(vLo, vHi, wLo, wHi, arcLenPerCell, arcLenPerCell, matchedDelta))
-		twistVolumeUpper = absSumUpper(twistVolumeUpper, cellTwistVolumeAllow(vLo, vHi, wLo, wHi))
+		cell := cellAllowsOf(vLo, vHi, wLo, wHi, arcLenPerCell, arcLenPerCell, matchedDelta)
+		wallAreaUpper = absSumUpper(wallAreaUpper, cell.chordCurveAreaUpper)
+		twistVolumeUpper = absSumUpper(twistVolumeUpper, cell.twistVolumeAllow)
 		seamPerimeterUpper = absSumUpper(seamPerimeterUpper, arcLenPerCell, arcLenPerCell)
 	}
 	chordLen := 2 * radius * math.Sin(sweepRad/float64(n)/2)
@@ -761,47 +811,26 @@ func TestChordedBoundaryVolumeAllowWallAndTwistLegsAreJointlyLoadBearing(t *test
 //     constant is not policed by anything in this suite, exactly the
 //     complaint this comment block exists to make impossible to miss.
 func TestChordedBoundaryVolumeAllowWallLegDeletionSearch(t *testing.T) {
-	radii := []float64{1, 5, 50}
-	sweepsDeg := []float64{30, 90, 180, 270}
-	heights := []float64{0.1, 10, 100}
-	chordCounts := []int{8, 32, 64, 128, 256}
-	twistsDeg := []float64{0, 5, 20, 45, 90}
-
 	minRatio := math.Inf(1)
 	var minRow string
 	rows := 0
 
-	for _, r := range radii {
-		for _, sweepDeg := range sweepsDeg {
-			sweepRad := sweepDeg * math.Pi / 180
-			for _, h := range heights {
-				for _, twistDeg := range twistsDeg {
-					twistRad := twistDeg * math.Pi / 180
-					for _, n := range chordCounts {
-						trueVolume := twistedPieSliceTrueVolume(r, sweepRad, twistRad, h)
-						verts, tris := twistedPieSliceMesh(r, sweepRad, twistRad, h, n)
-						heldVolume := heldVolumeExact(verts, tris)
-						measuredGap := math.Abs(trueVolume - heldVolume)
-						if measuredGap <= 0 {
-							continue
-						}
-						rows++
+	for _, row := range chordSweepTable() {
+		if row.measuredGap <= 0 {
+			continue
+		}
+		rows++
 
-						b := chordedBoundaryAllowForTwistedPieSlice(r, sweepRad, twistRad, h, n)
-						twistVolumeUpper := absSumUpper(b.twistVolumeArc, b.twistVolumeApex)
-						withoutWall := chordedBoundaryVolumeAllow(b.sectionDelta, 0, twistVolumeUpper, b.capVolumeUpper, b.seamAllow)
-						require.GreaterOrEqualf(t, withoutWall, measuredGap,
-							"r=%g sweep=%g h=%g twist=%g n=%d: deleting the wall leg alone must still enclose the measured gap",
-							r, sweepDeg, h, twistDeg, n)
+		b := row.breakdown
+		twistVolumeUpper := absSumUpper(b.twistVolumeArc, b.twistVolumeApex)
+		withoutWall := chordedBoundaryVolumeAllow(b.sectionDelta, 0, twistVolumeUpper, b.capVolumeUpper, b.seamAllow)
+		require.GreaterOrEqualf(t, withoutWall, row.measuredGap,
+			"%s: deleting the wall leg alone must still enclose the measured gap", row.label())
 
-						ratio := withoutWall / measuredGap
-						if ratio < minRatio {
-							minRatio = ratio
-							minRow = fmt.Sprintf("r=%g sweep=%g h=%g twist=%g n=%d", r, sweepDeg, h, twistDeg, n)
-						}
-					}
-				}
-			}
+		ratio := withoutWall / row.measuredGap
+		if ratio < minRatio {
+			minRatio = ratio
+			minRow = row.label()
 		}
 	}
 
@@ -821,44 +850,24 @@ func TestChordedBoundaryVolumeAllowWallLegDeletionSearch(t *testing.T) {
 // what would still need to happen before seam is either proven redundant or
 // caught by a genuine failing row.
 func TestChordedBoundaryVolumeAllowSeamLegDeletionSearch(t *testing.T) {
-	radii := []float64{1, 5, 50}
-	sweepsDeg := []float64{30, 90, 180, 270}
-	heights := []float64{0.1, 10, 100}
-	chordCounts := []int{8, 32, 64, 128, 256}
-	twistsDeg := []float64{0, 5, 20, 45, 90}
-
 	minRatio := math.Inf(1)
 	var minRow string
 	rows := 0
 
-	for _, r := range radii {
-		for _, sweepDeg := range sweepsDeg {
-			sweepRad := sweepDeg * math.Pi / 180
-			for _, h := range heights {
-				for _, twistDeg := range twistsDeg {
-					twistRad := twistDeg * math.Pi / 180
-					for _, n := range chordCounts {
-						trueVolume := twistedPieSliceTrueVolume(r, sweepRad, twistRad, h)
-						verts, tris := twistedPieSliceMesh(r, sweepRad, twistRad, h, n)
-						heldVolume := heldVolumeExact(verts, tris)
-						measuredGap := math.Abs(trueVolume - heldVolume)
-						if measuredGap <= 0 {
-							continue
-						}
-						rows++
+	for _, row := range chordSweepTable() {
+		if row.measuredGap <= 0 {
+			continue
+		}
+		rows++
 
-						b := chordedBoundaryAllowForTwistedPieSlice(r, sweepRad, twistRad, h, n)
-						wallAreaUpper := absSumUpper(b.wallAreaArc, b.wallAreaApex)
-						twistVolumeUpper := absSumUpper(b.twistVolumeArc, b.twistVolumeApex)
-						withoutSeam := chordedBoundaryVolumeAllow(b.sectionDelta, wallAreaUpper, twistVolumeUpper, b.capVolumeUpper, 0)
-						ratio := withoutSeam / measuredGap
-						if ratio < minRatio {
-							minRatio = ratio
-							minRow = fmt.Sprintf("pie r=%g sweep=%g h=%g twist=%g n=%d", r, sweepDeg, h, twistDeg, n)
-						}
-					}
-				}
-			}
+		b := row.breakdown
+		wallAreaUpper := absSumUpper(b.wallAreaArc, b.wallAreaApex)
+		twistVolumeUpper := absSumUpper(b.twistVolumeArc, b.twistVolumeApex)
+		withoutSeam := chordedBoundaryVolumeAllow(b.sectionDelta, wallAreaUpper, twistVolumeUpper, b.capVolumeUpper, 0)
+		ratio := withoutSeam / row.measuredGap
+		if ratio < minRatio {
+			minRatio = ratio
+			minRow = "pie " + row.label()
 		}
 	}
 
@@ -1049,6 +1058,199 @@ func TestCellChordCurveAreaUpperRefusesNonFiniteCorners(t *testing.T) {
 	require.True(t, math.IsInf(cellChordCurveAreaUpper(vLo, nan, wLo, wHi, chordA, chordB, 0), 1), "NaN vHi")
 	require.True(t, math.IsInf(cellChordCurveAreaUpper(vLo, vHi, nan, wHi, chordA, chordB, 0), 1), "NaN wLo")
 	require.True(t, math.IsInf(cellChordCurveAreaUpper(vLo, vHi, wLo, nan, chordA, chordB, 0), 1), "NaN wHi")
+}
+
+// ratSpanUpper and ratTwistQuarterUpper are the DIRECT big.Rat readings of
+// |a−b| and |T|/4 — one exact rational operation per step, the most literal
+// spelling of the two quantities there is. cellSpanUpper and
+// cellTwistQuarterUpper carry the same exact values through the homogeneous
+// INTEGER kernel instead, which normalises once at the end rather than at
+// every step, and the two tests below pin that this is a change of
+// representation only. They exist as REFERENCES for those tests and for
+// nothing else; no bound reads them.
+func ratSpanUpper(a, b r3.Vec) float64 {
+	d := rvSub(ratVec(a), ratVec(b))
+	return ratSqrtUp(rvDot(d, d))
+}
+
+func ratTwistQuarterUpper(vLo, vHi, wLo, wHi r3.Vec) float64 {
+	t := rvSub(rvSub(ratVec(vLo), ratVec(vHi)), rvSub(ratVec(wLo), ratVec(wHi)))
+	if rvIsZero(t) {
+		return 0
+	}
+	return ratSqrtUp(new(big.Rat).Quo(rvDot(t, t), new(big.Rat).SetInt64(16)))
+}
+
+// TestCellExactReadingsMatchTheRationalReference pins that carrying the two
+// certified cell quantities through the homogeneous integer kernel publishes
+// EXACTLY what the direct big.Rat chain publishes — bit for bit, never within
+// a tolerance. Nothing here is an approximation to be checked for closeness:
+// both chains are exact, both feed ratSqrtUp, and a big.Rat is canonical, so
+// equal VALUES are the same big.Rat and ratSqrtUp cannot tell which chain
+// built it. A difference of any size would mean one of the chains is not
+// carrying the value it claims.
+//
+// The table carries the cells where a representation change could most
+// plausibly show: corners whose raw norms sit below their exact spans, a
+// twist chain that cancels to exactly (0,0,0) in float, coordinates spread
+// across the exponent range (a subnormal against a large one, where the two
+// operands' own denominators differ by hundreds of bits), and exact zeros.
+func TestCellExactReadingsMatchTheRationalReference(t *testing.T) {
+	vecs := []r3.Vec{
+		r3.NewVec(0, 0, 0),
+		r3.NewVec(1, 0, 0),
+		r3.NewVec(-0.18407194718000197, -0.9670493813481006, 0.11756527611707068),
+		r3.NewVec(-0.2543362139571195, 0.17121027904800257, 0.6486272299368296),
+		r3.NewVec(-0.329681753490781, 0.20068938566549477, 0.2784442506567102),
+		r3.NewVec(-0.7983173553857771, 0.456370350439145, 0.09559367959010823),
+		r3.NewVec(0.1, 0.2, 0.3),
+		r3.NewVec(0.7, 1.1, 1.3),
+		r3.NewVec(0.1, 0.2, 0.3).Add(r3.NewVec(0.7, 1.1, 1.3)),
+		r3.NewVec(1e-300, 5e300, -3.5),
+		r3.NewVec(math.SmallestNonzeroFloat64, math.MaxFloat64/4, 0),
+		r3.NewVec(1e16, 1e-16, 1),
+	}
+
+	t.Run("spans", func(t *testing.T) {
+		for i, a := range vecs {
+			for j, b := range vecs {
+				require.Equalf(t, ratSpanUpper(a, b), cellSpanUpper(a, b), "vecs[%d] to vecs[%d]", i, j)
+			}
+		}
+		rng := rand.New(rand.NewPCG(41, 43))
+		for range 500 {
+			a := r3.NewVec(rng.Float64()*200-100, rng.Float64()*200-100, rng.Float64()*200-100)
+			b := r3.NewVec(rng.Float64()*200-100, rng.Float64()*200-100, rng.Float64()*200-100)
+			require.Equal(t, ratSpanUpper(a, b), cellSpanUpper(a, b))
+		}
+	})
+
+	t.Run("twist quarter", func(t *testing.T) {
+		for i := range vecs {
+			vLo, vHi := vecs[i], vecs[(i+1)%len(vecs)]
+			wLo, wHi := vecs[(i+2)%len(vecs)], vecs[(i+3)%len(vecs)]
+			require.Equalf(t, ratTwistQuarterUpper(vLo, vHi, wLo, wHi), cellTwistQuarterUpper(vLo, vHi, wLo, wHi), "cell at vecs[%d]", i)
+		}
+		// The cancelling chain: wHi is BUILT as vHi+wLo, so the float chain
+		// reads exactly (0,0,0) while the exact T is the addition's own
+		// rounding residue.
+		vHi, wLo := r3.NewVec(0.1, 0.2, 0.3), r3.NewVec(0.7, 1.1, 1.3)
+		require.Equal(t,
+			ratTwistQuarterUpper(r3.NewVec(0, 0, 0), vHi, wLo, vHi.Add(wLo)),
+			cellTwistQuarterUpper(r3.NewVec(0, 0, 0), vHi, wLo, vHi.Add(wLo)))
+
+		rng := rand.New(rand.NewPCG(47, 53))
+		for range 500 {
+			corner := func() r3.Vec {
+				return r3.NewVec(rng.Float64()*200-100, rng.Float64()*200-100, rng.Float64()*200-100)
+			}
+			vLo, vHi, wLo, wHi := corner(), corner(), corner(), corner()
+			require.Equal(t, ratTwistQuarterUpper(vLo, vHi, wLo, wHi), cellTwistQuarterUpper(vLo, vHi, wLo, wHi))
+		}
+	})
+}
+
+// TestCellAllowsOfMatchesThePerBoundHelpers pins cellAllowsOf's whole
+// contract. That reader exists only to certify one cell's four spans and its
+// |T|/4 endpoint ONCE for all three of the cell's bounds instead of once per
+// bound, so each of its three fields must equal — BIT FOR BIT, never within a
+// tolerance — what the corresponding helper publishes for the same cell. A
+// difference of any size would mean the two entry points disagree about a
+// published bound, which is what makes the sharing a change of WHICH
+// computations happen rather than of what any of them returns.
+//
+// The table carries the cells where the two could most plausibly diverge:
+// the raw-norm fixture whose corner separations read BELOW their exact norms
+// under r3.Vec.Len (so the certified endpoint is what decides both the
+// premise gate and eBBase); a cell whose twist chain CANCELS to exactly
+// (0,0,0) in float while its exact T is nonzero (the case
+// cellTwistQuarterUpper exists for); a wholly degenerate cell; a cell whose
+// SCALAR claims are broken, where only the area reading may refuse; and a
+// cell with a non-finite corner, where all three must. The randomized sweep
+// then covers ordinary cells, with arc-length claims deliberately straddling
+// their own chords so both the admitting and the refusing side of the premise
+// gate are exercised.
+func TestCellAllowsOfMatchesThePerBoundHelpers(t *testing.T) {
+	check := func(t *testing.T, vLo, vHi, wLo, wHi r3.Vec, arcLenA, arcLenB, matchedDelta float64) {
+		t.Helper()
+		got := cellAllowsOf(vLo, vHi, wLo, wHi, arcLenA, arcLenB, matchedDelta)
+		require.Equal(t, cellChordCurveAreaUpper(vLo, vHi, wLo, wHi, arcLenA, arcLenB, matchedDelta), got.chordCurveAreaUpper, "chordCurveAreaUpper")
+		require.Equal(t, cellTwistVolumeAllow(vLo, vHi, wLo, wHi), got.twistVolumeAllow, "twistVolumeAllow")
+		require.Equal(t, cellTwistOffsetUpper(vLo, vHi, wLo, wHi), got.twistOffsetUpper, "twistOffsetUpper")
+	}
+
+	// The float chain vLo−vHi−wLo+wHi cancels to exactly (0,0,0) here, since
+	// wHi is BUILT as vHi+wLo, while the exact T is the addition's own
+	// rounding residue, about (-2.78e-17, -5.55e-17, 5.55e-17).
+	cancelVHi := r3.NewVec(0.1, 0.2, 0.3)
+	cancelWLo := r3.NewVec(0.7, 1.1, 1.3)
+
+	for _, tc := range []struct {
+		name                         string
+		vLo, vHi, wLo, wHi           r3.Vec
+		arcLenA, arcLenB, matchedDel float64
+	}{
+		{
+			name: "raw norms below the exact spans",
+			vLo:  r3.NewVec(-0.18407194718000197, -0.9670493813481006, 0.11756527611707068),
+			vHi:  r3.NewVec(-0.2543362139571195, 0.17121027904800257, 0.6486272299368296),
+			wLo:  r3.NewVec(-0.329681753490781, 0.20068938566549477, 0.2784442506567102),
+			wHi:  r3.NewVec(-0.7983173553857771, 0.456370350439145, 0.09559367959010823),
+			// Dominates both sides' own certified chords, so the premise gate
+			// admits and eA is exactly this claim.
+			arcLenA: 1.5, arcLenB: 1.5, matchedDel: 0,
+		},
+		{
+			name: "cancelling twist chain",
+			vLo:  r3.NewVec(0, 0, 0), vHi: cancelVHi, wLo: cancelWLo, wHi: cancelVHi.Add(cancelWLo),
+			arcLenA: 1, arcLenB: 1, matchedDel: 0.01,
+		},
+		{
+			name: "wholly degenerate cell",
+			vLo:  r3.NewVec(1, 2, 3), vHi: r3.NewVec(1, 2, 3), wLo: r3.NewVec(1, 2, 3), wHi: r3.NewVec(1, 2, 3),
+			arcLenA: 0, arcLenB: 0, matchedDel: 0,
+		},
+		{
+			name: "arc-length claim below its own chord",
+			vLo:  r3.NewVec(0, 0, 0), vHi: r3.NewVec(1, 0, 0), wLo: r3.NewVec(0, 0, 1), wHi: r3.NewVec(0, 1, 1),
+			arcLenA: 0.25, arcLenB: 2, matchedDel: 0,
+		},
+		{
+			name: "broken scalar claim",
+			vLo:  r3.NewVec(0, 0, 0), vHi: r3.NewVec(1, 0, 0), wLo: r3.NewVec(0, 0, 1), wHi: r3.NewVec(0, 1, 1),
+			arcLenA: 2, arcLenB: 2, matchedDel: -1,
+		},
+		{
+			name: "non-finite scalar claim",
+			vLo:  r3.NewVec(0, 0, 0), vHi: r3.NewVec(1, 0, 0), wLo: r3.NewVec(0, 0, 1), wHi: r3.NewVec(0, 1, 1),
+			arcLenA: math.Inf(1), arcLenB: 2, matchedDel: 0,
+		},
+		{
+			name: "non-finite corner",
+			vLo:  r3.NewVec(0, 0, 0), vHi: r3.NewVec(math.NaN(), 0, 0), wLo: r3.NewVec(0, 0, 1), wHi: r3.NewVec(0, 1, 1),
+			arcLenA: 2, arcLenB: 2, matchedDel: 0,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			check(t, tc.vLo, tc.vHi, tc.wLo, tc.wHi, tc.arcLenA, tc.arcLenB, tc.matchedDel)
+		})
+	}
+
+	t.Run("randomized cells", func(t *testing.T) {
+		rng := rand.New(rand.NewPCG(31, 37))
+		coord := func() float64 { return rng.Float64()*4 - 2 }
+		for range 300 {
+			vLo := r3.NewVec(coord(), coord(), coord())
+			vHi := r3.NewVec(coord(), coord(), coord())
+			wLo := r3.NewVec(coord(), coord(), coord())
+			wHi := r3.NewVec(coord(), coord(), coord())
+			// Straddles each side's own certified chord, so roughly half the
+			// rows are admitted by the premise gate and the rest refused.
+			arcLenA := cellSpanUpper(vHi, vLo) * (0.5 + rng.Float64())
+			arcLenB := cellSpanUpper(wHi, wLo) * (0.5 + rng.Float64())
+			check(t, vLo, vHi, wLo, wHi, arcLenA, arcLenB, rng.Float64()*0.1)
+		}
+	})
 }
 
 // rawNormIsBelowExact reports whether r3.Vec.Len of a−b lands STRICTLY below

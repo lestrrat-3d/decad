@@ -12,7 +12,11 @@ import (
 // This file is the single owner of every proven error bound a faceted
 // (boolean-built) measurement reports. NO measurement site computes a bound
 // inline: each error mechanism the mesh boolean is subject to has exactly one
-// helper here, and every site routes through it.
+// helper here, and every site routes through it. One reader below owns no
+// mechanism of its own: cellAllowsOf returns all three of a WALL CELL's bounds
+// from a single certification of that cell's spans and twist vector, publishing
+// exactly what the three helpers listed below publish, so a caller that needs
+// more than one of them pays the exact-rational cost once.
 //
 // The mechanisms, and the helper that owns each:
 //
@@ -496,20 +500,46 @@ func cellChordCurveAreaUpper(vLo, vHi, wLo, wHi r3.Vec, arcLenUpperA, arcLenUppe
 	if !finiteVec(vLo) || !finiteVec(vHi) || !finiteVec(wLo) || !finiteVec(wHi) {
 		return math.Inf(1)
 	}
+	if !cellChordClaimsStated(arcLenUpperA, arcLenUpperB, matchedDeltaUpper) {
+		return math.Inf(1)
+	}
+	return cellChordCurveAreaFromSpans(cellSpansOf(vLo, vHi, wLo, wHi), arcLenUpperA, arcLenUpperB, matchedDeltaUpper)
+}
+
+// cellChordClaimsStated reports whether the three scalar claims
+// cellChordCurveAreaUpper takes are stateable at all: finite and
+// non-negative. It is the single owner of that gate, read by every entry
+// point into the bound, so no caller can be admitted under one spelling of
+// it and refused under another. A claim it rejects is a BROKEN caller claim
+// and its own entry point answers +Inf, never 0 (cellChordCurveAreaUpper's
+// own doc comment).
+func cellChordClaimsStated(arcLenUpperA, arcLenUpperB, matchedDeltaUpper float64) bool {
 	if isNonFinite(arcLenUpperA) || isNonFinite(arcLenUpperB) || isNonFinite(matchedDeltaUpper) {
-		return math.Inf(1)
+		return false
 	}
-	if arcLenUpperA < 0 || arcLenUpperB < 0 || matchedDeltaUpper < 0 {
-		return math.Inf(1)
-	}
-	if arcLenUpperA < cellSpanUpper(vHi, vLo) || arcLenUpperB < cellSpanUpper(wHi, wLo) {
+	return arcLenUpperA >= 0 && arcLenUpperB >= 0 && matchedDeltaUpper >= 0
+}
+
+// cellChordCurveAreaFromSpans is cellChordCurveAreaUpper's own derivation
+// once that helper's corner-finiteness and scalar-claim gates have passed
+// and the cell's four certified spans are in hand. It is the ONE
+// implementation of the published area bound: cellChordCurveAreaUpper and
+// cellAllowsOf both return exactly what it returns, so which entry point a
+// caller takes changes only which computations happen, never the number.
+//
+// The premise the derivation's first bullet rests on — an arc-length claim
+// never below its own side's chord — is falsified here against spans.sideA
+// and spans.sideB, the CERTIFIED endpoints cellSpanUpper publishes, for the
+// reason cellChordCurveAreaUpper's own doc comment gives.
+func cellChordCurveAreaFromSpans(spans cellSpans, arcLenUpperA, arcLenUpperB, matchedDeltaUpper float64) float64 {
+	if arcLenUpperA < spans.sideA || arcLenUpperB < spans.sideB {
 		return math.Inf(1)
 	}
 	eA := math.Max(arcLenUpperA, arcLenUpperB)
 	if eA <= 0 {
 		return 0
 	}
-	eBBase := math.Max(cellSpanUpper(wLo, vLo), cellSpanUpper(wHi, vHi))
+	eBBase := math.Max(spans.rungLo, spans.rungHi)
 	eB := absSumUpper(eBBase, productUpper(2, matchedDeltaUpper))
 	return productUpper(eA, eB)
 }
@@ -624,15 +654,30 @@ func cellTwistVolumeAllow(vLo, vHi, wLo, wHi r3.Vec) float64 {
 	if !finiteVec(vLo) || !finiteVec(vHi) || !finiteVec(wLo) || !finiteVec(wHi) {
 		return math.Inf(1)
 	}
-	twistUpper := cellTwistQuarterUpper(vLo, vHi, wLo, wHi)
+	corners := cellCornersOf(vLo, vHi, wLo, wHi)
+	twistUpper := xtwistQuarterUpper(corners)
 	if twistUpper <= 0 {
 		// Certified zero: the EXACT T vanishes, so the ruled patch IS the
 		// triangle pair and the cell contributes nothing. cellTwistQuarterUpper
-		// answers 0 for no other reason.
+		// answers 0 for no other reason. Taken here so a cell with no twist at
+		// all never pays to certify spans its own answer does not read.
 		return 0
 	}
-	eA := math.Max(cellSpanUpper(vHi, vLo), cellSpanUpper(wHi, wLo))
-	eB := math.Max(cellSpanUpper(wLo, vLo), cellSpanUpper(wHi, vHi))
+	return cellTwistVolumeFromSpans(corners.spans(), twistUpper)
+}
+
+// cellTwistVolumeFromSpans is cellTwistVolumeAllow's own derivation once that
+// helper's corner-finiteness gate has passed and the cell's certified |T|/4
+// endpoint and four certified spans are in hand. It is the ONE implementation
+// of the published twist bound, the same way cellChordCurveAreaFromSpans owns
+// the area one: cellTwistVolumeAllow and cellAllowsOf both return exactly what
+// it returns.
+func cellTwistVolumeFromSpans(spans cellSpans, twistUpper float64) float64 {
+	if twistUpper <= 0 {
+		return 0
+	}
+	eA := math.Max(spans.sideA, spans.sideB)
+	eB := math.Max(spans.rungLo, spans.rungHi)
 	return productUpper(twistUpper, productUpper(eA, eB))
 }
 
@@ -646,20 +691,37 @@ func cellTwistVolumeAllow(vLo, vHi, wLo, wHi r3.Vec) float64 {
 //     exact T, the addition's own rounding residue, is nonzero, so a computed
 //     zero proves nothing and a computed magnitude carries unbounded relative
 //     loss. The four corners are float64 and therefore exact rationals, so the
-//     chain is evaluated over big.Rat with no rounding at all and answers 0
-//     only when T is EXACTLY the zero vector.
+//     chain is evaluated exactly, with no rounding at all, and answers 0 only
+//     when T is EXACTLY the zero vector.
 //   - |T| is a square root, and r3.Vec.Len is nested math.Hypot, which Go
 //     publishes no accuracy contract for and which falls several ulp BELOW the
 //     exact norm for a large share of vectors. The magnitude therefore comes
 //     from ratSqrtUp of the exact |T|²/16, whose answer is decided by exact
 //     rational comparison rather than by any libm's rounding.
+//
+// The chain runs over the HOMOGENEOUS INTEGER kernel (xpt, boolean_exact.go),
+// which carries the same exact values with no normalisation per operation —
+// xhp's own doc comment gives the reason — and materialises one big.Rat at the
+// end, for ratSqrtUp alone. A big.Rat is canonical, so the value handed over
+// decides ratSqrtUp's answer by itself: the representation the chain took to
+// reach it cannot change the endpoint published.
 func cellTwistQuarterUpper(vLo, vHi, wLo, wHi r3.Vec) float64 {
+	return xtwistQuarterUpper(cellCornersOf(vLo, vHi, wLo, wHi))
+}
+
+// xtwistQuarterUpper is cellTwistQuarterUpper's own chain over corners already
+// lifted, so a caller reading more than one of a cell's exact quantities lifts
+// them once.
+func xtwistQuarterUpper(c cellCorners) float64 {
 	// T = vLo − vHi − wLo + wHi = (vLo − vHi) − (wLo − wHi).
-	t := rvSub(rvSub(ratVec(vLo), ratVec(vHi)), rvSub(ratVec(wLo), ratVec(wHi)))
-	if rvIsZero(t) {
+	t := xsub(xsub(c.vLo, c.vHi), xsub(c.wLo, c.wHi))
+	if t.x.Sign() == 0 && t.y.Sign() == 0 && t.z.Sign() == 0 {
 		return 0
 	}
-	return ratSqrtUp(new(big.Rat).Quo(rvDot(t, t), new(big.Rat).SetInt64(16)))
+	// |T|²/16 over one shared positive denominator: xdotNum's own w·w, times
+	// the 16. The whole quotient normalises once, here.
+	den := new(big.Int).Mul(new(big.Int).Mul(t.w, t.w), big.NewInt(16))
+	return ratSqrtUp(new(big.Rat).SetFrac(xdotNum(t, t), den))
 }
 
 // cellSpanUpper is the CERTIFIED upper endpoint of |a − b| for two of a wall
@@ -671,13 +733,73 @@ func cellTwistQuarterUpper(vLo, vHi, wLo, wHi r3.Vec) float64 {
 // correctly rounded and can sit several ulp below the exact norm, and a
 // trailing one-ulp upRound cannot recover a multi-ulp shortfall. The
 // corners are float64 and hence exact rationals, so the difference and its
-// squared norm are exact and ratSqrtUp decides the root by exact comparison.
+// squared norm are exact and ratSqrtUp decides the root by exact comparison —
+// carried, like the twist chain, through the homogeneous integer kernel and
+// materialised as a big.Rat only for ratSqrtUp itself.
 //
 // It reads its corners as exact rationals, so a caller must have already
-// refused a non-finite one before calling: both callers run finiteVec first.
+// refused a non-finite one before calling: every entry point that reaches it
+// goes through cellCornersOf, and each of those runs finiteVec first.
 func cellSpanUpper(a, b r3.Vec) float64 {
-	d := rvSub(ratVec(a), ratVec(b))
-	return ratSqrtUp(rvDot(d, d))
+	return xspanUpper(xptOf(a), xptOf(b))
+}
+
+// xspanUpper is cellSpanUpper's own reading over corners already lifted.
+func xspanUpper(a, b xpt) float64 {
+	d := xsub(a, b)
+	return ratSqrtUp(xdotRat(d, d))
+}
+
+// cellCorners is ONE wall cell's four corners lifted to exact homogeneous
+// integer coordinates (xptOf, boolean_exact.go). Every exact quantity a cell
+// publishes — its four certified spans and its certified |T|/4 endpoint — is a
+// function of these four points and nothing else, and lifting a corner is the
+// single most expensive step in each of them, so a caller reading more than one
+// of those quantities lifts the cell's corners once and reads them all from the
+// same four points.
+//
+// The lift rounds nothing: a float64 is an exact dyadic rational (xptOf's own
+// doc comment), so these four points denote the cell's own corners exactly.
+type cellCorners struct{ vLo, vHi, wLo, wHi xpt }
+
+// cellCornersOf lifts a cell whose four corners the caller has already proved
+// finite, which is the exact lift's own precondition.
+func cellCornersOf(vLo, vHi, wLo, wHi r3.Vec) cellCorners {
+	return cellCorners{vLo: xptOf(vLo), vHi: xptOf(vHi), wLo: xptOf(wLo), wHi: xptOf(wHi)}
+}
+
+// cellSpans is ONE wall cell's four certified corner spans — every span any
+// bound over that cell reads, and nothing else. cellChordCurveAreaUpper's own
+// arc-length premise gate and eBBase, and cellTwistVolumeAllow's own eA and
+// eB, are each one of these four and no other quantity.
+//
+// It exists so a caller that reads more than one of a cell's bounds certifies
+// each span ONCE (cellAllowsOf) instead of once per bound. Each span is an
+// exact-arithmetic reading ending in a ratSqrtUp — the price of the certified
+// endpoint cellSpanUpper's own doc comment explains — so recertifying the same
+// four corners per bound is the dominant cost of a chorded wall, and paying it
+// once changes only which computations happen, never what any of them returns.
+type cellSpans struct {
+	sideA  float64 // |vHi − vLo|, side A's own chord
+	sideB  float64 // |wHi − wLo|, side B's own chord
+	rungLo float64 // |wLo − vLo|, the cell's own rung at s=0
+	rungHi float64 // |wHi − vHi|, the cell's own rung at s=1
+}
+
+// cellSpansOf certifies all four spans of a cell whose four corners the caller
+// has already proved finite, which is cellCornersOf's own precondition.
+func cellSpansOf(vLo, vHi, wLo, wHi r3.Vec) cellSpans {
+	return cellCornersOf(vLo, vHi, wLo, wHi).spans()
+}
+
+// spans certifies all four of the cell's spans from its already-lifted corners.
+func (c cellCorners) spans() cellSpans {
+	return cellSpans{
+		sideA:  xspanUpper(c.vHi, c.vLo),
+		sideB:  xspanUpper(c.wHi, c.wLo),
+		rungLo: xspanUpper(c.wLo, c.vLo),
+		rungHi: xspanUpper(c.wHi, c.vHi),
+	}
 }
 
 // cellTwistOffsetUpper is cellTwistVolumeAllow's own POINTWISE deviation
@@ -703,6 +825,51 @@ func cellTwistOffsetUpper(vLo, vHi, wLo, wHi r3.Vec) float64 {
 		return math.Inf(1)
 	}
 	return cellTwistQuarterUpper(vLo, vHi, wLo, wHi)
+}
+
+// cellAllows is every bound ONE wall cell publishes, each field carrying
+// exactly what the like-named helper publishes for that same cell.
+type cellAllows struct {
+	chordCurveAreaUpper float64 // cellChordCurveAreaUpper
+	twistVolumeAllow    float64 // cellTwistVolumeAllow
+	twistOffsetUpper    float64 // cellTwistOffsetUpper
+}
+
+// cellAllowsOf reads all three of one wall cell's bounds from ONE certification
+// of that cell's spans and ONE certification of its twist vector. A caller
+// summing a whole chorded wall needs every one of them per cell
+// (chordedBoundaryVolumeAllow's own wallAreaUpper and twistVolumeUpper
+// obligations, and chordedBoundaryMomentAllow's own coordUpper one), and taking
+// the three helpers separately recertifies the same four spans twice and the
+// same |T|/4 endpoint twice — exact-rational work that dominates a chorded
+// wall's cost and that no answer depends on being repeated.
+//
+// It is a sharing of computation, never a bound of its own: each field is
+// produced by the SAME cellChordCurveAreaFromSpans / cellTwistVolumeFromSpans /
+// xtwistQuarterUpper the individual helpers call, under the same gates in
+// the same order, so the three numbers are identical to the three helpers' own
+// by construction (TestCellAllowsOfMatchesThePerBoundHelpers pins it over a
+// randomized sweep). A broken SCALAR claim refuses the area reading alone: the
+// twist readings do not take those operands and are not spoken for by them,
+// while a non-finite CORNER is unstateable geometry and refuses all three.
+func cellAllowsOf(vLo, vHi, wLo, wHi r3.Vec, arcLenUpperA, arcLenUpperB, matchedDeltaUpper float64) cellAllows {
+	if !finiteVec(vLo) || !finiteVec(vHi) || !finiteVec(wLo) || !finiteVec(wHi) {
+		inf := math.Inf(1)
+		return cellAllows{chordCurveAreaUpper: inf, twistVolumeAllow: inf, twistOffsetUpper: inf}
+	}
+	corners := cellCornersOf(vLo, vHi, wLo, wHi)
+	spans := corners.spans()
+	twistUpper := xtwistQuarterUpper(corners)
+
+	area := math.Inf(1)
+	if cellChordClaimsStated(arcLenUpperA, arcLenUpperB, matchedDeltaUpper) {
+		area = cellChordCurveAreaFromSpans(spans, arcLenUpperA, arcLenUpperB, matchedDeltaUpper)
+	}
+	return cellAllows{
+		chordCurveAreaUpper: area,
+		twistVolumeAllow:    cellTwistVolumeFromSpans(spans, twistUpper),
+		twistOffsetUpper:    twistUpper,
+	}
 }
 
 // chordedBoundaryVolumeAllow bounds the VOLUME between a loft's HELD
