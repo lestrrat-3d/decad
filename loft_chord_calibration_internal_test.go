@@ -1023,7 +1023,7 @@ func wedgePinStations(t *testing.T) int {
 	t.Helper()
 	target := loftChordFraction * wedgeArcEnvelope(t)
 	seg, w := wedgeArcRecord(t)
-	stations, _, sagitta, stationUpper, err := loftCircularCellStations(w, w, seg, seg, target)
+	stations, _, sagitta, _, stationUpper, err := loftCircularCellStations(w, w, seg, seg, target)
 	require.NoError(t, err)
 	m := len(stations)
 	require.LessOrEqual(t, sagitta, target, "the generator's own published sagitta must meet the target it was asked for")

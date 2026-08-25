@@ -482,18 +482,32 @@ func sweptVolumeAllow(delta, areaUpper float64) float64 {
 // facet area of h while its own bilinear patch already carries area 1/3 +
 // O(h)), so no fixed held quantity the excess could subtract from bounds it.
 //
-// The derivation fixes s in [0,1] to parametrize EACH side at constant
-// ARC-LENGTH speed (never the side's own native curve parameter), so a
-// side's tangent magnitude is the CONSTANT arcLenUpper the caller states for
-// it, and defines a fixed (t-independent) homotopy a_t(s) = (1−t)·a_chord(s)
-// + t·a_curve(s) for each side, X_t(s,r) = (1−r)·a_t(s) + r·b_t(s) the
-// cell's own ruled surface at time t:
+// The derivation fixes s in [0,1] to parametrize EACH side under ONE SHARED
+// parametrization the caller chooses — constant ARC-LENGTH speed for the
+// circular arm, the free-form arm's own SPAN-UNIFORM native fraction (the
+// identical parameter the loft correspondence itself pairs stations on,
+// spline_sagitta.go's spanMatchedDeltaUpper) — never the side's own native
+// curve parameter used unmatched. Nothing below actually depends on which
+// parametrization was chosen: the derivation reads exactly two properties of
+// it, and nothing more. (1) a per-side tangent-magnitude bound, arcLenUpperA/
+// arcLenUpperB, that is at least that side's own chord length UNDER that
+// parametrization. (2) matchedDeltaUpper, a bound on |curve(s) − chord(s)| at
+// the SAME s, proven under that SAME shared parametrization on BOTH sides.
+// Arc length is one such choice — the circular arm's, whose sagitta discharges
+// it exactly (loftCircularCellStations' own doc comment). The free-form arm's
+// span-uniform fraction is another, discharged by spanMatchedDeltaUpper. A
+// caller adopting a third parametrization may reuse this derivation unchanged
+// provided it proves the same two properties under it. With the shared
+// parametrization fixed, it defines one (t-independent) homotopy
+// a_t(s) = (1−t)·a_chord(s) + t·a_curve(s) for each side,
+// X_t(s,r) = (1−r)·a_t(s) + r·b_t(s) the cell's own ruled surface at time t:
 //
 //   - ∂a_t/∂s = (1−t)·(vHi−vLo) + t·a_curve'(s) is a convex combination (in
 //     t, for fixed s) of a CONSTANT vector of magnitude the chord length and
-//     a vector of magnitude arcLenUpper (the constant-arc-length-speed
-//     choice above), so |∂a_t/∂s| <= max(chordLen, arcLenUpper) =
-//     arcLenUpper (a chord never exceeds the arc it subtends). The same
+//     a vector of magnitude arcLenUpper (the shared parametrization's own
+//     speed bound), so |∂a_t/∂s| <= max(chordLen, arcLenUpper) =
+//     arcLenUpper (a chord never exceeds the curve length it subtends, arc or
+//     free-form span alike — property (1) above). The same
 //     holds for b_t, so eA := max(arcLenUpperA, arcLenUpperB) bounds every
 //     ∂X_t/∂s = (1−r)·∂a_t/∂s + r·∂b_t/∂s (itself a convex combination of the
 //     two) at every s, r, t.
@@ -524,23 +538,30 @@ func sweptVolumeAllow(delta, areaUpper float64) float64 {
 // loft_build.go) and the two are never interchangeable. sectionDelta is a
 // SET-distance sagitta: every curve point sits within it of SOME chord
 // point. matchedDeltaUpper must be a PROVEN bound on |curve(s) − chord(s)|
-// at the SAME s under the identical constant-arc-length parametrization this
-// derivation fixes — a PARAMETER-MATCHED bound. The two coincide only when
-// the curve's own natural traversal already matches that parametrization: a
+// at the SAME s under the caller's OWN shared parametrization (above) — a
+// PARAMETER-MATCHED bound. The two coincide only when the curve's own
+// natural traversal already matches the parametrization the caller chose: a
 // straight LINE (trivially, chord(s)=curve(s) identically, both zero) or a
 // circular ARC under its own uniform-angle parametrization
-// (TestArcMatchedDeltaEqualsSagitta pins the equality over a 5-170 degree
-// sweep range). For any other curve kind the two provably DIFFER, by an
-// amount that can reach the CHORD LENGTH itself rather than the sagitta: a
-// curve can hug its chord within an arbitrarily small sagitta while packing
-// almost all of its arc length into one short span, so its arc-length-
-// matched point sits far from the chord point at the same s
-// (TestCellChordCurveAreaUpperRefusesTheSagittaZigzag pins the exact
-// counterexample). A caller that cannot prove the parameter-matched bound —
-// every caller today, since S3 admits only LineSeg pairs and no arc/curved
-// pairing has landed — must pass +Inf, never the sagitta as a stand-in
-// (F1's own rule: a SET-distance may never be silently upgraded into a
-// parameter-matched one).
+// (TestArcMatchedDeltaEqualsSagitta derives that equality analytically and
+// checks every step of the derivation over exact rationals, covering every
+// cell angle chordCount can produce). For any other curve kind under an
+// ARC-LENGTH parametrization the two provably DIFFER, by an amount that can reach the CHORD LENGTH
+// itself rather than the sagitta: a curve can hug its chord within an
+// arbitrarily small sagitta while packing almost all of its arc length into
+// one short span, so its arc-length-matched point sits far from the chord
+// point at the same s (TestCellChordCurveAreaUpperRefusesTheSagittaZigzag
+// pins the exact counterexample). A free-form span under its OWN
+// span-uniform native fraction is the one other case this derivation admits
+// today, discharged not by the sagitta but by spanMatchedDeltaUpper
+// (spline_sagitta.go), which is proven under that exact parametrization
+// rather than assumed equal to it. A caller that cannot prove the
+// parameter-matched bound under whichever shared parametrization it adopted
+// must pass +Inf, never the sagitta as a stand-in (F1's own rule: a
+// SET-distance may never be silently upgraded into a parameter-matched
+// one) — every caller reaching this helper today either proves the bound
+// (the circular arm's own sagitta, or the free-form arm's own
+// spanMatchedDeltaUpper) or has none to pass.
 //
 // arcLenUpperA and arcLenUpperB must each be a PROVEN upper bound on that
 // side's own arc length over the cell — never smaller than the corresponding
