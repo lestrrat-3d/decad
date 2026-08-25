@@ -279,6 +279,25 @@ func pairStations(spans0, spans1 []bezierSpan, target float64, work0, work1 *fre
 	if len(spans0) > maxChordsPerWalk {
 		return nil, nil, 0, errTooManyChords
 	}
+	// A span with no control points at all is not a Bézier of any degree — it
+	// has no chord and no curve, unlike a COLLAPSED span (every control point
+	// coincident, §5.1), which still has a degree and a (single-point) chord.
+	// dyadicSpan.split preserves point count at every depth (spline_length.go),
+	// so refusing it HERE, before the first dyadicSpanOf conversion, is enough
+	// to keep every cell walkCell ever sees at n >= 1: dyadicSpanSagittaUpper's
+	// own n==0 guard exists for a caller that reaches it directly (spanSagittaUpper,
+	// with no error return of its own to refuse with), not for this walk, whose
+	// accept branch unconditionally reads ratPointAt(0) — reachable only because
+	// that guard's 0 answer let the cell through, an index-out-of-range panic
+	// otherwise, never a wrong Measurement.
+	for i := range spans0 {
+		if len(spans0[i]) == 0 || len(spans1[i]) == 0 {
+			return nil, nil, 0, fmt.Errorf(
+				`%w: a free-form span with no control points at index %d has no chord to bisect`,
+				ErrDegenerate, i,
+			)
+		}
+	}
 
 	gen := &sagittaStationWalk{target: target, work0: work0, work1: work1, frontier: len(spans0)}
 	for i := range spans0 {
@@ -294,10 +313,18 @@ func pairStations(spans0, spans1 []bezierSpan, target float64, work0, work1 *fre
 	// split leaves right[n-1] = the original last point, untouched by any
 	// blend), so reading it here is the identical value the deepest possible
 	// recursion would have produced, without walking there.
-	last0 := spans0[len(spans0)-1]
-	last1 := spans1[len(spans1)-1]
-	gen.stations0 = append(gen.stations0, last0[len(last0)-1])
-	gen.stations1 = append(gen.stations1, last1[len(last1)-1])
+	//
+	// COPIED, not aliased: every other station in the two returned lists comes
+	// from ratPointAt, whose own doc comment guarantees the *big.Rat it returns
+	// shares no storage with the dyadicSpan it was read from. Appending the
+	// caller's own last0[len(last0)-1]/last1[len(last1)-1] ratPoint directly
+	// would break that guarantee for this ONE station — it would alias the
+	// input span's own *big.Rat fields, so a caller mutating a returned station
+	// in place would silently corrupt the span it originally passed in.
+	last0 := spans0[len(spans0)-1][len(spans0[len(spans0)-1])-1]
+	last1 := spans1[len(spans1)-1][len(spans1[len(spans1)-1])-1]
+	gen.stations0 = append(gen.stations0, ratPoint{u: new(big.Rat).Set(last0.u), v: new(big.Rat).Set(last0.v)})
+	gen.stations1 = append(gen.stations1, ratPoint{u: new(big.Rat).Set(last1.u), v: new(big.Rat).Set(last1.v)})
 	return gen.stations0, gen.stations1, gen.sagittaUpper, nil
 }
 
