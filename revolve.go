@@ -902,13 +902,13 @@ func (ax axisFrame) classify(w segmentWalk) wallKind {
 func resolveAxisSide(profile ProfileRecord, line axisLine2, work *freeformWork) (axisFrame, float64, error) {
 	ctx := context.Background()
 	nU, nV := -line.dV, line.dU
-	rlo, rhi, rBound, err := boundaryExtremesBoundedContext(ctx, profile, nU, nV, work)
+	rlo, rhi, rBound, err := boundaryExtremesBoundedContext(ctx, profile, nU, nV, work, nil)
 	if err != nil {
 		return axisFrame{}, 0, err
 	}
 	roff := nU*line.aU + nV*line.aV
 	rlo, rhi = rlo-roff, rhi-roff
-	zlo, zhi, _, err := boundaryExtremesBoundedContext(ctx, profile, line.dU, line.dV, work)
+	zlo, zhi, _, err := boundaryExtremesBoundedContext(ctx, profile, line.dU, line.dV, work, nil)
 	if err != nil {
 		return axisFrame{}, 0, err
 	}
@@ -1041,7 +1041,7 @@ func (rp revolvePayload) basis() revolveBasis {
 // rotates about the resolved axis, then passes through a rigid placement. The
 // L1 envelopes use three times an input L1 norm for any orthogonal map.
 func revolveCentroidGeometryBound(rp revolvePayload, held r3.Vec, work *freeformWork) (float64, error) {
-	coordUpper, err := profileCoordinateUpper(rp.profile, work)
+	coordUpper, err := profileCoordinateUpper(rp.profile, work, nil)
 	if err != nil {
 		return 0, err
 	}
@@ -1928,7 +1928,7 @@ func (rp revolvePayload) extentBoundedAlong(ctx context.Context, g r3.Vec, work 
 //     |ρ| ≤ envUpper (the swept radial coefficient multiplies ρ); base's
 //     displaces the extreme directly, at both ends alike.
 func (rp revolvePayload) frameRoundAllow(g r3.Vec, b revolveBasis, base, wg, c0, c1 float64, work *freeformWork) (float64, error) {
-	coordUpper, err := profileCoordinateUpper(rp.profile, work)
+	coordUpper, err := profileCoordinateUpper(rp.profile, work, nil)
 	if err != nil {
 		return 0, err
 	}
@@ -1978,7 +1978,7 @@ func (rp revolvePayload) frameRoundAllow(g r3.Vec, b revolveBasis, base, wg, c0,
 // adds; an extent whose radial envelope cannot be proven finite is refused
 // rather than published against a bound that omits it.
 func (rp revolvePayload) sweepBoundAlong(c0, c1, mlo, mhi float64, work *freeformWork) (float64, float64, error) {
-	coordUpper, err := profileCoordinateUpper(rp.profile, work)
+	coordUpper, err := profileCoordinateUpper(rp.profile, work, nil)
 	if err != nil {
 		return 0, 0, err
 	}
@@ -2197,11 +2197,11 @@ func sweepExtremeBounds(c0, c1, phi0, phi1, heldLo, heldHi float64, full bool) (
 // direction it is read against.
 func axisExtremeContext(ctx context.Context, rp revolvePayload, wg, k float64, wantMax bool, work *freeformWork) (float64, float64, error) {
 	gu, gv := rp.ax.planeDirection(wg, k)
-	lo, hi, bound, err := boundaryExtremesBoundedContext(ctx, rp.profile, gu, gv, work)
+	lo, hi, bound, err := boundaryExtremesBoundedContext(ctx, rp.profile, gu, gv, work, nil)
 	if err != nil {
 		return 0, 0, err
 	}
-	coordUpper, err := profileCoordinateEnvelope(rp.profile, work)
+	coordUpper, err := profileCoordinateEnvelope(rp.profile, work, nil)
 	if err != nil {
 		return 0, 0, err
 	}

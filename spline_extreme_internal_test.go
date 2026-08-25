@@ -71,7 +71,7 @@ func TestBoundaryExtremesBoundedInteriorMaximumBeatsEndpointOnly(t *testing.T) {
 	control := []Point2{{U: 0, V: 0}, {U: 1, V: 3}, {U: 3, V: 1}, {U: 4, V: 0}}
 	profile := splineProfile(control)
 
-	lo, hi, bound, err := boundaryExtremesBoundedContext(t.Context(), profile, 0, 1, newFreeformWork())
+	lo, hi, bound, err := boundaryExtremesBoundedContext(t.Context(), profile, 0, 1, newFreeformWork(), nil)
 	require.NoError(t, err)
 	require.Positive(t, bound, "an extreme held by an irrational interior root carries the bracket's own width")
 	require.Less(t, lo, hi)
@@ -96,7 +96,7 @@ func TestBoundaryExtremesBoundedEndpointExtremeIsExact(t *testing.T) {
 	control := []Point2{{U: 0, V: 0}, {U: 1, V: 3}, {U: 3, V: 1}, {U: 4, V: 0}}
 	profile := splineProfile(control)
 
-	lo, hi, bound, err := boundaryExtremesBoundedContext(t.Context(), profile, 1, 0, newFreeformWork())
+	lo, hi, bound, err := boundaryExtremesBoundedContext(t.Context(), profile, 1, 0, newFreeformWork(), nil)
 	require.NoError(t, err)
 	require.Zero(t, bound, "an extreme held by a recorded control coordinate carries no bound")
 	require.Equal(t, control[0].U, lo, "the minimum is the first control point's own U")
@@ -195,7 +195,7 @@ func TestBoundaryExtremesBoundedRepeatedInteriorKnot(t *testing.T) {
 
 	profile := ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{seg}}}
 	gu, gv := 1.0, 2.0
-	lo, hi, bound, err := boundaryExtremesBoundedContext(t.Context(), profile, gu, gv, newFreeformWork())
+	lo, hi, bound, err := boundaryExtremesBoundedContext(t.Context(), profile, gu, gv, newFreeformWork(), nil)
 	require.NoError(t, err)
 
 	denseLo, denseHi := denseSpanExtreme(t, spans, gu, gv, 20_000)
@@ -272,7 +272,7 @@ func TestBoundaryExtremesBoundedNonFiniteDirectionRefuses(t *testing.T) {
 		{"Inf gv", 0, math.Inf(1)},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			_, _, _, err := boundaryExtremesBoundedContext(t.Context(), profile, tc.gu, tc.gv, newFreeformWork())
+			_, _, _, err := boundaryExtremesBoundedContext(t.Context(), profile, tc.gu, tc.gv, newFreeformWork(), nil)
 			require.Error(t, err)
 			require.ErrorIs(t, err, ErrNotFinite)
 		})
@@ -314,7 +314,7 @@ func TestPrismExtentAlongWorkRefusesFreeformBoxAnswersApproximate(t *testing.T) 
 	require.Error(t, err)
 	require.ErrorIs(t, err, ErrUnsupported)
 
-	box, err := prismBoundsContext(t.Context(), pp, newFreeformWork())
+	box, err := prismBoundsContext(t.Context(), pp, newFreeformWork(), nil)
 	require.NoError(t, err)
 	require.Equal(t, Approximate, box.Exactness)
 	require.Positive(t, box.Bound.Base())
@@ -344,7 +344,7 @@ func TestPrismBoundsFreeformEndpointHeldExtremesStayExact(t *testing.T) {
 	require.Equal(t, 0.0, lo)
 	require.Equal(t, 3.0, hi)
 
-	box, err := prismBoundsContext(t.Context(), pp, newFreeformWork())
+	box, err := prismBoundsContext(t.Context(), pp, newFreeformWork(), nil)
 	require.NoError(t, err)
 	require.Equal(t, Exact, box.Exactness, "an endpoint-held free-form extreme has no width to report")
 	require.Zero(t, box.Bound.Base())
@@ -361,7 +361,7 @@ func TestBoundaryExtremesContextRegression(t *testing.T) {
 	control := []Point2{{U: 0, V: 0}, {U: 1, V: 2}, {U: 3, V: 2}, {U: 4, V: 0}, {U: 6, V: 1}, {U: 7, V: -2}}
 	// V (not U) has an interior extreme on this fixture (see the comment on
 	// TestPrismExtentAlongWorkRefusesFreeformBoxAnswersApproximate).
-	_, _, bound, err := boundaryExtremesBoundedContext(t.Context(), splineProfile(control), 0, 1, newFreeformWork())
+	_, _, bound, err := boundaryExtremesBoundedContext(t.Context(), splineProfile(control), 0, 1, newFreeformWork(), nil)
 	require.NoError(t, err)
 	require.Greater(t, bound, 0.0, "an interior free-form extreme is held by a bracket, never exactly")
 
@@ -377,7 +377,7 @@ func TestBoundaryExtremesContextRegression(t *testing.T) {
 		LineSeg{Start: Point2{U: 0, V: 10}, End: Point2{U: 0, V: 0}, TStart: 0, TEnd: 1},
 	}}}
 	pp := prismPayload{profile: analytic, frame: identityFrame(t), z0: 0, z1: 5, xform: r3.Identity()}
-	box, err := prismBoundsContext(t.Context(), pp, newFreeformWork())
+	box, err := prismBoundsContext(t.Context(), pp, newFreeformWork(), nil)
 	require.NoError(t, err)
 	require.Equal(t, Exact, box.Exactness)
 	require.Zero(t, box.Bound.Base())
@@ -398,7 +398,7 @@ func TestBoundaryExtremesBoundedSaturatedEnclosureRefusesUnsupported(t *testing.
 	}
 	profile := splineProfile(control)
 
-	satLo, satHi, satBound, err := boundaryExtremesBoundedContext(t.Context(), profile, 1, 1, newFreeformWork())
+	satLo, satHi, satBound, err := boundaryExtremesBoundedContext(t.Context(), profile, 1, 1, newFreeformWork(), nil)
 	require.Error(t, err)
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.NotErrorIs(t, err, ErrDegenerate,
@@ -422,13 +422,13 @@ func TestBoundaryExtremesBoundedSaturatedEnclosureRefusesUnsupported(t *testing.
 	rotated, err := r3.NewFrame(r3.NewVec(0, 0, 0), r3.NewVec(0.6, 0.8, 0), r3.NewVec(-0.8, 0.6, 0))
 	require.NoError(t, err)
 	tilted := prismPayload{profile: profile, frame: rotated, z0: 0, z1: 5, xform: r3.Identity()}
-	_, err = prismBoundsContext(t.Context(), tilted, newFreeformWork())
+	_, err = prismBoundsContext(t.Context(), tilted, newFreeformWork(), nil)
 	require.ErrorIs(t, err, ErrUnsupported)
 
 	// The identical fixture read along a direction whose enclosure IS
 	// representable still answers, so the refusal is the range's and not the
 	// fixture's.
-	lo, hi, bound, err := boundaryExtremesBoundedContext(t.Context(), profile, 1, 0, newFreeformWork())
+	lo, hi, bound, err := boundaryExtremesBoundedContext(t.Context(), profile, 1, 0, newFreeformWork(), nil)
 	require.NoError(t, err)
 	require.Equal(t, control[0].U, lo, "U is monotone here, so the minimum is the first control point's own U")
 	require.Equal(t, control[len(control)-1].U, hi)
@@ -473,7 +473,7 @@ func TestBoundaryExtremesBoundedContextCancellation(t *testing.T) {
 	}}}
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	lo, hi, bound, err := boundaryExtremesBoundedContext(ctx, profile, 1, 0, newFreeformWork())
+	lo, hi, bound, err := boundaryExtremesBoundedContext(ctx, profile, 1, 0, newFreeformWork(), nil)
 	require.ErrorIs(t, err, context.Canceled)
 	require.Zero(t, lo)
 	require.Zero(t, hi)

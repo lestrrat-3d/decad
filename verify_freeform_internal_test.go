@@ -142,7 +142,7 @@ func TestBodyGateDiameterFreeformArmBelowBoxDiagonal(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, ok)
 
-	box, err := prismBoundsContext(t.Context(), pp, newFreeformWork())
+	box, err := prismBoundsContext(t.Context(), pp, newFreeformWork(), nil)
 	require.NoError(t, err)
 	diagonal := box.Max.Sub(box.Min).Len()
 	require.Less(t, d, diagonal, "the diameter arm must read tighter than the section's own bounding-box diagonal")

@@ -321,7 +321,7 @@ func conePatchMoment(g capPatchGeom) (mu, mv, mz boundedScalar) {
 // of the SAME envelope prismCentroidGeometryBound already forms for a whole
 // profile.
 func loopCoordinateUpper(loop LoopRecord, work *freeformWork) (float64, error) {
-	return profileCoordinateUpper(ProfileRecord{Outer: loop}, work)
+	return profileCoordinateUpper(ProfileRecord{Outer: loop}, work, nil)
 }
 
 // capBandMoment is one loop's chamfer-band first-moment contribution — Mx,

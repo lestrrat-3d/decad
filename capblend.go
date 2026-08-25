@@ -231,7 +231,7 @@ func (cbp capBlendPayload) extentBoundedAlong(ctx context.Context, g r3.Vec, wor
 		// (extrude.go's circularExtremeInterval) — and it displaces the reading
 		// IN PLANE, so it composes with the axial terms above rather than
 		// replacing either.
-		l, h, planeAllow, err := boundaryExtremesBoundedContext(ctx, ProfileRecord{Outer: loop}, gu, gv, work)
+		l, h, planeAllow, err := boundaryExtremesBoundedContext(ctx, ProfileRecord{Outer: loop}, gu, gv, work, nil)
 		if err != nil {
 			return 0, 0, 0, err
 		}
@@ -254,7 +254,7 @@ func (cbp capBlendPayload) extentBoundedAlong(ctx context.Context, g r3.Vec, wor
 		if err != nil {
 			return 0, 0, 0, err
 		}
-		cl, ch, contourPlaneAllow, err := boundaryExtremesBoundedContext(ctx, ProfileRecord{Outer: contour}, gu, gv, work)
+		cl, ch, contourPlaneAllow, err := boundaryExtremesBoundedContext(ctx, ProfileRecord{Outer: contour}, gu, gv, work, nil)
 		if err != nil {
 			return 0, 0, 0, err
 		}
@@ -276,7 +276,7 @@ func (cbp capBlendPayload) extentBoundedAlong(ctx context.Context, g r3.Vec, wor
 		math.Max(loUpper-lo, lo-loLower),
 		math.Max(hiUpper-hi, hi-hiLower),
 	))
-	coordUpper, err := profileCoordinateEnvelope(cbp.profile, work)
+	coordUpper, err := profileCoordinateEnvelope(cbp.profile, work, nil)
 	if err != nil {
 		return 0, 0, 0, err
 	}
