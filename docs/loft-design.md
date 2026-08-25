@@ -1740,7 +1740,15 @@ conservative LOWER bound on the margin the shipped constant reaches on this
 fixture, never an overstatement of it. The fit-spline wedge's 1.90x
 is NOT: 6.69759e-05 is a coarser target than the shipped constant, so a
 fit-spline wedge chorded to meet 3.76491e-05 takes more than 64 chord cells,
-and the margin it reaches there is a reading this document does not state.
+and the paragraph below states the margin it reaches there.
+
+**The margins the SHIPPED chooser reaches are measured at its own production
+count.** Both fixtures are chorded at the count that chooser settles on for
+the arc wedge, `m = 65`, and `Verify` at the default `1e-3` tolerance clears
+there with a **2.47x** margin on the arc wedge (a gate ratio of 4.04928e-4)
+and a **1.95x** margin on the fit-spline wedge (5.1326e-4), `Volume` binding
+in both. Each fixture builds in about 1.4 seconds against the 2-second
+per-fixture wall-clock budget §13 states.
 
 **The constant does not clear a 4x margin inside the wall-clock budget, and
 this design accepts that rather than widen either.** A 4x margin needs 128

@@ -69,21 +69,27 @@ func TestLoftCircularCellStationsHandDerivedStationCount(t *testing.T) {
 	require.LessOrEqual(t, achieved, target)
 	require.Equal(t, handN, m, "chordCount's own walk-up must match this test's own independent transcription of the same conservative bound")
 
-	// PR 1 (#188) pinned this reference wedge's expected station count at
-	// m=64 (loft_chord_calibration_internal_test.go's loftChordFractionPinM),
-	// measured against the EXACT sagitta formula 2r*sin^2(dtheta/4). The
-	// PRODUCTION chooser (chordCount, tessellate.go) instead proves its own
-	// bound through chordSagitta's outward-rounded, provably conservative
-	// r*sweep^2/(8n^2) approximation (chordSagitta's own doc comment states
-	// the (x/sin x)^2 gap this opens). At m=64 on this exact wedge, that gap
-	// is razor-thin: chordSagitta(5, pi/2, 64) = 3.76495...e-4 against a
-	// target of 3.76491...e-4 -- the conservative bound sits ABOVE target by
-	// about 4.7e-9, so the walk-up commits one further station. This is a
-	// real, reproducible finding (not host noise: it holds computing target
-	// from an exact envelope of 10.0 as well as the live profileCoordinateUpper
-	// reading), reported rather than papered over here — see this PR's own
-	// final report. The number below is what chordCount ACTUALLY returns, not
-	// an adjusted expectation.
+	// The chooser's own walk-up settles this reference wedge at 65 stations,
+	// the count loft_chord_calibration_internal_test.go's loftChordFractionPinM
+	// pins and measures every calibration margin at. It sits one station above
+	// the sweep grid row the shipped constant was read off because the two
+	// prove the sagitta differently: the sweep measures the EXACT
+	// 2r*sin^2(dtheta/4), while the PRODUCTION chooser proves its own bound
+	// through chordSagitta's outward-rounded, provably conservative
+	// r*sweep^2/(8n^2) (chordSagitta's own doc comment states the (x/sin x)^2
+	// gap this opens). At m=64 on this exact wedge the two straddle the target:
+	// chordSagitta(5, pi/2, 64) = 3.7649553e-4 against a target of
+	// 3.7649100e-4, over by about 4.53e-9, so the walk-up commits one further
+	// station. The straddle is host-independent — it holds computing target
+	// from an exact envelope of 10.0 as well as from the live
+	// profileCoordinateUpper reading — and wedgePinStations asserts both sides
+	// of it directly.
+	//
+	// The literal below is deliberate here, where every other site names
+	// loftChordFractionPinM instead: this test exists to check the chooser
+	// against an independent transcription, so naming the pin the chooser
+	// itself settles would make the two ends of the cross-check the same
+	// value.
 	require.Equal(t, 65, m)
 }
 
@@ -102,11 +108,10 @@ func handChordSagittaConservative(radius, sweep float64, n int) float64 {
 // loftChordFraction constant, envelope read through the real
 // profileCoordinateUpper, on the plan's own reference wedge — proving the
 // production chooser, not a hand re-derivation of it. See
-// TestLoftCircularCellStationsHandDerivedStationCount's own comment for why
-// this is 65, not PR 1's originally measured 64: chordSagitta's conservative
-// bound exceeds the exact-formula target by about 4.7e-9 at m=64, forcing one
-// further station. That gap is real and is reported, not hidden by adjusting
-// this assertion to a number chordCount does not actually produce.
+// TestLoftCircularCellStationsHandDerivedStationCount's own comment for the
+// straddle at m=64 that puts this count at 65, and
+// loft_chord_calibration_internal_test.go's loftChordFractionPinM for the
+// margins measured at it.
 func TestLoftChordCountShippedFractionOnReferenceWedge(t *testing.T) {
 	envelope := wedgeArcEnvelope(t)
 	target := loftChordFraction * envelope
@@ -115,7 +120,7 @@ func TestLoftChordCountShippedFractionOnReferenceWedge(t *testing.T) {
 	require.NoError(t, err)
 	require.LessOrEqual(t, achieved, target)
 	t.Logf("chordCount at the shipped loftChordFraction on the reference wedge: m=%d (target=%.10g, achieved=%.10g)", m, target, achieved)
-	require.Equal(t, 65, m, "the shipped constant no longer lands on PR 1's originally measured m=64 through the production chooser; see this test's sibling for the derivation of the gap")
+	require.Equal(t, loftChordFractionPinM, m, "the calibration pin must name the count the production chooser produces at the shipped constant; see this test's sibling for the derivation of the straddle at m=64")
 }
 
 // --- loftCircularCellStations: the shared-m rule ---

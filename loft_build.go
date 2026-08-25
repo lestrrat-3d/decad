@@ -252,14 +252,24 @@ type loftLoopPair struct {
 // fit-spline approximation of the same arc, both lofted between z=0 and
 // z=10 — it is the coarsest value at which both fixtures still read Sound at
 // the default 1e-3 relative tolerance within the plan's 2-second
-// per-fixture wall-clock budget (Q3): m=64 stations on the arc wedge (F=134
-// wall+cap triangles), with Volume the binding reading at a measured 2.39x
-// margin. A finer grid point (m=128) clears the plan's separate 4x-margin
-// target but costs roughly 4.3s, more than double the wall-clock budget, so
-// the plan's own named fallback governs (a10-plan.md Q2's "Fallback if
-// calibration does not close"): ship the coarser, in-budget value and accept
-// that an extreme aspect ratio can read Suspect at a tight tolerance — a
-// correct non-silent outcome, not a wrong answer.
+// per-fixture wall-clock budget (Q3).
+//
+// Driven through the SHIPPED chooser — chordCount (tessellate.go), the same
+// call loftCircularCellStations makes below — this constant settles the arc
+// wedge at m=65 stations (F=136 wall+cap faces), with Volume the binding
+// reading at a measured 2.47x margin (gate ratio 4.04928e-4), and the
+// fit-spline wedge chorded at that same count at 1.95x (5.1326e-4). Both
+// build in about 1.4 seconds. The calibration pins those two margins at that
+// production count and re-derives the count from chordCount at every run
+// (loftChordFractionPinM), so no published margin here belongs to a chording
+// this evaluator does not produce.
+//
+// A finer grid point (m=128) clears the plan's separate 4x-margin target but
+// costs roughly 4.3s, more than double the wall-clock budget, so the plan's
+// own named fallback governs (a10-plan.md Q2's "Fallback if calibration does
+// not close"): ship the coarser, in-budget value and accept that an extreme
+// aspect ratio can read Suspect at a tight tolerance — a correct non-silent
+// outcome, not a wrong answer.
 //
 // It is NOT a caller option: a loft's chording is topology, and nothing is
 // added to the recipe wire format for it (a10-plan.md Q2).
