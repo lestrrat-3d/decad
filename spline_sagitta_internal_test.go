@@ -221,21 +221,20 @@ func levelSagitta(span bezierSpan, depth int) float64 {
 // the maximum true distance from a sampled curve point to the chord SEGMENT
 // joining the chain's own first and last control point — the falsifier a
 // bound built from the chord's carrier LINE, or from the parametric deviation
-// |C(t) - L(t)|, cannot survive. evalSpans (spline_bezier_internal_test.go,
-// same package) is the independent de Casteljau oracle already used to check
-// spline_bezier.go's own conversion; this reuses it rather than adding a
-// second evaluator.
+// |C(t) - L(t)|, cannot survive. The cached float de Casteljau oracle is the
+// independent evaluator used for this large sample count; the exact-rational
+// oracle remains the conversion check in spline_bezier_internal_test.go.
 func denseChordSegmentDeviation(t *testing.T, span bezierSpan, samples int) float64 {
 	t.Helper()
-	spans := []bezierSpan{span}
-	ax, ay := evalSpans(t, spans, 0)
-	bx, by := evalSpans(t, spans, 1)
+	floatSpan := floatBezierSpanOf(span)
+	ax, ay := evalFloatBezierSpan(floatSpan, 0)
+	bx, by := evalFloatBezierSpan(floatSpan, 1)
 	dx, dy := bx-ax, by-ay
 	d := dx*dx + dy*dy
 	maxDev := 0.0
 	for i := 0; i <= samples; i++ {
 		at := float64(i) / float64(samples)
-		cx, cy := evalSpans(t, spans, at)
+		cx, cy := evalFloatBezierSpan(floatSpan, at)
 		var px, py float64
 		if d == 0 {
 			px, py = ax, ay
