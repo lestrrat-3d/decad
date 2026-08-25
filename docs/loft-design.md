@@ -607,6 +607,36 @@ so a caller-supplied tolerance would change body identity and demand a wire
 field. The constant stays in source, and `LoftOpts` gains no new field for it
 (§10).
 
+**The target reads an axis-aligned envelope from the section's own plane
+origin, so it is not an invariant of the section's shape alone.**
+`profileCoordinateUpper` (`extrude.go`) is `max(w.coordUpper)` over the
+section's own walks — an axis-aligned quantity measured in the plane's own
+`(U, V)` coordinates, anchored at `PlaneRecord.Origin`. It is invariant
+under NEITHER a rotation of the section within its plane NOR a translation
+of it: a record of the SAME shape recorded at a different in-plane
+orientation or a different in-plane offset reports a different envelope, so
+it takes a different `chordTarget` and chords into a different number of
+cells. This applies to both station arms alike, since both read the same
+target above. **Body topology therefore depends on the section's placement
+within its own plane, and not on its shape alone** — two geometrically
+congruent parts recorded at different positions relative to their own plane
+origins can chord to different station counts and different face counts, an
+ordinary gear's teeth — each an identical profile at a different angular
+position — being the case worth naming.
+
+This is not unsound, and no published bound is affected by it: every build
+measures its OWN achieved sagitta and publishes it as `sectionDelta` (§5.2),
+so each body's bound is valid for that body regardless of where its section
+sits relative to its plane origin. What varies is how FINELY the wall is
+chorded, and with it how much margin the tolerance gate has: a section
+recorded far from its plane origin chords more coarsely — its envelope, and
+so its target, both grow with the offset — so `Verify` can read `Suspect`
+on such a record where the identical shape recorded near its plane origin
+reads `Sound` at the same tolerance. Determinism (§10) is unaffected: the
+same record always yields the same envelope, the same target and the same
+stations — this property is about two DIFFERENT records of congruent
+shapes, never about one record building differently on two runs.
+
 **The station cap and the ceiling it answers to.** A build's total station
 count is capped by one unexported package constant, `loftStationCap` (§14
 names the increment that fixes its value). The cap exists to keep the chord
