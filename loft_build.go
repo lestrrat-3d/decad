@@ -315,17 +315,32 @@ func loftPlanesCoincide(a, b PlaneRecord) bool {
 // the one-point-per-LineSeg convention already did: the next segment's own
 // first station (or the loop's wrap) supplies it.
 //
-// arcUpperV/arcUpperW and circular are parallel to v/w, one entry per
+// arcUpperV/arcUpperW and matchedDelta are parallel to v/w, one entry per
 // station: arcUpperV[j]/arcUpperW[j] is that station's own OUTGOING cell's
-// per-side arc-length upper bound (perCellArcUpper), and circular[j] says
-// whether that station's own paired segment resolved to a circular walk.
+// per-side arc-length upper bound (perCellArcUpper), and matchedDelta[j] is
+// that cell's own PARAMETER-MATCHED bound on |curve(s) - chord(s)| at the
+// same s — bounds.go's cellChordCurveAreaUpper own matchedDeltaUpper
+// obligation, F1's rule — NEVER the SET-distance sagitta sectionDelta names.
+// A LineSeg cell's own chord IS the curve it denotes, so its matchedDelta is
+// exactly 0; a circular cell's own sagitta discharges the obligation exactly
+// (loftCircularCellStations' own doc comment), so its matchedDelta equals its
+// sagitta; a free-form cell's matchedDelta is spanMatchedDeltaUpper's own
+// per-cell reading (spline_sagitta.go's pairStations), which can differ cell
+// to cell within one paired segment where the bisection settled at different
+// depths.
+//
 // computeLoftChordedAllow (loft_moments.go) reads all three to charge
-// docs/loft-design.md §5/§8's chorded volume/centroid/area terms only where
-// a genuine chord-to-curve departure exists, never on an exact LineSeg cell.
+// docs/loft-design.md §5/§8's chorded volume/centroid/area terms only where a
+// genuine chord-to-curve departure exists (matchedDelta[j] > 0), never on an
+// exact LineSeg cell. THIS GATE IS NEVER KEYED ON A SEGMENT KIND: a same-kind
+// pairing this evaluator later admits that carries a positive matchedDelta
+// must be charged regardless of which arm produced it, so the gate reads the
+// proven quantity itself rather than an enum a future arm could be silently
+// exempted from (a10-plan.md Part 3 PR 9 Task 1a).
 type loftLoopPair struct {
 	v, w                 []Point2
 	arcUpperV, arcUpperW []float64
-	circular             []bool
+	matchedDelta         []float64
 }
 
 // loftChordFraction is the coefficient a10-plan.md Part 2 Q2's chord-target
@@ -422,11 +437,23 @@ func loftChordTarget(p0, p1 ProfileRecord, walks0, walks1 [][]segmentWalk) (floa
 // sectionDelta. The LineSeg arm's stations are recorded endpoints, never
 // computed, so its own contribution is exactly zero; the circular arm's own
 // doc comment states the mechanism.
-func loftCellStations(seg0, seg1 CurveSegment, w0, w1 segmentWalk, target float64, work0, work1 *freeformWork) ([]Point2, []Point2, float64, float64, error) { //nolint:unparam // work0/work1 are part of the fixed kind-switch interface every future arm shares; the ARC and LineSeg arms below are the two that do not need them yet.
+//
+// matchedDelta is bounds.go's cellChordCurveAreaUpper own matchedDeltaUpper
+// obligation (F1's rule), ONE ENTRY PER CELL — never a single per-segment
+// scalar, since a bisected free-form arm can settle cells of that one paired
+// segment at different depths and so at different matched-delta readings.
+// len(matchedDelta) always equals len(stations0), the per-cell count every
+// arm below publishes. It is NEVER sagittaUpper: the LineSeg arm's chord IS
+// the curve, so every entry is exactly 0; the circular arm's own sagitta
+// discharges the obligation exactly, so every entry equals the segment's own
+// sagittaUpper (loftCircularCellStations' own doc comment); a future
+// free-form arm's own per-cell reading can vary within these two extremes
+// cell to cell.
+func loftCellStations(seg0, seg1 CurveSegment, w0, w1 segmentWalk, target float64, work0, work1 *freeformWork) ([]Point2, []Point2, float64, []float64, float64, error) { //nolint:unparam // work0/work1 are part of the fixed kind-switch interface every future arm shares; the ARC and LineSeg arms below are the two that do not need them yet.
 	switch {
 	case w0.kind == walkLine && w1.kind == walkLine:
-		stations0, stations1, sagitta, err := loftLineCellStations(w0, w1)
-		return stations0, stations1, sagitta, 0, err
+		stations0, stations1, sagitta, matchedDelta, err := loftLineCellStations(w0, w1)
+		return stations0, stations1, sagitta, matchedDelta, 0, err
 	case w0.kind == walkCircular && w1.kind == walkCircular:
 		return loftCircularCellStations(seg0, seg1, w0, w1, target)
 	default:
@@ -436,17 +463,18 @@ func loftCellStations(seg0, seg1 CurveSegment, w0, w1 segmentWalk, target float6
 		// branch a caller could reach silently: a future kind this switch
 		// has no case for yet must still fail loud rather than fall through
 		// into either analytic arm's own assumptions.
-		return nil, nil, 0, 0, fmt.Errorf(`%w: this loft evaluator has no chord station rule for this segment-kind pairing`, ErrUnsupported)
+		return nil, nil, 0, nil, 0, fmt.Errorf(`%w: this loft evaluator has no chord station rule for this segment-kind pairing`, ErrUnsupported)
 	}
 }
 
 // loftLineCellStations is the LineSeg arm: one station per side, at the
-// segment's own recorded start, with zero sagitta — a straight wall's own
-// chord IS the recorded segment, so there is no curve for it to depart from.
-// m is fixed at 1, so this arm's output is bit-identical to every LineSeg
-// pairing this evaluator built before the station generator existed.
-func loftLineCellStations(w0, w1 segmentWalk) ([]Point2, []Point2, float64, error) { //nolint:unparam // the error return matches loftCircularCellStations' own arm shape; a straight chord never fails to state its own recorded endpoint.
-	return []Point2{{U: w0.startU, V: w0.startV}}, []Point2{{U: w1.startU, V: w1.startV}}, 0, nil
+// segment's own recorded start, with zero sagitta and zero matchedDelta — a
+// straight wall's own chord IS the recorded segment, so there is no curve
+// for it to depart from. m is fixed at 1, so this arm's output is
+// bit-identical to every LineSeg pairing this evaluator built before the
+// station generator existed.
+func loftLineCellStations(w0, w1 segmentWalk) ([]Point2, []Point2, float64, []float64, error) { //nolint:unparam // the error return matches loftCircularCellStations' own arm shape; a straight chord never fails to state its own recorded endpoint.
+	return []Point2{{U: w0.startU, V: w0.startV}}, []Point2{{U: w1.startU, V: w1.startV}}, 0, []float64{0}, nil
 }
 
 // loftCircularCellStations is the circular arm: tessellate.go's chordCount
@@ -474,18 +502,24 @@ func loftLineCellStations(w0, w1 segmentWalk) ([]Point2, []Point2, float64, erro
 // never merely bounding it. A SET distance from an arbitrary chord point to
 // the curve would not carry that guarantee; the uniform-angle station rule
 // is what buys it.
-func loftCircularCellStations(seg0, seg1 CurveSegment, w0, w1 segmentWalk, target float64) ([]Point2, []Point2, float64, float64, error) {
+//
+// matchedDelta is loftCellStations' own per-cell obligation: this arm's
+// sagitta discharges it EXACTLY (the paragraph above), and every cell of one
+// uniformly-stepped circular segment shares the same true angular width, so
+// the same value — math.Max(s0, s1) — is the correct, exact per-cell reading
+// for all m cells, not merely a safe upper bound repeated m times.
+func loftCircularCellStations(seg0, seg1 CurveSegment, w0, w1 segmentWalk, target float64) ([]Point2, []Point2, float64, []float64, float64, error) {
 	// S15: chordCount itself already refuses (errTooManyChords, reused per
 	// spline design Table R row R8) a side whose target cannot be met inside
 	// maxChordsPerWalk — this arm mints no separate cap of its own, and
 	// propagates that refusal verbatim from whichever side hits it first.
 	m0, s0, err := chordCount(w0, target)
 	if err != nil {
-		return nil, nil, 0, 0, err
+		return nil, nil, 0, nil, 0, err
 	}
 	m1, s1, err := chordCount(w1, target)
 	if err != nil {
-		return nil, nil, 0, 0, err
+		return nil, nil, 0, nil, 0, err
 	}
 	m := max(m0, m1)
 	if m > m0 {
@@ -512,16 +546,21 @@ func loftCircularCellStations(seg0, seg1 CurveSegment, w0, w1 segmentWalk, targe
 		eq0 := stations0[k] == stations0[k+1]
 		eq1 := stations1[k] == stations1[k+1]
 		if eq0 != eq1 {
-			return nil, nil, 0, 0, fmt.Errorf(`%w: chord cell %d of this paired segment collapses to one point on only one of the two sections`, ErrUnsupported, k)
+			return nil, nil, 0, nil, 0, fmt.Errorf(`%w: chord cell %d of this paired segment collapses to one point on only one of the two sections`, ErrUnsupported, k)
 		}
 	}
 
 	stationRound, err := loftCircularStationRound(seg0, seg1, stations0, stations1, m)
 	if err != nil {
-		return nil, nil, 0, 0, err
+		return nil, nil, 0, nil, 0, err
 	}
 
-	return stations0, stations1, math.Max(s0, s1), stationRound, nil
+	sagitta := math.Max(s0, s1)
+	matchedDelta := make([]float64, m)
+	for i := range matchedDelta {
+		matchedDelta[i] = sagitta
+	}
+	return stations0, stations1, sagitta, matchedDelta, stationRound, nil
 }
 
 // circularSegRange reads a recorded circular segment's own TStart/TEnd —
@@ -648,50 +687,65 @@ func circularStationChain(w segmentWalk, m int) []Point2 {
 // (a10-plan.md Part 3 PR 5), so a loop's v/w lists carry more than one entry
 // per segment exactly when that segment's own arm does — a LineSeg pairing
 // stays exactly one entry per segment, bit-identical to before. sectionDelta
-// is the MAX of every cell's own sagittaUpper across the whole build, never
-// a sum: a boundary point lies in exactly one cell, so only the widest cell's
-// own departure bounds the whole section. stationRound is the analogous MAX
-// of every cell's own loftCircularStationRound (Table S row S14, delta's own
-// component, never sectionDelta's).
-func loftPairings(p0, p1 ProfileRecord, offsets []int, walks0, walks1 [][]segmentWalk, target float64, work0, work1 *freeformWork) ([]loftLoopPair, float64, float64, error) {
+// is the MAX of every cell's own SAGITTA (a SET-distance) across the whole
+// build, never a sum: a boundary point lies in exactly one cell, so only the
+// widest cell's own departure bounds the whole section. sectionMatchedDelta
+// is the analogous MAX of every cell's own matchedDelta (a PARAMETER-MATCHED
+// bound, F1's rule) — a DIFFERENT quantity, never interchangeable with
+// sectionDelta, and every caller composing bounds.go's
+// chordedBoundaryVolumeAllow/chordedBoundaryMomentAllow/
+// chordedBoundarySeamAllow (each of whose own doc comments name a
+// parameter-matched matchedDelta obligation, never "the sagitta alone")
+// reads sectionMatchedDelta, never sectionDelta. The two coincide bit-for-bit
+// on a circular-only build (every circular cell's own matchedDelta equals
+// its own sagitta exactly, loftCircularCellStations' own doc comment) and on
+// a LineSeg-only build (both exactly 0), which is why every existing arc
+// fixture stays bit-identical under this split. stationRound is the
+// analogous MAX of every cell's own loftCircularStationRound (Table S row
+// S14, delta's own component, never sectionDelta's or
+// sectionMatchedDelta's).
+func loftPairings(p0, p1 ProfileRecord, offsets []int, walks0, walks1 [][]segmentWalk, target float64, work0, work1 *freeformWork) ([]loftLoopPair, float64, float64, float64, error) {
 	loops0 := append([]LoopRecord{p0.Outer}, p0.Holes...)
 	loops1 := append([]LoopRecord{p1.Outer}, p1.Holes...)
 	pairs := make([]loftLoopPair, len(loops0))
 	sectionDelta := 0.0
+	sectionMatchedDelta := 0.0
 	stationRound := 0.0
 	for i := range loops0 {
 		n := len(loops0[i].Segments)
 		off := offsets[i]
 		var v, w []Point2
 		var arcUpperV, arcUpperW []float64
-		var circular []bool
+		var matchedDelta []float64
 		for j := range n {
 			w0 := walks0[i][j]
 			k := (j + off) % n
 			w1 := walks1[i][k]
 			seg0 := loops0[i].Segments[j]
 			seg1 := loops1[i].Segments[k]
-			stations0, stations1, sagitta, round, err := loftCellStations(seg0, seg1, w0, w1, target, work0, work1)
+			stations0, stations1, sagitta, cellMatchedDelta, round, err := loftCellStations(seg0, seg1, w0, w1, target, work0, work1)
 			if err != nil {
-				return nil, 0, 0, err
+				return nil, 0, 0, 0, err
 			}
 			m := len(stations0)
 			cellArcV := perCellArcUpper(seg0, w0, m)
 			cellArcW := perCellArcUpper(seg1, w1, m)
-			isCircular := w0.kind == walkCircular
 			for range m {
 				arcUpperV = append(arcUpperV, cellArcV)
 				arcUpperW = append(arcUpperW, cellArcW)
-				circular = append(circular, isCircular)
 			}
+			matchedDelta = append(matchedDelta, cellMatchedDelta...)
 			v = append(v, stations0...)
 			w = append(w, stations1...)
 			sectionDelta = math.Max(sectionDelta, sagitta)
+			for _, d := range cellMatchedDelta {
+				sectionMatchedDelta = math.Max(sectionMatchedDelta, d)
+			}
 			stationRound = math.Max(stationRound, round)
 		}
-		pairs[i] = loftLoopPair{v: v, w: w, arcUpperV: arcUpperV, arcUpperW: arcUpperW, circular: circular}
+		pairs[i] = loftLoopPair{v: v, w: w, arcUpperV: arcUpperV, arcUpperW: arcUpperW, matchedDelta: matchedDelta}
 	}
-	return pairs, sectionDelta, stationRound, nil
+	return pairs, sectionDelta, sectionMatchedDelta, stationRound, nil
 }
 
 // loftAssembly is the built triangle set plus the index bookkeeping the
@@ -1335,7 +1389,7 @@ func evalLoft(ctx context.Context, d *Document, ref StepRef, pl loftPayload, bud
 		return nil, err
 	}
 
-	pairs, sectionDelta, stationRound, err := loftPairings(pl.profile0, pl.profile1, offsets, walks0, walks1, target, work0, work1)
+	pairs, sectionDelta, sectionMatchedDelta, stationRound, err := loftPairings(pl.profile0, pl.profile1, offsets, walks0, walks1, target, work0, work1)
 	if err != nil {
 		return nil, err
 	}
@@ -1373,18 +1427,22 @@ func evalLoft(ctx context.Context, d *Document, ref StepRef, pl loftPayload, bud
 	body.lumps = []*Lump{{shells: []*Shell{{faces: faces}}}}
 
 	anchor := pl.xform.Apply(pl.plane0.Origin)
-	mass := newLoftMassAccumulator(anchor, a.delta, sectionDelta)
+	mass := newLoftMassAccumulator(anchor, a.delta, sectionDelta, sectionMatchedDelta)
 	for k, t := range a.tris {
 		mass.add(a.verts[t[0]], a.verts[t[1]], a.verts[t[2]], k < a.walls)
 	}
 	// The chorded correction terms (docs/loft-design.md §5/§8, a10-plan.md
 	// Part 3 PR 6) read the mass accumulator's own coordUpper, which is only
 	// complete once every triangle has folded into it above — so this runs
-	// after the add loop, gated on sectionDelta > 0 exactly as every other
-	// sectionDelta-driven term in this evaluator is, and left at its zero
-	// value (every field of loftChordedAllow) for a LineSeg-only build.
-	if sectionDelta > 0 {
-		mass.chorded = computeLoftChordedAllow(pairs, a.vIdx, a.wIdx, a.verts, anchor, sectionDelta, mass.distUpper)
+	// after the add loop, gated on EITHER sectionDelta or sectionMatchedDelta
+	// being positive rather than on sectionDelta alone: a free-form cell can
+	// carry a positive matchedDelta at an exactly-zero sagitta
+	// (spline_sagitta.go's own counterexample), and skipping the computation
+	// there would silently drop a genuine chord-to-curve area/volume
+	// obligation. Left at its zero value (every field of loftChordedAllow)
+	// for a LineSeg-only build, where both are zero.
+	if sectionDelta > 0 || sectionMatchedDelta > 0 {
+		mass.chorded = computeLoftChordedAllow(pairs, a.vIdx, a.wIdx, a.verts, anchor, sectionDelta, sectionMatchedDelta, mass.distUpper)
 	}
 	body.volume = mass.volume(a.verts, a.tris)
 	centroid, err := mass.centroid(a.verts, a.tris)

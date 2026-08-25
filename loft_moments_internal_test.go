@@ -37,7 +37,7 @@ func addBoxFaces(m *loftMassAccumulator, a, b, c float64) {
 // power of two, so every intermediate rational is exactly representable in
 // float64 (docs/loft-design.md §8, required test).
 func TestLoftMassAccumulatorBoxIsExact(t *testing.T) {
-	m := newLoftMassAccumulator(r3.NewVec(0, 0, 0), 0, 0)
+	m := newLoftMassAccumulator(r3.NewVec(0, 0, 0), 0, 0, 0)
 	addBoxFaces(m, 2, 2, 2)
 
 	vol := m.volume(nil, nil)
@@ -64,7 +64,7 @@ func TestLoftMassAccumulatorBoxIsExact(t *testing.T) {
 // reproduces the exact volume and centroid, since every subtraction is
 // carried out over rationals (docs/loft-design.md §8's anchor discipline).
 func TestLoftMassAccumulatorBoxAnchoredElsewhereStillExact(t *testing.T) {
-	m := newLoftMassAccumulator(r3.NewVec(-4, 8, 0.5), 0, 0)
+	m := newLoftMassAccumulator(r3.NewVec(-4, 8, 0.5), 0, 0, 0)
 	addBoxFaces(m, 2, 2, 2)
 
 	vol := m.volume(nil, nil)
@@ -83,7 +83,7 @@ func TestLoftMassAccumulatorBoxAnchoredElsewhereStillExact(t *testing.T) {
 // represent exactly — Approximate, with the proven single-rounding bound
 // (docs/loft-design.md §8).
 func TestLoftMassAccumulatorVolumeApproximate(t *testing.T) {
-	m := newLoftMassAccumulator(r3.NewVec(0, 0, 0), 0, 0)
+	m := newLoftMassAccumulator(r3.NewVec(0, 0, 0), 0, 0, 0)
 	m.add(r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1), false)
 
 	vol := m.volume(nil, nil)
@@ -107,7 +107,7 @@ func TestLoftMassAccumulatorVolumeApproximate(t *testing.T) {
 // per-coordinate rounding, and Exact only when every coordinate rounds
 // exactly (docs/loft-design.md §8).
 func TestLoftMassAccumulatorCentroidApproximate(t *testing.T) {
-	m := newLoftMassAccumulator(r3.NewVec(0, 0, 0), 0, 0)
+	m := newLoftMassAccumulator(r3.NewVec(0, 0, 0), 0, 0, 0)
 	m.add(r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1), false)
 	m.add(r3.NewVec(1, 0, 0), r3.NewVec(-1, 2, 0), r3.NewVec(0, 0, 1), false)
 
@@ -144,7 +144,7 @@ func TestLoftMassAccumulatorCentroidApproximate(t *testing.T) {
 // volume has no centroid: two opposing tetrahedra of equal and opposite
 // signed volume cancel exactly.
 func TestLoftMassAccumulatorCentroidZeroVolumeDegenerate(t *testing.T) {
-	m := newLoftMassAccumulator(r3.NewVec(0, 0, 0), 0, 0)
+	m := newLoftMassAccumulator(r3.NewVec(0, 0, 0), 0, 0, 0)
 	m.add(r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1), false)
 	m.add(r3.NewVec(0, 1, 0), r3.NewVec(1, 0, 0), r3.NewVec(0, 0, 1), false) // reversed winding
 
@@ -159,7 +159,7 @@ func TestLoftMassAccumulatorCentroidZeroVolumeDegenerate(t *testing.T) {
 // merely asserting the bound is present (docs/loft-design.md §8, required
 // test).
 func TestLoftMassAccumulatorAreaApproximateBoundedByReference(t *testing.T) {
-	m := newLoftMassAccumulator(r3.NewVec(0, 0, 0), 0, 0)
+	m := newLoftMassAccumulator(r3.NewVec(0, 0, 0), 0, 0, 0)
 	m.add(r3.NewVec(0, 0, 0), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 1), true) // area sqrt(2)/2
 	m.add(r3.NewVec(0, 0, 0), r3.NewVec(2, 0, 0), r3.NewVec(0, 2, 3), true) // area sqrt(13)
 	capArea := big.NewRat(5, 3)
@@ -249,7 +249,7 @@ func TestLoftMassAccumulatorAreaBoundEnclosesTrueError(t *testing.T) {
 		{name: "large coordinates aspect 1e-6", tri: sliver(far, 8192, 1e-6)},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			m := newLoftMassAccumulator(r3.NewVec(0, 0, 0), 0, 0)
+			m := newLoftMassAccumulator(r3.NewVec(0, 0, 0), 0, 0, 0)
 			m.add(tc.tri[0], tc.tri[1], tc.tri[2], true)
 			area := m.area()
 
@@ -292,7 +292,7 @@ func TestLoftMassAccumulatorAreaBoundEnclosesSliverSum(t *testing.T) {
 	perp := r3.NewVec(-0.48, 0.36, 0.8)
 
 	const prec = 400
-	m := newLoftMassAccumulator(r3.NewVec(0, 0, 0), 0, 0)
+	m := newLoftMassAccumulator(r3.NewVec(0, 0, 0), 0, 0, 0)
 	ref := new(big.Float).SetPrec(prec)
 	for i := range 64 {
 		origin := r3.NewVec(100*float64(i), -25*float64(i), 3.5)
@@ -368,7 +368,7 @@ func TestLoftMassAccumulatorAreaBoundSurvivesSaturatedScale(t *testing.T) {
 		}
 	}
 
-	m := newLoftMassAccumulator(r3.NewVec(0, 0, 0), 0, 0)
+	m := newLoftMassAccumulator(r3.NewVec(0, 0, 0), 0, 0, 0)
 	addLoftWalls(m, corners(0), corners(lift))
 
 	// The fixture is only meaningful while it really does saturate the scale
@@ -481,7 +481,7 @@ func TestLoftMassAccumulatorAreaNeverExact(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			m := newLoftMassAccumulator(r3.NewVec(0, 0, 0), 0, 0)
+			m := newLoftMassAccumulator(r3.NewVec(0, 0, 0), 0, 0, 0)
 			tc.build(m)
 			area := m.area(tc.caps...)
 
@@ -503,7 +503,101 @@ func TestLoftMassAccumulatorAreaNeverExact(t *testing.T) {
 // TestLoftMassAccumulatorBoundsEmpty proves bounds reports false before any
 // triangle has been added.
 func TestLoftMassAccumulatorBoundsEmpty(t *testing.T) {
-	m := newLoftMassAccumulator(r3.NewVec(0, 0, 0), 0, 0)
+	m := newLoftMassAccumulator(r3.NewVec(0, 0, 0), 0, 0, 0)
 	_, ok := m.bounds()
 	require.False(t, ok)
+}
+
+// TestLoftMassAccumulatorVolumeChordedTermReadsMatchedDeltaNotSagitta pins
+// a10-plan.md Part 3 PR 9 Task 1's own soundness fix: bounds.go's
+// chordedBoundaryVolumeAllow (and chordedBoundaryMomentAllow /
+// chordedBoundarySeamAllow inside computeLoftChordedAllow) must be composed
+// with the build's own sectionMatchedDelta — the MAX over cells of the
+// PARAMETER-MATCHED matchedDelta each cell's own arm publishes — NEVER
+// sectionDelta, the build's own MAX SAGITTA (a SET-distance). The two
+// coincide exactly on a circular-only build (loftCircularCellStations' own
+// doc comment: a circular cell's own sagitta discharges the
+// parameter-matched obligation exactly), which is why every existing arc
+// fixture is unaffected by this field's introduction — but a free-form cell
+// can carry a matchedDelta strictly LARGER than its own sagitta
+// (spline_sagitta_test.go's own overshoot-net counterexample: sagitta
+// exactly 0, matchedDelta about 0.384), so composing with sectionDelta alone
+// would silently understate a genuine chord-to-curve volume displacement —
+// unsound in exactly the direction CLAUDE.md forbids.
+//
+// FALSIFICATION: reverting loft_moments.go's volume()/centroid() and
+// computeLoftChordedAllow to read m.sectionDelta wherever they now read
+// m.sectionMatchedDelta turns this test red — verified by hand during
+// review (git stash the fix, rerun, confirm failure; restore). The fixture
+// is potent BECAUSE sectionDelta and sectionMatchedDelta are given
+// deliberately different values (0.001 vs 0.5) that a circular-only build
+// could never produce, so no bit-identical-arc-fixture reason lets a caller
+// swap them silently.
+func TestLoftMassAccumulatorVolumeChordedTermReadsMatchedDeltaNotSagitta(t *testing.T) {
+	// Two stations per side: station 0 is the one curved cell under test;
+	// station 1 stands in for the next segment's own first station — the
+	// same "closing, non-curved station" shape
+	// TestComputeLoftChordedAllowWallLegEnclosesConeFrustumGap already uses
+	// — so cell 0 (j=0, matchedDelta[0] > 0) is charged and cell 1 (j=1,
+	// matchedDelta[1] == 0, the wraparound back to station 0) is skipped.
+	vLo := r3.NewVec(0, 0, 0)
+	vHi := r3.NewVec(1, 0, 0)
+	wLo := r3.NewVec(0, 1, 1)
+	// wHi is displaced off the vLo/vHi/wLo plane (z=1.3, not 1) so the two
+	// triangles m.add folds in below carry a genuinely nonzero signed
+	// tetrahedron sum — a coplanar (T=0) quad would give vol6 == 0 and no
+	// centroid to publish, which is not what this test is checking.
+	wHi := r3.NewVec(1, 1, 1.3)
+	verts := []r3.Vec{vLo, vHi, wLo, wHi}
+	vIdx := [][]int{{0, 1}}
+	wIdx := [][]int{{2, 3}}
+	arcUpperV := []float64{1.01, 0}
+	arcUpperW := []float64{1.1, 0} // wHi.Sub(wLo).Len() = sqrt(1.09) ~= 1.044; must stay below its own arc-length claim
+
+	const sectionDelta = 0.001      // stands in for the build's own max sagitta
+	const sectionMatchedDelta = 0.5 // stands in for its own max matchedDelta, deliberately far larger
+	pairs := []loftLoopPair{{
+		v: make([]Point2, 2), w: make([]Point2, 2),
+		arcUpperV: arcUpperV, arcUpperW: arcUpperW,
+		matchedDelta: []float64{sectionMatchedDelta, 0},
+	}}
+	// anchor sits off every held vertex so neither triangle's own first
+	// vertex cancels the tetrahedron term trivially (a vLo-anchored sum
+	// would read vol6 == 0 regardless of geometry, since A-anchor is then
+	// the zero vector for both of these triangles).
+	anchor := r3.NewVec(-1, -1, -1)
+
+	chorded := computeLoftChordedAllow(pairs, vIdx, wIdx, verts, anchor, sectionDelta, sectionMatchedDelta, 2.0)
+
+	m := newLoftMassAccumulator(anchor, 0, sectionDelta, sectionMatchedDelta)
+	m.chorded = chorded
+	m.add(vLo, vHi, wHi, true)
+	m.add(vLo, wHi, wLo, true)
+
+	tris := [][3]int{{0, 1, 3}, {0, 3, 2}}
+	vol := m.volume(verts, tris)
+
+	// The reference this fixture must FALSIFY: chordedBoundaryVolumeAllow
+	// composed with sectionDelta (the sagitta) rather than
+	// sectionMatchedDelta — what a buggy caller reading the wrong field
+	// would publish.
+	wrongTerm := chordedBoundaryVolumeAllow(sectionDelta, chorded.wallAreaUpper, chorded.twistVolumeUpper, chorded.capVolumeUpper, chorded.seamAllow)
+	rightTerm := chordedBoundaryVolumeAllow(sectionMatchedDelta, chorded.wallAreaUpper, chorded.twistVolumeUpper, chorded.capVolumeUpper, chorded.seamAllow)
+	require.Greater(t, rightTerm, wrongTerm, "the fixture must actually distinguish the two candidate bounds")
+
+	require.GreaterOrEqual(t, vol.Bound.Base(), rightTerm,
+		"Volume's own Bound must compose the matchedDelta-keyed chordedBoundaryVolumeAllow term")
+	require.Greater(t, vol.Bound.Base(), wrongTerm,
+		"Volume's own Bound must exceed what composing the sagitta-keyed term alone would publish")
+
+	// The moment leg's identical composition, checked at the scalar level
+	// (chordedBoundaryMomentAllow itself, the SAME helper centroid() calls
+	// with m.sectionMatchedDelta): this fixture's own volume/allowance ratio
+	// is too extreme for m.centroid() to publish a positive S12 clearance
+	// (an expected, unrelated refusal on a synthetic 2-triangle patch this
+	// small), so the moment leg is checked directly rather than through the
+	// full accumulator call.
+	wrongMoment := chordedBoundaryMomentAllow(sectionDelta, chorded.wallAreaUpper, chorded.twistVolumeUpper, chorded.capVolumeUpper, chorded.seamAllow, chorded.maxTwistOffsetUpper, m.coordUpper)
+	rightMoment := chordedBoundaryMomentAllow(sectionMatchedDelta, chorded.wallAreaUpper, chorded.twistVolumeUpper, chorded.capVolumeUpper, chorded.seamAllow, chorded.maxTwistOffsetUpper, m.coordUpper)
+	require.Greater(t, rightMoment, wrongMoment, "the fixture must actually distinguish the two candidate moment terms")
 }
