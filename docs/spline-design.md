@@ -1622,6 +1622,7 @@ every walk of the section is itself exactly rational (§3).
 |---|---|---|
 | `ProfileRecord.Area`/`Centroid`/`SecondMoments` | Tier A exactly rational, rounded once; B/C proven interval | §5 |
 | `Extrude` | Tier A section; `Volume` from the Tier A rational, `Area`/`Box` bounded | §6.1 length, §6.2 extremes, §7 surfaces; a through-all stop reading the bracket is §6.4; a wall edge's convexity is §6.5 |
+| `Loft` | a same-kind Tier A free-form paired segment (`docs/loft-design.md` §1, §5.1's free-form arm), chorded at shared dyadic parameter fractions of the two curves' own Bézier span decomposition; every reading carries the resulting chord displacement (`docs/loft-design.md` §5.2's `sectionDelta`) | §6.2.1's sagitta, measured per dyadic level under a hard station cap; the wall stays flat triangles built between held stations and needs no §7 surface |
 | `Tessellate`, `STL`, `OBJ` | `ErrUnsupported` for a free-form-walled body until §10 P5 chords it; every OTHER body `Extrude` builds | §6.2 sagitta; rides the existing prism path, NOT tessellation T5 |
 | `Union`/`Cut`/`Intersect` | `ErrUnsupported` for a free-form-walled operand until §10 P5, `Faceted` output as always thereafter | free once chording lands — the mesh boolean reads triangles, not kinds |
 | interference proof | `ErrUnsupported` for a free-form-walled body until §10 P5 | free once chording lands — read-only mesh intersection already serves faceted pairs |
@@ -1696,6 +1697,13 @@ half-silent. These stages do not consume a global evaluator increment number.
 | **P8** | free-form surfaces of revolution, §6.1.1's radial first-moment bracket | `Revolve` builds for a Tier A section |
 | **P9** | Tier B formulas; Tier C certified quadrature | Tier B/C moment readings answer, and the builds Table C stages on them follow — R10 retires |
 | **P10** | the §4.1 analytic-corner modify slice over §6.4's free-form crossing and contact tests | fillet/chamfer on analytic corners of a mixed section |
+
+`docs/loft-design.md`'s own station rule for a same-kind Tier A free-form
+paired segment is a SECOND consumer of §6.2.1's sagitta, beside P5's
+tessellation chording above — measured per dyadic level under its own hard
+station cap rather than tessellation's, and landed on `docs/loft-design.md`
+§12's own delivery plan rather than by a P-numbered increment of this
+document.
 
 ## 11. Test obligations
 
