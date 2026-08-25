@@ -192,8 +192,13 @@ func TestTessellatePlateWithHole(t *testing.T) {
 	require.Len(t, mesh.Triangles(), 56)
 
 	// The proven bound is the sagitta actually taken: positive, within tol.
+	// chordSagitta is a PROVEN UPPER bound via sin(x)<=x
+	// (r*sweep^2/(8*n^2)), not the tight closed form r*(1-cos(sweep/2n)) an
+	// earlier, Sin-based version returned, so this compares against that
+	// same upper-bound formula rather than the true (smaller) sagitta.
 	n := 10.0
-	wantSag := 10 * (1 - math.Cos(math.Pi/n))
+	sweep := 2 * math.Pi
+	wantSag := 10 * sweep * sweep / (8 * n * n)
 	require.InDelta(t, wantSag, mesh.Bound().Mag(), 1e-12)
 	require.LessOrEqual(t, mesh.Bound().Mag(), tol)
 
@@ -538,9 +543,12 @@ func TestTessellateUndisplacedPrismSpendsTheWholeTolerance(t *testing.T) {
 	requireWatertight(t, mesh)
 
 	// r = 10 at tol = 0.5 still buys 10 chords around the hole: a reservation
-	// taken from an undisplaced prism would buy fewer.
+	// taken from an undisplaced prism would buy fewer. The comparison uses
+	// chordSagitta's own PROVEN UPPER-bound formula, r*sweep^2/(8*n^2)
+	// (sin(x)<=x), not the tight closed form — see
+	// TestTessellatePlateWithHole's identical comment.
 	require.Len(t, mesh.Vertices(), 28)
-	require.InDelta(t, 10*(1-math.Cos(math.Pi/10)), mesh.Bound().Mag(), 1e-12)
+	require.InDelta(t, 10*(2*math.Pi)*(2*math.Pi)/(8*10*10), mesh.Bound().Mag(), 1e-12)
 	require.LessOrEqual(t, mesh.Bound().Mag(), tol)
 
 	// A straight-only prism chords exactly, bound and all.
