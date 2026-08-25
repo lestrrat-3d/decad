@@ -48,7 +48,9 @@ the body is the resulting polyhedron, never a curved ruled surface, and the
 departure of that chord chain from the recorded arc or circle it approximates
 publishes as a section displacement (§5.2), the same discipline
 `docs/prism-boolean-design.md` §7 and `CLAUDE.md`'s "Section displacement"
-note already state for a prism's re-expressed section. A full-circle loop's
+note already state for a prism's re-expressed section. Same-kind is necessary
+rather than sufficient for a circular pair: Table P row P5 carries one further
+requirement on two `CircleSeg`s, that they agree in walk sense. A full-circle loop's
 correspondence has exactly one segment (`record.go`), so its alignment offset
 is confined to `[0, 1)` and forced to `0` (§3 S4): a rotated correspondence
 between two full-circle loops is not reachable by this construction.
@@ -139,23 +141,8 @@ decad reads the two `ProfileRecord`s' own segment order, and nothing else.
 | **P2** | `len(p0.Holes)` MUST equal `len(p1.Holes)`. A mismatch has no positional pairing (Table S, S1) |
 | **P3** | For each paired loop, `len(loop0.Segments)` MUST equal `len(loop1.Segments)` — call it `n`. A mismatch has no one-to-one pairing (Table S, S2) |
 | **P4** | Within a paired loop, segment `j` of `loop0` (for `j` in `[0, n)`) pairs with segment `(j + offset) mod n` of `loop1`, where `offset` is that loop's entry in `WithLoftAlignment`'s `offsets` (default 0) |
-| **P5** | A paired segment's two sides MUST be same-kind: both `LineSeg`, both `ArcSeg`, or both `CircleSeg`. Any other pairing — mixed-kind or free-form — is `ErrUnsupported` (§1, Table S row S3) |
+| **P5** | A paired segment's two sides MUST be same-kind: both `LineSeg`, both `ArcSeg`, or both `CircleSeg`. Any other pairing — mixed-kind or free-form — is `ErrUnsupported` (§1, Table S row S3). A same-kind `CircleSeg` pair MUST also agree in WALK SENSE: the two sides' recorded `CCW` flags MUST be equal, and a pair whose flags disagree is `ErrDegenerate` (Table S row S7's structural arm), decided from the two records before any triangle is built |
 | **P6** | Every loop's own walk direction is intrinsic to its own plane (outer CCW, holes CW, seam §2) and is never reinterpreted for the pairing: P4's ordinal rule pairs walk-position `j` to walk-position `j`, in each loop's own sense, regardless of how the two profiles' planes are posed relative to each other |
-
-<!--
-On Table P row P5 and a pair of opposite-sense circular sections. This
-document states no CCW-agreement gate, and "CCW" appears in this file only at
-P6. That pair is still refused rather than admitted: Table S row S7 and the
-paragraph immediately below this table both state that §6's audit proves the
-resulting walls cross and refuses with ErrDegenerate, so the correspondence
-produces a refusal, never a silent wrong body. What this document does not
-carry is the CHEAPER structural CCW-agreement gate beside S3 — Table S holds
-no CCW row, and §12's PR 3 row lands S14, S15 and S16 only. That gate is a
-later increment's row, assigned by the local (untracked) planning document
-.tmp/asks-helical-impl/a10-plan.md, Part 3, "PR 6 — feat-loft-arc-pairs"
-task 1, whose acceptance line reads "two paired CircleSegs with opposite CCW
-refuse at the structural gate, not at S7".
--->
 
 **A wrong alignment choice is not a silent wrong body.** If the caller's
 `offset` (or a caller's two sketches drawn without a shared segment-order
@@ -180,16 +167,16 @@ that exists and this evaluator cannot build → `ErrUnsupported`.**
 |---|---|---|---|---|
 | **S1** | a hole-loop count mismatch (P2) | this evaluator has no positional pairing for it, though a smarter kernel could still loft a differing hole count by point-degenerate construction | `ErrUnsupported` | no — reach no increment in §12 claims |
 | **S2** | a paired loop's segment-count mismatch (P3) | same — a smarter kernel could subdivide to match; this evaluator's ordinal correspondence cannot | `ErrUnsupported` | no — reach no increment in §12 claims |
-| **S3** | a paired segment whose two sides are not same-kind (§1, P5), or a same-kind pair where either side is free-form | the ruled surface exists; this evaluator has no exact construction for a mixed-kind pairing, and none yet for a free-form one | `ErrUnsupported` | yes, §1 |
+| **S3** | a paired segment whose two sides are not same-kind (§1, P5), or a same-kind pair where either side is free-form. A same-kind `CircleSeg` pair whose two recorded `CCW` flags disagree (P5) is NOT this row's refusal: it is S7's `ErrDegenerate`, decided structurally beside this gate rather than by the audit | the ruled surface exists; this evaluator has no exact construction for a mixed-kind pairing, and none yet for a free-form one | `ErrUnsupported` | yes, §1 |
 | **S4** | a `WithLoftAlignment` payload of the wrong length, an offset outside `[0, n)` for its loop, or the option passed more than once | no single intent (mirrors modify-reach SX1, which refuses a repeated contradictory option on the same ground) | `ErrDegenerate` | yes, §2 |
 | **S5** | `p0` and `p1` represent the same geometric plane, regardless of which in-plane origin or right-handed `U`/`V` basis each `PlaneRecord` uses | no — every wall vertex then lies in one plane, so the solid is provably flat: the tetrahedron-sum volume (§8) is a structural zero, not a computed one | `ErrDegenerate` | yes, §4 |
 | **S6** | a wall or cap triangle whose three recorded points collapse (coincident vertices, zero area) | no — the modification consumed the region, the same existence answer modify §5 test 1 gives an inside-out loop | `ErrDegenerate` | yes, §4 |
-| **S7** | the crossing audit (§6) finds contact other than the pair's recorded expected contact | no — a self-intersecting or self-touching shell bounds no solid | `ErrDegenerate` | yes, §6 |
+| **S7** | either of two arms: the STRUCTURAL arm — a same-kind `CircleSeg` pair whose two recorded `CCW` flags disagree (P5), decided from the two records before construction — or the AUDIT arm, where the crossing audit (§6) finds contact other than the pair's recorded expected contact | no — a self-intersecting or self-touching shell bounds no solid, and an opposite-sense circular correspondence walls each side against the other's reversed walk, which is that same crossing | `ErrDegenerate` | yes, §6 |
 | **S8** | the crossing audit exhausts its fixed work budget (§6, §10) before every pair is decided, over the triangle count `F = 2·Σstations + cap triangles` (§7) a chorded pair contributes rather than `2n` | this evaluator cannot tell | `ErrUnsupported` | no, §6 — a resource ceiling, not a shape rule |
 | **S9** | either profile fails a seam gate (§2): foreign, stale, invalid, or an unrecordable `Partial` fragment | seam design's own answer, per profile | `ErrForeignProfile` / `ErrStaleProfile` / `ErrInvalidProfile` / `ErrUnrecordableProfile` | seam design's own answer, per gate; this document adds no permanence of its own (§2) |
 | **S10** | a nil `*sketch.Sketch` or `*sketch.Profile` argument | no call at all | `ErrDegenerate` | yes, §2 |
 | **S11** | a nil or foreign `LoftOption` value, including a foreign type that embeds the sealed marker | no well-defined decad operation can invoke an unowned callback | `ErrDegenerate` | yes, §2 |
-| **S12** | a placement (`Placed`/`Duplicate`/`PlacedCopy`, §12 PR 2a) whose proven volume allowance is not smaller than the held volume | yes — the placed body itself is sound; only its centroid's proven quotient bound has no positive denominator left to divide by | `ErrUnsupported` | no — a precision ceiling on this evaluator's centroid bound, not a shape rule |
+| **S12** | ANY build — placed (`Placed`/`Duplicate`/`PlacedCopy`, §12 PR 2a), chorded (§5.1), or both — whose COMBINED proven volume allowance (§8) is not smaller than the held volume | yes — the body itself is sound; only its centroid's proven quotient bound has no positive denominator left to divide by | `ErrUnsupported` | no — a precision ceiling on this evaluator's centroid bound, not a shape rule |
 | **S13** | a build whose lifted-and-placed coordinate, whose computed station coordinate (§5.1), or whose orientation anchor (§5), runs past the representable float64 range | yes — every input is finite (both records' coordinates, the plane origins, and a transform `r3` itself validated), and only decad's own float evaluation of the lift or the station computation overflows; a placed body is the rigid image of one this evaluator already built | `ErrUnsupported` | no — a range ceiling on this evaluator's float64 vertex table, not a shape rule |
 | **S14** | a chorded circular pair whose per-station displacement this evaluator cannot derive | yes — the body exists and the chord set is built; only the station's own proven displacement has no derivation from this record | `ErrUnsupported` | no — a derivation gap in this evaluator's circular walk bound, not a shape rule |
 | **S15** | a paired segment whose chord target (§5.1) is not met inside the fixed station cap | yes — the ruled surface exists; this evaluator cannot chord it inside its own ceiling | `ErrUnsupported` (`errTooManyChords`, spline R8) | no — a resource ceiling, not a shape rule |
@@ -227,7 +214,11 @@ in that same option loop since it needs no record, S9 seam authentication of
 both profiles — nothing downstream is safe to read before this), then the
 shape gates that need only the two authenticated records (S1 hole count, S2
 segment count, S4's PAYLOAD-SHAPE half — a wrong-length alignment or an offset
-outside `[0, n)` for its loop — S3 segment kind, S5 geometric-plane
+outside `[0, n)` for its loop — S3 segment kind, S7's STRUCTURAL arm
+immediately beside it (a same-kind `CircleSeg` pair whose two recorded `CCW`
+flags disagree, P5: one flag comparison over the same two records S3 already
+reads, where S7's audit arm would reach the identical refusal only after
+building every triangle and proving every pair), S5 geometric-plane
 coincidence, and, for a same-kind circular pair, S15's station-cap decision —
 the shared station count `m` and the `mMax` it is compared against (§5.1)
 are each a closed-form function of the two records alone, so it is decided
@@ -236,8 +227,8 @@ construction (§5), whose own first act is S13's coordinate-range gate on the
 anchor, on every computed station, and on every placed vertex as it is
 emitted, together with S14's per-station displacement-derivation gate for a
 circular pair, then S16's one-sided-collapsed-cell gate as stations are
-paired into chord cells, then the per-triangle existence gate S6, then the
-crossing audit (S7/S8, §6) — the most expensive step, run last, over
+paired into chord cells, then the per-triangle existence gate S6, then S7's
+AUDIT arm with S8 beside it (§6) — the most expensive step, run last, over
 triangles already proven individually non-degenerate.
 
 **A placement (`Placed`/`Duplicate`/`PlacedCopy`, §12 PR 2a) re-runs every
@@ -246,7 +237,7 @@ S14, S15, S16 — plus S12, never a reduced set of them.** The evaluator
 re-lifts both records under the composed motion and rebuilds from scratch
 (§7), so S6/S7/S8 are reachable from a placement too: the crossing audit
 re-runs on the rounded vertex set every re-evaluation produces, and a
-placement whose rounding closes a previously-clear gap is refused exactly as
+placement whose rounding closes a gap during this build is refused exactly as
 a first build with the same geometry would be. S13 is judged on every build,
 placement or first, since it reads the coordinate the lift emits rather than
 the motion that produced it; a composed placement is how that coordinate
@@ -254,24 +245,15 @@ grows past the range in practice. S14, S15 and S16 are likewise decided fresh
 on every build: the station generator (§5.1) reruns from the two records on
 every re-evaluation, so a placement judges the identical station-derivation,
 station-cap, and collapsed-cell questions a first build does, over the same
-recorded curves. S12 is reachable from a placement, and from an unplaced
-circular pair whose station rounding narrows the centroid's quotient
-denominator, since `delta = absSumUpper(stationRound, placeAllow)` (§5.2) and
-a same-kind circular pair's `stationRound` term is positive even under
-`r3.Identity()`.
-
-<!--
-On "a placement whose rounding closes a previously-clear gap", in the
-paragraph above. "previously-clear" names the gap's own GEOMETRIC state at an
-earlier stage of the same build — clear before that build's vertex rounding
-is applied, closed after it — not the history of this document or of the
-code. CLAUDE.md's docs-state-current-state-only rule forbids changelog
-wording about the artefact's own history ("was X, now Y"), and a within-build
-sequence of geometric states is not that. The surrounding sentence is
-checkable on its own terms: it states what the rounding does to the geometry
-and what the evaluator does in response, with no claim about any earlier
-version of anything.
--->
+recorded curves. **S12 is judged on every build, because its condition is on
+the COMBINED proven volume allowance §8 composes and not on how the build was
+reached.** Each mechanism contributes its own term: a placement contributes
+`placeAllow` through `delta`; a chorded build contributes `stationRound`
+through that same `delta` (§5.2) and `sectionDelta` through
+`chordedBoundaryVolumeAllow` (§8); a build that is both contributes all
+three. A same-kind circular pair's `stationRound` and `sectionDelta` are each
+positive under `r3.Identity()`, so an unplaced chorded body reaches S12
+through both of them.
 
 **S9, S10, S11 and S4's ARITY half belong to the original call alone.** Each
 judges an argument the caller passed to `Document.Loft` — the two live
@@ -344,8 +326,9 @@ introduced; it is the same closed-form coordinate lift every other feature
 already treats as truth. A same-kind circular pair's interior stations
 (§5.1) are the one exception: a station beyond a segment's own two recorded
 endpoints is a COMPUTED point, not one the record states directly, so it
-takes no zero-bound grant here — its own rounding is `stationRound`, folded
-into `delta` rather than treated as exact (§5.2).
+takes no zero-bound grant here — its own displacement from the point the
+record denotes is `stationRound`, folded into `delta` rather than treated as
+exact (§5.2).
 
 **This claim holds for the identity transform.** A placed, duplicated, or
 placed-copied loft body (§7, §12 PR 2a) carries the payload's own proven
@@ -539,11 +522,23 @@ body that is both placed and chorded (§8) — sums the two into ITS OWN bound;
 the two source terms are never added into one another or substituted for
 each other anywhere upstream of that composition.
 
-**`delta` gains exactly one new term, `stationRound`** — the rounding a
-COMPUTED station commits: an exact-rational circular-walk sample, rounded
-once into a `Point2` and lifted once through the plane frame, the same
-single-rounding shape `rigidRoundAllow` already states for a placement's own
-lift. So `delta = absSumUpper(stationRound, placeAllow)`, where `placeAllow`
+**`delta` gains exactly one new term, `stationRound`** — the world-space
+displacement between a HELD circular-walk station and the CERTIFIED INTERVAL
+enclosing the point the record denotes for it. The walk that produces a
+station evaluates `math.Sincos` on a computed angle, so neither the trig nor
+its argument is a quantity the walk itself can enclose while holding floats
+alone; the bound comes from the recorded curve instead.
+`extrude.go`'s `circularWalkEndBound` builds the enclosure of the denoted
+point through `circularEndpointInterval` and reports each plane-local
+component's own gap from that enclosure, and `bounds.go`'s
+`walkEndBoundAllow` carries the wider component through the payload's
+orthonormal frame into one 3D world-space displacement. `stationRound` is
+those per-station allowances accumulated over the build. **A station whose
+enclosure the recorded data cannot state answers `+Inf`, and the build
+refuses `ErrUnsupported` (Table S row S14): a `+Inf` is a refusal and never a
+published zero.**
+
+So `delta = absSumUpper(stationRound, placeAllow)`, where `placeAllow`
 is the existing placement-rounding term this document already names (§5,
 "This claim holds for the identity transform"). A `LineSeg`-only pairing has
 every station at a recorded endpoint, so its `stationRound` is exactly zero
@@ -770,10 +765,11 @@ each coordinate's bound by the same quotient composition `moments.go`'s
 allowance and `sweptMomentAllow` as the numerator's; a chorded body widens it
 again by the matching `chordedBoundaryVolumeAllow` / `chordedBoundaryMomentAllow`
 pair (`bounds.go`), each doing for `sectionDelta` what the swept pair does
-for `delta`. A placement whose proven volume allowance is not smaller than
-the held volume leaves that quotient's denominator non-positive, and the
-centroid is unstateable — refused `ErrUnsupported` (Table S, S12) rather than
-published with a bound nobody could use.
+for `delta`. A build whose COMBINED volume allowance — the placement term,
+the chording term, or the two composed — is not smaller than the held volume
+leaves that quotient's denominator non-positive, and the centroid is
+unstateable — refused `ErrUnsupported` (Table S, S12) rather than published
+with a bound nobody could use.
 
 **`Area` is never Exact.** A triangle's own area is `(1/2) * |(B-A) x
 (C-A)|` — a square root of a rational, generically irrational — so a wall
@@ -813,14 +809,44 @@ under a placement the built cap triangles are within `delta` of what that
 rational denotes.
 
 A CHORDED (same-kind circular) body's `Area` adds a different further term,
-to the wall sum only: each chord cell's own RULED-SURFACE-VERSUS-CHORD
-excess — the area between the flat chord facet this construction actually
-builds and the curved ruled surface between the two recorded curves it
-approximates, order `8s²/3L` for that cell's own achieved sagitta `s` (§5.1)
-and chord length `L` — proven and published as an outward bound, per cell,
-never fit against a particular curve. The two caps carry no such term: their
-own contribution is the assembled chord polygon's exact rational shoelace
-area (above), not a bound on a curved region.
+to the wall sum only. **The quantity that term bounds is an AREA: the area
+between the flat chord facet pair this construction actually builds over one
+chord cell and the curved ruled surface between the two recorded curve pieces
+that cell approximates.** An arc-minus-chord LENGTH excess is not that
+quantity and never stands in for it — it carries one length dimension too few
+to sit in an `Area` sum at all. `bounds.go`'s `cellRuledExcessUpper` (§14) is
+the one owner of the term, publishes it as an outward bound in the direction
+`Area` needs, and states it per cell as a length excess multiplied by a
+ruling length:
+
+```text
+cellRuledExcessUpper = rulingUpper * ((arc0 - L0) + (arc1 - L1))
+```
+
+- `arc_k - L_k` is side `k`'s own arc-minus-chord length excess over that
+  cell: `r·Δθ − 2r·sin(Δθ/2)` at that side's own recorded radius `r` and the
+  cell's own sweep `Δθ` (that side's recorded sweep divided by the shared
+  station count `m`, §5.1). It is a closed form of recorded data
+  rather than an asymptotic estimate, it is non-negative because a chord is
+  the shortest path between its own two endpoints, and it is evaluated with
+  outward rounding, so what the term carries is an upper bound and not a
+  leading-term approximation to one.
+- `rulingUpper` is the stated upper bound on that cell's own RULING LENGTH —
+  the distance across the two sections that one ruling of the cell spans. It
+  is the larger of the cell's two rung edge lengths `|V_j - W_j|` and
+  `|V_{j+1} - W_{j+1}|` (§5's rung edges, both held edges of the built body),
+  widened by the two sides' achieved sagittae `s0 + s1` (§5.1). A ruling joins
+  the point at parameter `t` on side 0's recorded curve piece to the point at
+  the same `t` on side 1's; each of those two points sits within its own
+  side's achieved sagitta of the chord point at that `t`, and the
+  chord-to-chord distance at any `t` is the norm of a convex combination of
+  the cell's two rung vectors, hence at most the larger of their two lengths.
+
+Charging BOTH sides' length excesses against that one ruling bound, rather
+than their mean, is deliberate slack in the outward direction. The bound is
+per cell and is never fit against a particular curve. The two caps carry no
+such term: their own contribution is the assembled chord polygon's exact
+rational shoelace area (above), not a bound on a curved region.
 
 **`Bounds` is Exact only when BOTH the payload's displacement `delta` and its
 section displacement `sectionDelta` (§5.2) are zero.** Every vertex is
@@ -946,7 +972,7 @@ global evaluator increment.
 | 1 | `OpLoft` wire/recipe plumbing (`LoftOpts` codec, `Op` token, `Step.Profile`/`Plane` reuse), Table P pairing + Table S gates S1–S5/S9–S11, the flat-triangle wall construction (§5), the crossing audit (§6, Table S S6–S8), `Document.Loft` / `LoftContext`, `Volume` / `Centroid` (§8's rational accumulator) / `Area` / `Bounds`, `Verify` (D6: the structural audit and the tolerance gate over all four) | same-kind `CircleSeg`/`ArcSeg` correspondence; N-section/guide-rail/centerline loft; `Placed`/`Duplicate`/`PlacedCopy`; reversed correspondence; surveys, clearance, interference beyond box-disjoint |
 | 2a | `Placed` / `Duplicate` / `PlacedCopy` (D7): the payload's own proven displacement term `delta` (§5), composed into every vertex, edge length, face area, and all four body measurements; Table S gains S12 and S13 | D1/D2 (`Tessellate`/`STL`/`OBJ`, mesh-boolean admission); D3/D4's analytic-kernel case; D5 |
 | 2b | `Tessellate` / `STL` / `OBJ` (D1), mesh-boolean admission (D2) | D3/D4's analytic-kernel case, D5 |
-| 3 | same-kind `CircleSeg`/`ArcSeg` correspondence (§1): the chord-chain construction and its shared station generator (§5.1), `sectionDelta` (§5.2) composed into `Volume`/`Centroid`/`Area`/`Bounds`, Table S gates S14–S16 | free-form and mixed-kind correspondence (§1); N-section and guide-rail/centerline lofts; a loft case in `clearance_geom.go`; a non-constant-cross-section wall survey kernel |
+| 3 | same-kind `CircleSeg`/`ArcSeg` correspondence (§1): the chord-chain construction and its shared station generator (§5.1), `sectionDelta` (§5.2) composed into `Volume`/`Centroid`/`Area`/`Bounds`, Table S gates S14–S16 and S7's structural walk-sense arm (P5) | free-form and mixed-kind correspondence (§1); N-section and guide-rail/centerline lofts; a loft case in `clearance_geom.go`; a non-constant-cross-section wall survey kernel |
 | 4 (reach, not committed by this document) | N-section and guide-rail/centerline lofts, a loft case in `clearance_geom.go`, a non-constant-cross-section wall survey kernel | — |
 
 **The four measurements land with the operation, never after it.** A `Body`
@@ -1031,7 +1057,11 @@ target or its cap. §14 records the reference fixture's own measured build
 against this budget.
 
 - **Pairing**: hole-count mismatch → S1; segment-count mismatch → S2;
-  mixed-kind or free-form segment pair → S3; malformed
+  mixed-kind or free-form segment pair → S3; a same-kind `CircleSeg` pair
+  whose two recorded `CCW` flags disagree → S7's `ErrDegenerate` at the
+  structural gate, asserted to refuse before construction rather than from
+  the audit, so the fixture pins the gate's position and not only its
+  sentinel; malformed
   `WithLoftAlignment` (wrong length, out-of-range offset, or duplicate
   option) → S4; nil and foreign `LoftOption` values (including a type with a
   promoted sealed marker) → S11 before their callbacks run and with the
@@ -1116,7 +1146,14 @@ against this budget.
   S4. A fixture sized past the station cap → S15 (`errTooManyChords`),
   asserted to fire BEFORE S8 on a construction that would otherwise reach the
   audit ceiling. A synthetic pair whose two sides are forced to different
-  station parities at one cell → S16. `Bounds` widened by its own `Bound`
+  station parities at one cell → S16. A recorded pair whose station enclosure
+  the record cannot state (`circularWalkEndBound` answering `+Inf`, §5.2) →
+  S14, asserted on the sentinel and on the refusal happening instead of a
+  published zero bound. `Area.Bound` on a chorded body ENCLOSES
+  `|held - true|` against a high-precision reference for the true ruled
+  surface between the two recorded curves, so §8's per-cell ruled-excess term
+  is asserted in the outward direction rather than merely present.
+  `Bounds` widened by its own `Bound`
   (`absSumUpper(delta, sectionDelta)`) CONTAINS a dense sample of both true
   recorded arcs lifted through their planes — a box that did not widen fails
   it. A pair chorded at exactly `m = 1` publishes `delta == 0` and
@@ -1229,7 +1266,9 @@ plus a per-wall-cell `cellRuledExcessUpper` term, because containment inside
 a thin neighbourhood of the chord facets does not, on its own, bound a
 surface's area: the arc-minus-chord ruled surface can carry more area than
 the flat facets it stays close to, so the excess needs its own term rather
-than following from proximity alone.
+than following from proximity alone. `cellRuledExcessUpper` is the same
+per-cell helper §8's `Area` wall term reads, in the same length-excess-times-
+ruling-length form, and §8 states that form once for both consumers.
 
 **`loftStationCap`'s value is this document's one open variable.** §5.1
 states the rule the cap obeys and everything an implementation needs to
