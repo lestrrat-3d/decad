@@ -3,6 +3,7 @@ package decad
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math"
 	"testing"
 
@@ -79,6 +80,215 @@ func TestLoftArcWedgeMatchesExtrudeOracle(t *testing.T) {
 	t.Logf("Centroid oracle: loft=%v+/-%.3e extrude=%v+/-%.3e dist=%.3e allowed=%.3e",
 		loftCen.Value, loftCen.Bound.Base(), extCen.Value, extCen.Bound.Base(), dist, allowedC)
 	require.LessOrEqual(t, dist, allowedC, "the loft and extrude centroid intervals must overlap")
+
+	// AREA: an adversarial audit found the loft's own published Area.Bound
+	// omits the cap's own chord-to-curve gap entirely (VIOLATION 1) and
+	// under-widens the wall's own transverse extent when the two sections
+	// differ (VIOLATION 2) — on the SHIPPED A10a wedge this exact oracle
+	// checks, the true gap (5.7333e-03) exceeded the published Area.Bound
+	// (3.8222e-03) by 1.50x, a false-Sound reading. computeLoftChordedAllow's
+	// own capAreaExcess and widened areaExcess close it; see
+	// TestLoftArcWedgeAreaOracleAtGrowingRadius for the 4.5x/10.5x cases the
+	// audit reported at r=20 and r=50.
+	loftArea, err := loftBody.Area()
+	require.NoError(t, err)
+	extArea, err := extrudeBody.Area()
+	require.NoError(t, err)
+	areaGap := math.Abs(loftArea.Value.Base() - extArea.Value.Base())
+	areaAllowed := loftArea.Bound.Base() + extArea.Bound.Base()
+	t.Logf("Area oracle: loft=%.10g+/-%.3e extrude=%.10g+/-%.3e gap=%.4e allowed=%.4e",
+		loftArea.Value.Base(), loftArea.Bound.Base(), extArea.Value.Base(), extArea.Bound.Base(), areaGap, areaAllowed)
+	require.LessOrEqual(t, areaGap, areaAllowed, "the loft and extrude Area intervals must overlap")
+}
+
+// wedgeArcSketchR is wedgeArcSketch's own radius-parametrized twin
+// (loft_chord_calibration_internal_test.go's wedgeArcSketch is fixed at
+// wedgeRadius): TestLoftArcWedgeAreaOracleAtGrowingRadius needs the SAME
+// A10a wedge shape at r=20 and r=50, where VIOLATION 1's true-error-to-
+// published-bound ratio (the omitted cap term scales as 4r/h) grows past
+// the shipped fixture's own 1.50x to 4.50x and 10.50x.
+func wedgeArcSketchR(t *testing.T, w *sketch.World, plane *sketch.Plane, radius float64) (*sketch.Sketch, *sketch.Profile) {
+	t.Helper()
+	s, err := w.CreateSketch(plane)
+	require.NoError(t, err)
+	origin := s.CreatePoint(0, 0)
+	s.Fix(origin)
+	px := s.CreatePoint(radius, 0)
+	py := s.CreatePoint(0, radius)
+	s.CreateLine(origin, px)
+	s.CreateLine(py, origin)
+	s.CreateArc(origin, px, py)
+	_, err = s.Solve(t.Context())
+	require.NoError(t, err)
+	profiles := s.Profiles()
+	require.Len(t, profiles, 1)
+	return s, profiles[0]
+}
+
+// TestLoftArcWedgeAreaOracleAtGrowingRadius is the ask's own line: the same
+// Extrude-oracle Area overlap TestLoftArcWedgeMatchesExtrudeOracle checks at
+// the shipped r=5 wedge, replayed at r=20 and r=50 — the radii the audit
+// reported VIOLATION 1's shortfall growing to 4.50x and 10.50x at (the omitted
+// cap term scales as 4r/h, so a bound that only covers r=5 by chance would
+// still fail here). All three must overlap under computeLoftChordedAllow's
+// own capAreaExcess and widened areaExcess terms.
+func TestLoftArcWedgeAreaOracleAtGrowingRadius(t *testing.T) {
+	for _, radius := range []float64{5, 20, 50} {
+		t.Run(fmt.Sprintf("r=%g", radius), func(t *testing.T) {
+			w, base, top := wedgePlanes(t)
+			s0, p0 := wedgeArcSketchR(t, w, base, radius)
+			s1, p1 := wedgeArcSketchR(t, w, top, radius)
+			loftDoc := New()
+			loftBody, err := loftDoc.Loft(s0, p0, s1, p1)
+			require.NoError(t, err)
+
+			extrudeDoc := New()
+			extrudeBody, err := extrudeDoc.Extrude(s0, p0, Distance{D: units.Millimeters(wedgeHeight), Dir: Along})
+			require.NoError(t, err)
+
+			loftArea, err := loftBody.Area()
+			require.NoError(t, err)
+			extArea, err := extrudeBody.Area()
+			require.NoError(t, err)
+			gap := math.Abs(loftArea.Value.Base() - extArea.Value.Base())
+			allowed := loftArea.Bound.Base() + extArea.Bound.Base()
+			t.Logf("r=%g Area oracle: loft=%.10g+/-%.6e extrude=%.10g+/-%.6e gap=%.6e allowed=%.6e",
+				radius, loftArea.Value.Base(), loftArea.Bound.Base(), extArea.Value.Base(), extArea.Bound.Base(), gap, allowed)
+			require.LessOrEqual(t, gap, allowed, "the loft and extrude Area intervals must overlap at r=%g", radius)
+		})
+	}
+}
+
+// TestLoftConeFrustumWallAreaEnclosed is VIOLATION 2's own fixture: a loft
+// between two ARCS of DIFFERENT radii (r0=20 -> r1=2, h=10) is a genuine
+// quarter-cone frustum, the case the shipped areaExcess term under-bounds
+// because its own transverse "rung" was read at the cell corners alone,
+// where the chord and the arc it stands in for coincide by construction, and
+// never widened for how far the true (uncongruent) sections' generator can
+// depart from that corner-to-corner reading in between. The independent
+// reference total is closed-form: a quarter lateral frustum
+// (pi/4)*(r0+r1)*slant, the two quarter-sector caps (pi*r^2/4 each), and the
+// two flat radial "spoke" walls the two profiles' shared radial LineSegs
+// sweep — each an exact right trapezoid of parallel sides r0/r1 and height h,
+// area (r0+r1)/2*h — a term this fixture's own frustum formula alone omits,
+// confirmed by an independent audit of this test (recomputing the held wall
+// share as Area.Value minus the two closed-form caps and both closed-form
+// spokes) before this fixture shipped.
+func TestLoftConeFrustumWallAreaEnclosed(t *testing.T) {
+	const r0, r1, h = 20.0, 2.0, wedgeHeight
+	w, base, top := wedgePlanes(t)
+	s0, p0 := wedgeArcSketchR(t, w, base, r0)
+	s1, p1 := wedgeArcSketchR(t, w, top, r1)
+	doc := New()
+	body, err := doc.Loft(s0, p0, s1, p1)
+	require.NoError(t, err)
+
+	loaded, ok := body.payload.(loftPayload)
+	require.True(t, ok)
+	require.Greater(t, loaded.sectionDelta, 0.0, "a genuinely curved, un-congruent pairing must carry a positive sectionDelta")
+
+	area, err := body.Area()
+	require.NoError(t, err)
+
+	slant := math.Hypot(r0-r1, h)
+	trueWall := math.Pi / 4 * (r0 + r1) * slant
+	trueCap0 := math.Pi * r0 * r0 / 4
+	trueCap1 := math.Pi * r1 * r1 / 4
+	trueSpokes := (r0 + r1) / 2 * h * 2
+	trueTotal := trueWall + trueCap0 + trueCap1 + trueSpokes
+
+	gap := math.Abs(area.Value.Base() - trueTotal)
+	t.Logf("cone frustum Area: loft=%.10g+/-%.6e trueTotal=%.10g (wall=%.9g cap0=%.9g cap1=%.9g spokes=%.9g) gap=%.6e",
+		area.Value.Base(), area.Bound.Base(), trueTotal, trueWall, trueCap0, trueCap1, trueSpokes, gap)
+	require.LessOrEqual(t, gap, area.Bound.Base(),
+		"the published Area interval must enclose the closed-form frustum total")
+}
+
+// triAreaFloat is a plain float64 triangle-area formula (0.5*|cross|), used
+// only as an independent reference by
+// TestComputeLoftChordedAllowWallLegEnclosesConeFrustumGap below — never
+// production code, and never claimed exact.
+func triAreaFloat(a, b, c r3.Vec) float64 {
+	return 0.5 * b.Sub(a).Cross(c.Sub(a)).Len()
+}
+
+// TestComputeLoftChordedAllowWallLegEnclosesConeFrustumGap isolates
+// VIOLATION 2's own claim from VIOLATION 1's cap term entirely: it calls
+// computeLoftChordedAllow DIRECTLY on a hand-built quarter-cone-frustum
+// station chain (r0=20 -> r1=2, h=10, m=65 — the audit's own fixture), with
+// no cap contribution in the picture at all, and checks that its OWN
+// areaExcess return value alone encloses the wall's own true chord-to-curve
+// gap. TestLoftConeFrustumWallAreaEnclosed already covers the built body's
+// combined Area reading (wall + caps together); on that combined fixture
+// capAreaExcess (VIOLATION 1's own fix) alone already provides more than
+// enough slack to cover a missing wall term, so reverting the wall fix alone
+// does not turn that test red — this one isolates the wall leg by never
+// computing a cap term to begin with, the same way the audit's own report
+// isolated "held arc-wall" against "true cone strip" before any cap
+// reasoning entered the picture.
+func TestComputeLoftChordedAllowWallLegEnclosesConeFrustumGap(t *testing.T) {
+	const r0, r1, h = 20.0, 2.0, 10.0
+	const sweep = math.Pi / 2
+	const m = 65
+	n := m + 1 // m circular cells, plus one closing (non-circular) station
+	// standing in for the next segment's own first station
+	// (loftLoopPair's own doc comment) — without it, (j+1)%n would wrap
+	// cell m-1 straight back to station 0 and fabricate a bogus closing
+	// cell spanning nearly the whole sweep.
+
+	verts := make([]r3.Vec, 2*n)
+	vIdx := make([]int, n)
+	wIdx := make([]int, n)
+	arcUpperV := make([]float64, n)
+	arcUpperW := make([]float64, n)
+	circular := make([]bool, n)
+	dth := sweep / float64(m)
+	for k := 0; k <= m; k++ {
+		th := sweep * float64(k) / float64(m)
+		verts[k] = r3.NewVec(r0*math.Cos(th), r0*math.Sin(th), 0)
+		verts[n+k] = r3.NewVec(r1*math.Cos(th), r1*math.Sin(th), h)
+		vIdx[k] = k
+		wIdx[k] = n + k
+		if k < m {
+			arcUpperV[k] = r0 * dth
+			arcUpperW[k] = r1 * dth
+			circular[k] = true
+		}
+	}
+	pairs := []loftLoopPair{{
+		v: make([]Point2, n), w: make([]Point2, n),
+		arcUpperV: arcUpperV, arcUpperW: arcUpperW, circular: circular,
+	}}
+
+	// sectionDelta: the closed-form per-cell sagitta (chordSagitta's own
+	// formula, tessellate.go), the max over both radii.
+	sagitta0 := 2 * r0 * math.Sin(dth/4) * math.Sin(dth/4)
+	sagitta1 := 2 * r1 * math.Sin(dth/4) * math.Sin(dth/4)
+	sectionDelta := math.Max(sagitta0, sagitta1)
+
+	anchor := r3.NewVec(0, 0, 0)
+	distUpper := math.Hypot(r0, h) + 1 // generously above the true max distance
+
+	chorded := computeLoftChordedAllow(pairs, [][]int{vIdx}, [][]int{wIdx}, verts, anchor, sectionDelta, distUpper)
+
+	// The independent reference: the quarter lateral frustum's own closed
+	// form, and the SAME two-triangle split assembleLoft's own Table B uses,
+	// summed by hand over the identical stations.
+	slant := math.Hypot(r0-r1, h)
+	trueWall := math.Pi / 4 * (r0 + r1) * slant
+	held := 0.0
+	for k := range m {
+		vLo, vHi := verts[vIdx[k]], verts[vIdx[k+1]]
+		wLo, wHi := verts[wIdx[k]], verts[wIdx[k+1]]
+		held += triAreaFloat(vLo, vHi, wHi) + triAreaFloat(vLo, wLo, wHi)
+	}
+	trueGap := trueWall - held
+
+	t.Logf("cone frustum wall leg: trueWall=%.9g held=%.9g trueGap=%.6e chorded.areaExcess=%.6e",
+		trueWall, held, trueGap, chorded.areaExcess)
+	require.Greater(t, trueGap, 0.0, "the fixture must actually exercise a positive chord-to-curve gap")
+	require.LessOrEqual(t, trueGap, chorded.areaExcess,
+		"the wall leg alone (no cap term) must enclose the true chord-to-curve gap")
 }
 
 // loftBodyBindingRatio replays verify.go's own scalar/bounded tolerance gate
@@ -299,6 +509,65 @@ func TestLoftCircleSegOppositeCCWRefusesStructuralGateNotS7(t *testing.T) {
 	require.ErrorIs(t, err, ErrUnsupported, "the CCW-disagreement gate's own sentinel")
 	require.False(t, errors.Is(err, ErrDegenerate), "must NOT be S7's own sentinel (ErrDegenerate)")
 	require.Contains(t, err.Error(), "opposite directions")
+}
+
+// TestLoftCircleSegArcSegOppositeCCWRefusesStructuralGateNotS7 is FIX 4's own
+// line: a CircleSeg{CCW:false} paired against an ArcSeg whose own TStart <
+// TEnd (walkOf's ArcSeg arm, extrude.go, forces its sweep positive, so this
+// pairing's effective direction is CCW — never "nothing to disagree with", a
+// false claim an earlier version of loftSameKindGate's own doc comment made)
+// genuinely walks in opposite directions and must refuse at the SAME cheap
+// structural gate the CircleSeg/CircleSeg case above does, never fall
+// through to S7's own crossing refusal three build phases later.
+func TestLoftCircleSegArcSegOppositeCCWRefusesStructuralGateNotS7(t *testing.T) {
+	cw := CircleSeg{Center: pt(0.5, 0.5), Radius: units.Millimeters(0.5), CCW: false, TStart: 1, TEnd: 0}
+	ccwArc := ArcSeg{Center: pt(0.5, -1), Start: pt(0, 0), End: pt(1, 0), TStart: 0, TEnd: 1}
+	p0 := ProfileRecord{Outer: squareLoopWithFirstSegment(cw)}
+	p1 := ProfileRecord{Outer: squareLoopWithFirstSegment(ccwArc)}
+	pl0, pl1 := planeAt(r3.NewVec(0, 0, 0)), planeAt(r3.NewVec(0, 0, 1))
+	err := validateLoftRecordsErr(p0, p1, pl0, pl1, nil, newFreeformWork(), newFreeformWork())
+	require.Error(t, err)
+	require.ErrorIs(t, err, ErrUnsupported, "the CCW-disagreement gate's own sentinel")
+	require.False(t, errors.Is(err, ErrDegenerate), "must NOT be S7's own sentinel (ErrDegenerate)")
+	require.Contains(t, err.Error(), "opposite directions")
+}
+
+// TestLoftCircularSegRangeRefusesNonCircularKind is FIX 6's own line: an
+// evaluator bug elsewhere could hand loftCircularStationRound a segment kind
+// it has no rounding rule for; circularSegRange's own defensive false arm
+// (unreached from any real build today, per its own doc comment, since
+// loftSameKindGate has already proven both walks are walkCircular) still
+// answers false rather than a silently wrong TStart/TEnd pair, and
+// loftCircularStationRound turns that into ErrUnsupported rather than a
+// panic or a fabricated rounding of zero.
+func TestLoftCircularSegRangeRefusesNonCircularKind(t *testing.T) {
+	_, _, ok := circularSegRange(LineSeg{Start: pt(0, 0), End: pt(1, 0), TStart: 0, TEnd: 1})
+	require.False(t, ok, "a LineSeg carries no circular TStart/TEnd for this reader")
+
+	seg := CircleSeg{Center: pt(0, 0), Radius: units.Millimeters(1), CCW: true, TStart: 0, TEnd: 1}
+	_, err := loftCircularStationRound(LineSeg{Start: pt(0, 0), End: pt(1, 0), TStart: 0, TEnd: 1}, seg,
+		[]Point2{pt(1, 0)}, []Point2{pt(1, 0)}, 1)
+	require.Error(t, err)
+	require.ErrorIs(t, err, ErrUnsupported)
+	require.Contains(t, err.Error(), "no station-rounding rule")
+}
+
+// TestLoftCircularStationRoundRefusesUnderivableRounding is Table S row
+// S14's own refusal line (FIX 6): a CircleSeg whose radius carries the wrong
+// units.Kind makes circularEndpointInterval's own radius conversion fail
+// (moments.go), so circularWalkEndBound answers the underivable +Inf bound
+// at every station, walkEndBoundAllow propagates it, and
+// loftCircularStationRound's own isNonFinite(round) check refuses
+// ErrUnsupported rather than publish a silent zero rounding for a station
+// this evaluator genuinely cannot enclose.
+func TestLoftCircularStationRoundRefusesUnderivableRounding(t *testing.T) {
+	broken := CircleSeg{Center: pt(0, 0), Radius: units.Value{}, CCW: true, TStart: 0, TEnd: 1}
+	ok := CircleSeg{Center: pt(0, 0), Radius: units.Millimeters(1), CCW: true, TStart: 0, TEnd: 1}
+	stations := []Point2{pt(1, 0), pt(0, 1)}
+	_, err := loftCircularStationRound(broken, ok, stations, stations, 2)
+	require.Error(t, err)
+	require.ErrorIs(t, err, ErrUnsupported)
+	require.Contains(t, err.Error(), "cannot derive a proven rounding bound")
 }
 
 // --- the m=1 edge case ---
