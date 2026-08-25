@@ -142,6 +142,21 @@ decad reads the two `ProfileRecord`s' own segment order, and nothing else.
 | **P5** | A paired segment's two sides MUST be same-kind: both `LineSeg`, both `ArcSeg`, or both `CircleSeg`. Any other pairing — mixed-kind or free-form — is `ErrUnsupported` (§1, Table S row S3) |
 | **P6** | Every loop's own walk direction is intrinsic to its own plane (outer CCW, holes CW, seam §2) and is never reinterpreted for the pairing: P4's ordinal rule pairs walk-position `j` to walk-position `j`, in each loop's own sense, regardless of how the two profiles' planes are posed relative to each other |
 
+<!--
+On Table P row P5 and a pair of opposite-sense circular sections. This
+document states no CCW-agreement gate, and "CCW" appears in this file only at
+P6. That pair is still refused rather than admitted: Table S row S7 and the
+paragraph immediately below this table both state that §6's audit proves the
+resulting walls cross and refuses with ErrDegenerate, so the correspondence
+produces a refusal, never a silent wrong body. What this document does not
+carry is the CHEAPER structural CCW-agreement gate beside S3 — Table S holds
+no CCW row, and §12's PR 3 row lands S14, S15 and S16 only. That gate is a
+later increment's row, assigned by the local (untracked) planning document
+.tmp/asks-helical-impl/a10-plan.md, Part 3, "PR 6 — feat-loft-arc-pairs"
+task 1, whose acceptance line reads "two paired CircleSegs with opposite CCW
+refuse at the structural gate, not at S7".
+-->
+
 **A wrong alignment choice is not a silent wrong body.** If the caller's
 `offset` (or a caller's two sketches drawn without a shared segment-order
 convention) produces a twisted, self-crossing correspondence, §6's audit
@@ -214,16 +229,16 @@ shape gates that need only the two authenticated records (S1 hole count, S2
 segment count, S4's PAYLOAD-SHAPE half — a wrong-length alignment or an offset
 outside `[0, n)` for its loop — S3 segment kind, S5 geometric-plane
 coincidence, and, for a same-kind circular pair, S15's station-cap decision —
-the shared station count `m` (§5.1) is a closed-form function of the two
-records alone, so it is decided here with the rest — all decidable without
-building a single triangle), then construction (§5), whose own first act is
-S13's coordinate-range gate on the anchor, on every computed station, and on
-every placed vertex as it is emitted, together with S14's per-station
-displacement-derivation gate for a circular pair, then S16's
-one-sided-collapsed-cell gate as stations are paired into chord cells, then
-the per-triangle existence gate S6, then the crossing audit (S7/S8, §6) — the
-most expensive step, run last, over triangles already proven individually
-non-degenerate.
+the shared station count `m` and the `mMax` it is compared against (§5.1)
+are each a closed-form function of the two records alone, so it is decided
+here with the rest — all decidable without building a single triangle), then
+construction (§5), whose own first act is S13's coordinate-range gate on the
+anchor, on every computed station, and on every placed vertex as it is
+emitted, together with S14's per-station displacement-derivation gate for a
+circular pair, then S16's one-sided-collapsed-cell gate as stations are
+paired into chord cells, then the per-triangle existence gate S6, then the
+crossing audit (S7/S8, §6) — the most expensive step, run last, over
+triangles already proven individually non-degenerate.
 
 **A placement (`Placed`/`Duplicate`/`PlacedCopy`, §12 PR 2a) re-runs every
 record-only gate — S1, S2, S3, S4's payload-shape half, S5, S6, S7, S8, S13,
@@ -244,6 +259,19 @@ circular pair whose station rounding narrows the centroid's quotient
 denominator, since `delta = absSumUpper(stationRound, placeAllow)` (§5.2) and
 a same-kind circular pair's `stationRound` term is positive even under
 `r3.Identity()`.
+
+<!--
+On "a placement whose rounding closes a previously-clear gap", in the
+paragraph above. "previously-clear" names the gap's own GEOMETRIC state at an
+earlier stage of the same build — clear before that build's vertex rounding
+is applied, closed after it — not the history of this document or of the
+code. CLAUDE.md's docs-state-current-state-only rule forbids changelog
+wording about the artefact's own history ("was X, now Y"), and a within-build
+sequence of geometric states is not that. The surrounding sentence is
+checkable on its own terms: it states what the rounding does to the geometry
+and what the evaluator does in response, with no claim about any earlier
+version of anything.
+-->
 
 **S9, S10, S11 and S4's ARITY half belong to the original call alone.** Each
 judges an argument the caller passed to `Document.Loft` — the two live
@@ -438,14 +466,54 @@ so a caller-supplied tolerance would change body identity and demand a wire
 field. The constant stays in source, and `LoftOpts` gains no new field for it
 (§10).
 
-**The station cap.** Total stations per loop are capped so the resulting
-triangle count `F = 2·Σstations + cap triangles` (§7) stays inside §6's
-work-clock budget. A paired segment whose target is not met inside that cap
-is Table S row S15 (`ErrUnsupported`, `errTooManyChords` — spline R8), the
+**The station cap and the ceiling it answers to.** A build's total station
+count is capped by one unexported package constant, `loftStationCap` (§14
+names the increment that fixes its value). The cap exists to keep the chord
+chain from being what carries §6's audit past the pair-test ceiling that
+section already owns: the assembled triangle count is
+`F = 2·Σstations + cap triangles` (§7), and §6 refuses under S8 unless
+`F*(F-1)/2` is at or below `maxFacetPairTestsPerCall`. `loftStationCap` is
+fixed so that a build whose `Σstations` reaches it assembles an `F` whose
+`F*(F-1)/2` is STRICTLY below that ceiling. A build chorded too finely for
+the audit therefore refuses as S15, carrying the chord-count message, rather
+than as S8 carrying the audit-budget one: **the cap is the soft limit and S8
+the hard one, and the two are never merged.** A record whose own
+paired-segment count already exceeds the cap is past chording altogether —
+its `Σstations` is that segment count (§7) — and S8 is what refuses it,
+exactly as for an all-`LineSeg` build.
+
+**Allocating the cap.** `loftStationCap` bounds `Σstations`, the total over
+every loop (§7), because the `F` above depends on that total and on nothing
+per-loop. It is allocated per paired segment, which gives each loop a share
+proportional to its own paired-segment count, and a share of the part
+chording can spend proportional to its own circular-pair count. With `P` the
+build's total paired-segment count and `C` the number of same-kind circular
+pairs among them — both fixed by Table P from the two records alone — every
+paired segment is entitled to its first station, which is a `LineSeg` pair's
+whole entitlement (`m = 1`, §7), and each circular pair may take at most
+
+```text
+mMax = 1 + max(0, (loftStationCap - P) / C)      // integer division
+```
+
+stations. A circular pair whose own `m = max(m0, m1)` exceeds `mMax` is
+Table S row S15 (`ErrUnsupported`, `errTooManyChords` — spline R8, the
 identical sentinel `chordCount` itself already returns when its own walk-up
-would exceed `maxChordsPerWalk`. The cap is checked with the record-only
-gates (§4's gate-order paragraph), so a fixture that would exceed it is
-refused before a single station is built.
+would exceed `maxChordsPerWalk`), and the refusal names that segment, since
+the share it exceeded is that segment's own. A build with no circular pair
+(`C = 0`) never consults the cap at all: its `Σstations` is `Σn_i` exactly
+(§7), the count the record itself states, so an all-`LineSeg` build's only
+resource refusal is S8.
+
+**Deciding S15 from the record.** `m0`, `m1` and `mMax` are each a
+closed-form function of the two `ProfileRecord`s — the two sides' radii and
+sweeps, the chord target above, `P` and `C` — so S15 is decided with the
+record-only gates (§4's gate-order paragraph) and a build that would exceed
+the cap is refused before a single station is built. Every product and sum
+in the `mMax` comparison and in §6's own `F*(F-1)/2` preflight is evaluated
+with checked arithmetic and refuses on overflow rather than wrapping, the
+identical preflight-before-allocation discipline §6 states for the pair-test
+ceiling itself.
 
 ### 5.2 `sectionDelta` — the in-plane chord displacement
 
@@ -570,9 +638,12 @@ before commit; the document and recipe stay unchanged. `Loft` is the
 **This audit is unchanged in kind for a chorded pair.** It still tests every
 pair among the assembled triangle set exactly as stated above; only the
 triangle count grows with the station chain (§5.1, §7). §5.1's station cap,
-decided before construction, is what keeps `F` inside this audit's own
-`F*(F-1)/2` ceiling — the cap is the soft limit that binds in practice, S8
-above stays the hard one.
+decided before construction, is what keeps the CHORDING from carrying `F`
+past this audit's own `F*(F-1)/2` ceiling: the cap is the soft limit, S8
+above stays the hard one, and the ceiling here is the quantity the cap is
+fixed against (§5.1). The two are never merged, and S8 remains the only
+resource refusal a build with no circular pair can reach, since such a build
+never consults the cap at all.
 
 ## 7. Table B — the result
 
@@ -946,6 +1017,19 @@ subject, and §8 owns the rule each of them follows: `delta` enters every
 vertex, edge length, face area, and all four body measurements, so no fixture
 here may be reused against a placed body without carrying it.
 
+**The fixture wall-clock budget.** Every fixture in this section builds its
+loft in 2 seconds or less, and at most three of them chord a curve at the
+calibrated `loftChordFraction` (§14) rather than at a coarse or explicitly
+forced station count; a fixture whose build needs longer runs behind
+`testing.Short()` rather than shipping in the default `go test ./...` run.
+§6's audit is the phase this budget governs — it tests every pair among the
+assembled triangle set, so its cost grows with the square of `F`, while
+pairing and construction are linear in `Σstations`. The budget bounds which
+fixtures ship, never what the evaluator admits: a station count that misses
+it is a fixture this section excludes, never a reason to loosen §5.1's chord
+target or its cap. §14 records the reference fixture's own measured build
+against this budget.
+
 - **Pairing**: hole-count mismatch → S1; segment-count mismatch → S2;
   mixed-kind or free-form segment pair → S3; malformed
   `WithLoftAlignment` (wrong length, out-of-range offset, or duplicate
@@ -1122,17 +1206,16 @@ matching fit-spline wedge.
 
 **The constant does not clear a 4x margin inside the wall-clock budget, and
 this design accepts that rather than widen either.** A 4x margin needs 128
-stations, whose build measures about 4.3 seconds; the wall-clock budget for
-a fixture that ships in `go test ./...` (§6, §12) caps that build at 2
-seconds, which the 64-station build meets at about 1.4 seconds. The fixed
-64-station constant is what ships. An arc loft at an aspect ratio more
-extreme than the reference fixture, judged at a tolerance tighter than the
-default, can read `Suspect` rather than `Sound` — a correct, non-silent
-outcome under a tight enough tolerance, not a wrong answer, and the
-reject-only discipline `CLAUDE.md` requires: no two-pass rebuild reads its
-own published measurement and rebuilds to chase a tighter margin, since that
-would make the topology a function of a published float and a new
-determinism obligation for replay (§10).
+stations, whose build measures about 4.3 seconds; the fixture wall-clock
+budget §13 states caps that build at 2 seconds, which the 64-station build
+meets at about 1.4 seconds. The fixed 64-station constant is what ships. An
+arc loft at an aspect ratio more extreme than the reference fixture, judged
+at a tolerance tighter than the default, can read `Suspect` rather than
+`Sound` — a correct, non-silent outcome under a tight enough tolerance, not
+a wrong answer, and the reject-only discipline `CLAUDE.md` requires: no
+two-pass rebuild reads its own published measurement and rebuilds to chase a
+tighter margin, since that would make the topology a function of a published
+float and a new determinism obligation for replay (§10).
 
 **`chordedBoundaryVolumeAllow` and `chordedBoundaryMomentAllow` (§5.2,
 `bounds.go`) are TWINNED helpers with their own derivations, never an
@@ -1147,6 +1230,18 @@ a thin neighbourhood of the chord facets does not, on its own, bound a
 surface's area: the arc-minus-chord ruled surface can carry more area than
 the flat facets it stays close to, so the excess needs its own term rather
 than following from proximity alone.
+
+**`loftStationCap`'s value is this document's one open variable.** §5.1
+states the rule the cap obeys and everything an implementation needs to
+decide S15 from the record — the per-segment share, the `mMax` comparison,
+and the checked arithmetic — but not the number itself. The number is fixed
+by the increment that lands the station generator (§12 PR 3), inside two
+constraints §5.1 already states: a build whose `Σstations` reaches the cap
+must assemble an `F` whose `F*(F-1)/2` is strictly below
+`maxFacetPairTestsPerCall` (§6), and the cap must leave room for every
+fixture §13 requires. Nothing else in this document reads the number: the
+reference fixture's 64 stations, and every other station count named here,
+are stated against the chord target above rather than against the cap.
 
 Every other design variable this document depends on is resolved above. The
 reach items in §12's PR 4 row are future work, not open questions of this
