@@ -962,8 +962,11 @@ func TestCellChordCurveAreaUpperEnclosesTheCrossedCellCounterexample(t *testing.
 // sectionDelta=0, cellChordCurveAreaUpper's own eA (arc length, which
 // equals chord length for a straight LineSeg pairing) and eB (corner
 // separation) are EXACTLY the same eA, eB cellTwistVolumeAllow's own already
-// -proven derivation uses for the SAME bilinear patch, so the two must
-// publish the identical eA*eB product for the same four corners.
+// -proven derivation uses for the SAME bilinear patch, so the two speak for
+// the same eA*eB product on the same four corners. The check is against that
+// product itself, not against cellTwistVolumeAllow's own float: that helper
+// certifies both norms over the rationals (cellSpanUpper), so the two answers
+// agree on the quantity while each rounds outward on its own.
 func TestCellChordCurveAreaUpperReducesToTheTwistBoundAtZeroSectionDelta(t *testing.T) {
 	vLo := r3.NewVec(0, 0, 0)
 	vHi := r3.NewVec(1, 0, 0)
@@ -1221,6 +1224,112 @@ func TestCellTwistOffsetUpperIsZeroWithoutTwist(t *testing.T) {
 	wLo := vLo.Add(r3.NewVec(0, 0, 5))
 	wHi := vHi.Add(r3.NewVec(0, 0, 5))
 	require.Equal(t, 0.0, cellTwistOffsetUpper(vLo, vHi, wLo, wHi))
+}
+
+// exactCellTwistFactors returns the EXACT rational SQUARES of the three
+// factors cellTwistVolumeAllow multiplies — |T|², eA² and eB² — taken from
+// the cell's own float corners without a single rounding. The SQUARES are
+// what a caller compares because |T|, eA and eB are irrational in general
+// while their squares are exactly rational: got >= (|T|/4)·eA·eB holds if
+// and only if 16·got² >= |T|²·eA²·eB², every term of which is exact.
+func exactCellTwistFactors(vLo, vHi, wLo, wHi r3.Vec) (*big.Rat, *big.Rat, *big.Rat) {
+	sub := func(a, b r3.Vec) [3]*big.Rat {
+		return [3]*big.Rat{
+			new(big.Rat).Sub(ratOfFloat(a.X), ratOfFloat(b.X)),
+			new(big.Rat).Sub(ratOfFloat(a.Y), ratOfFloat(b.Y)),
+			new(big.Rat).Sub(ratOfFloat(a.Z), ratOfFloat(b.Z)),
+		}
+	}
+	norm2 := func(d [3]*big.Rat) *big.Rat {
+		out := new(big.Rat)
+		for _, c := range d {
+			out.Add(out, new(big.Rat).Mul(c, c))
+		}
+		return out
+	}
+	larger := func(a, b *big.Rat) *big.Rat {
+		if b.Cmp(a) > 0 {
+			return b
+		}
+		return a
+	}
+	// T = vLo − vHi − wLo + wHi = (wHi − wLo) − (vHi − vLo).
+	vSpan, wSpan := sub(vHi, vLo), sub(wHi, wLo)
+	var twist [3]*big.Rat
+	for i := range twist {
+		twist[i] = new(big.Rat).Sub(wSpan[i], vSpan[i])
+	}
+	eA2 := larger(norm2(vSpan), norm2(wSpan))
+	eB2 := larger(norm2(sub(wLo, vLo)), norm2(sub(wHi, vHi)))
+	return norm2(twist), eA2, eB2
+}
+
+// TestCellTwistBoundsEncloseTheExactTwistTerm pins both twist helpers against
+// the EXACT |T|/4 and (|T|/4)·eA·eB their own doc comments claim to dominate,
+// over the two channels that can drive a float evaluation BELOW that value.
+// Neither channel needs pathological geometry: both rows below are ordinary
+// finite cells.
+//
+//   - the CANCELLATION channel. T = vLo − vHi − wLo + wHi is a cancelling
+//     chain, so an ordinary parallelogram cell can drive the float-computed
+//     chain to EXACTLY (0,0,0) while the exact T — that cell's own addition
+//     rounding, here about (-2.8e-17,-5.6e-17,5.6e-17) — stays nonzero. A
+//     zero published there is not a loose bound but a wrong one, so the
+//     twistUpper <= 0 early return may only short-circuit once the
+//     enclosure of |T| is ITSELF zero.
+//   - the RAW-NORM channel. r3.Vec.Len is nested math.Hypot, which is not
+//     correctly rounded and falls several ulp below the exact norm for a
+//     large fraction of vectors, so eA and eB read raw understate the
+//     product they feed and a single trailing one-ulp nudge cannot recover
+//     the shortfall.
+func TestCellTwistBoundsEncloseTheExactTwistTerm(t *testing.T) {
+	for _, row := range []struct {
+		name               string
+		vLo, vHi, wLo, wHi r3.Vec
+		floatChainCancels  bool
+	}{
+		{
+			name:              "cancelling twist chain",
+			vLo:               r3.NewVec(0, 0, 0),
+			vHi:               r3.NewVec(0.1, 0.2, 0.3),
+			wLo:               r3.NewVec(0.7, 1.1, 1.3),
+			wHi:               r3.NewVec(0.1, 0.2, 0.3).Add(r3.NewVec(0.7, 1.1, 1.3)),
+			floatChainCancels: true,
+		},
+		{
+			name: "raw norms below the exact edge lengths",
+			vLo:  r3.NewVec(-0.18407194718000197, -0.9670493813481006, 0.11756527611707068),
+			vHi:  r3.NewVec(-0.2543362139571195, 0.17121027904800257, 0.6486272299368296),
+			wLo:  r3.NewVec(-0.329681753490781, 0.20068938566549477, 0.2784442506567102),
+			wHi:  r3.NewVec(-0.7983173553857771, 0.456370350439145, 0.09559367959010823),
+		},
+	} {
+		t.Run(row.name, func(t *testing.T) {
+			twist2, eA2, eB2 := exactCellTwistFactors(row.vLo, row.vHi, row.wLo, row.wHi)
+			require.Equal(t, 1, twist2.Sign(), "the fixture must carry a genuinely nonzero exact twist")
+			if row.floatChainCancels {
+				require.Equal(t, r3.NewVec(0, 0, 0), row.vLo.Sub(row.vHi).Sub(row.wLo).Add(row.wHi),
+					"this row exists to exercise the cancellation channel; a nonzero float chain stops exercising it")
+			}
+			// dominates reports 16·got² >= target, the squared form of
+			// got >= sqrt(target)/4 exactCellTwistFactors' doc comment states.
+			dominates := func(got float64, target *big.Rat) bool {
+				lhs := new(big.Rat).Mul(ratOfFloat(got), ratOfFloat(got))
+				lhs.Mul(lhs, new(big.Rat).SetInt64(16))
+				return lhs.Cmp(target) >= 0
+			}
+
+			offset := cellTwistOffsetUpper(row.vLo, row.vHi, row.wLo, row.wHi)
+			require.Positive(t, offset, "the pointwise bound must not vanish while the exact |T| is positive")
+			require.True(t, dominates(offset, twist2),
+				"cellTwistOffsetUpper = %.20g sits BELOW the exact |T|/4 it claims to dominate", offset)
+
+			volume := cellTwistVolumeAllow(row.vLo, row.vHi, row.wLo, row.wHi)
+			require.Positive(t, volume, "the volume allowance must not vanish while the exact twist gap is positive")
+			require.True(t, dominates(volume, new(big.Rat).Mul(twist2, new(big.Rat).Mul(eA2, eB2))),
+				"cellTwistVolumeAllow = %.20g sits BELOW the exact (|T|/4)·eA·eB it claims to dominate", volume)
+		})
+	}
 }
 
 // TestCapAreaVolumeAllowIsExactForAPlanarFace pins the closed form's own

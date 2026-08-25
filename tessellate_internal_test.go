@@ -310,3 +310,38 @@ func TestChordSagittaRefusesRatherThanUnderstatesOnBrokenClaims(t *testing.T) {
 	require.True(t, math.IsInf(chordSagitta(5, 1, 0), 1), "n=0 must refuse, not understate")
 	require.Zero(t, chordSagitta(-5, 1, 8), "a negative radius has a genuine 0 upper bound and needs no refusal")
 }
+
+// TestChordSagittaNeverUnderflowsToZero pins the bound against a POSITIVE
+// exact r·sweep²/(8n²) whose float evaluation underflows. There are two
+// independent underflow sites in that chain and a row for each: the inner
+// sweep·sweep product can fall below the smallest denormal on its own, and
+// the final quotient can land on zero even when the numerator survived. A
+// published zero for a positive radius, sweep and n is a bound below the
+// deviation it claims to dominate — chordCount hands it on as the walk's
+// proven sagitta, Mesh.Bound publishes it, and the walk-up loop exits on it.
+func TestChordSagittaNeverUnderflowsToZero(t *testing.T) {
+	for _, row := range []struct {
+		name          string
+		radius, sweep float64
+		n             int
+	}{
+		{name: "the sweep square underflows", radius: 1, sweep: 1e-200, n: 1},
+		{name: "the sweep square underflows under a fine chording", radius: 10, sweep: 1e-200, n: 64},
+		{name: "the quotient underflows below a denormal numerator", radius: 0.001, sweep: 1e-160, n: 1},
+	} {
+		t.Run(row.name, func(t *testing.T) {
+			// The exact bound, over the rationals: radius and sweep are
+			// float64 and hence exact rationals, and 8n² is an exact integer.
+			exact := new(big.Rat).Mul(ratOfFloat(row.radius), new(big.Rat).Mul(ratOfFloat(row.sweep), ratOfFloat(row.sweep)))
+			nRat := new(big.Rat).SetInt64(int64(row.n))
+			exact.Quo(exact, new(big.Rat).Mul(new(big.Rat).SetInt64(8), new(big.Rat).Mul(nRat, nRat)))
+			require.Equal(t, 1, exact.Sign(), "the fixture must carry a genuinely positive exact sagitta")
+
+			got := chordSagitta(row.radius, row.sweep, row.n)
+			require.Positive(t, got, "a positive radius, sweep and n must never publish a zero sagitta")
+			require.GreaterOrEqual(t, ratOfFloat(got).Cmp(exact), 0,
+				"chordSagitta(radius=%g, sweep=%g, n=%d) = %.20g must stay at or above the exact bound %s",
+				row.radius, row.sweep, row.n, got, exact.FloatString(410))
+		})
+	}
+}

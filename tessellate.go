@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"math/big"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -858,6 +859,18 @@ func chordCount(w segmentWalk, tol float64) (int, float64, error) {
 // one division is outward-rounded by a final upRound, exactly the
 // single-operation margin productUpper already applies to a multiply.
 //
+// That float chain is a proven upper bound wherever it lands on a positive
+// value, and it is the only thing this helper publishes there. What it may
+// NOT do is answer ZERO for a positive r·sweep²/(8n²): rounding outward
+// cannot rescue an UNDERFLOW, since upRound leaves 0 alone, and both the
+// sweep·sweep product and the final quotient can reach 0 from operands that
+// are each positive. chordCount hands this figure on as the walk's proven
+// sagitta and [Mesh.Bound] publishes it, so a zero there would claim an
+// exact chording for a nonzero deviation and would end chordCount's walk-up
+// loop on a false reading. A non-positive answer from the float chain
+// therefore falls through to exactChordSagitta, which states the same bound
+// over the rationals.
+//
 // The bound sits above the true sagitta by the factor (x/sin x)² — about
 // 1.0000126 at a typical fine chording (90 degrees over 64 stations) and
 // π²/9 in the coarsest case a closed walk can reach (n=3 on a full circle;
@@ -887,12 +900,46 @@ func chordSagitta(radius, sweep float64, n int) float64 {
 		// refusal needed.
 		return 0
 	}
+	if isNonFinite(radius) || isNonFinite(sweep) {
+		// A non-finite claim states no bound at all. It refuses with +Inf for
+		// the same reason the two arms above do, rather than carrying the NaN
+		// the arithmetic below would otherwise publish as a bound.
+		return math.Inf(1)
+	}
 	denom := 8 * float64(n) * float64(n)
-	num := productUpper(radius, productUpper(sweep, sweep))
-	if num <= 0 || denom <= 0 || isNonFinite(denom) {
+	if denom <= 0 || isNonFinite(denom) {
+		// 8n² saturated, so the true bound r·sweep²/(8n²) is itself driven to
+		// zero and 0 remains an upper bound.
 		return 0
 	}
-	return upRound(num / denom)
+	if radius == 0 || sweep == 0 {
+		// The true sagitta is exactly zero, and so is its bound.
+		return 0
+	}
+	if s := upRound(productUpper(radius, productUpper(sweep, sweep)) / denom); s > 0 {
+		return s
+	}
+	return exactChordSagitta(radius, sweep, n)
+}
+
+// exactChordSagitta states chordSagitta's own r·sweep²/(8n²) over the
+// RATIONALS, for the one case its float chain cannot: a POSITIVE bound whose
+// float evaluation underflows to zero. Two independent sites in that chain can
+// underflow — sweep·sweep can fall below the smallest denormal on its own, and
+// the final quotient can land on zero from a numerator that survived — and this
+// helper covers both, because it is reached from the PUBLISHED value rather
+// than from either site.
+//
+// radius and sweep are float64 and therefore exact rationals, and 8n² is an
+// exact integer for every positive n, so the quotient here is the EXACT bound
+// with no rounding anywhere in it. ratFloatUp then rounds that one value
+// outward, which answers the smallest positive float64 — never zero — for a
+// bound too small for float64 to represent.
+func exactChordSagitta(radius, sweep float64, n int) float64 {
+	num := new(big.Rat).Mul(floatRat(radius), new(big.Rat).Mul(floatRat(sweep), floatRat(sweep)))
+	nRat := new(big.Rat).SetInt64(int64(n))
+	denom := new(big.Rat).Mul(new(big.Rat).SetInt64(8), new(big.Rat).Mul(nRat, nRat))
+	return ratFloatUp(num.Quo(num, denom))
 }
 
 // errTooManyChords refuses a chord tolerance finer than the mesh cap.

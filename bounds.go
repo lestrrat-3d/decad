@@ -615,14 +615,55 @@ func cellTwistVolumeAllow(vLo, vHi, wLo, wHi r3.Vec) float64 {
 	if !finiteVec(vLo) || !finiteVec(vHi) || !finiteVec(wLo) || !finiteVec(wHi) {
 		return math.Inf(1)
 	}
-	t := vLo.Sub(vHi).Sub(wLo).Add(wHi)
-	twistUpper := t.Len() / 4
+	twistUpper := cellTwistQuarterUpper(vLo, vHi, wLo, wHi)
 	if twistUpper <= 0 {
+		// Certified zero: the EXACT T vanishes, so the ruled patch IS the
+		// triangle pair and the cell contributes nothing. cellTwistQuarterUpper
+		// answers 0 for no other reason.
 		return 0
 	}
-	eA := math.Max(vHi.Sub(vLo).Len(), wHi.Sub(wLo).Len())
-	eB := math.Max(wLo.Sub(vLo).Len(), wHi.Sub(vHi).Len())
+	eA := math.Max(cellSpanUpper(vHi, vLo), cellSpanUpper(wHi, wLo))
+	eB := math.Max(cellSpanUpper(wLo, vLo), cellSpanUpper(wHi, vHi))
 	return productUpper(twistUpper, productUpper(eA, eB))
+}
+
+// cellTwistQuarterUpper is the CERTIFIED upper endpoint of |T|/4 for a wall
+// cell, the single quantity cellTwistVolumeAllow and cellTwistOffsetUpper both
+// rest on. Nothing about it may be computed in float64:
+//
+//   - T = vLo − vHi − wLo + wHi is a CANCELLING chain. An ordinary
+//     parallelogram cell — one whose two rules were themselves built by adding
+//     a common offset — drives the float chain to EXACTLY (0,0,0) while the
+//     exact T, the addition's own rounding residue, is nonzero, so a computed
+//     zero proves nothing and a computed magnitude carries unbounded relative
+//     loss. The four corners are float64 and therefore exact rationals, so the
+//     chain is evaluated over big.Rat with no rounding at all and answers 0
+//     only when T is EXACTLY the zero vector.
+//   - |T| is a square root, and r3.Vec.Len is nested math.Hypot, which Go
+//     publishes no accuracy contract for and which falls several ulp BELOW the
+//     exact norm for a large share of vectors. The magnitude therefore comes
+//     from ratSqrtUp of the exact |T|²/16, whose answer is decided by exact
+//     rational comparison rather than by any libm's rounding.
+func cellTwistQuarterUpper(vLo, vHi, wLo, wHi r3.Vec) float64 {
+	// T = vLo − vHi − wLo + wHi = (vLo − vHi) − (wLo − wHi).
+	t := rvSub(rvSub(ratVec(vLo), ratVec(vHi)), rvSub(ratVec(wLo), ratVec(wHi)))
+	if rvIsZero(t) {
+		return 0
+	}
+	return ratSqrtUp(new(big.Rat).Quo(rvDot(t, t), new(big.Rat).SetInt64(16)))
+}
+
+// cellSpanUpper is the CERTIFIED upper endpoint of |a − b| for two of a wall
+// cell's own corners — the eA and eB edge lengths cellTwistVolumeAllow's
+// derivation part (b) bounds the homotopy's facet area by. It exists for the
+// same reason cellTwistQuarterUpper does: r3.Vec.Len is nested math.Hypot,
+// which is not correctly rounded and can sit several ulp below the exact norm,
+// and a trailing one-ulp upRound cannot recover a multi-ulp shortfall. The
+// corners are float64 and hence exact rationals, so the difference and its
+// squared norm are exact and ratSqrtUp decides the root by exact comparison.
+func cellSpanUpper(a, b r3.Vec) float64 {
+	d := rvSub(ratVec(a), ratVec(b))
+	return ratSqrtUp(rvDot(d, d))
 }
 
 // cellTwistOffsetUpper is cellTwistVolumeAllow's own POINTWISE deviation
@@ -638,12 +679,16 @@ func cellTwistVolumeAllow(vLo, vHi, wLo, wHi r3.Vec) float64 {
 //
 // Non-finite corners answer +Inf rather than a silently-computed NaN, the
 // same guard cellTwistVolumeAllow's own doc comment states for its sibling.
+//
+// It reads the SAME certified |T|/4 endpoint cellTwistVolumeAllow multiplies,
+// through cellTwistQuarterUpper, so neither the cancelling T chain nor
+// r3.Vec.Len's own missing accuracy contract can put this reading below the
+// deviation it claims to dominate.
 func cellTwistOffsetUpper(vLo, vHi, wLo, wHi r3.Vec) float64 {
 	if !finiteVec(vLo) || !finiteVec(vHi) || !finiteVec(wLo) || !finiteVec(wHi) {
 		return math.Inf(1)
 	}
-	t := vLo.Sub(vHi).Sub(wLo).Add(wHi)
-	return upRound(t.Len() / 4)
+	return cellTwistQuarterUpper(vLo, vHi, wLo, wHi)
 }
 
 // chordedBoundaryVolumeAllow bounds the VOLUME between a loft's HELD

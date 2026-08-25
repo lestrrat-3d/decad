@@ -171,9 +171,15 @@ FMA contraction between architectures. `s` is evaluated with its numerator
 outward-rounded, its denominator `8 n²` left exact (every admitted `n` keeps
 `8 n²` inside float64's exact-integer range, and outward-rounding a DIVISOR
 would tighten the quotient — the wrong direction for an upper bound), and the
-single quotient outward-rounded once. `s` exceeds the true sagitta by the factor
-`(x / sin x)²`, which is `pi²/9` at the coarsest chording a closed walk reaches
-(`n = 3` over a full circle) and falls toward 1 as the chording refines.
+single quotient outward-rounded once. Outward rounding cannot rescue an
+UNDERFLOW, though, and both the `theta²` product and the final quotient can
+reach zero from operands that are each positive; `s` is therefore never
+published as ZERO for a positive `r`, `theta` and `n`. A float evaluation that
+lands on zero falls back to the same quotient taken over the rationals — `r` and
+`theta` are float64 and hence exact, and `8 n²` is an exact integer — rounded
+outward to the smallest positive float64. `s` exceeds the true sagitta by the
+factor `(x / sin x)²`, which is `pi²/9` at the coarsest chording a closed walk
+reaches (`n = 3` over a full circle) and falls toward 1 as the chording refines.
 
 Choose the smallest `n` whose `s` fits its positive budget `b`. Let `nMin` be
 the walk minimum. First evaluate `s(r, theta, nMin)`; when it is at most `b`,
