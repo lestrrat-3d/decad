@@ -354,10 +354,10 @@ func TestEvalLoftHoleRimIsConcave(t *testing.T) {
 // against the pairing's own output: with no alignment, vertex k of loop0
 // pairs with vertex k of loop1; with an offset, it pairs with vertex
 // (k+offset) mod n — asserted on the built correspondence's own coordinates.
-// resolveProfileWalks resolves every loop of p (Outer, then Holes in order)
+// resolveLoftLoopWalks resolves every loop of p (Outer, then Holes in order)
 // into its own per-segment walk slice, on a fresh freeformWork per loop — the
 // shape validateLoftRecords now returns and loftPairings now consumes.
-func resolveProfileWalks(t *testing.T, p ProfileRecord) [][]segmentWalk {
+func resolveLoftLoopWalks(t *testing.T, p ProfileRecord) [][]segmentWalk {
 	t.Helper()
 	loops := append([]LoopRecord{p.Outer}, p.Holes...)
 	walks := make([][]segmentWalk, len(loops))
@@ -377,7 +377,7 @@ func resolveProfileWalks(t *testing.T, p ProfileRecord) [][]segmentWalk {
 func TestLoftPairingsDefaultOffsetIsZero(t *testing.T) {
 	p := unitSquareProfile()
 	offsets := []int{0}
-	walks := resolveProfileWalks(t, p)
+	walks := resolveLoftLoopWalks(t, p)
 	pairs := loftPairings(p, offsets, walks, walks)
 	require.Equal(t, pt(0, 0), pairs[0].w[0])
 }
@@ -385,7 +385,7 @@ func TestLoftPairingsDefaultOffsetIsZero(t *testing.T) {
 func TestLoftPairingsAlignmentRotatesCorrespondence(t *testing.T) {
 	p := unitSquareProfile()
 	offsets := []int{1}
-	walks := resolveProfileWalks(t, p)
+	walks := resolveLoftLoopWalks(t, p)
 	pairs := loftPairings(p, offsets, walks, walks)
 	// loop0 segment 0 (V_0, at local (0,0)) now pairs with loop1 segment 1,
 	// whose own recorded start is local (1,0) — the far endpoint of rung R_0
@@ -408,7 +408,7 @@ func TestLoftPairingsTwoHolesPairByPosition(t *testing.T) {
 	p1 := ProfileRecord{Outer: squareLoop(0.5, 0.5, 0.5, true), Holes: []LoopRecord{largeHole, smallHole}}
 
 	offsets := []int{0, 0, 0}
-	pairs := loftPairings(p0, offsets, resolveProfileWalks(t, p0), resolveProfileWalks(t, p1))
+	pairs := loftPairings(p0, offsets, resolveLoftLoopWalks(t, p0), resolveLoftLoopWalks(t, p1))
 
 	require.Len(t, pairs, 3) // outer + 2 holes
 	// Hole loop 1 (index 1+0): p0's own small hole (v) pairs with p1's
