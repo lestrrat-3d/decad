@@ -313,23 +313,29 @@ func (m *loftMassAccumulator) volume(verts []r3.Vec, tris [][3]int) Measurement 
 // (docs/loft-design.md §8, §12 PR 2a, a10-plan.md Part 3 PR 6). A loft with
 // zero net volume has no centroid.
 //
-// A placement (delta > 0) and a curved pairing (sectionDelta > 0) each widen
-// one COMBINED volume allowance epsV and one COMBINED first-moment allowance
-// epsM before either is spent: delta's own leg is
-// sweptVolumeAllow/sweptMomentAllow, sectionDelta's own leg is
-// chordedBoundaryVolumeAllow/chordedBoundaryMomentAllow — mechanically
-// distinct (a vertex displaced versus a boundary replaced by a nearby
-// non-mesh surface, docs/loft-design.md §5), but each publishes a volume and
-// a first-moment allowance over the SAME anchored accumulator, so ONE
-// clearance test and ONE placedCentroidAllow quotient composition — moments.go's
-// boundedQuotient formula, specialized to whichever allowances are active — cover
-// both. A non-positive clearance (the combined volume allowance is not
-// smaller than the held volume) leaves the quotient's denominator with
-// nothing left to divide by, so the centroid is unstateable — refused
-// ErrUnsupported (Table S, S12) rather than published with a bound nobody
-// could use. This gate is reachable on an UNPLACED body for the first time
-// under sectionDelta alone (a10-plan.md Part 3 PR 6): delta's own fast path
-// (delta == 0) no longer implies epsV == 0.
+// A placement (delta > 0) and a curved pairing (sectionDelta > 0 or
+// sectionMatchedDelta > 0) each widen one COMBINED volume allowance epsV and
+// one COMBINED first-moment allowance epsM before either is spent: delta's
+// own leg is sweptVolumeAllow/sweptMomentAllow, and the curved pairing's leg
+// is chordedBoundaryVolumeAllow/chordedBoundaryMomentAllow, both composed
+// from sectionMatchedDelta — the PARAMETER-MATCHED quantity those two
+// helpers' own doc comments oblige, never sectionDelta, whose SET-distance
+// sagitta is spent on the cap tube (sectionDisplacementArea) and Bounds
+// instead. The two legs are mechanically distinct (a vertex displaced versus
+// a boundary replaced by a nearby non-mesh surface, docs/loft-design.md §5),
+// but each publishes a volume and a first-moment allowance over the SAME
+// anchored accumulator, so ONE clearance test and ONE placedCentroidAllow
+// quotient composition — moments.go's boundedQuotient formula, specialized to
+// whichever allowances are active — cover both. A non-positive clearance (the
+// combined volume allowance is not smaller than the held volume) leaves the
+// quotient's denominator with nothing left to divide by, so the centroid is
+// unstateable — refused ErrUnsupported (Table S, S12) rather than published
+// with a bound nobody could use. This gate is reachable on an UNPLACED body
+// under a curved pairing alone (a10-plan.md Part 3 PR 6): delta's own fast
+// path (delta == 0) does not imply epsV == 0, and EITHER section quantity on
+// its own reaches it, since a free-form cell can carry a positive
+// matchedDelta at an exactly-zero sagitta (spline_sagitta.go's own
+// counterexample).
 func (m *loftMassAccumulator) centroid(verts []r3.Vec, tris [][3]int) (VecMeasurement, error) {
 	if m.vol6.Sign() == 0 {
 		return VecMeasurement{}, fmt.Errorf(`%w: a loft with zero net volume has no centroid`, ErrDegenerate)

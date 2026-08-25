@@ -86,8 +86,28 @@ type loftPayload struct {
 	// coincide only for a LINE (trivially, both zero) or an ARC under its own
 	// uniform-angle parametrization (bounds.go's own doc comment on
 	// cellChordCurveAreaUpper, F1) — the coincidence loftCircularCellStations'
-	// own doc comment proves, and the ONLY reason evalLoft passes this same
-	// field's value as matchedDeltaUpper at every one of its own call sites.
+	// own doc comment proves.
+	//
+	// Every matched-delta obligation is discharged by a SEPARATE quantity,
+	// sectionMatchedDelta: loftPairings accumulates it as its own MAX over
+	// each cell's matchedDelta and returns it beside sectionDelta, and
+	// evalLoft passes it — never this field — to newLoftMassAccumulator and
+	// computeLoftChordedAllow (loft_moments.go), which is where every
+	// chordedBoundaryVolumeAllow, chordedBoundaryMomentAllow and
+	// chordedBoundarySeamAllow matched argument comes from;
+	// cellChordCurveAreaUpper reads the per-cell matchedDelta[j] that same
+	// MAX is taken over, one cell at a time. sectionMatchedDelta is a
+	// PER-BUILD LOCAL of evalLoft and deliberately NOT a loftPayload field:
+	// nothing this payload stores needs it, because placed re-evaluates
+	// through evalLoft, which recomputes both quantities from the records,
+	// and those two consumers have exactly one production call site each —
+	// evalLoft's own. So there is no stored copy of the matched quantity that
+	// could disagree with the records, and no caller that could reach those
+	// helpers with the other quantity.
+	//
+	// This field's OWN remaining spends are the cap SET-distance tube
+	// (sectionDisplacementArea, loft_moments.go) and Bounds.Bound. Both are
+	// set-distance readings, so both correctly read sectionDelta.
 	sectionDelta float64
 
 	verts []r3.Vec
@@ -413,14 +433,19 @@ func loftChordTarget(p0, p1 ProfileRecord, walks0, walks1 [][]segmentWalk) (floa
 // loop's wrap) supplies it, the convention loftLoopPair's own doc comment
 // states.
 //
-// sagittaUpper is the proven upper bound on max_s |curve(s) - chord(s)|
-// under the SAME parameter this cell's own uniform stations walk — a
-// PARAMETER-MATCHED bound, never a set distance from some chord point to the
-// curve (bounds.go's cellChordCurveAreaUpper doc comment states the
-// distinction this field's name exists to keep visible). The LineSeg arm's
-// chord IS the recorded segment, so its bound is exactly zero; the circular
-// arm's own doc comment states why its sagitta discharges the matched
-// obligation exactly, never merely bounds it.
+// sagittaUpper is this cell's own SAGITTA: the proven upper bound on how far
+// a BUILT CHORD point sits from the curve it chords, AS A SET — the
+// SET-distance reading loftPairings maxes into sectionDelta (loftPayload's
+// own doc comment), never bounds.go's cellChordCurveAreaUpper own
+// PARAMETER-MATCHED matchedDeltaUpper obligation. The two arms shipping
+// today happen to discharge that matched obligation with this same number:
+// the LineSeg arm's chord IS the recorded segment, so its bound is exactly
+// zero, and the circular arm's own doc comment states why its uniform-angle
+// sagitta discharges the matched obligation exactly rather than merely
+// bounding it. That coincidence is a property of those two arms, not of this
+// return — which is why the matched reading is returned separately as
+// matchedDelta below, and why matchedDelta, never this value, is what the
+// matched helpers read.
 //
 // target is loftChordTarget's own single per-build reading, never
 // recomputed per cell. work0/work1 are the two records' own free-form work
