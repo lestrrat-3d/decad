@@ -569,7 +569,7 @@ those sections restates one.
 | **`delta`** | a LENGTH: the world-space displacement of one held vertex from the point the record and the motion together denote for it | `absSumUpper(stationRound, placeAllow)` — the two rows above and no third mechanism | the triangle inequality over the two rows above: the two displacements are committed at independent stages — the station is computed, then the motion is applied — so the vertex's total departure is at most their sum | outward, in `absSumUpper` | inherits both rows'. Zero exactly when both terms are zero: an unplaced pairing whose every station is either a `LineSeg` endpoint or one of the two pinned circular kinds below |
 | **per-cell sagitta `s_k`** | a LENGTH: the in-section-plane distance from one chord to the recorded curve piece it chords, on side `k` of one chord cell | `2·r·sin²(Δθ/4m)` evaluated over side `k`'s own enclosures — the RADIUS enclosure (`ratSqrtDown` / `ratSqrtUp` of the exact squared `Start`-to-`Center` distance for an `ArcSeg`; the recorded `Radius` converted to millimetres, exactly rational, for a `CircleSeg`) and the SWEEP enclosure (`atan2Interval`'s difference under the same `+2π` branch correction `circularLengthInterval` applies for an `ArcSeg`; the exact rational turn `2π·(TEnd − TStart)` for a `CircleSeg`), with `radSinCosSpan` supplying the sine of the enclosed angle | elementary and stated here: a circular arc's distance from its own chord is `r·(1 − cos(half the cell's sweep))`, taken at the cell's midpoint where the two are farthest apart, and `1 − cos x = 2·sin²(x/2)` turns that into the form the row publishes | interval arithmetic to the last step, then ONE outward rounding of the interval's upper end into the published float | `+Inf` wherever an enclosure has no derivation — the `In(units.Millimeter)` conversion, `floatRat`, `ratSqrtUp` or `radSinCosSpan` answering no — refused `ErrUnsupported` at Table S row **S14** |
 | **`sectionDelta`** | a LENGTH: the largest single `s_k` over every chord cell and both sides of the whole build, a MAXIMUM and never a sum | the row above | this section's maximum-not-a-sum paragraph: a boundary point lies in exactly one cell, so no point is displaced by two cells' sagittae | none of its own — a maximum of values already rounded outward is already an over-statement | inherits the row above's `+Inf` and its **S14**. Exactly zero when every paired segment is a `LineSeg` |
-| **`cellRuledExcessUpper`** | an AREA: the area between the two flat chord facets this construction builds over one chord cell and the curved ruled surface between the two recorded curve pieces that cell approximates. A length excess is a different quantity and never stands in for it | two arms, selected by the pair's own recorded pose (§8.1). A COAXIAL CONCENTRIC angle-for-angle pair takes the EXACT arm `(arc0 + arc1)/2 · rung − (L0 + L1)/2 · bandHeight`; every other admitted pair takes the GENERAL arm `rulingUpper·((d0 + d1)/2 + twistUpper/3) + (L0 + L1)·(L0 + L1 + d0 + d1)/6`. Both read the arc, chord, rung, radius and sweep enclosures the sagitta row names, and §8.1 defines each factor | **§8.1**, which proves each arm dominates the AREA difference — both areas written as one integral over one shared parameter square, then the exact cone-band difference on the first arm and a four-step outward enclosure on the second | outward: every factor is evaluated in that same interval arithmetic, each square root by `ratSqrtUp`, each product by `productUpper`, and the assembled term rounded out once | inherits the sagitta row's `+Inf` and its **S14**; a rung, chord or twist enclosure that runs past `MaxFloat64` is likewise `+Inf` and **S14**, never a finite substitute |
+| **`cellRuledExcessUpper`** | an AREA: the area between the two flat chord facets this construction builds over one chord cell and the curved ruled surface between the two recorded curve pieces that cell approximates. A length excess is a different quantity and never stands in for it | two arms, selected by an exact equality test over the two records (§8.1). A pair whose two segment records DIFFER ONLY IN RADIUS, on plane records carrying identical `U`/`V` bases and separating along their common normal, takes the EXACT arm `(arc0 + arc1)/2 · rung − (L0 + L1)/2 · bandHeight`; every other admitted pair takes the GENERAL arm `rulingUpper·((d0 + d1)/2 + twistUpper/3) + (L0 + L1)·(L0 + L1 + d0 + d1)/6`. Both read the arc, chord, rung, radius and sweep enclosures the sagitta row names, and §8.1 defines each factor | **§8.1**, which proves each arm dominates the AREA difference — both areas written as one integral over one shared parameter square, then the exact cone-band difference on the first arm and a four-step outward enclosure on the second | outward: every factor is evaluated in that same interval arithmetic, each square root by `ratSqrtUp`, each product by `productUpper`, and the assembled term rounded out once | inherits the sagitta row's `+Inf` and its **S14**; a rung, chord or twist enclosure that runs past `MaxFloat64` is likewise `+Inf` and **S14**, never a finite substitute |
 | **`Bounds.Bound`** | a LENGTH: the radius by which the axis-aligned box the payload holds may fall short of the box the true recorded boundary occupies | `absSumUpper(delta, sectionDelta)` — the two published terms above, summed | §8's `Bounds` paragraph: the recorded boundary can exceed the held box both by a held vertex's own displacement and by the recorded curve's bulge outside the station polygon, and the two act on the same face of the box, so the shortfall is at most their sum | outward, in `absSumUpper` | inherits both rows'. `Bounds` is `Exact` only where that sum is exactly zero (§8) |
 
 **Four rules govern every row, and they are stated here once.**
@@ -1013,25 +1013,58 @@ cell it chords, by a per-cell amount that falls only as fast as the cell's
 own sweep, so a derivation taken against that patch would leave the direction
 the triangles actually depart in unbounded.
 
-**Arm 1 — the EXACT arm, for a coaxial concentric angle-for-angle pair.** The
-arm is selected from the two records alone, beside §4's other record-only
-gates, and every test in it is exact:
+**Arm 1 — the EXACT arm, for a pair whose two records differ only in RADIUS.**
+The arm is selected from the two records alone, beside §4's other record-only
+gates, and every test in it is an EQUALITY OF RECORDED DATA rather than a
+geometric property inferred from that data. The closed form below needs one
+premise — that at every parameter `t` the two world-space points sit at the
+SAME SIGNED ANGLE about the common axis — and world sense is decided by three
+things together: the recorded winding, the plane's `V` against the world
+normal, and the parameter range. A predicate written as a list of geometric
+properties can be satisfied by a pair that still misses that premise, since
+no such list states all three at once; an equality of the recorded numbers
+leaves nothing to infer at all. The tests are:
 
-- the two section planes are PARALLEL: `U0 × V0` and `U1 × V1` are parallel,
-  a cross product of recorded coordinates taken over the rationals;
-- the pair is COAXIAL AND CONCENTRIC: the two recorded centres lift to points
-  whose displacement lies along that common normal;
-- the correspondence is ANGLE-FOR-ANGLE: the two sides walk the same sense
-  and their stations share every angle. For an `ArcSeg` pair, the lifted
-  `Start - Center` and `End - Center` rays of the two sides are positively
-  parallel; for a `CircleSeg` pair, the two planes' `U` axes lift to the same
-  direction — a circular walk measures its own angle from `U` (`extrude.go`)
-  — and `TStart`, `TEnd` and `CCW` are equal.
+- **THE TWO FRAME BASES ARE IDENTICAL**: `plane0.U` equals `plane1.U` and
+  `plane0.V` equals `plane1.V`, componentwise exact equality of the recorded
+  float64 coordinates. Not parallel, not equal up to sign — EQUAL. The two
+  planes then share one normal `U × V` INCLUDING ITS SIGN, and both sides'
+  plane-local `(u, v)` axes lift to the same two world directions;
+- **THE TWO ORIGINS SEPARATE ALONG THAT NORMAL**: `plane1.Origin` minus
+  `plane0.Origin` is parallel to `U × V`, a cross product and a parallelism of
+  recorded coordinates taken over the rationals. A zero separation is two
+  records of one geometric plane and is refused by §4's own coplanarity gate
+  (Table S row S5) before this arm is ever consulted;
+- **THE TWO SEGMENT RECORDS ARE EQUAL FIELD FOR FIELD, EXCEPT IN RADIUS.**
+  For a `CircleSeg` pair, `Center`, `CCW`, `TStart` and `TEnd` are each
+  exactly equal and `Radius` alone may differ. For an `ArcSeg` pair — which
+  records no radius (`record.go`) — `Center`, `TStart` and `TEnd` are each
+  exactly equal, and side 1's `Start - Center` and `End - Center` are the
+  SAME POSITIVE RATIONAL MULTIPLE of side 0's, which is what makes the radius
+  the one thing the two records differ in. Each test is an equality or a
+  common-scale test over recorded numbers, decided over the rationals.
 
 A pair that passes every test takes this arm; a pair that fails any of them
-takes arm 2. No test admits on a residual: each is a parallelism, a sign or
-an equality over recorded coordinates, so each is decided outright or the arm
-is not taken.
+takes arm 2 and is covered by its proven bound. Failing this predicate is not
+a refusal: no Table S row reads it, and a genuinely coaxial pair recorded on
+two differently-posed frames is bounded by arm 2 rather than rejected. No
+test admits on a residual: each is an exact equality, a parallelism, or a
+common rational scale over recorded data, so each is decided outright or the
+arm is not taken.
+
+**The premise follows from the predicate BY CONSTRUCTION, and no geometric
+step is left between them.** Both sides carry the same recorded `Center`
+under the same lifted `(u, v)` axes, so the two centres lift onto one line
+along the common normal and the pair is coaxial and concentric. Both sides
+carry the same `TStart` and `TEnd`, the same `CCW` where the kind records one
+and the same implicit counter-clockwise sweep where it does not, under frames
+that are equal rather than merely parallel — so the two walks measure their
+angle from one and the same world direction, in one and the same world sense,
+over one and the same parameter range. Station `j` therefore sits at a single
+signed world angle about the axis on BOTH sides, for every `j`, which is the
+premise the closed form reads. None of the three things that decide world
+sense can differ between the two sides here, since each is equal by a test
+above rather than argued per kind.
 
 Under those conditions each cell is a band of one cone — a cylinder where the
 radii agree — swept through the pair's shared per-cell angle `θ` at radii
@@ -1068,11 +1101,12 @@ over-statement: both areas it differences are closed forms of the same
 enclosed data, so the only rounding is §5.2's one outward rounding of the
 assembled interval.
 
-**Arm 2 — the GENERAL arm, for every other admitted pair.** Where the planes
-are not parallel, the centres are not on one normal, or the correspondence is
-not angle-for-angle, the curved cell is not a cone band and has no elementary
-closed-form area. The term is then a proven outward enclosure of the same
-difference:
+**Arm 2 — the GENERAL arm, for every other admitted pair.** Where any of arm
+1's equalities fails — the two recorded frame bases differ in any component,
+the origins do not separate along the common normal, or the two segment
+records differ in anything but radius — the curved cell need not be a cone
+band and has no elementary closed-form area. The term is then a proven
+outward enclosure of the same difference:
 
 ```text
 cellRuledExcessUpper = rulingUpper * ((d0 + d1)/2 + twistUpper/3)
@@ -1155,13 +1189,24 @@ all. That last part is not slack in the bound but the built body's own
 behaviour: where the correspondence twists, a cell's two flat triangles are
 tilted against the ruled surface they chord and carry more area than it does,
 by an amount refinement does not remove. So a body the general arm covers can
-read `Suspect` at the default tolerance whatever its station count, where a
-coaxial one reads `Sound` (`docs/verification-design.md` §2) — a correct,
+read `Suspect` at the default tolerance whatever its station count, where an
+exact-arm body reads `Sound` (`docs/verification-design.md` §2) — a correct,
 non-silent outcome, and the same trade §14 already accepts for a tolerance
-tighter than the default. §14's calibration is measured on two coaxial
-concentric pairs — the arc wedge paired with itself, and the full-circle
-frustum (§13) — so both take the exact arm, and the margins §14 states are
-the exact arm's.
+tighter than the default. **A pair that is coaxial in fact but recorded on
+two differently-posed frames pays that coarser bound**, and this design takes
+that trade knowingly: arm 2's bound is proven for it, arm 1's premise is not
+established for it, and a `Suspect` reading is the correct non-silent
+outcome where a closed form applied off its premise is not.
+
+**Both fixtures §14 calibrates on PASS the equality predicate, so the margins
+§14 records are the exact arm's.** The arc wedge is one recorded `ArcSeg`
+profile paired with ITSELF across two planes that carry identical `U` and `V`
+and separate along their common normal, so every field of the two segment
+records is equal and the common scale is exactly 1. The
+full-circle frustum pairs two `CircleSeg` records on those same identical
+bases whose `Center`, `CCW`, `TStart` and `TEnd` agree and whose `Radius`
+alone differs (§13). Both therefore take arm 1, and neither the shipped
+`loftChordFraction` nor either measured margin is re-derived here.
 
 ## 9. Table D — downstream
 
@@ -1459,16 +1504,38 @@ against this budget.
   surface between the two recorded curves, so §8.1's per-cell ruled-excess
   term is asserted in the outward direction rather than merely present.
   **Both of §8.1's arms are fixtured, each on a pair that separates it.** The
-  EXACT arm takes a coaxial concentric pair whose radius DIFFERENCE exceeds
-  its plane separation — a shallow wide frustum band, where the excess is
+  EXACT arm takes a pair recorded on IDENTICAL `U`/`V` bases whose two
+  `CircleSeg`s differ in `Radius` alone, that radius DIFFERENCE exceeding the
+  plane separation — a shallow wide frustum band, where the excess is
   governed by the ruling's own radius-changing component and not by either
   side's arc-minus-chord length — and the fixture encloses `|held - true|`
   against the closed-form cone-band area over `math/big.Rat`. The GENERAL arm
   takes a TWISTED pair, two full circles on parallel planes whose recorded
-  angular origins differ, where the flat facet pair carries MORE area than
-  the curved band it chords: that fixture asserts the enclosure in BOTH
-  directions, which a one-sided term fails, and asserts it again at a higher
-  station count, where the twisted excess does not fall (§8.1).
+  `U` axes differ, so §8.1's equality predicate fails and the flat facet pair
+  carries MORE area than the curved band it chords: that fixture asserts the
+  enclosure in BOTH directions, which a one-sided term fails, and asserts it
+  again at a higher station count, where the twisted excess does not fall
+  (§8.1). §14's two calibration fixtures — the arc wedge paired with itself
+  and the full-circle frustum — are each asserted to take the EXACT arm at
+  that same selection point, so the margins §14 records stay the exact arm's.
+  **Two FLIPPED-BASIS pairs pin the equality predicate's own boundary, and
+  each MUST take the GENERAL arm.** Both record side 1 on a plane whose `U`
+  equals side 0's while its `V` is the exact negation of side 0's, so the two
+  lifted normals are opposite and side 1 walks clockwise about side 0's
+  normal, while side 1's lifted rays stay identical to side 0's and the two
+  section planes stay parallel. The first is a `CircleSeg` pair trimmed to
+  under a half turn on that flipped plane; the second is an `ArcSeg` pair on
+  it whose lifted `Start - Center` and `End - Center` rays match side 0's.
+  Neither is refused — each builds at a forced coarse station count, inside
+  the wall-clock budget above, and clears §6's audit — and each asserts its
+  `Area.Bound` ENCLOSES `|held - true|` in BOTH directions against a
+  high-precision reference for the true ruled surface between the two
+  recorded curves. The exact arm's closed form encloses neither: at these
+  poses a cell's two rungs carry different lengths and its quad is not
+  planar, so a build that admitted one would publish a bound smaller than the
+  area difference it claims to bound and fails here. An internal test asserts
+  the SELECTION on both — general arm, never exact — so the two fixtures pin
+  the predicate itself and not only the number it produces.
   `Bounds` widened by its own `Bound`
   (`absSumUpper(delta, sectionDelta)`) CONTAINS a dense sample of both true
   recorded arcs lifted through their planes — a box that did not widen fails
