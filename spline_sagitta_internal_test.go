@@ -86,6 +86,25 @@ import (
 //     costs ~20 s and hundreds of megabytes even in the shipped form that
 //     bounds it correctly, so it is argued here rather than paid for on every
 //     run.
+//
+// SECOND PASS — an independent adversarial audit of this file found two real
+// defects behind an otherwise-sound bound, closed here:
+//
+//   - B1: dyadicSpanSagittaUpper's own n==0 guard was dead-ended — nothing in
+//     pairStations prevented a zero-control-point span from reaching
+//     walkCell, whose accept branch then panicked on c0.ratPointAt(0)'s empty
+//     slice. Removing the new entry-level guard and running
+//     TestPairStationsRefusesAZeroControlSpanInsteadOfPanicking reproduced
+//     exactly that panic (index out of range on dyadicSpan.ratPointAt);
+//     pairStations now refuses a zero-control span on either side with
+//     ErrDegenerate before any cell is walked.
+//   - B2: the final station's own append reverted from a fresh
+//     ratPoint{u: new(big.Rat).Set(...), v: new(big.Rat).Set(...)} copy back
+//     to appending the caller's own last control point ratPoint directly:
+//     TestPairStationsFinalStationDoesNotAliasTheInputSpan went red —
+//     mutating the returned station's own *big.Rat in place changed the
+//     caller's input span, violating ratPointAt's own non-aliasing contract
+//     every OTHER station in the two returned lists already carries.
 
 // ratSpan is spline_extreme_internal_test.go's own helper (same package): it
 // builds a bezierSpan directly from plane-local float coordinates, for tests
@@ -622,4 +641,55 @@ func independentMaxChordSquaredDistance(t *testing.T, span bezierSpan) *big.Rat 
 		}
 	}
 	return maxSq
+}
+
+// --- B1: a zero-control-point span must refuse, never panic ---
+
+// TestPairStationsRefusesAZeroControlSpanInsteadOfPanicking pins the fix for
+// dyadicSpanSagittaUpper's own dead-ended n==0 guard: with no entry-level
+// gate, a zero-control span reaches walkCell, both sides' sagitta reads 0
+// (dyadicSpanSagittaUpper's own guard), the accept test passes trivially,
+// and the accept branch's own c0.ratPointAt(0) panics with an index out of
+// range on the empty points slice. pairStations must refuse this input
+// cleanly, on either side, before any cell is ever walked.
+func TestPairStationsRefusesAZeroControlSpanInsteadOfPanicking(t *testing.T) {
+	empty := bezierSpan{}
+	line := ratSpan([][2]float64{{0, 0}, {1, 0}})
+
+	t.Run("side0", func(t *testing.T) {
+		_, _, _, err := pairStations([]bezierSpan{empty}, []bezierSpan{line}, 1, nil, nil)
+		require.Error(t, err)
+		require.ErrorIs(t, err, ErrDegenerate)
+	})
+	t.Run("side1", func(t *testing.T) {
+		_, _, _, err := pairStations([]bezierSpan{line}, []bezierSpan{empty}, 1, nil, nil)
+		require.Error(t, err)
+		require.ErrorIs(t, err, ErrDegenerate)
+	})
+}
+
+// --- B2: the final station must not alias the caller's own input span ---
+
+// TestPairStationsFinalStationDoesNotAliasTheInputSpan mutates a RETURNED
+// station's own *big.Rat in place and checks the caller's input span is
+// unaffected. ratPointAt's own doc comment guarantees non-aliasing for every
+// OTHER station; the final station (appended after the recursive walk,
+// straight off the original chain's own last control point) must carry the
+// same guarantee.
+func TestPairStationsFinalStationDoesNotAliasTheInputSpan(t *testing.T) {
+	span := ratSpan([][2]float64{{0, 0}, {1, 0}})
+	spans := []bezierSpan{span}
+
+	// target=1 is far above this straight span's own (zero) sagitta, so the
+	// single cell accepts whole with no bisection — the final station is
+	// exactly the code path under test.
+	s0, _, _, err := pairStations(spans, spans, 1, nil, nil)
+	require.NoError(t, err)
+
+	wantU := new(big.Rat).Set(span[len(span)-1].u) // the input's own value, before any mutation
+	last := s0[len(s0)-1]
+	last.u.Add(last.u, big.NewRat(1, 1)) // mutate the RETURNED station in place
+
+	require.Zero(t, wantU.Cmp(span[len(span)-1].u),
+		"mutating a returned station must never change the caller's own input span")
 }
