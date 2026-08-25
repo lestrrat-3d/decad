@@ -217,18 +217,35 @@ func sagittaSplitCost(n int) uint64 {
 // duplicate at a span join: consecutive spans already share their boundary
 // control point exactly, per bezierSpan's own doc comment).
 //
-// The HARD CAP bounds the total number of dyadic cells this call may examine,
-// counting every cell measured whether it is ultimately accepted or split
-// further. It reuses maxChordsPerWalk and errTooManyChords (tessellate.go;
-// docs/spline-design.md Table R row R8) rather than minting a new ceiling,
-// and it is a STRICTER form of that existing cap's own stated meaning ("more
-// than N chords on one curve"): every accepted leaf was also examined, so
-// bounding the examined count at maxChordsPerWalk can only refuse sooner than
-// a cap counting accepted leaves alone would, never later, and the two sides
-// share one cell count by construction (above) so there is one ceiling for
-// the pair, not one per side. Reaching the cap guarantees termination even
-// for a target this evaluator cannot reach at all — a pathological or
-// unrepresentable target never spins forever; it refuses.
+// The HARD CAP bounds the number of CHORD CELLS the finished chain carries —
+// the accepted leaves this call returns stations for — and never the number of
+// cells its recursion happens to visit on the way to them. It reuses
+// maxChordsPerWalk and errTooManyChords (tessellate.go; docs/spline-design.md
+// Table R row R8) rather than minting a new ceiling, and it binds at exactly
+// the count that cap's own message states ("more than N chords on one curve"):
+// a walk refuses when, and only when, the chain it is building would carry
+// more than maxChordsPerWalk chords. The two sides share one chord count by
+// construction (above), so there is one ceiling for the pair, not one per
+// side.
+//
+// The cap is charged AT EACH SPLIT, before the split runs, because a split is
+// the only thing that raises the chord count: it replaces one cell of the
+// walk's frontier — the cells created but not yet accepted — with two, so
+// accepted-plus-frontier, a proven LOWER bound on the finished chain's own
+// chord count, grows by exactly one. Refusing when that sum would pass the
+// ceiling therefore refuses on the chord count itself, never on a visit tally
+// that overstates it. The chain starts with one frontier cell per span, so a
+// chain of more spans than the ceiling admits refuses up front, before any
+// cell is measured.
+//
+// TERMINATION rides on that same charge rather than on a separate node or
+// depth ceiling. walkCell recurses only after a split, every split raises
+// accepted-plus-frontier by one, and that sum starts at the span count and may
+// never pass maxChordsPerWalk — so the walk runs at most (maxChordsPerWalk −
+// span count) splits, and visits at most twice that many cells, before it
+// either finishes or refuses. A target this evaluator
+// cannot reach at all — pathological or unrepresentable — never spins forever;
+// it refuses.
 //
 // work0/work1 are the two records' OWN free-form work counters
 // (docs/spline-design.md §5.2) — this function mints no counter of its own.
@@ -256,8 +273,14 @@ func pairStations(spans0, spans1 []bezierSpan, target float64, work0, work1 *fre
 	if len(spans0) == 0 {
 		return nil, nil, 0, fmt.Errorf(`%w: a paired free-form station chain needs at least one span on each side`, ErrDegenerate)
 	}
+	// Every span carries at least one chord even when it needs no bisection at
+	// all, so a chain of more spans than the ceiling admits already exceeds the
+	// chord count errTooManyChords names.
+	if len(spans0) > maxChordsPerWalk {
+		return nil, nil, 0, errTooManyChords
+	}
 
-	gen := &sagittaStationWalk{target: target, work0: work0, work1: work1}
+	gen := &sagittaStationWalk{target: target, work0: work0, work1: work1, frontier: len(spans0)}
 	for i := range spans0 {
 		if err := gen.walkCell(dyadicSpanOf(spans0[i]), dyadicSpanOf(spans1[i])); err != nil {
 			return nil, nil, 0, err
@@ -280,13 +303,19 @@ func pairStations(spans0, spans1 []bezierSpan, target float64, work0, work1 *fre
 
 // sagittaStationWalk accumulates one pairStations call's own state across its
 // recursive cell walk: the two growing station lists, the running sagitta
-// maximum, and the shared examined-cell count the hard cap reads.
+// maximum, and the two shared counts the hard cap reads — chords, the cells
+// already accepted as chords of the finished chain, and frontier, the cells
+// created but not yet accepted. Their sum is a proven lower bound on the chord
+// count the finished chain carries: it starts at one cell per span, holds
+// steady when a cell is accepted, and rises by one per split (pairStations'
+// own doc comment).
 type sagittaStationWalk struct {
 	target               float64
 	work0, work1         *freeformWork
 	stations0, stations1 []ratPoint
 	sagittaUpper         float64
-	cells                int
+	chords               int
+	frontier             int
 }
 
 // walkCell measures one dyadic cell pair and either accepts it — appending
@@ -294,11 +323,14 @@ type sagittaStationWalk struct {
 // the running maximum — or bisects it on BOTH sides together and recurses
 // left then right, in that order, which is what makes the whole walk
 // deterministic and left-to-right (pairStations' own doc comment).
+//
+// Accepting moves this cell off the frontier and into the chord count, leaving
+// their sum unchanged; splitting raises it by one, which is why the cap is
+// read here and only here, before the split runs and before its cost is
+// charged. Since the recursion below is reachable only through that charged
+// split, the same read is what bounds the walk's own depth and breadth
+// (pairStations' own doc comment states the termination argument in full).
 func (g *sagittaStationWalk) walkCell(c0, c1 dyadicSpan) error {
-	g.cells++
-	if g.cells > maxChordsPerWalk {
-		return errTooManyChords
-	}
 	n0, n1 := len(c0.points), len(c1.points)
 	if err := g.work0.step(sagittaMeasureCost(n0)); err != nil {
 		return err
@@ -309,18 +341,24 @@ func (g *sagittaStationWalk) walkCell(c0, c1 dyadicSpan) error {
 	sag0 := dyadicSpanSagittaUpper(c0)
 	sag1 := dyadicSpanSagittaUpper(c1)
 	if math.Max(sag0, sag1) <= g.target {
+		g.frontier--
+		g.chords++
 		g.stations0 = append(g.stations0, c0.ratPointAt(0))
 		g.stations1 = append(g.stations1, c1.ratPointAt(0))
 		g.sagittaUpper = math.Max(g.sagittaUpper, math.Max(sag0, sag1))
 		return nil
 	}
 
+	if g.chords+g.frontier+1 > maxChordsPerWalk {
+		return errTooManyChords
+	}
 	if err := g.work0.step(sagittaSplitCost(n0)); err != nil {
 		return err
 	}
 	if err := g.work1.step(sagittaSplitCost(n1)); err != nil {
 		return err
 	}
+	g.frontier++
 	left0, right0 := c0.split()
 	left1, right1 := c1.split()
 	if err := g.walkCell(left0, left1); err != nil {

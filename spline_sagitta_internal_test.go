@@ -63,6 +63,29 @@ import (
 //     quietly wrong Measurement — a panic is its own unambiguous, maximally
 //     visible falsification signal, and removing the length check and running
 //     that single test was confirmed to panic before the gate was restored.
+//   - Charge the hard cap per cell VISITED instead of per chord ACCEPTED
+//     (count every walkCell entry against maxChordsPerWalk):
+//     TestPairStationsAcceptsTheStatedChordCap went red — a walk needing
+//     exactly maxChordsPerWalk chords was refused with errTooManyChords
+//     barely halfway through, because a binary refinement visits 2L−m cells
+//     for L chords over m spans and so trips a visit-charged ceiling at
+//     roughly half the chord count that ceiling's own message names.
+//   - Drop pairStations' span-count entry guard:
+//     TestPairStationsSpanCountPastTheCapRefusesUpFront went red — a chain of
+//     maxChordsPerWalk+1 straight spans returned that many chords and no
+//     error, one past the count errTooManyChords names.
+//   - Move the cap charge from the SPLIT to the accept (count only chords
+//     already accepted, with nothing charged before a bisection): NOT
+//     separately falsified, argued instead. The two forms return the
+//     identical verdict on every walk that terminates, since the accepted
+//     count reaches the ceiling either way; they differ only on a walk that
+//     never accepts a cell at all, where the accept-time form charges nothing
+//     and leaves the recursion with no bound whatsoever. That difference is a
+//     HANG rather than a wrong answer, and the fixture that expresses it — an
+//     unreachable target such as NaN, which no comparison ever satisfies —
+//     costs ~20 s and hundreds of megabytes even in the shipped form that
+//     bounds it correctly, so it is argued here rather than paid for on every
+//     run.
 
 // ratSpan is spline_extreme_internal_test.go's own helper (same package): it
 // builds a bezierSpan directly from plane-local float coordinates, for tests
@@ -332,6 +355,93 @@ func TestPairStationsOverCapRefuses(t *testing.T) {
 	spans := quarterCircleFitSpans(t)
 	_, _, _, err := pairStations(spans, spans, 1e-20, nil, nil) //nolint:dogsled // stations/sagitta discarded; only the refusal is under test
 	require.Error(t, err)
+	require.ErrorIs(t, err, errTooManyChords)
+	require.ErrorIs(t, err, ErrUnsupported)
+}
+
+// parabolaSpan is a quadratic Bézier over an exact integer control net whose
+// §6.2.1 sagitta is SELF-SIMILAR under bisection: a quadratic's middle control
+// point lands at exactly a quarter of its parent's own offset from the chord
+// in each half, so every cell at a given dyadic depth carries the identical
+// bound, and a target read off depth d settles the walk on exactly 2^d chords.
+// That is what lets the two cap fixtures below name an exact chord count
+// instead of approaching one, and the small integer net keeps every rational
+// the walk builds cheap enough for a 2^14-chord walk to stay fast.
+func parabolaSpan() bezierSpan {
+	return ratSpan([][2]float64{{0, 0}, {1, 1}, {2, 0}})
+}
+
+// straightSpanFrom is a collinear, evenly spaced quadratic span: every control
+// point lies ON its own chord segment, so its sagitta is exactly 0, and it is
+// accepted whole as ONE chord at depth 0 against any target. It contributes a
+// chord to a chain without contributing a bisection.
+func straightSpanFrom(u float64) bezierSpan {
+	return ratSpan([][2]float64{{u, 0}, {u + 1, 0}, {u + 2, 0}})
+}
+
+// capDepth is the uniform bisection depth whose leaves number exactly
+// maxChordsPerWalk, read off the cap itself rather than written down as a
+// tuned number.
+func capDepth(t *testing.T) int {
+	t.Helper()
+	d := 0
+	for 1<<d < maxChordsPerWalk {
+		d++
+	}
+	require.Equal(t, maxChordsPerWalk, 1<<d,
+		"these fixtures read their refinement depth off the cap; a cap that is not a power of two needs a different construction")
+	return d
+}
+
+// TestPairStationsAcceptsTheStatedChordCap puts the cap where its own message
+// puts it. errTooManyChords reads "more than maxChordsPerWalk chords on one
+// curve", so a walk that settles on EXACTLY maxChordsPerWalk chords is inside
+// the ceiling and must be built, not refused.
+//
+// This is the fixture that goes red if the cap ever binds below the count it
+// names. A binary refinement visits nearly two cells for every chord it
+// accepts (2L−m cells for L chords over m spans), so a ceiling charged per
+// cell VISITED rather than per chord ACCEPTED refuses this walk barely halfway
+// through it, at a chord count under half the one the message states.
+func TestPairStationsAcceptsTheStatedChordCap(t *testing.T) {
+	span := parabolaSpan()
+	chain := []bezierSpan{span}
+	target := levelSagitta(span, capDepth(t))
+
+	s0, s1, sag, err := pairStations(chain, chain, target, nil, nil)
+	require.NoError(t, err, "a walk needing exactly the chord count the cap names must be built")
+	require.Len(t, s0, maxChordsPerWalk+1,
+		"a chain of exactly maxChordsPerWalk chords carries one more station than that")
+	require.Len(t, s1, len(s0), "both sides share one station set by construction")
+	require.LessOrEqual(t, sag, target, "the achieved sagitta must honor the target it settled on")
+}
+
+// TestPairStationsRefusesOneChordPastTheStatedCap is the other half of the
+// same boundary. The identical parabola walk gains ONE straight span, which is
+// accepted whole at depth 0, so the chain needs maxChordsPerWalk+1 chords —
+// the first count the message's "more than" covers — and the walk refuses.
+func TestPairStationsRefusesOneChordPastTheStatedCap(t *testing.T) {
+	span := parabolaSpan()
+	chain := []bezierSpan{span, straightSpanFrom(2)}
+	target := levelSagitta(span, capDepth(t))
+
+	_, _, _, err := pairStations(chain, chain, target, nil, nil) //nolint:dogsled // stations/sagitta discarded; only the refusal is under test
+	require.ErrorIs(t, err, errTooManyChords)
+	require.ErrorIs(t, err, ErrUnsupported)
+}
+
+// TestPairStationsSpanCountPastTheCapRefusesUpFront pins the entry guard: each
+// span carries at least one chord even when it needs no bisection at all, so a
+// chain of more spans than the cap admits already exceeds the chord count the
+// message names, and refuses before a single cell is measured. The target here
+// is deliberately lax enough that every span would otherwise be accepted whole.
+func TestPairStationsSpanCountPastTheCapRefusesUpFront(t *testing.T) {
+	chain := make([]bezierSpan, maxChordsPerWalk+1)
+	for i := range chain {
+		chain[i] = straightSpanFrom(float64(2 * i))
+	}
+
+	_, _, _, err := pairStations(chain, chain, 1, nil, nil) //nolint:dogsled // stations/sagitta discarded; only the refusal is under test
 	require.ErrorIs(t, err, errTooManyChords)
 	require.ErrorIs(t, err, ErrUnsupported)
 }
