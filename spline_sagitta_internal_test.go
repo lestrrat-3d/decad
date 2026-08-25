@@ -949,13 +949,14 @@ func TestPairStationsFinalStationDoesNotAliasTheInputSpan(t *testing.T) {
 // tests already use, never through any of spline_sagitta.go's own machinery.
 func denseMatchedDeviation(t *testing.T, span bezierSpan, samples int) float64 {
 	t.Helper()
-	ax, ay := evalSpans(t, []bezierSpan{span}, 0)
-	bx, by := evalSpans(t, []bezierSpan{span}, 1)
+	floatSpan := floatBezierSpanOf(span)
+	ax, ay := evalFloatBezierSpan(floatSpan, 0)
+	bx, by := evalFloatBezierSpan(floatSpan, 1)
 	dx, dy := bx-ax, by-ay
 	maxDev := 0.0
 	for i := 0; i <= samples; i++ {
 		at := float64(i) / float64(samples)
-		cx, cy := evalSpans(t, []bezierSpan{span}, at)
+		cx, cy := evalFloatBezierSpan(floatSpan, at)
 		lx, ly := ax+at*dx, ay+at*dy
 		maxDev = math.Max(maxDev, math.Hypot(cx-lx, cy-ly))
 	}
@@ -968,6 +969,7 @@ func denseMatchedDeviation(t *testing.T, span bezierSpan, samples int) float64 {
 func denseSpeedSample(t *testing.T, span bezierSpan, samples int) float64 {
 	t.Helper()
 	const h = 1e-5
+	floatSpan := floatBezierSpanOf(span)
 	maxSpeed := 0.0
 	for i := 0; i <= samples; i++ {
 		at := float64(i) / float64(samples)
@@ -975,8 +977,8 @@ func denseSpeedSample(t *testing.T, span bezierSpan, samples int) float64 {
 		if at1 <= at0 {
 			continue
 		}
-		x0, y0 := evalSpans(t, []bezierSpan{span}, at0)
-		x1, y1 := evalSpans(t, []bezierSpan{span}, at1)
+		x0, y0 := evalFloatBezierSpan(floatSpan, at0)
+		x1, y1 := evalFloatBezierSpan(floatSpan, at1)
 		speed := math.Hypot(x1-x0, y1-y0) / (at1 - at0)
 		maxSpeed = math.Max(maxSpeed, speed)
 	}
