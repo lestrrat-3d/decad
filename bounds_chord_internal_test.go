@@ -704,6 +704,36 @@ func TestChordedBoundaryVolumeAllowWallAndTwistLegsAreJointlyLoadBearing(t *test
 	t.Logf("full ratio=%.6g, without-wall-and-twist ratio=%.6g (must be < 1)", full/measuredGap, withoutWallAndTwist/measuredGap)
 }
 
+// THIS BLOCK IS ABOUT chordedBoundaryVolumeAllow, THE VOLUME ALLOW — NOT
+// about the AREA bound whose falsification ledger this PR carries. The two
+// are different functions with different legs, and the "NOT SHOWN TO FAIL"
+// entries below say nothing about the area ledger's coverage.
+//
+// The area bound is composed at loft_moments.go's area(), as
+// absSumUpper(bound, m.chorded.areaExcess, m.chorded.capAreaExcess), and its
+// per-leg falsifiers live in loft_area_excess_fixture_internal_test.go, not
+// here. Each of the three the ledger names goes red when its leg is deleted,
+// verified by rebuilding with the leg replaced by a literal 0:
+//
+//   - wall leg (areaExcess) zeroed: TestLoftTallThinArcWedgeAreaBoundEnclosesConvergedReference
+//     fails with residual 2.446e-3 against bound 4.609e-4, and
+//     TestLoftShearedArcWedgeAreaBoundEnclosesConvergedReference fails with
+//     residual 3.197e-2 against bound 6.084e-3.
+//   - cap leg (capAreaExcess) zeroed:
+//     TestLoftArcWedgeAreaBoundEnclosesConvergedReference fails with residual
+//     5.733e-3 against bound 3.822e-3, while tall-thin and sheared stay green
+//     because the wall term masks the cap leg on those two.
+//
+// The volume allow's own wall leg genuinely cannot be falsified by deletion
+// over the family searched here, and that is a measured fact rather than an
+// untested gap: TestChordedBoundaryVolumeAllowWallLegDeletionSearch logs a
+// without-wall worst-case ratio of 2.85257 over its 900 rows, so the
+// wall-zeroed volume bound stays about 2.85x ABOVE the measured gap
+// everywhere it looked. An assertion that deleting it drops the bound below
+// the gap would therefore fail; the sound seam leg subsumes wall's share in
+// this circular-arc family, as the F3 and joint-load-bearing notes below set
+// out.
+//
 // PER-LEG DELETION-CHECK STATUS. Four legs compose chordedBoundaryVolumeAllow
 // — wall (a), twist (b), cap (c), seam (d) — and every one now has a
 // deletion check on record, so a reader can tell at a glance which the suite
