@@ -520,8 +520,9 @@ func TestChordedBoundaryVolumeAllowRatioDoesNotDegradeUnderRefinement(t *testing
 // n=256, found by scanning the same 900-row grid
 // TestChordedBoundaryVolumeAllowEnclosesTheMeasuredGap already covers) and
 // confirming the composed bound collapses far below the measured gap: F3's
-// own finding was that deleting this leg drops the minimum ratio to 1.3e-5
-// across the whole table, and this pins the concrete row and re-confirms it
+// own finding was that deleting this leg drops the minimum ratio to
+// 1.84662e-05 across the whole table, and this pins the concrete row and
+// re-confirms it
 // after F1/F2/F4's own fixes (the newly added seam leg can only ADD
 // coverage, never rescue a row this leg alone was carrying).
 func TestChordedBoundaryVolumeAllowTwistLegIsLoadBearing(t *testing.T) {
@@ -555,8 +556,10 @@ func TestChordedBoundaryVolumeAllowTwistLegIsLoadBearing(t *testing.T) {
 // and seam legs already cover what the cap leg would have. This test proves
 // the SAME fact TestCapAreaVolumeAllowIsExactForAPlanarFace already pins for
 // capAreaVolumeAllow alone, one level up: with the wall, twist and seam legs
-// all synthetically absent (0 — a legitimate state, e.g. an exact LineSeg
-// wall pairing with no twist), the composed bound must still publish EXACTLY
+// all synthetically absent (0 — a SYNTHETIC state that exercises the
+// composition rather than a reachable geometry: cap and wall share one
+// boundary curve, so no admissible caller can produce a nonzero cap leg
+// alongside a zero wall leg), the composed bound must still publish EXACTLY
 // the cap leg's own known-exact volume displacement (h·area/3 = 8 for
 // h=4, area=6), and deleting the cap leg alone must drop the composed
 // answer to 0 — failing to cover a REAL, exactly-known volume displacement.
@@ -709,32 +712,40 @@ func TestChordedBoundaryVolumeAllowWallAndTwistLegsAreJointlyLoadBearing(t *test
 //   - TWIST (b): SHOWN-TO-FAIL.
 //     TestChordedBoundaryVolumeAllowTwistLegIsLoadBearing (r=1 sweep=30
 //     h=100 twist=90 n=256): deleting twist alone drops the ratio to
-//     1.3e-5 across the 900-row sweep table.
+//     1.84662e-05 across the 900-row sweep table.
 //   - CAP (c): SHOWN-TO-FAIL, at the COMPOSITION level (no row of the
 //     geometric sweep table drives it — capAreaVolumeAllow's own
 //     capAreaAllow input is generous enough there that wall+seam already
 //     cover it).
 //     TestChordedBoundaryVolumeAllowCapLegIsLoadBearing: with wall, twist
-//     and seam legitimately 0 (an exact LineSeg wall pairing with no
-//     twist, e.g. a straight prism over a chorded circular cap), deleting
-//     cap alone drops the composed answer from the known-exact 8 to 0.
-//   - WALL (a): PROVEN-REDUNDANT, not merely unshown-to-fail. See
-//     chordedBoundaryVolumeAllow's own doc comment for the two-case
-//     argument (T=0 / T≠0, no third case). Corroborated, never
-//     substituted for, by
+//     and seam synthetically 0 (SYNTHETIC, not a reachable geometry — cap
+//     and wall share one boundary curve, so no admissible caller pairs a
+//     nonzero cap leg with an all-zero wall leg; the tuple exercises the
+//     composition, not a real part), deleting cap alone drops the composed
+//     answer from the known-exact 8 to 0.
+//   - WALL (a): NOT SHOWN TO FAIL — the SAME status as seam (d) below, not
+//     PROVEN-REDUNDANT. Only the T=0 (no-twist) case is proven redundant;
+//     see chordedBoundaryVolumeAllow's own doc comment for that proof and
+//     for why the T≠0 case it used to also claim was FALSE (the gap itself
+//     is Theta(1/n), the same order as the twist leg, not Theta(1/n^2) as
+//     previously claimed, and the twist leg alone does not dominate it at
+//     every refinement). Corroborated, never substituted for a proof, by
 //     TestChordedBoundaryVolumeAllowWallAndTwistLegsAreJointlyLoadBearing
 //     (wall's own deletion alone never fails anywhere an extensive
 //     geometric search tried — only wall+twist TOGETHER fails) and by
-//     TestChordedBoundaryVolumeAllowWallLegIsProvenRedundant below, which
+//     TestChordedBoundaryVolumeAllowWallLegDeletionSearch below, which
 //     pins that same "never fails alone" property as a running regression
-//     over the full 900-row sweep table.
+//     over the 900-row sweep table: an independent audit's own re-run,
+//     adding a ring-family grid alongside it for 1260 rows total, found a
+//     minimum ratio of 2.00242 with 0 failing rows.
 //   - SEAM (d): NOT SHOWN TO FAIL — an open question, recorded honestly
 //     rather than forced into either of the other two categories.
 //     TestChordedBoundaryVolumeAllowSeamLegDeletionSearch scans the same
 //     900-row sweep table plus a ring-family grid and finds deleting seam
 //     alone (wall, twist and cap all left intact) never drops the ratio
 //     below roughly 2.5 anywhere tried. That is consistent with seam being
-//     provably redundant the way wall is — structurally, seam is only ever
+//     redundant the same way wall's own T=0 case is provably redundant —
+//     structurally, seam is only ever
 //     nonzero when the wall leg (a) is too (both gate on matchedDelta>0
 //     and nonzero wall geometry), and leg (a)'s own flux term is 3x the
 //     magnitude of the boundary term seam bounds (chordedBoundaryVolumeAllow's
@@ -744,7 +755,7 @@ func TestChordedBoundaryVolumeAllowWallAndTwistLegsAreJointlyLoadBearing(t *test
 //     failing fixture turns up or that proof gets written, seam's own
 //     constant is not policed by anything in this suite, exactly the
 //     complaint this comment block exists to make impossible to miss.
-func TestChordedBoundaryVolumeAllowWallLegIsProvenRedundant(t *testing.T) {
+func TestChordedBoundaryVolumeAllowWallLegDeletionSearch(t *testing.T) {
 	radii := []float64{1, 5, 50}
 	sweepsDeg := []float64{30, 90, 180, 270}
 	heights := []float64{0.1, 10, 100}
@@ -790,7 +801,7 @@ func TestChordedBoundaryVolumeAllowWallLegIsProvenRedundant(t *testing.T) {
 	}
 
 	require.Positive(t, rows)
-	t.Logf("without-wall worst-case ratio %.6g at %s (%d rows) — corroborates the PROVEN redundancy above, never a substitute for it", minRatio, minRow, rows)
+	t.Logf("without-wall worst-case ratio %.6g at %s (%d rows) — NOT shown to fail here either; not a proof of redundancy (see the per-leg status comment above)", minRatio, minRow, rows)
 }
 
 // TestChordedBoundaryVolumeAllowSeamLegDeletionSearch is the seam leg's own

@@ -568,7 +568,8 @@ func capAreaVolumeAllow(planeOffsetUpper, capAreaAllow float64) float64 {
 // s·(wHi−wLo) over 0 <= s <= r <= 1 (the vLo/wHi/wLo triangle) — and
 // subtracting each from X(s,r) cancels every term but the twist one:
 // X − X_tri1 = r·(s−1)·T, X − X_tri2 = s·(r−1)·T, continuous across the
-// shared diagonal s=r (both read −T/4 there). Both magnitudes are
+// shared diagonal s=r (both read s·(s−1)·T there, equal to −T/4 only at its
+// midpoint s=1/2). Both magnitudes are
 // |T|·r·(1−s) (resp. |T|·s·(1−r)), maximised at s=r=1/2 over their own
 // triangular domain at |T|/4 — so no point of the ruled patch sits further
 // than |T|/4 from the built triangle surface at the matching (s, r).
@@ -595,8 +596,10 @@ func capAreaVolumeAllow(planeOffsetUpper, capAreaAllow float64) float64 {
 // — r=0, r=1, s=0 and s=1 — not merely at the four corners: substituting
 // each edge into part (a)'s two formulas gives r·(s−1)·T = 0 at r=0 and at
 // s=1, and s·(r−1)·T = 0 at s=0 and at r=1 (the two formulas agree on the
-// shared diagonal s=r, where the difference is −T/4 rather than 0, but the
-// diagonal is interior to the square, not one of its edges). The homotopy's
+// shared diagonal s=r, where the shared value s·(s−1)·T is generally
+// nonzero rather than 0 — falling back to 0 only at the diagonal's own two
+// endpoints, s=0 and s=1 — but the diagonal is interior to the square, not
+// one of its edges). The homotopy's
 // own boundary curve is therefore stationary throughout, so — unlike the
 // wall's own OPEN patch (leg (a)/(d) above, whose r=0/r=1 seam DOES move and
 // needs chordedBoundarySeamAllow's own correction) — this cell's flux
@@ -705,7 +708,7 @@ func cellTwistOffsetUpper(vLo, vHi, wLo, wHi r3.Vec) float64 {
 // the full h·ΔArea) and the wall's own BOUNDARY term, which is −h·ΔArea/3:
 // 1/3 in magnitude, the OPPOSITE sign from the cap's own share (measured
 // directly on an untwisted ring, R=10, h=25, n=64, anchor on the bottom
-// cap: total gap 12.6104, wall flux +12.6106 ≈ +gap, wall boundary
+// cap: total gap 12.6104, wall flux +12.6104 ≈ +gap, wall boundary
 // −4.2035 ≈ −gap/3, cap +4.2035 ≈ +gap/3, flux+boundary = 8.4069 ≈
 // 2·gap/3). So leg (a)'s own flux term alone overcounts the wall's true
 // contribution by exactly the boundary term, and a wall leg that omits it
@@ -714,29 +717,44 @@ func cellTwistOffsetUpper(vLo, vHi, wLo, wHi r3.Vec) float64 {
 // not a proof. seamAllow charges it explicitly instead of assuming it
 // away; see chordedBoundarySeamAllow's own doc comment for the bound.
 //
-// The wall leg (a) is itself proven REDUNDANT given the other three — cap,
-// twist and seam — are present, over the only two cases the loft's own
-// twist between its two paired sections admits:
+// The wall leg (a) is NOT SHOWN TO FAIL given the other three — cap, twist
+// and seam — are present: the SAME open-question status the seam leg (d)
+// carries (bounds_chord_internal_test.go's per-leg status comment), not a
+// proof of redundancy. Only the T=0 (no-twist) case is actually proven:
 //
 //   - NO twist forces the two sections to be translates of each other,
 //     hence parallel planes at signed offsets h0 and h1 from the anchor.
 //     Writing H for |h0|+|h1|, delta for matchedDelta and P for the true
-//     perimeter (dArea <= delta·P, sectionDisplacementArea's own tube term
-//     dominating its own joints term), cap >= (|h0|+|h1|)·2·delta·P/3 >=
-//     (2/3)·H·dArea and seam >= delta·max(|h0|,|h1|)·2·P/3 >= (1/3)·H·dArea
-//     (posUpper >= max(|h0|,|h1|) >= H/2). Their sum already reaches
-//     H·dArea, the gap itself — tight only in a limit no arc attains,
-//     since an arc gives dArea/(delta·chord) <= pi/4.
-//   - A NONZERO twist makes the twist leg Theta(1/n) while the gap itself
-//     is Theta(1/n^2), so twist alone dominates at any refinement.
+//     perimeter, dArea <= delta·P: the SIGNED area difference between two
+//     boundaries whose own normal offset is bounded pointwise by delta is
+//     exactly a boundary integral of that offset, so it is bounded by
+//     delta times the perimeter it integrates over — a distinct, tighter
+//     identity than sectionDisplacementArea's own UNSIGNED
+//     symmetric-difference tube bound (2·delta·P), not sourced from it.
+//     So cap >= (|h0|+|h1|)·2·delta·P/3 >= (2/3)·H·dArea and seam >=
+//     delta·max(|h0|,|h1|)·2·P/3 >= (1/3)·H·dArea (posUpper >=
+//     max(|h0|,|h1|) >= H/2). Their sum already reaches H·dArea, the gap
+//     itself — tight only in a limit no arc attains, since an arc gives
+//     dArea/(delta·chord) <= pi/4. This T=0 case is a proven partial
+//     result, scoped to the untwisted pairing alone.
+//   - A NONZERO twist has no proof here. An earlier version of this
+//     comment claimed the twist leg is Theta(1/n) while the gap itself is
+//     Theta(1/n^2), so twist alone would dominate at any refinement — that
+//     claim is FALSE. Measured on a ring (r=10, h=25, twist=20deg), the
+//     gap itself is ALSO Theta(1/n) (gap·n converges as n runs 8..1024,
+//     while gap·n^2 grows without bound), the same order as the twist leg,
+//     and the twist leg alone does not dominate at every refinement either
+//     (twist-leg-alone-over-measured-gap ratio 0.7475 at n=6, twist=20deg,
+//     still under 1; 4.8e-5 at n=6 with twist shrunk to 0.001deg).
 //
-// There is no third case, so cap+seam (untwisted) or twist (twisted)
-// already covers what leg (a) would have added on top. Corroborated
-// empirically, never substituted for the proof above: an independent audit
-// found leg (a)'s own deletion — keeping cap, twist and seam — never fails
-// anywhere across an extensive geometric search
+// There is no proof for the twisted case, so the leg's status over BOTH
+// cases together is NOT SHOWN TO FAIL, corroborated but not proven
+// empirically: an independent audit found deleting the wall leg alone —
+// keeping cap, twist and seam — over 1260 rows (the 900-row pie-slice
+// sweep table plus a ring-family grid) gives a minimum ratio of 2.00242
+// with 0 failing rows, strong empirical support and NOT a proof
 // (TestChordedBoundaryVolumeAllowWallAndTwistLegsAreJointlyLoadBearing,
-// TestChordedBoundaryVolumeAllowWallLegIsProvenRedundant). The leg stays in
+// TestChordedBoundaryVolumeAllowWallLegDeletionSearch). The leg stays in
 // the composition regardless — removing a mechanism on a case analysis
 // nobody had written down is how earlier rounds of this bound broke.
 //
@@ -772,9 +790,12 @@ func cellTwistOffsetUpper(vLo, vHi, wLo, wHi r3.Vec) float64 {
 // mu(Ω0 Δ Ω1) (Δ the symmetric difference) between the held triangle
 // polyhedron Ω0 and the true solid Ω1, mu(Ω0 Δ Ω1) <= ∫[0,1] sup|velocity|
 // · A(t) dt along ANY homotopy path from one to the other — and leg (a)
-// (matchedDelta·wallAreaUpper) plus leg (b) (twistVolumeUpper) are EXACTLY
-// that integral, taken over the two-leg path held triangle -> ruled patch
-// -> true curve. So V >= wall + twist >= mu: the two legs that ARE measures
+// (matchedDelta·wallAreaUpper) plus leg (b) (twistVolumeUpper) are AT OR
+// ABOVE that integral — each is itself an UPPER BOUND on its own share
+// (matchedDelta >= sup|v|, wallAreaUpper >= sup_t A(t)), and over-estimating
+// only helps here, since the argument needs a LOWER bound on wall+twist —
+// taken over the two-leg path held triangle -> ruled patch -> true curve.
+// So V >= wall + twist >= mu: the two legs that ARE measures
 // already dominate the true swept measure on their own, and the cap and
 // seam legs — which are signed volume corrections, not measures — can only
 // ADD to a total that already sits at or above mu. That is what licenses

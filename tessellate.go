@@ -846,8 +846,34 @@ func chordCount(w segmentWalk, tol float64) (int, float64, error) {
 // own walk-up may settle on a slightly larger n than the tightest possible
 // sagitta would allow — the safe direction: a finer mesh over a tighter
 // proven bound, never a coarser one over a looser claim.
+//
+// A known consequence: because the bound is conservative, a tol chordCount
+// used to satisfy at the mesh cap (n=maxChordsPerWalk) can now land in the
+// narrow window between the old sin-based sagitta and this one — the walk-up
+// hits the cap before reaching a sagitta this bound proves is under tol, so
+// chordCount now returns errTooManyChords where it previously succeeded. The
+// window's relative width is the same (x/sin x)²−1 factor, about 3.064e-9 at
+// n=maxChordsPerWalk, so it only bites a tol chosen within a few parts in a
+// billion of the cap. A full circle of radius 10 mm at tol =
+// 1.8383570706191657495e-07 mm previously chose n=16384 and now refuses with
+// errTooManyChords; at radius 0.5 mm the same happens at tol =
+// 9.1917853530958284169e-09 mm. Refusing is the conservative direction (a
+// coarser mesh is never built silently) and the error is typed
+// (ErrUnsupported), so this is a narrowing of what succeeds, never a
+// correctness gap.
 func chordSagitta(radius, sweep float64, n int) float64 {
-	if n <= 0 {
+	if n <= 0 || sweep < 0 {
+		// A non-positive n or a negative sweep would otherwise read as
+		// sagitta 0 — productUpper(sweep, sweep) already zeroes a negative
+		// sweep — which UNDERSTATES the true, positive sagitta rather than
+		// falsifying the claim (cutDisplacementAllow's own rule: an absent
+		// bound must never read as a small one).
+		return math.Inf(1)
+	}
+	if radius < 0 {
+		// The true sagitta r·(1−cos) is itself non-positive for a negative
+		// radius, so 0 is a valid (if unattained) upper bound here — no
+		// refusal needed.
 		return 0
 	}
 	denom := 8 * float64(n) * float64(n)
