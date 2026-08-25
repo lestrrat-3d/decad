@@ -1323,23 +1323,39 @@ func (in pairToleranceInputs) lengthReference(value float64) (float64, bool) {
 // correction to the prisms it reads, over each one's own displacement.
 //
 // A loftPayload reads its OWN held vertex-set diameter (pointSetDiameterContext),
-// never an envelope: an unplaced loft's every vertex is exact
-// (docs/loft-design.md §5), the
-// boundary is a polyhedron, and a convex-hull diameter is realized at
-// vertices, so the vertex set's own maximum IS the body's true diameter rather
-// than a bound on it — the strongest arm in this function, ahead of the exact
-// carrier model that does not yet cover this payload class. That holds whenever
-// the payload's delta is zero, which loft_build.go decides by an exact
-// identity-transform comparison and never by a tolerance, and this arm then
-// reports the shared reader's answer UNCHANGED: no subtraction and no rounding
-// of its own. What that answer is, is the reader's to state — the largest
-// float64 at or below that true diameter, since the reader publishes every
-// witness maximum rounded toward zero (pointSetDiameterWithBudget) — so this
-// arm publishes the tightest lower bound a float64 can carry on a diameter
-// that is exact as a quantity. Subtracting a zero allowance on top of it would
-// move that reading in exchange for nothing, which is why
+// never an envelope: the boundary is a polyhedron, and a convex-hull diameter
+// is realized at vertices, so the vertex set's own maximum IS AT OR BELOW the
+// body's true diameter — the strongest arm in this function, ahead of the
+// exact carrier model that does not yet cover this payload class. For an
+// unplaced LineSeg-only loft the claim is the stronger one, IS the true
+// diameter, because every held vertex is then exact (docs/loft-design.md
+// §5); a same-kind circular pairing's own interior stations are held on the
+// true recorded curve but are themselves COMPUTED (a10-plan.md Part 3 PR 6),
+// so the held maximum is still a chorded (equal-or-fewer, never additional)
+// vertex set's own diameter over a set that sits ON the true boundary — at
+// or below it, whether or not the body is placed. That weaker claim is what
+// this arm always publishes, and it still fails safe: understating a
+// diameter can only turn a passing reading into a false Suspect, never a
+// false Sound.
+//
+// This arm's zero-subtraction fast path reads payload.delta == 0 exactly
+// (loft_build.go's exact identity-transform-and-no-computed-station
+// comparison, never a tolerance) and then reports the shared reader's
+// answer UNCHANGED: no subtraction and no rounding of its own. What that
+// answer is, is the reader's to state — the largest float64 at or below the
+// held diameter, since the reader publishes every witness maximum rounded
+// toward zero (pointSetDiameterWithBudget) — so this arm publishes the
+// tightest lower bound a float64 can carry on a diameter that is itself
+// already at or below the true one. Subtracting a zero allowance on top of
+// it would move that reading in exchange for nothing, which is why
 // capBlendPayload.extentBoundedAlong's own `outward` helper (capblend.go)
-// keeps a zero-displacement candidate untouched too.
+// keeps a zero-displacement candidate untouched too. delta == 0 no longer
+// implies the body is unplaced (a10-plan.md Part 3 PR 6): a curved pair
+// chorded at ONE station (m = 1, docs/loft-design.md §12's m = 1 case) has
+// no interior computed station either, so an UNPLACED body with such a pair
+// takes this same fast path with delta == 0 and an unshrunk reference —
+// sound for the identical reason, every held vertex is then a recorded
+// endpoint.
 //
 // A PLACED loft's held vertices are no
 // longer provably exact (§12 PR 2a): the true diameter can differ from the

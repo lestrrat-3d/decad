@@ -527,7 +527,7 @@ func chordedWedgeTriangles(t testing.TB, pts [][2]float64) ([]r3.Vec, [][3]int) 
 	require.NoError(t, err)
 	target, err := loftChordTarget(profile0, profile1, walks0, walks1)
 	require.NoError(t, err)
-	pairs, _, err := loftPairings(profile0, profile1, offsets, walks0, walks1, target, work0, work1)
+	pairs, _, stationRound, err := loftPairings(profile0, profile1, offsets, walks0, walks1, target, work0, work1)
 	require.NoError(t, err)
 
 	frame0, err := r3.NewFrame(plane0.Origin, plane0.U, plane0.V)
@@ -535,7 +535,7 @@ func chordedWedgeTriangles(t testing.TB, pts [][2]float64) ([]r3.Vec, [][3]int) 
 	frame1, err := r3.NewFrame(plane1.Origin, plane1.U, plane1.V)
 	require.NoError(t, err)
 
-	a, err := assembleLoft(t.Context(), pairs, frame0, frame1, plane0, r3.Identity())
+	a, err := assembleLoft(t.Context(), pairs, frame0, frame1, plane0, r3.Identity(), stationRound)
 	require.NoError(t, err)
 	return a.verts, a.tris
 }

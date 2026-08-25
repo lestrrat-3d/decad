@@ -1023,19 +1023,21 @@ func wedgePinStations(t *testing.T) int {
 	t.Helper()
 	target := loftChordFraction * wedgeArcEnvelope(t)
 	seg, w := wedgeArcRecord(t)
-	stations, _, sagitta, err := loftCircularCellStations(w, w, seg, seg, target)
+	stations, _, sagitta, stationUpper, err := loftCircularCellStations(w, w, seg, seg, target)
 	require.NoError(t, err)
 	m := len(stations)
-	require.LessOrEqual(t, sagitta, target, "the generator's own published bound must meet the target it was asked for")
+	require.LessOrEqual(t, sagitta, target, "the generator's own published sagitta must meet the target it was asked for")
 
-	// The published bound is the certified sagitta composed with the generated
-	// stations' own displacement — both halves, since the certified sagitta
-	// alone bounds a chord between the EXACT recorded points, not the chord
-	// this build actually draws between two rounded stations.
+	// The arm publishes the certified sagitta and the generated stations' own
+	// displacement APART, and this fixture's chord bound is the consumer-side
+	// composition of both halves — the certified sagitta alone bounds a chord
+	// between the EXACT recorded points, not the chord this build actually
+	// draws between two rounded stations.
 	certified := loftCertifiedSagittaUpper(seg, m)
 	chordPts, chordDelta := wedgeArcChords(t, m)
-	require.Equal(t, chordDelta, sagitta, "the published bound is the certified reading composed with the station displacement, at the settled count")
-	require.Greater(t, sagitta, certified, "the station displacement is a real term on this fixture, not a rounding that vanishes")
+	require.Equal(t, certified, sagitta, "the published sagitta is the certified reading at the settled count")
+	require.Equal(t, chordDelta, chordCellDeltaUpper(sagitta, stationUpper), "the fixture's chord bound composes the arm's own two published halves")
+	require.Greater(t, stationUpper, 0.0, "the station displacement is a real term on this fixture, not a rounding that vanishes")
 	require.Len(t, chordPts, m+1, "the fixture's vertex list is the m stations plus the walk's own end point")
 	for k, p := range stations {
 		require.Equal(t, [2]float64{p.U, p.V}, chordPts[k], "every A10a vertex must BE the station the shipped generator produced")
