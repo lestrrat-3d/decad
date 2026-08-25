@@ -830,9 +830,11 @@ here may be reused against a placed body without carrying it.
   `Document.Loft` while `Duplicate`/`PlacedCopy`/`Placed` of the
   already-built body each succeed pins §4's original-call-only S9.
   `Duplicate` of a fresh loft reproduces bit-identical vertices, Exact
-  16000 mm³ volume, Exact centroid, Exact bounds, leaves the source live, and
-  gives the document two bodies. Rotating the 16000 mm³ square-square loft 37
-  degrees about X is the regression this PR exists for: assert
+  16000 mm³ volume, Exact centroid, Exact bounds, a bit-identical `Area`
+  (Bounded, so what carries over is the source's own value, bound and
+  exactness alike), leaves the source live, and gives the document two
+  bodies. Rotating the 16000 mm³ square-square loft 37 degrees about X is the
+  regression this PR exists for: assert
   `|Volume.Value - 16000| <= Volume.Bound` (the naive implementation misses by
   1.819e-12 against a 7.203e-13 bound), the centroid against the closed-form
   rotated centroid within its bound, every `Vertex.Position().Bound >= 0`, and

@@ -704,6 +704,36 @@ func TestChordedBoundaryVolumeAllowWallAndTwistLegsAreJointlyLoadBearing(t *test
 	t.Logf("full ratio=%.6g, without-wall-and-twist ratio=%.6g (must be < 1)", full/measuredGap, withoutWallAndTwist/measuredGap)
 }
 
+// THIS BLOCK IS ABOUT chordedBoundaryVolumeAllow, THE VOLUME ALLOW — NOT
+// about the AREA bound whose falsification ledger this PR carries. The two
+// are different functions with different legs, and the "NOT SHOWN TO FAIL"
+// entries below say nothing about the area ledger's coverage.
+//
+// The area bound is composed at loft_moments.go's area(), as
+// absSumUpper(bound, m.chorded.areaExcess, m.chorded.capAreaExcess), and its
+// per-leg falsifiers live in loft_area_excess_fixture_internal_test.go, not
+// here. Each of the three the ledger names goes red when its leg is deleted,
+// verified by rebuilding with the leg replaced by a literal 0:
+//
+//   - wall leg (areaExcess) zeroed: TestLoftTallThinArcWedgeAreaBoundEnclosesConvergedReference
+//     fails with residual 2.446e-3 against bound 4.609e-4, and
+//     TestLoftShearedArcWedgeAreaBoundEnclosesConvergedReference fails with
+//     residual 3.197e-2 against bound 6.084e-3.
+//   - cap leg (capAreaExcess) zeroed:
+//     TestLoftArcWedgeAreaBoundEnclosesConvergedReference fails with residual
+//     5.733e-3 against bound 3.822e-3, while tall-thin and sheared stay green
+//     because the wall term masks the cap leg on those two.
+//
+// The volume allow's own wall leg genuinely cannot be falsified by deletion
+// over the family searched here, and that is a measured fact rather than an
+// untested gap: TestChordedBoundaryVolumeAllowWallLegDeletionSearch logs a
+// without-wall worst-case ratio of 2.85257 over its 900 rows, so the
+// wall-zeroed volume bound stays about 2.85x ABOVE the measured gap
+// everywhere it looked. An assertion that deleting it drops the bound below
+// the gap would therefore fail; the sound seam leg subsumes wall's share in
+// this circular-arc family, as the F3 and joint-load-bearing notes below set
+// out.
+//
 // PER-LEG DELETION-CHECK STATUS. Four legs compose chordedBoundaryVolumeAllow
 // — wall (a), twist (b), cap (c), seam (d) — and every one now has a
 // deletion check on record, so a reader can tell at a glance which the suite
@@ -1089,64 +1119,204 @@ func TestCellChordCurveAreaUpperRefusesTheSagittaZigzag(t *testing.T) {
 	require.True(t, math.IsInf(got, 1), "an unstatable parameter-matched bound must refuse, not publish %.6g", got)
 }
 
+// ratUnitCirclePoints returns exact rational points (cos, sin) on the unit
+// circle: ((1-t^2)/(1+t^2), 2t/(1+t^2)) is the standard rational
+// parametrization, so every coordinate below is an exact big.Rat, no trig
+// call and no rounding anywhere. Distinct t give distinct points, and t = 0
+// gives (1, 0) — the collapsed half-angle a zero parameter offset needs.
+func ratUnitCirclePoints(ts []int64) [][2]*big.Rat {
+	one := big.NewRat(1, 1)
+	pts := make([][2]*big.Rat, 0, len(ts))
+	for _, n := range ts {
+		t := big.NewRat(n, 7)
+		t2 := new(big.Rat).Mul(t, t)
+		den := new(big.Rat).Add(one, t2)
+		cos := new(big.Rat).Quo(new(big.Rat).Sub(one, t2), den)
+		sin := new(big.Rat).Quo(new(big.Rat).Add(t, t), den)
+		pts = append(pts, [2]*big.Rat{cos, sin})
+	}
+	return pts
+}
+
 // TestArcMatchedDeltaEqualsSagitta pins Step 2's own carried-forward
-// verification: for a CIRCULAR ARC under its own uniform-angle
-// parametrization, sup_s|arc(s)-chord(s)| equals the chord's own TRUE
-// sagitta EXACTLY — the one curve kind (besides a trivial straight LINE)
-// where cellChordCurveAreaUpper's matchedDeltaUpper obligation and the
-// loft evaluator's sagitta-only sectionDelta field coincide, over sweeps
-// from 5 to 170 degrees. An arc of radius r subtending angle theta about
-// its own centre has, at the uniform-angle parameter s in [0,1], true
-// point r*(cos(s*theta), sin(s*theta)) and chord point (1-s)*(r,0) +
-// s*(r*cos(theta), r*sin(theta)); the maximum separation over s is a
-// standard result, r*(1-cos(theta/2)) BETWEEN the endpoints — the SAME
-// value as 2r*sin(theta/4)^2 (2*sin(x/2)^2 = 1-cos(x) is the
-// numerically-stable identity) — confirmed here by direct numerical
-// maximisation over s rather than trusted algebraically. That TRUE
-// closed-form value, trueSagitta below, is computed independently of
-// chordSagitta: chordSagitta itself now publishes a PROVEN UPPER bound
-// (sin(x)<=x, this file's own item 2) rather than the tight closed form,
-// so it is no longer the arc's exact matched-parameter deviation — it
-// still bounds it, which the second assertion below pins, but the
-// coincidence this test's own name refers to is a fact about the TRUE
-// mathematical quantities, not about chordSagitta's own numeric output.
+// verification, and pins it as a PROOF rather than as a sample: for a
+// CIRCULAR ARC under its own uniform-angle parametrization,
+// sup_s |arc(s)-chord(s)| equals the chord's own TRUE sagitta
+// 2r*sin^2(theta/4) EXACTLY, at every cell angle theta a build can produce.
+// That is the one curve kind (besides a trivial straight LINE) where
+// cellChordCurveAreaUpper's matchedDeltaUpper obligation and the loft
+// evaluator's sagitta-only sectionDelta field coincide, so every caller
+// leaning on the coincidence (bounds.go's own matchedDeltaUpper paragraph,
+// loft_build.go's loftCircularCellStations) rests on what follows.
+//
+// THE DERIVATION. Put the chord's own midpoint on the x axis. An arc of
+// radius r subtending theta = 2b, parametrized uniformly in angle by
+// s in [0,1], is arc(u) = r*(cos(u*b), sin(u*b)) with u = 2s-1 in [-1,1],
+// and the chord it subtends is chord(u) = r*(cos(b), u*sin(b)). Both scale
+// linearly in r, so write D(u) = |arc(u)-chord(u)|^2 / r^2 and take r = 1.
+// Expanding D through the half-angle substitutions cos b = 1-2*S^2,
+// sin b = 2*S*C, cos(u*b) = 1-2*sa^2, sin(u*b) = 2*sa*ca:
+//
+//	D(u) - (1-cos b)^2 = 4*[ (u*S*C - sa*ca)^2 - sa^2*(2*S^2 - sa^2) ]   (1)
+//
+// with S = sin(b/2), C = cos(b/2), sa = sin(u*b/2), ca = cos(u*b/2). (1) is
+// an ALGEBRAIC identity in five variables tied only by S^2+C^2 = 1 and
+// sa^2+ca^2 = 1 — u is free of the two angles in it — and the first subtest
+// verifies it over exact rationals rather than leaving it to the reader.
+//
+// r*(1-cos b) = 2r*sin^2(b/2) is the true sagitta (the half-angle identity,
+// with b = theta/2), so the whole claim is that the bracket in (1) is never
+// positive:
+//
+//	|u*S*C - sa*ca| <= sa*sqrt(2*S^2 - sa^2)                            (2)
+//
+// D is even in u, so u in [0,1] settles it. At u = 0 — the chord's own
+// MIDPOINT, s = 1/2 — sa = 0 makes the bracket exactly zero, so (1) is an
+// EQUALITY there and the supremum is ATTAINED, never merely approached: the
+// separation at s = 1/2 is exactly r*(1-cos b), the sagitta itself. For
+// u in (0,1] and a cell angle 2b with b in (0,2]:
+//
+//   - sa >= u*S and ca >= C — sin is concave on [0,pi], so sin(u*x) >= u*sin(x)
+//     there, and cos decreases on [0,pi] — hence u*S*C <= sa*ca, and the left
+//     side of (2) is the nonnegative sa*ca - u*S*C;
+//   - sa <= u*b/2 (sin x <= x) gives u*S*C/sa >= 2*S*C/b = sin(b)/b, and
+//     ca <= 1, so (sa*ca - u*S*C)/sa <= 1 - sin(b)/b;
+//   - sa <= S (both half-angles lie in [0,1], where sin increases), so
+//     sqrt(2*S^2 - sa^2) >= S and (2) follows from 1 - sin(b)/b <= sin(b/2);
+//   - sin x >= x - x^3/6 for x >= 0 bounds both sides of that last one:
+//     1 - sin(b)/b <= b^2/6 and sin(b/2) >= b/2 - b^3/48, so it holds
+//     whenever b/6 + b^2/48 <= 1/2 — a single rational inequality in b,
+//     increasing in b, which the second subtest settles at its own endpoint
+//     b = 2 over exact rationals.
+//
+// b <= 2 covers every cell angle a build can produce, with room to spare:
+// chordCount splits a walk into n = ceil(sweep/maxD) chords with
+// maxD = 4*asin(sqrt(tol/(2r))) when tol < r and maxD = pi otherwise, and
+// asin(sqrt(1/2)) = pi/4 caps the first form at pi too, so a cell angle
+// sweep/n never exceeds maxD <= pi — that is 2b <= pi, b <= pi/2 < 2. The
+// third subtest reads that ceiling back off chordCount itself.
+//
+// chordSagitta publishes a PROVEN UPPER bound (sin(x) <= x, this file's own
+// item 2) rather than the tight closed form, so what a circular cell carries
+// is not the arc's exact matched-parameter deviation; it still encloses it,
+// which the fourth subtest pins. That a circular cell's matchedDelta IS that
+// published sagitta, cell for cell, is pinned in the evaluator itself by
+// TestLoftCircularCellStationsMatchedDeltaIsItsSagitta
+// (loft_stations_internal_test.go).
 func TestArcMatchedDeltaEqualsSagitta(t *testing.T) {
-	const radius = 7.0
-	for _, sweepDeg := range []float64{5, 10, 30, 60, 90, 120, 150, 170} {
-		t.Run(fmt.Sprintf("sweep=%gdeg", sweepDeg), func(t *testing.T) {
+	t.Run("the reduction to (1) is an exact identity", func(t *testing.T) {
+		// Both sides of (1) have degree 4 in (C,S), degree 4 in (ca,sa) and
+		// degree 2 in u, so their difference P vanishes identically once it
+		// vanishes on this grid. Fixing the two circle points, P is a degree-2
+		// polynomial in u killed by 4 distinct u; each of its u-coefficients
+		// then has degree 4 in (C,S) and, vanishing at 9 > 2*4 points of the
+		// unit circle, must vanish on the WHOLE circle (an irreducible conic
+		// and a degree-4 curve sharing more than 8 points share a component);
+		// running that step once per circle in either order extends it to the
+		// whole product. Nothing here is sampled: the grid is a proof.
+		ts := []int64{0, 1, 2, 3, 4, 5, 6, 8, 9}
+		half := ratUnitCirclePoints(ts)
+		one, two, four := big.NewRat(1, 1), big.NewRat(2, 1), big.NewRat(4, 1)
+		for _, u := range []*big.Rat{big.NewRat(0, 1), big.NewRat(1, 3), big.NewRat(3, 4), one} {
+			for _, hb := range half { // (C, S) = (cos(b/2), sin(b/2))
+				cc, ss := hb[0], hb[1]
+				// cos b = 1-2*S^2, sin b = 2*S*C.
+				cb := new(big.Rat).Sub(one, new(big.Rat).Mul(two, new(big.Rat).Mul(ss, ss)))
+				sb := new(big.Rat).Mul(two, new(big.Rat).Mul(ss, cc))
+				for _, ha := range half { // (ca, sa) = (cos(u*b/2), sin(u*b/2))
+					ca, sa := ha[0], ha[1]
+					// cos(u*b) = 1-2*sa^2, sin(u*b) = 2*sa*ca.
+					cua := new(big.Rat).Sub(one, new(big.Rat).Mul(two, new(big.Rat).Mul(sa, sa)))
+					sua := new(big.Rat).Mul(two, new(big.Rat).Mul(sa, ca))
+
+					// D(u) - (1-cos b)^2, straight off the two points:
+					// arc = (cos(u*b), sin(u*b)), chord = (cos b, u*sin b).
+					dx := new(big.Rat).Sub(cua, cb)
+					dy := new(big.Rat).Sub(sua, new(big.Rat).Mul(u, sb))
+					sag := new(big.Rat).Sub(one, cb)
+					left := new(big.Rat).Add(new(big.Rat).Mul(dx, dx), new(big.Rat).Mul(dy, dy))
+					left.Sub(left, new(big.Rat).Mul(sag, sag))
+
+					// 4*[(u*S*C - sa*ca)^2 - sa^2*(2*S^2 - sa^2)].
+					cross := new(big.Rat).Sub(
+						new(big.Rat).Mul(u, new(big.Rat).Mul(ss, cc)),
+						new(big.Rat).Mul(sa, ca),
+					)
+					rest := new(big.Rat).Sub(new(big.Rat).Mul(two, new(big.Rat).Mul(ss, ss)), new(big.Rat).Mul(sa, sa))
+					right := new(big.Rat).Sub(
+						new(big.Rat).Mul(cross, cross),
+						new(big.Rat).Mul(new(big.Rat).Mul(sa, sa), rest),
+					)
+					right.Mul(four, right)
+
+					require.Zerof(t, left.Cmp(right),
+						"identity (1) failed at u=%s, (C,S)=(%s,%s), (ca,sa)=(%s,%s): %s vs %s",
+						u.RatString(), cc.RatString(), ss.RatString(), ca.RatString(), sa.RatString(),
+						left.RatString(), right.RatString())
+
+					// u = 0 forces sa = 0 (the chord's own midpoint), where
+					// the bracket is exactly zero: the sagitta is ATTAINED.
+					if u.Sign() == 0 && sa.Sign() == 0 {
+						require.Zerof(t, left.Sign(),
+							"the midpoint separation must equal the sagitta exactly, not merely approach it; got %s", left.RatString())
+					}
+				}
+			}
+		}
+	})
+
+	t.Run("the closure holds over the whole proven range", func(t *testing.T) {
+		// b/6 + b^2/48 <= 1/2 for every b in (0,2]. Both terms strictly
+		// increase in b > 0, so the endpoint b = 2 settles the whole range,
+		// and it settles it over exact rationals: 1/3 + 1/12 = 5/12 < 1/2.
+		b := big.NewRat(2, 1)
+		lhs := new(big.Rat).Add(
+			new(big.Rat).Quo(b, big.NewRat(6, 1)),
+			new(big.Rat).Quo(new(big.Rat).Mul(b, b), big.NewRat(48, 1)),
+		)
+		require.Equal(t, "5/12", lhs.RatString())
+		require.Negativef(t, lhs.Cmp(big.NewRat(1, 2)),
+			"the closure b/6 + b^2/48 <= 1/2 must hold at the range endpoint b=2; got %s", lhs.RatString())
+	})
+
+	t.Run("every production cell angle lands inside the proven range", func(t *testing.T) {
+		// chordCount is the only thing that sets a circular cell's angle
+		// (loftCircularCellStations calls it once per side and shares the
+		// larger count), and its own maxD <= pi caps that angle at pi — half
+		// the proven ceiling of 4 radians. Read back off chordCount itself,
+		// over targets from coarser-than-the-radius (the maxD = pi arm) to
+		// fine, on radii and sweeps a real section carries.
+		for _, radius := range []float64{0.5, 5, 250} {
+			for _, sweep := range []float64{0.05, math.Pi / 2, 2 * math.Pi} {
+				for _, target := range []float64{1e3, 1, 1e-2, 1e-5} {
+					w := circularWalk(0, 0, radius, 0, sweep, radius, sweep)
+					w.closed = sweep >= 2*math.Pi
+					n, _, err := chordCount(w, target)
+					require.NoError(t, err)
+					cell := sweep / float64(n)
+					require.LessOrEqualf(t, cell, math.Pi,
+						"radius=%v sweep=%v target=%v: a cell angle must never exceed pi; got %v over %d chords", radius, sweep, target, cell, n)
+					require.Lessf(t, cell, 4.0,
+						"radius=%v sweep=%v target=%v: a cell angle must stay inside the proven range 2b <= 4; got %v", radius, sweep, target, cell)
+				}
+			}
+		}
+	})
+
+	t.Run("chordSagitta's published bound encloses the true sagitta", func(t *testing.T) {
+		// The derivation above is about the TRUE quantity 2r*sin^2(theta/4);
+		// what a cell actually carries is chordSagitta's proven upper bound
+		// r*theta^2/(8n^2). This is the sin(x) <= x step, corroborated
+		// numerically across the sweep range the evaluator admits.
+		const radius = 7.0
+		for _, sweepDeg := range []float64{5, 10, 30, 60, 90, 120, 150, 170, 180} {
 			theta := sweepDeg * math.Pi / 180
 			trueSagitta := 2 * radius * math.Sin(theta/4) * math.Sin(theta/4)
-
-			chordStart := r3.NewVec(radius, 0, 0)
-			chordEnd := r3.NewVec(radius*math.Cos(theta), radius*math.Sin(theta), 0)
-
-			maxSep := 0.0
-			const steps = 200000
-			for i := 0; i <= steps; i++ {
-				s := float64(i) / steps
-				truePoint := r3.NewVec(radius*math.Cos(s*theta), radius*math.Sin(s*theta), 0)
-				chordPoint := chordStart.Scale(1 - s).Add(chordEnd.Scale(s))
-				sep := truePoint.Sub(chordPoint).Len()
-				maxSep = math.Max(maxSep, sep)
-			}
-
-			// A fine but finite numerical maximisation converges toward the
-			// true supremum from below, so this checks near-equality rather
-			// than an exact match — HOST PORTABILITY: no literal from this
-			// run is pinned, only a same-run comparison against the TRUE
-			// closed form computed above.
-			require.InDeltaf(t, trueSagitta, maxSep, trueSagitta*1e-4+1e-9,
-				"sweep=%g: the arc-vs-chord max separation %.10g must match the true sagitta %.10g under the matched parametrization", sweepDeg, maxSep, trueSagitta)
-
-			// chordSagitta's own PROVEN bound (sin(x)<=x, no longer the tight
-			// closed form) must still enclose the true parameter-matched
-			// deviation, so it remains valid to pass as matchedDeltaUpper for
-			// an arc pairing even though it is no longer exactly equal to it.
 			bound := chordSagitta(radius, theta, 1)
 			require.GreaterOrEqualf(t, bound, trueSagitta,
 				"sweep=%g: chordSagitta's own proven bound %.10g must enclose the true sagitta %.10g", sweepDeg, bound, trueSagitta)
-		})
-	}
+		}
+	})
 }
 
 // TestCellChordCurveAreaUpperIsZeroForADegenerateCell pins the legitimate

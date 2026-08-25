@@ -340,9 +340,9 @@ func TestPairStationsStationDeterminism(t *testing.T) {
 	spans := quarterCircleFitSpans(t)
 	const target = 1e-4
 
-	s0a, s1a, sagA, err := pairStations(spans, spans, target, nil, nil)
+	s0a, s1a, _, sagA, err := pairStations(spans, spans, target, nil, nil)
 	require.NoError(t, err)
-	s0b, s1b, sagB, err := pairStations(spans, spans, target, nil, nil)
+	s0b, s1b, _, sagB, err := pairStations(spans, spans, target, nil, nil)
 	require.NoError(t, err)
 
 	require.Equal(t, sagA, sagB, "the achieved sagittaUpper must be bit-identical across calls")
@@ -401,14 +401,14 @@ func TestPairStationsSettlesOnSmallestLevelForTarget(t *testing.T) {
 
 	single := []bezierSpan{span}
 
-	s0Fine, _, sagFine, err := pairStations(single, single, targetFine, nil, nil)
+	s0Fine, _, _, sagFine, err := pairStations(single, single, targetFine, nil, nil)
 	require.NoError(t, err)
 	require.LessOrEqual(t, sagFine, targetFine, "the achieved sagitta must honor the fine target")
 	leavesFine := len(s0Fine) - 1
 	require.LessOrEqual(t, leavesFine, 1<<d,
 		"the generator must never need more cells than uniform refinement to depth %d already guarantees suffices", d)
 
-	s0Coarse, _, sagCoarse, err := pairStations(single, single, targetCoarse, nil, nil)
+	s0Coarse, _, _, sagCoarse, err := pairStations(single, single, targetCoarse, nil, nil)
 	require.NoError(t, err)
 	require.LessOrEqual(t, sagCoarse, targetCoarse, "the achieved sagitta must honor the coarse target")
 	leavesCoarse := len(s0Coarse) - 1
@@ -423,7 +423,7 @@ func TestPairStationsSettlesOnSmallestLevelForTarget(t *testing.T) {
 
 func TestPairStationsOverCapRefuses(t *testing.T) {
 	spans := quarterCircleFitSpans(t)
-	_, _, _, err := pairStations(spans, spans, 1e-20, nil, nil) //nolint:dogsled // stations/sagitta discarded; only the refusal is under test
+	_, _, _, _, err := pairStations(spans, spans, 1e-20, nil, nil) //nolint:dogsled // stations/sagitta discarded; only the refusal is under test
 	require.Error(t, err)
 	require.ErrorIs(t, err, errTooManyChords)
 	require.ErrorIs(t, err, ErrUnsupported)
@@ -478,7 +478,7 @@ func TestPairStationsAcceptsTheStatedChordCap(t *testing.T) {
 	chain := []bezierSpan{span}
 	target := levelSagitta(span, capDepth(t))
 
-	s0, s1, sag, err := pairStations(chain, chain, target, nil, nil)
+	s0, s1, _, sag, err := pairStations(chain, chain, target, nil, nil)
 	require.NoError(t, err, "a walk needing exactly the chord count the cap names must be built")
 	require.Len(t, s0, maxChordsPerWalk+1,
 		"a chain of exactly maxChordsPerWalk chords carries one more station than that")
@@ -495,7 +495,7 @@ func TestPairStationsRefusesOneChordPastTheStatedCap(t *testing.T) {
 	chain := []bezierSpan{span, straightSpanFrom(2)}
 	target := levelSagitta(span, capDepth(t))
 
-	_, _, _, err := pairStations(chain, chain, target, nil, nil) //nolint:dogsled // stations/sagitta discarded; only the refusal is under test
+	_, _, _, _, err := pairStations(chain, chain, target, nil, nil) //nolint:dogsled // stations/sagitta discarded; only the refusal is under test
 	require.ErrorIs(t, err, errTooManyChords)
 	require.ErrorIs(t, err, ErrUnsupported)
 }
@@ -511,7 +511,7 @@ func TestPairStationsSpanCountPastTheCapRefusesUpFront(t *testing.T) {
 		chain[i] = straightSpanFrom(float64(2 * i))
 	}
 
-	_, _, _, err := pairStations(chain, chain, 1, nil, nil) //nolint:dogsled // stations/sagitta discarded; only the refusal is under test
+	_, _, _, _, err := pairStations(chain, chain, 1, nil, nil) //nolint:dogsled // stations/sagitta discarded; only the refusal is under test
 	require.ErrorIs(t, err, errTooManyChords)
 	require.ErrorIs(t, err, ErrUnsupported)
 }
@@ -521,7 +521,7 @@ func TestPairStationsSpanCountPastTheCapRefusesUpFront(t *testing.T) {
 func TestPairStationsOverBudgetRefusesR7(t *testing.T) {
 	spans := quarterCircleFitSpans(t)
 	exhausted := &freeformWork{spent: freeformWorkLimit}
-	_, _, _, err := pairStations(spans, spans, 1e-9, exhausted, newFreeformWork()) //nolint:dogsled // stations/sagitta discarded; only the refusal is under test
+	_, _, _, _, err := pairStations(spans, spans, 1e-9, exhausted, newFreeformWork()) //nolint:dogsled // stations/sagitta discarded; only the refusal is under test
 	require.Error(t, err)
 	require.ErrorIs(t, err, ErrUnsupported)
 }
@@ -544,7 +544,7 @@ func TestPairStationsSharedStationSetAcrossDifferentScale(t *testing.T) {
 	scaled := scaleSpans(base, 5)
 
 	target := levelSagitta(base[0], 2) // fine enough to force several splits
-	s0, s1, _, err := pairStations(base, scaled, target, nil, nil)
+	s0, s1, _, _, err := pairStations(base, scaled, target, nil, nil)
 	require.NoError(t, err)
 	require.Equal(t, len(s0), len(s1))
 	require.Greater(t, len(s0), len(base)+1, "the target must force genuine subdivision for this test to exercise the shared-cell claim")
@@ -576,7 +576,7 @@ func TestPairStationsChargesBothCountersSeparately(t *testing.T) {
 
 	target := math.Min(levelSagitta(small, 2), levelSagitta(big8, 2))
 	work0, work1 := newFreeformWork(), newFreeformWork()
-	_, _, _, err := pairStations([]bezierSpan{small}, []bezierSpan{big8}, target, work0, work1) //nolint:dogsled // stations/sagitta discarded; only the counter split is under test
+	_, _, _, _, err := pairStations([]bezierSpan{small}, []bezierSpan{big8}, target, work0, work1) //nolint:dogsled // stations/sagitta discarded; only the counter split is under test
 	require.NoError(t, err)
 
 	require.Positive(t, work0.spent, "side 0's own counter must be charged")
@@ -604,7 +604,7 @@ func TestPairStationsSagittaUpperIsAMaximumNeverTheLastCell(t *testing.T) {
 	target := bulgeSag * (1 + 1e-9)
 	spans0 := []bezierSpan{bulge, flat}
 	spans1 := []bezierSpan{bulge, flat}
-	_, _, sagUp, err := pairStations(spans0, spans1, target, nil, nil)
+	_, _, _, sagUp, err := pairStations(spans0, spans1, target, nil, nil) //nolint:dogsled // stations/matchedDelta discarded; only sagittaUpper and err matter here.
 	require.NoError(t, err)
 	require.InEpsilon(t, bulgeSag, sagUp, 1e-9, "sagittaUpper must be the running MAXIMUM (the first, bulging cell), never the last cell's own tiny reading")
 }
@@ -613,7 +613,7 @@ func TestPairStationsSagittaUpperIsAMaximumNeverTheLastCell(t *testing.T) {
 
 func TestPairStationsSpanCountMismatchRefuses(t *testing.T) {
 	spans := quarterCircleFitSpans(t)
-	_, _, _, err := pairStations(spans, spans[:len(spans)-1], 1e-6, nil, nil) //nolint:dogsled // stations/sagitta discarded; only the refusal is under test
+	_, _, _, _, err := pairStations(spans, spans[:len(spans)-1], 1e-6, nil, nil) //nolint:dogsled // stations/sagitta discarded; only the refusal is under test
 	require.Error(t, err)
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.False(t, errors.Is(err, ErrDegenerate))
@@ -756,7 +756,7 @@ func TestPairStationsAcceptTestRequiresBothSidesUnderTarget(t *testing.T) {
 
 	spans0 := []bezierSpan{small}
 	spans1 := []bezierSpan{large}
-	_, _, sagUp, err := pairStations(spans0, spans1, target, nil, nil)
+	_, _, _, sagUp, err := pairStations(spans0, spans1, target, nil, nil) //nolint:dogsled // stations/matchedDelta discarded; only sagittaUpper and err matter here.
 	require.NoError(t, err)
 	require.LessOrEqual(t, sagUp, target,
 		"the achieved sagittaUpper must honor the target on BOTH sides, never side 0 alone")
@@ -786,7 +786,7 @@ func TestPairStationsSagittaUpperReflectsTheLargerSide(t *testing.T) {
 	target := largeSag * (1 + 1e-9)
 	spans0 := []bezierSpan{small}
 	spans1 := []bezierSpan{large}
-	_, _, sagUp, err := pairStations(spans0, spans1, target, nil, nil)
+	_, _, _, sagUp, err := pairStations(spans0, spans1, target, nil, nil) //nolint:dogsled // stations/matchedDelta discarded; only sagittaUpper and err matter here.
 	require.NoError(t, err)
 	require.InEpsilon(t, largeSag, sagUp, 1e-9,
 		"sagittaUpper must reflect the LARGER side's own reading, never the smaller side's")
@@ -806,7 +806,7 @@ func TestPairStationsStationsAdvanceMonotonicallyAlongTheChain(t *testing.T) {
 	spans := quarterCircleFitSpans(t)
 	target := levelSagitta(spans[0], 3)
 
-	s0, _, _, err := pairStations(spans, spans, target, nil, nil)
+	s0, _, _, _, err := pairStations(spans, spans, target, nil, nil) //nolint:dogsled // stations1/matchedDelta/sagittaUpper discarded; only s0 and err matter here.
 	require.NoError(t, err)
 	require.Greater(t, len(s0), len(spans)+1,
 		"the target must force genuine subdivision across the chain for this test to exercise cross-cell order")
@@ -840,7 +840,7 @@ func TestPairStationsFirstAndLastStationAreTheChainEndpointsExactly(t *testing.T
 	spans := quarterCircleFitSpans(t)
 	target := levelSagitta(spans[0], 3)
 
-	s0, s1, _, err := pairStations(spans, spans, target, nil, nil)
+	s0, s1, _, _, err := pairStations(spans, spans, target, nil, nil)
 	require.NoError(t, err)
 	require.Greater(t, len(s0), len(spans)+1, "the target must force genuine subdivision for this test to exercise anything")
 
@@ -900,12 +900,12 @@ func TestPairStationsRefusesAZeroControlSpanInsteadOfPanicking(t *testing.T) {
 	line := ratSpan([][2]float64{{0, 0}, {1, 0}})
 
 	t.Run("side0", func(t *testing.T) {
-		_, _, _, err := pairStations([]bezierSpan{empty}, []bezierSpan{line}, 1, nil, nil)
+		_, _, _, _, err := pairStations([]bezierSpan{empty}, []bezierSpan{line}, 1, nil, nil)
 		require.Error(t, err)
 		require.ErrorIs(t, err, ErrDegenerate)
 	})
 	t.Run("side1", func(t *testing.T) {
-		_, _, _, err := pairStations([]bezierSpan{line}, []bezierSpan{empty}, 1, nil, nil)
+		_, _, _, _, err := pairStations([]bezierSpan{line}, []bezierSpan{empty}, 1, nil, nil)
 		require.Error(t, err)
 		require.ErrorIs(t, err, ErrDegenerate)
 	})
@@ -926,7 +926,7 @@ func TestPairStationsFinalStationDoesNotAliasTheInputSpan(t *testing.T) {
 	// target=1 is far above this straight span's own (zero) sagitta, so the
 	// single cell accepts whole with no bisection — the final station is
 	// exactly the code path under test.
-	s0, _, _, err := pairStations(spans, spans, 1, nil, nil)
+	s0, _, _, _, err := pairStations(spans, spans, 1, nil, nil) //nolint:dogsled // stations1/matchedDelta/sagittaUpper discarded; only s0 and err matter here.
 	require.NoError(t, err)
 
 	wantU := new(big.Rat).Set(span[len(span)-1].u) // the input's own value, before any mutation

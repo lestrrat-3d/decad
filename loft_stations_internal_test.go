@@ -44,11 +44,12 @@ func mkCircleSeg(cu, cv, radius, th0, th1 float64) CircleSeg { //nolint:unparam 
 func TestLoftLineCellStationsIsUnchanged(t *testing.T) {
 	w0 := segmentWalk{kind: walkLine, startU: 1, startV: 2}
 	w1 := segmentWalk{kind: walkLine, startU: 3, startV: 4}
-	stations0, stations1, sagitta, stationRound, err := loftCellStations(nil, nil, w0, w1, 123.0, nil, nil)
+	stations0, stations1, sagitta, matchedDelta, stationRound, err := loftCellStations(nil, nil, w0, w1, 123.0, nil, nil)
 	require.NoError(t, err)
 	require.Equal(t, []Point2{{U: 1, V: 2}}, stations0)
 	require.Equal(t, []Point2{{U: 3, V: 4}}, stations1)
 	require.Zero(t, sagitta)
+	require.Equal(t, []float64{0}, matchedDelta, "a LineSeg cell's own chord IS the curve it denotes")
 	require.Zero(t, stationRound, "a LineSeg station is a recorded endpoint, never computed")
 }
 
@@ -157,7 +158,7 @@ func TestLoftCircularCellStationsSharedMTakesMax(t *testing.T) {
 	require.NotEqual(t, m0, m1, "the fixture must need different station counts on its two sides for this test to exercise the max rule")
 	want := max(m0, m1)
 
-	stations0, stations1, sagittaUpper, _, err := loftCircularCellStations(seg0, seg1, w0, w1, target)
+	stations0, stations1, sagittaUpper, _, _, err := loftCircularCellStations(seg0, seg1, w0, w1, target)
 	require.NoError(t, err)
 	require.Len(t, stations0, want)
 	require.Len(t, stations1, want)
@@ -183,12 +184,18 @@ func TestLoftCircularCellStationsSharedMTakesMax(t *testing.T) {
 
 // --- loftCircularCellStations: the parameter-matched discharge ---
 
-// TestLoftCircularArcSagittaIsTheUniformParameterMatchedBound pins the claim
-// loftCircularCellStations' own doc comment makes: under uniform-angle
-// parametrization (t_k = th0 + (k/m)*(th1-th0)), sup_s |arc(s) - chord(s)|
-// over one chord EQUALS the sagitta 2r*sin^2(dtheta/4) exactly, the maximum
-// always landing at s = 1/2 — proven here by dense sampling across a spread
-// of sweeps from 0.5 to 359.5 degrees, never merely one case.
+// TestLoftCircularArcSagittaIsTheUniformParameterMatchedBound corroborates
+// the claim loftCircularCellStations' own doc comment makes: under
+// uniform-angle parametrization (t_k = th0 + (k/m)*(th1-th0)),
+// sup_s |arc(s) - chord(s)| over one chord EQUALS the sagitta
+// 2r*sin^2(dtheta/4) exactly, the maximum always landing at s = 1/2. The
+// PROOF of that claim is TestArcMatchedDeltaEqualsSagitta
+// (bounds_chord_internal_test.go): an analytic derivation whose steps are
+// checked over exact rationals, covering every cell angle up to 4 radians
+// and so every cell angle chordCount can produce. What this test adds is
+// numerical corroboration across a wider spread than the derivation covers —
+// sweeps from 0.5 to 359.5 degrees, past the half turn no chord split ever
+// hands one cell — sampled, and so evidence rather than proof.
 func TestLoftCircularArcSagittaIsTheUniformParameterMatchedBound(t *testing.T) {
 	const r = 5.0
 	const samples = 20_000
@@ -215,6 +222,63 @@ func TestLoftCircularArcSagittaIsTheUniformParameterMatchedBound(t *testing.T) {
 	}
 }
 
+// TestLoftCircularCellStationsMatchedDeltaIsItsSagitta pins the coupling the
+// derivation above exists to license, on the production path itself: the
+// per-cell matchedDelta loftCircularCellStations publishes IS that pairing's
+// own sagittaUpper, for EVERY cell of the shared chain, never a separate or
+// smaller reading. Every consumer of a circular cell's matched-delta
+// obligation (bounds.go's cellChordCurveAreaUpper through
+// loft_moments.go's computeLoftChordedAllow) reads that equality straight
+// off this arm, and loftPayload's own doc comment states it as fact, so it
+// is asserted here rather than left to the assignment that implements it.
+//
+// The rows exercise every shape the arm can settle on: two identical sides,
+// two sides whose own station counts differ (the shared max, where the
+// coarser side's sagitta is re-derived at m), a single-cell pairing, and a
+// degenerate radius-0 pair whose sagitta is exactly zero.
+func TestLoftCircularCellStationsMatchedDeltaIsItsSagitta(t *testing.T) {
+	for _, row := range []struct {
+		name           string
+		r0, sweep0     float64
+		r1, sweep1     float64
+		target         float64
+		wantSharedOnly bool
+	}{
+		{name: "identical sides", r0: 5, sweep0: math.Pi / 2, r1: 5, sweep1: math.Pi / 2, target: 1e-3},
+		{name: "different station counts", r0: 5, sweep0: math.Pi / 2, r1: 2, sweep1: math.Pi / 6, target: 1e-3, wantSharedOnly: true},
+		{name: "single cell", r0: 5, sweep0: math.Pi / 2, r1: 4, sweep1: math.Pi / 2, target: 10},
+		{name: "degenerate radius", r0: 0, sweep0: math.Pi / 2, r1: 0, sweep1: math.Pi / 2, target: 1e-3},
+	} {
+		t.Run(row.name, func(t *testing.T) {
+			w0 := circularWalk(0, 0, row.r0, 0, row.sweep0, row.r0, row.sweep0)
+			w1 := circularWalk(0, 0, row.r1, 0, row.sweep1, row.r1, row.sweep1)
+			seg0 := mkCircleSeg(0, 0, row.r0, 0, row.sweep0)
+			seg1 := mkCircleSeg(0, 0, row.r1, 0, row.sweep1)
+
+			if row.wantSharedOnly {
+				m0, _, err := chordCount(w0, row.target)
+				require.NoError(t, err)
+				m1, _, err := chordCount(w1, row.target)
+				require.NoError(t, err)
+				require.NotEqual(t, m0, m1, "this row must need different station counts on its two sides")
+			}
+
+			stations0, stations1, sagitta, matchedDelta, _, err := loftCircularCellStations(seg0, seg1, w0, w1, row.target)
+			require.NoError(t, err)
+			require.Len(t, stations1, len(stations0))
+			require.Len(t, matchedDelta, len(stations0),
+				"one matched-delta entry per cell, the count loftCellStations' own doc comment fixes")
+
+			want := make([]float64, len(stations0))
+			for i := range want {
+				want[i] = sagitta
+			}
+			require.Equal(t, want, matchedDelta,
+				"every circular cell's matchedDelta must equal the pairing's own sagitta %v exactly", sagitta)
+		})
+	}
+}
+
 // --- S15: the station cap ---
 
 // TestLoftCellStationsStationCapFiresBeforeAuditCeiling is S15: a target this
@@ -236,7 +300,7 @@ func TestLoftCircularArcSagittaIsTheUniformParameterMatchedBound(t *testing.T) {
 func TestLoftCellStationsStationCapFiresBeforeAuditCeiling(t *testing.T) {
 	w0 := circularWalk(0, 0, 5, 0, math.Pi/2, 5, math.Pi/2)
 	w1 := circularWalk(0, 0, 5, 0, math.Pi/2, 5, math.Pi/2)
-	_, _, _, _, err := loftCellStations(nil, nil, w0, w1, 1e-12, nil, nil) //nolint:dogsled // only the error matters here; the station cap fires before seg0/seg1 are ever read.
+	_, _, _, _, _, err := loftCellStations(nil, nil, w0, w1, 1e-12, nil, nil) //nolint:dogsled // only the error matters here; the station cap fires before seg0/seg1 are ever read.
 	require.ErrorIs(t, err, errTooManyChords)
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.Contains(t, err.Error(), "more than 16384 chords")
@@ -258,7 +322,7 @@ func TestLoftCircularCellStationsRefusesOneSidedCollapse(t *testing.T) {
 	normal := circularWalk(0, 0, 5, 0, math.Pi/2, 5, math.Pi/2)
 	segDegenerate := mkCircleSeg(0, 0, 0, 0, math.Pi/2)
 	segNormal := mkCircleSeg(0, 0, 5, 0, math.Pi/2)
-	_, _, _, _, err := loftCircularCellStations(segDegenerate, segNormal, degenerate, normal, 1e-3) //nolint:dogsled // only the error matters here; S16 fires before stationRound is computed.
+	_, _, _, _, _, err := loftCircularCellStations(segDegenerate, segNormal, degenerate, normal, 1e-3) //nolint:dogsled // only the error matters here; S16 fires before stationRound is computed.
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.Contains(t, err.Error(), "collapses to one point on only one of the two sections")
 }
@@ -272,7 +336,7 @@ func TestLoftCircularCellStationsSymmetricCollapseIsFine(t *testing.T) {
 	w1 := circularWalk(0, 0, 0, 0, math.Pi/2, 0, math.Pi/2)
 	seg0 := mkCircleSeg(0, 0, 0, 0, math.Pi/2)
 	seg1 := mkCircleSeg(0, 0, 0, 0, math.Pi/2)
-	stations0, stations1, sagitta, _, err := loftCircularCellStations(seg0, seg1, w0, w1, 1e-3)
+	stations0, stations1, sagitta, _, _, err := loftCircularCellStations(seg0, seg1, w0, w1, 1e-3)
 	require.NoError(t, err)
 	require.Len(t, stations0, 1)
 	require.Len(t, stations1, 1)
@@ -295,13 +359,13 @@ func TestLoftPairingsSectionDeltaIsMaxNotSum(t *testing.T) {
 	wA0 := circularWalk(0, 0, 5, 0, math.Pi/2, 5, math.Pi/2)
 	wA1 := circularWalk(0, 0, 5, 0, math.Pi/2, 5, math.Pi/2)
 	segA0, segA1 := mkCircleSeg(0, 0, 5, 0, math.Pi/2), mkCircleSeg(0, 0, 5, 0, math.Pi/2)
-	_, _, sagA, _, err := loftCellStations(segA0, segA1, wA0, wA1, target, nil, nil) //nolint:dogsled // only sagA and err matter here.
+	_, _, sagA, _, _, err := loftCellStations(segA0, segA1, wA0, wA1, target, nil, nil) //nolint:dogsled // only sagA and err matter here.
 	require.NoError(t, err)
 
 	wB0 := circularWalk(0, 0, 1, 0, math.Pi/6, 1, math.Pi/6)
 	wB1 := circularWalk(0, 0, 1, 0, math.Pi/6, 1, math.Pi/6)
 	segB0, segB1 := mkCircleSeg(0, 0, 1, 0, math.Pi/6), mkCircleSeg(0, 0, 1, 0, math.Pi/6)
-	_, _, sagB, _, err := loftCellStations(segB0, segB1, wB0, wB1, target, nil, nil) //nolint:dogsled // only sagB and err matter here.
+	_, _, sagB, _, _, err := loftCellStations(segB0, segB1, wB0, wB1, target, nil, nil) //nolint:dogsled // only sagB and err matter here.
 	require.NoError(t, err)
 
 	require.NotEqual(t, sagA, sagB, "the two segment pairs must reach different sagittas for this test to distinguish max from sum")
@@ -311,7 +375,7 @@ func TestLoftPairingsSectionDeltaIsMaxNotSum(t *testing.T) {
 	walks0 := [][]segmentWalk{{wA0, wB0}}
 	walks1 := [][]segmentWalk{{wA1, wB1}}
 
-	pairs, sectionDelta, _, err := loftPairings(p0, p1, []int{0}, walks0, walks1, target, nil, nil)
+	pairs, sectionDelta, _, _, err := loftPairings(p0, p1, []int{0}, walks0, walks1, target, nil, nil)
 	require.NoError(t, err)
 	require.NotEmpty(t, pairs)
 
@@ -330,7 +394,7 @@ func TestLoftPairingsLineSegOnlyStationChainUnchanged(t *testing.T) {
 	p := unitSquareProfile()
 	offsets := []int{0}
 	walks := resolveLoftLoopWalks(t, p)
-	pairs, sectionDelta, stationRound, err := loftPairings(p, p, offsets, walks, walks, 999.0, nil, nil)
+	pairs, sectionDelta, _, stationRound, err := loftPairings(p, p, offsets, walks, walks, 999.0, nil, nil)
 	require.NoError(t, err)
 	require.Len(t, pairs, 1)
 	require.Len(t, pairs[0].v, 4)
