@@ -91,7 +91,7 @@ func (tc *triCutter) proj(p xpt) xp2 {
 	if tc.swap {
 		a, b = b, a
 	}
-	return xp2{a, b}
+	return newXP2(a, b)
 }
 
 // addVert interns a vertex by its exact 2D identity; boundary is sticky.
@@ -119,7 +119,7 @@ func cutTriangle(ctx context.Context, xtri [3]xpt, normal xpt, segs []xseg) ([]c
 
 	// Keep the projected facet counter-clockwise, so polygon areas and ear
 	// clipping read the facet's own orientation.
-	corner := func(p xpt) xp2 { return xp2{ratCoordOf(p, tc.u), ratCoordOf(p, tc.v)} }
+	corner := func(p xpt) xp2 { return newXP2(ratCoordOf(p, tc.u), ratCoordOf(p, tc.v)) }
 	if cross2xSign(corner(xtri[0]), corner(xtri[1]), corner(xtri[2])) < 0 {
 		tc.swap = true
 	}
@@ -272,10 +272,10 @@ func (tc *triCutter) chainProbe(ch chainPath) (xp2, error) {
 	}
 	a, b := tc.verts[ch.verts[0]].p2, tc.verts[ch.verts[1]].p2
 	half := big.NewRat(1, 2)
-	return xp2{
+	return newXP2(
 		new(big.Rat).Mul(half, new(big.Rat).Add(a.u, b.u)),
 		new(big.Rat).Mul(half, new(big.Rat).Add(a.v, b.v)),
-	}, nil
+	), nil
 }
 
 func (tc *triCutter) polyPoints(poly []int) ([]xp2, error) {
@@ -487,10 +487,10 @@ func (tc *triCutter) splitEdgesAtU(c *big.Rat) error {
 			continue
 		}
 		t := new(big.Rat).Quo(new(big.Rat).Sub(c, ua), new(big.Rat).Sub(ub, ua))
-		p2 := xp2{
+		p2 := newXP2(
 			new(big.Rat).Set(c),
 			new(big.Rat).Add(tc.verts[e.a].p2.v, new(big.Rat).Mul(t, new(big.Rat).Sub(tc.verts[e.b].p2.v, tc.verts[e.a].p2.v))),
-		}
+		)
 		p3 := xlerp(tc.verts[e.a].p3, tc.verts[e.b].p3, t.Num(), t.Denom())
 		mid := tc.addVert(p2, p3, true)
 		out = append(out,
@@ -525,10 +525,10 @@ func (tc *triCutter) splitConvexByU(piece []int, c *big.Rat) ([]int, []int, erro
 		ua := tc.verts[vi].p2.u
 		ub := tc.verts[vj].p2.u
 		t := new(big.Rat).Quo(new(big.Rat).Sub(c, ua), new(big.Rat).Sub(ub, ua))
-		p2 := xp2{
+		p2 := newXP2(
 			new(big.Rat).Set(c),
 			new(big.Rat).Add(tc.verts[vi].p2.v, new(big.Rat).Mul(t, new(big.Rat).Sub(tc.verts[vj].p2.v, tc.verts[vi].p2.v))),
-		}
+		)
 		p3 := xlerp(tc.verts[vi].p3, tc.verts[vj].p3, t.Num(), t.Denom())
 		mid := tc.addVert(p2, p3, true)
 		left = append(left, mid)
