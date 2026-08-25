@@ -1312,6 +1312,14 @@ func sweptMomentAllow(delta, areaUpper, coordUpper float64) float64 {
 // SAME neighbourhood (it is the wall's own open-seam residue, bounded by the
 // identical matchedDelta), so it needs no separate widening term.
 //
+// R is therefore what decides a zero answer, never coordUpper on its own: a
+// coordUpper of exactly 0 (every held vertex sitting at the plane-local
+// origin) still leaves the matchedDelta and maxTwistOffsetUpper legs, and the
+// symmetric difference still reaches that far out, so a positive volume with
+// either leg positive charges productUpper(vol, R) like any other. Only a
+// zero volume — nothing displaced to take a moment of — publishes 0 here;
+// R = 0 reaches the same answer through productUpper's own zero factor.
+//
 // coordUpper, matchedDelta and maxTwistOffsetUpper must each be PROVEN upper
 // bounds; a non-finite or negative matchedDelta, maxTwistOffsetUpper or
 // coordUpper is a BROKEN caller claim and this helper answers +Inf for it,
@@ -1330,7 +1338,7 @@ func chordedBoundaryMomentAllow(matchedDelta, wallAreaUpper, twistVolumeUpper, c
 	if isNonFinite(vol) {
 		return math.Inf(1)
 	}
-	if vol <= 0 || coordUpper <= 0 {
+	if vol <= 0 {
 		return 0
 	}
 	widened := absSumUpper(coordUpper, matchedDelta, maxTwistOffsetUpper)

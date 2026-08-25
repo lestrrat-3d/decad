@@ -1367,8 +1367,25 @@ func TestChordedBoundaryMomentAllowIsItsOwnWidenedTwin(t *testing.T) {
 	got := chordedBoundaryMomentAllow(matchedDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper, seamAllow, maxTwistOffsetUpper, coordUpper)
 	require.Equal(t, want, got)
 
+	// A zero VOLUME is a legitimate zero: nothing is displaced, so there is
+	// no moment for any radius to charge.
 	require.Equal(t, 0.0, chordedBoundaryMomentAllow(0, wallAreaUpper, 0, 0, 0, 0, coordUpper))
-	require.Equal(t, 0.0, chordedBoundaryMomentAllow(matchedDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper, seamAllow, maxTwistOffsetUpper, 0))
+
+	// A zero coordUpper is NOT one. R is coordUpper WIDENED, so the
+	// matchedDelta and maxTwistOffsetUpper legs still stand on their own and
+	// the answer is the same closed form taken at absSumUpper(0,
+	// matchedDelta, maxTwistOffsetUpper) — derived here from the helper's own
+	// doc comment, never read back from the helper. This assertion FAILS if
+	// coordUpper <= 0 is ever restored to the zero-return guard, which would
+	// UNDER-state a proven moment allowance.
+	zeroCoordWidened := absSumUpper(0, matchedDelta, maxTwistOffsetUpper)
+	require.Greater(t, zeroCoordWidened, 0.0, "the widening legs alone must carry a positive radius")
+	require.Equal(t, productUpper(vol, zeroCoordWidened),
+		chordedBoundaryMomentAllow(matchedDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper, seamAllow, maxTwistOffsetUpper, 0))
+
+	// R == 0 — every widening leg zero as well — reaches 0 through
+	// productUpper's own zero factor, not through a guard on coordUpper.
+	require.Equal(t, 0.0, chordedBoundaryMomentAllow(0, wallAreaUpper, twistVolumeUpper, capVolumeUpper, seamAllow, 0, 0))
 }
 
 // TestChordedBoundaryMomentAllowWidensPastTheHeldCoordEnvelope pins F7
@@ -1388,6 +1405,14 @@ func TestChordedBoundaryMomentAllowWidensPastTheHeldCoordEnvelope(t *testing.T) 
 
 	require.Greater(t, widenedAnswer, unwidenedAnswer,
 		"the widened term must exceed the SAME product taken over the held coordUpper alone")
+
+	// The same invariant at coordUpper == 0, the sharpest case: the held
+	// envelope collapses to the plane-local origin, the unwidened product is
+	// exactly 0, and the widened term must still charge both legs. A guard
+	// that returned 0 on coordUpper <= 0 would answer 0 here and break this.
+	zeroCoordWidened := chordedBoundaryMomentAllow(matchedDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper, seamAllow, maxTwistOffsetUpper, 0)
+	require.Greater(t, zeroCoordWidened, productUpper(vol, 0.0),
+		"a zero held envelope still leaves the matchedDelta and maxTwistOffsetUpper legs")
 }
 
 // TestChordedBoundaryMomentAllowRefusesOnBrokenClaims pins the reject-only
