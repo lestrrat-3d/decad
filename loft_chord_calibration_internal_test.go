@@ -55,7 +55,7 @@ func wedgeCirclePoints(m int) [][2]float64 {
 // the same quarter circle, at k*pi/8 for k = 0..4 (angles 0, pi/8, pi/4, 3pi/8, pi/2).
 // Every A10b fixture below samples THIS curve's own Eval, never the circle, since the
 // task requires the hand-chorded stand-in to chord the spline's own curve.
-func wedgeFitSpline(t *testing.T) *sketch.FitSpline {
+func wedgeFitSpline(t testing.TB) *sketch.FitSpline {
 	t.Helper()
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
@@ -91,7 +91,7 @@ func wedgeSplinePoints(fs *sketch.FitSpline, m int) [][2]float64 {
 // and its CreateOffsetPlane at wedgeHeight, sharing one U/V basis so a chord vertex
 // at the same (u,v) on each plane is the natural (offset-0) correspondence
 // loft_test.go's loftSquaresAt idiom also relies on.
-func wedgePlanes(t *testing.T) (*sketch.World, *sketch.Plane, *sketch.Plane) {
+func wedgePlanes(t testing.TB) (*sketch.World, *sketch.Plane, *sketch.Plane) {
 	t.Helper()
 	w := sketch.NewWorld()
 	frame, err := r3.NewFrame(r3.NewVec(0, 0, 0), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))
@@ -107,7 +107,7 @@ func wedgePlanes(t *testing.T) (*sketch.World, *sketch.Plane, *sketch.Plane) {
 // wedge outline on plane — origin -> pts[0] -> ... -> pts[last] -> origin — the only
 // way to see the future chorded evaluator's published measurements before that
 // evaluator exists.
-func chordedWedgeProfile(t *testing.T, w *sketch.World, plane *sketch.Plane, pts [][2]float64) (*sketch.Sketch, *sketch.Profile) {
+func chordedWedgeProfile(t testing.TB, w *sketch.World, plane *sketch.Plane, pts [][2]float64) (*sketch.Sketch, *sketch.Profile) {
 	t.Helper()
 	s, err := w.CreateSketch(plane)
 	require.NoError(t, err)
