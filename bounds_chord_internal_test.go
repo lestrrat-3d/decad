@@ -11,11 +11,11 @@ import (
 )
 
 // This file tests bounds.go's chordedBoundaryVolumeAllow,
-// chordedBoundaryMomentAllow, cellChordCurveAreaUpper, capAreaVolumeAllow,
-// cellTwistOffsetUpper and cellTwistVolumeAllow (docs/loft-design.md §5 —
-// the chord-chain subsection lands with the arc design change; the A10
-// plan's Part 2 Q4 and Part 4 R1 fallback): the enclosure
-// chordedBoundaryVolumeAllow proves between the HELD FLAT-TRIANGLE
+// chordedBoundaryMomentAllow, chordedBoundarySeamAllow, cellChordCurveAreaUpper,
+// capAreaVolumeAllow, cellTwistOffsetUpper and cellTwistVolumeAllow
+// (docs/loft-design.md §5 — the chord-chain subsection lands with the arc
+// design change; the A10 plan's Part 2 Q4 and Part 4 R1 fallback): the
+// enclosure chordedBoundaryVolumeAllow proves between the HELD FLAT-TRIANGLE
 // polyhedron assembleLoft actually builds and the true curved solid it
 // approximates, over a table of radii, sweeps, heights, chord counts AND —
 // the mechanism a previous version of this bound missed entirely — a TWIST
@@ -28,9 +28,10 @@ import (
 // of this bound failed outright — 20 degrees of twist at 64 stations, and 90
 // degrees at 256 stations — are asserted explicitly.
 //
-// Two independent audits refuted earlier versions of this bound. The second
-// refutation's own findings drive this file's structure beyond the sweep
-// above:
+// THREE independent audits refuted earlier versions of this bound. The
+// third refutation's own findings (F1-F6) drive this file's structure
+// beyond the sweep above and beyond the second refutation's own three
+// bullets that follow it:
 //
 //   - the chord-to-curve leg must bound the AREA of the bilinear RULED PATCH
 //     a wall cell's four chord corners span, and every surface between it
@@ -45,11 +46,42 @@ import (
 //     (TestCapAreaVolumeAllow*);
 //   - the fixture's own worst row must bind at a TWISTED station, never at
 //     twist zero (the mechanism this whole file exists to prove), and a
-//     refinement test must be driven by the cells that actually refine —
-//     the n curved arc cells — not the two apex/radial cells whose own
-//     geometry never changes with the station count
-//     (TestChordedBoundaryVolumeAllowRatioDoesNotDegradeUnderRefinement's
-//     own arc/apex split).
+//     refinement test must be driven by a quantity that ACTUALLY shrinks
+//     with refinement — F4: an earlier refinement test's own arc/apex
+//     SHARE was a fixture constant, sweep/(sweep+2), identical at every
+//     station count, and a check against it was really testing the sweep
+//     angle, not refinement
+//     (TestChordedBoundaryVolumeAllowRatioDoesNotDegradeUnderRefinement).
+//
+// The third refutation (F1-F6, this file's own current structure):
+//
+//   - F1: cellChordCurveAreaUpper's own eB term silently upgraded a
+//     SET-distance sagitta into a PARAMETER-MATCHED displacement — the two
+//     coincide only for a LINE or an ARC (TestArcMatchedDeltaEqualsSagitta)
+//     and can differ by the CHORD LENGTH for any other curve
+//     (TestCellChordCurveAreaUpperRefusesTheSagittaZigzag);
+//   - F2: chordedBoundaryVolumeAllow's own wall leg applied a closed-surface
+//     flux identity to an OPEN patch, dropping the LINE-INTEGRAL boundary
+//     term the by-parts identity commits when the wall's own r=0/r=1 seam
+//     moves — chordedBoundarySeamAllow charges it explicitly, as a fourth
+//     leg (TestChordedBoundarySeamAllow*, and the seam operands every
+//     chordedBoundaryAllowForTwistedPieSlice/ringAllow row now composes);
+//   - F3: the fixture was vacuous for the wall leg — deleting
+//     cellChordCurveAreaUpper's own composed contribution never failed
+//     anywhere in the 900-row sweep table. TestChordedBoundaryVolumeAllow*
+//     LoadBearing and *JointlyLoadBearing pin exactly what deletion DOES
+//     and does NOT fail, with the honest finding recorded in the latter's
+//     own doc comment: F2's own (sound) seam leg subsumes the wall leg's
+//     necessary share in this circular-arc family, so only wall+twist
+//     TOGETHER could be shown load-bearing here, never wall alone;
+//   - F4: see above (the second refutation's own third bullet, now fixed);
+//   - F5: cellChordCurveAreaUpper validated its three scalar operands but
+//     not its four r3.Vec corners, so a NaN vertex propagated to a silent
+//     NaN answer rather than a refusing +Inf — just as dangerous as a
+//     silent 0, since `NaN > 0` is false for every downstream consumer's
+//     own widening check (TestCellChordCurveAreaUpperRefusesNonFiniteCorners);
+//   - F6: chordedBoundaryMomentAllow guarded isNonFinite(coordUpper) but not
+//     coordUpper<0 (TestChordedBoundaryMomentAllowRefusesOnBrokenClaims).
 
 // twistedPieSliceMesh builds the watertight triangle mesh of a CHORDED
 // circular-sector wedge whose top section is the bottom section's own arc
@@ -196,6 +228,9 @@ type chordedAllowBreakdown struct {
 	twistVolumeArc      float64
 	twistVolumeApex     float64
 	capVolumeUpper      float64
+	seamPerimeterUpper  float64
+	posUpper            float64
+	seamAllow           float64
 	maxTwistOffsetUpper float64
 	allow               float64
 }
@@ -223,7 +258,13 @@ type chordedAllowBreakdown struct {
 //     bottom cap's own plane passes through this fixture's implicit anchor
 //     (the world origin, matching heldVolumeExact's own unanchored
 //     tetrahedron sum) exactly, so its plane offset is exactly 0 and it
-//     contributes nothing, while the top cap sits at offset h.
+//     contributes nothing, while the top cap sits at offset h;
+//   - the seam leg: chordedBoundarySeamAllow over the SAME sectionDelta,
+//     posUpper the exact distance from the origin to either loop's own true
+//     arc (known exactly in this fixture), and seamPerimeterUpper the sum,
+//     over every wall cell (arc and radial alike) and BOTH its own sides, of
+//     that cell's own arc-length upper bound — the same quantities each
+//     cellChordCurveAreaUpper call above already states.
 func chordedBoundaryAllowForTwistedPieSlice(radius, sweepRad, twistRad, h float64, n int) chordedAllowBreakdown {
 	sectionDelta := chordSagitta(radius, sweepRad, n)
 	verts, _ := twistedPieSliceMesh(radius, sweepRad, twistRad, h, n)
@@ -246,6 +287,11 @@ func chordedBoundaryAllowForTwistedPieSlice(radius, sweepRad, twistRad, h float6
 		b.wallAreaArc = absSumUpper(b.wallAreaArc, cellChordCurveAreaUpper(vLo, vHi, wLo, wHi, arcLenPerArcCell, arcLenPerArcCell, sectionDelta))
 		b.twistVolumeArc = absSumUpper(b.twistVolumeArc, cellTwistVolumeAllow(vLo, vHi, wLo, wHi))
 		b.maxTwistOffsetUpper = math.Max(b.maxTwistOffsetUpper, cellTwistOffsetUpper(vLo, vHi, wLo, wHi))
+		// arcLenPerArcCell is BOTH sides' own arc-length upper bound for an
+		// arc cell (an untwisted or twisted rotation does not change either
+		// arc's own length), so this cell's own contribution to BOTH the
+		// r=0 and r=1 loop's own seam perimeter is arcLenPerArcCell each.
+		b.seamPerimeterUpper = absSumUpper(b.seamPerimeterUpper, arcLenPerArcCell, arcLenPerArcCell)
 	}
 
 	radialCells := [2][4]r3.Vec{
@@ -259,6 +305,7 @@ func chordedBoundaryAllowForTwistedPieSlice(radius, sweepRad, twistRad, h float6
 		b.wallAreaApex = absSumUpper(b.wallAreaApex, cellChordCurveAreaUpper(vLo, vHi, wLo, wHi, arcLenA, arcLenB, sectionDelta))
 		b.twistVolumeApex = absSumUpper(b.twistVolumeApex, cellTwistVolumeAllow(vLo, vHi, wLo, wHi))
 		b.maxTwistOffsetUpper = math.Max(b.maxTwistOffsetUpper, cellTwistOffsetUpper(vLo, vHi, wLo, wHi))
+		b.seamPerimeterUpper = absSumUpper(b.seamPerimeterUpper, arcLenA, arcLenB)
 	}
 
 	chordLen := 2 * radius * math.Sin(dtheta/2)
@@ -266,9 +313,19 @@ func chordedBoundaryAllowForTwistedPieSlice(radius, sweepRad, twistRad, h float6
 	capAreaAllow1 := sectionDisplacementArea(sectionDelta, n+2, perimeterUpper1)
 	b.capVolumeUpper = capAreaVolumeAllow(h, capAreaAllow1)
 
+	// posUpper is a PROVEN upper bound on the distance from the fixture's own
+	// anchor (the world origin, matching heldVolumeExact's own unanchored
+	// tetrahedron sum and centerB) to any point of either loop's TRUE curve:
+	// the bottom loop's own true arc sits at exactly `radius` from the
+	// origin, the top loop's own true arc at exactly sqrt(radius^2+h^2) —
+	// known exactly in this fixture, nudged outward by one ulp so the
+	// closed-form Hypot's own rounding can never understate it.
+	b.posUpper = upRound(math.Nextafter(math.Hypot(radius, h), math.Inf(1)))
+	b.seamAllow = chordedBoundarySeamAllow(sectionDelta, b.posUpper, b.seamPerimeterUpper)
+
 	wallAreaUpper := absSumUpper(b.wallAreaArc, b.wallAreaApex)
 	twistVolumeUpper := absSumUpper(b.twistVolumeArc, b.twistVolumeApex)
-	b.allow = chordedBoundaryVolumeAllow(sectionDelta, wallAreaUpper, twistVolumeUpper, b.capVolumeUpper)
+	b.allow = chordedBoundaryVolumeAllow(sectionDelta, wallAreaUpper, twistVolumeUpper, b.capVolumeUpper, b.seamAllow)
 	return b
 }
 
@@ -378,73 +435,270 @@ func TestChordedBoundaryVolumeAllowEnclosesTheRefutedCounterexamples(t *testing.
 // and pinned as an assertion: at FIXED twist, refining the chord count (more
 // stations) must not push the allow/measuredGap ratio down toward 1.
 //
-// An earlier fixture's own refinement check was itself refuted: 99.2% of
-// its own twist leg at n=256 came from the two apex/radial cells, whose own
-// four corners never change with n, so the check was measuring two constant
-// cells rather than a refining wall. This version logs the split every row
-// and asserts on it directly: the REFINED arc cells' own share of the total
-// wall-area leg must not collapse to a sliver of the total as n grows — the
-// opposite of what drove the earlier refutation.
+// An earlier fixture's own refinement check was itself refuted twice. The
+// second refutation's own "arc cells must drive the wall-area leg" guard
+// checked arcShare := wallAreaArc/(wallAreaArc+wallAreaApex) > 0.5 — but that
+// ratio (F4) is exactly sweep/(sweep+2) for THIS fixture's own geometry,
+// identical at every n: the two apex cells' own four corners are fixed by
+// radius, sweepRad and twistRad alone, so wallAreaApex never moves, and
+// wallAreaArc's own total converges to a CONSTANT (the true wall's own area)
+// as n grows rather than shrinking — so the ratio of two near-constants is
+// itself near-constant, and the guard was really checking "sweep exceeds 2
+// radians" (about a hard-coded 120 degrees) rather than anything about
+// refinement — it would have READ AS PASSING at 120 degrees for a reason
+// having nothing to do with whether the bound refines properly, and this
+// test now runs the SAME guard at 90 degrees too (a sweep the old constant-
+// share reading would have failed, per F4), to confirm the replacement
+// actually measures refinement rather than sweep angle.
+//
+// This version checks something that ACTUALLY changes with refinement
+// instead: the arc cells' own VOLUME contribution to the wall leg —
+// sectionDelta(n) * wallAreaArc(n), the term the composed bound actually
+// charges, not a share of an unrelated total — is O(1/n^2) (sectionDelta
+// itself is; wallAreaArc converges to a constant as n grows), so refining
+// from n=8 to n=256, a 32x refinement, must shrink it by close to 32^2=1024x.
+// A guard requiring only 100x leaves ample host-portability slack while
+// still failing outright on a fixture that is NOT actually refining (a
+// constant-in-n quantity, as arcShare always was, would show a 1x "shrink").
 func TestChordedBoundaryVolumeAllowRatioDoesNotDegradeUnderRefinement(t *testing.T) {
-	const radius, sweepDeg, h = 10.0, 120.0, 25.0
-	sweepRad := sweepDeg * math.Pi / 180
+	const radius, h = 10.0, 25.0
 	chordCounts := []int{8, 32, 64, 128, 256}
 
-	for _, twistDeg := range []float64{5, 20, 45, 90} {
-		t.Run(fmt.Sprintf("twist=%gdeg", twistDeg), func(t *testing.T) {
-			twistRad := twistDeg * math.Pi / 180
+	for _, sweepDeg := range []float64{120, 90} {
+		sweepRad := sweepDeg * math.Pi / 180
+		for _, twistDeg := range []float64{5, 20, 45, 90} {
+			t.Run(fmt.Sprintf("sweep=%gdeg/twist=%gdeg", sweepDeg, twistDeg), func(t *testing.T) {
+				twistRad := twistDeg * math.Pi / 180
 
-			var ratios []float64
-			var arcShares []float64
-			for _, n := range chordCounts {
-				trueVolume := twistedPieSliceTrueVolume(radius, sweepRad, twistRad, h)
-				verts, tris := twistedPieSliceMesh(radius, sweepRad, twistRad, h, n)
-				heldVolume := heldVolumeExact(verts, tris)
-				measuredGap := math.Abs(trueVolume - heldVolume)
-				require.Greater(t, measuredGap, 0.0)
+				var ratios []float64
+				var arcOnlyVolumes []float64
+				for _, n := range chordCounts {
+					trueVolume := twistedPieSliceTrueVolume(radius, sweepRad, twistRad, h)
+					verts, tris := twistedPieSliceMesh(radius, sweepRad, twistRad, h, n)
+					heldVolume := heldVolumeExact(verts, tris)
+					measuredGap := math.Abs(trueVolume - heldVolume)
+					require.Greater(t, measuredGap, 0.0)
 
-				b := chordedBoundaryAllowForTwistedPieSlice(radius, sweepRad, twistRad, h, n)
-				require.GreaterOrEqual(t, b.allow, measuredGap)
-				ratios = append(ratios, b.allow/measuredGap)
-
-				wallAreaTotal := absSumUpper(b.wallAreaArc, b.wallAreaApex)
-				arcShare := 0.0
-				if wallAreaTotal > 0 {
-					arcShare = b.wallAreaArc / wallAreaTotal
+					b := chordedBoundaryAllowForTwistedPieSlice(radius, sweepRad, twistRad, h, n)
+					require.GreaterOrEqual(t, b.allow, measuredGap)
+					ratios = append(ratios, b.allow/measuredGap)
+					arcOnlyVolumes = append(arcOnlyVolumes, b.sectionDelta*b.wallAreaArc)
+					t.Logf("sweep=%g twist=%g n=%d: ratio=%.6g arcOnlyVolume=%.6g wallAreaArc=%.6g wallAreaApex=%.6g",
+						sweepDeg, twistDeg, n, ratios[len(ratios)-1], arcOnlyVolumes[len(arcOnlyVolumes)-1], b.wallAreaArc, b.wallAreaApex)
 				}
-				arcShares = append(arcShares, arcShare)
-				t.Logf("twist=%g n=%d: ratio=%.6g wallAreaArc=%.6g wallAreaApex=%.6g arcShare=%.4f twistVolumeArc=%.6g twistVolumeApex=%.6g",
-					twistDeg, n, ratios[len(ratios)-1], b.wallAreaArc, b.wallAreaApex, arcShare, b.twistVolumeArc, b.twistVolumeApex)
-			}
 
-			// The REFINED cells must drive the wall-area leg once the mesh
-			// has refined even a little: at n=32 and beyond, the n arc
-			// cells' own share of the total wall area must be the majority,
-			// never dominated by the two constant apex cells the way an
-			// earlier fixture's own twist leg was (99.2% apex at n=256).
-			for i, n := range chordCounts {
-				if n < 32 {
-					continue
-				}
-				require.Greaterf(t, arcShares[i], 0.5,
-					"twist=%g n=%d: the refined arc cells must drive the wall-area leg (got arcShare=%.4f)",
-					twistDeg, n, arcShares[i])
-			}
+				// The REFINED arc cells' own volume contribution must actually
+				// shrink as the mesh refines — a genuine refinement property,
+				// unlike F4's constant arcShare — never merely track a fixed
+				// geometric ratio that happens to exceed some threshold.
+				first, last := arcOnlyVolumes[0], arcOnlyVolumes[len(arcOnlyVolumes)-1]
+				require.Greaterf(t, first/last, 100.0,
+					"sweep=%g twist=%g: the arc cells' own wall-leg volume must shrink by more than 100x from n=%d to n=%d (got %.6g -> %.6g, shrink %.4gx)",
+					sweepDeg, twistDeg, chordCounts[0], chordCounts[len(chordCounts)-1], first, last, first/last)
 
-			t.Logf("twist=%g ratios across n=%v: %v", twistDeg, chordCounts, ratios)
+				t.Logf("sweep=%g twist=%g ratios across n=%v: %v", sweepDeg, twistDeg, chordCounts, ratios)
 
-			// The ratio may wobble a little station to station (both the
-			// allowance and the measured gap are sums of many small
-			// per-cell terms whose own relative weights shift as n grows),
-			// but it must never trend down toward 1 as the mesh refines: the
-			// finest station count's own ratio must stay within a modest
-			// factor of the coarsest one, never collapse toward it from
-			// above.
-			require.GreaterOrEqual(t, ratios[len(ratios)-1], ratios[0]*0.5,
-				"twist=%g: refining from n=%d to n=%d must not degrade the ratio toward 1 (got %.6g -> %.6g)",
-				twistDeg, chordCounts[0], chordCounts[len(chordCounts)-1], ratios[0], ratios[len(ratios)-1])
-		})
+				// The ratio may wobble a little station to station (both the
+				// allowance and the measured gap are sums of many small
+				// per-cell terms whose own relative weights shift as n grows),
+				// but it must never trend down toward 1 as the mesh refines: the
+				// finest station count's own ratio must stay within a modest
+				// factor of the coarsest one, never collapse toward it from
+				// above.
+				require.GreaterOrEqual(t, ratios[len(ratios)-1], ratios[0]*0.5,
+					"sweep=%g twist=%g: refining from n=%d to n=%d must not degrade the ratio toward 1 (got %.6g -> %.6g)",
+					sweepDeg, twistDeg, chordCounts[0], chordCounts[len(chordCounts)-1], ratios[0], ratios[len(ratios)-1])
+			})
+		}
 	}
+}
+
+// TestChordedBoundaryVolumeAllowTwistLegIsLoadBearing pins that the twist
+// leg is genuinely necessary — not merely present — by DELETING it
+// (twistVolumeUpper forced to 0, every other leg left intact) at the sweep
+// table's own worst row for that deletion (r=1 sweep=30 h=100 twist=90
+// n=256, found by scanning the same 900-row grid
+// TestChordedBoundaryVolumeAllowEnclosesTheMeasuredGap already covers) and
+// confirming the composed bound collapses far below the measured gap: F3's
+// own finding was that deleting this leg drops the minimum ratio to 1.3e-5
+// across the whole table, and this pins the concrete row and re-confirms it
+// after F1/F2/F4's own fixes (the newly added seam leg can only ADD
+// coverage, never rescue a row this leg alone was carrying).
+func TestChordedBoundaryVolumeAllowTwistLegIsLoadBearing(t *testing.T) {
+	const radius, sweepDeg, h, twistDeg, n = 1.0, 30.0, 100.0, 90.0, 256
+	sweepRad := sweepDeg * math.Pi / 180
+	twistRad := twistDeg * math.Pi / 180
+
+	trueVolume := twistedPieSliceTrueVolume(radius, sweepRad, twistRad, h)
+	verts, tris := twistedPieSliceMesh(radius, sweepRad, twistRad, h, n)
+	heldVolume := heldVolumeExact(verts, tris)
+	measuredGap := math.Abs(trueVolume - heldVolume)
+	require.Greater(t, measuredGap, 0.0)
+
+	b := chordedBoundaryAllowForTwistedPieSlice(radius, sweepRad, twistRad, h, n)
+	require.GreaterOrEqual(t, b.allow, measuredGap, "the full four-leg bound must enclose this row")
+
+	wallAreaUpper := absSumUpper(b.wallAreaArc, b.wallAreaApex)
+	withoutTwist := chordedBoundaryVolumeAllow(b.sectionDelta, wallAreaUpper, 0, b.capVolumeUpper, b.seamAllow)
+	require.Lessf(t, withoutTwist, measuredGap,
+		"deleting the twist leg alone must fail to enclose the measured gap (got allow=%.6g < measuredGap=%.6g is required; ratio %.6g)",
+		withoutTwist, measuredGap, withoutTwist/measuredGap)
+	t.Logf("full ratio=%.6g, without-twist ratio=%.6g (must be < 1)", b.allow/measuredGap, withoutTwist/measuredGap)
+}
+
+// TestChordedBoundaryVolumeAllowCapLegIsLoadBearing pins that the cap leg is
+// genuinely necessary at the COMPOSITION level. The geometric sweep table
+// never drives this: a scan of the same 900-row grid found the cap leg's
+// own deletion never drops the ratio below 3.0 anywhere in it, because
+// capAreaVolumeAllow's own capAreaAllow input (sectionDisplacementArea) is
+// generous enough, for every row in that circular-arc family, that the wall
+// and seam legs already cover what the cap leg would have. This test proves
+// the SAME fact TestCapAreaVolumeAllowIsExactForAPlanarFace already pins for
+// capAreaVolumeAllow alone, one level up: with the wall, twist and seam legs
+// all synthetically absent (0 — a legitimate state, e.g. an exact LineSeg
+// wall pairing with no twist), the composed bound must still publish EXACTLY
+// the cap leg's own known-exact volume displacement (h·area/3 = 8 for
+// h=4, area=6), and deleting the cap leg alone must drop the composed
+// answer to 0 — failing to cover a REAL, exactly-known volume displacement.
+func TestChordedBoundaryVolumeAllowCapLegIsLoadBearing(t *testing.T) {
+	const h, area = 4.0, 6.0
+	const knownExactVolumeDisplacement = h * area / 3 // == 8, capAreaVolumeAllow's own exact identity
+
+	capVolumeUpper := capAreaVolumeAllow(h, area)
+	require.InDelta(t, knownExactVolumeDisplacement, capVolumeUpper, 1e-12)
+
+	withCap := chordedBoundaryVolumeAllow(0, 0, 0, capVolumeUpper, 0)
+	require.GreaterOrEqual(t, withCap, knownExactVolumeDisplacement)
+
+	withoutCap := chordedBoundaryVolumeAllow(0, 0, 0, 0, 0)
+	require.Lessf(t, withoutCap, knownExactVolumeDisplacement,
+		"deleting the cap leg alone must fail to enclose the known-exact volume displacement %.6g (got %.6g)",
+		knownExactVolumeDisplacement, withoutCap)
+}
+
+// ringMesh builds a CLOSED n-gon ring loft (a full 360-degree sweep, no
+// apex/radial cells at all — every wall cell chords a genuine arc, and both
+// caps are full n-gon disks) at radius, twisted by twistRad between its
+// bottom and top section, straight-extruded to height h. It exists
+// alongside twistedPieSliceMesh for exactly one purpose: the PIE-SLICE
+// fixture's own two apex/radial cells make capAreaVolumeAllow's own
+// capAreaAllow input carry needless slack (sectionDisplacementArea's
+// delta-tube covers the apex cells' own two EXACT straight edges too, which
+// never move at all), which is generous enough on its own to make the cap
+// leg's own deletion never fail anywhere in the pie-slice sweep table. A
+// closed ring has no such edges, so its own cap bound is tighter, and it is
+// the fixture TestChordedBoundaryVolumeAllowWallAndTwistLegsAreJointlyLoadBearing
+// uses to find a row where dropping the wall AND twist legs together still
+// fails despite that tighter cap.
+func ringMesh(radius, twistRad, h float64, n int) (verts []r3.Vec, tris [][3]int) {
+	arcPoint := func(i int, twist, z float64) r3.Vec {
+		theta := twist + 2*math.Pi*float64(i)/float64(n)
+		return r3.NewVec(radius*math.Cos(theta), radius*math.Sin(theta), z)
+	}
+	arcB := make([]int, n)
+	arcT := make([]int, n)
+	for i := range n {
+		arcB[i] = len(verts)
+		verts = append(verts, arcPoint(i, 0, 0))
+		arcT[i] = len(verts)
+		verts = append(verts, arcPoint(i, twistRad, h))
+	}
+	for i := range n {
+		jn := (i + 1) % n
+		tris = append(tris, [3]int{arcB[i], arcB[jn], arcT[jn]})
+		tris = append(tris, [3]int{arcB[i], arcT[jn], arcT[i]})
+	}
+	for i := 1; i < n-1; i++ {
+		tris = append(tris, [3]int{arcB[0], arcB[i+1], arcB[i]})
+	}
+	for i := 1; i < n-1; i++ {
+		tris = append(tris, [3]int{arcT[0], arcT[i], arcT[i+1]})
+	}
+	return verts, tris
+}
+
+// ringAllow computes chordedBoundaryVolumeAllow's own four operands for one
+// ringMesh row, mirroring chordedBoundaryAllowForTwistedPieSlice's own
+// construction one mesh family over: matchedDelta the ring's own sagitta
+// (parameter-matched for an arc — TestArcMatchedDeltaEqualsSagitta),
+// wallAreaUpper and twistVolumeUpper summed over every one of the n arc
+// wall cells (there are no others), capVolumeUpper from BOTH caps' own
+// TIGHT perimeter (n*chordLen, no radial-edge slack — bottom offset 0
+// contributes nothing, matching the pie-slice fixture's own anchor
+// convention), and seamAllow from posUpper = the exact distance from the
+// origin anchor to either loop's own true arc.
+func ringAllow(radius, twistRad, h float64, n int) (matchedDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper, seamAllow float64) {
+	const sweepRad = 2 * math.Pi
+	matchedDelta = chordSagitta(radius, sweepRad, n)
+	arcPoint := func(i int, twist, z float64) r3.Vec {
+		theta := twist + sweepRad*float64(i)/float64(n)
+		return r3.NewVec(radius*math.Cos(theta), radius*math.Sin(theta), z)
+	}
+	arcLenPerCell := radius * sweepRad / float64(n)
+	var seamPerimeterUpper float64
+	for i := range n {
+		jn := (i + 1) % n
+		vLo, vHi := arcPoint(i, 0, 0), arcPoint(jn, 0, 0)
+		wLo, wHi := arcPoint(i, twistRad, h), arcPoint(jn, twistRad, h)
+		wallAreaUpper = absSumUpper(wallAreaUpper, cellChordCurveAreaUpper(vLo, vHi, wLo, wHi, arcLenPerCell, arcLenPerCell, matchedDelta))
+		twistVolumeUpper = absSumUpper(twistVolumeUpper, cellTwistVolumeAllow(vLo, vHi, wLo, wHi))
+		seamPerimeterUpper = absSumUpper(seamPerimeterUpper, arcLenPerCell, arcLenPerCell)
+	}
+	chordLen := 2 * radius * math.Sin(sweepRad/float64(n)/2)
+	perimeterUpper := float64(n) * chordLen
+	capAreaAllow := sectionDisplacementArea(matchedDelta, n, perimeterUpper)
+	capVolumeUpper = capAreaVolumeAllow(h, capAreaAllow) // bottom cap offset 0 contributes nothing
+	posUpper := upRound(math.Nextafter(math.Hypot(radius, h), math.Inf(1)))
+	seamAllow = chordedBoundarySeamAllow(matchedDelta, posUpper, seamPerimeterUpper)
+	return matchedDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper, seamAllow
+}
+
+// TestChordedBoundaryVolumeAllowWallAndTwistLegsAreJointlyLoadBearing
+// documents what an extensive search — the pie-slice sweep table (900
+// rows), the tighter ringMesh family above, varying radius, height, twist
+// and chord count across both — could and could not show about the wall
+// leg's own RAW chord-to-curve area/flux term (matchedDelta*wallAreaUpper)
+// once F2's seam leg is present and sound: in EVERY row tried, deleting the
+// wall leg alone (keeping twist, cap and seam) still encloses the measured
+// gap, because the seam leg's own Cauchy-Schwarz bound is, by itself,
+// already larger than the wall leg's own necessary share — confirmed
+// analytically for the untwisted ring at the exact (no-slack) cap share:
+// seamAllow alone exceeds the true 2/3-of-physical-ΔVolume residual leg (a)
+// and leg (d) jointly cover, by a stable ~1.616x margin from n=6 to n=1024.
+// That is a property of THIS derivation (a sound but non-tight seam bound
+// subsumes leg (a) in a circular-arc family), not a fixture weakness left
+// unexplored, so no amount of further fixture tuning within this family
+// will make leg (a) alone fail.
+//
+// What DOES fail, and is pinned here as the concrete evidence Step 1 asks
+// for: deleting the wall AND twist legs TOGETHER (both are 0 for the only
+// pairing this evaluator admits today, an exact LineSeg wall) at radius=10
+// h=25 twist=20deg n=32 drops the ring's own bound below the measured gap,
+// so cap and seam alone are NOT a substitute for the mechanisms
+// cellChordCurveAreaUpper and cellTwistVolumeAllow each independently prove
+// (their own dedicated counterexample tests above — the flat-triangle,
+// crossed-cell and twist-vector tests — pin that each is individually
+// correct and necessary as an AREA/VOLUME bound in its own right, whatever
+// this one composition's own redundancy happens to be).
+func TestChordedBoundaryVolumeAllowWallAndTwistLegsAreJointlyLoadBearing(t *testing.T) {
+	const radius, h, twistDeg, n = 10.0, 25.0, 20.0, 32
+	twistRad := twistDeg * math.Pi / 180
+
+	trueVolume := twistedPieSliceTrueVolume(radius, 2*math.Pi, twistRad, h)
+	verts, tris := ringMesh(radius, twistRad, h, n)
+	heldVolume := heldVolumeExact(verts, tris)
+	measuredGap := math.Abs(trueVolume - heldVolume)
+	require.Greater(t, measuredGap, 0.0)
+
+	matchedDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper, seamAllow := ringAllow(radius, twistRad, h, n)
+	full := chordedBoundaryVolumeAllow(matchedDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper, seamAllow)
+	require.GreaterOrEqual(t, full, measuredGap, "the full four-leg bound must enclose this row")
+
+	withoutWallAndTwist := chordedBoundaryVolumeAllow(matchedDelta, 0, 0, capVolumeUpper, seamAllow)
+	require.Lessf(t, withoutWallAndTwist, measuredGap,
+		"deleting the wall AND twist legs together must fail to enclose the measured gap (got allow=%.6g, measuredGap=%.6g, ratio %.6g)",
+		withoutWallAndTwist, measuredGap, withoutWallAndTwist/measuredGap)
+	t.Logf("full ratio=%.6g, without-wall-and-twist ratio=%.6g (must be < 1)", full/measuredGap, withoutWallAndTwist/measuredGap)
 }
 
 // TestCellChordCurveAreaUpperEnclosesTheFlatTriangleCounterexample pins F1's
@@ -567,6 +821,124 @@ func TestCellChordCurveAreaUpperRefusesOnBrokenClaims(t *testing.T) {
 	require.True(t, math.IsInf(cellChordCurveAreaUpper(vLo, vHi, wLo, wHi, math.Inf(1), chordB, 0), 1), "+Inf arcLenA")
 }
 
+// TestCellChordCurveAreaUpperRefusesNonFiniteCorners pins F5: an earlier
+// version validated only the three scalar operands, so a NaN corner sailed
+// straight through `arcLenUpperA < vHi.Sub(vLo).Len()` (NaN compares false
+// against everything, so the range gate never refuses) and propagated
+// through eBBase's own math.Max into a silently-NaN answer for a cell whose
+// own geometry is unstateable, rather than a refusing +Inf — an unchecked
+// caller that widens its own bound by `answer > 0` treats NaN exactly like
+// 0, since `NaN > 0` is false either way. Every one of the four corners, in
+// isolation, must now trigger a genuine +Inf refusal.
+func TestCellChordCurveAreaUpperRefusesNonFiniteCorners(t *testing.T) {
+	vLo := r3.NewVec(0, 0, 0)
+	vHi := r3.NewVec(1, 0, 0)
+	wLo := r3.NewVec(0, 0, 1)
+	wHi := r3.NewVec(0, 1, 1)
+	nan := r3.NewVec(math.NaN(), 0, 0)
+	chordA := vHi.Sub(vLo).Len()
+	chordB := wHi.Sub(wLo).Len()
+
+	require.True(t, math.IsInf(cellChordCurveAreaUpper(nan, vHi, wLo, wHi, chordA, chordB, 0), 1), "NaN vLo")
+	require.True(t, math.IsInf(cellChordCurveAreaUpper(vLo, nan, wLo, wHi, chordA, chordB, 0), 1), "NaN vHi")
+	require.True(t, math.IsInf(cellChordCurveAreaUpper(vLo, vHi, nan, wHi, chordA, chordB, 0), 1), "NaN wLo")
+	require.True(t, math.IsInf(cellChordCurveAreaUpper(vLo, vHi, wLo, nan, chordA, chordB, 0), 1), "NaN wHi")
+}
+
+// TestCellChordCurveAreaUpperRefusesTheSagittaZigzag pins F1's own
+// counterexample: cellChordCurveAreaUpper's matchedDeltaUpper obligation is
+// a PARAMETER-MATCHED bound, never the loft evaluator's SET-distance sagitta
+// (loftPayload.sectionDelta). Side A is straight (vLo=(0,0,0), vHi=(1,0,0),
+// chord length 1). Side B's CHORD is also straight (wLo=(0,0,0.001),
+// wHi=(1,0,0.001)), but the TRUE curve it chords is a 400-tooth zigzag of
+// amplitude 0.001 packed into x in [0, 0.02] and straight for the rest —
+// hugging its own chord within a sagitta of 0.001 (bounding BOTH sides'
+// sagittas exactly) while its own arc length is 2.578, far more than its
+// chord's 1.
+//
+// A caller who (wrongly, per the old broken contract this fixes) read the
+// sagitta 0.001 as if it were matchedDeltaUpper would have published
+// eA*eB=0.007734 against a true ruled-surface area of 0.2365 — a 30x
+// violation, because max_s|b(s)-a(s)| under the constant-arc-length
+// parametrization the homotopy actually uses is 0.5999 (200x the sagitta):
+// packing almost all of side B's arc length into x in [0,0.02] decouples the
+// zigzag's own arc-length-matched position from its chord position by
+// nearly the full chord length, something a SET-distance sagitta says
+// nothing about (cellChordCurveAreaUpper's own doc comment).
+//
+// No caller can derive a parameter-matched bound for this curve today (only
+// a LINE or an ARC can, per that doc comment), so the only HONEST value to
+// pass is +Inf — which is exactly what stops the 30x violation from ever
+// reaching the derivation: refusal, not a shrunken bound.
+func TestCellChordCurveAreaUpperRefusesTheSagittaZigzag(t *testing.T) {
+	vLo := r3.NewVec(0, 0, 0)
+	vHi := r3.NewVec(1, 0, 0)
+	wLo := r3.NewVec(0, 0, 0.001)
+	wHi := r3.NewVec(1, 0, 0.001)
+	const arcLenUpperA, arcLenUpperB = 1.0, 2.578
+	const sagitta = 0.001
+
+	// The old (broken) contract's own answer, pinned here as the violation
+	// this fix closes: a wrongly sagitta-fed reading published far less area
+	// than the true ruled surface carries.
+	oldBroken := cellChordCurveAreaUpper(vLo, vHi, wLo, wHi, arcLenUpperA, arcLenUpperB, sagitta)
+	const trueRuledSurfaceArea = 0.2365
+	require.Less(t, oldBroken, trueRuledSurfaceArea,
+		"pinning the historical violation: the sagitta-fed reading %.6g must fall short of the true ruled-surface area %.6g", oldBroken, trueRuledSurfaceArea)
+
+	// The fixed contract: no caller can honestly state a parameter-matched
+	// bound for this curve, so the only value to pass is +Inf, and the
+	// helper must publish +Inf right back — never the sagitta's own 0.007734.
+	got := cellChordCurveAreaUpper(vLo, vHi, wLo, wHi, arcLenUpperA, arcLenUpperB, math.Inf(1))
+	require.True(t, math.IsInf(got, 1), "an unstatable parameter-matched bound must refuse, not publish %.6g", got)
+}
+
+// TestArcMatchedDeltaEqualsSagitta pins Step 2's own carried-forward
+// verification: for a CIRCULAR ARC under its own uniform-angle
+// parametrization, sup_s|arc(s)-chord(s)| equals the chord's own sagitta
+// EXACTLY — the one curve kind (besides a trivial straight LINE) where
+// cellChordCurveAreaUpper's matchedDeltaUpper obligation and the loft
+// evaluator's sagitta-only sectionDelta field coincide, over sweeps from 5
+// to 170 degrees. An arc of radius r subtending angle theta about its own
+// centre has, at the uniform-angle parameter s in [0,1], true point
+// r*(cos(s*theta), sin(s*theta)) and chord point (1-s)*(r,0) +
+// s*(r*cos(theta), r*sin(theta)); the maximum separation over s is a
+// standard result, r*(1-cos(theta/2)) BETWEEN the endpoints — but the
+// closed-form sagitta chordSagitta(r, theta, 1) = 2r*sin(theta/4)^2 is the
+// SAME value (2*sin(x/2)^2 = 1-cos(x) is the numerically-stable identity
+// chordSagitta's own doc comment already uses at x=theta/2), confirmed here
+// by direct numerical maximisation over s rather than trusted algebraically.
+func TestArcMatchedDeltaEqualsSagitta(t *testing.T) {
+	const radius = 7.0
+	for _, sweepDeg := range []float64{5, 10, 30, 60, 90, 120, 150, 170} {
+		t.Run(fmt.Sprintf("sweep=%gdeg", sweepDeg), func(t *testing.T) {
+			theta := sweepDeg * math.Pi / 180
+			sagitta := chordSagitta(radius, theta, 1)
+
+			chordStart := r3.NewVec(radius, 0, 0)
+			chordEnd := r3.NewVec(radius*math.Cos(theta), radius*math.Sin(theta), 0)
+
+			maxSep := 0.0
+			const steps = 200000
+			for i := 0; i <= steps; i++ {
+				s := float64(i) / steps
+				truePoint := r3.NewVec(radius*math.Cos(s*theta), radius*math.Sin(s*theta), 0)
+				chordPoint := chordStart.Scale(1 - s).Add(chordEnd.Scale(s))
+				sep := truePoint.Sub(chordPoint).Len()
+				maxSep = math.Max(maxSep, sep)
+			}
+
+			// A fine but finite numerical maximisation converges toward the
+			// true supremum from below, so this checks near-equality rather
+			// than an exact match — HOST PORTABILITY: no literal from this
+			// run is pinned, only a same-run comparison against
+			// chordSagitta's own closed form.
+			require.InDeltaf(t, sagitta, maxSep, sagitta*1e-4+1e-9,
+				"sweep=%g: the arc-vs-chord max separation %.10g must match the sagitta %.10g under the matched parametrization", sweepDeg, maxSep, sagitta)
+		})
+	}
+}
+
 // TestCellChordCurveAreaUpperIsZeroForADegenerateCell pins the legitimate
 // zero: both sides collapsed to a point (zero arc length on both) leaves
 // nothing for a ruled surface to sweep.
@@ -676,94 +1048,131 @@ func TestCapAreaVolumeAllowRefusesOnBrokenClaims(t *testing.T) {
 	require.True(t, math.IsInf(capAreaVolumeAllow(4.0, -1), 1))
 }
 
-// TestChordedBoundaryVolumeAllowComposesAllThreeLegs pins that
+// TestChordedBoundaryVolumeAllowComposesAllFourLegs pins that
 // chordedBoundaryVolumeAllow composes its wall chord-to-curve leg, its
-// caller-supplied twist leg and its caller-supplied cap leg by absSumUpper,
-// never by picking the largest of the three or dropping any: with only one
-// leg positive at a time, the whole answer is exactly that leg; with all
-// three positive, the answer is at least as large as any one leg alone.
-func TestChordedBoundaryVolumeAllowComposesAllThreeLegs(t *testing.T) {
+// caller-supplied twist leg, its caller-supplied cap leg and its caller-
+// supplied seam leg by absSumUpper, never by picking the largest of the four
+// or dropping any: with only one leg positive at a time, the whole answer is
+// exactly that leg; with all four positive, the answer is at least as large
+// as any one leg alone.
+func TestChordedBoundaryVolumeAllowComposesAllFourLegs(t *testing.T) {
 	// absSumUpper rounds its outward-nudged sum away from an exact value by
 	// construction (upRound's own contract), so single-leg cases are checked
 	// as an enclosure — never pinned to a literal float this platform's own
 	// rounding could move a ulp either way — rather than an exact match.
-	twistOnly := chordedBoundaryVolumeAllow(0, 5.0, 3.5, 0)
+	twistOnly := chordedBoundaryVolumeAllow(0, 5.0, 3.5, 0, 0)
 	require.GreaterOrEqual(t, twistOnly, 3.5)
 	require.InDelta(t, 3.5, twistOnly, 1e-12)
 
-	capOnly := chordedBoundaryVolumeAllow(0, 5.0, 0, 2.0)
+	capOnly := chordedBoundaryVolumeAllow(0, 5.0, 0, 2.0, 0)
 	require.GreaterOrEqual(t, capOnly, 2.0)
 	require.InDelta(t, 2.0, capOnly, 1e-12)
 
-	require.Equal(t, 0.0, chordedBoundaryVolumeAllow(0, 5.0, 0, 0))
-	require.Equal(t, 0.0, chordedBoundaryVolumeAllow(0.01, 0, 0, 0))
+	seamOnly := chordedBoundaryVolumeAllow(0, 5.0, 0, 0, 1.5)
+	require.GreaterOrEqual(t, seamOnly, 1.5)
+	require.InDelta(t, 1.5, seamOnly, 1e-12)
 
-	all := chordedBoundaryVolumeAllow(0.01, 5.0, 3.5, 2.0)
-	wallOnly := chordedBoundaryVolumeAllow(0.01, 5.0, 0, 0)
+	require.Equal(t, 0.0, chordedBoundaryVolumeAllow(0, 5.0, 0, 0, 0))
+	require.Equal(t, 0.0, chordedBoundaryVolumeAllow(0.01, 0, 0, 0, 0))
+
+	all := chordedBoundaryVolumeAllow(0.01, 5.0, 3.5, 2.0, 1.5)
+	wallOnly := chordedBoundaryVolumeAllow(0.01, 5.0, 0, 0, 0)
 	require.GreaterOrEqual(t, all, wallOnly)
 	require.GreaterOrEqual(t, all, twistOnly)
 	require.GreaterOrEqual(t, all, capOnly)
+	require.GreaterOrEqual(t, all, seamOnly)
 }
 
 // TestChordedBoundaryVolumeAllowRefusesOnBrokenClaims pins F6's own fix: an
 // earlier version of this bound let a NaN wallAreaUpper compare false
 // against `> 0` and silently vanish from the sum (rather than refusing),
 // and let absSumUpper's internal math.Abs flip a negative broken
-// twistVolumeUpper or capVolumeUpper positive instead of refusing. Every
-// case here must answer +Inf, never a finite number computed past a broken
-// claim.
+// twistVolumeUpper, capVolumeUpper or seamAllow positive instead of
+// refusing. Every case here must answer +Inf, never a finite number computed
+// past a broken claim.
 func TestChordedBoundaryVolumeAllowRefusesOnBrokenClaims(t *testing.T) {
-	require.True(t, math.IsInf(chordedBoundaryVolumeAllow(math.NaN(), 5.0, 3.5, 2.0), 1), "NaN sectionDelta")
-	require.True(t, math.IsInf(chordedBoundaryVolumeAllow(-1, 5.0, 3.5, 2.0), 1), "negative sectionDelta")
-	require.True(t, math.IsInf(chordedBoundaryVolumeAllow(1, math.NaN(), 3.5, 2.0), 1), "sectionDelta>0 with NaN wallAreaUpper — F6's own scenario")
-	require.True(t, math.IsInf(chordedBoundaryVolumeAllow(1, -1, 3.5, 2.0), 1), "sectionDelta>0 with negative wallAreaUpper")
-	require.True(t, math.IsInf(chordedBoundaryVolumeAllow(0.01, 5.0, math.NaN(), 2.0), 1), "NaN twistVolumeUpper")
-	require.True(t, math.IsInf(chordedBoundaryVolumeAllow(0.01, 5.0, -1, 2.0), 1), "negative twistVolumeUpper — must refuse, never flip positive via absSumUpper")
-	require.True(t, math.IsInf(chordedBoundaryVolumeAllow(0.01, 5.0, 3.5, math.NaN()), 1), "NaN capVolumeUpper")
-	require.True(t, math.IsInf(chordedBoundaryVolumeAllow(0.01, 5.0, 3.5, -1), 1), "negative capVolumeUpper — must refuse, never flip positive via absSumUpper")
+	require.True(t, math.IsInf(chordedBoundaryVolumeAllow(math.NaN(), 5.0, 3.5, 2.0, 1.5), 1), "NaN matchedDelta")
+	require.True(t, math.IsInf(chordedBoundaryVolumeAllow(-1, 5.0, 3.5, 2.0, 1.5), 1), "negative matchedDelta")
+	require.True(t, math.IsInf(chordedBoundaryVolumeAllow(1, math.NaN(), 3.5, 2.0, 1.5), 1), "matchedDelta>0 with NaN wallAreaUpper — F6's own scenario")
+	require.True(t, math.IsInf(chordedBoundaryVolumeAllow(1, -1, 3.5, 2.0, 1.5), 1), "matchedDelta>0 with negative wallAreaUpper")
+	require.True(t, math.IsInf(chordedBoundaryVolumeAllow(0.01, 5.0, math.NaN(), 2.0, 1.5), 1), "NaN twistVolumeUpper")
+	require.True(t, math.IsInf(chordedBoundaryVolumeAllow(0.01, 5.0, -1, 2.0, 1.5), 1), "negative twistVolumeUpper — must refuse, never flip positive via absSumUpper")
+	require.True(t, math.IsInf(chordedBoundaryVolumeAllow(0.01, 5.0, 3.5, math.NaN(), 1.5), 1), "NaN capVolumeUpper")
+	require.True(t, math.IsInf(chordedBoundaryVolumeAllow(0.01, 5.0, 3.5, -1, 1.5), 1), "negative capVolumeUpper — must refuse, never flip positive via absSumUpper")
+	require.True(t, math.IsInf(chordedBoundaryVolumeAllow(0.01, 5.0, 3.5, 2.0, math.NaN()), 1), "NaN seamAllow")
+	require.True(t, math.IsInf(chordedBoundaryVolumeAllow(0.01, 5.0, 3.5, 2.0, -1), 1), "negative seamAllow — must refuse, never flip positive via absSumUpper")
 
-	// sectionDelta==0 is a legitimate SKIP of the wall leg regardless of what
+	// matchedDelta==0 is a legitimate SKIP of the wall leg regardless of what
 	// wallAreaUpper claims (the boundary provably does not move, so the area
 	// it would move across is irrelevant) — never a refusal on its own.
-	require.Equal(t, 0.0, chordedBoundaryVolumeAllow(0, math.Inf(1), 0, 0))
+	require.Equal(t, 0.0, chordedBoundaryVolumeAllow(0, math.Inf(1), 0, 0, 0))
+}
+
+// TestChordedBoundarySeamAllowRefusesOnBrokenClaims pins F2's own seam
+// helper against the same reject-only convention: a non-finite or negative
+// matchedDelta, posUpper or seamPerimeterUpper must answer +Inf, never a
+// finite number computed past a broken claim, and the three legitimate
+// zeros (any operand exactly 0) must publish exactly 0.
+func TestChordedBoundarySeamAllowRefusesOnBrokenClaims(t *testing.T) {
+	require.True(t, math.IsInf(chordedBoundarySeamAllow(math.NaN(), 5.0, 10.0), 1), "NaN matchedDelta")
+	require.True(t, math.IsInf(chordedBoundarySeamAllow(-1, 5.0, 10.0), 1), "negative matchedDelta")
+	require.True(t, math.IsInf(chordedBoundarySeamAllow(0.01, math.NaN(), 10.0), 1), "NaN posUpper")
+	require.True(t, math.IsInf(chordedBoundarySeamAllow(0.01, -1, 10.0), 1), "negative posUpper")
+	require.True(t, math.IsInf(chordedBoundarySeamAllow(0.01, 5.0, math.NaN()), 1), "NaN seamPerimeterUpper")
+	require.True(t, math.IsInf(chordedBoundarySeamAllow(0.01, 5.0, -1), 1), "negative seamPerimeterUpper")
+
+	require.Equal(t, 0.0, chordedBoundarySeamAllow(0, 5.0, 10.0))
+	require.Equal(t, 0.0, chordedBoundarySeamAllow(0.01, 0, 10.0))
+	require.Equal(t, 0.0, chordedBoundarySeamAllow(0.01, 5.0, 0))
+}
+
+// TestChordedBoundarySeamAllowScalesWithItsThreeOperands pins the closed
+// form directly: matchedDelta*posUpper*seamPerimeterUpper/3, rounded
+// outward.
+func TestChordedBoundarySeamAllowScalesWithItsThreeOperands(t *testing.T) {
+	const matchedDelta, posUpper, seamPerimeterUpper = 0.02, 12.0, 40.0
+	want := matchedDelta * posUpper * seamPerimeterUpper / 3
+	got := chordedBoundarySeamAllow(matchedDelta, posUpper, seamPerimeterUpper)
+	require.InDelta(t, want, got, 1e-9)
+	require.GreaterOrEqual(t, got, want, "the answer must round outward, never inward")
 }
 
 // TestChordedBoundaryMomentAllowIsItsOwnWidenedTwin pins
 // chordedBoundaryMomentAllow's own closed form —
 // chordedBoundaryVolumeAllow(...) composed with coordUpper WIDENED by
-// sectionDelta and maxTwistOffsetUpper via absSumUpper, the same pattern
+// matchedDelta and maxTwistOffsetUpper via absSumUpper, the same pattern
 // loft_moments.go:265's sweptMomentAllow call site widens by m.delta —
 // computed here by calling chordedBoundaryVolumeAllow directly, never
 // sweptMomentAllow, so a caller that swapped the two internally would move
 // this answer.
 func TestChordedBoundaryMomentAllowIsItsOwnWidenedTwin(t *testing.T) {
-	sectionDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper := 0.02, 7.5, 1.25, 0.5
+	matchedDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper, seamAllow := 0.02, 7.5, 1.25, 0.5, 0.1
 	maxTwistOffsetUpper, coordUpper := 0.3, 3.0
 
-	vol := chordedBoundaryVolumeAllow(sectionDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper)
-	widened := absSumUpper(coordUpper, sectionDelta, maxTwistOffsetUpper)
+	vol := chordedBoundaryVolumeAllow(matchedDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper, seamAllow)
+	widened := absSumUpper(coordUpper, matchedDelta, maxTwistOffsetUpper)
 	want := productUpper(vol, widened)
 
-	got := chordedBoundaryMomentAllow(sectionDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper, maxTwistOffsetUpper, coordUpper)
+	got := chordedBoundaryMomentAllow(matchedDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper, seamAllow, maxTwistOffsetUpper, coordUpper)
 	require.Equal(t, want, got)
 
-	require.Equal(t, 0.0, chordedBoundaryMomentAllow(0, wallAreaUpper, 0, 0, 0, coordUpper))
-	require.Equal(t, 0.0, chordedBoundaryMomentAllow(sectionDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper, maxTwistOffsetUpper, 0))
+	require.Equal(t, 0.0, chordedBoundaryMomentAllow(0, wallAreaUpper, 0, 0, 0, 0, coordUpper))
+	require.Equal(t, 0.0, chordedBoundaryMomentAllow(matchedDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper, seamAllow, maxTwistOffsetUpper, 0))
 }
 
 // TestChordedBoundaryMomentAllowWidensPastTheHeldCoordEnvelope pins F7
 // directly: the symmetric difference this term bounds the moment of extends
 // OUTSIDE every held vertex, so a coordUpper read only over the HELD
 // material (never widened) must publish a SMALLER answer than the widened
-// term whenever sectionDelta or maxTwistOffsetUpper is positive — an
+// term whenever matchedDelta or maxTwistOffsetUpper is positive — an
 // earlier version of this bound charged the held envelope alone and so
 // understated the obligation.
 func TestChordedBoundaryMomentAllowWidensPastTheHeldCoordEnvelope(t *testing.T) {
-	const sectionDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper = 0.02, 7.5, 1.25, 0.5
+	const matchedDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper, seamAllow = 0.02, 7.5, 1.25, 0.5, 0.1
 	const maxTwistOffsetUpper, coordUpper = 0.3, 3.0
 
-	widenedAnswer := chordedBoundaryMomentAllow(sectionDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper, maxTwistOffsetUpper, coordUpper)
-	vol := chordedBoundaryVolumeAllow(sectionDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper)
+	widenedAnswer := chordedBoundaryMomentAllow(matchedDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper, seamAllow, maxTwistOffsetUpper, coordUpper)
+	vol := chordedBoundaryVolumeAllow(matchedDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper, seamAllow)
 	unwidenedAnswer := productUpper(vol, coordUpper)
 
 	require.Greater(t, widenedAnswer, unwidenedAnswer,
@@ -771,22 +1180,27 @@ func TestChordedBoundaryMomentAllowWidensPastTheHeldCoordEnvelope(t *testing.T) 
 }
 
 // TestChordedBoundaryMomentAllowRefusesOnBrokenClaims pins the reject-only
-// gate over every non-finite argument position: sectionDelta,
-// wallAreaUpper, twistVolumeUpper, capVolumeUpper, maxTwistOffsetUpper and
+// gate over every non-finite argument position: matchedDelta, wallAreaUpper,
+// twistVolumeUpper, capVolumeUpper, seamAllow, maxTwistOffsetUpper and
 // coordUpper must each, when NaN or a negative claim where negative is
 // broken, produce a non-finite published bound, never a finite number
-// silently computed past it.
+// silently computed past it. F6: a NEGATIVE coordUpper is one such broken
+// claim — an earlier version of this bound guarded only isNonFinite(coordUpper)
+// and let a negative claim return 0 instead of +Inf.
 func TestChordedBoundaryMomentAllowRefusesOnBrokenClaims(t *testing.T) {
-	const sectionDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper = 0.02, 7.5, 1.25, 0.5
+	const matchedDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper, seamAllow = 0.02, 7.5, 1.25, 0.5, 0.1
 	const maxTwistOffsetUpper, coordUpper = 0.3, 3.0
 
-	require.True(t, math.IsInf(chordedBoundaryMomentAllow(math.NaN(), wallAreaUpper, twistVolumeUpper, capVolumeUpper, maxTwistOffsetUpper, coordUpper), 1), "NaN sectionDelta")
-	require.True(t, math.IsInf(chordedBoundaryMomentAllow(-1, wallAreaUpper, twistVolumeUpper, capVolumeUpper, maxTwistOffsetUpper, coordUpper), 1), "negative sectionDelta")
-	require.True(t, math.IsInf(chordedBoundaryMomentAllow(sectionDelta, math.NaN(), twistVolumeUpper, capVolumeUpper, maxTwistOffsetUpper, coordUpper), 1), "NaN wallAreaUpper")
-	require.True(t, math.IsInf(chordedBoundaryMomentAllow(sectionDelta, wallAreaUpper, math.NaN(), capVolumeUpper, maxTwistOffsetUpper, coordUpper), 1), "NaN twistVolumeUpper")
-	require.True(t, math.IsInf(chordedBoundaryMomentAllow(sectionDelta, wallAreaUpper, twistVolumeUpper, math.NaN(), maxTwistOffsetUpper, coordUpper), 1), "NaN capVolumeUpper")
-	require.True(t, math.IsInf(chordedBoundaryMomentAllow(sectionDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper, math.NaN(), coordUpper), 1), "NaN maxTwistOffsetUpper")
-	require.True(t, math.IsInf(chordedBoundaryMomentAllow(sectionDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper, -1, coordUpper), 1), "negative maxTwistOffsetUpper")
-	require.True(t, math.IsInf(chordedBoundaryMomentAllow(sectionDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper, maxTwistOffsetUpper, math.NaN()), 1), "NaN coordUpper")
-	require.True(t, math.IsInf(chordedBoundaryMomentAllow(sectionDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper, maxTwistOffsetUpper, math.Inf(1)), 1), "+Inf coordUpper")
+	require.True(t, math.IsInf(chordedBoundaryMomentAllow(math.NaN(), wallAreaUpper, twistVolumeUpper, capVolumeUpper, seamAllow, maxTwistOffsetUpper, coordUpper), 1), "NaN matchedDelta")
+	require.True(t, math.IsInf(chordedBoundaryMomentAllow(-1, wallAreaUpper, twistVolumeUpper, capVolumeUpper, seamAllow, maxTwistOffsetUpper, coordUpper), 1), "negative matchedDelta")
+	require.True(t, math.IsInf(chordedBoundaryMomentAllow(matchedDelta, math.NaN(), twistVolumeUpper, capVolumeUpper, seamAllow, maxTwistOffsetUpper, coordUpper), 1), "NaN wallAreaUpper")
+	require.True(t, math.IsInf(chordedBoundaryMomentAllow(matchedDelta, wallAreaUpper, math.NaN(), capVolumeUpper, seamAllow, maxTwistOffsetUpper, coordUpper), 1), "NaN twistVolumeUpper")
+	require.True(t, math.IsInf(chordedBoundaryMomentAllow(matchedDelta, wallAreaUpper, twistVolumeUpper, math.NaN(), seamAllow, maxTwistOffsetUpper, coordUpper), 1), "NaN capVolumeUpper")
+	require.True(t, math.IsInf(chordedBoundaryMomentAllow(matchedDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper, math.NaN(), maxTwistOffsetUpper, coordUpper), 1), "NaN seamAllow")
+	require.True(t, math.IsInf(chordedBoundaryMomentAllow(matchedDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper, -1, maxTwistOffsetUpper, coordUpper), 1), "negative seamAllow")
+	require.True(t, math.IsInf(chordedBoundaryMomentAllow(matchedDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper, seamAllow, math.NaN(), coordUpper), 1), "NaN maxTwistOffsetUpper")
+	require.True(t, math.IsInf(chordedBoundaryMomentAllow(matchedDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper, seamAllow, -1, coordUpper), 1), "negative maxTwistOffsetUpper")
+	require.True(t, math.IsInf(chordedBoundaryMomentAllow(matchedDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper, seamAllow, maxTwistOffsetUpper, math.NaN()), 1), "NaN coordUpper")
+	require.True(t, math.IsInf(chordedBoundaryMomentAllow(matchedDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper, seamAllow, maxTwistOffsetUpper, -1), 1), "negative coordUpper — F6")
+	require.True(t, math.IsInf(chordedBoundaryMomentAllow(matchedDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper, seamAllow, maxTwistOffsetUpper, math.Inf(1)), 1), "+Inf coordUpper")
 }

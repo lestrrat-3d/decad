@@ -36,13 +36,17 @@ import (
 //   - the VOLUME between a loft's HELD FLAT-TRIANGLE polyhedron — the two
 //     triangles assembleLoft actually builds per wall cell, never a ruled
 //     patch — and the curved solid its paired curved sections denote →
-//     chordedBoundaryVolumeAllow, composed of THREE legs, each its own
+//     chordedBoundaryVolumeAllow, composed of FOUR legs, each its own
 //     mechanism, by absSumUpper: a wall chord-to-curve leg carrying the SAME
 //     closed form sweptVolumeAllow states for a DIFFERENT mechanism — a
 //     boundary REPLACED by a nearby non-mesh surface, rather than a mesh
 //     whose vertices moved — a ruled-to-triangle (TWIST) leg the caller
-//     supplies pre-summed from cellTwistVolumeAllow, and a cap chord-to-curve
-//     leg the caller supplies pre-summed from capAreaVolumeAllow;
+//     supplies pre-summed from cellTwistVolumeAllow, a cap chord-to-curve
+//     leg the caller supplies pre-summed from capAreaVolumeAllow, and a SEAM
+//     leg the caller supplies pre-summed from chordedBoundarySeamAllow — the
+//     line-integral residue the wall leg's own flux identity drops by
+//     treating an OPEN patch (closed off only by the caps) as if it had no
+//     moving boundary of its own;
 //   - an ABSOLUTE upper bound on the AREA of every surface ONE chorded wall
 //     cell's chord-to-curve homotopy visits, from the bilinear RULED patch
 //     between its four chord corners through to the ruled surface between
@@ -50,7 +54,16 @@ import (
 //     chordedBoundaryVolumeAllow's own wallAreaUpper obligation sums over
 //     every wall cell — never a held-facet-area-plus-excess reading, which
 //     does not bound a family whose area is not sign-definite relative to
-//     any one held facet;
+//     any one held facet, and never fed the loft evaluator's own sagitta
+//     sectionDelta in place of its own PARAMETER-MATCHED matchedDeltaUpper
+//     obligation, a strictly stronger claim the two coincide for only a
+//     LINE or an ARC (F1);
+//   - the LINE-INTEGRAL residue chordedBoundaryVolumeAllow's own wall leg
+//     drops by treating the wall as a closed surface when it is in fact an
+//     OPEN patch whose r=0/r=1 seam moves under the SAME homotopy →
+//     chordedBoundarySeamAllow, a Cauchy-Schwarz bound on the by-parts
+//     boundary term the flux identity's own open-surface application
+//     otherwise leaves uncharged (F2);
 //   - the VOLUME ONE cap contributes when its held polygon triangulation is
 //     replaced by the region its recorded profile curve denotes →
 //     capAreaVolumeAllow, an EXACT divergence-theorem mechanism (a planar
@@ -110,7 +123,7 @@ import (
 //     chordedBoundaryVolumeAllow's own one-dimension-higher sibling, NOT
 //     sweptMomentAllow reused, since that helper calls sweptVolumeAllow
 //     internally and so speaks for the wrong mechanism here — its own
-//     coordUpper obligation is widened by sectionDelta and by
+//     coordUpper obligation is widened by matchedDelta and by
 //     cellTwistOffsetUpper's own MAXIMUM over every wall cell, since the
 //     symmetric difference it bounds extends outside every held vertex on
 //     both legs, never by the held envelope alone;
@@ -421,37 +434,63 @@ func sweptVolumeAllow(delta, areaUpper float64) float64 {
 //     term is linear in s (b_chord(s)−a_chord(s) = (1−s)·(wLo−vLo) +
 //     s·(wHi−vHi)), so it is itself bounded by eBBase :=
 //     max(|wLo−vLo|,|wHi−vHi|) via the SAME convexity cellTwistVolumeAllow's
-//     part (b) uses. The curve term is within sectionDelta of the matching
-//     chord term at every s (each curve point sits within sectionDelta of
-//     its own chord under the constant-arc-length parametrization, by
-//     definition of sectionDelta as the whole span's own sagitta bound), so
-//     triangle inequality gives |b_curve(s)−a_curve(s)| <= eBBase +
-//     2·sectionDelta. eB := eBBase + 2·sectionDelta therefore bounds
-//     |∂X_t/∂r| at every s, r, t (2·sectionDelta only ever widens the chord
-//     case's own exact bound, so one eB serves both endpoints of the t
-//     sweep).
+//     part (b) uses. The curve term is within matchedDeltaUpper of the
+//     matching chord term AT THE SAME s — never merely somewhere on the
+//     chord, which is all a SAGITTA (a SET-distance from the curve to its
+//     nearest chord point, decad's own sectionDelta) proves — so triangle
+//     inequality gives |b_curve(s)−a_curve(s)| <= eBBase +
+//     2·matchedDeltaUpper. eB := eBBase + 2·matchedDeltaUpper therefore
+//     bounds |∂X_t/∂r| at every s, r, t (2·matchedDeltaUpper only ever
+//     widens the chord case's own exact bound, so one eB serves both
+//     endpoints of the t sweep).
 //   - |∂X_t/∂s × ∂X_t/∂r| <= |∂X_t/∂s|·|∂X_t/∂r| <= eA·eB pointwise, so
 //     Area(X_t) <= eA·eB for every t in [0,1] (the (s,r) domain is the unit
 //     square, area 1) — the published bound, ready for
-//     chordedBoundaryVolumeAllow's own sectionDelta · sup_t A(t) flux
+//     chordedBoundaryVolumeAllow's own matchedDelta · sup_t A(t) flux
 //     argument, summed over every wall cell for its wallAreaUpper.
+//
+// matchedDeltaUpper is a DIFFERENT, STRONGER quantity than the loft
+// evaluator's own sectionDelta field (loftPayload.sectionDelta,
+// loft_build.go) and the two are never interchangeable. sectionDelta is a
+// SET-distance sagitta: every curve point sits within it of SOME chord
+// point. matchedDeltaUpper must be a PROVEN bound on |curve(s) − chord(s)|
+// at the SAME s under the identical constant-arc-length parametrization this
+// derivation fixes — a PARAMETER-MATCHED bound. The two coincide only when
+// the curve's own natural traversal already matches that parametrization: a
+// straight LINE (trivially, chord(s)=curve(s) identically, both zero) or a
+// circular ARC under its own uniform-angle parametrization
+// (TestArcMatchedDeltaEqualsSagitta pins the equality over a 5-170 degree
+// sweep range). For any other curve kind the two provably DIFFER, by an
+// amount that can reach the CHORD LENGTH itself rather than the sagitta: a
+// curve can hug its chord within an arbitrarily small sagitta while packing
+// almost all of its arc length into one short span, so its arc-length-
+// matched point sits far from the chord point at the same s
+// (TestCellChordCurveAreaUpperRefusesTheSagittaZigzag pins the exact
+// counterexample). A caller that cannot prove the parameter-matched bound —
+// every caller today, since S3 admits only LineSeg pairs and no arc/curved
+// pairing has landed — must pass +Inf, never the sagitta as a stand-in
+// (F1's own rule: a SET-distance may never be silently upgraded into a
+// parameter-matched one).
 //
 // arcLenUpperA and arcLenUpperB must each be a PROVEN upper bound on that
 // side's own arc length over the cell — never smaller than the corresponding
 // chord length, which the derivation's first bullet depends on (a chord
-// never exceeds the arc it subtends). sectionDelta must be a PROVEN upper
-// bound on the whole span's own chord-to-curve sagitta. Any of the three
-// non-finite, or either arc length claim negative or smaller than its own
-// chord, is a BROKEN caller claim and this helper answers +Inf for it, never
-// 0 (cutDisplacementAllow's own rule): a claim this derivation's own
-// premises falsify must never publish a shrunken bound. Zero stays the
-// answer for a wholly degenerate cell (both sides zero length), which
-// legitimately has no area for a ruled surface to sweep.
-func cellChordCurveAreaUpper(vLo, vHi, wLo, wHi r3.Vec, arcLenUpperA, arcLenUpperB, sectionDelta float64) float64 {
-	if isNonFinite(arcLenUpperA) || isNonFinite(arcLenUpperB) || isNonFinite(sectionDelta) {
+// never exceeds the arc it subtends). Any of the three non-finite, either
+// arc length claim negative or smaller than its own chord, matchedDeltaUpper
+// negative, or any of the four corners carrying a non-finite coordinate, is
+// a BROKEN caller claim and this helper answers +Inf for it, never 0
+// (cutDisplacementAllow's own rule): a claim this derivation's own premises
+// falsify must never publish a shrunken bound. Zero stays the answer for a
+// wholly degenerate cell (both sides zero length), which legitimately has no
+// area for a ruled surface to sweep.
+func cellChordCurveAreaUpper(vLo, vHi, wLo, wHi r3.Vec, arcLenUpperA, arcLenUpperB, matchedDeltaUpper float64) float64 {
+	if !finiteVec(vLo) || !finiteVec(vHi) || !finiteVec(wLo) || !finiteVec(wHi) {
 		return math.Inf(1)
 	}
-	if arcLenUpperA < 0 || arcLenUpperB < 0 || sectionDelta < 0 {
+	if isNonFinite(arcLenUpperA) || isNonFinite(arcLenUpperB) || isNonFinite(matchedDeltaUpper) {
+		return math.Inf(1)
+	}
+	if arcLenUpperA < 0 || arcLenUpperB < 0 || matchedDeltaUpper < 0 {
 		return math.Inf(1)
 	}
 	if arcLenUpperA < vHi.Sub(vLo).Len() || arcLenUpperB < wHi.Sub(wLo).Len() {
@@ -462,7 +501,7 @@ func cellChordCurveAreaUpper(vLo, vHi, wLo, wHi r3.Vec, arcLenUpperA, arcLenUppe
 		return 0
 	}
 	eBBase := math.Max(wLo.Sub(vLo).Len(), wHi.Sub(vHi).Len())
-	eB := absSumUpper(eBBase, productUpper(2, sectionDelta))
+	eB := absSumUpper(eBBase, productUpper(2, matchedDeltaUpper))
 	return productUpper(eA, eB)
 }
 
@@ -518,7 +557,7 @@ func capAreaVolumeAllow(planeOffsetUpper, capAreaAllow float64) float64 {
 // t=0 endpoint (docs/loft-design.md §5 (the chord-chain subsection lands with the arc design change)). The two are DIFFERENT surfaces:
 // loftMassAccumulator sums signed tetrahedra over the built triangle pair,
 // never over the bilinear patch, so the gap between them is a mechanism of
-// its own with its own charge — chordedBoundaryVolumeAllow's sectionDelta ·
+// its own with its own charge — chordedBoundaryVolumeAllow's matchedDelta ·
 // areaUpper term does not speak for it, because that term's own homotopy
 // starts FROM the ruled patch and never visits the triangle pair at all.
 //
@@ -585,19 +624,21 @@ func cellTwistOffsetUpper(vLo, vHi, wLo, wHi r3.Vec) float64 {
 // never a ruled patch — and the TRUE solid its paired curved sections
 // denote (docs/loft-design.md §5 — the chord-chain subsection lands with
 // the arc design change, §8; the A10 plan's Part 1/Part 2 Q4). The gap
-// decomposes into THREE legs, each its own mechanism with its own charge,
+// decomposes into FOUR legs, each its own mechanism with its own charge,
 // composed by absSumUpper into one total displacement:
 //
-// (a) wall chord-to-curve: sectionDelta · wallAreaUpper, the SAME closed
+// (a) wall chord-to-curve: matchedDelta · wallAreaUpper, the SAME closed
 // form sweptVolumeAllow states for a DIFFERENT mechanism. Each RULED-PATCH
 // chord point — the bilinear interpolation of a wall cell's own four
 // corners, NOT the built triangle pair — moves along the STRAIGHT path to
-// the curve point at its own parameter, a motion of at most sectionDelta
-// (the in-section-plane displacement of a built chord from the recorded
-// curve it chords, docs/loft-design.md §5 — the chord-chain subsection
-// lands with the arc design change). The signed volume is a polynomial in
-// the boundary, so along that path |dV/dt| <= sectionDelta · A(t) and
-// |V_true − V_ruled| <= sectionDelta · sup_t A(t).
+// the curve point AT ITS OWN PARAMETER, a motion of at most matchedDelta
+// (cellChordCurveAreaUpper's own PARAMETER-MATCHED obligation, never the
+// evaluator's sagitta-only sectionDelta field — F1's own rule). The signed
+// volume of a parametrized surface patch, V = (1/3)∬ X·(X_s × X_r), is a
+// polynomial in the boundary, so along that path |dV/dt| <= matchedDelta ·
+// A(t) and |V_true − V_ruled| <= matchedDelta · sup_t A(t) — but this
+// identity, applied literally to the WALL patch alone, is only half the
+// story: see leg (d) below.
 //
 // wallAreaUpper must be the SUM, over every WALL cell, of
 // cellChordCurveAreaUpper for that cell — an ABSOLUTE bound on the area of
@@ -606,7 +647,7 @@ func cellTwistOffsetUpper(vLo, vHi, wLo, wHi r3.Vec) float64 {
 // gives the counterexample that framing misses: a cell can hold almost no
 // triangle area while its own ruled patch already carries substantial area,
 // so no fixed held quantity an excess could subtract from bounds it, and
-// mere containment in a sectionDelta-thick neighbourhood of the held mesh
+// mere containment in a matchedDelta-thick neighbourhood of the held mesh
 // does not bound a surface's area either, since a surface can carry
 // unbounded area inside an arbitrarily thin slab).
 //
@@ -623,22 +664,40 @@ func cellTwistOffsetUpper(vLo, vHi, wLo, wHi r3.Vec) float64 {
 // its 2-D region's shape, an EXACT divergence-theorem mechanism
 // capAreaVolumeAllow's own doc comment derives.
 //
-// Composing all three by absSumUpper is sound because they are three
-// segments of one path — held triangle to ruled patch (b), ruled patch to
-// true curve (a), held cap polygon to true cap region (c) — and the total
-// displacement any boundary point commits over a multi-leg path is at most
-// the sum of the legs' own bounds, whatever each leg's own shape (the flux
-// argument needs a SPEED bound on each leg, not a straight line).
+// (d) the SEAM correction: seamAllow, which the caller supplies
+// PRE-SUMMED from chordedBoundarySeamAllow. Leg (a)'s own identity is the
+// flux formula for a CLOSED surface, but the wall is an OPEN patch — closed
+// off only by the two caps, at r=0 and r=1 — whose r=0/r=1 SEAM itself
+// moves under the SAME homotopy leg (a) integrates over. Integrating
+// V_wall = (1/3)∬ X·(X_s×X_r) by parts over that open patch gives
+// δV_wall = ∬ δX·(X_s×X_r) + (1/3)·[∮_s δX·(X×X_s) ds]{at r=1, minus at
+// r=0} — leg (a) charges only the first term. The second is the SAME
+// mechanism the anchored tetrahedron sum's own cap/wall split always pays:
+// for a straight (untwisted) prism the true identity ΔVolume = h·ΔArea
+// splits EXACTLY as h·ΔArea/3 to the cap (capAreaVolumeAllow's own exact
+// share) and 2h·ΔArea/3 to the wall's own boundary term, so a wall leg that
+// omits it is relying on nothing but an unrelated leg's own incidental
+// slack to cover a mechanism that leg was never charged for — "zero proven
+// margin", not a proof. seamAllow charges it explicitly instead of assuming
+// it away; see chordedBoundarySeamAllow's own doc comment for the bound.
 //
-// A non-finite or negative sectionDelta, twistVolumeUpper or capVolumeUpper
-// is a BROKEN caller claim and this helper answers +Inf for it, never a
-// finite number silently computed past it (F6: math.Abs inside absSumUpper
-// would otherwise flip a negative broken total positive, and a NaN
-// wallAreaUpper compared with `> 0` would otherwise read false and vanish
-// from the sum instead of refusing) — an absent bound must never read as a
-// small one (cutDisplacementAllow's own rule).
-func chordedBoundaryVolumeAllow(sectionDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper float64) float64 {
-	if isNonFinite(sectionDelta) || sectionDelta < 0 {
+// Composing all four by absSumUpper is sound because they are segments of
+// one path — held triangle to ruled patch (b), ruled patch to true curve
+// (a) plus its own uncharged seam residue (d), held cap polygon to true cap
+// region (c) — and the total displacement any boundary point commits over a
+// multi-leg path is at most the sum of the legs' own bounds, whatever each
+// leg's own shape (the flux argument needs a SPEED bound on each leg, not a
+// straight line).
+//
+// A non-finite or negative matchedDelta, twistVolumeUpper, capVolumeUpper or
+// seamAllow is a BROKEN caller claim and this helper answers +Inf for it,
+// never a finite number silently computed past it (F6: math.Abs inside
+// absSumUpper would otherwise flip a negative broken total positive, and a
+// NaN wallAreaUpper compared with `> 0` would otherwise read false and
+// vanish from the sum instead of refusing) — an absent bound must never read
+// as a small one (cutDisplacementAllow's own rule).
+func chordedBoundaryVolumeAllow(matchedDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper, seamAllow float64) float64 {
+	if isNonFinite(matchedDelta) || matchedDelta < 0 {
 		return math.Inf(1)
 	}
 	if isNonFinite(twistVolumeUpper) || twistVolumeUpper < 0 {
@@ -647,16 +706,67 @@ func chordedBoundaryVolumeAllow(sectionDelta, wallAreaUpper, twistVolumeUpper, c
 	if isNonFinite(capVolumeUpper) || capVolumeUpper < 0 {
 		return math.Inf(1)
 	}
+	if isNonFinite(seamAllow) || seamAllow < 0 {
+		return math.Inf(1)
+	}
 	chordToCurve := 0.0
-	if sectionDelta > 0 {
+	if matchedDelta > 0 {
 		if isNonFinite(wallAreaUpper) || wallAreaUpper < 0 {
 			return math.Inf(1)
 		}
 		if wallAreaUpper > 0 {
-			chordToCurve = upRound(sectionDelta * wallAreaUpper)
+			chordToCurve = upRound(matchedDelta * wallAreaUpper)
 		}
 	}
-	return absSumUpper(chordToCurve, twistVolumeUpper, capVolumeUpper)
+	return absSumUpper(chordToCurve, twistVolumeUpper, capVolumeUpper, seamAllow)
+}
+
+// chordedBoundarySeamAllow bounds chordedBoundaryVolumeAllow's own leg (d):
+// the LINE-INTEGRAL residue leg (a)'s flux identity drops by treating the
+// wall as if it were closed, when it is in fact an OPEN patch whose r=0/r=1
+// seam moves under the same chord-to-curve homotopy
+// (docs/loft-design.md §5).
+//
+// |δX·(X×X_s)| <= |δX|·|X|·|X_s| pointwise (Cauchy-Schwarz on the cross
+// product, then again on the dot product), so the residue at ONE loop (r=0
+// or r=1) integrates, over s in [0,1] per cell — the same unit interval
+// cellChordCurveAreaUpper's own eA/eB bound already integrates over, so a
+// pointwise supremum over an interval of width 1 carries through unchanged —
+// and summed over every cell of that loop, to at most matchedDelta ·
+// posUpper · (that loop's own arc-length upper bound). seamPerimeterUpper
+// must be the SUM, over BOTH loops (r=0 and r=1), of every wall cell's own
+// side arc-length upper bound — the same arcLenUpperA/arcLenUpperB every
+// cellChordCurveAreaUpper call already states, so a caller that has already
+// summed wallAreaUpper's own per-cell arc lengths is reading the identical
+// quantities a second time, not deriving a new one.
+//
+// matchedDelta must be the SAME parameter-matched displacement leg (a)'s own
+// obligation requires (cellChordCurveAreaUpper's own doc comment — never the
+// sagitta alone). posUpper must be a PROVEN upper bound on the distance from
+// the mass accumulator's own anchor to any point of EITHER loop's TRUE
+// curve: the held loop's own max distance from anchor
+// (loftMassAccumulator's own coordUpper, or the wider box radius3D of it)
+// widened by matchedDelta itself, since every true curve point sits within
+// matchedDelta of its own held chord vertex and so within matchedDelta
+// further from the anchor than that vertex's own distance.
+//
+// A non-finite or negative operand is a BROKEN caller claim and this helper
+// answers +Inf, never a finite number computed past it (cutDisplacementAllow's
+// own rule).
+func chordedBoundarySeamAllow(matchedDelta, posUpper, seamPerimeterUpper float64) float64 {
+	if isNonFinite(matchedDelta) || matchedDelta < 0 {
+		return math.Inf(1)
+	}
+	if isNonFinite(posUpper) || posUpper < 0 {
+		return math.Inf(1)
+	}
+	if isNonFinite(seamPerimeterUpper) || seamPerimeterUpper < 0 {
+		return math.Inf(1)
+	}
+	if matchedDelta <= 0 || posUpper <= 0 || seamPerimeterUpper <= 0 {
+		return 0
+	}
+	return upRound(productUpper(matchedDelta, productUpper(posUpper, seamPerimeterUpper)) / 3)
 }
 
 // sectionDisplacementArea bounds the AREA a recorded 2D section can differ from
@@ -1045,39 +1155,42 @@ func sweptMomentAllow(delta, areaUpper, coordUpper float64) float64 {
 //
 // R is coordUpper WIDENED, never coordUpper itself: the symmetric difference
 // this term bounds the moment of extends OUTSIDE every held vertex — by up
-// to sectionDelta on the wall/cap chord-to-curve legs (a curve point sits up
-// to sectionDelta from its own chord) and by up to maxTwistOffsetUpper on
-// the twist leg (cellTwistVolumeAllow's own |T|/4 pointwise bound, taken as
-// a MAXIMUM over every wall cell via cellTwistOffsetUpper, never a sum, per
-// that helper's own doc comment) — so R := coordUpper + sectionDelta +
-// maxTwistOffsetUpper, composed by absSumUpper, is what the caller's own
-// coordUpper (a bound over the HELD material alone, e.g.
-// loft_moments.go:265's m.coordUpper) must be widened by before this term
-// can charge it (compare that call site's own m.coordUpper+m.delta widening
-// for sweptMomentAllow's identical obligation one mechanism over).
+// to matchedDelta on the wall/cap chord-to-curve legs (a curve point sits up
+// to matchedDelta from its own chord, at the matching parameter) and by up
+// to maxTwistOffsetUpper on the twist leg (cellTwistVolumeAllow's own |T|/4
+// pointwise bound, taken as a MAXIMUM over every wall cell via
+// cellTwistOffsetUpper, never a sum, per that helper's own doc comment) —
+// so R := coordUpper + matchedDelta + maxTwistOffsetUpper, composed by
+// absSumUpper, is what the caller's own coordUpper (a bound over the HELD
+// material alone, e.g. loft_moments.go:265's m.coordUpper) must be widened
+// by before this term can charge it (compare that call site's own
+// m.coordUpper+m.delta widening for sweptMomentAllow's identical obligation
+// one mechanism over). The seam leg's own displaced material sits within the
+// SAME neighbourhood (it is the wall's own open-seam residue, bounded by the
+// identical matchedDelta), so it needs no separate widening term.
 //
-// coordUpper, sectionDelta and maxTwistOffsetUpper must each be PROVEN upper
-// bounds; a non-finite or negative sectionDelta or maxTwistOffsetUpper is a
-// BROKEN caller claim and this helper answers +Inf for it, never a finite
-// number computed past it (cutDisplacementAllow's own rule).
-func chordedBoundaryMomentAllow(sectionDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper, maxTwistOffsetUpper, coordUpper float64) float64 {
-	if isNonFinite(sectionDelta) || sectionDelta < 0 {
+// coordUpper, matchedDelta and maxTwistOffsetUpper must each be PROVEN upper
+// bounds; a non-finite or negative matchedDelta, maxTwistOffsetUpper or
+// coordUpper is a BROKEN caller claim and this helper answers +Inf for it,
+// never a finite number computed past it (cutDisplacementAllow's own rule).
+func chordedBoundaryMomentAllow(matchedDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper, seamAllow, maxTwistOffsetUpper, coordUpper float64) float64 {
+	if isNonFinite(matchedDelta) || matchedDelta < 0 {
 		return math.Inf(1)
 	}
 	if isNonFinite(maxTwistOffsetUpper) || maxTwistOffsetUpper < 0 {
 		return math.Inf(1)
 	}
-	if isNonFinite(coordUpper) {
+	if isNonFinite(coordUpper) || coordUpper < 0 {
 		return math.Inf(1)
 	}
-	vol := chordedBoundaryVolumeAllow(sectionDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper)
+	vol := chordedBoundaryVolumeAllow(matchedDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper, seamAllow)
 	if isNonFinite(vol) {
 		return math.Inf(1)
 	}
 	if vol <= 0 || coordUpper <= 0 {
 		return 0
 	}
-	widened := absSumUpper(coordUpper, sectionDelta, maxTwistOffsetUpper)
+	widened := absSumUpper(coordUpper, matchedDelta, maxTwistOffsetUpper)
 	return productUpper(vol, widened)
 }
 

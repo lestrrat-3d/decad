@@ -54,14 +54,15 @@ type loftPayload struct {
 	delta float64
 
 	// sectionDelta is the proven upper bound on how far any BUILT CHORD point
-	// of a wall cell sits from the recorded curve it chords, taken as a
-	// MAXIMUM over cells rather than a sum (docs/loft-design.md §5 — the
-	// chord-chain subsection lands with the arc design change). It is
-	// zero for every pairing this evaluator admits today — S3 admits only
-	// same-kind LineSeg pairs, and a straight wall's own chord IS the
-	// recorded segment, so there is no curve for it to depart from. A
-	// same-kind curved pairing (reach, not yet admitted) is the construction
-	// that will set it, to the sagitta its station chording commits.
+	// of a wall cell sits from the recorded curve it chords, AS A SET — the
+	// curve's own sagitta, taken as a MAXIMUM over cells rather than a sum
+	// (docs/loft-design.md §5 — the chord-chain subsection lands with the
+	// arc design change). It is zero for every pairing this evaluator admits
+	// today — S3 admits only same-kind LineSeg pairs, and a straight wall's
+	// own chord IS the recorded segment, so there is no curve for it to
+	// depart from. A same-kind curved pairing (reach, not yet admitted) is
+	// the construction that will set it, to the sagitta its station
+	// chording commits.
 	//
 	// It is NEVER delta and never stands in for it, the identical
 	// independence prismPayload's own sectionDelta/z0Delta pair states one
@@ -70,6 +71,19 @@ type loftPayload struct {
 	// sectionDelta bounds a BUILT CHORD's own displacement, in the section
 	// plane, from the curve it chords. A reading that needs both sums them
 	// into its own bound; neither is ever substituted for the other.
+	//
+	// It is ALSO never bounds.go's cellChordCurveAreaUpper's own
+	// matchedDeltaUpper obligation, a STRONGER, DIFFERENT quantity that
+	// helper's own doc comment defines: sectionDelta is a SET-distance (some
+	// chord point, not necessarily at the matching parameter), while
+	// matchedDeltaUpper must be a PARAMETER-MATCHED bound (the SAME s under
+	// the wall homotopy's own constant-arc-length parametrization). The two
+	// coincide only for a LINE (trivially, both zero) or an ARC under its own
+	// uniform-angle parametrization (bounds.go's own doc comment on
+	// cellChordCurveAreaUpper, F1). A future curved-pairing construction that
+	// sets this field to an arc's sagitta may pass that SAME value as
+	// matchedDeltaUpper only because of that proven coincidence, never as a
+	// general licence to conflate the two for any other curve kind.
 	sectionDelta float64
 
 	verts []r3.Vec
