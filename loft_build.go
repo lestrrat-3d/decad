@@ -238,17 +238,26 @@ func validateLoftRecords(p0, p1 ProfileRecord, pl0, pl1 PlaneRecord, alignment [
 // so a mixed-kind or free-form pair still refuses under today's sentinel.
 //
 // Beside S3, a CHEAP STRUCTURAL gate rather than an expensive proof: two
-// paired CircleSegs whose own recorded CCW flags disagree walk in opposite
-// directions and would twist the station correspondence into a
+// paired circular segments whose own EFFECTIVE walk directions disagree walk
+// in opposite directions and would twist the station correspondence into a
 // self-crossing wall. §6's build-time audit would eventually catch the
 // resulting crossing as S7 (ErrDegenerate, loft_audit.go), but this test
 // runs before a single station or triangle is built, and its own sentinel
 // (ErrUnsupported) is what keeps the two refusals distinguishable — a
 // caller can tell "this evaluator does not admit the pairing" from "the
-// pairing self-crosses" without inspecting the message. Only a CircleSeg
-// carries an explicit CCW flag; an ArcSeg's sweep direction is fixed by its
-// own Start/End/Center definition (record.go), so it has nothing to
-// disagree with and this check is silently skipped for it.
+// pairing self-crosses" without inspecting the message.
+//
+// An ArcSeg's sweep is NOT structurally fixed CCW the way an earlier version
+// of this comment claimed: walkOf's own ArcSeg arm (extrude.go) reads
+// th0 = a0 + TStart*sweep, th1 = a0 + TEnd*sweep with sweep always forced
+// positive, so the walk's own angle is monotonic in t and its EFFECTIVE
+// direction is CCW exactly when TEnd > TStart — the identical formula
+// validateSegmentWinding already enforces a CircleSeg's own CCW field must
+// equal (record.go). loftCircularSegmentCCW reads that one shared formula
+// for either kind, so a CircleSeg{CCW: false} paired with an ArcSeg whose
+// own TStart < TEnd — genuinely opposite directions — is caught here rather
+// than silently admitted and left to surface as S7's own crossing refusal
+// three build phases later.
 func loftSameKindGate(w0, w1 segmentWalk, seg0, seg1 CurveSegment, loop, j, k int) error {
 	if w0.kind != w1.kind || (w0.kind != walkLine && w0.kind != walkCircular) {
 		return fmt.Errorf(`%w: loop %d segment %d of the first profile and segment %d of the second are not the same admitted kind; this evaluator pairs same-kind LineSeg or circular segments only`,
@@ -257,13 +266,38 @@ func loftSameKindGate(w0, w1 segmentWalk, seg0, seg1 CurveSegment, loop, j, k in
 	if w0.kind != walkCircular {
 		return nil
 	}
-	c0, ok0 := seg0.(CircleSeg)
-	c1, ok1 := seg1.(CircleSeg)
-	if ok0 && ok1 && c0.CCW != c1.CCW {
-		return fmt.Errorf(`%w: loop %d's paired CircleSeg at segment %d/%d walk in opposite directions; this evaluator refuses rather than twist the correspondence`,
+	ccw0, ok0 := loftCircularSegmentCCW(seg0)
+	ccw1, ok1 := loftCircularSegmentCCW(seg1)
+	if ok0 && ok1 && ccw0 != ccw1 {
+		return fmt.Errorf(`%w: loop %d's paired circular segment at segment %d/%d walk in opposite directions; this evaluator refuses rather than twist the correspondence`,
 			ErrUnsupported, loop, j, k)
 	}
 	return nil
+}
+
+// loftCircularSegmentCCW reads a circular segment's own EFFECTIVE walk
+// direction structurally, from ONE shared formula rather than trusting a
+// per-kind field (loftSameKindGate's own doc comment): a CircleSeg's CCW
+// flag is required to already equal TStart < TEnd (record.go's
+// validateSegmentWinding), and an ArcSeg's own walkOf arm forces its sweep
+// positive (extrude.go), so its angle is a STRICTLY INCREASING function of
+// t and its own walk visits increasing angle exactly when TEnd > TStart —
+// the identical formula. The false return is defensive, unreached from any
+// real build today since loftSameKindGate has already proven w.kind ==
+// walkCircular for both sides, which only CircleSeg and ArcSeg produce.
+func loftCircularSegmentCCW(seg CurveSegment) (bool, bool) {
+	seg, err := normalizeSegment(seg)
+	if err != nil {
+		return false, false
+	}
+	switch s := seg.(type) {
+	case CircleSeg:
+		return s.CCW, true
+	case ArcSeg:
+		return s.TEnd > s.TStart, true
+	default:
+		return false, false
+	}
 }
 
 // loftPlanesCoincide decides S5 over exact rationals on the recorded U/V/

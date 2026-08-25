@@ -935,6 +935,50 @@ func cellAllowsOf(vLo, vHi, wLo, wHi r3.Vec, arcLenUpperA, arcLenUpperB, matched
 	}
 }
 
+// cellTwistAreaAllow is cellTwistVolumeAllow's own AREA twin (a new
+// caller-side term; that function's own derivation is untouched): a bound on
+// how far ONE loft wall cell's held flat-triangle-pair area (t=0) can sit
+// from its own bilinear ruled patch's area (t=1) — the SAME homotopy
+// cellTwistVolumeAllow's part (a)/(b) already builds, T = vLo−vHi−wLo+wHi
+// its own twist vector, zero exactly when the cell is planar (the shipped
+// A10a wedge's own case: two circles offset along their shared normal alone
+// give T = 0 identically, TestArcMatchedDeltaEqualsSagitta's own family).
+//
+// Part (a) already gives the explicit form of the deviation: on triangle 1
+// (0<=r<=s<=1), X−X_tri1 = r(s−1)·T; on triangle 2, X−X_tri2 = s(r−1)·T. Both
+// are δX(s,r) = (a scalar bounded in [−1,1]) · T, so |∂δX/∂s| <= |T| and
+// |∂δX/∂r| <= |T| pointwise (each factor differentiates the scalar, itself
+// bounded by 1, and leaves T untouched). Homotoping Xt = (1−t)·X_tri + t·X
+// linearly in t (the SAME homotopy part (b) already uses), the area
+// functional's own rate is bounded by the product rule on the cross product:
+//
+//	d/dt(∂Xt/∂s × ∂Xt/∂r) = ∂δX/∂s × ∂Xt/∂r + ∂Xt/∂s × ∂δX/∂r
+//	|dArea/dt| <= ∬ |∂δX/∂s|·|∂Xt/∂r| + |∂Xt/∂s|·|∂δX/∂r| dr ds
+//	           <= ∬ |T|·eB + eA·|T| dr ds = |T|·(eA+eB)
+//
+// using part (b)'s own pointwise bound |∂Xt/∂s|<=eA, |∂Xt/∂r|<=eB at every t
+// (its own eA, eB, computed identically here). Integrating t over [0,1] at
+// this CONSTANT rate bounds the area difference itself by the same product,
+// |T|·(eA+eB) — a genuine, if not tight, PROOF (not an estimate), the two
+// factors T and (eA+eB) independent rather than a fabricated cross term, and
+// the whole product vanishes with T exactly rather than merely shrinking.
+//
+// Non-finite corners answer +Inf, the same guard cellTwistVolumeAllow's own
+// doc comment states for its sibling.
+func cellTwistAreaAllow(vLo, vHi, wLo, wHi r3.Vec) float64 {
+	if !finiteVec(vLo) || !finiteVec(vHi) || !finiteVec(wLo) || !finiteVec(wHi) {
+		return math.Inf(1)
+	}
+	t := vLo.Sub(vHi).Sub(wLo).Add(wHi)
+	twistLen := t.Len()
+	if twistLen <= 0 {
+		return 0
+	}
+	eA := math.Max(vHi.Sub(vLo).Len(), wHi.Sub(wLo).Len())
+	eB := math.Max(wLo.Sub(vLo).Len(), wHi.Sub(vHi).Len())
+	return productUpper(twistLen, absSumUpper(eA, eB))
+}
+
 // chordedBoundaryVolumeAllow bounds the VOLUME between a loft's HELD
 // FLAT-TRIANGLE polyhedron — the two triangles per wall cell assembleLoft
 // actually builds and loftMassAccumulator actually sums tetrahedra over,
