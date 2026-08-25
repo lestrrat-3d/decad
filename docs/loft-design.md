@@ -178,7 +178,7 @@ that exists and this evaluator cannot build → `ErrUnsupported`.**
 | **S11** | a nil or foreign `LoftOption` value, including a foreign type that embeds the sealed marker | no well-defined decad operation can invoke an unowned callback | `ErrDegenerate` | yes, §2 |
 | **S12** | ANY build — placed (`Placed`/`Duplicate`/`PlacedCopy`, §12 PR 2a), chorded (§5.1), or both — whose COMBINED proven volume allowance (§8) is not smaller than the held volume | yes — the body itself is sound; only its centroid's proven quotient bound has no positive denominator left to divide by | `ErrUnsupported` | no — a precision ceiling on this evaluator's centroid bound, not a shape rule |
 | **S13** | a build whose lifted-and-placed coordinate, whose computed station coordinate (§5.1), or whose orientation anchor (§5), runs past the representable float64 range | yes — every input is finite (both records' coordinates, the plane origins, and a transform `r3` itself validated), and only decad's own float evaluation of the lift or the station computation overflows; a placed body is the rigid image of one this evaluator already built | `ErrUnsupported` | no — a range ceiling on this evaluator's float64 vertex table, not a shape rule |
-| **S14** | a chorded circular pair for which any displacement term §5.2's table lists — a station's own `stationRound`, a cell's certified sagitta, or the ruled excess built on that cell's radius and sweep enclosures — has no derivation from the record, answering `+Inf` | yes — the body exists and the chord set is built; only one of its proven displacement terms has no derivation from this record | `ErrUnsupported` | no — a derivation gap in this evaluator's certified circular enclosures, not a shape rule |
+| **S14** | a chorded circular pair for which any displacement term §5.2's table lists — a station's own `stationRound`, a cell's certified sagitta, or the ruled excess built on that cell's own enclosures under either arm (§8.1) — has no derivation from the record, answering `+Inf` | yes — the body exists and the chord set is built; only one of its proven displacement terms has no derivation from this record | `ErrUnsupported` | no — a derivation gap in this evaluator's certified circular enclosures, not a shape rule |
 | **S15** | a paired segment whose chord target (§5.1) is not met inside the fixed station cap | yes — the ruled surface exists; this evaluator cannot chord it inside its own ceiling | `ErrUnsupported` (`errTooManyChords`, spline R8) | no — a resource ceiling, not a shape rule |
 | **S16** | a chord cell whose two stations coincide on exactly one of the two sections | yes — a collapsed piece is a recordable curve piece; only the uniform two-faces-per-cell topology (§5) has no case for it | `ErrUnsupported` | no — an evaluator topology limit |
 
@@ -424,10 +424,11 @@ flattened chord-cell sequence rather than over one entry per recorded
 segment, and each cell still resolves to exactly the `side(i,j,0)` /
 `side(i,j,1)` pair §5's table states.
 
-**`m` counts CHORD CELLS, and the station points are one more.** `m` is
-`chordCount`'s own CHORD count, so a pair chorded at `m` contributes exactly
-`m` chord cells to its loop and holds `m + 1` station POINTS on each side of
-the pair — that side's own two END stations plus `m - 1` interior stations.
+**`m` counts CHORD CELLS, and an OPEN side's station points are one more.**
+`m` is `chordCount`'s own CHORD count, so a pair chorded at `m` contributes
+exactly `m` chord cells to its loop. An OPEN side — an `ArcSeg`, or a
+`CircleSeg` recorded over less than a full turn — holds `m + 1` station
+POINTS: that side's own two END stations plus `m - 1` interior stations.
 A pair at `m = 1` therefore has no interior station at all and walls with a
 single cell, which is the case §8 and §12 both single out. **An end station
 is not automatically a recorded coordinate**: only an untrimmed `ArcSeg`'s
@@ -436,6 +437,23 @@ endpoint coordinate at all and a trimmed `ArcSeg` end is computed like any
 interior station — §5.2's table states which kinds are pinned and what the
 rest carry. Wherever this document calls `m` a station count it names that
 same chord-cell count, never the count of station points.
+
+**A CLOSED side holds `m` CYCLIC station points, not `m + 1`, and its final
+cell pairs the last station back to the first.** A `CircleSeg` recorded over
+a full turn walks closed (`extrude.go`), and the station loop appends exactly
+one point per chord cell and never the terminal one (`tessellate.go`),
+because that point IS the walk's own first station. So a full-circle side has
+ONE station where an open side has two ends, and `m` stations carry `m`
+cells: cell `j` pairs station `j` to station `j + 1` for `j` in `[0, m-1)`,
+and the last cell pairs station `m - 1` to station `0`. The open rule read
+here would count the walk's single start station twice and add a closing cell
+between a station and itself, so it is the CLOSED count that every derived
+set takes: §5's vertex set, §8's assembled cap polygon and the triangle set
+§8 integrates over, and §8's `Bounds` candidate set. `chordCount` forces
+`n >= 3` on a closed walk, so a full-circle pair's smallest chorded body is
+three cells over three stations a side, and `m = 1` is reachable only on an
+open one. Table B's `stations_i` (§7) counts CELLS, so it reads the same for
+either kind and needs no exception of its own.
 
 **Station generation reuses the existing circular-walk primitives, never new
 trigonometry, and the value it walks up against is the CERTIFIED one.** The
@@ -539,26 +557,39 @@ ceiling itself.
 
 **Every displacement term this document publishes is listed once, in the
 table below, with the quantity it bounds, the certified enclosure it is
-derived from, the direction it rounds, and what it does when that enclosure
-is underivable.** §5, §8 and §12 name these terms; this table is what states
-their conditions, and none of those sections restates one.
+derived from, the site that PROVES it dominates that quantity, the direction
+it rounds, and what it does when that enclosure is underivable.** §5, §8 and
+§12 name these terms; this table is what states their conditions, and none of
+those sections restates one.
 
-| Term | The quantity it bounds | Certified source | Rounding direction | Refusal |
-|---|---|---|---|---|
-| **`placeAllow`** | a LENGTH: the world-space displacement of one held vertex from the point the composed rigid motion denotes for it | `bounds.go`'s `rigidRoundAllow`, read at the pre-transform lifted point's own magnitude and the composed translation's magnitude — never at the result's, since that is where a general rigid motion's rounding is actually committed | outward, inside `rigidRoundAllow`'s own rounding | exactly zero when the accumulated motion is `r3.Identity()`, decided by exact struct comparison and never by a tolerance. A lifted or placed coordinate past the float64 range is Table S row **S13**, not a published bound |
-| **`stationRound`** | a LENGTH: the world-space displacement of one held circular-walk station from the certified interval enclosing the point the record denotes for it | `extrude.go`'s `circularWalkEndBound` over `moments.go`'s `circularEndpointInterval` — a `CircleSeg`'s exact rational turn through `quarterTurnSinCos` / `turnSinCosInterval`, an `ArcSeg`'s `ratSqrtDown` / `ratSqrtUp` radius and `atan2Interval` swept angle — carried into world space by `bounds.go`'s `walkEndBoundAllow` | outward at every step: `intervalFloatError` takes the wider side of the enclosure, `walkEndBoundAllow` widens the wider plane-local component through `radius3D`, and the accumulation over stations rounds up in `absSumUpper` | `+Inf` wherever the record cannot state the enclosure, refused `ErrUnsupported` at Table S row **S14**. Exactly zero only at the two pinned station kinds below |
-| **`delta`** | a LENGTH: the world-space displacement of one held vertex from the point the record and the motion together denote for it | `absSumUpper(stationRound, placeAllow)` — the two rows above and no third mechanism | outward, in `absSumUpper` | inherits both rows'. Zero exactly when both terms are zero: an unplaced pairing whose every station is either a `LineSeg` endpoint or one of the two pinned circular kinds below |
-| **per-cell sagitta `s_k`** | a LENGTH: the in-section-plane distance from one chord to the recorded curve piece it chords, on side `k` of one chord cell | `2·r·sin²(Δθ/4m)` evaluated over side `k`'s own enclosures — the RADIUS enclosure (`ratSqrtDown` / `ratSqrtUp` of the exact squared `Start`-to-`Center` distance for an `ArcSeg`; the recorded `Radius` converted to millimetres, exactly rational, for a `CircleSeg`) and the SWEEP enclosure (`atan2Interval`'s difference under the same `+2π` branch correction `circularLengthInterval` applies for an `ArcSeg`; the exact rational turn `2π·(TEnd − TStart)` for a `CircleSeg`), with `radSinCosSpan` supplying the sine of the enclosed angle | interval arithmetic to the last step, then ONE outward rounding of the interval's upper end into the published float | `+Inf` wherever an enclosure has no derivation — the `In(units.Millimeter)` conversion, `floatRat`, `ratSqrtUp` or `radSinCosSpan` answering no — refused `ErrUnsupported` at Table S row **S14** |
-| **`sectionDelta`** | a LENGTH: the largest single `s_k` over every chord cell and both sides of the whole build, a MAXIMUM and never a sum | the row above | none of its own — a maximum of values already rounded outward is already an over-statement | inherits the row above's `+Inf` and its **S14**. Exactly zero when every paired segment is a `LineSeg` |
-| **`cellRuledExcessUpper`** | an AREA: the area between the two flat chord facets this construction builds over one chord cell and the curved ruled surface between the two recorded curve pieces that cell approximates. A length excess is a different quantity and never stands in for it | `rulingUpper * ((arc0 − L0) + (arc1 − L1))`, each `arc_k − L_k` being `r·Δθ − 2r·sin(Δθ/2)` over the SAME radius and sweep enclosures the sagitta row names, and `rulingUpper` the larger of the cell's two held rung lengths widened by `s0 + s1` | outward: the arc-minus-chord difference is evaluated in that same interval arithmetic and rounded out once, each rung length's own square root by `ratSqrtUp`, and the product by `productUpper` | inherits the sagitta row's `+Inf` and its **S14**; a rung enclosure that runs past `MaxFloat64` is likewise `+Inf` and **S14**, never a finite substitute |
-| **`Bounds.Bound`** | a LENGTH: the radius by which the axis-aligned box the payload holds may fall short of the box the true recorded boundary occupies | `absSumUpper(delta, sectionDelta)` — the two published terms above, summed | outward, in `absSumUpper` | inherits both rows'. `Bounds` is `Exact` only where that sum is exactly zero (§8) |
+| Term | The quantity it bounds | Certified source | Derivation | Rounding direction | Refusal |
+|---|---|---|---|---|---|
+| **`placeAllow`** | a LENGTH: the world-space displacement of one held vertex from the point the composed rigid motion denotes for it | `bounds.go`'s `rigidRoundAllow`, read at the pre-transform lifted point's own magnitude and the composed translation's magnitude — never at the result's, since that is where a general rigid motion's rounding is actually committed | `rigidRoundAllow`'s own doc comment (`bounds.go`), which derives a rigid motion's committed rounding at those pre-transform magnitudes; this document proves nothing of its own here | outward, inside `rigidRoundAllow`'s own rounding | exactly zero when the accumulated motion is `r3.Identity()`, decided by exact struct comparison and never by a tolerance. A lifted or placed coordinate past the float64 range is Table S row **S13**, not a published bound |
+| **`stationRound`** | a LENGTH: the world-space displacement of one held circular-walk station from the certified interval enclosing the point the record denotes for it | `extrude.go`'s `circularWalkEndBound` over `moments.go`'s `circularEndpointInterval` — a `CircleSeg`'s exact rational turn through `quarterTurnSinCos` / `turnSinCosInterval`, an `ArcSeg`'s `ratSqrtDown` / `ratSqrtUp` radius and `atan2Interval` swept angle — carried into world space by `bounds.go`'s `walkEndBoundAllow` | this section's closing paragraph: the held station and the point the record denotes both lie in the plane-local enclosure `circularWalkEndBound` reports, so their gap is at most that enclosure's own width, which `walkEndBoundAllow` carries through the payload's ORTHONORMAL frame without growing it | outward at every step: `intervalFloatError` takes the wider side of the enclosure, `walkEndBoundAllow` widens the wider plane-local component through `radius3D`, and the accumulation over stations rounds up in `absSumUpper` | `+Inf` wherever the record cannot state the enclosure, refused `ErrUnsupported` at Table S row **S14**. Exactly zero only at the two pinned station kinds below |
+| **`delta`** | a LENGTH: the world-space displacement of one held vertex from the point the record and the motion together denote for it | `absSumUpper(stationRound, placeAllow)` — the two rows above and no third mechanism | the triangle inequality over the two rows above: the two displacements are committed at independent stages — the station is computed, then the motion is applied — so the vertex's total departure is at most their sum | outward, in `absSumUpper` | inherits both rows'. Zero exactly when both terms are zero: an unplaced pairing whose every station is either a `LineSeg` endpoint or one of the two pinned circular kinds below |
+| **per-cell sagitta `s_k`** | a LENGTH: the in-section-plane distance from one chord to the recorded curve piece it chords, on side `k` of one chord cell | `2·r·sin²(Δθ/4m)` evaluated over side `k`'s own enclosures — the RADIUS enclosure (`ratSqrtDown` / `ratSqrtUp` of the exact squared `Start`-to-`Center` distance for an `ArcSeg`; the recorded `Radius` converted to millimetres, exactly rational, for a `CircleSeg`) and the SWEEP enclosure (`atan2Interval`'s difference under the same `+2π` branch correction `circularLengthInterval` applies for an `ArcSeg`; the exact rational turn `2π·(TEnd − TStart)` for a `CircleSeg`), with `radSinCosSpan` supplying the sine of the enclosed angle | elementary and stated here: a circular arc's distance from its own chord is `r·(1 − cos(half the cell's sweep))`, taken at the cell's midpoint where the two are farthest apart, and `1 − cos x = 2·sin²(x/2)` turns that into the form the row publishes | interval arithmetic to the last step, then ONE outward rounding of the interval's upper end into the published float | `+Inf` wherever an enclosure has no derivation — the `In(units.Millimeter)` conversion, `floatRat`, `ratSqrtUp` or `radSinCosSpan` answering no — refused `ErrUnsupported` at Table S row **S14** |
+| **`sectionDelta`** | a LENGTH: the largest single `s_k` over every chord cell and both sides of the whole build, a MAXIMUM and never a sum | the row above | this section's maximum-not-a-sum paragraph: a boundary point lies in exactly one cell, so no point is displaced by two cells' sagittae | none of its own — a maximum of values already rounded outward is already an over-statement | inherits the row above's `+Inf` and its **S14**. Exactly zero when every paired segment is a `LineSeg` |
+| **`cellRuledExcessUpper`** | an AREA: the area between the two flat chord facets this construction builds over one chord cell and the curved ruled surface between the two recorded curve pieces that cell approximates. A length excess is a different quantity and never stands in for it | two arms, selected by the pair's own recorded pose (§8.1). A COAXIAL CONCENTRIC angle-for-angle pair takes the EXACT arm `(arc0 + arc1)/2 · rung − (L0 + L1)/2 · bandHeight`; every other admitted pair takes the GENERAL arm `rulingUpper·((d0 + d1)/2 + twistUpper/3) + (L0 + L1)·(L0 + L1 + d0 + d1)/6`. Both read the arc, chord, rung, radius and sweep enclosures the sagitta row names, and §8.1 defines each factor | **§8.1**, which proves each arm dominates the AREA difference — both areas written as one integral over one shared parameter square, then the exact cone-band difference on the first arm and a four-step outward enclosure on the second | outward: every factor is evaluated in that same interval arithmetic, each square root by `ratSqrtUp`, each product by `productUpper`, and the assembled term rounded out once | inherits the sagitta row's `+Inf` and its **S14**; a rung, chord or twist enclosure that runs past `MaxFloat64` is likewise `+Inf` and **S14**, never a finite substitute |
+| **`Bounds.Bound`** | a LENGTH: the radius by which the axis-aligned box the payload holds may fall short of the box the true recorded boundary occupies | `absSumUpper(delta, sectionDelta)` — the two published terms above, summed | §8's `Bounds` paragraph: the recorded boundary can exceed the held box both by a held vertex's own displacement and by the recorded curve's bulge outside the station polygon, and the two act on the same face of the box, so the shortfall is at most their sum | outward, in `absSumUpper` | inherits both rows'. `Bounds` is `Exact` only where that sum is exactly zero (§8) |
 
-**Three rules govern every row, and they are stated here once.**
+**Four rules govern every row, and they are stated here once.**
 
 - **A term names the quantity it bounds, and never stands in for a quantity
   of another dimension.** A length excess is not an area (§8's `Area` term),
   and a boundary displacement is not a point motion (`sectionDelta` and
   `delta` below).
+- **Every row cites a DERIVATION a reader can check, and a term whose
+  derivation is not written is not a proven bound.** The `Certified source`
+  column states where a term's inputs come from and the `Rounding direction`
+  column states which way they are rounded; neither can state WHY the
+  published value dominates the quantity the row names, so a term of the
+  wrong functional form satisfies both columns while bounding nothing. The
+  `Derivation` column closes that gap: it names the site that proves the
+  domination — this document's own derivation, or the source helper whose
+  doc comment owns it — and a term with no such site is not published at
+  all. It answers `+Inf` and the build refuses at Table S row **S14**,
+  exactly as an underivable enclosure does. Extending this table means
+  writing the new row's derivation, never only its source.
 - **Every term is evaluated over the certified source its row names and
   rounded OUTWARD**, so what it publishes over-states the true displacement
   in the direction its consumer needs. No term is read off a held float the
@@ -903,45 +934,12 @@ chord cell and the curved ruled surface between the two recorded curve pieces
 that cell approximates.** An arc-minus-chord LENGTH excess is not that
 quantity and never stands in for it — it carries one length dimension too few
 to sit in an `Area` sum at all. `bounds.go`'s `cellRuledExcessUpper` (§14) is
-the one owner of the term; §5.2's table states its certified source, its
-rounding direction and its refusal, and this section states only the form it
-takes — a length excess multiplied by a ruling length, per cell:
-
-```text
-cellRuledExcessUpper = rulingUpper * ((arc0 - L0) + (arc1 - L1))
-```
-
-- `arc_k - L_k` is side `k`'s own arc-minus-chord length excess over that
-  cell: `r·Δθ − 2r·sin(Δθ/2)` over side `k`'s own certified RADIUS and SWEEP
-  ENCLOSURES — the pair §5.2's table names, with `Δθ` that side's enclosed
-  sweep divided by the shared station count `m` (§5.1). **Neither an
-  `ArcSeg` nor a `CircleSeg` records the two quantities this form reads**: an
-  `ArcSeg` records `Start`, `End` and `Center` and no radius or angle at all,
-  and a `CircleSeg` records a radius and a parameter range but no swept
-  angle, so both are read from the enclosures the table names and never from
-  a held `math.Hypot` or `math.Atan2` value. It is a closed form of the
-  record's own enclosed data rather than an asymptotic estimate, it is
-  non-negative because a chord is the shortest path between its own two
-  endpoints, and its final rounding is outward, so what the term carries is
-  an upper bound and not a leading-term approximation to one.
-- `rulingUpper` is the stated upper bound on that cell's own RULING LENGTH —
-  the distance across the two sections that one ruling of the cell spans. It
-  is the larger of the cell's two rung edge lengths `|V_j - W_j|` and
-  `|V_{j+1} - W_{j+1}|` (§5's rung edges, both held edges of the built body),
-  widened by the two sides' certified sagittae `s0 + s1` (§5.2). A ruling joins
-  the point at parameter `t` on side 0's recorded curve piece to the point at
-  the same `t` on side 1's; each of those two points sits within its own
-  side's certified sagitta (§5.2) of the chord point at that `t`, and the
-  chord-to-chord distance at any `t` is the norm of a convex combination of
-  the cell's two rung vectors, hence at most the larger of their two lengths.
-  Each rung length is a square root, so it enters through `ratSqrtUp` of the
-  exact rational squared length, never a held float64 length.
-
-Charging BOTH sides' length excesses against that one ruling bound, rather
-than their mean, is deliberate slack in the outward direction. The bound is
-per cell and is never fit against a particular curve. The two caps carry no
-such term: their own contribution is the assembled chord polygon's exact
-rational shoelace area (above), not a bound on a curved region.
+the one owner of the term, summed over every chord cell of the build; §5.2's
+table states its certified source, its rounding direction and its refusal,
+and **§8.1 states the two forms it takes and proves each dominates that area
+difference**. The two caps carry no such term: their own contribution is the
+assembled chord polygon's exact rational shoelace area (above), not a bound
+on a curved region.
 
 **`Bounds` is Exact only when BOTH the payload's displacement `delta` and its
 section displacement `sectionDelta` (§5.2) are zero.** Every vertex is
@@ -987,6 +985,183 @@ rule reads `delta` rather than the mechanism** — so an unplaced chorded body
 whose stations are computed publishes no Exact position either. This
 document introduces no new per-accessor rule beyond what §8 already derives
 for the body-level quantities.
+
+### 8.1 The per-cell ruled excess — two arms, each derived
+
+**`cellRuledExcessUpper` bounds the AREA difference between two surfaces over
+one chord cell, and this section derives it.** The two surfaces are:
+
+- the CURVED cell — the ruled surface between the two recorded curve pieces,
+  `R(t,u) = (1-u)*c0(t) + u*c1(t)` with `t` and `u` each in `[0,1]`, where
+  `c_k(t)` is side `k`'s own recorded curve piece over that cell and the
+  correspondence pairs equal `t`. Its area is the integral of
+  `norm(R_t × R_u)` over that unit square;
+- the BUILT pair — the two flat triangles §5's table assembles, taken as the
+  map `Φ` that is AFFINE on each half of the same unit square split along the
+  diagonal `u = t`, which is §5's own diagonal: the lower half `u <= t`
+  carries `V_j, V_{j+1}, W_{j+1}` and the upper half `u >= t` carries
+  `V_j, W_{j+1}, W_j`. An affine map's own `Φ_t × Φ_u` is constant and each
+  half has domain area `1/2`, so the same integral over a half is exactly
+  that triangle's area.
+
+Writing both areas as one integral of the same quantity over one shared
+domain is what makes them subtractable at all, and it is why this derivation
+compares the curved cell against the TWO TRIANGLES and never against the
+bilinear patch over the two chords. Those two are not interchangeable: where
+the correspondence twists, the built pair carries MORE area than the curved
+cell it chords, by a per-cell amount that falls only as fast as the cell's
+own sweep, so a derivation taken against that patch would leave the direction
+the triangles actually depart in unbounded.
+
+**Arm 1 — the EXACT arm, for a coaxial concentric angle-for-angle pair.** The
+arm is selected from the two records alone, beside §4's other record-only
+gates, and every test in it is exact:
+
+- the two section planes are PARALLEL: `U0 × V0` and `U1 × V1` are parallel,
+  a cross product of recorded coordinates taken over the rationals;
+- the pair is COAXIAL AND CONCENTRIC: the two recorded centres lift to points
+  whose displacement lies along that common normal;
+- the correspondence is ANGLE-FOR-ANGLE: the two sides walk the same sense
+  and their stations share every angle. For an `ArcSeg` pair, the lifted
+  `Start - Center` and `End - Center` rays of the two sides are positively
+  parallel; for a `CircleSeg` pair, the two planes' `U` axes lift to the same
+  direction — a circular walk measures its own angle from `U` (`extrude.go`)
+  — and `TStart`, `TEnd` and `CCW` are equal.
+
+A pair that passes every test takes this arm; a pair that fails any of them
+takes arm 2. No test admits on a residual: each is a parallelism, a sign or
+an equality over recorded coordinates, so each is decided outright or the arm
+is not taken.
+
+Under those conditions each cell is a band of one cone — a cylinder where the
+radii agree — swept through the pair's shared per-cell angle `θ` at radii
+`r0` and `r1`, and two elementary facts give the difference in closed form.
+
+FIRST, the cell's quad is PLANAR, so the built pair is a flat trapezoid and
+carries no twist at all: with the shared axis as `z`, the identity
+`r0·(W_{j+1} − V_j) = r1·(V_{j+1} − V_j) + r0·(W_j − V_j)` holds coordinate
+by coordinate, which puts the fourth corner in the plane of the other three.
+Its
+two parallel sides are the cell's two chords `L0` and `L1` — each chord is
+its own radius times the same `(cos θ - 1, sin θ, 0)` — and its height is the
+perpendicular distance between those two chords' lines: the chord direction
+is `(-sin(θ/2), cos(θ/2), 0)` and the rung is `(dr, 0, h)` for
+`dr = r1 − r0` and `h` the plane separation, so that distance is
+`bandHeight = sqrt(rung² − dr²·sin²(θ/2))`, with `rung = sqrt(dr² + h²)`
+the length both of the cell's rungs share here.
+
+SECOND, the curved cell is the band of that same cone over the same `θ`,
+whose lateral area is `(r0 + r1)/2 · θ · rung` — the standard cone-band area,
+with `rung` its own slant.
+
+So the difference is exact, and it is what this arm publishes:
+
+```text
+cellRuledExcessUpper = (arc0 + arc1)/2 * rung - (L0 + L1)/2 * bandHeight
+```
+
+with `arc_k = r_k·θ` and `L_k = 2·r_k·sin(θ/2)` the same enclosed arc and
+chord lengths §5.2's sagitta row reads. It is NON-NEGATIVE, since
+`θ >= 2·sin(θ/2)` and `rung >= bandHeight`, so a cone band never carries less
+area than the trapezoid inscribed in it. It is EXACT rather than an
+over-statement: both areas it differences are closed forms of the same
+enclosed data, so the only rounding is §5.2's one outward rounding of the
+assembled interval.
+
+**Arm 2 — the GENERAL arm, for every other admitted pair.** Where the planes
+are not parallel, the centres are not on one normal, or the correspondence is
+not angle-for-angle, the curved cell is not a cone band and has no elementary
+closed-form area. The term is then a proven outward enclosure of the same
+difference:
+
+```text
+cellRuledExcessUpper = rulingUpper * ((d0 + d1)/2 + twistUpper/3)
+                     + (L0 + L1) * (L0 + L1 + d0 + d1)/6
+```
+
+Four steps derive it, each checkable on its own.
+
+1. Both areas are integrals of a norm over the same unit square, so their
+   difference is at most the integral of `norm(R_t × R_u − Φ_t × Φ_u)` — the
+   reverse triangle inequality taken under the integral sign. This is the
+   step that makes the enclosure TWO-SIDED: it bounds the built pair's excess
+   over the curved cell as well as the curved cell's over the built pair.
+2. `a × b − c × d = (a − c) × b + c × (b − d)`, so that integrand is at most
+   `norm(R_t − Φ_t)·norm(R_u) + norm(Φ_t)·norm(R_u − Φ_u)`. This step is
+   where one order in the cell's sweep is spent: a side's velocity departs
+   from its own chord in both directions and those departures cancel in the
+   true difference, a cancellation no norm keeps.
+3. Each of the four factors is bounded over the cell's own enclosed data.
+   Write `Δ_k` for side `k`'s chord VECTOR, `L_k` for its length, `d_k` for
+   the largest gap between side `k`'s own velocity `c_k'(t)` and that chord
+   vector, and `twistUpper` for an outward enclosure of `norm(Δ1 − Δ0)`. On
+   the lower half `Φ_t = Δ0` and `Φ_u` is the cell's FAR rung; on the upper
+   half `Φ_t = Δ1` and `Φ_u` is its NEAR rung. Then
+   - `norm(R_u) <= rulingUpper`, the ruling bound below;
+   - `norm(Φ_t)` is `L0` on the lower half and `L1` on the upper;
+   - `norm(R_t − Φ_t) <= (1−u)·d0 + u·(d1 + twistUpper)` on the lower half,
+     and `(1−u)·(d0 + twistUpper) + u·d1` on the upper, because `R_t` is that
+     same convex combination of the two sides' velocities, each velocity is
+     within `d_k` of its OWN chord vector, and the two chord vectors differ
+     by `Δ1 − Δ0`;
+   - `norm(R_u − Φ_u) <= (1−t)·(L0 + d0 + L1 + d1)` on the lower half, and
+     `t·(L0 + d0 + L1 + d1)` on the upper, because each side's own point
+     travels at speed at most `L_k + d_k` and `Φ_u` is that half's own corner
+     ruling.
+4. Integrating those over the two halves — `1/6` for `u`, `1/3` for `1−u`
+   and `1/6` for `1−t` over `u <= t`, with the mirrored values over `u >= t` —
+   and adding the two halves gives the two lines above.
+
+`d_k` has its own closed bound for a circular side, and that bound is proven
+rather than expanded. `norm(c_k'(t) − Δ_k)²` is largest at either end of the
+cell, where it is `r_k²·(Δθ² + 2 − 2·cos Δθ − 2·Δθ·sin Δθ)`, so
+`d_k <= r_k·Δθ²/2` follows from `g(x) = x⁴/4 − x² − 2 + 2·cos x + 2·x·sin x`
+having `g(0) = 0` and `g'(x) = x·(x² − 2 + 2·cos x) >= 0` for `x >= 0`, that
+bracket being non-negative because `2 − 2·cos x = 4·sin²(x/2) <= x²`. `Δθ` is
+that side's enclosed sweep divided by the shared station count `m` (§5.1) and
+`r_k` its enclosed radius — the same pair §5.2's sagitta row reads.
+
+`rulingUpper` is the stated upper bound on that cell's own RULING LENGTH —
+the distance across the two sections that one ruling of the cell spans. It is
+the larger of the cell's two rung edge lengths (§5's rung edges, both held
+edges of the built body), widened by the two sides' certified sagittae
+`s0 + s1` (§5.2). A ruling joins the point at parameter `t` on side 0's
+recorded curve piece to the point at the same `t` on side 1's; each of those
+two points sits within its own side's certified sagitta (§5.2) of the chord
+point at that `t`, and the chord-to-chord distance at any `t` is the norm of
+a convex combination of the cell's two rung vectors, hence at most the larger
+of their two lengths. Each rung length is a square root, so it enters through
+`ratSqrtUp` of the exact rational squared length, never a held float64
+length; `twistUpper` and each `L_k` enter the same way, from the exact
+rational squared length of a difference of held station points.
+
+**Neither an `ArcSeg` nor a `CircleSeg` records the radius and swept angle
+either arm reads**: an `ArcSeg` records `Start`, `End` and `Center` and no
+radius or angle at all, and a `CircleSeg` records a radius and a parameter
+range but no swept angle. Both are read from the enclosures §5.2's table
+names and never from a held `math.Hypot` or `math.Atan2` value, so what each
+arm carries is a closed form of the record's own enclosed data rather than an
+asymptotic estimate of one.
+
+**The general arm costs one order in the cell's own sweep, and on a twisted
+correspondence it costs more than that.** This design states that consequence
+here rather than leaving it to be found downstream. The exact arm's per-cell
+excess falls as the CUBE of the cell's sweep, so a whole build's excess falls
+as the square of its station count. The general arm's first two terms fall as
+the SQUARE, so their total falls as the station count itself; its
+`twistUpper` term falls only as the sweep, so on a pair whose two chords do
+not agree the whole build's excess does not fall with the station count at
+all. That last part is not slack in the bound but the built body's own
+behaviour: where the correspondence twists, a cell's two flat triangles are
+tilted against the ruled surface they chord and carry more area than it does,
+by an amount refinement does not remove. So a body the general arm covers can
+read `Suspect` at the default tolerance whatever its station count, where a
+coaxial one reads `Sound` (`docs/verification-design.md` §2) — a correct,
+non-silent outcome, and the same trade §14 already accepts for a tolerance
+tighter than the default. §14's calibration is measured on two coaxial
+concentric pairs — the arc wedge paired with itself, and the full-circle
+frustum (§13) — so both take the exact arm, and the margins §14 states are
+the exact arm's.
 
 ## 9. Table D — downstream
 
@@ -1074,7 +1249,7 @@ global evaluator increment.
 | 1 | `OpLoft` wire/recipe plumbing (`LoftOpts` codec, `Op` token, `Step.Profile`/`Plane` reuse), Table P pairing + Table S gates S1–S5/S9–S11, the flat-triangle wall construction (§5), the crossing audit (§6, Table S S6–S8), `Document.Loft` / `LoftContext`, `Volume` / `Centroid` (§8's rational accumulator) / `Area` / `Bounds`, `Verify` (D6: the structural audit and the tolerance gate over all four) | same-kind `CircleSeg`/`ArcSeg` correspondence; N-section/guide-rail/centerline loft; `Placed`/`Duplicate`/`PlacedCopy`; reversed correspondence; surveys, clearance, interference beyond box-disjoint |
 | 2a | `Placed` / `Duplicate` / `PlacedCopy` (D7): the payload's own proven displacement term `delta` (§5), composed into every vertex, edge length, face area, and all four body measurements; Table S gains S12 and S13 | D1/D2 (`Tessellate`/`STL`/`OBJ`, mesh-boolean admission); D3/D4's analytic-kernel case; D5 |
 | 2b | `Tessellate` / `STL` / `OBJ` (D1), mesh-boolean admission (D2) | D3/D4's analytic-kernel case, D5 |
-| 3 | same-kind `CircleSeg`/`ArcSeg` correspondence (§1): the chord-chain construction and its shared station generator (§5.1), the certified per-cell sagitta and `sectionDelta` it publishes plus the `stationRound` term `delta` gains (§5.2), all composed into `Volume`/`Centroid`/`Area`/`Bounds`, Table S gates S14–S16 and S7's structural walk-sense arm (P5) | free-form and mixed-kind correspondence (§1); N-section and guide-rail/centerline lofts; a loft case in `clearance_geom.go`; a non-constant-cross-section wall survey kernel |
+| 3 | same-kind `CircleSeg`/`ArcSeg` correspondence (§1): the chord-chain construction and its shared station generator (§5.1), every term §5.2's table lists that a chorded build reaches — the certified per-cell sagitta and the `sectionDelta` it publishes, the `stationRound` term `delta` gains, and the per-cell ruled excess with the record-only test that selects its arm (§8.1) — all composed into `Volume`/`Centroid`/`Area`/`Bounds`, Table S gates S14–S16 and S7's structural walk-sense arm (P5) | free-form and mixed-kind correspondence (§1); N-section and guide-rail/centerline lofts; a loft case in `clearance_geom.go`; a non-constant-cross-section wall survey kernel |
 | 4 (reach, not committed by this document) | N-section and guide-rail/centerline lofts, a loft case in `clearance_geom.go`, a non-constant-cross-section wall survey kernel | — |
 
 **The four measurements land with the operation, never after it.** A `Body`
@@ -1265,9 +1440,11 @@ against this budget.
   `chordCount`'s value verbatim would publish a bound smaller than the
   displacement it claims to bound and fails here. A paired `CircleSeg` loop builds a full-circle-to-full-circle
   frustum whose volume encloses the closed-form frustum volume at
-  `chordCount`'s closed-walk floor of three stations; its alignment offset is
-  forced to `0` (§1), and a nonzero `WithLoftAlignment` entry for that loop is
-  S4. A fixture sized past the station cap → S15 (`errTooManyChords`),
+  `chordCount`'s closed-walk floor of three CYCLIC stations a side, walled by
+  the three cells §5.1's closed rule pairs from them — a fourth station, or a
+  closing cell between one station and itself, fails it; its alignment offset
+  is forced to `0` (§1), and a nonzero `WithLoftAlignment` entry for that
+  loop is S4. A fixture sized past the station cap → S15 (`errTooManyChords`),
   asserted to fire BEFORE S8 on a construction that would otherwise reach the
   audit ceiling. A synthetic pair whose two sides are forced to different
   station parities at one cell → S16. A recorded pair whose station enclosure
@@ -1279,8 +1456,19 @@ against this budget.
   RULED-EXCESS rung enclosure runs past `MaxFloat64` each refuse S14 too,
   each asserted to refuse rather than fall back on a finite estimate. `Area.Bound` on a chorded body ENCLOSES
   `|held - true|` against a high-precision reference for the true ruled
-  surface between the two recorded curves, so §8's per-cell ruled-excess term
-  is asserted in the outward direction rather than merely present.
+  surface between the two recorded curves, so §8.1's per-cell ruled-excess
+  term is asserted in the outward direction rather than merely present.
+  **Both of §8.1's arms are fixtured, each on a pair that separates it.** The
+  EXACT arm takes a coaxial concentric pair whose radius DIFFERENCE exceeds
+  its plane separation — a shallow wide frustum band, where the excess is
+  governed by the ruling's own radius-changing component and not by either
+  side's arc-minus-chord length — and the fixture encloses `|held - true|`
+  against the closed-form cone-band area over `math/big.Rat`. The GENERAL arm
+  takes a TWISTED pair, two full circles on parallel planes whose recorded
+  angular origins differ, where the flat facet pair carries MORE area than
+  the curved band it chords: that fixture asserts the enclosure in BOTH
+  directions, which a one-sided term fails, and asserts it again at a higher
+  station count, where the twisted excess does not fall (§8.1).
   `Bounds` widened by its own `Bound`
   (`absSumUpper(delta, sectionDelta)`) CONTAINS a dense sample of both true
   recorded arcs lifted through their planes — a box that did not widen fails
@@ -1405,7 +1593,10 @@ and the margin it reaches there is a reading this document does not state.
 this design accepts that rather than widen either.** A 4x margin needs 128
 stations, whose build measures about 4.3 seconds; the fixture wall-clock
 budget §13 states caps that build at 2 seconds, which the 64-station build
-meets at about 1.4 seconds. The fixed 64-station constant is what ships. An
+meets at about 1.4 seconds. What ships is the chord-target fraction that
+64-station run implies — `loftChordFraction`, a dimensionless number and not
+a station count, whose own count is whatever each build's walk-up settles on
+(65 on this fixture, above). An
 arc loft at an aspect ratio more extreme than the reference fixture, judged
 at a tolerance tighter than the default, can read `Suspect` rather than
 `Sound` — a correct, non-silent outcome under a tight enough tolerance, not
@@ -1424,11 +1615,11 @@ surface — the recorded curve a chord chain approximates. Their `areaUpper`
 obligation is discharged by `perturbedAreaUpper(verts, tris, sectionDelta)`
 plus a per-wall-cell `cellRuledExcessUpper` term, because containment inside
 a thin neighbourhood of the chord facets does not, on its own, bound a
-surface's area: the arc-minus-chord ruled surface can carry more area than
-the flat facets it stays close to, so the excess needs its own term rather
-than following from proximity alone. `cellRuledExcessUpper` is the same
-per-cell helper §8's `Area` wall term reads, in the same length-excess-times-
-ruling-length form, and §8 states that form once for both consumers.
+surface's area: the ruled surface a chord chain approximates can carry more
+area than the flat facets it stays close to, so the excess needs its own term
+rather than following from proximity alone. `cellRuledExcessUpper` is the
+same per-cell helper §8's `Area` wall term reads, over the two-arm form §8.1
+derives once for both consumers.
 
 **`loftStationCap`'s value is this document's one open variable.** §5.1
 states the rule the cap obeys and everything an implementation needs to
@@ -1439,8 +1630,8 @@ constraints §5.1 already states: a build whose `Σstations` reaches the cap
 must assemble an `F` whose `F*(F-1)/2` is strictly below
 `maxFacetPairTestsPerCall` (§6), and the cap must leave room for every
 fixture §13 requires. Nothing else in this document reads the number: the
-reference fixture's 64 stations, and every other station count named here,
-are stated against the chord target above rather than against the cap.
+reference fixture's FORCED 64 stations, and every other station count named
+here, are stated against the chord target above rather than against the cap.
 
 Every other design variable this document depends on is resolved above. The
 reach items in §12's PR 4 row are future work, not open questions of this
