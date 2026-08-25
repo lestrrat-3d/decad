@@ -37,7 +37,7 @@ func addBoxFaces(m *loftMassAccumulator, a, b, c float64) {
 // power of two, so every intermediate rational is exactly representable in
 // float64 (docs/loft-design.md §8, required test).
 func TestLoftMassAccumulatorBoxIsExact(t *testing.T) {
-	m := newLoftMassAccumulator(r3.NewVec(0, 0, 0), 0)
+	m := newLoftMassAccumulator(r3.NewVec(0, 0, 0), 0, 0)
 	addBoxFaces(m, 2, 2, 2)
 
 	vol := m.volume(nil, nil)
@@ -64,7 +64,7 @@ func TestLoftMassAccumulatorBoxIsExact(t *testing.T) {
 // reproduces the exact volume and centroid, since every subtraction is
 // carried out over rationals (docs/loft-design.md §8's anchor discipline).
 func TestLoftMassAccumulatorBoxAnchoredElsewhereStillExact(t *testing.T) {
-	m := newLoftMassAccumulator(r3.NewVec(-4, 8, 0.5), 0)
+	m := newLoftMassAccumulator(r3.NewVec(-4, 8, 0.5), 0, 0)
 	addBoxFaces(m, 2, 2, 2)
 
 	vol := m.volume(nil, nil)
@@ -83,7 +83,7 @@ func TestLoftMassAccumulatorBoxAnchoredElsewhereStillExact(t *testing.T) {
 // represent exactly — Approximate, with the proven single-rounding bound
 // (docs/loft-design.md §8).
 func TestLoftMassAccumulatorVolumeApproximate(t *testing.T) {
-	m := newLoftMassAccumulator(r3.NewVec(0, 0, 0), 0)
+	m := newLoftMassAccumulator(r3.NewVec(0, 0, 0), 0, 0)
 	m.add(r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1), false)
 
 	vol := m.volume(nil, nil)
@@ -107,7 +107,7 @@ func TestLoftMassAccumulatorVolumeApproximate(t *testing.T) {
 // per-coordinate rounding, and Exact only when every coordinate rounds
 // exactly (docs/loft-design.md §8).
 func TestLoftMassAccumulatorCentroidApproximate(t *testing.T) {
-	m := newLoftMassAccumulator(r3.NewVec(0, 0, 0), 0)
+	m := newLoftMassAccumulator(r3.NewVec(0, 0, 0), 0, 0)
 	m.add(r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1), false)
 	m.add(r3.NewVec(1, 0, 0), r3.NewVec(-1, 2, 0), r3.NewVec(0, 0, 1), false)
 
@@ -144,7 +144,7 @@ func TestLoftMassAccumulatorCentroidApproximate(t *testing.T) {
 // volume has no centroid: two opposing tetrahedra of equal and opposite
 // signed volume cancel exactly.
 func TestLoftMassAccumulatorCentroidZeroVolumeDegenerate(t *testing.T) {
-	m := newLoftMassAccumulator(r3.NewVec(0, 0, 0), 0)
+	m := newLoftMassAccumulator(r3.NewVec(0, 0, 0), 0, 0)
 	m.add(r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0), r3.NewVec(0, 0, 1), false)
 	m.add(r3.NewVec(0, 1, 0), r3.NewVec(1, 0, 0), r3.NewVec(0, 0, 1), false) // reversed winding
 
@@ -159,7 +159,7 @@ func TestLoftMassAccumulatorCentroidZeroVolumeDegenerate(t *testing.T) {
 // merely asserting the bound is present (docs/loft-design.md §8, required
 // test).
 func TestLoftMassAccumulatorAreaApproximateBoundedByReference(t *testing.T) {
-	m := newLoftMassAccumulator(r3.NewVec(0, 0, 0), 0)
+	m := newLoftMassAccumulator(r3.NewVec(0, 0, 0), 0, 0)
 	m.add(r3.NewVec(0, 0, 0), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 1), true) // area sqrt(2)/2
 	m.add(r3.NewVec(0, 0, 0), r3.NewVec(2, 0, 0), r3.NewVec(0, 2, 3), true) // area sqrt(13)
 	capArea := big.NewRat(5, 3)
@@ -249,7 +249,7 @@ func TestLoftMassAccumulatorAreaBoundEnclosesTrueError(t *testing.T) {
 		{name: "large coordinates aspect 1e-6", tri: sliver(far, 8192, 1e-6)},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			m := newLoftMassAccumulator(r3.NewVec(0, 0, 0), 0)
+			m := newLoftMassAccumulator(r3.NewVec(0, 0, 0), 0, 0)
 			m.add(tc.tri[0], tc.tri[1], tc.tri[2], true)
 			area := m.area()
 
@@ -292,7 +292,7 @@ func TestLoftMassAccumulatorAreaBoundEnclosesSliverSum(t *testing.T) {
 	perp := r3.NewVec(-0.48, 0.36, 0.8)
 
 	const prec = 400
-	m := newLoftMassAccumulator(r3.NewVec(0, 0, 0), 0)
+	m := newLoftMassAccumulator(r3.NewVec(0, 0, 0), 0, 0)
 	ref := new(big.Float).SetPrec(prec)
 	for i := range 64 {
 		origin := r3.NewVec(100*float64(i), -25*float64(i), 3.5)
@@ -368,7 +368,7 @@ func TestLoftMassAccumulatorAreaBoundSurvivesSaturatedScale(t *testing.T) {
 		}
 	}
 
-	m := newLoftMassAccumulator(r3.NewVec(0, 0, 0), 0)
+	m := newLoftMassAccumulator(r3.NewVec(0, 0, 0), 0, 0)
 	addLoftWalls(m, corners(0), corners(lift))
 
 	// The fixture is only meaningful while it really does saturate the scale
@@ -481,7 +481,7 @@ func TestLoftMassAccumulatorAreaNeverExact(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			m := newLoftMassAccumulator(r3.NewVec(0, 0, 0), 0)
+			m := newLoftMassAccumulator(r3.NewVec(0, 0, 0), 0, 0)
 			tc.build(m)
 			area := m.area(tc.caps...)
 
@@ -503,7 +503,7 @@ func TestLoftMassAccumulatorAreaNeverExact(t *testing.T) {
 // TestLoftMassAccumulatorBoundsEmpty proves bounds reports false before any
 // triangle has been added.
 func TestLoftMassAccumulatorBoundsEmpty(t *testing.T) {
-	m := newLoftMassAccumulator(r3.NewVec(0, 0, 0), 0)
+	m := newLoftMassAccumulator(r3.NewVec(0, 0, 0), 0, 0)
 	_, ok := m.bounds()
 	require.False(t, ok)
 }

@@ -5,8 +5,26 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
+
+// mkCircleSeg builds a CircleSeg whose own walk (extrude.go's walkOf, the
+// CircleSeg branch: th0, th1 = 2*math.Pi*TStart, 2*math.Pi*TEnd) matches a
+// hand-built circularWalk(cu, cv, radius, th0, th1, ...) exactly — the
+// bridge these tests need now that loftCellStations/loftCircularCellStations
+// take the RAW recorded segment beside the resolved walk (S14,
+// a10-plan.md Part 3 PR 6).
+func mkCircleSeg(cu, cv, radius, th0, th1 float64) CircleSeg { //nolint:unparam // every fixture below happens to center on the origin; cu/cv stay general so a future fixture off-origin does not need this helper rewritten.
+	tStart, tEnd := th0/(2*math.Pi), th1/(2*math.Pi)
+	return CircleSeg{
+		Center: Point2{U: cu, V: cv},
+		Radius: units.Millimeters(radius),
+		CCW:    tStart < tEnd,
+		TStart: tStart,
+		TEnd:   tEnd,
+	}
+}
 
 // This file is a10-plan.md Part 3 PR 5's own test file: loftCellStations (the
 // station generator), loftCircularCellStations (the ARC arm), the S15 station
@@ -26,11 +44,12 @@ import (
 func TestLoftLineCellStationsIsUnchanged(t *testing.T) {
 	w0 := segmentWalk{kind: walkLine, startU: 1, startV: 2}
 	w1 := segmentWalk{kind: walkLine, startU: 3, startV: 4}
-	stations0, stations1, sagitta, err := loftCellStations(w0, w1, 123.0, nil, nil)
+	stations0, stations1, sagitta, stationRound, err := loftCellStations(nil, nil, w0, w1, 123.0, nil, nil)
 	require.NoError(t, err)
 	require.Equal(t, []Point2{{U: 1, V: 2}}, stations0)
 	require.Equal(t, []Point2{{U: 3, V: 4}}, stations1)
 	require.Zero(t, sagitta)
+	require.Zero(t, stationRound, "a LineSeg station is a recorded endpoint, never computed")
 }
 
 // --- loftCircularCellStations / the ARC arm: station count ---
@@ -127,6 +146,8 @@ func TestLoftChordCountShippedFractionOnReferenceWedge(t *testing.T) {
 func TestLoftCircularCellStationsSharedMTakesMax(t *testing.T) {
 	w0 := circularWalk(0, 0, 5, 0, math.Pi/2, 5, math.Pi/2) // radius 5, 90 degrees
 	w1 := circularWalk(0, 0, 2, 0, math.Pi/6, 2, math.Pi/6) // radius 2, 30 degrees
+	seg0 := mkCircleSeg(0, 0, 5, 0, math.Pi/2)
+	seg1 := mkCircleSeg(0, 0, 2, 0, math.Pi/6)
 	const target = 1e-3
 
 	m0, _, err := chordCount(w0, target)
@@ -136,7 +157,7 @@ func TestLoftCircularCellStationsSharedMTakesMax(t *testing.T) {
 	require.NotEqual(t, m0, m1, "the fixture must need different station counts on its two sides for this test to exercise the max rule")
 	want := max(m0, m1)
 
-	stations0, stations1, sagittaUpper, err := loftCircularCellStations(w0, w1, target)
+	stations0, stations1, sagittaUpper, _, err := loftCircularCellStations(seg0, seg1, w0, w1, target)
 	require.NoError(t, err)
 	require.Len(t, stations0, want)
 	require.Len(t, stations1, want)
@@ -215,7 +236,7 @@ func TestLoftCircularArcSagittaIsTheUniformParameterMatchedBound(t *testing.T) {
 func TestLoftCellStationsStationCapFiresBeforeAuditCeiling(t *testing.T) {
 	w0 := circularWalk(0, 0, 5, 0, math.Pi/2, 5, math.Pi/2)
 	w1 := circularWalk(0, 0, 5, 0, math.Pi/2, 5, math.Pi/2)
-	_, _, _, err := loftCellStations(w0, w1, 1e-12, nil, nil) //nolint:dogsled // only the error matters here.
+	_, _, _, _, err := loftCellStations(nil, nil, w0, w1, 1e-12, nil, nil) //nolint:dogsled // only the error matters here; the station cap fires before seg0/seg1 are ever read.
 	require.ErrorIs(t, err, errTooManyChords)
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.Contains(t, err.Error(), "more than 16384 chords")
@@ -235,7 +256,9 @@ func TestLoftCellStationsStationCapFiresBeforeAuditCeiling(t *testing.T) {
 func TestLoftCircularCellStationsRefusesOneSidedCollapse(t *testing.T) {
 	degenerate := circularWalk(0, 0, 0, 0, math.Pi/2, 0, math.Pi/2) // radius 0: every station is the same point
 	normal := circularWalk(0, 0, 5, 0, math.Pi/2, 5, math.Pi/2)
-	_, _, _, err := loftCircularCellStations(degenerate, normal, 1e-3) //nolint:dogsled // only the error matters here.
+	segDegenerate := mkCircleSeg(0, 0, 0, 0, math.Pi/2)
+	segNormal := mkCircleSeg(0, 0, 5, 0, math.Pi/2)
+	_, _, _, _, err := loftCircularCellStations(segDegenerate, segNormal, degenerate, normal, 1e-3) //nolint:dogsled // only the error matters here; S16 fires before stationRound is computed.
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.Contains(t, err.Error(), "collapses to one point on only one of the two sections")
 }
@@ -247,7 +270,9 @@ func TestLoftCircularCellStationsRefusesOneSidedCollapse(t *testing.T) {
 func TestLoftCircularCellStationsSymmetricCollapseIsFine(t *testing.T) {
 	w0 := circularWalk(0, 0, 0, 0, math.Pi/2, 0, math.Pi/2)
 	w1 := circularWalk(0, 0, 0, 0, math.Pi/2, 0, math.Pi/2)
-	stations0, stations1, sagitta, err := loftCircularCellStations(w0, w1, 1e-3)
+	seg0 := mkCircleSeg(0, 0, 0, 0, math.Pi/2)
+	seg1 := mkCircleSeg(0, 0, 0, 0, math.Pi/2)
+	stations0, stations1, sagitta, _, err := loftCircularCellStations(seg0, seg1, w0, w1, 1e-3)
 	require.NoError(t, err)
 	require.Len(t, stations0, 1)
 	require.Len(t, stations1, 1)
@@ -259,32 +284,34 @@ func TestLoftCircularCellStationsSymmetricCollapseIsFine(t *testing.T) {
 // TestLoftPairingsSectionDeltaIsMaxNotSum is the plan's own acceptance line:
 // a loop with two curved pairs of different curvature publishes sectionDelta
 // as the LARGER cell's own measured sagitta, never their sum — a boundary
-// point lies in exactly one cell. The two segment pairs are built directly on
-// hand-constructed walks (loftPairings only reads each loop's own Segments
-// SLICE LENGTH from p0, never their content, once walks are already
-// resolved), each independently proven to reach a DIFFERENT achieved
-// sagitta at the shared target so the max-versus-sum distinction is
-// observable.
+// point lies in exactly one cell. The two segment pairs are built on
+// hand-constructed walks paired with matching CircleSeg records (S14 now
+// reads the raw record beside the resolved walk), each independently proven
+// to reach a DIFFERENT achieved sagitta at the shared target so the
+// max-versus-sum distinction is observable.
 func TestLoftPairingsSectionDeltaIsMaxNotSum(t *testing.T) {
 	const target = 1e-3
 
 	wA0 := circularWalk(0, 0, 5, 0, math.Pi/2, 5, math.Pi/2)
 	wA1 := circularWalk(0, 0, 5, 0, math.Pi/2, 5, math.Pi/2)
-	_, _, sagA, err := loftCellStations(wA0, wA1, target, nil, nil)
+	segA0, segA1 := mkCircleSeg(0, 0, 5, 0, math.Pi/2), mkCircleSeg(0, 0, 5, 0, math.Pi/2)
+	_, _, sagA, _, err := loftCellStations(segA0, segA1, wA0, wA1, target, nil, nil) //nolint:dogsled // only sagA and err matter here.
 	require.NoError(t, err)
 
 	wB0 := circularWalk(0, 0, 1, 0, math.Pi/6, 1, math.Pi/6)
 	wB1 := circularWalk(0, 0, 1, 0, math.Pi/6, 1, math.Pi/6)
-	_, _, sagB, err := loftCellStations(wB0, wB1, target, nil, nil)
+	segB0, segB1 := mkCircleSeg(0, 0, 1, 0, math.Pi/6), mkCircleSeg(0, 0, 1, 0, math.Pi/6)
+	_, _, sagB, _, err := loftCellStations(segB0, segB1, wB0, wB1, target, nil, nil) //nolint:dogsled // only sagB and err matter here.
 	require.NoError(t, err)
 
 	require.NotEqual(t, sagA, sagB, "the two segment pairs must reach different sagittas for this test to distinguish max from sum")
 
-	p0 := ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{LineSeg{}, LineSeg{}}}}
+	p0 := ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{segA0, segB0}}}
+	p1 := ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{segA1, segB1}}}
 	walks0 := [][]segmentWalk{{wA0, wB0}}
 	walks1 := [][]segmentWalk{{wA1, wB1}}
 
-	pairs, sectionDelta, err := loftPairings(p0, []int{0}, walks0, walks1, target, nil, nil)
+	pairs, sectionDelta, _, err := loftPairings(p0, p1, []int{0}, walks0, walks1, target, nil, nil)
 	require.NoError(t, err)
 	require.NotEmpty(t, pairs)
 
@@ -303,7 +330,7 @@ func TestLoftPairingsLineSegOnlyStationChainUnchanged(t *testing.T) {
 	p := unitSquareProfile()
 	offsets := []int{0}
 	walks := resolveLoftLoopWalks(t, p)
-	pairs, sectionDelta, err := loftPairings(p, offsets, walks, walks, 999.0, nil, nil)
+	pairs, sectionDelta, stationRound, err := loftPairings(p, p, offsets, walks, walks, 999.0, nil, nil)
 	require.NoError(t, err)
 	require.Len(t, pairs, 1)
 	require.Len(t, pairs[0].v, 4)
@@ -313,6 +340,7 @@ func TestLoftPairingsLineSegOnlyStationChainUnchanged(t *testing.T) {
 		require.Equal(t, Point2{U: walks[0][j].startU, V: walks[0][j].startV}, pairs[0].w[j])
 	}
 	require.Zero(t, sectionDelta)
+	require.Zero(t, stationRound)
 }
 
 // --- loftChordTarget ---

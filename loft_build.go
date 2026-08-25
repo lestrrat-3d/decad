@@ -46,24 +46,28 @@ type loftPayload struct {
 	xform              r3.Transform
 
 	// delta is the proven displacement of every held vertex from the exact
-	// placed image of the recorded sections (docs/loft-design.md §5, §12 PR
-	// 2a): zero for an unplaced body — pl.xform == r3.Identity(), an exact
-	// struct comparison, never a tolerance — and otherwise
+	// point the record denotes for it (docs/loft-design.md §5, §12 PR 2a,
+	// a10-plan.md Part 3 PR 6): absSumUpper(stationRound, placeAllow).
+	// placeAllow is zero for an unplaced body — pl.xform == r3.Identity(), an
+	// exact struct comparison, never a tolerance — and otherwise
 	// bounds.go's rigidRoundAllow, read at the pre-transform lifted point's
-	// own magnitude and the composed translation's magnitude. Every
-	// measurement this payload publishes composes it.
+	// own magnitude and the composed translation's magnitude. stationRound is
+	// the rounding a COMPUTED circular station commits (an exact-rational
+	// trig enclosure rounded once into a Point2), zero for a LineSeg pairing
+	// (every station is a recorded endpoint) and positive for a curved
+	// pairing whenever a cell has an interior station — so delta is zero
+	// exactly when BOTH terms are, no longer merely when the body is
+	// unplaced. Every measurement this payload publishes composes it.
 	delta float64
 
 	// sectionDelta is the proven upper bound on how far any BUILT CHORD point
 	// of a wall cell sits from the recorded curve it chords, AS A SET — the
 	// curve's own sagitta, taken as a MAXIMUM over cells rather than a sum
-	// (docs/loft-design.md §5 — the chord-chain subsection lands with the
-	// arc design change). It is zero for every pairing this evaluator admits
-	// today — S3 admits only same-kind LineSeg pairs, and a straight wall's
-	// own chord IS the recorded segment, so there is no curve for it to
-	// depart from. A same-kind curved pairing (reach, not yet admitted) is
-	// the construction that will set it, to the sagitta its station
-	// chording commits.
+	// (docs/loft-design.md §5, a10-plan.md Part 3 PR 5/PR 6). It is zero for
+	// a LineSeg pairing — a straight wall's own chord IS the recorded
+	// segment, so there is no curve for it to depart from — and positive for
+	// a same-kind circular pairing, to the sagitta its station chording
+	// commits.
 	//
 	// It is NEVER delta and never stands in for it, the identical
 	// independence prismPayload's own sectionDelta/z0Delta pair states one
@@ -81,10 +85,9 @@ type loftPayload struct {
 	// the wall homotopy's own constant-arc-length parametrization). The two
 	// coincide only for a LINE (trivially, both zero) or an ARC under its own
 	// uniform-angle parametrization (bounds.go's own doc comment on
-	// cellChordCurveAreaUpper, F1). A future curved-pairing construction that
-	// sets this field to an arc's sagitta may pass that SAME value as
-	// matchedDeltaUpper only because of that proven coincidence, never as a
-	// general licence to conflate the two for any other curve kind.
+	// cellChordCurveAreaUpper, F1) — the coincidence loftCircularCellStations'
+	// own doc comment proves, and the ONLY reason evalLoft passes this same
+	// field's value as matchedDeltaUpper at every one of its own call sites.
 	sectionDelta float64
 
 	verts []r3.Vec
@@ -130,8 +133,8 @@ func (pl loftPayload) placed(ctx context.Context, d *Document, ref StepRef, comp
 //
 // Each segment is walked exactly ONCE, at the SAME point in the SAME
 // interleaved per-segment order this gate has always used — walk p0's
-// segment j, test S3, walk p1's segment k=(j+off)%n, test S3, then move to
-// j+1 — never batched a whole loop ahead of that order. walkOf is neither
+// segment j, walk p1's segment k=(j+off)%n, test S3 over the pair, then move
+// to j+1 — never batched a whole loop ahead of that order. walkOf is neither
 // memoized nor free to call twice (it charges the free-form work budget on
 // every call, extrude.go's own doc comment), so resolving here and never
 // again (loftPairings reads this function's own output) is what Task 1
@@ -141,6 +144,16 @@ func (pl loftPayload) placed(ctx context.Context, d *Document, ref StepRef, comp
 // walkOf itself cannot resolve at all (a malformed CircleSeg, say), a
 // combination sketch's own authentication never produces but a decoded
 // recipe can (docs/recipe-replay-design.md).
+//
+// S3's admission test is now a SAME-KIND test (a10-plan.md Part 3 PR 6): a
+// pair is admitted when both walks share the identical admitted kind —
+// walkLine or walkCircular — never merely because one side is a LineSeg.
+// Mixed-kind and free-form pairs keep today's refusal and today's sentinel
+// (loftSameKindGate). Testing only after BOTH sides are resolved (rather
+// than each side against its own kind test, as the LineSeg-only form did) is
+// unavoidable once the admitted set has two kinds, and it does not relax
+// PRECEDENCE: the first (i, j) whose pair fails is still the first refusal
+// reported, in the same walk order as before.
 func validateLoftRecords(p0, p1 ProfileRecord, pl0, pl1 PlaneRecord, alignment []int, work0, work1 *freeformWork) ([]int, [][]segmentWalk, [][]segmentWalk, error) {
 	if len(p0.Holes) != len(p1.Holes) {
 		return nil, nil, nil, fmt.Errorf(`%w: the two profiles have %d and %d holes; a loft has no positional pairing for a hole-count mismatch`,
@@ -185,21 +198,17 @@ func validateLoftRecords(p0, p1 ProfileRecord, pl0, pl1 PlaneRecord, alignment [
 			if err != nil {
 				return nil, nil, nil, err
 			}
-			if !w0.isLine() {
-				return nil, nil, nil, fmt.Errorf(`%w: loop %d segment %d of the first profile is not a LineSeg; this evaluator rules straight lines only`,
-					ErrUnsupported, i, j)
-			}
-			walks0[i][j] = w0
 
 			k := (j + off) % n
 			w1, err := walkOf(loops1[i].Segments[k], work1)
 			if err != nil {
 				return nil, nil, nil, err
 			}
-			if !w1.isLine() {
-				return nil, nil, nil, fmt.Errorf(`%w: loop %d segment %d of the second profile is not a LineSeg; this evaluator rules straight lines only`,
-					ErrUnsupported, i, k)
+
+			if err := loftSameKindGate(w0, w1, loops0[i].Segments[j], loops1[i].Segments[k], i, j, k); err != nil {
+				return nil, nil, nil, err
 			}
+			walks0[i][j] = w0
 			walks1[i][k] = w1
 		}
 	}
@@ -209,6 +218,40 @@ func validateLoftRecords(p0, p1 ProfileRecord, pl0, pl1 PlaneRecord, alignment [
 	}
 
 	return offsets, walks0, walks1, nil
+}
+
+// loftSameKindGate is docs/loft-design.md Table S row S3 and Table P row P5
+// in their arc form (a10-plan.md Part 3 PR 6): a pairing is admitted only
+// when both walks share the SAME admitted kind — walkLine or walkCircular —
+// so a mixed-kind or free-form pair still refuses under today's sentinel.
+//
+// Beside S3, a CHEAP STRUCTURAL gate rather than an expensive proof: two
+// paired CircleSegs whose own recorded CCW flags disagree walk in opposite
+// directions and would twist the station correspondence into a
+// self-crossing wall. §6's build-time audit would eventually catch the
+// resulting crossing as S7 (ErrDegenerate, loft_audit.go), but this test
+// runs before a single station or triangle is built, and its own sentinel
+// (ErrUnsupported) is what keeps the two refusals distinguishable — a
+// caller can tell "this evaluator does not admit the pairing" from "the
+// pairing self-crosses" without inspecting the message. Only a CircleSeg
+// carries an explicit CCW flag; an ArcSeg's sweep direction is fixed by its
+// own Start/End/Center definition (record.go), so it has nothing to
+// disagree with and this check is silently skipped for it.
+func loftSameKindGate(w0, w1 segmentWalk, seg0, seg1 CurveSegment, loop, j, k int) error {
+	if w0.kind != w1.kind || (w0.kind != walkLine && w0.kind != walkCircular) {
+		return fmt.Errorf(`%w: loop %d segment %d of the first profile and segment %d of the second are not the same admitted kind; this evaluator pairs same-kind LineSeg or circular segments only`,
+			ErrUnsupported, loop, j, k)
+	}
+	if w0.kind != walkCircular {
+		return nil
+	}
+	c0, ok0 := seg0.(CircleSeg)
+	c1, ok1 := seg1.(CircleSeg)
+	if ok0 && ok1 && c0.CCW != c1.CCW {
+		return fmt.Errorf(`%w: loop %d's paired CircleSeg at segment %d/%d walk in opposite directions; this evaluator refuses rather than twist the correspondence`,
+			ErrUnsupported, loop, j, k)
+	}
+	return nil
 }
 
 // loftPlanesCoincide decides S5 over exact rationals on the recorded U/V/
@@ -231,14 +274,24 @@ func loftPlanesCoincide(a, b PlaneRecord) bool {
 // loftLoopPair is Table P's correspondence for one loop: the two walk-ordered
 // STATION-chain lists, v from loop0's own segment order and w from loop1's,
 // already rotated by that loop's own alignment offset (P4). Each paired
-// segment contributes its own station count of entries — one per LineSeg
-// (today's only admitted kind) or the shared chord count a circular pair's
-// own generator settles on (a10-plan.md Part 3 PR 5) — and every list still
-// carries only each segment's OWN interior stations, never its shared end
-// point, exactly as the one-point-per-LineSeg convention already did: the
-// next segment's own first station (or the loop's wrap) supplies it.
+// segment contributes its own station count of entries — one per LineSeg or
+// the shared chord count a circular pair's own generator settles on
+// (loftCircularCellStations) — and every list still carries only each
+// segment's OWN interior stations, never its shared end point, exactly as
+// the one-point-per-LineSeg convention already did: the next segment's own
+// first station (or the loop's wrap) supplies it.
+//
+// arcUpperV/arcUpperW and circular are parallel to v/w, one entry per
+// station: arcUpperV[j]/arcUpperW[j] is that station's own OUTGOING cell's
+// per-side arc-length upper bound (perCellArcUpper), and circular[j] says
+// whether that station's own paired segment resolved to a circular walk.
+// computeLoftChordedAllow (loft_moments.go) reads all three to charge
+// docs/loft-design.md §5/§8's chorded volume/centroid/area terms only where
+// a genuine chord-to-curve departure exists, never on an exact LineSeg cell.
 type loftLoopPair struct {
-	v, w []Point2
+	v, w                 []Point2
+	arcUpperV, arcUpperW []float64
+	circular             []bool
 }
 
 // loftChordFraction is the coefficient a10-plan.md Part 2 Q2's chord-target
@@ -328,21 +381,28 @@ func loftChordTarget(p0, p1 ProfileRecord, walks0, walks1 [][]segmentWalk) (floa
 // work0/work1 parameters, and this generator's own interface constraint
 // (a10-plan.md Part 3 PR 5) fixes them into the signature ahead of that arm
 // existing to consume them.
-func loftCellStations(w0, w1 segmentWalk, target float64, work0, work1 *freeformWork) ([]Point2, []Point2, float64, error) { //nolint:unparam // work0/work1 are part of the fixed kind-switch interface every future arm shares; the ARC and LineSeg arms below are the two that do not need them yet.
+//
+// stationRoundUpper is docs/loft-design.md Table S row S14 (a10-plan.md Part
+// 3 PR 6): the proven rounding a COMPUTED station commits, taken as a MAX
+// over this cell's own stations on both sides — a component of delta, never
+// sectionDelta. The LineSeg arm's stations are recorded endpoints, never
+// computed, so its own contribution is exactly zero; the circular arm's own
+// doc comment states the mechanism.
+func loftCellStations(seg0, seg1 CurveSegment, w0, w1 segmentWalk, target float64, work0, work1 *freeformWork) ([]Point2, []Point2, float64, float64, error) { //nolint:unparam // work0/work1 are part of the fixed kind-switch interface every future arm shares; the ARC and LineSeg arms below are the two that do not need them yet.
 	switch {
 	case w0.kind == walkLine && w1.kind == walkLine:
-		return loftLineCellStations(w0, w1)
+		stations0, stations1, sagitta, err := loftLineCellStations(w0, w1)
+		return stations0, stations1, sagitta, 0, err
 	case w0.kind == walkCircular && w1.kind == walkCircular:
-		return loftCircularCellStations(w0, w1, target)
+		return loftCircularCellStations(seg0, seg1, w0, w1, target)
 	default:
 		// Unreached from any real build today: validateLoftRecords' own S3
-		// gate refuses every non-LineSeg pair before loftPairings ever calls
-		// this function (loft_build.go's own header comment states the same
-		// shape for the original PR 1a landing). A defensive refusal, not a
-		// dead branch a caller could reach silently: a future kind this
-		// switch has no case for yet must still fail loud rather than fall
-		// through into either analytic arm's own assumptions.
-		return nil, nil, 0, fmt.Errorf(`%w: this loft evaluator has no chord station rule for this segment-kind pairing`, ErrUnsupported)
+		// gate refuses every mixed-kind pair before loftPairings ever calls
+		// this function (loftSameKindGate). A defensive refusal, not a dead
+		// branch a caller could reach silently: a future kind this switch
+		// has no case for yet must still fail loud rather than fall through
+		// into either analytic arm's own assumptions.
+		return nil, nil, 0, 0, fmt.Errorf(`%w: this loft evaluator has no chord station rule for this segment-kind pairing`, ErrUnsupported)
 	}
 }
 
@@ -351,7 +411,7 @@ func loftCellStations(w0, w1 segmentWalk, target float64, work0, work1 *freeform
 // chord IS the recorded segment, so there is no curve for it to depart from.
 // m is fixed at 1, so this arm's output is bit-identical to every LineSeg
 // pairing this evaluator built before the station generator existed.
-func loftLineCellStations(w0, w1 segmentWalk) ([]Point2, []Point2, float64, error) {
+func loftLineCellStations(w0, w1 segmentWalk) ([]Point2, []Point2, float64, error) { //nolint:unparam // the error return matches loftCircularCellStations' own arm shape; a straight chord never fails to state its own recorded endpoint.
 	return []Point2{{U: w0.startU, V: w0.startV}}, []Point2{{U: w1.startU, V: w1.startV}}, 0, nil
 }
 
@@ -380,18 +440,18 @@ func loftLineCellStations(w0, w1 segmentWalk) ([]Point2, []Point2, float64, erro
 // never merely bounding it. A SET distance from an arbitrary chord point to
 // the curve would not carry that guarantee; the uniform-angle station rule
 // is what buys it.
-func loftCircularCellStations(w0, w1 segmentWalk, target float64) ([]Point2, []Point2, float64, error) {
+func loftCircularCellStations(seg0, seg1 CurveSegment, w0, w1 segmentWalk, target float64) ([]Point2, []Point2, float64, float64, error) {
 	// S15: chordCount itself already refuses (errTooManyChords, reused per
 	// spline design Table R row R8) a side whose target cannot be met inside
 	// maxChordsPerWalk — this arm mints no separate cap of its own, and
 	// propagates that refusal verbatim from whichever side hits it first.
 	m0, s0, err := chordCount(w0, target)
 	if err != nil {
-		return nil, nil, 0, err
+		return nil, nil, 0, 0, err
 	}
 	m1, s1, err := chordCount(w1, target)
 	if err != nil {
-		return nil, nil, 0, err
+		return nil, nil, 0, 0, err
 	}
 	m := max(m0, m1)
 	if m > m0 {
@@ -418,11 +478,113 @@ func loftCircularCellStations(w0, w1 segmentWalk, target float64) ([]Point2, []P
 		eq0 := stations0[k] == stations0[k+1]
 		eq1 := stations1[k] == stations1[k+1]
 		if eq0 != eq1 {
-			return nil, nil, 0, fmt.Errorf(`%w: chord cell %d of this paired segment collapses to one point on only one of the two sections`, ErrUnsupported, k)
+			return nil, nil, 0, 0, fmt.Errorf(`%w: chord cell %d of this paired segment collapses to one point on only one of the two sections`, ErrUnsupported, k)
 		}
 	}
 
-	return stations0, stations1, math.Max(s0, s1), nil
+	stationRound, err := loftCircularStationRound(seg0, seg1, stations0, stations1, m)
+	if err != nil {
+		return nil, nil, 0, 0, err
+	}
+
+	return stations0, stations1, math.Max(s0, s1), stationRound, nil
+}
+
+// circularSegRange reads a recorded circular segment's own TStart/TEnd —
+// the SAME normalized parameter domain circularWalkEndBound's own t argument
+// reads (extrude.go's walkOf: a CircleSeg's t is a turn fraction, an ArcSeg's
+// is a fraction of its own Start-to-End sweep; either way seg.TStart/seg.TEnd
+// name it directly). Only CircleSeg and ArcSeg carry it in this evaluator's
+// admitted circular kind; the false return is defensive, unreached from any
+// real build today since loftSameKindGate has already proven w.kind ==
+// walkCircular for both sides.
+func circularSegRange(seg CurveSegment) (float64, float64, bool) {
+	switch seg := seg.(type) {
+	case CircleSeg:
+		return seg.TStart, seg.TEnd, true
+	case ArcSeg:
+		return seg.TStart, seg.TEnd, true
+	default:
+		return 0, 0, false
+	}
+}
+
+// loftCircularStationRound is docs/loft-design.md Table S row S14
+// (a10-plan.md Part 3 PR 6): the proven rounding a COMPUTED chord station
+// commits — an exact-rational trig enclosure rounded once into a Point2 —
+// taken as a MAX over this cell's own m stations on BOTH sides, through
+// extrude.go's circularWalkEndBound and bounds.go's walkEndBoundAllow. It is
+// a component of delta (a HELD VERTEX's own displacement), never
+// sectionDelta (a BUILT CHORD's own departure from the curve it chords):
+// loftPayload's own doc comment states why the two are never interchanged.
+//
+// t_k = seg.TStart + (k/m)*(seg.TEnd-seg.TStart) is the identical parameter
+// circularStationChain walks to place stations0[k]/stations1[k] (w.th0 is a
+// float restatement of seg.TStart under the same affine map, so the two
+// agree exactly), which is what lets circularWalkEndBound's own enclosure
+// speak for the SAME computed point this function's caller already holds.
+//
+// A station whose rounding this evaluator cannot enclose — circularWalkEndBound
+// answers +Inf for either side, at any k — refuses ErrUnsupported rather than
+// publish a silent zero: the row's own text is "no derivation from this
+// record", not "the derivation is exactly zero".
+func loftCircularStationRound(seg0, seg1 CurveSegment, stations0, stations1 []Point2, m int) (float64, error) {
+	t0Start, t0End, ok0 := circularSegRange(seg0)
+	t1Start, t1End, ok1 := circularSegRange(seg1)
+	if !ok0 || !ok1 {
+		return 0, fmt.Errorf(`%w: this evaluator has no station-rounding rule for this circular segment's own representation`, ErrUnsupported)
+	}
+	round := 0.0
+	for k := range m {
+		frac := float64(k) / float64(m)
+		t0 := t0Start + frac*(t0End-t0Start)
+		t1 := t1Start + frac*(t1End-t1Start)
+		b0 := circularWalkEndBound(seg0, t0, stations0[k].U, stations0[k].V)
+		b1 := circularWalkEndBound(seg1, t1, stations1[k].U, stations1[k].V)
+		round = math.Max(round, walkEndBoundAllow(b0))
+		round = math.Max(round, walkEndBoundAllow(b1))
+	}
+	if isNonFinite(round) {
+		return 0, fmt.Errorf(`%w: this evaluator cannot derive a proven rounding bound for a computed chord station on this circular pairing`, ErrUnsupported)
+	}
+	return round, nil
+}
+
+// perCellArcUpper is one paired segment's own per-cell arc-length upper
+// bound, shared by every one of its m uniformly-stepped cells
+// (computeLoftChordedAllow, loft_moments.go). Uniform angular stepping means
+// each of the m cells carries the SAME true share of the whole sweep, so
+// dividing a proven upper bound on the WHOLE segment's length by m stays an
+// upper bound on each share.
+//
+// For a circular segment (CircleSeg/ArcSeg) that whole-length bound is
+// moments.go's circularLengthInterval — an EXACT rational bracket on the
+// segment's true length — never segmentWalk.lengthUpper: that field's own
+// bound is deliberately loose (circularSweepUpper bounds any ArcSeg's sweep
+// by the full 2*pi it could reach, never the sweep THIS record states, per
+// its own doc comment), so a quarter-turn arc's lengthUpper overstates its
+// true length by roughly 4x — a slack that would flow straight through this
+// division into cellChordCurveAreaUpper's own arcLenUpper argument and
+// quadruple the wall/seam/cap terms it feeds (an earlier version of this
+// function did exactly that, measured Suspect on the calibrated reference
+// wedge before this fix). The tight bracket is what keeps the per-cell share
+// close to the true one.
+//
+// For the LineSeg arm (m=1, and every other kind circularLengthInterval
+// declines) this falls back to segmentWalk.lengthUpper exactly, unaffected —
+// a straight chord's own recorded length bound was never the loose one. A
+// non-finite whole-length bound propagates rather than silently shrinking
+// under the division.
+func perCellArcUpper(seg CurveSegment, w segmentWalk, m int) float64 {
+	if ns, err := normalizeSegment(seg); err == nil {
+		if iv, ok := circularLengthInterval(ns); ok {
+			return upRound(ratFloatUp(iv.hi) / float64(m))
+		}
+	}
+	if isNonFinite(w.lengthUpper) {
+		return math.Inf(1)
+	}
+	return upRound(w.lengthUpper / float64(m))
 }
 
 // circularStationChain walks m uniform-angle stations of w, at parameter
@@ -454,30 +616,48 @@ func circularStationChain(w segmentWalk, m int) []Point2 {
 // stays exactly one entry per segment, bit-identical to before. sectionDelta
 // is the MAX of every cell's own sagittaUpper across the whole build, never
 // a sum: a boundary point lies in exactly one cell, so only the widest cell's
-// own departure bounds the whole section.
-func loftPairings(p0 ProfileRecord, offsets []int, walks0, walks1 [][]segmentWalk, target float64, work0, work1 *freeformWork) ([]loftLoopPair, float64, error) {
+// own departure bounds the whole section. stationRound is the analogous MAX
+// of every cell's own loftCircularStationRound (Table S row S14, delta's own
+// component, never sectionDelta's).
+func loftPairings(p0, p1 ProfileRecord, offsets []int, walks0, walks1 [][]segmentWalk, target float64, work0, work1 *freeformWork) ([]loftLoopPair, float64, float64, error) {
 	loops0 := append([]LoopRecord{p0.Outer}, p0.Holes...)
+	loops1 := append([]LoopRecord{p1.Outer}, p1.Holes...)
 	pairs := make([]loftLoopPair, len(loops0))
 	sectionDelta := 0.0
+	stationRound := 0.0
 	for i := range loops0 {
 		n := len(loops0[i].Segments)
 		off := offsets[i]
 		var v, w []Point2
+		var arcUpperV, arcUpperW []float64
+		var circular []bool
 		for j := range n {
 			w0 := walks0[i][j]
 			k := (j + off) % n
 			w1 := walks1[i][k]
-			stations0, stations1, sagitta, err := loftCellStations(w0, w1, target, work0, work1)
+			seg0 := loops0[i].Segments[j]
+			seg1 := loops1[i].Segments[k]
+			stations0, stations1, sagitta, round, err := loftCellStations(seg0, seg1, w0, w1, target, work0, work1)
 			if err != nil {
-				return nil, 0, err
+				return nil, 0, 0, err
+			}
+			m := len(stations0)
+			cellArcV := perCellArcUpper(seg0, w0, m)
+			cellArcW := perCellArcUpper(seg1, w1, m)
+			isCircular := w0.kind == walkCircular
+			for range m {
+				arcUpperV = append(arcUpperV, cellArcV)
+				arcUpperW = append(arcUpperW, cellArcW)
+				circular = append(circular, isCircular)
 			}
 			v = append(v, stations0...)
 			w = append(w, stations1...)
 			sectionDelta = math.Max(sectionDelta, sagitta)
+			stationRound = math.Max(stationRound, round)
 		}
-		pairs[i] = loftLoopPair{v: v, w: w}
+		pairs[i] = loftLoopPair{v: v, w: w, arcUpperV: arcUpperV, arcUpperW: arcUpperW, circular: circular}
 	}
-	return pairs, sectionDelta, nil
+	return pairs, sectionDelta, stationRound, nil
 }
 
 // loftAssembly is the built triangle set plus the index bookkeeping the
@@ -512,7 +692,11 @@ type loftAssembly struct {
 	loopIdx0, loopIdx1 [][]int
 	// delta is the proven displacement every held vertex carries from the
 	// exact placed image of the recorded sections (docs/loft-design.md §5,
-	// §12 PR 2a) — zero exactly when xform is r3.Identity().
+	// §12 PR 2a) — absSumUpper(stationRound, placeAllow): zero exactly when
+	// xform is r3.Identity() AND every station is a recorded endpoint (a10-
+	// plan.md Part 3 PR 6), never zero merely because the body is unplaced,
+	// since a curved pair with interior COMPUTED stations commits its own
+	// rounding whether or not the body is later placed.
 	delta float64
 }
 
@@ -524,7 +708,12 @@ type loftAssembly struct {
 // p0 origin (§5's whole-shell rule). It also owns Table S row S13: every
 // placed coordinate it emits, the anchor among them, is proven finite before
 // any of them is lifted into an exact rational.
-func assembleLoft(ctx context.Context, pairs []loftLoopPair, f0, f1 r3.Frame, plane0 PlaneRecord, xform r3.Transform) (loftAssembly, error) {
+//
+// stationRound is loftPairings' own accumulated Table S row S14 term
+// (a10-plan.md Part 3 PR 6): the proven rounding every COMPUTED circular
+// station commits, composed into delta beside the placement's own
+// rigidRoundAllow term.
+func assembleLoft(ctx context.Context, pairs []loftLoopPair, f0, f1 r3.Frame, plane0 PlaneRecord, xform r3.Transform, stationRound float64) (loftAssembly, error) {
 	// S13, decided before the first coordinate is lifted into an exact
 	// rational: the orientation anchor is the first point loftOrientationSign
 	// hands to xptOf, so its own finiteness is the gate's first question.
@@ -641,14 +830,24 @@ func assembleLoft(ctx context.Context, pairs []loftLoopPair, f0, f1 r3.Frame, pl
 		}
 	}
 
-	// delta is zero exactly when xform is the identity transform — an exact
-	// struct comparison, never a tolerance. This fast path is REQUIRED:
-	// without it, every directly-built (unplaced) loft would lose the Exact
-	// readings §8/§12 PR 1 publishes (docs/loft-design.md §5, §12 PR 2a).
-	delta := 0.0
+	// placeAllow is zero exactly when xform is the identity transform — an
+	// exact struct comparison, never a tolerance. This fast path is
+	// REQUIRED: without it, every directly-built (unplaced) LineSeg-only
+	// loft would lose the Exact readings §8/§12 PR 1 publishes
+	// (docs/loft-design.md §5, §12 PR 2a). delta = absSumUpper(stationRound,
+	// placeAllow) (a10-plan.md Part 3 PR 6) is NO LONGER zero exactly when
+	// xform is the identity: a curved pair with interior computed stations
+	// carries a positive stationRound whether or not the body is placed, so
+	// the fast path this comment used to state is now placeAllow's own,
+	// while stationRound is absSumUpper's other, independent leg —
+	// absSumUpper(0, 0) is exactly 0.0 (upRound never nudges a non-positive
+	// value), which is what keeps an unplaced LineSeg-only loft's delta bit-
+	// identical to before.
+	placeAllow := 0.0
 	if xform != r3.Identity() {
-		delta = rigidRoundAllow(maxInputAbs, vecMaxAbs(xform.Translation()))
+		placeAllow = rigidRoundAllow(maxInputAbs, vecMaxAbs(xform.Translation()))
 	}
+	delta := absSumUpper(stationRound, placeAllow)
 
 	return loftAssembly{
 		verts: verts, tris: tris, walls: walls, capStartCount: capStartCount,
@@ -1082,10 +1281,11 @@ func validateLoftBodyMeasurements(body *Body) error {
 // §5.2): the R7 ceiling is one record's across a whole OPERATION, and
 // LoftContext also runs falsifyRecordedArea on both records before evalLoft
 // is called, so those counters — not two fresh ones minted here — must be
-// the ones every walkOf call site in this build spends against. Increment 1
-// admits only LineSeg pairs, so nothing here ever actually charges, but the
-// counters are still threaded through so PR 3's curved correspondence does
-// not silently open a second ceiling per record.
+// the ones every walkOf call site in this build spends against. S3 admits
+// only same-kind LineSeg or circular pairs, neither of which is a free-form
+// kind, so nothing here charges them yet — but the counters are still
+// threaded through so a future free-form correspondence does not silently
+// open a second ceiling per record.
 func evalLoft(ctx context.Context, d *Document, ref StepRef, pl loftPayload, budget *workBudget, work0, work1 *freeformWork) (*Body, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -1101,12 +1301,12 @@ func evalLoft(ctx context.Context, d *Document, ref StepRef, pl loftPayload, bud
 		return nil, err
 	}
 
-	pairs, sectionDelta, err := loftPairings(pl.profile0, offsets, walks0, walks1, target, work0, work1)
+	pairs, sectionDelta, stationRound, err := loftPairings(pl.profile0, pl.profile1, offsets, walks0, walks1, target, work0, work1)
 	if err != nil {
 		return nil, err
 	}
 
-	a, err := assembleLoft(ctx, pairs, pl.frame0, pl.frame1, pl.plane0, pl.xform)
+	a, err := assembleLoft(ctx, pairs, pl.frame0, pl.frame1, pl.plane0, pl.xform, stationRound)
 	if err != nil {
 		return nil, err
 	}
@@ -1139,9 +1339,18 @@ func evalLoft(ctx context.Context, d *Document, ref StepRef, pl loftPayload, bud
 	body.lumps = []*Lump{{shells: []*Shell{{faces: faces}}}}
 
 	anchor := pl.xform.Apply(pl.plane0.Origin)
-	mass := newLoftMassAccumulator(anchor, a.delta)
+	mass := newLoftMassAccumulator(anchor, a.delta, sectionDelta)
 	for k, t := range a.tris {
 		mass.add(a.verts[t[0]], a.verts[t[1]], a.verts[t[2]], k < a.walls)
+	}
+	// The chorded correction terms (docs/loft-design.md §5/§8, a10-plan.md
+	// Part 3 PR 6) read the mass accumulator's own coordUpper, which is only
+	// complete once every triangle has folded into it above — so this runs
+	// after the add loop, gated on sectionDelta > 0 exactly as every other
+	// sectionDelta-driven term in this evaluator is, and left at its zero
+	// value (every field of loftChordedAllow) for a LineSeg-only build.
+	if sectionDelta > 0 {
+		mass.chorded = computeLoftChordedAllow(pairs, a.vIdx, a.wIdx, a.verts, anchor, sectionDelta, mass.distUpper)
 	}
 	body.volume = mass.volume(a.verts, a.tris)
 	centroid, err := mass.centroid(a.verts, a.tris)
@@ -1163,11 +1372,9 @@ func evalLoft(ctx context.Context, d *Document, ref StepRef, pl loftPayload, bud
 	pl.verts, pl.tris, pl.walls = a.verts, a.tris, a.walls
 	pl.delta = a.delta
 	// sectionDelta is loftPairings' own accumulated MAX over cells
-	// (loftPayload's own doc comment): it is exactly zero today because S3
-	// admits only same-kind LineSeg pairs, whose own chord IS the recorded
-	// segment, so this is not yet observable through a real build — but the
-	// wiring is live, so a same-kind curved pairing (reach, not yet
-	// admitted) sets it with no further plumbing here.
+	// (loftPayload's own doc comment): zero for a LineSeg-only pairing,
+	// positive for a same-kind circular one, to the sagitta its station
+	// chording commits.
 	pl.sectionDelta = sectionDelta
 	body.payload = pl
 	return body, nil
