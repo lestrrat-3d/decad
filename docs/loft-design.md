@@ -1388,8 +1388,15 @@ constant serves both fixtures rather than each kind carrying its own.
 margins belong to that forced `m = 64` run.** There, `Verify` at the default
 `1e-3` tolerance clears with a 2.39x margin on the arc wedge (a gate ratio of
 4.18e-4) and with a 1.90x margin on the fit-spline wedge. The arc wedge's
-`m = 64` is the count the shipped constant itself yields on that fixture, so
-its 2.39x is a margin at the shipped constant. The fit-spline wedge's 1.90x
+`m = 64` is a FORCED count, not the count the shipped constant yields on the
+production path: `chordCount` (§5.1) proves its own bound through
+`chordSagitta`'s `r·sweep²/(8n²)`, which is conservative against the exact
+`2r·sin²(Δθ/4)` the calibration measured, so at `m = 64` it reads 3.764955e-4
+against a 3.764910e-4 target — over by 4.53e-9 — and steps to `m = 65`, where
+it reads 3.650002e-4 and clears. The production `sectionDelta` at 65 is
+therefore TIGHTER than the calibration's own at 64, so the 2.39x is a
+conservative LOWER bound on the margin the shipped constant reaches on this
+fixture, never an overstatement of it. The fit-spline wedge's 1.90x
 is NOT: 6.69759e-05 is a coarser target than the shipped constant, so a
 fit-spline wedge chorded to meet 3.76491e-05 takes more than 64 chord cells,
 and the margin it reaches there is a reading this document does not state.
