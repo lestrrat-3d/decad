@@ -418,21 +418,25 @@ func TestLoftPairingsTwoHolesPairByPosition(t *testing.T) {
 }
 
 // TestLoftWalkResolutionChargesOncePerSegment pins the A10 plan's Task 1: a
-// loft build must resolve each recorded segment's walk exactly ONCE, never
-// twice (walkOf neither memoizes nor is free to call again — it charges the
-// free-form work budget on every call). S3 refuses every non-LineSeg pair
-// today, so this cannot be observed end to end through validateLoftRecords
-// (it would abort after the very first non-Line segment); it is asserted
-// directly at the walk-resolution seam instead — walkOf itself, called once
-// per segment in a loop, the exact shape validateLoftRecords' own
-// interleaved per-segment loop now shares with the walks it hands to
-// loftPairings — and loftPairings is shown to spend nothing further.
+// loft build resolves each recorded segment's walk exactly ONCE, never twice
+// (walkOf neither memoizes nor is free to call again — it charges the
+// free-form work budget on every call).
+//
+// The charge is pinned AT THE GATE because a full free-form BUILD is not
+// reachable: S3 refuses every non-LineSeg pair, so no input runs evalLoft to
+// completion with a nonzero free-form charge, and a LineSeg-only build
+// charges zero whether its segments are walked once or twice (walkOf's
+// LineSeg arm charges nothing), which would separate nothing.
+// validateLoftRecords with a FitSplineSeg as p0's first segment does charge,
+// and refuses at S3 immediately after, so its counter reads exactly what one
+// segment's walk costs.
 func TestLoftWalkResolutionChargesOncePerSegment(t *testing.T) {
 	fit := FitSplineSeg{
 		Fit:    []Point2{pt(0, 0), pt(1, 1), pt(2, 0), pt(3, 1), pt(4, 0)},
 		TStart: 0, TEnd: 1,
 	}
 
+	// The reference: what ONE walkOf(fit) costs on a fresh counter.
 	single := &freeformWork{}
 	_, err := walkOf(fit, single)
 	require.NoError(t, err)
@@ -440,23 +444,65 @@ func TestLoftWalkResolutionChargesOncePerSegment(t *testing.T) {
 
 	const k = 4
 	loopWork := &freeformWork{}
-	walks := make([]segmentWalk, k)
-	for i := range walks {
-		walks[i], err = walkOf(fit, loopWork)
+	for range k {
+		_, err = walkOf(fit, loopWork)
 		require.NoError(t, err)
 	}
 	require.Equal(t, k*single.spent, loopWork.spent,
-		"the loft's own walk resolution must charge exactly once per segment, not twice")
+		"walkOf charges the same amount every call, so k calls read k reference charges")
 
-	before := loopWork.spent
-	loop := LoopRecord{Segments: make([]CurveSegment, k)}
-	for i := range loop.Segments {
-		loop.Segments[i] = fit
-	}
-	profile := ProfileRecord{Outer: loop}
-	pairs := loftPairings(profile, []int{0}, [][]segmentWalk{walks}, [][]segmentWalk{walks})
+	// The production gate's own charge, on the same segment. p0's segment 0
+	// is the FitSplineSeg: the gate walks it, then S3 refuses it. Walking it
+	// a second time instead of threading the resolved walk onward is exactly
+	// the difference between one reference charge here and two.
+	pl0, pl1 := planeAt(r3.NewVec(0, 0, 0)), planeAt(r3.NewVec(0, 0, 1))
+	work0, work1 := newFreeformWork(), newFreeformWork()
+	err = validateLoftRecordsErr(
+		ProfileRecord{Outer: squareLoopWithFirstSegment(fit)}, unitSquareProfile(),
+		pl0, pl1, nil, work0, work1)
+	require.ErrorIs(t, err, ErrUnsupported, "S3: a FitSplineSeg is not a LineSeg")
+	require.Equal(t, single.spent, work0.spent,
+		"the gate walks that segment ONCE: its counter reads a single reference charge, not two")
+	require.Zero(t, work1.spent, "S3 refuses on p0's segment 0 before p1's own segment is walked")
+}
+
+// TestLoftPairingsConsumesTheGateResolvedWalks pins Task 1's other half on
+// the ADMITTED path: loftPairings publishes the coordinates of the walks
+// validateLoftRecords already resolved, rather than resolving the segments
+// again. loftPairings is handed p0's record and both walk sets, and never
+// sees p1's record at all, so every w coordinate it publishes can only come
+// from the walks1 slice the gate returned — the two profiles are deliberately
+// disjoint squares, so a pairing that re-resolved from the one record it does
+// hold would publish p0's coordinates in w's place.
+func TestLoftPairingsConsumesTheGateResolvedWalks(t *testing.T) {
+	p0 := unitSquareProfile()                               // corners (0,0), (1,0), (1,1), (0,1)
+	p1 := ProfileRecord{Outer: squareLoop(10, 20, 2, true)} // corners (8,18), (12,18), (12,22), (8,22)
+	pl0, pl1 := planeAt(r3.NewVec(0, 0, 0)), planeAt(r3.NewVec(0, 0, 1))
+
+	offsets, walks0, walks1, err := validateLoftRecords(p0, p1, pl0, pl1, []int{1}, newFreeformWork(), newFreeformWork())
+	require.NoError(t, err)
+	require.Equal(t, []int{1}, offsets)
+	require.Len(t, walks0, 1)
+	require.Len(t, walks1, 1)
+
+	pairs := loftPairings(p0, offsets, walks0, walks1)
 	require.Len(t, pairs, 1)
-	require.Equal(t, before, loopWork.spent, "loftPairings must spend no further free-form work")
+
+	n := len(p0.Outer.Segments)
+	require.Len(t, pairs[0].v, n)
+	require.Len(t, pairs[0].w, n)
+	for j := range n {
+		k := (j + offsets[0]) % n
+		require.Equal(t, pt(walks0[0][j].startU, walks0[0][j].startV), pairs[0].v[j],
+			"v[%d] is walks0[0][%d]'s own start point", j, j)
+		require.Equal(t, pt(walks1[0][k].startU, walks1[0][k].startV), pairs[0].w[j],
+			"w[%d] is walks1[0][%d]'s own start point", j, k)
+	}
+	// The same claim as literal coordinates: v runs p0's own corners from
+	// (0,0), and w runs p1's corners rotated by the offset, so w[0] is p1's
+	// SECOND corner (12,18) — a coordinate p0's record does not contain.
+	require.Equal(t, pt(0, 0), pairs[0].v[0])
+	require.Equal(t, pt(12, 18), pairs[0].w[0])
 }
 
 // TestValidateLoftRecordsS3PrecedesAWalkOfErrorLaterInTheOtherProfile pins
