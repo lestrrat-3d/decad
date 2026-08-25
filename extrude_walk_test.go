@@ -222,7 +222,7 @@ func TestBoundaryExtremesChargeAComputedWalkEndpoint(t *testing.T) {
 				`the bound is this endpoint's own displacement, not the circle's extent`)
 
 			lo, hi, bound, err := boundaryExtremesBoundedContext(
-				t.Context(), oneSegmentProfile(tc.seg), 1, 0, newFreeformWork())
+				t.Context(), oneSegmentProfile(tc.seg), 1, 0, newFreeformWork(), nil)
 			require.NoError(t, err)
 			require.Positive(t, bound)
 			requireEnclosesTruth(t, hi, bound, cosEighthPi, `the maximum along (1, 0)`)
@@ -250,7 +250,7 @@ func TestBoundaryExtremesChargeAComputedWalkEndpoint(t *testing.T) {
 		require.Equal(t, walkEndBound{}, w.endBound, `t = 1 names the recorded End`)
 
 		lo, hi, bound, err := boundaryExtremesBoundedContext(
-			t.Context(), oneSegmentProfile(seg), 1, 0, newFreeformWork())
+			t.Context(), oneSegmentProfile(seg), 1, 0, newFreeformWork(), nil)
 		require.NoError(t, err)
 		require.Positive(t, bound)
 		requireEnclosesTruth(t, lo, bound, truth, `the minimum along (1, 0)`)
@@ -271,7 +271,7 @@ func TestBoundaryExtremesChargeAComputedWalkEndpoint(t *testing.T) {
 		require.False(t, w.startBound.derivable())
 
 		_, _, _, err = boundaryExtremesBoundedContext(
-			t.Context(), oneSegmentProfile(seg), 1, 0, newFreeformWork())
+			t.Context(), oneSegmentProfile(seg), 1, 0, newFreeformWork(), nil)
 		require.ErrorIs(t, err, ErrUnsupported)
 	})
 }
@@ -311,7 +311,7 @@ func TestBoundaryExtremesKeepAProvenZero(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			lo, hi, bound, err := boundaryExtremesBoundedContext(
-				t.Context(), tc.profile, 1, 0, newFreeformWork())
+				t.Context(), tc.profile, 1, 0, newFreeformWork(), nil)
 			require.NoError(t, err)
 			require.Equal(t, 0.0, bound, `every candidate here is a value the record states exactly`)
 			require.Equal(t, tc.lo, lo)
