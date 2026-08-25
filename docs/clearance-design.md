@@ -103,11 +103,14 @@ held triangle to a trimmed plane and carries one body-level displacement
 `delta`; after held candidate aggregation the true distance interval is widened
 once by the two payload deltas. A nonzero widened interval that reaches zero is
 undecided unless a separate exact contact certificate settles it. A
-`loftPayload` has no analytic adapter: its own bounds, inflated by the bound
-they carry (the payload's combined `delta` and `sectionDelta`, zero only for an
+`loftPayload` has no analytic adapter: its own `Bounds`, inflated by the
+two-term `absSumUpper(delta, sectionDelta)` those boxes carry (zero only for an
 unplaced `LineSeg`-only loft — loft §5, §5.2), may decide a box-disjoint
-partition, but a requested `WithClearances` gap remains `Suspect` until its
-analytic adapter lands.
+partition. A distance measured against a held FACET carries the payload's
+wider facet departure `absSumUpper(delta, sectionDelta, maxTwistOffsetUpper)`
+instead (loft §5.2), since a twisted cell's held triangle pair is not the
+ruled patch through its own four corners; a requested `WithClearances` gap
+remains `Suspect` until its analytic adapter lands and reads that term.
 Payload verification §3/§7 owns the cup/faceted
 adapters and their tests; §13/§14.1 own the loft staging and tests.
 
