@@ -87,17 +87,57 @@ import (
 //     bounds it correctly, so it is argued here rather than paid for on every
 //     run.
 //
-// SECOND PASS — an independent adversarial audit of this file found two real
-// defects behind an otherwise-sound bound, closed here:
+// SECOND PASS — an independent adversarial audit of this file, closing gaps
+// its own falsification did not reach the first time:
 //
-//   - B1: dyadicSpanSagittaUpper's own n==0 guard was dead-ended — nothing in
-//     pairStations prevented a zero-control-point span from reaching
-//     walkCell, whose accept branch then panicked on c0.ratPointAt(0)'s empty
-//     slice. Removing the new entry-level guard and running
-//     TestPairStationsRefusesAZeroControlSpanInsteadOfPanicking reproduced
-//     exactly that panic (index out of range on dyadicSpan.ratPointAt);
-//     pairStations now refuses a zero-control span on either side with
-//     ErrDegenerate before any cell is walked.
+//   - A1: chordSegmentSquaredDistance's d==0 branch (a degenerate CHORD, e.g.
+//     a closed free-form loop whose first and last control point coincide —
+//     not a collapsed SPAN) returning 0 instead of |p-a|^2:
+//     TestSpanSagittaUpperClosedLoopChordIsAPointNotZero went red — the
+//     reported bound fell from ~5.099 to 0 on a net whose farthest control
+//     point sits exactly sqrt(26) from the shared chord point. This gap
+//     existed because the test file's own independent oracle,
+//     independentMaxChordSquaredDistance, asserted abLenSq.Sign() nonzero and
+//     so could not exercise this branch at all; it is now fixed to answer
+//     |p-a|^2 directly for a degenerate chord, the same derivation
+//     chordSegmentSquaredDistance's own doc comment states.
+//   - A2: the accept test math.Max(sag0, sag1) <= target narrowed to
+//     sag0 <= target alone: TestPairStationsAcceptTestRequiresBothSidesUnderTarget
+//     went red — a cell whose side 0 already met a target=0.01 but whose side
+//     1 sat at 5.0 was accepted whole, and the returned sagittaUpper (5.0)
+//     blew past the target it was asked to honor.
+//   - A3: the running maximum g.sagittaUpper = math.Max(g.sagittaUpper,
+//     math.Max(sag0, sag1)) narrowed to fold only sag0:
+//     TestPairStationsSagittaUpperReflectsTheLargerSide went red — a cell
+//     accepted whole with side 1's reading (5.0) far above side 0's (~1e-4)
+//     reported sagittaUpper ~1e-4 instead of ~5.0, a four-orders-of-magnitude
+//     under-report of the published bound.
+//   - A4: walkCell's own left-then-right recursion order swapped to
+//     right-then-left: TestPairStationsStationsAdvanceMonotonicallyAlongTheChain
+//     went red — a quarter circle's own returned stations no longer advanced
+//     monotonically in angle, regressing partway through the chain exactly as
+//     a scrambled walk order predicts.
+//   - A5: the accept branch's own c0.ratPointAt(0)/c1.ratPointAt(0) swapped
+//     for c0.ratPointAt(len-1)/c1.ratPointAt(len-1) (each cell's LAST control
+//     point instead of its FIRST):
+//     TestPairStationsFirstAndLastStationAreTheChainEndpointsExactly went red
+//     — stations[0] no longer equaled the chain's own start control point,
+//     exactly.
+//   - A6: sagittaMeasureCostPerPoint narrowed from 8 to 1:
+//     TestSagittaMeasureCostMatchesDocumentedFormula went red, while
+//     TestPairStationsChargesBothCountersSeparately — which pins only the
+//     RATIO between two differently-sized sides' own charges — stayed green,
+//     confirming the audit's own finding that a uniform rescaling of the cost
+//     constant is invisible to a ratio-only fixture.
+//   - B1: dyadicSpanSagittaUpper's own n==0 guard was already dead-ended —
+//     nothing in pairStations prevented a zero-control-point span from
+//     reaching walkCell, whose accept branch then panicked on
+//     c0.ratPointAt(0)'s empty slice. Removing the new entry-level guard and
+//     running TestPairStationsRefusesAZeroControlSpanInsteadOfPanicking
+//     reproduced exactly that panic (index out of range on
+//     dyadicSpan.ratPointAt); pairStations now refuses a zero-control span on
+//     either side with ErrDegenerate before any cell is walked, so the
+//     dead-ended guard's own 0 answer is no longer reachable from this walk.
 //   - B2: the final station's own append reverted from a fresh
 //     ratPoint{u: new(big.Rat).Set(...), v: new(big.Rat).Set(...)} copy back
 //     to appending the caller's own last control point ratPoint directly:
@@ -105,6 +145,18 @@ import (
 //     mutating the returned station's own *big.Rat in place changed the
 //     caller's input span, violating ratPointAt's own non-aliasing contract
 //     every OTHER station in the two returned lists already carries.
+//
+// Part C's three new primitives (spanHodographGapUpper, spanMatchedDeltaUpper,
+// spanSpeedUpper) are new proofs, not fixes to existing broken legs, so they
+// carry no mutation-of-existing-code entry here. Their own soundness rests on
+// TestSpanMatchedDeltaUpperEnclosesWhatTheSagittaMisses (the decisive
+// zigzag-hugging fixture proving the sagitta is NOT a substitute) and
+// TestHodographBoundsAreExactlyZeroOnCollapsedAndStraightUniformSpans, which a
+// quick sanity check confirmed IS sensitive to a broken derivation: dropping
+// the hodograph's own "- Delta" term (silencing it via a x0 multiply so the
+// build still compiles) left the dense-sample enclosure tests green — a wider
+// bound still encloses — but turned the straight-uniform-span's own EXACT
+// zero reading into 2, which the zero-reading fixture caught immediately.
 
 // ratSpan is spline_extreme_internal_test.go's own helper (same package): it
 // builds a bezierSpan directly from plane-local float coordinates, for tests
@@ -618,29 +670,221 @@ func independentMaxChordSquaredDistance(t *testing.T, span bezierSpan) *big.Rat 
 	abx := new(big.Rat).Sub(b.u, a.u)
 	aby := new(big.Rat).Sub(b.v, a.v)
 	abLenSq := new(big.Rat).Add(new(big.Rat).Mul(abx, abx), new(big.Rat).Mul(aby, aby))
-	require.NotZero(t, abLenSq.Sign())
 
 	var maxSq *big.Rat
 	for _, p := range span {
 		apx := new(big.Rat).Sub(p.u, a.u)
 		apy := new(big.Rat).Sub(p.v, a.v)
-		dot := new(big.Rat).Add(new(big.Rat).Mul(apx, abx), new(big.Rat).Mul(apy, aby))
-		s := new(big.Rat).Quo(dot, abLenSq)
-		if s.Sign() < 0 {
-			s = big.NewRat(0, 1)
-		} else if s.Cmp(big.NewRat(1, 1)) > 0 {
-			s = big.NewRat(1, 1)
+		var sq *big.Rat
+		if abLenSq.Sign() == 0 {
+			// The chord's own two ends coincide (a == b), so the segment
+			// degenerates to the single point a — §6.2.1's own explicit
+			// "distance to a one-point set" case (spline_sagitta.go's own
+			// chordSegmentSquaredDistance doc comment). There is nothing to
+			// clamp: the distance is |p-a|^2 directly, worked out here by an
+			// independent formula rather than deferring to that function's
+			// own d==0 branch, which is exactly the branch A1's own
+			// falsification ledger entry targets.
+			sq = new(big.Rat).Add(new(big.Rat).Mul(apx, apx), new(big.Rat).Mul(apy, apy))
+		} else {
+			dot := new(big.Rat).Add(new(big.Rat).Mul(apx, abx), new(big.Rat).Mul(apy, aby))
+			s := new(big.Rat).Quo(dot, abLenSq)
+			if s.Sign() < 0 {
+				s = big.NewRat(0, 1)
+			} else if s.Cmp(big.NewRat(1, 1)) > 0 {
+				s = big.NewRat(1, 1)
+			}
+			qx := new(big.Rat).Add(a.u, new(big.Rat).Mul(s, abx))
+			qy := new(big.Rat).Add(a.v, new(big.Rat).Mul(s, aby))
+			ex := new(big.Rat).Sub(p.u, qx)
+			ey := new(big.Rat).Sub(p.v, qy)
+			sq = new(big.Rat).Add(new(big.Rat).Mul(ex, ex), new(big.Rat).Mul(ey, ey))
 		}
-		qx := new(big.Rat).Add(a.u, new(big.Rat).Mul(s, abx))
-		qy := new(big.Rat).Add(a.v, new(big.Rat).Mul(s, aby))
-		ex := new(big.Rat).Sub(p.u, qx)
-		ey := new(big.Rat).Sub(p.v, qy)
-		sq := new(big.Rat).Add(new(big.Rat).Mul(ex, ex), new(big.Rat).Mul(ey, ey))
 		if maxSq == nil || sq.Cmp(maxSq) > 0 {
 			maxSq = sq
 		}
 	}
 	return maxSq
+}
+
+// --- A1: the degenerate-chord branch must report |p-a|^2, never a silent 0 ---
+
+// TestSpanSagittaUpperClosedLoopChordIsAPointNotZero pins the audit's own
+// most serious finding: a closed free-form loop — first and last control
+// point coincident, so the chord collapses to a single point — is exactly a
+// shape a loft cap can contribute, and chordSegmentSquaredDistance's own
+// d==0 branch must still report the true |p-a|^2 for it, never a bolted-on
+// 0. The net (0,0) (1,5) (-1,5) (0,0) is a non-collapsed control polygon (the
+// FIRST and LAST points coincide; the interior two do not) whose farthest
+// control point sits exactly sqrt(26) from the shared chord point.
+func TestSpanSagittaUpperClosedLoopChordIsAPointNotZero(t *testing.T) {
+	span := ratSpan([][2]float64{{0, 0}, {1, 5}, {-1, 5}, {0, 0}})
+
+	exactMaxSq := independentMaxChordSquaredDistance(t, span)
+	require.Zero(t, new(big.Rat).Sub(exactMaxSq, big.NewRat(26, 1)).Sign(),
+		"the chord collapses to the origin, so the farthest control point (+-1,5) sits exactly sqrt(26) away")
+
+	// The CURVE's own dense-sampled deviation from the (single-point) chord is
+	// only a LOWER bound on the control-point maximum above — the curve is a
+	// convex BLEND of the control points, not the control points themselves,
+	// so its own departure can and does sit below the hull's own extreme. The
+	// bound must still enclose it (that is the contract), never equal it.
+	dense := denseChordSegmentDeviation(t, span, 200_000)
+
+	bound := spanSagittaUpper(span)
+	require.GreaterOrEqual(t, bound, dense, "the reported bound must ENCLOSE the dense-sample deviation")
+	require.InDelta(t, math.Sqrt(26), bound, 0.01,
+		"a collapsed CHORD (not a collapsed span) must report the true sqrt(26) |p-a| distance, never a silent 0")
+}
+
+// --- A2: the accept test must honor BOTH sides, never side 0 alone ---
+
+// TestPairStationsAcceptTestRequiresBothSidesUnderTarget pairs a side whose
+// own sagitta already sits under the target with a side whose own sagitta
+// sits far over it, so a correct implementation MUST keep subdividing (both
+// sides bisect together) until side 1 also meets the target, while an accept
+// test reading sag0 alone would accept the very first (unsplit) cell and
+// publish a returned sagittaUpper the target never actually bounds.
+func TestPairStationsAcceptTestRequiresBothSidesUnderTarget(t *testing.T) {
+	small := ratSpan([][2]float64{{0, 0}, {0.33, 0.0001}, {0.66, 0.0001}, {1, 0}})
+	large := ratSpan([][2]float64{{0, 0}, {0, 5}, {1, 5}, {1, 0}})
+
+	const target = 0.01
+	require.LessOrEqual(t, spanSagittaUpper(small), target,
+		"side 0 alone must already sit inside the target, or the accept-test bug this fixture targets has nothing to catch")
+	require.Greater(t, spanSagittaUpper(large), target,
+		"side 1 alone must sit outside the target, forcing real subdivision under a correct accept test")
+
+	spans0 := []bezierSpan{small}
+	spans1 := []bezierSpan{large}
+	_, _, sagUp, err := pairStations(spans0, spans1, target, nil, nil)
+	require.NoError(t, err)
+	require.LessOrEqual(t, sagUp, target,
+		"the achieved sagittaUpper must honor the target on BOTH sides, never side 0 alone")
+}
+
+// --- A3: the returned sagittaUpper must reflect the LARGER side, never side 0 alone ---
+
+// TestPairStationsSagittaUpperReflectsTheLargerSide pairs two sides whose
+// single (unsplit) cell already meets the target on both — so the walk
+// accepts the whole span with NO bisection at all — and pins that the
+// RETURNED sagittaUpper reflects the larger of the two readings. A running
+// maximum that folds only side 0 into sagittaUpper would report the smaller
+// side's own tiny value here instead, understating the published bound by
+// the same mechanism the audit measured as a 1000x under-report on a scaled
+// pairing.
+func TestPairStationsSagittaUpperReflectsTheLargerSide(t *testing.T) {
+	small := ratSpan([][2]float64{{0, 0}, {0.33, 0.0001}, {0.66, 0.0001}, {1, 0}})
+	large := ratSpan([][2]float64{{0, 0}, {0, 5}, {1, 5}, {1, 0}})
+
+	smallSag := spanSagittaUpper(small)
+	largeSag := spanSagittaUpper(large)
+	require.Greater(t, largeSag, smallSag*100, "the fixture needs a large gap between the two sides' own readings")
+
+	// Just above the LARGER side's own reading, so the single cell accepts
+	// whole with no bisection at all — the returned value is then a direct
+	// readout of whatever the fold computed, not an artifact of subdivision.
+	target := largeSag * (1 + 1e-9)
+	spans0 := []bezierSpan{small}
+	spans1 := []bezierSpan{large}
+	_, _, sagUp, err := pairStations(spans0, spans1, target, nil, nil)
+	require.NoError(t, err)
+	require.InEpsilon(t, largeSag, sagUp, 1e-9,
+		"sagittaUpper must reflect the LARGER side's own reading, never the smaller side's")
+}
+
+// --- A4: station ORDER — consecutive stations must advance along the chain ---
+
+// TestPairStationsStationsAdvanceMonotonicallyAlongTheChain walks a quarter
+// circle (a curve whose angle atan2(v,u) increases strictly and monotonically
+// from 0 to pi/2 along its own true parameter) refined finely enough to force
+// subdivision across multiple cells and spans, then asserts the returned
+// stations' own angles never regress and that consecutive stations sit close
+// together. A walk that recursed right-then-left instead of left-then-right
+// would scramble the chain's own start into the middle of the list, which
+// this monotonicity check cannot survive.
+func TestPairStationsStationsAdvanceMonotonicallyAlongTheChain(t *testing.T) {
+	spans := quarterCircleFitSpans(t)
+	target := levelSagitta(spans[0], 3)
+
+	s0, _, _, err := pairStations(spans, spans, target, nil, nil)
+	require.NoError(t, err)
+	require.Greater(t, len(s0), len(spans)+1,
+		"the target must force genuine subdivision across the chain for this test to exercise cross-cell order")
+
+	prevAngle := math.Inf(-1)
+	var maxGap float64
+	var prevU, prevV float64
+	for i, p := range s0 {
+		u, v := floatOfRatPoint(t, p)
+		angle := math.Atan2(v, u)
+		require.GreaterOrEqual(t, angle, prevAngle,
+			"station %d must advance the parameter monotonically along the quarter-circle chain, never regress", i)
+		if i > 0 {
+			maxGap = math.Max(maxGap, math.Hypot(u-prevU, v-prevV))
+		}
+		prevAngle, prevU, prevV = angle, u, v
+	}
+	require.Less(t, maxGap, 1.0,
+		"consecutive stations must sit close together along a chain refined to a fine target, never scattered by a scrambled walk order")
+}
+
+// --- A5: station IDENTITY — the two ends are the chain's own endpoints, exactly ---
+
+// TestPairStationsFirstAndLastStationAreTheChainEndpointsExactly asserts
+// stations[0] and the final station are the chain's own start and end
+// control points, as exact rational equalities. Emitting a cell's LAST
+// control point instead of its FIRST would drop the chain's true start (the
+// leftmost leaf's own end is an interior boundary, never the chain start
+// once genuinely subdivided) and duplicate its end.
+func TestPairStationsFirstAndLastStationAreTheChainEndpointsExactly(t *testing.T) {
+	spans := quarterCircleFitSpans(t)
+	target := levelSagitta(spans[0], 3)
+
+	s0, s1, _, err := pairStations(spans, spans, target, nil, nil)
+	require.NoError(t, err)
+	require.Greater(t, len(s0), len(spans)+1, "the target must force genuine subdivision for this test to exercise anything")
+
+	requireExactRatPoint := func(t *testing.T, want, got ratPoint, msg string) {
+		t.Helper()
+		require.Zero(t, want.u.Cmp(got.u), "%s: U", msg)
+		require.Zero(t, want.v.Cmp(got.v), "%s: V", msg)
+	}
+
+	requireExactRatPoint(t, spans[0][0], s0[0], "first station side0 must be the chain's own start control point")
+	requireExactRatPoint(t, spans[0][0], s1[0], "first station side1 must be the chain's own start control point")
+	last := spans[len(spans)-1]
+	requireExactRatPoint(t, last[len(last)-1], s0[len(s0)-1], "final station side0 must be the chain's own end control point")
+	requireExactRatPoint(t, last[len(last)-1], s1[len(s1)-1], "final station side1 must be the chain's own end control point")
+}
+
+// --- A6: charged work MAGNITUDE, not merely its cross-side ratio ---
+
+// TestSagittaMeasureCostMatchesDocumentedFormula pins sagittaMeasureCost's
+// own closed form directly: sagittaMeasureCostPerPoint (8) units per control
+// point, per its own doc comment. TestPairStationsChargesBothCountersSeparately
+// only pins the RATIO between two differently-sized sides' own charges, which
+// any uniform rescaling of sagittaMeasureCostPerPoint preserves; this pins the
+// constant's own value.
+func TestSagittaMeasureCostMatchesDocumentedFormula(t *testing.T) {
+	// The expected multiplier is the LITERAL 8 the doc comment states, never
+	// sagittaMeasureCostPerPoint itself — comparing against that constant would
+	// be circular (it would still pass after the constant were mutated to 1),
+	// which is exactly the vulnerability this fixture exists to close.
+	const perPointCost = 8
+	require.Equal(t, perPointCost, sagittaMeasureCostPerPoint,
+		"this test's own literal must match the constant it pins; update both together on a deliberate cost-model change")
+	for _, n := range []int{1, 2, 4, 8} {
+		require.Equal(t, uint64(perPointCost*n), sagittaMeasureCost(n), "n=%d", n)
+	}
+}
+
+// TestSagittaSplitCostMatchesDocumentedFormula pins sagittaSplitCost's own
+// closed form: n(n-1) exact dyadicMidpoint blends, per its own doc comment.
+func TestSagittaSplitCostMatchesDocumentedFormula(t *testing.T) {
+	for _, n := range []int{2, 3, 4, 8} {
+		require.Equal(t, uint64(n*(n-1)), sagittaSplitCost(n), "n=%d", n)
+	}
 }
 
 // --- B1: a zero-control-point span must refuse, never panic ---
@@ -692,4 +936,148 @@ func TestPairStationsFinalStationDoesNotAliasTheInputSpan(t *testing.T) {
 
 	require.Zero(t, wantU.Cmp(span[len(span)-1].u),
 		"mutating a returned station must never change the caller's own input span")
+}
+
+// --- C: matched-delta primitives (bounds.go's cellChordCurveAreaUpper
+// matchedDeltaUpper obligation) — spanHodographGapUpper, spanMatchedDeltaUpper,
+// spanSpeedUpper ---
+
+// denseMatchedDeviation samples a single-span chain densely and returns the
+// maximum true |C(t) - (P_0 + t*Delta)| over the span's own NATIVE parameter
+// t — the parameter-matched deviation spanMatchedDeltaUpper bounds, sampled
+// through the same independent de Casteljau oracle (evalSpans) the sagitta
+// tests already use, never through any of spline_sagitta.go's own machinery.
+func denseMatchedDeviation(t *testing.T, span bezierSpan, samples int) float64 {
+	t.Helper()
+	ax, ay := evalSpans(t, []bezierSpan{span}, 0)
+	bx, by := evalSpans(t, []bezierSpan{span}, 1)
+	dx, dy := bx-ax, by-ay
+	maxDev := 0.0
+	for i := 0; i <= samples; i++ {
+		at := float64(i) / float64(samples)
+		cx, cy := evalSpans(t, []bezierSpan{span}, at)
+		lx, ly := ax+at*dx, ay+at*dy
+		maxDev = math.Max(maxDev, math.Hypot(cx-lx, cy-ly))
+	}
+	return maxDev
+}
+
+// denseSpeedSample samples ||C'(t)|| densely via a central finite difference
+// over evalSpans — an INDEPENDENT numerical estimate, never a reuse of
+// spanHodographGapUpper's own exact-rational hodograph.
+func denseSpeedSample(t *testing.T, span bezierSpan, samples int) float64 {
+	t.Helper()
+	const h = 1e-5
+	maxSpeed := 0.0
+	for i := 0; i <= samples; i++ {
+		at := float64(i) / float64(samples)
+		at0, at1 := math.Max(0, at-h), math.Min(1, at+h)
+		if at1 <= at0 {
+			continue
+		}
+		x0, y0 := evalSpans(t, []bezierSpan{span}, at0)
+		x1, y1 := evalSpans(t, []bezierSpan{span}, at1)
+		speed := math.Hypot(x1-x0, y1-y0) / (at1 - at0)
+		maxSpeed = math.Max(maxSpeed, speed)
+	}
+	return maxSpeed
+}
+
+// zigzagHuggingSpan is the free-form analogue of bounds_chord_internal_test.go's
+// own TestCellChordCurveAreaUpperRefusesTheSagittaZigzag counterexample: every
+// control point sits exactly ON the chord segment [(0,0),(1,0)] (collinear,
+// v=0 throughout), so the sagitta is EXACTLY 0 — the strongest possible zero,
+// by exact float equality, never merely a small one — while three of the four
+// control points cluster at u=0.001. Bernstein blending over that
+// non-uniformly-spaced collinear net packs almost all of the curve's own
+// motion along the parameter into short stretches near t=0 and t=1, leaving
+// the curve's own position at t=0.5 far short of the chord's own midpoint —
+// the SAME mechanism TestSpanSagittaUpperDistinguishesFromParametricDeviation
+// already demonstrates for a milder clustering, pushed here into a decisive
+// numeric gap between the sagitta and the true parameter-matched deviation.
+func zigzagHuggingSpan() bezierSpan {
+	return ratSpan([][2]float64{{0, 0}, {0.001, 0}, {0.001, 0}, {1, 0}})
+}
+
+// TestSpanMatchedDeltaUpperEnclosesWhatTheSagittaMisses is the decisive C4
+// fixture: it densely proves the sagitta of 0 FAILS to bound the true
+// parameter-matched deviation on zigzagHuggingSpan, and that
+// spanMatchedDeltaUpper (d/2) DOES bound it. This is F1's rule made
+// concrete: cellChordCurveAreaUpper's matchedDeltaUpper obligation is a
+// strictly stronger claim than the sagitta, and confusing the two is exactly
+// the unsoundness this function exists to prevent a downstream caller from
+// committing.
+func TestSpanMatchedDeltaUpperEnclosesWhatTheSagittaMisses(t *testing.T) {
+	span := zigzagHuggingSpan()
+
+	sagitta := spanSagittaUpper(span)
+	require.Zero(t, sagitta, "every control point sits exactly on the chord segment, so the sagitta is exactly 0")
+
+	dense := denseMatchedDeviation(t, span, 200_000)
+	require.Greater(t, dense, 0.3, "the fixture needs a substantial true parameter-matched deviation for this test to mean anything")
+
+	require.Less(t, sagitta, dense,
+		"pinning F1's own violation: a sagitta of 0 must FAIL to bound the true parameter-matched deviation of %.6g", dense)
+
+	matched := spanMatchedDeltaUpper(span)
+	require.GreaterOrEqual(t, matched, dense,
+		"spanMatchedDeltaUpper must ENCLOSE the true parameter-matched deviation, where the sagitta above does not")
+}
+
+// TestSpanMatchedDeltaUpperEnclosesDenseSampleOnOrdinarySpans checks the
+// bound holds — not merely on the decisive counterexample above — on an
+// ordinary curved chain.
+func TestSpanMatchedDeltaUpperEnclosesDenseSampleOnOrdinarySpans(t *testing.T) {
+	spans := quarterCircleFitSpans(t)
+	for i, span := range spans {
+		dense := denseMatchedDeviation(t, span, 20_000)
+		matched := spanMatchedDeltaUpper(span)
+		require.GreaterOrEqual(t, matched, dense,
+			"span %d: matchedDeltaUpper must enclose the dense-sampled parameter-matched deviation", i)
+	}
+}
+
+// TestSpanSpeedUpperEnclosesDenseSampleAndNeverFallsBelowChordLength checks
+// both of spanSpeedUpper's own obligations: it encloses a dense finite-
+// difference sample of ||C'(t)||, and it never reads below the span's own
+// chord length — the floor cellChordCurveAreaUpper's own tangent-magnitude
+// argument depends on.
+func TestSpanSpeedUpperEnclosesDenseSampleAndNeverFallsBelowChordLength(t *testing.T) {
+	spans := quarterCircleFitSpans(t)
+	for i, span := range spans {
+		dense := denseSpeedSample(t, span, 2000)
+		speed := spanSpeedUpper(span)
+		require.GreaterOrEqual(t, speed, dense*(1-1e-6),
+			"span %d: speed bound must enclose the dense-sampled ||C'(t)||", i)
+
+		ax, ay := floatOfRatPoint(t, span[0])
+		bx, by := floatOfRatPoint(t, span[len(span)-1])
+		chordLen := math.Hypot(bx-ax, by-ay)
+		require.GreaterOrEqual(t, speed, chordLen, "span %d: speed bound must never fall below the chord length", i)
+	}
+}
+
+// TestHodographBoundsAreExactlyZeroOnCollapsedAndStraightUniformSpans checks
+// the zero readings §6.2.1's own philosophy predicts from the general
+// formulas, with no special case: on a fully COLLAPSED span (every control
+// point coincident, chord length 0 too), all three quantities read exactly
+// 0. On a STRAIGHT, uniformly-spaced span (collinear controls at equal
+// parameter spacing — genuine constant-speed motion along a chord of
+// POSITIVE length), the two GAP terms (spanHodographGapUpper,
+// spanMatchedDeltaUpper) still read exactly 0, because a uniformly-spaced
+// collinear net's hodograph is the CONSTANT vector Delta itself at every
+// control point; the speed bound is NOT zero there — it reads exactly the
+// span's own chord length, since d=0 leaves nothing to widen it by.
+func TestHodographBoundsAreExactlyZeroOnCollapsedAndStraightUniformSpans(t *testing.T) {
+	collapsed := ratSpan([][2]float64{{2, 3}, {2, 3}, {2, 3}, {2, 3}})
+	require.Zero(t, spanHodographGapUpper(collapsed))
+	require.Zero(t, spanMatchedDeltaUpper(collapsed))
+	require.Zero(t, spanSpeedUpper(collapsed), "a fully collapsed span (chord length 0 too) has zero speed as well as zero deviation")
+
+	straight := ratSpan([][2]float64{{0, 0}, {1, 0}, {2, 0}}) // uniformly-spaced collinear controls: constant-speed line
+	require.Zero(t, spanHodographGapUpper(straight))
+	require.Zero(t, spanMatchedDeltaUpper(straight))
+	chordLen := math.Hypot(2, 0)
+	require.InEpsilon(t, chordLen, spanSpeedUpper(straight), 1e-12,
+		"a straight uniformly-spaced span's speed bound must equal its own chord length exactly (d=0), never merely enclose it")
 }

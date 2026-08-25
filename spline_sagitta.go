@@ -393,3 +393,117 @@ func (g *sagittaStationWalk) walkCell(c0, c1 dyadicSpan) error {
 	}
 	return g.walkCell(right0, right1)
 }
+
+// This section is bounds.go's cellChordCurveAreaUpper's matchedDeltaUpper
+// obligation (its own doc comment, F1's rule): a PARAMETER-MATCHED bound on
+// |curve(s) − chord(s)| at the SAME s, which is a STRONGER, DIFFERENT claim
+// than the SET-distance sagitta above. No caller may pass the sagitta where
+// this is owed. Every function below is Tier A / polynomial-Bézier only, for
+// the identical reason spanSagittaUpper is (this file's own header): a
+// rational span never reaches here (Table R row R10 refuses it first).
+
+// spanChordVector returns a Tier A span's own chord vector Δ = P_p − P_0, the
+// shared quantity spanHodographGapUpper and spanSpeedUpper each build on.
+func spanChordVector(span bezierSpan) (dxU, dxV *big.Rat) {
+	a, b := span[0], span[len(span)-1]
+	return new(big.Rat).Sub(b.u, a.u), new(big.Rat).Sub(b.v, a.v)
+}
+
+// spanChordSquared is the exact squared length of spanChordVector's own Δ.
+func spanChordSquared(span bezierSpan) *big.Rat {
+	dxU, dxV := spanChordVector(span)
+	return new(big.Rat).Add(new(big.Rat).Mul(dxU, dxU), new(big.Rat).Mul(dxV, dxV))
+}
+
+// spanHodographGapUpper bounds d = max_t ‖C'(t) − Δ‖ for a Tier A span of
+// degree p with chord Δ = P_p − P_0: the velocity C'(t) is itself a Bézier —
+// the HODOGRAPH, degree p−1, with Bernstein control points p·(P_{i+1} − P_i)
+// (docs/spline-design.md §6.2's direction-cone row already reuses this same
+// hull for a different question) — so C'(t) − Δ is the Bézier with control
+// points p·(P_{i+1} − P_i) − Δ, and the convex-hull property bounds its norm
+// at every t by the largest control point's own norm:
+//
+//	d = max_i ‖ p·(P_{i+1} − P_i) − Δ ‖
+//
+// Exact rational throughout; the ONLY rounding is one outward ratSqrtUp of
+// the exact squared norm the maximum selects — the same single-rounding
+// shape dyadicSpanSagittaUpper already commits, for a different quantity.
+//
+// A span with fewer than 2 control points has no chord and no hodograph
+// (degree < 1), so it reports 0 rather than reading an empty slice — the
+// same shape dyadicSpanSagittaUpper's own n==0 guard takes, for the same
+// reason. A COLLAPSED span (every control point coincident, §5.1) needs no
+// separate case either: Δ is then the zero vector and every hodograph
+// coefficient reduces to p·0 − 0 = 0, so d reads exactly 0 — that span's
+// true (zero) velocity gap — from the general formula, never bolted on.
+func spanHodographGapUpper(span bezierSpan) float64 {
+	n := len(span)
+	if n < 2 {
+		return 0
+	}
+	dxU, dxV := spanChordVector(span)
+	p := big.NewRat(int64(n-1), 1)
+
+	var maxSq *big.Rat
+	for i := 0; i+1 < n; i++ {
+		hu := new(big.Rat).Sub(span[i+1].u, span[i].u)
+		hu.Mul(hu, p)
+		hu.Sub(hu, dxU)
+		hv := new(big.Rat).Sub(span[i+1].v, span[i].v)
+		hv.Mul(hv, p)
+		hv.Sub(hv, dxV)
+		sq := new(big.Rat).Add(new(big.Rat).Mul(hu, hu), new(big.Rat).Mul(hv, hv))
+		if maxSq == nil || sq.Cmp(maxSq) > 0 {
+			maxSq = sq
+		}
+	}
+	return ratSqrtUp(maxSq)
+}
+
+// spanMatchedDeltaUpper is bounds.go's cellChordCurveAreaUpper
+// matchedDeltaUpper obligation for a Tier A span, under the span's own
+// NATIVE parameter — the span-uniform fraction t in [0, 1] — and NEVER a
+// constant-arc-length one. A caller pairing on constant arc length
+// (cellChordCurveAreaUpper's own derivation) must convert, or must not use
+// this value directly; it bounds |C(t) − (P_0 + t·Δ)| at the SAME t, not the
+// arc-length-matched deviation.
+//
+// Derivation: g(t) = C(t) − (P_0 + t·Δ) has g(0) = g(1) = 0 (a Bézier
+// interpolates its own endpoints exactly) and g'(t) = C'(t) − Δ, so
+// ‖g'(t)‖ ≤ d (spanHodographGapUpper). Integrating from either end,
+// ‖g(t)‖ ≤ min(t, 1−t)·d ≤ d/2 — the bound reported here, rounded outward.
+// Dividing the already-outward-rounded d by the exact power of two 2
+// introduces no further rounding of its own; the upRound wrap is defensive,
+// matching this package's other bound helpers.
+//
+// This is a STRONGER and DIFFERENT quantity than spanSagittaUpper's own
+// SET-distance sagitta (every curve point sits within the sagitta of SOME
+// chord point). Never substitute one for the other: passing the sagitta
+// where this parameter-matched bound is owed silently upgrades a
+// SET-distance claim into one it was never proven to carry — bounds.go's
+// own matchedDeltaUpper doc comment states the rule (F1), and
+// TestSpanMatchedDeltaUpperEnclosesWhatTheSagittaMisses pins the
+// counterexample: a span whose every control point sits exactly ON its own
+// chord segment (sagitta exactly 0) can still carry a large parameter-matched
+// deviation, which only this function — never the sagitta — bounds.
+func spanMatchedDeltaUpper(span bezierSpan) float64 {
+	return upRound(spanHodographGapUpper(span) / 2)
+}
+
+// spanSpeedUpper bounds a Tier A span's own tangent speed ‖C'(t)‖ at every t:
+// ‖C'(t)‖ = ‖Δ + (C'(t) − Δ)‖ ≤ ‖Δ‖ + d (spanHodographGapUpper), rounded
+// outward. It is always at least the span's own chord length ‖Δ‖, since d is
+// never negative — which is what cellChordCurveAreaUpper's own tangent-
+// magnitude argument (its doc comment's eA bullet: "a chord never exceeds
+// the arc it subtends") requires of a caller's arc-length-speed claim: a
+// speed bound that could fall below the chord length would understate the
+// very quantity that argument depends on staying above it.
+//
+// A span with fewer than 2 control points has no chord and no hodograph, so
+// it reports 0, matching spanHodographGapUpper's own guard.
+func spanSpeedUpper(span bezierSpan) float64 {
+	if len(span) < 2 {
+		return 0
+	}
+	return absSumUpper(ratSqrtUp(spanChordSquared(span)), spanHodographGapUpper(span))
+}
