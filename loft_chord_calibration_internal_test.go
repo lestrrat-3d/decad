@@ -168,11 +168,16 @@ func wedgeArcSketch(t *testing.T, w *sketch.World, plane *sketch.Plane) (*sketch
 }
 
 // wedgeSplineSketch builds the true A10b outline: the same 5-point fit spline
-// wedgeFitSpline samples, closed by a chord from its last point back to its first.
+// wedgeFitSpline samples, closed back through the origin by the two radial lines
+// chordedWedgeProfile also draws. It is therefore the uncorded twin of the chorded
+// A10b body — same wedge region, the chord chain replaced by the curve itself —
+// exactly as wedgeArcSketch is the uncorded twin of the chorded A10a body.
 func wedgeSplineSketch(t *testing.T, w *sketch.World, plane *sketch.Plane) (*sketch.Sketch, *sketch.Profile) {
 	t.Helper()
 	s, err := w.CreateSketch(plane)
 	require.NoError(t, err)
+	origin := s.CreatePoint(0, 0)
+	s.Fix(origin)
 	pts := make([]*sketch.Point, 5)
 	for k := range pts {
 		theta := float64(k) * math.Pi / 8
@@ -182,7 +187,8 @@ func wedgeSplineSketch(t *testing.T, w *sketch.World, plane *sketch.Plane) (*ske
 	}
 	_, err = s.CreateFitSpline(pts...)
 	require.NoError(t, err)
-	s.CreateLine(pts[len(pts)-1], pts[0])
+	s.CreateLine(origin, pts[0])
+	s.CreateLine(pts[len(pts)-1], origin)
 	_, err = s.Solve(t.Context())
 	require.NoError(t, err)
 	profiles := s.Profiles()
@@ -232,6 +238,100 @@ func wedgeSplineEnvelope(t *testing.T) float64 {
 	u1, err := profileCoordinateEnvelope(rec1, work, nil)
 	require.NoError(t, err)
 	return math.Max(u0, u1)
+}
+
+// requireFeetMatchChordEnds asserts that the two radial feet of a true outline are
+// the same two points the chorded stand-in's own chain starts and ends at. Both
+// lists are ordered by descending u first, so the wedge's (r,0) corner is compared
+// against (r,0) and its (0,r) corner against (0,r).
+func requireFeetMatchChordEnds(t *testing.T, feet [][2]float64, chorded [][2]float64) {
+	t.Helper()
+	require.Len(t, feet, 2, "a true wedge outline closes through the origin on exactly two radial lines")
+	if feet[0][0] < feet[1][0] {
+		feet[0], feet[1] = feet[1], feet[0]
+	}
+	want := [][2]float64{chorded[0], chorded[len(chorded)-1]}
+	if want[0][0] < want[1][0] {
+		want[0], want[1] = want[1], want[0]
+	}
+	for i := range want {
+		require.InDelta(t, want[i][0], feet[i][0], 1e-12,
+			"the radial lines reach the same two corners the chorded stand-in starts and ends at")
+		require.InDelta(t, want[i][1], feet[i][1], 1e-12,
+			"the radial lines reach the same two corners the chorded stand-in starts and ends at")
+	}
+}
+
+// TestLoftChordCalibrationTrueOutlineIsTheChordedTwin pins the fidelity both
+// envelope readings rest on: each TRUE outline encloses the same wedge region its
+// chorded stand-in does. chordedWedgeProfile walks origin -> pts[0] -> ... ->
+// pts[last] -> origin, so the uncorded twin is origin -> the curve's first defining
+// point -> the curve -> its last defining point -> origin, with the chord chain and
+// nothing else replaced by the curve. An outline closed straight from the curve's
+// last point back to its first would enclose a lens rather than a wedge, and its
+// envelope would then be read off a different region than every other reading here
+// is measured on. It records profiles only and builds no loft, so it always runs.
+func TestLoftChordCalibrationTrueOutlineIsTheChordedTwin(t *testing.T) {
+	// radialFeet returns, for each straight segment of the recorded loop, the
+	// endpoint away from the origin — and fails the test outright on a straight
+	// segment that touches the origin at neither end, which is exactly the lens
+	// closure this fixture must not have.
+	radialFeet := func(t *testing.T, rec ProfileRecord) [][2]float64 {
+		t.Helper()
+		var feet [][2]float64
+		for _, seg := range rec.Outer.Segments {
+			line, ok := seg.(LineSeg)
+			if !ok {
+				continue
+			}
+			switch {
+			case line.Start == (Point2{}):
+				feet = append(feet, [2]float64{line.End.U, line.End.V})
+			case line.End == (Point2{}):
+				feet = append(feet, [2]float64{line.Start.U, line.Start.V})
+			default:
+				t.Fatalf("a true wedge outline's straight segments are radial, but %v reaches the origin at neither end", line)
+			}
+		}
+		return feet
+	}
+
+	t.Run("A10a: the arc outline is the chorded circle wedge's twin", func(t *testing.T) {
+		w, base, _ := wedgePlanes(t)
+		s, p := wedgeArcSketch(t, w, base)
+		rec, _, err := RecordProfile(s, p)
+		require.NoError(t, err)
+		require.Len(t, rec.Outer.Segments, 3, "two radial lines plus the arc")
+
+		curved := 0
+		for _, seg := range rec.Outer.Segments {
+			if _, ok := seg.(ArcSeg); ok {
+				curved++
+			}
+		}
+		require.Equal(t, 1, curved, "the curved side is the arc itself, never a chord")
+
+		requireFeetMatchChordEnds(t, radialFeet(t, rec), wedgeCirclePoints(loftChordFractionPinM))
+	})
+
+	t.Run("A10b: the spline outline is the chorded spline wedge's twin", func(t *testing.T) {
+		w, base, _ := wedgePlanes(t)
+		s, p := wedgeSplineSketch(t, w, base)
+		rec, _, err := RecordProfile(s, p)
+		require.NoError(t, err)
+		require.Len(t, rec.Outer.Segments, 3, "two radial lines plus the fit spline")
+
+		curved := 0
+		for _, seg := range rec.Outer.Segments {
+			if _, ok := seg.(FitSplineSeg); ok {
+				curved++
+			}
+		}
+		require.Equal(t, 1, curved, "the curved side is the fit spline itself, never a chord")
+
+		fs := wedgeFitSpline(t)
+		requireFeetMatchChordEnds(t, radialFeet(t, rec), wedgeSplinePoints(fs, loftChordFractionPinM))
+	})
 }
 
 // --- sectionDelta and the Area excesses, per arm ---
