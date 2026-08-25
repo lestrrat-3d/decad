@@ -361,6 +361,12 @@ type loftLoopPair struct {
 	v, w                 []Point2
 	arcUpperV, arcUpperW []float64
 	matchedDelta         []float64
+	// tangentEnergyV/tangentEnergyW are parallel to v/w too:
+	// perCellTangentEnergy's own per-side reading for that station's OUTGOING
+	// cell, bounds.go's cellChordCurveAreaAllow tangentEnergyUpper obligation.
+	// +Inf where the arm that placed the stations proves no such bound, which
+	// costs that helper its sharper arm and never its soundness.
+	tangentEnergyV, tangentEnergyW []float64
 }
 
 // loftChordFraction is the coefficient a10-plan.md Part 2 Q2's chord-target
@@ -687,6 +693,60 @@ func perCellArcUpper(seg CurveSegment, w segmentWalk, m int) float64 {
 	return upRound(w.lengthUpper / float64(m))
 }
 
+// perCellTangentEnergy is bounds.go's cellChordCurveAreaAllow own
+// tangentEnergyUpper obligation for ONE cell of this walk: a proven upper bound
+// on the integral of |curve'(s) - chord|^2 over the cell's own shared
+// parameter, or +Inf where this evaluator cannot prove one.
+//
+// It is dispatched on the WALK KIND rather than shared across every arm,
+// because the obligation uniformSpeedTangentEnergyUpper discharges rests on the
+// shared parametrization having CONSTANT SPEED — a property of the arm that
+// placed the stations, not of the cell's geometry. The circular arm's
+// uniform-ANGLE stations (loftCircularCellStations) are constant speed on a
+// circle, which is what discharges it; a straight walk's chord IS its curve, so
+// its deviation is identically zero. Any FUTURE kind — the free-form arm's own
+// span-uniform native fraction above all, which is NOT constant speed — answers
+// +Inf here until it carries a proof of its own, so it degrades
+// cellChordCurveAreaAllow to that helper's premise-free arm rather than being
+// silently handed a bound whose premise it does not meet.
+func perCellTangentEnergy(seg CurveSegment, w segmentWalk, m int) float64 {
+	switch w.kind {
+	case walkLine:
+		return 0
+	case walkCircular:
+		return uniformSpeedTangentEnergyUpper(perCellArcUpper(seg, w, m), circularCellChordLower(w, m))
+	default:
+		return math.Inf(1)
+	}
+}
+
+// circularCellChordLower is a PROVEN LOWER bound on ONE uniform-angle cell's
+// own chord length, 2*|R|*sin(phi) at the cell's own half sweep
+// phi = |th1-th0|/(2m) — uniformSpeedTangentEnergyUpper's own chordLower
+// obligation, which must never overstate the chord.
+//
+// The sine is bounded below without a library call: sin(x) >= x - x^3/6 for
+// every x >= 0 (the Maclaurin series alternates with decreasing terms over the
+// whole range a half sweep can reach, phi <= pi). The half sweep itself is
+// taken DOWN and the cube UP, so both roundings push the published chord the
+// same way, and a walk whose own numbers leave nothing provable answers 0 —
+// which is a valid, if empty, lower bound on any chord.
+func circularCellChordLower(w segmentWalk, m int) float64 {
+	if m <= 0 || isNonFinite(w.radius) || isNonFinite(w.th0) || isNonFinite(w.th1) {
+		return 0
+	}
+	phi := downRound(downRound(math.Abs(w.th1-w.th0)) / float64(2*m))
+	if phi <= 0 {
+		return 0
+	}
+	cube := upRound(upRound(upRound(phi*phi)*phi) / 6)
+	sinLower := downRound(phi - cube)
+	if sinLower <= 0 {
+		return 0
+	}
+	return downRound(2 * math.Abs(w.radius) * sinLower)
+}
+
 // circularStationChain walks m uniform-angle stations of w, at parameter
 // t_k = k/m for k = 0..m-1 — this segment's OWN interior stations, excluding
 // its shared end point (loftCellStations' own doc comment states why).
@@ -743,6 +803,7 @@ func loftPairings(p0, p1 ProfileRecord, offsets []int, walks0, walks1 [][]segmen
 		off := offsets[i]
 		var v, w []Point2
 		var arcUpperV, arcUpperW []float64
+		var tangentEnergyV, tangentEnergyW []float64
 		var matchedDelta []float64
 		for j := range n {
 			w0 := walks0[i][j]
@@ -757,9 +818,13 @@ func loftPairings(p0, p1 ProfileRecord, offsets []int, walks0, walks1 [][]segmen
 			m := len(stations0)
 			cellArcV := perCellArcUpper(seg0, w0, m)
 			cellArcW := perCellArcUpper(seg1, w1, m)
+			cellEnergyV := perCellTangentEnergy(seg0, w0, m)
+			cellEnergyW := perCellTangentEnergy(seg1, w1, m)
 			for range m {
 				arcUpperV = append(arcUpperV, cellArcV)
 				arcUpperW = append(arcUpperW, cellArcW)
+				tangentEnergyV = append(tangentEnergyV, cellEnergyV)
+				tangentEnergyW = append(tangentEnergyW, cellEnergyW)
 			}
 			matchedDelta = append(matchedDelta, cellMatchedDelta...)
 			v = append(v, stations0...)
@@ -770,7 +835,12 @@ func loftPairings(p0, p1 ProfileRecord, offsets []int, walks0, walks1 [][]segmen
 			}
 			stationRound = math.Max(stationRound, round)
 		}
-		pairs[i] = loftLoopPair{v: v, w: w, arcUpperV: arcUpperV, arcUpperW: arcUpperW, matchedDelta: matchedDelta}
+		pairs[i] = loftLoopPair{
+			v: v, w: w,
+			arcUpperV: arcUpperV, arcUpperW: arcUpperW,
+			matchedDelta:   matchedDelta,
+			tangentEnergyV: tangentEnergyV, tangentEnergyW: tangentEnergyW,
+		}
 	}
 	return pairs, sectionDelta, sectionMatchedDelta, stationRound, nil
 }

@@ -560,6 +560,12 @@ func TestLoftMassAccumulatorVolumeChordedTermReadsMatchedDeltaNotSagitta(t *test
 		v: make([]Point2, 2), w: make([]Point2, 2),
 		arcUpperV: arcUpperV, arcUpperW: arcUpperW,
 		matchedDelta: []float64{sectionMatchedDelta, 0},
+		// No arm placed these stations, so neither side carries a
+		// constant-speed claim: +Inf is the absence of a tangent-deviation
+		// energy proof, which cellChordCurveAreaAllow spends as its
+		// premise-free arm (this fixture asserts on the VOLUME leg anyway).
+		tangentEnergyV: []float64{math.Inf(1), math.Inf(1)},
+		tangentEnergyW: []float64{math.Inf(1), math.Inf(1)},
 	}}
 	// anchor sits off every held vertex so neither triangle's own first
 	// vertex cancels the tetrahedron term trivially (a vLo-anchored sum

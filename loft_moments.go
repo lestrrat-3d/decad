@@ -623,36 +623,28 @@ type loftChordedAllow struct {
 // areaExcess is the wall's own per-cell chord-versus-curve gap, composed of
 // TWO independent legs by absSumUpper — the SAME triangle-inequality
 // composition chordedBoundaryVolumeAllow's own doc comment uses for the
-// volume gap one dimension over, |true − held| <= |true − planar| +
-// |planar − held|, "planar" the flat (T=0) trapezoid the two chords would
-// sweep if the cell's own four corners were coplanar:
+// volume gap one dimension over, |true − held| <= |held − bilinear| +
+// |bilinear − true|, "bilinear" the RULED patch through the cell's own four
+// held corners:
 //
-//   - the PLANAR leg reuses tessellate.go's walkAreaSlack own SHAPE — "the
-//     wall loses (arc − chord) × height" — one dimension over its
-//     single-axis-height prism case: (that side's own per-cell arc-length
-//     upper bound minus its OWN held chord length, floored at zero) times
-//     rung (the corner-to-corner transverse extent), summed over both
-//     sides. This is EXACT for walkAreaSlack's own case (a literal cylinder
-//     wall, the shipped A10a wedge's own shape — two sections offset along
-//     their shared normal alone), where the true departure between an
-//     m-chord cylinder strip and the analytic one IS (arc−chord)·height
-//     with no further correction, and this term (summed over BOTH sides
-//     against one rung) is twice that exact value — a safe, deliberate
-//     over-count, not a gap;
-//   - the TWIST leg, cellTwistAreaAllow (bounds.go, a NEW caller-side term):
-//     the planar leg's own "the four corners lie in one plane" premise fails
-//     whenever the two sections genuinely differ (VIOLATION 2's own
-//     cone-frustum counterexample, TestLoftConeFrustumWallAreaEnclosed,
-//     where the planar leg alone under-covers the true gap by 1.646x), and
-//     this leg is what closes it: a PROVEN, T-proportional bound on how far
-//     the cell's own bilinear ruled patch can carry the held triangle pair's
-//     area from the planar reading, T = vLo−vHi−wLo+wHi the SAME twist
-//     vector cellTwistVolumeAllow already names, zero EXACTLY when the cell
-//     is planar (the shipped wedge's own T ≡ 0 —
-//     loft_chord_calibration_internal_test.go's own wedge fixtures) so this
-//     leg contributes nothing extra there and the shipped
-//     margin is unaffected; positive whenever the two sections genuinely
-//     twist against each other.
+//   - the TWIST leg, cellTwistAreaAllow (bounds.go): |held − bilinear|, how
+//     far the cell's own bilinear ruled patch can carry the held triangle
+//     pair's area, T = vLo−vHi−wLo+wHi the SAME twist vector
+//     cellTwistVolumeAllow already names, zero EXACTLY when the cell is
+//     planar (the shipped wedge's own T ≡ 0 —
+//     loft_chord_calibration_internal_test.go's own wedge fixtures);
+//   - the RULED leg, cellChordCurveAreaAllow (bounds.go): |bilinear − true|,
+//     how far that bilinear patch's own area sits from the TRUE ruled patch
+//     between the two recorded curves. It reads the cell's own held corners,
+//     its two per-side arc-length bounds, its PARAMETER-MATCHED matchedDelta
+//     and its two per-side tangent-deviation ENERGIES
+//     (p.tangentEnergyV/tangentEnergyW, perCellTangentEnergy's own per-arm
+//     reading), and that helper's own doc comment carries the derivation. It
+//     replaces an arc-minus-chord LENGTH excess times a rung length, a shape
+//     third order in the cell's own sweep where the gap it stood for is
+//     SECOND order wherever the ruling runs anything but square across the
+//     section tangent — an understatement without bound on a twisted
+//     pairing.
 //
 // This is the wall term; capAreaExcess above is Area's own cap term, and the
 // two together are what area() charges beside the held triangle sum.
@@ -690,14 +682,13 @@ func computeLoftChordedAllow(pairs []loftLoopPair, vIdx, wIdx [][]int, verts []r
 			maxTwistOffsetUpper = math.Max(maxTwistOffsetUpper, cellTwistOffsetUpper(vLo, vHi, wLo, wHi))
 			seamPerimeterUpper = absSumUpper(seamPerimeterUpper, p.arcUpperV[j], p.arcUpperW[j])
 
-			rung := math.Max(vLo.Sub(wLo).Len(), vHi.Sub(wHi).Len())
-			chordV := vHi.Sub(vLo).Len()
-			chordW := wHi.Sub(wLo).Len()
-			excessV := math.Max(p.arcUpperV[j]-chordV, 0)
-			excessW := math.Max(p.arcUpperW[j]-chordW, 0)
-			planarLeg := productUpper(absSumUpper(excessV, excessW), rung)
+			ruledLeg := cellChordCurveAreaAllow(
+				vLo, vHi, wLo, wHi,
+				p.arcUpperV[j], p.arcUpperW[j], p.matchedDelta[j],
+				p.tangentEnergyV[j], p.tangentEnergyW[j],
+			)
 			twistLeg := cellTwistAreaAllow(vLo, vHi, wLo, wHi)
-			areaExcess = absSumUpper(areaExcess, planarLeg, twistLeg)
+			areaExcess = absSumUpper(areaExcess, ruledLeg, twistLeg)
 		}
 	}
 
