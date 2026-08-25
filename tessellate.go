@@ -812,17 +812,50 @@ func chordCount(w segmentWalk, tol float64) (int, float64, error) {
 	return n, s, nil
 }
 
-// chordSagitta is the proven sagitta 2r·sin²(Δθ/4) a chord subtends when a
-// circular walk of the given sweep is split into n equal chords —
-// chordCount's own walk-up step, pulled out as its single owner (docs/loft-
-// design.md PR 3) so a later caller measuring the SAME quantity for a hand-
-// chorded fixture reads the identical closed form rather than a second copy
-// of it. It is the same sagitta as r·(1 − cos(Δθ/2)) but stays accurate
-// where 1 − cos rounds a tiny positive sagitta to zero — the bound is
-// PROVEN, so it may be conservative but never understated.
+// chordSagitta is a PROVEN upper bound on the sagitta 2r·sin²(Δθ/4) a chord
+// subtends when a circular walk of the given sweep is split into n equal
+// chords — chordCount's own walk-up step, pulled out as its single owner
+// (docs/loft-design.md PR 3) so a later caller measuring the SAME quantity
+// for a hand-chorded fixture reads the identical closed form rather than a
+// second copy of it.
+//
+// It never calls math.Sin. sin(x) <= x for every x >= 0 — the tangent line
+// to sin at the origin lies above the curve on the whole nonnegative axis,
+// an elementary inequality, not a derived one — so with x = sweep/(4n),
+// 2r·sin²(x) <= 2r·x² = r·sweep²/(8n²). That bound needs no trig call at
+// all, so it carries none of Sin's own missing ulp contract (Go publishes
+// none) and none of the FMA-contraction difference between amd64 and arm64
+// a Sin-based formula would expose: every operation below is an ordinary
+// multiply or divide, each individually outward-rounded, the same
+// single-operation proof every other bound in this package rests on.
+//
+// The denominator 8n² is computed with PLAIN arithmetic, never
+// outward-rounded: for every n this package ever calls with (n <=
+// maxChordsPerWalk = 1<<14, so 8n² <= 2^31, far under float64's 2^53
+// exact-integer range) the computation commits no rounding at all, and
+// outward-rounding a DENOMINATOR would move the bound the WRONG way — a
+// larger denominator gives a SMALLER, tighter, and here unproven quotient.
+// The numerator r·sweep² is outward-rounded through productUpper, and the
+// one division is outward-rounded by a final upRound, exactly the
+// single-operation margin productUpper already applies to a multiply.
+//
+// The bound is conservative by the factor (x/sin x)² — about 1.0000126 at a
+// typical fine chording (90 degrees over 64 stations) and about 1.098 in
+// the coarsest case a closed walk can reach (n=3 on a full circle,
+// TestChordSagittaCoarsestClosedWalkStaysProven pins it). So chordCount's
+// own walk-up may settle on a slightly larger n than the tightest possible
+// sagitta would allow — the safe direction: a finer mesh over a tighter
+// proven bound, never a coarser one over a looser claim.
 func chordSagitta(radius, sweep float64, n int) float64 {
-	s := math.Sin(sweep / float64(n) / 4)
-	return 2 * radius * s * s
+	if n <= 0 {
+		return 0
+	}
+	denom := 8 * float64(n) * float64(n)
+	num := productUpper(radius, productUpper(sweep, sweep))
+	if num <= 0 || denom <= 0 || isNonFinite(denom) {
+		return 0
+	}
+	return upRound(num / denom)
 }
 
 // errTooManyChords refuses a chord tolerance finer than the mesh cap.

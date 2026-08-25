@@ -1080,25 +1080,31 @@ func TestCellChordCurveAreaUpperRefusesTheSagittaZigzag(t *testing.T) {
 
 // TestArcMatchedDeltaEqualsSagitta pins Step 2's own carried-forward
 // verification: for a CIRCULAR ARC under its own uniform-angle
-// parametrization, sup_s|arc(s)-chord(s)| equals the chord's own sagitta
-// EXACTLY — the one curve kind (besides a trivial straight LINE) where
-// cellChordCurveAreaUpper's matchedDeltaUpper obligation and the loft
-// evaluator's sagitta-only sectionDelta field coincide, over sweeps from 5
-// to 170 degrees. An arc of radius r subtending angle theta about its own
-// centre has, at the uniform-angle parameter s in [0,1], true point
-// r*(cos(s*theta), sin(s*theta)) and chord point (1-s)*(r,0) +
+// parametrization, sup_s|arc(s)-chord(s)| equals the chord's own TRUE
+// sagitta EXACTLY — the one curve kind (besides a trivial straight LINE)
+// where cellChordCurveAreaUpper's matchedDeltaUpper obligation and the
+// loft evaluator's sagitta-only sectionDelta field coincide, over sweeps
+// from 5 to 170 degrees. An arc of radius r subtending angle theta about
+// its own centre has, at the uniform-angle parameter s in [0,1], true
+// point r*(cos(s*theta), sin(s*theta)) and chord point (1-s)*(r,0) +
 // s*(r*cos(theta), r*sin(theta)); the maximum separation over s is a
-// standard result, r*(1-cos(theta/2)) BETWEEN the endpoints — but the
-// closed-form sagitta chordSagitta(r, theta, 1) = 2r*sin(theta/4)^2 is the
-// SAME value (2*sin(x/2)^2 = 1-cos(x) is the numerically-stable identity
-// chordSagitta's own doc comment already uses at x=theta/2), confirmed here
-// by direct numerical maximisation over s rather than trusted algebraically.
+// standard result, r*(1-cos(theta/2)) BETWEEN the endpoints — the SAME
+// value as 2r*sin(theta/4)^2 (2*sin(x/2)^2 = 1-cos(x) is the
+// numerically-stable identity) — confirmed here by direct numerical
+// maximisation over s rather than trusted algebraically. That TRUE
+// closed-form value, trueSagitta below, is computed independently of
+// chordSagitta: chordSagitta itself now publishes a PROVEN UPPER bound
+// (sin(x)<=x, this file's own item 2) rather than the tight closed form,
+// so it is no longer the arc's exact matched-parameter deviation — it
+// still bounds it, which the second assertion below pins, but the
+// coincidence this test's own name refers to is a fact about the TRUE
+// mathematical quantities, not about chordSagitta's own numeric output.
 func TestArcMatchedDeltaEqualsSagitta(t *testing.T) {
 	const radius = 7.0
 	for _, sweepDeg := range []float64{5, 10, 30, 60, 90, 120, 150, 170} {
 		t.Run(fmt.Sprintf("sweep=%gdeg", sweepDeg), func(t *testing.T) {
 			theta := sweepDeg * math.Pi / 180
-			sagitta := chordSagitta(radius, theta, 1)
+			trueSagitta := 2 * radius * math.Sin(theta/4) * math.Sin(theta/4)
 
 			chordStart := r3.NewVec(radius, 0, 0)
 			chordEnd := r3.NewVec(radius*math.Cos(theta), radius*math.Sin(theta), 0)
@@ -1116,10 +1122,18 @@ func TestArcMatchedDeltaEqualsSagitta(t *testing.T) {
 			// A fine but finite numerical maximisation converges toward the
 			// true supremum from below, so this checks near-equality rather
 			// than an exact match — HOST PORTABILITY: no literal from this
-			// run is pinned, only a same-run comparison against
-			// chordSagitta's own closed form.
-			require.InDeltaf(t, sagitta, maxSep, sagitta*1e-4+1e-9,
-				"sweep=%g: the arc-vs-chord max separation %.10g must match the sagitta %.10g under the matched parametrization", sweepDeg, maxSep, sagitta)
+			// run is pinned, only a same-run comparison against the TRUE
+			// closed form computed above.
+			require.InDeltaf(t, trueSagitta, maxSep, trueSagitta*1e-4+1e-9,
+				"sweep=%g: the arc-vs-chord max separation %.10g must match the true sagitta %.10g under the matched parametrization", sweepDeg, maxSep, trueSagitta)
+
+			// chordSagitta's own PROVEN bound (sin(x)<=x, no longer the tight
+			// closed form) must still enclose the true parameter-matched
+			// deviation, so it remains valid to pass as matchedDeltaUpper for
+			// an arc pairing even though it is no longer exactly equal to it.
+			bound := chordSagitta(radius, theta, 1)
+			require.GreaterOrEqualf(t, bound, trueSagitta,
+				"sweep=%g: chordSagitta's own proven bound %.10g must enclose the true sagitta %.10g", sweepDeg, bound, trueSagitta)
 		})
 	}
 }

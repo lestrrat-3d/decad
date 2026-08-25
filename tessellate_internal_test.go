@@ -3,6 +3,7 @@ package decad
 import (
 	"context"
 	"math"
+	"math/big"
 	"testing"
 
 	"github.com/lestrrat-3d/r3"
@@ -132,4 +133,99 @@ func TestTessellateContextReachesCapTriangulationCancellation(t *testing.T) {
 	_, err = body.TessellateContext(ctx, units.Millimeters(0.0005))
 	require.ErrorIs(t, err, context.Canceled)
 	require.True(t, ctx.entered, `the public context must reach cap hole ordering`)
+}
+
+// bigSinTaylor returns sin(x) to prec bits via a Taylor series carried
+// entirely in big.Float, run for a fixed 200 terms — no libm call anywhere,
+// so it carries none of Go's math.Sin's own missing accuracy contract. It
+// assumes |x| stays comfortably under pi, which every caller here meets:
+// chordSagitta's own argument sweep/(4n) never reaches pi/2 for n>=1 and a
+// sweep under one full turn.
+func bigSinTaylor(x float64, prec uint) *big.Float {
+	bx := new(big.Float).SetPrec(prec).SetFloat64(x)
+	x2 := new(big.Float).SetPrec(prec).Mul(bx, bx)
+	term := new(big.Float).SetPrec(prec).Set(bx)
+	sum := new(big.Float).SetPrec(prec).Set(bx)
+	for k := 1; k <= 200; k++ {
+		denom := new(big.Float).SetPrec(prec).SetInt64(int64(2*k) * int64(2*k+1))
+		term = new(big.Float).SetPrec(prec).Quo(new(big.Float).SetPrec(prec).Mul(term, x2), denom)
+		term.Neg(term)
+		sum.Add(sum, term)
+	}
+	return sum
+}
+
+// bigSagittaReference computes the TRUE closed-form sagitta,
+// 2*radius*sin(sweep/n/4)^2 — a chord's own exact deviation from its arc,
+// NOT chordSagitta's own (now deliberately looser) proven-upper-bound
+// formula — entirely in big.Float at prec bits, so the comparisons this
+// file's chordSagitta tests draw never lean on any accuracy claim about
+// float64 arithmetic or Go's Sin.
+func bigSagittaReference(radius, sweep float64, n int, prec uint) *big.Float {
+	s := bigSinTaylor(sweep/float64(n)/4, prec)
+	s2 := new(big.Float).SetPrec(prec).Mul(s, s)
+	r := new(big.Float).SetPrec(prec).SetFloat64(radius)
+	return new(big.Float).SetPrec(prec).Mul(big.NewFloat(2).SetPrec(prec), new(big.Float).SetPrec(prec).Mul(r, s2))
+}
+
+// TestChordSagittaNeverUnderstatesTheHighPrecisionReference is what makes
+// chordSagitta's own doc-comment claim — PROVEN, so it may be conservative
+// but must never be understated — true rather than merely stated: it checks
+// the published sagitta against a from-scratch 300-bit-precision reference
+// (bigSagittaReference, which never calls Go's math.Sin either) over one row
+// an earlier, Sin-based formula used to understate (radius=15.42,
+// sweep=4.1657, n=57) plus a further spread of radii, sweeps and chord
+// counts.
+func TestChordSagittaNeverUnderstatesTheHighPrecisionReference(t *testing.T) {
+	const prec = 300
+	type row struct {
+		radius, sweep float64
+		n             int
+	}
+	rows := []row{
+		{15.42, 4.1657, 57},
+	}
+	for _, radius := range []float64{0.001, 1, 7, 15.42, 100, 5000} {
+		for _, sweepDeg := range []float64{1, 5, 30, 90, 180, 270, 359} {
+			for _, n := range []int{1, 2, 3, 7, 57, 128, 1024} {
+				rows = append(rows, row{radius, sweepDeg * math.Pi / 180, n})
+			}
+		}
+	}
+
+	for _, rw := range rows {
+		got := chordSagitta(rw.radius, rw.sweep, rw.n)
+		want := bigSagittaReference(rw.radius, rw.sweep, rw.n, prec)
+		gotBig := new(big.Float).SetPrec(prec).SetFloat64(got)
+		diff := new(big.Float).SetPrec(prec).Sub(gotBig, want)
+		require.GreaterOrEqualf(t, diff.Sign(), 0,
+			"chordSagitta(radius=%g, sweep=%g, n=%d) = %.20g must be at or above the high-precision reference %s",
+			rw.radius, rw.sweep, rw.n, got, want.Text('g', 40))
+	}
+}
+
+// TestChordSagittaCoarsestClosedWalkStaysProven pins the OTHER end of
+// chordSagitta's own conservatism, at the coarsest chording a CLOSED walk
+// can ever reach: chordCount never admits fewer than 3 chords for a closed
+// walk, and a full 2*pi sweep split 3 ways is the widest single-chord angle
+// this package ever asks the bound to cover. The sin(x)<=x reduction is
+// loosest exactly where x is largest, so this is where the (x/sin x)^2
+// slack the doc comment states is at its worst — still enclosing the
+// high-precision reference, and still doing so by a bounded, checked
+// margin rather than an unbounded one.
+func TestChordSagittaCoarsestClosedWalkStaysProven(t *testing.T) {
+	const prec = 300
+	const radius, sweep, n = 7.0, 2 * math.Pi, 3
+
+	got := chordSagitta(radius, sweep, n)
+	want := bigSagittaReference(radius, sweep, n, prec)
+	gotBig := new(big.Float).SetPrec(prec).SetFloat64(got)
+	diff := new(big.Float).SetPrec(prec).Sub(gotBig, want)
+	require.GreaterOrEqualf(t, diff.Sign(), 0,
+		"chordSagitta(radius=%g, sweep=%g, n=%d) = %.20g must enclose the high-precision reference %s even at the coarsest closed-walk chording",
+		radius, sweep, n, got, want.Text('g', 40))
+
+	ratio, _ := new(big.Float).SetPrec(prec).Quo(gotBig, want).Float64()
+	require.InDeltaf(t, 1.098, ratio, 0.01,
+		"the sin(x)<=x slack at the coarsest closed-walk chording (n=3, full circle) should sit close to the doc comment's own stated (x/sin x)^2 figure, got ratio=%.6g", ratio)
 }
