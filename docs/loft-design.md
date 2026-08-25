@@ -429,8 +429,9 @@ for a cap vertex.** Topology §3 grants a zero bound to a vertex whose
 plane-local coordinates come from the RECORD rather than to every vertex a
 feature builds, and `p` here is the recorded section's own point, so a loft
 vertex carries the same standing a cap vertex does. A station the walk
-COMPUTES takes no such grant — a same-kind circular pair's (§5.1), and a
-`LineSeg` end at a trimmed parameter alike; §5.1's Table C states each
+COMPUTES takes no such grant — a same-kind circular pair's and a same-kind
+Tier A free-form pair's alike (§5.1), and a `LineSeg` end at a trimmed
+parameter too; §5.1's Table C states each
 station's provenance and §5.2's table states its displacement from the point
 the record denotes.
 
@@ -496,7 +497,7 @@ the face's `Area()` and every vertex `Position()` on it carry `delta` (§8).
 Cap faces (`capStart`, `capEnd`) are `Plane`s over a polygon-with-holes
 region, exactly as an Extrude cap is.
 
-### 5.1 Chord chain for a same-kind circular pair
+### 5.1 Chord chain for a same-kind circular or Tier A free-form pair
 
 **A same-kind `ArcSeg` or `CircleSeg` pair walls with a chain of chord
 cells, never with the single quad §5's table shows for a `LineSeg` pair.**
@@ -626,22 +627,24 @@ exactly as for an all-`LineSeg` build.
 every loop (§7), because the `F` above depends on that total and on nothing
 per-loop. It is allocated per paired segment, which gives each loop a share
 proportional to its own paired-segment count, and a share of the part
-chording can spend proportional to its own circular-pair count. With `P` the
-build's total paired-segment count and `C` the number of same-kind circular
-pairs among them — both fixed by Table P from the two records alone — every
+chording can spend proportional to its own CHORDED-pair count — circular and
+same-kind Tier A free-form together, since a free-form pair chords exactly as
+a circular one does (below). With `P` the build's total paired-segment count
+and `C` the number of chorded pairs among them — circular or same-kind Tier A
+free-form, both fixed by Table P from the two records alone — every
 paired segment is entitled to its first station, which is a `LineSeg` pair's
-whole entitlement (`m = 1`, §7), and each circular pair may take at most
+whole entitlement (`m = 1`, §7), and each chorded pair may take at most
 
 ```text
 mMax = 1 + max(0, (loftStationCap - P) / C)      // integer division
 ```
 
-stations. A circular pair whose own settled `m` (the joint walk-up above)
-exceeds `mMax` is Table S row S15 (`ErrUnsupported`, `errTooManyChords` —
+stations. A chorded pair whose own settled `m` exceeds `mMax` is Table S
+row S15 (`ErrUnsupported`, `errTooManyChords` —
 spline R8, the
 identical sentinel `chordCount` itself already returns when its own walk-up
 would exceed `maxChordsPerWalk`), and the refusal names that segment, since
-the share it exceeded is that segment's own. A build with no circular pair
+the share it exceeded is that segment's own. A build with no chorded pair
 (`C = 0`) never consults the cap at all: its `Σstations` is `Σn_i` exactly
 (§7), the count the record itself states, so an all-`LineSeg` build's only
 resource refusal is S8.
@@ -674,11 +677,12 @@ instead would refuse a mixed build while admitting an all-`LineSeg` build of
 the identical triangle count, which S15's own row states S15 is not.
 
 **Deciding S15 from the record.** `m` and `mMax` are each a function of the
-two `ProfileRecord`s alone — the two sides' certified radius and sweep
-enclosures (§5.2), the chord target above, `P` and `C` — so S15 is DECIDABLE
-from the two records, with no station built. A pair whose certified sagitta
-has no derivation refuses S14 beside it, since the walk-up that settles `m`
-is what asks for it. Every product and sum
+two `ProfileRecord`s alone — the two sides' certified enclosures (§5.2), the
+chord target above, `P` and `C` — so S15 is DECIDABLE from the two records,
+with no station built. A pair whose certified sagitta has no derivation
+refuses S14 beside it, since the process that settles `m` — the joint walk-up
+for a circular pair, the measure-then-bisect loop for a free-form pair
+(§5.1's free-form arm) — is what asks for it. Every product and sum
 in the `mMax` comparison and in §6's own `F*(F-1)/2` preflight is evaluated
 with checked arithmetic and refuses on overflow rather than wrapping, the
 identical preflight-before-allocation discipline §6 states for the pair-test
@@ -770,15 +774,14 @@ all, share the identical rule and the identical `loftChordFraction` constant
 own parameterisation.
 
 **The station cap applies unchanged, and a free-form pair's share of it is
-counted the same way a circular pair's is.** A free-form pair that cannot
+counted by the same allocation stated above.** A free-form pair that cannot
 meet the chord target inside `loftStationCap` is S15, `errTooManyChords`,
 the identical refusal a circular pair reaches under the same cap. The
-`mMax` allocation above counts a same-kind Tier A free-form pair as one of
-`C`'s pairs, exactly as it already counts a circular one: `C` is the
-CHORDED-pair count — circular and same-kind Tier A free-form together — and
-a free-form pair's own entitlement, its first station included, is the
-identical `mMax` share a circular pair of the same build gets. A free-form
-pair is a chorded pair for every purpose the cap allocation reads.
+`mMax` allocation above already counts a same-kind Tier A free-form pair as
+one of `C`'s CHORDED pairs, exactly as it counts a circular one — `C`'s own
+definition names both kinds together — so a free-form pair's entitlement,
+its first station included, is the identical `mMax` share a circular pair of
+the same build gets, with no separate accounting of its own.
 
 **The work budget charges both records' existing free-form work counters,
 and mints no fresh one.** The station generator's exact-rational de
@@ -1198,6 +1201,22 @@ never is — and it leaves the caps and the chord-chain wall triangles
 integrating over the SAME assembled boundary, with no region-versus-chord
 mismatch at the cap seam.
 
+**A same-kind Tier A free-form pair takes the built polygon too, for a
+DIFFERENT reason.** `addFreeform` (`moments.go`, `docs/spline-design.md`
+§5) does NOT drop exactness the way `addCircular` does — it adds each
+converted Bézier span's own exact rational Green's-theorem integral into
+the SAME region accumulator, so a free-form-only `ProfileRecord`'s own
+region integral IS an exact rational. That rational is exact for the
+RECORDED curve, though, not for the chord chain §5.1's free-form arm
+actually builds: the two are different boundaries wherever a cell's
+measured sagitta is positive, so reading the record's own rational as the
+cap term would leave the cap integrating a boundary the walls do not
+chord — the identical region-versus-chord mismatch the circular case
+avoids, reached here even though the record's own integral is exact rather
+than absent. The assembled chord polygon's vertices are the same held
+float64 stations the triangulation already holds, taken exactly as
+`math/big.Rat`, exactly as the circular case reads them.
+
 **`Volume` is `Exact` exactly when its published rational is representable in
 the `units.Value` magnitude it carries, AND the payload's displacement
 `delta` is zero, AND its section displacement `sectionDelta` (§5.2) is zero —
@@ -1209,9 +1228,9 @@ whose `delta` is positive — placed (§12 PR 2a), chorded past §5.2's one
 pinned station kind, or both — composes `bounds.go`'s
 `sweptVolumeAllow(delta, areaUpper)` on top of that single rounding, so
 `delta` alone is enough to make the reading `Approximate` however exactly
-any placement's own rotation or reflection is representable. A chorded
-(same-kind circular) body's volume additionally composes `bounds.go`'s
-`chordedBoundaryVolumeAllow(matchedDelta, wallAreaUpper, twistVolumeUpper,
+any placement's own rotation or reflection is representable. A CHORDED body's
+volume — circular or same-kind Tier A free-form — additionally composes
+`bounds.go`'s `chordedBoundaryVolumeAllow(matchedDelta, wallAreaUpper, twistVolumeUpper,
 capVolumeUpper, seamAllow)` — a twin over the chord-to-curve homotopy rather
 than the placement's rigid one, and **never a `sweptVolumeAllow`-shaped
 `(sectionDelta, areaUpper)` pair**, which charges the wall leg alone and
@@ -1220,7 +1239,7 @@ understates a twisted pairing by about five orders of magnitude
 each of that helper's arguments and §8.1 states which mechanism each of its
 four legs answers for. So `sectionDelta` alone is enough to make the reading
 `Approximate` even where `delta == 0`, which is the `m = 1` pair whose two
-end stations §5.2's table pins (§12). A body that is both placed and chorded
+end stations §5.2's table pins (§12), for either kind. A body that is both placed and chorded
 composes both terms, since each bounds a displacement committed at an
 independent stage of the construction — the section chording, then the rigid
 placement.
@@ -1292,8 +1311,8 @@ the walls do — a cap's contribution is the assembled chord polygon's exact
 rational area (above), and the built cap triangles are within `delta` of the
 points that polygon's own vertices denote.
 
-A CHORDED (same-kind circular) body's `Area` reaches for TWO further terms,
-and only one of them has a proven owner.
+A CHORDED body's `Area` — circular or same-kind Tier A free-form — reaches
+for TWO further terms, and only one of them has a proven owner.
 
 - **The cap term is owned.** A cap's held reading is the assembled chord
   polygon's shoelace area, and the region that cap's recorded boundary
@@ -1471,10 +1490,19 @@ check replay §3.1 already runs for every other closed-set field.
 **Replay is deterministic for the same reason every other feature's is**
 (evaluator §1, modify §11): the evaluator reads only the two validated
 records, never a live sketch. The pairing (Table P), the construction (§5),
-and the audit (§6) are closed-form functions of that recorded data: a
-same-kind circular pair's station chain (§5.1) is a closed-form walk-up over
-the two records' own certified radius and sweep enclosures (§5.2), evaluated
-against the fixed `loftChordFraction` constant (§5.1, §14) — the same two
+and the audit (§6) are closed-form functions of that recorded data, over
+either of §5.1's two station arms — the determinism claim rests on what is
+actually true of each, not on a single shared mechanism: a same-kind
+circular pair's station chain is a closed-form walk-up over the two records'
+own certified radius and sweep enclosures (§5.2); a same-kind Tier A
+free-form pair's station chain is instead a measure-then-bisect walk over
+the two records' own Bézier span decompositions (§5.1's free-form arm),
+which is deterministic for the reason §5.1 states — the bisection is applied
+to the CELL rather than to one side, so the same two records settle the
+identical dyadic station set every time, with no external input to the
+loop. Both arms are evaluated
+against the fixed `loftChordFraction` constant (§5.1, §14) — so for either
+kind of pair, the same two
 records and the same constant always produce the same station count and the
 same station coordinates, with no live sketch consulted and no caller input
 threaded through the wire (§10). A replay reproduces the same triangles, the
@@ -1533,8 +1561,9 @@ missing exceeds the diameter it would have measured directly.
 
 **A COMPUTED station's KIND earns it no such standing, and wherever its own
 `stationRound` is positive the unshrunk reading is not a lower bound over
-one**: the walk reaches it through `math.Sincos` and it sits only within that
-bound of the point the record denotes (§5.2), so it can sit OUTWARD of the
+one**: the circular walk reaches it through `math.Sincos` and §5.1's
+free-form arm through its own dyadic bisection, and either way it sits only
+within that bound of the point the record denotes (§5.2), so it can sit OUTWARD of the
 true boundary and the raw station-set maximum can EXCEED the true diameter —
 the unsound direction, since an overstated reference loosens the relative
 tolerance gate toward a false `Sound`. **A payload whose `delta` is positive
