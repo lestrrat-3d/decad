@@ -361,10 +361,10 @@ func cmpOnLine(a, b, dir xpt) int {
 // on the plane, so the 2-D answer IS the 3-D one.
 func onTriBoundary(p xpt, xt [3]xpt, n xpt) bool {
 	u, v := projAxes(n)
-	pp := xp2{ratCoordOf(p, u), ratCoordOf(p, v)}
+	pp := newXP2(ratCoordOf(p, u), ratCoordOf(p, v))
 	for i := range 3 {
-		a := xp2{ratCoordOf(xt[i], u), ratCoordOf(xt[i], v)}
-		b := xp2{ratCoordOf(xt[(i+1)%3], u), ratCoordOf(xt[(i+1)%3], v)}
+		a := newXP2(ratCoordOf(xt[i], u), ratCoordOf(xt[i], v))
+		b := newXP2(ratCoordOf(xt[(i+1)%3], u), ratCoordOf(xt[(i+1)%3], v))
 		if on, _ := onSegment2(a, b, pp); on {
 			return true
 		}
@@ -378,11 +378,11 @@ func onTriBoundary(p xpt, xt [3]xpt, n xpt) bool {
 // graze-or-crossing verdict only the edge's two adjacent facets can give.
 func segAlongEdge(p0, p1 xpt, xt [3]xpt, n xpt) int {
 	u, v := projAxes(n)
-	q0 := xp2{ratCoordOf(p0, u), ratCoordOf(p0, v)}
-	q1 := xp2{ratCoordOf(p1, u), ratCoordOf(p1, v)}
+	q0 := newXP2(ratCoordOf(p0, u), ratCoordOf(p0, v))
+	q1 := newXP2(ratCoordOf(p1, u), ratCoordOf(p1, v))
 	for i := range 3 {
-		a := xp2{ratCoordOf(xt[i], u), ratCoordOf(xt[i], v)}
-		b := xp2{ratCoordOf(xt[(i+1)%3], u), ratCoordOf(xt[(i+1)%3], v)}
+		a := newXP2(ratCoordOf(xt[i], u), ratCoordOf(xt[i], v))
+		b := newXP2(ratCoordOf(xt[(i+1)%3], u), ratCoordOf(xt[(i+1)%3], v))
 		on0, _ := onSegment2(a, b, q0)
 		if !on0 {
 			continue
@@ -507,10 +507,10 @@ func xcoordOf(p xpt, i int) *big.Rat { return ratCoordOf(p, i) }
 // plane — lies inside or on the closed triangle, via the exact projection.
 func pointOnTri(p xpt, xt [3]xpt, n xpt) bool {
 	u, v := projAxes(n)
-	pp := xp2{xcoordOf(p, u), xcoordOf(p, v)}
-	a := xp2{xcoordOf(xt[0], u), xcoordOf(xt[0], v)}
-	b := xp2{xcoordOf(xt[1], u), xcoordOf(xt[1], v)}
-	c := xp2{xcoordOf(xt[2], u), xcoordOf(xt[2], v)}
+	pp := newXP2(xcoordOf(p, u), xcoordOf(p, v))
+	a := newXP2(xcoordOf(xt[0], u), xcoordOf(xt[0], v))
+	b := newXP2(xcoordOf(xt[1], u), xcoordOf(xt[1], v))
+	c := newXP2(xcoordOf(xt[2], u), xcoordOf(xt[2], v))
 	return pointInTriX(pp, a, b, c)
 }
 
@@ -562,8 +562,8 @@ func coplanarOverlap(xta, xtb [3]xpt, n xpt) bool {
 	u, v := projAxes(n)
 	var a2, b2 [3]xp2
 	for i := range 3 {
-		a2[i] = xp2{ratCoordOf(xta[i], u), ratCoordOf(xta[i], v)}
-		b2[i] = xp2{ratCoordOf(xtb[i], u), ratCoordOf(xtb[i], v)}
+		a2[i] = newXP2(ratCoordOf(xta[i], u), ratCoordOf(xta[i], v))
+		b2[i] = newXP2(ratCoordOf(xtb[i], u), ratCoordOf(xtb[i], v))
 	}
 	// Any edge of one meeting the closed other with positive length is an
 	// overlap; this covers containment (all edges inside), proper crossings,
@@ -1593,7 +1593,7 @@ func triangulatePlanarPolygon(ctx context.Context, verts []xpt, poly []int) ([][
 		if err := budget.step(); err != nil {
 			return nil, err
 		}
-		pts[i] = xp2{ratCoordOf(verts[vi], u), ratCoordOf(verts[vi], v)}
+		pts[i] = newXP2(ratCoordOf(verts[vi], u), ratCoordOf(verts[vi], v))
 		idx[i] = i
 	}
 	// Keep the projected orientation counter-clockwise so ear clipping and

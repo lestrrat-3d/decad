@@ -89,7 +89,7 @@ func errLoftContact(i, j int, reason string) error {
 // classification (docs/loft-design.md §6, required test).
 func triTriCoplanarSharedEdge(xta, xtb [3]xpt, n xpt, edgeA, edgeB xpt) bool {
 	u, v := projAxes(n)
-	project := func(p xpt) xp2 { return xp2{xcoordOf(p, u), xcoordOf(p, v)} }
+	project := func(p xpt) xp2 { return newXP2(xcoordOf(p, u), xcoordOf(p, v)) }
 	a2 := [3]xp2{project(xta[0]), project(xta[1]), project(xta[2])}
 	b2 := [3]xp2{project(xtb[0]), project(xtb[1]), project(xtb[2])}
 	e0, e1 := project(edgeA), project(edgeB)

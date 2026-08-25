@@ -649,6 +649,12 @@ func facesNearMiss(ctx context.Context, bmA *boolMesh, fis []int, bmB *boolMesh,
 			}
 			ta := triCorners(bmA, i)
 			tb := triCorners(bmB, j)
+			// The distance routine returns a conservative lower bound. Use it
+			// before the exact classifier so nearby boxes whose triangles are
+			// still clearly separated do not pay for rational predicates.
+			if triTriDistance(ta, tb) > slack {
+				continue
+			}
 			c, err := memo.classify(i, j)
 			if err != nil {
 				return false, err
@@ -660,15 +666,13 @@ func facesNearMiss(ctx context.Context, bmA *boolMesh, fis []int, bmB *boolMesh,
 				// to it.
 				return false, nil
 			}
-			if c.kind != contactNone || triTriDistance(ta, tb) <= slack {
-				if !seenA[i] {
-					seenA[i] = true
-					closeA = append(closeA, i)
-				}
-				if !seenB[j] {
-					seenB[j] = true
-					closeB = append(closeB, j)
-				}
+			if !seenA[i] {
+				seenA[i] = true
+				closeA = append(closeA, i)
+			}
+			if !seenB[j] {
+				seenB[j] = true
+				closeB = append(closeB, j)
 			}
 		}
 	}
