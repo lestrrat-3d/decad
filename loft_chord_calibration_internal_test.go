@@ -929,13 +929,14 @@ func TestLoftChordCalibrationSweep(t *testing.T) {
 // the 2s figure: that reintroduces a host-dependent failure.
 const loftChordBuildCeiling = 60 * time.Second
 
-// loftChordFractionPinM is the station count the SHIPPED chooser settles the
-// reference arc wedge on at the shipped loftChordFraction (loft_build.go):
-// chordCount (tessellate.go), asked for loftChordFraction *
-// wedgeArcEnvelope, walks up to 65 chords. wedgePinStations re-derives it
-// from that chooser at every run and requires the two to agree, so every
-// fixture below is chorded at a count production actually produces and this
-// literal is a pin on the chooser's own answer, never a hand-forced count.
+// loftChordFractionPinM is the station count the SHIPPED generator settles the
+// reference arc wedge on at the shipped loftChordFraction:
+// loftCircularCellStations (loft_build.go), asked for loftChordFraction *
+// wedgeArcEnvelope, settles its joint walk-up at 65 chords. wedgePinStations
+// re-derives it from that generator at every run and requires the two to
+// agree, so every fixture below is chorded at a count production actually
+// produces and this literal is a pin on the generator's own answer, never a
+// hand-forced count.
 //
 // The constant that count is measured at was itself read off
 // TestLoftChordCalibrationSweep's table over the mandated grid m = 4, 8, 16,
@@ -964,43 +965,63 @@ const loftChordBuildCeiling = 60 * time.Second
 // at a tighter-than-default tolerance; that is the plan's accepted, non-silent
 // outcome, not a bug.
 //
-// The pin sits one station ABOVE that grid point because the chooser proves
-// its own bound differently from the way the sweep measures one: chordSagitta's
-// outward-rounded r*sweep^2/(8n^2) is conservative against the exact
-// 2r*sin^2(dtheta/4) arcSagitta evaluates, and at m=64 on this fixture the two
-// straddle the target. wedgePinStations asserts that straddle directly. The
-// production chording is therefore strictly FINER than the grid point the
-// constant was read off, and the margins measured here are correspondingly
-// wider than that grid row's.
+// The pin sits one station ABOVE that grid point because the walk-up's SEED
+// proves its bound differently from the way the sweep measures one:
+// chordCount asks chordSagitta, whose outward-rounded r*sweep^2/(8n^2) is
+// conservative against the exact 2r*sin^2(dtheta/4) arcSagitta evaluates, and
+// at m=64 on this fixture the two straddle the target. The joint walk-up only
+// ever increments from that seed, so the count stands at 65 even though the
+// certified sagitta at 64 already clears. wedgePinStations asserts the
+// straddle directly. The production chording is therefore strictly FINER than
+// the grid point the constant was read off, and the margins measured here are
+// correspondingly wider than that grid row's.
 const loftChordFractionPinM = 65
 
-// wedgePinStations asks the PRODUCTION chooser — chordCount, the same call
-// loftCircularCellStations makes on a real build (loft_build.go) — how many
-// stations the reference arc wedge takes at the shipped loftChordFraction,
-// and requires the answer to be loftChordFractionPinM. Every fixture in this
-// file is chorded at THIS returned count, so no reading here can belong to a
-// chording production never produces.
+// wedgePinStations asks the PRODUCTION generator — loftCircularCellStations
+// (loft_build.go), the same call a real build makes — how many stations the
+// reference arc wedge takes at the shipped loftChordFraction, and requires the
+// answer to be loftChordFractionPinM. Every fixture in this file is chorded at
+// THIS returned count, so no reading here can belong to a chording production
+// never produces.
 func wedgePinStations(t *testing.T) int {
 	t.Helper()
 	target := loftChordFraction * wedgeArcEnvelope(t)
-	w := circularWalk(0, 0, wedgeRadius, 0, wedgeSweep, wedgeRadius, wedgeSweep)
-	m, achieved, err := chordCount(w, target)
+	seg, w := wedgeArcRecord(t)
+	stations, _, sagitta, err := loftCircularCellStations(w, w, seg, seg, target)
 	require.NoError(t, err)
-	require.LessOrEqual(t, achieved, target, "the chooser's own returned bound must meet the target it was asked for")
+	m := len(stations)
+	require.LessOrEqual(t, sagitta, target, "the generator's own published bound must meet the target it was asked for")
+	require.Equal(t, loftCertifiedSagittaUpper(seg, m), sagitta, "the published bound is the certified reading at the settled count")
 
-	// The straddle that decides this count, asserted rather than described:
-	// the conservative bound at one station BELOW the pin still reads over
-	// target, so the walk-up commits the further station, while the exact
-	// sagitta formula the sweep measures with is already under it there.
+	// The seed that decides this count, asserted rather than described: the
+	// held chooser's conservative bound at one station BELOW the pin still
+	// reads over target, so chordCount seeds the joint walk-up one station
+	// higher, while the exact sagitta formula the sweep measures with is
+	// already under target there.
 	require.Greater(t, chordSagitta(wedgeRadius, wedgeSweep, m-1), target,
-		"the chooser's own conservative bound at m=%d must exceed the target, or it would not have walked up to m=%d", m-1, m)
+		"the held chooser's own conservative bound at m=%d must exceed the target, or it would not have seeded m=%d", m-1, m)
 	require.Less(t, arcSagitta(m-1), target,
 		"the exact sagitta at m=%d is already under target, which is why the sweep's own grid row sits one station coarser", m-1)
 
-	t.Logf("the shipped chooser on the reference arc wedge: m=%d target=%.10g achieved=%.10g; chordSagitta at m=%d is %.10g against an exact sagitta of %.10g",
-		m, target, achieved, m-1, chordSagitta(wedgeRadius, wedgeSweep, m-1), arcSagitta(m-1))
-	require.Equal(t, loftChordFractionPinM, m, "the pinned station count must be the one the shipped chooser produces at the shipped constant")
+	t.Logf("the shipped generator on the reference arc wedge: m=%d target=%.10g certified=%.10g; chordSagitta at m=%d is %.10g against an exact sagitta of %.10g",
+		m, target, sagitta, m-1, chordSagitta(wedgeRadius, wedgeSweep, m-1), arcSagitta(m-1))
+	require.Equal(t, loftChordFractionPinM, m, "the pinned station count must be the one the shipped generator produces at the shipped constant")
 	return m
+}
+
+// wedgeArcRecord is the reference quarter arc as a RECORDED ArcSeg plus the
+// walk walkOf resolves for it. The generator reads both — the stations off the
+// walk, the certified sagitta off the record — so the pin is measured on the
+// pair a real build hands it, never on a hand-built walk with no record behind
+// it.
+func wedgeArcRecord(t *testing.T) (ArcSeg, segmentWalk) {
+	t.Helper()
+	seg := ArcSeg{Center: pt(0, 0), Start: pt(wedgeRadius, 0), End: pt(0, wedgeRadius), TStart: 0, TEnd: 1}
+	w, err := walkOf(seg, nil)
+	require.NoError(t, err)
+	require.Equal(t, wedgeRadius, w.radius, "the recorded arc must resolve to the fixture's own radius")
+	require.Equal(t, wedgeSweep, w.th1-w.th0, "the recorded arc must resolve to the fixture's own sweep")
+	return seg, w
 }
 
 // TestLoftChordCalibrationPinsFraction is the fast, always-run pin PR 1's acceptance
@@ -1010,10 +1031,11 @@ func wedgePinStations(t *testing.T) int {
 // merely a Sound/Suspect verdict, and that both fixtures build within the 2s
 // budget.
 //
-// The fit-spline wedge is chorded at that SAME count. There is no shipped chooser
-// to ask for a free-form pairing — loftCellStations has no free-form arm
-// (loft_build.go) — so the two fixtures share the arc arm's own production count,
-// which is what makes their two margins comparable readings of one constant.
+// The fit-spline wedge is chorded at that SAME count. There is no shipped
+// generator arm to ask for a free-form pairing — loftCellStations has no
+// free-form arm (loft_build.go) — so the two fixtures share the arc arm's own
+// production count, which is what makes their two margins comparable readings
+// of one constant.
 func TestLoftChordCalibrationPinsFraction(t *testing.T) {
 	const wantVolume = math.Pi * 25 / 4 * wedgeHeight // 196.349540849...
 

@@ -57,13 +57,12 @@ type loftPayload struct {
 	// sectionDelta is the proven upper bound on how far any BUILT CHORD point
 	// of a wall cell sits from the recorded curve it chords, AS A SET — the
 	// curve's own sagitta, taken as a MAXIMUM over cells rather than a sum
-	// (docs/loft-design.md §5 — the chord-chain subsection lands with the
-	// arc design change). It is zero for every pairing this evaluator admits
-	// today — S3 admits only same-kind LineSeg pairs, and a straight wall's
-	// own chord IS the recorded segment, so there is no curve for it to
-	// depart from. A same-kind curved pairing (reach, not yet admitted) is
-	// the construction that will set it, to the sagitta its station
-	// chording commits.
+	// (docs/loft-design.md §5.1). It is zero for every pairing this evaluator
+	// admits today — S3 admits only same-kind LineSeg pairs, and a straight
+	// wall's own chord IS the recorded segment, so there is no curve for it to
+	// depart from. A same-kind curved pairing (reach, not yet admitted) is the
+	// construction that sets it, to the CERTIFIED sagitta its station chording
+	// commits (loftCertifiedSagittaUpper), never to a held float.
 	//
 	// It is NEVER delta and never stands in for it, the identical
 	// independence prismPayload's own sectionDelta/z0Delta pair states one
@@ -254,15 +253,15 @@ type loftLoopPair struct {
 // the default 1e-3 relative tolerance within the plan's 2-second
 // per-fixture wall-clock budget (Q3).
 //
-// Driven through the SHIPPED chooser — chordCount (tessellate.go), the same
-// call loftCircularCellStations makes below — this constant settles the arc
-// wedge at m=65 stations (F=136 wall+cap faces), with Volume the binding
-// reading at a measured 2.47x margin (gate ratio 4.04928e-4), and the
-// fit-spline wedge chorded at that same count at 1.95x (5.1326e-4). Both
-// build in about 1.4 seconds. The calibration pins those two margins at that
-// production count and re-derives the count from chordCount at every run
-// (loftChordFractionPinM), so no published margin here belongs to a chording
-// this evaluator does not produce.
+// Driven through the SHIPPED generator — loftCircularCellStations below, whose
+// joint walk-up settles the count against the CERTIFIED per-cell sagitta — this
+// constant settles the arc wedge at m=65 stations (F=136 wall+cap faces), with
+// Volume the binding reading at a measured 2.47x margin (gate ratio
+// 4.04928e-4), and the fit-spline wedge chorded at that same count at 1.95x
+// (5.1326e-4). Both build in about 1.4 seconds. The calibration pins those two
+// margins at that production count and re-derives the count from the generator
+// at every run (loftChordFractionPinM), so no published margin here belongs to
+// a chording this evaluator does not produce.
 //
 // A finer grid point (m=128) clears the plan's separate 4x-margin target but
 // costs roughly 4.3s, more than double the wall-clock budget, so the plan's
@@ -327,8 +326,15 @@ func loftChordTarget(p0, p1 ProfileRecord, walks0, walks1 [][]segmentWalk) (floa
 // curve (bounds.go's cellChordCurveAreaUpper doc comment states the
 // distinction this field's name exists to keep visible). The LineSeg arm's
 // chord IS the recorded segment, so its bound is exactly zero; the circular
-// arm's own doc comment states why its sagitta discharges the matched
-// obligation exactly, never merely bounds it.
+// arm publishes docs/loft-design.md §5.2's certified per-cell sagitta, an
+// OUTWARD-rounded upper end of an enclosure over the record's own radius and
+// sweep brackets, and refuses where that enclosure has no derivation.
+//
+// seg0/seg1 are the two RECORDED segments w0/w1 were resolved from. An arm
+// whose bound is a proof rather than a held float needs them: every enclosure
+// docs/loft-design.md §5.2 names is stated by the record, never by the walk,
+// whose radius is a math.Hypot and whose angles are a math.Atan2 the walk
+// itself declares it cannot enclose (extrude.go's circularWalk).
 //
 // target is loftChordTarget's own single per-build reading, never
 // recomputed per cell. work0/work1 are the two records' own free-form work
@@ -338,12 +344,12 @@ func loftChordTarget(p0, p1 ProfileRecord, walks0, walks1 [][]segmentWalk) (floa
 // work0/work1 parameters, and this generator's own interface constraint
 // (a10-plan.md Part 3 PR 5) fixes them into the signature ahead of that arm
 // existing to consume them.
-func loftCellStations(w0, w1 segmentWalk, target float64, work0, work1 *freeformWork) ([]Point2, []Point2, float64, error) { //nolint:unparam // work0/work1 are part of the fixed kind-switch interface every future arm shares; the ARC and LineSeg arms below are the two that do not need them yet.
+func loftCellStations(w0, w1 segmentWalk, seg0, seg1 CurveSegment, target float64, work0, work1 *freeformWork) ([]Point2, []Point2, float64, error) { //nolint:unparam // work0/work1 are part of the fixed kind-switch interface every future arm shares; the ARC and LineSeg arms below are the two that do not need them yet.
 	switch {
 	case w0.kind == walkLine && w1.kind == walkLine:
 		return loftLineCellStations(w0, w1)
 	case w0.kind == walkCircular && w1.kind == walkCircular:
-		return loftCircularCellStations(w0, w1, target)
+		return loftCircularCellStations(w0, w1, seg0, seg1, target)
 	default:
 		// Unreached from any real build today: validateLoftRecords' own S3
 		// gate refuses every non-LineSeg pair before loftPairings ever calls
@@ -365,50 +371,71 @@ func loftLineCellStations(w0, w1 segmentWalk) ([]Point2, []Point2, float64, erro
 	return []Point2{{U: w0.startU, V: w0.startV}}, []Point2{{U: w1.startU, V: w1.startV}}, 0, nil
 }
 
-// loftCircularCellStations is the circular arm: tessellate.go's chordCount
-// picks each side's OWN station count against target independently, the
-// shared count is m = max(m0, m1) (a10-plan.md Q2's shared-station rule),
-// and each side's stations are then walked at that SHARED m — never at its
-// own smaller count — so both sides carry the same station count by
-// construction, the correspondence a loft wall needs.
+// loftCircularCellStations is the circular arm, and it settles the pair's
+// shared station count by docs/loft-design.md §5.1's JOINT WALK-UP.
+// tessellate.go's chordCount picks each side's OWN count against target
+// independently, and max(m0, m1) only SEEDS the walk: from there, BOTH sides'
+// certified per-cell sagittae are recomputed at each candidate count and the
+// count increments until both are at or below the target. Settling that way
+// needs no monotonicity claim about the certified sagitta as the count grows,
+// and both sides are then walked at the count it settles on — never at either
+// side's own smaller count — which is the correspondence a loft wall needs.
 //
-// Because chordSagitta strictly decreases in n, m >= m_side already proves
-// each side's own achieved sagitta at the shared m is at or below the SAME
-// target its own independent count met; only the side whose own count was
-// smaller than m needs its sagitta recomputed at the shared m; the side that
-// already IS m keeps chordCount's own returned value unchanged.
+// What the walk-up compares against the target, and what this arm publishes,
+// is loftCertifiedSagittaUpper's enclosure over the RECORD's own radius and
+// sweep brackets — never the held float chordCount itself returns. That float
+// is computed from the walk's math.Hypot radius and its math.Atan2 sweep, with
+// no enclosure and no outward rounding, so it can decide a COUNT and nothing
+// more (docs/loft-design.md §5.2's third rule). A candidate count whose
+// certified sagitta has no derivation refuses at Table S row S14 rather than
+// walking on, and the refusal never degrades into a published zero or a held
+// substitute.
 //
-// sagittaUpper is the MAX of the two sides' achieved sagittas — this cell's
-// own single bound, covering whichever side departs further from its chord.
-// It is also this arm's discharge of loftCellStations' own PARAMETER-MATCHED
-// obligation: stations are placed at uniform PARAMETER t_k = TStart +
-// (k/m)*(TEnd-TStart), which for a circular walk is uniform in ANGLE because
-// t is the walk's own sweep fraction — and under that uniform-angle
-// parametrization, sup_s |arc(s) - chord(s)| over one chord EQUALS the
-// sagitta exactly (an audit verified this across sweeps from 0.5 to 359.5
-// degrees, the maximum departure always landing at s = 1/2 of the chord),
-// never merely bounding it. A SET distance from an arbitrary chord point to
-// the curve would not carry that guarantee; the uniform-angle station rule
-// is what buys it.
-func loftCircularCellStations(w0, w1 segmentWalk, target float64) ([]Point2, []Point2, float64, error) {
+// sagittaUpper is the MAX of the two sides' certified sagittae at the settled
+// count — this cell's own single bound, covering whichever side departs
+// further from its chord. It also discharges loftCellStations' own
+// PARAMETER-MATCHED obligation: stations are placed at uniform PARAMETER t_k =
+// TStart + (k/m)*(TEnd-TStart), which for a circular walk is uniform in ANGLE
+// because t is the walk's own sweep fraction — and under that uniform-angle
+// parametrization the exact departure sup_s |arc(s) - chord(s)| over one chord
+// IS the cell's sagitta 2r·sin²(Δθ/4m), attained at s = 1/2. The published
+// value encloses that quantity from above; a SET distance from an arbitrary
+// chord point to the curve would bound something else entirely, and the
+// uniform-angle station rule is what makes the two the same quantity.
+func loftCircularCellStations(w0, w1 segmentWalk, seg0, seg1 CurveSegment, target float64) ([]Point2, []Point2, float64, error) {
 	// S15: chordCount itself already refuses (errTooManyChords, reused per
 	// spline design Table R row R8) a side whose target cannot be met inside
 	// maxChordsPerWalk — this arm mints no separate cap of its own, and
 	// propagates that refusal verbatim from whichever side hits it first.
-	m0, s0, err := chordCount(w0, target)
+	m0, _, err := chordCount(w0, target)
 	if err != nil {
 		return nil, nil, 0, err
 	}
-	m1, s1, err := chordCount(w1, target)
+	m1, _, err := chordCount(w1, target)
 	if err != nil {
 		return nil, nil, 0, err
 	}
+
 	m := max(m0, m1)
-	if m > m0 {
-		s0 = chordSagitta(w0.radius, math.Abs(w0.th1-w0.th0), m)
-	}
-	if m > m1 {
-		s1 = chordSagitta(w1.radius, math.Abs(w1.th1-w1.th0), m)
+	var s0, s1 float64
+	for {
+		s0 = loftCertifiedSagittaUpper(seg0, m)
+		s1 = loftCertifiedSagittaUpper(seg1, m)
+		if isNonFinite(s0) || isNonFinite(s1) {
+			return nil, nil, 0, errLoftSagittaUnderivable
+		}
+		if s0 <= target && s1 <= target {
+			break
+		}
+		// The same ceiling chordCount enforces on its own walk-up, enforced
+		// again on this one: the certified sagitta shrinks with m but is
+		// floored by its own enclosure width, so a target below that floor
+		// would otherwise walk forever. Refusing is S15's answer, carrying
+		// chordCount's own sentinel rather than a second one.
+		if m >= maxChordsPerWalk {
+			return nil, nil, 0, errTooManyChords
+		}
+		m++
 	}
 
 	stations0 := circularStationChain(w0, m)
@@ -438,9 +465,27 @@ func loftCircularCellStations(w0, w1 segmentWalk, target float64) ([]Point2, []P
 // circularStationChain walks m uniform-angle stations of w, at parameter
 // t_k = k/m for k = 0..m-1 — this segment's OWN interior stations, excluding
 // its shared end point (loftCellStations' own doc comment states why).
+//
+// Station 0 is the WALK's own start point, never a recomputed cos/sin at th0.
+// The two are not the same reading: walkOf runs pinArcWalkEnds over every arc
+// walk, and arcWalkEnd restates an UNTRIMMED end as the recorded Start / End
+// verbatim under a zero bound (extrude.go), so at that kind of end the walk's
+// point IS a recorded coordinate while circularWalk's own cU + r·cos(th0) is a
+// float that misses it. Recomputing here would displace such a station off the
+// coordinate the record states — measurably, by an ulp of the coordinate — and
+// would leave every reading that reads a pinned station's zero displacement
+// (docs/loft-design.md §5.2's two pinned station kinds) stating a zero the
+// built vertex does not have. Reading the walk keeps the pin and the station
+// the same point.
+//
+// The chain's own terminal station is the next segment's station 0, or the
+// loop's wrap back to the first segment's, so it takes the identical pin from
+// that segment's own walk: a loop's segments are contiguous on the record, and
+// each junction carries exactly one station.
 func circularStationChain(w segmentWalk, m int) []Point2 {
 	pts := make([]Point2, m)
-	for k := range m {
+	pts[0] = Point2{U: w.startU, V: w.startV}
+	for k := 1; k < m; k++ {
 		t := float64(k) / float64(m)
 		theta := w.th0 + t*(w.th1-w.th0)
 		sin, cos := math.Sincos(theta)
@@ -448,6 +493,63 @@ func circularStationChain(w segmentWalk, m int) []Point2 {
 	}
 	return pts
 }
+
+// loftCertifiedSagittaUpper is docs/loft-design.md §5.2's certified per-cell
+// sagitta for one side of a chorded circular pair, at a candidate station
+// count m: the in-section-plane distance from one chord to the recorded curve
+// piece it chords, published as ONE outward rounding of an enclosure's upper
+// end.
+//
+// The quantity is 2·r·sin²(Δθ/4m) with r the segment's radius and Δθ the angle
+// its walk sweeps. Both come from circularWalkEnclosures (moments.go), which
+// states them from the RECORD — an ArcSeg's ratSqrtDown/ratSqrtUp radius and
+// its atan2Interval swept angle, a CircleSeg's recorded radius and exact
+// rational turn — never from the walk's held math.Hypot radius and math.Atan2
+// angles, neither of which the walk can enclose (extrude.go's circularWalk).
+// radSinCosSpan supplies the sine of the enclosed cell half-angle, and the
+// squaring goes through intervalMul, whose four-corner upper end dominates
+// max x² over the span whatever the span's sign.
+//
+// The derivation of the form itself is elementary: a circular arc's distance
+// from its own chord is r·(1 − cos(half the cell's sweep)), taken at the
+// cell's midpoint where the two are farthest apart, and 1 − cos x = 2·sin²(x/2)
+// gives the published form.
+//
+// An enclosure the record cannot state — a radius or sweep bracket
+// circularWalkEnclosures refuses, a sine radSinCosSpan cannot span, or an
+// upper end past the float64 range — answers +Inf, and the caller refuses at
+// Table S row S14 rather than publishing a finite substitute or a zero.
+func loftCertifiedSagittaUpper(seg CurveSegment, m int) float64 {
+	if m <= 0 {
+		return math.Inf(1)
+	}
+	radius, sweep, ok := circularWalkEnclosures(seg)
+	if !ok {
+		return math.Inf(1)
+	}
+	half := intervalScale(sweep, big.NewRat(1, 4*int64(m)))
+	sin, _, ok := radSinCosSpan(half)
+	if !ok {
+		return math.Inf(1)
+	}
+	s := intervalMul(intervalScale(radius, big.NewRat(2, 1)), intervalMul(sin, sin))
+	up := ratFloatUp(s.hi)
+	if isNonFinite(up) {
+		return math.Inf(1)
+	}
+	return up
+}
+
+// errLoftSagittaUnderivable is docs/loft-design.md Table S row S14's refusal:
+// a chorded circular pair for which the certified per-cell sagitta has no
+// derivation from the record. The body exists and the chord set is buildable;
+// only one of its proven displacement terms cannot be stated, which is a
+// derivation gap in this evaluator's certified circular enclosures rather than
+// a shape rule — so the sentinel is ErrUnsupported, and no finite value is
+// published in its place.
+var errLoftSagittaUnderivable = fmt.Errorf(
+	`%w: a chorded circular pair's certified per-cell sagitta has no derivation from this record`, ErrUnsupported,
+)
 
 // loftPairings resolves Table P into one flat correspondence per loop, from
 // validateLoftRecords' own already-resolved walks — it spends no further
@@ -465,8 +567,14 @@ func circularStationChain(w segmentWalk, m int) []Point2 {
 // is the MAX of every cell's own sagittaUpper across the whole build, never
 // a sum: a boundary point lies in exactly one cell, so only the widest cell's
 // own departure bounds the whole section.
-func loftPairings(p0 ProfileRecord, offsets []int, walks0, walks1 [][]segmentWalk, target float64, work0, work1 *freeformWork) ([]loftLoopPair, float64, error) {
+//
+// Both records are read, never p0 alone: a curved arm's own bound is stated by
+// the RECORDED segment behind each side's walk (loftCellStations' own doc
+// comment), so each side's segment is handed to the generator alongside its
+// walk, under the same alignment offset the walk itself is read at.
+func loftPairings(p0, p1 ProfileRecord, offsets []int, walks0, walks1 [][]segmentWalk, target float64, work0, work1 *freeformWork) ([]loftLoopPair, float64, error) {
 	loops0 := append([]LoopRecord{p0.Outer}, p0.Holes...)
+	loops1 := append([]LoopRecord{p1.Outer}, p1.Holes...)
 	pairs := make([]loftLoopPair, len(loops0))
 	sectionDelta := 0.0
 	for i := range loops0 {
@@ -477,7 +585,7 @@ func loftPairings(p0 ProfileRecord, offsets []int, walks0, walks1 [][]segmentWal
 			w0 := walks0[i][j]
 			k := (j + off) % n
 			w1 := walks1[i][k]
-			stations0, stations1, sagitta, err := loftCellStations(w0, w1, target, work0, work1)
+			stations0, stations1, sagitta, err := loftCellStations(w0, w1, loops0[i].Segments[j], loops1[i].Segments[k], target, work0, work1)
 			if err != nil {
 				return nil, 0, err
 			}
@@ -1112,7 +1220,7 @@ func evalLoft(ctx context.Context, d *Document, ref StepRef, pl loftPayload, bud
 		return nil, err
 	}
 
-	pairs, sectionDelta, err := loftPairings(pl.profile0, offsets, walks0, walks1, target, work0, work1)
+	pairs, sectionDelta, err := loftPairings(pl.profile0, pl.profile1, offsets, walks0, walks1, target, work0, work1)
 	if err != nil {
 		return nil, err
 	}
