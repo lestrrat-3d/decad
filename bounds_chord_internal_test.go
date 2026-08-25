@@ -701,6 +701,191 @@ func TestChordedBoundaryVolumeAllowWallAndTwistLegsAreJointlyLoadBearing(t *test
 	t.Logf("full ratio=%.6g, without-wall-and-twist ratio=%.6g (must be < 1)", full/measuredGap, withoutWallAndTwist/measuredGap)
 }
 
+// PER-LEG DELETION-CHECK STATUS. Four legs compose chordedBoundaryVolumeAllow
+// — wall (a), twist (b), cap (c), seam (d) — and every one now has a
+// deletion check on record, so a reader can tell at a glance which the suite
+// actually polices rather than merely carries:
+//
+//   - TWIST (b): SHOWN-TO-FAIL.
+//     TestChordedBoundaryVolumeAllowTwistLegIsLoadBearing (r=1 sweep=30
+//     h=100 twist=90 n=256): deleting twist alone drops the ratio to
+//     1.3e-5 across the 900-row sweep table.
+//   - CAP (c): SHOWN-TO-FAIL, at the COMPOSITION level (no row of the
+//     geometric sweep table drives it — capAreaVolumeAllow's own
+//     capAreaAllow input is generous enough there that wall+seam already
+//     cover it).
+//     TestChordedBoundaryVolumeAllowCapLegIsLoadBearing: with wall, twist
+//     and seam legitimately 0 (an exact LineSeg wall pairing with no
+//     twist, e.g. a straight prism over a chorded circular cap), deleting
+//     cap alone drops the composed answer from the known-exact 8 to 0.
+//   - WALL (a): PROVEN-REDUNDANT, not merely unshown-to-fail. See
+//     chordedBoundaryVolumeAllow's own doc comment for the two-case
+//     argument (T=0 / T≠0, no third case). Corroborated, never
+//     substituted for, by
+//     TestChordedBoundaryVolumeAllowWallAndTwistLegsAreJointlyLoadBearing
+//     (wall's own deletion alone never fails anywhere an extensive
+//     geometric search tried — only wall+twist TOGETHER fails) and by
+//     TestChordedBoundaryVolumeAllowWallLegIsProvenRedundant below, which
+//     pins that same "never fails alone" property as a running regression
+//     over the full 900-row sweep table.
+//   - SEAM (d): NOT SHOWN TO FAIL — an open question, recorded honestly
+//     rather than forced into either of the other two categories.
+//     TestChordedBoundaryVolumeAllowSeamLegDeletionSearch scans the same
+//     900-row sweep table plus a ring-family grid and finds deleting seam
+//     alone (wall, twist and cap all left intact) never drops the ratio
+//     below roughly 2.5 anywhere tried. That is consistent with seam being
+//     provably redundant the way wall is — structurally, seam is only ever
+//     nonzero when the wall leg (a) is too (both gate on matchedDelta>0
+//     and nonzero wall geometry), and leg (a)'s own flux term is 3x the
+//     magnitude of the boundary term seam bounds (chordedBoundaryVolumeAllow's
+//     own doc comment, the h·ΔArea vs h·ΔArea/3 split) — but no closed-form
+//     redundancy proof was attempted here: doing so would be a NEW
+//     derivation, which this pass's own scope rules out. Until either a
+//     failing fixture turns up or that proof gets written, seam's own
+//     constant is not policed by anything in this suite, exactly the
+//     complaint this comment block exists to make impossible to miss.
+func TestChordedBoundaryVolumeAllowWallLegIsProvenRedundant(t *testing.T) {
+	radii := []float64{1, 5, 50}
+	sweepsDeg := []float64{30, 90, 180, 270}
+	heights := []float64{0.1, 10, 100}
+	chordCounts := []int{8, 32, 64, 128, 256}
+	twistsDeg := []float64{0, 5, 20, 45, 90}
+
+	minRatio := math.Inf(1)
+	var minRow string
+	rows := 0
+
+	for _, r := range radii {
+		for _, sweepDeg := range sweepsDeg {
+			sweepRad := sweepDeg * math.Pi / 180
+			for _, h := range heights {
+				for _, twistDeg := range twistsDeg {
+					twistRad := twistDeg * math.Pi / 180
+					for _, n := range chordCounts {
+						trueVolume := twistedPieSliceTrueVolume(r, sweepRad, twistRad, h)
+						verts, tris := twistedPieSliceMesh(r, sweepRad, twistRad, h, n)
+						heldVolume := heldVolumeExact(verts, tris)
+						measuredGap := math.Abs(trueVolume - heldVolume)
+						if measuredGap <= 0 {
+							continue
+						}
+						rows++
+
+						b := chordedBoundaryAllowForTwistedPieSlice(r, sweepRad, twistRad, h, n)
+						twistVolumeUpper := absSumUpper(b.twistVolumeArc, b.twistVolumeApex)
+						withoutWall := chordedBoundaryVolumeAllow(b.sectionDelta, 0, twistVolumeUpper, b.capVolumeUpper, b.seamAllow)
+						require.GreaterOrEqualf(t, withoutWall, measuredGap,
+							"r=%g sweep=%g h=%g twist=%g n=%d: deleting the wall leg alone must still enclose the measured gap",
+							r, sweepDeg, h, twistDeg, n)
+
+						ratio := withoutWall / measuredGap
+						if ratio < minRatio {
+							minRatio = ratio
+							minRow = fmt.Sprintf("r=%g sweep=%g h=%g twist=%g n=%d", r, sweepDeg, h, twistDeg, n)
+						}
+					}
+				}
+			}
+		}
+	}
+
+	require.Positive(t, rows)
+	t.Logf("without-wall worst-case ratio %.6g at %s (%d rows) — corroborates the PROVEN redundancy above, never a substitute for it", minRatio, minRow, rows)
+}
+
+// TestChordedBoundaryVolumeAllowSeamLegDeletionSearch is the seam leg's own
+// deletion check, the gap this file's earlier F3 finding (about the wall
+// leg) left inherited by the leg later added to answer it: zeroing seamAllow
+// changed no minimum ratio in any shipped fixture, so nothing in the suite
+// could catch a wrong constant in chordedBoundarySeamAllow. This test is
+// that missing check — it does not manufacture a failure (deleting seam
+// alone did not fail anywhere the search below tried, and no fixture is
+// narrowed here to force one), so it stands as a documented NOT-SHOWN-TO-FAIL
+// finding, not a SHOWN-TO-FAIL pin: see the per-leg status comment above for
+// what would still need to happen before seam is either proven redundant or
+// caught by a genuine failing row.
+func TestChordedBoundaryVolumeAllowSeamLegDeletionSearch(t *testing.T) {
+	radii := []float64{1, 5, 50}
+	sweepsDeg := []float64{30, 90, 180, 270}
+	heights := []float64{0.1, 10, 100}
+	chordCounts := []int{8, 32, 64, 128, 256}
+	twistsDeg := []float64{0, 5, 20, 45, 90}
+
+	minRatio := math.Inf(1)
+	var minRow string
+	rows := 0
+
+	for _, r := range radii {
+		for _, sweepDeg := range sweepsDeg {
+			sweepRad := sweepDeg * math.Pi / 180
+			for _, h := range heights {
+				for _, twistDeg := range twistsDeg {
+					twistRad := twistDeg * math.Pi / 180
+					for _, n := range chordCounts {
+						trueVolume := twistedPieSliceTrueVolume(r, sweepRad, twistRad, h)
+						verts, tris := twistedPieSliceMesh(r, sweepRad, twistRad, h, n)
+						heldVolume := heldVolumeExact(verts, tris)
+						measuredGap := math.Abs(trueVolume - heldVolume)
+						if measuredGap <= 0 {
+							continue
+						}
+						rows++
+
+						b := chordedBoundaryAllowForTwistedPieSlice(r, sweepRad, twistRad, h, n)
+						wallAreaUpper := absSumUpper(b.wallAreaArc, b.wallAreaApex)
+						twistVolumeUpper := absSumUpper(b.twistVolumeArc, b.twistVolumeApex)
+						withoutSeam := chordedBoundaryVolumeAllow(b.sectionDelta, wallAreaUpper, twistVolumeUpper, b.capVolumeUpper, 0)
+						ratio := withoutSeam / measuredGap
+						if ratio < minRatio {
+							minRatio = ratio
+							minRow = fmt.Sprintf("pie r=%g sweep=%g h=%g twist=%g n=%d", r, sweepDeg, h, twistDeg, n)
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// The ring family has no apex/radial cells at all, so it exercises the
+	// wall/twist/cap/seam interplay without the pie slice's own unrefined
+	// corners diluting it (ringAllow's own doc comment).
+	ringRadii := []float64{1, 10, 50}
+	ringHeights := []float64{0.1, 25, 1000}
+	ringTwistsDeg := []float64{0, 5, 20, 90}
+	ringN := []int{8, 32, 128, 256}
+	for _, r := range ringRadii {
+		for _, h := range ringHeights {
+			for _, twistDeg := range ringTwistsDeg {
+				twistRad := twistDeg * math.Pi / 180
+				for _, n := range ringN {
+					trueVolume := twistedPieSliceTrueVolume(r, 2*math.Pi, twistRad, h)
+					verts, tris := ringMesh(r, twistRad, h, n)
+					heldVolume := heldVolumeExact(verts, tris)
+					measuredGap := math.Abs(trueVolume - heldVolume)
+					if measuredGap <= 0 {
+						continue
+					}
+					rows++
+
+					matchedDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper, _ := ringAllow(r, twistRad, h, n)
+					withoutSeam := chordedBoundaryVolumeAllow(matchedDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper, 0)
+					ratio := withoutSeam / measuredGap
+					if ratio < minRatio {
+						minRatio = ratio
+						minRow = fmt.Sprintf("ring r=%g h=%g twist=%g n=%d", r, h, twistDeg, n)
+					}
+				}
+			}
+		}
+	}
+
+	require.Positive(t, rows)
+	require.GreaterOrEqualf(t, minRatio, 1.0,
+		"deleting the seam leg alone dropped below the measured gap at %s — this IS a failing fixture: pin it as SHOWN-TO-FAIL and update the per-leg status comment above",
+		minRow)
+	t.Logf("without-seam worst-case ratio %.6g at %s (%d rows) — NOT shown to fail; not a proof of redundancy either (see the per-leg status comment above)", minRatio, minRow, rows)
+}
+
 // TestCellChordCurveAreaUpperEnclosesTheFlatTriangleCounterexample pins F1's
 // own counterexample cell: vLo=(0,0,0) vHi=(1,0,0) wLo=(0,1,h) wHi=(0,0,h).
 // The cell's HELD flat-triangle facet area is exactly h — vanishingly small
