@@ -511,7 +511,7 @@ func TestLoftCrossingAuditBroadPhaseStillCatchesACrossing(t *testing.T) {
 // Assembling the set once and auditing it twice is what makes the comparison
 // below a comparison: both runs see byte-identical geometry, so the only
 // difference between their work counts is the broad-phase itself.
-func chordedWedgeTriangles(t *testing.T, pts [][2]float64) ([]r3.Vec, [][3]int) {
+func chordedWedgeTriangles(t testing.TB, pts [][2]float64) ([]r3.Vec, [][3]int) {
 	t.Helper()
 	w, base, top := wedgePlanes(t)
 	s0, p0 := chordedWedgeProfile(t, w, base, pts)
@@ -558,10 +558,19 @@ const loftBroadPhaseWorkDivisor = 4
 // geometry, so they are identical on every host and across repeats, and the
 // test fails outright if the broad-phase is disabled, mis-gated, or made
 // ineffective — the case where the two runs classify the same pairs. A timing
-// assertion could not do that here: the two runs' wall clocks differ by a
-// margin smaller than the per-host spread
+// assertion could not do that here: the gap between the two arms' wall clocks
+// is smaller than the per-host spread
 // loft_chord_calibration_internal_test.go's own loftChordBuildCeiling comment
-// records for a loft this size.
+// records for a loft this size, so asserting it would fail the suite on a slow
+// host while proving nothing about the code.
+//
+// The count is NOT a proxy for the runtime and must never be read as one. The
+// pairs the broad-phase removes are the cheap ones — a box test rejects them
+// in a handful of float comparisons — while the pairs it keeps are the ones
+// that were always going to dominate, so the classification reduction this
+// test asserts is several times larger than the wall-clock reduction that
+// follows from it. BenchmarkLoftCrossingAuditBroadPhase below measures both
+// quantities on one host and records what each came to.
 func TestLoftCrossingAuditBroadPhaseCutsClassificationWork(t *testing.T) {
 	const stations = 112
 	fs := wedgeFitSpline(t)
@@ -583,4 +592,61 @@ func TestLoftCrossingAuditBroadPhaseCutsClassificationWork(t *testing.T) {
 		"the wedge's own adjacent and nearby pairs must still reach the exact classification")
 	require.Less(t, on.classifications, off.classifications/loftBroadPhaseWorkDivisor,
 		"the broad-phase must still remove the bulk of the exact classification work")
+}
+
+// BenchmarkLoftCrossingAuditBroadPhase times the F~230 wedge audit with the
+// short-circuit off and on, over the SAME pre-assembled triangle set, so the
+// two arms differ in nothing but the broad-phase. It reports rather than
+// asserts: a benchmark has no pass/fail, so it can measure wall clock without
+// the host-dependent flakiness a timing assertion would carry, and it does not
+// run under a plain go test ./... at all.
+//
+// Run it with:
+//
+//	go test . -run '^$' -bench BenchmarkLoftCrossingAuditBroadPhase -benchtime 5x
+//
+// Each arm reports its own ns/op alongside classifications/op and skips/op, so
+// the two quantities the audit's speedup is spoken about in are visible side by
+// side. This is the defining site for what they came to. Three repeats of the
+// command above, on one otherwise idle development host (linux/amd64, AMD Ryzen
+// 9 7900X3D), measured:
+//
+//	off: 4.05s, 3.30s, 4.31s per audit — 101926 classifications, 0 skips
+//	on:  2.44s, 2.43s, 2.53s per audit —  15234 classifications, 86692 skips
+//
+// So the broad-phase removes 6.7x of the exact classification work and buys
+// about 1.4x to 1.7x of wall clock for it on this host. Those are two different
+// numbers about two different things, and the smaller one is the runtime claim:
+// reading the 6.7x count as a runtime figure overstates the speedup by roughly
+// 5x. The absolute figures are host-specific and will not reproduce elsewhere;
+// the ratio is the portable part, and even it moves by a few tenths between
+// repeats on the same host, which is exactly why no test asserts on it. See
+// TestLoftCrossingAuditBroadPhaseCutsClassificationWork for the count the suite
+// does assert on.
+func BenchmarkLoftCrossingAuditBroadPhase(b *testing.B) {
+	const stations = 112
+	fs := wedgeFitSpline(b)
+	verts, tris := chordedWedgeTriangles(b, wedgeSplinePoints(fs, stations))
+
+	for _, arm := range []struct {
+		name       string
+		broadPhase bool
+	}{
+		{name: "off", broadPhase: false},
+		{name: "on", broadPhase: true},
+	} {
+		b.Run(arm.name, func(b *testing.B) {
+			budget := newWorkBudget(b.Context())
+			var work loftBroadPhaseWork
+			for b.Loop() {
+				var err error
+				work, err = loftCrossingAuditWork(budget, verts, tris, arm.broadPhase)
+				if err != nil {
+					b.Fatal(err)
+				}
+			}
+			b.ReportMetric(float64(work.classifications), "classifications/op")
+			b.ReportMetric(float64(work.skips), "skips/op")
+		})
+	}
 }
