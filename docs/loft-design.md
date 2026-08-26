@@ -180,7 +180,7 @@ that exists and this evaluator cannot build → `ErrUnsupported`.**
 | **S13** | a build whose lifted-and-placed coordinate, whose computed station coordinate (§5.1), or whose orientation anchor (§5), runs past the representable float64 range | yes — every input is finite (both records' coordinates, the plane origins, and a transform `r3` itself validated), and only decad's own float evaluation of the lift or the station computation overflows; a placed body is the rigid image of one this evaluator already built | `ErrUnsupported` | no — a range ceiling on this evaluator's float64 vertex table, not a shape rule |
 | **S14** | a chorded circular pair for which any displacement term §5.2's table lists answers `+Inf`, decided in whichever of the row's two arms the gate-order paragraph below assigns that term | yes — the body exists; only one of its proven displacement terms has no derivation | `ErrUnsupported` | no — a derivation gap in this evaluator's certified circular enclosures, not a shape rule |
 | **S15** | a paired segment whose chord target (§5.1) is not met inside the fixed station cap | yes — the ruled surface exists; this evaluator cannot chord it inside its own ceiling | `ErrUnsupported` (`errTooManyChords`, spline R8) | no — a resource ceiling, not a shape rule |
-| **S16** | a chord cell whose two stations coincide on exactly ONE of the two sections. A cell collapsing on BOTH sections, and a collapsed cap triangle, are S6's two arms rather than this row, so every collapse is covered exactly once | yes — a collapsed piece is a recordable curve piece whatever the provenance of the two stations that produced it, and a point-degenerate correspondence is a body a smarter kernel could still loft; only the uniform two-faces-per-cell topology (§5) has no case for it | `ErrUnsupported` | no — an evaluator topology limit |
+| **S16** | a chord cell (§5.1) whose two stations coincide on exactly ONE of the two sections. A cell collapsing on BOTH sections, and a collapsed cap triangle, are S6's two arms rather than this row, so every collapse is covered exactly once | yes — a collapsed piece is a recordable curve piece whatever the provenance of the two stations that produced it, and a point-degenerate correspondence is a body a smarter kernel could still loft; only the uniform two-faces-per-cell topology (§5) has no case for it | `ErrUnsupported` | no — an evaluator topology limit |
 
 **S13 is `ErrUnsupported`, never `ErrNotFinite`.** Core §12 scopes
 `ErrNotFinite` to a non-finite PARAMETER or a derived non-finite MEASUREMENT
@@ -211,6 +211,15 @@ correspondence and only this evaluator's float64 vertex table collapses
 it — the same reading S13 gives a coordinate that runs past that table's
 range. Which arm a collapse takes is decided by §5.1's Table C, which states
 each station vertex's provenance.
+
+**A degenerate `LineSeg` pair is a recordable input, so the RECORDED arm
+covers a live case rather than a hypothetical one.** `record.go`'s
+`validateSegment` checks a `LineSeg`'s `Start` and `End` for finiteness
+alone, and `validateSegmentRange` refuses only an empty or out-of-range
+span, so a `LineSeg` whose `Start` equals its `End` over `[0, 1]` clears
+every gate a decoded recipe runs; on the recording path `seam.go`'s
+`segmentOf` copies both endpoints verbatim, adding no length check of its
+own.
 
 **S5 compares geometric planes, not `PlaneRecord` fields.** Its normal is
 `U × V`; it refuses when the two normals are parallel and the displacement
