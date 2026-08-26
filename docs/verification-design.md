@@ -384,11 +384,11 @@ record states, which is what makes it the counterpart of this arm's own
 span endpoints) has a maximum at or below the true one exactly as this arm's
 is, since a curved wall's farthest pair can sit between two sampled points —
 which is why both claim a bound rather than the diameter. **A COMPUTED loft
-station is not such a point and earns no unshrunk reading**: it sits only
-within its own `stationRound` of the point the record denotes (loft §5.2),
-so it can sit outward of the body and the raw maximum can EXCEED the true
-diameter, which is the unsound direction. That case is covered by the
-shrink, not by this equivalence: wherever `delta` is positive the loft arm
+station is not such a point, so its KIND earns it no unshrunk reading**: it
+sits only within its own `stationRound` of the point the record denotes
+(loft §5.2), so wherever that bound is positive it can sit outward of the
+body and the raw maximum can EXCEED the true diameter, which is the unsound
+direction. That case is covered by the shrink, not by this equivalence: wherever `delta` is positive the loft arm
 shrinks its reading by `2*delta` first (loft §12), and it reads `delta`
 rather than asking whether the body was placed.
 
