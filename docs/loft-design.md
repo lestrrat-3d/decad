@@ -1737,14 +1737,12 @@ budget §13 states caps that build at 2 seconds, which the 64-station build
 meets at about 1.4 seconds. What ships is the chord-target fraction that
 64-station run implies — `loftChordFraction`, a dimensionless number and not
 a station count, whose own count is whatever each build's walk-up settles on
-(65 on this fixture, above). An
-arc loft at an aspect ratio more extreme than the reference fixture, judged
-at a tolerance tighter than the default, can read `Suspect` rather than
-`Sound` — a correct, non-silent outcome under a tight enough tolerance, not
-a wrong answer, and the reject-only discipline `CLAUDE.md` requires: no
+(65 on this fixture, above). An arc loft at an aspect ratio more extreme than
+the reference fixture, judged at a tolerance tighter than the default, can
+read `Suspect` rather than `Sound` — a correct, non-silent outcome. **No
 two-pass rebuild reads its own published measurement and rebuilds to chase a
-tighter margin, since that would make the topology a function of a published
-float and a new determinism obligation for replay (§10).
+tighter margin**, since that would make the topology a function of a
+published float and a new determinism obligation for replay (§10).
 
 **A chorded wall's `Area` difference has no proven owner, and §12 PR 3 waits
 on one.** `cellChordCurveAreaUpper` bounds the true surface's area from ABOVE,
@@ -1752,9 +1750,8 @@ which is what the volume allowance's flux identity needs; the `Area` reading
 needs `|Area_held − Area_true|` over a wall cell, a different quantity, and no
 shipped helper bounds it. §8 therefore refuses rather than substitute the one
 that is available. This is an open question about a DERIVATION and not about a
-design variable: the reading's shape, its trigger and its consumers are all
-settled above, and what is missing is a helper in `bounds.go` carrying a
-written proof of that difference.
+design variable: what is missing is a helper in `bounds.go` carrying a written
+proof of that difference.
 
 **`loftStationCap`'s value is this document's one open variable.** §5.1
 states the rule the cap obeys and everything an implementation needs to
@@ -1764,15 +1761,12 @@ by the increment that lands the station generator (§12 PR 3), inside two
 constraints §5.1 already states: a build whose `Σstations` reaches the cap
 must assemble an `F` whose `F*(F-1)/2` is strictly below
 `maxFacetPairTestsPerCall` (§6), and the cap must leave room for every
-fixture §13 requires. Nothing else in this document reads the number: the
-reference fixture's FORCED 64 stations, and every other station count named
-here, are stated against the chord target above rather than against the cap.
+fixture §13 requires. Nothing else in this document reads the number: every
+station count named here, the reference fixture's FORCED 64 included, is
+stated against the chord target above rather than against the cap.
 
-Every other design variable this document depends on is resolved above. The
-reach items in §12's PR 4 row are future work, not open questions of this
-design: N-section and guide-rail/centerline lofts, and a loft case in the
-analytic clearance kernel are each named and deferred with a one-line
-reason, not left undecided.
+Every other design variable this document depends on is resolved above, and
+§12's PR 4 row is future work rather than an open question of this design.
 
 ## 15. Companion edits
 
