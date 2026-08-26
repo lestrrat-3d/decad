@@ -356,7 +356,7 @@ func TestEvalLoftHoleRimIsConcave(t *testing.T) {
 // (k+offset) mod n — asserted on the built correspondence's own coordinates.
 // resolveLoftLoopWalks resolves every loop of p (Outer, then Holes in order)
 // into its own per-segment walk slice, on a fresh freeformWork per loop — the
-// shape validateLoftRecords now returns and loftPairings now consumes.
+// shape validateLoftRecords returns and loftPairings consumes.
 func resolveLoftLoopWalks(t *testing.T, p ProfileRecord) [][]segmentWalk {
 	t.Helper()
 	loops := append([]LoopRecord{p.Outer}, p.Holes...)
@@ -922,7 +922,7 @@ func TestEvalLoftAuditRefusesOverBudget(t *testing.T) {
 	require.ErrorIs(t, err, ErrUnsupported, "S8: the facet-pair ceiling")
 }
 
-// --- capPolygonAreaRat: PR 4 (docs/loft-design.md §8's cap-polygon shoelace) ---
+// --- capPolygonAreaRat: docs/loft-design.md §8's cap-polygon shoelace ---
 
 // assembleLoftFixture runs evalLoft's own pairing/assembly prefix
 // (validateLoftRecords, loftPairings, assembleLoft) and stops there, so a
@@ -954,13 +954,14 @@ func triangleAreaRat2D(pts []Point2, tri [3]int) *big.Rat {
 	return sum.Quo(sum, big.NewRat(2, 1))
 }
 
-// TestCapPolygonAreaRatMatchesMomentsOnUntrimmedLineSeg is PR 4's first
-// acceptance line: on an untrimmed LineSeg profile (every segment's TStart/
-// TEnd is the natural 0/1, so lerp2 and moments.go's own ratLerp both return
-// the record's own endpoint verbatim, with no rounding on either side) the
-// shoelace of the cap polygon assembleLoft actually built must equal
-// moments.go's own region-level exact rational EXACTLY — a big.Rat.Cmp, not
-// a float comparison, since both sides are genuinely the same rational here.
+// TestCapPolygonAreaRatMatchesMomentsOnUntrimmedLineSeg is the untrimmed
+// half of docs/loft-design.md §8's cap-area rule: on an untrimmed LineSeg
+// profile (every segment's TStart/TEnd is the natural 0/1, so lerp2 and
+// moments.go's own ratLerp both return the record's own endpoint verbatim,
+// with no rounding on either side) the shoelace of the cap polygon
+// assembleLoft actually built must equal moments.go's own region-level exact
+// rational EXACTLY — a big.Rat.Cmp, not a float comparison, since both sides
+// are genuinely the same rational here.
 func TestCapPolygonAreaRatMatchesMomentsOnUntrimmedLineSeg(t *testing.T) {
 	pl := boxLoftPayload(t)
 	a := assembleLoftFixture(t, pl)
@@ -980,18 +981,18 @@ func TestCapPolygonAreaRatMatchesMomentsOnUntrimmedLineSeg(t *testing.T) {
 // fragment of a longer virtual line: Start=(0,0), End=(10,3), TStart=0.1 —
 // a fractional parameter that walkOf's lerp2 (float64) and moments.go's own
 // ratLerp (exact math/big.Rat) evaluate to two DIFFERENT values, by exactly
-// the lerp rounding docs/loft-design.md §8 (PR 4) closes (verified by this
-// test's own oldRat/newRat comparison, never pinned as a literal so the
-// assertion stays host-portable). Starting the trimmed segment AT THE
-// ORIGIN is deliberate: moments.go's own Green's-theorem term for that
-// segment is then EXACTLY zero in exact rational arithmetic (three points
-// through the origin are collinear with it however the trim divides them),
-// while the shoelace term over the FLOAT-rounded walked point is not — so
-// this fixture isolates the lerp-rounding gap from every other source of
-// difference. The other two segments are untrimmed (TStart 0, TEnd 1) so
-// the loop closes on ordinary recorded corners, and the closing segment's
-// End is the walked point's own float64 value so the loop is a clean
-// triangle.
+// the lerp rounding docs/loft-design.md §8 owns. The test below compares
+// those two rationals against each other rather than pinning either as a
+// literal, so its assertion stays host-portable. Starting the trimmed
+// segment AT THE ORIGIN is deliberate: moments.go's own Green's-theorem
+// term for that segment is then EXACTLY zero in exact rational arithmetic
+// (three points through the origin are collinear with it however the trim
+// divides them), while the shoelace term over the FLOAT-rounded walked
+// point is not — so this fixture isolates the lerp-rounding difference from
+// every other source of difference. The other two segments are untrimmed
+// (TStart 0, TEnd 1) so the loop closes on ordinary recorded corners, and
+// the closing segment's End is the walked point's own float64 value so the
+// loop is a clean triangle.
 func trimmedLineTriangleProfile() ProfileRecord {
 	segs := []CurveSegment{
 		LineSeg{Start: pt(0, 0), End: pt(10, 3), TStart: 0.1, TEnd: 1},
@@ -1001,18 +1002,22 @@ func trimmedLineTriangleProfile() ProfileRecord {
 	return ProfileRecord{Outer: LoopRecord{Segments: segs}}
 }
 
-// TestCapPolygonAreaRatClosesTheTrimmedLineSegGap is PR 4's second
-// acceptance line. Before this PR, a loft cap's published Area came from
-// moments.go's own record-level integral (exactRegionArea, now removed),
-// which — for a TRIMMED LineSeg — reads a DIFFERENT corner than the one
-// assembleLoft actually walked into the cap's own triangles (this file's
-// trimmedLineTriangleProfile doc comment). This test measures that
-// pre-existing gap (oldRat vs newRat, logged, and asserted nonzero — never a
-// regression, since the two were always independently computed) and proves
-// the fix: the published cap Area now equals, EXACTLY, the sum of the SAME
-// triangulation's own triangle areas (an independent square-root-free 2D
-// check), and the built Face.Area() the caller actually reads matches it.
-func TestCapPolygonAreaRatClosesTheTrimmedLineSegGap(t *testing.T) {
+// TestCapPolygonAreaRatMatchesTrianglesOnTrimmedLineSeg is the counterpart
+// of the untrimmed case above, and the acceptance line for the case where
+// the two rationals genuinely disagree. On a TRIMMED LineSeg profile the
+// corner assembleLoft walks into the cap's own triangles is NOT the corner
+// moments.go's record-level integral reads (this file's
+// trimmedLineTriangleProfile doc comment), and the cap reading has to follow
+// the walked one: the published cap Area equals, EXACTLY, the sum of the
+// SAME triangulation's own triangle areas (an independent square-root-free
+// 2D check), and the built Face.Area() the caller actually reads carries
+// that same value.
+//
+// That the two rationals differ at all is asserted rather than assumed, so a
+// fixture that quietly stopped exercising the trimmed path would fail here
+// instead of passing vacuously. The difference is logged and held to
+// rounding scale; neither rational is ever pinned as a literal.
+func TestCapPolygonAreaRatMatchesTrianglesOnTrimmedLineSeg(t *testing.T) {
 	p := trimmedLineTriangleProfile()
 	pl0 := planeAt(r3.NewVec(0, 0, 0))
 	pl1 := planeAt(r3.NewVec(0, 0, 1))
@@ -1024,34 +1029,34 @@ func TestCapPolygonAreaRatClosesTheTrimmedLineSegGap(t *testing.T) {
 	}
 
 	a := assembleLoftFixture(t, pl)
-	newRat := capPolygonAreaRat(a.pts0, a.loopIdx0)
+	polyRat := capPolygonAreaRat(a.pts0, a.loopIdx0)
 
-	// The OLD behaviour, reproduced directly against moments.go: the
-	// record's own region-level exact rational, independent of whatever
+	// The other rational this cap could have been read from: moments.go's
+	// own region-level integral of the record, independent of whatever
 	// assembleLoft actually walked.
 	ig, err := p.integralsTo(momentAreaOrder)
 	require.NoError(t, err)
 	require.False(t, ig.exactDead)
 	require.True(t, ig.exact.complete())
-	oldRat := ig.exact.area
+	recordRat := ig.exact.area
 
-	require.NotEqualf(t, 0, oldRat.Cmp(newRat),
-		"expected a genuine pre-existing gap between moments.go's record-level area %s and the assembled cap polygon's own shoelace %s",
-		oldRat.RatString(), newRat.RatString())
-	diff := new(big.Rat).Sub(oldRat, newRat)
+	require.NotEqualf(t, 0, recordRat.Cmp(polyRat),
+		"a trimmed LineSeg must leave moments.go's record-level area %s and the assembled cap polygon's own shoelace %s different, or this fixture no longer exercises the trimmed path",
+		recordRat.RatString(), polyRat.RatString())
+	diff := new(big.Rat).Sub(recordRat, polyRat)
 	diffFloat, _ := diff.Float64()
-	t.Logf("trimmed LineSeg cap: moments.go area = %s, assembled shoelace area = %s, old discrepancy = %s (%.3e mm^2)",
-		oldRat.RatString(), newRat.RatString(), diff.RatString(), diffFloat)
-	// The gap is a lerp-rounding artifact at the coordinate's own float64
-	// ULP scale (~1e-16 relative to coordinates of order 1-10), never a
-	// structural mismatch — bounded loosely so the assertion stays
+	t.Logf("trimmed LineSeg cap: moments.go area = %s, assembled shoelace area = %s, difference = %s (%.3e mm^2)",
+		recordRat.RatString(), polyRat.RatString(), diff.RatString(), diffFloat)
+	// The difference is a lerp-rounding artifact at the coordinate's own
+	// float64 ULP scale (~1e-16 relative to coordinates of order 1-10),
+	// never a structural mismatch — bounded loosely so the assertion stays
 	// host-portable (never pin an ULP-scale literal, CLAUDE.md's host
 	// portability note).
-	require.Lessf(t, math.Abs(diffFloat), 1e-9, "the closed gap must be a rounding-scale artifact, not a structural one")
+	require.Lessf(t, math.Abs(diffFloat), 1e-9, "the difference must be a rounding-scale artifact, not a structural one")
 
-	// The fix: newRat is EXACTLY the sum of the SAME triangulation's own
-	// triangle areas (the square-root-free 2D formula, so this comparison
-	// is exact rather than a proven-bound enclosure).
+	// polyRat is EXACTLY the sum of the SAME triangulation's own triangle
+	// areas (the square-root-free 2D formula, so this comparison is exact
+	// rather than a proven-bound enclosure).
 	tris0, err := triangulate2DContext(t.Context(), a.pts0, a.loopIdx0)
 	require.NoError(t, err)
 	require.NotEmpty(t, tris0)
@@ -1059,9 +1064,9 @@ func TestCapPolygonAreaRatClosesTheTrimmedLineSegGap(t *testing.T) {
 	for _, tri := range tris0 {
 		triSum.Add(triSum, triangleAreaRat2D(a.pts0, tri))
 	}
-	require.Equalf(t, 0, newRat.Cmp(triSum),
+	require.Equalf(t, 0, polyRat.Cmp(triSum),
 		"published cap area %s must equal the sum of its own triangulation's triangle areas %s exactly",
-		newRat.RatString(), triSum.RatString())
+		polyRat.RatString(), triSum.RatString())
 
 	// End to end: the built Face the caller actually reads carries the
 	// SAME value, not merely the helper this test called directly.
@@ -1076,7 +1081,7 @@ func TestCapPolygonAreaRatClosesTheTrimmedLineSegGap(t *testing.T) {
 	require.NotNil(t, capStart, "no capStart face in the built body")
 	areaM, err := capStart.Area()
 	require.NoError(t, err)
-	wantFloat, _ := newRat.Float64()
+	wantFloat, _ := polyRat.Float64()
 	require.Equal(t, wantFloat, areaM.Value.Base(), "the built capStart face must publish the same shoelace-derived area")
 }
 
