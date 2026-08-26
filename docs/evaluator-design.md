@@ -123,14 +123,10 @@ Rules:
   cap-loop chamfer's cap-level feet the offset solve's displacement
   (modify-reach §8.4). A loft's vertices carry the payload's own `delta`, the
   placement term `placeAllow` composed with the computed station's
-  `stationRound` wherever the build holds a station loft §5.2's table does not
-  pin — a chorded circular pair's, and a `LineSeg` end at a trimmed parameter
-  alike, each carrying whatever its own walk bound proves and never a zero the
-  kind grants. Every consumer conditions on `delta > 0` and never on the body
-  having been placed. A loft is NOT swept, so
-  its section displacement `sectionDelta` is not a vertex term at all: it
-  bounds a chord's departure from the curve it chords, and the facet reading
-  that composes it is loft §5.2's own. **`docs/loft-design.md` §5.2's table
+  `stationRound`, and every consumer conditions on `delta > 0` rather than on
+  the body having been placed. A loft is NOT swept, so its section
+  displacement `sectionDelta` is not a vertex term at all: it bounds a chord's
+  departure from the curve it chords. **`docs/loft-design.md` §5.2's table
   owns every loft term, its condition and its refusal; this bullet names them
   and restates none.** The verification gate reads these (verification §4).
 - **Every loop exposes its stored direction.** `Loop.CoEdges()` returns copied

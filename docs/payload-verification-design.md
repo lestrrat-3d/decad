@@ -39,21 +39,11 @@ Three payload classes require different treatment:
   axial planes. NEVER tessellate it for verification.
 - `facetedPayload` is an approximate boundary backed by a proof certificate.
   Read held polygons exactly, then widen every claim by that certificate.
-- `loftPayload` is a closed triangle boundary whose held vertices carry the
-  payload's own proven displacement `delta`, whose chorded wall facets carry
-  its section displacement `sectionDelta`, and whose twisted CHORDED cells
-  carry a further `maxTwistOffsetUpper` because there the held triangle pair
-  is not the bilinear ruled patch through its own four corners, a term a
-  `LineSeg`-only build charges nothing to — the three composing into the
-  payload's facet departure
-  `absSumUpper(delta, sectionDelta, maxTwistOffsetUpper)` (loft §5.2). All
-  three are zero for an unplaced `LineSeg`-only body whose every station is
-  PINNED (loft §5.2 owns both tests), which is what GUARANTEES that boundary
-  exact. A body under a non-identity motion carries a positive `placeAllow`
-  and a chorded one a positive `sectionDelta`; one holding a station loft
-  §5.2's table does not pin — a TRIMMED `LineSeg` end, a chorded circular
-  pair's station — carries whatever its own station bound proves, a value no
-  kind proves nonzero (loft §5, §5.2). Its
+- `loftPayload` is a closed triangle boundary whose facets carry the payload's
+  own facet departure `absSumUpper(delta, sectionDelta, maxTwistOffsetUpper)`
+  (loft §5.2, which owns each term, its condition and its zero test). That
+  boundary is exact only where all three are zero, which an unplaced
+  `LineSeg`-only body whose every station is PINNED is what GUARANTEES. Its
   construction audit proves validity, and it re-runs
   on every placement. Its `Bounds`, inflated by the two-term
   `absSumUpper(delta, sectionDelta)` those boxes carry rather than by the

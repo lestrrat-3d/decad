@@ -112,7 +112,7 @@ carries its own row for it.
 |---|---|---|---|---|---|
 | `prismPayload` | one chording per recorded section loop, shared by walls + caps | wall sagitta; each cap's maximum curved-trim sagitta; plus `sectionDelta`, per-end axial displacement, and proven coordinate/placement rounding; zero only for an exact held trim with exact stored coordinates and no section displacement | max per-face source bound | non-cancelling wall error + both cap circular-segment deficits + coordinate-movement allowance + section-displacement area (§5) | section symmetric-difference allowance × sweep height + coordinate swept allowance (§5) |
 | `cupPayload` | one chording per outer/cavity loop, shared by walls + floors + rims | wall sagitta; each floor/rim patch's maximum curved-trim sagitta; plus `zDelta` and proven coordinate/placement rounding; zero only for an exact held trim with exact stored coordinates | max per-face source bound | non-cancelling per-wall/per-planar-patch error + coordinate-movement allowance | outer-prism + cavity-prism allowances + coordinate swept allowance (§6) |
-| `loftPayload` | the wall and cap triangles already held by the payload | the payload's own facet departure `absSumUpper(delta, sectionDelta, maxTwistOffsetUpper)` (loft §5.2): every held facet IS the payload's triangle for its source face, so the facet is displaced by what the payload's vertices are, departs on a chorded wall by what its chord does from the curve it chords, and departs again where a CHORDED cell twists, since there the held triangle pair is not the bilinear ruled patch through its own four corners — a term a `LineSeg`-only build charges nothing to (loft §5.2), so the sum is zero only for a `LineSeg`-only loft under an identity motion (loft §5.2's `placeAllow` row) | max per-face source bound, so that facet departure | zero only for a `LineSeg`-only loft under an identity motion; otherwise the payload's own per-triangle perturbation sum. A CHORDED body states no further term here, because loft §8 refuses a chorded `Area` outright until a helper owns a wall cell's own `\|Area_held − Area_true\|` | zero only for a `LineSeg`-only loft under an identity motion, otherwise `sweptVolumeAllow(delta, areaUpper)` composed with the four-leg `chordedBoundaryVolumeAllow(matchedDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper, seamAllow)` (loft §8, §8.1); `symDiffOK == true` either way |
+| `loftPayload` | the wall and cap triangles already held by the payload | the payload's own facet departure `absSumUpper(delta, sectionDelta, maxTwistOffsetUpper)` (loft §5.2, which owns each term and its zero condition): every held facet IS the payload's triangle for its source face, so the facet departs by exactly what the payload states for it | max per-face source bound, so that facet departure | the payload's own per-triangle perturbation sum. A CHORDED body states no further term here, because loft §8 refuses a chorded `Area` outright until a helper owns a wall cell's own `\|Area_held − Area_true\|` | `sweptVolumeAllow(delta, areaUpper)` composed with the four-leg `chordedBoundaryVolumeAllow(matchedDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper, seamAllow)` (loft §8, §8.1); `symDiffOK == true` either way |
 | `revolvePayload` | one meridian chording + one global angular sequence, then final rigid placement | current meridian + angular displacement for that analytic patch, plus construction rounding `deltaC` and final-placement rounding `deltaR`; `deltaC + deltaR` for otherwise exact planar patches | max per-face source bound (§8) | integral of absolute local true-vs-held area-density error + cap deficits + construction/placement area allowances (§10) | meridian/angular + construction/placement homotopy allowances (§11) |
 | `facetedPayload` | held polygons + inherited boundary certificate | inherited certified face displacement, or global composed `Delta` when no tighter face value exists | max per-face source bound | payload's composed slack | payload's composed symmetric-difference bound |
 
@@ -144,23 +144,14 @@ proven allowance rather than an unbounded one. **A CHORDED loft reaches this
 restatement only with the increment that lands one**: loft §8 refuses a
 chorded `Area` until a helper owns a wall cell's own
 `|Area_held − Area_true|`, so there is no `areaSlack` for a chorded body to
-restate until then. For an unplaced `LineSeg`-only loft whose every station
-loft §5.2 PINS all three terms are zero (that table's own zero tests for
-`placeAllow` and `stationRound`, a `sectionDelta` that is zero exactly when
-every paired segment is a `LineSeg`, and a
-`maxTwistOffsetUpper` that is a CHORDED-wall-cell reading no such build
-takes), every one of those proof terms is zero, the held boundary IS the true
-boundary, and the mesh is admitted to the mesh boolean as an all-planar
-zero-bound operand.
-Every other loft's mesh — one under a non-identity motion, a CHORDED one, one
-holding a station loft §5.2's table does not pin whose own walk bound proves
-nonzero, or any combination of the three — is admitted
-as an ordinary positive-bound all-planar operand instead, through the same
-`rimDelta` composition every other nonzero-bound operand already uses. A
-chorded loft is never a zero-bound operand: loft §8 states its boundary
-departs from the recorded curves by `sectionDelta`, which stays positive even
-where `delta` is zero. The normal closed-mesh and source-face audits run in
-either case.
+restate until then. A loft whose facet departure is exactly zero is admitted
+to the mesh boolean as an all-planar zero-bound operand; every other loft's
+mesh is admitted as an ordinary positive-bound all-planar operand instead,
+through the same `rimDelta` composition every other nonzero-bound operand
+already uses. Loft §5.2 owns which builds fall on which side, and a chorded
+loft is never a zero-bound operand: its boundary departs from the recorded
+curves by `sectionDelta`, which stays positive even where `delta` is zero.
+The normal closed-mesh and source-face audits run in either case.
 
 ## 3. Shared curve chording
 
@@ -983,19 +974,15 @@ until T4 proves occupied-volume error.
 - Check prism/cup `volSymDiff` against exact circular-segment examples.
 - Cover an admitted `loftPayload`: every wall/cap triangle and source face is
   copied unchanged; for an unplaced `LineSeg`-only loft whose every station is
-  PINNED (loft §5.2) `sourceBound`, `Bound`,
-  `areaSlack`, and `volSymDiff` are zero and a loft/prism boolean succeeds
-  through the all-planar zero-bound path; for one under a non-identity motion,
-  for an identity-motion CHORDED one, and for an identity-motion one holding a
-  station loft §5.2's table does not pin, each of those four equals the term
-  §2's own payload row states
-  over that payload's `delta`, `sectionDelta` and `maxTwistOffsetUpper`, and
+  PINNED (loft §5.2) `sourceBound`, `Bound`, `areaSlack`, and `volSymDiff` are
+  zero and a loft/prism boolean succeeds through the all-planar zero-bound
+  path; for one under a non-identity motion, for an identity-motion CHORDED
+  one, and for an identity-motion one holding a station loft §5.2's table does
+  not pin, each of those four equals the term §2's own payload row states, and
   the same boolean succeeds in all three cases — through the positive-bound
-  path wherever that term is positive, which the first two carry by their own
-  `placeAllow` and `sectionDelta` rows, and through the zero-bound path
-  wherever an unpinned station's own walk bound proves zero. The
-  chorded half of that obligation lands with the loft increment that publishes
-  a chorded body at all (loft §12 PR 3).
+  path wherever that term is positive and the zero-bound path wherever it is
+  zero. The chorded half of that obligation lands with the loft increment that
+  publishes a chorded body at all (loft §12 PR 3).
 - Prove the T4 interval integrator encloses analytic fixed-sign cells and
   adversarial sign-changing cells; budget exhaustion MUST refuse.
 - Exercise revolve×prism and revolve×revolve booleans after T4, including a

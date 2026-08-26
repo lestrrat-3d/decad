@@ -1420,10 +1420,7 @@ otherwise** — its accumulated motion is `r3.Identity()`, the test §5.2's
 second licenses an exactness or zero-bound assertion: an unplaced chorded
 fixture is granted a zero `delta` only where every one of its stations is
 pinned by §5.2's table, so each such assertion below is read at `delta` zero
-and names why its own fixture is there. §8 owns the rule every reading follows —
-`delta` enters every vertex, edge length, face area, and all four body
-measurements wherever it is positive — so no fixture here may be reused
-against a placed or a chorded body without carrying it.
+and names why its own fixture is there.
 
 **The fixture wall-clock budget.** Every fixture in this section builds its
 loft in 2 seconds or less, and at most three of them chord a curve at the
@@ -1769,36 +1766,6 @@ two-pass rebuild reads its own published measurement and rebuilds to chase a
 tighter margin, since that would make the topology a function of a published
 float and a new determinism obligation for replay (§10).
 
-**`chordedBoundaryVolumeAllow` and `chordedBoundaryMomentAllow` (§5.2,
-`bounds.go`) are TWINNED helpers with their own derivations, never an
-extension of `sweptVolumeAllow`/`sweptMomentAllow`.** The two pairs speak for
-different mechanisms: `sweptVolumeAllow`/`sweptMomentAllow` bound a MESH
-whose vertices moved under a rigid motion; `chordedBoundaryVolumeAllow`/
-`chordedBoundaryMomentAllow` bound a boundary REPLACED by a nearby non-mesh
-surface — the recorded curve a chord chain approximates. **The chorded pair
-takes FOUR legs and never a `(sectionDelta, areaUpper)` pair** (§8, §8.1),
-and `perturbedAreaUpper` discharges nothing for it: that helper's per-facet
-argument is about vertices DISPLACED by `delta`, which is the swept pair's own
-mechanism and stays its discharge alone. The wall leg's area obligation is
-`wallAreaUpper`, the SUM over wall cells of `cellChordCurveAreaUpper` — an
-ABSOLUTE bound on the area of every surface the chord-to-curve homotopy
-visits, never a held facet area plus a per-cell excess, because there is no
-fixed held quantity an excess could add to: a cell can hold almost no
-triangle area while its own ruled patch already carries substantial area
-(`TestCellChordCurveAreaUpperEnclosesTheFlatTriangleCounterexample`), and
-containment inside a thin neighbourhood of the chord facets bounds no
-surface's area at all, since a surface can carry unbounded area inside an
-arbitrarily thin slab. The moment twin adds `maxTwistOffsetUpper` and
-`coordUpper` on top of those four legs, and widens its own radius by both
-(§8).
-
-**The wall leg's displacement argument is a PARAMETER-MATCHED departure, and
-`matchedDelta` is the term that states it.** §5.2's parameter-matched
-paragraph states the obligation and its two-step proof — the sagitta is the
-ideal chord's own matched departure for the kinds this design admits, and the
-held chord adds `delta` on top of it; a caller that cannot prove the
-composition passes `+Inf`, and the sagitta never stands in.
-
 **A chorded wall's `Area` difference has no proven owner, and §12 PR 3 waits
 on one.** `cellChordCurveAreaUpper` bounds the true surface's area from ABOVE,
 which is what the volume allowance's flux identity needs; the `Area` reading
@@ -1849,11 +1816,9 @@ landing this file:
   (core §6.2), so a variant this document requires belongs in that block.
 
 **`doc.go`'s support-and-refusal map is a dependent of §12's PR rows.** Its
-Loft entries state what this evaluator builds and what it refuses, so §12's
-increments — the same-kind circular correspondence of §12 PR 3 among them —
-are what change them, and the map is correct once the increment that changes
-it has landed. §12's rows own what each increment admits; that map restates
-none of it, and this document assigns no PR for the edit itself.
+Loft entries state what this evaluator builds and what it refuses, so the
+increment that changes what §12 admits is what changes them; this document
+assigns no PR for the edit itself.
 
 §5.1's chord chain also gives a loft under an identity motion a positive
 boundary displacement (§5.2, §8). Five companion documents state a zero bound
@@ -1863,15 +1828,12 @@ every station §5.2 PINS and whose accumulated motion is `r3.Identity()`, the
 two tests §5.2's `stationRound` and `placeAllow` rows own — rather than on
 `delta` alone or on the body never having been placed.
 **Which term each site names depends on what it reads.** A site that reads a
-per-FACET departure names the payload's
-facet departure `absSumUpper(delta, sectionDelta, maxTwistOffsetUpper)`
-(§5.2), because a twisted CHORDED cell's held triangle pair is not the
-ruled patch through its own four corners — a term a `LineSeg`-only build
-charges nothing to (§5.2); a site that reads the payload's `Bounds` names
-the two-term `absSumUpper(delta, sectionDelta)`, for the reason §5.2's own row
-gives; and a site that composes a chorded VOLUME allowance names
-`chordedBoundaryVolumeAllow`'s four legs (§8.1), never a `(sectionDelta,
-areaUpper)` pair:
+per-FACET departure names the payload's facet departure
+`absSumUpper(delta, sectionDelta, maxTwistOffsetUpper)`; a site that reads
+the payload's `Bounds` names the two-term
+`absSumUpper(delta, sectionDelta)`; and a site that composes a chorded VOLUME
+allowance names `chordedBoundaryVolumeAllow`'s four legs (§8.1), never a
+`(sectionDelta, areaUpper)` pair. §5.2's own rows give the reason for each:
 
 - **`docs/tessellation-design.md`**: the `loftPayload` row of §2's proof-term
   table and the exact-restatement text under it, §13's T6 row, and §14's
@@ -1886,14 +1848,11 @@ areaUpper)` pair:
   facet.
 - **`docs/payload-verification-design.md`**: §2's `loftPayload` bullet, which
   calls the held boundary exact only where all three terms are zero.
-- **`docs/evaluator-design.md`**: §3's per-vertex bound rule, whose swept-
-  vertex clause names a section displacement and a sweep-level one and has no
-  loft arm, and whose loft clause names the placement term alone. It gains
-  the chorded station's own `stationRound` (§5.2) beside that placement term,
-  and names §5.2's table as where a loft's terms and their conditions live.
-  §3 also states the `side(i,j,k)` provenance-role mechanism, and points at
-  §7 for what a loft's `j` indexes rather than glossing it as a segment
-  index.
+- **`docs/evaluator-design.md`**: §3's per-vertex bound rule, whose loft
+  clause gains the computed station's own `stationRound` (§5.2) beside the
+  placement term and names §5.2's table as where a loft's terms and their
+  conditions live. §3's provenance-role bullet points at §7 for what a loft's
+  `i`, `j` and `k` index rather than glossing `j` as a segment index.
 - **`docs/verification-design.md`**: §3's `bodyGateDiameter` prose, which
   earns the vertex maximum as the true diameter for a `LineSeg`-only loft at
   `delta` zero, as a lower bound on it for a chorded one whose every station
