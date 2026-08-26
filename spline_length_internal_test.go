@@ -69,12 +69,23 @@ func TestFreeformArcLengthBracketEnclosesAndNarrows(t *testing.T) {
 // Bézier whose control points wind eight times around a 10 mm circle — measures
 // 2.20e-05, over a hundred times coarser, and it narrows by as little as 1.37x
 // at one of its ten levels, so no per-level rate sizes it either.
+//
+// The admitted width is DISCOVERED from freeformBracketCost rather than passed
+// to it, so the fixture measures whatever that preflight currently admits; the
+// pinned 32 is there to make a change in the preflight read as the REACH change
+// it is, never as a test to retune quietly.
 func TestFreeformArcLengthRelativeWidthVariesWithTheSpan(t *testing.T) {
 	t.Parallel()
-	require.LessOrEqual(t, freeformBracketCost(32), freeformWorkLimit,
-		"a 32-control span's bracket is affordable")
-	require.Greater(t, freeformBracketCost(33), freeformWorkLimit,
-		"33 controls is past the ceiling, so 32 is the widest span measured here")
+	widest := 2
+	for freeformBracketCost(widest+1) <= freeformWorkLimit {
+		widest++
+	}
+	require.LessOrEqual(t, freeformBracketCost(widest), freeformWorkLimit,
+		"the discovered width's bracket is affordable")
+	require.Greater(t, freeformBracketCost(widest+1), freeformWorkLimit,
+		"one control past it is over the ceiling, so this is the widest span measured here")
+	require.Equal(t, 32, widest,
+		"the preflight admits 32 controls; a change here moves what this evaluator can bracket at all")
 
 	cubic := []Point2{{U: 0, V: 0}, {U: 1, V: 2}, {U: 3, V: 2}, {U: 4, V: 0}}
 	spans, err := splineBezierSpans(SplineSeg{Control: cubic, TStart: 0, TEnd: 1}, &freeformWork{})
@@ -84,7 +95,7 @@ func TestFreeformArcLengthRelativeWidthVariesWithTheSpan(t *testing.T) {
 	require.InDelta(t, 1.9213e-07, bound/value, 1e-11,
 		"an ordinary cubic's measured relative half width")
 
-	wide := windingControlNet(32, 8, 10)
+	wide := windingControlNet(widest, 8, 10)
 	seg := equalWeightNURBS(wide)
 	require.NoError(t, validateNURBSSegment(seg), "the widest span is a well-formed record")
 	wideSpans, _, err := freeformBezierSpans(seg, &freeformWork{})
@@ -559,7 +570,8 @@ func TestSubdivisionIntroducesOnlyPowersOfTwo(t *testing.T) {
 			require.NotEmpty(t, spans)
 
 			for i, span := range spans {
-				dyadic := dyadicSpanOf(span)
+				dyadic, err := dyadicSpanOf(nil, span)
+				require.NoError(t, err)
 				odd := oddPart(dyadic.den)
 				requireSameSpan(t, dyadic, span, "span %d is re-expressed exactly", i)
 				requireSubdivisionStaysDyadic(t, dyadic, span, odd, 4)
@@ -582,7 +594,8 @@ func requireSubdivisionStaysDyadic(t *testing.T, dyadic dyadicSpan, reference be
 	if depth == 0 {
 		return
 	}
-	dyadicLeft, dyadicRight := dyadic.split()
+	dyadicLeft, dyadicRight, err := dyadic.split(nil)
+	require.NoError(t, err)
 	referenceLeft, referenceRight := referenceSplit(reference)
 	requireSameSpan(t, dyadicLeft, referenceLeft, "the left half agrees with the rational reference")
 	requireSameSpan(t, dyadicRight, referenceRight, "the right half agrees with the rational reference")

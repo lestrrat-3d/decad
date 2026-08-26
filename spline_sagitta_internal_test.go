@@ -155,6 +155,50 @@ import (
 //     caller's input span, violating ratPointAt's own non-aliasing contract
 //     every OTHER station in the two returned lists already carries.
 //
+// THIRD PASS — the cost model moved from caller-side aggregates into the
+// callees, so a charge's multiplicity is the call count rather than a number a
+// caller restates. Every leg below was broken in spline_sagitta.go or
+// spline_length.go, watched go RED against the fixture that exists to catch it,
+// and restored:
+//
+//   - C1: the two chord-end reconstructions in dyadicSpanSagittaUpper run
+//     unmetered (the exact blind spot a per-point aggregate had, since it
+//     multiplied one rate by n and the chord ends are n+1 and n+2):
+//     TestSagittaAndMatchedDeltaChargeTheirOwnCodePaths went red at 144 units
+//     against 158, and both walk-total fixtures with it.
+//   - C2: ratChordFrame's shared chord vector and squared length run unmetered
+//     — five exact operations per span that the old model charged nothing for:
+//     the same two fixtures went red, at 153 and 616 units.
+//   - C3: the accept branch's own station reads run unmetered:
+//     TestPairStationsChargesEveryPhaseOfAWalkThatNeverSplits went red at 612
+//     against 626, and TestPairStationsBudgetBindsAtTheWholeChargedTotal with it.
+//   - C4: the two final-station copies run unmetered:
+//     TestPairStationsChargesEveryPhaseOfAWalkThatNeverSplits went red at 624.
+//   - C5: ratRunningMax's own comparison runs unmetered: red at 155 and 620.
+//   - C6: dyadicMidpointOps narrowed from 6 back to the 2 per blend the old
+//     split charge paid: TestSagittaCostTermsMatchTheOperationsTheyName went
+//     red against its own independent derivation of what an aligned sum runs.
+//   - C7: dyadicSplitBookkeepingOps zeroed (a split's three allocations, its
+//     copy and its 2n appends left free): the same fixture went red. This leg
+//     had NO red run on its first attempt — both split fixtures derived from the
+//     constant they were meant to check — and the independent derivation was
+//     added because of it.
+//   - C8: dyadicSpan.split's own charge deleted:
+//     TestDyadicSplitChargesItselfAndRefusesBeforeSplitting went red at 0 units
+//     against 52.
+//   - C9: widthUnits flattened to 1, and separately the three primitives that
+//     scale by it left on a count-only charge:
+//     TestChargesScaleWithOperandWidth went red both ways — decisively on the
+//     second, where the identical hull scan over 4096-bit coordinates charged
+//     the SAME 96 units as over machine words.
+//   - C10: ratChordFrame renamed without renaming it in the guard's own metered
+//     set: TestSplineSagittaRunsNoExactArithmeticOutsideAMeteredPrimitive went
+//     red, so a primitive cannot be silently dropped out of the metered surface.
+//   - C11: an unmetered new(big.Rat).Add added to walkCell: the same guard went
+//     red on all four exact-arithmetic sites, naming the function and the
+//     operation. This is the leg that keeps the class closed rather than the
+//     numbers repaired.
+//
 // Part C's three new primitives (spanHodographGapUpper, spanMatchedDeltaUpper,
 // spanSpeedUpper) are new proofs, not fixes to existing broken legs, so they
 // carry no mutation-of-existing-code entry here. Their own soundness rests on
@@ -214,16 +258,56 @@ func scaleSpans(spans []bezierSpan, factor int64) []bezierSpan {
 // itself bisects with (dyadicSpanOf, dyadicSpan.split, dyadicSpanSagittaUpper)
 // — a different (uniform, non-adaptive) traversal of the real machinery,
 // never a parallel reimplementation of the bound it measures.
-func maxSagittaAtDepth(s dyadicSpan, depth int) float64 {
+func maxSagittaAtDepth(t *testing.T, s dyadicSpan, depth int) float64 {
+	t.Helper()
 	if depth == 0 {
-		return dyadicSpanSagittaUpper(s)
+		bound, err := dyadicSpanSagittaUpper(nil, s)
+		require.NoError(t, err)
+		return bound
 	}
-	left, right := s.split()
-	return math.Max(maxSagittaAtDepth(left, depth-1), maxSagittaAtDepth(right, depth-1))
+	left, right, err := s.split(nil)
+	require.NoError(t, err)
+	return math.Max(maxSagittaAtDepth(t, left, depth-1), maxSagittaAtDepth(t, right, depth-1))
 }
 
-func levelSagitta(span bezierSpan, depth int) float64 {
-	return maxSagittaAtDepth(dyadicSpanOf(span), depth)
+func levelSagitta(t *testing.T, span bezierSpan, depth int) float64 {
+	t.Helper()
+	s, err := dyadicSpanOf(nil, span)
+	require.NoError(t, err)
+	return maxSagittaAtDepth(t, s, depth)
+}
+
+// Every bound below is read through one of these four unmetered readers. Each
+// primitive now takes the counter that pays for it and returns that counter's
+// own refusal (spline_sagitta.go's header); a nil counter never refuses, so a
+// fixture measuring a BOUND rather than a CHARGE reads it here and asserts the
+// error away once instead of at every call.
+func sagittaOf(t *testing.T, span bezierSpan) float64 {
+	t.Helper()
+	bound, err := spanSagittaUpper(nil, span)
+	require.NoError(t, err)
+	return bound
+}
+
+func hodographGapOf(t *testing.T, span bezierSpan) float64 {
+	t.Helper()
+	bound, err := spanHodographGapUpper(nil, span)
+	require.NoError(t, err)
+	return bound
+}
+
+func matchedDeltaOf(t *testing.T, span bezierSpan) float64 {
+	t.Helper()
+	bound, err := spanMatchedDeltaUpper(nil, span)
+	require.NoError(t, err)
+	return bound
+}
+
+func speedOf(t *testing.T, span bezierSpan) float64 {
+	t.Helper()
+	bound, err := spanSpeedUpper(nil, span)
+	require.NoError(t, err)
+	return bound
 }
 
 // denseChordSegmentDeviation samples a single-span chain densely and returns
@@ -294,7 +378,7 @@ func TestSpanSagittaUpperEnclosesOvershootingChordSegment(t *testing.T) {
 	dense := denseChordSegmentDeviation(t, span, 200_000)
 	require.InDelta(t, 0.76, dense, 0.01, "the dense-sample deviation must match §6.2.1's own stated ~0.76")
 
-	bound := spanSagittaUpper(span)
+	bound := sagittaOf(t, span)
 	require.GreaterOrEqual(t, bound, dense, "the reported bound must ENCLOSE the dense-sample deviation")
 
 	// The broken carrier-LINE mechanism does not enclose it: every control
@@ -326,7 +410,7 @@ func TestSpanSagittaUpperEnclosesOvershootingChordSegment(t *testing.T) {
 func TestSpanSagittaUpperDistinguishesFromParametricDeviation(t *testing.T) {
 	span := ratSpan([][2]float64{{0, 0}, {0.1, 0}, {0.1, 0}, {1, 0}})
 
-	bound := spanSagittaUpper(span)
+	bound := sagittaOf(t, span)
 	require.Zero(t, bound, "every control point already sits on the chord segment, so the sagitta is exactly 0")
 
 	cx, cy := evalSpans(t, []bezierSpan{span}, 0.5)
@@ -340,7 +424,7 @@ func TestSpanSagittaUpperDistinguishesFromParametricDeviation(t *testing.T) {
 
 func TestSpanSagittaUpperCollapsedSpanIsExactZero(t *testing.T) {
 	span := ratSpan([][2]float64{{2, 3}, {2, 3}, {2, 3}, {2, 3}})
-	require.Equal(t, 0.0, spanSagittaUpper(span), "a span whose control points all coincide reports sagitta exactly 0, by exact float equality")
+	require.Equal(t, 0.0, sagittaOf(t, span), "a span whose control points all coincide reports sagitta exactly 0, by exact float equality")
 }
 
 // --- 4. station determinism ---
@@ -373,7 +457,7 @@ func TestPairStationsSagittaStrictlyDecreasesWithLevel(t *testing.T) {
 
 	previous := math.Inf(1)
 	for depth := range 7 {
-		s := levelSagitta(span, depth)
+		s := levelSagitta(t, span, depth)
 		require.Less(t, s, previous, "depth %d must strictly narrow the sagitta bound", depth)
 		previous = s
 	}
@@ -399,13 +483,13 @@ func TestPairStationsSettlesOnSmallestLevelForTarget(t *testing.T) {
 	// target set just above level d's own measured value — d itself is
 	// discovered from the level sequence, never a hard-coded number.
 	d := 0
-	for levelSagitta(span, d) > levelSagitta(span, 4) {
+	for levelSagitta(t, span, d) > levelSagitta(t, span, 4) {
 		d++
 	}
 	require.LessOrEqual(t, d, 4)
 	require.Positive(t, d, "the fixture needs at least one level of refinement for this test to exercise anything")
-	targetFine := levelSagitta(span, d) * (1 + 1e-9)
-	targetCoarse := levelSagitta(span, d-1) * (1 + 1e-9)
+	targetFine := levelSagitta(t, span, d) * (1 + 1e-9)
+	targetCoarse := levelSagitta(t, span, d-1) * (1 + 1e-9)
 	require.Greater(t, targetCoarse, targetFine, "level d-1's own target must be strictly laxer than level d's")
 
 	single := []bezierSpan{span}
@@ -485,7 +569,7 @@ func capDepth(t *testing.T) int {
 func TestPairStationsAcceptsTheStatedChordCap(t *testing.T) {
 	span := parabolaSpan()
 	chain := []bezierSpan{span}
-	target := levelSagitta(span, capDepth(t))
+	target := levelSagitta(t, span, capDepth(t))
 
 	s0, s1, _, sag, err := pairStations(chain, chain, target, nil, nil)
 	require.NoError(t, err, "a walk needing exactly the chord count the cap names must be built")
@@ -502,7 +586,7 @@ func TestPairStationsAcceptsTheStatedChordCap(t *testing.T) {
 func TestPairStationsRefusesOneChordPastTheStatedCap(t *testing.T) {
 	span := parabolaSpan()
 	chain := []bezierSpan{span, straightSpanFrom(2)}
-	target := levelSagitta(span, capDepth(t))
+	target := levelSagitta(t, span, capDepth(t))
 
 	_, _, _, _, err := pairStations(chain, chain, target, nil, nil) //nolint:dogsled // stations/sagitta discarded; only the refusal is under test
 	require.ErrorIs(t, err, errTooManyChords)
@@ -552,7 +636,7 @@ func TestPairStationsSharedStationSetAcrossDifferentScale(t *testing.T) {
 	base := quarterCircleFitSpans(t)
 	scaled := scaleSpans(base, 5)
 
-	target := levelSagitta(base[0], 2) // fine enough to force several splits
+	target := levelSagitta(t, base[0], 2) // fine enough to force several splits
 	s0, s1, _, _, err := pairStations(base, scaled, target, nil, nil)
 	require.NoError(t, err)
 	require.Equal(t, len(s0), len(s1))
@@ -583,7 +667,7 @@ func TestPairStationsChargesBothCountersSeparately(t *testing.T) {
 		{1.7, -3}, {2.1, 2}, {2.6, -3}, {3, 0},
 	})
 
-	target := math.Min(levelSagitta(small, 2), levelSagitta(big8, 2))
+	target := math.Min(levelSagitta(t, small, 2), levelSagitta(t, big8, 2))
 	work0, work1 := newFreeformWork(), newFreeformWork()
 	_, _, _, _, err := pairStations([]bezierSpan{small}, []bezierSpan{big8}, target, work0, work1) //nolint:dogsled // stations/sagitta discarded; only the counter split is under test
 	require.NoError(t, err)
@@ -606,8 +690,8 @@ func TestPairStationsSagittaUpperIsAMaximumNeverTheLastCell(t *testing.T) {
 	bulge := ratSpan([][2]float64{{0, 0}, {0, 5}, {1, 5}, {1, 0}})
 	flat := ratSpan([][2]float64{{0, 0}, {0.33, 0.0001}, {0.66, 0.0001}, {1, 0}})
 
-	bulgeSag := spanSagittaUpper(bulge)
-	flatSag := spanSagittaUpper(flat)
+	bulgeSag := sagittaOf(t, bulge)
+	flatSag := sagittaOf(t, flat)
 	require.Greater(t, bulgeSag, flatSag*100, "the fixture needs a large gap between the two spans' own readings")
 
 	target := bulgeSag * (1 + 1e-9)
@@ -659,7 +743,7 @@ func TestSpanSagittaUpperRoundsOutward(t *testing.T) {
 	ref := new(big.Float).SetPrec(200).SetRat(exactMaxSq)
 	ref.Sqrt(ref)
 
-	bound := spanSagittaUpper(span)
+	bound := sagittaOf(t, span)
 	require.False(t, math.IsNaN(bound))
 	boundFloat := new(big.Float).SetPrec(200).SetFloat64(bound)
 	require.GreaterOrEqual(t, boundFloat.Cmp(ref), 0,
@@ -739,7 +823,7 @@ func TestSpanSagittaUpperClosedLoopChordIsAPointNotZero(t *testing.T) {
 	// bound must still enclose it (that is the contract), never equal it.
 	dense := denseChordSegmentDeviation(t, span, 200_000)
 
-	bound := spanSagittaUpper(span)
+	bound := sagittaOf(t, span)
 	require.GreaterOrEqual(t, bound, dense, "the reported bound must ENCLOSE the dense-sample deviation")
 	require.InDelta(t, math.Sqrt(26), bound, 0.01,
 		"a collapsed CHORD (not a collapsed span) must report the true sqrt(26) |p-a| distance, never a silent 0")
@@ -758,9 +842,9 @@ func TestPairStationsAcceptTestRequiresBothSidesUnderTarget(t *testing.T) {
 	large := ratSpan([][2]float64{{0, 0}, {0, 5}, {1, 5}, {1, 0}})
 
 	const target = 0.01
-	require.LessOrEqual(t, spanSagittaUpper(small), target,
+	require.LessOrEqual(t, sagittaOf(t, small), target,
 		"side 0 alone must already sit inside the target, or the accept-test bug this fixture targets has nothing to catch")
-	require.Greater(t, spanSagittaUpper(large), target,
+	require.Greater(t, sagittaOf(t, large), target,
 		"side 1 alone must sit outside the target, forcing real subdivision under a correct accept test")
 
 	spans0 := []bezierSpan{small}
@@ -785,8 +869,8 @@ func TestPairStationsSagittaUpperReflectsTheLargerSide(t *testing.T) {
 	small := ratSpan([][2]float64{{0, 0}, {0.33, 0.0001}, {0.66, 0.0001}, {1, 0}})
 	large := ratSpan([][2]float64{{0, 0}, {0, 5}, {1, 5}, {1, 0}})
 
-	smallSag := spanSagittaUpper(small)
-	largeSag := spanSagittaUpper(large)
+	smallSag := sagittaOf(t, small)
+	largeSag := sagittaOf(t, large)
 	require.Greater(t, largeSag, smallSag*100, "the fixture needs a large gap between the two sides' own readings")
 
 	// Just above the LARGER side's own reading, so the single cell accepts
@@ -813,7 +897,7 @@ func TestPairStationsSagittaUpperReflectsTheLargerSide(t *testing.T) {
 // this monotonicity check cannot survive.
 func TestPairStationsStationsAdvanceMonotonicallyAlongTheChain(t *testing.T) {
 	spans := quarterCircleFitSpans(t)
-	target := levelSagitta(spans[0], 3)
+	target := levelSagitta(t, spans[0], 3)
 
 	s0, _, _, _, err := pairStations(spans, spans, target, nil, nil) //nolint:dogsled // stations1/matchedDelta/sagittaUpper discarded; only s0 and err matter here.
 	require.NoError(t, err)
@@ -847,7 +931,7 @@ func TestPairStationsStationsAdvanceMonotonicallyAlongTheChain(t *testing.T) {
 // once genuinely subdivided) and duplicate its end.
 func TestPairStationsFirstAndLastStationAreTheChainEndpointsExactly(t *testing.T) {
 	spans := quarterCircleFitSpans(t)
-	target := levelSagitta(spans[0], 3)
+	target := levelSagitta(t, spans[0], 3)
 
 	s0, s1, _, _, err := pairStations(spans, spans, target, nil, nil)
 	require.NoError(t, err)
@@ -881,11 +965,23 @@ func TestSagittaCostTermsMatchTheOperationsTheyName(t *testing.T) {
 	require.Equal(t, ratPointAtOps, ratPointReconstructCost,
 		"ratPointAt's reconstruction must be charged, and charged for SetFrac's own normalisation")
 
-	// chordSegmentSquaredDistance's non-degenerate branch, then
-	// dyadicSpanSagittaUpper's own running-maximum comparison.
-	const chordProjectionOps = 2 + (2 + 1) + 1 + (1 + 1) + (2 + 2) + 2 + (2 + 1) + 1
+	// chordSegmentSquaredDistance's non-degenerate branch. The running-maximum
+	// comparison is NOT folded in here: ratRunningMax charges it on its own
+	// call, so one comparison is charged per fold rather than per projection.
+	const chordProjectionOps = 2 + (2 + 1) + 1 + (1 + 1) + (2 + 2) + 2 + (2 + 1)
 	require.Equal(t, chordProjectionOps, chordProjectionCost,
 		"every exact operation the clamped projection performs must be charged")
+	require.Equal(t, 1, ratCompareCost, "the running-maximum comparison is one big.Rat.Cmp")
+
+	// ratChordFrame: 2 Sub for the chord vector, 2 Mul + 1 Add for its squared
+	// length. This is the per-call work the old per-point aggregate charged
+	// nothing at all for.
+	const chordFrameOps = 2 + (2 + 1)
+	require.Equal(t, chordFrameOps, chordFrameCost,
+		"the shared chord frame every projection reads must be charged")
+	require.Equal(t, 2, chordVectorCost, "spanChordVector is two big.Rat.Sub")
+	require.Equal(t, 2+1, chordSquaredCost, "spanChordSquared squares and sums that vector")
+	require.Equal(t, 2, ratPointCopyCost, "a station copy is two big.Rat.Set")
 
 	// spanHodographGapUpper per index: hu, hv, the squared norm, the compare.
 	const hodographOps = 3 + 3 + (2 + 1) + 1
@@ -904,37 +1000,141 @@ func TestSagittaCostTermsMatchTheOperationsTheyName(t *testing.T) {
 	require.Equal(t, dyadicConversionOps, dyadicConversionCostPerPoint,
 		"dyadicSpanOf's own conversion arithmetic must be charged")
 
-	require.Equal(t, ratPointAtOps+chordProjectionOps, sagittaMeasureCostPerPoint,
-		"the sagitta's per-point charge is its reconstruction plus its projection, both counted")
-	require.Equal(t, ratPointAtOps+hodographOps, matchedDeltaMeasureCostPerPoint,
-		"the matched delta's per-point charge is its reconstruction plus its hull scan, both counted")
+	// dyadicMidpoint: two alignedSum, each a big.Int.Lsh plus an Add, plus the
+	// second operand's own Lsh where its shift is nonzero — the branch that
+	// shifts BOTH, since only an over-count bounds the other.
+	const midpointOps = 2 * (1 + 1 + 1)
+	require.Equal(t, midpointOps, dyadicMidpointOps,
+		"one exact midpoint blend runs two aligned sums, each of which may shift both operands")
+
+	// split's own per-control-point bookkeeping, outside the blends: three
+	// slice allocations and one copy of the parent's points, then one append
+	// into each half per level. It is O(n) work that a blend count alone leaves
+	// entirely free.
+	const splitBookkeepingOps = 3 + 1
+	require.Equal(t, splitBookkeepingOps, dyadicSplitBookkeepingOps,
+		"a split's own allocations, copy and appends must be charged, not left free beside its blends")
 }
 
-// TestSagittaAndMatchedDeltaCostsAreDerivedSeparately pins the two readings'
-// closed forms and, decisively, that they are NOT the same number: the
-// matched-delta reading runs spanHodographGapUpper where the sagitta runs
-// chordSegmentSquaredDistance, so charging one at the other's rate is charging
-// for work that is not the work being done.
-func TestSagittaAndMatchedDeltaCostsAreDerivedSeparately(t *testing.T) {
-	const sagittaPerPoint, matchedPerPoint, perCall = 25, 17, 64
-	for _, n := range []int{1, 2, 4, 8} {
-		require.Equal(t, uint64(sagittaPerPoint*n+perCall), sagittaMeasureCost(n), "sagitta n=%d", n)
-		require.Equal(t, uint64(matchedPerPoint*n+perCall), matchedDeltaMeasureCost(n), "matched delta n=%d", n)
-		require.NotEqual(t, sagittaMeasureCost(n), matchedDeltaMeasureCost(n),
-			"n=%d: the two readings must carry their own separately derived charge, never one reused for the other", n)
+// TestDyadicSplitOpsCountsEveryOperationOneBisectionRuns is the split's own
+// under-charge fixture. A bisection of n control points runs n(n-1)/2 midpoint
+// blends and each blend is SIX big.Int operations, not the two a charge read
+// off the blend count alone spends; it also allocates three slices, copies the
+// parent's points and appends into both halves at every level.
+//
+// freeformBracketCost stays on its own coordinate-blend unit and is pinned here
+// as STRICTLY CHEAPER than this count, so the gap between the two is a measured
+// fact of the tree rather than something a reader has to notice. Closing it
+// would refuse the involute record that spends 91% of the shared ceiling today,
+// which makes it a §6.1 decision about freeformWorkLimit and not an accounting
+// repair (freeformBracketCost's own doc comment).
+func TestDyadicSplitOpsCountsEveryOperationOneBisectionRuns(t *testing.T) {
+	for _, n := range []uint64{2, 3, 4, 8, 32} {
+		blends := n * (n - 1) / 2
+		require.Equal(t, blends*dyadicMidpointOps+dyadicSplitBookkeepingOps*n, dyadicSplitOps(n), "n=%d", n)
+		require.Greater(t, dyadicSplitOps(n), 2*blends,
+			"n=%d: two units per blend is the under-charge the metered unit replaces", n)
 	}
-	for _, n := range []int{1, 2, 4, 8} {
-		require.Equal(t, uint64(10*n), dyadicConversionCost(n), "conversion n=%d", n)
+
+	leaves := uint64(1) << freeformLengthDepth
+	require.Less(t,
+		freeformBracketCost(4),
+		costAdd(costMul(leaves-1, dyadicSplitOps(4)), costMul(leaves, 4)),
+		"the arc-length preflight charges its own coordinate-blend unit, knowingly below the metered operation count")
+}
+
+// TestDyadicSplitChargesItselfAndRefusesBeforeSplitting pins the callee-side
+// contract on the one primitive two files share: split spends its own charge as
+// its first statement, at its own operand width, and an exhausted counter gets
+// Table R row R7 back with no bisection performed.
+func TestDyadicSplitChargesItselfAndRefusesBeforeSplitting(t *testing.T) {
+	cell, err := dyadicSpanOf(nil, ratSpan([][2]float64{{0, 0}, {1, 2}, {2, 2}, {3, 0}}))
+	require.NoError(t, err)
+
+	work := newFreeformWork()
+	_, _, err = cell.split(work)
+	require.NoError(t, err)
+	require.Equal(t, costMul(dyadicSplitOps(4), widthUnits(cell.spanWidth())), work.spent,
+		"a split charges its own cost, read off its own control count and operand width")
+
+	exhausted := &freeformWork{spent: freeformWorkLimit}
+	_, _, err = cell.split(exhausted)
+	require.ErrorIs(t, err, ErrUnsupported, "an exhausted counter refuses the split rather than running it")
+}
+
+// TestChargesScaleWithOperandWidth is axis F's own fixture. A charged unit is
+// one exact operation on at most one 64-bit word, so the SAME primitive over a
+// value thousands of bits wide costs strictly — and proportionally — more than
+// over a machine word. A count-only model charges the two the same, which is
+// how one full spend of the ceiling could take a quarter of a second on one
+// walk and fifteen seconds on another.
+func TestChargesScaleWithOperandWidth(t *testing.T) {
+	require.Equal(t, uint64(1), widthUnits(0), "a value with no bits still pays its operation count once")
+	require.Equal(t, uint64(1), widthUnits(63))
+	require.Equal(t, uint64(2), widthUnits(64), "one more unit per 64-bit word")
+	require.Equal(t, uint64(1+4096/64), widthUnits(4096))
+
+	narrow := ratSpan([][2]float64{{0, 0}, {1, 1}, {2, 0}})
+	huge := new(big.Rat).SetFrac(new(big.Int).Lsh(big.NewInt(1), 4096), big.NewInt(3))
+	wide := make(bezierSpan, len(narrow))
+	for i, p := range narrow {
+		wide[i] = ratPoint{u: new(big.Rat).Mul(p.u, huge), v: new(big.Rat).Mul(p.v, huge)}
 	}
+
+	narrowWork, wideWork := newFreeformWork(), newFreeformWork()
+	_, err := spanHodographGapUpper(narrowWork, narrow)
+	require.NoError(t, err)
+	_, err = spanHodographGapUpper(wideWork, wide)
+	require.NoError(t, err)
+
+	require.Positive(t, narrowWork.spent)
+	require.Greater(t, wideWork.spent, 30*narrowWork.spent,
+		"the same hull scan over 4096-bit coordinates must cost orders of magnitude more than over machine words")
+}
+
+// TestSagittaAndMatchedDeltaChargeTheirOwnCodePaths pins each reading's total
+// against the primitive calls its own code actually makes, and decisively that
+// the two are NOT the same number: the matched-delta reading runs
+// spanHodographGapUpper where the sagitta runs chordSegmentSquaredDistance.
+//
+// It is also the multiplicity fixture. The sagitta reading reconstructs n+2
+// points — the two chord ends in ADDITION to its own loop's n — and a charge
+// stated at a caller as one rate times n cannot see the extra two at all.
+func TestSagittaAndMatchedDeltaChargeTheirOwnCodePaths(t *testing.T) {
+	const n = 3
+	span := ratSpan([][2]float64{{0, 0}, {1, 1}, {2, 0}})
+	cell, err := dyadicSpanOf(nil, span)
+	require.NoError(t, err)
+	require.Len(t, cell.points, n)
+
+	sagWork := newFreeformWork()
+	_, err = dyadicSpanSagittaUpper(sagWork, cell)
+	require.NoError(t, err)
+
+	mdWork := newFreeformWork()
+	reconstructed, err := cell.bezierSpan(mdWork)
+	require.NoError(t, err)
+	_, err = spanMatchedDeltaUpper(mdWork, reconstructed)
+	require.NoError(t, err)
+
+	// Written from the literals, never from the constants under test. Every
+	// coordinate here is a small integer, so every operand is one machine word
+	// and each operation count is spent once.
+	require.Equal(t, uint64((n+2)*7+5+n*(17+1)+64), sagWork.spent,
+		"the sagitta pays for n+2 reconstructions, one chord frame, n projections, n comparisons and one rounding")
+	require.Equal(t, uint64(n*7+2+10*n+64), mdWork.spent,
+		"the matched delta pays for n reconstructions, one chord vector, its own per-point hull scan and one rounding")
+	require.NotEqual(t, sagWork.spent, mdWork.spent,
+		"the two readings must carry their own separately derived charge, never one reused for the other")
 }
 
 // TestPairStationsChargesEveryPhaseOfAWalkThatNeverSplits pins the whole
 // charged total against an independently written closed form, on the one walk
 // shape whose charges are fully determined: a target no cell can miss, so every
 // span is converted once, measured once, and accepted once, with no split
-// anywhere. The total is conversion + sagitta + matched delta per span on each
-// side's OWN control count. Dropping the conversion charge, or paying the
-// matched delta at the sagitta's rate, changes this number.
+// anywhere. Dropping any phase — the conversion, either chord-end read, the
+// chord frame, the accepted cell's own station read, or the final station's
+// copy — changes this number.
 func TestPairStationsChargesEveryPhaseOfAWalkThatNeverSplits(t *testing.T) {
 	// Two sides of deliberately different control counts, so a charge reading
 	// the wrong side's count is visible as well.
@@ -951,12 +1151,27 @@ func TestPairStationsChargesEveryPhaseOfAWalkThatNeverSplits(t *testing.T) {
 	_, _, _, _, err := pairStations(side0, side1, math.Inf(1), work0, work1) //nolint:dogsled // only the charged totals are under test
 	require.NoError(t, err)
 
-	// Written from the literals, never from the constants under test.
-	perSpan := func(n int) uint64 { return uint64(10*n) + uint64(25*n+64) + uint64(17*n+64) }
-	require.Equal(t, 2*perSpan(3), work0.spent,
-		"side 0's total must be conversion + sagitta + matched delta on its own 3 control points, per span")
-	require.Equal(t, 2*perSpan(4), work1.spent,
-		"side 1's total must be conversion + sagitta + matched delta on its own 4 control points, per span")
+	require.Equal(t, 2*neverSplittingSpanCharge(3)+2, work0.spent,
+		"side 0's total must be its own per-span charge twice, plus the one final-station copy")
+	require.Equal(t, 2*neverSplittingSpanCharge(4)+2, work1.spent,
+		"side 1's total must be its own per-span charge twice, plus the one final-station copy")
+}
+
+// neverSplittingSpanCharge is what ONE accepted, never-bisected span of n small
+// integer control points costs its own side's counter, written from the
+// literals and never from the constants under test: 10n to convert, then the
+// sagitta reading ((n+2) reconstructions at 7, one chord frame at 5, n
+// projections at 17, n comparisons at 1, one rounding at 64), then the
+// matched-delta reading (n reconstructions at 7, one chord vector at 2, n hull
+// indices at 10, one rounding at 64), then the accepted cell's own start
+// station at 7. Every coordinate is one machine word, so no width multiplier
+// applies.
+func neverSplittingSpanCharge(n uint64) uint64 {
+	convert := 10 * n
+	sagitta := (n+2)*7 + 5 + n*(17+1) + 64
+	matched := n*7 + 2 + 10*n + 64
+	station := uint64(7)
+	return convert + sagitta + matched + station
 }
 
 // TestPairStationsBudgetBindsAtTheWholeChargedTotal pins that the budget
@@ -966,10 +1181,7 @@ func TestPairStationsChargesEveryPhaseOfAWalkThatNeverSplits(t *testing.T) {
 // walk this fixture expects to refuse would instead succeed.
 func TestPairStationsBudgetBindsAtTheWholeChargedTotal(t *testing.T) {
 	span := ratSpan([][2]float64{{0, 0}, {1, 1}, {2, 0}})
-	// One span of 3 control points: 30 to convert, 25*3+64 to measure the
-	// sagitta, 17*3+64 to measure the matched delta. Written from the
-	// literals, never from the constants under test.
-	const total = 30 + (25*3 + 64) + (17*3 + 64)
+	total := neverSplittingSpanCharge(3) + 2 // the one span, plus the final-station copy
 
 	exact := &freeformWork{spent: freeformWorkLimit - total}
 	_, _, _, _, err := pairStations([]bezierSpan{span}, []bezierSpan{span}, math.Inf(1), exact, newFreeformWork()) //nolint:dogsled // only the budget boundary is under test
@@ -980,14 +1192,6 @@ func TestPairStationsBudgetBindsAtTheWholeChargedTotal(t *testing.T) {
 	_, _, _, _, err = pairStations([]bezierSpan{span}, []bezierSpan{span}, math.Inf(1), short, newFreeformWork()) //nolint:dogsled // only the budget boundary is under test
 	require.Error(t, err, "one unit short of the charged total must refuse")
 	require.ErrorIs(t, err, ErrUnsupported)
-}
-
-// TestSagittaSplitCostMatchesDocumentedFormula pins sagittaSplitCost's own
-// closed form: n(n-1) exact dyadicMidpoint blends, per its own doc comment.
-func TestSagittaSplitCostMatchesDocumentedFormula(t *testing.T) {
-	for _, n := range []int{2, 3, 4, 8} {
-		require.Equal(t, uint64(n*(n-1)), sagittaSplitCost(n), "n=%d", n)
-	}
 }
 
 // --- B1: a zero-control-point span must refuse, never panic ---
@@ -1115,7 +1319,7 @@ func zigzagHuggingSpan() bezierSpan {
 func TestSpanMatchedDeltaUpperEnclosesWhatTheSagittaMisses(t *testing.T) {
 	span := zigzagHuggingSpan()
 
-	sagitta := spanSagittaUpper(span)
+	sagitta := sagittaOf(t, span)
 	require.Zero(t, sagitta, "every control point sits exactly on the chord segment, so the sagitta is exactly 0")
 
 	dense := denseMatchedDeviation(t, span, 200_000)
@@ -1124,7 +1328,7 @@ func TestSpanMatchedDeltaUpperEnclosesWhatTheSagittaMisses(t *testing.T) {
 	require.Less(t, sagitta, dense,
 		"pinning F1's own violation: a sagitta of 0 must FAIL to bound the true parameter-matched deviation of %.6g", dense)
 
-	matched := spanMatchedDeltaUpper(span)
+	matched := matchedDeltaOf(t, span)
 	require.GreaterOrEqual(t, matched, dense,
 		"spanMatchedDeltaUpper must ENCLOSE the true parameter-matched deviation, where the sagitta above does not")
 }
@@ -1136,7 +1340,7 @@ func TestSpanMatchedDeltaUpperEnclosesDenseSampleOnOrdinarySpans(t *testing.T) {
 	spans := quarterCircleFitSpans(t)
 	for i, span := range spans {
 		dense := denseMatchedDeviation(t, span, 20_000)
-		matched := spanMatchedDeltaUpper(span)
+		matched := matchedDeltaOf(t, span)
 		require.GreaterOrEqual(t, matched, dense,
 			"span %d: matchedDeltaUpper must enclose the dense-sampled parameter-matched deviation", i)
 	}
@@ -1151,7 +1355,7 @@ func TestSpanSpeedUpperEnclosesDenseSampleAndNeverFallsBelowChordLength(t *testi
 	spans := quarterCircleFitSpans(t)
 	for i, span := range spans {
 		dense := denseSpeedSample(t, span, 2000)
-		speed := spanSpeedUpper(span)
+		speed := speedOf(t, span)
 		require.GreaterOrEqual(t, speed, dense*(1-1e-6),
 			"span %d: speed bound must enclose the dense-sampled ||C'(t)||", i)
 
@@ -1175,14 +1379,14 @@ func TestSpanSpeedUpperEnclosesDenseSampleAndNeverFallsBelowChordLength(t *testi
 // span's own chord length, since d=0 leaves nothing to widen it by.
 func TestHodographBoundsAreExactlyZeroOnCollapsedAndStraightUniformSpans(t *testing.T) {
 	collapsed := ratSpan([][2]float64{{2, 3}, {2, 3}, {2, 3}, {2, 3}})
-	require.Zero(t, spanHodographGapUpper(collapsed))
-	require.Zero(t, spanMatchedDeltaUpper(collapsed))
-	require.Zero(t, spanSpeedUpper(collapsed), "a fully collapsed span (chord length 0 too) has zero speed as well as zero deviation")
+	require.Zero(t, hodographGapOf(t, collapsed))
+	require.Zero(t, matchedDeltaOf(t, collapsed))
+	require.Zero(t, speedOf(t, collapsed), "a fully collapsed span (chord length 0 too) has zero speed as well as zero deviation")
 
 	straight := ratSpan([][2]float64{{0, 0}, {1, 0}, {2, 0}}) // uniformly-spaced collinear controls: constant-speed line
-	require.Zero(t, spanHodographGapUpper(straight))
-	require.Zero(t, spanMatchedDeltaUpper(straight))
+	require.Zero(t, hodographGapOf(t, straight))
+	require.Zero(t, matchedDeltaOf(t, straight))
 	chordLen := math.Hypot(2, 0)
-	require.InEpsilon(t, chordLen, spanSpeedUpper(straight), 1e-12,
+	require.InEpsilon(t, chordLen, speedOf(t, straight), 1e-12,
 		"a straight uniformly-spaced span's speed bound must equal its own chord length exactly (d=0), never merely enclose it")
 }
