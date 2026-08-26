@@ -249,18 +249,6 @@ whichever arm the collapsed vertices' own provenance assigns it, then
 S7's AUDIT arm with S8 beside it (§6) — the most expensive step, run last,
 over triangles already proven individually non-degenerate.
 
-**S15's phase is a deliberate deviation from the approved implementation
-plan, which places it in construction beside S16.** It is decided among the
-record-only gates instead, because `m` and the `mMax` it is compared against
-are each a closed-form function of the two authenticated records alone
-(§5.1), so the cap can be judged before construction and a build over it is
-refused before a single station is built — the guarantee §5.1's *Deciding
-S15 from the record* paragraph states, which a construction placement could
-not make. That deviation supersedes the plan's placement, and it changes no
-observable answer: S13, S14, S15 and S16 all carry `ErrUnsupported`, and
-S15 sits after S5 and S7's structural arm (both `ErrDegenerate`) and before
-S6 under either phase.
-
 **S14 splits into two arms, the way S7 already does, because §5.2's table
 lists terms of two kinds and no single phase can evaluate both.** A term is
 judged in the earliest phase whose inputs it reads, and neither arm judges a
@@ -289,9 +277,7 @@ term the other owns:
 alone.** That table is what enumerates the terms S14 owns — each such term
 names this row in its own Refusal column — so a reader checking S14's scope
 reads that column and never a list restated here. The breadth is what makes
-the two arms above necessary, since the terms it reaches are of both kinds,
-and it widens the narrower per-station condition the approved implementation
-plan states.
+the two arms above necessary, since the terms it reaches are of both kinds.
 
 **A placement (`Placed`/`Duplicate`/`PlacedCopy`, §12 PR 2a) re-runs every
 record-only gate — S1, S2, S3, S4's payload-shape half, S5, S6, S7, S8, S13,
