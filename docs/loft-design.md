@@ -917,14 +917,9 @@ before commit; the document and recipe stay unchanged. `Loft` is the
 
 **This audit is unchanged in kind for a chorded pair.** It still tests every
 pair among the assembled triangle set exactly as stated above; only the
-triangle count grows with the station chain (§5.1, §7). §5.1's station cap,
-which §4's gate-order paragraph places before construction, is what keeps the
-CHORDING from carrying `F` past this audit's own `F*(F-1)/2` ceiling: the
-cap is the soft limit, S8
-above stays the hard one, and the ceiling here is the quantity the cap is
-fixed against (§5.1). The two are never merged, and S8 remains the only
-resource refusal a build with no circular pair can reach, since such a build
-never consults the cap at all.
+triangle count grows with the station chain (§5.1, §7). §5.1's station cap is
+what keeps the CHORDING from carrying `F` past the `F*(F-1)/2` ceiling above,
+and §5.1 owns how the soft cap and this hard ceiling relate.
 
 ## 7. Table B — the result
 
@@ -1018,21 +1013,19 @@ cap-boundary entity §5.1's Table C states. A site naming that polygon cites
 this paragraph and states no definition of its own. For a
 `LineSeg`-only loop whose every station is PINNED (§5.2) the assembled cap
 polygon is the region boundary itself, so the shoelace rational equals
-`moments.go`'s own region rational there — no new 2D integration for that
-case. A TRIMMED `LineSeg` station is a computed point rather than a recorded
-one (§5.2), so that equality is not stated for it: the assembled polygon
-sits within `delta` of the region the record denotes, which is the term
-§8 already composes into every reading it feeds. For a same-kind circular
-pair the assembled cap polygon is instead the chord chain §5.1 built: `addCircular`
-(`moments.go`) calls `dropExact()` unconditionally, so an arc-bearing
-`ProfileRecord`'s own region integral is never an exact rational, while the
-ASSEMBLED chord polygon's vertices are the same held float64 points the
-triangulation already holds, taken exactly as `math/big.Rat` — the identical
-"take the floats exactly" lift the wall sum already uses. Reading the cap
-term from the built polygon rather than the record's region integral is what
-keeps `Volume`/`Centroid` exact-rational for a chorded loft: the two caps
-and the chord-chain wall triangles then integrate over the SAME assembled
-boundary, with no region-versus-chord mismatch at the cap seam.
+`moments.go`'s own region rational there. A TRIMMED `LineSeg` station is a
+computed point rather than a recorded one (§5.2), so that equality is not
+stated for it: the assembled polygon sits within `delta` of the region the
+record denotes, the term this section already composes into every reading it
+feeds. For a same-kind circular pair the assembled cap polygon is instead the
+chord chain §5.1 built. `addCircular` (`moments.go`) calls `dropExact()`
+unconditionally, so an arc-bearing `ProfileRecord`'s own region integral is
+never an exact rational, while the ASSEMBLED chord polygon's vertices are the
+same held float64 points the triangulation holds, taken exactly as
+`math/big.Rat`. Reading the cap term from the built polygon is what keeps
+`Volume`/`Centroid` exact-rational for a chorded loft: the two caps and the
+chord-chain wall triangles then integrate over the SAME assembled boundary,
+with no region-versus-chord mismatch at the cap seam.
 
 **`Volume` is `Exact` exactly when its published rational is representable in
 the `units.Value` magnitude it carries, AND the payload's displacement
@@ -1047,30 +1040,21 @@ whose `delta` is positive — placed (§12 PR 2a), chorded past §5.2's one
 pinned station kind, or both — composes `bounds.go`'s
 `sweptVolumeAllow(delta, areaUpper)` on top of that single rounding, so
 `delta` alone is enough to make the reading `Approximate` however exactly
-any placement's own rotation or reflection is representable. The condition
-is `delta > 0` and never that the body was placed: an unplaced chorded body
-whose computed stations carry a positive `stationRound` (§5.2) takes this
-allowance exactly as a placed one does. A chorded (same-kind circular)
-body's volume additionally composes `bounds.go`'s
+any placement's own rotation or reflection is representable. A chorded
+(same-kind circular) body's volume additionally composes `bounds.go`'s
 `chordedBoundaryVolumeAllow(matchedDelta, wallAreaUpper, twistVolumeUpper,
 capVolumeUpper, seamAllow)` — a twin over the chord-to-curve homotopy rather
 than the placement's rigid one, and **never a `sweptVolumeAllow`-shaped
 `(sectionDelta, areaUpper)` pair**, which charges the wall leg alone and
 understates a twisted pairing by about five orders of magnitude
-(`TestChordedBoundaryVolumeAllowTwistLegIsLoadBearing`). The helper composes
-FOUR legs by `absSumUpper`, each its own mechanism with its own charge: the
-wall chord-to-curve leg `matchedDelta · wallAreaUpper`, the twist leg
-`twistVolumeUpper`, the cap leg `capVolumeUpper`, and the seam leg
-`seamAllow`. §5.2's table states every one of those terms, `matchedDelta`
-among them — `absSumUpper(sectionDelta, delta)`, the sagitta the ideal chord
-commits plus the displacement the held chord's own computed endpoints carry;
-§8.1 states which mechanism each leg answers for and where its derivation
-lives. So `sectionDelta` alone is enough to make the
-reading `Approximate` even where `delta == 0`, which is the `m = 1` pair
-whose two end stations §5.2's table pins (§12). A body that is both placed
-and chorded composes both terms, since each bounds a
-displacement committed at an independent stage of the construction — the
-section chording, then the rigid placement.
+(`TestChordedBoundaryVolumeAllowTwistLegIsLoadBearing`). §5.2's table states
+each of that helper's arguments and §8.1 states which mechanism each of its
+four legs answers for. So `sectionDelta` alone is enough to make the reading
+`Approximate` even where `delta == 0`, which is the `m = 1` pair whose two
+end stations §5.2's table pins (§12). A body that is both placed and chorded
+composes both terms, since each bounds a displacement committed at an
+independent stage of the construction — the section chording, then the rigid
+placement.
 
 **`Centroid` publishes three exact rational coordinates as a
 `VecMeasurement`, not a `units.Value`.** Round each coordinate once into the
@@ -1082,9 +1066,7 @@ centroid publication pattern, extended from the plane-local two-coordinate
 result to this 3D triangulated boundary. A body whose `delta` is positive
 (§5.2) widens each coordinate's bound by the same quotient composition
 `moments.go`'s `boundedQuotient` states, using `sweptVolumeAllow` as the
-denominator's own allowance and `sweptMomentAllow` as the numerator's — a
-placed body (§12 PR 2a) and an unplaced chorded one alike, since the pair is
-keyed to `delta` and not to what produced it. A body whose `sectionDelta` is
+denominator's own allowance and `sweptMomentAllow` as the numerator's. A body whose `sectionDelta` is
 positive widens it again by the matching `chordedBoundaryVolumeAllow` /
 `chordedBoundaryMomentAllow` pair (`bounds.go`), each doing for
 `sectionDelta` what the swept pair does for `delta`. **The moment twin takes
@@ -1122,13 +1104,13 @@ scale, so the published bound is `+Inf`, never the zero `sumSlop` reports for a
 non-finite `absSum`**: the enclosure widths are exactly zero whenever every
 triangle's own area is representable, so the two together would otherwise leave
 a saturated sum claiming `Exact` over mass it has already swallowed, with a true
-error that here runs past `MaxFloat64`. Any finite substitute would be an
-unproven guess. A bound scaled off the held TOTAL bounds only
-the loop: a float cross product's forward error scales with its products
-rather than with its result, so on a thin triangle it exceeds any such bound by
-roughly one over the triangle's aspect ratio — and Table B's diagonal split
-makes thin walls the ordinary case for a short loft over long recorded
-`LineSeg`s. Spline design §3 states the identical asymmetry for arc length:
+error that here runs past `MaxFloat64`. The bound is derived at each
+triangle's OWN scale rather than off the held total because a float cross
+product's forward error scales with its products rather than with its result,
+so on a thin triangle it exceeds any total-scaled bound by roughly one over
+the triangle's aspect ratio — and Table B's diagonal split makes thin walls
+the ordinary case for a short loft over long recorded `LineSeg`s.
+Spline design §3 states the identical asymmetry for arc length:
 "Arc length is never exact in ANY tier… a Tier A body's `Area` always
 carries a positive bound even where its `Volume` does not." A loft's `Area`
 is the two caps' own exact rational SHOELACE area over the polygon this
@@ -1144,9 +1126,7 @@ the per-triangle area allowance `bounds.go`'s `perturbedTriangleAreaAllow`
 states, summed over every wall AND cap triangle. The caps need it as much as
 the walls do — a cap's contribution is the assembled chord polygon's exact
 rational area (above), and the built cap triangles are within `delta` of the
-points that polygon's own vertices denote. The trigger is `delta > 0`, so an unplaced chorded body whose
-computed stations carry a positive `stationRound` (§5.2) adds the term too; a
-placement (§12 PR 2a) is one way to reach it, not the condition.
+points that polygon's own vertices denote.
 
 A CHORDED (same-kind circular) body's `Area` reaches for TWO further terms,
 and only one of them has a proven owner. **The quantity each bounds is an
@@ -1180,10 +1160,9 @@ with no staging error path — so there is no accessor behind which a missing
 instead: §12 PR 3 lands the chorded correspondence only once `bounds.go` owns
 a wall cell's `|Area_held − Area_true|` with a written derivation, and until
 then a same-kind circular pair stays unlanded — `ErrUnsupported`, the staging
-refusal every §12 row before PR 3 already carries for it (§14). A `LineSeg`-only build is untouched — its walls chord
-nothing, so its `Area` is the held triangle sum this section already derives.
-An invented wall term would be the one outcome `CLAUDE.md`'s
-proven-or-refused rule forbids, whatever margin a fixture measured for it.
+refusal every §12 row before PR 3 already carries for it (§14). A
+`LineSeg`-only build is untouched — its walls chord nothing, so its `Area` is
+the held triangle sum this section already derives.
 
 **`Bounds` is Exact only when BOTH the payload's displacement `delta` and its
 section displacement `sectionDelta` (§5.2) are zero.** Every vertex is
@@ -1208,9 +1187,6 @@ chorded pair: even at `m = 1` on a pair whose two end stations are both
 pinned (§5.2), where `delta` is exactly zero and every held vertex is a
 recorded coordinate, the box still widens, because the box is about the TRUE
 recorded curve between those two stations and not about the vertices alone.
-A chorded pair whose end stations are NOT pinned carries whatever its own
-`stationRound` proves (§5.2), and `Bounds.Bound` sums both terms as the rule
-above states at whatever value that is.
 
 **Vertex position, edge length, and face area follow the standing rules
 already governing every other analytic payload, each composed with the
@@ -1224,23 +1200,15 @@ already carry. Where `delta` is positive, all three readings carry it: a
 vertex position publishes `delta` itself as its bound, and an edge length
 and a face area each add a strictly positive `delta` term to the bound they
 would otherwise publish, so none of the three is Exact however exactly its
-own evaluation happens to come out. **A placement (§12 PR 2a) is one way
-`delta` becomes positive and a computed station's own `stationRound` (§5.2) is
-the other, and the rule reads `delta` rather than the mechanism** — so an
-unplaced chorded body whose computed stations carry a positive `stationRound`
-publishes no Exact position either. This
-document introduces no new per-accessor rule beyond what §8 already derives
-for the body-level quantities.
+own evaluation happens to come out. This document introduces no new
+per-accessor rule beyond what §8 already derives for the body-level
+quantities.
 
 ### 8.1 The four legs of the chorded volume allowance
 
 **`chordedBoundaryVolumeAllow` composes four legs by `absSumUpper`, and every
 one of them is derived in `bounds.go` rather than here.** This section states
-which mechanism each leg answers for and which helper owns its derivation;
-§5.2's table states each term's certified source, rounding direction and
-refusal, and §8's `Volume` and `Centroid` paragraphs state where the two
-composed readings spend them.
-
+which mechanism each leg answers for and which helper owns its derivation.
 The gap the composition bounds is between the HELD flat-triangle polyhedron —
 the two triangles per wall cell §5's Table B assembles and §8's accumulator
 actually sums tetrahedra over, never a ruled patch — and the TRUE solid the
@@ -1270,13 +1238,11 @@ the cap leg is the third.
 **No leg may be dropped for another's incidental slack.** The twist leg is
 load-bearing on its own measurement: deleting it understates a twisted
 pairing's true gap by about five orders of magnitude
-(`TestChordedBoundaryVolumeAllowTwistLegIsLoadBearing`), which is why the
-composition takes four terms and not the wall leg's own `(sectionDelta,
-areaUpper)` pair. Whether the WALL leg could be deleted given the other three
-is an open question `bounds.go` records and this document does not settle;
-leaving it in can only make the published total larger, and DOMINATION — that
-the total bounds the true gap — is proven leg by leg above whatever that
-question's answer turns out to be.
+(`TestChordedBoundaryVolumeAllowTwistLegIsLoadBearing`). Whether the WALL leg
+could be deleted given the other three is an open question `bounds.go`
+records and this document does not settle; leaving it in can only make the
+published total larger, and DOMINATION is proven leg by leg above whatever
+that question's answer turns out to be.
 
 **The moment twin reads this total as a region measure, and only two of the
 four legs license that.** The wall and twist legs ARE measures and already
