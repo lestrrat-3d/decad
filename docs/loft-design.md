@@ -519,15 +519,13 @@ one point per chord cell and never the terminal one (`tessellate.go`),
 because that point IS the walk's own first station. So a full-circle side has
 ONE station where an open side has two ends, and `m` stations carry `m`
 cells: cell `j` pairs station `j` to station `j + 1` for `j` in `[0, m-1)`,
-and the last cell pairs station `m - 1` to station `0`. The open rule read
-here would count the walk's single start station twice and add a closing cell
-between a station and itself, so it is the CLOSED count that every derived
-set takes: §5's vertex set, §8's assembled cap polygon and the triangle set
-§8 integrates over, and §8's `Bounds` candidate set. `chordCount` forces
-`n >= 3` on a closed walk, so a full-circle pair's smallest chorded body is
-three cells over three stations a side, and `m = 1` is reachable only on an
-open one. Table B's `stations_i` (§7) counts CELLS, so it reads the same for
-either kind and needs no exception of its own.
+and the last cell pairs station `m - 1` to station `0`. Every set derived
+from a closed side's stations takes that CLOSED count; reading the open rule
+there would count the walk's single start station twice and add a closing
+cell between a station and itself. `chordCount` forces `n >= 3` on a closed
+walk, so a full-circle pair's smallest chorded body is three cells over three
+stations a side, and `m = 1` is reachable only on an open one. Table B's
+`stations_i` (§7) counts CELLS, so it reads the same for either kind.
 
 **Station generation reuses the existing circular-walk primitives, never new
 trigonometry, and the value it walks up against is the CERTIFIED one.** The
@@ -536,20 +534,11 @@ recompute-and-increment `Document.Extrude`'s circular side walls already
 use — evaluate the per-cell sagitta at a candidate station count, increment
 until the value is at or below the target, so the depth is measured at every
 step rather than sized from a rate. What it evaluates at each candidate is
-§5.2's certified per-cell sagitta over the record's own radius and sweep
-enclosures, NOT the held float `chordCount` itself returns. That float is
-`chordSagitta`'s proven quadratic bound, the one
-`docs/tessellation-design.md` §3 owns and publishes — never the true
-`2r·sin²(Δθ/4)` closed form that section's own seed inverse solves — and it
-is decided over a `math.Hypot` radius and a `math.Atan2` sweep neither of
-which the record states, so it can only decide a COUNT and can never be the
-sagitta this build publishes. Its OWN outward rounding does not change that:
-what it over-states is the sagitta of the two held floats it was handed, and
-that states nothing about the recorded curve. The value
-the walk-up compares against the target is therefore the same over-stated
-value §5.2 publishes as `s_k`, and a candidate count whose certified sagitta
-has no derivation refuses at Table S row S14, in the arm and at the phase
-§4's gate-order paragraph assigns it.
+§5.2's certified per-cell sagitta `s_k` over the record's own radius and
+sweep enclosures, never the held float `chordCount` itself returns, which
+§5.2's rounding rule states can decide a COUNT and nothing else. A candidate
+count whose certified sagitta has no derivation refuses at Table S row S14,
+in the arm and at the phase §4's gate-order paragraph assigns it.
 
 **Shared station count, one target.** For a paired segment, each side's own
 minimum station count (`m0`, `m1`) is walked up independently at the shared
@@ -634,32 +623,26 @@ below carves out the one that is not — the build's total is therefore
 ```
 
 because integer division only ever UNDER-allocates:
-`C·floor((loftStationCap - P) / C) ≤ loftStationCap - P`. At
-`P = loftStationCap - 3` with `C = 2`, `mMax` is `2`, and two circular pairs
-both settling at `m = 2` total `(P - 2) + 2 + 2 = P + 2`, one station inside
-the cap. That bound is why the per-pair share is sound: for such a record,
-no build every one of whose pairs passes S15 can exceed `loftStationCap`.
+`C·floor((loftStationCap - P) / C) ≤ loftStationCap - P`. So for such a
+record no build every one of whose pairs passes S15 can exceed
+`loftStationCap`.
 
 **A record whose own `P` already exceeds the cap.** The `max(0, …)` term
-clamps to zero there, so `mMax = 1`, and a circular pair whose joint walk-up
-settles at `m = 1` passes S15 with `Σstations` already past the cap. That
-admission is not an escape from the ceiling the cap answers to: the paragraph
-above carves this record out as past chording altogether, and S8 is what
-refuses it, over the assembled triangle count §6's `F*(F-1)/2` preflight
-computes rather than over the cap. Nothing is left unchorded either, because
-a pair settles at `m = 1` only when both sides' certified sagittae are at or
-below the target at one cell — that is what the joint walk-up above settles
-on. Refusing such a build at S15 instead would refuse a mixed build while
-admitting an all-`LineSeg` build of the identical triangle count, which is
-the shape rule Table S row S15 states S15 is not.
+clamps to zero there, so `mMax = 1` and a pair settling at `m = 1` passes
+S15 with `Σstations` already past the cap. Such a record is past chording
+altogether (above), and S8 is what refuses it, over the assembled triangle
+count §6's `F*(F-1)/2` preflight computes rather than over the cap. Nothing
+is left unchorded either: a pair settles at `m = 1` only when both sides'
+certified sagittae already meet the target at one cell. Refusing it at S15
+instead would refuse a mixed build while admitting an all-`LineSeg` build of
+the identical triangle count, which S15's own row states S15 is not.
 
 **Deciding S15 from the record.** `m` and `mMax` are each a function of the
 two `ProfileRecord`s alone — the two sides' certified radius and sweep
 enclosures (§5.2), the chord target above, `P` and `C` — so S15 is DECIDABLE
 from the two records, with no station built. A pair whose certified sagitta
 has no derivation refuses S14 beside it, since the walk-up that settles `m`
-is what asks for it. §4's gate-order paragraph owns both placements and
-S14's two arms; this section restates neither. Every product and sum
+is what asks for it. Every product and sum
 in the `mMax` comparison and in §6's own `F*(F-1)/2` preflight is evaluated
 with checked arithmetic and refuses on overflow rather than wrapping, the
 identical preflight-before-allocation discipline §6 states for the pair-test
@@ -708,32 +691,24 @@ counterexample). **A caller that cannot PROVE the matched bound must pass
 `+Inf`, and the sagitta may never stand in for it** — that helper's own rule,
 and `CLAUDE.md`'s reject-only discipline at this seam.
 
-**The sagitta is the IDEAL chord's matched departure, and the chord this
-build HOLDS is a different segment.** Call a cell's IDEAL chord the one
+**The row's derivation runs in two steps.** Call a cell's IDEAL chord the one
 joining the two points the record and the motion together denote for its two
-stations. That chord's matched departure from the recorded curve is at most
-`sectionDelta` for exactly the two kinds a paired segment can carry here: a
-`LineSeg` side's chord IS its curve, deviation zero, and a circular arc under
-its own uniform-angle parametrization has matched deviation exactly
+stations. First, that chord's matched departure from the recorded curve is at
+most `sectionDelta` for exactly the two kinds a paired segment can carry
+here: a `LineSeg` side's chord IS its curve, deviation zero, and a circular
+arc under its own uniform-angle parametrization has matched deviation exactly
 `2·r·sin²(Δθ/4m)` — the number the sagitta row publishes, maximised over
-cells by the `sectionDelta` row
-(`TestArcMatchedDeltaEqualsSagitta`, over a 5°–170° sweep). **That is an
-EQUALITY for a circular arc, so it leaves no slack a second mechanism could
-hide in.** The chord the build HOLDS joins two held stations, each sitting
-within `delta` of the point the record and the motion denote for it —
-guaranteed zero only at one of the two PINNED station kinds below, and
-elsewhere whatever the station's own walk bound proves; a segment's
-displacement at parameter `s` is the convex combination `(1−s)·(h₀−d₀) + s·(h₁−d₁)` of its
-two endpoints' displacements, of magnitude at most `delta` at every `s`. The
-triangle inequality over the two closes it: the held chord departs from the
-recorded curve at the matching parameter by at most
-`absSumUpper(sectionDelta, delta)`, which is what the `matchedDelta` row
-publishes. **Reading `matchedDelta` as `sectionDelta` alone leaves the
-computed station's own displacement uncharged on every chorded leg**, and no
-finite value read off the geometry may stand in for that term either — the
-achieved sagitta `tessellate.go`'s `chordCount` returns is not the sagitta
-this table publishes (the rounding rule below), so its incidental slack
-proves nothing here.
+cells by the `sectionDelta` row (`TestArcMatchedDeltaEqualsSagitta`, over a
+5°–170° sweep). **That is an EQUALITY for a circular arc, so it leaves no
+slack a second mechanism could hide in.** Second, the chord the build HOLDS
+joins two held stations, each within `delta` of the point the record and the
+motion denote for it, and a segment's displacement at parameter `s` is the
+convex combination `(1−s)·(h₀−d₀) + s·(h₁−d₁)` of its two endpoints',
+of magnitude at most `delta` at every `s`. The triangle inequality over the
+two gives `absSumUpper(sectionDelta, delta)`, which is what the
+`matchedDelta` row publishes. **Reading `matchedDelta` as `sectionDelta`
+alone leaves the computed station's own displacement uncharged on every
+chorded leg.**
 
 **Four rules govern every row, and they are stated here once.**
 
@@ -743,16 +718,14 @@ proves nothing here.
   `delta` below).
 - **Every row cites a DERIVATION a reader can check, and a term whose
   derivation is not written is not a proven bound.** The `Certified source`
-  column states where a term's inputs come from and the `Rounding direction`
-  column states which way they are rounded; neither can state WHY the
-  published value dominates the quantity the row names, so a term of the
-  wrong functional form satisfies both columns while bounding nothing. The
-  `Derivation` column closes that gap: it names the site that proves the
-  domination — this document's own derivation, or the source helper whose
-  doc comment owns it — and a term with no such site is not published at
-  all. It answers `+Inf` and the build refuses at Table S row **S14**,
-  exactly as an underivable enclosure does. Extending this table means
-  writing the new row's derivation, never only its source.
+  and `Rounding direction` columns state where a term's inputs come from and
+  which way they are rounded; neither states WHY the published value
+  dominates the quantity the row names, so a term of the wrong functional
+  form satisfies both while bounding nothing. The `Derivation` column names
+  the site that proves the domination, and a term with no such site is not
+  published at all: it answers `+Inf` and the build refuses at Table S row
+  **S14**. Extending this table means writing the new row's derivation, never
+  only its source.
 - **Every term is evaluated over the certified source its row names and
   rounded OUTWARD**, so what it publishes over-states the true displacement
   in the direction its consumer needs. No term is read off a held float the
@@ -823,11 +796,11 @@ every site in this document reads that published value rather than the kind.
 stands in for the other.** `delta` bounds the displacement of a HELD VERTEX
 from the point the record denotes for it; `sectionDelta` bounds the
 displacement of a BUILT CHORD, in the section plane, from the recorded curve
-it approximates — a boundary-surface quantity, not a point motion. A reading
-that both terms displace — `Bounds`' box, or `Volume` / `Centroid` on a body
-that is both displaced and chorded (§8) — sums the two into ITS OWN bound;
-the two source terms are never added into one another or substituted for
-each other anywhere upstream of that composition.
+it approximates — a boundary-surface quantity, not a point motion. Unlike
+`delta`, `sectionDelta` composes from the recorded curves alone and carries
+no placement term at all. A reading that both terms displace sums the two
+into ITS OWN bound; the two source terms are never added into one another or
+substituted for each other anywhere upstream of that composition.
 
 **`sectionDelta` is a maximum rather than a sum because a boundary point
 lies in exactly one cell** — the identical reasoning
@@ -835,29 +808,19 @@ lies in exactly one cell** — the identical reasoning
 cross-cutting note already state for `prismPayload.sectionDelta`, which this
 field mirrors by name and by contract.
 
-**`delta` gains exactly one new term over the placement one, `stationRound`.**
-The walk that produces a station evaluates `math.Sincos` on a computed angle,
-so neither the trig nor its argument is a quantity the walk itself can enclose
-while holding floats alone; the enclosure comes from the recorded curve
-instead, which is what the table's `stationRound` row names.
-`circularWalkEndBound` reports each plane-local component's own gap from that
-enclosure and `walkEndBoundAllow` carries the wider component through the
-payload's orthonormal frame into one 3D world-space displacement;
-`stationRound` is the MAXIMUM of those per-station allowances over the
-build and never their sum: the term bounds ONE held vertex's own
-displacement, and every consumer spends it as a PER-VERTEX bound —
-`perturbedTriangleAreaAllow` over a facet's three corners,
+**`delta` gains exactly one new term over the placement one, `stationRound`,
+and that term is a MAXIMUM over stations rather than a sum.** The walk that
+produces a station evaluates `math.Sincos` on a computed angle, so neither
+the trig nor its argument is a quantity the walk itself can enclose while
+holding floats alone; the enclosure comes from the recorded curve instead,
+which is what the table's `stationRound` row names. The term bounds ONE held
+vertex's own displacement, and every consumer spends it as a PER-VERTEX
+bound — `perturbedTriangleAreaAllow` over a facet's three corners,
 `sweptVolumeAllow` over a held mesh whose every vertex moves by it, §12's
 diameter shrink over the two witnesses — so the widest station's own
-allowance already covers every vertex, and an accumulation over stations
-would scale it with the station count while bounding no quantity this
-document reads.
-A pairing whose every station is PINNED (the two kinds above) has every
-station at a recorded coordinate, so its `stationRound` is exactly zero and
-an unplaced such loft's `delta` is exactly `0`. A `LineSeg`-only pairing
-earns that only where the record leaves every one of its stations
-untrimmed. Unlike `delta`, `sectionDelta` composes from the recorded
-curves alone and carries no placement term at all.
+allowance already covers every vertex, while an accumulation over stations
+would scale it with the station count and bound no quantity this document
+reads.
 
 ## 6. The build-time simplicity / crossing audit
 
