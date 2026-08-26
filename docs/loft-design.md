@@ -178,7 +178,7 @@ that exists and this evaluator cannot build → `ErrUnsupported`.**
 | **S11** | a nil or foreign `LoftOption` value, including a foreign type that embeds the sealed marker | no well-defined decad operation can invoke an unowned callback | `ErrDegenerate` | yes, §2 |
 | **S12** | ANY build — placed (`Placed`/`Duplicate`/`PlacedCopy`, §12 PR 2a), chorded (§5.1), or both — whose COMBINED proven volume allowance (§8) is not smaller than the held volume | yes — the body itself is sound; only its centroid's proven quotient bound has no positive denominator left to divide by | `ErrUnsupported` | no — a precision ceiling on this evaluator's centroid bound, not a shape rule |
 | **S13** | a build whose lifted-and-placed coordinate, whose computed station coordinate (§5.1), or whose orientation anchor (§5), runs past the representable float64 range | yes — every input is finite (both records' coordinates, the plane origins, and a transform `r3` itself validated), and only decad's own float evaluation of the lift or the station computation overflows; a placed body is the rigid image of one this evaluator already built | `ErrUnsupported` | no — a range ceiling on this evaluator's float64 vertex table, not a shape rule |
-| **S14** | a chorded circular pair for which any displacement term §5.2's table lists answers `+Inf`, decided in whichever of the row's two arms the gate-order paragraph below assigns that term | yes — the body exists; only one of its proven displacement terms has no derivation | `ErrUnsupported` | no — a derivation gap in this evaluator's certified circular enclosures, not a shape rule |
+| **S14** | ANY build for which a displacement term §5.2's table lists answers `+Inf` — a chorded circular pair's certified enclosure among them, a trimmed `LineSeg` end whose lerp the record cannot state as a rational, and a DERIVED term whose own outward-rounded composition saturates — decided in whichever of the row's two arms the gate-order paragraph below assigns that term | yes — the body exists; only one of its proven displacement terms has no derivation | `ErrUnsupported` | no — a derivation gap in this evaluator's certified circular enclosures, not a shape rule |
 | **S15** | a paired segment whose chord target (§5.1) is not met inside the fixed station cap | yes — the ruled surface exists; this evaluator cannot chord it inside its own ceiling | `ErrUnsupported` (`errTooManyChords`, spline R8) | no — a resource ceiling, not a shape rule |
 | **S16** | a chord cell (§5.1) whose two stations coincide on exactly ONE of the two sections. A cell collapsing on BOTH sections, and a collapsed cap triangle, are S6's two arms rather than this row, so every collapse is covered exactly once | yes — a collapsed piece is a recordable curve piece whatever the provenance of the two stations that produced it, and a point-degenerate correspondence is a body a smarter kernel could still loft; only the uniform two-faces-per-cell topology (§5) has no case for it | `ErrUnsupported` | no — an evaluator topology limit |
 
@@ -282,33 +282,53 @@ over triangles already proven individually non-degenerate.
 
 **S14 splits into two arms, the way S7 already does, because §5.2's table
 lists terms of two kinds and no single phase can evaluate both.** A term is
-judged in the earliest phase whose inputs it reads, and neither arm judges a
-term the other owns:
+judged in the phase that EVALUATES it — the earliest phase in which every
+input its own arithmetic reads already exists — and the two arms together
+cover every term that table lists, a term DERIVED from other rows included:
 
 - the **DERIVATION arm** — record-only, decided beside S15 among the shape
   gates above. It asks whether the two authenticated records state every
   certified enclosure §5.2's table derives from them: the per-cell sagitta
   the walk-up compares against the chord target (§5.1), the `arcLenUpper_k`
-  arc-length enclosure, and the `circularEndpointInterval` enclosure
-  `stationRound` is measured against. A candidate count whose certified
-  sagitta has no derivation refuses here rather than walking on, and refuses
-  before a single station is built. This arm decides DERIVABILITY, never a
-  term's value; §5.2's table owns what each term's value is and what it is
-  derived from;
+  arc-length enclosure, the `circularEndpointInterval` enclosure a circular
+  station's `stationRound` is measured against, and the exact `ratLerp` a
+  trimmed `LineSeg` station's own `stationRound` is measured against. A
+  candidate count whose certified sagitta has no derivation refuses here
+  rather than walking on, and refuses before a single station is built. It
+  also owns the DERIVED terms composed from those record-only rows alone —
+  `sectionDelta`, the MAXIMUM of the per-cell sagittae, and
+  `seamPerimeterUpper`, the SUM of the per-cell `arcLenUpper_k` over both cap
+  loops. Beyond those, this arm decides DERIVABILITY and never a term's
+  value; §5.2's table owns what each term's value is and what it is derived
+  from;
 - the **CONSTRUCTION arm** — decided after cells exist, since its terms read
   held coordinates rather than the record. It covers `maxTwistOffsetUpper`
   and `twistVolumeUpper` at each chorded cell's own four held corners, and
   each cap's `planeOffsetUpper` at that cap's own held vertices. These cannot
   be asked in the record-only phase at all: a cell's twist vector and a cap
   plane's offset from the anchor are functions of the vertex table, which
-  does not yet exist there.
+  does not yet exist there. It owns every remaining DERIVED term for the same
+  reason, since each one's composition reads a held coordinate:
+  `stationRound` and `placeAllow`, the `delta` over them, `matchedDelta`,
+  `posUpper`, `wallAreaUpper`, `capAreaAllow`, `capVolumeUpper`, `seamAllow`,
+  the facet departure, and `Bounds.Bound`.
+
+**A DERIVED term answers `+Inf` on its OWN saturation as well as by
+inheriting one, and S14 reaches it either way.** `absSumUpper` accumulates
+through `upRound` (`moments.go`) and `bounds.go`'s product helpers round
+outward at every step, so a composition of finite rows can itself run past
+`float64`. S14's condition reads the term's PUBLISHED value and never its
+inputs', so such a term refuses in whichever arm above evaluates it rather
+than falling to neither.
 
 **S14's condition is deliberately the broad one: ANY displacement term
 §5.2's table lists answering `+Inf`, and not the per-station displacement
 alone.** That table is what enumerates the terms S14 owns — each such term
 names this row in its own Refusal column — so a reader checking S14's scope
 reads that column and never a list restated here. The breadth is what makes
-the two arms above necessary, since the terms it reaches are of both kinds.
+the two arms above necessary, since the terms it reaches are of both kinds,
+and those two arms partition that column completely: no term it names is left
+without a phase.
 
 **A placement (`Placed`/`Duplicate`/`PlacedCopy`, §12 PR 2a) re-runs every
 record-only gate — S1, S2, S3, S4's payload-shape half, S5, S6, S7, S8, S13,
@@ -705,7 +725,7 @@ table is what states their conditions, and none of those sites restates one.
 | **`sectionDelta`** | a LENGTH: the largest single `s_k` over every chord cell and both sides of the whole build, a MAXIMUM and never a sum | the row above | this section's maximum-not-a-sum paragraph: a boundary point lies in exactly one cell, so no point is displaced by two cells' sagittae | none of its own — a maximum of values already rounded outward is already an over-statement | inherits the row above's `+Inf` and its **S14**. Exactly zero when every paired segment is a `LineSeg` |
 | **`matchedDelta`** | a LENGTH: how far one point of a HELD chord sits from the point the recorded curve denotes at the SAME arc-length parameter — the PARAMETER-MATCHED departure every chorded leg charges, and a strictly stronger claim than the SET distance a sagitta states | `absSumUpper(sectionDelta, delta)` — the `sectionDelta` row above and the `delta` row above that, and no third mechanism | this section's parameter-matched paragraph, in two steps: the sagitta is the IDEAL chord's own matched departure for the two kinds a paired segment may carry here, and the HELD chord sits within `delta` of that ideal chord at every matching parameter, since a segment's displacement is the convex combination of its two endpoints' and each held station sits within `delta` of the point the record and the motion denote for it | outward, in `absSumUpper` | inherits both rows' `+Inf` and their **S14**. Exactly zero only where BOTH are: an unplaced `LineSeg`-only pairing whose every station is PINNED, the `delta` row's own zero test |
 | **per-cell `arcLenUpper_k`** | a LENGTH: the arc length of side `k`'s own recorded curve piece over one chord cell, never below that cell's own chord length on that side | `moments.go`'s `circularLengthInterval` over the same radius and sweep enclosures the sagitta row names | `bounds.go`'s `cellChordCurveAreaUpper` doc comment, whose derivation parametrizes each side at CONSTANT ARC-LENGTH speed and reads this bound as that side's own constant tangent magnitude; the same comment states why a bound below the chord it subtends is a broken claim rather than a tighter one | outward: the enclosure's upper end, rounded out once | `+Inf` wherever the record cannot state the enclosure, refused `ErrUnsupported` at Table S row **S14** |
-| **`maxTwistOffsetUpper`** | a LENGTH: how far one point of a CHORDED wall cell's bilinear ruled patch sits from the built triangle pair at the matching parameter, over the WHOLE build — a MAXIMUM over the build's CHORDED wall cells and never a sum, and exactly zero on a build that holds none (a `LineSeg`-only pairing, whose walls this term never reads) | `bounds.go`'s `cellTwistOffsetUpper`, read at each CHORDED cell's own twist vector `T = vLo − vHi − wLo + wHi` as `\|T\|/4`, and over no other cell | `cellTwistVolumeAllow`'s own derivation part (a), which solves that deviation exactly as `r·(s−1)·T` and `s·(r−1)·T` and maximises it at `\|T\|/4`; `cellTwistOffsetUpper`'s doc comment owns the maximum-not-a-sum rule, since the term bounds how far a SINGLE point sits from its nearest held vertex rather than an accumulation over cells. **The chorded scoping is proven rather than a convenience**: §5 builds a `LineSeg` pair's wall AS the held triangle pair, and that pair IS the boundary the body has there — §5's polyhedron rule and §8's `Volume`-`Exact` rule both read it as the true solid — so no ruled patch stands between such a facet and the surface it stands for, and a `LineSeg` cell charges nothing here however its four corners twist. A CHORDED cell is the only cell whose facet stands for a piece of a solid the record denotes and the build does not hold, and its bilinear ruled patch is the intermediate surface §8.1's twist leg starts from | outward, in `upRound` | `+Inf` on a non-finite CHORDED-cell corner, refused **S14** — the chorded circular pair that row already scopes; a build with no chorded cell publishes the exact zero above and reaches no refusal here |
+| **`maxTwistOffsetUpper`** | a LENGTH: how far one point of a CHORDED wall cell's bilinear ruled patch sits from the built triangle pair at the matching parameter, over the WHOLE build — a MAXIMUM over the build's CHORDED wall cells and never a sum, and exactly zero on a build that holds none (a `LineSeg`-only pairing, whose walls this term never reads) | `bounds.go`'s `cellTwistOffsetUpper`, read at each CHORDED cell's own twist vector `T = vLo − vHi − wLo + wHi` as `\|T\|/4`, and over no other cell | `cellTwistVolumeAllow`'s own derivation part (a), which solves that deviation exactly as `r·(s−1)·T` and `s·(r−1)·T` and maximises it at `\|T\|/4`; `cellTwistOffsetUpper`'s doc comment owns the maximum-not-a-sum rule, since the term bounds how far a SINGLE point sits from its nearest held vertex rather than an accumulation over cells. **The chorded scoping is proven rather than a convenience**: §5 builds a `LineSeg` pair's wall AS the held triangle pair, and that pair IS the boundary the body has there — §5's polyhedron rule and §8's `Volume`-`Exact` rule both read it as the true solid — so no ruled patch stands between such a facet and the surface it stands for, and a `LineSeg` cell charges nothing here however its four corners twist. A CHORDED cell is the only cell whose facet stands for a piece of a solid the record denotes and the build does not hold, and its bilinear ruled patch is the intermediate surface §8.1's twist leg starts from | outward, in `upRound` | `+Inf` on a non-finite CHORDED-cell corner, refused **S14** — the chorded cells that row reaches; a build with no chorded cell publishes the exact zero above and reaches no refusal here |
 | **cap `planeOffsetUpper`** | a LENGTH: `\|h\|`, one cap plane's own perpendicular offset from the mass accumulator's anchor (§8) | the exact rational distance from that anchor to a held vertex of that cap, bracketed by `ratSqrtUp` | a plane's own perpendicular offset from a point never exceeds the distance to any single point ON that plane, and every held cap vertex lies on that cap's plane exactly | outward, in `ratSqrtUp` | `+Inf` where the assembly states no such vertex, refused **S14** |
 | **cap `capAreaAllow`** | an AREA: how far one cap's ASSEMBLED chord polygon region differs in area from the region its recorded boundary denotes | `bounds.go`'s `sectionDisplacementArea(matchedDelta, walks, perimeterUpper)` over that cap's own recorded boundary, its `perimeterUpper` summed from the `arcLenUpper_k` row | `sectionDisplacementArea`'s own doc comment: the two regions' symmetric difference lies inside the `matchedDelta`-neighbourhood of the recorded boundary, covered by a `2·matchedDelta`-wide tube along the walks plus a disk of that radius at each joint. The held polygon's own vertices are displaced as well as chorded, which is why the neighbourhood is the matched term and not the sagitta | outward, in `productUpper` and one closing `upRound` | inherits the `matchedDelta` and `arcLenUpper_k` rows' `+Inf` and their **S14** |
 | **`posUpper`** | a LENGTH: the distance from the anchor to any point of EITHER cap loop's TRUE recorded curve | the held vertex set's own maximum distance from that anchor, widened by `matchedDelta` | `chordedBoundarySeamAllow`'s own doc comment: every true curve point sits within `matchedDelta` of its own held chord at the matching parameter, and every point of that chord lies in the convex hull of the held vertex set, so the curve point sits at most that much further from the anchor than the farthest held vertex does | outward, in `absSumUpper` | inherits the `matchedDelta` row's |
@@ -1663,7 +1683,11 @@ against this budget.
   whose cap `planeOffsetUpper` or per-cell `arcLenUpper_k` enclosure runs past
   `MaxFloat64` (§5.2), each refuse S14 too, each asserted to refuse rather
   than fall back on a finite estimate, and each asserted to refuse in the S14
-  arm §4's gate-order paragraph assigns its term.
+  arm §4's gate-order paragraph assigns its term. A DERIVED term that
+  saturates on its OWN arithmetic gets a fixture of the same shape: a build
+  whose `matchedDelta` composition runs past `float64` while both source rows
+  it reads stay finite refuses S14 in the CONSTRUCTION arm, asserted on the
+  sentinel and on the arm rather than on the source rows' own finiteness.
   **The chorded volume allowance's four legs are fixtured in `bounds.go`'s own
   internal tests, and this section names those fixtures rather than restating
   their assertions over a built body.**
