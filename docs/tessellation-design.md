@@ -144,10 +144,10 @@ proven allowance rather than an unbounded one. **A CHORDED loft reaches this
 restatement only with the increment that lands one**: loft §8 refuses a
 chorded `Area` until a helper owns a wall cell's own
 `|Area_held − Area_true|`, so there is no `areaSlack` for a chorded body to
-restate until then. For a `LineSeg`-only loft under an identity motion (loft
-§5.2's `placeAllow` row) all three terms are zero (loft §5's identity fast
-path, a `sectionDelta` that is zero exactly when every paired segment is a
-`LineSeg`, and a
+restate until then. For an unplaced `LineSeg`-only loft whose every station
+loft §5.2 PINS all three terms are zero (that table's own zero tests for
+`placeAllow` and `stationRound`, a `sectionDelta` that is zero exactly when
+every paired segment is a `LineSeg`, and a
 `maxTwistOffsetUpper` that is a CHORDED-wall-cell reading no such build
 takes), every one of those proof terms is zero, the held boundary IS the true
 boundary, and the mesh is admitted to the mesh boolean as an all-planar
@@ -918,7 +918,7 @@ sample to make an analytic mesh close. Refine or refuse.
 | **T3** | circular meridian generators: sphere/torus cells, axis-to-axis minimum, circular meridian nesting/homotopy audit, non-adjacent-intersection refinement, cut-stable circular-cell area proof | revolve booleans |
 | **T4** | meridian first-moment allowance + certified per-cell angular homotopy integral; finite `volSymDiff`; revolve admitted to booleans | density improvements |
 | **T5** | deterministic local meridian refinement and global angular density improvements that preserve every earlier proof | free-form/NURBS REVOLVE generators. An extruded free-form prism's own chording is a DIFFERENT increment — it rides the existing prism tessellation path (`docs/spline-design.md` §10 P5, Table C), not this row |
-| **T6** | `loftPayload` exact restatement: source-face-preserving wall/cap triangle copy, a proof record carrying the payload's own facet departure `absSumUpper(delta, sectionDelta, maxTwistOffsetUpper)` (zero only for a `LineSeg`-only loft under an identity motion, loft §5.2), and mesh-boolean admission | loft surveys and analytic pair clearance |
+| **T6** | `loftPayload` exact restatement: source-face-preserving wall/cap triangle copy, a proof record carrying the payload's own facet departure `absSumUpper(delta, sectionDelta, maxTwistOffsetUpper)` (zero only for an unplaced `LineSeg`-only loft whose every station is PINNED, loft §5.2), and mesh-boolean admission | loft surveys and analytic pair clearance |
 
 Each increment ships its computed geometry tests with it. T2/T3 may export a
 revolve because §§8–10 prove the mesh itself; they do not enter the boolean
@@ -981,11 +981,12 @@ until T4 proves occupied-volume error.
   bound the retained error without whole-cell cancellation.
 - Check prism/cup `volSymDiff` against exact circular-segment examples.
 - Cover an admitted `loftPayload`: every wall/cap triangle and source face is
-  copied unchanged; for a `LineSeg`-only loft under an identity motion (loft
-  §5.2) `sourceBound`, `Bound`,
+  copied unchanged; for an unplaced `LineSeg`-only loft whose every station is
+  PINNED (loft §5.2) `sourceBound`, `Bound`,
   `areaSlack`, and `volSymDiff` are zero and a loft/prism boolean succeeds
-  through the all-planar zero-bound path; for one under a non-identity motion
-  and for an identity-motion CHORDED one each of those four equals the term
+  through the all-planar zero-bound path; for one under a non-identity motion,
+  for an identity-motion CHORDED one, and for an identity-motion one holding a
+  TRIMMED `LineSeg` station each of those four equals the term
   §2's own payload row states
   over that payload's `delta`, `sectionDelta` and `maxTwistOffsetUpper`, and
   the same boolean succeeds with a positive-bound result in both cases. The

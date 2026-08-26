@@ -123,8 +123,10 @@ Rules:
   cap-loop chamfer's cap-level feet the offset solve's displacement
   (modify-reach §8.4). A loft's vertices carry the payload's own `delta`,
   which is the placement term for a placed loft and the computed station's
-  `stationRound` for a chorded one, positive under `r3.Identity()` and so
-  never conditioned on the body having been placed. A loft is NOT swept, so
+  `stationRound` wherever the build holds a station loft §5.2's table does not
+  pin — a chorded circular pair's, and a `LineSeg` end at a trimmed parameter
+  alike — positive under `r3.Identity()` and so never conditioned on the body
+  having been placed. A loft is NOT swept, so
   its section displacement `sectionDelta` is not a vertex term at all: it
   bounds a chord's departure from the curve it chords, and the facet reading
   that composes it is loft §5.2's own. **`docs/loft-design.md` §5.2's table

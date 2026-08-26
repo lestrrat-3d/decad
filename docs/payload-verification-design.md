@@ -47,10 +47,11 @@ Three payload classes require different treatment:
   `LineSeg`-only build charges nothing to — the three composing into the
   payload's facet departure
   `absSumUpper(delta, sectionDelta, maxTwistOffsetUpper)` (loft §5.2). All
-  three are zero for a `LineSeg`-only body under an identity motion (loft
-  §5.2's `placeAllow` row owns that test), so that boundary is then exact, and
-  at least one is positive for a body under a non-identity motion or a chorded
-  one (loft §5, §5.2). Its construction audit proves validity, and it re-runs
+  three are zero for an unplaced `LineSeg`-only body whose every station is
+  PINNED (loft §5.2 owns both tests), so that boundary is then exact, and at
+  least one is positive for a body under a non-identity motion, for a chorded
+  one, and for one holding a TRIMMED `LineSeg` station (loft §5, §5.2). Its
+  construction audit proves validity, and it re-runs
   on every placement. Its `Bounds`, inflated by the two-term
   `absSumUpper(delta, sectionDelta)` those boxes carry rather than by the
   facet departure, settle bounds-disjoint pairs; a
