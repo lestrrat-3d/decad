@@ -70,6 +70,24 @@ import (
 //     whole sharp arm, so the published minimum never turns on it. Hence the
 //     structural falsifier above, whose recomposition is written out
 //     independently of the function under test.
+//
+//     The undiscriminability is MEASURED, so it can be rechecked: sweeping
+//     30,240 cells across those families and keeping the 17,680 where
+//     deleting oscTerm actually LOWERS the published minimum, the directly
+//     integrated ruled-patch gap never reached 0.67 of the stripped bound —
+//     worst case 0.6654, an opposite-bulge cell, at 1024^2 quadrature nodes.
+//     So an enclosure assertion of the shape `gap <= allow` still passes with
+//     the term deleted, and adding one would record coverage it does not
+//     have. What deleting `productUpper(oscW, iMax)` from bounds.go's lin
+//     does redden is four subtests across two tests:
+//     TestCellChordCurveAreaAllowComposesEveryTerm/{oscillation-carried,
+//     ceiling-carried} below, and
+//     TestCellChordCurveAreaAllowEnclosesItsExactTerms/{cancelling twist,
+//     oscillation carried; cancelling twist, matched delta carried} in
+//     bounds_proven_norm_internal_test.go — whose refChordCurveAreaAllow
+//     big.Float reference restates the published value mathematically and
+//     never calls cellChordCurveAreaAllow, so those rows are not a
+//     self-consistency check of the function against itself.
 //   - L4, the sharp arm's MATCHED-DELTA term:
 //     TestCellChordCurveAreaAllowEnclosesOppositeBulgeGap fails —
 //     `"0.004686786475488334" is not less than or equal to
@@ -769,6 +787,10 @@ func recomposeCellAllow(a, b ruledArc) (float64, float64, float64, float64, floa
 // contribution the derivation cannot drop. So it is falsified structurally
 // instead — this test rebuilds the published value from the four terms
 // independently and compares, and each row names the term that carries it.
+//
+// L3 of this file's falsification ledger carries the measurement behind "no
+// enclosure fixture can bind it" — the searched cell count, the worst gap-to-
+// stripped-bound ratio, and the four subtests deleting the term does redden.
 func TestCellChordCurveAreaAllowComposesEveryTerm(t *testing.T) {
 	type row struct {
 		name    string
