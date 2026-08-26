@@ -474,19 +474,21 @@ states.** Every cell of a loop contributes exactly the entities below,
 whether it is a `LineSeg` pair's single cell or one link of a chord chain.
 Each entity is RECORDED — the record itself states its coordinates — or
 GENERATED — this build computed them. **This table is the single owner of a
-cell's entity inventory, its counts and its provenance marks.** A site naming
-one of these entities cites this table and states no count or provenance mark
-of its own.
+cell's own entity inventory and provenance marks.** A site naming one of
+these entities cites this table and states no per-cell count and no
+provenance mark of its own. Every count over a whole LOOP or a whole BUILD —
+`stations_i`, Table B's face counts, and `F` — is §7's, and this table states
+none of them.
 
-| Entity | Per cell | Per loop | Provenance |
-|---|---|---|---|
-| lower triangle, role `side(i,j,0)` | 1 — `V_j, V_{j+1}, W_{j+1}` | `stations_i` (§7) | GENERATED — the triangle is this build's own facet |
-| upper triangle, role `side(i,j,1)` | 1 — `V_j, W_{j+1}, W_j` | `stations_i` (§7) | GENERATED — same |
-| `p0`-side cap-boundary entity | 1, held by the lower triangle and shared with `capStart`'s boundary | `stations_i` | RECORDED for a `LineSeg` pair — the recorded `LineSeg` itself, no new edge at all. GENERATED for a chord cell — a chord joining that cell's two `p0` stations, which the record does not state |
-| `p1`-side cap-boundary entity | 1, held by the upper triangle reversed and shared with `capEnd`'s boundary | `stations_i` | same rule, on the `p1` side |
-| rung edge `V -> W` | 2 — one at each of the cell's two station pairs, each shared with the neighbouring cell | `stations_i`, one per station pair, since a loop's cells form a closed cycle | GENERATED — no record states an edge between the two sections, whatever the provenance of its two endpoints |
-| diagonal edge `V_j -> W_{j+1}` | 1, shared by this cell's own lower and upper triangle | `stations_i`, one per cell | GENERATED — same |
-| station vertex, per side | 2 per side, each shared with the neighbouring cell | `stations_i` per side | RECORDED for a station §5.2's table PINS — an untrimmed `LineSeg` end or an untrimmed `ArcSeg` end, the two kinds that table names. GENERATED for every other station, a TRIMMED `LineSeg` end included, each carrying `stationRound` (§5.2) |
+| Entity | Per cell | Provenance |
+|---|---|---|
+| lower triangle, role `side(i,j,0)` | 1 — `V_j, V_{j+1}, W_{j+1}` | GENERATED — the triangle is this build's own facet |
+| upper triangle, role `side(i,j,1)` | 1 — `V_j, W_{j+1}, W_j` | GENERATED — same |
+| `p0`-side cap-boundary entity | 1, held by the lower triangle and shared with `capStart`'s boundary | RECORDED for a `LineSeg` pair — the recorded `LineSeg` itself, no new edge at all. GENERATED for a chord cell — a chord joining that cell's two `p0` stations, which the record does not state |
+| `p1`-side cap-boundary entity | 1, held by the upper triangle reversed and shared with `capEnd`'s boundary | same rule, on the `p1` side |
+| rung edge `V -> W` | 2 — one at each of the cell's two station pairs, each shared with the neighbouring cell | GENERATED — no record states an edge between the two sections, whatever the provenance of its two endpoints |
+| diagonal edge `V_j -> W_{j+1}` | 1, shared by this cell's own lower and upper triangle | GENERATED — same |
+| station vertex, per side | 2 per side, each shared with the neighbouring cell | RECORDED for a station §5.2's table PINS — an untrimmed `LineSeg` end or an untrimmed `ArcSeg` end, the two kinds that table names. GENERATED for every other station, a TRIMMED `LineSeg` end included, each carrying `stationRound` (§5.2) |
 
 A cell's expected contact with another cell — what §6's audit admits and
 refuses against — is the entity this table gives it, never a provenance mark
@@ -928,6 +930,14 @@ and §5.1 owns how the soft cap and this hard ceiling relate.
 paired segments, of each pair's own station count `m` (§5.1). `n_i` (the
 loop's segment count) is `stations_i`'s special case: `m = 1` for a
 `LineSeg` pair, so a loop with no curved pair has `stations_i = n_i` exactly.
+
+**This section is the single owner of every count over a whole LOOP and over
+a whole BUILD**, and §5.1's Table C states none of them. Over one loop, each
+entity that table gives a cell also totals `stations_i` — the station-vertex
+row per side, and the rung-edge row one per station pair — because a loop's
+cells form a closed cycle and each cell shares a rung and a station vertex
+with each neighbour. The two wall-triangle rows of Table B above are that
+same count.
 
 **The assembled triangle count is `F = 2·Σstations + cap triangles`** — the
 `2·Σstations` wall triangles above, plus the two caps' own
@@ -1797,10 +1807,12 @@ assigns no PR for the edit itself.
 §5.1's chord chain also gives a loft under an identity motion a positive
 boundary displacement (§5.2, §8). Five companion documents state a zero bound
 or an exact boundary for a loft, so each is corrected to condition that on
-BOTH `delta` and `sectionDelta` being zero — a `LineSeg`-only loft whose
-every station §5.2 PINS and whose accumulated motion is `r3.Identity()`, the
-two tests §5.2's `stationRound` and `placeAllow` rows own — rather than on
-`delta` alone or on the body never having been placed.
+BOTH `delta` and `sectionDelta` being zero, and to CITE §5.2 for when those
+two terms are zero rather than to spell that test out. Conditioning on
+`delta` alone, on the body never having been placed, or on a restatement of
+§5.2's own zero test is what each edit removes: §5.2's table owns every such
+condition, and a companion names the terms and states no condition of its
+own.
 **Which term each site names depends on what it reads.** A site that reads a
 per-FACET departure names the payload's facet departure
 `absSumUpper(delta, sectionDelta, maxTwistOffsetUpper)`; a site that reads
