@@ -171,7 +171,7 @@ that exists and this evaluator cannot build → `ErrUnsupported`.**
 | **S4** | a `WithLoftAlignment` payload of the wrong length, an offset outside `[0, n)` for its loop, or the option passed more than once | no single intent (mirrors modify-reach SX1, which refuses a repeated contradictory option on the same ground) | `ErrDegenerate` | yes, §2 |
 | **S5** | `p0` and `p1` represent the same geometric plane, regardless of which in-plane origin or right-handed `U`/`V` basis each `PlaneRecord` uses | no — every wall vertex then lies in one plane, so the solid is provably flat: the tetrahedron-sum volume (§8) is a structural zero, not a computed one | `ErrDegenerate` | yes, §4 |
 | **S6** | a wall or cap triangle that collapses (coincident vertices, zero area) — every collapse S16's one-sided chord cell does not already claim, in either of two arms the existence test above splits: the RECORDED arm — EVERY vertex the collapse consumes is a coordinate the record states, which is a station §5.2 PINS (an untrimmed `LineSeg` pair's own endpoints; the two pinned ends of an `ArcSeg` pair recorded at ZERO RADIUS on BOTH sides) — or the COMPUTED arm, which takes every other collapse: one over GENERATED station vertices alone (§5.1's Table C) rounding to the same float64, one whose two stations DIFFER in provenance, and a cap triangle collapsing over either | the RECORDED arm: no — the modification consumed the region, the same existence answer modify §5 test 1 gives an inside-out loop. The COMPUTED arm: this evaluator cannot tell, and the row therefore never claims non-existence — where the two stations' recorded angles are distinct the denoted body exists at that correspondence and only this evaluator's float64 vertex table collapses it, and where any collapsing vertex is COMPUTED the record states no coordinate for it to be decided from | `ErrDegenerate` (RECORDED arm) / `ErrUnsupported` (COMPUTED arm) | yes, §4, for the RECORDED arm; no for the COMPUTED arm — a precision ceiling on this evaluator's float64 vertex table, the same reading S13 gives, and an undecided existence this row never converts into a permanent refusal |
-| **S7** | either of two arms: the STRUCTURAL arm — a same-kind `CircleSeg` pair whose two recorded `CCW` flags disagree (P5), decided from the two records before construction — or the AUDIT arm, where the crossing audit (§6) finds contact other than the pair's own expected contact, whatever §5.1's Table C gives it | no — a self-intersecting or self-touching shell bounds no solid, and an opposite-sense circular correspondence walls each side against the other's reversed walk, which is that same crossing | `ErrDegenerate` | yes, §6 |
+| **S7** | either of two arms: the STRUCTURAL arm — a same-kind `CircleSeg` pair whose two recorded `CCW` flags disagree (P5), decided from the two records alone (§4's gate-order paragraph places both arms) — or the AUDIT arm, where the crossing audit (§6) finds contact other than the pair's own expected contact, whatever §5.1's Table C gives it | no — a self-intersecting or self-touching shell bounds no solid, and an opposite-sense circular correspondence walls each side against the other's reversed walk, which is that same crossing | `ErrDegenerate` | yes, §6 |
 | **S8** | the crossing audit exhausts its fixed work budget (§6, §10) before every pair is decided, over the assembled triangle count `F` (§7), which a chorded pair grows past `2n` | this evaluator cannot tell | `ErrUnsupported` | no, §6 — a resource ceiling, not a shape rule |
 | **S9** | either profile fails a seam gate (§2): foreign, stale, invalid, or an unrecordable `Partial` fragment | seam design's own answer, per profile | `ErrForeignProfile` / `ErrStaleProfile` / `ErrInvalidProfile` / `ErrUnrecordableProfile` | seam design's own answer, per gate; this document adds no permanence of its own (§2) |
 | **S10** | a nil `*sketch.Sketch` or `*sketch.Profile` argument | no call at all | `ErrDegenerate` | yes, §2 |
@@ -252,9 +252,8 @@ records use distinct origins or bases.
 **Gate order**, the same "ask what could be asked" discipline modify §4
 states. **This paragraph is the single owner of where every gate sits
 relative to construction and of what each gate's phase can already have
-evaluated.** §5, §5.1, §6, §7, §9's Table D, §12's PR rows and §13 name a
-gate by its row and point here for its phase; none of them asserts a phase of
-its own.
+evaluated.** A site naming a gate's phase cites this paragraph and states no
+phase of its own.
 
 Pre-gates first (S10 nil check, S11 concrete option ownership without
 invoking a callback, S4's ARITY half — a repeated `WithLoftAlignment` — decided
@@ -277,8 +276,10 @@ and on every placed vertex as it is emitted, then S16's
 one-sided-collapsed-cell gate as stations are paired into chord cells, then
 S14's CONSTRUCTION arm below, then the per-triangle existence gate S6 in
 whichever arm the collapsed vertices' own provenance assigns it, then
-S7's AUDIT arm with S8 beside it (§6) — the most expensive step, run last,
-over triangles already proven individually non-degenerate.
+S7's AUDIT arm with S8 beside it (§6) — the most expensive step, over
+triangles already proven individually non-degenerate — and last of all S12,
+which reads the COMBINED volume allowance §8 composes over that audited
+triangle set and so cannot be asked before those measurements exist.
 
 **S14 splits into two arms, the way S7 already does, because §5.2's table
 lists terms of two kinds and no single phase can evaluate both.** A term is
@@ -331,9 +332,10 @@ and those two arms partition that column completely: no term it names is left
 without a phase.
 
 **A placement (`Placed`/`Duplicate`/`PlacedCopy`, §12 PR 2a) re-runs every
-record-only gate — S1, S2, S3, S4's payload-shape half, S5, S6, S7, S8, S13,
-S14, S15, S16 — plus S12, never a reduced set of them.** The evaluator
-re-lifts both records under the composed motion and rebuilds from scratch
+gate decided from the records rather than from the call — S1, S2, S3, S4's
+payload-shape half, S5, S6, S7, S8, S12, S13, S14, S15, S16 — never a
+reduced set of them.** The evaluator re-lifts both records under the
+composed motion and rebuilds from scratch
 (§7), so S6/S7/S8 are reachable from a placement too: the crossing audit
 re-runs on the rounded vertex set every re-evaluation produces, and a
 placement whose rounding closes a gap during this build is refused exactly as
@@ -522,11 +524,9 @@ states.** Every cell of a loop contributes exactly the entities below,
 whether it is a `LineSeg` pair's single cell or one link of a chord chain.
 Each entity is RECORDED — the record itself states its coordinates — or
 GENERATED — this build computed them. **This table is the single owner of a
-cell's entity inventory, its counts and its provenance marks.** §5's wall
-table and edge families, §6's audit admission rules, §7's Table B, §8's cap
-contribution, §13's construction and audit fixtures, and
-`docs/tessellation-design.md` §2's `loftPayload` restatement all name these
-entities and point here; none of them restates a count or a provenance mark.
+cell's entity inventory, its counts and its provenance marks.** A site naming
+one of these entities cites this table and states no count or provenance mark
+of its own.
 
 | Entity | Per cell | Per loop | Provenance |
 |---|---|---|---|
@@ -699,12 +699,11 @@ the shape rule Table S row S15 states S15 is not.
 
 **Deciding S15 from the record.** `m` and `mMax` are each a function of the
 two `ProfileRecord`s alone — the two sides' certified radius and sweep
-enclosures (§5.2), the chord target above, `P` and `C` — so S15 is decided
-with the record-only gates and a build that would exceed the cap is refused
-before a single station is built. A pair whose certified sagitta has no
-derivation refuses S14 beside it, since the walk-up that settles `m` is what
-asks for it. §4's gate-order paragraph owns both placements and S14's two
-arms; this section restates neither. Every product and sum
+enclosures (§5.2), the chord target above, `P` and `C` — so S15 is DECIDABLE
+from the two records, with no station built. A pair whose certified sagitta
+has no derivation refuses S14 beside it, since the walk-up that settles `m`
+is what asks for it. §4's gate-order paragraph owns both placements and
+S14's two arms; this section restates neither. Every product and sum
 in the `mMax` comparison and in §6's own `F*(F-1)/2` preflight is evaluated
 with checked arithmetic and refuses on overflow rather than wrapping, the
 identical preflight-before-allocation discipline §6 states for the pair-test
@@ -715,11 +714,9 @@ ceiling itself.
 **Every displacement term this document publishes is listed once, in the
 table below, with the quantity it bounds, the certified enclosure it is
 derived from, the site that PROVES it dominates that quantity, the direction
-it rounds, and what it does when that enclosure is underivable.** §4's Table
-S rows S12 and S14 and its gate-order and placement paragraphs, §5, §8,
-§9's Table D, §12, §13's fixture preamble, §15's companion-edit list and
-`docs/evaluator-design.md` §3's per-vertex bound rule name these terms; this
-table is what states their conditions, and none of those sites restates one.
+it rounds, and what it does when that enclosure is underivable.** A site
+naming one of these terms cites this table and states no condition of its
+own.
 
 | Term | The quantity it bounds | Certified source | Derivation | Rounding direction | Refusal |
 |---|---|---|---|---|---|
@@ -1002,8 +999,9 @@ before commit; the document and recipe stay unchanged. `Loft` is the
 **This audit is unchanged in kind for a chorded pair.** It still tests every
 pair among the assembled triangle set exactly as stated above; only the
 triangle count grows with the station chain (§5.1, §7). §5.1's station cap,
-decided before construction, is what keeps the CHORDING from carrying `F`
-past this audit's own `F*(F-1)/2` ceiling: the cap is the soft limit, S8
+which §4's gate-order paragraph places before construction, is what keeps the
+CHORDING from carrying `F` past this audit's own `F*(F-1)/2` ceiling: the
+cap is the soft limit, S8
 above stays the hard one, and the ceiling here is the quantity the cap is
 fixed against (§5.1). The two are never merged, and S8 remains the only
 resource refusal a build with no circular pair can reach, since such a build
@@ -1026,18 +1024,15 @@ loop's segment count) is `stations_i`'s special case: `m = 1` for a
 **The assembled triangle count is `F = 2·Σstations + cap triangles`** — the
 `2·Σstations` wall triangles above, plus the two caps' own
 polygon-with-holes triangulations (§6). **This section is the single owner of
-`F`.** §5.1's station cap, §6's audit and its `F*(F-1)/2` preflight, Table S
-row S8 and §13's build cost model each name `F` and point here; none of them
-states what it counts.
+`F`.** A site naming `F` cites this section and states no count of its own.
 
 **This section is the single owner of a loft's `side(i,j,k)` grammar.** `i`
 is the loop index — `0` for `Outer`, `1+h` for `Holes[h]`, matching Table
 P's own indexing. `j` indexes that loop's flattened CHORD-CELL sequence
 (§5.1) — one entry per `LineSeg` pair, `m` entries per curved pair — and
 never one entry per recorded segment. `k` is `0` for a cell's lower triangle
-and `1` for its upper. §5, §5.1, `docs/evaluator-design.md` §3 and
-`docs/tessellation-design.md` §4's Loft wall paragraph name this grammar and
-point here; none of them states what an index means.
+and `1` for its upper. A site naming this grammar cites this section and
+states no index meaning of its own.
 
 **Lump count is always 1.** The two caps and `2*sum(stations_i)` wall
 triangles form one connected, manifold, watertight shell once §6's audit has
@@ -1056,10 +1051,10 @@ recorded profiles: it re-lifts every vertex from the record and applies the
 composed motion ONCE — never moving an already-built mesh incrementally, so
 `delta` does not accumulate across repeated placements — reproducing the same
 roles (modify §11's "roles derive from the record and the deterministic walk
-order") and the same pairing, and re-running §4's record-only Table S gates
-and §6's crossing audit on the rounded vertex set — the set §4 names, which
-is every gate but S9/S10/S11 and S4's arity half. §5's whole-shell orientation step
-re-decides the sign from the placed triangle set on its own, so a mirror
+order") and the same pairing, and re-running the Table S gates §4's placement
+paragraph names and §6's crossing audit on the rounded vertex set. §5's
+whole-shell orientation step re-decides the sign from the placed triangle
+set on its own, so a mirror
 flips `reversed` and needs no separate winding-flip case — unlike
 `facetedPayload.placed`'s `IsReflection()` handling, which moves a held mesh
 rather than re-lifting one.
@@ -1100,9 +1095,8 @@ implements for a 2D region's exact rational accumulator, extended here to a
 polygon this construction actually ASSEMBLED (§5), never `moments.go`'s
 region integral read directly off the record.** **This paragraph is the
 single owner of what a cap's assembled polygon IS**, over the per-cell
-cap-boundary entity §5.1's Table C states. §5's cap-seeding paragraph, Table
-C's own two cap-boundary rows, §9's Table D and §13's construction fixtures
-name that polygon and point here; none of them states what it is. For a
+cap-boundary entity §5.1's Table C states. A site naming that polygon cites
+this paragraph and states no definition of its own. For a
 `LineSeg`-only loop whose every station is PINNED (§5.2) the assembled cap
 polygon is the region boundary itself, so the shoelace rational equals
 `moments.go`'s own region rational there — no new 2D integration for that
@@ -1585,8 +1579,8 @@ against this budget.
   mixed-kind or free-form segment pair → S3; a same-kind `CircleSeg` pair
   whose two recorded `CCW` flags disagree → S7's `ErrDegenerate` at the
   structural gate, asserted to refuse before construction rather than from
-  the audit, so the fixture pins the gate's position and not only its
-  sentinel; malformed
+  the audit — the position §4's gate-order paragraph gives it — so the fixture
+  pins the gate's position and not only its sentinel; malformed
   `WithLoftAlignment` (wrong length, out-of-range offset, or duplicate
   option) → S4; nil and foreign `LoftOption` values (including a type with a
   promoted sealed marker) → S11 before their callbacks run and with the
