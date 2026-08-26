@@ -249,6 +249,18 @@ whichever arm the collapsed vertices' own provenance assigns it, then
 S7's AUDIT arm with S8 beside it (§6) — the most expensive step, run last,
 over triangles already proven individually non-degenerate.
 
+**S15's phase is a deliberate deviation from the approved implementation
+plan, which places it in construction beside S16.** It is decided among the
+record-only gates instead, because `m` and the `mMax` it is compared against
+are each a closed-form function of the two authenticated records alone
+(§5.1), so the cap can be judged before construction and a build over it is
+refused before a single station is built — the guarantee §5.1's *Deciding
+S15 from the record* paragraph states, which a construction placement could
+not make. That deviation supersedes the plan's placement, and it changes no
+observable answer: S13, S14, S15 and S16 all carry `ErrUnsupported`, and
+S15 sits after S5 and S7's structural arm (both `ErrDegenerate`) and before
+S6 under either phase.
+
 **S14 splits into two arms, the way S7 already does, because §5.2's table
 lists terms of two kinds and no single phase can evaluate both.** A term is
 judged in the earliest phase whose inputs it reads, and neither arm judges a
@@ -271,6 +283,15 @@ term the other owns:
   be asked in the record-only phase at all: a cell's twist vector and a cap
   plane's offset from the anchor are functions of the vertex table, which
   does not yet exist there.
+
+**S14's condition is deliberately the broad one: ANY displacement term
+§5.2's table lists answering `+Inf`, and not the per-station displacement
+alone.** That table is what enumerates the terms S14 owns — each such term
+names this row in its own Refusal column — so a reader checking S14's scope
+reads that column and never a list restated here. The breadth is what makes
+the two arms above necessary, since the terms it reaches are of both kinds,
+and it widens the narrower per-station condition the approved implementation
+plan states.
 
 **A placement (`Placed`/`Duplicate`/`PlacedCopy`, §12 PR 2a) re-runs every
 record-only gate — S1, S2, S3, S4's payload-shape half, S5, S6, S7, S8, S13,
@@ -599,6 +620,25 @@ the share it exceeded is that segment's own. A build with no circular pair
 (`C = 0`) never consults the cap at all: its `Σstations` is `Σn_i` exactly
 (§7), the count the record itself states, so an all-`LineSeg` build's only
 resource refusal is S8.
+
+**The per-pair share can never sum past the global cap.** `C` counts the
+same-kind circular pairs AMONG `P`, so a circular pair's `m` stations
+SUBSUME the first-station entitlement `P` already grants that segment rather
+than adding to it. For a record whose `P` is within the cap — the paragraph
+below carves out the one that is not — the build's total is therefore
+
+```text
+Σstations = (P - C)·1 + Σm  ≤  (P - C) + C·mMax
+          =  P + C·floor((loftStationCap - P) / C)
+          ≤  loftStationCap
+```
+
+because integer division only ever UNDER-allocates:
+`C·floor((loftStationCap - P) / C) ≤ loftStationCap - P`. At
+`P = loftStationCap - 3` with `C = 2`, `mMax` is `2`, and two circular pairs
+both settling at `m = 2` total `(P - 2) + 2 + 2 = P + 2`, one station inside
+the cap. That bound is why the per-pair share is sound: for such a record,
+no build every one of whose pairs passes S15 can exceed `loftStationCap`.
 
 **A record whose own `P` already exceeds the cap.** The `max(0, …)` term
 clamps to zero there, so `mMax = 1`, and a circular pair whose joint walk-up
