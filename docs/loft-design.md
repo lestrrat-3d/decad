@@ -178,7 +178,7 @@ that exists and this evaluator cannot build → `ErrUnsupported`.**
 | **S11** | a nil or foreign `LoftOption` value, including a foreign type that embeds the sealed marker | no well-defined decad operation can invoke an unowned callback | `ErrDegenerate` | yes, §2 |
 | **S12** | ANY build — placed (`Placed`/`Duplicate`/`PlacedCopy`, §12 PR 2a), chorded (§5.1), or both — whose COMBINED proven volume allowance (§8) is not smaller than the held volume | yes — the body itself is sound; only its centroid's proven quotient bound has no positive denominator left to divide by | `ErrUnsupported` | no — a precision ceiling on this evaluator's centroid bound, not a shape rule |
 | **S13** | a build whose lifted-and-placed coordinate, whose computed station coordinate (§5.1), or whose orientation anchor (§5), runs past the representable float64 range | yes — every input is finite (both records' coordinates, the plane origins, and a transform `r3` itself validated), and only decad's own float evaluation of the lift or the station computation overflows; a placed body is the rigid image of one this evaluator already built | `ErrUnsupported` | no — a range ceiling on this evaluator's float64 vertex table, not a shape rule |
-| **S14** | a chorded circular pair for which any displacement term §5.2's table lists has no derivation from the record, answering `+Inf` | yes — the body exists and the chord set is built; only one of its proven displacement terms has no derivation from this record | `ErrUnsupported` | no — a derivation gap in this evaluator's certified circular enclosures, not a shape rule |
+| **S14** | a chorded circular pair for which any displacement term §5.2's table lists answers `+Inf`, decided in whichever of the row's two arms the gate-order paragraph below assigns that term | yes — the body exists; only one of its proven displacement terms has no derivation | `ErrUnsupported` | no — a derivation gap in this evaluator's certified circular enclosures, not a shape rule |
 | **S15** | a paired segment whose chord target (§5.1) is not met inside the fixed station cap | yes — the ruled surface exists; this evaluator cannot chord it inside its own ceiling | `ErrUnsupported` (`errTooManyChords`, spline R8) | no — a resource ceiling, not a shape rule |
 | **S16** | a chord cell whose two stations coincide on exactly one of the two sections | yes — a collapsed piece is a recordable curve piece; only the uniform two-faces-per-cell topology (§5) has no case for it | `ErrUnsupported` | no — an evaluator topology limit |
 
@@ -208,7 +208,12 @@ construction for every coplanar section pair, even when their authenticated
 records use distinct origins or bases.
 
 **Gate order**, the same "ask what could be asked" discipline modify §4
-states: pre-gates first (S10 nil check, S11 concrete option ownership without
+states. **This paragraph is the single owner of where every gate sits
+relative to construction and of what each gate's phase can already have
+evaluated.** §5, §5.1, §6, §7 and §13 name a gate by its row and point
+here for its phase; none of them asserts a phase of its own.
+
+Pre-gates first (S10 nil check, S11 concrete option ownership without
 invoking a callback, S4's ARITY half — a repeated `WithLoftAlignment` — decided
 in that same option loop since it needs no record, S9 seam authentication of
 both profiles — nothing downstream is safe to read before this), then the
@@ -219,17 +224,40 @@ immediately beside it (a same-kind `CircleSeg` pair whose two recorded `CCW`
 flags disagree, P5: one flag comparison over the same two records S3 already
 reads, where S7's audit arm would reach the identical refusal only after
 building every triangle and proving every pair), S5 geometric-plane
-coincidence, and, for a same-kind circular pair, S15's station-cap decision —
-the shared station count `m` and the `mMax` it is compared against (§5.1)
-are each a closed-form function of the two records alone, so it is decided
-here with the rest — all decidable without building a single triangle), then
-construction (§5), whose own first act is S13's coordinate-range gate on the
-anchor, on every computed station, and on every placed vertex as it is
-emitted, together with S14's displacement-derivation gate for a circular pair — every
-term §5.2's table lists, with no exception — then S16's one-sided-collapsed-cell gate as stations are
-paired into chord cells, then the per-triangle existence gate S6, then S7's
-AUDIT arm with S8 beside it (§6) — the most expensive step, run last, over
-triangles already proven individually non-degenerate.
+coincidence, and, for a same-kind circular pair, S15's station-cap decision
+beside S14's DERIVATION arm below — the shared station count `m` and the
+`mMax` it is compared against (§5.1) are each a closed-form function of the
+two records alone, so both are decided here with the rest — all decidable
+without building a single triangle), then construction (§5), whose own first
+act is S13's coordinate-range gate on the anchor, on every computed station,
+and on every placed vertex as it is emitted, then S16's
+one-sided-collapsed-cell gate as stations are paired into chord cells, then
+S14's CONSTRUCTION arm below, then the per-triangle existence gate S6, then
+S7's AUDIT arm with S8 beside it (§6) — the most expensive step, run last,
+over triangles already proven individually non-degenerate.
+
+**S14 splits into two arms, the way S7 already does, because §5.2's table
+lists terms of two kinds and no single phase can evaluate both.** A term is
+judged in the earliest phase whose inputs it reads, and neither arm judges a
+term the other owns:
+
+- the **DERIVATION arm** — record-only, decided beside S15 among the shape
+  gates above. It asks whether the two authenticated records state every
+  certified enclosure §5.2's table derives from them: the per-cell sagitta
+  the walk-up compares against the chord target (§5.1), the `arcLenUpper_k`
+  arc-length enclosure, and the `circularEndpointInterval` enclosure
+  `stationRound` is measured against. A candidate count whose certified
+  sagitta has no derivation refuses here rather than walking on, and refuses
+  before a single station is built. This arm decides DERIVABILITY, never a
+  term's value: `stationRound`'s own value is the held station's outward gap
+  from an enclosure this arm only proves exists;
+- the **CONSTRUCTION arm** — decided after cells exist, since its terms read
+  held coordinates rather than the record. It covers `maxTwistOffsetUpper`
+  and `twistVolumeUpper` at each chorded cell's own four held corners, and
+  each cap's `planeOffsetUpper` at that cap's own held vertices. These cannot
+  be asked in the record-only phase at all: a cell's twist vector and a cap
+  plane's offset from the anchor are functions of the vertex table, which
+  does not yet exist there.
 
 **A placement (`Placed`/`Duplicate`/`PlacedCopy`, §12 PR 2a) re-runs every
 record-only gate — S1, S2, S3, S4's payload-shape half, S5, S6, S7, S8, S13,
@@ -284,8 +312,8 @@ W_{j+1}, W_j` splits into:
 
 | Triangle | Vertices | Contains | Role |
 |---|---|---|---|
-| lower | `V_j, V_{j+1}, W_{j+1}` | the full `p0` segment (shared with `capStart`'s boundary) | `side(i,j,0)` |
-| upper | `V_j, W_{j+1}, W_j` | the full `p1` segment, reversed (shared with `capEnd`'s boundary) | `side(i,j,1)` |
+| lower | `V_j, V_{j+1}, W_{j+1}` | that cell's own `p0`-side cap-boundary entity (§5.1's Table C) | `side(i,j,0)` |
+| upper | `V_j, W_{j+1}, W_j` | that cell's own `p1`-side cap-boundary entity (§5.1's Table C), reversed | `side(i,j,1)` |
 
 **Seed cap winding from shared-edge adjacency before orienting the complete
 shell.** Retain each `capEnd` triangle from `p1`'s triangulation. Reverse each
@@ -302,8 +330,10 @@ individual wall or cap after cap seeding. This deterministic whole-shell step
 makes Table B, mass properties, and `Tessellate` receive one positively
 oriented material boundary.
 
-Evaluator §3 owns the `side(i,j,k)` grammar. Here `i` is the loop index
-(`0` for `Outer`, `1+h` for `Holes[h]`), matching Table P's own indexing.
+**§7's Table B owns a loft's `side(i,j,k)` grammar** — what `i` and `j`
+index and what `k` distinguishes. Evaluator §3 owns the provenance-role
+MECHANISM this grammar instantiates and points at §7 for the grammar itself;
+this section restates neither.
 
 **Every Loft wall triangle is exempt from evaluator §3's
 adjacent-coplanar-side-face canonicalization**, and evaluator §3 owns that
@@ -353,16 +383,12 @@ mechanism made it so — an unplaced chorded body included (§8).
 **Edges get no new role mechanism.** Selector.go's existing rule already
 covers loft: "`CreatedBy` matches an edge through its adjacent faces'
 `Origins()` — an edge carries no roles of its own." A loft's three new edge
-families need none:
+families — the cap-boundary entity on each side, the rung, and the
+diagonal — need none. §5.1's Table C states each family's count, its
+provenance, and which faces share it; this section restates none of that and
+uses only what the table gives.
 
-- a **cap-boundary edge** is the recorded `LineSeg` itself — no new edge at
-  all, shared between the cap face and its one incident wall triangle;
-- a **rung edge** `V_k -> W_k` (one per paired vertex) — shared by the two
-  wall triangles that meet at vertex `k` from opposite sides;
-- a **diagonal edge** `V_j -> W_{j+1}` (one per paired segment) — shared by
-  that segment's own lower and upper triangle.
-
-Every edge of the result therefore bounds exactly two faces (one cap +
+Every edge of the result bounds exactly two faces (one cap +
 one wall triangle for a boundary edge; two wall triangles for a rung or a
 diagonal), so the payload is manifold and watertight **by construction**,
 the same structural claim modify §2 makes for a rewritten prism section —
@@ -418,10 +444,34 @@ pair into §5's quad, and each cell still splits into the same lower/upper
 triangle pair Table B (§7) already defines — the topology above is
 unchanged, only the number of cells a paired segment contributes grows from
 one to `m`. **A chord cell is its own Table B cell, so `side(i,j,k)`'s
-grammar (§5) is unchanged**: for a chorded pair, `j` ranges over that loop's
-flattened chord-cell sequence rather than over one entry per recorded
-segment, and each cell still resolves to exactly the `side(i,j,0)` /
-`side(i,j,1)` pair §5's table states.
+grammar needs no chorded exception** — §7 owns that grammar and already
+indexes `j` over a loop's chord-cell sequence, so this section changes
+nothing there.
+
+**Table C — what one cell contributes, and which entities the record
+states.** Every cell of a loop contributes exactly the entities below,
+whether it is a `LineSeg` pair's single cell or one link of a chord chain.
+Each entity is RECORDED — the record itself states its coordinates — or
+GENERATED — this build computed them. **This table is the single owner of a
+cell's entity inventory, its counts and its provenance marks.** §5's wall
+table and edge families, §6's audit admission rules, §7's Table B, §8's cap
+contribution, §13's construction and audit fixtures, and
+`docs/tessellation-design.md` §2's `loftPayload` restatement all name these
+entities and point here; none of them restates a count or a provenance mark.
+
+| Entity | Per cell | Per loop | Provenance |
+|---|---|---|---|
+| lower triangle, role `side(i,j,0)` | 1 — `V_j, V_{j+1}, W_{j+1}` | `stations_i` (§7) | GENERATED — the triangle is this build's own facet |
+| upper triangle, role `side(i,j,1)` | 1 — `V_j, W_{j+1}, W_j` | `stations_i` (§7) | GENERATED — same |
+| `p0`-side cap-boundary entity | 1, held by the lower triangle and shared with `capStart`'s boundary | `stations_i` | RECORDED for a `LineSeg` pair — the recorded `LineSeg` itself, no new edge at all. GENERATED for a chord cell — a chord joining that cell's two `p0` stations, which the record does not state |
+| `p1`-side cap-boundary entity | 1, held by the upper triangle reversed and shared with `capEnd`'s boundary | `stations_i` | same rule, on the `p1` side |
+| rung edge `V -> W` | 2 — one at each of the cell's two station pairs, each shared with the neighbouring cell | `stations_i`, one per station pair, since a loop's cells form a closed cycle | GENERATED — no record states an edge between the two sections, whatever the provenance of its two endpoints |
+| diagonal edge `V_j -> W_{j+1}` | 1, shared by this cell's own lower and upper triangle | `stations_i`, one per cell | GENERATED — same |
+| station vertex, per side | 2 per side, each shared with the neighbouring cell | `stations_i` per side | RECORDED for a `LineSeg` pair's own endpoints and for the one pinned circular station kind §5.2's table names. GENERATED for every other station, which carries `stationRound` (§5.2) |
+
+A cell's expected contact with another cell — what §6's audit admits and
+refuses against — is the entity this table gives it, never a provenance mark
+the audit decides for itself.
 
 **`m` counts CHORD CELLS, and an OPEN side's station points are one more.**
 `m` is `chordCount`'s own CHORD count, so a pair chorded at `m` contributes
@@ -468,7 +518,8 @@ neither of which the record states, with no outward rounding, so it can only
 decide a COUNT and can never be the sagitta this build publishes. The value
 the walk-up compares against the target is therefore the same over-stated
 value §5.2 publishes as `s_k`, and a candidate count whose certified sagitta
-has no derivation refuses at Table S row S14 rather than walking on.
+has no derivation refuses at Table S row S14, in the arm and at the phase
+§4's gate-order paragraph assigns it.
 
 **Shared station count, one target.** For a paired segment, each side's own
 minimum station count (`m0`, `m1`) is walked up independently at the shared
@@ -543,10 +594,11 @@ resource refusal is S8.
 **Deciding S15 from the record.** `m` and `mMax` are each a function of the
 two `ProfileRecord`s alone — the two sides' certified radius and sweep
 enclosures (§5.2), the chord target above, `P` and `C` — so S15 is decided
-with the record-only gates (§4's gate-order paragraph) and a build that
-would exceed the cap is refused before a single station is built. A pair
-whose certified sagitta has no derivation refuses S14 at this same point,
-since the walk-up that settles `m` is what asks for it. Every product and sum
+with the record-only gates and a build that would exceed the cap is refused
+before a single station is built. A pair whose certified sagitta has no
+derivation refuses S14 beside it, since the walk-up that settles `m` is what
+asks for it. §4's gate-order paragraph owns both placements and S14's two
+arms; this section restates neither. Every product and sum
 in the `mMax` comparison and in §6's own `F*(F-1)/2` preflight is evaluated
 with checked arithmetic and refuses on overflow rather than wrapping, the
 identical preflight-before-allocation discipline §6 states for the pair-test
@@ -557,9 +609,10 @@ ceiling itself.
 **Every displacement term this document publishes is listed once, in the
 table below, with the quantity it bounds, the certified enclosure it is
 derived from, the site that PROVES it dominates that quantity, the direction
-it rounds, and what it does when that enclosure is underivable.** §5, §8 and
-§12 name these terms; this table is what states their conditions, and none of
-those sections restates one.
+it rounds, and what it does when that enclosure is underivable.** §5, §8,
+§9's Table D, §12, §15's companion-edit list and
+`docs/evaluator-design.md` §3's per-vertex bound rule name these terms; this
+table is what states their conditions, and none of those sites restates one.
 
 | Term | The quantity it bounds | Certified source | Derivation | Rounding direction | Refusal |
 |---|---|---|---|---|---|
@@ -732,27 +785,38 @@ reveal** — extreme twist between the two sections is exactly the shape the
 target case (a helical tooth) invites. decad never builds an unproven
 solid (modify §1), so this is a build-time gate, not a `Verify` question.
 
-The audit tests every pair among the `2n` wall triangles and the two
+The audit tests every pair among the assembled triangle set — the wall
+triangles §5.1's Table C gives every cell of every loop, plus the two
 triangulated caps (`triangulate.go`'s existing ear-clipping triangulation of
-each polygon-with-holes cap). A recorded shared edge or vertex does not prove
-that it is the pair's only contact. **Adjacency states the expected contact;
-every pair is classified against that expectation:**
+each polygon-with-holes cap). That set's size is §7's `F`, and the audit
+reads no count of its own.
+
+**The audit decides CONTACT, never PROVENANCE.** Table C states each cell's
+expected contact entity and whether the record or this build produced it;
+the audit asks only whether a pair's actual contact IS that entity. So an
+admission rule below never says "recorded" — the expected entity is
+whatever Table C gives the pair, generated chords and station vertices
+included. A shared entity does not prove it is the pair's only contact.
+**Adjacency states the expected contact; every pair is classified against
+that expectation:**
 
 - **A pair sharing an EDGE is admitted only when the edge-adjacency check
-  reports the exact recorded common edge as its whole shared segment.** This
-  applies to a rung, a diagonal, a cap-boundary edge, and an internal edge of
-  one cap's own triangulation. The matching segment proves the triangle
-  interiors are disjoint; a point, an extra segment, a 2-D region, or a
-  crossing refuses.
+  reports that pair's own expected common edge as its whole shared segment.**
+  This applies to a rung, a diagonal, a cap-boundary entity, and an internal
+  edge of one cap's own triangulation. The matching segment proves the
+  triangle interiors are disjoint; a point, an extra segment, a 2-D region,
+  or a crossing refuses.
 - **A pair sharing exactly one VERTEX and no edge is admitted only when its
-  sole contact is that recorded vertex.** A point elsewhere, a shared segment,
-  a 2-D region, or a transversal crossing refuses. Vertex-sharing pairs need
-  this check because they can cross away from their recorded vertex.
+  sole contact is that pair's own expected shared vertex.** A point
+  elsewhere, a shared segment, a 2-D region, or a transversal crossing
+  refuses. Vertex-sharing pairs need this check because they can cross away
+  from that vertex.
 
 The vertex rule is what every consecutive wall pair needs: the lower
-triangles of paired segments `j` and `j+1` share only `V_{j+1}`, and their
-upper triangles share only `W_{j+1}`, so each pair must pass the recorded-
-vertex check. `triangulate.go` produces an interior-disjoint conforming
+triangles of consecutive cells `j` and `j+1` share only the rung's `V` at
+the station between them, and their upper triangles share only that rung's
+`W`, so each pair must pass the expected-vertex check.
+`triangulate.go` produces an interior-disjoint conforming
 triangulation of one planar region, so two triangles of the SAME cap meet
 only in shared edges and shared vertices — each must produce the expected
 classification above. Every cap triangle is also tested against every wall
@@ -771,19 +835,19 @@ predicate is exact and total.
 positive-length coplanar shared boundary. The audit adds
 `triTriCoplanarSharedEdge` for an edge-adjacent pair when that classifier
 reports `contactRegion`. The helper receives both exact triangles and the
-recorded edge. It projects them exactly onto their common plane and accepts
-only when the recorded endpoints are an edge of both triangles and the two
-opposite vertices lie strictly on opposite sides of that edge's supporting
-line. Those conditions prove that the closed-triangle intersection is exactly
-the recorded segment. Every other result refuses under S7. The helper is
-audit-only and MUST NOT change `triTriClassify` or mesh-boolean contact
-classification.
+pair's own expected common edge (Table C). It projects them exactly onto
+their common plane and accepts only when that edge's endpoints are an edge of
+both triangles and the two opposite vertices lie strictly on opposite sides
+of its supporting line. Those conditions prove that the closed-triangle
+intersection is exactly that segment. Every other result refuses under S7.
+The helper is audit-only and MUST NOT change `triTriClassify` or
+mesh-boolean contact classification.
 
-- **empty** (disjoint) → admitted only for a pair with no recorded shared
+- **empty** (disjoint) → admitted only for a pair Table C gives no shared
   edge or vertex;
-- **the exact recorded common-edge segment** → admitted only for a pair that
-  records that edge;
-- **a point contact at the pair's own recorded shared vertex** → admitted
+- **exactly the pair's own expected common-edge segment** → admitted only for
+  the pair Table C gives that edge;
+- **a point contact at the pair's own expected shared vertex** → admitted
   only for that vertex-sharing pair;
 - **every other classification** — a missing expected contact, a point or
   segment elsewhere, a shared area, or a genuine transversal crossing →
@@ -830,8 +894,14 @@ never consults the cap at all.
 paired segments, of each pair's own station count `m` (§5.1). `n_i` (the
 loop's segment count) is `stations_i`'s special case: `m = 1` for a
 `LineSeg` pair, so a loop with no curved pair has `stations_i = n_i` exactly.
-`j`, in `side(i,j,k)`, indexes that loop's flattened chord-cell sequence
-(§5.1) — one entry per `LineSeg` pair, `m` entries per curved pair.
+
+**This section is the single owner of a loft's `side(i,j,k)` grammar.** `i`
+is the loop index — `0` for `Outer`, `1+h` for `Holes[h]`, matching Table
+P's own indexing. `j` indexes that loop's flattened CHORD-CELL sequence
+(§5.1) — one entry per `LineSeg` pair, `m` entries per curved pair — and
+never one entry per recorded segment. `k` is `0` for a cell's lower triangle
+and `1` for its upper. §5 and `docs/evaluator-design.md` §3 name this
+grammar and point here; neither states what an index means.
 
 **Lump count is always 1.** The two caps and `2*sum(stations_i)` wall
 triangles form one connected, manifold, watertight shell once §6's audit has
@@ -892,20 +962,23 @@ implements for a 2D region's exact rational accumulator, extended here to a
 
 **Each cap's own contribution is the exact rational shoelace area of the cap
 polygon this construction actually ASSEMBLED (§5), never `moments.go`'s
-region integral read directly off the record.** For a `LineSeg`-only loop the
-assembled cap polygon is the region boundary itself, so the shoelace rational
-equals `moments.go`'s own region rational there — no new 2D integration for
-that case. For a same-kind circular pair the assembled cap polygon is
-instead the chord chain §5.1 built: `addCircular` (`moments.go`) calls
-`dropExact()` unconditionally, so an arc-bearing `ProfileRecord`'s own region
-integral is never an exact rational, while the ASSEMBLED chord polygon's
-vertices are the same held float64 points the triangulation already holds,
-taken exactly as `math/big.Rat` — the identical "take the floats exactly"
-lift the wall sum already uses. Reading the cap term from the built polygon
-rather than the record's region integral is what keeps `Volume`/`Centroid`
-exact-rational for a chorded loft: the two caps and the chord-chain wall
-triangles then integrate over the SAME assembled boundary, with no
-region-versus-chord mismatch at the cap seam.
+region integral read directly off the record.** **This paragraph is the
+single owner of what a cap's assembled polygon IS**, over the per-cell
+cap-boundary entity §5.1's Table C states; §9's Table D and §13's
+construction fixtures point here and restate neither. For a `LineSeg`-only
+loop the assembled cap polygon is the region boundary itself, so the
+shoelace rational equals `moments.go`'s own region rational there — no new
+2D integration for that case. For a same-kind circular pair the assembled
+cap polygon is instead the chord chain §5.1 built: `addCircular`
+(`moments.go`) calls `dropExact()` unconditionally, so an arc-bearing
+`ProfileRecord`'s own region integral is never an exact rational, while the
+ASSEMBLED chord polygon's vertices are the same held float64 points the
+triangulation already holds, taken exactly as `math/big.Rat` — the identical
+"take the floats exactly" lift the wall sum already uses. Reading the cap
+term from the built polygon rather than the record's region integral is what
+keeps `Volume`/`Centroid` exact-rational for a chorded loft: the two caps
+and the chord-chain wall triangles then integrate over the SAME assembled
+boundary, with no region-versus-chord mismatch at the cap seam.
 
 **`Volume` is `Exact` exactly when its published rational is representable in
 the `units.Value` magnitude it carries, AND the payload's displacement
@@ -1163,7 +1236,7 @@ total that already sits at or above the measure.
 
 | D | Consumer | Reads | Increment-1 status |
 |---|---|---|---|
-| **D1** | `Tessellate` / `STL` / `OBJ` | the payload | works from the first PR that wires it in (§12 PR 2b), and the returned `Bound` is **the payload's own facet departure `absSumUpper(delta, sectionDelta, maxTwistOffsetUpper)`** (§5.2, §8, §12 PR 2a), not unconditionally zero and never `delta` alone: that sum is zero only for an unplaced `LineSeg`-only loft, whose tessellation is still restatement with a zero bound. Every wall and cap face of a body whose `delta` is positive — placed, chorded past §5.2's one pinned station kind, or both — is a flat triangle over held vertices that are no longer provably exact; every wall facet of a CHORDED body chords a recorded curve it departs from by `sectionDelta` (§5.2) whatever the placement; and where a CHORDED cell twists, that held flat triangle pair is not the bilinear ruled patch through its own four corners either, a further departure of at most `maxTwistOffsetUpper` (§5.2, §8.1) — a term a `LineSeg`-only build charges nothing to, since §5 makes its held triangle pair the boundary itself. So tessellation restates exactly what the payload holds, all three terms included. `Bounds.Bound` is the one loft reading that stays the two-term `absSumUpper(delta, sectionDelta)`, for the reason §5.2's own row gives (`triangulate.go`'s existing polygon-with-holes triangulator for the two caps; no chording anywhere) |
+| **D1** | `Tessellate` / `STL` / `OBJ` | the payload | works from the first PR that wires it in (§12 PR 2b), and the returned `Bound` is **the payload's own facet departure `absSumUpper(delta, sectionDelta, maxTwistOffsetUpper)`** (§5.2, §8, §12 PR 2a), not unconditionally zero and never `delta` alone: that sum is zero only for an unplaced `LineSeg`-only loft, whose tessellation is still restatement with a zero bound. Every wall and cap face of a body whose `delta` is positive — placed, chorded past §5.2's one pinned station kind, or both — is a flat triangle over held vertices that are no longer provably exact; every wall facet of a CHORDED body chords a recorded curve it departs from by `sectionDelta` (§5.2) whatever the placement; and where a CHORDED cell twists, that held flat triangle pair is not the bilinear ruled patch through its own four corners either, a further departure of at most `maxTwistOffsetUpper` (§5.2, §8.1) — a term a `LineSeg`-only build charges nothing to, since §5 makes its held triangle pair the boundary itself. So tessellation restates exactly what the payload holds, all three terms included. `Bounds.Bound` is the one loft reading that stays the two-term `absSumUpper(delta, sectionDelta)`, for the reason §5.2's own row gives |
 | **D2** | the mesh boolean (`Union`/`Cut`/`Intersect`, evaluator §9) | the tessellation | a first-class operand once D1 lands — no new boolean code, a loft body is just another all-planar operand. An unplaced `LineSeg`-only loft — the one case where all three of those terms are zero — is admitted through the existing all-planar zero-bound path (`docs/evaluator-design.md` §2 — "the VOLUME of an all-planar pair whose contact points round exactly"); every other loft, placed or chorded or both, hands the boolean its own facet departure `absSumUpper(delta, sectionDelta, maxTwistOffsetUpper)` as the operand displacement every other nonzero-bound operand already carries (`bounds.go`'s `rimDelta`), so the result's volume is `Approximate` like any other. That is D1's own term and never a two-term subset of it: what a boolean intersects is the FACET, and a twisted CHORDED cell's facet departs from the surface it stands for by `maxTwistOffsetUpper` beyond the two section terms (§5.2, §8.1). **A chorded loft is not a zero-bound operand however it is placed**: at `m = 1` on a pair whose two end stations §5.2's table pins, its `delta` is exactly zero while its `sectionDelta` is positive (§5.2, §8), so admitting it on `delta` alone would hand the boolean a zero bound for a boundary §8 states departs by `sectionDelta` |
 | **D3** | Interference (`docs/interference-design.md`) | box separation (D6-style) reads `Bounds` directly; the read-only mesh-boolean path reads D2's tessellation | box-disjoint pairs prove only their disjoint-interior interference relation (`Bounds` carries the payload's own displacement, §8). `Verify` is `Sound` only when every other required or requested body and pair check is decided and trusted; a pair needing the mesh boolean works once D2 lands; a pair needing the analytic containment/pair kernel stays `Suspect` until a loft case is added to `clearance_geom.go`'s payload switch — identical staging to the cup's own D6 row in `docs/modify-design.md` |
 | **D4** | Clearance (`WithClearances`, `docs/clearance-design.md`) | the analytic pair kernel's payload switch | `WithClearances` stays `Suspect`, even for a box-disjoint pair: box separation proves disjoint interiors but does not measure the gap. No loft case exists in the kernel yet. |
@@ -1231,9 +1304,10 @@ same roles, and the same measurements every time.
 
 ## 11. Cancellation and work budget
 
-Covered in full by §6 (the audit is the only expensive phase; pairing and
-construction are `O(sum n_i)`, cheap). No separate discipline is needed
-beyond what §6 already states.
+Covered in full by §6, which owns the audit's budget, its ceiling and its
+cancellation. §13's fixture wall-clock budget paragraph owns the build cost
+model — which phase costs what, and what each phase is linear or quadratic
+in. This section restates neither and adds no discipline of its own.
 
 ## 12. Increments
 
@@ -1342,9 +1416,11 @@ loft in 2 seconds or less, and at most three of them chord a curve at the
 calibrated `loftChordFraction` (§14) rather than at a coarse or explicitly
 forced station count; a fixture whose build needs longer runs behind
 `testing.Short()` rather than shipping in the default `go test ./...` run.
-§6's audit is the phase this budget governs — it tests every pair among the
-assembled triangle set, so its cost grows with the square of `F`, while
-pairing and construction are linear in `Σstations`. The budget bounds which
+**This paragraph is the single owner of the build cost model.** §6's audit
+is the phase this budget governs — it tests every pair among the assembled
+triangle set, so its cost grows with the square of `F` (§7), while pairing
+and construction are linear in `Σstations`, which chording puts above `Σn_i`
+(§5.1). §11 points here rather than restating any of it. The budget bounds which
 fixtures ship, never what the evaluator admits: a station count that misses
 it is a fixture this section excludes, never a reason to loosen §5.1's chord
 target or its cap. §14 records the reference fixture's own measured build
@@ -1367,10 +1443,14 @@ against this budget.
   profiles MUST assert the two ordinal pairings by wall coordinates, or S7 for
   the resulting crossed correspondence; a nearest-hole matcher MUST fail it.
 - **Construction**: every wall/cap edge bounds exactly two faces; every
-  triangle has positive area; the two caps' triangulation matches
-  `triangulate.go`'s existing polygon-with-holes output for each profile in
-  isolation; matching counter-clockwise square `LineSeg` profiles on identity
-  frames at `z=0` and `z=1` first assert that `capStart` reverses `p0`'s
+  triangle has positive area; each cell contributes exactly the entities
+  §5.1's Table C gives it, at that table's own counts; the two caps'
+  triangulation matches `triangulate.go`'s existing polygon-with-holes output
+  over the cap polygon §8's cap-contribution paragraph says this construction
+  ASSEMBLED — the recorded region boundary for a `LineSeg`-only loop, the
+  chord chain for a chorded one — and never over the record's region for a
+  chorded profile; matching counter-clockwise square `LineSeg` profiles on
+  identity frames at `z=0` and `z=1` first assert that `capStart` reverses `p0`'s
   triangulation while `capEnd` retains `p1`'s, with every cap-boundary edge
   opposite its wall neighbor; that fixture then normalizes all wall and cap
   windings to a positive signed tetrahedron sum before mass properties and
@@ -1394,7 +1474,8 @@ against this budget.
   pairs are admitted through `triTriCoplanarSharedEdge`. The same pairs remain
   `contactRegion` in `triTriClassify`, proving that the adjacency helper does
   not change mesh-boolean contact classification. Consecutive wall pairs
-  classify as their recorded vertices. A vertex-sharing wall pair that crosses
+  classify as the expected shared vertex §5.1's Table C gives them, whether
+  that station is recorded or generated. A vertex-sharing wall pair that crosses
   away from that vertex → S7. Two valid square `LineSeg` profiles with `p0` frame
   `U=(1,0,0)`, `V=(0,1,0)`, origin `(0,0,0)` and `p1` frame
   `U=(-1,0,0)`, `V=(0,1,0)`, origin `(1,0,1)`, carrying the same local
@@ -1456,12 +1537,13 @@ against this budget.
   station parities at one cell → S16. A recorded pair whose station enclosure
   the record cannot state (`circularWalkEndBound` answering `+Inf`, §5.2) →
   S14, asserted on the sentinel and on the refusal happening instead of a
-  published zero bound. The other two S14 arms get their own fixtures over
-  the same rule: a pair whose certified per-cell SAGITTA has no derivation
-  (its radius or sweep enclosure answering no, §5.2), and a pair whose cap
-  `planeOffsetUpper` or per-cell `arcLenUpper_k` enclosure runs past
+  published zero bound. Two further underivable terms get their own fixtures
+  over the same rule: a pair whose certified per-cell SAGITTA has no
+  derivation (its radius or sweep enclosure answering no, §5.2), and a pair
+  whose cap `planeOffsetUpper` or per-cell `arcLenUpper_k` enclosure runs past
   `MaxFloat64` (§5.2), each refuse S14 too, each asserted to refuse rather
-  than fall back on a finite estimate.
+  than fall back on a finite estimate, and each asserted to refuse in the S14
+  arm §4's gate-order paragraph assigns its term.
   **The chorded volume allowance's four legs are fixtured in `bounds.go`'s own
   internal tests, and this section names those fixtures rather than restating
   their assertions over a built body.**
@@ -1730,7 +1812,7 @@ landing this file:
   (core §6.2), so a variant this document requires belongs in that block.
 
 §5.1's chord chain also gives an unplaced loft a positive boundary
-displacement (§5.2, §8). Four companion documents state a zero bound or an
+displacement (§5.2, §8). Five companion documents state a zero bound or an
 exact boundary for an unplaced loft, so each is corrected to condition that
 on BOTH `delta` and `sectionDelta` being zero — an unplaced `LineSeg`-only
 loft — rather than on `delta` alone. **Which term each site names depends on
@@ -1757,6 +1839,14 @@ areaUpper)` pair:
   facet.
 - **`docs/payload-verification-design.md`**: §2's `loftPayload` bullet, which
   calls the held boundary exact only where all three terms are zero.
+- **`docs/evaluator-design.md`**: §3's per-vertex bound rule, whose swept-
+  vertex clause names a section displacement and a sweep-level one and has no
+  loft arm, and whose loft clause names the placement term alone. It gains
+  the chorded station's own `stationRound` (§5.2) beside that placement term,
+  and names §5.2's table as where a loft's terms and their conditions live.
+  §3 also states the `side(i,j,k)` provenance-role mechanism, and points at
+  §7 for what a loft's `j` indexes rather than glossing it as a segment
+  index.
 - **`docs/verification-design.md`**: §3's `bodyGateDiameter` prose, which
   earns the vertex maximum as the true diameter for a `LineSeg`-only loft at
   `delta` zero, as a lower bound on it for a chorded one whose every station

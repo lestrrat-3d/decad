@@ -119,7 +119,8 @@ carries its own row for it.
 ### `loftPayload` exact restatement
 
 A `loftPayload` already holds the cap triangles from its polygon-with-holes
-triangulation and the two wall triangles for every paired segment. Its
+triangulation and the wall triangles loft §5.1's Table C gives every cell of
+every loop — one cell per `LineSeg` pair, `m` per chorded pair. Its
 construction normalizes the complete triangle shell to a positive signed
 tetrahedron sum (loft §5), and the crossing audit proves it free of
 non-adjacent contact. `Tessellate` copies that triangle connectivity, vertices,
