@@ -42,8 +42,8 @@ Three payload classes require different treatment:
 - `loftPayload` is a closed triangle boundary whose facets carry the payload's
   own facet departure `absSumUpper(delta, sectionDelta, maxTwistOffsetUpper)`
   (loft §5.2, which owns each term, its condition and its zero test). That
-  boundary is exact only where all three are zero, which an unplaced
-  `LineSeg`-only body whose every station is PINNED is what GUARANTEES. Its
+  boundary is exact only where all three are zero, on that table's own
+  conditions and never on the body simply never having been placed. Its
   construction audit proves validity, and it re-runs
   on every placement. Its `Bounds`, inflated by the two-term
   `absSumUpper(delta, sectionDelta)` those boxes carry rather than by the

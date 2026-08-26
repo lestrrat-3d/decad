@@ -345,9 +345,9 @@ convention as its actual TOPOLOGY, not merely its tessellation. The local
 order below fixes the diagonal and roles. The cap seed plus whole-shell rule
 that follows fixes outward winding.
 
-For paired segment `j` of a loop — `V_j -> V_{j+1}` on `p0`, `W_j -> W_{j+1}`
-on `p1` (indices already rotated by §3's alignment) — the quad `V_j, V_{j+1},
-W_{j+1}, W_j` splits into:
+For cell `j` of a loop — `V_j -> V_{j+1}` on `p0`, `W_j -> W_{j+1}` on `p1`,
+at the index §7's grammar gives that cell, over stations already rotated by
+§3's alignment — the quad `V_j, V_{j+1}, W_{j+1}, W_j` splits into:
 
 | Triangle | Vertices | Contains | Role |
 |---|---|---|---|
@@ -900,10 +900,10 @@ predicate under test here is the same one tessellation's boolean pre-pass
 runs, so the audit charges every invocation against
 `maxFacetPairTestsPerCall = 8_000_000` (tessellation §3) rather than minting
 a second constant for the identical quantity. Before running a single pair
-test, compute the conservative `F*(F-1)/2` upper bound (`F` the total
-triangle count) with checked arithmetic and refuse before allocation if it
-would exceed the ceiling — the same preflight-before-allocation discipline
-tessellation §3 states.
+test, compute the conservative `F*(F-1)/2` upper bound over §7's `F` with
+checked arithmetic and refuse before allocation if it would exceed the
+ceiling — the same preflight-before-allocation discipline tessellation §3
+states.
 
 `LoftContext` threads a shared `workBudget` (`budget.go`) through the audit,
 polling at `workPollInterval` exactly as `FilletContext` / `ChamferContext`
@@ -979,10 +979,11 @@ rather than re-lifting one.
 
 ## 8. Mass properties — derived, not asserted
 
-Write `T` for the set of `2*sum(stations_i)` wall triangles (§7) plus the two
-caps' own triangulations, each triangle `(A, B, C)` outward-oriented by §5's
-cap seeding and complete-shell rule (material on the left, the same
-walk-order convention every payload already uses).
+Write `T` for the assembled triangle set §7 counts as `F` — that section's
+wall triangles plus the two caps' own triangulations — each triangle
+`(A, B, C)` outward-oriented by §5's cap seeding and complete-shell rule
+(material on the left, the same walk-order convention every payload already
+uses).
 
 **Volume is a signed sum of tetrahedron volumes from a fixed anchor** —
 the standard divergence-theorem reduction for a closed triangulated
@@ -1432,14 +1433,15 @@ against this budget.
 
 - **Pairing**: hole-count mismatch → S1; segment-count mismatch → S2;
   mixed-kind or free-form segment pair → S3; a same-kind `CircleSeg` pair
-  whose two recorded `CCW` flags disagree → S7's `ErrDegenerate` at the
-  structural gate, asserted to refuse before construction rather than from
-  the audit, so the fixture pins the gate's position and not only its
-  sentinel; malformed
+  whose two recorded `CCW` flags disagree → S7's `ErrDegenerate` from its
+  STRUCTURAL arm, asserted to refuse at the phase §4's gate-order paragraph
+  assigns that arm rather than from the AUDIT arm, so the fixture pins the
+  gate's position and not only its sentinel; malformed
   `WithLoftAlignment` (wrong length, out-of-range offset, or duplicate
   option) → S4; nil and foreign `LoftOption` values (including a type with a
-  promoted sealed marker) → S11 before their callbacks run and with the
-  document unchanged; geometrically coplanar sections → S5, including two
+  promoted sealed marker) → S11 at the phase §4's gate-order paragraph
+  assigns it, with the document unchanged; geometrically coplanar sections →
+  S5, including two
   distinct `PlaneRecord`s with the same plane but rotated `U`/`V` bases; a
   nonzero alignment offset pairs the expected rotated vertex, asserted on the
   built wall's own coordinates. A
@@ -1451,9 +1453,9 @@ against this budget.
   §5.1's Table C gives it, at that table's own counts; the two caps'
   triangulation matches `triangulate.go`'s existing polygon-with-holes output
   over the cap polygon §8's cap-contribution paragraph says this construction
-  ASSEMBLED — the recorded region boundary for a `LineSeg`-only loop, the
-  chord chain for a chorded one — and never over the record's region for a
-  chorded profile; matching counter-clockwise square `LineSeg` profiles on
+  ASSEMBLED, whichever of that paragraph's two cases the loop falls in, and
+  never over the record's region for a chorded profile; matching
+  counter-clockwise square `LineSeg` profiles on
   identity frames at `z=0` and `z=1` first assert that `capStart` reverses `p0`'s
   triangulation while `capEnd` retains `p1`'s, with every cap-boundary edge
   opposite its wall neighbor; that fixture then normalizes all wall and cap
@@ -1742,9 +1744,9 @@ and the margin it reaches there is a reading this document does not state.
 
 **The constant does not clear a 4x margin inside the wall-clock budget, and
 this design accepts that rather than widen either.** A 4x margin needs 128
-stations, whose build measures about 4.3 seconds; the fixture wall-clock
-budget §13 states caps that build at 2 seconds, which the 64-station build
-meets at about 1.4 seconds. What ships is the chord-target fraction that
+stations, whose build measures about 4.3 seconds and so falls outside the
+fixture wall-clock budget §13 states; the 64-station build measures about
+1.4 seconds and meets it. What ships is the chord-target fraction that
 64-station run implies — `loftChordFraction`, a dimensionless number and not
 a station count, whose own count is whatever each build's walk-up settles on
 (65 on this fixture, above). An arc loft at an aspect ratio more extreme than

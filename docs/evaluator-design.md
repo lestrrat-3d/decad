@@ -96,8 +96,8 @@ Rules:
   `j`) for a swept wall; `side(i, j, k)` for a Loft wall triangle;
   `capStart`, `capEnd`, and the revolve/boolean analogs. This bullet owns the
   role MECHANISM, not every grammar it carries: `docs/loft-design.md` §7 owns
-  what `i`, `j` and `k` index for a Loft, and a Loft's `j` is NOT the
-  swept-wall segment index this bullet glosses beside it. Roles derive from
+  what `i`, `j` and `k` index for a Loft, and the `side(i, j)` gloss above is
+  the swept-wall grammar alone, which no Loft role reads. Roles derive from
   the recorded step, so
   re-evaluation reproduces them, and the provenance predicates — `CreatedBy`
   for edges, `FaceCreatedBy` for faces (core §9) — select the same entities
@@ -125,10 +125,10 @@ Rules:
   placement term `placeAllow` composed with the computed station's
   `stationRound`, and every consumer conditions on `delta > 0` rather than on
   the body having been placed. A loft is NOT swept, so its section
-  displacement `sectionDelta` is not a vertex term at all: it bounds a chord's
-  departure from the curve it chords. **`docs/loft-design.md` §5.2's table
-  owns every loft term, its condition and its refusal; this bullet names them
-  and restates none.** The verification gate reads these (verification §4).
+  displacement `sectionDelta` is not a vertex term at all.
+  **`docs/loft-design.md` §5.2's table owns every loft term, its condition
+  and its refusal; this bullet names them and restates none.** The
+  verification gate reads these (verification §4).
 - **Every loop exposes its stored direction.** `Loop.CoEdges()` returns copied
   `CoEdge` values in boundary-walk order. Each use's `Start`/`End` follows that
   walk and `IsForward` states whether it matches the shared `Edge` orientation.

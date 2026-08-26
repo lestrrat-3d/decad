@@ -120,7 +120,7 @@ carries its own row for it.
 
 A `loftPayload` already holds the cap triangles from its polygon-with-holes
 triangulation and the wall triangles loft §5.1's Table C gives every cell of
-every loop — one cell per `LineSeg` pair, `m` per chorded pair. Its
+every loop, over the chord-cell sequence loft §7 counts. Its
 construction normalizes the complete triangle shell to a positive signed
 tetrahedron sum (loft §5), and the crossing audit proves it free of
 non-adjacent contact. `Tessellate` copies that triangle connectivity, vertices,
@@ -148,10 +148,10 @@ restate until then. A loft whose facet departure is exactly zero is admitted
 to the mesh boolean as an all-planar zero-bound operand; every other loft's
 mesh is admitted as an ordinary positive-bound all-planar operand instead,
 through the same `rimDelta` composition every other nonzero-bound operand
-already uses. Loft §5.2 owns which builds fall on which side, and a chorded
-loft is never a zero-bound operand: its boundary departs from the recorded
-curves by `sectionDelta`, which stays positive even where `delta` is zero.
-The normal closed-mesh and source-face audits run in either case.
+already uses. Loft §5.2 owns which builds fall on which side, including
+which of them carry a positive `sectionDelta` and so are never zero-bound
+operands. The normal closed-mesh and source-face audits run in either
+case.
 
 ## 3. Shared curve chording
 
@@ -910,7 +910,7 @@ sample to make an analytic mesh close. Refine or refuse.
 | **T3** | circular meridian generators: sphere/torus cells, axis-to-axis minimum, circular meridian nesting/homotopy audit, non-adjacent-intersection refinement, cut-stable circular-cell area proof | revolve booleans |
 | **T4** | meridian first-moment allowance + certified per-cell angular homotopy integral; finite `volSymDiff`; revolve admitted to booleans | density improvements |
 | **T5** | deterministic local meridian refinement and global angular density improvements that preserve every earlier proof | free-form/NURBS REVOLVE generators. An extruded free-form prism's own chording is a DIFFERENT increment — it rides the existing prism tessellation path (`docs/spline-design.md` §10 P5, Table C), not this row |
-| **T6** | `loftPayload` exact restatement: source-face-preserving wall/cap triangle copy, a proof record carrying the payload's own facet departure `absSumUpper(delta, sectionDelta, maxTwistOffsetUpper)` (zero only for a `LineSeg`-only loft under an identity motion, loft §5.2), and mesh-boolean admission | loft surveys and analytic pair clearance |
+| **T6** | `loftPayload` exact restatement: source-face-preserving wall/cap triangle copy, a proof record carrying the payload's own facet departure `absSumUpper(delta, sectionDelta, maxTwistOffsetUpper)` (zero only on the condition loft §5.2 states for those terms), and mesh-boolean admission | loft surveys and analytic pair clearance |
 
 Each increment ships its computed geometry tests with it. T2/T3 may export a
 revolve because §§8–10 prove the mesh itself; they do not enter the boolean
