@@ -153,7 +153,8 @@ func chordedWedgeProfile(t testing.TB, w *sketch.World, plane *sketch.Plane, pts
 
 // buildChordedWedgeLoft builds both planes' chorded profiles from the same 2D vertex
 // list and lofts them, returning the built body and the wall-clock the Loft call
-// itself took (the quantity Q3's O(F^2) audit cost is measured against).
+// itself took — the quantity the audit cost docs/loft-design.md §13's build cost
+// model paragraph states, over the F §7 owns, is measured against (Q3).
 func buildChordedWedgeLoft(t *testing.T, pts [][2]float64) (*Body, time.Duration) {
 	t.Helper()
 	w, base, top := wedgePlanes(t)
@@ -568,8 +569,8 @@ func (r widenedGateRow) verdict() string {
 
 // wedgeMeasurement is one m's full row: the closed-form/measured sectionDelta this
 // file added to every Bound, the area-along-the-path ceiling the Volume and Centroid
-// widenings multiplied it by, the built body's own face count and wall-clock, and
-// the four widened-bound gate rows.
+// widenings multiplied it by, the built body's own face count (the F
+// docs/loft-design.md §7 owns) and wall-clock, and the four widened-bound gate rows.
 type wedgeMeasurement struct {
 	m            int
 	sectionDelta float64
@@ -724,7 +725,7 @@ func measureWedgeReadings(t *testing.T, pts [][2]float64, sectionDelta float64, 
 // measurements with their VALUES and their widened bounds, the gate reference each
 // was compared against, each one's Verify verdict at the default 1e-3, the
 // sectionDelta this file added and the areaUpper ceiling it multiplied that by, the
-// face count F and the loft's wall-clock.
+// face count F (§7) and the loft's wall-clock.
 func formatWedgeMeasurement(label string, m wedgeMeasurement) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%-14s m=%-4d sectionDelta=%.6g areaUpper=%.6g F=%-4d elapsed=%-12s", label, m.m, m.sectionDelta, m.areaUpper, m.f, m.elapsed)
@@ -747,9 +748,10 @@ func logWedgeMeasurement(t *testing.T, label string, m wedgeMeasurement) {
 // TestLoftChordCalibrationRowRecordsValueAndVerdict pins the recording contract
 // a10-plan.md Part 2 Q2 step 2 states for the sweep: every row carries each of the
 // four measurements' own VALUE and its Verify verdict, on top of the widened bound,
-// the reference and the ratio. It is fast (one m=8 loft, F=22) and always runs, so
-// the contract holds even though the sweep itself is opt-in behind
-// DECAD_LOFT_CALIBRATION.
+// the reference and the ratio. It builds one m=8 loft, whose F is §7's and whose
+// cost sits inside the budget docs/loft-design.md §13's build cost model paragraph
+// owns, and it always runs, so the contract holds even though the sweep itself is
+// opt-in behind DECAD_LOFT_CALIBRATION.
 func TestLoftChordCalibrationRowRecordsValueAndVerdict(t *testing.T) {
 	t.Run("a no-reference row reads differently for a pass and a fail", func(t *testing.T) {
 		require.Equal(t, "Sound", widenedGateRow{haveRef: true, sound: true}.verdict())
@@ -824,8 +826,9 @@ func TestLoftChordCalibrationRowRecordsValueAndVerdict(t *testing.T) {
 // each cell's own ruled-area excess", so the Volume and Centroid widenings built on
 // it cannot understate the chord-to-curve gap. It asserts the COMPUTED ceiling
 // against an independently summed per-cell excess, and asserts that the two
-// widenings actually consumed that ceiling. It is fast (one m=8 loft, F=22) and
-// always runs, since the sweep it protects is opt-in.
+// widenings actually consumed that ceiling. It builds one m=8 loft, whose F is §7's
+// and whose cost sits inside the budget §13's build cost model paragraph owns, and
+// it always runs, since the sweep it protects is opt-in.
 func TestLoftChordCalibrationCeilingCoversRuledExcess(t *testing.T) {
 	const m = 8
 	excess := arcChordExcess(t, m)
@@ -890,16 +893,18 @@ func TestLoftChordCalibrationCeilingCoversRuledExcess(t *testing.T) {
 // decadLoftCalibrationEnv is the explicit opt-in TestLoftChordCalibrationSweep
 // requires. testing.Short() alone does not gate anything in the package's default
 // `go test ./...` run — that flag is false unless a caller passes -short — so the
-// sweep needs its own default-off switch to keep Q3's "at most three [2s] fixtures"
-// budget out of the normal suite. Set it to any non-empty value to run the sweep.
+// sweep needs its own default-off switch to keep Q3's "at most three fixtures"
+// budget — the one docs/loft-design.md §13's build cost model paragraph owns — out
+// of the normal suite. Set it to any non-empty value to run the sweep.
 const decadLoftCalibrationEnv = "DECAD_LOFT_CALIBRATION"
 
 // TestLoftChordCalibrationSweep is a10-plan.md PR 1's calibration procedure (Part 2
 // Q2, Part 3 PR 1 tasks 2-3): both wedges, hand-chorded at m = 4, 8, 16, 32, 64, 128,
 // each row logging the column set formatWedgeMeasurement owns. It is a
-// one-time measurement harness, not a regression fixture, and it is expensive (m=128
-// drives F past 500, and loftCrossingAudit is O(F^2) — Q3: ~13s and 12 loft builds
-// measured), so it costs the default `go test ./...` run nothing: it skips unless
+// one-time measurement harness, not a regression fixture, and its m=128 rows carry
+// an F (§7) and a build cost well past the budget docs/loft-design.md §13's build
+// cost model paragraph owns (Q3), so it stays out of the default `go test ./...`
+// run entirely and costs it nothing: it skips unless
 // DECAD_LOFT_CALIBRATION is set (and still honors -short on top of that).
 // TestLoftChordCalibrationPinsFraction below is the fast, always-run pin.
 func TestLoftChordCalibrationSweep(t *testing.T) {
@@ -948,7 +953,7 @@ func TestLoftChordCalibrationSweep(t *testing.T) {
 // the race detector, so asserting the budget itself makes the
 // suite fail on the slower host while proving nothing about the code. What a
 // test CAN assert portably is that the build has not regressed by orders of
-// magnitude — §13 states how the audit's cost grows with F, so a station-count
+// magnitude — §13 states how the audit's cost grows with F (§7), so a station-count
 // or cap-count regression shows up as a 10x blowup, not a 1.6x one. The
 // achieved time is logged at every run so the budget stays observable. NEVER
 // tighten this toward that budget: it reintroduces a host-dependent failure.
@@ -966,8 +971,8 @@ const loftChordBuildCeiling = 60 * time.Second
 // The constant that count is measured at was itself read off
 // TestLoftChordCalibrationSweep's table over the mandated grid m = 4, 8, 16,
 // 32, 64, 128 (a10-plan.md Part 2 Q2's "chordTarget = loftChordFraction *
-// envelope" rule). On that grid the 4x-margin requirement and the 2s
-// wall-clock budget do NOT hold simultaneously (a10-plan.md's risk R2,
+// envelope" rule). On that grid the 4x-margin requirement and the wall-clock
+// budget §13 owns do NOT hold simultaneously (a10-plan.md's risk R2,
 // confirmed by measurement rather than assumed):
 //
 //   - Volume is the binding reading throughout (not Centroid — the areaUpper
@@ -982,7 +987,7 @@ const loftChordBuildCeiling = 60 * time.Second
 //     4x. The shipped constant is that grid point's own implied fraction.
 //
 // Per the plan's named fallback (Q2, "Fallback if calibration does not close"),
-// the coarser, in-budget value ships: Q3's 2s wall-clock ceiling is stated as a
+// the coarser, in-budget value ships: Q3's wall-clock ceiling is stated as a
 // hard "any fixture that ships in go test ./... builds in 2 seconds or less",
 // while the 4x margin is a target on top of Sound, not a second hard gate. A
 // loft at this radius/aspect-ratio combination can therefore still read Suspect
@@ -1071,8 +1076,8 @@ func wedgeArcRecord(t *testing.T) (ArcSeg, segmentWalk) {
 // line requires: it re-measures both fixtures at the station count the SHIPPED
 // chooser settles the reference wedge on (wedgePinStations, not the whole sweep)
 // and asserts the closed-form enclosure and the achieved margin as numbers, never
-// merely a Sound/Suspect verdict, and that both fixtures build within the 2s
-// budget.
+// merely a Sound/Suspect verdict, and that both fixtures build within the budget
+// docs/loft-design.md §13's build cost model paragraph owns.
 //
 // The fit-spline wedge is chorded at that SAME count. There is no shipped
 // generator arm to ask for a free-form pairing — loftCellStations has no
@@ -1093,8 +1098,9 @@ func TestLoftChordCalibrationPinsFraction(t *testing.T) {
 	require.Less(t, arcElapsed, loftChordBuildCeiling, "the arc wedge build has regressed by orders of magnitude")
 
 	// Reuse the body measureWedgeReadings already built above rather than lofting
-	// the same arc wedge a second time — Q3's "at most three [2s] fixtures" budget
-	// counts loft builds, not assertions, so this pin stays at two builds total.
+	// the same arc wedge a second time — Q3's "at most three fixtures" budget, the
+	// one §13's build cost model paragraph owns, counts loft builds and not
+	// assertions, so this pin stays at two builds total.
 	vol, err := arcMeas.body.Volume()
 	require.NoError(t, err)
 	// The plan's acceptance line: |Volume.Value - (pi*25/4)*10| <= Volume.Bound +
