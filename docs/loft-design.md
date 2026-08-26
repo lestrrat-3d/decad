@@ -102,10 +102,7 @@ document (Table S row S11).
 type-checks a call that passes it twice, so the arity is a stated gate rather
 than a compile-time one: zero occurrences mean every offset is 0, exactly one
 supplies the whole per-loop payload, and two or more are `ErrDegenerate`
-(Table S row S4) — never resolved by a last-wins or a merge rule. Two alignment
-payloads are two different correspondences, so silently picking one builds a
-body the caller did not ask for; this is the same ground modify-reach SX1
-refuses a repeated contradictory option on.
+(Table S row S4) — never resolved by a last-wins or a merge rule.
 
 `s0`/`p0` is the **from** section (`capStart`); `s1`/`p1` is the **to**
 section (`capEnd`) — the same naming Extrude already uses for its two caps.
@@ -187,8 +184,7 @@ that exists and this evaluator cannot build → `ErrUnsupported`.**
 or BOUND. A vertex coordinate is neither: every input reaching the lift is
 finite and the derived measurement case is already the finiteness gate §8's
 publication runs. The refusal states that this evaluator cannot hold the
-body's vertex table in float64, the same reading spline design's R15 (an arc
-length past `MaxFloat64`) and R16 (a fit interpolant's coefficient past it)
+body's vertex table in float64, the same reading spline design's R15 and R16
 give a finite input whose derived magnitude runs off float64. **It is decided
 before the first exact-rational lift.** §5's whole-shell orientation sum and
 §8's accumulator both take every coordinate exactly, and the package's one
@@ -198,50 +194,38 @@ overflows must be refused while it is still a float.
 **S6 is also reachable from a same-kind circular pair, and how many sides a
 ZERO-RADIUS arc consumes decides which row answers.** A recorded `ArcSeg`
 whose `Center`, `Start` and `End` are one point walks at radius zero, so
-every station on that side lands on the centre. It is a recordable input:
-`record.go`'s `validateSegment` checks an arc's three points for finiteness
-and its range for emptiness alone, so such a record clears every gate a
-decoded recipe runs, exactly as a degenerate `LineSeg` does. **A zero SWEEP
-is not the trigger and cannot be one.** `extrude.go` folds an arc's
-`math.Mod` sweep into `(0, 2π]` by adding `2π` to a non-positive result —
-the branch `moments.go`'s own enclosure applies independently — so
-coincident recorded endpoints walk a FULL turn rather than none, and
-`record.go` refuses `TStart == TEnd` outright.
-
-A zero-radius arc on exactly ONE side of a pair collapses that side's
-stations alone, which is S16's one-sided chord cell and `ErrUnsupported`:
-the correspondence denotes a point-to-arc fan, a body a smarter kernel could
-still loft, and the gate order below reaches S16 first. A pair zero-radius on
-BOTH sides collapses each of its cells on both sections, and that is this
-row.
+every station on that side lands on the centre. **A zero SWEEP is not the
+trigger and cannot be one:** `extrude.go` folds an arc's `math.Mod` sweep
+into `(0, 2π]` by adding `2π` to a non-positive result, so coincident
+recorded endpoints walk a FULL turn rather than none, and `record.go`
+refuses `TStart == TEnd` outright. A zero-radius arc on exactly ONE side
+collapses that side's stations alone, which is S16's one-sided chord cell and
+`ErrUnsupported` — the correspondence denotes a point-to-arc fan, a body a
+smarter kernel could still loft, and the gate order below reaches S16 first.
+A pair zero-radius on BOTH sides collapses each of its cells on both
+sections, and that is this row.
 
 **Which arm a collapse takes is decided by §5.1's Table C, which states each
 station vertex's provenance, and a cell whose two stations DIFFER in
 provenance takes the COMPUTED arm.** The RECORDED arm needs EVERY vertex the
 collapse consumes to be a coordinate the record states, so it is reached only
 where every one of them is PINNED (§5.2's two kinds) — a zero-radius pair's
-cell over two pinned ends, or a cap triangle over pinned stations alone,
-reaching `ErrDegenerate` exactly as a degenerate `LineSeg` pair already does.
+cell over two pinned ends, or a cap triangle over pinned stations alone.
 ONE computed station is enough to leave that arm, because `ErrDegenerate`
 claims no body exists under ANY evaluator and nothing here proves that of a
 computed station: the record states no coordinate for it, its enclosure may
 be read only as an enclosure, and the collapse would otherwise be read off
-the held float64s — which is the same zero §5.2 refuses to grant from the
-shape of an enclosure. So a mixed cell reaches the COMPUTED arm and
-`ErrUnsupported` beside a cell whose two stations are both computed, and
-S6's permanence column claims nothing for either — the record's two station
-angles may well be distinct, leaving a denoted body only this evaluator's
-float64 vertex table collapses, the same reading S13 gives a coordinate that
-runs past that table's range.
+the held float64s — the same zero §5.2 refuses to grant from the shape of an
+enclosure.
 
-**A degenerate `LineSeg` pair is a recordable input, so the RECORDED arm
-covers a live case rather than a hypothetical one.** `record.go`'s
-`validateSegment` checks a `LineSeg`'s `Start` and `End` for finiteness
-alone, and `validateSegmentRange` refuses only an empty or out-of-range
-span, so a `LineSeg` whose `Start` equals its `End` over `[0, 1]` clears
-every gate a decoded recipe runs; on the recording path `seam.go`'s
-`segmentOf` copies both endpoints verbatim, adding no length check of its
-own.
+**A degenerate `LineSeg` pair and a zero-radius `ArcSeg` are both recordable
+inputs, so the RECORDED arm covers live cases rather than hypothetical
+ones.** `record.go`'s `validateSegment` checks a segment's points for
+finiteness alone and `validateSegmentRange` refuses only an empty or
+out-of-range span, so a `LineSeg` whose `Start` equals its `End` over
+`[0, 1]`, and an arc whose three points coincide, each clear every gate a
+decoded recipe runs; on the recording path `seam.go`'s `segmentOf` copies
+the endpoints verbatim, adding no length check of its own.
 
 **S5 compares geometric planes, not `PlaneRecord` fields.** Its normal is
 `U × V`; it refuses when the two normals are parallel and the displacement
@@ -322,14 +306,9 @@ outward at every step, so a composition of finite rows can itself run past
 inputs', so such a term refuses in whichever arm above evaluates it rather
 than falling to neither.
 
-**S14's condition is deliberately the broad one: ANY displacement term
-§5.2's table lists answering `+Inf`, and not the per-station displacement
-alone.** That table is what enumerates the terms S14 owns — each such term
-names this row in its own Refusal column — so a reader checking S14's scope
-reads that column and never a list restated here. The breadth is what makes
-the two arms above necessary, since the terms it reaches are of both kinds,
-and those two arms partition that column completely: no term it names is left
-without a phase.
+**S14's scope is read off §5.2's table**, whose Refusal column names this row
+on every term it reaches; the two arms above partition that column
+completely, leaving no such term without a phase.
 
 **A placement (`Placed`/`Duplicate`/`PlacedCopy`, §12 PR 2a) re-runs every
 gate decided from the records rather than from the call — S1, S2, S3, S4's
@@ -348,14 +327,8 @@ every re-evaluation, so a placement judges the identical station-derivation,
 station-cap, and collapsed-cell questions a first build does, over the same
 recorded curves. **S12 is judged on every build, because its condition is on
 the COMBINED proven volume allowance §8 composes and not on how the build was
-reached.** Each mechanism contributes its own term: a placement contributes
-`placeAllow` through `delta`; a chorded build contributes `stationRound`
-through that same `delta` (§5.2) and `sectionDelta` through the four-leg
-`chordedBoundaryVolumeAllow` §8 composes; a build that is both contributes
-all three. So a chorded build reaches S12 on its own terms, under
-`r3.Identity()` included; §5.2's table owns which of those terms are
-positive there and under what condition, and this paragraph states only that
-S12 reads their combination.
+reached** — so a chorded build reaches it under `r3.Identity()` too. §5.2's
+table owns which terms that combination carries and when each is positive.
 
 **S9, S10, S11 and S4's ARITY half belong to the original call alone.** Each
 judges an argument the caller passed to `Document.Loft` — the two live
@@ -402,10 +375,8 @@ individual wall or cap after cap seeding. This deterministic whole-shell step
 makes Table B, mass properties, and `Tessellate` receive one positively
 oriented material boundary.
 
-**§7's Table B owns a loft's `side(i,j,k)` grammar** — what `i` and `j`
-index and what `k` distinguishes. Evaluator §3 owns the provenance-role
-MECHANISM this grammar instantiates and points at §7 for the grammar itself;
-this section restates neither.
+**§7's Table B owns a loft's `side(i,j,k)` grammar**, and evaluator §3 owns
+the provenance-role mechanism that grammar instantiates.
 
 **Every Loft wall triangle is exempt from evaluator §3's
 adjacent-coplanar-side-face canonicalization**, and evaluator §3 owns that
@@ -413,52 +384,37 @@ rule. No wall triangle merges with its mate or with a triangle in another
 cell. A wall quad is generally non-planar — `V_j`, `V_{j+1}`, `W_{j+1}`,
 `W_j` lie in one plane only where the two recorded segments happen to be
 parallel and equally posed — while a split collinear side can make triangles
-from neighboring cells coplanar. Merging either case would make the face
-count, role grammar, diagonal incidence, or split-rung incidence depend on an
-accident of the caller's two sections. The uniform two-face-per-cell topology
-keeps Table B's roles and counts identical for every correspondence, which
-makes §5's manifold argument and §6's adjacency checks read from recorded
-pairing alone.
+from neighboring cells coplanar. The uniform two-face-per-cell topology keeps
+Table B's roles and counts identical for every correspondence, so §5's
+manifold argument and §6's adjacency checks read from recorded pairing alone
+rather than from an accident of the caller's two sections.
 
 **Every vertex position is `V = Plane.Origin + p.U * Plane.U + p.V *
 Plane.V`, the identical single float64 evaluation Extrude already performs
 for a cap vertex.** Topology §3 grants a zero bound to a vertex whose
 plane-local coordinates come from the RECORD rather than to every vertex a
 feature builds, and `p` here is the recorded section's own point, so a loft
-vertex carries the same standing a cap vertex does — no new rounding risk is
-introduced; it is the same closed-form coordinate lift every other feature
-already treats as truth. A station the walk COMPUTES is the exception — a
-same-kind circular pair's (§5.1), and a `LineSeg` end at a trimmed parameter
-(§5.2): §5.1's Table C states which station vertices the record states and
-which this build generated, and a GENERATED one takes no zero-bound grant
-here. §5.2's table states which two station kinds carry a zero and what
-every other station's own displacement from the point the record denotes is.
-This section restates neither and folds what they give into `delta` (§5.2).
+vertex carries the same standing a cap vertex does. A station the walk
+COMPUTES takes no such grant — a same-kind circular pair's (§5.1), and a
+`LineSeg` end at a trimmed parameter alike; §5.1's Table C states each
+station's provenance and §5.2's table states its displacement from the point
+the record denotes.
 
-**This claim holds where the payload's displacement `delta` is zero, and a
-placement is only one of the two ways it stops being.** A placed,
-duplicated, or placed-copied loft body (§7, §12 PR 2a) contributes the
-placement term `placeAllow`, which is zero exactly at `r3.Identity()`;
-a computed station contributes `stationRound`, which §5.2's table guarantees
-zero at the kinds it pins and at no other — a chorded pair's station, and a
-trimmed `LineSeg` end alike, carry whatever their own walk bound proves.
-`delta` is `absSumUpper` of the two, so it is zero only where BOTH are, and
-an unplaced pairing (§5.2's `placeAllow` row owns what unplaced means) whose
-every station is PINNED — one of §5.2's own two kinds — is what guarantees
-that. §5.2's table owns each term's source, rounding and refusal.
-
-**Every consumer conditions on `delta > 0`, never on the body having been
-placed.** A vertex position, an edge length, a face area, and each of the
-four body measurements carry `delta` whenever it is positive, whatever
-mechanism made it so — an unplaced chorded body included (§8).
+**`delta` is `absSumUpper(stationRound, placeAllow)` (§5.2), so a placement
+is only one of the two ways it stops being zero.** It is zero only where both
+terms are, which an unplaced pairing whose every station is PINNED — one of
+§5.2's own two kinds — is what guarantees. **Every consumer conditions on
+`delta > 0`, never on the body having been placed**: a vertex position, an
+edge length, a face area, and each of the four body measurements carry
+`delta` whenever it is positive, whatever mechanism made it so — an unplaced
+chorded body included (§8).
 
 **Edges get no new role mechanism.** Selector.go's existing rule already
 covers loft: "`CreatedBy` matches an edge through its adjacent faces'
 `Origins()` — an edge carries no roles of its own." A loft's three new edge
 families — the cap-boundary entity on each side, the rung, and the
 diagonal — need none. §5.1's Table C states each family's count, its
-provenance, and which faces share it; this section restates none of that and
-uses only what the table gives.
+provenance, and which faces share it.
 
 Every edge of the result bounds exactly two faces — §5.1's Table C states
 which two for each family — so the payload is manifold and watertight **by
@@ -484,10 +440,10 @@ computed:
   `boolean_exact.go` already implements for the mesh boolean's contact
   classification — reused here, not reinvented, because both faces are
   already exact `Plane`s, so the sign is always decidable without a
-  tolerance. The predicate is needed because a prism's junction turn is read
-  off the single recorded 2D section it sweeps rigidly (evaluator §3), while
-  a loft has two sections whose own corner turns can disagree at the same
-  paired vertex. A zero result retains a flat rung or diagonal as a decided
+  tolerance. A prism reads its junction turn off the single recorded 2D
+  section it sweeps rigidly (evaluator §3); a loft has two sections whose own
+  corner turns can disagree at the same paired vertex, which is why it needs
+  the predicate. A zero result retains a flat rung or diagonal as a decided
   non-convex edge: `IsConvex()` is false, `Convex()` does not select it, and
   `Concave()` does;
 - a **cap-boundary** edge is a RIM edge, and takes evaluator §3's existing
