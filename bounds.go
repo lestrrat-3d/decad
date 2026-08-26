@@ -229,6 +229,49 @@ func radius3D(perCoord float64) float64 {
 	return upRound(perCoord * sqrt3Up)
 }
 
+// heldDelta is the EXACT difference a − b of two held corners, taken over
+// clearance_degen.go's own rational kernel rather than r3's float64 Sub: a
+// float64 coordinate is an exact rational, so the difference is exact and
+// carries none of the cancellation error the float subtraction commits. Every
+// proven bound in this file that needs the LENGTH of a corner difference must
+// form it this way and then take rvLenUpper of it — r3.Vec.Len is
+// math.Hypot, which rounds to NEAREST and so is not an upper bound on
+// anything (nor is Sub), and a final upRound of the product buys back only
+// ~1 ulp of the PRODUCT, never the norms' own inward error, which a
+// near-cancelling difference can carry as a fraction of the term rather than
+// an ulp of it.
+//
+// Both corners must already be finite (finiteVec), which every caller here
+// checks before it lifts.
+func heldDelta(a, b r3.Vec) ratV3 { return rvSub(ratVec(a), ratVec(b)) }
+
+// rvLenUpper is a PROVEN upper bound on |u| for an exactly-represented vector:
+// the squared length is exact rational arithmetic and ratSqrtUp brackets its
+// root by exact comparison (f·f ≥ u·u), so the published value encloses the
+// true norm whatever the platform's own sqrt does — the same mechanism
+// loft_moments.go's distUpper and computeLoftChordedAllow's h1Upper already
+// use. A zero vector answers exactly 0, so a bound that vanishes with its
+// vector still vanishes. A norm past the float64 range answers +Inf, a
+// refusal rather than a bound.
+func rvLenUpper(u ratV3) float64 { return ratSqrtUp(rvDot(u, u)) }
+
+// ratLenAtLeast reports whether claim is PROVABLY at least |u|, decided by
+// exact comparison of claim² against u·u rather than against a rounded norm.
+// It is the falsifier form a "this claimed length cannot be below its own
+// chord" gate needs: exact in BOTH directions, so it neither admits a claim
+// that is genuinely short nor refuses one that is exactly tight.
+func ratLenAtLeast(claim float64, u ratV3) bool {
+	if !(claim >= 0) {
+		return false
+	}
+	c, ok := ratOf(claim)
+	if !ok {
+		return false
+	}
+	c.Mul(c, c)
+	return c.Cmp(rvDot(u, u)) >= 0
+}
+
 // sumSlop is a PROVEN bound on the rounding a NAIVE float64 summation of n
 // terms commits, given absSum = Σ|term|. The classic bound is
 // (n−1)·u/(1 − (n−1)·u) · Σ|term|, which 2·(n−1)·u·Σ|term| dominates for
@@ -696,19 +739,30 @@ func cellTwistOffsetUpper(vLo, vHi, wLo, wHi r3.Vec) float64 {
 // factors T and (eA+eB) independent rather than a fabricated cross term, and
 // the whole product vanishes with T exactly rather than merely shrinking.
 //
+// Every one of the three factors is formed EXACTLY and rounded OUTWARD
+// (heldDelta into rvLenUpper): |T|, eA and eB are each an upper bound in their
+// own right before the product is taken, which is what the derivation above
+// needs of them. A float64 norm cannot stand in for any of them — r3.Vec.Len
+// is math.Hypot and Sub is a float subtraction, both round-to-nearest, and the
+// twist vector T is a four-term alternating sum whose float evaluation can
+// cancel to an arbitrarily large RELATIVE error, so the published product's
+// own upRound (one ulp of the product) is nowhere near enough to cover it.
+// The exact form also makes the T = 0 planar case exact rather than a float
+// near-zero: an untwisted cell charges nothing at all.
+//
 // Non-finite corners answer +Inf, the same guard cellTwistVolumeAllow's own
 // doc comment states for its sibling.
 func cellTwistAreaAllow(vLo, vHi, wLo, wHi r3.Vec) float64 {
 	if !finiteVec(vLo) || !finiteVec(vHi) || !finiteVec(wLo) || !finiteVec(wHi) {
 		return math.Inf(1)
 	}
-	t := vLo.Sub(vHi).Sub(wLo).Add(wHi)
-	twistLen := t.Len()
+	// T = (vLo − vHi) − (wLo − wHi), exact.
+	twistLen := rvLenUpper(rvSub(heldDelta(vLo, vHi), heldDelta(wLo, wHi)))
 	if twistLen <= 0 {
 		return 0
 	}
-	eA := math.Max(vHi.Sub(vLo).Len(), wHi.Sub(wLo).Len())
-	eB := math.Max(wLo.Sub(vLo).Len(), wHi.Sub(vHi).Len())
+	eA := math.Max(rvLenUpper(heldDelta(vHi, vLo)), rvLenUpper(heldDelta(wHi, wLo)))
+	eB := math.Max(rvLenUpper(heldDelta(wLo, vLo)), rvLenUpper(heldDelta(wHi, vHi)))
 	return productUpper(twistLen, absSumUpper(eA, eB))
 }
 
@@ -982,13 +1036,18 @@ func cellChordCurveAreaAllow(
 	if math.IsNaN(tangentEnergyA) || math.IsNaN(tangentEnergyB) || tangentEnergyA < 0 || tangentEnergyB < 0 {
 		return math.Inf(1)
 	}
-	da, db := vHi.Sub(vLo), wHi.Sub(wLo)
-	ca, cb := da.Len(), db.Len()
-	if arcLenUpperA < ca || arcLenUpperB < cb {
+	// Every corner difference, cross product and norm below is formed EXACTLY
+	// and rounded OUTWARD, cellTwistAreaAllow's own rule: a float64 Sub/Len
+	// pair rounds to NEAREST and so bounds nothing, and the twist vector in
+	// particular cancels. The arc-length-versus-chord gate is decided by exact
+	// comparison instead (ratLenAtLeast), so an outward-rounded chord can never
+	// refuse a caller whose claim is exactly tight.
+	da, db := heldDelta(vHi, vLo), heldDelta(wHi, wLo)
+	if !ratLenAtLeast(arcLenUpperA, da) || !ratLenAtLeast(arcLenUpperB, db) {
 		return math.Inf(1)
 	}
-	gLo, gHi := wLo.Sub(vLo), wHi.Sub(vHi)
-	eB := math.Max(gLo.Len(), gHi.Len())
+	ca, cb := rvLenUpper(da), rvLenUpper(db)
+	eB := math.Max(rvLenUpper(heldDelta(wLo, vLo)), rvLenUpper(heldDelta(wHi, vHi)))
 	cMax := math.Max(ca, cb)
 	md := matchedDeltaUpper
 
@@ -1010,9 +1069,9 @@ func cellChordCurveAreaAllow(
 	if nMin <= 0 {
 		return free
 	}
-	twist := vLo.Sub(vHi).Sub(wLo).Add(wHi)
-	pCrossT := math.Max(da.Cross(twist).Len(), db.Cross(twist).Len())
-	oscW := absSumUpper(twist.Len(), upRound(productUpper(eB, pCrossT)/nMin))
+	twist := rvSub(heldDelta(vLo, vHi), heldDelta(wLo, wHi))
+	pCrossT := math.Max(rvLenUpper(rvCross(da, twist)), rvLenUpper(rvCross(db, twist)))
+	oscW := absSumUpper(rvLenUpper(twist), upRound(productUpper(eB, pCrossT)/nMin))
 	lin := absSumUpper(
 		productUpper(oscW, iMax),
 		productUpper(productUpper(2, md), absSumUpper(cMax, iMax)),

@@ -658,9 +658,9 @@ func recomposeCellAllow(a, b ruledArc) (float64, float64, float64, float64, floa
 	energyA := uniformSpeedTangentEnergyUpper(arcA, chordLo(a))
 	energyB := uniformSpeedTangentEnergyUpper(arcB, chordLo(b))
 
-	da, db := vHi.Sub(vLo), wHi.Sub(wLo)
-	ca, cb := da.Len(), db.Len()
-	eB := math.Max(wLo.Sub(vLo).Len(), wHi.Sub(vHi).Len())
+	da, db := heldDelta(vHi, vLo), heldDelta(wHi, wLo)
+	ca, cb := rvLenUpper(da), rvLenUpper(db)
+	eB := math.Max(rvLenUpper(heldDelta(wLo, vLo)), rvLenUpper(heldDelta(wHi, vHi)))
 	cMax := math.Max(ca, cb)
 	ia, ja := tangentDeviationUpper(arcA, ca, energyA)
 	ib, jb := tangentDeviationUpper(arcB, cb, energyB)
@@ -673,9 +673,9 @@ func recomposeCellAllow(a, b ruledArc) (float64, float64, float64, float64, floa
 	if nMin <= 0 {
 		return free, free, 0, 0, 0
 	}
-	twist := vLo.Sub(vHi).Sub(wLo).Add(wHi)
-	pCrossT := math.Max(da.Cross(twist).Len(), db.Cross(twist).Len())
-	oscW := absSumUpper(twist.Len(), upRound(productUpper(eB, pCrossT)/nMin))
+	twist := rvSub(heldDelta(vLo, vHi), heldDelta(wLo, wHi))
+	pCrossT := math.Max(rvLenUpper(rvCross(da, twist)), rvLenUpper(rvCross(db, twist)))
+	oscW := absSumUpper(rvLenUpper(twist), upRound(productUpper(eB, pCrossT)/nMin))
 	oscTerm := productUpper(oscW, iMax)
 	mdTerm := productUpper(productUpper(2, md), absSumUpper(cMax, iMax))
 	quad := upRound(absSumUpper(
