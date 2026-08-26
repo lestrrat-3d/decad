@@ -167,7 +167,7 @@ that exists and this evaluator cannot build → `ErrUnsupported`.**
 | **S3** | a paired segment whose two sides are not same-kind (§1, P5), or a same-kind pair where either side is free-form. A same-kind `CircleSeg` pair whose two recorded `CCW` flags disagree (P5) is NOT this row's refusal: it is S7's `ErrDegenerate`, decided structurally beside this gate rather than by the audit | the ruled surface exists; this evaluator has no exact construction for a mixed-kind pairing, and none yet for a free-form one | `ErrUnsupported` | yes, §1 |
 | **S4** | a `WithLoftAlignment` payload of the wrong length, an offset outside `[0, n)` for its loop, or the option passed more than once | no single intent (mirrors modify-reach SX1, which refuses a repeated contradictory option on the same ground) | `ErrDegenerate` | yes, §2 |
 | **S5** | `p0` and `p1` represent the same geometric plane, regardless of which in-plane origin or right-handed `U`/`V` basis each `PlaneRecord` uses | no — every wall vertex then lies in one plane, so the solid is provably flat: the tetrahedron-sum volume (§8) is a structural zero, not a computed one | `ErrDegenerate` | yes, §4 |
-| **S6** | a wall or cap triangle that collapses (coincident vertices, zero area) — every collapse S16's one-sided chord cell does not already claim, in either of two arms the existence test above splits: the RECORDED arm — EVERY vertex the collapse consumes is a coordinate the record states, which is a station §5.2 PINS (an untrimmed `LineSeg` pair's own endpoints; the two pinned ends of an `ArcSeg` pair recorded at ZERO RADIUS on BOTH sides) — or the COMPUTED arm, which takes every other collapse: one over GENERATED station vertices alone (§5.1's Table C) rounding to the same float64, one whose two stations DIFFER in provenance, and a cap triangle collapsing over either | the RECORDED arm: no — the modification consumed the region, the same existence answer modify §5 test 1 gives an inside-out loop. The COMPUTED arm: this evaluator cannot tell, and the row therefore never claims non-existence — where the two stations' recorded angles are distinct the denoted body exists at that correspondence and only this evaluator's float64 vertex table collapses it, and where any collapsing vertex is COMPUTED the record states no coordinate for it to be decided from | `ErrDegenerate` (RECORDED arm) / `ErrUnsupported` (COMPUTED arm) | yes, §4, for the RECORDED arm; no for the COMPUTED arm — a precision ceiling on this evaluator's float64 vertex table, the same reading S13 gives, and an undecided existence this row never converts into a permanent refusal |
+| **S6** | a wall or cap triangle that collapses (coincident vertices, zero area) — every collapse S16's one-sided chord cell does not already claim, in either of two arms: the RECORDED arm, where EVERY vertex the collapse consumes is a station §5.2 PINS (an untrimmed `LineSeg` pair's own endpoints; the two pinned ends of an `ArcSeg` pair recorded at ZERO RADIUS on BOTH sides), or the COMPUTED arm, which takes every other collapse — one over GENERATED station vertices alone (§5.1's Table C) rounding to the same float64, one whose two stations DIFFER in provenance, and a cap triangle collapsing over either | the RECORDED arm: no — the modification consumed the region, the same existence answer modify §5 test 1 gives an inside-out loop. The COMPUTED arm: this evaluator cannot tell, and the row therefore never claims non-existence, since the record states no coordinate for a COMPUTED vertex to be decided from | `ErrDegenerate` (RECORDED arm) / `ErrUnsupported` (COMPUTED arm) | yes, §4, for the RECORDED arm; no for the COMPUTED arm — a precision ceiling on this evaluator's float64 vertex table, the same reading S13 gives |
 | **S7** | either of two arms: the STRUCTURAL arm — a same-kind `CircleSeg` pair whose two recorded `CCW` flags disagree (P5), decided from the two records alone (§4's gate-order paragraph places both arms) — or the AUDIT arm, where the crossing audit (§6) finds contact other than the pair's own expected contact, whatever §5.1's Table C gives it | no — a self-intersecting or self-touching shell bounds no solid, and an opposite-sense circular correspondence walls each side against the other's reversed walk, which is that same crossing | `ErrDegenerate` | yes, §6 |
 | **S8** | the crossing audit exhausts its fixed work budget (§6, §10) before every pair is decided, over the assembled triangle count `F` (§7), which a chorded pair grows past `2n` | this evaluator cannot tell | `ErrUnsupported` | no, §6 — a resource ceiling, not a shape rule |
 | **S9** | either profile fails a seam gate (§2): foreign, stale, invalid, or an unrecordable `Partial` fragment | seam design's own answer, per profile | `ErrForeignProfile` / `ErrStaleProfile` / `ErrInvalidProfile` / `ErrUnrecordableProfile` | seam design's own answer, per gate; this document adds no permanence of its own (§2) |
@@ -175,7 +175,7 @@ that exists and this evaluator cannot build → `ErrUnsupported`.**
 | **S11** | a nil or foreign `LoftOption` value, including a foreign type that embeds the sealed marker | no well-defined decad operation can invoke an unowned callback | `ErrDegenerate` | yes, §2 |
 | **S12** | ANY build — placed (`Placed`/`Duplicate`/`PlacedCopy`, §12 PR 2a), chorded (§5.1), or both — whose COMBINED proven volume allowance (§8) is not smaller than the held volume | yes — the body itself is sound; only its centroid's proven quotient bound has no positive denominator left to divide by | `ErrUnsupported` | no — a precision ceiling on this evaluator's centroid bound, not a shape rule |
 | **S13** | a build whose lifted-and-placed coordinate, whose computed station coordinate (§5.1), or whose orientation anchor (§5), runs past the representable float64 range | yes — every input is finite (both records' coordinates, the plane origins, and a transform `r3` itself validated), and only decad's own float evaluation of the lift or the station computation overflows; a placed body is the rigid image of one this evaluator already built | `ErrUnsupported` | no — a range ceiling on this evaluator's float64 vertex table, not a shape rule |
-| **S14** | ANY build for which a displacement term §5.2's table lists answers `+Inf` — a chorded circular pair's certified enclosure among them, a trimmed `LineSeg` end whose lerp the record cannot state as a rational, and a DERIVED term whose own outward-rounded composition saturates — decided in whichever of the row's two arms the gate-order paragraph below assigns that term | yes — the body exists; only one of its proven displacement terms has no derivation | `ErrUnsupported` | no — a derivation gap in this evaluator's certified circular enclosures, not a shape rule |
+| **S14** | ANY build for which a displacement term §5.2's table lists answers `+Inf`, decided in whichever of the two arms the gate-order paragraph below assigns that term | yes — the body exists; only one of its proven displacement terms has no derivation | `ErrUnsupported` | no — a derivation gap in this evaluator's certified enclosures, not a shape rule |
 | **S15** | a paired segment whose chord target (§5.1) is not met inside the fixed station cap | yes — the ruled surface exists; this evaluator cannot chord it inside its own ceiling | `ErrUnsupported` (`errTooManyChords`, spline R8) | no — a resource ceiling, not a shape rule |
 | **S16** | a chord cell (§5.1) whose two stations coincide on exactly ONE of the two sections. A cell collapsing on BOTH sections, and a collapsed cap triangle, are S6's two arms rather than this row, so every collapse is covered exactly once | yes — a collapsed piece is a recordable curve piece whatever the provenance of the two stations that produced it, and a point-degenerate correspondence is a body a smarter kernel could still loft; only the uniform two-faces-per-cell topology (§5) has no case for it | `ErrUnsupported` | no — an evaluator topology limit |
 
@@ -250,8 +250,8 @@ immediately beside it (a same-kind `CircleSeg` pair whose two recorded `CCW`
 flags disagree, P5: one flag comparison over the same two records S3 already
 reads), S5 geometric-plane coincidence, and, for a same-kind circular pair,
 S15's station-cap decision beside S14's DERIVATION arm below (§5.1) — all
-decidable without building a single triangle), then construction (§5), whose own first
-act is S13's coordinate-range gate on the anchor, on every computed station,
+decidable without building a single triangle), then construction (§5), whose
+own first act is S13's coordinate-range gate on the anchor, on every computed station,
 and on every placed vertex as it is emitted, then S16's
 one-sided-collapsed-cell gate as stations are paired into chord cells, then
 S14's CONSTRUCTION arm below, then the per-triangle existence gate S6 in
@@ -319,7 +319,8 @@ placement or first, since it reads the coordinate the lift emits rather than
 the motion that produced it. S14, S15 and S16 are likewise decided fresh
 on every build: the station generator (§5.1) reruns from the two records on
 every re-evaluation, so a placement judges the identical station-derivation,
-station-cap, and collapsed-cell questions a first build does. **S12 is judged on every build, because its condition is on
+station-cap, and collapsed-cell questions a first build does. **S12 is judged
+on every build, because its condition is on
 the COMBINED proven volume allowance §8 composes and not on how the build was
 reached** — so a chorded build reaches it under `r3.Identity()` too. §5.2's
 table owns which terms that combination carries and when each is positive.
@@ -1056,7 +1057,8 @@ centroid publication pattern, extended from the plane-local two-coordinate
 result to this 3D triangulated boundary. A body whose `delta` is positive
 (§5.2) widens each coordinate's bound by the same quotient composition
 `moments.go`'s `boundedQuotient` states, using `sweptVolumeAllow` as the
-denominator's own allowance and `sweptMomentAllow` as the numerator's. A body whose `sectionDelta` is
+denominator's own allowance and `sweptMomentAllow` as the numerator's. A body
+whose `sectionDelta` is
 positive widens it again by the matching `chordedBoundaryVolumeAllow` /
 `chordedBoundaryMomentAllow` pair (`bounds.go`), each doing for
 `sectionDelta` what the swept pair does for `delta`. **The moment twin takes
@@ -1549,8 +1551,7 @@ against this budget.
   it reads stay finite refuses S14 in the CONSTRUCTION arm, asserted on the
   sentinel and on the arm rather than on the source rows' own finiteness.
   **The chorded volume allowance's four legs are fixtured in `bounds.go`'s own
-  internal tests, and this section names those fixtures rather than restating
-  their assertions over a built body.**
+  internal tests, named here rather than restated over a built body.**
   `TestChordedBoundaryVolumeAllowComposesAllFourLegs` pins the composition's
   shape; `TestChordedBoundaryVolumeAllowCapLegIsLoadBearing` pins that
   deleting the CAP leg understates a measured gap, and
@@ -1596,8 +1597,7 @@ against this budget.
   ends — strictly positive on that fixture's recorded geometry, a value its
   own walk bound states and no station kind grants — and therefore a strictly
   positive `delta` under `r3.Identity()`, and `bodyGateDiameter` shrinks its
-  reading by `2*delta` — a fixture that read `delta == 0` there would pin the
-  false generalisation from the untrimmed-`ArcSeg` case. **That fixture is
+  reading by `2*delta`. **That fixture is
   run at a QUARTER-TURN range as well, and that run asserts the value the
   walk bound proves rather than a sign.** The quarter-turn run is what pins
   §5.2's no-exemption rule from the other side: `circularEndpointInterval`
