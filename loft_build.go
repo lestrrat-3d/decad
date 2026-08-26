@@ -785,12 +785,13 @@ func capTriangleAreaAllow(verts []r3.Vec, tris [][3]int, delta float64) float64 
 // re-deriving the region's area from the record (moments.go), is what
 // keeps the published cap Area and the built cap triangles in lockstep by
 // construction: whatever assembleLoft walked into a triangle is exactly
-// what this sums. On an untrimmed LineSeg profile the two are the same
-// points and so agree exactly; on a TRIMMED LineSeg profile they did not
-// before this function existed, because assembleLoft's own walk lands on
-// walkOf's float lerp2 endpoint while moments.go's region-level
-// accumulator integrates the exact rational ratLerp — a pre-existing gap
-// this closes, not a regression (moments.go's ratLerp/lerp2 doc comments).
+// what this sums. On an untrimmed LineSeg profile that walked point IS the
+// record's own endpoint, so this sum and moments.go's region-level integral
+// are the same rational. On a TRIMMED LineSeg profile they are not: the walk
+// lands on walkOf's float lerp2 endpoint while moments.go integrates the
+// exact rational ratLerp (moments.go's ratLerp/lerp2 doc comments), and the
+// cap reading follows the walked point, because that is the point the cap's
+// own triangles have.
 //
 // The outer loop walks CCW and each hole walks CW
 // (docs/sketch-seam-design.md), and a per-loop shoelace sum already nets a

@@ -1079,3 +1079,181 @@ func TestCapPolygonAreaRatClosesTheTrimmedLineSegGap(t *testing.T) {
 	wantFloat, _ := newRat.Float64()
 	require.Equal(t, wantFloat, areaM.Value.Base(), "the built capStart face must publish the same shoelace-derived area")
 }
+
+// holeSquareProfile is a unit square carrying one clockwise square hole, and
+// twoHoleSquareProfile the same square carrying two disjoint ones. A hole's
+// clockwise walk is what makes a per-loop shoelace sum SUBTRACT it
+// (docs/sketch-seam-design.md, ProfileRecord.Area's own doc comment), so
+// these are the fixtures that exercise capPolygonAreaRat's multi-loop arm at
+// all: on a single-loop profile the loop over loopIdx runs exactly once and
+// hole netting is never reached.
+func holeSquareProfile() ProfileRecord {
+	return ProfileRecord{
+		Outer: squareLoop(0.5, 0.5, 0.5, true),
+		Holes: []LoopRecord{squareLoop(0.5, 0.5, 0.2, false)},
+	}
+}
+
+func twoHoleSquareProfile() ProfileRecord {
+	return ProfileRecord{
+		Outer: squareLoop(0.5, 0.5, 0.5, true),
+		Holes: []LoopRecord{
+			squareLoop(0.3, 0.3, 0.1, false),
+			squareLoop(0.7, 0.7, 0.1, false),
+		},
+	}
+}
+
+// loftPayloadFor is the general unplaced-payload builder the cap-area table
+// uses: two profiles on two standard-basis planes at the given world origins.
+func loftPayloadFor(t *testing.T, p0, p1 ProfileRecord, o0, o1 r3.Vec) loftPayload {
+	t.Helper()
+	pl0, pl1 := planeAt(o0), planeAt(o1)
+	return loftPayload{
+		profile0: p0, profile1: p1,
+		plane0: pl0, plane1: pl1,
+		frame0: mustFrame(t, pl0), frame1: mustFrame(t, pl1),
+		xform: r3.Identity(),
+	}
+}
+
+// placedHoleLoftPayload is the hole-bearing square lofted under a genuine
+// rigid placement, so the table also covers the delta > 0 arm of
+// loftMassAccumulator.area (its perturbAreaSum term, docs/loft-design.md §12
+// PR 2a). The cap polygon itself is PLANE-LOCAL and so is untouched by the
+// placement (assembleLoft's pts0/pts1 are the pairs' own (U, V) points), which
+// is exactly why a placed row still admits the same exact-rational equality.
+func placedHoleLoftPayload(t *testing.T) loftPayload {
+	t.Helper()
+	pl := loftPayloadFor(t, holeSquareProfile(), holeSquareProfile(), r3.NewVec(0, 0, 0), r3.NewVec(0, 0, 1))
+	rot, err := r3.Rotation(r3.NewVec(1, 2, 3), units.Degrees(37))
+	require.NoError(t, err)
+	shift, err := r3.Translation(r3.NewVec(12, -5, 3))
+	require.NoError(t, err)
+	xform, err := rot.Then(shift)
+	require.NoError(t, err)
+	pl.xform = xform
+	return pl
+}
+
+// TestCapPolygonAreaRatNetsEveryLoop is capPolygonAreaRat's MULTI-LOOP
+// acceptance line: the shoelace must walk every loop loopIdx records, so a
+// hole's clockwise walk nets its own area back out of the cap reading.
+//
+// Both halves are computed inside this one process and compared to each
+// other; NO float literal is pinned anywhere in this test, and none may be
+// added. A placed loft's vertices, its delta and every Bound derived from
+// them move by an ULP between amd64 and arm64, because r3's
+// Transform.ApplyDir has the x*y+z shape Go contracts into a fused
+// multiply-add on arm64 and not on amd64. CI runs ubuntu, macOS and windows,
+// so a pinned constant here would be a permanently red build on one of them.
+//
+// The two halves:
+//
+//   - capPolygonAreaRat over the polygon assembleLoft ACTUALLY assembled must
+//     equal, as an exact rational, moments.go's own region-level integral of
+//     the same record — and that integral nets holes out per loop already
+//     (integrateMomentRecordWithPoll walks Outer then every hole). Dropping a
+//     hole loop from the shoelace breaks this comparison on every
+//     hole-bearing row.
+//   - The published Measurement must be the same one either rational
+//     produces: value, proven bound and Exactness all compared field by
+//     field, through the SAME accumulator the evaluator itself feeds, so the
+//     check covers the publication path and not just the helper.
+//
+// Every row's profiles are untrimmed LineSeg loops (TStart 0, TEnd 1), which
+// is what makes the first comparison an exact rational equality rather than a
+// bounded one: walkOf's lerp2 and moments.go's ratLerp both return the
+// record's own endpoint verbatim, with no rounding on either side (this
+// file's trimmedLineTriangleProfile doc comment owns the trimmed case).
+func TestCapPolygonAreaRatNetsEveryLoop(t *testing.T) {
+	zero, up := r3.NewVec(0, 0, 0), r3.NewVec(0, 0, 1)
+	for _, tc := range []struct {
+		name  string
+		build func(*testing.T) loftPayload
+	}{
+		{
+			name:  "unit box, p0 below p1",
+			build: func(t *testing.T) loftPayload { return boxLoftPayloadOn(t, 0, 1) },
+		},
+		{
+			// The other z-spelling of the same box: p0 above p1, so §5's
+			// whole-shell orientation step reverses the raw winding.
+			name:  "unit box, p0 above p1",
+			build: func(t *testing.T) loftPayload { return boxLoftPayloadOn(t, 1, 0) },
+		},
+		{
+			name: "frustum, unit square to quarter square",
+			build: func(t *testing.T) loftPayload {
+				small := ProfileRecord{Outer: squareLoop(0.5, 0.5, 0.25, true)}
+				return loftPayloadFor(t, unitSquareProfile(), small, zero, up)
+			},
+		},
+		{
+			// A skewed pair: the two planes are laterally offset, so no wall
+			// triangle is vertical and every cap point is walked into a
+			// differently sheared triangle.
+			name: "skewed pair, laterally offset planes",
+			build: func(t *testing.T) loftPayload {
+				return loftPayloadFor(t, unitSquareProfile(), unitSquareProfile(), zero, r3.NewVec(0.4, 0.3, 1))
+			},
+		},
+		{
+			name: "triangle",
+			build: func(t *testing.T) loftPayload {
+				tri := ProfileRecord{Outer: triangleLoop()}
+				return loftPayloadFor(t, tri, tri, zero, up)
+			},
+		},
+		{
+			name: "one hole",
+			build: func(t *testing.T) loftPayload {
+				return loftPayloadFor(t, holeSquareProfile(), holeSquareProfile(), zero, up)
+			},
+		},
+		{
+			name: "two holes",
+			build: func(t *testing.T) loftPayload {
+				return loftPayloadFor(t, twoHoleSquareProfile(), twoHoleSquareProfile(), zero, up)
+			},
+		},
+		{
+			name:  "placed, one hole",
+			build: placedHoleLoftPayload,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			pl := tc.build(t)
+			a := assembleLoftFixture(t, pl)
+
+			got0 := capPolygonAreaRat(a.pts0, a.loopIdx0)
+			got1 := capPolygonAreaRat(a.pts1, a.loopIdx1)
+
+			ig0, err := pl.profile0.integralsTo(momentAreaOrder)
+			require.NoError(t, err)
+			require.False(t, ig0.exactDead)
+			require.True(t, ig0.exact.complete())
+			ig1, err := pl.profile1.integralsTo(momentAreaOrder)
+			require.NoError(t, err)
+			require.False(t, ig1.exactDead)
+			require.True(t, ig1.exact.complete())
+
+			require.Equalf(t, 0, ig0.exact.area.Cmp(got0),
+				"capStart: the assembled polygon's shoelace %s must equal moments.go's own hole-netted region rational %s exactly",
+				got0.RatString(), ig0.exact.area.RatString())
+			require.Equalf(t, 0, ig1.exact.area.Cmp(got1),
+				"capEnd: the assembled polygon's shoelace %s must equal moments.go's own hole-netted region rational %s exactly",
+				got1.RatString(), ig1.exact.area.RatString())
+
+			mass := newLoftMassAccumulator(pl.xform.Apply(pl.plane0.Origin), a.delta)
+			for k, tri := range a.tris {
+				mass.add(a.verts[tri[0]], a.verts[tri[1]], a.verts[tri[2]], k < a.walls)
+			}
+			want := mass.area(ig0.exact.area, ig1.exact.area)
+			area := mass.area(got0, got1)
+			require.Equal(t, want.Value.Base(), area.Value.Base(), "published area value")
+			require.Equal(t, want.Bound.Base(), area.Bound.Base(), "published area bound")
+			require.Equal(t, want.Exactness, area.Exactness, "published area exactness")
+		})
+	}
+}
