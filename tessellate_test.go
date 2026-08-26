@@ -191,10 +191,19 @@ func TestTessellatePlateWithHole(t *testing.T) {
 	require.Len(t, mesh.Vertices(), 28)
 	require.Len(t, mesh.Triangles(), 56)
 
-	// The proven bound is the sagitta actually taken: positive, within tol.
+	// The published bound is the PROVEN sagitta of the chording actually
+	// taken: positive, within tol, and at or above the true chord-to-arc
+	// deviation. Both figures below are derived here rather than read back
+	// from the implementation — the proven bound is
+	// docs/tessellation-design.md Sec 3's r*theta^2/(8n^2), the sin(x)<=x
+	// reduction of the true sagitta r*(1-cos(theta/2n)) beside it.
 	n := 10.0
-	wantSag := 10 * (1 - math.Cos(math.Pi/n))
+	sweep := 2 * math.Pi
+	wantSag := 10 * sweep * sweep / (8 * n * n)
+	trueSag := 10 * (1 - math.Cos(math.Pi/n))
 	require.InDelta(t, wantSag, mesh.Bound().Mag(), 1e-12)
+	require.GreaterOrEqual(t, mesh.Bound().Mag(), trueSag,
+		`the published bound must enclose the deviation the chords actually take`)
 	require.LessOrEqual(t, mesh.Bound().Mag(), tol)
 
 	// The hole polygon is inscribed in the true circle, so the mesh volume
@@ -229,7 +238,7 @@ func TestTessellatePlateWithHole(t *testing.T) {
 			}
 			mid := a.Add(b).Scale(0.5)
 			d := math.Hypot(mid.X-70, mid.Y-30)
-			require.GreaterOrEqual(t, d, 10-wantSag-1e-9, `a chord midpoint deviates by at most the proven sagitta`)
+			require.GreaterOrEqual(t, d, 10-trueSag-1e-9, `a chord midpoint deviates by exactly the true sagitta, which the published bound covers`)
 		}
 	}
 	require.Equal(t, 20, cylFacets)
@@ -538,9 +547,14 @@ func TestTessellateUndisplacedPrismSpendsTheWholeTolerance(t *testing.T) {
 	requireWatertight(t, mesh)
 
 	// r = 10 at tol = 0.5 still buys 10 chords around the hole: a reservation
-	// taken from an undisplaced prism would buy fewer.
+	// taken from an undisplaced prism would buy fewer. The comparison is
+	// against docs/tessellation-design.md Sec 3's published sagitta
+	// r*theta^2/(8n^2), derived here, and is checked to enclose the true
+	// chord-to-arc deviation — see TestTessellatePlateWithHole.
 	require.Len(t, mesh.Vertices(), 28)
-	require.InDelta(t, 10*(1-math.Cos(math.Pi/10)), mesh.Bound().Mag(), 1e-12)
+	require.InDelta(t, 10*(2*math.Pi)*(2*math.Pi)/(8*10*10), mesh.Bound().Mag(), 1e-12)
+	require.GreaterOrEqual(t, mesh.Bound().Mag(), 10*(1-math.Cos(math.Pi/10)),
+		`the published bound must enclose the deviation the chords actually take`)
 	require.LessOrEqual(t, mesh.Bound().Mag(), tol)
 
 	// A straight-only prism chords exactly, bound and all.

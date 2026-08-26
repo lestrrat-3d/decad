@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"math/big"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
@@ -52,7 +53,10 @@ func (m *Mesh) SourceFaces() []*Face { return append([]*Face(nil), m.source...) 
 // lies farther than this from the mesh, and vice versa. It is the largest
 // complete displacement the tessellation used, including curve chording and
 // inherited payload coordinate bounds. Its chording component is at most the
-// requested tolerance; inherited payload displacement is added on top, so
+// requested tolerance — it is a PROVEN upper bound on the chord-to-arc
+// deviation rather than that deviation itself, so it can read above the
+// deviation a chord actually takes by the factor [Body.Tessellate] states;
+// inherited payload displacement is added on top, so
 // Bound can exceed that tolerance. It is zero only when every held boundary
 // coordinate is exact. A scalar quantity is a units.Value (core §5.1): Kind
 // Length, millimetres.
@@ -71,6 +75,19 @@ func (m *Mesh) Bound() units.Value { return units.Millimeters(m.bound) }
 // that meets it — a cap and the cylinder wall use the same chording of their
 // shared edge — so the mesh is watertight and consistently oriented by
 // construction, and Bound carries the complete displacement actually taken.
+//
+// Two things follow from the chording sagitta being PROVEN rather than tight
+// (docs/tessellation-design.md §3 derives it; chordSagitta implements it).
+// First, the chording component of [Mesh.Bound] sits above the deviation the
+// chords take by the factor (x/sin x)² at x = a chord's own quarter angle —
+// at most π²/9, about 9.66% high, at the coarsest chording a closed walk
+// reaches (three chords over a full circle), and 0.83% at ten. Second, the
+// chord count is chosen against that same proven figure, so the finest tol
+// this mesh admits is set by it and not by the tighter true sagitta: a tol
+// within about 3.06e-9 relative of the finest chording the per-curve cap
+// allows leaves no admissible count and is [ErrUnsupported]. Both point the
+// same way — a finer mesh, or a refusal, never a coarser mesh under a claim
+// this package cannot prove.
 //
 // Prism, cup and boolean-built bodies tessellate. A boolean-built body only
 // RESTATES its held mesh, so tol must be at least the body's own Bound: a
@@ -446,7 +463,7 @@ func tessellateCup(ctx context.Context, b *Body, cp cupPayload, chord float64) (
 	// One chorded ring per region loop: the walls hang off it and the caps and
 	// rims share it, so every vertex is shared and the mesh closes by
 	// construction. A ring holds its samples, the lo/hi mesh vertices of each,
-	// its wall faces and the sagitta the chording took.
+	// its wall faces and the sagitta bound the chording proved.
 	type ring struct {
 		samples []Point2
 		loV     []int
@@ -769,18 +786,21 @@ func (m *Mesh) addTriangle(tri [3]int, src *Face) {
 	m.source = append(m.source, src)
 }
 
-// chordCount picks the number of chords for a circular walk so each chord's
-// sagitta r·(1 − cos(Δθ/2)) stays within tol, and returns the sagitta the
-// choice proves. A closed walk needs at least three chords to bound a
-// polygon; the per-chord angle never exceeds π, so consecutive samples are
-// always distinct.
+// chordCount picks the number of chords for a circular walk so chordSagitta's
+// PROVEN bound on each chord's sagitta stays within tol, and returns that
+// bound. Every accept/reject below reads chordSagitta, never the true
+// sagitta r·(1 − cos(Δθ/2)) it encloses. A closed walk needs at least three
+// chords to bound a polygon; the per-chord angle never exceeds π, so
+// consecutive samples are always distinct.
 func chordCount(w segmentWalk, tol float64) (int, float64, error) {
 	sweep := math.Abs(w.th1 - w.th0)
 	maxD := math.Pi
 	if tol < w.radius {
-		// sagitta(Δθ) = 2r·sin²(Δθ/4), so Δθ_max = 4·asin(√(tol/2r)) — the
-		// stable inverse: acos(1 − tol/r) rounds to zero for tiny tol and
-		// would seed an unbounded walk-up.
+		// The TRUE sagitta 2r·sin²(Δθ/4) inverts to Δθ_max = 4·asin(√(tol/2r))
+		// — the stable inverse: acos(1 − tol/r) rounds to zero for tiny tol
+		// and would seed an unbounded walk-up. It seeds the search only; the
+		// walk-up below decides on chordSagitta's larger proven figure, so
+		// this seed can land one chord short and is corrected there.
 		maxD = 4 * math.Asin(math.Sqrt(tol/(2*w.radius)))
 	}
 	// A tolerance this fine asks for more chords than any mesh can hold;
@@ -801,22 +821,125 @@ func chordCount(w segmentWalk, tol float64) (int, float64, error) {
 	// asked tolerance: float rounding in the asin/ceil path can land one
 	// chord short at a threshold value. Each increment strictly shrinks the
 	// sagitta toward zero, so the walk-up terminates.
-	// 2r·sin²(Δθ/4) is the same sagitta as r·(1 − cos(Δθ/2)) but stays
-	// accurate where 1 − cos rounds a tiny positive sagitta to zero — the
-	// bound is PROVEN, so it may be conservative but never understated.
-	sagitta := func(n int) float64 {
-		s := math.Sin(sweep / float64(n) / 4)
-		return 2 * w.radius * s * s
-	}
-	s := sagitta(n)
+	s := chordSagitta(w.radius, sweep, n)
 	for s > tol && sweep > 0 {
 		if n == maxChordsPerWalk {
 			return 0, 0, errTooManyChords
 		}
 		n++
-		s = sagitta(n)
+		s = chordSagitta(w.radius, sweep, n)
 	}
 	return n, s, nil
+}
+
+// chordSagitta is a PROVEN upper bound on the sagitta 2r·sin²(Δθ/4) a chord
+// subtends when a circular walk of the given sweep is split into n equal
+// chords — docs/tessellation-design.md §3's published sagitta, and the
+// single owner of chordCount's walk-up step, so a later caller measuring the
+// SAME quantity for a hand-chorded fixture reads the identical closed form
+// rather than a second copy of it.
+//
+// It never calls math.Sin. sin(x) <= x for every x >= 0 — the tangent line
+// to sin at the origin lies above the curve on the whole nonnegative axis,
+// an elementary inequality, not a derived one — so with x = sweep/(4n),
+// 2r·sin²(x) <= 2r·x² = r·sweep²/(8n²). That bound needs no trig call at
+// all, so it carries none of Sin's own missing ulp contract (Go publishes
+// none) and none of the FMA-contraction difference between amd64 and arm64
+// a Sin-based formula would expose: every operation below is an ordinary
+// multiply or divide, each individually outward-rounded, the same
+// single-operation proof every other bound in this package rests on.
+//
+// The denominator 8n² is computed with PLAIN arithmetic, never
+// outward-rounded: for every n this package ever calls with (n <=
+// maxChordsPerWalk = 1<<14, so 8n² <= 2^31, far under float64's 2^53
+// exact-integer range) the computation commits no rounding at all, and
+// outward-rounding a DENOMINATOR would move the bound the WRONG way — a
+// larger denominator gives a SMALLER, tighter, and here unproven quotient.
+// The numerator r·sweep² is outward-rounded through productUpper, and the
+// one division is outward-rounded by a final upRound, exactly the
+// single-operation margin productUpper already applies to a multiply.
+//
+// That float chain is a proven upper bound wherever it lands on a positive
+// value, and it is the only thing this helper publishes there. What it may
+// NOT do is answer ZERO for a positive r·sweep²/(8n²): rounding outward
+// cannot rescue an UNDERFLOW, since upRound leaves 0 alone, and both the
+// sweep·sweep product and the final quotient can reach 0 from operands that
+// are each positive. chordCount hands this figure on as the walk's proven
+// sagitta and [Mesh.Bound] publishes it, so a zero there would claim an
+// exact chording for a nonzero deviation and would end chordCount's walk-up
+// loop on a false reading. A non-positive answer from the float chain
+// therefore falls through to exactChordSagitta, which states the same bound
+// over the rationals.
+//
+// The bound sits above the true sagitta by the factor (x/sin x)² — about
+// 1.0000126 at a typical fine chording (90 degrees over 64 stations) and
+// π²/9 in the coarsest case a closed walk can reach (n=3 on a full circle;
+// TestChordSagittaCoarsestClosedWalkStaysProven pins that ratio). Two
+// consequences reach a caller, and [Body.Tessellate]'s doc comment owns
+// both in the caller's own terms: [Mesh.Bound] reads by that factor above
+// the deviation the chords take, and chordCount's walk-up settles on a
+// slightly larger n than the true sagitta alone would need — up to and
+// including hitting maxChordsPerWalk and returning errTooManyChords for a
+// tol within (x/sin x)²−1 of the finest chording the cap admits. Both are
+// the safe direction: a finer mesh, or a typed refusal, never a coarser
+// mesh under a claim this package cannot prove.
+// TestChordCountRefusesTheToleranceWindowAtTheMeshCap pins that refusal at
+// its exact boundary.
+func chordSagitta(radius, sweep float64, n int) float64 {
+	if n <= 0 || sweep < 0 {
+		// A non-positive n or a negative sweep would otherwise read as
+		// sagitta 0 — productUpper(sweep, sweep) already zeroes a negative
+		// sweep — which UNDERSTATES the true, positive sagitta rather than
+		// falsifying the claim (cutDisplacementAllow's own rule: an absent
+		// bound must never read as a small one).
+		return math.Inf(1)
+	}
+	if radius < 0 {
+		// The true sagitta r·(1−cos) is itself non-positive for a negative
+		// radius, so 0 is a valid (if unattained) upper bound here — no
+		// refusal needed.
+		return 0
+	}
+	if isNonFinite(radius) || isNonFinite(sweep) {
+		// A non-finite claim states no bound at all. It refuses with +Inf for
+		// the same reason the two arms above do, rather than carrying the NaN
+		// the arithmetic below would otherwise publish as a bound.
+		return math.Inf(1)
+	}
+	denom := 8 * float64(n) * float64(n)
+	if denom <= 0 || isNonFinite(denom) {
+		// 8n² saturated, so the true bound r·sweep²/(8n²) is itself driven to
+		// zero and 0 remains an upper bound.
+		return 0
+	}
+	if radius == 0 || sweep == 0 {
+		// The true sagitta is exactly zero, and so is its bound.
+		return 0
+	}
+	if s := upRound(productUpper(radius, productUpper(sweep, sweep)) / denom); s > 0 {
+		return s
+	}
+	return exactChordSagitta(radius, sweep, n)
+}
+
+// exactChordSagitta states chordSagitta's own r·sweep²/(8n²) over the
+// RATIONALS, for the one case its float chain cannot: a POSITIVE bound whose
+// float evaluation underflows to zero. Two independent sites in that chain can
+// underflow — sweep·sweep can fall below the smallest denormal on its own, and
+// the final quotient can land on zero from a numerator that survived — and this
+// helper covers both, because it is reached from the PUBLISHED value rather
+// than from either site.
+//
+// radius and sweep are float64 and therefore exact rationals, and 8n² is an
+// exact integer for every positive n, so the quotient here is the EXACT bound
+// with no rounding anywhere in it. ratFloatUp then rounds that one value
+// outward, which answers the smallest positive float64 — never zero — for a
+// bound too small for float64 to represent.
+func exactChordSagitta(radius, sweep float64, n int) float64 {
+	num := new(big.Rat).Mul(floatRat(radius), new(big.Rat).Mul(floatRat(sweep), floatRat(sweep)))
+	nRat := new(big.Rat).SetInt64(int64(n))
+	denom := new(big.Rat).Mul(new(big.Rat).SetInt64(8), new(big.Rat).Mul(nRat, nRat))
+	return ratFloatUp(num.Quo(num, denom))
 }
 
 // errTooManyChords refuses a chord tolerance finer than the mesh cap.
