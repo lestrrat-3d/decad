@@ -1569,7 +1569,8 @@ forced station count; a fixture whose build needs longer runs behind
 is the phase this budget governs — it tests every pair among the assembled
 triangle set, so its cost grows with the square of `F` (§7), while pairing
 and construction are linear in `Σstations`, which chording puts above `Σn_i`
-(§5.1). §11 points here rather than restating any of it. The budget bounds which
+(§5.1). A site naming the build cost model cites this paragraph and states
+no cost of its own. The budget bounds which
 fixtures ship, never what the evaluator admits: a station count that misses
 it is a fixture this section excludes, never a reason to loosen §5.1's chord
 target or its cap. §14 records the reference fixture's own measured build
