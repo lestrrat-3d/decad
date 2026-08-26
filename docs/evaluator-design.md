@@ -93,9 +93,12 @@ Rules:
   body; concurrency safety (core §12) falls out.
 - **Provenance is structural.** `FeatureRef` identifies the producing
   `StepRef` plus a stable role within it — `side(i, j)` (loop `i`, segment
-  `j`) for a swept wall; `side(i, j, k)` for a Loft wall triangle, where
-  `k=0` is lower and `k=1` is upper; `capStart`, `capEnd`, and the
-  revolve/boolean analogs. Roles derive from the recorded step, so
+  `j`) for a swept wall; `side(i, j, k)` for a Loft wall triangle;
+  `capStart`, `capEnd`, and the revolve/boolean analogs. This bullet owns the
+  role MECHANISM, not every grammar it carries: `docs/loft-design.md` §7 owns
+  what `i`, `j` and `k` index for a Loft, and the `side(i, j)` gloss above is
+  the swept-wall grammar alone, which no Loft role reads. Roles derive from
+  the recorded step, so
   re-evaluation reproduces them, and the provenance predicates — `CreatedBy`
   for edges, `FaceCreatedBy` for faces (core §9) — select the same entities
   under every run.
@@ -118,8 +121,14 @@ Rules:
   chord bound. A Boolean result that analytic reduction admits carries its
   payload's own bound instead, as `docs/prism-boolean-design.md` §7 owns. A
   cap-loop chamfer's cap-level feet the offset solve's displacement
-  (modify-reach §8.4), and a placed loft's re-lifted vertices the motion's own
-  rounding (loft §5). The verification gate reads these (verification §4).
+  (modify-reach §8.4). A loft's vertices carry the payload's own `delta`, the
+  placement term `placeAllow` composed with the computed station's
+  `stationRound`, and every consumer conditions on `delta > 0` rather than on
+  the body having been placed. A loft is NOT swept, so its section
+  displacement `sectionDelta` is not a vertex term at all.
+  **`docs/loft-design.md` §5.2's table owns every loft term, its condition
+  and its refusal; this bullet names them and restates none.** The
+  verification gate reads these (verification §4).
 - **Every loop exposes its stored direction.** `Loop.CoEdges()` returns copied
   `CoEdge` values in boundary-walk order. Each use's `Start`/`End` follows that
   walk and `IsForward` states whether it matches the shared `Edge` orientation.
@@ -711,11 +720,11 @@ silent pass.
 Free-form support is `docs/spline-design.md`'s own increment plan (§10 there).
 Its stages do not consume a global evaluator increment number.
 
-Loft follows `docs/loft-design.md` §12's count-free three-PR delivery plan.
+Loft follows `docs/loft-design.md` §12's count-free four-PR delivery plan.
 PR 1 adds `Document.Loft`, its four measurements, and structural/tolerance
 `Verify`; PR 2 adds tessellation, mesh-boolean admission, and placement; PR 3
-reserves same-kind `CircleSeg`/`ArcSeg` correspondence and N-section and
-guide-rail/centerline lofts, and stages the analytic clearance adapter and
+lands same-kind `CircleSeg`/`ArcSeg` correspondence; PR 4 reserves N-section
+and guide-rail/centerline lofts, and stages the analytic clearance adapter and
 non-constant-section wall survey.
 Every unlanded Loft `Verify` question remains `Suspect`; a call this evaluator
 cannot yet build returns `ErrUnsupported`.

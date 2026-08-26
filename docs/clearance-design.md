@@ -103,10 +103,13 @@ held triangle to a trimmed plane and carries one body-level displacement
 `delta`; after held candidate aggregation the true distance interval is widened
 once by the two payload deltas. A nonzero widened interval that reaches zero is
 undecided unless a separate exact contact certificate settles it. A
-`loftPayload` has no analytic adapter: its own bounds, inflated by the bound
-they carry (zero for an unplaced loft, the payload's `delta` for a placed one —
-loft §5), may decide a box-disjoint partition, but a requested
-`WithClearances` gap remains `Suspect` until its analytic adapter lands.
+`loftPayload` has no analytic adapter: its own `Bounds`, inflated by the
+two-term `absSumUpper(delta, sectionDelta)` those boxes carry (loft §5.2 owns
+when that sum is zero), may decide a box-disjoint partition. A distance
+measured against a held FACET carries the payload's wider facet departure
+`absSumUpper(delta, sectionDelta, maxTwistOffsetUpper)` instead (loft §5.2);
+a requested `WithClearances` gap remains `Suspect` until its analytic adapter
+lands and reads that term.
 Payload verification §3/§7 owns the cup/faceted
 adapters and their tests; §13/§14.1 own the loft staging and tests.
 

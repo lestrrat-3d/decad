@@ -375,10 +375,21 @@ realized between two real body points, and the shared reader publishes that
 maximum rounded toward zero, so the reading can only UNDERSTATE the
 body's true diameter and never overstate it — the same construction
 `bodyGateDiameter` already runs over a `loftPayload`'s own held vertex set
-(`verify.go`), differing only in what it earns: a loft body's boundary is a
-polyhedron, so its vertex maximum IS the true diameter, while a curved wall's
-farthest pair can sit between two sampled points, which is exactly why this
-arm claims a bound and not the diameter.
+(`verify.go`), differing only in what it earns, and there the standing of a
+witness is decided PER STATION rather than granted to the whole vertex set.
+A `LineSeg`-only loft body's boundary is a polyhedron, so where that body's
+own displacement `delta` is zero its vertex maximum IS the true diameter. A
+chorded loft whose every station is PINNED (loft §5.2) has a maximum at or
+below the true one exactly as this arm's is, since a curved wall's farthest
+pair can sit between two sampled points — which is why both claim a bound
+rather than the diameter. **A COMPUTED loft station is not such a point, so
+its KIND earns it no unshrunk reading**: it sits only within its own
+`stationRound` of the point the record denotes (loft §5.2), so wherever that
+bound is positive it can sit outward of the body and the raw maximum can
+EXCEED the true diameter, which is the unsound direction. That case is
+covered by the shrink: wherever `delta` is positive the loft arm shrinks its
+reading by `2*delta` first (loft §12), reading `delta` rather than asking
+whether the body was placed.
 
 **Publishing is conditional, and withholding is the only alternative.** This
 arm yields a diameter only when its own witness conversion and the shared
