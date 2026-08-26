@@ -1988,10 +1988,11 @@ landing this file:
   (core §6.2), so a variant this document requires belongs in that block.
 
 **`doc.go`'s support-and-refusal map is a dependent of §12's PR rows.** Its
-Loft entries state what this evaluator builds and what it refuses, so every
-increment that changes either — the same-kind circular correspondence of §12
-PR 3 among them — updates them in the same PR. §12's rows own what each
-increment admits; that map restates none of it.
+Loft entries state what this evaluator builds and what it refuses, so §12's
+increments — the same-kind circular correspondence of §12 PR 3 among them —
+are what change them, and the map is correct once the increment that changes
+it has landed. §12's rows own what each increment admits; that map restates
+none of it, and this document assigns no PR for the edit itself.
 
 §5.1's chord chain also gives a loft under an identity motion a positive
 boundary displacement (§5.2, §8). Five companion documents state a zero bound
