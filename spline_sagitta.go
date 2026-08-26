@@ -131,6 +131,12 @@ const chordSquaredCost = 3
 // rational the loop builds once inside that slack.
 const hodographGapCost = 10
 
+// ratQuarterCost is ratQuarterOf's own per-call operation count: 1 big.NewRat
+// for the exact one-quarter factor, then a NORMALISING big.Rat.Mul — a GCD plus
+// a division of numerator and of denominator, the same 3 ratPointAt charges its
+// own normalising SetFrac. 1 + 3 = 4.
+const ratQuarterCost = 4
+
 // ratSqrtUpCost is chargedRatSqrtUp's own per-call operation count for the
 // single outward rounding each measurement commits (ratSqrtUp,
 // spline_length.go). It is bounded, not open-ended: ratSqrtSeed costs at most 4
@@ -787,43 +793,47 @@ func spanChordSquared(w *freeformWork, span bezierSpan) (*big.Rat, error) {
 	return new(big.Rat).Add(new(big.Rat).Mul(dxU, dxU), new(big.Rat).Mul(dxV, dxV)), nil
 }
 
-// spanHodographGapUpper bounds d = max_t ‖C'(t) − Δ‖ for a Tier A span of
-// degree p with chord Δ = P_p − P_0: the velocity C'(t) is itself a Bézier —
-// the HODOGRAPH, degree p−1, with Bernstein control points p·(P_{i+1} − P_i)
-// (docs/spline-design.md §6.2's direction-cone row already reuses this same
-// hull for a different question) — so C'(t) − Δ is the Bézier with control
-// points p·(P_{i+1} − P_i) − Δ, and the convex-hull property bounds its norm
-// at every t by the largest control point's own norm:
+// spanHodographGapSquared is the exact-rational core both hodograph readings
+// share: it returns d² = max_i ‖ p·(P_{i+1} − P_i) − Δ ‖², the SQUARED velocity
+// gap of a Tier A span of degree p with chord Δ = P_p − P_0, and never rounds.
 //
-//	d = max_i ‖ p·(P_{i+1} − P_i) − Δ ‖
+// The velocity C'(t) is itself a Bézier — the HODOGRAPH, degree p−1, with
+// Bernstein control points p·(P_{i+1} − P_i) (docs/spline-design.md §6.2's
+// direction-cone row already reuses this same hull for a different question) —
+// so C'(t) − Δ is the Bézier with control points p·(P_{i+1} − P_i) − Δ, and the
+// convex-hull property bounds its norm at every t by the largest control
+// point's own norm.
 //
-// Exact rational throughout; the ONLY rounding is one outward chargedRatSqrtUp
-// of the exact squared norm the maximum selects — the same single-rounding
-// shape dyadicSpanSagittaUpper already commits, for a different quantity.
+// Returning the SQUARE rather than its root is what lets each reading commit
+// its own single outward rounding on the quantity it actually publishes:
+// spanHodographGapUpper roots this value, spanMatchedDeltaUpper roots a quarter
+// of it. Neither scales a float another reading already rounded.
 //
 // A span with fewer than 2 control points has no chord and no hodograph
-// (degree < 1), so it reports 0 rather than reading an empty slice — the
-// same shape dyadicSpanSagittaUpper's own n==0 guard takes, for the same
-// reason. A COLLAPSED span (every control point coincident, §5.1) needs no
-// separate case either: Δ is then the zero vector and every hodograph
-// coefficient reduces to p·0 − 0 = 0, so d reads exactly 0 — that span's
-// true (zero) velocity gap — from the general formula, never bolted on.
+// (degree < 1), so it reports an exact 0 without charging — the same shape
+// dyadicSpanSagittaUpper's own n==0 guard takes, for the same reason. Both
+// callers screen that case out first, so the guard is the defensive floor and
+// never the path a reading takes. A COLLAPSED span (every control point
+// coincident, §5.1) needs no separate case either: Δ is then the zero vector
+// and every hodograph coefficient reduces to p·0 − 0 = 0, so d² reads exactly
+// 0 — that span's true (zero) velocity gap — from the general formula, never
+// bolted on.
 //
 // It charges hodographGapCost per control point of its OWN span, at its own
 // operand width, before the hull scan runs — its control count is the operand's
-// shape, never a caller's loop bound — and the chord vector and the outward
-// rounding charge themselves on their own calls.
-func spanHodographGapUpper(w *freeformWork, span bezierSpan) (float64, error) {
+// shape, never a caller's loop bound — and the chord vector charges itself on
+// its own call.
+func spanHodographGapSquared(w *freeformWork, span bezierSpan) (*big.Rat, error) {
 	n := len(span)
 	if n < 2 {
-		return 0, nil
+		return new(big.Rat), nil
 	}
 	dxU, dxV, err := spanChordVector(w, span)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 	if err := w.step(costMul(costMul(hodographGapCost, uint64(n)), widthUnits(spanBitWidth(span)))); err != nil {
-		return 0, err
+		return nil, err
 	}
 	p := big.NewRat(int64(n-1), 1)
 
@@ -839,6 +849,43 @@ func spanHodographGapUpper(w *freeformWork, span bezierSpan) (float64, error) {
 		if maxSq == nil || sq.Cmp(maxSq) > 0 {
 			maxSq = sq
 		}
+	}
+	return maxSq, nil
+}
+
+// ratQuarterOf returns the exact rational q/4, the radicand
+// spanMatchedDeltaUpper roots so that its own halving happens over the
+// rationals rather than on a published float. big.Rat carries no exponent
+// range, so the quotient is exact for every q, however small.
+//
+// It charges ratQuarterCost at q's own width, first.
+func ratQuarterOf(w *freeformWork, q *big.Rat) (*big.Rat, error) {
+	if err := w.step(costMul(ratQuarterCost, widthUnits(ratBitWidth(q)))); err != nil {
+		return nil, err
+	}
+	return new(big.Rat).Mul(q, big.NewRat(1, 4)), nil
+}
+
+// spanHodographGapUpper bounds d = max_t ‖C'(t) − Δ‖ for a Tier A span: the
+// outward square root of spanHodographGapSquared's own exact hull maximum,
+//
+//	d = max_i ‖ p·(P_{i+1} − P_i) − Δ ‖
+//
+// The ONLY rounding is that one outward chargedRatSqrtUp — the same
+// single-rounding shape dyadicSpanSagittaUpper already commits, for a different
+// quantity. A span with fewer than 2 control points has no hodograph at all, so
+// it reports 0 without charging, the same reading and the same shape
+// spanSpeedUpper's own guard takes.
+//
+// Beyond that guard it holds no charge of its own; every unit it spends is
+// spent by the exact scan and the outward rounding it calls.
+func spanHodographGapUpper(w *freeformWork, span bezierSpan) (float64, error) {
+	if len(span) < 2 {
+		return 0, nil
+	}
+	maxSq, err := spanHodographGapSquared(w, span)
+	if err != nil {
+		return 0, err
 	}
 	return chargedRatSqrtUp(w, maxSq)
 }
@@ -865,10 +912,18 @@ func spanBitWidth(span bezierSpan) int {
 // Derivation: g(t) = C(t) − (P_0 + t·Δ) has g(0) = g(1) = 0 (a Bézier
 // interpolates its own endpoints exactly) and g'(t) = C'(t) − Δ, so
 // ‖g'(t)‖ ≤ d (spanHodographGapUpper). Integrating from either end,
-// ‖g(t)‖ ≤ min(t, 1−t)·d ≤ d/2 — the bound reported here, rounded outward.
-// Dividing the already-outward-rounded d by the exact power of two 2
-// introduces no further rounding of its own; the upRound wrap is defensive,
-// matching this package's other bound helpers.
+// ‖g(t)‖ ≤ min(t, 1−t)·d ≤ d/2 — the bound reported here.
+//
+// The halving is performed over the RATIONALS and not on any published float:
+// d/2 is the outward square root of d²/4, so the reading commits exactly one
+// outward rounding, on the quantity it publishes. Halving an already-rounded
+// float d would be unsound at the bottom of the range — every positive d² at or
+// below 2⁻²¹⁴⁸ roots to the smallest subnormal, whose float half underflows to
+// +0, and a published 0 states that the deviation is exactly zero. bounds.go's
+// cellChordCurveAreaUpper gates its whole chord-to-curve leg on
+// matchedDelta > 0, so that 0 would drop a real leg out of a proven allowance
+// rather than merely narrow it. big.Rat has no underflow, so d²/4 stays exactly
+// positive and the root reports the smallest subnormal, which does bound it.
 //
 // This is a STRONGER and DIFFERENT quantity than spanSagittaUpper's own
 // SET-distance sagitta (every curve point sits within the sagitta of SOME
@@ -881,14 +936,23 @@ func spanBitWidth(span bezierSpan) int {
 // chord segment (sagitta exactly 0) can still carry a large parameter-matched
 // deviation, which only this function — never the sagitta — bounds.
 //
-// The halving is float arithmetic on an already-published bound, so it holds no
-// charge of its own; every unit it spends is spanHodographGapUpper's.
+// A span with fewer than 2 control points has no hodograph and no deviation to
+// bound, so it reports 0 without charging. Beyond that guard it holds no charge
+// of its own; every unit it spends is spent by the exact scan, the exact
+// quartering and the outward rounding it calls.
 func spanMatchedDeltaUpper(w *freeformWork, span bezierSpan) (float64, error) {
-	gap, err := spanHodographGapUpper(w, span)
+	if len(span) < 2 {
+		return 0, nil
+	}
+	maxSq, err := spanHodographGapSquared(w, span)
 	if err != nil {
 		return 0, err
 	}
-	return upRound(gap / 2), nil
+	quarter, err := ratQuarterOf(w, maxSq)
+	if err != nil {
+		return 0, err
+	}
+	return chargedRatSqrtUp(w, quarter)
 }
 
 // spanSpeedUpper bounds a Tier A span's own tangent speed ‖C'(t)‖ at every t:

@@ -47,7 +47,8 @@ var meteredPrimitives = map[string]struct{}{
 	"dyadicSpan.ratPointAt":       {},
 	"spanChordVector":             {},
 	"spanChordSquared":            {},
-	"spanHodographGapUpper":       {},
+	"spanHodographGapSquared":     {},
+	"ratQuarterOf":                {},
 }
 
 // bigArithmeticMethods are the math/big method names that DO work: they

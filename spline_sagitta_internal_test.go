@@ -2,6 +2,7 @@ package decad
 
 import (
 	"errors"
+	"fmt"
 	"math"
 	"math/big"
 	"testing"
@@ -199,9 +200,10 @@ import (
 //     operation. This is the leg that keeps the class closed rather than the
 //     numbers repaired.
 //
-// Part C's three new primitives (spanHodographGapUpper, spanMatchedDeltaUpper,
-// spanSpeedUpper) are new proofs, not fixes to existing broken legs, so they
-// carry no mutation-of-existing-code entry here. Their own soundness rests on
+// Part C's three primitives (spanHodographGapUpper, spanMatchedDeltaUpper,
+// spanSpeedUpper) were new proofs rather than repairs of an existing leg when
+// they landed, so only the fourth pass below records a mutation against one of
+// them. Their own soundness rests on
 // TestSpanMatchedDeltaUpperEnclosesWhatTheSagittaMisses (the decisive
 // zigzag-hugging fixture proving the sagitta is NOT a substitute) and
 // TestHodographBoundsAreExactlyZeroOnCollapsedAndStraightUniformSpans, which a
@@ -211,6 +213,19 @@ import (
 // bound still encloses — but turned the straight-uniform-span's own EXACT
 // zero reading into 2, which the zero-reading fixture caught immediately.
 
+// FOURTH PASS — the matched delta's own halving moved out of float arithmetic
+// and into the exact rational radicand. The leg below was broken in
+// spline_sagitta.go, watched go RED against the fixture that exists to catch
+// it, and restored:
+//
+//   - D1: spanMatchedDeltaUpper's exact quartering replaced by the float
+//     halving upRound(gap / 2) of the already-rounded hodograph gap:
+//     TestSpanMatchedDeltaUpperNeverUnderflowsASubnormalGapToZero went red on
+//     every row of its window — the published bound read exactly 0 where the
+//     true parameter-matched deviation is positive, which is an under-cover
+//     and not a rounding, since bounds.go's cellChordCurveAreaUpper gates its
+//     whole chord-to-curve leg on matchedDelta > 0.
+//
 // ratSpan is spline_extreme_internal_test.go's own helper (same package): it
 // builds a bezierSpan directly from plane-local float coordinates, for tests
 // that exercise this file's machinery without going through a recorded
@@ -983,10 +998,16 @@ func TestSagittaCostTermsMatchTheOperationsTheyName(t *testing.T) {
 	require.Equal(t, 2+1, chordSquaredCost, "spanChordSquared squares and sums that vector")
 	require.Equal(t, 2, ratPointCopyCost, "a station copy is two big.Rat.Set")
 
-	// spanHodographGapUpper per index: hu, hv, the squared norm, the compare.
+	// spanHodographGapSquared per index: hu, hv, the squared norm, the compare.
 	const hodographOps = 3 + 3 + (2 + 1) + 1
 	require.Equal(t, hodographOps, hodographGapCost,
 		"every exact operation the hodograph hull scan performs must be charged")
+
+	// ratQuarterOf: one big.NewRat for the factor, then a NORMALISING Mul (a GCD
+	// plus a division of numerator and of denominator).
+	const ratQuarterOps = 1 + 3
+	require.Equal(t, ratQuarterOps, ratQuarterCost,
+		"the exact quartering the matched delta roots must be charged, and charged for the Mul's own normalisation")
 
 	// ratSqrtUp: the seed, then at most sqrtAdjustLimit walks of two ratSquare
 	// probes (floatRat, Mul, Cmp) plus one Nextafter.
@@ -1095,7 +1116,8 @@ func TestChargesScaleWithOperandWidth(t *testing.T) {
 // TestSagittaAndMatchedDeltaChargeTheirOwnCodePaths pins each reading's total
 // against the primitive calls its own code actually makes, and decisively that
 // the two are NOT the same number: the matched-delta reading runs
-// spanHodographGapUpper where the sagitta runs chordSegmentSquaredDistance.
+// spanHodographGapSquared and one exact quartering where the sagitta runs
+// chordSegmentSquaredDistance.
 //
 // It is also the multiplicity fixture. The sagitta reading reconstructs n+2
 // points — the two chord ends in ADDITION to its own loop's n — and a charge
@@ -1122,8 +1144,8 @@ func TestSagittaAndMatchedDeltaChargeTheirOwnCodePaths(t *testing.T) {
 	// and each operation count is spent once.
 	require.Equal(t, uint64((n+2)*7+5+n*(17+1)+64), sagWork.spent,
 		"the sagitta pays for n+2 reconstructions, one chord frame, n projections, n comparisons and one rounding")
-	require.Equal(t, uint64(n*7+2+10*n+64), mdWork.spent,
-		"the matched delta pays for n reconstructions, one chord vector, its own per-point hull scan and one rounding")
+	require.Equal(t, uint64(n*7+2+10*n+4+64), mdWork.spent,
+		"the matched delta pays for n reconstructions, one chord vector, its own per-point hull scan, one exact quartering and one rounding")
 	require.NotEqual(t, sagWork.spent, mdWork.spent,
 		"the two readings must carry their own separately derived charge, never one reused for the other")
 }
@@ -1163,13 +1185,13 @@ func TestPairStationsChargesEveryPhaseOfAWalkThatNeverSplits(t *testing.T) {
 // sagitta reading ((n+2) reconstructions at 7, one chord frame at 5, n
 // projections at 17, n comparisons at 1, one rounding at 64), then the
 // matched-delta reading (n reconstructions at 7, one chord vector at 2, n hull
-// indices at 10, one rounding at 64), then the accepted cell's own start
-// station at 7. Every coordinate is one machine word, so no width multiplier
-// applies.
+// indices at 10, one exact quartering at 4, one rounding at 64), then the
+// accepted cell's own start station at 7. Every coordinate is one machine word,
+// so no width multiplier applies.
 func neverSplittingSpanCharge(n uint64) uint64 {
 	convert := 10 * n
 	sagitta := (n+2)*7 + 5 + n*(17+1) + 64
-	matched := n*7 + 2 + 10*n + 64
+	matched := n*7 + 2 + 10*n + 4 + 64
 	station := uint64(7)
 	return convert + sagitta + matched + station
 }
@@ -1343,6 +1365,99 @@ func TestSpanMatchedDeltaUpperEnclosesDenseSampleOnOrdinarySpans(t *testing.T) {
 		matched := matchedDeltaOf(t, span)
 		require.GreaterOrEqual(t, matched, dense,
 			"span %d: matchedDeltaUpper must enclose the dense-sampled parameter-matched deviation", i)
+	}
+}
+
+// negativePowerOfTwo builds the exact rational 2^-k, a value big.Rat holds
+// with no exponent range of its own and therefore no underflow, however large
+// k grows.
+func negativePowerOfTwo(k uint) *big.Rat {
+	return new(big.Rat).SetFrac(big.NewInt(1), new(big.Int).Lsh(big.NewInt(1), k))
+}
+
+// nearMidpointQuadraticSpan builds the quadratic span
+// P_0 = (0,0), P_1 = (1/2 + eps, 0), P_2 = (1,0), whose every quantity is a
+// closed form in eps: the hodograph gap is d = 2*eps (both control points of
+// C'(t) - Delta read +-2*eps), and the TRUE parameter-matched deviation at
+// t = 1/2 is |C(1/2) - (P_0 + Delta/2)| = eps/2, since C(1/2) is the Bezier
+// midpoint (P_0 + 2*P_1 + P_2)/4 = 1/2 + eps/2 while the chord's own midpoint
+// is 1/2. Every control point is collinear, so the span's sagitta is exactly 0
+// and only the parameter-matched reading sees the deviation at all.
+func nearMidpointQuadraticSpan(eps *big.Rat) bezierSpan {
+	half := big.NewRat(1, 2)
+	return bezierSpan{
+		{u: new(big.Rat), v: new(big.Rat)},
+		{u: new(big.Rat).Add(half, eps), v: new(big.Rat)},
+		{u: big.NewRat(1, 1), v: new(big.Rat)},
+	}
+}
+
+// TestSpanMatchedDeltaUpperNeverUnderflowsASubnormalGapToZero is the D1
+// fixture. It pins the whole window in which a float halving of the published
+// hodograph gap loses the bound outright, rather than the single span that
+// first exposed it.
+//
+// The window is not a knife edge. ratSqrtUp reports the smallest subnormal for
+// EVERY positive exact radicand at or below (2^-1074)^2, because big.Rat has no
+// underflow to lose the radicand in, so every span whose exact gap d sits at or
+// below 2^-1074 publishes the same subnormal d. Halving that float in float
+// arithmetic gives exactly 0 (2^-1075 is the tie between 0 and 2^-1074, and
+// round-to-nearest-even takes the zero), so the whole window would publish a
+// matched delta of 0 against a positive true deviation. Every row asserts the
+// float halving DOES underflow, so the row is proven to sit inside the window
+// and not merely to pass.
+//
+// A published 0 is not a narrow bound here, it is an absent one:
+// cellChordCurveAreaUpper (bounds.go) gates its chord-to-curve leg on
+// matchedDelta > 0 and drops the leg entirely at 0. The enclosure is therefore
+// asserted over the exact rationals, against eps/2 itself — a dense float
+// sample cannot even represent the deviations in this window.
+func TestSpanMatchedDeltaUpperNeverUnderflowsASubnormalGapToZero(t *testing.T) {
+	// eps must sit at or below 2^-1075 for the gap d = 2*eps to land in the
+	// window; 2^-1101 is the span the audit reproduced with.
+	for _, exp := range []uint{1075, 1101, 2000, 9000} {
+		t.Run(fmt.Sprintf("eps=2^-%d", exp), func(t *testing.T) {
+			eps := negativePowerOfTwo(exp)
+			span := nearMidpointQuadraticSpan(eps)
+
+			gap := hodographGapOf(t, span)
+			require.Equal(t, math.SmallestNonzeroFloat64, gap,
+				"the exact gap 2*eps rounds outward to the smallest subnormal, which is what puts this row in the window")
+			require.Zero(t, gap/2,
+				"halving the published float gap underflows to zero, which is the loss this fixture exists to catch")
+
+			matched := matchedDeltaOf(t, span)
+			require.Positive(t, matched,
+				"the true parameter-matched deviation is eps/2 > 0, so the published bound must be positive too")
+
+			trueDeviation := new(big.Rat).Quo(eps, big.NewRat(2, 1))
+			published := floatRat(matched)
+			require.NotNil(t, published)
+			require.GreaterOrEqual(t, published.Cmp(trueDeviation), 0,
+				"the published bound must enclose the exact deviation eps/2")
+
+			require.Zero(t, sagittaOf(t, span),
+				"the controls are collinear, so only the parameter-matched reading sees this deviation")
+		})
+	}
+}
+
+// TestSpanMatchedDeltaUpperHalvesAnOrdinaryGapExactly checks the same exact
+// path away from the bottom of the range: where no rounding is forced, the
+// matched delta reads exactly half the hodograph gap, so moving the halving
+// into the radicand costs an ordinary span nothing.
+func TestSpanMatchedDeltaUpperHalvesAnOrdinaryGapExactly(t *testing.T) {
+	// d = 2*eps = 1 exactly for eps = 1/2, and 1/2 is representable.
+	span := nearMidpointQuadraticSpan(big.NewRat(1, 2))
+	require.Equal(t, 1.0, hodographGapOf(t, span))
+	require.Equal(t, 0.5, matchedDeltaOf(t, span))
+
+	for i, span := range quarterCircleFitSpans(t) {
+		gap := hodographGapOf(t, span)
+		matched := matchedDeltaOf(t, span)
+		require.LessOrEqual(t, matched, upRound(gap/2),
+			"span %d: rooting d^2/4 must never read above the float halving of d", i)
+		require.Positive(t, matched, "span %d: a curved span carries a positive parameter-matched deviation", i)
 	}
 }
 
