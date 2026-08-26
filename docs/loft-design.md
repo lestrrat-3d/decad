@@ -1258,12 +1258,12 @@ total that already sits at or above the measure.
 
 | D | Consumer | Reads | Increment-1 status |
 |---|---|---|---|
-| **D1** | `Tessellate` / `STL` / `OBJ` | the payload | works from the first PR that wires it in (§12 PR 2b), and the returned `Bound` is **the payload's own facet departure `absSumUpper(delta, sectionDelta, maxTwistOffsetUpper)`** (§5.2, §8, §12 PR 2a), not unconditionally zero and never `delta` alone: that sum is zero only for a `LineSeg`-only loft under an identity motion, and pinning that build's every station is what GUARANTEES it zero (§5.2), a tessellation that is still restatement with a zero bound. Every wall and cap face of a body whose `delta` is positive — placed, holding a station §5.2's table does not pin, or both — is a flat triangle over held vertices that are no longer provably exact; every wall facet of a CHORDED body chords a recorded curve it departs from by `sectionDelta` (§5.2) whatever the placement; and where a CHORDED cell twists, that held flat triangle pair is not the bilinear ruled patch through its own four corners either, a further departure of at most `maxTwistOffsetUpper` (§5.2, §8.1) — a term a `LineSeg`-only build charges nothing to, since §5 makes its held triangle pair the boundary itself. So tessellation restates exactly what the payload holds, all three terms included. `Bounds.Bound` is the one loft reading that stays the two-term `absSumUpper(delta, sectionDelta)`, for the reason §5.2's own row gives |
-| **D2** | the mesh boolean (`Union`/`Cut`/`Intersect`, evaluator §9) | the tessellation | a first-class operand once D1 lands — no new boolean code, a loft body is just another all-planar operand. A loft whose facet departure is exactly zero — which an unplaced `LineSeg`-only loft whose every station is PINNED (§5.2) is what GUARANTEES — is admitted through the existing all-planar zero-bound path (`docs/evaluator-design.md` §2 — "the VOLUME of an all-planar pair whose contact points round exactly"); every loft whose facet departure is positive — one under a non-identity motion, a CHORDED one, one holding a station §5.2's table does not pin whose own walk bound proves nonzero, or any combination of the three — hands the boolean its own facet departure `absSumUpper(delta, sectionDelta, maxTwistOffsetUpper)` as the operand displacement every other nonzero-bound operand already carries (`bounds.go`'s `rimDelta`), so the result's volume is `Approximate` like any other. That is D1's own term and never a two-term subset of it: what a boolean intersects is the FACET, and a twisted CHORDED cell's facet departs from the surface it stands for by `maxTwistOffsetUpper` beyond the two section terms (§5.2, §8.1). **A chorded loft is not a zero-bound operand however it is placed**: at `m = 1` on a pair whose two end stations §5.2's table pins, its `delta` is exactly zero while its `sectionDelta` is positive (§5.2, §8), so admitting it on `delta` alone would hand the boolean a zero bound for a boundary §8 states departs by `sectionDelta` |
+| **D1** | `Tessellate` / `STL` / `OBJ` | the payload | works from the first PR that wires it in (§12 PR 2b), and the returned `Bound` is **the payload's own facet departure `absSumUpper(delta, sectionDelta, maxTwistOffsetUpper)`** (§5.2), never `delta` alone: tessellation restates exactly what the payload holds, all three terms included, and §5.2's facet-departure row states what each term charges and when it is zero. `Bounds.Bound` is the one loft reading that stays the two-term `absSumUpper(delta, sectionDelta)`, for the reason §5.2's own row gives |
+| **D2** | the mesh boolean (`Union`/`Cut`/`Intersect`, evaluator §9) | the tessellation | a first-class operand once D1 lands — no new boolean code, a loft body is just another all-planar operand. A loft whose facet departure is exactly zero is admitted through the existing all-planar zero-bound path (`docs/evaluator-design.md` §2 — "the VOLUME of an all-planar pair whose contact points round exactly"); one whose facet departure is positive hands the boolean that same term as the operand displacement every other nonzero-bound operand already carries (`bounds.go`'s `rimDelta`), so the result's volume is `Approximate` like any other. It is D1's own three-term reading and never a subset of it, since what a boolean intersects is the FACET. **A chorded loft is not a zero-bound operand however it is placed**: at `m = 1` on a pair whose two end stations §5.2's table pins, its `delta` is exactly zero while its `sectionDelta` is positive, so admitting it on `delta` alone would hand the boolean a zero bound for a boundary §8 states departs by `sectionDelta` |
 | **D3** | Interference (`docs/interference-design.md`) | box separation (D6-style) reads `Bounds` directly; the read-only mesh-boolean path reads D2's tessellation | box-disjoint pairs prove only their disjoint-interior interference relation (`Bounds` carries the payload's own two-term `absSumUpper(delta, sectionDelta)`, §5.2, §8). `Verify` is `Sound` only when every other required or requested body and pair check is decided and trusted; a pair needing the mesh boolean works once D2 lands; a pair needing the analytic containment/pair kernel stays `Suspect` until a loft case is added to `clearance_geom.go`'s payload switch — identical staging to the cup's own D6 row in `docs/modify-design.md` |
 | **D4** | Clearance (`WithClearances`, `docs/clearance-design.md`) | the analytic pair kernel's payload switch | `WithClearances` stays `Suspect`, even for a box-disjoint pair: box separation proves disjoint interiors but does not measure the gap. No loft case exists in the kernel yet. |
 | **D5** | `MinWallThickness` / `Undercuts` / `MinRadius` (verification §6, `survey2d.go`) | one constant 2D cross-section (a prism's section, a revolve's meridian) | The corresponding requested survey is `Suspect` until its loft implementation lands. In increment 1, a loft's cross-section varies continuously between the two profiles, so the existing spanning-disk / meridian-walk reduction does not reach it; `docs/modify-reach-design.md` DX9 states the identical cap-blend reason: "not one constant section at one height… the existing 2D spanning-disk proof does not decide them" |
-| **D6** | `Verify` — structural audit + tolerance gate | topology + measurements | valid by construction once §6's audit has passed (modify §1's standard; §4's gate-order paragraph owns where that audit sits); the tolerance gate judges `Volume`/`Area`/`Centroid`/`Bounds` on the terms §8 derives — wherever the payload's `delta` is positive (a placement, §12 PR 2a, or a computed station whose own walk bound proves nonzero, §5.2) all four carry it, so the gate judges four readings that all carry that displacement |
+| **D6** | `Verify` — structural audit + tolerance gate | topology + measurements | valid by construction once §6's audit has passed (modify §1's standard; §4's gate-order paragraph owns where that audit sits); the tolerance gate judges `Volume`/`Area`/`Centroid`/`Bounds` on the terms §8 derives, and wherever the payload's `delta` is positive all four carry it |
 | **D7** | `Placed` / `Duplicate` / `PlacedCopy` | the payload | landed (§12 PR 2a): `Placed` retires the receiver; `Duplicate`/`PlacedCopy` leave it live. No geometry-specific payload case is needed (§7) — every reading composes the payload's own proven displacement `delta` (§5, §8). |
 
 ## 10. Recipe, provenance, and replay
@@ -1328,8 +1328,7 @@ same roles, and the same measurements every time.
 
 Covered in full by §6, which owns the audit's budget, its ceiling and its
 cancellation. §13's fixture wall-clock budget paragraph owns the build cost
-model — which phase costs what, and what each phase is linear or quadratic
-in. This section restates neither and adds no discipline of its own.
+model.
 
 ## 12. Increments
 
@@ -1358,76 +1357,57 @@ beside them, though, landed in the same PR: `bodyGateDiameter` (verification
 `Area` is always `Approximate` (§8) and a body with no reference diameter can
 never clear the gate's relative tolerance.
 
-On an uncurved payload whose `delta` is zero (every paired segment a
-`LineSeg` whose two stations §5.2 PINS, and the accumulated motion
-`r3.Identity()`, which is what UNPLACED means — §5.2's `placeAllow` row owns
-that test) the vertex set's own maximum
-IS the body's true diameter — every vertex is exact (§5), so a convex-hull
-diameter realized at vertices is that diameter, not an envelope — and the
-arm reports the shared
-reader's answer unchanged, with no subtraction and no rounding of its own. That answer is the
-largest `float64` at or below the true diameter, because the reader publishes
-every witness maximum rounded toward zero (verification §3), so the arm
-carries the tightest lower bound a `float64` can state on a quantity that is
-exact. **For a same-kind circular pair whose stations are all PINNED (§5.2)
-the vertex set's own maximum is at or below the body's true diameter, never
-necessarily equal to it**: a pinned station is a coordinate the record
-states, so it lies ON the recorded curve rather than at an extreme of it,
-the true boundary can bulge past the station polygon (§5.2), and the held
-diameter can only understate the true one. The arm's own reasoning holds
-there without change, because it only ever needs the held reading to be a
-sound LOWER bound on the true diameter, never an exact one, and a
-pinned-station diameter is that: every witness is a real point of the true
-boundary, so no true pairwise distance the arm could be missing exceeds the
-diameter it would have measured directly. **A COMPUTED station's KIND earns
-it no such standing, and wherever its own `stationRound` is positive the
-unshrunk reading is not a lower bound over one**: the walk reaches it
-through `math.Sincos` and it sits only within that bound of the point the
-record denotes (§5.2), so it can then sit OUTWARD of the true boundary and
-the raw station-set maximum can EXCEED the true diameter — the unsound
-direction, since an overstated reference loosens the relative tolerance gate
-toward a false `Sound`. Only the shrunk reading is a lower bound there, and
-the rule that follows is what supplies it — conditioned on the value `delta`
-takes and never on the station's kind. **A
-payload whose `delta` is positive holds every vertex only within `delta` of
-its true position, so each of the two farthest points can move by `delta`
-and the reported reference is the held diameter minus `2*delta`, rounded
-down**: an understated reference can only tighten the gate into a false
-`Suspect`, never loosen it into a false `Sound`. The arm applies that
-subtraction on `delta > 0` and never on the body having been placed, so a
-placement whose `placeAllow` is positive (PR 2a) and an unplaced chorded
-build whose computed stations carry a positive `stationRound` (§5.2) both
-take it, while an identity
-placement of a `LineSeg`-only pairing whose every station is PINNED (§5.2)
-leaves `delta` zero and reports the unshrunk reading. A shrink that
-collapses to zero or below reports no diameter at all, the same answer any other unusable magnitude gets. That last
-branch is defensive rather than a reachable reference-less `Suspect`: the
-divergence theorem bounds a closed boundary's own volume by `d*A/3` for `d`
-the vertex-set diameter and `A` the held surface area, so a `delta` at or
-above `d/2` makes `sweptVolumeAllow`'s `delta*A` at least `3/2` of the held
-volume, and S12 refuses that placement before any gate reads it.
+On an uncurved payload whose `delta` is zero — every paired segment a
+`LineSeg` whose two stations §5.2 PINS, under `r3.Identity()` — every vertex
+is exact (§5), so the vertex set's own maximum IS the body's true diameter
+and the arm reports the shared reader's answer unchanged, with no subtraction
+and no rounding of its own. That answer is the largest `float64` at or below
+the true diameter, since the reader publishes every witness maximum rounded
+toward zero (verification §3).
+
+**For a same-kind circular pair whose stations are all PINNED (§5.2) the
+vertex set's own maximum is at or below the body's true diameter, never
+necessarily equal to it**: a pinned station lies ON the recorded curve rather
+than at an extreme of it, and the true boundary can bulge past the station
+polygon (§5.2). The arm's reasoning holds there unchanged, because it only
+ever needs the held reading to be a sound LOWER bound: every witness is a
+real point of the true boundary, so no true pairwise distance it could be
+missing exceeds the diameter it would have measured directly.
+
+**A COMPUTED station's KIND earns it no such standing, and wherever its own
+`stationRound` is positive the unshrunk reading is not a lower bound over
+one**: the walk reaches it through `math.Sincos` and it sits only within that
+bound of the point the record denotes (§5.2), so it can sit OUTWARD of the
+true boundary and the raw station-set maximum can EXCEED the true diameter —
+the unsound direction, since an overstated reference loosens the relative
+tolerance gate toward a false `Sound`. **A payload whose `delta` is positive
+holds every vertex only within `delta` of its true position, so each of the
+two farthest points can move by `delta` and the reported reference is the
+held diameter minus `2*delta`, rounded down**: an understated reference can
+only tighten the gate into a false `Suspect`. The arm applies that
+subtraction on the value `delta` takes, never on the station's kind and never
+on the body having been placed. A shrink that collapses to zero or below
+reports no diameter at all, the same answer any other unusable magnitude
+gets — a defensive branch rather than a reachable reference-less `Suspect`,
+since the divergence theorem bounds a closed boundary's own volume by `d*A/3`
+for `d` the vertex-set diameter and `A` the held surface area, so a `delta`
+at or above `d/2` makes `sweptVolumeAllow`'s `delta*A` at least `3/2` of the
+held volume and S12 refuses that build before any gate reads it.
 
 **A curved pair chorded at `m = 1` (§5.1) has no interior station, and only
 pinning BOTH of its two end stations by §5.2's table guarantees it a zero
-`stationRound`** — which for a curved pair means an untrimmed
-`ArcSeg`'s two recorded ends, the one pinned kind that table names. On such
-a pair `delta` is zero, so the gate arm reports the unshrunk held-diameter
-reading, exactly as the uncurved zero-`delta` case above. That is sound
-rather than an oversight: every vertex there is a coordinate the record
-states, so the held diameter's witnesses are exact points on the true
-boundary, and the pinned-station half of the arm's soundness argument above
-covers the case without needing `sectionDelta` at all. `sectionDelta`
-bounds how far the BUILT WALL departs from the curve between those two exact
-stations, a question the diameter-witness argument never asks. **Every other
-`m = 1` pair — every `CircleSeg` end, quarter turns included, and a trimmed
-`ArcSeg` end — is a COMPUTED station carrying whatever `stationRound`
-§5.2 proves for it, and the arm shrinks by `2*delta` at that proven value,
-as on any other build.** A `CircleSeg` end is never exempted by its
-enclosure being a point interval (§5.2), so no quarter-turn pairing is
-GUARANTEED a zero `stationRound` by its kind — it stays a COMPUTED station
-either way, and where its own `circularWalkEndBound` proves that zero the
-arm reads the resulting zero `delta` by value and reports the unshrunk
-reading, exactly as it does for any other `delta`.
+`stationRound`** — which for a curved pair means an untrimmed `ArcSeg`'s two
+recorded ends, the one pinned kind that table names. On such a pair `delta`
+is zero, so the arm reports the unshrunk reading exactly as in the uncurved
+case, and the pinned-station argument above covers it without needing
+`sectionDelta`, which bounds how far the BUILT WALL departs from the curve
+between those two exact stations — a question the diameter-witness argument
+never asks. **Every other `m = 1` pair — every `CircleSeg` end, quarter turns
+included, and a trimmed `ArcSeg` end — is a COMPUTED station carrying
+whatever `stationRound` §5.2 proves for it, and the arm shrinks by `2*delta`
+at that proven value.** Where such a station's own `circularWalkEndBound`
+proves that bound zero, the arm reads the resulting zero `delta` BY VALUE and
+reports the unshrunk reading, exactly as it does for any other `delta`.
 
 ## 13. Required tests
 
