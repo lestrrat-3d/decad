@@ -48,9 +48,12 @@ Three payload classes require different treatment:
   payload's facet departure
   `absSumUpper(delta, sectionDelta, maxTwistOffsetUpper)` (loft §5.2). All
   three are zero for an unplaced `LineSeg`-only body whose every station is
-  PINNED (loft §5.2 owns both tests), so that boundary is then exact, and at
-  least one is positive for a body under a non-identity motion, for a chorded
-  one, and for one holding a TRIMMED `LineSeg` station (loft §5, §5.2). Its
+  PINNED (loft §5.2 owns both tests), which is what GUARANTEES that boundary
+  exact. A body under a non-identity motion carries a positive `placeAllow`
+  and a chorded one a positive `sectionDelta`; one holding a station loft
+  §5.2's table does not pin — a TRIMMED `LineSeg` end, a chorded circular
+  pair's station — carries whatever its own station bound proves, a value no
+  kind proves nonzero (loft §5, §5.2). Its
   construction audit proves validity, and it re-runs
   on every placement. Its `Bounds`, inflated by the two-term
   `absSumUpper(delta, sectionDelta)` those boxes carry rather than by the

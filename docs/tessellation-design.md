@@ -152,8 +152,9 @@ every paired segment is a `LineSeg`, and a
 takes), every one of those proof terms is zero, the held boundary IS the true
 boundary, and the mesh is admitted to the mesh boolean as an all-planar
 zero-bound operand.
-Every other loft's mesh — one under a non-identity motion, a CHORDED one, or
-both — is admitted
+Every other loft's mesh — one under a non-identity motion, a CHORDED one, one
+holding a station loft §5.2's table does not pin whose own walk bound proves
+nonzero, or any combination of the three — is admitted
 as an ordinary positive-bound all-planar operand instead, through the same
 `rimDelta` composition every other nonzero-bound operand already uses. A
 chorded loft is never a zero-bound operand: loft §8 states its boundary
@@ -918,7 +919,7 @@ sample to make an analytic mesh close. Refine or refuse.
 | **T3** | circular meridian generators: sphere/torus cells, axis-to-axis minimum, circular meridian nesting/homotopy audit, non-adjacent-intersection refinement, cut-stable circular-cell area proof | revolve booleans |
 | **T4** | meridian first-moment allowance + certified per-cell angular homotopy integral; finite `volSymDiff`; revolve admitted to booleans | density improvements |
 | **T5** | deterministic local meridian refinement and global angular density improvements that preserve every earlier proof | free-form/NURBS REVOLVE generators. An extruded free-form prism's own chording is a DIFFERENT increment — it rides the existing prism tessellation path (`docs/spline-design.md` §10 P5, Table C), not this row |
-| **T6** | `loftPayload` exact restatement: source-face-preserving wall/cap triangle copy, a proof record carrying the payload's own facet departure `absSumUpper(delta, sectionDelta, maxTwistOffsetUpper)` (zero only for an unplaced `LineSeg`-only loft whose every station is PINNED, loft §5.2), and mesh-boolean admission | loft surveys and analytic pair clearance |
+| **T6** | `loftPayload` exact restatement: source-face-preserving wall/cap triangle copy, a proof record carrying the payload's own facet departure `absSumUpper(delta, sectionDelta, maxTwistOffsetUpper)` (zero only for a `LineSeg`-only loft under an identity motion, loft §5.2), and mesh-boolean admission | loft surveys and analytic pair clearance |
 
 Each increment ships its computed geometry tests with it. T2/T3 may export a
 revolve because §§8–10 prove the mesh itself; they do not enter the boolean
@@ -986,10 +987,13 @@ until T4 proves occupied-volume error.
   `areaSlack`, and `volSymDiff` are zero and a loft/prism boolean succeeds
   through the all-planar zero-bound path; for one under a non-identity motion,
   for an identity-motion CHORDED one, and for an identity-motion one holding a
-  TRIMMED `LineSeg` station each of those four equals the term
+  station loft §5.2's table does not pin, each of those four equals the term
   §2's own payload row states
   over that payload's `delta`, `sectionDelta` and `maxTwistOffsetUpper`, and
-  the same boolean succeeds with a positive-bound result in both cases. The
+  the same boolean succeeds in all three cases — through the positive-bound
+  path wherever that term is positive, which the first two carry by their own
+  `placeAllow` and `sectionDelta` rows, and through the zero-bound path
+  wherever an unpinned station's own walk bound proves zero. The
   chorded half of that obligation lands with the loft increment that publishes
   a chorded body at all (loft §12 PR 3).
 - Prove the T4 interval integrator encloses analytic fixed-sign cells and
