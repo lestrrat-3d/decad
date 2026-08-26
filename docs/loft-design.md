@@ -591,6 +591,19 @@ the share it exceeded is that segment's own. A build with no circular pair
 (§7), the count the record itself states, so an all-`LineSeg` build's only
 resource refusal is S8.
 
+**A record whose own `P` already exceeds the cap.** The `max(0, …)` term
+clamps to zero there, so `mMax = 1`, and a circular pair whose joint walk-up
+settles at `m = 1` passes S15 with `Σstations` already past the cap. That
+admission is not an escape from the ceiling the cap answers to: the paragraph
+above carves this record out as past chording altogether, and S8 is what
+refuses it, over the assembled triangle count §6's `F*(F-1)/2` preflight
+computes rather than over the cap. Nothing is left unchorded either, because
+a pair settles at `m = 1` only when both sides' certified sagittae are at or
+below the target at one cell — that is what the joint walk-up above settles
+on. Refusing such a build at S15 instead would refuse a mixed build while
+admitting an all-`LineSeg` build of the identical triangle count, which is
+the shape rule Table S row S15 states S15 is not.
+
 **Deciding S15 from the record.** `m` and `mMax` are each a function of the
 two `ProfileRecord`s alone — the two sides' certified radius and sweep
 enclosures (§5.2), the chord target above, `P` and `C` — so S15 is decided
