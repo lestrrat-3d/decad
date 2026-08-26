@@ -54,18 +54,18 @@ type loftPayload struct {
 	// measurement this payload publishes composes it.
 	delta float64
 
-	// sectionDelta is the proven upper bound on how far any BUILT CHORD point
-	// of a wall cell sits from the recorded curve it chords, AS A SET — the
-	// curve's own sagitta, taken as a MAXIMUM over cells rather than a sum
-	// (docs/loft-design.md §5.1). It is zero for every pairing this evaluator
-	// admits today — S3 admits only same-kind LineSeg pairs, and a straight
-	// wall's own chord IS the recorded segment, so there is no curve for it to
-	// depart from. A same-kind curved pairing (reach, not yet admitted) is the
+	// sectionDelta holds the term of that name in docs/loft-design.md §5.2's
+	// table, which owns the quantity it bounds, the row it is derived from and
+	// its maximum-versus-sum rule; this comment states none of them. It is
+	// zero for every pairing this evaluator admits today — S3 admits only
+	// same-kind LineSeg pairs, and a straight wall's own chord IS the recorded
+	// segment, so there is no curve for it to depart from. A same-kind curved
+	// pairing (reach, not yet admitted) is the
 	// construction that sets it, to the two-term bound its station chording
 	// commits (chordCellDeltaUpper): the CERTIFIED sagitta
-	// (loftCertifiedSagittaUpper) composed with the GENERATED stations' own
-	// displacement (circularStationChain), never to a held float and never to
-	// either term alone.
+	// (loftCertifiedSagittaUpper) composed with the stations' own displacement
+	// (circularStationChain) under the provenance mark §5.1's Table C gives
+	// them, never to a held float and never to either term alone.
 	//
 	// It is NEVER delta and never stands in for it, the identical
 	// independence prismPayload's own sectionDelta/z0Delta pair states one
@@ -77,18 +77,11 @@ type loftPayload struct {
 	//
 	// It is ALSO never bounds.go's cellChordCurveAreaUpper's own
 	// matchedDeltaUpper obligation, a STRONGER, DIFFERENT quantity that
-	// helper's own doc comment defines: sectionDelta is a SET-distance (some
-	// chord point, not necessarily at the matching parameter), while
-	// matchedDeltaUpper must be a PARAMETER-MATCHED bound (the SAME s under
-	// the wall homotopy's own constant-arc-length parametrization). The two
-	// coincide only for a LINE (trivially, both zero) or an ARC under its own
-	// uniform-angle parametrization (bounds.go's own doc comment on
-	// cellChordCurveAreaUpper, F1). A future curved-pairing construction that
-	// sets this field to an arc's own composed chord bound may pass that SAME
-	// value as matchedDeltaUpper only because of that proven coincidence —
-	// which the station-displacement term does not disturb, since it too is
-	// read at the matching s (chordCellDeltaUpper) — never as a general
-	// licence to conflate the two for any other curve kind.
+	// helper's own doc comment defines. §5.2's table owns both terms and the
+	// relation between them: its matchedDelta row states what that
+	// parameter-matched quantity is, what it is composed from and what it
+	// refuses on. A consumer that needs it reads that row and composes the
+	// terms the row names, never this field on its own.
 	sectionDelta float64
 
 	verts []r3.Vec
@@ -235,12 +228,12 @@ func loftPlanesCoincide(a, b PlaneRecord) bool {
 // loftLoopPair is Table P's correspondence for one loop: the two walk-ordered
 // STATION-chain lists, v from loop0's own segment order and w from loop1's,
 // already rotated by that loop's own alignment offset (P4). Each paired
-// segment contributes its own station count of entries — one per LineSeg
-// (today's only admitted kind) or the shared chord count a circular pair's
-// own generator settles on (a10-plan.md Part 3 PR 5) — and every list still
+// segment contributes the entries its own generator arm produces
+// (a10-plan.md Part 3 PR 5), and every list still
 // carries only each segment's OWN interior stations, never its shared end
-// point, exactly as the one-point-per-LineSeg convention already did: the
-// next segment's own first station (or the loop's wrap) supplies it.
+// point: the next segment's own first station (or the loop's wrap) supplies
+// it, which is what makes a loop's list total the count
+// docs/loft-design.md §7 states for that loop rather than one stated here.
 type loftLoopPair struct {
 	v, w []Point2
 }
@@ -255,21 +248,22 @@ type loftLoopPair struct {
 // reference wedges — a 90-degree radius-5 quarter-arc and a 5-point
 // fit-spline approximation of the same arc, both lofted between z=0 and
 // z=10 — it is the coarsest value at which both fixtures still read Sound at
-// the default 1e-3 relative tolerance within the plan's 2-second
-// per-fixture wall-clock budget (Q3).
+// the default 1e-3 relative tolerance inside the per-fixture wall-clock budget
+// (a10-plan.md Q3), which docs/loft-design.md §13's build cost model paragraph
+// owns and this comment states no cost of its own for.
 //
 // Driven through the SHIPPED generator — loftCircularCellStations below, whose
 // joint walk-up settles the count against the CERTIFIED per-cell sagitta — this
-// constant settles the arc wedge at m=65 stations (F=136 wall+cap faces), with
-// Volume the binding reading at a measured 2.47x margin (gate ratio
-// 4.04928e-4), and the fit-spline wedge chorded at that same count at 1.95x
-// (5.1326e-4). Both build in about 1.4 seconds. The calibration pins those two
-// margins at that production count and re-derives the count from the generator
-// at every run (loftChordFractionPinM), so no published margin here belongs to
-// a chording this evaluator does not produce.
+// constant settles the arc wedge at m=65 stations, whose assembled face count
+// is the F §7 owns, with Volume the binding reading at a measured 2.47x margin
+// (gate ratio 4.04928e-4), and the fit-spline wedge chorded at that same count
+// at 1.95x (5.1326e-4). Both builds land inside the budget §13 owns. The
+// calibration pins those two margins at that production count and re-derives
+// the count from the generator at every run (loftChordFractionPinM), so no
+// published margin here belongs to a chording this evaluator does not produce.
 //
 // A finer grid point (m=128) clears the plan's separate 4x-margin target but
-// costs roughly 4.3s, more than double the wall-clock budget, so the plan's
+// falls outside that budget, so the plan's
 // own named fallback governs (a10-plan.md Q2's "Fallback if calibration does
 // not close"): ship the coarser, in-budget value and accept that an extreme
 // aspect ratio can read Suspect at a tight tolerance — a correct non-silent
@@ -323,7 +317,8 @@ func loftChordTarget(p0, p1 ProfileRecord, walks0, walks1 [][]segmentWalk) (floa
 // stations0/stations1 each carry ONLY this segment's own interior stations,
 // never its shared end point — the next segment's own first station (or the
 // loop's wrap) supplies it, the convention loftLoopPair's own doc comment
-// states.
+// states, and what makes a loop's own chain total the count
+// docs/loft-design.md §7 states for it rather than one stated here.
 //
 // sagittaUpper is the proven upper bound on max_s |curve(s) - chord(s)|
 // under the SAME parameter this cell's own uniform stations walk — a
@@ -331,11 +326,11 @@ func loftChordTarget(p0, p1 ProfileRecord, walks0, walks1 [][]segmentWalk) (floa
 // curve (bounds.go's cellChordCurveAreaUpper doc comment states the
 // distinction this field's name exists to keep visible). The LineSeg arm's
 // chord IS the recorded segment, so its bound is exactly zero; the circular
-// arm publishes docs/loft-design.md §5.1's two-term chord bound — that
-// section's certified per-cell sagitta, an OUTWARD-rounded upper end of an
-// enclosure over the record's own radius and sweep brackets, composed with the
-// generated stations' own displacement from the recorded points they stand
-// for — and refuses where either term has no derivation.
+// arm composes the two terms docs/loft-design.md §5.2's table lists for a
+// chorded cell — that table's certified per-cell sagitta and the displacement
+// its stations carry, each with the derivation and rounding direction that
+// table states and the provenance mark §5.1's Table C gives those stations —
+// and answers the refusal §5.2's table assigns those terms.
 //
 // seg0/seg1 are the two RECORDED segments w0/w1 were resolved from. An arm
 // whose bound is a proof rather than a held float needs them: every enclosure
@@ -394,18 +389,18 @@ func loftLineCellStations(w0, w1 segmentWalk) ([]Point2, []Point2, float64, erro
 // is computed from the walk's math.Hypot radius and its math.Atan2 sweep, with
 // no enclosure and no outward rounding, so it can decide a COUNT and nothing
 // more (docs/loft-design.md §5.2's third rule). A candidate count whose
-// certified sagitta has no derivation refuses at Table S row S14 rather than
-// walking on, and the refusal never degrades into a published zero or a held
-// substitute.
+// certified sagitta has no derivation refuses at Table S row S14, in the arm
+// and at the phase §4's gate-order paragraph assigns it, and the refusal never
+// degrades into a published zero or a held substitute.
 //
-// sagittaUpper is the MAX of the two sides' certified sagittae at the settled
-// count, composed by chordCellDeltaUpper with the MAX of their two station
-// displacements — this cell's own single bound, covering whichever side
-// departs further from its chord and whichever side's stations sit further
-// from the curve they chord. Only the sagitta half is walked up against the
-// target: the target names the chord DEPTH the chording commits to, while the
-// station displacement is a rounding term of the generator's own arithmetic,
-// composed into the published bound once the count has settled.
+// sagittaUpper covers both sides of the pair at the settled count:
+// chordCellDeltaUpper composes the two terms §5.2's table lists for a chorded
+// cell, each read across the two sides under the max-versus-sum rule that
+// table states for it rather than one stated here. Only the sagitta half is
+// walked up against the target: the target names the chord DEPTH the chording
+// commits to, while the station displacement is a rounding term of the
+// generator's own arithmetic, composed into the published bound once the count
+// has settled.
 //
 // It also discharges loftCellStations' own
 // PARAMETER-MATCHED obligation: stations are placed at uniform PARAMETER t_k =
@@ -416,9 +411,10 @@ func loftLineCellStations(w0, w1 segmentWalk) ([]Point2, []Point2, float64, erro
 // 2r·sin²(Δθ/4m), attained at s = 1/2. The certified half encloses THAT
 // quantity from above.
 //
-// The chord this arm actually draws runs between two GENERATED stations rather
-// than those two exact points, which is precisely the gap the station-
-// displacement half closes: the sagitta alone bounds a chord the build never
+// The chord this arm actually draws runs between two stations carrying the
+// provenance §5.1's Table C marks them with rather than between those two
+// exact points, which is precisely the gap the station-displacement half
+// closes: the sagitta alone bounds a chord the build never
 // drew, and a built chord can and does depart from the curve by more than it.
 // A SET distance from an arbitrary chord point to the curve would bound
 // something else entirely, and the uniform-angle station rule — read at an
@@ -427,8 +423,9 @@ func loftLineCellStations(w0, w1 segmentWalk) ([]Point2, []Point2, float64, erro
 func loftCircularCellStations(w0, w1 segmentWalk, seg0, seg1 CurveSegment, target float64) ([]Point2, []Point2, float64, error) {
 	// S15: chordCount itself already refuses (errTooManyChords, reused per
 	// spline design Table R row R8) a side whose target cannot be met inside
-	// maxChordsPerWalk — this arm mints no separate cap of its own, and
-	// propagates that refusal verbatim from whichever side hits it first.
+	// maxChordsPerWalk, at the phase docs/loft-design.md §4's gate-order
+	// paragraph assigns that row — this arm mints no separate cap of its own,
+	// and propagates that refusal verbatim from whichever side hits it first.
 	m0, _, err := chordCount(w0, target)
 	if err != nil {
 		return nil, nil, 0, err
@@ -452,7 +449,8 @@ func loftCircularCellStations(w0, w1 segmentWalk, seg0, seg1 CurveSegment, targe
 		// The same ceiling chordCount enforces on its own walk-up, enforced
 		// again on this one: the certified sagitta shrinks with m but is
 		// floored by its own enclosure width, so a target below that floor
-		// would otherwise walk forever. Refusing is S15's answer, carrying
+		// would otherwise walk forever. This refuses as S15, in the arm and at
+		// the phase §4's gate-order paragraph assigns it, carrying
 		// chordCount's own sentinel rather than a second one.
 		if m >= maxChordsPerWalk {
 			return nil, nil, 0, errTooManyChords
@@ -463,19 +461,21 @@ func loftCircularCellStations(w0, w1 segmentWalk, seg0, seg1 CurveSegment, targe
 	stations0, d0 := circularStationChain(w0, seg0, m)
 	stations1, d1 := circularStationChain(w1, seg1, m)
 
-	// S14, the station-displacement half: a side whose generated stations have
-	// no proven displacement from the recorded points they stand for cannot
-	// state this cell's own chord bound at all, so the cell refuses rather
-	// than publishing the certified sagitta alone — which would be a bound on
-	// a chord this build did not draw.
+	// S14, in the arm and at the phase §4's gate-order paragraph assigns the
+	// station-displacement term: a side whose stations have no proven
+	// displacement from the recorded points they stand for cannot state this
+	// cell's own chord bound at all, so the cell refuses rather than
+	// publishing the certified sagitta alone — which would be a bound on a
+	// chord this build did not draw.
 	chordDelta := chordCellDeltaUpper(math.Max(s0, s1), math.Max(d0, d1))
 	if isNonFinite(chordDelta) {
 		return nil, nil, 0, errLoftStationDisplacementUnderivable
 	}
 
-	// S16, defensive: a chord cell whose two stations coincide on exactly
-	// ONE of the two sections has no case in the uniform two-faces-per-cell
-	// wall topology assembleLoft builds. A same-kind pair with a genuinely
+	// S16, defensive, decided at the phase §4's gate-order paragraph assigns
+	// it: a chord cell whose two stations coincide on exactly ONE of the two
+	// sections has no case in the uniform two-faces-per-cell wall topology
+	// assembleLoft builds. A same-kind pair with a genuinely
 	// positive sweep on both sides never reaches this — distinct k give
 	// distinct angles give distinct (cos, sin) pairs — so it is reachable
 	// only from a degenerate walk (a zero radius) that a real sketch
@@ -496,24 +496,17 @@ func loftCircularCellStations(w0, w1 segmentWalk, seg0, seg1 CurveSegment, targe
 
 // chordCellDeltaUpper composes one chord cell's two independent displacement
 // terms into the single bound loftCellStations publishes: the certified
-// per-cell sagitta — how far the RECORDED curve departs from the chord between
-// the EXACT points the record denotes at the cell's two station parameters —
-// plus the station displacement, how far the BUILT stations sit from those two
-// exact points.
+// per-cell sagitta and the station displacement, both of which
+// docs/loft-design.md §5.2's table lists with the quantity each bounds and the
+// certified source each is read from.
 //
-// The sum is the whole derivation. A chord point at parameter s is the convex
-// combination (1−s)·P̃_k + s·P̃_{k+1} of the two built stations, so its distance
-// from the same combination of the two exact points is at most the larger of
-// the two stations' own displacements — a convex combination cannot move
-// further than its furthest input. The exact chord's own distance from the
-// curve at the matching s is the certified sagitta. The triangle inequality
-// over the two gives the published bound, and it stays PARAMETER-MATCHED
-// (loftCellStations' own doc comment) because both terms are read at the same
-// s.
+// That table owns the composition's derivation and its rounding direction, and
+// this helper adds no mechanism of its own to either. What the code here does
+// state is that both terms are read at the same s, which is what keeps the
+// published bound PARAMETER-MATCHED (loftCellStations' own doc comment).
 //
-// Either term underivable answers +Inf, which the caller refuses on. The sum
-// is rounded outward, so its own float rounding can never land it below the
-// quantity it bounds.
+// Either term underivable answers +Inf, the answer §5.2's table assigns those
+// rows, and the caller refuses on it.
 func chordCellDeltaUpper(sagittaUpper, stationUpper float64) float64 {
 	if isNonFinite(sagittaUpper) || isNonFinite(stationUpper) {
 		return math.Inf(1)
@@ -521,8 +514,9 @@ func chordCellDeltaUpper(sagittaUpper, stationUpper float64) float64 {
 	return absSumUpper(sagittaUpper, stationUpper)
 }
 
-// errLoftStationDisplacementUnderivable is docs/loft-design.md Table S row
-// S14's station-displacement half: a chorded circular pair whose generated
+// errLoftStationDisplacementUnderivable is the sentinel docs/loft-design.md
+// Table S row S14 carries for the station-displacement term, raised in the arm
+// §4's gate-order paragraph assigns that term: a chorded circular pair whose
 // stations have no proven displacement from the recorded points they stand
 // for. Like its certified-sagitta twin the shape itself is fine and the chord
 // set is buildable; only one of the two terms the published chord bound is
@@ -532,9 +526,11 @@ var errLoftStationDisplacementUnderivable = fmt.Errorf(
 	`%w: a chorded circular pair's generated stations have no proven displacement from the recorded curve`, ErrUnsupported,
 )
 
-// circularStationChain walks m uniform-angle stations of w, at parameter
-// t_k = k/m for k = 0..m-1 — this segment's OWN interior stations, excluding
-// its shared end point (loftCellStations' own doc comment states why).
+// circularStationChain walks this segment's own uniform-angle stations of w,
+// at parameter t_k = k/m — its OWN interior stations, excluding its shared end
+// point (loftCellStations' own doc comment states why), so the chain holds the
+// entries a loop's own count under docs/loft-design.md §7 needs from it rather
+// than a count stated here.
 //
 // Station 0 is the WALK's own start point, never a recomputed cos/sin at th0.
 // The two are not the same reading: walkOf runs pinArcWalkEnds over every arc
@@ -553,9 +549,10 @@ var errLoftStationDisplacementUnderivable = fmt.Errorf(
 // that segment's own walk: a loop's segments are contiguous on the record, and
 // each junction carries exactly one station.
 //
-// The second return is the PROVEN upper bound on how far any of this
-// segment's own chord-cell endpoints sits from the recorded point it stands
-// for, as an in-section-plane distance. Only station 0 is a coordinate reading
+// The second return is this segment's own reading of the stationRound term
+// docs/loft-design.md §5.2's table lists, as an in-section-plane distance;
+// that table owns the quantity it bounds, the certified source it is read from
+// and its max-versus-sum rule. Only station 0 is a coordinate reading
 // alone: every interior station is a math.Sincos evaluation at an angle
 // composed from the walk's own held math.Atan2 / math.Hypot floats, none of
 // which the walk can enclose (circularWalk's own doc comment), so the built
@@ -650,15 +647,12 @@ func circularSegmentRange(seg CurveSegment) (*big.Rat, *big.Rat, bool) {
 // squaring goes through intervalMul, whose four-corner upper end dominates
 // max x² over the span whatever the span's sign.
 //
-// The derivation of the form itself is elementary: a circular arc's distance
-// from its own chord is r·(1 − cos(half the cell's sweep)), taken at the
-// cell's midpoint where the two are farthest apart, and 1 − cos x = 2·sin²(x/2)
-// gives the published form.
+// The derivation of the form itself belongs to §5.2's table, on its per-cell
+// sagitta row, and this comment restates none of it.
 //
-// An enclosure the record cannot state — a radius or sweep bracket
-// circularWalkEnclosures refuses, a sine radSinCosSpan cannot span, or an
-// upper end past the float64 range — answers +Inf, and the caller refuses at
-// Table S row S14 rather than publishing a finite substitute or a zero.
+// An enclosure the record cannot state answers +Inf — the refusal that row
+// assigns this term — and the caller refuses at Table S row S14 rather than
+// publishing a finite substitute or a zero.
 func loftCertifiedSagittaUpper(seg CurveSegment, m int) float64 {
 	if m <= 0 {
 		return math.Inf(1)
@@ -701,14 +695,14 @@ var errLoftSagittaUnderivable = fmt.Errorf(
 // as validateLoftRecords' own S3 check already does.
 //
 // Each paired segment's own station chain now comes from loftCellStations
-// (a10-plan.md Part 3 PR 5), so a loop's v/w lists carry more than one entry
-// per segment exactly when that segment's own arm does — a LineSeg pairing
-// stays exactly one entry per segment, bit-identical to before. sectionDelta
-// is the MAX of every cell's own published chord bound across the whole build,
-// never a sum: a boundary point lies in exactly one cell, so only the widest
-// cell's own departure bounds the whole section. Within ONE cell the two terms
-// that bound ARE summed (chordCellDeltaUpper) — they are displacements of two
-// different things, not two cells' readings of one.
+// (a10-plan.md Part 3 PR 5), so a loop's v/w lists carry whatever entries that
+// segment's own arm generates and total the count docs/loft-design.md §7
+// states for the loop; a LineSeg pairing's own lists stay bit-identical to
+// what this evaluator built before the generator existed. sectionDelta
+// accumulates every cell's own published chord bound under the max-versus-sum
+// rule §5.2's table states for that term, never one stated here. Within ONE
+// cell the two terms that bound ARE summed (chordCellDeltaUpper) — they are
+// displacements of two different things, not two cells' readings of one.
 //
 // Both records are read, never p0 alone: a curved arm's own bound is stated by
 // the RECORDED segment behind each side's walk (loftCellStations' own doc
@@ -1423,7 +1417,8 @@ func evalLoft(ctx context.Context, d *Document, ref StepRef, pl loftPayload, bud
 
 	pl.verts, pl.tris, pl.walls = a.verts, a.tris, a.walls
 	pl.delta = a.delta
-	// sectionDelta is loftPairings' own accumulated MAX over cells
+	// sectionDelta is loftPairings' own accumulation, under the rule
+	// docs/loft-design.md §5.2's table states for that term
 	// (loftPayload's own doc comment): it is exactly zero today because S3
 	// admits only same-kind LineSeg pairs, whose own chord IS the recorded
 	// segment, so this is not yet observable through a real build — but the

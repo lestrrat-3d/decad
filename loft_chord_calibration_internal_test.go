@@ -939,18 +939,19 @@ func TestLoftChordCalibrationSweep(t *testing.T) {
 
 // --- the pin: fast, always-run ---
 
-// loftChordBuildCeiling is a RUNAWAY guard, deliberately far above the 2s
-// wall-clock budget a10-plan.md Q3 states for a shipping fixture. The budget is
-// a design constraint measured on a reference machine, NOT a portable property
+// loftChordBuildCeiling is a RUNAWAY guard, deliberately far above the
+// per-fixture wall-clock budget docs/loft-design.md §13's build cost model
+// paragraph owns (a10-plan.md Q3). That budget is a design constraint measured
+// on a reference machine, NOT a portable property
 // of any one run: the same build measures about 1.4s on the development host and
 // about 2.3s on a CI Windows runner, and about 9.7s on a CI Linux runner under
 // the race detector, so asserting the budget itself makes the
 // suite fail on the slower host while proving nothing about the code. What a
 // test CAN assert portably is that the build has not regressed by orders of
-// magnitude — the crossing audit is O(F^2), so a station-count or cap-count
-// regression shows up as a 10x blowup, not a 1.6x one. The achieved time is
-// logged at every run so the budget stays observable. NEVER tighten this toward
-// the 2s figure: that reintroduces a host-dependent failure.
+// magnitude — §13 states how the audit's cost grows with F, so a station-count
+// or cap-count regression shows up as a 10x blowup, not a 1.6x one. The
+// achieved time is logged at every run so the budget stays observable. NEVER
+// tighten this toward that budget: it reintroduces a host-dependent failure.
 const loftChordBuildCeiling = 60 * time.Second
 
 // loftChordFractionPinM is the station count the SHIPPED generator settles the
@@ -974,12 +975,11 @@ const loftChordBuildCeiling = 60 * time.Second
 //     the curved wall alone, which makes the volume term dominate).
 //   - The coarsest grid m at which BOTH fixtures clear 4x margin is m=128
 //     (arc ratio=1.04e-4, margin=9.58x; spline ratio=1.32e-4, margin=7.55x) —
-//     but F=262 there and the measured build is ~4.3s, more than double the 2s
-//     budget.
-//   - The finest grid m that still fits the 2s budget is m=64 (F=134,
-//     ~1.1s measured for both fixtures) — Sound (ratio < 1e-3 for both) but only
-//     ~2.4x (arc) / ~1.9x (spline) margin, short of 4x. The shipped constant is
-//     that grid point's own implied fraction.
+//     but its assembled F (§7) and its measured build both land outside the
+//     budget docs/loft-design.md §13's build cost model paragraph owns.
+//   - The finest grid m that still fits that budget is m=64 — Sound (ratio <
+//     1e-3 for both) but only ~2.4x (arc) / ~1.9x (spline) margin, short of
+//     4x. The shipped constant is that grid point's own implied fraction.
 //
 // Per the plan's named fallback (Q2, "Fallback if calibration does not close"),
 // the coarser, in-budget value ships: Q3's 2s wall-clock ceiling is stated as a

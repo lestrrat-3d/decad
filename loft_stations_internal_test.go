@@ -400,14 +400,15 @@ func TestLoftCircularArcSagittaIsTheUniformParameterMatchedBound(t *testing.T) {
 // (errTooManyChords, reused from tessellate.go per spline design Table R row
 // R8).
 //
-// This necessarily precedes S8's own audit-budget ceiling: evalLoft calls
-// loftPairings (which reaches this refusal through loftCellStations)
-// strictly BEFORE assembleLoft ever builds a triangle and before
+// This necessarily precedes S8's own audit-budget ceiling, each row decided at
+// the phase docs/loft-design.md §4's gate-order paragraph assigns it: evalLoft
+// calls loftPairings (which reaches this refusal through loftCellStations)
+// before assembleLoft ever builds a triangle and before
 // loftCrossingAudit ever runs (loft_build.go's own evalLoft body). Had the
 // cap not fired, the station count alone — already past 2^14 per side — would
 // publish orders of magnitude more wall faces than S8's own
-// maxFacetPairTestsPerCall ceiling binds at (roughly F=4000,
-// loft_audit.go), so this fixture is exactly the one the plan names: one
+// maxFacetPairTestsPerCall ceiling binds at, an F (§7) far past it
+// (loft_audit.go), so this fixture is exactly the one the plan names: one
 // that would otherwise reach the audit ceiling.
 func TestLoftCellStationsStationCapFiresBeforeAuditCeiling(t *testing.T) {
 	seg, w := arcFixture(t, 5, 0, math.Pi/2, 0, 1)
