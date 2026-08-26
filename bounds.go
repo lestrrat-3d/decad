@@ -215,11 +215,70 @@ const (
 
 // upRound nudges a positive bound to the next representable float64, so the
 // bound's own rounding can never land it below the quantity it bounds.
+//
+// It cannot repair a quantity that ALREADY flushed: a positive product or
+// quotient that underflows arrives here as +0, and this helper leaves 0 alone
+// deliberately, because nudging it would widen every legitimately EXACT zero
+// in the package into a positive bound. A caller holding a +0 it has PROVEN
+// positive is therefore holding a flush, not an answer, and must reach it
+// through provenUpRound — or through productUpper and divUpper, which carry
+// that rule for the multiply and the divide that commit the flush.
 func upRound(x float64) float64 {
 	if x > 0 {
 		return math.Nextafter(x, math.Inf(1))
 	}
 	return x
+}
+
+// provenUpRound is upRound for a value its caller has PROVEN strictly
+// positive: it never publishes 0.
+//
+// float64's own arithmetic rounds a positive result to +0 once that result
+// falls below half the smallest subnormal, and a bound of 0 is not a small
+// bound — it is the CLAIM that the quantity it bounds is enclosed exactly, so
+// the published interval collapses to a point that excludes the truth, and
+// exactnessOf reads the same 0 as Exact for a body whose error is merely tiny.
+// math.SmallestNonzeroFloat64 is the correct replacement rather than a fudge:
+// rounding to +0 proves the exact result lies at or below half the smallest
+// subnormal, so the smallest subnormal is itself a valid — and finite — upper
+// bound on it.
+//
+// +Inf is deliberately NOT the answer here. A refusal would propagate to
+// consumers that read a positive bound as their own gate
+// (chordedBoundaryVolumeAllow's wallAreaUpper > 0 branch) and turn a
+// tiny-but-real bound into a refused reading.
+//
+// A caller whose operands are NOT proven positive keeps upRound: a zero that
+// is honestly zero must stay zero.
+func provenUpRound(x float64) float64 {
+	if r := upRound(x); r != 0 {
+		return r
+	}
+	return math.SmallestNonzeroFloat64
+}
+
+// divUpper is productUpper's division twin: it carries the same "a positive
+// quantity must never publish as a proven zero" rule provenUpRound states,
+// which a bare upRound(num/den) cannot, the quotient having already flushed
+// before upRound sees it.
+//
+// num must be a proven UPPER bound on the numerator and den a proven positive
+// LOWER bound on the denominator, so that num/den bounds the true quotient.
+// A numerator at or below zero is an ABSENT term and answers an honest 0. A
+// denominator that is not finite and positive states no scale to divide by —
+// including one that has itself overflowed to +Inf — and is a BROKEN caller
+// claim: it answers +Inf, never a bound, the same rule
+// cellChordCurveAreaUpper's own F5 refusal follows.
+func divUpper(num, den float64) float64 {
+	if math.IsNaN(num) || math.IsNaN(den) || den <= 0 || math.IsInf(den, 1) {
+		return math.Inf(1)
+	}
+	if num <= 0 {
+		return 0
+	}
+	// A +Inf numerator needs no arm of its own: +Inf/den is +Inf, which
+	// provenUpRound passes through as the refusal it already is.
+	return provenUpRound(num / den)
 }
 
 // radius3D turns a per-coordinate bound into the 3D distance bound its
@@ -584,7 +643,11 @@ func capAreaVolumeAllow(planeOffsetUpper, capAreaAllow float64) float64 {
 	if planeOffsetUpper <= 0 || capAreaAllow <= 0 {
 		return 0
 	}
-	return upRound(upRound(planeOffsetUpper*capAreaAllow) / 3)
+	// Both operands are proven positive by the arm above, so the product and
+	// its third are positive too: productUpper and divUpper carry that
+	// through a magnitude at which the float multiply or the divide flushes,
+	// where a bare upRound would publish the moved cap as an unmoved one.
+	return divUpper(productUpper(planeOffsetUpper, capAreaAllow), 3)
 }
 
 // cellTwistVolumeAllow bounds the VOLUME between ONE loft wall cell's HELD
@@ -1084,7 +1147,11 @@ func chordedBoundaryVolumeAllow(matchedDelta, wallAreaUpper, twistVolumeUpper, c
 			return math.Inf(1)
 		}
 		if wallAreaUpper > 0 {
-			chordToCurve = upRound(matchedDelta * wallAreaUpper)
+			// Both factors are proven positive by the two arms above, so the
+			// wall leg is positive: productUpper keeps it positive at a
+			// magnitude where the float multiply flushes, which a bare
+			// upRound of the product cannot.
+			chordToCurve = productUpper(matchedDelta, wallAreaUpper)
 		}
 	}
 	return absSumUpper(chordToCurve, twistVolumeUpper, capVolumeUpper, seamAllow)
@@ -1135,7 +1202,10 @@ func chordedBoundarySeamAllow(matchedDelta, posUpper, seamPerimeterUpper float64
 	if matchedDelta <= 0 || posUpper <= 0 || seamPerimeterUpper <= 0 {
 		return 0
 	}
-	return upRound(productUpper(matchedDelta, productUpper(posUpper, seamPerimeterUpper)) / 3)
+	// All three operands are proven positive by the arm above, so every
+	// factor and the closing third are positive: divUpper carries that
+	// through the divide the way productUpper already does the multiplies.
+	return divUpper(productUpper(matchedDelta, productUpper(posUpper, seamPerimeterUpper)), 3)
 }
 
 // sectionDisplacementArea bounds the AREA a recorded 2D section can differ from
