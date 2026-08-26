@@ -581,10 +581,15 @@ use — evaluate the per-cell sagitta at a candidate station count, increment
 until the value is at or below the target, so the depth is measured at every
 step rather than sized from a rate. What it evaluates at each candidate is
 §5.2's certified per-cell sagitta over the record's own radius and sweep
-enclosures, NOT the held-float `2r·sin²(Δθ/4)` `chordCount` itself returns:
-that float is computed from a `math.Hypot` radius and a `math.Atan2` sweep
-neither of which the record states, with no outward rounding, so it can only
-decide a COUNT and can never be the sagitta this build publishes. The value
+enclosures, NOT the held float `chordCount` itself returns. That float is
+`chordSagitta`'s proven quadratic bound, the one
+`docs/tessellation-design.md` §3 owns and publishes — never the true
+`2r·sin²(Δθ/4)` closed form that section's own seed inverse solves — and it
+is decided over a `math.Hypot` radius and a `math.Atan2` sweep neither of
+which the record states, so it can only decide a COUNT and can never be the
+sagitta this build publishes. Its OWN outward rounding does not change that:
+what it over-states is the sagitta of the two held floats it was handed, and
+that states nothing about the recorded curve. The value
 the walk-up compares against the target is therefore the same over-stated
 value §5.2 publishes as `s_k`, and a candidate count whose certified sagitta
 has no derivation refuses at Table S row S14, in the arm and at the phase
@@ -799,10 +804,12 @@ proves nothing here.
   rounded OUTWARD**, so what it publishes over-states the true displacement
   in the direction its consumer needs. No term is read off a held float the
   record's own enclosure did not produce — in particular the achieved
-  sagitta `tessellate.go`'s `chordCount` returns is a held-float value over a
-  held `math.Hypot` radius and a held `math.Atan2` sweep, with no enclosure
-  and no outward rounding, so it decides a station COUNT (§5.1) and is never
-  the sagitta this table publishes.
+  sagitta `tessellate.go`'s `chordCount` returns is `chordSagitta`'s proven
+  bound (`docs/tessellation-design.md` §3) over a held `math.Hypot` radius
+  and a held `math.Atan2` sweep, with no enclosure of either behind it.
+  Rounding that bound outward over-states the sagitta of those two held
+  floats and no quantity the record states, so it decides a station COUNT
+  (§5.1) and is never the sagitta this table publishes.
 - **An enclosure the record cannot state answers `+Inf`, and the build
   REFUSES** — `ErrUnsupported`, Table S row S14 — never a finite substitute
   and never a published zero. This is `CLAUDE.md`'s reject-only rule at this
