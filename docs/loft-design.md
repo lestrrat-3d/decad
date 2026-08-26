@@ -170,7 +170,7 @@ that exists and this evaluator cannot build → `ErrUnsupported`.**
 | **S3** | a paired segment whose two sides are not same-kind (§1, P5), or a same-kind pair where either side is free-form. A same-kind `CircleSeg` pair whose two recorded `CCW` flags disagree (P5) is NOT this row's refusal: it is S7's `ErrDegenerate`, decided structurally beside this gate rather than by the audit | the ruled surface exists; this evaluator has no exact construction for a mixed-kind pairing, and none yet for a free-form one | `ErrUnsupported` | yes, §1 |
 | **S4** | a `WithLoftAlignment` payload of the wrong length, an offset outside `[0, n)` for its loop, or the option passed more than once | no single intent (mirrors modify-reach SX1, which refuses a repeated contradictory option on the same ground) | `ErrDegenerate` | yes, §2 |
 | **S5** | `p0` and `p1` represent the same geometric plane, regardless of which in-plane origin or right-handed `U`/`V` basis each `PlaneRecord` uses | no — every wall vertex then lies in one plane, so the solid is provably flat: the tetrahedron-sum volume (§8) is a structural zero, not a computed one | `ErrDegenerate` | yes, §4 |
-| **S6** | a wall or cap triangle that collapses (coincident vertices, zero area), in either of two arms the existence test above splits: the RECORDED arm — every vertex the collapse consumes is a coordinate the record states (a `LineSeg` pair's own endpoints, a zero-sweep `ArcSeg`'s pinned ends) — or the COMPUTED arm, where the collapse is two GENERATED station vertices (§5.1's Table C) rounding to the same float64, a cap triangle collapsing over them included | the RECORDED arm: no — the modification consumed the region, the same existence answer modify §5 test 1 gives an inside-out loop. The COMPUTED arm: yes — the record's two station angles are distinct, so the denoted body exists at that correspondence and only this evaluator's float64 vertex table collapses it | `ErrDegenerate` (RECORDED arm) / `ErrUnsupported` (COMPUTED arm) | yes, §4, for the RECORDED arm; no for the COMPUTED arm — a precision ceiling on this evaluator's float64 vertex table, the same reading S13 gives |
+| **S6** | a wall or cap triangle that collapses (coincident vertices, zero area) — every collapse S16's one-sided chord cell does not already claim, in either of two arms the existence test above splits: the RECORDED arm — every vertex the collapse consumes is a coordinate the record states (a `LineSeg` pair's own endpoints, the pinned ends of an `ArcSeg` pair zero-swept on BOTH sides) — or the COMPUTED arm, where the collapse is two GENERATED station vertices (§5.1's Table C) rounding to the same float64, a cap triangle collapsing over them included | the RECORDED arm: no — the modification consumed the region, the same existence answer modify §5 test 1 gives an inside-out loop. The COMPUTED arm: yes — the record's two station angles are distinct, so the denoted body exists at that correspondence and only this evaluator's float64 vertex table collapses it | `ErrDegenerate` (RECORDED arm) / `ErrUnsupported` (COMPUTED arm) | yes, §4, for the RECORDED arm; no for the COMPUTED arm — a precision ceiling on this evaluator's float64 vertex table, the same reading S13 gives |
 | **S7** | either of two arms: the STRUCTURAL arm — a same-kind `CircleSeg` pair whose two recorded `CCW` flags disagree (P5), decided from the two records before construction — or the AUDIT arm, where the crossing audit (§6) finds contact other than the pair's own expected contact, whatever §5.1's Table C gives it | no — a self-intersecting or self-touching shell bounds no solid, and an opposite-sense circular correspondence walls each side against the other's reversed walk, which is that same crossing | `ErrDegenerate` | yes, §6 |
 | **S8** | the crossing audit exhausts its fixed work budget (§6, §10) before every pair is decided, over the assembled triangle count `F` (§7), which a chorded pair grows past `2n` | this evaluator cannot tell | `ErrUnsupported` | no, §6 — a resource ceiling, not a shape rule |
 | **S9** | either profile fails a seam gate (§2): foreign, stale, invalid, or an unrecordable `Partial` fragment | seam design's own answer, per profile | `ErrForeignProfile` / `ErrStaleProfile` / `ErrInvalidProfile` / `ErrUnrecordableProfile` | seam design's own answer, per gate; this document adds no permanence of its own (§2) |
@@ -195,16 +195,22 @@ before the first exact-rational lift.** §5's whole-shell orientation sum and
 float-to-rational lift is defined only on a finite float, so a coordinate that
 overflows must be refused while it is still a float.
 
-**S6 is also reachable from a same-kind circular pair, and its two arms
-answer differently there.** A zero-sweep arc collapses a wall or cap triangle
-over coordinates the record itself states, so it reaches the RECORDED arm and
+**S6 is also reachable from a same-kind circular pair, and how many sides a
+zero sweep consumes decides which row answers.** A pair zero-swept on exactly
+ONE side collapses that side's stations alone, which is S16's one-sided chord
+cell and `ErrUnsupported`: the correspondence denotes a point-to-arc fan, a
+body a smarter kernel could still loft, and the gate order below reaches S16
+first. Only a pair zero-swept on BOTH sides, whose cell collapses on both
+sections over coordinates the record itself states, or a cap triangle
+collapsing over record-stated coordinates, reaches the RECORDED arm and
 `ErrDegenerate`, exactly as a degenerate `LineSeg` pair already does. Two
-computed stations that round to the same float64 (§5.1) reach the COMPUTED
-arm and `ErrUnsupported` instead: the record's two station angles are
-distinct, so the denoted body exists at that correspondence and only this
-evaluator's float64 vertex table collapses it — the same reading S13 gives a
-coordinate that runs past that table's range. Which arm a collapse takes is
-decided by §5.1's Table C, which states each station vertex's provenance.
+computed stations that round to the same float64 on BOTH sections (§5.1)
+reach the COMPUTED arm and `ErrUnsupported` instead: the record's two
+station angles are distinct, so the denoted body exists at that
+correspondence and only this evaluator's float64 vertex table collapses
+it — the same reading S13 gives a coordinate that runs past that table's
+range. Which arm a collapse takes is decided by §5.1's Table C, which states
+each station vertex's provenance.
 
 **S5 compares geometric planes, not `PlaneRecord` fields.** Its normal is
 `U × V`; it refuses when the two normals are parallel and the displacement
@@ -1363,9 +1369,11 @@ beside them, though, landed in the same PR: `bodyGateDiameter` (verification
 never clear the gate's relative tolerance.
 
 On an uncurved payload whose `delta` is zero (every paired segment a
-`LineSeg`, no placement) the vertex set's own maximum IS the body's true
-diameter — every vertex is exact (§5), so a convex-hull diameter realized at
-vertices is that diameter, not an envelope — and the arm reports the shared
+`LineSeg`, and the accumulated motion `r3.Identity()`, which is what UNPLACED
+means — §5.2's `placeAllow` row owns that test) the vertex set's own maximum
+IS the body's true diameter — every vertex is exact (§5), so a convex-hull
+diameter realized at vertices is that diameter, not an envelope — and the
+arm reports the shared
 reader's answer unchanged, with no subtraction and no rounding of its own. That answer is the
 largest `float64` at or below the true diameter, because the reader publishes
 every witness maximum rounded toward zero (verification §3), so the arm
@@ -1394,8 +1402,10 @@ and the reported reference is the held diameter minus `2*delta`, rounded
 down**: an understated reference can only tighten the gate into a false
 `Suspect`, never loosen it into a false `Sound`. The arm applies that
 subtraction on `delta > 0` and never on the body having been placed, so a
-placement (PR 2a) and an unplaced chorded build whose stations are computed
-(§5.2) both take it. A shrink that collapses to zero or below reports no
+placement whose `placeAllow` is positive (PR 2a) and an unplaced chorded
+build whose stations are computed (§5.2) both take it, while an identity
+placement of a `LineSeg`-only pairing leaves `delta` zero and reports the
+unshrunk reading. A shrink that collapses to zero or below reports no
 diameter at all, the same answer any other unusable magnitude gets. That last
 branch is defensive rather than a reachable reference-less `Suspect`: the
 divergence theorem bounds a closed boundary's own volume by `d*A/3` for `d`
@@ -1491,10 +1501,12 @@ against this budget.
   diagonal and that rung report `IsConvex() == false`, are selected by
   `Concave()`, and are not selected by `Convex()`. A collapsed
   (coincident-vertex) segment pair → S6's RECORDED arm, asserted on
-  `ErrDegenerate`; a same-kind circular pair with zero sweep reaches that same
-  arm and that same sentinel; a pair whose two computed stations round to the
-  same float64 (§5.1) reaches S6's COMPUTED arm instead, asserted on
-  `ErrUnsupported` and not merely on being refused.
+  `ErrDegenerate`; a same-kind circular pair zero-swept on exactly ONE side
+  reaches S16 ahead of that arm and is asserted on `ErrUnsupported`, while one
+  zero-swept on BOTH sides reaches that same arm and that same sentinel; a
+  pair whose two computed stations round to the same float64 on BOTH sections
+  (§5.1) reaches S6's COMPUTED arm instead, asserted on `ErrUnsupported` and
+  not merely on being refused.
 - **Audit**: a deliberately over-twisted correspondence (e.g. an intentional
   wrong `WithLoftAlignment` offset on a non-convex profile) proves a
   crossing → S7, asserted against the specific triangle pair the crossing
