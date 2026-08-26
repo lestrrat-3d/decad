@@ -285,6 +285,13 @@ type loftAssembly struct {
 	side []uint8
 	// vIdx/wIdx are, per loop, the vertex-table index of V[i][j] and W[i][j].
 	vIdx, wIdx [][]int
+	// pts0/pts1 and loopIdx0/loopIdx1 are the plane-local (U, V) points and
+	// per-loop index arrays this construction ACTUALLY triangulated each cap
+	// from (§5's cap seeding) — the same arrays capPolygonAreaRat sums, so
+	// the published cap area can never disagree with the built cap
+	// triangles (docs/loft-design.md §8).
+	pts0, pts1         []Point2
+	loopIdx0, loopIdx1 [][]int
 	// delta is the proven displacement every held vertex carries from the
 	// exact placed image of the recorded sections (docs/loft-design.md §5,
 	// §12 PR 2a) — zero exactly when xform is r3.Identity().
@@ -428,6 +435,7 @@ func assembleLoft(ctx context.Context, pairs []loftLoopPair, f0, f1 r3.Frame, pl
 	return loftAssembly{
 		verts: verts, tris: tris, walls: walls, capStartCount: capStartCount,
 		reversed: reversed, cell: cell, side: side, vIdx: vIdx, wIdx: wIdx,
+		pts0: pts0, pts1: pts1, loopIdx0: loopIdx0, loopIdx1: loopIdx1,
 		delta: delta,
 	}, nil
 }
@@ -757,9 +765,9 @@ func buildLoftTopology(ctx context.Context, body *Body, ref StepRef, a loftAssem
 
 // capTriangleAreaAllow sums bounds.go's perturbedTriangleAreaAllow over one
 // cap's own triangulation triangles (docs/loft-design.md §12 PR 2a) — the
-// extra area a placement's delta can add to a cap's exact rational area
-// (moments.go), summed the same way loft_moments.go's accumulator sums it
-// for the wall triangles.
+// extra area a placement's delta can add to a cap's own exact rational area
+// (capPolygonAreaRat), summed the same way loft_moments.go's accumulator
+// sums it for the wall triangles.
 func capTriangleAreaAllow(verts []r3.Vec, tris [][3]int, delta float64) float64 {
 	total := 0.0
 	for _, t := range tris {
@@ -768,21 +776,55 @@ func capTriangleAreaAllow(verts []r3.Vec, tris [][3]int, delta float64) float64 
 	return total
 }
 
-// exactRegionArea returns a LineSeg-only region's exact rational area — the
-// same rational moments.go's own region-level accumulator holds, never a
-// float re-derivation (docs/loft-design.md §8: "Each cap's own contribution
-// reuses moments.go unchanged"). S3 admits only LineSeg pairs, so the
-// accumulator is always complete here; an incomplete one is an evaluator
-// invariant break rather than a caller-reachable refusal.
-func exactRegionArea(p ProfileRecord, work *freeformWork) (*big.Rat, error) {
-	ig, err := p.evaluatorIntegrals(momentAreaOrder, work)
-	if err != nil {
-		return nil, err
+// capPolygonAreaRat returns the exact rational shoelace area of the cap
+// polygon this construction ACTUALLY assembled: pts in that plane's own
+// local (U, V) coordinates, walked per loop in loopIdx's own recorded walk
+// order — assembleLoft's own pts0/loopIdx0 or pts1/loopIdx1, the identical
+// arrays triangulate2DContext consumed to build that cap's own triangles.
+// Reading the SAME points the triangles came from, rather than
+// re-deriving the region's area from the record (moments.go), is what
+// keeps the published cap Area and the built cap triangles in lockstep by
+// construction: whatever assembleLoft walked into a triangle is exactly
+// what this sums. On an untrimmed LineSeg profile that walked point IS the
+// record's own endpoint, so this sum and moments.go's region-level integral
+// are the same rational. On a TRIMMED LineSeg profile they are not: the walk
+// lands on walkOf's float lerp2 endpoint while moments.go integrates the
+// exact rational ratLerp (moments.go's ratLerp/lerp2 doc comments), and the
+// cap reading follows the walked point, because that is the point the cap's
+// own triangles have.
+//
+// The outer loop walks CCW and each hole walks CW
+// (docs/sketch-seam-design.md), and a per-loop shoelace sum already nets a
+// hole's area out with no special-casing — the identical convention
+// moments.go's own Green's-theorem accumulator relies on (ProfileRecord.
+// Area's own doc comment: "a hole's clockwise walk subtracts without a
+// special case").
+//
+// Every coordinate is taken exactly as a math/big.Rat off its own float64
+// (clearance_poly.go's mustRatOf, the package's take-the-floats-exactly
+// discipline) — no float arithmetic anywhere in this sum. mustRatOf's
+// finiteness precondition is already proven here: every pts entry is one
+// of the SAME (U, V) pairs assembleLoft already lifted through its plane
+// frame and checked with finiteVec before this function is ever reached
+// (errLoftPointUnrepresentable, S13), so a non-finite U or V would have
+// refused the build already.
+//
+// pts/loopIdx carry no assumption about segment kind, so admitting a
+// curved same-kind pairing later needs no rework here: whatever stations
+// assembleLoft chords a curve into become more pts entries this same
+// shoelace sums unchanged.
+func capPolygonAreaRat(pts []Point2, loopIdx [][]int) *big.Rat {
+	sum := new(big.Rat)
+	for _, idx := range loopIdx {
+		n := len(idx)
+		for j := range n {
+			p, q := pts[idx[j]], pts[idx[(j+1)%n]]
+			term := new(big.Rat).Mul(mustRatOf(p.U), mustRatOf(q.V))
+			term.Sub(term, new(big.Rat).Mul(mustRatOf(q.U), mustRatOf(p.V)))
+			sum.Add(sum, term)
+		}
 	}
-	if ig.exactDead || !ig.exact.complete() {
-		return nil, fmt.Errorf(`%w: the loft cap's area has no exact rational`, ErrUnsupported)
-	}
-	return ig.exact.area, nil
+	return sum.Quo(sum, big.NewRat(2, 1))
 }
 
 // validateLoftBodyMeasurements is evalLoft's own finiteness gate (design O2).
@@ -851,14 +893,8 @@ func evalLoft(ctx context.Context, d *Document, ref StepRef, pl loftPayload, bud
 		return nil, err
 	}
 
-	cap0Rat, err := exactRegionArea(pl.profile0, work0)
-	if err != nil {
-		return nil, err
-	}
-	cap1Rat, err := exactRegionArea(pl.profile1, work1)
-	if err != nil {
-		return nil, err
-	}
+	cap0Rat := capPolygonAreaRat(a.pts0, a.loopIdx0)
+	cap1Rat := capPolygonAreaRat(a.pts1, a.loopIdx1)
 
 	body := &Body{doc: d, origin: FeatureRef{Step: ref, Role: roleBody}, solid: true}
 

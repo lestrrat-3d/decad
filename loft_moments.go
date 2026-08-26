@@ -36,8 +36,9 @@ import (
 // triangulation triangle — anchored at anchor (p0's own PlaneRecord.Origin).
 // Volume, Centroid and Bounds fold every triangle handed to add; Area's wall
 // contribution folds only the triangles whose wall flag is true, since a
-// cap's own contribution is its 2-D region's exact rational area
-// (moments.go), never the sum of its triangulation's own float areas.
+// cap's own contribution is the exact rational shoelace area of the SAME
+// polygon its triangulation was built from (loft_build.go's
+// capPolygonAreaRat), never the sum of its triangulation's own float areas.
 type loftMassAccumulator struct {
 	anchor  xpt
 	anchorF r3.Vec
@@ -316,9 +317,10 @@ func (m *loftMassAccumulator) bounds() (Box, bool) {
 	}, true
 }
 
-// area publishes the two caps' own exact rational areas (moments.go's
-// ProfileRecord.Area, already-exact rationals — never the sum of their own
-// triangulations' float areas) plus the wall triangles' float sum.
+// area publishes the two caps' own exact rational areas (loft_build.go's
+// capPolygonAreaRat, the shoelace of the SAME polygon each cap was
+// triangulated from — never the sum of their own triangulations' float
+// areas) plus the wall triangles' float sum.
 //
 // The Exactness is the CONSTANT Approximate — docs/loft-design.md §8's
 // "Area is never Exact", spline design §3's arc-length asymmetry — and is
