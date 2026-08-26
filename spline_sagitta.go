@@ -24,6 +24,186 @@ import (
 // control-point-to-chord-segment argument reads no weight or parameterisation
 // at all, so it holds unchanged on a rational span even though this file
 // never has to prove that itself.
+//
+// EVERY EXACT-ARITHMETIC PRIMITIVE HERE METERS ITSELF. A primitive takes the
+// *freeformWork counter that pays for it, charges its own documented cost as
+// its first statement, and returns freeformWork.step's own Table R row R7
+// refusal unchanged — having done no work at all — when the counter cannot
+// cover it. Nothing above a primitive restates how many times it runs, so the
+// multiplicity of a charge IS the number of calls the code makes, and a caller
+// that invokes a primitive k times pays k times by construction. The cost
+// model below owns the per-operation terms; each closure reads only its own
+// operand's shape (its control count, its numerator and denominator bit
+// lengths, its dyadic exponent) and never a caller's loop bound.
+// spline_sagitta_metering_internal_test.go is the durable guard on that rule:
+// it fails if this file runs exact arithmetic anywhere but inside a metered
+// primitive's own body.
+
+// --- the cost model ---
+
+// This block is the file's cost model. Every term below is derived by COUNTING
+// the exact operations the code it names actually performs — never estimated as
+// "a handful". A term is deliberately a slight OVER-count where an operation's
+// own cost is not uniform (a normalising big.Rat.SetFrac is charged for its GCD
+// and both divisions, not as one unit), because a charge is spent BEFORE the
+// work it pays for and only an over-count keeps freeformWork a real upper
+// bound.
+//
+// The terms are OPERATION COUNTS, and an operation count alone is not a bound
+// on work: a big.Int call on a value thousands of bits wide costs orders of
+// magnitude more machine time than the same call on a machine word. So every
+// charge multiplies its operation count by widthUnits of the operand width its
+// own value carries, and one charged unit stands for one exact operation on at
+// most one 64-bit word rather than for one call of unbounded size.
+
+// widthUnits converts an operand's own bit width into the number of charged
+// units ONE exact operation on it costs: one unit per 64-bit word the value
+// occupies, and never fewer than one, so a machine-word operand still pays its
+// operation count unchanged.
+//
+// The scaling is LINEAR in the word count, which is exactly the growth of the
+// shifts, additions, subtractions, comparisons and copies that dominate this
+// file's arithmetic. It TRACKS rather than dominates the super-linear ones (a
+// multiplication, and the GCD inside a normalising SetFrac), so a unit is a
+// proportional cost signal there rather than a proof of constant cost — which
+// is what the counter needs to stop a deep walk from spending a bounded number
+// of unbounded operations, the failure a count-only model admits.
+func widthUnits(bits int) uint64 {
+	if bits <= 0 {
+		return 1
+	}
+	return uint64(1 + bits/64)
+}
+
+// ratBitWidth is the widest bit length the given exact rationals carry, across
+// every numerator and denominator. A nil operand contributes nothing: it is the
+// absent running maximum a fold starts from, never a value with a width.
+func ratBitWidth(rs ...*big.Rat) int {
+	widest := 0
+	for _, r := range rs {
+		if r == nil {
+			continue
+		}
+		widest = max(widest, r.Num().BitLen(), r.Denom().BitLen())
+	}
+	return widest
+}
+
+// ratPointReconstructCost is dyadicSpan.ratPointAt's own per-CALL operation
+// count: one big.Int.Lsh for the shared scale, then two big.Rat.SetFrac.
+// SetFrac NORMALISES — a GCD plus a division of each of numerator and
+// denominator — so it is charged 3, making it the heaviest single operation on
+// the per-point path, and it is charged rather than left free as the
+// reconstruction it is. 1 + 3 + 3 = 7.
+const ratPointReconstructCost = 7
+
+// ratPointCopyCost is ratPointCopy's own per-call operation count: two
+// big.Rat.Set, one per coordinate.
+const ratPointCopyCost = 2
+
+// chordFrameCost is ratChordFrame's own per-call operation count: 2 Sub for the
+// chord vector, then 2 Mul + 1 Add for its squared length. 5.
+const chordFrameCost = 5
+
+// chordProjectionCost is chordSegmentSquaredDistance's own per-call operation
+// count: 2 Sub for p−a, 2 Mul + 1 Add for the dot product, 1 Quo for t, 1 Cmp +
+// 1 SetInt64 for the clamp, 2 Mul + 2 Add for the clamped point, 2 Sub for the
+// difference, 2 Mul + 1 Add for the squared distance = 17. The d == 0 branch
+// runs strictly fewer operations (2 Sub + 2 Mul + 1 Add), so this same term
+// bounds a collapsed chord too. The running-maximum comparison is NOT folded in
+// here: it is ratRunningMax's own charge, spent by ratRunningMax on its own call.
+const chordProjectionCost = 17
+
+// ratCompareCost is ratRunningMax's own per-call operation count: one big.Rat.Cmp.
+const ratCompareCost = 1
+
+// chordVectorCost is spanChordVector's own per-call operation count: 2 Sub.
+const chordVectorCost = 2
+
+// chordSquaredCost is spanChordSquared's own per-call operation count, over and
+// above the chord vector it asks spanChordVector for: 2 Mul + 1 Add.
+const chordSquaredCost = 3
+
+// hodographGapCost is spanHodographGapUpper's own per-index operation count: 3
+// for hu (Sub, Mul, Sub), 3 for hv, 2 Mul + 1 Add for the squared norm, and 1
+// Cmp against its running maximum. It is charged per POINT rather than per
+// index, which over-covers the loop's own n−1 indices and absorbs the degree
+// rational the loop builds once inside that slack.
+const hodographGapCost = 10
+
+// ratSqrtUpCost is chargedRatSqrtUp's own per-call operation count for the
+// single outward rounding each measurement commits (ratSqrtUp,
+// spline_length.go). It is bounded, not open-ended: ratSqrtSeed costs at most 4
+// (a big.Float SetRat, MantExp and Float64), and the directed walk runs at most
+// sqrtAdjustLimit iterations of two ratSquare probes (1 floatRat + 1 Mul + 1
+// Cmp each) plus one Nextafter. 4 + 8·7 = 60, charged as 64. It is a per-call
+// term because one ratSqrtUp rounds a whole span's selected maximum, never one
+// per point.
+const ratSqrtUpCost = 64
+
+// dyadicConversionCostPerPoint is dyadicSpanOf's own per-point operation count
+// (spline_length.go): two ratLCM folds over the running denominator (a GCD, a
+// Quo and a Mul each = 3) and two scaledNumerator scalings (a Quo and a Mul
+// each = 2). 6 + 4 = 10.
+const dyadicConversionCostPerPoint = 10
+
+// dyadicMidpointOps is one exact dyadicMidpoint blend's own operation count
+// (spline_length.go): two alignedSum, each a big.Int.Lsh plus an Add, plus the
+// second operand's own Lsh where its shift is nonzero. 2·3 = 6, the branch that
+// shifts BOTH numerators, since only an over-count bounds the other.
+const dyadicMidpointOps = 6
+
+// dyadicBlendOpsPerPair is dyadicMidpointOps with dyadicSplit's own halving
+// folded in: a split of n control points blends n(n−1)/2 de Casteljau pairs, so
+// the blend total is n(n−1) times this, and the saturating multiply never has a
+// ceiling to divide afterwards.
+const dyadicBlendOpsPerPair = dyadicMidpointOps / 2
+
+// dyadicSplitBookkeepingOps is dyadicSpan.split's own per-point operation count
+// outside the blends: three slice allocations and one copy of the parent's own
+// points, then one append into each half per level. 4.
+const dyadicSplitBookkeepingOps = 4
+
+// dyadicSplitOps is the exact big.Int operation count ONE de Casteljau
+// bisection of an n-control span performs: n(n−1)/2 midpoint blends at
+// dyadicMidpointOps each, plus the split's own allocations, copy and appends.
+// dyadicSpan.split (spline_length.go) spends it scaled by its own operand
+// width, and it is the only description of that count the metered surface has.
+//
+// freeformBracketCost (spline_length.go) charges the same bisections in a
+// DIFFERENT unit — one per coordinate blend, roughly a third of this — and
+// deliberately does not read this closed form. Its own doc comment owns why:
+// that ceiling is whole-record and already 91% spent by a shipping record, so
+// converting it to this unit would refuse a capability rather than account for
+// one.
+func dyadicSplitOps(n uint64) uint64 {
+	if n < 2 {
+		return costMul(dyadicSplitBookkeepingOps, n)
+	}
+	return costAdd(
+		costMul(costMul(n, n-1), dyadicBlendOpsPerPair),
+		costMul(dyadicSplitBookkeepingOps, n),
+	)
+}
+
+// dyadicSpanOfCharge is dyadicSpanOf's own charge (spline_length.go), read off
+// the span it is handed and nothing else. The width is an upper bound on the
+// operands the conversion actually builds: the running least common multiple's
+// bit length is at most the SUM of the denominators folded into it, and
+// scaledNumerator then multiplies a numerator by a quotient of that multiple.
+func dyadicSpanOfCharge(span bezierSpan) uint64 {
+	denBits, numBits := 0, 0
+	for _, p := range span {
+		denBits += p.u.Denom().BitLen() + p.v.Denom().BitLen()
+		numBits = max(numBits, p.u.Num().BitLen(), p.v.Num().BitLen())
+	}
+	return costMul(
+		costMul(dyadicConversionCostPerPoint, uint64(len(span))),
+		widthUnits(denBits+numBits),
+	)
+}
+
+// --- the metered primitives ---
 
 // chordSegmentSquaredDistance is the exact squared distance from point p to
 // the closed segment a→(a+bax, a+bay), a CLAMPED rational projection: with
@@ -32,9 +212,9 @@ import (
 // is |p − (a + t·(bax, bay))|².
 //
 // bax, bay and d are the chord's own vector and its squared length, computed
-// ONCE by the caller and shared across every control point of the span the
-// chord belongs to — this function never recomputes them, which is what keeps
-// one span's whole sagitta reading linear in its control count rather than
+// ONCE per span by ratChordFrame and shared across every control point of the
+// span the chord belongs to — this function never recomputes them, which is what
+// keeps one span's whole sagitta reading linear in its control count rather than
 // quadratic.
 //
 // d == 0 means a and the chord's other end coincide, so the segment is a
@@ -44,11 +224,17 @@ import (
 // projection — it is what the projection degenerates to algebraically once
 // the chord has zero length — so it is stated here only to avoid a division
 // by zero, never as a special case of the bound itself.
-func chordSegmentSquaredDistance(p, a ratPoint, bax, bay, d *big.Rat) *big.Rat {
+//
+// It charges chordProjectionCost at its own operand width, first, and returns
+// having done nothing when the counter cannot cover it.
+func chordSegmentSquaredDistance(w *freeformWork, p, a ratPoint, bax, bay, d *big.Rat) (*big.Rat, error) {
+	if err := w.step(costMul(chordProjectionCost, widthUnits(ratBitWidth(p.u, p.v, a.u, a.v, bax, bay, d)))); err != nil {
+		return nil, err
+	}
 	pax := new(big.Rat).Sub(p.u, a.u)
 	pay := new(big.Rat).Sub(p.v, a.v)
 	if d.Sign() == 0 {
-		return new(big.Rat).Add(new(big.Rat).Mul(pax, pax), new(big.Rat).Mul(pay, pay))
+		return new(big.Rat).Add(new(big.Rat).Mul(pax, pax), new(big.Rat).Mul(pay, pay)), nil
 	}
 	t := new(big.Rat).Quo(new(big.Rat).Add(new(big.Rat).Mul(pax, bax), new(big.Rat).Mul(pay, bay)), d)
 	switch {
@@ -61,8 +247,119 @@ func chordSegmentSquaredDistance(p, a ratPoint, bax, bay, d *big.Rat) *big.Rat {
 	cv := new(big.Rat).Add(a.v, new(big.Rat).Mul(t, bay))
 	du := new(big.Rat).Sub(p.u, cu)
 	dv := new(big.Rat).Sub(p.v, cv)
-	return new(big.Rat).Add(new(big.Rat).Mul(du, du), new(big.Rat).Mul(dv, dv))
+	return new(big.Rat).Add(new(big.Rat).Mul(du, du), new(big.Rat).Mul(dv, dv)), nil
 }
+
+// ratChordFrame is the shared chord frame every sagitta reading projects
+// against: the vector from a to b and that vector's own exact squared length,
+// built ONCE per span so chordSegmentSquaredDistance never rebuilds it per
+// point.
+//
+// It charges chordFrameCost at its own operand width, first.
+func ratChordFrame(w *freeformWork, a, b ratPoint) (*big.Rat, *big.Rat, *big.Rat, error) {
+	if err := w.step(costMul(chordFrameCost, widthUnits(ratBitWidth(a.u, a.v, b.u, b.v)))); err != nil {
+		return nil, nil, nil, err
+	}
+	bax := new(big.Rat).Sub(b.u, a.u)
+	bay := new(big.Rat).Sub(b.v, a.v)
+	d := new(big.Rat).Add(new(big.Rat).Mul(bax, bax), new(big.Rat).Mul(bay, bay))
+	return bax, bay, d, nil
+}
+
+// ratRunningMax folds one candidate into a running exact maximum. A nil running
+// maximum is the fold's own start — the candidate wins with no comparison at
+// all — and the charge is spent unconditionally anyway, because a charge that
+// skipped a branch would make the count depend on the data rather than on the
+// call.
+//
+// It charges ratCompareCost at its own operand width, first.
+func ratRunningMax(w *freeformWork, best, candidate *big.Rat) (*big.Rat, error) {
+	if err := w.step(costMul(ratCompareCost, widthUnits(ratBitWidth(best, candidate)))); err != nil {
+		return nil, err
+	}
+	if best == nil || candidate.Cmp(best) > 0 {
+		return candidate, nil
+	}
+	return best, nil
+}
+
+// ratPointCopy duplicates an exact rational point so the copy shares no storage
+// with its source. It is a metered primitive rather than a free convenience
+// because a big.Rat.Set of a wide value copies every word of it.
+//
+// It charges ratPointCopyCost at its own operand width, first.
+func ratPointCopy(w *freeformWork, p ratPoint) (ratPoint, error) {
+	if err := w.step(costMul(ratPointCopyCost, widthUnits(ratBitWidth(p.u, p.v)))); err != nil {
+		return ratPoint{}, err
+	}
+	return ratPoint{u: new(big.Rat).Set(p.u), v: new(big.Rat).Set(p.v)}, nil
+}
+
+// chargedRatSqrtUp is this file's metered entry point for ratSqrtUp
+// (spline_length.go), the one outward rounding a free-form bound commits. Every
+// reading in this file rounds through it and none calls ratSqrtUp directly, so
+// the number of roundings charged is the number performed.
+//
+// ratSqrtUp itself keeps its unmetered signature for the ANALYTIC readers that
+// share it — a prism's arc radius, a revolve's amplitude, a cap band's contour
+// (extrude.go, revolve.go, capblend_contour.go, moments.go, loft_moments.go,
+// bounds.go) — none of which walks a free-form record and none of which holds a
+// freeformWork counter to charge.
+//
+// It charges ratSqrtUpCost at the radicand's own width, first.
+func chargedRatSqrtUp(w *freeformWork, q *big.Rat) (float64, error) {
+	if err := w.step(costMul(ratSqrtUpCost, widthUnits(ratBitWidth(q)))); err != nil {
+		return 0, err
+	}
+	return ratSqrtUp(q), nil
+}
+
+// ratPointAt reconstructs split value i's exact rational coordinate:
+// numerator / (den · 2^exp), the inverse of the factored form dyadicSpanOf
+// and split (spline_length.go) build it in. Every value that form holds is
+// exact — a den·2^exp scaling and an integer numerator, never a normalised
+// rational — so this reconstruction loses nothing: the ratPoint it returns is
+// the value the split produced, to the last bit, and big.Rat.SetFrac copies
+// rather than aliases its arguments, so the result shares no storage with the
+// dyadicSpan it was read from.
+//
+// It charges ratPointReconstructCost at value i's OWN width, first — the
+// denominator den·2^exp it normalises against, or either numerator, whichever
+// is widest — so a reconstruction at depth pays for the wider integers depth
+// gave it.
+func (s dyadicSpan) ratPointAt(w *freeformWork, i int) (ratPoint, error) {
+	p := s.points[i]
+	if err := w.step(costMul(ratPointReconstructCost, widthUnits(s.valueWidth(p)))); err != nil {
+		return ratPoint{}, err
+	}
+	scale := new(big.Int).Lsh(s.den, p.exp)
+	return ratPoint{
+		u: new(big.Rat).SetFrac(p.u, scale),
+		v: new(big.Rat).SetFrac(p.v, scale),
+	}, nil
+}
+
+// bezierSpan reconstructs a dyadicSpan's own control points as a bezierSpan —
+// the form spanMatchedDeltaUpper/spanHodographGapUpper read — by calling
+// ratPointAt over every index. It is ratPointAt's own doc comment's
+// "reconstruction" extended to a whole span rather than one point: every
+// value is exact and the result shares no storage with s.
+//
+// It holds no charge of its own; every unit it spends is ratPointAt's, spent
+// once per index it actually reconstructs.
+func (s dyadicSpan) bezierSpan(w *freeformWork) (bezierSpan, error) {
+	span := make(bezierSpan, len(s.points))
+	for i := range s.points {
+		p, err := s.ratPointAt(w, i)
+		if err != nil {
+			return nil, err
+		}
+		span[i] = p
+	}
+	return span, nil
+}
+
+// --- the sagitta reading ---
 
 // dyadicSpanSagittaUpper is docs/spline-design.md §6.2.1's bound, over the
 // dyadic form pairStations' own bisection already holds: the maximum,
@@ -86,35 +383,55 @@ func chordSegmentSquaredDistance(p, a ratPoint, bax, bay, d *big.Rat) *big.Rat {
 // derived from the general formula rather than bolted onto it as a special
 // case.
 //
-// The single rounding is the final ratSqrtUp: the exact rational maximum
+// The single rounding is the final chargedRatSqrtUp: the exact rational maximum
 // squared distance is rounded OUTWARD once, so the published float64 is an
 // over-statement of the true bound, never an understatement. Where that exact
-// maximum's root itself runs past the representable float64 range,
-// ratSqrtUp's own contract returns +Inf — a valid, if useless, upper bound;
-// this function has no error return of its own to refuse with, and a caller
-// that needs a decision on that (pairStations, via its own station cap) makes
-// it by continuing to bisect until its cap fires rather than by trusting a
-// bound this wide.
-func dyadicSpanSagittaUpper(s dyadicSpan) float64 {
+// maximum's root itself runs past the representable float64 range, ratSqrtUp's
+// own contract returns +Inf — a valid, if useless, upper bound; this function's
+// only error is the counter's own refusal, and a caller that needs a decision on
+// a bound that wide (pairStations, via its own station cap) makes it by
+// continuing to bisect until its cap fires rather than by trusting it.
+//
+// It holds no aggregate charge of its own. Its cost is exactly the charges its
+// own calls spend — the two chord-end reconstructions, the chord frame, then one
+// reconstruction, one projection and one comparison per control point, and the
+// one outward rounding — so the two chord-end reads that a per-point aggregate
+// silently omitted are paid for here by the simple fact that the code makes
+// them.
+func dyadicSpanSagittaUpper(w *freeformWork, s dyadicSpan) (float64, error) {
 	n := len(s.points)
 	if n == 0 {
-		return 0
+		return 0, nil
 	}
-	a := s.ratPointAt(0)
-	b := s.ratPointAt(n - 1)
-	bax := new(big.Rat).Sub(b.u, a.u)
-	bay := new(big.Rat).Sub(b.v, a.v)
-	d := new(big.Rat).Add(new(big.Rat).Mul(bax, bax), new(big.Rat).Mul(bay, bay))
+	a, err := s.ratPointAt(w, 0)
+	if err != nil {
+		return 0, err
+	}
+	b, err := s.ratPointAt(w, n-1)
+	if err != nil {
+		return 0, err
+	}
+	bax, bay, d, err := ratChordFrame(w, a, b)
+	if err != nil {
+		return 0, err
+	}
 
 	var maxSq *big.Rat
 	for i := range n {
-		p := s.ratPointAt(i)
-		sq := chordSegmentSquaredDistance(p, a, bax, bay, d)
-		if maxSq == nil || sq.Cmp(maxSq) > 0 {
-			maxSq = sq
+		p, err := s.ratPointAt(w, i)
+		if err != nil {
+			return 0, err
+		}
+		sq, err := chordSegmentSquaredDistance(w, p, a, bax, bay, d)
+		if err != nil {
+			return 0, err
+		}
+		maxSq, err = ratRunningMax(w, maxSq, sq)
+		if err != nil {
+			return 0, err
 		}
 	}
-	return ratSqrtUp(maxSq)
+	return chargedRatSqrtUp(w, maxSq)
 }
 
 // spanSagittaUpper is dyadicSpanSagittaUpper's entry point for a caller
@@ -123,140 +440,14 @@ func dyadicSpanSagittaUpper(s dyadicSpan) float64 {
 // once through dyadicSpanOf (spline_length.go) and reuses the identical
 // arithmetic dyadicSpanSagittaUpper runs on every dyadic cell pairStations
 // bisects, so the sagitta bound exists in exactly one place regardless of
-// which form a caller starts from.
-func spanSagittaUpper(span bezierSpan) float64 {
-	return dyadicSpanSagittaUpper(dyadicSpanOf(span))
-}
-
-// ratPointAt reconstructs split value i's exact rational coordinate:
-// numerator / (den · 2^exp), the inverse of the factored form dyadicSpanOf
-// and split (spline_length.go) build it in. Every value that form holds is
-// exact — a den·2^exp scaling and an integer numerator, never a normalised
-// rational — so this reconstruction loses nothing: the ratPoint it returns is
-// the value the split produced, to the last bit, and big.Rat.SetFrac copies
-// rather than aliases its arguments, so the result shares no storage with the
-// dyadicSpan it was read from.
-func (s dyadicSpan) ratPointAt(i int) ratPoint {
-	p := s.points[i]
-	scale := new(big.Int).Lsh(s.den, p.exp)
-	return ratPoint{
-		u: new(big.Rat).SetFrac(p.u, scale),
-		v: new(big.Rat).SetFrac(p.v, scale),
+// which form a caller starts from. Both phases charge the counter it is
+// handed, each on its own call.
+func spanSagittaUpper(w *freeformWork, span bezierSpan) (float64, error) {
+	s, err := dyadicSpanOf(w, span)
+	if err != nil {
+		return 0, err
 	}
-}
-
-// bezierSpan reconstructs a dyadicSpan's own control points as a bezierSpan —
-// the form spanMatchedDeltaUpper/spanHodographGapUpper read — by calling
-// ratPointAt over every index. It is ratPointAt's own doc comment's
-// "reconstruction" extended to a whole span rather than one point: every
-// value is exact and the result shares no storage with s.
-func (s dyadicSpan) bezierSpan() bezierSpan {
-	span := make(bezierSpan, len(s.points))
-	for i := range s.points {
-		span[i] = s.ratPointAt(i)
-	}
-	return span
-}
-
-// This block is the file's cost model. Every charge below is built from ONE
-// named per-operation term, and each term is derived by COUNTING the exact
-// operations the code it names actually performs — never estimated as "a
-// handful". A term is deliberately a slight OVER-count where an operation's
-// own cost is not uniform (a normalising big.Rat.SetFrac is charged for its
-// GCD and both divisions, not as one unit), because a charge is spent BEFORE
-// the work it pays for and only an over-count keeps freeformWork a real upper
-// bound.
-//
-// The two measurements this file charges are separate readings over separate
-// code, so they carry separate per-point terms rather than one shared
-// constant: the sagitta reading runs chordSegmentSquaredDistance, the
-// matched-delta reading runs spanHodographGapUpper, and the two counts differ.
-
-// ratPointReconstructCost is dyadicSpan.ratPointAt's own per-point charge: one
-// big.Int.Lsh for the shared scale, then two big.Rat.SetFrac. SetFrac
-// NORMALISES — a GCD plus a division of each of numerator and denominator —
-// so it is charged 3, making it the heaviest single operation on the per-point
-// path, and it is charged here rather than left free as the reconstruction it
-// is. 1 + 3 + 3 = 7.
-const ratPointReconstructCost = 7
-
-// chordProjectionCost is chordSegmentSquaredDistance's own per-point charge
-// plus the caller's running-maximum comparison: 2 Sub for p−a, 2 Mul + 1 Add
-// for the dot product, 1 Quo for t, 1 Cmp + 1 SetInt64 for the clamp, 2 Mul +
-// 2 Add for the clamped point, 2 Sub for the difference, 2 Mul + 1 Add for the
-// squared distance = 17, then 1 Cmp against dyadicSpanSagittaUpper's own
-// running maximum. The d == 0 branch runs strictly fewer operations (2 Sub +
-// 2 Mul + 1 Add), so this same term bounds a collapsed chord too.
-const chordProjectionCost = 18
-
-// hodographGapCost is spanHodographGapUpper's own per-index charge: 3 for hu
-// (Sub, Mul, Sub), 3 for hv, 2 Mul + 1 Add for the squared norm, and 1 Cmp
-// against its running maximum. It is charged per POINT rather than per index,
-// which over-covers the loop's own n−1 indices and absorbs spanChordVector's
-// once-per-call 2 Sub inside that slack.
-const hodographGapCost = 10
-
-// ratSqrtUpCost is the per-CALL charge for the single outward rounding each
-// measurement commits (ratSqrtUp, spline_length.go). It is bounded, not
-// open-ended: ratSqrtSeed costs at most 4 (a big.Float SetRat, MantExp and
-// Float64), and the directed walk runs at most sqrtAdjustLimit iterations of
-// two ratSquare probes (1 floatRat + 1 Mul + 1 Cmp each) plus one Nextafter.
-// 4 + 8·7 = 60, charged as 64. It is a per-call term because one ratSqrtUp
-// rounds the whole span's selected maximum, never one per point.
-const ratSqrtUpCost = 64
-
-// dyadicConversionCostPerPoint is dyadicSpanOf's own per-point charge
-// (spline_length.go): two ratLCM folds over the running denominator (a GCD, a
-// Quo and a Mul each = 3) and two scaledNumerator scalings (a Quo and a Mul
-// each = 2). 6 + 4 = 10. pairStations charges it before converting each input
-// span, so the conversion that opens the walk is paid for like every step
-// inside it.
-const dyadicConversionCostPerPoint = 10
-
-// sagittaMeasureCostPerPoint is one control point's whole sagitta-measurement
-// charge: dyadicSpanSagittaUpper reconstructs the point (ratPointReconstructCost)
-// and then projects it onto the shared chord (chordProjectionCost). The chord's
-// own vector and squared length are computed once per span and shared across
-// every point, which is what keeps this charge linear rather than quadratic.
-const sagittaMeasureCostPerPoint = ratPointReconstructCost + chordProjectionCost
-
-// matchedDeltaMeasureCostPerPoint is one control point's whole matched-delta
-// charge, derived on its OWN code path rather than borrowed from the sagitta's:
-// dyadicSpan.bezierSpan reconstructs the point (ratPointReconstructCost) and
-// spanHodographGapUpper then reads it (hodographGapCost). spanMatchedDeltaUpper's
-// own halving is one exact division by a power of two, absorbed in the same
-// slack hodographGapCost's per-point over-count already carries.
-const matchedDeltaMeasureCostPerPoint = ratPointReconstructCost + hodographGapCost
-
-// sagittaMeasureCost is one dyadic cell's own sagitta-measurement charge:
-// linear in its control count, plus the one outward rounding the reading ends
-// with.
-func sagittaMeasureCost(n int) uint64 {
-	return costAdd(costMul(uint64(n), sagittaMeasureCostPerPoint), ratSqrtUpCost)
-}
-
-// matchedDeltaMeasureCost is one dyadic cell's own matched-delta charge, the
-// same shape sagittaMeasureCost carries over its own per-point term. The two
-// are separate functions because they pay for separate work; neither may stand
-// in for the other.
-func matchedDeltaMeasureCost(n int) uint64 {
-	return costAdd(costMul(uint64(n), matchedDeltaMeasureCostPerPoint), ratSqrtUpCost)
-}
-
-// dyadicConversionCost is one input span's own dyadicSpanOf charge, linear in
-// its control count.
-func dyadicConversionCost(n int) uint64 {
-	return costMul(uint64(n), dyadicConversionCostPerPoint)
-}
-
-// sagittaSplitCost is one dyadic cell's own de Casteljau bisection charge:
-// dyadicSpan.split (spline_length.go) runs n(n−1)/2 exact dyadicMidpoint
-// blends for a span of n control points — the identical shape
-// freeformBracketCost already charges as "perSplit" for its own fixed-depth
-// bisection in spline_length.go, restated here because a target-driven
-// bisection charges it per cell rather than per fixed level.
-func sagittaSplitCost(n int) uint64 {
-	return costMul(uint64(n), uint64(n-1))
+	return dyadicSpanSagittaUpper(w, s)
 }
 
 // pairStations generates docs/spline-design.md §6.2.1's shared dyadic chord
@@ -349,17 +540,16 @@ func sagittaSplitCost(n int) uint64 {
 //
 // work0/work1 are the two records' OWN free-form work counters
 // (docs/spline-design.md §5.2) — this function mints no counter of its own.
-// Side 0's cost charges work0 and side 1's charges work1, independently,
+// Side 0's work charges work0 and side 1's charges work1, independently,
 // because the two sides' spans can carry different control counts even on a
-// same-kind pairing. Four charges are spent, each BEFORE the work it pays for
-// and each derived on its own code path by this file's own cost model: the
-// input conversion (dyadicConversionCost), every cell's sagitta measurement
-// (sagittaMeasureCost), an accepted cell's matched-delta measurement
-// (matchedDeltaMeasureCost, at ACCEPT time only), and a bisected cell's split
-// (sagittaSplitCost). They use the same saturating costMul/costAdd arithmetic
-// every other free-form charge in this package uses; an exhausted budget
-// returns freeformWork.step's own Table R row R7 refusal unchanged, and a nil
-// counter is tolerated exactly as freeformWork.step already tolerates one.
+// same-kind pairing. NOTHING HERE STATES A COST: every unit spent is spent
+// inside the primitive that does the work — the conversion, each
+// reconstruction, each projection, each comparison, each outward rounding, each
+// split, each final-station copy — so the multiplicity of every charge is the
+// number of calls this walk makes and never a number restated at a call site.
+// An exhausted budget returns freeformWork.step's own Table R row R7 refusal
+// unchanged, and a nil counter is tolerated exactly as freeformWork.step
+// already tolerates one.
 //
 // DETERMINISM: the recursion below is a fixed left-to-right, depth-first walk
 // over an ordered slice of spans, with no map anywhere on the path from the
@@ -389,10 +579,10 @@ func pairStations(spans0, spans1 []bezierSpan, target float64, work0, work1 *fre
 	// so refusing it HERE, before the first dyadicSpanOf conversion, is enough
 	// to keep every cell walkCell ever sees at n >= 1: dyadicSpanSagittaUpper's
 	// own n==0 guard exists for a caller that reaches it directly (spanSagittaUpper,
-	// with no error return of its own to refuse with), not for this walk, whose
-	// accept branch unconditionally reads ratPointAt(0) — reachable only because
-	// that guard's 0 answer let the cell through, an index-out-of-range panic
-	// otherwise, never a wrong Measurement.
+	// whose only error is the counter's), not for this walk, whose accept branch
+	// unconditionally reads ratPointAt(0) — reachable only because that guard's 0
+	// answer let the cell through, an index-out-of-range panic otherwise, never a
+	// wrong Measurement.
 	for i := range spans0 {
 		if len(spans0[i]) == 0 || len(spans1[i]) == 0 {
 			return nil, nil, nil, 0, fmt.Errorf(
@@ -404,18 +594,19 @@ func pairStations(spans0, spans1 []bezierSpan, target float64, work0, work1 *fre
 
 	gen := &sagittaStationWalk{target: target, work0: work0, work1: work1, frontier: len(spans0)}
 	for i := range spans0 {
-		// The dyadicSpanOf conversion that opens the walk is charged like
+		// The dyadicSpanOf conversion that opens the walk charges itself, like
 		// every step inside it: it runs its own exact big.Int arithmetic per
-		// control point (dyadicConversionCost), and leaving it free would let
-		// a chain of very wide spans do unbounded work before the first cell
-		// is ever measured.
-		if err := work0.step(dyadicConversionCost(len(spans0[i]))); err != nil {
+		// control point, and leaving it free would let a chain of very wide
+		// spans do unbounded work before the first cell is ever measured.
+		cell0, err := dyadicSpanOf(work0, spans0[i])
+		if err != nil {
 			return nil, nil, nil, 0, err
 		}
-		if err := work1.step(dyadicConversionCost(len(spans1[i]))); err != nil {
+		cell1, err := dyadicSpanOf(work1, spans1[i])
+		if err != nil {
 			return nil, nil, nil, 0, err
 		}
-		if err := gen.walkCell(dyadicSpanOf(spans0[i]), dyadicSpanOf(spans1[i])); err != nil {
+		if err := gen.walkCell(cell0, cell1); err != nil {
 			return nil, nil, nil, 0, err
 		}
 	}
@@ -434,11 +625,21 @@ func pairStations(spans0, spans1 []bezierSpan, target float64, work0, work1 *fre
 	// caller's own last0[len(last0)-1]/last1[len(last1)-1] ratPoint directly
 	// would break that guarantee for this ONE station — it would alias the
 	// input span's own *big.Rat fields, so a caller mutating a returned station
-	// in place would silently corrupt the span it originally passed in.
+	// in place would silently corrupt the span it originally passed in. The copy
+	// runs through ratPointCopy, which charges for it, because copying a wide
+	// rational is real work and every other reconstruction in this walk pays.
 	last0 := spans0[len(spans0)-1][len(spans0[len(spans0)-1])-1]
 	last1 := spans1[len(spans1)-1][len(spans1[len(spans1)-1])-1]
-	gen.stations0 = append(gen.stations0, ratPoint{u: new(big.Rat).Set(last0.u), v: new(big.Rat).Set(last0.v)})
-	gen.stations1 = append(gen.stations1, ratPoint{u: new(big.Rat).Set(last1.u), v: new(big.Rat).Set(last1.v)})
+	end0, err := ratPointCopy(work0, last0)
+	if err != nil {
+		return nil, nil, nil, 0, err
+	}
+	end1, err := ratPointCopy(work1, last1)
+	if err != nil {
+		return nil, nil, nil, 0, err
+	}
+	gen.stations0 = append(gen.stations0, end0)
+	gen.stations1 = append(gen.stations1, end1)
 	return gen.stations0, gen.stations1, gen.matchedDelta, gen.sagittaUpper, nil
 }
 
@@ -481,39 +682,52 @@ type sagittaStationWalk struct {
 //
 // Accepting moves this cell off the frontier and into the chord count, leaving
 // their sum unchanged; splitting raises it by one, which is why the cap is
-// read here and only here, before the split runs and before its cost is
-// charged. Since the recursion below is reachable only through that charged
-// split, the same read is what bounds the walk's own depth and breadth
-// (pairStations' own doc comment states the termination argument in full).
+// read here and only here, before the split runs. Since the recursion below is
+// reachable only through that split, the same read is what bounds the walk's own
+// depth and breadth (pairStations' own doc comment states the termination
+// argument in full).
+//
+// NO CHARGE IS SPENT HERE. Every measurement, reconstruction and bisection below
+// charges its own counter from inside the primitive that performs it, so this
+// function never restates what any of them costs or how often it runs.
 func (g *sagittaStationWalk) walkCell(c0, c1 dyadicSpan) error {
-	n0, n1 := len(c0.points), len(c1.points)
-	if err := g.work0.step(sagittaMeasureCost(n0)); err != nil {
+	sag0, err := dyadicSpanSagittaUpper(g.work0, c0)
+	if err != nil {
 		return err
 	}
-	if err := g.work1.step(sagittaMeasureCost(n1)); err != nil {
+	sag1, err := dyadicSpanSagittaUpper(g.work1, c1)
+	if err != nil {
 		return err
 	}
-	sag0 := dyadicSpanSagittaUpper(c0)
-	sag1 := dyadicSpanSagittaUpper(c1)
 	if math.Max(sag0, sag1) <= g.target {
-		// The matched-delta charge is its OWN derived cost, never the
-		// sagitta's reused: c0.bezierSpan() reconstructs every control point
-		// again and spanHodographGapUpper reads a different set of exact
-		// operations from chordSegmentSquaredDistance's projection, so the two
-		// per-point terms differ and each is counted on its own code path
-		// (this file's own cost model).
-		if err := g.work0.step(matchedDeltaMeasureCost(n0)); err != nil {
+		span0, err := c0.bezierSpan(g.work0)
+		if err != nil {
 			return err
 		}
-		if err := g.work1.step(matchedDeltaMeasureCost(n1)); err != nil {
+		span1, err := c1.bezierSpan(g.work1)
+		if err != nil {
 			return err
 		}
-		md0 := spanMatchedDeltaUpper(c0.bezierSpan())
-		md1 := spanMatchedDeltaUpper(c1.bezierSpan())
+		md0, err := spanMatchedDeltaUpper(g.work0, span0)
+		if err != nil {
+			return err
+		}
+		md1, err := spanMatchedDeltaUpper(g.work1, span1)
+		if err != nil {
+			return err
+		}
+		start0, err := c0.ratPointAt(g.work0, 0)
+		if err != nil {
+			return err
+		}
+		start1, err := c1.ratPointAt(g.work1, 0)
+		if err != nil {
+			return err
+		}
 		g.frontier--
 		g.chords++
-		g.stations0 = append(g.stations0, c0.ratPointAt(0))
-		g.stations1 = append(g.stations1, c1.ratPointAt(0))
+		g.stations0 = append(g.stations0, start0)
+		g.stations1 = append(g.stations1, start1)
 		g.matchedDelta = append(g.matchedDelta, math.Max(md0, md1))
 		g.sagittaUpper = math.Max(g.sagittaUpper, math.Max(sag0, sag1))
 		return nil
@@ -522,15 +736,15 @@ func (g *sagittaStationWalk) walkCell(c0, c1 dyadicSpan) error {
 	if g.chords+g.frontier+1 > maxChordsPerWalk {
 		return errTooManyChords
 	}
-	if err := g.work0.step(sagittaSplitCost(n0)); err != nil {
+	left0, right0, err := c0.split(g.work0)
+	if err != nil {
 		return err
 	}
-	if err := g.work1.step(sagittaSplitCost(n1)); err != nil {
+	left1, right1, err := c1.split(g.work1)
+	if err != nil {
 		return err
 	}
 	g.frontier++
-	left0, right0 := c0.split()
-	left1, right1 := c1.split()
 	if err := g.walkCell(left0, left1); err != nil {
 		return err
 	}
@@ -543,19 +757,34 @@ func (g *sagittaStationWalk) walkCell(c0, c1 dyadicSpan) error {
 // than the SET-distance sagitta above. No caller may pass the sagitta where
 // this is owed. Every function below is Tier A / polynomial-Bézier only, for
 // the identical reason spanSagittaUpper is (this file's own header): a
-// rational span never reaches here (Table R row R10 refuses it first).
+// rational span never reaches here (Table R row R10 refuses it first). Each is
+// metered on its own call, like every other primitive in this file.
 
 // spanChordVector returns a Tier A span's own chord vector Δ = P_p − P_0, the
 // shared quantity spanHodographGapUpper and spanSpeedUpper each build on.
-func spanChordVector(span bezierSpan) (dxU, dxV *big.Rat) {
+//
+// It charges chordVectorCost at its own operand width, first.
+func spanChordVector(w *freeformWork, span bezierSpan) (*big.Rat, *big.Rat, error) {
 	a, b := span[0], span[len(span)-1]
-	return new(big.Rat).Sub(b.u, a.u), new(big.Rat).Sub(b.v, a.v)
+	if err := w.step(costMul(chordVectorCost, widthUnits(ratBitWidth(a.u, a.v, b.u, b.v)))); err != nil {
+		return nil, nil, err
+	}
+	return new(big.Rat).Sub(b.u, a.u), new(big.Rat).Sub(b.v, a.v), nil
 }
 
 // spanChordSquared is the exact squared length of spanChordVector's own Δ.
-func spanChordSquared(span bezierSpan) *big.Rat {
-	dxU, dxV := spanChordVector(span)
-	return new(big.Rat).Add(new(big.Rat).Mul(dxU, dxU), new(big.Rat).Mul(dxV, dxV))
+//
+// It charges chordSquaredCost for its own two multiplications and one addition,
+// first; the vector it squares is spanChordVector's own charge, spent there.
+func spanChordSquared(w *freeformWork, span bezierSpan) (*big.Rat, error) {
+	dxU, dxV, err := spanChordVector(w, span)
+	if err != nil {
+		return nil, err
+	}
+	if err := w.step(costMul(chordSquaredCost, widthUnits(ratBitWidth(dxU, dxV)))); err != nil {
+		return nil, err
+	}
+	return new(big.Rat).Add(new(big.Rat).Mul(dxU, dxU), new(big.Rat).Mul(dxV, dxV)), nil
 }
 
 // spanHodographGapUpper bounds d = max_t ‖C'(t) − Δ‖ for a Tier A span of
@@ -568,8 +797,8 @@ func spanChordSquared(span bezierSpan) *big.Rat {
 //
 //	d = max_i ‖ p·(P_{i+1} − P_i) − Δ ‖
 //
-// Exact rational throughout; the ONLY rounding is one outward ratSqrtUp of
-// the exact squared norm the maximum selects — the same single-rounding
+// Exact rational throughout; the ONLY rounding is one outward chargedRatSqrtUp
+// of the exact squared norm the maximum selects — the same single-rounding
 // shape dyadicSpanSagittaUpper already commits, for a different quantity.
 //
 // A span with fewer than 2 control points has no chord and no hodograph
@@ -579,12 +808,23 @@ func spanChordSquared(span bezierSpan) *big.Rat {
 // separate case either: Δ is then the zero vector and every hodograph
 // coefficient reduces to p·0 − 0 = 0, so d reads exactly 0 — that span's
 // true (zero) velocity gap — from the general formula, never bolted on.
-func spanHodographGapUpper(span bezierSpan) float64 {
+//
+// It charges hodographGapCost per control point of its OWN span, at its own
+// operand width, before the hull scan runs — its control count is the operand's
+// shape, never a caller's loop bound — and the chord vector and the outward
+// rounding charge themselves on their own calls.
+func spanHodographGapUpper(w *freeformWork, span bezierSpan) (float64, error) {
 	n := len(span)
 	if n < 2 {
-		return 0
+		return 0, nil
 	}
-	dxU, dxV := spanChordVector(span)
+	dxU, dxV, err := spanChordVector(w, span)
+	if err != nil {
+		return 0, err
+	}
+	if err := w.step(costMul(costMul(hodographGapCost, uint64(n)), widthUnits(spanBitWidth(span)))); err != nil {
+		return 0, err
+	}
 	p := big.NewRat(int64(n-1), 1)
 
 	var maxSq *big.Rat
@@ -600,7 +840,18 @@ func spanHodographGapUpper(span bezierSpan) float64 {
 			maxSq = sq
 		}
 	}
-	return ratSqrtUp(maxSq)
+	return chargedRatSqrtUp(w, maxSq)
+}
+
+// spanBitWidth is the widest bit length a converted span's own control
+// coordinates carry, the operand width every per-span charge over a bezierSpan
+// scales by.
+func spanBitWidth(span bezierSpan) int {
+	widest := 0
+	for _, p := range span {
+		widest = max(widest, ratBitWidth(p.u, p.v))
+	}
+	return widest
 }
 
 // spanMatchedDeltaUpper is bounds.go's cellChordCurveAreaUpper
@@ -629,8 +880,15 @@ func spanHodographGapUpper(span bezierSpan) float64 {
 // counterexample: a span whose every control point sits exactly ON its own
 // chord segment (sagitta exactly 0) can still carry a large parameter-matched
 // deviation, which only this function — never the sagitta — bounds.
-func spanMatchedDeltaUpper(span bezierSpan) float64 {
-	return upRound(spanHodographGapUpper(span) / 2)
+//
+// The halving is float arithmetic on an already-published bound, so it holds no
+// charge of its own; every unit it spends is spanHodographGapUpper's.
+func spanMatchedDeltaUpper(w *freeformWork, span bezierSpan) (float64, error) {
+	gap, err := spanHodographGapUpper(w, span)
+	if err != nil {
+		return 0, err
+	}
+	return upRound(gap / 2), nil
 }
 
 // spanSpeedUpper bounds a Tier A span's own tangent speed ‖C'(t)‖ at every t:
@@ -643,10 +901,23 @@ func spanMatchedDeltaUpper(span bezierSpan) float64 {
 // very quantity that argument depends on staying above it.
 //
 // A span with fewer than 2 control points has no chord and no hodograph, so
-// it reports 0, matching spanHodographGapUpper's own guard.
-func spanSpeedUpper(span bezierSpan) float64 {
+// it reports 0, matching spanHodographGapUpper's own guard. It holds no charge
+// of its own; every unit it spends is spent by the three primitives it calls.
+func spanSpeedUpper(w *freeformWork, span bezierSpan) (float64, error) {
 	if len(span) < 2 {
-		return 0
+		return 0, nil
 	}
-	return absSumUpper(ratSqrtUp(spanChordSquared(span)), spanHodographGapUpper(span))
+	chordSq, err := spanChordSquared(w, span)
+	if err != nil {
+		return 0, err
+	}
+	chord, err := chargedRatSqrtUp(w, chordSq)
+	if err != nil {
+		return 0, err
+	}
+	gap, err := spanHodographGapUpper(w, span)
+	if err != nil {
+		return 0, err
+	}
+	return absSumUpper(chord, gap), nil
 }

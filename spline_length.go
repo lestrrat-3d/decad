@@ -109,6 +109,23 @@ var errFreeformLengthDegenerate = fmt.Errorf(
 // lets an arbitrarily wide span through: a single degree-1000 span is 1024
 // leaves and over five hundred million rational midpoints.
 //
+// This preflight is why the fixed-depth bracket calls dyadicSpan.split
+// UNMETERED: the whole subtree is paid for here, before the first level
+// allocates anything, and charging each split again would charge the same work
+// twice.
+//
+// ITS UNIT IS NOT THE METERED UNIT. perSplit counts one unit per COORDINATE
+// blend — a split's n(n−1)/2 de Casteljau pairs over two coordinates — while
+// dyadicSplitOps (spline_sagitta.go) counts the big.Int OPERATIONS the same
+// bisection performs, which is 6 per blend plus the split's own allocations and
+// copies. So this bracket charges about a third of what the sagitta walk
+// charges for the identical code. That gap is deliberate and is NOT closed
+// here: this ceiling is a whole-record one shared with conversion, integration
+// and reconstruction (§5.2), the involute fit-spline record already spends 91%
+// of it, and raising the per-split term to the metered count would refuse a
+// capability that ships today. Reconciling the two units is a §6.1 decision
+// about freeformWorkLimit itself, not an accounting repair.
+//
 // Saturating arithmetic keeps the estimate an UPPER bound at every size, so an
 // oversized span refuses at freeformWorkLimit instead of wrapping to a small
 // charge (spline_bezier.go).
@@ -130,7 +147,12 @@ func freeformBracketCost(controls int) uint64 {
 // The span is re-expressed once, here, into the split form below; every level
 // under it works in that form and only the leaves come back out as rationals.
 func spanLengthBracket(span bezierSpan, depth int) (float64, float64) {
-	return dyadicSpanOf(span).lengthBracket(depth)
+	// Unmetered on purpose: freeformArcLength has already charged this whole
+	// span's subtree through freeformBracketCost, and a nil counter is exactly
+	// how freeformWork.step spells "already accounted for". The error a metered
+	// conversion could return is unreachable here for that reason.
+	s, _ := dyadicSpanOf(nil, span)
+	return s.lengthBracket(depth)
 }
 
 // dyadicPoint is one split value: the plane-local coordinate
@@ -163,11 +185,39 @@ type dyadicSpan struct {
 	den    *big.Int
 }
 
+// valueWidth is one split value's own operand width in bits: the widest of its
+// two integer numerators and of the den·2^exp denominator they are read
+// against. It is the shape every charge over a single dyadic value scales by
+// (spline_sagitta.go's widthUnits).
+func (s dyadicSpan) valueWidth(p dyadicPoint) int {
+	return max(s.den.BitLen()+int(p.exp), p.u.BitLen(), p.v.BitLen())
+}
+
+// spanWidth is the widest operand width any of the span's own values carries —
+// the shape a whole-span charge scales by.
+func (s dyadicSpan) spanWidth() int {
+	widest := s.den.BitLen()
+	for _, p := range s.points {
+		widest = max(widest, s.valueWidth(p))
+	}
+	return widest
+}
+
 // dyadicSpanOf re-expresses a converted span over one shared denominator. The
 // denominator is the least common multiple of the span's own, so every
 // coordinate lifts to an EXACT integer numerator and the span it describes is
 // the span it was given, to the last bit.
-func dyadicSpanOf(span bezierSpan) dyadicSpan {
+//
+// It is the ONE entry point for that conversion, and it meters itself: it
+// charges dyadicSpanOfCharge (spline_sagitta.go) as its first statement and
+// returns freeformWork.step's own refusal, having converted nothing, when the
+// counter cannot cover it. A nil counter is unmetered, which is what the
+// fixed-depth arc-length bracket passes under its own freeformBracketCost
+// preflight.
+func dyadicSpanOf(w *freeformWork, span bezierSpan) (dyadicSpan, error) {
+	if err := w.step(dyadicSpanOfCharge(span)); err != nil {
+		return dyadicSpan{}, err
+	}
 	den := big.NewInt(1)
 	for _, point := range span {
 		den = ratLCM(den, point.u.Denom())
@@ -177,7 +227,7 @@ func dyadicSpanOf(span bezierSpan) dyadicSpan {
 	for i, point := range span {
 		points[i] = dyadicPoint{u: scaledNumerator(point.u, den), v: scaledNumerator(point.v, den)}
 	}
-	return dyadicSpan{points: points, den: den}
+	return dyadicSpan{points: points, den: den}, nil
 }
 
 // ratLCM returns the least common multiple of two positive integers. A big.Rat
@@ -199,7 +249,9 @@ func (s dyadicSpan) lengthBracket(depth int) (float64, float64) {
 	if depth == 0 || len(s.points) < 2 {
 		return s.chordLower(), s.polygonUpper()
 	}
-	left, right := s.split()
+	// Unmetered: freeformBracketCost already charged every split in this
+	// subtree up front (its own doc comment), so a nil counter cannot refuse.
+	left, right, _ := s.split(nil)
 	leftLo, leftHi := left.lengthBracket(depth - 1)
 	rightLo, rightHi := right.lengthBracket(depth - 1)
 	return downRound(leftLo + rightLo), upRound(leftHi + rightHi)
@@ -207,8 +259,19 @@ func (s dyadicSpan) lengthBracket(depth int) (float64, float64) {
 
 // split halves a span by de Casteljau at t = 1/2, exactly: every blend is a
 // midpoint, so the arithmetic is a binary bisection over integer numerators.
-func (s dyadicSpan) split() (dyadicSpan, dyadicSpan) {
+//
+// It is the ONE entry point for that bisection, and it meters itself: it
+// charges dyadicSplitOps (spline_sagitta.go) at its own operand width as its
+// first statement — the span's control count and its widest value are the
+// receiver's own shape, never a caller's loop bound — and returns
+// freeformWork.step's own refusal, having split nothing, when the counter
+// cannot cover it. A nil counter is unmetered, which is what the fixed-depth
+// arc-length bracket passes under its own freeformBracketCost preflight.
+func (s dyadicSpan) split(w *freeformWork) (dyadicSpan, dyadicSpan, error) {
 	n := len(s.points)
+	if err := w.step(costMul(dyadicSplitOps(uint64(n)), widthUnits(s.spanWidth()))); err != nil {
+		return dyadicSpan{}, dyadicSpan{}, err
+	}
 	work := make([]dyadicPoint, n)
 	copy(work, s.points)
 	left := make([]dyadicPoint, 0, n)
@@ -222,7 +285,7 @@ func (s dyadicSpan) split() (dyadicSpan, dyadicSpan) {
 		left = append(left, work[0])
 		right[round-1] = work[round-1]
 	}
-	return dyadicSpan{points: left, den: s.den}, dyadicSpan{points: right, den: s.den}
+	return dyadicSpan{points: left, den: s.den}, dyadicSpan{points: right, den: s.den}, nil
 }
 
 // dyadicMidpoint is (a+b)/2 exactly: the two numerators are raised to their
