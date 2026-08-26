@@ -1672,17 +1672,18 @@ against this budget.
   over `math/big.Rat`. `sectionDelta` on a loop with two curved pairs of different
   curvature equals the LARGER pair's own measured sagitta, never their sum,
   over `big.Rat`. **A THRESHOLD FIXTURE pins that the published sagitta is
-  the certified one and not `chordCount`'s held-float estimate**: an
-  `ArcSeg` whose `Start`, `End` and `Center` are chosen so the exact
-  Start-to-Center distance falls strictly between two consecutive float64s,
-  making the held `math.Hypot` radius round BELOW it, and whose sweep is
-  chosen so the same happens to the held `math.Atan2` difference. Its exact
-  per-cell sagitta, computed over `math/big.Rat` from the recorded
-  coordinates, then EXCEEDS `2*heldRadius*sin²(heldSweep/4m)`. The fixture
-  asserts the published `sectionDelta` is at or above that exact sagitta,
-  and strictly above the held-float estimate — a build that adopted
-  `chordCount`'s value verbatim would publish a bound smaller than the
-  displacement it claims to bound and fails here. A paired `CircleSeg` loop builds a full-circle-to-full-circle
+  evaluated over the record's own enclosures and never over the walk's held
+  floats**: an `ArcSeg` whose `Start`, `End` and `Center` are chosen so the
+  exact Start-to-Center distance falls strictly between two consecutive
+  float64s, making the held `math.Hypot` radius round BELOW it, and whose
+  sweep is chosen so the same happens to the held `math.Atan2` difference.
+  Its exact per-cell sagitta, computed over `math/big.Rat` from the recorded
+  coordinates, then EXCEEDS `2*heldRadius*sin²(heldSweep/4m)`, the closed-form
+  sagitta of those two held floats. The fixture asserts the published
+  `sectionDelta` is at or above that exact sagitta and strictly above that
+  held-float value: a build that read its sagitta off the held radius and
+  sweep publishes a bound smaller than the displacement it claims to bound and
+  fails here. A paired `CircleSeg` loop builds a full-circle-to-full-circle
   frustum whose volume encloses the closed-form frustum volume at
   `chordCount`'s closed-walk floor of three CYCLIC stations a side, walled by
   the three cells §5.1's closed rule pairs from them — a fourth station, or a
