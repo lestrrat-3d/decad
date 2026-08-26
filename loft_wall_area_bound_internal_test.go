@@ -1,6 +1,7 @@
 package decad
 
 import (
+	"fmt"
 	"math"
 	"testing"
 
@@ -261,6 +262,78 @@ func TestCellChordCurveAreaAllowEnclosesTwistedRuledGap(t *testing.T) {
 					"the ruled leg must enclose the directly integrated chord-patch-to-ruled-patch area gap (twist %.1f deg, cell sweep %.3f, height %.1f)",
 					deg, dt, height)
 			}
+		}
+	}
+}
+
+// TestCellChordCurveAreaAllowSurvivesAnUnderflowingScale is the ruled leg's own
+// UNDERFLOW falsifier: at a scale where the products the bound forms internally
+// round to +0, the published value must still enclose the cell's own gap rather
+// than collapse to a proven zero.
+//
+// The cell is a pure translational sweep — one constant-speed arc of radius r
+// and sweep dt, plus its copy displaced by sep along z — so both areas are
+// closed form and the reference needs no integration. The ruled patch's own
+// area element is |a'(s) x sep*zhat| = sep*|a'(s)|, the tangent being
+// perpendicular to z, which integrates to sep*(r*dt); the bilinear chord patch
+// replaces the arc by its chord and gives sep*(2*r*sin(dt/2)). The gap is
+// therefore exactly sep*r*(dt - 2*sin(dt/2)), and this fixture forms the sep*r
+// factor FIRST, so the reference itself never touches the extremes the bound is
+// being asked to hold apart.
+//
+// A bound that published 0 here would not merely be loose: exactnessOf reads a
+// zero bound as the claim that the area is exactly representable, so the body
+// would report Exact while missing the whole gap — precisely what
+// docs/loft-design.md §8's "Area is never Exact" forbids.
+//
+// The two separations and the two energy arms are four DIFFERENT flush sites,
+// not one restated:
+//
+//   - a wide rung (sep = 1e200) leaves the premise-free arm at ordinary scale,
+//     so only the PROVEN-energy arm flushes — inside
+//     uniformSpeedTangentEnergyUpper's own (arcLen-chord)*(arcLen+chord)
+//     product, which is quadratically smaller than the gap it serves;
+//   - a unit rung (sep = 1) shrinks every term to the section's own scale, so
+//     the premise-free square in tangentDeviationUpper flushes too and the
+//     ABSENT-energy arm collapses as well. There the free arm survives at
+//     8e-201 and the sharper arm is the one that flushes, so the published
+//     minimum takes the flushed arm over a sound one — a bound that is wrong by
+//     every order of magnitude it had, not by an ulp.
+//
+// A repair applied at any single one of those sites leaves the others
+// publishing 0.
+func TestCellChordCurveAreaAllowSurvivesAnUnderflowingScale(t *testing.T) {
+	const radius, dt = 1e-200, 0.4
+	for _, separation := range []float64{1e200, 1} {
+		lo, hi := twistedArcCellPair(0, 0, radius, separation, 0.3, dt)
+		gap := (separation * radius) * (dt - 2*math.Sin(dt/2))
+		require.Positive(t, gap, "the reference must be a representable quantity worth missing")
+
+		vLo, vHi, wLo, wHi := lo.at(0), lo.at(1), hi.at(0), hi.at(1)
+		arcA, arcB := upRound(lo.arcLen()), upRound(hi.arcLen())
+		md := math.Max(lo.sagittaUpper(), hi.sagittaUpper())
+		chordLower := downRound(downRound(2 * radius * math.Sin(dt/2)))
+		energy := uniformSpeedTangentEnergyUpper(arcA, chordLower)
+		t.Run(fmt.Sprintf("sep=%g/energy", separation), func(t *testing.T) {
+			require.Positive(t, energy,
+				"this cell's arc genuinely exceeds its chord, so its own tangent-deviation energy is not zero")
+		})
+
+		for _, tc := range []struct {
+			name   string
+			energy float64
+		}{
+			{"proven energy", energy},
+			{"absent energy", math.Inf(1)},
+		} {
+			t.Run(fmt.Sprintf("sep=%g/%s", separation, tc.name), func(t *testing.T) {
+				allow := cellChordCurveAreaAllow(vLo, vHi, wLo, wHi, arcA, arcB, md, tc.energy, tc.energy)
+				t.Logf("gap=%.9e allow=%.9e", gap, allow)
+				require.LessOrEqual(t, gap, allow,
+					"the ruled leg must enclose the underflowing cell's own chord-patch-to-ruled-patch gap")
+				require.Equal(t, Approximate, exactnessOf(allow),
+					"a bound whose intermediates flushed must never publish as Exact")
+			})
 		}
 	}
 }

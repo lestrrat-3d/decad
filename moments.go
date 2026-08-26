@@ -503,11 +503,27 @@ func absSumUpper(values ...float64) float64 {
 	return total
 }
 
+// productUpper is a PROVEN upper bound on a·b for two non-negative bounds.
+//
+// An operand at or below zero is an ABSENT term and answers an honest 0 — the
+// only way a product legitimately vanishes, and the only zero exactnessOf may
+// read as a claim of exactness. Two POSITIVE operands can never answer 0: their
+// product is positive, so a rounded +0 is float64's own underflow flush and
+// bounds.go's provenUpRound replaces it with the smallest subnormal, a correct
+// finite upper bound on anything that flushed.
+//
+// A +Inf operand is a REFUSAL and not a magnitude, so it wins over a zero
+// rather than being annihilated by it: an unbounded factor times an absent one
+// bounds nothing, and answering 0 there would republish a refusal as a proven
+// zero.
 func productUpper(a, b float64) float64 {
+	if math.IsInf(a, 1) || math.IsInf(b, 1) {
+		return math.Inf(1)
+	}
 	if a <= 0 || b <= 0 {
 		return 0
 	}
-	return upRound(a * b)
+	return provenUpRound(a * b)
 }
 
 func twoPiUpper() float64 {

@@ -19,6 +19,10 @@ import (
 // arms: the exact answer a zero-bound operand keeps, and the outward step a
 // genuinely bounded one still receives, and boundedFloatError, the bridge a
 // producer crosses when it evaluates a quantity one way and proves it another.
+// It also owns the outward-rounding primitives every other helper in that file
+// is built on — productUpper and divUpper — where the rule under test is that
+// a bound may vanish only when a term is genuinely ABSENT, never because
+// float64 flushed it.
 
 // TestRigidRoundAllowIsAlwaysAFiniteBound pins bounds.go's rigidRoundAllow
 // answering a finite, positive bound at every magnitude, including the ones
@@ -410,4 +414,108 @@ func TestSnapToZeroAllowEnclosesTheOverwrittenCoordinate(t *testing.T) {
 	// one: answering the caller's own bound would let the assignment vanish.
 	require.True(t, math.IsInf(snapToZeroAllow(0, math.NaN()), 1))
 	require.True(t, math.IsInf(snapToZeroAllow(0, math.Inf(1)), 1))
+}
+
+// TestOutwardRoundingNeverPublishesAFlushedZero pins the rule productUpper and
+// divUpper carry for every bound in this package: two operands the caller has
+// proven POSITIVE can never answer 0.
+//
+// float64 rounds a positive result to +0 as soon as that result falls below
+// half the smallest subnormal, and upRound cannot undo it — 0 is not a
+// representable neighbour away from a positive number, it IS the rounded
+// answer. The consequence is not a slightly loose bound but a categorically
+// false one: exactnessOf reads a zero bound as the CLAIM that the value it
+// bounds is exactly representable, so every flushed product publishes an Exact
+// measurement for a body whose error merely happens to be tiny.
+//
+// math.SmallestNonzeroFloat64 is the correct answer rather than a fudge.
+// Rounding to +0 PROVES the exact result sits at or below half the smallest
+// subnormal, so the smallest subnormal encloses it — and stays finite, which a
+// +Inf refusal would not, and which the consumers that gate on a positive
+// bound need.
+func TestOutwardRoundingNeverPublishesAFlushedZero(t *testing.T) {
+	const tiny = math.SmallestNonzeroFloat64
+
+	t.Run("product", func(t *testing.T) {
+		for _, tc := range []struct {
+			name string
+			a, b float64
+		}{
+			{"both factors far below the subnormal floor", 1e-200, 1e-200},
+			{"a subnormal factor scaled down", 1e-320, 1e-10},
+			{"the smallest subnormal halved", tiny, 0.5},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				require.Equal(t, 0.0, tc.a*tc.b, "the fixture must actually exercise a flush")
+				require.Equal(t, tiny, productUpper(tc.a, tc.b))
+				require.Equal(t, Approximate, exactnessOf(productUpper(tc.a, tc.b)))
+			})
+		}
+	})
+
+	t.Run("quotient", func(t *testing.T) {
+		for _, tc := range []struct {
+			name     string
+			num, den float64
+		}{
+			{"a subnormal numerator over a large denominator", 1e-320, 1e10},
+			{"the smallest subnormal quartered", tiny, 4},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				require.Equal(t, 0.0, tc.num/tc.den, "the fixture must actually exercise a flush")
+				require.Equal(t, tiny, divUpper(tc.num, tc.den))
+				require.Equal(t, Approximate, exactnessOf(divUpper(tc.num, tc.den)))
+			})
+		}
+	})
+
+	// An operand at or below zero is an ABSENT term, not a flushed one: it is
+	// the only way a product or quotient legitimately vanishes, and the only
+	// zero exactnessOf may read as a claim of exactness. Widening it would
+	// convert every genuinely exact reading in the package into Approximate.
+	require.Equal(t, 0.0, productUpper(0, 1e300))
+	require.Equal(t, 0.0, productUpper(1e300, 0))
+	require.Equal(t, 0.0, productUpper(-1, 5))
+	require.Equal(t, 0.0, divUpper(0, 2))
+	require.Equal(t, 0.0, divUpper(-1, 2))
+
+	// An ordinary product and quotient still round OUTWARD.
+	require.GreaterOrEqual(t, productUpper(3, 5), 15.0)
+	require.GreaterOrEqual(t, divUpper(15, 5), 3.0)
+	require.GreaterOrEqual(t, productUpper(0.1, 0.1), 0.01)
+	require.GreaterOrEqual(t, divUpper(1, 3), 1.0/3.0)
+}
+
+// TestProductUpperRefusesRatherThanAnnihilatesARefusal pins the second half of
+// the same family: +Inf is a REFUSAL, not a magnitude, so an absent factor may
+// not cancel it away.
+//
+// The arithmetic identity Inf*0 = NaN is not what this guards — productUpper
+// short-circuits on its own operand tests, so a +Inf paired with a 0 used to
+// take the "absent term" arm and publish a PROVEN zero for a term whose scale
+// nothing had bounded. cellChordCurveAreaAllow reaches it directly: its beta
+// factor overflows to +Inf at a large rung while its energy sum vanishes at a
+// small one, and the sharper arm then wins the final min with a bound of 0.
+func TestProductUpperRefusesRatherThanAnnihilatesARefusal(t *testing.T) {
+	for name, ab := range map[string][2]float64{
+		"refusal first":  {math.Inf(1), 0},
+		"refusal second": {0, math.Inf(1)},
+		"both refused":   {math.Inf(1), math.Inf(1)},
+		"refusal scaled": {math.Inf(1), 3},
+	} {
+		require.True(t, math.IsInf(productUpper(ab[0], ab[1]), 1), "%s must answer +Inf", name)
+	}
+
+	// A denominator that states no scale — zero, negative, or itself
+	// overflowed — is a broken caller claim and answers +Inf, never a bound.
+	for name, nd := range map[string][2]float64{
+		"zero denominator":       {1, 0},
+		"negative denominator":   {1, -1},
+		"overflowed denominator": {1, math.Inf(1)},
+		"NaN denominator":        {1, math.NaN()},
+		"NaN numerator":          {math.NaN(), 1},
+		"refused numerator":      {math.Inf(1), 2},
+	} {
+		require.True(t, math.IsInf(divUpper(nd[0], nd[1]), 1), "%s must answer +Inf", name)
+	}
 }

@@ -211,11 +211,70 @@ const (
 
 // upRound nudges a positive bound to the next representable float64, so the
 // bound's own rounding can never land it below the quantity it bounds.
+//
+// It cannot repair a quantity that ALREADY flushed: a positive product or
+// quotient that underflows arrives here as +0, and this helper leaves 0 alone
+// deliberately, because nudging it would widen every legitimately EXACT zero
+// in the package into a positive bound. A caller holding a +0 it has PROVEN
+// positive is therefore holding a flush, not an answer, and must reach it
+// through provenUpRound — or through productUpper and divUpper, which carry
+// that rule for the multiply and divide that commit the flush.
 func upRound(x float64) float64 {
 	if x > 0 {
 		return math.Nextafter(x, math.Inf(1))
 	}
 	return x
+}
+
+// provenUpRound is upRound for a value its caller has PROVEN strictly
+// positive: it never publishes 0.
+//
+// float64's own arithmetic rounds a positive result to +0 once that result
+// falls below half the smallest subnormal, and a bound of 0 is not a small
+// bound — exactnessOf reads it as the CLAIM that the value it bounds is
+// exactly representable, so a flushed product publishes an Exact measurement
+// for a body whose true error is merely tiny. math.SmallestNonzeroFloat64 is
+// the correct replacement rather than a fudge: rounding to +0 proves the exact
+// result lies strictly below half the smallest subnormal, so the smallest
+// subnormal is itself a valid — and finite — upper bound on it.
+//
+// +Inf is deliberately NOT the answer here. A refusal would propagate to
+// consumers that read a positive bound as their own gate
+// (cellChordPatchNormalLower's 0 sentinel, chordedBoundaryVolumeAllow's
+// wallAreaUpper > 0 branch) and turn a tiny-but-real bound into a refused
+// reading.
+//
+// A caller whose operands are NOT proven positive keeps upRound: a zero that
+// is honestly zero must stay zero.
+func provenUpRound(x float64) float64 {
+	if r := upRound(x); r != 0 {
+		return r
+	}
+	return math.SmallestNonzeroFloat64
+}
+
+// divUpper is productUpper's division twin: it carries the same "a positive
+// quantity must never publish as a proven zero" rule provenUpRound states,
+// which a bare upRound(num/den) cannot, the quotient having already flushed
+// before upRound sees it.
+//
+// num must be a proven UPPER bound on the numerator and den a proven positive
+// LOWER bound on the denominator, so that num/den bounds the true quotient.
+// A numerator at or below zero is an absent term and answers an honest 0. A
+// denominator that is not finite and positive states no scale to divide by —
+// including one that has itself overflowed to +Inf — and is a BROKEN caller
+// claim: it answers +Inf, never a bound, the same rule
+// cellChordCurveAreaUpper's own F5 refusal follows.
+func divUpper(num, den float64) float64 {
+	if math.IsNaN(num) || math.IsNaN(den) || den <= 0 || math.IsInf(den, 1) {
+		return math.Inf(1)
+	}
+	if num <= 0 {
+		return 0
+	}
+	// A +Inf numerator needs no arm of its own: +Inf/den is +Inf, which
+	// provenUpRound passes through as the refusal it already is.
+	return provenUpRound(num / den)
 }
 
 // radius3D turns a per-coordinate bound into the 3D distance bound its
@@ -1060,7 +1119,7 @@ func cellChordCurveAreaAllow(
 	beta := absSumUpper(eB, productUpper(2, md))
 	gamma := productUpper(productUpper(2, md), cMax)
 
-	free := absSumUpper(upRound(productUpper(beta, absSumUpper(ia, ib))/2), gamma)
+	free := absSumUpper(divUpper(productUpper(beta, absSumUpper(ia, ib)), 2), gamma)
 	if isNonFinite(free) {
 		return math.Inf(1)
 	}
@@ -1071,15 +1130,15 @@ func cellChordCurveAreaAllow(
 	}
 	twist := rvSub(heldDelta(vLo, vHi), heldDelta(wLo, wHi))
 	pCrossT := math.Max(rvLenUpper(rvCross(da, twist)), rvLenUpper(rvCross(db, twist)))
-	oscW := absSumUpper(rvLenUpper(twist), upRound(productUpper(eB, pCrossT)/nMin))
+	oscW := absSumUpper(rvLenUpper(twist), divUpper(productUpper(eB, pCrossT), nMin))
 	lin := absSumUpper(
 		productUpper(oscW, iMax),
 		productUpper(productUpper(2, md), absSumUpper(cMax, iMax)),
 	)
-	quad := upRound(absSumUpper(
+	quad := divUpper(absSumUpper(
 		productUpper(productUpper(beta, beta), absSumUpper(ja, jb)),
 		productUpper(2, productUpper(gamma, gamma)),
-	) / (2 * nMin))
+	), 2*nMin)
 	sharp := absSumUpper(lin, quad)
 	if isNonFinite(sharp) {
 		return free
