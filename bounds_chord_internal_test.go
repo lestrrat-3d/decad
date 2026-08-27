@@ -771,9 +771,9 @@ func TestChordedBoundaryVolumeAllowWallAndTwistLegsAreJointlyLoadBearing(t *test
 // verified by rebuilding with the leg replaced by a literal 0:
 //
 //   - wall leg (areaExcess) zeroed: TestLoftTallThinArcWedgeAreaBoundEnclosesConvergedReference
-//     fails with residual 2.446e-3 against bound 4.609e-4, and
+//     fails with residual 2.446e-3 against bound 4.608e-4, and
 //     TestLoftShearedArcWedgeAreaBoundEnclosesConvergedReference fails with
-//     residual 3.197e-2 against bound 6.084e-3.
+//     residual 3.197e-2 against bound 6.083e-3.
 //   - cap leg (capAreaExcess) zeroed:
 //     TestLoftArcWedgeAreaBoundEnclosesConvergedReference fails with residual
 //     5.733e-3 against bound 3.822e-3, while tall-thin and sheared stay green

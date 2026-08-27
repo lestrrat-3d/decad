@@ -10,7 +10,7 @@ import (
 )
 
 // This file is a10-plan.md Part 3 PR 9 Task 1c: an END-TO-END fixture for
-// the wall's own ruled-versus-chord AREA excess (loft_moments.go's
+// the wall's own three-leg AREA gap (loft_moments.go's
 // m.chorded.areaExcess, area()'s own composition line
 // `bound = absSumUpper(bound, m.chorded.areaExcess, m.chorded.capAreaExcess)`)
 // — the leg zeroing left the ENTIRE repository suite green before this file
@@ -70,13 +70,13 @@ import (
 //   - m.chorded.areaExcess (the wall leg) zeroed
 //     (`bound = absSumUpper(bound, 0, m.chorded.capAreaExcess)`):
 //     TestLoftTallThinArcWedgeAreaBoundEnclosesConvergedReference fails —
-//     `"0.002446194848033656" is not less than or equal to "0.00046084914520616235"`
-//     (residual=2.4462e-3, shrunk bound=4.6085e-4) — on "the loft's own
+//     `"0.002446194848033656" is not less than or equal to "0.0004608435108288873"`
+//     (residual=2.4462e-3, shrunk bound=4.6084e-4) — on "the loft's own
 //     Area must enclose the converged densely-chorded reference on a
 //     wall-dominated shape", the enclosure assertion itself.
 //     TestLoftShearedArcWedgeAreaBoundEnclosesConvergedReference fails —
-//     `"0.031970386054553046" is not less than or equal to "0.006083634427563824"`
-//     (residual=3.1970e-2, shrunk bound=6.0836e-3) — on the same enclosure
+//     `"0.031970386054553046" is not less than or equal to "0.006082653033925895"`
+//     (residual=3.1970e-2, shrunk bound=6.0827e-3) — on the same enclosure
 //     assertion, "...under a large in-plane shear".
 //     TestLoftArcWedgeAreaBoundEnclosesConvergedReference (the untwisted,
 //     radius-5 wedge) stays GREEN under this same leg-zeroing (residual

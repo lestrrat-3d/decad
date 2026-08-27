@@ -672,6 +672,7 @@ own.
 | **`twistVolumeUpper`** | a VOLUME: the gap between a wall cell's HELD pair of flat triangles and the BILINEAR RULED patch the wall leg's own homotopy starts from, summed over wall cells | `bounds.go`'s `cellTwistVolumeAllow` per wall cell | that helper's parts (a), (b) and (c): the pointwise deviation `\|T\|/4`, the homotopy's own `eA·eB` area at every time, and the flux identity closing them — with no seam term of its own, since the deviation vanishes on all four edges of the parameter square | outward, in `productUpper` and `absSumUpper` | `+Inf` on a non-finite corner, refused **S14** |
 | **`areaExcess` twist leg** | an AREA: how far one CHORDED wall cell's HELD flat triangle pair sits in AREA from its own BILINEAR ruled patch through the same four held corners, summed over chorded wall cells | `bounds.go`'s `cellTwistAreaAllow` per chorded wall cell — `cellTwistVolumeAllow`'s AREA twin over the SAME twist vector `T = vLo − vHi − wLo + wHi`, its `\|T\|/4` from the exact `xtwistQuarterUpper` kernel and its two edge extents from the certified `xspanUpper` that cell's own `cellSpans` already carries | that helper's own doc comment: `cellTwistVolumeAllow` part (a)'s EXACT deviation `r(s−1)·T` and `s(r−1)·T` gives `\|∂δX/∂s\| ≤ \|T\|` and `\|∂δX/∂r\| ≤ \|T\|` pointwise, and the product rule on the cross product bounds the area functional's own rate along part (b)'s homotopy by `\|T\|·(eA + eB)` at every time; integrating `t` over `[0,1]` at that constant rate bounds the area difference by the same product. It vanishes EXACTLY with `T`, so a cell whose four held corners form a parallelogram charges nothing | outward, in `productUpper` and `absSumUpper`, over quantities formed EXACTLY. NOTHING here may be read in float64: `T` is a cancelling chain whose float evaluation can answer a computed zero for a nonzero exact `T`, and `r3.Vec.Len` sits below the exact norm often enough that extents taken that way are not upper bounds either — both directions shrink the allowance below the deviation it claims to dominate | `+Inf` on a non-finite chorded-cell corner, a corner set **S13** has already proven finite. A `+Inf` here is PUBLISHED as `Area`'s own `Bound` and never refused: §8's finiteness gate reads `Area`'s VALUE alone, since §8 requires a saturated area bound to publish `+Inf` as a proof term rather than a finite guess |
 | **`areaExcess` ruled leg** | an AREA: how far one CHORDED wall cell's own BILINEAR chord patch sits in AREA from the ruled patch through the SAME four held corners — the patch ruled between the two curves those corners pin, never the one between the two recorded curves as the record places them — summed over chorded wall cells | `bounds.go`'s `cellChordCurveAreaAllow(vLo, vHi, wLo, wHi, arcLenUpper_A, arcLenUpper_B, matchedDelta, tangentEnergy_A, tangentEnergy_B)` per chorded wall cell — the per-cell `arcLenUpper_k` row, the `matchedDelta` row read at THIS cell (`loft_build.go`'s `chordCellDeltaUpper`), and the two `tangentEnergy_k` rows above | that helper's own doc comment, which publishes the MINIMUM of two independently proven arms: a PREMISE-FREE arm that bounds the integrated normal difference from the tangent bound alone, and a SHARP arm that keeps the norm-convexity cancellation the first throws away — a LINEAR term over the mean-zero deviation, every piece of which carries a factor of the cell's own twist `T`, plus a QUADRATIC term over the two energies, both divided by `cellChordPatchNormalLower`'s PROVEN positive lower bound on the cell's own area element. Where that four-corner reduction proves nothing it answers 0, the sharp arm is dropped, and the premise-free arm stands alone | outward at every step, in `absSumUpper` / `productUpper` / `divUpper`, over corner differences, cross products and norms formed EXACTLY in the same rational kernel the row above names. The area-element lower bound is rounded DOWN (`ratFloatDown`), the only direction that cannot inflate the quotient it divides | `+Inf` on a BROKEN caller claim — a non-finite or negative operand, a negative energy, or an arc-length claim below the chord it subtends. Its inputs carry the refusals: the `arcLenUpper_k` and `matchedDelta` rows' `+Inf` is **S14**, raised before any measurement runs, while a `+Inf` `tangentEnergy_k` costs only the sharp arm. A `+Inf` published here reaches `Area`'s `Bound` unrefused, the twist row's own rule |
+| **`areaExcess` station-shift leg** | an AREA: how far the ruled patch through one CHORDED wall cell's four HELD corners sits in AREA from the ruled patch through the four STATIONS those corners denote — the step the twist and ruled legs both stop short of, since each pins its patches at the corners it is handed — summed over chorded wall cells | `bounds.go`'s `cellStationShiftAreaAllow(vLo, vHi, wLo, wHi, arcLenUpper_A, arcLenUpper_B, matchedDelta, delta)` per chorded wall cell — the per-cell `arcLenUpper_k` row, the `matchedDelta` row read at THIS cell (`loft_build.go`'s `chordCellDeltaUpper`), and the `delta` row above | that helper's own doc comment: the difference between the two patches is BILINEAR in the cell's own parameters with the four corner displacements as its values, so each partial is at most `2·delta`, and the `\|e x v\| + \|u x f\| + \|e x f\|` expansion `perturbedTriangleAreaAllow` states for ONE TRIANGLE, taken one dimension up over the two patches, sizes the step at `2·delta·(∬\|X_r\| + ∬\|X_s\|) + 4·delta²`. The `s` integral is the two sides' own arc-length bounds averaged, and the `r` integral is the SAME `eB` convexity rung the ruled leg forms, widened by `2·matchedDelta` because the denoted rung joins two CURVE points rather than two chord ends. A triangle's own allowance bounds a DIFFERENT quantity of the same shape and order and is never spent for this step | outward at every step, in `absSumUpper` / `productUpper` / `divUpper`, over the same EXACTLY formed corner differences and norms the two rows above read | `+Inf` on a BROKEN caller claim — a non-finite corner, or a non-finite or negative operand. Its inputs carry the refusals, the ruled leg's own rule. It is exactly 0 where `delta` is 0, the build that holds the stations it denotes |
 | **`capVolumeUpper`** | a VOLUME: the volume one cap contributes when its held chord polygon is replaced by the region its recorded curve denotes, summed over the (at most two) caps | `bounds.go`'s `capAreaVolumeAllow(planeOffsetUpper, capAreaAllow)` per cap, over the two rows above | that helper's EXACT planar identity: a planar face's own signed-tetrahedron sum is `2·h·Area(cap)` whatever the triangulation, so replacing the held polygon's area with the denoted region's changes it by exactly `2·h·ΔArea`, giving `\|ΔVolume_cap\| ≤ \|h\|·\|ΔArea\|/3`. It is never `perturbedAreaUpper`, whose per-facet argument is about vertices that MOVE and a cap's never do | outward, in `productUpper` and one closing `upRound` | inherits the two rows above |
 | **`seamAllow`** | a VOLUME: the line-integral residue the wall leg's flux identity drops by treating the wall as CLOSED when it is an OPEN patch whose `r=0`/`r=1` seam moves under the same homotopy | `bounds.go`'s `chordedBoundarySeamAllow(matchedDelta, posUpper, seamPerimeterUpper)` | that helper's own doc comment: Cauchy-Schwarz on the by-parts boundary term, `matchedDelta · posUpper · seamPerimeterUpper / 3` | outward, in `productUpper` and one closing `upRound` | inherits the `matchedDelta`, `posUpper` and `seamPerimeterUpper` rows' |
 | **facet departure** | a LENGTH: how far one point of a HELD facet sits from the true boundary surface that facet stands for | `absSumUpper(delta, sectionDelta, maxTwistOffsetUpper)` — the three rows above, and no fourth mechanism | the triangle inequality over three independent departures: the facet's own vertices sit within `delta` of the points the record and the motion denote, a CHORDED cell's bilinear ruled patch through those corners departs from the recorded curve by `sectionDelta`, and that cell's held flat triangle pair departs from the ruled patch by at most `maxTwistOffsetUpper`. **The last two terms are charged by chorded cells alone**, and both are exactly zero on a `LineSeg`-only build, whose held triangle pair IS the boundary §5 gives it (the two rows above): the sum is the same three-term reading for every build, and it collapses to `delta` there by its own terms rather than by a consumer choosing a shorter one. Every per-facet consumer reads this term (§9 D1, D2) and no consumer reads a two-term subset of it | outward, in `absSumUpper` | inherits all three rows' |
@@ -815,6 +816,7 @@ holding floats alone; the enclosure comes from the recorded curve instead,
 which is what the table's `stationRound` row names. The term bounds ONE held
 vertex's own displacement, and every consumer spends it as a PER-VERTEX
 bound — `perturbedTriangleAreaAllow` over a facet's three corners,
+`cellStationShiftAreaAllow` over a wall cell's four corners,
 `sweptVolumeAllow` over a held mesh whose every vertex moves by it, §12's
 diameter shrink over the two witnesses — so the widest station's own
 allowance already covers every vertex, while an accumulation over stations
@@ -1128,10 +1130,10 @@ the per-triangle area allowance `bounds.go`'s `perturbedTriangleAreaAllow`
 states, summed over every wall AND cap triangle. The caps need it as much as
 the walls do — a cap's contribution is the assembled chord polygon's exact
 rational area (above), and the built cap triangles are within `delta` of the
-points that polygon's own vertices denote. On a CHORDED body the same sum
-carries a second role, and §8.1's wall paragraph owns it: it is the third leg
-of that wall's own area gap, the only leg that reaches from the corners the
-build holds to the stations they denote.
+points that polygon's own vertices denote. That per-TRIANGLE role is the whole
+of what the term is proven for: the wall's own held-corner-to-denoted-station
+step is an area step between two ruled SURFACES, and §8.1's wall paragraph
+charges it from its own inequality instead.
 
 A CHORDED (same-kind circular) body's `Area` reaches for TWO further terms,
 and §5.2's table owns both.
@@ -1156,9 +1158,13 @@ and §5.2's table owns both.
   table carrying its own derivation, rounding direction and refusal. **Both
   pin their patches at the corners the build HOLDS**, which is what the
   arithmetic of each reads, so neither reaches the stations those corners
-  denote; the third leg is the payload's own `perturbedTriangleAreaAllow` sum
-  over the cell's two triangles at `delta`, charged beside them and gated on
-  `delta` rather than on a section displacement.
+  denote; the STATION-SHIFT leg `cellStationShiftAreaAllow` owns
+  `|denoted − held corners|`, a third row of that table with its own
+  inequality over the two ruled patches, charged beside them at the payload's
+  own `delta`. A triangle's own `perturbedTriangleAreaAllow` is NOT that leg:
+  it bounds a triangle's area step, an expression of the same shape and order
+  over a different quantity, and which of the two is larger is a fact about
+  the cell rather than an identity.
   `cellChordCurveAreaUpper` is NONE of the three — that helper bounds the true
   surface's own area from ABOVE (§5.2), which is what the volume leg's flux
   identity needs and is not a bound on a DIFFERENCE of areas — and
@@ -1171,14 +1177,14 @@ measurement.** §12's own rule is that all four measurements land at build — a
 `Body` caches `Volume` / `Centroid` / `Area` / `Bounds` with no staging error
 path — so a chorded `Area`'s VALUE is the held wall triangle sum plus the two
 caps' own exact rational area, and its BOUND composes the wall-sum and cap
-terms this section already derives with the wall's own first two legs and the
+terms this section already derives with the wall's own three legs and the
 two caps' `capAreaAllow`s. Both excesses are charged wherever §5.2's
 `sectionDelta` or its `matchedDelta` is positive, never on a segment kind, so
 a `LineSeg`-only build is untouched —
 its walls chord nothing, both terms are exactly zero, and its `Area` is the
-held triangle sum this section already derives. The wall's THIRD leg rides on
-the payload's own `perturbedTriangleAreaAllow` sum, which is gated on `delta`
-and so is exactly zero on that same unplaced `LineSeg`-only build.
+held triangle sum this section already derives. The wall's THIRD leg carries
+the payload's own `delta` as a factor, so it too is exactly zero on that same
+unplaced `LineSeg`-only build.
 
 **`Bounds` is Exact only when BOTH the payload's displacement `delta` and its
 section displacement `sectionDelta` (§5.2) are zero.** Every vertex is

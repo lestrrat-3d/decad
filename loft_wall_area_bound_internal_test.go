@@ -17,9 +17,10 @@ import (
 // Area(ruled patch)| with BOTH patches pinned at the four corners that helper
 // is handed — and for the two readings it is built on,
 // uniformSpeedTangentEnergyUpper and cellChordPatchNormalLower. It also owns
-// the fixture for the three-leg composition that leg is spent in, which is
-// what reaches from those held corners to the stations they denote:
-// TestDisplacedStationCellNeedsThePerturbationLeg.
+// the fixture for the three-leg composition that leg is spent in, and for the
+// STATION-SHIFT leg cellStationShiftAreaAllow that reaches from those held
+// corners to the stations they denote:
+// TestDisplacedStationCellNeedsTheStationShiftLeg.
 //
 // THE REFERENCE IS INTEGRATED DIRECTLY, NEVER BUILT THROUGH THE PRODUCTION
 // PATH. ruledPatchAreaGap below integrates |X_s × X_r| over the unit square for
@@ -45,22 +46,22 @@ import (
 //
 //   - L1, the CARRIED-OVER twist leg (cellTwistAreaAllow), zeroed in
 //     loft_moments.go's own composition
-//     (`absSumUpper(areaExcess, ruledLeg, 0*twistLeg)`):
+//     (`absSumUpper(areaExcess, ruledLeg, 0*twistLeg, stationLeg)`):
 //     TestLoftRotatedWedgeAreaBoundEnclosesDenotedSurface fails at 5 degrees —
-//     `"0.1073172359528769" is not less than or equal to "0.06248846721192522"`
+//     `"0.1073172359528769" is not less than or equal to "0.0624826696376347"`
 //     — on "the loft's own Area must enclose the denoted ruled surface at 5.0
 //     deg of twist", the enclosure assertion itself.
-//   - L2, the NEW ruled leg (cellChordCurveAreaAllow), zeroed the same way
-//     (`absSumUpper(areaExcess, 0*ruledLeg, twistLeg)`):
+//   - L2, the ruled leg (cellChordCurveAreaAllow), zeroed the same way
+//     (`absSumUpper(areaExcess, 0*ruledLeg, twistLeg, stationLeg)`):
 //     TestLoftTallThinArcWedgeAreaBoundEnclosesConvergedReference fails —
 //     `"0.002446194848033656" is not less than or equal to
-//     "0.00046084914520616235"`;
+//     "0.000460843512606508"`;
 //     TestLoftShearedArcWedgeAreaBoundEnclosesConvergedReference fails —
 //     `"0.031970386054553046" is not less than or equal to
-//     "0.006083634427684118"`;
+//     "0.0060826530347349314"`;
 //     TestLoftRotatedWedgeAreaBoundEnclosesDenotedSurface fails at 0 degrees —
 //     `"0.025836198167183966" is not less than or equal to
-//     "0.004919442573413758"` — each on its own enclosure assertion.
+//     "0.004918800807284351"` — each on its own enclosure assertion.
 //   - L3, the sharp arm's OSCILLATION term (bounds.go's oscW):
 //     TestCellChordCurveAreaAllowComposesEveryTerm/oscillation-carried fails —
 //     `Relative error is too high: 1e-13 (expected)` — on "the published bound
@@ -121,16 +122,16 @@ import (
 //     energy every reading falls back to arcLen+chord and the sharp arm stops
 //     being the tighter one at all.
 //   - L8, the composition's THIRD leg, bounds.go's
-//     perturbedTriangleAreaAllow neutered to return 0:
-//     TestDisplacedStationCellNeedsThePerturbationLeg fails on all three rows
-//     — `"0.020616034727364507" is not less than or equal to
-//     "0.0016544648735172252"`, `"0.04077004778319804" is not less than or
-//     equal to "0.0028225423331476145"` and `"0.003143918266949264" is not
-//     less than or equal to "0.0020951286257164282"` — on "the three-leg
-//     composition must cover the directly integrated gap between the denoted
-//     ruled patch and the held triangle pair". That fixture's own
-//     twoLegs assertion is the standing form of the same falsification, so
-//     the entry stays red without needing the edit.
+//     cellStationShiftAreaAllow neutered to return 0:
+//     TestDisplacedStationCellNeedsTheStationShiftLeg fails on all three rows
+//     — `"0.019999497629115126" is not less than or equal to "0"`,
+//     `"0.03999974896660774" is not less than or equal to "0"` and
+//     `"0.002399004185227094" is not less than or equal to "0"` — on "the
+//     station-shift leg must cover the directly integrated area step from the
+//     held-corner ruled patch to the denoted one", the leg's own enclosure
+//     assertion, and the three-leg assertion beneath it reddens on the same
+//     rows. That fixture's own twoLegs assertion is the standing form of the
+//     same falsification, so the entry stays red without needing the edit.
 //
 // The end-to-end twist fixtures live beside the older shear ones in
 // loft_area_excess_fixture_internal_test.go's own family; the ones here are
@@ -1051,13 +1052,45 @@ func TestLoftRotatedWedgeAreaBoundEnclosesDenotedSurface(t *testing.T) {
 	}
 }
 
+// ruledDirectrix is one side of a ruled patch: a point and a tangent under the
+// shared parameter s in [0,1]. ruledArc is one, and so is the shiftedArc below
+// that carries a station displacement, which is what lets the composition
+// fixture integrate the SAME patch area over the denoted stations and over the
+// held corners with one integrator.
+type ruledDirectrix interface {
+	at(s float64) r3.Vec
+	der(s float64) r3.Vec
+}
+
+// shiftedArc is a directrix displaced from the stations it denotes onto the
+// corners a build HOLDS: a(s) = arc(s) + (1−s)·p + s·q, the affine correction
+// cellChordCurveAreaAllow's own composition section writes, with p and q the
+// two corner displacements. Its derivative is arc'(s) + (q−p) exactly, so the
+// integrator below reads the held patch with no resampling of its own.
+type shiftedArc struct {
+	arc  ruledArc
+	p, q r3.Vec
+}
+
+func (a shiftedArc) at(s float64) r3.Vec {
+	return a.arc.at(s).Add(a.p.Scale(1 - s)).Add(a.q.Scale(s))
+}
+
+func (a shiftedArc) der(s float64) r3.Vec { return a.arc.der(s).Add(a.q.Sub(a.p)) }
+
+// heldShiftFrom builds the shiftedArc whose two endpoints ARE the held corners
+// lo and hi, from the denoted directrix they stand for.
+func heldShiftFrom(arc ruledArc, lo, hi r3.Vec) shiftedArc {
+	return shiftedArc{arc: arc, p: lo.Sub(arc.at(0)), q: hi.Sub(arc.at(1))}
+}
+
 // ruledPatchAreaAbs integrates |X_s × X_r| over the unit square for the ruled
-// patch between two DENOTED directrices, by the midpoint rule at n² nodes. It
-// is the absolute-area twin of ruledPatchAreaGap above, needed because the
+// patch between two directrices, by the midpoint rule at n² nodes. It is the
+// absolute-area twin of ruledPatchAreaGap above, needed because the
 // composition fixture below compares the true surface against a HELD TRIANGLE
 // pair rather than against another patch, so there is no second integrand to
 // difference node by node.
-func ruledPatchAreaAbs(a, b ruledArc, n int) float64 {
+func ruledPatchAreaAbs(a, b ruledDirectrix, n int) float64 {
 	h := 1 / float64(n)
 	sum := 0.0
 	for i := range n {
@@ -1076,7 +1109,7 @@ func ruledPatchAreaAbs(a, b ruledArc, n int) float64 {
 // two SUCCESSIVE resolutions agree to within tol ABSOLUTE. The caller passes a
 // tolerance read from the geometry it is about to measure and never from the
 // bound under test, so no leg of that bound can move this gate.
-func convergedRuledArea(t *testing.T, a, b ruledArc, tol float64) float64 {
+func convergedRuledArea(t *testing.T, a, b ruledDirectrix, tol float64) float64 {
 	t.Helper()
 	prev, havePrev := 0.0, false
 	for _, n := range []int{64, 128, 256, 512, 1024} {
@@ -1116,27 +1149,30 @@ func heldTrianglePairArea(vLo, vHi, wLo, wHi r3.Vec) float64 {
 	return tri(vLo, vHi, wHi) + tri(vLo, wHi, wLo)
 }
 
-// TestDisplacedStationCellNeedsThePerturbationLeg pins the THREE-LEG
+// TestDisplacedStationCellNeedsTheStationShiftLeg pins the THREE-LEG
 // composition cellChordCurveAreaAllow's own doc comment states and area()
 // spends: over a cell whose held corners are displaced from the stations they
 // denote,
 //
-//	|A_true − T_held| <= ruled leg + twist leg + perturbedTriangleAreaAllow,
+//	|A_true − T_held| <= ruled leg + twist leg + cellStationShiftAreaAllow,
 //
-// and the first two legs ALONE do not cover it. That second assertion is the
-// point of the fixture: the ruled and twist legs each pin their patches at the
-// corners they are handed, so the step to the denoted stations is carried by
-// area()'s perturbAreaSum and by nothing else, and a change that gated that sum
-// on anything other than delta > 0 lands here rather than silently understating
-// every circular pairing's Area.
+// and the first two legs ALONE do not cover it. It asserts three things:
+//
+//   - the STEP the new leg is charged for — the area difference between the
+//     ruled patch through the DENOTED stations and the one through the HELD
+//     corners, both integrated directly — is covered by that leg alone. This is
+//     the assertion the leg exists for, and it turns on the inequality rather
+//     than on the whole composition's slack;
+//   - the three legs together cover the whole gap to the held triangle pair;
+//   - the first two legs alone do NOT, so the third stays load-bearing.
 //
 // The cells are UNTWISTED on purpose. Their four corners form a parallelogram,
 // so the exact twist vector T is zero and cellTwistAreaAllow is a certified
-// zero: what remains is the ruled leg against the perturbation leg, with no
-// third term able to mask which one carries the gap. The reference is the
-// directly integrated area of the ruled patch between the two DENOTED arcs,
-// converged well below the gap it is differenced against.
-func TestDisplacedStationCellNeedsThePerturbationLeg(t *testing.T) {
+// zero: what remains is the ruled leg against the station-shift leg, with no
+// third term able to mask which one carries the gap. Every reference is a
+// direct numerical integral of the surfaces themselves, converged well below
+// the quantity it is differenced against, and shares no code with the bound.
+func TestDisplacedStationCellNeedsTheStationShiftLeg(t *testing.T) {
 	cases := []struct {
 		name           string
 		radius, height float64
@@ -1166,20 +1202,30 @@ func TestDisplacedStationCellNeedsThePerturbationLeg(t *testing.T) {
 				uniformSpeedTangentEnergyUpper(arcB, chordLo(hi)))
 			twist := cellTwistAreaAllow(vLo, vHi, wLo, wHi)
 			require.Zero(t, twist, "an untwisted cell's four corners form a parallelogram, so the twist leg is a certified zero")
-			perturb := upRound(perturbedTriangleAreaAllow(vLo, vHi, wHi, tc.delta) +
-				perturbedTriangleAreaAllow(vLo, wHi, wLo, tc.delta))
+			station := cellStationShiftAreaAllow(vLo, vHi, wLo, wHi, arcA, arcB, md, tc.delta)
+
+			// The step the station-shift leg is charged for, integrated
+			// directly: the SAME patch area over the denoted directrices and
+			// over the held ones, which differ by nothing but the affine
+			// correction that lands each end on the corner the build holds.
+			trueArea := convergedRuledArea(t, lo, hi, tc.delta*tc.delta)
+			heldPatch := convergedRuledArea(t,
+				heldShiftFrom(lo, vLo, vHi), heldShiftFrom(hi, wLo, wHi), tc.delta*tc.delta)
+			surfaceStep := math.Abs(trueArea - heldPatch)
 
 			held := heldTrianglePairArea(vLo, vHi, wLo, wHi)
-			trueArea := convergedRuledArea(t, lo, hi, tc.delta*tc.delta)
 			gap := math.Abs(trueArea - held)
 
 			twoLegs := absSumUpper(ruled, twist)
-			composed := absSumUpper(ruled, twist, perturb)
-			t.Logf("%s: gap=%.6e ruled=%.6e twist=%.6e perturb=%.6e twoLegs=%.6e composed=%.6e (gap/twoLegs=%.4g gap/composed=%.4g)",
-				tc.name, gap, ruled, twist, perturb, twoLegs, composed, gap/twoLegs, gap/composed)
+			composed := absSumUpper(ruled, twist, station)
+			t.Logf("%s: gap=%.6e surfaceStep=%.6e ruled=%.6e twist=%.6e station=%.6e twoLegs=%.6e composed=%.6e (step/station=%.4g gap/twoLegs=%.4g gap/composed=%.4g)",
+				tc.name, gap, surfaceStep, ruled, twist, station, twoLegs, composed,
+				surfaceStep/station, gap/twoLegs, gap/composed)
 
+			require.LessOrEqual(t, surfaceStep, station,
+				"the station-shift leg must cover the directly integrated area step from the held-corner ruled patch to the denoted one")
 			require.Greater(t, gap, twoLegs,
-				"the ruled and twist legs alone must NOT cover a displaced-station cell's gap — if they did, this fixture would stop pinning that the perturbation leg is load-bearing")
+				"the ruled and twist legs alone must NOT cover a displaced-station cell's gap — if they did, this fixture would stop pinning that the station-shift leg is load-bearing")
 			require.LessOrEqual(t, gap, composed,
 				"the three-leg composition must cover the directly integrated gap between the denoted ruled patch and the held triangle pair")
 		})

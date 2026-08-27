@@ -452,6 +452,12 @@ func perturbedAreaUpper(verts []r3.Vec, tris [][3]int, delta float64) float64 {
 // needs one triangle's own allowance, rather than a whole mesh's held area
 // plus the same correction summed over every facet, does not recompute it
 // inline.
+//
+// It is proven for ONE TRIANGLE's own area and is spent for nothing else: a
+// held facet against the facet its displaced vertices denote, and a cap's
+// triangulation against the polygon its displaced vertices denote. The AREA
+// STEP between two ruled SURFACES is a different quantity of the same shape and
+// order, and cellStationShiftAreaAllow charges it from its own inequality.
 func perturbedTriangleAreaAllow(a, b, c r3.Vec, delta float64) float64 {
 	u, v := b.Sub(a), c.Sub(a)
 	return delta*(u.Len()+v.Len()) + 2*delta*delta
@@ -1248,7 +1254,7 @@ func cellChordPatchNormalLower(vLo, vHi, wLo, wHi r3.Vec) float64 {
 //
 // area() (loft_moments.go) charges one wall cell's whole gap as
 //
-//	|A_true - T_held| <= ruled leg + twist leg + perturbedTriangleAreaAllow,
+//	|A_true - T_held| <= ruled leg + twist leg + station-shift leg,
 //
 // A_true the area of the ruled patch between the two curves the cell's DENOTED
 // stations carry and T_held the two flat triangles assembleLoft actually holds:
@@ -1257,12 +1263,13 @@ func cellChordPatchNormalLower(vLo, vHi, wLo, wHi r3.Vec) float64 {
 //     patch)|, both patches pinned at the corners it is handed;
 //   - the TWIST leg is cellTwistAreaAllow's, unchanged, |Area(held triangle
 //     pair) - Area(bilinear chord patch)|, pinned at those same corners;
-//   - the HELD-TO-DENOTED leg is area()'s own perturbAreaSum, the sum of
-//     perturbedTriangleAreaAllow over the cell's two triangles at the payload's
-//     own delta. It carries the step the two legs above stop short of, and it
-//     is not merely a placement allowance: a change that gated it on anything
-//     but delta > 0 would leave that step uncharged on every circular pairing,
-//     which is what TestDisplacedStationCellNeedsThePerturbationLeg pins.
+//   - the HELD-TO-DENOTED leg is cellStationShiftAreaAllow's, |Area(ruled patch
+//     through the held corners) - Area(ruled patch through the stations they
+//     denote)|, at the payload's own delta. It carries the step the two legs
+//     above stop short of, from its own inequality rather than by analogy with
+//     a triangle's, and TestDisplacedStationCellNeedsTheStationShiftLeg pins
+//     both directions: the first two legs alone do NOT cover a displaced-station
+//     circular cell, and this leg covers the surface step it is charged for.
 //
 // # Why no corner reading is widened by delta
 //
@@ -1283,16 +1290,16 @@ func cellChordPatchNormalLower(vLo, vHi, wLo, wHi r3.Vec) float64 {
 // with no widening at all; eB, cMax, T and Nmin are read at exactly the corners
 // of the two patches they speak for. What the affine correction does move is
 // the SURFACE, and |Area(ruled(abar,bbar)) - Area(ruled(a,b))| is the one step
-// that crosses from held to denoted. It is the third leg's: expanding the same
-// |e x v| + |u x f| + |e x f| product perturbedTriangleAreaAllow derives, one
-// dimension up, sizes it at 2*delta*(int|X_r| + int|X_s|) + 4*delta^2, while
-// the cell's two triangles charge delta*(|vHi-vLo| + 2*|wHi-vLo| + |wLo-vLo|) +
-// 4*delta^2 for it — the same expansion at the cell's own four corners, its
-// diagonal counted twice. The two readings are the same shape at the same
-// order, and which one is larger is a fact about the cell rather than an
-// identity, so the composition is pinned by measurement against a directly
-// integrated gap (TestDisplacedStationCellNeedsThePerturbationLeg) rather than
-// asserted here.
+// that crosses from held to denoted. It is the third leg's, and
+// cellStationShiftAreaAllow charges exactly that step from its own inequality:
+// expanding the same |e x v| + |u x f| + |e x f| product one dimension up over
+// the two ruled patches sizes it at 2*delta*(int|X_r| + int|X_s|) + 4*delta^2,
+// with both integrals bounded from readings this call site already holds. The
+// cell's two triangles charge delta*(|vHi-vLo| + 2*|wHi-vLo| + |wLo-vLo|) +
+// 4*delta^2 under the SAME expansion at the cell's own four corners, its
+// diagonal counted twice — the same shape at the same order over a DIFFERENT
+// quantity, and which one is larger is a fact about the cell rather than an
+// identity, so a triangle's allowance is never spent for this surface step.
 //
 // # Setup
 //
@@ -1392,7 +1399,7 @@ func cellChordPatchNormalLower(vLo, vHi, wLo, wHi r3.Vec) float64 {
 // cellTwistVolumeAllow and cellTwistAreaAllow already use, and the two
 // sections above own what that convention does and does not claim: the patch
 // is pinned at those corners, and the step to the stations a HELD corner
-// denotes is the third leg's, charged once by area()'s own perturbAreaSum and
+// denotes is the third leg's, charged once by cellStationShiftAreaAllow and
 // never here.
 //
 // A non-finite corner, a non-finite or negative scalar, a negative energy, or an
@@ -1485,6 +1492,116 @@ func tangentDeviationUpper(arcLenUpper, chordLen, energyUpper float64) (float64,
 	}
 	fromEnergy := upRound(math.Sqrt(energyUpper))
 	return math.Min(freeI, fromEnergy), math.Min(freeJ, energyUpper)
+}
+
+// cellStationShiftAreaAllow bounds the AREA STEP from the ruled patch through
+// ONE loft wall cell's HELD corners to the ruled patch through the STATIONS
+// those corners denote — the THIRD leg of the three-leg composition
+// cellChordCurveAreaAllow's own doc comment states, and the one leg the other
+// two are scoped away from, since both of those pin their patches at the
+// corners they are handed.
+//
+// # Setup
+//
+// Write abar(s), bbar(s), s in [0,1], for the two DENOTED curves under the
+// shared parametrization cellChordCurveAreaUpper fixes, and a(s), b(s) for the
+// two curves through the HELD corners vLo/vHi and wLo/wHi this call is handed.
+// Each held corner sits within delta of the station it denotes, so, writing p
+// and q for one side's two corner displacements (|p|,|q| <= delta),
+//
+//	a(s) = abar(s) + (1-s)p + s q,
+//
+// cellChordCurveAreaAllow's own affine correction. The two ruled patches are
+// Xbar(s,r) = (1-r)abar(s) + r bbar(s) and X(s,r) = (1-r)a(s) + r b(s) over the
+// unit square, and this helper bounds |Area(X) - Area(Xbar)|.
+//
+// # The inequality
+//
+// D := X - Xbar is BILINEAR in (s,r), its four corner values the four corner
+// displacements, so each partial is a convex combination of a DIFFERENCE of two
+// of them and |D_s| <= 2*delta, |D_r| <= 2*delta pointwise. Expanding the cross
+// product,
+//
+//	|(Xbar_s + D_s) x (Xbar_r + D_r)| <= |Xbar_s x Xbar_r|
+//	    + |D_s||Xbar_r| + |Xbar_s||D_r| + |D_s||D_r|,
+//
+// and the same expansion with the two patches exchanged bounds the other
+// direction, so integrating over the unit square,
+//
+//	|Area(X) - Area(Xbar)| <= 2*delta*(int|Xbar_r| + int|Xbar_s|) + 4*delta^2,
+//
+// the SAME |e x v| + |u x f| + |e x f| expansion perturbedTriangleAreaAllow
+// derives for ONE TRIANGLE, one dimension up. That triangle helper is NOT a
+// bound on this step and is not spent for it: its own reading is over a
+// triangle's two edge vectors, and which of the two expressions is larger is a
+// fact about the cell, so the step is charged HERE, from its own inequality.
+//
+// # The two integrals, from the readings the call site already holds
+//
+// int|Xbar_s|: Xbar_s = (1-r)abar'(s) + r bbar'(s), so |Xbar_s| is at most
+// (1-r)|abar'| + r|bbar'| by convexity and its double integral is
+// (int|abar'| + int|bbar'|)/2 <= (arcLenUpperA + arcLenUpperB)/2, each side's
+// own arc-length claim being a bound on that side's speed under the shared
+// parametrization — cellChordCurveAreaUpper's own obligation, read here for the
+// DENOTED curve it actually speaks for.
+//
+// int|Xbar_r|: Xbar_r = bbar(s) - abar(s), the DENOTED rung, which joins two
+// CURVE points rather than the two chord ends eB is read from. Write abar0 and
+// bbar0 for the two denoted chords and mdCurve for the PARAMETER-MATCHED
+// chord-to-curve departure, so |abar - abar0| <= mdCurve and likewise for b.
+// Then
+//
+//	|bbar(s) - abar(s)| <= |bbar0(s) - abar0(s)| + 2*mdCurve,
+//
+// and the denoted chord rung is (1-s)Gbar + s Gbar' with Gbar = denoted
+// wLo-vLo and Gbar' = denoted wHi-vHi, hence at most max(|Gbar|,|Gbar'|) by
+// convexity — the SAME eB convexity reading cellChordCurveAreaAllow forms, one
+// station displacement out: each denoted corner sits within delta of its held
+// one, so max(|Gbar|,|Gbar'|) <= eB + 2*delta at the held eB. Therefore
+//
+//	int|Xbar_r| <= eB + 2*delta + 2*mdCurve <= eB + 2*matchedDeltaUpper,
+//
+// the last step being the caller's obligation below.
+//
+// # Obligations
+//
+// matchedDeltaUpper must be the cell's own COMPOSED matched delta —
+// loft_build.go's chordCellDeltaUpper, the certified chord-to-curve sagitta
+// PLUS the station displacement delta — never the sagitta alone, because the
+// final step above spends exactly mdCurve + delta <= matchedDeltaUpper.
+// arcLenUpperA/arcLenUpperB are cellChordCurveAreaUpper's own per-side speed
+// bounds, and delta is the payload's own proven station displacement.
+//
+// delta = 0 is a build that holds the stations it denotes, and the step is
+// exactly zero. A non-finite corner, or a non-finite or negative scalar, is a
+// BROKEN caller claim and answers +Inf, never 0 (cellChordCurveAreaUpper's own
+// F5 rule).
+func cellStationShiftAreaAllow(
+	vLo, vHi, wLo, wHi r3.Vec,
+	arcLenUpperA, arcLenUpperB, matchedDeltaUpper, delta float64,
+) float64 {
+	if !finiteVec(vLo) || !finiteVec(vHi) || !finiteVec(wLo) || !finiteVec(wHi) {
+		return math.Inf(1)
+	}
+	if isNonFinite(arcLenUpperA) || isNonFinite(arcLenUpperB) || isNonFinite(matchedDeltaUpper) || isNonFinite(delta) {
+		return math.Inf(1)
+	}
+	if arcLenUpperA < 0 || arcLenUpperB < 0 || matchedDeltaUpper < 0 || delta < 0 {
+		return math.Inf(1)
+	}
+	if delta == 0 {
+		return 0
+	}
+	// eB is formed EXACTLY and rounded OUTWARD, cellChordCurveAreaAllow's own
+	// rule for the identical reading: a float64 Sub/Len pair rounds to NEAREST
+	// and so bounds nothing.
+	eB := math.Max(rvLenUpper(heldDelta(wLo, vLo)), rvLenUpper(heldDelta(wHi, vHi)))
+	rung := absSumUpper(eB, productUpper(2, matchedDeltaUpper))
+	span := divUpper(absSumUpper(arcLenUpperA, arcLenUpperB), 2)
+	return absSumUpper(
+		productUpper(productUpper(2, delta), absSumUpper(rung, span)),
+		productUpper(4, productUpper(delta, delta)),
+	)
 }
 
 // chordedBoundaryVolumeAllow bounds the VOLUME between a loft's HELD

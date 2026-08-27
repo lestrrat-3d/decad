@@ -143,8 +143,8 @@ capVolumeUpper, seamAllow)` (loft §8.1) — with
 proven allowance rather than an unbounded one. **A CHORDED loft's `areaSlack`
 carries the two further terms its own `Area` bound composes**: the wall's
 three-leg area gap — `cellTwistAreaAllow` for the held-to-bilinear leg,
-`cellChordCurveAreaAllow` for the bilinear-to-ruled leg, and the payload's own
-`perturbedTriangleAreaAllow` sum for the held-corner-to-denoted-station leg the
+`cellChordCurveAreaAllow` for the bilinear-to-ruled leg, and
+`cellStationShiftAreaAllow` for the held-corner-to-denoted-station leg the
 first two stop short of — beside the two
 caps' `capAreaAllow`, each owned by loft §5.2's table or §8.1's wall
 paragraph, which carry every derivation and refusal this restatement spends. A loft whose facet departure
