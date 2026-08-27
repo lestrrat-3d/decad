@@ -52,14 +52,15 @@ publishes as a section displacement (§5.2), the same discipline
 `docs/prism-boolean-design.md` §7 and `CLAUDE.md`'s "Section displacement"
 note already state for a prism's re-expressed section. A same-kind Tier A
 free-form pair walls the identical way, over a chord chain built between
-stations placed at shared dyadic parameter fractions of the two curves'
-own Bézier span decompositions rather than a circular walk (§5.1's free-form
-arm), and its departure from the two recorded curves publishes as the same
-section displacement (§5.2). Same-kind is necessary rather than sufficient
-for a circular pair: Table P row P5 carries one further requirement on two
-`CircleSeg`s, that they agree in walk sense; it carries a different further
-requirement on a same-kind Tier A free-form pair, that the two sides' Bézier
-span chains reduce to the same span count (Table S row S17). A full-circle loop's
+stations placed at shared dyadic fractions of the span-index coordinate the
+two curves' own Bézier span decompositions define, rather than a circular
+walk (§5.1's free-form arm), and its departure from the two recorded curves
+publishes as the same section displacement (§5.2). Same-kind is necessary
+rather than sufficient for a circular pair: Table P row P5 carries one
+further requirement on two `CircleSeg`s, that they agree in walk sense; it
+carries a different further requirement on a same-kind Tier A free-form
+pair, that the two sides' Bézier span chains reduce to the same span count
+(Table S row S17). A full-circle loop's
 correspondence has exactly one segment (`record.go`), so its alignment offset
 is confined to `[0, 1)` and forced to `0` (§3 S4): a rotated correspondence
 between two full-circle loops is not reachable by this construction.
@@ -79,10 +80,11 @@ between two full-circle loops is not reachable by this construction.
 - **Same-kind Tier A free-form correspondence's remaining reach.** A paired
   segment whose two sides are the SAME Tier A free-form kind
   (`docs/spline-design.md` Table F) is ruled between chorded stations placed
-  at shared dyadic parameter fractions of the two curves, the wall staying
-  flat triangles and the departure of that chord chain from the two recorded
-  curves publishing as a section displacement (§5.2) — exactly as §5.1/§5.2
-  already state for a same-kind circular pair. **The pair is ADMITTED and its
+  at shared dyadic fractions of the span-index coordinate their two Bézier
+  span decompositions define (§5.1), the wall staying flat triangles and the
+  departure of that chord chain from the two recorded curves publishing as a
+  section displacement (§5.2) — exactly as §5.1/§5.2 already state for a
+  same-kind circular pair. **The pair is ADMITTED and its
   construction is stated, while its `Volume` and `Centroid` are staged**: the
   chorded volume allowance has no free-form arm (§8, §8.1, §14), so such a
   build refuses `ErrUnsupported` at Table S row S14 and §12 PR 4 is the
@@ -208,7 +210,7 @@ that exists and this evaluator cannot build → `ErrUnsupported`.**
 | **S14** | ANY build for which a displacement term §5.2's table lists answers `+Inf`, decided in whichever of the two arms the gate-order paragraph below assigns that term | yes — the body exists; only one of its proven displacement terms has no derivation | `ErrUnsupported` | no — a derivation gap in this evaluator's certified enclosures, not a shape rule |
 | **S15** | a paired segment whose chord target (§5.1) is not met inside the fixed station cap | yes — the ruled surface exists; this evaluator cannot chord it inside its own ceiling | `ErrUnsupported` (`errTooManyChords`, spline R8) | no — a resource ceiling, not a shape rule |
 | **S16** | a chord cell (§5.1) whose two stations coincide on exactly ONE of the two sections. A cell collapsing on BOTH sections, and a collapsed cap triangle, are S6's two arms rather than this row, so every collapse is covered exactly once | yes — a collapsed piece is a recordable curve piece whatever the provenance of the two stations that produced it, and a point-degenerate correspondence is a body a smarter kernel could still loft; only the uniform two-faces-per-cell topology (§5) has no case for it | `ErrUnsupported` | no — an evaluator topology limit |
-| **S17** | a same-kind Tier A free-form pair whose two sides' Bézier span chains (`docs/spline-design.md` §5.1) reduce to different span counts (P5) | yes — the ruled surface exists; this evaluator's span-uniform station rule (§5.1) has no shared parameter domain to chord it over | `ErrUnsupported` | no — §12's reach row, which would retire this refusal by admitting an unequal span count |
+| **S17** | a same-kind Tier A free-form pair whose two sides' Bézier span chains (`docs/spline-design.md` §5.1) reduce to different span counts (P5) | yes — the ruled surface exists; this evaluator's span-uniform station rule (§5.1) has no shared station coordinate to chord it over | `ErrUnsupported` | no — §12's reach row, which would retire this refusal by admitting an unequal span count |
 
 **S13 is `ErrUnsupported`, never `ErrNotFinite`.** Core §12 scopes
 `ErrNotFinite` to a non-finite PARAMETER or a derived non-finite MEASUREMENT
@@ -713,44 +715,58 @@ so far in this section — the diagonal split (§5), Table B's cell shape (§7),
 the chord target, and the station cap — is unchanged for a free-form pair;
 only the RULE that places its stations differs from the circular walk-up.
 
-- **The station domain is the pair's shared Bézier span decomposition,
-  read from the record alone.** Each side of a same-kind Tier A free-form
-  pair reduces to its own chain of `bezierSpan`s (`docs/spline-design.md`
-  §5.1); P5 and S17 require the two chains to reduce to the same span count,
-  written `spanCount` here to keep it distinct from this section's own
-  chord-cell count `m` above. Span `q` of `spanCount` (`q` in
-  `[0, spanCount)`, a letter chosen to collide with none of §7's
-  `side(i,j,k)` indices) is parameterised by its SPAN-UNIFORM fraction
-  `[q/spanCount, (q+1)/spanCount]` of the curve's own domain — a partition
-  read from the record's own span decomposition alone, needing no knot
-  values: the Bézier conversion (`docs/spline-design.md` §5.1) already
-  reduces every recorded knot vector to that same uniform per-span
-  parameterisation, so nothing here re-derives a knot.
+- **The station coordinate is the normalized concatenation of the two
+  chains' span-LOCAL parameters, read from the record alone.** Each side of
+  a same-kind Tier A free-form pair reduces to its own chain of
+  `bezierSpan`s (`docs/spline-design.md` §5.1); P5 and S17 require the two
+  chains to reduce to the same span count, written `spanCount` here to keep
+  it distinct from this section's own chord-cell count `m` above. Span `q`
+  of `spanCount` (`q` in `[0, spanCount)`, a letter chosen to collide with
+  none of §7's `side(i,j,k)` indices) occupies slot `q` by INDEX: that
+  span's own local parameter `[0, 1]` — the parameter its de Casteljau
+  bisection below already walks — is laid onto the shared coordinate's
+  slot `[q/spanCount, (q+1)/spanCount]`, so every span boundary is a
+  coordinate value `q/spanCount` and coincides with a cell boundary by
+  definition. **This coordinate is NOT the recorded parameter domain, and
+  nothing here maps through one.** The Bézier conversion
+  (`docs/spline-design.md` §5.1) promises one Bézier per nonempty knot span
+  and returns a `[]bezierSpan` of control points with the recorded knots
+  DISCARDED (`spline_bezier.go`'s `freeformBezierSpans`), so the converted
+  chain carries no knot values at all: the coordinate is defined by span
+  INDEX and the recorded knot spacing never enters it. Unequal recorded
+  intervals are therefore admissible and stay so under this rule —
+  `record.go`'s `validateNURBSSegmentContent` tests a recorded knot vector
+  for finiteness, monotonicity, clamping, a nonempty knot domain and
+  `docs/spline-design.md` Table R's R12 continuity rule and for nothing
+  else, never for equal spacing, and a `FitSplineSeg`'s `Params` are
+  cumulative chord length, unequal by construction.
 
-- **The span-count match (P5, S17) is what gives the pair a shared parameter
-  domain at all.** Two curves whose Bézier decompositions carry different
-  span counts have no shared fraction `q/spanCount` to chord between: span
-  `q/spanCount` on one side and the geometrically unrelated interior of a
-  different span on the other would be an invented correspondence, the same
-  ground §1 refuses a mixed-kind pairing on. A same-kind Tier A free-form
-  pair whose two span counts agree is what this rule reads as one shared
-  domain; a pair whose counts disagree refuses at S17.
+- **The span-count match (P5, S17) is what gives the pair a shared station
+  coordinate at all.** Two curves whose Bézier decompositions carry
+  different span counts have no shared fraction `q/spanCount` to chord
+  between: span `q/spanCount` on one side and the geometrically unrelated
+  interior of a different span on the other would be an invented
+  correspondence, the same ground §1 refuses a mixed-kind pairing on. A
+  same-kind Tier A free-form pair whose two span counts agree is what this
+  rule reads as one shared coordinate; a pair whose counts disagree refuses
+  at S17.
 
 - **The shared station set is chorded at shared dyadic fractions of that
-  domain, one cell per Bézier span to start.** Seed one chord cell per span
-  boundary — `spanCount` cells over the `spanCount` shared spans — and read
-  that seed's own station points off the open/closed accounting stated above
-  for the circular arm, which governs a free-form side unchanged and is
-  restated nowhere here. Measure that cell's own sagitta (below) on BOTH
+  coordinate, one cell per Bézier span to start.** Seed one chord cell per
+  span boundary — `spanCount` cells over the `spanCount` shared spans — and
+  read that seed's own station points off the open/closed accounting stated
+  above for the circular arm, which governs a free-form side unchanged and
+  is restated nowhere here. Measure that cell's own sagitta (below) on BOTH
   sides; bisect any CELL whose measured sagitta on either side exceeds the
   chord target (below), replacing it with its two dyadic children; repeat,
   measuring the new cells, under the station cap (below). **Because the
   bisection is dyadic and is applied to the CELL rather than to one side,
   the two sides carry an identical station set by construction** — a
   bisected cell replaces ONE cell on BOTH sides at once, at the identical
-  dyadic fraction of the shared domain, so no cell can be split on one side
-  and left whole on the other. This is the reason the two sides' station
-  counts agree at every step, not an assumption checked after the fact.
+  dyadic fraction of the shared coordinate, so no cell can be split on one
+  side and left whole on the other. This is the reason the two sides'
+  station counts agree at every step, not an assumption checked after the
+  fact.
 
   **Measure-then-bisect is required here, not merely chosen.**
   `docs/spline-design.md` §6.1 states the rule this construction inherits:
