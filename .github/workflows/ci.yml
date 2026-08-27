@@ -41,10 +41,19 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
         include:
           - os: ubuntu-latest
             race: "-race"
+            shard: "0"
+          - os: ubuntu-latest
+            race: "-race"
+            shard: "1"
+          - os: macos-latest
+            race: ""
+            shard: ""
+          - os: windows-latest
+            race: ""
+            shard: ""
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout repository
@@ -58,7 +67,24 @@ jobs:
       - name: Download dependencies
         run: go mod download
 
+      - name: Run tests (Ubuntu shard)
+        if: matrix.shard != ''
+        shell: bash
+        run: |
+          tests="$(go test -list '^Test' . | awk -v shard='${{ matrix.shard }}' '
+            /^Test/ {
+              if (count % 2 == shard) {
+                printf "%s|", $0
+              }
+              count++
+            }
+          ')"
+          tests="${tests%|}"
+          test -n "$tests"
+          go test ${{ matrix.race }} -timeout 10m -run "^(${tests})$" ./...
+
       - name: Run tests
+        if: matrix.shard == ''
         run: go test ${{ matrix.race }} -timeout 10m ./...
 
   # Tier 2: verify the tree is tidy.

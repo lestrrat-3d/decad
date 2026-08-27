@@ -19,6 +19,10 @@ import (
 // arms: the exact answer a zero-bound operand keeps, and the outward step a
 // genuinely bounded one still receives, and boundedFloatError, the bridge a
 // producer crosses when it evaluates a quantity one way and proves it another.
+// It also owns the outward-rounding primitives every other helper in that file
+// is built on — productUpper and divUpper — where the rule under test is that
+// a bound may vanish only when a term is genuinely ABSENT, never because
+// float64 flushed it.
 
 // TestRigidRoundAllowIsAlwaysAFiniteBound pins bounds.go's rigidRoundAllow
 // answering a finite, positive bound at every magnitude, including the ones
@@ -410,4 +414,39 @@ func TestSnapToZeroAllowEnclosesTheOverwrittenCoordinate(t *testing.T) {
 	// one: answering the caller's own bound would let the assignment vanish.
 	require.True(t, math.IsInf(snapToZeroAllow(0, math.NaN()), 1))
 	require.True(t, math.IsInf(snapToZeroAllow(0, math.Inf(1)), 1))
+}
+
+// TestProductUpperRefusesRatherThanAnnihilatesARefusal pins the second half of
+// the family TestOutwardRoundingNeverPublishesAFlushedZero
+// (bounds_flush_internal_test.go) opens: +Inf is a REFUSAL, not a magnitude, so
+// an absent factor may not cancel it away.
+//
+// The arithmetic identity Inf*0 = NaN is not what this guards — productUpper
+// short-circuits on its own operand tests, so a +Inf paired with a 0 used to
+// take the "absent term" arm and publish a PROVEN zero for a term whose scale
+// nothing had bounded. cellChordCurveAreaAllow reaches it directly: its beta
+// factor overflows to +Inf at a large rung while its energy sum vanishes at a
+// small one, and the sharper arm then wins the final min with a bound of 0.
+func TestProductUpperRefusesRatherThanAnnihilatesARefusal(t *testing.T) {
+	for name, ab := range map[string][2]float64{
+		"refusal first":  {math.Inf(1), 0},
+		"refusal second": {0, math.Inf(1)},
+		"both refused":   {math.Inf(1), math.Inf(1)},
+		"refusal scaled": {math.Inf(1), 3},
+	} {
+		require.True(t, math.IsInf(productUpper(ab[0], ab[1]), 1), "%s must answer +Inf", name)
+	}
+
+	// A denominator that states no scale — zero, negative, or itself
+	// overflowed — is a broken caller claim and answers +Inf, never a bound.
+	for name, nd := range map[string][2]float64{
+		"zero denominator":       {1, 0},
+		"negative denominator":   {1, -1},
+		"overflowed denominator": {1, math.Inf(1)},
+		"NaN denominator":        {1, math.NaN()},
+		"NaN numerator":          {math.NaN(), 1},
+		"refused numerator":      {math.Inf(1), 2},
+	} {
+		require.True(t, math.IsInf(divUpper(nd[0], nd[1]), 1), "%s must answer +Inf", name)
+	}
 }

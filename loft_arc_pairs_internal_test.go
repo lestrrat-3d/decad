@@ -241,8 +241,20 @@ func TestComputeLoftChordedAllowWallLegEnclosesConeFrustumGap(t *testing.T) {
 	wIdx := make([]int, n)
 	arcUpperV := make([]float64, n)
 	arcUpperW := make([]float64, n)
-	circular := make([]bool, n)
+	matchedDelta := make([]float64, n)
+	energyV := make([]float64, n)
+	energyW := make([]float64, n)
 	dth := sweep / float64(m)
+
+	// sectionDelta/sectionMatchedDelta: the closed-form per-cell sagitta
+	// (chordSagitta's own formula, tessellate.go), the max over both radii —
+	// a circular cell's own matchedDelta equals its own sagitta exactly
+	// (loftCircularCellStations' own doc comment), so the two build-wide
+	// accumulators coincide on this all-circular fixture.
+	sagitta0 := 2 * r0 * math.Sin(dth/4) * math.Sin(dth/4)
+	sagitta1 := 2 * r1 * math.Sin(dth/4) * math.Sin(dth/4)
+	sectionDelta := math.Max(sagitta0, sagitta1)
+
 	for k := 0; k <= m; k++ {
 		th := sweep * float64(k) / float64(m)
 		verts[k] = r3.NewVec(r0*math.Cos(th), r0*math.Sin(th), 0)
@@ -252,24 +264,26 @@ func TestComputeLoftChordedAllowWallLegEnclosesConeFrustumGap(t *testing.T) {
 		if k < m {
 			arcUpperV[k] = r0 * dth
 			arcUpperW[k] = r1 * dth
-			circular[k] = true
+			matchedDelta[k] = sectionDelta
+			// Uniform-angle stations are constant speed on a circle, so
+			// uniformSpeedTangentEnergyUpper discharges the per-cell energy
+			// obligation here exactly as perCellTangentEnergy's own circular
+			// arm does in the real build; the half-chord is rounded DOWN
+			// twice so it stays the lower bound that helper requires.
+			energyV[k] = uniformSpeedTangentEnergyUpper(arcUpperV[k], downRound(downRound(2*r0*math.Sin(dth/2))))
+			energyW[k] = uniformSpeedTangentEnergyUpper(arcUpperW[k], downRound(downRound(2*r1*math.Sin(dth/2))))
 		}
 	}
 	pairs := []loftLoopPair{{
 		v: make([]Point2, n), w: make([]Point2, n),
-		arcUpperV: arcUpperV, arcUpperW: arcUpperW, circular: circular,
+		arcUpperV: arcUpperV, arcUpperW: arcUpperW, matchedDelta: matchedDelta,
+		tangentEnergyV: energyV, tangentEnergyW: energyW,
 	}}
-
-	// sectionDelta: the closed-form per-cell sagitta (chordSagitta's own
-	// formula, tessellate.go), the max over both radii.
-	sagitta0 := 2 * r0 * math.Sin(dth/4) * math.Sin(dth/4)
-	sagitta1 := 2 * r1 * math.Sin(dth/4) * math.Sin(dth/4)
-	sectionDelta := math.Max(sagitta0, sagitta1)
 
 	anchor := r3.NewVec(0, 0, 0)
 	distUpper := math.Hypot(r0, h) + 1 // generously above the true max distance
 
-	chorded := computeLoftChordedAllow(pairs, [][]int{vIdx}, [][]int{wIdx}, verts, anchor, sectionDelta, distUpper)
+	chorded := computeLoftChordedAllow(pairs, [][]int{vIdx}, [][]int{wIdx}, verts, anchor, sectionDelta, sectionDelta, distUpper)
 
 	// The independent reference: the quarter lateral frustum's own closed
 	// form, and the SAME two-triangle split assembleLoft's own Table B uses,

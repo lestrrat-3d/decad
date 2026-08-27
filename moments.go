@@ -513,7 +513,15 @@ func absSumUpper(values ...float64) float64 {
 // correct finite upper bound on anything that flushed. Its own `a > 0 && b > 0`
 // arm is the proof of positivity provenUpRound requires; no caller has to
 // repeat it.
+//
+// A +Inf operand is a REFUSAL and not a magnitude, so it wins over a zero
+// rather than being annihilated by it: an unbounded factor times an absent one
+// bounds nothing, and answering 0 there would republish a refusal as a proven
+// zero.
 func productUpper(a, b float64) float64 {
+	if math.IsInf(a, 1) || math.IsInf(b, 1) {
+		return math.Inf(1)
+	}
 	if a <= 0 || b <= 0 {
 		return 0
 	}

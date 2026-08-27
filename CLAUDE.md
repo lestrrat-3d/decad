@@ -148,6 +148,7 @@ one.
 | `spline_extreme.go` | `docs/spline-design.md` §6.2: brackets a Tier A free-form span's directional extreme over `gu·u + gv·v`, reducing to `clearance_poly.go`'s certified root engine via the Bernstein convex-hull property. Owns Table R row R18's refusal. See the file's own doc comment. |
 | `spline_fit.go` | `docs/spline-design.md` §5.1.2's fit-spline reduction: converts a recorded `FitSplineSeg` into the same `bezierSpan` chain the other Tier A kinds produce, over its own closed form rather than knot insertion. See the file's own doc comment. |
 | `spline_moments.go` | The exact integration of `docs/spline-design.md` §5.1 over Bézier spans, reusing `clearance_poly.go`'s `ratPoly`. `addFreeform` feeds `moments.go`'s region-level rational accumulator. |
+| `spline_sagitta.go` | `docs/spline-design.md` §6.2.1's chord-sagitta bounds and the shared dyadic station generator built on them. Each bound's derivation, refusal and work charge lives on its own function's doc comment. See the file's own doc comments. |
 | `spline_convexity.go` | `docs/spline-design.md` §6.5: proves a free-form wall edge's single curvature sign from the curvature numerator's Bernstein coefficients, subdividing to a fixed depth, or refuses. Owns Table R row R19's refusal. See the file's own doc comment. |
 
 ### Features
