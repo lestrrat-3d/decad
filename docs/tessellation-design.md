@@ -112,7 +112,7 @@ carries its own row for it.
 |---|---|---|---|---|---|
 | `prismPayload` | one chording per recorded section loop, shared by walls + caps | wall sagitta; each cap's maximum curved-trim sagitta; plus `sectionDelta`, per-end axial displacement, and proven coordinate/placement rounding; zero only for an exact held trim with exact stored coordinates and no section displacement | max per-face source bound | non-cancelling wall error + both cap circular-segment deficits + coordinate-movement allowance + section-displacement area (§5) | section symmetric-difference allowance × sweep height + coordinate swept allowance (§5) |
 | `cupPayload` | one chording per outer/cavity loop, shared by walls + floors + rims | wall sagitta; each floor/rim patch's maximum curved-trim sagitta; plus `zDelta` and proven coordinate/placement rounding; zero only for an exact held trim with exact stored coordinates | max per-face source bound | non-cancelling per-wall/per-planar-patch error + coordinate-movement allowance | outer-prism + cavity-prism allowances + coordinate swept allowance (§6) |
-| `loftPayload` | the wall and cap triangles already held by the payload | the payload's own facet departure `absSumUpper(delta, sectionDelta, maxTwistOffsetUpper)` (loft §5.2, which owns each term and its zero condition): every held facet IS the payload's triangle for its source face, so the facet departs by exactly what the payload states for it | max per-face source bound, so that facet departure | the payload's own per-triangle perturbation sum, plus, for a CHORDED body, the two further terms its own `Area` bound composes: the wall's two-leg area gap and the two caps' `capAreaAllow` (loft §5.2, §8) | `sweptVolumeAllow(delta, areaUpper)` composed with the four-leg `chordedBoundaryVolumeAllow(matchedDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper, seamAllow)` (loft §8, §8.1); `symDiffOK == true` either way |
+| `loftPayload` | the wall and cap triangles already held by the payload | the payload's own facet departure `absSumUpper(delta, sectionDelta, maxTwistOffsetUpper)` (loft §5.2, which owns each term and its zero condition): every held facet IS the payload's triangle for its source face, so the facet departs by exactly what the payload states for it | max per-face source bound, so that facet departure | the payload's own per-triangle perturbation sum, plus, for a CHORDED body, the two further terms its own `Area` bound composes: the wall's three-leg area gap and the two caps' `capAreaAllow` (loft §5.2, §8, §8.1) | `sweptVolumeAllow(delta, areaUpper)` composed with the four-leg `chordedBoundaryVolumeAllow(matchedDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper, seamAllow)` (loft §8, §8.1); `symDiffOK == true` either way |
 | `revolvePayload` | one meridian chording + one global angular sequence, then final rigid placement | current meridian + angular displacement for that analytic patch, plus construction rounding `deltaC` and final-placement rounding `deltaR`; `deltaC + deltaR` for otherwise exact planar patches | max per-face source bound (§8) | integral of absolute local true-vs-held area-density error + cap deficits + construction/placement area allowances (§10) | meridian/angular + construction/placement homotopy allowances (§11) |
 | `facetedPayload` | held polygons + inherited boundary certificate | inherited certified face displacement, or global composed `Delta` when no tighter face value exists | max per-face source bound | payload's composed slack | payload's composed symmetric-difference bound |
 
@@ -142,10 +142,12 @@ capVolumeUpper, seamAllow)` (loft §8.1) — with
 `symDiffOK == true` throughout, since each of those displacements is a
 proven allowance rather than an unbounded one. **A CHORDED loft's `areaSlack`
 carries the two further terms its own `Area` bound composes**: the wall's
-two-leg area gap — `cellTwistAreaAllow` for the held-to-bilinear half and
-`cellChordCurveAreaAllow` for the bilinear-to-true half — beside the two
-caps' `capAreaAllow`, each a row of loft §5.2's table, which owns every
-derivation and refusal this restatement spends. A loft whose facet departure
+three-leg area gap — `cellTwistAreaAllow` for the held-to-bilinear leg,
+`cellChordCurveAreaAllow` for the bilinear-to-ruled leg, and the payload's own
+`perturbedTriangleAreaAllow` sum for the held-corner-to-denoted-station leg the
+first two stop short of — beside the two
+caps' `capAreaAllow`, each owned by loft §5.2's table or §8.1's wall
+paragraph, which carry every derivation and refusal this restatement spends. A loft whose facet departure
 is exactly zero is admitted
 to the mesh boolean as an all-planar zero-bound operand; every other loft's
 mesh is admitted as an ordinary positive-bound all-planar operand instead,

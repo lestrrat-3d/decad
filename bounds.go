@@ -1229,23 +1229,76 @@ func cellChordPatchNormalLower(vLo, vHi, wLo, wHi r3.Vec) float64 {
 
 // cellChordCurveAreaAllow bounds the AREA GAP between ONE loft wall cell's own
 // BILINEAR CHORD PATCH — cellTwistVolumeAllow's own X(s,r), the t=0 endpoint of
-// cellChordCurveAreaUpper's chord-to-curve homotopy — and the TRUE RULED PATCH
-// between the two recorded curves the cell's two sides denote. It is the second
-// of the two legs area()'s own per-cell wall term is composed of: the FIRST,
-// |Area(held triangle pair) - Area(bilinear chord patch)|, is
-// cellTwistAreaAllow's, unchanged, and the caller composes the two by
-// absSumUpper over the triangle inequality
-// |true - held| <= |held - bilinear| + |bilinear - true|.
+// cellChordCurveAreaUpper's chord-to-curve homotopy — and the RULED PATCH
+// THROUGH THE FOUR STATIONS THIS CALL IS HANDED, the patch ruled between the
+// two curves that pass through vLo/vHi and wLo/wHi. It is NOT a gap to the
+// patch between the two recorded curves as the record places them: every
+// reading below — the two chords, eB, cMax, the twist vector and Nmin — comes
+// off those four corner arguments, so the patch they pin is the only one the
+// arithmetic supports. A caller that hands HELD corners (every caller today)
+// therefore gets the gap at the held stations, and the step from those to the
+// stations they DENOTE is a leg of its own, named in the composition below.
 //
 // It replaces an arc-minus-chord LENGTH excess times a rung length. That shape
 // is third order in the cell's own sweep, while the gap it stands for is SECOND
 // order wherever the ruling runs anything but square across the section's own
 // tangent, so it understates a twisted pairing without bound.
 //
+// # The three-leg composition at the call site
+//
+// area() (loft_moments.go) charges one wall cell's whole gap as
+//
+//	|A_true - T_held| <= ruled leg + twist leg + perturbedTriangleAreaAllow,
+//
+// A_true the area of the ruled patch between the two curves the cell's DENOTED
+// stations carry and T_held the two flat triangles assembleLoft actually holds:
+//
+//   - the RULED leg is this helper, |Area(bilinear chord patch) - Area(ruled
+//     patch)|, both patches pinned at the corners it is handed;
+//   - the TWIST leg is cellTwistAreaAllow's, unchanged, |Area(held triangle
+//     pair) - Area(bilinear chord patch)|, pinned at those same corners;
+//   - the HELD-TO-DENOTED leg is area()'s own perturbAreaSum, the sum of
+//     perturbedTriangleAreaAllow over the cell's two triangles at the payload's
+//     own delta. It carries the step the two legs above stop short of, and it
+//     is not merely a placement allowance: a change that gated it on anything
+//     but delta > 0 would leave that step uncharged on every circular pairing,
+//     which is what TestDisplacedStationCellNeedsThePerturbationLeg pins.
+//
+// # Why no corner reading is widened by delta
+//
+// The two legs are evaluated at held corners, and no eB, cMax or Nmin here is
+// widened by delta before use, because there is no held-for-denoted
+// substitution inside this helper to charge. Write abar for the recorded curve
+// of side a and p, q for its two corner displacements, |p|,|q| <= delta. The
+// curve a(s) = abar(s) + (1-s)p + s q passes through vLo and vHi, and the
+// affine correction cancels out of BOTH obligations this helper spends, since
+// the chord a0 through the held corners is abar's own chord plus that SAME
+// affine term:
+//
+//	a(s) - a0(s) = abar(s) - abar0(s)      (the chord-relative deviation)
+//	a'(s) - da   = abar'(s) - dabar        (the tangent deviation)
+//
+// So matchedDeltaUpper, tangentEnergyUpper and the mean-zero step they feed all
+// hold verbatim for a(s), stated against the chord this helper actually reads,
+// with no widening at all; eB, cMax, T and Nmin are read at exactly the corners
+// of the two patches they speak for. What the affine correction does move is
+// the SURFACE, and |Area(ruled(abar,bbar)) - Area(ruled(a,b))| is the one step
+// that crosses from held to denoted. It is the third leg's: expanding the same
+// |e x v| + |u x f| + |e x f| product perturbedTriangleAreaAllow derives, one
+// dimension up, sizes it at 2*delta*(int|X_r| + int|X_s|) + 4*delta^2, while
+// the cell's two triangles charge delta*(|vHi-vLo| + 2*|wHi-vLo| + |wLo-vLo|) +
+// 4*delta^2 for it — the same expansion at the cell's own four corners, its
+// diagonal counted twice. The two readings are the same shape at the same
+// order, and which one is larger is a fact about the cell rather than an
+// identity, so the composition is pinned by measurement against a directly
+// integrated gap (TestDisplacedStationCellNeedsThePerturbationLeg) rather than
+// asserted here.
+//
 // # Setup
 //
-// Write a(s) and b(s), s in [0,1], for the cell's two true curves under the
-// SHARED parametrization cellChordCurveAreaUpper fixes, a(0)=vLo, a(1)=vHi,
+// Write a(s) and b(s), s in [0,1], for the two curves through the four corners
+// this call is handed, under the SHARED parametrization
+// cellChordCurveAreaUpper fixes, a(0)=vLo, a(1)=vHi,
 // b(0)=wLo, b(1)=wHi; da = vHi-vLo, db = wHi-wLo for the two chords, ca=|da|,
 // cb=|db|; a0(s) = vLo + s*da and b0(s) = wLo + s*db for the two chord
 // segments. The two patches are X1(s,r) = (1-r)a(s) + r b(s) and
@@ -1334,11 +1387,13 @@ func cellChordPatchNormalLower(vLo, vHi, wLo, wHi r3.Vec) float64 {
 // that side's own integral |curve' - chord|^2 ds; a caller with no such proof
 // passes +Inf and both Ia and Ja fall back to what the tangent bound alone
 // gives, Ia <= arcLen+chord and Ja <= (arcLen+chord)^2, which costs tightness
-// and never soundness. Every geometric quantity above is read from the cell's
-// own HELD corners, the same convention cellChordCurveAreaUpper,
-// cellTwistVolumeAllow and cellTwistAreaAllow already use: a held corner sits
-// within the payload's own delta of the station it denotes, and THAT
-// displacement is charged by area()'s own perturbAreaSum leg, never twice here.
+// and never soundness. Every geometric quantity above is read from the four
+// corners this call is handed, the same convention cellChordCurveAreaUpper,
+// cellTwistVolumeAllow and cellTwistAreaAllow already use, and the two
+// sections above own what that convention does and does not claim: the patch
+// is pinned at those corners, and the step to the stations a HELD corner
+// denotes is the third leg's, charged once by area()'s own perturbAreaSum and
+// never here.
 //
 // A non-finite corner, a non-finite or negative scalar, a negative energy, or an
 // arc-length claim below its own chord is a BROKEN caller claim and answers

@@ -117,9 +117,12 @@ type loftMassAccumulator struct {
 	distUpper float64
 
 	// perturbAreaSum is Σ perturbedTriangleAreaAllow(...) over EVERY triangle
-	// of T — walls and caps alike — the extra area a placement's delta can
-	// add on top of the held triangle areas area() already sums. It stays
-	// exactly 0 when delta is 0.
+	// of T — walls and caps alike — the extra area the payload's own delta
+	// can add on top of the held triangle areas area() already sums. It is
+	// also the leg that carries the held-to-denoted step of a chorded wall
+	// cell's three-leg area gap, area()'s own composition site and
+	// cellChordCurveAreaAllow's (bounds.go) owning why. It stays exactly 0
+	// when delta is 0.
 	perturbAreaSum float64
 
 	// wallAreaSum is the naive float sum of the per-triangle PROVEN LOWER
@@ -464,7 +467,10 @@ func (m *loftMassAccumulator) bounds() (Box, bool) {
 // 0) adds two further terms, computeLoftChordedAllow's own areaExcess (the
 // wall's own ruled-versus-chord excess) and capAreaExcess (the SAME cap
 // chord-versus-curve gap capVolumeUpper folds into Volume, spent here as an
-// area rather than a volume) — both documented at the composition below.
+// area rather than a volume) — both documented at the composition below. A
+// displaced build (delta > 0) adds perturbAreaSum, which is both the caps'
+// own placement allowance and the wall gap's THIRD leg; the composition site
+// below owns why the wall needs all three.
 func (m *loftMassAccumulator) area(capAreas ...*big.Rat) Measurement {
 	capTotal := new(big.Rat)
 	for _, ca := range capAreas {
@@ -478,11 +484,21 @@ func (m *loftMassAccumulator) area(capAreas ...*big.Rat) Measurement {
 	value := m.wallAreaSum + capFloat
 	addBound := addRoundError(m.wallAreaSum, capFloat, value)
 	bound := absSumUpper(m.wallBound(), capBound, addBound)
-	// A placement's own per-triangle allowance covers both directions at
-	// once: the wall sum is over held triangles and the cap term is the
-	// denoted region's exact rational, and the two differ by at most this
-	// sum (docs/loft-design.md §12 PR 2a). Gated on delta > 0 so an
-	// unplaced loft's Area stays bit-identical to PR 1's.
+	// The per-triangle allowance covers both directions at once: the wall
+	// sum is over held triangles and the cap term is the denoted region's
+	// exact rational, and the two differ by at most this sum
+	// (docs/loft-design.md §12 PR 2a). It ALSO carries the THIRD leg of the
+	// wall's own gap, and not a placement allowance alone: the two legs
+	// areaExcess is composed of — cellChordCurveAreaAllow and
+	// cellTwistAreaAllow (bounds.go) — each pin their patches at the corners
+	// the build HOLDS, so the step from a held corner to the station it
+	// denotes is charged nowhere else. cellChordCurveAreaAllow's own
+	// three-leg composition section owns that split, and
+	// TestDisplacedStationCellNeedsThePerturbationLeg pins that the other two
+	// legs alone do not cover a displaced-station circular cell. The gate
+	// therefore stays delta > 0 — positive on every circular pairing, whose
+	// stations always carry a computed displacement — and an unplaced
+	// LineSeg-only loft's Area stays bit-identical to PR 1's.
 	if m.delta > 0 {
 		bound = absSumUpper(bound, m.perturbAreaSum)
 	}
@@ -647,12 +663,11 @@ type loftChordedAllow struct {
 // Area on every curved pairing, caught on the shipped A10a wedge fixture
 // itself (TestLoftArcWedgeAreaMatchesExtrudeOracle).
 //
-// areaExcess is the wall's own per-cell chord-versus-curve gap, composed of
-// TWO independent legs by absSumUpper — the SAME triangle-inequality
-// composition chordedBoundaryVolumeAllow's own doc comment uses for the
-// volume gap one dimension over, |true − held| <= |held − bilinear| +
-// |bilinear − true|, "bilinear" the RULED patch through the cell's own four
-// held corners:
+// areaExcess is TWO of the THREE legs of the wall's own per-cell gap, composed
+// by absSumUpper — the SAME triangle-inequality composition
+// chordedBoundaryVolumeAllow's own doc comment uses for the volume gap one
+// dimension over, |true − held| <= |held − bilinear| + |bilinear − true|,
+// "bilinear" the RULED patch through the cell's own four held corners:
 //
 //   - the TWIST leg, cellTwistAreaAllow (bounds.go): |held − bilinear|, how
 //     far the cell's own bilinear ruled patch can carry the held triangle
@@ -662,9 +677,9 @@ type loftChordedAllow struct {
 //     corners form a parallelogram (the shipped wedge's own T ≡ 0 —
 //     TestArcMatchedDeltaEqualsSagitta's family);
 //   - the RULED leg, cellChordCurveAreaAllow (bounds.go): |bilinear − true|,
-//     how far that bilinear patch's own area sits from the TRUE ruled patch
-//     between the two recorded curves. It reads the cell's own held corners,
-//     its two per-side arc-length bounds, its PARAMETER-MATCHED matchedDelta
+//     how far that bilinear patch's own area sits from the ruled patch through
+//     the same four corners. It reads the cell's own held corners, its two
+//     per-side arc-length bounds, its PARAMETER-MATCHED matchedDelta
 //     and its two per-side tangent-deviation ENERGIES
 //     (p.tangentEnergyV/tangentEnergyW, perCellTangentEnergy's own per-arm
 //     reading), and that helper's own doc comment carries the derivation. It
@@ -674,8 +689,16 @@ type loftChordedAllow struct {
 //     section tangent — an understatement without bound on a twisted
 //     pairing.
 //
+// BOTH legs pin their patches at the corners the build HOLDS, so neither
+// reaches the stations those corners denote. That THIRD leg is the
+// accumulator's own perturbAreaSum, charged by area() beside these two and
+// gated on delta rather than on a section displacement;
+// cellChordCurveAreaAllow's own three-leg composition section owns the split
+// and why no reading here is widened by delta to stand in for it.
+//
 // This is the wall term; capAreaExcess above is Area's own cap term, and the
-// two together are what area() charges beside the held triangle sum.
+// two together are what area() charges beside the held triangle sum and that
+// third leg.
 func computeLoftChordedAllow(pairs []loftLoopPair, vIdx, wIdx [][]int, verts []r3.Vec, anchor r3.Vec, matchedDelta, delta, distUpper float64) (loftChordedAllow, error) {
 	var wallAreaUpper, twistVolumeUpper, maxTwistOffsetUpper, seamPerimeterUpper float64
 	var perimeterUpperV, perimeterUpperW, areaExcess float64
