@@ -160,7 +160,7 @@ func TestLoftShippedFractionOnReferenceWedge(t *testing.T) {
 	envelope := wedgeArcEnvelope(t)
 	target := loftChordFraction * envelope
 	seg, w := wedgeArcRecord(t)
-	stations, _, sagitta, _, _, err := loftCircularCellStations(w, w, seg, seg, target)
+	stations, _, sagitta, _, _, err := loftCircularCellStations(w, w, seg, seg, target) //nolint:dogsled // only the stations and the sagitta matter here.
 	require.NoError(t, err)
 	require.LessOrEqual(t, sagitta, target)
 	t.Logf("the generator at the shipped loftChordFraction on the reference wedge: m=%d (target=%.10g, certified=%.10g)", len(stations), target, sagitta)
@@ -796,7 +796,7 @@ func TestLoftPairingsRefusesAOneSidedCellAtOneChordCell(t *testing.T) {
 	arc0, w0 := arcFixture(t, 1e-9, 0, 0.1, 0, 1)
 	arc1, w1 := arcFixture(t, 1, 0, 0.1, 0, 1)
 
-	stations0, stations1, _, _, _, err := loftCircularCellStations(w0, w1, arc0, arc1, target)
+	stations0, stations1, _, _, _, err := loftCircularCellStations(w0, w1, arc0, arc1, target) //nolint:dogsled // only the two station chains matter here.
 	require.NoError(t, err)
 	require.Len(t, stations0, 1, "the fixture must settle at one chord cell, or it tests a different class")
 	require.Len(t, stations1, 1)
@@ -821,7 +821,7 @@ func TestLoftPairingsAdmitsABothSidedCollapsedCell(t *testing.T) {
 	p0, walks0 := lineStationLoopFixture(t, []Point2{pt(0, 0), pt(0, 0), pt(1, 1)})
 	p1, walks1 := lineStationLoopFixture(t, []Point2{pt(5, 5), pt(5, 5), pt(9, 9)})
 
-	pairs, _, _, _, err := loftPairings(p0, p1, make([]int, 1), walks0, walks1, 0, nil, nil)
+	pairs, _, _, _, err := loftPairings(p0, p1, make([]int, 1), walks0, walks1, 0, nil, nil) //nolint:dogsled // only the pairs matter here.
 	require.NoError(t, err)
 	require.Len(t, pairs, 1)
 	require.Equal(t, pairs[0].v[0], pairs[0].v[1], "the fixture's cell 0 must collapse on side 0")

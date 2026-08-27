@@ -236,7 +236,7 @@ func wedgeCirclePointsR(m int, radius float64) [][2]float64 {
 // wedgePlanesH is wedgePlanes' own height-parametrized twin: two parallel
 // planes sharing one U/V basis, offset by height rather than the fixed
 // package constant wedgeHeight.
-func wedgePlanesH(t *testing.T, height float64) (*sketch.World, *sketch.Plane, *sketch.Plane) {
+func wedgePlanesH(t *testing.T, height float64) (*sketch.World, *sketch.Plane, *sketch.Plane) { //nolint:unparam // the height is the whole point of this helper over wedgePlanes; every caller happening to want 60 today is a coincidence of the two wall-dominated fixtures, not a signal the parameter should go.
 	t.Helper()
 	w := sketch.NewWorld()
 	frame, err := r3.NewFrame(r3.NewVec(0, 0, 0), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0))

@@ -242,6 +242,8 @@ func TestComputeLoftChordedAllowWallLegEnclosesConeFrustumGap(t *testing.T) {
 	arcUpperV := make([]float64, n)
 	arcUpperW := make([]float64, n)
 	matchedDelta := make([]float64, n)
+	energyV := make([]float64, n)
+	energyW := make([]float64, n)
 	dth := sweep / float64(m)
 
 	// sectionDelta/sectionMatchedDelta: the closed-form per-cell sagitta
@@ -263,11 +265,19 @@ func TestComputeLoftChordedAllowWallLegEnclosesConeFrustumGap(t *testing.T) {
 			arcUpperV[k] = r0 * dth
 			arcUpperW[k] = r1 * dth
 			matchedDelta[k] = sectionDelta
+			// Uniform-angle stations are constant speed on a circle, so
+			// uniformSpeedTangentEnergyUpper discharges the per-cell energy
+			// obligation here exactly as perCellTangentEnergy's own circular
+			// arm does in the real build; the half-chord is rounded DOWN
+			// twice so it stays the lower bound that helper requires.
+			energyV[k] = uniformSpeedTangentEnergyUpper(arcUpperV[k], downRound(downRound(2*r0*math.Sin(dth/2))))
+			energyW[k] = uniformSpeedTangentEnergyUpper(arcUpperW[k], downRound(downRound(2*r1*math.Sin(dth/2))))
 		}
 	}
 	pairs := []loftLoopPair{{
 		v: make([]Point2, n), w: make([]Point2, n),
 		arcUpperV: arcUpperV, arcUpperW: arcUpperW, matchedDelta: matchedDelta,
+		tangentEnergyV: energyV, tangentEnergyW: energyW,
 	}}
 
 	anchor := r3.NewVec(0, 0, 0)
