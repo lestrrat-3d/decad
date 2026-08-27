@@ -36,7 +36,9 @@ closed and valid per `sketch`, recorded on distinct geometric planes, with the
 same topology (same loop count, same segment count per loop), no guide rail,
 no centerline, ruled between corresponding points. A helical gear tooth is one
 such loft (bottom tooth loop to a twisted top loop); a bevel gear is two;
-herringbone and spiral bevel compose those.
+herringbone and spiral bevel compose those. That consumer records a tooth
+flank as a Tier A free-form curve (`docs/spline-design.md` Table F), so
+straight and circular rules alone do not cover the target case.
 
 **Increment 1 admits exactly this shape, narrowed once more: every
 corresponding segment pair MUST be same-kind — both `LineSeg`, both `ArcSeg`,
