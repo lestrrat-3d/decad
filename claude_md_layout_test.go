@@ -44,6 +44,17 @@ const (
 	// layoutCellMaxChars caps a Layout row's description (second) column.
 	// A row that needs more detail belongs in the file/doc it names, with
 	// this cell trimmed back to a short pointer.
+	//
+	// The cap binds real rows, and a SUBSECTION number is the first detail it
+	// pushes back out. The `loft_build.go` row is the worked case: its
+	// description cell measures 295 runes, so naming docs/loft-design.md
+	// §5.1 and §5.2 beside the §5 that row already points at lands the cell
+	// at 303 and fails the check below, unless a reference the row already
+	// carries is dropped to pay for them. A row therefore names the SECTION
+	// and lets the section carry its own subsections; where a subsection's
+	// content matters to the reader, the row spells that content in words
+	// instead of by number, which is what the `loft_build.go` row does for
+	// §5.2's placement re-lift and its `delta`.
 	layoutCellMaxChars = 300
 	// designDocDir and designDocSuffix spell CLAUDE.md's own Conventions
 	// rule, "Design docs live in `docs/<topic>-design.md`", once. Every file

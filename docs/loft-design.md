@@ -713,64 +713,65 @@ so far in this section — the diagonal split (§5), Table B's cell shape (§7),
 the chord target, and the station cap — is unchanged for a free-form pair;
 only the RULE that places its stations differs from the circular walk-up.
 
-**The station domain is the pair's shared Bézier span decomposition, read
-from the record alone.** Each side of a same-kind Tier A free-form pair
-reduces to its own chain of `bezierSpan`s (`docs/spline-design.md` §5.1);
-P5 and S17 require the two chains to reduce to the same span count, written
-`spanCount` here to keep it distinct from this section's own chord-cell count
-`m` above. Span `q` of `spanCount` (`q` in `[0, spanCount)`, a letter chosen
-to collide with none of §7's `side(i,j,k)` indices) is parameterised
-by its SPAN-UNIFORM fraction `[q/spanCount, (q+1)/spanCount]` of the curve's
-own domain — a partition read from the record's own span decomposition
-alone, needing no knot values: the Bézier conversion (`docs/spline-design.md`
-§5.1) already reduces every recorded knot vector to that same uniform
-per-span parameterisation, so nothing here re-derives a knot.
+- **The station domain is the pair's shared Bézier span decomposition,
+  read from the record alone.** Each side of a same-kind Tier A free-form
+  pair reduces to its own chain of `bezierSpan`s (`docs/spline-design.md`
+  §5.1); P5 and S17 require the two chains to reduce to the same span count,
+  written `spanCount` here to keep it distinct from this section's own
+  chord-cell count `m` above. Span `q` of `spanCount` (`q` in
+  `[0, spanCount)`, a letter chosen to collide with none of §7's
+  `side(i,j,k)` indices) is parameterised by its SPAN-UNIFORM fraction
+  `[q/spanCount, (q+1)/spanCount]` of the curve's own domain — a partition
+  read from the record's own span decomposition alone, needing no knot
+  values: the Bézier conversion (`docs/spline-design.md` §5.1) already
+  reduces every recorded knot vector to that same uniform per-span
+  parameterisation, so nothing here re-derives a knot.
 
-**The span-count match (P5, S17) is what gives the pair a shared parameter
-domain at all.** Two curves whose Bézier decompositions carry different span
-counts have no shared fraction `q/spanCount` to chord between: span
-`q/spanCount` on one side and the geometrically unrelated interior of a
-different span on the other would be an invented correspondence, the same
-ground §1 refuses a mixed-kind pairing on. A same-kind Tier A free-form pair
-whose two span counts agree is what this rule reads as one shared domain;
-a pair whose counts disagree refuses at S17.
+- **The span-count match (P5, S17) is what gives the pair a shared parameter
+  domain at all.** Two curves whose Bézier decompositions carry different
+  span counts have no shared fraction `q/spanCount` to chord between: span
+  `q/spanCount` on one side and the geometrically unrelated interior of a
+  different span on the other would be an invented correspondence, the same
+  ground §1 refuses a mixed-kind pairing on. A same-kind Tier A free-form
+  pair whose two span counts agree is what this rule reads as one shared
+  domain; a pair whose counts disagree refuses at S17.
 
-**The shared station set is chorded at shared dyadic fractions of that
-domain, one cell per Bézier span to start.** Seed one chord cell per span
-boundary — `spanCount` cells over the `spanCount` shared spans — and read
-that seed's own station points off the open/closed accounting stated above
-for the circular arm, which governs a free-form side unchanged and is
-restated nowhere here. Measure that cell's own sagitta (below) on BOTH sides;
-bisect any CELL whose measured sagitta on either side exceeds the chord
-target (below), replacing it with its two dyadic children; repeat, measuring
-the new cells, under the station cap (below). **Because the bisection is
-dyadic and is applied to the CELL rather than to one side, the two sides
-carry an identical station set by construction** — a bisected cell replaces
-ONE cell on BOTH sides at once, at the identical dyadic fraction of the
-shared domain, so no cell can be split on one side and left whole on the
-other. This is the reason the two sides' station counts agree at every step,
-not an assumption checked after the fact.
+- **The shared station set is chorded at shared dyadic fractions of that
+  domain, one cell per Bézier span to start.** Seed one chord cell per span
+  boundary — `spanCount` cells over the `spanCount` shared spans — and read
+  that seed's own station points off the open/closed accounting stated above
+  for the circular arm, which governs a free-form side unchanged and is
+  restated nowhere here. Measure that cell's own sagitta (below) on BOTH
+  sides; bisect any CELL whose measured sagitta on either side exceeds the
+  chord target (below), replacing it with its two dyadic children; repeat,
+  measuring the new cells, under the station cap (below). **Because the
+  bisection is dyadic and is applied to the CELL rather than to one side,
+  the two sides carry an identical station set by construction** — a
+  bisected cell replaces ONE cell on BOTH sides at once, at the identical
+  dyadic fraction of the shared domain, so no cell can be split on one side
+  and left whole on the other. This is the reason the two sides' station
+  counts agree at every step, not an assumption checked after the fact.
 
-**Measure-then-bisect is required here, not merely chosen.**
-`docs/spline-design.md` §6.1 states the rule this construction inherits:
-"NEVER size a depth from a rate." A station generator that estimated the
-sagitta at one bisection depth and multiplied by a fixed per-level factor
-would publish a width the enclosure was never measured to reach — the same
-failure §6.1 forbids for an arc-length bracket. So every candidate cell's
-sagitta (below) is RECOMPUTED at its own dyadic depth before the loop
-decides whether to bisect it again, and the reported `s_k` (§5.2) is that
-measured post-subdivision enclosure, never an assumed rate.
+  **Measure-then-bisect is required here, not merely chosen.**
+  `docs/spline-design.md` §6.1 states the rule this construction inherits:
+  "NEVER size a depth from a rate." A station generator that estimated the
+  sagitta at one bisection depth and multiplied by a fixed per-level factor
+  would publish a width the enclosure was never measured to reach — the same
+  failure §6.1 forbids for an arc-length bracket. So every candidate cell's
+  sagitta (below) is RECOMPUTED at its own dyadic depth before the loop
+  decides whether to bisect it again, and the reported `s_k` (§5.2) is that
+  measured post-subdivision enclosure, never an assumed rate.
 
-**Which sagitta.** The per-cell sagitta is `docs/spline-design.md` §6.2.1's
-control-point-to-chord-SEGMENT distance, measured over that cell's own
-dyadic sub-span's control points and outward-rounded (`ratSqrtUp`, the same
-helper the circular arm's arc-versus-chord bound rounds through). §6.2.1
-states — and this construction relies on it rather than restating it — that
-distance to the chord's carrier LINE is a different, smaller quantity that
-does not bound the sagitta, and that the parametric deviation
-`|C(t) − L(t)|` is a different, LARGER quantity the control points do not
-bound on a rational span; neither stands in for the chord-SEGMENT distance
-this row publishes.
+- **Which sagitta.** The per-cell sagitta is `docs/spline-design.md`
+  §6.2.1's control-point-to-chord-SEGMENT distance, measured over that
+  cell's own dyadic sub-span's control points and outward-rounded
+  (`ratSqrtUp`, the same helper the circular arm's arc-versus-chord bound
+  rounds through). §6.2.1 states — and this construction relies on it rather
+  than restating it — that distance to the chord's carrier LINE is a
+  different, smaller quantity that does not bound the sagitta, and that the
+  parametric deviation `|C(t) − L(t)|` is a different, LARGER quantity the
+  control points do not bound on a rational span; neither stands in for the
+  chord-SEGMENT distance this row publishes.
 
 **Every station is an exact rational point ON the curve, never a solve, a
 fit, or a search.** A dyadic sub-span's endpoint is produced by exact
@@ -1102,6 +1103,21 @@ mesh-boolean contact classification.
   proven self-contact or self-intersection, `ErrDegenerate` (S7);
 - exhausting the fixed work budget before every pair is decided →
   `ErrUnsupported` (S8), never a guess.
+
+**A pair PROVEN apart reaches the empty verdict early, through a reject-only
+broad-phase.** For a pair Table C gives no shared edge and no shared vertex —
+the one case whose admitted verdict IS "no contact at all" — two float-only
+tiers run ahead of the exact predicate, cheapest first: the two triangles' own
+bounding boxes, then a plane-separation test over the same float corners the
+exact predicate reads first. Either tier succeeding proves the two closed
+triangles share no point, which is the verdict the exact classification would
+reach for that pair, so the broad-phase changes only how SOON a pair's verdict
+is reached, never which verdict it is. Neither tier ever answers "touching": a
+pair neither decides falls through to the full exact classification, and a
+pair sharing an edge or a vertex is REQUIRED to touch there, so no tier is
+consulted for it. What the broad-phase prunes is the exact work per PAIR, not
+the pair ENUMERATION, which remains every pair among the assembled triangle
+set and stays bounded by the ceiling below.
 
 **The work budget reuses tessellation design §3's own ceiling.** The
 predicate under test here is the same one tessellation's boolean pre-pass
@@ -1461,6 +1477,30 @@ composition answers `+Inf` with them. What is missing is TWO derivations,
 both named in §14 —
 this document adds no leg, no substitute, and no free-form arm of its own.
 
+**Every quantity the four legs read is a NAMED term with a named owner.**
+The table above is the whole reading: the wall leg is stated PER WALL CELL,
+over that cell's own two per-side terms and its four held corners, and the
+twist leg per wall cell over those four corners alone; the cap leg is stated
+over one cap's own plane offset and area, and the seam leg over the wall's
+own open seam contour. The third column names the `bounds.go` helper that
+carries each derivation in writing, `cellChordCurveAreaUpper`,
+`cellTwistVolumeAllow`, `capAreaVolumeAllow` and `chordedBoundarySeamAllow`.
+The only per-cell terms those helpers take from outside `bounds.go` are
+§5.2's own published `arcLenUpper_k` and `matchedDelta`, each with its own
+row and its own provenance there. This section names no further per-cell
+bound, because it reads none: a quantity neither the table nor §5.2 names is
+a quantity no leg here consumes.
+
+**A free-form pair's `matchedDelta` is REFUSED rather than asserted, and that
+refusal is what keeps the gap harmless.** §5.2's row publishes `+Inf` for it
+at every free-form cell on the missing derivation alone, three of the four
+legs answer `+Inf` with it, and Table S row S14 refuses the pair before a body
+exists — so nothing ever reads a free-form value for the term, and the
+mechanism it would bound cannot arise in a built body. §14 records that
+derivation and the free-form `arcLenUpper_k` beside it as the two open ones,
+with the counterexample that DISPROVES the free-form sagitta as a substitute
+for either.
+
 **Summing the four is sound because the difference telescopes exactly.**
 Writing `W_true`, `W_ruled` and `W_tri` for the wall's true, ruled-patch and
 held-triangle contributions and `C_true`, `C_held` for the cap's,
@@ -1589,7 +1629,7 @@ global evaluator increment.
 | 2b | `Tessellate` / `STL` / `OBJ` (D1), mesh-boolean admission (D2) | D3/D4's analytic-kernel case, D5 |
 | 3 | same-kind `CircleSeg`/`ArcSeg` correspondence (§1): the chord-chain construction and its shared station generator (§5.1), every term §5.2's table lists that a chorded build reaches — the certified per-cell sagitta and the `sectionDelta` it publishes, the `stationRound` term `delta` gains, the `matchedDelta` those two compose, the four legs of the chorded volume allowance with the moment twin's two swept-measure radii (§8.1), and the wall's own three-leg area gap beside the two caps' `capAreaAllow` (§8) — composed into `Volume`/`Centroid`/`Area`/`Bounds`, Table S gates S14–S16, S6's COMPUTED arm, and S7's structural walk-sense arm (P5). **This row is landed.** | same-kind Tier A free-form correspondence, until PR 4 lands it; mixed-kind correspondence, permanently (§1); N-section and guide-rail/centerline lofts; a loft case in `clearance_geom.go`; a non-constant-cross-section wall survey kernel |
 | 4 | same-kind Tier A free-form correspondence (§1): the free-form arm of the shared station generator (§5.1), the free-form arms §5.2's table gains — the free-form `stationRound` mechanism, the free-form per-cell sagitta, a free-form `arcLenUpper_k`, and a free-form `matchedDelta` — all composed into `Volume`/`Centroid`/`Area`/`Bounds`, and Table S row S17. **This row lands only once `bounds.go` owns BOTH of a free-form cell's missing derivations, its `arcLenUpper_k` and its arc-length-matched `matchedDelta`** (§5.2, §8.1, §14): until then three of the four chorded volume legs answer `+Inf` on each of the two, and a same-kind Tier A free-form pair keeps the `ErrUnsupported` staging refusal S14 gives it | mixed-kind correspondence, permanently (§1); a same-kind Tier A free-form pair whose two curves reduce to different Bézier span counts (S17); N-section and guide-rail/centerline lofts; a loft case in `clearance_geom.go`; a non-constant-cross-section wall survey kernel |
-| 5 (reach, not committed by this document) | N-section and guide-rail/centerline lofts, a loft case in `clearance_geom.go`, a non-constant-cross-section wall survey kernel, an unequal Bézier span count between a same-kind Tier A free-form pair's two sides (which would retire S17) | — |
+| 5 (reach, not committed by this document) | N-section and guide-rail/centerline lofts, a loft case in `clearance_geom.go`, a non-constant-cross-section wall survey kernel, an unequal Bézier span count between a same-kind Tier A free-form pair's two sides (which would retire S17), a spatial-index broad-phase for §6's audit — one pruning the pair ENUMERATION itself, which §6's own two float tiers do not touch and S8's `F*(F-1)/2` preflight is what bounds today | — |
 
 **The four measurements land with the operation, never after it.** A `Body`
 caches `Volume` / `Centroid` / `Area` / `Bounds` at build and its accessors
