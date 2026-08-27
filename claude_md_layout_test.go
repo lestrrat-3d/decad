@@ -148,11 +148,13 @@ var (
 	htmlBlockRe = regexp.MustCompile(`^ {0,3}<[a-zA-Z!/?]`)
 )
 
-// The fixtures below share three strings: the invented sub-heading every
-// fixture section opens its table under, and the two refusal fragments the
-// table and heading branches are pinned by.
+// The fixtures below share four strings: the invented sub-heading every
+// fixture section opens its table under, the real "##" heading each fixture
+// closes its Layout section at, and the two refusal fragments the table and
+// heading branches are pinned by.
 const (
 	inventedSubHeading    = "### Invented sub-table"
+	conventionsHeading    = "## Conventions"
 	wantStrayTable        = "outside any declared table"
 	wantMisspelledHeading = "not spelled that way"
 )
@@ -768,7 +770,7 @@ func TestParseLayoutRowsRejectsMalformedRows(t *testing.T) {
 	section := func(body ...string) string {
 		lines := []string{layoutHeading, "", inventedSubHeading, "", layoutTableHeader, layoutTableSeparator}
 		lines = append(lines, body...)
-		return strings.Join(append(lines, "", "## Conventions", ""), "\n")
+		return strings.Join(append(lines, "", conventionsHeading, ""), "\n")
 	}
 
 	const wellFormed = "| `doc.go` | An invented short pointer row. |"
@@ -843,7 +845,7 @@ func TestParseLayoutRowsRefusesTextItWouldNotReach(t *testing.T) {
 		return strings.Join(lines, "\n")
 	}
 	// other is any following section, so the Layout section really does end.
-	other := []string{"## Conventions", "", "An invented sentence.", ""}
+	other := []string{conventionsHeading, "", "An invented sentence.", ""}
 
 	for name, tc := range map[string]struct {
 		content string
@@ -868,7 +870,7 @@ func TestParseLayoutRowsRefusesTextItWouldNotReach(t *testing.T) {
 			want:    "a second",
 		},
 		"a Layout table outside the Layout section": {
-			content: join(layoutSection(wellFormed), []string{"## Conventions", "", layoutTableHeader, layoutTableSeparator, oversized, ""}),
+			content: join(layoutSection(wellFormed), []string{conventionsHeading, "", layoutTableHeader, layoutTableSeparator, oversized, ""}),
 			want:    "outside the",
 		},
 		"prose beside the rows": {
@@ -940,7 +942,7 @@ func TestParseCLAUDEMDRefusesEverySpellingOfTheAnchors(t *testing.T) {
 		layoutTableHeader, layoutTableSeparator,
 		"| `doc.go` | An invented short pointer row. |", "",
 	}
-	other := []string{"## Conventions", "", "An invented sentence.", ""}
+	other := []string{conventionsHeading, "", "An invented sentence.", ""}
 	join := func(blocks ...[]string) string {
 		var lines []string
 		for _, block := range blocks {
@@ -1075,7 +1077,7 @@ func TestParseCLAUDEMDRefusesEverySpellingOfTheAnchors(t *testing.T) {
 // CLAUDE.md.
 func TestParseCLAUDEMDAcceptsTheShapesTheFormatMakesSafe(t *testing.T) {
 	const wellFormed = "| `doc.go` | An invented short pointer row. |"
-	other := []string{"## Conventions", "", "An invented sentence.", ""}
+	other := []string{conventionsHeading, "", "An invented sentence.", ""}
 	join := func(blocks ...[]string) string {
 		var lines []string
 		for _, block := range blocks {
@@ -1114,7 +1116,7 @@ func TestParseCLAUDEMDAcceptsTheShapesTheFormatMakesSafe(t *testing.T) {
 		// section states the rule at exactly that width, and this case with
 		// the standalone-comment refusal above are what hold it there.
 		"an HTML comment inside a prose line": join(realSection, []string{
-			"## Conventions", "",
+			conventionsHeading, "",
 			"An invented sentence with <!-- an invented aside --> inside it.", "",
 		}),
 		// The declared non-Layout table, where it belongs.
