@@ -45,15 +45,19 @@ jobs:
           - os: ubuntu-latest
             race: "-race"
             shard: "0"
+            packages: "./examples/"
           - os: ubuntu-latest
             race: "-race"
             shard: "1"
+            packages: ""
           - os: macos-latest
             race: ""
             shard: ""
+            packages: ""
           - os: windows-latest
             race: ""
             shard: ""
+            packages: ""
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout repository
@@ -67,12 +71,18 @@ jobs:
       - name: Download dependencies
         run: go mod download
 
-      - name: Run tests (Ubuntu shard)
+      # The shard regex is derived from the ROOT package's own names, so it is
+      # applied to the ROOT package alone. A -run filter built from one
+      # package's names matches nothing in another, so handing it ./... would
+      # run zero tests in every other package while still reporting success.
+      # -run gates Examples and Fuzz seed corpora as well as Test functions,
+      # so the enumeration takes all three.
+      - name: Run root-package tests (Ubuntu shard)
         if: matrix.shard != ''
         shell: bash
         run: |
-          tests="$(go test -list '^Test' . | awk -v shard='${{ matrix.shard }}' '
-            /^Test/ {
+          tests="$(go test -list '.*' . | awk -v shard='${{ matrix.shard }}' '
+            /^(Test|Fuzz|Example)/ {
               if (count % 2 == shard) {
                 printf "%s|", $0
               }
@@ -81,7 +91,15 @@ jobs:
           ')"
           tests="${tests%|}"
           test -n "$tests"
-          go test ${{ matrix.race }} -timeout 10m -run "^(${tests})$" ./...
+          go test ${{ matrix.race }} -timeout 10m -run "^(${tests})$" .
+
+      # Every package outside the root runs UNFILTERED on one shard, so the
+      # shards together cover what an unsharded `go test ./...` covers.
+      # ci_workflow_test.go fails when a package on disk is named by no shard.
+      - name: Run tests outside the root package (Ubuntu shard)
+        if: matrix.packages != ''
+        shell: bash
+        run: go test ${{ matrix.race }} -timeout 10m ${{ matrix.packages }}
 
       - name: Run tests
         if: matrix.shard == ''

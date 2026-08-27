@@ -496,8 +496,8 @@ func TestLoftArcWedgeBoxSoundness(t *testing.T) {
 // --- refusals ---
 
 // TestLoftArcToFitSplineStillRefusesS3 is the ask's own line: an
-// arc-to-fit-spline pair still refuses S3 — a circular walk and a free-form
-// walk are never the same admitted kind.
+// arc-to-fit-spline pair still refuses S3 — an ArcSeg and a FitSplineSeg are
+// never the same recorded segment type.
 func TestLoftArcToFitSplineStillRefusesS3(t *testing.T) {
 	p0 := ProfileRecord{Outer: squareLoopWithFirstSegment(ArcSeg{
 		Center: pt(0.5, -1), Start: pt(0, 0), End: pt(1, 0), TStart: 0, TEnd: 1,
@@ -529,25 +529,69 @@ func TestLoftCircleSegOppositeCCWRefusesStructuralGateNotS7(t *testing.T) {
 	require.Contains(t, err.Error(), "opposite directions")
 }
 
-// TestLoftCircleSegArcSegOppositeCCWRefusesStructuralGateNotS7 is FIX 4's own
-// line: a CircleSeg{CCW:false} paired against an ArcSeg whose own TStart <
-// TEnd (walkOf's ArcSeg arm, extrude.go, forces its sweep positive, so this
-// pairing's effective direction is CCW — never "nothing to disagree with", a
-// false claim an earlier version of loftSameKindGate's own doc comment made)
-// genuinely walks in opposite directions and must refuse at the SAME cheap
-// structural gate the CircleSeg/CircleSeg case above does, never fall
-// through to S7's own crossing refusal three build phases later.
-func TestLoftCircleSegArcSegOppositeCCWRefusesStructuralGateNotS7(t *testing.T) {
-	cw := CircleSeg{Center: pt(0.5, 0.5), Radius: units.Millimeters(0.5), CCW: false, TStart: 1, TEnd: 0}
+// TestLoftArcSegOppositeCCWRefusesStructuralGateNotS7 is the ArcSeg twin of
+// the CircleSeg case above: an ArcSeg whose own TStart < TEnd paired against
+// one whose TStart > TEnd walks the opposite way, because walkOf's ArcSeg arm
+// (extrude.go) forces the sweep positive and reads th0 = a0 + TStart*sweep,
+// th1 = a0 + TEnd*sweep — so the pair's effective directions genuinely
+// disagree and must refuse at the SAME cheap structural gate, never fall
+// through to S7's own crossing refusal three build phases later. This is the
+// one pairing that reaches loftCircularSegmentCCW's own ArcSeg arm with a
+// disagreement, now that an ArcSeg can only ever be paired with another
+// ArcSeg (loftSameKindGate).
+func TestLoftArcSegOppositeCCWRefusesStructuralGateNotS7(t *testing.T) {
 	ccwArc := ArcSeg{Center: pt(0.5, -1), Start: pt(0, 0), End: pt(1, 0), TStart: 0, TEnd: 1}
-	p0 := ProfileRecord{Outer: squareLoopWithFirstSegment(cw)}
-	p1 := ProfileRecord{Outer: squareLoopWithFirstSegment(ccwArc)}
+	cwArc := ArcSeg{Center: pt(0.5, -1), Start: pt(0, 0), End: pt(1, 0), TStart: 1, TEnd: 0}
+	p0 := ProfileRecord{Outer: squareLoopWithFirstSegment(ccwArc)}
+	p1 := ProfileRecord{Outer: squareLoopWithFirstSegment(cwArc)}
 	pl0, pl1 := planeAt(r3.NewVec(0, 0, 0)), planeAt(r3.NewVec(0, 0, 1))
 	err := validateLoftRecordsErr(p0, p1, pl0, pl1, nil, newFreeformWork(), newFreeformWork())
 	require.Error(t, err)
 	require.ErrorIs(t, err, ErrUnsupported, "the CCW-disagreement gate's own sentinel")
 	require.False(t, errors.Is(err, ErrDegenerate), "must NOT be S7's own sentinel (ErrDegenerate)")
 	require.Contains(t, err.Error(), "opposite directions")
+}
+
+// TestLoftArcSegAgainstCircleSegRefusesS3 pins S3 on the CONCRETE recorded
+// type rather than on the resolved walk's kind. docs/loft-design.md §1 and
+// Table P row P5 enumerate exactly three admitted pairings — both LineSeg,
+// both ArcSeg, or both CircleSeg — so an ArcSeg against a CircleSeg is
+// mixed-kind and refuses, and §5.1 states no station correspondence for it
+// either: it classifies an ArcSeg side as OPEN with m+1 station points and a
+// full-turn CircleSeg side as CLOSED with m cyclic stations.
+//
+// The fixture is deliberately the case a walkKind test CANNOT catch: both
+// sides resolve to walkCircular (extrude.go's own walkCircular covers a
+// circle and an arc alike) and both walk CCW, so the CCW disagreement gate
+// says nothing and only the segment-type test refuses. Through the public
+// API the same pairing is reachable as a full-turn ArcSeg loop against a
+// CircleSeg loop, since seam.go's falsifyLoopJoins forces a lone ArcSeg loop
+// to close; at the record level it needs no full turn.
+func TestLoftArcSegAgainstCircleSegRefusesS3(t *testing.T) {
+	ccwArc := ArcSeg{Center: pt(0.5, -1), Start: pt(0, 0), End: pt(1, 0), TStart: 0, TEnd: 1}
+	ccwCircle := CircleSeg{Center: pt(0.5, 0.5), Radius: units.Millimeters(0.5), CCW: true, TStart: 0, TEnd: 1}
+	p0 := ProfileRecord{Outer: squareLoopWithFirstSegment(ccwArc)}
+	p1 := ProfileRecord{Outer: squareLoopWithFirstSegment(ccwCircle)}
+	pl0, pl1 := planeAt(r3.NewVec(0, 0, 0)), planeAt(r3.NewVec(0, 0, 1))
+
+	err := validateLoftRecordsErr(p0, p1, pl0, pl1, nil, newFreeformWork(), newFreeformWork())
+	require.ErrorIs(t, err, ErrUnsupported, "S3: an ArcSeg against a CircleSeg is a mixed-kind pairing")
+	require.Contains(t, err.Error(), "same admitted segment type")
+	require.NotContains(t, err.Error(), "opposite directions",
+		"the two sides agree in walk sense, so only the segment-type test can refuse this pair")
+
+	// Both orders refuse: the gate reads neither side as privileged.
+	err = validateLoftRecordsErr(p1, p0, pl0, pl1, nil, newFreeformWork(), newFreeformWork())
+	require.ErrorIs(t, err, ErrUnsupported, "S3: a CircleSeg against an ArcSeg refuses the same way")
+
+	// The premise the refusal rests on: a walkKind test could not have made
+	// this decision, because both sides resolve to the SAME walkCircular.
+	w0, err := walkOf(ccwArc, newFreeformWork())
+	require.NoError(t, err)
+	w1, err := walkOf(ccwCircle, newFreeformWork())
+	require.NoError(t, err)
+	require.Equal(t, walkCircular, w0.kind)
+	require.Equal(t, w0.kind, w1.kind, "both sides resolve to one walk kind; only the recorded type separates them")
 }
 
 // --- the m=1 edge case ---

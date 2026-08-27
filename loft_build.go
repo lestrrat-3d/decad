@@ -165,15 +165,15 @@ func (pl loftPayload) placed(ctx context.Context, d *Document, ref StepRef, comp
 // combination sketch's own authentication never produces but a decoded
 // recipe can (docs/recipe-replay-design.md).
 //
-// S3's admission test is now a SAME-KIND test (a10-plan.md Part 3 PR 6): a
-// pair is admitted when both walks share the identical admitted kind —
-// walkLine or walkCircular — never merely because one side is a LineSeg.
-// Mixed-kind and free-form pairs keep today's refusal and today's sentinel
-// (loftSameKindGate). Testing only after BOTH sides are resolved (rather
-// than each side against its own kind test, as the LineSeg-only form did) is
-// unavoidable once the admitted set has two kinds, and it does not relax
-// PRECEDENCE: the first (i, j) whose pair fails is still the first refusal
-// reported, in the same walk order as before.
+// S3's admission test is a SAME-KIND test over the two RECORDED SEGMENT
+// TYPES, exactly the three-way enumeration docs/loft-design.md §1 and Table P
+// row P5 spell — both LineSeg, both ArcSeg, or both CircleSeg — never merely
+// because one side is a LineSeg. Mixed-kind and free-form pairs keep today's
+// refusal and today's sentinel (loftSameKindGate). Testing only after BOTH
+// sides are resolved (rather than each side against its own kind test, as the
+// LineSeg-only form did) is unavoidable once the admitted set has three
+// types, and it does not relax PRECEDENCE: the first (i, j) whose pair fails
+// is still the first refusal reported, in the same walk order as before.
 func validateLoftRecords(p0, p1 ProfileRecord, pl0, pl1 PlaneRecord, alignment []int, work0, work1 *freeformWork) ([]int, [][]segmentWalk, [][]segmentWalk, error) {
 	if len(p0.Holes) != len(p1.Holes) {
 		return nil, nil, nil, fmt.Errorf(`%w: the two profiles have %d and %d holes; a loft has no positional pairing for a hole-count mismatch`,
@@ -225,7 +225,7 @@ func validateLoftRecords(p0, p1 ProfileRecord, pl0, pl1 PlaneRecord, alignment [
 				return nil, nil, nil, err
 			}
 
-			if err := loftSameKindGate(w0, w1, loops0[i].Segments[j], loops1[i].Segments[k], i, j, k); err != nil {
+			if err := loftSameKindGate(loops0[i].Segments[j], loops1[i].Segments[k], i, j, k); err != nil {
 				return nil, nil, nil, err
 			}
 			walks0[i][j] = w0
@@ -244,10 +244,9 @@ func validateLoftRecords(p0, p1 ProfileRecord, pl0, pl1 PlaneRecord, alignment [
 	// WHOLE build's paired-segment counts (loftStationShare) and a generator
 	// handed one pair can never see them.
 	//
-	// S3 above refuses every non-LineSeg pair, so no record reaches this gate
-	// with a circular pair to measure until the arc correspondence lands
-	// (docs/loft-design.md §12 PR 3). The gate is exercised at its own entry
-	// point meanwhile, the same way the circular station generator itself is
+	// S3 above admits a same-kind ArcSeg or CircleSeg pair, so a record with a
+	// circular pair to measure does reach this gate from a real build; it is
+	// exercised there and at its own entry point both
 	// (loft_stations_internal_test.go's own header).
 	if err := loftStationCapGate(p0, p1, offsets, walks0, walks1); err != nil {
 		return nil, nil, nil, err
@@ -258,8 +257,18 @@ func validateLoftRecords(p0, p1 ProfileRecord, pl0, pl1 PlaneRecord, alignment [
 
 // loftSameKindGate is docs/loft-design.md Table S row S3 and Table P row P5
 // in their arc form (a10-plan.md Part 3 PR 6): a pairing is admitted only
-// when both walks share the SAME admitted kind — walkLine or walkCircular —
-// so a mixed-kind or free-form pair still refuses under today's sentinel.
+// when the two RECORDED SEGMENT TYPES are the same one of the three §1 and
+// P5 enumerate — both LineSeg, both ArcSeg, or both CircleSeg — so a
+// mixed-kind or free-form pair still refuses under today's sentinel.
+//
+// The test is on the CONCRETE recorded type, never on the resolved walk's
+// own walkKind. walkCircular is one kind for a circle and an arc alike
+// (extrude.go), so a walkKind test would admit an ArcSeg paired against a
+// CircleSeg — a pairing §1 names mixed-kind and refuses, and one §5.1 has no
+// station correspondence for, since it classifies an ArcSeg side as OPEN
+// with m+1 station points and a full-turn CircleSeg side as CLOSED with m
+// cyclic stations and states no rule for one of each. Admitting by concrete
+// type is what keeps the code inside the contract the document carries.
 //
 // Beside S3, a CHEAP STRUCTURAL gate rather than an expensive proof: two
 // paired circular segments whose own EFFECTIVE walk directions disagree walk
@@ -271,23 +280,22 @@ func validateLoftRecords(p0, p1 ProfileRecord, pl0, pl1 PlaneRecord, alignment [
 // caller can tell "this evaluator does not admit the pairing" from "the
 // pairing self-crosses" without inspecting the message.
 //
-// An ArcSeg's sweep is NOT structurally fixed CCW the way an earlier version
-// of this comment claimed: walkOf's own ArcSeg arm (extrude.go) reads
-// th0 = a0 + TStart*sweep, th1 = a0 + TEnd*sweep with sweep always forced
-// positive, so the walk's own angle is monotonic in t and its EFFECTIVE
-// direction is CCW exactly when TEnd > TStart — the identical formula
-// validateSegmentWinding already enforces a CircleSeg's own CCW field must
-// equal (record.go). loftCircularSegmentCCW reads that one shared formula
-// for either kind, so a CircleSeg{CCW: false} paired with an ArcSeg whose
-// own TStart < TEnd — genuinely opposite directions — is caught here rather
-// than silently admitted and left to surface as S7's own crossing refusal
-// three build phases later.
-func loftSameKindGate(w0, w1 segmentWalk, seg0, seg1 CurveSegment, loop, j, k int) error {
-	if w0.kind != w1.kind || (w0.kind != walkLine && w0.kind != walkCircular) {
-		return fmt.Errorf(`%w: loop %d segment %d of the first profile and segment %d of the second are not the same admitted kind; this evaluator pairs same-kind LineSeg or circular segments only`,
+// An ArcSeg's sweep is NOT structurally fixed CCW: walkOf's own ArcSeg arm
+// (extrude.go) reads th0 = a0 + TStart*sweep, th1 = a0 + TEnd*sweep with
+// sweep always forced positive, so the walk's own angle is monotonic in t and
+// its EFFECTIVE direction is CCW exactly when TEnd > TStart — the identical
+// formula validateSegmentWinding already enforces a CircleSeg's own CCW field
+// must equal (record.go). loftCircularSegmentCCW reads that one shared
+// formula, so an ArcSeg pair whose two recorded ranges run opposite ways is
+// caught here beside the CircleSeg pair P5 names, rather than left to surface
+// as S7's own crossing refusal three build phases later.
+func loftSameKindGate(seg0, seg1 CurveSegment, loop, j, k int) error {
+	t0, t1 := loftPairTypeOf(seg0), loftPairTypeOf(seg1)
+	if t0 == loftPairUnadmitted || t0 != t1 {
+		return fmt.Errorf(`%w: loop %d segment %d of the first profile and segment %d of the second are not the same admitted segment type; this evaluator pairs two LineSegs, two ArcSegs or two CircleSegs only`,
 			ErrUnsupported, loop, j, k)
 	}
-	if w0.kind != walkCircular {
+	if t0 == loftPairLine {
 		return nil
 	}
 	ccw0, ok0 := loftCircularSegmentCCW(seg0)
@@ -299,6 +307,47 @@ func loftSameKindGate(w0, w1 segmentWalk, seg0, seg1 CurveSegment, loop, j, k in
 	return nil
 }
 
+// loftPairType is the three-way enumeration docs/loft-design.md §1 and Table
+// P row P5 admit a loft pairing over, plus loftPairUnadmitted for every other
+// recorded type. It reads the CONCRETE recorded segment type — the walk kind
+// resolved from it is coarser (walkCircular covers a circle and an arc alike,
+// extrude.go) and cannot state this contract.
+type loftPairType uint8
+
+const (
+	// loftPairUnadmitted is every recorded type outside the three below —
+	// each free-form kind, and each conic kind the seam records. A pair is
+	// refused when either side reads this value, even when both do: §1
+	// admits three enumerated types and nothing else.
+	loftPairUnadmitted loftPairType = iota
+	loftPairLine
+	loftPairArc
+	loftPairCircle
+)
+
+// loftPairTypeOf classifies one recorded segment into loftPairType. A segment
+// normalizeSegment itself refuses — a nil typed pointer a decoded recipe can
+// carry — reads loftPairUnadmitted rather than panicking; walkOf resolves
+// each side ahead of this gate and reports that refusal first
+// (validateLoftRecords' own precedence note), so the value is never the one a
+// caller sees.
+func loftPairTypeOf(seg CurveSegment) loftPairType {
+	seg, err := normalizeSegment(seg)
+	if err != nil {
+		return loftPairUnadmitted
+	}
+	switch seg.(type) {
+	case LineSeg:
+		return loftPairLine
+	case ArcSeg:
+		return loftPairArc
+	case CircleSeg:
+		return loftPairCircle
+	default:
+		return loftPairUnadmitted
+	}
+}
+
 // loftCircularSegmentCCW reads a circular segment's own EFFECTIVE walk
 // direction structurally, from ONE shared formula rather than trusting a
 // per-kind field (loftSameKindGate's own doc comment): a CircleSeg's CCW
@@ -307,8 +356,8 @@ func loftSameKindGate(w0, w1 segmentWalk, seg0, seg1 CurveSegment, loop, j, k in
 // positive (extrude.go), so its angle is a STRICTLY INCREASING function of
 // t and its own walk visits increasing angle exactly when TEnd > TStart —
 // the identical formula. The false return is defensive, unreached from any
-// real build today since loftSameKindGate has already proven w.kind ==
-// walkCircular for both sides, which only CircleSeg and ArcSeg produce.
+// real build today since loftSameKindGate has already proven both sides
+// record the SAME circular type, which only CircleSeg and ArcSeg are.
 func loftCircularSegmentCCW(seg CurveSegment) (bool, bool) {
 	seg, err := normalizeSegment(seg)
 	if err != nil {

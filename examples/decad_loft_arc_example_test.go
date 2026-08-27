@@ -10,14 +10,15 @@ import (
 )
 
 // Loft admits a same-kind CIRCULAR pairing as of a10-plan.md's arc design:
-// two corresponding segments may both be a LineSeg or both an arc/circle,
-// never a mix. This wedge pairs two straight radial edges plus one 90-degree
-// radius-5 arc on the bottom plane with the identical shape on a plane
-// offset 10 mm along the normal, ruling a quarter-cylinder wedge whose
-// closed-form volume is (pi*r^2/4)*h = 196.349540849... mm^3. The wall is a
-// chorded polyhedron, not the true curved surface, so every published
-// measurement carries a proven positive Bound rather than reading Exact —
-// the same honesty a straight-walled loft's own Bound reads zero for.
+// two corresponding segments must be the same recorded type — both a
+// LineSeg, both an ArcSeg, or both a CircleSeg — and an arc paired against a
+// circle is a mix like any other. This wedge pairs two straight radial edges
+// plus one 90-degree radius-5 arc on the bottom plane with the identical
+// shape on a plane offset 10 mm along the normal, ruling a quarter-cylinder
+// wedge whose closed-form volume is (pi*r^2/4)*h = 196.349540849... mm^3.
+// The wall is a chorded polyhedron, not the true curved surface, so every
+// published measurement carries a proven positive Bound rather than reading
+// Exact — the same honesty a straight-walled loft's own Bound reads zero for.
 func Example_decad_loft_arc() {
 	w := sketch.NewWorld()
 	s0, err := w.CreateSketch(w.XY())

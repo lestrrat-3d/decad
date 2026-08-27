@@ -58,8 +58,9 @@ func (d *Document) Loft(s0 *sketch.Sketch, p0 *sketch.Profile, s1 *sketch.Sketch
 // order (p0 of s0, then p1 of s1): a foreign, stale, invalid, or
 // unrecordable profile is the seam's own sentinel.
 //
-// Every corresponding segment pair must be same-kind: both sides straight
-// (LineSeg), or both sides circular (a CircleSeg or an ArcSeg on each). A
+// Every corresponding segment pair must be same-kind, over the recorded
+// segment type: both LineSeg, both ArcSeg, or both CircleSeg. An ArcSeg
+// paired against a CircleSeg is a mixed-kind pairing like any other. A
 // mixed-kind or free-form pairing is [ErrUnsupported] (§1, P5, S3), and so is
 // a circular pair whose two sides walk in opposite senses, which this
 // evaluator refuses rather than twist the correspondence. A circular

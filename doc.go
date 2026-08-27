@@ -105,9 +105,9 @@
 //	  non-prism receiver, or a cap-loop chamfer result        ErrUnsupported
 //	Shell         straight prism (tube or cup)                builds
 //	  both caps removed from a holed section                  ErrUnsupported
-//	Loft          LineSeg/circular pairs, distinct planes     builds
+//	Loft          same-type segment pairs, distinct planes    builds
 //	  hole-count or per-loop segment-count mismatch           ErrUnsupported
-//	  a paired segment not same-kind LineSeg or circular      ErrUnsupported
+//	  a pair not two LineSegs, ArcSegs or CircleSegs          ErrUnsupported
 //	  a circular pair whose two sides walk opposite senses    ErrUnsupported
 //	  a chorded pair past the fixed station cap               ErrUnsupported
 //	  a chorded pair whose displacement has no derivation     ErrUnsupported
