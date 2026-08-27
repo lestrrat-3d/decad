@@ -672,10 +672,10 @@ the share it exceeded is that segment's own. A build with no chorded pair
 (§7), the count the record itself states, so an all-`LineSeg` build's only
 resource refusal is S8.
 
-**The per-pair share can never sum past the global cap.** `C` counts the
-same-kind circular pairs AMONG `P`, so a circular pair's `m` stations
-SUBSUME the first-station entitlement `P` already grants that segment rather
-than adding to it. For a record whose `P` is within the cap — the paragraph
+**The per-pair share can never sum past the global cap.** Every pair `C`
+counts is AMONG `P`, so a chorded pair's `m` stations SUBSUME the
+first-station entitlement `P` already grants that segment rather than adding
+to it. For a record whose `P` is within the cap — the paragraph
 below carves out the one that is not — the build's total is therefore
 
 ```text
@@ -1794,7 +1794,9 @@ target or its cap. §14 records the reference fixture's own measured build
 against this budget.
 
 - **Pairing**: hole-count mismatch → S1; segment-count mismatch → S2;
-  mixed-kind or free-form segment pair → S3; a same-kind `CircleSeg` pair
+  mixed-kind segment pair → S3; a same-kind Tier A free-form pair whose two
+  Bézier span counts differ → S17; an equal-span same-kind Tier A free-form
+  pair → S14, never S3; a same-kind `CircleSeg` pair
   whose two recorded `CCW` flags disagree → S7's `ErrDegenerate` from its
   STRUCTURAL arm, asserted to refuse at the phase §4's gate-order paragraph
   assigns that arm rather than from the AUDIT arm, so the fixture pins the
