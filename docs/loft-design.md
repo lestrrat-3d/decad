@@ -2021,7 +2021,13 @@ against this budget.
   proves slot 0 lands at each side's own recorded walk START (§5.1's
   walk-order mapping) rather than at the converted chain's natural start;
   the same fixture is asserted to need no walk-sense refusal, `Verify`
-  reading `Sound` rather than S7. `Bounds` widened by its own `Bound`
+  reading `Sound` rather than S7. A same-shape side with the opposite range
+  order carries REVERSED control data — P6 fixes each loop's walk direction
+  intrinsically, and `seam.go`'s `recordEdge` bakes the sense into the range
+  order alone, never reordering the entity's own fields — so §5.1's natural
+  span `spanCount-1-q` at local parameter `1-u` restores the same point per
+  slot; a natural-order mapping instead lands slot 0 on that side's far end
+  and fails that per-station assertion. `Bounds` widened by its own `Bound`
   (`absSumUpper(delta, sectionDelta)`) CONTAINS a dense sample of both true
   recorded curves lifted through their planes — a box that did not widen
   fails it. Refusals, each asserted on the sentinel AND that the document
