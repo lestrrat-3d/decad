@@ -299,9 +299,13 @@ placement. See `docs/evaluator-design.md` §8.
   path must EXIST on the branch that adds the row — the guard runs `os.Stat` on
   every Layout path and fails with "Layout row names … which does not exist on
   disk" — so a row for a new file lands in the same change as the file, never in
-  an earlier one. And this file admits no HTML comment anywhere: the guard reads
-  such a line as part of a table and answers "CLAUDE.md's Layout table did not
-  parse", so a note that would be a comment elsewhere is written as prose here.
+  an earlier one. And a line that OPENS an HTML block — up to three leading
+  spaces, then `<` followed by a letter, `!`, `/` or `?`, an HTML comment on its
+  own line among them — is refused anywhere in the file: `parseCLAUDEMD`
+  classifies such a line as an HTML block, ahead of both its table branch and
+  its prose branch, and answers "an HTML block in CLAUDE.md". That check reads a
+  line's START only and says nothing about a `<` appearing mid-line, so a note
+  that would be a standalone comment elsewhere is written as prose here.
 
 ## Verification
 

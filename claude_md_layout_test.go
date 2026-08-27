@@ -1108,6 +1108,15 @@ func TestParseCLAUDEMDAcceptsTheShapesTheFormatMakesSafe(t *testing.T) {
 		}, other),
 		// A thematic break is not a setext underline: nothing precedes it.
 		"a thematic break outside the section": join(realSection, other, []string{"---", ""}),
+		// The HTML-block rule is LINE-LEVEL. htmlBlockRe only ever sees a
+		// line-start delimiter, so a `<` in the middle of a prose line is
+		// text this scanner never classifies. CLAUDE.md's Conventions
+		// section states the rule at exactly that width, and this case with
+		// the standalone-comment refusal above are what hold it there.
+		"an HTML comment inside a prose line": join(realSection, []string{
+			"## Conventions", "",
+			"An invented sentence with <!-- an invented aside --> inside it.", "",
+		}),
 		// The declared non-Layout table, where it belongs.
 		"a declared non-Layout table outside the section": join([]string{
 			nonLayoutTableHeaders[0].section, "",

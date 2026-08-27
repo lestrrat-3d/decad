@@ -720,14 +720,16 @@ only the RULE that places its stations differs from the circular walk-up.
   a same-kind Tier A free-form pair reduces to its own chain of
   `bezierSpan`s (`docs/spline-design.md` §5.1); P5 and S17 require the two
   chains to reduce to the same span count, written `spanCount` here to keep
-  it distinct from this section's own chord-cell count `m` above. Span `q`
+  it distinct from this section's own chord-cell count `m` above. Slot `q`
   of `spanCount` (`q` in `[0, spanCount)`, a letter chosen to collide with
-  none of §7's `side(i,j,k)` indices) occupies slot `q` by INDEX: that
-  span's own local parameter `[0, 1]` — the parameter its de Casteljau
-  bisection below already walks — is laid onto the shared coordinate's
-  slot `[q/spanCount, (q+1)/spanCount]`, so every span boundary is a
-  coordinate value `q/spanCount` and coincides with a cell boundary by
-  definition. **This coordinate is NOT the recorded parameter domain, and
+  none of §7's `side(i,j,k)` indices) takes one span by INDEX: that span's
+  own local parameter `[0, 1]` — the parameter its de Casteljau bisection
+  below already walks — is laid onto the shared coordinate's slot
+  `[q/spanCount, (q+1)/spanCount]`, so every slot boundary is a coordinate
+  value `q/spanCount` and coincides with a cell boundary by definition.
+  **Which span slot `q` takes is decided in the side's RECORDED WALK ORDER,
+  and the bullet below owns that mapping.** **This coordinate is NOT the
+  recorded parameter domain, and
   nothing here maps through one.** The Bézier conversion
   (`docs/spline-design.md` §5.1) promises one Bézier per nonempty knot span
   and returns a `[]bezierSpan` of control points with the recorded knots
@@ -741,6 +743,51 @@ only the RULE that places its stations differs from the circular walk-up.
   else, never for equal spacing, and a `FitSplineSeg`'s `Params` are
   cumulative chord length, unequal by construction.
 
+- **Slot `q` takes natural span `q` on a FORWARD side and natural span
+  `spanCount-1-q` at local parameter `1-u` on a REVERSED one.** A recorded
+  free-form range states its side's walk sense in the ORDER of its two ends:
+  `RecordProfile` swaps `TStart` and `TEnd` whenever `sketch`'s walk runs
+  against the entity (`seam.go`), so `TStart > TEnd` says this side is
+  walked against its curve's natural sense. `docs/spline-design.md` §2 states
+  a recorded free-form range is always `[0, 1]` or `[1, 0]`, so those two
+  orders are the whole space this rule maps over, and `record.go`'s
+  `validateSegmentRange` admits both — it refuses a non-finite end, an end
+  outside `[0, 1]` and an empty range, and tests the two ends' ORDER for
+  nothing. The conversion does NOT apply that order:
+  `spline_bezier.go`'s `freeformBezierSpans` returns its spans in
+  NATURAL order together with a `reversed` flag, because
+  `clampedBezierSpans` slices control points in ascending index order
+  whatever the recorded range says, and every consumer applies the flag
+  itself — `freeformEndControls` and `freeformEndTangents` each do. So does
+  this rule: on a FORWARD side (`TStart < TEnd`) slot `q` takes natural span
+  `q` at local parameter `u`, and on a REVERSED side (`TStart > TEnd`) slot
+  `q` takes natural span `spanCount-1-q` at local parameter `1-u`. **The
+  shared coordinate above, each cell's two endpoints, and every station
+  point below are defined AFTER that transformation, over the walk-ordered
+  chain and never over the natural one.** The per-cell sagitta (below) is
+  unaffected by it — reversing a span's control-point order leaves the
+  control-point SET, the chord segment `P_0 P_p` joining its two ends, and
+  every distance between them identical — so the transformation changes the
+  ORDER stations are visited in and nothing else.
+
+- **Both sides' slot 0 lands at the same end of the pair, so the free-form
+  arm needs no walk-sense gate of its own.** Under the mapping above a
+  side's coordinate `0` IS that side's recorded walk START — natural span
+  `0` at `u = 0` forward, natural span `spanCount-1` at `u = 1` reversed,
+  which is the very control point `freeformEndControls` reports as that
+  segment's start — and its coordinate `1` is that side's recorded walk END.
+  §3's vertex pairing already pairs segment `j`'s walk-start vertex on `p0`
+  with its paired segment's walk-start vertex on `p1` (P4, P6), so the two
+  sides' slot 0 ARE that pair's own two paired endpoints, whichever side the
+  record reversed, and the far end of slot `spanCount - 1` is that pair's
+  other paired endpoint on each side.
+  This is why P5 carries a walk-sense requirement on a same-kind `CircleSeg`
+  pair and none on a same-kind Tier A free-form pair: a `CircleSeg` records
+  no endpoint at all and states its sense only in a `CCW` flag, which is
+  what S7's structural arm exists to reconcile, while a free-form side
+  states its sense in the ORDER of its own recorded range and this rule
+  reads that order directly.
+
 - **The span-count match (P5, S17) is what gives the pair a shared station
   coordinate at all.** Two curves whose Bézier decompositions carry
   different span counts have no shared fraction `q/spanCount` to chord
@@ -752,9 +799,10 @@ only the RULE that places its stations differs from the circular walk-up.
   at S17.
 
 - **The shared station set is chorded at shared dyadic fractions of that
-  coordinate, one cell per Bézier span to start.** Seed one chord cell per
-  span boundary — `spanCount` cells over the `spanCount` shared spans — and
-  read that seed's own station points off the open/closed accounting stated
+  coordinate, one cell per slot to start.** Seed one chord cell per slot —
+  `spanCount` cells over the `spanCount` shared slots, each holding each
+  side's own walk-ordered span (above) — and read that seed's own station
+  points off the open/closed accounting stated
   above for the circular arm, which governs a free-form side unchanged and
   is restated nowhere here. Measure that cell's own sagitta (below) on BOTH
   sides; bisect any CELL whose measured sagitta on either side exceeds the
@@ -1964,7 +2012,14 @@ against this budget.
   counts: a same-span-count fit-spline pair maps each station of one side to
   the other side's station at the SAME shared dyadic fraction (§5.1),
   and a nonzero `WithLoftAlignment` offset on a loop containing a curved pair
-  maps the expected ROTATED station. `Bounds` widened by its own `Bound`
+  maps the expected ROTATED station. A pair whose two sides record the SAME
+  curve shape under OPPOSITE range orders — one `TStart < TEnd`, the other
+  `TStart > TEnd`, each loop walked in its own intrinsic sense — builds the
+  identical station coordinates as the all-forward pair, which is what
+  proves slot 0 lands at each side's own recorded walk START (§5.1's
+  walk-order mapping) rather than at the converted chain's natural start;
+  the same fixture is asserted to need no walk-sense refusal, `Verify`
+  reading `Sound` rather than S7. `Bounds` widened by its own `Bound`
   (`absSumUpper(delta, sectionDelta)`) CONTAINS a dense sample of both true
   recorded curves lifted through their planes — a box that did not widen
   fails it. Refusals, each asserted on the sentinel AND that the document
