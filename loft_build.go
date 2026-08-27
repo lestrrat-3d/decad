@@ -116,8 +116,8 @@ func (pl loftPayload) placed(ctx context.Context, d *Document, ref StepRef, comp
 	return evalLoft(ctx, d, ref, next, newWorkBudget(ctx), newFreeformWork(), newFreeformWork())
 }
 
-// validateLoftRecords applies docs/loft-design.md Table S rows S1, S2, S4, S3
-// and S5, in §4's stated gate order, from the two authenticated records
+// validateLoftRecords applies docs/loft-design.md Table S rows S1, S2, S4, S3,
+// S5 and S15, in §4's stated gate order, from the two authenticated records
 // alone — no triangle is built. It returns the normalized per-loop alignment
 // offsets (a nil alignment becomes every offset 0, §2) alongside every
 // segment's own resolved walk, one slice per loop, in that loop's own
@@ -205,6 +205,22 @@ func validateLoftRecords(p0, p1 ProfileRecord, pl0, pl1 PlaneRecord, alignment [
 		return nil, nil, nil, fmt.Errorf(`%w: the two profiles lie in the same geometric plane; the loft has zero volume by construction`, ErrDegenerate)
 	}
 
+	// S15, last among the shape gates, exactly where §4's gate-order paragraph
+	// puts it: after S5 and beside S14's DERIVATION arm, decided from the two
+	// records with no station built. It belongs HERE and not in the per-segment
+	// station generator, because the share it enforces is allocated over the
+	// WHOLE build's paired-segment counts (loftStationShare) and a generator
+	// handed one pair can never see them.
+	//
+	// S3 above refuses every non-LineSeg pair, so no record reaches this gate
+	// with a circular pair to measure until the arc correspondence lands
+	// (docs/loft-design.md §12 PR 3). The gate is exercised at its own entry
+	// point meanwhile, the same way the circular station generator itself is
+	// (loft_stations_internal_test.go's own header).
+	if err := loftStationCapGate(p0, p1, offsets, walks0, walks1); err != nil {
+		return nil, nil, nil, err
+	}
+
 	return offsets, walks0, walks1, nil
 }
 
@@ -223,6 +239,189 @@ func loftPlanesCoincide(a, b PlaneRecord) bool {
 	}
 	d := xsub(xptOf(b.Origin), xptOf(a.Origin))
 	return xdotSign(na, d) == 0
+}
+
+// loftStationCap is docs/loft-design.md §5.1's ceiling on a build's TOTAL
+// station count Σstations (§7) — the soft limit that keeps the chord chain
+// from being what carries §6's audit past the pair-test ceiling S8 owns. §14
+// left its value to this increment; the derivation is here.
+//
+// §7 fixes the assembled triangle count: 2·Σstations wall triangles, plus each
+// of the two caps' own polygon-with-holes triangulation, which triangulate.go
+// bridges into a simple polygon and so answers Σstations + 2H − 2 triangles
+// over H hole loops. So
+//
+//	F = 2·Σstations + 2·(Σstations + 2H − 2) = 4·Σstations + 4H − 4
+//
+// S8 (loft_audit.go) refuses unless F*(F−1)/2 is at or below
+// maxFacetPairTestsPerCall (8_000_000, budget.go), which admits F ≤ 4000:
+// 4000·3999/2 = 7_998_000 passes and 4001·4000/2 = 8_002_000 does not.
+//
+// H is bounded by Σstations itself. Every loop holds at least one segment and
+// every paired segment chords at m ≥ 1 (§5.1), so a build of L loops has
+// Σstations ≥ L and therefore H = L − 1 ≤ Σstations − 1. Taking that worst
+// case,
+//
+//	F ≤ 4·Σstations + 4·(Σstations − 1) − 4 = 8·Σstations − 8
+//
+// and at Σstations = 500 that is F ≤ 3992, whose 3992·3991/2 = 7_966_036 is
+// STRICTLY below the ceiling — which is the property §5.1 requires of this
+// constant. The hole-free shape §5.1's own "F ≈ 4Σ − 4" names is far smaller
+// still: F = 1996 at the cap, 1_991_010 pair tests.
+//
+// It also leaves room for every fixture §13 requires: that section's reference
+// wedge forces 64 stations and its calibrated twin settles at 65, so the cap
+// sits more than seven times above the largest fixture that ships.
+//
+// The cap is deliberately NOT maxChordsPerWalk (tessellate.go). That constant
+// bounds how finely ONE curve may be chorded and knows nothing of how many
+// curves a build holds; this one bounds the build.
+const loftStationCap = 500
+
+// loftStationCapError is docs/loft-design.md Table S row S15's refusal: a
+// same-kind circular pair whose settled station count `m` (§5.1's joint
+// walk-up) exceeds the per-segment share loftStationShare allocates it.
+//
+// It is a type rather than an fmt.Errorf wrapper because the refusal must NAME
+// the segment whose own share it exceeded (§5.1) while still answering
+// errors.Is for errTooManyChords, the sentinel §5.1 assigns this row (spline
+// design Table R row R8). Wrapping errTooManyChords with %w would prepend that
+// sentinel's own text — "the chord tolerance asks for more than 16384 chords
+// on one curve" — which names no segment and describes a caller-supplied
+// tessellation tolerance a loft has no such knob for (§5.1: "The target is not
+// a caller option"). Unwrap keeps errors.Is answering for both errTooManyChords
+// and, through it, ErrUnsupported.
+type loftStationCapError struct {
+	loop, seg int
+	m, mMax   int
+}
+
+func (e *loftStationCapError) Error() string {
+	return fmt.Sprintf(
+		`%s: loop %d segment %d needs %d chord cells to meet the loft chord target, past the %d its share of the %d-station cap allows`,
+		ErrUnsupported.Error(), e.loop, e.seg, e.m, e.mMax, loftStationCap,
+	)
+}
+
+func (e *loftStationCapError) Unwrap() error { return errTooManyChords }
+
+// loftPairCounts reads docs/loft-design.md §5.1's two build-wide counts off
+// Table P over both records: P, the total paired-segment count, and C, the
+// number of same-kind circular pairs among them. Both are decided from the two
+// authenticated records alone — no station is generated to read either.
+//
+// A pair is circular when BOTH sides' walks are circular; a mixed-kind pair is
+// S3's refusal (validateLoftRecords) and is counted in P like any other, since
+// P's own entitlement is one station per paired segment whatever its kind. Only
+// loop0's segment counts are read: S2 has already proved loop1 carries the same
+// count, which is what makes one loop's shape the pair count for both.
+//
+// The accumulation is checked (wallCheckedAdd, budget.go) and answers false on
+// overflow rather than wrapping, the discipline §5.1 states for every sum the
+// mMax comparison reads.
+func loftPairCounts(loops0 []LoopRecord, offsets []int, walks0, walks1 [][]segmentWalk) (uint64, uint64, bool) {
+	var p, c uint64
+	for i := range loops0 {
+		n := len(loops0[i].Segments)
+		off := offsets[i]
+		for j := range n {
+			var ok bool
+			if p, ok = wallCheckedAdd(p, 1); !ok {
+				return 0, 0, false
+			}
+			k := (j + off) % n
+			if walks0[i][j].kind == walkCircular && walks1[i][k].kind == walkCircular {
+				if c, ok = wallCheckedAdd(c, 1); !ok {
+					return 0, 0, false
+				}
+			}
+		}
+	}
+	return p, c, true
+}
+
+// loftStationShare allocates docs/loft-design.md §5.1's per-segment share of
+// the station cap:
+//
+//	mMax = 1 + max(0, (loftStationCap - P) / C)      // integer division
+//
+// Every paired segment is entitled to its first station — a LineSeg pair's
+// whole entitlement (m = 1, §7) — and each of the C circular pairs may take at
+// most mMax. Because C counts the circular pairs AMONG P, a circular pair's m
+// stations SUBSUME that first-station entitlement rather than adding to it, so
+// §5.1's own sum shows no build every pair of which passes S15 can exceed the
+// cap.
+//
+// The caller must not reach here with C == 0: §5.1 states a build with no
+// circular pair never consults the cap at all, and dividing by C would be
+// undefined besides.
+//
+// A record whose own P already exceeds the cap clamps to mMax = 1, which §5.1
+// carves out deliberately: such a record is past chording altogether and S8 is
+// what refuses it, over the assembled triangle count §6's own preflight
+// computes. Refusing it here instead would refuse a mixed build while
+// admitting an all-LineSeg build of the identical triangle count.
+func loftStationShare(p, c uint64) int {
+	q := max(int64(0), (int64(loftStationCap)-int64(p))/int64(c)) //nolint:gosec // p and c are paired-segment counts wallCheckedAdd already proved do not overflow, and a record large enough to pass int64 cannot be built from a decoded recipe's own resource limits.
+	return 1 + int(q)
+}
+
+// loftStationCapGate decides docs/loft-design.md Table S row S15 from the two
+// RECORDS alone, at the phase §4's gate-order paragraph assigns it — among the
+// shape gates, beside S14's DERIVATION arm, with no station built and no
+// triangle assembled. §5.1's "Deciding S15 from the record" paragraph is what
+// makes that possible: m and mMax are each a function of the two records, so
+// the construction phase settles the identical m this gate reads.
+//
+// A build with no same-kind circular pair (C == 0) never consults the cap and
+// never even reads the chord target: its Σstations is Σn_i exactly, the count
+// the record itself states, and S8 is its only resource refusal. That early
+// return is why an all-LineSeg build — every build this evaluator admits
+// today, S3 refusing every other kind — pays nothing for this gate.
+//
+// The refusal NAMES the segment whose own share was exceeded, since the share
+// is that segment's (loftStationCapError). A walk-up that cannot settle at all
+// propagates its own refusal instead: errLoftSagittaUnderivable is S14's
+// DERIVATION arm, which §5.1 places beside this row precisely because the
+// walk-up that settles m is what asks for that term, and errTooManyChords bare
+// is chordCount's own per-walk ceiling.
+func loftStationCapGate(p0, p1 ProfileRecord, offsets []int, walks0, walks1 [][]segmentWalk) error {
+	loops0 := append([]LoopRecord{p0.Outer}, p0.Holes...)
+	loops1 := append([]LoopRecord{p1.Outer}, p1.Holes...)
+
+	p, c, ok := loftPairCounts(loops0, offsets, walks0, walks1)
+	if !ok {
+		return fmt.Errorf(`%w: this loft's paired-segment count overflows the station-cap arithmetic`, ErrUnsupported)
+	}
+	if c == 0 {
+		return nil
+	}
+
+	target, err := loftChordTarget(p0, p1, walks0, walks1)
+	if err != nil {
+		return err
+	}
+	mMax := loftStationShare(p, c)
+
+	for i := range loops0 {
+		n := len(loops0[i].Segments)
+		off := offsets[i]
+		for j := range n {
+			k := (j + off) % n
+			w0, w1 := walks0[i][j], walks1[i][k]
+			if w0.kind != walkCircular || w1.kind != walkCircular {
+				continue
+			}
+			m, _, _, err := loftSettleStationCount(w0, w1, loops0[i].Segments[j], loops1[i].Segments[k], target)
+			if err != nil {
+				return err
+			}
+			if m > mMax {
+				return &loftStationCapError{loop: i, seg: j, m: m, mMax: mMax}
+			}
+		}
+	}
+	return nil
 }
 
 // loftLoopPair is Table P's correspondence for one loop: the two walk-ordered
@@ -373,15 +572,62 @@ func loftLineCellStations(w0, w1 segmentWalk) ([]Point2, []Point2, float64, erro
 	return []Point2{{U: w0.startU, V: w0.startV}}, []Point2{{U: w1.startU, V: w1.startV}}, 0, nil
 }
 
-// loftCircularCellStations is the circular arm, and it settles the pair's
-// shared station count by docs/loft-design.md §5.1's JOINT WALK-UP.
-// tessellate.go's chordCount picks each side's OWN count against target
-// independently, and max(m0, m1) only SEEDS the walk: from there, BOTH sides'
-// certified per-cell sagittae are recomputed at each candidate count and the
-// count increments until both are at or below the target. Settling that way
-// needs no monotonicity claim about the certified sagitta as the count grows,
-// and both sides are then walked at the count it settles on — never at either
-// side's own smaller count — which is the correspondence a loft wall needs.
+// loftSettleStationCount runs docs/loft-design.md §5.1's JOINT WALK-UP for one
+// same-kind circular pair and answers the count it settles on, together with
+// each side's own certified per-cell sagitta AT that count.
+//
+// chordCount picks each side's OWN count against target independently, and
+// max(m0, m1) only SEEDS the walk: from there BOTH sides' certified sagittae
+// are recomputed at each candidate and the count increments until both are at
+// or below the target. Settling that way needs no monotonicity claim about the
+// certified sagitta as the count grows.
+//
+// It is a pure function of the two walks, the two RECORDED segments and the
+// target, and it charges no work budget — which is what lets the record-only
+// station-cap gate (loftStationCapGate, S15) settle the same m the
+// construction phase will, with no station built and no triangle assembled.
+//
+// The two refusals it raises are the two docs/loft-design.md §4's gate-order
+// paragraph assigns to this walk-up: errLoftSagittaUnderivable is S14's
+// DERIVATION arm — a candidate count whose certified sagitta has no derivation
+// from the record — and errTooManyChords is the per-walk ceiling chordCount
+// itself enforces, raised again here because the certified sagitta shrinks
+// with m but is floored by its own enclosure width, so a target below that
+// floor would otherwise walk forever. That per-walk ceiling is NOT the station
+// cap: it bounds one curve's own chording and knows nothing of how many curves
+// the build holds, while loftStationCap bounds the build's station total.
+func loftSettleStationCount(w0, w1 segmentWalk, seg0, seg1 CurveSegment, target float64) (int, float64, float64, error) {
+	m0, _, err := chordCount(w0, target)
+	if err != nil {
+		return 0, 0, 0, err
+	}
+	m1, _, err := chordCount(w1, target)
+	if err != nil {
+		return 0, 0, 0, err
+	}
+
+	m := max(m0, m1)
+	for {
+		s0 := loftCertifiedSagittaUpper(seg0, m)
+		s1 := loftCertifiedSagittaUpper(seg1, m)
+		if isNonFinite(s0) || isNonFinite(s1) {
+			return 0, 0, 0, errLoftSagittaUnderivable
+		}
+		if s0 <= target && s1 <= target {
+			return m, s0, s1, nil
+		}
+		if m >= maxChordsPerWalk {
+			return 0, 0, 0, errTooManyChords
+		}
+		m++
+	}
+}
+
+// loftCircularCellStations is the circular arm. It settles the pair's shared
+// station count through loftSettleStationCount — docs/loft-design.md §5.1's
+// JOINT WALK-UP, whose own doc comment owns that rule — and then walks BOTH
+// sides at the count it settles on, never at either side's own smaller count,
+// which is the correspondence a loft wall needs.
 //
 // What the walk-up compares against the target, and what this arm publishes,
 // is loftCertifiedSagittaUpper's enclosure over the RECORD's own radius and
@@ -421,41 +667,9 @@ func loftLineCellStations(w0, w1 segmentWalk) ([]Point2, []Point2, float64, erro
 // EXACT rational parameter, never a float rounding of one (circularPointBound)
 // — is what keeps both halves readings of the same quantity.
 func loftCircularCellStations(w0, w1 segmentWalk, seg0, seg1 CurveSegment, target float64) ([]Point2, []Point2, float64, error) {
-	// S15: chordCount itself already refuses (errTooManyChords, reused per
-	// spline design Table R row R8) a side whose target cannot be met inside
-	// maxChordsPerWalk, at the phase docs/loft-design.md §4's gate-order
-	// paragraph assigns that row — this arm mints no separate cap of its own,
-	// and propagates that refusal verbatim from whichever side hits it first.
-	m0, _, err := chordCount(w0, target)
+	m, s0, s1, err := loftSettleStationCount(w0, w1, seg0, seg1, target)
 	if err != nil {
 		return nil, nil, 0, err
-	}
-	m1, _, err := chordCount(w1, target)
-	if err != nil {
-		return nil, nil, 0, err
-	}
-
-	m := max(m0, m1)
-	var s0, s1 float64
-	for {
-		s0 = loftCertifiedSagittaUpper(seg0, m)
-		s1 = loftCertifiedSagittaUpper(seg1, m)
-		if isNonFinite(s0) || isNonFinite(s1) {
-			return nil, nil, 0, errLoftSagittaUnderivable
-		}
-		if s0 <= target && s1 <= target {
-			break
-		}
-		// The same ceiling chordCount enforces on its own walk-up, enforced
-		// again on this one: the certified sagitta shrinks with m but is
-		// floored by its own enclosure width, so a target below that floor
-		// would otherwise walk forever. This refuses as S15, in the arm and at
-		// the phase §4's gate-order paragraph assigns it, carrying
-		// chordCount's own sentinel rather than a second one.
-		if m >= maxChordsPerWalk {
-			return nil, nil, 0, errTooManyChords
-		}
-		m++
 	}
 
 	stations0, d0 := circularStationChain(w0, seg0, m)

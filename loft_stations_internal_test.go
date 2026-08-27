@@ -1,10 +1,12 @@
 package decad
 
 import (
+	"fmt"
 	"math"
 	"math/big"
 	"testing"
 
+	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
@@ -416,6 +418,205 @@ func TestLoftCellStationsStationCapFiresBeforeAuditCeiling(t *testing.T) {
 	require.ErrorIs(t, err, errTooManyChords)
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.Contains(t, err.Error(), "more than 16384 chords")
+}
+
+// quarterArcRingProfile is the S15 fixture: n radius-5 quarter arcs recorded in
+// one loop, each a same-kind circular pair with itself. Every pair settles at
+// the SAME station count against the shared chord target (the whole profile's
+// own coordinate envelope decides that target, §5.1, so it does not move with
+// n), which is what lets a fixture drive P and C alone and read the per-segment
+// share loftStationShare allocates from them.
+func quarterArcRingProfile(t *testing.T, n int) (ProfileRecord, [][]segmentWalk) {
+	t.Helper()
+	segs := make([]CurveSegment, n)
+	for i := range n {
+		base := float64(i) * math.Pi / 2
+		segs[i] = ArcSeg{
+			Center: pt(0, 0),
+			Start:  pt(5*math.Cos(base), 5*math.Sin(base)),
+			End:    pt(5*math.Cos(base+math.Pi/2), 5*math.Sin(base+math.Pi/2)),
+			TStart: 0, TEnd: 1,
+		}
+	}
+	p := ProfileRecord{Outer: LoopRecord{Segments: segs}}
+	return p, resolveLoftLoopWalks(t, p)
+}
+
+// TestLoftStationCapClearsTheAuditPairCeiling pins the DERIVATION behind
+// loftStationCap's value (docs/loft-design.md §5.1, §14): a build whose
+// Σstations reaches the cap must assemble an F whose F*(F-1)/2 is STRICTLY
+// below maxFacetPairTestsPerCall, the ceiling S8 enforces.
+//
+// The F formula the derivation rests on is measured here on a real assembled
+// triangle set rather than assumed: a square-with-square-hole loft has
+// Σstations = 8 over H = 1 hole, and assembleLoft emits exactly
+// 4*8 + 4*1 - 4 = 32 triangles. A hole-free square gives 4*4 - 4 = 12.
+func TestLoftStationCapClearsTheAuditPairCeiling(t *testing.T) {
+	assembledTriangles := func(t *testing.T, p ProfileRecord) int {
+		t.Helper()
+		pl0, pl1 := planeAt(r3.NewVec(0, 0, 0)), planeAt(r3.NewVec(0, 0, 1))
+		offsets, walks0, walks1, err := validateLoftRecords(p, p, pl0, pl1, nil, newFreeformWork(), newFreeformWork())
+		require.NoError(t, err)
+		pairs, _, err := loftPairings(p, p, offsets, walks0, walks1, 0, nil, nil)
+		require.NoError(t, err)
+		a, err := assembleLoft(t.Context(), pairs, mustFrame(t, pl0), mustFrame(t, pl1), pl0, r3.Identity())
+		require.NoError(t, err)
+		return len(a.tris)
+	}
+
+	// F = 4*Σstations + 4H - 4, measured on the built triangle set.
+	require.Equal(t, 4*4-4, assembledTriangles(t, unitSquareProfile()),
+		"a hole-free 4-station loft must assemble 4*Σ - 4 triangles")
+	holed := ProfileRecord{Outer: squareLoop(0.5, 0.5, 0.5, true), Holes: []LoopRecord{squareLoop(0.5, 0.5, 0.2, false)}}
+	require.Equal(t, 4*8+4*1-4, assembledTriangles(t, holed),
+		"an 8-station one-hole loft must assemble 4*Σ + 4H - 4 triangles")
+
+	// H <= Σ - 1 (every loop holds at least one segment and every pair chords
+	// at m >= 1), so the worst F a build AT the cap can assemble is 8*cap - 8.
+	worstF := uint64(8*loftStationCap - 8)
+	worstPairs, ok := wallChoose2(worstF)
+	require.True(t, ok, "the worst-case pair count at the cap must not overflow")
+	require.Less(t, worstPairs, uint64(maxFacetPairTestsPerCall),
+		"a build at the station cap must stay STRICTLY below S8's own pair ceiling")
+
+	// The cap is not arbitrarily conservative either: two stations further in
+	// that same worst shape already breaks S8's ceiling, so the constant sits
+	// against the bound it is derived from rather than far under it.
+	overPairs, ok := wallChoose2(uint64(8*(loftStationCap+2) - 8))
+	require.True(t, ok)
+	require.Greater(t, overPairs, uint64(maxFacetPairTestsPerCall),
+		"the cap must sit at the ceiling it is derived from, not far below it")
+
+	// And it leaves room for every fixture docs/loft-design.md §13 requires:
+	// that section's reference wedge forces 64 stations and its calibrated
+	// twin settles at 65.
+	require.Greater(t, loftStationCap, 65*4, "the cap must leave room for §13's own chorded fixtures")
+}
+
+// TestLoftStationCapRefusesPastItsShareBeforeTheAuditCeiling is Table S row
+// S15 (docs/loft-design.md §5.1): a same-kind circular pair whose settled
+// station count exceeds its own share of loftStationCap refuses with
+// errTooManyChords, and the refusal NAMES the segment whose share it exceeded.
+//
+// It is also the fixture §13 requires for this row — one that fires BEFORE S8
+// on a construction that would otherwise reach the audit ceiling. That is
+// asserted, not asserted-by-narration: the settled count is read back, the F
+// the build would have assembled from it is computed through §7's own formula,
+// and its F*(F-1)/2 is shown to exceed maxFacetPairTestsPerCall.
+//
+// The refusal must NOT read as tessellate.go's own per-walk message. That text
+// blames a "chord tolerance" for asking "more than 16384 chords on one curve",
+// and a loft has no such caller knob (§5.1: "The target is not a caller
+// option") — nor did any single curve here ask for 16384 of anything.
+func TestLoftStationCapRefusesPastItsShareBeforeTheAuditCeiling(t *testing.T) {
+	const n = 16
+	p, walks := quarterArcRingProfile(t, n)
+
+	target, err := loftChordTarget(p, p, walks, walks)
+	require.NoError(t, err)
+	m, _, _, err := loftSettleStationCount(walks[0][0], walks[0][0], p.Outer.Segments[0], p.Outer.Segments[0], target)
+	require.NoError(t, err)
+
+	mMax := loftStationShare(n, n)
+	require.Greater(t, m, mMax, "the fixture must settle past its own share, or it proves nothing")
+	require.Less(t, m, maxChordsPerWalk, "the fixture must stay inside the per-walk ceiling, so only the CAP can refuse it")
+
+	// What this build would have assembled had the cap not fired: §7's
+	// F = 4*Σstations - 4 over this hole-free loop, and S8's own pair count
+	// over it (loft_audit.go).
+	wouldBePairs, ok := wallChoose2(uint64(4*n*m - 4))
+	require.True(t, ok)
+	require.Greater(t, wouldBePairs, uint64(maxFacetPairTestsPerCall),
+		"the fixture must be one that would otherwise reach S8's audit ceiling")
+
+	err = loftStationCapGate(p, p, make([]int, 1), walks, walks)
+	require.ErrorIs(t, err, errTooManyChords, "S15 carries chordCount's own sentinel (spline design Table R row R8)")
+	require.ErrorIs(t, err, ErrUnsupported)
+	require.Contains(t, err.Error(), "loop 0 segment 0", "the refusal must name the segment whose share it exceeded")
+	require.Contains(t, err.Error(), fmt.Sprintf("%d chord cells", m))
+	require.NotContains(t, err.Error(), "chord tolerance", "a loft's chord target is not a caller-supplied tolerance")
+	require.NotContains(t, err.Error(), fmt.Sprintf("%d chords on one curve", maxChordsPerWalk),
+		"the refusal must not report the per-walk ceiling it never reached")
+}
+
+// TestLoftStationCapAdmitsAPairInsideItsShare is S15's own boundary: the same
+// arcs, few enough that each one's settled count fits the share the cap
+// allocates it, are admitted. Without this the refusal above would prove only
+// that the gate refuses everything.
+func TestLoftStationCapAdmitsAPairInsideItsShare(t *testing.T) {
+	const n = 4
+	p, walks := quarterArcRingProfile(t, n)
+
+	target, err := loftChordTarget(p, p, walks, walks)
+	require.NoError(t, err)
+	m, _, _, err := loftSettleStationCount(walks[0][0], walks[0][0], p.Outer.Segments[0], p.Outer.Segments[0], target)
+	require.NoError(t, err)
+	require.LessOrEqual(t, m, loftStationShare(n, n), "the fixture must settle inside its own share")
+
+	require.NoError(t, loftStationCapGate(p, p, make([]int, 1), walks, walks))
+}
+
+// TestLoftStationShareAllocatesTheCap pins docs/loft-design.md §5.1's own
+// allocation arithmetic, including the two cases that paragraph carves out by
+// name.
+func TestLoftStationShareAllocatesTheCap(t *testing.T) {
+	for _, row := range []struct {
+		name    string
+		p, c    uint64
+		want    int
+		comment string
+	}{
+		{name: "one circular pair alone", p: 1, c: 1, want: 1 + (loftStationCap-1)/1},
+		{name: "four circular pairs", p: 4, c: 4, want: 1 + (loftStationCap-4)/4},
+		{name: "circular pairs among line pairs", p: 100, c: 4, want: 1 + (loftStationCap-100)/4},
+		{
+			name: "a record whose own P already exceeds the cap clamps to one",
+			p:    loftStationCap + 1, c: 1, want: 1,
+			comment: "such a record is past chording altogether and S8 is what refuses it",
+		},
+		{
+			name: "integer division only ever under-allocates",
+			p:    10, c: 7, want: 1 + (loftStationCap-10)/7,
+		},
+	} {
+		t.Run(row.name, func(t *testing.T) {
+			mMax := loftStationShare(row.p, row.c)
+			require.Equal(t, row.want, mMax)
+
+			// §5.1's own sum: because C counts the circular pairs AMONG P, a
+			// circular pair's m stations SUBSUME the first-station
+			// entitlement P already grants it, so the build's total is
+			// (P - C)*1 + C*mMax — which can never pass the cap unless P
+			// alone already did.
+			require.LessOrEqual(t, row.c, row.p, "C counts the circular pairs among P, so it can never exceed it")
+			total := (row.p - row.c) + row.c*uint64(mMax) //nolint:gosec // mMax is a positive share bounded by loftStationCap.
+			if row.p <= loftStationCap {
+				require.LessOrEqual(t, total, uint64(loftStationCap),
+					"no build every pair of which passes S15 may exceed the cap")
+			}
+		})
+	}
+}
+
+// TestLoftStationCapGateNeverConsultsTheCapWithNoCircularPair is §5.1's C == 0
+// carve-out: an all-LineSeg build's Σstations is Σn_i exactly, the count the
+// record itself states, so S8 is its only resource refusal and the gate does
+// not even read the chord target. The fixture proves the second half by
+// handing the gate a profile loftChordTarget itself would REFUSE — a free-form
+// boundary profileCoordinateUpper has no envelope for — and requiring the gate
+// to answer nil anyway.
+func TestLoftStationCapGateNeverConsultsTheCapWithNoCircularPair(t *testing.T) {
+	p := unitSquareProfile()
+	walks := resolveLoftLoopWalks(t, p)
+	require.NoError(t, loftStationCapGate(p, p, make([]int, 1), walks, walks))
+
+	fit := FitSplineSeg{Fit: []Point2{pt(0, 0), pt(1, 1), pt(2, 0), pt(3, 1), pt(4, 0)}, TStart: 0, TEnd: 1}
+	free := ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{fit, fit, fit}}}
+	freeWalks := resolveLoftLoopWalks(t, free)
+	_, err := loftChordTarget(free, free, freeWalks, freeWalks)
+	require.Error(t, err, "the fixture must be one whose chord target cannot be read at all")
+	require.NoError(t, loftStationCapGate(free, free, make([]int, 1), freeWalks, freeWalks),
+		"a build with no circular pair must never consult the cap, nor the target it is measured against")
 }
 
 // --- S16: the one-sided collapsed cell (defensive) ---
