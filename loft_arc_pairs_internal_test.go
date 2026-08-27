@@ -286,7 +286,8 @@ func TestComputeLoftChordedAllowWallLegEnclosesConeFrustumGap(t *testing.T) {
 	// delta is 0: this hand-built station chain stands for an unplaced build
 	// whose stations are the exact points, so the composed matchedDelta
 	// (docs/loft-design.md §5.2) is the chord-to-curve half alone.
-	chorded := computeLoftChordedAllow(pairs, [][]int{vIdx}, [][]int{wIdx}, verts, anchor, sectionDelta, 0, distUpper)
+	chorded, err := computeLoftChordedAllow(pairs, [][]int{vIdx}, [][]int{wIdx}, verts, anchor, sectionDelta, 0, distUpper)
+	require.NoError(t, err, "this fixture's cap plane offset is derivable")
 
 	// The independent reference: the quarter lateral frustum's own closed
 	// form, and the SAME two-triangle split assembleLoft's own Table B uses,

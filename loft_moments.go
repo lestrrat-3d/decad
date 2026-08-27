@@ -541,7 +541,9 @@ func (m *loftMassAccumulator) wallBound() float64 {
 // ruled-versus-chord area excess (docs/loft-design.md §5/§8, a10-plan.md
 // Part 3 PR 6's integration task). Every field of the zero value is 0, the
 // correct standing for a LineSeg-only loft that never calls
-// computeLoftChordedAllow at all.
+// computeLoftChordedAllow at all. It is also what a REFUSING call returns
+// beside its error, where the zero stands for nothing at all and no consumer
+// ever sees it: evalLoft propagates that error and publishes no measurement.
 type loftChordedAllow struct {
 	wallAreaUpper       float64
 	twistVolumeUpper    float64
@@ -624,7 +626,10 @@ type loftChordedAllow struct {
 // distance from anchor to ANY one held cap1 vertex — valid because a plane's
 // own perpendicular offset from a point is never more than the distance to
 // any single point ON that plane, and every cap1 vertex lies on cap1's own
-// plane exactly.
+// plane exactly. Where the assembly states no such distance this function
+// RETURNS errLoftCapOffsetUnderivable and publishes nothing, which is the one
+// error it raises and the reason it returns one at all; the site itself owns
+// why a zero would not do.
 //
 // capAreaAllow0 and capAreaAllow1 are ALSO area()'s own AREA reading of the
 // identical cap gap capVolumeUpper folds into a volume: h0 being zero sinks
@@ -671,7 +676,7 @@ type loftChordedAllow struct {
 //
 // This is the wall term; capAreaExcess above is Area's own cap term, and the
 // two together are what area() charges beside the held triangle sum.
-func computeLoftChordedAllow(pairs []loftLoopPair, vIdx, wIdx [][]int, verts []r3.Vec, anchor r3.Vec, matchedDelta, delta, distUpper float64) loftChordedAllow {
+func computeLoftChordedAllow(pairs []loftLoopPair, vIdx, wIdx [][]int, verts []r3.Vec, anchor r3.Vec, matchedDelta, delta, distUpper float64) (loftChordedAllow, error) {
 	var wallAreaUpper, twistVolumeUpper, maxTwistOffsetUpper, seamPerimeterUpper float64
 	var perimeterUpperV, perimeterUpperW, areaExcess float64
 	var walksV, walksW int
@@ -733,16 +738,36 @@ func computeLoftChordedAllow(pairs []loftLoopPair, vIdx, wIdx [][]int, verts []r
 	// to ANY point on that plane, so the minimum over every held vertex is
 	// the tightest such bound this evaluator can read off the assembly
 	// without a fresh plane-distance computation of its own.
+	//
+	// Either half of that reading failing is §5.2's cap planeOffsetUpper row
+	// answering +Inf, and this function REFUSES on it rather than publishing
+	// a number: a vertex whose coordinates ratSquaredDistance3 cannot read as
+	// exact rationals (a non-finite coordinate) states no distance at all, and
+	// an assembly whose every cap1 vertex overflows ratSqrtUp leaves the
+	// minimum at +Inf, as does an assembly stating no cap1 vertex. §5.2's own
+	// closing rule — an enclosure the record cannot state answers +Inf and the
+	// build refuses at Table S row S14, "never a finite substitute and never a
+	// published zero" — is what forbids the obvious alternative of assigning
+	// h1Upper = 0 here. That zero is not a bound: capAreaVolumeAllow takes its
+	// planeOffsetUpper <= 0 arm on it and publishes capVolumeUpper = 0, the
+	// SMALLEST possible number standing in for a quantity this evaluator could
+	// not derive, in a term every consumer reads as an upper bound. Nothing
+	// about the surrounding legs is allowed to excuse it: whether a sibling leg
+	// happens to saturate on the same assembly is that leg's own business, and
+	// a bound may not rest on another term's value to stay sound.
 	h1Upper := math.Inf(1)
 	for _, row := range wIdx {
 		for _, idx := range row {
 			v := verts[idx]
 			d2 := ratSquaredDistance3(anchor.X, anchor.Y, anchor.Z, v.X, v.Y, v.Z)
+			if d2 == nil {
+				return loftChordedAllow{}, errLoftCapOffsetUnderivable
+			}
 			h1Upper = math.Min(h1Upper, ratSqrtUp(d2))
 		}
 	}
 	if isNonFinite(h1Upper) {
-		h1Upper = 0
+		return loftChordedAllow{}, errLoftCapOffsetUnderivable
 	}
 	capVolumeUpper := absSumUpper(
 		capAreaVolumeAllow(0, capAreaAllow0),
@@ -768,5 +793,18 @@ func computeLoftChordedAllow(pairs []loftLoopPair, vIdx, wIdx [][]int, verts []r
 		seamAllow:           seamAllow,
 		areaExcess:          areaExcess,
 		capAreaExcess:       absSumUpper(capAreaAllow0, capAreaAllow1),
-	}
+	}, nil
 }
+
+// errLoftCapOffsetUnderivable is the sentinel docs/loft-design.md Table S row
+// S14 carries for the cap planeOffsetUpper term (§5.2), raised in the
+// CONSTRUCTION arm §4's gate-order paragraph assigns that term — it reads the
+// held vertex table, which the record-only arm does not have. Like its
+// certified-sagitta and station-displacement twins the shape itself is fine and
+// the chord set is buildable; only one of the proven displacement terms the
+// published cap volume allowance is composed from cannot be stated, so the
+// sentinel is ErrUnsupported and no finite value — least of all a zero — is
+// published in its place.
+var errLoftCapOffsetUnderivable = fmt.Errorf(
+	`%w: a chorded loft cap's plane offset from the mass anchor has no derivation from this assembly`, ErrUnsupported,
+)

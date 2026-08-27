@@ -2063,8 +2063,18 @@ func evalLoft(ctx context.Context, d *Document, ref StepRef, pl loftPayload, bud
 	// there would silently drop a genuine chord-to-curve area/volume
 	// obligation. Left at its zero value (every field of loftChordedAllow)
 	// for a LineSeg-only build, where both are zero.
+	//
+	// It is also where S14's CONSTRUCTION arm decides the cap
+	// planeOffsetUpper term §5.2's table lists: an assembly stating no proven
+	// distance from the anchor to a held cap1 vertex refuses here
+	// (errLoftCapOffsetUnderivable, loft_moments.go) instead of measuring on,
+	// so no measurement below is ever composed from a substituted value.
 	if sectionDelta > 0 || sectionMatchedDelta > 0 {
-		mass.chorded = computeLoftChordedAllow(pairs, a.vIdx, a.wIdx, a.verts, anchor, matchedDelta, a.delta, mass.distUpper)
+		chorded, err := computeLoftChordedAllow(pairs, a.vIdx, a.wIdx, a.verts, anchor, matchedDelta, a.delta, mass.distUpper)
+		if err != nil {
+			return nil, err
+		}
+		mass.chorded = chorded
 	}
 	body.volume = mass.volume(a.verts, a.tris)
 	centroid, err := mass.centroid(a.verts, a.tris)

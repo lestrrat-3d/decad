@@ -575,7 +575,8 @@ func TestLoftMassAccumulatorVolumeChordedTermReadsMatchedDeltaNotSagitta(t *test
 	// delta is 0: the accumulator below carries no placement displacement
 	// either, so the composed matchedDelta (docs/loft-design.md §5.2) is the
 	// chord-to-curve half alone and the two sites agree.
-	chorded := computeLoftChordedAllow(pairs, vIdx, wIdx, verts, anchor, sectionMatchedDelta, 0, 2.0)
+	chorded, err := computeLoftChordedAllow(pairs, vIdx, wIdx, verts, anchor, sectionMatchedDelta, 0, 2.0)
+	require.NoError(t, err, "this fixture's cap plane offset is derivable")
 
 	m := newLoftMassAccumulator(anchor, 0, sectionDelta, sectionMatchedDelta)
 	m.chorded = chorded
@@ -661,11 +662,13 @@ func TestComputeLoftChordedAllowChargesTheHeldStationDisplacement(t *testing.T) 
 	matched := chordCellDeltaUpper(chordToCurve, delta)
 	require.Greater(t, matched, chordToCurve, "the composition must actually widen the term it replaces")
 
-	got := computeLoftChordedAllow(pairs, vIdx, wIdx, verts, anchor, matched, delta, 2.0)
+	got, err := computeLoftChordedAllow(pairs, vIdx, wIdx, verts, anchor, matched, delta, 2.0)
+	require.NoError(t, err, "this fixture's cap plane offset is derivable")
 	// What the sagitta-alone reading publishes: the identical call with the
 	// station displacement dropped from both the per-cell and the build-wide
 	// argument.
-	sagittaOnly := computeLoftChordedAllow(pairs, vIdx, wIdx, verts, anchor, chordToCurve, 0, 2.0)
+	sagittaOnly, err := computeLoftChordedAllow(pairs, vIdx, wIdx, verts, anchor, chordToCurve, 0, 2.0)
+	require.NoError(t, err, "the sagitta-alone reference reads the same derivable assembly")
 
 	require.Greater(t, got.wallAreaUpper, sagittaOnly.wallAreaUpper,
 		"the wall upper must charge the held station displacement")
@@ -700,4 +703,91 @@ func TestComputeLoftChordedAllowChargesTheHeldStationDisplacement(t *testing.T) 
 		"Volume's own Bound must compose the matched-term chorded allowance")
 	require.Greater(t, vol.Bound.Base(), wrongTerm,
 		"Volume's own Bound must exceed what the sagitta-alone reading would publish")
+}
+
+// underivableCapOffsetPairs is the one-cell chorded pairing the two subtests
+// below share: a single positive-matchedDelta cell on each side, so the wall
+// loop runs and both caps carry a strictly positive sectionDisplacementArea,
+// leaving the cap plane offset as the only term under test. The two tangent
+// energies are +Inf, which costs cellChordCurveAreaAllow its sharp arm and
+// nothing else (loft_build.go's perCellTangentEnergy).
+func underivableCapOffsetPairs(matched float64) []loftLoopPair {
+	return []loftLoopPair{{
+		v: make([]Point2, 2), w: make([]Point2, 2),
+		arcUpperV:      []float64{1.01, 0},
+		arcUpperW:      []float64{1.1, 0},
+		matchedDelta:   []float64{matched, 0},
+		tangentEnergyV: []float64{math.Inf(1), math.Inf(1)},
+		tangentEnergyW: []float64{math.Inf(1), math.Inf(1)},
+	}}
+}
+
+// TestLoftCapOffsetUnderivableRefuses is docs/loft-design.md Table S row S14
+// for §5.2's cap planeOffsetUpper term, decided in the CONSTRUCTION arm §4's
+// gate-order paragraph assigns it: an assembly stating no proven distance from
+// the mass anchor to a held cap1 vertex must REFUSE, never publish a finite
+// substitute and never a zero (§5.2's own closing rule).
+//
+// Both subtests assert on the sentinel and on the WHOLE return being the zero
+// value, so no leg reaches a consumer at all. Neither weakens any numeric
+// bound: the fixture is built for this row and shares no assertion with the
+// calibrated wedges.
+func TestLoftCapOffsetUnderivableRefuses(t *testing.T) {
+	const matched = 0.5
+	anchor := r3.NewVec(0, 0, 0)
+	vIdx, wIdx := [][]int{{0, 1}}, [][]int{{2, 3}}
+
+	t.Run("a cap1 distance past the float64 range refuses instead of publishing zero", func(t *testing.T) {
+		// Both cap1 vertices sit a hair beyond MaxFloat64 from the anchor, so
+		// ratSqrtUp's outward step off MaxFloat64 lands on +Inf for each and
+		// the minimum over the cap never leaves +Inf.
+		for _, v := range []r3.Vec{r3.NewVec(math.MaxFloat64, 0, 1), r3.NewVec(math.MaxFloat64, -1, 1)} {
+			d2 := ratSquaredDistance3(anchor.X, anchor.Y, anchor.Z, v.X, v.Y, v.Z)
+			require.NotNil(t, d2, "the coordinates are finite, so the squared distance is an exact rational")
+			require.True(t, math.IsInf(ratSqrtUp(d2), 1), "no float64 upper bound on this distance exists")
+		}
+
+		// What a substituted zero would publish in its place, at this
+		// fixture's own cap-area allowance: capAreaVolumeAllow takes its
+		// planeOffsetUpper <= 0 arm and answers exactly 0 for a strictly
+		// positive area gap, the SMALLEST possible number standing in for a
+		// quantity no derivation states. The proven-underivable reading
+		// answers +Inf for the same area gap, which is what a refusal must
+		// stand on.
+		capAreaAllow := sectionDisplacementArea(matched, 1, 1.1)
+		require.Positive(t, capAreaAllow, "the fixture's cap carries a real area gap to fold into a volume")
+		require.Zero(t, capAreaVolumeAllow(0, capAreaAllow), "a zero plane offset publishes a zero cap volume gap")
+		require.True(t, math.IsInf(capAreaVolumeAllow(math.Inf(1), capAreaAllow), 1),
+			"the underivable plane offset's own answer is +Inf, never that zero")
+
+		verts := []r3.Vec{
+			r3.NewVec(0, 0, 0), r3.NewVec(1, 0, 0),
+			r3.NewVec(math.MaxFloat64, 0, 1), r3.NewVec(math.MaxFloat64, -1, 1),
+		}
+		got, err := computeLoftChordedAllow(underivableCapOffsetPairs(matched), vIdx, wIdx, verts, anchor, matched, 0, 2.0)
+		require.ErrorIs(t, err, errLoftCapOffsetUnderivable, "S14 refuses the underivable cap plane offset")
+		require.ErrorIs(t, err, ErrUnsupported, "the row's sentinel is ErrUnsupported, a derivation gap and not a shape rule")
+		require.Equal(t, loftChordedAllow{}, got, "a refused build publishes no leg at all")
+	})
+
+	t.Run("a NaN cap1 vertex refuses instead of panicking", func(t *testing.T) {
+		// A NaN coordinate has no exact rational, so ratSquaredDistance3
+		// answers nil — which ratSqrtUp dereferences. The same refusal arm
+		// covers it, so the reading never reaches that dereference.
+		verts := []r3.Vec{
+			r3.NewVec(0, 0, 0), r3.NewVec(1, 0, 0),
+			r3.NewVec(math.NaN(), 0, 1), r3.NewVec(1, 1, 1.3),
+		}
+		require.Nil(t, ratSquaredDistance3(anchor.X, anchor.Y, anchor.Z, verts[2].X, verts[2].Y, verts[2].Z),
+			"a NaN coordinate states no squared distance")
+
+		var got loftChordedAllow
+		var err error
+		require.NotPanics(t, func() {
+			got, err = computeLoftChordedAllow(underivableCapOffsetPairs(matched), vIdx, wIdx, verts, anchor, matched, 0, 2.0)
+		}, "an unreadable cap1 coordinate is a refusal, never a nil dereference")
+		require.ErrorIs(t, err, errLoftCapOffsetUnderivable, "S14 refuses the unreadable cap plane offset")
+		require.ErrorIs(t, err, ErrUnsupported, "the row's sentinel is ErrUnsupported")
+		require.Equal(t, loftChordedAllow{}, got, "a refused build publishes no leg at all")
+	})
 }
