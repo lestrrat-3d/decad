@@ -108,7 +108,6 @@
 //	Loft          same-type segment pairs, distinct planes    builds
 //	  hole-count or per-loop segment-count mismatch           ErrUnsupported
 //	  a pair not two LineSegs, ArcSegs or CircleSegs          ErrUnsupported
-//	  a circular pair whose two sides walk opposite senses    ErrUnsupported
 //	  a chorded pair past the fixed station cap               ErrUnsupported
 //	  a chorded pair whose displacement has no derivation     ErrUnsupported
 //	  a chord cell collapsing on one section only             ErrUnsupported
@@ -117,6 +116,7 @@
 //	  a build whose volume allowance swamps the body          ErrUnsupported
 //	  the two profiles lie in the same geometric plane        ErrDegenerate
 //	  a proven self-contact or self-intersection              ErrDegenerate
+//	  a circular pair whose two sides walk opposite senses    ErrDegenerate
 //	Placed        any body this evaluator built               builds
 //	Verify        every body; surveys read prisms/revolves/cups/cap blends
 //	  a question the evaluator cannot decide                  Status Suspect

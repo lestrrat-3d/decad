@@ -12,8 +12,8 @@ import (
 )
 
 // This file is docs/loft-design.md PR 1a: the evaluator half of Loft — the
-// loftPayload, its Table P pairing, Table S gates S1-S5 and S13's
-// coordinate-range gate (S9-S11 are the public
+// loftPayload, its Table P pairing, Table S gates S1-S5, S7's STRUCTURAL arm
+// and S13's coordinate-range gate (S9-S11 are the public
 // entry point's job, docs/loft-design.md §2/§4), the flat-triangle wall
 // construction (§5), the wiring of the already-landed §6 audit
 // (loft_audit.go) and §8 mass kernel (loft_moments.go), and the four
@@ -143,8 +143,9 @@ func (pl loftPayload) placed(ctx context.Context, d *Document, ref StepRef, comp
 }
 
 // validateLoftRecords applies docs/loft-design.md Table S rows S1, S2, S4, S3,
-// S5 and S15, in §4's stated gate order, from the two authenticated records
-// alone — no triangle is built. It returns the normalized per-loop alignment
+// S7's STRUCTURAL arm, S5 and S15, in §4's stated gate order, from the two
+// authenticated records alone — no triangle is built. It returns the
+// normalized per-loop alignment
 // offsets (a nil alignment becomes every offset 0, §2) alongside every
 // segment's own resolved walk, one slice per loop, in that loop's own
 // recorded segment order — NOT rotated by the alignment offset, which stays
@@ -270,15 +271,19 @@ func validateLoftRecords(p0, p1 ProfileRecord, pl0, pl1 PlaneRecord, alignment [
 // cyclic stations and states no rule for one of each. Admitting by concrete
 // type is what keeps the code inside the contract the document carries.
 //
-// Beside S3, a CHEAP STRUCTURAL gate rather than an expensive proof: two
-// paired circular segments whose own EFFECTIVE walk directions disagree walk
-// in opposite directions and would twist the station correspondence into a
-// self-crossing wall. §6's build-time audit would eventually catch the
-// resulting crossing as S7 (ErrDegenerate, loft_audit.go), but this test
-// runs before a single station or triangle is built, and its own sentinel
-// (ErrUnsupported) is what keeps the two refusals distinguishable — a
-// caller can tell "this evaluator does not admit the pairing" from "the
-// pairing self-crosses" without inspecting the message.
+// Beside S3 sits S7's STRUCTURAL arm (docs/loft-design.md Table S row S7,
+// Table P row P5, and §4's gate-order paragraph, which places both arms):
+// two paired circular segments whose own EFFECTIVE walk directions disagree
+// walk in opposite directions, and that correspondence walls each side
+// against the other's reversed walk — the very crossing §6's build-time
+// audit proves in its AUDIT arm. The two arms answer one existence question
+// and therefore carry one sentinel, S7's own ErrDegenerate (loft_audit.go's
+// errLoftContact is the audit arm's spelling of it): a self-crossing shell
+// bounds no solid under any evaluator, so this is never a staging refusal.
+// What this arm buys is POSITION, not a different answer — it is decided
+// from the two records alone, before a single station or triangle is built,
+// where the audit would only reach the same verdict three build phases
+// later.
 //
 // An ArcSeg's sweep is NOT structurally fixed CCW: walkOf's own ArcSeg arm
 // (extrude.go) reads th0 = a0 + TStart*sweep, th1 = a0 + TEnd*sweep with
@@ -301,8 +306,8 @@ func loftSameKindGate(seg0, seg1 CurveSegment, loop, j, k int) error {
 	ccw0, ok0 := loftCircularSegmentCCW(seg0)
 	ccw1, ok1 := loftCircularSegmentCCW(seg1)
 	if ok0 && ok1 && ccw0 != ccw1 {
-		return fmt.Errorf(`%w: loop %d's paired circular segment at segment %d/%d walk in opposite directions; this evaluator refuses rather than twist the correspondence`,
-			ErrUnsupported, loop, j, k)
+		return fmt.Errorf(`%w: loop %d's paired circular segments at segment %d/%d walk in opposite directions; the correspondence walls each side against the other's reversed walk, so the shell self-crosses and bounds no solid`,
+			ErrDegenerate, loop, j, k)
 	}
 	return nil
 }

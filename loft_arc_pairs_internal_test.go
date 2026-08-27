@@ -511,12 +511,15 @@ func TestLoftArcToFitSplineStillRefusesS3(t *testing.T) {
 	require.ErrorIs(t, err, ErrUnsupported, "S3: an arc-to-fit-spline pair is a mixed kind")
 }
 
-// TestLoftCircleSegOppositeCCWRefusesStructuralGateNotS7 is the ask's own
-// line: two paired CircleSegs with opposite CCW refuse at the STRUCTURAL
-// gate (loftSameKindGate), never at S7 (the build-time crossing audit) —
-// asserted on the SENTINEL, which is what keeps the two refusals
-// distinguishable: ErrUnsupported here, never ErrDegenerate (S7's own).
-func TestLoftCircleSegOppositeCCWRefusesStructuralGateNotS7(t *testing.T) {
+// TestLoftCircleSegOppositeCCWRefusesStructuralArmNotAudit is the ask's own
+// line: two paired CircleSegs with opposite CCW refuse at S7's STRUCTURAL
+// arm (loftSameKindGate), never at S7's AUDIT arm (the build-time crossing
+// audit). Both arms answer one existence question and so carry one sentinel,
+// ErrDegenerate (docs/loft-design.md Table S row S7) — so the assertion pins
+// the arm by POSITION, calling the record-only gate directly, with no
+// triangle built, and by the structural gate's own message; and it pins the
+// sentinel against ErrUnsupported, the opposite existence claim S3 carries.
+func TestLoftCircleSegOppositeCCWRefusesStructuralArmNotAudit(t *testing.T) {
 	ccw := CircleSeg{Center: pt(0.5, 0.5), Radius: units.Millimeters(0.5), CCW: true, TStart: 0, TEnd: 1}
 	cw := CircleSeg{Center: pt(0.5, 0.5), Radius: units.Millimeters(0.5), CCW: false, TStart: 1, TEnd: 0}
 	p0 := ProfileRecord{Outer: squareLoopWithFirstSegment(ccw)}
@@ -524,22 +527,22 @@ func TestLoftCircleSegOppositeCCWRefusesStructuralGateNotS7(t *testing.T) {
 	pl0, pl1 := planeAt(r3.NewVec(0, 0, 0)), planeAt(r3.NewVec(0, 0, 1))
 	err := validateLoftRecordsErr(p0, p1, pl0, pl1, nil, newFreeformWork(), newFreeformWork())
 	require.Error(t, err)
-	require.ErrorIs(t, err, ErrUnsupported, "the CCW-disagreement gate's own sentinel")
-	require.False(t, errors.Is(err, ErrDegenerate), "must NOT be S7's own sentinel (ErrDegenerate)")
+	require.ErrorIs(t, err, ErrDegenerate, "S7's own sentinel, whichever arm decides it")
+	require.False(t, errors.Is(err, ErrUnsupported), "must NOT be S3's sentinel (ErrUnsupported), the opposite existence claim")
 	require.Contains(t, err.Error(), "opposite directions")
 }
 
-// TestLoftArcSegOppositeCCWRefusesStructuralGateNotS7 is the ArcSeg twin of
+// TestLoftArcSegOppositeCCWRefusesStructuralArmNotAudit is the ArcSeg twin of
 // the CircleSeg case above: an ArcSeg whose own TStart < TEnd paired against
 // one whose TStart > TEnd walks the opposite way, because walkOf's ArcSeg arm
 // (extrude.go) forces the sweep positive and reads th0 = a0 + TStart*sweep,
 // th1 = a0 + TEnd*sweep — so the pair's effective directions genuinely
-// disagree and must refuse at the SAME cheap structural gate, never fall
-// through to S7's own crossing refusal three build phases later. This is the
-// one pairing that reaches loftCircularSegmentCCW's own ArcSeg arm with a
+// disagree and must refuse at the SAME cheap structural arm, never fall
+// through to S7's AUDIT arm three build phases later. This is the one
+// pairing that reaches loftCircularSegmentCCW's own ArcSeg arm with a
 // disagreement, now that an ArcSeg can only ever be paired with another
 // ArcSeg (loftSameKindGate).
-func TestLoftArcSegOppositeCCWRefusesStructuralGateNotS7(t *testing.T) {
+func TestLoftArcSegOppositeCCWRefusesStructuralArmNotAudit(t *testing.T) {
 	ccwArc := ArcSeg{Center: pt(0.5, -1), Start: pt(0, 0), End: pt(1, 0), TStart: 0, TEnd: 1}
 	cwArc := ArcSeg{Center: pt(0.5, -1), Start: pt(0, 0), End: pt(1, 0), TStart: 1, TEnd: 0}
 	p0 := ProfileRecord{Outer: squareLoopWithFirstSegment(ccwArc)}
@@ -547,8 +550,8 @@ func TestLoftArcSegOppositeCCWRefusesStructuralGateNotS7(t *testing.T) {
 	pl0, pl1 := planeAt(r3.NewVec(0, 0, 0)), planeAt(r3.NewVec(0, 0, 1))
 	err := validateLoftRecordsErr(p0, p1, pl0, pl1, nil, newFreeformWork(), newFreeformWork())
 	require.Error(t, err)
-	require.ErrorIs(t, err, ErrUnsupported, "the CCW-disagreement gate's own sentinel")
-	require.False(t, errors.Is(err, ErrDegenerate), "must NOT be S7's own sentinel (ErrDegenerate)")
+	require.ErrorIs(t, err, ErrDegenerate, "S7's own sentinel, whichever arm decides it")
+	require.False(t, errors.Is(err, ErrUnsupported), "must NOT be S3's sentinel (ErrUnsupported), the opposite existence claim")
 	require.Contains(t, err.Error(), "opposite directions")
 }
 
