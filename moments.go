@@ -931,32 +931,44 @@ func circularAreaInterval(seg CurveSegment, anchor Point2) (ratInterval, bool) {
 	}
 }
 
-// circularLengthInterval brackets one circular walk's exact arc length with no
-// dependence on Sin/Cos/Atan2/Hypot's undocumented accuracy: a CircleSeg's
-// length is exactly |dT|·2π·r over its own recorded range, whole or
-// fractional — a length has no cross-term to bracket, so unlike
-// circularAreaInterval and circularFirstMomentInterval it never needed
-// moments_trig.go's endpoint sine/cosine enclosure to admit a trimmed
-// fragment — and an ArcSeg's is its own radius (ratSqrtDown/ratSqrtUp of the
-// exact squared Start-to-Center distance, the same radius circularWalk uses
-// throughout) times its own swept angle (atan2Interval, with the same +2π
-// branch correction circularAreaInterval applies), multiplied as intervals.
-func circularLengthInterval(seg CurveSegment) (ratInterval, bool) {
+// circularWalkEnclosures brackets the two quantities a recorded circular
+// segment's own walk (extrude.go's circularWalk) is BUILT from and the record
+// itself states — its RADIUS, and the ABSOLUTE ANGLE that walk sweeps over the
+// segment's own recorded parameter range — as exact rational intervals. It is
+// the single owner of both brackets, with no dependence on Sin/Cos/Atan2/Hypot's
+// undocumented accuracy:
+//
+//   - a CircleSeg states its radius outright, so the radius is a point interval
+//     of the recorded value converted to millimetres, and the walk's sweep is
+//     the exact rational turn 2π·|TEnd − TStart|;
+//   - an ArcSeg states Start, End and Center only, so the radius is the
+//     ratSqrtDown/ratSqrtUp bracket of the exact squared Start-to-Center
+//     distance — the same radius circularWalk holds as a math.Hypot float — and
+//     the walk's sweep is the atan2Interval difference of the two recorded
+//     endpoint angles under the +2π branch correction circularAreaInterval
+//     applies, scaled by the recorded |TEnd − TStart|, the same trimming
+//     circularWalk applies to its own held a0 + t·sweep angles.
+//
+// Both are what a consumer needs that would otherwise read the walk's own held
+// w.radius and |w.th1 − w.th0|: neither of those floats is a quantity the walk
+// can enclose (circularWalk's own doc comment), so a published bound composed
+// from them would be a held value wearing a proof's clothes. A record this
+// bracket cannot state answers false, and the consumer refuses.
+func circularWalkEnclosures(seg CurveSegment) (ratInterval, ratInterval, bool) {
 	switch seg := seg.(type) {
 	case CircleSeg:
 		radius, err := seg.Radius.In(units.Millimeter)
 		if err != nil {
-			return ratInterval{}, false
+			return ratInterval{}, ratInterval{}, false
 		}
 		r := floatRat(radius)
 		if r == nil {
-			return ratInterval{}, false
+			return ratInterval{}, ratInterval{}, false
 		}
 		r.Abs(r)
 		dt := exactCoordinateDelta(seg.TEnd, seg.TStart)
 		dt.Abs(dt)
-		scale := new(big.Rat).Mul(big.NewRat(2, 1), new(big.Rat).Mul(dt, r))
-		return intervalScale(interval(piLower, piUpper), scale), true
+		return pointInterval(r), intervalScale(twoPiInterval(), dt), true
 	case ArcSeg:
 		dx0 := exactCoordinateDelta(seg.Start.U, seg.Center.U)
 		dy0 := exactCoordinateDelta(seg.Start.V, seg.Center.V)
@@ -965,7 +977,7 @@ func circularLengthInterval(seg CurveSegment) (ratInterval, bool) {
 		r2 := new(big.Rat).Add(new(big.Rat).Mul(dx0, dx0), new(big.Rat).Mul(dy0, dy0))
 		rLo, rHi := floatRat(ratSqrtDown(r2)), floatRat(ratSqrtUp(r2))
 		if rLo == nil || rHi == nil {
-			return ratInterval{}, false
+			return ratInterval{}, ratInterval{}, false
 		}
 		heldDY0 := seg.Start.V - seg.Center.V
 		heldDY1 := seg.End.V - seg.Center.V
@@ -979,10 +991,23 @@ func circularLengthInterval(seg CurveSegment) (ratInterval, bool) {
 		}
 		dt := exactCoordinateDelta(seg.TEnd, seg.TStart)
 		dt.Abs(dt)
-		return intervalMul(interval(rLo, rHi), intervalScale(sweep, dt)), true
+		return interval(rLo, rHi), intervalScale(sweep, dt), true
 	default:
+		return ratInterval{}, ratInterval{}, false
+	}
+}
+
+// circularLengthInterval brackets one circular walk's exact arc length as the
+// product of circularWalkEnclosures' two brackets: an arc's length IS its radius
+// times its swept angle, and a length has no cross-term to bracket, so unlike
+// circularAreaInterval and circularFirstMomentInterval it never needed
+// moments_trig.go's endpoint sine/cosine enclosure to admit a trimmed fragment.
+func circularLengthInterval(seg CurveSegment) (ratInterval, bool) {
+	r, sweep, ok := circularWalkEnclosures(seg)
+	if !ok {
 		return ratInterval{}, false
 	}
+	return intervalMul(r, sweep), true
 }
 
 // circularEndpointInterval encloses the (u, v) position a recorded circular
@@ -1007,11 +1032,16 @@ func circularLengthInterval(seg CurveSegment) (ratInterval, bool) {
 // atan2Interval under the same +2π branch correction circularLengthInterval
 // applies, and the sine and cosine of that enclosed angle taken by
 // radSinCosSpan.
-func circularEndpointInterval(seg CurveSegment, t float64) (ratInterval, ratInterval, bool) {
-	rt := floatRat(t)
-	if rt == nil {
-		return ratInterval{}, ratInterval{}, false
-	}
+//
+// The parameter is taken as an EXACT RATIONAL, never a float. A caller reading
+// a walk's own endpoint converts its held float parameter (floatRat) at the
+// call; one generating a point at a parameter the record's own arithmetic
+// states — a uniform station division t_k = TStart + (k/m)·(TEnd − TStart)
+// (loft_build.go's circularStationChain) — hands that value in unrounded,
+// because rounding it to a float first would enclose the curve at a
+// NEIGHBOURING parameter and prove a bound about a point no construction
+// named.
+func circularEndpointInterval(seg CurveSegment, rt *big.Rat) (ratInterval, ratInterval, bool) {
 	switch seg := seg.(type) {
 	case CircleSeg:
 		radius, err := seg.Radius.In(units.Millimeter)

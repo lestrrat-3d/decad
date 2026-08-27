@@ -1740,7 +1740,25 @@ conservative LOWER bound on the margin the shipped constant reaches on this
 fixture, never an overstatement of it. The fit-spline wedge's 1.90x
 is NOT: 6.69759e-05 is a coarser target than the shipped constant, so a
 fit-spline wedge chorded to meet 3.76491e-05 takes more than 64 chord cells,
-and the margin it reaches there is a reading this document does not state.
+and the paragraph below states the margin it reaches there.
+
+**The margins the SHIPPED generator reaches are measured at its own
+production count, and the CERTIFIED sagitta is what it settles on.** The
+walk-up's SEED is `chordCount`'s own conservative bound, which straddles the
+target at 64 and so seeds `m = 65`. The certified sagitta at 64 already
+clears the target at 3.764908e-4, but the joint walk-up (§5.1) only ever
+increments from its seed, so the pair settles at 65 and publishes
+3.649957e-4 there — the certified value, not the 3.650002e-4 `chordSagitta`
+bound the paragraph above reads at that count — composed with a station
+displacement of about 1.2e-15 mm, which is below every digit the margins
+below are read at. Both fixtures are chorded at that production count. The
+arc fixture's own vertices and section delta are the shipped generator's,
+while the fit-spline fixture measures a hand-chorded stand-in, since a
+free-form pairing has no generator arm of its own to ask. `Verify` at the
+default `1e-3` tolerance clears there with a **2.47x** margin on the arc
+wedge (a gate ratio of 4.04928e-4) and a **1.95x** margin on the fit-spline
+wedge (5.1326e-4), `Volume` binding in both. Each fixture builds in about 1.4
+seconds against the 2-second per-fixture wall-clock budget §13 states.
 
 **The constant does not clear a 4x margin inside the wall-clock budget, and
 this design accepts that rather than widen either.** A 4x margin needs 128

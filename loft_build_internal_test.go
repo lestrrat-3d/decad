@@ -378,15 +378,18 @@ func TestLoftPairingsDefaultOffsetIsZero(t *testing.T) {
 	p := unitSquareProfile()
 	offsets := []int{0}
 	walks := resolveLoftLoopWalks(t, p)
-	pairs := loftPairings(p, offsets, walks, walks)
+	pairs, sectionDelta, err := loftPairings(p, p, offsets, walks, walks, 0, nil, nil)
+	require.NoError(t, err)
 	require.Equal(t, pt(0, 0), pairs[0].w[0])
+	require.Zero(t, sectionDelta, "a LineSeg-only pairing carries no curve to depart from")
 }
 
 func TestLoftPairingsAlignmentRotatesCorrespondence(t *testing.T) {
 	p := unitSquareProfile()
 	offsets := []int{1}
 	walks := resolveLoftLoopWalks(t, p)
-	pairs := loftPairings(p, offsets, walks, walks)
+	pairs, _, err := loftPairings(p, p, offsets, walks, walks, 0, nil, nil)
+	require.NoError(t, err)
 	// loop0 segment 0 (V_0, at local (0,0)) now pairs with loop1 segment 1,
 	// whose own recorded start is local (1,0) — the far endpoint of rung R_0
 	// moves from W[0]=(0,0) to W[1]=(1,0).
@@ -408,7 +411,8 @@ func TestLoftPairingsTwoHolesPairByPosition(t *testing.T) {
 	p1 := ProfileRecord{Outer: squareLoop(0.5, 0.5, 0.5, true), Holes: []LoopRecord{largeHole, smallHole}}
 
 	offsets := []int{0, 0, 0}
-	pairs := loftPairings(p0, offsets, resolveLoftLoopWalks(t, p0), resolveLoftLoopWalks(t, p1))
+	pairs, _, err := loftPairings(p0, p1, offsets, resolveLoftLoopWalks(t, p0), resolveLoftLoopWalks(t, p1), 0, nil, nil)
+	require.NoError(t, err)
 
 	require.Len(t, pairs, 3) // outer + 2 holes
 	// Hole loop 1 (index 1+0): p0's own small hole (v) pairs with p1's
@@ -444,8 +448,9 @@ func TestLoftWalkResolutionChargesOncePerSegment(t *testing.T) {
 
 	const k = 4
 	loopWork := &freeformWork{}
-	for range k {
-		_, err = walkOf(fit, loopWork)
+	walks := make([]segmentWalk, k)
+	for i := range walks {
+		walks[i], err = walkOf(fit, loopWork)
 		require.NoError(t, err)
 	}
 	require.Equal(t, k*single.spent, loopWork.spent,
@@ -464,6 +469,21 @@ func TestLoftWalkResolutionChargesOncePerSegment(t *testing.T) {
 	require.Equal(t, single.spent, work0.spent,
 		"the gate walks that segment ONCE: its counter reads a single reference charge, not two")
 	require.Zero(t, work1.spent, "S3 refuses on p0's segment 0 before p1's own segment is walked")
+
+	// loftPairings, handed those already-resolved walks, spends nothing
+	// further.
+	before := loopWork.spent
+	loop := LoopRecord{Segments: make([]CurveSegment, k)}
+	for i := range loop.Segments {
+		loop.Segments[i] = fit
+	}
+	profile := ProfileRecord{Outer: loop}
+	// A free-form pairing has no station rule yet (loftCellStations' own
+	// default case, unreached from any real build since S3 refuses it
+	// first) — this is asserted below for the charge, not the correspondence.
+	_, _, err = loftPairings(profile, profile, []int{0}, [][]segmentWalk{walks}, [][]segmentWalk{walks}, 0, loopWork, loopWork)
+	require.Error(t, err)
+	require.Equal(t, before, loopWork.spent, "loftPairings must spend no further free-form work")
 }
 
 // TestLoftPairingsConsumesTheGateResolvedWalks pins Task 1's other half on
@@ -485,7 +505,8 @@ func TestLoftPairingsConsumesTheGateResolvedWalks(t *testing.T) {
 	require.Len(t, walks0, 1)
 	require.Len(t, walks1, 1)
 
-	pairs := loftPairings(p0, offsets, walks0, walks1)
+	pairs, _, err := loftPairings(p0, p1, offsets, walks0, walks1, 0, nil, nil)
+	require.NoError(t, err)
 	require.Len(t, pairs, 1)
 
 	n := len(p0.Outer.Segments)
@@ -932,7 +953,10 @@ func assembleLoftFixture(t *testing.T, pl loftPayload) loftAssembly {
 	t.Helper()
 	offsets, walks0, walks1, err := validateLoftRecords(pl.profile0, pl.profile1, pl.plane0, pl.plane1, pl.alignment, newFreeformWork(), newFreeformWork())
 	require.NoError(t, err)
-	pairs := loftPairings(pl.profile0, offsets, walks0, walks1)
+	target, err := loftChordTarget(pl.profile0, pl.profile1, walks0, walks1)
+	require.NoError(t, err)
+	pairs, _, err := loftPairings(pl.profile0, pl.profile1, offsets, walks0, walks1, target, newFreeformWork(), newFreeformWork())
+	require.NoError(t, err)
 	a, err := assembleLoft(t.Context(), pairs, pl.frame0, pl.frame1, pl.plane0, pl.xform)
 	require.NoError(t, err)
 	return a
