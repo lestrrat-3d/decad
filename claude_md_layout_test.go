@@ -333,6 +333,15 @@ func requireSeparator(lines []string, i int, header string) error {
 //     outside any table are all refusals.
 //  5. An HTML block is refused anywhere in the file, and a code fence left
 //     open at EOF is refused, since either hides text from every rule above.
+//     "HTML block" here is CommonMark's line-start construct, exactly what
+//     htmlBlockRe spells, and the rule reaches no further: a "<!--" in the
+//     MIDDLE of a line is not one. No document in this repository states a
+//     rule against an HTML comment, so a mid-line delimiter has no contract
+//     to violate, and it escapes no check either. A Layout row still opens
+//     with a pipe, so it takes the table branch and its cell is measured and
+//     its paths os.Stat'ed with the comment text included; any other line is
+//     prose, which the first of the two policies in this file's own header
+//     already leaves unmeasured.
 //
 // Content the format renders as code — inside a fence, or indented four spaces
 // or more — is skipped rather than classified, which is what lets the section
@@ -1112,9 +1121,9 @@ func TestParseCLAUDEMDAcceptsTheShapesTheFormatMakesSafe(t *testing.T) {
 		"a thematic break outside the section": join(realSection, other, []string{"---", ""}),
 		// The HTML-block rule is LINE-LEVEL. htmlBlockRe only ever sees a
 		// line-start delimiter, so a `<` in the middle of a prose line is
-		// text this scanner never classifies. CLAUDE.md's Conventions
-		// section states the rule at exactly that width, and this case with
-		// the standalone-comment refusal above are what hold it there.
+		// text this scanner never classifies. Rule 5 of parseCLAUDEMD states
+		// that reach, and this case with the standalone-comment refusal
+		// above are what hold it there.
 		"an HTML comment inside a prose line": join(realSection, []string{
 			conventionsHeading, "",
 			"An invented sentence with <!-- an invented aside --> inside it.", "",
