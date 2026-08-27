@@ -686,17 +686,22 @@ func loftCircularCellStations(w0, w1 segmentWalk, seg0, seg1 CurveSegment, targe
 		return nil, nil, 0, errLoftStationDisplacementUnderivable
 	}
 
-	// S16, defensive, decided at the phase §4's gate-order paragraph assigns
-	// it: a chord cell whose two stations coincide on exactly ONE of the two
-	// sections has no case in the uniform two-faces-per-cell wall topology
-	// assembleLoft builds. A same-kind pair with a genuinely
-	// positive sweep on both sides never reaches this — distinct k give
-	// distinct angles give distinct (cos, sin) pairs — so it is reachable
-	// only from a degenerate walk (a zero radius) that a real sketch
-	// authentication does not produce (spline_fit.go's own dedup plays the
-	// analogous role for the free-form arm's own R3 risk). It still ships:
-	// deleting a gate for want of a caller-reachable fixture is not this
-	// evaluator's call to make.
+	// S16 over this segment's own INTERIOR cells — an early local guard that
+	// refuses at the arm's own seam, so a caller reaching the generator
+	// directly gets the row rather than a chain it has no case for.
+	// loftOneSidedCellGate owns the COMPLETE row, cyclically over the whole
+	// loop's assembled chains, and is the only site that can see this
+	// segment's terminal cell, a pair settled at m = 1, or a LineSeg-pair
+	// cell — none of which has a consecutive pair inside one segment. The two
+	// sites agree by construction: both compare the two sides' station
+	// equality at the same cell, and this one reads a strict subset of the
+	// cells that one does.
+	//
+	// A same-kind pair with a genuinely positive sweep on both sides never
+	// reaches this — distinct k give distinct angles give distinct (cos, sin)
+	// pairs — so it is reachable only from a degenerate walk (a zero radius)
+	// that a real sketch authentication does not produce (spline_fit.go's own
+	// dedup plays the analogous role for the free-form arm's own R3 risk).
 	for k := range m - 1 {
 		eq0 := stations0[k] == stations0[k+1]
 		eq1 := stations1[k] == stations1[k+1]
@@ -943,9 +948,63 @@ func loftPairings(p0, p1 ProfileRecord, offsets []int, walks0, walks1 [][]segmen
 			w = append(w, stations1...)
 			sectionDelta = math.Max(sectionDelta, sagitta)
 		}
+		if err := loftOneSidedCellGate(i, v, w); err != nil {
+			return nil, 0, err
+		}
 		pairs[i] = loftLoopPair{v: v, w: w}
 	}
 	return pairs, sectionDelta, nil
+}
+
+// loftOneSidedCellGate is docs/loft-design.md Table S row S16, decided over one
+// loop's own ASSEMBLED station chains at the phase §4's gate-order paragraph
+// assigns it — as stations are paired into chord cells, which is here and not
+// inside the per-segment generator.
+//
+// A cell whose two stations coincide on exactly ONE of the two sections has no
+// case in the uniform two-faces-per-cell wall topology assembleLoft builds, so
+// the row refuses with ErrUnsupported. A cell collapsing on BOTH sections, and
+// a collapsed cap triangle, are S6's two arms rather than this row, which is
+// why the test below compares the two sides' equality rather than refusing on
+// either alone — that is what makes every collapse covered exactly once.
+//
+// The walk is CYCLIC, over the whole loop, because §7's j indexes that loop's
+// flattened chord-cell sequence and each chain carries only each segment's OWN
+// stations, never its shared end point (loftLoopPair): cell j pairs station j
+// to station (j+1) mod len, so the loop's last cell pairs its last station back
+// to its first. Three whole classes of cell exist only in that reading and
+// cannot be seen one segment at a time:
+//
+//   - a segment's TERMINAL cell, which reaches into the NEXT segment's first
+//     station (or wraps to the loop's own first) — at every m, including the m
+//     the generator itself settled;
+//   - every cell of a pair settled at m = 1, which has no interior station at
+//     all (§5.1) and so no consecutive pair inside its own segment;
+//   - every LineSeg-pair cell, since that arm generates one station a side and
+//     its cell is by definition a terminal one.
+//
+// Missing any of them lets a one-sided collapse fall through to S6
+// (loft_audit.go), whose collapse refusal is ErrDegenerate — a claim that no
+// body exists under ANY evaluator — where this row owes ErrUnsupported, the
+// weaker claim that a point-degenerate correspondence is a body a smarter
+// kernel could still loft.
+func loftOneSidedCellGate(loop int, v, w []Point2) error {
+	n := len(v)
+	if n != len(w) {
+		// Unreachable from any build: both chains take the SAME per-segment
+		// station count from loftCellStations, appended in the same order. A
+		// refusal rather than a silent skip, since skipping would drop the
+		// gate for the whole loop.
+		return fmt.Errorf(`%w: loop %d's two station chains carry %d and %d stations; a chord cell has no pairing across unequal chains`,
+			ErrUnsupported, loop, n, len(w))
+	}
+	for j := range n {
+		k := (j + 1) % n
+		if (v[j] == v[k]) != (w[j] == w[k]) {
+			return fmt.Errorf(`%w: loop %d's chord cell %d collapses to one point on only one of the two sections`, ErrUnsupported, loop, j)
+		}
+	}
+	return nil
 }
 
 // loftAssembly is the built triangle set plus the index bookkeeping the

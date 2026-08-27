@@ -655,6 +655,112 @@ func TestLoftCircularCellStationsSymmetricCollapseIsFine(t *testing.T) {
 	}
 }
 
+// lineStationLoopFixture records one loop of LineSegs whose walk STARTS are
+// exactly the points given, chained End-to-Start around the loop. The LineSeg
+// arm publishes one station a side at its own recorded start
+// (loftLineCellStations), so the points given ARE the station chain
+// loftPairings assembles for that side — which is what lets an S16 fixture
+// state a cell's collapse directly instead of hunting for a curve that
+// produces one. A repeated point makes a zero-length LineSeg, which
+// docs/loft-design.md §4 names as a recordable input rather than a
+// hypothetical one (record.go's validateSegment checks finiteness alone).
+func lineStationLoopFixture(t *testing.T, starts []Point2) (ProfileRecord, [][]segmentWalk) {
+	t.Helper()
+	n := len(starts)
+	segs := make([]CurveSegment, n)
+	for j := range n {
+		segs[j] = LineSeg{Start: starts[j], End: starts[(j+1)%n], TStart: 0, TEnd: 1}
+	}
+	p := ProfileRecord{Outer: LoopRecord{Segments: segs}}
+	return p, resolveLoftLoopWalks(t, p)
+}
+
+// requireOneSidedCellRefusal is S16's own reading: ErrUnsupported and never
+// ErrDegenerate. The distinction is the whole point of the row — a one-sided
+// collapse that escapes here falls through to S6 (loft_audit.go), whose
+// collapse refusal claims no body exists under ANY evaluator, where this row
+// owes only that THIS evaluator's uniform two-faces-per-cell topology has no
+// case for a point-degenerate correspondence.
+func requireOneSidedCellRefusal(t *testing.T, err error, cell int) {
+	t.Helper()
+	require.ErrorIs(t, err, ErrUnsupported)
+	require.NotErrorIs(t, err, ErrDegenerate, "S16 owes ErrUnsupported; ErrDegenerate is S6's own claim")
+	require.Contains(t, err.Error(), fmt.Sprintf("chord cell %d", cell))
+	require.Contains(t, err.Error(), "collapses to one point on only one of the two sections")
+}
+
+// TestLoftPairingsRefusesAOneSidedTerminalCell is S16 over a class of cell no
+// per-segment generator can see: a segment's TERMINAL cell, which pairs that
+// segment's last station with the NEXT segment's first. Every LineSeg-pair
+// cell is one of those — that arm publishes a single station a side — so this
+// fixture is also the LineSeg pairing's only S16 reading.
+//
+// Side 0 repeats its first station, side 1 does not, so cell 0 collapses on
+// exactly one of the two sections.
+func TestLoftPairingsRefusesAOneSidedTerminalCell(t *testing.T) {
+	p0, walks0 := lineStationLoopFixture(t, []Point2{pt(0, 0), pt(0, 0), pt(1, 1)})
+	p1, walks1 := lineStationLoopFixture(t, []Point2{pt(0, 0), pt(2, 0), pt(1, 3)})
+
+	_, _, err := loftPairings(p0, p1, make([]int, 1), walks0, walks1, 0, nil, nil)
+	requireOneSidedCellRefusal(t, err, 0)
+}
+
+// TestLoftPairingsRefusesAOneSidedWrapCell is the same row at the loop's own
+// WRAP: a loop's last cell pairs its last station back to its first (§7's
+// flattened chord-cell sequence), so that cell exists in no segment at all and
+// is invisible to any walk that stops at the end of the chain. Cells 0 and 1
+// here are sound on both sections; only the wrap collapses, and only on side 0.
+func TestLoftPairingsRefusesAOneSidedWrapCell(t *testing.T) {
+	p0, walks0 := lineStationLoopFixture(t, []Point2{pt(0, 0), pt(1, 1), pt(0, 0)})
+	p1, walks1 := lineStationLoopFixture(t, []Point2{pt(0, 0), pt(2, 0), pt(3, 3)})
+
+	_, _, err := loftPairings(p0, p1, make([]int, 1), walks0, walks1, 0, nil, nil)
+	requireOneSidedCellRefusal(t, err, 2)
+}
+
+// TestLoftPairingsRefusesAOneSidedCellAtOneChordCell is the third class: a
+// circular pair settled at m = 1 holds no INTERIOR station at all (§5.1), so
+// its single cell reaches into the next segment and no consecutive station
+// pair exists inside it. The pair below settles at exactly one chord cell —
+// asserted, since the fixture proves nothing otherwise — with side 0's station
+// landing on the next segment's own start and side 1's not.
+func TestLoftPairingsRefusesAOneSidedCellAtOneChordCell(t *testing.T) {
+	const target = 1.0
+	arc0, w0 := arcFixture(t, 1e-9, 0, 0.1, 0, 1)
+	arc1, w1 := arcFixture(t, 1, 0, 0.1, 0, 1)
+
+	stations0, stations1, _, err := loftCircularCellStations(w0, w1, arc0, arc1, target)
+	require.NoError(t, err)
+	require.Len(t, stations0, 1, "the fixture must settle at one chord cell, or it tests a different class")
+	require.Len(t, stations1, 1)
+
+	line0 := LineSeg{Start: stations0[0], End: pt(0, 1), TStart: 0, TEnd: 1}
+	line1 := LineSeg{Start: pt(2, 0), End: pt(0, 1), TStart: 0, TEnd: 1}
+	require.NotEqual(t, stations1[0], line1.Start, "side 1's cell must NOT collapse, or the cell is S6's row and not this one")
+
+	p0 := ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{arc0, line0}}}
+	p1 := ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{arc1, line1}}}
+
+	_, _, err = loftPairings(p0, p1, make([]int, 1), resolveLoftLoopWalks(t, p0), resolveLoftLoopWalks(t, p1), target, nil, nil)
+	requireOneSidedCellRefusal(t, err, 0)
+}
+
+// TestLoftPairingsAdmitsABothSidedCollapsedCell is S16's own boundary, and the
+// reason the gate compares the two sides rather than refusing on either: a
+// cell collapsing on BOTH sections is S6's row, so loftPairings must let it
+// through for the audit to answer it. Without this the three refusals above
+// would prove only that the gate refuses every collapse.
+func TestLoftPairingsAdmitsABothSidedCollapsedCell(t *testing.T) {
+	p0, walks0 := lineStationLoopFixture(t, []Point2{pt(0, 0), pt(0, 0), pt(1, 1)})
+	p1, walks1 := lineStationLoopFixture(t, []Point2{pt(5, 5), pt(5, 5), pt(9, 9)})
+
+	pairs, _, err := loftPairings(p0, p1, make([]int, 1), walks0, walks1, 0, nil, nil)
+	require.NoError(t, err)
+	require.Len(t, pairs, 1)
+	require.Equal(t, pairs[0].v[0], pairs[0].v[1], "the fixture's cell 0 must collapse on side 0")
+	require.Equal(t, pairs[0].w[0], pairs[0].w[1], "and on side 1 too, or it is not this boundary")
+}
+
 // --- the chain's own pinned endpoint ---
 
 // TestCircularStationChainStartsAtThePinnedEnd is the seam regression for the
