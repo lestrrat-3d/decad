@@ -86,25 +86,28 @@ type loftPayload struct {
 	// terms the row names, never this field on its own.
 	//
 	// Every matched-delta obligation is discharged by a SEPARATE quantity,
-	// sectionMatchedDelta: loftPairings accumulates it as its own MAX over
-	// each cell's matchedDelta and returns it beside sectionDelta, and
-	// evalLoft passes it — never this field — to newLoftMassAccumulator and
-	// computeLoftChordedAllow (loft_moments.go), which is where every
-	// chordedBoundaryVolumeAllow, chordedBoundaryMomentAllow and
-	// chordedBoundarySeamAllow matched argument comes from;
-	// cellChordCurveAreaUpper reads the per-cell matchedDelta[j] that same
-	// MAX is taken over, one cell at a time. sectionMatchedDelta is a
-	// PER-BUILD LOCAL of evalLoft and deliberately NOT a loftPayload field:
-	// nothing this payload stores needs it, because placed re-evaluates
-	// through evalLoft, which recomputes both quantities from the records,
-	// and those two consumers have exactly one production call site each —
-	// evalLoft's own. So there is no stored copy of the matched quantity that
-	// could disagree with the records, and no caller that could reach those
-	// helpers with the other quantity.
+	// the matchedDelta evalLoft composes: loftPairings accumulates each
+	// cell's own chord-to-curve departure into a MAX beside sectionDelta,
+	// and evalLoft sums that MAX with the delta above through
+	// chordCellDeltaUpper before passing it — never this field — to
+	// newLoftMassAccumulator and computeLoftChordedAllow (loft_moments.go),
+	// which is where every chordedBoundaryVolumeAllow,
+	// chordedBoundaryMomentAllow, chordedBoundarySeamAllow and cap-area
+	// matched argument comes from; cellChordCurveAreaUpper reads the same
+	// composition per cell, over the cell's own chord-to-curve half.
+	// The composed term is a PER-BUILD LOCAL of evalLoft and deliberately NOT
+	// a loftPayload field: nothing this payload stores needs it, because
+	// placed re-evaluates through evalLoft, which recomputes every quantity
+	// from the records, and those two consumers have exactly one production
+	// call site each — evalLoft's own. So there is no stored copy of the
+	// matched quantity that could disagree with the records, and no caller
+	// that could reach those helpers with the other quantity.
 	//
-	// This field's OWN remaining spends are the cap SET-distance tube
-	// (sectionDisplacementArea, loft_moments.go) and Bounds.Bound. Both are
-	// set-distance readings, so both correctly read sectionDelta.
+	// This field's OWN remaining spend is Bounds.Bound, a SET-distance
+	// reading, which is what makes sectionDelta the term it correctly reads.
+	// The cap-area tube is NOT one of them: §5.2's capAreaAllow row names the
+	// matched term there, because a held cap polygon's own vertices are
+	// displaced as well as chorded.
 	sectionDelta float64
 
 	verts []r3.Vec
@@ -534,13 +537,18 @@ func loftStationCapGate(p0, p1 ProfileRecord, offsets []int, walks0, walks1 [][]
 // arcUpperV/arcUpperW and matchedDelta are parallel to v/w, one entry per
 // station: arcUpperV[j]/arcUpperW[j] is that station's own OUTGOING cell's
 // per-side arc-length upper bound (perCellArcUpper), and matchedDelta[j] is
-// that cell's own PARAMETER-MATCHED bound on |curve(s) - chord(s)| at the
-// same s — bounds.go's cellChordCurveAreaUpper own matchedDeltaUpper
-// obligation, F1's rule — NEVER the SET-distance sagitta sectionDelta names.
-// A LineSeg cell's own chord IS the curve it denotes, so its matchedDelta is
-// exactly 0; a circular cell's own sagitta discharges the obligation exactly
-// (loftCircularCellStations' own doc comment), so its matchedDelta equals its
-// sagitta; a free-form cell's matchedDelta is spanMatchedDeltaUpper's own
+// that cell's own PARAMETER-MATCHED bound on |curve(s) - idealChord(s)| at the
+// same s: the CHORD-TO-CURVE HALF of docs/loft-design.md §5.2's matchedDelta
+// row, stated for the ideal chord joining the two points the record denotes.
+// The consumer composes it with the build's own delta through
+// chordCellDeltaUpper to reach the bound bounds.go's cellChordCurveAreaUpper
+// obligates for the chord the build actually DREW (computeLoftChordedAllow,
+// loft_moments.go); this field is never that composed bound on its own, and
+// never the SET-distance sagitta sectionDelta names either.
+// A LineSeg cell's own chord IS the curve it denotes, so its entry is
+// exactly 0; a circular cell's own sagitta discharges this half exactly
+// (loftCircularCellStations' own doc comment), so its entry equals its
+// sagitta; a free-form cell's entry is spanMatchedDeltaUpper's own
 // per-cell reading (spline_sagitta.go's pairStations), which can differ cell
 // to cell within one paired segment where the bisection settled at different
 // depths.
@@ -681,14 +689,16 @@ func loftChordTarget(p0, p1 ProfileRecord, walks0, walks1 [][]segmentWalk) (floa
 // computed, so its own contribution is exactly zero; the circular arm's own
 // doc comment states the mechanism.
 //
-// matchedDelta is bounds.go's cellChordCurveAreaUpper own matchedDeltaUpper
-// obligation (F1's rule), ONE ENTRY PER CELL — never a single per-segment
+// matchedDelta is the CHORD-TO-CURVE HALF of docs/loft-design.md §5.2's
+// matchedDelta row — the half a consumer composes with the build's own delta
+// (chordCellDeltaUpper) to reach bounds.go's cellChordCurveAreaUpper own
+// matchedDeltaUpper obligation (F1's rule) — ONE ENTRY PER CELL, never a single per-segment
 // scalar, since a bisected free-form arm can settle cells of that one paired
 // segment at different depths and so at different matched-delta readings.
 // len(matchedDelta) always equals len(stations0), the per-cell count every
 // arm below publishes. It is read per cell rather than from sagittaUpper: the
 // LineSeg arm's chord IS the curve, so every entry is exactly 0; the circular
-// arm's own sagitta discharges the obligation exactly, so every entry equals
+// arm's own sagitta discharges that half exactly, so every entry equals
 // the segment's own sagittaUpper (loftCircularCellStations' own doc comment);
 // a future free-form arm's own per-cell reading can vary within these two
 // extremes cell to cell.
@@ -818,11 +828,14 @@ func loftSettleStationCount(w0, w1 segmentWalk, seg0, seg1 CurveSegment, target 
 // EXACT rational parameter, never a float rounding of one (circularPointBound)
 // — is what keeps both halves readings of the same quantity.
 //
-// matchedDelta is loftCellStations' own per-cell obligation: this arm's
-// sagitta discharges it EXACTLY (the paragraph above), and every cell of one
-// uniformly-stepped circular segment shares the same true angular width, so
-// the same value — math.Max(s0, s1) — is the correct, exact per-cell reading
-// for all m cells, not merely a safe upper bound repeated m times.
+// matchedDelta is loftCellStations' own per-cell obligation — the CHORD-TO-
+// CURVE half of docs/loft-design.md §5.2's matchedDelta row, which the
+// consumer composes with the build's own delta (chordCellDeltaUpper), never
+// the whole row: this arm's sagitta discharges that half EXACTLY (the
+// paragraph above), and every cell of one uniformly-stepped circular segment
+// shares the same true angular width, so the same value — math.Max(s0, s1) —
+// is the correct, exact per-cell reading for all m cells, not merely a safe
+// upper bound repeated m times.
 func loftCircularCellStations(w0, w1 segmentWalk, seg0, seg1 CurveSegment, target float64) ([]Point2, []Point2, float64, []float64, float64, error) {
 	m, s0, s1, err := loftSettleStationCount(w0, w1, seg0, seg1, target)
 	if err != nil {
@@ -912,15 +925,22 @@ func perCellArcUpper(seg CurveSegment, w segmentWalk, m int) float64 {
 	return upRound(w.lengthUpper / float64(m))
 }
 
-// chordCellDeltaUpper composes one chord cell's two independent displacement
-// terms — the certified per-cell sagitta and the station displacement, both of
-// which docs/loft-design.md §5.2's table lists with the quantity each bounds
-// and the certified source each is read from — into the single bound a
-// consumer that BOTH terms displace states for itself. The generator itself
-// publishes the two apart, and the payload carries them apart
-// (loftPayload.sectionDelta and the stationRound half of loftPayload.delta),
-// which is the rule §5.2's table states for them; this helper is only ever a
-// consumer's own composition.
+// chordCellDeltaUpper is docs/loft-design.md §5.2's matchedDelta row: it
+// composes a chord's own departure from the curve it chords (the certified
+// sagitta, that table's sectionDelta row, read per cell or build-wide) with the
+// displacement of the two held stations that chord actually joins (that table's
+// delta row) into the single PARAMETER-MATCHED bound every chorded leg charges.
+// Both terms are listed there with the quantity each bounds and the certified
+// source each is read from.
+//
+// The two are accumulated apart — the generator publishes them apart and the
+// payload carries them apart (loftPayload.sectionDelta and loftPayload.delta),
+// which is the rule §5.2's table states for them — and this helper is only ever
+// a consumer's own composition. Composing them is not optional for such a
+// consumer: the sagitta bounds the IDEAL chord between the two points the record
+// denotes, and the chord the build DREW joins two stations each displaced by
+// delta from those points, so a leg charging the sagitta alone leaves the
+// computed station's own displacement uncharged.
 //
 // That table owns the composition's derivation and its rounding direction, and
 // this helper adds no mechanism of its own to either. What the code here does
@@ -929,11 +949,11 @@ func perCellArcUpper(seg CurveSegment, w segmentWalk, m int) float64 {
 //
 // Either term underivable answers +Inf, the answer §5.2's table assigns those
 // rows, and the caller refuses on it.
-func chordCellDeltaUpper(sagittaUpper, stationUpper float64) float64 {
-	if isNonFinite(sagittaUpper) || isNonFinite(stationUpper) {
+func chordCellDeltaUpper(sagittaUpper, deltaUpper float64) float64 {
+	if isNonFinite(sagittaUpper) || isNonFinite(deltaUpper) {
 		return math.Inf(1)
 	}
-	return absSumUpper(sagittaUpper, stationUpper)
+	return absSumUpper(sagittaUpper, deltaUpper)
 }
 
 // errLoftStationDisplacementUnderivable is the sentinel docs/loft-design.md
@@ -953,6 +973,16 @@ var errLoftStationDisplacementUnderivable = fmt.Errorf(
 // on the integral of |curve'(s) - chord|^2 over the cell's own shared
 // parameter, or +Inf where this evaluator cannot prove one.
 //
+// Its two operands are BOTH read from the RECORD's own certified enclosures —
+// perCellArcUpper over circularLengthInterval, and loftCertifiedChordLower over
+// circularWalkEnclosures — never from the walk's own held math.Hypot radius and
+// math.Atan2 angles, neither of which the walk can enclose (extrude.go's
+// circularWalk). uniformSpeedTangentEnergyUpper's published energy DECREASES in
+// its chord operand, so a chord read off those floats can overstate the true
+// chord and understate the energy every consumer downstream spends: a held
+// value wearing a proof's clothes, which circularWalkEnclosures' own doc
+// comment forbids.
+//
 // It is dispatched on the WALK KIND rather than shared across every arm,
 // because the obligation uniformSpeedTangentEnergyUpper discharges rests on the
 // shared parametrization having CONSTANT SPEED — a property of the arm that
@@ -969,37 +999,10 @@ func perCellTangentEnergy(seg CurveSegment, w segmentWalk, m int) float64 {
 	case walkLine:
 		return 0
 	case walkCircular:
-		return uniformSpeedTangentEnergyUpper(perCellArcUpper(seg, w, m), circularCellChordLower(w, m))
+		return uniformSpeedTangentEnergyUpper(perCellArcUpper(seg, w, m), loftCertifiedChordLower(seg, m))
 	default:
 		return math.Inf(1)
 	}
-}
-
-// circularCellChordLower is a PROVEN LOWER bound on ONE uniform-angle cell's
-// own chord length, 2*|R|*sin(phi) at the cell's own half sweep
-// phi = |th1-th0|/(2m) — uniformSpeedTangentEnergyUpper's own chordLower
-// obligation, which must never overstate the chord.
-//
-// The sine is bounded below without a library call: sin(x) >= x - x^3/6 for
-// every x >= 0 (the Maclaurin series alternates with decreasing terms over the
-// whole range a half sweep can reach, phi <= pi). The half sweep itself is
-// taken DOWN and the cube UP, so both roundings push the published chord the
-// same way, and a walk whose own numbers leave nothing provable answers 0 —
-// which is a valid, if empty, lower bound on any chord.
-func circularCellChordLower(w segmentWalk, m int) float64 {
-	if m <= 0 || isNonFinite(w.radius) || isNonFinite(w.th0) || isNonFinite(w.th1) {
-		return 0
-	}
-	phi := downRound(downRound(math.Abs(w.th1-w.th0)) / float64(2*m))
-	if phi <= 0 {
-		return 0
-	}
-	cube := upRound(upRound(upRound(phi*phi)*phi) / 6)
-	sinLower := downRound(phi - cube)
-	if sinLower <= 0 {
-		return 0
-	}
-	return downRound(2 * math.Abs(w.radius) * sinLower)
 }
 
 // circularStationChain walks this segment's own uniform-angle stations of w,
@@ -1150,6 +1153,49 @@ func loftCertifiedSagittaUpper(seg CurveSegment, m int) float64 {
 	return up
 }
 
+// loftCertifiedChordLower is a PROVEN LOWER bound on ONE uniform-angle cell's
+// own true chord length at a station count m — the chord between the two points
+// the RECORD denotes at the cell's own two parameters, which is
+// uniformSpeedTangentEnergyUpper's own chordLower obligation and must never
+// overstate that chord.
+//
+// The quantity is 2·r·sin(Δθ/2m), r the segment's radius and Δθ the angle its
+// walk sweeps: the same two enclosures loftCertifiedSagittaUpper reads, from the
+// same owner (moments.go's circularWalkEnclosures), taken at the cell's own HALF
+// angle rather than its quarter. Reading them here rather than the walk's held
+// w.radius/w.th0/w.th1 is not a preference: those floats carry no enclosure
+// (circularWalkEnclosures' own doc comment), a math.Atan2 endpoint's own error
+// is amplified by 1/Δθ on a short arc, and the published energy DECREASES in
+// this operand — so a float-derived "lower" bound that lands above the true
+// chord understates the energy and every area allowance composed from it.
+//
+// The product runs through intervalMul, whose four-corner LOWER end is a bound
+// on 2·r·sin over the whole enclosure and so on the true chord wherever in it
+// the true radius and sweep lie. A record this bracket cannot state, or a
+// bracket whose own lower end is not positive, answers 0 — a valid, if empty,
+// lower bound on any chord, which costs uniformSpeedTangentEnergyUpper its
+// sharpness and never its soundness.
+func loftCertifiedChordLower(seg CurveSegment, m int) float64 {
+	if m <= 0 {
+		return 0
+	}
+	radius, sweep, ok := circularWalkEnclosures(seg)
+	if !ok {
+		return 0
+	}
+	half := intervalScale(sweep, big.NewRat(1, 2*int64(m)))
+	sin, _, ok := radSinCosSpan(half)
+	if !ok {
+		return 0
+	}
+	c := intervalMul(intervalScale(radius, big.NewRat(2, 1)), sin)
+	lo := ratFloatDown(c.lo)
+	if isNonFinite(lo) || lo <= 0 {
+		return 0
+	}
+	return lo
+}
+
 // errLoftSagittaUnderivable is docs/loft-design.md Table S row S14's refusal:
 // a chorded circular pair for which the certified per-cell sagitta has no
 // derivation from the record. The body exists and the chord set is buildable;
@@ -1177,17 +1223,18 @@ var errLoftSagittaUnderivable = fmt.Errorf(
 // is the MAX of every cell's own SAGITTA across the whole build, never a sum:
 // a boundary point lies in exactly one cell, so only the widest cell's own
 // departure bounds the whole section. sectionMatchedDelta is the analogous
-// MAX of every cell's own matchedDelta (a PARAMETER-MATCHED bound, F1's rule)
-// — a DIFFERENT quantity, never interchangeable with sectionDelta, and every
-// caller composing bounds.go's
+// MAX of every cell's own PARAMETER-MATCHED chord-to-curve departure (F1's
+// rule) — a DIFFERENT quantity, never interchangeable with sectionDelta. It
+// is the CHORD-TO-CURVE HALF of docs/loft-design.md §5.2's matchedDelta row
+// and never that whole row: evalLoft composes it with the build's own delta
+// (chordCellDeltaUpper) before any caller of bounds.go's
 // chordedBoundaryVolumeAllow/chordedBoundaryMomentAllow/
 // chordedBoundarySeamAllow (each of whose own doc comments name a
 // parameter-matched matchedDelta obligation, never "the sagitta alone")
-// reads sectionMatchedDelta, never sectionDelta. The two coincide bit-for-bit
-// on a circular-only build (every circular cell's own matchedDelta equals
+// reads it. The two accumulators here coincide bit-for-bit
+// on a circular-only build (every circular cell's own departure equals
 // its own sagitta exactly, loftCircularCellStations' own doc comment) and on
-// a LineSeg-only build (both exactly 0), which is why every existing arc
-// fixture stays bit-identical under this split. stationRound is the analogous
+// a LineSeg-only build (both exactly 0). stationRound is the analogous
 // MAX of every cell's own station displacement (Table S row S14, delta's own
 // component, never sectionDelta's or sectionMatchedDelta's) — the terms are
 // accumulated apart and never added into one another here, which is the rule
@@ -1985,7 +2032,24 @@ func evalLoft(ctx context.Context, d *Document, ref StepRef, pl loftPayload, bud
 	body.lumps = []*Lump{{shells: []*Shell{{faces: faces}}}}
 
 	anchor := pl.xform.Apply(pl.plane0.Origin)
-	mass := newLoftMassAccumulator(anchor, a.delta, sectionDelta, sectionMatchedDelta)
+	// docs/loft-design.md §5.2's matchedDelta row, composed here and nowhere
+	// else: absSumUpper of the build's own MAX-over-cells chord-to-curve
+	// departure (loftPairings' sectionMatchedDelta) and the held vertex
+	// displacement a.delta. The two halves are accumulated apart — a chord's
+	// departure from the curve it chords, and a station's departure from the
+	// point the record and the motion denote for it — and every chorded leg
+	// charges their SUM, since the chord the build DREW joins two displaced
+	// stations. The sagitta alone would leave the computed station's own
+	// displacement uncharged (§5.2's matchedDelta paragraph). Left at exactly
+	// 0 on a build with no chorded cell, which is what keeps a LineSeg-only
+	// pairing's published measurements free of every chorded term: its held
+	// triangle pair IS the boundary §5 gives it, and a.delta already reaches
+	// its measurements through the accumulator's own delta-keyed legs.
+	matchedDelta := 0.0
+	if sectionDelta > 0 || sectionMatchedDelta > 0 {
+		matchedDelta = chordCellDeltaUpper(sectionMatchedDelta, a.delta)
+	}
+	mass := newLoftMassAccumulator(anchor, a.delta, sectionDelta, matchedDelta)
 	for k, t := range a.tris {
 		mass.add(a.verts[t[0]], a.verts[t[1]], a.verts[t[2]], k < a.walls)
 	}
@@ -2000,7 +2064,7 @@ func evalLoft(ctx context.Context, d *Document, ref StepRef, pl loftPayload, bud
 	// obligation. Left at its zero value (every field of loftChordedAllow)
 	// for a LineSeg-only build, where both are zero.
 	if sectionDelta > 0 || sectionMatchedDelta > 0 {
-		mass.chorded = computeLoftChordedAllow(pairs, a.vIdx, a.wIdx, a.verts, anchor, sectionDelta, sectionMatchedDelta, mass.distUpper)
+		mass.chorded = computeLoftChordedAllow(pairs, a.vIdx, a.wIdx, a.verts, anchor, matchedDelta, a.delta, mass.distUpper)
 	}
 	body.volume = mass.volume(a.verts, a.tris)
 	centroid, err := mass.centroid(a.verts, a.tris)

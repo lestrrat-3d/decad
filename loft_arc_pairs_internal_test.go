@@ -283,7 +283,10 @@ func TestComputeLoftChordedAllowWallLegEnclosesConeFrustumGap(t *testing.T) {
 	anchor := r3.NewVec(0, 0, 0)
 	distUpper := math.Hypot(r0, h) + 1 // generously above the true max distance
 
-	chorded := computeLoftChordedAllow(pairs, [][]int{vIdx}, [][]int{wIdx}, verts, anchor, sectionDelta, sectionDelta, distUpper)
+	// delta is 0: this hand-built station chain stands for an unplaced build
+	// whose stations are the exact points, so the composed matchedDelta
+	// (docs/loft-design.md §5.2) is the chord-to-curve half alone.
+	chorded := computeLoftChordedAllow(pairs, [][]int{vIdx}, [][]int{wIdx}, verts, anchor, sectionDelta, 0, distUpper)
 
 	// The independent reference: the quarter lateral frustum's own closed
 	// form, and the SAME two-triangle split assembleLoft's own Table B uses,

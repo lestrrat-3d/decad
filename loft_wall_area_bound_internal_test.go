@@ -3,10 +3,12 @@ package decad
 import (
 	"fmt"
 	"math"
+	"math/big"
 	"testing"
 
 	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
+	"github.com/lestrrat-3d/units"
 	"github.com/stretchr/testify/require"
 )
 
@@ -524,32 +526,101 @@ func TestCellChordCurveAreaAllowRefusesBrokenClaims(t *testing.T) {
 		"an exactly straight cell has no ruled-versus-chord gap to charge")
 }
 
-// TestCircularCellChordLowerIsALowerBound pins perCellTangentEnergy's own chord
-// reading: the published value must never exceed the true cell chord
-// 2*R*sin(sweep/(2m)), which is what keeps the energy above from being
-// understated.
-func TestCircularCellChordLowerIsALowerBound(t *testing.T) {
-	for _, sweep := range []float64{0.01, 0.5, 1.5, math.Pi, 2 * math.Pi} {
+// TestLoftCertifiedChordLowerIsALowerBound pins perCellTangentEnergy's own
+// chord reading over a sweep of whole-circle records: the published value must
+// never exceed the true cell chord 2*R*sin(sweep/(2m)), which is what keeps
+// the energy it feeds from being understated.
+func TestLoftCertifiedChordLowerIsALowerBound(t *testing.T) {
+	const radius = 2.75
+	for _, turn := range []float64{0.01, 0.25, 0.5, 1} {
 		for _, m := range []int{1, 3, 64, 1024} {
-			w := segmentWalk{kind: walkCircular, radius: 2.75, th0: 0.4, th1: 0.4 + sweep}
-			got := circularCellChordLower(w, m)
-			want := 2 * 2.75 * math.Sin(sweep/(2*float64(m)))
+			seg := CircleSeg{
+				Center: Point2{U: 1.5, V: -0.5},
+				Radius: units.Millimeters(radius),
+				CCW:    true,
+				TStart: 0,
+				TEnd:   turn,
+			}
+			got := loftCertifiedChordLower(seg, m)
+			sweep := 2 * math.Pi * turn
+			want := 2 * radius * math.Sin(sweep/(2*float64(m)))
 			// math.Sin is itself accurate only to about an ulp, so the
-			// reference — not the bound — carries the slack; the series
-			// bound below it is a genuine lower bound on the true sine.
+			// reference — not the bound — carries the slack; the certified
+			// enclosure below it is a genuine lower bound on the true chord.
 			require.LessOrEqual(t, got, want*(1+referenceUlpSlack),
-				"the published chord lower bound must not exceed the true chord (sweep %.4g, m=%d)", sweep, m)
-			if halfSweep := sweep / (2 * float64(m)); halfSweep <= 1 {
-				// Past a radian per half cell the two-term series runs out
-				// and the helper publishes 0 — the empty, still valid, lower
-				// bound. Inside it the bound must be genuinely positive, or
-				// the energy it feeds would collapse to the arc length.
-				require.Greater(t, got, 0.0, "a cell inside a radian must carry a positive chord bound (sweep %.4g, m=%d)", sweep, m)
+				"the published chord lower bound must not exceed the true chord (turn %.4g, m=%d)", turn, m)
+			if want > 1e-6 {
+				// A whole turn at m = 1 is the one cell whose two stations
+				// COINCIDE, so its true chord is 0 and the published bound is
+				// too; every other row must carry a genuinely positive bound,
+				// or the energy it feeds would collapse to the arc length.
+				require.Greater(t, got, 0.0,
+					"a cell of a positive chord must carry a positive chord bound (turn %.4g, m=%d)", turn, m)
 			}
 		}
 	}
-	require.Equal(t, 0.0, circularCellChordLower(segmentWalk{kind: walkCircular, radius: 1, th0: 1, th1: 1}, 4),
-		"a zero sweep has no chord to bound")
+	zero := CircleSeg{Center: Point2{}, Radius: units.Millimeters(1), CCW: true, TStart: 0.25, TEnd: 0.25}
+	require.Equal(t, 0.0, loftCertifiedChordLower(zero, 4), "a zero sweep has no chord to bound")
+	require.Equal(t, 0.0, loftCertifiedChordLower(LineSeg{}, 4), "a record with no circular enclosure publishes the empty bound")
+	require.Equal(t, 0.0, loftCertifiedChordLower(zero, 0), "a non-positive station count has no cell to bound")
+}
+
+// TestLoftCertifiedChordLowerRefusesTheHeldWalkFloats is the regression witness
+// for the defect a certified reading repairs: a chord "lower bound" read off
+// the walk's own held math.Hypot radius and math.Atan2 endpoint angles can land
+// ABOVE the true chord, because a math.Atan2 endpoint's own error is amplified
+// by 1/sweep on a short arc while the roundings applied to the held floats
+// cover about one ulp. uniformSpeedTangentEnergyUpper DECREASES in its chord
+// operand, so such an overstatement understates the energy — and
+// cellChordCurveAreaAllow's sharp arm increases in the energy, so the published
+// Area allowance comes out too small. A public caller reaches this with an
+// unplaced loft over two untrimmed ArcSeg profiles at m = 1.
+//
+// The arc below is a Pythagorean rotation of its own start point about the
+// origin: Start and End are EXACTLY equidistant from Center (asserted, not
+// assumed), so the recorded arc's own t=1 point IS End and the true m=1 chord
+// is exactly |End − Start|, which ratSqrtUp brackets from above with no
+// trigonometry in the reference at all. A held-float reading of this record
+// answers about 5592.1318893204816 against a true 5592.1318893050811 — roughly
+// 1.5e-8 too large, some four orders of magnitude past this record's own ulp.
+func TestLoftCertifiedChordLowerRefusesTheHeldWalkFloats(t *testing.T) {
+	seg := ArcSeg{
+		Center: Point2{U: 0, V: 0},
+		Start:  Point2{U: 20724598.671875, V: 50331168.203125},
+		End:    Point2{U: 20719427.640625, V: 50333297.140625},
+		TStart: 0,
+		TEnd:   1,
+	}
+
+	r2Start := new(big.Rat).Add(
+		new(big.Rat).Mul(floatRat(seg.Start.U), floatRat(seg.Start.U)),
+		new(big.Rat).Mul(floatRat(seg.Start.V), floatRat(seg.Start.V)),
+	)
+	r2End := new(big.Rat).Add(
+		new(big.Rat).Mul(floatRat(seg.End.U), floatRat(seg.End.U)),
+		new(big.Rat).Mul(floatRat(seg.End.V), floatRat(seg.End.V)),
+	)
+	require.Zero(t, r2Start.Cmp(r2End),
+		"the fixture's two endpoints must be exactly equidistant from Center, or |End-Start| is not the true chord")
+
+	du := new(big.Rat).Sub(floatRat(seg.End.U), floatRat(seg.Start.U))
+	dv := new(big.Rat).Sub(floatRat(seg.End.V), floatRat(seg.Start.V))
+	chord2 := new(big.Rat).Add(new(big.Rat).Mul(du, du), new(big.Rat).Mul(dv, dv))
+	trueChordUpper := ratSqrtUp(chord2)
+
+	got := loftCertifiedChordLower(seg, 1)
+	require.Greater(t, got, 0.0, "the fixture must reach a real bound rather than the empty one")
+	require.LessOrEqual(t, got, trueChordUpper,
+		"the published chord lower bound must not exceed the true chord |End-Start|")
+
+	// The energy that bound feeds must stay an UPPER bound on L^2-c^2: with
+	// the chord overstated it fell BELOW the true energy on this record.
+	w := segmentWalk{kind: walkCircular}
+	arcUpper := perCellArcUpper(seg, w, 1)
+	energy := perCellTangentEnergy(seg, w, 1)
+	require.Greater(t, energy, 0.0, "a curved cell carries a positive tangent-deviation energy")
+	require.GreaterOrEqual(t, energy, (arcUpper-trueChordUpper)*(arcUpper+trueChordUpper),
+		"the published energy must dominate the L^2-c^2 reading its own arc-length bound and the true chord give")
 }
 
 // rotatedWedgeOffset, rotatedWedgeRadius and rotatedWedgeHeight fix this

@@ -409,11 +409,13 @@ func TestLoftCircularArcSagittaIsTheUniformParameterMatchedBound(t *testing.T) {
 // derivation above exists to license, on the production path itself: the
 // per-cell matchedDelta loftCircularCellStations publishes IS that pairing's
 // own sagittaUpper, for EVERY cell of the shared chain, never a separate or
-// smaller reading. Every consumer of a circular cell's matched-delta
-// obligation (bounds.go's cellChordCurveAreaUpper through
-// loft_moments.go's computeLoftChordedAllow) reads that equality straight
-// off this arm, and loftPayload's own doc comment states it as fact, so it
-// is asserted here rather than left to the assignment that implements it.
+// smaller reading. That per-cell value is the CHORD-TO-CURVE HALF of
+// docs/loft-design.md §5.2's matchedDelta row, which every consumer
+// (bounds.go's cellChordCurveAreaUpper through loft_moments.go's
+// computeLoftChordedAllow) reads straight off this arm before composing it
+// with the build's own delta, and loftPayload's own doc comment states the
+// equality as fact — so it is asserted here rather than left to the
+// assignment that implements it.
 //
 // The rows exercise every shape the arm can settle on: two identical sides,
 // two sides whose own station counts differ (the shared max, where the

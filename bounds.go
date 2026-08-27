@@ -538,7 +538,9 @@ func sweptVolumeAllow(delta, areaUpper float64) float64 {
 // parametrization. (2) matchedDeltaUpper, a bound on |curve(s) − chord(s)| at
 // the SAME s, proven under that SAME shared parametrization on BOTH sides.
 // Arc length is one such choice — the circular arm's, whose sagitta discharges
-// it exactly (loftCircularCellStations' own doc comment). The free-form arm's
+// it exactly for the IDEAL chord (loftCircularCellStations' own doc comment),
+// leaving the held stations' own displacement for the caller to compose in.
+// The free-form arm's
 // span-uniform fraction is another, discharged by spanMatchedDeltaUpper. A
 // caller adopting a third parametrization may reuse this derivation unchanged
 // provided it proves the same two properties under it. With the shared
@@ -603,9 +605,14 @@ func sweptVolumeAllow(delta, areaUpper float64) float64 {
 // parameter-matched bound under whichever shared parametrization it adopted
 // must pass +Inf, never the sagitta as a stand-in (F1's own rule: a
 // SET-distance may never be silently upgraded into a parameter-matched
-// one) — every caller reaching this helper today either proves the bound
-// (the circular arm's own sagitta, or the free-form arm's own
-// spanMatchedDeltaUpper) or has none to pass.
+// one) — every caller reaching this helper today either proves the bound or
+// has none to pass. The loft evaluator proves it in two composed legs
+// (docs/loft-design.md §5.2's matchedDelta row): the arm's own matched
+// departure for the IDEAL chord — the circular arm's sagitta, or the
+// free-form arm's spanMatchedDeltaUpper — plus the displacement of the two
+// HELD stations the chord this helper reads actually joins, which is what
+// makes the published bound a claim about the corners passed in rather than
+// about a chord the build never drew.
 //
 // arcLenUpperA and arcLenUpperB must each be a PROVEN upper bound on that
 // side's own arc length over the cell — never smaller than the corresponding
