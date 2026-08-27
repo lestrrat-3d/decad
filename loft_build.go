@@ -344,7 +344,7 @@ func loftPlanesCoincide(a, b PlaneRecord) bool {
 // loftStationCap is docs/loft-design.md §5.1's ceiling on a build's TOTAL
 // station count Σstations (§7) — the soft limit that keeps the chord chain
 // from being what carries §6's audit past the pair-test ceiling S8 owns. §14
-// left its value to this increment; the derivation is here.
+// points here for the value; the derivation follows.
 //
 // §7 fixes the assembled triangle count: 2·Σstations wall triangles, plus each
 // of the two caps' own polygon-with-holes triangulation, which triangulate.go

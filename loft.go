@@ -58,9 +58,17 @@ func (d *Document) Loft(s0 *sketch.Sketch, p0 *sketch.Profile, s1 *sketch.Sketch
 // order (p0 of s0, then p1 of s1): a foreign, stale, invalid, or
 // unrecordable profile is the seam's own sentinel.
 //
-// Every corresponding segment pair must be a LineSeg on both sides — a
-// same-kind CircleSeg or ArcSeg pair is also [ErrUnsupported] in this
-// increment (§1). The two profiles must lie on distinct geometric planes;
+// Every corresponding segment pair must be same-kind: both sides straight
+// (LineSeg), or both sides circular (a CircleSeg or an ArcSeg on each). A
+// mixed-kind or free-form pairing is [ErrUnsupported] (§1, P5, S3), and so is
+// a circular pair whose two sides walk in opposite senses, which this
+// evaluator refuses rather than twist the correspondence. A circular
+// pair's walls are chorded (§5.1), which carries three refusals of its own,
+// each [ErrUnsupported]: a pair the fixed station cap cannot chord to its
+// chord target (S15), a build whose certified sagitta or station displacement
+// has no derivation from the two records (S14), and a chord cell that
+// collapses to one point on exactly one of the two sections (S16).
+// The two profiles must lie on distinct geometric planes;
 // coplanar sections are [ErrDegenerate] (§4, S5), since every wall vertex
 // would then lie in one plane and the solid has zero volume by construction.
 // A hole-count or per-loop segment-count mismatch has no positional or
