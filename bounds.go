@@ -86,7 +86,12 @@ import (
 //     since that leg's own homotopy starts FROM the ruled patch, never from
 //     the triangle pair the evaluator actually holds; cellTwistOffsetUpper is
 //     that same derivation's own POINTWISE deviation bound |T|/4, taken alone
-//     for a caller that widens a coordinate envelope rather than a volume;
+//     for a caller that widens a coordinate envelope rather than a volume,
+//     and cellTwistAreaAllow is its AREA twin, the gap between that same
+//     triangle pair's own area and the ruled patch's. All three rest on the
+//     SAME certified |T|/4 endpoint (cellTwistQuarterUpper) and the same
+//     certified spans: no reading of the twist vector or of an edge length
+//     is ever taken in float64;
 //   - the AREA a 2D boundary displacement sweeps out → sectionDisplacementArea,
 //     the same identity one dimension down: the region a recorded section can
 //     move is a tube about its own recorded boundary, with
@@ -940,9 +945,14 @@ func cellAllowsOf(vLo, vHi, wLo, wHi r3.Vec, arcLenUpperA, arcLenUpperB, matched
 // how far ONE loft wall cell's held flat-triangle-pair area (t=0) can sit
 // from its own bilinear ruled patch's area (t=1) — the SAME homotopy
 // cellTwistVolumeAllow's part (a)/(b) already builds, T = vLo−vHi−wLo+wHi
-// its own twist vector, zero exactly when the cell is planar (the shipped
-// A10a wedge's own case: two circles offset along their shared normal alone
-// give T = 0 identically, TestArcMatchedDeltaEqualsSagitta's own family).
+// its own twist vector, zero exactly when the cell's four corners form a
+// PARALLELOGRAM — the case the shipped A10a wedge lands in, since its two
+// frames share their U and V axes and differ only by an offset along the
+// shared normal, so every corner's lift carries the identical rounding and
+// the exact chain cancels to (0,0,0) rather than merely the float one
+// (TestArcMatchedDeltaEqualsSagitta's own family). A cell that is planar
+// WITHOUT being a parallelogram — a trapezoid — has a nonzero T, and this
+// bound charges it, which costs a little tightness and no soundness.
 //
 // Part (a) already gives the explicit form of the deviation: on triangle 1
 // (0<=r<=s<=1), X−X_tri1 = r(s−1)·T; on triangle 2, X−X_tri2 = s(r−1)·T. Both
@@ -963,20 +973,48 @@ func cellAllowsOf(vLo, vHi, wLo, wHi r3.Vec, arcLenUpperA, arcLenUpperB, matched
 // factors T and (eA+eB) independent rather than a fabricated cross term, and
 // the whole product vanishes with T exactly rather than merely shrinking.
 //
+// NOTHING in this reading may be computed in float64, for exactly the two
+// reasons cellTwistQuarterUpper's own doc comment gives and that
+// cellTwistVolumeAllow and cellTwistOffsetUpper already obey on the SAME
+// vector: T is a cancelling chain whose float evaluation can answer a
+// computed (0,0,0) for a cell whose exact T is nonzero — and this helper
+// reads that zero as "planar, nothing to charge" and publishes 0 — while
+// r3.Vec.Len is nested math.Hypot, whose own accuracy contract Go does not
+// state and which sits several ulp BELOW the exact norm often enough that
+// eA and eB taken that way are not upper bounds either. Both directions
+// shrink the allowance below the deviation it claims to dominate, so |T|/4
+// comes from the exact xtwistQuarterUpper kernel over the cell's lifted
+// corners and each edge length from the certified xspanUpper the same four
+// corners' cellSpans already carries.
+//
 // Non-finite corners answer +Inf, the same guard cellTwistVolumeAllow's own
-// doc comment states for its sibling.
+// doc comment states for its sibling — and, as there, that guard is what
+// lets the exact lift read its corners as rationals at all.
 func cellTwistAreaAllow(vLo, vHi, wLo, wHi r3.Vec) float64 {
 	if !finiteVec(vLo) || !finiteVec(vHi) || !finiteVec(wLo) || !finiteVec(wHi) {
 		return math.Inf(1)
 	}
-	t := vLo.Sub(vHi).Sub(wLo).Add(wHi)
-	twistLen := t.Len()
-	if twistLen <= 0 {
+	corners := cellCornersOf(vLo, vHi, wLo, wHi)
+	return cellTwistAreaFromSpans(corners.spans(), xtwistQuarterUpper(corners))
+}
+
+// cellTwistAreaFromSpans is cellTwistAreaAllow's own derivation once that
+// helper's corner-finiteness gate has passed and the cell's certified |T|/4
+// endpoint and four certified spans are in hand — the same split
+// cellTwistVolumeFromSpans owns for the VOLUME twin, over the identical eA
+// and eB that helper reads from the identical four spans.
+//
+// The certified endpoint is |T|/4, so the |T| the derivation above multiplies
+// is four times it. The scaling is by a power of two and therefore exact
+// wherever it does not overflow, and productUpper's own up-rounding covers
+// the overflow case by answering +Inf rather than a finite understatement.
+func cellTwistAreaFromSpans(spans cellSpans, twistQuarterUpper float64) float64 {
+	if twistQuarterUpper <= 0 {
 		return 0
 	}
-	eA := math.Max(vHi.Sub(vLo).Len(), wHi.Sub(wLo).Len())
-	eB := math.Max(wLo.Sub(vLo).Len(), wHi.Sub(vHi).Len())
-	return productUpper(twistLen, absSumUpper(eA, eB))
+	eA := math.Max(spans.sideA, spans.sideB)
+	eB := math.Max(spans.rungLo, spans.rungHi)
+	return productUpper(productUpper(4, twistQuarterUpper), absSumUpper(eA, eB))
 }
 
 // chordedBoundaryVolumeAllow bounds the VOLUME between a loft's HELD

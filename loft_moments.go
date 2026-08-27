@@ -606,11 +606,12 @@ type loftChordedAllow struct {
 //     this leg is what closes it: a PROVEN, T-proportional bound on how far
 //     the cell's own bilinear ruled patch can carry the held triangle pair's
 //     area from the planar reading, T = vLo−vHi−wLo+wHi the SAME twist
-//     vector cellTwistVolumeAllow already names, zero EXACTLY when the cell
-//     is planar (the shipped wedge's own T ≡ 0 — TestArcMatchedDeltaEqualsSagitta's
-//     family) so this leg contributes nothing extra there and the shipped
-//     margin is unaffected; positive whenever the two sections genuinely
-//     twist against each other.
+//     vector cellTwistVolumeAllow already names, read through the SAME exact
+//     kernel that helper reads it through and so zero EXACTLY when the
+//     cell's four corners form a parallelogram (the shipped wedge's own
+//     T ≡ 0 — TestArcMatchedDeltaEqualsSagitta's family) so this leg
+//     contributes nothing extra there and the shipped margin is unaffected;
+//     positive whenever the two sections genuinely twist against each other.
 //
 // This is the wall term; capAreaExcess above is Area's own cap term, and the
 // two together are what area() charges beside the held triangle sum.

@@ -14,8 +14,8 @@ import (
 
 // This file tests bounds.go's chordedBoundaryVolumeAllow,
 // chordedBoundaryMomentAllow, chordedBoundarySeamAllow, cellChordCurveAreaUpper,
-// capAreaVolumeAllow, cellTwistOffsetUpper, cellTwistVolumeAllow and the
-// shared per-cell reader cellAllowsOf
+// capAreaVolumeAllow, cellTwistOffsetUpper, cellTwistVolumeAllow,
+// cellTwistAreaAllow and the shared per-cell reader cellAllowsOf
 // (docs/loft-design.md §5 — the chord-chain subsection lands with the arc
 // design change; the A10 plan's Part 2 Q4 and Part 4 R1 fallback): the
 // enclosure chordedBoundaryVolumeAllow proves between the HELD FLAT-TRIANGLE
@@ -1843,4 +1843,150 @@ func TestChordedBoundaryMomentAllowRefusesOnBrokenClaims(t *testing.T) {
 	require.True(t, math.IsInf(chordedBoundaryMomentAllow(matchedDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper, seamAllow, maxTwistOffsetUpper, math.NaN()), 1), "NaN coordUpper")
 	require.True(t, math.IsInf(chordedBoundaryMomentAllow(matchedDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper, seamAllow, maxTwistOffsetUpper, -1), 1), "negative coordUpper — F6")
 	require.True(t, math.IsInf(chordedBoundaryMomentAllow(matchedDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper, seamAllow, maxTwistOffsetUpper, math.Inf(1)), 1), "+Inf coordUpper")
+}
+
+// exactTwistAreaLower is a float64 at or below the EXACT value
+// cellTwistAreaAllow's own derivation names, |T|·(eA+eB), computed here from
+// the cell's four float64 corners over big.Rat and a 300-bit big.Float root
+// and then nudged one ulp toward zero. It shares no arithmetic with the
+// helper under test: the helper's answer must dominate this number, and a
+// helper that computed any part of the chain in float64 does not.
+func exactTwistAreaLower(vLo, vHi, wLo, wHi r3.Vec) float64 {
+	rat := func(v r3.Vec) [3]*big.Rat {
+		return [3]*big.Rat{
+			new(big.Rat).SetFloat64(v.X),
+			new(big.Rat).SetFloat64(v.Y),
+			new(big.Rat).SetFloat64(v.Z),
+		}
+	}
+	sub := func(a, b [3]*big.Rat) [3]*big.Rat {
+		var out [3]*big.Rat
+		for i := range out {
+			out[i] = new(big.Rat).Sub(a[i], b[i])
+		}
+		return out
+	}
+	norm := func(d [3]*big.Rat) *big.Float {
+		q := new(big.Rat)
+		for _, c := range d {
+			q.Add(q, new(big.Rat).Mul(c, c))
+		}
+		return new(big.Float).SetPrec(300).Sqrt(new(big.Float).SetPrec(300).SetRat(q))
+	}
+	maxFloat := func(a, b *big.Float) *big.Float {
+		if a.Cmp(b) >= 0 {
+			return a
+		}
+		return b
+	}
+	rvLo, rvHi, rwLo, rwHi := rat(vLo), rat(vHi), rat(wLo), rat(wHi)
+
+	twist := norm(sub(sub(rvLo, rvHi), sub(rwLo, rwHi)))
+	eA := maxFloat(norm(sub(rvHi, rvLo)), norm(sub(rwHi, rwLo)))
+	eB := maxFloat(norm(sub(rwLo, rvLo)), norm(sub(rwHi, rvHi)))
+	prod := new(big.Float).SetPrec(300).Mul(twist, new(big.Float).SetPrec(300).Add(eA, eB))
+	f, _ := prod.Float64()
+	return math.Nextafter(f, math.Inf(-1))
+}
+
+// TestCellTwistAreaAllowDominatesTheExactProduct pins cellTwistAreaAllow to
+// the same exact-arithmetic discipline cellTwistQuarterUpper's own doc
+// comment imposes on every other reading of the twist vector, over the two
+// float64 failures that discipline exists for.
+//
+// The first is CANCELLATION. T = vLo−vHi−wLo+wHi is a cancelling chain, so a
+// float64 evaluation can answer exactly (0,0,0) for a cell whose exact T is
+// nonzero, and this helper reads that zero as "planar, nothing to charge".
+// The huge-scale row below is the sharpest form: the float chain cancels to
+// (0,0,0) while the exact T is the unit vector (−1,0,0), so the deviation the
+// helper claims to dominate is about 1e16 and a float64 chain publishes 0.
+// The residue row is the ordinary form — a cell whose second rule was BUILT
+// by adding a common offset, where the exact T is the addition's own rounding
+// residue.
+//
+// The second is r3.Vec.Len, nested math.Hypot, which Go publishes no accuracy
+// contract for and which sits several ulp BELOW the exact norm often enough
+// that eA and eB taken that way are not upper bounds. The randomized sweep
+// row cover it: every answer must dominate the independently computed exact
+// product, never merely approach it.
+func TestCellTwistAreaAllowDominatesTheExactProduct(t *testing.T) {
+	residueVHi := r3.NewVec(0.1, 0.2, 0.3)
+	residueWLo := r3.NewVec(0.7, 1.1, 1.3)
+
+	for _, tc := range []struct {
+		name               string
+		vLo, vHi, wLo, wHi r3.Vec
+		floatCancels       bool
+	}{
+		{
+			// The float chain gives (1e16−1) − 1e16 + 0 = 0 in every
+			// coordinate; the exact chain gives (−1, 0, 0).
+			name:         "cancelling chain at a huge scale",
+			vLo:          r3.NewVec(1e16, 0, 0),
+			vHi:          r3.NewVec(1, 0, 0),
+			wLo:          r3.NewVec(1e16, 1, 0),
+			wHi:          r3.NewVec(0, 1, 0),
+			floatCancels: true,
+		},
+		{
+			// wHi is BUILT as vHi+wLo, so the float chain cancels to
+			// exactly (0,0,0) while the exact T is that addition's own
+			// rounding residue.
+			name:         "cancelling chain over a rounding residue",
+			vLo:          r3.NewVec(0, 0, 0),
+			vHi:          residueVHi,
+			wLo:          residueWLo,
+			wHi:          residueVHi.Add(residueWLo),
+			floatCancels: true,
+		},
+		{
+			// An ordinary cell — nothing cancels — where the four
+			// r3.Vec.Len readings sit far enough below their exact norms
+			// that one up-round cannot recover the shortfall: taking the
+			// spans that way publishes the float64 just below the exact
+			// product.
+			name: "libm norms shrink the product past one up-round",
+			vLo:  r3.NewVec(-0.8675135336778659, 0.29838195716762295, -0.3981530225038339),
+			vHi:  r3.NewVec(0.5107684458941033, -0.6206943280001098, -0.15068689686676673),
+			wLo:  r3.NewVec(0.6646268586257917, 0.4551956430202062, -0.14964066133325593),
+			wHi:  r3.NewVec(0.9089996001491185, -0.897793599718202, -0.08340000409501869),
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.floatCancels {
+				require.Equal(t, r3.NewVec(0, 0, 0), tc.vLo.Sub(tc.vHi).Sub(tc.wLo).Add(tc.wHi),
+					"fixture premise: the float64 twist chain cancels to zero here")
+			}
+
+			got := cellTwistAreaAllow(tc.vLo, tc.vHi, tc.wLo, tc.wHi)
+			want := exactTwistAreaLower(tc.vLo, tc.vHi, tc.wLo, tc.wHi)
+			require.Greater(t, want, 0.0, "fixture premise: the exact deviation is positive")
+			require.GreaterOrEqual(t, got, want,
+				"the published allowance must dominate the exact |T|(eA+eB) it claims to bound")
+		})
+	}
+
+	t.Run("an exactly planar cell still answers zero", func(t *testing.T) {
+		// T = (0,0,0) − (1,0,0) − (0,1,0) + (1,1,0) is exactly the zero
+		// vector, not a cancelled one, so there is no deviation to charge.
+		require.Zero(t, cellTwistAreaAllow(
+			r3.NewVec(0, 0, 0), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0), r3.NewVec(1, 1, 0)))
+	})
+
+	t.Run("a non-finite corner refuses", func(t *testing.T) {
+		require.True(t, math.IsInf(cellTwistAreaAllow(
+			r3.NewVec(math.NaN(), 0, 0), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0), r3.NewVec(1, 1, 1)), 1))
+	})
+
+	t.Run("randomized cells", func(t *testing.T) {
+		rng := rand.New(rand.NewPCG(0x7e15, 0xa4ea))
+		vec := func() r3.Vec {
+			return r3.NewVec(rng.Float64()*2-1, rng.Float64()*2-1, rng.Float64()*2-1)
+		}
+		for i := range 400 {
+			vLo, vHi, wLo, wHi := vec(), vec(), vec(), vec()
+			got := cellTwistAreaAllow(vLo, vHi, wLo, wHi)
+			require.GreaterOrEqual(t, got, exactTwistAreaLower(vLo, vHi, wLo, wHi), "cell %d", i)
+		}
+	})
 }
