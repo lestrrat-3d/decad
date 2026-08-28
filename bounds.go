@@ -1729,6 +1729,11 @@ func cellStationShiftAreaAllow(
 // So no unproven step can shrink the number this function returns; the
 // open question can only cost precision.
 //
+// The empirical status above belongs to this VOLUME allowance alone: no
+// area path calls this function, and the chorded AREA gap is areaExcess,
+// summing cellChordCurveAreaAllow, cellTwistAreaAllow (derived at nonzero
+// twist) and cellStationShiftAreaAllow, each with its own derivation.
+//
 // The four-leg composition is also why this helper does NOT carry the
 // two-argument (sectionDelta, areaUpper) shape the A10 plan's Q4 names.
 // That shape charges the wall leg alone, and the wall leg alone does not
