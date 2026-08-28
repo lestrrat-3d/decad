@@ -1322,10 +1322,10 @@ func TestCellChordCurveAreaUpperEnclosesTheExactEdgeProduct(t *testing.T) {
 	got := cellChordCurveAreaUpper(vLo, vHi, wLo, wHi, arcLenUpper, arcLenUpper, 0)
 	require.False(t, math.IsInf(got, 1), "the fixture must be admitted, not refused")
 
-	// exactCellTwistFactors' own third return IS eBBase's definition squared,
+	// exactCellTwistFactors' own second return IS eBBase's definition squared,
 	// max(|wLo−vLo|², |wHi−vHi|²), taken from the float corners with no
 	// rounding. got >= eA·eBBase holds iff got² >= eA²·eBBase².
-	_, _, eB2 := exactCellTwistFactors(vLo, vHi, wLo, wHi)
+	_, eB2 := exactCellTwistFactors(vLo, vHi, wLo, wHi)
 	lhs := new(big.Rat).Mul(ratOfFloat(got), ratOfFloat(got))
 	rhs := new(big.Rat).Mul(new(big.Rat).Mul(ratOfFloat(arcLenUpper), ratOfFloat(arcLenUpper)), eB2)
 	require.GreaterOrEqual(t, lhs.Cmp(rhs), 0,
@@ -1673,10 +1673,9 @@ func TestCellTwistOffsetUpperIsZeroWithoutTwist(t *testing.T) {
 	require.Equal(t, 0.0, cellTwistOffsetUpper(vLo, vHi, wLo, wHi))
 }
 
-// exactCellTwistFactors returns the exact rational squares of |T|, eA and eB.
-// The pointwise offset test uses |T|²; the other two values remain useful to
-// the linear area-arm tests below.
-func exactCellTwistFactors(vLo, vHi, wLo, wHi r3.Vec) (*big.Rat, *big.Rat, *big.Rat) {
+// exactCellTwistFactors returns the exact rational squares of |T| and eB.
+// The pointwise offset test uses |T|²; the linear area-arm test uses eB².
+func exactCellTwistFactors(vLo, vHi, wLo, wHi r3.Vec) (*big.Rat, *big.Rat) {
 	sub := func(a, b r3.Vec) [3]*big.Rat {
 		return [3]*big.Rat{
 			new(big.Rat).Sub(ratOfFloat(a.X), ratOfFloat(b.X)),
@@ -1703,9 +1702,8 @@ func exactCellTwistFactors(vLo, vHi, wLo, wHi r3.Vec) (*big.Rat, *big.Rat, *big.
 	for i := range twist {
 		twist[i] = new(big.Rat).Sub(wSpan[i], vSpan[i])
 	}
-	eA2 := larger(norm2(vSpan), norm2(wSpan))
 	eB2 := larger(norm2(sub(wLo, vLo)), norm2(sub(wHi, vHi)))
-	return norm2(twist), eA2, eB2
+	return norm2(twist), eB2
 }
 
 // exactCellTwistVolume returns |det(a,T,b)|/12 over the cell's exact float64
@@ -1760,7 +1758,7 @@ func TestCellTwistBoundsEncloseTheirExactTerms(t *testing.T) {
 		},
 	} {
 		t.Run(row.name, func(t *testing.T) {
-			twist2, _, _ := exactCellTwistFactors(row.vLo, row.vHi, row.wLo, row.wHi)
+			twist2, _ := exactCellTwistFactors(row.vLo, row.vHi, row.wLo, row.wHi)
 			require.Equal(t, 1, twist2.Sign(), "the fixture must carry a genuinely nonzero exact twist")
 			if row.floatChainCancels {
 				require.Equal(t, r3.NewVec(0, 0, 0), row.vLo.Sub(row.vHi).Sub(row.wLo).Add(row.wHi),

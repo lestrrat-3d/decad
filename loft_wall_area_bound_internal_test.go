@@ -924,14 +924,6 @@ type sideCurve interface {
 	der(s float64) r3.Vec
 }
 
-// ruledLine is the straight directrix a LineSeg pairing contributes, traversed
-// linearly in the shared parameter exactly as the loft's own correspondence
-// does.
-type ruledLine struct{ p0, p1 r3.Vec }
-
-func (l ruledLine) at(s float64) r3.Vec { return l.p0.Add(l.p1.Sub(l.p0).Scale(s)) }
-func (l ruledLine) der(float64) r3.Vec  { return l.p1.Sub(l.p0) }
-
 // ruledPatchArea integrates |X_s × X_r| over the unit square for the ruled
 // patch X(s,r) = (1−r)*a(s) + r*b(s) — the surface the loft's construction
 // DENOTES between two paired curves. It is a plain numerical integral: no
