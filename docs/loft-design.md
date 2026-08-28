@@ -1341,8 +1341,10 @@ than absent.
 
 **`Volume` is `Exact` exactly when its published rational is representable in
 the `units.Value` magnitude it carries, AND the payload's displacement
-`delta` is zero, AND its section displacement `sectionDelta` (§5.2) is zero —
-never unconditionally.** That single-rounding ceiling is spline design §3's
+`delta` is zero, AND its full
+`chordedBoundaryVolumeAllow(matchedDelta, wallAreaUpper, twistVolumeUpper,
+capVolumeUpper, seamAllow)` (§5.2, §8.1) is zero — never unconditionally.**
+That single-rounding ceiling is spline design §3's
 Tier A rule, and a loft's volume earns it for the same reason a Tier A
 free-form region's area does: the integral is exactly rational, and only its
 final publication rounds. A body
@@ -1361,10 +1363,12 @@ understates a twisted pairing by about five orders of magnitude
 each of that helper's arguments and §8.1 states which mechanism each of its
 four legs answers for. So `sectionDelta` alone is enough to make the reading
 `Approximate` even where `delta == 0`, which is the `m = 1` pair whose two
-end stations §5.2's table pins (§12), for either kind. A body that is both placed and chorded
-composes both terms, since each bounds a displacement committed at an
-independent stage of the construction — the section chording, then the rigid
-placement.
+end stations §5.2's table pins (§12), for either kind. A free-form cell can
+also make the reading `Approximate` through a positive `matchedDelta` even
+where its sagitta and therefore `sectionDelta` are exactly zero. A body that
+is both placed and chorded composes both terms, since each bounds a
+displacement committed at an independent stage of the construction — the
+section chording, then the rigid placement.
 
 **A same-kind Tier A free-form pair composes the same allowance from its own
 shared parameter.** Each cell reads `spanSpeedUpper` for its per-side
@@ -1377,17 +1381,19 @@ lands the evaluator integration.
 `VecMeasurement`, not a `units.Value`.** Round each coordinate once into the
 returned `r3.Vec`. Its `Bound` is the length radius enclosing all three
 coordinate-rounding errors, and it is `Exact` only when every coordinate has
-zero rounding error AND the payload's displacement `delta` and section
-displacement `sectionDelta` are also zero. This is the existing `moments.go`
-centroid publication pattern, extended from the plane-local two-coordinate
-result to this 3D triangulated boundary. A body whose `delta` is positive
+zero rounding error, the payload's displacement `delta` is zero, and the full
+`chordedBoundaryVolumeAllow` and `chordedBoundaryMomentAllow` terms (§5.2,
+§8.1), including their `matchedDelta` input, are both zero. This is the
+existing `moments.go` centroid publication pattern, extended from the
+plane-local two-coordinate result to this 3D triangulated boundary. A body
+whose `delta` is positive
 (§5.2) widens each coordinate's bound by the same quotient composition
 `moments.go`'s `boundedQuotient` states, using `sweptVolumeAllow` as the
-denominator's own allowance and `sweptMomentAllow` as the numerator's. A body
-whose `sectionDelta` is
-positive widens it again by the matching `chordedBoundaryVolumeAllow` /
-`chordedBoundaryMomentAllow` pair (`bounds.go`), each doing for
-`sectionDelta` what the swept pair does for `delta`. **The moment twin takes
+denominator's own allowance and `sweptMomentAllow` as the numerator's. A
+CHORDED body widens it again by the matching `chordedBoundaryVolumeAllow` /
+`chordedBoundaryMomentAllow` pair (`bounds.go`), each reading the full
+`matchedDelta` rather than `sectionDelta` alone. A free-form cell can activate
+both terms at exactly-zero sagitta. **The moment twin takes
 only the two legs that are swept three-dimensional measures.**
 `chordedBoundaryMomentAllow(matchedDelta, wallAreaUpper, twistVolumeUpper,
 capVolumeUpper, seamAllow, maxTwistOffsetUpper, coordUpper)` reads the
