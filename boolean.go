@@ -649,12 +649,6 @@ func facesNearMiss(ctx context.Context, bmA *boolMesh, fis []int, bmB *boolMesh,
 			}
 			ta := triCorners(bmA, i)
 			tb := triCorners(bmB, j)
-			// The distance routine returns a conservative lower bound. Use it
-			// before the exact classifier so nearby boxes whose triangles are
-			// still clearly separated do not pay for rational predicates.
-			if triTriDistance(ta, tb) > slack {
-				continue
-			}
 			c, err := memo.classify(i, j)
 			if err != nil {
 				return false, err
@@ -666,13 +660,20 @@ func facesNearMiss(ctx context.Context, bmA *boolMesh, fis []int, bmB *boolMesh,
 				// to it.
 				return false, nil
 			}
-			if !seenA[i] {
-				seenA[i] = true
-				closeA = append(closeA, i)
-			}
-			if !seenB[j] {
-				seenB[j] = true
-				closeB = append(closeB, j)
+			// triTriDistance is only meaningful on a pair the exact classifier
+			// has already proven disjoint (contactNone); asking it about a
+			// crossing pair reads a distance its candidate set never attains.
+			// So classify first, and consult the distance only as an ADDITIONAL
+			// admit for a pair that provably does not meet.
+			if c.kind != contactNone || triTriDistance(ta, tb) <= slack {
+				if !seenA[i] {
+					seenA[i] = true
+					closeA = append(closeA, i)
+				}
+				if !seenB[j] {
+					seenB[j] = true
+					closeB = append(closeB, j)
+				}
 			}
 		}
 	}
@@ -923,6 +924,12 @@ func boxesWithin(a, b [2]r3.Vec, slack float64) bool {
 // which is where the minimum of two disjoint convex sets is always attained.
 // The result is nudged DOWN so its own float rounding can only widen the
 // refusal, never narrow it.
+//
+// Disjointness is the CALLER's obligation, discharged by the exact classifier
+// before the call, never by this routine: an intersecting pair attains its
+// minimum where the two triangles' interiors meet, which this candidate set
+// does not contain, so the value returned for such a pair is neither the
+// distance nor a lower bound on it and must never gate an admission.
 func triTriDistance(ta, tb [3]r3.Vec) float64 {
 	best := math.Inf(1)
 	for i := range 3 {
