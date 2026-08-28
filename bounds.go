@@ -86,7 +86,12 @@ import (
 //     since that leg's own homotopy starts FROM the ruled patch, never from
 //     the triangle pair the evaluator actually holds; cellTwistOffsetUpper is
 //     that same derivation's own POINTWISE deviation bound |T|/4, taken alone
-//     for a caller that widens a coordinate envelope rather than a volume;
+//     for a caller that widens a coordinate envelope rather than a volume,
+//     and cellTwistAreaAllow is its AREA twin, the gap between that same
+//     triangle pair's own area and the ruled patch's. All three rest on the
+//     SAME certified |T|/4 endpoint (cellTwistQuarterUpper) and the same
+//     certified spans: no reading of the twist vector or of an edge length
+//     is ever taken in float64;
 //   - the AREA a 2D boundary displacement sweeps out → sectionDisplacementArea,
 //     the same identity one dimension down: the region a recorded section can
 //     move is a tube about its own recorded boundary, with
@@ -245,7 +250,8 @@ func upRound(x float64) float64 {
 //
 // +Inf is deliberately NOT the answer here. A refusal would propagate to
 // consumers that read a positive bound as their own gate
-// (chordedBoundaryVolumeAllow's wallAreaUpper > 0 branch) and turn a
+// (cellChordPatchNormalLower's 0 sentinel, chordedBoundaryVolumeAllow's
+// wallAreaUpper > 0 branch) and turn a
 // tiny-but-real bound into a refused reading.
 //
 // A caller whose operands are NOT proven positive keeps upRound: a zero that
@@ -290,6 +296,49 @@ func radius3D(perCoord float64) float64 {
 		return 0
 	}
 	return upRound(perCoord * sqrt3Up)
+}
+
+// heldDelta is the EXACT difference a − b of two held corners, taken over
+// clearance_degen.go's own rational kernel rather than r3's float64 Sub: a
+// float64 coordinate is an exact rational, so the difference is exact and
+// carries none of the cancellation error the float subtraction commits. Every
+// proven bound in this file that needs the LENGTH of a corner difference must
+// form it this way and then take rvLenUpper of it — r3.Vec.Len is
+// math.Hypot, which rounds to NEAREST and so is not an upper bound on
+// anything (nor is Sub), and a final upRound of the product buys back only
+// ~1 ulp of the PRODUCT, never the norms' own inward error, which a
+// near-cancelling difference can carry as a fraction of the term rather than
+// an ulp of it.
+//
+// Both corners must already be finite (finiteVec), which every caller here
+// checks before it lifts.
+func heldDelta(a, b r3.Vec) ratV3 { return rvSub(ratVec(a), ratVec(b)) }
+
+// rvLenUpper is a PROVEN upper bound on |u| for an exactly-represented vector:
+// the squared length is exact rational arithmetic and ratSqrtUp brackets its
+// root by exact comparison (f·f ≥ u·u), so the published value encloses the
+// true norm whatever the platform's own sqrt does — the same mechanism
+// loft_moments.go's distUpper and computeLoftChordedAllow's h1Upper already
+// use. A zero vector answers exactly 0, so a bound that vanishes with its
+// vector still vanishes. A norm past the float64 range answers +Inf, a
+// refusal rather than a bound.
+func rvLenUpper(u ratV3) float64 { return ratSqrtUp(rvDot(u, u)) }
+
+// ratLenAtLeast reports whether claim is PROVABLY at least |u|, decided by
+// exact comparison of claim² against u·u rather than against a rounded norm.
+// It is the falsifier form a "this claimed length cannot be below its own
+// chord" gate needs: exact in BOTH directions, so it neither admits a claim
+// that is genuinely short nor refuses one that is exactly tight.
+func ratLenAtLeast(claim float64, u ratV3) bool {
+	if !(claim >= 0) {
+		return false
+	}
+	c, ok := ratOf(claim)
+	if !ok {
+		return false
+	}
+	c.Mul(c, c)
+	return c.Cmp(rvDot(u, u)) >= 0
 }
 
 // sumSlop is a PROVEN bound on the rounding a NAIVE float64 summation of n
@@ -403,6 +452,12 @@ func perturbedAreaUpper(verts []r3.Vec, tris [][3]int, delta float64) float64 {
 // needs one triangle's own allowance, rather than a whole mesh's held area
 // plus the same correction summed over every facet, does not recompute it
 // inline.
+//
+// It is proven for ONE TRIANGLE's own area and is spent for nothing else: a
+// held facet against the facet its displaced vertices denote, and a cap's
+// triangulation against the polygon its displaced vertices denote. The AREA
+// STEP between two ruled SURFACES is a different quantity of the same shape and
+// order, and cellStationShiftAreaAllow charges it from its own inequality.
 func perturbedTriangleAreaAllow(a, b, c r3.Vec, delta float64) float64 {
 	u, v := b.Sub(a), c.Sub(a)
 	return delta*(u.Len()+v.Len()) + 2*delta*delta
@@ -477,18 +532,34 @@ func sweptVolumeAllow(delta, areaUpper float64) float64 {
 // facet area of h while its own bilinear patch already carries area 1/3 +
 // O(h)), so no fixed held quantity the excess could subtract from bounds it.
 //
-// The derivation fixes s in [0,1] to parametrize EACH side at constant
-// ARC-LENGTH speed (never the side's own native curve parameter), so a
-// side's tangent magnitude is the CONSTANT arcLenUpper the caller states for
-// it, and defines a fixed (t-independent) homotopy a_t(s) = (1−t)·a_chord(s)
-// + t·a_curve(s) for each side, X_t(s,r) = (1−r)·a_t(s) + r·b_t(s) the
-// cell's own ruled surface at time t:
+// The derivation fixes s in [0,1] to parametrize EACH side under ONE SHARED
+// parametrization the caller chooses — constant ARC-LENGTH speed for the
+// circular arm, the free-form arm's own SPAN-UNIFORM native fraction (the
+// identical parameter the loft correspondence itself pairs stations on,
+// spline_sagitta.go's spanMatchedDeltaUpper) — never the side's own native
+// curve parameter used unmatched. Nothing below actually depends on which
+// parametrization was chosen: the derivation reads exactly two properties of
+// it, and nothing more. (1) a per-side tangent-magnitude bound, arcLenUpperA/
+// arcLenUpperB, that is at least that side's own chord length UNDER that
+// parametrization. (2) matchedDeltaUpper, a bound on |curve(s) − chord(s)| at
+// the SAME s, proven under that SAME shared parametrization on BOTH sides.
+// Arc length is one such choice — the circular arm's, whose sagitta discharges
+// it exactly for the IDEAL chord (loftCircularCellStations' own doc comment),
+// leaving the held stations' own displacement for the caller to compose in.
+// The free-form arm's
+// span-uniform fraction is another, discharged by spanMatchedDeltaUpper. A
+// caller adopting a third parametrization may reuse this derivation unchanged
+// provided it proves the same two properties under it. With the shared
+// parametrization fixed, it defines one (t-independent) homotopy
+// a_t(s) = (1−t)·a_chord(s) + t·a_curve(s) for each side,
+// X_t(s,r) = (1−r)·a_t(s) + r·b_t(s) the cell's own ruled surface at time t:
 //
 //   - ∂a_t/∂s = (1−t)·(vHi−vLo) + t·a_curve'(s) is a convex combination (in
 //     t, for fixed s) of a CONSTANT vector of magnitude the chord length and
-//     a vector of magnitude arcLenUpper (the constant-arc-length-speed
-//     choice above), so |∂a_t/∂s| <= max(chordLen, arcLenUpper) =
-//     arcLenUpper (a chord never exceeds the arc it subtends). The same
+//     a vector of magnitude arcLenUpper (the shared parametrization's own
+//     speed bound), so |∂a_t/∂s| <= max(chordLen, arcLenUpper) =
+//     arcLenUpper (a chord never exceeds the curve length it subtends, arc or
+//     free-form span alike — property (1) above). The same
 //     holds for b_t, so eA := max(arcLenUpperA, arcLenUpperB) bounds every
 //     ∂X_t/∂s = (1−r)·∂a_t/∂s + r·∂b_t/∂s (itself a convex combination of the
 //     two) at every s, r, t.
@@ -519,23 +590,35 @@ func sweptVolumeAllow(delta, areaUpper float64) float64 {
 // loft_build.go) and the two are never interchangeable. sectionDelta is a
 // SET-distance sagitta: every curve point sits within it of SOME chord
 // point. matchedDeltaUpper must be a PROVEN bound on |curve(s) − chord(s)|
-// at the SAME s under the identical constant-arc-length parametrization this
-// derivation fixes — a PARAMETER-MATCHED bound. The two coincide only when
-// the curve's own natural traversal already matches that parametrization: a
+// at the SAME s under the caller's OWN shared parametrization (above) — a
+// PARAMETER-MATCHED bound. The two coincide only when the curve's own
+// natural traversal already matches the parametrization the caller chose: a
 // straight LINE (trivially, chord(s)=curve(s) identically, both zero) or a
 // circular ARC under its own uniform-angle parametrization
-// (TestArcMatchedDeltaEqualsSagitta pins the equality over a 5-170 degree
-// sweep range). For any other curve kind the two provably DIFFER, by an
-// amount that can reach the CHORD LENGTH itself rather than the sagitta: a
-// curve can hug its chord within an arbitrarily small sagitta while packing
-// almost all of its arc length into one short span, so its arc-length-
-// matched point sits far from the chord point at the same s
-// (TestCellChordCurveAreaUpperRefusesTheSagittaZigzag pins the exact
-// counterexample). A caller that cannot prove the parameter-matched bound —
-// every caller today, since S3 admits only LineSeg pairs and no arc/curved
-// pairing has landed — must pass +Inf, never the sagitta as a stand-in
-// (F1's own rule: a SET-distance may never be silently upgraded into a
-// parameter-matched one).
+// (TestArcMatchedDeltaEqualsSagitta derives that equality analytically and
+// checks every step of the derivation over exact rationals, covering every
+// cell angle chordCount can produce). For any other curve kind under an
+// ARC-LENGTH parametrization the two provably DIFFER, by an amount that can reach the CHORD LENGTH
+// itself rather than the sagitta: a curve can hug its chord within an
+// arbitrarily small sagitta while packing almost all of its arc length into
+// one short span, so its arc-length-matched point sits far from the chord
+// point at the same s (TestCellChordCurveAreaUpperRefusesTheSagittaZigzag
+// pins the exact counterexample). A free-form span under its OWN
+// span-uniform native fraction is the one other case this derivation admits
+// today, discharged not by the sagitta but by spanMatchedDeltaUpper
+// (spline_sagitta.go), which is proven under that exact parametrization
+// rather than assumed equal to it. A caller that cannot prove the
+// parameter-matched bound under whichever shared parametrization it adopted
+// must pass +Inf, never the sagitta as a stand-in (F1's own rule: a
+// SET-distance may never be silently upgraded into a parameter-matched
+// one) — every caller reaching this helper today either proves the bound or
+// has none to pass. The loft evaluator proves it in two composed legs
+// (docs/loft-design.md §5.2's matchedDelta row): the arm's own matched
+// departure for the IDEAL chord — the circular arm's sagitta, or the
+// free-form arm's spanMatchedDeltaUpper — plus the displacement of the two
+// HELD stations the chord this helper reads actually joins, which is what
+// makes the published bound a claim about the corners passed in rather than
+// about a chord the build never drew.
 //
 // arcLenUpperA and arcLenUpperB must each be a PROVEN upper bound on that
 // side's own arc length over the cell — never smaller than the corresponding
@@ -935,6 +1018,592 @@ func cellAllowsOf(vLo, vHi, wLo, wHi r3.Vec, arcLenUpperA, arcLenUpperB, matched
 	}
 }
 
+// cellTwistAreaAllow is cellTwistVolumeAllow's own AREA twin (a new
+// caller-side term; that function's own derivation is untouched): a bound on
+// how far ONE loft wall cell's held flat-triangle-pair area (t=0) can sit
+// from its own bilinear ruled patch's area (t=1) — the SAME homotopy
+// cellTwistVolumeAllow's part (a)/(b) already builds, T = vLo−vHi−wLo+wHi
+// its own twist vector, zero exactly when the cell's four corners form a
+// PARALLELOGRAM — the case the shipped A10a wedge lands in, since its two
+// frames share their U and V axes and differ only by an offset along the
+// shared normal, so every corner's lift carries the identical rounding and
+// the exact chain cancels to (0,0,0) rather than merely the float one
+// (TestArcMatchedDeltaEqualsSagitta's own family). A cell that is planar
+// WITHOUT being a parallelogram — a trapezoid — has a nonzero T, and this
+// bound charges it, which costs a little tightness and no soundness.
+//
+// Part (a) already gives the explicit form of the deviation: on triangle 1
+// (0<=r<=s<=1), X−X_tri1 = r(s−1)·T; on triangle 2, X−X_tri2 = s(r−1)·T. Both
+// are δX(s,r) = (a scalar bounded in [−1,1]) · T, so |∂δX/∂s| <= |T| and
+// |∂δX/∂r| <= |T| pointwise (each factor differentiates the scalar, itself
+// bounded by 1, and leaves T untouched). Homotoping Xt = (1−t)·X_tri + t·X
+// linearly in t (the SAME homotopy part (b) already uses), the area
+// functional's own rate is bounded by the product rule on the cross product:
+//
+//	d/dt(∂Xt/∂s × ∂Xt/∂r) = ∂δX/∂s × ∂Xt/∂r + ∂Xt/∂s × ∂δX/∂r
+//	|dArea/dt| <= ∬ |∂δX/∂s|·|∂Xt/∂r| + |∂Xt/∂s|·|∂δX/∂r| dr ds
+//	           <= ∬ |T|·eB + eA·|T| dr ds = |T|·(eA+eB)
+//
+// using part (b)'s own pointwise bound |∂Xt/∂s|<=eA, |∂Xt/∂r|<=eB at every t
+// (its own eA, eB, computed identically here). Integrating t over [0,1] at
+// this CONSTANT rate bounds the area difference itself by the same product,
+// |T|·(eA+eB) — a genuine, if not tight, PROOF (not an estimate), the two
+// factors T and (eA+eB) independent rather than a fabricated cross term, and
+// the whole product vanishes with T exactly rather than merely shrinking.
+//
+// NOTHING in this reading may be computed in float64, for exactly the two
+// reasons cellTwistQuarterUpper's own doc comment gives and that
+// cellTwistVolumeAllow and cellTwistOffsetUpper already obey on the SAME
+// vector: T is a cancelling chain whose float evaluation can answer a
+// computed (0,0,0) for a cell whose exact T is nonzero — and this helper
+// reads that zero as "planar, nothing to charge" and publishes 0 — while
+// r3.Vec.Len is nested math.Hypot, whose own accuracy contract Go does not
+// state and which sits several ulp BELOW the exact norm often enough that
+// eA and eB taken that way are not upper bounds either. Both directions
+// shrink the allowance below the deviation it claims to dominate, so |T|/4
+// comes from the exact xtwistQuarterUpper kernel over the cell's lifted
+// corners and each edge length from the certified xspanUpper the same four
+// corners' cellSpans already carries.
+//
+// Non-finite corners answer +Inf, the same guard cellTwistVolumeAllow's own
+// doc comment states for its sibling — and, as there, that guard is what
+// lets the exact lift read its corners as rationals at all.
+func cellTwistAreaAllow(vLo, vHi, wLo, wHi r3.Vec) float64 {
+	if !finiteVec(vLo) || !finiteVec(vHi) || !finiteVec(wLo) || !finiteVec(wHi) {
+		return math.Inf(1)
+	}
+	corners := cellCornersOf(vLo, vHi, wLo, wHi)
+	return cellTwistAreaFromSpans(corners.spans(), xtwistQuarterUpper(corners))
+}
+
+// cellTwistAreaFromSpans is cellTwistAreaAllow's own derivation once that
+// helper's corner-finiteness gate has passed and the cell's certified |T|/4
+// endpoint and four certified spans are in hand — the same split
+// cellTwistVolumeFromSpans owns for the VOLUME twin, over the identical eA
+// and eB that helper reads from the identical four spans.
+//
+// The certified endpoint is |T|/4, so the |T| the derivation above multiplies
+// is four times it. The scaling is by a power of two and therefore exact
+// wherever it does not overflow, and productUpper's own up-rounding covers
+// the overflow case by answering +Inf rather than a finite understatement.
+func cellTwistAreaFromSpans(spans cellSpans, twistQuarterUpper float64) float64 {
+	if twistQuarterUpper <= 0 {
+		return 0
+	}
+	eA := math.Max(spans.sideA, spans.sideB)
+	eB := math.Max(spans.rungLo, spans.rungHi)
+	return productUpper(productUpper(4, twistQuarterUpper), absSumUpper(eA, eB))
+}
+
+// uniformSpeedTangentEnergyUpper is the per-side TANGENT-DEVIATION ENERGY
+// cellChordCurveAreaAllow's own tangentEnergyUpper obligation names: a PROVEN
+// upper bound on
+//
+//	J := integral over s in [0,1] of |curve'(s) - chord|^2 ds
+//
+// where chord = curve(1) - curve(0) is the cell's own chord VECTOR and the
+// derivative is taken under the SHARED parametrization cellChordCurveAreaUpper
+// fixes. It is the one quantity that makes an area difference second order
+// rather than first: the deviation curve'(s) - chord has MEAN ZERO in s (its
+// integral is curve(1) - curve(0) - chord = 0 exactly, which is what makes the
+// chord the curve's OWN endpoint chord rather than any nearby segment), so a
+// consumer that can bound its size in the mean, and not merely pointwise, gets
+// the cancellation the pointwise bound |curve'| + |chord| throws away.
+//
+// The derivation needs ONE premise beyond that: the shared parametrization has
+// CONSTANT SPEED over the cell, |curve'(s)| = L for every s, L the cell's own
+// true arc length. Then, writing C for the chord vector and c = |C|,
+//
+//	integral |curve' - C|^2 ds = integral (|curve'|^2 - 2 curve'.C + |C|^2) ds
+//	                           = L^2 - 2 C.C + c^2 = L^2 - c^2,
+//
+// EXACTLY, using integral curve' ds = C once. L^2 - c^2 increases in L for
+// L >= c, so any proven arc-length upper bound arcLenUpper >= L gives
+// J <= arcLenUpper^2 - c^2 = (arcLenUpper - c)(arcLenUpper + c), the published
+// form — the factored one, never the difference of two squares, so a long cell
+// whose two squares cancel keeps its own scale.
+//
+// chordLower must be a PROVEN LOWER bound on c (the published value decreases
+// in c, so an overstated chord would understate the energy), and arcLenUpper a
+// PROVEN upper bound on that side's own arc length over the cell. The
+// CONSTANT-SPEED premise is the caller's to discharge and this helper cannot
+// check it: a parametrization that is not constant speed can pack the same arc
+// length into a short span and carry an arbitrarily larger energy, so a caller
+// that cannot prove constant speed must pass +Inf and let
+// cellChordCurveAreaAllow fall back to its own premise-free arm. The circular
+// arm's uniform-ANGLE stations (loftCircularCellStations) are constant speed on
+// a circle, which is what discharges it today.
+//
+// A non-finite or negative operand, or an arcLenUpper below the chord it is
+// supposed to subtend, is a BROKEN caller claim and answers +Inf, never 0
+// (cutDisplacementAllow's own rule).
+func uniformSpeedTangentEnergyUpper(arcLenUpper, chordLower float64) float64 {
+	if isNonFinite(arcLenUpper) || isNonFinite(chordLower) {
+		return math.Inf(1)
+	}
+	if arcLenUpper < 0 || chordLower < 0 || arcLenUpper < chordLower {
+		return math.Inf(1)
+	}
+	return productUpper(upRound(arcLenUpper-chordLower), upRound(arcLenUpper+chordLower))
+}
+
+// cellChordPatchNormalLower is a PROVEN LOWER bound on |N(s,r)|, the AREA
+// ELEMENT of ONE loft wall cell's own BILINEAR chord patch
+// X(s,r) = (1-r)*(vLo + s*(vHi-vLo)) + r*(wLo + s*(wHi-wLo)), over the whole
+// unit square — or 0 where this reduction proves nothing, which is a REFUSAL
+// and never a bound (its one consumer, cellChordCurveAreaAllow, drops its
+// sharper arm entirely on a 0 rather than dividing by it).
+//
+// N = X_s cross X_r = P(r) cross g(s), with P(r) = (1-r)*(vHi-vLo) + r*(wHi-wLo)
+// the section chord and g(s) = (1-s)*(wLo-vLo) + s*(wHi-vHi) the rung. Both are
+// convex combinations, so N is the BILINEAR convex combination of the cell's
+// own FOUR CORNER normals,
+//
+//	N(s,r) = (1-r)(1-s) N00 + (1-r)s N01 + r(1-s) N10 + rs N11,
+//
+// N00 = (vHi-vLo) cross (wLo-vLo), N01 = (vHi-vLo) cross (wHi-vHi),
+// N10 = (wHi-wLo) cross (wLo-vLo), N11 = (wHi-wLo) cross (wHi-vHi), whose four
+// weights are non-negative and sum to 1 at every (s, r).
+//
+// Fix ANY unit vector m. A convex combination's own component along m is at or
+// above the smallest component among the combined vectors, so
+// |N(s,r)| >= N(s,r).m >= min over the four corners of Ni.m. When that minimum
+// is POSITIVE it is a lower bound on the area element everywhere on the cell,
+// and when it is not, the four corner normals do not fit in one open half space
+// and this reduction has nothing to say — the cell's own patch may genuinely
+// degenerate somewhere inside it, and no positive bound exists to publish.
+//
+// m is taken as the direction of N00+N01+N10+N11, the choice that maximises the
+// smallest component for a tight cluster of corner normals and so refuses least
+// often. Every corner normal, their sum, and each of the four dot products is
+// formed EXACTLY over clearance_degen.go's own ratV3 kernel (a float64
+// coordinate is an exact rational, and
+// the differences and cross products above are exact rational arithmetic), so
+// the only rounding is the final division: the sum's own length is taken UP
+// (ratSqrtUp) and the quotient DOWN (ratFloatDown), which can only shrink the
+// published lower bound, never inflate it.
+//
+// A non-finite corner is a BROKEN caller claim: it answers 0, this helper's own
+// refusal, rather than a NaN a later comparison would silently drop — the
+// consumer turns that refusal into its own premise-free arm, which is where the
+// +Inf discipline is spent.
+func cellChordPatchNormalLower(vLo, vHi, wLo, wHi r3.Vec) float64 {
+	if !finiteVec(vLo) || !finiteVec(vHi) || !finiteVec(wLo) || !finiteVec(wHi) {
+		return 0
+	}
+	da := rvSub(ratVec(vHi), ratVec(vLo))
+	db := rvSub(ratVec(wHi), ratVec(wLo))
+	g := rvSub(ratVec(wLo), ratVec(vLo))
+	gp := rvSub(ratVec(wHi), ratVec(vHi))
+	corners := [4]ratV3{
+		rvCross(da, g), rvCross(da, gp),
+		rvCross(db, g), rvCross(db, gp),
+	}
+	sum := ratV3{new(big.Rat), new(big.Rat), new(big.Rat)}
+	for _, c := range corners {
+		for i := range sum {
+			sum[i].Add(sum[i], c[i])
+		}
+	}
+	sumLen2 := rvDot(sum, sum)
+	if sumLen2.Sign() <= 0 {
+		return 0
+	}
+	minDot := rvDot(corners[0], sum)
+	for _, c := range corners[1:] {
+		if d := rvDot(c, sum); d.Cmp(minDot) < 0 {
+			minDot = d
+		}
+	}
+	if minDot.Sign() <= 0 {
+		return 0
+	}
+	lenUp := ratSqrtUp(sumLen2)
+	if isNonFinite(lenUp) || lenUp <= 0 {
+		return 0
+	}
+	lenRat, ok := ratOf(lenUp)
+	if !ok {
+		return 0
+	}
+	lower := ratFloatDown(new(big.Rat).Quo(minDot, lenRat))
+	if isNonFinite(lower) || lower <= 0 {
+		return 0
+	}
+	return lower
+}
+
+// cellChordCurveAreaAllow bounds the AREA GAP between ONE loft wall cell's own
+// BILINEAR CHORD PATCH — cellTwistVolumeAllow's own X(s,r), the t=0 endpoint of
+// cellChordCurveAreaUpper's chord-to-curve homotopy — and the RULED PATCH
+// THROUGH THE FOUR STATIONS THIS CALL IS HANDED, the patch ruled between the
+// two curves that pass through vLo/vHi and wLo/wHi. It is NOT a gap to the
+// patch between the two recorded curves as the record places them: every
+// reading below — the two chords, eB, cMax, the twist vector and Nmin — comes
+// off those four corner arguments, so the patch they pin is the only one the
+// arithmetic supports. A caller that hands HELD corners (every caller today)
+// therefore gets the gap at the held stations, and the step from those to the
+// stations they DENOTE is a leg of its own, named in the composition below.
+//
+// It replaces an arc-minus-chord LENGTH excess times a rung length. That shape
+// is third order in the cell's own sweep, while the gap it stands for is SECOND
+// order wherever the ruling runs anything but square across the section's own
+// tangent, so it understates a twisted pairing without bound.
+//
+// # The three-leg composition at the call site
+//
+// area() (loft_moments.go) charges one wall cell's whole gap as
+//
+//	|A_true - T_held| <= ruled leg + twist leg + station-shift leg,
+//
+// A_true the area of the ruled patch between the two curves the cell's DENOTED
+// stations carry and T_held the two flat triangles assembleLoft actually holds:
+//
+//   - the RULED leg is this helper, |Area(bilinear chord patch) - Area(ruled
+//     patch)|, both patches pinned at the corners it is handed;
+//   - the TWIST leg is cellTwistAreaAllow's, unchanged, |Area(held triangle
+//     pair) - Area(bilinear chord patch)|, pinned at those same corners;
+//   - the HELD-TO-DENOTED leg is cellStationShiftAreaAllow's, |Area(ruled patch
+//     through the held corners) - Area(ruled patch through the stations they
+//     denote)|, at the payload's own delta. It carries the step the two legs
+//     above stop short of, from its own inequality rather than by analogy with
+//     a triangle's, and TestDisplacedStationCellNeedsTheStationShiftLeg pins
+//     both directions: the first two legs alone do NOT cover a displaced-station
+//     circular cell, and this leg covers the surface step it is charged for.
+//
+// # Why no corner reading is widened by delta
+//
+// The two legs are evaluated at held corners, and no eB, cMax or Nmin here is
+// widened by delta before use, because there is no held-for-denoted
+// substitution inside this helper to charge. Write abar for the recorded curve
+// of side a and p, q for its two corner displacements, |p|,|q| <= delta. The
+// curve a(s) = abar(s) + (1-s)p + s q passes through vLo and vHi, and the
+// affine correction cancels out of BOTH obligations this helper spends, since
+// the chord a0 through the held corners is abar's own chord plus that SAME
+// affine term:
+//
+//	a(s) - a0(s) = abar(s) - abar0(s)      (the chord-relative deviation)
+//	a'(s) - da   = abar'(s) - dabar        (the tangent deviation)
+//
+// So matchedDeltaUpper, tangentEnergyUpper and the mean-zero step they feed all
+// hold verbatim for a(s), stated against the chord this helper actually reads,
+// with no widening at all; eB, cMax, T and Nmin are read at exactly the corners
+// of the two patches they speak for. What the affine correction does move is
+// the SURFACE, and |Area(ruled(abar,bbar)) - Area(ruled(a,b))| is the one step
+// that crosses from held to denoted. It is the third leg's, and
+// cellStationShiftAreaAllow charges exactly that step from its own inequality:
+// expanding the same |e x v| + |u x f| + |e x f| product one dimension up over
+// the two ruled patches sizes it at 2*delta*(int|X_r| + int|X_s|) + 4*delta^2,
+// with both integrals bounded from readings this call site already holds. The
+// cell's two triangles charge delta*(|vHi-vLo| + 2*|wHi-vLo| + |wLo-vLo|) +
+// 4*delta^2 under the SAME expansion at the cell's own four corners, its
+// diagonal counted twice — the same shape at the same order over a DIFFERENT
+// quantity, and which one is larger is a fact about the cell rather than an
+// identity, so a triangle's allowance is never spent for this surface step.
+//
+// # Setup
+//
+// Write a(s) and b(s), s in [0,1], for the two curves through the four corners
+// this call is handed, under the SHARED parametrization
+// cellChordCurveAreaUpper fixes, a(0)=vLo, a(1)=vHi,
+// b(0)=wLo, b(1)=wHi; da = vHi-vLo, db = wHi-wLo for the two chords, ca=|da|,
+// cb=|db|; a0(s) = vLo + s*da and b0(s) = wLo + s*db for the two chord
+// segments. The two patches are X1(s,r) = (1-r)a(s) + r b(s) and
+// X0(s,r) = (1-r)a0(s) + r b0(s), each over the unit square, so
+// Area(Xk) = double integral of |Nk|, Nk = dXk/ds cross dXk/dr. Write
+//
+//	ea(s) = a'(s) - da, eb(s) = b'(s) - db      (MEAN ZERO in s)
+//	eps(s,r) = (1-r) ea(s) + r eb(s)
+//	g(s) = b0(s) - a0(s) = (1-s) G + s G',  G = wLo-vLo, G' = wHi-vHi
+//	T = G' - G                                  (the SAME twist vector
+//	                                             cellTwistVolumeAllow reads)
+//	P(r) = (1-r) da + r db
+//	f(s) = (b(s)-b0(s)) - (a(s)-a0(s)),  |f| <= 2*matchedDeltaUpper
+//
+// Then N0 = P cross g exactly, N1 = (P + eps) cross (g + f), and
+//
+//	D := N1 - N0 = eps cross g + P cross f + eps cross f.
+//
+// eB := max(|G|,|G'|) bounds |g| by convexity, cMax := max(ca,cb) bounds |P|.
+//
+// # The premise-free arm
+//
+// |Area(X1) - Area(X0)| <= double integral of ||N1| - |N0|| <= double integral
+// of |D| <= (eB + 2*md)*(Ia + Ib)/2 + 2*md*cMax, md the matched delta and
+// Ia = integral |ea| ds, Ib likewise. This arm needs nothing but the tangent
+// bound |a'| <= arcLenUpperA cellChordCurveAreaUpper already requires, since
+// Ia <= arcLenUpperA + ca follows from it directly. It is TIGHT where the cell
+// twists hard and loose by a factor of order 1/sweep where it does not, so it
+// ships as a ceiling the sharper arm below is taken against, never alone.
+//
+// # The sharp arm
+//
+// The premise-free arm throws away the whole point: |N1| - |N0| is a difference
+// of LENGTHS, and D is mostly a ROTATION of N0, which changes no length at all.
+// Convexity of the Euclidean norm recovers that. For any u != 0 and any v,
+//
+//	u.v/|u| <= |u+v| - |u| <= u.v/|u| + |v|^2/(2|u|),
+//
+// the left from |u+v| >= (u+v).u/|u| and the right from |u+v| =
+// |u|*sqrt(1+x) <= |u|*(1+x/2) at x = (2u.v + |v|^2)/|u|^2 >= -1. Applied
+// pointwise at u = N0, v = D and integrated,
+//
+//	|Area(X1) - Area(X0)| <= |double integral of N0hat.D| + double integral of
+//	                         |D|^2/(2|N0|),
+//
+// which needs a POSITIVE lower bound Nmin on |N0| over the whole cell —
+// cellChordPatchNormalLower's four-corner convex-combination reduction. Where
+// that refuses, this arm is dropped and the premise-free arm stands alone.
+//
+// LINEAR TERM. Split D. The eps cross g part is
+// N0hat.(eps cross g) = eps.(g cross N0hat) = eps.W, W(s,r) := g(s) cross
+// N0hat(s,r), and for each fixed r the integral of eps over s is ZERO, so
+// integral eps.W ds = integral eps.(W(s,r) - W(s0,r)) ds for any s0 — the whole
+// cancellation, bought by nothing but the mean-zero property. Hence that part
+// is at most oscW * max(Ia,Ib), oscW the s-oscillation of W, and
+//
+//	dW/ds = T cross N0hat + g cross dN0hat/ds,  dN0/ds = P cross T,
+//	|dN0hat/ds| <= |P cross T|/|N0| <= max(|da cross T|,|db cross T|)/Nmin,
+//	oscW <= |T| + eB * max(|da cross T|,|db cross T|)/Nmin,
+//
+// using |P(r) cross T| <= max(|da cross T|,|db cross T|) by convexity. Every
+// term of oscW carries a factor T: a PLANAR cell (T = 0, the untwisted
+// offset-section case) contributes nothing here at all, which is what keeps a
+// shipped untwisted pairing's own Area bound where it was. The two remaining
+// parts of D contribute at most 2*md*cMax and 2*md*max(Ia,Ib), so
+//
+//	LIN = oscW*max(Ia,Ib) + 2*md*(cMax + max(Ia,Ib)).
+//
+// QUADRATIC TERM. |D| <= beta*|eps| + gamma with beta = eB + 2*md and
+// gamma = 2*md*cMax, so |D|^2 <= 2*beta^2*|eps|^2 + 2*gamma^2, and
+// |eps|^2 <= (1-r)|ea|^2 + r|eb|^2 by convexity of the square, whose double
+// integral is (Ja+Jb)/2 for Ja = integral |ea|^2 ds. Hence
+//
+//	QUAD = (beta^2 * (Ja+Jb) + 2*gamma^2) / (2*Nmin).
+//
+// The published value is min(premise-free, LIN + QUAD): both are proven upper
+// bounds on the same quantity, so their minimum is one too.
+//
+// # Obligations
+//
+// arcLenUpperA/arcLenUpperB are cellChordCurveAreaUpper's own: a proven bound on
+// that side's tangent magnitude under the shared parametrization, never below
+// the chord it subtends. matchedDeltaUpper is that helper's own PARAMETER-
+// MATCHED obligation (F1's rule), never a set-distance sagitta. tangentEnergyA/
+// tangentEnergyB are uniformSpeedTangentEnergyUpper's J, each a proven bound on
+// that side's own integral |curve' - chord|^2 ds; a caller with no such proof
+// passes +Inf and both Ia and Ja fall back to what the tangent bound alone
+// gives, Ia <= arcLen+chord and Ja <= (arcLen+chord)^2, which costs tightness
+// and never soundness. Every geometric quantity above is read from the four
+// corners this call is handed, the same convention cellChordCurveAreaUpper,
+// cellTwistVolumeAllow and cellTwistAreaAllow already use, and the two
+// sections above own what that convention does and does not claim: the patch
+// is pinned at those corners, and the step to the stations a HELD corner
+// denotes is the third leg's, charged once by cellStationShiftAreaAllow and
+// never here.
+//
+// A non-finite corner, a non-finite or negative scalar, a negative energy, or an
+// arc-length claim below its own chord is a BROKEN caller claim and answers
+// +Inf, never 0 (cellChordCurveAreaUpper's own F5 rule).
+func cellChordCurveAreaAllow(
+	vLo, vHi, wLo, wHi r3.Vec,
+	arcLenUpperA, arcLenUpperB, matchedDeltaUpper, tangentEnergyA, tangentEnergyB float64,
+) float64 {
+	if !finiteVec(vLo) || !finiteVec(vHi) || !finiteVec(wLo) || !finiteVec(wHi) {
+		return math.Inf(1)
+	}
+	if isNonFinite(arcLenUpperA) || isNonFinite(arcLenUpperB) || isNonFinite(matchedDeltaUpper) {
+		return math.Inf(1)
+	}
+	if arcLenUpperA < 0 || arcLenUpperB < 0 || matchedDeltaUpper < 0 {
+		return math.Inf(1)
+	}
+	if math.IsNaN(tangentEnergyA) || math.IsNaN(tangentEnergyB) || tangentEnergyA < 0 || tangentEnergyB < 0 {
+		return math.Inf(1)
+	}
+	// Every corner difference, cross product and norm below is formed EXACTLY
+	// and rounded OUTWARD, cellTwistAreaAllow's own rule: a float64 Sub/Len
+	// pair rounds to NEAREST and so bounds nothing, and the twist vector in
+	// particular cancels. The arc-length-versus-chord gate is decided by exact
+	// comparison instead (ratLenAtLeast), so an outward-rounded chord can never
+	// refuse a caller whose claim is exactly tight.
+	da, db := heldDelta(vHi, vLo), heldDelta(wHi, wLo)
+	if !ratLenAtLeast(arcLenUpperA, da) || !ratLenAtLeast(arcLenUpperB, db) {
+		return math.Inf(1)
+	}
+	ca, cb := rvLenUpper(da), rvLenUpper(db)
+	eB := math.Max(rvLenUpper(heldDelta(wLo, vLo)), rvLenUpper(heldDelta(wHi, vHi)))
+	cMax := math.Max(ca, cb)
+	md := matchedDeltaUpper
+
+	// Ia/Ib bound the MEAN deviation and Ja/Jb its ENERGY, each taken against
+	// the premise-free reading the tangent bound alone proves, so a caller with
+	// no energy proof degrades rather than saturates.
+	ia, ja := tangentDeviationUpper(arcLenUpperA, ca, tangentEnergyA)
+	ib, jb := tangentDeviationUpper(arcLenUpperB, cb, tangentEnergyB)
+	iMax := math.Max(ia, ib)
+	beta := absSumUpper(eB, productUpper(2, md))
+	gamma := productUpper(productUpper(2, md), cMax)
+
+	free := absSumUpper(divUpper(productUpper(beta, absSumUpper(ia, ib)), 2), gamma)
+	if isNonFinite(free) {
+		return math.Inf(1)
+	}
+
+	nMin := cellChordPatchNormalLower(vLo, vHi, wLo, wHi)
+	if nMin <= 0 {
+		return free
+	}
+	twist := rvSub(heldDelta(vLo, vHi), heldDelta(wLo, wHi))
+	pCrossT := math.Max(rvLenUpper(rvCross(da, twist)), rvLenUpper(rvCross(db, twist)))
+	oscW := absSumUpper(rvLenUpper(twist), divUpper(productUpper(eB, pCrossT), nMin))
+	lin := absSumUpper(
+		productUpper(oscW, iMax),
+		productUpper(productUpper(2, md), absSumUpper(cMax, iMax)),
+	)
+	quad := divUpper(absSumUpper(
+		productUpper(productUpper(beta, beta), absSumUpper(ja, jb)),
+		productUpper(2, productUpper(gamma, gamma)),
+	), 2*nMin)
+	sharp := absSumUpper(lin, quad)
+	if isNonFinite(sharp) {
+		return free
+	}
+	return math.Min(free, sharp)
+}
+
+// tangentDeviationUpper turns ONE side's own arc-length bound, held chord and
+// (possibly absent) tangent-deviation energy into the two readings
+// cellChordCurveAreaAllow spends: a bound on integral |curve' - chord| ds and
+// one on integral |curve' - chord|^2 ds, both over s in [0,1].
+//
+// The energy arm is uniformSpeedTangentEnergyUpper's J, and Cauchy-Schwarz over
+// the unit interval turns it into the first: integral |e| <= sqrt(integral
+// |e|^2). The premise-free arm reads only |curve'| <= arcLenUpper, which
+// cellChordCurveAreaUpper already requires of arcLenUpper, and gives
+// integral |e| <= arcLenUpper + chordLen pointwise-then-integrated, hence also
+// integral |e|^2 <= (arcLenUpper + chordLen)^2. Each reading is the SMALLER of
+// the two arms, so an absent (+Inf) energy costs tightness and never soundness.
+func tangentDeviationUpper(arcLenUpper, chordLen, energyUpper float64) (float64, float64) {
+	span := absSumUpper(arcLenUpper, chordLen)
+	freeI, freeJ := span, productUpper(span, span)
+	if isNonFinite(energyUpper) || energyUpper < 0 {
+		return freeI, freeJ
+	}
+	fromEnergy := upRound(math.Sqrt(energyUpper))
+	return math.Min(freeI, fromEnergy), math.Min(freeJ, energyUpper)
+}
+
+// cellStationShiftAreaAllow bounds the AREA STEP from the ruled patch through
+// ONE loft wall cell's HELD corners to the ruled patch through the STATIONS
+// those corners denote — the THIRD leg of the three-leg composition
+// cellChordCurveAreaAllow's own doc comment states, and the one leg the other
+// two are scoped away from, since both of those pin their patches at the
+// corners they are handed.
+//
+// # Setup
+//
+// Write abar(s), bbar(s), s in [0,1], for the two DENOTED curves under the
+// shared parametrization cellChordCurveAreaUpper fixes, and a(s), b(s) for the
+// two curves through the HELD corners vLo/vHi and wLo/wHi this call is handed.
+// Each held corner sits within delta of the station it denotes, so, writing p
+// and q for one side's two corner displacements (|p|,|q| <= delta),
+//
+//	a(s) = abar(s) + (1-s)p + s q,
+//
+// cellChordCurveAreaAllow's own affine correction. The two ruled patches are
+// Xbar(s,r) = (1-r)abar(s) + r bbar(s) and X(s,r) = (1-r)a(s) + r b(s) over the
+// unit square, and this helper bounds |Area(X) - Area(Xbar)|.
+//
+// # The inequality
+//
+// D := X - Xbar is BILINEAR in (s,r), its four corner values the four corner
+// displacements, so each partial is a convex combination of a DIFFERENCE of two
+// of them and |D_s| <= 2*delta, |D_r| <= 2*delta pointwise. Expanding the cross
+// product,
+//
+//	|(Xbar_s + D_s) x (Xbar_r + D_r)| <= |Xbar_s x Xbar_r|
+//	    + |D_s||Xbar_r| + |Xbar_s||D_r| + |D_s||D_r|,
+//
+// and the same expansion with the two patches exchanged bounds the other
+// direction, so integrating over the unit square,
+//
+//	|Area(X) - Area(Xbar)| <= 2*delta*(int|Xbar_r| + int|Xbar_s|) + 4*delta^2,
+//
+// the SAME |e x v| + |u x f| + |e x f| expansion perturbedTriangleAreaAllow
+// derives for ONE TRIANGLE, one dimension up. That triangle helper is NOT a
+// bound on this step and is not spent for it: its own reading is over a
+// triangle's two edge vectors, and which of the two expressions is larger is a
+// fact about the cell, so the step is charged HERE, from its own inequality.
+//
+// # The two integrals, from the readings the call site already holds
+//
+// int|Xbar_s|: Xbar_s = (1-r)abar'(s) + r bbar'(s), so |Xbar_s| is at most
+// (1-r)|abar'| + r|bbar'| by convexity and its double integral is
+// (int|abar'| + int|bbar'|)/2 <= (arcLenUpperA + arcLenUpperB)/2, each side's
+// own arc-length claim being a bound on that side's speed under the shared
+// parametrization — cellChordCurveAreaUpper's own obligation, read here for the
+// DENOTED curve it actually speaks for.
+//
+// int|Xbar_r|: Xbar_r = bbar(s) - abar(s), the DENOTED rung, which joins two
+// CURVE points rather than the two chord ends eB is read from. Write abar0 and
+// bbar0 for the two denoted chords and mdCurve for the PARAMETER-MATCHED
+// chord-to-curve departure, so |abar - abar0| <= mdCurve and likewise for b.
+// Then
+//
+//	|bbar(s) - abar(s)| <= |bbar0(s) - abar0(s)| + 2*mdCurve,
+//
+// and the denoted chord rung is (1-s)Gbar + s Gbar' with Gbar = denoted
+// wLo-vLo and Gbar' = denoted wHi-vHi, hence at most max(|Gbar|,|Gbar'|) by
+// convexity — the SAME eB convexity reading cellChordCurveAreaAllow forms, one
+// station displacement out: each denoted corner sits within delta of its held
+// one, so max(|Gbar|,|Gbar'|) <= eB + 2*delta at the held eB. Therefore
+//
+//	int|Xbar_r| <= eB + 2*delta + 2*mdCurve <= eB + 2*matchedDeltaUpper,
+//
+// the last step being the caller's obligation below.
+//
+// # Obligations
+//
+// matchedDeltaUpper must be the cell's own COMPOSED matched delta —
+// loft_build.go's chordCellDeltaUpper, the certified chord-to-curve sagitta
+// PLUS the station displacement delta — never the sagitta alone, because the
+// final step above spends exactly mdCurve + delta <= matchedDeltaUpper.
+// arcLenUpperA/arcLenUpperB are cellChordCurveAreaUpper's own per-side speed
+// bounds, and delta is the payload's own proven station displacement.
+//
+// delta = 0 is a build that holds the stations it denotes, and the step is
+// exactly zero. A non-finite corner, or a non-finite or negative scalar, is a
+// BROKEN caller claim and answers +Inf, never 0 (cellChordCurveAreaUpper's own
+// F5 rule).
+func cellStationShiftAreaAllow(
+	vLo, vHi, wLo, wHi r3.Vec,
+	arcLenUpperA, arcLenUpperB, matchedDeltaUpper, delta float64,
+) float64 {
+	if !finiteVec(vLo) || !finiteVec(vHi) || !finiteVec(wLo) || !finiteVec(wHi) {
+		return math.Inf(1)
+	}
+	if isNonFinite(arcLenUpperA) || isNonFinite(arcLenUpperB) || isNonFinite(matchedDeltaUpper) || isNonFinite(delta) {
+		return math.Inf(1)
+	}
+	if arcLenUpperA < 0 || arcLenUpperB < 0 || matchedDeltaUpper < 0 || delta < 0 {
+		return math.Inf(1)
+	}
+	if delta == 0 {
+		return 0
+	}
+	// eB is formed EXACTLY and rounded OUTWARD, cellChordCurveAreaAllow's own
+	// rule for the identical reading: a float64 Sub/Len pair rounds to NEAREST
+	// and so bounds nothing.
+	eB := math.Max(rvLenUpper(heldDelta(wLo, vLo)), rvLenUpper(heldDelta(wHi, vHi)))
+	rung := absSumUpper(eB, productUpper(2, matchedDeltaUpper))
+	span := divUpper(absSumUpper(arcLenUpperA, arcLenUpperB), 2)
+	return absSumUpper(
+		productUpper(productUpper(2, delta), absSumUpper(rung, span)),
+		productUpper(4, productUpper(delta, delta)),
+	)
+}
+
 // chordedBoundaryVolumeAllow bounds the VOLUME between a loft's HELD
 // FLAT-TRIANGLE polyhedron — the two triangles per wall cell assembleLoft
 // actually builds and loftMassAccumulator actually sums tetrahedra over,
@@ -1059,6 +1728,11 @@ func cellAllowsOf(vLo, vHi, wLo, wHi r3.Vec, arcLenUpperA, arcLenUpperB, matched
 // identity |h|·|ΔArea|/3, leg (d) Cauchy-Schwarz on the by-parts residue.
 // So no unproven step can shrink the number this function returns; the
 // open question can only cost precision.
+//
+// The empirical status above belongs to this VOLUME allowance alone: no
+// area path calls this function, and the chorded AREA gap is areaExcess,
+// summing cellChordCurveAreaAllow, cellTwistAreaAllow (derived at nonzero
+// twist) and cellStationShiftAreaAllow, each with its own derivation.
 //
 // The four-leg composition is also why this helper does NOT carry the
 // two-argument (sectionDelta, areaUpper) shape the A10 plan's Q4 names.

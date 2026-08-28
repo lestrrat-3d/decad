@@ -844,8 +844,27 @@ func triTriMissesFilter(ta, tb [3]r3.Vec, na, nb r3.Vec, sa, sb [3]int) bool {
 	return spanA.disjoint(spanB)
 }
 
-// xp2 is an exact 2D point (a plane projection of an xpt).
-type xp2 struct{ u, v *big.Rat }
+// xp2 is an exact 2D point (a plane projection of an xpt). The cached float
+// coordinates only accelerate the conservative sign filter; the rational
+// coordinates remain the source of truth whenever the filter cannot decide.
+type xp2 struct {
+	u, v        *big.Rat
+	fu, fv      float64
+	floatFinite bool
+}
+
+func newXP2(u, v *big.Rat) xp2 {
+	fu, _ := u.Float64()
+	fv, _ := v.Float64()
+	return xp2{
+		u:  u,
+		v:  v,
+		fu: fu,
+		fv: fv,
+		floatFinite: !math.IsNaN(fu) && !math.IsInf(fu, 0) &&
+			!math.IsNaN(fv) && !math.IsInf(fv, 0),
+	}
+}
 
 // key2 is the exact 2D identity.
 func (p xp2) key2() string { return p.u.RatString() + "|" + p.v.RatString() }
@@ -867,18 +886,8 @@ func cross2x(a, b, c xp2) *big.Rat {
 // could change the answer. The scale uses the original coordinates, not only
 // their float differences, so cancellation during subtraction is covered too.
 func cross2xSign(a, b, c xp2) int {
-	au, _ := a.u.Float64()
-	av, _ := a.v.Float64()
-	bu, _ := b.u.Float64()
-	bv, _ := b.v.Float64()
-	cu, _ := c.u.Float64()
-	cv, _ := c.v.Float64()
-	if !math.IsNaN(au) && !math.IsInf(au, 0) &&
-		!math.IsNaN(av) && !math.IsInf(av, 0) &&
-		!math.IsNaN(bu) && !math.IsInf(bu, 0) &&
-		!math.IsNaN(bv) && !math.IsInf(bv, 0) &&
-		!math.IsNaN(cu) && !math.IsInf(cu, 0) &&
-		!math.IsNaN(cv) && !math.IsInf(cv, 0) {
+	au, av, bu, bv, cu, cv := a.fu, a.fv, b.fu, b.fv, c.fu, c.fv
+	if a.floatFinite && b.floatFinite && c.floatFinite {
 		det := (bu-au)*(cv-av) - (bv-av)*(cu-au)
 		scale := (math.Abs(bu)+math.Abs(au))*(math.Abs(cv)+math.Abs(av)) +
 			(math.Abs(bv)+math.Abs(av))*(math.Abs(cu)+math.Abs(au))
@@ -1049,6 +1058,11 @@ func earBlockedX(budget *workBudget, pts []xp2, idx []int, i int) (bool, error) 
 	n := len(idx)
 	ip, in := (i-1+n)%n, (i+1)%n
 	a, b, c := pts[idx[ip]], pts[idx[i]], pts[idx[in]]
+	minU := math.Min(a.fu, math.Min(b.fu, c.fu))
+	maxU := math.Max(a.fu, math.Max(b.fu, c.fu))
+	minV := math.Min(a.fv, math.Min(b.fv, c.fv))
+	maxV := math.Max(a.fv, math.Max(b.fv, c.fv))
+	finiteBox := a.floatFinite && b.floatFinite && c.floatFinite
 	for j := range n {
 		if err := budget.step(); err != nil {
 			return false, err
@@ -1057,6 +1071,13 @@ func earBlockedX(budget *workBudget, pts []xp2, idx []int, i int) (bool, error) 
 			continue
 		}
 		p := pts[idx[j]]
+		// Float conversion is monotone. A strict float separation therefore
+		// proves exact separation, while equal rounded coordinates fall
+		// through to the exact predicate.
+		if finiteBox && p.floatFinite &&
+			(p.fu < minU || p.fu > maxU || p.fv < minV || p.fv > maxV) {
+			continue
+		}
 		if p.u.Cmp(a.u) == 0 && p.v.Cmp(a.v) == 0 {
 			continue
 		}
@@ -1142,10 +1163,10 @@ func meshParityContext(ctx context.Context, p xpt, verts []r3.Vec, tris [][3]int
 			}
 			tri := tris[ti]
 			a, b, c := verts[tri[0]], verts[tri[1]], verts[tri[2]]
-			pa := xp2{ratCoordOf(p, ray.u), ratCoordOf(p, ray.v)}
-			qa := xp2{mustRatOf(coordOf(a, ray.u)), mustRatOf(coordOf(a, ray.v))}
-			qb := xp2{mustRatOf(coordOf(b, ray.u)), mustRatOf(coordOf(b, ray.v))}
-			qc := xp2{mustRatOf(coordOf(c, ray.u)), mustRatOf(coordOf(c, ray.v))}
+			pa := newXP2(ratCoordOf(p, ray.u), ratCoordOf(p, ray.v))
+			qa := newXP2(mustRatOf(coordOf(a, ray.u)), mustRatOf(coordOf(a, ray.v)))
+			qb := newXP2(mustRatOf(coordOf(b, ray.u)), mustRatOf(coordOf(b, ray.v)))
+			qc := newXP2(mustRatOf(coordOf(c, ray.u)), mustRatOf(coordOf(c, ray.v)))
 			s1 := cross2xSign(qa, qb, pa)
 			s2 := cross2xSign(qb, qc, pa)
 			s3 := cross2xSign(qc, qa, pa)

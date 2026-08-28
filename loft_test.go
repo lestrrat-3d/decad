@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"math"
+	"os"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
@@ -535,10 +536,11 @@ func TestLoftCoplanarSectionsRefuse(t *testing.T) {
 }
 
 func TestLoftCurvedPairRefuses(t *testing.T) {
-	// Both scenarios refuse (whichever of S2/S3 the evaluator reaches first
-	// depends on the recorded segment counts; the public entry point's own
-	// job is to propagate the evaluator's refusal, already pinned exactly by
-	// loft_build_internal_test.go's own S1-S8 tests).
+	// A mismatched segment count refuses at S2, before S3's own same-kind
+	// test ever runs (already pinned exactly by loft_build_internal_test.go's
+	// own S1-S8 tests) — unaffected by S3's arc form (a10-plan.md Part 3
+	// PR 6), since a circle (one segment) against a square (four segments)
+	// never reaches a per-segment kind comparison at all.
 	t.Run("CircleAgainstSquare", func(t *testing.T) {
 		w := sketch.NewWorld()
 		s0, p0 := loftCircleProfile(t, w, w.XY(), 10)
@@ -558,24 +560,34 @@ func TestLoftCurvedPairRefuses(t *testing.T) {
 		require.Empty(t, doc.Bodies())
 		require.Empty(t, doc.Recipe().Steps)
 	})
+}
 
-	t.Run("CircleAgainstCircle", func(t *testing.T) {
-		// Matching segment counts (one CircleSeg each), so this is squarely
-		// S3: a same-kind curved pair, refused even where the two loops
-		// otherwise pair one-to-one.
-		w := sketch.NewWorld()
-		s0, p0 := loftCircleProfile(t, w, w.XY(), 10)
-		top, err := w.CreateOffsetPlane(w.XY(), 10)
-		require.NoError(t, err)
-		s1, p1 := loftCircleProfile(t, w, top, 5)
+// TestLoftSameKindCircleAgainstCircleAdmitted is the same-kind circular
+// pairing S3's arc form now admits (a10-plan.md Part 3 PR 6), superseding
+// the old refusal TestLoftCurvedPairRefuses's own "CircleAgainstCircle"
+// subtest asserted: matching segment counts (one CircleSeg each) pair
+// one-to-one and BUILD. A whole CircleSeg loop is always the FULL circle
+// (record.go: "the full period for a whole edge"), and station count scales
+// with sweep independent of radius, so a full circle needs roughly 256
+// stations per side and several seconds to build — too expensive for the
+// default suite (a10-plan.md's own Fixture sizing note: at most three ~2s
+// fixtures ship in go test ./...), so the actual build is opt-in behind an
+// env var, the same shape loft_chord_calibration_internal_test.go's own
+// DECAD_LOFT_CALIBRATION gate uses.
+func TestLoftSameKindCircleAgainstCircleAdmitted(t *testing.T) {
+	if os.Getenv("DECAD_LOFT_FULL_CIRCLE") == "" {
+		t.Skip("set DECAD_LOFT_FULL_CIRCLE=1 to build a full circle-to-circle loft (several seconds, roughly 256 stations per side)")
+	}
+	w := sketch.NewWorld()
+	s0, p0 := loftCircleProfile(t, w, w.XY(), 10)
+	top, err := w.CreateOffsetPlane(w.XY(), 10)
+	require.NoError(t, err)
+	s1, p1 := loftCircleProfile(t, w, top, 5)
 
-		doc := decad.New()
-		body, err := doc.Loft(s0, p0, s1, p1)
-		require.Nil(t, body)
-		require.ErrorIs(t, err, decad.ErrUnsupported)
-		require.Empty(t, doc.Bodies())
-		require.Empty(t, doc.Recipe().Steps)
-	})
+	doc := decad.New()
+	body, err := doc.Loft(s0, p0, s1, p1)
+	require.NoError(t, err)
+	require.NotNil(t, body)
 }
 
 // --- Recipe fidelity ---

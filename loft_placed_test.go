@@ -157,6 +157,19 @@ func TestLoftDuplicateIsMeasurementIdentical(t *testing.T) {
 	require.Equal(t, srcBounds, dupBounds)
 	require.Equal(t, decad.Exact, dupBounds.Exactness)
 
+	// Area is the fourth measurement a loft payload publishes beside Volume,
+	// Centroid and Bounds (loft_build.go), so the bit-identical claim this
+	// test's own name makes covers it too. It is the one of the four that is
+	// NOT Exact — a loft's area sums held triangles under a proven allowance
+	// — which is exactly why the comparison is the whole Measurement: value,
+	// bound and exactness all have to survive the identity motion unchanged.
+	srcArea, err := body.Area()
+	require.NoError(t, err)
+	dupArea, err := dup.Area()
+	require.NoError(t, err)
+	require.Equal(t, srcArea, dupArea)
+	require.Equal(t, decad.Approximate, dupArea.Exactness)
+
 	srcVerts, dupVerts := body.Vertices(), dup.Vertices()
 	require.Len(t, dupVerts, len(srcVerts))
 	for i := range srcVerts {
@@ -422,8 +435,10 @@ func TestLoftPlacedFaceAreaSumMatchesBodyArea(t *testing.T) {
 }
 
 // TestLoftPlacedAccessorExactness pins docs/loft-design.md §8's per-accessor
-// rule on both sides of delta. An unplaced loft's every vertex position is
-// Exact with a zero bound; a placed one's is Approximate carrying the
+// rule on both sides of delta. This receiver's every vertex position is Exact
+// with a zero bound — it is unplaced AND its every station is PINNED by its
+// own natural parameter (§5.2), which is what a zero delta needs; a placed
+// one's is Approximate carrying the
 // payload's own delta — the SAME bound at every vertex — and its every edge
 // length and face area carry a positive delta term on top of their own
 // square-root bound, so neither can be Exact however exactly its own

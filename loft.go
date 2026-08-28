@@ -58,16 +58,27 @@ func (d *Document) Loft(s0 *sketch.Sketch, p0 *sketch.Profile, s1 *sketch.Sketch
 // order (p0 of s0, then p1 of s1): a foreign, stale, invalid, or
 // unrecordable profile is the seam's own sentinel.
 //
-// Every corresponding segment pair must be a LineSeg on both sides — a
-// same-kind CircleSeg or ArcSeg pair is also [ErrUnsupported] in this
-// increment (§1). The two profiles must lie on distinct geometric planes;
+// Every corresponding segment pair must be same-kind, over the recorded
+// segment type: both LineSeg, both ArcSeg, or both CircleSeg. An ArcSeg
+// paired against a CircleSeg is a mixed-kind pairing like any other. A
+// mixed-kind or free-form pairing is [ErrUnsupported] (§1, P5, S3). A circular
+// pair's walls are chorded (§5.1), which carries three refusals of its own,
+// each [ErrUnsupported]: a pair the fixed station cap cannot chord to its
+// chord target (S15), a build whose certified sagitta or station displacement
+// has no derivation from the two records (S14), and a chord cell that
+// collapses to one point on exactly one of the two sections (S16).
+// The two profiles must lie on distinct geometric planes;
 // coplanar sections are [ErrDegenerate] (§4, S5), since every wall vertex
 // would then lie in one plane and the solid has zero volume by construction.
 // A hole-count or per-loop segment-count mismatch has no positional or
 // one-to-one pairing and is [ErrUnsupported] (S1/S2). A build-time audit
 // proves the ruled walls do not cross or self-touch anywhere but their
 // recorded shared edges and vertices (§6); a proven crossing is
-// [ErrDegenerate] (S7), and exhausting the audit's fixed pair-test budget is
+// [ErrDegenerate] (S7's audit arm). A circular pair whose two sides walk in
+// opposite senses is that same crossing — the correspondence walls each side
+// against the other's reversed walk — and is the same [ErrDegenerate] (S7's
+// structural arm), decided from the two records before any triangle is built.
+// Exhausting the audit's fixed pair-test budget is
 // [ErrUnsupported] (S8). A section point whose world coordinate runs past the
 // representable float64 range is [ErrUnsupported] (S13) — the body exists,
 // and this evaluator cannot hold its vertex table.

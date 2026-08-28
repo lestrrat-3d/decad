@@ -830,7 +830,10 @@ type segmentWalk struct {
 	// up, and stated for the same reason. An endpoint is an exact leaf only
 	// where the record STATES it: a line's own bounds and an arc's own bounds
 	// are recorded coordinates the walk reads verbatim (lerp2, pinArcWalkEnds),
-	// and those read zero. Every other endpoint is computed — a trimmed line's
+	// and those read zero. That zero is about THIS walk's own rounding, not
+	// about the recorded coordinate agreeing with the curve the record denotes
+	// at that parameter — arcWalkEnd's own doc comment states where an arc's
+	// two readings part company, and names who owes the difference. Every other endpoint is computed — a trimmed line's
 	// is a float lerp, a trimmed arc's and EVERY circle's is a
 	// math.Cos/math.Sin at an angle this package itself computed — so each kind
 	// STATES what its own endpoint is worth (lineWalkEndBound,
@@ -1486,6 +1489,18 @@ func pinArcWalkEnds(w *segmentWalk, seg ArcSeg) {
 // are one decision, taken here once. At any other parameter the walk keeps
 // circularWalk's own held pair under the bound circularWalkEndBound proves for
 // it.
+//
+// What the natural-bound zero states is that the held pair IS the recorded
+// coordinate, with no rounding of this walk's own. It does NOT state that the
+// recorded coordinate is the point the DENOTED curve passes through there. For
+// an arc the two coincide at t == 0 and need not at t == 1: the denoted curve
+// takes its radius from Start alone (circularEndpointInterval, moments.go), so
+// its t == 1 point sits at Start's radius and End's angle, which is the
+// recorded End only where the two recorded radii are equal — an equality
+// nothing in this package certifies. A consumer that publishes a station's
+// displacement from the DENOTED point owes that radial residual on top of this
+// zero; docs/loft-design.md §5.2 names the term and loft_build.go's
+// arcNaturalEndRadialUpper charges it for the loft.
 func arcWalkEnd(seg ArcSeg, t, heldU, heldV float64) (float64, float64, walkEndBound) {
 	switch t {
 	case 0:

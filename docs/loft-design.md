@@ -396,8 +396,9 @@ the record denotes.
 
 **`delta` is `absSumUpper(stationRound, placeAllow)` (§5.2), so a placement
 is only one of the two ways it stops being zero.** It is zero only where both
-terms are, which an unplaced pairing whose every station is PINNED — one of
-§5.2's own two kinds — is what guarantees. **Every consumer conditions on
+terms are, which an unplaced pairing whose every station publishes a zero
+`stationRound` — which §5.2's own guaranteed-zero kinds are what guarantee —
+is what guarantees. **Every consumer conditions on
 `delta > 0`, never on the body having been placed**: a vertex position, an
 edge length, a face area, and each of the four body measurements carry
 `delta` whenever it is positive, whatever mechanism made it so — an unplaced
@@ -488,7 +489,7 @@ none of them.
 | `p1`-side cap-boundary entity | 1, held by the upper triangle reversed and shared with `capEnd`'s boundary | same rule, on the `p1` side |
 | rung edge `V -> W` | 2 — one at each of the cell's two station pairs, each shared with the neighbouring cell | GENERATED — no record states an edge between the two sections, whatever the provenance of its two endpoints |
 | diagonal edge `V_j -> W_{j+1}` | 1, shared by this cell's own lower and upper triangle | GENERATED — same |
-| station vertex, per side | 2 per side, each shared with the neighbouring cell | RECORDED for a station §5.2's table PINS — an untrimmed `LineSeg` end or an untrimmed `ArcSeg` end, the two kinds that table names. GENERATED for every other station, a TRIMMED `LineSeg` end included, each carrying `stationRound` (§5.2) |
+| station vertex, per side | 2 per side, each shared with the neighbouring cell | RECORDED for a station §5.2's table PINS — an untrimmed `LineSeg` end or an untrimmed `ArcSeg` end, the two kinds that table names. GENERATED for every other station, a TRIMMED `LineSeg` end included. A RECORDED provenance is not by itself a zero `stationRound` (§5.2): every station outside that table's GUARANTEED-zero list carries the term, an untrimmed `ArcSeg`'s `t == 1` end — RECORDED, and still displaced from the point the record DENOTES at that parameter — among them |
 
 A cell's expected contact with another cell — what §6's audit admits and
 refuses against — is the entity this table gives it, never a provenance mark
@@ -567,12 +568,12 @@ field. The constant stays in source, and `LoftOpts` gains no new field for it
 (§10).
 
 **The station cap and the ceiling it answers to.** A build's total station
-count is capped by one unexported package constant, `loftStationCap` (§14
-names the increment that fixes its value). The cap exists to keep the chord
-chain from being what carries §6's audit past the pair-test ceiling that
-section already owns: §6 refuses under S8 unless the assembled triangle count
-`F` (§7) has an `F*(F-1)/2` at or below `maxFacetPairTestsPerCall`.
-`loftStationCap` is
+count is capped by one unexported package constant, `loftStationCap`, whose
+own doc comment in `loft_build.go` owns its value and derivation (§14). The
+cap exists to keep the chord chain from being what carries §6's audit past
+the pair-test ceiling that section already owns: §6 refuses under S8 unless
+the assembled triangle count `F` (§7) has an `F*(F-1)/2` at or below
+`maxFacetPairTestsPerCall`. `loftStationCap` is
 fixed so that a build whose `Σstations` reaches it assembles an `F` whose
 `F*(F-1)/2` is STRICTLY below that ceiling. A build chorded too finely for
 the audit therefore refuses as S15, carrying the chord-count message, rather
@@ -656,12 +657,13 @@ own.
 | Term | The quantity it bounds | Certified source | Derivation | Rounding direction | Refusal |
 |---|---|---|---|---|---|
 | **`placeAllow`** | a LENGTH: the world-space displacement of one held vertex from the point the composed rigid motion denotes for it | `bounds.go`'s `rigidRoundAllow`, read at the pre-transform lifted point's own magnitude and the composed translation's magnitude — never at the result's, since that is where a general rigid motion's rounding is actually committed | `rigidRoundAllow`'s own doc comment (`bounds.go`), which derives a rigid motion's committed rounding at those pre-transform magnitudes; this document proves nothing of its own here | outward, inside `rigidRoundAllow`'s own rounding | exactly zero when the accumulated motion is `r3.Identity()`, decided by exact struct comparison and never by a tolerance. **That test is what UNPLACED means** wherever this document or a companion says it of a loft: a build is unplaced exactly when its accumulated motion is `r3.Identity()` — an identity `Duplicate`, which is `copyUnder(ctx, OpDuplicate, r3.Identity())` (`document.go`), included — and never by whether a placement call was made. This row owns that definition, and every site conditioning on an unplaced loft points here. A lifted or placed coordinate past the float64 range is Table S row **S13**, not a published bound |
-| **`stationRound`** | a LENGTH: the world-space displacement of one held station from the point the record denotes for it, over EVERY station whose generator COMPUTES its coordinates — a circular-walk station, and a `LineSeg` end at a TRIMMED parameter, which `lerp2` evaluates in float instead of reading a recorded `Point2` | `extrude.go`'s `circularWalkEndBound` over `moments.go`'s `circularEndpointInterval` — a `CircleSeg`'s exact rational turn through `quarterTurnSinCos` / `turnSinCosInterval`, an `ArcSeg`'s `ratSqrtDown` / `ratSqrtUp` radius and `atan2Interval` swept angle — carried into world space by `bounds.go`'s `walkEndBoundAllow`. For a trimmed `LineSeg` end, `extrude.go`'s `lineWalkEndBound` over `moments.go`'s `ratLerp` — the exact rational lerp of the two recorded endpoints at the recorded parameter, which is the denoted point itself rather than an enclosure of it — carried into world space by that same `walkEndBoundAllow` | this section's computed-station paragraph: ONLY the point the record denotes lies in that enclosure. The held station is an independent `math.Sincos` evaluation (`circularWalk`) and can sit OUTSIDE it, so the enclosure's own width bounds nothing here. `intervalFloatError` measures the OUTWARD GAP from the held station to the enclosure — `max(\|held − lo\|, \|held − hi\|)`, which dominates the held station's distance from EVERY point of that interval and so from the denoted point wherever in it that point lies — and `walkEndBoundAllow` carries that gap through the payload's ORTHONORMAL frame without growing it. The trimmed-`LineSeg` arm needs no enclosure step: `lineWalkEndBound`'s own doc comment states the denoted point exactly as `ratLerp`, and `rationalFloatError` reports the held `lerp2` float's own per-component gap from it | outward at every step: `intervalFloatError` takes the FARTHER of the held station's two gaps from the enclosure's ends, `walkEndBoundAllow` widens the wider plane-local component through `radius3D`, and `rationalFloatError` rounds the trimmed-line arm's gap out the same way. The build-wide value is the MAXIMUM over stations and never a sum, for the reason this section's `delta` paragraph gives | `+Inf` wherever the record cannot state the enclosure, or cannot state a trimmed `LineSeg` end's own lerp as a rational, refused `ErrUnsupported` at Table S row **S14**. Exactly zero at the two PINNED station kinds below, and PINNING is the only thing that GUARANTEES it: a computed station whose own arithmetic happens to be exact — a trimmed `LineSeg` end whose `lerp2` reproduces `ratLerp` bit for bit — reports zero too, a tighter bound this term is free to publish and never a zero the kind proves, so every site reads a build's `stationRound` at the value this term publishes and takes only the GUARANTEE from the kind |
-| **`delta`** | a LENGTH: the world-space displacement of one held vertex from the point the record and the motion together denote for it | `absSumUpper(stationRound, placeAllow)` — the two rows above and no third mechanism | the triangle inequality over the two rows above: the two displacements are committed at independent stages — the station is computed, then the motion is applied — so the vertex's total departure is at most their sum | outward, in `absSumUpper` | inherits both rows'. Zero exactly when both terms are zero, which an unplaced pairing whose every station is PINNED — one of the two kinds below — is what GUARANTEES |
+| **`stationRound`** | a LENGTH: the world-space displacement of one held station from the point the record denotes for it, over EVERY station the record does not itself state at that parameter — a circular-walk station; a `LineSeg` end at a TRIMMED parameter, which `lerp2` evaluates in float instead of reading a recorded `Point2`; and an untrimmed `ArcSeg`'s `t == 1` end, whose coordinate the record states verbatim while DENOTING a different point there | `extrude.go`'s `circularWalkEndBound` over `moments.go`'s `circularEndpointInterval` — a `CircleSeg`'s exact rational turn through `quarterTurnSinCos` / `turnSinCosInterval`, an `ArcSeg`'s `ratSqrtDown` / `ratSqrtUp` radius and `atan2Interval` swept angle — carried into world space by `bounds.go`'s `walkEndBoundAllow`. For a trimmed `LineSeg` end, `extrude.go`'s `lineWalkEndBound` over `moments.go`'s `ratLerp` — the exact rational lerp of the two recorded endpoints at the recorded parameter, which is the denoted point itself rather than an enclosure of it — carried into world space by that same `walkEndBoundAllow`. For an untrimmed `ArcSeg`'s `t == 1` end, the ARC-END RADIAL RESIDUAL `abs(abs(End − Center) − abs(Start − Center))` over `spline_length.go`'s `ratSqrtDown` of the two exact squared distances `exactCoordinateDelta` states from the record, read in the section plane, where the pin already puts the held station on the recorded coordinate and no frame step can grow it | this section's computed-station paragraph: ONLY the point the record denotes lies in that enclosure. The held station is an independent `math.Sincos` evaluation (`circularWalk`) and can sit OUTSIDE it, so the enclosure's own width bounds nothing here. `intervalFloatError` measures the OUTWARD GAP from the held station to the enclosure — `max(\|held − lo\|, \|held − hi\|)`, which dominates the held station's distance from EVERY point of that interval and so from the denoted point wherever in it that point lies — and `walkEndBoundAllow` carries that gap through the payload's ORTHONORMAL frame without growing it. The trimmed-`LineSeg` arm needs no enclosure step: `lineWalkEndBound`'s own doc comment states the denoted point exactly as `ratLerp`, and `rationalFloatError` reports the held `lerp2` float's own per-component gap from it. The arc-end radial arm needs none either, and its own proof is `loft_build.go`'s `arcNaturalEndRadialUpper`: `circularEndpointInterval` (`moments.go`) takes the denoted curve's radius from `Start` ALONE, so the point the record denotes at `t == 1` sits at `Start`'s radius and `End`'s own angle, exactly the radial residual away from the recorded `End` the pin holds — and nothing certifies that residual zero, since `validateSegment`'s `ArcSeg` arm (`record.go`) tests finiteness and the range alone and `sketch`'s own arc-radius constraint holds to solver tolerance (`docs/sketch-seam-design.md`) | outward at every step: `intervalFloatError` takes the FARTHER of the held station's two gaps from the enclosure's ends, `walkEndBoundAllow` widens the wider plane-local component through `radius3D`, and `rationalFloatError` rounds the trimmed-line arm's gap out the same way. The arc-end radial arm divides the EXACT squared-radius difference by a rounded-DOWN sum of the two radii and rounds the quotient out through `ratFloatUp`, so every step of it errs upward. The build-wide value is the MAXIMUM over stations and never a sum, for the reason this section's `delta` paragraph gives | `+Inf` wherever the record cannot state the enclosure, or cannot state a trimmed `LineSeg` end's own lerp as a rational, refused `ErrUnsupported` at Table S row **S14**. Exactly zero at the GUARANTEED-zero stations the pinned list below names — an untrimmed `LineSeg` end, and an untrimmed `ArcSeg`'s `t == 0` end ALONE — and that guarantee is the only thing that GUARANTEES it: a computed station whose own arithmetic happens to be exact — a trimmed `LineSeg` end whose `lerp2` reproduces `ratLerp` bit for bit — reports zero too, a tighter bound this term is free to publish and never a zero the kind proves, so every site reads a build's `stationRound` at the value this term publishes and takes only the GUARANTEE from the kind |
+| **`delta`** | a LENGTH: the world-space displacement of one held vertex from the point the record and the motion together denote for it | `absSumUpper(stationRound, placeAllow)` — the two rows above and no third mechanism | the triangle inequality over the two rows above: the two displacements are committed at independent stages — the station is computed, then the motion is applied — so the vertex's total departure is at most their sum | outward, in `absSumUpper` | inherits both rows'. Zero exactly when both terms are zero, which an unplaced pairing whose every station is one of the GUARANTEED-zero kinds below is what GUARANTEES. An untrimmed `ArcSeg`'s `t == 1` end is PINNED and is NOT one of them: such a pairing publishes a zero `delta` only where its own arc-end radial residual is itself zero, read at the value the row above publishes |
 | **per-cell sagitta `s_k`** | a LENGTH: the in-section-plane distance from one chord to the recorded curve piece it chords, on side `k` of one chord cell | `2·r·sin²(Δθ/4m)` evaluated over side `k`'s own enclosures — the RADIUS enclosure (`ratSqrtDown` / `ratSqrtUp` of the exact squared `Start`-to-`Center` distance for an `ArcSeg`; the recorded `Radius` converted to millimetres, exactly rational, for a `CircleSeg`) and the SWEEP enclosure (`atan2Interval`'s difference under the same `+2π` branch correction `circularLengthInterval` applies for an `ArcSeg`; the exact rational turn `2π·(TEnd − TStart)` for a `CircleSeg`), with `radSinCosSpan` supplying the sine of the enclosed angle | elementary and stated here: a circular arc's distance from its own chord is `r·(1 − cos(half the cell's sweep))`, taken at the cell's midpoint where the two are farthest apart, and `1 − cos x = 2·sin²(x/2)` turns that into the form the row publishes | interval arithmetic to the last step, then ONE outward rounding of the interval's upper end into the published float | `+Inf` wherever an enclosure has no derivation — the `In(units.Millimeter)` conversion, `floatRat`, `ratSqrtUp` or `radSinCosSpan` answering no — refused `ErrUnsupported` at Table S row **S14** |
 | **`sectionDelta`** | a LENGTH: the largest single `s_k` over every chord cell and both sides of the whole build, a MAXIMUM and never a sum | the row above | this section's maximum-not-a-sum paragraph: a boundary point lies in exactly one cell, so no point is displaced by two cells' sagittae | none of its own — a maximum of values already rounded outward is already an over-statement | inherits the row above's `+Inf` and its **S14**. Exactly zero when every paired segment is a `LineSeg` |
 | **`matchedDelta`** | a LENGTH: how far one point of a HELD chord sits from the point the recorded curve denotes at the SAME arc-length parameter — the PARAMETER-MATCHED departure every chorded leg charges, and a strictly stronger claim than the SET distance a sagitta states | `absSumUpper(sectionDelta, delta)` — the `sectionDelta` row above and the `delta` row above that, and no third mechanism | this section's parameter-matched paragraph, in two steps: the sagitta is the IDEAL chord's own matched departure for the two kinds a paired segment may carry here, and the HELD chord sits within `delta` of that ideal chord at every matching parameter, since a segment's displacement is the convex combination of its two endpoints' and each held station sits within `delta` of the point the record and the motion denote for it | outward, in `absSumUpper` | inherits both rows' `+Inf` and their **S14**. Exactly zero only where BOTH are, which an unplaced `LineSeg`-only pairing whose every station is PINNED is what GUARANTEES, the `delta` row's own zero test |
 | **per-cell `arcLenUpper_k`** | a LENGTH: the arc length of side `k`'s own recorded curve piece over one chord cell, never below that cell's own chord length on that side | `moments.go`'s `circularLengthInterval` over the same radius and sweep enclosures the sagitta row names | `bounds.go`'s `cellChordCurveAreaUpper` doc comment, whose derivation parametrizes each side at CONSTANT ARC-LENGTH speed and reads this bound as that side's own constant tangent magnitude; the same comment states why a bound below the chord it subtends is a broken claim rather than a tighter one | outward: the enclosure's upper end, rounded out once | `+Inf` wherever the record cannot state the enclosure, refused `ErrUnsupported` at Table S row **S14** |
+| **per-cell `tangentEnergy_k`** | a squared LENGTH: the integral over `s` in `[0,1]` of `\|curve'(s) − chord\|²` on side `k` of one chord cell — the ENERGY of that side's tangent deviation from its own cell chord, under the SHARED parametrization the row above fixes. It is the one input that makes the wall's ruled area leg SECOND order in the cell's own sweep rather than first, since that deviation has MEAN ZERO in `s` | `bounds.go`'s `uniformSpeedTangentEnergyUpper(arcLenUpper, chordLower)`, read at the per-cell `arcLenUpper_k` row above and at `loft_build.go`'s `loftCertifiedChordLower` — `2·r·sin(Δθ/2m)` over the SAME radius and sweep enclosures the sagitta row names, never the walk's own held `math.Hypot` radius or `math.Atan2` angles, which carry no enclosure | `uniformSpeedTangentEnergyUpper`'s own doc comment: under a CONSTANT-SPEED parametrization the integral is EXACTLY `L² − c²`, so a proven `arcLenUpper ≥ L` and a proven `chordLower ≤ c` give `J ≤ (arcLenUpper − c)·(arcLenUpper + c)`, the published factored form. The constant-speed premise is the caller's and that helper cannot check it: `loft_build.go`'s `perCellTangentEnergy` discharges it PER WALK KIND — a `LineSeg` walk's chord IS its curve, so its energy is exactly zero, and the circular arm's uniform-ANGLE stations (§5.1) are constant speed on a circle | outward: the two factors through `upRound` and their product through `productUpper`. The chord operand is rounded DOWN (`ratFloatDown`), the only direction that cannot overstate it, since the published energy DECREASES in that operand | none of its own, and no **S14**: `+Inf` wherever the record states no enclosure, or wherever a walk kind cannot discharge the constant-speed premise, and the ruled-leg row below falls back to its own premise-free arm rather than refusing |
 | **`maxTwistOffsetUpper`** | a LENGTH: how far one point of a CHORDED wall cell's bilinear ruled patch sits from the built triangle pair at the matching parameter, over the WHOLE build — a MAXIMUM over the build's CHORDED wall cells and never a sum, and exactly zero on a build that holds none (a `LineSeg`-only pairing, whose walls this term never reads) | `bounds.go`'s `cellTwistOffsetUpper`, read at each CHORDED cell's own twist vector `T = vLo − vHi − wLo + wHi` as `\|T\|/4`, and over no other cell | `cellTwistVolumeAllow`'s own derivation part (a), which solves that deviation exactly as `r·(s−1)·T` and `s·(r−1)·T` and maximises it at `\|T\|/4`; `cellTwistOffsetUpper`'s doc comment owns the maximum-not-a-sum rule, since the term bounds how far a SINGLE point sits from its nearest held vertex rather than an accumulation over cells. **The chorded scoping is proven rather than a convenience**: §5 builds a `LineSeg` pair's wall AS the held triangle pair, and that pair IS the boundary the body has there — §5's polyhedron rule and §8's `Volume`-`Exact` rule both read it as the true solid — so no ruled patch stands between such a facet and the surface it stands for, and a `LineSeg` cell charges nothing here however its four corners twist. A CHORDED cell is the only cell whose facet stands for a piece of a solid the record denotes and the build does not hold, and its bilinear ruled patch is the intermediate surface §8.1's twist leg starts from | outward, in `upRound` | `+Inf` on a non-finite CHORDED-cell corner, refused **S14** — the chorded cells that row reaches; a build with no chorded cell publishes the exact zero above and reaches no refusal here |
 | **cap `planeOffsetUpper`** | a LENGTH: `\|h\|`, one cap plane's own perpendicular offset from the mass accumulator's anchor (§8) | the exact rational distance from that anchor to a held vertex of that cap, bracketed by `ratSqrtUp` | a plane's own perpendicular offset from a point never exceeds the distance to any single point ON that plane, and every held cap vertex lies on that cap's plane exactly | outward, in `ratSqrtUp` | `+Inf` where the assembly states no such vertex, refused **S14** |
 | **cap `capAreaAllow`** | an AREA: how far one cap's ASSEMBLED chord polygon region differs in area from the region its recorded boundary denotes | `bounds.go`'s `sectionDisplacementArea(matchedDelta, walks, perimeterUpper)` over that cap's own recorded boundary, its `perimeterUpper` summed from the `arcLenUpper_k` row | `sectionDisplacementArea`'s own doc comment: the two regions' symmetric difference lies inside the `matchedDelta`-neighbourhood of the recorded boundary, covered by a `2·matchedDelta`-wide tube along the walks plus a disk of that radius at each joint. The held polygon's own vertices are displaced as well as chorded, which is why the neighbourhood is the matched term and not the sagitta | outward, in `productUpper` and one closing `upRound` | inherits the `matchedDelta` and `arcLenUpper_k` rows' `+Inf` and their **S14** |
@@ -669,6 +671,9 @@ own.
 | **`seamPerimeterUpper`** | a LENGTH: the total arc length of BOTH cap loops' true recorded curves | the SUM over both loops of every wall cell's own `arcLenUpper_k` for that side — the identical quantities that row already states, read a second time rather than derived again | `chordedBoundarySeamAllow`'s own doc comment, whose line integral runs over exactly those two loops | outward, in `absSumUpper` | inherits the `arcLenUpper_k` row's |
 | **`wallAreaUpper`** | an AREA: the area of EVERY surface the wall's chord-to-curve homotopy visits, summed over wall cells — an ABSOLUTE bound, never a held facet area plus an excess | `bounds.go`'s `cellChordCurveAreaUpper(vLo, vHi, wLo, wHi, arcLenUpperA, arcLenUpperB, matchedDelta)` per wall cell | that helper's own doc comment, whose `eA·eB` product bounds the homotopy's own area at every time; the same comment gives the counterexample an excess reading misses — a cell can hold almost no triangle area while its own ruled patch carries substantial area | outward: every factor through `absSumUpper` / `productUpper` | inherits the `arcLenUpper_k` and `matchedDelta` rows' `+Inf` and their **S14** |
 | **`twistVolumeUpper`** | a VOLUME: the gap between a wall cell's HELD pair of flat triangles and the BILINEAR RULED patch the wall leg's own homotopy starts from, summed over wall cells | `bounds.go`'s `cellTwistVolumeAllow` per wall cell | that helper's parts (a), (b) and (c): the pointwise deviation `\|T\|/4`, the homotopy's own `eA·eB` area at every time, and the flux identity closing them — with no seam term of its own, since the deviation vanishes on all four edges of the parameter square | outward, in `productUpper` and `absSumUpper` | `+Inf` on a non-finite corner, refused **S14** |
+| **`areaExcess` twist leg** | an AREA: how far one CHORDED wall cell's HELD flat triangle pair sits in AREA from its own BILINEAR ruled patch through the same four held corners, summed over chorded wall cells | `bounds.go`'s `cellTwistAreaAllow` per chorded wall cell — `cellTwistVolumeAllow`'s AREA twin over the SAME twist vector `T = vLo − vHi − wLo + wHi`, its `\|T\|/4` from the exact `xtwistQuarterUpper` kernel and its two edge extents from the certified `xspanUpper` that cell's own `cellSpans` already carries | that helper's own doc comment: `cellTwistVolumeAllow` part (a)'s EXACT deviation `r(s−1)·T` and `s(r−1)·T` gives `\|∂δX/∂s\| ≤ \|T\|` and `\|∂δX/∂r\| ≤ \|T\|` pointwise, and the product rule on the cross product bounds the area functional's own rate along part (b)'s homotopy by `\|T\|·(eA + eB)` at every time; integrating `t` over `[0,1]` at that constant rate bounds the area difference by the same product. It vanishes EXACTLY with `T`, so a cell whose four held corners form a parallelogram charges nothing | outward, in `productUpper` and `absSumUpper`, over quantities formed EXACTLY. NOTHING here may be read in float64: `T` is a cancelling chain whose float evaluation can answer a computed zero for a nonzero exact `T`, and `r3.Vec.Len` sits below the exact norm often enough that extents taken that way are not upper bounds either — both directions shrink the allowance below the deviation it claims to dominate | `+Inf` on a non-finite chorded-cell corner, a corner set **S13** has already proven finite. A `+Inf` here is PUBLISHED as `Area`'s own `Bound` and never refused: §8's finiteness gate reads `Area`'s VALUE alone, since §8 requires a saturated area bound to publish `+Inf` as a proof term rather than a finite guess |
+| **`areaExcess` ruled leg** | an AREA: how far one CHORDED wall cell's own BILINEAR chord patch sits in AREA from the ruled patch through the SAME four held corners — the patch ruled between the two curves those corners pin, never the one between the two recorded curves as the record places them — summed over chorded wall cells | `bounds.go`'s `cellChordCurveAreaAllow(vLo, vHi, wLo, wHi, arcLenUpper_A, arcLenUpper_B, matchedDelta, tangentEnergy_A, tangentEnergy_B)` per chorded wall cell — the per-cell `arcLenUpper_k` row, the `matchedDelta` row read at THIS cell (`loft_build.go`'s `chordCellDeltaUpper`), and the two `tangentEnergy_k` rows above | that helper's own doc comment, which publishes the MINIMUM of two independently proven arms: a PREMISE-FREE arm that bounds the integrated normal difference from the tangent bound alone, and a SHARP arm that keeps the norm-convexity cancellation the first throws away — a LINEAR term over the mean-zero deviation, every piece of which carries a factor of the cell's own twist `T`, plus a QUADRATIC term over the two energies, both divided by `cellChordPatchNormalLower`'s PROVEN positive lower bound on the cell's own area element. Where that four-corner reduction proves nothing it answers 0, the sharp arm is dropped, and the premise-free arm stands alone | outward at every step, in `absSumUpper` / `productUpper` / `divUpper`, over corner differences, cross products and norms formed EXACTLY in the same rational kernel the row above names. The area-element lower bound is rounded DOWN (`ratFloatDown`), the only direction that cannot inflate the quotient it divides | `+Inf` on a BROKEN caller claim — a non-finite or negative operand, a negative energy, or an arc-length claim below the chord it subtends. Its inputs carry the refusals: the `arcLenUpper_k` and `matchedDelta` rows' `+Inf` is **S14**, raised before any measurement runs, while a `+Inf` `tangentEnergy_k` costs only the sharp arm. A `+Inf` published here reaches `Area`'s `Bound` unrefused, the twist row's own rule |
+| **`areaExcess` station-shift leg** | an AREA: how far the ruled patch through one CHORDED wall cell's four HELD corners sits in AREA from the ruled patch through the four STATIONS those corners denote — the step the twist and ruled legs both stop short of, since each pins its patches at the corners it is handed — summed over chorded wall cells | `bounds.go`'s `cellStationShiftAreaAllow(vLo, vHi, wLo, wHi, arcLenUpper_A, arcLenUpper_B, matchedDelta, delta)` per chorded wall cell — the per-cell `arcLenUpper_k` row, the `matchedDelta` row read at THIS cell (`loft_build.go`'s `chordCellDeltaUpper`), and the `delta` row above | that helper's own doc comment: the difference between the two patches is BILINEAR in the cell's own parameters with the four corner displacements as its values, so each partial is at most `2·delta`, and the `\|e x v\| + \|u x f\| + \|e x f\|` expansion `perturbedTriangleAreaAllow` states for ONE TRIANGLE, taken one dimension up over the two patches, sizes the step at `2·delta·(∬\|X_r\| + ∬\|X_s\|) + 4·delta²`. The `s` integral is the two sides' own arc-length bounds averaged, and the `r` integral is the SAME `eB` convexity rung the ruled leg forms, widened by `2·matchedDelta` because the denoted rung joins two CURVE points rather than two chord ends. A triangle's own allowance bounds a DIFFERENT quantity of the same shape and order and is never spent for this step | outward at every step, in `absSumUpper` / `productUpper` / `divUpper`, over the same EXACTLY formed corner differences and norms the two rows above read | `+Inf` on a BROKEN caller claim — a non-finite corner, or a non-finite or negative operand. Its inputs carry the refusals, the ruled leg's own rule. It is exactly 0 where `delta` is 0, the build that holds the stations it denotes |
 | **`capVolumeUpper`** | a VOLUME: the volume one cap contributes when its held chord polygon is replaced by the region its recorded curve denotes, summed over the (at most two) caps | `bounds.go`'s `capAreaVolumeAllow(planeOffsetUpper, capAreaAllow)` per cap, over the two rows above | that helper's EXACT planar identity: a planar face's own signed-tetrahedron sum is `2·h·Area(cap)` whatever the triangulation, so replacing the held polygon's area with the denoted region's changes it by exactly `2·h·ΔArea`, giving `\|ΔVolume_cap\| ≤ \|h\|·\|ΔArea\|/3`. It is never `perturbedAreaUpper`, whose per-facet argument is about vertices that MOVE and a cap's never do | outward, in `productUpper` and one closing `upRound` | inherits the two rows above |
 | **`seamAllow`** | a VOLUME: the line-integral residue the wall leg's flux identity drops by treating the wall as CLOSED when it is an OPEN patch whose `r=0`/`r=1` seam moves under the same homotopy | `bounds.go`'s `chordedBoundarySeamAllow(matchedDelta, posUpper, seamPerimeterUpper)` | that helper's own doc comment: Cauchy-Schwarz on the by-parts boundary term, `matchedDelta · posUpper · seamPerimeterUpper / 3` | outward, in `productUpper` and one closing `upRound` | inherits the `matchedDelta`, `posUpper` and `seamPerimeterUpper` rows' |
 | **facet departure** | a LENGTH: how far one point of a HELD facet sits from the true boundary surface that facet stands for | `absSumUpper(delta, sectionDelta, maxTwistOffsetUpper)` — the three rows above, and no fourth mechanism | the triangle inequality over three independent departures: the facet's own vertices sit within `delta` of the points the record and the motion denote, a CHORDED cell's bilinear ruled patch through those corners departs from the recorded curve by `sectionDelta`, and that cell's held flat triangle pair departs from the ruled patch by at most `maxTwistOffsetUpper`. **The last two terms are charged by chorded cells alone**, and both are exactly zero on a `LineSeg`-only build, whose held triangle pair IS the boundary §5 gives it (the two rows above): the sum is the same three-term reading for every build, and it collapses to `delta` there by its own terms rather than by a consumer choosing a shorter one. Every per-facet consumer reads this term (§9 D1, D2) and no consumer reads a two-term subset of it | outward, in `absSumUpper` | inherits all three rows' |
@@ -739,12 +744,15 @@ chorded leg.**
   falsify a claim but never admit one, so no term here is admitted by
   measuring the geometry it was handed.
 
-**TWO station kinds GUARANTEE a zero `stationRound`, and the kind is what
-the record proves — never the enclosure the generator happened to reach.
-Both are NATURAL BOUNDS, `t == 0` or `t == 1`, and this list is what PINNED
-names wherever this document or a companion says it of a station.** The
-`stationRound` row above owns why a guarantee is all this list claims, and
-the zero-`delta` paragraph below owns what may be read from it.
+**TWO station kinds are PINNED — the held station IS the record's own
+coordinate — and this list is what PINNED names wherever this document or a
+companion says it of a station. Both are NATURAL BOUNDS, `t == 0` or
+`t == 1`. A pin fixes the held POSITION and does not by itself GUARANTEE a
+zero `stationRound`: the record can state a coordinate at a parameter and
+DENOTE a different point there, and one of the two kinds below does exactly
+that at one of its two bounds.** The `stationRound` row above owns why a
+guarantee is all the guaranteed-zero list claims, and the zero-`delta`
+paragraph below owns what may be read from it.
 
 - an **untrimmed `ArcSeg` end**: `extrude.go`'s `arcWalkEnd` PINS the held
   pair to the recorded `Start` / `End` verbatim and stamps a zero bound, at
@@ -756,6 +764,34 @@ the zero-`delta` paragraph below owns what may be read from it.
   comment states. The pin lives in those two lerps: `lineWalkEndBound`
   carries no natural-bound test of its own and stamps whatever gap its two
   `rationalFloatError` calls measure.
+
+**TWO station kinds GUARANTEE a zero `stationRound`, and they are the pinned
+kinds above MINUS an untrimmed `ArcSeg`'s `t == 1` end.** They are an
+untrimmed `LineSeg` end — where the pin and the denoted point are the same
+`ratLerp` coordinate, so the two agree at both bounds — and an untrimmed
+`ArcSeg`'s `t == 0` end, where the denoted curve's own radius is
+`|Start − Center|` and its own start angle is `Start`'s, so the point the
+record denotes there IS `Start`.
+
+**An untrimmed `ArcSeg`'s `t == 1` end is PINNED and carries a `stationRound`
+of its own, the ARC-END RADIAL RESIDUAL the table above names.** A recorded
+`ArcSeg` states three points, and the curve it denotes takes its radius from
+`Start` alone: `circularEndpointInterval` and `circularWalkEnclosures`
+(`moments.go`) both read `|Start − Center|`, so the denoted point at
+`t == 1` sits at THAT radius and `End`'s angle, which is `End` itself only
+when `|End − Center| == |Start − Center|` — the reading
+`docs/sketch-seam-design.md` states outright. Nothing in this evaluator
+certifies that equality. `validateSegment`'s `ArcSeg` arm (`record.go`)
+tests point finiteness and the parameter range, `seam.go` records
+`geom.Arc`'s three points verbatim, and `sketch`'s own arc-radius constraint
+is solved to solver tolerance rather than proven. So the term is CHARGED,
+never assumed away, and it is charged at `t == 1` ALONE: at `t == 0` the
+residual is zero by the definition of the denoted radius, and reporting a
+generator's enclosure WIDTH there would publish a positive displacement for
+a station that has none. A record whose two radii DIFFER is not refused
+here — that would refuse ordinary solver output, whose radii agree only to
+tolerance — it is measured, which is `CLAUDE.md`'s reject-only rule read
+correctly: this term never admits a record, it only bounds one.
 
 **A station whose generator COMPUTES its coordinates is never granted a zero
 by the shape of the record's own enclosure.** `circularEndpointInterval`
@@ -769,8 +805,8 @@ zero there is read off the value `circularWalkEndBound` publishes and is
 never proven from the kind. The `stationRound` row above owns that value,
 and every site reads it as published.
 
-**Every station outside the two pinned kinds above carries whatever its own
-walk bound proves for it, the two ends of a chord chain included.** A
+**Every station outside the two GUARANTEED-zero kinds above carries whatever
+its own bound proves for it, the two ends of a chord chain included.** A
 `CircleSeg` records no endpoint coordinate at all — `walkOf` stamps
 `circularWalkEndBound` on both of its ends unconditionally, quarter turns
 among them — and a TRIMMED `ArcSeg` end takes the same computed bound an
@@ -782,11 +818,15 @@ station, and `lineWalkEndBound` stamps whatever gap its own
 Every one of these records is caller-reachable rather than a corner
 case: `seam.go`'s `recordEdge` records a certified `Partial` line, circle or
 arc fragment over a non-natural range, and no Table S row excludes one. So
-pinning BOTH of a pair's stations by the kinds above is what GUARANTEES a
-zero-`delta` build — a `LineSeg` pair as much as a pair chorded at `m = 1` —
-and only a pair that clears that test is GUARANTEED one. Every other pair
-carries whatever its own walk bounds prove, a proven zero included, and
-every site in this document reads that published value rather than the kind.
+placing BOTH of a pair's stations at the GUARANTEED-zero kinds above is what
+GUARANTEES a zero-`delta` build — an untrimmed `LineSeg` pair is the one
+pairing that clears it on kind alone — and only a pair that clears that test
+is GUARANTEED one. An untrimmed `ArcSeg` pair chorded at `m = 1` does NOT:
+its two `t == 1` ends carry the arc-end radial residual, so it publishes a
+zero `delta` only where that residual is itself zero, which the record can
+prove but the kind cannot. Every other pair carries whatever its own bounds
+prove, a proven zero included, and every site in this document reads that
+published value rather than the kind.
 
 **`sectionDelta` and `delta` bound different objects, and neither ever
 stands in for the other.** `delta` bounds the displacement of a HELD VERTEX
@@ -812,6 +852,7 @@ holding floats alone; the enclosure comes from the recorded curve instead,
 which is what the table's `stationRound` row names. The term bounds ONE held
 vertex's own displacement, and every consumer spends it as a PER-VERTEX
 bound — `perturbedTriangleAreaAllow` over a facet's three corners,
+`cellStationShiftAreaAllow` over a wall cell's four corners,
 `sweptVolumeAllow` over a held mesh whose every vertex moves by it, §12's
 diameter shrink over the two witnesses — so the widest station's own
 allowance already covers every vertex, while an accumulation over stations
@@ -1038,8 +1079,8 @@ never unconditionally.** That single-rounding ceiling is spline design §3's
 Tier A rule, and a loft's volume earns it for the same reason a Tier A
 free-form region's area does: the integral is exactly rational, and only its
 final publication rounds. A body
-whose `delta` is positive — placed (§12 PR 2a), chorded past §5.2's one
-pinned station kind, or both — composes `bounds.go`'s
+whose `delta` is positive — placed (§12 PR 2a), chorded past §5.2's
+guaranteed-zero stations, or both — composes `bounds.go`'s
 `sweptVolumeAllow(delta, areaUpper)` on top of that single rounding, so
 `delta` alone is enough to make the reading `Approximate` however exactly
 any placement's own rotation or reflection is representable. A chorded
@@ -1053,7 +1094,7 @@ understates a twisted pairing by about five orders of magnitude
 each of that helper's arguments and §8.1 states which mechanism each of its
 four legs answers for. So `sectionDelta` alone is enough to make the reading
 `Approximate` even where `delta == 0`, which is the `m = 1` pair whose two
-end stations §5.2's table pins (§12). A body that is both placed and chorded
+end stations both publish a zero `stationRound` (§5.2, §12). A body that is both placed and chorded
 composes both terms, since each bounds a displacement committed at an
 independent stage of the construction — the section chording, then the rigid
 placement.
@@ -1125,41 +1166,61 @@ the per-triangle area allowance `bounds.go`'s `perturbedTriangleAreaAllow`
 states, summed over every wall AND cap triangle. The caps need it as much as
 the walls do — a cap's contribution is the assembled chord polygon's exact
 rational area (above), and the built cap triangles are within `delta` of the
-points that polygon's own vertices denote.
+points that polygon's own vertices denote. That per-TRIANGLE role is the whole
+of what the term is proven for: the wall's own held-corner-to-denoted-station
+step is an area step between two ruled SURFACES, and §8.1's wall paragraph
+charges it from its own inequality instead.
 
 A CHORDED (same-kind circular) body's `Area` reaches for TWO further terms,
-and only one of them has a proven owner.
+and §5.2's table owns both.
 
-- **The cap term is owned.** A cap's held reading is the assembled chord
-  polygon's shoelace area, and the region that cap's recorded boundary
+- **The cap term.** A cap's held reading is the assembled chord polygon's
+  shoelace area, and the region that cap's recorded boundary
   denotes differs from it by at most `capAreaAllow` — `sectionDisplacementArea`
   over that cap's own boundary (§5.2), the same term the cap VOLUME leg
   charges one dimension up. The two caps' `capAreaAllow`s enter `Area`'s bound
   directly, with no plane-offset division of any kind: a cap's area gap is an
   area gap whether or not its own plane passes through the anchor.
-- **The wall term is NOT owned, and this design refuses rather than invent
-  one.** The quantity is `|Area_held − Area_true|` over the wall: how far the
-  flat chord facet pair this construction builds over one chord cell sits from
-  the area of the curved ruled surface between the two recorded curve pieces
-  that cell approximates. `cellChordCurveAreaUpper` does NOT bound it — that
-  helper bounds the true surface's own area from ABOVE (§5.2), which is what
-  the volume leg's flux identity needs and is not a bound on a DIFFERENCE of
-  areas. `cellTwistVolumeAllow` bounds a volume, not an area. No shipped
-  helper owns the difference, and substituting either of those two would
-  publish a number that bounds a different quantity than the one the reading
-  states.
+- **The wall term is the SUM of three independent legs.** The quantity is
+  `|Area_held − Area_true|` over the wall: how far the flat chord facet pair
+  this construction builds over one chord cell sits from the area of the
+  curved ruled surface between the two recorded curve pieces that cell
+  approximates. It is composed by `absSumUpper` over the triangle inequality
+  `|true − held| ≤ |held − bilinear| + |bilinear − true| + |denoted − held
+  corners|`, "bilinear" the ruled patch through the cell's own four held
+  corners — §8.1's volume leg makes the first two of those one dimension up.
+  The TWIST leg `cellTwistAreaAllow` owns `|held − bilinear|` and the RULED
+  leg `cellChordCurveAreaAllow` owns `|bilinear − true|`, each a row of §5.2's
+  table carrying its own derivation, rounding direction and refusal. **Both
+  pin their patches at the corners the build HOLDS**, which is what the
+  arithmetic of each reads, so neither reaches the stations those corners
+  denote; the STATION-SHIFT leg `cellStationShiftAreaAllow` owns
+  `|denoted − held corners|`, a third row of that table with its own
+  inequality over the two ruled patches, charged beside them at the payload's
+  own `delta`. A triangle's own `perturbedTriangleAreaAllow` is NOT that leg:
+  it bounds a triangle's area step, an expression of the same shape and order
+  over a different quantity, and which of the two is larger is a fact about
+  the cell rather than an identity.
+  `cellChordCurveAreaUpper` is NONE of the three — that helper bounds the true
+  surface's own area from ABOVE (§5.2), which is what the volume leg's flux
+  identity needs and is not a bound on a DIFFERENCE of areas — and
+  `cellTwistVolumeAllow` bounds a volume rather than an area. Substituting
+  either would publish a number that bounds a different quantity than the one
+  the reading states.
 
-**So the chorded increment does not land its `Area` until a helper owns that
-difference.** §12's own rule is that all four measurements land with the
-operation — a `Body` caches `Volume` / `Centroid` / `Area` / `Bounds` at build
-with no staging error path — so there is no accessor behind which a missing
-`Area` bound could be staged, and the consequence falls on the INCREMENT
-instead: §12 PR 3 lands the chorded correspondence only once `bounds.go` owns
-a wall cell's `|Area_held − Area_true|` with a written derivation, and until
-then a same-kind circular pair stays unlanded — `ErrUnsupported`, the staging
-refusal every §12 row before PR 3 already carries for it (§14). A
-`LineSeg`-only build is untouched — its walls chord nothing, so its `Area` is
-the held triangle sum this section already derives.
+**A chorded body's `Area` lands with the operation, like every other
+measurement.** §12's own rule is that all four measurements land at build — a
+`Body` caches `Volume` / `Centroid` / `Area` / `Bounds` with no staging error
+path — so a chorded `Area`'s VALUE is the held wall triangle sum plus the two
+caps' own exact rational area, and its BOUND composes the wall-sum and cap
+terms this section already derives with the wall's own three legs and the
+two caps' `capAreaAllow`s. Both excesses are charged wherever §5.2's
+`sectionDelta` or its `matchedDelta` is positive, never on a segment kind, so
+a `LineSeg`-only build is untouched —
+its walls chord nothing, both terms are exactly zero, and its `Area` is the
+held triangle sum this section already derives. The wall's THIRD leg carries
+the payload's own `delta` as a factor, so it too is exactly zero on that same
+unplaced `LineSeg`-only build.
 
 **`Bounds` is Exact only when BOTH the payload's displacement `delta` and its
 section displacement `sectionDelta` (§5.2) are zero.** Every vertex is
@@ -1180,8 +1241,8 @@ already is for a `LineSeg`-only one, where `sectionDelta` is zero and the sum
 reduces to `delta` unchanged. **A chorded body's `Bounds` is `Approximate`
 whatever its `delta` is**, since `sectionDelta` alone is positive on every
 chorded pair: even at `m = 1` on a pair whose two end stations are both
-pinned (§5.2), where `delta` is exactly zero and every held vertex is a
-recorded coordinate, the box still widens, because the box is about the TRUE
+pinned and whose published `delta` is exactly zero (§5.2), so that every held
+vertex is a recorded coordinate the record also denotes, the box still widens, because the box is about the TRUE
 recorded curve between those two stations and not about the vertices alone.
 
 **Vertex position, edge length, and face area follow the standing rules
@@ -1333,7 +1394,7 @@ global evaluator increment.
 | 1 | `OpLoft` wire/recipe plumbing (`LoftOpts` codec, `Op` token, `Step.Profile`/`Plane` reuse), Table P pairing + Table S gates S1–S5/S9–S11, the flat-triangle wall construction (§5), the crossing audit (§6, Table S S6's RECORDED arm, S7's audit arm, S8), `Document.Loft` / `LoftContext`, `Volume` / `Centroid` (§8's rational accumulator) / `Area` / `Bounds`, `Verify` (D6: the structural audit and the tolerance gate over all four) | same-kind `CircleSeg`/`ArcSeg` correspondence; N-section/guide-rail/centerline loft; `Placed`/`Duplicate`/`PlacedCopy`; reversed correspondence; surveys, clearance, interference beyond box-disjoint |
 | 2a | `Placed` / `Duplicate` / `PlacedCopy` (D7): the payload's own proven displacement term `delta` (§5), composed into every vertex, edge length, face area, and all four body measurements; Table S gains S12 and S13 | D1/D2 (`Tessellate`/`STL`/`OBJ`, mesh-boolean admission); D3/D4's analytic-kernel case; D5 |
 | 2b | `Tessellate` / `STL` / `OBJ` (D1), mesh-boolean admission (D2) | D3/D4's analytic-kernel case, D5 |
-| 3 | same-kind `CircleSeg`/`ArcSeg` correspondence (§1): the chord-chain construction and its shared station generator (§5.1), every term §5.2's table lists that a chorded build reaches — the certified per-cell sagitta and the `sectionDelta` it publishes, the `stationRound` term `delta` gains, the `matchedDelta` those two compose, and the four legs of the chorded volume allowance with the moment twin's own widened radius (§8.1) — composed into `Volume`/`Centroid`/`Bounds`, Table S gates S14–S16, S6's COMPUTED arm, and S7's structural walk-sense arm (P5). **This row lands only once `bounds.go` owns a wall cell's `Area` difference** (§8, §14): until then a chorded body has no `Area` bound to publish, and a same-kind circular pair keeps the `ErrUnsupported` staging refusal the rows above carry | free-form and mixed-kind correspondence (§1); N-section and guide-rail/centerline lofts; a loft case in `clearance_geom.go`; a non-constant-cross-section wall survey kernel |
+| 3 | same-kind `CircleSeg`/`ArcSeg` correspondence (§1): the chord-chain construction and its shared station generator (§5.1), every term §5.2's table lists that a chorded build reaches — the certified per-cell sagitta and the `sectionDelta` it publishes, the `stationRound` term `delta` gains, the `matchedDelta` those two compose, the four legs of the chorded volume allowance with the moment twin's own widened radius (§8.1), and the wall's own three-leg area gap beside the two caps' `capAreaAllow` (§8) — composed into `Volume`/`Centroid`/`Area`/`Bounds`, Table S gates S14–S16, S6's COMPUTED arm, and S7's structural walk-sense arm (P5). **This row is landed.** | free-form and mixed-kind correspondence (§1); N-section and guide-rail/centerline lofts; a loft case in `clearance_geom.go`; a non-constant-cross-section wall survey kernel |
 | 4 (reach, not committed by this document) | N-section and guide-rail/centerline lofts, a loft case in `clearance_geom.go`, a non-constant-cross-section wall survey kernel | — |
 
 **The four measurements land with the operation, never after it.** A `Body`
@@ -1358,11 +1419,15 @@ and no rounding of its own. That answer is the largest `float64` at or below
 the true diameter, since the reader publishes every witness maximum rounded
 toward zero (verification §3).
 
-**For a same-kind circular pair whose stations are all PINNED (§5.2) the
-vertex set's own maximum is at or below the body's true diameter, never
-necessarily equal to it**: a pinned station lies ON the recorded curve rather
-than at an extreme of it, and the true boundary can bulge past the station
-polygon (§5.2). The arm's reasoning holds there unchanged, because it only
+**For a same-kind circular pair whose every station publishes a zero
+`stationRound` (§5.2) the vertex set's own maximum is at or below the body's
+true diameter, never necessarily equal to it**: a station at a zero
+`stationRound` lies ON the recorded curve rather than at an extreme of it, and
+the true boundary can bulge past the station polygon (§5.2). The standing is
+earned from that PUBLISHED zero and never from the station's kind: an
+untrimmed `ArcSeg`'s `t == 1` end is PINNED yet sits its own arc-end radial
+residual OFF the denoted curve, outward as easily as inward, so a pin alone
+would grant a lower bound the geometry does not support. The arm's reasoning holds there unchanged, because it only
 ever needs the held reading to be a sound LOWER bound: every witness is a
 real point of the true boundary, so no true pairwise distance it could be
 missing exceeds the diameter it would have measured directly.
@@ -1387,18 +1452,21 @@ for `d` the vertex-set diameter and `A` the held surface area, so a `delta`
 at or above `d/2` makes `sweptVolumeAllow`'s `delta*A` at least `3/2` of the
 held volume and S12 refuses that build before any gate reads it.
 
-**A curved pair chorded at `m = 1` (§5.1) has no interior station, and only
-pinning BOTH of its two end stations by §5.2's table guarantees it a zero
-`stationRound`** — which for a curved pair means an untrimmed `ArcSeg`'s two
-recorded ends, the one pinned kind that table names. On such a pair `delta`
-is zero, so the arm reports the unshrunk reading exactly as in the uncurved
-case, and the pinned-station argument above covers it without needing
+**A curved pair chorded at `m = 1` (§5.1) has no interior station, and no
+curved pair is GUARANTEED a zero `stationRound` by its kind at all** — §5.2's
+guaranteed-zero list holds no circular entry, since an untrimmed `ArcSeg`'s
+`t == 1` end carries the arc-end radial residual and every other circular end
+is computed. An untrimmed `ArcSeg` pair at `m = 1` publishes a zero
+`stationRound` exactly where that residual is zero on both of its sides,
+which the RECORD can prove and the kind cannot; on such a pair `delta` is
+zero, so the arm reports the unshrunk reading exactly as in the uncurved
+case, and the zero-`stationRound` argument above covers it without needing
 `sectionDelta`, which bounds how far the BUILT WALL departs from the curve
 between those two exact stations — a question the diameter-witness argument
-never asks. **Every other `m = 1` pair — every `CircleSeg` end, quarter turns
-included, and a trimmed `ArcSeg` end — is a COMPUTED station carrying
-whatever `stationRound` §5.2 proves for it, and the arm shrinks by `2*delta`
-at that proven value.** Where such a station's own `circularWalkEndBound`
+never asks. **Every other `m = 1` pair — an untrimmed `ArcSeg` end whose
+radial residual is positive, every `CircleSeg` end, quarter turns included,
+and a trimmed `ArcSeg` end — carries whatever `stationRound` §5.2 proves for
+it, and the arm shrinks by `2*delta` at that proven value.** Where such a station's own `circularWalkEndBound`
 proves that bound zero, the arm reads the resulting zero `delta` BY VALUE and
 reports the unshrunk reading, exactly as it does for any other `delta`.
 
@@ -1411,8 +1479,9 @@ never merely that a call ran (project rule).
 otherwise** — its accumulated motion is `r3.Identity()`, the test §5.2's
 `placeAllow` row owns. Unplaced is not the same as zero-`delta`, and only the
 second licenses an exactness or zero-bound assertion: an unplaced chorded
-fixture is granted a zero `delta` only where every one of its stations is
-pinned by §5.2's table, so each such assertion below is read at `delta` zero
+fixture is granted a zero `delta` only where every one of its stations
+publishes a zero `stationRound` under §5.2's table, so each such assertion
+below is read at `delta` zero
 and names why its own fixture is there.
 
 **The fixture wall-clock budget.** Every fixture in this section builds its
@@ -1599,9 +1668,18 @@ against this budget.
   `Bounds` widened by its own `Bound`
   (`absSumUpper(delta, sectionDelta)`) CONTAINS a dense sample of both true
   recorded arcs lifted through their planes — a box that did not widen fails
-  it. An untrimmed `ArcSeg` pair chorded at exactly `m = 1` — both end
-  stations pinned to recorded coordinates (§5.2) — publishes `delta == 0` and
-  `bodyGateDiameter`'s unshrunk reading, with `sectionDelta > 0` (§12).
+  it. An untrimmed `ArcSeg` pair chorded at exactly `m = 1`, over a record whose
+  two arc radii are EXACTLY equal so that its two pinned end stations carry a
+  zero arc-end radial residual (§5.2), publishes `delta == 0` and
+  `bodyGateDiameter`'s unshrunk reading, with `sectionDelta > 0` (§12); the
+  fixture states that equality over exact rationals rather than asserting it
+  of a float. **Its DRIFTED twin asserts the opposite and is what proves the
+  residual is charged**: the same shape with the arc's recorded `End` moved
+  off `Start`'s radius by an exactly-representable amount, whose radial
+  residual is proven positive over exact rationals from the record's own
+  coordinates — never from a float comparison, which is architecture-dependent
+  — publishes a `delta` at or above that proven residual, and therefore takes
+  `bodyGateDiameter`'s `2*delta`-shrunk reading rather than the unshrunk one.
   **A PARTIAL CIRCLE is the companion fixture and asserts the opposite**: a
   certified `Partial` `CircleSeg` fragment recorded over a non-natural range
   (`recordEdge`, `seam.go`), paired with itself and chorded at `m = 1`,
@@ -1620,8 +1698,8 @@ against this budget.
   `math.Sincos` residue and equalling the denoted rational bit for bit. What
   the kind never grants is the ZERO, not the reading: the run asserts the
   build takes that value from the walk bound and treats the station as
-  GENERATED throughout (§5.1's Table C), and a run that read such a station as
-  PINNED would pin the exemption §5.2 refuses to grant. A TRIMMED `ArcSeg`
+  GENERATED throughout (§5.1's Table C), and a run that granted such a station
+  §5.2's guaranteed zero would pin the exemption that table refuses to grant. A TRIMMED `ArcSeg`
   pair at `m = 1` asserts its own walk bound the same way. A
   mixed line-to-arc pair, and an arc-to-fit-spline pair, still refuse S3.
   Replay of a recorded circular-pair step reproduces the same station count,
@@ -1669,9 +1747,11 @@ against this budget.
   `Document.Loft` while `Duplicate`/`PlacedCopy`/`Placed` of the
   already-built body each succeed pins §4's original-call-only S9.
   `Duplicate` of a fresh loft reproduces bit-identical vertices, Exact
-  16000 mm³ volume, Exact centroid, Exact bounds, leaves the source live, and
-  gives the document two bodies. Rotating the 16000 mm³ square-square loft 37
-  degrees about X is the regression this PR exists for: assert
+  16000 mm³ volume, Exact centroid, Exact bounds, a bit-identical `Area`
+  (Bounded, so what carries over is the source's own value, bound and
+  exactness alike), leaves the source live, and gives the document two
+  bodies. Rotating the 16000 mm³ square-square loft 37 degrees about X is the
+  regression this PR exists for: assert
   `|Volume.Value - 16000| <= Volume.Bound` (the naive implementation misses by
   1.819e-12 against a 7.203e-13 bound), the centroid against the closed-form
   rotated centroid within its bound, every `Vertex.Position().Bound >= 0`, and
@@ -1774,29 +1854,20 @@ two-pass rebuild reads its own published measurement and rebuilds to chase a
 tighter margin**, since that would make the topology a function of a
 published float and a new determinism obligation for replay (§10).
 
-**A chorded wall's `Area` difference has no proven owner, and §12 PR 3 waits
-on one.** `cellChordCurveAreaUpper` bounds the true surface's area from ABOVE,
-which is what the volume allowance's flux identity needs; the `Area` reading
-needs `|Area_held − Area_true|` over a wall cell, a different quantity, and no
-shipped helper bounds it. §8 therefore refuses rather than substitute the one
-that is available. This is an open question about a DERIVATION and not about a
-design variable: what is missing is a helper in `bounds.go` carrying a written
-proof of that difference.
-
-**`loftStationCap`'s value is this document's one open variable.** §5.1
-states the rule the cap obeys and everything an implementation needs to
-decide S15 from the record — the per-segment share, the `mMax` comparison,
-and the checked arithmetic — but not the number itself. The number is fixed
-by the increment that lands the station generator (§12 PR 3), inside two
-constraints §5.1 already states: a build whose `Σstations` reaches the cap
-must assemble an `F` whose `F*(F-1)/2` is strictly below
-`maxFacetPairTestsPerCall` (§6), and the cap must leave room for every
+**`loftStationCap`'s value is resolved.** §5.1 states the rule the cap obeys
+and everything an implementation needs to decide S15 from the record — the
+per-segment share, the `mMax` comparison, and the checked arithmetic — and the
+number itself is the unexported `loftStationCap` constant in `loft_build.go`,
+whose own doc comment carries the derivation and is its ONE defining site.
+That derivation discharges the two constraints §5.1 states: a build whose
+`Σstations` reaches the cap assembles an `F` whose `F*(F-1)/2` is strictly
+below `maxFacetPairTestsPerCall` (§6), and the cap leaves room for every
 fixture §13 requires. Nothing else in this document reads the number: every
 station count named here, the reference fixture's FORCED 64 included, is
 stated against the chord target above rather than against the cap.
 
-Every other design variable this document depends on is resolved above, and
-§12's PR 4 row is future work rather than an open question of this design.
+Every design variable this document depends on is resolved above, and §12's
+PR 4 row is future work rather than an open question of this design.
 
 ## 15. Companion edits
 
@@ -1845,9 +1916,13 @@ allowance names `chordedBoundaryVolumeAllow`'s four legs (§8.1), never a
   table and the exact-restatement text under it, §13's T6 row, and §14's
   `loftPayload` test obligation. Its `sourceBound(face)` and `Bound` are the
   facet departure, its `volSymDiff` composes the four-leg chorded allowance,
-  and its `areaSlack` has no chorded term to state while a chorded `Area`
-  itself has no owner (§8). A chorded loft is not an all-planar
-  zero-bound mesh-boolean operand however it is placed.
+  and its `areaSlack` is the per-triangle perturbation sum, which for a
+  CHORDED body carries the two further terms §8 composes into that body's own
+  `Area` bound: the wall's three-leg area gap — `cellTwistAreaAllow`,
+  `cellChordCurveAreaAllow` and `cellStationShiftAreaAllow` — beside the two
+  caps' `capAreaAllow` (§5.2's table owns each term and its zero condition).
+  A chorded loft is not an all-planar zero-bound mesh-boolean operand however
+  it is placed.
 - **`docs/clearance-design.md`**: §2's `loftPayload` sentence, which decides a
   box-disjoint partition on the `Bounds` reading and names the wider facet
   departure for the distance a future adapter would measure against a held
@@ -1862,6 +1937,6 @@ allowance names `chordedBoundaryVolumeAllow`'s four legs (§8.1), never a
 - **`docs/verification-design.md`**: §3's `bodyGateDiameter` prose, which
   earns the vertex maximum as the true diameter for a `LineSeg`-only loft at
   `delta` zero, as a lower bound on it for a chorded one whose every station
-  is pinned, and as the `2*delta`-shrunk reading wherever `delta` is
+  publishes a zero `stationRound`, and as the `2*delta`-shrunk reading wherever `delta` is
   positive — a condition on `delta` and never on the body having been placed
   (§12).

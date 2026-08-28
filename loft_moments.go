@@ -46,9 +46,53 @@ type loftMassAccumulator struct {
 	// delta is the placement's own proven displacement of every held vertex
 	// from the exact placed image of the recorded sections (loft_build.go's
 	// loftPayload.delta, docs/loft-design.md §5/§12 PR 2a) — zero for an
-	// unplaced body. Every extra term below is gated on delta > 0, so an
-	// unplaced loft's published measurements stay bit-identical to PR 1's.
+	// unplaced LineSeg-only body. Every extra term below is gated on
+	// delta > 0, so an unplaced LineSeg-only loft's published measurements
+	// stay bit-identical to PR 1's.
 	delta float64
+
+	// sectionDelta is loft_build.go's loftPayload.sectionDelta: the proven
+	// upper bound, as a MAX over cells, on how far a BUILT CHORD point sits
+	// from the recorded curve it chords, AS A SET (a10-plan.md Part 3 PR 6) —
+	// zero for a LineSeg-only pairing. It is delta's independent twin
+	// (loftPayload's own doc comment), never composed as if it were delta.
+	// It is ALSO never bounds.go's cellChordCurveAreaUpper (or
+	// chordedBoundaryVolumeAllow/chordedBoundaryMomentAllow/
+	// chordedBoundarySeamAllow's) own matchedDeltaUpper obligation — a
+	// STRONGER, PARAMETER-MATCHED quantity sectionMatchedDelta below carries
+	// instead — and that includes the cap-area tube
+	// (sectionDisplacementArea), whose own §5.2 row names the matched term
+	// because a held cap polygon's vertices are displaced as well as chorded.
+	// sectionDelta's OWN remaining spend is Bounds.Bound, a SET-distance
+	// reading, and the terms below that read it are gated on sectionDelta > 0
+	// exactly as the delta-driven terms are gated on delta > 0.
+	sectionDelta float64
+
+	// sectionMatchedDelta is docs/loft-design.md §5.2's own matchedDelta term,
+	// composed by evalLoft as absSumUpper(sectionDelta, delta) over that
+	// table's sectionDelta and delta rows: how far one point of a HELD chord
+	// sits from the point the recorded curve denotes at the SAME arc-length
+	// parameter. It is a DIFFERENT, strictly stronger quantity than
+	// sectionDelta's own SET-distance sagitta and never interchangeable with
+	// it, and it is not the sagitta with a new name either — the delta leg is
+	// what charges the computed station's own displacement, which the sagitta
+	// leaves out (§5.2's matchedDelta paragraph). Every composed reading that
+	// needs "the SAME parameter-matched displacement leg (a)'s own
+	// obligation" — bounds.go's own phrase, repeated verbatim on
+	// chordedBoundaryVolumeAllow, chordedBoundaryMomentAllow and
+	// chordedBoundarySeamAllow's own doc comments — reads this field, never
+	// sectionDelta. It stays exactly 0 on a build with no chorded cell at all
+	// (a LineSeg-only pairing), whose held triangle pair IS the boundary §5
+	// gives it and whose vertex displacement the delta-keyed legs above
+	// already charge.
+	sectionMatchedDelta float64
+
+	// chorded holds the six legs computeLoftChordedAllow derives from the
+	// composed sectionMatchedDelta and the delta above (loft_build.go): every
+	// field stays
+	// its zero value unless evalLoft calls computeLoftChordedAllow, which it
+	// does only when sectionDelta > 0 or sectionMatchedDelta > 0.
+	chorded loftChordedAllow
 
 	// vol6 is Σ (A-anchor)·((B-anchor)×(C-anchor)) over every triangle of T:
 	// six times the signed volume (docs/loft-design.md §8).
@@ -65,11 +109,20 @@ type loftMassAccumulator struct {
 	// vertex (bounds.go's sweptMomentAllow reads it widened by delta at the
 	// point of use, since the true vertex may sit up to delta further out).
 	coordUpper float64
+	// distUpper is coordUpper's Euclidean twin (a10-plan.md Part 3 PR 6): the
+	// max |v-anchor| (3D distance, not inf-norm) over every held vertex —
+	// computeLoftChordedAllow's own posUpper reading, tighter than
+	// radius3D(coordUpper) since it never assumes the three per-axis
+	// extremes land on one vertex at once.
+	distUpper float64
 
 	// perturbAreaSum is Σ perturbedTriangleAreaAllow(...) over EVERY triangle
-	// of T — walls and caps alike — the extra area a placement's delta can
-	// add on top of the held triangle areas area() already sums. It stays
-	// exactly 0 when delta is 0.
+	// of T — walls and caps alike — the extra area the payload's own delta
+	// can add on top of the held triangle areas area() already sums. That
+	// per-TRIANGLE role is all of it: a chorded wall cell's held-to-denoted
+	// SURFACE step is cellStationShiftAreaAllow's leg of areaExcess instead,
+	// area()'s own composition site and cellChordCurveAreaAllow's (bounds.go)
+	// owning the split. It stays exactly 0 when delta is 0.
 	perturbAreaSum float64
 
 	// wallAreaSum is the naive float sum of the per-triangle PROVEN LOWER
@@ -92,17 +145,21 @@ type loftMassAccumulator struct {
 
 // newLoftMassAccumulator opens a fresh accumulator anchored at the loft's
 // first profile plane origin (docs/loft-design.md §8), carrying the
-// payload's own proven placement displacement delta (§12 PR 2a) — zero for
-// an unplaced body.
-func newLoftMassAccumulator(anchor r3.Vec, delta float64) *loftMassAccumulator {
+// payload's own proven placement displacement delta (§12 PR 2a), the
+// SET-distance sagitta sectionDelta, and §5.2's own composed PARAMETER-MATCHED
+// term sectionMatchedDelta (a10-plan.md Part 3 PR 6/PR 9) — all three zero for
+// an unplaced LineSeg-only body.
+func newLoftMassAccumulator(anchor r3.Vec, delta, sectionDelta, sectionMatchedDelta float64) *loftMassAccumulator {
 	return &loftMassAccumulator{
-		anchor:  xptOf(anchor),
-		anchorF: anchor,
-		delta:   delta,
-		vol6:    new(big.Rat),
-		momX:    new(big.Rat),
-		momY:    new(big.Rat),
-		momZ:    new(big.Rat),
+		anchor:              xptOf(anchor),
+		anchorF:             anchor,
+		delta:               delta,
+		sectionDelta:        sectionDelta,
+		sectionMatchedDelta: sectionMatchedDelta,
+		vol6:                new(big.Rat),
+		momX:                new(big.Rat),
+		momY:                new(big.Rat),
+		momZ:                new(big.Rat),
 	}
 }
 
@@ -192,10 +249,37 @@ func (m *loftMassAccumulator) foldBounds(p r3.Vec) {
 }
 
 // foldCoordUpper extends coordUpper over one held vertex's own inf-norm
-// distance from anchor.
+// distance from anchor, and distUpper (a10-plan.md Part 3 PR 6) over its
+// own EUCLIDEAN distance from anchor — a tighter reading than
+// radius3D(coordUpper) by up to sqrt(3), since the inf-norm bound assumes
+// the per-axis extremes are simultaneously achieved at one vertex, which a
+// real point set rarely does. computeLoftChordedAllow reads distUpper for
+// chordedBoundarySeamAllow's own posUpper obligation.
+//
+// distUpper is PROVEN by exact rational arithmetic, the SAME mechanism
+// computeLoftChordedAllow's own h1Upper reading already uses
+// (ratSquaredDistance3/ratSqrtUp): p and anchorF are both float64, hence
+// both exact rationals, so ratSquaredDistance3 is the true squared distance
+// with no rounding of its own, and ratSqrtUp brackets its root by exact
+// comparison, proven whatever the platform's own sqrt does. An earlier
+// version of this function instead nudged r3.Vec.Len()'s own float64
+// result outward by a single upRound — one ulp — which does not cover
+// Len()'s own composed rounding (Sub, two nested Hypot calls each with
+// their own error) and so was not actually proven to enclose the true
+// distance; the exact-rational route replaces that single-ulp guess with a
+// derivation this function's own callers can trust the same way h1Upper's
+// already is. A vertex or anchor coordinate ratSquaredDistance3 cannot read
+// as an exact rational (non-finite) answers +Inf here rather than silently
+// dropping the widening — the same "absent bound must never read as small"
+// rule this file's other terms already follow.
 func (m *loftMassAccumulator) foldCoordUpper(p r3.Vec) {
 	d := p.Sub(m.anchorF)
 	m.coordUpper = max(m.coordUpper, math.Abs(d.X), math.Abs(d.Y), math.Abs(d.Z))
+	dist := math.Inf(1)
+	if d2 := ratSquaredDistance3(m.anchorF.X, m.anchorF.Y, m.anchorF.Z, p.X, p.Y, p.Z); d2 != nil {
+		dist = ratSqrtUp(d2)
+	}
+	m.distUpper = max(m.distUpper, dist)
 }
 
 // volume publishes Σvol6/6, rounded to float64 exactly once. Its Exactness
@@ -218,6 +302,12 @@ func (m *loftMassAccumulator) volume(verts []r3.Vec, tris [][3]int) Measurement 
 		areaUpper := perturbedAreaUpper(verts, tris, m.delta)
 		bound = absSumUpper(bound, sweptVolumeAllow(m.delta, areaUpper))
 	}
+	if m.sectionDelta > 0 || m.sectionMatchedDelta > 0 {
+		bound = absSumUpper(bound, chordedBoundaryVolumeAllow(
+			m.sectionMatchedDelta, m.chorded.wallAreaUpper, m.chorded.twistVolumeUpper,
+			m.chorded.capVolumeUpper, m.chorded.seamAllow,
+		))
+	}
 	return Measurement{
 		Value:     units.CubicMillimeters(value),
 		Exactness: exactnessOf(bound),
@@ -228,19 +318,32 @@ func (m *loftMassAccumulator) volume(verts []r3.Vec, tris [][3]int) Measurement 
 // centroid publishes anchor + Σmoment/(4·Σvol6) as a VecMeasurement, each of
 // the three coordinates rounded to float64 exactly once. Bound is radius3D
 // of the largest per-coordinate rounding error, Exact only when all three
-// round exactly AND the payload carries no placement displacement
-// (docs/loft-design.md §8, §12 PR 2a). A loft with zero net volume has no
-// centroid.
+// round exactly AND the payload carries no placement or section displacement
+// (docs/loft-design.md §8, §12 PR 2a, a10-plan.md Part 3 PR 6). A loft with
+// zero net volume has no centroid.
 //
-// A placement (delta > 0) widens each coordinate's bound by
-// placedCentroidAllow's own quotient composition — moments.go's
-// boundedQuotient formula, specialized to the proven volume/moment
-// allowances sweptVolumeAllow/sweptMomentAllow already state rather than a
-// fresh division. A non-positive clearance (the volume allowance is not
-// smaller than the held volume) leaves the quotient's denominator with
-// nothing left to divide by, so the centroid is unstateable — refused
-// ErrUnsupported (Table S, S12) rather than published with a bound nobody
-// could use.
+// A placement (delta > 0) and a curved pairing (sectionDelta > 0 or
+// sectionMatchedDelta > 0) each widen one COMBINED volume allowance epsV and
+// one COMBINED first-moment allowance epsM before either is spent: delta's
+// own leg is sweptVolumeAllow/sweptMomentAllow, and the curved pairing's leg
+// is chordedBoundaryVolumeAllow/chordedBoundaryMomentAllow, both composed
+// from sectionMatchedDelta — the PARAMETER-MATCHED quantity those two
+// helpers' own doc comments oblige, never sectionDelta, whose SET-distance
+// sagitta is spent on Bounds instead. The two legs are mechanically distinct (a vertex displaced versus
+// a boundary replaced by a nearby non-mesh surface, docs/loft-design.md §5),
+// but each publishes a volume and a first-moment allowance over the SAME
+// anchored accumulator, so ONE clearance test and ONE placedCentroidAllow
+// quotient composition — moments.go's boundedQuotient formula, specialized to
+// whichever allowances are active — cover both. A non-positive clearance (the
+// combined volume allowance is not smaller than the held volume) leaves the
+// quotient's denominator with nothing left to divide by, so the centroid is
+// unstateable — refused ErrUnsupported (Table S, S12) rather than published
+// with a bound nobody could use. This gate is reachable on an UNPLACED body
+// under a curved pairing alone (a10-plan.md Part 3 PR 6): delta's own fast
+// path (delta == 0) does not imply epsV == 0, and EITHER section quantity on
+// its own reaches it, since a free-form cell can carry a positive
+// matchedDelta at an exactly-zero sagitta (spline_sagitta.go's own
+// counterexample).
 func (m *loftMassAccumulator) centroid(verts []r3.Vec, tris [][3]int) (VecMeasurement, error) {
 	if m.vol6.Sign() == 0 {
 		return VecMeasurement{}, fmt.Errorf(`%w: a loft with zero net volume has no centroid`, ErrDegenerate)
@@ -258,16 +361,30 @@ func (m *loftMassAccumulator) centroid(verts []r3.Vec, tris [][3]int) (VecMeasur
 	by := rationalFloatError(cy, fy)
 	bz := rationalFloatError(cz, fz)
 
-	if m.delta > 0 {
+	if m.delta > 0 || m.sectionDelta > 0 || m.sectionMatchedDelta > 0 {
 		vol := new(big.Rat).Quo(m.vol6, big.NewRat(6, 1))
 		volValue, _ := vol.Float64()
-		areaUpper := perturbedAreaUpper(verts, tris, m.delta)
-		epsV := sweptVolumeAllow(m.delta, areaUpper)
-		epsM := sweptMomentAllow(m.delta, areaUpper, m.coordUpper+m.delta)
+
+		epsV, epsM := 0.0, 0.0
+		if m.delta > 0 {
+			areaUpper := perturbedAreaUpper(verts, tris, m.delta)
+			epsV = absSumUpper(epsV, sweptVolumeAllow(m.delta, areaUpper))
+			epsM = absSumUpper(epsM, sweptMomentAllow(m.delta, areaUpper, m.coordUpper+m.delta))
+		}
+		if m.sectionDelta > 0 || m.sectionMatchedDelta > 0 {
+			epsV = absSumUpper(epsV, chordedBoundaryVolumeAllow(
+				m.sectionMatchedDelta, m.chorded.wallAreaUpper, m.chorded.twistVolumeUpper,
+				m.chorded.capVolumeUpper, m.chorded.seamAllow,
+			))
+			epsM = absSumUpper(epsM, chordedBoundaryMomentAllow(
+				m.sectionMatchedDelta, m.chorded.wallAreaUpper, m.chorded.twistVolumeUpper,
+				m.chorded.capVolumeUpper, m.chorded.seamAllow, m.chorded.maxTwistOffsetUpper, m.coordUpper,
+			))
+		}
 
 		clearance := math.Nextafter(math.Abs(volValue)-epsV, math.Inf(-1))
 		if clearance <= 0 {
-			return VecMeasurement{}, fmt.Errorf(`%w: the placement's proven volume allowance is not smaller than the held volume; this evaluator cannot state the placed centroid`, ErrUnsupported)
+			return VecMeasurement{}, fmt.Errorf(`%w: the placement and section proven volume allowance is not smaller than the held volume; this evaluator cannot state the placed centroid`, ErrUnsupported)
 		}
 		bx = absSumUpper(bx, placedCentroidAllow(fx-m.anchorF.X, epsM, epsV, clearance))
 		by = absSumUpper(by, placedCentroidAllow(fy-m.anchorF.Y, epsM, epsV, clearance))
@@ -297,23 +414,27 @@ func placedCentroidAllow(coordRel, epsM, epsV, clearance float64) float64 {
 	return upRound(numerator / clearance)
 }
 
-// bounds publishes the componentwise min/max over every held vertex. For an
-// unplaced body it is always Exact: every vertex is already exact by
-// construction, so an extreme over an already-exact set introduces no
-// rounding of its own (docs/loft-design.md §8). A placed body's box carries
-// the payload's own delta (§12 PR 2a): the held vertex set is no longer
-// provably exact, so the box's Bound is delta and its Exactness is Exact
-// only when delta is zero. The second return is false only when add has
-// never been called.
+// bounds publishes the componentwise min/max over every held vertex. Bound
+// is absSumUpper(delta, sectionDelta) — NON-NEGOTIABLE (a10-plan.md Part 3
+// PR 6): a chorded curved section's TRUE curve bulges OUTSIDE the station
+// polygon this box is taken over, so a box carrying only delta UNDERSTATES
+// the true box, and Verify's box-disjointness (Table D row D3) reads Bounds
+// to prove pairs disjoint — understating it is unsound in the one direction
+// that matters. For an unplaced LineSeg-only body both terms are exactly
+// zero, absSumUpper(0, 0) is exactly 0.0 (upRound never nudges a
+// non-positive value), and Exactness stays Exact — bit-identical to before
+// this field existed. The second return is false only when add has never
+// been called.
 func (m *loftMassAccumulator) bounds() (Box, bool) {
 	if !m.haveBounds {
 		return Box{}, false
 	}
+	bound := absSumUpper(m.delta, m.sectionDelta)
 	return Box{
 		Min:       m.lo,
 		Max:       m.hi,
-		Exactness: exactnessOf(m.delta),
-		Bound:     units.Millimeters(m.delta),
+		Exactness: exactnessOf(bound),
+		Bound:     units.Millimeters(bound),
 	}, true
 }
 
@@ -331,8 +452,8 @@ func (m *loftMassAccumulator) bounds() (Box, bool) {
 // underflowing on a subnormal wall triangle, a saturated wallAreaAbs), which
 // is a fact about the proof term and not about the value.
 //
-// Bound is proven independently, and every one of its four terms is charged
-// at the magnitude where its own rounding happens:
+// Bound is proven independently, and every one of its base four terms is
+// charged at the magnitude where its own rounding happens:
 //
 //   - wallAreaSlack — Σ over the triangles of the exact-rational cross-norm
 //     bracket's own width, so each triangle's area is charged at ITS OWN
@@ -342,7 +463,15 @@ func (m *loftMassAccumulator) bounds() (Box, bool) {
 //   - addBound — the final wall+cap addition's own rounding, exact.
 //
 // wallBound owns the first two and answers +Inf where either has saturated,
-// since neither is a proven scale any more.
+// since neither is a proven scale any more. A curved pairing (sectionDelta >
+// 0) adds two further terms, computeLoftChordedAllow's own areaExcess (the
+// wall's own three-leg area gap) and capAreaExcess (the SAME cap
+// chord-versus-curve gap capVolumeUpper folds into Volume, spent here as an
+// area rather than a volume) — both documented at the composition below. A
+// displaced build (delta > 0) adds perturbAreaSum, the held triangles' and the
+// caps' own per-triangle placement allowance; the wall's own held-to-denoted
+// SURFACE step is a leg of areaExcess, not of that sum, and the composition
+// site below owns the split.
 func (m *loftMassAccumulator) area(capAreas ...*big.Rat) Measurement {
 	capTotal := new(big.Rat)
 	for _, ca := range capAreas {
@@ -356,13 +485,37 @@ func (m *loftMassAccumulator) area(capAreas ...*big.Rat) Measurement {
 	value := m.wallAreaSum + capFloat
 	addBound := addRoundError(m.wallAreaSum, capFloat, value)
 	bound := absSumUpper(m.wallBound(), capBound, addBound)
-	// A placement's own per-triangle allowance covers both directions at
-	// once: the wall sum is over held triangles and the cap term is the
-	// denoted region's exact rational, and the two differ by at most this
-	// sum (docs/loft-design.md §12 PR 2a). Gated on delta > 0 so an
-	// unplaced loft's Area stays bit-identical to PR 1's.
+	// The per-triangle allowance covers both directions at once: the wall
+	// sum is over held triangles and the cap term is the denoted region's
+	// exact rational, and the two differ by at most this sum
+	// (docs/loft-design.md §12 PR 2a). That TRIANGLE-level role is the whole
+	// of what it is proven for. The wall's own SURFACE step from the held
+	// corners to the stations they denote is a different quantity of the same
+	// shape, charged by cellStationShiftAreaAllow inside areaExcess below;
+	// cellChordCurveAreaAllow's own three-leg composition section owns that
+	// split. The gate stays delta > 0, and an unplaced LineSeg-only loft's
+	// Area stays bit-identical to PR 1's.
 	if m.delta > 0 {
 		bound = absSumUpper(bound, m.perturbAreaSum)
+	}
+	// A curved pairing's own wall three-leg area gap PLUS its own cap
+	// chord-versus-curve excess (a10-plan.md Part 3 PR 6,
+	// computeLoftChordedAllow's own doc comment): the wall sum above is over
+	// held CHORD triangles, and the true wall surface a circular cell's own
+	// arc denotes carries more area than its chord (areaExcess); capFloat
+	// above is capPolygonAreaRat, the built polygon's own exact rational, and
+	// the region the loft's construction actually denotes is the CURVED
+	// region sectionDisplacementArea bounds the gap to on EITHER cap
+	// (capAreaExcess) — the identical gap capVolumeUpper folds into the
+	// Volume leg via a plane-offset division that Area, having no such
+	// offset, spends unfolded. Both are gated on sectionDelta > 0 OR
+	// sectionMatchedDelta > 0 — never sectionDelta alone — so a free-form
+	// cell whose matchedDelta is positive at an exactly-zero sagitta
+	// (spline_sagitta.go's own counterexample) still has its wall and cap
+	// excess charged; an unplaced LineSeg-only loft, where both are exactly
+	// 0, stays bit-identical to PR 1's.
+	if m.sectionDelta > 0 || m.sectionMatchedDelta > 0 {
+		bound = absSumUpper(bound, m.chorded.areaExcess, m.chorded.capAreaExcess)
 	}
 
 	return Measurement{
@@ -394,3 +547,298 @@ func (m *loftMassAccumulator) wallBound() float64 {
 	}
 	return absSumUpper(m.wallAreaSlack, sumSlop(m.wallTerms, m.wallAreaAbs))
 }
+
+// loftChordedAllow bundles chordedBoundaryVolumeAllow's and
+// chordedBoundaryMomentAllow's own four composed legs, plus the wall's own
+// three-leg area gap (docs/loft-design.md §5/§8, a10-plan.md
+// Part 3 PR 6's integration task). Every field of the zero value is 0, the
+// correct standing for a LineSeg-only loft that never calls
+// computeLoftChordedAllow at all. It is also what a REFUSING call returns
+// beside its error, where the zero stands for nothing at all and no consumer
+// ever sees it: evalLoft propagates that error and publishes no measurement.
+type loftChordedAllow struct {
+	wallAreaUpper       float64
+	twistVolumeUpper    float64
+	maxTwistOffsetUpper float64
+	capVolumeUpper      float64
+	seamAllow           float64
+	// areaExcess is the wall's own per-cell area gap summed over chorded
+	// cells: the ruled, twist and station-shift legs of the three-leg
+	// composition cellChordCurveAreaAllow's own doc comment states, composed
+	// by absSumUpper at computeLoftChordedAllow's own loop.
+	areaExcess float64
+	// capAreaExcess is capAreaAllow0 and capAreaAllow1 (each
+	// sectionDisplacementArea over its own cap's boundary) composed by
+	// absSumUpper: the SAME two per-cap area allowances capVolumeUpper folds
+	// into a volume via capAreaVolumeAllow's own |h|/3 identity, spent here
+	// UNFOLDED as an area instead — area()'s own AREA reading, unlike
+	// volume(), has no plane offset h to divide by, since a cap's own
+	// published area IS the built polygon's area and the true denoted area
+	// differs from it by exactly this much (docs/loft-design.md §5/§8).
+	capAreaExcess float64
+}
+
+// computeLoftChordedAllow derives loftChordedAllow's six legs by walking
+// every wall cell of every loop pairs holds, over the SAME cell corner
+// convention assembleLoft's own Table B split uses (vLo, vHi = section-0's
+// two corners; wLo, wHi = section-1's) — verts/vIdx/wIdx are evalLoft's own
+// assembled loftAssembly fields, read after the whole mass-accumulator add
+// loop so coordUpper is complete. anchor is the accumulator's own anchor
+// (p0's placed plane origin).
+//
+// matchedDelta is docs/loft-design.md §5.2's own matchedDelta term, already
+// COMPOSED by evalLoft as absSumUpper(sectionDelta, delta) over that table's
+// sectionDelta and delta rows — the build-wide PARAMETER-MATCHED displacement,
+// spent on every leg that table keys on it: the cap-area tube
+// (sectionDisplacementArea, below, whose capAreaAllow row names this term and
+// not the sagitta, because a held cap polygon's own vertices are displaced as
+// well as chorded) and chordedBoundarySeamAllow's own matchedDelta/posUpper
+// obligations. delta is that same table's delta row on its own — the held
+// vertex displacement — passed alongside so each cell can compose its OWN
+// tighter matched reading through chordCellDeltaUpper (loft_build.go) from the
+// cell's own chord-to-curve half rather than the build-wide maximum. Neither is
+// ever the sagitta alone: reading matchedDelta as sectionDelta leaves the
+// computed station's own displacement uncharged on every chorded leg (§5.2's
+// matchedDelta paragraph).
+//
+// A cell contributes to wallAreaUpper (cellChordCurveAreaUpper),
+// twistVolumeUpper (cellTwistVolumeAllow), maxTwistOffsetUpper (the MAX,
+// never a sum, of cellTwistOffsetUpper) and seamPerimeterUpper's own running
+// total ONLY when its own CHORD-TO-CURVE departure is positive
+// (pairs[i].matchedDelta[j] > 0, the cell's own half of §5.2's matchedDelta
+// composition) — NEVER keyed on a segment kind (a10-plan.md Part 3 PR 9 Task
+// 1a): an exact LineSeg cell's true curve already IS its chord, so that half
+// is exactly 0 and the cell has nothing to contribute to any of those four
+// legs — its held triangle pair IS the boundary §5 gives it, and its own
+// vertex displacement is charged by the accumulator's delta-keyed legs
+// instead, never twice. The gate therefore reads the cell's chord-to-curve
+// half and never the composed matched value, which a placed build makes
+// positive on every cell including the straight ones.
+// Skipping such a cell also keeps the bound tighter than passing a zero
+// displacement through the same machinery would. Any OTHER cell with a
+// positive chord-to-curve half — circular today, a same-kind Tier A free-form cell once that
+// arm lands — is charged, regardless of which arm produced it: gating on the
+// PROVEN quantity itself, rather than on an enum naming which arm ran, is
+// what keeps a future arm from being silently exempted from this whole
+// charge the way an earlier version of this evaluator's kind-keyed gate
+// would have exempted it.
+//
+// perimeterUpperV/perimeterUpperW and walksV/walksW sum only the POSITIVE-
+// matchedDelta cells of their own cap, never every cell regardless of kind:
+// under the fixed-station chord-to-curve homotopy this whole function
+// reasons about, a LineSeg boundary never moves at all (its chord IS the
+// curve it denotes), so the symmetric difference between the held cap
+// polygon and the true denoted region is the union of the curved cells' own
+// lenses alone and already lies inside the tube sectionDisplacementArea
+// takes over their own perimeter — including the straight cells would only
+// widen an already-sound bound, never repair an unsound one, so they are
+// left out.
+//
+// h0 (cap0's own offset from anchor) is always exactly zero because anchor
+// IS a point on cap0's own plane (evalLoft's own anchor := xform.Apply(
+// plane0.Origin)) — capAreaVolumeAllow(0, ...) answers 0 without reading its
+// second argument, so capAreaAllow0 is computed but never spent BY THE VOLUME
+// LEG. h1 (cap1's own offset) is bounded by the proven exact-rational
+// distance from anchor to ANY one held cap1 vertex — valid because a plane's
+// own perpendicular offset from a point is never more than the distance to
+// any single point ON that plane, and every cap1 vertex lies on cap1's own
+// plane exactly. Where the assembly states no such distance this function
+// RETURNS errLoftCapOffsetUnderivable and publishes nothing, which is the one
+// error it raises and the reason it returns one at all; the site itself owns
+// why a zero would not do.
+//
+// capAreaAllow0 and capAreaAllow1 are ALSO area()'s own AREA reading of the
+// identical cap gap capVolumeUpper folds into a volume: h0 being zero sinks
+// capAreaAllow0 out of capVolumeUpper (an area gap in a plane THROUGH the
+// anchor sweeps no volume), but it never sinks the AREA those two allowances
+// bound in the first place — a cap's published Area is capPolygonAreaRat, the
+// built polygon's own exact rational, and the region the loft's construction
+// actually denotes is the curved region sectionDisplacementArea(matchedDelta,
+// walks, perimeterUpper) bounds the gap to, for EITHER cap, offset or not —
+// the MATCHED term, never the sagitta, because that cap polygon's own held
+// vertices are displaced as well as chorded (§5.2's capAreaAllow row).
+// capAreaExcess is absSumUpper(capAreaAllow0, capAreaAllow1), unfolded by no
+// plane-offset division at all, and area() charges it beside the wall term
+// below — omitting it (an earlier version of this function did) understates
+// Area on every curved pairing, caught on the shipped A10a wedge fixture
+// itself (TestLoftArcWedgeAreaMatchesExtrudeOracle).
+//
+// areaExcess is ALL THREE legs of the wall's own per-cell gap, composed by
+// absSumUpper — the SAME triangle-inequality composition
+// chordedBoundaryVolumeAllow's own doc comment uses for the volume gap one
+// dimension over, |true − held| <= |held − bilinear| + |bilinear − ruled at the
+// held corners| + |ruled at the held corners − ruled at the denoted stations|,
+// "bilinear" the chord patch through the cell's own four held corners:
+//
+//   - the TWIST leg, cellTwistAreaAllow (bounds.go): |held − bilinear|, how
+//     far the cell's own bilinear ruled patch can carry the held triangle
+//     pair's area, T = vLo−vHi−wLo+wHi the SAME twist vector
+//     cellTwistVolumeAllow already names, read through the SAME exact kernel
+//     that helper reads it through and so zero EXACTLY when the cell's four
+//     corners form a parallelogram (the shipped wedge's own T ≡ 0 —
+//     TestArcMatchedDeltaEqualsSagitta's family);
+//   - the RULED leg, cellChordCurveAreaAllow (bounds.go): |bilinear − true|,
+//     how far that bilinear patch's own area sits from the ruled patch through
+//     the same four corners. It reads the cell's own held corners, its two
+//     per-side arc-length bounds, its PARAMETER-MATCHED matchedDelta
+//     and its two per-side tangent-deviation ENERGIES
+//     (p.tangentEnergyV/tangentEnergyW, perCellTangentEnergy's own per-arm
+//     reading), and that helper's own doc comment carries the derivation. It
+//     replaces an arc-minus-chord LENGTH excess times a rung length, a shape
+//     third order in the cell's own sweep where the gap it stood for is
+//     SECOND order wherever the ruling runs anything but square across the
+//     section tangent — an understatement without bound on a twisted
+//     pairing.
+//   - the STATION-SHIFT leg, cellStationShiftAreaAllow (bounds.go):
+//     |ruled at the held corners − ruled at the denoted stations|, the step the
+//     first two legs stop short of, since both pin their patches at the corners
+//     the build HOLDS. It reads the cell's own held corners for the same eB
+//     convexity rung the ruled leg forms, its two per-side arc-length bounds,
+//     the SAME composed cellMatched those legs take, and the payload's own
+//     station displacement delta; that helper's own doc comment carries the
+//     derivation, one dimension up from the |e x v| + |u x f| + |e x f|
+//     expansion perturbedTriangleAreaAllow states for a single triangle. It is
+//     exactly zero on a build that holds the stations it denotes.
+//
+// cellChordCurveAreaAllow's own three-leg composition section owns the split
+// and why no reading in the first two legs is widened by delta to stand in for
+// the third.
+//
+// This is the wall term; capAreaExcess above is Area's own cap term, and the
+// two together are what area() charges beside the held triangle sum.
+func computeLoftChordedAllow(pairs []loftLoopPair, vIdx, wIdx [][]int, verts []r3.Vec, anchor r3.Vec, matchedDelta, delta, distUpper float64) (loftChordedAllow, error) {
+	var wallAreaUpper, twistVolumeUpper, maxTwistOffsetUpper, seamPerimeterUpper float64
+	var perimeterUpperV, perimeterUpperW, areaExcess float64
+	var walksV, walksW int
+
+	for i, p := range pairs {
+		n := len(p.v)
+		for j := range n {
+			if p.matchedDelta[j] <= 0 {
+				// An exact LineSeg cell's own recorded chord IS the curve it
+				// denotes, so its true departure is exactly zero: excluding
+				// it from the cap's own perimeter/walks tally
+				// (sectionDisplacementArea's own tube-plus-joints argument)
+				// is sound, not merely convenient — a zero-width segment of
+				// the tube contributes nothing to widen, and a joint whose
+				// own incident boundary never moves contributes no disk
+				// either. Gated on the proven matchedDelta itself, never on a
+				// segment kind (this function's own doc comment).
+				continue
+			}
+			walksV++
+			walksW++
+			perimeterUpperV = absSumUpper(perimeterUpperV, p.arcUpperV[j])
+			perimeterUpperW = absSumUpper(perimeterUpperW, p.arcUpperW[j])
+			jn := (j + 1) % n
+			vLo, vHi := verts[vIdx[i][j]], verts[vIdx[i][jn]]
+			wLo, wHi := verts[wIdx[i][j]], verts[wIdx[i][jn]]
+
+			// docs/loft-design.md §5.2's matchedDelta row, at THIS cell:
+			// the cell's own chord-to-curve half composed with the held
+			// vertex displacement delta, which is what makes the bound a
+			// claim about the chord the build actually DREW rather than the
+			// ideal chord between the two points the record denotes. The
+			// per-cell composition is at most the build-wide matchedDelta
+			// above (that term takes the same sum at the MAX cell), so it is
+			// the tighter of the two readings of the same row.
+			cellMatched := chordCellDeltaUpper(p.matchedDelta[j], delta)
+
+			cellWallUpper := cellChordCurveAreaUpper(vLo, vHi, wLo, wHi, p.arcUpperV[j], p.arcUpperW[j], cellMatched)
+			wallAreaUpper = absSumUpper(wallAreaUpper, cellWallUpper)
+			twistVolumeUpper = absSumUpper(twistVolumeUpper, cellTwistVolumeAllow(vLo, vHi, wLo, wHi))
+			maxTwistOffsetUpper = math.Max(maxTwistOffsetUpper, cellTwistOffsetUpper(vLo, vHi, wLo, wHi))
+			seamPerimeterUpper = absSumUpper(seamPerimeterUpper, p.arcUpperV[j], p.arcUpperW[j])
+
+			ruledLeg := cellChordCurveAreaAllow(
+				vLo, vHi, wLo, wHi,
+				p.arcUpperV[j], p.arcUpperW[j], cellMatched,
+				p.tangentEnergyV[j], p.tangentEnergyW[j],
+			)
+			twistLeg := cellTwistAreaAllow(vLo, vHi, wLo, wHi)
+			stationLeg := cellStationShiftAreaAllow(
+				vLo, vHi, wLo, wHi,
+				p.arcUpperV[j], p.arcUpperW[j], cellMatched, delta,
+			)
+			areaExcess = absSumUpper(areaExcess, ruledLeg, twistLeg, stationLeg)
+		}
+	}
+
+	capAreaAllow0 := sectionDisplacementArea(matchedDelta, walksV, perimeterUpperV)
+	capAreaAllow1 := sectionDisplacementArea(matchedDelta, walksW, perimeterUpperW)
+	// h1Upper (cap1's own offset from anchor) is bounded by the distance to
+	// the CLOSEST held cap1 vertex to anchor, never an arbitrary one: a
+	// plane's own perpendicular offset from a point is at most the distance
+	// to ANY point on that plane, so the minimum over every held vertex is
+	// the tightest such bound this evaluator can read off the assembly
+	// without a fresh plane-distance computation of its own.
+	//
+	// Either half of that reading failing is §5.2's cap planeOffsetUpper row
+	// answering +Inf, and this function REFUSES on it rather than publishing
+	// a number: a vertex whose coordinates ratSquaredDistance3 cannot read as
+	// exact rationals (a non-finite coordinate) states no distance at all, and
+	// an assembly whose every cap1 vertex overflows ratSqrtUp leaves the
+	// minimum at +Inf, as does an assembly stating no cap1 vertex. §5.2's own
+	// closing rule — an enclosure the record cannot state answers +Inf and the
+	// build refuses at Table S row S14, "never a finite substitute and never a
+	// published zero" — is what forbids the obvious alternative of assigning
+	// h1Upper = 0 here. That zero is not a bound: capAreaVolumeAllow takes its
+	// planeOffsetUpper <= 0 arm on it and publishes capVolumeUpper = 0, the
+	// SMALLEST possible number standing in for a quantity this evaluator could
+	// not derive, in a term every consumer reads as an upper bound. Nothing
+	// about the surrounding legs is allowed to excuse it: whether a sibling leg
+	// happens to saturate on the same assembly is that leg's own business, and
+	// a bound may not rest on another term's value to stay sound.
+	h1Upper := math.Inf(1)
+	for _, row := range wIdx {
+		for _, idx := range row {
+			v := verts[idx]
+			d2 := ratSquaredDistance3(anchor.X, anchor.Y, anchor.Z, v.X, v.Y, v.Z)
+			if d2 == nil {
+				return loftChordedAllow{}, errLoftCapOffsetUnderivable
+			}
+			h1Upper = math.Min(h1Upper, ratSqrtUp(d2))
+		}
+	}
+	if isNonFinite(h1Upper) {
+		return loftChordedAllow{}, errLoftCapOffsetUnderivable
+	}
+	capVolumeUpper := absSumUpper(
+		capAreaVolumeAllow(0, capAreaAllow0),
+		capAreaVolumeAllow(h1Upper, capAreaAllow1),
+	)
+
+	// posUpper (chordedBoundarySeamAllow's own obligation): the held
+	// material's own max EUCLIDEAN distance from anchor (distUpper, tighter
+	// than radius3D(coordUpper) — this file's own foldCoordUpper doc
+	// comment), widened by matchedDelta — chordedBoundarySeamAllow's
+	// own doc comment requires "the SAME parameter-matched displacement leg
+	// (a)'s own obligation", never the sagitta alone, so this widening and
+	// the matchedDelta argument beside it both read §5.2's own COMPOSED
+	// matched term, never either half of it alone.
+	posUpper := absSumUpper(distUpper, matchedDelta)
+	seamAllow := chordedBoundarySeamAllow(matchedDelta, posUpper, seamPerimeterUpper)
+
+	return loftChordedAllow{
+		wallAreaUpper:       wallAreaUpper,
+		twistVolumeUpper:    twistVolumeUpper,
+		maxTwistOffsetUpper: maxTwistOffsetUpper,
+		capVolumeUpper:      capVolumeUpper,
+		seamAllow:           seamAllow,
+		areaExcess:          areaExcess,
+		capAreaExcess:       absSumUpper(capAreaAllow0, capAreaAllow1),
+	}, nil
+}
+
+// errLoftCapOffsetUnderivable is the sentinel docs/loft-design.md Table S row
+// S14 carries for the cap planeOffsetUpper term (§5.2), raised in the
+// CONSTRUCTION arm §4's gate-order paragraph assigns that term — it reads the
+// held vertex table, which the record-only arm does not have. Like its
+// certified-sagitta and station-displacement twins the shape itself is fine and
+// the chord set is buildable; only one of the proven displacement terms the
+// published cap volume allowance is composed from cannot be stated, so the
+// sentinel is ErrUnsupported and no finite value — least of all a zero — is
+// published in its place.
+var errLoftCapOffsetUnderivable = fmt.Errorf(
+	`%w: a chorded loft cap's plane offset from the mass anchor has no derivation from this assembly`, ErrUnsupported,
+)

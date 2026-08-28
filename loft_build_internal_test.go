@@ -378,17 +378,19 @@ func TestLoftPairingsDefaultOffsetIsZero(t *testing.T) {
 	p := unitSquareProfile()
 	offsets := []int{0}
 	walks := resolveLoftLoopWalks(t, p)
-	pairs, sectionDelta, err := loftPairings(p, p, offsets, walks, walks, 0, nil, nil)
+	pairs, sectionDelta, sectionMatchedDelta, stationRound, err := loftPairings(p, p, offsets, walks, walks, 0, nil, nil)
 	require.NoError(t, err)
 	require.Equal(t, pt(0, 0), pairs[0].w[0])
 	require.Zero(t, sectionDelta, "a LineSeg-only pairing carries no curve to depart from")
+	require.Zero(t, sectionMatchedDelta, "a LineSeg-only pairing carries no curve to depart from")
+	require.Zero(t, stationRound, "every segment of this square is UNTRIMMED, so every station is PINNED (docs/loft-design.md §5.2)")
 }
 
 func TestLoftPairingsAlignmentRotatesCorrespondence(t *testing.T) {
 	p := unitSquareProfile()
 	offsets := []int{1}
 	walks := resolveLoftLoopWalks(t, p)
-	pairs, _, err := loftPairings(p, p, offsets, walks, walks, 0, nil, nil)
+	pairs, _, _, _, err := loftPairings(p, p, offsets, walks, walks, 0, nil, nil) //nolint:dogsled // sectionDelta/sectionMatchedDelta/stationRound discarded; only the correspondence is under test.
 	require.NoError(t, err)
 	// loop0 segment 0 (V_0, at local (0,0)) now pairs with loop1 segment 1,
 	// whose own recorded start is local (1,0) — the far endpoint of rung R_0
@@ -411,7 +413,7 @@ func TestLoftPairingsTwoHolesPairByPosition(t *testing.T) {
 	p1 := ProfileRecord{Outer: squareLoop(0.5, 0.5, 0.5, true), Holes: []LoopRecord{largeHole, smallHole}}
 
 	offsets := []int{0, 0, 0}
-	pairs, _, err := loftPairings(p0, p1, offsets, resolveLoftLoopWalks(t, p0), resolveLoftLoopWalks(t, p1), 0, nil, nil)
+	pairs, _, _, _, err := loftPairings(p0, p1, offsets, resolveLoftLoopWalks(t, p0), resolveLoftLoopWalks(t, p1), 0, nil, nil) //nolint:dogsled // sectionDelta/sectionMatchedDelta/stationRound discarded; only the correspondence is under test.
 	require.NoError(t, err)
 
 	require.Len(t, pairs, 3) // outer + 2 holes
@@ -481,7 +483,7 @@ func TestLoftWalkResolutionChargesOncePerSegment(t *testing.T) {
 	// A free-form pairing has no station rule yet (loftCellStations' own
 	// default case, unreached from any real build since S3 refuses it
 	// first) — this is asserted below for the charge, not the correspondence.
-	_, _, err = loftPairings(profile, profile, []int{0}, [][]segmentWalk{walks}, [][]segmentWalk{walks}, 0, loopWork, loopWork)
+	_, _, _, _, err = loftPairings(profile, profile, []int{0}, [][]segmentWalk{walks}, [][]segmentWalk{walks}, 0, loopWork, loopWork) //nolint:dogsled // only the error matters here.
 	require.Error(t, err)
 	require.Equal(t, before, loopWork.spent, "loftPairings must spend no further free-form work")
 }
@@ -505,7 +507,7 @@ func TestLoftPairingsConsumesTheGateResolvedWalks(t *testing.T) {
 	require.Len(t, walks0, 1)
 	require.Len(t, walks1, 1)
 
-	pairs, _, err := loftPairings(p0, p1, offsets, walks0, walks1, 0, nil, nil)
+	pairs, _, _, _, err := loftPairings(p0, p1, offsets, walks0, walks1, 0, nil, nil) //nolint:dogsled // only the pairs and the error matter here.
 	require.NoError(t, err)
 	require.Len(t, pairs, 1)
 
@@ -648,7 +650,7 @@ func TestLoftGateDiameterIsTheVertexDiameter(t *testing.T) {
 	require.InDelta(t, 1.7320508075688772, d, 1e-12) // sqrt(3)
 
 	pl := body.payload.(loftPayload)
-	require.Zero(t, pl.delta, "an unplaced loft's vertices are exact")
+	require.Zero(t, pl.delta, "this fixture is unplaced AND every station of its untrimmed square is PINNED (docs/loft-design.md §5.2)")
 	require.Zero(t, pl.sectionDelta, "S3 admits only LineSeg pairs, so every wall cell's chord IS the recorded segment")
 	held, ok, err := pointSetDiameterContext(t.Context(), pl.verts)
 	require.NoError(t, err)
@@ -823,7 +825,13 @@ func TestValidateLoftRecordsCurvedPairIsUnsupported(t *testing.T) {
 	require.ErrorIs(t, err, ErrUnsupported, "S3: a mixed LineSeg/ArcSeg pair")
 }
 
-func TestValidateLoftRecordsSameKindCircularPairIsUnsupported(t *testing.T) {
+// TestValidateLoftRecordsSameKindCircularPairIsAdmitted supersedes the
+// arc-form S3's own admission (a10-plan.md Part 3 PR 6): a segment-position
+// pairing of the SAME kind at every position — here a CircleSeg paired with
+// a CircleSeg at position 0, LineSeg with LineSeg elsewhere — clears S3
+// structurally, whatever loft_stations_internal_test.go's own generator
+// later makes of the resulting station chain.
+func TestValidateLoftRecordsSameKindCircularPairIsAdmitted(t *testing.T) {
 	circle := func() CurveSegment {
 		return CircleSeg{Center: pt(0.5, 0.5), Radius: units.Millimeters(0.5), CCW: true, TStart: 0, TEnd: 1}
 	}
@@ -831,7 +839,7 @@ func TestValidateLoftRecordsSameKindCircularPairIsUnsupported(t *testing.T) {
 	p1 := ProfileRecord{Outer: squareLoopWithFirstSegment(circle())}
 	pl0, pl1 := planeAt(r3.NewVec(0, 0, 0)), planeAt(r3.NewVec(0, 0, 1))
 	err := validateLoftRecordsErr(p0, p1, pl0, pl1, nil, newFreeformWork(), newFreeformWork())
-	require.ErrorIs(t, err, ErrUnsupported, "S3: a same-kind CircleSeg pair is still refused in increment 1")
+	require.NoError(t, err, "S3: a same-kind CircleSeg pair at matching positions is admitted")
 }
 
 func TestValidateLoftRecordsMalformedAlignment(t *testing.T) {
@@ -955,9 +963,9 @@ func assembleLoftFixture(t *testing.T, pl loftPayload) loftAssembly {
 	require.NoError(t, err)
 	target, err := loftChordTarget(pl.profile0, pl.profile1, walks0, walks1)
 	require.NoError(t, err)
-	pairs, _, err := loftPairings(pl.profile0, pl.profile1, offsets, walks0, walks1, target, newFreeformWork(), newFreeformWork())
+	pairs, _, _, stationRound, err := loftPairings(pl.profile0, pl.profile1, offsets, walks0, walks1, target, newFreeformWork(), newFreeformWork())
 	require.NoError(t, err)
-	a, err := assembleLoft(t.Context(), pairs, pl.frame0, pl.frame1, pl.plane0, pl.xform)
+	a, err := assembleLoft(t.Context(), pairs, pl.frame0, pl.frame1, pl.plane0, pl.xform, stationRound)
 	require.NoError(t, err)
 	return a
 }
@@ -1274,7 +1282,7 @@ func TestCapPolygonAreaRatNetsEveryLoop(t *testing.T) {
 				"capEnd: the assembled polygon's shoelace %s must equal moments.go's own hole-netted region rational %s exactly",
 				got1.RatString(), ig1.exact.area.RatString())
 
-			mass := newLoftMassAccumulator(pl.xform.Apply(pl.plane0.Origin), a.delta)
+			mass := newLoftMassAccumulator(pl.xform.Apply(pl.plane0.Origin), a.delta, 0, 0)
 			for k, tri := range a.tris {
 				mass.add(a.verts[tri[0]], a.verts[tri[1]], a.verts[tri[2]], k < a.walls)
 			}

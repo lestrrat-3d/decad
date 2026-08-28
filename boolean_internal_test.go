@@ -268,6 +268,38 @@ func TestCoplanarCarrierPairIsNotSettledByCoplanarityAlone(t *testing.T) {
 	})
 }
 
+// TestNearMissKeepsACrossingTheDistanceRoutineMisreads pins the order the
+// proximity gate asks its two questions in: the EXACT classifier decides
+// whether a facet pair meets, and triTriDistance is consulted only afterwards,
+// on a pair the classifier has already proven disjoint (contactNone), where its
+// own disjointness precondition holds.
+//
+// The pair below is why the order matters. triTriDistance minimises over nine
+// edge-edge and six vertex-to-triangle distances, which is where two DISJOINT
+// convex sets attain their minimum. An intersecting pair attains it in the
+// interiors instead, so that candidate set misses it entirely and the routine
+// reports a value far above the slack for a pair that provably crosses. Asked
+// FIRST, it would drop the crossing from the gate's contact set, and a face
+// pair whose solid penetration is at or below the slack — the case
+// provenDepthExceeds cannot certify — would clear the gate with no proof
+// behind it, its topology decided by where the chords fell.
+func TestNearMissKeepsACrossingTheDistanceRoutineMisreads(t *testing.T) {
+	// A needle piercing a plate's interior: tb runs from z = -0.5 to z = 0.5
+	// through the plane z = 0, strictly inside ta.
+	ta := [3]r3.Vec{{X: -5, Y: -5, Z: 0}, {X: 5, Y: -5, Z: 0}, {X: 0, Y: 5, Z: 0}}
+	tb := [3]r3.Vec{{X: -2, Y: 0, Z: -0.5}, {X: 2, Y: 0, Z: -0.5}, {X: 0, Y: 0, Z: 0.5}}
+
+	const slack = 0.1
+	require.Equal(t, contactSegment, classify(t, ta, tb).kind, `the exact classifier proves the pair crosses`)
+	require.Greater(t, triTriDistance(ta, tb), slack,
+		`the distance routine reads the crossing pair as far apart, so it can never be the gate's first question`)
+
+	bmA, bmB := singleFacetBoolMesh(t, ta), singleFacetBoolMesh(t, tb)
+	near, err := facesNearMiss(t.Context(), bmA, []int{0}, bmB, []int{0}, slack, newContactMemo(bmA, bmB))
+	require.NoError(t, err)
+	require.True(t, near, `a proven crossing the gate cannot certify deeper than the slack stays undecidable`)
+}
+
 // tinyOffset is a displacement far below one ulp at the coordinates below, so
 // two exact points a tinyOffset apart round to the SAME float64 vertex — which
 // is what makes the stitcher weld them, and the facets they span collapse.

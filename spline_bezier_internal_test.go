@@ -55,6 +55,55 @@ func evalSpans(t *testing.T, spans []bezierSpan, at float64) (float64, float64) 
 	return u, v
 }
 
+type floatBezierSpan [][2]float64
+
+type floatBezierSpans []floatBezierSpan
+
+func floatBezierSpanOf(span bezierSpan) floatBezierSpan {
+	got := make(floatBezierSpan, len(span))
+	for i, point := range span {
+		got[i][0], _ = point.u.Float64()
+		got[i][1], _ = point.v.Float64()
+	}
+	return got
+}
+
+func floatBezierSpansOf(spans []bezierSpan) floatBezierSpans {
+	got := make(floatBezierSpans, len(spans))
+	for i, span := range spans {
+		got[i] = floatBezierSpanOf(span)
+	}
+	return got
+}
+
+// evalFloatBezierSpan is the dense-sampling oracle for tests whose sample
+// count is large. The exact-rational oracle above remains the conversion
+// check; this one avoids creating a large denominator for every sample.
+func evalFloatBezierSpan(span floatBezierSpan, at float64) (float64, float64) {
+	u := make([]float64, len(span))
+	v := make([]float64, len(span))
+	for i, point := range span {
+		u[i], v[i] = point[0], point[1]
+	}
+	oneMinus := 1 - at
+	for round := len(span) - 1; round > 0; round-- {
+		for i := range round {
+			u[i] = oneMinus*u[i] + at*u[i+1]
+			v[i] = oneMinus*v[i] + at*v[i+1]
+		}
+	}
+	return u[0], v[0]
+}
+
+func evalFloatBezierSpans(spans floatBezierSpans, at float64) (float64, float64) {
+	scaled := at * float64(len(spans))
+	index := int(math.Floor(scaled))
+	if index >= len(spans) {
+		index = len(spans) - 1
+	}
+	return evalFloatBezierSpan(spans[index], scaled-float64(index))
+}
+
 func TestSplineBezierMatchesGeomEvaluator(t *testing.T) {
 	control := []Point2{{U: 0, V: 0}, {U: 1, V: 2}, {U: 3, V: 2}, {U: 4, V: 0}, {U: 6, V: 1}, {U: 7, V: -2}}
 	coords := make([][2]float64, len(control))

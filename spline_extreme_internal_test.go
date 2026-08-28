@@ -35,10 +35,11 @@ func ratSpan(uv [][2]float64) bezierSpan {
 // bracket that understated its enclosure could not survive.
 func denseSpanExtreme(t *testing.T, spans []bezierSpan, gu, gv float64, samples int) (lo, hi float64) {
 	t.Helper()
+	floatSpans := floatBezierSpansOf(spans)
 	lo, hi = math.Inf(1), math.Inf(-1)
 	for i := 0; i <= samples; i++ {
 		at := float64(i) / float64(samples)
-		u, v := evalSpans(t, spans, at)
+		u, v := evalFloatBezierSpans(floatSpans, at)
 		g := gu*u + gv*v
 		lo = math.Min(lo, g)
 		hi = math.Max(hi, g)

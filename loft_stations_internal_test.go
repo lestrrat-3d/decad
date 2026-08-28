@@ -14,10 +14,10 @@ import (
 // This file is a10-plan.md Part 3 PR 5's own test file: loftCellStations (the
 // station generator), loftCircularCellStations (the ARC arm), the S15 station
 // cap and S16 one-sided collapsed-cell refusal, and loftPairings' own
-// station-chain and sectionDelta expansion. S3 still refuses every non-LineSeg
-// pairing (loft_build.go's own header comment states the same shape for the
-// original PR 1a landing), so every circular-arm test below calls the
-// generator or loftPairings DIRECTLY, never through Document.Loft.
+// station-chain and sectionDelta expansion. Every circular-arm test below
+// calls the generator or loftPairings DIRECTLY rather than through
+// Document.Loft, so each one pins the arm's own published readings; the
+// end-to-end arc build is pinned in loft_arc_pairs_internal_test.go.
 
 // --- shared fixtures ---
 
@@ -60,19 +60,254 @@ func degenerateArcFixture(t *testing.T) (ArcSeg, segmentWalk) {
 
 // --- loftLineCellStations / the LineSeg arm ---
 
-// TestLoftLineCellStationsIsUnchanged pins the LineSeg arm's own contract: one
-// station per side, at the segment's own recorded start, zero sagitta — the
-// exact shape a LineSeg pairing already had before this generator existed. An
-// arbitrary target must not perturb it: a straight wall's own chord IS the
-// recorded segment, so this arm never reads target at all.
+// TestLoftLineCellStationsIsUnchanged pins the LineSeg arm's own STATION
+// contract: one station per side, at the segment's own recorded start, zero
+// sagitta — the exact shape a LineSeg pairing already had before this
+// generator existed. An arbitrary target must not perturb it: a straight
+// wall's own chord IS the recorded segment, so this arm never reads target at
+// all.
+//
+// The zero stationRound here is read off these two walks' own zero
+// startBound, which is the UNTRIMMED case: both are hand-built, so both carry
+// the zero-valued walkEndBound that lineWalkEndBound stamps at a natural
+// parameter. It is NOT a property the LineSeg kind grants — §5.2 pins a
+// station by its own natural parameter and never by its kind — and the
+// trimmed-start fixture below asserts the same arm charging a positive term.
 func TestLoftLineCellStationsIsUnchanged(t *testing.T) {
 	w0 := segmentWalk{kind: walkLine, startU: 1, startV: 2}
 	w1 := segmentWalk{kind: walkLine, startU: 3, startV: 4}
-	stations0, stations1, sagitta, err := loftCellStations(w0, w1, LineSeg{}, LineSeg{}, 123.0, nil, nil)
+	stations0, stations1, sagitta, matchedDelta, stationRound, err := loftCellStations(w0, w1, LineSeg{}, LineSeg{}, 123.0, nil, nil)
 	require.NoError(t, err)
 	require.Equal(t, []Point2{{U: 1, V: 2}}, stations0)
 	require.Equal(t, []Point2{{U: 3, V: 4}}, stations1)
 	require.Zero(t, sagitta)
+	require.Equal(t, []float64{0}, matchedDelta, "a LineSeg cell's own chord IS the curve it denotes")
+	require.Zero(t, stationRound, "these two walks carry an UNTRIMMED start, whose own lineWalkEndBound is zero")
+}
+
+// --- the LineSeg arm at a TRIMMED start (docs/loft-design.md §5.2, Table C) ---
+
+// trimmedSquareCentre and trimmedSquareHalf place the trimmed-start fixture's
+// unit square at [1,2]×[1,2] rather than at the origin. Both of the replaced
+// edge's own corners then sit at a coordinate whose ULP is a normal one, which
+// is what lets BOTH of that edge's ends be trimmed and still round onto the
+// corners exactly — the property the two readings below are separated by.
+const (
+	trimmedSquareCentre = 1.5
+	trimmedSquareHalf   = 0.5
+)
+
+// trimmedStartSegment is the fragment both trimmed-start fixtures rest on: the
+// virtual line (0,1) -> (5,1) trimmed to [TStart 0.2, TEnd 0.4]. It DENOTES
+// the fixture square's own bottom edge, (1,1) -> (2,1), so the profile is the
+// same closed unit square the untrimmed loop states, its neighbours still join
+// it at recorded corners, and every VALUE reading a loft over it publishes
+// (bounds 1..2 across the section, volume 1) is unchanged.
+//
+// What changes is provenance alone, which is what makes this fragment isolate
+// the term under test. walkOf fills a trimmed walk's ends from lerp2 in FLOAT,
+// so station 0 is GENERATED (§5.1's Table C) and carries lineWalkEndBound's
+// proven gap from ratLerp, while the other three segments' starts stay
+// untrimmed recorded corners at a zero bound.
+//
+// The operands are chosen so that gap CANNOT VANISH ON ANY ARCHITECTURE. A
+// gap of one ULP is not such a choice: a compiler is free to contract
+// start + t·(end − start) into a fused multiply-add or not, and for some
+// operands the fused evaluation reproduces the exact rational lerp bit for
+// bit, leaving a true zero on that target and a nonzero gap on another. These
+// operands leave nothing for a contraction to decide, and the point the record
+// denotes is not a float64 at all:
+//
+//	The recorded Start.U is 0, so lerp2's 0 + t·(5 − 0) is the single product
+//	t × 5 whether it is fused or not, and ratLerp's exact rational is that same
+//	product. 0.2 is the float64 3602879701896397·2⁻⁵⁴ — a full 53-bit
+//	significand — and 5 × 3602879701896397 is 18014398509481985 = 2⁵⁴+1, so the
+//	denoted START is exactly (2⁵⁴+1)·2⁻⁵⁴ = 1 + 2⁻⁵⁴. 0.4 is that same
+//	significand one binade up, so the denoted END is 2 + 2⁻⁵³.
+//
+// Neither is a float64: each needs a 55-bit significand, while every float64
+// in [1,2) is a multiple of 2⁻⁵² and every one in [2,4) a multiple of 2⁻⁵¹.
+// lerp2 answers a float64, so its gap from the denoted point is positive at
+// BOTH ends on every target — a fact trimmedStartWalk proves over exact
+// rationals below rather than assumes from one machine's rounding.
+//
+// The HELD ends are the square's own corners exactly, which is what keeps the
+// denoted square intact: 2⁻⁵⁴ is a quarter of ulp(1) = 2⁻⁵² and 2⁻⁵³ a quarter
+// of ulp(2) = 2⁻⁵¹, so each denoted end rounds to the corner beside it. The V
+// component is 1 at both recorded ends, so its lerp is exactly 1 either way
+// and contributes nothing.
+//
+// The two gaps are 2⁻⁵⁴ and 2⁻⁵³ — the end's is twice the start's, by
+// construction rather than by one machine's rounding. That is what lets the
+// arm-level test separate charging the START bound from charging the end
+// bound, or from a max over both.
+func trimmedStartSegment() LineSeg {
+	return LineSeg{Start: pt(0, 1), End: pt(5, 1), TStart: 0.2, TEnd: 0.4}
+}
+
+// trimmedStartSquareProfile is the fixture square with its bottom edge
+// replaced by trimmedStartSegment's fragment. The build's stationRound is
+// therefore that one segment's own reading and nothing else's.
+func trimmedStartSquareProfile() ProfileRecord {
+	loop := squareLoop(trimmedSquareCentre, trimmedSquareCentre, trimmedSquareHalf, true)
+	loop.Segments[0] = trimmedStartSegment()
+	return ProfileRecord{Outer: loop}
+}
+
+// trimmedStartWalk resolves trimmedStartSegment's walk and proves the premises
+// every assertion over it rests on, all over exact rationals so that the proof
+// holds on every target rather than on the one that ran it.
+//
+// The first is that neither denoted end is a float64: they are exactly
+// 1 + 2⁻⁵⁴ and 2 + 2⁻⁵³, each needing a 55-bit significand. Since lerp2's
+// answer is a float64 whatever the compiler contracts, it cannot equal either,
+// and lineWalkEndBound's gap is positive at both ends everywhere. This is the
+// architecture-independent statement of "the fixture exercises a real
+// rounding" — asserting that a float came out positive states only what one
+// machine's contraction happened to do.
+//
+// The second is that the two denoted ends differ, so the end reading can never
+// stand in for the start's however either is composed. The third is that the
+// held ends are the square's own corners exactly, so the fragment states the
+// same square its untrimmed neighbours do and the VALUE readings a loft over
+// it publishes are unchanged.
+func trimmedStartWalk(t *testing.T) segmentWalk {
+	t.Helper()
+	seg := trimmedStartSegment()
+	w, err := walkOf(seg, nil)
+	require.NoError(t, err)
+
+	denotedStart := ratLerp(seg.Start.U, seg.End.U, seg.TStart)
+	denotedEnd := ratLerp(seg.Start.U, seg.End.U, seg.TEnd)
+	require.NotNil(t, denotedStart, "the fixture's own start lerp must be statable as a rational")
+	require.NotNil(t, denotedEnd, "the fixture's own end lerp must be statable as a rational")
+	require.Zero(t, denotedStart.Cmp(big.NewRat(1<<54+1, 1<<54)),
+		"the denoted start must be exactly 1 + 2⁻⁵⁴, got %s", denotedStart.RatString())
+	require.Zero(t, denotedEnd.Cmp(big.NewRat(1<<54+1, 1<<53)),
+		"the denoted end must be exactly 2 + 2⁻⁵³, got %s", denotedEnd.RatString())
+
+	for _, end := range []struct {
+		name    string
+		denoted *big.Rat
+	}{{"start", denotedStart}, {"end", denotedEnd}} {
+		_, representable := end.denoted.Float64()
+		require.False(t, representable,
+			"the denoted %s must NOT be representable as a float64: one that is can be reproduced bit for bit by lerp2, and the rounding under test would then be a true zero on that architecture", end.name)
+	}
+
+	lo, hi := trimmedSquareCentre-trimmedSquareHalf, trimmedSquareCentre+trimmedSquareHalf
+	require.Equal(t, lo, w.startU, "the denoted start rounds to the square's own bottom-left corner")
+	require.Equal(t, hi, w.endU, "the denoted end rounds to the square's own bottom-right corner")
+	require.Equal(t, lo, w.startV, "the fragment's two recorded ends share their V, so its lerp is that V exactly")
+	require.Equal(t, lo, w.endV, "the fragment's two recorded ends share their V, so its lerp is that V exactly")
+	return w
+}
+
+// TestLoftLineCellStationsChargesTrimmedStartBound is the arm-level half of
+// docs/loft-design.md §5.2's trimmed-LineSeg requirement: the LineSeg arm must
+// charge the certified lineWalkEndBound its walk carries at a TRIMMED start,
+// and must charge the START bound alone.
+//
+// Both assertions are derived in-process from the walk's own bounds and no
+// float literal is pinned anywhere: a bound of this magnitude moves by an ULP
+// between amd64 and arm64, so a literal here would be a permanently red build
+// on one of them.
+//
+// The second assertion is what separates the correct term from the plausible
+// wrong ones. This walk's two ends carry DIFFERENT certified gaps — 2⁻⁵³ at the
+// end against 2⁻⁵⁴ at the start, by trimmedStartSegment's own construction and
+// not by one machine's rounding — so an arm charging the endpoint, or a max
+// over both ends, publishes a reading this one is not, on every target. It
+// would also be charging a point this build never holds: this cell's terminal
+// station is segment 1's own recorded start, which segment 1's own cell
+// charges at its own zero bound.
+func TestLoftLineCellStationsChargesTrimmedStartBound(t *testing.T) {
+	seg := trimmedStartSegment()
+	w := trimmedStartWalk(t)
+
+	startDelta := walkEndPlaneDelta(w.startBound)
+	endDelta := walkEndPlaneDelta(w.endBound)
+	require.Positive(t, startDelta,
+		"a station the record denotes off the float64 grid must carry a positive gap")
+	require.Positive(t, endDelta,
+		"a station the record denotes off the float64 grid must carry a positive gap")
+
+	_, _, sagitta, matchedDelta, stationRound, err := loftCellStations(w, w, seg, seg, 123.0, nil, nil)
+	require.NoError(t, err)
+	require.Zero(t, sagitta, "a straight chord IS its own recorded segment, trimmed or not")
+	require.Equal(t, []float64{0}, matchedDelta, "a LineSeg cell's own chord IS the curve it denotes")
+
+	require.Equal(t, startDelta, stationRound,
+		"the LineSeg arm must charge its walk's own certified startBound at a trimmed start")
+	require.NotEqual(t, endDelta, stationRound,
+		"the arm must charge the START bound alone: this cell's terminal station is the NEXT segment's own start")
+}
+
+// TestEvalLoftTrimmedLineSegPublishesStationDisplacement is the end-to-end
+// half, and the fixture docs/loft-design.md §5.2 requires beside the pinned
+// LineSeg-only one: an UNPLACED LineSeg-only loft holding one TRIMMED station
+// must publish a Bounds.Bound equal to that station's own lineWalkEndBound
+// reading, carried through delta — never the Exact zero a kind-granted pin
+// would give it.
+//
+// The body here is the pinned fixture's own unit box translated to (1,1) —
+// trimmedStartSegment's doc comment states why the square sits there — so the
+// assertions below separate the BOUND from the VALUE cleanly: every value
+// reading is the untrimmed loop's own and only the published bound and
+// Exactness move.
+//
+// No float bound is pinned as a literal. The expected bound is recomposed
+// in-test through the same absSumUpper chain the evaluator itself uses —
+// delta = absSumUpper(stationRound, placeAllow) with placeAllow exactly zero
+// under r3.Identity(), then Bounds.Bound = absSumUpper(delta, sectionDelta)
+// with sectionDelta exactly zero on a LineSeg-only build (§5.2). That the
+// displacement is nonzero at all is trimmedStartWalk's own exact-rational
+// proof and holds on every target; the assertions here read the value it
+// publishes.
+func TestEvalLoftTrimmedLineSegPublishesStationDisplacement(t *testing.T) {
+	p := trimmedStartSquareProfile()
+	stationRound := walkEndPlaneDelta(trimmedStartWalk(t).startBound)
+
+	pl := loftPayloadFor(t, p, p, r3.NewVec(0, 0, 0), r3.NewVec(0, 0, 1))
+	body := evalLoftFixture(t, pl)
+
+	// The unplaced LineSeg-only composition: placeAllow and sectionDelta are
+	// both exactly zero, so the whole published bound is the trimmed station's
+	// own displacement carried through absSumUpper's outward rounding.
+	wantBound := absSumUpper(absSumUpper(stationRound, 0), 0)
+
+	box, err := body.Bounds()
+	require.NoError(t, err)
+	lo, hi := trimmedSquareCentre-trimmedSquareHalf, trimmedSquareCentre+trimmedSquareHalf
+	require.Equal(t, r3.NewVec(lo, lo, 0), box.Min, "the trimmed fragment denotes the same unit square")
+	require.Equal(t, r3.NewVec(hi, hi, 1), box.Max, "the trimmed fragment denotes the same unit square")
+	gotBound, err := box.Bound.In(units.Millimeter)
+	require.NoError(t, err)
+	require.Equal(t, wantBound, gotBound, "Bounds.Bound must carry the trimmed station's own displacement")
+	require.Positive(t, gotBound, "an Exact zero here would be a bound smaller than the true displacement")
+	require.Equal(t, Approximate, box.Exactness,
+		"a build holding a COMPUTED station states a bound, never an Exact zero")
+
+	vol, err := body.Volume()
+	require.NoError(t, err)
+	volValue, err := vol.Value.In(units.CubicMillimeter)
+	require.NoError(t, err)
+	require.InDelta(t, 1.0, volValue, 1e-12, "the denoted solid is still the unit box")
+	volBound, err := vol.Bound.In(units.CubicMillimeter)
+	require.NoError(t, err)
+	require.Positive(t, volBound, "the volume bound must charge the same displacement")
+	require.Equal(t, Approximate, vol.Exactness)
+
+	// The contrast that makes the assertions above meaningful: the SAME square
+	// recorded with untrimmed segments keeps every pinned Exact zero, so the
+	// movement above is the trim's own and not a blanket loss of exactness.
+	pinned := evalLoftFixture(t, loftPayloadFor(t, unitSquareProfile(), unitSquareProfile(), r3.NewVec(0, 0, 0), r3.NewVec(0, 0, 1)))
+	pinnedBox, err := pinned.Bounds()
+	require.NoError(t, err)
+	pinnedBound, err := pinnedBox.Bound.In(units.Millimeter)
+	require.NoError(t, err)
+	require.Zero(t, pinnedBound, "an untrimmed LineSeg-only loft's every station is PINNED (§5.2)")
+	require.Equal(t, Exact, pinnedBox.Exactness)
 }
 
 // --- loftCircularCellStations / the ARC arm: station count ---
@@ -158,7 +393,7 @@ func TestLoftShippedFractionOnReferenceWedge(t *testing.T) {
 	envelope := wedgeArcEnvelope(t)
 	target := loftChordFraction * envelope
 	seg, w := wedgeArcRecord(t)
-	stations, _, sagitta, err := loftCircularCellStations(w, w, seg, seg, target)
+	stations, _, sagitta, _, _, err := loftCircularCellStations(w, w, seg, seg, target) //nolint:dogsled // only the stations and the sagitta matter here.
 	require.NoError(t, err)
 	require.LessOrEqual(t, sagitta, target)
 	t.Logf("the generator at the shipped loftChordFraction on the reference wedge: m=%d (target=%.10g, certified=%.10g)", len(stations), target, sagitta)
@@ -185,7 +420,7 @@ func TestLoftCircularCellStationsJointWalkUpSharesOneCount(t *testing.T) {
 	require.NotEqual(t, m0, m1, "the fixture must seed different station counts on its two sides for this test to exercise the shared-count rule")
 	seed := max(m0, m1)
 
-	stations0, stations1, sagittaUpper, err := loftCircularCellStations(w0, w1, seg0, seg1, target)
+	stations0, stations1, sagittaUpper, _, stationUpper, err := loftCircularCellStations(w0, w1, seg0, seg1, target)
 	require.NoError(t, err)
 	require.Len(t, stations1, len(stations0), "both sides must be walked at ONE count")
 	m := len(stations0)
@@ -206,8 +441,10 @@ func TestLoftCircularCellStationsJointWalkUpSharesOneCount(t *testing.T) {
 	require.True(t,
 		loftCertifiedSagittaUpper(seg0, m) == sagittaHalf || loftCertifiedSagittaUpper(seg1, m) == sagittaHalf,
 		"the published bound's sagitta half must BE one of the two sides' own certified readings, never a blend of them")
-	require.Equal(t, chordCellDeltaUpper(sagittaHalf, requireStationDelta(t, w0, w1, seg0, seg1, m)), sagittaUpper,
-		"the published bound is that sagitta composed with the two sides' own station displacement")
+	require.Equal(t, sagittaHalf, sagittaUpper,
+		"the published sagitta IS one of the two sides' own certified readings")
+	require.Equal(t, requireStationDelta(t, w0, w1, seg0, seg1, m), stationUpper,
+		"the arm publishes the two sides' own station displacement as its own term, never folded into the sagitta")
 }
 
 // requireStationDelta is the station-displacement half of every composition
@@ -244,13 +481,14 @@ func TestLoftCircularCellStationsJointWalkUpOutrunsTheSeed(t *testing.T) {
 	require.Greater(t, loftCertifiedSagittaUpper(seg, seed), held,
 		"the certified sagitta at the seed must still exceed the target, or this fixture proves nothing about the walk-up")
 
-	stations0, stations1, sagittaUpper, err := loftCircularCellStations(w, w, seg, seg, held)
+	stations0, stations1, sagittaUpper, _, stationUpper, err := loftCircularCellStations(w, w, seg, seg, held)
 	require.NoError(t, err)
 	require.Len(t, stations1, len(stations0))
 	require.Greater(t, len(stations0), seed, "the joint walk-up must commit at least one station past the seed")
 	require.LessOrEqual(t, sagittaUpper, held)
 	m2 := len(stations0)
-	require.Equal(t, chordCellDeltaUpper(loftCertifiedSagittaUpper(seg, m2), requireStationDelta(t, w, w, seg, seg, m2)), sagittaUpper)
+	require.Equal(t, loftCertifiedSagittaUpper(seg, m2), sagittaUpper)
+	require.Equal(t, requireStationDelta(t, w, w, seg, seg, m2), stationUpper)
 }
 
 // --- the published sagitta is certified, never the held chooser's ---
@@ -284,13 +522,14 @@ func TestLoftCircularCellStationsPublishesTheCertifiedReading(t *testing.T) {
 	const target = 1e-3
 	seg, w := arcFixture(t, 5, 0, math.Pi/2, 0, 1)
 
-	stations, _, sagittaUpper, err := loftCircularCellStations(w, w, seg, seg, target)
+	stations, _, sagittaUpper, _, stationUpper, err := loftCircularCellStations(w, w, seg, seg, target)
 	require.NoError(t, err)
 	m := len(stations)
 	certified := loftCertifiedSagittaUpper(seg, m)
-	require.Equal(t, chordCellDeltaUpper(certified, requireStationDelta(t, w, w, seg, seg, m)), sagittaUpper)
-	require.Greater(t, sagittaUpper, certified,
-		"the trimmed stations of this fixture carry a real displacement, so the published bound sits strictly above the certified sagitta alone")
+	require.Equal(t, certified, sagittaUpper)
+	require.Equal(t, requireStationDelta(t, w, w, seg, seg, m), stationUpper)
+	require.Greater(t, stationUpper, 0.0,
+		"the trimmed stations of this fixture carry a real displacement, so the cell publishes a positive station term beside the certified sagitta")
 	require.NotEqual(t, chordSagitta(w.radius, math.Abs(w.th1-w.th0), m), sagittaUpper,
 		"the held chooser's own float and the certified enclosure are different readings; the arm publishes the certified one")
 }
@@ -354,19 +593,25 @@ func TestLoftCertifiedSagittaRefusesAnUnderivableRecord(t *testing.T) {
 	require.True(t, isNonFinite(loftCertifiedSagittaUpper(seg, 8)))
 
 	good, w := arcFixture(t, 5, 0, math.Pi/2, 0, 1)
-	_, _, _, err := loftCircularCellStations(w, w, good, seg, 1e-3) //nolint:dogsled // only the error matters here.
+	_, _, _, _, _, err := loftCircularCellStations(w, w, good, seg, 1e-3) //nolint:dogsled // only the error matters here.
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.ErrorIs(t, err, errLoftSagittaUnderivable)
 }
 
 // --- loftCircularCellStations: the parameter-matched discharge ---
 
-// TestLoftCircularArcSagittaIsTheUniformParameterMatchedBound pins the claim
-// loftCircularCellStations' own doc comment makes: under uniform-angle
-// parametrization (t_k = th0 + (k/m)*(th1-th0)), sup_s |arc(s) - chord(s)|
-// over one chord EQUALS the sagitta 2r*sin^2(dtheta/4) exactly, the maximum
-// always landing at s = 1/2 — proven here by dense sampling across a spread
-// of sweeps from 0.5 to 359.5 degrees, never merely one case.
+// TestLoftCircularArcSagittaIsTheUniformParameterMatchedBound corroborates
+// the claim loftCircularCellStations' own doc comment makes: under
+// uniform-angle parametrization (t_k = th0 + (k/m)*(th1-th0)),
+// sup_s |arc(s) - chord(s)| over one chord EQUALS the sagitta
+// 2r*sin^2(dtheta/4) exactly, the maximum always landing at s = 1/2. The
+// PROOF of that claim is TestArcMatchedDeltaEqualsSagitta
+// (bounds_chord_internal_test.go): an analytic derivation whose steps are
+// checked over exact rationals, covering every cell angle up to 4 radians
+// and so every cell angle chordCount can produce. What this test adds is
+// numerical corroboration across a wider spread than the derivation covers —
+// sweeps from 0.5 to 359.5 degrees, past the half turn no chord split ever
+// hands one cell — sampled, and so evidence rather than proof.
 func TestLoftCircularArcSagittaIsTheUniformParameterMatchedBound(t *testing.T) {
 	const r = 5.0
 	const samples = 20_000
@@ -393,6 +638,63 @@ func TestLoftCircularArcSagittaIsTheUniformParameterMatchedBound(t *testing.T) {
 	}
 }
 
+// TestLoftCircularCellStationsMatchedDeltaIsItsSagitta pins the coupling the
+// derivation above exists to license, on the production path itself: the
+// per-cell matchedDelta loftCircularCellStations publishes IS that pairing's
+// own sagittaUpper, for EVERY cell of the shared chain, never a separate or
+// smaller reading. That per-cell value is the CHORD-TO-CURVE HALF of
+// docs/loft-design.md §5.2's matchedDelta row, which every consumer
+// (bounds.go's cellChordCurveAreaUpper through loft_moments.go's
+// computeLoftChordedAllow) reads straight off this arm before composing it
+// with the build's own delta, and loftPayload's own doc comment states the
+// equality as fact — so it is asserted here rather than left to the
+// assignment that implements it.
+//
+// The rows exercise every shape the arm can settle on: two identical sides,
+// two sides whose own station counts differ (the shared max, where the
+// coarser side's sagitta is re-derived at m), a single-cell pairing, and a
+// degenerate radius-0 pair whose sagitta is exactly zero.
+func TestLoftCircularCellStationsMatchedDeltaIsItsSagitta(t *testing.T) {
+	for _, row := range []struct {
+		name           string
+		r0, sweep0     float64
+		r1, sweep1     float64
+		target         float64
+		wantSharedOnly bool
+	}{
+		{name: "identical sides", r0: 5, sweep0: math.Pi / 2, r1: 5, sweep1: math.Pi / 2, target: 1e-3},
+		{name: "different station counts", r0: 5, sweep0: math.Pi / 2, r1: 2, sweep1: math.Pi / 6, target: 1e-3, wantSharedOnly: true},
+		{name: "single cell", r0: 5, sweep0: math.Pi / 2, r1: 4, sweep1: math.Pi / 2, target: 10},
+		{name: "degenerate radius", r0: 0, sweep0: math.Pi / 2, r1: 0, sweep1: math.Pi / 2, target: 1e-3},
+	} {
+		t.Run(row.name, func(t *testing.T) {
+			seg0, w0 := arcFixture(t, row.r0, 0, row.sweep0, 0, 1)
+			seg1, w1 := arcFixture(t, row.r1, 0, row.sweep1, 0, 1)
+
+			if row.wantSharedOnly {
+				m0, _, err := chordCount(w0, row.target)
+				require.NoError(t, err)
+				m1, _, err := chordCount(w1, row.target)
+				require.NoError(t, err)
+				require.NotEqual(t, m0, m1, "this row must need different station counts on its two sides")
+			}
+
+			stations0, stations1, sagitta, matchedDelta, _, err := loftCircularCellStations(w0, w1, seg0, seg1, row.target)
+			require.NoError(t, err)
+			require.Len(t, stations1, len(stations0))
+			require.Len(t, matchedDelta, len(stations0),
+				"one matched-delta entry per cell, the count loftCellStations' own doc comment fixes")
+
+			want := make([]float64, len(stations0))
+			for i := range want {
+				want[i] = sagitta
+			}
+			require.Equal(t, want, matchedDelta,
+				"every circular cell's matchedDelta must equal the pairing's own sagitta %v exactly", sagitta)
+		})
+	}
+}
+
 // --- S15: the station cap ---
 
 // TestLoftCellStationsStationCapFiresBeforeAuditCeiling is S15: a target this
@@ -414,7 +716,7 @@ func TestLoftCircularArcSagittaIsTheUniformParameterMatchedBound(t *testing.T) {
 // that would otherwise reach the audit ceiling.
 func TestLoftCellStationsStationCapFiresBeforeAuditCeiling(t *testing.T) {
 	seg, w := arcFixture(t, 5, 0, math.Pi/2, 0, 1)
-	_, _, _, err := loftCellStations(w, w, seg, seg, 1e-12, nil, nil) //nolint:dogsled // only the error matters here.
+	_, _, _, _, _, err := loftCellStations(w, w, seg, seg, 1e-12, nil, nil) //nolint:dogsled // only the error matters here.
 	require.ErrorIs(t, err, errTooManyChords)
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.Contains(t, err.Error(), "more than 16384 chords")
@@ -457,9 +759,9 @@ func TestLoftStationCapClearsTheAuditPairCeiling(t *testing.T) {
 		pl0, pl1 := planeAt(r3.NewVec(0, 0, 0)), planeAt(r3.NewVec(0, 0, 1))
 		offsets, walks0, walks1, err := validateLoftRecords(p, p, pl0, pl1, nil, newFreeformWork(), newFreeformWork())
 		require.NoError(t, err)
-		pairs, _, err := loftPairings(p, p, offsets, walks0, walks1, 0, nil, nil)
+		pairs, _, _, stationRound, err := loftPairings(p, p, offsets, walks0, walks1, 0, nil, nil)
 		require.NoError(t, err)
-		a, err := assembleLoft(t.Context(), pairs, mustFrame(t, pl0), mustFrame(t, pl1), pl0, r3.Identity())
+		a, err := assembleLoft(t.Context(), pairs, mustFrame(t, pl0), mustFrame(t, pl1), pl0, r3.Identity(), stationRound)
 		require.NoError(t, err)
 		return len(a.tris)
 	}
@@ -633,7 +935,7 @@ func TestLoftStationCapGateNeverConsultsTheCapWithNoCircularPair(t *testing.T) {
 func TestLoftCircularCellStationsRefusesOneSidedCollapse(t *testing.T) {
 	degSeg, degWalk := degenerateArcFixture(t) // radius 0: every station is the same point
 	seg, w := arcFixture(t, 5, 0, math.Pi/2, 0, 1)
-	_, _, _, err := loftCircularCellStations(degWalk, w, degSeg, seg, 1e-3) //nolint:dogsled // only the error matters here.
+	_, _, _, _, _, err := loftCircularCellStations(degWalk, w, degSeg, seg, 1e-3) //nolint:dogsled // only the error matters here.
 	require.ErrorIs(t, err, ErrUnsupported)
 	require.Contains(t, err.Error(), "collapses to one point on only one of the two sections")
 }
@@ -645,7 +947,7 @@ func TestLoftCircularCellStationsRefusesOneSidedCollapse(t *testing.T) {
 // zeroes the certified sagitta and every station's own displacement alike.
 func TestLoftCircularCellStationsSymmetricCollapseIsFine(t *testing.T) {
 	seg, w := degenerateArcFixture(t)
-	stations0, stations1, sagitta, err := loftCircularCellStations(w, w, seg, seg, 1e-3)
+	stations0, stations1, sagitta, _, _, err := loftCircularCellStations(w, w, seg, seg, 1e-3)
 	require.NoError(t, err)
 	require.NotEmpty(t, stations0)
 	require.Len(t, stations1, len(stations0))
@@ -701,7 +1003,7 @@ func TestLoftPairingsRefusesAOneSidedTerminalCell(t *testing.T) {
 	p0, walks0 := lineStationLoopFixture(t, []Point2{pt(0, 0), pt(0, 0), pt(1, 1)})
 	p1, walks1 := lineStationLoopFixture(t, []Point2{pt(0, 0), pt(2, 0), pt(1, 3)})
 
-	_, _, err := loftPairings(p0, p1, make([]int, 1), walks0, walks1, 0, nil, nil)
+	_, _, _, _, err := loftPairings(p0, p1, make([]int, 1), walks0, walks1, 0, nil, nil) //nolint:dogsled // only the error matters here.
 	requireOneSidedCellRefusal(t, err, 0)
 }
 
@@ -714,7 +1016,7 @@ func TestLoftPairingsRefusesAOneSidedWrapCell(t *testing.T) {
 	p0, walks0 := lineStationLoopFixture(t, []Point2{pt(0, 0), pt(1, 1), pt(0, 0)})
 	p1, walks1 := lineStationLoopFixture(t, []Point2{pt(0, 0), pt(2, 0), pt(3, 3)})
 
-	_, _, err := loftPairings(p0, p1, make([]int, 1), walks0, walks1, 0, nil, nil)
+	_, _, _, _, err := loftPairings(p0, p1, make([]int, 1), walks0, walks1, 0, nil, nil) //nolint:dogsled // only the error matters here.
 	requireOneSidedCellRefusal(t, err, 2)
 }
 
@@ -729,7 +1031,7 @@ func TestLoftPairingsRefusesAOneSidedCellAtOneChordCell(t *testing.T) {
 	arc0, w0 := arcFixture(t, 1e-9, 0, 0.1, 0, 1)
 	arc1, w1 := arcFixture(t, 1, 0, 0.1, 0, 1)
 
-	stations0, stations1, _, err := loftCircularCellStations(w0, w1, arc0, arc1, target)
+	stations0, stations1, _, _, _, err := loftCircularCellStations(w0, w1, arc0, arc1, target) //nolint:dogsled // only the two station chains matter here.
 	require.NoError(t, err)
 	require.Len(t, stations0, 1, "the fixture must settle at one chord cell, or it tests a different class")
 	require.Len(t, stations1, 1)
@@ -741,7 +1043,7 @@ func TestLoftPairingsRefusesAOneSidedCellAtOneChordCell(t *testing.T) {
 	p0 := ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{arc0, line0}}}
 	p1 := ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{arc1, line1}}}
 
-	_, _, err = loftPairings(p0, p1, make([]int, 1), resolveLoftLoopWalks(t, p0), resolveLoftLoopWalks(t, p1), target, nil, nil)
+	_, _, _, _, err = loftPairings(p0, p1, make([]int, 1), resolveLoftLoopWalks(t, p0), resolveLoftLoopWalks(t, p1), target, nil, nil) //nolint:dogsled // only the error matters here.
 	requireOneSidedCellRefusal(t, err, 0)
 }
 
@@ -754,7 +1056,7 @@ func TestLoftPairingsAdmitsABothSidedCollapsedCell(t *testing.T) {
 	p0, walks0 := lineStationLoopFixture(t, []Point2{pt(0, 0), pt(0, 0), pt(1, 1)})
 	p1, walks1 := lineStationLoopFixture(t, []Point2{pt(5, 5), pt(5, 5), pt(9, 9)})
 
-	pairs, _, err := loftPairings(p0, p1, make([]int, 1), walks0, walks1, 0, nil, nil)
+	pairs, _, _, _, err := loftPairings(p0, p1, make([]int, 1), walks0, walks1, 0, nil, nil) //nolint:dogsled // only the pairs matter here.
 	require.NoError(t, err)
 	require.Len(t, pairs, 1)
 	require.Equal(t, pairs[0].v[0], pairs[0].v[1], "the fixture's cell 0 must collapse on side 0")
@@ -889,11 +1191,11 @@ func TestLoftPairingsSectionDeltaIsMaxNotSum(t *testing.T) {
 	const target = 1e-3
 
 	segA, wA := arcFixture(t, 5, 0, math.Pi/2, 0, 1)
-	_, _, sagA, err := loftCellStations(wA, wA, segA, segA, target, nil, nil)
+	_, _, sagA, _, _, err := loftCellStations(wA, wA, segA, segA, target, nil, nil) //nolint:dogsled // only sagA and err matter here.
 	require.NoError(t, err)
 
 	segB, wB := arcFixture(t, 1, 0, math.Pi/6, 0, 1)
-	_, _, sagB, err := loftCellStations(wB, wB, segB, segB, target, nil, nil)
+	_, _, sagB, _, _, err := loftCellStations(wB, wB, segB, segB, target, nil, nil) //nolint:dogsled // only sagB and err matter here.
 	require.NoError(t, err)
 
 	require.NotEqual(t, sagA, sagB, "the two segment pairs must reach different sagittas for this test to distinguish max from sum")
@@ -902,7 +1204,7 @@ func TestLoftPairingsSectionDeltaIsMaxNotSum(t *testing.T) {
 	walks0 := [][]segmentWalk{{wA, wB}}
 	walks1 := [][]segmentWalk{{wA, wB}}
 
-	pairs, sectionDelta, err := loftPairings(p, p, []int{0}, walks0, walks1, target, nil, nil)
+	pairs, sectionDelta, _, _, err := loftPairings(p, p, []int{0}, walks0, walks1, target, nil, nil)
 	require.NoError(t, err)
 	require.NotEmpty(t, pairs)
 
@@ -917,11 +1219,17 @@ func TestLoftPairingsSectionDeltaIsMaxNotSum(t *testing.T) {
 // acceptance line: a LineSeg-only pairing is bit-identical to today's — one
 // station per segment, at its own recorded start, sectionDelta exactly zero,
 // unaffected by an arbitrary target the LineSeg arm never reads.
+//
+// Its zero stationRound is a property of THIS fixture and not of the LineSeg
+// kind: every segment of the unit square is UNTRIMMED, so every station is
+// PINNED by its own natural parameter (docs/loft-design.md §5.2) and its own
+// lineWalkEndBound is zero. The trimmed-start fixture earlier in this file
+// asserts the same pairing path carrying a positive term.
 func TestLoftPairingsLineSegOnlyStationChainUnchanged(t *testing.T) {
 	p := unitSquareProfile()
 	offsets := []int{0}
 	walks := resolveLoftLoopWalks(t, p)
-	pairs, sectionDelta, err := loftPairings(p, p, offsets, walks, walks, 999.0, nil, nil)
+	pairs, sectionDelta, _, stationRound, err := loftPairings(p, p, offsets, walks, walks, 999.0, nil, nil)
 	require.NoError(t, err)
 	require.Len(t, pairs, 1)
 	require.Len(t, pairs[0].v, 4)
@@ -931,6 +1239,7 @@ func TestLoftPairingsLineSegOnlyStationChainUnchanged(t *testing.T) {
 		require.Equal(t, Point2{U: walks[0][j].startU, V: walks[0][j].startV}, pairs[0].w[j])
 	}
 	require.Zero(t, sectionDelta)
+	require.Zero(t, stationRound, "every station of this UNTRIMMED square is PINNED (docs/loft-design.md §5.2)")
 }
 
 // --- loftChordTarget ---

@@ -466,8 +466,9 @@ func TestFitPointsAreNeitherTheChainNorItsHull(t *testing.T) {
 	// the first span's own third of the converted parameter.
 	minV := math.Inf(1)
 	const samples = 2000
+	floatSpans := floatBezierSpansOf(spans)
 	for i := 0; i <= samples; i++ {
-		_, v := evalSpans(t, spans, float64(i)/float64(samples)/3)
+		_, v := evalFloatBezierSpans(floatSpans, float64(i)/float64(samples)/3)
 		minV = math.Min(minV, v)
 	}
 	require.Less(t, minV, floor, "the curve leaves the recorded fit points' hull")
