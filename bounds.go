@@ -13,10 +13,8 @@ import (
 // (boolean-built) measurement reports. NO measurement site computes a bound
 // inline: each error mechanism the mesh boolean is subject to has exactly one
 // helper here, and every site routes through it. One reader below owns no
-// mechanism of its own: cellAllowsOf returns all three of a WALL CELL's bounds
-// from a single certification of that cell's spans and twist vector, publishing
-// exactly what the three helpers listed below publish, so a caller that needs
-// more than one of them pays the exact-rational cost once.
+// mechanism of its own: cellAllowsOf returns all three of a wall cell's bounds,
+// publishing exactly what the three helpers listed below publish.
 //
 // The mechanisms, and the helper that owns each:
 //
@@ -79,19 +77,16 @@ import (
 //     shape;
 //   - the VOLUME between ONE loft wall cell's HELD two flat triangles and the
 //     BILINEAR RULED patch a chord-to-curve homotopy's own "chord point"
-//     implicitly denotes at that cell → cellTwistVolumeAllow, charged at the
-//     cell's own TWIST VECTOR (its four corners' own bilinear-interpolation
-//     defect) and its own two edge-length products — a mechanism
+//     implicitly denotes at that cell → cellTwistVolumeAllow, the exact swept
+//     measure |det(a,T,b)|/12 over the cell's side vectors and twist — a mechanism
 //     chordedBoundaryVolumeAllow's chord-to-curve leg does not speak for,
 //     since that leg's own homotopy starts FROM the ruled patch, never from
 //     the triangle pair the evaluator actually holds; cellTwistOffsetUpper is
-//     that same derivation's own POINTWISE deviation bound |T|/4, taken alone
-//     for a caller that widens a coordinate envelope rather than a volume,
-//     and cellTwistAreaAllow is its AREA twin, the gap between that same
-//     triangle pair's own area and the ruled patch's. All three rest on the
-//     SAME certified |T|/4 endpoint (cellTwistQuarterUpper) and the same
-//     certified spans: no reading of the twist vector or of an edge length
-//     is ever taken in float64;
+//     the POINTWISE deviation bound |T|/4 used by the facet-departure proof,
+//     and cellTwistAreaAllow is the gap between that triangle pair's own area
+//     and the ruled patch's, as the minimum of a premise-free linear arm and a
+//     cancellation-preserving quadratic arm. No reading of the twist vector
+//     is taken in float64;
 //   - the AREA a 2D boundary displacement sweeps out → sectionDisplacementArea,
 //     the same identity one dimension down: the region a recorded section can
 //     move is a tube about its own recorded boundary, with
@@ -129,13 +124,9 @@ import (
 //     sweptMomentAllow, sweptVolumeAllow's own one-dimension-higher sibling;
 //   - the FIRST MOMENT a loft's chorded boundary can move under the same
 //     chord-to-curve homotopy → chordedBoundaryMomentAllow,
-//     chordedBoundaryVolumeAllow's own one-dimension-higher sibling, NOT
-//     sweptMomentAllow reused, since that helper calls sweptVolumeAllow
-//     internally and so speaks for the wrong mechanism here — its own
-//     coordUpper obligation is widened by matchedDelta and by
-//     cellTwistOffsetUpper's own MAXIMUM over every wall cell, since the
-//     symmetric difference it bounds extends outside every held vertex on
-//     both legs, never by the held envelope alone;
+//     which multiplies only the two three-dimensional swept measures by their
+//     own radii: the wall measure reaches matchedDelta beyond the held envelope,
+//     while the twist sweep stays in its four corners' convex hull;
 //   - the LENGTH gap between a cap-loop chamfer's straight-ruled corner
 //     miter ruling and the curved locus it denotes at a non-tangential
 //     corner adjacent to a circular wall → chordLocusLengthAllow, the
@@ -733,103 +724,44 @@ func capAreaVolumeAllow(planeOffsetUpper, capAreaAllow float64) float64 {
 	return divUpper(productUpper(planeOffsetUpper, capAreaAllow), 3)
 }
 
-// cellTwistVolumeAllow bounds the VOLUME between ONE loft wall cell's HELD
-// pair of flat triangles — vLo, vHi on section 0 and wLo, wHi on section 1,
-// split along the vLo–wHi diagonal exactly the way assembleLoft's Table B
-// builds it (loft_build.go), never a ruled patch — and the BILINEAR RULED
-// patch X(s,r) = vLo + s·(vHi−vLo) + r·(wLo−vLo) + s·r·T, T = vLo−vHi−wLo+wHi,
-// that chordedBoundaryVolumeAllow's own chord-to-curve homotopy takes as its
-// t=0 endpoint (docs/loft-design.md §5 (the chord-chain subsection lands with the arc design change)). The two are DIFFERENT surfaces:
-// loftMassAccumulator sums signed tetrahedra over the built triangle pair,
-// never over the bilinear patch, so the gap between them is a mechanism of
-// its own with its own charge — chordedBoundaryVolumeAllow's matchedDelta ·
-// areaUpper term does not speak for it, because that term's own homotopy
-// starts FROM the ruled patch and never visits the triangle pair at all.
+// cellTwistVolumeAllow bounds the swept volume between one loft wall cell's
+// held triangle pair and its bilinear ruled patch. Put a=vHi-vLo,
+// b=wLo-vLo and T=vLo-vHi-wLo+wHi. On the two parameter triangles the ruled
+// patch's displacement from the held surface is respectively
+// r(s-1)T and s(r-1)T. It vanishes on the unit square's boundary.
 //
-// (a) The pointwise deviation. Each built triangle is the AFFINE (planar)
-// function of (s, r) agreeing with the bilinear patch at its own three
-// corners — X_tri1(s,r) = vLo + s·(vHi−vLo) + r·(wHi−vHi) over 0 <= r <= s
-// <= 1 (the vLo/vHi/wHi triangle), X_tri2(s,r) = vLo + r·(wLo−vLo) +
-// s·(wHi−wLo) over 0 <= s <= r <= 1 (the vLo/wHi/wLo triangle) — and
-// subtracting each from X(s,r) cancels every term but the twist one:
-// X − X_tri1 = r·(s−1)·T, X − X_tri2 = s·(r−1)·T, continuous across the
-// shared diagonal s=r (both read s·(s−1)·T there, equal to −T/4 only at its
-// midpoint s=1/2). Both magnitudes are
-// |T|·r·(1−s) (resp. |T|·s·(1−r)), maximised at s=r=1/2 over their own
-// triangular domain at |T|/4 — so no point of the ruled patch sits further
-// than |T|/4 from the built triangle surface at the matching (s, r).
+// Along the straight homotopy, dotting that displacement with the surface
+// normal cancels every term containing T twice. Its absolute Jacobian is
+// therefore |det(a,T,b)| times r(1-s) on 0<=r<=s<=1 and s(1-r) on
+// 0<=s<=r<=1, independent of the homotopy parameter. Each triangular factor
+// integrates to 1/24, so the complete swept measure is exactly
 //
-// (b) The area along the way. Homotoping the built surface to the ruled
-// patch linearly, X_t = (1−t)·X_tri + t·X for t in [0,1], is a CONVEX
-// combination of the two surfaces at every (s, r), so its own partials are
-// too: |∂X_t/∂s| <= max(|∂X_tri/∂s|, |∂X/∂s|), and the same for ∂/∂r. Each
-// triangle's own ∂/∂s is exactly vHi−vLo or wHi−wLo, and the bilinear
-// patch's ∂X/∂s = (1−r)·(vHi−vLo) + r·(wHi−wLo) is a convex combination of
-// the SAME two vectors, so all three share one bound, eA = max(|vHi−vLo|,
-// |wHi−wLo|) — and, symmetrically, every ∂/∂r shares eB = max(|wLo−vLo|,
-// |wHi−vHi|). The homotopy's own facet area is therefore at most eA·eB at
-// every t (the (s, r) domain is the unit square however the diagonal splits
-// it, area 1, and Area = integral of |∂X_t/∂s × ∂X_t/∂r| <= eA·eB · 1).
+//	|det(a,T,b)| / 12.
 //
-// (c) The flux. Every point of the homotopy moves at the CONSTANT velocity
-// X − X_tri, bounded by |T|/4 per (a), so |dV/dt| <= (|T|/4)·A(t) <=
-// (|T|/4)·eA·eB for every t — the SAME flux identity sweptVolumeAllow
-// states, self-contained here because the area bound this mechanism needs
-// is not perturbedAreaUpper's: that helper bounds a mesh whose VERTICES
-// moved, and what makes this leg need no seam correction of its own is that
-// X − X_tri vanishes identically on all FOUR EDGES of the unit (s, r) square
-// — r=0, r=1, s=0 and s=1 — not merely at the four corners: substituting
-// each edge into part (a)'s two formulas gives r·(s−1)·T = 0 at r=0 and at
-// s=1, and s·(r−1)·T = 0 at s=0 and at r=1 (the two formulas agree on the
-// shared diagonal s=r, where the shared value s·(s−1)·T is generally
-// nonzero rather than 0 — falling back to 0 only at the diagonal's own two
-// endpoints, s=0 and s=1 — but the diagonal is interior to the square, not
-// one of its edges). The homotopy's
-// own boundary curve is therefore stationary throughout, so — unlike the
-// wall's own OPEN patch (leg (a)/(d) above, whose r=0/r=1 seam DOES move and
-// needs chordedBoundarySeamAllow's own correction) — this cell's flux
-// identity carries no uncharged boundary term to begin with. Integrating
-// over t in [0,1] gives the published bound.
-//
-// Non-finite corners are a BROKEN caller claim, not a degenerate cell: they
-// answer +Inf, never a silently-computed NaN a `> 0` widening check would
-// drop (cellChordCurveAreaUpper's own F5 rule, extended here to this
-// helper's sibling — cutDisplacementAllow's own "absent bound must never
-// read as a small one").
+// This parameterized swept measure bounds the occupied symmetric difference
+// even if the sweep overlaps itself, so the moment twin may spend it as a
+// measure as well as Volume spending it as a magnitude. The determinant is
+// formed exactly over big.Rat and only the final quotient rounds outward.
+// Non-finite corners answer +Inf before the exact lift.
 func cellTwistVolumeAllow(vLo, vHi, wLo, wHi r3.Vec) float64 {
 	if !finiteVec(vLo) || !finiteVec(vHi) || !finiteVec(wLo) || !finiteVec(wHi) {
 		return math.Inf(1)
 	}
-	corners := cellCornersOf(vLo, vHi, wLo, wHi)
-	twistUpper := xtwistQuarterUpper(corners)
-	if twistUpper <= 0 {
-		// Certified zero: the EXACT T vanishes, so the ruled patch IS the
-		// triangle pair and the cell contributes nothing. cellTwistQuarterUpper
-		// answers 0 for no other reason. Taken here so a cell with no twist at
-		// all never pays to certify spans its own answer does not read.
+	a := heldDelta(vHi, vLo)
+	b := heldDelta(wLo, vLo)
+	twist := rvSub(heldDelta(vLo, vHi), heldDelta(wLo, wHi))
+	det := rvDot(a, rvCross(twist, b))
+	if det.Sign() == 0 {
 		return 0
 	}
-	return cellTwistVolumeFromSpans(corners.spans(), twistUpper)
-}
-
-// cellTwistVolumeFromSpans is cellTwistVolumeAllow's own derivation once that
-// helper's corner-finiteness gate has passed and the cell's certified |T|/4
-// endpoint and four certified spans are in hand. It is the ONE implementation
-// of the published twist bound, the same way cellChordCurveAreaFromSpans owns
-// the area one: cellTwistVolumeAllow and cellAllowsOf both return exactly what
-// it returns.
-func cellTwistVolumeFromSpans(spans cellSpans, twistUpper float64) float64 {
-	if twistUpper <= 0 {
-		return 0
-	}
-	eA := math.Max(spans.sideA, spans.sideB)
-	eB := math.Max(spans.rungLo, spans.rungHi)
-	return productUpper(twistUpper, productUpper(eA, eB))
+	det.Abs(det)
+	return ratFloatUp(new(big.Rat).Quo(det, big.NewRat(12, 1)))
 }
 
 // cellTwistQuarterUpper is the CERTIFIED upper endpoint of |T|/4 for a wall
-// cell, the single quantity cellTwistVolumeAllow and cellTwistOffsetUpper both
-// rest on. Nothing about it may be computed in float64:
+// cell, the single quantity cellTwistAreaLinearFromSpans and
+// cellTwistOffsetUpper both rest on. Nothing about it may be computed in
+// float64:
 //
 //   - T = vLo − vHi − wLo + wHi is a CANCELLING chain. An ordinary
 //     parallelogram cell — one whose two rules were themselves built by adding
@@ -871,10 +803,10 @@ func xtwistQuarterUpper(c cellCorners) float64 {
 }
 
 // cellSpanUpper is the CERTIFIED upper endpoint of |a − b| for two of a wall
-// cell's own corners — the eA and eB edge lengths cellTwistVolumeAllow's
-// derivation part (b) bounds the homotopy's facet area by, and the same
-// endpoint cellChordCurveAreaUpper reads for its own eBBase and for the chord
-// its arc-length premise is falsified against. It exists for the same reason
+// cell's own corners — the edge lengths cellTwistAreaLinearFromSpans reads,
+// and the same endpoint cellChordCurveAreaUpper reads for its own eBBase and
+// for the chord its arc-length premise is falsified against. It exists for
+// the same reason
 // cellTwistQuarterUpper does: r3.Vec.Len is nested math.Hypot, which is not
 // correctly rounded and can sit several ulp below the exact norm, and a
 // trailing one-ulp upRound cannot recover a multi-ulp shortfall. The
@@ -916,8 +848,8 @@ func cellCornersOf(vLo, vHi, wLo, wHi r3.Vec) cellCorners {
 
 // cellSpans is ONE wall cell's four certified corner spans — every span any
 // bound over that cell reads, and nothing else. cellChordCurveAreaUpper's own
-// arc-length premise gate and eBBase, and cellTwistVolumeAllow's own eA and
-// eB, are each one of these four and no other quantity.
+// arc-length premise gate and eBBase, and cellTwistAreaLinearFromSpans' own eA
+// and eB, are each one of these four and no other quantity.
 //
 // It exists so a caller that reads more than one of a cell's bounds certifies
 // each span ONCE (cellAllowsOf) instead of once per bound. Each span is an
@@ -948,22 +880,19 @@ func (c cellCorners) spans() cellSpans {
 	}
 }
 
-// cellTwistOffsetUpper is cellTwistVolumeAllow's own POINTWISE deviation
-// bound |T|/4 (that helper's derivation part (a)), taken alone for a caller
-// that widens a coordinate envelope rather than charging a volume —
-// chordedBoundaryMomentAllow's own coordUpper obligation (its doc comment):
-// the symmetric difference between the held triangle pair and the ruled
-// patch extends outside every held vertex by at most this much, the same
-// T = vLo−vHi−wLo+wHi cellTwistVolumeAllow reads. A caller that needs one
-// bound for a WHOLE boundary takes the MAXIMUM of this over every wall cell,
-// never a sum — it bounds how far any SINGLE point can sit from its nearest
-// held vertex, not an accumulation over cells.
+// cellTwistOffsetUpper is the pointwise deviation bound |T|/4 used by the
+// facet-departure proof. The symmetric difference between the held triangle
+// pair and the ruled patch extends outside every held facet by at most this
+// much, for the same T = vLo−vHi−wLo+wHi cellTwistVolumeAllow reads. A caller
+// that needs one bound for a WHOLE boundary takes the MAXIMUM of this over
+// every wall cell, never a sum — it bounds how far any SINGLE point can sit
+// from the held facet at the matching parameter, not an accumulation over
+// cells.
 //
 // Non-finite corners answer +Inf rather than a silently-computed NaN, the
 // same guard cellTwistVolumeAllow's own doc comment states for its sibling.
 //
-// It reads the SAME certified |T|/4 endpoint cellTwistVolumeAllow multiplies,
-// through cellTwistQuarterUpper, so neither the cancelling T chain nor
+// It reads the certified |T|/4 endpoint through cellTwistQuarterUpper, so neither the cancelling T chain nor
 // r3.Vec.Len's own missing accuracy contract can put this reading below the
 // deviation it claims to dominate.
 func cellTwistOffsetUpper(vLo, vHi, wLo, wHi r3.Vec) float64 {
@@ -981,18 +910,13 @@ type cellAllows struct {
 	twistOffsetUpper    float64 // cellTwistOffsetUpper
 }
 
-// cellAllowsOf reads all three of one wall cell's bounds from ONE certification
-// of that cell's spans and ONE certification of its twist vector. A caller
-// summing a whole chorded wall needs every one of them per cell
-// (chordedBoundaryVolumeAllow's own wallAreaUpper and twistVolumeUpper
-// obligations, and chordedBoundaryMomentAllow's own coordUpper one), and taking
-// the three helpers separately recertifies the same four spans twice and the
-// same |T|/4 endpoint twice — exact-rational work that dominates a chorded
-// wall's cost and that no answer depends on being repeated.
+// cellAllowsOf reads all three bounds one wall cell publishes. It shares the
+// certified spans and |T|/4 endpoint used by the area and offset readings;
+// the exact determinant volume reading has its own rational reduction.
 //
 // It is a sharing of computation, never a bound of its own: each field is
-// produced by the SAME cellChordCurveAreaFromSpans / cellTwistVolumeFromSpans /
-// xtwistQuarterUpper the individual helpers call, under the same gates in
+// produced by the same cellChordCurveAreaFromSpans / cellTwistVolumeAllow /
+// xtwistQuarterUpper helpers the individual entry points call, under the same gates in
 // the same order, so the three numbers are identical to the three helpers' own
 // by construction (TestCellAllowsOfMatchesThePerBoundHelpers pins it over a
 // randomized sweep). A broken SCALAR claim refuses the area reading alone: the
@@ -1013,86 +937,104 @@ func cellAllowsOf(vLo, vHi, wLo, wHi r3.Vec, arcLenUpperA, arcLenUpperB, matched
 	}
 	return cellAllows{
 		chordCurveAreaUpper: area,
-		twistVolumeAllow:    cellTwistVolumeFromSpans(spans, twistUpper),
+		twistVolumeAllow:    cellTwistVolumeAllow(vLo, vHi, wLo, wHi),
 		twistOffsetUpper:    twistUpper,
 	}
 }
 
-// cellTwistAreaAllow is cellTwistVolumeAllow's own AREA twin (a new
-// caller-side term; that function's own derivation is untouched): a bound on
-// how far ONE loft wall cell's held flat-triangle-pair area (t=0) can sit
-// from its own bilinear ruled patch's area (t=1) — the SAME homotopy
-// cellTwistVolumeAllow's part (a)/(b) already builds, T = vLo−vHi−wLo+wHi
-// its own twist vector, zero exactly when the cell's four corners form a
-// PARALLELOGRAM — the case the shipped A10a wedge lands in, since its two
-// frames share their U and V axes and differ only by an offset along the
-// shared normal, so every corner's lift carries the identical rounding and
-// the exact chain cancels to (0,0,0) rather than merely the float one
-// (TestArcMatchedDeltaEqualsSagitta's own family). A cell that is planar
-// WITHOUT being a parallelogram — a trapezoid — has a nonzero T, and this
-// bound charges it, which costs a little tightness and no soundness.
+// cellTwistAreaAllow bounds the area gap between one loft wall cell's held
+// triangle pair and its bilinear ruled patch. It publishes the smaller of two
+// independently proven bounds: cellTwistAreaLinearFromSpans is the existing
+// homotopy bound, and cellTwistAreaQuadraticAllow keeps the first-order
+// cancellation shared by the two triangles. The linear arm remains the
+// fallback when the quadratic arm cannot state a positive denominator.
 //
-// Part (a) already gives the explicit form of the deviation: on triangle 1
-// (0<=r<=s<=1), X−X_tri1 = r(s−1)·T; on triangle 2, X−X_tri2 = s(r−1)·T. Both
-// are δX(s,r) = (a scalar bounded in [−1,1]) · T, so |∂δX/∂s| <= |T| and
-// |∂δX/∂r| <= |T| pointwise (each factor differentiates the scalar, itself
-// bounded by 1, and leaves T untouched). Homotoping Xt = (1−t)·X_tri + t·X
-// linearly in t (the SAME homotopy part (b) already uses), the area
-// functional's own rate is bounded by the product rule on the cross product:
-//
-//	d/dt(∂Xt/∂s × ∂Xt/∂r) = ∂δX/∂s × ∂Xt/∂r + ∂Xt/∂s × ∂δX/∂r
-//	|dArea/dt| <= ∬ |∂δX/∂s|·|∂Xt/∂r| + |∂Xt/∂s|·|∂δX/∂r| dr ds
-//	           <= ∬ |T|·eB + eA·|T| dr ds = |T|·(eA+eB)
-//
-// using part (b)'s own pointwise bound |∂Xt/∂s|<=eA, |∂Xt/∂r|<=eB at every t
-// (its own eA, eB, computed identically here). Integrating t over [0,1] at
-// this CONSTANT rate bounds the area difference itself by the same product,
-// |T|·(eA+eB) — a genuine, if not tight, PROOF (not an estimate), the two
-// factors T and (eA+eB) independent rather than a fabricated cross term, and
-// the whole product vanishes with T exactly rather than merely shrinking.
-//
-// NOTHING in this reading may be computed in float64, for exactly the two
-// reasons cellTwistQuarterUpper's own doc comment gives and that
-// cellTwistVolumeAllow and cellTwistOffsetUpper already obey on the SAME
-// vector: T is a cancelling chain whose float evaluation can answer a
-// computed (0,0,0) for a cell whose exact T is nonzero — and this helper
-// reads that zero as "planar, nothing to charge" and publishes 0 — while
-// r3.Vec.Len is nested math.Hypot, whose own accuracy contract Go does not
-// state and which sits several ulp BELOW the exact norm often enough that
-// eA and eB taken that way are not upper bounds either. Both directions
-// shrink the allowance below the deviation it claims to dominate, so |T|/4
-// comes from the exact xtwistQuarterUpper kernel over the cell's lifted
-// corners and each edge length from the certified xspanUpper the same four
-// corners' cellSpans already carries.
-//
-// Non-finite corners answer +Inf, the same guard cellTwistVolumeAllow's own
-// doc comment states for its sibling — and, as there, that guard is what
-// lets the exact lift read its corners as rationals at all.
+// Every corner operation in both arms is exact rational arithmetic followed
+// by outward rounding. In particular T = vLo-vHi-wLo+wHi is a cancelling
+// chain and may not be formed with r3.Vec subtraction. Non-finite corners
+// answer +Inf rather than entering the exact lift.
 func cellTwistAreaAllow(vLo, vHi, wLo, wHi r3.Vec) float64 {
 	if !finiteVec(vLo) || !finiteVec(vHi) || !finiteVec(wLo) || !finiteVec(wHi) {
 		return math.Inf(1)
 	}
 	corners := cellCornersOf(vLo, vHi, wLo, wHi)
-	return cellTwistAreaFromSpans(corners.spans(), xtwistQuarterUpper(corners))
+	linear := cellTwistAreaLinearFromSpans(corners.spans(), xtwistQuarterUpper(corners))
+	quadratic := cellTwistAreaQuadraticAllow(vLo, vHi, wLo, wHi)
+	return math.Min(linear, quadratic)
 }
 
-// cellTwistAreaFromSpans is cellTwistAreaAllow's own derivation once that
-// helper's corner-finiteness gate has passed and the cell's certified |T|/4
-// endpoint and four certified spans are in hand — the same split
-// cellTwistVolumeFromSpans owns for the VOLUME twin, over the identical eA
-// and eB that helper reads from the identical four spans.
+// cellTwistAreaLinearFromSpans is the premise-free arm. On the two parameter
+// triangles, the bilinear-to-flat displacement is a scalar multiple of T, so
+// each of its two partial derivatives has norm at most |T|. The product rule
+// bounds the area functional's rate by |T|*(eA+eB), where eA bounds the two
+// section edges and eB the two rungs. Integrating the homotopy parameter gives
+// the same expression for the complete area gap.
 //
-// The certified endpoint is |T|/4, so the |T| the derivation above multiplies
-// is four times it. The scaling is by a power of two and therefore exact
-// wherever it does not overflow, and productUpper's own up-rounding covers
-// the overflow case by answering +Inf rather than a finite understatement.
-func cellTwistAreaFromSpans(spans cellSpans, twistQuarterUpper float64) float64 {
+// twistQuarterUpper is the certified |T|/4. Multiplication by four is exact
+// unless it overflows, when productUpper returns +Inf.
+func cellTwistAreaLinearFromSpans(spans cellSpans, twistQuarterUpper float64) float64 {
 	if twistQuarterUpper <= 0 {
 		return 0
 	}
 	eA := math.Max(spans.sideA, spans.sideB)
 	eB := math.Max(spans.rungLo, spans.rungHi)
 	return productUpper(productUpper(4, twistQuarterUpper), absSumUpper(eA, eB))
+}
+
+// cellTwistAreaQuadraticAllow is the cancellation-preserving arm. Write the
+// bilinear patch's area-element vector as
+//
+//	N(s,r) = N0 + s*A + r*B,
+//	N0 = da cross g, A = da cross T, B = T cross g,
+//
+// where da=vHi-vLo, g=wLo-vLo and T=vLo-vHi-wLo+wHi. The ruled area is the
+// unit-square average of |N|. The held triangle pair is the two-point rule
+//
+//	Q = (|N(1,0)| + |N(0,1)|) / 2.
+//
+// The square average and Q have the same mean parameter (1/2,1/2), so the
+// constant and first-order terms cancel. Put U=N(1/2,1/2) and
+// V=(s-1/2)A+(r-1/2)B. The Euclidean norm obeys
+//
+//	0 <= |U+V|-|U|-Uhat dot V <= |V|^2/(2|U|).
+//
+// Applying this remainder bound to both averages and using the triangle
+// inequality gives
+//
+//	|Area_ruled-Q| <= (|A|^2+|B|^2+3|A-B|^2)/(12*|2U|).
+//
+// Every vector and squared norm is exact over big.Rat. The denominator is
+// rounded down before division and the quotient is rounded up. A zero or
+// unrepresentable denominator withdraws this arm with +Inf; the linear arm
+// then remains available.
+func cellTwistAreaQuadraticAllow(vLo, vHi, wLo, wHi r3.Vec) float64 {
+	da := heldDelta(vHi, vLo)
+	g := heldDelta(wLo, vLo)
+	twist := rvSub(heldDelta(vLo, vHi), heldDelta(wLo, wHi))
+	a := rvCross(da, twist)
+	b := rvCross(twist, g)
+	diff := rvSub(a, b)
+
+	numerator := new(big.Rat).Add(rvDot(a, a), rvDot(b, b))
+	numerator.Add(numerator, new(big.Rat).Mul(big.NewRat(3, 1), rvDot(diff, diff)))
+	if numerator.Sign() == 0 {
+		return 0
+	}
+
+	n0 := rvCross(da, g)
+	var centerTwice ratV3
+	for i := range centerTwice {
+		centerTwice[i] = new(big.Rat).Mul(big.NewRat(2, 1), n0[i])
+		centerTwice[i].Add(centerTwice[i], a[i])
+		centerTwice[i].Add(centerTwice[i], b[i])
+	}
+	centerLenLower := ratSqrtDown(rvDot(centerTwice, centerTwice))
+	centerLenRat, ok := ratOf(centerLenLower)
+	if !ok || centerLenLower <= 0 {
+		return math.Inf(1)
+	}
+	denominator := new(big.Rat).Mul(big.NewRat(12, 1), centerLenRat)
+	return ratFloatUp(new(big.Rat).Quo(numerator, denominator))
 }
 
 // uniformSpeedTangentEnergyUpper is the per-side TANGENT-DEVIATION ENERGY
@@ -1724,7 +1666,7 @@ func cellStationShiftAreaAllow(
 // gap, and that IS proven, by the telescoping identity immediately below
 // plus each leg's own derivation: leg (a) the flux identity over
 // cellChordCurveAreaUpper's ABSOLUTE sup_t A(t), leg (b)
-// cellTwistVolumeAllow's parts (a)/(b)/(c), leg (c) the exact planar
+// cellTwistVolumeAllow's exact swept-measure integral, leg (c) the exact planar
 // identity |h|·|ΔArea|/3, leg (d) Cauchy-Schwarz on the by-parts residue.
 // So no unproven step can shrink the number this function returns; the
 // open question can only cost precision.
@@ -1762,11 +1704,8 @@ func cellStationShiftAreaAllow(
 // alone), the second is leg (b) (twist), the third is leg (c) (cap) — the
 // four legs this function sums.
 //
-// This total is a bound on a SIGNED anchored-flux DIFFERENCE, not obviously
-// a region MEASURE — but chordedBoundaryMomentAllow's own use of it (a
-// region of proven volume V has |∫p dV| <= V·R for every point within R of
-// the origin) needs exactly that reading, and two of the four legs are not
-// measures of anything: the CAP leg is an EXACT signed identity,
+// This total is a bound on a SIGNED anchored-flux DIFFERENCE, while two of the
+// four legs are not measures of anything: the CAP leg is an EXACT signed identity,
 // |h|·|ΔArea|/3 (capAreaVolumeAllow's own doc comment) — a cap's region
 // change sweeps exactly ZERO 3D measure, since it moves entirely inside its
 // own plane, so that /3 has no geometric reading as a measure; the SEAM leg
@@ -1782,18 +1721,10 @@ func cellStationShiftAreaAllow(
 // (matchedDelta >= sup|v|, wallAreaUpper >= sup_t A(t)), and over-estimating
 // only helps here, since the argument needs a LOWER bound on wall+twist —
 // taken over the two-leg path held triangle -> ruled patch -> true curve.
-// So V >= wall + twist >= mu: the two legs that ARE measures
-// already dominate the true swept measure on their own, and the cap and
-// seam legs — which are signed volume corrections, not measures — can only
-// ADD to a total that already sits at or above mu. That is what licenses
-// chordedBoundaryMomentAllow to read this function's total as a region
-// measure.
-//
-// CORROBORATION, never a substitute for the inequality above (CLAUDE.md: a
-// residual may only falsify a claim, never bless one): an independent
-// numerical audit measured wall+twist against the true swept measure over
-// ~10,000 independently constructed rows and found a minimum ratio of
-// 1.50011.
+// So wall + twist >= mu: the two legs that ARE measures already dominate the
+// true swept measure on their own. chordedBoundaryMomentAllow therefore
+// multiplies those two by their own coordinate radii and does not read the cap
+// or seam corrections as material.
 //
 // A non-finite or negative matchedDelta, twistVolumeUpper, capVolumeUpper or
 // seamAllow is a BROKEN caller claim and this helper answers +Inf for it,
@@ -2256,46 +2187,37 @@ func sweptMomentAllow(delta, areaUpper, coordUpper float64) float64 {
 	return productUpper(vol, coordUpper)
 }
 
-// chordedBoundaryMomentAllow is chordedBoundaryVolumeAllow's own one-
-// dimension-higher sibling, the SAME relation sweptMomentAllow states for the
-// vertex-displacement mechanism: a region of proven volume V all of whose
-// points lie within R of the plane-local origin has |∫p dV| <= V·R for any
-// single coordinate p, since |p| <= R pointwise. It is NOT sweptMomentAllow
-// reused unchanged — that helper calls sweptVolumeAllow internally, which
-// speaks for the vertex-displacement mechanism rather than this one — so
-// this is its own twin over the CORRECTED chorded volume term, all three of
-// chordedBoundaryVolumeAllow's own composed legs included.
+// chordedBoundaryMomentAllow bounds the first moment of the occupied symmetric
+// difference between the held chorded body and the denoted body. Only the wall
+// chord-to-curve sweep and the triangle-to-bilinear twist sweep are measures.
+// capVolumeUpper is an exact planar signed-volume correction and seamAllow is
+// an integration-by-parts residue; neither represents swept 3D material, so
+// multiplying the complete signed-volume allowance by a radius charges two
+// terms that the moment does not contain.
 //
-// R is coordUpper WIDENED, never coordUpper itself: the symmetric difference
-// this term bounds the moment of extends OUTSIDE every held vertex — by up
-// to matchedDelta on the wall/cap chord-to-curve legs (a curve point sits up
-// to matchedDelta from its own chord, at the matching parameter) and by up
-// to maxTwistOffsetUpper on the twist leg (cellTwistVolumeAllow's own |T|/4
-// pointwise bound, taken as a MAXIMUM over every wall cell via
-// cellTwistOffsetUpper, never a sum, per that helper's own doc comment) —
-// so R := coordUpper + matchedDelta + maxTwistOffsetUpper, composed by
-// absSumUpper, is what the caller's own coordUpper (a bound over the HELD
-// material alone, e.g. loft_moments.go:265's m.coordUpper) must be widened
-// by before this term can charge it (compare that call site's own
-// m.coordUpper+m.delta widening for sweptMomentAllow's identical obligation
-// one mechanism over). The seam leg's own displaced material sits within the
-// SAME neighbourhood (it is the wall's own open-seam residue, bounded by the
-// identical matchedDelta), so it needs no separate widening term.
+// The wall measure is matchedDelta*wallAreaUpper. Its points can sit
+// matchedDelta beyond the held coordinate envelope, so its moment is bounded
+// by that measure times coordUpper+matchedDelta. cellTwistVolumeAllow is the
+// twist sweep's exact parameterized measure. Every point of its straight
+// homotopy is a convex combination of the cell's four held corners, so it
+// stays inside coordUpper and needs no maxTwistOffsetUpper widening. Summing
+// those two moment bounds covers the complete symmetric difference by the
+// two-stage held -> bilinear -> denoted homotopy.
 //
-// R is therefore what decides a zero answer, never coordUpper on its own: a
-// coordUpper of exactly 0 (every held vertex sitting at the plane-local
-// origin) still leaves the matchedDelta and maxTwistOffsetUpper legs, and the
-// symmetric difference still reaches that far out, so a positive volume with
-// either leg positive charges productUpper(vol, R) like any other. Only a
-// zero volume — nothing displaced to take a moment of — publishes 0 here;
-// R = 0 reaches the same answer through productUpper's own zero factor.
-//
-// coordUpper, matchedDelta and maxTwistOffsetUpper must each be PROVEN upper
-// bounds; a non-finite or negative matchedDelta, maxTwistOffsetUpper or
-// coordUpper is a BROKEN caller claim and this helper answers +Inf for it,
-// never a finite number computed past it (cutDisplacementAllow's own rule).
+// The cap, seam and max-twist arguments remain in this private signature so
+// the volume and moment call sites continue to pass one shared proof bundle.
+// They are validated as caller claims but do not enter the moment value.
 func chordedBoundaryMomentAllow(matchedDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper, seamAllow, maxTwistOffsetUpper, coordUpper float64) float64 {
 	if isNonFinite(matchedDelta) || matchedDelta < 0 {
+		return math.Inf(1)
+	}
+	if isNonFinite(twistVolumeUpper) || twistVolumeUpper < 0 {
+		return math.Inf(1)
+	}
+	if isNonFinite(capVolumeUpper) || capVolumeUpper < 0 {
+		return math.Inf(1)
+	}
+	if isNonFinite(seamAllow) || seamAllow < 0 {
 		return math.Inf(1)
 	}
 	if isNonFinite(maxTwistOffsetUpper) || maxTwistOffsetUpper < 0 {
@@ -2304,15 +2226,16 @@ func chordedBoundaryMomentAllow(matchedDelta, wallAreaUpper, twistVolumeUpper, c
 	if isNonFinite(coordUpper) || coordUpper < 0 {
 		return math.Inf(1)
 	}
-	vol := chordedBoundaryVolumeAllow(matchedDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper, seamAllow)
-	if isNonFinite(vol) {
-		return math.Inf(1)
+	wallMeasure := 0.0
+	if matchedDelta > 0 {
+		if isNonFinite(wallAreaUpper) || wallAreaUpper < 0 {
+			return math.Inf(1)
+		}
+		wallMeasure = productUpper(matchedDelta, wallAreaUpper)
 	}
-	if vol <= 0 {
-		return 0
-	}
-	widened := absSumUpper(coordUpper, matchedDelta, maxTwistOffsetUpper)
-	return productUpper(vol, widened)
+	wallMoment := productUpper(wallMeasure, absSumUpper(coordUpper, matchedDelta))
+	twistMoment := productUpper(twistVolumeUpper, coordUpper)
+	return absSumUpper(wallMoment, twistMoment)
 }
 
 // boundedSqrt propagates a proven bound through a square root: x.bound must

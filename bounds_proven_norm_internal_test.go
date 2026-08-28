@@ -110,8 +110,7 @@ func provenNormFixtures() []cellQuad {
 }
 
 // refTwistAreaProduct is |T|·(eA+eB) computed exactly from the cell's own
-// corners — the quantity cellTwistAreaAllow's derivation publishes, stated
-// independently of the code that publishes it.
+// corners, the quantity the linear fallback arm publishes.
 func refTwistAreaProduct(c cellQuad) *big.Float {
 	twist := rvSub(heldDelta(c.vLo, c.vHi), heldDelta(c.wLo, c.wHi))
 	eA := refMax(refLen(heldDelta(c.vHi, c.vLo)), refLen(heldDelta(c.wHi, c.wLo)))
@@ -130,17 +129,17 @@ func floatTwistAreaProduct(c cellQuad) float64 {
 	return productUpper(t.Len(), absSumUpper(eA, eB))
 }
 
-// TestCellTwistAreaAllowEnclosesTheExactProduct is the assigned finding's own
-// falsifier: the published twist leg must never fall below the exact
-// |T|·(eA+eB) its derivation states, on any of the reviewer's corners.
-func TestCellTwistAreaAllowEnclosesTheExactProduct(t *testing.T) {
+// TestCellTwistAreaLinearArmEnclosesTheExactProduct pins the fallback arm on
+// every review fixture.
+func TestCellTwistAreaLinearArmEnclosesTheExactProduct(t *testing.T) {
 	for _, c := range provenNormFixtures() {
 		t.Run(c.name, func(t *testing.T) {
-			got := cellTwistAreaAllow(c.vLo, c.vHi, c.wLo, c.wHi)
+			corners := cellCornersOf(c.vLo, c.vHi, c.wLo, c.wHi)
+			got := cellTwistAreaLinearFromSpans(corners.spans(), xtwistQuarterUpper(corners))
 			want := refTwistAreaProduct(c)
 			t.Logf("%s: published=%.17g exact=%s", c.name, got, want.Text('g', 25))
 			require.GreaterOrEqual(t, refFloat(got).Cmp(want), 0,
-				"the published twist leg must enclose the exact |T|*(eA+eB)")
+				"the linear twist-area arm must enclose the exact |T|*(eA+eB)")
 
 			if c.floatShortfallExpected {
 				require.Less(t, refFloat(floatTwistAreaProduct(c)).Cmp(want), 0,
@@ -153,11 +152,11 @@ func TestCellTwistAreaAllowEnclosesTheExactProduct(t *testing.T) {
 	}
 }
 
-// TestCellTwistAreaAllowEnclosesOrdinaryCells sweeps plain one-decimal-mm
+// TestCellTwistAreaLinearArmEnclosesOrdinaryCells sweeps plain one-decimal-mm
 // coordinates, the reachable-by-an-end-user range: no adversarial input is
 // needed to drive the float-norm route below the exact product, so the swept
 // enclosure has to hold everywhere rather than on the named fixtures alone.
-func TestCellTwistAreaAllowEnclosesOrdinaryCells(t *testing.T) {
+func TestCellTwistAreaLinearArmEnclosesOrdinaryCells(t *testing.T) {
 	rng := rand.New(rand.NewPCG(0x10f7c0de, 0x51de51de))
 	coord := func() float64 { return math.Round(rng.Float64()*2000) / 10 }
 	vec := func() r3.Vec { return r3.NewVec(coord(), coord(), coord()) }
@@ -167,8 +166,10 @@ func TestCellTwistAreaAllowEnclosesOrdinaryCells(t *testing.T) {
 	for range cases {
 		c := cellQuad{vLo: vec(), vHi: vec(), wLo: vec(), wHi: vec()}
 		want := refTwistAreaProduct(c)
-		require.GreaterOrEqual(t, refFloat(cellTwistAreaAllow(c.vLo, c.vHi, c.wLo, c.wHi)).Cmp(want), 0,
-			"published twist leg fell below the exact product for %+v", c)
+		corners := cellCornersOf(c.vLo, c.vHi, c.wLo, c.wHi)
+		got := cellTwistAreaLinearFromSpans(corners.spans(), xtwistQuarterUpper(corners))
+		require.GreaterOrEqual(t, refFloat(got).Cmp(want), 0,
+			"linear twist-area arm fell below the exact product for %+v", c)
 		if refFloat(floatTwistAreaProduct(c)).Cmp(want) < 0 {
 			floatShort++
 		}

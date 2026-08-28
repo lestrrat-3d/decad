@@ -259,9 +259,8 @@ type chordedAllowBreakdown struct {
 //     of the n+2 wall cells, since a twisted top section gives every wall
 //     cell — including the two radial ones, whose "outer" corners rotate by
 //     twistRad between sections — a nonzero twist vector; and
-//     cellTwistOffsetUpper's own MAXIMUM over every cell, the widening
-//     chordedBoundaryMomentAllow's own coordUpper obligation needs (unused
-//     by the volume-only tests below, carried for the moment tests);
+//     cellTwistOffsetUpper's own MAXIMUM over every cell, used by the
+//     facet-departure proof and carried beside these volume fixtures;
 //   - cap chord-to-curve: capAreaVolumeAllow for the top cap alone — the
 //     bottom cap's own plane passes through this fixture's implicit anchor
 //     (the world origin, matching heldVolumeExact's own unanchored
@@ -514,7 +513,7 @@ func TestChordedBoundaryVolumeAllowEnclosesTheRefutedCounterexamples(t *testing.
 // A guard requiring only 100x leaves ample host-portability slack while
 // still failing outright on a fixture that is NOT actually refining (a
 // constant-in-n quantity, as arcShare always was, would show a 1x "shrink").
-func TestChordedBoundaryVolumeAllowRatioDoesNotDegradeUnderRefinement(t *testing.T) {
+func TestChordedBoundaryVolumeAllowRemainsSoundUnderRefinement(t *testing.T) {
 	const radius, h = 10.0, 25.0
 	chordCounts := []int{8, 32, 64, 128, 256}
 
@@ -552,16 +551,9 @@ func TestChordedBoundaryVolumeAllowRatioDoesNotDegradeUnderRefinement(t *testing
 
 				t.Logf("sweep=%g twist=%g ratios across n=%v: %v", sweepDeg, twistDeg, chordCounts, ratios)
 
-				// The ratio may wobble a little station to station (both the
-				// allowance and the measured gap are sums of many small
-				// per-cell terms whose own relative weights shift as n grows),
-				// but it must never trend down toward 1 as the mesh refines: the
-				// finest station count's own ratio must stay within a modest
-				// factor of the coarsest one, never collapse toward it from
-				// above.
-				require.GreaterOrEqual(t, ratios[len(ratios)-1], ratios[0]*0.5,
-					"sweep=%g twist=%g: refining from n=%d to n=%d must not degrade the ratio toward 1 (got %.6g -> %.6g)",
-					sweepDeg, twistDeg, chordCounts[0], chordCounts[len(chordCounts)-1], ratios[0], ratios[len(ratios)-1])
+				// The exact determinant twist measure can make this ratio
+				// converge toward 1. Every row's enclosure assertion above is
+				// the soundness property; spare slack is not one.
 			})
 		}
 	}
@@ -1298,7 +1290,7 @@ func rawNormIsBelowExact(a, b r3.Vec) bool {
 
 // TestCellChordCurveAreaUpperEnclosesTheExactEdgeProduct pins the RAW-NORM
 // channel on this helper's own eB term, the same channel
-// TestCellTwistBoundsEncloseTheExactTwistTerm pins one helper over: r3.Vec.Len
+// TestCellTwistBoundsEncloseTheirExactTerms pins one helper over: r3.Vec.Len
 // is nested math.Hypot, which carries no accuracy contract and sits several
 // ulp BELOW the exact norm for a large share of vectors, and neither
 // absSumUpper's nor productUpper's one-ulp outward nudge can recover a
@@ -1330,10 +1322,10 @@ func TestCellChordCurveAreaUpperEnclosesTheExactEdgeProduct(t *testing.T) {
 	got := cellChordCurveAreaUpper(vLo, vHi, wLo, wHi, arcLenUpper, arcLenUpper, 0)
 	require.False(t, math.IsInf(got, 1), "the fixture must be admitted, not refused")
 
-	// exactCellTwistFactors' own third return IS eBBase's definition squared,
+	// exactCellTwistFactors' own second return IS eBBase's definition squared,
 	// max(|wLo−vLo|², |wHi−vHi|²), taken from the float corners with no
 	// rounding. got >= eA·eBBase holds iff got² >= eA²·eBBase².
-	_, _, eB2 := exactCellTwistFactors(vLo, vHi, wLo, wHi)
+	_, eB2 := exactCellTwistFactors(vLo, vHi, wLo, wHi)
 	lhs := new(big.Rat).Mul(ratOfFloat(got), ratOfFloat(got))
 	rhs := new(big.Rat).Mul(new(big.Rat).Mul(ratOfFloat(arcLenUpper), ratOfFloat(arcLenUpper)), eB2)
 	require.GreaterOrEqual(t, lhs.Cmp(rhs), 0,
@@ -1639,35 +1631,25 @@ func TestCellTwistVolumeAllowIsZeroWithoutTwist(t *testing.T) {
 	require.Equal(t, 0.0, cellTwistVolumeAllow(vLo, vHi, wLo, wHi))
 }
 
-// TestCellTwistVolumeAllowScalesWithTheTwistVector pins the closed form
-// against a hand-computed cell: a square cell twisted by rotating its top
-// edge 90 degrees relative to its bottom edge, where the twist vector T =
-// vLo-vHi-wLo+wHi, eA and eB (the two edge-length products the derivation's
-// part (b) bounds the homotopy's own facet area by) are all exactly
-// rational and can be checked by hand.
-func TestCellTwistVolumeAllowScalesWithTheTwistVector(t *testing.T) {
+// TestCellTwistVolumeAllowMatchesTheSweptMeasure pins the exact determinant
+// form against a hand-computed cell. Here a=(1,0,0), b=(0,0,1),
+// T=(-1,1,0), so |det(a,T,b)|/12 is exactly 1/12.
+func TestCellTwistVolumeAllowMatchesTheSweptMeasure(t *testing.T) {
 	vLo := r3.NewVec(0, 0, 0)
 	vHi := r3.NewVec(1, 0, 0)
 	wLo := r3.NewVec(0, 0, 1)
 	wHi := r3.NewVec(0, 1, 1)
 
-	twist := vLo.Sub(vHi).Sub(wLo).Add(wHi) // (0,0,0)-(1,0,0)-(0,0,1)+(0,1,1) = (-1,1,0)
-	require.InDelta(t, math.Sqrt2, twist.Len(), 1e-15)
-
-	eA := math.Max(vHi.Sub(vLo).Len(), wHi.Sub(wLo).Len()) // max(1, 1) = 1
-	eB := math.Max(wLo.Sub(vLo).Len(), wHi.Sub(vHi).Len()) // max(1, sqrt(2))
-	want := (twist.Len() / 4) * eA * eB
+	want := 1.0 / 12
 
 	got := cellTwistVolumeAllow(vLo, vHi, wLo, wHi)
 	require.InDelta(t, want, got, 1e-12)
 	require.GreaterOrEqual(t, got, want, "the answer must round outward, never inward")
 }
 
-// TestCellTwistOffsetUpperMatchesTheTwistVolumeAllowPointwiseTerm pins that
-// cellTwistOffsetUpper is exactly cellTwistVolumeAllow's own internal |T|/4
-// term, taken alone, for the SAME cell TestCellTwistVolumeAllowScalesWithTheTwistVector
-// already hand-checks.
-func TestCellTwistOffsetUpperMatchesTheTwistVolumeAllowPointwiseTerm(t *testing.T) {
+// TestCellTwistOffsetUpperMatchesPointwiseDeviation pins the exact |T|/4
+// maximum against the same hand-computed cell as the swept-measure test.
+func TestCellTwistOffsetUpperMatchesPointwiseDeviation(t *testing.T) {
 	vLo := r3.NewVec(0, 0, 0)
 	vHi := r3.NewVec(1, 0, 0)
 	wLo := r3.NewVec(0, 0, 1)
@@ -1691,13 +1673,9 @@ func TestCellTwistOffsetUpperIsZeroWithoutTwist(t *testing.T) {
 	require.Equal(t, 0.0, cellTwistOffsetUpper(vLo, vHi, wLo, wHi))
 }
 
-// exactCellTwistFactors returns the EXACT rational SQUARES of the three
-// factors cellTwistVolumeAllow multiplies — |T|², eA² and eB² — taken from
-// the cell's own float corners without a single rounding. The SQUARES are
-// what a caller compares because |T|, eA and eB are irrational in general
-// while their squares are exactly rational: got >= (|T|/4)·eA·eB holds if
-// and only if 16·got² >= |T|²·eA²·eB², every term of which is exact.
-func exactCellTwistFactors(vLo, vHi, wLo, wHi r3.Vec) (*big.Rat, *big.Rat, *big.Rat) {
+// exactCellTwistFactors returns the exact rational squares of |T| and eB.
+// The pointwise offset test uses |T|²; the linear area-arm test uses eB².
+func exactCellTwistFactors(vLo, vHi, wLo, wHi r3.Vec) (*big.Rat, *big.Rat) {
 	sub := func(a, b r3.Vec) [3]*big.Rat {
 		return [3]*big.Rat{
 			new(big.Rat).Sub(ratOfFloat(a.X), ratOfFloat(b.X)),
@@ -1724,14 +1702,24 @@ func exactCellTwistFactors(vLo, vHi, wLo, wHi r3.Vec) (*big.Rat, *big.Rat, *big.
 	for i := range twist {
 		twist[i] = new(big.Rat).Sub(wSpan[i], vSpan[i])
 	}
-	eA2 := larger(norm2(vSpan), norm2(wSpan))
 	eB2 := larger(norm2(sub(wLo, vLo)), norm2(sub(wHi, vHi)))
-	return norm2(twist), eA2, eB2
+	return norm2(twist), eB2
 }
 
-// TestCellTwistBoundsEncloseTheExactTwistTerm pins both twist helpers against
-// the EXACT |T|/4 and (|T|/4)·eA·eB their own doc comments claim to dominate,
-// over the two channels that can drive a float evaluation BELOW that value.
+// exactCellTwistVolume returns |det(a,T,b)|/12 over the cell's exact float64
+// coordinates, independently of cellTwistVolumeAllow's implementation.
+func exactCellTwistVolume(vLo, vHi, wLo, wHi r3.Vec) *big.Rat {
+	a := heldDelta(vHi, vLo)
+	b := heldDelta(wLo, vLo)
+	twist := rvSub(heldDelta(vLo, vHi), heldDelta(wLo, wHi))
+	det := rvDot(a, rvCross(twist, b))
+	det.Abs(det)
+	return det.Quo(det, big.NewRat(12, 1))
+}
+
+// TestCellTwistBoundsEncloseTheirExactTerms pins the offset against |T|/4 and
+// the volume allowance against |det(a,T,b)|/12 over the two channels that can
+// drive a float evaluation below an exact result.
 // Neither channel needs pathological geometry: both rows below are ordinary
 // finite cells.
 //
@@ -1747,7 +1735,7 @@ func exactCellTwistFactors(vLo, vHi, wLo, wHi r3.Vec) (*big.Rat, *big.Rat, *big.
 //     large fraction of vectors, so eA and eB read raw understate the
 //     product they feed and a single trailing one-ulp nudge cannot recover
 //     the shortfall.
-func TestCellTwistBoundsEncloseTheExactTwistTerm(t *testing.T) {
+func TestCellTwistBoundsEncloseTheirExactTerms(t *testing.T) {
 	for _, row := range []struct {
 		name               string
 		vLo, vHi, wLo, wHi r3.Vec
@@ -1770,7 +1758,7 @@ func TestCellTwistBoundsEncloseTheExactTwistTerm(t *testing.T) {
 		},
 	} {
 		t.Run(row.name, func(t *testing.T) {
-			twist2, eA2, eB2 := exactCellTwistFactors(row.vLo, row.vHi, row.wLo, row.wHi)
+			twist2, _ := exactCellTwistFactors(row.vLo, row.vHi, row.wLo, row.wHi)
 			require.Equal(t, 1, twist2.Sign(), "the fixture must carry a genuinely nonzero exact twist")
 			if row.floatChainCancels {
 				require.Equal(t, r3.NewVec(0, 0, 0), row.vLo.Sub(row.vHi).Sub(row.wLo).Add(row.wHi),
@@ -1790,9 +1778,9 @@ func TestCellTwistBoundsEncloseTheExactTwistTerm(t *testing.T) {
 				"cellTwistOffsetUpper = %.20g sits BELOW the exact |T|/4 it claims to dominate", offset)
 
 			volume := cellTwistVolumeAllow(row.vLo, row.vHi, row.wLo, row.wHi)
-			require.Positive(t, volume, "the volume allowance must not vanish while the exact twist gap is positive")
-			require.True(t, dominates(volume, new(big.Rat).Mul(twist2, new(big.Rat).Mul(eA2, eB2))),
-				"cellTwistVolumeAllow = %.20g sits BELOW the exact (|T|/4)·eA·eB it claims to dominate", volume)
+			wantVolume := exactCellTwistVolume(row.vLo, row.vHi, row.wLo, row.wHi)
+			require.GreaterOrEqual(t, ratOfFloat(volume).Cmp(wantVolume), 0,
+				"cellTwistVolumeAllow = %.20g sits below the exact determinant measure", volume)
 		})
 	}
 }
@@ -1922,21 +1910,19 @@ func TestChordedBoundarySeamAllowScalesWithItsThreeOperands(t *testing.T) {
 	require.GreaterOrEqual(t, got, want, "the answer must round outward, never inward")
 }
 
-// TestChordedBoundaryMomentAllowIsItsOwnWidenedTwin pins
-// chordedBoundaryMomentAllow's own closed form —
-// chordedBoundaryVolumeAllow(...) composed with coordUpper WIDENED by
-// matchedDelta and maxTwistOffsetUpper via absSumUpper, the same pattern
-// loft_moments.go:265's sweptMomentAllow call site widens by m.delta —
-// computed here by calling chordedBoundaryVolumeAllow directly, never
-// sweptMomentAllow, so a caller that swapped the two internally would move
-// this answer.
-func TestChordedBoundaryMomentAllowIsItsOwnWidenedTwin(t *testing.T) {
+// TestChordedBoundaryMomentAllowComposesTheTwoSweptMeasures pins the two
+// moment legs: the chord-to-curve wall measure at coordUpper+matchedDelta and
+// the triangle-to-bilinear sweep at coordUpper. Planar cap and seam corrections
+// are signed-volume terms and do not enter this measure.
+func TestChordedBoundaryMomentAllowComposesTheTwoSweptMeasures(t *testing.T) {
 	matchedDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper, seamAllow := 0.02, 7.5, 1.25, 0.5, 0.1
 	maxTwistOffsetUpper, coordUpper := 0.3, 3.0
 
-	vol := chordedBoundaryVolumeAllow(matchedDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper, seamAllow)
-	widened := absSumUpper(coordUpper, matchedDelta, maxTwistOffsetUpper)
-	want := productUpper(vol, widened)
+	wallMeasure := productUpper(matchedDelta, wallAreaUpper)
+	want := absSumUpper(
+		productUpper(wallMeasure, absSumUpper(coordUpper, matchedDelta)),
+		productUpper(twistVolumeUpper, coordUpper),
+	)
 
 	got := chordedBoundaryMomentAllow(matchedDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper, seamAllow, maxTwistOffsetUpper, coordUpper)
 	require.Equal(t, want, got)
@@ -1945,16 +1931,9 @@ func TestChordedBoundaryMomentAllowIsItsOwnWidenedTwin(t *testing.T) {
 	// no moment for any radius to charge.
 	require.Equal(t, 0.0, chordedBoundaryMomentAllow(0, wallAreaUpper, 0, 0, 0, 0, coordUpper))
 
-	// A zero coordUpper is NOT one. R is coordUpper WIDENED, so the
-	// matchedDelta and maxTwistOffsetUpper legs still stand on their own and
-	// the answer is the same closed form taken at absSumUpper(0,
-	// matchedDelta, maxTwistOffsetUpper) — derived here from the helper's own
-	// doc comment, never read back from the helper. This assertion FAILS if
-	// coordUpper <= 0 is ever restored to the zero-return guard, which would
-	// UNDER-state a proven moment allowance.
-	zeroCoordWidened := absSumUpper(0, matchedDelta, maxTwistOffsetUpper)
-	require.Greater(t, zeroCoordWidened, 0.0, "the widening legs alone must carry a positive radius")
-	require.Equal(t, productUpper(vol, zeroCoordWidened),
+	// A zero coordUpper still leaves the wall sweep's matchedDelta widening.
+	zeroCoordWall := productUpper(wallMeasure, absSumUpper(0, matchedDelta))
+	require.Equal(t, absSumUpper(zeroCoordWall, productUpper(twistVolumeUpper, 0)),
 		chordedBoundaryMomentAllow(matchedDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper, seamAllow, maxTwistOffsetUpper, 0))
 
 	// R == 0 — every widening leg zero as well — reaches 0 through
@@ -1962,31 +1941,28 @@ func TestChordedBoundaryMomentAllowIsItsOwnWidenedTwin(t *testing.T) {
 	require.Equal(t, 0.0, chordedBoundaryMomentAllow(0, wallAreaUpper, twistVolumeUpper, capVolumeUpper, seamAllow, 0, 0))
 }
 
-// TestChordedBoundaryMomentAllowWidensPastTheHeldCoordEnvelope pins F7
-// directly: the symmetric difference this term bounds the moment of extends
-// OUTSIDE every held vertex, so a coordUpper read only over the HELD
-// material (never widened) must publish a SMALLER answer than the widened
-// term whenever matchedDelta or maxTwistOffsetUpper is positive — an
-// earlier version of this bound charged the held envelope alone and so
-// understated the obligation.
-func TestChordedBoundaryMomentAllowWidensPastTheHeldCoordEnvelope(t *testing.T) {
+// TestChordedBoundaryMomentAllowWidensTheWallMeasure pins that the
+// chord-to-curve sweep can extend matchedDelta beyond the held envelope. The
+// twist sweep stays in the four corners' convex hull and needs no widening.
+func TestChordedBoundaryMomentAllowWidensTheWallMeasure(t *testing.T) {
 	const matchedDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper, seamAllow = 0.02, 7.5, 1.25, 0.5, 0.1
 	const maxTwistOffsetUpper, coordUpper = 0.3, 3.0
 
 	widenedAnswer := chordedBoundaryMomentAllow(matchedDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper, seamAllow, maxTwistOffsetUpper, coordUpper)
-	vol := chordedBoundaryVolumeAllow(matchedDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper, seamAllow)
-	unwidenedAnswer := productUpper(vol, coordUpper)
+	wallMeasure := productUpper(matchedDelta, wallAreaUpper)
+	unwidenedAnswer := absSumUpper(
+		productUpper(wallMeasure, coordUpper),
+		productUpper(twistVolumeUpper, coordUpper),
+	)
 
 	require.Greater(t, widenedAnswer, unwidenedAnswer,
 		"the widened term must exceed the SAME product taken over the held coordUpper alone")
 
-	// The same invariant at coordUpper == 0, the sharpest case: the held
-	// envelope collapses to the plane-local origin, the unwidened product is
-	// exactly 0, and the widened term must still charge both legs. A guard
-	// that returned 0 on coordUpper <= 0 would answer 0 here and break this.
+	// At coordUpper == 0 only the wall widening remains; the twist sweep is in
+	// the held convex hull and therefore carries a zero coordinate radius.
 	zeroCoordWidened := chordedBoundaryMomentAllow(matchedDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper, seamAllow, maxTwistOffsetUpper, 0)
-	require.Greater(t, zeroCoordWidened, productUpper(vol, 0.0),
-		"a zero held envelope still leaves the matchedDelta and maxTwistOffsetUpper legs")
+	zeroCoordWall := productUpper(wallMeasure, absSumUpper(0, matchedDelta))
+	require.Equal(t, absSumUpper(zeroCoordWall, productUpper(twistVolumeUpper, 0)), zeroCoordWidened)
 }
 
 // TestChordedBoundaryMomentAllowRefusesOnBrokenClaims pins the reject-only
@@ -2015,8 +1991,8 @@ func TestChordedBoundaryMomentAllowRefusesOnBrokenClaims(t *testing.T) {
 	require.True(t, math.IsInf(chordedBoundaryMomentAllow(matchedDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper, seamAllow, maxTwistOffsetUpper, math.Inf(1)), 1), "+Inf coordUpper")
 }
 
-// exactTwistAreaLower is a float64 at or below the EXACT value
-// cellTwistAreaAllow's own derivation names, |T|·(eA+eB), computed here from
+// exactTwistAreaLower is a float64 at or below the exact value the linear
+// arm names, |T|·(eA+eB), computed here from
 // the cell's four float64 corners over big.Rat and a 300-bit big.Float root
 // and then nudged one ulp toward zero. It shares no arithmetic with the
 // helper under test: the helper's answer must dominate this number, and a
@@ -2059,10 +2035,8 @@ func exactTwistAreaLower(vLo, vHi, wLo, wHi r3.Vec) float64 {
 	return math.Nextafter(f, math.Inf(-1))
 }
 
-// TestCellTwistAreaAllowDominatesTheExactProduct pins cellTwistAreaAllow to
-// the same exact-arithmetic discipline cellTwistQuarterUpper's own doc
-// comment imposes on every other reading of the twist vector, over the two
-// float64 failures that discipline exists for.
+// TestCellTwistAreaLinearArmDominatesTheExactProduct pins the fallback arm to
+// the exact-arithmetic discipline used for every twist-vector reading.
 //
 // The first is CANCELLATION. T = vLo−vHi−wLo+wHi is a cancelling chain, so a
 // float64 evaluation can answer exactly (0,0,0) for a cell whose exact T is
@@ -2079,7 +2053,7 @@ func exactTwistAreaLower(vLo, vHi, wLo, wHi r3.Vec) float64 {
 // that eA and eB taken that way are not upper bounds. The randomized sweep
 // row cover it: every answer must dominate the independently computed exact
 // product, never merely approach it.
-func TestCellTwistAreaAllowDominatesTheExactProduct(t *testing.T) {
+func TestCellTwistAreaLinearArmDominatesTheExactProduct(t *testing.T) {
 	residueVHi := r3.NewVec(0.1, 0.2, 0.3)
 	residueWLo := r3.NewVec(0.7, 1.1, 1.3)
 
@@ -2128,7 +2102,8 @@ func TestCellTwistAreaAllowDominatesTheExactProduct(t *testing.T) {
 					"fixture premise: the float64 twist chain cancels to zero here")
 			}
 
-			got := cellTwistAreaAllow(tc.vLo, tc.vHi, tc.wLo, tc.wHi)
+			corners := cellCornersOf(tc.vLo, tc.vHi, tc.wLo, tc.wHi)
+			got := cellTwistAreaLinearFromSpans(corners.spans(), xtwistQuarterUpper(corners))
 			want := exactTwistAreaLower(tc.vLo, tc.vHi, tc.wLo, tc.wHi)
 			require.Greater(t, want, 0.0, "fixture premise: the exact deviation is positive")
 			require.GreaterOrEqual(t, got, want,
@@ -2139,8 +2114,10 @@ func TestCellTwistAreaAllowDominatesTheExactProduct(t *testing.T) {
 	t.Run("an exactly planar cell still answers zero", func(t *testing.T) {
 		// T = (0,0,0) − (1,0,0) − (0,1,0) + (1,1,0) is exactly the zero
 		// vector, not a cancelled one, so there is no deviation to charge.
-		require.Zero(t, cellTwistAreaAllow(
-			r3.NewVec(0, 0, 0), r3.NewVec(1, 0, 0), r3.NewVec(0, 1, 0), r3.NewVec(1, 1, 0)))
+		vLo, vHi := r3.NewVec(0, 0, 0), r3.NewVec(1, 0, 0)
+		wLo, wHi := r3.NewVec(0, 1, 0), r3.NewVec(1, 1, 0)
+		corners := cellCornersOf(vLo, vHi, wLo, wHi)
+		require.Zero(t, cellTwistAreaLinearFromSpans(corners.spans(), xtwistQuarterUpper(corners)))
 	})
 
 	t.Run("a non-finite corner refuses", func(t *testing.T) {
@@ -2155,8 +2132,48 @@ func TestCellTwistAreaAllowDominatesTheExactProduct(t *testing.T) {
 		}
 		for i := range 400 {
 			vLo, vHi, wLo, wHi := vec(), vec(), vec(), vec()
-			got := cellTwistAreaAllow(vLo, vHi, wLo, wHi)
+			corners := cellCornersOf(vLo, vHi, wLo, wHi)
+			got := cellTwistAreaLinearFromSpans(corners.spans(), xtwistQuarterUpper(corners))
 			require.GreaterOrEqual(t, got, exactTwistAreaLower(vLo, vHi, wLo, wHi), "cell %d", i)
 		}
 	})
+}
+
+// TestCellTwistAreaAllowEnclosesTheBilinearGap checks the published minimum
+// against an independent dense integration of the ruled patch and the held
+// triangle pair. The rows include the small-twist shape whose quadratic arm
+// is much tighter than the linear fallback.
+func TestCellTwistAreaAllowEnclosesTheBilinearGap(t *testing.T) {
+	for _, tc := range []struct {
+		name               string
+		vLo, vHi, wLo, wHi r3.Vec
+		sharp              bool
+	}{
+		{
+			name: "small rotational twist",
+			vLo:  r3.NewVec(9.5, 0, 0), vHi: r3.NewVec(9.49, 0.2, 0),
+			wLo: r3.NewVec(9.49, 0.5, 5), wHi: r3.NewVec(9.47, 0.7, 5),
+			sharp: true,
+		},
+		{
+			name: "skew cell",
+			vLo:  r3.NewVec(0, 0, 0), vHi: r3.NewVec(2, 0.5, 0),
+			wLo: r3.NewVec(0.2, -0.1, 3), wHi: r3.NewVec(1.8, 1.2, 3.2),
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			patchArea := bilinearPatchAreaNumeric(tc.vLo, tc.vHi, tc.wLo, tc.wHi)
+			heldArea := heldTrianglePairArea(tc.vLo, tc.vHi, tc.wLo, tc.wHi)
+			gap := math.Abs(patchArea - heldArea)
+			allow := cellTwistAreaAllow(tc.vLo, tc.vHi, tc.wLo, tc.wHi)
+			require.LessOrEqual(t, gap, allow+1e-8,
+				"the allowance must enclose the independently integrated area gap")
+			if tc.sharp {
+				corners := cellCornersOf(tc.vLo, tc.vHi, tc.wLo, tc.wHi)
+				linear := cellTwistAreaLinearFromSpans(corners.spans(), xtwistQuarterUpper(corners))
+				require.Less(t, allow, linear,
+					"the cancellation-preserving arm must tighten a small rotational twist")
+			}
+		})
+	}
 }
