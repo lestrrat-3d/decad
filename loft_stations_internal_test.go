@@ -87,30 +87,120 @@ func TestLoftLineCellStationsIsUnchanged(t *testing.T) {
 
 // --- the LineSeg arm at a TRIMMED start (docs/loft-design.md §5.2, Table C) ---
 
-// trimmedStartSquareProfile is the unit square with segment 0 replaced by a
-// TRIMMED fragment of a longer virtual line: (-1,0) -> (9,0) over
-// [TStart 0.1, TEnd 0.2]. That fragment DENOTES exactly the square's own
-// (0,0) -> (1,0) bottom edge — the exact rational lerp lands on both corners —
-// so the profile is the same closed unit square the untrimmed fixture states,
-// its neighbours still join it at recorded corners, and every VALUE reading a
-// loft over it publishes (bounds 0..1, volume 1) is unchanged.
+// trimmedSquareCentre and trimmedSquareHalf place the trimmed-start fixture's
+// unit square at [1,2]×[1,2] rather than at the origin. Both of the replaced
+// edge's own corners then sit at a coordinate whose ULP is a normal one, which
+// is what lets BOTH of that edge's ends be trimmed and still round onto the
+// corners exactly — the property the two readings below are separated by.
+const (
+	trimmedSquareCentre = 1.5
+	trimmedSquareHalf   = 0.5
+)
+
+// trimmedStartSegment is the fragment both trimmed-start fixtures rest on: the
+// virtual line (0,1) -> (5,1) trimmed to [TStart 0.2, TEnd 0.4]. It DENOTES
+// the fixture square's own bottom edge, (1,1) -> (2,1), so the profile is the
+// same closed unit square the untrimmed loop states, its neighbours still join
+// it at recorded corners, and every VALUE reading a loft over it publishes
+// (bounds 1..2 across the section, volume 1) is unchanged.
 //
-// What changes is provenance alone, which is exactly what makes this fixture
-// isolate the term under test. walkOf fills a trimmed walk's start from lerp2
-// in FLOAT, so station 0 is GENERATED (§5.1's Table C) and carries
-// lineWalkEndBound's proven gap from ratLerp, while the other three segments'
-// starts stay untrimmed recorded corners at a zero bound. The build's
-// stationRound is therefore this one segment's own reading and nothing else's.
+// What changes is provenance alone, which is what makes this fragment isolate
+// the term under test. walkOf fills a trimmed walk's ends from lerp2 in FLOAT,
+// so station 0 is GENERATED (§5.1's Table C) and carries lineWalkEndBound's
+// proven gap from ratLerp, while the other three segments' starts stay
+// untrimmed recorded corners at a zero bound.
 //
-// The 10-to-1 span is deliberate: it scales the lerp's rounding to a gap that
-// is genuinely nonzero on this fixture rather than one that happens to
-// reproduce ratLerp bit for bit, which §5.2 warns a trimmed end may well do.
-// Its positivity is ASSERTED below, never assumed, so a fixture that stopped
-// exercising the path would fail rather than pass vacuously.
+// The operands are chosen so that gap CANNOT VANISH ON ANY ARCHITECTURE. A
+// gap of one ULP is not such a choice: a compiler is free to contract
+// start + t·(end − start) into a fused multiply-add or not, and for some
+// operands the fused evaluation reproduces the exact rational lerp bit for
+// bit, leaving a true zero on that target and a nonzero gap on another. These
+// operands leave nothing for a contraction to decide, and the point the record
+// denotes is not a float64 at all:
+//
+//	The recorded Start.U is 0, so lerp2's 0 + t·(5 − 0) is the single product
+//	t × 5 whether it is fused or not, and ratLerp's exact rational is that same
+//	product. 0.2 is the float64 3602879701896397·2⁻⁵⁴ — a full 53-bit
+//	significand — and 5 × 3602879701896397 is 18014398509481985 = 2⁵⁴+1, so the
+//	denoted START is exactly (2⁵⁴+1)·2⁻⁵⁴ = 1 + 2⁻⁵⁴. 0.4 is that same
+//	significand one binade up, so the denoted END is 2 + 2⁻⁵³.
+//
+// Neither is a float64: each needs a 55-bit significand, while every float64
+// in [1,2) is a multiple of 2⁻⁵² and every one in [2,4) a multiple of 2⁻⁵¹.
+// lerp2 answers a float64, so its gap from the denoted point is positive at
+// BOTH ends on every target — a fact trimmedStartWalk proves over exact
+// rationals below rather than assumes from one machine's rounding.
+//
+// The HELD ends are the square's own corners exactly, which is what keeps the
+// denoted square intact: 2⁻⁵⁴ is a quarter of ulp(1) = 2⁻⁵² and 2⁻⁵³ a quarter
+// of ulp(2) = 2⁻⁵¹, so each denoted end rounds to the corner beside it. The V
+// component is 1 at both recorded ends, so its lerp is exactly 1 either way
+// and contributes nothing.
+//
+// The two gaps are 2⁻⁵⁴ and 2⁻⁵³ — the end's is twice the start's, by
+// construction rather than by one machine's rounding. That is what lets the
+// arm-level test separate charging the START bound from charging the end
+// bound, or from a max over both.
+func trimmedStartSegment() LineSeg {
+	return LineSeg{Start: pt(0, 1), End: pt(5, 1), TStart: 0.2, TEnd: 0.4}
+}
+
+// trimmedStartSquareProfile is the fixture square with its bottom edge
+// replaced by trimmedStartSegment's fragment. The build's stationRound is
+// therefore that one segment's own reading and nothing else's.
 func trimmedStartSquareProfile() ProfileRecord {
-	loop := squareLoop(0.5, 0.5, 0.5, true)
-	loop.Segments[0] = LineSeg{Start: pt(-1, 0), End: pt(9, 0), TStart: 0.1, TEnd: 0.2}
+	loop := squareLoop(trimmedSquareCentre, trimmedSquareCentre, trimmedSquareHalf, true)
+	loop.Segments[0] = trimmedStartSegment()
 	return ProfileRecord{Outer: loop}
+}
+
+// trimmedStartWalk resolves trimmedStartSegment's walk and proves the premises
+// every assertion over it rests on, all over exact rationals so that the proof
+// holds on every target rather than on the one that ran it.
+//
+// The first is that neither denoted end is a float64: they are exactly
+// 1 + 2⁻⁵⁴ and 2 + 2⁻⁵³, each needing a 55-bit significand. Since lerp2's
+// answer is a float64 whatever the compiler contracts, it cannot equal either,
+// and lineWalkEndBound's gap is positive at both ends everywhere. This is the
+// architecture-independent statement of "the fixture exercises a real
+// rounding" — asserting that a float came out positive states only what one
+// machine's contraction happened to do.
+//
+// The second is that the two denoted ends differ, so the end reading can never
+// stand in for the start's however either is composed. The third is that the
+// held ends are the square's own corners exactly, so the fragment states the
+// same square its untrimmed neighbours do and the VALUE readings a loft over
+// it publishes are unchanged.
+func trimmedStartWalk(t *testing.T) segmentWalk {
+	t.Helper()
+	seg := trimmedStartSegment()
+	w, err := walkOf(seg, nil)
+	require.NoError(t, err)
+
+	denotedStart := ratLerp(seg.Start.U, seg.End.U, seg.TStart)
+	denotedEnd := ratLerp(seg.Start.U, seg.End.U, seg.TEnd)
+	require.NotNil(t, denotedStart, "the fixture's own start lerp must be statable as a rational")
+	require.NotNil(t, denotedEnd, "the fixture's own end lerp must be statable as a rational")
+	require.Zero(t, denotedStart.Cmp(big.NewRat(1<<54+1, 1<<54)),
+		"the denoted start must be exactly 1 + 2⁻⁵⁴, got %s", denotedStart.RatString())
+	require.Zero(t, denotedEnd.Cmp(big.NewRat(1<<54+1, 1<<53)),
+		"the denoted end must be exactly 2 + 2⁻⁵³, got %s", denotedEnd.RatString())
+
+	for _, end := range []struct {
+		name    string
+		denoted *big.Rat
+	}{{"start", denotedStart}, {"end", denotedEnd}} {
+		_, representable := end.denoted.Float64()
+		require.False(t, representable,
+			"the denoted %s must NOT be representable as a float64: one that is can be reproduced bit for bit by lerp2, and the rounding under test would then be a true zero on that architecture", end.name)
+	}
+
+	lo, hi := trimmedSquareCentre-trimmedSquareHalf, trimmedSquareCentre+trimmedSquareHalf
+	require.Equal(t, lo, w.startU, "the denoted start rounds to the square's own bottom-left corner")
+	require.Equal(t, hi, w.endU, "the denoted end rounds to the square's own bottom-right corner")
+	require.Equal(t, lo, w.startV, "the fragment's two recorded ends share their V, so its lerp is that V exactly")
+	require.Equal(t, lo, w.endV, "the fragment's two recorded ends share their V, so its lerp is that V exactly")
+	return w
 }
 
 // TestLoftLineCellStationsChargesTrimmedStartBound is the arm-level half of
@@ -124,19 +214,23 @@ func trimmedStartSquareProfile() ProfileRecord {
 // on one of them.
 //
 // The second assertion is what separates the correct term from the plausible
-// wrong one. This walk's endBound is the LARGER of its two readings, so an arm
-// charging the endpoint — or a max over both ends — would publish a strictly
-// bigger number and fail here. It would also be charging a point this build
-// never holds: this cell's terminal station is segment 1's own recorded start,
-// which segment 1's own cell charges at its own zero bound.
+// wrong ones. This walk's two ends carry DIFFERENT certified gaps — 2⁻⁵³ at the
+// end against 2⁻⁵⁴ at the start, by trimmedStartSegment's own construction and
+// not by one machine's rounding — so an arm charging the endpoint, or a max
+// over both ends, publishes a reading this one is not, on every target. It
+// would also be charging a point this build never holds: this cell's terminal
+// station is segment 1's own recorded start, which segment 1's own cell
+// charges at its own zero bound.
 func TestLoftLineCellStationsChargesTrimmedStartBound(t *testing.T) {
-	seg := trimmedStartSquareProfile().Outer.Segments[0]
-	w, err := walkOf(seg, nil)
-	require.NoError(t, err)
+	seg := trimmedStartSegment()
+	w := trimmedStartWalk(t)
 
 	startDelta := walkEndPlaneDelta(w.startBound)
 	endDelta := walkEndPlaneDelta(w.endBound)
-	require.Positive(t, startDelta, "this fixture must actually exercise a nonzero trimmed-start rounding")
+	require.Positive(t, startDelta,
+		"a station the record denotes off the float64 grid must carry a positive gap")
+	require.Positive(t, endDelta,
+		"a station the record denotes off the float64 grid must carry a positive gap")
 
 	_, _, sagitta, matchedDelta, stationRound, err := loftCellStations(w, w, seg, seg, 123.0, nil, nil)
 	require.NoError(t, err)
@@ -145,7 +239,7 @@ func TestLoftLineCellStationsChargesTrimmedStartBound(t *testing.T) {
 
 	require.Equal(t, startDelta, stationRound,
 		"the LineSeg arm must charge its walk's own certified startBound at a trimmed start")
-	require.Less(t, stationRound, endDelta,
+	require.NotEqual(t, endDelta, stationRound,
 		"the arm must charge the START bound alone: this cell's terminal station is the NEXT segment's own start")
 }
 
@@ -156,21 +250,23 @@ func TestLoftLineCellStationsChargesTrimmedStartBound(t *testing.T) {
 // reading, carried through delta — never the Exact zero a kind-granted pin
 // would give it.
 //
-// The body here is geometrically the same unit box the pinned fixture builds,
-// so the assertions below separate the BOUND from the VALUE cleanly: every
-// value reading is unchanged and only the published bound and Exactness move.
+// The body here is the pinned fixture's own unit box translated to (1,1) —
+// trimmedStartSegment's doc comment states why the square sits there — so the
+// assertions below separate the BOUND from the VALUE cleanly: every value
+// reading is the untrimmed loop's own and only the published bound and
+// Exactness move.
 //
-// Nothing is pinned as a literal. The expected bound is recomposed in-test
-// through the same absSumUpper chain the evaluator itself uses — delta =
-// absSumUpper(stationRound, placeAllow) with placeAllow exactly zero under
-// r3.Identity(), then Bounds.Bound = absSumUpper(delta, sectionDelta) with
-// sectionDelta exactly zero on a LineSeg-only build (§5.2).
+// No float bound is pinned as a literal. The expected bound is recomposed
+// in-test through the same absSumUpper chain the evaluator itself uses —
+// delta = absSumUpper(stationRound, placeAllow) with placeAllow exactly zero
+// under r3.Identity(), then Bounds.Bound = absSumUpper(delta, sectionDelta)
+// with sectionDelta exactly zero on a LineSeg-only build (§5.2). That the
+// displacement is nonzero at all is trimmedStartWalk's own exact-rational
+// proof and holds on every target; the assertions here read the value it
+// publishes.
 func TestEvalLoftTrimmedLineSegPublishesStationDisplacement(t *testing.T) {
 	p := trimmedStartSquareProfile()
-	w, err := walkOf(p.Outer.Segments[0], nil)
-	require.NoError(t, err)
-	stationRound := walkEndPlaneDelta(w.startBound)
-	require.Positive(t, stationRound, "this fixture must actually exercise a nonzero trimmed-start rounding")
+	stationRound := walkEndPlaneDelta(trimmedStartWalk(t).startBound)
 
 	pl := loftPayloadFor(t, p, p, r3.NewVec(0, 0, 0), r3.NewVec(0, 0, 1))
 	body := evalLoftFixture(t, pl)
@@ -182,8 +278,9 @@ func TestEvalLoftTrimmedLineSegPublishesStationDisplacement(t *testing.T) {
 
 	box, err := body.Bounds()
 	require.NoError(t, err)
-	require.Equal(t, r3.NewVec(0, 0, 0), box.Min, "the trimmed fragment denotes the same unit square")
-	require.Equal(t, r3.NewVec(1, 1, 1), box.Max, "the trimmed fragment denotes the same unit square")
+	lo, hi := trimmedSquareCentre-trimmedSquareHalf, trimmedSquareCentre+trimmedSquareHalf
+	require.Equal(t, r3.NewVec(lo, lo, 0), box.Min, "the trimmed fragment denotes the same unit square")
+	require.Equal(t, r3.NewVec(hi, hi, 1), box.Max, "the trimmed fragment denotes the same unit square")
 	gotBound, err := box.Bound.In(units.Millimeter)
 	require.NoError(t, err)
 	require.Equal(t, wantBound, gotBound, "Bounds.Bound must carry the trimmed station's own displacement")
