@@ -60,11 +60,19 @@ func degenerateArcFixture(t *testing.T) (ArcSeg, segmentWalk) {
 
 // --- loftLineCellStations / the LineSeg arm ---
 
-// TestLoftLineCellStationsIsUnchanged pins the LineSeg arm's own contract: one
-// station per side, at the segment's own recorded start, zero sagitta — the
-// exact shape a LineSeg pairing already had before this generator existed. An
-// arbitrary target must not perturb it: a straight wall's own chord IS the
-// recorded segment, so this arm never reads target at all.
+// TestLoftLineCellStationsIsUnchanged pins the LineSeg arm's own STATION
+// contract: one station per side, at the segment's own recorded start, zero
+// sagitta — the exact shape a LineSeg pairing already had before this
+// generator existed. An arbitrary target must not perturb it: a straight
+// wall's own chord IS the recorded segment, so this arm never reads target at
+// all.
+//
+// The zero stationRound here is read off these two walks' own zero
+// startBound, which is the UNTRIMMED case: both are hand-built, so both carry
+// the zero-valued walkEndBound that lineWalkEndBound stamps at a natural
+// parameter. It is NOT a property the LineSeg kind grants — §5.2 pins a
+// station by its own natural parameter and never by its kind — and the
+// trimmed-start fixture below asserts the same arm charging a positive term.
 func TestLoftLineCellStationsIsUnchanged(t *testing.T) {
 	w0 := segmentWalk{kind: walkLine, startU: 1, startV: 2}
 	w1 := segmentWalk{kind: walkLine, startU: 3, startV: 4}
@@ -74,7 +82,135 @@ func TestLoftLineCellStationsIsUnchanged(t *testing.T) {
 	require.Equal(t, []Point2{{U: 3, V: 4}}, stations1)
 	require.Zero(t, sagitta)
 	require.Equal(t, []float64{0}, matchedDelta, "a LineSeg cell's own chord IS the curve it denotes")
-	require.Zero(t, stationRound, "a LineSeg station is a recorded endpoint, never computed")
+	require.Zero(t, stationRound, "these two walks carry an UNTRIMMED start, whose own lineWalkEndBound is zero")
+}
+
+// --- the LineSeg arm at a TRIMMED start (docs/loft-design.md §5.2, Table C) ---
+
+// trimmedStartSquareProfile is the unit square with segment 0 replaced by a
+// TRIMMED fragment of a longer virtual line: (-1,0) -> (9,0) over
+// [TStart 0.1, TEnd 0.2]. That fragment DENOTES exactly the square's own
+// (0,0) -> (1,0) bottom edge — the exact rational lerp lands on both corners —
+// so the profile is the same closed unit square the untrimmed fixture states,
+// its neighbours still join it at recorded corners, and every VALUE reading a
+// loft over it publishes (bounds 0..1, volume 1) is unchanged.
+//
+// What changes is provenance alone, which is exactly what makes this fixture
+// isolate the term under test. walkOf fills a trimmed walk's start from lerp2
+// in FLOAT, so station 0 is GENERATED (§5.1's Table C) and carries
+// lineWalkEndBound's proven gap from ratLerp, while the other three segments'
+// starts stay untrimmed recorded corners at a zero bound. The build's
+// stationRound is therefore this one segment's own reading and nothing else's.
+//
+// The 10-to-1 span is deliberate: it scales the lerp's rounding to a gap that
+// is genuinely nonzero on this fixture rather than one that happens to
+// reproduce ratLerp bit for bit, which §5.2 warns a trimmed end may well do.
+// Its positivity is ASSERTED below, never assumed, so a fixture that stopped
+// exercising the path would fail rather than pass vacuously.
+func trimmedStartSquareProfile() ProfileRecord {
+	loop := squareLoop(0.5, 0.5, 0.5, true)
+	loop.Segments[0] = LineSeg{Start: pt(-1, 0), End: pt(9, 0), TStart: 0.1, TEnd: 0.2}
+	return ProfileRecord{Outer: loop}
+}
+
+// TestLoftLineCellStationsChargesTrimmedStartBound is the arm-level half of
+// docs/loft-design.md §5.2's trimmed-LineSeg requirement: the LineSeg arm must
+// charge the certified lineWalkEndBound its walk carries at a TRIMMED start,
+// and must charge the START bound alone.
+//
+// Both assertions are derived in-process from the walk's own bounds and no
+// float literal is pinned anywhere: a bound of this magnitude moves by an ULP
+// between amd64 and arm64, so a literal here would be a permanently red build
+// on one of them.
+//
+// The second assertion is what separates the correct term from the plausible
+// wrong one. This walk's endBound is the LARGER of its two readings, so an arm
+// charging the endpoint — or a max over both ends — would publish a strictly
+// bigger number and fail here. It would also be charging a point this build
+// never holds: this cell's terminal station is segment 1's own recorded start,
+// which segment 1's own cell charges at its own zero bound.
+func TestLoftLineCellStationsChargesTrimmedStartBound(t *testing.T) {
+	seg := trimmedStartSquareProfile().Outer.Segments[0]
+	w, err := walkOf(seg, nil)
+	require.NoError(t, err)
+
+	startDelta := walkEndPlaneDelta(w.startBound)
+	endDelta := walkEndPlaneDelta(w.endBound)
+	require.Positive(t, startDelta, "this fixture must actually exercise a nonzero trimmed-start rounding")
+
+	_, _, sagitta, matchedDelta, stationRound, err := loftCellStations(w, w, seg, seg, 123.0, nil, nil)
+	require.NoError(t, err)
+	require.Zero(t, sagitta, "a straight chord IS its own recorded segment, trimmed or not")
+	require.Equal(t, []float64{0}, matchedDelta, "a LineSeg cell's own chord IS the curve it denotes")
+
+	require.Equal(t, startDelta, stationRound,
+		"the LineSeg arm must charge its walk's own certified startBound at a trimmed start")
+	require.Less(t, stationRound, endDelta,
+		"the arm must charge the START bound alone: this cell's terminal station is the NEXT segment's own start")
+}
+
+// TestEvalLoftTrimmedLineSegPublishesStationDisplacement is the end-to-end
+// half, and the fixture docs/loft-design.md §5.2 requires beside the pinned
+// LineSeg-only one: an UNPLACED LineSeg-only loft holding one TRIMMED station
+// must publish a Bounds.Bound equal to that station's own lineWalkEndBound
+// reading, carried through delta — never the Exact zero a kind-granted pin
+// would give it.
+//
+// The body here is geometrically the same unit box the pinned fixture builds,
+// so the assertions below separate the BOUND from the VALUE cleanly: every
+// value reading is unchanged and only the published bound and Exactness move.
+//
+// Nothing is pinned as a literal. The expected bound is recomposed in-test
+// through the same absSumUpper chain the evaluator itself uses — delta =
+// absSumUpper(stationRound, placeAllow) with placeAllow exactly zero under
+// r3.Identity(), then Bounds.Bound = absSumUpper(delta, sectionDelta) with
+// sectionDelta exactly zero on a LineSeg-only build (§5.2).
+func TestEvalLoftTrimmedLineSegPublishesStationDisplacement(t *testing.T) {
+	p := trimmedStartSquareProfile()
+	w, err := walkOf(p.Outer.Segments[0], nil)
+	require.NoError(t, err)
+	stationRound := walkEndPlaneDelta(w.startBound)
+	require.Positive(t, stationRound, "this fixture must actually exercise a nonzero trimmed-start rounding")
+
+	pl := loftPayloadFor(t, p, p, r3.NewVec(0, 0, 0), r3.NewVec(0, 0, 1))
+	body := evalLoftFixture(t, pl)
+
+	// The unplaced LineSeg-only composition: placeAllow and sectionDelta are
+	// both exactly zero, so the whole published bound is the trimmed station's
+	// own displacement carried through absSumUpper's outward rounding.
+	wantBound := absSumUpper(absSumUpper(stationRound, 0), 0)
+
+	box, err := body.Bounds()
+	require.NoError(t, err)
+	require.Equal(t, r3.NewVec(0, 0, 0), box.Min, "the trimmed fragment denotes the same unit square")
+	require.Equal(t, r3.NewVec(1, 1, 1), box.Max, "the trimmed fragment denotes the same unit square")
+	gotBound, err := box.Bound.In(units.Millimeter)
+	require.NoError(t, err)
+	require.Equal(t, wantBound, gotBound, "Bounds.Bound must carry the trimmed station's own displacement")
+	require.Positive(t, gotBound, "an Exact zero here would be a bound smaller than the true displacement")
+	require.Equal(t, Approximate, box.Exactness,
+		"a build holding a COMPUTED station states a bound, never an Exact zero")
+
+	vol, err := body.Volume()
+	require.NoError(t, err)
+	volValue, err := vol.Value.In(units.CubicMillimeter)
+	require.NoError(t, err)
+	require.InDelta(t, 1.0, volValue, 1e-12, "the denoted solid is still the unit box")
+	volBound, err := vol.Bound.In(units.CubicMillimeter)
+	require.NoError(t, err)
+	require.Positive(t, volBound, "the volume bound must charge the same displacement")
+	require.Equal(t, Approximate, vol.Exactness)
+
+	// The contrast that makes the assertions above meaningful: the SAME square
+	// recorded with untrimmed segments keeps every pinned Exact zero, so the
+	// movement above is the trim's own and not a blanket loss of exactness.
+	pinned := evalLoftFixture(t, loftPayloadFor(t, unitSquareProfile(), unitSquareProfile(), r3.NewVec(0, 0, 0), r3.NewVec(0, 0, 1)))
+	pinnedBox, err := pinned.Bounds()
+	require.NoError(t, err)
+	pinnedBound, err := pinnedBox.Bound.In(units.Millimeter)
+	require.NoError(t, err)
+	require.Zero(t, pinnedBound, "an untrimmed LineSeg-only loft's every station is PINNED (§5.2)")
+	require.Equal(t, Exact, pinnedBox.Exactness)
 }
 
 // --- loftCircularCellStations / the ARC arm: station count ---
@@ -986,6 +1122,12 @@ func TestLoftPairingsSectionDeltaIsMaxNotSum(t *testing.T) {
 // acceptance line: a LineSeg-only pairing is bit-identical to today's — one
 // station per segment, at its own recorded start, sectionDelta exactly zero,
 // unaffected by an arbitrary target the LineSeg arm never reads.
+//
+// Its zero stationRound is a property of THIS fixture and not of the LineSeg
+// kind: every segment of the unit square is UNTRIMMED, so every station is
+// PINNED by its own natural parameter (docs/loft-design.md §5.2) and its own
+// lineWalkEndBound is zero. The trimmed-start fixture earlier in this file
+// asserts the same pairing path carrying a positive term.
 func TestLoftPairingsLineSegOnlyStationChainUnchanged(t *testing.T) {
 	p := unitSquareProfile()
 	offsets := []int{0}
@@ -1000,7 +1142,7 @@ func TestLoftPairingsLineSegOnlyStationChainUnchanged(t *testing.T) {
 		require.Equal(t, Point2{U: walks[0][j].startU, V: walks[0][j].startV}, pairs[0].w[j])
 	}
 	require.Zero(t, sectionDelta)
-	require.Zero(t, stationRound)
+	require.Zero(t, stationRound, "every station of this UNTRIMMED square is PINNED (docs/loft-design.md §5.2)")
 }
 
 // --- loftChordTarget ---

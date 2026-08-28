@@ -383,7 +383,7 @@ func TestLoftPairingsDefaultOffsetIsZero(t *testing.T) {
 	require.Equal(t, pt(0, 0), pairs[0].w[0])
 	require.Zero(t, sectionDelta, "a LineSeg-only pairing carries no curve to depart from")
 	require.Zero(t, sectionMatchedDelta, "a LineSeg-only pairing carries no curve to depart from")
-	require.Zero(t, stationRound, "a LineSeg-only pairing carries no computed station")
+	require.Zero(t, stationRound, "every segment of this square is UNTRIMMED, so every station is PINNED (docs/loft-design.md §5.2)")
 }
 
 func TestLoftPairingsAlignmentRotatesCorrespondence(t *testing.T) {
@@ -650,7 +650,7 @@ func TestLoftGateDiameterIsTheVertexDiameter(t *testing.T) {
 	require.InDelta(t, 1.7320508075688772, d, 1e-12) // sqrt(3)
 
 	pl := body.payload.(loftPayload)
-	require.Zero(t, pl.delta, "an unplaced loft's vertices are exact")
+	require.Zero(t, pl.delta, "this fixture is unplaced AND every station of its untrimmed square is PINNED (docs/loft-design.md §5.2)")
 	require.Zero(t, pl.sectionDelta, "S3 admits only LineSeg pairs, so every wall cell's chord IS the recorded segment")
 	held, ok, err := pointSetDiameterContext(t.Context(), pl.verts)
 	require.NoError(t, err)

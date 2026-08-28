@@ -52,12 +52,16 @@ type loftPayload struct {
 	// exact struct comparison, never a tolerance — and otherwise
 	// bounds.go's rigidRoundAllow, read at the pre-transform lifted point's
 	// own magnitude and the composed translation's magnitude. stationRound is
-	// the rounding a COMPUTED circular station commits (an exact-rational
-	// trig enclosure rounded once into a Point2), zero for a LineSeg pairing
-	// (every station is a recorded endpoint) and positive for a curved
-	// pairing whenever a cell has an interior station — so delta is zero
-	// exactly when BOTH terms are, no longer merely when the body is
-	// unplaced. Every measurement this payload publishes composes it.
+	// the rounding a COMPUTED station commits — an exact-rational trig
+	// enclosure rounded once into a Point2 for a circular station, lerp2's own
+	// gap from ratLerp for a LineSeg station sitting at a TRIMMED parameter.
+	// It is zero exactly where every station is PINNED by its own NATURAL
+	// parameter (docs/loft-design.md §5.2's pinned-station list), which no
+	// segment KIND grants on its own: an untrimmed LineSeg pairing reaches
+	// that zero, a trimmed one does not, and a curved pairing is positive
+	// whenever a cell has an interior station. So delta is zero exactly when
+	// BOTH terms are, no longer merely when the body is unplaced. Every
+	// measurement this payload publishes composes it.
 	delta float64
 
 	// sectionDelta is the proven upper bound on how far any BUILT CHORD point
@@ -739,9 +743,13 @@ func loftChordTarget(p0, p1 ProfileRecord, walks0, walks1 [][]segmentWalk) (floa
 // stationRoundUpper is docs/loft-design.md Table S row S14 (a10-plan.md Part
 // 3 PR 6): the proven rounding a COMPUTED station commits, taken as a MAX
 // over this cell's own stations on both sides — a component of delta, never
-// sectionDelta. The LineSeg arm's stations are recorded endpoints, never
-// computed, so its own contribution is exactly zero; the circular arm's own
-// doc comment states the mechanism.
+// sectionDelta. NEITHER arm is exempt, and the LineSeg arm is not the
+// zero it would be if a kind could grant one: §5.2 PINS a station by its own
+// NATURAL parameter, never by the kind of segment it sits on, so this arm
+// charges exactly zero where its two stations are UNTRIMMED recorded
+// endpoints and charges its own certified lineWalkEndBound wherever a TRIMMED
+// parameter made lerp2 compute one. Each arm's own doc comment states its
+// mechanism.
 //
 // matchedDelta is the CHORD-TO-CURVE HALF of docs/loft-design.md §5.2's
 // matchedDelta row — the half a consumer composes with the build's own delta
@@ -759,8 +767,7 @@ func loftChordTarget(p0, p1 ProfileRecord, walks0, walks1 [][]segmentWalk) (floa
 func loftCellStations(w0, w1 segmentWalk, seg0, seg1 CurveSegment, target float64, work0, work1 *freeformWork) ([]Point2, []Point2, float64, []float64, float64, error) { //nolint:unparam // work0/work1 are part of the fixed kind-switch interface every future arm shares; the ARC and LineSeg arms below are the two that do not need them yet.
 	switch {
 	case w0.kind == walkLine && w1.kind == walkLine:
-		stations0, stations1, sagitta, matchedDelta, err := loftLineCellStations(w0, w1)
-		return stations0, stations1, sagitta, matchedDelta, 0, err
+		return loftLineCellStations(w0, w1)
 	case w0.kind == walkCircular && w1.kind == walkCircular:
 		return loftCircularCellStations(w0, w1, seg0, seg1, target)
 	default:
@@ -777,11 +784,54 @@ func loftCellStations(w0, w1 segmentWalk, seg0, seg1 CurveSegment, target float6
 // loftLineCellStations is the LineSeg arm: one station per side, at the
 // segment's own recorded start, with zero sagitta and zero matchedDelta — a
 // straight wall's own chord IS the recorded segment, so there is no curve
-// for it to depart from. m is fixed at 1, so this arm's output is
+// for it to depart from. m is fixed at 1, so this arm's STATION SET is
 // bit-identical to every LineSeg pairing this evaluator built before the
 // station generator existed.
-func loftLineCellStations(w0, w1 segmentWalk) ([]Point2, []Point2, float64, []float64, error) { //nolint:unparam // the error return matches loftCircularCellStations' own arm shape; a straight chord never fails to state its own recorded endpoint.
-	return []Point2{{U: w0.startU, V: w0.startV}}, []Point2{{U: w1.startU, V: w1.startV}}, 0, []float64{0}, nil
+//
+// Its stationRoundUpper is NOT unconditionally zero, and that is the one
+// thing this arm does not inherit from that earlier shape. docs/loft-design.md
+// §5.2 pins a station by its own NATURAL parameter — t == 0 or t == 1 — and
+// never by the kind of segment it sits on, and §5.1's Table C marks a TRIMMED
+// LineSeg end GENERATED for exactly that reason. So this arm reads what its
+// two walks actually prove rather than asserting a zero its kind does not
+// grant.
+//
+// It charges each side's startBound and NEVER its endBound. Each station this
+// arm emits is its own walk's START, and a cell's terminal station is the NEXT
+// segment's own start — or the loop's wrap back to the first segment's — which
+// that segment charges when its own cell is generated. Charging endBound here
+// would charge a point this build never holds, and would double-count the
+// junction the two segments share.
+//
+// At an UNTRIMMED start the term is exactly zero, proven rather than assumed:
+// lerp2 and moments.go's ratLerp both special-case t == 0 and t == 1 to the
+// recorded Point2 verbatim, so lineWalkEndBound's two rationalFloatError calls
+// measure no gap at all. An untrimmed LineSeg-only pairing therefore still
+// publishes the bit-identical zero delta — and the Exact readings §8 gives it
+// — that it always did.
+//
+// At a TRIMMED start the term is whatever lineWalkEndBound proves. walkOf
+// fills such a walk's start from lerp2 in FLOAT (extrude.go's LineSeg arm),
+// while the point the record denotes is the exact rational ratLerp, and
+// lineWalkEndBound stamps the outward-rounded gap between them. That gap is a
+// real displacement of a held vertex from the point the record denotes, so
+// leaving it uncharged would publish a bound smaller than the displacement the
+// body actually carries. Such a record is caller-reachable rather than a
+// corner case: seam.go's recordEdge records a certified Partial line fragment
+// over a non-natural range verbatim, and no Table S row excludes one.
+//
+// The refusal is DEFENSIVE and no admitted record reaches it. walkEndPlaneDelta
+// answers +Inf only where lineWalkEndBound could not state the denoted point as
+// a rational, and ratLerp fails solely on a non-finite coordinate — which the
+// record gates exclude long before any walk is resolved. It stands so that an
+// underivable term can never be published as a finite bound, which is the S14
+// discipline §5.2's table states for every term in it.
+func loftLineCellStations(w0, w1 segmentWalk) ([]Point2, []Point2, float64, []float64, float64, error) {
+	round := math.Max(walkEndPlaneDelta(w0.startBound), walkEndPlaneDelta(w1.startBound))
+	if isNonFinite(round) {
+		return nil, nil, 0, nil, 0, errLoftStationDisplacementUnderivable
+	}
+	return []Point2{{U: w0.startU, V: w0.startV}}, []Point2{{U: w1.startU, V: w1.startV}}, 0, []float64{0}, round, nil
 }
 
 // loftSettleStationCount runs docs/loft-design.md §5.1's JOINT WALK-UP for one
@@ -1012,14 +1062,18 @@ func chordCellDeltaUpper(sagittaUpper, deltaUpper float64) float64 {
 
 // errLoftStationDisplacementUnderivable is the sentinel docs/loft-design.md
 // Table S row S14 carries for the station-displacement term, raised in the arm
-// §4's gate-order paragraph assigns that term: a chorded circular pair whose
-// stations have no proven displacement from the recorded points they stand
-// for. Like its certified-sagitta twin the shape itself is fine and the chord
-// set is buildable; only one of the two terms the published chord bound is
-// composed from cannot be stated, so the sentinel is ErrUnsupported and no
-// finite value — least of all the sagitta alone — is published in its place.
+// §4's gate-order paragraph assigns that term: a pair whose generated stations
+// have no proven displacement from the recorded points they stand for. BOTH
+// station arms raise it, since both can generate a station — the circular arm
+// for its walked chord chain, the LineSeg arm for a station sitting at a
+// TRIMMED parameter — and neither may publish a finite bound in place of a
+// term it could not derive. Like its certified-sagitta twin the shape itself is
+// fine and the chord set is buildable; only one of the terms the published
+// bound is composed from cannot be stated, so the sentinel is ErrUnsupported
+// and no finite value — least of all the sagitta alone — is published in its
+// place.
 var errLoftStationDisplacementUnderivable = fmt.Errorf(
-	`%w: a chorded circular pair's generated stations have no proven displacement from the recorded curve`, ErrUnsupported,
+	`%w: a loft pair's generated stations have no proven displacement from the recorded curve`, ErrUnsupported,
 )
 
 // perCellTangentEnergy is bounds.go's cellChordCurveAreaAllow own
@@ -1578,17 +1632,19 @@ func assembleLoft(ctx context.Context, pairs []loftLoopPair, f0, f1 r3.Frame, pl
 
 	// placeAllow is zero exactly when xform is the identity transform — an
 	// exact struct comparison, never a tolerance. This fast path is
-	// REQUIRED: without it, every directly-built (unplaced) LineSeg-only
-	// loft would lose the Exact readings §8/§12 PR 1 publishes
-	// (docs/loft-design.md §5, §12 PR 2a). delta = absSumUpper(stationRound,
-	// placeAllow) (a10-plan.md Part 3 PR 6) is NO LONGER zero exactly when
-	// xform is the identity: a curved pair with interior computed stations
-	// carries a positive stationRound whether or not the body is placed, so
-	// the fast path this comment used to state is now placeAllow's own,
-	// while stationRound is absSumUpper's other, independent leg —
-	// absSumUpper(0, 0) is exactly 0.0 (upRound never nudges a non-positive
-	// value), which is what keeps an unplaced LineSeg-only loft's delta bit-
-	// identical to before.
+	// REQUIRED: without it, every directly-built (unplaced) LineSeg-only loft
+	// whose every station is PINNED would lose the Exact readings §8/§12 PR 1
+	// publishes (docs/loft-design.md §5, §12 PR 2a). delta =
+	// absSumUpper(stationRound, placeAllow) (a10-plan.md Part 3 PR 6) is NO
+	// LONGER zero exactly when xform is the identity: a curved pair with
+	// interior computed stations carries a positive stationRound whether or
+	// not the body is placed, and so does a LineSeg pair holding a station at
+	// a TRIMMED parameter (loftLineCellStations). So the fast path this
+	// comment used to state is now placeAllow's own, while stationRound is
+	// absSumUpper's other, independent leg — absSumUpper(0, 0) is exactly 0.0
+	// (upRound never nudges a non-positive value), which is what keeps the
+	// delta of an unplaced LineSeg-only loft whose every station is PINNED
+	// bit-identical to before.
 	placeAllow := 0.0
 	if xform != r3.Identity() {
 		placeAllow = rigidRoundAllow(maxInputAbs, vecMaxAbs(xform.Translation()))
@@ -1663,9 +1719,11 @@ func loftOrientationSign(verts []r3.Vec, tris [][3]int, anchor r3.Vec) int {
 // loftVertex builds a vertex at a recorded (or lifted-from-recorded)
 // coordinate: every loft vertex position comes from Plane.Origin + p.U*Plane.U
 // + p.V*Plane.V, the identical single float64 evaluation Extrude already
-// performs for a cap vertex (§5), so an unplaced vertex (delta 0) carries the
-// same zero-bound standing; a placed vertex carries the payload's own
-// delta (§12 PR 2a).
+// performs for a cap vertex (§5), so a vertex of a build whose delta is zero
+// carries the same zero-bound standing; any other vertex carries the payload's
+// own delta (§12 PR 2a). Zero delta is NOT the same claim as unplaced: an
+// unplaced build still carries a positive delta wherever a station was
+// COMPUTED rather than pinned (loftPayload's own delta doc comment).
 func loftVertex(p r3.Vec, delta float64) *Vertex {
 	return &Vertex{position: p, bound: units.Millimeters(delta)}
 }
@@ -1673,7 +1731,8 @@ func loftVertex(p r3.Vec, delta float64) *Vertex {
 // loftEdgeLength is the proven bound on a straight loft edge's held length:
 // the square root's own committed error against the exact rational squared
 // length (capblend_contour.go's straightEdgeBound/ratSquaredDistance3), no
-// new mechanism for an unplaced edge. A placed edge (delta > 0, §12 PR 2a)
+// new mechanism for an edge whose build carries a zero delta. An edge at a
+// positive delta (§12 PR 2a — a placed build, or a COMPUTED station)
 // composes that with bounds.go's chainLengthBound(1, delta, held) — both
 // endpoints displaced by delta is exactly that helper's own one-chord case —
 // through absSumUpper.

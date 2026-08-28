@@ -435,8 +435,10 @@ func TestLoftPlacedFaceAreaSumMatchesBodyArea(t *testing.T) {
 }
 
 // TestLoftPlacedAccessorExactness pins docs/loft-design.md §8's per-accessor
-// rule on both sides of delta. An unplaced loft's every vertex position is
-// Exact with a zero bound; a placed one's is Approximate carrying the
+// rule on both sides of delta. This receiver's every vertex position is Exact
+// with a zero bound — it is unplaced AND its every station is PINNED by its
+// own natural parameter (§5.2), which is what a zero delta needs; a placed
+// one's is Approximate carrying the
 // payload's own delta — the SAME bound at every vertex — and its every edge
 // length and face area carry a positive delta term on top of their own
 // square-root bound, so neither can be Exact however exactly its own
