@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"math/big"
 	"testing"
 
 	"github.com/lestrrat-3d/r3"
@@ -599,19 +600,42 @@ func TestLoftArcSegAgainstCircleSegRefusesS3(t *testing.T) {
 
 // --- the m=1 edge case ---
 
-// arcWedgeLoop is a two-line-plus-one-arc wedge loop about the origin, at
-// the given radius and sweep (radians), Start pinned at angle 0 (so a
-// natural, untrimmed ArcSeg endpoint reads a proven-zero rounding —
-// circularStationChain's own doc comment).
-func arcWedgeLoop(radius, sweep float64) LoopRecord {
+// arcWedgeLoopEqualRadii is a two-line-plus-one-arc wedge loop about the
+// origin whose arc's two recorded radii are EXACTLY equal, and whose every
+// coordinate is an exact dyadic float64 written down rather than computed
+// through trigonometry.
+//
+// Start is (u, -v) and End is (u, v), so the two squared distances from the
+// centre are u*u + v*v under either sign of v — equal as exact rationals,
+// on every architecture, with no appeal to math.Cos being even. That is what
+// makes the arc's own t == 1 end carry a zero arc-end radial residual
+// (docs/loft-design.md §5.2) rather than the positive one an arc placed by
+// float trigonometry generally carries.
+//
+// The half-sweep is atan(v/u), so a small v against a fixed u gives the tiny
+// total sweep the m = 1 case needs.
+func arcWedgeLoopEqualRadii(u, v float64) LoopRecord {
 	origin := pt(0, 0)
-	start := pt(radius, 0)
-	end := pt(radius*math.Cos(sweep), radius*math.Sin(sweep))
+	start := pt(u, -v)
+	end := pt(u, v)
 	return LoopRecord{Segments: []CurveSegment{
 		LineSeg{Start: origin, End: start, TStart: 0, TEnd: 1},
 		ArcSeg{Center: origin, Start: start, End: end, TStart: 0, TEnd: 1},
 		LineSeg{Start: end, End: origin, TStart: 0, TEnd: 1},
 	}}
+}
+
+// arcSquaredRadii states a recorded arc's two squared radii as exact
+// rationals, straight off the coordinates the record holds. The tests below
+// decide the arc-end radial residual from these and never from a float
+// comparison, which would make the assertion architecture-dependent.
+func arcSquaredRadii(arc ArcSeg) (*big.Rat, *big.Rat) {
+	dx0 := exactCoordinateDelta(arc.Start.U, arc.Center.U)
+	dy0 := exactCoordinateDelta(arc.Start.V, arc.Center.V)
+	dx1 := exactCoordinateDelta(arc.End.U, arc.Center.U)
+	dy1 := exactCoordinateDelta(arc.End.V, arc.Center.V)
+	return new(big.Rat).Add(new(big.Rat).Mul(dx0, dx0), new(big.Rat).Mul(dy0, dy0)),
+		new(big.Rat).Add(new(big.Rat).Mul(dx1, dx1), new(big.Rat).Mul(dy1, dy1))
 }
 
 // TestLoftArcPairM1PublishesZeroDeltaWithPositiveSectionDelta is the ask's
@@ -620,10 +644,24 @@ func arcWedgeLoop(radius, sweep float64) LoopRecord {
 // one chord meets the target) publishes delta == 0 and an UNSHRUNK
 // bodyGateDiameter reference, with sectionDelta > 0 (the chord still
 // departs from the arc it denotes).
+//
+// The zero is earned from the RECORD and not from the station kind
+// (docs/loft-design.md §5.2): the fixture's arc has exactly equal radii, so
+// its t == 1 end's arc-end radial residual is exactly zero. The test proves
+// that equality over exact rationals before reading delta, so a reader can
+// see which premise the zero rests on.
 func TestLoftArcPairM1PublishesZeroDeltaWithPositiveSectionDelta(t *testing.T) {
-	const radius = 5.0
-	const tinySweep = 1e-4 // sagitta ~= r*sweep^2/8 ~= 6.25e-10, far under any target
-	p := ProfileRecord{Outer: arcWedgeLoop(radius, tinySweep)}
+	// u = 5, v = 2^-10: both exact, and the half-sweep atan(v/u) is small
+	// enough that a single chord's sagitta is far under any target.
+	const u, v = 5.0, 1.0 / 1024
+	loop := arcWedgeLoopEqualRadii(u, v)
+	arc, ok := loop.Segments[1].(ArcSeg)
+	require.True(t, ok)
+	r0, r1 := arcSquaredRadii(arc)
+	require.Zero(t, r0.Cmp(r1), "the fixture's two arc radii must be EXACTLY equal for its zero delta to be earned from the record")
+	require.Zero(t, arcNaturalEndRadialUpper(arc), "equal recorded radii must charge no arc-end radial residual at all")
+
+	p := ProfileRecord{Outer: loop}
 	pl0, pl1 := planeAt(r3.NewVec(0, 0, 0)), planeAt(r3.NewVec(0, 0, 10))
 	pl := loftPayload{
 		profile0: p, profile1: p,
@@ -647,6 +685,81 @@ func TestLoftArcPairM1PublishesZeroDeltaWithPositiveSectionDelta(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, ok)
 	require.Equal(t, held, d, "delta == 0 takes the unshrunk fast path: the shared reader's own answer, unchanged")
+}
+
+// TestLoftArcPairDriftedEndChargesRadialResidual is the drifted twin of the
+// test above, and it is what proves docs/loft-design.md §5.2's ARC-END RADIAL
+// RESIDUAL is actually charged.
+//
+// The fixture is the same equal-radii wedge with the arc's recorded End moved
+// to (u+d, v): the record still states that coordinate verbatim and
+// arcWalkEnd still PINS the walk to it, but the curve the record DENOTES at
+// t == 1 sits at Start's radius and End's angle (circularEndpointInterval),
+// so the held vertex misses the denoted point by | |End-C| - |Start-C| |.
+// Before that residual was charged, this build published delta == 0 and took
+// bodyGateDiameter's unshrunk fast path on the false premise that every held
+// vertex was exact.
+//
+// Every quantity the assertions rest on is EXACT. The drift d = 2^-40 and the
+// coordinates u, v are dyadic floats, so the two squared radii are exact
+// rationals; their difference is proven nonzero by big.Rat comparison rather
+// than by asserting a float is positive, which would be architecture-
+// dependent. The certified lower bound on the residual is
+// |r1^2 - r0^2| / (r1_up + r0_up) with each radius rounded UP (ratSqrtUp),
+// which can only shrink the quotient, and delta is compared against it as a
+// rational.
+func TestLoftArcPairDriftedEndChargesRadialResidual(t *testing.T) {
+	const u, v = 5.0, 1.0 / 1024
+	const drift = 1.0 / (1 << 40) // 2^-40, exactly representable at u = 5
+
+	loop := arcWedgeLoopEqualRadii(u, v)
+	arc, ok := loop.Segments[1].(ArcSeg)
+	require.True(t, ok)
+	arc.End = pt(u+drift, v)
+	loop.Segments[1] = arc
+	loop.Segments[2] = LineSeg{Start: arc.End, End: pt(0, 0), TStart: 0, TEnd: 1}
+
+	// The record's two radii differ, proven over exact rationals.
+	r0, r1 := arcSquaredRadii(arc)
+	require.NotZero(t, r0.Cmp(r1), "the drifted fixture must state two DIFFERENT squared radii")
+
+	// residual >= |r1^2 - r0^2| / (r1_up + r0_up), every step exact.
+	num := new(big.Rat).Abs(new(big.Rat).Sub(r1, r0))
+	den := new(big.Rat).Add(floatRat(ratSqrtUp(r0)), floatRat(ratSqrtUp(r1)))
+	require.Positive(t, den.Sign())
+	want := new(big.Rat).Quo(num, den)
+
+	charged := arcNaturalEndRadialUpper(arc)
+	require.GreaterOrEqual(t, floatRat(charged).Cmp(want), 0,
+		"the charged arc-end radial residual must dominate the record's own proven radial gap")
+
+	p := ProfileRecord{Outer: loop}
+	pl0, pl1 := planeAt(r3.NewVec(0, 0, 0)), planeAt(r3.NewVec(0, 0, 10))
+	pl := loftPayload{
+		profile0: p, profile1: p,
+		plane0: pl0, plane1: pl1,
+		frame0: mustFrame(t, pl0), frame1: mustFrame(t, pl1),
+		xform: r3.Identity(),
+	}
+	budget := newWorkBudget(t.Context())
+	body, err := evalLoft(t.Context(), New(), StepRef(0), pl, budget, newFreeformWork(), newFreeformWork())
+	require.NoError(t, err)
+
+	loaded, ok := body.payload.(loftPayload)
+	require.True(t, ok)
+	require.GreaterOrEqual(t, floatRat(loaded.delta).Cmp(want), 0,
+		"delta must dominate the drifted arc end's own proven radial displacement; a zero here is the defect this test guards")
+
+	// delta > 0 now, so bodyGateDiameter must SHRINK rather than take the
+	// zero-delta fast path, whose premise ("every held vertex is exact") the
+	// drifted end does not meet.
+	d, ok, err := bodyGateDiameter(t.Context(), body)
+	require.NoError(t, err)
+	require.True(t, ok)
+	held, ok, err := pointSetDiameterContext(t.Context(), loaded.verts)
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.Less(t, d, held, "a positive delta must take the 2*delta-shrunk reference, never the unshrunk fast path")
 }
 
 // --- placement: both displacements, and sectionDelta invariant under motion ---

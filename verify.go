@@ -1329,7 +1329,10 @@ func (in pairToleranceInputs) lengthReference(value float64) (float64, bool) {
 // exact carrier model that does not yet cover this payload class. For an
 // unplaced LineSeg-only loft the claim is the stronger one, IS the true
 // diameter, because every held vertex is then exact (docs/loft-design.md
-// §5); a same-kind circular pairing's own interior stations are held on the
+// §5) — which is a claim about that payload's own published delta, never
+// about a station's KIND, since a station can be a recorded coordinate and
+// still sit off the point the record denotes (docs/loft-design.md §5.2's
+// arc-end radial residual); a same-kind circular pairing's own interior stations are held on the
 // true recorded curve but are themselves COMPUTED (a10-plan.md Part 3 PR 6),
 // so the held maximum is still a chorded (equal-or-fewer, never additional)
 // vertex set's own diameter over a set that sits ON the true boundary — at
@@ -1353,9 +1356,16 @@ func (in pairToleranceInputs) lengthReference(value float64) (float64, bool) {
 // implies the body is unplaced (a10-plan.md Part 3 PR 6): a curved pair
 // chorded at ONE station (m = 1, docs/loft-design.md §12's m = 1 case) has
 // no interior computed station either, so an UNPLACED body with such a pair
-// takes this same fast path with delta == 0 and an unshrunk reference —
-// sound for the identical reason, every held vertex is then a recorded
-// endpoint.
+// can reach this same fast path with delta == 0 and an unshrunk reference.
+// What makes that sound is the published ZERO and nothing else: at delta == 0
+// every held vertex sits exactly at the point the record denotes for it, so
+// the vertex set lies ON the true boundary and its maximum cannot exceed the
+// true diameter. Being a RECORDED coordinate is not that premise and never
+// stands in for it — an untrimmed ArcSeg's t == 1 end is recorded verbatim
+// and still sits its own arc-end radial residual off the denoted curve,
+// outward as easily as inward (docs/loft-design.md §5.2). Such a build
+// publishes a positive delta and takes the shrink below, which is exactly how
+// this arm sees the difference.
 //
 // A PLACED loft's held vertices are no
 // longer provably exact (§12 PR 2a): the true diameter can differ from the

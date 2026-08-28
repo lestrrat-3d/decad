@@ -52,14 +52,18 @@ type loftPayload struct {
 	// exact struct comparison, never a tolerance — and otherwise
 	// bounds.go's rigidRoundAllow, read at the pre-transform lifted point's
 	// own magnitude and the composed translation's magnitude. stationRound is
-	// the rounding a COMPUTED station commits — an exact-rational trig
-	// enclosure rounded once into a Point2 for a circular station, lerp2's own
-	// gap from ratLerp for a LineSeg station sitting at a TRIMMED parameter.
-	// It is zero exactly where every station is PINNED by its own NATURAL
-	// parameter (docs/loft-design.md §5.2's pinned-station list), which no
-	// segment KIND grants on its own: an untrimmed LineSeg pairing reaches
-	// that zero, a trimmed one does not, and a curved pairing is positive
-	// whenever a cell has an interior station. So delta is zero exactly when
+	// each station's own displacement from the point the record denotes for
+	// it — an exact-rational trig enclosure rounded once into a Point2 for a
+	// circular station, lerp2's own gap from ratLerp for a LineSeg station
+	// sitting at a TRIMMED parameter, and the arc-end radial residual
+	// (arcNaturalEndRadialUpper) at an untrimmed ArcSeg's t == 1 end, whose
+	// recorded coordinate the record states while denoting another point
+	// there. It is zero exactly where every station publishes a zero
+	// (docs/loft-design.md §5.2's guaranteed-zero list), which no segment KIND
+	// grants on its own beyond an untrimmed LineSeg: a trimmed LineSeg
+	// pairing does not reach that zero, and a curved pairing is positive
+	// whenever a cell has an interior station or an arc end off its own
+	// recorded radius. So delta is zero exactly when
 	// BOTH terms are, no longer merely when the body is unplaced. Every
 	// measurement this payload publishes composes it.
 	delta float64
@@ -1126,9 +1130,9 @@ func perCellTangentEnergy(seg CurveSegment, w segmentWalk, m int) float64 {
 // point IS a recorded coordinate while circularWalk's own cU + r·cos(th0) is a
 // float that misses it. Recomputing here would displace such a station off the
 // coordinate the record states — measurably, by an ulp of the coordinate — and
-// would leave every reading that reads a pinned station's zero displacement
-// (docs/loft-design.md §5.2's two pinned station kinds) stating a zero the
-// built vertex does not have. Reading the walk keeps the pin and the station
+// would leave every reading that reads a pinned station's own published
+// displacement (docs/loft-design.md §5.2's pinned station kinds) stating it of
+// a vertex the build does not hold. Reading the walk keeps the pin and the station
 // the same point.
 //
 // The chain's own terminal station is the next segment's station 0, or the
@@ -1156,6 +1160,15 @@ func perCellTangentEnergy(seg CurveSegment, w segmentWalk, m int) float64 {
 // enclosure at a trimmed one), and this segment's LAST cell reaches the walk
 // end, so both bounds belong to cells this chain draws.
 //
+// Those two readings are not the whole charge at an UNTRIMMED ArcSeg end.
+// arcWalkEnd's zero states that the held station IS the recorded coordinate,
+// which is a statement about the POSITION and not about the point the record
+// DENOTES there: circularEndpointInterval (moments.go) takes the denoted
+// curve's radius from Start alone, so at t == 1 the denoted point sits at
+// Start's radius and End's own angle and misses the recorded End by the
+// arc-end radial residual. arcNaturalEndRadialUpper charges exactly that
+// residual, at t == 1 alone, and docs/loft-design.md §5.2 owns the term.
+//
 // A station the record cannot enclose answers +Inf, which the caller refuses
 // on rather than publishing the certified sagitta as if it were the whole
 // bound.
@@ -1163,6 +1176,7 @@ func circularStationChain(w segmentWalk, seg CurveSegment, m int) ([]Point2, flo
 	pts := make([]Point2, m)
 	pts[0] = Point2{U: w.startU, V: w.startV}
 	delta := math.Max(walkEndPlaneDelta(w.startBound), walkEndPlaneDelta(w.endBound))
+	delta = math.Max(delta, arcNaturalEndRadialUpper(seg))
 	tStart, dt, ok := circularSegmentRange(seg)
 	if !ok {
 		return pts, math.Inf(1)
@@ -1189,6 +1203,75 @@ func walkEndPlaneDelta(bound walkEndBound) float64 {
 		return math.Inf(1)
 	}
 	return radius2D(math.Abs(bound.u), math.Abs(bound.v))
+}
+
+// arcNaturalEndRadialUpper charges docs/loft-design.md §5.2's ARC-END RADIAL
+// RESIDUAL: an upper bound on | ‖End − Center‖ − ‖Start − Center‖ | for a
+// recorded ArcSeg whose walk reaches the natural bound t == 1, and exactly
+// zero for every other segment and every other bound.
+//
+// The term exists because a pin is a statement about a POSITION and not about
+// the point the record denotes at that parameter. An ArcSeg records three
+// points and the curve it denotes takes its radius from Start ALONE —
+// circularEndpointInterval and circularWalkEnclosures (moments.go) both read
+// |Start − Center|, the reading docs/sketch-seam-design.md states outright —
+// so the denoted point at t == 1 lies at THAT radius and End's own angle. The
+// walk holds the recorded End there (arcWalkEnd), and the two coincide only
+// where the two radii are equal. Nothing certifies that: validateSegment's
+// ArcSeg arm (record.go) tests point finiteness and the parameter range,
+// seam.go records geom.Arc's three points verbatim, and sketch's own arc
+// radius constraint is solved to solver tolerance rather than proven. So the
+// residual is CHARGED. It is not a gate: a record whose radii differ is
+// measured, never admitted or refused on the measurement, which is CLAUDE.md's
+// reject-only rule read correctly — this term bounds a record and can never
+// bless one.
+//
+// It is charged at t == 1 ALONE. At t == 0 the denoted point IS Start, by the
+// definition of the denoted radius, so the true displacement there is zero and
+// a generator's enclosure WIDTH read at that bound would publish a positive
+// displacement for a station that has none. This is why the charge lives here
+// rather than in arcWalkEnd, whose zero every other consumer of a pinned
+// endpoint POSITION already relies on (pinArcWalkEnds' own doc comment).
+//
+// The bound is exact-rational throughout and never a float subtraction of two
+// square roots. |r1 − r0| is |r1² − r0²| / (r1 + r0); the numerator is the
+// exact rational difference of the two recorded squared distances, and the
+// denominator is replaced by a rounded-DOWN sum of the two radii
+// (ratSqrtDown), which can only enlarge the quotient. ratFloatUp rounds the
+// result out once. Equal squared radii answer exactly zero, so a record that
+// does state an exact circle keeps the zero delta §5.2 grants it.
+//
+// A denominator that cannot be shown positive answers +Inf, which the caller
+// refuses on rather than publishing a substitute — the S14 discipline §5.2's
+// table states for every term in it. It is defensive: it needs both recorded
+// radii to round down to zero while their exact squares differ.
+func arcNaturalEndRadialUpper(seg CurveSegment) float64 {
+	arc, ok := seg.(ArcSeg)
+	if !ok || (arc.TStart != 1 && arc.TEnd != 1) {
+		return 0
+	}
+	dx0 := exactCoordinateDelta(arc.Start.U, arc.Center.U)
+	dy0 := exactCoordinateDelta(arc.Start.V, arc.Center.V)
+	dx1 := exactCoordinateDelta(arc.End.U, arc.Center.U)
+	dy1 := exactCoordinateDelta(arc.End.V, arc.Center.V)
+	r0 := new(big.Rat).Add(new(big.Rat).Mul(dx0, dx0), new(big.Rat).Mul(dy0, dy0))
+	r1 := new(big.Rat).Add(new(big.Rat).Mul(dx1, dx1), new(big.Rat).Mul(dy1, dy1))
+
+	diff := new(big.Rat).Sub(r1, r0)
+	if diff.Sign() == 0 {
+		return 0
+	}
+	diff.Abs(diff)
+
+	den := new(big.Rat).Add(floatRat(ratSqrtDown(r0)), floatRat(ratSqrtDown(r1)))
+	if den.Sign() <= 0 {
+		return math.Inf(1)
+	}
+	up := ratFloatUp(new(big.Rat).Quo(diff, den))
+	if isNonFinite(up) {
+		return math.Inf(1)
+	}
+	return up
 }
 
 // circularSegmentRange states a recorded circular segment's own parameter
@@ -1493,10 +1576,13 @@ type loftAssembly struct {
 	// delta is the proven displacement every held vertex carries from the
 	// exact placed image of the recorded sections (docs/loft-design.md §5,
 	// §12 PR 2a) — absSumUpper(stationRound, placeAllow): zero exactly when
-	// xform is r3.Identity() AND every station is a recorded endpoint (a10-
-	// plan.md Part 3 PR 6), never zero merely because the body is unplaced,
-	// since a curved pair with interior COMPUTED stations commits its own
-	// rounding whether or not the body is later placed.
+	// xform is r3.Identity() AND every station publishes a zero stationRound
+	// (a10-plan.md Part 3 PR 6), never zero merely because the body is
+	// unplaced, since a curved pair with interior COMPUTED stations commits
+	// its own rounding whether or not the body is later placed. Being a
+	// recorded endpoint is not that condition: an untrimmed ArcSeg's t == 1
+	// end is recorded verbatim and still carries the arc-end radial residual
+	// (arcNaturalEndRadialUpper).
 	delta float64
 }
 
@@ -1638,8 +1724,10 @@ func assembleLoft(ctx context.Context, pairs []loftLoopPair, f0, f1 r3.Frame, pl
 	// absSumUpper(stationRound, placeAllow) (a10-plan.md Part 3 PR 6) is NO
 	// LONGER zero exactly when xform is the identity: a curved pair with
 	// interior computed stations carries a positive stationRound whether or
-	// not the body is placed, and so does a LineSeg pair holding a station at
-	// a TRIMMED parameter (loftLineCellStations). So the fast path this
+	// not the body is placed, so does a LineSeg pair holding a station at
+	// a TRIMMED parameter (loftLineCellStations), and so does an untrimmed
+	// ArcSeg pair whose recorded End sits off its own Start's radius
+	// (arcNaturalEndRadialUpper). So the fast path this
 	// comment used to state is now placeAllow's own, while stationRound is
 	// absSumUpper's other, independent leg — absSumUpper(0, 0) is exactly 0.0
 	// (upRound never nudges a non-positive value), which is what keeps the

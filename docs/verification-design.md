@@ -379,9 +379,9 @@ body's true diameter and never overstate it — the same construction
 witness is decided PER STATION rather than granted to the whole vertex set.
 A `LineSeg`-only loft body's boundary is a polyhedron, so where that body's
 own displacement `delta` is zero its vertex maximum IS the true diameter. A
-chorded loft whose every station is PINNED (loft §5.2) has a maximum at or
-below the true one exactly as this arm's is, since a curved wall's farthest
-pair can sit between two sampled points — which is why both claim a bound
+chorded loft whose every station publishes a zero `stationRound` (loft §5.2)
+has a maximum at or below the true one exactly as this arm's is, since a
+curved wall's farthest pair can sit between two sampled points — which is why both claim a bound
 rather than the diameter. **A COMPUTED loft station is not such a point, so
 its KIND earns it no unshrunk reading**: it sits only within its own
 `stationRound` of the point the record denotes (loft §5.2), so wherever that
