@@ -69,28 +69,24 @@ between two full-circle loops is not reachable by this construction.
 
 **Deferred reach, for reasons stated once:**
 
-- **Mixed-kind correspondence.** Mixed-kind pairing remains deferred until it
-  has an explicit pairing design.
 - **N-section lofts and guide-rail / centerline lofts.** Without a guide
   rail, ruling more than two sections needs an interpolation scheme this
   design has no closed-form, non-fitting answer for. The consumer does not
   need it either: a bevel gear is two 2-section lofts, not one 3-section
   loft. §12 defers this reach to PR 5; this design does not reserve a shape
   for it.
-- **Same-kind Tier A free-form correspondence's remaining reach.** A paired
+- **Same-kind Tier A free-form correspondence's implementation.** A paired
   segment whose two sides are the SAME Tier A free-form kind
   (`docs/spline-design.md` Table F) is ruled between chorded stations placed
   at shared dyadic fractions of the span-index coordinate their two Bézier
   span decompositions define (§5.1), the wall staying flat triangles and the
   departure of that chord chain from the two recorded curves publishing as a
   section displacement (§5.2) — exactly as §5.1/§5.2 already state for a
-  same-kind circular pair. **The pair is ADMITTED and its
-  construction is stated, while its `Volume` and `Centroid` are staged**: the
-  chorded volume allowance has no free-form arm (§8, §8.1, §14), so such a
-  build refuses `ErrUnsupported` at Table S row S14 and §12 PR 4 is the
-  increment that lands it. §12's own reach row names what stays outside that
-  increment — a same-kind Tier A free-form pair whose two curves reduce to
-  different Bézier span counts (Table S row S17) among them.
+  same-kind circular pair. The pair is ADMITTED, and its construction and
+  certified allowance inputs are stated. §12 PR 4 lands the evaluator
+  integration. §12's own reach row names what stays outside that increment —
+  a same-kind Tier A free-form pair whose two curves reduce to different
+  Bézier span counts (Table S row S17) among them.
 
 **Permanently out of scope, for reasons stated once:**
 
@@ -207,7 +203,7 @@ that exists and this evaluator cannot build → `ErrUnsupported`.**
 | **S11** | a nil or foreign `LoftOption` value, including a foreign type that embeds the sealed marker | no well-defined decad operation can invoke an unowned callback | `ErrDegenerate` | yes, §2 |
 | **S12** | ANY build — placed (`Placed`/`Duplicate`/`PlacedCopy`, §12 PR 2a), chorded (§5.1), or both — whose COMBINED proven volume allowance (§8) is not smaller than the held volume | yes — the body itself is sound; only its centroid's proven quotient bound has no positive denominator left to divide by | `ErrUnsupported` | no — a precision ceiling on this evaluator's centroid bound, not a shape rule |
 | **S13** | a build whose lifted-and-placed coordinate, whose computed station coordinate (§5.1), or whose orientation anchor (§5), runs past the representable float64 range | yes — every input is finite (both records' coordinates, the plane origins, and a transform `r3` itself validated), and only decad's own float evaluation of the lift or the station computation overflows; a placed body is the rigid image of one this evaluator already built | `ErrUnsupported` | no — a range ceiling on this evaluator's float64 vertex table, not a shape rule |
-| **S14** | ANY build for which a displacement term §5.2's table lists answers `+Inf`, decided in whichever of the two arms the gate-order paragraph below assigns that term | yes — the body exists; only one of its proven displacement terms has no derivation | `ErrUnsupported` | no — a derivation gap in this evaluator's certified enclosures, not a shape rule |
+| **S14** | ANY build for which a displacement term §5.2's table lists answers `+Inf`, decided in whichever of the two arms the gate-order paragraph below assigns that term | yes — the body exists; this evaluator cannot publish a finite certified enclosure for that term on this build | `ErrUnsupported` | no — an enclosure or numeric-range ceiling, not a shape rule |
 | **S15** | a paired segment whose chord target (§5.1) is not met inside the fixed station cap | yes — the ruled surface exists; this evaluator cannot chord it inside its own ceiling | `ErrUnsupported` (`errTooManyChords`, spline R8) | no — a resource ceiling, not a shape rule |
 | **S16** | a chord cell (§5.1) whose two stations coincide on exactly ONE of the two sections. A cell collapsing on BOTH sections, and a collapsed cap triangle, are S6's two arms rather than this row, so every collapse is covered exactly once | yes — a collapsed piece is a recordable curve piece whatever the provenance of the two stations that produced it, and a point-degenerate correspondence is a body a smarter kernel could still loft; only the uniform two-faces-per-cell topology (§5) has no case for it | `ErrUnsupported` | no — an evaluator topology limit |
 | **S17** | a same-kind Tier A free-form pair whose two sides' Bézier span chains (`docs/spline-design.md` §5.1) reduce to different span counts (P5) | yes — the ruled surface exists; this evaluator's span-uniform station rule (§5.1) has no shared station coordinate to chord it over | `ErrUnsupported` | no — §12's reach row, which would retire this refusal by admitting an unequal span count |
@@ -312,8 +308,9 @@ cover every term that table lists, a term DERIVED from other rows included:
 - the **DERIVATION arm** — record-only, decided beside S15 among the shape
   gates above. It asks whether the two authenticated records state every
   certified enclosure §5.2's table derives from them: the per-cell sagitta
-  the walk-up compares against the chord target (§5.1), the `arcLenUpper_k`
-  arc-length enclosure, the `circularEndpointInterval` enclosure a circular
+  the walk-up compares against the chord target (§5.1), the per-cell
+  `arcLenUpper_k` length/speed enclosure, the per-cell parameter-matched
+  departure, the `circularEndpointInterval` enclosure a circular
   station's `stationRound` is measured against, and the exact `ratLerp` a
   trimmed `LineSeg` station's own `stationRound` is measured against. A
   candidate count whose certified sagitta has no derivation refuses here
@@ -321,10 +318,7 @@ cover every term that table lists, a term DERIVED from other rows included:
   also owns the DERIVED terms composed from those record-only rows alone —
   `sectionDelta`, the MAXIMUM of the per-cell sagittae, and
   `seamPerimeterUpper`, the SUM of the per-cell `arcLenUpper_k` over both cap
-  loops. It owns the free-form arm of `matchedDelta` (§5.2) for the same
-  reason: that arm is unpublished on the paired segment's KIND alone, which
-  the record states, and reads no held coordinate. Beyond those, this arm
-  decides DERIVABILITY and never a term's
+  loops. Beyond those, this arm decides DERIVABILITY and never a term's
   value; §5.2's table owns what each term's value is and what it is derived
   from;
 - the **CONSTRUCTION arm** — decided after cells exist, since its terms read
@@ -335,8 +329,8 @@ cover every term that table lists, a term DERIVED from other rows included:
   plane's offset from the anchor are functions of the vertex table, which
   does not yet exist there. It owns every remaining DERIVED term for the same
   reason, since each one's composition reads a held coordinate:
-  `stationRound` and `placeAllow`, the `delta` over them, `matchedDelta`'s
-  composed `LineSeg`-and-circular arm,
+  `stationRound` and `placeAllow`, the `delta` over them, every kind's
+  composed `matchedDelta`,
   `posUpper`, `wallAreaUpper`, `capAreaAllow`, `capVolumeUpper`, `seamAllow`,
   the facet departure, and `Bounds.Bound`.
 
@@ -352,17 +346,12 @@ than falling to neither.
 on every term it reaches; the two arms above partition that column
 completely, leaving no such term without a phase.
 
-**Every same-kind Tier A free-form pair reaches S14 today, and that is what
-STAGES the free-form correspondence.** §5.2's table publishes TWO of its
-terms for a circular cell alone and answers `+Inf` at every free-form cell —
-the per-cell `arcLenUpper_k` and the `matchedDelta` every chorded leg charges
-(§8.1) — so the DERIVATION arm refuses `ErrUnsupported` on them
-before a station is built. Table P still ADMITS the pair, S3 still
-declines to refuse it, and §5.1's free-form station rule and §5.2's
-free-form displacement rows still state what such a build would construct;
-what has no proven owner is the volume allowance those constructions feed
-(§8, §14), and §12 PR 4 is the increment that retires this refusal by
-supplying both missing derivations.
+**A same-kind Tier A free-form pair reaches S14 only when one of its actual
+certified terms answers `+Inf`.** `spanSpeedUpper` supplies each free-form
+cell's length/speed upper bound, and `spanMatchedDeltaUpper` supplies its
+native-parameter matched departure (§5.2). A finite pair therefore passes
+S14 on those terms. §12 PR 4 stages only the evaluator integration, not a
+missing derivation or an unconditional refusal.
 
 **A placement (`Placed`/`Duplicate`/`PlacedCopy`, §12 PR 2a) re-runs every
 gate decided from the records rather than from the call — S1, S2, S3, S4's
@@ -898,8 +887,8 @@ own.
 | **`delta`** | a LENGTH: the world-space displacement of one held vertex from the point the record and the motion together denote for it | `absSumUpper(stationRound, placeAllow)` — the two rows above and no third mechanism | the triangle inequality over the two rows above: the two displacements are committed at independent stages — the station is computed, then the motion is applied — so the vertex's total departure is at most their sum | outward, in `absSumUpper` | inherits both rows'. Zero exactly when both terms are zero, which an unplaced pairing whose every station is one of the GUARANTEED-zero kinds below is what GUARANTEES. An untrimmed `ArcSeg`'s `t == 1` end is PINNED and is NOT one of them: such a pairing publishes a zero `delta` only where its own arc-end radial residual is itself zero, read at the value the row above publishes |
 | **per-cell sagitta `s_k`** | a LENGTH: the in-section-plane distance from one chord to the recorded curve piece it chords, on side `k` of one chord cell | circular: `2·r·sin²(Δθ/4m)` evaluated over side `k`'s own enclosures — the RADIUS enclosure (`ratSqrtDown` / `ratSqrtUp` of the exact squared `Start`-to-`Center` distance for an `ArcSeg`; the recorded `Radius` converted to millimetres, exactly rational, for a `CircleSeg`) and the SWEEP enclosure (`atan2Interval`'s difference under the same `+2π` branch correction `circularLengthInterval` applies for an `ArcSeg`; the exact rational turn `2π·(TEnd − TStart)` for a `CircleSeg`), with `radSinCosSpan` supplying the sine of the enclosed angle. Free-form (§5.1's free-form arm): `docs/spline-design.md` §6.2.1's control-point-to-chord-SEGMENT distance, the maximum, over that cell's own dyadic sub-span's control points taken as exact rationals, of each control point's distance to the segment `P_0 P_p` | circular: elementary and stated here — a circular arc's distance from its own chord is `r·(1 − cos(half the cell's sweep))`, taken at the cell's midpoint where the two are farthest apart, and `1 − cos x = 2·sin²(x/2)` turns that into the form the row publishes. Free-form: §6.2.1's convexity argument, cited rather than restated here — distance to a convex set is a convex function, so its maximum over the control hull is attained at a control point, and every curve point is a convex combination of the same control points; the argument reads no parameterisation and holds unchanged on the sub-span dyadic bisection produces | circular: interval arithmetic to the last step, then ONE outward rounding of the interval's upper end into the published float. Free-form: each control point's squared distance to the chord segment is an exact rational, and the maximum over the sub-span's control points is outward-rounded ONCE through `ratSqrtUp`, the identical exact-rational square-root helper the circular arm's radius and sweep enclosures round through | `+Inf` wherever an enclosure has no derivation — for the circular arm, the `In(units.Millimeter)` conversion, `floatRat`, `ratSqrtUp` or `radSinCosSpan` answering no; for the free-form arm, the squared distance's own `ratSqrtUp` enclosure running past `MaxFloat64` — either refused `ErrUnsupported` at Table S row **S14** |
 | **`sectionDelta`** | a LENGTH: the largest single `s_k` over every chord cell and both sides of the whole build, a MAXIMUM and never a sum | the row above | this section's maximum-not-a-sum paragraph: a boundary point lies in exactly one cell, so no point is displaced by two cells' sagittae | none of its own — a maximum of values already rounded outward is already an over-statement | inherits the row above's `+Inf` and its **S14**. Exactly zero when every paired segment is a `LineSeg` |
-| **`matchedDelta`** | a LENGTH: how far one point of a HELD chord sits from the point the recorded curve denotes at the SAME arc-length parameter — the PARAMETER-MATCHED departure every chorded leg charges, and a strictly stronger claim than the SET distance a sagitta states | `LineSeg` and circular: `absSumUpper(sectionDelta, delta)` — the `sectionDelta` row above and the `delta` row above that, and no third mechanism. Free-form: NONE. Both of those rows publish a finite value at a free-form cell, but their sum composes a SET distance with a vertex displacement, and no step carries either into the arc-length-matched departure this row names, so the composition states nothing here and this document derives no free-form arm of its own (§14) | `LineSeg` and circular: this section's parameter-matched paragraph, in two steps: the sagitta is the IDEAL chord's own matched departure for those two kinds, and the HELD chord sits within `delta` of that ideal chord at every matching parameter, since a segment's displacement is the convex combination of its two endpoints' and each held station sits within `delta` of the point the record and the motion denote for it. Free-form: no site proves any value dominates the quantity — the free-form sagitta the row above publishes is a control-point-to-chord-SEGMENT SET distance, which this section's free-form paragraph DISPROVES as a matched bound on its own counterexample — which by this section's second rule is what makes the term unpublished rather than merely unmeasured | `LineSeg` and circular: outward, in `absSumUpper`. Free-form: nothing to round | `LineSeg` and circular: inherits both rows' `+Inf` and their **S14**. Exactly zero only where BOTH are, which an unplaced `LineSeg`-only pairing whose every station is PINNED is what GUARANTEES, the `delta` row's own zero test. Free-form: `+Inf` at EVERY cell, on the missing derivation alone and never on a record's own shape or on a source row's own value, refused `ErrUnsupported` at Table S row **S14** |
-| **per-cell `arcLenUpper_k`** | a LENGTH: the arc length of side `k`'s own recorded curve piece over one chord cell, never below that cell's own chord length on that side | circular: `moments.go`'s `circularLengthInterval` over the same radius and sweep enclosures the sagitta row names. Free-form: NONE. `circularLengthInterval` encloses a CIRCULAR curve piece's arc length and states nothing about any other kind, and this document derives no enclosure of its own for a free-form dyadic sub-span's arc length (§14) | circular: `bounds.go`'s `cellChordCurveAreaUpper` doc comment, whose derivation parametrizes each side at CONSTANT ARC-LENGTH speed and reads this bound as that side's own constant tangent magnitude; the same comment states why a bound below the chord it subtends is a broken claim rather than a tighter one. Free-form: no site proves a value dominates the quantity, which by this section's second rule is what makes the term unpublished rather than merely unmeasured | circular: outward, the enclosure's upper end, rounded out once. Free-form: nothing to round | circular: `+Inf` wherever the record cannot state the enclosure. Free-form: `+Inf` at EVERY cell, on the missing derivation alone and never on a record's own shape. Either is refused `ErrUnsupported` at Table S row **S14** |
+| **`matchedDelta`** | a LENGTH: how far one point of a HELD chord sits from the point the recorded curve denotes at the SAME value of that arm's shared parameter — the PARAMETER-MATCHED departure every chorded leg charges, and a strictly stronger claim than the SET distance a sagitta states | `LineSeg` and circular: `absSumUpper(sectionDelta, delta)` under the shared linear or uniform-angle parameter. Free-form: for each shared dyadic cell, `chordCellDeltaUpper(max(spanMatchedDeltaUpper(side0), spanMatchedDeltaUpper(side1)), delta)` under that cell's shared span-native parameter; the build-wide value is the maximum over cells | `LineSeg` and circular: this section's parameter-matched paragraph. Free-form: `spline_sagitta.go`'s `spanMatchedDeltaUpper` doc comment proves `|C(t) − (P_0 + t·Δ)| ≤ d/2` at the SAME native `t`; §5.1 makes that `t` the pair's shared cell parameter. In every arm the HELD chord sits within `delta` of the ideal chord at that same parameter because endpoint displacement interpolates convexly | outward in `absSumUpper` / `chordCellDeltaUpper`; `spanMatchedDeltaUpper` roots its exact rational quarter-square outward once | inherits a source row's `+Inf` or its own saturated composition and reaches **S14** there. Exactly zero only where both the arm's ideal-chord departure and `delta` are zero; an unplaced `LineSeg`-only pairing whose every station is PINNED guarantees that case |
+| **per-cell `arcLenUpper_k`** | a LENGTH: an upper bound on side `k`'s recorded curve-piece length and on its tangent speed under that cell's shared parameter in `[0,1]`, never below that side's chord length | circular: `moments.go`'s `circularLengthInterval` over the same radius and sweep enclosures the sagitta row names. Free-form: `spline_sagitta.go`'s `spanSpeedUpper` on side `k`'s own accepted dyadic sub-span | circular: the shared uniform-angle parameter has constant speed equal to the cell's arc length. Free-form: `spanSpeedUpper` proves `\|C'(t)\| ≤ \|Δ\| + d`; integrating that speed over `[0,1]` also bounds the cell's arc length, and the helper proves the result is at least the chord length | circular: the interval's upper end, rounded outward once. Free-form: `spanSpeedUpper` outward-rounds the chord and hodograph-gap roots, then composes them through `absSumUpper` | `+Inf` wherever the selected enclosure is underivable or non-finite, refused `ErrUnsupported` at Table S row **S14** |
 | **per-cell `tangentEnergy_k`** | a squared LENGTH: the integral over `s` in `[0,1]` of `\|curve'(s) − chord\|²` on side `k` of one chord cell — the ENERGY of that side's tangent deviation from its own cell chord, under the SHARED parametrization the row above fixes. It is the one input that makes the wall's ruled area leg SECOND order in the cell's own sweep rather than first, since that deviation has MEAN ZERO in `s` | `bounds.go`'s `uniformSpeedTangentEnergyUpper(arcLenUpper, chordLower)`, read at the per-cell `arcLenUpper_k` row above and at `loft_build.go`'s `loftCertifiedChordLower` — `2·r·sin(Δθ/2m)` over the SAME radius and sweep enclosures the sagitta row names, never the walk's own held `math.Hypot` radius or `math.Atan2` angles, which carry no enclosure | `uniformSpeedTangentEnergyUpper`'s own doc comment: under a CONSTANT-SPEED parametrization the integral is EXACTLY `L² − c²`, so a proven `arcLenUpper ≥ L` and a proven `chordLower ≤ c` give `J ≤ (arcLenUpper − c)·(arcLenUpper + c)`, the published factored form. The constant-speed premise is the caller's and that helper cannot check it: `loft_build.go`'s `perCellTangentEnergy` discharges it PER WALK KIND — a `LineSeg` walk's chord IS its curve, so its energy is exactly zero, and the circular arm's uniform-ANGLE stations (§5.1) are constant speed on a circle. A free-form arm needs no derivation to remain sound: a kind that cannot discharge constant speed passes `+Inf`, and the ruled-leg row below falls back to its premise-free arm | outward: the two factors through `upRound` and their product through `productUpper`. The chord operand is rounded DOWN (`ratFloatDown`), the only direction that cannot overstate it, since the published energy DECREASES in that operand | none of its own, and no **S14**: `+Inf` wherever the record states no enclosure, or wherever a walk kind cannot discharge the constant-speed premise, and the ruled-leg row below falls back to its own premise-free arm rather than refusing |
 | **`maxTwistOffsetUpper`** | a LENGTH: how far one point of a CHORDED wall cell's bilinear ruled patch sits from the built triangle pair at the matching parameter, over the WHOLE build — a MAXIMUM over the build's CHORDED wall cells and never a sum, and exactly zero on a build that holds none (a `LineSeg`-only pairing, whose walls this term never reads) | `bounds.go`'s `cellTwistOffsetUpper`, read at each CHORDED cell's own twist vector `T = vLo − vHi − wLo + wHi` as `\|T\|/4`, and over no other cell | `cellTwistOffsetUpper`'s own derivation solves that deviation exactly as `r·(s−1)·T` and `s·(r−1)·T` and maximises it at `\|T\|/4`; its doc comment also owns the maximum-not-a-sum rule, since the term bounds how far a SINGLE point sits from its nearest held vertex rather than an accumulation over cells. **The chorded scoping is proven rather than a convenience**: §5 builds a `LineSeg` pair's wall AS the held triangle pair, and that pair IS the boundary the body has there — §5's polyhedron rule and §8's `Volume`-`Exact` rule both read it as the true solid — so no ruled patch stands between such a facet and the surface it stands for, and a `LineSeg` cell charges nothing here however its four corners twist. A CHORDED cell is the only cell whose facet stands for a piece of a solid the record denotes and the build does not hold, and its bilinear ruled patch is the intermediate surface §8.1's twist leg starts from | outward, in `upRound` | `+Inf` on a non-finite CHORDED-cell corner, refused **S14** — the chorded cells that row reaches; a build with no chorded cell publishes the exact zero above and reaches no refusal here |
 | **cap `planeOffsetUpper`** | a LENGTH: `\|h\|`, one cap plane's own perpendicular offset from the mass accumulator's anchor (§8) | the exact rational distance from that anchor to a held vertex of that cap, bracketed by `ratSqrtUp` | a plane's own perpendicular offset from a point never exceeds the distance to any single point ON that plane, and every held cap vertex lies on that cap's plane exactly | outward, in `ratSqrtUp` | `+Inf` where the assembly states no such vertex, refused **S14** |
@@ -917,55 +906,37 @@ own.
 | **`Bounds.Bound`** | a LENGTH: the radius by which the axis-aligned box the payload holds may fall short of the box the true recorded boundary occupies | `absSumUpper(delta, sectionDelta)` — the two published terms above, summed | §8's `Bounds` paragraph: the recorded boundary can exceed the held box both by a held vertex's own displacement and by the recorded curve's bulge outside the station polygon, and the two act on the same face of the box, so the shortfall is at most their sum. **This reading takes two terms where the facet-departure row takes three, and the difference is proven rather than an omission**: the held triangle pair and the bilinear ruled patch both lie in the convex hull of a cell's own four held corners, so a cell's twist moves no face of the box and `maxTwistOffsetUpper` has no term here | outward, in `absSumUpper` | inherits both rows'. `Bounds` is `Exact` only where that sum is exactly zero (§8) |
 
 **`matchedDelta` is the PARAMETER-MATCHED displacement the chorded allowance
-requires, and no single mechanism supplies it.**
-`cellChordCurveAreaUpper`'s displacement argument is a bound on `|curve(s) −
-chord(s)|` at the SAME `s` under one constant-arc-length parametrization,
-which is a strictly stronger claim than the SET distance a sagitta states: a
-curve can hug its chord within an arbitrarily small sagitta while packing
-almost all of its arc length into one short span, so its arc-length-matched
-point sits far from the chord point at the same `s`
-(`TestCellChordCurveAreaUpperRefusesTheSagittaZigzag` pins that
-counterexample). **A caller that cannot PROVE the matched bound must pass
-`+Inf`, and the sagitta may never stand in for it** — that helper's own rule,
-and `CLAUDE.md`'s reject-only discipline at this seam.
+requires, under the shared parametrization each construction arm defines.**
+`cellChordCurveAreaUpper`'s displacement argument bounds `|curve(s) −
+chord(s)|` at the SAME `s`. The `LineSeg` arm uses its linear parameter, the
+circular arm uses its uniform-angle parameter, and the free-form arm uses
+§5.1's shared span-native dyadic parameter. This is a strictly stronger
+claim than the SET distance a sagitta states. **A caller that cannot PROVE
+the matched bound must pass `+Inf`, and the sagitta may never stand in for
+it** — that helper's own rule, and `CLAUDE.md`'s reject-only discipline at
+this seam.
 
-**The row's derivation runs in two steps, and covers two of the three kinds a
-paired segment can carry.** Call a cell's IDEAL chord the one
-joining the two points the record and the motion together denote for its two
-stations. First, that chord's matched departure from the recorded curve is at
-most `sectionDelta` for a `LineSeg` side and for a circular
-one: a `LineSeg` side's chord IS its curve, deviation zero, and a circular
-arc under its own uniform-angle parametrization has matched deviation exactly
-`2·r·sin²(Δθ/4m)` — the number the sagitta row publishes, maximised over
-cells by the `sectionDelta` row (`TestArcMatchedDeltaEqualsSagitta`, over a
-5°–170° sweep). **That is an EQUALITY for a circular arc, so it leaves no
-slack a second mechanism could hide in.** Second, the chord the build HOLDS
-joins two held stations, each within `delta` of the point the record and the
-motion denote for it, and a segment's displacement at parameter `s` is the
-convex combination `(1−s)·(h₀−d₀) + s·(h₁−d₁)` of its two endpoints',
-of magnitude at most `delta` at every `s`. The triangle inequality over the
-two gives `absSumUpper(sectionDelta, delta)`, which is what the
-`matchedDelta` row publishes. **Reading `matchedDelta` as `sectionDelta`
-alone leaves the computed station's own displacement uncharged on every
-chorded leg.**
+**The row's derivation runs in two steps for every admitted kind.** Call a
+cell's IDEAL chord the one joining the two points the record and the motion
+together denote for its two stations. First, that chord's matched departure
+is at most `sectionDelta` for a `LineSeg` or circular side. A `LineSeg`
+side's chord IS its curve, and a circular arc's uniform-angle matched
+departure equals its sagitta. For a free-form cell,
+`spanMatchedDeltaUpper` bounds the ideal chord's departure under that cell's
+shared native parameter by the hodograph-gap proof in its own doc comment;
+the two sides' maximum supplies the cell's shared bound. Second, the chord
+the build HOLDS joins two held stations, each within `delta` of the point the
+record and the motion denote for it. Their displacement at parameter `s` is
+the convex combination of the endpoint displacements, so its magnitude is
+at most `delta`. The triangle inequality gives
+`absSumUpper(sectionDelta, delta)` in the line and circular arms, and
+`chordCellDeltaUpper(parameterMatched, delta)` in the free-form arm.
+**Reading `matchedDelta` as the sagitta or the parameter-matched term alone
+leaves one of the two mechanisms uncharged.**
 
-**The third kind — a same-kind Tier A free-form pair (§5.1's free-form arm) —
-has no first step, so its `matchedDelta` is not published at all.** That
-pair's sagitta is `docs/spline-design.md` §6.2.1's
-control-point-to-chord-SEGMENT distance, a SET distance, and this section's
-own sagitta-is-not-a-matched-bound paragraph above states why a SET distance
-cannot stand in for the matched one. The
-gap is not merely underived, it is REAL: the planar quartic with control
-points `(0,0)`, `(1,e)`, `(1,−e)`, `(0,e)`, `(1,0)` publishes sagitta exactly
-`e`, while its own arc-length-matched departure from its chord reaches
-0.15935 — 1593 times that sagitta at `e = 1e-4` — and dyadic bisection does
-not dissolve the gap, since at bisection depths 4 and 5 the largest per-cell
-matched departure still exceeds the largest per-cell sagitta. So a free-form
-cell's `matchedDelta` answers `+Inf` on the missing derivation alone, exactly
-as the `arcLenUpper_k` row's free-form arm does, and every leg that reads it
-answers `+Inf` with it (§8.1). Landing the free-form correspondence takes
-BOTH derivations (§12 PR 4, §14), and this document supplies neither and
-approximates neither.
+`TestSpanMatchedDeltaUpperEnclosesWhatTheSagittaMisses` pins why a free-form
+sagitta cannot replace `spanMatchedDeltaUpper`; it does not create a missing
+derivation because that helper supplies the stronger bound directly.
 
 **Four rules govern every row, and they are stated here once.**
 
@@ -1395,16 +1366,12 @@ composes both terms, since each bounds a displacement committed at an
 independent stage of the construction — the section chording, then the rigid
 placement.
 
-**A same-kind Tier A free-form pair cannot compose that allowance today, and
-this design refuses rather than substitute a term that bounds something
-else.** Three of the four legs read `arcLenUpper_k`, and those same three
-read `matchedDelta` (§8.1); §5.2's
-table publishes each of the two for a circular cell alone and answers `+Inf`
-at every free-form cell, so such a build refuses `ErrUnsupported` at Table S
-row S14 in the arm §4's gate-order paragraph assigns those terms — before a
-station is
-built, and with no `Volume` and no `Centroid` published. §12 PR 4 states what
-landing the free-form arm would take.
+**A same-kind Tier A free-form pair composes the same allowance from its own
+shared parameter.** Each cell reads `spanSpeedUpper` for its per-side
+length/speed bound and `spanMatchedDeltaUpper` plus `delta` for its held
+chord departure (§5.2). Table S row S14 applies only if one of those actual
+terms is underivable, non-finite, or saturates during composition. §12 PR 4
+lands the evaluator integration.
 
 **`Centroid` publishes three exact rational coordinates as a
 `VecMeasurement`, not a `units.Value`.** Round each coordinate once into the
@@ -1524,12 +1491,11 @@ held triangle sum this section already derives. The wall's THIRD leg carries
 the payload's own `delta` as a factor, so it too is exactly zero on that same
 unplaced `LineSeg`-only build.
 
-**A same-kind Tier A free-form pair remains staged only on the two missing
-derivations §5.2 names: `arcLenUpper_k` and arc-length-matched
-`matchedDelta`.** The three wall-area helpers, their composition, and the cap
-term are already landed. They become usable for a free-form cell when those
-two inputs gain proven free-form arms; no additional `Area` derivation or
-staging condition is missing.
+**A same-kind Tier A free-form pair uses the existing wall-area helpers
+without a new `Area` derivation.** Its `spanSpeedUpper` and
+`spanMatchedDeltaUpper` inputs satisfy the same per-cell helper contracts
+under §5.1's shared native parameter; `delta` adds the held-station
+displacement.
 
 **`Bounds` is Exact only when BOTH the payload's displacement `delta` and its
 section displacement `sectionDelta` (§5.2) are zero.** Every vertex is
@@ -1585,19 +1551,16 @@ two paired curved sections denote.
 | **cap** | `capVolumeUpper`. A cap has no second section to rule toward, and its own vertices never move under this homotopy — they are boundary points of the same recorded profile the wall cells chord — so only its 2-D region's shape changes | `capAreaVolumeAllow`'s EXACT planar identity: a planar face's own signed-tetrahedron sum is `2·h·Area(cap)` whatever the triangulation, so replacing the held polygon's area with the denoted region's changes it by exactly `2·h·ΔArea`, giving `\|ΔVolume_cap\| ≤ \|h\|·\|ΔArea\|/3` |
 | **seam** | `seamAllow`. The wall leg's flux identity is the formula for a CLOSED surface, but the wall is an OPEN patch whose `r=0`/`r=1` seam moves under the SAME homotopy, leaving a by-parts line integral the wall leg never charges | `chordedBoundarySeamAllow`'s own doc comment: Cauchy-Schwarz on that residue, `matchedDelta · posUpper · seamPerimeterUpper / 3` |
 
-**Three of the four legs read `arcLenUpper_k`, those same three read
-`matchedDelta`, and that is where a same-kind
-Tier A free-form pair stops.** The wall leg reads both, as
+**Three of the four legs read `arcLenUpper_k`, and those same three read
+`matchedDelta`.** The wall leg reads both, as
 `cellChordCurveAreaUpper`'s two per-side arc-length arguments and its own
 `matchedDeltaUpper`; the cap leg reads them through `capAreaAllow`'s own
 `perimeterUpper` and its `matchedDelta` argument; and the seam leg reads them
 through `seamPerimeterUpper` and `chordedBoundarySeamAllow`'s own
 `matchedDelta`. Only the twist leg is free of both, reading a cell's four
-held corners alone. §5.2's table publishes each of the two for a circular
-cell alone, so on a free-form pair three legs answer `+Inf` and the
-composition answers `+Inf` with them. What is missing is TWO derivations,
-both named in §14 —
-this document adds no leg, no substitute, and no free-form arm of its own.
+held corners alone. For a free-form cell, §5.2 supplies `arcLenUpper_k` from
+`spanSpeedUpper` and `matchedDelta` from `spanMatchedDeltaUpper` plus
+`delta`; the same four legs then compose unchanged.
 
 **Every quantity the four legs read is a NAMED term with a named owner.**
 The table above is the whole reading: the wall leg is stated PER WALL CELL,
@@ -1613,15 +1576,11 @@ row and its own provenance there. This section names no further per-cell
 bound, because it reads none: a quantity neither the table nor §5.2 names is
 a quantity no leg here consumes.
 
-**A free-form pair's `matchedDelta` is REFUSED rather than asserted, and that
-refusal is what keeps the gap harmless.** §5.2's row publishes `+Inf` for it
-at every free-form cell on the missing derivation alone, three of the four
-legs answer `+Inf` with it, and Table S row S14 refuses the pair before a body
-exists — so nothing ever reads a free-form value for the term, and the
-mechanism it would bound cannot arise in a built body. §14 records that
-derivation and the free-form `arcLenUpper_k` beside it as the two open ones,
-with the counterexample that DISPROVES the free-form sagitta as a substitute
-for either.
+**A free-form pair asserts its parameter-matched bound from
+`spanMatchedDeltaUpper`, never from its sagitta.** The helper's hodograph-gap
+proof supplies the stronger same-parameter claim, while the sagitta remains
+only the cell's set-distance bound. Table S row S14 still refuses an actual
+`+Inf` from this term or `spanSpeedUpper`, as it does for every other kind.
 
 **Summing the four is sound because the difference telescopes exactly.**
 Writing `W_true`, `W_ruled` and `W_tri` for the wall's true, ruled-patch and
@@ -1749,8 +1708,8 @@ global evaluator increment.
 | 1 | `OpLoft` wire/recipe plumbing (`LoftOpts` codec, `Op` token, `Step.Profile`/`Plane` reuse), Table P pairing + Table S gates S1–S5/S9–S11, the flat-triangle wall construction (§5), the crossing audit (§6, Table S S6's RECORDED arm, S7's audit arm, S8), `Document.Loft` / `LoftContext`, `Volume` / `Centroid` (§8's rational accumulator) / `Area` / `Bounds`, `Verify` (D6: the structural audit and the tolerance gate over all four) | same-kind `CircleSeg`/`ArcSeg` correspondence; N-section/guide-rail/centerline loft; `Placed`/`Duplicate`/`PlacedCopy`; reversed correspondence; surveys, clearance, interference beyond box-disjoint |
 | 2a | `Placed` / `Duplicate` / `PlacedCopy` (D7): the payload's own proven displacement term `delta` (§5), composed into every vertex, edge length, face area, and all four body measurements; Table S gains S12 and S13 | D1/D2 (`Tessellate`/`STL`/`OBJ`, mesh-boolean admission); D3/D4's analytic-kernel case; D5 |
 | 2b | `Tessellate` / `STL` / `OBJ` (D1), mesh-boolean admission (D2) | D3/D4's analytic-kernel case, D5 |
-| 3 | same-kind `CircleSeg`/`ArcSeg` correspondence (§1): the chord-chain construction and its shared station generator (§5.1), every term §5.2's table lists that a chorded build reaches — the certified per-cell sagitta and the `sectionDelta` it publishes, the `stationRound` term `delta` gains, the `matchedDelta` those two compose, the four legs of the chorded volume allowance with the moment twin's two swept-measure radii (§8.1), and the wall's own three-leg area gap beside the two caps' `capAreaAllow` (§8) — composed into `Volume`/`Centroid`/`Area`/`Bounds`, Table S gates S14–S16, S6's COMPUTED arm, and S7's structural walk-sense arm (P5). **This row is landed.** | same-kind Tier A free-form correspondence, until PR 4 lands it; mixed-kind correspondence, permanently (§1); N-section and guide-rail/centerline lofts; a loft case in `clearance_geom.go`; a non-constant-cross-section wall survey kernel |
-| 4 | same-kind Tier A free-form correspondence (§1): the free-form arm of the shared station generator (§5.1), the free-form arms §5.2's table gains — the free-form `stationRound` mechanism, the free-form per-cell sagitta, a free-form `arcLenUpper_k`, and a free-form `matchedDelta` — all composed into `Volume`/`Centroid`/`Area`/`Bounds`, and Table S row S17. **This row lands only once `bounds.go` owns BOTH of a free-form cell's missing derivations, its `arcLenUpper_k` and its arc-length-matched `matchedDelta`** (§5.2, §8.1, §14): until then three of the four chorded volume legs answer `+Inf` on each of the two, and a same-kind Tier A free-form pair keeps the `ErrUnsupported` staging refusal S14 gives it | mixed-kind correspondence, permanently (§1); a same-kind Tier A free-form pair whose two curves reduce to different Bézier span counts (S17); N-section and guide-rail/centerline lofts; a loft case in `clearance_geom.go`; a non-constant-cross-section wall survey kernel |
+| 3 | same-kind `CircleSeg`/`ArcSeg` correspondence (§1): the chord-chain construction and its shared station generator (§5.1), every term §5.2's table lists that a chorded build reaches — the certified per-cell sagitta and the `sectionDelta` it publishes, the `stationRound` term `delta` gains, the `matchedDelta` those two compose, the four legs of the chorded volume allowance with the moment twin's two swept-measure radii (§8.1), and the wall's own three-leg area gap beside the two caps' `capAreaAllow` (§8) — composed into `Volume`/`Centroid`/`Area`/`Bounds`, Table S gates S14–S16, S6's COMPUTED arm, and S7's structural walk-sense arm (P5). **This row is landed.** | same-kind Tier A free-form evaluator integration, until PR 4 lands it; mixed-kind correspondence, permanently (§1); N-section and guide-rail/centerline lofts; a loft case in `clearance_geom.go`; a non-constant-cross-section wall survey kernel |
+| 4 | same-kind Tier A free-form correspondence (§1): integrate the shared station generator (§5.1), the existing free-form `stationRound`, sagitta, `spanSpeedUpper` length/speed bound, and `spanMatchedDeltaUpper` native-parameter bound plus `delta` (§5.2) into `Volume`/`Centroid`/`Area`/`Bounds`, and land Table S row S17. **This row stages implementation only; the certified spline derivations already exist.** | mixed-kind correspondence, permanently (§1); a same-kind Tier A free-form pair whose two curves reduce to different Bézier span counts (S17); N-section and guide-rail/centerline lofts; a loft case in `clearance_geom.go`; a non-constant-cross-section wall survey kernel |
 | 5 (reach, not committed by this document) | N-section and guide-rail/centerline lofts, a loft case in `clearance_geom.go`, a non-constant-cross-section wall survey kernel, an unequal Bézier span count between a same-kind Tier A free-form pair's two sides (which would retire S17), a spatial-index broad-phase for §6's audit — one pruning the pair ENUMERATION itself, which §6's own two float tiers do not touch and S8's `F*(F-1)/2` preflight is what bounds today | — |
 
 **The four measurements land with the operation, never after it.** A `Body`
@@ -1861,7 +1820,8 @@ against this budget.
 - **Pairing**: hole-count mismatch → S1; segment-count mismatch → S2;
   mixed-kind segment pair → S3; a same-kind Tier A free-form pair whose two
   Bézier span counts differ → S17; an equal-span same-kind Tier A free-form
-  pair → S14, never S3; a same-kind `CircleSeg` pair
+  pair reaches S14 only when an actual certified term answers `+Inf`, never
+  on its kind and never through S3; a same-kind `CircleSeg` pair
   whose two recorded `CCW` flags disagree → S7's `ErrDegenerate` from its
   STRUCTURAL arm, asserted to refuse at the phase §4's gate-order paragraph
   assigns that arm rather than from the AUDIT arm, so the fixture pins the
@@ -2065,21 +2025,16 @@ against this budget.
   mixed line-to-arc pair, and an arc-to-fit-spline pair, still refuse S3.
   Replay of a recorded circular-pair step reproduces the same station count,
   the same triangle set, and bit-identical measurements.
-- **Same-kind Tier A free-form pairs (§5.1, §5.2)**: while §5.2's
-  `arcLenUpper_k` and `matchedDelta` publish no free-form value, a same-kind
-  Tier A free-form
-  pair asserts S14's `ErrUnsupported` on those terms, and that the document and
-  the recipe are unchanged. **The two terms are pinned as INDEPENDENT
-  refusals**: an internal fixture that hands a free-form cell a finite
-  `arcLenUpper_k` asserts the build still refuses S14 on `matchedDelta`, so a
-  build that composed `absSumUpper(sectionDelta, delta)` at a free-form cell
-  fails it. The quartic §5.2's free-form paragraph names is that term's own
-  counterexample fixture: its published sagitta and its measured
-  arc-length-matched departure are asserted to differ by three orders of
-  magnitude, and to keep differing under dyadic bisection, so a fixture that
-  read the sagitta as the matched bound fails there too.
-  **Every build-and-measure assertion that follows
-  lands with §12 PR 4's free-form arm** (§8.1, §14), and is stated here so
+- **Same-kind Tier A free-form pairs (§5.1, §5.2)**: per-cell tests assert
+  that `spanSpeedUpper` bounds both native-parameter speed and dense-sampled
+  arc length, and never falls below the chord. They also assert that
+  `spanMatchedDeltaUpper` encloses the same-native-parameter chord departure,
+  while the sagitta-alone counterexample still fails that stronger claim.
+  Composition tests add the cell's station displacement through
+  `chordCellDeltaUpper`; a fixture that omits that displacement fails.
+  Actual non-finite or underivable values still assert S14 and leave the
+  document and recipe unchanged. **Every build-and-measure assertion that
+  follows lands with §12 PR 4's free-form arm** (§8.1), and is stated here so
   that increment carries it rather than writes it fresh. The A10b wedge —
   two `LineSeg`s and one 5-point `FitSplineSeg` through a radius-5 quarter
   circle, on `z=0` and `z=10` — BUILDS, and `Verify` at the default tolerance
@@ -2254,32 +2209,6 @@ two-pass rebuild reads its own published measurement and rebuilds to chase a
 tighter margin**, since that would make the topology a function of a
 published float and a new determinism obligation for replay (§10).
 
-**A free-form cell's `arcLenUpper_k` has no proven owner, and §12 PR 4 waits
-on one.** `circularLengthInterval` encloses a circular curve piece's arc
-length and states nothing about any other kind, so three of the four chorded
-volume legs (§8.1) have no free-form value to read and the pair refuses at
-Table S row S14. §8 therefore refuses rather than substitute a term of
-another form. This is an open question about a DERIVATION and not about a
-design variable: what is missing is a bound in `bounds.go` on a free-form
-dyadic sub-span's own recorded arc length, carrying a written proof that it
-never falls below the chord that sub-span subtends.
-
-**A free-form cell's arc-length-matched departure has no proven owner either,
-and §12 PR 4 waits on it beside the arc length.** §5.2's `matchedDelta`
-composes `absSumUpper(sectionDelta, delta)`, and the first step of that
-composition is proven for a `LineSeg` side and a circular one alone. The
-free-form sagitta both source rows stay finite on is a
-control-point-to-chord-SEGMENT SET distance, which §5.2's own counterexample
-quartic shows can sit three orders of magnitude below the same curve's
-arc-length-matched departure, a gap dyadic bisection does not close. So the
-same three chorded volume legs (§8.1) have no free-form value to read here
-either, and the pair refuses at Table S row S14 on this term as well as on
-the arc length. This is an open question about a DERIVATION and not about a
-design variable: what is missing is a bound in `bounds.go` on how far a
-free-form dyadic sub-span's own chord sits from the recorded curve at the
-SAME arc-length parameter, carrying a written proof — never the sagitta,
-which bounds a different quantity.
-
 **`loftStationCap`'s value is resolved.** §5.1 states the rule the cap obeys
 and everything an implementation needs to decide S15 from the record — the
 per-segment share, the `mMax` comparison, and the checked arithmetic — and the
@@ -2295,7 +2224,8 @@ here, the reference fixture's FORCED 64 included, is stated against the chord
 target above rather than against the cap.
 
 Every design variable this document depends on is resolved above, and §12's
-PR 5 row is future work rather than an open question of this design.
+PR 4 and PR 5 rows are future implementation work rather than open questions
+of this design.
 
 ## 15. Companion edits
 
