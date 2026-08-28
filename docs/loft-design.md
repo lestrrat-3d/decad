@@ -1916,9 +1916,13 @@ allowance names `chordedBoundaryVolumeAllow`'s four legs (§8.1), never a
   table and the exact-restatement text under it, §13's T6 row, and §14's
   `loftPayload` test obligation. Its `sourceBound(face)` and `Bound` are the
   facet departure, its `volSymDiff` composes the four-leg chorded allowance,
-  and its `areaSlack` has no chorded term to state while a chorded `Area`
-  itself has no owner (§8). A chorded loft is not an all-planar
-  zero-bound mesh-boolean operand however it is placed.
+  and its `areaSlack` is the per-triangle perturbation sum, which for a
+  CHORDED body carries the two further terms §8 composes into that body's own
+  `Area` bound: the wall's three-leg area gap — `cellTwistAreaAllow`,
+  `cellChordCurveAreaAllow` and `cellStationShiftAreaAllow` — beside the two
+  caps' `capAreaAllow` (§5.2's table owns each term and its zero condition).
+  A chorded loft is not an all-planar zero-bound mesh-boolean operand however
+  it is placed.
 - **`docs/clearance-design.md`**: §2's `loftPayload` sentence, which decides a
   box-disjoint partition on the `Bounds` reading and names the wider facet
   departure for the distance a future adapter would measure against a held
