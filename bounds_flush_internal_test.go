@@ -124,9 +124,10 @@ func TestChordedBoundsNeverPublishAFlushedZero(t *testing.T) {
 		vHi = r3.Vec{X: s, Y: 0, Z: 0}
 		wLo = r3.Vec{X: 0, Y: s, Z: 0}
 		wHi = r3.Vec{X: s, Y: s, Z: 0}
-		// The same cell sheared so the exact twist vector
-		// T = vLo − vHi − wLo + wHi is (s,0,0), not the zero vector.
-		twHi = r3.Vec{X: 2 * s, Y: s, Z: 0}
+		// The same cell sheared out of plane so the exact twist vector
+		// T = vLo − vHi − wLo + wHi is (s,0,s) and the swept
+		// determinant is nonzero.
+		twHi = r3.Vec{X: 2 * s, Y: s, Z: s}
 	)
 
 	t.Run("cell chord-to-curve area", func(t *testing.T) {
@@ -141,9 +142,8 @@ func TestChordedBoundsNeverPublishAFlushedZero(t *testing.T) {
 	})
 
 	t.Run("cell twist volume", func(t *testing.T) {
-		// The exact T is nonzero, so the ruled patch and the built triangle
-		// pair are genuinely different surfaces with a positive volume
-		// between them.
+		// The exact swept determinant is nonzero, so the ruled patch and the
+		// built triangle pair carry positive swept measure between them.
 		require.Greater(t, cellTwistQuarterUpper(vLo, vHi, wLo, twHi), 0.0,
 			`the fixture must carry a certified nonzero twist`)
 		got := cellTwistVolumeAllow(vLo, vHi, wLo, twHi)

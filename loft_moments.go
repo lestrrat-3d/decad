@@ -548,9 +548,9 @@ func (m *loftMassAccumulator) wallBound() float64 {
 	return absSumUpper(m.wallAreaSlack, sumSlop(m.wallTerms, m.wallAreaAbs))
 }
 
-// loftChordedAllow bundles chordedBoundaryVolumeAllow's and
-// chordedBoundaryMomentAllow's own four composed legs, plus the wall's own
-// three-leg area gap (docs/loft-design.md §5/§8, a10-plan.md
+// loftChordedAllow bundles chordedBoundaryVolumeAllow's four signed-volume
+// legs, chordedBoundaryMomentAllow's two swept-measure legs, and the wall's
+// own three-leg area gap (docs/loft-design.md §5/§8, a10-plan.md
 // Part 3 PR 6's integration task). Every field of the zero value is 0, the
 // correct standing for a LineSeg-only loft that never calls
 // computeLoftChordedAllow at all. It is also what a REFUSING call returns
@@ -673,9 +673,10 @@ type loftChordedAllow struct {
 //   - the TWIST leg, cellTwistAreaAllow (bounds.go): |held − bilinear|, how
 //     far the cell's own bilinear ruled patch can carry the held triangle
 //     pair's area, T = vLo−vHi−wLo+wHi the SAME twist vector
-//     cellTwistVolumeAllow already names, read through the SAME exact kernel
-//     that helper reads it through and so zero EXACTLY when the cell's four
-//     corners form a parallelogram (the shipped wedge's own T ≡ 0 —
+//     cellTwistVolumeAllow already names. It publishes the minimum of a
+//     certified linear homotopy arm and a cancellation-preserving quadratic
+//     arm, and is zero EXACTLY when the cell's four corners form a
+//     parallelogram (the shipped wedge's own T ≡ 0 —
 //     TestArcMatchedDeltaEqualsSagitta's family);
 //   - the RULED leg, cellChordCurveAreaAllow (bounds.go): |bilinear − true|,
 //     how far that bilinear patch's own area sits from the ruled patch through

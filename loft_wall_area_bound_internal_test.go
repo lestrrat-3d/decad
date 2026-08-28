@@ -47,9 +47,9 @@ import (
 //   - L1, the CARRIED-OVER twist leg (cellTwistAreaAllow), zeroed in
 //     loft_moments.go's own composition
 //     (`absSumUpper(areaExcess, ruledLeg, 0*twistLeg, stationLeg)`):
-//     TestLoftRotatedWedgeAreaBoundEnclosesDenotedSurface fails at 5 degrees —
-//     `"0.1073172359528769" is not less than or equal to "0.0624826696376347"`
-//     — on "the loft's own Area must enclose the denoted ruled surface at 5.0
+//     TestLoftRotatedWedgeAreaBoundEnclosesDenotedSurface fails at 15 degrees —
+//     `"0.5053145056934625" is not less than or equal to "0.07130694749809868"`
+//     — on "the loft's own Area must enclose the denoted ruled surface at 15.0
 //     deg of twist", the enclosure assertion itself.
 //   - L2, the ruled leg (cellChordCurveAreaAllow), zeroed the same way
 //     (`absSumUpper(areaExcess, 0*ruledLeg, twistLeg, stationLeg)`):
@@ -937,15 +937,15 @@ func (l ruledLine) der(float64) r3.Vec  { return l.p1.Sub(l.p0) }
 // DENOTES between two paired curves. It is a plain numerical integral: no
 // sketch, no Document.Loft, no evaluator, and no chord chain of any kind.
 //
-// This is the reference a genuinely TWISTED pairing needs. A densely chorded
-// triangle sum does NOT converge to it there: under a rotational
-// correspondence each cell's own warp |T|/chord stays fixed as the chord count
-// grows (both shrink together), so the triangle sum converges to a Schwarz-
-// lantern limit strictly above the ruled surface's own area. That limit is what
-// loft_area_excess_fixture_internal_test.go's own dense reference measures, and
-// it is the right reference for an untwisted pairing, where the warp does
-// vanish with the chord — but it understates the gap the wall term is charged
-// for whenever the correspondence really rotates.
+// This is the reference a genuinely TWISTED circular pairing needs. A densely
+// chorded triangle sum does NOT converge to it there: under a rotational
+// correspondence each curved cell's own warp |T|/chord stays fixed as the
+// chord count grows (both shrink together), so the triangle sum converges to a
+// Schwarz-lantern limit strictly above the ruled surface's own area. That
+// limit is what loft_area_excess_fixture_internal_test.go's own dense reference
+// measures, and it is the right reference for an untwisted pairing, where the
+// warp does vanish with the chord — but it understates the gap the curved wall
+// term is charged for whenever the correspondence really rotates.
 func ruledPatchArea(a, b sideCurve, panels int) float64 {
 	// Five-point Gauss-Legendre per panel in each direction. The integrand is
 	// analytic wherever the patch is non-degenerate, so this converges far
@@ -974,11 +974,10 @@ func ruledPatchArea(a, b sideCurve, panels int) float64 {
 }
 
 // rotatedWedgeDenotedArea is the rotated wedge's own DENOTED area at the given
-// panel count: the three ruled wall patches its three paired segments denote
-// (two straight flanks and the quarter arc, each under the shared parameter the
-// loft's own correspondence pairs them by) plus the two exact circular-sector
-// caps. It is independent of any chord count — the ruled surface over one
-// segment does not change when that segment is subdivided — and of the
+// panel count: the circular pair's ruled wall patch, the two LineSeg pairs'
+// held triangle pairs, and the two exact circular-sector caps. Section 5 makes
+// each LineSeg wall the held triangle pair itself, so only a CHORDED circular
+// cell has a bilinear-to-triangle gap. The reference is independent of the
 // production evaluator entirely.
 func rotatedWedgeDenotedArea(phi float64, n int) float64 {
 	rot := func(v r3.Vec) r3.Vec {
@@ -999,9 +998,12 @@ func rotatedWedgeDenotedArea(phi float64, n int) float64 {
 		u: rot(r3.NewVec(1, 0, 0)), v: rot(r3.NewVec(0, 1, 0)),
 		t0: 0, dt: math.Pi / 2,
 	}
-	wall := ruledPatchArea(ruledLine{apex, px}, ruledLine{lift(apex), lift(px)}, n) +
+	heldLineArea := func(a0, a1, b0, b1 r3.Vec) float64 {
+		return triArea3(a0, a1, b1) + triArea3(a0, b1, b0)
+	}
+	wall := heldLineArea(apex, px, lift(apex), lift(px)) +
 		ruledPatchArea(arcLo, arcHi, n) +
-		ruledPatchArea(ruledLine{py, apex}, ruledLine{lift(py), lift(apex)}, n)
+		heldLineArea(py, apex, lift(py), lift(apex))
 	caps := 2 * (math.Pi * rotatedWedgeRadius * rotatedWedgeRadius / 4)
 	return wall + caps
 }
@@ -1026,11 +1028,11 @@ func convergedRotatedWedgeDenotedArea(t *testing.T, phi float64) float64 {
 }
 
 // TestLoftRotatedWedgeAreaBoundEnclosesDenotedSurface is the end-to-end
-// falsifier for BOTH legs of the wall term under real twist: the published Area
-// must enclose the DENOTED ruled surface's own directly integrated area, not
-// the polyhedral limit a dense triangle sum converges to. At every nonzero
-// angle the two sections' chords are genuinely non-parallel, so each cell's own
-// twist vector is nonzero and the carried-over twist leg is load-bearing here.
+// falsifier for BOTH legs of the curved wall term under real twist: the
+// published Area must enclose the circular pair's DENOTED ruled surface, with
+// each LineSeg pair read as the held triangle pair §5 defines. At every
+// nonzero angle the circular cells' chords are genuinely non-parallel, so each
+// curved cell's twist vector is nonzero and the twist leg is load-bearing here.
 func TestLoftRotatedWedgeAreaBoundEnclosesDenotedSurface(t *testing.T) {
 	for _, deg := range loftTwistSweepDegrees {
 		phi := deg * math.Pi / 180
