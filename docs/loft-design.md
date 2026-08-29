@@ -603,19 +603,22 @@ count grows.
 **The chord target and its constant.**
 
 ```text
-chordTarget = loftChordFraction * max(profileCoordinateUpper(p0), profileCoordinateUpper(p1))
+chordTarget = loftChordFraction * max(profileCoordinateEnvelope(p0), profileCoordinateEnvelope(p1))
 ```
 
 `loftChordFraction` is one unexported package constant (§14 records its
-calibration), and `profileCoordinateUpper` is the existing section-coordinate
-envelope reader (`extrude.go`) — the target scales with the section's own
-size rather than with one arc's own radius, so a Tier-A free-form pair that
-has no radius can share the identical rule (§12 reach). **The target is not a
-caller option.** `WithChordTolerance` is a tessellation/export render knob;
-a loft's chording is TOPOLOGY — it decides the vertex set the payload holds —
-so a caller-supplied tolerance would change body identity and demand a wire
-field. The constant stays in source, and `LoftOpts` gains no new field for it
-(§10).
+calibration), and `profileCoordinateEnvelope` is the existing non-refusing
+section-coordinate magnitude-envelope reader (`extrude.go`). It reads each
+walk's own `coordUpper`: analytic walks produce the same value
+`profileCoordinateUpper` would return, while a free-form walk supplies
+`freeformControlExtent` without passing through that reader's analytic-only
+placed-frame gate. The target therefore scales with the section's own size
+rather than with one arc's own radius, so a Tier-A free-form pair that has no
+radius can share the identical rule (§12 reach). **The target is not a caller
+option.** `WithChordTolerance` is a tessellation/export render knob; a loft's
+chording is TOPOLOGY — it decides the vertex set the payload holds — so a
+caller-supplied tolerance would change body identity and demand a wire field.
+The constant stays in source, and `LoftOpts` gains no new field for it (§10).
 
 **The station cap and the ceiling it answers to.** A build's total station
 count is capped by one unexported package constant, `loftStationCap` (§14
@@ -839,12 +842,12 @@ root.
 
 **The chord target is the same one the circular arm already uses.** §5.1's
 chord target above — `chordTarget = loftChordFraction *
-max(profileCoordinateUpper(p0), profileCoordinateUpper(p1))` — scales with
-the section's own coordinate envelope rather than with any one curve's own
-radius, which is exactly what lets a free-form pair, which has no radius at
-all, share the identical rule and the identical `loftChordFraction` constant
-(§14): the target is a property of the two SECTIONS, not of either curve's
-own parameterisation.
+max(profileCoordinateEnvelope(p0), profileCoordinateEnvelope(p1))` — reads a
+free-form walk's `freeformControlExtent` and scales with the section's own
+coordinate envelope rather than with any one curve's own radius. That is what
+lets a free-form pair, which has no radius at all, share the identical rule and
+the identical `loftChordFraction` constant (§14): the target is a property of
+the two SECTIONS, not of either curve's own parameterisation.
 
 **The station cap applies unchanged, and a free-form pair's share of it is
 counted by the same allocation stated above.** A free-form pair that cannot
@@ -2189,10 +2192,10 @@ against this budget.
 ## 14. Open questions
 
 **The chord-target constant.** `loftChordFraction = 3.76491e-05` (§5.1),
-used as `chordTarget = loftChordFraction * max(profileCoordinateUpper(p0),
-profileCoordinateUpper(p1))`. The number comes from two calibration fixtures
-measured at a FORCED `m = 64`, each with its own implied fraction at that
-count: the arc wedge, this document's reference fixture — a 90° radius-5
+used as `chordTarget = loftChordFraction * max(profileCoordinateEnvelope(p0),
+profileCoordinateEnvelope(p1))`. The number comes from two calibration
+fixtures measured at a FORCED `m = 64`, each with its own implied fraction at
+that count: the arc wedge, this document's reference fixture — a 90° radius-5
 quarter-arc lofted between `z=0` and `z=10` — reaches a `sectionDelta` of
 3.76491e-4 there, an implied fraction of 3.76491e-05, and the matching
 fit-spline wedge reaches a `sectionDelta` of
