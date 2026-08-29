@@ -44,6 +44,19 @@ const (
 	// layoutCellMaxChars caps a Layout row's description (second) column.
 	// A row that needs more detail belongs in the file/doc it names, with
 	// this cell trimmed back to a short pointer.
+	//
+	// The cap binds real rows, and a SUBSECTION number is among the first
+	// details it pushes back out. The `loft_build.go` row is the worked
+	// case: naming docs/loft-design.md §5.1 and §5.2 beside the §5 that row
+	// already points at costs 12 runes, which its 292-rune description cell
+	// affords only because the row carries no wording its pointer can do
+	// without — 8 runes of headroom is all that is left, so the next
+	// parenthetical appended to it fails the check below. A row that cannot
+	// pay for a subsection number that way names the SECTION and lets the
+	// section carry its own subsections; where a subsection's content
+	// matters to the reader, the row spells that content in words instead
+	// of by number, which is what the `loft_build.go` row also does for
+	// §5.2's placement re-lift and its `delta`.
 	layoutCellMaxChars = 300
 	// designDocDir and designDocSuffix spell CLAUDE.md's own Conventions
 	// rule, "Design docs live in `docs/<topic>-design.md`", once. Every file
@@ -135,11 +148,13 @@ var (
 	htmlBlockRe = regexp.MustCompile(`^ {0,3}<[a-zA-Z!/?]`)
 )
 
-// The fixtures below share three strings: the invented sub-heading every
-// fixture section opens its table under, and the two refusal fragments the
-// table and heading branches are pinned by.
+// The fixtures below share four strings: the invented sub-heading every
+// fixture section opens its table under, the real "##" heading each fixture
+// closes its Layout section at, and the two refusal fragments the table and
+// heading branches are pinned by.
 const (
 	inventedSubHeading    = "### Invented sub-table"
+	conventionsHeading    = "## Conventions"
 	wantStrayTable        = "outside any declared table"
 	wantMisspelledHeading = "not spelled that way"
 )
@@ -318,6 +333,15 @@ func requireSeparator(lines []string, i int, header string) error {
 //     outside any table are all refusals.
 //  5. An HTML block is refused anywhere in the file, and a code fence left
 //     open at EOF is refused, since either hides text from every rule above.
+//     "HTML block" here is CommonMark's line-start construct, exactly what
+//     htmlBlockRe spells, and the rule reaches no further: a "<!--" in the
+//     MIDDLE of a line is not one. No document in this repository states a
+//     rule against an HTML comment, so a mid-line delimiter has no contract
+//     to violate, and it escapes no check either. A Layout row still opens
+//     with a pipe, so it takes the table branch and its cell is measured and
+//     its paths os.Stat'ed with the comment text included; any other line is
+//     prose, which the first of the two policies in this file's own header
+//     already leaves unmeasured.
 //
 // Content the format renders as code — inside a fence, or indented four spaces
 // or more — is skipped rather than classified, which is what lets the section
@@ -755,7 +779,7 @@ func TestParseLayoutRowsRejectsMalformedRows(t *testing.T) {
 	section := func(body ...string) string {
 		lines := []string{layoutHeading, "", inventedSubHeading, "", layoutTableHeader, layoutTableSeparator}
 		lines = append(lines, body...)
-		return strings.Join(append(lines, "", "## Conventions", ""), "\n")
+		return strings.Join(append(lines, "", conventionsHeading, ""), "\n")
 	}
 
 	const wellFormed = "| `doc.go` | An invented short pointer row. |"
@@ -830,7 +854,7 @@ func TestParseLayoutRowsRefusesTextItWouldNotReach(t *testing.T) {
 		return strings.Join(lines, "\n")
 	}
 	// other is any following section, so the Layout section really does end.
-	other := []string{"## Conventions", "", "An invented sentence.", ""}
+	other := []string{conventionsHeading, "", "An invented sentence.", ""}
 
 	for name, tc := range map[string]struct {
 		content string
@@ -855,7 +879,7 @@ func TestParseLayoutRowsRefusesTextItWouldNotReach(t *testing.T) {
 			want:    "a second",
 		},
 		"a Layout table outside the Layout section": {
-			content: join(layoutSection(wellFormed), []string{"## Conventions", "", layoutTableHeader, layoutTableSeparator, oversized, ""}),
+			content: join(layoutSection(wellFormed), []string{conventionsHeading, "", layoutTableHeader, layoutTableSeparator, oversized, ""}),
 			want:    "outside the",
 		},
 		"prose beside the rows": {
@@ -927,7 +951,7 @@ func TestParseCLAUDEMDRefusesEverySpellingOfTheAnchors(t *testing.T) {
 		layoutTableHeader, layoutTableSeparator,
 		"| `doc.go` | An invented short pointer row. |", "",
 	}
-	other := []string{"## Conventions", "", "An invented sentence.", ""}
+	other := []string{conventionsHeading, "", "An invented sentence.", ""}
 	join := func(blocks ...[]string) string {
 		var lines []string
 		for _, block := range blocks {
@@ -1062,7 +1086,7 @@ func TestParseCLAUDEMDRefusesEverySpellingOfTheAnchors(t *testing.T) {
 // CLAUDE.md.
 func TestParseCLAUDEMDAcceptsTheShapesTheFormatMakesSafe(t *testing.T) {
 	const wellFormed = "| `doc.go` | An invented short pointer row. |"
-	other := []string{"## Conventions", "", "An invented sentence.", ""}
+	other := []string{conventionsHeading, "", "An invented sentence.", ""}
 	join := func(blocks ...[]string) string {
 		var lines []string
 		for _, block := range blocks {
@@ -1095,6 +1119,15 @@ func TestParseCLAUDEMDAcceptsTheShapesTheFormatMakesSafe(t *testing.T) {
 		}, other),
 		// A thematic break is not a setext underline: nothing precedes it.
 		"a thematic break outside the section": join(realSection, other, []string{"---", ""}),
+		// The HTML-block rule is LINE-LEVEL. htmlBlockRe only ever sees a
+		// line-start delimiter, so a `<` in the middle of a prose line is
+		// text this scanner never classifies. Rule 5 of parseCLAUDEMD states
+		// that reach, and this case with the standalone-comment refusal
+		// above are what hold it there.
+		"an HTML comment inside a prose line": join(realSection, []string{
+			conventionsHeading, "",
+			"An invented sentence with <!-- an invented aside --> inside it.", "",
+		}),
 		// The declared non-Layout table, where it belongs.
 		"a declared non-Layout table outside the section": join([]string{
 			nonLayoutTableHeaders[0].section, "",

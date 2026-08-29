@@ -904,9 +904,10 @@ func TestLoftStationShareAllocatesTheCap(t *testing.T) {
 // carve-out: an all-LineSeg build's Σstations is Σn_i exactly, the count the
 // record itself states, so S8 is its only resource refusal and the gate does
 // not even read the chord target. The fixture proves the second half by
-// handing the gate a profile loftChordTarget itself would REFUSE — a free-form
-// boundary profileCoordinateUpper has no envelope for — and requiring the gate
-// to answer nil anyway.
+// handing the gate a free-form profile. profileCoordinateEnvelope supplies its
+// control-point envelope for §5.1's complete rule, while the currently staged
+// loftChordTarget still reaches profileCoordinateUpper and refuses before that
+// free-form arm lands; the gate must answer nil without consulting either.
 func TestLoftStationCapGateNeverConsultsTheCapWithNoCircularPair(t *testing.T) {
 	p := unitSquareProfile()
 	walks := resolveLoftLoopWalks(t, p)
@@ -916,7 +917,7 @@ func TestLoftStationCapGateNeverConsultsTheCapWithNoCircularPair(t *testing.T) {
 	free := ProfileRecord{Outer: LoopRecord{Segments: []CurveSegment{fit, fit, fit}}}
 	freeWalks := resolveLoftLoopWalks(t, free)
 	_, err := loftChordTarget(free, free, freeWalks, freeWalks)
-	require.Error(t, err, "the fixture must be one whose chord target cannot be read at all")
+	require.Error(t, err, "the pre-free-form staging helper must still refuse this fixture")
 	require.NoError(t, loftStationCapGate(free, free, make([]int, 1), freeWalks, freeWalks),
 		"a build with no circular pair must never consult the cap, nor the target it is measured against")
 }
@@ -1244,11 +1245,11 @@ func TestLoftPairingsLineSegOnlyStationChainUnchanged(t *testing.T) {
 
 // --- loftChordTarget ---
 
-// TestLoftChordTargetUsesTheAnalyticEnvelope pins the deliberate choice
-// loftChordTarget's own doc comment states: it reads profileCoordinateUpper,
-// which refuses a free-form boundary segment outright, rather than its
-// non-refusing twin profileCoordinateEnvelope — costless today because every
-// kind this evaluator admits into a pairing (LineSeg) is analytic.
+// TestLoftChordTargetUsesTheAnalyticEnvelope isolates the staging gap §5.1's
+// free-form arm closes. profileCoordinateEnvelope must admit this FitSplineSeg
+// profile and read its control-point extent; the current loftChordTarget still
+// calls profileCoordinateUpper until that pairing arm lands, so it refuses the
+// same already-resolved walks.
 func TestLoftChordTargetUsesTheAnalyticEnvelope(t *testing.T) {
 	fit := FitSplineSeg{
 		Fit:    []Point2{pt(0, 0), pt(1, 1), pt(2, 0), pt(3, 1), pt(4, 0)},
@@ -1264,6 +1265,10 @@ func TestLoftChordTargetUsesTheAnalyticEnvelope(t *testing.T) {
 		require.NoError(t, err)
 	}
 	walks0 := [][]segmentWalk{walks}
+	pw := &profileWalks{profile: p, outer: walks0[0]}
+	envelope, err := profileCoordinateEnvelope(p, nil, pw)
+	require.NoError(t, err)
+	require.Positive(t, envelope, "a free-form walk must supply its control-point coordinate envelope")
 
 	_, err = loftChordTarget(p, p, walks0, walks0)
 	require.ErrorIs(t, err, ErrUnsupported)

@@ -221,9 +221,10 @@ func wedgeSplineSketch(t *testing.T, w *sketch.World, plane *sketch.Plane) (*ske
 	return s, profiles[0]
 }
 
-// wedgeArcEnvelope reads Q2's chordTarget envelope — max(profileCoordinateUpper(p0),
-// profileCoordinateUpper(p1)) — off the TRUE (arc) wedge record on both planes. The
-// arc walk is analytic, so profileCoordinateUpper (extrude.go:452) answers directly.
+// wedgeArcEnvelope reads §5.1's chordTarget envelope off the TRUE (arc) wedge
+// record on both planes. The current analytic staging helper uses
+// profileCoordinateUpper, whose answer agrees with profileCoordinateEnvelope
+// for this analytic walk.
 func wedgeArcEnvelope(t *testing.T) float64 {
 	t.Helper()
 	w, base, top := wedgePlanes(t)

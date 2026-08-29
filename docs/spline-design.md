@@ -1147,8 +1147,9 @@ is accepted and reads `Suspect`:
 so nothing in this section withholds a body — the readings that need a
 direction are the only ones it leaves undecided. Chording, export, the
 boolean path and interference proof read no direction cone either, but they
-wait on their own later increment regardless (§10 P5) — a free-form-walled
-body reaches none of them yet, for a reason unrelated to this section. A
+wait on their own later increment for an EXTRUDED free-form wall (§10 P5).
+Loft follows `docs/loft-design.md` Table D rows D1–D3 instead. A free-form
+extrude reaches none of them yet, for a reason unrelated to this section. A
 collapsed span shows the whole cost: it fails the speed floor, so it costs
 those two readings, on a body that still builds and reports its `Volume`.
 What refuses an ALL-collapsed walk at build time is §5.1's zero-length walk
@@ -1622,9 +1623,10 @@ every walk of the section is itself exactly rational (§3).
 |---|---|---|
 | `ProfileRecord.Area`/`Centroid`/`SecondMoments` | Tier A exactly rational, rounded once; B/C proven interval | §5 |
 | `Extrude` | Tier A section; `Volume` from the Tier A rational, `Area`/`Box` bounded | §6.1 length, §6.2 extremes, §7 surfaces; a through-all stop reading the bracket is §6.4; a wall edge's convexity is §6.5 |
-| `Tessellate`, `STL`, `OBJ` | `ErrUnsupported` for a free-form-walled body until §10 P5 chords it; every OTHER body `Extrude` builds | §6.2 sagitta; rides the existing prism path, NOT tessellation T5 |
-| `Union`/`Cut`/`Intersect` | `ErrUnsupported` for a free-form-walled operand until §10 P5, `Faceted` output as always thereafter | free once chording lands — the mesh boolean reads triangles, not kinds |
-| interference proof | `ErrUnsupported` for a free-form-walled body until §10 P5 | free once chording lands — read-only mesh intersection already serves faceted pairs |
+| `Loft` | a same-kind Tier A free-form paired segment (`docs/loft-design.md` §1, §5.1's free-form arm), chorded at shared dyadic fractions of the span-index coordinate the two curves' own Bézier span decompositions define, never of a recorded knot domain; every reading carries the applicable chorded allowance (`docs/loft-design.md` §5.2). Existing `spanSpeedUpper` and `spanMatchedDeltaUpper` derivations satisfy the bound inputs; only PR 4 evaluator integration remains staged behind `ErrUnsupported` | §6.2.1's sagitta, measured per dyadic level under the existing Loft station cap; the wall stays flat triangles built between held stations and needs no §7 surface. Once the pair lands, downstream reach follows `docs/loft-design.md` Table D rows D1–D3, not this document's P5 |
+| `Tessellate`, `STL`, `OBJ` | `ErrUnsupported` for an EXTRUDED free-form-walled body until §10 P5 chords it; every OTHER body `Extrude` builds. Loft follows `docs/loft-design.md` Table D row D1 | §6.2 sagitta; rides the existing prism path, NOT tessellation T5 |
+| `Union`/`Cut`/`Intersect` | `ErrUnsupported` for an EXTRUDED free-form-walled operand until §10 P5, `Faceted` output as always thereafter. Loft follows `docs/loft-design.md` Table D row D2 | free once chording lands — the mesh boolean reads triangles, not kinds |
+| interference proof | `ErrUnsupported` for an EXTRUDED free-form-walled body until §10 P5. Loft follows `docs/loft-design.md` Table D row D3 | free once chording lands — read-only mesh intersection already serves faceted pairs |
 | `Undercuts` | proven where §6.3's certificates close, else `Suspect` | §6.2 normal cones; an enclosure decides a face only while it is a proper cone (§6.3) |
 | `MinRadius` | proven interval under §6.3's speed floor, else `Suspect` | §6.2 curvature extremes; a measurement, never a verdict |
 | `MinWallThickness` | proven interval, else `Suspect` | §8.1 |
@@ -1690,12 +1692,19 @@ half-silent. These stages do not consume a global evaluator increment number.
 | **P3** | walk-kind discriminant across every `segmentWalk` consumer | none — behaviour preserved |
 | **P4a** | §6.2 row 1's directional-extreme bracket, wired into the prism bounds reading and into §6.4's straddle-narrowed through-all stop gate | none on its own — the bracket's reach through the public surface waits on P4b, below; the stop charges a met body's bracket to the level it resolves and R11 refuses only a straddling one, `extentAlongWork`'s wider refusal serving the clearance short-circuit alone, and R18 is live on the enclosure-to-float64 conversion the bracket publishes through |
 | **P4b** | `NURBSSurface`/`NURBSCurve`, free-form extrude side faces, `NormalAt` refusal, §6.5's wall-edge convexity proof and its R19 refusal | Tier A free-form prisms build, `FitSplineSeg` walks among them since P4b is where R6's build refusal lifts (§5.1.2); `Volume` from the Tier A rational, `Area`/`Box` bounded. A Tier B or C section is R10; an undecidable through-all stop is R11; a wall edge whose curvature sign the chain does not prove is R19 |
-| **P5** | free-form chording with proven sagitta + area slack | `Tessellate`/`STL`/`OBJ`, booleans, interference proof. Wall reading explicitly `Suspect` |
+| **P5** | extruded free-form chording with proven sagitta + area slack | `Tessellate`/`STL`/`OBJ`, booleans, interference proof for extruded free-form walls. Wall reading explicitly `Suspect` |
 | **P6** | §6.3's speed floor and origin-exclusion certificates, hodograph normal cones, bracketed curvature extremes | `Undercuts` and `MinRadius` each answer where the certificates that reading needs close, and read `Suspect` per §6.3's cost table where they do not |
 | **P7** | certified branch-and-bound inscribed-disk interval | `MinWallThickness` answered, with its own convergence evidence |
 | **P8** | free-form surfaces of revolution, §6.1.1's radial first-moment bracket | `Revolve` builds for a Tier A section |
 | **P9** | Tier B formulas; Tier C certified quadrature | Tier B/C moment readings answer, and the builds Table C stages on them follow — R10 retires |
 | **P10** | the §4.1 analytic-corner modify slice over §6.4's free-form crossing and contact tests | fillet/chamfer on analytic corners of a mixed section |
+
+`docs/loft-design.md`'s own station rule for a same-kind Tier A free-form
+paired segment is a SECOND consumer of §6.2.1's sagitta, beside P5's
+tessellation chording above — measured per dyadic level under its own hard
+station cap rather than tessellation's, and landed on `docs/loft-design.md`
+§12's own delivery plan rather than by a P-numbered increment of this
+document.
 
 ## 11. Test obligations
 
