@@ -343,7 +343,8 @@ ordinary revolve's box Exact as before.
 A walk endpoint is a computed one
 wherever the record does not state it: a trimmed line's or arc's own bound, and
 every circle's, is evaluated rather than read, and the bound it carries is the
-per-component gap from a certified enclosure of the point the record denotes. That bound belongs to the directional extent reading itself,
+per-component gap from a certified enclosure of the point the record denotes.
+That bound belongs to the directional extent reading itself,
 not to the box, because a body-relative stop reads the same extent (§5) and
 must see the same uncertainty rather than an exact coordinate. All mass results
 carry the §4 numerical bounds. Increment 2.

@@ -911,8 +911,9 @@ r_lo⁺ · L_lo  ≤  ∫ r ds  ≤  r_hi · L_hi
 Both factors of each product are non-negative — `r_lo⁺` by the clamp, `r_hi`
 because it dominates the walk's own values and the gate proves those
 non-negative — and that is exactly what licenses multiplying the two lower
-bounds together and the two upper bounds together. **NEVER write the lower bound as `r_lo · L_lo`.** Where `r_lo < 0` that
-is the LARGER of `r_lo·L_lo` and `r_lo·L_hi`, so it is not the product interval's
+bounds together and the two upper bounds together. **NEVER write the lower bound
+as `r_lo · L_lo`.** Where `r_lo < 0` that is the LARGER of `r_lo·L_lo` and
+`r_lo·L_hi`, so it is not the product interval's
 lower end; it survives only on the separate fact that `∫ r ds ≥ 0`, which is a
 different argument and a weaker bound than the clamp gives.
 
