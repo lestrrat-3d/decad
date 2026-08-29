@@ -1354,7 +1354,7 @@ their bounds.
 **`Volume` is `Exact` exactly when its published rational is representable in
 the `units.Value` magnitude it carries, AND the payload's displacement
 `delta` is zero, AND its full
-`chordedBoundaryVolumeAllow(matchedDelta, wallAreaUpper, twistVolumeUpper,
+`chordedBoundaryVolumeResidualAllow(matchedDelta, wallAreaUpper,
 capVolumeUpper, seamAllow)` (§5.2, §8.1) is zero — never unconditionally.**
 That single-rounding ceiling is spline design §3's
 Tier A rule, and a loft's volume earns it for the same reason a Tier A
@@ -1364,8 +1364,9 @@ whose `delta` is positive — placed (§12 PR 2a), chorded past §5.2's
 guaranteed-zero stations, or both — composes `bounds.go`'s
 `sweptVolumeAllow(delta, areaUpper)` on top of that single rounding, so
 `delta` alone is enough to make the reading `Approximate` however exactly
-any placement's own rotation or reflection is representable. A chorded
-(same-kind circular) body's volume additionally composes `bounds.go`'s
+any placement's own rotation or reflection is representable. A CHORDED
+body — circular or same-kind Tier A free-form — additionally composes
+`bounds.go`'s
 `chordedBoundaryVolumeResidualAllow(matchedDelta, wallAreaUpper,
 capVolumeUpper, seamAllow)`. The exact twist correction is already in the
 value, so this residual helper contains the other three legs only. It is a
@@ -1375,9 +1376,11 @@ and **never a `sweptVolumeAllow`-shaped
 understates a twisted pairing by about five orders of magnitude
 (`TestChordedBoundaryVolumeAllowTwistLegIsLoadBearing`). §5.2's table states
 each argument and §8.1 states which mechanism each residual leg answers for.
-So `sectionDelta` alone is enough to make the reading
-`Approximate` even where `delta == 0`, which is the `m = 1` pair whose two
-end stations both publish a zero `stationRound` (§5.2, §12). A body that is both placed and chorded
+So a positive `sectionDelta` OR a positive `matchedDelta` is enough to make
+the reading `Approximate` even where `delta == 0`. The latter is the
+free-form zero-sagitta case the base text called out; the former includes the
+`m = 1` pair whose two end stations both publish a zero `stationRound`
+(§5.2, §12). A body that is both placed and chorded
 composes both terms, since each bounds a displacement committed at an
 independent stage of the construction — the section chording, then the rigid
 placement.
@@ -1394,16 +1397,18 @@ lands the evaluator integration.
 returned `r3.Vec`. Its `Bound` is the length radius enclosing all three
 coordinate-rounding errors, and it is `Exact` only when every coordinate has
 zero rounding error, the payload's displacement `delta` is zero, and the full
-`chordedBoundaryVolumeAllow` and `chordedBoundaryMomentAllow` terms (§5.2,
-§8.1), including their `matchedDelta` input, are both zero. This is the
+`chordedBoundaryVolumeResidualAllow` and
+`chordedBoundaryMomentResidualAllow` terms (§5.2, §8.1), including their
+`matchedDelta` input, are both zero. This is the
 existing `moments.go` centroid publication pattern, extended from the
 plane-local two-coordinate result to this 3D triangulated boundary. A body
 whose `delta` is positive
 (§5.2) widens each coordinate's bound by the same quotient composition
 `moments.go`'s `boundedQuotient` states, using `sweptVolumeAllow` as the
 denominator's own allowance and `sweptMomentAllow` as the numerator's. A body
-whose `sectionDelta` is positive first applies the exact bilinear-patch
-volume and first-moment corrections, then widens the quotient by the matching
+whose `sectionDelta` OR `matchedDelta` is positive first applies the exact
+bilinear-patch volume and first-moment corrections, then widens the quotient
+by the matching
 `chordedBoundaryVolumeResidualAllow` /
 `chordedBoundaryMomentResidualAllow` pair (`bounds.go`). The moment residual
 reads the relation a region of proven volume `V` inside radius `R` obeys,
@@ -1681,8 +1686,9 @@ global evaluator increment.
 | 1 | `OpLoft` wire/recipe plumbing (`LoftOpts` codec, `Op` token, `Step.Profile`/`Plane` reuse), Table P pairing + Table S gates S1–S5/S9–S11, the flat-triangle wall construction (§5), the crossing audit (§6, Table S S6's RECORDED arm, S7's audit arm, S8), `Document.Loft` / `LoftContext`, `Volume` / `Centroid` (§8's rational accumulator) / `Area` / `Bounds`, `Verify` (D6: the structural audit and the tolerance gate over all four) | same-kind `CircleSeg`/`ArcSeg` correspondence; N-section/guide-rail/centerline loft; `Placed`/`Duplicate`/`PlacedCopy`; reversed correspondence; surveys, clearance, interference beyond box-disjoint |
 | 2a | `Placed` / `Duplicate` / `PlacedCopy` (D7): the payload's own proven displacement term `delta` (§5), composed into every vertex, edge length, face area, and all four body measurements; Table S gains S12 and S13 | D1/D2 (`Tessellate`/`STL`/`OBJ`, mesh-boolean admission); D3/D4's analytic-kernel case; D5 |
 | 2b | `Tessellate` / `STL` / `OBJ` (D1), mesh-boolean admission (D2) | D3/D4's analytic-kernel case, D5 |
-| 3 | same-kind `CircleSeg`/`ArcSeg` correspondence (§1): the chord-chain construction and its shared station generator (§5.1), every term §5.2's table lists that a chorded build reaches — the certified per-cell sagitta and the `sectionDelta` it publishes, the `stationRound` term `delta` gains, the `matchedDelta` those two compose, the exact bilinear-patch volume and first-moment corrections with three residual volume terms (§8.1), and the wall's certified bilinear-area reading with two residual area legs beside the two caps' `capAreaAllow` (§8) — composed into `Volume`/`Centroid`/`Area`/`Bounds`, Table S gates S14–S16, S6's COMPUTED arm, and S7's structural walk-sense arm (P5). **This row is landed.** | free-form and mixed-kind correspondence (§1); N-section and guide-rail/centerline lofts; a loft case in `clearance_geom.go`; a non-constant-cross-section wall survey kernel |
-| 4 (reach, not committed by this document) | N-section and guide-rail/centerline lofts, a loft case in `clearance_geom.go`, a non-constant-cross-section wall survey kernel | — |
+| 3 | same-kind `CircleSeg`/`ArcSeg` correspondence (§1): the chord-chain construction and its shared station generator (§5.1), every term §5.2's table lists that a chorded build reaches — the certified per-cell sagitta and the `sectionDelta` it publishes, the `stationRound` term `delta` gains, the `matchedDelta` those two compose, the exact bilinear-patch volume and first-moment corrections with three residual volume terms (§8.1), and the wall's certified bilinear-area reading with two residual area legs beside the two caps' `capAreaAllow` (§8) — composed into `Volume`/`Centroid`/`Area`/`Bounds`, Table S gates S14–S16, S6's COMPUTED arm, and S7's structural walk-sense arm (P5). **This row is landed.** | same-kind Tier A free-form evaluator integration, until PR 4 lands it; mixed-kind correspondence, permanently (§1); N-section and guide-rail/centerline lofts; a loft case in `clearance_geom.go`; a non-constant-cross-section wall survey kernel |
+| 4 | same-kind Tier A free-form correspondence (§1): integrate the shared station generator (§5.1), the existing free-form `stationRound`, sagitta, `spanSpeedUpper` length/speed bound, and `spanMatchedDeltaUpper` native-parameter bound plus `delta` (§5.2) into `Volume`/`Centroid`/`Area`/`Bounds`, and land Table S row S17. **This row stages implementation only; the certified spline derivations already exist.** | mixed-kind correspondence, permanently (§1); a same-kind Tier A free-form pair whose two curves reduce to different Bézier span counts (S17); N-section and guide-rail/centerline lofts; a loft case in `clearance_geom.go`; a non-constant-cross-section wall survey kernel |
+| 5 (reach, not committed by this document) | N-section and guide-rail/centerline lofts, a loft case in `clearance_geom.go`, a non-constant-cross-section wall survey kernel, an unequal Bézier span count between a same-kind Tier A free-form pair's two sides (which would retire S17), a spatial-index broad-phase for §6's audit — one pruning the pair ENUMERATION itself, which §6's own two float tiers do not touch and S8's `F*(F-1)/2` preflight is what bounds today | — |
 
 **The four measurements land with the operation, never after it.** A `Body`
 caches `Volume` / `Centroid` / `Area` / `Bounds` at build and its accessors
