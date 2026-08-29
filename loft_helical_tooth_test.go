@@ -41,9 +41,10 @@ func buildHelicalToothProfile(s *sketch.Sketch, rot float64) {
 	s.CreateLine(rootA, tipA)
 }
 
-// TestLoftHelicalToothClearsDefaultTolerance is A11's acceptance fixture. A
-// five-degree helix on this gear produces 2.95 degrees of end-to-end twist.
-// Its Area bound is the binding reading at the default relative tolerance.
+// TestLoftHelicalToothClearsDefaultTolerance is A11's acceptance fixture. The
+// generator applies its default 14.5-degree helix angle directly as the
+// section's end-to-end twist. Its Volume bound is the binding reading at the
+// default relative tolerance.
 func TestLoftHelicalToothClearsDefaultTolerance(t *testing.T) {
 	if testing.Short() {
 		t.Skip("the production chord count makes the crossing audit exceed the two-second fixture budget")
@@ -60,8 +61,7 @@ func TestLoftHelicalToothClearsDefaultTolerance(t *testing.T) {
 	require.NoError(t, err)
 	s1, err := w.CreateSketch(plane)
 	require.NoError(t, err)
-	pitchRadius := helicalToothModule * helicalToothCount / 2
-	twist := helicalToothThickness * math.Tan(5*math.Pi/180) / pitchRadius
+	twist := 14.5 * math.Pi / 180
 	buildHelicalToothProfile(s1, twist)
 	_, err = s1.Solve(ctx)
 	require.NoError(t, err)

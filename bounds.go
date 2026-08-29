@@ -747,15 +747,135 @@ func cellTwistVolumeAllow(vLo, vHi, wLo, wHi r3.Vec) float64 {
 	if !finiteVec(vLo) || !finiteVec(vHi) || !finiteVec(wLo) || !finiteVec(wHi) {
 		return math.Inf(1)
 	}
-	a := heldDelta(vHi, vLo)
-	b := heldDelta(wLo, vLo)
-	twist := rvSub(heldDelta(vLo, vHi), heldDelta(wLo, wHi))
-	det := rvDot(a, rvCross(twist, b))
+	det := cellTwistVolume(vLo, vHi, wLo, wHi)
 	if det.Sign() == 0 {
 		return 0
 	}
 	det.Abs(det)
-	return ratFloatUp(new(big.Rat).Quo(det, big.NewRat(12, 1)))
+	return ratFloatUp(det)
+}
+
+// cellTwistVolume returns the exact signed volume correction from one held
+// wall-cell triangle pair to its bilinear ruled patch. The derivation is
+// cellTwistVolumeAllow's; this form preserves the determinant's sign and
+// delays all rounding until the complete build has summed its cells.
+// Callers must prove every corner finite before entering the rational lift.
+func cellTwistVolume(vLo, vHi, wLo, wHi r3.Vec) *big.Rat {
+	a := heldDelta(vHi, vLo)
+	b := heldDelta(wLo, vLo)
+	twist := rvSub(heldDelta(vLo, vHi), heldDelta(wLo, wHi))
+	det := rvDot(a, rvCross(twist, b))
+	return new(big.Rat).Quo(det, big.NewRat(12, 1))
+}
+
+// cellTwistMoment returns the exact correction to loftMassAccumulator's
+// first-moment numerators when one held wall-cell triangle pair is replaced
+// by its bilinear patch. The returned components use the accumulator's
+// scaling: each is 24 times the corresponding first moment about anchor.
+//
+// For q=X-anchor, the divergence theorem gives the i-th first moment as
+// 1/2 integral(q_i^2 n_i). The bilinear patch has
+// q=q0+s*a+r*b+s*r*T and n=(a+r*T)x(b+s*T), so the integrand is a polynomial
+// integrated exactly over the unit square. The two held triangles use the
+// same identity over their parameter simplices. Their difference, multiplied
+// by 12, is therefore the exact correction in loftMassAccumulator's units.
+func cellTwistMoment(vLo, vHi, wLo, wHi, anchor r3.Vec) ratV3 {
+	qLo := heldDelta(vLo, anchor)
+	qHi := heldDelta(vHi, anchor)
+	qWLo := heldDelta(wLo, anchor)
+	qWHi := heldDelta(wHi, anchor)
+	a := rvSub(qHi, qLo)
+	b := rvSub(qWLo, qLo)
+	twist := rvSub(rvSub(qLo, qHi), rvSub(qWLo, qWHi))
+
+	var out ratV3
+	for axis := range out {
+		patch := bilinearPatchMomentIntegral(qLo, a, b, twist, axis)
+		held0 := triangleMomentIntegral(qLo, qHi, qWHi, axis)
+		held1 := triangleMomentIntegral(qLo, qWHi, qWLo, axis)
+		out[axis] = new(big.Rat).Sub(patch, held0)
+		out[axis].Sub(out[axis], held1)
+		out[axis].Mul(out[axis], big.NewRat(12, 1))
+	}
+	return out
+}
+
+type momentPoly map[[2]int]*big.Rat
+
+func momentPolyAdd(p momentPoly, degree [2]int, term *big.Rat) {
+	if term.Sign() == 0 {
+		return
+	}
+	if p[degree] == nil {
+		p[degree] = new(big.Rat)
+	}
+	p[degree].Add(p[degree], term)
+}
+
+func momentPolyMul(a, b momentPoly) momentPoly {
+	out := make(momentPoly)
+	for da, ca := range a {
+		for db, cb := range b {
+			momentPolyAdd(out, [2]int{da[0] + db[0], da[1] + db[1]}, new(big.Rat).Mul(ca, cb))
+		}
+	}
+	return out
+}
+
+func bilinearPatchMomentIntegral(q0, a, b, twist ratV3, axis int) *big.Rat {
+	q := momentPoly{
+		{0, 0}: q0[axis],
+		{1, 0}: a[axis],
+		{0, 1}: b[axis],
+		{1, 1}: twist[axis],
+	}
+	n0 := rvCross(a, b)
+	ns := rvCross(a, twist)
+	nr := rvCross(twist, b)
+	n := momentPoly{
+		{0, 0}: n0[axis],
+		{1, 0}: ns[axis],
+		{0, 1}: nr[axis],
+	}
+	integrand := momentPolyMul(momentPolyMul(q, q), n)
+	out := new(big.Rat)
+	for degree, coefficient := range integrand {
+		den := int64((degree[0] + 1) * (degree[1] + 1))
+		out.Add(out, new(big.Rat).Quo(coefficient, big.NewRat(den, 1)))
+	}
+	return out
+}
+
+func triangleMomentIntegral(q0, q1, q2 ratV3, axis int) *big.Rat {
+	e1 := rvSub(q1, q0)
+	e2 := rvSub(q2, q0)
+	q := momentPoly{
+		{0, 0}: q0[axis],
+		{1, 0}: e1[axis],
+		{0, 1}: e2[axis],
+	}
+	q2Poly := momentPolyMul(q, q)
+	n := rvCross(e1, e2)[axis]
+	out := new(big.Rat)
+	for degree, coefficient := range q2Poly {
+		// Integral over s>=0, r>=0, s+r<=1 of s^i*r^j is
+		// i!*j!/(i+j+2)!; the polynomial degree here is at most two.
+		num := int64(1)
+		for i := 2; i <= degree[0]; i++ {
+			num *= int64(i)
+		}
+		for i := 2; i <= degree[1]; i++ {
+			num *= int64(i)
+		}
+		den := int64(1)
+		for i := 2; i <= degree[0]+degree[1]+2; i++ {
+			den *= int64(i)
+		}
+		term := new(big.Rat).Mul(coefficient, n)
+		term.Mul(term, big.NewRat(num, den))
+		out.Add(out, term)
+	}
+	return out
 }
 
 // cellTwistQuarterUpper is the CERTIFIED upper endpoint of |T|/4 for a wall
@@ -961,6 +1081,93 @@ func cellTwistAreaAllow(vLo, vHi, wLo, wHi r3.Vec) float64 {
 	linear := cellTwistAreaLinearFromSpans(corners.spans(), xtwistQuarterUpper(corners))
 	quadratic := cellTwistAreaQuadraticAllow(vLo, vHi, wLo, wHi)
 	return math.Min(linear, quadratic)
+}
+
+// cellBilinearArea publishes a value and bound for a wall cell's bilinear
+// patch area. Its area-element vector is the affine form
+//
+//	N(s,r) = N0 + s*A + r*B.
+//
+// On each square of a fixed dyadic partition, Jensen's inequality makes the
+// norm at the square centre a lower bound on the square's average |N|.
+// Convexity gives the other direction: N is the bilinear interpolation of its
+// four corner values, so the triangle inequality bounds |N| by the same
+// interpolation of their norms, whose average is the four corner norms'
+// average. Summing those local brackets encloses the bilinear patch's area.
+//
+// The midpoint of the final rational interval is rounded once as the value;
+// the bound is the farther exact endpoint distance from that float. All vector
+// arithmetic and summation are exact over big.Rat. ratSqrtDown/ratSqrtUp
+// bracket only the irrational norms.
+func cellBilinearArea(vLo, vHi, wLo, wHi r3.Vec) (float64, float64) {
+	const divisions = 4
+	if !finiteVec(vLo) || !finiteVec(vHi) || !finiteVec(wLo) || !finiteVec(wHi) {
+		return 0, math.Inf(1)
+	}
+	da := heldDelta(vHi, vLo)
+	g := heldDelta(wLo, vLo)
+	twist := rvSub(heldDelta(vLo, vHi), heldDelta(wLo, wHi))
+	n0 := rvCross(da, g)
+	a := rvCross(da, twist)
+	b := rvCross(twist, g)
+
+	at := func(s, r *big.Rat) ratV3 {
+		var out ratV3
+		for k := range out {
+			out[k] = new(big.Rat).Set(n0[k])
+			out[k].Add(out[k], new(big.Rat).Mul(s, a[k]))
+			out[k].Add(out[k], new(big.Rat).Mul(r, b[k]))
+		}
+		return out
+	}
+	normEnd := func(v ratV3, up bool) (*big.Rat, bool) {
+		f := ratSqrtDown(rvDot(v, v))
+		if up {
+			f = ratSqrtUp(rvDot(v, v))
+		}
+		return ratOf(f)
+	}
+
+	integralLo := new(big.Rat)
+	integralHi := new(big.Rat)
+	den := int64(divisions)
+	for i := range divisions {
+		for j := range divisions {
+			sMid := big.NewRat(int64(2*i+1), 2*den)
+			rMid := big.NewRat(int64(2*j+1), 2*den)
+			lo, ok := normEnd(at(sMid, rMid), false)
+			if !ok {
+				return 0, math.Inf(1)
+			}
+			integralLo.Add(integralLo, lo)
+
+			for _, p := range [][2]int{{i, j}, {i + 1, j}, {i, j + 1}, {i + 1, j + 1}} {
+				hi, ok := normEnd(at(big.NewRat(int64(p[0]), den), big.NewRat(int64(p[1]), den)), true)
+				if !ok {
+					return 0, math.Inf(1)
+				}
+				integralHi.Add(integralHi, hi)
+			}
+		}
+	}
+	integralLo.Quo(integralLo, big.NewRat(int64(divisions*divisions), 1))
+	integralHi.Quo(integralHi, big.NewRat(int64(4*divisions*divisions), 1))
+
+	mid := new(big.Rat).Add(integralLo, integralHi)
+	mid.Quo(mid, big.NewRat(2, 1))
+	value, _ := mid.Float64()
+	valueRat, ok := ratOf(value)
+	if !ok {
+		return 0, math.Inf(1)
+	}
+	dLo := new(big.Rat).Sub(valueRat, integralLo)
+	dLo.Abs(dLo)
+	dHi := new(big.Rat).Sub(integralHi, valueRat)
+	dHi.Abs(dHi)
+	if dHi.Cmp(dLo) > 0 {
+		dLo = dHi
+	}
+	return value, ratFloatUp(dLo)
 }
 
 // cellTwistAreaLinearFromSpans is the premise-free arm. On the two parameter
@@ -1671,10 +1878,9 @@ func cellStationShiftAreaAllow(
 // So no unproven step can shrink the number this function returns; the
 // open question can only cost precision.
 //
-// The empirical status above belongs to this VOLUME allowance alone: no
-// area path calls this function, and the chorded AREA gap is areaExcess,
-// summing cellChordCurveAreaAllow, cellTwistAreaAllow (derived at nonzero
-// twist) and cellStationShiftAreaAllow, each with its own derivation.
+// The empirical status above belongs to this VOLUME allowance alone. The
+// chorded AREA path publishes the bilinear patch directly and composes
+// cellChordCurveAreaAllow with cellStationShiftAreaAllow as residuals.
 //
 // The four-leg composition is also why this helper does NOT carry the
 // two-argument (sectionDelta, areaUpper) shape the A10 plan's Q4 names.
@@ -1760,6 +1966,15 @@ func chordedBoundaryVolumeAllow(matchedDelta, wallAreaUpper, twistVolumeUpper, c
 		}
 	}
 	return absSumUpper(chordToCurve, twistVolumeUpper, capVolumeUpper, seamAllow)
+}
+
+// chordedBoundaryVolumeResidualAllow bounds the volume difference remaining
+// after Volume.Value has applied the exact signed twist correction. The wall,
+// cap and seam legs are unchanged from chordedBoundaryVolumeAllow; the twist
+// leg is absent because cellTwistVolume has already moved the nominal value
+// from the held triangle pair to its bilinear ruled patch.
+func chordedBoundaryVolumeResidualAllow(matchedDelta, wallAreaUpper, capVolumeUpper, seamAllow float64) float64 {
+	return chordedBoundaryVolumeAllow(matchedDelta, wallAreaUpper, 0, capVolumeUpper, seamAllow)
 }
 
 // chordedBoundarySeamAllow bounds chordedBoundaryVolumeAllow's own leg (d):
@@ -2236,6 +2451,16 @@ func chordedBoundaryMomentAllow(matchedDelta, wallAreaUpper, twistVolumeUpper, c
 	wallMoment := productUpper(wallMeasure, absSumUpper(coordUpper, matchedDelta))
 	twistMoment := productUpper(twistVolumeUpper, coordUpper)
 	return absSumUpper(wallMoment, twistMoment)
+}
+
+// chordedBoundaryMomentResidualAllow is the moment allowance after the exact
+// bilinear-patch volume and first-moment corrections have moved the nominal
+// centroid off the held triangle surface. The former twist sweep is therefore
+// absent; the remaining wall chord-to-curve sweep is unchanged.
+func chordedBoundaryMomentResidualAllow(matchedDelta, wallAreaUpper, capVolumeUpper, seamAllow, maxTwistOffsetUpper, coordUpper float64) float64 {
+	return chordedBoundaryMomentAllow(
+		matchedDelta, wallAreaUpper, 0, capVolumeUpper, seamAllow, maxTwistOffsetUpper, coordUpper,
+	)
 }
 
 // boundedSqrt propagates a proven bound through a square root: x.bound must

@@ -17,8 +17,8 @@ import (
 // Area(ruled patch)| with BOTH patches pinned at the four corners that helper
 // is handed — and for the two readings it is built on,
 // uniformSpeedTangentEnergyUpper and cellChordPatchNormalLower. It also owns
-// the fixture for the three-leg composition that leg is spent in, and for the
-// STATION-SHIFT leg cellStationShiftAreaAllow that reaches from those held
+// the fixture for the full held-to-true decomposition, and for the
+// STATION-SHIFT leg cellStationShiftAreaAllow that reaches from the bilinear
 // corners to the stations they denote:
 // TestDisplacedStationCellNeedsTheStationShiftLeg.
 //
@@ -44,15 +44,8 @@ import (
 // source, rerun the named test, confirm RED, restore). Each entry quotes the
 // ACTUAL failing assertion.
 //
-//   - L1, the CARRIED-OVER twist leg (cellTwistAreaAllow), zeroed in
-//     loft_moments.go's own composition
-//     (`absSumUpper(areaExcess, ruledLeg, 0*twistLeg, stationLeg)`):
-//     TestLoftRotatedWedgeAreaBoundEnclosesDenotedSurface fails at 15 degrees —
-//     `"0.5053145056934625" is not less than or equal to "0.07130694749809868"`
-//     — on "the loft's own Area must enclose the denoted ruled surface at 15.0
-//     deg of twist", the enclosure assertion itself.
-//   - L2, the ruled leg (cellChordCurveAreaAllow), zeroed the same way
-//     (`absSumUpper(areaExcess, 0*ruledLeg, twistLeg, stationLeg)`):
+//   - L2, the ruled leg (cellChordCurveAreaAllow), zeroed in
+//     loft_moments.go's composition (`absSumUpper(areaExcess, 0, stationLeg)`):
 //     TestLoftTallThinArcWedgeAreaBoundEnclosesConvergedReference fails —
 //     `"0.002446194848033656" is not less than or equal to
 //     "0.000460843512606508"`;
@@ -129,7 +122,7 @@ import (
 //     `"0.002399004185227094" is not less than or equal to "0"` — on "the
 //     station-shift leg must cover the directly integrated area step from the
 //     held-corner ruled patch to the denoted one", the leg's own enclosure
-//     assertion, and the three-leg assertion beneath it reddens on the same
+//     assertion, and the full held-to-true assertion beneath it reddens on the same
 //     rows. That fixture's own twoLegs assertion is the standing form of the
 //     same falsification, so the entry stays red without needing the edit.
 //
@@ -678,105 +671,6 @@ func rotatedWedgeSketch(t *testing.T, w *sketch.World, plane *sketch.Plane, phi 
 	return s, profiles[0]
 }
 
-// rotatedWedgeRing is the wedge outline as m+2 plain 2D points — apex, then the
-// m+1 arc stations — rotated by phi about the origin.
-func rotatedWedgeRing(m int, phi float64) [][2]float64 {
-	rot := func(x, y float64) [2]float64 {
-		sin, cos := math.Sincos(phi)
-		return [2]float64{x*cos - y*sin, x*sin + y*cos}
-	}
-	ring := make([][2]float64, 0, m+2)
-	ring = append(ring, rot(rotatedWedgeOffset, 0))
-	for k := 0; k <= m; k++ {
-		th := (math.Pi / 2) * float64(k) / float64(m)
-		ring = append(ring, rot(rotatedWedgeOffset+rotatedWedgeRadius*math.Cos(th), rotatedWedgeRadius*math.Sin(th)))
-	}
-	return ring
-}
-
-// denseRotatedWedgeArea sums the SAME Table B wall split and cap shoelace a
-// hand-chorded loft of these two rings would publish, in plain float64 and with
-// no sketch, Document.Loft or evaluator call of any kind — the independent
-// reference the end-to-end tests below converge.
-func denseRotatedWedgeArea(m int, phi float64) float64 {
-	bot := rotatedWedgeRing(m, 0)
-	top := rotatedWedgeRing(m, phi)
-	n := len(bot)
-	wall := 0.0
-	for j := range n {
-		jn := (j + 1) % n
-		vLo := r3.NewVec(bot[j][0], bot[j][1], 0)
-		vHi := r3.NewVec(bot[jn][0], bot[jn][1], 0)
-		wLo := r3.NewVec(top[j][0], top[j][1], rotatedWedgeHeight)
-		wHi := r3.NewVec(top[jn][0], top[jn][1], rotatedWedgeHeight)
-		wall += triArea3(vLo, vHi, wHi) + triArea3(vLo, wHi, wLo)
-	}
-	return wall + shoelace2DAbs(bot) + shoelace2DAbs(top)
-}
-
-// convergedRotatedWedgeArea sweeps denseRotatedWedgeArea to convergence, judged
-// entirely on the REFERENCE's own successive agreement at a fixed relative
-// tolerance — never on the bound the caller is checking.
-func convergedRotatedWedgeArea(t *testing.T, phi float64) float64 {
-	t.Helper()
-	const relTol = 1e-9
-	prev, havePrev := 0.0, false
-	for _, m := range []int{256, 512, 1024, 2048, 4096, 8192, 16384, 32768} {
-		cur := denseRotatedWedgeArea(m, phi)
-		if havePrev && math.Abs(cur-prev) <= relTol*math.Abs(cur) {
-			t.Logf("dense rotated-wedge reference converged at m=%d: area=%.15g", m, cur)
-			return cur
-		}
-		prev, havePrev = cur, true
-	}
-	t.Fatalf("the dense rotated-wedge area reference did not converge to relative %.3g", relTol)
-	return 0
-}
-
-// TestLoftRotatedWedgeAreaBoundEnclosesConvergedReference is the end-to-end
-// twist fixture: at every angle of loftTwistSweepDegrees the real
-// Document.Loft/Body.Area() reading must enclose the converged dense reference.
-// Every nonzero angle carries genuine twist — the two sections' chords are not
-// parallel, so each cell's own T is nonzero — which is exactly what the
-// arc-minus-chord length excess this leg replaced could not see.
-func TestLoftRotatedWedgeAreaBoundEnclosesConvergedReference(t *testing.T) {
-	for _, deg := range loftTwistSweepDegrees {
-		phi := deg * math.Pi / 180
-		w, base, top := wedgePlanesH(t, rotatedWedgeHeight)
-		s0, p0 := rotatedWedgeSketch(t, w, base, 0)
-		s1, p1 := rotatedWedgeSketch(t, w, top, phi)
-		doc := New()
-		body, err := doc.Loft(s0, p0, s1, p1)
-		require.NoError(t, err, "the rotated wedge must build at %.1f deg", deg)
-		area, err := body.Area()
-		require.NoError(t, err)
-
-		ref := convergedRotatedWedgeArea(t, phi)
-		residual := math.Abs(area.Value.Base() - ref)
-		t.Logf("rotated wedge %4.1fdeg: value=%.10g bound=%.6e ref=%.10g residual=%.6e",
-			deg, area.Value.Base(), area.Bound.Base(), ref, residual)
-		require.LessOrEqual(t, residual, area.Bound.Base(),
-			"the loft's own Area must enclose the converged densely-chorded reference at %.1f deg of twist", deg)
-	}
-}
-
-// A NOTE ON THE TWO REFERENCE KINDS. A densely chorded triangle sum converges
-// to the denoted ruled surface only where the cells' own warp vanishes with the
-// chord — true for an untwisted or purely translated pairing, false under a
-// ROTATIONAL correspondence, where |T|/chord stays fixed as both shrink and the
-// sum converges to a Schwarz-lantern limit strictly above the ruled area. So
-// the rotated wedge is checked BOTH ways: against the dense sum, which pins the
-// polyhedral reading, and against rotatedWedgeDenotedArea, the directly
-// integrated ruled surface, which is the quantity the wall term is actually
-// charged for and the one the twist leg's own falsifier turns on.
-//
-// A NOTE ON VERDICTS. The carried-over twist leg comes to roughly 2*sin(phi/2)
-// times the wall area once summed over a loop, so a curved-section loft under
-// real rotation cannot read Sound on Area at the default tolerance — measured
-// on this fixture, it over-charges the true held-triangles-versus-bilinear gap
-// by 23x at 30 degrees, 46x at 15 and 138x at 5. Tightening it is its own
-// mechanism and its own change; nothing here depends on it.
-
 // tiltedCellPair is twistedArcCellPair with the upper arc's own plane tilted
 // out of the section plane by tilt radians about its u axis — the family where
 // the sharp arm's oscillation term carries most of the bound.
@@ -1020,11 +914,11 @@ func convergedRotatedWedgeDenotedArea(t *testing.T, phi float64) float64 {
 }
 
 // TestLoftRotatedWedgeAreaBoundEnclosesDenotedSurface is the end-to-end
-// falsifier for BOTH legs of the curved wall term under real twist: the
+// falsifier for the chorded wall reading and both residual legs under real twist: the
 // published Area must enclose the circular pair's DENOTED ruled surface, with
 // each LineSeg pair read as the held triangle pair §5 defines. At every
 // nonzero angle the circular cells' chords are genuinely non-parallel, so each
-// curved cell's twist vector is nonzero and the twist leg is load-bearing here.
+// curved cell exercises the bilinear-area nominal value.
 func TestLoftRotatedWedgeAreaBoundEnclosesDenotedSurface(t *testing.T) {
 	for _, deg := range loftTwistSweepDegrees {
 		phi := deg * math.Pi / 180
