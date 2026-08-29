@@ -107,7 +107,7 @@ undecided unless a separate exact contact certificate settles it. A
 two-term `absSumUpper(delta, sectionDelta)` those boxes carry (loft §5.2 owns
 when that sum is zero), may decide a box-disjoint partition. A distance
 measured against a held FACET carries the payload's wider facet departure
-`absSumUpper(delta, sectionDelta, maxTwistOffsetUpper)` instead (loft §5.2);
+`absSumUpper(matchedDelta, maxTwistOffsetUpper)` instead (loft §5.2);
 a requested `WithClearances` gap remains `Suspect` until its analytic adapter
 lands and reads that term.
 Payload verification §3/§7 owns the cup/faceted

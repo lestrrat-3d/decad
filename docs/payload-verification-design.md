@@ -40,9 +40,9 @@ Three payload classes require different treatment:
 - `facetedPayload` is an approximate boundary backed by a proof certificate.
   Read held polygons exactly, then widen every claim by that certificate.
 - `loftPayload` is a closed triangle boundary whose facets carry the payload's
-  own facet departure `absSumUpper(delta, sectionDelta, maxTwistOffsetUpper)`
+  own facet departure `absSumUpper(matchedDelta, maxTwistOffsetUpper)`
   (loft §5.2, which owns each term, its condition and its zero test). That
-  boundary is exact only where all three are zero, on that table's own
+  boundary is exact only where both published terms are zero by value, on that table's own
   conditions and never on the body simply never having been placed. Its
   construction audit proves validity, and it re-runs
   on every placement. Its `Bounds`, inflated by the two-term
