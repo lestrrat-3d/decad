@@ -2271,7 +2271,9 @@ func evalLoft(ctx context.Context, d *Document, ref StepRef, pl loftPayload, bud
 	// (errLoftCapOffsetUnderivable, loft_moments.go) instead of measuring on,
 	// so no measurement below is ever composed from a substituted value.
 	if sectionDelta > 0 || sectionMatchedDelta > 0 {
-		chorded, err := computeLoftChordedAllow(pairs, a.vIdx, a.wIdx, a.verts, anchor, matchedDelta, a.delta, mass.distUpper)
+		chorded, err := computeLoftChordedAllow(
+			pairs, a.vIdx, a.wIdx, a.verts, anchor, matchedDelta, a.delta, mass.distUpper, a.reversed,
+		)
 		if err != nil {
 			return nil, err
 		}

@@ -575,7 +575,7 @@ func TestLoftMassAccumulatorVolumeChordedTermReadsMatchedDeltaNotSagitta(t *test
 	// delta is 0: the accumulator below carries no placement displacement
 	// either, so the composed matchedDelta (docs/loft-design.md §5.2) is the
 	// chord-to-curve half alone and the two sites agree.
-	chorded, err := computeLoftChordedAllow(pairs, vIdx, wIdx, verts, anchor, sectionMatchedDelta, 0, 2.0)
+	chorded, err := computeLoftChordedAllow(pairs, vIdx, wIdx, verts, anchor, sectionMatchedDelta, 0, 2.0, false)
 	require.NoError(t, err, "this fixture's cap plane offset is derivable")
 
 	m := newLoftMassAccumulator(anchor, 0, sectionDelta, sectionMatchedDelta)
@@ -590,8 +590,12 @@ func TestLoftMassAccumulatorVolumeChordedTermReadsMatchedDeltaNotSagitta(t *test
 	// composed with sectionDelta (the sagitta) rather than
 	// sectionMatchedDelta — what a buggy caller reading the wrong field
 	// would publish.
-	wrongTerm := chordedBoundaryVolumeAllow(sectionDelta, chorded.wallAreaUpper, chorded.twistVolumeUpper, chorded.capVolumeUpper, chorded.seamAllow)
-	rightTerm := chordedBoundaryVolumeAllow(sectionMatchedDelta, chorded.wallAreaUpper, chorded.twistVolumeUpper, chorded.capVolumeUpper, chorded.seamAllow)
+	wrongTerm := chordedBoundaryVolumeResidualAllow(
+		sectionDelta, chorded.wallAreaUpper, chorded.capVolumeUpper, chorded.seamAllow,
+	)
+	rightTerm := chordedBoundaryVolumeResidualAllow(
+		sectionMatchedDelta, chorded.wallAreaUpper, chorded.capVolumeUpper, chorded.seamAllow,
+	)
 	require.Greater(t, rightTerm, wrongTerm, "the fixture must actually distinguish the two candidate bounds")
 
 	require.GreaterOrEqual(t, vol.Bound.Base(), rightTerm,
@@ -606,8 +610,14 @@ func TestLoftMassAccumulatorVolumeChordedTermReadsMatchedDeltaNotSagitta(t *test
 	// (an expected, unrelated refusal on a synthetic 2-triangle patch this
 	// small), so the moment leg is checked directly rather than through the
 	// full accumulator call.
-	wrongMoment := chordedBoundaryMomentAllow(sectionDelta, chorded.wallAreaUpper, chorded.twistVolumeUpper, chorded.capVolumeUpper, chorded.seamAllow, chorded.maxTwistOffsetUpper, m.coordUpper)
-	rightMoment := chordedBoundaryMomentAllow(sectionMatchedDelta, chorded.wallAreaUpper, chorded.twistVolumeUpper, chorded.capVolumeUpper, chorded.seamAllow, chorded.maxTwistOffsetUpper, m.coordUpper)
+	wrongMoment := chordedBoundaryMomentResidualAllow(
+		sectionDelta, chorded.wallAreaUpper, chorded.capVolumeUpper,
+		chorded.seamAllow, chorded.maxTwistOffsetUpper, m.coordUpper,
+	)
+	rightMoment := chordedBoundaryMomentResidualAllow(
+		sectionMatchedDelta, chorded.wallAreaUpper, chorded.capVolumeUpper,
+		chorded.seamAllow, chorded.maxTwistOffsetUpper, m.coordUpper,
+	)
 	require.Greater(t, rightMoment, wrongMoment, "the fixture must actually distinguish the two candidate moment terms")
 }
 
@@ -662,12 +672,12 @@ func TestComputeLoftChordedAllowChargesTheHeldStationDisplacement(t *testing.T) 
 	matched := chordCellDeltaUpper(chordToCurve, delta)
 	require.Greater(t, matched, chordToCurve, "the composition must actually widen the term it replaces")
 
-	got, err := computeLoftChordedAllow(pairs, vIdx, wIdx, verts, anchor, matched, delta, 2.0)
+	got, err := computeLoftChordedAllow(pairs, vIdx, wIdx, verts, anchor, matched, delta, 2.0, false)
 	require.NoError(t, err, "this fixture's cap plane offset is derivable")
 	// What the sagitta-alone reading publishes: the identical call with the
 	// station displacement dropped from both the per-cell and the build-wide
 	// argument.
-	sagittaOnly, err := computeLoftChordedAllow(pairs, vIdx, wIdx, verts, anchor, chordToCurve, 0, 2.0)
+	sagittaOnly, err := computeLoftChordedAllow(pairs, vIdx, wIdx, verts, anchor, chordToCurve, 0, 2.0, false)
 	require.NoError(t, err, "the sagitta-alone reference reads the same derivable assembly")
 
 	require.Greater(t, got.wallAreaUpper, sagittaOnly.wallAreaUpper,
@@ -680,10 +690,16 @@ func TestComputeLoftChordedAllowChargesTheHeldStationDisplacement(t *testing.T) 
 		"the seam allowance must charge the held station displacement")
 	require.Greater(t, got.capVolumeUpper, sagittaOnly.capVolumeUpper,
 		"the cap volume leg inherits the widened cap-area term")
-	// The two legs that read no displacement at all must be untouched, so the
-	// widening above is the matched term's and not a blanket inflation.
+	// The exact corrections and the offset leg read no displacement at all,
+	// so the widening above is the matched term's and not blanket inflation.
+	require.Zero(t, got.twistVolumeCorrection.Cmp(sagittaOnly.twistVolumeCorrection),
+		"the twist volume correction reads no displacement term")
 	require.Equal(t, sagittaOnly.twistVolumeUpper, got.twistVolumeUpper,
-		"the twist volume leg reads no displacement term")
+		"the occupied-volume twist measure reads no displacement term")
+	for axis := range got.twistMomentCorrection {
+		require.Zero(t, got.twistMomentCorrection[axis].Cmp(sagittaOnly.twistMomentCorrection[axis]),
+			"the twist moment correction reads no displacement term on axis %d", axis)
+	}
 	require.Equal(t, sagittaOnly.maxTwistOffsetUpper, got.maxTwistOffsetUpper,
 		"the twist offset leg reads no displacement term")
 
@@ -696,8 +712,12 @@ func TestComputeLoftChordedAllowChargesTheHeldStationDisplacement(t *testing.T) 
 	tris := [][3]int{{0, 1, 3}, {0, 3, 2}}
 	vol := m.volume(verts, tris)
 
-	wrongTerm := chordedBoundaryVolumeAllow(chordToCurve, sagittaOnly.wallAreaUpper, sagittaOnly.twistVolumeUpper, sagittaOnly.capVolumeUpper, sagittaOnly.seamAllow)
-	rightTerm := chordedBoundaryVolumeAllow(matched, got.wallAreaUpper, got.twistVolumeUpper, got.capVolumeUpper, got.seamAllow)
+	wrongTerm := chordedBoundaryVolumeResidualAllow(
+		chordToCurve, sagittaOnly.wallAreaUpper, sagittaOnly.capVolumeUpper, sagittaOnly.seamAllow,
+	)
+	rightTerm := chordedBoundaryVolumeResidualAllow(
+		matched, got.wallAreaUpper, got.capVolumeUpper, got.seamAllow,
+	)
 	require.Greater(t, rightTerm, wrongTerm, "the fixture must actually distinguish the two candidate bounds")
 	require.GreaterOrEqual(t, vol.Bound.Base(), rightTerm,
 		"Volume's own Bound must compose the matched-term chorded allowance")
@@ -764,7 +784,7 @@ func TestLoftCapOffsetUnderivableRefuses(t *testing.T) {
 			r3.NewVec(0, 0, 0), r3.NewVec(1, 0, 0),
 			r3.NewVec(math.MaxFloat64, 0, 1), r3.NewVec(math.MaxFloat64, -1, 1),
 		}
-		got, err := computeLoftChordedAllow(underivableCapOffsetPairs(matched), vIdx, wIdx, verts, anchor, matched, 0, 2.0)
+		got, err := computeLoftChordedAllow(underivableCapOffsetPairs(matched), vIdx, wIdx, verts, anchor, matched, 0, 2.0, false)
 		require.ErrorIs(t, err, errLoftCapOffsetUnderivable, "S14 refuses the underivable cap plane offset")
 		require.ErrorIs(t, err, ErrUnsupported, "the row's sentinel is ErrUnsupported, a derivation gap and not a shape rule")
 		require.Equal(t, loftChordedAllow{}, got, "a refused build publishes no leg at all")
@@ -784,7 +804,7 @@ func TestLoftCapOffsetUnderivableRefuses(t *testing.T) {
 		var got loftChordedAllow
 		var err error
 		require.NotPanics(t, func() {
-			got, err = computeLoftChordedAllow(underivableCapOffsetPairs(matched), vIdx, wIdx, verts, anchor, matched, 0, 2.0)
+			got, err = computeLoftChordedAllow(underivableCapOffsetPairs(matched), vIdx, wIdx, verts, anchor, matched, 0, 2.0, false)
 		}, "an unreadable cap1 coordinate is a refusal, never a nil dereference")
 		require.ErrorIs(t, err, errLoftCapOffsetUnderivable, "S14 refuses the unreadable cap plane offset")
 		require.ErrorIs(t, err, ErrUnsupported, "the row's sentinel is ErrUnsupported")
