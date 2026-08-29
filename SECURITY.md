@@ -23,7 +23,8 @@ the reference and only line that receives fixes.
 
 ## Reporting a Vulnerability
 
-If you think you found a vulnerability, please report it via [GitHub Security Advisory](https://github.com/lestrrat-3d/decad/security/advisories/new).
+If you think you found a vulnerability, please report it via
+[GitHub Security Advisory](https://github.com/lestrrat-3d/decad/security/advisories/new).
 Please include explicit steps to reproduce the security issue — a minimal
 reproducer or failing test, and the commit SHA you tested against, are ideal.
 

@@ -544,7 +544,8 @@ body its extent or its axis names**, its profile, **the plane that profile lies
 in**, its extent, its selectors, its options, its quantities — MUST be recordable in
 its `Step`. **An operation whose inputs a `Step` cannot record does not ship**, and
 an *input* a `Step` cannot record is **rejected at the call**, never recorded
-approximately — that is what `ErrUnrecordableProfile` (§12) is. This is what §2's "the exact record of intent" costs: a `Recipe` that
+approximately — that is what `ErrUnrecordableProfile` (§12) is. This is what §2's
+"the exact record of intent" costs: a `Recipe` that
 re-evaluates to a *different* model than the one it was recorded from is not the
 deliverable §2 claims — it would make vN a silently different model rather than a
 better answer to the same one, and would make the mechanical Fusion emission of

@@ -190,7 +190,8 @@ outside:
   inner-spine-to-outer-spine distance, never the minimum: nested holds when
   `d_sup + r_in < r_out` STRICTLY, and the gap is `r_out − d_sup − r_in`,
   read across the annular space; equality is an internal tangency and
-  routes to §6 on the same terms as the exterior branch. `d_sup` is certified per spine pair: an inner POINT spine (a sphere
+  routes to §6 on the same terms as the exterior branch. `d_sup` is certified per
+  spine pair: an inner POINT spine (a sphere
   inside anything) has `d_sup = d` trivially — the supremum over one point
   is that point's distance; concentric spheres, parallel cylinder axes and
   coaxial torus spines have constant spine distance, so `d_sup = d` there

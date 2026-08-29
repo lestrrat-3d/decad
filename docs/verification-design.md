@@ -505,7 +505,8 @@ a pair proven apart whose asked gap the kernel could not measure emits a
 `DiagUndecidedClearance` instead, and a pair proven to overlap whose overlap
 volume the evaluator could not bound emits a `DiagUndecidedInterference` —
 `Reading` `ReadingNone`,
-`Observed` and `Required` nil, `Pair` set, status `Suspect` (§1). The pair that a local boolean once collapsed and dropped —
+`Observed` and `Required` nil, `Pair` set, status `Suspect` (§1). The pair
+that a local boolean once collapsed and dropped —
 undecided, so no `Interference` and no `Clearance` row — now names itself, so an
 agent sees which two bodies it could not separate rather than only that some pair
 failed. Core §4
