@@ -33,7 +33,7 @@ func main() {
 }
 
 func run(ctx context.Context) error {
-	base, err := extrudeLoops(ctx, [][]point{rectangle(-151, -62, 151, 62)}, decad.Symmetric{D: units.Millimeters(3)})
+	base, err := extrudeLoops(ctx, [][]point{rectangle(-151, -84, 151, 84)}, decad.Symmetric{D: units.Millimeters(3)})
 	if err != nil {
 		return fmt.Errorf("build backing plate: %w", err)
 	}
@@ -53,8 +53,8 @@ func run(ctx context.Context) error {
 		x, y, radius float64
 		color        solidlens.Color
 	}{
-		{-126, -51, 4.5, solidlens.RGB(1, 0.58, 0.08)},
-		{126, -51, 4.5, solidlens.RGB(0.1, 0.78, 0.95)},
+		{-126, -70, 4.5, solidlens.RGB(1, 0.58, 0.08)},
+		{126, -70, 4.5, solidlens.RGB(0.1, 0.78, 0.95)},
 	} {
 		mesh, err := extrudeLoops(ctx, [][]point{circle(accent.x, accent.y, accent.radius, 24)}, decad.Distance{
 			D: units.Millimeters(8), Dir: decad.Along,
@@ -74,10 +74,10 @@ func run(ctx context.Context) error {
 	}
 	scene := solidlens.Scene{
 		Camera: solidlens.Camera{
-			Position: solidlens.Vec{X: 28, Y: -340, Z: 155},
+			Position: solidlens.Vec{X: 18, Y: -360, Z: 68},
 			Target:   solidlens.Vec{Z: 4},
 			Up:       solidlens.Vec{Z: 1},
-			FOV:      29,
+			FOV:      30,
 		},
 		Models: models,
 		DirectionalLights: []solidlens.DirectionalLight{
@@ -113,7 +113,7 @@ func run(ctx context.Context) error {
 func decadLetters() []letter {
 	const (
 		width  = 45.0
-		height = 84.0
+		height = 120.0
 		stroke = 9.0
 		gap    = 9.0
 	)
@@ -178,7 +178,9 @@ func decadLetters() []letter {
 
 func extrudeLoops(ctx context.Context, loops [][]point, extent decad.Extent) (*decad.Mesh, error) {
 	w := sketch.NewWorld()
-	s, err := w.CreateSketch(w.XY())
+	// XZ makes the wordmark face the camera; extrusion then gives each stroke
+	// depth along Y without relying on a steep viewing angle.
+	s, err := w.CreateSketch(w.XZ())
 	if err != nil {
 		return nil, err
 	}
