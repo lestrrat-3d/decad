@@ -312,8 +312,8 @@ func scanRecipeJSONValueMode(dec *json.Decoder, root, stepRoot bool) error {
 
 func canonicalStepField(key string) (string, bool) {
 	typ := reflect.TypeFor[jsonStep]()
-	for i := range typ.NumField() {
-		tag := typ.Field(i).Tag.Get("json")
+	for field := range typ.Fields() {
+		tag := field.Tag.Get("json")
 		if comma := strings.IndexByte(tag, ','); comma >= 0 {
 			tag = tag[:comma]
 		}

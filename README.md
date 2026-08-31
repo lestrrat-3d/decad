@@ -1,7 +1,7 @@
 # decad
 
 <p align="center">
-  <img src="docs/images/hero.png" alt="Dimensional DECAD lettering rendered from decad solids against a deep navy background" width="900">
+  <img src="docs/images/hero.png" alt="Dimensional DECAD lettering rendered from decad solids against a pale blue-gray background" width="900">
 </p>
 
 A **headless CAD engine** for Go: the 3D modeling layer above the

@@ -443,11 +443,9 @@ func TestLoftCrossingAuditWorkCountsAreIndependentPerCall(t *testing.T) {
 	got := make([]loftBroadPhaseWork, 2)
 	errs := make([]error, 2)
 	for k := range got {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			got[k], errs[k] = loftCrossingAuditWork(newWorkBudget(t.Context()), verts, tris, true)
-		}()
+		})
 	}
 	wg.Wait()
 

@@ -74,10 +74,10 @@ func run(ctx context.Context) error {
 	}
 	scene := solidlens.Scene{
 		Camera: solidlens.Camera{
-			Position: solidlens.Vec{X: 64, Y: -365, Z: 188},
+			Position: solidlens.Vec{X: 28, Y: -340, Z: 155},
 			Target:   solidlens.Vec{Z: 4},
 			Up:       solidlens.Vec{Z: 1},
-			FOV:      34,
+			FOV:      29,
 		},
 		Models: models,
 		DirectionalLights: []solidlens.DirectionalLight{
@@ -97,7 +97,7 @@ func run(ctx context.Context) error {
 			Color:     solidlens.RGB(0.45, 0.75, 1),
 			Intensity: 1800,
 		}},
-		Background: solidlens.RGB(0.002, 0.006, 0.024),
+		Background: solidlens.RGB(0.82, 0.86, 0.93),
 	}
 	err = solidlens.RenderPNG(ctx, file, scene, solidlens.Settings{Width: 1440, Height: 810})
 	closeErr := file.Close()
@@ -210,11 +210,12 @@ func extrudeLoops(ctx context.Context, loops [][]point, extent decad.Extent) (*d
 	if profile == nil {
 		return nil, fmt.Errorf("sketch produced no profile for %d loops", len(loops))
 	}
-	body, err := decad.New().Extrude(s, profile, extent)
+	// Extrude has no context-aware variant; Solve above is the cancellable phase.
+	body, err := decad.New().Extrude(s, profile, extent) //nolint:contextcheck
 	if err != nil {
 		return nil, err
 	}
-	return body.Tessellate(units.Millimeters(0.4))
+	return body.TessellateContext(ctx, units.Millimeters(0.4))
 }
 
 func rectangle(x0, y0, x1, y1 float64) []point {
