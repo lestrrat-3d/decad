@@ -83,11 +83,11 @@ func newLoftAuditData(verts []r3.Vec, tris [][3]int) *loftAuditData {
 		for j, p := range d.xtris[i] {
 			switch projection {
 			case 0:
-				d.projections[i][j] = newXP2(ratCoordOf(p, 0), ratCoordOf(p, 1))
+				d.projections[i][j] = newXP2FromXpt(p, 0, 1)
 			case 1:
-				d.projections[i][j] = newXP2(ratCoordOf(p, 2), ratCoordOf(p, 0))
+				d.projections[i][j] = newXP2FromXpt(p, 2, 0)
 			default:
-				d.projections[i][j] = newXP2(ratCoordOf(p, 1), ratCoordOf(p, 2))
+				d.projections[i][j] = newXP2FromXpt(p, 1, 2)
 			}
 		}
 	}

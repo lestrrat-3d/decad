@@ -851,6 +851,7 @@ type xp2 struct {
 	u, v        *big.Rat
 	fu, fv      float64
 	floatFinite bool
+	hu, hv, hw  *big.Int
 }
 
 func newXP2(u, v *big.Rat) xp2 {
@@ -866,6 +867,27 @@ func newXP2(u, v *big.Rat) xp2 {
 	}
 }
 
+// newXP2FromXpt keeps the projected point's homogeneous numerators alongside
+// its rational coordinates. The rational values remain the public exact 2D
+// representation used by polygon construction, while cross2x can use the
+// homogeneous form to avoid normalising four intermediate differences.
+func newXP2FromXpt(p xpt, u, v int) xp2 {
+	ur, vr := ratCoordOf(p, u), ratCoordOf(p, v)
+	fu, _ := ur.Float64()
+	fv, _ := vr.Float64()
+	return xp2{
+		u:  ur,
+		v:  vr,
+		fu: fu,
+		fv: fv,
+		hu: xIntCoordOf(p, u),
+		hv: xIntCoordOf(p, v),
+		hw: p.w,
+		floatFinite: !math.IsNaN(fu) && !math.IsInf(fu, 0) &&
+			!math.IsNaN(fv) && !math.IsInf(fv, 0),
+	}
+}
+
 // key2 is the exact 2D identity.
 func (p xp2) key2() string { return p.u.RatString() + "|" + p.v.RatString() }
 
@@ -874,6 +896,15 @@ func (p xp2) key2() string { return p.u.RatString() + "|" + p.v.RatString() }
 //
 // The exact result remains available for callers that need more than its sign.
 func cross2x(a, b, c xp2) *big.Rat {
+	if a.hu != nil && b.hu != nil && c.hu != nil {
+		baU := new(big.Int).Sub(new(big.Int).Mul(b.hu, a.hw), new(big.Int).Mul(a.hu, b.hw))
+		baV := new(big.Int).Sub(new(big.Int).Mul(b.hv, a.hw), new(big.Int).Mul(a.hv, b.hw))
+		caU := new(big.Int).Sub(new(big.Int).Mul(c.hu, a.hw), new(big.Int).Mul(a.hu, c.hw))
+		caV := new(big.Int).Sub(new(big.Int).Mul(c.hv, a.hw), new(big.Int).Mul(a.hv, c.hw))
+		num := new(big.Int).Sub(new(big.Int).Mul(baU, caV), new(big.Int).Mul(baV, caU))
+		den := new(big.Int).Mul(new(big.Int).Mul(a.hw, a.hw), new(big.Int).Mul(b.hw, c.hw))
+		return new(big.Rat).SetFrac(num, den)
+	}
 	bu := new(big.Rat).Sub(b.u, a.u)
 	bv := new(big.Rat).Sub(b.v, a.v)
 	cu := new(big.Rat).Sub(c.u, a.u)

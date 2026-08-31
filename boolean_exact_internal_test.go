@@ -707,3 +707,30 @@ func TestTriTriIntervalEnclosesExact(t *testing.T) {
 		require.GreaterOrEqual(t, mustRatOf(gotDiv.hi).Cmp(exactDiv), 0)
 	}
 }
+
+// TestHomogeneousProjectedCrossMatchesRational verifies that the loft audit's
+// cached homogeneous projection path returns the same exact orientation value
+// as the existing rational projection path on every coordinate-plane choice.
+func TestHomogeneousProjectedCrossMatchesRational(t *testing.T) {
+	points := [3]xpt{
+		xptOf(r3.NewVec(0.1, 2.0, -3.5)),
+		xptOf(r3.NewVec(4.25, -1.5, 0.75)),
+		xptOf(r3.NewVec(-2.0, 3.125, 5.5)),
+	}
+	for _, axes := range [][2]int{{0, 1}, {2, 0}, {1, 2}} {
+		hom := [3]xp2{
+			newXP2FromXpt(points[0], axes[0], axes[1]),
+			newXP2FromXpt(points[1], axes[0], axes[1]),
+			newXP2FromXpt(points[2], axes[0], axes[1]),
+		}
+		rat := [3]xp2{
+			newXP2(ratCoordOf(points[0], axes[0]), ratCoordOf(points[0], axes[1])),
+			newXP2(ratCoordOf(points[1], axes[0]), ratCoordOf(points[1], axes[1])),
+			newXP2(ratCoordOf(points[2], axes[0]), ratCoordOf(points[2], axes[1])),
+		}
+		want := cross2x(rat[0], rat[1], rat[2])
+		got := cross2x(hom[0], hom[1], hom[2])
+		require.Zero(t, got.Cmp(want), "projection axes %v must preserve the exact cross product", axes)
+		require.Equal(t, cross2xSign(rat[0], rat[1], rat[2]), cross2xSign(hom[0], hom[1], hom[2]))
+	}
+}
