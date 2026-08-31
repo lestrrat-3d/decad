@@ -50,22 +50,68 @@ func loftXTriCorners(verts []r3.Vec, tri [3]int) [3]xpt {
 	return [3]xpt{xptOf(c[0]), xptOf(c[1]), xptOf(c[2])}
 }
 
-// sharedVertexIndices returns the vertex indices two triangles hold in
-// common — free and exact, since a shared vertex is a shared table index.
-// The loft build never emits a triangle with a repeated index (S6 refuses
-// any that would collapse first), so the result holds at most 3 entries and
-// no duplicates.
-func sharedVertexIndices(a, b [3]int) []int {
-	var shared []int
+// loftAuditData holds the immutable per-vertex and per-triangle values shared
+// by every pair in one crossing audit. The old pair path rebuilt the same
+// exact vertex lifts and triangle normals for every pair, even though both are
+// determined solely by the audit's input tables. Keeping them for the audit's
+// lifetime does not change a predicate or its inputs; it only avoids repeating
+// the same exact arithmetic.
+type loftAuditData struct {
+	corners     [][3]r3.Vec
+	xverts      []xpt
+	xtris       [][3]xpt
+	norms       []xpt
+	projections [][3]xp2
+}
+
+func newLoftAuditData(verts []r3.Vec, tris [][3]int) *loftAuditData {
+	d := &loftAuditData{
+		corners:     make([][3]r3.Vec, len(tris)),
+		xverts:      make([]xpt, len(verts)),
+		xtris:       make([][3]xpt, len(tris)),
+		norms:       make([]xpt, len(tris)),
+		projections: make([][3]xp2, len(tris)),
+	}
+	for i, v := range verts {
+		d.xverts[i] = xptOf(v)
+	}
+	for i, tri := range tris {
+		d.corners[i] = loftTriCorners(verts, tri)
+		d.xtris[i] = [3]xpt{d.xverts[tri[0]], d.xverts[tri[1]], d.xverts[tri[2]]}
+		d.norms[i] = xcross(xsub(d.xtris[i][1], d.xtris[i][0]), xsub(d.xtris[i][2], d.xtris[i][0]))
+		projection := projectionPairIndex(projAxes(d.norms[i]))
+		for j, p := range d.xtris[i] {
+			switch projection {
+			case 0:
+				d.projections[i][j] = newXP2(ratCoordOf(p, 0), ratCoordOf(p, 1))
+			case 1:
+				d.projections[i][j] = newXP2(ratCoordOf(p, 2), ratCoordOf(p, 0))
+			default:
+				d.projections[i][j] = newXP2(ratCoordOf(p, 1), ratCoordOf(p, 2))
+			}
+		}
+	}
+	return d
+}
+
+// sharedVertexIndices returns the vertex indices two triangles hold in common
+// and their count — free and exact, since a shared vertex is a shared table
+// index. The loft build never emits a triangle with a repeated index (S6
+// refuses any that would collapse first), so the result holds at most 3 entries
+// and no duplicates without allocating a slice per pair.
+func sharedVertexIndices(a, b [3]int) ([3]int, int) {
+	var shared [3]int
+	count := 0
 	for _, va := range a {
 		for _, vb := range b {
 			if va == vb {
-				shared = append(shared, va)
+				shared[count] = va
+				count++
 				break
 			}
 		}
 	}
-	return shared
+	return shared, count
 }
 
 // errLoftContact is S7 (docs/loft-design.md §4/§6): the pair's exact contact
@@ -78,46 +124,34 @@ func errLoftContact(i, j int, reason string) error {
 
 // triTriCoplanarSharedEdge is docs/loft-design.md §6's audit-only helper for
 // an edge-adjacent coplanar pair that triTriClassify reports as
-// contactRegion. It projects both exact triangles onto their shared plane
-// and admits the pair only when the recorded edge (edgeA, edgeB) is an edge
-// of BOTH triangles and their two opposite (apex) vertices lie strictly on
+// contactRegion. It reads the two exact triangles' opposite vertices and
+// admits the pair only when the recorded edge (edgeA, edgeB) is an edge of
+// BOTH triangles and their two opposite (apex) vertices lie strictly on
 // opposite sides of that edge's supporting line — the exact condition under
 // which the two triangles' closed intersection is precisely the recorded
-// segment, never a shared area. It reads only boolean_mesh.go's projAxes/
-// xcoordOf/cross2xSign and never writes to triTriClassify or any shared
-// classification state, so it cannot change mesh-boolean contact
+// segment, never a shared area. It never writes to triTriClassify or any
+// shared classification state, so it cannot change mesh-boolean contact
 // classification (docs/loft-design.md §6, required test).
 func triTriCoplanarSharedEdge(xta, xtb [3]xpt, n xpt, edgeA, edgeB xpt) bool {
-	u, v := projAxes(n)
-	project := func(p xpt) xp2 { return newXP2(xcoordOf(p, u), xcoordOf(p, v)) }
-	a2 := [3]xp2{project(xta[0]), project(xta[1]), project(xta[2])}
-	b2 := [3]xp2{project(xtb[0]), project(xtb[1]), project(xtb[2])}
-	e0, e1 := project(edgeA), project(edgeB)
-
-	apexA, ok := loftEdgeApex(a2, e0, e1)
-	if !ok {
-		return false
-	}
-	apexB, ok := loftEdgeApex(b2, e0, e1)
-	if !ok {
-		return false
-	}
-	sA := cross2xSign(e0, e1, apexA)
-	sB := cross2xSign(e0, e1, apexB)
-	return sA != 0 && sB != 0 && sA != sB
-}
-
-// loftEdgeApex finds the triangle edge that exactly matches the unordered
-// pair (e0, e1) and returns the triangle's third (opposite) vertex.
-func loftEdgeApex(tri [3]xp2, e0, e1 xp2) (xp2, bool) {
-	for i := range 3 {
-		a, b := tri[i], tri[(i+1)%3]
-		ak, bk := a.key2(), b.key2()
-		if (ak == e0.key2() && bk == e1.key2()) || (ak == e1.key2() && bk == e0.key2()) {
-			return tri[(i+2)%3], true
+	edgeAKey, edgeBKey := edgeA.key(), edgeB.key()
+	var apexA, apexB xpt
+	for _, p := range xta {
+		key := p.key()
+		if key != edgeAKey && key != edgeBKey {
+			apexA = p
+			break
 		}
 	}
-	return xp2{}, false
+	for _, p := range xtb {
+		key := p.key()
+		if key != edgeAKey && key != edgeBKey {
+			apexB = p
+			break
+		}
+	}
+	sA := planeSide(edgeA, edgeB, apexA, n)
+	sB := planeSide(edgeA, edgeB, apexB, n)
+	return sA != 0 && sB != 0 && sA != sB
 }
 
 // segMatchesRecordedEdge reports whether a non-coplanar segment contact is
@@ -193,33 +227,48 @@ func loftPlaneSeparated(ta, tb [3]r3.Vec) bool {
 // (docs/loft-design.md §6) and returns S7 (ErrDegenerate) when the exact
 // contact is not the one that adjacency expects.
 func auditLoftPair(verts []r3.Vec, tris [][3]int, i, j int) error {
-	ta := loftTriCorners(verts, tris[i])
-	tb := loftTriCorners(verts, tris[j])
-	xta := loftXTriCorners(verts, tris[i])
-	xtb := loftXTriCorners(verts, tris[j])
-	na := xcross(xsub(xta[1], xta[0]), xsub(xta[2], xta[0]))
-	nb := xcross(xsub(xtb[1], xtb[0]), xsub(xtb[2], xtb[0]))
+	return auditLoftPairData(newLoftAuditData(verts, tris), tris, i, j)
+}
 
-	contact, err := triTriClassify(ta, tb, xta, xtb, na, nb)
+func auditLoftPairData(data *loftAuditData, tris [][3]int, i, j int) error {
+	ta := data.corners[i]
+	tb := data.corners[j]
+	xta := data.xtris[i]
+	xtb := data.xtris[j]
+	na := data.norms[i]
+	nb := data.norms[j]
+	shared, sharedCount := sharedVertexIndices(tris[i], tris[j])
+	if sharedCount == 2 {
+		edgeA, edgeB := data.xverts[shared[0]], data.xverts[shared[1]]
+		apex := data.xverts[triangleApexIndex(tris[j], shared[0], shared[1])]
+		if xdotSign(na, xsub(apex, edgeA)) == 0 {
+			if triTriCoplanarSharedEdge(xta, xtb, na, edgeA, edgeB) {
+				return nil
+			}
+			return errLoftContact(i, j, "do not meet exactly along their recorded shared edge")
+		}
+	}
+
+	contact, err := triTriClassifyWithProjections(ta, tb, xta, xtb, na, nb,
+		&data.projections[i], &data.projections[j])
 	if err != nil {
 		return err
 	}
 
-	shared := sharedVertexIndices(tris[i], tris[j])
-	switch len(shared) {
+	switch sharedCount {
 	case 0:
 		if contact.kind == contactNone {
 			return nil
 		}
 		return errLoftContact(i, j, "share no recorded vertex, but make contact")
 	case 1:
-		v := xptOf(verts[shared[0]])
+		v := data.xverts[shared[0]]
 		if contact.kind == contactPoint && contact.p0.key() == v.key() {
 			return nil
 		}
 		return errLoftContact(i, j, "do not meet exactly at their recorded shared vertex")
 	case 2:
-		edgeA, edgeB := xptOf(verts[shared[0]]), xptOf(verts[shared[1]])
+		edgeA, edgeB := data.xverts[shared[0]], data.xverts[shared[1]]
 		if segMatchesRecordedEdge(contact, edgeA, edgeB) {
 			return nil
 		}
@@ -230,6 +279,26 @@ func auditLoftPair(verts []r3.Vec, tris [][3]int, i, j int) error {
 	default:
 		return errLoftContact(i, j, "share an unexpected vertex count")
 	}
+}
+
+func projectionPairIndex(u, v int) int {
+	switch {
+	case u == 0 && v == 1:
+		return 0
+	case u == 2 && v == 0:
+		return 1
+	default:
+		return 2
+	}
+}
+
+func triangleApexIndex(tri [3]int, edgeA, edgeB int) int {
+	for _, vertex := range tri {
+		if vertex != edgeA && vertex != edgeB {
+			return vertex
+		}
+	}
+	return -1
 }
 
 // loftCrossingAudit is docs/loft-design.md §6's whole build-time audit over
@@ -305,10 +374,11 @@ func loftCrossingAuditWork(budget *workBudget, verts []r3.Vec, tris [][3]int, br
 	for i, tri := range tris {
 		boxes[i] = triBox(verts, tri)
 	}
+	auditData := newLoftAuditData(verts, tris)
 
 	// S7: every pair, classified against its recorded adjacency. The
 	// broad-phase short-circuit runs ONLY for a pair sharing no recorded
-	// vertex (len(shared) == 0): that is the one case (auditLoftPair's
+	// vertex (sharedCount == 0): that is the one case (auditLoftPair's
 	// switch) where the audit's own passing verdict is "no contact at all",
 	// so a proof of no contact reaches the identical verdict auditLoftPair
 	// would reach. A pair sharing one or two vertices is REQUIRED to touch —
@@ -325,19 +395,19 @@ func loftCrossingAuditWork(budget *workBudget, verts []r3.Vec, tris [][3]int, br
 			if err := budget.step(); err != nil {
 				return work, err
 			}
-			shared := sharedVertexIndices(tris[i], tris[j])
-			if broadPhase && len(shared) == 0 {
+			_, sharedCount := sharedVertexIndices(tris[i], tris[j])
+			if broadPhase && sharedCount == 0 {
 				if !boxesOverlap(boxes[i], boxes[j]) {
 					work.skips++
 					continue
 				}
-				if loftPlaneSeparated(loftTriCorners(verts, tris[i]), loftTriCorners(verts, tris[j])) {
+				if loftPlaneSeparated(auditData.corners[i], auditData.corners[j]) {
 					work.skips++
 					continue
 				}
 			}
 			work.classifications++
-			if err := auditLoftPair(verts, tris, i, j); err != nil {
+			if err := auditLoftPairData(auditData, tris, i, j); err != nil {
 				return work, err
 			}
 		}
