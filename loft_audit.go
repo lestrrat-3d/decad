@@ -226,7 +226,7 @@ func loftPlaneSeparated(ta, tb [3]r3.Vec) bool {
 // auditLoftPair classifies one triangle pair against its recorded adjacency
 // (docs/loft-design.md §6) and returns S7 (ErrDegenerate) when the exact
 // contact is not the one that adjacency expects.
-func auditLoftPair(verts []r3.Vec, tris [][3]int, i, j int) error {
+func auditLoftPair(verts []r3.Vec, tris [][3]int, i, j int) error { //nolint:unparam // test helper keeps both pair indices aligned with production auditLoftPairData
 	return auditLoftPairData(newLoftAuditData(verts, tris), tris, i, j)
 }
 
