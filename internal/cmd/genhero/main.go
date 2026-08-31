@@ -9,12 +9,15 @@ import (
 	"path/filepath"
 
 	"github.com/lestrrat-3d/decad"
+	"github.com/lestrrat-3d/r3"
 	"github.com/lestrrat-3d/sketch"
 	"github.com/lestrrat-3d/solidlens"
 	"github.com/lestrrat-3d/units"
 )
 
 const outputPath = "docs/images/hero.png"
+
+const letterFilletRadius = 2.0
 
 type point struct {
 	x, y float64
@@ -41,7 +44,7 @@ func run(ctx context.Context) error {
 
 	for _, item := range decadLetters() {
 		for _, shape := range item.shapes {
-			mesh, err := extrudeLoops(ctx, shape, decad.Distance{D: units.Millimeters(14), Dir: decad.Along})
+			mesh, err := extrudeLetterLoops(ctx, shape, decad.Distance{D: units.Millimeters(14), Dir: decad.Along})
 			if err != nil {
 				return fmt.Errorf("build letter: %w", err)
 			}
@@ -177,6 +180,14 @@ func decadLetters() []letter {
 }
 
 func extrudeLoops(ctx context.Context, loops [][]point, extent decad.Extent) (*decad.Mesh, error) {
+	return extrudeLoopsWithFillet(ctx, loops, extent, 0)
+}
+
+func extrudeLetterLoops(ctx context.Context, loops [][]point, extent decad.Extent) (*decad.Mesh, error) {
+	return extrudeLoopsWithFillet(ctx, loops, extent, letterFilletRadius)
+}
+
+func extrudeLoopsWithFillet(ctx context.Context, loops [][]point, extent decad.Extent, filletRadius float64) (*decad.Mesh, error) {
 	w := sketch.NewWorld()
 	// XZ makes the wordmark face the camera; extrusion then gives each stroke
 	// depth along Y without relying on a steep viewing angle.
@@ -216,6 +227,17 @@ func extrudeLoops(ctx context.Context, loops [][]point, extent decad.Extent) (*d
 	body, err := decad.New().Extrude(s, profile, extent) //nolint:contextcheck
 	if err != nil {
 		return nil, err
+	}
+	if filletRadius > 0 {
+		// Round the exposed outside corners while keeping the counters and
+		// interior cut-ins crisp for a legible wordmark.
+		body, err = body.FilletContext(ctx, decad.Edges(
+			decad.ParallelTo(r3.NewVec(0, 1, 0)),
+			decad.Convex(),
+		), units.Millimeters(filletRadius))
+		if err != nil {
+			return nil, fmt.Errorf("fillet extruded loops: %w", err)
+		}
 	}
 	return body.TessellateContext(ctx, units.Millimeters(0.4))
 }
