@@ -236,26 +236,34 @@ var triTriFilterEnabled = true
 // line; each triangle's intersection with the OTHER's plane is an interval on
 // that line, and the answer is the intervals' overlap. That is the whole rule.
 func triTriClassify(ta, tb [3]r3.Vec, xta, xtb [3]xpt, na, nb xpt) (triContact, error) {
-	return triTriClassifyWithProjections(ta, tb, xta, xtb, na, nb, nil, nil)
+	return triTriClassifyWithProjections(ta, tb, xta, xtb, na, nb, nil, nil, nil, nil)
 }
 
-func triTriClassifyWithProjections(ta, tb [3]r3.Vec, xta, xtb [3]xpt, na, nb xpt, pa, pb *[3]xp2) (triContact, error) {
+func triTriClassifyWithProjections(ta, tb [3]r3.Vec, xta, xtb [3]xpt, na, nb xpt, pa, pb *[3]xp2, sa, sb *[3]int) (triContact, error) {
 	out := triContact{edgeA: -1, edgeB: -1}
-	var sb, sa [3]int
-	for i := range 3 {
-		sb[i] = orientSign(ta[0], ta[1], ta[2], tb[i])
+	var signsB, signsA [3]int
+	if sb != nil {
+		signsB = *sb
+	} else {
+		for i := range 3 {
+			signsB[i] = orientSign(ta[0], ta[1], ta[2], tb[i])
+		}
 	}
-	if allOneSide(sb) {
+	if allOneSide(signsB) {
 		return out, nil
 	}
-	for i := range 3 {
-		sa[i] = orientSign(tb[0], tb[1], tb[2], ta[i])
+	if sa != nil {
+		signsA = *sa
+	} else {
+		for i := range 3 {
+			signsA[i] = orientSign(tb[0], tb[1], tb[2], ta[i])
+		}
 	}
-	if allOneSide(sa) {
+	if allOneSide(signsA) {
 		return out, nil
 	}
 
-	if countZero(sa) == 3 || countZero(sb) == 3 {
+	if countZero(signsA) == 3 || countZero(signsB) == 3 {
 		// Coplanar. The intersection of two coplanar closed triangles is a
 		// convex polygon: positive area — or a positive-length shared boundary
 		// — is a face-on-face tangency (§9 refuses it); anything else is at
@@ -282,11 +290,11 @@ func triTriClassifyWithProjections(ta, tb [3]r3.Vec, xta, xtb [3]xpt, na, nb xpt
 	// Non-coplanar: the planes are distinct and non-parallel (a parallel pair
 	// would leave every vertex strictly on one side, already returned), so they
 	// meet in exactly one line, and every point of the intersection lies on it.
-	if triTriFilterEnabled && triTriMissesFilter(ta, tb, na.vec(), nb.vec(), sa, sb) {
+	if triTriFilterEnabled && triTriMissesFilter(ta, tb, na.vec(), nb.vec(), signsA, signsB) {
 		return out, nil
 	}
-	ptsA := dedupePoints(planeCrossings(xta, xtb, sa))
-	ptsB := dedupePoints(planeCrossings(xtb, xta, sb))
+	ptsA := dedupePoints(planeCrossings(xta, xtb, signsA))
+	ptsB := dedupePoints(planeCrossings(xtb, xta, signsB))
 	if len(ptsA) == 0 || len(ptsB) == 0 {
 		return out, nil
 	}

@@ -249,8 +249,10 @@ func auditLoftPairData(data *loftAuditData, tris [][3]int, i, j int) error {
 		}
 	}
 
+	signsB := trianglePlaneSigns(xta, na, xtb)
+	signsA := trianglePlaneSigns(xtb, nb, xta)
 	contact, err := triTriClassifyWithProjections(ta, tb, xta, xtb, na, nb,
-		&data.projections[i], &data.projections[j])
+		&data.projections[i], &data.projections[j], &signsA, &signsB)
 	if err != nil {
 		return err
 	}
@@ -279,6 +281,18 @@ func auditLoftPairData(data *loftAuditData, tris [][3]int, i, j int) error {
 	default:
 		return errLoftContact(i, j, "share an unexpected vertex count")
 	}
+}
+
+// trianglePlaneSigns returns the exact signs of other against tri's oriented
+// plane. The triangle normal and all vertices are cached by the audit, so this
+// avoids rebuilding float-to-homogeneous points in orientSign's exact fallback
+// for every repeated facet pair.
+func trianglePlaneSigns(tri [3]xpt, n xpt, other [3]xpt) [3]int {
+	var signs [3]int
+	for i, p := range other {
+		signs[i] = xdotSign(n, xsub(p, tri[0]))
+	}
+	return signs
 }
 
 func projectionPairIndex(u, v int) int {
