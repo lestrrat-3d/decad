@@ -552,3 +552,139 @@ func hasDiagnostic(report *decad.Report, code decad.DiagnosticCode) bool {
 	}
 	return false
 }
+
+// TestCapBlendReflexApexUndercutSurvey is DX7 over the apex patch, through the
+// public Verify API. A pull opposing the apex patch alone must list it: the
+// role collision that put a wall patch on the apex patch's role made the
+// survey read the wall's face AND the wall's geometry, so the apex patch was
+// reported for no pull at all. The (0, 0, 1) case is the proven-free reading —
+// the band's own normals all tilt toward the chamfered end, so pulling that
+// way frees every patch, and the empty list is only correct while the apex
+// patch's normal really does point that way.
+func TestCapBlendReflexApexUndercutSurvey(t *testing.T) {
+	body := reflexLBody(t)
+	chamfered, err := body.Chamfer(capLoopEdges(body), units.Millimeters(3))
+	require.NoError(t, err)
+	apex := apexPatchOf(t, chamfered, "chamferCap(end,")
+	doc := chamfered.Document()
+
+	// (-1, -1, 1) opposes the apex patch's inward-and-up normal over its own
+	// quarter turn and no other patch in the band: every wall patch's normal
+	// is exactly perpendicular to it or better.
+	opposing, err := doc.Verify(t.Context(), decad.WithPullDirection(r3.NewVec(-1, -1, 1)))
+	require.NoError(t, err)
+	require.Len(t, opposing.Bodies, 1)
+	var patches []*decad.Face
+	apexReported := false
+	for _, f := range opposing.Bodies[0].Undercuts {
+		for _, o := range f.Origins() {
+			if strings.HasPrefix(o.Role, "chamferCap(") {
+				patches = append(patches, f)
+			}
+		}
+		if f == apex {
+			apexReported = true
+		}
+	}
+	require.True(t, apexReported, "the apex patch opposes this pull and must be listed")
+	require.Equal(t, []*decad.Face{apex}, patches, "and it is the only patch that does")
+	require.Equal(t, decad.Violating, opposing.Bodies[0].Status)
+
+	// Pulling toward the chamfered end frees the whole band, apex included.
+	free, err := doc.Verify(t.Context(), decad.WithPullDirection(r3.NewVec(0, 0, 1)))
+	require.NoError(t, err)
+	for _, f := range free.Bodies[0].Undercuts {
+		for _, o := range f.Origins() {
+			require.False(t, strings.HasPrefix(o.Role, "chamferCap("), "role %s", o.Role)
+		}
+	}
+	p := apex.Loops()[0].CoEdges()[0].Start().Position().Value
+	n, err := apex.NormalAt(p)
+	require.NoError(t, err)
+	require.Greater(t, n.Value.Z, 0.0, "the apex patch is free of that pull because it tilts with it")
+}
+
+// TestCapBlendUndercutSurvey checks DX7 through the public Verify API: a
+// straight-down pull (0,0,-1) is caught as an undercut by the end-cap
+// chamfer bevels (they tilt outward-and-up, so extracting downward passes
+// through the wider unchamfered wall below — the same reasoning
+// prismUndercuts already applies to an ordinary wall), while a straight-up
+// pull sees no undercut from them.
+func TestCapBlendUndercutSurvey(t *testing.T) {
+	_, box := capBlendBox(t)
+	chamfered, err := box.Chamfer(capLoopEdges(box), units.Millimeters(5))
+	require.NoError(t, err)
+	doc := chamfered.Document()
+
+	down, err := doc.Verify(t.Context(), decad.WithPullDirection(r3.NewVec(0, 0, -1)))
+	require.NoError(t, err)
+	require.Len(t, down.Bodies, 1)
+	require.NotEmpty(t, down.Bodies[0].Undercuts, "pulling away from the chamfered end catches its bevels")
+	for _, f := range down.Bodies[0].Undercuts {
+		found := false
+		for _, o := range f.Origins() {
+			if strings.HasPrefix(o.Role, "chamferCap(") {
+				found = true
+			}
+		}
+		require.True(t, found, "every reported undercut is one of the chamfer patches")
+	}
+
+	up, err := doc.Verify(t.Context(), decad.WithPullDirection(r3.NewVec(0, 0, 1)))
+	require.NoError(t, err)
+	require.Len(t, up.Bodies, 1)
+	for _, f := range up.Bodies[0].Undercuts {
+		for _, o := range f.Origins() {
+			require.False(t, strings.HasPrefix(o.Role, "chamferCap("), "pulling toward the chamfered end frees its bevels")
+		}
+	}
+}
+
+// TestCapBlendMinRadiusMatchesUnchamferedSection checks DX8: chamfering this
+// plate's cap loop also chamfers its hole rim into a whole-turn Cone patch,
+// whose own held half-angle only encloses a cosine and sine rather than
+// fixing them exactly — so the patch is not proven to be the surface it
+// publishes even unplaced, and the survey now refuses instead of publishing
+// an answer the patch set does not support, while the receiver's own reading
+// is unaffected.
+func TestCapBlendMinRadiusMatchesUnchamferedSection(t *testing.T) {
+	_, box := plateWithDiskHole(t, 50, 50, 10)
+	doc := box.Document()
+	before, err := doc.Verify(t.Context(), decad.WithMinRadius())
+	require.NoError(t, err)
+	require.Len(t, before.Bodies, 1)
+	require.NotNil(t, before.Bodies[0].MinRadius)
+
+	chamfered, err := box.Chamfer(decad.Edges(decad.CreatedBy(decad.CapEnd(box)), decad.LongerThan(units.Millimeters(50))), units.Millimeters(3))
+	require.NoError(t, err)
+	after, err := chamfered.Document().Verify(t.Context(), decad.WithMinRadius())
+	require.NoError(t, err)
+	require.Len(t, after.Bodies, 1)
+	require.Nil(t, after.Bodies[0].MinRadius)
+	require.True(t, hasDiagnostic(after, decad.DiagUndecidedMinRadius))
+	require.Equal(t, decad.Suspect, after.Bodies[0].Status)
+}
+
+// TestCapBlendMinRadiusStillAnsweredOnPlaneOnlyBand keeps a case where DX8
+// still answers: a rectangle's sharp cap-loop corners meet two straight
+// walls directly, with no separate vertex patch at all, so every patch of
+// the band is an axis-aligned `Plane` whose own stamped departure is an
+// exact zero unplaced — the survey still returns the receiver's own proven
+// absence of a concave feature with no refusal diagnostic.
+func TestCapBlendMinRadiusStillAnsweredOnPlaneOnlyBand(t *testing.T) {
+	_, box := capBlendBox(t)
+	doc := box.Document()
+	before, err := doc.Verify(t.Context(), decad.WithMinRadius())
+	require.NoError(t, err)
+	require.Len(t, before.Bodies, 1)
+	require.Nil(t, before.Bodies[0].MinRadius, "a plain rectangle has no concave feature")
+
+	chamfered, err := box.Chamfer(capLoopEdges(box), units.Millimeters(5))
+	require.NoError(t, err)
+	after, err := chamfered.Document().Verify(t.Context(), decad.WithMinRadius())
+	require.NoError(t, err)
+	require.Len(t, after.Bodies, 1)
+	require.Nil(t, after.Bodies[0].MinRadius, "a proven absence, not a refusal")
+	require.False(t, hasDiagnostic(after, decad.DiagUndecidedMinRadius))
+	require.Equal(t, decad.Sound, after.Bodies[0].Status)
+}
