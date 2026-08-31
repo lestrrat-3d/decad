@@ -633,22 +633,30 @@ func segTriOverlap2(a, b, ta, tb, tc xp2) bool {
 	edges := [3][2]xp2{{ta, tb}, {tb, tc}, {tc, ta}}
 	lo, hi := new(big.Rat), new(big.Rat).SetInt64(1)
 	for _, e := range edges {
-		fa := cross2x(e[0], e[1], a)
-		fb := cross2x(e[0], e[1], b)
+		// Signs decide the two no-crossing cases without constructing rational
+		// values. Only an edge crossing the segment needs its exact clip point.
+		sa := cross2xSign(e[0], e[1], a)
+		sb := cross2xSign(e[0], e[1], b)
 		if ccw < 0 {
-			fa.Neg(fa)
-			fb.Neg(fb)
+			sa = -sa
+			sb = -sb
 		}
 		// f(t) = fa + t·(fb − fa) must stay ≥ 0.
-		diff := new(big.Rat).Sub(fb, fa)
 		switch {
-		case fa.Sign() >= 0 && fb.Sign() >= 0:
+		case sa >= 0 && sb >= 0:
 			continue
-		case fa.Sign() < 0 && fb.Sign() < 0:
+		case sa < 0 && sb < 0:
 			return false
 		default:
+			fa := cross2x(e[0], e[1], a)
+			fb := cross2x(e[0], e[1], b)
+			if ccw < 0 {
+				fa.Neg(fa)
+				fb.Neg(fb)
+			}
+			diff := new(big.Rat).Sub(fb, fa)
 			t := new(big.Rat).Quo(new(big.Rat).Neg(fa), diff)
-			if fa.Sign() < 0 {
+			if sa < 0 {
 				if t.Cmp(lo) > 0 {
 					lo = t
 				}
