@@ -1,5 +1,9 @@
 # decad
 
+<p align="center">
+  <img src="docs/images/hero.png" alt="Dimensional DECAD lettering rendered from decad solids against a pale blue-gray background" width="900">
+</p>
+
 A **headless CAD engine** for Go: the 3D modeling layer above the
 [sketch](https://github.com/lestrrat-3d/sketch) 2D constraint engine and the
 [r3](https://github.com/lestrrat-3d/r3) coordinate-math layer.
@@ -58,6 +62,8 @@ consuming 3D-derived geometry only as first-class reference geometry it is
 
 A 2D question — does this profile close, is this sketch fully constrained — is
 `sketch`'s to answer, and decad consumes the answer rather than re-deriving it.
+
+Regenerate the hero image with `go run ./internal/cmd/genhero`.
 
 ## License
 

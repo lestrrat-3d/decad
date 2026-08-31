@@ -226,8 +226,7 @@ func codecObjectFields(data []byte) ([]codecRawField, bool) {
 
 func codecStructField(typ reflect.Type, wireName string) (reflect.StructField, bool) {
 	var folded reflect.StructField
-	for i := range typ.NumField() {
-		field := typ.Field(i)
+	for field := range typ.Fields() {
 		if !field.IsExported() {
 			continue
 		}
