@@ -983,7 +983,9 @@ func TestSagittaCostTermsMatchTheOperationsTheyName(t *testing.T) {
 	// chordSegmentSquaredDistance's non-degenerate branch. The running-maximum
 	// comparison is NOT folded in here: ratRunningMax charges it on its own
 	// call, so one comparison is charged per fold rather than per projection.
-	const chordProjectionOps = 2 + (2 + 1) + 1 + (1 + 1) + (2 + 2) + 2 + (2 + 1)
+	// The most expensive path computes p-a, the dot product, the zero-length
+	// check and two interval comparisons, then p-b and its squared length.
+	const chordProjectionOps = 2 + (2 + 1) + 1 + 1 + 1 + 2 + (2 + 1)
 	require.Equal(t, chordProjectionOps, chordProjectionCost,
 		"every exact operation the clamped projection performs must be charged")
 	require.Equal(t, 1, ratCompareCost, "the running-maximum comparison is one big.Rat.Cmp")
@@ -1142,7 +1144,7 @@ func TestSagittaAndMatchedDeltaChargeTheirOwnCodePaths(t *testing.T) {
 	// Written from the literals, never from the constants under test. Every
 	// coordinate here is a small integer, so every operand is one machine word
 	// and each operation count is spent once.
-	require.Equal(t, uint64((n+2)*7+5+n*(17+1)+64), sagWork.spent,
+	require.Equal(t, uint64((n+2)*7+5+n*(13+1)+64), sagWork.spent,
 		"the sagitta pays for n+2 reconstructions, one chord frame, n projections, n comparisons and one rounding")
 	require.Equal(t, uint64(n*7+2+10*n+4+64), mdWork.spent,
 		"the matched delta pays for n reconstructions, one chord vector, its own per-point hull scan, one exact quartering and one rounding")
@@ -1182,16 +1184,16 @@ func TestPairStationsChargesEveryPhaseOfAWalkThatNeverSplits(t *testing.T) {
 // neverSplittingSpanCharge is what ONE accepted, never-bisected span of n small
 // integer control points costs its own side's counter, written from the
 // literals and never from the constants under test: 10n to convert, then the
-// sagitta reading ((n+2) reconstructions at 7, one chord frame at 5, n
-// projections at 17, n comparisons at 1, one rounding at 64), then the
-// matched-delta reading (n reconstructions at 7, one chord vector at 2, n hull
-// indices at 10, one exact quartering at 4, one rounding at 64), then the
-// accepted cell's own start station at 7. Every coordinate is one machine word,
-// so no width multiplier applies.
+// fused sagitta reading (n reconstructions at 7, one chord frame at 5, n
+// projections at 13, n comparisons at 1, one rounding at 64), then the
+// matched-delta reading (one chord vector at 2, n hull indices at 10, one
+// exact quartering at 4, one rounding at 64), then the accepted cell's own
+// start station at 7. The sagitta's reconstructed span is reused by matched
+// delta. Every coordinate is one machine word, so no width multiplier applies.
 func neverSplittingSpanCharge(n uint64) uint64 {
 	convert := 10 * n
-	sagitta := (n+2)*7 + 5 + n*(17+1) + 64
-	matched := n*7 + 2 + 10*n + 4 + 64
+	sagitta := n*7 + 5 + n*(13+1) + 64
+	matched := 2 + 10*n + 4 + 64
 	station := uint64(7)
 	return convert + sagitta + matched + station
 }
