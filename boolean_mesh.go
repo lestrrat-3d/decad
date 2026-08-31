@@ -236,27 +236,48 @@ var triTriFilterEnabled = true
 // line; each triangle's intersection with the OTHER's plane is an interval on
 // that line, and the answer is the intervals' overlap. That is the whole rule.
 func triTriClassify(ta, tb [3]r3.Vec, xta, xtb [3]xpt, na, nb xpt) (triContact, error) {
+	return triTriClassifyWithProjections(ta, tb, xta, xtb, na, nb, nil, nil, nil, nil)
+}
+
+func triTriClassifyWithProjections(ta, tb [3]r3.Vec, xta, xtb [3]xpt, na, nb xpt, pa, pb *[3]xp2, sa, sb *[3]int) (triContact, error) {
 	out := triContact{edgeA: -1, edgeB: -1}
-	var sb, sa [3]int
-	for i := range 3 {
-		sb[i] = orientSign(ta[0], ta[1], ta[2], tb[i])
+	var signsB, signsA [3]int
+	if sb != nil {
+		signsB = *sb
+	} else {
+		for i := range 3 {
+			signsB[i] = orientSign(ta[0], ta[1], ta[2], tb[i])
+		}
 	}
-	if allOneSide(sb) {
+	if allOneSide(signsB) {
 		return out, nil
 	}
-	for i := range 3 {
-		sa[i] = orientSign(tb[0], tb[1], tb[2], ta[i])
+	if sa != nil {
+		signsA = *sa
+	} else {
+		for i := range 3 {
+			signsA[i] = orientSign(tb[0], tb[1], tb[2], ta[i])
+		}
 	}
-	if allOneSide(sa) {
+	if allOneSide(signsA) {
 		return out, nil
 	}
 
-	if countZero(sa) == 3 || countZero(sb) == 3 {
+	if countZero(signsA) == 3 || countZero(signsB) == 3 {
 		// Coplanar. The intersection of two coplanar closed triangles is a
 		// convex polygon: positive area — or a positive-length shared boundary
 		// — is a face-on-face tangency (§9 refuses it); anything else is at
 		// most a point, carried for the isolated-point rule.
-		if coplanarOverlap(xta, xtb, na) {
+		if coplanarFloatSeparated(ta, tb, na) {
+			return out, nil
+		}
+		overlap := false
+		if pa != nil && pb != nil {
+			overlap = coplanarOverlapProjected(*pa, *pb)
+		} else {
+			overlap = coplanarOverlap(xta, xtb, na)
+		}
+		if overlap {
 			out.kind = contactRegion
 			return out, nil
 		}
@@ -269,11 +290,11 @@ func triTriClassify(ta, tb [3]r3.Vec, xta, xtb [3]xpt, na, nb xpt) (triContact, 
 	// Non-coplanar: the planes are distinct and non-parallel (a parallel pair
 	// would leave every vertex strictly on one side, already returned), so they
 	// meet in exactly one line, and every point of the intersection lies on it.
-	if triTriFilterEnabled && triTriMissesFilter(ta, tb, na.vec(), nb.vec(), sa, sb) {
+	if triTriFilterEnabled && triTriMissesFilter(ta, tb, na.vec(), nb.vec(), signsA, signsB) {
 		return out, nil
 	}
-	ptsA := dedupePoints(planeCrossings(xta, xtb, sa))
-	ptsB := dedupePoints(planeCrossings(xtb, xta, sb))
+	ptsA := dedupePoints(planeCrossings(xta, xtb, signsA))
+	ptsB := dedupePoints(planeCrossings(xtb, xta, signsB))
 	if len(ptsA) == 0 || len(ptsB) == 0 {
 		return out, nil
 	}
@@ -318,6 +339,65 @@ func allOneSide(s [3]int) bool {
 	return s[0] > 0 && s[1] > 0 && s[2] > 0 || s[0] < 0 && s[1] < 0 && s[2] < 0
 }
 
+// coplanarFloatSeparated is a conservative separating-axis filter for
+// coplanar triangles. It only rejects when every orientation sign is clear of
+// the floating-point error margin; ambiguous pairs continue to exact clipping.
+func coplanarFloatSeparated(a, b [3]r3.Vec, n xpt) bool {
+	u, v := projAxes(n)
+	pa := [3][2]float64{}
+	pb := [3][2]float64{}
+	for i := range 3 {
+		pa[i] = [2]float64{axisCoord(a[i], u), axisCoord(a[i], v)}
+		pb[i] = [2]float64{axisCoord(b[i], u), axisCoord(b[i], v)}
+	}
+	for i := range 3 {
+		if floatEdgeSeparates(pa[i], pa[(i+1)%3], pa[(i+2)%3], pb) ||
+			floatEdgeSeparates(pb[i], pb[(i+1)%3], pb[(i+2)%3], pa) {
+			return true
+		}
+	}
+	return false
+}
+
+func floatEdgeSeparates(a, b, inside [2]float64, tri [3][2]float64) bool {
+	insideSign := orient2Float(a, b, inside)
+	if insideSign == 0 {
+		return false
+	}
+	for _, p := range tri {
+		if orient2Float(a, b, p) != -insideSign {
+			return false
+		}
+	}
+	return true
+}
+
+func orient2Float(a, b, c [2]float64) int {
+	bx, by := b[0]-a[0], b[1]-a[1]
+	cx, cy := c[0]-a[0], c[1]-a[1]
+	det := bx*cy - by*cx
+	perm := math.Abs(bx)*math.Abs(cy) + math.Abs(by)*math.Abs(cx)
+	err := 1e-12 * perm
+	if det > err {
+		return 1
+	}
+	if det < -err {
+		return -1
+	}
+	return 0
+}
+
+func axisCoord(v r3.Vec, axis int) float64 {
+	switch axis {
+	case 0:
+		return v.X
+	case 1:
+		return v.Y
+	default:
+		return v.Z
+	}
+}
+
 // coplanarTouch returns the single point two coplanar, non-overlapping closed
 // triangles share, looking BOTH ways — the symmetric shape the whole classifier
 // is built on.
@@ -360,12 +440,9 @@ func cmpOnLine(a, b, dir xpt) int {
 // plane — lies on one of its three CLOSED edges. The projection is invertible
 // on the plane, so the 2-D answer IS the 3-D one.
 func onTriBoundary(p xpt, xt [3]xpt, n xpt) bool {
-	u, v := projAxes(n)
-	pp := newXP2(ratCoordOf(p, u), ratCoordOf(p, v))
 	for i := range 3 {
-		a := newXP2(ratCoordOf(xt[i], u), ratCoordOf(xt[i], v))
-		b := newXP2(ratCoordOf(xt[(i+1)%3], u), ratCoordOf(xt[(i+1)%3], v))
-		if on, _ := onSegment2(a, b, pp); on {
+		a, b := xt[i], xt[(i+1)%3]
+		if planeSide(a, b, p, n) == 0 && pointOnSegment3D(a, b, p) {
 			return true
 		}
 	}
@@ -377,17 +454,12 @@ func onTriBoundary(p xpt, xt [3]xpt, n xpt) bool {
 // runs along has both its endpoints on that plane — the in-plane edge whose
 // graze-or-crossing verdict only the edge's two adjacent facets can give.
 func segAlongEdge(p0, p1 xpt, xt [3]xpt, n xpt) int {
-	u, v := projAxes(n)
-	q0 := newXP2(ratCoordOf(p0, u), ratCoordOf(p0, v))
-	q1 := newXP2(ratCoordOf(p1, u), ratCoordOf(p1, v))
 	for i := range 3 {
-		a := newXP2(ratCoordOf(xt[i], u), ratCoordOf(xt[i], v))
-		b := newXP2(ratCoordOf(xt[(i+1)%3], u), ratCoordOf(xt[(i+1)%3], v))
-		on0, _ := onSegment2(a, b, q0)
-		if !on0 {
+		a, b := xt[i], xt[(i+1)%3]
+		if planeSide(a, b, p0, n) != 0 || !pointOnSegment3D(a, b, p0) {
 			continue
 		}
-		if on1, _ := onSegment2(a, b, q1); on1 {
+		if planeSide(a, b, p1, n) == 0 && pointOnSegment3D(a, b, p1) {
 			return i
 		}
 	}
@@ -498,20 +570,54 @@ func projAxes(n xpt) (int, int) {
 	return 1, 2
 }
 
-// xcoordOf materialises p's exact coordinate along axis i (0=x, 1=y, 2=z) as
-// a big.Rat — the same projection ratCoordOf performs, kept as its own name
-// for this file's own call sites into the xp2 domain.
-func xcoordOf(p xpt, i int) *big.Rat { return ratCoordOf(p, i) }
-
 // pointOnTri reports whether the exact point p — already on the triangle's
-// plane — lies inside or on the closed triangle, via the exact projection.
+// plane — lies inside or on the closed triangle, via exact side-of-edge signs.
 func pointOnTri(p xpt, xt [3]xpt, n xpt) bool {
-	u, v := projAxes(n)
-	pp := newXP2(xcoordOf(p, u), xcoordOf(p, v))
-	a := newXP2(xcoordOf(xt[0], u), xcoordOf(xt[0], v))
-	b := newXP2(xcoordOf(xt[1], u), xcoordOf(xt[1], v))
-	c := newXP2(xcoordOf(xt[2], u), xcoordOf(xt[2], v))
-	return pointInTriX(pp, a, b, c)
+	s0 := planeSide(xt[0], xt[1], p, n)
+	s1 := planeSide(xt[1], xt[2], p, n)
+	s2 := planeSide(xt[2], xt[0], p, n)
+	return (s0 >= 0 && s1 >= 0 && s2 >= 0) || (s0 <= 0 && s1 <= 0 && s2 <= 0)
+}
+
+func planeSide(a, b, p, n xpt) int {
+	return xdotSign(xcross(xsub(b, a), xsub(p, a)), n)
+}
+
+func pointOnSegment3D(a, b, p xpt) bool {
+	delta := xsub(b, a)
+	axis := 0
+	if absInt(delta.y).Cmp(absInt(delta.x)) > 0 {
+		axis = 1
+	}
+	if absInt(delta.z).Cmp(absInt(coord(delta, axis))) > 0 {
+		axis = 2
+	}
+	lo, hi := a, b
+	if compareCoord(lo, hi, axis) > 0 {
+		lo, hi = hi, lo
+	}
+	return compareCoord(lo, p, axis) <= 0 && compareCoord(p, hi, axis) <= 0
+}
+
+func coord(p xpt, axis int) *big.Int {
+	switch axis {
+	case 0:
+		return p.x
+	case 1:
+		return p.y
+	default:
+		return p.z
+	}
+}
+
+func absInt(v *big.Int) *big.Int {
+	return new(big.Int).Abs(v)
+}
+
+func compareCoord(a, b xpt, axis int) int {
+	left := new(big.Int).Mul(coord(a, axis), b.w)
+	right := new(big.Int).Mul(coord(b, axis), a.w)
+	return left.Cmp(right)
 }
 
 // segTriOverlap2 reports whether segment (a, b) meets the closed triangle
@@ -527,22 +633,30 @@ func segTriOverlap2(a, b, ta, tb, tc xp2) bool {
 	edges := [3][2]xp2{{ta, tb}, {tb, tc}, {tc, ta}}
 	lo, hi := new(big.Rat), new(big.Rat).SetInt64(1)
 	for _, e := range edges {
-		fa := cross2x(e[0], e[1], a)
-		fb := cross2x(e[0], e[1], b)
+		// Signs decide the two no-crossing cases without constructing rational
+		// values. Only an edge crossing the segment needs its exact clip point.
+		sa := cross2xSign(e[0], e[1], a)
+		sb := cross2xSign(e[0], e[1], b)
 		if ccw < 0 {
-			fa.Neg(fa)
-			fb.Neg(fb)
+			sa = -sa
+			sb = -sb
 		}
 		// f(t) = fa + t·(fb − fa) must stay ≥ 0.
-		diff := new(big.Rat).Sub(fb, fa)
 		switch {
-		case fa.Sign() >= 0 && fb.Sign() >= 0:
+		case sa >= 0 && sb >= 0:
 			continue
-		case fa.Sign() < 0 && fb.Sign() < 0:
+		case sa < 0 && sb < 0:
 			return false
 		default:
+			fa := cross2x(e[0], e[1], a)
+			fb := cross2x(e[0], e[1], b)
+			if ccw < 0 {
+				fa.Neg(fa)
+				fb.Neg(fb)
+			}
+			diff := new(big.Rat).Sub(fb, fa)
 			t := new(big.Rat).Quo(new(big.Rat).Neg(fa), diff)
-			if fa.Sign() < 0 {
+			if sa < 0 {
 				if t.Cmp(lo) > 0 {
 					lo = t
 				}
@@ -565,6 +679,10 @@ func coplanarOverlap(xta, xtb [3]xpt, n xpt) bool {
 		a2[i] = newXP2(ratCoordOf(xta[i], u), ratCoordOf(xta[i], v))
 		b2[i] = newXP2(ratCoordOf(xtb[i], u), ratCoordOf(xtb[i], v))
 	}
+	return coplanarOverlapProjected(a2, b2)
+}
+
+func coplanarOverlapProjected(a2, b2 [3]xp2) bool {
 	// Any edge of one meeting the closed other with positive length is an
 	// overlap; this covers containment (all edges inside), proper crossings,
 	// and collinear boundary contact alike.

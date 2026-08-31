@@ -105,14 +105,14 @@ const ratPointCopyCost = 2
 // chord vector, then 2 Mul + 1 Add for its squared length. 5.
 const chordFrameCost = 5
 
-// chordProjectionCost is chordSegmentSquaredDistance's own per-call operation
-// count: 2 Sub for p−a, 2 Mul + 1 Add for the dot product, 1 Quo for t, 1 Cmp +
-// 1 SetInt64 for the clamp, 2 Mul + 2 Add for the clamped point, 2 Sub for the
-// difference, 2 Mul + 1 Add for the squared distance = 17. The d == 0 branch
-// runs strictly fewer operations (2 Sub + 2 Mul + 1 Add), so this same term
-// bounds a collapsed chord too. The running-maximum comparison is NOT folded in
-// here: it is ratRunningMax's own charge, spent by ratRunningMax on its own call.
-const chordProjectionCost = 17
+// chordProjectionCost is chordSegmentSquaredDistance's own maximum per-call
+// operation count: 2 Sub for p−a, 2 Mul + 1 Add for the dot product, 1 Sign for
+// the zero-length check, 1 Sign + 1 Cmp for the interval checks, 2 Sub for p−b,
+// and 2 Mul + 1 Add for the squared distance = 13. The collapsed and interior
+// branches run fewer operations, so this same term bounds every path. The
+// running-maximum comparison is NOT folded in here: it is ratRunningMax's own
+// charge, spent by ratRunningMax on its own call.
+const chordProjectionCost = 13
 
 // ratCompareCost is ratRunningMax's own per-call operation count: one big.Rat.Cmp.
 const ratCompareCost = 1
@@ -212,10 +212,11 @@ func dyadicSpanOfCharge(span bezierSpan) uint64 {
 // --- the metered primitives ---
 
 // chordSegmentSquaredDistance is the exact squared distance from point p to
-// the closed segment a→(a+bax, a+bay), a CLAMPED rational projection: with
-// n = (p−a)·(bax, bay) and d = (bax, bay)·(bax, bay), the closest point on the
-// segment sits at parameter t = n/d clamped to [0, 1], and the returned value
-// is |p − (a + t·(bax, bay))|².
+// the closed segment a→(a+bax, a+bay). It uses n = (p−a)·(bax, bay) and
+// d = (bax, bay)·(bax, bay) to select the nearest endpoint when n is outside
+// [0, d]. When n is strictly inside that interval, the returned value is the
+// equivalent exact cross-product form cross(p−a, chord)²/d, avoiding a
+// rational projection point and its subsequent subtraction.
 //
 // bax, bay and d are the chord's own vector and its squared length, computed
 // ONCE per span by ratChordFrame and shared across every control point of the
@@ -231,8 +232,10 @@ func dyadicSpanOfCharge(span bezierSpan) uint64 {
 // the chord has zero length — so it is stated here only to avoid a division
 // by zero, never as a special case of the bound itself.
 //
-// It charges chordProjectionCost at its own operand width, first, and returns
-// having done nothing when the counter cannot cover it.
+// It charges the maximum exact-operation path, chordProjectionCost, at its own
+// operand width, first, and returns having done nothing when the counter cannot
+// cover it. The charge is fixed per call so the work bound does not depend on
+// which exact branch the input takes.
 func chordSegmentSquaredDistance(w *freeformWork, p, a ratPoint, bax, bay, d *big.Rat) (*big.Rat, error) {
 	if err := w.step(costMul(chordProjectionCost, widthUnits(ratBitWidth(p.u, p.v, a.u, a.v, bax, bay, d)))); err != nil {
 		return nil, err
@@ -242,18 +245,17 @@ func chordSegmentSquaredDistance(w *freeformWork, p, a ratPoint, bax, bay, d *bi
 	if d.Sign() == 0 {
 		return new(big.Rat).Add(new(big.Rat).Mul(pax, pax), new(big.Rat).Mul(pay, pay)), nil
 	}
-	t := new(big.Rat).Quo(new(big.Rat).Add(new(big.Rat).Mul(pax, bax), new(big.Rat).Mul(pay, bay)), d)
-	switch {
-	case t.Sign() < 0:
-		t.SetInt64(0)
-	case t.Cmp(big.NewRat(1, 1)) > 0:
-		t.SetInt64(1)
+	n := new(big.Rat).Add(new(big.Rat).Mul(pax, bax), new(big.Rat).Mul(pay, bay))
+	if n.Sign() < 0 {
+		return new(big.Rat).Add(new(big.Rat).Mul(pax, pax), new(big.Rat).Mul(pay, pay)), nil
 	}
-	cu := new(big.Rat).Add(a.u, new(big.Rat).Mul(t, bax))
-	cv := new(big.Rat).Add(a.v, new(big.Rat).Mul(t, bay))
-	du := new(big.Rat).Sub(p.u, cu)
-	dv := new(big.Rat).Sub(p.v, cv)
-	return new(big.Rat).Add(new(big.Rat).Mul(du, du), new(big.Rat).Mul(dv, dv)), nil
+	if n.Cmp(d) >= 0 {
+		pbx := new(big.Rat).Sub(pax, bax)
+		pby := new(big.Rat).Sub(pay, bay)
+		return new(big.Rat).Add(new(big.Rat).Mul(pbx, pbx), new(big.Rat).Mul(pby, pby)), nil
+	}
+	cross := new(big.Rat).Sub(new(big.Rat).Mul(pax, bay), new(big.Rat).Mul(pay, bax))
+	return new(big.Rat).Quo(new(big.Rat).Mul(cross, cross), d), nil
 }
 
 // ratChordFrame is the shared chord frame every sagitta reading projects
@@ -438,6 +440,47 @@ func dyadicSpanSagittaUpper(w *freeformWork, s dyadicSpan) (float64, error) {
 		}
 	}
 	return chargedRatSqrtUp(w, maxSq)
+}
+
+// dyadicSpanSagittaUpperWithSpan is the pairStations walk's fused reading. It
+// reconstructs the exact control points once, uses them for the sagitta, and
+// returns the same bezierSpan to the accepted cell's matched-delta reading.
+// Rejected cells discard the reconstructed span after this call, but accepted
+// cells avoid a second full ratPointAt pass before spanMatchedDeltaUpper.
+//
+// This helper holds no charge of its own. The reconstruction, projection,
+// comparison and rounding each charge the primitive that performs them, just
+// as they do in dyadicSpanSagittaUpper.
+func dyadicSpanSagittaUpperWithSpan(w *freeformWork, s dyadicSpan) (float64, bezierSpan, error) {
+	span, err := s.bezierSpan(w)
+	if err != nil {
+		return 0, nil, err
+	}
+	if len(span) == 0 {
+		return 0, span, nil
+	}
+	a, b := span[0], span[len(span)-1]
+	bax, bay, d, err := ratChordFrame(w, a, b)
+	if err != nil {
+		return 0, nil, err
+	}
+
+	var maxSq *big.Rat
+	for _, p := range span {
+		sq, err := chordSegmentSquaredDistance(w, p, a, bax, bay, d)
+		if err != nil {
+			return 0, nil, err
+		}
+		maxSq, err = ratRunningMax(w, maxSq, sq)
+		if err != nil {
+			return 0, nil, err
+		}
+	}
+	bound, err := chargedRatSqrtUp(w, maxSq)
+	if err != nil {
+		return 0, nil, err
+	}
+	return bound, span, nil
 }
 
 // spanSagittaUpper is dyadicSpanSagittaUpper's entry point for a caller
@@ -681,7 +724,7 @@ type sagittaStationWalk struct {
 // only for a line or a circular arc under its own uniform-angle
 // parametrization (bounds.go's own doc comment), neither of which this file
 // ever reaches (spanSagittaUpper/spanMatchedDeltaUpper are Tier A free-form
-// only). c0.bezierSpan()/c1.bezierSpan() reconstruct the accepted cell's own
+// only). dyadicSpanSagittaUpperWithSpan reconstructs the accepted cell's own
 // control points exactly (dyadicSpan.ratPointAt, this file's own reading), so
 // the matched-delta measurement reads the SAME dyadic sub-span the sagitta
 // measurement above already split to, never a re-derived one.
@@ -697,23 +740,15 @@ type sagittaStationWalk struct {
 // charges its own counter from inside the primitive that performs it, so this
 // function never restates what any of them costs or how often it runs.
 func (g *sagittaStationWalk) walkCell(c0, c1 dyadicSpan) error {
-	sag0, err := dyadicSpanSagittaUpper(g.work0, c0)
+	sag0, span0, err := dyadicSpanSagittaUpperWithSpan(g.work0, c0)
 	if err != nil {
 		return err
 	}
-	sag1, err := dyadicSpanSagittaUpper(g.work1, c1)
+	sag1, span1, err := dyadicSpanSagittaUpperWithSpan(g.work1, c1)
 	if err != nil {
 		return err
 	}
 	if math.Max(sag0, sag1) <= g.target {
-		span0, err := c0.bezierSpan(g.work0)
-		if err != nil {
-			return err
-		}
-		span1, err := c1.bezierSpan(g.work1)
-		if err != nil {
-			return err
-		}
 		md0, err := spanMatchedDeltaUpper(g.work0, span0)
 		if err != nil {
 			return err
