@@ -103,7 +103,7 @@ func Example_decad_cut() {
 	fmt.Printf("recipe steps: %d\n", len(doc.Recipe().Steps))
 	// Output:
 	// faces: 7, lumps: 1
-	// volume: 3099.51 mm^3 (Approximate, bound 0.189 mm^3)
+	// volume: 3099.51 mm^3 (Approximate, bound 0.115 mm^3)
 	// status: Sound, trustworthy: true
 	// recipe steps: 4
 }

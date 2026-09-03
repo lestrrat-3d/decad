@@ -726,3 +726,81 @@ func TestFacetedPlacementRebuildsCachedDiameter(t *testing.T) {
 	require.NotEqual(t, before.diameter, want, "the placement must make a stale cached diameter observable")
 	require.Equal(t, want, after.diameter)
 }
+
+// TestBooleanComposesTheOperandsOwnSymmetricDifferenceProofs is
+// docs/tessellation-reach-design.md §3's boolean half: the result's
+// occupied-volume bound is composed from each operand mesh's OWN volSymDiff
+// proof, never from the `Mesh.Bound × held area` product
+// docs/tessellation-design.md §11 forbids.
+func TestBooleanComposesTheOperandsOwnSymmetricDifferenceProofs(t *testing.T) {
+	doc := New()
+	plate := internalBoxBody(t, doc, 0, 0, 20, 20, 10)
+	disc := internalDiscBody(t, doc, 4, 10)
+	tr, err := r3.Translation(r3.NewVec(10, 10, 5))
+	require.NoError(t, err)
+	pin, err := disc.Placed(tr)
+	require.NoError(t, err)
+
+	tolMM, _, err := pairChordTolerance(plate, pin)
+	require.NoError(t, err)
+	ma, err := tessellateContext(t.Context(), plate, units.Millimeters(tolMM))
+	require.NoError(t, err)
+	mb, err := tessellateContext(t.Context(), pin, units.Millimeters(tolMM))
+	require.NoError(t, err)
+
+	symA, err := operandSymDiff(ma)
+	require.NoError(t, err)
+	symB, err := operandSymDiff(mb)
+	require.NoError(t, err)
+	require.Equal(t, ma.volSymDiff, symA, `the boolean reads the mesh's own proof, not a substitution`)
+	require.Equal(t, mb.volSymDiff, symB)
+	require.Zero(t, symA, `an all-planar box at exact coordinates differs from its mesh by nothing`)
+	require.Positive(t, symB, `a chorded cylinder omits its own circular segments`)
+
+	// The forbidden product, for comparison: strictly larger than the proof the
+	// operand actually carries.
+	substituted := mb.bound * meshAreaUpper(mb.vertices, mb.triangles)
+	require.Greater(t, substituted, symB)
+
+	eval, err := evaluateBoolean(t.Context(), OpUnion, plate, pin)
+	require.NoError(t, err)
+	// Step 6 of docs/tessellation-design.md §11: the operands' own bounds plus
+	// the final weld's swept volume, which is non-negative and nothing else.
+	require.GreaterOrEqual(t, eval.payload.volSymDiff, symA+symB)
+	require.Less(t, eval.payload.volSymDiff, symA+substituted,
+		`the result carries the operand's proof, not the product that would have stood in for it`)
+	volMM, err := eval.volume.Bound.In(units.CubicMillimeter)
+	require.NoError(t, err)
+	require.GreaterOrEqual(t, volMM, eval.payload.volSymDiff)
+}
+
+func TestOperandSymDiffRefusesAMeshWithNoOccupiedVolumeProof(t *testing.T) {
+	// An export-only mesh — one whose payload class has no occupied-volume proof
+	// yet — is refused as a staging limit, never composed as a zero.
+	_, err := operandSymDiff(&Mesh{volSymDiff: 17, symDiffOK: false})
+	require.ErrorIs(t, err, ErrUnsupported)
+
+	got, err := operandSymDiff(&Mesh{volSymDiff: 17, symDiffOK: true})
+	require.NoError(t, err)
+	require.Equal(t, 17.0, got)
+}
+
+func TestFacesOfMeshReadsTheMeshProofRecord(t *testing.T) {
+	stated, omitted := &Face{}, &Face{}
+	m := &Mesh{
+		triangles: [][3]int{{0, 1, 2}, {0, 2, 3}},
+		source:    []*Face{stated, stated},
+		faceBound: map[*Face]float64{stated: 0.25},
+	}
+	got, err := facesOfMesh(newWorkBudget(t.Context()), m)
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	require.Equal(t, 0.25, got[0].delta, `the gate charges the face what the mesh proved for it`)
+	require.Equal(t, []int{0, 1}, got[0].facets)
+
+	// A source face the record omits is a broken evaluator, not a staged
+	// capability, and never a zero the gate would read as "held exactly".
+	m.source[1] = omitted
+	_, err = facesOfMesh(newWorkBudget(t.Context()), m)
+	require.ErrorIs(t, err, ErrBooleanFailed)
+}

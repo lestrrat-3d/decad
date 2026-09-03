@@ -233,6 +233,7 @@ one.
 | Path | Responsibility |
 |---|---|
 | `tessellate.go` | `Mesh` and `Body.Tessellate`: analytic-walled prism, cup, and faceted payloads build; a free-form wall and revolve stay `ErrUnsupported`. See the file's own doc comment and `docs/tessellation-design.md`. |
+| `tessellate_station.go` | `chordStationBound`: the proven enclosure gap of one interior chord station on a circular walk, the coordinate-construction half of the mesh proof record. See the file's own doc comment and `docs/tessellation-reach-design.md` §3. |
 | `triangulate.go` | The cap triangulator behind `Tessellate`: hole bridging plus reflex-blocked ear clipping, correct for non-convex outlines with holes. See the file's own doc comment. |
 | `export.go` | `Body.STL`/`Body.OBJ`: deterministic writers over `Tessellate`, with `WithChordTolerance`'s documented default. See the file's own doc comment. |
 

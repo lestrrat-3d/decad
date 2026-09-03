@@ -30,22 +30,23 @@ Router (navigation, not authority):
 `ErrUnsupported`. A free-form-walled `prismPayload` reaches the prism path and refuses inside `chordLoop` at
 `requireAnalyticWalk`.
 
-`Mesh` holds `bound` and `areaSlack` only. Against tess §2's proof record:
+`Mesh` carries tess §2's proof record complete, populated by all three of those paths (§3, R0):
 
-| tess §2 proof | Held on `Mesh` today | Consumer today |
+| tess §2 proof | Held on `Mesh` | Consumer |
 |---|---|---|
-| `sourceBound(face)` | no | `faceChordDelta` (`boolean.go`) substitutes `bound`, `sectionDisplacementOf`, or 0 by surface kind |
-| `areaSlack` | yes | boolean area composition |
-| `volSymDiff` + `symDiffOK` | no | `operandSymDiff` (`boolean.go`) substitutes `bound * meshAreaUpper` for every non-faceted operand |
-| `deltaStore` (tess §5) | not charged | — |
+| `sourceBound(face)` | `faceBound`, one entry per source face | `facesOfMesh` (`boolean.go`), for the hidden-tangency pre-pass |
+| `areaSlack` | yes, the analytic terms plus a per-facet coordinate allowance | boolean area composition |
+| `volSymDiff` + `symDiffOK` | yes; `symDiffOK` true for prism, cup and faceted | `operandSymDiff` (`boolean.go`), which refuses a mesh carrying no proof |
+| `deltaStore` (tess §5) | charged per vertex into `faceBound`, `areaSlack` and `volSymDiff` | — |
 
-The two substitutions are what make a naive restatement unsound. `faceChordDelta` returns
-`sectionDisplacementOf(body)` (0 for every non-prism body) for a `Plane` face with `Line3` edges, so a placed
-loft's planar facets would enter the hidden-tangency pre-pass at 0 while sitting `delta` off their true
-position. `bound * heldArea` is not tess §2's occupied-volume proof for a chorded loft (tess §2's row
-composes `sweptVolumeAllow(delta, perturbedAreaUpper)` with the four-leg `chordedBoundaryVolumeAllow`) and is
-what tess §11 forbids outright for a revolve. So the proof record is completed first (§3, R0), and every
-restatement below reads it.
+Every restatement below publishes into that record, and no consumer infers a term the mesh did not state. A
+`Plane` face with `Line3` edges publishes zero only where its own polygon and its own stored coordinates are
+both proved exact, so a placed loft's planar facets cannot enter the hidden-tangency pre-pass at 0 while
+sitting `delta` off their true position. `bound * heldArea` is nowhere a substitute for the occupied-volume
+proof: for a chorded loft that proof composes `sweptVolumeAllow(delta, perturbedAreaUpper)` with the four-leg
+`chordedBoundaryVolumeAllow` (tess §2's row), and for a revolve tess §11 forbids the product outright. A
+payload whose occupied-volume proof has not landed returns a mesh with `symDiffOK` false, which serves export
+while the boolean refuses the operand.
 
 ## 2. Increments
 

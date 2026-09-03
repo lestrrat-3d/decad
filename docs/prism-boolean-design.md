@@ -1245,13 +1245,14 @@ it denotes:
 
 ### boolean.go
 
-`boolean.go`'s `faceChordDelta` is one of the two consumers that do NOT
-withhold: it charges a nonzero `sectionDelta` as a planar face's own chording
-displacement, so the mesh path's tangency gate
-(`refuseUndecidableProximity`) cannot read that face as held exactly. See
-`faceChordDelta`'s own doc comment. The other is `verify.go`'s
-`gateWitnessPrism` above, which charges `δ` as a shrink on the tolerance
-gate's reference diameter.
+`boolean.go`'s `facesOfMesh` is one of the two consumers that do NOT
+withhold: it charges each face the displacement the operand's own mesh proved
+for it (`docs/tessellation-design.md` §2's `sourceBound`), and `tessellate.go`
+composes a nonzero `sectionDelta` into every one of them, so the mesh path's
+tangency gate (`refuseUndecidableProximity`) cannot read a face of a displaced
+section as held exactly. See `facesOfMesh`'s own doc comment. The other is
+`verify.go`'s `gateWitnessPrism` above, which charges `δ` as a shrink on the
+tolerance gate's reference diameter.
 
 ### capblend_contour.go (boundary note)
 
