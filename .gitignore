@@ -26,3 +26,6 @@ go.work.sum
 .worktrees/
 .review-gauntlet/
 .gauntlet/
+
+# Binary built by `go build` in the nested gallery module
+/_gallery/_gallery
