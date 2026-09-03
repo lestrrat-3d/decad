@@ -47,7 +47,7 @@ func TestQueryStringRendering(t *testing.T) {
 	// A FeatureRef whose role itself holds parentheses and a comma: the role
 	// is quoted, so it stays unambiguous inside the created_by payload.
 	sideRef := decad.FeatureRef{Step: 2, Role: "side(0,1)"}
-	capRef := decad.FeatureRef{Step: 3, Role: "capStart"}
+	capRef := decad.FeatureRef{Step: 3, Role: roleCapStart}
 
 	cases := []struct {
 		name string

@@ -359,7 +359,7 @@ func TestFaceNormals(t *testing.T) {
 			case roleCapStart:
 				caps++
 				requireNormal(f, r3.NewVec(10, 10, 0), r3.NewVec(0, 0, -1))
-			case "capEnd":
+			case roleCapEnd:
 				caps++
 				requireNormal(f, r3.NewVec(10, 10, 8), r3.NewVec(0, 0, 1))
 			case "side(0,0)", "side(0,1)", "side(0,2)", "side(0,3)":

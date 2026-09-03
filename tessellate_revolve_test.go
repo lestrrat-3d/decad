@@ -233,7 +233,7 @@ func TestRevolveTessellatePartialAxisLineSharesOneCapEdge(t *testing.T) {
 			roles = append(roles, src[i].Origins()[0].Role)
 		}
 	}
-	require.ElementsMatch(t, []string{"capStart", "capEnd"}, roles)
+	require.ElementsMatch(t, []string{roleCapStart, roleCapEnd}, roles)
 
 	vol, err := body.Volume()
 	require.NoError(t, err)
