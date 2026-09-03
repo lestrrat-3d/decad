@@ -120,6 +120,7 @@ one.
 | `docs/modify-reach-design.md` | The approved modify extension: tangent-chain expansion, asymmetric chamfers, cap-loop blends, allowed shells, proof gates, payload topology and staging. |
 | `docs/loft-design.md` | The count-free `Loft` design in four normative tables (pairing, refusals, result, consumers), its exact-rational mass properties, and the wall-crossing audit. |
 | `docs/prism-boolean-design.md` | The analytic reduction for `Union`/`Cut`/`Intersect` over co-directional coplanar prisms: the reject-only entry gate, the private `sketch` scene, and section/axial displacement bounds. |
+| `docs/tessellation-reach-design.md` | The tessellation reach plan: completes the private proof record on `Mesh`, then lands the loft restatement, free-form prism chording, revolve T2–T4 and the cap-loop chamfer tessellator, each with its cells, proof terms, refusals and tests. |
 
 ### Seam, records and recipes
 

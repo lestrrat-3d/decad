@@ -115,6 +115,7 @@ carries its own row for it.
 | `loftPayload` | the wall and cap triangles already held by the payload | the payload's own facet departure `absSumUpper(matchedDelta, maxTwistOffsetUpper)` (loft §5.2, which owns both terms and the conditions under which each published value is zero): every held facet IS the payload's triangle for its source face, so the facet departs by exactly what the payload states for it; exactness requires both published values to be zero | max per-face source bound, so that facet departure | the payload's own per-triangle perturbation sum, plus, for a CHORDED body, the two further terms its own `Area` bound composes: the wall's three-leg area gap and the two caps' `capAreaAllow` (loft §5.2, §8, §8.1) | `sweptVolumeAllow(delta, areaUpper)` composed with the four-leg `chordedBoundaryVolumeAllow(matchedDelta, wallAreaUpper, twistVolumeUpper, capVolumeUpper, seamAllow)` (loft §8, §8.1); `symDiffOK == true` either way |
 | `revolvePayload` | one meridian chording + one global angular sequence, then final rigid placement | current meridian + angular displacement for that analytic patch, plus construction rounding `deltaC` and final-placement rounding `deltaR`; `deltaC + deltaR` for otherwise exact planar patches | max per-face source bound (§8) | integral of absolute local true-vs-held area-density error + cap deficits + construction/placement area allowances (§10) | meridian/angular + construction/placement homotopy allowances (§11) |
 | `facetedPayload` | held polygons + inherited boundary certificate | inherited certified face displacement, or global composed `Delta` when no tighter face value exists | max per-face source bound | payload's composed slack | payload's composed symmetric-difference bound |
+| `capBlendPayload` | `docs/tessellation-reach-design.md` §7 owns this row: one count per wall walk shared by the trimmed side wall, the band patch and the cap contour | that document's per-patch term table | max per-face source bound | that document's per-patch composition | none until its occupied-volume proof lands; `symDiffOK == false` |
 
 ### `loftPayload` exact restatement
 
@@ -889,7 +890,7 @@ Refuse before returning any partial mesh:
 | invalid tolerance | core §12's kind/finite/sign sentinel; zero is `ErrDegenerate` |
 | canceled `TessellateContext` | `ctx.Err()` unchanged; no partial mesh |
 | payload class not implemented | `ErrUnsupported` |
-| `prismPayload` whose section carries a free-form (NURBS) wall | `ErrUnsupported`; chording lands at `docs/spline-design.md` §10 P5, not this document |
+| `prismPayload` whose section carries a free-form (NURBS) wall | `ErrUnsupported`; chording lands at `docs/spline-design.md` §10 P5, not this document — `docs/tessellation-reach-design.md` §5 is that increment's design |
 | faceted request finer than the certified maximum face bound | `ErrUnsupported` |
 | prism request whose tolerance the payload's section displacement exhausts | `ErrUnsupported` |
 | meridian/angular, per-mesh facet, cumulative facet-work, cumulative pair-test, or certified-interval proof budget exceeded; integer size overflow | `ErrUnsupported`, before the refused allocation/audit starts |
@@ -916,10 +917,13 @@ sample to make an analytic mesh close. Refine or refuse.
 | **T4** | meridian first-moment allowance + certified per-cell angular homotopy integral; finite `volSymDiff`; revolve admitted to booleans | density improvements |
 | **T5** | deterministic local meridian refinement and global angular density improvements that preserve every earlier proof | free-form/NURBS REVOLVE generators. An extruded free-form prism's own chording is a DIFFERENT increment — it rides the existing prism tessellation path (`docs/spline-design.md` §10 P5, Table C), not this row |
 | **T6** | `loftPayload` exact restatement: source-face-preserving wall/cap triangle copy, a proof record carrying the payload's own facet departure `absSumUpper(matchedDelta, maxTwistOffsetUpper)` (zero only when both published terms are zero under loft §5.2's conditions), and mesh-boolean admission | loft surveys and analytic pair clearance |
+| **T7** | `capBlendPayload` export-only tessellation: `docs/tessellation-reach-design.md` §7 owns its cells, proof-record row and refusals | cap-blend mesh-boolean admission, until that document's occupied-volume proof lands |
 
 Each increment ships its computed geometry tests with it. T2/T3 may export a
 revolve because §§8–10 prove the mesh itself; they do not enter the boolean
-until T4 proves occupied-volume error.
+until T4 proves occupied-volume error. `docs/tessellation-reach-design.md`
+owns the implementation plan and order for T2–T4, T6, T7 and the P5 chording,
+and the completion of §2's proof record on `Mesh` they all publish into.
 
 ## 14. Test obligations
 
