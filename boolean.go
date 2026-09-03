@@ -476,8 +476,14 @@ func evaluateBoolean(ctx context.Context, op OpKind, a, b *Body) (booleanEvaluat
 		}
 		return booleanEvaluation{}, err
 	}
-	symA := operandSymDiff(a, ma)
-	symB := operandSymDiff(b, mb)
+	symA, err := operandSymDiff(ma)
+	if err != nil {
+		return booleanEvaluation{}, expectedBooleanForOperand(booleanExpectedStaging, 0, err)
+	}
+	symB, err := operandSymDiff(mb)
+	if err != nil {
+		return booleanEvaluation{}, expectedBooleanForOperand(booleanExpectedStaging, 1, err)
+	}
 	// The final rounding's own volume error is what its vertex displacement
 	// sweeps out over the surface it acted on — the stitched surface BEFORE the
 	// weld dropped any collapsed facet from it (bounds.go, sweptVolumeAllow).
@@ -532,15 +538,25 @@ func sourceIDs(ctx context.Context, m *Mesh, faceID map[*Face]int) ([]int, error
 	return out, nil
 }
 
-// operandSymDiff bounds the volume of the symmetric difference between the
-// operand's held tessellation and the body it stands for. A tessellated
-// analytic body deviates within each facet's own chord sliver, so δ times
-// the held area bounds it; a Faceted operand carries its own composed bound.
-func operandSymDiff(b *Body, m *Mesh) float64 {
-	if fp, ok := b.payload.(facetedPayload); ok {
-		return fp.volSymDiff
+// operandSymDiff reads the volume of the symmetric difference between the
+// operand's held tessellation and the body it stands for from the MESH's own
+// proof record (docs/tessellation-design.md §2's volSymDiff), which the
+// tessellator composed for that payload class.
+//
+// There is no fallback. `Mesh.Bound × held area` is NOT an occupied-volume
+// proof — a two-sided Hausdorff bound alone does not bound it, because a
+// doubly-curved cell can gain material where another loses it and the signed
+// error cancels while the symmetric difference does not — and
+// docs/tessellation-design.md §11 forbids the substitution outright. A payload
+// whose occupied-volume proof has not landed publishes symDiffOK false, and its
+// mesh serves export only: the boolean refuses the operand with ErrUnsupported,
+// a staging refusal reached before any contact is examined, so the caller routes
+// it through booleanExpectedStaging exactly as an untessellatable operand.
+func operandSymDiff(m *Mesh) (float64, error) {
+	if !m.symDiffOK {
+		return 0, fmt.Errorf(`%w: this operand's tessellation carries no proof of the volume it and the body it stands for differ by, so no boolean may compose it`, ErrUnsupported)
 	}
-	return m.bound * meshAreaUpper(m.vertices, m.triangles)
+	return m.volSymDiff, nil
 }
 
 // refuseUndecidableProximity is the tangency gate (docs/evaluator-design.md §9,
@@ -838,12 +854,17 @@ type faceFacets struct {
 }
 
 // facesOfMesh groups a tessellation's facets by their source face, in first-
-// appearance order, and charges each face its own chord displacement: how far
-// the TRUE face may lie from the facets that stand for it. A planar face with
-// straight edges triangulates exactly, and a Faceted face IS its polygons (core
-// §6.1) — both are held with zero error. Anything else — a cylinder wall, or a
-// planar cap whose rim is a circle the chords inscribe — deviates by up to the
-// mesh's own proven bound.
+// appearance order, and charges each face the displacement the MESH proved for
+// it: docs/tessellation-design.md §2's sourceBound(face), which the tessellator
+// composed from that face's own trim chording, coordinate construction, section
+// and axial terms. The gate never re-infers a displacement from the surface
+// kind — a planar carrier does not make a trimmed patch exact, and a zero here
+// is the claim that the held polygon IS the true trimmed patch with stored
+// coordinates that add nothing.
+//
+// A source face the mesh states no bound for is a broken evaluator, not a
+// staged capability: it returns ErrBooleanFailed rather than an ErrUnsupported
+// that Verify would hide as an undecided pair, and never a zero.
 func facesOfMesh(budget *workBudget, m *Mesh) ([]faceFacets, error) {
 	index := map[*Face]int{}
 	var out []faceFacets
@@ -853,48 +874,17 @@ func facesOfMesh(budget *workBudget, m *Mesh) ([]faceFacets, error) {
 		}
 		k, ok := index[f]
 		if !ok {
+			delta, stated := m.sourceBound(f)
+			if !stated {
+				return nil, fmt.Errorf(`%w: an operand's tessellation states no displacement bound for one of its own source faces`, ErrBooleanFailed)
+			}
 			k = len(out)
 			index[f] = k
-			delta, err := faceChordDelta(budget, f, m.bound)
-			if err != nil {
-				return nil, err
-			}
 			out = append(out, faceFacets{delta: delta})
 		}
 		out[k].facets = append(out[k].facets, i)
 	}
 	return out, nil
-}
-
-// faceChordDelta charges the tangency gate's per-face displacement. An
-// analytic face's own charge is its current chording displacement, currently
-// only nonzero for a prismPayload's section displacement (below). A Faceted
-// operand's own face always returns 0 here rather than reading a per-face
-// certificate: that certificate's Delta propagation has not landed in this
-// evaluator (neither boundaryCert.Delta nor the per-facet sourceBound that
-// would ride beside it exists yet), and the refusal a Faceted operand owes
-// once it does is specified in docs/payload-verification-design.md §5.3/§13,
-// not implemented here.
-func faceChordDelta(budget *workBudget, f *Face, meshBound float64) (float64, error) {
-	switch f.Surface().Kind() {
-	case KindFaceted:
-		return 0, nil
-	case KindPlane:
-		for _, e := range f.Edges() {
-			if err := budget.step(); err != nil {
-				return 0, err
-			}
-			if _, ok := e.Curve().(Line3); !ok {
-				return meshBound, nil
-			}
-		}
-		// Held exactly only where the body's own record IS the boundary it
-		// denotes: a payload carrying a section displacement
-		// (docs/prism-boolean-design.md §7) holds this face that far off, and the
-		// tangency gate must charge it.
-		return sectionDisplacementOf(f.body), nil
-	}
-	return meshBound, nil
 }
 
 // sectionDisplacementOf is the proven displacement between a body's recorded
