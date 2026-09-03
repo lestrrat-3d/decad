@@ -401,6 +401,15 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 	// stages, apart.
 	budget := newWorkBudget(ctx)
 	deltaC, deltaR := 0.0, 0.0
+	// radials[l] is the ideal radial direction at angular index l, the term
+	// of revolveIdealPoint's sum that every ring shares; the pole's covers
+	// every angle at once.
+	radials := make([]ivVec3, angular.samples)
+	for l := range angular.samples {
+		radials[l] = ivVec3Add(ivVec3Mul(p.ideal.e0, angular.cosIv[l]), ivVec3Mul(p.ideal.e1, angular.sinIv[l]))
+	}
+	poleIv := interval(minusOneRat(), oneRat())
+	poleRadial := ivVec3Add(ivVec3Mul(p.ideal.e0, poleIv), ivVec3Mul(p.ideal.e1, poleIv))
 	for li := range loopMesh {
 		for si := range loopMesh[li].samples {
 			s := &loopMesh[li].samples[si]
@@ -409,6 +418,7 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 				count = 1
 			}
 			s.ring = make([]int, count)
+			axial := ivVec3Mul(p.ideal.w, s.zIv)
 			// docs/tessellation-design.md §9's ring-collapse detection, run
 			// BEFORE and AFTER placement: a sample with ρ > 0 whose angular
 			// vertices coincide is not an axis sample, and §12 forbids merging
@@ -426,14 +436,13 @@ func buildRevolveMesh(ctx context.Context, p *revolvePlan) (*Mesh, error) {
 				if !finiteVec(local) || !finiteVec(placed) {
 					return nil, fmt.Errorf(`%w: a revolve mesh vertex is not finite`, ErrUnsupported)
 				}
-				cosIv, sinIv := angular.cosIv[l], angular.sinIv[l]
+				radial := radials[l]
 				if s.onAxis {
 					// A pole's single vertex stands for the ideal sample at
 					// EVERY angle, so its enclosure must cover them all.
-					cosIv = interval(minusOneRat(), oneRat())
-					sinIv = interval(minusOneRat(), oneRat())
+					radial = poleRadial
 				}
-				ideal := revolveIdealPoint(p.ideal, s.zIv, s.rhoIv, cosIv, sinIv)
+				ideal := ivVec3Add(p.ideal.a3, ivVec3Add(axial, ivVec3Mul(radial, s.rhoIv)))
 				gapC := radius3D(max(
 					intervalFloatError(ideal[0], local.X),
 					intervalFloatError(ideal[1], local.Y),

@@ -227,8 +227,14 @@ func turnSinCosInterval(t *big.Rat) (ratInterval, ratInterval) {
 	s := new(big.Rat).Sub(f, new(big.Rat).SetFrac64(k, 8))
 	sc := new(big.Rat).Sub(big.NewRat(1, 8), s)
 
-	sn, cs := turnFirstOctantSinCos(s)
-	snC, csC := turnFirstOctantSinCos(sc)
+	// Even octants read the residual's own pair, odd octants the complement's;
+	// only the pair the switch below returns is evaluated.
+	var sn, cs, snC, csC ratInterval
+	if k%2 == 0 {
+		sn, cs = turnFirstOctantSinCos(s)
+	} else {
+		snC, csC = turnFirstOctantSinCos(sc)
+	}
 	// Octant symmetry: within octant k the true angle is k*pi/4 + x for even
 	// k (x = 2*pi*s) or (k+1)*pi/4 - x' for odd k (x' = 2*pi*sc), so odd
 	// octants read off the COMPLEMENT pair with sin/cos swapped.

@@ -537,14 +537,18 @@ func ivTwoTriangleArea(p0, p1, p2 ivVec3) (ratInterval, bool) {
 }
 
 // revolveAuditTri is one triangle's exact lift, held for the whole audit: its
-// three corners, the two edge vectors, their cross product, and proven upper
-// bounds on the two edge lengths. Every predicate below reads these rather than
-// rebuilding them per pair, exactly as loft_audit.go's own audit data does.
+// three corners, the three edge vectors (u = p1−p0, v = p2−p0, w = p2−p1),
+// their cross product, and proven upper bounds on the three edge lengths.
+// Every predicate below reads these rather than rebuilding them per pair,
+// exactly as loft_audit.go's own audit data does.
 type revolveAuditTri struct {
-	p       [3]ratV3
-	u, v, n ratV3
-	lu, lv  float64
-	box     [2]r3.Vec
+	p          [3]ratV3
+	u, v, w, n ratV3
+	lu, lv, lw float64
+	box        [2]r3.Vec
+	// off[k] holds the two corner offsets measured from corner k, in
+	// increasing corner order, each with its proven length bound.
+	off [3][2]revolveOffset
 }
 
 func newRevolveAuditTri(verts []r3.Vec, tri [3]int) (revolveAuditTri, bool) {
@@ -557,10 +561,15 @@ func newRevolveAuditTri(verts []r3.Vec, tri [3]int) (revolveAuditTri, bool) {
 	}
 	out.u = rvSub(out.p[1], out.p[0])
 	out.v = rvSub(out.p[2], out.p[0])
+	out.w = rvSub(out.p[2], out.p[1])
 	out.n = rvCross(out.u, out.v)
 	out.lu = rvLenUpper(out.u)
 	out.lv = rvLenUpper(out.v)
+	out.lw = rvLenUpper(out.w)
 	out.box = triBox(verts, tri)
+	out.off[0] = [2]revolveOffset{{v: out.u, length: out.lu}, {v: out.v, length: out.lv}}
+	out.off[1] = [2]revolveOffset{revolveOffsetOf(rvSub(out.p[0], out.p[1])), {v: out.w, length: out.lw}}
+	out.off[2] = [2]revolveOffset{revolveOffsetOf(rvSub(out.p[0], out.p[2])), revolveOffsetOf(rvSub(out.p[1], out.p[2]))}
 	return out, true
 }
 
@@ -575,28 +584,47 @@ func newRevolveAuditTri(verts []r3.Vec, tri [3]int) (revolveAuditTri, bool) {
 // products, and each face normal crossed with its own three edges — the set
 // that decides every disjoint pair of triangles, coplanar ones included. A
 // candidate that vanishes carries no information and is skipped, and failing on
-// all of them is a refusal, never an admission.
+// all of them is a refusal, never an admission. The axes are built in the same
+// order as before, one at a time as the loop reaches them, and each one's
+// length bound is tried in its cheap form (|x × y| ≤ |x||y|) before its exact
+// form, so a pair that a low-index axis decides never pays for the rest.
 func revolveSeparated(a, b revolveAuditTri, delta float64) bool {
 	margin := productUpper(2, delta)
 	if isNonFinite(margin) {
 		return false
 	}
-	ea := [3]ratV3{a.u, a.v, rvSub(a.p[2], a.p[1])}
-	eb := [3]ratV3{b.u, b.v, rvSub(b.p[2], b.p[1])}
-	axes := make([]ratV3, 0, 17)
-	axes = append(axes, a.n, b.n)
-	for _, x := range ea {
-		for _, y := range eb {
-			axes = append(axes, rvCross(x, y))
+	ea := [3]ratV3{a.u, a.v, a.w}
+	eb := [3]ratV3{b.u, b.v, b.w}
+	la := [3]float64{a.lu, a.lv, a.lw}
+	lb := [3]float64{b.lu, b.lv, b.lw}
+	lnA := productUpper(a.lu, a.lv)
+	lnB := productUpper(b.lu, b.lv)
+	// axis is one candidate, built only when the candidates before it have
+	// failed, beside a cheap proven upper bound on its length: |x × y| ≤ |x||y|.
+	type axis struct {
+		g     ratV3
+		bound float64
+	}
+	next := func(gi int) axis {
+		switch {
+		case gi == 0:
+			return axis{a.n, lnA}
+		case gi == 1:
+			return axis{b.n, lnB}
+		case gi < 11:
+			x, y := (gi-2)/3, (gi-2)%3
+			return axis{rvCross(ea[x], eb[y]), productUpper(la[x], lb[y])}
+		case gi < 14:
+			x := gi - 11
+			return axis{rvCross(a.n, ea[x]), productUpper(lnA, la[x])}
+		default:
+			y := gi - 14
+			return axis{rvCross(b.n, eb[y]), productUpper(lnB, lb[y])}
 		}
 	}
-	for _, x := range ea {
-		axes = append(axes, rvCross(a.n, x))
-	}
-	for _, y := range eb {
-		axes = append(axes, rvCross(b.n, y))
-	}
-	for _, g := range axes {
+	for gi := range 17 {
+		ax := next(gi)
+		g := ax.g
 		if g[0].Sign() == 0 && g[1].Sign() == 0 && g[2].Sign() == 0 {
 			continue
 		}
@@ -608,6 +636,11 @@ func revolveSeparated(a, b revolveAuditTri, delta float64) bool {
 		}
 		if gap.Sign() <= 0 {
 			continue
+		}
+		// The cheap bound is at least the exact one, so a gap that clears it
+		// clears the exact one too; a gap that does not is retried exactly.
+		if cheap := floatRat(productUpper(margin, ax.bound)); cheap != nil && gap.Cmp(cheap) > 0 {
+			return true
 		}
 		need := floatRat(productUpper(margin, rvLenUpper(g)))
 		if need != nil && gap.Cmp(need) > 0 {
@@ -1002,16 +1035,7 @@ func revolveOffsetOf(v ratV3) revolveOffset {
 // revolveCornerOffsets is a triangle's two corners other than the one at slot
 // at, measured from that one.
 func revolveCornerOffsets(t revolveAuditTri, at int) [2]revolveOffset {
-	var out [2]revolveOffset
-	n := 0
-	for k := range 3 {
-		if k == at {
-			continue
-		}
-		out[n] = revolveOffsetOf(rvSub(t.p[k], t.p[at]))
-		n++
-	}
-	return out
+	return t.off[at]
 }
 
 // revolveEdgeIsolated proves the pair meets only along the edge they share,
