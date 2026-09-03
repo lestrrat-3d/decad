@@ -77,6 +77,11 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref StepRef, cbp capB
 	// band's own patch index — which IS Table BX row BX3's deterministic patch
 	// order, the order the DX7 survey then reports its faces in.
 	var patchGeoms []capPatch
+	// bandDeltas carries each band's own contour displacement onto the payload,
+	// keyed by the (loop, cap) it was built for. The tessellator reads it so its
+	// cap-level facets charge the SAME displacement this build's own vertices,
+	// edges and areas already did.
+	bandDeltas := map[capBandKey]float64{}
 	collectPatchGeoms := func(band capBandResult) {
 		for i, f := range band.patches {
 			if len(f.origins) == 0 {
@@ -168,6 +173,7 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref StepRef, cbp capB
 			}
 			faces = append(faces, band.patches...)
 			collectPatchGeoms(band)
+			bandDeltas[capBandKey{loop: li, start: true}] = band.delta
 			startCo = band.capCo
 			startBand = band
 			v, err := capBandVolume(ctx, loop, cbp, band.geom, cbp.z0, +1, band.delta)
@@ -194,6 +200,7 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref StepRef, cbp capB
 			}
 			faces = append(faces, band.patches...)
 			collectPatchGeoms(band)
+			bandDeltas[capBandKey{loop: li, start: false}] = band.delta
 			endCo = band.capCo
 			endBand = band
 			v, err := capBandVolume(ctx, loop, cbp, band.geom, cbp.z1, -1, band.delta)
@@ -331,6 +338,7 @@ func evalCapBlendContext(ctx context.Context, d *Document, ref StepRef, cbp capB
 		return nil, err
 	}
 	cbp.patches = patchGeoms
+	cbp.bandDelta = bandDeltas
 	body.payload = cbp
 	return body, nil
 }
@@ -904,12 +912,7 @@ func patchAreaOf(g capPatchGeom) (float64, float64) {
 			crossProductUpper(v1.Sub(v0), v2.Sub(v0)),
 			crossProductUpper(v2.Sub(v0), v3.Sub(v0)),
 		)
-		// The quad's two directrices are its side-level chord (sideA -> sideB)
-		// and its cap-level one (capA -> capB), both plane-local at their own
-		// single level, so each 3D length IS its 2D one.
-		levelAllow := bandLevelAreaAllow(g.levelDelta,
-			absSumUpper(chordUpper2(g.sideA, g.sideB), chordUpper2(g.capA, g.capB)))
-		bound := absSumUpper(sumSlop(2, absSumUpper(a1, a2)), analyticRoundBound(crossEnv), g.contourAllow, levelAllow)
+		bound := absSumUpper(sumSlop(2, absSumUpper(a1, a2)), analyticRoundBound(crossEnv), patchDisplacementAreaAllow(g))
 		return area, bound
 	}
 	R0, R1 := g.sideRadius, g.capRadius
@@ -971,20 +974,40 @@ func patchAreaOf(g capPatchGeom) (float64, float64) {
 		conservativeValueError(area, dth*(R0+R1)*(math.Abs(dR)+math.Abs(H))),
 		coneFrustumAreaBracket(R0, R1, H, dth, g.capThAllow, area),
 	)
-	// The level allowance is the one term neither reading of the core speaks
-	// for: the bracket lifts H as an EXACT rational (it is a difference of two
-	// payload floats, so it brackets the area of the patch this build HOLDS),
-	// and the fallback envelope covers it only by accident of its own width.
-	// The axial displacement is the side level's own rounding plus whatever
-	// the H subtraction just above committed, and the frustum sector's two
-	// directrix arcs are Δθ·R0 and Δθ·R1, read at an upper bound on the true
-	// window rather than at the held one.
-	levelAllow := bandLevelAreaAllow(
-		absSumUpper(g.levelDelta, addRoundError(g.capZ, -g.sideZ, H)),
-		productUpper(absSumUpper(dth, g.capThAllow), absSumUpper(R0, R1)),
-	)
-	bound := absSumUpper(core, windowSkew, g.contourAllow, levelAllow)
+	bound := absSumUpper(core, windowSkew, patchDisplacementAreaAllow(g))
 	return area, bound
+}
+
+// patchDisplacementAreaAllow is the part of a band patch's own area bound that
+// comes from the two DISPLACEMENTS its directrices carry rather than from the
+// arithmetic that evaluated its area: the cap contour's own in-plane
+// displacement (contourAllow, bandPatchAreaAllow at build time) beside the side
+// level's axial one (bandLevelAreaAllow over levelDelta). patchAreaOf composes
+// it into the bound it publishes, and the tessellator charges the same two
+// terms per patch into the mesh's own area slack
+// (docs/tessellation-reach-design.md §7), so neither reader can be told a
+// different story about how far this patch's area can move.
+//
+// The level allowance is the one term neither reading of a Cone patch's core
+// speaks for: coneFrustumAreaBracket lifts H as an EXACT rational (so it
+// brackets the area of the patch this build HOLDS), and the fallback envelope
+// covers it only by accident of its own width. The axial displacement charged
+// is the side level's own rounding plus whatever the capZ − sideZ subtraction
+// commits, and the frustum sector's two directrix arcs are Δθ·R0 and Δθ·R1,
+// read at an upper bound on the true window rather than at the held one. A
+// Plane patch's two directrices are its own two chords, each plane-local at a
+// single level, so each 3D length IS its 2D one.
+func patchDisplacementAreaAllow(g capPatchGeom) float64 {
+	if !g.circular {
+		return absSumUpper(g.contourAllow, bandLevelAreaAllow(g.levelDelta,
+			absSumUpper(chordUpper2(g.sideA, g.sideB), chordUpper2(g.capA, g.capB))))
+	}
+	h := g.capZ - g.sideZ
+	dth := math.Abs(g.capTh1 - g.capTh0)
+	return absSumUpper(g.contourAllow, bandLevelAreaAllow(
+		absSumUpper(g.levelDelta, addRoundError(g.capZ, -g.sideZ, h)),
+		productUpper(absSumUpper(dth, g.capThAllow), absSumUpper(g.sideRadius, g.capRadius)),
+	))
 }
 
 // chordUpper2 is a PROVEN upper bound on the distance between two plane-local

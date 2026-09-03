@@ -66,6 +66,22 @@ type capBlendPayload struct {
 	// to every reader, and sorting the role strings is not this order either —
 	// it puts patch 10 ahead of patch 2.
 	patches []capPatch
+	// bandDelta is each built band's own cap-contour displacement
+	// (capBandResult.delta, capblend_contour.go's capContourDelta), keyed by the
+	// (loop, cap) that band sits on. buildCapBand already computes it once for
+	// every cap-level vertex, edge and area reading of that band; storing it here
+	// lets a later reader — the tessellator, docs/tessellation-reach-design.md
+	// §7 — charge the SAME number those readings did rather than re-derive a
+	// second one from the same offset. It is plane-local and
+	// placement-invariant, exactly as patches is.
+	bandDelta map[capBandKey]float64
+}
+
+// capBandKey names one chamfer band: the loop it belongs to (an index into
+// loops(), the same index space Table BX's roles use) and which cap it sits on.
+type capBandKey struct {
+	loop  int
+	start bool
 }
 
 // capPatch is one built chamfer patch's role paired with the geometry that

@@ -946,8 +946,8 @@ reaches only the analytic bodies at the start of a chain.
 |---|---|---|---|---|
 | **DX1** | mass properties / bounds | existing bounded path | bounded analytic patch integrals | bounded slab-region sums |
 | **DX2** | topology / structural Verify | existing builder | payload builder | slab-region union builder |
-| **DX3** | `Tessellate` / STL / OBJ | waits on revolve tessellator; feature itself still builds | required patch tessellator; staged for the cap-loop chamfer, whose asked reading is `ErrUnsupported` | required slab-region tessellator |
-| **DX4** | mesh boolean | available once DX3 exists | available once DX3 exists | available once DX3 exists |
+| **DX3** | `Tessellate` / STL / OBJ | waits on revolve tessellator; feature itself still builds | patch tessellator, export-only: one count per wall walk shared by the side wall, the band patch and the cap contour (`docs/tessellation-reach-design.md` §7) | required slab-region tessellator |
+| **DX4** | mesh boolean | available once DX3 exists | available once DX3's occupied-volume proof lands (`docs/tessellation-reach-design.md` §7); export-only tessellation does not admit it | available once DX3 exists |
 | **DX5** | `ThroughAll` directional extent | existing | analytic patch extrema, published beside the displacement a computed cap contour and the inherited axial levels give them (§8.4), and beside the frame, placement and endpoint-summation rounding every extent reading of this payload carries (evaluator §5); the stop charges that displacement to the level it resolves and refuses only where it straddles the sketch plane (evaluator §5) | union of slab-region extents |
 | **DX6** | clearance | existing revolve boundary reader | add trimmed patch faces to boundary model; undecidable cells stay `Suspect`; staged for the cap-loop chamfer, whose pairs read `Suspect` unless boxes already decide them | union exposed slab faces; never include cancelled interfaces |
 | **DX7** | undercut | existing revolve survey | bounded normal ranges per patch, each widened by the whole distance its own `Face.NormalAt` readings can sit from the patch's exactly enclosed normal model and by that patch's own proven departure from the surface it publishes (§8.3), a circular patch's window read through a proven enclosure rather than a float evaluation; a proven opposing point lists its patch, and a remaining straddle is undecided without removing another proven listing. The receiver's own unchanged walls and caps are not patches, and are read through the SAME three-valued rule, with the same undecided outcome — no reader may treat the receiver half as exempt | exact normal ranges per exposed face |
@@ -962,18 +962,20 @@ asked wall survey is undecided. No open implementation claim remains.
 Clearance may also return undecided for surface cells its certified kernel does
 not solve. This is the existing `Verify` contract, not a modify-build refusal.
 
-DX3 and DX6 are staged for the cap-loop chamfer, and §14's rule that a PR may
-leave a DX question staged only where this table says so is what these two cells
-now say. Both remain required for the cap-loop fillet.
+DX6 is staged for the cap-loop chamfer, and §14's rule that a PR may leave a DX
+question staged only where this table says so is what that cell now says. It
+remains required for the cap-loop fillet.
 
-The chamfer's DX3 reading is `ErrUnsupported` through the unknown-payload path.
-A patch tessellator must chord the cap-level offset boundary and the side-level
-original boundary into one strip, and the two may need different sample
-densities; a strip whose densities disagree is not watertight, and a mesh that
-is not watertight is a wrong answer rather than a coarse one. The tessellator's
-design — one count per wall walk shared by the side wall, the band patch and
-the cap contour, and the positional departure each patch charges — is
-`docs/tessellation-reach-design.md` §7.
+The chamfer's DX3 reading is a mesh. A patch tessellator must chord the
+cap-level offset boundary and the side-level original boundary into one strip,
+and the two may need different sample densities; a strip whose densities
+disagree is not watertight, and a mesh that is not watertight is a wrong answer
+rather than a coarse one. The tessellator answers that with ONE count per wall
+walk, shared by the side wall, the band patch and the cap contour, and charges
+each patch its own positional departure; the design is
+`docs/tessellation-reach-design.md` §7. DX4 stays refused on top of it: that
+mesh carries no occupied-volume proof, so it serves export while every boolean
+refuses the operand.
 
 The chamfer's DX6 reading is `Suspect` for any pair its bounding boxes do not
 already decide, which is the same staging the cup payload took before its own
@@ -1143,7 +1145,7 @@ Every implementation PR MUST add geometry assertions, not run-only coverage.
 | **B** | revolve junction rewrite + roles + surveys | cap loops; shell reach; DX3 until revolve tessellation lands |
 | **C** | multi-region `stackedPrismPayload`; migrate cups; lift base S12 through BX8; closed + side-opening prism shell; tessellation/clearance cases | cap loops; revolve shell |
 | **D** | full/partial allowed revolve shell | cap loops |
-| **E** | `capBlendPayload`; complete cap-loop chamfer; analytic integrals | complete cap-loop fillet; DX3 patch tessellation; DX6 clearance model; partial cap chains; mixed edge classes; faceted receivers |
+| **E** | `capBlendPayload`; complete cap-loop chamfer; analytic integrals | complete cap-loop fillet; DX4 mesh-boolean admission; DX6 clearance model; partial cap chains; mixed edge classes; faceted receivers |
 
 Each PR lands its result payload, structural topology, measurement path, recipe
 round trip, and tests together. A PR may leave a DX question staged only where
