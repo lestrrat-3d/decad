@@ -952,8 +952,10 @@ func (w segmentWalk) isLine() bool { return w.kind == walkLine }
 // answer — the reason each consumer stages is its own row in
 // docs/spline-design.md Table R. The prism side-face build itself no longer
 // calls this: buildLoopSidesAs switches on walkKind instead (§10 P4b), with its
-// own free-form arm. Every remaining call site is a capability P4b does not
-// reach — chording (tessellate.go's chordLoop), the modify ops (fillet.go,
+// own free-form arm, and tessellate.go's chordLoop no longer calls it either:
+// it switches on walkKind, with its own free-form chording arm
+// (docs/tessellation-reach-design.md §5). Every remaining call site is a
+// capability neither increment reaches — the modify ops (fillet.go,
 // shell_offset.go, capblend_geom.go), revolve (revolve.go), and
 // profileCoordinateUpper's own callers (capblend_centroid.go, revolve.go),
 // which need a placed cap frame a free-form wall genuinely cannot represent.

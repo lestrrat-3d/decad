@@ -27,16 +27,17 @@ Router (navigation, not authority):
 ## 1. Current state
 
 `tessellateContext` (`tessellate.go`) dispatches on `facetedPayload`, `cupPayload`, `prismPayload` and
-`loftPayload` (R1), and refuses every other with `ErrUnsupported`. A free-form-walled `prismPayload` reaches
-the prism path and refuses inside `chordLoop` at `requireAnalyticWalk`.
+`loftPayload` (R1), and refuses every other with `ErrUnsupported`. A free-form-walled `prismPayload`
+reaches the prism path and chords there: `chordLoop` switches on `walkKind` and gives a `walkFreeform`
+walk its own dyadic station chain (§5, R2).
 
-`Mesh` carries tess §2's proof record complete, populated by all three of those paths (§3, R0):
+`Mesh` carries tess §2's proof record complete, populated by all four of those paths (§3, R0):
 
 | tess §2 proof | Held on `Mesh` | Consumer |
 |---|---|---|
 | `sourceBound(face)` | `faceBound`, one entry per source face | `facesOfMesh` (`boolean.go`), for the hidden-tangency pre-pass |
 | `areaSlack` | yes, the analytic terms plus a per-facet coordinate allowance | boolean area composition |
-| `volSymDiff` + `symDiffOK` | yes; `symDiffOK` true for prism, cup and faceted | `operandSymDiff` (`boolean.go`), which refuses a mesh carrying no proof |
+| `volSymDiff` + `symDiffOK` | yes; `symDiffOK` true for prism, cup, loft and faceted | `operandSymDiff` (`boolean.go`), which refuses a mesh carrying no proof |
 | `deltaStore` (tess §5) | charged per vertex into `faceBound`, `areaSlack` and `volSymDiff` | — |
 
 Every restatement below publishes into that record, and no consumer infers a term the mesh did not state. A
@@ -249,15 +250,18 @@ func chainStations(spans []bezierSpan, target float64, work *freeformWork) (free
 
 type freeformChain struct {
     stations    []ratPoint // exact points ON the curve, one per cell boundary, chain start included, end excluded
+    end         ratPoint   // the excluded final boundary, copied so it aliases no input span
     sagitta     float64    // measured post-subdivision MAXIMUM over cells (never a sum)
     cellArcUpper []float64 // spanSpeedUpper of each accepted cell's own sub-span
-    cellChordLower []float64 // ratFloatDown of each accepted cell's chord length
+    cellChordLower []float64 // proven lower bound on each accepted cell's chord length (chargedRatSqrtDown)
 }
 ```
 
-Implementation: refactor `sagittaStationWalk` so the per-side measurement is a method over a slice of sides
-(`[]dyadicSpan`), and both `pairStations` (2 sides) and `chainStations` (1 side) call it. The cap
-(`maxChordsPerWalk`, `errTooManyChords`, spline R8) and the R7 work refusal stay where they are.
+Implementation: `sagittaStationWalk` measures, accepts and bisects over a SLICE of sides (`[]dyadicSpan`),
+and both `pairStations` (2 sides) and `chainStations` (1 side) drive it. What each consumer owes per accepted
+cell — the pair's matched delta, the chain's arc/chord bracket — is a `stationCellReader`, the one place the
+two differ. The cap (`maxChordsPerWalk`, `errTooManyChords`, spline R8) and the R7 work refusal stay where
+they are.
 
 ### The `chordLoop` arm
 
@@ -303,12 +307,16 @@ A rational (Tier B/C) walk never reaches the arm: spline R10 refuses it at `Extr
   watertight; every wall vertex lies on the Bézier evaluated in `big.Rat` at the station's dyadic parameter
   to within one `Point2` rounding; dense sampling of the curve finds no point farther than `Bound()` from the
   mesh (a falsifier); the chording component of `Bound()` is `<= tol`.
-- Chord count strictly non-increasing as `tol` doubles; a `tol` below the cap's reach refuses with
-  `errTooManyChords` before any vertex is allocated.
-- A 15-point involute `FitSplineSeg` prism (`extrude_involute_test.go`'s fixture): byte-identical `OBJ` on
-  two calls; `Cut(prism, box)` where the box lies strictly inside reports `Volume` within `Bound` of
-  `prism.Volume − box.Volume`; two overlapping free-form prisms make `Verify` decide their pair.
-- `extrude_freeform_staging_test.go`'s tessellation refusal assertions flip to success.
+- Chord count non-increasing as `tol` doubles; a `tol` no bisection can reach refuses `ErrUnsupported`
+  before any vertex is allocated. Which of the two refusals binds is fixture-dependent and NOT asserted: the
+  exact-rational work counter (spline R7) is charged per bisection and is reached long before one curve's
+  chord cap (R8) is, on every fixture this package builds.
+- A 15-point involute `FitSplineSeg` prism (`extrude_test.go`'s `involuteFlankSketch`): byte-identical `STL`
+  and `OBJ` on two calls. On the fit-spline arch: `Cut(prism, box)` where the box lies strictly inside
+  reports `Volume` within `Bound` of `prism.Volume − box.Volume`; two overlapping free-form prisms make
+  `Verify` decide their pair with a proven `Interference` row.
+- `extrude_freeform_test.go`'s tessellation, export, boolean and interference refusal assertions flip to
+  success; its clearance and survey refusals stand, since neither reads the mesh.
 
 ## 6. R3–R5 — revolve (tess T2/T3/T4)
 

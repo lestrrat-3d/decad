@@ -271,3 +271,190 @@ func TestFacetedRestatementPublishesItsPayloadsOwnProofRecord(t *testing.T) {
 		require.Equal(t, fp.meshBound, d)
 	}
 }
+
+// internalFreeformArchBody is extrude_freeform_test.go's fit-spline arch built
+// inside the package: the hump through (0,0), (4,3), (8,0) closed by a chord,
+// extruded by height, whose one free-form wall is the only chorded walk in the
+// section. The height is a parameter because the chording's own area loss
+// splits between the two caps, which do not scale with it, and the wall, which
+// scales with it linearly — so a tall prism is what makes the wall's own term
+// the dominant one.
+func internalFreeformArchBody(t *testing.T, doc *Document, height float64) *Body {
+	t.Helper()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	start := s.CreatePoint(0, 0)
+	mid := s.CreatePoint(4, 3)
+	end := s.CreatePoint(8, 0)
+	_, err = s.CreateFitSpline(start, mid, end)
+	require.NoError(t, err)
+	s.CreateLine(end, start)
+	profiles := s.Profiles()
+	require.Len(t, profiles, 1)
+	body, err := doc.Extrude(s, profiles[0], Distance{D: units.Millimeters(height), Dir: Along})
+	require.NoError(t, err)
+	return body
+}
+
+// meshHeldArea and meshHeldVolume are the mesh's own held figures, summed from
+// its facets — the quantities the proof record's two allowances must cover the
+// gap between and the body's exactly measured Area and Volume.
+func meshHeldArea(m *Mesh) float64 {
+	total := 0.0
+	for _, tri := range m.triangles {
+		a, b, c := m.vertices[tri[0]], m.vertices[tri[1]], m.vertices[tri[2]]
+		total += b.Sub(a).Cross(c.Sub(a)).Len() / 2
+	}
+	return total
+}
+
+func meshHeldVolume(m *Mesh) float64 {
+	total := 0.0
+	for _, tri := range m.triangles {
+		a, b, c := m.vertices[tri[0]], m.vertices[tri[1]], m.vertices[tri[2]]
+		total += a.Dot(b.Cross(c)) / 6
+	}
+	return total
+}
+
+// TestFreeformPrismProofRecordCoversItsOwnChording is
+// docs/tessellation-reach-design.md §5's proof obligation, checked against the
+// quantities it bounds rather than against its own formula: the chorded
+// free-form wall's area slack must cover the area the chording actually loses,
+// and volSymDiff must cover the volume it actually loses, both measured against
+// the body's own exactly integrated readings.
+func TestFreeformPrismProofRecordCoversItsOwnChording(t *testing.T) {
+	// Two heights, because the area the chording loses splits between terms
+	// that scale differently: the two caps' loss is fixed by the section, and
+	// the wall's loss grows with the sweep. A short prism is dominated by the
+	// caps and a tall one by the wall, so covering both pins both terms.
+	for _, height := range []float64{10, 2000} {
+		t.Run(units.Millimeters(height).String(), func(t *testing.T) {
+			body := internalFreeformArchBody(t, New(), height)
+			mesh, err := tessellateContext(t.Context(), body, units.Millimeters(0.05))
+			require.NoError(t, err)
+			require.True(t, mesh.symDiffOK, `a chorded free-form prism still proves its occupied volume`)
+
+			area, err := body.Area()
+			require.NoError(t, err)
+			held := meshHeldArea(mesh)
+			require.Less(t, held, area.Value.Base(), `the chorded facets hold less area than the curved boundary`)
+			require.GreaterOrEqual(t, mesh.areaSlack, area.Value.Base()-held,
+				`the published area slack must cover the area the chording actually loses`)
+
+			volume, err := body.Volume()
+			require.NoError(t, err)
+			heldVol := meshHeldVolume(mesh)
+			require.Less(t, heldVol, volume.Value.Base(), `the inscribed chorded prism holds less volume than the curved one`)
+			require.GreaterOrEqual(t, mesh.volSymDiff, volume.Value.Base()-heldVol,
+				`the published occupied-volume bound must cover the volume the chording actually loses`)
+		})
+	}
+
+	body := internalFreeformArchBody(t, New(), 10)
+	mesh, err := tessellateContext(t.Context(), body, units.Millimeters(0.05))
+	require.NoError(t, err)
+
+	worst := 0.0
+	for _, f := range mesh.source {
+		d, ok := mesh.sourceBound(f)
+		require.True(t, ok, `every source face is present in the proof record`)
+		worst = math.Max(worst, d)
+	}
+	require.Equal(t, worst, mesh.bound, `Bound is the maximum sourceBound over the body`)
+
+	// The free-form wall pays for its own chording; the straight closing wall
+	// chords nothing and, under an unplaced axis-aligned payload, states an
+	// exactly held polygon.
+	var curved, straight float64
+	for _, f := range body.Faces() {
+		d, ok := mesh.sourceBound(f)
+		require.True(t, ok)
+		if _, isNURBS := f.Surface().(NURBSSurface); isNURBS {
+			curved = d
+			continue
+		}
+		if _, isPlane := f.Surface().(Plane); isPlane && roleOf(t, f) != roleCapStart && roleOf(t, f) != roleCapEnd {
+			straight = d
+		}
+	}
+	require.Positive(t, curved, `a chorded free-form wall never states an exact patch`)
+	require.Zero(t, straight, `the straight closing wall chords nothing and stores nothing inexact`)
+	require.Greater(t, curved, straight)
+
+	// The curved wall's OWN published displacement must cover its OWN chording,
+	// not merely be positive: no point of the recorded curve may sit farther
+	// from that face's held chords than the face states. The wall is a vertical
+	// ruled strip, so its facets' plane footprints ARE those chords and the
+	// whole reading is 2D.
+	deviation := freeformWallChordDeviation(t, body, mesh)
+	require.Positive(t, deviation, `this fixture genuinely departs from its chords — the check is not vacuous`)
+	require.GreaterOrEqual(t, curved, deviation,
+		`the free-form wall's own sourceBound must cover the departure its own chords take`)
+}
+
+// freeformWallChordDeviation measures, over a dense sampling of the recorded
+// free-form curve, the farthest any curve point sits from the chords the mesh
+// holds for that wall — the quantity the wall face's own sourceBound must
+// cover.
+func freeformWallChordDeviation(t *testing.T, body *Body, mesh *Mesh) float64 {
+	t.Helper()
+	pp, ok := body.payload.(prismPayload)
+	require.True(t, ok)
+
+	var spans []bezierSpan
+	for _, seg := range pp.profile.Outer.Segments {
+		if _, isFree := seg.(FitSplineSeg); !isFree {
+			continue
+		}
+		var err error
+		spans, _, err = freeformBezierSpans(seg, newFreeformWork())
+		require.NoError(t, err)
+	}
+	require.NotEmpty(t, spans, `the fixture's own free-form segment`)
+
+	// The chords: each wall facet of the NURBS face projects onto exactly one
+	// of them in the sketch plane.
+	var chords [][2][2]float64
+	for i, f := range mesh.source {
+		if _, isNURBS := f.Surface().(NURBSSurface); !isNURBS {
+			continue
+		}
+		tri := mesh.triangles[i]
+		flat := map[[2]float64]struct{}{}
+		for _, v := range tri {
+			flat[[2]float64{mesh.vertices[v].X, mesh.vertices[v].Y}] = struct{}{}
+		}
+		ends := make([][2]float64, 0, 2)
+		for p := range flat {
+			ends = append(ends, p)
+		}
+		require.Len(t, ends, 2, `a vertical wall facet has exactly two distinct plane footprints`)
+		chords = append(chords, [2][2]float64{ends[0], ends[1]})
+	}
+	require.NotEmpty(t, chords)
+
+	worst := 0.0
+	const samples = 5000
+	for k := range samples + 1 {
+		u, v := evalSpans(t, spans, float64(k)/samples)
+		best := math.Inf(1)
+		for _, c := range chords {
+			best = math.Min(best, planeSegmentDistance([2]float64{u, v}, c[0], c[1]))
+		}
+		worst = math.Max(worst, best)
+	}
+	return worst
+}
+
+// planeSegmentDistance is the distance from p to the segment ab in the plane.
+func planeSegmentDistance(p, a, b [2]float64) float64 {
+	dx, dy := b[0]-a[0], b[1]-a[1]
+	den := dx*dx + dy*dy
+	s := 0.0
+	if den > 0 {
+		s = math.Max(0, math.Min(1, ((p[0]-a[0])*dx+(p[1]-a[1])*dy)/den))
+	}
+	return math.Hypot(p[0]-(a[0]+s*dx), p[1]-(a[1]+s*dy))
+}

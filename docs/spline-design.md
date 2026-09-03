@@ -1147,12 +1147,11 @@ is accepted and reads `Suspect`:
 **Neither failure refuses a BUILD.** Volume and area read no direction cone,
 so nothing in this section withholds a body — the readings that need a
 direction are the only ones it leaves undecided. Chording, export, the
-boolean path and interference proof read no direction cone either, but they
-wait on their own later increment for an EXTRUDED free-form wall (§10 P5).
-Loft follows `docs/loft-design.md` Table D rows D1–D3 instead. A free-form
-extrude reaches none of them yet, for a reason unrelated to this section. A
-collapsed span shows the whole cost: it fails the speed floor, so it costs
-those two readings, on a body that still builds and reports its `Volume`.
+boolean path and interference proof read no direction cone either, and an
+EXTRUDED free-form wall reaches all four through §10 P5's chording; Loft
+follows `docs/loft-design.md` Table D rows D1–D3 instead. A collapsed span
+shows the whole cost: it fails the speed floor, so it costs those two
+readings, on a body that still builds and reports its `Volume`.
 What refuses an ALL-collapsed walk at build time is §5.1's zero-length walk
 rule, never this certificate.
 
@@ -1625,9 +1624,9 @@ every walk of the section is itself exactly rational (§3).
 | `ProfileRecord.Area`/`Centroid`/`SecondMoments` | Tier A exactly rational, rounded once; B/C proven interval | §5 |
 | `Extrude` | Tier A section; `Volume` from the Tier A rational, `Area`/`Box` bounded | §6.1 length, §6.2 extremes, §7 surfaces; a through-all stop reading the bracket is §6.4; a wall edge's convexity is §6.5 |
 | `Loft` | a same-kind Tier A free-form paired segment (`docs/loft-design.md` §1, §5.1's free-form arm), chorded at shared dyadic fractions of the span-index coordinate the two curves' own Bézier span decompositions define, never of a recorded knot domain; every reading carries the applicable chorded allowance (`docs/loft-design.md` §5.2). Existing `spanSpeedUpper` and `spanMatchedDeltaUpper` derivations satisfy the bound inputs; only PR 4 evaluator integration remains staged behind `ErrUnsupported` | §6.2.1's sagitta, measured per dyadic level under the existing Loft station cap; the wall stays flat triangles built between held stations and needs no §7 surface. Once the pair lands, downstream reach follows `docs/loft-design.md` Table D rows D1–D3, not this document's P5 |
-| `Tessellate`, `STL`, `OBJ` | `ErrUnsupported` for an EXTRUDED free-form-walled body until §10 P5 chords it; every OTHER body `Extrude` builds. Loft follows `docs/loft-design.md` Table D row D1 | §6.2 sagitta; rides the existing prism path, NOT tessellation T5 |
-| `Union`/`Cut`/`Intersect` | `ErrUnsupported` for an EXTRUDED free-form-walled operand until §10 P5, `Faceted` output as always thereafter. Loft follows `docs/loft-design.md` Table D row D2 | free once chording lands — the mesh boolean reads triangles, not kinds |
-| interference proof | `ErrUnsupported` for an EXTRUDED free-form-walled body until §10 P5. Loft follows `docs/loft-design.md` Table D row D3 | free once chording lands — read-only mesh intersection already serves faceted pairs |
+| `Tessellate`, `STL`, `OBJ` | an EXTRUDED free-form-walled body chords through §6.2.1's dyadic station chain, like every OTHER body `Extrude` builds; the fixed work budget (R7) and the per-curve chord cap (R8) are its only refusals. Loft follows `docs/loft-design.md` Table D row D1 | §6.2.1's sagitta over the single-chain station walk; rides the existing prism path, NOT tessellation T5 (`docs/tessellation-reach-design.md` §5) |
+| `Union`/`Cut`/`Intersect` | an EXTRUDED free-form-walled operand is admitted through its chorded mesh, `Faceted` output as always. Loft follows `docs/loft-design.md` Table D row D2 | the mesh boolean reads triangles, not kinds, so the chording is the whole reduction |
+| interference proof | an EXTRUDED free-form-walled body is decided through its chorded mesh. Loft follows `docs/loft-design.md` Table D row D3 | read-only mesh intersection over the same chording the export path builds |
 | `Undercuts` | proven where §6.3's certificates close, else `Suspect` | §6.2 normal cones; an enclosure decides a face only while it is a proper cone (§6.3) |
 | `MinRadius` | proven interval under §6.3's speed floor, else `Suspect` | §6.2 curvature extremes; a measurement, never a verdict |
 | `MinWallThickness` | proven interval, else `Suspect` | §8.1 |
@@ -1792,8 +1791,8 @@ rules).
   inside a longer clamped net, so `S` is the zero polynomial there while the
   walk's own length stays positive, and §6.5 skips the span rather than
   refusing the body — the speed floor must FAIL, `Undercuts` and `MinRadius`
-  must read `Suspect`, and the body must still build and report its `Volume`
-  — tessellating it is §10 P5, out of P4b's scope. A survey that instead
+  must read `Suspect`, and the body must still build and report its `Volume`.
+  A survey that instead
   returns an empty `Undercuts` list on that
   body is the silent pass §8.1 forbids, and must fail the test, and a
   certificate that reads the isolated root count alone reports a floor on that
@@ -1901,7 +1900,7 @@ rules).
 - Assert `Undercuts` on a free-form face whose certified cone is proper: a face
   whose cone puts every point provenly opposing the pull is listed, and a face
   whose cone clears at every point is not.
-- §10 P5 (blocked on chording, not on this section): assert directed-edge
+- §10 P5's chording: assert directed-edge
   closure, positive triangle area, outward winding, and
   `len(SourceFaces) == len(Triangles)` on a free-form prism mesh; assert
   byte-identical repeated STL/OBJ output; assert a boolean of a free-form

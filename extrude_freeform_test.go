@@ -3,7 +3,8 @@ package decad_test
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
+	"io"
+	"math"
 	"testing"
 
 	"github.com/lestrrat-3d/decad"
@@ -630,14 +631,14 @@ func TestExtrudeFreeformFalsifierDenseSample(t *testing.T) {
 	}
 }
 
-// This file is docs/spline-design.md P4b's Task 4 (.tmp/a3-p4b-plan.md): now
-// that a Tier A free-form section builds through the public Extrude (#179),
-// a dozen OTHER capabilities reach a free-form-walled body for the first
-// time. Every one of them still stages behind its own P5-or-later increment
-// (docs/spline-design.md §8 Table C), and this file pins each refusal so a
-// later change cannot widen one silently. Every test asserts the exact
-// sentinel and the identifying part of the message, never merely "it ran"
-// (CLAUDE.md's hard rules).
+// The section below covers the OTHER capabilities a free-form-walled body
+// reaches (docs/spline-design.md §8 Table C). Chording lands them in two
+// groups. Tessellation, export, the booleans and the interference proof read
+// the chorded mesh and are asserted on computed geometry — a watertight
+// manifold, a volume within its own published bound, a decided pair. The
+// analytic surveys and the clearance kernel read analytic faces, have no
+// free-form arm, and stay undecided; each of those tests pins the exact
+// sentinel or diagnostic so a later change cannot widen one silently.
 
 // freeformArchBody extrudes the fit-spline arch profile ((0,0), (4,3), (8,0)
 // closed by a chord) used throughout extrude_freeform_test.go, into doc, by
@@ -677,102 +678,281 @@ func straightNURBSPrismBody(t *testing.T, doc *decad.Document) *decad.Body {
 	return body
 }
 
-// TestFreeformPrismTessellateRefuses pins the Tessellate row: chording a
-// free-form-walled prism is P5's own increment, so a Tier A free-form
-// section that now builds still refuses at chordLoop (tessellate.go).
-func TestFreeformPrismTessellateRefuses(t *testing.T) {
+// overshootNetControls is docs/spline-design.md §6.2.1's own overshooting
+// control net: a cubic whose two interior control points sit a hundredth of a
+// millimetre off the chord through its ends while the curve itself swings
+// roughly 0.76 mm past that chord's start. It is the shape that separates a
+// chord-SEGMENT sagitta from a carrier-LINE one, so it is also the shape a
+// chording arm must not under-chord.
+var overshootNetControls = [4][2]float64{{0, 0}, {-3, 0.01}, {4, 0.01}, {1, 0}}
+
+// overshootNetPoint evaluates that cubic Bézier at parameter s, over the same
+// control net the sketch records, by de Casteljau — an independent reference
+// the tessellation never consults.
+func overshootNetPoint(s float64) (float64, float64) {
+	pts := overshootNetControls
+	work := pts[:]
+	buf := make([][2]float64, len(work))
+	copy(buf, work)
+	for round := len(buf) - 1; round > 0; round-- {
+		for i := range round {
+			buf[i][0] = buf[i][0] + s*(buf[i+1][0]-buf[i][0])
+			buf[i][1] = buf[i][1] + s*(buf[i+1][1]-buf[i][1])
+		}
+	}
+	return buf[0][0], buf[0][1]
+}
+
+// overshootNetBody extrudes that net, closed back to its start by a straight
+// chord, into a 5 mm prism.
+func overshootNetBody(t *testing.T, doc *decad.Document) *decad.Body {
+	t.Helper()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	pts := make([]*sketch.Point, len(overshootNetControls))
+	for i, c := range overshootNetControls {
+		pts[i] = s.CreatePoint(c[0], c[1])
+	}
+	_, err = s.CreateNURBS(3, pts, []float64{1, 1, 1, 1}, []float64{0, 0, 0, 0, 1, 1, 1, 1})
+	require.NoError(t, err)
+	s.CreateLine(pts[len(pts)-1], pts[0])
+	profiles := s.Profiles()
+	require.Len(t, profiles, 1)
+	body, err := doc.Extrude(s, profiles[0], decad.Distance{D: units.Millimeters(5), Dir: decad.Along})
+	require.NoError(t, err)
+	return body
+}
+
+// segmentDistance is the distance from p to the segment ab, in the plane.
+func segmentDistance(p, a, b [2]float64) float64 {
+	dx, dy := b[0]-a[0], b[1]-a[1]
+	den := dx*dx + dy*dy
+	s := 0.0
+	if den > 0 {
+		s = math.Max(0, math.Min(1, ((p[0]-a[0])*dx+(p[1]-a[1])*dy)/den))
+	}
+	return math.Hypot(p[0]-(a[0]+s*dx), p[1]-(a[1]+s*dy))
+}
+
+// TestFreeformPrismTessellatesItsChordedWall is docs/tessellation-reach-design.md
+// §5's headline: a Tier A free-form wall chords on the existing prism path.
+// The mesh must be a closed, consistently oriented manifold, its facets must
+// name the body's own faces, and the volume it encloses must land on the body's
+// exactly measured volume from below — a chorded outline is inscribed, so it
+// can only lose area to the curve it stands in for, never gain it.
+func TestFreeformPrismTessellatesItsChordedWall(t *testing.T) {
 	doc := decad.New()
 	body := freeformArchBody(t, doc)
 
-	_, err := body.Tessellate(units.Millimeters(0.5))
+	const tol = 0.02
+	mesh, err := body.Tessellate(units.Millimeters(tol))
+	require.NoError(t, err)
+	requireWatertight(t, mesh)
 
-	require.ErrorIs(t, err, decad.ErrUnsupported)
-	require.ErrorContains(t, err, "free-form boundary segment")
+	require.LessOrEqual(t, mesh.Bound().Base(), tol,
+		"an unplaced body's whole bound is chording plus a coordinate rounding, and chording alone is capped by the requested tolerance")
+	require.Positive(t, mesh.Bound().Base(), "a chorded free-form wall never publishes an exact mesh")
+
+	faces := map[*decad.Face]struct{}{}
+	for _, f := range body.Faces() {
+		faces[f] = struct{}{}
+	}
+	require.Len(t, mesh.SourceFaces(), len(mesh.Triangles()), "every facet names a source face")
+	for _, f := range mesh.SourceFaces() {
+		require.Contains(t, faces, f, "a facet's source face must be one of the body's own")
+	}
+
+	vol, err := body.Volume()
+	require.NoError(t, err)
+	held := meshVolume(mesh)
+	require.Positive(t, held, "the facets must be wound outward")
+	require.Less(t, held, vol.Value.Base(), "the inscribed chorded prism holds strictly less than the curved one")
+	require.Greater(t, held, vol.Value.Base()*0.99, "a chording this fine loses under a percent of the volume")
+
+	// The deficit is chording, not a fixed modelling error, so asking for a
+	// four-times finer chord must shrink it.
+	finer, err := body.Tessellate(units.Millimeters(tol / 4))
+	require.NoError(t, err)
+	require.Less(t, vol.Value.Base()-meshVolume(finer), vol.Value.Base()-held,
+		"a finer chording must recover volume the coarser one lost")
 }
 
-// TestFreeformPrismSTLRefusesUnchanged and TestFreeformPrismOBJRefusesUnchanged
-// pin that STL/OBJ surface Tessellate's refusal unmodified (export.go).
-func TestFreeformPrismSTLRefusesUnchanged(t *testing.T) {
+// TestFreeformPrismChordingEnclosesTheCurveBothWays is §5's falsifier on
+// docs/spline-design.md §6.2.1's own overshooting net, the shape whose true
+// departure from its chord is two orders of magnitude past what a carrier-line
+// reading would report. Both directions of the Hausdorff claim [Mesh.Bound]
+// makes are checked: no densely sampled point of the recorded curve lies
+// farther than Bound from the chorded polyline, and no chorded vertex lies
+// farther than Bound from the curve. The vertex direction is checked far
+// tighter than Bound — a station is an exact point ON the curve, so it may
+// only miss the reference polyline by that polyline's own sampling error.
+func TestFreeformPrismChordingEnclosesTheCurveBothWays(t *testing.T) {
+	doc := decad.New()
+	body := overshootNetBody(t, doc)
+
+	const tol = 0.01
+	mesh, err := body.Tessellate(units.Millimeters(tol))
+	require.NoError(t, err)
+	requireWatertight(t, mesh)
+	bound := mesh.Bound().Base()
+	require.LessOrEqual(t, bound, tol)
+
+	// The chorded outline, read off the mesh: every vertex at the base level,
+	// in the order the walls chain them, is a boundary sample.
+	verts := mesh.Vertices()
+	outline := make([][2]float64, 0, len(verts)/2)
+	for i := 0; i < len(verts); i += 2 {
+		require.Zero(t, verts[i].Z, "the base ring sits exactly on the sketch plane")
+		require.InDelta(t, 5.0, verts[i+1].Z, 1e-12, "the top ring sits exactly at the extrusion height")
+		outline = append(outline, [2]float64{verts[i].X, verts[i].Y})
+	}
+	require.GreaterOrEqual(t, len(outline), 4, "this net needs several chords at this tolerance")
+
+	const samples = 20000
+	curve := make([][2]float64, samples+1)
+	for i := range curve {
+		x, y := overshootNetPoint(float64(i) / samples)
+		curve[i] = [2]float64{x, y}
+	}
+
+	// Direction 1 — the falsifier: no point of the true curve is farther from
+	// the chorded outline than the mesh claims.
+	worstCurve := 0.0
+	for _, p := range curve {
+		best := math.Inf(1)
+		for i := range outline {
+			best = math.Min(best, segmentDistance(p, outline[i], outline[(i+1)%len(outline)]))
+		}
+		worstCurve = math.Max(worstCurve, best)
+	}
+	require.LessOrEqual(t, worstCurve, bound,
+		"a point of the recorded curve sits farther from the mesh than the mesh's own published bound")
+	require.Positive(t, worstCurve, "this net genuinely departs from its chords — the check is not vacuous")
+
+	// Direction 2: every chorded station is a point ON the curve, so it may
+	// only miss the dense reference polyline by that polyline's own sagitta.
+	for j, p := range outline {
+		best := math.Inf(1)
+		for i := range curve[:len(curve)-1] {
+			best = math.Min(best, segmentDistance(p, curve[i], curve[i+1]))
+		}
+		require.Less(t, best, 1e-9, "station %d must lie on the recorded curve, not merely near it", j)
+	}
+}
+
+// TestFreeformPrismChordCountTracksTheTolerance pins the two ends of the
+// chording budget: doubling the tolerance never asks for more chords, and a
+// tolerance no bisection this evaluator admits can reach refuses outright
+// rather than returning a coarser mesh under a bound it cannot prove.
+//
+// The refusal that binds at the fine end is the free-form work counter
+// (docs/spline-design.md Table R row R7), not the chord cap (row R8): an exact
+// dyadic bisection charges its own arithmetic, and that ceiling is reached long
+// before 2^14 chords are. Both are ErrUnsupported and both are §5's refusal
+// table, so the assertion is on the sentinel and on nothing being returned.
+func TestFreeformPrismChordCountTracksTheTolerance(t *testing.T) {
 	doc := decad.New()
 	body := freeformArchBody(t, doc)
 
-	var buf bytes.Buffer
-	err := body.STL(&buf)
+	previous := 0
+	for _, tol := range []float64{0.015625, 0.03125, 0.0625, 0.125, 0.25, 0.5, 1} {
+		mesh, err := body.Tessellate(units.Millimeters(tol))
+		require.NoError(t, err)
+		require.LessOrEqual(t, mesh.Bound().Base(), tol, "tol %v: the published bound stays within the tolerance asked for", tol)
+		count := len(mesh.Vertices())
+		if previous > 0 {
+			require.LessOrEqual(t, count, previous, "tol %v: doubling the tolerance must never ask for more chords", tol)
+		}
+		previous = count
+	}
 
+	mesh, err := body.Tessellate(units.Millimeters(1e-12))
+	require.Nil(t, mesh, "a refused tessellation returns no mesh")
 	require.ErrorIs(t, err, decad.ErrUnsupported)
-	require.ErrorContains(t, err, "free-form boundary segment")
-	require.Zero(t, buf.Len(), "a refused export writes nothing")
 }
 
-func TestFreeformPrismOBJRefusesUnchanged(t *testing.T) {
+// TestFreeformPrismExportsDeterministically pins the STL and OBJ rows: both
+// write the chorded mesh, and both are byte-identical across calls (export.go's
+// determinism contract) on the 15-point involute fit spline, the heaviest
+// free-form fixture this package builds.
+func TestFreeformPrismExportsDeterministically(t *testing.T) {
 	doc := decad.New()
-	body := freeformArchBody(t, doc)
+	s, p := involuteFlankSketch(t)
+	body, err := doc.Extrude(s, p, decad.Distance{D: units.Millimeters(4), Dir: decad.Along})
+	require.NoError(t, err)
 
-	var buf bytes.Buffer
-	err := body.OBJ(&buf)
-
-	require.ErrorIs(t, err, decad.ErrUnsupported)
-	require.ErrorContains(t, err, "free-form boundary segment")
-	require.Zero(t, buf.Len(), "a refused export writes nothing")
-}
-
-// TestFreeformPrismBooleanStagesNotContact pins Union/Cut/Intersect: a
-// free-form operand fails G4 (prismProfileIsAnalytic, prism_boolean.go)
-// silently, then the mesh path's own tessellation of that operand refuses —
-// a capability/staging limit reached BEFORE any contact is examined, so it
-// must surface as the plain ErrUnsupported sentinel asBooleanError leaves
-// unwrapped, never a *decad.BooleanError (mirrors
-// TestUnionOfRevolveBodiesStagesNotContact in boolean_test.go).
-func TestFreeformPrismBooleanStagesNotContact(t *testing.T) {
 	for _, tc := range []struct {
-		name string
-		op   func(a, b *decad.Body) (*decad.Body, error)
+		name  string
+		write func(w io.Writer) error
 	}{
-		{"Union", decad.Union},
-		{"Cut", decad.Cut},
-		{"Intersect", decad.Intersect},
+		{"STL", func(w io.Writer) error { return body.STL(w) }},
+		{"OBJ", func(w io.Writer) error { return body.OBJ(w) }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			doc := decad.New()
-			a := freeformArchBody(t, doc)
-			b := boxBody(t, doc, 20, 0, 30, 10, 10)
-
-			_, err := tc.op(a, b)
-
-			require.ErrorIs(t, err, decad.ErrUnsupported)
-			var be *decad.BooleanError
-			require.False(t, errors.As(err, &be),
-				"a pre-contact staging limit is a plain ErrUnsupported, not a BooleanError")
+			var first, second bytes.Buffer
+			require.NoError(t, tc.write(&first))
+			require.NoError(t, tc.write(&second))
+			require.NotZero(t, first.Len(), "a free-form-walled body exports a non-empty mesh")
+			require.Equal(t, first.Bytes(), second.Bytes(), "two exports of one body must be byte-identical")
 		})
 	}
 }
 
-// TestFreeformPrismInterferenceUndecided pins Verify's default pairwise
-// interference proof over a free-form operand: DiagUnsupportedPairPayload
-// (the cause) and the deprecated broad DiagUnsupportedPair both appear, both
-// Suspect, and the pair never reports a proven Interference row nor a Sound
-// status (interference.go / verify.go).
-func TestFreeformPrismInterferenceUndecided(t *testing.T) {
+// TestFreeformPrismCutsAnInteriorBox pins the boolean row: a free-form-walled
+// operand now tessellates, so the mesh boolean can consume it. Cutting a box
+// that lies STRICTLY inside the prism leaves a sealed void, and the result's
+// volume must land within its own published bound of the exact difference of
+// the two operands' volumes.
+func TestFreeformPrismCutsAnInteriorBox(t *testing.T) {
 	doc := decad.New()
-	freeformArchBody(t, doc)
-	// Bounding boxes overlap (u in [2,6] subsets the arch's u in [0,8], v in
-	// [-1,1] meets the arch's v in [0,~3], z in [0,10] matches) so the pair
-	// is never box-disjoint and the interference measurement actually runs.
-	boxBody(t, doc, 2, -1, 6, 1, 10)
+	body := freeformArchBody(t, doc)
+	prismVolume, err := body.Volume()
+	require.NoError(t, err)
+
+	lift, err := r3.Translation(r3.NewVec(0, 0, 3))
+	require.NoError(t, err)
+	inner, err := boxBody(t, doc, 3, 0.5, 5, 1.5, 4).Placed(lift)
+	require.NoError(t, err)
+	innerVolume, err := inner.Volume()
+	require.NoError(t, err)
+
+	result, err := decad.Cut(body, inner)
+	require.NoError(t, err)
+	got, err := result.Volume()
+	require.NoError(t, err)
+
+	want := prismVolume.Value.Base() - innerVolume.Value.Base()
+	require.InDelta(t, want, got.Value.Base(), got.Bound.Base(),
+		"the cut result's volume must sit within its own published bound of the exact difference")
+	require.Positive(t, got.Bound.Base(), "a chorded operand never yields an exact boolean volume")
+}
+
+// TestFreeformPrismInterferenceDecided pins Verify's default pairwise
+// interference proof over two overlapping free-form-walled bodies: the pair is
+// DECIDED — a proven Interference row with a positive overlap volume and its
+// own bound — rather than left undecided under DiagUnsupportedPairPayload.
+func TestFreeformPrismInterferenceDecided(t *testing.T) {
+	doc := decad.New()
+	body := freeformArchBody(t, doc)
+	// Shifted in all three axes, so the pair overlaps in a genuine volume and
+	// shares no face plane with its twin.
+	shift, err := r3.Translation(r3.NewVec(2, 0.2, 1))
+	require.NoError(t, err)
+	_, err = body.PlacedCopy(shift)
+	require.NoError(t, err)
 
 	report, err := doc.Verify(t.Context())
 	require.NoError(t, err)
 
-	require.True(t, hasDiagnostic(report, decad.DiagUnsupportedPairPayload))
-	require.True(t, hasDiagnostic(report, decad.DiagUnsupportedPair))
-	require.Empty(t, report.Interferences, "an undecided pair never publishes a proven overlap")
-	require.NotEqual(t, decad.Sound, report.Status)
-	for _, d := range report.Diagnostics {
-		switch d.Code {
-		case decad.DiagUnsupportedPairPayload, decad.DiagUnsupportedPair:
-			require.Equal(t, decad.Suspect, d.Status)
-		}
-	}
+	require.False(t, hasDiagnostic(report, decad.DiagUnsupportedPairPayload),
+		"a chorded free-form operand is no longer an unsupported payload")
+	require.Len(t, report.Interferences, 1, "the overlapping pair must publish one proven overlap")
+	overlap := report.Interferences[0].Volume
+	require.Positive(t, overlap.Value.Base(), "the two copies genuinely overlap")
+	require.Less(t, overlap.Value.Base(), 150.0, "the overlap is strictly less than either body's own volume")
+	require.Positive(t, overlap.Bound.Base(), "a chorded overlap is measured, never exact")
+	require.Equal(t, decad.Interfering, report.Status)
 }
 
 // TestFreeformPrismClearanceUndecided pins WithClearances on a box-disjoint
@@ -966,4 +1146,62 @@ func TestFreeformPrismSelectorNeverMatchesEdge(t *testing.T) {
 		_, ok := e.Curve().(decad.NURBSCurve)
 		require.False(t, ok, "a free-form rim must never satisfy a Curve type assertion it fails")
 	}
+}
+
+// reversedArchSketch is fitSplineArchSketch's mirror image in RECORDING
+// direction only: the same hump through the same three points and the same
+// closing chord, but authored so the profile loop walks the spline against the
+// curve's own parametrization. The region, and so every measurement of it, is
+// identical; only walkFreeform's reversed flag differs.
+func reversedArchSketch(t *testing.T) (*sketch.Sketch, *sketch.Profile) {
+	t.Helper()
+	w := sketch.NewWorld()
+	s, err := w.CreateSketch(w.XY())
+	require.NoError(t, err)
+	start := s.CreatePoint(0, 0)
+	mid := s.CreatePoint(4, 3)
+	end := s.CreatePoint(8, 0)
+	_, err = s.CreateFitSpline(end, mid, start)
+	require.NoError(t, err)
+	s.CreateLine(start, end)
+	profiles := s.Profiles()
+	require.Len(t, profiles, 1)
+	return s, profiles[0]
+}
+
+// TestFreeformPrismChordsBothWalkDirectionsIdentically pins the reversal arm of
+// the chording (docs/tessellation-reach-design.md §5): a walk running against
+// its curve emits the SAME dyadic cell boundaries the forward walk does, in the
+// opposite order. Two bodies over the same region, recorded in opposite
+// directions, must therefore carry the same chord count, the same published
+// bound and the same vertex set — down to the last bit, since every station is
+// one rounding of the same exact rational.
+func TestFreeformPrismChordsBothWalkDirectionsIdentically(t *testing.T) {
+	const tol = 0.02
+	meshOf := func(build func(t *testing.T) (*sketch.Sketch, *sketch.Profile)) *decad.Mesh {
+		s, p := build(t)
+		body, err := decad.New().Extrude(s, p, decad.Distance{D: units.Millimeters(10), Dir: decad.Along})
+		require.NoError(t, err)
+		mesh, err := body.Tessellate(units.Millimeters(tol))
+		require.NoError(t, err)
+		requireWatertight(t, mesh)
+		return mesh
+	}
+	forward := meshOf(fitSplineArchSketch)
+	backward := meshOf(reversedArchSketch)
+
+	require.Equal(t, len(forward.Triangles()), len(backward.Triangles()),
+		"the two recording directions must settle on the same chord count")
+	require.Equal(t, forward.Bound().Base(), backward.Bound().Base(),
+		"the two recording directions must publish the same bound, bit for bit")
+
+	key := func(m *decad.Mesh) map[r3.Vec]int {
+		out := map[r3.Vec]int{}
+		for _, v := range m.Vertices() {
+			out[v]++
+		}
+		return out
+	}
+	require.Equal(t, key(forward), key(backward),
+		"the two recording directions must land on the identical vertex set")
 }
