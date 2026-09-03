@@ -158,14 +158,14 @@ const revolveArcIntegralSteps = 32
 // the order (diagonal-low half, diagonal-high half), and slack is the proven
 // departure of this model's ρ from the meridian the record denotes.
 func revolveArcCellSlack(cell revArcCell, step ratInterval, twoArea [2]ratInterval, slack float64) (float64, error) {
-	scale, rho, extra, ok := revolveArcScale(cell, step, slack)
+	_, rho, extra, ok := revolveArcScale(cell, step, slack)
 	if !ok {
 		return 0, errRevolveArcCellSlack
 	}
 	total := new(big.Rat)
 	zero := pointInterval(new(big.Rat))
 	for half, weight := range [2]int{revolveWeightT, revolveWeightOneMinusT} {
-		total.Add(total, revolveArcAbsIntegral(rho, scale, twoArea[half], zero, extra, weight))
+		total.Add(total, revolveArcAbsIntegral(rho, twoArea[half], zero, extra, weight))
 	}
 	return ratFloatUp(total), nil
 }
@@ -177,7 +177,7 @@ func revolveArcCellSlack(cell revArcCell, step ratInterval, twoArea [2]ratInterv
 // Jtrue keeps the same sinusoidal ρ(t) the quad case has. The subdivision is
 // therefore identical with a LINEAR held density in place of a constant one.
 func revolveArcFanSlack(cell revArcCell, poleFirst bool, step, twoArea ratInterval, slack float64) (float64, error) {
-	scale, rho, extra, ok := revolveArcScale(cell, step, slack)
+	_, rho, extra, ok := revolveArcScale(cell, step, slack)
 	if !ok {
 		return 0, errRevolveArcCellSlack
 	}
@@ -185,7 +185,7 @@ func revolveArcFanSlack(cell revArcCell, poleFirst bool, step, twoArea ratInterv
 	if !poleFirst {
 		held, slope = twoArea, intervalNeg(twoArea)
 	}
-	return ratFloatUp(revolveArcAbsIntegral(rho, scale, held, slope, extra, revolveWeightOne)), nil
+	return ratFloatUp(revolveArcAbsIntegral(rho, held, slope, extra, revolveWeightOne)), nil
 }
 
 // revolveArcScale composes the non-negative factor r·|Δθ|·|dφ| every circular
@@ -200,7 +200,7 @@ func revolveArcFanSlack(cell revArcCell, poleFirst bool, step, twoArea ratInterv
 // meridian may sit from the model at all. The slack is kept out of the
 // curvature argument because a displacement of the true meridian is not
 // required to be smooth.
-func revolveArcScale(cell revArcCell, step ratInterval, slack float64) (ratInterval, []ratInterval, *big.Rat, bool) {
+func revolveArcScale(cell revArcCell, step ratInterval, slack float64) (ratInterval, []ratInterval, *big.Rat, bool) { //nolint:unparam // scale is the density factor this function's own doc comment names as part of what it composes; both callers now read it pre-multiplied into the returned rho nodes rather than by name.
 	s := floatRat(slack)
 	if s == nil || s.Sign() < 0 || cell.radius.Sign() < 0 {
 		return ratInterval{}, nil, nil, false
@@ -211,21 +211,26 @@ func revolveArcScale(cell revArcCell, step ratInterval, slack float64) (ratInter
 	}
 	scale := intervalScale(intervalAbsSpan(step), cell.speed())
 	extra := new(big.Rat).Mul(scale.hi, new(big.Rat).Add(bulge, s))
+	// The subdivision's two halves read the same scale·ρ at every node, so
+	// the product is taken here once and the nodes are returned pre-scaled.
+	for i := range rho {
+		rho[i] = intervalMul(scale, rho[i])
+	}
 	return scale, rho, extra, true
 }
 
 var errRevolveArcCellSlack = fmt.Errorf(`%w: a circular revolve cell states no enclosure of the area its held facets and the patch they stand for differ by`, ErrUnsupported)
 
 // revolveArcAbsIntegral bounds ∫₀¹ |scale·ρ(t) − (held + slope·t)|·w(t) dt
-// upward over the fixed subdivision whose NODE ρ enclosures the caller holds.
-// One piece is charged the larger of its two nodes' magnitudes plus the
-// caller's own allowance, times the exact integral of the weight over that
-// piece, so the answer is an upper bound at any depth and nothing cancels
-// between pieces.
-func revolveArcAbsIntegral(rho []ratInterval, scale, held, slope ratInterval, extra *big.Rat, weight int) *big.Rat {
+// upward over the fixed subdivision whose NODE ρ enclosures the caller holds,
+// pre-multiplied by scale (revolveArcScale's own doc comment). One piece is
+// charged the larger of its two nodes' magnitudes plus the caller's own
+// allowance, times the exact integral of the weight over that piece, so the
+// answer is an upper bound at any depth and nothing cancels between pieces.
+func revolveArcAbsIntegral(scaledRho []ratInterval, held, slope ratInterval, extra *big.Rat, weight int) *big.Rat {
 	at := func(i int) *big.Rat {
 		t := big.NewRat(int64(i), revolveArcIntegralSteps)
-		f := intervalSub(intervalMul(scale, rho[i]), intervalAdd(held, intervalScale(slope, t)))
+		f := intervalSub(scaledRho[i], intervalAdd(held, intervalScale(slope, t)))
 		return intervalAbsUpper(f)
 	}
 	total := new(big.Rat)

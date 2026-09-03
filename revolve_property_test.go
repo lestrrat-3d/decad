@@ -445,14 +445,16 @@ func TestRevolvePropertyInvariants(t *testing.T) {
 			su := factory(rng)
 			ap := randAxisPlacement(rng)
 			sw := randSweep(rng)
+			xf := randPlacement(t, rng)
 			t.Run(su.name, func(t *testing.T) {
-				runRevolveCase(t, rng, su, ap, sw)
+				t.Parallel()
+				runRevolveCase(t, su, ap, sw, xf)
 			})
 		}
 	}
 }
 
-func runRevolveCase(t *testing.T, rng *rand.Rand, su setup, ap axisPlacement, sw sweep) {
+func runRevolveCase(t *testing.T, su setup, ap axisPlacement, sw sweep, xf r3.Transform) {
 	w := sketch.NewWorld()
 	s, err := w.CreateSketch(w.XY())
 	require.NoError(t, err)
@@ -492,7 +494,6 @@ func runRevolveCase(t *testing.T, rng *rand.Rand, su setup, ap axisPlacement, sw
 	cen0, err := body.Centroid()
 	require.NoError(t, err)
 
-	xf := randPlacement(t, rng)
 	placed, err := body.Placed(xf)
 	require.NoError(t, err)
 	checkRevolveBody(t, placed, su, ap, xf, sw)

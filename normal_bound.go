@@ -308,8 +308,7 @@ func radSinCosInterval(x *big.Rat) (ratInterval, ratInterval, bool) {
 		zero, one := new(big.Rat), big.NewRat(1, 1)
 		return interval(zero, zero), interval(one, one), true
 	}
-	two := big.NewRat(2, 1)
-	twoPi := interval(new(big.Rat).Mul(two, piLower), new(big.Rat).Mul(two, piUpper))
+	twoPi := twoPiInterval()
 	turn, ok := intervalQuo(pointInterval(x), twoPi)
 	if !ok {
 		return ratInterval{}, ratInterval{}, false
@@ -320,7 +319,7 @@ func radSinCosInterval(x *big.Rat) (ratInterval, ratInterval, bool) {
 		return ratInterval{}, ratInterval{}, false
 	}
 	sin, cos := turnSinCosInterval(base)
-	slop := new(big.Rat).Mul(new(big.Rat).Mul(two, piUpper), gap)
+	slop := new(big.Rat).Mul(twoPi.hi, gap)
 	return intervalWiden(sin, slop), intervalWiden(cos, slop), true
 }
 
