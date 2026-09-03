@@ -141,20 +141,28 @@ func (m *Mesh) Bound() units.Value { return units.Millimeters(m.bound) }
 // same way — a finer mesh, or a refusal, never a coarser mesh under a claim
 // this package cannot prove.
 //
-// Prism, cup, loft and boolean-built bodies tessellate. A lofted body RESTATES
-// the flat triangle set its construction already built and audited: nothing is
-// chorded here, so tol binds nothing on that path and the returned Bound is the
-// payload's own facet departure, which can sit either side of tol.
-// A boolean-built body also only
-// RESTATES its held mesh, so tol must be at least the body's own Bound: a
+// Prism, revolve, cup, loft and boolean-built bodies tessellate. A revolved
+// body meshes its meridian section and one GLOBAL angular sequence, so every
+// generator face shares its whole latitude edge and a full turn closes with no
+// seam; its two coordinate stages — the construction that computes each sample
+// and the placement that moves it — are reserved from tol before any chord is
+// chosen, and a tol they exhaust is [ErrUnsupported]. A revolve whose section
+// carries a CIRCULAR generator (a sphere or a torus wall) is [ErrUnsupported]
+// here, and no revolve mesh may be a boolean operand yet: it carries no proof
+// of the volume it and the body it stands for differ by, so [Union], [Cut] and
+// [Intersect] refuse it while export stays available.
+//
+// A lofted body RESTATES the flat triangle set its construction already built
+// and audited: nothing is chorded here, so tol binds nothing on that path and
+// the returned Bound is the payload's own facet departure, which can sit either
+// side of tol. A boolean-built body also only RESTATES its held mesh, so tol
+// must be at least the body's own Bound: a
 // finer tol is [ErrUnsupported], because the analytic identity is gone and no
 // finer mesh can be proven. A prism the analytic prism boolean assembled holds
 // its section within a proven displacement of the section it denotes
 // (docs/prism-boolean-design.md §7); that displacement is reserved from tol
-// before any chord is chosen, so a tol it exhausts is [ErrUnsupported] too. A
-// revolve body is [ErrUnsupported] here — Revolve builds and verifies, but its
-// analytic surfaces have no tessellator, so it cannot be meshed or exported. A
-// body this evaluator did not build at all is also [ErrUnsupported].
+// before any chord is chosen, so a tol it exhausts is [ErrUnsupported] too.
+// A body this evaluator did not build at all is also [ErrUnsupported].
 func (b *Body) Tessellate(tol units.Value) (*Mesh, error) {
 	return b.TessellateContext(context.Background(), tol)
 }
@@ -196,11 +204,14 @@ func tessellateContext(ctx context.Context, b *Body, tol units.Value) (*Mesh, er
 		// (tessellate_loft.go's own doc comment owns why).
 		return tessellateLoft(ctx, b, lp)
 	}
+	if rp, ok := b.payload.(revolvePayload); ok {
+		return tessellateRevolve(ctx, b, rp, chord)
+	}
 	pp, ok := b.payload.(prismPayload)
 	if !ok {
 		// Chording is per payload kind. Name both the staged kind and the
 		// implemented set so the refusal cannot misstate evaluator reach.
-		return nil, fmt.Errorf(`%w: tessellation does not support payload %T; supported payload classes are prism, cup, loft, and faceted`, ErrUnsupported, b.payload)
+		return nil, fmt.Errorf(`%w: tessellation does not support payload %T; supported payload classes are prism, revolve, cup, loft, and faceted`, ErrUnsupported, b.payload)
 	}
 
 	// Every mesh vertex lands on the RECORDED section, which a payload carrying a

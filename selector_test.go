@@ -685,7 +685,7 @@ func TestSelectFacesPredicates(t *testing.T) {
 		require.Len(t, faces, 2, `the x=0 and x=100 side walls`)
 	})
 	t.Run("FaceCreatedBy", func(t *testing.T) {
-		ref := decad.FeatureRef{Step: body.Origin().Step, Role: "capEnd"}
+		ref := decad.FeatureRef{Step: body.Origin().Step, Role: roleCapEnd}
 		faces, err := decad.Faces(decad.FaceCreatedBy(ref)).SelectFaces(body)
 		require.NoError(t, err)
 		require.Len(t, faces, 1)

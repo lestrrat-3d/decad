@@ -242,7 +242,7 @@ func TestRevolvePartialSweeps(t *testing.T) {
 	require.InDelta(t, 0.0, n.Value.X, 1e-9)
 	require.InDelta(t, 0.0, n.Value.Y, 1e-9)
 	require.InDelta(t, -1.0, n.Value.Z, 1e-9)
-	capEnd := faceByRole(t, quarter, "capEnd")
+	capEnd := faceByRole(t, quarter, roleCapEnd)
 	n, err = capEnd.NormalAt(r3.NewVec(5, 0, 10))
 	require.NoError(t, err)
 	require.InDelta(t, 0.0, n.Value.X, 1e-9)
@@ -276,7 +276,7 @@ func TestRevolveWedgeSharesAxisEdgeBetweenCaps(t *testing.T) {
 	requireManifold(t, body)
 
 	capStart := faceByRole(t, body, roleCapStart)
-	capEnd := faceByRole(t, body, "capEnd")
+	capEnd := faceByRole(t, body, roleCapEnd)
 	shared := 0
 	for _, e := range body.Edges() {
 		faces := e.Faces()
@@ -953,7 +953,7 @@ func TestRevolveEdgeAxisMustBeCoplanar(t *testing.T) {
 	s, p := annularSketch(t)
 	doc := decad.New()
 	host := trianglePrismHost(t, doc)
-	capEnd := decad.FeatureRef{Step: host.Origin().Step, Role: "capEnd"}
+	capEnd := decad.FeatureRef{Step: host.Origin().Step, Role: roleCapEnd}
 	axis := decad.EdgeAxis{
 		Body: host,
 		Edge: decad.Edges(decad.CreatedBy(capEnd), decad.ParallelTo(r3.NewVec(1, 0, 0))).Exactly(1),
@@ -1221,7 +1221,7 @@ func TestRevolvePartialSweepWithHole(t *testing.T) {
 	require.Len(t, body.Shells(), 1, `the caps connect the hole wall to the outer boundary`)
 
 	// Each cap carries the hole as a second, non-outer loop.
-	for _, role := range []string{roleCapStart, "capEnd"} {
+	for _, role := range []string{roleCapStart, roleCapEnd} {
 		capFace := faceByRole(t, body, role)
 		loops := capFace.Loops()
 		require.Len(t, loops, 2)

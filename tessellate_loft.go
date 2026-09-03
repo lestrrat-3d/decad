@@ -119,7 +119,7 @@ func tessellateLoft(ctx context.Context, b *Body, lp loftPayload) (*Mesh, error)
 	if !finiteVec(anchor) {
 		return nil, fmt.Errorf(`%w: the loft payload states no finite anchor to audit its own orientation against`, ErrUnsupported)
 	}
-	if loftOrientationSign(mesh.vertices, mesh.triangles, anchor) <= 0 {
+	if meshOrientationSign(mesh.vertices, mesh.triangles, anchor) <= 0 {
 		return nil, fmt.Errorf(`%w: the loft payload's held triangle set does not enclose a positive volume, so it restates no solid`, ErrUnsupported)
 	}
 	return mesh, nil

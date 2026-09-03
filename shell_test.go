@@ -443,7 +443,7 @@ func TestShellCupInwardBox(t *testing.T) {
 	// Faces: 4 outer walls + 4 cavity walls + capStart + shellCap + rim = 11.
 	require.Len(t, body.Faces(), 11)
 	roles := shellRoleSet(body)
-	require.Contains(t, roles, "capStart")
+	require.Contains(t, roles, roleCapStart)
 	require.Contains(t, roles, "shellCap")
 	require.Contains(t, roles, "rim(0)")
 	require.Contains(t, roles, "side(0,0)")
@@ -628,7 +628,7 @@ func TestShellCupHoledInward(t *testing.T) {
 	// Roles are minted from the RESULT's own record (§11): a rim per loop, and
 	// the hole's own wall (loop 1) in both the outer and the cavity index space.
 	roles := shellRoleSet(body)
-	for _, want := range []string{"capStart", "shellCap", "rim(0)", "rim(1)", "side(0,0)", "side(1,0)", "shellSide(0,0)", "shellSide(1,0)"} {
+	for _, want := range []string{roleCapStart, "shellCap", "rim(0)", "rim(1)", "side(0,0)", "side(1,0)", "shellSide(0,0)", "shellSide(1,0)"} {
 		require.Contains(t, roles, want, `missing role %q`, want)
 	}
 
@@ -1374,7 +1374,7 @@ func TestShellCupUndercutsBox(t *testing.T) {
 			require.Equal(t, decad.KindPlane, f.Surface().Kind())
 		}
 		// The kept outer floor (capStart) is one of them.
-		capStartRef := decad.FeatureRef{Step: cup.Origin().Step, Role: "capStart"}
+		capStartRef := decad.FeatureRef{Step: cup.Origin().Step, Role: roleCapStart}
 		found := false
 		for _, f := range br.Undercuts {
 			for _, o := range f.Origins() {

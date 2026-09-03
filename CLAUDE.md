@@ -232,7 +232,9 @@ one.
 
 | Path | Responsibility |
 |---|---|
-| `tessellate.go` | `Mesh` and `Body.Tessellate`: prism (analytic or free-form walls), cup, loft and faceted payloads build; revolve and cap-blend stay `ErrUnsupported`. See the file's own doc comment, `docs/tessellation-design.md` and `docs/tessellation-reach-design.md` §5. |
+| `tessellate.go` | `Mesh` and `Body.Tessellate`: prism, revolve, cup, loft and faceted payloads build; a cap-blend stays `ErrUnsupported`. See the file's own doc comment and `docs/tessellation-design.md`. |
+| `tessellate_revolve.go` | `tessellateRevolve`: the meridian samples, the one global angular sequence, and the rings, cells, poles and partial caps a line-generator revolve builds from them. See the file's own doc comment. |
+| `tessellate_revolve_proof.go` | The revolve mesh's proofs: certified angular trig, both coordinate stages, the tolerance split, the facet-pair and vertex-link audits, and `Ecell`. See the file's own doc comment. |
 | `tessellate_station.go` | `chordStationBound`: the proven enclosure gap of one interior chord station on a circular walk, the coordinate-construction half of the mesh proof record. See the file's own doc comment and `docs/tessellation-reach-design.md` §3. |
 | `tessellate_loft.go` | `tessellateLoft`: the exact restatement of a `loftPayload`'s held triangle set, its source faces and the payload's own proof record. See the file's own doc comments and `docs/tessellation-reach-design.md` §4. |
 | `triangulate.go` | The cap triangulator behind `Tessellate`: hole bridging plus reflex-blocked ear clipping, correct for non-convex outlines with holes. See the file's own doc comment. |
