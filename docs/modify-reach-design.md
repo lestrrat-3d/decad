@@ -970,7 +970,10 @@ The chamfer's DX3 reading is `ErrUnsupported` through the unknown-payload path.
 A patch tessellator must chord the cap-level offset boundary and the side-level
 original boundary into one strip, and the two may need different sample
 densities; a strip whose densities disagree is not watertight, and a mesh that
-is not watertight is a wrong answer rather than a coarse one.
+is not watertight is a wrong answer rather than a coarse one. The tessellator's
+design — one count per wall walk shared by the side wall, the band patch and
+the cap contour, and the positional departure each patch charges — is
+`docs/tessellation-reach-design.md` §7.
 
 The chamfer's DX6 reading is `Suspect` for any pair its bounding boxes do not
 already decide, which is the same staging the cup payload took before its own

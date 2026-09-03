@@ -1705,7 +1705,9 @@ paired segment is a SECOND consumer of §6.2.1's sagitta, beside P5's
 tessellation chording above — measured per dyadic level under its own hard
 station cap rather than tessellation's, and landed on `docs/loft-design.md`
 §12's own delivery plan rather than by a P-numbered increment of this
-document.
+document. P5's own chording design — the single-chain station walk, the
+station rounding it charges, and its area and volume terms — is
+`docs/tessellation-reach-design.md` §5.
 
 ## 11. Test obligations
 
