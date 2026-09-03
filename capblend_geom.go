@@ -845,12 +845,44 @@ func capSlantEdge(budget *workBudget, capP Point2, capV, apex *Vertex, apexU, ap
 		return e, heldBound, nil
 	}
 	chordUpper := absSumUpper(held, heldBound)
-	axialSpan := sideZ - capZ
+	total, ok, err := capMiterLocusUpper(budget, prev, cur, apexU, apexV, sideZ-capZ, dc)
+	if err != nil {
+		return nil, 0, err
+	}
+	if !ok {
+		e.lengthBound = 0
+		e.lengthUnbounded = true
+		return e, heldBound, nil
+	}
+	if excess := total - chordUpper; excess > 0 {
+		e.lengthBound = absSumUpper(heldBound, upRound(excess))
+	}
+	return e, heldBound, nil
+}
+
+// capMiterLocusUpper is the proven upper bound on the LENGTH of the conic miter
+// locus a mitered ruling stands for — the sum capSlantEdge charges its chord
+// against, factored out so the tessellator can read the same number for its own
+// locus-gap term (docs/tessellation-reach-design.md §7) instead of deriving a
+// second bound from the same two carriers.
+//
+// The offset range [0, dc] is split into capMiterLocusSubdivisions sub-ranges,
+// each enclosed through miterLocusSpeedUpper and turned into that sub-range's
+// own length upper bound by chordLocusLengthAllow (called with a zero
+// chordUpper, which reduces it to the raw product); the sub-range bounds sum to
+// the whole locus's own. ok is false where any sub-range's enclosure cannot be
+// built, which every caller answers by withholding its reading rather than
+// publishing an understated one. Each sub-range charges one budget step, so a
+// band with many mitered circular corners cannot spend unbounded work here.
+func capMiterLocusUpper(budget *workBudget, prev, cur sideWalk, apexU, apexV, axialSpan, dc float64) (float64, bool, error) {
+	if dc <= 0 {
+		return 0, false, nil
+	}
 	step := dc / capMiterLocusSubdivisions
 	total := 0.0
 	for k := range capMiterLocusSubdivisions {
 		if err := wallBudgetStep(budget); err != nil {
-			return nil, 0, err
+			return 0, false, err
 		}
 		t0 := float64(k) * step
 		t1 := t0 + step
@@ -859,16 +891,11 @@ func capSlantEdge(budget *workBudget, capP Point2, capV, apex *Vertex, apexU, ap
 		}
 		speed, ok := miterLocusSpeedUpper(prev, cur, t0, t1, apexU, apexV)
 		if !ok {
-			e.lengthBound = 0
-			e.lengthUnbounded = true
-			return e, heldBound, nil
+			return 0, false, nil
 		}
 		total = absSumUpper(total, chordLocusLengthAllow(speed, t1-t0, axialSpan*(t1-t0)/dc, 0))
 	}
-	if excess := total - chordUpper; excess > 0 {
-		e.lengthBound = absSumUpper(heldBound, upRound(excess))
-	}
-	return e, heldBound, nil
+	return total, true, nil
 }
 
 // capMiterLocusSubdivisions is the fixed number of offset sub-ranges

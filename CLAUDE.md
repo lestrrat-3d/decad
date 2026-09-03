@@ -188,11 +188,11 @@ one.
 | Path | Responsibility |
 |---|---|
 | `capblend.go` | Builds the complete-cap-loop chamfer: `capBlendPayload` plus the selection classification and build gates in `buildCapBlend`. Gate order and sentinels are documented per function; see `docs/modify-reach-design.md` §8.3/§4. |
-| `capblend_geom.go` | Builds the `capBlendPayload` topology in `buildCapBand`: trimmed side walls, cap faces, and Plane/Cone chamfer band patches, each stamped with the readings its own geometry states. Orientation, area and normal bookkeeping are documented per function; see `docs/modify-reach-design.md` §8.3. |
-| `capblend_contour.go` | Proves the cap contour's displacement bound used by every cap-level reading, via interval arithmetic over the same offset-intersection cases `shell_offset.go` and `fillet.go` use, plus a miter ruling's own locus-speed bound. See `docs/modify-reach-design.md` §8.3-§8.4. |
+| `capblend_geom.go` | Builds the `capBlendPayload` topology in `buildCapBand`: trimmed side walls, cap faces, and Plane/Cone band patches, each stamped with its own readings. See the per-function doc comments and `docs/modify-reach-design.md` §8.3. |
+| `capblend_contour.go` | Proves the cap contour's displacement bound every cap-level reading charges, plus a miter ruling's own locus-speed bound. See the file's own doc comments and `docs/modify-reach-design.md` §8.3-§8.4. |
 | `capblend_centroid.go` | Computes closed-form first moments for the cap-blend payload's centroid: exact-rational Plane patch moments, a Fourier sum for Cone patches, and a bounding-box ceiling on the result. See `docs/modify-reach-design.md` §8.4. |
-| `capblend_moments.go` | `evalCapBlendContext` builds the cap-blend body and its bounded area/volume/centroid via closed-form divergence-theorem integrals per patch, exact where representable. See `docs/modify-reach-design.md` §8.4. |
-| `capblend_survey.go` | The cap-blend payload's undercut and minimum-radius surveys: per-patch normal ranges under each reading's own distance from the patch's model and the patch's published departure, plus the receiver's unchanged-profile radius survey. See `docs/modify-reach-design.md` §12 Table DX (DX7/DX8). |
+| `capblend_moments.go` | `evalCapBlendContext` builds the cap-blend body and its bounded area/volume/centroid by closed-form per-patch integrals. See `docs/modify-reach-design.md` §8.4. |
+| `capblend_survey.go` | The cap-blend payload's undercut and minimum-radius surveys, per patch and over the receiver's unchanged profile. See the file's own doc comments and `docs/modify-reach-design.md` §12 Table DX (DX7/DX8). |
 | `capblend_normal.go` | The certified half of DX7's circular-patch reading: the rational-interval enclosure of a band patch's own exact normal-component model, and the proven enclosure of a harmonic form's extremes over one window. See the file's own doc comment. |
 | `capblend_departure.go` | The proven bound on how far a band patch's BUILT ruled surface points away from the surface it publishes, measured in world space from the published corners, curves and tag. See the file's own doc comment. |
 
@@ -232,11 +232,12 @@ one.
 
 | Path | Responsibility |
 |---|---|
-| `tessellate.go` | `Mesh` and `Body.Tessellate`: prism, revolve, cup, loft and faceted payloads build; a cap-blend stays `ErrUnsupported`. See the file's own doc comment and `docs/tessellation-design.md`. |
+| `tessellate.go` | `Mesh` and `Body.Tessellate`: the proof record, the shared loop chording, and the prism, cup and faceted paths. See the file's own doc comment and `docs/tessellation-design.md`. |
 | `tessellate_revolve.go` | `tessellateRevolve`: the meridian samples, the one global angular sequence, and the rings, cells, poles and partial caps a line-generator revolve builds from them. See the file's own doc comment. |
 | `tessellate_revolve_proof.go` | The revolve mesh's proofs: certified angular trig, both coordinate stages, the tolerance split, the facet-pair and vertex-link audits, and `Ecell`. See the file's own doc comment. |
 | `tessellate_station.go` | `chordStationBound`: the proven enclosure gap of one interior chord station on a circular walk, the coordinate-construction half of the mesh proof record. See the file's own doc comment and `docs/tessellation-reach-design.md` §3. |
 | `tessellate_loft.go` | `tessellateLoft`: the exact restatement of a `loftPayload`'s held triangle set, its source faces and the payload's own proof record. See the file's own doc comments and `docs/tessellation-reach-design.md` §4. |
+| `tessellate_capblend.go` | `tessellateCapBlend`: the export-only cap-loop chamfer mesh — one chord count per wall walk shared three ways, the band cells and each patch's own proof terms. See the file's own doc comment and `docs/tessellation-reach-design.md` §7. |
 | `triangulate.go` | The cap triangulator behind `Tessellate`: hole bridging plus reflex-blocked ear clipping, correct for non-convex outlines with holes. See the file's own doc comment. |
 | `export.go` | `Body.STL`/`Body.OBJ`: deterministic writers over `Tessellate`, with `WithChordTolerance`'s documented default. See the file's own doc comment. |
 

@@ -570,16 +570,24 @@ func sourceIDs(ctx context.Context, m *Mesh, faceID map[*Face]int) ([]int, error
 //
 // It is operandSymDiff's question asked one step earlier. A revolve mesh serves
 // export and carries symDiffOK false until docs/tessellation-design.md §13's
-// increment T4 proves its symmetric difference, so meshing one for a boolean
-// only to refuse it afterwards buys nothing and costs the whole tessellation
-// and its facet-pair audit — which the evaluator's own internal tolerance makes
-// the most expensive part of the call. Both this and operandSymDiff must name
-// the same payload classes, and T4 retires both arms together.
+// increment T4 proves its symmetric difference, and a cap-loop chamfer mesh
+// does the same until §13's increment T7 gains the occupied-volume proof
+// docs/tessellation-reach-design.md §9 states is still open. Meshing either one
+// for a boolean only to refuse it afterwards buys nothing and costs the whole
+// tessellation and its facet-pair audit — which the evaluator's own internal
+// tolerance makes the most expensive part of the call. Both this and
+// operandSymDiff must name the same payload classes, and each proof retires
+// both arms of its own row together.
 func requireVolumeProvingPayload(b *Body, index int) error {
-	if _, ok := b.payload.(revolvePayload); !ok {
+	var err error
+	switch b.payload.(type) {
+	case revolvePayload:
+		err = fmt.Errorf(`%w: a revolved body's mesh carries no proof of the volume it and the body it stands for differ by, so no boolean may compose it`, ErrUnsupported)
+	case capBlendPayload:
+		err = fmt.Errorf(`%w: a cap-loop chamfer's mesh carries no proof of the volume it and the body it stands for differ by, so no boolean may compose it`, ErrUnsupported)
+	default:
 		return nil
 	}
-	err := fmt.Errorf(`%w: a revolved body's mesh carries no proof of the volume it and the body it stands for differ by, so no boolean may compose it`, ErrUnsupported)
 	return expectedBooleanForOperand(booleanExpectedStaging, index, err)
 }
 

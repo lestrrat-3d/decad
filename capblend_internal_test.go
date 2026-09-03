@@ -706,12 +706,12 @@ func diskSection(cx, cy, r float64) func(*sketch.Sketch) {
 // drawn a metre out leaves that weld a handful of ulps of the coordinates it
 // is welding — a margin each platform's own arithmetic can land either side
 // of. A closed circle welds to nothing and so has no such corner.
-func quarterDiskSection(cx, cy, r float64) func(*sketch.Sketch) {
+func quarterDiskSection(r float64) func(*sketch.Sketch) {
 	return func(s *sketch.Sketch) {
-		o := s.CreatePoint(cx, cy)
+		o := s.CreatePoint(0, 0)
 		s.Fix(o)
-		px := s.CreatePoint(cx+r, cy)
-		py := s.CreatePoint(cx, cy+r)
+		px := s.CreatePoint(r, 0)
+		py := s.CreatePoint(0, r)
 		s.CreateLine(o, px)
 		s.CreateLine(py, o)
 		s.CreateArc(o, px, py)
@@ -929,7 +929,7 @@ func TestCapPatchNormalRangeCoversWhatThePatchTakes(t *testing.T) {
 			// The section is drawn at the sketch origin and placed out here
 			// (quarterDiskSection), which displaces the sample points exactly as
 			// drawing it out here would.
-			name: `quarter window far from the origin, placed`, section: quarterDiskSection(0, 0, 0.55), motion: &spun,
+			name: `quarter window far from the origin, placed`, section: quarterDiskSection(0.55), motion: &spun,
 			centreFar: 1000,
 		},
 	} {

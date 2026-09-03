@@ -185,15 +185,13 @@ func TestTessellatePayloadClasses(t *testing.T) {
 		require.ErrorContains(t, err, "circular generator")
 	})
 
-	t.Run("cap-loop chamfer stays staged", func(t *testing.T) {
+	t.Run("cap-loop chamfer", func(t *testing.T) {
 		_, box := capBlendBox(t)
 		chamfered, err := box.Chamfer(capLoopEdges(box), units.Millimeters(5))
 		require.NoError(t, err)
 		mesh, err := chamfered.Tessellate(units.Millimeters(1))
-		require.Nil(t, mesh)
-		require.ErrorIs(t, err, decad.ErrUnsupported)
-		require.ErrorContains(t, err, "capBlendPayload")
-		require.ErrorContains(t, err, "supported payload classes are prism, revolve, cup, loft, and faceted")
+		require.NoError(t, err)
+		require.NotEmpty(t, mesh.Triangles())
 	})
 }
 
