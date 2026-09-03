@@ -281,13 +281,13 @@ func TestChordCountRefusesTheToleranceWindowAtTheMeshCap(t *testing.T) {
 			"radius=%g: the sampled tolerance %.20g must sit below the proven bound %.20g", row.radius, row.inside, atCap)
 
 		// The proven bound itself is chordable, at exactly the cap count.
-		n, s, err := chordCount(w, atCap)
+		n, s, err := chordCount(w, atCap, chordWalkMin(w))
 		require.NoErrorf(t, err, "radius=%g: the proven sagitta at the cap must itself be admissible", row.radius)
 		require.Equalf(t, maxChordsPerWalk, n, "radius=%g: that tolerance must spend the whole cap", row.radius)
 		require.Equalf(t, atCap, s, "radius=%g: the returned sagitta is the proven bound itself", row.radius)
 
 		for _, tol := range []float64{math.Nextafter(atCap, 0), row.inside, trueAtCap} {
-			_, _, err := chordCount(w, tol)
+			_, _, err := chordCount(w, tol, chordWalkMin(w))
 			require.ErrorIsf(t, err, errTooManyChords,
 				"radius=%g: tol=%.20g lies in the window and must refuse", row.radius, tol)
 			require.ErrorIsf(t, err, ErrUnsupported,

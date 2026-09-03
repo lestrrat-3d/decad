@@ -347,21 +347,30 @@ func TestRevolvePreflightFacetsChargesTheCeilingBeforeAllocating(t *testing.T) {
 			walks: make([]sideWalk, 4),
 			kinds: []wallKind{wallCylinder, wallPlane, wallCone, wallAxis},
 		},
-		samples: make([]revMeridian, 4),
+		samples: []revMeridian{{walk: 0}, {walk: 1}, {walk: 2}, {walk: 3}},
 	}
 	// The facet-pair ceiling is the binding one: F·(F−1)/2 stays inside
 	// maxFacetPairTestsPerCall only up to 4000 facets, which this shape reaches
 	// at n = 666 exactly. One angular step more refuses.
-	require.NoError(t, revolvePreflightFacets([]revLoopMesh{loop}, 666, false))
-	require.ErrorIs(t, revolvePreflightFacets([]revLoopMesh{loop}, 667, false), ErrUnsupported)
-	require.ErrorIs(t, revolvePreflightFacets([]revLoopMesh{loop}, 10923, false), ErrUnsupported)
+	require.NoError(t, revolvePreflightFacets([]revLoopMesh{loop}, 666, false, &revolveWork{}))
+	require.ErrorIs(t, revolvePreflightFacets([]revLoopMesh{loop}, 667, false, &revolveWork{}), ErrUnsupported)
+	require.ErrorIs(t, revolvePreflightFacets([]revLoopMesh{loop}, 10923, false, &revolveWork{}), ErrUnsupported)
 
 	// A pole ring fans rather than quads, so its own cell costs half as many
 	// facets per angular step and the same walks admit a finer count.
 	poled := loop
-	poled.samples = []revMeridian{{onAxis: true}, {}, {}, {}}
-	require.NoError(t, revolvePreflightFacets([]revLoopMesh{poled}, 799, false))
-	require.ErrorIs(t, revolvePreflightFacets([]revLoopMesh{poled}, 800, false), ErrUnsupported)
+	poled.samples = []revMeridian{{walk: 0, onAxis: true}, {walk: 1}, {walk: 2}, {walk: 3}}
+	require.NoError(t, revolvePreflightFacets([]revLoopMesh{poled}, 799, false, &revolveWork{}))
+	require.ErrorIs(t, revolvePreflightFacets([]revLoopMesh{poled}, 800, false, &revolveWork{}), ErrUnsupported)
+
+	// A refinement retry never resets the cumulative counters
+	// (docs/tessellation-design.md §3): the same shape that fits on its own is
+	// refused once an earlier attempt has already spent most of the ceiling.
+	work := &revolveWork{}
+	require.NoError(t, revolvePreflightFacets([]revLoopMesh{loop}, 600, false, work))
+	require.Positive(t, work.facets)
+	require.Positive(t, work.pairs)
+	require.ErrorIs(t, revolvePreflightFacets([]revLoopMesh{loop}, 600, false, work), ErrUnsupported)
 }
 
 func TestCheckedIntegerArithmeticRefusesOverflow(t *testing.T) {
@@ -413,4 +422,50 @@ func TestRevolveMeshCarriesNoOccupiedVolumeProof(t *testing.T) {
 		require.Positive(t, d)
 		require.LessOrEqual(t, d, mesh.bound)
 	}
+}
+
+// TestRevolveVertexIsolatedDecidesACapFanAgainstTheNextChordWall pins the pair
+// the edge-pair separating plane exists for, at the exact coordinates a
+// partial-sweep groove produced: facet 60, a wall triangle of one meridian
+// chord, against facet 167, a start-cap fan triangle, sharing vertex 42 alone.
+//
+// None of the four candidates built from ONE triangle's own normal decides it.
+// With the wall as a, the cap's two corners read mixed signs on all four. With
+// the cap as a, its own normal reads the wall's in-plane corner at −7.1e-15 —
+// that corner lies in the cap plane without being one of the cap triangle's own
+// vertices, so the reading is a numerical zero the perturbation allowance
+// cannot sign — and every rotation of that normal reads the wall's two corners
+// with opposite signs, because the off-plane corner's in-plane component is
+// −ρ(1−cos dφ)·e(φ0), whose sign is fixed. Refining the angular sequence
+// shrinks that component as dφ² and never flips it, so the whole refinement
+// chain fails identically and the mesh refuses however fine the chording.
+//
+// The edge-pair family decides it: g = eA × eB reads the two remaining corners
+// at +38.4 and −31.7, four hundred million times its own perturbation
+// allowance.
+func TestRevolveVertexIsolatedDecidesACapFanAgainstTheNextChordWall(t *testing.T) {
+	verts := make([]r3.Vec, 50)
+	verts[35] = r3.Vec{X: -22.861137887942604, Y: 3.1848000973097195, Z: -11.332206870439578}
+	verts[42] = r3.Vec{X: -21.72779063345132, Y: 2.943952572193523, Z: -10.587186732066304}
+	verts[43] = r3.Vec{X: -22.534312279222867, Y: 0.8079815808422071, Z: -9.77332215919684}
+	verts[7] = r3.Vec{X: -29.408326745936623, Y: 7.794809887107666, Z: -2.8190966120010716}
+	verts[49] = r3.Vec{X: -20.44213746589201, Y: 2.524200990919139, Z: -10.325570450153995}
+
+	const delta = 7.150045910436396e-15
+	triA := [3]int{35, 42, 43} // the wall triangle of one meridian chord
+	triB := [3]int{7, 49, 42}  // the start cap's fan triangle
+	a, ok := newRevolveAuditTri(verts, triA)
+	require.True(t, ok)
+	b, ok := newRevolveAuditTri(verts, triB)
+	require.True(t, ok)
+
+	require.True(t,
+		revolveVertexIsolated(a, triA, b, triB, 42, delta) ||
+			revolveVertexIsolated(b, triB, a, triA, 42, delta),
+		`the cap fan and the next chord's wall must be proven to meet only at the vertex they share`)
+
+	// The same pair inside the whole audit, which is where the refusal used to
+	// surface. Facet indices are the audit's own, so the two triangles are
+	// handed to it alone.
+	require.NoError(t, revolveContactAudit(newWorkBudget(t.Context()), verts, [][3]int{triA, triB}, delta))
 }

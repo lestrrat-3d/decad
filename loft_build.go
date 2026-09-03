@@ -917,11 +917,11 @@ func loftLineCellStations(w0, w1 segmentWalk) ([]Point2, []Point2, float64, []fl
 // cap: it bounds one curve's own chording and knows nothing of how many curves
 // the build holds, while loftStationCap bounds the build's station total.
 func loftSettleStationCount(w0, w1 segmentWalk, seg0, seg1 CurveSegment, target float64) (int, float64, float64, error) {
-	m0, _, err := chordCount(w0, target)
+	m0, _, err := chordCount(w0, target, chordWalkMin(w0))
 	if err != nil {
 		return 0, 0, 0, err
 	}
-	m1, _, err := chordCount(w1, target)
+	m1, _, err := chordCount(w1, target, chordWalkMin(w1))
 	if err != nil {
 		return 0, 0, 0, err
 	}

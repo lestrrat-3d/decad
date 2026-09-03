@@ -57,8 +57,9 @@ func WithChordTolerance(tol units.Value) STLOBJOption {
 // triangles' own outward normals; the mesh comes from [Body.Tessellate] at
 // the [WithChordTolerance] tolerance, or the documented payload-aware default
 // without one, and every Tessellate rejection surfaces unchanged — including
-// the [ErrUnsupported] a revolve body whose section carries a circular
-// generator returns, which cannot be meshed and so cannot be exported.
+// the [ErrUnsupported] a body whose own payload displacement exhausts the
+// requested tolerance returns, which cannot be meshed and so cannot be
+// exported.
 func (b *Body) STL(w io.Writer, opts ...STLOption) error {
 	folded := make([]option.Interface, len(opts))
 	for i, o := range opts {
@@ -96,9 +97,9 @@ func (b *Body) STL(w io.Writer, opts ...STLOption) error {
 // the triangles as 1-based index triples, both in mesh order (core §11). The
 // mesh comes from [Body.Tessellate] at the [WithChordTolerance] tolerance, or
 // the documented payload-aware default without one, and every Tessellate
-// rejection surfaces unchanged — including the [ErrUnsupported] a revolve body
-// whose section carries a circular generator returns, which cannot be meshed
-// and so cannot be exported.
+// rejection surfaces unchanged — including the [ErrUnsupported] a body whose
+// own payload displacement exhausts the requested tolerance returns, which
+// cannot be meshed and so cannot be exported.
 func (b *Body) OBJ(w io.Writer, opts ...OBJOption) error {
 	folded := make([]option.Interface, len(opts))
 	for i, o := range opts {

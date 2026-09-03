@@ -360,29 +360,6 @@ func TestRevolveTessellateChargesPlacementRoundingSeparately(t *testing.T) {
 }
 
 func TestRevolveTessellateRefusals(t *testing.T) {
-	t.Run("circular generator stays staged", func(t *testing.T) {
-		s, p := semicircleSketch(t)
-		body, err := decad.New().Revolve(s, p, uAxis, decad.FullRevolution{})
-		require.NoError(t, err)
-		_, err = body.Tessellate(units.Millimeters(0.05))
-		require.ErrorIs(t, err, decad.ErrUnsupported)
-	})
-
-	t.Run("torus generator stays staged", func(t *testing.T) {
-		w := sketch.NewWorld()
-		s, err := w.CreateSketch(w.XY())
-		require.NoError(t, err)
-		center := s.CreatePoint(0, 10)
-		s.Fix(center)
-		s.CreateCircle(center, 3)
-		_, err = s.Solve(t.Context())
-		require.NoError(t, err)
-		body, err := decad.New().Revolve(s, s.Profiles()[0], uAxis, decad.FullRevolution{})
-		require.NoError(t, err)
-		_, err = body.Tessellate(units.Millimeters(0.05))
-		require.ErrorIs(t, err, decad.ErrUnsupported)
-	})
-
 	t.Run("a tolerance past the facet ceiling refuses", func(t *testing.T) {
 		s, p := solidSketch(t)
 		body, err := decad.New().Revolve(s, p, uAxis, decad.FullRevolution{})

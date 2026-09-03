@@ -63,6 +63,22 @@ const revolveTrigGapPrior = 0x1p-50
 // budget this figure bought.
 const revolveEvalRoundUlps = 256
 
+// revolveStationRoundUlps is the a-priori ulp allowance, at the meridian's own
+// coordinate magnitude, for one CHORDED meridian station's stored (z, ρ) pair
+// (docs/tessellation-reach-design.md §6, R4). A station is stored as the float
+// NEAREST the certified enclosure of the point its record denotes
+// (revolveArcStation), so its gap is half an ulp plus that enclosure's own
+// width; eight ulps covers both with room to spare while staying far below any
+// tolerance a caller can state.
+//
+// It exists for revolveTrigGapPrior's reason one level down: §8 splits the
+// tolerance BEFORE the meridian counts are chosen, and how many stations there
+// are is exactly what the count decides, so the split needs a per-sample
+// ceiling that does not depend on it. Every station's real gap is MEASURED as
+// it is emitted and refused if it exceeds this, so the a-priori figure is held
+// to account rather than trusted.
+const revolveStationRoundUlps = 8
+
 // revolveAngular is the global angular sequence docs/tessellation-design.md §8
 // makes load-bearing: ONE chord count for the whole mesh, so adjacent generator
 // faces share their complete latitude edge, a full turn closes without a
@@ -192,14 +208,36 @@ type revolveBasis3Iv struct {
 // axis carries none.
 func revolveMeridianEnclosure(ax axisFrame, u, v float64, bound walkEndBound) (ratInterval, ratInterval, bool) {
 	ru, rv := floatRat(u), floatRat(v)
-	aU, aV := floatRat(ax.aU), floatRat(ax.aV)
-	dU, dV := floatRat(ax.dU), floatRat(ax.dV)
 	bu, bv := floatRat(math.Abs(bound.u)), floatRat(math.Abs(bound.v))
-	if ru == nil || rv == nil || aU == nil || aV == nil || dU == nil || dV == nil || bu == nil || bv == nil {
+	if ru == nil || rv == nil || bu == nil || bv == nil {
 		return ratInterval{}, ratInterval{}, false
 	}
-	du := intervalWiden(pointInterval(new(big.Rat).Sub(ru, aU)), bu)
-	dv := intervalWiden(pointInterval(new(big.Rat).Sub(rv, aV)), bv)
+	return axisCoordInterval(ax,
+		intervalWiden(pointInterval(ru), bu),
+		intervalWiden(pointInterval(rv), bv),
+	)
+}
+
+// axisCoordInterval carries an enclosed PLANE-local point into the axis
+// coordinates (z, ρ) through the payload's own axis frame, with no rounding
+// anywhere: aU/aV/dU/dV are float64 and therefore exact rationals, and the
+// whole map is two products and one sum per coordinate.
+//
+// The frame's own four numbers are read as exact leaves, which is what
+// axisFrame.toAxis itself denotes — the IDEAL sample docs/tessellation-design.md
+// §8 measures a stored vertex against is the exact evaluation on the payload's
+// held floats, not on the axis a longer derivation would call true. The
+// difference between those two axes is the frame's own recorded uncertainty
+// (axisFrame.toAxisRhoBound), which revolve's moments engine folds in
+// separately and no mesh coordinate re-charges here.
+func axisCoordInterval(ax axisFrame, u, v ratInterval) (ratInterval, ratInterval, bool) {
+	aU, aV := floatRat(ax.aU), floatRat(ax.aV)
+	dU, dV := floatRat(ax.dU), floatRat(ax.dV)
+	if aU == nil || aV == nil || dU == nil || dV == nil {
+		return ratInterval{}, ratInterval{}, false
+	}
+	du := intervalSub(u, pointInterval(aU))
+	dv := intervalSub(v, pointInterval(aV))
 	z := intervalAdd(intervalScale(du, dU), intervalScale(dv, dV))
 	rho := intervalSub(intervalScale(dv, dU), intervalScale(du, dV))
 	return z, rho, true
@@ -844,6 +882,21 @@ func revolveRejectionAxis(d, u ratV3, dLen, uLen, delta float64) revolveSepAxis 
 //     candidate that answers a pair of exactly opposite sectors of one pole fan,
 //     where each triangle's own edge rays run straight into the other's.
 //
+// A fifth family is not built from a's plane at all: the EDGE-PAIR planes,
+// whose normal g = eA × eB takes one edge of EACH triangle at the shared
+// corner. Both of those edges read an identical zero on g — a determinant
+// repeating a vector, twice over — so the plane contains one whole edge of a
+// and one whole edge of b for every member of the displaced family, and only
+// the two remaining corners have to be signed. It is the family that answers a
+// partial cap's fan triangle against the wall triangle of the NEXT meridian
+// chord, a pair no plane through a's own normal decides: a's normal reads the
+// wall's in-plane corner at a numerical zero it cannot sign, and every rotation
+// of it reads the wall's two corners with opposite signs, because the off-plane
+// corner's in-plane component is fixed in sign and only shrinks as dφ² under
+// refinement. Without this family that pair is undecidable at every angular
+// count, so a partial-sweep revolve carrying a chorded arc refuses however fine
+// the chording.
+//
 // The mirror, with the roles swapped, is the caller's second call.
 func revolveVertexIsolated(a revolveAuditTri, triA [3]int, b revolveAuditTri, triB [3]int, shared int, delta float64) bool {
 	e := productUpper(2, delta)
@@ -892,7 +945,47 @@ func revolveVertexIsolated(a revolveAuditTri, triA [3]int, b revolveAuditTri, tr
 		}
 	}
 	chord := revolveOffsetOf(rvSub(aOff[0].v, aOff[1].v))
-	return try(revolveEdgeFanAxis(a, chord, delta), aOff[:])
+	if try(revolveEdgeFanAxis(a, chord, delta), aOff[:]) {
+		return true
+	}
+	// The edge-pair family. g = eA × eB zeroes both eA and eB identically, so
+	// the plane holds one edge of each triangle for the WHOLE family rather
+	// than at the stored coordinates alone. That leaves a with two corners on
+	// the plane and one strictly off it, and b likewise, so a sits in one
+	// closed half-space and b in the other and their intersection lies in the
+	// plane. A triangle with two corners on a plane and its third strictly off
+	// meets that plane in exactly the closed segment between the two, so the
+	// intersection is contained in eA ∩ eB — two segments from the shared
+	// corner that a non-zero g makes non-parallel, and which therefore meet
+	// only at that corner.
+	//
+	// g stays non-zero over the whole family without a separate test: a member
+	// whose g vanished would read zero on both remaining corners, and sideOf
+	// has already proven each of them strictly outside its own perturbation
+	// allowance, which bounds exactly how far that reading can move. length
+	// bounds |eA × eB| by the product of the two factor lengths and drift is
+	// perturbBilinearAllow over the two factors sliding by e, so the charge is
+	// the one every other candidate here makes. A reading inside its allowance
+	// stays UNDECIDED and the candidate is skipped, never admitted.
+	for k := range 2 {
+		for m := range 2 {
+			g := rvCross(aOff[k].v, bOff[m].v)
+			if rvIsZero(g) {
+				continue
+			}
+			ax := revolveSepAxis{
+				g:      g,
+				length: productUpper(aOff[k].length, bOff[m].length),
+				drift:  perturbBilinearAllow(aOff[k].length, bOff[m].length, e, e),
+			}
+			sa, okA := ax.sideOf(aOff[1-k].v, aOff[1-k].length, e)
+			sb, okB := ax.sideOf(bOff[1-m].v, bOff[1-m].length, e)
+			if okA && okB && sa != sb {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // revolveOffset is one corner offset from the pair's shared corner, beside the

@@ -327,7 +327,11 @@ func chordCapBlendLoop(ctx context.Context, budget *workBudget, cbp capBlendPayl
 			lm.count[i] = 1
 			continue
 		}
-		nSide, _, err := chordCount(w.segmentWalk, chord)
+		// A cap-blend wall walk CAN be a whole closed curve — lm.whole is that
+		// case — so it takes chordWalkMin's own minimum rather than a fixed
+		// one: three chords for a whole circle, which is what keeps its
+		// polygon bounded, and one otherwise.
+		nSide, _, err := chordCount(w.segmentWalk, chord, chordWalkMin(w.segmentWalk))
 		if err != nil {
 			return capBlendLoopMesh{}, err
 		}
@@ -344,7 +348,12 @@ func chordCapBlendLoop(ctx context.Context, budget *workBudget, cbp capBlendPayl
 				lm.capTh0[i], lm.capTh1[i], _ = capWallSweep(w.cU, w.cV, start, end, w.th1-w.th0)
 			}
 			capWalk := segmentWalk{kind: walkCircular, radius: r, th0: lm.capTh0[i], th1: lm.capTh1[i], closed: w.closed}
-			nCap, _, err := chordCount(capWalk, chord)
+			// capWalk carries the wall walk's own closed bit, so its minimum
+			// is the wall's: a whole closed wall's cap contour is a whole
+			// closed circle too. Both counts are read at their own minimum
+			// before max() shares one of them across the side ring, the band
+			// patch and the cap contour.
+			nCap, _, err := chordCount(capWalk, chord, chordWalkMin(capWalk))
 			if err != nil {
 				return capBlendLoopMesh{}, err
 			}
@@ -387,7 +396,13 @@ func chordCapBlendLoop(ctx context.Context, budget *workBudget, cbp capBlendPayl
 		for th1 > th0 {
 			th1 -= 2 * math.Pi
 		}
-		cnt, _, err := chordCount(segmentWalk{kind: walkCircular, radius: cbp.d, th0: th0, th1: th1}, chord)
+		// The connector's minimum is ONE, stated rather than inherited: this
+		// arc runs between two distinct offset feet of two distinct walks, so
+		// it is never a whole closed curve and never reaches the three-chord
+		// minimum a closed walk needs. Its sweep is the corner's own reflex
+		// turn, which is strictly less than a full turn by construction.
+		connector := segmentWalk{kind: walkCircular, radius: cbp.d, th0: th0, th1: th1}
+		cnt, _, err := chordCount(connector, chord, 1)
 		if err != nil {
 			return capBlendLoopMesh{}, err
 		}

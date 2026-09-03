@@ -122,8 +122,8 @@
 //	  a question the evaluator cannot decide                  Status Suspect
 //	Tessellate / STL / OBJ  prism, revolve, cup, loft,
 //	                        cap-loop chamfer, boolean body    builds
-//	  revolve section carrying a circular generator           ErrUnsupported
 //	  revolve whose tolerance its coordinate stages exhaust   ErrUnsupported
+//	  revolve chording no bounded refinement can prove        ErrUnsupported
 //	  boolean body at a tolerance finer than its bound        ErrUnsupported
 //	  a chorded free-form wall past the fixed work budget     ErrUnsupported
 //

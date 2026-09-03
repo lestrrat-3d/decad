@@ -176,13 +176,12 @@ func TestTessellatePayloadClasses(t *testing.T) {
 		require.NotEmpty(t, mesh.Triangles())
 	})
 
-	t.Run("revolve with a circular generator stays staged", func(t *testing.T) {
+	t.Run("revolve with a circular generator", func(t *testing.T) {
 		doc := decad.New()
 		body := ballBody(t, doc, 5)
 		mesh, err := body.Tessellate(units.Millimeters(1))
-		require.Nil(t, mesh)
-		require.ErrorIs(t, err, decad.ErrUnsupported)
-		require.ErrorContains(t, err, "circular generator")
+		require.NoError(t, err)
+		require.NotEmpty(t, mesh.Triangles())
 	})
 
 	t.Run("cap-loop chamfer", func(t *testing.T) {

@@ -1,6 +1,7 @@
 package decad_test
 
 import (
+	"errors"
 	"math"
 	"math/rand"
 	"testing"
@@ -551,16 +552,33 @@ func checkRevolveBody(t *testing.T, body *decad.Body, su setup, ap axisPlacement
 		}
 	}
 
-	// Invariant 2: a watertight, consistently-oriented mesh. A revolve whose
-	// section carries only LINE generators meshes; a circular generator is
-	// staged (ErrUnsupported), and so is a tolerance the payload's own
-	// coordinate stages exhaust, so the check runs on whatever this fixture
-	// produced and demands an explicit staging refusal otherwise.
-	if mesh, err := body.Tessellate(units.Millimeters(su.scale / 20)); err == nil {
-		requireMeshWinding(t, mesh)
-	} else {
-		require.ErrorIs(t, err, decad.ErrUnsupported, "revolve tessellation must stay explicitly staged")
+	// Invariant 2: a watertight, consistently-oriented mesh, which EVERY
+	// fixture here must produce, at a tolerance that is a COARSE fraction of
+	// the fixture's own scale. What the invariant reads — every facet
+	// non-degenerate, every facet wound with its source face's outward normal,
+	// every edge bounding exactly two facets — is a property of the mesh's
+	// structure rather than of its density, and a coarse mesh exercises it with
+	// fewer, larger cells rather than with more of them. The density is what
+	// buys FULL fixture coverage inside the suite's own time budget: at
+	// scale/20 these sixty bodies cost 215 s under -race and at scale/5 they
+	// cost 71 s, and every one of the hundred and twenty meshes is checked
+	// either way. Once revolveVertexIsolated carries the
+	// edge-pair family, a partial-sweep revolve whose meridian holds a chorded
+	// arc decides its cap-fan-against-next-wall-chord pairs, so no fixture in
+	// this file refuses any more and a refusal is a regression rather than an
+	// admissible outcome. Requiring the mesh is what keeps that honest: an
+	// invariant that ACCEPTS a refusal cannot tell "meshed" from "refused every
+	// time", and the systematic refusal this file used to hide was exactly that
+	// silence. A refusal is still checked to be typed — never a cracked mesh
+	// (docs/tessellation-design.md §14) — before the fixture fails.
+	mesh, err := body.Tessellate(units.Millimeters(su.scale / 5))
+	if err != nil {
+		require.True(t,
+			errors.Is(err, decad.ErrUnsupported) || errors.Is(err, decad.ErrDegenerate),
+			"revolve tessellation must refuse explicitly, got %v", err)
+		t.Fatalf("%s must mesh at scale/5 and refused instead: %v", su.name, err)
 	}
+	requireMeshWinding(t, mesh)
 
 	// Invariant 3: the walked-boundary convexity holds under this orientation.
 	checkConvexity(t, body, su, ap, xf, sw)

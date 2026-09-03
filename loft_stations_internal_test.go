@@ -342,7 +342,7 @@ func TestLoftCircularCellStationsHandDerivedStationCount(t *testing.T) {
 	}
 
 	w := circularWalk(0, 0, wedgeRadius, 0, wedgeSweep, wedgeRadius, wedgeSweep)
-	m, achieved, err := chordCount(w, target)
+	m, achieved, err := chordCount(w, target, chordWalkMin(w))
 	require.NoError(t, err)
 	require.LessOrEqual(t, achieved, target)
 	require.Equal(t, handN, m, "chordCount's own walk-up must match this test's own independent transcription of the same conservative bound")
@@ -413,9 +413,9 @@ func TestLoftCircularCellStationsJointWalkUpSharesOneCount(t *testing.T) {
 	seg0, w0 := arcFixture(t, 5, 0, math.Pi/2, 0, 1) // radius 5, 90 degrees
 	seg1, w1 := arcFixture(t, 2, 0, math.Pi/6, 0, 1) // radius 2, 30 degrees
 
-	m0, _, err := chordCount(w0, target)
+	m0, _, err := chordCount(w0, target, chordWalkMin(w0))
 	require.NoError(t, err)
-	m1, _, err := chordCount(w1, target)
+	m1, _, err := chordCount(w1, target, chordWalkMin(w1))
 	require.NoError(t, err)
 	require.NotEqual(t, m0, m1, "the fixture must seed different station counts on its two sides for this test to exercise the shared-count rule")
 	seed := max(m0, m1)
@@ -473,7 +473,7 @@ func TestLoftCircularCellStationsJointWalkUpOutrunsTheSeed(t *testing.T) {
 	// The target IS the held reading at m: chordCount is exactly satisfied
 	// there and seeds the walk at m, which is what makes the certified
 	// reading's own verdict at m the only thing that can move the count.
-	seed, ach, err := chordCount(w, held)
+	seed, ach, err := chordCount(w, held, chordWalkMin(w))
 	require.NoError(t, err)
 	require.Equal(t, m, seed, "the held chooser must be exactly satisfied at the fixture's own count")
 	require.LessOrEqual(t, ach, held)
@@ -672,9 +672,9 @@ func TestLoftCircularCellStationsMatchedDeltaIsItsSagitta(t *testing.T) {
 			seg1, w1 := arcFixture(t, row.r1, 0, row.sweep1, 0, 1)
 
 			if row.wantSharedOnly {
-				m0, _, err := chordCount(w0, row.target)
+				m0, _, err := chordCount(w0, row.target, chordWalkMin(w0))
 				require.NoError(t, err)
-				m1, _, err := chordCount(w1, row.target)
+				m1, _, err := chordCount(w1, row.target, chordWalkMin(w1))
 				require.NoError(t, err)
 				require.NotEqual(t, m0, m1, "this row must need different station counts on its two sides")
 			}
